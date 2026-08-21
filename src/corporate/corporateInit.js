@@ -193,6 +193,13 @@ const ELO_I = {
   gcChampion: 40,   // 独立グランドCS優勝（全国王座の栄誉）
   gcRunnerUp: 18,   // 独立グランドCS準優勝
   proDrafted: 15,   // プロ輩出1名あたり（育成実績はチームの格を直接押し上げる）
+  // ⚠ **地域大会・都市対抗予選・クラブ選手権が一度も計上されていなかった**。
+  //    低ランクのチームのシーズンはこの3つで出来ているので、
+  //    「何をやってもランクが動かない」状態になっていた（実測: クラブ208チームの
+  //    rankingScore は4年間で相異なる値が3〜5個しか無く、動く経路はプロ輩出+15 だけ）。
+  //    全国大会より格は下なので重みは小さくする。
+  qualifier: 20,    // 地域大会・都市対抗地区予選（1試合あたり基礎値）
+  clubNational: 30, // クラブ選手権（クラブチームにとっての全国大会）
 };
 
 // リーグ最終順位ボーナス（優勝を明確に評価し、勝ち続ければ数年で昇格できるようにする）。
@@ -1442,45 +1449,13 @@ export const applyReputationDecay = (teamData) => {
   //   （減衰はランク判定より先に走る）。リセットは updateAllRanks の末尾で行う。
 };
 
-// 注目度からランクを再判定（昇格/降格）
-// 昇格閾値は初期値より少し低め（努力で到達可能に）、降格閾値はさらに低め（ヒステリシス）
-const RANK_PROMOTE_THRESHOLD = { S: 75, A: 55, B: 32, C: 15 };
-const RANK_DEMOTE_THRESHOLD  = { S: 60, A: 40, B: 22, C: 8 };
-
-export const updateRankFromReputation = (teamData) => {
-  const cd = teamData.corporateData;
-  if (!cd) return null;
-
-  const rep = cd.reputation;
-  const oldRank = cd.rank;
-  let newRank = oldRank;
-
-  if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.A) newRank = 'A';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.B) newRank = 'B';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.C) newRank = 'C';
-  else newRank = 'D';
-
-  // ヒステリシス: 降格は低い閾値を下回った場合のみ
-  const rankOrder = ['D', 'C', 'B', 'A', 'S'];
-  const oldIdx = rankOrder.indexOf(oldRank);
-  const newIdx = rankOrder.indexOf(newRank);
-  if (newIdx < oldIdx) {
-    const demoteThreshold = oldRank === 'S' ? RANK_DEMOTE_THRESHOLD.S
-      : oldRank === 'A' ? RANK_DEMOTE_THRESHOLD.A
-      : oldRank === 'B' ? RANK_DEMOTE_THRESHOLD.B
-      : RANK_DEMOTE_THRESHOLD.C;
-    if (rep >= demoteThreshold) {
-      newRank = oldRank;
-    }
-  }
-
-  if (newRank !== oldRank) {
-    cd.rank = newRank;
-    return { team: teamData.name, from: oldRank, to: newRank, reputation: rep };
-  }
-  return null;
-};
+// ⚠ **ランクの権威は `updateAllRanks`（rankingScore のパーセンタイル）ひとつだけ**。
+//    以前はここに注目度(reputation)の閾値でランクを決める
+//    `updateRankFromReputation` / `updateUniversityRankFromReputation` があり、
+//    CLAUDE.md にも「昇格閾値 S≥75 / A≥55 …」と書かれていたが、
+//    **どちらも一度も呼ばれていない死んだコード**だった（export だけされていた）。
+//    ランクを決める式が2つあると必ず食い違うので、表を二重に作らずここには置かない。
+//    注目度はスカウト・予算・入団交渉の成功率にだけ効く別系統。
 
 // トーナメントブラケットからチームごとの勝利数を集計
 const countBracketWins = (bracket) => {
@@ -1631,34 +1606,6 @@ export const applyUniversityReputationDecay = (teamData) => {
   ud.reputation = clamp((ud.reputation || 0) - UNI_REPUTATION_DECAY, 0, 100);
   ud.currentSeasonGain = 0;
   // ※ proDraftCountSeason は updateAllRanks が読むため、ここではリセットしない
-};
-
-export const updateUniversityRankFromReputation = (teamData) => {
-  const ud = teamData.universityData;
-  if (!ud) return null;
-  const rep = ud.reputation;
-  const oldRank = ud.rank;
-  let newRank;
-  if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.A) newRank = 'A';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.B) newRank = 'B';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.C) newRank = 'C';
-  else newRank = 'D';
-  const rankOrder = ['D', 'C', 'B', 'A', 'S'];
-  const oldIdx = rankOrder.indexOf(oldRank);
-  const newIdx = rankOrder.indexOf(newRank);
-  if (newIdx < oldIdx) {
-    const dt = oldRank === 'S' ? RANK_DEMOTE_THRESHOLD.S
-      : oldRank === 'A' ? RANK_DEMOTE_THRESHOLD.A
-      : oldRank === 'B' ? RANK_DEMOTE_THRESHOLD.B
-      : RANK_DEMOTE_THRESHOLD.C;
-    if (rep >= dt) newRank = oldRank;
-  }
-  if (newRank !== oldRank) {
-    ud.rank = newRank;
-    return { team: teamData.name, from: oldRank, to: newRank, reputation: rep, type: 'university' };
-  }
-  return null;
 };
 
 // 全チーム（社会人＋独立＋大学）のランク変動を一括処理（FIFAスタイルElo方式）
@@ -1847,8 +1794,24 @@ export const updateAllRanks = (seasonData) => {
     }
   };
   // 社会人全国大会
-  applyBracketElo(seasonData.toshitaikou?.mainTournament?.bracket, ELO_I.tournament);
-  applyBracketElo(seasonData.nihonSenshuken?.mainTournament?.bracket, ELO_I.tournament);
+  // ⚠ **置き場所はモードで変わる**。社会人モードでは seasonData、独立・大学モードでは
+  //    WORLD_DATA 側に入る。片方だけ見ていると、そのモードでは丸ごと計上されない。
+  const td = seasonData.toshitaikou || WORLD_DATA.corporateToshitaikou;
+  const ns = seasonData.nihonSenshuken || WORLD_DATA.corporateNihonSenshuken;
+  const cs = seasonData.clubSenshuken || WORLD_DATA.corporateClubSenshuken;
+  const rt = seasonData.regionalTournament || WORLD_DATA.corporateRegionalTournament;
+  applyBracketElo(td?.mainTournament?.bracket, ELO_I.tournament);
+  applyBracketElo(ns?.mainTournament?.bracket, ELO_I.tournament);
+  // クラブの全国大会。208チームのクラブにとってはここが最上位の舞台
+  applyBracketElo(cs?.mainTournament?.bracket, ELO_I.clubNational);
+  // 地域大会・都市対抗地区予選。下位チームのシーズンはここで出来ている
+  for (const reg of Object.values(rt?.brackets || {})) applyBracketElo(reg?.bracket, ELO_I.qualifier);
+  for (const q of Object.values(td?.qualifiers || {})) {
+    applyBracketElo(q?.mainBracket, ELO_I.qualifier);
+    applyBracketElo(q?.losersBracket, ELO_I.qualifier);
+  }
+  for (const q of Object.values(ns?.qualifiers || {})) applyBracketElo(q?.mainBracket, ELO_I.qualifier);
+  for (const q of Object.values(cs?.qualifiers || {})) applyBracketElo(q?.mainBracket, ELO_I.qualifier);
   // 大学全国大会
   applyBracketElo(ucSource?.bracket, ELO_I.uniNational);
   applyBracketElo(mjSource?.bracket, ELO_I.uniNational);
@@ -1874,12 +1837,20 @@ export const updateAllRanks = (seasonData) => {
   // === Step 5: rankingScoreでソートしてパーセンテージ別ランク割り当て ===
   allEntries.sort((a, b) => b.dataObj.rankingScore - a.dataObj.rankingScore);
 
+  // ⚠ **帯は初期分布と一致していなければならない**。
+  //    初期のランクは RANK_CONFIG が team ごとに手で割り当てており、実測の内訳は
+  //    S20 / A45 / B88 / C160 / D243（＝3.6 / 8.1 / 15.8 / 28.8 / 43.7%）。
+  //    ところが帯は S5 / A20 / B45 / C75% で、**D の枠が139しか無いのに D が243チーム**
+  //    あった。そのため初年度の年度末に **104チームが成績と無関係に D→C へ機械的に
+  //    昇格**していた（実測: Dスタートの43%が1年目に昇格し、以後6年間まったく動かない）。
+  //    「1年ですぐ上がって、その後は何をしても動かない」の正体はこれ。
+  //    クラブ208チームを含む母集団なので、下位が厚いのが正しい姿。
   const total = allEntries.length;
   const PCT_BANDS = [
-    { rank: 'S', end: Math.max(1, Math.round(total * 0.05)) },
-    { rank: 'A', end: Math.max(2, Math.round(total * 0.20)) },
-    { rank: 'B', end: Math.max(3, Math.round(total * 0.45)) },
-    { rank: 'C', end: Math.max(4, Math.round(total * 0.75)) },
+    { rank: 'S', end: Math.max(1, Math.round(total * 0.04)) },
+    { rank: 'A', end: Math.max(2, Math.round(total * 0.12)) },
+    { rank: 'B', end: Math.max(3, Math.round(total * 0.28)) },
+    { rank: 'C', end: Math.max(4, Math.round(total * 0.56)) },
     { rank: 'D', end: total },
   ];
 
