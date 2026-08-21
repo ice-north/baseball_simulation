@@ -2986,8 +2986,14 @@ if (newOuts === 3) {
         return 'bg-gray-700';
       };
 
+      // ⚠ ここはアプリ全体の地色。かつて `from-green-900 to-green-800` の緑だった。
+      //    カードは全て surface-* の紺なので、**中身が短い画面では緑の帯が剥き出しになり**
+      //    （日程進行のシーズン序盤で 800×460px）、さらに `bg-gray-800/30` のような
+      //    半透明のサーフェスが全部この緑の上で合成されて画面全体が緑がかっていた。
+      //    地色は最深部（surface-0）にして、サイドバー(surface-1)・カード(surface-2) と
+      //    3段の深度を作る。
       return (
-        <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
+        <div className="min-h-screen bg-surface-0">
           {/* オートセーブ完了トースト */}
           {autoSaveFlash && (
             <div className="fixed bottom-3 right-3 z-[60] bg-gray-900/95 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none">

@@ -1120,6 +1120,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const firstDay = getFirstDayOfWeek(year, selectedMonth);
 
   const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+  const todayDow = new Date(seasonData.currentDate.year, seasonData.currentDate.month - 1, seasonData.currentDate.day).getDay();
 
   // トーナメント日程をカレンダー用に取得
   const tournamentCalendarDates = useMemo(() => {
@@ -1178,6 +1179,27 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   }, [seasonData.schedule, seasonData.currentDate, year, selectedMonth, daysInMonth, firstDay, tournamentCalendarDates, isCorporate]);
 
   const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+
+  // 自チームの次の試合（進行バーに「あと何日」を出す）
+  const nextUserGame = useMemo(() => {
+    const cd = seasonData.currentDate;
+    const key = (d) => d.year * 10000 + d.month * 100 + d.day;
+    const today = key(cd);
+    let best = null;
+    for (const g of seasonData.schedule || []) {
+      if (g.home !== userTeamName && g.away !== userTeamName) continue;
+      if (g.result) continue;
+      const k = key(g.date);
+      if (k < today) continue;
+      if (!best || k < key(best.date)) best = g;
+    }
+    if (!best) return null;
+    // 月ごとの日数を跨ぐので Date で差を取る
+    const days = Math.round(
+      (new Date(best.date.year, best.date.month - 1, best.date.day)
+        - new Date(cd.year, cd.month - 1, cd.day)) / 86400000);
+    return { game: best, days };
+  }, [seasonData.schedule, seasonData.currentDate, userTeamName]);
 
   // 今日のトーナメント試合を取得（「本日の対戦」欄に表示するため）
   const todaysTournamentMatches = useMemo(() => {
@@ -2119,8 +2141,58 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   return (
     <div className="p-3 min-h-screen max-w-7xl mx-auto">
       <TutorialHint id="dateprogress-intro" title="シーズンの進め方">
-        ここが基本画面です。<b className="text-cyan-200">日付を進める</b>と試合が自動で消化され、順位表・成績が更新されます。自分の試合は采配してプレイすることもできます。左サイドバーからロスター管理・注目選手などへ移動できます。
+        ここが基本画面です。右上の<b className="text-cyan-200">「1日進める」</b>を押すと試合が自動で消化され、順位表・成績が更新されます。自分の試合は采配してプレイすることもできます。左サイドバーからロスター管理・注目選手などへ移動できます。
       </TutorialHint>
+
+      {/* ⚠ **このゲームで一番よく押すボタンには、長らく「ボタンが無かった」**。
+          日付を進める手段はサイドバーの「日程進行」を**選択中にもう一度押す**
+          （`SidebarButton` の `onActiveClick`）だけで、見た目は他のナビ項目と同じ。
+          主要な動詞に押す場所が無いので、毎日の操作が作業に見えていた。
+          日付・今日の予定・次の自チーム戦を1本に畳んで、画面の先頭に置く。 */}
+      <div className="mb-3 rounded-2xl border border-gray-700/40 bg-gradient-to-r from-surface-2 to-gray-900 px-4 py-3 flex items-center gap-4 shadow-xl">
+        <div className="shrink-0">
+          <div className="text-xs text-gray-300 tabular-nums">{seasonData.currentDate.year}年</div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-black text-white tabular-nums leading-none">
+              {seasonData.currentDate.month}/{seasonData.currentDate.day}
+            </span>
+            <span className={`text-sm font-bold ${todayDow === 0 ? 'text-red-400' : todayDow === 6 ? 'text-blue-400' : 'text-gray-300'}`}>
+              ({dayNames[todayDow]})
+            </span>
+          </div>
+        </div>
+        <div className="w-px h-10 bg-gray-700 shrink-0" />
+        <div className="min-w-0 flex-1 flex items-center gap-x-5 gap-y-1 flex-wrap">
+          <div className="min-w-0">
+            <div className="text-xs text-gray-300">本日</div>
+            <div className="text-sm font-bold text-gray-100 truncate">
+              {(todaysGames.length + todaysTournamentMatches.length) > 0
+                ? <>リーグ・大会 <span className="text-accent tabular-nums">{todaysGames.length + todaysTournamentMatches.length}</span> 試合</>
+                : <span className="text-gray-300">試合なし（休養日）</span>}
+            </div>
+          </div>
+          {nextUserGame && (
+            <div className="min-w-0">
+              <div className="text-xs text-gray-300">次の自チーム戦</div>
+              <div className="text-sm font-bold text-gray-100 truncate">
+                {nextUserGame.days === 0
+                  ? <span className="text-amber-300">本日 vs {nextUserGame.game.home === userTeamName ? nextUserGame.game.away : nextUserGame.game.home}</span>
+                  : <>あと<span className="text-accent tabular-nums mx-0.5">{nextUserGame.days}</span>日
+                     <span className="text-gray-300 font-normal ml-1">
+                       ({nextUserGame.game.date.month}/{nextUserGame.game.date.day} vs {nextUserGame.game.home === userTeamName ? nextUserGame.game.away : nextUserGame.game.home})
+                     </span></>}
+              </div>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => handleProgressDate(1)}
+          disabled={isSimulating}
+          className="btn-primary shrink-0 px-6 py-3 rounded-xl text-base font-bold transition active:scale-95"
+        >
+          {isSimulating ? '進行中…' : '▶ 1日進める'}
+        </button>
+      </div>
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}

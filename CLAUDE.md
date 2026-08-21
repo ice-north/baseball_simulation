@@ -105,7 +105,16 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 
 ### 4. デザイントークン（`src/index.css` の `:root` ＋ `tailwind.config.js`）
 - **アクセント色**: `var(--accent)`(cyan-400) / `var(--accent-strong)` / `var(--accent-soft)`。UIクローム・チャートに使う。**ランク色（pink/red/orange/yellow/green/blue/gray）とは役割を分離**すること
-- **サーフェス**: `var(--surface-0/1/2)`（最深部→gray-900→gray-800相当）
+- **サーフェス**: `var(--surface-0/1/2)`（最深部→gray-900→gray-800相当）。
+  深度は **地色=surface-0 / サイドバー=surface-1 / カード=surface-2** の3段
+- ⚠ **アプリ全体の地色が緑だった**（`App.jsx` の管理シェル直下が
+  `bg-gradient-to-br from-green-900 to-green-800`）。カードは全て紺の surface-* なので
+  2つの症状が出ていた:
+  1. **中身が短い画面で緑の帯が剥き出しになる**。日程進行のシーズン序盤で
+     **800×460px**（中央カラムの4割）が真緑の空白になり、バグに見えていた
+  2. **半透明のサーフェスが全部その緑の上で合成される**。`bg-gray-800/30` 等が
+     オリーブがかり、チームランキングの表の行が紺ではなく暗緑になっていた
+  ——「透明度付きは素の色のまま」と決めてある以上、**地色は必ず中立にすること**
 - ⚠ **トークンは Tailwind のユーティリティとして生やしてある**（`bg-surface-2` / `text-accent`）。
   CSS変数を定義しただけの頃は実使用が1〜2箇所しかなく（対して素の `bg-gray-800/900` が392箇所）、
   トークンが有名無実だった。`tailwind.config.js` の `theme.extend.colors` で解決してある。
@@ -134,6 +143,19 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 | `.btn-danger` | 破壊的（削除・解雇・戦力外） | 削除 / 解雇 |
 | `.btn-warn` | 不可逆だが破壊ではない | 緊急セーブの復元 |
 | `.seg` / `.seg-on` | タブ・セグメントの選択状態 | 画面上部のタブ / フィルタ |
+
+#### ⚠ このゲームで一番よく押す操作に、ボタンが無かった
+日付を進める手段は **サイドバーの「日程進行」を選択中にもう一度押す**
+（`SidebarButton` の `onActiveClick` → `advanceDayRef`）だけで、見た目は他のナビ項目と同じ。
+キーボードショートカットも無く、チュートリアルにも書いていなかった。
+**主要な動詞に押す場所が無いと、毎日の操作は作業にしか見えない。**
+
+日程進行の先頭に進行バーを置いてある（日付＋曜日 / 本日の試合数 / 次の自チーム戦まで
+あと何日 / `.btn-primary` の「▶ 1日進める」）。サイドバーの再クリックも残してある。
+
+- ⚠ `handleProgressDate(days)` は **その日の試合を消化してから `days` 日進める**。
+  `days > 1` にすると間の試合が飛ぶので、**1 以外を渡さないこと**
+  （「次の試合まで」を作るなら1日ずつ回すこと）
 
 - **余白・文字サイズは持たない**（既存の `px-4 py-2 text-sm` と併用する前提）
 - **無効化は `disabled` 属性に任せる**。`cond ? 'btn-primary' : '...cursor-not-allowed'` と
