@@ -419,6 +419,20 @@ const CATEGORY_GROWTH = {
     focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8, breaking: 1.8, lead: 1.7,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
+  // NPB: 練習量・環境ともに最高。**天井だけがアマより高い**（`ceilingShift`）。
+  // ⚠ アマの天井（技術系52 → 実効70）はNPBレギュラー相当に置いてあるので、
+  //    プロがそこで頭打ちになるとスター選手が生まれない。プロだけ +20 する。
+  // ⚠ **練習量と環境を上げるだけにすること**。プロ意識・出場量（一軍/二軍）が
+  //    そのまま効くので、「二軍暮らしが続くと伸びない」が自然に出る。
+  npb: {
+    volume: 1.00, gain: 0.80, ceilingShift: 14, topN: 2, strength: 1.25, weak: 0.85,
+    // ⚠ focus は成長だけでなく**衰えの止まりにくさ**にも効く（練習項が基礎成長の
+    //    マイナスを打ち消すため）。28→38歳の実測が 守備-15% 対 走力-16% と
+    //    ほぼ並んでいた（実データは 守備-10 対 走力-22）。「体から落ち、技術は残る」を
+    //    出すために、技術系を厚く・身体系を薄くしてある。
+    focus: { control: 1.6, meet: 1.8, eye: 1.4, defense: 1.7, breaking: 1.4,
+             velocity: 1.0, speed: 0.55, arm: 0.6, stamina: 1.1, power: 1.2, lead: 1.4 },
+  },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
     volume: 0.86, gain: 0.06, topN: 2, strength: 1.25, weak: 0.9,
@@ -426,6 +440,120 @@ const CATEGORY_GROWTH = {
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6, breaking: 0.5, lead: 0.5 },
   },
 };
+
+// ============================================================
+// 成長の実行体。**カテゴリ（社会人/独立/クラブ/プロ）で共有する**。
+//
+// ⚠ ここを増やさないこと。以前は 大学・キャンプ・プロが別々の `grow()` を持ち、
+//    同じ「ミート60」が場所によって別の意味になっていた。3作品で能力値を
+//    共有する構想があるので、伸びやすさ・天井・ピーク年齢は `STAT_GROWTH`、
+//    カテゴリの性格は `CATEGORY_GROWTH` の乗数だけで表す。
+//
+// @param opts.activity 出場量を外から与える（プロは一軍/二軍で決まる）
+// ============================================================
+export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
+  const decayMult = (current, threshold, rate) => {
+    if (current < threshold) return 1.0;
+    return Math.max(0.10, 1.0 - (current - threshold) * rate);
+  };
+    const age = player.age || 25;
+    const gp = player.growthPotential || 1.0;
+    const discipline = player.personality?.discipline ?? 50;
+
+    // 実成長 = 基礎成長 + 練習成長（**分岐なし。和の符号がすべて**）。
+    // 設計は冒頭の「実成長 = 基礎成長 + 練習成長」の節を参照。
+    const basal = basalGrowth(age, gp);
+    // その年の充実度（前年を引き継ぐ）。⚠ 成長方向にだけ掛ける
+    const formMult = advanceGrowthForm(player);
+    // 実戦に出ているほど練習量が増える（出場も練習のうち）
+    const activity = player.position === 'pitcher'
+      ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
+      : (player.seasonStats?.batting?.atBats || 0);
+    // ⚠ 旧式 `0.75 + min(0.5, activity/400)` は **200打席で上限に張り付いた**。
+    //    レギュラーも準レギュラーも同じ 1.25 になり、出場量が結果を
+    //    ほとんど説明しなかった（実測の説明力 0.8%）。
+    //    レギュラー(240打席)の値は 1.25 のまま据え置き、**下を伸ばす**。
+    //    控えは 0.45＝レギュラーの36%しか練習量を得られない。
+    const activityMult = 0.55 + Math.min(0.95, activity / 300);   // 0.55〜1.50
+    // ⚠ **若年前倒しは練習項にだけ掛けること**。「若いほど吸収が速い」は
+    //    **練習の吸収**の話で、基礎成長は `basalGrowth` が自前の年齢カーブを
+    //    持っている。実成長全体に掛けると**年齢の効果を二重に計上**する。
+    //    練習項の中に入れると `基礎 + 練習 = 0` の交点が動くので、
+    //    **衰え始める年齢の再較正とセット**になる（年配ほど練習で衰えを
+    //    抑えられなくなる＝実際の関係と同じ向き）。
+    const practice = (prof.volume ?? 1.0) * activityMult
+      * disciplineTrainMult(discipline) * youthMult(age);
+
+    // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
+    // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
+    let statEntries;
+    if (player.position === 'pitcher') {
+      statEntries = [
+        { key: 'control', val: player.pitching?.control || 0 },
+        { key: 'stamina', val: player.pitching?.stamina || 0 },
+        { key: 'velocity', val: (player.pitching?.velocity || 130) - 100 },
+        { key: 'arm', val: player.physical?.arm || 0 },
+      ];
+    } else {
+      statEntries = [
+        { key: 'meet', val: player.batting?.meet || 0 },
+        { key: 'power', val: player.batting?.power || 0 },
+        { key: 'eye', val: player.batting?.eye || 0 },
+        { key: 'speed', val: player.physical?.speed || 0 },
+        { key: 'arm', val: player.physical?.arm || 0 },
+        { key: 'defense', val: player.fielding?.defense || 0 },
+      ];
+    }
+    // ⚠ **傾斜は grow() の base（能力ごとの伸びやすさ）を覆せる強さが要る**。
+    //    base はミート3.0 対 走力0.5 と6倍の開きがあるので、旧値（長所1.4 / 短所0.7）
+    //    では「長所の走力 0.5×1.4=0.7」より「短所のミート 3.0×0.7=2.1」の方が
+    //    3倍速く伸びていた。**長所を指定しているのに短所が伸びる**状態だった。
+    // カテゴリの得意分野を掛けてから並べる（社会人は技術を、クラブは体力を長所と見る）
+    statEntries.sort((a, b) =>
+      (b.val * (prof.focus?.[b.key] ?? 1.0)) - (a.val * (prof.focus?.[a.key] ?? 1.0)));
+    // ⚠ **一芸（topN=1）は毎年引き直してはいけない**。年ごとにその時点の1位が
+    //    長所判定を受けるので、結果的に全能力が順番に伸びて**万能になる**
+    //    （実測: 有望素材＋意識100 の独立選手が32歳で
+    //     ミート88/パワー87/走力86/守備88）。一芸の設計と逆。
+    //    最初に決めた1つを持ち続ける（`_sharpenedTool` は選手に載るのでセーブされる）。
+    let strengthKeys;
+    if (prof.topN === 1) {
+      if (!player._sharpenedTool || !statEntries.some(e => e.key === player._sharpenedTool)) {
+        player._sharpenedTool = statEntries[0].key;
+      }
+      strengthKeys = new Set([player._sharpenedTool]);
+    } else {
+      strengthKeys = new Set(statEntries.slice(0, prof.topN).map(e => e.key));
+    }
+    const weakKeys = new Set(statEntries.slice(-2).map(e => e.key));
+    const specMult = (key) => {
+      const shape = strengthKeys.has(key) ? prof.strength : weakKeys.has(key) ? prof.weak : 1.0;
+      return shape * (prof.focus?.[key] ?? 1.0);
+    };
+
+    // key は STAT_GROWTH のキー。specKey は長所/短所・カテゴリ得意分野の判定に使う
+    // 能力名（投手の肩 'armP' は 'arm' として見る）。
+    const grow = (current, key, baseMult = 1, capOverride = null) => {
+      const g = STAT_GROWTH[key];
+      const specKey = key === 'armP' ? 'arm' : key;
+      // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
+      const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
+      const delta = g.base * baseMult * (statBasal + practice * specMult(specKey))
+        * rankMult * (prof.gain ?? 1.0) * (YEAR_NOISE_LO + Math.random() * YEAR_NOISE_W);
+      if (delta >= 0) {
+        // ⚠ 体格補正は**成長方向にだけ**掛ける（衰退には効かない）。
+        //    この関数が担当する能力は `applyAgeCurveChanges` の対象外に
+        //    してあるので、ここで掛けないと体幹・器用さが効かなくなる
+        //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
+        const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * formMult;
+        return Math.min(capOverride ?? g.cap,
+          current + stochasticRound(delta * phys * decayMult(current, growthThreshold(g.threshold + (prof.ceilingShift ?? 0), gp), growthDecayRate(g.rate, gp))));
+      }
+
+      return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
+    };
+  return { grow, age, gp, discipline };
+}
 
 export function applyCorporatePlayerGrowth(allTeams) {
   const decayMult = (current, threshold, rate) => {
@@ -448,102 +576,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
     const prof = CATEGORY_GROWTH[isClub ? 'club' : isIndependent ? 'independent' : 'corporate'];
 
     for (const player of team.players) {
-      const age = player.age || 25;
-      const gp = player.growthPotential || 1.0;
-      const discipline = player.personality?.discipline ?? 50;
-
-      // 実成長 = 基礎成長 + 練習成長（**分岐なし。和の符号がすべて**）。
-      // 設計は冒頭の「実成長 = 基礎成長 + 練習成長」の節を参照。
-      const basal = basalGrowth(age, gp);
-      // その年の充実度（前年を引き継ぐ）。⚠ 成長方向にだけ掛ける
-      const formMult = advanceGrowthForm(player);
-      // 実戦に出ているほど練習量が増える（出場も練習のうち）
-      const activity = player.position === 'pitcher'
-        ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
-        : (player.seasonStats?.batting?.atBats || 0);
-      // ⚠ 旧式 `0.75 + min(0.5, activity/400)` は **200打席で上限に張り付いた**。
-      //    レギュラーも準レギュラーも同じ 1.25 になり、出場量が結果を
-      //    ほとんど説明しなかった（実測の説明力 0.8%）。
-      //    レギュラー(240打席)の値は 1.25 のまま据え置き、**下を伸ばす**。
-      //    控えは 0.45＝レギュラーの36%しか練習量を得られない。
-      const activityMult = 0.55 + Math.min(0.95, activity / 300);   // 0.55〜1.50
-      // ⚠ **若年前倒しは練習項にだけ掛けること**。「若いほど吸収が速い」は
-      //    **練習の吸収**の話で、基礎成長は `basalGrowth` が自前の年齢カーブを
-      //    持っている。実成長全体に掛けると**年齢の効果を二重に計上**する。
-      //    練習項の中に入れると `基礎 + 練習 = 0` の交点が動くので、
-      //    **衰え始める年齢の再較正とセット**になる（年配ほど練習で衰えを
-      //    抑えられなくなる＝実際の関係と同じ向き）。
-      const practice = (prof.volume ?? 1.0) * activityMult
-        * disciplineTrainMult(discipline) * youthMult(age);
-
-      // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
-      // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
-      let statEntries;
-      if (player.position === 'pitcher') {
-        statEntries = [
-          { key: 'control', val: player.pitching?.control || 0 },
-          { key: 'stamina', val: player.pitching?.stamina || 0 },
-          { key: 'velocity', val: (player.pitching?.velocity || 130) - 100 },
-          { key: 'arm', val: player.physical?.arm || 0 },
-        ];
-      } else {
-        statEntries = [
-          { key: 'meet', val: player.batting?.meet || 0 },
-          { key: 'power', val: player.batting?.power || 0 },
-          { key: 'eye', val: player.batting?.eye || 0 },
-          { key: 'speed', val: player.physical?.speed || 0 },
-          { key: 'arm', val: player.physical?.arm || 0 },
-          { key: 'defense', val: player.fielding?.defense || 0 },
-        ];
-      }
-      // ⚠ **傾斜は grow() の base（能力ごとの伸びやすさ）を覆せる強さが要る**。
-      //    base はミート3.0 対 走力0.5 と6倍の開きがあるので、旧値（長所1.4 / 短所0.7）
-      //    では「長所の走力 0.5×1.4=0.7」より「短所のミート 3.0×0.7=2.1」の方が
-      //    3倍速く伸びていた。**長所を指定しているのに短所が伸びる**状態だった。
-      // カテゴリの得意分野を掛けてから並べる（社会人は技術を、クラブは体力を長所と見る）
-      statEntries.sort((a, b) =>
-        (b.val * (prof.focus?.[b.key] ?? 1.0)) - (a.val * (prof.focus?.[a.key] ?? 1.0)));
-      // ⚠ **一芸（topN=1）は毎年引き直してはいけない**。年ごとにその時点の1位が
-      //    長所判定を受けるので、結果的に全能力が順番に伸びて**万能になる**
-      //    （実測: 有望素材＋意識100 の独立選手が32歳で
-      //     ミート88/パワー87/走力86/守備88）。一芸の設計と逆。
-      //    最初に決めた1つを持ち続ける（`_sharpenedTool` は選手に載るのでセーブされる）。
-      let strengthKeys;
-      if (prof.topN === 1) {
-        if (!player._sharpenedTool || !statEntries.some(e => e.key === player._sharpenedTool)) {
-          player._sharpenedTool = statEntries[0].key;
-        }
-        strengthKeys = new Set([player._sharpenedTool]);
-      } else {
-        strengthKeys = new Set(statEntries.slice(0, prof.topN).map(e => e.key));
-      }
-      const weakKeys = new Set(statEntries.slice(-2).map(e => e.key));
-      const specMult = (key) => {
-        const shape = strengthKeys.has(key) ? prof.strength : weakKeys.has(key) ? prof.weak : 1.0;
-        return shape * (prof.focus?.[key] ?? 1.0);
-      };
-
-      // key は STAT_GROWTH のキー。specKey は長所/短所・カテゴリ得意分野の判定に使う
-      // 能力名（投手の肩 'armP' は 'arm' として見る）。
-      const grow = (current, key, baseMult = 1, capOverride = null) => {
-        const g = STAT_GROWTH[key];
-        const specKey = key === 'armP' ? 'arm' : key;
-        // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
-        const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
-        const delta = g.base * baseMult * (statBasal + practice * specMult(specKey))
-          * rankMult * (prof.gain ?? 1.0) * (YEAR_NOISE_LO + Math.random() * YEAR_NOISE_W);
-        if (delta >= 0) {
-          // ⚠ 体格補正は**成長方向にだけ**掛ける（衰退には効かない）。
-          //    この関数が担当する能力は `applyAgeCurveChanges` の対象外に
-          //    してあるので、ここで掛けないと体幹・器用さが効かなくなる
-          //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
-          const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * formMult;
-          return Math.min(capOverride ?? g.cap,
-            current + stochasticRound(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
-        }
-
-        return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
-      };
+      const { grow, age, discipline } = makeGrower(player, prof, rankMult);
 
       if (player.position === 'pitcher') {
         if (player.pitching) {
@@ -836,4 +869,56 @@ export function applyPositionShifts(allTeams) {
     }
   }
   return shifts;
+}
+
+
+// ============================================================
+// プロ入り後の成長。**アマ側と同じ実行体（`makeGrower`）を使う**。
+//
+// ⚠ 旧実装（`npbCareer.applyAging`）は `growthPotential` だけで駆動しており、
+//    **プロ意識も出場機会も見ていなかった**。24歳まで全能力に一律
+//    `(2.6 - (age-18)×0.25) × gp` が乗るので、**指名された全員が一様に伸びて
+//    一軍ラインを超える**（実測の一軍到達 86〜93%。実NPB 40〜50%）。
+//    現実は逆で、大半の下位・育成指名は二軍で頭打ちになる。
+//
+// 一軍で出場すれば練習量が増え、二軍が続けば伸びない——という
+// フィードバックが `activity` を通じて自然に働く。
+// @param isFirstTeam 前年に一軍だったか
+// ============================================================
+export function applyNpbGrowth(player, isFirstTeam) {
+  const prof = CATEGORY_GROWTH.npb;
+  // 一軍は出場量が最大、二軍は控え相当。ここが「二軍暮らしは伸びない」の入口
+  const activity = isFirstTeam ? 300 : 70;
+  const { grow, age } = makeGrower(player, prof, 1.0, { activity });
+  if (player.position === 'pitcher') {
+    if (player.pitching) {
+      player.pitching.control = grow(player.pitching.control, 'control');
+      player.pitching.stamina = grow(player.pitching.stamina, 'stamina');
+      const catchup = getVelocityCatchupMult(player.physical?.arm || 50, player.pitching.velocity);
+      player.pitching.velocity = grow(player.pitching.velocity, 'velocity',
+        catchup, getVelocityCap(player.physical?.arm || 50));
+      for (const pitch of (player.pitching.arsenal || [])) {
+        if (pitch.type === 'straight') continue;
+        pitch.level = grow(pitch.level, 'breaking');
+      }
+    }
+    if (player.physical) player.physical.arm = grow(player.physical.arm, 'armP');
+  } else {
+    if (player.batting) {
+      player.batting.meet = grow(player.batting.meet, 'meet');
+      player.batting.power = grow(player.batting.power, 'power');
+      player.batting.eye = grow(player.batting.eye, 'eye');
+      player.batting.steal = grow(player.batting.steal ?? 40, 'speed');
+    }
+    if (player.physical) {
+      player.physical.speed = grow(player.physical.speed, 'speed');
+      player.physical.arm = grow(player.physical.arm, 'arm');
+    }
+    if (player.fielding) player.fielding.defense = grow(player.fielding.defense, 'defense');
+    // リードは経験で積み上がる（`STAT_GROWTH.lead` は decline 0）
+    if (player.position === 'catcher' && player.catching) {
+      player.catching.lead = grow(player.catching.lead ?? 40, 'lead');
+    }
+  }
+  return age;
 }

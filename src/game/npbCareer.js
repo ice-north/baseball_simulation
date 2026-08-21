@@ -15,10 +15,27 @@
 // ============================================================
 
 import { POSITION_GLOVE_WEIGHT } from './scoutTools.js';
+import { applyNpbGrowth } from '../season/growthSystem.js';
 
 // 一軍定着に必要な総合力。二軍暮らしとの境目
 const FIRST_TEAM_THRESHOLD = 58;
-const REGULAR_THRESHOLD = 68;      // ここを超えるとレギュラー（規定到達級の出場数）
+const REGULAR_THRESHOLD = 68;
+// ⚠ **枠は「登録29人」ではなく「1年のうちに一軍で使われた人数」**。
+//    支配下は 70人×12球団＝840人、一軍登録は29人×12＝348人だが、
+//    1シーズンに一軍で出場する選手は1球団40人前後＝**約480人（57%）**いる。
+//    登録枠(41%)で切ると、線の上下が年をまたいでほとんど動かないため
+//    一軍到達が26%までしか届かなかった（実NPB 40〜50%）。
+//    規定到達級（レギュラー）は約110人＝13%。
+const NPB_FIRST_TEAM_SHARE = 0.57;
+const NPB_REGULAR_SHARE = 0.13;
+// その年のめぐり合わせ（故障・チーム事情・出来）。総合力に足す振れ幅
+const OPPORTUNITY_SD = 3.0;
+
+/** 平均0・標準偏差1の正規乱数（Box-Muller） */
+function gauss() {
+  let u = 0; while (u === 0) u = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+}
 
 // ============================================================
 // ⚠ **守備・肩・リードが総合力に入っていなかった**
@@ -75,58 +92,17 @@ export function evaluateNpbAbility(a) {
 
 /**
  * 年齢に応じた能力の変化を適用する。
- * 22歳前後までは伸び、27歳前後がピーク、30代から落ちる。
- * 成長力(growthPotential)が高い選手ほど伸び幅が大きく、衰えも遅い。
+ *
+ * ⚠ **独自の成長式を持たないこと**。以前はここに専用の年齢係数
+ *    （`age<=24: (2.6-(age-18)*0.25)*gp`）があり、**プロ意識も出場機会も
+ *    見ずに全員を一様に伸ばして**いた。その結果、指名された選手の
+ *    **一軍到達が86〜93%**（実NPB 40〜50%）になっていた。
+ *    さらに成長と衰退で同じ倍率を使っており、38歳でミート60→14 まで落ちた。
+ *    伸びやすさ・天井・ピーク年齢・衰えは `growthSystem.STAT_GROWTH` が
+ *    単一の権威で、プロの性格は `CATEGORY_GROWTH.npb` の乗数だけで表す。
  */
-function applyAging(a) {
-  const age = a.age;
-  const gp = a.growthPotential ?? 1.0;
-  // 年齢係数。18-24は成長、25-28は微増、29+は下降
-  let delta;
-  if (age <= 24) delta = (2.6 - (age - 18) * 0.25) * gp;
-  else if (age <= 28) delta = 0.5 * gp;
-  // ⚠ 衰退の傾きは 0.75 では急すぎた（10年で累計 -41点）。実データ基準の
-  //    減衰率（能力の -2〜-22%）に合わせて 0.22 にし、能力ごとの差は
-  //    `DECLINE_MULT` で付ける。
-  else delta = -(age - 28) * 0.22;
-
-  // ⚠ **成長と衰退で同じプロファイルを使ってはいけない**。アマ側
-  //    （`growthSystem.STAT_GROWTH[].decline`）で直したのと同じ欠陥がここにもあった。
-  //    実測（28→38歳）: ミート **-76%** / 選球眼 **-76%** / 制球 **-79%** / 走力 -48% と
-  //    38歳の選手がミート60→14 まで落ちていた。しかも**順序が逆**で、
-  //    コメントに「制球は歳を取っても保たれやすい」と書いてあるのに
-  //    制球(1.15)が球速(0.55)の2倍速く落ちていた。
-  //    衰退側はアマ側と同じ実データ基準（走力-22 / 肩-15 / スタミナ-15 /
-  //    パワー-10 / 守備-10 / ミート-8 / 球速-8 / 制球-3 / 選球眼-2%）に揃える。
-  const DECLINE_MULT = {
-    velocity: 0.97, control: 0.15, stamina: 1.05,
-    meet: 0.40, power: 0.45, eye: 0.09, speed: 1.09, steal: 1.00, arm: 0.74, defense: 0.50,
-  };
-  const bump = (obj, key, mult = 1, lo = 1, hi = 100) => {
-    if (!obj || obj[key] == null) return;
-    const m = delta < 0 ? (DECLINE_MULT[key] ?? mult) : mult;
-    const v = obj[key] + delta * m * (0.6 + Math.random() * 0.8);
-    obj[key] = Math.max(lo, Math.min(hi, Math.round(v)));
-  };
-
-  if (a.position === 'pitcher') {
-    // 球速は落ちやすく戻りにくい、制球は歳を取っても保たれやすい
-    bump(a.pitching, 'velocity', 0.55, 110, 168);
-    bump(a.pitching, 'control', 1.15, 1, 100);
-    bump(a.pitching, 'stamina', 0.7, 20, 100);
-  } else {
-    bump(a.batting, 'meet', 1.1);
-    bump(a.batting, 'power', 0.9);
-    bump(a.batting, 'eye', 1.0);
-    bump(a.physical, 'speed', 0.7);
-    bump(a.batting, 'steal', 0.6);      // 足に連動する
-    bump(a.physical, 'arm', 0.5);       // 肩は落ちるが打撃ほどではない
-    bump(a.fielding, 'defense', 0.6);
-    // リードは経験で積み上がる。衰えるのは肩と足であって配球ではない
-    if (a.position === 'catcher' && a.catching?.lead != null) {
-      a.catching.lead = Math.min(99, Math.round(a.catching.lead + Math.max(0.4, delta * 0.5)));
-    }
-  }
+function applyAging(a, isFirstTeam) {
+  applyNpbGrowth(a, isFirstTeam);
 }
 
 /**
@@ -193,9 +169,13 @@ function shouldRetire(a, ability) {
   if (a.age >= 34) return Math.random() < 0.18 + (a.age - 34) * 0.14;
   if (ability < 52 && a.age >= 30) return Math.random() < 0.35;
   // 二軍暮らしが続けば戦力外になる。これが無いと、一軍に上がれないまま
-  // 34歳まで在籍し続ける選手だらけになり、8年以内の脱落が2%しか起きなかった
+  // 34歳まで在籍し続ける選手だらけになり、8年以内の脱落が2%しか起きなかった。
+  // ⚠ **「3年連続で二軍」を条件にしてはいけない**。めぐり合わせ(OPPORTUNITY_SD)で
+  //    年に一度でも一軍に顔を出すとカウンタがリセットされ、この規則が
+  //    ほとんど発火しなくなる（実測で在籍が969人まで膨らみ、実NPBの840を超えた）。
+  //    **直近3年のうち一軍が1年以下**なら二軍暮らしと見なす。
   const recent = (a.npbSeasons || []).slice(-3);
-  if (recent.length >= 3 && recent.every(s => s.level === '二軍') && a.age >= 24) {
+  if (recent.length >= 3 && recent.filter(s => s.level === '一軍').length <= 1 && a.age >= 24) {
     return Math.random() < 0.30 + (a.age - 24) * 0.08;
   }
   return false;
@@ -206,7 +186,7 @@ function shouldRetire(a, ability) {
  * @param {Object} a team.npbAlumni の1エントリ（破壊的に更新する）
  * @param {number} year 現在のゲーム内年度
  */
-export function advanceNpbCareer(a, year) {
+export function advanceNpbCareer(a, year, ctx = null) {
   if (!a || a.retired) return a;
   if (!Array.isArray(a.npbSeasons)) a.npbSeasons = [];
   // 同じ年を二重に処理しない（オフシーズン処理が複数回走っても安全にする）
@@ -214,14 +194,39 @@ export function advanceNpbCareer(a, year) {
   if (year <= a.draftYear) return a;   // 指名された年はまだプロで投げていない
 
   a.age = (a.age ?? 22) + 1;
-  applyAging(a);
+  // 前年に一軍だったか＝今年の出場機会。二軍が続くと伸びない
+  const prevFirst = (a.npbSeasons || []).slice(-1)[0]?.level === '一軍';
+  applyAging(a, prevFirst);
   const ability = evaluateNpbAbility(a);
-  const isFirstTeam = ability >= FIRST_TEAM_THRESHOLD;
-  const isRegular = ability >= REGULAR_THRESHOLD;
+  // ⚠ **一軍は「絶対的な能力の線」ではなく「枠の奪い合い」**。
+  //    絶対値の閾値だけで判定していたため、指名された選手がほぼ全員それを超えて
+  //    **一軍到達89% / レギュラー73%**（実NPB 40〜50% / 15〜20%）になっていた。
+  //    アマ側の天井を下げても動かない——`evaluateNpbAbility` に椅子取りが無いのが本質。
+  //    絶対値は「そもそもプロで通用するか」の床として残し、
+  //    そのうえで**現役選手の中の順位**で枠を切る。
+  const firstLine = Math.max(FIRST_TEAM_THRESHOLD, ctx?.firstTeamLine ?? -Infinity);
+  const regLine = Math.max(REGULAR_THRESHOLD, ctx?.regularLine ?? -Infinity);
+  // ⚠ **能力だけで枠を決めると、順位が動かないので誰も割り込めない**。
+  //    線を引いただけの実装では 一軍到達40%（実40〜50）まで来るが、
+  //    レギュラー到達が **9%**（実15〜20）から動かなかった。能力の年次変化が
+  //    小さいので、一度決まった序列がキャリアを通してほとんど入れ替わらないため。
+  //    実際は故障・チーム事情・その年の出来で「掴む年」と「棒に振る年」がある。
+  //    **その年のめぐり合わせ**を毎年引き直して能力に足す。平均0なので枠の割合は動かない。
+  const chance = gauss() * OPPORTUNITY_SD;
+  const shown = ability + chance;
+  const isFirstTeam = shown >= firstLine;
+  const isRegular = isFirstTeam && shown >= regLine;
 
+  // ⚠ **成績は「絶対的な能力」ではなく「リーグの中での位置」で出すこと**。
+  //    `generateBatterSeason` は 総合70→.265 と絶対値で較正してあるが、
+  //    枠を相対にした結果プールの水準がその物差しより上へ寄る（実測でレギュラーの
+  //    線が 85）。絶対値のまま渡すと **リーグ打率.322 / 本塁打54本 / 防御率2.40 /
+  //    23勝** という実在しない数字が出た。レギュラーの線を基準(REGULAR_THRESHOLD)に
+  //    平行移動して渡す。ctx が無い場合は線＝基準なので従来どおり素通りする。
+  const rel = shown - regLine + REGULAR_THRESHOLD;
   const stats = a.position === 'pitcher'
-    ? generatePitcherSeason(ability, isRegular, a.npbRole)
-    : generateBatterSeason(ability, isRegular);
+    ? generatePitcherSeason(rel, isRegular, a.npbRole)
+    : generateBatterSeason(rel, isRegular);
   // 初めて一軍で役割が付いた時点で固定する
   if (a.position === 'pitcher' && !a.npbRole && (stats.role === '先発' || stats.role === '中継ぎ')) {
     a.npbRole = stats.role;
@@ -230,6 +235,7 @@ export function advanceNpbCareer(a, year) {
   a.npbSeasons.push({
     year, age: a.age,
     level: isFirstTeam ? '一軍' : '二軍',
+    regular: isFirstTeam && isRegular,
     ability: Math.round(ability),
     ...stats,
   });
@@ -245,13 +251,27 @@ export function advanceNpbCareer(a, year) {
  * 全チームの教え子を1年分進める。年度末（オフシーズン）に1回呼ぶ。
  * @returns {number} 処理した人数
  */
+/** 現役の教え子の中で、一軍/レギュラーの枠に相当する能力の線を引く */
+export function npbRosterLines(actives) {
+  const vals = actives.map(evaluateNpbAbility).sort((x, y) => y - x);
+  if (vals.length < 12) return { firstTeamLine: -Infinity, regularLine: -Infinity };
+  const at = (frac) => vals[Math.min(vals.length - 1, Math.floor(vals.length * frac))];
+  return { firstTeamLine: at(NPB_FIRST_TEAM_SHARE), regularLine: at(NPB_REGULAR_SHARE) };
+}
+
 export function processNpbCareers(allTeams, year) {
   let n = 0;
+  const actives = [];
+  for (const team of Object.values(allTeams || {})) {
+    if (!Array.isArray(team?.npbAlumni)) continue;
+    for (const a of team.npbAlumni) if (!a.retired && (a.age ?? 22) < 40) actives.push(a);
+  }
+  const ctx = npbRosterLines(actives);
   for (const team of Object.values(allTeams || {})) {
     if (!Array.isArray(team?.npbAlumni)) continue;
     for (const a of team.npbAlumni) {
       if (a.retired) continue;
-      advanceNpbCareer(a, year);
+      advanceNpbCareer(a, year, ctx);
       n++;
     }
   }
