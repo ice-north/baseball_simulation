@@ -154,7 +154,7 @@ export const growthDecayRate = (base, gp = 1.0) =>
 //    「伸びにくい」ことと「ピークが早い」ことは別の話なので、軸を分ける。
 //    実データのピーク: 走力22-24 / 肩24-26 / パワー27-29 / ミート26-27 /
 //                     守備26-28 / 選球眼28-32（晩成）/ 球速24-26 / 制球28-32
-const STAT_GROWTH = {
+export const STAT_GROWTH = {
   meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.66 },
   power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 1.78 },
   eye:      { peak: 2, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.25 },
@@ -165,6 +165,13 @@ const STAT_GROWTH = {
   control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.44 },
   stamina:  { peak: 2, base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 1.48 },
   velocity: { peak: 5, base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 6.00 },
+  // 体力・体幹・器用さ。年次成長では直接伸ばさないが、**大学とキャンプが使うので
+  // 物差しはここに置く**（進路で「体力60」の意味が変わらないようにするため）。
+  bodyStamina: { peak: 2, ref: 50, base: 1.15, cap: 99, threshold: 80, rate: 0.03, decline: 1.00 },
+  muscle:      { peak: 4, ref: 50, base: 0.77, cap: 99, threshold: 80, rate: 0.03, decline: 0.60 },
+  dexterity:   { peak: 4, ref: 50, base: 0.77, cap: 99, threshold: 80, rate: 0.03, decline: 0.40 },
+  // 回復力は加齢で落ちる一方（`getRecoveryAgeBase` が別に担当）。ここは成長側だけ
+  recovery:    { peak: 2, ref: 50, base: 0.77, cap: 99, threshold: 80, rate: 0.03, decline: 1.20 },
   // ⚠ **変化球とリードは長らく年次成長の対象外だった**。社会人・独立・クラブの
   //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
   //    （大学プールだけが `applyUniversityGrowth` で伸ばしていた）。
@@ -325,7 +332,7 @@ const dampDecline = (current, delta) => Math.max(delta, -Math.max(1, current * D
 //    端数の確率で切り上げれば**期待値が正確に保たれる**（0.36 なら36%で+1）。
 //    ⚠ 下限クランプや base の引き上げで代用しないこと——前者は平均を歪め、
 //      後者は「走力は才能で決まる」という設計（実効重みの序列）を壊す。
-const stochasticRound = (v) => {
+export const stochasticRound = (v) => {
   const f = Math.floor(v);
   return f + (Math.random() < (v - f) ? 1 : 0);
 };

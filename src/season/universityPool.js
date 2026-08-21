@@ -10,6 +10,7 @@ import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionF
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
+import { STAT_GROWTH, growthThreshold, growthDecayRate, stochasticRound } from './growthSystem.js';
 import { generateHandedness } from '../utils/handedness.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { buildToolNorms, toolProfile } from '../game/scoutTools.js';
@@ -1016,6 +1017,16 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
     return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
 
+  // ⚠ **能力の物差し（伸びやすさ・天井・ピーク年齢）は `STAT_GROWTH` が単一の権威**。
+  //    以前は大学だけ完全に別実装で、base も閾値もハードコードされていた
+  //    （技術系は社会人の2.6倍、走力・肩は4〜7倍）。そのため社会人側で天井を
+  //    下げても大学卒業生の上位1%が 79→77 としか動かず、
+  //    **同じ「ミート60」が進路によって別の意味を持つ**状態だった。
+  //    3作品（高校野球版・本作・プロ野球版）で能力値を共有する構想があるので、
+  //    ここが分かれていると作品間でスケールがずれる。
+  // 大学の性格（ランク・specialties・マイルドなプロ意識）は乗数側で表す。
+  const UNIV_GAIN = 2.6;   // STAT_GROWTH の base を大学の成長量に合わせる係数
+
   // プロ意識。**大学は他カテゴリよりマイルド**にする。
   // 意図: 怠け者でも練習環境があり、ある程度は強制的に練習させられるので、
   //       意識の差は出るが独立（0.55〜1.90）やクラブ（0.10〜2.60）ほど開かない。
@@ -1028,21 +1039,25 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
   const discipline = player.personality?.discipline ?? 50;
   const disciplineMult = Math.max(0.78, 1.0 + (discipline - 50) * 0.013);
 
-  const grow = (current, base, spec, cap = 99, threshold = null, rate = 0.05) => {
-    let amount = base * gp * rankMult * disciplineMult * specMult(spec) * (0.7 + Math.random() * 0.6);
-    if (threshold != null) {
-      amount *= decayMult(current, threshold, rate);
-    }
-    return Math.min(cap, current + Math.round(amount));
+  /**
+   * @param key STAT_GROWTH のキー（伸びやすさ・天井・ピーク年齢の出どころ）
+   * @param spec 大学の得意分野（specialties）のキー
+   */
+  const grow = (current, key, spec, capOverride = null, baseMult = 1) => {
+    const g = STAT_GROWTH[key];
+    let amount = g.base * baseMult * UNIV_GAIN * gp * rankMult * disciplineMult
+      * specMult(spec) * (0.7 + Math.random() * 0.6);
+    amount *= decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp));
+    return Math.min(capOverride ?? g.cap, current + stochasticRound(amount));
   };
 
   if (isPitcher) {
-    player.pitching.control = grow(player.pitching.control, 5, 'technique', 99, 70, 0.05);
-    player.pitching.stamina = grow(player.pitching.stamina, 7, 'stamina', 200, 80, 0.03);
-    player.physical.arm = grow(player.physical.arm, 3.5, 'athletic', 99, 80, 0.03);
+    player.pitching.control = grow(player.pitching.control, 'control', 'technique');
+    player.pitching.stamina = grow(player.pitching.stamina, 'stamina', 'stamina');
+    player.physical.arm = grow(player.physical.arm, 'armP', 'athletic');
     const uniVelCap = getVelocityCap(player.physical.arm);
     const uniVelCatchup = getVelocityCatchupMult(player.physical.arm, player.pitching.velocity);
-    player.pitching.velocity = grow(player.pitching.velocity, 2.0 * uniVelCatchup, 'power', uniVelCap, 150, 0.20);
+    player.pitching.velocity = grow(player.pitching.velocity, 'velocity', 'power', uniVelCap, uniVelCatchup);
     if (player.pitching.arsenal) {
       const techBonus = has('technique') ? 1.3 : 1.0;
       player.pitching.arsenal.forEach(pitch => {
@@ -1051,7 +1066,7 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
         }
       });
     }
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 'stamina', 99, 80, 0.03);
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 'bodyStamina', 'stamina');
 
     // 新球種習得チャンス（technique or versatility持ちの大学で確率UP）
     const arsenal = player.pitching?.arsenal || [];
@@ -1076,13 +1091,13 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
       }
     }
   } else {
-    player.batting.meet = grow(player.batting.meet, 5, 'technique', 99, 70, 0.05);
-    player.batting.power = grow(player.batting.power, 3.5, 'power', 99, 70, 0.05);
-    player.batting.eye = grow(player.batting.eye, 3.5, 'mental', 99, 70, 0.05);
-    player.physical.speed = grow(player.physical.speed, 2, 'athletic', 99, 80, 0.03);
-    player.fielding.defense = grow(player.fielding.defense, 3.5, 'defense', 99, 70, 0.05);
-    player.physical.arm = grow(player.physical.arm, 2, 'athletic', 99, 80, 0.03);
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 'stamina', 99, 80, 0.03);
+    player.batting.meet = grow(player.batting.meet, 'meet', 'technique');
+    player.batting.power = grow(player.batting.power, 'power', 'power');
+    player.batting.eye = grow(player.batting.eye, 'eye', 'mental');
+    player.physical.speed = grow(player.physical.speed, 'speed', 'athletic');
+    player.fielding.defense = grow(player.fielding.defense, 'defense', 'defense');
+    player.physical.arm = grow(player.physical.arm, 'arm', 'athletic');
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 'bodyStamina', 'stamina');
 
     // サブポジ成長（defense or versatility持ちの大学で確率UP）
     if (player.positionFitness) {
@@ -1103,9 +1118,9 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
   }
 
   // フィジカル共通
-  player.physical.muscle = grow(player.physical.muscle || 40, 2, 'athletic', 99, 80, 0.03);
-  player.physical.dexterity = grow(player.physical.dexterity || 40, 2, 'athletic', 99, 80, 0.03);
-  player.physical.recovery = grow(player.physical.recovery || 40, 2, 'stamina', 99, 80, 0.03);
+  player.physical.muscle = grow(player.physical.muscle || 40, 'muscle', 'athletic');
+  player.physical.dexterity = grow(player.physical.dexterity || 40, 'dexterity', 'athletic');
+  player.physical.recovery = grow(player.physical.recovery || 40, 'recovery', 'stamina');
 }
 
 // ============================================================
