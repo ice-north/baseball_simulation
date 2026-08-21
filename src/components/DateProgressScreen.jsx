@@ -62,7 +62,6 @@ const Collapse = ({ open, children, className = '' }) => {
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [lastGameResults, setLastGameResults] = useState([]);
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
   const [rankingLeague, setRankingLeague] = useState('all');
   const [selectedRegionTab, setSelectedRegionTab] = useState(null);
@@ -857,9 +856,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const executeSkipDay = (days) => {
     setIsSimulating(true);
-    const { data: afterSimData, results } = simulateGamesOnDate(seasonData);
+    const { data: afterSimData } = simulateGamesOnDate(seasonData);
     let newSeasonData = progressDate(afterSimData, days);
-    setLastGameResults(results);
 
     // 平行世界の試合をシミュレーション
     if (WORLD_DATA.initialized) {
@@ -1201,6 +1199,86 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return { game: best, days };
   }, [seasonData.schedule, seasonData.currentDate, userTeamName]);
 
+  // ============================================================
+  // 昨日の結果
+  //
+  // ⚠ `simulateGamesOnDate` の戻り値 `results` は長らく state に入るだけで
+  //    **一度も描画されていなかった**。進めても何が起きたか画面に返らないので、
+  //    順位表を見に行くまで自チームの勝敗すら分からなかった。
+  //
+  // ⚠ **その戻り値を出すだけでは社会人モードで何も出ない**。社会人の
+  //    `seasonData.schedule` はリーグ戦を持たず（地域大会→都市対抗→日本選手権の
+  //    トーナメント制）、`todaysGames` は年間ずっと0件。実際に画面には毎日
+  //    「本日は試合がありません（休養日）」だけが出ていた。
+  //
+  // そこで**押した瞬間の戻り値ではなく、データから「昨日」を引き直す**。
+  // 他の画面から戻ってきても残るし、自分で采配した試合・スキップした試合も
+  // 同じ経路で拾える（どちらもブラケット／results に記録されるため）。
+  // ============================================================
+  const yesterday = useMemo(() => {
+    const cd = seasonData.currentDate;
+    const d = new Date(cd.year, cd.month - 1, cd.day - 1);
+    return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+  }, [seasonData.currentDate]);
+
+  const yesterdayResults = useMemo(() => {
+    const y = yesterday;
+    const same = (d) => d && d.year === y.year && d.month === y.month && d.day === y.day;
+    const out = [];
+
+    // リーグ戦（独立・大学モード）
+    for (const r of seasonData.results || []) {
+      if (!same(r.date) || !r.result) continue;
+      out.push({
+        key: `L${r.gameId}`, label: null,
+        team1: r.away, score1: r.result.awayScore,
+        team2: r.home, score2: r.result.homeScore,
+        decisions: r.result.decisions || null,
+      });
+    }
+
+    // トーナメント（社会人モードはこちらが本体）
+    const sweep = (bracket, label, regionId = null) => {
+      if (!bracket?.rounds) return;
+      for (let r = 0; r < bracket.rounds.length; r++) {
+        for (let m = 0; m < bracket.rounds[r].length; m++) {
+          const mt = bracket.rounds[r][m];
+          if (!mt || mt.isBye || !mt.winner || !Array.isArray(mt.score)) continue;
+          const d = bracket.matchDates?.[r]?.[m] || bracket.roundDates?.[r];
+          if (!same(d)) continue;
+          out.push({
+            key: `T${label}-${regionId || ''}-${r}-${m}`, label, regionId,
+            team1: mt.team1, score1: mt.score[0],
+            team2: mt.team2, score2: mt.score[1],
+            decisions: null,
+          });
+        }
+      }
+    };
+    const rt = seasonData.regionalTournament;
+    if (rt?.generated) for (const [rid, reg] of Object.entries(rt.brackets || {})) sweep(reg?.bracket, '地域大会', rid);
+    const td = seasonData.toshitaikou;
+    if (td?.generated) {
+      for (const [rid, q] of Object.entries(td.qualifiers || {})) {
+        sweep(q?.mainBracket, '都市対抗予選', rid);
+        sweep(q?.losersBracket, '都市対抗予選', rid);
+      }
+      sweep(td.mainTournament?.bracket, '都市対抗本戦');
+    }
+    sweep(seasonData.nihonSenshuken?.mainTournament?.bracket, '日本選手権');
+    sweep(seasonData.clubSenshuken?.mainTournament?.bracket, 'クラブ選手権');
+
+    // ⚠ 全国12地区ぶんが一度に出ると、自分に関係の無い試合で埋まる（実測51試合）。
+    //    自チーム → 自分の地区 → 全国 の順に並べ、表示は上から詰める。
+    const myRegion = rt?.userRegionId || td?.userRegionId || null;
+    const rank = (x) => (x.team1 === userTeamName || x.team2 === userTeamName) ? 0
+      : (myRegion && x.regionId === myRegion) ? 1
+      : x.regionId ? 3 : 2;   // 全国大会（regionId なし）は地区より上
+    out.sort((a, b) => rank(a) - rank(b));
+    return out;
+  }, [seasonData.results, seasonData.regionalTournament, seasonData.toshitaikou,
+      seasonData.nihonSenshuken, seasonData.clubSenshuken, yesterday, userTeamName]);
+
   // 今日のトーナメント試合を取得（「本日の対戦」欄に表示するため）
   const todaysTournamentMatches = useMemo(() => {
     const matches = [];
@@ -1357,6 +1435,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.clubSenshuken, seasonData.regionalTournament, seasonData.currentDate, userTeamName]);
 
   // 月間戦績を1回だけ計算（ヘッダーとサマリーの両方で使用）
+  // 進行バーに出す「本日の自チームの予定」。トーナメントは todaysTournamentMatches が
+  // 自チームの次戦だけを持っているので、そこと自チームのリーグ戦を見る。
+  const todaysUserMatch = useMemo(() => {
+    const t = todaysTournamentMatches?.[0];
+    if (t) return `${t.label} vs ${t.opponent}`;
+    const g = todaysGames.find(x => x.home === userTeamName || x.away === userTeamName);
+    if (g) return `vs ${g.home === userTeamName ? g.away : g.home}`;
+    return null;
+  }, [todaysTournamentMatches, todaysGames, userTeamName]);
+
   const monthlyStats = useMemo(() => {
     const monthGames = calendarCells
       .filter(c => c.day !== null)
@@ -2166,9 +2254,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           <div className="min-w-0">
             <div className="text-xs text-gray-300">本日</div>
             <div className="text-sm font-bold text-gray-100 truncate">
-              {(todaysGames.length + todaysTournamentMatches.length) > 0
-                ? <>リーグ・大会 <span className="text-accent tabular-nums">{todaysGames.length + todaysTournamentMatches.length}</span> 試合</>
-                : <span className="text-gray-300">試合なし（休養日）</span>}
+              {/* ⚠ ここは**自チームの予定**。全国の試合数を出すと、自分に試合が無い日でも
+                  「51試合」と出て意味を成さない（社会人は毎日どこかの地区が動いている） */}
+              {todaysUserMatch
+                ? <span className="text-accent">{todaysUserMatch}</span>
+                : <span className="text-gray-300">自チームの試合なし</span>}
             </div>
           </div>
           {nextUserGame && (
@@ -2193,6 +2283,72 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           {isSimulating ? '進行中…' : '▶ 1日進める'}
         </button>
       </div>
+
+      {/* 昨日の結果。押した手応えを返すのが役目なので、進行バーの直下・
+          カレンダーより上に置く。自チームの試合だけ格を上げる。 */}
+      {yesterdayResults.length > 0 && (() => {
+        const isMine = (r) => r.team1 === userTeamName || r.team2 === userTeamName;
+        const mine = yesterdayResults.filter(isMine);
+        const others = yesterdayResults.filter(r => !isMine(r));
+        return (
+          <div className="mb-3 rounded-2xl border border-gray-700/40 bg-surface-2 px-4 py-3 shadow-xl">
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-sm font-bold text-gray-100 tabular-nums">
+                {yesterday.month}/{yesterday.day} の結果
+              </span>
+              <span className="text-xs text-gray-300 tabular-nums">{yesterdayResults.length}試合</span>
+            </div>
+
+            {mine.map(r => {
+              const first = r.team1 === userTeamName;
+              const my = first ? r.score1 : r.score2;
+              const opp = first ? r.score2 : r.score1;
+              const oppName = first ? r.team2 : r.team1;
+              const outcome = my > opp ? 'win' : my < opp ? 'lose' : 'draw';
+              const d = r.decisions || {};
+              return (
+                <div key={r.key} className={`rounded-xl px-3 py-2.5 mb-2 border ${
+                  outcome === 'win' ? 'bg-[var(--accent-soft)] border-[var(--accent)]/50'
+                    : 'bg-gray-800 border-gray-600'}`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-lg font-black shrink-0 w-8 text-center ${
+                      outcome === 'win' ? 'text-accent' : 'text-gray-300'}`}>
+                      {outcome === 'win' ? '勝' : outcome === 'lose' ? '敗' : '分'}
+                    </span>
+                    <span className="text-2xl font-black text-white tabular-nums shrink-0">
+                      {my}<span className="text-gray-300 mx-1.5 font-bold text-lg">-</span>{opp}
+                    </span>
+                    <span className="text-sm text-gray-100 truncate min-w-0">
+                      <span className="text-gray-300 mr-1">vs</span>{oppName}
+                    </span>
+                    {r.label && <span className="text-xs text-gray-300 shrink-0">{r.label}</span>}
+                    <span className="ml-auto text-xs text-gray-300 shrink-0 truncate max-w-[42%]">
+                      {d.winningPitcher?.name && <>勝 <span className="text-gray-100">{d.winningPitcher.name}</span></>}
+                      {d.losingPitcher?.name && <span className="ml-2">敗 <span className="text-gray-100">{d.losingPitcher.name}</span></span>}
+                      {d.savePitcher?.name && <span className="ml-2">S <span className="text-gray-100">{d.savePitcher.name}</span></span>}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {others.length > 0 && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                {others.slice(0, 16).map(r => (
+                  <div key={r.key} className="flex items-center gap-2 text-xs tabular-nums">
+                    <span className={`truncate min-w-0 flex-1 text-right ${r.score1 > r.score2 ? 'text-gray-100 font-bold' : 'text-gray-300'}`}>{r.team1}</span>
+                    <span className="text-gray-100 shrink-0 w-12 text-center">{r.score1} - {r.score2}</span>
+                    <span className={`truncate min-w-0 flex-1 ${r.score2 > r.score1 ? 'text-gray-100 font-bold' : 'text-gray-300'}`}>{r.team2}</span>
+                  </div>
+                ))}
+                {others.length > 16 && (
+                  <div className="text-xs text-gray-300 col-span-2 mt-0.5">ほか {others.length - 16} 試合</div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
@@ -2237,7 +2393,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 return (
                   <div key={i} className={`min-h-[62px] p-1 rounded-lg text-sm transition-all ${
                     cell.day === null ? 'bg-transparent' :
-                    cell.isToday ? 'bg-gradient-to-br from-green-700/90 to-emerald-800/80 border-2 border-green-400 shadow-lg shadow-green-500/30 ring-2 ring-green-400/30' :
+                    // ⚠ 「今日」は緑のベタ塗り＋グロー＋リングで、画面で一番強い要素だった。
+                    //    一番強くあるべきなのは進行バーの「1日進める」なので、
+                    //    現在地はサイドバー・タブと同じアクセント（＝ここに居る）の語彙に揃える
+                    cell.isToday ? 'bg-[var(--accent-soft)] border border-[var(--accent)]' :
                     hasUserTournament ? 'bg-yellow-900/30 border border-yellow-500/30 hover:border-yellow-400/40' :
                     hasUserGame && !cell.games.some(g => g.result) ? 'bg-blue-900/30 border border-blue-500/20 hover:border-blue-400/40' :
                     hasUserGame && cell.games.some(g => g.result) ? 'bg-gray-700/60 border border-gray-600/20' :
@@ -2248,7 +2407,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   }`}>
                     {cell.day && (
                       <>
-                        <div className={`font-bold mb-0.5 text-xs leading-none ${cell.isToday ? 'text-green-300' : colIdx === 0 ? 'text-red-400' : colIdx === 6 ? 'text-blue-400' : 'text-gray-200'}`}>{cell.day}</div>
+                        <div className={`font-bold mb-0.5 text-xs leading-none ${cell.isToday ? 'text-accent' : colIdx === 0 ? 'text-red-400' : colIdx === 6 ? 'text-blue-400' : 'text-gray-200'}`}>{cell.day}</div>
                         {hasTournament && (
                           <div className="mb-0.5">
                             {(() => {
