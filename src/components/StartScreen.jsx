@@ -233,13 +233,6 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-xs text-gray-400">
-              毎年 <span className="text-gray-300 tabular-nums">5,000</span> 人の高校3年生が生まれ、
-              そのうち <span className="text-gray-300 tabular-nums">120</span> 人だけがプロへ進む
-            </p>
-            <p className="mt-1 text-xs text-gray-400">
-              箱庭モード＝成長・ドラフト・引退なし。自由に編集して戦う
-            </p>
           </div>
         )}
       </div>
