@@ -60,216 +60,191 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
     setShowEditSlotSelect(true);
   };
 
+  // セーブスロット1件ぶんの行。コンティニュー／エディットで共有する
+  const SlotRow = ({ slot, index, onPick }) => (
+    <button
+      key={index}
+      onClick={() => slot && onPick(index)}
+      disabled={!slot}
+      className={`w-full text-left px-4 py-2.5 rounded-lg border transition ${
+        slot ? 'bg-surface-2 border-gray-700 hover:border-[var(--accent)] hover:bg-gray-700/60'
+             : 'bg-transparent border-gray-800 cursor-not-allowed'}`}
+    >
+      <div className="flex items-baseline gap-2">
+        <span className={`text-sm font-bold ${slot ? 'text-white' : 'text-gray-400'}`}>スロット {index + 1}</span>
+        {slot
+          ? <span className="text-xs text-gray-300 tabular-nums truncate">
+              {slot.year}年目 {slot.date.month}/{slot.date.day}{slot.teamName ? ` · ${slot.teamName}` : ''}
+            </span>
+          : <span className="text-xs text-gray-400">空</span>}
+        {slot?.timestamp && (
+          <span className="ml-auto text-xs text-gray-400 tabular-nums shrink-0">
+            {new Date(slot.timestamp).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+
+  // メニューを載せるカード。本編のカード（surface-2 + gray-700）と同じ見た目にする
+  const MenuCard = ({ title, children }) => (
+    <div className="w-full max-w-sm rounded-2xl border border-gray-700/60 bg-surface-2/70 backdrop-blur p-5 shadow-2xl">
+      {title && <p className="text-xs text-gray-300 mb-3">{title}</p>}
+      {children}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
-      <div className="text-center">
-        <div className="mb-10">
-          <h1 className="text-6xl font-bold text-white tracking-tight">NEXT STAGE</h1>
-          <p className="text-gray-400 text-sm mt-2 tracking-widest uppercase">Baseball Simulation</p>
+    // ⚠ 地色は本編と同じ `surface-0`。アクセントのにじみだけで奥行きを出す
+    //    （以前は `from-gray-900 to-gray-800` の灰色グラデで、本編の紺と繋がっていなかった）。
+    <div className="min-h-screen bg-surface-0 relative overflow-hidden flex items-center">
+      {/* 背景: アクセントのにじみ。画像を持たずにタイトルらしさを出す。
+          中心はタイトルの位置（左3割・上下中央）に合わせる */}
+      <div aria-hidden className="pointer-events-none absolute inset-0"
+        style={{ background: 'radial-gradient(48% 46% at 32% 48%, rgba(34,211,238,0.11) 0%, rgba(34,211,238,0) 72%)' }} />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/40 to-transparent" />
+
+      <div className="relative mx-auto w-full max-w-5xl px-8 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-10 items-center">
+        {/* 左: タイトル */}
+        <div className="min-w-0">
+          <h1 className="text-5xl md:text-6xl font-bold text-white tracking-tight leading-none">NEXT STAGE</h1>
+          <div className="mt-3 flex items-center gap-3">
+            <span className="h-px w-10 bg-[var(--accent)]" />
+            <p className="text-xs text-gray-300 tracking-[0.25em] uppercase">Baseball Simulation</p>
+          </div>
+          <p className="mt-6 text-sm text-gray-300 leading-relaxed max-w-md">
+            高校・大学・社会人・独立リーグまで、すべてが繋がった<b className="text-gray-100">ひとつの球界</b>。
+            監督として選手を育て、<b className="text-gray-100">プロへ送り出す</b>。
+          </p>
+
+          {/* 世界の規模。装飾ではなく中身を出す＝本編と同じ「密度のある数字」の語彙 */}
+          <div className="mt-7 max-w-md">
+            <div className="flex flex-wrap gap-x-7 gap-y-2">
+              {[['996', '高校'], ['234', '大学'], ['300', '社会人'], ['26', '独立']].map(([n, l]) => (
+                <div key={l} className="flex items-baseline gap-1.5">
+                  <span className="text-xl font-bold text-accent tabular-nums leading-none">{n}</span>
+                  <span className="text-xs text-gray-300">{l}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-gray-400 leading-relaxed">
+              毎年 <span className="text-gray-300 tabular-nums">5,000</span> 人の高校3年生が生まれ、
+              そのうち <span className="text-gray-300 tabular-nums">120</span> 人だけがプロへ進む。
+            </p>
+          </div>
+
+          {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
+          {emergencyInfo && !showSlotSelect && !showEditSlotSelect && (
+            <div className="mt-6 max-w-md p-3 rounded-xl border border-amber-600/60 bg-amber-900/20">
+              <div className="text-amber-300 font-bold text-sm mb-1">緊急バックアップが見つかりました</div>
+              <p className="text-xs text-gray-300 mb-2">
+                前回アプリが予期せず終了した際の進行データ（{emergencyInfo.year ? `${emergencyInfo.year}年目・` : ''}{emergencyInfo.gameMode || ''}）です。復元先を選んでください。
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {[0, 1, 2].map(i => (
+                  <button key={i} onClick={() => handleRestoreEmergency(i)} className="btn-warn px-3 py-1.5 rounded text-xs">
+                    スロット{i + 1}へ復元
+                  </button>
+                ))}
+                <button onClick={() => { clearEmergencySave(); setEmergencyInfo(null); }}
+                  className="btn-secondary px-3 py-1.5 rounded text-xs">破棄</button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
-        {emergencyInfo && !showSlotSelect && !showEditSlotSelect && (
-          <div className="mb-8 mx-auto max-w-md p-4 rounded-lg border-2 border-amber-500/60 bg-amber-900/20 text-left">
-            <div className="text-amber-300 font-bold mb-1">🛟 緊急バックアップが見つかりました</div>
-            <p className="text-sm text-gray-300 mb-3">
-              前回アプリが予期せず終了した際の進行データ（{emergencyInfo.year ? `${emergencyInfo.year}年目・` : ''}{emergencyInfo.gameMode || ''}）です。復元先スロットを選んでください。
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {[0, 1, 2].map(i => (
-                <button key={i} onClick={() => handleRestoreEmergency(i)}
-                  className="btn-warn px-3 py-1.5 rounded text-sm">
-                  スロット{i + 1}へ復元
-                </button>
-              ))}
-              <button onClick={() => { clearEmergencySave(); setEmergencyInfo(null); }}
-                className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm">破棄</button>
-            </div>
-          </div>
-        )}
-
+        {/* 右: メニュー */}
         {showSlotSelect ? (
-          <div className="flex flex-col items-center space-y-3">
-            <p className="text-base text-gray-300 mb-4">セーブデータを選択</p>
-            {saveSlots.map((slot, index) => (
-              <button
-                key={index}
-                onClick={() => slot && onContinue(index)}
-                disabled={!slot}
-                className={`block w-80 px-6 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
-                  'btn-primary'
-                }`}
-              >
-                {slot ? (
-                  <div>
-                    <div>スロット {index + 1}</div>
-                    <div className="text-sm font-normal opacity-80">
-                      Year {slot.year} - {slot.date.month}月{slot.date.day}日{slot.teamName ? ` / ${slot.teamName}` : ''}
-                    </div>
-                    <div className="text-xs font-normal opacity-60">
-                      {slot.timestamp ? new Date(slot.timestamp).toLocaleString('ja-JP') : ''}
-                    </div>
-                  </div>
-                ) : (
-                  <div>スロット {index + 1} - 空</div>
-                )}
-              </button>
-            ))}
-
-            {/* オートセーブから続ける（コンティニュー内に配置） */}
+          <MenuCard title="つづきから">
+            <div className="space-y-2">
+              {saveSlots.map((slot, index) => <SlotRow key={index} slot={slot} index={index} onPick={onContinue} />)}
+            </div>
             {autosaveInfo && onContinueAutosave && (
               <>
-                <div className="w-80 border-t border-gray-700/60 my-1"></div>
-                <button
-                  onClick={onContinueAutosave}
-                  className="btn-primary w-80 px-6 py-3 rounded-lg font-semibold text-sm border transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                >
-                  💾 オートセーブから続ける
-                  <span className="text-xs font-normal opacity-70">
+                <div className="border-t border-gray-700/60 my-3" />
+                <button onClick={onContinueAutosave}
+                  className="btn-primary w-full px-4 py-2.5 rounded-lg text-sm transition active:scale-[0.99]">
+                  オートセーブから続ける
+                  <span className="ml-2 text-xs font-normal opacity-70 tabular-nums">
                     {autosaveInfo.year ? `${autosaveInfo.year}年目` : ''}{autosaveInfo.date ? ` ${autosaveInfo.date.month}月` : ''}{fmtDate(autosaveInfo.timestamp) ? `・${fmtDate(autosaveInfo.timestamp)}` : ''}
                   </span>
                 </button>
               </>
             )}
-
-            <button
-              onClick={() => setShowSlotSelect(false)}
-              className="mt-4 text-gray-300 hover:text-gray-200 text-sm transition flex items-center gap-1"
-            >
-              ← 戻る
-            </button>
-          </div>
+            <button onClick={() => setShowSlotSelect(false)}
+              className="mt-3 w-full text-xs text-gray-300 hover:text-white py-1.5 transition">← 戻る</button>
+          </MenuCard>
         ) : showEditSlotSelect ? (
-          <div className="flex flex-col items-center space-y-3">
-            <p className="text-base text-gray-300 mb-4">編集するセーブデータを選択</p>
-            {saveSlots.map((slot, index) => (
-              <button
-                key={index}
-                onClick={() => slot && onEdit(index)}
-                disabled={!slot}
-                className={`block w-80 px-6 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
-                  'btn-primary'
-                }`}
-              >
-                {slot ? (
-                  <div>
-                    <div>スロット {index + 1}</div>
-                    <div className="text-sm font-normal opacity-80">
-                      Year {slot.year} - {slot.date.month}月{slot.date.day}日{slot.teamName ? ` / ${slot.teamName}` : ''}
-                    </div>
-                    <div className="text-xs font-normal opacity-60">
-                      {slot.timestamp ? new Date(slot.timestamp).toLocaleString('ja-JP') : ''}
-                    </div>
-                  </div>
-                ) : (
-                  <div>スロット {index + 1} - 空</div>
-                )}
-              </button>
-            ))}
-
-            <div className="border-t border-gray-700 w-80 my-2"></div>
-
-            <button
-              onClick={onEditCorporateNames}
-              className="btn-secondary block w-80 px-6 py-3 rounded-lg text-lg transition shadow-lg"
-            >
-              <div>社会人チーム設定</div>
-              <div className="text-sm font-normal text-indigo-200">地域・強さ・種別・名前を編集（全セーブ共通）</div>
+          <MenuCard title="編集するデータ">
+            <div className="space-y-2">
+              {saveSlots.map((slot, index) => <SlotRow key={index} slot={slot} index={index} onPick={onEdit} />)}
+            </div>
+            <div className="border-t border-gray-700/60 my-3" />
+            <button onClick={onEditCorporateNames}
+              className="btn-secondary w-full px-4 py-2.5 rounded-lg text-sm text-left transition">
+              社会人チーム設定
+              <span className="block text-xs font-normal opacity-70 mt-0.5">地域・強さ・種別・名前を編集（全セーブ共通）</span>
             </button>
-
-            <button
-              onClick={() => setShowEditSlotSelect(false)}
-              className="mt-4 text-gray-300 hover:text-gray-200 text-sm transition flex items-center gap-1"
-            >
-              ← 戻る
-            </button>
-          </div>
+            <button onClick={() => setShowEditSlotSelect(false)}
+              className="mt-3 w-full text-xs text-gray-300 hover:text-white py-1.5 transition">← 戻る</button>
+          </MenuCard>
         ) : (
-          <div className="flex flex-col items-center gap-3">
+          <MenuCard>
+            {/* ⚠ `.btn-primary` は「次に押すもの」1つだけ。セーブがあれば
+                つづきから、無ければ はじめから が次の一手になる */}
+            <div className="space-y-2">
+              <button
+                onClick={handleContinue}
+                disabled={!canContinue}
+                className={`${canContinue ? 'btn-primary' : 'btn-secondary'} w-full px-6 py-3.5 rounded-xl text-base transition active:scale-[0.99]`}
+              >
+                つづきから
+              </button>
+              <button
+                onClick={onNewGame}
+                className={`${canContinue ? 'btn-secondary' : 'btn-primary'} w-full px-6 py-3.5 rounded-xl text-base transition active:scale-[0.99]`}
+              >
+                はじめから
+              </button>
+            </div>
 
-            {/* 主要アクション */}
-            <button
-              onClick={onNewGame}
-              className="btn-primary w-80 active:scale-[0.98] px-8 py-4 rounded-xl text-xl transition-all shadow-lg"
-            >
-              NEW GAME
+            <div className="border-t border-gray-700/60 my-3" />
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={onSandbox} className="btn-secondary px-4 py-2 rounded-lg text-sm transition">箱庭モード</button>
+              <button onClick={handleEdit} className="btn-secondary px-4 py-2 rounded-lg text-sm transition">エディット</button>
+            </div>
+            <button onClick={onManual}
+              className="mt-2 w-full text-sm text-gray-300 hover:text-white py-2 rounded-lg hover:bg-gray-700/40 transition">
+              マニュアル
             </button>
+            <p className="mt-2.5 text-xs text-gray-400 leading-relaxed">
+              箱庭モード＝成長・ドラフト・引退なし。自由にチームを編集してシーズンを戦う
+            </p>
 
-            <button
-              onClick={handleContinue}
-              disabled={!canContinue}
-              className={`w-80 px-8 py-4 rounded-xl font-bold text-xl transition-all shadow-lg active:scale-[0.98] ${
-                'btn-primary shadow-none'
-              }`}
-            >
-              CONTINUE
-            </button>
+            <div className="border-t border-gray-700/60 my-3" />
 
-            {/* 区切り */}
-            <div className="w-80 border-t border-gray-700/60 my-1"></div>
-
-            {/* サブアクション */}
-            <button
-              onClick={onSandbox}
-              className="w-80 bg-gray-700/80 hover:bg-gray-600/80 border border-gray-600/50 hover:border-amber-600/50 text-gray-200 hover:text-amber-300 px-8 py-3 rounded-xl font-semibold text-base transition-all active:scale-[0.98]"
-            >
-              SANDBOX
-            </button>
-
-            <button
-              onClick={handleEdit}
-              className="w-80 bg-gray-700/80 hover:bg-gray-600/80 border border-gray-600/50 hover:border-purple-600/50 text-gray-200 hover:text-purple-300 px-8 py-3 rounded-xl font-semibold text-base transition-all active:scale-[0.98]"
-            >
-              EDIT
-            </button>
-
-            <button
-              onClick={onManual}
-              className="w-80 text-gray-400 hover:text-gray-300 px-8 py-2 rounded-xl text-sm transition-all"
-            >
-              MANUAL
-            </button>
-
-            {/* チュートリアル(ヒント)表示のON/OFF */}
-            <button
-              onClick={() => { const next = !tutorialOn; setTutorialEnabled(next); setTutorialOn(next); if (next) resetTutorialProgress(); }}
-              className="w-80 text-xs text-gray-400 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
-              title="ゲーム中に操作ヒントを表示するかどうか"
-            >
-              <span>💡 チュートリアル（操作ヒント）</span>
-              <span className={`font-bold px-2 py-0.5 rounded ${tutorialOn ? 'seg-on' : 'seg'}`}>
-                {tutorialOn ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            {/* オートセーブのON/OFF */}
-            <button
-              onClick={() => { const next = !autosaveOn; setAutosaveEnabled(next); setAutosaveOn(next); }}
-              className="w-80 text-xs text-gray-400 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
-              title="月替わり・年替わりの節目で自動保存します"
-            >
-              <span>💾 オートセーブ</span>
-              <span className={`font-bold px-2 py-0.5 rounded ${autosaveOn ? 'seg-on' : 'seg'}`}>
-                {autosaveOn ? 'ON' : 'OFF'}
-              </span>
-            </button>
-
-            {/* 画面スケール（小さい画面で1画面に収める） */}
-            <button
-              onClick={() => setUiScaleState(cycleUiScale())}
-              className="w-80 text-xs text-gray-400 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
-              title="画面が横にはみ出す場合は「自動」または縮小を選ぶと1画面に収まります"
-            >
-              <span>🖥 画面スケール</span>
-              <span className="font-bold px-2 py-0.5 rounded bg-cyan-700/60 text-cyan-200">
-                {UI_SCALE_LABEL[uiScale] || uiScale}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {!hasSaveData && !showSlotSelect && !showEditSlotSelect && (
-          <p className="text-xs text-gray-400 mt-8">SANDBOX: 成長・ドラフト・引退なし。自由にチームを編集してシーズンを戦うモード</p>
+            {/* 設定は主要アクションと同じ格にしない。1行に畳んで下に置く */}
+            <div className="space-y-1">
+              {[
+                { label: 'チュートリアル', value: tutorialOn ? 'ON' : 'OFF', on: tutorialOn,
+                  onClick: () => { const n = !tutorialOn; setTutorialEnabled(n); setTutorialOn(n); if (n) resetTutorialProgress(); },
+                  title: 'ゲーム中に操作ヒントを表示するかどうか' },
+                { label: 'オートセーブ', value: autosaveOn ? 'ON' : 'OFF', on: autosaveOn,
+                  onClick: () => { const n = !autosaveOn; setAutosaveEnabled(n); setAutosaveOn(n); },
+                  title: '月替わり・年替わりの節目で自動保存します' },
+                { label: '画面スケール', value: UI_SCALE_LABEL[uiScale] || uiScale, on: true,
+                  onClick: () => setUiScaleState(cycleUiScale()),
+                  title: '画面が横にはみ出す場合は「自動」または縮小を選ぶと1画面に収まります' },
+              ].map(o => (
+                <button key={o.label} onClick={o.onClick} title={o.title}
+                  className="w-full flex items-center justify-between text-xs text-gray-300 hover:text-white px-1 py-1 transition">
+                  <span>{o.label}</span>
+                  <span className={`font-bold px-2 py-0.5 rounded ${o.on ? 'seg-on' : 'seg'}`}>{o.value}</span>
+                </button>
+              ))}
+            </div>
+          </MenuCard>
         )}
       </div>
     </div>
