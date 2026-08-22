@@ -97,63 +97,41 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
   return (
     // ⚠ 地色は本編と同じ `surface-0`。アクセントのにじみだけで奥行きを出す
     //    （以前は `from-gray-900 to-gray-800` の灰色グラデで、本編の紺と繋がっていなかった）。
-    <div className="min-h-screen bg-surface-0 relative overflow-hidden flex items-center">
-      {/* 背景: アクセントのにじみ。画像を持たずにタイトルらしさを出す。
-          中心はタイトルの位置（左3割・上下中央）に合わせる */}
+    <div className="min-h-screen bg-surface-0 relative overflow-hidden flex items-center justify-center py-6">
+      {/* 背景: アクセントのにじみ。画像を持たずにタイトルらしさを出す */}
       <div aria-hidden className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(48% 46% at 32% 48%, rgba(34,211,238,0.11) 0%, rgba(34,211,238,0) 72%)' }} />
+        style={{ background: 'radial-gradient(46% 40% at 50% 34%, rgba(34,211,238,0.10) 0%, rgba(34,211,238,0) 72%)' }} />
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/40 to-transparent" />
 
-      <div className="relative mx-auto w-full max-w-5xl px-8 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-10 items-center">
-        {/* 左: タイトル */}
-        <div className="min-w-0">
-          <h1 className="text-5xl md:text-6xl font-bold text-white tracking-tight leading-none">NEXT STAGE</h1>
-          <div className="mt-3 flex items-center gap-3">
-            <span className="h-px w-10 bg-[var(--accent)]" />
-            <p className="text-xs text-gray-300 tracking-[0.25em] uppercase">Baseball Simulation</p>
-          </div>
-          <p className="mt-6 text-sm text-gray-300 leading-relaxed max-w-md">
-            高校・大学・社会人・独立リーグまで、すべてが繋がった<b className="text-gray-100">ひとつの球界</b>。
-            監督として選手を育て、<b className="text-gray-100">プロへ送り出す</b>。
-          </p>
-
-          {/* 世界の規模。装飾ではなく中身を出す＝本編と同じ「密度のある数字」の語彙 */}
-          <div className="mt-7 max-w-md">
-            <div className="flex flex-wrap gap-x-7 gap-y-2">
-              {[['996', '高校'], ['234', '大学'], ['300', '社会人'], ['26', '独立']].map(([n, l]) => (
-                <div key={l} className="flex items-baseline gap-1.5">
-                  <span className="text-xl font-bold text-accent tabular-nums leading-none">{n}</span>
-                  <span className="text-xs text-gray-300">{l}</span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-gray-400 leading-relaxed">
-              毎年 <span className="text-gray-300 tabular-nums">5,000</span> 人の高校3年生が生まれ、
-              そのうち <span className="text-gray-300 tabular-nums">120</span> 人だけがプロへ進む。
-            </p>
-          </div>
-
-          {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
-          {emergencyInfo && !showSlotSelect && !showEditSlotSelect && (
-            <div className="mt-6 max-w-md p-3 rounded-xl border border-amber-600/60 bg-amber-900/20">
-              <div className="text-amber-300 font-bold text-sm mb-1">緊急バックアップが見つかりました</div>
-              <p className="text-xs text-gray-300 mb-2">
-                前回アプリが予期せず終了した際の進行データ（{emergencyInfo.year ? `${emergencyInfo.year}年目・` : ''}{emergencyInfo.gameMode || ''}）です。復元先を選んでください。
-              </p>
-              <div className="flex gap-2 flex-wrap">
-                {[0, 1, 2].map(i => (
-                  <button key={i} onClick={() => handleRestoreEmergency(i)} className="btn-warn px-3 py-1.5 rounded text-xs">
-                    スロット{i + 1}へ復元
-                  </button>
-                ))}
-                <button onClick={() => { clearEmergencySave(); setEmergencyInfo(null); }}
-                  className="btn-secondary px-3 py-1.5 rounded text-xs">破棄</button>
-              </div>
-            </div>
-          )}
+      <div className="relative w-full max-w-md px-6 flex flex-col items-center">
+        {/* タイトル */}
+        <h1 className="text-5xl font-bold text-white tracking-tight leading-none">NEXT STAGE</h1>
+        <div className="mt-2.5 mb-5 flex items-center gap-3">
+          <span className="h-px w-10 bg-[var(--accent)]" />
+          <p className="text-xs text-gray-300 tracking-[0.25em] uppercase">Baseball Simulation</p>
+          <span className="h-px w-10 bg-[var(--accent)]" />
         </div>
 
-        {/* 右: メニュー */}
+        {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
+        {emergencyInfo && !showSlotSelect && !showEditSlotSelect && (
+          <div className="w-full max-w-sm mb-4 p-3 rounded-xl border border-amber-600/60 bg-amber-900/20 text-left">
+            <div className="text-amber-300 font-bold text-sm mb-1">緊急バックアップが見つかりました</div>
+            <p className="text-xs text-gray-300 mb-2">
+              前回アプリが予期せず終了した際の進行データ（{emergencyInfo.year ? `${emergencyInfo.year}年目・` : ''}{emergencyInfo.gameMode || ''}）です。復元先を選んでください。
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {[0, 1, 2].map(i => (
+                <button key={i} onClick={() => handleRestoreEmergency(i)} className="btn-warn px-3 py-1.5 rounded text-xs">
+                  スロット{i + 1}へ復元
+                </button>
+              ))}
+              <button onClick={() => { clearEmergencySave(); setEmergencyInfo(null); }}
+                className="btn-secondary px-3 py-1.5 rounded text-xs">破棄</button>
+            </div>
+          </div>
+        )}
+
+        {/* メニュー */}
         {showSlotSelect ? (
           <MenuCard title="つづきから">
             <div className="space-y-2">
@@ -196,13 +174,13 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               <button
                 onClick={handleContinue}
                 disabled={!canContinue}
-                className={`${canContinue ? 'btn-primary' : 'btn-secondary'} w-full px-6 py-3.5 rounded-xl text-base transition active:scale-[0.99]`}
+                className={`${canContinue ? 'btn-primary' : 'btn-secondary'} w-full px-6 py-3 rounded-xl text-base transition active:scale-[0.99]`}
               >
                 つづきから
               </button>
               <button
                 onClick={onNewGame}
-                className={`${canContinue ? 'btn-secondary' : 'btn-primary'} w-full px-6 py-3.5 rounded-xl text-base transition active:scale-[0.99]`}
+                className={`${canContinue ? 'btn-secondary' : 'btn-primary'} w-full px-6 py-3 rounded-xl text-base transition active:scale-[0.99]`}
               >
                 はじめから
               </button>
@@ -215,17 +193,14 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               <button onClick={handleEdit} className="btn-secondary px-4 py-2 rounded-lg text-sm transition">エディット</button>
             </div>
             <button onClick={onManual}
-              className="mt-2 w-full text-sm text-gray-300 hover:text-white py-2 rounded-lg hover:bg-gray-700/40 transition">
+              className="mt-2 w-full text-sm text-gray-300 hover:text-white py-1.5 rounded-lg hover:bg-gray-700/40 transition">
               マニュアル
             </button>
-            <p className="mt-2.5 text-xs text-gray-400 leading-relaxed">
-              箱庭モード＝成長・ドラフト・引退なし。自由にチームを編集してシーズンを戦う
-            </p>
 
             <div className="border-t border-gray-700/60 my-3" />
 
             {/* 設定は主要アクションと同じ格にしない。1行に畳んで下に置く */}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {[
                 { label: 'チュートリアル', value: tutorialOn ? 'ON' : 'OFF', on: tutorialOn,
                   onClick: () => { const n = !tutorialOn; setTutorialEnabled(n); setTutorialOn(n); if (n) resetTutorialProgress(); },
@@ -238,13 +213,34 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                   title: '画面が横にはみ出す場合は「自動」または縮小を選ぶと1画面に収まります' },
               ].map(o => (
                 <button key={o.label} onClick={o.onClick} title={o.title}
-                  className="w-full flex items-center justify-between text-xs text-gray-300 hover:text-white px-1 py-1 transition">
+                  className="w-full flex items-center justify-between text-xs text-gray-300 hover:text-white px-1 py-0.5 transition">
                   <span>{o.label}</span>
                   <span className={`font-bold px-2 py-0.5 rounded ${o.on ? 'seg-on' : 'seg'}`}>{o.value}</span>
                 </button>
               ))}
             </div>
           </MenuCard>
+        )}
+
+        {/* 世界の規模。装飾ではなく中身を出す＝本編と同じ「密度のある数字」の語彙 */}
+        {!showSlotSelect && !showEditSlotSelect && (
+          <div className="mt-5 text-center">
+            <div className="flex items-baseline justify-center gap-x-5 gap-y-1 flex-wrap">
+              {[['996', '高校'], ['234', '大学'], ['300', '社会人'], ['26', '独立']].map(([n, l]) => (
+                <div key={l} className="flex items-baseline gap-1.5">
+                  <span className="text-base font-bold text-accent tabular-nums leading-none">{n}</span>
+                  <span className="text-xs text-gray-300">{l}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-400">
+              毎年 <span className="text-gray-300 tabular-nums">5,000</span> 人の高校3年生が生まれ、
+              そのうち <span className="text-gray-300 tabular-nums">120</span> 人だけがプロへ進む
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              箱庭モード＝成長・ドラフト・引退なし。自由に編集して戦う
+            </p>
+          </div>
         )}
       </div>
     </div>
