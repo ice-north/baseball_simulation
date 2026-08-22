@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { exportDraftedPlayers } from '../game/saveSystem.js';
 import { summarizeNpbCareer } from '../game/npbCareer.js';
 import { resolveWatchList, removeFromWatchList, WATCH_STATUS_LABEL } from '../game/watchList.js';
@@ -360,12 +361,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   }, [teamHistory]);
 
   return (
-    <div className="p-4 bg-surface-1 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        {/* ヘッダー + タブ */}
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h1 className="text-xl font-bold text-yellow-400">資料室</h1>
-          <div className="flex gap-1 flex-wrap">
+    <ScreenShell>
+        <ScreenHeader title="資料室" right={
+          <div className="flex gap-1 flex-wrap justify-end">
             <button
               onClick={() => setActiveTab('npbdraft')}
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
@@ -439,7 +437,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               注目選手
             </button>
           </div>
-        </div>
+        } />
 
         {/* NPBドラフトタブ（3×4グリッド年度別表示） */}
         {activeTab === 'npbdraft' && (
@@ -1499,9 +1497,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             </button>
           </div>
         )}
-      </div>
       {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
-    </div>
+    </ScreenShell>
   );
 };
 

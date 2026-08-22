@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
@@ -182,13 +183,9 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const StatVal = ({ value, isVel, isSta }) => <AbilityValue value={value} isVel={isVel} isSta={isSta} />;
 
   return (
-    <div className="min-h-screen bg-surface-1 text-white p-4">
-      {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold">選手検索</h2>
-          <button onClick={onBack} className="text-gray-300 hover:text-white text-sm px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 transition">戻る</button>
-        </div>
+    <ScreenShell className="text-white">
+        <ScreenHeader title="選手検索"
+          right={<button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded text-sm">戻る</button>} />
 
         {/* Source toggles */}
         <div className="flex flex-wrap gap-2 mb-3">
@@ -407,8 +404,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
         </div>
 
         {selectedPlayer && <PlayerDetailModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
-      </div>
-    </div>
+    </ScreenShell>
   );
 };
 

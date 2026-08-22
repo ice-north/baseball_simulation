@@ -7,6 +7,7 @@ import { generateOptimalLineup, generatePitchingRotation } from '../game/lineupG
 import { TabBar } from './GameUIComponents.jsx';
 import { AbilityValue } from './AbilityValue.jsx';
 import TutorialHint from './TutorialHint.jsx';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 
 // 投球フォームの短縮ラベル（カードの省スペース表示用）
@@ -1119,22 +1120,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   );
 
   return (
-    <div className="min-h-screen bg-surface-1">
-      <div className="max-w-7xl mx-auto px-4 py-5">
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">
-              {teamName}
-              <span className="ml-2 text-gray-400 font-normal text-sm">ロスター管理</span>
-            </h1>
-          </div>
-          {onBack && (
-            <button onClick={onBack} className="flex items-center gap-1.5 bg-surface-2 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-              ← 戻る
-            </button>
-          )}
-        </div>
+    <ScreenShell>
+        <ScreenHeader title="ロスター管理" sub={teamName}
+          right={onBack && (
+            <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">← 戻る</button>
+          )} />
 
         {/* タブナビゲーション */}
         <TabBar
@@ -2591,8 +2581,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         {detailPlayer === '__compare__' && compareIds.length >= 2 && (
           <CompareModal playerIds={compareIds} onClose={() => setDetailPlayer(null)} />
         )}
-      </div>
-    </div>
+    </ScreenShell>
   );
 };
 

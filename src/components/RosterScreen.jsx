@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import LineupSettingScreen from './LineupSettingScreen.jsx';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { AbilityValue, OverallBadge } from './AbilityValue.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 
@@ -242,22 +243,19 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   const activeGroups = sortAndGroup(activePlayers);
   const inactiveGroups = sortAndGroup(inactivePlayers);
 
+  // ⚠ `LineupSettingScreen` は自前で `ScreenShell` と見出しを持つ。
+  //    ここで枠と H1 を重ねると余白が二重になり、見出しも2つ出る。
   if (!isUniversityMode) {
-    return (
-      <div className="p-4 max-w-7xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-4">スタメン・ロスター管理</h1>
-        <LineupSettingScreen teamName={userTeamName} onBack={null} />
-      </div>
-    );
+    return <LineupSettingScreen teamName={userTeamName} onBack={null} />;
   }
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <ScreenShell>
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold text-white">ロスター・スタメン管理</h1>
-          <p className="text-xs text-gray-300 mt-0.5">大学野球 公式試合ベンチ登録枠：最大 {ACTIVE_LIMIT} 名</p>
+          <h1 className="text-xl font-bold text-white">ロスター管理</h1>
+          <p className="text-xs text-gray-300 mt-1">大学野球 公式試合ベンチ登録枠：最大 {ACTIVE_LIMIT} 名</p>
         </div>
         {activeTab === 'roster' && (
           <div className="flex items-center gap-3">
@@ -401,7 +399,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
           <PosStats activePlayers={activePlayers} />
         </>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

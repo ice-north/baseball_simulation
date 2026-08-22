@@ -44,7 +44,7 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
   };
 
   return (
-    <div className="p-3 min-h-screen">
+    <div className="p-4">
       <div className="max-w-lg mx-auto">
         <h1 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
           <span className="text-yellow-400">💰</span> 年度末決算（11月30日）

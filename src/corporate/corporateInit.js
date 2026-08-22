@@ -185,6 +185,28 @@ const ELO_CLAMP_MIN = 100;
 const ELO_CLAMP_MAX = 2000;
 
 // 試合重要度係数（I）
+// ランクの帯。**ここが唯一の定義**。
+// ⚠ `TeamRankingScreen` にも同じ表がコピーされていて、片方だけ直した結果
+//    画面には「上位5% / 6-20% / …」と旧い帯が出ていた。表を二重に作らないこと。
+export const RANK_BAND_CUM = { S: 0.04, A: 0.12, B: 0.28, C: 0.56 };
+export const RANK_BAND_LABEL = { S: '上位4%', A: '5-12%', B: '13-28%', C: '29-56%', D: '下位44%' };
+export const buildRankBands = (total) => ([
+  { rank: 'S', end: Math.max(1, Math.round(total * RANK_BAND_CUM.S)) },
+  { rank: 'A', end: Math.max(2, Math.round(total * RANK_BAND_CUM.A)) },
+  { rank: 'B', end: Math.max(3, Math.round(total * RANK_BAND_CUM.B)) },
+  { rank: 'C', end: Math.max(4, Math.round(total * RANK_BAND_CUM.C)) },
+  { rank: 'D', end: total },
+]);
+/** スコア降順に並んだ配列へランクを割り当てる（UIの暫定ランキングと共有） */
+export const assignRankByPercentile = (entries, setRank = (e, r) => { e.rank = r; }) => {
+  const bands = buildRankBands(entries.length);
+  let bandIdx = 0;
+  entries.forEach((e, i) => {
+    while (bandIdx < bands.length - 1 && i >= bands[bandIdx].end) bandIdx++;
+    setRank(e, bands[bandIdx].rank);
+  });
+};
+
 const ELO_I = {
   regular: 50,      // 社会人レギュラーシーズン（シーズン全体を1単位として計算）
   league: 40,       // 大学・独立リーグ（春・秋それぞれ）
@@ -1846,13 +1868,7 @@ export const updateAllRanks = (seasonData) => {
   //    「1年ですぐ上がって、その後は何をしても動かない」の正体はこれ。
   //    クラブ208チームを含む母集団なので、下位が厚いのが正しい姿。
   const total = allEntries.length;
-  const PCT_BANDS = [
-    { rank: 'S', end: Math.max(1, Math.round(total * 0.04)) },
-    { rank: 'A', end: Math.max(2, Math.round(total * 0.12)) },
-    { rank: 'B', end: Math.max(3, Math.round(total * 0.28)) },
-    { rank: 'C', end: Math.max(4, Math.round(total * 0.56)) },
-    { rank: 'D', end: total },
-  ];
+  const PCT_BANDS = buildRankBands(total);
 
   const rankChanges = [];
   let bandIdx = 0;

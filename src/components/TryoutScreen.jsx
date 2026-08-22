@@ -283,7 +283,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   const isUserTurn = currentTeam === 'ユーザー';
 
   return (
-    <div className="p-6 bg-surface-1 min-h-screen">
+    <div className="p-4">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-1">トライアウト</h1>
         <p className="text-gray-400 text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>

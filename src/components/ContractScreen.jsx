@@ -229,7 +229,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     .reduce((sum, [, arr]) => sum + arr.length, 0);
 
   return (
-    <div className="p-3 bg-surface-1 min-h-screen">
+    <div className="p-4">
       <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
       <p className="text-gray-300 text-xs mb-1">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
       <AbilityLegend className="mb-2" />

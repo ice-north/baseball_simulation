@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import TutorialHint from './TutorialHint.jsx';
+import { assignRankByPercentile, RANK_BAND_LABEL } from '../corporate/corporateInit.js';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
@@ -9,7 +11,9 @@ import { calcPlayerOverall } from '../season/dispatchSystem.js';
 const RANK_COLOR = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
 const RANK_BG = { S: 'bg-yellow-900/40 border-yellow-700/60', A: 'bg-orange-900/30 border-orange-700/50', B: 'bg-green-900/30 border-green-700/50', C: 'bg-blue-900/20 border-blue-700/40', D: 'bg-gray-900/20 border-gray-700/30' };
 const TYPE_LABEL = { corporate: '社会人', worldUniversity: '大学', university: '大学', independent: '独立' };
-const RANK_BAND_PCT = { S: '上位5%', A: '6-20%', B: '21-45%', C: '46-75%', D: '下位25%' };
+// ⚠ 帯の定義は `corporateInit.RANK_BAND_*` が唯一の権威。ここに数字を書かないこと
+//    （以前はこのファイルが独自の帯を持っており、画面だけ旧い値を出していた）。
+const RANK_BAND_PCT = RANK_BAND_LABEL;
 
 // 全ての「順位表」ソースを走査し、チーム名→通算成績のマップを作る。
 // 同じチームが複数箇所（レギュラーシーズン＋春秋リーグ等）にあれば全て合算。
@@ -77,23 +81,6 @@ const rosterAvgOverall = (players) => {
   let total = 0, count = 0;
   for (const p of players) { total += calcPlayerOverall(p); count++; }
   return count ? total / count : null;
-};
-
-// パーセンタイル別ランク割り当て（オフシーズンのランク変動と同じ帯）
-const assignRankByPercentile = (entries) => {
-  const total = entries.length;
-  const bands = [
-    { rank: 'S', end: Math.max(1, Math.round(total * 0.05)) },
-    { rank: 'A', end: Math.max(2, Math.round(total * 0.20)) },
-    { rank: 'B', end: Math.max(3, Math.round(total * 0.45)) },
-    { rank: 'C', end: Math.max(4, Math.round(total * 0.75)) },
-    { rank: 'D', end: total },
-  ];
-  let bandIdx = 0;
-  entries.forEach((e, i) => {
-    while (bandIdx < bands.length - 1 && i >= bands[bandIdx].end) bandIdx++;
-    e.rank = bands[bandIdx].rank;
-  });
 };
 
 // 成績スナップショットが無い1年目に、所属選手の能力から暫定ランキングを算出する。
@@ -312,17 +299,15 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
 
   if (ranking.length === 0) {
     return (
-      <div className="p-6 text-white">
-        <div className="flex items-center gap-3 mb-6">
-          {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
-          <h2 className="text-xl font-bold">チームランキング</h2>
-        </div>
+      <ScreenShell className="text-white">
+        <ScreenHeader title="チームランキング"
+          right={onBack && <button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded text-sm">← 戻る</button>} />
         <div className="text-gray-300 text-center py-16">
           <div className="text-5xl mb-4">📊</div>
           <p className="text-lg mb-2">ランキングデータがまだありません</p>
           <p className="text-sm text-gray-400">オフシーズン終了後にランキングが確定します</p>
         </div>
-      </div>
+      </ScreenShell>
     );
   }
 
@@ -331,16 +316,14 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
   enriched.forEach(e => { if (rankCounts[e.rank] !== undefined) rankCounts[e.rank]++; });
 
   return (
-    <div className="p-4 text-white max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
-        <h2 className="text-xl font-bold">チームランキング</h2>
-        {isProvisional && (
-          <span className="text-xs font-bold text-amber-200 bg-amber-900/50 border border-amber-600/50 rounded px-2 py-0.5">暫定（戦力評価）</span>
-        )}
-        <span className="text-gray-300 text-sm ml-auto">全 {totalTeams} チーム</span>
-      </div>
+    <ScreenShell className="text-white">
+      <ScreenHeader title="チームランキング" sub={`全 ${totalTeams} チーム`}
+        right={<>
+          {isProvisional && (
+            <span className="text-xs font-bold text-amber-200 bg-amber-900/50 border border-amber-600/50 rounded px-2 py-0.5">暫定（戦力評価）</span>
+          )}
+          {onBack && <button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded text-sm">← 戻る</button>}
+        </>} />
       <TutorialHint id="teamranking-intro" title="全チームの序列">
         全国の社会人・大学・独立チームをS〜Dランクで序列化しています。<b className="text-cyan-200">行をクリック</b>すると成績・打撃・投手・編成の詳細が開きます。ヘッダーで並び替え可。1年目は成績が無いため所属選手の戦力から算出した暫定順位です。
       </TutorialHint>
@@ -602,18 +585,18 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       {/* Score explanation */}
       {isProvisional ? (
         <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
-          <div><span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。</div>
+          <div><span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（S〜Dの帯は上の内訳のとおり）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。</div>
           <div className="text-gray-300">行をクリックすると、試合成績・打撃・投手・編成の詳細を展開できます。ヘッダーをクリックでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（並行世界の実体化されていない大学）。</div>
         </div>
       ) : (
         <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-gray-100">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
           重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
-          初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D。</div>
+          初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。ランクは全体でのパーセンタイル（帯は上の内訳のとおり）。</div>
           <div className="text-gray-300">成績・打率・防御率は各リーグ順位表と選手個人成績から集計。行をクリックで詳細展開、ヘッダーでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（選手が個別に実体化されていない並行世界チーム）を示します。</div>
         </div>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

@@ -572,7 +572,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const dispatchedPlayers = sortedPlayers.filter(p => p.dispatchedThisCamp);
 
   return (
-    <div className="p-3 bg-surface-1 min-h-screen">
+    <div className="p-4">
       <div className="max-w-full mx-auto">
         {/* 派遣確認モーダル */}
         {dispatchConfirm && (() => {

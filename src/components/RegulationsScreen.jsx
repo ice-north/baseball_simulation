@@ -1,4 +1,5 @@
 import React from 'react';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
@@ -76,8 +77,8 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
   );
 
   return (
-    <div className="p-4 max-w-3xl mx-auto">
-      <h1 className="text-xl font-bold mb-4 text-white">レギュレーション設定</h1>
+    <ScreenShell width="form">
+      <ScreenHeader title="レギュレーション設定" />
 
       {!canModify && (
         <div className="bg-yellow-900/50 border border-yellow-700/50 rounded-lg p-3 mb-3">
@@ -299,7 +300,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
           </button>
         </div>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

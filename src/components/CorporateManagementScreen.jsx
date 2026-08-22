@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus, STAFF_GRADE_CAP, canHireGrade, MAX_STAFF } from '../corporate/staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/constants.js';
@@ -34,10 +35,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
   if (!cd) {
     return (
-      <div className="p-8 text-center">
-        <h1 className="text-2xl font-bold text-white mb-4">チーム運営</h1>
+      <ScreenShell>
+        <ScreenHeader title="チーム運営" />
         <p className="text-gray-300">社会人モードでのみ利用可能です。</p>
-      </div>
+      </ScreenShell>
     );
   }
 
@@ -120,9 +121,8 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-white mb-1">チーム運営</h1>
-      <p className="text-xs text-gray-400 mb-4">{userTeamName} - {STAFF_GRADES[cd.rank]?.label || cd.rank}ランク</p>
+    <ScreenShell>
+      <ScreenHeader title="チーム運営" sub={`${userTeamName} - ${STAFF_GRADES[cd.rank]?.label || cd.rank}ランク`} />
 
       {/* タブ */}
       <div className="flex gap-1 mb-4 border-b border-gray-700">
@@ -1344,7 +1344,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
         );
       })()}
-    </div>
+    </ScreenShell>
   );
 };
 

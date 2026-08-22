@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import { AbilityRadar, teamRadarAxes } from './AbilityRadar.jsx';
@@ -119,11 +120,8 @@ const TeamInfoScreen = ({ gameMode }) => {
 
 
   return (
-    <div className="p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-white">チーム情報</h1>
-        </div>
+    <ScreenShell>
+      <ScreenHeader title="チーム情報" />
 
         <div className="bg-surface-2 rounded-lg p-6 mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">チーム選択</label>
@@ -339,10 +337,9 @@ const TeamInfoScreen = ({ gameMode }) => {
             <p className="text-gray-300 text-center py-4">野手がいません</p>
           )}
         </div>
-      </div>
 
       {selectedPlayer && <PlayerDetailModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
-    </div>
+    </ScreenShell>
   );
 };
 

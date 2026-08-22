@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { formatInnings } from '../utils/physics.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
@@ -166,9 +167,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     : [];
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-bold text-white">選手成績</h1>
+    <ScreenShell>
+      <ScreenHeader title="選手成績" right={
         <div className="flex gap-1">
           <button
             onClick={() => setStatsTab('growth')}
@@ -213,7 +213,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
             投手
           </button>
         </div>
-      </div>
+      } />
 
       {statsTab === 'growth' && (
         <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden">
@@ -425,7 +425,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           </div>
         </div>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

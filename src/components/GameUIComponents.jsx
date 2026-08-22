@@ -1,5 +1,49 @@
 import React from 'react';
 
+// ============================================================
+// 画面の外枠と見出し（全画面で共通）
+//
+// ⚠ **画面ごとに padding / max-w / 見出しの大きさを書かないこと**。
+//    実測で余白が `p-3 / p-4 / p-6 / p-8` の4種類、本文幅が
+//    `max-w-7xl / max-w-3xl / 指定なし` の3通り、見出しが
+//    `text-lg / xl / 2xl / 3xl`（しかも資料室だけ黄色）に散っていて、
+//    画面を移動するたび余白も本文幅も文字の大きさも変わっていた。
+//    `.btn-*` や `.seg` と同じで、**語彙を1箇所に置く**。
+//
+// ⚠ 画面は**自前の背景を持たない**。地色は App.jsx の `bg-surface-0` ひとつで、
+//    カードが `bg-surface-2`。画面ごとに `bg-surface-1 min-h-screen` を足すと
+//    地色が2層になり、カードとの対比も画面ごとに変わる。
+// ============================================================
+
+// コンテンツ幅は3段だけ（CLAUDE.md「コンテンツ幅は3段だけ」と同じ区分）
+const SHELL_WIDTH = {
+  wide: 'max-w-7xl',        // 1280 表・一覧が主役（ロスター・日程・成績・資料室・チーム運営）
+  form: 'max-w-3xl',        // 768  フォーム・確認（セーブ/ロード・レギュレーション）
+  panel: 'max-w-[1800px]',  // 1800 多パネルの例外（試合画面の3カラム等）
+};
+
+export const ScreenShell = ({ width = 'wide', className = '', children }) => (
+  <div className={`mx-auto p-4 ${SHELL_WIDTH[width] || SHELL_WIDTH.wide} ${className}`}>
+    {children}
+  </div>
+);
+
+/**
+ * 画面の見出し。大きさ・色は1つに揃える。
+ * @param title 画面名（絵文字は付けない。サイドバーのアイコンと重複するため）
+ * @param sub   補足の1行
+ * @param right 右端に置く操作（タブ・フィルタ・戻るなど）
+ */
+export const ScreenHeader = ({ title, sub = null, right = null }) => (
+  <div className="flex items-end justify-between gap-4 mb-4">
+    <div className="min-w-0">
+      <h1 className="text-xl font-bold text-white truncate">{title}</h1>
+      {sub && <p className="text-xs text-gray-300 mt-1">{sub}</p>}
+    </div>
+    {right && <div className="shrink-0 flex items-center gap-2">{right}</div>}
+  </div>
+);
+
 // --- PositionControl コンポーネント ---
 export const PositionControl = ({ position, label, defense, setDefense }) => {
   const [show, setShow] = React.useState(false);

@@ -285,7 +285,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
       </th>
     );
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
+      <div className="p-4">
         <div className="max-w-[1800px] mx-auto">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -435,7 +435,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
+    <div className="p-4">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getBackupInfo, restoreBackup, getAutosaveInfo } from '../game/saveSystem.js';
 
 // セーブ＆ロード画面（3スロット対応）
@@ -110,8 +111,8 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
   const slotNames = ['セーブスロット 1', 'セーブスロット 2', 'セーブスロット 3'];
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8 text-white">💾 セーブ＆ロード</h1>
+    <ScreenShell width="form">
+      <ScreenHeader title="セーブ＆ロード" />
 
       {/* ステータスメッセージ */}
       {saveStatus && (
@@ -286,7 +287,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
           🏠 タイトルへ戻る
         </button>
       </div>
-    </div>
+    </ScreenShell>
   );
 };
 

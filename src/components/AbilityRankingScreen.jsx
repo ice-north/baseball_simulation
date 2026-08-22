@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import ProspectBoardScreen from './ProspectBoardScreen.jsx';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
@@ -468,12 +469,8 @@ const AbilityRankingScreen = () => {
   const currentSortOptions = getSortOptions(mode);
 
   return (
-    <div className="p-4 bg-surface-1 min-h-screen text-white">
-      {/* 背景はビューポート全幅のまま、本文だけ 7xl で止める
-          （4Kだと列が2300pxに引き伸ばされて1行を目で追えなくなる） */}
-      <div className="max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold mb-1">📰 総合ランキング</h1>
-      <p className="text-gray-300 text-xs mb-4">全チーム・全選手の能力ランキング</p>
+    <ScreenShell className="text-white">
+      <ScreenHeader title="能力ランキング" sub="全チーム・全選手の能力ランキング" />
 
       <div className="flex gap-2 mb-4">
         {[
@@ -622,8 +619,7 @@ const AbilityRankingScreen = () => {
           </div>
         </>
       )}
-      </div>
-    </div>
+    </ScreenShell>
   );
 };
 
