@@ -6,6 +6,7 @@
 // 楽しみにするための画面。将来性は projectPeak() による推定（スカウト材料）。
 // ============================================================
 import React, { useState, useMemo } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { projectPeak } from '../season/potential.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
@@ -87,7 +88,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
 
   if (prospects.length === 0) {
     return (
-      <div className="p-6 text-white">
+      <ScreenShell className="text-white">
         <div className="flex items-center gap-3 mb-6">
           {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
           <h2 className="text-xl font-bold">注目選手ボード</h2>
@@ -97,7 +98,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
           <p className="text-lg mb-2">アマチュア候補がまだいません</p>
           <p className="text-sm text-gray-400">高校生は4月に生成されます。シーズンが進むと注目選手が並びます。</p>
         </div>
-      </div>
+      </ScreenShell>
     );
   }
 

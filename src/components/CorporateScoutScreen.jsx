@@ -194,7 +194,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       <div className="p-4">
         {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
         <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-2">交渉結果</h1>
+        <h1 className="text-xl font-bold text-white mb-2">交渉結果</h1>
         <p className="text-sm text-gray-300 mb-5">
           {negotiationResults.length}名に打診 → {successes.length}名が入団承諾
           {totalAcquired > 0 && <span className="text-green-400 ml-2">(累計{totalAcquired}名獲得)</span>}
@@ -283,7 +283,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       <div className="p-4">
         {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
         <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-4">スカウト入団完了</h1>
+        <h1 className="text-xl font-bold text-white mb-4">スカウト入団完了</h1>
         {totalAcquired > 0 ? (
           <div className="mb-5">
             <p className="text-green-400 text-base mb-3">今シーズンは{totalAcquired}名を獲得しました</p>
@@ -333,7 +333,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     <div className="p-4">
       {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
       <div className="max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-white mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
+      <h1 className="text-xl font-bold text-white mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
       <div className="flex items-center gap-5 text-sm text-gray-300 mb-3">
         <span>注目度: <span className={reputation >= 50 ? 'text-yellow-400 font-bold' : 'text-gray-300'}>{reputation}</span></span>
         <span>ランク: <span className="text-white font-bold">{rank}</span></span>

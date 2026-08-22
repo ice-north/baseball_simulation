@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TOSHITAIKOU_REGION_NAMES, REGIONAL_SLOTS, getRoundName } from '../corporate/toshitaikou.js';
 
 const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
@@ -40,9 +41,8 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
   if (selectedRegion) {
     const q = qualifiers[selectedRegion];
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-2xl font-bold text-white mb-1">{q.regionName} 地区予選</h1>
+      <ScreenShell width="mid">
+          <h1 className="text-xl font-bold text-white mb-1">{q.regionName} 地区予選</h1>
           <p className="text-gray-300 text-sm mb-4">{q.teamDefs.length}チーム → {q.slots}枠</p>
 
           <BracketView bracket={q.mainBracket} title="勝者側トーナメント" />
@@ -65,15 +65,14 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
           <button onClick={() => setSelectedRegion(null)} className="mt-4 text-gray-300 hover:text-white text-sm">
             ← 全地区一覧に戻る
           </button>
-        </div>
-      </div>
+      </ScreenShell>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-1 text-center">都市対抗野球 地区予選</h1>
+        <h1 className="text-xl font-bold text-white mb-1">都市対抗野球 地区予選</h1>
         <p className="text-gray-300 mb-6 text-center">6月 ― 各地区の代表が決定しました</p>
 
         <div className="grid grid-cols-2 gap-3">
@@ -127,7 +126,7 @@ const ToshitaikouMainScreen = ({ toshitaikou, userTeamName, onContinue }) => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-1 text-center">都市対抗野球大会 本戦</h1>
+        <h1 className="text-xl font-bold text-white mb-1">都市対抗野球大会 本戦</h1>
         <p className="text-gray-300 mb-6 text-center">8月 ― {mt.teams.length}チームによるトーナメント</p>
 
         <BracketView bracket={mt.bracket} />

@@ -392,7 +392,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   }
 
   return (
-    <div className="p-3 bg-surface-1 min-h-screen">
+    <div className="p-4">
       {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
       <div className="max-w-7xl mx-auto">
       <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目 11月末</h1>

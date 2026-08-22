@@ -1,4 +1,5 @@
 import React from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { generateTeamCalendar } from '../season/calendarUI.js';
@@ -293,8 +294,7 @@ const ScheduleScreen = ({
     : { name: '', color: 'bg-gray-100', description: '' };
 
   return (
-    <div className="min-h-screen bg-surface-1">
-      <div className="max-w-7xl mx-auto px-4 py-5">
+    <ScreenShell>
       {/* シーズンタイムライン */}
       {(() => {
         const isUniversity = seasonData?.settings?.universityMode;
@@ -746,8 +746,7 @@ const ScheduleScreen = ({
           <RankingTable title="セーブランキング" data={seasonData?.finalRankings?.saves || getSavesRanking(teamNamesList)} valueLabel="セーブ" />
         </div>
       )}
-    </div>
-      </div>
+    </ScreenShell>
   );
 };
 

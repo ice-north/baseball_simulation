@@ -107,6 +107,25 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
   `p-4 max-w-7xl` でもう一度包んだうえ H1 も持っており、**余白が二重・見出しが2つ**出ていた
 - 日程進行だけ `ScreenHeader` を使わない。先頭の進行バーがその役目を持つため
 
+#### 幅は4段（`ScreenShell` の `width`）
+`wide`=7xl(1280) 表・一覧 / `mid`=5xl(1024) 設定・選択・カード一覧 /
+`form`=3xl(768) フォーム・確認 / `panel`=1800 多パネルの例外。
+
+#### この語彙の対象外（意図的に別）
+| 画面 | 理由 |
+|---|---|
+| 試合画面（`App.jsx` RENDER） | 守備=amber / 攻撃=cyan の独自語彙を持つ |
+| `DraftResultScreen` | 抽選の見せ場。明るいカードと大きな見出し |
+| `StartScreen` | タイトル画面（`text-6xl`） |
+| 開始前の「表紙」3画面 | `CorporateSelectScreen` / `UniversitySelectScreen` /<br>`SandboxSetupScreen`。`min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6`<br>＋ 見出し `text-3xl text-center` で**3枚とも同じ**にしてある |
+
+⚠ **「触っていない画面」を残さないこと**。1回目の統一ではサイドバーの11画面しか見ておらず、
+日程/順位表・オフシーズン・都市対抗・マニュアル・注目選手・背番号・エディット・
+デバッグ表示・ゲームフロー・新規レギュレーションの**10画面が取り残されていた**
+（`p-2 / p-4 / p-6 / p-8` と `text-lg 〜 text-4xl` が残存）。
+監査は `grep -rhoE '<h1 className="text-(lg|2xl|3xl|4xl|6xl)[^"]*"' src/components/*.jsx`
+のように**全ファイルを機械的に走査**して行う。
+
 #### コンテンツ幅は3段だけ（`max-w-*`）
 `3xl`〜`7xl` が10箇所ずつ散っていて、画面を移動するたび本文の幅が変わっていた。
 

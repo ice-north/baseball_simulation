@@ -46,7 +46,7 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
   return (
     <div className="p-4">
       <div className="max-w-lg mx-auto">
-        <h1 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+        <h1 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
           <span className="text-yellow-400">💰</span> 年度末決算（11月30日）
         </h1>
         <p className="text-xs text-gray-300 mb-4">

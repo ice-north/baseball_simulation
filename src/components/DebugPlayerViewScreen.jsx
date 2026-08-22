@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
@@ -165,7 +166,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
   };
 
   return (
-    <div className="min-h-screen bg-surface-1 text-white p-4">
+    <ScreenShell className="text-white">
       {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
       <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -240,7 +241,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
         </div>
       )}
     </div>
-    </div>
+    </ScreenShell>
   );
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
@@ -255,11 +256,10 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       teamGroups[g.team].push(g);
     });
     return (
-      <div className="p-4">
-        <div className="max-w-3xl mx-auto">
+      <ScreenShell width="form">
           <div className="mb-6">
             <p className="text-gray-300 text-sm font-semibold tracking-[0.15em] uppercase">Graduation Report</p>
-            <h1 className="text-3xl font-black text-white">🎓 卒業・入部レポート</h1>
+            <h1 className="text-xl font-bold text-white">🎓 卒業・入部レポート</h1>
           </div>
 
           {/* サマリー */}
@@ -393,8 +393,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               キャンプへ進む →
             </button>
           </div>
-        </div>
-      </div>
+      </ScreenShell>
     );
   }
 
@@ -417,7 +416,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         {/* ヘッダー */}
         <div className="mb-6">
           <p className="text-gray-300 text-sm font-semibold tracking-[0.15em] uppercase">Off Season</p>
-          <h1 className="text-3xl font-black text-white">{seasonData.year}年目 シーズン終了</h1>
+          <h1 className="text-xl font-bold text-white">{seasonData.year}年目 シーズン終了</h1>
           {gameMode === 'sandbox' && (
             <span className="inline-block mt-1 bg-orange-500/20 text-orange-400 border border-orange-500/40 text-sm font-bold px-3 py-0.5 rounded-full">
               箱庭モード

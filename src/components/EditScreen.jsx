@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
@@ -105,8 +106,8 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
   };
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6 text-white">エディット画面（開発用）</h1>
+    <ScreenShell>
+      <h1 className="text-xl font-bold mb-6 text-white">エディット画面（開発用）</h1>
 
       <div className="mb-6 flex gap-4 flex-wrap">
         {currentTeams.map((teamName) => (
@@ -427,7 +428,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
           </div>
         </div>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

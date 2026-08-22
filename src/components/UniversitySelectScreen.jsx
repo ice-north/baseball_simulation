@@ -30,9 +30,9 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
 
   if (!selectedRegion) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
         <div className="max-w-5xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
+          <h1 className="text-3xl font-bold text-white mb-2 text-center">リーグ選択</h1>
           <p className="text-gray-300 text-sm mb-6">所属するリーグを選んでください</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -100,9 +100,9 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-1">{selectedRegion.name}</h1>
+        <h1 className="text-3xl font-bold text-white mb-1 text-center">{selectedRegion.name}</h1>
         <p className="text-gray-300 text-sm mb-6">監督を務めるチームを選んでください</p>
 
         {hasDivisions ? (

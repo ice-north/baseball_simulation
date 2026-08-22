@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import TutorialHint from './TutorialHint.jsx';
 import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
@@ -198,9 +199,8 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
   };
 
   return (
-    <div className="p-8 bg-surface-1 min-h-screen">
-      <div className="max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold text-white mb-2">⚙️ レギュレーション設定</h1>
+    <ScreenShell width="mid">
+        <h1 className="text-xl font-bold text-white mb-2">⚙️ レギュレーション設定</h1>
         {selectedLeague && (
           <p className="text-gray-300 text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
         )}
@@ -449,8 +449,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
             設定完了 - トライアウトへ
           </button>
         </div>
-      </div>
-    </div>
+    </ScreenShell>
   );
 };
 

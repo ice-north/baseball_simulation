@@ -1,4 +1,5 @@
 import React from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
 import { SEASON_PHASES, createSeasonData } from '../season/seasonManager.js';
 import { REGULATION_PRESETS } from '../season/regulationSettings.js';
@@ -89,9 +90,8 @@ const GameFlowScreens = ({
       { key: 'kansai', icon: '🏯' },
     ];
     return (
-      <div className="p-8 bg-surface-1 min-h-screen">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
+      <ScreenShell width="form">
+          <h1 className="text-xl font-bold text-white mb-2">リーグ選択</h1>
           <p className="text-gray-300 text-sm mb-6">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {leagueList.map(({ key, icon }) => {
@@ -146,8 +146,7 @@ const GameFlowScreens = ({
           <div className="mt-6 text-center">
             <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-surface-2 text-sm transition">← 戻る</button>
           </div>
-        </div>
-      </div>
+      </ScreenShell>
     );
   }
 
@@ -160,7 +159,7 @@ const GameFlowScreens = ({
     return (
       <div className="p-8 bg-surface-1 min-h-screen">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2">{leagueDef?.name}</h1>
+          <h1 className="text-xl font-bold text-white mb-2">{leagueDef?.name}</h1>
           <p className="text-gray-300 text-sm mb-6">監督を務めるチームを選んでください</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {teams.map((team) => (
