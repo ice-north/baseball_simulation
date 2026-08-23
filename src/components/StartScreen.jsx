@@ -70,17 +70,29 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
         slot ? 'bg-surface-2 border-gray-700 hover:border-[var(--accent)] hover:bg-gray-700/60'
              : 'bg-transparent border-gray-800 cursor-not-allowed'}`}
     >
+      {/* ⚠ **1行に収めること**。各要素に `whitespace-nowrap shrink-0` を付けないと、
+          長いチーム名（「埼玉武蔵ヒートベアーズ」等）に押されて「スロット」と「1」の
+          間で折り返し、行が2段になる。**伸縮していいのはチーム名だけ**。 */}
       <div className="flex items-baseline gap-2">
-        <span className={`text-base font-bold ${slot ? 'text-white' : 'text-gray-400'}`}>スロット {index + 1}</span>
-        {slot
-          ? <span className="text-xs text-gray-300 tabular-nums truncate">
-              {slot.year}年目 {slot.date.month}/{slot.date.day}{slot.teamName ? ` · ${slot.teamName}` : ''}
+        <span className={`text-base font-bold whitespace-nowrap shrink-0 ${slot ? 'text-white' : 'text-gray-400'}`}>
+          スロット{index + 1}
+        </span>
+        {slot ? (
+          <>
+            <span className="text-xs text-gray-300 tabular-nums whitespace-nowrap shrink-0">
+              {slot.year}年目 {slot.date.month}/{slot.date.day}
             </span>
-          : <span className="text-xs text-gray-400">空</span>}
-        {slot?.timestamp && (
-          <span className="ml-auto text-xs text-gray-400 tabular-nums shrink-0">
-            {new Date(slot.timestamp).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-          </span>
+            {slot.teamName && (
+              <span className="text-xs text-gray-100 truncate min-w-0 flex-1">{slot.teamName}</span>
+            )}
+            {slot.timestamp && (
+              <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap shrink-0 ml-auto">
+                {new Date(slot.timestamp).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-xs text-gray-400">空</span>
         )}
       </div>
     </button>
