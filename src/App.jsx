@@ -3595,7 +3595,13 @@ if (newOuts === 3) {
                     {/* ヘッダー行 */}
                     <thead>
                       <tr className="border-b border-gray-700">
-                        <th className="py-0.5 px-1 text-left text-orange-400" style={{width: '20%'}}>TEAM</th>
+                        {/* ⚠ ここは長らく `TEAM` という**情報を持たない固定ラベル**だった。
+                            一方で「いま何回の表裏か」は投球ログの文中にしか無く、画面のどこにも
+                            大きく出ていない。テレビ中継のテロップが「9回ウラ」を最大級の見出しに
+                            するのはこれが1球ごとに要る情報だからで、掲示板でも同じ扱いにする。 */}
+                        <th className="py-0.5 px-1 text-left text-orange-300 font-bold" style={{width: '20%', textShadow: '0 0 8px #fb923c'}}>
+                          <span className="tabular-nums">{inning}</span>回{isTopInning ? '表' : '裏'}
+                        </th>
                         {inning <= 9 ? (
                           // 9回まで: 1-9回を表示
                           [1,2,3,4,5,6,7,8,9].map(i => (
@@ -3634,7 +3640,7 @@ if (newOuts === 3) {
                             </td>
                           ))
                         )}
-                        <td className="py-0.5 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
+                        <td className="py-0.5 px-1 font-black text-2xl leading-none tabular-nums text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
                         <td className="py-0.5 px-1 text-orange-400">{teamHits?.away || 0}</td>
                         <td className="py-0.5 px-1 text-orange-400">{teamErrors?.home || 0}</td>
                       </tr>
@@ -3664,7 +3670,7 @@ if (newOuts === 3) {
                             );
                           })
                         )}
-                        <td className="py-0.5 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
+                        <td className="py-0.5 px-1 font-black text-2xl leading-none tabular-nums text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
                         <td className="py-0.5 px-1 text-orange-400">{teamHits?.home || 0}</td>
                         <td className="py-0.5 px-1 text-orange-400">{teamErrors?.away || 0}</td>
                       </tr>
