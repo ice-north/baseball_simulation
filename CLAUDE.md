@@ -266,7 +266,7 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
   （全体=灰 / L1=青 / L2=橙）が残っていた。**同じ動作の変種を色で分けない**
   ——赤は破壊的の意味と衝突する
 - ⚠ **ランク色・チーム色・結果の意味色とは別語彙**。そちらは素のTailwind色のままにする。
-  投手ロールのバッジ（`ROLE_INFO`。完投型・守護神…13種）は識別色なのでこの語彙の対象外
+  投手ロールのバッジ（`PITCHER_ROLES`。完投型・守護神…13種）は識別色なのでこの語彙の対象外
 - ⚠ **`DraftResultScreen` は対象外**。抽選の赤い演出を持つ「見せ場」の画面で、
   明るいカードと同居している（文字色の一括是正で外したのと同じ理由）
 
@@ -405,31 +405,54 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `teams-data.js` の `typeof createDefaultPlayers === 'function'` 分岐は
   ESモジュールでは必ず false。一度も実行されていない到達しないコードだった（除去）
 
+## ⚠ 腐った文書は、無い文書より悪い（`npm run check:doc`）
+この作品の開発は「**文書に書いた『こうなっているはず』と実測がずれた瞬間**に
+不具合が見つかる」という形で回っている。だから間違った記述は、権威に見えるぶん
+無記述より害が大きい。`tools/sim-harness/doc-check.mjs` が毎回照合する。
+
+実際に見つかった腐り（この検査を作る動機）:
+
+| 腐り | 実態 |
+|---|---|
+| App.jsx のセクション行番号表 | 「RENDER: L2131」と書いてあったが**実際は L2995**。<br>throwPitch も L611 のはずが L1751。**同じ表が App.jsx と<br>CLAUDE.md の2箇所にあり両方腐っていた**（表の二重化） |
+| `ROLE_INFO` | 実際の名前は `PITCHER_ROLES` |
+| `practiceOffset` / `declineRate` | 成長を2項モデルへ書き換えたときに消えたのに、<br>現在の実装として説明されていた |
+| カテゴリ別 disciplineMult の表 | クラブ/独立/社会人の3行は現存しない<br>（`disciplineTrainMult` に統一済み。大学だけ現役） |
+| ファイル行数の申告 | 最大 **56%** ずれ（simulation-logic.js 675→1055） |
+
+- ⚠ **行番号を文書に書かないこと**。App.jsx の各セクションの先頭に
+  `// [SECTION: 名前]` を置いてあるので `grep -n "\[SECTION:" src/App.jsx` で引く。
+  検査は**行番号の表が復活していないか**も見る
+- ⚠ **「もう存在しない」と明示した参照は腐りではない**。撤廃・失敗の記録は資産なので
+  消させない。検査側の `REMOVED_ON_PURPOSE` に理由つきで登録する
+- ⚠ **文書を消す方向で通してはいけない**。検査を通すために記述を削るのは本末転倒で、
+  正しいのは「実装に合わせて直す」か「もう無いと明記する」のどちらか
+
 ## 主要ファイル
-- `src/App.jsx` (~5130行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
-- `src/game/autoSimulation.js` (~2430行) - 自動シミュレーション・buildDefense
-- `src/game/aiManager.js` (~640行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
-- `src/game/lineupGenerator.js` (~625行) - AIオーダー編成・投手ローテーション生成
-- `src/game/gameControls.js` (~185行) - resetGame・multiPitch・simMode
-- `src/game/gameSetup.js` (~750行) - setupManagedGame・handleManagedGameEnd
-- `src/game/saveSystem.js` (~470行) - セーブ/ロード/エクスポート/インポート
+- `src/App.jsx` (~5850行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
+- `src/game/autoSimulation.js` (~2870行) - 自動シミュレーション・buildDefense
+- `src/game/aiManager.js` (~650行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
+- `src/game/lineupGenerator.js` (~650行) - AIオーダー編成・投手ローテーション生成
+- `src/game/gameControls.js` (~180行) - resetGame・multiPitch・simMode
+- `src/game/gameSetup.js` (~820行) - setupManagedGame・handleManagedGameEnd
+- `src/game/saveSystem.js` (~560行) - セーブ/ロード/エクスポート/インポート
 - `src/game/seasonProgress.js` (~420行) - 日程進行ハンドラー
-- `src/simulation-logic.js` (~675行) - 物理演算（打球・投球）
-- `src/components/ScheduleScreen.jsx` (~760行) - 日程/順位表/成績ランキング
-- `src/components/LineupSettingScreen.jsx` (~2720行) - スタメン/投手起用/守備分析の3タブ
-- `src/components/DateProgressScreen.jsx` (~4510行) - 日程進行画面
-- `src/components/ManagementScreen.jsx` (~635行) - 管理画面ルーター
+- `src/simulation-logic.js` (~1050行) - 物理演算（打球・投球）
+- `src/components/ScheduleScreen.jsx` (~750行) - 日程/順位表/成績ランキング
+- `src/components/LineupSettingScreen.jsx` (~2590行) - スタメン/投手起用/守備分析の3タブ
+- `src/components/DateProgressScreen.jsx` (~4370行) - 日程進行画面
+- `src/components/ManagementScreen.jsx` (~660行) - 管理画面ルーター
 - `src/components/GameFlowScreens.jsx` (~570行) - ゲームフロー画面群
-- `src/components/UniversityScoutScreen.jsx` (~730行) - 大学スポーツ推薦スカウト画面
-- `src/components/GameUIComponents.jsx` (~505行) - Sidebar・RenderBases・AccordionSection
+- `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
+- `src/components/GameUIComponents.jsx` (~550行) - Sidebar・RenderBases・AccordionSection
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
-- `src/season/universityPool.js` (~1425行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
-- `src/season/yearProgressionSystem.js` (~2780行) - 年間進行・キャンプ・オフシーズン処理
-- `src/corporate/corporateInit.js` (~1700行) - 社会人/独立リーグ初期化・チームランク変動
-- `src/corporate/scoutingSystem.js` (~2005行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
-- `src/university/universityTeamsData.js` (~455行) - 大学チームデータ（27リーグ234校（2部制12リーグ×12校＋1部制15リーグ×6校）、ランク別成長倍率定義）
-- `src/university/universityLeagueManager.js` (~495行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
+- `src/season/universityPool.js` (~1620行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
+- `src/season/yearProgressionSystem.js` (~1630行) - 年間進行・キャンプ・オフシーズン処理
+- `src/corporate/corporateInit.js` (~1960行) - 社会人/独立リーグ初期化・チームランク変動
+- `src/corporate/scoutingSystem.js` (~2040行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
+- `src/university/universityTeamsData.js` (~510行) - 大学チームデータ（27リーグ234校（2部制12リーグ×12校＋1部制15リーグ×6校）、ランク別成長倍率定義）
+- `src/university/universityLeagueManager.js` (~500行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
 - `src/data/playerNames.js` (210KB) - 姓3200件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
@@ -437,21 +460,24 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 ## App.jsx セクション構成（トークン節約のため必要なセクションだけ読むこと）
 
 App.jsxは大きいファイルなので、作業に関連するセクションだけを `offset` + `limit` で読むこと。
-**※分割作業は完了しました。以降は通常の開発（機能追加・バグ修正）を行うこと。**
 
-| セクション | 行範囲 | 内容 |
-|---|---|---|
-| IMPORTS | L1-57 | import文 |
-| APP_STATE | L58-340 | アプリ全体のstate定義（試合状態、チーム状態、セーブ等） |
-| GAME_HANDLERS | L341-595 | 成績更新・打順変更・選手交代ハンドラー |
-| AI_MANAGER | L596-610 | → `aiManager.js` に抽出済み（ラッパーのみ） |
-| THROW_PITCH | L611-2030 | throwPitch（投球シミュレーション本体、最大セクション） |
-| GAME_CONTROLS | L2031-2080 | → `gameControls.js` に抽出済み（ラッパーのみ） |
-| GAME_SETUP | L2081-2100 | → `gameSetup.js` に抽出済み（ラッパーのみ） |
-| SEASON_PROGRESS | L2101-2110 | → `seasonProgress.js` に抽出済み（ラッパーのみ） |
-| MANAGEMENT | L2111-2112 | → `ManagementScreen.jsx` に抽出済み |
-| GAME_FLOW | L2113-2130 | → `GameFlowScreens.jsx` に抽出済み |
-| RENDER | L2131-END | メインreturn（試合画面UI） |
+⚠ **行番号をここに書かないこと**。以前はこの位置に
+「THROW_PITCH: L611-2030 / RENDER: L2131-END」という表があったが、コードが伸びて
+実際は **throwPitch が L1751 / RENDER が L2995** とずれていた。しかも
+**同じ表が App.jsx の先頭にもあり、2箇所とも腐っていた**（「表を二重に作らない」違反）。
+各セクションの先頭に `// [SECTION: 名前]` を置いてあるので、
+**`grep -n "\[SECTION:" src/App.jsx` で現在地を引くこと**。
+
+| セクション | 内容 |
+|---|---|
+| IMPORTS | import文 |
+| APP_STATE | アプリ全体のstate定義（試合状態、チーム状態、セーブ等） |
+| GAME_HANDLERS | 投球生成・接触判定・走者進塁・守備記録・成績更新 |
+| THROW_PITCH | throwPitch（投球シミュレーション本体、最大セクション） |
+| GAME_CONTROLS | → `gameControls.js` に抽出済み（ラッパーのみ） |
+| GAME_SETUP | → `gameSetup.js` に抽出済み（ラッパーのみ） |
+| SEASON_PROGRESS | → `seasonProgress.js` に抽出済み（ラッパーのみ） |
+| RENDER | メインreturn（試合画面UI・管理シェル） |
 
 ### 編集作業ガイド
 - **試合ロジック修正**: `src/App.jsx` THROW_PITCH (L611-2030) + `src/game/aiManager.js`
@@ -4005,7 +4031,16 @@ discipline の3乗の崖）が残り、他が変わっても取り残されて�
 **① 生成時の才能差を広げる**（`off` を S+22〜E-4 → **S+28〜E-7**）
 生成時 S43.4 / A37.4 / B31.3 / C26.7 / D25.3 / E21.5 で **21.9点（2.2ランク）**。
 
-**② 育成の幅（`practiceOffset` を両側に ＋ 減衰をプロ意識連動に）**
+**② 育成の幅**
+
+⚠ **この②の実装（`practiceOffset` / `declineRate`）はもう存在しない**。
+成長エンジンを「実成長 = 基礎成長 + 練習成長」の2項モデル
+（`basalGrowth` ＋ `disciplineTrainMult`）へ書き換えたときに置き換わった。
+下の表と⚠は**当時の実測と、そのとき踏んだ落とし穴の記録**として残してある
+（「中心は discipline の平均に置く」「減衰係数を一律に上げない」は
+2項モデルでも同じ性質の罠なので、判断の材料としてはまだ有効）。
+現在の実装は `growthSystem.js` の `STAT_GROWTH` / `makeGrower` を見ること。
+
 
 | 才能 | 意識20 | 意識50 | 意識90 |
 |---|---|---|---|
@@ -4028,12 +4063,17 @@ discipline の3乗の崖）が残り、他が変わっても取り残されて�
 
 #### カテゴリごとのプロ意識の効き（環境が本人をどれだけ補完するか）
 
+⚠ **クラブ／独立／社会人の3行は現存しない**。プロ意識の効き方は
+`disciplineTrainMult` ひとつに統一され、カテゴリの性格は
+`CATEGORY_GROWTH[].volume` / `gain` が持つようになった。
+**大学だけは `universityPool.js` に自前の経路が残っている**（下表の 0.78〜1.65 は現役）。
+
 | | 倍率の幅 | 意図 |
 |---|---|---|
-| クラブ | 0.10〜2.60 | 指導者が居ない。伸びるかは完全に本人次第 |
-| 独立 | 0.55〜1.90（両側） | プロ。自主性が無ければ落ちる |
-| 社会人 | 1.00〜1.90（片側） | 環境が補完するので下振れしない |
-| **大学** | **0.78〜1.65（下限あり）** | **怠け者でも強制的に練習させられる** |
+| ~~クラブ~~ | ~~0.10〜2.60~~ | 指導者が居ない。伸びるかは完全に本人次第（**設計意図として残す**） |
+| ~~独立~~ | ~~0.55〜1.90（両側）~~ | プロ。自主性が無ければ落ちる（同上） |
+| ~~社会人~~ | ~~1.00〜1.90（片側）~~ | 環境が補完するので下振れしない（同上） |
+| **大学** | **0.78〜1.65（下限あり）** | **怠け者でも強制的に練習させられる**（`universityPool.js:1040` 現存） |
 
 - 大学の4年間の幅は 意識20→+7.3 / 50→+9.2 / 90→+14.2（素点）。
   独立の 2.2〜2.7ランクに対し **0.7ランク**程度で、狙いどおりマイルド

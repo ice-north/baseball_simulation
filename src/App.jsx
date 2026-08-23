@@ -88,17 +88,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
     // ========================================================================
     // App.jsx セクション構成 (行番号はおおよその目安)
     // ========================================================================
-    // [SECTION: IMPORTS]         L1-57    : import文
-    // [SECTION: APP_STATE]       L58-340  : アプリ全体のstate定義
-    // [SECTION: GAME_HANDLERS]   L341-595 : 成績更新・選手交代ハンドラー
-    // [SECTION: AI_MANAGER]      L596-610 : → aiManager.js に抽出済み（ラッパーのみ）
-    // [SECTION: THROW_PITCH]     L611-2030: throwPitch（投球シミュレーション本体）
-    // [SECTION: GAME_CONTROLS]   L2031-2080: → gameControls.js に抽出済み（ラッパーのみ）
-    // [SECTION: GAME_SETUP]      L2081-2100: → gameSetup.js に抽出済み（ラッパーのみ）
-    // [SECTION: SEASON_PROGRESS] L2101-2110: → seasonProgress.js に抽出済み（ラッパーのみ）
-    // [SECTION: MANAGEMENT]      L2111-2112: → ManagementScreen.jsx に抽出済み
-    // [SECTION: GAME_FLOW]       L2113-2130: → GameFlowScreens.jsx に抽出済み
-    // [SECTION: RENDER]          L2131-END : メインreturn（試合画面UI）
+    // ⚠ **セクションの行番号をここに書かないこと**。以前はこの位置に
+    //    「L611-2030: throwPitch」のような表があったが、コードが伸びて
+    //    実際は L1751、RENDER も L2131 のはずが L2995 とずれていた。
+    //    しかも同じ表が CLAUDE.md にもあり、2箇所とも腐っていた。
+    //    各セクションの先頭に `// [SECTION: 名前]` を置いてあるので、
+    //    `grep -n "\[SECTION:" src/App.jsx` で現在地を引くこと。
     //
     // ★ 分割作業は完了しました。今後は通常の開発（機能追加・バグ修正）に集中できます。
     // ========================================================================
@@ -111,6 +106,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       }, []);
 
       // 画面モード管理
+      // [SECTION: APP_STATE] アプリ全体のstate定義
       const [screenMode, setScreenMode] = useState('start'); // 'start', 'game', 'management'
       const [gameFlowState, setGameFlowState] = useState('title'); // 'title', 'newgame_regulations', 'newgame_tryout', 'newgame_camp', 'sandbox_regulations', 'sandbox_setup', 'season'
       const [gameMode, setGameMode] = useState('normal'); // 'normal', 'sandbox'
@@ -1128,6 +1124,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         'right-grounder': { total: 0, outs: 0, hits: 0 }
       });
 
+      // [SECTION: GAME_HANDLERS] 投球生成・接触判定・走者進塁・守備記録・成績更新
       const addPitch = () => {
         const newId = pitcher.pitches.length > 0 
           ? Math.max(...pitcher.pitches.map(b => b.id)) + 1 
@@ -1748,6 +1745,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         return { bases: newBases, runsScored, outsMade: outsFromThrow };
       };
 
+      // [SECTION: THROW_PITCH] throwPitch（投球シミュレーション本体）
       const throwPitch = () => {
         // ガード: countがundefinedの場合は早期リターン
         if (!count || count.balls === undefined) {
@@ -2878,6 +2876,7 @@ if (newOuts === 3) {
         setBattedBallDirectionStats, setBattedBallAreaStats,
         setIsAutoSimulating
       };
+      // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）
       const resetGame = () => executeResetGame(gameControlsCtx);
       const multiPitch = (pitchCount) => executeMultiPitch(gameControlsCtx, pitchCount);
       const startSimMode = (mode) => executeStartSimMode(gameControlsCtx, mode);
@@ -2934,6 +2933,7 @@ if (newOuts === 3) {
         setHomeTeam, setAwayTeam, setCurrentStamina,
         setManagedGameInfo, managedGameInfoRef, setScreenMode
       };
+      // [SECTION: GAME_SETUP] → gameSetup.js に抽出済み（ラッパーのみ）
       const setupManagedGame = (gameInfo) => executeSetupManagedGame(gameSetupCtx, gameInfo);
 
       const handleManagedGameEnd = () => executeHandleManagedGameEnd({
@@ -2944,6 +2944,7 @@ if (newOuts === 3) {
 
   // 日程進行ハンドラー（seasonProgress.jsからインポート済み、stateバインド用ラッパー）
   const seasonProgressCtx = { seasonData, setSeasonData, setSelectedMonth, selectedMonth, userTeamName, setScreenMode, setManagementView };
+      // [SECTION: SEASON_PROGRESS] → seasonProgress.js に抽出済み（ラッパーのみ）
   const handleProgressDate = (days) => progressDateHandler(days, seasonProgressCtx);
   const handleProgressToNextGame = () => progressToNextGameHandler(seasonProgressCtx);
   const handleProgressToNextPhase = () => progressToNextPhaseHandler(seasonProgressCtx);
@@ -2992,6 +2993,7 @@ if (newOuts === 3) {
       //    半透明のサーフェスが全部この緑の上で合成されて画面全体が緑がかっていた。
       //    地色は最深部（surface-0）にして、サイドバー(surface-1)・カード(surface-2) と
       //    3段の深度を作る。
+      // [SECTION: RENDER] メインreturn（試合画面UI・管理シェル）
       return (
         <div className="min-h-screen bg-surface-0">
           {/* オートセーブ完了トースト */}
