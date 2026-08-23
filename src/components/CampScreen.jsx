@@ -3,7 +3,7 @@ import TutorialHint from './TutorialHint.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { DIRECTIONS, PHASES, resolveTraining, moodMultiplier, describeMood, playerWish } from '../season/trainingPolicy.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES, POSITION_ORDER, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_ORDER, getAbilityColor, POSITION_GROUP_COLORS } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
@@ -893,7 +893,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 const n = allActivePlayers.filter(pl => tabOf(pl) === t.key).length;
                 return (
                   <button key={t.key} onClick={() => setCampTab(t.key)}
-                    className={`px-3 py-1 rounded text-xs font-semibold transition ${campTab === t.key ? 'seg-on' : 'seg'}`}>
+                    className={`px-3 py-1 rounded border text-xs font-semibold transition ${
+                      POSITION_GROUP_COLORS[t.key][campTab === t.key ? 'on' : 'off']}`}>
                     {t.label} <span className="opacity-60 tabular-nums">{n}</span>
                   </button>
                 );

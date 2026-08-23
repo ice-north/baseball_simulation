@@ -1200,85 +1200,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return { game: best, days };
   }, [seasonData.schedule, seasonData.currentDate, userTeamName]);
 
-  // ============================================================
-  // 昨日の結果
-  //
-  // ⚠ `simulateGamesOnDate` の戻り値 `results` は長らく state に入るだけで
-  //    **一度も描画されていなかった**。進めても何が起きたか画面に返らないので、
-  //    順位表を見に行くまで自チームの勝敗すら分からなかった。
-  //
-  // ⚠ **その戻り値を出すだけでは社会人モードで何も出ない**。社会人の
-  //    `seasonData.schedule` はリーグ戦を持たず（地域大会→都市対抗→日本選手権の
-  //    トーナメント制）、`todaysGames` は年間ずっと0件。実際に画面には毎日
-  //    「本日は試合がありません（休養日）」だけが出ていた。
-  //
-  // そこで**押した瞬間の戻り値ではなく、データから「昨日」を引き直す**。
-  // 他の画面から戻ってきても残るし、自分で采配した試合・スキップした試合も
-  // 同じ経路で拾える（どちらもブラケット／results に記録されるため）。
-  // ============================================================
-  const yesterday = useMemo(() => {
-    const cd = seasonData.currentDate;
-    const d = new Date(cd.year, cd.month - 1, cd.day - 1);
-    return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
-  }, [seasonData.currentDate]);
-
-  const yesterdayResults = useMemo(() => {
-    const y = yesterday;
-    const same = (d) => d && d.year === y.year && d.month === y.month && d.day === y.day;
-    const out = [];
-
-    // リーグ戦（独立・大学モード）
-    for (const r of seasonData.results || []) {
-      if (!same(r.date) || !r.result) continue;
-      out.push({
-        key: `L${r.gameId}`, label: null,
-        team1: r.away, score1: r.result.awayScore,
-        team2: r.home, score2: r.result.homeScore,
-        decisions: r.result.decisions || null,
-      });
-    }
-
-    // トーナメント（社会人モードはこちらが本体）
-    const sweep = (bracket, label, regionId = null) => {
-      if (!bracket?.rounds) return;
-      for (let r = 0; r < bracket.rounds.length; r++) {
-        for (let m = 0; m < bracket.rounds[r].length; m++) {
-          const mt = bracket.rounds[r][m];
-          if (!mt || mt.isBye || !mt.winner || !Array.isArray(mt.score)) continue;
-          const d = bracket.matchDates?.[r]?.[m] || bracket.roundDates?.[r];
-          if (!same(d)) continue;
-          out.push({
-            key: `T${label}-${regionId || ''}-${r}-${m}`, label, regionId,
-            team1: mt.team1, score1: mt.score[0],
-            team2: mt.team2, score2: mt.score[1],
-            decisions: null,
-          });
-        }
-      }
-    };
-    const rt = seasonData.regionalTournament;
-    if (rt?.generated) for (const [rid, reg] of Object.entries(rt.brackets || {})) sweep(reg?.bracket, '地域大会', rid);
-    const td = seasonData.toshitaikou;
-    if (td?.generated) {
-      for (const [rid, q] of Object.entries(td.qualifiers || {})) {
-        sweep(q?.mainBracket, '都市対抗予選', rid);
-        sweep(q?.losersBracket, '都市対抗予選', rid);
-      }
-      sweep(td.mainTournament?.bracket, '都市対抗本戦');
-    }
-    sweep(seasonData.nihonSenshuken?.mainTournament?.bracket, '日本選手権');
-    sweep(seasonData.clubSenshuken?.mainTournament?.bracket, 'クラブ選手権');
-
-    // ⚠ 全国12地区ぶんが一度に出ると、自分に関係の無い試合で埋まる（実測51試合）。
-    //    自チーム → 自分の地区 → 全国 の順に並べ、表示は上から詰める。
-    const myRegion = rt?.userRegionId || td?.userRegionId || null;
-    const rank = (x) => (x.team1 === userTeamName || x.team2 === userTeamName) ? 0
-      : (myRegion && x.regionId === myRegion) ? 1
-      : x.regionId ? 3 : 2;   // 全国大会（regionId なし）は地区より上
-    out.sort((a, b) => rank(a) - rank(b));
-    return out;
-  }, [seasonData.results, seasonData.regionalTournament, seasonData.toshitaikou,
-      seasonData.nihonSenshuken, seasonData.clubSenshuken, yesterday, userTeamName]);
+  // ⚠ **「昨日の結果」は撤去済み**（日程進行が縦に長くなりすぎたため）。
+  //    `simulateGamesOnDate` の戻り値が一度も描画されていなかったのを直した機能で、
+  //    データは `seasonData.results`（リーグ戦）＋ 各ブラケットの日付走査
+  //    （トーナメント。社会人はリーグ戦を持たないのでこちらが本体）で作っていた。
+  //    ⚠ **宣言だけ残さないこと**——描画されない state はこの作品が繰り返し踏んだ defect。
+  //    復活させるなら git 履歴から戻し、**縦を増やさない置き方**にすること
+  //    （進行バーの中に1行、または折りたたみ）。
 
   // 今日のトーナメント試合を取得（「本日の対戦」欄に表示するため）
   const todaysTournamentMatches = useMemo(() => {
@@ -2285,71 +2213,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         </button>
       </div>
 
-      {/* 昨日の結果。押した手応えを返すのが役目なので、進行バーの直下・
-          カレンダーより上に置く。自チームの試合だけ格を上げる。 */}
-      {yesterdayResults.length > 0 && (() => {
-        const isMine = (r) => r.team1 === userTeamName || r.team2 === userTeamName;
-        const mine = yesterdayResults.filter(isMine);
-        const others = yesterdayResults.filter(r => !isMine(r));
-        return (
-          <div className="mb-3 rounded-2xl border border-gray-700/40 bg-surface-2 px-4 py-3 shadow-xl">
-            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-sm font-bold text-gray-100 tabular-nums">
-                {yesterday.month}/{yesterday.day} の結果
-              </span>
-              <span className="text-xs text-gray-300 tabular-nums">{yesterdayResults.length}試合</span>
-            </div>
-
-            {mine.map(r => {
-              const first = r.team1 === userTeamName;
-              const my = first ? r.score1 : r.score2;
-              const opp = first ? r.score2 : r.score1;
-              const oppName = first ? r.team2 : r.team1;
-              const outcome = my > opp ? 'win' : my < opp ? 'lose' : 'draw';
-              const d = r.decisions || {};
-              return (
-                <div key={r.key} className={`rounded-xl px-3 py-2.5 mb-2 border ${
-                  outcome === 'win' ? 'bg-[var(--accent-soft)] border-[var(--accent)]/50'
-                    : 'bg-gray-800 border-gray-600'}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-lg font-black shrink-0 w-8 text-center ${
-                      outcome === 'win' ? 'text-accent' : 'text-gray-300'}`}>
-                      {outcome === 'win' ? '勝' : outcome === 'lose' ? '敗' : '分'}
-                    </span>
-                    <span className="text-2xl font-black text-white tabular-nums shrink-0">
-                      {my}<span className="text-gray-300 mx-1.5 font-bold text-lg">-</span>{opp}
-                    </span>
-                    <span className="text-sm text-gray-100 truncate min-w-0">
-                      <span className="text-gray-300 mr-1">vs</span>{oppName}
-                    </span>
-                    {r.label && <span className="text-xs text-gray-300 shrink-0">{r.label}</span>}
-                    <span className="ml-auto text-xs text-gray-300 shrink-0 truncate max-w-[42%]">
-                      {d.winningPitcher?.name && <>勝 <span className="text-gray-100">{d.winningPitcher.name}</span></>}
-                      {d.losingPitcher?.name && <span className="ml-2">敗 <span className="text-gray-100">{d.losingPitcher.name}</span></span>}
-                      {d.savePitcher?.name && <span className="ml-2">S <span className="text-gray-100">{d.savePitcher.name}</span></span>}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {others.length > 0 && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                {others.slice(0, 16).map(r => (
-                  <div key={r.key} className="flex items-center gap-2 text-xs tabular-nums">
-                    <span className={`truncate min-w-0 flex-1 text-right ${r.score1 > r.score2 ? 'text-gray-100 font-bold' : 'text-gray-300'}`}>{r.team1}</span>
-                    <span className="text-gray-100 shrink-0 w-12 text-center">{r.score1} - {r.score2}</span>
-                    <span className={`truncate min-w-0 flex-1 ${r.score2 > r.score1 ? 'text-gray-100 font-bold' : 'text-gray-300'}`}>{r.team2}</span>
-                  </div>
-                ))}
-                {others.length > 16 && (
-                  <div className="text-xs text-gray-300 col-span-2 mt-0.5">ほか {others.length - 16} 試合</div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      {/* ⚠ **「昨日の結果」パネルはここにあったが、日程進行が縦に長くなりすぎたため撤去した**。
+          押した手応えを返すのが役目だったので、消したことで
+          「押しても何が起きたか画面に返らない」が部分的に戻っている。
+          復活させるなら**縦を増やさない置き方**（進行バーの中に1行、または折りたたみ）にすること。
+          データを作る useMemo も併せて撤去済み（描画されない state を残さないため）。 */}
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}

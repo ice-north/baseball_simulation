@@ -326,7 +326,7 @@ export const atBatResultColor = (label) => {
  */
 export const POSITION_COLORS = {
   pitcher: 'bg-red-600 text-white',
-  catcher: 'bg-blue-600 text-white',
+  catcher: 'bg-sky-600 text-white',
   first: 'bg-yellow-600 text-white',
   second: 'bg-yellow-600 text-white',
   third: 'bg-yellow-600 text-white',
@@ -335,6 +335,23 @@ export const POSITION_COLORS = {
   center: 'bg-green-600 text-white',
   right: 'bg-green-600 text-white',
   dh: 'bg-purple-600 text-white'
+};
+
+/**
+ * ポジション「群」の識別色。キャンプのタブなど、群単位で色分けするときに使う。
+ * ⚠ **色を別に持たないこと**。`POSITION_COLORS` と同じ割り当て
+ * （投手=赤 / 捕手=水色 / 内野=黄 / 外野=緑）を群にまとめただけ。
+ * 選択中は塗り、非選択は同系の枠と文字だけにして、識別色は保ったまま格を落とす。
+ */
+export const POSITION_GROUP_COLORS = {
+  pitcher:  { on: 'bg-red-600 text-white border-red-500',
+              off: 'bg-red-900/25 text-red-300 border-red-700/50 hover:bg-red-900/40' },
+  catcher:  { on: 'bg-sky-600 text-white border-sky-500',
+              off: 'bg-sky-900/25 text-sky-300 border-sky-700/50 hover:bg-sky-900/40' },
+  infield:  { on: 'bg-yellow-600 text-white border-yellow-500',
+              off: 'bg-yellow-900/25 text-yellow-300 border-yellow-700/50 hover:bg-yellow-900/40' },
+  outfield: { on: 'bg-green-600 text-white border-green-500',
+              off: 'bg-green-900/25 text-green-300 border-green-700/50 hover:bg-green-900/40' },
 };
 
 /**
