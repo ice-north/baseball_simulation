@@ -26,7 +26,10 @@ const md = fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8');
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
   const p = path.join(dir, e.name);
   if (e.isDirectory()) return e.name === 'node_modules' ? [] : walk(p);
-  return /\.(js|jsx|mjs)$/.test(e.name) ? [p] : [];
+  // ⚠ **CSS も走査対象に入れること**。CLAUDE.md は `.btn-primary` / `--accent` /
+  //    `body` のようなCSS側の名前も参照する。JSだけ見ていると誤検知する
+  //    （実際、地色を body に敷いた追記で `html` が未解決として引っ掛かった）。
+  return /\.(js|jsx|mjs|css)$/.test(e.name) ? [p] : [];
 });
 const srcFiles = [...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'tools'))];
 const blob = srcFiles.map(f => fs.readFileSync(f, 'utf8')).join('\n');
