@@ -71,7 +71,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
              : 'bg-transparent border-gray-800 cursor-not-allowed'}`}
     >
       <div className="flex items-baseline gap-2">
-        <span className={`text-sm font-bold ${slot ? 'text-white' : 'text-gray-400'}`}>スロット {index + 1}</span>
+        <span className={`text-base font-bold ${slot ? 'text-white' : 'text-gray-400'}`}>スロット {index + 1}</span>
         {slot
           ? <span className="text-xs text-gray-300 tabular-nums truncate">
               {slot.year}年目 {slot.date.month}/{slot.date.day}{slot.teamName ? ` · ${slot.teamName}` : ''}
@@ -88,8 +88,8 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
   // メニューを載せるカード。本編のカード（surface-2 + gray-700）と同じ見た目にする
   const MenuCard = ({ title, children }) => (
-    <div className="w-full max-w-sm rounded-2xl border border-gray-700/60 bg-surface-2/70 backdrop-blur p-5 shadow-2xl">
-      {title && <p className="text-xs text-gray-300 mb-3">{title}</p>}
+    <div className="w-full max-w-md rounded-2xl border border-gray-700/60 bg-surface-2/70 backdrop-blur p-6 shadow-2xl">
+      {title && <p className="text-sm text-gray-300 mb-3">{title}</p>}
       {children}
     </div>
   );
@@ -105,11 +105,11 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
       <div className="relative w-full max-w-md px-6 flex flex-col items-center">
         {/* タイトル */}
-        <h1 className="text-5xl font-bold text-white tracking-tight leading-none">NEXT STAGE</h1>
-        <div className="mt-2.5 mb-5 flex items-center gap-3">
-          <span className="h-px w-10 bg-[var(--accent)]" />
-          <p className="text-xs text-gray-300 tracking-[0.25em] uppercase">Baseball Simulation</p>
-          <span className="h-px w-10 bg-[var(--accent)]" />
+        <h1 className="text-6xl font-bold text-white tracking-tight leading-none">NEXT STAGE</h1>
+        <div className="mt-4 mb-7 flex items-center gap-4">
+          <span className="h-px w-12 bg-[var(--accent)]" />
+          <p className="text-sm text-gray-300 tracking-[0.25em] uppercase">Baseball Simulation</p>
+          <span className="h-px w-12 bg-[var(--accent)]" />
         </div>
 
         {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
@@ -150,7 +150,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               </>
             )}
             <button onClick={() => setShowSlotSelect(false)}
-              className="mt-3 w-full text-xs text-gray-300 hover:text-white py-1.5 transition">← 戻る</button>
+              className="mt-3 w-full text-sm text-gray-300 hover:text-white py-2 transition">← 戻る</button>
           </MenuCard>
         ) : showEditSlotSelect ? (
           <MenuCard title="編集するデータ">
@@ -164,7 +164,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               <span className="block text-xs font-normal opacity-70 mt-0.5">地域・強さ・種別・名前を編集（全セーブ共通）</span>
             </button>
             <button onClick={() => setShowEditSlotSelect(false)}
-              className="mt-3 w-full text-xs text-gray-300 hover:text-white py-1.5 transition">← 戻る</button>
+              className="mt-3 w-full text-sm text-gray-300 hover:text-white py-2 transition">← 戻る</button>
           </MenuCard>
         ) : (
           <MenuCard>
@@ -174,13 +174,13 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               <button
                 onClick={handleContinue}
                 disabled={!canContinue}
-                className={`${canContinue ? 'btn-primary' : 'btn-secondary'} w-full px-6 py-3 rounded-xl text-base transition active:scale-[0.99]`}
+                className={`${canContinue ? 'btn-primary' : 'btn-secondary'} w-full px-6 py-3.5 rounded-xl text-lg transition active:scale-[0.99]`}
               >
                 つづきから
               </button>
               <button
                 onClick={onNewGame}
-                className={`${canContinue ? 'btn-secondary' : 'btn-primary'} w-full px-6 py-3 rounded-xl text-base transition active:scale-[0.99]`}
+                className={`${canContinue ? 'btn-secondary' : 'btn-primary'} w-full px-6 py-3.5 rounded-xl text-lg transition active:scale-[0.99]`}
               >
                 はじめから
               </button>
@@ -189,11 +189,11 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
             <div className="border-t border-gray-700/60 my-3" />
 
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={onSandbox} className="btn-secondary px-4 py-2 rounded-lg text-sm transition">箱庭モード</button>
-              <button onClick={handleEdit} className="btn-secondary px-4 py-2 rounded-lg text-sm transition">エディット</button>
+              <button onClick={onSandbox} className="btn-secondary px-4 py-2.5 rounded-lg text-base transition">箱庭モード</button>
+              <button onClick={handleEdit} className="btn-secondary px-4 py-2.5 rounded-lg text-base transition">エディット</button>
             </div>
             <button onClick={onManual}
-              className="mt-2 w-full text-sm text-gray-300 hover:text-white py-1.5 rounded-lg hover:bg-gray-700/40 transition">
+              className="mt-2 w-full text-base text-gray-300 hover:text-white py-2 rounded-lg hover:bg-gray-700/40 transition">
               マニュアル
             </button>
 
@@ -213,28 +213,15 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                   title: '画面が横にはみ出す場合は「自動」または縮小を選ぶと1画面に収まります' },
               ].map(o => (
                 <button key={o.label} onClick={o.onClick} title={o.title}
-                  className="w-full flex items-center justify-between text-xs text-gray-300 hover:text-white px-1 py-0.5 transition">
+                  className="w-full flex items-center justify-between text-sm text-gray-300 hover:text-white px-1 py-1 transition">
                   <span>{o.label}</span>
-                  <span className={`font-bold px-2 py-0.5 rounded ${o.on ? 'seg-on' : 'seg'}`}>{o.value}</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded ${o.on ? 'seg-on' : 'seg'}`}>{o.value}</span>
                 </button>
               ))}
             </div>
           </MenuCard>
         )}
 
-        {/* 世界の規模。装飾ではなく中身を出す＝本編と同じ「密度のある数字」の語彙 */}
-        {!showSlotSelect && !showEditSlotSelect && (
-          <div className="mt-5 text-center">
-            <div className="flex items-baseline justify-center gap-x-5 gap-y-1 flex-wrap">
-              {[['996', '高校'], ['234', '大学'], ['300', '社会人'], ['26', '独立']].map(([n, l]) => (
-                <div key={l} className="flex items-baseline gap-1.5">
-                  <span className="text-base font-bold text-accent tabular-nums leading-none">{n}</span>
-                  <span className="text-xs text-gray-300">{l}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
