@@ -3,6 +3,83 @@ import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getAutosa
 import { isTutorialEnabled, setTutorialEnabled, resetTutorialProgress } from '../game/tutorial.js';
 import { getUiScale, cycleUiScale, UI_SCALE_LABEL } from '../game/uiSettings.js';
 
+/**
+ * タイトル画面の球場パレット。
+ * ⚠ ここは**タイトル画面専用**。本編のUIは surface-*／accent の語彙で、
+ *   試合画面は電光掲示板（オレンジのLED）の語彙。混ぜないこと。
+ */
+const FIELD = {
+  night:  '#141b24',   // ナイターの空・スタンドの影
+  turfHi: '#2c4a33',   // 芝（手前）
+  turfLo: '#1d3324',   // 芝（奥）
+  dirtHi: '#7a5540',   // 内野の土（手前）
+  dirtLo: '#5b3f2f',   // 内野の土（奥）
+  chalk:  '#f2f0e8',   // 白線・チョーク
+  ball:   '#22c55e',   // 本編と同じ意味色: 緑=ボール
+  strike: '#facc15',   // 黄=ストライク
+  out:    '#ef4444',   // 赤=アウト
+};
+
+/**
+ * 捕手の後ろから内野を見た画。画像を持たずSVGだけで描く。
+ * ⚠ **下端を基準に置くこと**（`xMidYMax slice`）。`xMidYMid` だと縦の短い画面で
+ *   ホームベースと打席が下に切れ、土だけが残って「茶色いドーム」に見える。
+ * ⚠ **土の扇は大きくしすぎない**。半径を上げると画面の主役が土になり、
+ *   メニューが読みにくくなる。あくまで下3分の1に収める。
+ */
+const FieldBackdrop = () => (
+  <svg aria-hidden viewBox="0 0 1600 800" preserveAspectRatio="xMidYMax slice"
+       className="pointer-events-none absolute inset-0 w-full h-full">
+    <defs>
+      <linearGradient id="ns-turf" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={FIELD.turfLo} /><stop offset="100%" stopColor={FIELD.turfHi} />
+      </linearGradient>
+      <linearGradient id="ns-dirt" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={FIELD.dirtLo} /><stop offset="100%" stopColor={FIELD.dirtHi} />
+      </linearGradient>
+      {/* 空から芝への継ぎ目を溶かす（硬い水平線だと「帯」に見える） */}
+      <linearGradient id="ns-haze" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={FIELD.night} stopOpacity="1" />
+        <stop offset="100%" stopColor={FIELD.night} stopOpacity="0" />
+      </linearGradient>
+      {/* メニューの背後を落として文字を読ませる。球場の絵より可読性が優先 */}
+      <radialGradient id="ns-scrim" cx="50%" cy="40%" r="56%">
+        <stop offset="0%" stopColor={FIELD.night} stopOpacity="0.90" />
+        <stop offset="65%" stopColor={FIELD.night} stopOpacity="0.55" />
+        <stop offset="100%" stopColor={FIELD.night} stopOpacity="0" />
+      </radialGradient>
+    </defs>
+
+    {/* 芝 */}
+    <path d="M0,360 H1600 V800 H0 Z" fill="url(#ns-turf)" />
+    {/* 内野の土。⚠ **半円にしないこと**——真ん中が盛り上がって「茶色いドーム」に見える。
+        実際の内野はホームから外へ広がる楔なので、**ファウルラインで挟んだ形**にする。 */}
+    {/* ホーム周りの土（実際の球場にある円）。これが無いと楔の先端が尖って矢印に見える */}
+    <ellipse cx="800" cy="762" rx="230" ry="112" fill={FIELD.dirtHi} fillOpacity="0.92" />
+    <path d="M800,786 L332,474 Q800,398 1268,474 Z" fill="url(#ns-dirt)" />
+    <path d="M332,474 Q800,398 1268,474"
+          fill="none" stroke={FIELD.chalk} strokeOpacity="0.16" strokeWidth="3" />
+    {/* 投手板。楔の中心に置くと一気に「球場」に見える */}
+    <ellipse cx="800" cy="596" rx="62" ry="20" fill={FIELD.dirtHi} fillOpacity="0.75" />
+    <rect x="782" y="590" width="36" height="6" rx="2" fill={FIELD.chalk} fillOpacity="0.55" />
+    {/* ファウルライン。ホームから外へ開いて視点を作る */}
+    <g stroke={FIELD.chalk} strokeOpacity="0.45" strokeWidth="4" fill="none" strokeLinecap="round">
+      <path d="M800,762 L150,362" />
+      <path d="M800,762 L1450,362" />
+    </g>
+    {/* 打席のチョーク */}
+    <g stroke={FIELD.chalk} strokeOpacity="0.30" strokeWidth="3.5" fill="none">
+      <path d="M694,700 H754 V782 H694 Z" />
+      <path d="M846,700 H906 V782 H846 Z" />
+    </g>
+    {/* ホームベースの五角形 */}
+    <path d="M776,736 H824 L824,758 L800,776 L776,758 Z" fill={FIELD.chalk} fillOpacity="0.88" />
+
+    <rect y="300" width="1600" height="120" fill="url(#ns-haze)" />
+    <rect width="1600" height="800" fill="url(#ns-scrim)" />
+  </svg>
+);
+
 const PHASE_NAMES = {
   regular_season: 'レギュラーシーズン',
   playoff: 'プレーオフ',
@@ -107,21 +184,32 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
   );
 
   return (
-    // ⚠ 地色は本編と同じ `surface-0`。アクセントのにじみだけで奥行きを出す
-    //    （以前は `from-gray-900 to-gray-800` の灰色グラデで、本編の紺と繋がっていなかった）。
-    <div className="min-h-screen bg-surface-0 relative overflow-hidden flex items-center justify-center py-6">
-      {/* 背景: アクセントのにじみ。画像を持たずにタイトルらしさを出す */}
-      <div aria-hidden className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(46% 40% at 50% 34%, rgba(34,211,238,0.10) 0%, rgba(34,211,238,0) 72%)' }} />
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/40 to-transparent" />
+    // ⚠ **タイトル画面の地は「球場」**。捕手の後ろから内野を見た画を土色と白線で描く。
+    //    以前は `radial-gradient` のアクセントのにじみ＋大文字字間空けのサブタイトルという、
+    //    **題材と無関係な定番の意匠**だった（洗練はされているが野球に見えない）。
+    //    ⚠ **電光掲示板の語彙（オレンジのLED・グロー）は持ち込まないこと**。
+    //    あれは「現地で試合を見ている」ための演出で、試合画面だけのもの。
+    // ⚠ **上寄せにすること**。中央寄せだとメニューがホームベースの真上に重なり、
+    //    球場の絵で一番効いている部分（打席とベース）が隠れる。
+    <div className="min-h-screen relative overflow-hidden flex items-start justify-center pt-10 pb-6"
+         style={{ backgroundColor: FIELD.night }}>
+      <FieldBackdrop />
 
       <div className="relative w-full max-w-md px-6 flex flex-col items-center">
-        {/* タイトル */}
-        <h1 className="text-6xl font-bold text-white tracking-tight leading-none">NEXT STAGE</h1>
-        <div className="mt-4 mb-7 flex items-center gap-4">
-          <span className="h-px w-12 bg-[var(--accent)]" />
-          <p className="text-sm text-gray-300 tracking-[0.25em] uppercase">Baseball Simulation</p>
-          <span className="h-px w-12 bg-[var(--accent)]" />
+        {/* タイトル。白線と同じチョーク色で、球場に引かれたラインの延長に見せる */}
+        <h1 className="text-6xl font-black tracking-tight leading-none"
+            style={{ color: FIELD.chalk, textShadow: '0 2px 18px rgba(0,0,0,0.55)' }}>
+          NEXT STAGE
+        </h1>
+        {/* ⚠ 罫線で挟んだ大文字サブタイトルは定番手なのでやめた。
+            代わりに**カウントのランプ**（緑=ボール / 黄=ストライク / 赤=アウト）を置く。
+            本編の意味色そのままなので、この作品の語彙で「野球」と言える。 */}
+        <div className="mt-4 mb-7 flex items-center gap-2.5">
+          {[FIELD.ball, FIELD.ball, FIELD.strike, FIELD.strike, FIELD.out].map((c, i) => (
+            <span key={i} className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: c, boxShadow: `0 0 8px ${c}` }} />
+          ))}
+          <span className="ml-2 text-sm font-bold" style={{ color: FIELD.chalk }}>野球シミュレーター</span>
         </div>
 
         {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
