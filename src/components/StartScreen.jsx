@@ -55,25 +55,22 @@ const FieldBackdrop = () => (
     {/* 内野の土。⚠ **半円にしないこと**——真ん中が盛り上がって「茶色いドーム」に見える。
         実際の内野はホームから外へ広がる楔なので、**ファウルラインで挟んだ形**にする。 */}
     {/* ホーム周りの土（実際の球場にある円）。これが無いと楔の先端が尖って矢印に見える */}
-    <ellipse cx="800" cy="762" rx="230" ry="112" fill={FIELD.dirtHi} fillOpacity="0.92" />
-    <path d="M800,786 L332,474 Q800,398 1268,474 Z" fill="url(#ns-dirt)" />
+    <ellipse cx="800" cy="770" rx="240" ry="118" fill={FIELD.dirtHi} fillOpacity="0.92" />
+    <path d="M800,800 L332,474 Q800,398 1268,474 Z" fill="url(#ns-dirt)" />
     <path d="M332,474 Q800,398 1268,474"
           fill="none" stroke={FIELD.chalk} strokeOpacity="0.16" strokeWidth="3" />
     {/* 投手板。楔の中心に置くと一気に「球場」に見える */}
     <ellipse cx="800" cy="596" rx="62" ry="20" fill={FIELD.dirtHi} fillOpacity="0.75" />
     <rect x="782" y="590" width="36" height="6" rx="2" fill={FIELD.chalk} fillOpacity="0.55" />
-    {/* ファウルライン。ホームから外へ開いて視点を作る */}
+    {/* ファウルライン。⚠ **ホームベースと打席は描かない**——手前に来るものほど
+        遠近の圧縮が強く、線・ベース・打席の3つを1枚の絵で辻褄を合わせられなかった
+        （打席をラインの外へ出すと今度はベースから離れて浮く）。
+        球場に見せているのは**土の楔と白線と投手板**で、そこは成立している。
+        手前の小物は無い方が絵が締まるので、描かないことにした。 */}
     <g stroke={FIELD.chalk} strokeOpacity="0.45" strokeWidth="4" fill="none" strokeLinecap="round">
-      <path d="M800,762 L150,362" />
-      <path d="M800,762 L1450,362" />
+      <path d="M800,806 L140,372" />
+      <path d="M800,806 L1460,372" />
     </g>
-    {/* 打席のチョーク */}
-    <g stroke={FIELD.chalk} strokeOpacity="0.30" strokeWidth="3.5" fill="none">
-      <path d="M694,700 H754 V782 H694 Z" />
-      <path d="M846,700 H906 V782 H846 Z" />
-    </g>
-    {/* ホームベースの五角形 */}
-    <path d="M776,736 H824 L824,758 L800,776 L776,758 Z" fill={FIELD.chalk} fillOpacity="0.88" />
 
     <rect y="300" width="1600" height="120" fill="url(#ns-haze)" />
     <rect width="1600" height="800" fill="url(#ns-scrim)" />
