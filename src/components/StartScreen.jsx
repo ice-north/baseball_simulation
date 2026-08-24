@@ -28,7 +28,11 @@ const FIELD = {
  *   メニューが読みにくくなる。あくまで下3分の1に収める。
  */
 const FieldBackdrop = () => (
-  <svg aria-hidden viewBox="0 0 1600 800" preserveAspectRatio="xMidYMax slice"
+  // ⚠ **viewBox の下端(700)は絵の下端(800)より上**。ベースを描かなくなったので、
+  //    ファウルラインの**合流点が画面に写ると「線が1点で終わっている」不自然さ**が出る。
+  //    座標はそのままに viewBox で下を切り落とし、合流点を画面外へ逃がしてある。
+  //    ⚠ 高さを 800 に戻すと合流点が戻ってくる。
+  <svg aria-hidden viewBox="0 0 1600 700" preserveAspectRatio="xMidYMax slice"
        className="pointer-events-none absolute inset-0 w-full h-full">
     <defs>
       <linearGradient id="ns-turf" x1="0" y1="0" x2="0" y2="1">
