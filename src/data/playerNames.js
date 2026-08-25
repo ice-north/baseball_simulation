@@ -1,6 +1,9 @@
 // 選手名データベース（実際の名前の出現頻度に基づく重み付け）
-// 姓: 3000件（実際のパーセンテージを重みとして使用）
-// 名: 3000件（均等に0.033%）
+// 姓: 3199件（実際のパーセンテージを重みとして使用）
+// 名: 3000件（均等に0.033）
+//
+// ⚠ 足すときは tools/names/merge-names.mjs を通すこと。手で書き足すと
+//    重複が混ざる（実際に「足立」が2件入っていた）。
 
 export const PLAYER_NAMES = {
   surnames: [
@@ -3069,7 +3072,6 @@ export const PLAYER_NAMES = {
     { name: '倉岡', weight: 0.004 },
     { name: '下原', weight: 0.004 },
     { name: '小城', weight: 0.004 },
-    { name: '足立', weight: 0.004 },
     { name: '八谷', weight: 0.004 },
     { name: '直江', weight: 0.004 },
     { name: '飯高', weight: 0.004 },
