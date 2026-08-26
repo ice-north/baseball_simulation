@@ -9,6 +9,7 @@ import { AbilityValue } from './AbilityValue.jsx';
 import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
+import { surnameOf } from '../data/playerNames.js';
 
 // 投球フォームの短縮ラベル（カードの省スペース表示用）
 const FORM_SHORT = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
@@ -1448,7 +1449,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           <>
                             <text x={coord.x} y={coord.y - 4} textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">{posLabelsShort[pos]}</text>
                             <text x={coord.x} y={coord.y + 7} textAnchor="middle" fill="#cbd5e1" fontSize="8">
-                              {player.name.length > 3 ? player.name.slice(0, 3) : player.name}
+                              {surnameOf(player.name)}
                             </text>
                           </>
                         ) : (

@@ -9041,3 +9041,14 @@ export function getRandomGivenName() {
 export function generateRandomPlayerName() {
   return getRandomSurname() + ' ' + getRandomGivenName();
 }
+
+// 表示用に姓だけを取り出す（守備配置図のような狭い枠で使う）
+// ⚠ **文字数で切ってはいけない**。フルネームは「姓 名」なので区切りで切ること。
+//    実際に守備配置図が `name.slice(0, 3)` で切っており、**1文字の姓**
+//    （林・森・原・関・東… 169件 / 出現率3.5%）で「林 大」と名の1文字目まで
+//    出ていた。4文字の姓（勅使河原）は「勅使河」と姓が途中で切れていた。
+export function surnameOf(fullName) {
+  const s = String(fullName ?? '');
+  const i = s.indexOf(' ');
+  return i > 0 ? s.slice(0, i) : s;
+}
