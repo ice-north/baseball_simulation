@@ -2,7 +2,8 @@
 // 名前DB（src/data/playerNames.js）への追加ツール
 //
 //   node tools/names/merge-names.mjs --surnames <file> --given <file> \
-//        [--weight 0.012] [--pop-base 85000000] [--limit 5000] [--dry]
+//        [--weight 0.012] [--pop-base 85000000] [--limit 5000] [--dry] \
+//        [--drop-given "徳次郎,喜代和"] [--drop-surnames <file>]
 //
 // 入力は**素のテキスト**でよい。1行1件でも、空白・読点・カンマ区切りで
 // 1行にずらっと並べてもよい（全角空白・全角カンマも受ける）。
@@ -43,6 +44,10 @@ const LIMIT = arg('--limit') ? Number(arg('--limit')) : Infinity;
 // 名は既存が全件 0.033 の一様。**一様のまま揃える**こと（片方だけ重みを
 // 持たせると、新しく足した名前だけが出やすい／出にくいという偏りになる）。
 const GIVEN_W = 0.033;
+// 削除。ファイルパスでも、カンマ区切りで直接書いてもよい
+const dropList = (v) => !v ? new Set()
+  : new Set((fs.existsSync(path.resolve(v)) ? fs.readFileSync(path.resolve(v), 'utf8') : v)
+      .split(/[\s,、,\n]+/u).map(s => s.trim()).filter(Boolean));
 
 // --- 入力の読み取り --------------------------------------------------
 // 1行1件でも、空白・カンマ区切りの羅列でも、順位つきの表でも同じように読む
@@ -86,7 +91,7 @@ const parseArray = (key) => {
     .map(m => ({ name: m[1], weight: Number(m[2]) }));
 };
 
-const merge = (key, cands, label, limit = Infinity) => {
+const merge = (key, cands, label, limit = Infinity, drop = new Set()) => {
   const cur = parseArray(key);
   // ⚠ 既存にも重複がありうる（実際に「足立」が2件あった）。ここで畳む
   const seen = new Map();
@@ -125,10 +130,16 @@ const merge = (key, cands, label, limit = Infinity) => {
     for (const x of order) { if (seen.size <= limit) break; seen.delete(x.name); dropped.push(x.name); }
   }
 
+  // 明示的な削除指定
+  const removed = [], notFound = [];
+  for (const n of drop) { if (seen.delete(n)) removed.push(n); else notFound.push(n); }
+
   const out = [...seen.values()];
   const show = (a, n = 8) => a.slice(0, n).join(' ') + (a.length > n ? ` …他${a.length - n}件` : '');
   console.log(`\n【${label}】 ${cur.length}件 → ${out.length}件`);
   console.log(`  追加            ${added.length - dropped.length}件`);
+  if (removed.length)   console.log(`  指定により削除    ${removed.length}件  ${show(removed)}`);
+  if (notFound.length)  console.log(`  ⚠ 削除指定が見つからない ${notFound.length}件  ${show(notFound)}`);
   if (dropped.length)   console.log(`  上限で落とした    ${dropped.length}件  ${show(dropped)}`);
   if (dupInDb.length)   console.log(`  既存DBの重複を除去  ${dupInDb.length}件  ${show(dupInDb)}`);
   if (already.length)   console.log(`  既にあった      ${already.length}件  ${show(already)}`);
@@ -137,8 +148,10 @@ const merge = (key, cands, label, limit = Infinity) => {
   return out;
 };
 
-const surnames   = merge('surnames',   readList(arg('--surnames'), SUR_W),   '姓', LIMIT);
-const givenNames = merge('givenNames', readList(arg('--given'),    GIVEN_W), '名', LIMIT);
+const surnames   = merge('surnames',   readList(arg('--surnames'), SUR_W),   '姓', LIMIT,
+                         dropList(arg('--drop-surnames')));
+const givenNames = merge('givenNames', readList(arg('--given'),    GIVEN_W), '名', LIMIT,
+                         dropList(arg('--drop-given')));
 
 // --- 分布の測定（実データと比べる） ----------------------------------
 const eff = (a) => { const t = a.reduce((s, x) => s + x.weight, 0);

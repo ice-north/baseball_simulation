@@ -1,6 +1,6 @@
 // 選手名データベース（実際の名前の出現頻度に基づく重み付け）
 // 姓: 5000件（実際のパーセンテージを重みとして使用）
-// 名: 4002件（均等に0.033）
+// 名: 4000件（均等に0.033）
 //
 // ⚠ 足すときは tools/names/merge-names.mjs を通すこと。手で書き足すと
 //    重複が混ざる（実際に「足立」が2件入っていた）。
@@ -6370,7 +6370,6 @@ export const PLAYER_NAMES = {
     { name: '岳', weight: 0.033 },
     { name: '和清', weight: 0.033 },
     { name: '清和', weight: 0.033 },
-    { name: '喜代和', weight: 0.033 },
     { name: '恭一', weight: 0.033 },
     { name: '景虎', weight: 0.033 },
     { name: '和智', weight: 0.033 },
@@ -7105,7 +7104,6 @@ export const PLAYER_NAMES = {
     { name: '当真', weight: 0.033 },
     { name: '斗真', weight: 0.033 },
     { name: '統吾', weight: 0.033 },
-    { name: '徳次郎', weight: 0.033 },
     { name: '徳成', weight: 0.033 },
     { name: '斗夢', weight: 0.033 },
     { name: '都夢', weight: 0.033 },

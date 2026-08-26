@@ -613,6 +613,7 @@ NEW GAME → 大学チーム選択 → キャンプ
 ——実際に「足立」が2件入っていた。追加は必ずツールを通す。
 
     node tools/names/merge-names.mjs --surnames <file> [--given <file>] [--limit 5000]
+    node tools/names/merge-names.mjs --drop-given "徳次郎,喜代和"   # 削除も同じ経路で
 
 順位つきの表（`3191位<TAB>中司<TAB>およそ3,900人`）をそのまま読む。
 
