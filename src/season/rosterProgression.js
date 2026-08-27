@@ -18,6 +18,7 @@ import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool, replaceReleasedPool, removeFromReleasedPoolByIds } from '../state/pools.js';
 import { addToRoster, replaceRoster } from '../state/roster.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
+import { homeBlockOf, blockOfCorporate, HOME_BONUS, HOME_WINDOW } from '../data/regions.js';
 
 /**
  * 大学モード: TEAMS_DATA上のチームから4年生を卒業させ、新入生を補充
@@ -527,6 +528,7 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
 
   for (const teamInfo of teamsNeedingPlayers) {
     const isCDRank = teamInfo.rank === 'C' || teamInfo.rank === 'D';
+    const teamBlock = blockOfCorporate(teamInfo.team);
     let added = 0;
 
     // このチーム向けにスコア付けしてソート
@@ -536,7 +538,9 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
         if (p.age && p.age > 32) return null;
         const base   = isCDRank ? calcProspectScore(p) : calcAbilScore(p);
         const posAdj = positionBoost(p, teamInfo.team);
-        return { player: p, idx, score: base + posAdj };
+        // 地元の高校出身なら少し優先する。⚠ 加点は控えめに（HOME_BONUS の注記参照）
+        const homeAdj = (teamBlock && homeBlockOf(p) === teamBlock) ? HOME_BONUS : 0;
+        return { player: p, idx, score: base + posAdj + homeAdj };
       })
       .filter(Boolean)
       .sort((a, b) => b.score - a.score);
@@ -642,7 +646,19 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
       if (candidateIdx >= poolCandidates.length) break;
       if (taken >= availableFromPool) break;
 
-      const candidate = poolCandidates[candidateIdx];
+      // 地元優先。⚠ **プール全体から探してはいけない**——能力順に並んでいるので
+      //    地元というだけで下位の選手まで拾いに行くとチーム戦力が地区で決まる。
+      //    直後の HOME_WINDOW 人だけを見て、同じ地区の選手がいればそちらを取る。
+      let pickIdx = candidateIdx;
+      const teamBlock = blockOfCorporate(teamInfo.team);
+      if (teamBlock) {
+        for (let k = candidateIdx, seen = 0; k < poolCandidates.length && seen < HOME_WINDOW; k++) {
+          if (recruitedIds.has(poolCandidates[k].player.id)) continue;
+          seen++;
+          if (homeBlockOf(poolCandidates[k].player) === teamBlock) { pickIdx = k; break; }
+        }
+      }
+      const candidate = poolCandidates[pickIdx];
       candidate.player._nextYearTeam = teamInfo.teamName; // レポート転記用
       const p = JSON.parse(JSON.stringify(candidate.player));
       p.isStarter = false;
@@ -654,7 +670,7 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
       recruitedIds.add(candidate.player.id);
       teamInfo.needed--;
       taken++;
-      candidateIdx++;
+      if (pickIdx === candidateIdx) candidateIdx++;
       anyRecruited = true;
     }
   }

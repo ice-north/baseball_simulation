@@ -6,6 +6,7 @@
 
 import { generateRandomPlayerName, getRandomGivenName } from '../data/playerNames.js';
 import { getRegionalSurname, REGIONAL_SHARE } from '../data/prefectureNames.js';
+import { homeBlockOf, blockOfUniversity, HOME_UNIV_PREF } from '../data/regions.js';
 import { generateCatcherLead, taperLow } from '../utils/constants.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
@@ -1152,7 +1153,7 @@ export function enrollInUniversity(players, enrollYear) {
   // 独立/社会人モードでは234大学がすべてTEAMS_DATAに載るため、TEAMS_DATA全体で
   // 除外すると配属先が無くなり所属が「大学」表記になってしまう不具合を防ぐ。
   const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
-  const assignTeam = (rank) => {
+  const assignTeam = (rank, homeBlock = null) => {
     const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank && t.name !== userUniTeam);
     if (teams.length === 0) return null;
     let minCount = Infinity;
@@ -1166,7 +1167,12 @@ export function enrollInUniversity(players, enrollYear) {
         candidates.push(t);
       }
     });
-    const team = candidates[Math.floor(Math.random() * candidates.length)];
+    // 地元優先。⚠ **枠は均等割り（最も空いている大学）のまま**にすること。
+    //    地元だからと空きを無視して入れると、人口の多い地区の大学だけ膨らむ。
+    //    同じだけ空いている大学が複数あるときに、地元をより高い確率で選ぶ。
+    const home = homeBlock ? candidates.filter(t => blockOfUniversity(t) === homeBlock) : [];
+    const pick = (home.length && Math.random() < HOME_UNIV_PREF) ? home : candidates;
+    const team = pick[Math.floor(Math.random() * pick.length)];
     teamCounts[team.id] = (teamCounts[team.id] || 0) + 1;
     return team;
   };
@@ -1181,7 +1187,7 @@ export function enrollInUniversity(players, enrollYear) {
   if (Array.isArray(players)) {
     players.forEach(player => {
       const rank = player._destinationRank || 'C';
-      const team = assignTeam(rank);
+      const team = assignTeam(rank, homeBlockOf(player));
       addUniHistory(player, team);
       player.age = Math.max(player.age || 18, 19);
       universityPool[enrollYear].push({
@@ -1195,7 +1201,7 @@ export function enrollInUniversity(players, enrollYear) {
     for (const rank of ['S', 'A', 'B', 'C', 'D']) {
       if (!players[rank]) continue;
       players[rank].forEach(player => {
-        const team = assignTeam(rank);
+        const team = assignTeam(rank, homeBlockOf(player));
         addUniHistory(player, team);
         player.age = Math.max(player.age || 18, 19);
         universityPool[enrollYear].push({
