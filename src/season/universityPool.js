@@ -4,7 +4,8 @@
 // 大学4年間 → 卒業後に再びドラフト/入団候補
 // ============================================================
 
-import { generateRandomPlayerName } from '../data/playerNames.js';
+import { generateRandomPlayerName, getRandomGivenName } from '../data/playerNames.js';
+import { getRegionalSurname, REGIONAL_SHARE } from '../data/prefectureNames.js';
 import { generateCatcherLead, taperLow } from '../utils/constants.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
@@ -77,7 +78,9 @@ function weightedPick(weights) {
 }
 
 function generateHighSchoolPlayer(id) {
-  const name = generateRandomPlayerName();
+  // ⚠ **名前はここで作らない**。出身校（＝県）が決まってからでないと
+  //    県別の姓を引けない。以前はここで `generateRandomPlayerName()` を呼び、
+  //    高校の割り当ては 300行ほど下で行っていた。順序を入れ替えてある。
 
   // 左右比率は src/utils/handedness.js に一元化（右打56% / 左打41% / 両打3%）
   const { throws, bats } = generateHandedness();
@@ -392,6 +395,13 @@ function generateHighSchoolPlayer(id) {
   const growthPotential = cl(gpCenter[tier] + normal * 0.28, 0.35, 1.50);
 
   const highSchool = assignHighSchool(tier);
+
+  // 出身校の県に固有の姓の表があればそちらから引く（現状は沖縄のみ）。
+  // 名（下の名前）は本土と共通なので全国のまま。
+  const regional = highSchool?.pref ? getRegionalSurname(highSchool.pref) : null;
+  const name = (regional && Math.random() < REGIONAL_SHARE)
+    ? regional + ' ' + getRandomGivenName()
+    : generateRandomPlayerName();
 
   // 高校知名度の計算: 出身校ランク + 能力（投手=球速、野手=パワー） + 揺らぎ
   // 高校野球分析サイトの評価軸（強豪校在籍・MAX球速・通算本塁打）を模倣
