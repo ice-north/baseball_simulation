@@ -33,6 +33,19 @@ const PITCH_LIMITS = {
 // イニング別ダメージ閾値: 1回=45, 2回=40, ..., 9回=5
 const INNING_DAMAGE_THRESHOLDS = [45, 40, 35, 30, 25, 20, 15, 10, 5];
 
+// リリーフを reliefFatigue の少ない順に並べるための比較関数。
+// ⚠ **守護神だけは最後に回す**。守護神はセーブ場面（実測で1チーム110試合あたり
+//    32.6回）でしか呼ばれないので、**常にブルペンで最も疲労が少ない**。
+//    疲労順の緊急フォールバックがそれを毎回拾い、セーブ場面が32.6回しか
+//    無いのに登板が61回まで膨らんでいた（実NPBの守護神は35〜42%の試合）。
+//    除外ではなく末尾送りにするのは、本当に誰も居ないときに投げられなくなるのを防ぐため。
+const closerLast = (fatigue, closerId, tieBreak = null) => (a, b) => {
+  const ac = a.id === closerId ? 1 : 0, bc = b.id === closerId ? 1 : 0;
+  if (ac !== bc) return ac - bc;
+  const d = (fatigue[a.id] || 0) - (fatigue[b.id] || 0);
+  return d || (tieBreak ? tieBreak(a, b) : 0);
+};
+
 // 選手が投手かどうかを判定（positionだけでなく能力値も確認）
 export const isPitcherPlayer = (player) => {
   // 明示的にpitcherと設定されている場合
@@ -1505,13 +1518,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       }
     }
 
-    // 9回リード時→クローザー必須
-    if (!shouldChange && gs.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
+    // 9回リード時→クローザー必須。
+    // ⚠ **同点(0点差)も含める**。実際の監督は9回同点でも守護神を投入する。
+    //    セーブ機会（1チーム110試合あたり32.6回）だけだと登板が28%に留まり、
+    //    実NPBの35〜42%に届かない。同点を足して34%になる。
+    if (!shouldChange && gs.inning >= 9 && scoreDiff >= 0 && scoreDiff <= 3) {
       const isCloser = rotation.closer && currentPitcher.id === rotation.closer;
       if (!isCloser) {
         shouldChange = true;
         situation = 'save';
-        changeReason = `9回${scoreDiff}点リード、守護神を投入`;
+        changeReason = scoreDiff === 0 ? `9回同点、守護神を投入` : `9回${scoreDiff}点リード、守護神を投入`;
       }
     }
     // 8回僅差→セットアッパー
@@ -1663,7 +1679,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         )
         // reliefFatigue（登板間隔の管理値）の少ない順。p.fatigue はシーズン疲労で
         // リリーフではほとんど溜まらないため、ここで使うと選択が偏る
-        .sort((a, b) => (fatigue[a.id] || 0) - (fatigue[b.id] || 0))[0];
+        // ⚠ **守護神は最後に回す**（`closerLast`）。セーブ場面でしか投げないので
+        //    常にブルペンで最も疲労が少なく、疲労順のこの経路が毎回拾ってしまう。
+        .sort(closerLast(fatigue, rotation.closer))[0];
       if (reliever) selectedRoleLabel = '緊急中継ぎ';
     }
 
@@ -1674,8 +1692,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       const nonStarterPitchers = defenseTeam.players
         .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id) && !starterIdsSet.has(p.id))
         // currentStamina は登板のたびにリセットされるため、スタミナ順だと常に同じ投手が
-        // 選ばれてしまう。reliefFatigue の少ない順を主キーにする
-        .sort((a, b) => ((fatigue[a.id] || 0) - (fatigue[b.id] || 0)) || ((b.currentStamina || 0) - (a.currentStamina || 0)));
+        // 選ばれてしまう。reliefFatigue の少ない順を主キーにする（守護神は最後）
+        .sort(closerLast(fatigue, rotation.closer, (a, b) => (b.currentStamina || 0) - (a.currentStamina || 0)));
       if (nonStarterPitchers.length > 0) {
         reliever = nonStarterPitchers[0];
         selectedRoleLabel = '緊急登板';
@@ -2416,13 +2434,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               changeReason = `先発${pitcher.name}がダメージ蓄積で降板(DP:${currentDamage}/${threshold})`;
             }
           }
-          // 9回、3点差以内のリード → クローザー
-          if (!shouldChange && gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
+          // 9回、同点〜3点差以内のリード → クローザー（同点を含める理由は上記）
+          if (!shouldChange && gameState.inning >= 9 && scoreDiff >= 0 && scoreDiff <= 3) {
             const closerId = rotation?.closer;
             if (closerId && pitcher.id !== closerId) {
               shouldChange = true;
               situation = 'save';
-              changeReason = `9回セーブ場面、守護神を投入`;
+              changeReason = scoreDiff === 0 ? `9回同点、守護神を投入` : `9回セーブ場面、守護神を投入`;
             }
           }
           // 8回で僅差リード → セットアッパー
@@ -2542,21 +2560,25 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             // フォールバック（先発ローテーション投手・登板済み投手は除外）
             if (shouldChange && !reliever) {
               const starterIds = new Set(rotation?.starters || []);
-              reliever = team.players.find(p =>
-                isPitcher(p) &&
-                p.battingOrder === 0 &&
-                p.isActive !== false &&
-                !alreadyPitchedIds.has(p.id) &&
-                !starterIds.has(p.id) &&
-                (p.currentStamina || 80) > 40
-              );
+              // ⚠ `.find()` はロスター順なので同じ投手が毎試合指名される。
+              //    reliefFatigue の少ない順にし、守護神は最後へ回す（`closerLast`）
+              reliever = team.players
+                .filter(p =>
+                  isPitcher(p) &&
+                  p.battingOrder === 0 &&
+                  p.isActive !== false &&
+                  !alreadyPitchedIds.has(p.id) &&
+                  !starterIds.has(p.id) &&
+                  (p.currentStamina || 80) > 40
+                )
+                .sort(closerLast(fatigue, rotation?.closer))[0];
               if (reliever) selectedRoleLabel = '緊急中継ぎ';
               if (!reliever) {
                 // 最終手段: 先発ローテーション投手も除外せず最もスタミナの残っている投手を選ぶ
                 // （先発がpitcherAppearancesに入るとセーブ判定が狂うため、先発は除外して探す）
                 const allPitchers = team.players
                   .filter(p => isPitcher(p) && p.battingOrder === 0 && p.isActive !== false && p.id !== pitcher.id && !starterIds.has(p.id))
-                  .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
+                  .sort(closerLast(fatigue, rotation?.closer, (a, b) => (b.currentStamina || 0) - (a.currentStamina || 0)));
                 if (allPitchers.length > 0) {
                   reliever = allPitchers[0];
                   selectedRoleLabel = '緊急登板';
