@@ -2,7 +2,7 @@ import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
   pitchVelocityDrop, isUnreadablePitch } from '../utils/constants.js';
-import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
+import { conditionBattingMod, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, infieldDefenseOf, guessSuccessRate } from './pitchCalling.js';
@@ -667,7 +667,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // コンディション補正
     const batterCondition = batterPlayer.condition ?? CONDITION_LEVELS.NORMAL;
     const pitcherCondition = pitcherPlayer.condition ?? CONDITION_LEVELS.NORMAL;
-    const batterCondMod = CONDITION_BATTING_MODIFIER[batterCondition] || 0;
+    const batterCondMod = conditionBattingMod(batterCondition);
     const pitcherCondMod = CONDITION_PITCHING_MODIFIER[pitcherCondition] || 0;
 
     // 疲労による能力低下（疲労0→0%, 疲労50→-5%, 疲労100→-15%）
@@ -682,8 +682,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const pitcherClutchMod = isClutch ? Math.round((pitcherMental - 50) / 10) : 0;
 
     const batter = {
-      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod - fatiguePenalty + batterClutchMod,
-      power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod - fatiguePenalty + batterClutchMod,
+      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod.meet - fatiguePenalty + batterClutchMod,
+      power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod.power - fatiguePenalty + batterClutchMod,
       eye: (batterPlayer.batting?.eye || 50) + stratEyeMod - Math.floor(fatiguePenalty * 0.5),
       speed: (batterPlayer.physical?.speed || 50) - fatiguePenalty,
       bats: batterPlayer.batting?.bats || 'right',

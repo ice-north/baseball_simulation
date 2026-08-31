@@ -194,7 +194,8 @@ const ManualContent = ({ category }) => {
         <div className="space-y-4">
           <Entry title="コンディション（5段階）">
             毎日変動する選手の調子。試合でのパフォーマンスに直接影響する。
-            打撃補正は<b>ミートとパワーの両方</b>に同じ値が乗る（選球眼は対象外）。
+            打撃補正は<b>ミートとパワーで幅が違う</b>（選球眼は対象外）。
+            パワーは本塁打への効き方が急なので、ミートの半分に抑えてある。
           </Entry>
           <div className="bg-gray-700/50 rounded-lg p-3">
             <table className="w-full text-sm">
@@ -202,17 +203,18 @@ const ManualContent = ({ category }) => {
                 <tr className="border-b border-gray-600">
                   <th className="text-left py-1 px-2">状態</th>
                   <th className="text-left py-1 px-2">アイコン</th>
-                  <th className="text-left py-1 px-2">打撃補正</th>
-                  <th className="text-left py-1 px-2">制球補正</th>
+                  <th className="text-left py-1 px-2">ミート</th>
+                  <th className="text-left py-1 px-2">パワー</th>
+                  <th className="text-left py-1 px-2">制球</th>
                   <th className="text-left py-1 px-2">基本確率</th>
                 </tr>
               </thead>
               <tbody className="text-gray-300">
-                <tr><td className="py-1 px-2 text-red-500 font-bold">絶好調</td><td className="px-2">🔥</td><td className="px-2 text-green-400">+10</td><td className="px-2 text-green-400">+10</td><td className="px-2">10%</td></tr>
-                <tr><td className="py-1 px-2 text-orange-400 font-bold">好調</td><td className="px-2">😊</td><td className="px-2 text-green-400">+4</td><td className="px-2 text-green-400">+5</td><td className="px-2">15%</td></tr>
-                <tr><td className="py-1 px-2 text-yellow-300 font-bold">普通</td><td className="px-2">😐</td><td className="px-2">±0</td><td className="px-2">±0</td><td className="px-2">50%</td></tr>
-                <tr><td className="py-1 px-2 text-blue-400 font-bold">不調</td><td className="px-2">😞</td><td className="px-2 text-red-400">-4</td><td className="px-2 text-red-400">-5</td><td className="px-2">15%</td></tr>
-                <tr><td className="py-1 px-2 text-blue-700 font-bold">絶不調</td><td className="px-2">😰</td><td className="px-2 text-red-400">-10</td><td className="px-2 text-red-400">-10</td><td className="px-2">10%</td></tr>
+                <tr><td className="py-1 px-2 text-red-500 font-bold">絶好調</td><td className="px-2">🔥</td><td className="px-2 text-green-400">+10</td><td className="px-2 text-green-400">+5</td><td className="px-2 text-green-400">+10</td><td className="px-2">10%</td></tr>
+                <tr><td className="py-1 px-2 text-orange-400 font-bold">好調</td><td className="px-2">😊</td><td className="px-2 text-green-400">+4</td><td className="px-2 text-green-400">+2</td><td className="px-2 text-green-400">+5</td><td className="px-2">15%</td></tr>
+                <tr><td className="py-1 px-2 text-yellow-300 font-bold">普通</td><td className="px-2">😐</td><td className="px-2">±0</td><td className="px-2">±0</td><td className="px-2">±0</td><td className="px-2">50%</td></tr>
+                <tr><td className="py-1 px-2 text-blue-400 font-bold">不調</td><td className="px-2">😞</td><td className="px-2 text-red-400">-4</td><td className="px-2 text-red-400">-2</td><td className="px-2 text-red-400">-5</td><td className="px-2">15%</td></tr>
+                <tr><td className="py-1 px-2 text-blue-700 font-bold">絶不調</td><td className="px-2">😰</td><td className="px-2 text-red-400">-10</td><td className="px-2 text-red-400">-5</td><td className="px-2 text-red-400">-10</td><td className="px-2">10%</td></tr>
               </tbody>
             </table>
           </div>
@@ -231,17 +233,15 @@ const ManualContent = ({ category }) => {
                   <th className="text-right py-1 px-2">打率</th><th className="text-right py-1 px-2">長打率</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-red-500 font-bold">絶好調</td><td className="text-right px-2 text-green-400">.296</td><td className="text-right px-2 text-green-400">.495</td></tr>
-                  <tr><td className="py-0.5 px-2 text-yellow-300 font-bold">普通</td><td className="text-right px-2">.244</td><td className="text-right px-2">.343</td></tr>
-                  <tr><td className="py-0.5 px-2 text-blue-700 font-bold">絶不調</td><td className="text-right px-2 text-red-400">.207</td><td className="text-right px-2 text-red-400">.252</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-500 font-bold">絶好調</td><td className="text-right px-2 text-green-400">.280</td><td className="text-right px-2 text-green-400">.436</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300 font-bold">普通</td><td className="text-right px-2">.244</td><td className="text-right px-2">.347</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-700 font-bold">絶不調</td><td className="text-right px-2 text-red-400">.214</td><td className="text-right px-2 text-red-400">.276</td></tr>
                 </tbody>
               </table>
             </div>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-              <li>絶好調と絶不調で<b className="text-yellow-300">打率が9分違う</b>。今日の調子を見て起用を決める意味がある</li>
-              <li><b>長打はもっと激しく振れる</b>（長打率.252 → .495）。
-                  補正がミートとパワーの両方に乗り、本塁打はパワーに対して急に増えるため。
-                  絶好調の日は本塁打が数倍出る</li>
+              <li>絶好調と絶不調で<b className="text-yellow-300">打率が6分6厘違う</b>。今日の調子を見て起用を決める意味がある</li>
+              <li>長打はさらに振れる（長打率 .276 → .436）。<b>本塁打は絶好調の日に約3倍</b>出る</li>
               <li><b>リーグ全体の成績は動かない</b>（分布も補正も対称なので平均0）。
                   変わるのは個人の日ごとの振れ幅だけ</li>
               <li>若い選手ほど波が大きく、ベテランほど「普通」に寄る</li>

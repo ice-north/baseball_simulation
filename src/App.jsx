@@ -53,7 +53,7 @@ import { effectiveArsenalSize, activeArsenal } from './game/arsenal.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
-import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
+import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, conditionBattingMod, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
 import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, autoSave, isAutosaveEnabled, AUTOSAVE_KEY } from './game/saveSystem.js';
@@ -1577,7 +1577,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const currentCatcher = getCurrentCatcher();
 
         // コンディション補正
-        const batterCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+        const batterCondMod = conditionBattingMod(currentBatter.condition);
         const pitcherCondMod = CONDITION_PITCHING_MODIFIER[currentPitcher.condition ?? CONDITION_LEVELS.NORMAL] || 0;
 
         // 精神力によるチャンス/ピンチ補正（得点圏にランナー）
@@ -1588,8 +1588,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 選手データから必要な情報を展開
         const batter = {
           name: currentBatter.name,
-          meet: currentBatter.batting.meet + batterCondMod + batterMentalMod,
-          power: currentBatter.batting.power + batterCondMod + batterMentalMod,
+          meet: currentBatter.batting.meet + batterCondMod.meet + batterMentalMod,
+          power: currentBatter.batting.power + batterCondMod.power + batterMentalMod,
           eye: currentBatter.batting.eye,
           speed: currentBatter.physical.speed,
           steal: currentBatter.batting.steal,
@@ -1773,14 +1773,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const defenseTeam = getDefenseTeam();
         
         // コンディション補正
-        const bCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+        const bCondMod = conditionBattingMod(currentBatter.condition);
         const pCondMod = CONDITION_PITCHING_MODIFIER[currentPitcher.condition ?? CONDITION_LEVELS.NORMAL] || 0;
 
         // ローカル変数として展開
         const batter = {
           name: currentBatter.name,
-          meet: currentBatter.batting.meet + bCondMod,
-          power: currentBatter.batting.power + bCondMod,
+          meet: currentBatter.batting.meet + bCondMod.meet,
+          power: currentBatter.batting.power + bCondMod.power,
           eye: currentBatter.batting.eye,
           speed: currentBatter.physical.speed,
           steal: currentBatter.batting.steal,
@@ -2623,10 +2623,10 @@ if (newOuts === 3) {
         const currentCatcher = getCurrentCatcher();
         const defenseTeam = getDefenseTeam();
 
-        const bCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+        const bCondMod = conditionBattingMod(currentBatter.condition);
 
         const buntSkill = currentBatter.batting?.bunt || 30;
-        const meet = (currentBatter.batting?.meet || 50) + bCondMod;
+        const meet = (currentBatter.batting?.meet || 50) + bCondMod.meet;
         const speed = currentBatter.physical?.speed || 50;
 
         // バント種別を状況から自動判定

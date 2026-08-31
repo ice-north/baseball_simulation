@@ -46,7 +46,10 @@ export const CONDITION_ICONS = {
   [CONDITION_LEVELS.WORST]: '😰'
 };
 
-// 打撃への影響（ミート・パワーの両方に同じ値が乗る。選球眼は対象外）
+// 打撃への影響。選球眼は対象外。
+//
+// ⚠ **ミートとパワーで幅が違う**。1つの表に2つの値を持たせてあるので、
+//    表を2枚に分けないこと（片方だけ直す事故になる）。
 //
 // ⚠ **リーグ平均は動かない**。分布(10/15/50/15/10)も補正も対称なので平均0。
 //    実測でも ±5 / ±8 / ±10 / ±12 のどれでもリーグの打率 .2441〜.2449 /
@@ -54,27 +57,32 @@ export const CONDITION_ICONS = {
 //
 // ⚠ **幅は「同じ条件に固定したリーグ」で測ること**。実戦では毎日引き直されて
 //    シーズンでは均されるので、通常のリーグ集計では差が見えない。
-//    全打者を同じコンディションに固定して回すと下表になる:
+//    全打者を同じコンディションに固定して回した実測:
 //
-//      幅        絶不調 → 普通 → 絶好調      打率の幅
-//      ±5(旧)    .227    .241   .264         37pt
-//      ±8        .212    .240   .282         69pt
-//      ±10       .207    .244   .296         89pt   ← 採用
-//      ±12       .201    .245   .308        107pt
+//      設定              絶不調 → 普通 → 絶好調   打率の幅  長打率の幅  本塁打の比
+//      ミ±5  パ±5 (旧)   .227    .241   .264      37pt       94pt       —
+//      ミ±10 パ±10       .207    .244   .296      89pt      243pt      6.0倍
+//      ミ±10 パ±5  (現)  .214    .244   .280      66pt      160pt      3.0倍
 //
-//    ±10 は「絶好調なら3割近く、絶不調なら2割そこそこ」。
-//    ±12 まで広げると絶好調が .308 になり、別の選手に見えてくる。
+// ⚠ **パワーはミートより激しく効く**。本塁打がパワーに対して凸なので、
+//    両方を ±10 にすると長打率が .252 → .495 と倍近く振れ、本塁打が6倍出た。
+//    **ミートだけ広げ、パワーは ±5 のまま**にしてある。
 //
-// ⚠ **長打は打率よりずっと激しく振れる**（長打率 .252 → .343 → .495）。
-//    補正がミートとパワーの**両方**に乗り、本塁打はパワーに対して凸なので、
-//    +10 が本塁打を数倍にする。打率の幅だけを見て決めないこと。
+// ⚠ **打率の幅はミートだけでは決まらない**。パワーを据え置くと打率の幅も
+//    89pt → 66pt に縮む（強い打球はヒットにもなるため）。片方だけ動かすときは
+//    打率と長打率の両方を測ること。
 export const CONDITION_BATTING_MODIFIER = {
-  [CONDITION_LEVELS.BEST]: 10,
-  [CONDITION_LEVELS.GOOD]: 4,
-  [CONDITION_LEVELS.NORMAL]: 0,
-  [CONDITION_LEVELS.BAD]: -4,
-  [CONDITION_LEVELS.WORST]: -10
+  [CONDITION_LEVELS.BEST]:   { meet:  10, power:  5 },
+  [CONDITION_LEVELS.GOOD]:   { meet:   4, power:  2 },
+  [CONDITION_LEVELS.NORMAL]: { meet:   0, power:  0 },
+  [CONDITION_LEVELS.BAD]:    { meet:  -4, power: -2 },
+  [CONDITION_LEVELS.WORST]:  { meet: -10, power: -5 }
 };
+
+/** コンディションから打撃補正 { meet, power } を引く。未設定は「普通」扱い */
+export const conditionBattingMod = (condition) =>
+  CONDITION_BATTING_MODIFIER[condition ?? CONDITION_LEVELS.NORMAL]
+  || CONDITION_BATTING_MODIFIER[CONDITION_LEVELS.NORMAL];
 
 // 投手への影響（制球）
 export const CONDITION_PITCHING_MODIFIER = {
@@ -211,11 +219,10 @@ export const initializeAllPlayersCondition = () => {
  * @returns {Object} { meet, power } コンディション補正済み
  */
 export const getConditionAdjustedBatting = (player) => {
-  const condition = player.condition ?? CONDITION_LEVELS.NORMAL;
-  const mod = CONDITION_BATTING_MODIFIER[condition] || 0;
+  const mod = conditionBattingMod(player.condition);
   return {
-    meet: (player.batting?.meet || 50) + mod,
-    power: (player.batting?.power || 50) + mod
+    meet: (player.batting?.meet || 50) + mod.meet,
+    power: (player.batting?.power || 50) + mod.power
   };
 };
 
