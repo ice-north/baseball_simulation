@@ -1883,8 +1883,19 @@ export function selectPlayerForAI(candidates, currentRoster = [], teamContext = 
  * @param {number} rosterSize - ロスターサイズ（デフォルト24）
  * @returns {Array} 選手配列
  */
-export function generateExpansionRoster(year = 1, rosterSize = 24) {
-  const candidates = generateTryoutCandidates(year, 1, true);
+/**
+ * 新規参入チームのロスターを一括生成する。
+ *
+ * ⚠ **リーグの格（`independentLeagueRank`）を必ず渡すこと**。渡さないと
+ *    `applyLeagueLevelShift` が `!rank` で素通りし、**どのリーグに入っても
+ *    Aリーグ相当の選手**が生成される。実測（スタメン野手のミート+パワー）:
+ *      初回トライアウト A 106.7 / B 84.0 / C 64.2 / D 50.1
+ *      エキスパンション（ランクなし） 103.3  ← Cリーグなら +39 の格差
+ *    ランクを渡せば 30人から24人を取る形のままでも既存チームと揃う
+ *    （A で 103.3 対 106.7）。
+ */
+export function generateExpansionRoster(year = 1, rosterSize = 24, independentLeagueRank = null) {
+  const candidates = generateTryoutCandidates(year, 1, true, independentLeagueRank);
   const roster = [];
   const remaining = [...candidates];
 

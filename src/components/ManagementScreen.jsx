@@ -10,6 +10,7 @@ import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup
 import { processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 import { processNPBDraft } from '../season/npbDraft.js';
 import { generateExpansionRoster } from '../season/tryoutSystem.js';
+import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 
 import ScheduleScreen from './ScheduleScreen.jsx';
@@ -370,13 +371,17 @@ const ManagementScreen = ({
       const newTeamNames = configuredTeams.filter(t => !existingTeams.has(t));
       if (newTeamNames.length > 0) {
         const abbrs = settings.teamAbbreviations || [];
+        // ⚠ **リーグの格を渡すこと**。渡さないと新チームだけAリーグ相当の選手で
+        //    埋まる（Cリーグなら スタメン野手のミ+パ が 64 対 103）。格の算出は
+        //    TryoutScreen と同じ `getLeagueRankFromTeams` を使う（表を二重に作らない）。
+        const expansionRank = getLeagueRankFromTeams(configuredTeams.filter(t => existingTeams.has(t)));
         newTeamNames.forEach(teamName => {
           const idx = configuredTeams.indexOf(teamName);
           const abbr = abbrs[idx] || teamName.slice(0, 3);
           TEAMS_DATA[teamName] = {
             name: teamName,
             abbreviation: abbr,
-            players: generateExpansionRoster(seasonData.year || 1, 24),
+            players: generateExpansionRoster(seasonData.year || 1, 24, expansionRank),
             pitchingRotation: null
           };
           generatePitchingRotation(teamName);
@@ -484,13 +489,17 @@ const ManagementScreen = ({
 
       if (newTeamNames.length > 0) {
         const abbrs = settings.teamAbbreviations || [];
+        // ⚠ **リーグの格を渡すこと**。渡さないと新チームだけAリーグ相当の選手で
+        //    埋まる（Cリーグなら スタメン野手のミ+パ が 64 対 103）。格の算出は
+        //    TryoutScreen と同じ `getLeagueRankFromTeams` を使う（表を二重に作らない）。
+        const expansionRank = getLeagueRankFromTeams(configuredTeams.filter(t => existingTeams.has(t)));
         newTeamNames.forEach(teamName => {
           const idx = configuredTeams.indexOf(teamName);
           const abbr = abbrs[idx] || teamName.slice(0, 3);
           TEAMS_DATA[teamName] = {
             name: teamName,
             abbreviation: abbr,
-            players: generateExpansionRoster(seasonData.year || 1, 24),
+            players: generateExpansionRoster(seasonData.year || 1, 24, expansionRank),
             pitchingRotation: null
           };
           generatePitchingRotation(teamName);
