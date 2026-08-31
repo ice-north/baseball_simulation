@@ -11,11 +11,17 @@ const CATEGORIES = [
   { id: 'fitness', label: '守備位置適性' },
   { id: 'pitchRoles', label: '投手起用ロール' },
   { id: 'pitchSubstitution', label: '降板ルール' },
+  { id: 'pitchCalling', label: '配球とコース' },
+  { id: 'batterRead', label: '打者の読みと振り方' },
+  { id: 'ballTypes', label: '球種と持ち球' },
+  { id: 'battedBall', label: '打球と守備' },
   { id: 'traits', label: '選手特性' },
   { id: 'campMain', label: 'キャンプ：メイン練習' },
   { id: 'campSub', label: 'キャンプ：サブ練習' },
   { id: 'campGrowth', label: 'キャンプ：成長システム' },
   { id: 'campDispatch', label: 'キャンプ：派遣' },
+  { id: 'growth', label: '年次成長' },
+  { id: 'career', label: '進路とドラフト' },
   { id: 'gameflow', label: 'ゲームフロー' },
 ];
 
@@ -93,28 +99,91 @@ const ManualContent = ({ category }) => {
     case 'pitching':
       return (
         <div className="space-y-4">
-          <Entry title="球速（velocity）" range="100〜160 km/h">
-            ストレートの最高球速。球速が速いほど打者が振り遅れやすく、空振りが取りやすい。
-            150km/h超は一流の証。
+          <Entry title="球速（velocity）" range="110km/h 〜 肩力による">
+            ストレートの最高球速。速いほど打者の反応時間が削られ、空振りが取れる。
+            <b className="text-yellow-300">上限は肩力で決まる</b>——生成でも成長でも次の式を超えない。
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              球速の上限 = 130 + (肩力 - 50) × 0.7
+            </code>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>肩力50 → 130km/h まで／肩力80 → 151km/h まで／肩力100 → 165km/h まで</li>
+              <li>肩力に対して球速が遅い投手は<b>球速の伸びにボーナス</b>が付く（投げ方の改善）</li>
+              <li>160km/hは10年に1人、155km/hは年2〜3人の水準</li>
+            </ul>
           </Entry>
           <Entry title="制球力（control）" range="1〜99">
-            投球のコントロール。値が高いほどストライクゾーンへ正確に投げ込め、四球が減る。
+            <b className="text-yellow-300">「ストライクが入る率」ではなく「狙ったところへ投げられる再現性」</b>。
+            捕手が要求したマスからのばらつき（σ）が制球で決まる。
             コンディションにより±10の補正あり。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">制球</th>
+                  <th className="text-right py-1 px-2">20</th><th className="text-right py-1 px-2">40</th>
+                  <th className="text-right py-1 px-2">60</th><th className="text-right py-1 px-2">80</th>
+                  <th className="text-right py-1 px-2">100</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">9回あたり四球</td>
+                    <td className="text-right px-2 text-red-400">7.3</td><td className="text-right px-2">5.2</td>
+                    <td className="text-right px-2">3.5</td><td className="text-right px-2">2.1</td>
+                    <td className="text-right px-2 text-green-400">0.69</td></tr>
+                  <tr><td className="py-0.5 px-2">ストライク率</td>
+                    <td className="text-right px-2">56%</td><td className="text-right px-2">60%</td>
+                    <td className="text-right px-2">63%</td><td className="text-right px-2">68%</td>
+                    <td className="text-right px-2">76%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">制球が良い投手は<b>ボール球もストライクに見える</b>ため、打者に振ってもらいやすい。</p>
           </Entry>
           <Entry title="スタミナ（stamina）" range="30〜150">
-            1試合での投球持続力。先発投手は高いスタミナが必要。
-            スタミナが切れると球速・制球が低下し、被打率が上がる。
+            1試合での投球持続力。投球ごとに1減り、イニング間に3回復する。
+            スタミナが50%を切ると球速・制球が急激に落ち、25%で降板となる。
           </Entry>
-          <Entry title="変化球（pitches）">
-            各投手が持つ球種とそのレベル。レベルが高いほど変化量が大きく、打者が打ちにくい。
-            球種の組み合わせも重要で、多彩な球種を持つ投手ほど的を絞りにくい。
+          <Entry title="出どころ（deception）" range="1〜99">
+            球持ちの長さ・体の陰から腕が出る度合い。<b className="text-yellow-300">球速を上げるのとは別の軸</b>で、
+            打者の反応時間を削るうえに<b>球種そのものを見分けにくくする</b>（速いだけの球は「何が来るか」までは隠せない）。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>平均50・分布は9〜91。「見えない」「丸見え」は各5%程度</li>
+              <li>出どころ30→80で防御率が約0.42改善（捕手のリードと同程度の重み）</li>
+              <li><b>遅い投手ほどよく効く</b>（132km -0.44 / 150km -0.38）</li>
+              <li>球速135・制球78・出どころ82の技巧派が、球速148の速球派を上回ることがある</li>
+            </ul>
+            <p className="text-sm mt-2 text-gray-400">選手詳細の投球系にバーで表示される。</p>
+          </Entry>
+          <Entry title="変化球（arsenal）">
+            持ち球とそのレベル。詳しくは「球種と持ち球」のページを参照。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>球種ごとに<b>空振り・ゴロ・凡打</b>の性格が違う</li>
+              <li><b>何本持っているかより、何を持っているか</b>——似た球を並べても引き出しは増えない</li>
+              <li>レベル20未満は「覚えたてでむしろ損」（四球が増えるだけ）</li>
+            </ul>
           </Entry>
           <Entry title="投球フォーム（form）">
-            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
-              <li><b>オーバースロー</b>: 標準的なフォーム</li>
-              <li><b>スリークォーター</b>: やや横から投げる</li>
-              <li><b>サイドスロー</b>: 球速-10 / 制球+15</li>
-              <li><b>アンダースロー</b>: 球速-10 / 制球+15</li>
+            球速に倍率が掛かり、成長の伸びやすさも変わる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">フォーム</th>
+                  <th className="text-right py-1 px-2">球速倍率</th>
+                  <th className="text-right py-1 px-2">球速の伸び</th>
+                  <th className="text-right py-1 px-2">制球の伸び</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">オーバースロー</td><td className="text-right px-2">×1.00</td><td className="text-right px-2 text-green-400">×1.1</td><td className="text-right px-2">×0.9</td></tr>
+                  <tr><td className="py-0.5 px-2">スリークォーター</td><td className="text-right px-2">×0.98</td><td className="text-right px-2">×1.0</td><td className="text-right px-2">×1.0</td></tr>
+                  <tr><td className="py-0.5 px-2">サイドスロー</td><td className="text-right px-2">×0.95</td><td className="text-right px-2">×0.9</td><td className="text-right px-2 text-green-400">×1.1</td></tr>
+                  <tr><td className="py-0.5 px-2">アンダースロー</td><td className="text-right px-2 text-red-400">×0.92</td><td className="text-right px-2 text-red-400">×0.8</td><td className="text-right px-2 text-green-400">×1.2</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>サイド・アンダーは生成時に<b>制球+8</b>、同じ利き腕の打者に空振りを取りやすい</li>
+              <li><b>フォームには相性の良い球種がある</b>（サイド・アンダー＝シンカー / カーブ など）。
+                  適性球は試合での効きが×1.30、適性外は×0.88になる</li>
+              <li className="text-gray-400">ただし球速の倍率のほうが影響は大きく、腕を下げると総合的には不利
+                  （同じ素の球速145で オーバー2.42 対 アンダー2.87）</li>
             </ul>
           </Entry>
         </div>
@@ -186,6 +255,9 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="体力と1試合あたりの疲労量（野手）">
             スタメン出場（3打席以上）した野手は、体力に応じた疲労が蓄積する。代打や守備固めでは疲労は溜まらない。
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              1試合の疲労 = 15 - 体力 ÷ 100 × 8
+            </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
@@ -197,13 +269,32 @@ const ManualContent = ({ category }) => {
                 <tbody className="text-gray-300">
                   <tr>
                     <td className="py-0.5 px-2 text-green-300">1試合の疲労</td>
-                    <td className="text-right px-2">5</td><td className="text-right px-2">6</td>
-                    <td className="text-right px-2">7</td><td className="text-right px-2">8</td>
-                    <td className="text-right px-2">9</td><td className="text-right px-2">10</td>
+                    <td className="text-right px-2 text-green-400">7</td><td className="text-right px-2">9</td>
+                    <td className="text-right px-2">10</td><td className="text-right px-2">12</td>
+                    <td className="text-right px-2">13</td><td className="text-right px-2 text-red-400">15</td>
                   </tr>
                 </tbody>
               </table>
             </div>
+          </Entry>
+          <Entry title="死球は打席数に関わらず疲労が乗る">
+            当てられた痛みは<b className="text-yellow-300">故障ではなく疲労で表現される</b>。
+            代打の1打席で当たっても乗る（通常の野手疲労は3打席以上が条件だが、死球は別枠）。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">投手の球速＼体力</th>
+                  <th className="text-right py-1 px-2">30</th><th className="text-right py-1 px-2">50</th>
+                  <th className="text-right py-1 px-2">70</th><th className="text-right py-1 px-2">90</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">125km/h</td><td className="text-right px-2">14</td><td className="text-right px-2">12</td><td className="text-right px-2">11</td><td className="text-right px-2">9</td></tr>
+                  <tr><td className="py-0.5 px-2">140km/h</td><td className="text-right px-2">18</td><td className="text-right px-2">16</td><td className="text-right px-2">14</td><td className="text-right px-2">12</td></tr>
+                  <tr><td className="py-0.5 px-2">160km/h</td><td className="text-right px-2 text-red-400">24</td><td className="text-right px-2">21</td><td className="text-right px-2">18</td><td className="text-right px-2">16</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">スタメン1試合ぶんが7〜15なので、<b>1球で1.5〜2.5試合ぶん</b>。数日は本調子でなくなる。</p>
           </Entry>
 
           <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1 mt-4">スタミナ（stamina）</h3>
@@ -257,11 +348,28 @@ const ManualContent = ({ category }) => {
             疲労が高い状態で出場し続けると、打撃・投球ともにパフォーマンスが大きく落ちる。
           </Entry>
           <Entry title="疲労の蓄積">
-            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
-              <li><b>野手</b>: スタメン出場（3打席以上）で体力に応じた疲労が蓄積（5〜10）</li>
-              <li><b>先発投手</b>: 球数 ÷ 2 の疲労が蓄積（100球なら疲労+50）</li>
-              <li><b>リリーフ投手</b>: 球数 ÷ 3 の疲労が蓄積（30球なら疲労+10）</li>
-              <li>代打（1〜2打席）や守備固めでは疲労は蓄積しない</li>
+            投手の疲労も<b className="text-yellow-300">体力（bodyStamina）で割る</b>ので、体力が高いほど溜まりにくい。
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              先発 = 球数 ÷ (1.5 + 体力/100 × 1.5) + 30　　リリーフ = max(11, 球数 ÷ (3 + 体力/100 × 1.5))
+            </code>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">例</th>
+                  <th className="text-right py-1 px-2">体力40</th><th className="text-right py-1 px-2">体力70</th>
+                  <th className="text-right py-1 px-2">体力100</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-blue-300">先発100球</td><td className="text-right px-2 text-red-400">+77</td><td className="text-right px-2">+69</td><td className="text-right px-2 text-green-400">+63</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">リリーフ20球</td><td className="text-right px-2">+11</td><td className="text-right px-2">+11</td><td className="text-right px-2">+11</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">リリーフ45球</td><td className="text-right px-2">+12</td><td className="text-right px-2">+11</td><td className="text-right px-2">+11</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>先発は<b>1イニング以上投げると一律+30</b>（登板そのものの負荷）。1回持たずに降板した場合は付かない</li>
+              <li>リリーフには<b>下限11</b>があり、球数が少なくても連投すれば溜まる</li>
+              <li>代打（1〜2打席）や守備固めでは疲労は蓄積しない（ただし回復もしない）</li>
             </ul>
           </Entry>
           <Entry title="疲労による能力低下">
@@ -296,9 +404,10 @@ const ManualContent = ({ category }) => {
             </ul>
           </Entry>
           <Entry title="疲労の回復">
-            日付が進むたびに全選手の疲労が回復する。回復量は「回復力」に依存する。
+            <b className="text-yellow-300">その日に出場した選手は回復しない。</b>疲労が抜けるのは休養日だけ。
+            回復量の式は野手と投手で違う。
             <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
-              1日の回復量 = 20 × (0.7 + 回復力 / 100 × 0.6)
+              野手 = 体力 × (0.25 + 回復力/100 × 0.60)　　投手 = 20 × (0.7 + 回復力/100 × 0.6)
             </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
@@ -309,23 +418,35 @@ const ManualContent = ({ category }) => {
                   <th className="text-right py-1 px-2">90</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr>
-                    <td className="py-0.5 px-2 text-green-300">1日の回復</td>
+                  <tr><td className="py-0.5 px-2 text-green-300">野手（体力50）</td>
+                    <td className="text-right px-2">19</td><td className="text-right px-2">25</td>
+                    <td className="text-right px-2">28</td><td className="text-right px-2">34</td>
+                    <td className="text-right px-2">40</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">野手（体力80）</td>
+                    <td className="text-right px-2">30</td><td className="text-right px-2">39</td>
+                    <td className="text-right px-2">44</td><td className="text-right px-2">54</td>
+                    <td className="text-right px-2">63</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">投手</td>
                     <td className="text-right px-2">16</td><td className="text-right px-2">19</td>
                     <td className="text-right px-2">20</td><td className="text-right px-2">22</td>
-                    <td className="text-right px-2">25</td>
-                  </tr>
+                    <td className="text-right px-2">25</td></tr>
                 </tbody>
               </table>
             </div>
+            <p className="text-sm mt-2">
+              <b>野手の回復は体力にも比例する</b>ので、体力の高い選手は「溜まりにくく、抜けやすい」の二重に得をする。
+              スタッフの体調管理能力でさらに最大+20%。
+            </p>
           </Entry>
           <Entry title="運用のポイント">
             <ul className="list-disc list-inside text-sm space-y-1 mt-1">
-              <li>先発投手は100球で疲労+50。回復力50なら完全回復に約3日必要</li>
-              <li>連戦が続くと野手も疲労が蓄積し、打撃力が低下する</li>
+              <li>先発投手は100球で疲労+63〜77。回復力50なら完全回復に<b>3〜4日</b>必要（＝中4日〜5日のローテ）</li>
+              <li>野手は1試合+7〜15に対して休養日1日で+19〜63回復するので、<b>週に1日休めればほぼ抜ける</b>。
+                  問題は連戦が続く時期で、実測ではシーズン終了時の規定級野手の疲労が中央26・最大69</li>
               <li>疲労が高い投手はスタミナも減った状態で登板するため、早期降板のリスクが高まる</li>
-              <li>リリーフ投手は球数が少ないため疲労が軽いが、連投には注意</li>
+              <li>リリーフは球数が少なくても<b>1登板あたり最低11</b>溜まる。連投には注意</li>
               <li>AI監督は疲労80以上の投手を先発起用しない</li>
+              <li className="text-yellow-300">疲労50を超えた状態で出場すると、その選手の<b>成長率が下がる</b>（-0.01/試合）</li>
             </ul>
           </Entry>
         </div>
@@ -380,6 +501,11 @@ const ManualContent = ({ category }) => {
           <Entry title="勝ち権利交代（quality）" range="球数上限: 100球">
             5〜6回を投げ切ることを目標に投球。勝ち投手の権利取得後、状態を見て交代する標準的な運用。
           </Entry>
+          <Entry title="オープナー（opener）" range="球数上限: 40球">
+            初回〜2回だけを投げて<b>ロングリリーフへ繋ぐ</b>変則起用。
+            2イニング（6アウト）を投げた時点で役割完了となり、球数上限40球も併用される。
+            相手の上位打線を1巡だけ抑えたいときに使う。
+          </Entry>
 
           <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">リリーフロール</h3>
           <Entry title="ロングリリーフ（long）" range="球数上限: 60球">
@@ -426,6 +552,7 @@ const ManualContent = ({ category }) => {
                   <tr><td className="py-0.5 px-2 text-blue-300">ゲームメーカー</td><td className="text-right px-2">110球</td></tr>
                   <tr><td className="py-0.5 px-2 text-blue-300">勝ち権利交代</td><td className="text-right px-2">100球</td></tr>
                   <tr><td className="py-0.5 px-2 text-blue-300">ショートスターター</td><td className="text-right px-2">65球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">オープナー</td><td className="text-right px-2">40球</td></tr>
                   <tr className="border-t border-gray-600"><td className="py-0.5 px-2 text-green-300">ロングリリーフ</td><td className="text-right px-2">60球</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">敗戦処理 / ビハインド</td><td className="text-right px-2">50球</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">守護神 / 中継ぎエース</td><td className="text-right px-2">40球</td></tr>
@@ -489,6 +616,503 @@ const ManualContent = ({ category }) => {
               <p>→ 5回へまたぎで-10 → DP18。もう1本単打(+4) = DP22。</p>
               <p>→ 5回の閾値25なので続投。さらに失点(+10) = DP32 {'>'} 25で降板。</p>
             </div>
+          </Entry>
+        </div>
+      );
+
+    case 'pitchCalling':
+      return (
+        <div className="space-y-4">
+          <Entry title="ストライクゾーンは5×5の25マス">
+            ストライクゾーンを3×3に区切り、その外側にボールゾーンを1マス回して 5×5＝25マスとして扱う。
+            1球ごとに「捕手がどのマスを要求したか」「投手がそこへ投げられたか」が決まる。
+            <div className="bg-gray-700/50 rounded-lg p-3 mt-2 font-mono text-xs text-gray-300 leading-5">
+              <div>　　　　外角　　　　　　　　内角</div>
+              <div>高め　▫　　▫　　▫　　▫　　▫　　← 高めのボール</div>
+              <div>　　　▫　┌─┬─┬─┐　▫</div>
+              <div>　　　▫　│　│●│　│　▫　　● = ど真ん中</div>
+              <div>　　　▫　└─┴─┴─┘　▫</div>
+              <div>低め　▫　　▫　　▫　　▫　　▫　　← 低めのボール</div>
+            </div>
+            <p className="text-sm mt-2 text-gray-400">
+              ※ グリッドは<b>打者から見た向き</b>。右打者でも左打者でも「内角」は同じ側の列を指す。
+              試合画面の投球コース図は投手から見た向きに直して描かれる。
+            </p>
+          </Entry>
+
+          <h3 className="text-amber-300 font-bold text-sm border-b border-amber-800 pb-1 mt-6">捕手が決めること</h3>
+          <Entry title="1. 狙い（勝負 / 際どく / 誘い）">
+            まずカウントに応じて狙いの種類を決める。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>勝負（zone）</b>: ゾーン内。中央の上下左右を狙う
+                  （<b className="text-yellow-300">ど真ん中は狙わない</b>——狙うと制球の良い投手ほど失投が増える）</li>
+              <li><b>際どく（edge）</b>: ゾーンの四隅</li>
+              <li><b>誘い（chase）</b>: ゾーンのすぐ外</li>
+            </ul>
+            <p className="text-sm mt-1">3ボールでは勝負が66%、2ストライクでは誘いが38%になる。</p>
+          </Entry>
+          <Entry title="2. その狙いの中でどのマスか（リードが効く）">
+            <b className="text-yellow-300">同じ狙いの中での選び直しなので、ボールになる確率は変わらない</b>——
+            つまり四球のコストなしに打者の弱点を突ける。捕手のリードが高いほど、
+            打者の苦手なマスを選ぶ確率が上がる。リード0なら完全にランダム。
+          </Entry>
+          <Entry title="3. 場面ごとの目的">
+            走者と アウトカウントで欲しい結果が変わる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">場面</th><th className="text-left py-1 px-2">目的</th>
+                  <th className="text-left py-1 px-2">要求</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">一塁に走者・2アウト未満</td><td className="px-2 text-green-300">併殺狙い</td><td className="px-2">低め＋ゴロ系の球種＋ゾーンで勝負</td></tr>
+                  <tr><td className="py-0.5 px-2">三塁に走者・2アウト未満</td><td className="px-2 text-blue-300">三振狙い</td><td className="px-2">速球=高め / 変化球=低め＋誘い球増</td></tr>
+                  <tr><td className="py-0.5 px-2">満塁・0アウト</td><td className="px-2 text-blue-300">三振狙い</td><td className="px-2">同上だが<b>誘い球を減らしてゾーンへ</b></td></tr>
+                  <tr><td className="py-0.5 px-2">2アウト</td><td className="px-2">通常</td><td className="px-2">併殺も犠飛も関係ない</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              三塁に走者でも、一塁が埋まっていて1アウトなら併殺狙いに戻る（併殺でチェンジ）。
+              3ボールでは場面補正を掛けない（押し出し回避が最優先）。
+            </p>
+          </Entry>
+          <Entry title="4. 前の球との関係（配球の3次元）">
+            実際の配球は「内角高め→外角低め」のように動かす。<b>左右・高低・奥行き（球速差）</b>の
+            3次元で前球からどれだけ動いたかが効く。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>対角へ動かすほど打ちにくい（内角高め→外角低めが最大）</li>
+              <li><b className="text-yellow-300">ただし毎回対角に振り切るのも損</b>——
+                  直近4球で同じ引き出しを使うと打者に読まれる。
+                  実測でも「対角を使わない」「対角を最大化する」の両方が中間に負ける</li>
+              <li>制球が低い投手は狙いが洗い流されるので、配球の妙は<b>投げ切れる投手にだけ効く</b></li>
+            </ul>
+          </Entry>
+
+          <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">捕手の3つの仕事</h3>
+          <Entry title="リード・守備・肩がそれぞれ別の稼ぎ方をする">
+            捕手1人でこれだけ違う。実在する能力の幅で測った値。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">能力</th><th className="text-right py-1 px-2">防御率</th>
+                  <th className="text-right py-1 px-2">9回四球</th><th className="text-right py-1 px-2">9回三振</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-yellow-300">リード 18→81</td><td className="text-right px-2 text-green-400">-0.28</td><td className="text-right px-2">±0</td><td className="text-right px-2 text-green-400">+0.57</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300">守備 30→75</td><td className="text-right px-2 text-green-400">-0.19</td><td className="text-right px-2 text-green-400">-0.27</td><td className="text-right px-2">+0.09</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300">肩 20→80</td><td className="text-right px-2">-0.02</td><td className="text-right px-2">±0</td><td className="text-right px-2">+0.08</td></tr>
+                  <tr className="border-t border-gray-600"><td className="py-0.5 px-2 font-bold">三拍子そろった捕手</td><td className="text-right px-2 text-green-400 font-bold">-0.50</td><td className="text-right px-2 text-green-400 font-bold">-0.40</td><td className="text-right px-2 text-green-400 font-bold">+0.50</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li><b>リードは三振と被安打で稼ぐ</b>。四球のコストはゼロ</li>
+              <li><b>守備（フレーミング）は四球で稼ぐ</b>。際どい球をストライクにする。
+                  <b className="text-yellow-300">ノーコン投手ほど良い捕手を付ける価値が大きい</b>
+                  （制球40なら防御率-0.53、制球80なら-0.17）</li>
+              <li><b>肩は盗塁を刺す</b>（肩20→80で 0.74→0.45個/試合）が、
+                  盗塁1つの得点価値が小さいので防御率にはほとんど出ない</li>
+              <li>実在する捕手のリードは18〜81（中央46）。90は事実上存在しない</li>
+            </ul>
+          </Entry>
+          <Entry title="采配モードでの操作">
+            守備中は<b>「配球」（球種）</b>と<b>「狙い」（勝負/際どく/誘い）</b>を自分で指示できる。
+            どちらも「おまかせ」なら捕手AIが決める。
+          </Entry>
+        </div>
+      );
+
+    case 'batterRead':
+      return (
+        <div className="space-y-4">
+          <Entry title="打者にはコースの得手不得手がある">
+            選手ごとに<b>内角の苦手さ・低めの苦手さ・ど真ん中の苦手さ</b>の3つを持ち、
+            そこから25マスぶんの補正が決まる。選手詳細の能力タブに
+            <b className="text-yellow-300">5×5のヒートマップ</b>（赤=得意 / 青=苦手）で表示される。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>得意コースでは実効ミート+13・パワー+10、苦手コースではその逆</li>
+              <li><b>打者は得意コースをより振る</b>（スイング率 得意52.8% 対 苦手41.6%）</li>
+              <li>「ど真ん中の苦手さ」は<b>失投を仕留める能力</b>そのもの。
+                  同じ能力値でも本塁打率が4倍違う</li>
+              <li>四隅が苦手な打者が多数派。「隅は誰でも苦手」が既定になっている</li>
+            </ul>
+          </Entry>
+          <Entry title="詰まる打者・泳ぐ打者">
+            コース適性の一部は<b>ミートとパワーのバランス</b>から決まる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">打者</th><th className="text-left py-1 px-2">弱点</th>
+                  <th className="text-left py-1 px-2">攻め方</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">パワーの無い技巧派</td><td className="px-2 text-red-300">内角で<b>詰まる</b></td><td className="px-2">内角を突く</td></tr>
+                  <tr><td className="py-0.5 px-2">ミートの無い長距離砲</td><td className="px-2 text-red-300">外角で<b>泳ぐ</b></td><td className="px-2">外角へ逃がす</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              長距離砲を外角に逃がす効果は絶大（塁打/打球 0.728→0.417、本塁打率 9.2%→2.0%）。
+            </p>
+          </Entry>
+
+          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1 mt-6">打者の4分類（野村克也の分類）</h3>
+          <Entry title="型は選ぶものではなく能力から決まる">
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">型</th><th className="text-left py-1 px-2">張るもの</th>
+                  <th className="text-left py-1 px-2">条件</th><th className="text-right py-1 px-2">割合</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-pink-300 font-bold">A型 直球対応</td><td className="px-2">直球（変化球にも対応）</td><td className="px-2">ミート66以上</td><td className="text-right px-2">16%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300 font-bold">B型 コース狙い</td><td className="px-2">得意な側の縦列</td><td className="px-2">選球眼が強み</td><td className="text-right px-2">32%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-orange-300 font-bold">C型 方向決め</td><td className="px-2">引っ張り／流し</td><td className="px-2">パワーが強み</td><td className="text-right px-2">24%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-gray-300 font-bold">D型 ヤマ張り</td><td className="px-2">球種</td><td className="px-2">どれも平凡</td><td className="text-right px-2">27%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li><b>A型だけ「外し」がない</b>のが理想型の定義。三振が2.1pt減る</li>
+              <li><b>B型は逆のコースを見送る</b>ので四球で稼ぐ（出塁率+.011）</li>
+              <li><b>C型は打球方向が寄る</b>（±9度）ので本塁打が増える</li>
+              <li>B型・C型は<b>打席の頭でどちら側を待つか決める</b>。選球眼が高いほど読み当てる</li>
+              <li>型は選手詳細のコース適性の上にバッジで表示される</li>
+            </ul>
+          </Entry>
+          <Entry title="AI打者もヤマを張る">
+            張って当たればタイミングが大きく広がるが、<b className="text-yellow-300">外せば代償がある</b>。
+            これがあるから「良い捕手は読み違えさせられる」。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>張る確率はカウント次第（打者有利40% / 平行25% / 投手有利15% / 2ストライク8%）</li>
+              <li>リード0の捕手が相手だと打者の的中は36.5%、リード100なら11.6%まで落ちる</li>
+            </ul>
+          </Entry>
+
+          <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">振り方（フルスイング / 当てにいく）</h3>
+          <Entry title="1球ごとに振り方が変わる">
+            効果は<b>ミート -8 / パワー +10</b>（フルスイング側）。当てにいくとその逆。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">場面</th>
+                  <th className="text-right py-1 px-2">フルスイング</th><th className="text-right py-1 px-2">通常</th>
+                  <th className="text-right py-1 px-2">当てにいく</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">得意コース</td><td className="text-right px-2 text-orange-300">58.9%</td><td className="text-right px-2">35.4%</td><td className="text-right px-2">5.7%</td></tr>
+                  <tr><td className="py-0.5 px-2">苦手コース</td><td className="text-right px-2">5.9%</td><td className="text-right px-2">41.3%</td><td className="text-right px-2 text-blue-300">52.8%</td></tr>
+                  <tr><td className="py-0.5 px-2">2ストライク</td><td className="text-right px-2">4.0%</td><td className="text-right px-2">34.6%</td><td className="text-right px-2 text-blue-300">61.4%</td></tr>
+                  <tr><td className="py-0.5 px-2">前球で崩された</td><td className="text-right px-2">7.3%</td><td className="text-right px-2">32.9%</td><td className="text-right px-2 text-blue-300">59.8%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              <b className="text-yellow-300">一辺倒はどちらも損。</b>常にフルスイングだと打率-0.008、
+              常に当てにいくと-0.007。場面で決める現行が最善になる。
+            </p>
+          </Entry>
+          <Entry title="崩された打者はゾーンが広がる">
+            泳がされた次の球では、枠のすぐ外のボール球に手を出しやすくなる
+            （スイング率 34.7% → 40.7%）。<b>崩した直後に誘い球がよく効く</b>という畳み掛けが成立する。
+          </Entry>
+          <Entry title="パワー80の打者が常にパワー80ではない">
+            コース適性・振り方・投球位置の質を合算した「1球ごとの実効パワー」は大きく振れる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">素のパワー</th>
+                  <th className="text-right py-1 px-2">下位5%</th><th className="text-right py-1 px-2">中央</th>
+                  <th className="text-right py-1 px-2">上位5%</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">50</td><td className="text-right px-2">28</td><td className="text-right px-2">48</td><td className="text-right px-2">60</td></tr>
+                  <tr><td className="py-0.5 px-2">80</td><td className="text-right px-2 text-blue-300">54</td><td className="text-right px-2">78</td><td className="text-right px-2 text-orange-300">92</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="采配モードでの操作">
+            攻撃中は<b>狙い球（直球/変化球）</b>と<b>コース（内角/外角/高め/低め）</b>を張れる。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>当たれば有利／外すと不利。<b>当てずっぽうに張ると損をする</b></li>
+              <li>真ん中に来た球は中立（当たりでも外れでもない）</li>
+              <li>材料は揃っている——試合画面のコース図（この打席どこに来ているか）と
+                  選手詳細のヒートマップ（自分の弱点＝捕手が狙ってくる場所）</li>
+            </ul>
+          </Entry>
+        </div>
+      );
+
+    case 'ballTypes':
+      return (
+        <div className="space-y-4">
+          <Entry title="球種には3つの性格がある">
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b className="text-blue-300">空振り</b>（whiff）: タイミングを外す</li>
+              <li><b className="text-green-300">ゴロ</b>（groundball）: 打球の角度を下げる</li>
+              <li><b className="text-orange-300">凡打</b>（weak）: 打球の初速を落とす</li>
+            </ul>
+            <p className="text-sm mt-2">
+              <b className="text-yellow-300">「何を持っているか」で防御率が0.40〜0.84動く。</b>
+            </p>
+          </Entry>
+          <Entry title="球種ごとの実測（ストレート＋1球種Lv50）">
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">持ち球</th><th className="text-right py-1 px-2">防御率差</th>
+                  <th className="text-right py-1 px-2">三振率</th><th className="text-right py-1 px-2">ゴロ率</th>
+                  <th className="text-right py-1 px-2">9回四球</th><th className="text-left py-1 px-2">性格</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">ストレートのみ</td><td className="text-right px-2">—</td><td className="text-right px-2">16.0%</td><td className="text-right px-2">43.5%</td><td className="text-right px-2">3.56</td><td className="px-2">—</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-400">カーブ</td><td className="text-right px-2 text-green-400">-0.84</td><td className="text-right px-2">20.4%</td><td className="text-right px-2">46.7%</td><td className="text-right px-2">3.78</td><td className="px-2">緩急</td></tr>
+                  <tr><td className="py-0.5 px-2">ナックル</td><td className="text-right px-2">-0.72</td><td className="text-right px-2">20.4%</td><td className="text-right px-2">46.0%</td><td className="text-right px-2 text-red-400">4.29</td><td className="px-2">空振りだが決まらない</td></tr>
+                  <tr><td className="py-0.5 px-2">チェンジアップ</td><td className="text-right px-2">-0.71</td><td className="text-right px-2">20.2%</td><td className="text-right px-2">47.5%</td><td className="text-right px-2">3.75</td><td className="px-2">緩急＋ゴロ</td></tr>
+                  <tr><td className="py-0.5 px-2">シンカー</td><td className="text-right px-2">-0.70</td><td className="text-right px-2">19.0%</td><td className="text-right px-2 text-green-400">47.4%</td><td className="text-right px-2">3.67</td><td className="px-2">ゴロ＋凡打の両方</td></tr>
+                  <tr><td className="py-0.5 px-2">フォーク</td><td className="text-right px-2">-0.70</td><td className="text-right px-2">20.2%</td><td className="text-right px-2">46.3%</td><td className="text-right px-2">4.03</td><td className="px-2">空振り</td></tr>
+                  <tr><td className="py-0.5 px-2">スライダー</td><td className="text-right px-2">-0.67</td><td className="text-right px-2">19.9%</td><td className="text-right px-2">46.1%</td><td className="text-right px-2">3.74</td><td className="px-2">空振り</td></tr>
+                  <tr><td className="py-0.5 px-2">シュート / カッター</td><td className="text-right px-2">-0.49</td><td className="text-right px-2">18.7%</td><td className="text-right px-2 text-green-400">47.9%</td><td className="text-right px-2">3.86</td><td className="px-2">詰まらせる</td></tr>
+                  <tr><td className="py-0.5 px-2">ツーシーム</td><td className="text-right px-2">-0.40</td><td className="text-right px-2">18.4%</td><td className="text-right px-2">47.4%</td><td className="text-right px-2">3.87</td><td className="px-2">詰まらせる</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">上位（カーブ〜スライダー）は<b>三振</b>で、下位（シュート〜ツーシーム）は<b>ゴロ</b>で抑える。</p>
+          </Entry>
+
+          <h3 className="text-yellow-300 font-bold text-sm border-b border-yellow-800 pb-1 mt-6">習熟度（レベル）</h3>
+          <Entry title="未熟な変化球は決まらない">
+            <b className="text-yellow-300">「とりあえず覚える」は通用しない。</b>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">スライダーの習熟度</th>
+                  <th className="text-right py-1 px-2">防御率差</th><th className="text-right py-1 px-2">三振率</th>
+                  <th className="text-right py-1 px-2">9回四球</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">（持たない）</td><td className="text-right px-2">—</td><td className="text-right px-2">16.8%</td><td className="text-right px-2">3.58</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-400">Lv10</td><td className="text-right px-2 text-red-400">-0.11（誤差）</td><td className="text-right px-2">18.5%</td><td className="text-right px-2 text-red-400">4.48</td></tr>
+                  <tr><td className="py-0.5 px-2">Lv30</td><td className="text-right px-2">-0.47</td><td className="text-right px-2">19.7%</td><td className="text-right px-2">4.03</td></tr>
+                  <tr><td className="py-0.5 px-2">Lv50</td><td className="text-right px-2">-0.69</td><td className="text-right px-2">20.8%</td><td className="text-right px-2">3.77</td></tr>
+                  <tr><td className="py-0.5 px-2">Lv70</td><td className="text-right px-2">-0.81</td><td className="text-right px-2">22.2%</td><td className="text-right px-2">3.49</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-400">Lv90</td><td className="text-right px-2 text-green-400">-0.99</td><td className="text-right px-2">23.4%</td><td className="text-right px-2 text-green-400">3.14</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              <b>Lv10は「防御率はほぼ変わらず四球だけ +0.9 増える」＝覚えたてはむしろ損。</b>
+              Lv20〜30から明確に得になる。
+              <b className="text-yellow-300">Lv100はどの球種でもLv55を上回る</b>ので、
+              球種の性格が効くのは同じレベルで比べたときの話。
+            </p>
+          </Entry>
+
+          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1 mt-6">持ち球の「幅」</h3>
+          <Entry title="何本持っているかより、何を持っているか">
+            似た球を並べても引き出しは増えない。球種を「奥行き・横・縦」の3軸に置いて、
+            近い球どうしは互いを打ち消す。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">ストレート＋2球種（Lv60）</th>
+                  <th className="text-right py-1 px-2">実効の持ち球数</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">スライダー＋シュート（左右が反対）</td><td className="text-right px-2 text-green-400">2.64</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">カーブ＋シュート（遅球と横）</td><td className="text-right px-2 text-green-400">2.64</td></tr>
+                  <tr><td className="py-0.5 px-2">スライダー＋フォーク（横と縦）</td><td className="text-right px-2">2.41</td></tr>
+                  <tr><td className="py-0.5 px-2">フォーク＋カーブ</td><td className="text-right px-2">2.04</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-300">スライダー＋カッター（似ている）</td><td className="text-right px-2 text-red-400">1.83</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              実測でスライダー＋カッターはスライダー＋シュートより<b>防御率が0.14悪い</b>。
+              反対の性格を組み合わせるほど読まれにくい。
+            </p>
+          </Entry>
+          <Entry title="変化球の封印">
+            覚えている球でも<b>試合では使わない</b>という選択ができる。
+            スタメン設定 → 投手起用の選手詳細で、変化球バッジをクリックして封印／解禁する。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>封印しても<b>練習・成長・表示からは消えない</b>。試合で投げないだけ</li>
+              <li>打者の読み合いからも外れるので、<b>読まれやすくなる代償</b>がある</li>
+              <li>実測: 未熟な球（Lv10）の封印は<b>防御率+0.16と引き換えに四球-0.84</b>。
+                  「四球を出せない場面の投手は封印しておく」が意味を持つ</li>
+              <li>全部は封印できない（投げる球が無くなる）</li>
+            </ul>
+          </Entry>
+          <Entry title="ナックルは読み合いが成立しない">
+            回転を殺して不規則に揺れる球で、投手・捕手・打者の誰にもどこへ来るか分からない。
+            <b className="text-yellow-300">球種を張り当てても効果が出ない</b>。
+            そのぶん四球が増える代償があり、1球種のナックルボーラーが専門職として成立する。
+          </Entry>
+          <Entry title="曲がりの効きは130km/h付近が頂点">
+            物理的には遅いほど曲がるが、遅すぎると打者に見極める時間ができる。
+            打者にとっての実効的な効きは中間で頂点になる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">到達球速</th>
+                  <th className="text-right py-1 px-2">80</th><th className="text-right py-1 px-2">110</th>
+                  <th className="text-right py-1 px-2">130</th><th className="text-right py-1 px-2">150</th>
+                  <th className="text-right py-1 px-2">170</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">効き</td>
+                    <td className="text-right px-2 text-red-400">0.60</td><td className="text-right px-2">1.09</td>
+                    <td className="text-right px-2 text-green-400">1.18</td><td className="text-right px-2">1.09</td>
+                    <td className="text-right px-2">0.81</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+        </div>
+      );
+
+    case 'battedBall':
+      return (
+        <div className="space-y-4">
+          <Entry title="打球の種類ごとに安打率が桁違いに違う">
+            <b className="text-yellow-300">ライナーが最も安打になる打球</b>で、ゴロの3倍近い。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">打球</th><th className="text-right py-1 px-2">発生率</th>
+                  <th className="text-right py-1 px-2">安打率</th><th className="text-right py-1 px-2">実データ</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">ゴロ</td><td className="text-right px-2">42%</td><td className="text-right px-2">.235</td><td className="text-right px-2 text-gray-400">.240</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-400">ライナー</td><td className="text-right px-2">20%</td><td className="text-right px-2 text-green-400">.644</td><td className="text-right px-2 text-gray-400">.660</td></tr>
+                  <tr><td className="py-0.5 px-2">フライ（本塁打込）</td><td className="text-right px-2">31%</td><td className="text-right px-2">.229</td><td className="text-right px-2 text-gray-400">.210</td></tr>
+                  <tr><td className="py-0.5 px-2">ポップフライ</td><td className="text-right px-2">7%</td><td className="text-right px-2 text-red-400">.019</td><td className="text-right px-2 text-gray-400">.020</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="投球コースが打球を決める">
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">来た球</th><th className="text-right py-1 px-2">引っ張り</th>
+                  <th className="text-right py-1 px-2">センター</th><th className="text-right py-1 px-2">流し</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-orange-300">内角</td><td className="text-right px-2 text-orange-300">53.8%</td><td className="text-right px-2">38.6%</td><td className="text-right px-2">7.6%</td></tr>
+                  <tr><td className="py-0.5 px-2">真ん中</td><td className="text-right px-2">36.4%</td><td className="text-right px-2">50.9%</td><td className="text-right px-2">12.7%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">外角</td><td className="text-right px-2">24.3%</td><td className="text-right px-2">51.4%</td><td className="text-right px-2 text-blue-300">24.3%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">高さ</th><th className="text-right py-1 px-2">ゴロ率</th>
+                  <th className="text-right py-1 px-2">フライ率</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">高め</td><td className="text-right px-2">35.1%</td><td className="text-right px-2 text-orange-300">40.9%</td></tr>
+                  <tr><td className="py-0.5 px-2">真ん中</td><td className="text-right px-2">46.4%</td><td className="text-right px-2">33.6%</td></tr>
+                  <tr><td className="py-0.5 px-2">低め</td><td className="text-right px-2 text-green-300">56.8%</td><td className="text-right px-2">25.2%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              速球→遅球の<b>緩急</b>も方向に効く（引っ張り率 45.4% 対 遅球→速球の 30.5%）。
+            </p>
+          </Entry>
+
+          <h3 className="text-red-300 font-bold text-sm border-b border-red-800 pb-1 mt-6">失策</h3>
+          <Entry title="守備力60が「プロの及第点」">
+            60を基準に、下回るほど急激に、上回るほど緩やかに変化する。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">守備力</th>
+                  <th className="text-right py-1 px-2">20</th><th className="text-right py-1 px-2">30</th>
+                  <th className="text-right py-1 px-2">40</th><th className="text-right py-1 px-2">50</th>
+                  <th className="text-right py-1 px-2">60</th><th className="text-right py-1 px-2">70</th>
+                  <th className="text-right py-1 px-2">80</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-red-300">1機会あたり失策率</td>
+                    <td className="text-right px-2 text-red-400">12.2%</td><td className="text-right px-2">9.6%</td>
+                    <td className="text-right px-2">7.0%</td><td className="text-right px-2">4.4%</td>
+                    <td className="text-right px-2 text-yellow-300">1.8%</td><td className="text-right px-2">1.2%</td>
+                    <td className="text-right px-2 text-green-400">0.6%</td></tr>
+                  <tr><td className="py-0.5 px-2">1試合の失策（両チーム計）</td>
+                    <td className="text-right px-2">—</td><td className="text-right px-2">—</td>
+                    <td className="text-right px-2">3.42</td><td className="text-right px-2">2.13</td>
+                    <td className="text-right px-2">1.02</td><td className="text-right px-2">—</td>
+                    <td className="text-right px-2">0.48</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              能力値の物差し: <b>20=小学生 / 30=中学生 / 40=高校生 / 50=大学生 / 60=プロの及第点</b>。
+            </p>
+          </Entry>
+          <Entry title="送球エラーは「送り手の肩＋受け手の守備」">
+            捕球ミスとは独立した判定。悪送球・中継ミスは走者が<b>余分に1つ進塁</b>する。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>一塁への悪送球（一塁手の守備が受け手）</li>
+              <li>外野からの中継ミス（遊撃・二塁がカットマン）</li>
+              <li>盗塁阻止の捕手悪送球（二塁・三塁のカバーが受け手）</li>
+              <li>肩60・受け手60で約1.2%、肩40・受け手40で約4.6%</li>
+            </ul>
+          </Entry>
+          <Entry title="自責点は失策絡みを除外する">
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>失策で出塁した走者の生還は非自責</li>
+              <li>失策が無ければ3アウトだった後の得点は非自責</li>
+              <li>守備40のチームは防御率4.69に対して失点率3.62、
+                  守備60なら2.73に対して2.48と差が縮まる</li>
+            </ul>
+          </Entry>
+
+          <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">走者の進塁と捕殺</h3>
+          <Entry title="強肩の外野手は走者を自重させる">
+            単打での積極進塁（1塁→3塁 / 2塁→本塁）は、走者の足と<b>実際に打球を処理した野手の肩</b>で決まる。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>試行率: 2塁→本塁55% / 1塁→3塁22%（走力で増、外野の肩で減）</li>
+              <li>狙って失敗すれば刺殺（捕殺）。成功率は肩60・カット60・走力55で約22%</li>
+              <li><b className="text-yellow-300">強肩ほど捕殺数は伸びない</b>——走者が自重するため。
+                  ただし失点は明確に減る（肩40→7.0失点/試合、肩80→6.2）</li>
+            </ul>
+          </Entry>
+          <Entry title="内野ゴロでも走者は動く">
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>三塁走者の生還（ゴロGO）約50%、二塁走者の三塁進塁（進塁打）約50%。内野の守備力で増減</li>
+              <li><b>2アウトの走者が最も積極的</b>（打球を確認せずスタートを切るため）。
+                  単打での2塁走者生還は0アウト約5割 → 2アウト約8.5割</li>
+              <li>二塁打でも1塁走者の約45%が生還する</li>
+            </ul>
+          </Entry>
+          <Entry title="併殺">
+            一塁に走者・2アウト未満・内野ゴロのアウトが条件。
+            内野の守備力が高いほど、走者の足が遅いほど成立しやすい（守備50・足55で34%）。
+            <p className="text-sm mt-1 text-gray-400">
+              ※ 現状の併殺は0.65個/試合。実NPBの約0.70に近い水準。
+            </p>
+          </Entry>
+
+          <h3 className="text-orange-300 font-bold text-sm border-b border-orange-800 pb-1 mt-6">球場と長打</h3>
+          <Entry title="フェンスまでの距離">
+            ポール際96m / 中間112m / センター119m。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>フェンスを越える飛距離があり打出し角20〜45度なら原則そのまま本塁打</b>。
+                  塀際の好捕で稀に阻まれる（余裕5m未満で最大22%）</li>
+              <li>引っ張った打球はフェンスが近いので、<b>詰まっても本塁打だけは増える</b></li>
+              <li>公認球の差を吸収する係数があり、MLB基準の飛距離式のまま
+                  NPB相当の本塁打数（0.55〜0.75本/試合）になる</li>
+            </ul>
+          </Entry>
+          <Entry title="盗塁">
+            走力・盗塁スキル・捕手の肩・投手のクイック・左投手の牽制で決まる。
+            実測で0.4〜0.6個/試合・成功率73〜77%（実NPB 0.55個・72〜75%）。
           </Entry>
         </div>
       );
@@ -659,80 +1283,123 @@ const ManualContent = ({ category }) => {
       return (
         <div className="space-y-4">
           <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1">年齢による成長カーブ</h3>
-          <Entry title="フィジカル系（走力・肩力・スタミナ・球速・体力・回復）">
-            若いほど大きく成長し、20歳以下がピーク。28歳以降は衰えが始まる。
+          <Entry title="フィジカル系（走力・肩力・スタミナ・体力・回復）">
+            若いほど大きく成長し、20歳以下がピーク。<b>26歳から衰えに入り、30代の落ち方は技術系より急</b>。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">年齢</th>
                   <th className="text-right py-1 px-2">〜20</th><th className="text-right py-1 px-2">〜22</th>
-                  <th className="text-right py-1 px-2">〜25</th><th className="text-right py-1 px-2">〜28</th>
-                  <th className="text-right py-1 px-2">〜31</th><th className="text-right py-1 px-2">〜34</th>
-                  <th className="text-right py-1 px-2">35+</th>
+                  <th className="text-right py-1 px-2">〜24</th><th className="text-right py-1 px-2">25</th>
+                  <th className="text-right py-1 px-2">〜28</th><th className="text-right py-1 px-2">〜31</th>
+                  <th className="text-right py-1 px-2">〜34</th><th className="text-right py-1 px-2">35+</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
                   <tr>
                     <td className="py-0.5 px-2 text-green-300">成長補正</td>
-                    <td className="text-right px-2 text-green-400">+2.5</td>
-                    <td className="text-right px-2 text-green-400">+1.8</td>
                     <td className="text-right px-2 text-green-400">+0.8</td>
-                    <td className="text-right px-2 text-yellow-300">+0.1</td>
+                    <td className="text-right px-2 text-green-400">+0.6</td>
+                    <td className="text-right px-2 text-green-400">+0.3</td>
+                    <td className="text-right px-2 text-yellow-300">0.0</td>
                     <td className="text-right px-2 text-red-400">-0.5</td>
                     <td className="text-right px-2 text-red-400">-1.2</td>
-                    <td className="text-right px-2 text-red-400">-2.0</td>
+                    <td className="text-right px-2 text-red-400">-2.5</td>
+                    <td className="text-right px-2 text-red-400">-4.0</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </Entry>
           <Entry title="技術系（ミート・パワー・選球眼・制球・守備・盗塁）">
-            22〜24歳が成長のピーク。フィジカル系より遅咲きで、30歳前後まで伸びやすい。
+            22〜24歳がピーク。フィジカル系より落ち方が緩やかで、<b>30代でも技術は残る</b>。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">年齢</th>
                   <th className="text-right py-1 px-2">〜21</th><th className="text-right py-1 px-2">〜24</th>
-                  <th className="text-right py-1 px-2">〜27</th><th className="text-right py-1 px-2">〜30</th>
-                  <th className="text-right py-1 px-2">〜33</th><th className="text-right py-1 px-2">〜36</th>
-                  <th className="text-right py-1 px-2">37+</th>
+                  <th className="text-right py-1 px-2">25</th><th className="text-right py-1 px-2">〜28</th>
+                  <th className="text-right py-1 px-2">〜31</th><th className="text-right py-1 px-2">〜34</th>
+                  <th className="text-right py-1 px-2">35+</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
                   <tr>
                     <td className="py-0.5 px-2 text-green-300">成長補正</td>
-                    <td className="text-right px-2 text-green-400">+1.0</td>
-                    <td className="text-right px-2 text-green-400">+2.2</td>
-                    <td className="text-right px-2 text-green-400">+1.5</td>
-                    <td className="text-right px-2 text-yellow-300">+0.3</td>
-                    <td className="text-right px-2 text-red-400">-0.3</td>
-                    <td className="text-right px-2 text-red-400">-1.0</td>
-                    <td className="text-right px-2 text-red-400">-2.0</td>
+                    <td className="text-right px-2 text-green-400">+0.3</td>
+                    <td className="text-right px-2 text-green-400">+0.9</td>
+                    <td className="text-right px-2 text-yellow-300">0.0</td>
+                    <td className="text-right px-2 text-red-400">-0.4</td>
+                    <td className="text-right px-2 text-red-400">-0.8</td>
+                    <td className="text-right px-2 text-red-400">-1.8</td>
+                    <td className="text-right px-2 text-red-400">-3.0</td>
                   </tr>
                 </tbody>
               </table>
             </div>
+            <p className="text-sm mt-2 text-gray-400">
+              ※ この表はキャンプ練習の下敷きになる補正。シーズンをまたぐ年次成長は
+              能力ごとにピーク年齢が違う（走力23歳 / 肩25歳 / パワー29歳 / 選球眼29歳…）。
+              「年次成長」のページを参照。
+            </p>
           </Entry>
           <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">成長減衰</h3>
-          <Entry title="能力値80以上の減衰">
-            能力値が80を超えると、超過1ポイントごとに成長量が3%減衰する。
-            例えば能力値90なら成長量が70%に、能力値99なら43%まで減少する。
-          </Entry>
-          <Entry title="球速155km/h以上の減衰">
-            球速は155km/hを超えると超過1kmごとに成長量が20%減衰する。
-            156km/hで80%、157km/hで60%…と急激に伸びにくくなる。上限は175km/h。
+          <Entry title="伸びるほど伸びにくくなる">
+            高い能力ほど1ポイントの上積みが難しくなる。<b className="text-yellow-300">技術系とフィジカル系で閾値が違う</b>。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">系統</th>
+                  <th className="text-right py-1 px-2">減衰開始</th>
+                  <th className="text-right py-1 px-2">1ポイントあたり</th>
+                  <th className="text-right py-1 px-2">下限</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-yellow-300">技術系（ミート・パワー・選球眼・制球・守備・盗塁）</td>
+                    <td className="text-right px-2 text-yellow-300">75</td><td className="text-right px-2">-4%</td><td className="text-right px-2">15%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">フィジカル系（走力・肩・スタミナ・体力・回復）</td>
+                    <td className="text-right px-2">80</td><td className="text-right px-2">-3%</td><td className="text-right px-2">10%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">球速</td>
+                    <td className="text-right px-2">155km/h</td><td className="text-right px-2 text-red-400">-20%</td><td className="text-right px-2">10%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>技術系は85で60%、95で15%（下限）まで落ちる</li>
+              <li>球速は156km/hで80%、157km/hで60%…と急激に伸びにくくなる。
+                  さらに<b>肩力による上限</b>があり、そちらを超えることはできない</li>
+            </ul>
           </Entry>
           <h3 className="text-yellow-300 font-bold text-sm border-b border-yellow-800 pb-1 mt-6">覚醒システム</h3>
           <Entry title="覚醒とは">
-            メイン練習中に一定確率で発生する大幅な追加成長。覚醒分は成長減衰の影響を受けない。
+            メイン練習中に一定確率で発生する大幅な追加成長（+3〜6）。覚醒分は成長減衰の影響を受けない。
           </Entry>
-          <Entry title="覚醒の発生条件">
-            覚醒率は経験値に依存する。
+          <Entry title="覚醒は「経験値 × プロ意識」で決まる">
+            <b className="text-yellow-300">経験値だけでは覚醒しない。</b>努力する姿勢がなければ飛躍は起きない。
             <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
-              覚醒率 = 経験値 ÷ 10（%）
+              覚醒率 = (経験値 ÷ 15) × プロ意識係数　　※ 経験値30未満は0
             </code>
-            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-              <li>経験値100の選手 → 覚醒率10%</li>
-              <li>経験値250の選手 → 覚醒率25%</li>
-            </ul>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">プロ意識</th>
+                  <th className="text-right py-1 px-2">〜29</th><th className="text-right py-1 px-2">40</th>
+                  <th className="text-right py-1 px-2">50</th><th className="text-right py-1 px-2">70</th>
+                  <th className="text-right py-1 px-2">80以上</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">プロ意識係数</td>
+                    <td className="text-right px-2 text-red-400">0（覚醒しない）</td><td className="text-right px-2">0.5</td>
+                    <td className="text-right px-2">1.0</td><td className="text-right px-2">2.0</td>
+                    <td className="text-right px-2 text-green-400">2.5（上限）</td></tr>
+                  <tr><td className="py-0.5 px-2">経験値150の選手の覚醒率</td>
+                    <td className="text-right px-2 text-red-400">0%</td><td className="text-right px-2">5%</td>
+                    <td className="text-right px-2">10%</td><td className="text-right px-2">20%</td>
+                    <td className="text-right px-2 text-green-400">25%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              プロ意識は選手詳細で<b>「精神」グレード（S〜F）</b>としてぼかして表示される。生の数値は見えない。
+            </p>
           </Entry>
           <Entry title="経験値の稼ぎ方">
             シーズン中の出場実績に応じて経験値が蓄積される。
@@ -763,71 +1430,66 @@ const ManualContent = ({ category }) => {
           <Entry title="派遣の制限">
             <ul className="list-disc list-inside text-sm space-y-1 mt-1">
               <li>各チーム、各派遣先に1人ずつ派遣可能</li>
-              <li>リーグ全体で合計8人まで</li>
+              <li>大学野球留学はチーム全体で4人まで／プロ研修はリーグ全体で合計8人まで</li>
+              <li><b>モードによって行ける先が違う</b>——独立リーグは両方、社会人は大学のみ
+                  （プロとアマの交わりを避ける）、クラブ・大学は派遣なし</li>
             </ul>
           </Entry>
           <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1 mt-4">派遣先</h3>
-          <Entry title="🎓 大学野球留学" range="22歳以下 / 総合力55以下">
-            技術系の能力が大幅に伸びる。
+          <Entry title="🎓 大学野球留学" range="26歳以下 / 総合力60以下">
+            OBのいる大学へ派遣。<b className="text-yellow-300">フィジカル系</b>が大幅に伸びる。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">対象</th>
-                  <th className="text-left py-1 px-2">主な成長能力</th>
+                  <th className="text-left py-1 px-2">主な成長能力（標準的な結果の場合）</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-blue-300">投手</td><td className="px-2">制球+8〜17、球速+1〜3、変化球+5〜12、スタミナ+5〜14</td></tr>
-                  <tr><td className="py-0.5 px-2 text-green-300">野手</td><td className="px-2">ミート+8〜17、選球眼+6〜13、守備+5〜10、パワー+2〜5</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </Entry>
-          <Entry title="🏟️ プロ研修" range="24歳以下 / 総合力50以下">
-            フィジカル系の能力が大幅に伸びる。
-            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
-              <table className="w-full text-sm">
-                <thead><tr className="text-gray-300 border-b border-gray-600">
-                  <th className="text-left py-1 px-2">対象</th>
-                  <th className="text-left py-1 px-2">主な成長能力</th>
-                </tr></thead>
-                <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-blue-300">投手</td><td className="px-2">球速+4〜8、スタミナ+10〜24、制球+2〜5</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">投手</td><td className="px-2">スタミナ+10〜24、球速+2〜4、制球+2〜5</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">野手</td><td className="px-2">パワー+8〜17、走力+6〜13、肩力+4〜9、ミート+2〜5</td></tr>
                 </tbody>
               </table>
             </div>
           </Entry>
-          <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">成長と飛躍</h3>
-          <Entry title="結果判定">
-            派遣の結果は「成長」と「飛躍」の2段階。失敗はない。
+          <Entry title="🏟️ プロ研修" range="24歳以下 / 総合力55以下">
+            キャンプ期間にプロ球団で特訓。<b className="text-yellow-300">技術系</b>が大幅に伸びる。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
-                  <th className="text-left py-1 px-2">結果</th>
-                  <th className="text-right py-1 px-2">基本確率</th>
-                  <th className="text-right py-1 px-2">成長倍率</th>
+                  <th className="text-left py-1 px-2">対象</th>
+                  <th className="text-left py-1 px-2">主な成長能力（標準的な結果の場合）</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-green-300">成長</td><td className="text-right px-2">60%</td><td className="text-right px-2">×1.0</td></tr>
-                  <tr><td className="py-0.5 px-2 text-yellow-300">飛躍</td><td className="text-right px-2">40%</td><td className="text-right px-2 text-green-400">×1.5</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">投手</td><td className="px-2">制球+8〜17、変化球+5〜12、スタミナ+5〜14、球速+1〜3</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">野手</td><td className="px-2">ミート+8〜17、選球眼+6〜13、守備+5〜10、パワー+2〜5</td></tr>
                 </tbody>
               </table>
             </div>
           </Entry>
-          <Entry title="経験値による飛躍率ボーナス">
-            選手の経験値が高いほど飛躍の確率が上がる。
-            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
-              飛躍率 = 40% + min(25%, 経験値÷200)
-            </code>
-            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-              <li>経験値0 → 飛躍率40%</li>
-              <li>経験値100 → 飛躍率52.5%（+12.5%）</li>
-              <li>経験値200以上 → 飛躍率65%（上限）</li>
-            </ul>
+          <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">結果は3段階。失敗はない</h3>
+          <Entry title="どの段階になるかはプロ意識で決まる">
+            <b className="text-yellow-300">経験値ではなくプロ意識（精神グレード）</b>。
+            学ぶ姿勢がなければ、良い環境へ送っても伸びない。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">プロ意識</th>
+                  <th className="text-right py-1 px-2">微成長 ×0.5</th>
+                  <th className="text-right py-1 px-2">成長 ×1.0</th>
+                  <th className="text-right py-1 px-2">飛躍 ×1.5</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">20（精神E〜F）</td><td className="text-right px-2 text-red-400">23%</td><td className="text-right px-2">60%</td><td className="text-right px-2">17%</td></tr>
+                  <tr><td className="py-0.5 px-2">50（精神C〜D）</td><td className="text-right px-2">16%</td><td className="text-right px-2">56%</td><td className="text-right px-2">28%</td></tr>
+                  <tr><td className="py-0.5 px-2">80（精神A〜B）</td><td className="text-right px-2">8%</td><td className="text-right px-2">54%</td><td className="text-right px-2 text-green-400">38%</td></tr>
+                  <tr><td className="py-0.5 px-2">100（精神S）</td><td className="text-right px-2 text-green-400">3%</td><td className="text-right px-2">52%</td><td className="text-right px-2 text-green-400">45%</td></tr>
+                </tbody>
+              </table>
+            </div>
           </Entry>
           <h3 className="text-yellow-300 font-bold text-sm border-b border-yellow-800 pb-1 mt-6">覚醒チャンス</h3>
           <Entry title="派遣中の覚醒">
-            派遣でも覚醒が発生する可能性がある。覚醒時はランダムな能力に+5〜12の追加ボーナス（倍率適用後）。
+            派遣でも覚醒が発生する。覚醒時はランダムな能力に追加ボーナス（+3〜6に結果倍率を適用）。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
@@ -835,6 +1497,7 @@ const ManualContent = ({ category }) => {
                   <th className="text-right py-1 px-2">覚醒発生率</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-gray-300">微成長時</td><td className="text-right px-2">10%</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">成長時</td><td className="text-right px-2">20%</td></tr>
                   <tr><td className="py-0.5 px-2 text-yellow-300">飛躍時</td><td className="text-right px-2">30%</td></tr>
                 </tbody>
@@ -843,9 +1506,14 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="覚醒の対象能力">
             <ul className="list-disc list-inside text-sm space-y-1 mt-1">
-              <li><b>投手</b>: 球速または制球のいずれかがランダムで大幅UP</li>
+              <li><b>投手</b>: 球速または制球のいずれかがランダムで大幅UP。
+                  球速が選ばれた場合は<b>肩力による上限</b>を超えない</li>
               <li><b>野手</b>: ミート・パワー・走力のいずれかがランダムで大幅UP</li>
             </ul>
+          </Entry>
+          <Entry title="球速の成長上限">
+            リアリズム維持のため、<b className="text-yellow-300">1回の派遣で球速が伸びるのは最大13km/h</b>まで。
+            覚醒を含めた合計がこれを超える場合は切り詰められる。
           </Entry>
           <Entry title="総合力の計算">
             派遣条件の「総合力」は以下の式で算出される。
@@ -857,20 +1525,428 @@ const ManualContent = ({ category }) => {
         </div>
       );
 
+    case 'growth':
+      return (
+        <div className="space-y-4">
+          <Entry title="実成長 = 基礎成長 + 練習成長">
+            シーズンをまたぐ年次成長は、次の形で決まる。
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              実成長 = （基礎成長 ＋ 練習成長 × 環境）× 才能・出場量などの倍率
+            </code>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">要素</th><th className="text-left py-1 px-2">何を表すか</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-1 px-2 text-green-300 font-bold">成長率（growthPotential）</td>
+                    <td className="px-2"><b>基礎成長</b>。何もしなくても身体が育つ／衰える。年齢でマイナスへ入る</td></tr>
+                  <tr><td className="py-1 px-2 text-yellow-300 font-bold">プロ意識（discipline）</td>
+                    <td className="px-2"><b>練習成長への乗算</b>。常に0以上</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              基礎がマイナスへ入っても練習成長が上回れば伸び、釣り合えば維持、
+              <b className="text-yellow-300">基礎の衰えが練習成長を超えたらプロ意識が高くても衰える</b>。
+            </p>
+          </Entry>
+          <Entry title="衰え始める年齢はプロ意識で決まる">
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">プロ意識</th>
+                  <th className="text-right py-1 px-2">20</th><th className="text-right py-1 px-2">35</th>
+                  <th className="text-right py-1 px-2">50</th><th className="text-right py-1 px-2">65</th>
+                  <th className="text-right py-1 px-2">80</th><th className="text-right py-1 px-2">100</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">社会人</td>
+                    <td className="text-right px-2 text-red-400">27歳</td><td className="text-right px-2">29</td>
+                    <td className="text-right px-2">32</td><td className="text-right px-2">34</td>
+                    <td className="text-right px-2">37</td><td className="text-right px-2 text-green-400">40</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">独立</td>
+                    <td className="text-right px-2">27歳</td><td className="text-right px-2">31</td>
+                    <td className="text-right px-2">34</td><td className="text-right px-2">37</td>
+                    <td className="text-right px-2 text-green-400">40</td><td className="text-right px-2">—</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">クラブ</td>
+                    <td className="text-right px-2 text-red-400">26歳</td><td className="text-right px-2">27</td>
+                    <td className="text-right px-2">29</td><td className="text-right px-2">31</td>
+                    <td className="text-right px-2">32</td><td className="text-right px-2">34</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              プロ意識の分布は平均50・σ18。社会人なら下位5%が27歳・中央が32歳・上位3%が38歳で、
+              <b>「20代中盤で衰える者」と「30代後半でも活躍する者」が同居する</b>。
+            </p>
+          </Entry>
+          <Entry title="能力ごとにピーク年齢が違う">
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">能力</th><th className="text-right py-1 px-2">ピーク</th>
+                  <th className="text-left py-1 px-2 pl-6">能力</th><th className="text-right py-1 px-2">ピーク</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">走力</td><td className="text-right px-2">23歳</td>
+                      <td className="py-0.5 px-2 pl-6">ミート</td><td className="text-right px-2">27歳</td></tr>
+                  <tr><td className="py-0.5 px-2">球速</td><td className="text-right px-2">24歳</td>
+                      <td className="py-0.5 px-2 pl-6">守備</td><td className="text-right px-2">27歳</td></tr>
+                  <tr><td className="py-0.5 px-2">肩</td><td className="text-right px-2">25歳</td>
+                      <td className="py-0.5 px-2 pl-6">パワー</td><td className="text-right px-2">29歳</td></tr>
+                  <tr><td className="py-0.5 px-2">スタミナ</td><td className="text-right px-2">27歳</td>
+                      <td className="py-0.5 px-2 pl-6 text-yellow-300">選球眼</td><td className="text-right px-2 text-yellow-300">29歳</td></tr>
+                  <tr><td className="py-0.5 px-2"></td><td className="text-right px-2"></td>
+                      <td className="py-0.5 px-2 pl-6 text-yellow-300">制球</td><td className="text-right px-2 text-yellow-300">31歳</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              <b>走力は20代前半・筋力は20代後半・選球眼と制球は30代まで</b>。
+              打者の型が加齢で変わる（若い＝走力型 / 年配＝選球眼型）のもこの副産物。
+            </p>
+          </Entry>
+          <Entry title="衰え方は「体から落ち、技術は残る」">
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">ピーク→38歳</th><th className="text-right py-1 px-2">減少率</th>
+                  <th className="text-left py-1 px-2 pl-6"></th><th className="text-right py-1 px-2">減少率</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-red-300">走力</td><td className="text-right px-2 text-red-400">-23%</td>
+                      <td className="py-0.5 px-2 pl-6">守備</td><td className="text-right px-2">-8%</td></tr>
+                  <tr><td className="py-0.5 px-2">スタミナ</td><td className="text-right px-2">-16%</td>
+                      <td className="py-0.5 px-2 pl-6">パワー</td><td className="text-right px-2">-8%</td></tr>
+                  <tr><td className="py-0.5 px-2">肩</td><td className="text-right px-2">-15%</td>
+                      <td className="py-0.5 px-2 pl-6">ミート</td><td className="text-right px-2">-7%</td></tr>
+                  <tr><td className="py-0.5 px-2">球速</td><td className="text-right px-2">-10%</td>
+                      <td className="py-0.5 px-2 pl-6 text-green-300">制球</td><td className="text-right px-2 text-green-400">-2%</td></tr>
+                  <tr><td className="py-0.5 px-2"></td><td className="text-right px-2"></td>
+                      <td className="py-0.5 px-2 pl-6 text-green-300">選球眼</td><td className="text-right px-2 text-green-400">ほぼ不変</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2 text-gray-400">
+              ※ 捕手のリードは経験で積み上がるので加齢で落ちない。
+            </p>
+          </Entry>
+
+          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1 mt-6">何が選手の将来を決めるか</h3>
+          <Entry title="19歳から7年育てたときの分散分解">
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">要因</th><th className="text-right py-1 px-2">説明力</th>
+                  <th className="text-left py-1 px-2">効き幅</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-yellow-300 font-bold">18歳時点の能力（素材）</td><td className="text-right px-2">42%</td><td className="px-2">下位25%→上位25% で +18.7</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300 font-bold">プロ意識</td><td className="text-right px-2">30%</td><td className="px-2">5-30→80-100 で +19.0</td></tr>
+                  <tr><td className="py-0.5 px-2">カテゴリ（社会人/独立/クラブ）</td><td className="text-right px-2">8%</td><td className="px-2">—</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">成長率</td><td className="text-right px-2">6.3%</td><td className="px-2">0.6→1.4 で +10.8</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">出場量</td><td className="text-right px-2">5.4%</td><td className="px-2">0打席→300打席 で +12.6</td></tr>
+                  <tr><td className="py-0.5 px-2">チームランク</td><td className="text-right px-2">1.2%</td><td className="px-2">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              <b className="text-yellow-300">素材とプロ意識が拮抗している。</b>
+              「素材下位×意識上位」と「素材上位×意識下位」がほぼ同じ結果になるので、
+              プロ意識だけ見ていればいい構造にはなっていない。
+            </p>
+          </Entry>
+          <Entry title="起用は育成でもある">
+            <b className="text-yellow-300">試合に出した量そのものが成長に効く。</b>
+            20歳・社会人B・プロ意識55の選手を1年育てた実測（6能力の合計の伸び）:
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">年間打席</th>
+                  <th className="text-right py-1 px-2">0</th><th className="text-right py-1 px-2">90</th>
+                  <th className="text-right py-1 px-2">220</th><th className="text-right py-1 px-2">300</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">1年の伸び</td>
+                    <td className="text-right px-2 text-red-400">+5.8</td><td className="text-right px-2">+8.0</td>
+                    <td className="text-right px-2">+11.3</td><td className="text-right px-2 text-green-400">+12.7</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              レギュラー起用は控え起用の<b>2.2倍</b>伸びる。
+              体幹を先に鍛えるより<b>早く一軍で使うほうが強い</b>——
+              レギュラー入りが1年早いことの複利が上回るため。
+            </p>
+          </Entry>
+          <Entry title="プラトーとブレイクスルー">
+            成長には年ごとの「充実度」があり、前年を引きずる。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>2年伸び悩んで3年目に化ける</b>／<b>フォームを崩して1年落ちる</b>が起きる</li>
+              <li>停滞年 5.4% / 飛躍年 9.4%</li>
+              <li>平均は保たれるので、リーグ全体の水準や指名の構成比は動かない</li>
+            </ul>
+          </Entry>
+          <Entry title="カテゴリごとに鍛えられるものが違う">
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">所属</th><th className="text-left py-1 px-2">鍛えられるもの</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-1 px-2 text-pink-300 font-bold">大学</td><td className="px-2"><b>総合力</b>。大学ランク（S=1.36〜D=0.85倍）と得意分野で伸びが変わる</td></tr>
+                  <tr><td className="py-1 px-2 text-blue-300 font-bold">社会人</td><td className="px-2"><b>技術</b>（制球・ミート・選球眼・守備）。設備・指導者・実戦が揃う</td></tr>
+                  <tr><td className="py-1 px-2 text-green-300 font-bold">独立</td><td className="px-2"><b>一芸</b>。長所1つに極端に寄せ、短所は放置</td></tr>
+                  <tr><td className="py-1 px-2 text-gray-300 font-bold">クラブ</td><td className="px-2"><b>基礎体力</b>（走・肩・スタミナ）。技術指導者がいないので伸びるかは本人次第</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              <b className="text-yellow-300">一芸型は独立、総合型は社会人</b>が有利という逆転が実際に出る。
+              クラブはプロ意識が低いとほとんど伸びない代わりに、
+              意識の高い選手は突然変異のように伸びて社会人へ引き上げられることがある。
+            </p>
+          </Entry>
+          <Entry title="加齢によるポジション転向">
+            守れる場所は年齢とともに変わる。難しい位置の適性が落ち、移った先の適性が上がる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">元の位置</th><th className="text-right py-1 px-2">転向年齢（中央）</th>
+                  <th className="text-right py-1 px-2">実データ</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">捕手</td><td className="text-right px-2">32歳</td><td className="text-right px-2 text-gray-400">32-35</td></tr>
+                  <tr><td className="py-0.5 px-2">遊撃 / 中堅 / 二塁</td><td className="text-right px-2">30歳</td><td className="text-right px-2 text-gray-400">30-33</td></tr>
+                  <tr><td className="py-0.5 px-2">三塁 / 両翼</td><td className="text-right px-2">31歳</td><td className="text-right px-2 text-gray-400">31-34</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2 text-gray-400">
+              中堅→右翼 / 遊撃→三塁 / 三塁→一塁 の順に多い。捕手は3人以上いるときだけ転向する。
+            </p>
+          </Entry>
+        </div>
+      );
+
+    case 'career':
+      return (
+        <div className="space-y-4">
+          <Entry title="毎年5,000人の高校3年生が生まれる">
+            4月に高校3年生が5,000人生成され、<b>996校・47都道府県</b>に振り分けられる。
+            この学年が1年かけてドラフト・進路振り分けを経て球界へ散っていく。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>校ランクはS〜Fの7段階。才能と校ランクは<b>上下3ランクまで混ざる</b>ので、
+                  校名を見ても才能の下限は分からない（S才能の1%はF校から出る）</li>
+              <li>能力は独立に引かれず、<b>共通の運動能力因子</b>で相関する。
+                  「走攻守そろった逸材」も「全部だめな選手」も出る</li>
+              <li>肩力が高い子ほど投手になりやすい（全体の約半分が投手）</li>
+              <li><b>沖縄の高校の選手は沖縄の姓を引く</b>（比嘉・金城・大城…）</li>
+            </ul>
+          </Entry>
+          <Entry title="夏の甲子園">
+            8月に都道府県予選 → 本戦を消化する。勝ち上がると所属選手の<b>知名度</b>が上がり、
+            ドラフト評価とスカウトの発見率に直結する。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>優勝+12 / 出場+3。エース・主砲はさらに上乗せ</li>
+              <li>校の戦力＝校ランクの地力＋エースの出来＋打線の厚み。
+                  <b>校ランクだけでは決まらない</b></li>
+              <li>結果画面の☆から<b>注目選手リスト</b>に登録できる。
+                  登録時からの伸び（「球速 128→145」）が追える</li>
+            </ul>
+          </Entry>
+          <Entry title="10月：NPBドラフト">
+            高校・大学3〜4年生・社会人・独立の<b>全候補を統一評価</b>し、上位から指名する。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>指名枠は候補の質で動く（<b>年84〜120名</b>）。豊作の年は枠が広がる</li>
+              <li>評価 = 能力 × 将来性 + 年齢ボーナス（18歳+33 → 22歳+5 → 28歳-50）+ 知名度×0.3</li>
+              <li>年齢帯で見るところが違う。<b>高校生＝素材型</b>（球速・パワー・足・肩）、
+                  <b>社会人＝技術型</b>（制球・ミート・守備）</li>
+              <li>能力があっても<b>無名だと指名漏れ</b>する。大学・社会人でブレイクして翌年以降に指名、という経路がある</li>
+            </ul>
+          </Entry>
+          <Entry title="下位・育成は「道具を決めてから探す」">
+            上位は総合力だが、<b className="text-yellow-300">下位・育成では1つの道具で勝負する選手が並ぶ</b>。
+            指名ごとに確率で「探す道具」を1つ引き、その道具の突出度で並べ替える。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">巡目</th>
+                  <th className="text-right py-1 px-2">1〜2位</th><th className="text-right py-1 px-2">3位</th>
+                  <th className="text-right py-1 px-2">4位</th><th className="text-right py-1 px-2">5位</th>
+                  <th className="text-right py-1 px-2">6位〜</th><th className="text-right py-1 px-2">育成</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">一芸指名の確率</td>
+                    <td className="text-right px-2">0%</td><td className="text-right px-2">30%</td>
+                    <td className="text-right px-2">45%</td><td className="text-right px-2">60%</td>
+                    <td className="text-right px-2">75%</td><td className="text-right px-2 text-green-400">80%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>実際に獲れる水準は 守備90 / 肩97 / 走力96 / リード93 と<b>スバ抜けている</b>
+                  （守備60が及第点なので、守備90は figure として立つ）</li>
+              <li>守備・肩・リードは<b>守る場所で割り引く</b>ので、守備系の一芸指名は
+                  100%がセンターライン（捕遊中二）になる</li>
+              <li><b>年上の一芸型には土台も要求する</b>。高卒の素材買いと違い、
+                  26歳以上は総合力の重みが上がる</li>
+            </ul>
+          </Entry>
+          <Entry title="指名ラインは年齢とともに上がる">
+            <b className="text-yellow-300">若いほど才能、年上ほど実績。</b>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">年齢</th>
+                  <th className="text-right py-1 px-2">上位指名の下限</th>
+                  <th className="text-right py-1 px-2">下位・育成の下限</th>
+                  <th className="text-right py-1 px-2">評価点（中央）</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">18歳</td><td className="text-right px-2">70.3</td><td className="text-right px-2">54.4</td><td className="text-right px-2">282</td></tr>
+                  <tr><td className="py-0.5 px-2">22歳</td><td className="text-right px-2">82.2</td><td className="text-right px-2">68.1</td><td className="text-right px-2">279</td></tr>
+                  <tr><td className="py-0.5 px-2">27歳</td><td className="text-right px-2">75.6</td><td className="text-right px-2">71.1</td><td className="text-right px-2 text-red-400">202</td></tr>
+                  <tr><td className="py-0.5 px-2">29歳</td><td className="text-right px-2 text-red-400">104.4</td><td className="text-right px-2">74.8</td><td className="text-right px-2 text-red-400">185</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2">
+              評価点は逆に下がる（282→185）。同じ点を取るのに27歳は年齢ボーナスを失うので、
+              <b>必要な能力は上がる</b>。プロ意識の低い選手は18歳では上位指名圏にいるのに、
+              22歳でラインに置いていかれる。
+            </p>
+          </Entry>
+          <Entry title="オフシーズン：ドラフト漏れの進路振り分け">
+            5,000人のおおよその内訳。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">進路</th><th className="text-right py-1 px-2">人数</th>
+                  <th className="text-right py-1 px-2">割合</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-pink-300">NPB指名</td><td className="text-right px-2">約20名</td><td className="text-right px-2">0.4%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">大学</td><td className="text-right px-2">約2,230名</td><td className="text-right px-2">44.6%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">社会人</td><td className="text-right px-2">約127名</td><td className="text-right px-2">2.5%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-orange-300">独立</td><td className="text-right px-2">約123名</td><td className="text-right px-2">2.5%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-gray-300">引退</td><td className="text-right px-2">約2,500名</td><td className="text-right px-2">50%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>同じ水準の中では<b>形</b>で分かれる。総合力に優れる選手は大学・社会人へ、
+                  <b>一芸型は独立</b>へ流れる（尖り 大学1.29 / 社会人1.32 / <b>独立2.22</b>）</li>
+              <li>4年待てない即戦力志向の選手は、大学ではなく独立を選ぶことがある</li>
+            </ul>
+          </Entry>
+          <Entry title="地元の高校生は地元のチームへ行きやすい">
+            出身県を<b>12地区</b>に畳んで突き合わせる。無作為なら8.5%のところ——
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">進路</th><th className="text-right py-1 px-2">出身と同じ地区</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-blue-300">大学</td><td className="text-right px-2 text-green-400">47.5%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">社会人</td><td className="text-right px-2 text-green-400">40.0%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-orange-300">独立</td><td className="text-right px-2 text-green-400">38.6%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>地元率は地区で違う。<b>東京69% / 近畿64%</b>（受け入れ先が多い）に対し、
+                  <b>北信越24% / 四国31%</b>（大学6校しかない）</li>
+              <li>地元を除くと<b>どの地区からも東京への流出が最大</b>（13〜22%）</li>
+              <li>チーム戦力は歪まない（地区間の差はむしろ縮む）</li>
+            </ul>
+          </Entry>
+          <Entry title="教え子のプロキャリア（OB名鑑）">
+            ドラフトで送り出した選手は毎年1シーズンずつプロで進む。
+            資料室の「OB名鑑」で現況と通算成績が追える。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>一軍・レギュラーは<b>絶対的な能力の線ではなく現役の中の順位</b>で決まる（椅子取り）</li>
+              <li>実測: 一軍到達44〜48% / レギュラー到達15〜16%（実NPB 40〜50% / 15〜20%）</li>
+              <li><b>1年目からレギュラーになる選手もいる</b>（学年あたり3.9〜5.3人）。
+                  即戦力（社会人・独立）が最も早く、高卒が最も遅い。
+                  高卒の1年目レギュラーは学年あたり0.27人で、全員ドラフト1位</li>
+              <li>二軍が続くと戦力外。<b>プロは操作できない</b>——
+                  遊べるようにするとドラフトが単なる移籍になり、送り出す重みが失われる</li>
+            </ul>
+          </Entry>
+        </div>
+      );
+
     case 'gameflow':
       return (
         <div className="space-y-4">
-          <Entry title="ゲームの流れ">
-            <ol className="list-decimal list-inside text-sm space-y-2 mt-1">
-              <li><b>NEW GAME</b> → レギュレーション設定（チーム数・試合数等を決定）</li>
-              <li><b>トライアウト</b> → 24人の候補選手からドラフトでロスターを構築</li>
-              <li><b>キャンプ</b> → シーズン前の練習期間</li>
-              <li><b>レギュラーシーズン</b> → 日付進行で試合を自動消化</li>
-              <li><b>プレーオフ</b> → 上位チームによるトーナメント</li>
-              <li><b>ドラフト</b> → 新戦力の獲得</li>
-              <li><b>オフシーズン</b> → 表彰式・引退・契約更新</li>
-              <li>Year 2以降 → トライアウト（15人）→ ロスター調整 → キャンプ → シーズン…</li>
+          <Entry title="どのモードでも「1つの日本球界」が動いている">
+            どのモードで始めても、独立26・社会人300・大学234の全カテゴリが生成され、
+            選手プール（高校生・大学・リリース）も共有される。
+            <b className="text-yellow-300">モードの違いは「どのチームを操作し、どのカレンダーで進むか」だけ</b>。
+            <p className="text-sm mt-2">オフシーズンの「監督移籍」で別カテゴリのチームへ移ることもできる。</p>
+          </Entry>
+          <Entry title="独立リーグモード">
+            <ol className="list-decimal list-inside text-sm space-y-1 mt-1">
+              <li>レギュレーション設定 → <b>トライアウト</b>（24人ドラフト）→ キャンプ</li>
+              <li>4月: 高校3年生5,000人が生成される</li>
+              <li>レギュラーシーズン（日付進行で消化）→ プレーオフ</li>
+              <li>10月: <b>NPBドラフト</b>（チーム選手＋高校生から指名）</li>
+              <li>11/9 契約更改 → 11/10 トライアウト</li>
+              <li>オフシーズン（表彰・引退・高校生の進路振り分け）→ Year 2へ</li>
             </ol>
+          </Entry>
+          <Entry title="社会人モード">
+            <ol className="list-decimal list-inside text-sm space-y-1 mt-1">
+              <li>企業チーム選択 → キャンプ</li>
+              <li>4月: 高校3年生生成（スカウト対象になる）</li>
+              <li>レギュラーシーズン → <b>都市対抗予選</b>（6月）→ <b>都市対抗本戦</b>（8月）</li>
+              <li>10月: NPBドラフト → 11月: 日本選手権</li>
+              <li>11/9 <b>退団</b> → 11/10 <b>スカウト入団</b>（スカウトの眼で能力がぼける）</li>
+              <li>オフシーズン → Year 2へ</li>
+            </ol>
+          </Entry>
+          <Entry title="大学モード">
+            <ol className="list-decimal list-inside text-sm space-y-1 mt-1">
+              <li>大学チーム選択 → キャンプ</li>
+              <li>春季リーグ（4-6月）→ <b>全日本大学選手権</b>（6月）</li>
+              <li>秋季リーグ（9-11月）→ <b>明治神宮大会</b>（11月）</li>
+              <li>10月: NPBドラフト → 11/10: <b>スポーツ推薦スカウト</b></li>
+              <li>オフシーズン（卒業＋入部）→ Year 2へ</li>
+            </ol>
+            <p className="text-sm mt-2">
+              推薦スカウトはシーズン通年で動かせる。<b>低ランク大学ほど、
+              無名の逸材を早期に発掘して注目を続け、交渉率を上げてから確保する</b>のが要になる。
+            </p>
+          </Entry>
+          <Entry title="チームランクは勝てば上がる">
+            全カテゴリのチームがEloスコアを持ち、年度末に全体のパーセンタイルでランクが決まる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">ランク</th>
+                  <th className="text-right py-1 px-2">S</th><th className="text-right py-1 px-2">A</th>
+                  <th className="text-right py-1 px-2">B</th><th className="text-right py-1 px-2">C</th>
+                  <th className="text-right py-1 px-2">D</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">全体での位置</td>
+                    <td className="text-right px-2">上位4%</td><td className="text-right px-2">5-12%</td>
+                    <td className="text-right px-2">13-28%</td><td className="text-right px-2">29-56%</td>
+                    <td className="text-right px-2">下位44%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>Eloが動く場面: リーグ戦の勝率・最終順位（1位+30）・地域大会・都市対抗予選・
+                  全国大会・<b>プロ輩出（1名+15）</b></li>
+              <li><b>下位リーグでも優勝すれば昇格できる</b>ように、順位ボーナスを厚くしてある</li>
+              <li>実測: 地区大会を毎年勝つDランクのチームは<b>1〜6年（中央3年）でCへ</b>、
+                  さらに3〜8年でBへ。背景のCPUチームは10年で16%が昇格</li>
+              <li><b>注目度（reputation）はランクとは別系統</b>。
+                  スカウト・予算・入団交渉の成功率にだけ効く</li>
+            </ul>
           </Entry>
           <Entry title="能力値ランク">
             <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
