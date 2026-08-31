@@ -178,7 +178,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
   // メニューを載せるカード。本編のカード（surface-2 + gray-700）と同じ見た目にする
   const MenuCard = ({ title, children }) => (
-    <div className="w-full max-w-md rounded-2xl border border-gray-700/60 bg-surface-2/70 backdrop-blur p-6 shadow-2xl">
+    <div className="w-full max-w-xl rounded-2xl border border-gray-700/60 bg-surface-2/70 backdrop-blur p-7 shadow-2xl">
       {title && <p className="text-sm text-gray-300 mb-3">{title}</p>}
       {children}
     </div>
@@ -190,27 +190,31 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
     //    **題材と無関係な定番の意匠**だった（洗練はされているが野球に見えない）。
     //    ⚠ **電光掲示板の語彙（オレンジのLED・グロー）は持ち込まないこと**。
     //    あれは「現地で試合を見ている」ための演出で、試合画面だけのもの。
-    // ⚠ **上寄せにすること**。中央寄せだとメニューがホームベースの真上に重なり、
-    //    球場の絵で一番効いている部分（打席とベース）が隠れる。
-    <div className="min-h-screen relative overflow-hidden flex items-start justify-center pt-10 pb-6"
+    // ⚠ **中央に据える**。以前は「メニューがホームベースの真上に重なる」ので
+    //    上寄せにしていたが、**そのベースと打席はもう描いていない**（遠近が
+    //    合わなかったため撤去）。隠れて困るものが無くなったので前提が消えている。
+    // data-fit-height: 1画面に収める設計の画面という印。縦が足りない端末
+    // （1366×640 / 1280×600）では App.jsx の自動フィットが縮めて収める。
+    // ⚠ これが無いと 640 で44px・600 で84px はみ出す。
+    <div data-fit-height className="min-h-screen relative overflow-hidden flex items-center justify-center py-8"
          style={{ backgroundColor: FIELD.night }}>
       <FieldBackdrop />
 
-      <div className="relative w-full max-w-md px-6 flex flex-col items-center">
+      <div className="relative w-full max-w-xl px-6 flex flex-col items-center">
         {/* タイトル。白線と同じチョーク色で、球場に引かれたラインの延長に見せる */}
-        <h1 className="text-6xl font-black tracking-tight leading-none"
+        <h1 className="text-7xl font-black tracking-tight leading-none"
             style={{ color: FIELD.chalk, textShadow: '0 2px 18px rgba(0,0,0,0.55)' }}>
           NEXT STAGE
         </h1>
         {/* ⚠ 罫線で挟んだ大文字サブタイトルは定番手なのでやめた。
             代わりに**カウントのランプ**（緑=ボール / 黄=ストライク / 赤=アウト）を置く。
             本編の意味色そのままなので、この作品の語彙で「野球」と言える。 */}
-        <div className="mt-4 mb-7 flex items-center gap-2.5">
+        <div className="mt-5 mb-8 flex items-center gap-3">
           {[FIELD.ball, FIELD.ball, FIELD.strike, FIELD.strike, FIELD.out].map((c, i) => (
-            <span key={i} className="w-3 h-3 rounded-full"
+            <span key={i} className="w-3.5 h-3.5 rounded-full"
                   style={{ backgroundColor: c, boxShadow: `0 0 8px ${c}` }} />
           ))}
-          <span className="ml-2 text-sm font-bold" style={{ color: FIELD.chalk }}>野球シミュレーター</span>
+          <span className="ml-2 text-base font-bold" style={{ color: FIELD.chalk }}>野球シミュレーター</span>
         </div>
 
         {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
@@ -275,13 +279,13 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               <button
                 onClick={handleContinue}
                 disabled={!canContinue}
-                className={`${canContinue ? 'btn-primary' : 'btn-secondary'} w-full px-6 py-3.5 rounded-xl text-lg transition active:scale-[0.99]`}
+                className={`${canContinue ? 'btn-primary' : 'btn-secondary'} w-full px-6 py-4 rounded-xl text-xl transition active:scale-[0.99]`}
               >
                 つづきから
               </button>
               <button
                 onClick={onNewGame}
-                className={`${canContinue ? 'btn-secondary' : 'btn-primary'} w-full px-6 py-3.5 rounded-xl text-lg transition active:scale-[0.99]`}
+                className={`${canContinue ? 'btn-secondary' : 'btn-primary'} w-full px-6 py-4 rounded-xl text-xl transition active:scale-[0.99]`}
               >
                 はじめから
               </button>
@@ -290,11 +294,11 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
             <div className="border-t border-gray-700/60 my-3" />
 
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={onSandbox} className="btn-secondary px-4 py-2.5 rounded-lg text-base transition">箱庭モード</button>
-              <button onClick={handleEdit} className="btn-secondary px-4 py-2.5 rounded-lg text-base transition">エディット</button>
+              <button onClick={onSandbox} className="btn-secondary px-4 py-3 rounded-lg text-lg transition">箱庭モード</button>
+              <button onClick={handleEdit} className="btn-secondary px-4 py-3 rounded-lg text-lg transition">エディット</button>
             </div>
             <button onClick={onManual}
-              className="mt-2 w-full text-base text-gray-300 hover:text-white py-2 rounded-lg hover:bg-gray-700/40 transition">
+              className="mt-2 w-full text-lg text-gray-300 hover:text-white py-2.5 rounded-lg hover:bg-gray-700/40 transition">
               マニュアル
             </button>
 
@@ -314,9 +318,9 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                   title: '画面が横にはみ出す場合は「自動」または縮小を選ぶと1画面に収まります' },
               ].map(o => (
                 <button key={o.label} onClick={o.onClick} title={o.title}
-                  className="w-full flex items-center justify-between text-sm text-gray-300 hover:text-white px-1 py-1 transition">
+                  className="w-full flex items-center justify-between text-base text-gray-300 hover:text-white px-1 py-1.5 transition">
                   <span>{o.label}</span>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded ${o.on ? 'seg-on' : 'seg'}`}>{o.value}</span>
+                  <span className={`text-sm font-bold px-2.5 py-1 rounded ${o.on ? 'seg-on' : 'seg'}`}>{o.value}</span>
                 </button>
               ))}
             </div>
