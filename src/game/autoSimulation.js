@@ -281,9 +281,18 @@ export const setRecommendedLineup = (teamData, teamName) => {
 export const POSITION_PLAYER_RECOVERY_BASE = 7;
 
 // 全チームの疲労を回復（日次処理）
-// 投手はrecoveryAmount(20)で回復、野手はPOSITION_PLAYER_RECOVERY_BASE(7)で回復
+//
+// ⚠ **既定値は実ゲームと同じ 20 にすること**。以前は既定25で、実ゲームだけ
+//    `dateProgression` が 20 を明示的に渡していた。ハーネスは引数なしで呼ぶので
+//    **25で回っており、実ゲームより25%も回復の速いブルペンを測っていた**。
+//    実測でロール別の登板数が変わる（守護神 37 → 54 / ビハインド 58 → 50）。
+//    `reliefFatigue` もこの量で減るので、リリーフの起用分散に直接効く。
+//
+// ⚠ 野手はこの引数を使わない。体力比例の別式（下記）で回復する。
+//    `POSITION_PLAYER_RECOVERY_BASE = 7` は**参照されていない死んだ定数**。
+//
 // スタッフの身体ケア能力で回復量にボーナス（0→×1.0、50→×1.1、100→×1.2）
-export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
+export const recoverAllPitcherFatigue = (recoveryAmount = 20) => {
   Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
     if (!team || !team.players) return;
 
