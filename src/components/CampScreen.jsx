@@ -1077,7 +1077,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                               {Object.entries(TRAINING_MENUS).filter(([, m]) => !m.intensive)
                                 .map(([key, menu]) => (
                                 <option key={key} value={key}>
-                                  {menu.name}{menu.serves ? `（${menu.serves}）` : ''}
+                                  {menu.name}
                                 </option>
                               ))}
                               <option disabled>── 集中コース ──</option>
