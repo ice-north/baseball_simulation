@@ -33,7 +33,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
         <div className="max-w-5xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2 text-center">リーグ選択</h1>
-          <p className="text-gray-300 text-sm mb-6">所属するリーグを選んでください</p>
+          <p className="text-gray-300 mb-8 text-center">所属するリーグを選んでください</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {UNIVERSITY_REGIONS.map(region => {
@@ -42,29 +42,35 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
               const perDiv = numDivisions >= 2 ? Math.floor(teams.length / numDivisions) : 0;
               const leagueRank = getBestRank(teams);
               return (
+                // ⚠ **`flex flex-col` を付けること**。カードは `<button>` で、グリッドの
+                //    行の高さに引き伸ばされると**中身が上下中央に寄る**（button の既定）。
+                //    校数の少ないリーグだけリーグ名が下がって見出しの高さが揃わなかった。
+                //    見出しは上端・内訳は `mt-auto` で下端に固定する。
                 <button key={region.id}
                   onClick={() => setSelectedRegion(region)}
-                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-amber-500 rounded-xl p-4 text-left transition group"
+                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-amber-500 rounded-xl p-4 text-left transition group flex flex-col"
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="text-base font-bold text-white group-hover:text-amber-400 transition truncate mr-2">{region.name}</div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-sm font-bold px-1.5 py-0.5 rounded border ${RANK_BG[leagueRank]} ${RANK_COLORS[leagueRank]}`}>{leagueRank}</span>
-                      <span className="text-xs text-gray-400">{teams.length}校</span>
-                    </div>
+                  {/* 見出し行。名前が長くても崩れないよう、伸縮するのは名前だけにする */}
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="text-base font-bold text-white group-hover:text-amber-400 transition truncate min-w-0 flex-1">{region.name}</div>
+                    <span className={`text-xs font-bold w-6 text-center py-0.5 rounded border shrink-0 ${RANK_BG[leagueRank]} ${RANK_COLORS[leagueRank]}`}>{leagueRank}</span>
+                    <span className="text-xs text-gray-300 tabular-nums whitespace-nowrap shrink-0 w-9 text-right">{teams.length}校</span>
                   </div>
+                  <div className="border-t border-gray-700/60 my-2.5" />
                   <div className="flex flex-wrap gap-1 text-xs">
                     {teams.map(t => (
-                      <span key={t.id} className="bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-300">
+                      <span key={t.id} className="bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-300 whitespace-nowrap">
                         {t.name}<span className={`ml-1 ${RANK_COLORS[t.rank]}`}>{t.rank}</span>
                       </span>
                     ))}
                   </div>
-                  {numDivisions >= 2 && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      {Array.from({ length: numDivisions }, (_, d) => `${d + 1}部${perDiv}校`).join(' + ')}（入替制）
-                    </div>
-                  )}
+                  {/* 内訳は下端に固定する。1部制のリーグにも出して、
+                      どのカードも「見出し / 校名 / 内訳」の3段で揃える */}
+                  <div className="text-xs text-gray-400 mt-auto pt-2.5">
+                    {numDivisions >= 2
+                      ? `${Array.from({ length: numDivisions }, (_, d) => `${d + 1}部${perDiv}校`).join(' + ')}（入替制）`
+                      : `1部制 ${teams.length}校`}
+                  </div>
                 </button>
               );
             })}
@@ -103,7 +109,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
       <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-1 text-center">{selectedRegion.name}</h1>
-        <p className="text-gray-300 text-sm mb-6">監督を務めるチームを選んでください</p>
+        <p className="text-gray-300 mb-8 text-center">監督を務めるチームを選んでください</p>
 
         {hasDivisions ? (
           <>
