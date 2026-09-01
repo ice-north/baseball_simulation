@@ -119,8 +119,17 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 
 - `flex flex-col` を付けて見出しを上端に固定し、フッターは `mt-auto` で下端に置く
 - **フッターは条件付きにしないこと**。1部制のリーグだけ内訳行が無いと、
-  そのカードだけ3段目が欠けて揃わない。`1部制 6校` のように必ず何か出す
+  そのカードだけ3段目が欠けて揃わない。`1部制 6校` のように必ず何か出す。
+  どうしても条件付きなら `mt-auto` で下端へ固定する
 - 実測: 見出しの上端オフセットが全9行で17pxに統一（修正前は行ごとにバラバラ）
+
+**機械的に洗い出す**——`grid-cols-*` の直下の `<button>` を全部拾い、
+中身が2段以上あるのに `flex-col` を持たないものを列挙する。42件中6件が該当し、
+うち実害があったのは3件だった（独立リーグ選択 / 都市対抗の予選カード /
+エディットの地区カード）。残り3件は当時たまたま段数が揃っていただけなので、
+条件付きの行が足されたときに再発しないよう同じ形に直してある。
+検証はブラウザで**同じ行のカードの見出しの上端オフセット**を測る
+（1つでも違えばその行はズレている）。
 
 #### タイトル画面（`StartScreen`）
 以前は **幅320pxの同じピルが8個縦に並ぶ**だけで、主要アクション（NEW GAME / CONTINUE）と
@@ -187,7 +196,7 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 | 試合画面（`App.jsx` RENDER） | 守備=amber / 攻撃=cyan の独自語彙を持つ |
 | `DraftResultScreen` | 抽選の見せ場。明るいカードと大きな見出し |
 | `StartScreen` | タイトル画面。地色・カード・アクセントは本編と共有し、<br>**タイトルの大きさ（`text-7xl`）だけ**が例外 |
-| 開始前の「表紙」3画面 | `CorporateSelectScreen` / `UniversitySelectScreen` /<br>`SandboxSetupScreen`。`min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6`<br>＋ 見出し `text-3xl text-center` で**3枚とも同じ**にしてある |
+| 開始前の「表紙」 | `CorporateSelectScreen` / `UniversitySelectScreen` /<br>`SandboxSetupScreen` ＋ `GameFlowScreens` の独立リーグ選択・チーム選択。<br>`min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6` ＋ `max-w-5xl`<br>＋ 見出し `text-3xl text-center` で**全部同じ**にしてある |
 
 ⚠ **「触っていない画面」を残さないこと**。1回目の統一ではサイドバーの11画面しか見ておらず、
 日程/順位表・オフシーズン・都市対抗・マニュアル・注目選手・背番号・エディット・

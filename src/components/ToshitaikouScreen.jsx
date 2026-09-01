@@ -83,7 +83,7 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
               <button
                 key={regionId}
                 onClick={() => setSelectedRegion(regionId)}
-                className={`text-left p-3 rounded-lg border transition hover:border-blue-500 ${
+                className={`text-left p-3 rounded-lg border transition hover:border-blue-500 flex flex-col ${
                   userInRegion ? 'bg-blue-900/30 border-blue-700' : 'bg-surface-2 border-gray-700'
                 }`}
               >
@@ -98,8 +98,9 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
                     </span>
                   ))}
                 </div>
+                {/* 条件付きの行は下端に固定する。無いカードだけ段が欠けて揃わなくなるため */}
                 {userInRegion && !hasUser && (
-                  <div className="text-red-400 text-xs mt-1">あなたのチームは予選敗退</div>
+                  <div className="text-red-400 text-xs mt-auto pt-1">あなたのチームは予選敗退</div>
                 )}
               </button>
             );

@@ -1,5 +1,4 @@
 import React from 'react';
-import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
 import { SEASON_PHASES, createSeasonData } from '../season/seasonManager.js';
 import { REGULATION_PRESETS } from '../season/regulationSettings.js';
@@ -89,10 +88,15 @@ const GameFlowScreens = ({
       { key: 'hokkaido', icon: '🐻' },
       { key: 'kansai', icon: '🏯' },
     ];
+    // 開始前の「表紙」なので CorporateSelect / UniversitySelect / SandboxSetup と
+    // 同じ語彙にする（地色のグラデ ＋ max-w-5xl ＋ 見出し text-3xl 中央）。
+    // ⚠ ここだけ ScreenShell（本編の語彙）を使っていて、直後のローディング画面が
+    //    グラデ地色だったため、同じ流れの中で地色が2度変わっていた。
     return (
-      <ScreenShell width="form">
-          <h1 className="text-xl font-bold text-white mb-2">リーグ選択</h1>
-          <p className="text-gray-300 text-sm mb-6">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-2 text-center">リーグ選択</h1>
+          <p className="text-gray-300 mb-8 text-center">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {leagueList.map(({ key, icon }) => {
               const leagueDef = INDEPENDENT_LEAGUES[key];
@@ -102,7 +106,7 @@ const GameFlowScreens = ({
                     selectedIndependentLeague = key;
                     setGameFlowState('newgame_team_select');
                   }}
-                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group"
+                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group flex flex-col"
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-3xl">{icon}</span>
@@ -128,7 +132,7 @@ const GameFlowScreens = ({
                 selectedIndependentLeague = null;
                 setGameFlowState('newgame_regulations');
               }}
-              className="bg-surface-2 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-green-500 rounded-xl p-5 text-left transition group"
+              className="bg-surface-2 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-green-500 rounded-xl p-5 text-left transition group flex flex-col"
             >
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-3xl">🛠️</span>
@@ -146,7 +150,8 @@ const GameFlowScreens = ({
           <div className="mt-6 text-center">
             <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-surface-2 text-sm transition">← 戻る</button>
           </div>
-      </ScreenShell>
+        </div>
+      </div>
     );
   }
 
@@ -157,10 +162,10 @@ const GameFlowScreens = ({
     const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
     const RANK_LABELS = { S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興' };
     return (
-      <div className="p-8 bg-surface-1 min-h-screen">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-xl font-bold text-white mb-2">{leagueDef?.name}</h1>
-          <p className="text-gray-300 text-sm mb-6">監督を務めるチームを選んでください</p>
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-2 text-center">{leagueDef?.name}</h1>
+          <p className="text-gray-300 mb-8 text-center">監督を務めるチームを選んでください</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {teams.map((team) => (
               <button key={team.id}
@@ -191,7 +196,7 @@ const GameFlowScreens = ({
                     setGameFlowState('newgame_tryout');
                   }, 50);
                 }}
-                className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-green-500 rounded-xl p-5 text-left transition group"
+                className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-green-500 rounded-xl p-5 text-left transition group flex flex-col"
               >
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-lg font-bold text-white group-hover:text-green-400 transition">{team.name}</div>

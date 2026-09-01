@@ -232,7 +232,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                 <button
                   key={region.id}
                   onClick={() => setSelectedRegion(region.id)}
-                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-lg p-4 text-left transition"
+                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-lg p-4 text-left transition flex flex-col"
                 >
                   <div className="text-white font-bold text-lg">{region.name}</div>
                   <div className="text-gray-300 text-sm">{teams.length}チーム</div>
@@ -760,7 +760,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
                   <button
                     key={region.id}
                     onClick={() => setSelectedRegion(region.id)}
-                    className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-indigo-500 rounded-lg p-4 text-left transition"
+                    className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-indigo-500 rounded-lg p-4 text-left transition flex flex-col"
                   >
                     <div className="text-white font-bold">{region.name}</div>
                     <div className="text-gray-300 text-sm">{teams.length}チーム</div>
@@ -768,7 +768,8 @@ const CorporateNameEditScreen = ({ onBack }) => {
                       <span className="text-blue-400">企業:{corpCount}</span>
                       <span className="text-green-400">クラブ:{clubCount}</span>
                     </div>
-                    {customCount > 0 && <div className="text-indigo-400 text-xs mt-1">{customCount}件変更済</div>}
+                    {/* 条件付きの行は下端へ。無いカードだけ段が欠けて揃わなくなるため */}
+                    {customCount > 0 && <div className="text-indigo-400 text-xs mt-auto pt-1">{customCount}件変更済</div>}
                   </button>
                 );
               })}
