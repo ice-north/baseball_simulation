@@ -939,7 +939,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         {isPitchTab && <S k="velocity" w="w-9">球速</S>}
                         {isPitchTab && <S k="control" w="w-9">制球</S>}
                         {isPitchTab && <th className="py-1.5 px-1 text-center whitespace-nowrap" title="球の回転数">スピン</th>}
-                        {isPitchTab && <S k="stamina" w="w-9">ス</S>}
+                        {isPitchTab && <S k="stamina" title="1試合で投げ続けられる体力（30〜150）">スタミナ</S>}
                         <S k="bodyStamina" w="w-9">体力</S>
                         <S k="recovery" w="w-9">回復</S>
                         <S k="muscle" w="w-9" title="体幹（成長倍率に影響）">体幹</S>
