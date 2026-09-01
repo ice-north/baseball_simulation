@@ -1252,11 +1252,16 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-700/50 text-gray-300 text-xs">
-                    <th className="py-1 px-2 text-left w-20">氏名</th>
-                    <th className="py-1 px-2 text-left w-20">メイン</th>
-                    <th className="py-1 px-2 text-left">メイン結果</th>
-                    <th className="py-1 px-2 text-left w-20">サブ</th>
-                    <th className="py-1 px-2 text-left">サブ結果</th>
+                    <th className="py-1 px-2 text-left whitespace-nowrap">氏名</th>
+                    {/* ⚠ メニュー名は折り返さない。w-20(80px) では「🎯 投げ込み」
+                        「🏃 基礎体力」が2行になっていた */}
+                    <th className="py-1 px-2 text-left whitespace-nowrap">メイン</th>
+                    {/* ⚠ 余白は**最後の列に吸わせる**（`w-full`）。`table w-full` は
+                        余った横幅を各列へ配分するので、途中の列に w-px を付けても縮まない。
+                        これが無いとメイン結果が伸びきってサブ列が右端へ飛び、行が読めなかった */}
+                    <th className="py-1 px-2 text-left whitespace-nowrap">メイン結果</th>
+                    <th className="py-1 px-2 text-left whitespace-nowrap">サブ</th>
+                    <th className="py-1 px-2 text-left w-full">サブ結果</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1269,7 +1274,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     const coachComment = getCampCoachComment(result.player, currentRound);
                     return (
                     <tr key={idx} className="border-b border-gray-700/50">
-                      <td className="py-1 px-2">
+                      {/* ⚠ 氏名も折り返さない。最後の列に w-full を付けると他の列が
+                          最小幅まで押し込まれ、`w-20` では名前が1文字ずつ縦に割れる */}
+                      <td className="py-1 px-2 align-top whitespace-nowrap">
                         <span className={`font-bold ${isPitcher(result.player) ? 'text-red-400' : 'text-blue-300'}`}>
                           {result.player.name}
                         </span>
@@ -1277,11 +1284,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           <div className={`text-xs ${coachComment.color}`}>📋{coachComment.text}</div>
                         )}
                       </td>
-                      <td className="py-1 px-2 text-gray-400 text-xs">
+                      <td className="py-1 px-2 text-gray-300 text-xs whitespace-nowrap align-top">
                         {TRAINING_MENUS[result.trainingType]?.icon} {TRAINING_MENUS[result.trainingType]?.name}
                       </td>
-                      <td className="py-1 px-2">
-                        <div className="flex flex-wrap gap-0.5">
+                      <td className="py-1 px-2 align-top">
+                        <div className="flex gap-0.5 whitespace-nowrap">
                           {result.growthReport.map((growth, gIdx) => (
                             <span
                               key={gIdx}
@@ -1306,13 +1313,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           )}
                         </div>
                       </td>
-                      <td className="py-1 px-2 text-gray-400 text-xs">
+                      <td className="py-1 px-2 text-gray-300 text-xs whitespace-nowrap align-top">
                         {result.subTrainingType && SUB_TRAINING_MENUS[result.subTrainingType] && (
                           <>{SUB_TRAINING_MENUS[result.subTrainingType].icon} {SUB_TRAINING_MENUS[result.subTrainingType].name}</>
                         )}
                       </td>
-                      <td className="py-1 px-2">
-                        <div className="flex flex-wrap gap-0.5">
+                      <td className="py-1 px-2 align-top">
+                        <div className="flex gap-0.5 whitespace-nowrap">
                           {(result.subGrowthReport || []).map((growth, gIdx) => (
                             <span
                               key={gIdx}
