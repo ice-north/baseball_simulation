@@ -906,24 +906,26 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 <thead>
                   <tr className="bg-gray-700/80 text-gray-300 text-xs">
                     {(() => {
+                      // ⚠ 見出しは **nowrap を付けないと折り返す**。`w-*` を広げても
+                      //    列幅の「目安」でしかないので、「プロ意識」が「プロ意/識」に割れた
                       const S = ({ k, w, children, title, align = 'center' }) => (
-                        <th className={`py-1.5 px-1 ${align === 'left' ? 'text-left px-2' : 'text-center'} ${w || ''}`} title={title}>
+                        <th className={`py-1.5 px-1 whitespace-nowrap ${align === 'left' ? 'text-left px-2' : 'text-center'} ${w || ''}`} title={title}>
                           <button onClick={() => toggleSort(k)} className={`hover:text-white transition ${sortKey === k ? 'text-yellow-400' : ''}`}>
                             {children}{sortKey === k ? (sortAsc ? '↑' : '↓') : ''}
                           </button>
                         </th>
                       );
                       return (<>
-                        <th className="py-1.5 px-2 text-left w-28">氏名</th>
+                        <th className="py-1.5 px-2 text-left w-28 whitespace-nowrap">氏名</th>
                         <S k="position" w="w-9">ポジ</S>
                         <S k="age" w="w-9">年齢</S>
                         <S k="build" w="w-9" title="体格">体格</S>
                         <S k="growth" w="w-10" title="成長率 (基礎+変動)">成長</S>
-                        <S k="discipline" w="w-8" title="プロ意識">プ意</S>
-                        <S k="mental" w="w-8" title="精神力">精神</S>
-                        <th className="py-1.5 px-1 text-center w-14" title="この選手が今の方針をどう受け止めているか。希望と噛み合うと効率が上がる（正しい指示かどうかとは別）">意欲</th>
-                        <th className="py-1.5 px-1 text-center w-8">投/打</th>
-                        {isPitchTab && <th className="py-1.5 px-1 text-center w-12">フォーム</th>}
+                        <S k="discipline" title="練習成長への乗算。高いほど練習が身につき、覚醒も起きやすい">プロ意識</S>
+                        <S k="mental" w="w-8" title="チャンス・ピンチでの強さ">精神</S>
+                        <th className="py-1.5 px-1 text-center w-14 whitespace-nowrap" title="この選手が今の方針をどう受け止めているか。希望と噛み合うと効率が上がる（正しい指示かどうかとは別）">意欲</th>
+                        <th className="py-1.5 px-1 text-center w-8 whitespace-nowrap">投/打</th>
+                        {isPitchTab && <th className="py-1.5 px-1 text-center whitespace-nowrap">フォーム</th>}
                         {!isPitchTab && <S k="meet" w="w-12">ミート</S>}
                         {!isPitchTab && <S k="power" w="w-12">パワー</S>}
                         {!isPitchTab && <S k="speed" w="w-9">走力</S>}
@@ -936,13 +938,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         {!isPitchTab && <S k="bunt" w="w-12">バント</S>}
                         {isPitchTab && <S k="velocity" w="w-9">球速</S>}
                         {isPitchTab && <S k="control" w="w-9">制球</S>}
-                        {isPitchTab && <th className="py-1.5 px-1 text-center w-12" title="球の回転数">スピン</th>}
+                        {isPitchTab && <th className="py-1.5 px-1 text-center whitespace-nowrap" title="球の回転数">スピン</th>}
                         {isPitchTab && <S k="stamina" w="w-9">ス</S>}
                         <S k="bodyStamina" w="w-9">体力</S>
                         <S k="recovery" w="w-9">回復</S>
                         <S k="muscle" w="w-9" title="体幹（成長倍率に影響）">体幹</S>
-                        {isPitchTab && <th className="py-1.5 px-2 text-left">変化球</th>}
-                        <th className="py-1.5 px-2 text-left">前年成績</th>
+                        {isPitchTab && <th className="py-1.5 px-2 text-left whitespace-nowrap">変化球</th>}
+                        <th className="py-1.5 px-2 text-left whitespace-nowrap">前年成績</th>
                       </>);
                     })()}
                     {/* サブポジション適性（投手タブでは不要） */}
