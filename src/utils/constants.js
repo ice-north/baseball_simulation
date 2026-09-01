@@ -144,6 +144,39 @@ export const PITCHING_FORM_EFFECTS = {
   }
 };
 
+// ============================================================
+// 投球フォームの表示名
+//
+// ⚠ **表を二重に作らないこと**。以前は10箇所が独自の短縮表を持っており、
+//    `threeQuarter` だけで **スリークォーター / スリー / スリクォ / 3Q** の4通り、
+//    `sidearm` は サイド / サイドスロー / サイドアーム の3通りに割れていた。
+//    同じファイルの中で2種類使っている画面もあった（`CampScreen`）。
+//
+// ⚠ **フル名は `PITCHING_FORM_EFFECTS[].name` から導出する**。ここで書き直すと
+//    11個目のコピーになる。
+// ============================================================
+
+/** フル名（オーバースロー / スリークォーター / サイドスロー / アンダースロー） */
+export const FORM_NAME = Object.fromEntries(
+  Object.entries(PITCHING_FORM_EFFECTS).map(([k, v]) => [k, v.name])
+);
+
+/** 短縮名。表の列に入れる用（4文字で揃える） */
+export const FORM_SHORT = {
+  overhand: 'オーバー',
+  threeQuarter: 'スリクォ',
+  sidearm: 'サイド',
+  submarine: 'アンダー',
+};
+
+/** 2文字コード。選手検索のような極端に狭い列で使う */
+export const FORM_CODE = {
+  overhand: 'OV', threeQuarter: '3Q', sidearm: 'SD', submarine: 'UN',
+};
+
+/** フォームの選択肢（`<select>` 用）。順序もここが唯一の権威 */
+export const FORM_OPTIONS = Object.keys(PITCHING_FORM_EFFECTS).map(k => ({ key: k, name: FORM_NAME[k], short: FORM_SHORT[k] }));
+
 /**
  * 投球フォームと相性の良い変化球（ボーナス適用）
  */

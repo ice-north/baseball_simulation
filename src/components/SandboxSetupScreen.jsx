@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { addToRoster, addManyToRoster, removeFromRosterById } from '../state/roster.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, FORM_OPTIONS } from '../utils/constants.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { importDraftedPlayers, convertDraftedPlayerToSandboxPlayer } from '../game/saveSystem.js';
@@ -494,10 +494,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   <select value={editFormData.pitching?.form || 'overhand'}
                     onChange={(e) => setEditFormData(prev => ({ ...prev, pitching: { ...prev.pitching, form: e.target.value } }))}
                     className="flex-1 bg-gray-600 text-white px-1 py-1 rounded text-xs">
-                    <option value="overhand">オーバー</option>
-                    <option value="threeQuarter">スリークォーター</option>
-                    <option value="sidearm">サイド</option>
-                    <option value="submarine">アンダー</option>
+                    {FORM_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.short}</option>)}
                   </select>
                 </div>
               </div>

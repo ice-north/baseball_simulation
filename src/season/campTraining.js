@@ -4,7 +4,7 @@
 // ============================================================
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor } from './growthUtils.js';
-import { PITCHING_FORM_EFFECTS, getPitchTypeName } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 
 // 集中練習が1点に集約する倍率。通常メニューは3〜4能力に分散するので、
@@ -431,19 +431,18 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const targetForm = options.targetForm && options.targetForm !== currentForm
           ? options.targetForm
           : forms.filter(f => f !== currentForm)[Math.floor(Math.random() * (forms.length - 1))];
-        const FORM_NAMES = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
         // 成功/失敗にかかわらずフォームは変わる
         player.pitching.form = targetForm;
         if (Math.random() < 0.20) {
           // 成功: フォーム変更 + 制球+3~5 大幅アップ
-          growthReport.push({ statName: 'フォーム改造成功', before: FORM_NAMES[currentForm], after: FORM_NAMES[targetForm], growth: 0, isAwakening: true });
+          growthReport.push({ statName: 'フォーム改造成功', before: FORM_SHORT[currentForm], after: FORM_SHORT[targetForm], growth: 0, isAwakening: true });
           const bonus = Math.floor(Math.random() * 3) + 3;
           const oldCtrl = player.pitching.control || 50;
           player.pitching.control = oldCtrl + bonus;
           growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: bonus });
         } else {
           // 失敗: フォーム変更 + 制球-1~3 ダウン
-          growthReport.push({ statName: 'フォーム改造', before: FORM_NAMES[currentForm], after: FORM_NAMES[targetForm], growth: 0 });
+          growthReport.push({ statName: 'フォーム改造', before: FORM_SHORT[currentForm], after: FORM_SHORT[targetForm], growth: 0 });
           const penalty = Math.floor(Math.random() * 3) + 1;
           if (player.pitching.control > 20) {
             const oldCtrl = player.pitching.control;

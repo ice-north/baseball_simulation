@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { POSITION_NAMES, getAbilityColor, getPitchTypeName } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor, getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 
 const NPB_TEAMS_INFO = [
   { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', textColor: '#000', league: 'ce', flag: 'giants' },
@@ -697,7 +697,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   );
 };
 
-const FORM_NAMES = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+const FORM_NAMES = FORM_SHORT;
 const FULL_POS_NAMES = { pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手', third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手' };
 
 const TRAIT_NAMES = {

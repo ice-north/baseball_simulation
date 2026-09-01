@@ -1,21 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 
 // Utility imports
-import {
-  BALL_EFFECTS,
-  PITCHING_FORM_EFFECTS,
-  FORM_PITCH_SYNERGY,
-  POSITION_NAMES,
-  POSITION_COLORS,
-  HAND_LABELS,
-  sortBenchByPosition,
-  pitchVelocityDrop,
-  isUnreadablePitch,
-  formatAtBatResult,
-  atBatResultColor,
-  getPitchTypeName,
-  DP_BASE
-} from './utils/constants.js';
+import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY, POSITION_NAMES, POSITION_COLORS, HAND_LABELS, sortBenchByPosition, pitchVelocityDrop, isUnreadablePitch, formatAtBatResult, atBatResultColor, getPitchTypeName, DP_BASE, FORM_SHORT } from './utils/constants.js';
 
 import {
   formatInnings,
@@ -3441,12 +3427,7 @@ if (newOuts === 3) {
                     {(() => {
                       const pitcher = awayTeam.players.find(p => p.isStarter && p.position === 'pitcher');
                       if (!pitcher) return null;
-                      const formNames = {
-                        overhand: 'オーバー',
-                        threeQuarter: 'スリークォーター',
-                        sidearm: 'サイドアーム',
-                        submarine: 'アンダースロー'
-                      };
+                      const formNames = FORM_SHORT;
                       const getValueColor = (val) => {
                         if (val >= 80) return 'text-red-400';
                         if (val >= 70) return 'text-orange-400';
@@ -4972,12 +4953,7 @@ if (newOuts === 3) {
                     {(() => {
                       const pitcher = homeTeam.players.find(p => p.isStarter && p.position === 'pitcher');
                       if (!pitcher) return null;
-                      const formNames = {
-                        overhand: 'オーバー',
-                        threeQuarter: 'スリークォーター',
-                        sidearm: 'サイドアーム',
-                        submarine: 'アンダースロー'
-                      };
+                      const formNames = FORM_SHORT;
                       const getValueColor = (val) => {
                         if (val >= 80) return 'text-red-400';
                         if (val >= 70) return 'text-orange-400';

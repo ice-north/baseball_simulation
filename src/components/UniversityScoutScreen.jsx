@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, FORM_SHORT } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import {
   initUniversityScoutList,
@@ -184,7 +184,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
 
   const throwLabel = (t) => t === 'left' ? '左' : '右';
   const batLabel = (b) => b === 'left' ? '左' : b === 'switch' ? '両' : '右';
-  const formLabel = (f) => ({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[f] || '-');
+  const formLabel = (f) => FORM_SHORT[f] || '-';
   const gpLabel = (gp) => gp == null ? '-' : gp.toFixed(2);
   const gpColor = (gp) => gp >= 1.3 ? 'text-red-400' : gp >= 1.1 ? 'text-yellow-400' : gp >= 0.9 ? 'text-green-400' : 'text-gray-400';
 

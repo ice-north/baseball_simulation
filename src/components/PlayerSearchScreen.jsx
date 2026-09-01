@@ -4,7 +4,7 @@ import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
-import { POSITION_NAMES, POSITION_ORDER } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_ORDER, FORM_SHORT, FORM_CODE } from '../utils/constants.js';
 import { AbilityValue, overallRating } from './AbilityValue.jsx';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { addHighSchoolPlayerToScoutList } from '../corporate/scoutingSystem.js';
@@ -175,8 +175,6 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
     </th>
   );
 
-  const FORM_SHORT = { overhand: 'OV', threeQuarter: '3Q', sidearm: 'SD', submarine: 'UN' };
-  const FORM_FULL = { overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' };
   const handLabel = (v) => v === 'right' ? '右' : v === 'left' ? '左' : v === 'switch' ? '両' : '?';
 
   // 能力表示は共通の AbilityValue に集約（配色の単一の真実の源）
@@ -365,7 +363,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                     {handLabel(p.physical?.throws)}/{handLabel(p.batting?.bats)}
                   </td>
                   <td className="py-0.5 px-1 text-center text-gray-300 text-xs">
-                    {p.position === 'pitcher' ? (FORM_SHORT[p.pitching?.form] || '-') : '-'}
+                    {p.position === 'pitcher' ? (FORM_CODE[p.pitching?.form] || '-') : '-'}
                   </td>
                   {isScoutable && (
                     <td className="py-0.5 px-1 text-center" onClick={e => e.stopPropagation()}>

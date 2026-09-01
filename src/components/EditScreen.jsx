@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, FORM_OPTIONS } from '../utils/constants.js';
 
 const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, allTeams }) => {
   const [editingTeam, setEditingTeam] = useState(allTeams[0] || 'チームA');
@@ -365,10 +365,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
                     <select value={editFormData.pitching?.form || 'threeQuarter'}
                       onChange={(e) => updatePitchingForm(e.target.value)}
                       className="w-full bg-gray-600 text-white px-3 py-2 rounded">
-                      <option value="overhand">オーバースロー</option>
-                      <option value="threeQuarter">スリークォーター</option>
-                      <option value="sidearm">サイドスロー</option>
-                      <option value="submarine">アンダースロー</option>
+                      {FORM_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.name}</option>)}
                     </select>
                   </div>
                 </div>

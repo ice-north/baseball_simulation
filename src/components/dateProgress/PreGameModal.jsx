@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TEAMS_DATA } from '../../teams-data.js';
 import { getScheduleByDate } from '../../season/scheduleGenerator.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../../game/condition.js';
-import { POSITION_NAMES, getAbilityColor } from '../../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor, FORM_SHORT } from '../../utils/constants.js';
 import { getPitchTypeName } from '../../season/yearProgressionSystem.js';
 import { AbilityRadar, teamRadarAxes } from '../AbilityRadar.jsx';
 import { overallRating } from '../AbilityValue.jsx';
@@ -26,7 +26,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
   }
   const userTeam = TEAMS_DATA[userTeamName];
   const opponentTeam = TEAMS_DATA[opponentName];
-  const FORM_LABELS = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+  const FORM_LABELS = FORM_SHORT;
   const isPitcherPlayer = (p) => p.position === 'pitcher';
 
   const getStarters = (team, teamName) => {
@@ -413,7 +413,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     <span className={`text-xs px-1 py-0.5 rounded font-bold ${opponentStarter.physical?.throws === 'left' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'}`}>
                       {opponentStarter.physical?.throws === 'left' ? '左' : '右'}
                     </span>
-                    <span className="text-xs px-1 py-0.5 rounded bg-gray-700 text-gray-300">{FORM_LABELS[opponentStarter.pitching?.form] || 'スリー'}</span>
+                    <span className="text-xs px-1 py-0.5 rounded bg-gray-700 text-gray-300">{FORM_LABELS[opponentStarter.pitching?.form] || '-'}</span>
                     <span className="text-white font-bold text-xs">{opponentStarter.name}</span>
                     <span className="text-xs text-gray-400">{opponentStarter.age}</span>
                     <div className="flex gap-1.5 text-xs text-gray-300">

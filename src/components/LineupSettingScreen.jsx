@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityRank, getRankColor, FORM_SHORT } from '../utils/constants.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { generateOptimalLineup, generatePitchingRotation } from '../game/lineupGenerator.js';
@@ -12,7 +12,6 @@ import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 import { surnameOf } from '../data/playerNames.js';
 
 // 投球フォームの短縮ラベル（カードの省スペース表示用）
-const FORM_SHORT = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
 const throwsLabel = (player) => (player.physical?.throws === 'left' ? '左投' : '右投');
 const formLabel = (player) => FORM_SHORT[player.pitching?.form] || '';
 
@@ -73,7 +72,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   };
 
   const getFormLabel = (form) => {
-    const forms = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+    const forms = FORM_SHORT;
     return forms[form] || form;
   };
 

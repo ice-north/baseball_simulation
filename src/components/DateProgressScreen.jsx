@@ -17,7 +17,7 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 import { updateAllTeamReputations, resetIndependentLeagueSchedules, getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, FORM_SHORT, FORM_NAME } from '../utils/constants.js';
 import { Tooltip } from './GameUIComponents.jsx';
 import { formatInnings } from '../utils/physics.js';
 import { checkScoutMissionCompletion, SCOUT_TARGETS, processAutoInvestigation, advanceFavoriteBonus, processUniversityScoutDay, initUniversityScoutList } from '../corporate/scoutingSystem.js';
@@ -1934,7 +1934,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const newspaperData = useMemo(() => {
     if (!showNewspaper) return null;
     const POS_SHORT = { pitcher: '投', catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
-    const FORM_SHORT = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイドスロー', submarine: 'アンダースロー' };
 
     // 指名確度(★)はカテゴリ内順位で算出する。
     // 実ドラフトは各カテゴリの上位から順に指名される（高63/大18/社16/独13%程度）ため、
@@ -1984,9 +1983,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const v = p.pitching?.velocity || 0;
         const ctrl = p.pitching?.control || 0;
         const sta = p.pitching?.stamina || 0;
-        const form = FORM_SHORT[p.pitching?.form] || '';
+        const formKey = p.pitching?.form;
+        const form = FORM_NAME[formKey] || '';
         const balls = (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length;
-        if (form === 'アンダースロー' || form === 'サイドスロー') { headline = `${form}の技巧派`; subline = `制球${ctrl} ${balls}球種`; }
+        // ⚠ **表示ラベルで比較しないこと**。短縮名を共有表に一本化したとき
+        //    'アンダースロー' → 'アンダー' になって、この分岐が黙って死んだ
+        if (formKey === 'submarine' || formKey === 'sidearm') { headline = `${form}の技巧派`; subline = `制球${ctrl} ${balls}球種`; }
         else if (ctrl >= 60 && v < 145) { headline = `制球力${ctrl}の技巧派`; subline = `${v}km ${balls}球種`; }
         else if (balls >= 4) { headline = `${balls}球種の変化球王`; subline = `${v}km 制球${ctrl}`; }
         else if (sta >= 100 && v >= 140) { headline = `スタ${sta}の鉄腕`; subline = `${v}km 制球${ctrl}`; }

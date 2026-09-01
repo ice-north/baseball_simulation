@@ -3,7 +3,7 @@ import TutorialHint from './TutorialHint.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { DIRECTIONS, PHASES, resolveTraining, moodMultiplier, describeMood, playerWish } from '../season/trainingPolicy.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES, POSITION_ORDER, getAbilityColor, POSITION_GROUP_COLORS } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_ORDER, getAbilityColor, POSITION_GROUP_COLORS, FORM_SHORT } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
@@ -1026,7 +1026,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-300'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
                         </td>
                         {isPitchTab && <td className="py-1 px-1 text-center text-xs text-gray-300 whitespace-nowrap">
-                          {({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-')}
+                          {FORM_SHORT[p.form] || '-'}
                         </td>}
                         {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>}
                         {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>}
@@ -1155,7 +1155,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-20"
                               >
                                 <option value="">自動</option>
-                                {[['overhand','オーバー'],['threeQuarter','スリクォ'],['sidearm','サイド'],['submarine','アンダー']]
+                                {Object.entries(FORM_SHORT)
                                   .filter(([k]) => k !== player.pitching?.form)
                                   .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                               </select>
