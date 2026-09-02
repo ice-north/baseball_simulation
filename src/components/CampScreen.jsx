@@ -382,11 +382,20 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   };
 
   // 育成方針（方向性 × フェーズ）。既定値を作るだけで、個別の上書きは残る。
+  // 方針は「方向 × フェーズ」の2軸だが、`'wish'` だけは擬似的な方向で
+  // **選手ごとに本人の希望をそのまま採る**（＝やる気が必ず最大の 意欲的 ×1.15 になる）。
+  // ⚠ **希望どおりが正解ではない**。やる気は効率にだけ効き、何を伸ばすべきかは
+  //    選手の水準と目的（勝敗かドラフトか）が決める。指導者が方向を変えるのが仕事。
+  const WISH_KEY = 'wish';
+  const policyFor = (pl, dir = policyDir, phase = policyPhase) =>
+    (dir === WISH_KEY ? playerWish(pl) : { direction: dir, phase });
+
   const applyPolicy = (dir, phase) => {
     setPolicyDir(dir); setPolicyPhase(phase);
     const newAssign = {}; const newSubAssign = {};
     userTeam?.players?.forEach(p => {
-      const r = resolveTraining(p, dir, phase);
+      const eff = policyFor(p, dir, phase);
+      const r = resolveTraining(p, eff.direction, eff.phase);
       newAssign[p.id] = r.main; newSubAssign[p.id] = r.sub;
     });
     setAssignments(newAssign); setSubAssignments(newSubAssign);
@@ -420,7 +429,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     // ⚠ **希望どおりが正解ではない**。指示が正しいかは選手の水準と目的が決めるもので、
     //    ここは効率（身が入るか）にだけ効く。指導者が当たりということもある。
     const moodMults = {};
-    userTeam.players.forEach(p => { moodMults[p.id] = moodMultiplier(p, policyDir, policyPhase); });
+    userTeam.players.forEach(p => { const e = policyFor(p); moodMults[p.id] = moodMultiplier(p, e.direction, e.phase); });
     const { updatedTeam, allReports } = executeTeamCampTraining(
       userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult, moodMults
     );
@@ -841,13 +850,22 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               {Object.values(PHASES).map(ph => (
                 <button
                   key={ph.key}
-                  onClick={() => applyPolicy(policyDir, ph.key)}
+                  onClick={() => applyPolicy(policyDir === WISH_KEY ? 'balanced' : policyDir, ph.key)}
                   title={ph.description}
-                  className={`rounded px-2 py-0.5 text-xs transition ${policyPhase === ph.key ? 'seg seg-on' : 'seg'}`}
+                  className={`rounded px-2 py-0.5 text-xs transition ${policyDir !== WISH_KEY && policyPhase === ph.key ? 'seg seg-on' : 'seg'}`}
                 >
                   {ph.icon} {ph.name}
                 </button>
               ))}
+              <span className="text-gray-300 mx-1">|</span>
+              {/* 2軸とは別枠。選手ごとに本人の希望を採るので、方向もフェーズも選手ごとに変わる */}
+              <button
+                onClick={() => applyPolicy(WISH_KEY, policyPhase)}
+                title="選手ごとに本人がやりたい練習を割り当てます。やる気が必ず最大（意欲的 ×1.15）になりますが、希望どおりが正解とは限りません"
+                className={`rounded px-2 py-0.5 text-xs transition ${policyDir === WISH_KEY ? 'seg seg-on' : 'seg'}`}
+              >
+                🙂 やりたい練習
+              </button>
               <span className="text-gray-300 mx-1">|</span>
               <span className="text-gray-300 text-xs font-bold" title="タブに関係なく全選手に適用します">全員に一括:</span>
               {Object.entries(TRAINING_MENUS).filter(([k, m]) => !['newpitch'].includes(k) && !m.intensive).map(([key, menu]) => (
@@ -1019,7 +1037,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         </td>
                         <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
-                            const mood = describeMood(player, policyDir, policyPhase);
+                            const e = policyFor(player);
+                            const mood = describeMood(player, e.direction, e.phase);
                             const w = playerWish(player);
                             const c = mood.tone === 'good' ? 'text-green-400' : mood.tone === 'bad' ? 'text-orange-400' : 'text-gray-300';
                             return <span className={c}
