@@ -547,18 +547,24 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   // 派遣中でない選手のみ表示
   const allActivePlayers = sortedPlayers.filter(p => !p.dispatchedThisCamp);
 
-  // どちら側の練習をするか（既定はポジションどおり。移動ボタンで上書きできる）
-  const sideOf = (pl) => trainingSide[pl.id] || (isPitcher(pl) ? 'pitcher' : 'fielder');
-  // 野手側のどのタブに出すか。移動してきた投手は最も適性の高い守備位置のタブへ入れる
+  // どのタブに出すか。`trainingSide` は**行き先のタブそのもの**を持つ
+  // （'pitcher' / 'catcher' / 'infield' / 'outfield'）。
+  //
+  // ⚠ **投手の行き先を `positionFitness` から推測してはいけない**。投手は
+  //    投手100 / 他は**一律30**で、どの守備位置も完全に同点になる。
+  //    以前は `reduce(..., 'left')` で最大値を探しており、`0 > 0` が偽なので
+  //    初期値の 'left' を一度も上回らず、**移した投手が全員外野手タブへ落ちていた**。
+  //    能力で決める案も試したが、投手は肩が高く打力がほぼ0なので
+  //    今度は**97%が捕手**になった（偏りの向きが変わるだけ）。
+  //    ゲームが投手の守備位置を持っていない以上、推測せず**選ばせる**のが正しい。
   const INFIELD = ['first', 'second', 'third', 'short'];
-  const fielderTabOf = (pl) => {
-    const pos = isPitcher(pl)
-      ? (['catcher', ...INFIELD, 'left', 'center', 'right']
-          .reduce((best, k) => ((pl.positionFitness?.[k] ?? 0) > (pl.positionFitness?.[best] ?? 0) ? k : best), 'left'))
-      : pl.position;
+  const naturalTabOf = (pl) => {
+    if (isPitcher(pl)) return 'pitcher';
+    const pos = pl.position;
     return pos === 'catcher' ? 'catcher' : INFIELD.includes(pos) ? 'infield' : 'outfield';
   };
-  const tabOf = (pl) => (sideOf(pl) === 'pitcher' ? 'pitcher' : fielderTabOf(pl));
+  const tabOf = (pl) => trainingSide[pl.id] || naturalTabOf(pl);
+  const sideOf = (pl) => (tabOf(pl) === 'pitcher' ? 'pitcher' : 'fielder');
   const CAMP_TABS = [
     { key: 'pitcher',  label: '投手' },
     { key: 'catcher',  label: '捕手' },
@@ -895,7 +901,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 );
               })}
               <span className="text-gray-400 text-xs ml-2">
-                {isPitchTab ? '投球系の能力を表示中。打撃練習をさせたい投手は「野手へ」で移せます'
+                {isPitchTab ? '投球系の能力を表示中。打撃練習をさせたい投手は「野手へ…」で行き先のタブを選んで移せます'
                             : '打撃・守備系の能力を表示中。投球練習をさせたい選手は「投手へ」で移せます'}
               </span>
             </div>
@@ -1177,16 +1183,29 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         {/* 練習側の移動。position は変えず、表示するタブ＝見える列だけを切り替える */}
                         <td className="py-1 px-1 text-center">
                           {(() => {
-                            const side = sideOf(player);
-                            const toFielder = side === 'pitcher';
+                            // 投手タブからは**行き先の野手タブを選ばせる**。
+                            // 逆向き（野手 → 投手）は1つしか行き先が無いのでボタンのまま。
+                            if (sideOf(player) === 'pitcher') {
+                              return (
+                                <select
+                                  value=""
+                                  onChange={(e) => e.target.value && setTrainingSide(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                  title="打撃・守備の数字を見ながら組めるよう、野手側のタブへ移す（ポジションは変わりません）"
+                                  className="bg-gray-700 text-white text-xs px-1 py-0.5 rounded"
+                                >
+                                  <option value="">野手へ…</option>
+                                  <option value="catcher">捕手タブ</option>
+                                  <option value="infield">内野手タブ</option>
+                                  <option value="outfield">外野手タブ</option>
+                                </select>
+                              );
+                            }
                             return (
                               <button
-                                onClick={() => setTrainingSide(prev => ({ ...prev, [player.id]: toFielder ? 'fielder' : 'pitcher' }))}
-                                title={toFielder
-                                  ? '打撃・守備の数字を見ながら組めるよう、野手側のタブへ移す（ポジションは変わりません）'
-                                  : '投球の数字を見ながら組めるよう、投手タブへ移す（ポジションは変わりません）'}
+                                onClick={() => setTrainingSide(prev => ({ ...prev, [player.id]: 'pitcher' }))}
+                                title="投球の数字を見ながら組めるよう、投手タブへ移す（ポジションは変わりません）"
                                 className="btn-secondary px-1.5 py-0.5 rounded text-xs whitespace-nowrap">
-                                {toFielder ? '野手へ' : '投手へ'}
+                                投手へ
                               </button>
                             );
                           })()}
