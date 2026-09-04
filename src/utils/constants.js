@@ -357,17 +357,29 @@ export const atBatResultColor = (label) => {
 /**
  * ポジション別の色設定（背景色）
  */
+// ⚠ **識別色は保ったまま、文字色でコントラストを取ること**。
+//    `text-white` 一律だと 黄 2.94:1 / 緑 3.30:1 / 水色 4.10:1 と AA(4.5) を割る。
+//    黄色は**濃い文字**に、緑と水色は**地を1段濃く**して white を活かす。
+//    実測: 赤 4.83 / 水色 5.03 / 黄 4.96 / 緑 5.02 / 紫 5.38。
+const POS_BADGE = {
+  pitcher:  'bg-red-600 text-white',
+  catcher:  'bg-sky-700 text-white',
+  infield:  'bg-yellow-600 text-yellow-950',
+  outfield: 'bg-green-700 text-white',
+  dh:       'bg-purple-600 text-white',
+};
+
 export const POSITION_COLORS = {
-  pitcher: 'bg-red-600 text-white',
-  catcher: 'bg-sky-600 text-white',
-  first: 'bg-yellow-600 text-white',
-  second: 'bg-yellow-600 text-white',
-  third: 'bg-yellow-600 text-white',
-  short: 'bg-yellow-600 text-white',
-  left: 'bg-green-600 text-white',
-  center: 'bg-green-600 text-white',
-  right: 'bg-green-600 text-white',
-  dh: 'bg-purple-600 text-white'
+  pitcher: POS_BADGE.pitcher,
+  catcher: POS_BADGE.catcher,
+  first: POS_BADGE.infield,
+  second: POS_BADGE.infield,
+  third: POS_BADGE.infield,
+  short: POS_BADGE.infield,
+  left: POS_BADGE.outfield,
+  center: POS_BADGE.outfield,
+  right: POS_BADGE.outfield,
+  dh: POS_BADGE.dh
 };
 
 /**

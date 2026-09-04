@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { POSITION_COLORS } from '../utils/constants.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import LineupSettingScreen from './LineupSettingScreen.jsx';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
@@ -88,11 +89,10 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
         ${isStarter ? 'border-yellow-600/40' : ''}`}
     >
       {/* ポジションバッジ */}
+      {/* ⚠ 色は `POSITION_COLORS` を使う。ここに独自の表を持っていたため、
+          同じ「内野=黄」でも文字色が違い（yellow-100）2.74:1 まで落ちていた */}
       <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded text-xs font-bold ${
-        player.position === 'pitcher' ? 'bg-red-700 text-red-100' :
-        player.position === 'catcher' ? 'bg-cyan-700 text-cyan-100' :
-        ['first','second','third','short'].includes(player.position) ? 'bg-yellow-600 text-yellow-100' :
-        'bg-green-700 text-green-100'
+        POSITION_COLORS[player.position] || POSITION_COLORS.dh
       }`}>
         {POS_NAMES[player.position] || '?'}
       </span>
