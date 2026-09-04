@@ -706,10 +706,17 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       const nonMainPos = allPos.filter(p => p !== player.position);
       let picked = options.targetPosition;
       if (!picked || picked === player.position || !allPos.includes(picked)) {
-        // 指定なしならランダム（弱いポジション優先）
-        const weakPositions = nonMainPos.filter(p => (player.positionFitness[p] || 0) < 80);
-        const targets = weakPositions.length > 0 ? weakPositions : nonMainPos;
-        picked = targets[Math.floor(Math.random() * targets.length)];
+        // 「自動」は**既に高い適性を100へ寄せる**のを優先する。
+        // 半端な適性をいくつも作るより、1つを守れる水準まで上げ切るほうが使える
+        // （`lineupGenerator` は適性の高い選手をそのポジションに置くため）。
+        // ⚠ 以前は「80未満の弱いポジションからランダム」で、狙いが逆だった。
+        const room = nonMainPos.filter(p => (player.positionFitness[p] || 0) < 100);
+        const pool = room.length > 0 ? room : nonMainPos;
+        const top = pool.reduce((m, p) => Math.max(m, player.positionFitness[p] || 0), -1);
+        // ⚠ 同点は必ず起きる（投手は全ポジション一律30、野手も横並びになりうる）。
+        //    `reduce` で最大値を1つ選ぶと配列の先頭＝常に捕手になるので、同点内で引く。
+        const best = pool.filter(p => (player.positionFitness[p] || 0) === top);
+        picked = best[Math.floor(Math.random() * best.length)];
       }
       if (picked) {
         // 3倍成長: 元(50%で0,30%で3,20%で5) → 常に成長、9-15程度
