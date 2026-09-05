@@ -1179,26 +1179,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
 
-  // 自チームの次の試合（進行バーに「あと何日」を出す）
-  const nextUserGame = useMemo(() => {
-    const cd = seasonData.currentDate;
-    const key = (d) => d.year * 10000 + d.month * 100 + d.day;
-    const today = key(cd);
-    let best = null;
-    for (const g of seasonData.schedule || []) {
-      if (g.home !== userTeamName && g.away !== userTeamName) continue;
-      if (g.result) continue;
-      const k = key(g.date);
-      if (k < today) continue;
-      if (!best || k < key(best.date)) best = g;
-    }
-    if (!best) return null;
-    // 月ごとの日数を跨ぐので Date で差を取る
-    const days = Math.round(
-      (new Date(best.date.year, best.date.month - 1, best.date.day)
-        - new Date(cd.year, cd.month - 1, cd.day)) / 86400000);
-    return { game: best, days };
-  }, [seasonData.schedule, seasonData.currentDate, userTeamName]);
+  // ⚠ **「次の自チーム戦まであと何日」は撤去済み**（`nextUserGame`）。
+  //    先頭の進行バーの中にあったが、バーごと撤去した。カレンダーは自チームの試合日を
+  //    青、自チームのトーナメントを黄で塗っているので、**同じことが絵で分かる**。
+  //    ⚠ データを作る `useMemo` も併せて消してある——描画されない state を残さない。
 
   // ⚠ **「昨日の結果」は撤去済み**（日程進行が縦に長くなりすぎたため）。
   //    `simulateGamesOnDate` の戻り値が一度も描画されていなかったのを直した機能で、
@@ -1206,7 +1190,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   //    （トーナメント。社会人はリーグ戦を持たないのでこちらが本体）で作っていた。
   //    ⚠ **宣言だけ残さないこと**——描画されない state はこの作品が繰り返し踏んだ defect。
   //    復活させるなら git 履歴から戻し、**縦を増やさない置き方**にすること
-  //    （進行バーの中に1行、または折りたたみ）。
+  //    （⚠ かつてここに「進行バーの中に1行」と書いてあったが、**その進行バーも撤去した**。
+  //    折りたたみか、カレンダーの「本日の試合」欄に畳むことになる）。
 
   // 今日のトーナメント試合を取得（「本日の対戦」欄に表示するため）
   const todaysTournamentMatches = useMemo(() => {
@@ -1363,17 +1348,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return matches;
   }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.clubSenshuken, seasonData.regionalTournament, seasonData.currentDate, userTeamName]);
 
-  // 月間戦績を1回だけ計算（ヘッダーとサマリーの両方で使用）
-  // 進行バーに出す「本日の自チームの予定」。トーナメントは todaysTournamentMatches が
-  // 自チームの次戦だけを持っているので、そこと自チームのリーグ戦を見る。
-  const todaysUserMatch = useMemo(() => {
-    const t = todaysTournamentMatches?.[0];
-    if (t) return `${t.label} vs ${t.opponent}`;
-    const g = todaysGames.find(x => x.home === userTeamName || x.away === userTeamName);
-    if (g) return `vs ${g.home === userTeamName ? g.away : g.home}`;
-    return null;
-  }, [todaysTournamentMatches, todaysGames, userTeamName]);
+  // ⚠ **「本日の自チームの予定」は撤去済み**（`todaysUserMatch`）。進行バーの中にあったが、
+  //    下の「本日の試合」欄が同じ内容をカードで出しており**二重だった**。
+  //    ⚠ データを作る `useMemo` も併せて消してある——描画されない state を残さない。
 
+  // 月間戦績を1回だけ計算（ヘッダーとサマリーの両方で使用）
   const monthlyStats = useMemo(() => {
     const monthGames = calendarCells
       .filter(c => c.day !== null)
@@ -2160,65 +2139,22 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   return (
     <ScreenShell>
       <TutorialHint id="dateprogress-intro" title="シーズンの進め方">
-        ここが基本画面です。右上の<b className="text-cyan-200">「1日進める」</b>を押すと試合が自動で消化され、順位表・成績が更新されます。自分の試合は采配してプレイすることもできます。左サイドバーからロスター管理・注目選手などへ移動できます。
+        ここが基本画面です。左サイドバーの<b className="text-cyan-200">「日程進行」をもう一度押す</b>と1日進み、試合が自動で消化されて順位表・成績が更新されます。自分の試合は采配してプレイすることもできます。サイドバーからロスター管理・注目選手などへ移動できます。
       </TutorialHint>
 
-      {/* ⚠ **このゲームで一番よく押すボタンには、長らく「ボタンが無かった」**。
-          日付を進める手段はサイドバーの「日程進行」を**選択中にもう一度押す**
-          （`SidebarButton` の `onActiveClick`）だけで、見た目は他のナビ項目と同じ。
-          主要な動詞に押す場所が無いので、毎日の操作が作業に見えていた。
-          日付・今日の予定・次の自チーム戦を1本に畳んで、画面の先頭に置く。 */}
-      <div className="mb-3 rounded-2xl border border-gray-700/40 bg-gradient-to-r from-surface-2 to-gray-900 px-4 py-3 flex items-center gap-4 shadow-xl">
-        <div className="shrink-0">
-          <div className="text-xs text-gray-300 tabular-nums">{seasonData.currentDate.year}年</div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-black text-white tabular-nums leading-none">
-              {seasonData.currentDate.month}/{seasonData.currentDate.day}
-            </span>
-            <span className={`text-sm font-bold ${todayDow === 0 ? 'text-red-400' : todayDow === 6 ? 'text-blue-400' : 'text-gray-300'}`}>
-              ({dayNames[todayDow]})
-            </span>
-          </div>
-        </div>
-        <div className="w-px h-10 bg-gray-700 shrink-0" />
-        <div className="min-w-0 flex-1 flex items-center gap-x-5 gap-y-1 flex-wrap">
-          <div className="min-w-0">
-            <div className="text-xs text-gray-300">本日</div>
-            <div className="text-sm font-bold text-gray-100 truncate">
-              {/* ⚠ ここは**自チームの予定**。全国の試合数を出すと、自分に試合が無い日でも
-                  「51試合」と出て意味を成さない（社会人は毎日どこかの地区が動いている） */}
-              {todaysUserMatch
-                ? <span className="text-accent">{todaysUserMatch}</span>
-                : <span className="text-gray-300">自チームの試合なし</span>}
-            </div>
-          </div>
-          {nextUserGame && (
-            <div className="min-w-0">
-              <div className="text-xs text-gray-300">次の自チーム戦</div>
-              <div className="text-sm font-bold text-gray-100 truncate">
-                {nextUserGame.days === 0
-                  ? <span className="text-amber-300">本日 vs {nextUserGame.game.home === userTeamName ? nextUserGame.game.away : nextUserGame.game.home}</span>
-                  : <>あと<span className="text-accent tabular-nums mx-0.5">{nextUserGame.days}</span>日
-                     <span className="text-gray-300 font-normal ml-1">
-                       ({nextUserGame.game.date.month}/{nextUserGame.game.date.day} vs {nextUserGame.game.home === userTeamName ? nextUserGame.game.away : nextUserGame.game.home})
-                     </span></>}
-              </div>
-            </div>
-          )}
-        </div>
-        <button
-          onClick={() => handleProgressDate(1)}
-          disabled={isSimulating}
-          className="btn-primary shrink-0 px-6 py-3 rounded-xl text-base font-bold transition active:scale-95"
-        >
-          {isSimulating ? '進行中…' : '▶ 1日進める'}
-        </button>
-      </div>
-
+      {/* ⚠ **画面の先頭にあった進行バーは撤去した**（日付＋本日の予定＋次の自チーム戦＋
+          「▶ 1日進める」を1本に畳んだ帯）。日程進行が縦に長かったので、
+          **持っていた4つの情報がどれも他の場所と重複していた**ことを理由に外してある:
+          日付 → カレンダーの見出しへ統合 / 本日の予定 → 下の「本日の試合」欄 /
+          次の自チーム戦 → カレンダーの色分け（自チーム戦=青・自トーナメント=黄）/
+          1日進める → サイドバーの「日程進行」の再クリック（`onActiveClick`）。
+          ⚠ **「一番よく押す操作に押す場所が無い」は、これで再び当てはまる**。
+          復活させるなら**縦を増やさない置き方**にすること（この帯は実測66px使っていた）。 */}
       {/* ⚠ **「昨日の結果」パネルはここにあったが、日程進行が縦に長くなりすぎたため撤去した**。
           押した手応えを返すのが役目だったので、消したことで
           「押しても何が起きたか画面に返らない」が部分的に戻っている。
-          復活させるなら**縦を増やさない置き方**（進行バーの中に1行、または折りたたみ）にすること。
+          復活させるなら**縦を増やさない置き方**（折りたたみ、または「本日の試合」欄の中）にすること。
+          ⚠ 置き場所として挙げていた進行バーも、その後撤去した（すぐ上の注記）。
           データを作る useMemo も併せて撤去済み（描画されない state を残さないため）。 */}
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
@@ -2231,6 +2167,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span className="text-blue-400 text-sm">📅</span>
                 </div>
                 <span>{selectedMonth}月</span>
+                {/* 今日の日付。撤去した進行バーが持っていたものをここへ統合してある。
+                    ⚠ **カレンダーの「今日」と同じアクセントの語彙にすること**——
+                    別の色を持たせると、盤面のどのマスを指しているのか繋がらない。
+                    ⚠ `selectedMonth` は前後の月へ送れるので、この日付とは一致しない
+                    ことがある。だから「何月を見ているか」と別の要素として並べる */}
+                <span className="text-sm font-bold tabular-nums whitespace-nowrap rounded-lg border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5">
+                  <span className="text-gray-300 font-normal text-xs mr-0.5">{seasonData.currentDate.year}年</span>
+                  <span className="text-accent">{seasonData.currentDate.month}/{seasonData.currentDate.day}</span>
+                  <span className={`ml-0.5 ${todayDow === 0 ? 'text-red-400' : todayDow === 6 ? 'text-blue-400' : 'text-gray-300'}`}>
+                    ({dayNames[todayDow]})
+                  </span>
+                </span>
                 {monthlyStats && (
                   <span className="text-sm font-bold ml-1">
                     <span className="text-green-400">{monthlyStats.wins}勝</span>
@@ -2265,8 +2213,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <div key={i} className={`min-h-[62px] p-1 rounded-lg text-sm transition-all ${
                     cell.day === null ? 'bg-transparent' :
                     // ⚠ 「今日」は緑のベタ塗り＋グロー＋リングで、画面で一番強い要素だった。
-                    //    一番強くあるべきなのは進行バーの「1日進める」なので、
-                    //    現在地はサイドバー・タブと同じアクセント（＝ここに居る）の語彙に揃える
+                    //    現在地は「次に押すもの」ではないので、サイドバー・タブと同じ
+                    //    アクセント（＝ここに居る）の語彙に揃える。
+                    //    見出しに統合した日付のチップも同じ語彙で、盤面のこのマスを指している
                     cell.isToday ? 'bg-[var(--accent-soft)] border border-[var(--accent)]' :
                     hasUserTournament ? 'bg-yellow-900/30 border border-yellow-500/30 hover:border-yellow-400/40' :
                     hasUserGame && !cell.games.some(g => g.result) ? 'bg-blue-900/30 border border-blue-500/20 hover:border-blue-400/40' :
