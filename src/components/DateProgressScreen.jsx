@@ -2166,19 +2166,26 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <div className="w-8 h-8 rounded-lg bg-blue-600/30 flex items-center justify-center">
                   <span className="text-blue-400 text-sm">📅</span>
                 </div>
-                <span>{selectedMonth}月</span>
-                {/* 今日の日付。撤去した進行バーが持っていたものをここへ統合してある。
-                    ⚠ **カレンダーの「今日」と同じアクセントの語彙にすること**——
-                    別の色を持たせると、盤面のどのマスを指しているのか繋がらない。
-                    ⚠ `selectedMonth` は前後の月へ送れるので、この日付とは一致しない
-                    ことがある。だから「何月を見ているか」と別の要素として並べる */}
-                <span className="text-sm font-bold tabular-nums whitespace-nowrap rounded-lg border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5">
-                  <span className="text-gray-300 font-normal text-xs mr-0.5">{seasonData.currentDate.year}年</span>
-                  <span className="text-accent">{seasonData.currentDate.month}/{seasonData.currentDate.day}</span>
-                  <span className={`ml-0.5 ${todayDow === 0 ? 'text-red-400' : todayDow === 6 ? 'text-blue-400' : 'text-gray-300'}`}>
-                    ({dayNames[todayDow]})
+                {/* 撤去した進行バーの日付をここへ統合してある。
+                    ⚠ **「4月」と日付を並べて出さないこと**。今月を見ている間ずっと
+                    同じ月が2回出る（実際にそうなっていた）。見出しは1つだけ持ち、
+                    今月なら日付・他の月なら月、と中身を入れ替える。
+                    ⚠ 枠も地色も持たせない。見出しの中の見出しになって、
+                    隣の月間戦績と格が揃わなかった */}
+                {selectedMonth === seasonData.currentDate.month ? (
+                  <span className="tabular-nums whitespace-nowrap">
+                    <span className="text-gray-300 font-normal text-sm mr-1">{seasonData.currentDate.year}年</span>
+                    <span className="text-white">{seasonData.currentDate.month}月{seasonData.currentDate.day}日</span>
+                    <span className={`ml-0.5 text-sm ${todayDow === 0 ? 'text-red-400' : todayDow === 6 ? 'text-blue-400' : 'text-gray-300'}`}>
+                      ({dayNames[todayDow]})
+                    </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="tabular-nums whitespace-nowrap">
+                    <span className="text-gray-300 font-normal text-sm mr-1">{seasonData.currentDate.year}年</span>
+                    <span className="text-white">{selectedMonth}月</span>
+                  </span>
+                )}
                 {monthlyStats && (
                   <span className="text-sm font-bold ml-1">
                     <span className="text-green-400">{monthlyStats.wins}勝</span>
@@ -2215,7 +2222,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     // ⚠ 「今日」は緑のベタ塗り＋グロー＋リングで、画面で一番強い要素だった。
                     //    現在地は「次に押すもの」ではないので、サイドバー・タブと同じ
                     //    アクセント（＝ここに居る）の語彙に揃える。
-                    //    見出しに統合した日付のチップも同じ語彙で、盤面のこのマスを指している
+                    //    ⚠ **この画面でアクセントを持つのはここだけ**にすること
+                    //    （見出しの日付にも同じ枠を付けたら、強い箱が2つになった）
                     cell.isToday ? 'bg-[var(--accent-soft)] border border-[var(--accent)]' :
                     hasUserTournament ? 'bg-yellow-900/30 border border-yellow-500/30 hover:border-yellow-400/40' :
                     hasUserGame && !cell.games.some(g => g.result) ? 'bg-blue-900/30 border border-blue-500/20 hover:border-blue-400/40' :
