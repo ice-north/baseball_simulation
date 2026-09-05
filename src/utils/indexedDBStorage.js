@@ -75,17 +75,43 @@ export function isIndexedDBAvailable() {
   return typeof indexedDB !== 'undefined';
 }
 
+// ブラウザに「この保存領域は捨てないでほしい」と申告する。
+// ⚠ **既定は best-effort** で、ディスクが逼迫すると IndexedDB は退避対象になる
+//    （＝セーブが消える）。呼ばないと永続化されないので、起動時に一度だけ叩く。
+// ⚠ 失敗しても止めないこと。Firefox は許可プロンプトを出し、Safari は false を返す。
+export async function requestPersistentStorage() {
+  try {
+    if (!navigator.storage?.persist) return { supported: false, persisted: false };
+    if (await navigator.storage.persisted()) return { supported: true, persisted: true };
+    return { supported: true, persisted: await navigator.storage.persist() };
+  } catch {
+    return { supported: false, persisted: false };
+  }
+}
+
+// localStorage に残っている旧セーブを IndexedDB へ移す。
+//
+// ⚠ **消す前に、移った先を読み直して確かめること**。ここは片方にしか無いデータを
+//    扱うので、「書いたはず」で消すと復旧手段が無くなる。
+// ⚠ **移行先に既にデータがある場合、localStorage 側を消してはいけない**。
+//    以前は `if (!existing)` の外で無条件に `removeItem` しており、
+//    IndexedDB 側が古い／壊れていても localStorage の正本を捨てていた。
+//    どちらを残すか判断できない以上、**両方残す**のが正しい。
 export async function migrateLocalStorageToIDB(slotKeys) {
   let migrated = 0;
   for (const key of slotKeys) {
     const lsData = localStorage.getItem(key);
-    if (lsData) {
+    if (!lsData) continue;
+    try {
       const existing = await idbGetItem(key);
-      if (!existing) {
-        await idbSetItem(key, lsData);
-        migrated++;
-      }
+      if (existing) continue;          // 判断できないので localStorage 側も残す
+      await idbSetItem(key, lsData);
+      const written = await idbGetItem(key);   // 読み直して確認してから消す
+      if (written !== lsData) continue;
       localStorage.removeItem(key);
+      migrated++;
+    } catch {
+      // IndexedDB が使えない環境。localStorage のまま残す（消さない）
     }
   }
   return migrated;

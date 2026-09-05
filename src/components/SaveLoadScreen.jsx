@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
-import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getBackupInfo, restoreBackup, getAutosaveInfo } from '../game/saveSystem.js';
+import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getBackupInfo, restoreBackup, getAutosaveInfo, exportSaveSlotToFile, importSaveFileToSlot } from '../game/saveSystem.js';
 
 // セーブ＆ロード画面（3スロット対応）
-const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, seasonData, onReturnToTitle }) => {
+const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, seasonData, onReturnToTitle, onSlotsChanged }) => {
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveProgress, setSaveProgress] = useState(0);
   const [emergencyInfo, setEmergencyInfo] = useState(null);
@@ -54,6 +54,31 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
       }
       setTimeout(() => setSaveStatus(null), 4000);
     }
+  };
+
+  // ファイルへ書き出す／ファイルから読み込む。
+  // ⚠ **ブラウザの保存領域はオリジンを跨げない**ので、ポートが変わった・別のブラウザ・
+  //    別のPCへ移す、のいずれもここを通すしかない。バックアップの正規の手段でもある。
+  const handleExport = async (slotIndex) => {
+    const r = await exportSaveSlotToFile(slotIndex);
+    if (!r.success) { setSaveStatus({ type: 'error', message: r.error }); setTimeout(() => setSaveStatus(null), 4000); }
+  };
+
+  const handleImport = (slotIndex) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (saveSlots[slotIndex] && !window.confirm(`スロット${slotIndex + 1}を上書きします。よろしいですか？（上書き前のデータは「1つ前のセーブに戻す」で戻せます）`)) return;
+      setSaveStatus({ type: 'loading' });
+      const r = await importSaveFileToSlot(slotIndex, file);
+      setSaveStatus(r.success ? { type: 'imported' } : { type: 'error', message: r.error });
+      if (r.success && onSlotsChanged) await onSlotsChanged();
+      setTimeout(() => setSaveStatus(null), 4000);
+    };
+    input.click();
   };
 
   // 緊急バックアップを指定スロットへ復元してロード
@@ -121,6 +146,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
           saveStatus.type === 'loading' ? 'bg-gray-600 text-white animate-pulse' :
           saveStatus.type === 'saved' ? 'bg-green-600 text-white' :
           saveStatus.type === 'loaded' ? 'bg-blue-600 text-white' :
+          saveStatus.type === 'imported' ? 'bg-blue-600 text-white' :
           saveStatus.type === 'deleted' ? 'bg-yellow-600 text-white' :
           'bg-red-600 text-white'
         }`}>
@@ -140,6 +166,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
           {saveStatus.type === 'saved' && '✅ セーブしました'}
           {saveStatus.type === 'loaded' && '✅ ロードしました'}
           {saveStatus.type === 'deleted' && '🗑️ 削除しました'}
+          {saveStatus.type === 'imported' && '✅ ファイルからセーブを読み込みました'}
           {saveStatus.type === 'error' && (
             <div>
               <div>❌ エラーが発生しました</div>
@@ -263,15 +290,31 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                     ↩ 1つ前のセーブに戻す（{formatTimestamp(backupInfos[idx].timestamp)} 時点）
                   </button>
                 )}
+                {/* ファイルへの書き出し／読み込み。ブラウザの外へ持ち出せる唯一の経路 */}
+                <div className="mt-2 flex gap-3 text-xs">
+                  <button onClick={() => handleExport(idx)} disabled={!info}
+                    className="text-gray-300 hover:text-white hover:underline disabled:text-gray-500 disabled:no-underline disabled:cursor-not-allowed">
+                    ⬇ ファイルに書き出す
+                  </button>
+                  <button onClick={() => handleImport(idx)}
+                    className="text-gray-300 hover:text-white hover:underline">
+                    ⬆ ファイルから読み込む
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
 
-        <p className="text-xs text-gray-400 mt-4">
-          ※ セーブデータはブラウザのローカルストレージに保存されます。<br />
-          ※ ブラウザのデータを消去すると、セーブデータも削除されます。
-        </p>
+        <div className="text-xs text-gray-300 mt-4 rounded-lg border border-gray-600/60 bg-gray-800/40 p-3 space-y-1">
+          <p className="font-bold text-gray-200">セーブデータの置き場所について</p>
+          <p>※ セーブデータは<b className="text-gray-100">ブラウザの中</b>（このアドレス専用の領域）に保存されます。ゲームのフォルダには入りません。</p>
+          <p>※ <b className="text-amber-300">アドレスが変わると別のセーブ置き場になります。</b>
+            {' '}このゲームは必ず <span className="tabular-nums">http://localhost:3000</span> で開いてください
+            （現在: <span className="tabular-nums text-gray-100">{typeof location !== 'undefined' ? location.origin : ''}</span>）。
+            ポート番号が違うと、前のセーブは消えたわけではなく<b className="text-gray-100">見えなくなっている</b>だけです。</p>
+          <p>※ ブラウザのデータを消去すると削除されます。<b className="text-gray-100">大事な進行は「ファイルに書き出す」で控えを取ってください。</b></p>
+        </div>
       </div>
 
       {/* タイトルへ戻るボタン */}

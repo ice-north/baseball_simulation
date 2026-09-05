@@ -640,6 +640,7 @@ const ManagementScreen = ({
     onDelete={deleteSave}
     saveSlots={saveSlots}
     seasonData={seasonData}
+    onSlotsChanged={refreshSaveSlots}
     onReturnToTitle={() => {
       setScreenMode('start');
       setGameFlowState('title');

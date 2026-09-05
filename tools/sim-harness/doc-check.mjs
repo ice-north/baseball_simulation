@@ -33,7 +33,14 @@ const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => 
 });
 const srcFiles = [...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'tools'))];
 const blob = srcFiles.map(f => fs.readFileSync(f, 'utf8')).join('\n');
-const rootCfg = fs.readdirSync(ROOT).filter(f => /\.(js|json|cjs)$/.test(f)).join('\n');
+// ⚠ **ファイル名ではなく中身を読むこと**。`.join('\n')` でファイル名を並べただけ
+//    だったので、`vite.config.js` の中の識別子（`strictPort` 等）を照合できず、
+//    実在するのに未解決として弾いていた。ルート直下の設定ファイルは
+//    `package.json` の scripts や `vite.config.js` の設定名を文書が参照する。
+const rootCfg = fs.readdirSync(ROOT)
+  .filter(f => /\.(js|json|cjs)$/.test(f))
+  .map(f => { try { return fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch { return f; } })
+  .join('\n');
 
 // ⚠ **「もう存在しない」と明示して書いてあるものは腐りではない**。
 //    失敗の記録・撤廃の記録はこの作品の資産なので、消させてはいけない。

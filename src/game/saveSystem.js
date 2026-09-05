@@ -5,7 +5,7 @@ import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
 import { UNIVERSITY_TEAMS, generateLeagueAbbreviations } from '../university/universityTeamsData.js';
-import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage } from '../utils/indexedDBStorage.js';
+import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage, requestPersistentStorage } from '../utils/indexedDBStorage.js';
 import { migrateSaveData, CURRENT_SAVE_VERSION } from './saveMigration.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
@@ -16,6 +16,11 @@ let _migrationDone = false;
 export async function ensureMigration() {
   if (_migrationDone || !useIDB) return;
   _migrationDone = true;
+  // ⚠ **保存領域の永続化を申告する**。既定は best-effort で、ディスクが逼迫すると
+  //    ブラウザが IndexedDB を勝手に捨てる（＝セーブが消える）。
+  requestPersistentStorage().then(r => {
+    if (r.supported && !r.persisted) console.warn('保存領域の永続化が許可されませんでした（空き容量が減ると消える可能性があります）');
+  });
   try {
     const count = await migrateLocalStorageToIDB(SAVE_SLOT_KEYS);
     const oldKey = 'baseballSim_saveData';
@@ -40,11 +45,21 @@ async function storageGetItem(key) {
   return localStorage.getItem(key);
 }
 
+// ⚠ **読みと書きで対称にすること**。読み（`storageGetItem`）は IndexedDB が
+//    失敗したら localStorage へ落ちるのに、書きは落ちずにそのまま throw していた。
+//    `isIndexedDBAvailable()` は `typeof indexedDB` を見るだけなので、
+//    **「オブジェクトはあるが open が失敗する」環境**（Firefox の `file://`、
+//    Safari のプライベート、容量超過）で保存だけが丸ごと失敗する。
+//    IndexedDB が駄目なら localStorage に書く。両方駄目なら初めて throw する。
 async function storageSetItem(key, value) {
   if (useIDB) {
-    await idbSetItem(key, value);
-    try { localStorage.removeItem(key); } catch { /* ignore */ }
-    return;
+    try {
+      await idbSetItem(key, value);
+      try { localStorage.removeItem(key); } catch { /* ignore */ }
+      return;
+    } catch (e) {
+      console.warn('IndexedDBへの保存に失敗。localStorageへ切り替えます:', e);
+    }
   }
   localStorage.setItem(key, value);
 }
@@ -461,6 +476,80 @@ export const deleteSaveSlot = async (slotIndex) => {
   } catch (error) {
     console.error('削除失敗:', error);
     return false;
+  }
+};
+
+// ============================================================
+// セーブのファイル書き出し／読み込み
+//
+// ⚠ **ブラウザの保存領域はオリジン（scheme+ホスト+ポート）に閉じている**。
+//    `localhost:3000` で作ったセーブは `localhost:3001` からは1件も見えず、
+//    **ページ内のコードでは絶対に跨げない**（同一オリジンポリシー）。
+//    ポートがずれた・別のブラウザに乗り換えた・PCを変えた、のいずれでも
+//    ファイルに出す以外の持ち出し手段が無いので、ここが唯一の避難経路になる。
+// ⚠ 中身は保存されている圧縮文字列**そのまま**を包むだけにすること。
+//    ここで作り直すと、セーブの形式が2箇所に分かれて必ず腐る。
+// ============================================================
+const SAVE_FILE_TYPE = 'baseball_sim_save';
+
+export const exportSaveSlotToFile = async (slotIndex) => {
+  try {
+    const raw = await storageGetItem(SAVE_SLOT_KEYS[slotIndex]);
+    if (!raw) return { success: false, error: 'このスロットにセーブがありません' };
+    // メタはファイル名と取り違え防止のためだけに持つ（正本は payload）
+    let meta = {};
+    try {
+      const d = await decompressDataAsync(raw);
+      meta = {
+        year: d?.seasonData?.year ?? null,
+        timestamp: d?.timestamp ?? null,
+        // ⚠ チーム名の引き方は `readSaveSlots` と同じにすること（表を二重に作らない）
+        teamName: d?.seasonData?.settings?.teamNames?.[0]
+          || (d?.leagueConfig?.leagues || []).flatMap(l => l.teams || [])[0]
+          || null,
+      };
+    } catch { /* メタが読めなくても書き出しは通す */ }
+    const blob = new Blob([JSON.stringify({
+      type: SAVE_FILE_TYPE, version: CURRENT_SAVE_VERSION,
+      exportDate: new Date().toISOString(), slotIndex, meta, payload: raw,
+    })], { type: 'application/json' });
+    // ⚠ **ファイル名は ASCII にすること**。日本語を入れると Chromium が
+    //    `download` 属性ごと無視して、**拡張子の無い `download` という名前**で落とす
+    //    （実測: `野球シミュレーター_セーブ1_….json` → `download` /
+    //    `baseball-sim_save1_….json` → そのまま）。拡張子が消えると読み込みで選べない。
+    // ⚠ アンカーはDOMに挿してからクリックし、revoke は次のタスクまで待つ
+    //    （4MBのセーブは即 revoke すると転送が間に合わないことがある）。
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `baseball-sim_save${slotIndex + 1}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: '書き出しに失敗しました: ' + e.message };
+  }
+};
+
+export const importSaveFileToSlot = async (slotIndex, file) => {
+  try {
+    const text = await file.text();
+    let env;
+    try { env = JSON.parse(text); } catch { return { success: false, error: 'セーブファイルとして読めませんでした' }; }
+    if (env?.type !== SAVE_FILE_TYPE || typeof env.payload !== 'string') {
+      return { success: false, error: 'このゲームのセーブファイルではありません' };
+    }
+    // ⚠ **書き込む前に必ず中身を検証する**。壊れたファイルでスロットを潰さない
+    const data = await decompressDataAsync(env.payload);
+    const invalid = validateSaveData(data);
+    if (invalid) return { success: false, error: 'セーブデータが壊れています: ' + invalid };
+    await backupExistingSlot(slotIndex);
+    await storageSetItem(SAVE_SLOT_KEYS[slotIndex], env.payload);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: '読み込みに失敗しました: ' + e.message };
   }
 };
 
