@@ -287,7 +287,10 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="stamina" w="w-8">スタ</SortTh>
                 <SortTh k="breakingCount" w="w-8">球種</SortTh>
                 <SortTh k="growth" w="w-9" cls="border-l border-gray-600/50">成長率</SortTh>
-                <SortTh k="discipline" w="w-8">意欲</SortTh>
+                {/* ⚠ ここだけ生のプロ意識を出す（「誰の目でもない全知の資料室」という切り分け）。
+                    キャンプの「意欲」列は別物（本人が方針をどう受け止めているか）なので、
+                    同じ語を使うと2つの違う情報が同じ名前になる */}
+                <SortTh k="discipline" w="w-8">プロ意識</SortTh>
                 <SortTh k="fame" w="w-8">知名度</SortTh>
                 <th className="py-1 px-1 text-center w-10">投/打</th>
                 <th className="py-1 px-1 text-center w-8">投法</th>
