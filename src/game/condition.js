@@ -27,7 +27,9 @@ export const CONDITION_COLORS = {
   [CONDITION_LEVELS.GOOD]: 'text-orange-400',
   [CONDITION_LEVELS.NORMAL]: 'text-yellow-300',
   [CONDITION_LEVELS.BAD]: 'text-blue-400',
-  [CONDITION_LEVELS.WORST]: 'text-blue-700'
+  // ⚠ `text-blue-700` は暗いカードの上で **1.3:1** で見えなかった。冷たい側の
+  //    階調は保ったまま読める色にする（indigo-400 は 4.36:1）
+  [CONDITION_LEVELS.WORST]: 'text-indigo-400'
 };
 
 export const CONDITION_BG_COLORS = {

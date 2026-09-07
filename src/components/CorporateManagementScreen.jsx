@@ -130,9 +130,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-bold rounded-t transition ${
-              tab === t.id ? 'bg-surface-2 text-white border-b-2 border-green-400' : 'text-gray-300 hover:text-gray-200'
-            }`}
+            /* ⚠ このタブ列は**地色の上に直に載る**。背景を持たない `text-gray-300` の
+               ままだと明るい紙の上で 1.23:1 で消える。選択色も緑ではなくアクセント
+               （`.seg` / `.seg-on` の共有語彙）に揃える */
+            className={`px-4 py-2 text-sm font-bold rounded-t transition ${tab === t.id ? 'seg-on' : 'seg'}`}
           >
             {t.label}
           </button>

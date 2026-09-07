@@ -320,7 +320,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       <ScreenHeader title="チームランキング" sub={`全 ${totalTeams} チーム`}
         right={<>
           {isProvisional && (
-            <span className="text-xs font-bold text-amber-200 bg-amber-900/50 border border-amber-600/50 rounded px-2 py-0.5">暫定（戦力評価）</span>
+            <span className="text-xs font-bold text-amber-200 bg-amber-950 border border-amber-600/50 rounded px-2 py-0.5">暫定（戦力評価）</span>
           )}
           {onBack && <button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded text-sm">← 戻る</button>}
         </>} />
@@ -328,7 +328,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
         全国の社会人・大学・独立チームをS〜Dランクで序列化しています。<b className="text-cyan-200">行をクリック</b>すると成績・打撃・投手・編成の詳細が開きます。ヘッダーで並び替え可。1年目は成績が無いため所属選手の戦力から算出した暫定順位です。
       </TutorialHint>
       {isProvisional && (
-        <div className="mb-4 -mt-1 text-xs text-gray-300 bg-gray-800/60 border border-gray-700/60 rounded px-3 py-2">
+        <div className="mb-4 -mt-1 text-xs text-gray-300 bg-surface-2 border border-gray-700/60 rounded px-3 py-2">
           まだ公式戦の結果がないため、<span className="text-amber-200 font-bold">所属選手の能力</span>から算出した暫定ランキングを表示しています。シーズン終了後は実際の成績（Eloスコア）で更新されます。
         </div>
       )}

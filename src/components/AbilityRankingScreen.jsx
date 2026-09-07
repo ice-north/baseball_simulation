@@ -507,7 +507,8 @@ const AbilityRankingScreen = () => {
           </div>
 
           <div className="flex items-center gap-3 mb-3">
-            <span className="text-xs text-gray-400">ソート:</span>
+            {/* ⚠ 以下の数箇所は**地色の上に直に載る**（カードの外）ので暗い文字にすること */}
+            <span className="text-xs text-ink-sub">ソート:</span>
             <div className="flex flex-wrap gap-1">
               {currentSortOptions.map(o => (
                 <button key={o.key}
@@ -521,7 +522,7 @@ const AbilityRankingScreen = () => {
             <div className="ml-auto flex gap-1">
               {[50, 100, 200].map(n => (
                 <button key={n} onClick={() => setLimit(n)}
-                  className={`px-2 py-1 rounded text-xs ${limit === n ? 'bg-gray-600 text-white' : 'bg-surface-2 text-gray-400'}`}
+                  className={`px-2 py-1 rounded text-xs ${limit === n ? 'seg-on' : 'seg'}`}
                 >Top{n}</button>
               ))}
             </div>
@@ -530,18 +531,18 @@ const AbilityRankingScreen = () => {
           {mode === 'player' ? (
             <>
               {renderPlayerTable(filteredPlayers, sortKey === 'draft')}
-              <div className="text-xs text-gray-400 mt-2">
+              <div className="text-xs text-ink-sub mt-2">
                 全{allPlayers.length}選手{sortKey === 'draft' && hsPlayers.length > 0 ? ` + 高校生${hsPlayers.length}名` : ''}中 上位{Math.min(limit, filteredPlayers.length)}名を表示
               </div>
             </>
           ) : (
             <>
               {hsPlayers.length === 0 ? (
-                <div className="text-gray-400 text-center py-8">高校3年生はまだ生成されていません（4月に生成されます）</div>
+                <div className="text-ink-sub text-center py-8">高校3年生はまだ生成されていません（4月に生成されます）</div>
               ) : (
                 <>
                   {renderPlayerTable(filteredHsPlayers, true)}
-                  <div className="text-xs text-gray-400 mt-2">
+                  <div className="text-xs text-ink-sub mt-2">
                     全{hsPlayers.length}名中 上位{Math.min(limit, filteredHsPlayers.length)}名を表示
                   </div>
                 </>
@@ -617,7 +618,7 @@ const AbilityRankingScreen = () => {
               );
             })}
           </div>
-          <div className="text-xs text-gray-400 mt-3">
+          <div className="text-xs text-ink-sub mt-3">
             {filteredTeams.length}チーム表示
           </div>
         </>

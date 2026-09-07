@@ -274,7 +274,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
       </div>
 
       {/* タブ切り替え */}
-      <div className="flex gap-1 bg-gray-800/60 rounded-xl p-1 border border-gray-700/50 mb-4">
+      <div className="flex gap-1 bg-surface-2 rounded-xl p-1 border border-gray-700/50 mb-4">
         <button
           onClick={() => setActiveTab('roster')}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${

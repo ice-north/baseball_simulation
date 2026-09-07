@@ -193,7 +193,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
               className={`px-3 py-1 rounded text-xs font-bold transition ${sources[s.key] ? 'seg-on' : 'seg'}`}
             >{s.label}</button>
           ))}
-          <span className="text-gray-400 text-xs self-center ml-2">|</span>
+          <span className="text-ink-sub text-xs self-center ml-2">|</span>
           {[{ key: 'all', label: '全ポジ' }, { key: 'pitcher', label: '投手' }, { key: 'fielder', label: '野手' },
             ...POSITION_ORDER.filter(p => p !== 'pitcher').map(p => ({ key: p, label: POSITION_NAMES[p] }))
           ].map(p => (
@@ -215,7 +215,8 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             className="bg-surface-2 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 w-64 focus:outline-none focus:border-blue-500"
           />
           {nameQuery && <button onClick={() => setNameQuery('')} className="text-gray-400 hover:text-white text-sm">✕</button>}
-          <span className="text-gray-400 text-xs ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
+          {/* ⚠ この行は**地色の上に直に載る**（カードの外）ので暗い文字にすること */}
+          <span className="text-ink-sub text-xs ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
         </div>
 
         {/* Filters */}
@@ -252,7 +253,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
         </div>
 
         {/* Results */}
-        <div className="text-xs text-gray-300 mb-1">{filtered.length}件{filtered.length >= 200 ? '（上位200件表示）' : ''}</div>
+        <div className="text-xs text-ink-sub mb-1">{filtered.length}件{filtered.length >= 200 ? '（上位200件表示）' : ''}</div>
         <div className="bg-surface-2 rounded-lg overflow-x-auto">
           <table className="w-full text-xs">
             <thead>

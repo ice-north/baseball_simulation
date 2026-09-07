@@ -1065,12 +1065,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           <td className="py-1.5 px-2 text-xs text-center whitespace-nowrap border-l border-gray-700/40">
             {isPitcher ? (() => {
               const ps2 = player.seasonStats?.pitching;
-              if (!ps2 || !ps2.games) return <span className="text-gray-700">-</span>;
+              if (!ps2 || !ps2.games) return <span className="text-gray-400">-</span>;
               const era2 = ps2.inningsPitched > 0 ? ((ps2.earnedRuns || 0) / (ps2.inningsPitched / 3) * 9).toFixed(2) : '-';
               return <span className="text-gray-300">{ps2.wins||0}勝{ps2.losses||0}敗 <span className="text-orange-300">防{era2}</span></span>;
             })() : (() => {
               const bs2 = player.seasonStats?.batting;
-              if (!bs2 || !bs2.atBats) return <span className="text-gray-700">-</span>;
+              if (!bs2 || !bs2.atBats) return <span className="text-gray-400">-</span>;
               return <><span className="text-blue-300 font-semibold">{(bs2.hits / bs2.atBats).toFixed(3)}</span><span className="text-gray-300 ml-1">{bs2.homeruns||0}本</span></>;
             })()}
           </td>
@@ -1096,12 +1096,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           <td className="py-1.5 px-2 text-xs text-center whitespace-nowrap border-l border-gray-700/40">
             {isPitcher ? (() => {
               const ps2 = player.seasonStats?.pitching;
-              if (!ps2 || !ps2.games) return <span className="text-gray-700">-</span>;
+              if (!ps2 || !ps2.games) return <span className="text-gray-400">-</span>;
               const era2 = ps2.inningsPitched > 0 ? ((ps2.earnedRuns || 0) / (ps2.inningsPitched / 3) * 9).toFixed(2) : '-';
               return <span className="text-gray-300">{ps2.wins||0}勝{ps2.losses||0}敗 <span className="text-orange-300">防{era2}</span></span>;
             })() : (() => {
               const bs2 = player.seasonStats?.batting;
-              if (!bs2 || !bs2.atBats) return <span className="text-gray-700">-</span>;
+              if (!bs2 || !bs2.atBats) return <span className="text-gray-400">-</span>;
               return <><span className="text-blue-300 font-semibold">{(bs2.hits / bs2.atBats).toFixed(3)}</span><span className="text-gray-400 ml-1">{bs2.homeruns||0}本</span></>;
             })()}
           </td>
@@ -1149,7 +1149,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           </TutorialHint>
           <div className="grid grid-cols-12 gap-4">
             {/* 左側: スタメン (4/12) */}
-            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden">
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-700/50">
                 <div className="flex items-center gap-2">
                   <h2 className="font-semibold text-white text-sm">スタメン設定</h2>
@@ -1410,7 +1410,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             </div>
 
             {/* 中央: ミニダイアモンド */}
-            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-3 overflow-hidden p-3">
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-3 overflow-hidden p-3">
               <h2 className="font-semibold text-white text-sm mb-2 text-center">守備配置</h2>
               <svg viewBox="0 0 260 240" className="w-full max-w-[260px] mx-auto">
                 <defs>
@@ -1479,7 +1479,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             </div>
 
             {/* 右側: 控え選手一覧 */}
-            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-5 overflow-hidden flex flex-col">
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-5 overflow-hidden flex flex-col">
               <div className="px-4 py-3 border-b border-gray-700/50 shrink-0 space-y-2">
                 <div className="flex items-center gap-2">
                   <h2 className="font-semibold text-white text-sm">
@@ -1704,7 +1704,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           {s.count}{s.target > 0 && <span className="text-gray-400 text-xs">/{s.target}</span>}
                         </span>
                       </div>
-                      {i < items.length - 1 && <span className="text-gray-700 text-xs">▸</span>}
+                      {i < items.length - 1 && <span className="text-gray-400 text-xs">▸</span>}
                     </React.Fragment>
                   ))}
                   {tapSelectedPitcherId ? (
@@ -1939,7 +1939,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <button
                           onClick={() => handleSwapStarter(idx, -1)}
                           disabled={idx === 0}
-                          className={`text-xs px-0.5 ${idx === 0 ? 'text-gray-700' : 'text-gray-300 hover:text-white'}`}
+                          className={`text-xs px-0.5 ${idx === 0 ? 'text-gray-400' : 'text-gray-300 hover:text-white'}`}
                         >◀</button>
                         <span className="text-blue-400 font-bold text-xs w-3 text-center">{idx + 1}</span>
                         <span className="text-xs font-bold text-white truncate max-w-[4.5rem]">{pl.name}</span>
@@ -1947,7 +1947,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <button
                           onClick={() => handleSwapStarter(idx, 1)}
                           disabled={idx === starterPitchers.length - 1}
-                          className={`text-xs px-0.5 ${idx === starterPitchers.length - 1 ? 'text-gray-700' : 'text-gray-300 hover:text-white'}`}
+                          className={`text-xs px-0.5 ${idx === starterPitchers.length - 1 ? 'text-gray-400' : 'text-gray-300 hover:text-white'}`}
                         >▶</button>
                       </div>
                     ))}
@@ -2406,7 +2406,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           </>
                         )}
                         {!player && (
-                          <text x={coord.x} y={coord.y - 22} textAnchor="middle" fill="#6b7280" fontSize="12" filter="url(#textShadow)">未配置</text>
+                          <text x={coord.x} y={coord.y - 22} textAnchor="middle" fill="#abb9cf" fontSize="12" filter="url(#textShadow)">未配置</text>
                         )}
                       </g>
                     );

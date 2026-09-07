@@ -45,6 +45,9 @@ export default {
         ink:     'var(--ink)',
         'ink-sub': 'var(--ink-sub)',
         purple: { 400: '#d8b4fe' },
+        // ⚠ 好不調の5段（`condition.js` の `CONDITION_COLORS`）の一番冷たい段が
+        //    ここを使う。素の indigo-400(#818cf8) はカード上で AA を割る。
+        indigo: { 400: '#a5b4fc' },
         blue:   { 400: '#91c4fd' },
         red:    { 400: '#fca6a6' },
         pink:   { 400: '#f9a9d5' },

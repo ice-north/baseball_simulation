@@ -105,11 +105,17 @@ body {
     border-color: transparent; cursor: not-allowed;
   }
 
-  /* タブ／セグメント。未選択は沈め、選択だけをアクセントで持ち上げる */
+  /* タブ／セグメント。未選択は沈め、選択だけをアクセントで持ち上げる。
+     ⚠ **どちらも不透明にすること**。タブ列は「カードの上」と「地色の上に直に」の
+     両方に置かれる（選手検索・能力ランキング・選手成績の絞り込みは地色の上に直）。
+     `.seg-on` は `--accent-soft`（alpha 0.16）だったので、明るい地色の上では
+     淡い水色になり、載っている `--accent` の文字が **1.21:1** で消えていた。
+     半透明では2つの文脈を同時に満たせないので、不透明な濃い面＋アクセントの枠にする
+     （実測 文字 6.34:1 / 紙との分離 8.20）。 */
   .seg { background-color: var(--surface-2); color: #d1d5db; }
   .seg:hover:not(:disabled) { background-color: #374151; color: #fff; }
   .seg-on {
-    background-color: var(--accent-soft);
+    background-color: #0e3f4c;
     color: var(--accent);
     box-shadow: inset 0 0 0 1px var(--accent-strong);
     font-weight: 700;

@@ -184,7 +184,7 @@ export function renderBracketWithLines(bracket, teamDefsMap = null, userTeamName
             const x = PAD_LEFT + NAME_W + ri * CONN_W + CONN_W / 2;
             const rd = bracket.roundDates?.[ri];
             if (!rd) return null;
-            return <text key={`d${ri}`} x={x} y={svgH - 3} textAnchor="middle" fill="#6b7280" fontSize={DATE_FONT}>{rd.month}/{rd.day}</text>;
+            return <text key={`d${ri}`} x={x} y={svgH - 3} textAnchor="middle" fill="#abb9cf" fontSize={DATE_FONT}>{rd.month}/{rd.day}</text>;
           })}
         </svg>
       </div>

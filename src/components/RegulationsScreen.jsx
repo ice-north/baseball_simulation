@@ -80,8 +80,10 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
     <ScreenShell width="form">
       <ScreenHeader title="レギュレーション設定" />
 
+      {/* ⚠ この帯は**地色の上に直に載る**。半透明のままだと明るい紙の上で薄まり、
+          載っている黄色い文字が 2.69:1 で読めなくなる（実測）。不透明にすること */}
       {!canModify && (
-        <div className="bg-yellow-900/50 border border-yellow-700/50 rounded-lg p-3 mb-3">
+        <div className="bg-yellow-950 border border-yellow-700/50 rounded-lg p-3 mb-3">
           <p className="text-yellow-200 font-bold text-sm">レギュレーション変更はオフシーズンのみ可能です</p>
           <p className="text-yellow-300/70 text-xs mt-0.5">現在: {phaseInfo.name}</p>
         </div>

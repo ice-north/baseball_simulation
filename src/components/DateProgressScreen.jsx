@@ -1993,7 +1993,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return {
         name: p.name, age: p.age, position: POS_SHORT[p.position] || p.position,
         throws, bats, source, orgName, headline, subline,
-        isPitcher, fame: p.fame || 0, score: draft.totalScore,
+        // ⚠ 生の `totalScore` は小数（実測 419.52422906408486）。紙面にそのまま出ていた
+        isPitcher, fame: p.fame || 0, score: Math.round(draft.totalScore),
         velocity: p.pitching?.velocity, control: p.pitching?.control,
         stamina: p.pitching?.stamina || 0,
         arsenalCount: (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length,
@@ -3919,13 +3920,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
         const gpBadge = (gp) => gp >= 1.5 ? '成長◎◎' : gp >= 1.3 ? '成長◎' : gp >= 1.1 ? '成長○' : null;
 
-        // 新聞紙面カラーパレット（クリーム紙×黒インク＝明朝体で本物の紙面感・高コントラスト）
-        const PAPER = '#f4efe2';
-        const PAPER2 = '#faf6ec';
-        const INK = '#1b1710';
-        const MUTED = '#5a5342';
-        const FAINT = '#7d735b';
-        const RULE = 'rgba(90,70,30,0.30)';
+        // 新聞紙面カラーパレット（紙×インク＝明朝体で本物の紙面感・高コントラスト）
+        // ⚠ **地色と同じ紙にすること**。以前はここだけクリーム（`#f4efe2` 彩度28%）で、
+        //    本編の地色（`--surface-0` = `#dcdad5` 彩度9%）と別の紙だった。
+        //    新聞は「明るい地色の上に直に載るもの」と同じ文脈なので、
+        //    紙は `--surface-0`、文字は `--ink` / `--ink-sub` の系統へ揃える。
+        //    ⚠ ただし MUTED/FAINT はトークンそのままだと 4.34 / 2.81 まで落ちる
+        //    （紙面は文字が主役で、所属・寸評まで読ませる）。同じ色相軸のまま一段濃くしてある。
+        const PAPER = '#dcdad5';   // = --surface-0
+        const PAPER2 = '#e8e6e2';  // 段の中のカード（紙より一段明るい）
+        const INK = '#2b3038';     // = --ink                        9.50:1
+        const MUTED = '#4e555f';   // --ink-sub を一段濃く            5.39:1
+        const FAINT = '#646b75';   // 補足（所属名）                  3.85:1
+        const RULE = 'rgba(43,48,56,0.28)';
         const serif = { fontFamily: '"Hiragino Mincho ProN","Yu Mincho",serif' };
         // カテゴリ別のインク色（クリーム上で十分濃い色）
         const CAT = {
@@ -3935,9 +3942,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           ind:  { head: 'text-purple-800', bar: 'bg-purple-800', chip: 'bg-purple-800 text-purple-50' },
         };
 
-        // 指名確度スター（クリーム紙で映える濃オレンジ）
-        const STAR_ON = '#c2410c';
-        const STAR_OFF = '#d9cdb0';
+        // 指名確度スター（中立な紙で映える濃オレンジ。ラベルも同色なので AA を満たす濃さにする）
+        const STAR_ON = '#9a3412';
+        const STAR_OFF = '#a9a8a3';   // 空の★。輪郭が見える程度（2.0:1）に留める
         const Stars = ({ n = 0, size = 'text-base' }) => (
           <span className={`${size} leading-none tracking-tighter`}>
             <span style={{ color: STAR_ON }}>{'★'.repeat(n)}</span><span style={{ color: STAR_OFF }}>{'☆'.repeat(5 - n)}</span>
@@ -3954,7 +3961,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             <div className="rounded-sm p-3 flex flex-col gap-1.5" style={{ background: PAPER2, border: `1px solid ${RULE}` }}>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className={`text-xs font-bold px-1.5 py-0.5 rounded-sm ${cat.chip}`}>{label}</span>
-                {gp && <span className="ml-auto text-xs font-black shrink-0" style={{ color: '#b45309' }}>{gp}</span>}
+                {gp && <span className="ml-auto text-xs font-black shrink-0" style={{ color: '#92400e' }}>{gp}</span>}
               </div>
               <div className="text-2xl font-black leading-tight" style={{ ...serif, color: INK }}>{c.name}</div>
               <div className="text-xs font-medium" style={{ color: MUTED }}>{c.position}・{c.throws}投{c.bats}打・{c.age}歳 <span style={{ color: FAINT }}>／ {c.orgName}</span></div>
@@ -3967,12 +3974,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <div className={`text-base font-bold leading-snug ${c.isPitcher ? 'text-red-800' : 'text-sky-800'}`} style={serif}>{c.headline}</div>
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {stats.map((s, i) => (
-                  <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#e9e0cb', color: INK }}>{s}</span>
+                  <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#cbcac6', color: INK }}>{s}</span>
                 ))}
               </div>
               {/* スカウト寸評 */}
               {c.comment && <div className="text-xs font-medium leading-snug mt-0.5" style={{ ...serif, color: INK }}>「{c.comment}」</div>}
-              {c.fame > 10 && <div className="text-xs font-bold" style={{ color: '#92400e' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
+              {c.fame > 10 && <div className="text-xs font-bold" style={{ color: '#78350f' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
             </div>
           );
         };
