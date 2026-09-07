@@ -38,8 +38,10 @@ export const ScreenShell = ({ width = 'wide', className = '', children }) => (
 export const ScreenHeader = ({ title, sub = null, right = null }) => (
   <div className="flex items-end justify-between gap-4 mb-4">
     <div className="min-w-0">
-      <h1 className="text-xl font-bold text-white truncate">{title}</h1>
-      {sub && <p className="text-xs text-gray-300 mt-1">{sub}</p>}
+      {/* 見出しはカードではなく**地色の上**に載る。地色が明るいのでここだけ暗い文字
+          （`text-white` のままだと 1.4:1 で消える。実測） */}
+      <h1 className="text-xl font-bold text-ink truncate">{title}</h1>
+      {sub && <p className="text-xs text-ink-sub mt-1">{sub}</p>}
     </div>
     {right && <div className="shrink-0 flex items-center gap-2">{right}</div>}
   </div>

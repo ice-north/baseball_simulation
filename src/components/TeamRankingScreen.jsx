@@ -335,7 +335,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
 
       {/* User team highlight */}
       {userEntry && (
-        <div className={`mb-4 p-3 rounded-lg border-2 border-yellow-500/60 bg-yellow-900/20`}>
+        <div className="mb-4 bg-surface-2 rounded-xl p-1"><div className="p-3 rounded-lg border-2 border-yellow-500/60 bg-yellow-900/20">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="text-yellow-400 font-bold text-sm">あなたのチーム</div>
             <div className="font-bold">{userEntry.name}</div>
@@ -399,11 +399,11 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
               </div>
             );
           })()}
-        </div>
+        </div></div>
       )}
 
       {/* Rank band summary */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 bg-surface-2 rounded-xl p-2">
         {['S', 'A', 'B', 'C', 'D'].map(r => (
           <div key={r} className={`flex-1 text-center p-2 rounded border ${RANK_BG[r]}`}>
             <div className={`font-bold ${RANK_COLOR[r]}`}>{r}</div>
@@ -414,7 +414,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap gap-2 mb-3 bg-surface-2 rounded-xl p-2">
         <div className="flex gap-1">
           {[['all', '全て'], ['corporate', '社会人'], ['university', '大学'], ['independent', '独立']].map(([v, label]) => (
             <button key={v} onClick={() => setFilterType(v)}
@@ -442,7 +442,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       </div>
 
       {/* Ranking table */}
-      <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 340px)' }}>
+      <div className="overflow-auto bg-surface-2 rounded-xl p-2" style={{ maxHeight: 'calc(100vh - 340px)' }}>
         <table className="w-full text-xs border-collapse tabular-nums">
           <thead className="sticky top-0 bg-surface-1 z-10">
             <tr className="text-gray-300 border-b border-gray-700">
@@ -584,12 +584,12 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
 
       {/* Score explanation */}
       {isProvisional ? (
-        <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
+        <div className="mt-3 p-2 bg-surface-2 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（S〜Dの帯は上の内訳のとおり）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。</div>
           <div className="text-gray-300">行をクリックすると、試合成績・打撃・投手・編成の詳細を展開できます。ヘッダーをクリックでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（並行世界の実体化されていない大学）。</div>
         </div>
       ) : (
-        <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
+        <div className="mt-3 p-2 bg-surface-2 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-gray-100">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
           重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
           初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。ランクは全体でのパーセンタイル（帯は上の内訳のとおり）。</div>

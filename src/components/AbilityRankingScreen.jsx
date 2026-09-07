@@ -8,7 +8,10 @@ import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 
 const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
-const RANK_BG = { S: 'bg-yellow-900/30 border-yellow-700/50', A: 'bg-red-900/20 border-red-700/50', B: 'bg-blue-900/20 border-blue-700/50', C: 'bg-green-900/20 border-green-700/50', D: 'bg-surface-2 border-gray-700/50' };
+// ⚠ **不透明にすること**。地色が明るいので、半透明のタイルはその明るい地の上で
+//    薄まり、載っている淡い文字が読めなくなる（実測で6600箇所超が3.0未満）。
+//    ランクの識別色は保ったまま、素の Tailwind の 950 段で不透明にしてある。
+const RANK_BG = { S: 'bg-yellow-950 border-yellow-700/60', A: 'bg-red-950 border-red-700/60', B: 'bg-blue-950 border-blue-700/60', C: 'bg-green-950 border-green-700/60', D: 'bg-surface-2 border-gray-700/50' };
 
 const getOverallColor = (v) => {
   if (v >= 70) return 'text-yellow-400';

@@ -2160,7 +2160,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
         <div className="w-[800px] shrink-0">
-          <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mb-3">
+          <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mb-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-blue-600/30 flex items-center justify-center">
@@ -2342,7 +2342,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           </div>
 
           {/* 本日の対戦 */}
-          <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-2 shadow-xl border border-gray-700/30">
+          <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-2 shadow-xl border border-gray-700/30">
             <h2 className="text-sm font-bold text-white mb-1.5 flex items-center gap-1.5">
               <span className="text-orange-400 text-sm">⚾</span>
               <span>{formatDate(seasonData.currentDate)} の対戦</span>
@@ -2415,7 +2415,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     <div key={game.id} className={`rounded-lg p-1.5 transition-all relative overflow-hidden ${
                       isUserGame && !hasResult ? 'bg-gradient-to-br from-blue-900/50 to-blue-800/30 border border-blue-500/30 shadow-md shadow-blue-900/20' :
                       hasResult ? 'bg-gray-800/60 border border-gray-700/20' :
-                      'bg-gradient-to-br from-gray-800/80 to-gray-800/50 border border-gray-700/20'
+                      'bg-gradient-to-br from-gray-800 to-gray-800 border border-gray-700/20'
                     }`}>
                       {isUserGame && !hasResult && <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-400 via-blue-500 to-blue-400"></div>}
                       {todaySeriesInfo && (
@@ -2619,7 +2619,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
 
             return (
-              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
+              <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
                 <h2 className="text-base font-bold text-white mb-2 flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-yellow-600/30 flex items-center justify-center">
                     <span className="text-yellow-400 text-sm">📊</span>
@@ -2675,7 +2675,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <div className="space-y-3 mb-3">
                 {/* 全日本大学野球選手権大会 */}
                 {uc?.generated && (
-                  <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-orange-700/30">
+                  <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-orange-700/30">
                     <h2
                       className="text-sm font-bold text-orange-400 mb-2 flex items-center justify-between cursor-pointer select-none"
                       onClick={() => setShowUcTournament(v => !v)}
@@ -2697,7 +2697,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
                 {/* 明治神宮野球大会 */}
                 {mj?.generated && (
-                  <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-red-700/30">
+                  <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-red-700/30">
                     <h2
                       className="text-sm font-bold text-red-400 mb-2 flex items-center justify-between cursor-pointer select-none"
                       onClick={() => setShowMjTournament(v => !v)}
@@ -2907,7 +2907,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
             const curTabDef = tournamentTabs.find(t => t.key === curTab);
             return (
-              <div className={`bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border ${borderColors[curTabDef?.color] || 'border-gray-700/30'}`}>
+              <div className={`bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border ${borderColors[curTabDef?.color] || 'border-gray-700/30'}`}>
                 {tournamentTabs.length > 0 ? (
                   <>
                   <div className="flex flex-wrap gap-1 mb-2">
@@ -2945,7 +2945,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               })();
 
               return (
-                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
+                <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
                   <h2 className={`text-base font-bold mb-2.5 ${titleColor || 'text-white'} flex items-center gap-2`}>
                     <div className="w-7 h-7 rounded-lg bg-gray-700/60 flex items-center justify-center text-sm">📊</div>
                     {title}
@@ -3068,14 +3068,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 const t2Abbr = getTeamAbbreviation(team2);
                 return (
                   <div className={`rounded-xl overflow-hidden ${
-                    isFinal ? 'bg-gradient-to-b from-yellow-900/30 to-gray-800/80 border border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
+                    isFinal ? 'bg-gradient-to-b from-yellow-900/30 to-gray-800 border border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
                     isComplete ? 'bg-gray-800/60 border border-gray-700/30' :
-                    'bg-gradient-to-b from-gray-700/50 to-gray-800/60 border border-gray-600/30'
+                    'bg-gradient-to-b from-gray-700 to-gray-800 border border-gray-600/30'
                   }`}>
                     {/* タイトルバー */}
                     <div className={`px-2.5 py-1 ${
                       isFinal ? 'bg-gradient-to-r from-yellow-700/40 via-yellow-600/30 to-yellow-700/40' :
-                      'bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40'
+                      'bg-gradient-to-r from-gray-700 via-gray-600/30 to-gray-700'
                     }`}>
                       <div className={`text-xs font-bold text-center tracking-wide ${isFinal ? 'text-yellow-400' : 'text-gray-300'}`}>{title}</div>
                     </div>
@@ -3131,7 +3131,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               };
 
               const renderBracketContainer = (title, content) => (
-                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
+                <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
                   <h2 className="text-base font-bold mb-3 text-white flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-yellow-600/30 flex items-center justify-center">
                       <span className="text-yellow-400 text-sm">🏆</span>
@@ -3232,7 +3232,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
             return (
               <div className="space-y-3">
-                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
+                <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
                   {/* タブ（両シーズンある場合のみ） */}
                   {hasBothSeasons && (
                     <div className="flex gap-1 mb-3">
@@ -3314,7 +3314,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
           {/* ニュース＆状況（チーム状況レポート＋スカウト＋リーグトピックを重要度順に統合） */}
           {newsFeed.length > 0 && (
-            <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
+            <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
               <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
                 <span className="text-yellow-400">📰</span> ニュース＆状況
                 <button onClick={() => setShowNewspaper(true)} className="btn-warn ml-auto text-xs px-2 py-0.5 rounded-lg border transition-colors">
@@ -3341,7 +3341,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const parallelLeagues = getAllParallelLeagues();
             if (parallelLeagues.length === 0 && !seasonData.grandChampionship?.done) return null;
             return (
-              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-emerald-700/30 mt-3">
+              <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-emerald-700/30 mt-3">
                 <h2
                   className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-1.5 cursor-pointer select-none flex-wrap"
                   onClick={() => setShowOtherLeagues(prev => !prev)}
@@ -3513,7 +3513,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const activeLeagues = uniLeagues.filter(l => l.playedGames > 0 || l.currentSeason !== '終了');
             if (activeLeagues.length === 0 && !uniLeagues.some(l => l.springDone || l.fallDone)) return null;
             return (
-              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30 mt-3">
+              <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30 mt-3">
                 <h2
                   className="text-sm font-bold text-blue-400 mb-2 flex items-center gap-1.5 cursor-pointer select-none"
                   onClick={() => setShowUniversityLeagues(prev => !prev)}
@@ -3688,7 +3688,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             if (tournamentList.length === 0) return null;
 
             return (
-              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-yellow-700/30 mt-3">
+              <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-yellow-700/30 mt-3">
                 <h2
                   className="text-sm font-bold text-yellow-400 flex items-center gap-1.5 cursor-pointer select-none"
                   onClick={() => setShowCorporateTournaments(prev => !prev)}
