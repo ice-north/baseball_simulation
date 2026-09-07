@@ -401,7 +401,7 @@ export const AbilityLegend = ({ className = '' }) => (
 // --- GameButton 共通ボタンコンポーネント ---
 const BUTTON_VARIANTS = {
   primary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',
-  secondary: 'bg-gray-600 hover:bg-gray-500 text-gray-100',
+  secondary: 'btn-secondary',
   danger: 'bg-red-600 hover:bg-red-500 text-white',
   success: 'bg-green-600 hover:bg-green-500 text-white',
   ghost: 'bg-transparent hover:bg-gray-700/60 text-gray-300 hover:text-white',

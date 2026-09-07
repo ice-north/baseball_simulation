@@ -43,7 +43,7 @@ const TeamInfoScreen = ({ gameMode }) => {
 
   const SortableHeader = ({ label, sortKey, currentKey, currentDir, onClick, align = 'center' }) => (
     <th
-      className={`px-2 py-2 text-${align} cursor-pointer hover:bg-gray-500 transition ${currentKey === sortKey ? 'text-yellow-400' : ''}`}
+      className={`px-2 py-2 text-${align} cursor-pointer hover:bg-gray-600 transition ${currentKey === sortKey ? 'text-yellow-400' : ''}`}
       onClick={() => onClick(sortKey)}
     >
       {label} {currentKey === sortKey && (currentDir === 'asc' ? '▲' : '▼')}
@@ -211,7 +211,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                     const gradeLabel = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
                     const rt = RECRUIT_TYPE_LABEL[player.recruitType] || null;
                     return (
-                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-surface-2'}`}
+                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-600 transition ${index % 2 === 0 ? 'bg-gray-900/25' : 'bg-surface-2'}`}
                         onClick={() => setSelectedPlayer(player)}>
                         <td className="px-2 py-1 text-gray-300 text-center tabular-nums font-bold">{player.number ?? '-'}</td>
                         <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>
@@ -301,7 +301,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                     const gradeLabel = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
                     const rt = RECRUIT_TYPE_LABEL[player.recruitType] || null;
                     return (
-                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-surface-2'}`}
+                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-600 transition ${index % 2 === 0 ? 'bg-gray-900/25' : 'bg-surface-2'}`}
                         onClick={() => setSelectedPlayer(player)}>
                         <td className="px-2 py-1 text-gray-300 text-center tabular-nums font-bold">{player.number ?? '-'}</td>
                         <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>

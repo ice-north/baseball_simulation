@@ -364,7 +364,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                 setReleasedPlayers(prev => ({ ...prev, [userTeamName]: [] }));
                 handleConfirm();
               }}
-              className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-1.5 rounded text-sm"
+              className="btn-secondary px-4 py-1.5 rounded text-sm"
             >
               解雇せずに確定
             </button>

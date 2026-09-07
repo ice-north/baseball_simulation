@@ -1452,7 +1452,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                             </text>
                           </>
                         ) : (
-                          <text x={coord.x} y={coord.y + 3} textAnchor="middle" fill="#94a3b8" fontSize="9">{posLabelsShort[pos]}</text>
+                          <text x={coord.x} y={coord.y + 3} textAnchor="middle" fill="#bdc6d6" fontSize="9">{posLabelsShort[pos]}</text>
                         )}
                       </g>
                     );
@@ -1915,7 +1915,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     }
                     setUpdateTrigger(prev => prev + 1);
                   }}
-                  className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-3 py-1 rounded font-medium transition"
+                  className="btn-secondary text-xs px-3 py-1 rounded font-medium transition"
                   title="全投手をおまかせにします（AIが登板場面を自動判断）"
                 >
                   全員おまかせ
@@ -2215,7 +2215,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <div className="flex items-center gap-2">
                       <span className="text-yellow-400 text-sm font-bold">{posFullLabels[selectedDefensePos]}を選択中</span>
                       <span className="text-gray-300 text-xs">→ 交換先をクリック</span>
-                      <button onClick={() => setSelectedDefensePos(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-2 py-0.5 rounded text-xs">解除</button>
+                      <button onClick={() => setSelectedDefensePos(null)} className="btn-secondary px-2 py-0.5 rounded text-xs">解除</button>
                     </div>
                   )}
                 </div>

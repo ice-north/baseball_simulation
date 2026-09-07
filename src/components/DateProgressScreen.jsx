@@ -2741,7 +2741,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const autoTab = tournamentTabs.find(t => !t.done)?.key || tournamentTabs[tournamentTabs.length - 1]?.key || null;
             const curTab = (activeTournamentTab && tournamentTabs.some(t => t.key === activeTournamentTab)) ? activeTournamentTab : autoTab;
 
-            const tabColors = { green: 'bg-green-600', blue: 'bg-blue-600', yellow: 'bg-yellow-600', red: 'bg-red-600', purple: 'bg-purple-600' };
             const borderColors = { green: 'border-green-700/30', blue: 'border-blue-700/30', yellow: 'border-yellow-700/30', red: 'border-red-700/30', purple: 'border-purple-700/30' };
 
             // ヘルパー: ブラケット＋ユーザー試合情報の描画
@@ -2917,7 +2916,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       return (
                         <button key={tab.key} onClick={() => setActiveTournamentTab(tab.key)}
                           className={`px-2 py-1 rounded-lg text-xs font-bold transition ${
-                            active ? `${tabColors[tab.color]} text-white` : tab.done ? 'bg-gray-700/50 text-gray-400 hover:text-gray-300' : 'bg-gray-700/50 text-gray-300 hover:text-white'
+                            /* ⚠ 選択色をデータ配列(`tabColors`)に持たせていたので大会ごとに
+                               緑/青/黄/赤/紫 とバラバラだった（CLAUDE.md「色をデータ配列に
+                               持たせない」）。しかも `text-white` が bg-green-600 の上で 3.3:1。
+                               共有語彙の `.seg` / `.seg-on` に揃える。大会の識別色は
+                               カードの枠(`borderColors`)が引き続き持つ */
+                            active ? 'seg-on' : tab.done ? 'seg opacity-70' : 'seg'
                           }`}>
                           {tab.label}{tab.done ? ' ✓' : ''}
                         </button>
@@ -3927,12 +3931,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         //    紙は `--surface-0`、文字は `--ink` / `--ink-sub` の系統へ揃える。
         //    ⚠ ただし MUTED/FAINT はトークンそのままだと 4.34 / 2.81 まで落ちる
         //    （紙面は文字が主役で、所属・寸評まで読ませる）。同じ色相軸のまま一段濃くしてある。
-        const PAPER = '#dcdad5';   // = --surface-0
-        const PAPER2 = '#e8e6e2';  // 段の中のカード（紙より一段明るい）
-        const INK = '#2b3038';     // = --ink                        9.50:1
-        const MUTED = '#4e555f';   // --ink-sub を一段濃く            5.39:1
-        const FAINT = '#646b75';   // 補足（所属名）                  3.85:1
-        const RULE = 'rgba(43,48,56,0.28)';
+        const PAPER = '#c2c0ba';   // = --surface-0
+        const PAPER2 = '#d0cec9';  // 段の中のカード（紙より一段明るい）
+        const INK = '#262b32';     // = --ink                        7.83:1
+        const MUTED = '#434a54';   // --ink-sub を一段濃く            4.98:1
+        const FAINT = '#585f69';   // 補足（所属名）                  3.72:1
+        const RULE = 'rgba(38,43,50,0.30)';
         const serif = { fontFamily: '"Hiragino Mincho ProN","Yu Mincho",serif' };
         // カテゴリ別のインク色（クリーム上で十分濃い色）
         const CAT = {
@@ -3944,7 +3948,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
         // 指名確度スター（中立な紙で映える濃オレンジ。ラベルも同色なので AA を満たす濃さにする）
         const STAR_ON = '#9a3412';
-        const STAR_OFF = '#a9a8a3';   // 空の★。輪郭が見える程度（2.0:1）に留める
+        const STAR_OFF = '#949390';   // 空の★。輪郭が見える程度（2.0:1）に留める
         const Stars = ({ n = 0, size = 'text-base' }) => (
           <span className={`${size} leading-none tracking-tighter`}>
             <span style={{ color: STAR_ON }}>{'★'.repeat(n)}</span><span style={{ color: STAR_OFF }}>{'☆'.repeat(5 - n)}</span>
@@ -3974,7 +3978,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <div className={`text-base font-bold leading-snug ${c.isPitcher ? 'text-red-800' : 'text-sky-800'}`} style={serif}>{c.headline}</div>
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {stats.map((s, i) => (
-                  <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#cbcac6', color: INK }}>{s}</span>
+                  <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#b4b3ae', color: INK }}>{s}</span>
                 ))}
               </div>
               {/* スカウト寸評 */}

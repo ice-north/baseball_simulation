@@ -654,7 +654,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     </div>
                   )}
                   <div className="flex gap-2 justify-center">
-                    <button onClick={() => setDispatchConfirm(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
+                    <button onClick={() => setDispatchConfirm(null)} className="btn-secondary px-6 py-2 rounded-lg text-sm font-bold transition">
                       キャンセル
                     </button>
                   </div>
@@ -683,7 +683,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   <p>派遣後もシーズンには通常通り出場できます</p>
                 </div>
                 <div className="flex gap-2 justify-center">
-                  <button onClick={() => setDispatchConfirm(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
+                  <button onClick={() => setDispatchConfirm(null)} className="btn-secondary px-6 py-2 rounded-lg text-sm font-bold transition">
                     キャンセル
                   </button>
                   <button onClick={() => handleDispatch(dispatchConfirm.playerId, dispatchConfirm.destKey, dispatchConfirm.universityId)} className="btn-warn px-6 py-2 rounded-lg text-sm transition">

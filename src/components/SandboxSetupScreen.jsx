@@ -280,7 +280,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
               <button
                 key={pos}
                 onClick={() => addPlayer(pos)}
-                className="bg-gray-600 hover:bg-gray-500 text-white px-2.5 py-1 rounded text-xs font-bold transition"
+                className="btn-secondary px-2.5 py-1 rounded text-xs font-bold transition"
               >
                 + {POSITION_NAMES[pos]}
               </button>
@@ -362,7 +362,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                     className="flex-1 bg-gray-700 text-white px-2 py-1.5 rounded text-sm" />
                   <button
                     onClick={() => setEditFormData(prev => ({ ...prev, name: generateRandomPlayerName() }))}
-                    className="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs"
+                    className="btn-secondary px-2 py-1 rounded text-xs"
                     title="ランダム名前"
                   >
                     🎲
@@ -559,7 +559,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
 
             {/* ボタン */}
             <div className="flex justify-end gap-3">
-              <button onClick={cancelEdit} className="px-5 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition text-sm">キャンセル</button>
+              <button onClick={cancelEdit} className="px-5 py-2 btn-secondary rounded transition text-sm">キャンセル</button>
               <button onClick={savePlayerEdit} className="btn-primary px-5 py-2 rounded transition text-sm">保存</button>
             </div>
           </div>

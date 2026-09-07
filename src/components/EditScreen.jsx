@@ -419,7 +419,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
             </div>
 
             <div className="flex justify-end gap-4 mt-6">
-              <button onClick={cancelEdit} className="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition">キャンセル</button>
+              <button onClick={cancelEdit} className="px-6 py-2 btn-secondary rounded transition">キャンセル</button>
               <button onClick={savePlayerEdit} className="btn-primary px-6 py-2 rounded transition">保存</button>
             </div>
           </div>
