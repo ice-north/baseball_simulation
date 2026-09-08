@@ -3931,24 +3931,27 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         //    紙は `--surface-0`、文字は `--ink` / `--ink-sub` の系統へ揃える。
         //    ⚠ ただし MUTED/FAINT はトークンそのままだと 4.34 / 2.81 まで落ちる
         //    （紙面は文字が主役で、所属・寸評まで読ませる）。同じ色相軸のまま一段濃くしてある。
-        const PAPER = '#c2c0ba';   // = --surface-0
-        const PAPER2 = '#d0cec9';  // 段の中のカード（紙より一段明るい）
-        const INK = '#262b32';     // = --ink                        7.83:1
-        const MUTED = '#434a54';   // --ink-sub を一段濃く            4.98:1
-        const FAINT = '#585f69';   // 補足（所属名）                  3.72:1
+        const PAPER = '#abb1ad';   // = --surface-0
+        const PAPER2 = '#bcc1be';  // 段の中のカード（紙より一段明るい）
+        const INK = '#262b32';     // = --ink                        6.53:1
+        const MUTED = '#3a4048';   // --ink-sub を一段濃く            4.80:1
+        const FAINT = '#4d545b';   // 補足（所属名）                  3.52:1
         const RULE = 'rgba(38,43,50,0.30)';
         const serif = { fontFamily: '"Hiragino Mincho ProN","Yu Mincho",serif' };
         // カテゴリ別のインク色（クリーム上で十分濃い色）
+        // ⚠ 紙を暗くしたら**カテゴリのインクも一段濃く**すること。800段は
+        //    輝度175の紙の上で 3.25〜4.00 まで落ちる（見出しと注目株の惹句なので実害）。
+        //    900段で 4.16〜4.98。チップは塗りなので 800 のまま（白文字が乗る）
         const CAT = {
-          hs:   { head: 'text-green-800',  bar: 'bg-green-800',  chip: 'bg-green-800 text-green-50' },
-          uni:  { head: 'text-blue-800',   bar: 'bg-blue-800',   chip: 'bg-blue-800 text-blue-50' },
-          corp: { head: 'text-amber-800',  bar: 'bg-amber-800',  chip: 'bg-amber-800 text-amber-50' },
-          ind:  { head: 'text-purple-800', bar: 'bg-purple-800', chip: 'bg-purple-800 text-purple-50' },
+          hs:   { head: 'text-green-900',  bar: 'bg-green-800',  chip: 'bg-green-800 text-green-50' },
+          uni:  { head: 'text-blue-900',   bar: 'bg-blue-800',   chip: 'bg-blue-800 text-blue-50' },
+          corp: { head: 'text-amber-900',  bar: 'bg-amber-800',  chip: 'bg-amber-800 text-amber-50' },
+          ind:  { head: 'text-purple-900', bar: 'bg-purple-800', chip: 'bg-purple-800 text-purple-50' },
         };
 
         // 指名確度スター（中立な紙で映える濃オレンジ。ラベルも同色なので AA を満たす濃さにする）
-        const STAR_ON = '#9a3412';
-        const STAR_OFF = '#949390';   // 空の★。輪郭が見える程度（2.0:1）に留める
+        const STAR_ON = '#7c2d12';
+        const STAR_OFF = '#868b88';   // 空の★。輪郭が見える程度（2.0:1）に留める
         const Stars = ({ n = 0, size = 'text-base' }) => (
           <span className={`${size} leading-none tracking-tighter`}>
             <span style={{ color: STAR_ON }}>{'★'.repeat(n)}</span><span style={{ color: STAR_OFF }}>{'☆'.repeat(5 - n)}</span>
@@ -3965,7 +3968,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             <div className="rounded-sm p-3 flex flex-col gap-1.5" style={{ background: PAPER2, border: `1px solid ${RULE}` }}>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className={`text-xs font-bold px-1.5 py-0.5 rounded-sm ${cat.chip}`}>{label}</span>
-                {gp && <span className="ml-auto text-xs font-black shrink-0" style={{ color: '#92400e' }}>{gp}</span>}
+                {gp && <span className="ml-auto text-xs font-black shrink-0" style={{ color: '#78350f' }}>{gp}</span>}
               </div>
               <div className="text-2xl font-black leading-tight" style={{ ...serif, color: INK }}>{c.name}</div>
               <div className="text-xs font-medium" style={{ color: MUTED }}>{c.position}・{c.throws}投{c.bats}打・{c.age}歳 <span style={{ color: FAINT }}>／ {c.orgName}</span></div>
@@ -3975,15 +3978,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <span className="text-xs font-black" style={{ color: STAR_ON }}>{c.outlook}</span>
                 <span className="text-xs font-bold ml-auto" style={{ color: MUTED }}>指名確度 {c.prob}%</span>
               </div>
-              <div className={`text-base font-bold leading-snug ${c.isPitcher ? 'text-red-800' : 'text-sky-800'}`} style={serif}>{c.headline}</div>
+              <div className={`text-base font-bold leading-snug ${c.isPitcher ? 'text-red-900' : 'text-sky-900'}`} style={serif}>{c.headline}</div>
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {stats.map((s, i) => (
-                  <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#b4b3ae', color: INK }}>{s}</span>
+                  <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#9ea4a1', color: INK }}>{s}</span>
                 ))}
               </div>
               {/* スカウト寸評 */}
               {c.comment && <div className="text-xs font-medium leading-snug mt-0.5" style={{ ...serif, color: INK }}>「{c.comment}」</div>}
-              {c.fame > 10 && <div className="text-xs font-bold" style={{ color: '#78350f' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
+              {c.fame > 10 && <div className="text-xs font-bold" style={{ color: '#6b3410' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
             </div>
           );
         };
@@ -3998,7 +4001,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <span className="text-xs font-bold shrink-0 text-center" style={{ color: MUTED, width: '1.2rem' }}>{c.position}</span>
                 <span className="text-sm font-bold truncate" style={{ ...serif, color: INK }}>{c.name}</span>
                 <span className="text-xs shrink-0" style={{ color: MUTED }}>{c.age}歳</span>
-                {extra && <span className="text-xs font-bold shrink-0 text-blue-700">{extra}</span>}
+                {extra && <span className="text-xs font-bold shrink-0 text-blue-800">{extra}</span>}
                 <Stars n={c.stars || 0} size="text-xs" />
               </div>
               <div className="flex items-center gap-1" style={{ paddingLeft: '1.2rem' }}>
@@ -4066,16 +4069,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   {/* カテゴリ別 注目株一覧（4段組み・段間罫線） */}
                   <div className="grid grid-cols-4 gap-3">
                     <SubColumn title="高校 注目株" count={d.hsOthers.length} cat={CAT.hs}>
-                      {d.hsOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-green-800" />)}
+                      {d.hsOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-green-900" />)}
                     </SubColumn>
                     <SubColumn title="大学 注目株" count={d.uniOthers.length} cat={CAT.uni} borderLeft>
-                      {d.uniOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-blue-800" extra={c.year ? `${c.year}年` : ''} />)}
+                      {d.uniOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-blue-900" extra={c.year ? `${c.year}年` : ''} />)}
                     </SubColumn>
                     <SubColumn title="社会人 注目株" count={d.corpOthers.length} cat={CAT.corp} borderLeft>
-                      {d.corpOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-amber-800" />)}
+                      {d.corpOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-amber-900" />)}
                     </SubColumn>
                     <SubColumn title="独立リーグ 注目株" count={d.indOthers.length} cat={CAT.ind} borderLeft>
-                      {d.indOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-purple-800" />)}
+                      {d.indOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-purple-900" />)}
                     </SubColumn>
                   </div>
 
