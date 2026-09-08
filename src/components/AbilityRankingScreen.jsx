@@ -48,15 +48,24 @@ const toSource = (tt) => tt === 'user' ? 'independent' : tt;
 
 const IL_PREFIX = { shikoku: 'IL', bc: 'BC', kyushu: 'KL', hokkaido: 'FL', kansai: 'KI' };
 
+// ⚠ **チーム名を文字数で切らないこと**（選手名の `surnameOf` と同じ話）。
+//    社会人・独立の315チームは**中央7文字 / 75%点9文字**あるのに `slice(0, 3)` で
+//    切っており、`日本製鉄室蘭シャークス`→`日本製` / `JR北海道`→`JR北` /
+//    `TRANSYS`→`TRA` と、**別のチーム名に読めるものが大半**だった。
+//    ⚠ `team.abbreviation` は**どのチームも持っていない**（`corporateTeamsData` に
+//    そのフィールドは存在しない）ので、この `||` は常に slice 側へ落ちていた。
+//    フル名を返し、溢れるぶんは表示側の `truncate`（省略記号）と `title` に任せる。
+//    「…」なら切れていることが読み手に分かるが、`東京ガ` は別名に見えてしまう。
 const makeDisplayAbbr = (teamName, team) => {
   if (team?.independentLeagueId) {
+    // リーグの接頭辞だけは残す（同名の街が別リーグにあるため）
     const prefix = IL_PREFIX[team.independentLeagueId] || 'IL';
-    return `${prefix}${team.abbreviation || teamName.slice(0, 2)}`;
+    return `${prefix} ${teamName}`;
   }
   if (team?.universityData || team?.universityTeamId) {
     return normalizeUniAbbr(teamName);
   }
-  return team?.abbreviation || teamName.slice(0, 3);
+  return teamName;
 };
 
 const normalizeUniAbbr = (name) => {
@@ -64,8 +73,10 @@ const normalizeUniAbbr = (name) => {
   if (s.endsWith('大学')) s = s.slice(0, -1);
   const daiIdx = s.indexOf('大');
   if (daiIdx >= 0 && daiIdx <= 4) s = s.slice(0, daiIdx + 1);
-  else if (!s.endsWith('大')) s = s.slice(0, 3) + '大';
-  if (s.length > 5) s = s.slice(0, 4) + '大';
+  // ⚠ 「〇〇大学」→「〇〇大」は実在する略し方なので残す。ただし
+  //    **「大」を含まない校名を機械的に3文字で切って『大』を足す**のは
+  //    実在しない名前を作るので、その場合はフル名のままにする
+  else if (!s.endsWith('大')) return name;
   return s;
 };
 
@@ -179,8 +190,11 @@ const ScoutBadges = ({ npbScouts, amScouts }) => {
   if ((!npbScouts || npbScouts.length === 0) && (!amScouts || amScouts.length === 0)) return null;
   return (
     <div className="flex flex-wrap gap-0.5">
+      {/* ⚠ 赤だった（`bg-red-900/40` + `text-red-300`）。カードが紺なので**補色**になって
+          目がちらつくうえ、`text-red-400`（ランク色）とも意味が衝突する。
+          球団名は識別色を持たない情報なので中立にする（実測 5.52:1） */}
       {npbScouts?.map(t => (
-        <span key={t} className="text-xs px-1 py-0 rounded bg-red-900/40 text-red-300 leading-tight">{t}</span>
+        <span key={t} className="text-xs px-1 py-0 rounded bg-gray-700 text-gray-100 leading-tight">{t}</span>
       ))}
       {amScouts?.map(t => (
         <span key={t} className="text-xs px-1 py-0 rounded bg-purple-900/40 text-purple-300 leading-tight">{t}</span>
@@ -415,21 +429,24 @@ const AbilityRankingScreen = () => {
         <table className="tabular-nums w-full text-sm">
           <thead>
             <tr className="text-gray-300 text-xs border-b border-gray-700">
+              {/* ⚠ 1文字の略記（ミ/パ/走/守/眼/変/ス）だったのでフル表記にした。
+                  ⚠ **「守」が2つあった**——3列目は守備**位置**、9列目は守備**力**で
+                  別物なので、位置は選手検索と同じ `ポジ` に揃える（表記を二重に作らない） */}
               <th className="px-1.5 py-2 text-left w-6">#</th>
               <th className="px-1.5 py-2 text-left">選手</th>
-              <th className="px-1.5 py-2 text-center">守</th>
-              <th className="px-1.5 py-2 text-center">年</th>
+              <th className="px-1.5 py-2 text-center">ポジ</th>
+              <th className="px-1.5 py-2 text-center">年齢</th>
               <th className="px-1.5 py-2 text-left">所属</th>
               <th className="px-1.5 py-2 text-center font-bold">総合</th>
-              <th className="px-1 py-2 text-center">ミ</th>
-              <th className="px-1 py-2 text-center">パ</th>
-              <th className="px-1 py-2 text-center">走</th>
-              <th className="px-1 py-2 text-center">守</th>
-              <th className="px-1 py-2 text-center">眼</th>
+              <th className="px-1 py-2 text-center">ミート</th>
+              <th className="px-1 py-2 text-center">パワー</th>
+              <th className="px-1 py-2 text-center">走力</th>
+              <th className="px-1 py-2 text-center">守備</th>
+              <th className="px-1 py-2 text-center">選球眼</th>
               <th className="px-1 py-2 text-center">球速</th>
               <th className="px-1 py-2 text-center">制球</th>
-              <th className="px-1 py-2 text-center">変</th>
-              <th className="px-1 py-2 text-center">ス</th>
+              <th className="px-1 py-2 text-center">変化球</th>
+              <th className="px-1 py-2 text-center">スタミナ</th>
               <th className="px-1 py-2 text-left">スカウト注目</th>
             </tr>
           </thead>
@@ -445,7 +462,7 @@ const AbilityRankingScreen = () => {
                   <td className="px-1.5 py-1.5 text-center text-gray-300 text-xs">{POSITION_NAMES[p.position] || p.position}</td>
                   <td className="px-1.5 py-1.5 text-center text-gray-300 text-xs">{p.age}</td>
                   <td className="px-1.5 py-1.5 text-xs">
-                    <span className={typeInfo.color}>{p.teamAbbr}</span>
+                    <span className={`${typeInfo.color} inline-block max-w-[150px] truncate align-bottom`} title={p.teamName}>{p.teamAbbr}</span>
                   </td>
                   <td className={`px-1.5 py-1.5 text-center font-bold ${getOverallColor(p.overall)}`}>{p.overall}</td>
                   <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-400' : getStatColor(p.batting?.meet || 0)}`}>{p.batting?.meet || 0}</td>
