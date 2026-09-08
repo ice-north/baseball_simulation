@@ -6,6 +6,7 @@ import { calcPlayerOverall } from '../season/dispatchSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
+import PlayerDetailModal from './PlayerDetailModal.jsx';
 
 const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
 // ⚠ **不透明にすること**。地色が明るいので、半透明のタイルはその明るい地の上で
@@ -209,6 +210,8 @@ const AbilityRankingScreen = () => {
   const [sortKey, setSortKey] = useState('overall');
   const [limit, setLimit] = useState(50);
   const [teamRankFilter, setTeamRankFilter] = useState('all');
+  // 選手名クリックで詳細（選手検索・チーム情報・推薦スカウトと同じ共有モーダル）
+  const [detailPlayer, setDetailPlayer] = useState(null);
 
   const { allPlayers, allTeamStats, hsPlayers } = useMemo(() => {
     const players = [];
@@ -458,7 +461,13 @@ const AbilityRankingScreen = () => {
               return (
                 <tr key={`${p.id}-${i}`} className={`border-b border-gray-700/30 hover:bg-gray-700/30 ${i < 3 ? 'bg-gray-700/20' : ''}`}>
                   <td className="px-1.5 py-1.5 text-gray-400 text-xs">{i + 1}</td>
-                  <td className="px-1.5 py-1.5 font-bold text-white text-xs">{p.name}</td>
+                  <td className="px-1.5 py-1.5 text-xs">
+                    <button onClick={() => setDetailPlayer(p)}
+                      className="font-bold text-white hover:text-accent hover:underline text-left"
+                      title="クリックで選手の詳細">
+                      {p.name}
+                    </button>
+                  </td>
                   <td className="px-1.5 py-1.5 text-center text-gray-300 text-xs">{POSITION_NAMES[p.position] || p.position}</td>
                   <td className="px-1.5 py-1.5 text-center text-gray-300 text-xs">{p.age}</td>
                   <td className="px-1.5 py-1.5 text-xs">
@@ -640,6 +649,8 @@ const AbilityRankingScreen = () => {
           </div>
         </>
       )}
+
+      {detailPlayer && <PlayerDetailModal player={detailPlayer} onClose={() => setDetailPlayer(null)} />}
     </ScreenShell>
   );
 };
