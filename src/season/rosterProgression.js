@@ -130,9 +130,23 @@ export function processUniversityTeamGraduation(allTeams, seasonData, currentYea
     });
 
     // スカウト推薦入部者（ユーザーチームのみ）
+    //
+    // ⚠ **プールから外す対象は、フラグを消す「前」に確保すること**。
+    //    以前は `delete p._universityReserved` を先に実行してから
+    //    `filter(p => p._universityReserved !== teamName)` で除去していたので、
+    //    **フラグが既に消えていて条件が全員 true になり、誰も除去されなかった**。
+    //    推薦入部した選手が高校生プールに残り続け、その後
+    //    `distributeHighSchoolGraduates` が社会人・独立へも配るため、
+    //    **同じ選手が「大学 ＋ 社会人 ＋ 自由契約」と3箇所に増える**。
+    //    実際に選手検索で同名3人（不変量の 器用さ・成長率・左右が完全一致）として現れた。
+    //    ⚠ 一般入部の経路（`generateUniversityFreshmen`）は `takenIds` を先に取って
+    //    いて正しい。**同じ処理の片方だけ順序が違う**という形の欠陥だった。
+    //    ⚠ id ではなく**オブジェクトの同一性**で除去する。id はチーム内でしか
+    //    一意でない（実測で自リーグ4チーム間に157件の衝突がある）。
     const scoutedPlayers = [];
     if (isUserTeam && highSchoolPool.players) {
       const reserved = highSchoolPool.players.filter(p => p._universityReserved === teamName);
+      const reservedSet = new Set(reserved);
       reserved.forEach(p => {
         delete p._universityReserved;
         p.universityTeamId = teamData.universityTeamId;
@@ -151,7 +165,7 @@ export function processUniversityTeamGraduation(allTeams, seasonData, currentYea
         if (!p.careerStats) p.careerStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } };
         scoutedPlayers.push(p);
       });
-      highSchoolPool.players = highSchoolPool.players.filter(p => p._universityReserved !== teamName);
+      highSchoolPool.players = highSchoolPool.players.filter(p => !reservedSet.has(p));
     }
 
     const maxRoster = isUserTeam ? 60 : Infinity;

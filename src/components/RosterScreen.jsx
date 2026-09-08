@@ -77,12 +77,17 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
     ? (isStarter ? 'スタメン出場中のため変更不可' : 'ベンチ外に移動')
     : (canActivate ? '登録選手に追加' : `登録枠満員（${ACTIVE_LIMIT}名）`);
 
+  // ⚠ **「移動できない」を opacity で表さないこと**。カード全体を薄くすると
+  //    前景も背景も一緒に地色へ寄るので、`opacity-50` で選手名が **2.87:1**、
+  //    先発の黄色い名前が **2.44:1** まで落ちて読めなくなっていた（実測）。
+  //    行は「選手を見比べる情報」なので薄くしてはいけない。
+  //    操作できないことは カーソル・ツールチップ・先発チップ・枠線が担う。
   return (
     <div
       title={tooltip}
       onClick={blocked ? undefined : onClick}
       className={`flex items-center gap-1.5 px-2 py-1.5 rounded border text-xs select-none transition-colors
-        ${blocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
+        ${blocked ? 'cursor-not-allowed' : 'cursor-pointer'}
         ${isActive
           ? 'bg-surface-2 border-gray-600 ' + (blocked ? '' : 'hover:bg-red-950/60')
           : 'bg-surface-1 border-gray-700 ' + (blocked ? '' : 'hover:bg-green-950/60')}
@@ -158,7 +163,8 @@ const PosStats = ({ activePlayers }) => {
   return (
     <div className="mt-3 grid grid-cols-4 gap-2 text-xs text-center">
       {stats.map(({ label, count }) => (
-        <div key={label} className="bg-gray-800/60 rounded p-2">
+        /* ⚠ 半透明だと明るい地の上で薄まり、ラベルが 2.77:1 になる（実測）。不透明に */
+        <div key={label} className="bg-surface-2 rounded p-2">
           <div className="text-gray-300">{label}</div>
           <div className="text-white font-bold text-base">{count}</div>
         </div>
@@ -251,16 +257,17 @@ const RosterScreen = ({ seasonData, gameMode }) => {
 
   return (
     <ScreenShell>
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-white">ロスター管理</h1>
-          <p className="text-xs text-gray-300 mt-1">大学野球 公式試合ベンチ登録枠：最大 {ACTIVE_LIMIT} 名</p>
-        </div>
-        {activeTab === 'roster' && (
-          <div className="flex items-center gap-3">
+      {/* ⚠ ここは手書きの見出しだった（`text-white` / `text-gray-300`）。地色の上に
+          直に載るので実測 **2.18:1 / 1.27:1** ——補足行はほぼ見えていなかった。
+          共有の `ScreenHeader`（`text-ink` 6.53 / `text-ink-sub` 4.51）を使う。
+          ⚠ 登録数のバッジも `bg-*-950/30` の半透明で、明るい地の上では薄まる。不透明に */}
+      <ScreenHeader
+        title="ロスター管理"
+        sub={`大学野球 公式試合ベンチ登録枠：最大 ${ACTIVE_LIMIT} 名`}
+        right={activeTab === 'roster' ? (
+          <>
             <div className={`text-sm font-bold px-3 py-1 rounded border
-              ${isFull ? 'border-red-500 text-red-400 bg-red-950/40' : 'border-green-600 text-green-400 bg-green-950/30'}`}>
+              ${isFull ? 'border-red-500 text-red-300 bg-red-950' : 'border-green-600 text-green-300 bg-green-950'}`}>
               登録 {activePlayers.length} / {ACTIVE_LIMIT} 名
             </div>
             <button
@@ -269,9 +276,9 @@ const RosterScreen = ({ seasonData, gameMode }) => {
             >
               AI自動選択
             </button>
-          </div>
-        )}
-      </div>
+          </>
+        ) : null}
+      />
 
       {/* タブ切り替え */}
       <div className="flex gap-1 bg-surface-2 rounded-xl p-1 border border-gray-700/50 mb-4">
@@ -303,14 +310,14 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <>
           {/* 説明 + 並替 */}
           <div className="flex items-center gap-3 mb-3">
-            <div className="bg-gray-800/70 rounded px-3 py-2 text-xs text-gray-300 flex-1">
+            <div className="bg-surface-2 rounded px-3 py-2 text-xs text-gray-300 flex-1">
               選手をクリックして<span className="text-white font-medium">登録選手 ↔ ベンチ外</span>を切り替えます。
               <span className="text-yellow-400 ml-2">先発</span>表示中は変更不可。
               <span className="ml-3 text-green-400">■</span><span className="ml-0.5">高値</span>
               <span className="ml-2 text-yellow-300">■</span><span className="ml-0.5">平均</span>
               <span className="ml-2 text-gray-400">■</span><span className="ml-0.5">低値</span>
             </div>
-            <div className="flex items-center gap-1 flex-shrink-0 bg-gray-800/70 rounded px-2 py-1.5">
+            <div className="flex items-center gap-1 flex-shrink-0 bg-surface-2 rounded px-2 py-1.5">
               <span className="text-xs text-gray-400 mr-1">並替:</span>
               {[
                 { key: 'position', label: 'ポジション' },
