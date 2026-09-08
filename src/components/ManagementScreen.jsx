@@ -40,7 +40,6 @@ import BudgetSettlementScreen from './BudgetSettlementScreen.jsx';
 import UniversityScoutScreen from './UniversityScoutScreen.jsx';
 import PlayerSearchScreen from './PlayerSearchScreen.jsx';
 import TeamRankingScreen from './TeamRankingScreen.jsx';
-import ProspectBoardScreen from './ProspectBoardScreen.jsx';
 
 const ManagementScreen = ({
   managementView,
@@ -621,9 +620,6 @@ const ManagementScreen = ({
     userTeamName={userTeamName}
     gameMode={gameMode}
     seasonData={seasonData}
-    onBack={() => setManagementView('dateprogress')}
-  />;
-  if (managementView === 'prospects') return <ProspectBoardScreen
     onBack={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'halloffame') return <HallOfFameScreen

@@ -56,6 +56,7 @@ const REMOVED_ON_PURPOSE = {
   EGRESS_BLOCKED:  'egressプロキシのエラー文字列。コードではない',
   allTeamStats:    '能力ランキングのチームランキングタブ撤去で削除（歴史の記録）',
   teamRankFilter:  '同上',
+  ProspectBoardScreen: '「注目選手（将来性）」タブ撤去でファイルごと削除（歴史の記録）',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');
