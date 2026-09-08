@@ -3,7 +3,8 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
-import { AbilityRadar, teamRadarAxes } from './AbilityRadar.jsx';
+// ⚠ チーム戦力レーダーはこの画面から撤去した（下記）。`AbilityRadar` / `teamRadarAxes`
+//    自体は試合前モーダルと選手詳細が使っているので消さないこと
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 import { formatInnings } from '../utils/physics.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
@@ -121,7 +122,36 @@ const TeamInfoScreen = ({ gameMode }) => {
 
   return (
     <ScreenShell>
-      <ScreenHeader title="チーム情報" />
+      {/* ⚠ かつてここに「総人数 / 投手 / 野手 ＋ チーム戦力レーダー」の全幅パネルがあったが
+          **撤去した**。3つの数字は下の表の見出し（`投手 (10人)`）と重複しており、
+          大学・独立のチームでは実質それとレーダーだけで、1250×330px のパネルの大半が空白だった。
+          ⚠ ただし**社会人チームだけはランクと注目度も持っていた**——これはこの画面に
+          他に出る場所が無いので、見出しの右へ移して残す。数字と重複しているものだけ捨てる。
+          ⚠ `teamRadarAxes` は消さないこと。試合前モーダル（相手チームの戦力）が使っている */}
+      <ScreenHeader
+        title="チーム情報"
+        right={team?.corporateData ? (() => {
+          const cd = team.corporateData;
+          const rankColor = { S: 'text-yellow-400', A: 'text-blue-400', B: 'text-green-400', C: 'text-gray-300', D: 'text-gray-400' }[cd.rank] || 'text-gray-300';
+          return (
+            <div className="flex items-center gap-4 bg-surface-2 rounded-lg px-4 py-2">
+              <div className="text-center">
+                <div className="text-xs text-gray-300 leading-none">ランク</div>
+                <div className={`text-xl font-black leading-tight ${rankColor}`}>{cd.rank}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-300 leading-none">注目度</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xl font-bold text-white leading-tight tabular-nums">{Math.round(cd.reputation)}</div>
+                  <div className="w-16 bg-gray-700 rounded-full h-2">
+                    <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full" style={{ width: `${cd.reputation}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })() : null}
+      />
 
         <div className="bg-surface-2 rounded-lg p-6 mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">チーム選択</label>
@@ -130,42 +160,6 @@ const TeamInfoScreen = ({ gameMode }) => {
               <option key={teamName} value={teamName}>{teamName}</option>
             ))}
           </select>
-        </div>
-
-        {/* 内訳とレーダーを1枚に並べる。
-            以前は別々の全幅パネルで、内訳は3つの数字が1250pxに散り、
-            レーダーは1250pxのパネルの中で240pxしか使っていなかった */}
-        <div className="bg-surface-2 rounded-lg p-6 mb-6 flex flex-wrap items-start gap-6">
-          <div className={`grid ${team.corporateData ? 'grid-cols-5' : 'grid-cols-3'} gap-x-8 gap-y-3 text-white`}>
-            <div><div className="text-sm text-gray-300">総人数</div><div className="text-2xl font-bold">{team.players.length}人</div></div>
-            <div><div className="text-sm text-gray-300">投手</div><div className="text-2xl font-bold">{pitchers.length}人</div></div>
-            <div><div className="text-sm text-gray-300">野手</div><div className="text-2xl font-bold">{fielders.length}人</div></div>
-            {team.corporateData && (() => {
-              const cd = team.corporateData;
-              const rankColor = { S: 'text-yellow-400', A: 'text-blue-400', B: 'text-green-400', C: 'text-gray-300', D: 'text-gray-400' }[cd.rank] || 'text-gray-300';
-              return (<>
-                <div>
-                  <div className="text-sm text-gray-300">ランク</div>
-                  <div className={`text-2xl font-black ${rankColor}`}>{cd.rank}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-300">注目度</div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-2xl font-bold">{Math.round(cd.reputation)}</div>
-                    <div className="flex-1 max-w-[80px] bg-gray-700 rounded-full h-2.5 mt-1">
-                      <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full" style={{width: `${cd.reputation}%`}} />
-                    </div>
-                  </div>
-                </div>
-              </>);
-            })()}
-          </div>
-
-          {/* チーム戦力レーダー */}
-          <div className="ml-auto">
-            <h2 className="text-sm font-bold text-gray-300 mb-1">チーム戦力</h2>
-            <AbilityRadar axes={teamRadarAxes(team)} size={240} />
-          </div>
         </div>
 
         {/* 投手テーブル */}
