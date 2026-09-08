@@ -527,6 +527,22 @@ export const getAbilityColor = (value) => {
 };
 
 /**
+ * 球速・投手スタミナを**他の能力値と同じ 0〜100 の物差し**へ正規化する。
+ *
+ * ⚠ **この2つだけ単位が違う**（球速は km/h・スタミナは 0〜200）ので、
+ *    生の値を他の能力と平均すると意味を成さない。
+ * ⚠ **新しい係数を作らないこと**。`(v-115)×2.5` / `sta/2` は
+ *    `AbilityValue` / `AbilityRadar` / `PlayerDetailModal` / `TryoutScreen` /
+ *    `ContractScreen` が既に使っている**この作品の共通の物差し**で、
+ *    ランク配色もこれで較正してある。ここが唯一の定義。
+ * ⚠ 実際にこれを守らなかったのが `calcPlayerOverall` で、独自に
+ *    `(v-115)×1.5` / `sta/3` を使っていたため**投手の総合力だけ低く出て**いた
+ *    （NPBレギュラー相当で 投手45 対 野手57）。
+ */
+export const normVelocity = (v) => Math.max(0, Math.min(99, ((v ?? 130) - 115) * 2.5));
+export const normPitcherStamina = (v) => Math.max(0, Math.min(99, (v ?? 80) / 2));
+
+/**
  * 総合力（`calcPlayerOverall`）→ 色クラス。
  * ⚠ `getAbilityColor`（生の能力値用）とは**別のスケール**。総合力は個々の能力値より
  *    低く出るので、同じ閾値を使うと大半が灰色に潰れる。用途で使い分けること。

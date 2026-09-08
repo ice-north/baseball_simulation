@@ -4,7 +4,7 @@
 // ============================================================
 
 import { getNestedValue, setNestedValueMut } from './growthUtils.js';
-import { getUtilityScore } from '../utils/constants.js';
+import { getUtilityScore, normVelocity, normPitcherStamina } from '../utils/constants.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { getPitchTypeName } from './campTraining.js';
 import { getAvailableUniversityDispatches, getRemainingDispatchSlots } from '../university/universityPipeSystem.js';
@@ -53,12 +53,48 @@ export function getAvailableDispatchKeys(gameMode, clubMode) {
  * 投手: (velocity-115)*1.5 + control + stamina/3 を3で割った平均
  * 野手: (meet + power + speed + defense) / 4
  */
+// 投手の素点（4項）を**野手のスケールへ平行移動する**ための実測値。
+// ⚠ **倍率で揃えようとしないこと**。投手と野手は別の式なので、重みをいじって
+//    平均を合わせても**裾が合わない**（実測で σ 投手10.2 対 野手8.5。中央は揃うのに
+//    能力ランキングの Top50 が投手66%になる）。ドラフト評価でも同じ轍を2度踏んで
+//    「群ごとの偏差値」に落ち着いている（`playerValue.js`）。ここも同じ形にする。
+// ⚠ ただし**この画面の総合力は絶対値でなければならない**（派遣の適性判定 60/55・
+//    `getOverallColor` の帯・`projectPeak` が閾値として使う）。母集団から毎回
+//    偏差値を作るのではなく、**一度実測した平均とσで固定の平行移動**にしてある。
+// ⚠ **母集団は「チームに所属している選手」で測ること**。高校生プールまで混ぜて
+//    較正すると、2つの部分母集団で投手と野手の関係が違う（チーム 39.4 対 42.3 /
+//    高校生 27.5 対 35.5）ぶん折衷になり、能力ランキングの Top50 が投手60%に
+//    振れた。チームのみで較正すると Top50 52% / Top200 38% / Top1000 30% と
+//    母集団比率(29%)へ収束する。
+// ⚠ **生成側を変えたら測り直すこと**（`VALUE_DIST` / `BAND_SD` と同じ性質）。
+//    実測: 560チーム 15,858人（投手4,580 / 野手11,278）。
+const PITCHER_RAW_MEAN = 39.4, PITCHER_RAW_SD = 9.6;
+const FIELDER_MEAN = 42.3, FIELDER_SD = 8.1;
+
+/**
+ * 選手の総合力（0〜99目安）。**投手と野手を同じ物差しに載せる。**
+ *
+ * ⚠ かつて投手だけ独自の正規化（`(球速-115)×1.5` / `スタミナ/3`）を使っており、
+ *    **投手と野手で別のスケール**になっていた。NPBレギュラー相当を通すと
+ *    投手45 対 野手57 で、実測では能力ランキングの総合ソートの Top50 に投手が
+ *    **1人も居ない**（0.0%。母集団は29.3%）状態だった。
+ * ⚠ 野手側は動かしていない。派遣の閾値・配色の帯・暫定戦力スコアが
+ *    **この絶対値に乗っている**ので、基準スケールは野手のまま据え置く。
+ */
 export function calcPlayerOverall(player) {
   if (player.position === 'pitcher') {
-    const vel = ((player.pitching?.velocity || 130) - 115) * 1.5;
+    // 球速・スタミナは単位が違うので共有の正規化を通す（`utils/constants.js` が唯一の定義）
+    const vel = normVelocity(player.pitching?.velocity);
     const ctrl = player.pitching?.control || 40;
-    const sta = (player.pitching?.stamina || 80) / 3;
-    return Math.round((vel + ctrl + sta) / 3);
+    const sta = normPitcherStamina(player.pitching?.stamina);
+    // ⚠ 変化球を入れること。持ち球は防御率を 0.40〜0.84 動かすのに総合力に
+    //    一切入っておらず、しかも項が3つしかないぶん裾が野手より広がっていた
+    const arsenal = player.pitching?.arsenal || [];
+    const bestBreak = arsenal.filter(a => a.type !== 'straight')
+      .reduce((m, a) => Math.max(m, a.level || 0), 0);
+    const raw = (vel + ctrl + sta + bestBreak) / 4;
+    const scaled = (raw - PITCHER_RAW_MEAN) / PITCHER_RAW_SD * FIELDER_SD + FIELDER_MEAN;
+    return Math.max(0, Math.min(99, Math.round(scaled)));
   } else {
     const meet = player.batting?.meet || 30;
     const power = player.batting?.power || 30;
