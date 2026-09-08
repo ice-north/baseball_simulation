@@ -279,7 +279,27 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
         });
       });
     }
-    return list.sort((a, b) => b.overall - a.overall).slice(0, 5);
+    // ⚠ **投手と野手を同じ数字で並べてはいけない**。`calcPlayerOverall` は
+    //    投手 `(球速-115)×1.5 + 制球 + スタミナ/3` の平均・野手 `4能力の平均` と
+    //    **別のスケール**で、NPBレギュラー相当を通すと 投手45 対 野手57 になる。
+    //    素直に上位5名を取ると実測で **投手は2.1%**（ロスターの投手比率は29.5%）
+    //    しか入らず、どのチームも野手だけが並んでいた。
+    //    **群ごとに取る**（＝ロスター構成に合わせて 投手2 / 野手3）。
+    //    ⚠ 倍率でスケールを揃える案は取らないこと——ドラフト評価で2通り試して失敗し、
+    //    「群ごとの偏差値」に落ち着いた経緯がある（`playerValue.js`）。ここは
+    //    順位を出す場所ではないので、群を分けるだけで足りる。
+    //    ⚠ `calcPlayerOverall` そのものを直すのは別の話。派遣の適性判定
+    //    （`maxOverall` 60/55）・`projectPeak`・暫定戦力スコアが同じ数字に乗っている。
+    const byOverall = (a, b) => b.overall - a.overall;
+    const pitchers = list.filter(x => x.player.position === 'pitcher').sort(byOverall);
+    const fielders = list.filter(x => x.player.position !== 'pitcher').sort(byOverall);
+    const picked = [...pitchers.slice(0, 2), ...fielders.slice(0, 3)];
+    // 片方が足りないチーム（プール由来の大学等）は、もう片方で5名まで埋める
+    if (picked.length < 5) {
+      const rest = [...pitchers.slice(2), ...fielders.slice(3)].sort(byOverall);
+      picked.push(...rest.slice(0, 5 - picked.length));
+    }
+    return picked;
   }, [expandedTeam]);
 
   const filtered = useMemo(() => {
