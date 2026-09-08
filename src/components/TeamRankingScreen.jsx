@@ -7,6 +7,8 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 import { universityPool } from '../season/universityPool.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
+import { POSITION_NAMES, getOverallColor } from '../utils/constants.js';
+import PlayerDetailModal from './PlayerDetailModal.jsx';
 
 const RANK_COLOR = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
 const RANK_BG = { S: 'bg-yellow-900/40 border-yellow-700/60', A: 'bg-orange-900/30 border-orange-700/50', B: 'bg-green-900/30 border-green-700/50', C: 'bg-blue-900/20 border-blue-700/40', D: 'bg-gray-900/20 border-gray-700/30' };
@@ -193,6 +195,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
   const [expandedTeam, setExpandedTeam] = useState(null); // 詳細を開いているチーム名
   const [sortKey, setSortKey] = useState('position'); // 'position'|'score'|'reputation'|'roster'|'wins'|'winRate'|'avg'|'era'
   const [sortAsc, setSortAsc] = useState(true); // position=昇順, その他=降順
+  const [detailPlayer, setDetailPlayer] = useState(null); // 主な選手のチップから開く
 
   const storedRanking = WORLD_DATA._teamRanking || [];
   const isProvisional = storedRanking.length === 0;
@@ -253,6 +256,31 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       };
     });
   }, [ranking, standingsMap, uniPoolCountMap]);
+
+  // 「主な選手」（能力ランキングのチーム表示から移設）。
+  // ⚠ **展開中の1チームぶんだけ計算すること**。移設元は全チームぶんを先に集計しており、
+  //    約16000人に `calcPlayerOverall` を掛けていた。この画面は560行あるので同じことは
+  //    できない。展開は常に1チームなので、そこだけ引けば足りる。
+  // ⚠ **選手の実体を持つこと**。移設元は {name, position, overall, age} のスナップ
+  //    ショットだったので選手詳細を開けなかった。実体なら共有モーダルへそのまま渡せる。
+  const topPlayers = useMemo(() => {
+    if (!expandedTeam) return [];
+    const td = TEAMS_DATA[expandedTeam];
+    const list = [];
+    if (td?.players?.length) {
+      td.players.forEach(p => list.push({ player: p, overall: calcPlayerOverall(p) }));
+    } else {
+      // 実体化されていない並行世界の大学は universityPool から引く（人数列の † と同じ経路）
+      Object.values(universityPool || {}).forEach(cohort => {
+        if (!Array.isArray(cohort)) return;
+        cohort.forEach(e => {
+          if (e?.universityTeamName !== expandedTeam || !e.player) return;
+          list.push({ player: e.player, overall: calcPlayerOverall(e.player) });
+        });
+      });
+    }
+    return list.sort((a, b) => b.overall - a.overall).slice(0, 5);
+  }, [expandedTeam]);
 
   const filtered = useMemo(() => {
     const list = enriched.filter(e => {
@@ -572,6 +600,25 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
                         ].filter(Boolean)}
                         />
                       </div>
+
+                      {topPlayers.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-700/60">
+                          <div className="text-xs font-bold text-cyan-300 mb-1.5">主な選手</div>
+                          <div className="flex gap-1 flex-wrap">
+                            {topPlayers.map(({ player, overall }, j) => (
+                              // ⚠ 行のクリックは展開のトグルなので、必ず stopPropagation すること
+                              <button key={j}
+                                onClick={(ev) => { ev.stopPropagation(); setDetailPlayer(player); }}
+                                className="text-xs bg-gray-900 hover:bg-gray-700 transition px-2 py-0.5 rounded inline-flex items-center gap-1"
+                                title="クリックで選手の詳細">
+                                <span className="text-gray-300">{POSITION_NAMES[player.position] || player.position}</span>
+                                <span className="text-white font-bold">{player.name}</span>
+                                <span className={`font-bold ${getOverallColor(overall)}`}>{overall}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )}
@@ -586,16 +633,18 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       {isProvisional ? (
         <div className="mt-3 p-2 bg-surface-2 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（S〜Dの帯は上の内訳のとおり）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。</div>
-          <div className="text-gray-300">行をクリックすると、試合成績・打撃・投手・編成の詳細を展開できます。ヘッダーをクリックでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（並行世界の実体化されていない大学）。</div>
+          <div className="text-gray-300">行をクリックすると、試合成績・打撃・投手・編成の詳細と、総合力上位5名の「主な選手」を展開できます（選手名をクリックで詳細）。ヘッダーをクリックでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（並行世界の実体化されていない大学）。</div>
         </div>
       ) : (
         <div className="mt-3 p-2 bg-surface-2 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-gray-100">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
           重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
           初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。ランクは全体でのパーセンタイル（帯は上の内訳のとおり）。</div>
-          <div className="text-gray-300">成績・打率・防御率は各リーグ順位表と選手個人成績から集計。行をクリックで詳細展開、ヘッダーでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（選手が個別に実体化されていない並行世界チーム）を示します。</div>
+          <div className="text-gray-300">成績・打率・防御率は各リーグ順位表と選手個人成績から集計。行をクリックで詳細（成績・編成＋総合力上位5名の「主な選手」。選手名をクリックで詳細）を展開、ヘッダーでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（選手が個別に実体化されていない並行世界チーム）を示します。</div>
         </div>
       )}
+
+      {detailPlayer && <PlayerDetailModal player={detailPlayer} onClose={() => setDetailPlayer(null)} />}
     </ScreenShell>
   );
 };

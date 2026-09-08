@@ -54,6 +54,8 @@ const REMOVED_ON_PURPOSE = {
   practiceOffset:  '成長の2項モデル化で置き換え（歴史の記録）',
   declineRate:     '同上',
   EGRESS_BLOCKED:  'egressプロキシのエラー文字列。コードではない',
+  allTeamStats:    '能力ランキングのチームランキングタブ撤去で削除（歴史の記録）',
+  teamRankFilter:  '同上',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');

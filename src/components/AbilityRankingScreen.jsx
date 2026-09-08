@@ -3,24 +3,16 @@ import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import ProspectBoardScreen from './ProspectBoardScreen.jsx';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, getOverallColor } from '../utils/constants.js';
 import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 
-const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
-// ⚠ **不透明にすること**。地色が明るいので、半透明のタイルはその明るい地の上で
-//    薄まり、載っている淡い文字が読めなくなる（実測で6600箇所超が3.0未満）。
-//    ランクの識別色は保ったまま、素の Tailwind の 950 段で不透明にしてある。
-const RANK_BG = { S: 'bg-yellow-950 border-yellow-700/60', A: 'bg-red-950 border-red-700/60', B: 'bg-blue-950 border-blue-700/60', C: 'bg-green-950 border-green-700/60', D: 'bg-surface-2 border-gray-700/50' };
-
-const getOverallColor = (v) => {
-  if (v >= 70) return 'text-yellow-400';
-  if (v >= 60) return 'text-red-400';
-  if (v >= 50) return 'text-blue-400';
-  if (v >= 40) return 'text-green-400';
-  return 'text-gray-300';
-};
+// ⚠ **チームランキングのタブはここから撤去した**（サイドバーの `TeamRankingScreen` と
+//    完全に重複していたため）。惜しかった「主な選手」の並びは向こうの行の詳細へ移してある。
+//    ここに再びチーム単位の集計を足さないこと——順位・ランクの権威は向こう1箇所。
+//    ⚠ RANK_COLORS / RANK_BG もそのとき道連れで不要になった。復活させるなら
+//    「半透明のタイルは明るい地色の上で薄まる」ので 950段で不透明にすること。
 
 const getStatColor = (v) => {
   if (v >= 80) return 'text-yellow-400';
@@ -209,89 +201,35 @@ const AbilityRankingScreen = () => {
   const [category, setCategory] = useState('all');
   const [sortKey, setSortKey] = useState('overall');
   const [limit, setLimit] = useState(50);
-  const [teamRankFilter, setTeamRankFilter] = useState('all');
   // 選手名クリックで詳細（選手検索・チーム情報・推薦スカウトと同じ共有モーダル）
   const [detailPlayer, setDetailPlayer] = useState(null);
 
-  const { allPlayers, allTeamStats, hsPlayers } = useMemo(() => {
+  const { allPlayers, hsPlayers } = useMemo(() => {
     const players = [];
-    const teamMap = {};
 
     for (const [teamName, team] of Object.entries(TEAMS_DATA)) {
       if (!team?.players) continue;
       const type = getTeamType(team);
-      const rank = team.corporateData?.rank || team.universityData?.rank || null;
-
       const displayAbbr = makeDisplayAbbr(teamName, team);
-      const teamEntry = {
-        name: teamName, abbr: displayAbbr,
-        type, rank,
-        count: 0, total: 0,
-        pitchers: 0, pitcherTotal: 0,
-        fielders: 0, fielderTotal: 0,
-        topPlayers: [],
-      };
 
       for (const p of team.players) {
         const overall = calcPlayerOverall(p);
         const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
-        const entry = { ...p, teamName, teamAbbr: teamEntry.abbr, teamType: type, overall, draftScore };
-        players.push(entry);
-        teamEntry.count++;
-        teamEntry.total += overall;
-        if (p.position === 'pitcher') { teamEntry.pitchers++; teamEntry.pitcherTotal += overall; }
-        else { teamEntry.fielders++; teamEntry.fielderTotal += overall; }
-        teamEntry.topPlayers.push({ name: p.name, position: p.position, overall, age: p.age });
+        players.push({ ...p, teamName, teamAbbr: displayAbbr, teamType: type, overall, draftScore });
       }
-
-      teamEntry.avg = teamEntry.count > 0 ? teamEntry.total / teamEntry.count : 0;
-      teamEntry.pitcherAvg = teamEntry.pitchers > 0 ? teamEntry.pitcherTotal / teamEntry.pitchers : 0;
-      teamEntry.fielderAvg = teamEntry.fielders > 0 ? teamEntry.fielderTotal / teamEntry.fielders : 0;
-      teamEntry.topPlayers.sort((a, b) => b.overall - a.overall);
-      teamEntry.topPlayers = teamEntry.topPlayers.slice(0, 5);
-      teamMap[teamName] = teamEntry;
     }
 
-    const uniTeamMap = {};
     const teamsDataNames = new Set(Object.keys(TEAMS_DATA));
     Object.values(universityPool).forEach(cohort => {
       if (!cohort) return;
       cohort.forEach(entry => {
         const tName = entry.universityTeamName;
         if (!tName || teamsDataNames.has(tName)) return;
-        if (!uniTeamMap[tName]) {
-          uniTeamMap[tName] = {
-            name: tName, abbr: normalizeUniAbbr(tName), type: 'university',
-            rank: entry.universityRank || null,
-            count: 0, total: 0,
-            pitchers: 0, pitcherTotal: 0,
-            fielders: 0, fielderTotal: 0,
-            topPlayers: [],
-          };
-        }
-        const te = uniTeamMap[tName];
-        if (entry.universityRank && (!te.rank || 'SABCD'.indexOf(entry.universityRank) < 'SABCD'.indexOf(te.rank))) {
-          te.rank = entry.universityRank;
-        }
         const p = entry.player;
         const overall = calcPlayerOverall(p);
         const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
-        const pEntry = { ...p, teamName: tName, teamAbbr: normalizeUniAbbr(tName), teamType: 'university', overall, draftScore };
-        players.push(pEntry);
-        te.count++;
-        te.total += overall;
-        if (p.position === 'pitcher') { te.pitchers++; te.pitcherTotal += overall; }
-        else { te.fielders++; te.fielderTotal += overall; }
-        te.topPlayers.push({ name: p.name, position: p.position, overall, age: p.age });
+        players.push({ ...p, teamName: tName, teamAbbr: normalizeUniAbbr(tName), teamType: 'university', overall, draftScore });
       });
-    });
-    Object.values(uniTeamMap).forEach(te => {
-      te.avg = te.count > 0 ? te.total / te.count : 0;
-      te.pitcherAvg = te.pitchers > 0 ? te.pitcherTotal / te.pitchers : 0;
-      te.fielderAvg = te.fielders > 0 ? te.fielderTotal / te.fielders : 0;
-      te.topPlayers.sort((a, b) => b.overall - a.overall);
-      te.topPlayers = te.topPlayers.slice(0, 5);
-      teamMap[`uni_${te.name}`] = te;
     });
 
     const hs = (highSchoolPool.players || []).map(p => {
@@ -324,7 +262,7 @@ const AbilityRankingScreen = () => {
       p.amScouts = amScouts;
     });
 
-    return { allPlayers: players, allTeamStats: Object.values(teamMap), hsPlayers: hs };
+    return { allPlayers: players, hsPlayers: hs };
   }, [Object.keys(TEAMS_DATA).length]);
 
   const filteredPlayers = useMemo(() => {
@@ -380,18 +318,6 @@ const AbilityRankingScreen = () => {
 
     return list.slice(0, limit);
   }, [hsPlayers, category, sortKey, limit]);
-
-  const filteredTeams = useMemo(() => {
-    let list = allTeamStats;
-    if (teamRankFilter !== 'all') {
-      if (teamRankFilter === 'user') list = list.filter(t => t.type === 'user');
-      else if (teamRankFilter === 'independent') list = list.filter(t => t.type === 'independent' || t.type === 'user');
-      else if (teamRankFilter === 'corporate') list = list.filter(t => t.type === 'corporate');
-      else if (teamRankFilter === 'university') list = list.filter(t => t.type === 'university');
-      else list = list.filter(t => t.rank === teamRankFilter);
-    }
-    return [...list].sort((a, b) => b.avg - a.avg);
-  }, [allTeamStats, teamRankFilter]);
 
   const isFielderCategory = ['catcher', 'infielder', 'outfielder'].includes(category);
 
@@ -504,7 +430,6 @@ const AbilityRankingScreen = () => {
       <div className="flex gap-2 mb-4">
         {[
           { key: 'player', label: '選手ランキング' },
-          { key: 'team', label: 'チームランキング' },
           { key: 'highschool', label: `高校3年生${hsPlayers.length > 0 ? ` (${hsPlayers.length})` : ''}` },
           { key: 'prospects', label: '注目選手（将来性）' },
         ].map(t => (
@@ -575,78 +500,6 @@ const AbilityRankingScreen = () => {
               )}
             </>
           )}
-        </>
-      )}
-
-      {mode === 'team' && (
-        <>
-          <div className="flex flex-wrap gap-1 mb-4">
-            {[
-              { key: 'all', label: '全チーム' },
-              { key: 'independent', label: '独立リーグ' },
-              { key: 'corporate', label: '社会人' },
-              { key: 'university', label: '大学' },
-              { key: 'S', label: 'Sランク' },
-              { key: 'A', label: 'Aランク' },
-              { key: 'B', label: 'Bランク' },
-              { key: 'C', label: 'Cランク' },
-              { key: 'D', label: 'Dランク' },
-            ].map(t => (
-              <button key={t.key}
-                onClick={() => setTeamRankFilter(t.key)}
-                className={`px-3 py-1.5 rounded text-xs font-bold transition ${
-                  teamRankFilter === t.key
-                    ? (RANK_COLORS[t.key] ? `seg-on ${RANK_COLORS[t.key]}` : 'seg-on')
-                    : 'seg'
-                }`}
-              >{t.label}</button>
-            ))}
-          </div>
-
-          <div className="space-y-2">
-            {filteredTeams.map((team, i) => {
-              const typeInfo = TYPE_LABEL[team.type] || TYPE_LABEL.user;
-              const rankKey = team.rank || (team.type === 'user' ? 'B' : null);
-              const bgClass = rankKey ? RANK_BG[rankKey] : 'bg-surface-2 border-gray-700/50';
-
-              return (
-                <div key={`${team.type}_${team.name}`} className={`rounded-lg border p-3 ${bgClass}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-400 text-xs w-6">{i + 1}.</span>
-                      <span className="font-bold text-sm">{team.name}</span>
-                      <span className={`text-xs ${typeInfo.color}`}>{typeInfo.text}</span>
-                      {team.rank && <span className={`text-xs font-bold ${RANK_COLORS[team.rank]}`}>{team.rank}</span>}
-                    </div>
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className="text-gray-300">{team.count}人</span>
-                      <span>
-                        総合<span className={`font-bold ml-1 ${getOverallColor(team.avg)}`}>{team.avg.toFixed(1)}</span>
-                      </span>
-                      <span>
-                        投手<span className={`ml-1 ${getOverallColor(team.pitcherAvg)}`}>{team.pitcherAvg.toFixed(1)}</span>
-                      </span>
-                      <span>
-                        野手<span className={`ml-1 ${getOverallColor(team.fielderAvg)}`}>{team.fielderAvg.toFixed(1)}</span>
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 flex-wrap">
-                    {team.topPlayers.map((tp, j) => (
-                      <span key={j} className="text-xs bg-gray-900/50 px-2 py-0.5 rounded inline-flex items-center gap-1">
-                        <span className="text-gray-400">{POSITION_NAMES[tp.position]}</span>
-                        <span className="text-white">{tp.name}</span>
-                        <span className={`font-bold ${getOverallColor(tp.overall)}`}>{tp.overall}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="text-xs text-ink-sub mt-3">
-            {filteredTeams.length}チーム表示
-          </div>
         </>
       )}
 

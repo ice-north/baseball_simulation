@@ -526,6 +526,20 @@ export const getAbilityColor = (value) => {
   return 'text-gray-300';
 };
 
+/**
+ * 総合力（`calcPlayerOverall`）→ 色クラス。
+ * ⚠ `getAbilityColor`（生の能力値用）とは**別のスケール**。総合力は個々の能力値より
+ *    低く出るので、同じ閾値を使うと大半が灰色に潰れる。用途で使い分けること。
+ * ⚠ 能力ランキングとチームランキングの2画面が使う。**片方に書き写さないこと**。
+ */
+export const getOverallColor = (v) => {
+  if (v >= 70) return 'text-yellow-400';
+  if (v >= 60) return 'text-red-400';
+  if (v >= 50) return 'text-blue-400';
+  if (v >= 40) return 'text-green-400';
+  return 'text-gray-300';
+};
+
 const FIELD_POSITIONS_FOR_UTILITY = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
 
 /**
