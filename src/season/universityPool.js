@@ -639,6 +639,37 @@ export function processHighSchoolNPBDraft() {
  * @returns {{ university: Object, corporate: Array, independent: Array, retired: Array }}
  *   university: { S: [...], A: [...], ... } ランク別に分類
  */
+
+// ============================================================
+// ⚠ 進路の振り分けは「群ごとに順位を付けてから」帯を切る
+//
+// `evaluatePlayerPotential` は**投手の評価点が野手より低く出る既知の偏り**を持つ
+// （`npbDraft` の節）。1本の順位表を作って上から帯で切ると、その偏りが
+// **そのまま進路の構成比になる**。実測で高校生プールは投手50.6%なのに
+// **大学プールは19.2%**しか無く、高校の投手の半分が「引退」へ落ちていた。
+//
+// 群（投手/野手）ごとに順位を付け、母集団の比率どおりに交互へ並べ直す。
+// **群の中の順位は完全に保たれる**ので「良い選手ほど良い進路」は変わらず、
+// **どの帯を切っても投手の割合が母集団と同じ**になる。
+//
+// ⚠ 倍率や加点でスケールを揃えようとしないこと——ドラフト評価で2度失敗している。
+// ⚠ トライアウトは別経路で既に是正済み（`TRYOUT_OVERDRAW` + `balanceByPosition`）。
+//    そちらへこの関数を持ち込むと二重に効く。
+function balanceRankByPosition(scored) {
+  const P = scored.filter(e => e.player?.position === 'pitcher');
+  const F = scored.filter(e => e.player?.position !== 'pitcher');
+  if (P.length === 0 || F.length === 0) return scored;
+  const total = P.length + F.length;
+  const out = [];
+  let pi = 0, fi = 0;
+  for (let k = 0; k < total; k++) {
+    const wantP = (k + 1) * P.length / total;   // ここまでに出ているべき投手の数
+    if (pi < P.length && (fi >= F.length || pi < wantP)) out.push(P[pi++]);
+    else out.push(F[fi++]);
+  }
+  return out;
+}
+
 export function distributeHighSchoolGraduates(enrollYear) {
   const players = highSchoolPool.players.filter(p => !p._universityReserved);
   if (players.length === 0) {
@@ -646,11 +677,10 @@ export function distributeHighSchoolGraduates(enrollYear) {
   }
 
   // 潜在能力でソート（降順）
-  const scored = players.map(p => ({
+  const scored = balanceRankByPosition(players.map(p => ({
     player: p,
     score: evaluatePlayerPotential(p)
-  }));
-  scored.sort((a, b) => b.score - a.score);
+  })).sort((a, b) => b.score - a.score));
 
   // === 進路は「水準」だけでなく「形」でも決まる（弱者の兵法）===
   // 総合能力に優れた選手は大学・社会人へ進んで万能を目指し、
@@ -1241,8 +1271,12 @@ export function seedInitialUniversityClasses(gameYear) {
       players.push(p);
     }
 
-    const scored = players.map(p => ({ player: p, score: evaluatePlayerPotential(p) }));
-    scored.sort((a, b) => b.score - a.score);
+    // ⚠ **枠の2.5倍を生成して上位だけ採る**ので、順位表の偏りがそのまま構成比になる。
+    //    群ごとに順位を付け直してから切ること（`balanceRankByPosition`）。
+    const scored = balanceRankByPosition(
+      players.map(p => ({ player: p, score: evaluatePlayerPotential(p) }))
+        .sort((a, b) => b.score - a.score)
+    );
     const uniPlayers = { S: [], A: [], B: [], C: [], D: [] };
     let cursor = 0;
     for (const rank of ['S', 'A', 'B', 'C', 'D']) {
