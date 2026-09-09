@@ -3925,23 +3925,31 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const gpBadge = (gp) => gp >= 1.5 ? '成長◎◎' : gp >= 1.3 ? '成長◎' : gp >= 1.1 ? '成長○' : null;
 
         // 新聞紙面カラーパレット（紙×インク＝明朝体で本物の紙面感・高コントラスト）
-        // ⚠ **地色と同じ紙にすること**。以前はここだけクリーム（`#f4efe2` 彩度28%）で、
-        //    本編の地色（`--surface-0` = `#dcdad5` 彩度9%）と別の紙だった。
-        //    新聞は「明るい地色の上に直に載るもの」と同じ文脈なので、
-        //    紙は `--surface-0`、文字は `--ink` / `--ink-sub` の系統へ揃える。
-        //    ⚠ ただし MUTED/FAINT はトークンそのままだと 4.34 / 2.81 まで落ちる
-        //    （紙面は文字が主役で、所属・寸評まで読ませる）。同じ色相軸のまま一段濃くしてある。
-        const PAPER = '#abb1ad';   // = --surface-0
-        const PAPER2 = '#bcc1be';  // 段の中のカード（紙より一段明るい）
-        const INK = '#262b32';     // = --ink                        6.53:1
-        const MUTED = '#3a4048';   // --ink-sub を一段濃く            4.80:1
-        const FAINT = '#4d545b';   // 補足（所属名）                  3.52:1
-        const RULE = 'rgba(38,43,50,0.30)';
+        // ⚠ **紙は地色より明るい**。以前は `--surface-0`(#abb1ad・輝度175) と同じ紙に
+        //    していたが、**この紙面は地色の上ではなく黒い幕(bg-black/80)の上に浮く**ので
+        //    「地色の上に直に載るもの」の文脈ではない。輝度175 では新聞紙に見えず、
+        //    載っているインクも 3.5〜4.3 と紙面の割に薄かった。
+        //    輝度210 の中立グレー（彩度2%）にすると**全インクが 5.1〜9.5 へ上がる**。
+        //    ⚠ 明るくしても**クリームには戻さないこと**（彩度28%の別の紙になる）。
+        //    「明るいグレーの新聞紙」であって「セピアの古紙」ではない。
+        const PAPER = '#d2d3cf';   // 新聞紙（輝度210・彩度2%）
+        const CARD  = '#f4f4f1';   // 囲み記事の中（紙に対し 1.37。**分離は太い黒枠が担う**）
+        const INK   = '#262b32';   // = --ink                        9.47:1
+        const MUTED = '#3a4048';   // --ink-sub を一段濃く            6.96:1
+        const FAINT = '#4d545b';   // 補足（所属名）                  5.10:1
+        const RULE = 'rgba(38,43,50,0.35)';
+        const MAST = '#b91c1c';    // 題字脇の色帯（塗りのみ。文字は乗せない）
         const serif = { fontFamily: '"Hiragino Mincho ProN","Yu Mincho",serif' };
-        // カテゴリ別のインク色（クリーム上で十分濃い色）
-        // ⚠ 紙を暗くしたら**カテゴリのインクも一段濃く**すること。800段は
-        //    輝度175の紙の上で 3.25〜4.00 まで落ちる（見出しと注目株の惹句なので実害）。
-        //    900段で 4.16〜4.98。チップは塗りなので 800 のまま（白文字が乗る）
+        // ⚠ **囲み記事の分離に「地色→カードは3.0以上」を当てはめないこと**。
+        //    あちらは *面の明暗* だけで島を浮かせる話。新聞の囲み記事は
+        //    **2px の黒枠**で切るのが本来の作法で、紙と記事面を明暗で離すと
+        //    紙面がまだら（＝新聞に見えない）になる。ここは枠が境界を持つ。
+        // カテゴリ別のインク色
+        // ⚠ **900段（文字）と800段（塗り）を取り違えないこと**。紙の上に直に載る
+        //    見出しは 900段（実測 6.03〜7.23）、白文字が乗る塗りは 800段（白で 7.09〜8.72）。
+        //    800段を紙の上の文字に使うと 4.0 前後まで落ちる。
+        // `bar` は**段見出しの白抜き（反転）**に使う。スポーツ紙の見出しは
+        // 色文字ではなく色帯に白抜きなので、そちらを主にしてある。
         const CAT = {
           hs:   { head: 'text-green-900',  bar: 'bg-green-800',  chip: 'bg-green-800 text-green-50' },
           uni:  { head: 'text-blue-900',   bar: 'bg-blue-800',   chip: 'bg-blue-800 text-blue-50' },
@@ -3964,29 +3972,52 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             ? [c.velocity && `${c.velocity}km`, c.control && `制球${c.control}`, c.stamina && `スタ${c.stamina}`, c.arsenalCount && `${c.arsenalCount}球種`].filter(Boolean)
             : [c.meet && `ミート${c.meet}`, c.power && `パワー${c.power}`, c.speed && `走力${c.speed}`, c.defense && `守備${c.defense}`, c.eye && `選球${c.eye}`].filter(Boolean);
           const gp = gpBadge(c.growthPotential || 1.0);
+          // 見出しは**白抜きの帯**（スポーツ紙の主見出し）。投手=赤 / 野手=紺の意味色は
+          // そのまま塗りへ移す（白文字で 10.02 / 9.46）
+          const headBand = c.isPitcher ? '#7f1d1d' : '#0c4a6e';
           return (
-            <div className="rounded-sm p-3 flex flex-col gap-1.5" style={{ background: PAPER2, border: `1px solid ${RULE}` }}>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-sm ${cat.chip}`}>{label}</span>
-                {gp && <span className="ml-auto text-xs font-black shrink-0" style={{ color: '#78350f' }}>{gp}</span>}
+            // ⚠ **囲み記事は太い黒枠で切る**。紙との明暗差ではなく枠が境界を持つ
+            <div className="flex flex-col" style={{ background: CARD, border: `2px solid ${INK}` }}>
+              {/* 肩見出し（キッカー）＝カテゴリの反転チップ */}
+              <div className={`flex items-center gap-1.5 px-2 py-1 ${cat.chip}`}>
+                <span className="text-xs font-black tracking-wide">{label}</span>
+                {gp && <span className="ml-auto text-xs font-black shrink-0">{gp}</span>}
               </div>
-              <div className="text-2xl font-black leading-tight" style={{ ...serif, color: INK }}>{c.name}</div>
-              <div className="text-xs font-medium" style={{ color: MUTED }}>{c.position}・{c.throws}投{c.bats}打・{c.age}歳 <span style={{ color: FAINT }}>／ {c.orgName}</span></div>
-              {/* 指名確度: ★＋ラベル＋確率 */}
-              <div className="flex items-center gap-2">
-                <Stars n={c.stars || 0} />
-                <span className="text-xs font-black" style={{ color: STAR_ON }}>{c.outlook}</span>
-                <span className="text-xs font-bold ml-auto" style={{ color: MUTED }}>指名確度 {c.prob}%</span>
+              <div className="p-2.5 flex flex-col gap-1.5">
+                {/* 選手名（紙面の主役なので大きく、下に太い罫） */}
+                <div>
+                  <div className="text-2xl font-black leading-tight" style={{ ...serif, color: INK }}>{c.name}</div>
+                  <div className={`h-0.5 mt-0.5 ${cat.bar}`} />
+                </div>
+                {/* ⚠ **1行に収めること**（所属名だけ truncate）。折り返すとカードごとに
+                    主見出しの帯の高さが変わり、4枚の紙面が段として揃わない */}
+                <div className="text-xs font-medium flex items-baseline gap-1 whitespace-nowrap" style={{ color: MUTED }}>
+                  <span className="shrink-0">{c.position}・{c.throws}投{c.bats}打・{c.age}歳 ／</span>
+                  <span className="truncate min-w-0" style={{ color: FAINT }} title={c.orgName}>{c.orgName}</span>
+                </div>
+                {/* 主見出し（白抜きの帯） */}
+                <div className="text-base font-black leading-snug px-2 py-1 text-white" style={{ ...serif, background: headBand }}>{c.headline}</div>
+                {/* 指名確度: ★＋ラベル ／ 確率は大きな数字で囲む（紙面は数字を大きく出す） */}
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0">
+                    <Stars n={c.stars || 0} />
+                    <div className="text-xs font-black truncate" style={{ color: STAR_ON }}>{c.outlook}</div>
+                  </div>
+                  <div className="ml-auto shrink-0 text-center px-1.5 py-0.5" style={{ border: `1px solid ${INK}` }}>
+                    <div className="text-xs font-bold leading-none" style={{ color: MUTED }}>指名確度</div>
+                    <div className="text-xl font-black leading-none tnum" style={{ color: INK }}>{c.prob}<span className="text-xs">%</span></div>
+                  </div>
+                </div>
+                {/* データBOX（白地＋細罫。塗りつぶすと紙面が濁る） */}
+                <div className="flex flex-wrap gap-1">
+                  {stats.map((s, i) => (
+                    <span key={i} className="text-xs font-bold px-1.5 py-0.5 tnum" style={{ background: '#ffffff', border: `1px solid ${RULE}`, color: INK }}>{s}</span>
+                  ))}
+                </div>
+                {/* スカウト寸評 */}
+                {c.comment && <div className="text-xs font-medium leading-snug" style={{ ...serif, color: INK }}>「{c.comment}」</div>}
+                {c.fame > 10 && <div className="text-xs font-bold tnum" style={{ color: '#6b3410' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
               </div>
-              <div className={`text-base font-bold leading-snug ${c.isPitcher ? 'text-red-900' : 'text-sky-900'}`} style={serif}>{c.headline}</div>
-              <div className="flex flex-wrap gap-1 mt-0.5">
-                {stats.map((s, i) => (
-                  <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#9ea4a1', color: INK }}>{s}</span>
-                ))}
-              </div>
-              {/* スカウト寸評 */}
-              {c.comment && <div className="text-xs font-medium leading-snug mt-0.5" style={{ ...serif, color: INK }}>「{c.comment}」</div>}
-              {c.fame > 10 && <div className="text-xs font-bold" style={{ color: '#6b3410' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
             </div>
           );
         };
@@ -3997,19 +4028,21 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             : `ミ${c.meet || '-'} パ${c.power || '-'} 走${c.speed || '-'}`;
           return (
             <div className="py-1.5" style={{ borderBottom: `1px solid ${RULE}` }}>
-              <div className="flex items-baseline gap-1.5 leading-tight">
-                <span className="text-xs font-bold shrink-0 text-center" style={{ color: MUTED, width: '1.2rem' }}>{c.position}</span>
+              <div className="flex items-center gap-1.5 leading-tight">
+                {/* 守備位置は反転の小さな四角（紙面の約物。白 on INK で 14.25） */}
+                <span className="text-xs font-black shrink-0 text-center text-white leading-none py-0.5"
+                      style={{ background: INK, width: '1.15rem' }}>{c.position}</span>
                 <span className="text-sm font-bold truncate" style={{ ...serif, color: INK }}>{c.name}</span>
-                <span className="text-xs shrink-0" style={{ color: MUTED }}>{c.age}歳</span>
-                {extra && <span className="text-xs font-bold shrink-0 text-blue-800">{extra}</span>}
+                <span className="text-xs shrink-0 tnum" style={{ color: MUTED }}>{c.age}歳</span>
+                {extra && <span className="text-xs font-bold shrink-0 text-blue-900">{extra}</span>}
                 <Stars n={c.stars || 0} size="text-xs" />
               </div>
-              <div className="flex items-center gap-1" style={{ paddingLeft: '1.2rem' }}>
-                <span className={`text-xs font-semibold truncate ${headColor}`}>{c.headline}</span>
-                <span className="ml-auto text-xs shrink-0 font-mono font-semibold" style={{ color: MUTED }}>{statStr}</span>
+              <div className="flex items-center gap-1 mt-0.5" style={{ paddingLeft: '1.4rem' }}>
+                <span className={`text-xs font-bold truncate ${headColor}`}>{c.headline}</span>
+                <span className="ml-auto text-xs shrink-0 font-mono font-semibold tnum px-1" style={{ color: INK, background: '#ffffff', border: `1px solid ${RULE}` }}>{statStr}</span>
               </div>
               {/* 所属＋スカウト寸評（枠内で折り返し、途切れないように） */}
-              <div className="text-xs leading-snug" style={{ paddingLeft: '1.2rem' }}>
+              <div className="text-xs leading-snug" style={{ paddingLeft: '1.4rem' }}>
                 <span style={{ color: FAINT }}>{c.orgName}</span>
                 <span style={{ color: FAINT }}> ／ </span>
                 <span style={{ color: INK }}>{c.comment}</span>
@@ -4020,8 +4053,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
         const SubColumn = ({ title, count, cat, children, borderLeft }) => (
           <div style={borderLeft ? { borderLeft: `1px solid ${RULE}`, paddingLeft: '0.75rem' } : undefined}>
-            <div className={`text-sm font-black pb-1 mb-2 flex justify-between items-baseline ${cat.head}`} style={{ ...serif, borderBottom: `2px solid ${INK}` }}>
-              <span>{title}</span><span className="text-xs font-bold" style={{ color: MUTED }}>{count}名</span>
+            {/* 段見出しは**白抜き**（色文字ではなく色帯に白）。スポーツ紙の作法 */}
+            <div className={`text-sm font-black px-2 py-1 mb-2 flex justify-between items-center text-white ${cat.bar}`} style={serif}>
+              <span>{title}</span>
+              <span className="text-xs font-black px-1 tnum" style={{ background: 'rgba(255,255,255,0.22)' }}>{count}名</span>
             </div>
             {children}
             {count === 0 && <div className="text-xs font-medium" style={{ color: FAINT }}>情報なし</div>}
@@ -4032,24 +4067,33 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3" onClick={() => setShowNewspaper(false)}>
             <div className="absolute inset-0 bg-black/80" />
-            <div className="relative w-full max-w-7xl rounded-lg shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()} style={{ background: PAPER, maxHeight: '95vh', border: `1px solid ${INK}` }}>
+            {/* ⚠ **角を丸めないこと**。紙面なので直角。丸めると本編のカードに見える */}
+            <div className="relative w-full max-w-7xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()} style={{ background: PAPER, maxHeight: '95vh', border: `3px solid ${INK}` }}>
               {/* 題字（マストヘッド） */}
-              <div className="text-center pt-2.5 pb-2 px-5 shrink-0" style={{ background: PAPER, borderBottom: `4px double ${INK}` }}>
+              <div className="pt-2 pb-0 px-4 shrink-0" style={{ background: PAPER, borderBottom: `4px double ${INK}` }}>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold" style={{ color: MUTED }}>{curDate.year}年{curDate.month}月{curDate.day}日</span>
+                  <span className="text-xs font-bold tnum" style={{ color: MUTED }}>{curDate.year}年{curDate.month}月{curDate.day}日</span>
                   <span className="text-xs tracking-[0.35em] uppercase font-bold" style={{ color: FAINT }}>Draft Watch</span>
                   <button onClick={() => setShowNewspaper(false)} className="text-xl leading-none px-1 font-bold hover:opacity-60" style={{ color: INK }}>✕</button>
                 </div>
-                <h2 className="text-4xl font-black tracking-[0.15em] mt-1" style={{ ...serif, color: INK }}>ドラフト戦線</h2>
-                <div className="text-xs font-bold mt-1" style={{ color: MUTED }}>全国 高校・大学・社会人・独立リーグ　注目選手 速報</div>
+                {/* 題字＋脇の色帯（新聞の題字は左に色の柱を持つ） */}
+                <div className="flex items-center justify-center gap-3 mt-0.5">
+                  <span className="w-1.5 h-9 shrink-0" style={{ background: MAST }} />
+                  <h2 className="text-4xl font-black tracking-[0.15em]" style={{ ...serif, color: INK }}>ドラフト戦線</h2>
+                  <span className="w-1.5 h-9 shrink-0" style={{ background: MAST }} />
+                </div>
+                {/* リード文は反転の帯（紙面の柱） */}
+                <div className="mt-1.5 -mx-4 px-4 py-1 text-xs font-bold text-white text-center tracking-wide" style={{ background: INK }}>
+                  全国 高校・大学・社会人・独立リーグ　注目選手 速報
+                </div>
               </div>
 
               {hasContent ? (
                 <div className="overflow-y-auto flex-1 min-h-0 p-4" style={{ background: PAPER }}>
                   {/* 速報ティッカー */}
                   {d.tournamentNews.length > 0 && (
-                    <div className="rounded-sm px-3 py-2 mb-3 flex gap-3 items-center flex-wrap" style={{ background: '#7f1d1d' }}>
-                      <span className="text-xs font-black text-white px-1.5 py-0.5 rounded-sm shrink-0" style={{ background: '#dc2626' }}>速報</span>
+                    <div className="px-3 py-2 mb-3 flex gap-3 items-center flex-wrap" style={{ background: '#7f1d1d', border: `2px solid ${INK}` }}>
+                      <span className="text-xs font-black text-white px-1.5 py-0.5 shrink-0" style={{ background: '#dc2626' }}>速報</span>
                       {d.tournamentNews.map((t, i) => (
                         <span key={i} className="text-sm font-bold text-white">{t}</span>
                       ))}
