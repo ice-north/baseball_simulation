@@ -10,10 +10,11 @@ import { addToRoster, removeFromRosterById } from '../state/roster.js';
 import { checkRetirement } from '../season/yearProgressionSystem.js';
 import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
-import { universityPool, highSchoolPool } from '../season/universityPool.js';
+import { universityPool, highSchoolPool, balanceRankByPosition } from '../season/universityPool.js';
 import { getUniversityPipes } from '../university/universityPipeSystem.js';
 import { WORLD_DATA } from './worldData.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
+import { buildToolNorms, toolProfile } from '../game/scoutTools.js';
 
 // ============================================================
 // 退団システム
@@ -1606,32 +1607,87 @@ function discoverCandidatesFromPool(count, rank, reputation, initialGauge = 0) {
   const bandHi = BAND_HI[rank] ?? 0.84;
 
   // 全選手を能力順にソートして帯を切り出す
-  const byAbility = [...available]
-    .map((p, idx) => ({ player: p, poolIndex: highSchoolPool.players.indexOf(p), ability: evaluatePlayerScore(p) }))
-    .sort((a, b) => b.ability - a.ability);
+  // ⚠ **群ごとに順位を付け直してから切ること**（`balanceRankByPosition`）。
+  //    `evaluatePlayerScore` は 投手 `(球速-120)×1.5+制球+スタミナ×0.4` / 野手
+  //    `ミート+パワー+走×0.5+守×0.3+肩×0.3` と**スケールが揃っていない**ので、
+  //    高校生では野手のスコアが systematically 高く出る。1本の順位表を帯で切ると
+  //    **上の帯が野手だらけ・下の帯が投手だらけ**になっていた
+  //    （実測 S大学の候補の投手 17% / D大学 86%。プールは51%）。
+  //    S大学は投手を獲りたくても候補に居ない、という形になる。
+  //    ⚠ 進路の振り分けで踏んだのと同じ轍。**並べ替えを書き写さず共有すること**
+  const byAbility = balanceRankByPosition([...available]
+    .map((p) => ({ player: p, poolIndex: highSchoolPool.players.indexOf(p), ability: evaluatePlayerScore(p), score: evaluatePlayerScore(p) }))
+    .sort((a, b) => b.ability - a.ability));
 
   const n = byAbility.length;
   const loIdx = Math.floor(n * bandLo);
   const hiIdx = Math.min(n, Math.floor(n * bandHi));
   const band = byAbility.slice(loIdx, hiIdx);
 
-  // 帯内では知名度・成長力・ランダムで選手を発見
-  // 低知名度の逸材(fame低+growthPotential高)は鋭いスカウトが見つけられる
-  const reputationMult = 0.8 + (reputation / 100) * 0.4;
-  const scored = band.map(({ player: p, poolIndex, ability }) => {
-    const fame = p.fame || 0;
-    const gp = p.growthPotential || 1.0;
-    const noise = (Math.random() - 0.5) * 30;
-    const repBonus = (reputationMult - 1.0) * 10;
-    // 知名度が高い選手=見つかりやすい、低い選手=埋もれがち
-    const fameScore = fame * 0.5;
-    // 成長力が高い選手=素材の良さが滲み出て目に留まりやすい
-    const gemBonus = (gp - 1.0) * 25;
-    return { player: p, poolIndex, score: fameScore + gemBonus + noise + repBonus };
-  });
-  scored.sort((a, b) => b.score - a.score);
+  // ============================================================
+  // ⚠ **1本の順位表から上位を取ると、毎年同じ顔ぶれになる**
+  //
+  // 旧実装は `知名度×0.5 + (成長率-1.0)×25 + ノイズ±15` の1本で上位を取っていた。
+  // 4月は知名度がほぼ0（プール平均5.6）なので知名度の項が効かず、
+  // **2300人の帯から9人を取ると「成長率の最上位＋運」だけが残る**。
+  // 実測: 帯の中で成長率1.2以上は14.9%しかいないのに、**載った選手の99.7%が1.2以上**。
+  // 載った選手の成長率の平均は S大学1.434 〜 D大学1.432 と**ランクを問わず同じ**だった。
+  //
+  // さらに `evaluatePlayerScore` は `+(成長率-0.9)×30` を含むので、
+  // **選抜に使った成長率が評価点にも二重に乗り**、おすすめ度が S に張り付いていた
+  // （実測 S大学79% / C大学54% が S評価。C・D評価は 0%）。
+  // 「選ぶ基準と見せる基準は別」（`scoutTools` の節）と同じ轍。
+  //
+  // **枠を3つに分ける**。ドラフトの一芸指名で同じ問題を解いたのと同じ手で、
+  // ⚠ 物差しは `scoutTools` を流用する（**道具の表を二重に作らないこと**）。
+  //   ① 知名度 … 全国区の名前。**帯の上を越えて挙がる**（届かなくても話題には出る）
+  //   ② 格相応 … 帯の中央。ライバルが少なく**実際に獲れる見込みのある層**
+  //   ③ 一芸  … 総合力は帯の下でも、1つの道具が figure として立つ選手
+  // ============================================================
+  const nFame = Math.max(1, Math.round(count * 0.3));
+  const nTool = Math.max(1, Math.round(count * 0.3));
+  // ⚠ 3つの合計を `count` に一致させること。`Math.max(1, …)` にすると
+  //    月次追加（D大学は2名）で合計3になり、`slice` で**一芸枠だけ毎回捨てられる**
+  const nFit = Math.max(0, count - nFame - nTool);
 
-  return scored.slice(0, count).map(entry => {
+  // ⚠ **道具の物差しはプール全体から作ること**（帯の中だけで標準化すると
+  //    「その帯の中で相対的にマシな道具」になり、一芸の意味が薄まる）
+  const norms = buildToolNorms(available);
+  const taken = new Set();
+  const out = [];
+  // `balance` を立てた枠は**群ごとに順位を付けてから取る**。
+  // ⚠ 一芸枠は立てること——投手の道具は4種・野手は8種なので、
+  //    「最も突出した道具の偏差」で素直に並べると **max(8個) > max(4個)** で
+  //    野手が構造的に勝つ（ドラフトの `HUNT_PITCHER_SHARE` と同じ話）
+  const pick = (rows, k, scoreFn, balance = false) => {
+    let cand = rows.filter(r => !taken.has(r.player.id))
+      .map(r => ({ ...r, s: scoreFn(r) + (Math.random() - 0.5) * 12 }))
+      .sort((a, b) => b.s - a.s);
+    if (balance) cand = balanceRankByPosition(cand);
+    for (const r of cand.slice(0, k)) { taken.add(r.player.id); out.push(r); }
+  };
+
+  // ① 知名度枠。⚠ **ここだけ帯の上限を越える**——甲子園に出た選手は
+  //    どのランクの大学でも名前は挙がる（獲れるかは交渉率が決める）。
+  //    ⚠ 注目度(reputation)はここで**実際に効かせる**。旧実装の `repBonus` は
+  //    全候補に同じ値を足すだけで**順位を1つも動かしていなかった**（定数）。
+  //    注目度が高い大学ほど上の層まで情報が入る、という形にする。
+  const reach = 0.06 + (reputation / 100) * 0.14;          // 帯の上へ 6〜20%
+  const fameBand = byAbility.slice(Math.floor(n * Math.max(0, bandLo - reach)), hiIdx);
+  pick(fameBand, nFame, r => (r.player.fame || 0) * 1.5);
+
+  // ② 格相応枠。帯の中央半分から素直に引く（＝その大学の水準どおりの選手）。
+  //    ここに順位を付ける項を置かないこと——置いた瞬間にまた一色になる
+  const fitLo = loIdx + Math.floor((hiIdx - loIdx) * 0.25);
+  const fitHi = loIdx + Math.floor((hiIdx - loIdx) * 0.75);
+  pick(byAbility.slice(fitLo, fitHi), nFit, () => 0);
+
+  // ③ 一芸枠。`top` は「自分の中で最も突出した道具の偏差」
+  //    ⚠ 成長力はここに**小さく**だけ残す（素材の良さが滲み出る程度）。
+  //       ×25 は選抜を独占するので ×8 まで下げてある
+  pick(band, nTool, r => toolProfile(r.player, norms).top * 10 + ((r.player.growthPotential || 1) - 1) * 8, true);
+
+  return out.slice(0, count).map(entry => {
     const p = JSON.parse(JSON.stringify(entry.player));
     const accuracy = 40 + Math.floor(reputation * 0.2) + Math.floor(Math.random() * 10);
     p.scoutAccuracy = Math.min(75, accuracy);
@@ -1993,12 +2049,28 @@ export function getRivalInfo(candidate) {
 
 export function getUniversityScoutRecommendation(player, uniRank) {
   const score = evaluatePlayerScore(player);
-  const baseline = { S: 80, A: 65, B: 50, C: 40, D: 30 }[uniRank] || 50;
-  const diff = score - baseline;
-  if (diff >= 30) return 'S';
-  if (diff >= 15) return 'A';
-  if (diff >= 0) return 'B';
-  if (diff >= -15) return 'C';
+  // ⚠ **baseline はその大学に見えている帯の中央に置くこと**。旧値
+  //    （S80/A65/B50/C40/D30）は帯の中央より 22〜28 も低く、`diff>=30 で S` の
+  //    閾値に対して**帯の中央がほぼ A〜S の境目**に来ていた。そのため候補の
+  //    46〜79% が S評価で、**C・D評価は1件も出なかった**——「どの選手も
+  //    Sランクに見える」の正体。帯の中央を 0（＝B＝その大学にとって普通）に置く。
+  // ⚠ **投手と野手で別の baseline を持つこと**。`evaluatePlayerScore` は
+  //    投手 `(球速-120)×1.5+制球+スタミナ×0.4` / 野手 `ミート+パワー+走×0.5+…` と
+  //    スケールが揃っておらず、実測で**同じ帯の中央でも 40〜50点ひらく**
+  //    （C大学で 投手49 対 野手92）。1つの baseline では投手だけ不当に低く出る。
+  // ⚠ 閾値も**baseline に対する割合**で持つこと。絶対値だと野手のほうが
+  //    スケールが大きいぶん同じ +30 が別の意味になる。
+  // ⚠ 高校生プールの生成や `evaluatePlayerScore` を変えたら**測り直すこと**
+  //    （`VALUE_DIST` / `BAND_SD` と同じ性質の、実測から取った定数）
+  const isP = player.position === 'pitcher';
+  const base = (isP ? { S: 74, A: 64, B: 57, C: 49, D: 41 }
+                    : { S: 124, A: 112, B: 102, C: 92, D: 82 })[uniRank]
+             ?? (isP ? 57 : 102);
+  const rel = (score - base) / base;
+  if (rel >= 0.50) return 'S';
+  if (rel >= 0.25) return 'A';
+  if (rel >= 0) return 'B';
+  if (rel >= -0.25) return 'C';
   return 'D';
 }
 

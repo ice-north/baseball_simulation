@@ -655,7 +655,9 @@ export function processHighSchoolNPBDraft() {
 // ⚠ 倍率や加点でスケールを揃えようとしないこと——ドラフト評価で2度失敗している。
 // ⚠ トライアウトは別経路で既に是正済み（`TRYOUT_OVERDRAW` + `balanceByPosition`）。
 //    そちらへこの関数を持ち込むと二重に効く。
-function balanceRankByPosition(scored) {
+// ⚠ **大学推薦スカウトの候補の帯も同じ順位表を切っている**ので、そちらからも呼ぶ
+//    （`scoutingSystem.discoverCandidatesFromPool`）。**同じ並べ替えを書き写さないこと**。
+export function balanceRankByPosition(scored) {
   const P = scored.filter(e => e.player?.position === 'pitcher');
   const F = scored.filter(e => e.player?.position !== 'pitcher');
   if (P.length === 0 || F.length === 0) return scored;
