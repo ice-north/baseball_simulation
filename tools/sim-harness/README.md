@@ -100,6 +100,20 @@ SIM_HARNESS_LEAK=1 node tools/sim-harness/progression-check.mjs 4
 > 補足: 高校生供給を止めても壊れない（`processNPBDraft` にプール空時の自動再生成
 > セーフティがあり、パイプラインが自己修復する）ことが構築時に判明した。健全性の証左。
 
+### spin-probe.mjs — 回転数の効き方（プローブ / 合否なし）
+
+`check` 系と違い**PASS/FAILを出さない測定ツール**。回転数(spinRate)を振ったときに
+球種ごとの空振り率と、リーグ全体のK/9・防御率がどう動くかを表で出す。
+
+```bash
+node tools/sim-harness/spin-probe.mjs            # 球種別の空振り率のみ（数秒）
+node tools/sim-harness/spin-probe.mjs --season   # ＋全投手の回転数を揃えたシーズン（約1分）
+```
+
+回転数は「直球に大きく・変化球に少し」という配分で設計してある（CLAUDE.md 参照）。
+係数（`SPIN_FASTBALL_W` / `SPIN_BREAKING_W` / `SPIN_BREAK_LEVEL_W`）を触ったら、
+**この配分と、能力の総価値（回転0→100のK/9の幅）の両方**を測り直すこと。
+
 ## 構成
 
 ```
@@ -107,6 +121,7 @@ tools/sim-harness/
   season-check.mjs        シーズン統計検証（エントリ）
   draft-check.mjs         ドラフト比率検証（エントリ）
   progression-check.mjs   多年次プログレッション検証（エントリ）
+  spin-probe.mjs          回転数の効き方プローブ（合否なし・測定のみ）
   lib/
     bootstrap.mjs         window/alert/localStorage のNodeスタブ（最初にimport必須）
     report.mjs            PASS/FAIL整形・帯チェック

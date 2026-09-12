@@ -62,6 +62,50 @@ const OFFSPEED_WHIFF_K = 1.0;
 // 防御率 -0.17 ± 0.05。捕手のリード(18→81 で -0.35)の半分ほどの重みにしてある。
 const DECEPTION_W = 0.18;
 
+// ============================================================
+// 【回転数(spinRate)】直球に大きく・変化球に少し
+//
+// ⚠ 旧実装は直球 0.36 / 変化球 0.38 で、**変化球のほうが回転の恩恵が大きかった**。
+// spinVelocityBoost（遅い球ほど増幅）まで乗るので実測はさらに開いていた:
+//   回転0→100の空振り率の伸び ストレート+23.3pt に対し
+//   カーブ+31.8 / チェンジアップ+31.3 / フォーク+28.6 / スライダー+27.6pt。
+// 「伸びのあるストレート」という能力の位置づけと逆になっていたので、
+// 直接項は直球に寄せ、変化球へは **実効変化量**（下）という別経路で少しだけ渡す。
+//
+// ⚠ 生成される回転数は**中央値38・p5=19・p95=71 と 50 より下に寄っている**ので、
+// 直球側の係数を上げるとリーグの大多数は「罰を受ける側」で効きが強まる。
+// 打高へ振れていないかは必ずシーズンで確認すること（spin-probe / season-check）。
+// 実測ではリーグ集計はシード間のブレ（防御率で±0.25）の内側に収まっている。
+const SPIN_FASTBALL_W = 0.48;   // 直球系: ホップ成分そのもの。回転数の主戦場
+const SPIN_BREAKING_W = 0.14;   // 変化球: 直接項は控えめ（本体は実効変化量経由）
+const SPIN_BREAK_LEVEL_W = 0.16; // 実効変化量: 回転100で +8 / 回転0で -8
+
+// 回転が「球の動き」そのものを作る球種。
+// ⚠ FASTBALL_TYPES（球速で空振りを取る球）とは目的が違う別の集合。
+// ツーシームは球速で空振りを取る球ではないが、動きは回転で決まるのでこちらには入る。
+const SPIN_FASTBALL_TYPES = new Set(['straight', 'twoSeam']);
+export const isSpinFastball = (pitchType) => SPIN_FASTBALL_TYPES.has(pitchType);
+
+/**
+ * 回転数を織り込んだ変化球の「実効変化量」。
+ * 回転を掛けられる投手は変化球の変化量も少し大きくなる（直球ほどではない）。
+ *
+ * ⚠ **呼び出し側で一度だけ掛けること**。物理エンジンは受け取った `pitch.level` を
+ *    そのまま使う（内部では補正しない）。両エンジンとも投球を選ぶ前に
+ *    `spinAdjustedArsenal()` でアーセナル全体に一度掛けてあるので、
+ *    球速減(pitchVelocityDrop)・コース・スイング判断・物理エンジンの
+ *    すべてが同じ実効変化量で揃う。個別に掛け直すと二重適用になる。
+ */
+export const getEffectiveBreakLevel = (pitchType, level, spinRate) => {
+  const lv = level ?? 50;
+  if (isSpinFastball(pitchType)) return lv;
+  return Math.max(1, Math.min(100, Math.round(lv + ((spinRate ?? 50) - 50) * SPIN_BREAK_LEVEL_W)));
+};
+
+/** アーセナル全体の変化量を実効値へ差し替えた配列を返す（元配列は変更しない） */
+export const spinAdjustedArsenal = (arsenal, spinRate) =>
+  (arsenal || []).map((a) => ({ ...a, level: getEffectiveBreakLevel(a.type, a.level, spinRate) }));
+
 const BALL_WHIFF_W = 2.2;   // 空振り: タイミング窓を狭める強さ
 const BALL_WEAK_W = 46;     // 凡打誘発: 打球初速を落とす km/h 係数
 const BALL_GB_W = 58;       // ゴロ誘発: 打出し角を下げる度数係数
@@ -200,16 +244,12 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
 
   // 回転数によるタイミング窓補正（MLB Statcast準拠）
   // 高回転ストレート: ホップ成分が大きく打者の予測軌道とズレる → 空振り増
-  // 高回転変化球: 変化量が大きく軌道予測が困難 → 空振り増
+  // 変化球: ここでの直接項は控えめ。効果の大半は実効変化量(getEffectiveBreakLevel)
+  //         経由で、上の breakingBallPenalty / whiffBonus / 球速減から入る
   const spinRate = pitcher.spinRate ?? 50;
   if (spinRate !== 50) {
     const spinDeviation = (spinRate - 50) / 100;
-    let spinEffect;
-    if (pitch.type === 'straight' || pitch.type === 'twoSeam') {
-      spinEffect = spinDeviation * 0.36;
-    } else {
-      spinEffect = spinDeviation * 0.38;
-    }
+    let spinEffect = spinDeviation * (isSpinFastball(pitch.type) ? SPIN_FASTBALL_W : SPIN_BREAKING_W);
     // 遅い球は滞空時間が長く、回転による変化量が増幅される
     const spinVelocityBoost = 1 + Math.max(0, (150 - pitchVelocity) / 50);
     spinEffect *= spinVelocityBoost;

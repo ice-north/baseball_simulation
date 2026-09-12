@@ -876,7 +876,7 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `src/game/gameSetup.js` (~820行) - setupManagedGame・handleManagedGameEnd
 - `src/game/saveSystem.js` (~650行) - セーブ/ロード/ファイル書き出し・読み込み
 - `src/game/seasonProgress.js` (~420行) - 日程進行ハンドラー
-- `src/simulation-logic.js` (~1050行) - 物理演算（打球・投球）
+- `src/simulation-logic.js` (~1090行) - 物理演算（打球・投球）
 - `src/components/ScheduleScreen.jsx` (~750行) - 日程/順位表/成績ランキング
 - `src/components/LineupSettingScreen.jsx` (~2590行) - スタメン/投手起用/守備分析の3タブ
 - `src/components/DateProgressScreen.jsx` (~4190行) - 日程進行画面
@@ -2995,6 +2995,61 @@ cutter=knuckle > straight > shoot=sinker=twoSeam）。
 - **接続により捕手のリードが初めて意味を持った**。球種選択だけを分離した実測で
   制球70の投手は「常に最良を選ぶ」と「ランダム」で防御率 2.833 → 2.580（-0.253 ± 0.096、有意）
 - リーグ全体の成績は変わっていない（NPB相当で 打率.236 / 失点3.77 / 本塁打0.78）
+
+## 回転数(spinRate)は「直球に大きく・変化球に少し」（`simulation-logic.js`）
+
+`pitching.spinRate`（UI表記「回転」「伸」）の効き方。**測定は `node tools/sim-harness/spin-probe.mjs [--season]`**。
+
+### ⚠ 旧実装は「変化球の能力」になっていた
+直接項が **直球 0.36 に対し変化球 0.38** で、しかも `spinVelocityBoost`
+（遅い球ほど増幅）が乗るため、実測では遅い変化球ほど得をしていた。
+
+| 回転0→100の空振り率の伸び | ストレート | スライダー | フォーク | チェンジアップ | カーブ |
+|---|---|---|---|---|---|
+| 旧 | +23.3pt | +27.6 | +28.6 | +31.3 | **+31.8** |
+| 現在 | **+30.8pt** | +9.6 | +10.6 | +11.6 | +11.9 |
+
+「伸びのあるストレート」という能力の位置づけと逆だったので、**直接項は直球に寄せ、
+変化球へは実効変化量という別経路で少しだけ渡す**形に組み替えた。
+
+### 2つの経路
+1. **タイミング窓の直接補正**（`calculatePhysicsContact`）
+   - `SPIN_FASTBALL_W = 0.48`（`isSpinFastball` = straight / twoSeam）／ `SPIN_BREAKING_W = 0.14`
+   - 共通で `spinVelocityBoost = 1 + max(0, (150-球速)/50)` を乗算
+   - ⚠ `SPIN_FASTBALL_TYPES` は `FASTBALL_TYPES`（球速で空振りを取る球＝straightのみ）とは**別の集合**。
+     ツーシームは球速では空振りを取らないが、動きは回転で決まるのでこちらには入る
+2. **実効変化量**（`getEffectiveBreakLevel` / `SPIN_BREAK_LEVEL_W = 0.16`）
+   - 変化球のみ `level + (回転-50)×0.16`（回転100→+8 / 回転0→-8）
+   - 流れ込む先: 球種選択・`pitchVelocityDrop` の球速減・コース・スイング判断・
+     `breakingBallPenalty`・`whiffBonus × lv`。**変化量が上がる**という一点から全部が動く
+
+### ⚠ 実効変化量は「アーセナルに一度だけ」掛ける
+両エンジンとも投球を選ぶ前に `spinAdjustedArsenal(activeArsenal(...), spinRate)` で
+アーセナル全体に一度掛けている（`autoSimulation.js` / `App.jsx` の投手オブジェクト構築時）。
+物理エンジンは受け取った `pitch.level` を素通しで使う——**内部では補正しない**。
+個別に掛け直すと二重適用になるうえ、`pitchVelocityDrop` で出した球速と
+物理エンジンが見る `typeDrop` がズレる（両エンジンで球速の意味が食い違う既知の罠）。
+
+### 打球角度への影響（`getSpinRateAngleAdjust`、変更なし）
+直球系(straight/twoSeam/cutter)は `(回転-50)/100 × +26`（高回転=フライ）、変化球は `× -13`（高回転=ゴロ）。
+
+### 能力の総価値は据え置き
+全投手の回転数を揃えたシーズン実測（8チーム×100試合×2シード）:
+
+| 回転 | 0 | 25 | 50 | 75 | 100 |
+|---|---|---|---|---|---|
+| K/9（旧） | 6.37 | 6.75 | 7.37 | 8.55 | 9.41 |
+| K/9（現在） | 6.31 | 6.80 | 7.29 | 8.16 | 9.24 |
+
+**内訳だけを直球寄りに移し、能力そのものの強さは動かしていない。**
+リーグ集計（`season-check` 8×120×6シード）も 打率.241-.246 / 防御率3.39-3.58 と、
+改修前の実測（.243-.250 / 3.50-3.75）のブレの内側。
+
+- ⚠ 生成される回転数は**中央値38・p5=19・p95=71 と 50 より下に寄っている**。
+  直球側の係数を上げるとリーグの**大多数が罰を受ける側**で効きが強まるので、
+  ここを触ったら必ず `season-check` で打高に振れていないか確かめること
+- 既知の端: 回転0のツーシームは空振り0%になる（`whiffBonus` が負の球種＋最大の回転罰）。
+  生成される回転数の最低は10なので実戦では出ないが、エディタでは作れる
 
 ## 死球（`hitByPitchChance` / `src/game/pitchZone.js`）
 **死球はこれまで1つも発生していなかった**（結果種別もスタッツも存在しなかった）。

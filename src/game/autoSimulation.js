@@ -1,5 +1,5 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate } from '../simulation-logic.js';
+import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate, spinAdjustedArsenal } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
   pitchVelocityDrop, isUnreadablePitch } from '../utils/constants.js';
 import { conditionBattingMod, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
@@ -741,7 +741,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // リードでスコア選択していた。リーグ成績を作るのは自動側なので、
     // 捕手のリード能力が成績にまったく反映されていなかった。
     // 封印した球は投げない（arsenal.js）。練習・成長からは消さない
-    const arsenal = activeArsenal(pitcherPlayer.pitching?.arsenal);
+    // 回転数を変化量へ織り込む（回転の高い投手は変化球も少し曲がる）。
+    // ここで一度だけ掛けることで、球種選択・球速減・コース・スイング判断・
+    // 物理エンジンのすべてが同じ実効変化量で動く（simulation-logic.js）
+    const arsenal = spinAdjustedArsenal(
+      activeArsenal(pitcherPlayer.pitching?.arsenal), pitcher.spinRate);
     const selectedPitch = selectPitchType({
       arsenal,
       catcherLead: catcherPlayer?.catching?.lead ?? 50,

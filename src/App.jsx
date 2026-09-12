@@ -19,7 +19,7 @@ import { initializeTeamsData, TEAMS_DATA, LEAGUE_SETTINGS, initializeTeamsForCou
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
-import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
+import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect, spinAdjustedArsenal } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, infieldDefenseOf, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
@@ -1594,8 +1594,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           control: currentPitcher.pitching.control + pitcherCondMod + pitcherMentalMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
-          // 封印した球は投げない（arsenal.js）
-          pitches: activeArsenal(currentPitcher.pitching.arsenal),
+          // 封印した球は投げない（arsenal.js）。回転数を変化量へ織り込む
+          // （ここで一度だけ。simulation-logic.js の getEffectiveBreakLevel 参照）
+          pitches: spinAdjustedArsenal(activeArsenal(currentPitcher.pitching.arsenal),
+            currentPitcher.pitching.spinRate ?? 50),
           form: currentPitcher.pitching.form,
           spinRate: currentPitcher.pitching.spinRate ?? 50,
           // 球の出どころの見づらさ（deception.js）。-1=丸見え 〜 +1=見えない
@@ -1780,8 +1782,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           control: currentPitcher.pitching.control + pCondMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
-          // 封印した球は投げない（arsenal.js）
-          pitches: activeArsenal(currentPitcher.pitching.arsenal),
+          // 封印した球は投げない（arsenal.js）。回転数を変化量へ織り込む
+          // （ここで一度だけ。simulation-logic.js の getEffectiveBreakLevel 参照）
+          pitches: spinAdjustedArsenal(activeArsenal(currentPitcher.pitching.arsenal),
+            currentPitcher.pitching.spinRate ?? 50),
           form: currentPitcher.pitching.form,
           spinRate: currentPitcher.pitching.spinRate ?? 50,
           // 球の出どころの見づらさ（deception.js）。-1=丸見え 〜 +1=見えない
