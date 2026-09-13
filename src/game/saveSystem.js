@@ -554,6 +554,11 @@ export const importSaveFileToSlot = async (slotIndex, file) => {
 };
 
 // ストレージ使用量を取得
+// ⚠ **今は誰も呼んでいない**（未使用exportの掃除で見つかった）。消さずに残してあるのは、
+//    これが `getIDBUsage` / `getLocalStorageUsage` の唯一の呼び出し口で、消すと3ファイルに
+//    またがって道連れになるため。セーブは約1.46MB あり、容量が逼迫するとブラウザが
+//    IndexedDB を捨てる（`requestPersistentStorage` を足したのはそのため）ので、
+//    セーブ画面に使用量を出すときにここを使う。
 export async function getStorageUsage() {
   if (useIDB) {
     return getIDBUsage();

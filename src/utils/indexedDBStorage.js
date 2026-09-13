@@ -60,6 +60,8 @@ export async function idbRemoveItem(key) {
   });
 }
 
+// ⚠ **今は誰も呼んでいない**。保存領域の中身を数える唯一の手段なので、
+//    「セーブが消えた」系の切り分け（オリジンが変わっていないか等）のために残してある。
 export async function idbGetAllKeys() {
   const db = await openDB();
   return new Promise((resolve, reject) => {
