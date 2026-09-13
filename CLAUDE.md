@@ -875,7 +875,7 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
   正しいのは「実装に合わせて直す」か「もう無いと明記する」のどちらか
 
 ## 主要ファイル
-- `src/App.jsx` (~4890行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
+- `src/App.jsx` (~4370行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
 - `src/game/autoSimulation.js` (~2870行) - 自動シミュレーション・buildDefense
 - `src/game/aiManager.js` (~650行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
 - `src/game/lineupGenerator.js` (~650行) - AIオーダー編成・投手ローテーション生成
@@ -893,6 +893,7 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `src/components/GameFlowScreens.jsx` (~570行) - ゲームフロー画面群
 - `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
 - `src/components/GameUIComponents.jsx` (~1050行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel・TeamMemberPanel
+- `src/components/PlayerEditColumn.jsx` (~280行) - デバッグ用エディット画面の1チーム分の列（左右で共有）
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
 - `src/season/universityPool.js` (~1620行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
