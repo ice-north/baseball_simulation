@@ -1050,65 +1050,12 @@ import { Sidebar, RenderBases, AccordionSection, TeamPitcherPanel } from './comp
         wildPitchesBlocked: 0   // 暴投阻止数
       });
       
-      // 打球統計
-      const [battedBallStats, setBattedBallStats] = useState({
-        innerGrounder: { total: 0, hits: 0 }, // 内野ゴロ
-        innerLiner: { total: 0, hits: 0 },    // 内野ライナー
-        innerFly: { total: 0, hits: 0 },      // 内野フライ
-        shallowOuter: { total: 0, hits: 0 },  // 浅い外野
-        outerLiner: { total: 0, hits: 0 },    // 外野ライナー
-        shallowFly: { total: 0, hits: 0 },    // 浅いフライ
-        mediumFly: { total: 0, hits: 0 },     // 中堅フライ
-        deepFly: { total: 0, hits: 0 },       // 深いフライ
-        outerGrounder: { total: 0, hits: 0 }, // 外野ゴロ
-        homerun: { total: 0, hits: 0 }        // 本塁打
-      });
-      
-      // 打球タイプ別統計
-      const [battedBallTypeStats, setBattedBallTypeStats] = useState({
-        grounder: 0,  // ゴロ
-        liner: 0,     // ライナー
-        fly: 0,       // フライ
-        popup: 0      // ポップフライ
-      });
-      
-      // 打球方向別統計（5方向）
-      const [battedBallDirectionStats, setBattedBallDirectionStats] = useState({
-        left: 0,        // 左
-        leftCenter: 0,  // 左中間
-        center: 0,      // 中央
-        rightCenter: 0, // 右中間
-        right: 0        // 右
-      });
-      
-      // 打球エリア別統計（方向×タイプ）- 詳細版（5方向×5タイプ）
-      const [battedBallAreaStats, setBattedBallAreaStats] = useState({
-        'left-homerun': { total: 0, outs: 0, hits: 0 },
-        'left-fly': { total: 0, outs: 0, hits: 0 },
-        'left-liner': { total: 0, outs: 0, hits: 0 },
-        'left-popup': { total: 0, outs: 0, hits: 0 },
-        'left-grounder': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-homerun': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-fly': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-liner': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-popup': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-grounder': { total: 0, outs: 0, hits: 0 },
-        'center-homerun': { total: 0, outs: 0, hits: 0 },
-        'center-fly': { total: 0, outs: 0, hits: 0 },
-        'center-liner': { total: 0, outs: 0, hits: 0 },
-        'center-popup': { total: 0, outs: 0, hits: 0 },
-        'center-grounder': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-homerun': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-fly': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-liner': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-popup': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-grounder': { total: 0, outs: 0, hits: 0 },
-        'right-homerun': { total: 0, outs: 0, hits: 0 },
-        'right-fly': { total: 0, outs: 0, hits: 0 },
-        'right-liner': { total: 0, outs: 0, hits: 0 },
-        'right-popup': { total: 0, outs: 0, hits: 0 },
-        'right-grounder': { total: 0, outs: 0, hits: 0 }
-      });
+      // ⚠ ここに打球統計4種（battedBallStats / …Type / …Direction / …Area）の
+      //    useState が58行あったが、**一度も描画されていなかった**ので除去した。
+      //    2つは打球のたびに setState していて、誰も見ないデータのために
+      //    再描画コストだけ払っていた（`lastGameResults` と同じ defect）。
+      //    リセット側（gameControls.js）にも同じ形が52行あり、二重定義でもあった。
+      //    復活させるなら**描く場所を先に決めてから**にすること。
 
       // [SECTION: GAME_HANDLERS] 投球生成・接触判定・走者進塁・守備記録・成績更新
       const addPitch = () => {
@@ -1237,29 +1184,6 @@ import { Sidebar, RenderBases, AccordionSection, TeamPitcherPanel } from './comp
           return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
         }
 
-        // 打球統計を記録
-        const battedBallType = battedBall.launchAngle < 10 ? 'grounder' :
-                               battedBall.launchAngle < 25 ? 'liner' :
-                               battedBall.launchAngle < 50 ? 'fly' : 'popup';
-
-        setBattedBallTypeStats(prev => ({
-          ...prev,
-          [battedBallType]: prev[battedBallType] + 1
-        }));
-
-        // 打球方向を記録
-        let ballDirection;
-        if (battedBall.direction < -20) ballDirection = 'left';
-        else if (battedBall.direction < -5) ballDirection = 'leftCenter';
-        else if (battedBall.direction <= 5) ballDirection = 'center';
-        else if (battedBall.direction <= 20) ballDirection = 'rightCenter';
-        else ballDirection = 'right';
-
-        setBattedBallDirectionStats(prev => ({
-          ...prev,
-          [ballDirection]: prev[ballDirection] + 1
-        }));
-
         // 時間競合モデルで守備判定
         const fieldingResult = judgeFielderReach(battedBall, defense, effectiveBatter);
 
@@ -1293,7 +1217,6 @@ import { Sidebar, RenderBases, AccordionSection, TeamPitcherPanel } from './comp
         // 打球データを結果に付加（統計ログ用）
         return {
           ...result,
-          ballDirection,
           exitVelocity: battedBall.exitVelocity,
           launchAngle: battedBall.launchAngle,
           distance: battedBall.distance,
@@ -2862,8 +2785,6 @@ if (newOuts === 3) {
         setGameLog, setLastResult, setStatistics, setRecentVelocities,
         setHomeTeam, setAwayTeam, setCurrentStamina,
         setBatterStats, setPitcherStats, setCatcherStats,
-        setBattedBallStats, setBattedBallTypeStats,
-        setBattedBallDirectionStats, setBattedBallAreaStats,
         setIsAutoSimulating
       };
       // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）

@@ -15,9 +15,13 @@ import { createDefaultPlayers, createAwayPlayers, createHomeBench, createAwayBen
  *   setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
  *   setGameLog, setLastResult, setStatistics, setRecentVelocities,
  *   setHomeTeam, setAwayTeam, setCurrentStamina,
- *   setBatterStats, setPitcherStats, setCatcherStats,
- *   setBattedBallStats, setBattedBallTypeStats,
- *   setBattedBallDirectionStats, setBattedBallAreaStats
+ *   setBatterStats, setPitcherStats, setCatcherStats
+ *
+ * ⚠ かつてここに打球統計4種（battedBall*Stats）のリセットが52行あったが、
+ *    **その state は一度も描画されていなかった**ので App.jsx ごと除去した
+ *    （`lastGameResults` / 「昨日の結果」と同じ defect）。
+ *    初期値とリセット値を2箇所に書く形でもあったので、復活させるなら
+ *    **描く場所を先に決めてから**にすること。
  */
 export function executeResetGame(ctx) {
   const {
@@ -28,9 +32,7 @@ export function executeResetGame(ctx) {
     setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
     setGameLog, setLastResult, setStatistics, setRecentVelocities,
     setHomeTeam, setAwayTeam, setCurrentStamina,
-    setBatterStats, setPitcherStats, setCatcherStats,
-    setBattedBallStats, setBattedBallTypeStats,
-    setBattedBallDirectionStats, setBattedBallAreaStats
+    setBatterStats, setPitcherStats, setCatcherStats
   } = ctx;
 
   // 交代処理中フラグをクリア
@@ -102,58 +104,6 @@ export function executeResetGame(ctx) {
     stolenBasesAllowed: 0,
     caughtStealing: 0,
     wildPitchesBlocked: 0
-  });
-  setBattedBallStats({
-    innerGrounder: { total: 0, hits: 0 },
-    innerLiner: { total: 0, hits: 0 },
-    innerFly: { total: 0, hits: 0 },
-    shallowOuter: { total: 0, hits: 0 },
-    outerLiner: { total: 0, hits: 0 },
-    shallowFly: { total: 0, hits: 0 },
-    mediumFly: { total: 0, hits: 0 },
-    deepFly: { total: 0, hits: 0 },
-    outerGrounder: { total: 0, hits: 0 },
-    homerun: { total: 0, hits: 0 }
-  });
-  setBattedBallTypeStats({
-    grounder: 0,
-    liner: 0,
-    fly: 0,
-    popup: 0
-  });
-  setBattedBallDirectionStats({
-    left: 0,
-    leftCenter: 0,
-    center: 0,
-    rightCenter: 0,
-    right: 0
-  });
-  setBattedBallAreaStats({
-    'left-homerun': { total: 0, outs: 0, hits: 0 },
-    'left-fly': { total: 0, outs: 0, hits: 0 },
-    'left-liner': { total: 0, outs: 0, hits: 0 },
-    'left-popup': { total: 0, outs: 0, hits: 0 },
-    'left-grounder': { total: 0, outs: 0, hits: 0 },
-    'leftCenter-homerun': { total: 0, outs: 0, hits: 0 },
-    'leftCenter-fly': { total: 0, outs: 0, hits: 0 },
-    'leftCenter-liner': { total: 0, outs: 0, hits: 0 },
-    'leftCenter-popup': { total: 0, outs: 0, hits: 0 },
-    'leftCenter-grounder': { total: 0, outs: 0, hits: 0 },
-    'center-homerun': { total: 0, outs: 0, hits: 0 },
-    'center-fly': { total: 0, outs: 0, hits: 0 },
-    'center-liner': { total: 0, outs: 0, hits: 0 },
-    'center-popup': { total: 0, outs: 0, hits: 0 },
-    'center-grounder': { total: 0, outs: 0, hits: 0 },
-    'rightCenter-homerun': { total: 0, outs: 0, hits: 0 },
-    'rightCenter-fly': { total: 0, outs: 0, hits: 0 },
-    'rightCenter-liner': { total: 0, outs: 0, hits: 0 },
-    'rightCenter-popup': { total: 0, outs: 0, hits: 0 },
-    'rightCenter-grounder': { total: 0, outs: 0, hits: 0 },
-    'right-homerun': { total: 0, outs: 0, hits: 0 },
-    'right-fly': { total: 0, outs: 0, hits: 0 },
-    'right-liner': { total: 0, outs: 0, hits: 0 },
-    'right-popup': { total: 0, outs: 0, hits: 0 },
-    'right-grounder': { total: 0, outs: 0, hits: 0 }
   });
 }
 
