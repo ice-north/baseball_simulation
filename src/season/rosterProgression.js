@@ -10,7 +10,7 @@
 // ============================================================
 
 import { highSchoolPool } from './universityPool.js';
-import { generateCatcherLead } from '../utils/constants.js';
+import { generateCatcherLead, RANK_DESC } from '../utils/constants.js';
 import { generatePositionFitness } from './tryoutSystem.js';
 import { syncPositionToFitness } from '../utils/physics.js';
 import { generateHandedness, generateBats } from '../utils/handedness.js';
@@ -535,8 +535,7 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
   };
 
   // ランク順に処理（S→A→B→C→D）
-  const RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
-  teamsNeedingPlayers.sort((a, b) => RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank));
+  teamsNeedingPlayers.sort((a, b) => RANK_DESC.indexOf(a.rank) - RANK_DESC.indexOf(b.rank));
 
   const usedIndices = new Set();
 

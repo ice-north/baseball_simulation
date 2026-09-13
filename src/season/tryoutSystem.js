@@ -6,7 +6,7 @@
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
-import { getUtilityScore, generateCatcherLead } from '../utils/constants.js';
+import { getUtilityScore, generateCatcherLead, RANK_ASC } from '../utils/constants.js';
 import { generateBats } from '../utils/handedness.js';
 
 // 2年目以降トライアウトの1チームあたり基準受験者数
@@ -70,7 +70,6 @@ function getPlayerTraits(isPitcher) {
 }
 
 
-const RANK_ORDER = ['D', 'C', 'B', 'A', 'S'];
 /**
  * 受験者の実効ランクを決める。約10%は1つ上のランク基準でスケールする。
  * 意図: 同格の中で埋もれるより、少し格下のリーグで試合に出て活躍・目立つほうが賢い、という逸材を再現。
@@ -78,8 +77,8 @@ const RANK_ORDER = ['D', 'C', 'B', 'A', 'S'];
 function effectiveTryoutRank(baseRank) {
   if (!baseRank) return baseRank;
   if (Math.random() < 0.10) {
-    const i = RANK_ORDER.indexOf(baseRank);
-    if (i >= 0 && i < RANK_ORDER.length - 1) return RANK_ORDER[i + 1];
+    const i = RANK_ASC.indexOf(baseRank);
+    if (i >= 0 && i < RANK_ASC.length - 1) return RANK_ASC[i + 1];
   }
   return baseRank;
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { RANK_COLORS, RANK_LABELS } from '../utils/constants.js';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
 import { SEASON_PHASES, createSeasonData } from '../season/seasonManager.js';
 import { REGULATION_PRESETS } from '../season/regulationSettings.js';
@@ -159,8 +160,6 @@ const GameFlowScreens = ({
   if (gameFlowState === 'newgame_team_select') {
     const leagueDef = INDEPENDENT_LEAGUES[selectedIndependentLeague];
     const teams = leagueDef?.teams || [];
-    const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
-    const RANK_LABELS = { S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興' };
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
         <div className="max-w-5xl mx-auto">

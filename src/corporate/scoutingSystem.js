@@ -1954,7 +1954,6 @@ export function calculateDailyGaugeRate(player, uniRank, reputation) {
 // ============================================================
 
 const RANK_REPUTATION_BASE = { S: 85, A: 65, B: 40, C: 20, D: 5 };
-const RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
 
 function generateRivals(player, userRank) {
   const score = evaluatePlayerScore(player);

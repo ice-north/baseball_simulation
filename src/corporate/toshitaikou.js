@@ -39,7 +39,6 @@ export const TOSHITAIKOU_REGION_NAMES = {
 };
 
 const MAX_QUALIFIER_TEAMS = 32;
-const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 const RANK_STRENGTH = { S: 88, A: 73, B: 58, C: 43, D: 30 };
 
 function shuffleArray(arr) {

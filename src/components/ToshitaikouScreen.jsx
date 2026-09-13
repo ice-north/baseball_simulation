@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
+import { RANK_COLORS } from '../utils/constants.js';
 import { ScreenShell } from './GameUIComponents.jsx';
 import { TOSHITAIKOU_REGION_NAMES, REGIONAL_SLOTS, getRoundName } from '../corporate/toshitaikou.js';
 
-const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
 
 const BracketView = ({ bracket, title }) => {
   if (!bracket) return null;

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
-import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances } from '../season/seasonManager.js';
+import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth } from '../season/seasonManager.js';
+import { RANK_COLORS } from '../utils/constants.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
@@ -1111,7 +1112,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     else if (anyActive) setShowCorporateTournaments(true);
   }, [seasonData?.currentDate?.month, seasonData?.currentDate?.day]);
 
-  const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
+  // ⚠ getDaysInMonth は seasonManager の export を使う（同じ式をここに書き直さないこと）
   const getFirstDayOfWeek = (year, month) => new Date(year, month - 1, 1).getDay();
 
   const year = seasonData.currentDate?.year || 2024;
@@ -2725,7 +2726,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const rtData = seasonData.regionalTournament;
             const ns = seasonData.nihonSenshuken;
             const cs = seasonData.clubSenshuken;
-            const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
 
             // 利用可能なトーナメントタブを構築（時系列順）
             const tournamentTabs = [];

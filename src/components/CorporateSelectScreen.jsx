@@ -1,22 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { RANK_COLORS, RANK_LABELS, RANK_ORDER } from '../utils/constants.js';
 import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, getAllMasterTeamsEffective, addCustomTeam, updateCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam } from '../corporate/corporateTeamsData.js';
-
-const RANK_COLORS = {
-  S: 'text-yellow-400',
-  A: 'text-red-400',
-  B: 'text-blue-400',
-  C: 'text-green-400',
-  D: 'text-gray-300',
-};
 
 const TYPE_LABELS = {
   corporate: { label: '企業', color: 'bg-blue-800 text-blue-200' },
   club: { label: 'クラブ', color: 'bg-green-800 text-green-200' },
   custom: { label: '作成', color: 'bg-purple-800 text-purple-200' },
-};
-
-const RANK_LABELS = {
-  S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興',
 };
 
 // 就任先を選ぶための判断材料。ランクは「チームの強さ」だが、
@@ -25,7 +14,6 @@ const RANK_LABELS = {
 // （corporateInit.js の proChance / standout はクラブを除外している）。
 const DIFFICULTY = ['やさしい', 'ふつう', 'ややむずかしい', 'むずかしい', '高難度'];
 const DIFF_COLOR = ['text-green-400', 'text-emerald-400', 'text-yellow-400', 'text-orange-400', 'text-red-400'];
-const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 const difficultyOf = (team) =>
   Math.min(4, (RANK_ORDER[team.rank] ?? 3) + (team.type === 'club' ? 1 : 0));
 

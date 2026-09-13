@@ -136,7 +136,9 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
     return Math.round(deviationValue(player, main, sub) + ageBonus);
   };
 
-  const getValueColor = (val) => {
+  // ⚠ 能力値の色ではなく**トレード評価点**の色（平均150のスケール）。
+  //    試合画面の getValueColor（0〜100）と混同しないこと
+  const tradeValueColor = (val) => {
     if (val >= 130) return 'text-pink-400';
     if (val >= 110) return 'text-red-400';
     if (val >= 90) return 'text-orange-400';
@@ -380,7 +382,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
         <td className="py-1.5 px-1 text-xs text-center text-gray-300 border-l border-gray-700/30">{season.games || '-'}</td>
         <td className="py-1.5 px-1 text-xs text-gray-300 truncate max-w-[120px]">{season.line || '-'}</td>
         {/* 評価 */}
-        <td className={`py-1.5 px-1.5 text-xs font-bold text-center border-l border-gray-700/30 ${getValueColor(val)}`}>{Math.round(val)}</td>
+        <td className={`py-1.5 px-1.5 text-xs font-bold text-center border-l border-gray-700/30 ${tradeValueColor(val)}`}>{Math.round(val)}</td>
       </tr>
     );
   };
@@ -463,7 +465,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
             {season.games}試合 {season.line}
           </div>
         )}
-        <div className={`text-sm font-bold ${getValueColor(val)}`}>
+        <div className={`text-sm font-bold ${tradeValueColor(val)}`}>
           評価: {Math.round(val)}pt
         </div>
       </div>
@@ -544,7 +546,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
                       <div className="font-bold text-white">{proposal.wantedPlayer.name}</div>
                       <div className="text-xs text-gray-300 mt-0.5">{POSITION_NAMES[proposal.wantedPlayer.position]} / {proposal.wantedPlayer.age}歳</div>
                       <AbilityLine player={proposal.wantedPlayer} />
-                      <div className={`text-xs font-bold mt-2 ${getValueColor(proposal.wantedVal)}`}>評価 {proposal.wantedVal}pt</div>
+                      <div className={`text-xs font-bold mt-2 ${tradeValueColor(proposal.wantedVal)}`}>評価 {proposal.wantedVal}pt</div>
                     </div>
                     <div className="text-xl text-yellow-400/70 font-bold text-center">⇄</div>
                     {/* 獲得 (AI側) */}
@@ -553,7 +555,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
                       <div className="font-bold text-white">{proposal.offeredPlayer.name}</div>
                       <div className="text-xs text-gray-300 mt-0.5">{POSITION_NAMES[proposal.offeredPlayer.position]} / {proposal.offeredPlayer.age}歳</div>
                       <AbilityLine player={proposal.offeredPlayer} />
-                      <div className={`text-xs font-bold mt-2 ${getValueColor(proposal.offeredVal)}`}>評価 {proposal.offeredVal}pt</div>
+                      <div className={`text-xs font-bold mt-2 ${tradeValueColor(proposal.offeredVal)}`}>評価 {proposal.offeredVal}pt</div>
                     </div>
                   </div>
                   <div className="flex gap-2">

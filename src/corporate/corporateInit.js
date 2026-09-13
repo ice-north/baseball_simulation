@@ -23,7 +23,7 @@
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
-import { taperLow } from '../utils/constants.js';
+import { taperLow, RANK_ORDER, RANK_DESC } from '../utils/constants.js';
 import { generateStaff, STAFF_GRADE_CAP } from './staffData.js';
 import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
@@ -806,7 +806,6 @@ const NEIGHBOR_REGIONS = {
   kyushu: ['chugoku', 'shikoku'],
 };
 
-const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 const TARGET_LEAGUE_SIZE = 10;
 const GAMES_PER_SEASON = 30;
 
@@ -1092,7 +1091,6 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
 // チームランキング(Elo)・注目度・トレードなど独立リーグ系システムから漏れていた。
 // リーグの「格」＝所属チームの現ランクの最頻値（同数なら上位ランクを採用）。
 // トライアウト受験者の質もこの値でスケールされるため、表示と挙動を一致させる目的で共有する。
-const LEAGUE_RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
 export const getLeagueRankFromTeams = (teamNames) => {
   if (!Array.isArray(teamNames) || teamNames.length === 0) return null;
   const counts = {};
@@ -1102,7 +1100,7 @@ export const getLeagueRankFromTeams = (teamNames) => {
   });
   const ranks = Object.keys(counts);
   if (ranks.length === 0) return null;
-  ranks.sort((a, b) => (counts[b] - counts[a]) || (LEAGUE_RANK_ORDER.indexOf(a) - LEAGUE_RANK_ORDER.indexOf(b)));
+  ranks.sort((a, b) => (counts[b] - counts[a]) || (RANK_DESC.indexOf(a) - RANK_DESC.indexOf(b)));
   return ranks[0];
 };
 

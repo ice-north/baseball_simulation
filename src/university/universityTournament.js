@@ -7,6 +7,7 @@
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from './universityTeamsData.js';
 import { TEAMS_DATA } from '../teams-data.js';
+import { RANK_ORDER } from '../utils/constants.js';
 import {
   createBracket,
   recordResult,
@@ -106,7 +107,6 @@ export function generateUniversityChampionship(userSeasonData, calendarYear = 20
   const teamDefsMap = buildTeamDefsMap(champions);
 
   // ランク順でシード（S→A→B→C→D）
-  const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
   teamNames.sort((a, b) => (RANK_ORDER[teamDefsMap[a].rank] || 4) - (RANK_ORDER[teamDefsMap[b].rank] || 4));
 
   const bracket = createBracket(teamNames);
@@ -137,7 +137,6 @@ export function generateMeijiJinguTournament(userSeasonData, calendarYear = 2024
   const teamNames = champions.map(c => c.name);
   const teamDefsMap = buildTeamDefsMap(champions);
 
-  const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
   teamNames.sort((a, b) => (RANK_ORDER[teamDefsMap[a].rank] || 4) - (RANK_ORDER[teamDefsMap[b].rank] || 4));
 
   const bracket = createBracket(teamNames);

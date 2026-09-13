@@ -399,6 +399,34 @@ export const POSITION_GROUP_COLORS = {
               off: 'bg-green-900/25 text-green-300 border-green-700/50 hover:bg-green-900/40' },
 };
 
+// ============================================================
+// チームランク（S〜D）の共有テーブル
+//
+// ⚠ **表を二重に作らないこと**。実測で `RANK_ORDER` が6箇所にあり、
+//    ・4つが同じ `{S:0…D:4}` のコピー
+//    ・`scoutingSystem` と `toshitaikou` の2つは**定義だけで一度も使われていない**
+//    ・`scoutingSystem` は `['S'…'D']`、`tryoutSystem` は `['D'…'S']` と
+//      **同じ名前で逆順**（読み間違いの罠）
+//    という状態だった。`RANK_COLORS` も4箇所・`RANK_LABELS` も3箇所に
+//    同じものが書かれていた。
+//
+// ⚠ **ここに置いてよいのは「どのカテゴリでも同じもの」だけ**。
+//    強さの数値（`RANK_STRENGTH`）は 社会人 `{S:88…}` と 大学 `{S:78…}` で
+//    別物なので**統合してはいけない**。背景色も
+//    `TeamRankingScreen`(900段) と `UniversitySelectScreen`(500/20) で別物。
+// ============================================================
+export const RANK_DESC = ['S', 'A', 'B', 'C', 'D'];              // 強い順
+export const RANK_ASC = ['D', 'C', 'B', 'A', 'S'];               // 弱い順（1つ上のランクを引く用）
+export const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };      // 強い順の添字
+export const RANK_LABELS = { S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興' };
+export const RANK_COLORS = {
+  S: 'text-yellow-400',
+  A: 'text-red-400',
+  B: 'text-blue-400',
+  C: 'text-green-400',
+  D: 'text-gray-300',
+};
+
 /**
  * 利き手ラベル（日本語表記）
  */

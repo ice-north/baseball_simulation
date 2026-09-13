@@ -1,17 +1,6 @@
 import React, { useState } from 'react';
+import { RANK_COLORS, RANK_LABELS, RANK_ORDER } from '../utils/constants.js';
 import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
-
-const RANK_COLORS = {
-  S: 'text-yellow-400',
-  A: 'text-red-400',
-  B: 'text-blue-400',
-  C: 'text-green-400',
-  D: 'text-gray-300',
-};
-
-const RANK_LABELS = {
-  S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興',
-};
 
 const RANK_BG = {
   S: 'bg-yellow-500/20 border-yellow-500/40',
@@ -21,7 +10,6 @@ const RANK_BG = {
   D: 'bg-gray-500/20 border-gray-500/40',
 };
 
-const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 const getBestRank = (teams) => teams.reduce((best, t) => RANK_ORDER[t.rank] < RANK_ORDER[best] ? t.rank : best, 'D');
 
 const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {

@@ -23,6 +23,7 @@ import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
+import { RANK_ORDER } from '../utils/constants.js';
 
 /** チームがどのカテゴリに属するかを判定する */
 export const getTeamCategory = (teamName) => {
@@ -63,7 +64,6 @@ export const getTransferCandidates = (currentTeamName) => {
           : (team.corporateData?.region || '社会人')),
     });
   }
-  const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
   Object.values(groups).forEach(list =>
     list.sort((a, b) => (RANK_ORDER[a.rank] - RANK_ORDER[b.rank]) || b.reputation - a.reputation)
   );
