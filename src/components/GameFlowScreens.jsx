@@ -5,7 +5,7 @@ import { SEASON_PHASES, createSeasonData } from '../season/seasonManager.js';
 import { REGULATION_PRESETS } from '../season/regulationSettings.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
-import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
+import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, ensureAllTeamsReady } from '../game/lineupGenerator.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 import { initializeCorporateGame, initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
@@ -252,18 +252,9 @@ const GameFlowScreens = ({
           if (isClubTeam) {
             // クラブチームはキャンプなし → 直接シーズンへ
             initializeAllPlayersCondition();
-            Object.keys(TEAMS_DATA).forEach(teamName => {
-              const teamData = TEAMS_DATA[teamName];
-              if (teamData && teamData.players && teamData.players.length > 0) {
-                if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-                  generatePitchingRotation(teamName);
-                }
-                if (teamName === result.userTeamName) {
-                  setRecommendedLineup(teamData, teamName);
-                } else {
-                  generateAILineup(teamData, teamName);
-                }
-              }
+            ensureAllTeamsReady({
+              userTeamName: result.userTeamName,
+              generatePitchingRotation, setRecommendedLineup, generateAILineup,
             });
             const calYear = 2024;
             const rt = generateRegionalTournament({ userTeamName: result.userTeamName, calendarYear: calYear, seeds: null });
@@ -307,18 +298,9 @@ const GameFlowScreens = ({
       allTeams={allTeams}
       onComplete={() => {
         initializeAllPlayersCondition();
-        Object.keys(TEAMS_DATA).forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players && teamData.players.length > 0) {
-            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-              generatePitchingRotation(teamName);
-            }
-            if (teamName === userTeamName) {
-              setRecommendedLineup(teamData, teamName);
-            } else {
-              generateAILineup(teamData, teamName);
-            }
-          }
+        ensureAllTeamsReady({
+          userTeamName: userTeamName,
+          generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;
@@ -401,18 +383,9 @@ const GameFlowScreens = ({
       allTeams={allTeams}
       onComplete={() => {
         initializeAllPlayersCondition();
-        Object.keys(TEAMS_DATA).forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players && teamData.players.length > 0) {
-            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-              generatePitchingRotation(teamName);
-            }
-            if (teamName === userTeamName) {
-              setRecommendedLineup(teamData, teamName);
-            } else {
-              generateAILineup(teamData, teamName);
-            }
-          }
+        ensureAllTeamsReady({
+          userTeamName: userTeamName,
+          generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;
@@ -497,18 +470,9 @@ const GameFlowScreens = ({
       allTeams={allTeams}
       onComplete={() => {
         initializeAllPlayersCondition();
-        Object.keys(TEAMS_DATA).forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players && teamData.players.length > 0) {
-            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-              generatePitchingRotation(teamName);
-            }
-            if (teamName === userTeamName) {
-              setRecommendedLineup(teamData, teamName);
-            } else {
-              generateAILineup(teamData, teamName);
-            }
-          }
+        ensureAllTeamsReady({
+          userTeamName: userTeamName,
+          generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;
@@ -544,18 +508,9 @@ const GameFlowScreens = ({
       generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
       onComplete={() => {
         initializeAllPlayersCondition();
-        Object.keys(TEAMS_DATA).forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players && teamData.players.length > 0) {
-            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-              generatePitchingRotation(teamName);
-            }
-            if (teamName === userTeamName) {
-              setRecommendedLineup(teamData, teamName);
-            } else {
-              generateAILineup(teamData, teamName);
-            }
-          }
+        ensureAllTeamsReady({
+          userTeamName: userTeamName,
+          generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;

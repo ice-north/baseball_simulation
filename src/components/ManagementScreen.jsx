@@ -6,7 +6,7 @@ import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
-import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
+import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, ensureAllTeamsReady } from '../game/lineupGenerator.js';
 import { processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 import { processNPBDraft } from '../season/npbDraft.js';
 import { generateExpansionRoster } from '../season/tryoutSystem.js';
@@ -132,25 +132,6 @@ function applyNextSeasonRegulations({
   if (alerts.length > 0) {
     alert(alerts.join('\n\n'));
   }
-}
-
-// 全チームのローテとオーダーを整える（未設定のものだけ）。
-// ⚠ 箱庭のセットアップ完了時とキャンプ完了時で**同じ15行をコピペしていた**。
-function ensureAllTeamsReady({ userTeamName, generatePitchingRotation }) {
-  Object.keys(TEAMS_DATA).forEach(teamName => {
-    const teamData = TEAMS_DATA[teamName];
-    if (!teamData?.players?.length) return;
-    if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-      generatePitchingRotation(teamName);
-    }
-    if (teamName === userTeamName) {
-      if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
-        setRecommendedLineup(teamData, teamName);
-      }
-    } else {
-      generateAILineup(teamData, teamName);
-    }
-  });
 }
 
 const ManagementScreen = ({
@@ -428,7 +409,10 @@ const ManagementScreen = ({
         if (seasonData?.settings?.clubMode) {
           // クラブチームはキャンプなし → 直接シーズンへ
           initializeAllPlayersCondition();
-          ensureAllTeamsReady({ userTeamName, generatePitchingRotation });
+          ensureAllTeamsReady({
+      userTeamName, generatePitchingRotation, setRecommendedLineup, generateAILineup,
+      preserveUserLineup: true,
+    });
           snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
           const calYear = 2024 + (seasonData?.year || 1) - 1;
           const rtSeeds = seasonData?.tournamentSeeds || null;
@@ -472,7 +456,10 @@ const ManagementScreen = ({
     generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
     onComplete={() => {
       initializeAllPlayersCondition();
-      ensureAllTeamsReady({ userTeamName, generatePitchingRotation });
+      ensureAllTeamsReady({
+      userTeamName, generatePitchingRotation, setRecommendedLineup, generateAILineup,
+      preserveUserLineup: true,
+    });
       snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
       setSeasonData(prev => {
         const calYear = 2024 + prev.year - 1;
@@ -513,7 +500,10 @@ const ManagementScreen = ({
     allTeams={allTeams}
     gameMode={gameMode}
     onComplete={() => {
-      ensureAllTeamsReady({ userTeamName, generatePitchingRotation });
+      ensureAllTeamsReady({
+      userTeamName, generatePitchingRotation, setRecommendedLineup, generateAILineup,
+      preserveUserLineup: true,
+    });
       snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
       setSeasonData(prev => {
         const calYear = 2024 + prev.year - 1;

@@ -955,84 +955,28 @@ const CLUB_SENSHUKEN_SLOTS = {
   kyushu: 3,
 };
 
-export function generateNihonSenshuken(options = {}) {
-  const {
-    userTeamName = null,
-    calendarYear = 2024,
-    seeds = null,
-  } = options;
-
+/**
+ * 地区予選（日本選手権 / クラブ選手権）の共通生成。
+ * ⚠ この41行はかつて `generateNihonSenshuken` と `generateClubSenshuken` に
+ *    まるごと2回書かれていた。違いは4つ（枠数の表・チーム種別・シードのキー・
+ *    2チーム未満の扱い）だけ。
+ * ⚠ 2チーム未満の扱いは実際にドリフトしていた。クラブ側は `continue` で飛ばすのに
+ *    企業側は素通りしており、`createBracket` が null を返すので
+ *    **phase が 'main' のまま 'done' にならない予選** が生まれる（自チームがそこに
+ *    居ると `userQualifierDone` が永久に false になり本戦へ進めない）。
+ *    クラブ側の挙動を正として統一してある。実データでは最少の地区でも
+ *    企業3・クラブ3なので現状は発火しないが、戻さないこと。
+ */
+function buildRegionalQualifiers({ slotsMap, teamType, seedsKey, userTeamName, calendarYear, seeds }) {
   const qualifiers = {};
   let userRegionId = null;
 
-  for (const regionId of Object.keys(SENSHUKEN_SLOTS)) {
+  for (const regionId of Object.keys(slotsMap)) {
     const allTeams = getTeamsByRegion(regionId);
-    const corporateTeams = allTeams.filter(t => t.type === 'corporate');
-    const regionSeeds = seeds?.senshukenQualifiers?.[regionId] || null;
-    const { teams, appliedSeeds } = applySeeds(corporateTeams, regionSeeds);
-    const slots = SENSHUKEN_SLOTS[regionId] || 1;
-
-    const teamNames = teams.map(t => t.displayName || t.name);
-    const teamDefsMap = {};
-    teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
-
-    const mainBracket = createBracket(teamNames);
-    if (mainBracket && appliedSeeds) mainBracket.seeds = appliedSeeds;
-
-    const qualifier = {
-      regionId,
-      regionName: TOSHITAIKOU_REGION_NAMES[regionId],
-      slots,
-      teamDefs: teams,
-      teamDefsMap,
-      mainBracket,
-      losersBracket: null,
-      qualifiedTeams: [],
-      phase: 'main',
-    };
-
-    assignQualifierDates(qualifier, { year: calendarYear, month: 9, day: 1 }, 5);
-
-    if (userTeamName && teamDefsMap[userTeamName]) {
-      userRegionId = regionId;
-    }
-
-    qualifiers[regionId] = qualifier;
-  }
-
-  const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';
-
-  return {
-    qualifiers,
-    mainTournament: null,
-    userRegionId,
-    userQualifierDone,
-    champion: null,
-    runnerUp: null,
-    phase: 'qualifiers',
-  };
-}
-
-// ============================================================
-// 全日本クラブ野球選手権大会（9月予選、10月本戦、クラブチームのみ）
-// ============================================================
-
-export function generateClubSenshuken(options = {}) {
-  const {
-    userTeamName = null,
-    calendarYear = 2024,
-    seeds = null,
-  } = options;
-
-  const qualifiers = {};
-  let userRegionId = null;
-
-  for (const regionId of Object.keys(CLUB_SENSHUKEN_SLOTS)) {
-    const allTeams = getTeamsByRegion(regionId);
-    const clubTeams = allTeams.filter(t => t.type === 'club');
-    const regionSeeds = seeds?.clubQualifiers?.[regionId] || null;
-    const { teams, appliedSeeds } = applySeeds(clubTeams, regionSeeds);
-    const slots = CLUB_SENSHUKEN_SLOTS[regionId] || 1;
+    const targetTeams = allTeams.filter(t => t.type === teamType);
+    const regionSeeds = seeds?.[seedsKey]?.[regionId] || null;
+    const { teams, appliedSeeds } = applySeeds(targetTeams, regionSeeds);
+    const slots = slotsMap[regionId] || 1;
 
     if (teams.length < 2) continue;
 
@@ -1075,6 +1019,30 @@ export function generateClubSenshuken(options = {}) {
     runnerUp: null,
     phase: 'qualifiers',
   };
+}
+
+export function generateNihonSenshuken(options = {}) {
+  const { userTeamName = null, calendarYear = 2024, seeds = null } = options;
+  return buildRegionalQualifiers({
+    slotsMap: SENSHUKEN_SLOTS,
+    teamType: 'corporate',
+    seedsKey: 'senshukenQualifiers',
+    userTeamName, calendarYear, seeds,
+  });
+}
+
+// ============================================================
+// 全日本クラブ野球選手権大会（9月予選、10月本戦、クラブチームのみ）
+// ============================================================
+
+export function generateClubSenshuken(options = {}) {
+  const { userTeamName = null, calendarYear = 2024, seeds = null } = options;
+  return buildRegionalQualifiers({
+    slotsMap: CLUB_SENSHUKEN_SLOTS,
+    teamType: 'club',
+    seedsKey: 'clubQualifiers',
+    userTeamName, calendarYear, seeds,
+  });
 }
 
 export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, teamType = null, seedNames = null) {

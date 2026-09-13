@@ -878,7 +878,7 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `src/App.jsx` (~4370行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
 - `src/game/autoSimulation.js` (~2870行) - 自動シミュレーション・buildDefense
 - `src/game/aiManager.js` (~650行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
-- `src/game/lineupGenerator.js` (~650行) - AIオーダー編成・投手ローテーション生成
+- `src/game/lineupGenerator.js` (~690行) - AIオーダー編成・投手ローテーション生成・`ensureAllTeamsReady`
 - `src/game/gameControls.js` (~135行) - resetGame・multiPitch・simMode
 - `src/game/gameSetup.js` (~820行) - setupManagedGame・handleManagedGameEnd
 - `src/game/saveSystem.js` (~650行) - セーブ/ロード/ファイル書き出し・読み込み
@@ -890,7 +890,7 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
   （`dateProgress/` に切り出し済み: `Newspaper.jsx` 440行 / `PreGameModal.jsx` 490行 /
    `Modals.jsx` 125行 / `bracketRenderer.jsx` 190行）
 - `src/components/ManagementScreen.jsx` (~590行) - 管理画面ルーター
-- `src/components/GameFlowScreens.jsx` (~570行) - ゲームフロー画面群
+- `src/components/GameFlowScreens.jsx` (~530行) - ゲームフロー画面群
 - `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
 - `src/components/GameUIComponents.jsx` (~1050行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel・TeamMemberPanel
 - `src/components/PlayerEditColumn.jsx` (~280行) - デバッグ用エディット画面の1チーム分の列（左右で共有）
@@ -901,7 +901,7 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `src/corporate/corporateInit.js` (~1960行) - 社会人/独立リーグ初期化・チームランク変動
 - `src/corporate/scoutingSystem.js` (~2040行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
 - `src/university/universityTeamsData.js` (~510行) - 大学チームデータ（27リーグ234校（2部制12リーグ×12校＋1部制15リーグ×6校）、ランク別成長倍率定義）
-- `src/university/universityLeagueManager.js` (~500行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
+- `src/university/universityLeagueManager.js` (~450行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
 - `src/data/playerNames.js` (345KB) - 姓5000件+名4000件の重み付き名前DB
   （足すときは `tools/names/merge-names.mjs` を通すこと。下記「名前DB」を参照）
 - `src/players.js` - 初期選手データ

@@ -387,12 +387,27 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
     );
   };
 
-  const TeamTable = ({ players, teamName, selectedPlayer, onSelect, title, titleColor }) => (
+  /**
+   * トレード画面の選手表。
+   * ⚠ 自チーム側は `TeamTable`、相手チーム側は **同じ29行の thead を手書きでコピー** していた。
+   *    違いはヘッダー（人数 か チーム選択の select）と、未選択のときの表示だけなので
+   *    `header` / `emptyMessage` で受け取る形にして1つに畳んである。
+   *    **列を足すときに片方だけ直す事故が起きるので、表をもう1つ作らないこと。**
+   */
+  const TeamTable = ({
+    players, teamName, selectedPlayer, onSelect, title, titleColor,
+    header, emptyMessage, keyPrefix,
+  }) => (
     <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden flex flex-col">
-      <div className="px-4 py-3 border-b border-gray-700/50 flex items-center gap-2">
-        <h2 className={`font-semibold text-sm ${titleColor}`}>{title}</h2>
-        <span className="text-xs text-gray-400">{players.length}人</span>
-      </div>
+      {header || (
+        <div className="px-4 py-3 border-b border-gray-700/50 flex items-center gap-2">
+          <h2 className={`font-semibold text-sm ${titleColor}`}>{title}</h2>
+          <span className="text-xs text-gray-400">{players.length}人</span>
+        </div>
+      )}
+      {emptyMessage ? (
+        <div className="text-gray-400 text-sm text-center py-12">{emptyMessage}</div>
+      ) : (
       <div className="overflow-y-auto max-h-[420px]">
         <table className="w-full text-left">
           <thead className="sticky top-0 z-10">
@@ -424,7 +439,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
           <tbody>
             {players.map((p, idx) => (
               <PlayerRow
-                key={`${teamName}-${p.id}-${idx}`}
+                key={`${keyPrefix || teamName}-${p.id}-${idx}`}
                 player={p}
                 isSelected={selectedPlayer === p}
                 onSelect={onSelect}
@@ -434,6 +449,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 
@@ -589,68 +605,31 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
           titleColor="text-blue-400"
         />
 
-        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-700/50 flex items-center gap-3">
-            <h2 className="font-semibold text-sm text-red-400">相手チーム</h2>
-            <select
-              value={selectedTargetTeam}
-              onChange={(e) => { setSelectedTargetTeam(e.target.value); setSelectedTargetPlayer(null); }}
-              className="bg-gray-700/80 border border-gray-600/50 text-white text-sm px-2.5 py-1 rounded-lg"
-            >
-              <option value="">-- 選択 --</option>
-              {tradeGroups.map(([label, teams]) => (
-                <optgroup key={label} label={label}>
-                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-          {selectedTargetTeam && TEAMS_DATA[selectedTargetTeam] ? (
-            <div className="overflow-y-auto max-h-[420px]">
-              <table className="w-full text-left">
-                <thead className="sticky top-0 z-10">
-                  <tr className="bg-surface-2 border-b border-gray-700/30 text-xs font-medium">
-                    <th colSpan={3} className="py-0.5 pl-2 text-gray-400">選手情報</th>
-                    <th colSpan={2} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">打撃</th>
-                    <th colSpan={3} className="py-0.5 px-1 text-center text-cyan-400/60 border-l border-gray-700/30">フィジカル</th>
-                    <th colSpan={3} className="py-0.5 px-1 text-center text-red-400/60 border-l border-gray-700/30">投手</th>
-                    <th colSpan={2} className="py-0.5 px-1 text-center text-green-400/60 border-l border-gray-700/30">出場</th>
-                    <th className="py-0.5 px-1 text-center text-gray-400 border-l border-gray-700/30">総合</th>
-                  </tr>
-                  <tr className="bg-surface-2 border-b border-gray-700/50 text-xs text-gray-300">
-                    <th className="py-1 pl-2 text-left font-medium">名前</th>
-                    <th className="py-1 px-1 font-medium">守備</th>
-                    <th className="py-1 px-1 text-center font-medium">齢</th>
-                    <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">ミ</th>
-                    <th className="py-1 px-0.5 text-center font-medium">パ</th>
-                    <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">走</th>
-                    <th className="py-1 px-0.5 text-center font-medium">肩</th>
-                    <th className="py-1 px-0.5 text-center font-medium">守</th>
-                    <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">球速</th>
-                    <th className="py-1 px-0.5 text-center font-medium">制球</th>
-                    <th className="py-1 px-0.5 text-center font-medium">ス</th>
-                    <th className="py-1 px-1 text-center font-medium border-l border-gray-700/30">試合</th>
-                    <th className="py-1 px-1 font-medium">成績</th>
-                    <th className="py-1 px-1 text-center font-medium border-l border-gray-700/30">評価</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(TEAMS_DATA[selectedTargetTeam].players || []).map((p, idx) => (
-                    <PlayerRow
-                      key={`target-${p.id}-${idx}`}
-                      player={p}
-                      isSelected={selectedTargetPlayer === p}
-                      onSelect={setSelectedTargetPlayer}
-                      teamName={selectedTargetTeam}
-                    />
-                  ))}
-                </tbody>
-              </table>
+        <TeamTable
+          players={TEAMS_DATA[selectedTargetTeam]?.players || []}
+          teamName={selectedTargetTeam}
+          selectedPlayer={selectedTargetPlayer}
+          onSelect={setSelectedTargetPlayer}
+          keyPrefix="target"
+          emptyMessage={selectedTargetTeam && TEAMS_DATA[selectedTargetTeam] ? null : 'チームを選択してください'}
+          header={
+            <div className="px-4 py-3 border-b border-gray-700/50 flex items-center gap-3">
+              <h2 className="font-semibold text-sm text-red-400">相手チーム</h2>
+              <select
+                value={selectedTargetTeam}
+                onChange={(e) => { setSelectedTargetTeam(e.target.value); setSelectedTargetPlayer(null); }}
+                className="bg-gray-700/80 border border-gray-600/50 text-white text-sm px-2.5 py-1 rounded-lg"
+              >
+                <option value="">-- 選択 --</option>
+                {tradeGroups.map(([label, teams]) => (
+                  <optgroup key={label} label={label}>
+                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                  </optgroup>
+                ))}
+              </select>
             </div>
-          ) : (
-            <div className="text-gray-400 text-sm text-center py-12">チームを選択してください</div>
-          )}
-        </div>
+          }
+        />
       </div>}
 
       {tradeTab === 'propose' && (

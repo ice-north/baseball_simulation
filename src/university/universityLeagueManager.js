@@ -337,8 +337,14 @@ export function getAllUniversityLeagues() {
   });
 }
 
-// 部制リーグの入替戦処理（1部最下位 ↔ 2部1位）
-export function processUniversityPromotionRelegation() {
+// 部制リーグの入替戦処理（各部の最下位 ↔ 1つ下の部の1位）
+// ⚠ 春季用と秋季用が **65行/56行のほぼ同一のコピー** で並んでいた。
+//    違いは「どちらのシーズンの順位表を見るか」だけ…のはずが、実際にはドリフトしていて
+//    **秋季版だけ順位表を並べ替えずに先頭/末尾を取っていた**。
+//    `updateStandings` が毎試合ソートするので現状は同じ結果になるが、
+//    セーブから復元した順位表など「ソート済みでない配列」を渡されると
+//    **昇格・降格するチームを取り違える**。防御的な春季版を正として1つに畳んである。
+function processPromotionRelegation(seasonKey) {
   const leagues = WORLD_DATA.universityLeagues;
   if (!leagues) return [];
 
@@ -348,17 +354,15 @@ export function processUniversityPromotionRelegation() {
     if (!league.divisions || !league.divTeams) continue;
     const numDiv = league.numDivisions || 2;
 
-    // 秋季リーグの順位で判定
-    const fallData = league.fall;
-    if (!fallData?.done) continue;
+    const seasonData = league[seasonKey];
+    if (!seasonData?.done) continue;
 
     for (let d = 1; d < numDiv; d++) {
-      const upperStandings = fallData[`standings${d}`];
-      const lowerStandings = fallData[`standings${d + 1}`];
-      if (!upperStandings?.length || !lowerStandings?.length) continue;
-
-      const relegated = upperStandings[upperStandings.length - 1]?.team;
-      const promoted = lowerStandings[0]?.team;
+      const byRank = (s) => [...(s || [])].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+      const upper = byRank(seasonData[`standings${d}`]);
+      const lower = byRank(seasonData[`standings${d + 1}`]);
+      const relegated = upper[upper.length - 1]?.team;
+      const promoted = lower[0]?.team;
       if (!relegated || !promoted) continue;
 
       // divTeamsを入替
@@ -402,64 +406,15 @@ export function processUniversityPromotionRelegation() {
   return changes;
 }
 
+// 秋季終了後の入替戦処理（年度末）
+export function processUniversityPromotionRelegation() {
+  return processPromotionRelegation('fall');
+}
 
 // 春季終了後の入替戦処理（春季順位表ベース）
 // ※ユーザーリーグのspring.doneは呼び出し元が事前にセットすること
 export function processSpringPromotionRelegation() {
-  const leagues = WORLD_DATA.universityLeagues;
-  if (!leagues) return [];
-  const changes = [];
-
-  for (const [regionId, league] of Object.entries(leagues)) {
-    if (!league.divisions || !league.divTeams) continue;
-    const numDiv = league.numDivisions || 2;
-    const springData = league.spring;
-    if (!springData?.done) continue;
-
-    for (let d = 1; d < numDiv; d++) {
-      const upper = [...(springData[`standings${d}`] || [])].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-      const lower = [...(springData[`standings${d + 1}`] || [])].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-      const relegated = upper[upper.length - 1]?.team;
-      const promoted = lower[0]?.team;
-      if (!relegated || !promoted) continue;
-
-      const upperTeams = league.divTeams[d];
-      const lowerTeams = league.divTeams[d + 1];
-      const relIdx = upperTeams.indexOf(relegated);
-      const proIdx = lowerTeams.indexOf(promoted);
-      if (relIdx >= 0 && proIdx >= 0) {
-        upperTeams[relIdx] = promoted;
-        lowerTeams[proIdx] = relegated;
-        if (d === 1) {
-          league.div1Teams = [...upperTeams];
-          league.div2Teams = [...lowerTeams];
-        }
-        changes.push({
-          league: league.name,
-          regionId,
-          promoted: { team: promoted, from: `${d + 1}部`, to: `${d}部` },
-          relegated: { team: relegated, from: `${d}部`, to: `${d + 1}部` },
-        });
-      }
-    }
-  }
-
-  // ユーザーの部が変わった場合、WORLD_DATAを更新
-  if (WORLD_DATA.universityLeague) {
-    const ul = WORLD_DATA.universityLeague;
-    const league = leagues[ul.userRegion];
-    if (league?.divisions && league.divTeams) {
-      for (let d = 1; d <= (league.numDivisions || 2); d++) {
-        if (league.divTeams[d]?.includes(ul.userTeam)) {
-          ul.userDivision = d;
-          ul.leagueTeams = [...league.divTeams[d]];
-          break;
-        }
-      }
-    }
-  }
-
-  return changes;
+  return processPromotionRelegation('spring');
 }
 
 // 入替戦後の新divTeamsで全リーグの秋季スケジュール＋順位表を再生成

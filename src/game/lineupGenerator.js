@@ -650,3 +650,36 @@ export const generatePitchingRotation = (teamName) => {
   team.pitchingRotation.reliefFatigue = {};
   team.pitchingRotation.pitcherRoles = pitcherRoles;
 };
+
+/**
+ * 全チームのローテーションとオーダーが揃っているか確かめ、無ければ作る。
+ * ⚠ 同じ `Object.keys(TEAMS_DATA).forEach(...)` が3箇所に書かれていた
+ *    （`ManagementScreen` の1箇所と `GameFlowScreens` の newgame_camp / sandbox_setup の
+ *     onComplete に2箇所。後者2つは29行が完全に同一）。
+ * ⚠ **3つは同じではなかった**。自チームのオーダーについて
+ *      - ManagementScreen … 既に組んであれば **触らない**（プレイヤーの編成を保つ）
+ *      - GameFlowScreens … 常に `setRecommendedLineup` で上書き
+ *    という違いがある。新規ゲーム直後は編成が無いので実質同じだが、意味は違うので
+ *    `preserveUserLineup` で明示する。**既定を変えないこと**。
+ */
+export function ensureAllTeamsReady({
+  userTeamName,
+  generatePitchingRotation: genRotation,
+  setRecommendedLineup: setUserLineup,
+  generateAILineup: genAILineup,
+  preserveUserLineup = false,
+}) {
+  Object.keys(TEAMS_DATA).forEach(teamName => {
+    const teamData = TEAMS_DATA[teamName];
+    if (!teamData?.players?.length) return;
+    if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+      genRotation(teamName);
+    }
+    if (teamName === userTeamName) {
+      const alreadySet = teamData.lineupSettings?.battingOrder?.length > 0;
+      if (!preserveUserLineup || !alreadySet) setUserLineup(teamData, teamName);
+    } else {
+      genAILineup(teamData, teamName);
+    }
+  });
+}
