@@ -1,4 +1,6 @@
 import React from 'react';
+import { FORM_SHORT, getPitchTypeName } from '../utils/constants.js';
+import { formatInnings } from '../utils/physics.js';
 
 // ============================================================
 // 画面の外枠と見出し（全画面で共通）
@@ -547,5 +549,137 @@ export const Sidebar = ({
       <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
     </nav>
+  </div>
+);
+
+// ============================================================
+// 試合画面 左右カラムの投手欄（試合中=投手成績 / 試合前=予告先発）
+//
+// ⚠ **アウェイ用とホーム用で115行を丸ごとコピペしていた**（L3388-3502 と
+//    L4914-5028）。チーム参照を置換するとバイト単位で一致しており、
+//    片方だけ直す事故が起きる形だった（この作品が繰り返し踏んでいる
+//    「表を二重に作らない」違反そのもの）。
+//
+// ⚠ **ここの getValueColor / getBgColor が使う正規化は共有の物差しと違う**
+//    （球速 `(v-100)*2` / スタミナ `v/2`。共有は `normVelocity` = `(v-115)*2.5`）。
+//    抽出時は**挙動を変えないため元の係数のまま**にしてある。
+//    揃えると色が変わる（140km は 赤 → 黄）ので、直すなら別の変更として測ること。
+// ============================================================
+const panelValueColor = (val) => {
+  if (val >= 80) return 'text-red-400';
+  if (val >= 70) return 'text-orange-400';
+  if (val >= 60) return 'text-yellow-400';
+  if (val >= 50) return 'text-green-400';
+  return 'text-gray-300';
+};
+const panelBgColor = (val) => {
+  if (val >= 80) return 'bg-red-500';
+  if (val >= 70) return 'bg-orange-500';
+  if (val >= 60) return 'bg-yellow-500';
+  if (val >= 50) return 'bg-green-500';
+  return 'bg-gray-500';
+};
+
+export const TeamPitcherPanel = ({ team, gameStarted }) => (
+  <div className="mt-2 pt-2 border-t border-gray-700">
+    {gameStarted ? (
+      <>
+        <div className="text-sm text-gray-300 mb-1 font-semibold">📊 試合スタッツ</div>
+        {/* 投手成績 */}
+        <div className="bg-surface-2 rounded p-2 mb-1">
+          <div className="text-xs text-blue-400 mb-0.5">投手</div>
+          <div className="text-sm">
+            {(() => {
+              const pitchers = team.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
+              const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
+              const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
+              return (
+                <>
+                  {pitchers.map(p => {
+                    const s = p.stats?.pitching || {};
+                    const outs = s.outs || 0;
+                    const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
+                    const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                    return (
+                      <div key={p.id} className="flex justify-between text-gray-300 gap-1">
+                        <span className="truncate">{p.name}</span>
+                        <span className="text-gray-300 whitespace-nowrap text-xs">
+                          {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {pitchers.length > 1 && (
+                    <div className="flex justify-between text-yellow-400 text-xs mt-1 pt-1 border-t border-gray-700">
+                      <span>合計イニング</span>
+                      <span>{totalIP}</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      </>
+    ) : (
+      <>
+        <div className="text-sm font-bold text-gray-300 mb-1">⚾ 予告先発</div>
+        {(() => {
+          const pitcher = team.players.find(p => p.isStarter && p.position === 'pitcher');
+          if (!pitcher) return null;
+          const formNames = FORM_SHORT;
+          const velocityScore = Math.min(100, (pitcher.pitching.velocity - 100) * 2);
+          const staminaScore = Math.min(100, pitcher.pitching.stamina / 2);
+          return (
+            <div className="bg-surface-2 rounded p-3 border-2 border-gray-700">
+              <div className="text-base text-white mb-2 font-bold flex items-center gap-2">
+                <span>⚾</span>
+                <span>{pitcher.name}</span>
+                <span className="text-sm text-gray-300">#{pitcher.number || pitcher.id}</span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-xs text-gray-300">投げ手:</span>
+                  <span className="text-white font-bold">{pitcher.physical.throws === 'right' ? '右投' : '左投'}</span>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-white">{formNames[pitcher.pitching.form]}</span>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-xs text-gray-300">球速:</span>
+                  <span className={`text-lg font-bold ${panelValueColor(velocityScore)}`}>{pitcher.pitching.velocity}</span>
+                  <span className="text-xs text-gray-400">km/h</span>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-xs text-gray-300">回転:</span>
+                  <span className={`text-sm font-bold ${panelValueColor(pitcher.pitching.spinRate ?? 50)}`}>{pitcher.pitching.spinRate ?? 50}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-300 w-12">制球</span>
+                  <div className="flex-1 bg-gray-700 rounded h-3 overflow-hidden">
+                    <div className={`h-full ${panelBgColor(pitcher.pitching.control)}`} style={{ width: `${pitcher.pitching.control}%` }} />
+                  </div>
+                  <span className={`text-sm font-bold ${panelValueColor(pitcher.pitching.control)}`}>{pitcher.pitching.control}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-300 w-12">体力</span>
+                  <div className="flex-1 bg-gray-700 rounded h-3 overflow-hidden">
+                    <div className={`h-full ${panelBgColor(staminaScore)}`} style={{ width: `${staminaScore}%` }} />
+                  </div>
+                  <span className={`text-sm font-bold ${panelValueColor(staminaScore)}`}>{pitcher.pitching.stamina}</span>
+                </div>
+                <div className="pt-1 border-t border-gray-700">
+                  <div className="text-xs text-gray-300 mb-1">変化球</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pitcher.pitching.arsenal.map((ball, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded font-semibold">
+                        {getPitchTypeName(ball.type)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </>
+    )}
   </div>
 );
