@@ -1,6 +1,8 @@
 import React from 'react';
-import { FORM_SHORT, getPitchTypeName } from '../utils/constants.js';
-import { formatInnings } from '../utils/physics.js';
+import { FORM_SHORT, getPitchTypeName, POSITION_NAMES, sortBenchByPosition, formatAtBatResult, atBatResultColor } from '../utils/constants.js';
+import { formatInnings, getAbilityTextColor } from '../utils/physics.js';
+import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
+import { calculateDefensiveFitness } from '../simulation-logic.js';
 
 // ============================================================
 // 画面の外枠と見出し（全画面で共通）
@@ -681,5 +683,372 @@ export const TeamPitcherPanel = ({ team, gameStarted }) => (
         })()}
       </>
     )}
+  </div>
+);
+
+/**
+ * 左右のメンバー表（打順・守備位置・成績・打席結果）。
+ * ⚠ かつて App.jsx の RENDER にアウェイ用とホーム用が並んで書かれており、
+ *    正規化して比べると 335行中 328行が同一だった。ドリフトも実際に起きていて、
+ *    アウェイ側だけ `text-red-400`（チーム色分け。表と裏で意味が反転するので使わない決まり）と
+ *    `truncate min-w-0` 無しが残っていた。ホーム側を正として1つに畳んである。
+ * - `side` は 'away' | 'home'。ヘッダーの並び（得点とチーム名の左右）と
+ *   handleXxxClick の teamType を兼ねる
+ * - `isBatting` はこのチームが攻撃中か（旧: アウェイ=isTopInning / ホーム=!isTopInning）
+ */
+export const TeamMemberPanel = ({
+  side, team, score, isBatting, gameStarted, gameOver,
+  selectedBatter, selectedPosition, selectedSubstitute, showBench, setShowBench,
+  handleBatterClick, handlePositionClick, handleSubstituteClick,
+  getPositionColor, getPositionColorHighlighted,
+}) => (
+  <div className="bg-surface-1 rounded-lg p-2 text-white min-w-0 overflow-hidden">
+    {/* 長いチーム名で2行にならないよう truncate。チーム色分けは使わない
+        （表と裏で色の意味が反転するため）。左右で得点とチーム名の並びだけ鏡像にする */}
+    <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
+      {side === 'away' ? (
+        <>
+          <h3 className="font-bold text-gray-100 truncate min-w-0" title={team.name}>✈️ {team.name}</h3>
+          <span className="text-2xl font-bold text-gray-100 tabular-nums shrink-0 ml-2">{score || 0}</span>
+        </>
+      ) : (
+        <>
+          <span className="text-2xl font-bold text-gray-100 tabular-nums shrink-0 mr-2">{score || 0}</span>
+          <h3 className="font-bold text-gray-100 truncate min-w-0 text-right" title={team.name}>🏠 {team.name}</h3>
+        </>
+      )}
+    </div>
+    
+    {/* スタメンと控え選手を横並び表示 */}
+    {!gameStarted ? (
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        {/* 左: スタメン */}
+        <div>
+          <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">スターティングメンバー</div>
+          <div className="space-y-1 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
+            {team.players
+              .filter(p => p.isStarter)
+              .sort((a, b) => a.battingOrder - b.battingOrder)
+              .map(player => {
+                const isPitcher = player.position === 'pitcher';
+                const posNames = POSITION_NAMES;
+                const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+                const isSubSelected = selectedSubstitute === player.id;
+                const isSelected = selectedBatter === player.battingOrder;
+                const isPositionSelected = selectedPosition === player.id;
+
+                return (
+                  <div
+                    key={player.id}
+                    onClick={() => handleSubstituteClick(side, player.id)}
+                    className={`p-1.5 rounded cursor-pointer transition ${
+                      isSubSelected ? 'seg-on ring-2' : 'seg'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBatterClick(side, player.battingOrder);
+                        }}
+                        className="w-4 text-gray-300 text-xs hover:text-blue-400 transition font-bold"
+                      >
+                        {player.battingOrder}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePositionClick(side, player.id);
+                        }}
+                        className={`w-6 text-center rounded text-sm py-0.5 font-bold transition ${
+                          isPositionSelected
+                            ? 'bg-purple-600 text-white ring-2 ring-purple-400'
+                            : getPositionColor(player.position) + ' hover:opacity-80'
+                        }`}
+                      >
+                        {posNames[player.position]}
+                      </button>
+                      <span className="font-medium text-base truncate flex-1">
+                        {player.name}
+                        <span className={`ml-0.5 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                      </span>
+                      <span className="text-xs text-gray-400 font-mono font-bold">#{player.number || player.id}</span>
+<span className="text-sm text-gray-300 font-semibold">{throwHand}{batHand}</span>
+                      {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
+                      {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
+                      {isPositionSelected && <span className="text-purple-300 animate-pulse">◀</span>}
+                    </div>
+                    <div className="ml-9 mt-0.5">
+                      <div className="flex gap-3 text-xs text-gray-400 font-bold">
+                        <span className="w-7 text-center">ミ</span>
+                        <span className="w-7 text-center">パ</span>
+                        <span className="w-7 text-center">走</span>
+                        <span className="w-7 text-center">肩</span>
+                        <span className="w-7 text-center">守</span>
+                      </div>
+                      <div className="flex gap-3 text-sm font-bold">
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.batting.meet)}`}>{player.batting.meet}</span>
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.batting.power)}`}>{player.batting.power}</span>
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.physical.speed)}`}>{player.physical.speed}</span>
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.physical.arm)}`}>{player.physical.arm}</span>
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.fielding.defense)}`}>{player.fielding.defense}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        {/* 右: 控え選手 */}
+        <div>
+          <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">ベンチメンバー</div>
+          <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
+            {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
+                ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
+            {sortBenchByPosition(team.players.filter(p => !p.isStarter))
+              .map(player => {
+                const posNames = POSITION_NAMES;
+                const isPitcher = player.position === 'pitcher';
+                const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+                const isSubSelected = selectedSubstitute === player.id;
+                const isSubbedOut = player.hasSubbedOut;
+
+                return (
+                  <div
+                    key={player.id}
+                    onClick={() => !isSubbedOut && handleSubstituteClick(side, player.id)}
+                    className={`p-1.5 rounded transition ${
+                      isSubbedOut
+                        ? 'bg-surface-1 opacity-50 cursor-not-allowed'
+                        : isSubSelected
+                          ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
+                      <span className="font-medium text-sm truncate flex-1">{player.name}</span>
+                      <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
+                      {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
+                      {isSubSelected && <span className="text-blue-300">👆</span>}
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
+                      <span>M{player.batting.meet}</span>
+                      <span>P{player.batting.power}</span>
+                      <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      </div>
+    ) : (
+      /* 試合中/試合終了後は現在フィールドにいる選手のみ表示 */
+      <div className="mb-2">
+        <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
+          {team.players
+            .filter(p => {
+              // 試合終了後：実際に出場した選手のみ
+              if (gameOver) {
+                const hasBattingStats = p.stats?.batting && (p.stats.batting.atBats > 0 || p.stats.batting.walks > 0 || p.stats.batting.hits > 0);
+                const hasPitchingStats = p.stats?.pitching && p.stats.pitching.outs > 0;
+                const isOnField = p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
+                return hasBattingStats || hasPitchingStats || isOnField;
+              }
+              // 試合中：現在フィールドにいる選手
+              return p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
+            })
+            .sort((a, b) => a.battingOrder - b.battingOrder)
+            .map(player => {
+            const isCurrentBatter = gameStarted && isBatting && player.battingOrder === team.currentBatterOrder;
+            const isPitcher = player.position === 'pitcher';
+            const posNames = POSITION_NAMES;
+            const getPosColor = (pos) => getPositionColorHighlighted(pos, isCurrentBatter);
+
+          const throwHand = player.physical.throws === 'right' ? '右' : '左';
+          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+
+          const isSelected = !gameStarted && selectedBatter === player.battingOrder;
+          const isPositionSelected = !gameStarted && selectedPosition === player.id;
+          const isSubSelected = gameStarted && selectedSubstitute === player.id;
+          const isSubbedOut = player.hasSubbedOut;
+          const fitness = calculateDefensiveFitness(player, player.position);
+
+          return (
+            <div
+              key={player.id}
+              onClick={() => {
+                if (gameStarted && !isSubbedOut) {
+                  handleSubstituteClick(side, player.id);
+                } else if (!gameStarted) {
+                  handleBatterClick(side, player.battingOrder);
+                }
+              }}
+              className={`p-2 rounded transition ${
+                isSubbedOut ? 'opacity-50 cursor-not-allowed' :
+                isCurrentBatter ? 'bg-yellow-500 text-black cursor-pointer' :
+                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer' :
+                isSelected ? 'seg-on cursor-pointer' : 'seg cursor-pointer'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <span className={`w-5 shrink-0 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-300'}`}>{player.battingOrder}</span>
+                {!gameStarted ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePositionClick(side, player.id);
+                    }}
+                    className={`w-6 shrink-0 text-center rounded text-xs py-0.5 font-semibold transition ${
+                      isPositionSelected
+                        ? 'bg-purple-600 text-white ring-2 ring-purple-400'
+                        : getPosColor(player.position) + ' hover:opacity-80'
+                    }`}
+                  >
+                    {posNames[player.position]}
+                  </button>
+                ) : (
+                  <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(player.position)}`}>{posNames[player.position]}</span>
+                )}
+                <span className="font-bold truncate">{player.name}</span>
+                <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-300'}`}>{throwHand}{batHand}</span>
+                <span className="flex-1"></span>
+                {isSubbedOut && <span className="text-red-400 text-xs shrink-0">交代済</span>}
+                {isCurrentBatter && <span className="shrink-0">⚾</span>}
+                {isSubSelected && <span className="text-orange-300 shrink-0">⚡</span>}
+                {isSelected && <span className="shrink-0">👆</span>}
+                {isPositionSelected && <span className="shrink-0">🔄</span>}
+              </div>
+              {/* 2行目: 成績（打率・本塁打・打点）と打席結果。
+                  打席結果を1行目に置くと選手名が切れるのでこちらへ移した。
+                  成績は固定幅の右寄せで縦に揃えつつ、間隔を詰めて1かたまりに見せる。
+                  バッジは右端に寄せ、入り切らない場合は**古い方から隠れる**
+                  （justify-end + overflow-hidden） */}
+              {gameStarted ? (
+                <div className="flex items-center gap-2 ml-6 mt-0.5 text-xs">
+                  <div className={`flex gap-1 font-bold tabular-nums shrink-0 ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
+                    {(() => {
+                      const ss = player.seasonStats?.batting;
+                      if (ss && ss.atBats > 0) {
+                        const avg = (ss.hits / ss.atBats).toFixed(3);
+                        return <>
+                          <span className="w-8 text-right">.{avg.split('.')[1]}</span>
+                          <span className="w-9 text-right">{ss.homeruns || 0}本</span>
+                          <span className="w-10 text-right">{ss.rbis || 0}点</span>
+                        </>;
+                      }
+                      if (isPitcher) {
+                        const ps = player.seasonStats?.pitching;
+                        if (ps && ps.inningsPitched > 0) {
+                          const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
+                          return <span>防御率 {era}</span>;
+                        }
+                      }
+                      return <span className={isCurrentBatter ? '' : 'text-gray-300'}>出場なし</span>;
+                    })()}
+                  </div>
+                  {player.gameStats?.atBatResults?.length > 0 && (
+                    /* **左から右へ増やす**。右寄せ(justify-end)にすると
+                       打席が増えるたびに既存のバッジが左へずれて落ち着かない。
+                       先頭から並べれば N打席目は常に同じ位置に出る。
+                       slice も先頭からにすること（-6 だと6打席目で全部ずれる） */
+                    <div className="flex gap-0.5 flex-1 min-w-0 overflow-hidden">
+                      {player.gameStats.atBatResults.slice(0, 6).map((r, i) => (
+                        <span key={i} title={r}
+                          style={{ textAlignLast: 'justify' }}
+                          className={`w-10 shrink-0 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
+                          {formatAtBatResult(r)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className={`grid grid-cols-4 gap-1 text-xs ml-6 mt-0.5 tabular-nums ${isSelected ? 'text-blue-200' : 'text-gray-300'}`}>
+                    <span>M{player.batting.meet}</span>
+                    <span>P{player.batting.power}</span>
+                    <span>E{player.batting.eye}</span>
+                    <span className={isSelected ? 'text-blue-200' : 'text-blue-300'}>
+                      {isPitcher ? `⚡${player.pitching.velocity}` : ''}
+                    </span>
+                  </div>
+                  <div className={`text-xs ml-6 mt-0.5 ${
+                    fitness.grade === 'S' ? 'text-yellow-400' :
+                    fitness.grade === 'A' ? 'text-green-400' :
+                    fitness.grade === 'B' ? 'text-blue-400' :
+                    fitness.grade === 'D' ? 'text-red-400' :
+                    'text-gray-300'
+                  }`}>
+                    守備適性 [{fitness.grade}] {fitness.comments}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 試合中の選手交代アコーディオン */}
+      <div className="mt-2">
+        <button
+          onClick={() => setShowBench(!showBench)}
+          className="w-full p-2 bg-surface-2 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
+        >
+          <span>⚡ 選手交代</span>
+          <span>{showBench ? '▼' : '▶'}</span>
+        </button>
+
+        {showBench && (
+          <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
+            {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
+                ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
+            {sortBenchByPosition(team.players.filter(p => !p.isStarter))
+              .map(player => {
+                const posNames = POSITION_NAMES;
+                const isPitcher = player.position === 'pitcher';
+                const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+                const isSubSelected = selectedSubstitute === player.id;
+                const isSubbedOut = player.hasSubbedOut;
+
+                return (
+                  <div
+                    key={player.id}
+                    onClick={() => !isSubbedOut && handleSubstituteClick(side, player.id)}
+                    className={`p-1.5 rounded transition ${
+                      isSubbedOut
+                        ? 'bg-surface-1 opacity-50 cursor-not-allowed'
+                        : isSubSelected
+                          ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
+                      <span className="font-medium text-sm truncate flex-1">{player.name}</span>
+                      <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
+                      {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
+                      {isSubSelected && <span className="text-blue-300">👆</span>}
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
+                      <span>M{player.batting.meet}</span>
+                      <span>P{player.batting.power}</span>
+                      <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+      </div>
+    </div>
+    )}
+
+    {/* このチームの試合スタッツ/投手詳細 */}
+    <TeamPitcherPanel team={team} gameStarted={gameStarted} />
   </div>
 );

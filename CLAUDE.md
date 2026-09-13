@@ -767,6 +767,13 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 
 ### 左右のメンバー表は「列」を固定する
 打順を縦に読んで比較する表なので、桁数や文字数で位置がずれてはいけない。
+
+⚠ **左右は同じ `TeamMemberPanel`（`GameUIComponents.jsx`）**。かつて App.jsx の RENDER に
+アウェイ用とホーム用が**別々に335行ずつ**書かれており、正規化して比べると **328行が同一**だった。
+案の定ドリフトしていて、**アウェイ側だけ `text-red-400`（チーム色分け。下記の決定に反する）と
+`truncate min-w-0` 無し**が残っていた。ホーム側を正として1つに畳んである。
+左右の違いは `side`（'away' | 'home'。ヘッダーの並びと `handleXxxClick` の teamType を兼ねる）と
+`isBatting`（旧: アウェイ=`isTopInning` / ホーム=`!isTopInning`）だけ。**片側だけ直さないこと**。
 - **打席結果は3文字幅に固定し、2文字は均等割り付けで埋める**
   （`formatAtBatResult` + `textAlignLast: 'justify'`）。`addAtBatResult` に渡る
   文字列は 安打/二塁打/投ゴロ/ライナー … と2〜4文字ありバッジの幅が揃わず、
@@ -868,7 +875,7 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
   正しいのは「実装に合わせて直す」か「もう無いと明記する」のどちらか
 
 ## 主要ファイル
-- `src/App.jsx` (~5530行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
+- `src/App.jsx` (~4890行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
 - `src/game/autoSimulation.js` (~2870行) - 自動シミュレーション・buildDefense
 - `src/game/aiManager.js` (~650行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
 - `src/game/lineupGenerator.js` (~650行) - AIオーダー編成・投手ローテーション生成
@@ -882,10 +889,10 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `src/components/DateProgressScreen.jsx` (~3760行) - 日程進行画面
   （`dateProgress/` に切り出し済み: `Newspaper.jsx` 440行 / `PreGameModal.jsx` 490行 /
    `Modals.jsx` 125行 / `bracketRenderer.jsx` 190行）
-- `src/components/ManagementScreen.jsx` (~660行) - 管理画面ルーター
+- `src/components/ManagementScreen.jsx` (~590行) - 管理画面ルーター
 - `src/components/GameFlowScreens.jsx` (~570行) - ゲームフロー画面群
 - `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
-- `src/components/GameUIComponents.jsx` (~690行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel
+- `src/components/GameUIComponents.jsx` (~1050行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel・TeamMemberPanel
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
 - `src/season/universityPool.js` (~1620行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
