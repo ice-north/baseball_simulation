@@ -365,26 +365,7 @@ export const getTeamStaffBonus = (staffList) => {
   return bonus;
 };
 
-// 練習効率（0.5〜1.5倍）を返す
-export const getTrainingEfficiency = (staffBonus, type) => {
-  const abilityMap = {
-    batting: 'battingCoach',
-    fielding: 'fieldRunCoach',
-    baserunning: 'fieldRunCoach',
-    pitching: 'pitchingCoach',
-    battery: 'batteryCoach',
-    physical: 'fitness',
-  };
-  const key = abilityMap[type] || 'battingCoach';
-  const val = staffBonus[key] || 50;
-  return 0.5 + (val / 100);
-};
 
-// スカウト精度ボーナス（1回の視察で得る精度ポイント）
-export const getScoutAccuracyGain = (staffBonus) => {
-  const eye = staffBonus.scoutingEye || 50;
-  return Math.round(15 + (eye / 100) * 25); // 15〜40pt/回
-};
 
 // 交渉成功率ボーナス
 export const getNegotiationBonus = (staffBonus) => {

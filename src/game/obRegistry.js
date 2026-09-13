@@ -49,10 +49,6 @@ export const addToObRegistry = (entries) => {
   }
 };
 
-/** 名鑑を全消去する */
-export const clearObRegistry = () => {
-  try { localStorage.removeItem(OB_REGISTRY_KEY); } catch (_) { /* noop */ }
-};
 
 /**
  * OB名鑑のエントリをプレイ可能な選手オブジェクトに変換する（サンドボックス投入用）。

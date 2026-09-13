@@ -405,10 +405,6 @@ for (const [name, rank, pref] of ALL) {
   LOOKUP[name] = { name, rank, pref };
 }
 
-export const HIGH_SCHOOL_BY_RANK = BY_RANK;
-export const HIGH_SCHOOL_LOOKUP = LOOKUP;
-export const HIGH_SCHOOL_COUNT = ALL.length;
-export const HIGH_SCHOOL_REAL_COUNT = RAW.length;
 
 // 才能ランクに応じた出身校割り当て
 // 相関はあるが決定的ではない。F校でもB〜C才能が数%混ざり、

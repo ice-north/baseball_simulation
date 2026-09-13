@@ -226,67 +226,6 @@ export const isGameDay = (date, phase) => {
   return false;
 };
 
-/**
- * レギュラーシーズンの試合スケジュールを生成
- * @param {Array} teams - チーム配列 ['チームA', 'チームB', ...]
- * @param {number} gamesPerOpponent - 各対戦相手との試合数
- * @param {number} startYear - 開始年
- * @returns {Array} スケジュール配列
- */
-export const generateRegularSeasonSchedule = (teams, gamesPerOpponent = 20, startYear = 2024) => {
-  const schedule = [];
-  const teamsCount = teams.length;
-
-  // 各チームペアの対戦カードを作成
-  const matchups = [];
-  for (let i = 0; i < teamsCount; i++) {
-    for (let j = i + 1; j < teamsCount; j++) {
-      matchups.push({ team1: teams[i], team2: teams[j] });
-    }
-  }
-
-  // 3月1日から開始
-  let currentDate = { year: startYear, month: 3, day: 1 };
-  const endDate = { year: startYear, month: 9, day: 30 };
-
-  // 各対戦カードごとに試合を分散配置
-  let gameCount = 0;
-  const totalGamesNeeded = matchups.length * gamesPerOpponent;
-
-  while (compareDates(currentDate, endDate) <= 0 && gameCount < totalGamesNeeded) {
-    const phase = getCurrentPhase(currentDate.month, currentDate.day);
-
-    if (isGameDay(currentDate, phase)) {
-      // この日に複数試合を配置（同時開催可能）
-      const gamesThisDay = Math.min(Math.floor(teamsCount / 2), totalGamesNeeded - gameCount);
-
-      for (let i = 0; i < gamesThisDay; i++) {
-        const matchupIndex = (gameCount + i) % matchups.length;
-        const matchup = matchups[matchupIndex];
-        const gameNumber = Math.floor((gameCount + i) / matchups.length);
-
-        // ホーム/アウェイを交互に
-        const isHomeTeam1 = gameNumber % 2 === 0;
-
-        schedule.push({
-          date: { ...currentDate },
-          home: isHomeTeam1 ? matchup.team1 : matchup.team2,
-          away: isHomeTeam1 ? matchup.team2 : matchup.team1,
-          homePitcher: null,  // 後で設定
-          awayPitcher: null,  // 後で設定
-          result: null,
-          phase: SEASON_PHASES.REGULAR_SEASON
-        });
-      }
-
-      gameCount += gamesThisDay;
-    }
-
-    currentDate = advanceDate(currentDate, 1);
-  }
-
-  return schedule;
-};
 
 /**
  * プレーオフスケジュールを生成

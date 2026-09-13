@@ -161,16 +161,3 @@ function pickWeightedRank(weights) {
   return 'B';
 }
 
-/**
- * パイプ情報のサマリーを取得（UI表示用）
- * @param {Object} teamData
- * @returns {{ totalPipes, totalSlots, pipes }}
- */
-export function getPipeSummary(teamData) {
-  const pipes = getAvailableUniversityDispatches(teamData);
-  return {
-    totalPipes: pipes.length,
-    totalSlots: pipes.reduce((sum, p) => sum + p.slots, 0),
-    pipes,
-  };
-}

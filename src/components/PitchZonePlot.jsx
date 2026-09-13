@@ -62,10 +62,6 @@ const SHAPE_FAMILY = {
   slider: 'side', cutter: 'side', shoot: 'side', twoSeam: 'side',
   sinker: 'sideDown',
 };
-export const PITCH_SHAPE_LEGEND = [
-  ['circle', 'ストレート'], ['up', 'カーブ'], ['down', '落ちる球'],
-  ['left', 'スライダー系'], ['right', 'シュート系'], ['downRight', 'シンカー'],
-];
 
 // 三角の向き（画面座標。x+ = 三塁側 / y+ = 下）。circle はここに無い
 const D = Math.SQRT1_2;
@@ -95,9 +91,6 @@ const RESULT_STYLE = {
 };
 const UNKNOWN = { color: C_OUT, swung: true };
 
-export const RESULT_COLOR_LEGEND = [
-  [C_BALL, 'ボール'], [C_STRIKE, 'ストライク'], [C_OUT, 'アウト'], [C_HIT, '安打'],
-];
 
 const resultStyle = (t) => RESULT_STYLE[t] || UNKNOWN;
 const pitchShape = (t, leftHanded) => {
@@ -315,36 +308,3 @@ export default function PitchZonePlot({
   );
 }
 
-/** 凡例。**形＝球種（曲がる方向）/ 色＝結果**の2列に分ける */
-export function PitchZoneLegend() {
-  const Sw = ({ shape, color, filled }) => (
-    <svg width="13" height="13" viewBox="-7 -7 14 14" className="flex-shrink-0">
-      <Marker x={0} y={0} shape={shape} color={color} filled={filled} />
-    </svg>
-  );
-  return (
-    <div className="flex gap-3">
-      <div className="flex flex-col gap-1">
-        <div className="text-xs text-gray-300">形＝球種</div>
-        {PITCH_SHAPE_LEGEND.map(([shape, label]) => (
-          <div key={shape} className="flex items-center gap-1.5">
-            <Sw shape={shape} color="#cbd5e1" filled={false} />
-            <span className="text-xs text-gray-300 leading-none">{label}</span>
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-col gap-1">
-        <div className="text-xs text-gray-300">色＝結果</div>
-        {RESULT_COLOR_LEGEND.map(([color, label]) => (
-          <div key={label} className="flex items-center gap-1.5">
-            <Sw shape="circle" color={color} filled />
-            <span className="text-xs text-gray-300 leading-none">{label}</span>
-          </div>
-        ))}
-        <div className="text-xs text-gray-300 pt-1 leading-tight">
-          塗り＝スイング<br />白丸＝最新<br />数字＝何球目
-        </div>
-      </div>
-    </div>
-  );
-}

@@ -809,63 +809,6 @@ const NEIGHBOR_REGIONS = {
 const TARGET_LEAGUE_SIZE = 10;
 const GAMES_PER_SEASON = 30;
 
-export const generateRegionalLeague = (userTeamName, userRegion, allTeamDefs) => {
-  // 同地域のチームを取得（ランク順）
-  const regionTeams = allTeamDefs
-    .filter(d => d.region === userRegion)
-    .map(d => d.displayName || d.name)
-    .filter(name => TEAMS_DATA[name]);
-
-  // ユーザーチームを含むリーグメンバーを構築
-  let leagueTeams = [...regionTeams];
-
-  // 地域のチーム数が多すぎる場合: ユーザー＋上位チームを選出
-  if (leagueTeams.length > TARGET_LEAGUE_SIZE + 2) {
-    const userIncluded = leagueTeams.includes(userTeamName);
-    const sorted = leagueTeams
-      .filter(name => name !== userTeamName)
-      .sort((a, b) => {
-        const ra = RANK_ORDER[TEAMS_DATA[a]?.corporateData?.rank] ?? 4;
-        const rb = RANK_ORDER[TEAMS_DATA[b]?.corporateData?.rank] ?? 4;
-        return ra - rb;
-      });
-    leagueTeams = userIncluded ? [userTeamName, ...sorted.slice(0, TARGET_LEAGUE_SIZE - 1)] : sorted.slice(0, TARGET_LEAGUE_SIZE);
-  }
-
-  // 地域のチーム数が少なすぎる場合: 近隣地域から補充
-  if (leagueTeams.length < 6) {
-    const neighbors = NEIGHBOR_REGIONS[userRegion] || [];
-    for (const nRegion of neighbors) {
-      if (leagueTeams.length >= 8) break;
-      const nTeams = allTeamDefs
-        .filter(d => d.region === nRegion)
-        .map(d => d.displayName || d.name)
-        .filter(name => TEAMS_DATA[name] && !leagueTeams.includes(name))
-        .sort((a, b) => {
-          const ra = RANK_ORDER[TEAMS_DATA[a]?.corporateData?.rank] ?? 4;
-          const rb = RANK_ORDER[TEAMS_DATA[b]?.corporateData?.rank] ?? 4;
-          return ra - rb;
-        });
-      const needed = Math.min(nTeams.length, 8 - leagueTeams.length);
-      leagueTeams.push(...nTeams.slice(0, needed));
-    }
-  }
-
-  // スケジュール生成
-  const schedule = generateFullSeasonSchedule({
-    teams: leagueTeams,
-    gamesPerSeason: GAMES_PER_SEASON,
-    startDate: { year: 2024, month: 4, day: 1 },
-    endDate: { year: 2024, month: 9, day: 30 },
-    leagueFormat: 'single',
-  });
-
-  return {
-    leagueTeams,
-    schedule,
-    gamesPerSeason: GAMES_PER_SEASON,
-  };
-};
 
 // ============================================================
 // 全234大学チームをTEAMS_DATAに追加（並行世界として全モードで選手追跡・移籍を有効化）
@@ -1282,66 +1225,6 @@ const TOURNAMENT_BUDGET_BONUS = {
 
 export const getTournamentBudgetBonus = (cd) => cd?.tournamentBudgetBonus || 0;
 
-export const computeTournamentBonuses = (seasonData) => {
-  const toshitaikouEntries = new Set();
-  const senshukenEntries = new Set();
-  const mainTournamentWinsMap = {};
-  const td = seasonData.toshitaikou;
-  if (td?.qualifiers) {
-    for (const regionId of Object.keys(td.qualifiers)) {
-      const q = td.qualifiers[regionId];
-      if (q.qualifiedTeams) q.qualifiedTeams.forEach(t => toshitaikouEntries.add(t));
-    }
-  }
-  if (td?.mainTournament) {
-    const mtWins = countBracketWins(td.mainTournament);
-    for (const [team, w] of Object.entries(mtWins)) {
-      mainTournamentWinsMap[team] = (mainTournamentWinsMap[team] || 0) + w;
-    }
-  }
-  const ns = seasonData.nihonSenshuken;
-  if (ns?.mainTournament?.bracket) {
-    if (ns.mainTournament.bracket.rounds?.[0]) {
-      for (const match of ns.mainTournament.bracket.rounds[0]) {
-        if (match.team1) senshukenEntries.add(match.team1);
-        if (match.team2) senshukenEntries.add(match.team2);
-      }
-    }
-    const nsWins = countBracketWins(ns.mainTournament.bracket);
-    for (const [team, w] of Object.entries(nsWins)) {
-      mainTournamentWinsMap[team] = (mainTournamentWinsMap[team] || 0) + w;
-    }
-  } else if (ns?.qualifiers) {
-    for (const q of Object.values(ns.qualifiers)) {
-      if (q.qualifiedTeams) q.qualifiedTeams.forEach(t => senshukenEntries.add(t));
-    }
-  }
-  const toshitaikouChampion = td?.mainTournament?.champion || td?.champion || null;
-  const toshitaikouFinal = td?.mainTournament?.bracket?.rounds?.slice(-1)[0] || [];
-  const toshitaikouRunnerUp = toshitaikouFinal.length > 0 ? (toshitaikouFinal[0]?.loser || null) : null;
-  const senshukenChampion = ns?.mainTournament?.champion || ns?.champion || null;
-  const senshukenFinal = ns?.mainTournament?.bracket?.rounds?.slice(-1)[0] || [];
-  const senshukenRunnerUp = senshukenFinal.length > 0 ? (senshukenFinal[0]?.loser || null) : null;
-
-  for (const teamName of Object.keys(TEAMS_DATA)) {
-    const teamData = TEAMS_DATA[teamName];
-    if (!teamData?.corporateData) continue;
-    const cd = teamData.corporateData;
-    let entryCount = 0;
-    if (toshitaikouEntries.has(teamName)) entryCount++;
-    if (senshukenEntries.has(teamName)) entryCount++;
-    if (entryCount === 0 && !mainTournamentWinsMap[teamName]) continue;
-    const isChamp = teamName === toshitaikouChampion || teamName === senshukenChampion;
-    const isRunner = teamName === toshitaikouRunnerUp || teamName === senshukenRunnerUp;
-    const tWins = mainTournamentWinsMap[teamName] || 0;
-    let tBonus = 0;
-    if (isChamp) tBonus = TOURNAMENT_BUDGET_BONUS.champion;
-    else if (isRunner) tBonus = TOURNAMENT_BUDGET_BONUS.runnerUp;
-    else if (tWins >= 2) tBonus = TOURNAMENT_BUDGET_BONUS.semiFinal;
-    else if (entryCount > 0) tBonus = TOURNAMENT_BUDGET_BONUS.entry;
-    cd.tournamentBudgetBonus = tBonus;
-  }
-};
 
 // スポンサー契約 → 年間収入（万円）
 // 注目度と実績に応じてスポンサーが付く

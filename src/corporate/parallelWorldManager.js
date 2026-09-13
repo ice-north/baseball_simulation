@@ -111,16 +111,7 @@ export const simulateParallelWorldDate = (currentDate) => {
   }
 };
 
-export const getParallelLeagueStandings = (leagueId) => {
-  const league = WORLD_DATA.independentLeagues?.[leagueId];
-  return league?.standings || [];
-};
 
-export const getParallelLeagueResults = (leagueId, limit = 10) => {
-  const league = WORLD_DATA.independentLeagues?.[leagueId];
-  if (!league?.results) return [];
-  return league.results.slice(-limit);
-};
 
 export const getAllParallelLeagues = () => {
   if (!WORLD_DATA.initialized) return [];

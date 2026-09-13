@@ -157,5 +157,3 @@ export function getRegionalSurname(pref) {
   return items[items.length - 1].name;
 }
 
-/** 県の表を持っているか */
-export const hasRegionalSurnames = (pref) => !!PREFECTURE_SURNAME_POP[pref];

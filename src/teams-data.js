@@ -85,33 +85,9 @@ export const getTeamAbbreviation = (teamName) => {
   return (teamName || '').slice(0, 3);
 };
 
-/**
- * チームAの選手データ（元のホームチーム）
- */
-export const createTeamAPlayers = () => {
-  return window.createDefaultPlayers ? window.createDefaultPlayers() : [];
-};
 
-/**
- * チームAのベンチ
- */
-export const createTeamABench = () => {
-  return window.createHomeBench ? window.createHomeBench() : [];
-};
 
-/**
- * チームBの選手データ（元のアウェイチーム）
- */
-export const createTeamBPlayers = () => {
-  return window.createAwayPlayers ? window.createAwayPlayers() : [];
-};
 
-/**
- * チームBのベンチ
- */
-export const createTeamBBench = () => {
-  return window.createAwayBench ? window.createAwayBench() : [];
-};
 
 /**
  * 全チームデータを初期化（4チームの場合）

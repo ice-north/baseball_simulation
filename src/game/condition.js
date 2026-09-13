@@ -32,13 +32,6 @@ export const CONDITION_COLORS = {
   [CONDITION_LEVELS.WORST]: 'text-indigo-400'
 };
 
-export const CONDITION_BG_COLORS = {
-  [CONDITION_LEVELS.BEST]: 'bg-red-500',
-  [CONDITION_LEVELS.GOOD]: 'bg-orange-400',
-  [CONDITION_LEVELS.NORMAL]: 'bg-yellow-300',
-  [CONDITION_LEVELS.BAD]: 'bg-blue-400',
-  [CONDITION_LEVELS.WORST]: 'bg-blue-700'
-};
 
 export const CONDITION_ICONS = {
   [CONDITION_LEVELS.BEST]: '🔥',
@@ -215,26 +208,4 @@ export const initializeAllPlayersCondition = () => {
   });
 };
 
-/**
- * コンディションを考慮した打撃能力値を取得
- * @param {Object} player - 選手オブジェクト
- * @returns {Object} { meet, power } コンディション補正済み
- */
-export const getConditionAdjustedBatting = (player) => {
-  const mod = conditionBattingMod(player.condition);
-  return {
-    meet: (player.batting?.meet || 50) + mod.meet,
-    power: (player.batting?.power || 50) + mod.power
-  };
-};
 
-/**
- * コンディションを考慮した制球能力値を取得
- * @param {Object} player - 選手オブジェクト
- * @returns {number} コンディション補正済み制球値
- */
-export const getConditionAdjustedControl = (player) => {
-  const condition = player.condition ?? CONDITION_LEVELS.NORMAL;
-  const mod = CONDITION_PITCHING_MODIFIER[condition] || 0;
-  return (player.pitching?.control || 50) + mod;
-};

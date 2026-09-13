@@ -359,23 +359,7 @@ export const RANK_ABILITY_RANGE = {
   D: { min: 20, max: 45, starChance: 0.01 },
 };
 
-export const BUDGET_UNIT = 100;
 
-// 地区別の都市対抗代表枠数
-export const REGION_SLOTS = {
-  hokkaido: 1,
-  tohoku: 3,
-  kitakanto: 2,
-  minamikanto: 2,
-  tokyo: 4,
-  kanagawa: 2,
-  hokushinetsu: 2,
-  tokai: 5,
-  kinki: 4,
-  chugoku: 3,
-  shikoku: 1,
-  kyushu: 3,
-};
 
 // ============================================================
 // チームオーバーライド（マスター設定、セーブデータに含めない）
@@ -436,12 +420,7 @@ export const resetTeamOverrides = (teamId) => {
   saveOverrides(overrides);
 };
 
-export const resetAllOverrides = () => {
-  localStorage.removeItem(OVERRIDES_STORAGE_KEY);
-  localStorage.removeItem(NAMES_STORAGE_KEY);
-};
 
-export const getAllOverrides = () => loadOverrides();
 
 // 後方互換: getTeamDisplayName / setTeamDisplayName
 export const getTeamDisplayName = (teamId) => {
@@ -461,15 +440,6 @@ export const resetTeamDisplayName = (teamId) => {
   }
 };
 
-export const resetAllTeamDisplayNames = () => resetAllOverrides();
-export const getAllNameOverrides = () => {
-  const all = loadOverrides();
-  const names = {};
-  for (const [id, o] of Object.entries(all)) {
-    if (o.name) names[id] = o.name;
-  }
-  return names;
-};
 
 // ============================================================
 // カスタムチーム追加・削除（マスター設定、セーブデータに含めない）
@@ -625,13 +595,6 @@ export const addGameSessionCustomTeam = (teamData) => {
   return newTeam;
 };
 
-export const deleteGameSessionTeam = (teamId) => {
-  const deleted = loadSessionDeletedIds();
-  if (!deleted.includes(teamId)) {
-    deleted.push(teamId);
-    try { localStorage.setItem(SESSION_DELETED_KEY, JSON.stringify(deleted)); } catch {}
-  }
-};
 
 // オーバーライド適用済みのチームデータを取得
 const getEffectiveTeam = (team) => {
@@ -687,20 +650,6 @@ export const getAllTeamsEffective = () =>
 export const getAllMasterTeamsEffective = () =>
   getMasterTeams().map(t => getEffectiveTeam(t));
 
-export const getMasterTeamsByRegion = (regionId) =>
-  getMasterTeams()
-    .map(t => getEffectiveTeam(t))
-    .filter(t => t.region === regionId);
 
-export const getRegionName = (regionId) =>
-  REGIONS.find(r => r.id === regionId)?.name || regionId;
 
-export const getTeamById = (teamId) => {
-  const all = getMergedTeams();
-  const team = all.find(t => t.id === teamId);
-  if (!team) return null;
-  return getEffectiveTeam(team);
-};
 
-export const getRegionSlots = (regionId) =>
-  REGION_SLOTS[regionId] || 1;

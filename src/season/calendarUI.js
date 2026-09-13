@@ -94,48 +94,7 @@ export const generateTeamCalendar = (schedule, teamName, year, month, options = 
   });
 };
 
-/**
- * 月の週配列を生成（週ごとに表示するため）
- * @param {Array} calendar - カレンダー配列
- * @returns {Array} 週配列 [[日, 月, ..., 土], ...]
- */
-export const splitIntoWeeks = (calendar) => {
-  const weeks = [];
-  for (let i = 0; i < calendar.length; i += 7) {
-    weeks.push(calendar.slice(i, i + 7));
-  }
-  return weeks;
-};
 
-/**
- * 日付の色を取得（フェーズ別）
- * @param {string} phase - フェーズ
- * @returns {string} Tailwind CSSクラス
- */
-export const getPhaseColor = (phase) => {
-  const colors = {
-    [SEASON_PHASES.SPRING_CAMP]: 'bg-green-700',
-    [SEASON_PHASES.REGULAR_SEASON]: 'bg-blue-700',
-    [SEASON_PHASES.PLAYOFFS]: 'bg-yellow-700',
-    [SEASON_PHASES.DRAFT]: 'bg-purple-700',
-    [SEASON_PHASES.TRYOUT]: 'bg-orange-700',
-    [SEASON_PHASES.OFF_SEASON]: 'bg-gray-700'
-  };
-  return colors[phase] || 'bg-gray-700';
-};
 
-/**
- * 試合結果のマークを取得
- * @param {string} result - '○', '●', '△'
- * @returns {Object} {text, color}
- */
-export const getResultMark = (result) => {
-  const marks = {
-    '○': { text: '○', color: 'text-green-400' },
-    '●': { text: '●', color: 'text-red-400' },
-    '△': { text: '△', color: 'text-yellow-400' }
-  };
-  return marks[result] || { text: '', color: '' };
-};
 
 // ES module exports

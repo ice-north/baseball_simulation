@@ -1582,40 +1582,6 @@ function distributeToCorporateTeams(gameYear) {
   replaceReleasedPool(remaining);
 }
 
-/**
- * 大学プールの現在の状態サマリーを取得
- */
-export function getUniversityPoolSummary() {
-  const summary = {
-    totalStudents: 0,
-    byYear: {},
-    byRank: { S: 0, A: 0, B: 0, C: 0, D: 0, unknown: 0 },
-    byTeam: {},
-  };
-  Object.entries(universityPool).forEach(([year, cohort]) => {
-    summary.byYear[year] = {
-      count: cohort.length,
-      pitchers: cohort.filter(e => e.player.position === 'pitcher').length,
-      fielders: cohort.filter(e => e.player.position !== 'pitcher').length
-    };
-    summary.totalStudents += cohort.length;
-    cohort.forEach(entry => {
-      const rank = entry.universityRank;
-      if (rank && summary.byRank[rank] !== undefined) {
-        summary.byRank[rank]++;
-      } else {
-        summary.byRank.unknown++;
-      }
-      if (entry.universityTeamName) {
-        if (!summary.byTeam[entry.universityTeamName]) {
-          summary.byTeam[entry.universityTeamName] = { count: 0, rank: entry.universityRank };
-        }
-        summary.byTeam[entry.universityTeamName].count++;
-      }
-    });
-  });
-  return summary;
-}
 
 /**
  * セーブ/ロード用: 大学プール+高校生プールをシリアライズ

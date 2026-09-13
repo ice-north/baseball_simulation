@@ -65,13 +65,7 @@ export function isWatched(playerId) {
   return list().some(w => w.playerId === playerId);
 }
 
-export function getWatchList() {
-  return list();
-}
 
-export function clearWatchList() {
-  WORLD_DATA.watchList = [];
-}
 
 /**
  * 選手が今どこにいるかを解決する。

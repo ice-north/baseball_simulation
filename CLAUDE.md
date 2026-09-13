@@ -1257,9 +1257,14 @@ NEW GAME → 大学チーム選択 → キャンプ
   つまりこのタブが唯一の入口で、外した瞬間に画面ごと到達不能になる。
   ルートとコンポーネントも一緒に消してある——**描画されない state を残さない**のと同じ話
 - ⚠ **道連れの確認を先にすること**。`PotentialBadge` / `projectPeak` は
-  `PlayerDetailModal` の将来性バーが、`getScoutAccuracy` は `staffData.js` が
-  引き続き使うので**消してはいけない**。`scouting.js` の `formatRange` /
-  `MAX_SCOUT_LEVEL` は使い手がいなくなったが、season 側のモジュールなので残してある
+  `PlayerDetailModal` の将来性バーが引き続き使うので**消してはいけない**。
+  `scouting.js` の `formatRange` / `MAX_SCOUT_LEVEL` は使い手がいないが、
+  season 側のモジュールなので残してある（`abilityRange` / `accuracyMeta` は
+  `PotentialBadge` が現役で使う）
+- ⚠ **ここに「`getScoutAccuracy` は `staffData.js` が引き続き使う」と書いてあったが誤り**。
+  `staffData.js` にあるのは**別物の `getScoutAccuracyGain`**（これも未使用）で、
+  `getScoutAccuracy` はどこからも呼ばれていなかった。**残す理由が事実誤認だった**ので
+  両方とも除去した。⚠ 似た名前の関数を「使われているはず」で残さないこと
 
 ⚠ **NPB球団の「スカウト注目」バッジを赤にしないこと**。カードが紺なので**補色**に
 なって目がちらつくうえ、`text-red-400`（ランク色）とも意味が衝突する。
@@ -2150,8 +2155,17 @@ C も 61% が1年目に B へ。**クラブ208チームを含む母集団なの�
 - **調査システム**: `startUniversityInvestigation(candidate, date)` — 5日間で`_revealLevel`が1段階上昇
 - **注目システム**: `toggleUniversityWatch(candidate)` — 注目中は週+4%ずつ`_watchBonus`が蓄積
 - **日次処理**: `processUniversityScoutDay(candidates, date, rank, rep)` — 調査完了判定+注目ボーナス加算
-- **交渉成功率**: `calculateUniversityRecruitRate()` = baseRate(30%+rep*50%) - qualityPenalty + rankBonus(S+12%〜D-12%) + invBonus(8%/段階) + watchBonus
-- **交渉**: `attemptUniversityRecruit(player, rank, rep)` — 成功時`_universityReserved`フラグ
+- **交渉は「1回の抽選」ではなく「アプローチのゲージ」**（`startUniversityApproach` /
+  `calculateDailyGaugeRate` / `stopUniversityApproach`）。同時にアプローチできる人数は
+  ランク別（`getMaxApproaches`）で、日次処理でゲージが `_approachGauge` に積まれ、
+  100 に達すると `_gaugeComplete` になって**プレイヤーが手動で確定**する
+  （確定した時点で `_universityReserved` が立つ。⚠ 確定は画面側 `UniversityScoutScreen`
+  の `handleConfirmRecruit` が持っており、scoutingSystem には無い）
+- `calculateUniversityRecruitRate()`（baseRate 30%+rep*50% − qualityPenalty +
+  rankBonus + invBonus + watchBonus）は**表示用の `recruitRate` と日次ゲージ量の材料**として
+  現役。⚠ かつてここには「`attemptUniversityRecruit(player, rank, rep)` で交渉、
+  成功時 `_universityReserved`」と書いてあったが、**その関数はゲージ制へ移行した時点で
+  誰からも呼ばれなくなっており、死んだまま文書だけが残っていた**（除去済み）
 - **設計思想**: 低ランク大学は無名の逸材を早期に発掘・注目して交渉率を上げてから確保する醍醐味
 - **フロー**: 4月初期化 → シーズン中サイドバーからスカウト画面 → 11/10に強制完了イベント → オフシーズン卒業処理で入部
 - **画面遷移**: サイドバー「推薦スカウト」で随時アクセス / `university_scout`（11/10トリガー時はonComplete付き）

@@ -16,19 +16,6 @@ import { releasedPlayersPool } from '../teams-data.js';
 // import.meta.env が未定義のため DEV=true 扱い。
 const DEV = !(typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD);
 
-// 配列内にID重複がないか検査し、あれば警告する（開発時のみ）。
-export function assertUniqueIds(arr, label = 'pool') {
-  if (!DEV || !Array.isArray(arr)) return;
-  const seen = new Set();
-  for (const p of arr) {
-    if (p && p.id != null) {
-      if (seen.has(p.id)) {
-        console.error(`[state] 重複ID検出 (${label}): id=${p.id} name=${p.name ?? '?'}`);
-      }
-      seen.add(p.id);
-    }
-  }
-}
 
 // プールに選手を追加する。既に同一IDが存在する場合はスキップ（重複防止）。
 export function addToReleasedPool(player) {

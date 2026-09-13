@@ -93,8 +93,6 @@ export function deviationOf(player, main, sub) {
   return devOf(valueGroup(player), player?.age, main * W_MAIN + sub * W_SUB);
 }
 
-/** 素点（偏差値にする前）。上の VALUE_DIST / BAND_SD を測り直すときに使う */
-export function rawAbilityOf(main, sub) { return main * W_MAIN + sub * W_SUB; }
 
 // ============================================================
 // ドラフトのロスター需要（**価値ではない**）

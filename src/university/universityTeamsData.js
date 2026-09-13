@@ -424,32 +424,8 @@ export function getUniversityTeamsByRank(rank) {
   return UNIVERSITY_TEAMS.filter(t => t.rank === rank);
 }
 
-/**
- * 大学の得意分野リストを返す
- * 7分野: technique, power, stamina, defense, versatility, athletic, mental
- * specialtiesに含まれる分野は100%成長、含まれない分野は80%（SPECIALTY_RANK_BOOSTで補正）
- */
-export function getUniversitySpecialties(universityId) {
-  const team = UNIVERSITY_TEAMS.find(t => t.id === universityId);
-  return team?.specialties || [];
-}
 
-/**
- * 指定した得意分野キーが大学の得意分野に含まれるか判定する
- * stat→specialty のマッピングは呼び出し側（dispatchSystem等）で行うこと
- */
-export function hasUniversitySpecialty(universityId, specialtyKey) {
-  const specialties = getUniversitySpecialties(universityId);
-  if (specialties.length === 0) return true; // 得意分野未定義ならすべてOK
-  return specialties.includes(specialtyKey);
-}
 
-/**
- * 大学の得意分野ブースト値を返す（非得意分野の底上げ倍率）
- */
-export function getSpecialtyRankBoost(rank) {
-  return SPECIALTY_RANK_BOOST[rank] || 1.0;
-}
 
 export function getSpecialtyLabel(key) {
   return SPECIALTY_LABELS[key] || key;

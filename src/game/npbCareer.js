@@ -307,26 +307,3 @@ export function summarizeNpbCareer(a) {
   };
 }
 
-/** 「教え子の現在地」一覧。活躍している順に並べる */
-export function collectAlumniStatus(allTeams, userTeamName = null) {
-  const rows = [];
-  for (const [teamName, team] of Object.entries(allTeams || {})) {
-    if (userTeamName && teamName !== userTeamName) continue;
-    for (const a of team?.npbAlumni || []) {
-      const last = (a.npbSeasons || [])[a.npbSeasons.length - 1] || null;
-      rows.push({
-        playerId: a.playerId, name: a.name, position: a.position,
-        npbTeam: a.npbTeam, draftYear: a.draftYear, draftRound: a.draftRound,
-        age: a.age, retired: !!a.retired, retiredYear: a.retiredYear,
-        fromTeam: teamName,
-        latest: last,
-        summary: summarizeNpbCareer(a),
-      });
-    }
-  }
-  // 現役かつ一軍でよく出ている選手を上に
-  const score = (r) => (r.retired ? -1000 : 0) + (r.latest?.level === '一軍' ? 500 : 0)
-    + (r.latest?.ability || 0);
-  rows.sort((x, y) => score(y) - score(x));
-  return rows;
-}

@@ -254,18 +254,6 @@ export function recordResult(bracket, roundIdx, matchIdx, winnerName, score) {
   return bracket;
 }
 
-// 次の未消化試合を取得（team1, team2が揃っていてwinnerが未定のもの）
-export function getNextUnplayedMatch(bracket) {
-  for (let r = 0; r < bracket.rounds.length; r++) {
-    for (let m = 0; m < bracket.rounds[r].length; m++) {
-      const match = bracket.rounds[r][m];
-      if (!match.winner && !match.isBye && match.team1 && match.team2) {
-        return { roundIdx: r, matchIdx: m, match };
-      }
-    }
-  }
-  return null;
-}
 
 export function isBracketComplete(bracket) {
   return bracket != null && bracket.champion != null;
@@ -615,17 +603,6 @@ export function assignMainTournamentDates(bracket, startDate, matchesPerDay = 3)
   }
 }
 
-// ブラケットの各ラウンドに日付を割り当て
-// startDate: {year, month, day}, intervalDays: ラウンド間の日数
-export function assignBracketDates(bracket, startDate, intervalDays = 2) {
-  if (!bracket) return;
-  bracket.roundDates = [];
-  let d = new Date(startDate.year, startDate.month - 1, startDate.day);
-  for (let r = 0; r < bracket.rounds.length; r++) {
-    bracket.roundDates.push({ year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
-    d.setDate(d.getDate() + intervalDays);
-  }
-}
 
 // 週末のみの日程割り当て（土日だけに試合を配置）
 export function assignWeekendQualifierDates(bracket, startDate, matchesPerDay = 3) {
@@ -678,28 +655,6 @@ export function assignWeekendQualifierDates(bracket, startDate, matchesPerDay = 
   }
 }
 
-// 予選ブラケットに週末のみ日程を割り当て（勝者側+敗者復活）
-export function assignWeekendQualifier(qualifier, startDate, matchesPerDay = 3) {
-  assignWeekendQualifierDates(qualifier.mainBracket, startDate, matchesPerDay);
-  const mainMD = qualifier.mainBracket.matchDates;
-  let lastDate = null;
-  if (mainMD) {
-    for (let r = mainMD.length - 1; r >= 0; r--) {
-      for (let m = (mainMD[r]?.length || 0) - 1; m >= 0; m--) {
-        if (mainMD[r][m]) { lastDate = mainMD[r][m]; break; }
-      }
-      if (lastDate) break;
-    }
-  }
-  if (!lastDate) lastDate = startDate;
-  // 次の週末を敗者復活の開始日にする
-  const ld = new Date(lastDate.year, lastDate.month - 1, lastDate.day);
-  ld.setDate(ld.getDate() + 1);
-  while (ld.getDay() !== 6 && ld.getDay() !== 0) {
-    ld.setDate(ld.getDate() + 1);
-  }
-  qualifier.losersStartDate = { year: ld.getFullYear(), month: ld.getMonth() + 1, day: ld.getDate() };
-}
 
 // 予選ブラケットに日程を割り当て（勝者側+敗者復活、1日matchesPerDay試合）
 export function assignQualifierDates(qualifier, startDate, matchesPerDay = 3) {

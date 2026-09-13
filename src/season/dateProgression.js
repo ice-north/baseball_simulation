@@ -129,22 +129,6 @@ export const progressToNextPhase = (seasonData) => {
   };
 };
 
-/**
- * 指定日まで進行
- * @param {Object} seasonData - シーズンデータ
- * @param {Object} targetDate - 目標日付 {year, month, day}
- * @returns {Object} 更新されたシーズンデータ
- */
-export const progressToDate = (seasonData, targetDate) => {
-  const phaseOpts3 = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts3, targetDate.year);
-
-  return {
-    ...seasonData,
-    currentDate: targetDate,
-    phase: newPhase
-  };
-};
 
 /**
  * 試合結果を記録
@@ -290,32 +274,6 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
   return updatedSeasonData;
 };
 
-/**
- * 年度を進める（新シーズン開始）
- * @param {Object} seasonData - シーズンデータ
- * @returns {Object} 新しいシーズンデータ
- */
-export const startNewSeason = (seasonData) => {
-  const newYear = seasonData.year + 1;
-  const newSeasonData = createSeasonData(newYear);
-
-  // 設定を引き継ぎ
-  newSeasonData.settings = { ...seasonData.settings };
-
-  // スケジュールを再生成
-  const teams = seasonData.standings.map(t => t.team);
-  const schedule = generateFullSeasonSchedule({
-    teams,
-    gamesPerSeason: newSeasonData.settings.gamesPerSeason,
-    startDate: { year: 2024 + newYear, month: 3, day: 1 },
-    endDate: { year: 2024 + newYear, month: 9, day: 30 }
-  });
-
-  newSeasonData.schedule = schedule;
-  newSeasonData.standings = initializeStandings(teams);
-
-  return newSeasonData;
-};
 
 export { updatePlayoffProgress };
 

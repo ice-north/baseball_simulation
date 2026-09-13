@@ -31,7 +31,6 @@ import { sequenceScore } from './pitchSequence.js';
 import { objectiveRowScore } from './pitchSituation.js';
 import { shapeCallScore, shapeSigma } from './pitchShape.js';
 
-export const GRID_SIZE = 5;
 export const ZONE_MIN = 1;   // ストライクゾーンは col/row とも 1〜3
 export const ZONE_MAX = 3;
 
@@ -290,6 +289,3 @@ export function resolvePitchCell(target, control, shape = null) {
   return { col, row, inZone, quality: cellQuality(col, row) };
 }
 
-/** 表示用のラベル（右打者視点） */
-export const COL_LABEL = ['外角ボール', '外角', '真ん中', '内角', '内角ボール'];
-export const ROW_LABEL = ['高めボール', '高め', '真ん中', '低め', '低めボール'];

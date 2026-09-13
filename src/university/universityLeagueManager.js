@@ -402,11 +402,6 @@ export function processUniversityPromotionRelegation() {
   return changes;
 }
 
-export function resetUniversityLeagues() {
-  if (WORLD_DATA.universityLeagues) {
-    WORLD_DATA.universityLeagues = {};
-  }
-}
 
 // 春季終了後の入替戦処理（春季順位表ベース）
 // ※ユーザーリーグのspring.doneは呼び出し元が事前にセットすること

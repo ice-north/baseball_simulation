@@ -790,9 +790,6 @@ export function cancelScoutTask(teamData, staffId) {
   }
 }
 
-export function getScoutTask(teamData, staffId) {
-  return teamData?.corporateData?.scoutTasks?.[staffId] || null;
-}
 
 export function getAllScoutTasks(teamData) {
   return teamData?.corporateData?.scoutTasks || {};
@@ -1903,11 +1900,6 @@ export function toggleUniversityWatch(candidate) {
   return candidate._watching;
 }
 
-export function attemptUniversityRecruit(player, uniRank, reputation) {
-  const rate = player.recruitRate || calculateUniversityRecruitRate(player, uniRank, reputation);
-  const roll = Math.random() * 100;
-  return { success: roll < rate, rate };
-}
 
 // ============================================================
 // 接近ゲージシステム

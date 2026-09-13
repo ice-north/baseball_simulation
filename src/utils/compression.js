@@ -582,14 +582,6 @@ export function decompressData(compressed) {
   }
 }
 
-/**
- * Calculate estimated storage size
- * @param {string} str - String to measure
- * @returns {number} Size in bytes
- */
-export function getStorageSize(str) {
-  return new Blob([str]).size;
-}
 
 /**
  * Get total localStorage usage
