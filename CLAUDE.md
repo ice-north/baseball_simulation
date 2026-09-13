@@ -879,7 +879,9 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `src/simulation-logic.js` (~1090行) - 物理演算（打球・投球）
 - `src/components/ScheduleScreen.jsx` (~750行) - 日程/順位表/成績ランキング
 - `src/components/LineupSettingScreen.jsx` (~2590行) - スタメン/投手起用/守備分析の3タブ
-- `src/components/DateProgressScreen.jsx` (~4190行) - 日程進行画面
+- `src/components/DateProgressScreen.jsx` (~3760行) - 日程進行画面
+  （`dateProgress/` に切り出し済み: `Newspaper.jsx` 440行 / `PreGameModal.jsx` 490行 /
+   `Modals.jsx` 125行 / `bracketRenderer.jsx` 190行）
 - `src/components/ManagementScreen.jsx` (~660行) - 管理画面ルーター
 - `src/components/GameFlowScreens.jsx` (~570行) - ゲームフロー画面群
 - `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
