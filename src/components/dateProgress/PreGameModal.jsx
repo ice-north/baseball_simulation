@@ -381,7 +381,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                 <div className="bg-surface-1 rounded-lg p-2.5 border border-cyan-800/40">
                   <h3 className="text-xs font-bold text-cyan-300 mb-1">スカウトレポート — {opponentName}</h3>
                   <div className="flex items-center gap-3">
-                    <AbilityRadar axes={teamRadarAxes(opponentTeam)} size={150} />
+                    <AbilityRadar axes={teamRadarAxes(opponentTeam)} size={190} />
                     <div className="text-xs text-gray-300 space-y-1.5 flex-1">
                       {st && (
                         <div>

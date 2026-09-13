@@ -1410,9 +1410,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             </div>
 
             {/* 中央: ミニダイアモンド */}
-            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-3 overflow-hidden p-3">
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden p-3">
               <h2 className="font-semibold text-white text-sm mb-2 text-center">守備配置</h2>
-              <svg viewBox="0 0 260 240" className="w-full max-w-[260px] mx-auto">
+              {/* ⚠ **fontSize の数値は実寸ではない**。実寸 = 数値 × (表示幅 / 260)。
+                  260px 表示のままでは 8〜9 が 8〜9px にしかならず、12px の下限
+                  （UIデザイン原則1）を割る。**文字だけ大きくすると円(r=16)と座標が
+                  固定なので名前が重なる**ので、表示幅を 260 → 300 に広げて
+                  倍率 1.154 を稼ぎ、そのうえで 10.4（= 12 / 1.154）にしてある。
+                  列も col-span-3 → 4 に広げた（3のままだと 1280 幅で 220px しか無い）。 */}
+              <svg viewBox="0 0 260 240" className="w-full max-w-[300px] mx-auto">
                 <defs>
                   <linearGradient id="miniField" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#166534" stopOpacity="0.3"/>
@@ -1446,13 +1452,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <circle cx={coord.x} cy={coord.y} r={player ? 16 : 12} fill={player ? '#1e293b' : '#0f172a'} stroke={player ? fitnessColor : '#475569'} strokeWidth={player ? 2 : 1} opacity={player ? 1 : 0.5}/>
                         {player ? (
                           <>
-                            <text x={coord.x} y={coord.y - 4} textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">{posLabelsShort[pos]}</text>
-                            <text x={coord.x} y={coord.y + 7} textAnchor="middle" fill="#cbd5e1" fontSize="8">
+                            <text x={coord.x} y={coord.y - 3.5} textAnchor="middle" fill="white" fontSize="10.4" fontWeight="bold">{posLabelsShort[pos]}</text>
+                            <text x={coord.x} y={coord.y + 8.5} textAnchor="middle" fill="#cbd5e1" fontSize="10.4">
                               {surnameOf(player.name)}
                             </text>
                           </>
                         ) : (
-                          <text x={coord.x} y={coord.y + 3} textAnchor="middle" fill="#bdc6d6" fontSize="9">{posLabelsShort[pos]}</text>
+                          <text x={coord.x} y={coord.y + 3.6} textAnchor="middle" fill="#bdc6d6" fontSize="10.4">{posLabelsShort[pos]}</text>
                         )}
                       </g>
                     );
@@ -1479,7 +1485,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             </div>
 
             {/* 右側: 控え選手一覧 */}
-            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-5 overflow-hidden flex flex-col">
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden flex flex-col">
               <div className="px-4 py-3 border-b border-gray-700/50 shrink-0 space-y-2">
                 <div className="flex items-center gap-2">
                   <h2 className="font-semibold text-white text-sm">
@@ -2219,7 +2225,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     </div>
                   )}
                 </div>
-                <svg viewBox="0 -20 500 560" className="w-full max-w-2xl mx-auto">
+                {/* ⚠ 表示幅を固定しておくこと。実寸 = fontSize × (表示幅/500) なので、
+                    max-w-2xl(672) だと 1280幅のとき列が 645px しか無く倍率が 1.29 に落ちて
+                    fontSize 9 が 11.6px（12px未満）になる。600 に固定すれば倍率は常に 1.2。 */}
+                <svg viewBox="0 -20 500 560" className="w-full max-w-[600px] mx-auto">
                   <defs>
                     {/* 各ポジションの守備範囲グラデーション（守備ランク色で表示） */}
                     {Object.entries(posCoords).map(([pos]) => {
@@ -2423,7 +2432,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     ].map((item, i) => (
                       <g key={i} transform={`translate(${35 + i * 40}, 0)`}>
                         <circle cx="0" cy="-3" r="5" fill={item.color} opacity="0.8" />
-                        <text x="8" y="0" fill="white" fontSize="9" filter="url(#textShadow)">{item.label}</text>
+                        <text x="8" y="0" fill="white" fontSize="10" filter="url(#textShadow)">{item.label}</text>
                       </g>
                     ))}
                   </g>

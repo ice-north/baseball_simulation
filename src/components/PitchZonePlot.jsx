@@ -25,6 +25,9 @@
 
 import { PITCH_AXIS_SIDE } from '../game/pitchShape.js';
 
+// 文字の実寸の下限（UIデザイン原則1）。viewBox を持つSVGなので数値は px ではない
+const MIN_TEXT_PX = 12;
+
 const SIZE = 5;                       // 5×5セル
 const PAD = 0.55;                     // グリッド外（col=-1 や 5）を置く余白（セル単位）
 const SPAN = SIZE + PAD * 2;          // 描画範囲（セル単位）
@@ -108,20 +111,22 @@ const pitchShape = (t, leftHanded) => {
 // 以前は右上に添えていたが、点が増えると数字どうしが重なって読めなかった。
 // 中に入れるぶんマーカーを大きくする必要があるので、形（球種）は
 // 数字が収まるサイズで描く。
-function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, scale = 1, label = '' }) {
+function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, scale = 1, label = '', labelFs = 6 }) {
   // 基準半径。**マーカーの実寸を決めるのはここだけ**（`mk` が枠の大きさを
   // 打ち消すので、枠を広げてもマーカーは大きくならない）。
   // 打席が長引くと点が密集して図が狭く見えるので、三角と同じ幅で1段階詰めた
-  // （7.0 → 6.5。168px 表示で直径 16.8px → 15.6px）。
-  const r = 6.5 * scale;
+  // （7.0 → 6.5）。⚠ **その後 7.2 へ戻してある**——中の数字を 12px 未満に
+  // できない（UIデザイン原則1）ので、2桁が輪郭に触れない大きさが要る。
+  // 168px 表示で直径 17.3px。**文字だけ大きくしないこと**。
+  const r = 7.2 * scale;
   const w = 1.6 * scale;
   const fill = filled ? color : '#0b0f19';
   const common = { fill, stroke: color, strokeWidth: w, strokeLinejoin: 'round' };
   // 三角は同じ外接円でも面積が小さいので、数字が収まるよう少し大きく取る。
   // ⚠ 大きくしすぎると〇のストレートより目立って球種の重みが揃わない。
-  // 1.18 では2桁（10球目以降）が輪郭に触れていたので、枠は 1.10 に詰めて
-  // **2桁のときだけ数字を小さくする**（1桁は従来どおりの大きさ）。
-  const t = r * 1.10;
+  // ⚠ **2桁のときに数字を小さくする逃げは使えない**（12px の下限があるため）。
+  //    代わりに三角の枠を 1.10 → 1.22 へ広げて2桁を収める。
+  const t = r * 1.22;
   const dir = TRI_DIR[shape];
   let body;
   if (dir) {
@@ -142,7 +147,7 @@ function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, sca
     <g>
       {body}
       {label !== '' && (
-        <text x={tx} y={ty} fontSize={r * (String(label).length >= 2 ? 0.95 : 1.15)} fontWeight="bold"
+        <text x={tx} y={ty} fontSize={labelFs} fontWeight="bold"
           fill={filled ? '#0b0f19' : color} textAnchor="middle" dominantBaseline="central">
           {label}
         </text>
@@ -224,6 +229,9 @@ export default function PitchZonePlot({
   pitches = [], size = 96, bats = 'right', pitcherThrows = 'right', heat = null,
 }) {
   const V = 100;                                   // viewBox の1辺
+  // ⚠ **fontSize の数値は実寸ではない**（実寸 = 数値 × size/V）。
+  //    12px を割らないよう、表示サイズから逆算する（UIデザイン原則1）。
+  const LABEL_FS = +(MIN_TEXT_PX * V / size).toFixed(2);
   // viewBox は固定なので、大きく表示するときはマーカーを相対的に小さくして
   // 点が潰れないようにする（168px で約0.72倍）
   const mk = Math.max(0.6, Math.min(1, 120 / size));
@@ -282,16 +290,16 @@ export default function PitchZonePlot({
       <rect x={z0} y={z0} width={z1 - z0} height={z1 - z0}
         fill="none" stroke="#e5e7eb" strokeWidth="1.8" />
       {/* 投手から見た向きの目印 */}
-      <text x="2" y="7" fill="#6b7280" fontSize="5" textAnchor="start">一塁側</text>
-      <text x={V - 2} y="7" fill="#6b7280" fontSize="5" textAnchor="end">三塁側</text>
-      <text x="2" y={V - 2.5} fill="#9ca3af" fontSize="5.5" textAnchor="start">{leftLabel}</text>
-      <text x={V - 2} y={V - 2.5} fill="#9ca3af" fontSize="5.5" textAnchor="end">{rightLabel}</text>
+      <text x="2" y="7.4" fill="#6b7280" fontSize={LABEL_FS} textAnchor="start">一塁側</text>
+      <text x={V - 2} y="7.4" fill="#6b7280" fontSize={LABEL_FS} textAnchor="end">三塁側</text>
+      <text x="2" y={V - 2.5} fill="#9ca3af" fontSize={LABEL_FS} textAnchor="start">{leftLabel}</text>
+      <text x={V - 2} y={V - 2.5} fill="#9ca3af" fontSize={LABEL_FS} textAnchor="end">{rightLabel}</text>
       {list.map((p, i) => {
         const x = toX(p.pitchLoc.col, p.pitchLoc.jx ?? 0.5);
         const y = place(p.pitchLoc.row, p.pitchLoc.jy ?? 0.5) * V;
         const latest = i === list.length - 1;
         const rs = resultStyle(p.resultType);
-        const r = 7.0 * mk;
+        const r = 7.2 * mk;
         return (
           <g key={i}>
             {/* 最新の1球は白いリングで囲う。赤は「アウト」に使うので色では示せない */}
@@ -300,7 +308,7 @@ export default function PitchZonePlot({
                 stroke="#f1f5f9" strokeWidth={1.3 * mk} opacity="0.9" />
             )}
             <Marker x={x} y={y} shape={pitchShape(p.pitchLoc.type, leftHandedPitcher)}
-              color={rs.color} filled={rs.swung} scale={mk} label={i + 1} />
+              color={rs.color} filled={rs.swung} scale={mk} label={i + 1} labelFs={LABEL_FS} />
           </g>
         );
       })}

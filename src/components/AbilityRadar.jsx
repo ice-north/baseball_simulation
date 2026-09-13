@@ -57,10 +57,15 @@ export function teamRadarAxes(team) {
 }
 
 // axes: [{ label, value(0-100), raw? }]
-export function AbilityRadar({ axes = [], size = 190, showValues = true, accent = 'var(--accent)' }) {
+export function AbilityRadar({ axes = [], size = 200, showValues = true, accent = 'var(--accent)' }) {
   const n = axes.length;
   if (n < 3) return null;
-  const pad = 38;                 // ラベル用の外周余白（多軸・長ラベルも収める）
+  // ラベル用の外周余白（多軸・長ラベルも収める）。
+  // ⚠ **文字を大きくしたら必ずここも広げる**。viewBox = size なので倍率は常に1.0、
+  //    つまり fontSize の数値がそのまま実寸px。12px 未満にしないこと（UIデザイン原則1）。
+  //    4文字（スタミナ）× 12px = 48px が軸の外へ張り出すので、その分を確保する。
+  //    ⚠ 46 では左端の「守備幅」「投手力」が枠から 1〜9px はみ出した（実測）。
+  const pad = 52;
   const cx = size / 2, cy = size / 2;
   const maxR = size / 2 - pad;
   const angle = (i) => (-90 + (360 / n) * i) * (Math.PI / 180);
@@ -90,15 +95,15 @@ export function AbilityRadar({ axes = [], size = 190, showValues = true, accent 
       })}
       {/* ラベル＋数値 */}
       {axes.map((a, i) => {
-        const [lx, ly] = pt(i, maxR + 12);
+        const [lx, ly] = pt(i, maxR + 11);
         const cos = Math.cos(angle(i));
         const anchor = Math.abs(cos) < 0.3 ? 'middle' : cos > 0 ? 'start' : 'end';
         return (
           <text key={i} x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle"
-            fontSize="10" fill="#d1d5db">
+            fontSize="12" fill="#d1d5db">
             {a.label}
             {showValues && a.raw != null && (
-              <tspan x={lx} dy="11" fontSize="10" fontWeight="700" fill="#f3f4f6">{a.raw}</tspan>
+              <tspan x={lx} dy="14" fontSize="12" fontWeight="700" fill="#f3f4f6">{a.raw}</tspan>
             )}
           </text>
         );

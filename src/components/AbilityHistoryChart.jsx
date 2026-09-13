@@ -54,7 +54,11 @@ export default function AbilityHistoryChart({ player, isPitcher }) {
   const hasAge = series.every(p => p.age != null);
   const xLabel = (i) => hasAge ? `${series[i].age}` : `${i + 1}`;
 
-  const W = 640, H = 210, padL = 30, padR = 10, padT = 12, padB = 22;
+  // ⚠ **`fontSize` の数値は実寸ではない**。実寸 = fontSize × (表示幅 / W) なので、
+  //    W より狭いコンテナに置かれると 12px を割る。下の svg に `minWidth: W` を
+  //    付けて倍率を 1.0 未満にしない（狭いときは親の `overflow-x-auto` が横スクロールする）。
+  //    文字を9→12pxにしたぶん、目盛りの幅 padL と x軸の高さ padB も一緒に広げてある。
+  const W = 640, H = 214, padL = 36, padR = 10, padT = 14, padB = 26;
   const xs = (i) => padL + (n === 1 ? 0 : i / (n - 1) * (W - padL - padR));
   const ys = (v) => (H - padB) - Math.max(0, Math.min(100, v)) / 100 * (H - padT - padB);
   const valAt = (p, ln) => ln.vel ? velIndex(p.velocity) : (p[ln.key] || 0);
@@ -62,22 +66,22 @@ export default function AbilityHistoryChart({ player, isPitcher }) {
   return (
     <div>
       <div className="w-full overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="w-full" style={{ maxHeight: 230 }}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="w-full" style={{ minWidth: W, maxHeight: 234 }}>
           {/* grid */}
           {[20, 40, 60, 80].map(v => (
             <g key={v}>
               <line x1={padL} y1={ys(v)} x2={W - padR} y2={ys(v)} stroke="rgba(255,255,255,.06)" strokeWidth="1" />
-              <text x={padL - 5} y={ys(v) + 3} textAnchor="end" fill="#64748b" fontSize="9" className="tnum">{v}</text>
+              <text x={padL - 6} y={ys(v) + 4} textAnchor="end" fill="#64748b" fontSize="12" className="tnum">{v}</text>
             </g>
           ))}
           <line x1={padL} y1={ys(0)} x2={W - padR} y2={ys(0)} stroke="rgba(255,255,255,.18)" strokeWidth="1" />
           {/* x labels */}
           {series.map((p, i) => (
             (n <= 12 || i % 2 === 0 || i === n - 1) && (
-              <text key={i} x={xs(i)} y={H - padB + 14} textAnchor="middle" fill="#64748b" fontSize="9" className="tnum">{xLabel(i)}</text>
+              <text key={i} x={xs(i)} y={H - padB + 17} textAnchor="middle" fill="#64748b" fontSize="12" className="tnum">{xLabel(i)}</text>
             )
           ))}
-          <text x={padL - 5} y={padT} textAnchor="end" fill="#64748b" fontSize="9">{hasAge ? '歳' : '年'}</text>
+          <text x={padL - 6} y={padT} textAnchor="end" fill="#64748b" fontSize="12">{hasAge ? '歳' : '年'}</text>
           {/* lines */}
           {lines.map(ln => {
             const d = series.map((p, i) => (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(valAt(p, ln)).toFixed(1)).join(' ');
