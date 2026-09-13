@@ -244,8 +244,10 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
 
   // 回転数によるタイミング窓補正（MLB Statcast準拠）
   // 高回転ストレート: ホップ成分が大きく打者の予測軌道とズレる → 空振り増
-  // 変化球: ここでの直接項は控えめ。効果の大半は実効変化量(getEffectiveBreakLevel)
-  //         経由で、上の breakingBallPenalty / whiffBonus / 球速減から入る
+  // 変化球: ここでの直接項は控えめ。実効変化量(getEffectiveBreakLevel)からも入るが、
+  //         ⚠ **量としてはこの直接項が主**（実測: 回転20→95 の空振り +8.6pt のうち
+  //         実効変化量経由は 1.0pt ＝ 12%）。実効変化量の値打ちは空振りより
+  //         制球・球速差・釣り球など「変化量が上がる」こと全体に効く点にある
   const spinRate = pitcher.spinRate ?? 50;
   if (spinRate !== 50) {
     const spinDeviation = (spinRate - 50) / 100;
