@@ -91,6 +91,10 @@ export function advanceYear(seasonData) {
     nextSeasonData: adv.newSeasonData,
     draftTotal: drafted.length,
     draftClub: drafted.filter(p => p.isClub).length,
+    // ⚠ 指名者の実体（`{ player, source, draftRound, ... }`）。npbAlumni には
+    //    高校生・大学プール出身が入らないので、**指名クラス全体**を追う probe は
+    //    こちらから母集団を組み立てる（`npb-rookie-probe.mjs`）。
+    draftedPlayers: drafted,
     bySource: {
       highschool: s.highschool || 0,
       university: (s.university || 0) + (s.university_team || 0),

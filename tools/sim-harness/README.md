@@ -114,6 +114,30 @@ node tools/sim-harness/spin-probe.mjs --season   # ＋全投手の回転数を�
 係数（`SPIN_FASTBALL_W` / `SPIN_BREAKING_W` / `SPIN_BREAK_LEVEL_W`）を触ったら、
 **この配分と、能力の総価値（回転0→100のK/9の幅）の両方**を測り直すこと。
 
+### peak-age-probe.mjs — 完成年齢（プローブ / 合否なし）
+
+⚠ **断面（各年齢帯に居る選手の平均）で完成の早さを語らないこと**。断面は
+「誰がその年齢帯に残っているか」（ドラフトで抜ける・戦力外・進路の振り分け）に
+汚染される。このプローブは ①断面 と ②同じ1200人を18歳から追う縦断 を並べて出す。
+2つが食い違うときは縦断が正しい。⚠ 縦断でも標本が小さいと符号が反転する
+（129人では断面と同じ答えが出て、1150人では逆になった）。
+
+### npb-career-probe.mjs / npb-rookie-probe.mjs — 教え子のプロキャリア
+
+```bash
+YEARS=12 node tools/sim-harness/npb-career-probe.mjs   # ゲームが実際に回す母集団
+YEARS=20 node tools/sim-harness/npb-rookie-probe.mjs   # 指名クラス全体（影のNPB）
+```
+
+⚠ **2本あるのは母集団が違うから**。`npbAlumni` に載るのは `source` が
+highschool / university（＝プール）**以外**、つまり社会人・独立・クラブ・
+実体化した大学チームの選手だけで、指名時の年齢が22以上で95%を占める。
+実NPBの「指名者全体の一軍到達 40〜50%」と直接比べられるのは
+`npb-rookie-probe`（`advanceYear` の返す指名者全体で影のNPBを作る）のほう。
+
+⚠ **防御率は投球回で重み付けすること**。単純平均だと18回の敗戦処理と160回の
+エースが同じ重みになり 0.3〜0.4 高く出る。
+
 ## 構成
 
 ```
@@ -122,6 +146,9 @@ tools/sim-harness/
   draft-check.mjs         ドラフト比率検証（エントリ）
   progression-check.mjs   多年次プログレッション検証（エントリ）
   spin-probe.mjs          回転数の効き方プローブ（合否なし・測定のみ）
+  peak-age-probe.mjs      完成年齢プローブ（断面と縦断を並べる）
+  npb-career-probe.mjs    教え子のプロキャリア（npbAlumni の母集団）
+  npb-rookie-probe.mjs    指名クラス全体の影のNPB（1年目・下積みの長さ）
   lib/
     bootstrap.mjs         window/alert/localStorage のNodeスタブ（最初にimport必須）
     report.mjs            PASS/FAIL整形・帯チェック

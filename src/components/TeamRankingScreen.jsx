@@ -426,7 +426,11 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
                 <span className="text-yellow-300 font-bold">⚾ NPB輩出 {produced}名</span>
                 {recent.map((a, i) => (
                   <span key={i} className="text-gray-300 bg-gray-800/60 rounded px-1.5 py-0.5">
-                    {a.name}（{a.year}年目・{a.npbTeam}{a.draftRound ? '/' + a.draftRound : ''}）
+                    {/* ⚠ かつて `a.year` を読んでいたが、それは削除した重複レコード
+                        （`{name, position, npbTeam, draftRound, year}`）だけが持つ
+                        フィールドで、正規のレコードは `draftYear` を持つ。
+                        重複を消した瞬間に「undefined年目」と出た。 */}
+                    {a.name}（{a.draftYear}年目・{a.npbTeam}{a.draftRound ? '/' + a.draftRound : ''}）
                   </span>
                 ))}
               </div>

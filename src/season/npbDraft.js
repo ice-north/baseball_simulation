@@ -747,14 +747,20 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     });
   });
 
-  // === プロ輩出アラムナイの記録（チーム所属選手のみ、永続保存） ===
-  draftedPlayers.forEach(({ teamName, source, name, position, npbTeam, draftRound }) => {
-    if (source === 'highschool' || source === 'university') return;
-    const team = allTeams[teamName];
-    if (!team) return;
-    if (!team.npbAlumni) team.npbAlumni = [];
-    team.npbAlumni.push({ name, position, npbTeam, draftRound, year: gameYear });
-  });
+  // ⚠ **ここにもう1つ npbAlumni へ push するブロックがあった**（削除済み）。
+  //    `{ name, position, npbTeam, draftRound, year }` だけの古い形式で、
+  //    上の「OB名鑑への記録」と**同じ選手を二重に登録していた**。
+  //    `playerId` を持たないので上の重複ガードに引っかからず、能力も持たないので
+  //    `evaluateNpbAbility` が既定値（投手37.5 / 野手38.6）を返し続ける。実測:
+  //      - npbAlumni の **50%** が能力なしの幽霊レコード（投手150/150・野手114/114）
+  //      - 幽霊は1年目一軍 **0%**、実体は **87〜96%**。両者を平均した見かけの
+  //        「一軍到達44〜48%」が実NPB(40〜50%)に一致して見えていた
+  //      - `npbRosterLines` は現役の順位で線を引くので、半数が 37.5/38.6 に
+  //        張り付くぶん**線が下がり**、実体側がほぼ全員通っていた
+  //      - 既定値が投手37.5 / 野手38.6 と**ポジションで違う**ため、
+  //        新人の投打比較そのものが幽霊の定数で決まっていた
+  //    上のブロックは同じ条件（高校生・大学生を除く）で、能力・素質・経歴まで
+  //    記録する上位互換。**この形式を書き戻さないこと。**
 
   // === 各プールから指名者を除去 ===
   draftedPlayers.forEach(({ playerId, teamName, source }) => {

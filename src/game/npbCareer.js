@@ -26,8 +26,21 @@ const REGULAR_THRESHOLD = 68;
 //    登録枠(41%)で切ると、線の上下が年をまたいでほとんど動かないため
 //    一軍到達が26%までしか届かなかった（実NPB 40〜50%）。
 //    規定到達級（レギュラー）は約110人＝13%。
-const NPB_FIRST_TEAM_SHARE = 0.57;
-const NPB_REGULAR_SHARE = 0.13;
+//
+// ⚠ **枠は投手と野手で分けること**。まとめて1本の線で切っていたため、
+//    **新人の1年目一軍が 投手33% 対 野手50%** と実態と逆になっていた。
+//    実NPBは1球団の一軍出場者40人前後のうち**投手が22〜24人**（先発6〜8＋中継ぎ15前後）で、
+//    支配下35人に対して **投手66% / 野手49%** が年に一度は一軍を経験する。
+//    投手は登板機会が分散するので枠そのものが多く、**一芸（球速・変則）でも
+//    中継ぎとして使える**——「投手はルーキーから出てくる／野手は下積みを重ねる」
+//    という関係は、能力ではなく**枠の数**が作っている。
+//    ⚠ 加重平均は 0.5×0.66 + 0.5×0.49 = 0.575 で従来の 0.57 と一致する。
+//       **リーグ全体の一軍到達率は動かさずに、投打の内訳だけを入れ替えている。**
+// ⚠ レギュラーは分けない。実NPBは 先発ローテ5〜6＋勝ちパターン3 ＝ 投手8〜9 に対し
+//    スタメン8＋DH ＝ 野手9 とほぼ同数で、ここに投打の差は無い。
+const NPB_FIRST_TEAM_SHARE = { pitcher: 0.66, fielder: 0.49 };
+const NPB_REGULAR_SHARE = { pitcher: 0.13, fielder: 0.13 };
+const isPitcher = (a) => a?.position === 'pitcher';
 // その年のめぐり合わせ（故障・チーム事情・出来）。総合力に足す振れ幅
 const OPPORTUNITY_SD = 3.0;
 
@@ -204,8 +217,9 @@ export function advanceNpbCareer(a, year, ctx = null) {
   //    アマ側の天井を下げても動かない——`evaluateNpbAbility` に椅子取りが無いのが本質。
   //    絶対値は「そもそもプロで通用するか」の床として残し、
   //    そのうえで**現役選手の中の順位**で枠を切る。
-  const firstLine = Math.max(FIRST_TEAM_THRESHOLD, ctx?.firstTeamLine ?? -Infinity);
-  const regLine = Math.max(REGULAR_THRESHOLD, ctx?.regularLine ?? -Infinity);
+  const side = ctx?.[isPitcher(a) ? 'pitcher' : 'fielder'];
+  const firstLine = Math.max(FIRST_TEAM_THRESHOLD, side?.firstTeamLine ?? -Infinity);
+  const regLine = Math.max(REGULAR_THRESHOLD, side?.regularLine ?? -Infinity);
   // ⚠ **能力だけで枠を決めると、順位が動かないので誰も割り込めない**。
   //    線を引いただけの実装では 一軍到達40%（実40〜50）まで来るが、
   //    レギュラー到達が **9%**（実15〜20）から動かなかった。能力の年次変化が
@@ -251,12 +265,23 @@ export function advanceNpbCareer(a, year, ctx = null) {
  * 全チームの教え子を1年分進める。年度末（オフシーズン）に1回呼ぶ。
  * @returns {number} 処理した人数
  */
-/** 現役の教え子の中で、一軍/レギュラーの枠に相当する能力の線を引く */
+/**
+ * 現役の教え子の中で、一軍/レギュラーの枠に相当する能力の線を引く。
+ * ⚠ **投手と野手で別々に引くこと**（上の `NPB_FIRST_TEAM_SHARE` の⚠を参照）。
+ *   戻り値は `{ pitcher: {...}, fielder: {...} }`。
+ */
 export function npbRosterLines(actives) {
-  const vals = actives.map(evaluateNpbAbility).sort((x, y) => y - x);
-  if (vals.length < 12) return { firstTeamLine: -Infinity, regularLine: -Infinity };
-  const at = (frac) => vals[Math.min(vals.length - 1, Math.floor(vals.length * frac))];
-  return { firstTeamLine: at(NPB_FIRST_TEAM_SHARE), regularLine: at(NPB_REGULAR_SHARE) };
+  const cut = (group, key) => {
+    const vals = group.map(evaluateNpbAbility).sort((x, y) => y - x);
+    // 母数が小さいと分位が跳ねるので、線を引かず絶対値の床だけに任せる
+    if (vals.length < 12) return { firstTeamLine: -Infinity, regularLine: -Infinity };
+    const at = (frac) => vals[Math.min(vals.length - 1, Math.floor(vals.length * frac))];
+    return { firstTeamLine: at(NPB_FIRST_TEAM_SHARE[key]), regularLine: at(NPB_REGULAR_SHARE[key]) };
+  };
+  return {
+    pitcher: cut(actives.filter(isPitcher), 'pitcher'),
+    fielder: cut(actives.filter(a => !isPitcher(a)), 'fielder'),
+  };
 }
 
 export function processNpbCareers(allTeams, year) {
