@@ -23,7 +23,7 @@
 
 import './lib/bootstrap.mjs';
 import { Report } from './lib/report.mjs';
-import { bootstrapWorld, advanceYear } from './lib/world.mjs';
+import { bootstrapWorld, advanceYear, TEAMS_DATA } from './lib/world.mjs';
 
 const YEARS = Number(process.argv[2]) || 5;
 console.log(`\n▶ 多年次プログレッション検証: フルワールドを ${YEARS} 年進行`);
@@ -83,11 +83,40 @@ r.assert('年齢ピラミッドが単調減少',
   `18-21:${g['18-21']} 22-25:${g['22-25']} 26-29:${g['26-29']} 30-33:${g['30-33']} 34+:${g['34+']}`);
 r.assert('若年層(18-21)が最大層', g['18-21'] === Math.max(...Object.values(g)), '');
 // ポジションバランス: 全年で投手過多/捕手不足に陥っていないか
-// （初期の健全値: 投手~30% 捕手~8% 内野~32% 外野~30%）
+//
+// ⚠ **かつてここに「初期の健全値: 投手~30%」と書いて帯を 22〜42% にしていたが、
+//    腐っていた**。その後 高校生プールの投手比率を 41%→51% に、大学プールを
+//    19%→50.5% に是正してある（CLAUDE.md「大学プールの投手比率が19%しかなかった」）
+//    ので、**世界全体の投手シェアは 45% 台が正しい姿**。実測すると1年目から
+//    45.7% で、6年進めても 45.5% と**ドリフトではなく生成時点の値**だった
+//    （投手45.6 / 捕手8.3 / 内野24.1 / 外野22.0）。
+//    ⚠ 帯だけ見て「投手過多の回帰が起きた」と読まないこと——**検査の方が古かった**。
 const posMaxPitcher = Math.max(...history.map(m => m.positions.pitcher));
 const posMinCatcher = Math.min(...history.map(m => m.positions.catcher));
-r.band('投手シェア(最大)', posMaxPitcher, 22, 42, v => v.toFixed(1) + '%');
+r.band('投手シェア(最大)', posMaxPitcher, 40, 50, v => v.toFixed(1) + '%');
 r.band('捕手シェア(最小)', posMinCatcher, 5, 12, v => v.toFixed(1) + '%');
+
+// ⚠ **OB名鑑（`npbAlumni`）のレコードが壊れていないこと**。
+//    かつて `npbDraft.js` に push するブロックが2つあり、片方は
+//    `{name, position, npbTeam, draftRound, year}` だけの旧形式で**同じ選手を
+//    二重登録**していた。playerId を持たないので重複ガードをすり抜け、能力も
+//    持たないので `evaluateNpbAbility` が既定値（投手37.5 / 野手38.6）を返し続ける。
+//    実測で npbAlumni の **50%** が幽霊になり、`npbRosterLines` の分位を押し下げて
+//    一軍の線を狂わせていた（見かけの一軍到達率が実NPBに偶然一致して見えた）。
+//    画面側も `a.draftYear` が無くて「undefined年目」と出た。
+const alumni = [];
+for (const t of Object.values(TEAMS_DATA)) for (const a of (t.npbAlumni || [])) alumni.push(a);
+const ghosts = alumni.filter(a => a.playerId == null || a.draftYear == null
+  || (!a.pitching && !a.batting));
+const dupKeys = new Set();
+let dupes = 0;
+for (const a of alumni) {
+  const k = `${a.playerId}:${a.draftYear}`;
+  if (dupKeys.has(k)) dupes++; else dupKeys.add(k);
+}
+r.assert('OB名鑑に能力なしの幽霊レコードが無い', ghosts.length === 0,
+  `${alumni.length}件中 ${ghosts.length}件が playerId/draftYear/能力 のいずれかを欠く`);
+r.assert('OB名鑑に同一選手の二重登録が無い', dupes === 0, `重複 ${dupes}件`);
 r.print();
 
 // --- 参考: ドラフト比率の推移（初年が最も忠実）---

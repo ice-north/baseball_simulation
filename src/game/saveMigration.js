@@ -86,12 +86,43 @@ export function normalizePlayer(p) {
   return p;
 }
 
+/**
+ * 旧セーブの `npbAlumni` から「能力を持たない幽霊レコード」を落とす。
+ *
+ * かつて `npbDraft.js` に npbAlumni へ push するブロックが2つあり、片方は
+ * `{name, position, npbTeam, draftRound, year}` だけの旧形式で**同じ選手を
+ * 二重に登録していた**（実測で npbAlumni の **50%**）。生成側は除去したが、
+ * セーブは `teamsData` にチームオブジェクトを丸ごと入れるので**既存セーブには残る**。
+ *
+ * 残すと実害が3つある:
+ *   - `evaluateNpbAbility` が既定値（投手37.5 / 野手38.6）を返し続け、
+ *     `npbRosterLines` の分位を押し下げて一軍の線が狂う
+ *   - OB名鑑に能力欄が `速- 制- スタ-` の行が並ぶ（人数も倍に出る）
+ *   - React の key が `undefined-N` になる
+ *
+ * ⚠ 判定は `playerId` の有無で行う。正規のレコードは必ず持つ。
+ * @returns {number} 落とした件数
+ */
+export function pruneGhostAlumni(data) {
+  let removed = 0;
+  if (!data?.teamsData || typeof data.teamsData !== 'object') return 0;
+  Object.values(data.teamsData).forEach(team => {
+    if (!Array.isArray(team?.npbAlumni)) return;
+    const kept = team.npbAlumni.filter(a => a && a.playerId != null);
+    removed += team.npbAlumni.length - kept.length;
+    if (kept.length !== team.npbAlumni.length) team.npbAlumni = kept;
+  });
+  return removed;
+}
+
 // セーブ全体の選手を正規化（teamsData ＋ releasedPlayersPool）。
 function normalizeSaveData(data) {
   if (data.teamsData && typeof data.teamsData === 'object') {
     Object.values(data.teamsData).forEach(team => {
       if (Array.isArray(team?.players)) team.players.forEach(normalizePlayer);
     });
+    const ghosts = pruneGhostAlumni(data);
+    if (ghosts > 0) console.log(`[Save] 旧形式のOB重複レコードを除去: ${ghosts}件`);
   }
   if (Array.isArray(data.releasedPlayersPool)) {
     data.releasedPlayersPool.forEach(normalizePlayer);

@@ -389,6 +389,9 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       return { success: false, error: 'データの復元中にエラーが発生しました。元の状態に戻しました。' };
     }
 
+    // ⚠ 旧セーブの幽霊OBレコードの除去は `saveMigration.normalizeSaveData` が担当する
+    //    （`pruneGhostAlumni`）。ここに書き写さないこと——移行の置き場所は1つ。
+
     // 大学チームの略称をリーグ内で一意化（旧セーブの3文字重複を解消）
     const uniNames = Object.keys(TEAMS_DATA).filter(n => TEAMS_DATA[n]?.universityTeamId);
     if (uniNames.length > 0) {
