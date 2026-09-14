@@ -901,6 +901,109 @@ const initializeUniversityTeamsForParallelWorld = () => {
 // 社会人モードの完全初期化（全チーム＋独立リーグのロスターを生成）
 // ============================================================
 
+// ============================================================
+// 社会人（企業＋クラブ）全チームの生成 — 3つの初期化経路で共有する
+//
+// ⚠ **同じ 28行が 社会人 / 独立 / 大学 の3経路にコピペされており、
+//    片方にしか無い処理が2種類あった**（実測）:
+//
+//   | | 社会人 | 独立 | 大学 |
+//   |---|---|---|---|
+//   | クラブがスタッフを持つ（本来0） | 0 | **208** | **208** |
+//   | クラブの予算>0（本来0） | 0 | **208** | **208** |
+//   | 同名の改名 | 無し(同名17件) | 無し(10件) | **有り(1件)** |
+//
+//   クラブは「キャンプも無く指導者も居ない」前提で成長モデルが組まれているのに
+//   （CLAUDE.md「クラブチームのプロ意識駆動成長」）、独立・大学モードでは
+//   208クラブ全部がスタッフと予算12000を持っていた。
+//   **コピペを関数にすれば、この種の食い違いは構造的に起きなくなる。**
+// ============================================================
+
+/** 社会人チーム1つぶんの TEAMS_DATA エントリを作る */
+const createCorporateTeamEntry = (def) => {
+  const name = def.displayName || def.name;
+  const roster = generateCorporateRoster(def, 1);
+  // ⚠ クラブはスタッフも予算も持たない。3経路のうち社会人モードにしか無かった分岐
+  const isClub = def.type === 'club';
+  const staff = isClub ? [] : generateInitialStaff(def.rank);
+  TEAMS_DATA[name] = {
+    name,
+    abbreviation: makeAbbreviation(name),
+    players: roster,
+    pitchingRotation: null,
+    corporateTeamId: def.id,
+    corporateData: {
+      rank: def.rank, region: def.region, city: def.city, type: def.type,
+      budget: isClub ? 0 : (BUDGET_BY_RANK[def.rank] || 12000),
+      staff,
+      reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
+      proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
+      tournamentBudgetBonus: 0, sponsors: [],
+    },
+  };
+  return { name, roster, staff };
+};
+
+/**
+ * 同名の選手を改名する（リリースプール経由で同じ名前が複数チームに入るため）。
+ * ⚠ 母集団が約1.6万人・実効の組み合わせが169万通りなので**同名そのものは自然に出る**。
+ *    ここで消しているのは「初期化で同時に生まれた同名」だけ。
+ */
+const dedupeCorporatePlayerNames = (teamNames) => {
+  const seenPlayerNames = new Set();
+  for (const teamName of teamNames) {
+    for (const player of TEAMS_DATA[teamName]?.players || []) {
+      if (!player.name) continue;
+      if (seenPlayerNames.has(player.name)) {
+        let newName = generateRandomPlayerName();
+        while (seenPlayerNames.has(newName)) newName = generateRandomPlayerName();
+        player.name = newName;
+      }
+      seenPlayerNames.add(player.name);
+    }
+  }
+};
+
+/**
+ * 社会人全チームを TEAMS_DATA に作り、`WORLD_DATA.corporateLeague.teams` へ登録する。
+ * @param {string|null} userTeamName 指定するとそのチームを**最初に**作る
+ *   （⚠ App.jsx が `Object.keys(TEAMS_DATA)[0]` を自チームとして読むため順序が意味を持つ）
+ */
+const buildAllCorporateTeams = (userTeamName = null) => {
+  const allTeamDefs = getAllTeamsEffective();
+  const allTeamNames = [];
+  let userRoster = null;
+  let userStaff = null;
+
+  const add = (def) => {
+    const { name, roster, staff } = createCorporateTeamEntry(def);
+    allTeamNames.push(name);
+    return { roster, staff };
+  };
+
+  if (userTeamName) {
+    const userDef = allTeamDefs.find(d => (d.displayName || d.name) === userTeamName);
+    if (userDef) {
+      const { roster, staff } = add(userDef);
+      userRoster = roster;
+      userStaff = staff;
+    }
+  }
+  for (const def of allTeamDefs) {
+    const name = def.displayName || def.name;
+    if (TEAMS_DATA[name]) continue;
+    add(def);
+  }
+
+  WORLD_DATA.corporateLeague.teams = {};
+  for (const name of allTeamNames) {
+    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
+  }
+  dedupeCorporatePlayerNames(allTeamNames);
+
+  return { allTeamNames, userRoster, userStaff };
+};
+
 export const initializeCorporateGame = (teamDef) => {
   corporatePlayerIdBase = 20000;
 
@@ -909,56 +1012,11 @@ export const initializeCorporateGame = (teamDef) => {
   clearReleasedPlayersPool();
 
   // 社会人179チーム生成
-  const allTeamDefs = getAllTeamsEffective();
   const userTeamName = teamDef.displayName || teamDef.name;
   const userRegion = teamDef.region;
-  const allTeamNames = [];
-  let userRoster = null;
-  let userStaff = null;
-
-  const createTeamEntry = (def) => {
-    const name = def.displayName || def.name;
-    const roster = generateCorporateRoster(def, 1);
-    const isClub = def.type === 'club';
-    const staff = isClub ? [] : generateInitialStaff(def.rank);
-    TEAMS_DATA[name] = {
-      name,
-      abbreviation: makeAbbreviation(name),
-      players: roster,
-      pitchingRotation: null,
-      corporateTeamId: def.id,
-      corporateData: {
-        rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: isClub ? 0 : (BUDGET_BY_RANK[def.rank] || 12000),
-        staff,
-        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
-        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
-        tournamentBudgetBonus: 0, sponsors: [],
-      },
-    };
-    allTeamNames.push(name);
-    return { roster, staff };
-  };
-
-  // ユーザーチームを最初に追加（Object.keys(TEAMS_DATA)[0]で取得されるため）
-  const userDef = allTeamDefs.find(d => (d.displayName || d.name) === userTeamName);
-  if (userDef) {
-    const { roster, staff } = createTeamEntry(userDef);
-    userRoster = roster;
-    userStaff = staff;
-  }
-
-  for (const def of allTeamDefs) {
-    const name = def.displayName || def.name;
-    if (TEAMS_DATA[name]) continue;
-    createTeamEntry(def);
-  }
+  const { allTeamNames, userRoster, userStaff } = buildAllCorporateTeams(userTeamName);
 
   WORLD_DATA.corporateLeague.userTeam = userTeamName;
-  WORLD_DATA.corporateLeague.teams = {};
-  for (const name of allTeamNames) {
-    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
-  }
 
   // 独立リーグ4つも生成
   initializeIndependentLeagues(null, allTeamNames);
@@ -988,36 +1046,8 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
   initializeWorld('independent', userLeagueId);
   corporatePlayerIdBase = 20000;
 
-  // 社会人チーム全179チーム生成
-  const allCorpDefs = getAllTeamsEffective();
-  const corpTeamNames = [];
-  for (const def of allCorpDefs) {
-    const name = def.displayName || def.name;
-    if (TEAMS_DATA[name]) continue;
-
-    const roster = generateCorporateRoster(def, 1);
-    const staff = generateInitialStaff(def.rank);
-    TEAMS_DATA[name] = {
-      name,
-      abbreviation: makeAbbreviation(name),
-      players: roster,
-      pitchingRotation: null,
-      corporateTeamId: def.id,
-      corporateData: {
-        rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: BUDGET_BY_RANK[def.rank] || 12000,
-        staff,
-        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
-        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
-        tournamentBudgetBonus: 0, sponsors: [],
-      },
-    };
-    corpTeamNames.push(name);
-  }
-  WORLD_DATA.corporateLeague.teams = {};
-  for (const name of corpTeamNames) {
-    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
-  }
+  // 社会人チーム全179チーム生成（3経路で共有。クラブのスタッフ・予算と同名の改名もここ）
+  const { allTeamNames: corpTeamNames } = buildAllCorporateTeams();
 
   // ユーザーのリーグ以外の独立リーグを生成
   initializeIndependentLeagues(userLeagueId, [...userTeamNames, ...corpTeamNames]);
@@ -1141,49 +1171,9 @@ export const recoverMissingParallelTeams = (userLeagueId) => {
 
 export const initializeCorporateParallelWorld = (existingTeamNames = []) => {
   corporatePlayerIdBase = 20000;
-  const allCorpDefs = getAllTeamsEffective();
-  const corpTeamNames = [];
-  for (const def of allCorpDefs) {
-    const name = def.displayName || def.name;
-    if (TEAMS_DATA[name]) continue;
-    const roster = generateCorporateRoster(def, 1);
-    const staff = generateInitialStaff(def.rank);
-    TEAMS_DATA[name] = {
-      name,
-      abbreviation: makeAbbreviation(name),
-      players: roster,
-      pitchingRotation: null,
-      corporateTeamId: def.id,
-      corporateData: {
-        rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: BUDGET_BY_RANK[def.rank] || 12000,
-        staff,
-        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
-        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
-        tournamentBudgetBonus: 0, sponsors: [],
-      },
-    };
-    corpTeamNames.push(name);
-  }
-  WORLD_DATA.corporateLeague.teams = {};
-  for (const name of corpTeamNames) {
-    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
-  }
+  // 3経路で共有（クラブのスタッフ・予算と同名の改名もここが持つ）
+  const { allTeamNames: corpTeamNames } = buildAllCorporateTeams();
   initializeIndependentLeagues(null, [...existingTeamNames, ...corpTeamNames]);
-
-  // 重複名選手の改名（同一選手がリリースプール経由で複数チームに入るケースを修正）
-  const seenPlayerNames = new Set();
-  for (const teamName of corpTeamNames) {
-    for (const player of TEAMS_DATA[teamName]?.players || []) {
-      if (!player.name) continue;
-      if (seenPlayerNames.has(player.name)) {
-        let newName = generateRandomPlayerName();
-        while (seenPlayerNames.has(newName)) newName = generateRandomPlayerName();
-        player.name = newName;
-      }
-      seenPlayerNames.add(player.name);
-    }
-  }
 };
 
 // ============================================================

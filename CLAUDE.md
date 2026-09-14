@@ -825,6 +825,13 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 `truncate min-w-0` 無し**が残っていた。ホーム側を正として1つに畳んである。
 左右の違いは `side`（'away' | 'home'。ヘッダーの並びと `handleXxxClick` の teamType を兼ねる）と
 `isBatting`（旧: アウェイ=`isTopInning` / ホーム=`!isTopInning`）だけ。**片側だけ直さないこと**。
+
+⚠ **その `TeamMemberPanel` の中で、同じことをもう一度やっていた**（`BenchList` に是正済み）。
+ベンチメンバーの38行が、試合前の「右: 控え選手」欄と試合中の「⚡ 選手交代」
+アコーディオンに**完全に同じ内容で2度**書かれていた。
+左右を1つに畳んだファイルの中に、上下の重複が残っていたことになる。
+⚠ **外側の枠（高さ・余白）だけ2箇所で違う**ので、枠は呼び出し側に残して中身だけ共有する。
+
 - **打席結果は3文字幅に固定し、2文字は均等割り付けで埋める**
   （`formatAtBatResult` + `textAlignLast: 'justify'`）。`addAtBatResult` に渡る
   文字列は 安打/二塁打/投ゴロ/ライナー … と2〜4文字ありバッジの幅が揃わず、
@@ -902,6 +909,29 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `teams-data.js` の `typeof createDefaultPlayers === 'function'` 分岐は
   ESモジュールでは必ず false。一度も実行されていない到達しないコードだった（除去）
 
+### ⚠ 描画されない state はこれで3度目（`batterStats` / `pitcherStats` / `catcherStats` を除去）
+App.jsx に打者・投手・捕手の成績3種の `useState` があり、
+**書き込み52箇所・読み出し0**。1球ごとに `setState` していたので、
+誰も見ないデータのために**再描画コストだけ払っていた**。
+
+- 1度目 `lastGameResults`（`simulateGamesOnDate` の戻り値）/
+  2度目 打球統計4種（`battedBall*Stats`）/ **3度目がこれ**
+- ⚠ **見分け方**: `grep` は大文字小文字を区別するので `batterStats` では
+  `setBatterStats` に当たらない。**読みと書きを分けて数えること**
+  （`grep -E "(^|[^a-zA-Z])batterStats\b"` で読み、`setBatterStats` で書き）
+- ⚠ **`updateBatterStats` / `updatePitcherStats` は別物で現役**。
+  こちらは `player.stats` に選手ごとの成績を積んでおり、画面もシーズン集計も読む。
+  名前が似ているだけで役割が違うので、まとめて消さないこと
+- 実測: App.jsx 4368→4238行 / gameControls.js 135→105行
+
+**⚠ 検証はブラウザで実際に投げること**（この節の冒頭のとおり、`throwPitch` は
+ハーネスで一度も実行されない）。独立リーグで新規ゲーム → トライアウト24人 →
+キャンプ4クール → 日程進行 → 采配モードで **40球**投げて、2回表まで進行・
+コンソールエラー0・画面に `undefined`/`NaN` 0件を確認した。
+⚠ 自動操作の注意: モーダルの「キャンプ終了」と背後の「キャンプ終了 → 成長確認」は
+**前方一致だと背後を掴む**（`exact: true` で取る）。ヒントの「分かった」は
+毎ループ閉じないと次のクリックが素通りする。
+
 ## ⚠ 腐った文書は、無い文書より悪い（`npm run check:doc`）
 この作品の開発は「**文書に書いた『こうなっているはず』と実測がずれた瞬間**に
 不具合が見つかる」という形で回っている。だから間違った記述は、権威に見えるぶん
@@ -931,11 +961,11 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
   正しいのは「実装に合わせて直す」か「もう無いと明記する」のどちらか
 
 ## 主要ファイル
-- `src/App.jsx` (~4370行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
+- `src/App.jsx` (~4240行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
 - `src/game/autoSimulation.js` (~2870行) - 自動シミュレーション・buildDefense
 - `src/game/aiManager.js` (~650行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
 - `src/game/lineupGenerator.js` (~690行) - AIオーダー編成・投手ローテーション生成・`ensureAllTeamsReady`
-- `src/game/gameControls.js` (~135行) - resetGame・multiPitch・simMode
+- `src/game/gameControls.js` (~105行) - resetGame・multiPitch・simMode
 - `src/game/gameSetup.js` (~820行) - setupManagedGame・handleManagedGameEnd
 - `src/game/saveSystem.js` (~650行) - セーブ/ロード/ファイル書き出し・読み込み
 - `src/game/seasonProgress.js` (~420行) - 日程進行ハンドラー
@@ -948,13 +978,13 @@ prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアク�
 - `src/components/ManagementScreen.jsx` (~590行) - 管理画面ルーター
 - `src/components/GameFlowScreens.jsx` (~530行) - ゲームフロー画面群
 - `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
-- `src/components/GameUIComponents.jsx` (~1050行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel・TeamMemberPanel
+- `src/components/GameUIComponents.jsx` (~1030行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel・TeamMemberPanel・BenchList
 - `src/components/PlayerEditColumn.jsx` (~280行) - デバッグ用エディット画面の1チーム分の列（左右で共有）
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
 - `src/season/universityPool.js` (~1620行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
 - `src/season/yearProgressionSystem.js` (~1630行) - 年間進行・キャンプ・オフシーズン処理
-- `src/corporate/corporateInit.js` (~1960行) - 社会人/独立リーグ初期化・チームランク変動
+- `src/corporate/corporateInit.js` (~1830行) - 社会人/独立リーグ初期化・チームランク変動
 - `src/corporate/scoutingSystem.js` (~2040行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
 - `src/university/universityTeamsData.js` (~510行) - 大学チームデータ（27リーグ234校（2部制12リーグ×12校＋1部制15リーグ×6校）、ランク別成長倍率定義）
 - `src/university/universityLeagueManager.js` (~450行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
@@ -2227,6 +2257,32 @@ spike は結局 **バッジを出すかの判定だけ**に残してある。
   - `discoveryPenalty = -(100-fame)/100 × (100-scoutEye)×0.3`
   - 無名の原石(fame=0)はscoutingEyeが高いスカウトだけが見つけられる
   - 有名選手(fame=100)はどのチームでも候補に挙がる
+
+## ⚠ 社会人チームの生成は3経路あり、同じ28行がコピペされていた（是正済み）
+`initializeCorporateGame`（社会人モード）/ `initializeParallelWorldForIndependent`（独立モード）/
+`initializeCorporateParallelWorld`（大学モード等）が**それぞれ同じループを持って**おり、
+片方にしか無い処理が2種類あった。
+
+**実測（各モードで初期化直後を数えた）**
+
+| | 社会人 | 独立 | 大学 |
+|---|---|---|---|
+| クラブがスタッフを持つ（本来0） | **0** | **208** | **208** |
+| クラブの予算>0（本来0） | **0** | **208** | **208** |
+| 同名が2人以上いる名前 | 17件 | 10件 | **1件** |
+
+- **クラブはスタッフも予算も持たない**のが正（キャンプも指導者も無い前提で
+  成長モデルが組まれている）。その分岐は**社会人モードにしか無かった**ので、
+  独立・大学モードでは208クラブ全部が予算12000とスタッフを持っていた
+- ⚠ **同名の改名はどこに在るか**——かつてここには「`corporateInit.js` の
+  **社会人リーグ初期化**にだけ在る」と書いてあったが**誤り**で、実際に持っていたのは
+  `initializeCorporateParallelWorld`（大学モード等）だった。社会人モードは持っておらず
+  同名17件が残っていた
+- `createCorporateTeamEntry` / `dedupeCorporatePlayerNames` / `buildAllCorporateTeams` に
+  畳んで3経路で共有。修正後は3モードとも **クラブのスタッフ0・予算0**、同名2〜4件
+  （残るのは社会人と独立の**間**の衝突で、これは母集団の大きさから自然に出るぶん）
+- ⚠ **ユーザーチームは最初に作ること**。`App.jsx` が `Object.keys(TEAMS_DATA)[0]` を
+  自チームとして読むので、生成順が意味を持つ（`buildAllCorporateTeams(userTeamName)`）
 
 ## チームランク変動システム (`src/corporate/corporateInit.js`)
 - **対象**: 社会人(300チーム: 企業93+クラブ208、初期化は179チーム)・独立リーグ(5リーグ26チーム)・大学(234校) すべてのチーム

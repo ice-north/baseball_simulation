@@ -1018,39 +1018,14 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       // 直近の投球履歴（球速）
       const [recentVelocities, setRecentVelocities] = useState([]);
       
-      // 打者・投手の成績
-      const [batterStats, setBatterStats] = useState({
-        plateAppearances: 0, // 打席数
-        atBats: 0,
-        hits: 0,
-        homeruns: 0,
-        walks: 0,
-        hitByPitch: 0,
-        strikeouts: 0,
-        totalBases: 0,
-        stolenBases: 0,       // 盗塁成功数
-        caughtStealing: 0     // 盗塁失敗数
-      });
-      
-      const [pitcherStats, setPitcherStats] = useState({
-        pitches: 0,
-        outs: 0,
-        strikeouts: 0,
-        walks: 0,
-        hitBatters: 0,   // 与死球
-        runsAllowed: 0,
-        errors: 0,  // エラー数
-        wildPitches: 0,  // 暴投数を追加
-        doublePlay: 0  // 併殺打
-      });
-      
-      // 捕手統計を追加
-      const [catcherStats, setCatcherStats] = useState({
-        stolenBasesAllowed: 0,  // 盗塁許可数
-        caughtStealing: 0,      // 盗塁刺
-        wildPitchesBlocked: 0   // 暴投阻止数
-      });
-      
+      // ⚠ ここに **打者・投手・捕手の成績3種**（batterStats / pitcherStats /
+      //    catcherStats）の useState が31行あったが、**書き込み52箇所・読み出し0**で
+      //    一度も描画されていなかったので除去した。1球ごとに setState していたので、
+      //    誰も見ないデータのために再描画コストだけ払っていたことになる
+      //    （`lastGameResults` / 打球統計4種 と同じ defect。これで3度目）。
+      //    ⚠ 選手ごとの成績は `updateBatterStats` / `updatePitcherStats`（別物・現役）が
+      //    `player.stats` に積んでおり、画面もシーズン集計もそちらを読む。
+      //
       // ⚠ ここに打球統計4種（battedBallStats / …Type / …Direction / …Area）の
       //    useState が58行あったが、**一度も描画されていなかった**ので除去した。
       //    2つは打球のたびに setState していて、誰も見ないデータのために
@@ -1754,10 +1729,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         });
         
         // 投手成績の更新
-        setPitcherStats(prev => ({
-          ...prev,
-          pitches: prev.pitches + 1
-        }));
         
         // 投手個別の投球数を更新
         {
@@ -1806,15 +1777,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             if (doIntentionalWalk) { newCount.balls = 4; }
             if (newCount.balls === 4) {
               // 打者成績: 四球
-              setBatterStats(prev => ({
-                ...prev,
-                plateAppearances: prev.plateAppearances + 1,
-                walks: prev.walks + 1
-              }));
-              setPitcherStats(prev => ({
-                ...prev,
-                walks: prev.walks + 1
-              }));
               
               // 選手個別成績を更新
               {
@@ -1835,10 +1797,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               if (bases[0] && bases[1] && bases[2]) {
                 const run = 1;
                 isTopInning ? newScore.away++ : newScore.home++;
-                setPitcherStats(prev => ({
-                  ...prev,
-                  runsAllowed: prev.runsAllowed + run
-                }));
                 
                 // 押し出しの得点も投手成績に
                 {
@@ -1859,12 +1817,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             break;
           case 'hit_by_pitch': {
             // 死球。四球と同じ押し出し進塁だが、打数にも四球にも計上しない
-            setBatterStats(prev => ({
-              ...prev,
-              plateAppearances: prev.plateAppearances + 1,
-              hitByPitch: (prev.hitByPitch || 0) + 1
-            }));
-            setPitcherStats(prev => ({ ...prev, hitBatters: (prev.hitBatters || 0) + 1 }));
             {
               const b = getCurrentBatter();
               const pi = getCurrentPitcher();
@@ -1879,7 +1831,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             }
             if (bases[0] && bases[1] && bases[2]) {
               isTopInning ? newScore.away++ : newScore.home++;
-              setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
               {
                 const pi = getCurrentPitcher();
                 updatePitcherStats(pi.id, isTopInning ? 'home' : 'away', {
@@ -1900,17 +1851,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             newCount.strikes++;
             if (newCount.strikes === 3) {
               // 打者成績: 三振
-              setBatterStats(prev => ({
-                ...prev,
-                plateAppearances: prev.plateAppearances + 1,
-                atBats: prev.atBats + 1,
-                strikeouts: prev.strikeouts + 1
-              }));
-              setPitcherStats(prev => ({
-                ...prev,
-                outs: prev.outs + 1,
-                strikeouts: prev.strikeouts + 1
-              }));
               
               // 選手個別成績を更新
               {
@@ -1938,16 +1878,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             break;
           case 'double_play':
             // ダブルプレー処理
-            setBatterStats(prev => ({
-              ...prev,
-              plateAppearances: prev.plateAppearances + 1,
-              atBats: prev.atBats + 1
-            }));
-            setPitcherStats(prev => ({
-              ...prev,
-              outs: prev.outs + 2,
-              doublePlay: (prev.doublePlay || 0) + 1  // 併殺打カウント
-            }));
             newOuts += 2;  // 2アウト追加
             newBases[0] = false;  // 一塁ランナー消える
             atBatOver = true;
@@ -1966,14 +1896,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             const bases_earned = result.type === 'single' ? 1 : result.type === 'double' ? 2 : result.type === 'triple' ? 3 : 4;
             // 失策での出塁は「安打」ではない（打数のみ加算）
             const reachedOnError = !!result.isError;
-            setBatterStats(prev => ({
-              ...prev,
-              plateAppearances: prev.plateAppearances + 1,
-              atBats: prev.atBats + 1,
-              hits: prev.hits + (reachedOnError ? 0 : 1),
-              homeruns: prev.homeruns + (!reachedOnError && result.type === 'homerun' ? 1 : 0),
-              totalBases: prev.totalBases + (reachedOnError ? 0 : bases_earned)
-            }));
             
             // 選手個別成績を更新
             {
@@ -2019,17 +1941,12 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           }
         }
         
-        setPitcherStats(prev => ({
-          ...prev,
-          runsAllowed: prev.runsAllowed + runs
-        }));
         
         isTopInning ? (newScore.away += runs) : (newScore.home += runs);
         newBases = updatedBases;
         // 捕殺: 積極進塁を狙って刺された走者はアウトになる
         if (throwOuts > 0) {
           newOuts += throwOuts;
-          setPitcherStats(prev => ({ ...prev, outs: prev.outs + throwOuts }));
         }
         atBatOver = true;
         {
@@ -2039,15 +1956,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         break;
       case 'out':
         // 打者成績: アウト
-        setBatterStats(prev => ({
-          ...prev,
-          plateAppearances: prev.plateAppearances + 1,
-          atBats: prev.atBats + 1
-        }));
-        setPitcherStats(prev => ({
-          ...prev,
-          outs: prev.outs + 1
-        }));
         
         // 選手個別成績を更新
             {
@@ -2090,11 +1998,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
                 recordFielding('first', { chance: 1 });   // 一塁でのアウト
                 newOuts++;
                 newBases[0] = false;
-                setPitcherStats(prev => ({
-                  ...prev,
-                  outs: prev.outs + 1,
-                  doublePlay: (prev.doublePlay || 0) + 1
-                }));
                 {
                   const currentPitcherPlayer = getCurrentPitcher();
                   const defenseTeamType = isTopInning ? 'home' : 'away';
@@ -2121,7 +2024,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           if (adv.scoreFromThird) {
             newBases[2] = false;
             if (isTopInning) newScore.away++; else newScore.home++;
-            setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
             recordRunsToCurrentPitcher(1, outs);
             setLastResult({ ...result, description: (result.description || 'アウト') + '（進塁打）' });
           }
@@ -2142,7 +2044,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               } else {
                 setScore(prev => ({ ...prev, home: prev.home + 1 }));
               }
-              setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
               recordRunsToCurrentPitcher(1, outs);
               newBases[2] = false;
               setLastResult({ ...result, description: result.description + '（犠牲フライ）' });
@@ -2198,7 +2099,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           
           if (Math.random() < wildPitchRate) {
             // ãƒ¯ã‚¤ãƒ«ãƒ‰ãƒ”ãƒƒãƒç™ºç”Ÿ
-            setPitcherStats(prev => ({ ...prev, wildPitches: prev.wildPitches + 1 }));
             
             const catcherArm = defense.catcher.arm / 100;
             const runnerSpeed = batter.speed / 100;
@@ -2209,12 +2109,10 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             // 三塁→ホーム
             if (newBases[2]) {
               if (Math.random() < throwoutChance) {
-                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
                 wpDescription += ' 🛡️ 捕手が三塁ランナーを刺した！';
                 newOuts++;
               } else {
                 isTopInning ? newScore.away++ : newScore.home++;
-                setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
               recordRunsToCurrentPitcher(1, outs);
                 wpDescription += ' ⚡ 三塁ランナーがホームイン';
               }
@@ -2224,7 +2122,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             // 二塁→三塁
             if (newBases[1] && newOuts < 3) {
               if (Math.random() < throwoutChance) {
-                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
                 wpDescription += ' 🛡️ 二塁ランナーを刺した！';
                 newOuts++;
               } else {
@@ -2237,7 +2134,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             // 一塁→二塁
             if (newBases[0] && newOuts < 3) {
               if (Math.random() < throwoutChance) {
-                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
                 wpDescription += ' 🛡️ 一塁ランナーを刺した！';
                 newOuts++;
               } else {
@@ -2302,8 +2198,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
                 // 盗塁成功
         newBases[1] = true;
         newBases[0] = false;
-        setCatcherStats(prev => ({ ...prev, stolenBasesAllowed: prev.stolenBasesAllowed + 1 }));
-        setBatterStats(prev => ({ ...prev, stolenBases: prev.stolenBases + 1 }));
         setGameLog(prev => {
           const updated = [...prev, { description: '🏃 盗塁成功！一塁→二塁', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
@@ -2312,9 +2206,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         // 盗塁失敗
         newBases[0] = false;
         newOuts++;
-        setCatcherStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
-        setBatterStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
-        setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
         setGameLog(prev => {
           const updated = [...prev, { description: '❌ 盗塁失敗、アウト', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
@@ -2364,8 +2255,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
                 // 盗塁成功
         newBases[2] = true;
         newBases[1] = false;
-        setCatcherStats(prev => ({ ...prev, stolenBasesAllowed: prev.stolenBasesAllowed + 1 }));
-        setBatterStats(prev => ({ ...prev, stolenBases: prev.stolenBases + 1 }));
         setGameLog(prev => {
           const updated = [...prev, { description: '🏃 盗塁成功！二塁→三塁', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
@@ -2374,9 +2263,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         // 盗塁失敗
         newBases[1] = false;
         newOuts++;
-        setCatcherStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
-        setBatterStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
-        setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
         setGameLog(prev => {
           const updated = [...prev, { description: '❌ 盗塁失敗、アウト', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
@@ -2553,7 +2439,6 @@ if (newOuts === 3) {
 
         // スタミナ消費（1球分）
         setCurrentStamina(prev => Math.max(0, prev - 1));
-        setPitcherStats(prev => ({ ...prev, pitches: prev.pitches + 1 }));
         {
           const defenseTeamType = isTopInning ? 'home' : 'away';
           updatePitcherStats(currentPitcher.id, defenseTeamType, {
@@ -2575,8 +2460,6 @@ if (newOuts === 3) {
         if (roll < popupRate) {
           // バントフライ → アウト
           newOuts++;
-          setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1 }));
-          setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
           {
             const offenseTeamType = isTopInning ? 'away' : 'home';
             const defenseTeamType = isTopInning ? 'home' : 'away';
@@ -2591,8 +2474,6 @@ if (newOuts === 3) {
           if (count.strikes >= 2) {
             // 2ストライクからのバントファウルは三振
             newOuts++;
-            setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1, strikeouts: prev.strikeouts + 1 }));
-            setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1, strikeouts: prev.strikeouts + 1 }));
             {
               const offenseTeamType = isTopInning ? 'away' : 'home';
               const defenseTeamType = isTopInning ? 'home' : 'away';
@@ -2647,13 +2528,10 @@ if (newOuts === 3) {
 
               if (squeezeRunnerSafe) {
                 isTopInning ? newScore.away++ : newScore.home++;
-                setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
               recordRunsToCurrentPitcher(1, outs);
-                setBatterStats(prev => ({ ...prev, rbis: prev.rbis + 1 }));
                 newBases[2] = false;
               } else {
                 newOuts++;
-                setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
                 updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
                 newBases[2] = false;
               }
@@ -2661,7 +2539,6 @@ if (newOuts === 3) {
 
             if (batterOut) {
               newOuts++;
-              setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
               updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
               updateBatterStats(currentBatter.id, offenseTeamType, {
                 sacrificeBunts: (currentBatter.stats?.batting?.sacrificeBunts || 0) + 1
@@ -2670,7 +2547,6 @@ if (newOuts === 3) {
               setLastResult({ description: `${qualityText}スクイズ${squeezeRunnerSafe ? '成功！' : '（本塁封殺）'}` });
               addAtBatResult(currentBatter.id, offenseTeamType, '犠打');
             } else {
-              setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1, hits: prev.hits + 1 }));
               updateBatterStats(currentBatter.id, offenseTeamType, {
                 atBats: (currentBatter.stats?.batting?.atBats || 0) + 1,
                 hits: (currentBatter.stats?.batting?.hits || 0) + 1
@@ -2685,7 +2561,6 @@ if (newOuts === 3) {
           } else if (buntType === 'sacrifice') {
             if (batterOut) {
               newOuts++;
-              setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
               updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
               updateBatterStats(currentBatter.id, offenseTeamType, {
                 sacrificeBunts: (currentBatter.stats?.batting?.sacrificeBunts || 0) + 1
@@ -2698,7 +2573,6 @@ if (newOuts === 3) {
               setLastResult({ description: `${qualityText}犠打成功` });
               addAtBatResult(currentBatter.id, offenseTeamType, '犠打');
             } else {
-              setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1, hits: prev.hits + 1 }));
               updateBatterStats(currentBatter.id, offenseTeamType, {
                 atBats: (currentBatter.stats?.batting?.atBats || 0) + 1,
                 hits: (currentBatter.stats?.batting?.hits || 0) + 1
@@ -2714,14 +2588,11 @@ if (newOuts === 3) {
             // セーフティバント
             if (batterOut) {
               newOuts++;
-              setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1 }));
-              setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
               updateBatterStats(currentBatter.id, offenseTeamType, { atBats: (currentBatter.stats?.batting?.atBats || 0) + 1 });
               updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
               setLastResult({ description: 'セーフティバント失敗' });
               addAtBatResult(currentBatter.id, offenseTeamType, 'バ失');
             } else {
-              setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1, hits: prev.hits + 1 }));
               updateBatterStats(currentBatter.id, offenseTeamType, {
                 atBats: (currentBatter.stats?.batting?.atBats || 0) + 1,
                 hits: (currentBatter.stats?.batting?.hits || 0) + 1
@@ -2785,7 +2656,6 @@ if (newOuts === 3) {
         setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
         setGameLog, setLastResult, setStatistics, setRecentVelocities,
         setHomeTeam, setAwayTeam, setCurrentStamina,
-        setBatterStats, setPitcherStats, setCatcherStats,
         setIsAutoSimulating
       };
       // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）

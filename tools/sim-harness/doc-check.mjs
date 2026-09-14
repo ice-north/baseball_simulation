@@ -62,6 +62,10 @@ const REMOVED_ON_PURPOSE = {
   getScoutAccuracyGain: '同上。staffData 側の似た名前の関数で、こちらも未使用だった',
   battedBallStats: '描画されない打球統計。`lastGameResults` と同じ defect で除去（歴史の記録）',
   battedBallAreaStats: '同上',
+  setBatterStats:  '描画されない state（書き込み52・読み出し0）。3度目の同じ defect で除去（歴史の記録）',
+  batterStats:     '同上',
+  pitcherStats:    '同上',
+  catcherStats:    '同上',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');

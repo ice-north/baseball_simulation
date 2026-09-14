@@ -696,6 +696,55 @@ export const TeamPitcherPanel = ({ team, gameStarted }) => (
  *   handleXxxClick の teamType を兼ねる
  * - `isBatting` はこのチームが攻撃中か（旧: アウェイ=isTopInning / ホーム=!isTopInning）
  */
+/**
+ * ベンチメンバーの行（交代要員の一覧）。
+ * ⚠ **`TeamMemberPanel` の中に同じ38行が2度書かれていた**——試合前の「右: 控え選手」の欄と、
+ *    試合中の「⚡ 選手交代」アコーディオンの中。正規化すると完全に一致していた。
+ *    `TeamMemberPanel` 自体が「左右で335行中328行が同一だった」のを畳んだものなので、
+ *    同じファイルの中で同じことをもう一度やっていたことになる。
+ *    ⚠ 外側の枠（高さ・余白）だけ2箇所で違うので、**枠は呼び出し側に残して中身だけ共有する**。
+ */
+const BenchList = ({ team, side, selectedSubstitute, handleSubstituteClick, getPositionColor }) => (
+  <>
+    {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
+        ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
+    {sortBenchByPosition(team.players.filter(p => !p.isStarter))
+      .map(player => {
+        const isPitcher = player.position === 'pitcher';
+        const throwHand = player.physical.throws === 'right' ? '右' : '左';
+        const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+        const isSubSelected = selectedSubstitute === player.id;
+        const isSubbedOut = player.hasSubbedOut;
+
+        return (
+          <div
+            key={player.id}
+            onClick={() => !isSubbedOut && handleSubstituteClick(side, player.id)}
+            className={`p-1.5 rounded transition ${
+              isSubbedOut
+                ? 'bg-surface-1 opacity-50 cursor-not-allowed'
+                : isSubSelected
+                  ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
+            }`}
+          >
+            <div className="flex items-center gap-1">
+              <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{POSITION_NAMES[player.position]}</span>
+              <span className="font-medium text-sm truncate flex-1">{player.name}</span>
+              <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
+              {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
+              {isSubSelected && <span className="text-blue-300">👆</span>}
+            </div>
+            <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
+              <span>M{player.batting.meet}</span>
+              <span>P{player.batting.power}</span>
+              <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
+            </div>
+          </div>
+        );
+      })}
+  </>
+);
+
 export const TeamMemberPanel = ({
   side, team, score, isBatting, gameStarted, gameOver,
   selectedBatter, selectedPosition, selectedSubstitute, showBench, setShowBench,
@@ -805,43 +854,8 @@ export const TeamMemberPanel = ({
         <div>
           <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">ベンチメンバー</div>
           <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
-            {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
-                ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
-            {sortBenchByPosition(team.players.filter(p => !p.isStarter))
-              .map(player => {
-                const posNames = POSITION_NAMES;
-                const isPitcher = player.position === 'pitcher';
-                const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-                const isSubSelected = selectedSubstitute === player.id;
-                const isSubbedOut = player.hasSubbedOut;
-
-                return (
-                  <div
-                    key={player.id}
-                    onClick={() => !isSubbedOut && handleSubstituteClick(side, player.id)}
-                    className={`p-1.5 rounded transition ${
-                      isSubbedOut
-                        ? 'bg-surface-1 opacity-50 cursor-not-allowed'
-                        : isSubSelected
-                          ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
-                      <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                      <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
-                      {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
-                      {isSubSelected && <span className="text-blue-300">👆</span>}
-                    </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
-                      <span>M{player.batting.meet}</span>
-                      <span>P{player.batting.power}</span>
-                      <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
-                    </div>
-                  </div>
-                );
-              })}
+            <BenchList team={team} side={side} selectedSubstitute={selectedSubstitute}
+              handleSubstituteClick={handleSubstituteClick} getPositionColor={getPositionColor} />
           </div>
         </div>
       </div>
@@ -1005,43 +1019,8 @@ export const TeamMemberPanel = ({
 
         {showBench && (
           <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
-            {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
-                ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
-            {sortBenchByPosition(team.players.filter(p => !p.isStarter))
-              .map(player => {
-                const posNames = POSITION_NAMES;
-                const isPitcher = player.position === 'pitcher';
-                const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-                const isSubSelected = selectedSubstitute === player.id;
-                const isSubbedOut = player.hasSubbedOut;
-
-                return (
-                  <div
-                    key={player.id}
-                    onClick={() => !isSubbedOut && handleSubstituteClick(side, player.id)}
-                    className={`p-1.5 rounded transition ${
-                      isSubbedOut
-                        ? 'bg-surface-1 opacity-50 cursor-not-allowed'
-                        : isSubSelected
-                          ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
-                      <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                      <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
-                      {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
-                      {isSubSelected && <span className="text-blue-300">👆</span>}
-                    </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
-                      <span>M{player.batting.meet}</span>
-                      <span>P{player.batting.power}</span>
-                      <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
-                    </div>
-                  </div>
-                );
-              })}
+            <BenchList team={team} side={side} selectedSubstitute={selectedSubstitute}
+              handleSubstituteClick={handleSubstituteClick} getPositionColor={getPositionColor} />
           </div>
         )}
       </div>

@@ -14,8 +14,7 @@ import { createDefaultPlayers, createAwayPlayers, createHomeBench, createAwayBen
  *   setInningScores, setExtraInningScores, setCurrentInningScore,
  *   setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
  *   setGameLog, setLastResult, setStatistics, setRecentVelocities,
- *   setHomeTeam, setAwayTeam, setCurrentStamina,
- *   setBatterStats, setPitcherStats, setCatcherStats
+ *   setHomeTeam, setAwayTeam, setCurrentStamina
  *
  * ⚠ かつてここに打球統計4種（battedBall*Stats）のリセットが52行あったが、
  *    **その state は一度も描画されていなかった**ので App.jsx ごと除去した
@@ -31,8 +30,7 @@ export function executeResetGame(ctx) {
     setInningScores, setExtraInningScores, setCurrentInningScore,
     setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
     setGameLog, setLastResult, setStatistics, setRecentVelocities,
-    setHomeTeam, setAwayTeam, setCurrentStamina,
-    setBatterStats, setPitcherStats, setCatcherStats
+    setHomeTeam, setAwayTeam, setCurrentStamina
   } = ctx;
 
   // 交代処理中フラグをクリア
@@ -79,32 +77,6 @@ export function executeResetGame(ctx) {
       setCurrentStamina(homePitcher.pitching.stamina);
     }
   }, 100);
-  setBatterStats({
-    plateAppearances: 0,
-    atBats: 0,
-    hits: 0,
-    homeruns: 0,
-    walks: 0,
-    strikeouts: 0,
-    totalBases: 0,
-    stolenBases: 0,
-    caughtStealing: 0
-  });
-  setPitcherStats({
-    pitches: 0,
-    outs: 0,
-    strikeouts: 0,
-    walks: 0,
-    runsAllowed: 0,
-    errors: 0,
-    wildPitches: 0,
-    doublePlay: 0
-  });
-  setCatcherStats({
-    stolenBasesAllowed: 0,
-    caughtStealing: 0,
-    wildPitchesBlocked: 0
-  });
 }
 
 /**
