@@ -7,6 +7,18 @@ import { getPitchTypeName } from '../../season/yearProgressionSystem.js';
 import { AbilityRadar, teamRadarAxes } from '../AbilityRadar.jsx';
 import { overallRating } from '../AbilityValue.jsx';
 
+// 行の列幅は1箇所で決める。⚠ **表を二重に作らないこと**——ここを直せば
+// スタメン・控え・先発投手選択・相手控え投手の4種の行が同時に揃う。
+// 以前は 名前が `4rem` と `3.5rem`、球速・制球は幅指定なしで、
+// 桁数（2桁/3桁）や名前の文字数で縦の位置がずれていた。
+const COL = {
+  name: 'w-16 shrink-0 truncate',        // 選手名（4rem）。溢れたら「…」
+  age: 'w-5 shrink-0 text-right',        // 年齢（2桁）
+  velo: 'w-12 shrink-0 text-right',      // 球速（3桁＋km）
+  stat: 'w-10 shrink-0 text-right',      // 制球など2桁の能力値
+  line: 'w-24 shrink-0 text-right',      // 防御率＋勝敗
+};
+
 const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher, handleGameChoice, setShowGameChoiceModal, tournamentInfo }) => {
   const [swapTarget, setSwapTarget] = useState(null);
   const [selectedBench, setSelectedBench] = useState(null);
@@ -128,12 +140,14 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
     const ratio = Math.min(1, f / 150);
     const barW = Math.round(ratio * width);
     const barColor = f >= 100 ? 'bg-red-500' : f >= 80 ? 'bg-orange-400' : f >= 60 ? 'bg-yellow-400' : f >= 40 ? 'bg-green-400' : 'bg-green-600';
+    // ⚠ 疲労100超の「⚠」は条件付きなので、**外枠の幅を固定**しないと
+    //    その行だけ以降の列が右へずれる。バーの右に警告用の場所を常に取る。
     return (
-      <span className="shrink-0 flex items-center gap-0.5" title={`疲労: ${f}`}>
-        <span className="relative bg-gray-700 rounded-sm overflow-hidden" style={{ width, height: 5 }}>
+      <span className="shrink-0 flex items-center gap-0.5" style={{ width: width + 14 }} title={`疲労: ${f}`}>
+        <span className="relative bg-gray-700 rounded-sm overflow-hidden shrink-0" style={{ width, height: 5 }}>
           <span className={`absolute left-0 top-0 h-full rounded-sm ${barColor}`} style={{ width: barW }} />
         </span>
-        {f >= 100 && <span className="text-xs text-red-400">⚠</span>}
+        <span className="text-xs text-red-400 w-3 text-center">{f >= 100 ? '⚠' : ''}</span>
       </span>
     );
   };
@@ -188,8 +202,8 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
       >
         <span className={`w-4 text-center font-mono shrink-0 text-xs ${isSwapCandidate ? 'text-blue-400' : 'text-gray-400'}`}>{order}</span>
         <PosBadge pos={pos} />
-        <span className="font-bold text-white truncate shrink-0 text-xs" style={{width:'4rem'}}>{player.name}</span>
-        <span className="text-xs text-gray-400 shrink-0 w-4 text-right">{player.age || ''}</span>
+        <span className={`font-bold text-white text-xs ${COL.name}`}>{player.name}</span>
+        <span className={`text-xs text-gray-400 ${COL.age}`}>{player.age || ''}</span>
         <span className={`shrink-0 text-xs ${CONDITION_COLORS[cond]}`}>{CONDITION_ICONS[cond]}</span>
         <BatsLabel bats={player.batting?.bats || 'right'} />
         {pos !== 'pitcher' && <FatigueBar fatigue={player.fatigue} />}
@@ -199,7 +213,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         })()}
         <span className="flex-1" />
         {pos === 'pitcher' ? (
-          <span className="text-xs text-gray-300 font-mono">{player.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
+          <span className={`text-xs text-gray-300 font-mono ${COL.velo}`}>{player.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
         ) : <BattingStats player={player} />}
         {isUser && isSelected && pos !== 'pitcher' && (
           <button onClick={(e) => { e.stopPropagation(); }} className="btn-warn shrink-0 px-1 py-0.5 text-xs rounded ml-0.5">交代</button>
@@ -231,8 +245,8 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
       }`}
     >
       <PosBadge pos={player.position} />
-      <span className="font-bold text-white shrink-0 truncate text-xs" style={{width:'4rem'}}>{player.name}</span>
-      <span className="text-xs text-gray-400 shrink-0 w-4 text-right">{player.age || ''}</span>
+      <span className={`font-bold text-white text-xs ${COL.name}`}>{player.name}</span>
+      <span className={`text-xs text-gray-400 ${COL.age}`}>{player.age || ''}</span>
       <span className={`shrink-0 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
         {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
       </span>
@@ -258,35 +272,60 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         <span className={`px-1 py-0.5 rounded font-bold ${pitcher.physical?.throws === 'left' ? 'bg-blue-600/80 text-white' : 'bg-orange-600/80 text-white'}`}>
           {pitcher.physical?.throws === 'left' ? '左' : '右'}
         </span>
-        <span className="text-white truncate font-bold" style={{maxWidth:'3.5rem'}}>{pitcher.name}</span>
-        {showRole && role && <span className="text-xs px-0.5 rounded bg-gray-700 text-gray-300">{roleLabel[role] || role}</span>}
+        <span className={`text-white font-bold ${COL.name}`}>{pitcher.name}</span>
+        {/* ⚠ ロール枠は**中身が無くても場所を空けておく**。条件付きで消すと
+            その行だけ球速と防御率が左へ寄って、縦に読めなくなる
+            （CLAUDE.md「フッターを条件付きにしないこと」と同じ理由）。 */}
+        {showRole && (
+          <span className="w-12 shrink-0 text-center">
+            {role ? <span className="text-xs px-0.5 rounded bg-gray-700 text-gray-300">{roleLabel[role] || role}</span> : null}
+          </span>
+        )}
         <FatigueBar fatigue={pitcher.fatigue} width={20} />
-        <span className="text-gray-300">{pitcher.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
+        <span className={`text-gray-300 ${COL.velo}`}>{pitcher.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
         <span className="flex-1" />
-        {era && <span className="text-gray-400">{era} {ps.wins||0}勝{ps.losses||0}敗{(ps.saves||0) > 0 ? ` ${ps.saves}S` : ''}</span>}
+        {era && <span className={`text-gray-400 ${COL.line}`}>{era} {ps.wins||0}勝{ps.losses||0}敗{(ps.saves||0) > 0 ? ` ${ps.saves}S` : ''}</span>}
       </div>
     );
   };
 
+  // ⚠ **3段（ヘッダー / 本文 / フッター）の flex 列にして、スクロールするのは本文だけにする。**
+  //    以前はカードの高さが中身なりに伸び、実測で自然高 **1060px**。1536×730 では
+  //    「試合采配 / 試合スキップ」が **y=825〜879** と画面外に出ていて、
+  //    1シーズン75回、毎回スクロールして次に押すものを探させていた。
+  //    ⚠ 本文には `min-h-0` が要る——無いと flex 子要素が親をはみ出してフッターが押し出され、
+  //      直したつもりで元に戻る（CLAUDE.md「flex内スクロール領域には必ず付ける」）。
+  //    ⚠ この画面には自動フィットの zoom が掛からない（`data-fit-height` を持たない）ので、
+  //      高さは自前で閉じること。
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto">
-      <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-4 max-w-5xl w-full mx-4 shadow-2xl border border-gray-600/50 my-4">
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-lg font-bold text-white">{formatDate(seasonData.currentDate)} の試合</h2>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+      {/* ⚠ `tabular-nums` はカードの根に1つだけ置く。継承するので全ての数字が揃い、
+          行を足すたびに付け忘れる事故が起きない（CLAUDE.md の「表自身に付ける」と同じ理由）。
+          日本語の選手名は数字を含まないので影響しない。 */}
+      <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl max-w-5xl w-full max-h-full flex flex-col shadow-2xl border border-gray-600/50 tabular-nums">
+        {/* ヘッダー（固定） */}
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-700">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-white whitespace-nowrap">{formatDate(seasonData.currentDate)} の試合</h2>
             {isTournament && tournamentInfo.title && (
-              <div className={`text-sm font-bold ${tournamentInfo.titleColor || 'text-yellow-400'}`}>{tournamentInfo.title}{tournamentInfo.subtitle ? ` - ${tournamentInfo.subtitle}` : ''}</div>
+              <div className={`text-sm font-bold truncate ${tournamentInfo.titleColor || 'text-yellow-400'}`}>{tournamentInfo.title}{tournamentInfo.subtitle ? ` - ${tournamentInfo.subtitle}` : ''}</div>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <span className={`font-bold ${isHome ? 'text-blue-400' : 'text-red-400'}`}>{isHome ? '🏠' : '✈️'} {userTeamName}</span>
-            <span className="text-xl text-gray-400 font-bold">VS</span>
-            <span className={`font-bold ${!isHome ? 'text-blue-400' : 'text-red-400'}`}>{!isHome ? '🏠' : '✈️'} {opponentName}</span>
+          {/* ⚠ チーム名だけを伸縮させる（`truncate min-w-0`）。長い名前に押されて
+              VS が折り返すと、ヘッダーが2段になって本文の高さを食う。 */}
+          <div className="flex items-center gap-3 min-w-0 flex-1 justify-center">
+            <span className={`font-bold truncate min-w-0 text-right ${isHome ? 'text-blue-400' : 'text-red-400'}`}>{isHome ? '🏠' : '✈️'} {userTeamName}</span>
+            <span className="text-xl text-gray-400 font-bold shrink-0">VS</span>
+            <span className={`font-bold truncate min-w-0 ${!isHome ? 'text-blue-400' : 'text-red-400'}`}>{!isHome ? '🏠' : '✈️'} {opponentName}</span>
           </div>
-          <button onClick={() => setShowGameChoiceModal(false)} className="text-gray-400 hover:text-white text-lg px-2">✕</button>
+          <button onClick={() => setShowGameChoiceModal(false)} className="text-gray-400 hover:text-white text-lg px-2 shrink-0">✕</button>
         </div>
 
+        {/* 本文（ここだけスクロールする） */}
+        {/* ⚠ `flex-1`(= flex:1 1 0%) ではなく `flex-auto`(= 1 1 auto) を使う。
+            カードの高さは中身で決まるので、basis 0% だと**中身が短いときに本文が潰れる**。
+            auto なら「中身なりの高さ。溢れたら縮んでスクロール」になる。 */}
+        <div className="flex-auto min-h-0 overflow-y-auto px-4 py-3">
         <div className="grid grid-cols-2 gap-3">
           {/* === 左カラム: 自チーム === */}
           <div className="space-y-2">
@@ -312,12 +351,13 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                       <span className={`text-xs px-1 py-0.5 rounded font-bold ${pitcher.physical?.throws === 'left' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'}`}>
                         {pitcher.physical?.throws === 'left' ? '左' : '右'}
                       </span>
-                      <span className="text-white font-bold truncate" style={{maxWidth:'4rem'}}>{pitcher.name}</span>
-                      <span className="text-xs text-gray-400">{pitcher.age}</span>
+                      <span className={`text-white font-bold ${COL.name}`}>{pitcher.name}</span>
+                      <span className={`text-xs text-gray-400 ${COL.age}`}>{pitcher.age}</span>
                       <FatigueBar fatigue={f} width={24} />
-                      <span className="text-xs text-gray-300">{pitcher.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
-                      <span className="text-xs text-gray-300">制<span className="text-blue-300">{pitcher.pitching?.control || 0}</span></span>
-                      {era && <span className="text-xs text-gray-400 ml-auto">{era} {ps.wins||0}勝{ps.losses||0}敗</span>}
+                      <span className={`text-xs text-gray-300 ${COL.velo}`}>{pitcher.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
+                      <span className={`text-xs text-gray-300 ${COL.stat}`}>制<span className="text-blue-300">{pitcher.pitching?.control || 0}</span></span>
+                      <span className="flex-1" />
+                      {era && <span className={`text-xs text-gray-400 ${COL.line}`}>{era} {ps.wins||0}勝{ps.losses||0}敗</span>}
                     </div>
                   );
                 })}
@@ -464,16 +504,19 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             </div>
           </div>
         </div>
+        </div>
 
-        {/* ボタン */}
-        <div className="flex gap-3 justify-center mt-4">
+        {/* フッター（固定）＝この画面で「次に押すもの」。常に見えていること */}
+        {/* ⚠ 手書きの `bg-gray-700 …` だったので `.btn-secondary` へ寄せた。
+            `.btn-primary` はこの階層に1つ（試合采配）だけ。 */}
+        <div className="shrink-0 flex gap-3 justify-center px-4 py-3 border-t border-gray-700">
           <button onClick={() => handleGameChoice('manage')}
             className="group btn-primary py-3 px-8 rounded-xl transition-all text-lg shadow-lg active:scale-95 flex items-center gap-2"
           >
             <span className="text-xl group-hover:scale-110 transition-transform">🎮</span>試合采配
           </button>
           <button onClick={() => handleGameChoice('skip')}
-            className="bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white font-bold py-3 px-8 rounded-xl transition-all text-lg active:scale-95 border border-gray-600/50 hover:border-gray-500 flex items-center gap-2"
+            className="btn-secondary py-3 px-8 rounded-xl transition-all text-lg active:scale-95 flex items-center gap-2"
           >
             <span className="text-xl">⏭</span>試合スキップ
           </button>
