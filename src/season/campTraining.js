@@ -3,7 +3,7 @@
 // メイン練習・サブ練習・チーム一括実行
 // ============================================================
 
-import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor } from './growthUtils.js';
+import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor, dexterityMult, dexterityShift } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 
@@ -95,7 +95,7 @@ export const TRAINING_MENUS = {
   newpitch: {
     name: '新球種習得',
     icon: '✨',
-    description: '新しい変化球を覚える（投手のみ）',
+    description: '新しい変化球を覚える（投手のみ・器用さで習得レベルと失敗率が変わる）',
     targets: ['newpitch'],
     category: 'pitching'
   },
@@ -195,13 +195,13 @@ export const SUB_TRAINING_MENUS = {
   form_change: {
     name: 'フォーム改造',
     icon: '🔄',
-    description: '投球フォーム変更に挑戦（成功20%: フォーム変更+能力UP / 失敗: フォーム変更+制球低下）',
+    description: '投球フォーム変更に挑戦（成功20%・器用さで上下: フォーム変更+能力UP / 失敗: 制球低下）',
     targets: ['control', 'meet'],
   },
   switch_hit: {
     name: '打席変更',
     icon: '↔️',
-    description: '打席変更に挑戦（失敗でミート低下リスク）',
+    description: '打席変更に挑戦（器用さで成功率が上下・失敗でミート低下リスク）',
     targets: ['switch_bats'],
   },
   breaking: {
@@ -213,7 +213,7 @@ export const SUB_TRAINING_MENUS = {
   subposition: {
     name: 'サブポジ練習',
     icon: '🔀',
-    description: '指定ポジションの守備練習（適正大幅UP）',
+    description: '指定ポジションの守備練習（適正大幅UP・器用さで伸びが変わる）',
     targets: ['subposition'],
   },
   clead_study: {
@@ -237,7 +237,7 @@ export const SUB_TRAINING_MENUS = {
   newpitch: {
     name: '新球種習得',
     icon: '✨',
-    description: '新球種習得に挑戦（成功率12%、ランダム球種）',
+    description: '新球種習得に挑戦（成功率12%・器用さとフォーム適性で上昇、ランダム球種）',
     targets: ['newpitch'],
   },
   spin_analysis: {
@@ -433,7 +433,10 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           : forms.filter(f => f !== currentForm)[Math.floor(Math.random() * (forms.length - 1))];
         // 成功/失敗にかかわらずフォームは変わる
         player.pitching.form = targetForm;
-        if (Math.random() < 0.20) {
+        // ⚠ 器用さで成功率が動く（基準20%・器用さ50で据え置き）。
+        //    実測の p5(27)→10.8% / p95(72)→28.8% / 最高87→34.8%
+        const formRate = 0.20 * dexterityMult(player, 1.0);
+        if (Math.random() < formRate) {
           // 成功: フォーム変更 + 制球+3~5 大幅アップ
           growthReport.push({ statName: 'フォーム改造成功', before: FORM_SHORT[currentForm], after: FORM_SHORT[targetForm], growth: 0, isAwakening: true });
           const bonus = Math.floor(Math.random() * 3) + 3;
@@ -477,7 +480,10 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       // ハイリスクハイリターン: switch→片打は30%、片打→switchは15%、片打→反対は20%
       const isToSwitch = targetBats === 'switch';
       const isFromSwitch = currentBats === 'switch';
-      const successRate = isToSwitch ? 0.15 : isFromSwitch ? 0.30 : 0.20;
+      // ⚠ 器用さで成功率が動く（器用さ50で従来どおり）。
+      //    両打ちへの転向は「新しい形を身につける」の最たるものなので幅は広め
+      const successRate = (isToSwitch ? 0.15 : isFromSwitch ? 0.30 : 0.20)
+        * dexterityMult(player, 0.9);
       if (Math.random() < successRate) {
         if (!player.batting) player.batting = {};
         player.batting.bats = targetBats;
@@ -585,7 +591,10 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const newType = candidates[Math.floor(Math.random() * candidates.length)];
           const formAff = getFormPitchAffinity(playerForm, newType);
           const baseRate = 0.12;
-          const successRate = formAff ? Math.min(0.25, baseRate + formAff.affinity) : baseRate;
+          // ⚠ フォーム適性を足した**後**に器用さを掛ける。先に掛けると
+          //    上限 0.25 のクランプで器用さが消える
+          const successRate = (formAff ? Math.min(0.25, baseRate + formAff.affinity) : baseRate)
+            * dexterityMult(player, 0.8);
           if (Math.random() < successRate) {
             const level = 20 + Math.floor(Math.random() * 20);
             if (!player.pitching.arsenal) player.pitching.arsenal = [{ type: 'straight', level: 50 }];
@@ -720,7 +729,10 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       }
       if (picked) {
         // 3倍成長: 元(50%で0,30%で3,20%で5) → 常に成長、9-15程度
-        const baseGain = Math.floor(Math.random() * 7) + 9; // 9-15
+        // ⚠ 器用さで伸び幅が動く（器用さ50で従来どおり 9-15）。
+        //    新しい守備位置を覚えるのは器用さの仕事。幅は控えめ（毎クール掛かるため）
+        const baseGain = Math.max(1, Math.round(
+          (Math.floor(Math.random() * 7) + 9) * dexterityMult(player, 0.4)));
         const old = player.positionFitness[picked] || 0;
         player.positionFitness[picked] = Math.min(100, old + baseGain);
         const actual = player.positionFitness[picked] - old;
@@ -956,9 +968,16 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const affinityBonus = formBonus + (hasSecondAffinity ? 0.08 : 0);
       // 基本: 覚醒10%, 大成功15%, 成功20%, 習得25%, 失敗30%
       // 適性ボーナス分だけ失敗率が減り、成功率に上乗せ
-      const failRate = Math.max(0.05, 0.30 - affinityBonus);
+      // ⚠ ここに `failRate = max(0.05, 0.30 - affinityBonus)` があったが、
+      //    **計算するだけで一度も使われていなかった**（実際の失敗率は
+      //    `1 - (0.45 + learnedRate)` ＝ `0.30 - affinityBonus*0.5` で決まる）。
+      //    適性ボーナスの効きを読み違える元なので除去した
       const learnedRate = 0.25 + affinityBonus * 0.5;
-      const roll = Math.random();
+      // ⚠ 器用さは**抽選そのものを上へずらす**（器用さ50で従来どおり）。
+      //    `affinityBonus` は失敗↔習得(Lv1-20)しか動かさないので、そこへ足すと
+      //    「器用な投手は覚えが早い＝最初から高いレベル」が表現できない。
+      //    実測 器用さ87 で 覚醒10%→16% / 失敗30%→24%、器用さ5 で 覚醒2.8% / 失敗37%
+      const roll = Math.random() - dexterityShift(updatedPlayer, 0.08);
       const outcome = roll < 0.10 ? 'awakening'
         : roll < 0.25 ? 'great_success'
         : roll < 0.45 ? 'success'

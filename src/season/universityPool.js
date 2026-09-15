@@ -12,6 +12,7 @@ import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionF
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
+import { dexterityMult } from './growthUtils.js';
 import { STAT_GROWTH, growthThreshold, growthDecayRate, stochasticRound } from './growthSystem.js';
 import { generateHandedness } from '../utils/handedness.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
@@ -1115,7 +1116,9 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
     const arsenal = player.pitching?.arsenal || [];
     const existingTypes = arsenal.map(p => p.type);
     const hasNewPitchChance = has('technique') || has('versatility');
-    const newPitchRate = hasNewPitchChance ? 0.15 : 0.05;
+    // ⚠ 器用さも掛ける（器用さ50で従来どおり）。社会人・独立の
+    //    `tryLearnNewPitch` と揃えること——片方だけだと進路で意味が変わる
+    const newPitchRate = (hasNewPitchChance ? 0.15 : 0.05) * dexterityMult(player, 0.5);
     if (Math.random() < newPitchRate) {
       const form = player.pitching?.form || 'overhand';
       const affinityTypes = UNI_FORM_PITCH_AFFINITY[form] || [];
@@ -1153,7 +1156,9 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
         const targets = weak.length > 0 ? weak : nonMain;
         const picked = targets[Math.floor(Math.random() * targets.length)];
         const old = player.positionFitness[picked] || 0;
-        const gain = Math.floor(Math.random() * 8) + (hasSubPosChance ? 7 : 4);
+        // ⚠ キャンプの `subposition` と同じ幅(0.4)にすること
+        const gain = Math.max(1, Math.round(
+          (Math.floor(Math.random() * 8) + (hasSubPosChance ? 7 : 4)) * dexterityMult(player, 0.4)));
         player.positionFitness[picked] = Math.min(100, old + gain);
       }
       syncPositionToFitness(player);

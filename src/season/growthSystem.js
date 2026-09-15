@@ -7,7 +7,7 @@
 // ヘルパーのみに依存し、他の年間進行ロジックには依存しない（循環参照なし）。
 // ============================================================
 
-import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getRecoveryAgeBase, getStatPath, getStatName, getNestedValue, setNestedValue, MUSCLE_STATS, DEXTERITY_STATS, physiqueMultFor } from './growthUtils.js';
+import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getRecoveryAgeBase, getStatPath, getStatName, getNestedValue, setNestedValue, MUSCLE_STATS, DEXTERITY_STATS, physiqueMultFor, dexterityMult } from './growthUtils.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY } from '../utils/constants.js';
 
@@ -112,8 +112,12 @@ const ALL_PITCH_TYPES = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot
 function tryLearnNewPitch(player, categoryKey, discipline) {
   const arsenal = player.pitching?.arsenal;
   if (!arsenal) return;
-  // プロ意識が高いほど新しい球に手を出す（意識50で基準）
-  const rate = (NEW_PITCH_RATE[categoryKey] ?? 0.05) * (0.5 + discipline / 100);
+  // プロ意識が高いほど新しい球に手を出す（意識50で基準）。
+  // ⚠ **器用さも掛ける**（器用さ50で従来どおり）。キャンプ側だけに入れると
+  //    「キャンプでだけ器用さが効く」ことになり、背景のCPUと食い違う。
+  //    幅が控えめ(0.5)なのは**毎年掛かる**ため（`physiqueMultFor` の w と同じ理由）
+  const rate = (NEW_PITCH_RATE[categoryKey] ?? 0.05) * (0.5 + discipline / 100)
+    * dexterityMult(player, 0.5);
   if (Math.random() >= rate) return;
   const have = new Set(arsenal.map(a => a.type));
   const affinity = FORM_PITCH_SYNERGY[player.pitching?.form] || [];

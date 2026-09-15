@@ -122,6 +122,18 @@ node tools/sim-harness/spin-probe.mjs --season   # ＋全投手の回転数を�
 2つが食い違うときは縦断が正しい。⚠ 縦断でも標本が小さいと符号が反転する
 （129人では断面と同じ答えが出て、1150人では逆になった）。
 
+### dexterity-probe.mjs — 器用さの効き（プローブ / 合否なし）
+
+```bash
+node tools/sim-harness/dexterity-probe.mjs 20000
+```
+
+器用さ(dexterity)が フォーム改造 / 球種習得 / 打席変更 / サブポジ習得 に
+どれだけ効くかを出す。⚠ **2つを同時に見ること**——①選手間で差が付いているか、
+②リーグ全体の習得率が動いていないか（動くと球種数・左右比率が釣られる）。
+⚠ ②の基準は**器用さ50の実測値**を取る（倍率1.0＝従来の挙動）。定数を手で書くと、
+フォーム適性が乗っている経路で比較にならない。
+
 ### npb-career-probe.mjs / npb-rookie-probe.mjs — 教え子のプロキャリア
 
 ```bash
@@ -149,6 +161,7 @@ tools/sim-harness/
   peak-age-probe.mjs      完成年齢プローブ（断面と縦断を並べる）
   npb-career-probe.mjs    教え子のプロキャリア（npbAlumni の母集団）
   npb-rookie-probe.mjs    指名クラス全体の影のNPB（1年目・下積みの長さ）
+  dexterity-probe.mjs     器用さの効き（フォーム改造・球種習得・打席変更・サブポジ）
   lib/
     bootstrap.mjs         window/alert/localStorage のNodeスタブ（最初にimport必須）
     report.mjs            PASS/FAIL整形・帯チェック

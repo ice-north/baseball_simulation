@@ -259,6 +259,14 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                 <div className="border-t border-gray-600 mt-2 pt-2">
                   <StatBar label="体幹" value={player.physical?.muscle ?? 50} />
                   <StatBar label="器用さ" value={player.physical?.dexterity ?? 50} />
+                  {/* 器用さは「新しい形を身につけられるか」の物差し。バーだけ出しても
+                      何に効くか分からないので、キャンプで実際に選ぶ4つを名前で出す
+                      （出どころ(deception)に短い説明を添えてあるのと同じ扱い）。 */}
+                  <div className="text-xs text-gray-300 mt-1 leading-snug">
+                    {(player.physical?.dexterity ?? 50) >= 65 ? '器用。フォーム改造・球種習得・打席変更・サブポジ習得が決まりやすい'
+                      : (player.physical?.dexterity ?? 50) <= 35 ? '不器用。フォーム改造・球種習得・打席変更・サブポジ習得は決まりにくい'
+                      : '新しい形（フォーム・球種・打席・守備位置）の覚えやすさ'}
+                  </div>
                 </div>
                 <div className="border-t border-gray-600 mt-2 pt-2 text-xs text-gray-300 space-y-1">
                   <div>体格: <span className="text-white">{player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}</span></div>
