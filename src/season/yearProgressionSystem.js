@@ -25,7 +25,7 @@ import { addToRoster, replaceRoster } from '../state/roster.js';
 // 従来 export されていた3関数は互換性維持のため再エクスポートする。
 import { updateGrowthModifiers, applyFreeAgentGrowth, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts } from './growthSystem.js';
 // CPU並行世界のロスター管理（大学卒業/新入生・社会人/独立の戦力外/補充）は rosterProgression.js に抽出
-import { processUniversityTeamGraduation, releaseCPUCorporatePlayers, replenishCorporateRosters, replenishIndependentLeagueRosters } from './rosterProgression.js';
+import { processUniversityTeamGraduation, releaseCPUCorporatePlayers, replenishCorporateRosters, replenishIndependentLeagueRosters, buildRecruitNorms, abilityZ } from './rosterProgression.js';
 export { updateGrowthModifiers, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts };
 import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
@@ -1266,14 +1266,14 @@ export function advanceToNextYear(seasonData, allTeams) {
 
     if (clubCandidatesRaw.length > 0) {
       // クラブ向け採点: 能力 + プロ意識 + 成長率（クラブはdisciplineが成長を左右するため）
+      // ⚠ **能力は共有の `abilityZ` を使うこと**。ここも 投手 `球速×0.5+制球×0.3+…`
+      //    （典型97）対 野手の加重平均（典型38）と投打で別スケールで、候補を
+      //    この順に並べて空きクラブへ詰めるので**投手から先に入っていた**。
+      const clubNorms = buildRecruitNorms(clubCandidatesRaw);
       const scoreForClub = (p) => {
-        const abil = p.position === 'pitcher'
-          ? (p.pitching?.velocity || 130) * 0.5 + (p.pitching?.control || 0) * 0.3 + (p.pitching?.stamina || 0) * 0.2
-          : (p.batting?.meet || 0) * 0.35 + (p.batting?.power || 0) * 0.25
-            + (p.batting?.eye || 0) * 0.15 + (p.physical?.speed || 0) * 0.15 + (p.fielding?.defense || 0) * 0.10;
-        const disc = p.personality?.discipline ?? 50;
-        const gp   = p.growthPotential || 1.0;
-        return abil * 0.50 + disc * 0.35 + Math.max(0, (gp - 1.0)) * 100 * 0.15;
+        const disc = ((p.personality?.discipline ?? 50) - 50) / 18;
+        const gp   = Math.max(0, (p.growthPotential || 1.0) - 1.0) / 0.2;
+        return abilityZ(p, clubNorms) * 0.50 + disc * 0.35 + gp * 0.15;
       };
 
       // プロ意識が一定以上の選手のみクラブへ（あまりにも低い選手は野球から離れる）
@@ -1286,6 +1286,7 @@ export function advanceToNextYear(seasonData, allTeams) {
         .sort((a, b) => a.count - b.count);
 
       const CLUB_ROSTER_CAP = 35;
+      const CLUB_PITCHER_CAP = 0.45;   // これ以上の投手比のクラブには投手を入れない
       // 投手/野手バランスチェック用
       const getClubPitcherRatio = (clubInfo) => {
         const total    = clubInfo.team.players?.length || 0;
@@ -1296,13 +1297,21 @@ export function advanceToNextYear(seasonData, allTeams) {
       for (const p of clubCandidates) {
         // 人数が最も少ないクラブを選択（投手/野手バランスも考慮）
         const needsPitcher = sortedClubs.some(c => c.count < CLUB_ROSTER_CAP && getClubPitcherRatio(c) < 0.30);
-        const targetClub = sortedClubs.find(c => {
+        // ⚠ **フォールバックでも投手比の上限は外さないこと**。以前は
+        //    `|| sortedClubs.find(c => c.count < CLUB_ROSTER_CAP)` と無条件だったので、
+        //    **全クラブが45%を超えた瞬間に門番が効かなくなる**一方通行のラチェットに
+        //    なっていた（実測 クラブの投手比 37%→63%、クラブが投手の吸い込み口）。
+        //    上限に触れて入れない投手は、クラブにも入らず野球から離れる——
+        //    「最後の受け皿」でも受けきれない、が正しい形。
+        //    外していいのは「投手不足クラブには野手を回さない」という**優先**の方だけ。
+        const fits = (c, strict) => {
           if (c.count >= CLUB_ROSTER_CAP) return false;
           const ratio = getClubPitcherRatio(c);
-          if (p.position === 'pitcher' && ratio > 0.45) return false; // 投手過多クラブへは入れない
-          if (p.position !== 'pitcher' && needsPitcher && ratio < 0.25) return false; // 投手不足クラブには野手より投手を
+          if (p.position === 'pitcher' && ratio > CLUB_PITCHER_CAP) return false;
+          if (strict && p.position !== 'pitcher' && needsPitcher && ratio < 0.25) return false;
           return true;
-        }) || sortedClubs.find(c => c.count < CLUB_ROSTER_CAP);
+        };
+        const targetClub = sortedClubs.find(c => fits(c, true)) || sortedClubs.find(c => fits(c, false));
 
         if (!targetClub || !targetClub.team.players) continue;
         p._nextYearTeam = targetClub.name;
@@ -1326,12 +1335,12 @@ export function advanceToNextYear(seasonData, allTeams) {
     }
     const poolCap = seasonData.settings?.universityMode ? 300 : 400;
     if (releasedPlayersPool.length > poolCap) {
-      const scoredPool = releasedPlayersPool.map((p, i) => ({
-        p, i,
-        s: p.position === 'pitcher'
-          ? (p.pitching?.velocity || 130) + (p.pitching?.control || 0) * 0.5
-          : (p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) * 0.3,
-      })).sort((a, b) => b.s - a.s).slice(0, poolCap);
+      // ⚠ **ここも投打で別スケールだった**。旧式は 投手 `球速+制球×0.5`（典型155）
+      //    対 野手 `ミート+パワー+走×0.3`（典型90）で、400人へ削るたびに
+      //    **投手だけが残り野手が捨てられて**いた。共有の `abilityZ` で揃える。
+      const poolNorms = buildRecruitNorms(releasedPlayersPool);
+      const scoredPool = releasedPlayersPool.map((p, i) => ({ p, i, s: abilityZ(p, poolNorms) }))
+        .sort((a, b) => b.s - a.s).slice(0, poolCap);
       const keep = new Set(scoredPool.map(e => e.i));
       const trimmed = releasedPlayersPool.filter((_, i) => keep.has(i));
       replaceReleasedPool(trimmed);

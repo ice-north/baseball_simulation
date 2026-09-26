@@ -18,7 +18,132 @@ import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool, replaceReleasedPool, removeFromReleasedPoolByIds } from '../state/pools.js';
 import { addToRoster, replaceRoster } from '../state/roster.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
-import { homeBlockOf, blockOfCorporate, HOME_BONUS, HOME_WINDOW } from '../data/regions.js';
+import { homeBlockOf, blockOfCorporate, HOME_WINDOW } from '../data/regions.js';
+import { calcPlayerOverall } from './dispatchSystem.js';
+
+// ============================================================
+// プールからの補充の物差し（社会人・独立で共有）
+//
+// ⚠ **投打で別スケールの素点を使わないこと**。以前は2つの補充関数が
+//    それぞれ独自の式を持っており、球速(130台)が正規化されずに乗るので
+//    投手の典型値97〜105 対 野手38〜40 と**2.5倍の開き**があった。
+//    プールから補充するたび投手が先に取られ、12年で
+//    企業 44.5%→84.1% / 独立 40.5%→**92.6%** が投手になっていた。
+//    （ポジション補正 ±20/+15 では60点差を覆せず、独立にはそれすら無かった）
+// ⚠ 能力は `calcPlayerOverall` ひとつだけを使う。あれは投手側を実測の平均とσで
+//    野手スケールへ平行移動してあり、**この作品で唯一 投打を比べられる絶対値**
+//    （`dispatchSystem.js`。新しい係数を作らないこと——独自に持ったのが原因そのもの）。
+// ⚠ 物差し（平均・σ）は**候補プールから毎回作る**。固定の表に持つと生成側を
+//    触るたびに腐る（`scoutTools.buildToolNorms` と同じ理由）。
+// ============================================================
+
+/** この作品の守備位置キー。⚠ `first_base` / `shortstop` などは**存在しない** */
+const RECRUIT_POS_KEYS = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+
+/** ロスターの投手需要（トライアウトの `buildPositionBag` と同じ 10/24） */
+const PITCHER_TARGET = 10 / 24;
+/** 投打比のズレを z に変える係数。ズレ0.10 で ±0.5σ */
+const RATIO_Z_W = 5.0;
+/** そのポジションが不在 / 1人だけ のときの上積み（z） */
+const POS_MISSING_Z = 0.9;
+const POS_THIN_Z = 0.55;
+/** 地元の上積み（z）。⚠ 加点は「他の項の大きさ」ではなく**能力の幅**で決めること */
+const HOME_Z = 0.25;
+/** 1人選ぶときに見る窓。能力順に並んだ中の上位N人からポジション需要で選び直す */
+const PICK_WINDOW = 24;
+/** 放出候補に挙げる総合力の床。チーム所属選手の平均が約40なので、下位3割あたり */
+const RELEASE_ABILITY_FLOOR = 36;
+
+/** ポジション群。`playerValue.valueGroup` と同じ切り方（捕手は別に見る） */
+const recruitGroup = (p) =>
+  p?.position === 'pitcher' ? 'P' : p?.position === 'catcher' ? 'C' : 'F';
+
+/**
+ * 候補プールから**群ごとに**能力の平均・σを作る。
+ *
+ * ⚠ **群ごとにすること**。`calcPlayerOverall` は投打で揃えてあるが、その較正の
+ *    母集団は「チームに所属している選手」で、**リリースプール（大学卒業生が主体）
+ *    では揃っていない**（CLAUDE.md の実測: 高校生プールで 投手27.5 対 野手35.5）。
+ *    群をまたいで1本の順位表にすると、能力順に並べた時点で野手が全部先に取られる
+ *    ——実測で補充後のプールが **400名すべて投手**になり、余った投手がクラブへ
+ *    流れて クラブ67.6% / 企業20.3% という逆向きの偏りが出た。
+ * ⚠ 平均・σは**プールから毎回作る**（固定の表に持つと生成側を触るたびに腐る）。
+ */
+export function buildRecruitNorms(pool) {
+  const by = { P: [], C: [], F: [] };
+  for (const p of pool) {
+    const v = calcPlayerOverall(p);
+    if (Number.isFinite(v)) by[recruitGroup(p)].push(v);
+  }
+  const stat = (vals, fallback) => {
+    if (vals.length < 8) return fallback;
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length) || 1;
+    return { mean, sd };
+  };
+  const all = stat([...by.P, ...by.C, ...by.F], { mean: 40, sd: 8 });
+  // 捕手は人数が少ないので、足りなければ野手の物差しを借りる
+  const f = stat(by.F, all);
+  return { P: stat(by.P, all), C: stat(by.C, f), F: f };
+}
+
+export function abilityZ(player, norms) {
+  const n = norms[recruitGroup(player)] || norms.F;
+  return (calcPlayerOverall(player) - n.mean) / n.sd;
+}
+
+/**
+ * C/Dランク向けの将来性寄りの並び。旧 `calcProspectScore` の重み（0.60/0.25/0.15）を
+ * そのまま z の世界へ移したもの。プロ意識 N(50,18) / 成長率は 1.0 からの上振れを見る。
+ */
+function prospectZ(player, norms) {
+  const disc = ((player.personality?.discipline ?? 50) - 50) / 18;
+  const gp = Math.max(0, (player.growthPotential || 1.0) - 1.0) / 0.2;
+  return abilityZ(player, norms) * 0.60 + disc * 0.25 + gp * 0.15;
+}
+
+/** ロスターの野手をポジション別に数える（投手は除く） */
+function rosterPositionCounts(team) {
+  const counts = {};
+  RECRUIT_POS_KEYS.forEach(pos => { counts[pos] = 0; });
+  for (const p of (team.players || [])) {
+    if (p.position === 'pitcher') continue;
+    const pos = p.subPosition || p.position;
+    if (pos in counts) counts[pos]++;
+  }
+  return counts;
+}
+
+/**
+ * 「今このチームに足りているか」を z で返す。
+ * ⚠ 投打の偏りは**連続的に**効かせること。閾値でしか動かないと、境界の内側では
+ *    どれだけ偏っても補正がゼロになり、偏りが戻らない。
+ */
+const scarcityOf = (cnt) => (cnt === 0 ? POS_MISSING_Z : cnt === 1 ? POS_THIN_Z : 0);
+
+function recruitPositionBoost(player, team) {
+  const players = team.players || [];
+  const total = players.length;
+  const pitchers = players.filter(p => p.position === 'pitcher').length;
+  const ratio = total > 0 ? pitchers / total : PITCHER_TARGET;
+  const gap = ratio - PITCHER_TARGET;          // + なら投手過多
+  if (player.position === 'pitcher') return -gap * RATIO_Z_W;
+
+  // ⚠ **不在の加点は「野手の中での並べ替え」にしか使わないこと**。守備位置は8つ
+  //    あるので、どのロスターでも必ずどれかが 0〜1人になる。素のまま足すと
+  //    **野手だけが常に加点される**ことになり、投打の釣り合いそのものが野手側へ
+  //    ずれる（実測: 企業 44.5%→19.7% / 独立 40.5%→**9.7%** と逆に振り切れた）。
+  //    そのチームの8ポジションの平均を引いて、合計が0になるようにする。
+  const counts = rosterPositionCounts(team);
+  const meanScarcity =
+    RECRUIT_POS_KEYS.reduce((s, k) => s + scarcityOf(counts[k]), 0) / RECRUIT_POS_KEYS.length;
+  const pos = player.subPosition || player.position;
+  const scarcity = (pos in counts) ? scarcityOf(counts[pos]) : 0;
+  return gap * RATIO_Z_W + (scarcity - meanScarcity);
+}
+
+const homeZ = (player, teamBlock) =>
+  (teamBlock && homeBlockOf(player) === teamBlock) ? HOME_Z : 0;
 
 /**
  * 大学モード: TEAMS_DATA上のチームから4年生を卒業させ、新入生を補充
@@ -398,12 +523,31 @@ export function releaseCPUCorporatePlayers(allTeams, currentYear, excludeTeams =
     const MIN_KEEP = team.independentLeagueId ? 16 : 18;
     if (players.length <= MIN_KEEP) continue;
 
+    // 出場数は**同じ群（投手/野手）の中での相対**で見る。
+    // ⚠ **投手と野手を同じ試合数で測らないこと**。1年の出場は投手が登板数・
+    //    野手が出場試合数で、そもそも桁が違う（実測 平均 投手5.8 対 野手22.8）。
+    //    旧実装の「5試合未満」は野手の 0.9% にしか当たらないのに**投手の59%**に
+    //    当たり、+25 の加点が事実上投手専用になって**放出が投手に偏って**いた
+    //    （在籍30%の投手が流出の50%を占めていた）。
+    //    チーム内の同じ群の中央値を基準にすれば、injection の桁が変わっても腐らない。
+    const gamesOf = (p) => (p.seasonStats?.batting?.games || 0)
+      + (p.seasonStats?.pitching?.gamesStarted || 0)
+      + (p.seasonStats?.pitching?.gamesRelieved || 0);
+    const medianOf = (arr) => {
+      if (!arr.length) return 0;
+      const s = [...arr].sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    };
+    const groupMedian = {
+      P: medianOf(players.filter(p => p.position === 'pitcher').map(gamesOf)),
+      F: medianOf(players.filter(p => p.position !== 'pitcher').map(gamesOf)),
+    };
+
     // 放出スコア: 高いほど放出候補（年齢 + 出場数不足 + 能力低下）
     const scored = players.map(p => {
       const age = p.age || 25;
-      const games = (p.seasonStats?.batting?.games || 0)
-        + (p.seasonStats?.pitching?.gamesStarted || 0)
-        + (p.seasonStats?.pitching?.gamesRelieved || 0);
+      const games = gamesOf(p);
+      const med = groupMedian[p.position === 'pitcher' ? 'P' : 'F'];
       let score = 0;
 
       if (age >= 38) score += 60;
@@ -411,14 +555,19 @@ export function releaseCPUCorporatePlayers(allTeams, currentYear, excludeTeams =
       else if (age >= 34) score += 20;
       else if (age >= 32) score += 8;
 
-      if (games < 5 && age >= 30) score += 25;
-      else if (games < 10 && age >= 28) score += 10;
+      // 中央値が0（成績が入っていない年）は判断材料が無いので加点しない
+      if (med > 0) {
+        if (games < med * 0.30 && age >= 30) score += 25;
+        else if (games < med * 0.60 && age >= 28) score += 10;
+      }
 
-      // 能力低下: ランク基準より大幅に低い選手
-      const ability = p.position === 'pitcher'
-        ? (p.pitching?.velocity || 120) * 0.5 + (p.pitching?.control || 0)
-        : (p.batting?.meet || 0) + (p.batting?.power || 0) * 0.5;
-      if (ability < 55 && age >= 28) score += 12;
+      // 能力低下: 同じ水準の選手より明らかに落ちる選手
+      // ⚠ **ここも投打で別スケールだった**。旧式は 投手 `球速×0.5+制球`（典型110）
+      //    対 野手 `ミート+パワー×0.5`（典型55）で、閾値55は**投手には構造的に
+      //    到達不能**（球速110km でも 55＋制球）。結果、加点は野手にしか乗らず
+      //    **放出が野手に偏って**いた。投打で揃えてある `calcPlayerOverall` を使う
+      //    （この関数の較正母集団は「チームに所属している選手」＝まさにここ）。
+      if (calcPlayerOverall(p) < RELEASE_ABILITY_FLOOR && age >= 28) score += 12;
 
       return { player: p, score };
     });
@@ -477,62 +626,9 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
 
   if (teamsNeedingPlayers.length === 0 || releasedPlayersPool.length === 0) return;
 
-  // 能力スコア（S/A/Bランク: 現在能力重視）
-  const calcAbilScore = (p) => {
-    if (p.position === 'pitcher') {
-      return (p.pitching?.velocity || 130) * 0.5
-           + (p.pitching?.control  || 0)   * 0.3
-           + (p.pitching?.stamina  || 0)   * 0.2;
-    }
-    return (p.batting?.meet     || 0) * 0.35
-         + (p.batting?.power    || 0) * 0.25
-         + (p.batting?.eye      || 0) * 0.15
-         + (p.physical?.speed   || 0) * 0.15
-         + (p.fielding?.defense || 0) * 0.10;
-  };
-
-  // 将来性スコア（C/Dランク: 現在能力 + プロ意識 + 成長率も加味）
-  const calcProspectScore = (p) => {
-    const abil = calcAbilScore(p);
-    const disc = p.personality?.discipline ?? 50;
-    const gp   = p.growthPotential || 1.0;
-    return abil * 0.60 + disc * 0.25 + Math.max(0, (gp - 1.0)) * 100 * 0.15;
-  };
-
-  // ポジション別在籍数マップを取得（0=不在, 1=薄い, 2+=充足）
-  const FIELDER_POSITIONS = ['catcher', 'first_base', 'second_base', 'third_base', 'shortstop', 'left_field', 'center_field', 'right_field'];
-  const getPositionCounts = (team) => {
-    const counts = {};
-    FIELDER_POSITIONS.forEach(pos => { counts[pos] = 0; });
-    (team.players || []).forEach(p => {
-      if (p.position !== 'pitcher') {
-        const pos = p.subPosition || p.position;
-        if (pos in counts) counts[pos]++;
-      }
-    });
-    return counts;
-  };
-
-  // ポジション優先度ブースト（投手/野手比率・不在/薄いポジション補正）
-  const positionBoost = (player, team) => {
-    const total    = (team.players || []).length;
-    const pitchers = (team.players || []).filter(p => p.position === 'pitcher').length;
-    const ratio    = total > 0 ? pitchers / total : 0.35;
-    const TARGET   = 0.35;
-    if (player.position === 'pitcher') {
-      if (ratio < TARGET - 0.05) return 20;   // 投手不足 → 優先
-      if (ratio > TARGET + 0.10) return -20;  // 投手過多 → 抑制
-      return 0;
-    }
-    // 野手
-    if (ratio > TARGET + 0.05) return 15;     // 野手不足
-    const counts    = getPositionCounts(team);
-    const playerPos = player.subPosition || player.position;
-    const cnt       = counts[playerPos] ?? 2;
-    if (cnt === 0) return 30;   // 完全不在 → 最優先
-    if (cnt === 1) return 18;   // 1名のみ（薄い）→ 準優先
-    return 0;
-  };
+  // 能力・将来性・ポジション需要はすべて**同じ z の単位**で足す
+  // （冒頭の「プールからの補充の物差し」を参照。旧実装は投打で別スケールだった）
+  const norms = buildRecruitNorms(releasedPlayersPool);
 
   // ランク順に処理（S→A→B→C→D）
   teamsNeedingPlayers.sort((a, b) => RANK_DESC.indexOf(a.rank) - RANK_DESC.indexOf(b.rank));
@@ -544,23 +640,34 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
     const teamBlock = blockOfCorporate(teamInfo.team);
     let added = 0;
 
-    // このチーム向けにスコア付けしてソート
+    // 能力と地元はチームの中では動かないので、ここで一度だけ並べる
     const candidates = releasedPlayersPool
       .map((p, idx) => {
         if (usedIndices.has(idx)) return null;
         if (p.age && p.age > 32) return null;
-        const base   = isCDRank ? calcProspectScore(p) : calcAbilScore(p);
-        const posAdj = positionBoost(p, teamInfo.team);
-        // 地元の高校出身なら少し優先する。⚠ 加点は控えめに（HOME_BONUS の注記参照）
-        const homeAdj = (teamBlock && homeBlockOf(p) === teamBlock) ? HOME_BONUS : 0;
-        return { player: p, idx, score: base + posAdj + homeAdj };
+        const base = isCDRank ? prospectZ(p, norms) : abilityZ(p, norms);
+        return { player: p, idx, base: base + homeZ(p, teamBlock) };
       })
       .filter(Boolean)
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.base - a.base);
 
-    for (const entry of candidates) {
-      if (added >= teamInfo.needed) break;
-      if (usedIndices.has(entry.idx)) continue;
+    // ⚠ **ポジション需要は1人取るごとに測り直すこと**。以前は補充を始める前に
+    //    1回だけ計算していたので、Sランク（17人補充）が最初の判断のまま
+    //    投手を取り続けられた。窓の中は能力がほぼ並ぶので、ここで需要が主になる。
+    const pickFrom = (list) => {
+      let best = null, bestScore = -Infinity, scanned = 0;
+      for (const e of list) {
+        if (usedIndices.has(e.idx)) continue;
+        const s = e.base + recruitPositionBoost(e.player, teamInfo.team);
+        if (s > bestScore) { bestScore = s; best = e; }
+        if (++scanned >= PICK_WINDOW) break;
+      }
+      return best;
+    };
+
+    while (added < teamInfo.needed) {
+      const entry = pickFrom(candidates);
+      if (!entry) break;
 
       const p = entry.player;
       p._nextYearTeam = teamInfo.teamName;
@@ -602,12 +709,16 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
 
 const TARGET_ROSTER_SIZE = 24;
 
-function scorePlayerForRecruitment(p) {
-  const base = p.position === 'pitcher'
-    ? ((p.pitching?.velocity || 130) - 115) * 2 + (p.pitching?.control || 0) + (p.pitching?.stamina || 0) * 0.3
-    : ((p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) + (p.fielding?.defense || 0)) / 4;
-  const originBonus = (p.origin === 'independent_candidate' || p.postGradPath === 'independent') ? 15 : 0;
-  return base + originBonus;
+/**
+ * 独立の候補スコア（z）。⚠ 能力は共有の `abilityZ` を使うこと——ここは以前
+ * `(球速-115)×2 + 制球 + スタミナ×0.3` 対 `(ミート+パワー+走+守)/4` という
+ * 投打で別スケールの式を持っており、投手105 対 野手40 で常に投手が先に取られ、
+ * 12年で独立が **92.6% 投手**になっていた。
+ * 独立志向の候補への上積みだけがこの関数の固有分。
+ */
+function recruitBaseZ(p, norms) {
+  const originBonus = (p.origin === 'independent_candidate' || p.postGradPath === 'independent') ? 0.5 : 0;
+  return abilityZ(p, norms) + originBonus;
 }
 
 export function replenishIndependentLeagueRosters(allTeams, currentYear) {
@@ -630,9 +741,10 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
 
   if (teamsNeedingPlayers.length === 0) return;
 
-  // プール候補をスコア順にソート
+  // プール候補をスコア順にソート（能力は社会人と同じ z の物差し）
+  const norms = buildRecruitNorms(releasedPlayersPool);
   const poolCandidates = releasedPlayersPool
-    .map(p => ({ player: p, score: scorePlayerForRecruitment(p) }))
+    .map(p => ({ player: p, score: recruitBaseZ(p, norms) }))
     .sort((a, b) => b.score - a.score);
 
   // プールの60%をAIチームに配分、40%はユーザーのトライアウト用に残す
@@ -659,17 +771,20 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
       if (candidateIdx >= poolCandidates.length) break;
       if (taken >= availableFromPool) break;
 
-      // 地元優先。⚠ **プール全体から探してはいけない**——能力順に並んでいるので
-      //    地元というだけで下位の選手まで拾いに行くとチーム戦力が地区で決まる。
-      //    直後の HOME_WINDOW 人だけを見て、同じ地区の選手がいればそちらを取る。
+      // ⚠ **プール全体から探してはいけない**——能力順に並んでいるので、地元や
+      //    ポジションというだけで下位の選手まで拾いに行くとチーム戦力がそれで決まる。
+      //    直後の窓だけを見て、その中でポジション需要＋地元が最も高い選手を取る。
+      // ⚠ **ポジション需要をここで見ること**。以前は純粋な能力順のラウンドロビンで
+      //    均衡を一切見ておらず、12年で独立が 92.6% 投手になっていた。
       let pickIdx = candidateIdx;
       const teamBlock = blockOfCorporate(teamInfo.team);
-      if (teamBlock) {
-        for (let k = candidateIdx, seen = 0; k < poolCandidates.length && seen < HOME_WINDOW; k++) {
-          if (recruitedIds.has(poolCandidates[k].player.id)) continue;
-          seen++;
-          if (homeBlockOf(poolCandidates[k].player) === teamBlock) { pickIdx = k; break; }
-        }
+      let bestAdj = -Infinity;
+      for (let k = candidateIdx, seen = 0; k < poolCandidates.length && seen < HOME_WINDOW; k++) {
+        if (recruitedIds.has(poolCandidates[k].player.id)) continue;
+        seen++;
+        const cand = poolCandidates[k].player;
+        const adj = recruitPositionBoost(cand, teamInfo.team) + homeZ(cand, teamBlock);
+        if (adj > bestAdj) { bestAdj = adj; pickIdx = k; }
       }
       const candidate = poolCandidates[pickIdx];
       candidate.player._nextYearTeam = teamInfo.teamName; // レポート転記用
