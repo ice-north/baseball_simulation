@@ -644,6 +644,37 @@ export const TAPER_K = 0.25;
 export const taperLow = (val, floor = IMPLAUSIBLE_FLOOR) =>
   val >= floor ? val : Math.max(1, Math.round(floor - (floor - val) * TAPER_K));
 
+// ============================================================
+// アマ時代の進路（高卒 / 大卒）— NPBドラフトの在籍年数規定に使う
+//
+// 実NPBは「社会人チームに所属する選手は、高校卒業後3年 / 大学卒業後2年を
+// 経過しないと指名できない」。本作はこれを**年齢**で門番している
+// （`npbDraft.js`: 高卒 age>=21 / 大卒 age>=24）ので、その選手がどちらの
+// 進路で来たのかを引く手段が要る。
+//
+// ⚠ **判定を呼び出し側に書かないこと**。以前は `npbDraft.js` が
+//    `careerHistory?.some(h => h.type === 'university')` を直に書いており、
+//    一方の生成側（`corporateInit`）は大学歴を**経歴に積む前に**判定していたため、
+//    **生成された社会人6563人が1人も大学歴を持たず、大卒の門番が一度も
+//    発火していなかった**。書き手と読み手が別々に真偽を決めると必ず食い違う。
+// ⚠ `universityTeamId` は**大学パイプ**（`universityPipeSystem`）が見るフィールドで、
+//    経歴とは別経路。どちらが欠けても片方だけ動くので、両方見て判定する。
+// ============================================================
+export const AMATEUR_ROUTE = { HIGHSCHOOL: 'highschool', UNIVERSITY: 'university' };
+
+export const amateurRoute = (player) => {
+  if (!player) return AMATEUR_ROUTE.HIGHSCHOOL;
+  if (player.universityTeamId || player.universityTeamName || player.universityName) {
+    return AMATEUR_ROUTE.UNIVERSITY;
+  }
+  if (player.careerHistory?.some(h => h.type === 'university')) return AMATEUR_ROUTE.UNIVERSITY;
+  return AMATEUR_ROUTE.HIGHSCHOOL;
+};
+
+// 社会人に所属する選手がNPBドラフトの対象になる最低年齢（進路別）。
+// 高卒19歳入団なら 21歳＝3年目、大卒22歳入団なら 24歳＝3年目で解禁される。
+export const CORPORATE_DRAFT_MIN_AGE = { highschool: 21, university: 24 };
+
 export const generateCatcherLead = (age = 25) => {
   const u1 = Math.random() || 0.0001;
   const u2 = Math.random();

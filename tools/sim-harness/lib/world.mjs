@@ -28,6 +28,7 @@ const { initializeParallelWorldForIndependent } = await import(SRC + '/corporate
 const { generateAprilHighSchoolClass, processSeasonEnd, snapshotRankings,
         advanceToNextYear } = await import(SRC + '/season/yearProgressionSystem.js');
 const { processNPBDraft } = await import(SRC + '/season/npbDraft.js');
+const { generatePitchingRotation } = await import(SRC + '/game/lineupGenerator.js');
 const { createSeasonData } = await import(SRC + '/season/seasonManager.js');
 
 export { TEAMS_DATA };
@@ -57,6 +58,23 @@ export function bootstrapWorld(opts = {}) {
   return { seasonData, userTeams };
 }
 
+// `advanceToNextYear` の戻り値を TEAMS_DATA へ書き戻す（実ゲームの
+// `OffSeasonScreen.jsx` と同じ形）。**表を二重に作らない**ため、書き戻しの規則は
+// 「返ってきたチームだけを差し替える」で向こうと揃えてある。
+function applyUpdatedTeams(updatedTeams) {
+  if (!updatedTeams) return;
+  for (const name of Object.keys(updatedTeams)) TEAMS_DATA[name] = updatedTeams[name];
+}
+
+// CPUチームのローテーションを組み直す。ユーザーチームは手動設定を保持する
+// （実ゲームも同じ除外をしている）。
+function regenerateCpuRotations(userTeamName) {
+  for (const name of Object.keys(TEAMS_DATA)) {
+    if (name === userTeamName) continue;
+    try { generatePitchingRotation(name); } catch { /* ロスターが薄いチームは飛ばす */ }
+  }
+}
+
 // 1年ぶんの年次進行を実行する。戻り値は当年のメトリクス、副作用でグローバル更新。
 // 引数の seasonData は当年のもの。新 seasonData を返り値 .nextSeasonData に含める。
 export function advanceYear(seasonData) {
@@ -66,6 +84,16 @@ export function advanceYear(seasonData) {
     seasonData.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
     const draft = processNPBDraft(TEAMS_DATA, year);
     const adv = advanceToNextYear(seasonData, TEAMS_DATA);
+    // ⚠ `advanceToNextYear` は TEAMS_DATA を書き換えず、**新しいチームを戻り値で返す**
+    //    （加齢・年齢カーブ・引退は全てそのコピーに載る）。実ゲームは
+    //    `OffSeasonScreen.jsx` が `TEAMS_DATA[name] = result.updatedTeams[name]` で
+    //    書き戻している。ここを落とすと **誰も歳を取らず、引退もロスターから消えない**
+    //    世界を測ることになる（実測: 引退371名と報告されるのに1人も消えず、
+    //    19歳が7年間 359名のまま張り付き、18-21歳が人口の46%まで膨らんでいた）。
+    applyUpdatedTeams(adv.updatedTeams);
+    // 引退・加入でロスターが変わるとローテーションのIDが陳腐化する。
+    // 実ゲームも書き戻しの直後に CPU チームぶんを組み直している。
+    regenerateCpuRotations(seasonData.settings?.teamNames?.[0]);
     generateAprilHighSchoolClass(adv.newSeasonData.year);
     return { draft, adv };
   });

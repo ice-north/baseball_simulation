@@ -610,6 +610,16 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     const cut = Math.round(excess * (0.5 + Math.random() * 0.3));
     return cap + Math.max(0, excess - cut);
   };
+  // ⚠ **経歴を組み立てる前に大学歴を決めること**。以前はこの呼び出しが下の
+  //    `careerHistory` ループの**後**にあり、L639 の
+  //    `const uniName = p.universityTeamName || p.universityName` が常に undefined で、
+  //    **生成された社会人・独立・クラブの選手は1人も `type:'university'` を持たなかった**
+  //    （実測 6563人中 0人。`universityTeamId` の方は 56% に付いていたので、
+  //     大学パイプだけが動き、経歴とドラフトの大卒判定だけが死んでいた）。
+  //    `npbDraft` の「大卒は2年（age<24 は対象外）」がこれで一度も発火していない。
+  //    「名前より先に高校を決めること」（`generateHighSchoolPlayer`）と同じ型の順序バグ。
+  assignInitialUniversityBackgrounds(roster, { teamRank: rank });
+
   roster.forEach(p => {
     const pCtrlMax = p._standoutRank ? (RANK_CONTROL_CAP[p._standoutRank] + 8) : ctrlMax;
     const pBatCap = p._standoutRank ? (RANK_BATTING_CAP[p._standoutRank] || batCap) : batCap;
@@ -680,7 +690,6 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     }
   }
 
-  assignInitialUniversityBackgrounds(roster, { teamRank: rank });
   return roster;
 };
 

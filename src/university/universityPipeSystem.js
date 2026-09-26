@@ -112,9 +112,13 @@ export function getRemainingDispatchSlots(teamData, universityId) {
   return Math.max(0, maxSlots - dispatched);
 }
 
+// 大学を卒業していられる最低年齢（4年制を出た春が22歳）。
+const MIN_UNIVERSITY_GRAD_AGE = 22;
+
 /**
  * 初期選手に大学出身情報をランダム割り当て
  * ゲーム開始時に呼び出し、既存選手にOB情報を付与する
+ * ⚠ **`careerHistory` を組み立てる前に呼ぶこと**（`corporateInit` の該当箇所の注記を参照）
  * @param {Array} players - 選手配列
  * @param {Object} options - { universityRate: 大卒率(0-1), teamRank: チームランク }
  */
@@ -134,6 +138,11 @@ export function assignInitialUniversityBackgrounds(players, options = {}) {
 
   for (const player of players) {
     if (player.universityTeamId) continue;
+    // ⚠ **大学を出ていられる年齢かを見ること**。ここは長らく年齢を見ておらず、
+    //    19〜21歳にも大学歴が付いていた。経歴に出るだけなら軽微だが、
+    //    `npbDraft` は大学歴を見て「大卒は2年（age<24 は対象外）」を判定するので、
+    //    高卒1年目の19歳が「大卒扱い」で24歳まで指名できなくなる。
+    if ((player.age ?? MIN_UNIVERSITY_GRAD_AGE) < MIN_UNIVERSITY_GRAD_AGE) continue;
     if (Math.random() > universityRate) continue;
 
     const rank = pickWeightedRank(weights);

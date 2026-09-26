@@ -14,6 +14,7 @@ import { addToObRegistry } from '../game/obRegistry.js';
 import { buildToolNorms, toolProfile, toolHuntRateForRound, TOOL_HUNT_RATE_IKU,
          huntScoreWeight, scoreStats, randomHuntTool, toolDevOf, isSpecialist,
          TOOL_LABELS, TOOL_NOUNS } from '../game/scoutTools.js';
+import { amateurRoute, CORPORATE_DRAFT_MIN_AGE } from '../utils/constants.js';
 
 /**
  * NPBドラフト処理（統一評価・グローバルTop-N方式）
@@ -66,14 +67,11 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         // 大学: 4年生（22歳）のみ指名対象
         if (player.age < 22 || (player.universityYear && player.universityYear < 4)) return;
       } else if (source === 'corporate') {
-        // 社会人: 高卒3年目(21歳〜)、大卒2年目(24歳〜)
-        // 大卒社会人は23歳で入社→2年目の24歳でドラフト、翌年25歳でNPB入り
-        const hasUniHistory = player.careerHistory?.some(h => h.type === 'university');
-        if (hasUniHistory) {
-          if (player.age < 24) return;
-        } else {
-          if (player.age < 21) return;
-        }
+        // 社会人: 実NPBの「高校卒業後3年 / 大学卒業後2年」を年齢で表す。
+        // ⚠ 進路の判定は `amateurRoute` が唯一の権威（`utils/constants.js`）。
+        //    ここに `careerHistory.some(...)` を書き戻さないこと——書き手（生成側）と
+        //    読み手が別々に真偽を決めていたせいで、大卒の門番が一度も発火していなかった。
+        if (player.age < CORPORATE_DRAFT_MIN_AGE[amateurRoute(player)]) return;
       }
       // 独立リーグ: 年齢制限なし（1年目から指名対象）
       const baseBonus = awardBonusMap[player.id]?.bonus || 0;
