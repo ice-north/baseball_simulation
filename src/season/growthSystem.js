@@ -638,6 +638,12 @@ const CORPORATE_OWNED_STATS = {
   pitcher: new Set(['control', 'stamina', 'velocity', 'arm']),
   fielder: new Set(['meet', 'power', 'eye', 'speed', 'arm', 'defense']),
 };
+// 大学生は `applyUniversityYear`（`universityPool.applyUniversityGrowth`）が見る能力。
+// 社会人と同じ理由で年齢カーブと二重に掛けない
+const UNIVERSITY_OWNED_STATS = {
+  pitcher: new Set(['control', 'stamina', 'velocity', 'arm', 'bodyStamina', 'recovery']),
+  fielder: new Set(['meet', 'power', 'eye', 'speed', 'arm', 'defense', 'bodyStamina', 'recovery']),
+};
 
 // --- 年齢カーブによる成長・衰退 ---
 export function applyAgeCurveChanges(allTeams) {
@@ -655,8 +661,9 @@ export function applyAgeCurveChanges(allTeams) {
         const changes = [];
 
         // 全能力について年齢カーブを適用
-        const owned = corporateGrown
-          ? CORPORATE_OWNED_STATS[player.position === 'pitcher' ? 'pitcher' : 'fielder']
+        const group = player.position === 'pitcher' ? 'pitcher' : 'fielder';
+        const owned = corporateGrown ? CORPORATE_OWNED_STATS[group]
+          : team?.universityData ? UNIVERSITY_OWNED_STATS[group]
           : null;
         const allStats = [...PHYSICAL_STATS, ...TECHNICAL_STATS]
           .filter(s => !owned || !owned.has(s));

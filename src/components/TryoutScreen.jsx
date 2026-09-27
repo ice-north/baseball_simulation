@@ -163,6 +163,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     draftFinalizedRef.current = true;
 
     const allDraftedIds = [];
+    const allDraftedPlayers = [];
     const draftYear = isInitialTryout ? 1 : (seasonData?.year || 1);
     Object.keys(teamRosters).forEach(teamName => {
       const draftedPlayers = teamRosters[teamName] || [];
@@ -184,13 +185,13 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           ...newPlayers
         ];
       }
-      draftedPlayers.forEach(p => allDraftedIds.push(p.id));
+      draftedPlayers.forEach(p => { allDraftedIds.push(p.id); allDraftedPlayers.push(p); });
     });
     // 解雇プールを更新（再獲得された選手は削除、不指名は年齢+1・能力減衰）
     if (!isInitialTryout) {
       updateReleasedPoolAfterTryout(allDraftedIds);
       // 高校生プール・大学プールから指名者を除去（オフシーズン振り分けとの二重計上を防止）
-      removeDraftedFromGraduatePools(allDraftedIds);
+      removeDraftedFromGraduatePools(allDraftedIds, allDraftedPlayers);
       // クラブチームから指名者を除去（同一選手の二重所属を防止）
       removeDraftedFromClubTeams(allDraftedIds);
     }

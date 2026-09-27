@@ -9,7 +9,7 @@
 // replenishCorporateRosters / replenishIndependentLeagueRosters（advanceToNextYearから利用）。
 // ============================================================
 
-import { highSchoolPool } from './universityPool.js';
+import { highSchoolPool, applyUniversityYear } from './universityPool.js';
 import { generateCatcherLead, RANK_DESC } from '../utils/constants.js';
 import { generatePositionFitness } from './tryoutSystem.js';
 import { syncPositionToFitness } from '../utils/physics.js';
@@ -307,28 +307,30 @@ export function processUniversityTeamGraduation(allTeams, seasonData, currentYea
     });
 
     graduates.forEach(grad => {
-      const abilityScore = grad.position === 'pitcher'
-        ? ((grad.pitching?.velocity || 120) - 120) * 1.5 + (grad.pitching?.control || 0) + (grad.pitching?.stamina || 0) * 0.4
-        : (grad.batting?.meet || 0) + (grad.batting?.power || 0) + (grad.batting?.eye || 0) * 0.5 + (grad.physical?.speed || 0) * 0.3;
-
       const gp = grad.growthPotential || 1.0;
       const discipline = grad.personality?.discipline ?? 50;
-      // 成長力・プロ意識ボーナス: 低能力でも伸びしろがある選手が一定数残れるように
-      // gp1.0→+5, gp1.2→+15, gp1.5→+30 / disc60→+6, disc80→+12, disc100→+18
-      const gpBonus = Math.max(0, (gp - 0.9) * 50);
-      const discBonus = Math.max(0, (discipline - 40) * 0.3);
-      allGradsScored.push({ player: grad, teamName, abilityScore, gp, discipline,
-        compositeScore: abilityScore + gpBonus + discBonus });
+      allGradsScored.push({ player: grad, teamName, gp, discipline });
     });
 
     perTeamData[teamName] = { graduates, remaining, rank, isUserTeam, teamData };
   }
 
-  // スコア降順ソート → パーセンテージで進路振り分け
+  // 進路の順位。⚠ **能力は群ごとの z（`abilityZ`）で比べること**。以前は
+  //    投手 `(球速-120)×1.5+制球+…` 対 野手 `ミート+パワー+…` の投打で別スケールで、
+  //    上位（社会人・独立）が片方の群に偏っていた（社会人・独立の投手偏重と同じ型の誤り）。
+  //    成長力・プロ意識は「低能力でも伸びしろがある選手が一定数残れる」ための上乗せ。
+  const gradNorms = buildRecruitNorms(allGradsScored.map(e => e.player));
+  allGradsScored.forEach(e => {
+    e.compositeScore = abilityZ(e.player, gradNorms)
+      + Math.max(0, (e.gp - 0.9) * 1.2) + Math.max(0, (e.discipline - 40) * 0.008);
+  });
   allGradsScored.sort((a, b) => b.compositeScore - a.compositeScore);
   const total = allGradsScored.length;
-  const corpCut = Math.floor(total * 0.22);  // 上位22%→社会人
-  const indCut  = Math.floor(total * 0.37);  // 次の15%→独立リーグ
+  // ⚠ 割合は旧・プール側の卒業（社会人35% / 独立25%）に揃える。大学生の実体を名簿へ
+  //    一本化したので、旧・名簿側の 22% / 15% のままだと社会人・独立へ流れる大卒が
+  //    ほぼ半減し、企業の入団ルート（大卒6割）が細る
+  const corpCut = Math.floor(total * 0.35);
+  const indCut  = Math.floor(total * 0.60);
   // 残り: gp≥1.1かつdiscipline≥60 → クラブ、それ以外 → 引退
 
   allGradsScored.forEach(({ player: grad, gp, discipline }, idx) => {
@@ -378,8 +380,15 @@ export function processUniversityTeamGraduation(allTeams, seasonData, currentYea
       });
     }
 
+    // 在学生の1年（成長＋知名度）→ 進級。⚠ 大学生の成長はここが唯一の経路。
+    //    以前は裏の大学プールにしか掛からず、名簿の大学生は伸びなかった
+    graduates.forEach(p => applyUniversityYear(p, {
+      rank, teamId: teamData.universityTeamId, teamName, universityYear: 4, currentYear, grow: false,
+    }));
     remaining.forEach(p => {
-      if (p.universityYear) p.universityYear++;
+      const uy = Math.max(1, Math.min(3, p.universityYear || ((p.age || 19) - 19)));
+      applyUniversityYear(p, { rank, teamId: teamData.universityTeamId, teamName, universityYear: uy, currentYear });
+      p.universityYear = uy + 1;
     });
 
     // スカウト推薦入部者（ユーザーチームのみ）
@@ -421,9 +430,16 @@ export function processUniversityTeamGraduation(allTeams, seasonData, currentYea
       highSchoolPool.players = highSchoolPool.players.filter(p => !reservedSet.has(p));
     }
 
+    // ⚠ **AIの大学の新入生は `enrollInUniversity`（高校生の進路振り分け）だけが入れる**。
+    //    以前はここでも全校に「一般入部」を高校生プールの下位帯から取り、足りなければ
+    //    `generateFreshmanPlayer` で作っていた（年約700人。直球を持たない投手・
+    //    存在しないフォーム名が混じる）。入口が2つあったせいで大学生が設計の2倍いた。
+    //    自チーム（大学モード）だけは推薦・セレクション・一般入部をここで入れる。
     const maxRoster = isUserTeam ? 60 : Infinity;
     const targetSize = Math.min(getUniversityTargetRosterSize(rank), maxRoster);
-    const rawNeeded = Math.max(0, Math.max(graduates.length, targetSize - remaining.length) - scoutedPlayers.length);
+    const rawNeeded = isUserTeam
+      ? Math.max(0, Math.max(graduates.length, targetSize - remaining.length) - scoutedPlayers.length)
+      : 0;
     const neededCount = (isUserTeam && scoutedPlayers.length > 0)
       ? Math.min(rawNeeded, Math.ceil(scoutedPlayers.length / 2))
       : rawNeeded;

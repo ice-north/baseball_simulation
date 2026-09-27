@@ -8,7 +8,7 @@ import { WORLD_DATA, initializeWorld } from '../corporate/worldData.js';
 import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS, generateLeagueAbbreviations } from './universityTeamsData.js';
 import { initializeUniversityLeagues } from './universityLeagueManager.js';
 import { generateCorporateRoster, initializeCorporateParallelWorld } from '../corporate/corporateInit.js';
-import { seedInitialUniversityClasses, warmUpPlayerPipeline, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
+import { seedInitialUniversityClasses, warmUpPlayerPipeline, clearUniversityPool, clearHighSchoolPool, universityPool, absorbUniversityPoolIntoRosters } from '../season/universityPool.js';
 
 // 大学チームの学年あたり人数（1〜4年生 × 人数 = 総在籍数）
 const UNI_PLAYERS_PER_GRADE = { S: 14, A: 12, B: 10, C: 8, D: 6 };
@@ -163,7 +163,9 @@ export const initializeUniversityGame = (teamDef) => {
 
   const createTeamEntry = (def) => {
     const name = def.name;
-    const roster = generateUniversityRoster(def);
+    // プールに在学生が居る大学は名簿を空で作り、`absorbUniversityPoolIntoRosters` で移す
+    const hasPoolStudents = Object.values(universityPool).some(c => c?.some(e => e.universityTeamName === name));
+    const roster = hasPoolStudents ? [] : generateUniversityRoster(def);
     TEAMS_DATA[name] = {
       name,
       abbreviation: makeAbbreviation(name),
@@ -208,10 +210,20 @@ export const initializeUniversityGame = (teamDef) => {
     userRoster = roster;
   }
 
+  // パイプラインウォームアップ（全大学の在学生4学年 + 社会人補充）。
+  // ⚠ 同リーグの大学を作る**前**に回すこと。在学生はまずプールに仮置きされるので、
+  //    その大学の名簿はプールの在学生から作る（`generateUniversityRoster` で別に作ると、
+  //    同じ大学に名簿とプールの**別人の在学生**が並ぶ＝大学生の二重化）
+  // ⚠ 自チームには在学生を配らない（推薦・一般入部で自前に持つ）。`enrollInUniversity` は
+  //    `WORLD_DATA.universityLeague.userTeam` で除外するので、ウォームアップより前に置く
+  WORLD_DATA.universityLeague = { ...(WORLD_DATA.universityLeague || {}), userTeam: userTeamName };
+  warmUpPlayerPipeline(1);
+
   // 同リーグの全チームをTEAMS_DATAに追加（部制でも全チーム生成）
   for (const def of leagueTeams) {
     if (TEAMS_DATA[def.name]) continue;
     createTeamEntry(def);
+    absorbUniversityPoolIntoRosters(TEAMS_DATA, 1);   // その大学の在学生を名簿へ
   }
 
   // リーグ内で一意な略称に再設定（同地名大学の3文字重複を解消）
@@ -234,9 +246,6 @@ export const initializeUniversityGame = (teamDef) => {
 
   // 大学リーグ初期化（全16リーグ）
   initializeUniversityLeagues(2024);
-
-  // パイプラインウォームアップ（他リーグの大学生 + 社会人補充）
-  warmUpPlayerPipeline(1);
 
   // 社会人チーム＋独立リーグも並行世界として生成
   initializeCorporateWorldForUniversity();

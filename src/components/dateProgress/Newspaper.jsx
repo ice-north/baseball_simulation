@@ -127,6 +127,21 @@ export function buildNewspaperData(seasonData, userTeamName, fameDateRef) {
   // enrollYear はゲーム内年度（1,2,3…）なので、比較にもゲーム年を使う。
   // currentDate.year はカレンダー年(2024等)なので、混ぜると全学年が3〜4年生として通ってしまう
   const gameYear = seasonData.settings?.year || seasonData.year || 1;
+  // 大学生の実体は TEAMS_DATA の大学の名簿（プールは初期化中の仮置きだけ）
+  Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+    if (!team?.universityData) return;
+    (team.players || []).forEach(p => {
+      const grade = p.universityYear || Math.max(1, (p.age || 19) - 18);
+      if (grade < 3) return;
+      const draft = checkNPBDraftEligibility(p);
+      if (draft.totalScore >= 80) {
+        const card = makeCard(p, 'university', teamName);
+        card.year = grade;
+        card.uniRank = team.universityData.rank;
+        uniAll.push({ card, score: draft.totalScore, player: p });
+      }
+    });
+  });
   Object.entries(universityPool).forEach(([enrollYear, entries]) => {
     if (!entries) return;
     const yearsInUni = gameYear - parseInt(enrollYear);

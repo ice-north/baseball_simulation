@@ -25,8 +25,17 @@ import { syncPositionToFitness } from '../utils/physics.js';
 export const HIGH_SCHOOL_CLASS_SIZE = 5000;
 
 /**
- * 大学プール: グローバルミュータブル
+ * 大学プール: **初期化の途中だけ使う仮置き場**。
  * { [enrollYear]: [ { player, enrollYear, graduateYear } ] }
+ *
+ * ⚠ **大学生の実体は TEAMS_DATA の大学チームの名簿ひとつだけ**。かつてはこのプールと
+ *    名簿が別々に在学生を持っており、同じ「近畿大学」に名簿56人とプール60人が別人として
+ *    居た（大学生の総数が設計の約2倍の 17,800人）。しかも成長はプール側にしか掛からず、
+ *    画面に出る名簿の選手は伸びないまま、S校のスタメンが5年でミート63→30に落ちていた。
+ *    いまは `enrollInUniversity` が名簿へ直接入れ、年次の成長・知名度・卒業は
+ *    `processUniversityTeamGraduation`（名簿側）が担う。ここに入るのは
+ *    **大学チームがまだ TEAMS_DATA に無い初期化の途中**だけで、
+ *    `initializeUniversityTeamsForParallelWorld` / `absorbUniversityPoolIntoRosters` が名簿へ移す。
  */
 export const universityPool = {};
 
@@ -832,6 +841,18 @@ export function getHighSchoolTryoutCandidates(count, qualityBias = 0) {
 export function getUniversitySeniorTryoutCandidates(currentYear, count, qualityBias = 0) {
   if (count <= 0) return [];
   const seniors = [];
+  // 名簿の4年生（大学生の実体はここ）。指名されたら `removeDraftedFromGraduatePools` が
+  // `_srcUniTeam` を頼りに名簿から外す
+  const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
+  for (const [teamName, team] of Object.entries(TEAMS_DATA)) {
+    if (!team?.universityData || teamName === userUniTeam) continue;
+    for (const p of team.players || []) {
+      if ((p.universityYear || 0) >= 4 || (p.age || 18) >= 22) {
+        seniors.push({ player: p, universityRank: team.universityData.rank,
+          universityTeamId: team.universityTeamId, universityTeamName: teamName, _roster: true });
+      }
+    }
+  }
   for (const enrollYear of Object.keys(universityPool)) {
     const cohort = universityPool[enrollYear];
     if (!cohort) continue;
@@ -861,6 +882,7 @@ export function getUniversitySeniorTryoutCandidates(currentYear, count, qualityB
       if (team) { e.universityTeamName = team.name; e.universityTeamId = team.id; }
     }
     const c = _cloneForTryout(e.player);
+    if (e._roster) c._srcUniTeam = e.universityTeamName;
     if (e.universityRank) c.universityRank = e.universityRank;
     if (e.universityTeamName) { c.universityName = e.universityTeamName; c.universityTeamName = e.universityTeamName; }
     c.origin = 'university';
@@ -871,7 +893,17 @@ export function getUniversitySeniorTryoutCandidates(currentYear, count, qualityB
 }
 
 // トライアウトで指名された選手を高校生プール・大学プールから除去する
-export function removeDraftedFromGraduatePools(draftedIds) {
+export function removeDraftedFromGraduatePools(draftedIds, draftedPlayers = []) {
+  // 大学の名簿から来た4年生は、その大学の名簿から外す（id は名簿の中でだけ一意）
+  for (const p of draftedPlayers) {
+    if (!p?._srcUniTeam) continue;
+    const team = TEAMS_DATA[p._srcUniTeam];
+    if (team?.players) {
+      const i = team.players.findIndex(x => x.id === p.id && x.name === p.name);
+      if (i >= 0) team.players.splice(i, 1);
+    }
+    delete p._srcUniTeam;
+  }
   if (!draftedIds || draftedIds.length === 0) return;
   const drafted = new Set(draftedIds);
   if (highSchoolPool.players?.length) {
@@ -1180,17 +1212,38 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
  * @param {Array|Object} players - 大学進学する選手の配列、またはランク別オブジェクト { S: [...], A: [...], ... }
  * @param {number} enrollYear - 入学年度
  */
-export function enrollInUniversity(players, enrollYear) {
-  if (!universityPool[enrollYear]) {
-    universityPool[enrollYear] = [];
-  }
+export function enrollInUniversity(players, enrollYear, allTeams = TEAMS_DATA) {
+  const stage = (entry) => {
+    if (!universityPool[enrollYear]) universityPool[enrollYear] = [];
+    universityPool[enrollYear].push(entry);
+  };
+  // 名簿があればそこへ入れる（大学生の実体は名簿ひとつ）。無ければ初期化中の仮置き
+  const place = (player, rank, team) => {
+    const roster = team?.name ? allTeams[team.name] : null;
+    if (roster?.players) {
+      prepareUniversityFreshman(player, rank, team);
+      addToRoster(roster, player);
+    } else {
+      stage({
+        player, enrollYear, graduateYear: enrollYear + 4,
+        universityRank: rank,
+        universityTeamId: team?.id || null,
+        universityTeamName: team?.name || null,
+      });
+    }
+  };
 
   const teamCounts = {};
   // ユーザーが操作している大学（大学モード）のみNPC配属から除外する。
   // 独立/社会人モードでは234大学がすべてTEAMS_DATAに載るため、TEAMS_DATA全体で
   // 除外すると配属先が無くなり所属が「大学」表記になってしまう不具合を防ぐ。
   const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
-  const assignTeam = (rank, homeBlock = null) => {
+  // 捕手は「捕手の少ない大学」へ。⚠ 以前は守備位置を見ずに配っており、
+  //   捕手0人の大学が常に13〜23校あった（亜細亜大学: 60人中 捕手0・投手29）
+  const catchersOf = (t) => (allTeams[t.name]?.players || []).filter(p => p.position === 'catcher').length
+    + (teamCatchers[t.id] || 0);
+  const teamCatchers = {};
+  const assignTeam = (rank, homeBlock = null, position = null) => {
     const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank && t.name !== userUniTeam);
     if (teams.length === 0) return null;
     let minCount = Infinity;
@@ -1207,10 +1260,16 @@ export function enrollInUniversity(players, enrollYear) {
     // 地元優先。⚠ **枠は均等割り（最も空いている大学）のまま**にすること。
     //    地元だからと空きを無視して入れると、人口の多い地区の大学だけ膨らむ。
     //    同じだけ空いている大学が複数あるときに、地元をより高い確率で選ぶ。
+    if (position === 'catcher') {
+      const least = Math.min(...candidates.map(catchersOf));
+      candidates = candidates.filter(t => catchersOf(t) === least);
+    }
     const home = homeBlock ? candidates.filter(t => blockOfUniversity(t) === homeBlock) : [];
     const pick = (home.length && Math.random() < HOME_UNIV_PREF) ? home : candidates;
     const team = pick[Math.floor(Math.random() * pick.length)];
     teamCounts[team.id] = (teamCounts[team.id] || 0) + 1;
+    // 名簿に入る場合は名簿の人数に数えられるので、仮置き（名簿なし）のときだけ数える
+    if (position === 'catcher' && !allTeams[team.name]?.players) teamCatchers[team.id] = (teamCatchers[team.id] || 0) + 1;
     return team;
   };
 
@@ -1224,32 +1283,87 @@ export function enrollInUniversity(players, enrollYear) {
   if (Array.isArray(players)) {
     players.forEach(player => {
       const rank = player._destinationRank || 'C';
-      const team = assignTeam(rank, homeBlockOf(player));
+      const team = assignTeam(rank, homeBlockOf(player), player.position);
       addUniHistory(player, team);
       player.age = Math.max(player.age || 18, 19);
-      universityPool[enrollYear].push({
-        player, enrollYear, graduateYear: enrollYear + 4,
-        universityRank: rank,
-        universityTeamId: team?.id || null,
-        universityTeamName: team?.name || null,
-      });
+      place(player, rank, team);
     });
   } else {
     for (const rank of ['S', 'A', 'B', 'C', 'D']) {
       if (!players[rank]) continue;
       players[rank].forEach(player => {
-        const team = assignTeam(rank, homeBlockOf(player));
+        const team = assignTeam(rank, homeBlockOf(player), player.position);
         addUniHistory(player, team);
         player.age = Math.max(player.age || 18, 19);
-        universityPool[enrollYear].push({
-          player, enrollYear, graduateYear: enrollYear + 4,
-          universityRank: rank,
-          universityTeamId: team?.id || null,
-          universityTeamName: team?.name || null,
-        });
+        place(player, rank, team);
       });
     }
   }
+}
+
+const blankSeasonStats = () => ({
+  batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 },
+  pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 },
+});
+
+// 名簿に入る新1年生の支度（所属・学年・成績欄）
+function prepareUniversityFreshman(player, rank, team, universityYear = 1) {
+  player.universityTeamId = team.id ?? player.universityTeamId ?? null;
+  player.universityTeamName = team.name;
+  player.universityRank = rank;
+  player.universityYear = universityYear;
+  player.recruitType = player.recruitType || 'recommended';
+  player.isStarter = false;
+  player.battingOrder = 0;
+  delete player._destinationRank;
+  if (!player.positionFitness) player.positionFitness = generatePositionFitness(player.position);
+  syncPositionToFitness(player);
+  if (!player.seasonStats) player.seasonStats = blankSeasonStats();
+}
+
+/**
+ * 大学在学生1人の1年分（成長＋知名度）。**名簿の選手に掛ける唯一の経路**。
+ * ⚠ 以前は成長がプールの選手にしか掛からず、名簿の大学生は年齢カーブの
+ *    わずかな変動しか受けていなかった（3年でミート +1.4 対 プール +11.4）。
+ * @param {number} universityYear この1年を終えた時点の学年（1〜4）
+ */
+export function applyUniversityYear(player, { rank, teamId, teamName, universityYear, currentYear, grow = true }) {
+  applyUniversityFame({
+    player, universityRank: rank, universityTeamName: teamName,
+    enrollYear: currentYear - (universityYear - 1),
+  }, currentYear);
+  if (grow) applyUniversityGrowth(player, rank, teamId);
+}
+
+/** 大学生（名簿＋初期化中の仮置き）の総数 */
+export function countUniversityStudents(allTeams = TEAMS_DATA) {
+  let n = Object.values(universityPool).reduce((sum, c) => sum + (c?.length || 0), 0);
+  for (const t of Object.values(allTeams)) if (t?.universityData) n += t.players?.length || 0;
+  return n;
+}
+
+/**
+ * 仮置きのプールに残った在学生を名簿へ移す（旧セーブの移行もここ）。
+ * ⚠ 旧セーブはプールと名簿の**両方に別人の在学生**を持つので、移すと一時的に
+ *    名簿が大きくなる（4年で卒業して元の規模に戻る）。どちらも実在の選手なので捨てない。
+ */
+export function absorbUniversityPoolIntoRosters(allTeams = TEAMS_DATA, currentYear = 1) {
+  let moved = 0;
+  for (const enrollYear of Object.keys(universityPool)) {
+    const cohort = universityPool[enrollYear] || [];
+    const rest = [];
+    for (const e of cohort) {
+      const roster = e.universityTeamName ? allTeams[e.universityTeamName] : null;
+      if (!roster?.players || !e.player) { rest.push(e); continue; }
+      const grade = Math.max(1, Math.min(4, currentYear - Number(enrollYear) + 1));
+      prepareUniversityFreshman(e.player, e.universityRank || roster.universityData?.rank || 'C',
+        { id: e.universityTeamId, name: e.universityTeamName }, grade);
+      addToRoster(roster, e.player);
+      moved++;
+    }
+    if (rest.length) universityPool[enrollYear] = rest; else delete universityPool[enrollYear];
+  }
+  return moved;
 }
 
 /**
@@ -1259,8 +1373,9 @@ export function enrollInUniversity(players, enrollYear) {
  * @param {number} gameYear - 現在のゲーム年度
  */
 export function seedInitialUniversityClasses(gameYear) {
-  const existingCount = Object.values(universityPool).reduce((sum, cohort) => sum + (cohort?.length || 0), 0);
-  if (existingCount > 0) return;
+  // ⚠ 名簿も数えること。プールは仮置きなので普段は空で、プールだけ見ると
+  //    毎回8920人を作り直して名簿へ足してしまう（この関数は日送りのたびに呼ばれる）
+  if (countUniversityStudents() > 0) return;
 
   const classesNeeded = 4;
   const uniSlots = getUniversitySlotsByRank();
@@ -1296,7 +1411,8 @@ export function seedInitialUniversityClasses(gameYear) {
       });
     }
 
-    enrollInUniversity(uniPlayers, enrollYear);
+    // 一旦プールに仮置きしてから成長させ、最後に名簿へ移す
+    enrollInUniversity(uniPlayers, enrollYear, {});
 
     const cohort = universityPool[enrollYear];
     if (cohort) {
@@ -1307,6 +1423,7 @@ export function seedInitialUniversityClasses(gameYear) {
       }
     }
   }
+  absorbUniversityPoolIntoRosters(TEAMS_DATA, gameYear);
 }
 
 // ============================================================
@@ -1481,8 +1598,10 @@ export function warmUpPlayerPipeline(gameYear) {
     highSchoolPool.year = simYear;
     const hsDistribution = distributeHighSchoolGraduates(enrollYear);
 
-    // 大学入学
-    enrollInUniversity(hsDistribution.university, enrollYear);
+    // 大学入学。⚠ ウォームアップ中は必ずプールに仮置きする（`{}` を渡す）。大学モードでは
+    //    自リーグの大学が既に TEAMS_DATA に居るので、名簿へ直接入れると
+    //    ウォームアップの加齢・成長・卒業を通らない選手が名簿に混ざる
+    enrollInUniversity(hsDistribution.university, enrollYear, {});
 
     // 社会人・独立候補はリリースプールへ（高卒1年目=19歳）
     hsDistribution.corporate.forEach(p => {

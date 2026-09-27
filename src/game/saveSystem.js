@@ -3,7 +3,7 @@ import { TEAMS_DATA, releasedPlayersPool, clearReleasedPlayersPool } from '../te
 import { addManyToReleasedPool } from '../state/pools.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
-import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
+import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses, absorbUniversityPoolIntoRosters } from '../season/universityPool.js';
 import { UNIVERSITY_TEAMS, generateLeagueAbbreviations } from '../university/universityTeamsData.js';
 import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage, requestPersistentStorage } from '../utils/indexedDBStorage.js';
 import { migrateSaveData, CURRENT_SAVE_VERSION } from './saveMigration.js';
@@ -453,6 +453,8 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       deserializeUniversityPool(saveData.universityPool);
     }
     const loadedYear = saveData.seasonData?.year || 1;
+    // 旧セーブはプールにも在学生を持つ。大学生の実体は名簿ひとつなので名簿へ移す
+    absorbUniversityPoolIntoRosters(TEAMS_DATA, loadedYear);
     seedInitialUniversityClasses(loadedYear);
 
     // リリースプール復元

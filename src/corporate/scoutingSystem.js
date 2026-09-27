@@ -248,6 +248,18 @@ export function estimateRivalCount(player) {
  */
 function getUniversityScoutPool(currentYear) {
   const pool = [];
+  // 大学生の実体は TEAMS_DATA の大学の名簿（4年生のみ）。`teamName` を持たせて
+  // `removeFromPool` が獲得した選手を名簿から外せるようにする
+  const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
+  Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+    if (!team?.universityData || teamName === userUniTeam) return;
+    (team.players || []).forEach((p, idx) => {
+      if ((p.universityYear || 0) < 4 && (p.age || 18) < 22) return;
+      p.universityTeamName = p.universityTeamName || teamName;
+      p.universityTeamId = p.universityTeamId ?? team.universityTeamId;
+      pool.push({ player: p, source: 'university', teamName, poolIndex: idx, yearsInUni: 3 });
+    });
+  });
   Object.entries(universityPool).forEach(([enrollYear, cohort]) => {
     const yr = parseInt(enrollYear);
     cohort.forEach((entry, idx) => {
@@ -584,6 +596,8 @@ function removeFromPool(player) {
 
   if (ref.source === 'highschool') {
     removeFromRosterById(highSchoolPool, player.id);
+  } else if (ref.source === 'university' && ref.teamName && TEAMS_DATA[ref.teamName]?.universityData) {
+    removeFromRosterById(TEAMS_DATA[ref.teamName], player.id);
   } else if (ref.source === 'university') {
     const cohort = universityPool[ref.enrollYear];
     if (cohort) {

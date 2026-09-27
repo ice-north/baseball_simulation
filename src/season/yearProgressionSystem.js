@@ -11,7 +11,7 @@ import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStat
 import { PITCHING_FORM_EFFECTS, getUtilityScore } from '../utils/constants.js';
 import { pitchOwnValue } from '../game/pitchCalling.js';
 import { deviationValue, deviationOf, valueGroup, DRAFT_DEMAND } from '../game/playerValue.js';
-import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates, HIGH_SCHOOL_CLASS_SIZE } from './universityPool.js';
+import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates, HIGH_SCHOOL_CLASS_SIZE, absorbUniversityPoolIntoRosters } from './universityPool.js';
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { generatePositionFitness } from './tryoutSystem.js';
@@ -1065,6 +1065,10 @@ export function advanceToNextYear(seasonData, allTeams) {
   const npbYear = seasonData.settings?.year || seasonData.year || 1;
   processNpbCareers(allTeams, npbYear);
 
+  // 0.5. 仮置きのプールに残った在学生を名簿へ（旧セーブの移行。大学生の実体は名簿ひとつ）
+  //      ⚠ 加齢（4）より前に置くこと——名簿の選手として一緒に歳を取らせる
+  absorbUniversityPoolIntoRosters(allTeams, seasonData.year);
+
   // 1. シーズン終了処理（表彰）
   // ドラフト前にfrozenAwardsが確定済みならそれを使用（指名選手がランキングから消えるのを防ぐ）
   const awards = seasonData.frozenAwards || processSeasonEnd(seasonData, allTeams);
@@ -1149,12 +1153,11 @@ export function advanceToNextYear(seasonData, allTeams) {
   const { graduates: uniGraduates, report: uniReport } = processUniversityYear(currentYear);
   // 卒業生の進路を能力別に振り分け
   // NPBドラフト漏れの大学卒業生 → 社会人候補 / 独立候補 / 引退
-  const gradScored = uniGraduates.map(g => ({
-    player: g,
-    score: (g.position === 'pitcher'
-      ? (g.pitching?.velocity - 120) * 1.5 + (g.pitching?.control || 0) + (g.pitching?.stamina || 0) * 0.4
-      : (g.batting?.meet || 0) + (g.batting?.power || 0) + (g.batting?.eye || 0) * 0.5 + (g.physical?.speed || 0) * 0.3)
-  }));
+  // ⚠ 大学モードでは TEAMS_DATA に居ない222校の在学生がここ（プール）を通る。
+  //    名簿側（`processUniversityTeamGraduation`）と同じく群ごとの z で比べること
+  //    （旧式は投手 `(球速-120)×1.5+…` 対 野手 `ミート+パワー+…` の別スケール）
+  const uniGradNorms = buildRecruitNorms(uniGraduates);
+  const gradScored = uniGraduates.map(g => ({ player: g, score: abilityZ(g, uniGradNorms) }));
   gradScored.sort((a, b) => b.score - a.score);
   const corpCut = Math.floor(gradScored.length * 0.35);
   const indCut = corpCut + Math.floor(gradScored.length * 0.25);
@@ -1194,7 +1197,8 @@ export function advanceToNextYear(seasonData, allTeams) {
   if (highSchoolPool.players.length > 0) {
     hsDistribution = distributeHighSchoolGraduates(currentYear + 1);
     // ランク別に大学入学
-    enrollInUniversity(hsDistribution.university, currentYear + 1);
+    // ⚠ 名簿は `teamsAfterRetirement` 側に入れる（呼び出し側がこれで TEAMS_DATA を書き戻す）
+    enrollInUniversity(hsDistribution.university, currentYear + 1, teamsAfterRetirement);
     // 社会人候補はリリースプールへ
     hsDistribution.corporate.forEach(p => {
       p.isStarter = false;
