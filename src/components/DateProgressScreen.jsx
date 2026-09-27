@@ -63,6 +63,19 @@ const Collapse = ({ open, children, className = '' }) => {
   );
 };
 
+// フェーズ移行イベントの表示名（確認ダイアログ）
+const PHASE_EVENT_INFO = {
+  draft: { label: 'ドラフト会議', desc: 'NPBドラフト会議が始まります。チームの有力選手が指名される可能性があります。' },
+  contract: { label: '契約更改', desc: '選手との契約更改を行います。戦力外通告もこのフェーズで実施します。' },
+  corporate_departure: { label: '退団処理', desc: '引退・戦力外の選手が退団します。' },
+  corporate_scout: { label: 'スカウト入団', desc: '新戦力のスカウト・獲得を行います。' },
+  club_recruit: { label: 'クラブ補強', desc: '新メンバーの獲得を行います。' },
+  tryout: { label: 'トライアウト', desc: '新戦力の獲得のためトライアウトを実施します。' },
+  university_scout: { label: 'スポーツ推薦', desc: '推薦スカウトの最終決定を行います。' },
+  budget_settlement: { label: '予算決算', desc: '今シーズンの収支を確定します。' },
+  offseason: { label: 'オフシーズン', desc: 'シーズンが終了しました。表彰・引退・進路決定を行います。' },
+};
+
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -669,18 +682,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
-    const PHASE_EVENT_INFO = {
-      draft: { label: 'ドラフト会議', desc: 'NPBドラフト会議が始まります。チームの有力選手が指名される可能性があります。' },
-      contract: { label: '契約更改', desc: '選手との契約更改を行います。戦力外通告もこのフェーズで実施します。' },
-      corporate_departure: { label: '退団処理', desc: '引退・戦力外の選手が退団します。' },
-      corporate_scout: { label: 'スカウト入団', desc: '新戦力のスカウト・獲得を行います。' },
-      club_recruit: { label: 'クラブ補強', desc: '新メンバーの獲得を行います。' },
-      tryout: { label: 'トライアウト', desc: '新戦力の獲得のためトライアウトを実施します。' },
-      university_scout: { label: 'スポーツ推薦', desc: '推薦スカウトの最終決定を行います。' },
-      budget_settlement: { label: '予算決算', desc: '今シーズンの収支を確定します。' },
-      offseason: { label: 'オフシーズン', desc: 'シーズンが終了しました。表彰・引退・進路決定を行います。' },
-    };
     const triggerPhaseEvent = (data, eventType) => {
+      // ⚠ **未処理のイベントを seasonData に残す**。イベントは「その日ちょうど」でしか
+      //    発火しない（`day === 9` 等）ので、確認ダイアログを「キャンセル」してから
+      //    日付を進めると、その年のドラフト・契約更改・トライアウト・推薦確定が丸ごと飛んでいた。
+      //    残しておけば `handleProgressDate` がダイアログを出し直す（セーブ→ロードでも残る）
+      data = { ...data, pendingPhaseEvent: eventType };
       setSeasonData(data);
       const info = PHASE_EVENT_INFO[eventType];
       setPendingPhaseEvent({ eventType, label: info?.label || eventType, desc: info?.desc || '', data });
@@ -787,6 +794,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const handleProgressDate = (days) => {
     if (isSimulating) return;
+    // 未処理のフェーズ移行イベントがあれば、日付を進めずにダイアログを出し直す
+    if (seasonData.pendingPhaseEvent) {
+      const t = seasonData.pendingPhaseEvent;
+      const info = PHASE_EVENT_INFO[t];
+      setPendingPhaseEvent({ eventType: t, label: info?.label || t, desc: info?.desc || '', data: seasonData });
+      return;
+    }
     if ((currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS) && !autoFillLineup()) {
       alert('スタメンを自動補完できませんでした。ロスター管理で打順を設定してください。');
       return;
@@ -862,6 +876,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     setIsSimulating(true);
     const { data: afterSimData } = simulateGamesOnDate(seasonData);
     let newSeasonData = progressDate(afterSimData, days);
+    if (newSeasonData._resumeDayAfterManagedGame) newSeasonData = { ...newSeasonData, _resumeDayAfterManagedGame: false };
 
     // 平行世界の試合をシミュレーション
     if (WORLD_DATA.initialized) {
@@ -1003,6 +1018,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (finalData !== null) setSeasonData(finalData);
     setIsSimulating(false);
   };
+
+  // 采配した試合の後は、その日の残り（他の試合・背景の大会・日次処理・イベント判定）を
+  // 通常の日送りと同じ経路で済ませてから翌日へ進む（`gameSetup` が印を付けて戻ってくる）
+  useEffect(() => {
+    if (seasonData?._resumeDayAfterManagedGame && !isSimulating) executeSkipDay(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seasonData?._resumeDayAfterManagedGame]);
 
   const handleGameChoice = (choice) => {
     if (isSimulating) return;
@@ -3755,7 +3777,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       <PhaseTransitionModal
         event={pendingPhaseEvent}
         onClose={() => setPendingPhaseEvent(null)}
-        onProceed={(evt) => { setPendingPhaseEvent(null); if (onForceEvent) onForceEvent(evt); }} />
+        onProceed={(evt) => {
+          setPendingPhaseEvent(null);
+          setSeasonData(prev => (prev?.pendingPhaseEvent ? { ...prev, pendingPhaseEvent: null } : prev));
+          if (onForceEvent) onForceEvent(evt);
+        }} />
     </ScreenShell>
   );
 };

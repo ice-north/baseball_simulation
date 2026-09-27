@@ -4,12 +4,10 @@
 // ========================================================================
 
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { autoSimulateGame, generateAILineup } from './autoSimulation.js';
-import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
+import { generateAILineup } from './autoSimulation.js';
+import { recordGameResult } from '../season/dateProgression.js';
 import { adjustGrowthModifier, applyFatigueGrowthPenalty } from '../utils/constants.js';
 import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
-import { WORLD_DATA } from '../corporate/worldData.js';
-import { generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
 
 /**
  * setupManagedGame - 采配モードの試合セットアップ
@@ -471,86 +469,9 @@ export function executeHandleManagedGameEnd(ctx) {
     holdPitchers.forEach(hp => updatePitcherDecision(hp, winTeamName, 'holds'));
   }
 
-  if (info.otherGames && info.otherGames.length > 0) {
-    info.otherGames.forEach(otherGame => {
-      const oh = TEAMS_DATA[otherGame.home];
-      const oa = TEAMS_DATA[otherGame.away];
-      if (!oh || !oa) return;
-
-      // 先発IDをautoSimulateGame実行前のローテーションインデックスから記録
-      const ohStarterId = (() => {
-        const rot = oh.pitchingRotation;
-        if (!rot?.starters?.length) return null;
-        return rot.starters[(rot.currentStarterIndex || 0) % rot.starters.length];
-      })();
-      const oaStarterId = (() => {
-        const rot = oa.pitchingRotation;
-        if (!rot?.starters?.length) return null;
-        return rot.starters[(rot.currentStarterIndex || 0) % rot.starters.length];
-      })();
-      const otherResult = autoSimulateGame(otherGame.home, otherGame.away);
-      if (otherResult) {
-        // 投手勝敗・セーブ・ホールドの記録
-        if (otherResult.homeScore !== otherResult.awayScore) {
-          const oIsHomeWin = otherResult.homeScore > otherResult.awayScore;
-          const oWinTeam = oIsHomeWin ? otherResult.homeTeam : otherResult.awayTeam;
-          const oLoseTeam = oIsHomeWin ? otherResult.awayTeam : otherResult.homeTeam;
-          const oWinName = oIsHomeWin ? otherGame.home : otherGame.away;
-          const oLoseName = oIsHomeWin ? otherGame.away : otherGame.home;
-          if (oWinTeam && oLoseTeam) {
-            const oWinPs = oWinTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-            const oLosePs = oLoseTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-            // 勝ちチームの先発ID（試合前に取得済み）
-            const oWinStarterId = oIsHomeWin ? ohStarterId : oaStarterId;
-            // 勝ち投手（DH制では投手battingOrder=0）
-            const oStarter = oWinPs.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
-            const oWinP = oStarter && oStarter.gameStats.pitching.outs >= 15
-              ? oStarter : (oWinPs.filter(p => p !== oStarter).sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs)[0] || oWinPs[0]);
-            // 負け投手: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
-            const oLoseStarter = oLosePs.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
-            const oLoseP = oLoseStarter && (oLoseStarter.gameStats?.pitching?.runsAllowed || 0) > 0
-              ? oLoseStarter
-              : [...oLosePs].sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed)[0];
-            // セーブ: 勝ち投手・先発を除いた最少アウト（最後に登板）の投手
-            const oScoreDiff = Math.abs(otherResult.homeScore - otherResult.awayScore);
-            const oSaveCandidates = [...oWinPs]
-              .filter(p => p !== oWinP && (oWinStarterId ? p.id !== oWinStarterId : p !== oStarter))
-              .sort((a, b) => (b.gameStats.pitching.outs || 0) - (a.gameStats.pitching.outs || 0));
-            const oLastP = oSaveCandidates.length > 0 ? oSaveCandidates[oSaveCandidates.length - 1] : null;
-            const oSaveP = oLastP &&
-              ((oScoreDiff <= 3 && oLastP.gameStats.pitching.outs >= 3) || oLastP.gameStats.pitching.outs >= 9)
-              ? oLastP : null;
-            const recordOther = (playerState, teamName, stat) => {
-              const td = TEAMS_DATA[teamName];
-              if (!td) return;
-              const pd = td.players.find(pl => pl.id === playerState.id);
-              if (!pd) return;
-              if (!pd.seasonStats?.pitching) { if (!pd.seasonStats) pd.seasonStats = { batting: {}, pitching: {} }; if (!pd.seasonStats.pitching) pd.seasonStats.pitching = {}; }
-              pd.seasonStats.pitching[stat] = (pd.seasonStats.pitching[stat] || 0) + 1;
-            };
-            if (oWinP) recordOther(oWinP, oWinName, 'wins');
-            if (oLoseP) recordOther(oLoseP, oLoseName, 'losses');
-            if (oSaveP) recordOther(oSaveP, oWinName, 'saves');
-            // ホールド: 勝ち投手・セーブ・先発を除く
-            oWinPs.forEach(p => {
-              if (p !== oWinP && p !== oSaveP && p !== oStarter &&
-                  (oWinStarterId ? p.id !== oWinStarterId : true) &&
-                  p.gameStats.pitching.outs >= 1) {
-                recordOther(p, oWinName, 'holds');
-              }
-            });
-          }
-        }
-        updatedSeasonData = recordGameResult(updatedSeasonData, {
-          date: seasonData.currentDate,
-          home: otherGame.home,
-          away: otherGame.away,
-          homeScore: otherResult.homeScore,
-          awayScore: otherResult.awayScore
-        });
-      }
-    });
-  }
+  // ⚠ 同じ日の他の試合はここで消化しない。日付送りと一緒に日程進行の
+  //    `executeSkipDay`（`simulateGamesOnDate`）が消化する（下記 `_resumeDayAfterManagedGame`）。
+  //    以前はここに**勝敗・セーブ・ホールドの判定をもう1本**持っていた（表の二重化）
 
   // 大学トーナメントの結果処理（全日本大学野球選手権 / 明治神宮大会）
   for (const tournamentKey of ['universityChampionship', 'meijiJingu']) {
@@ -788,31 +709,14 @@ export function executeHandleManagedGameEnd(ctx) {
     return;
   }
 
-  updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
-  updatedSeasonData = progressDate(updatedSeasonData, 1);
-
-  const oldPhase = seasonData.phase;
-  const newPhase = updatedSeasonData.phase;
-  if (oldPhase !== newPhase) {
-    updatedSeasonData = handlePhaseTransition(updatedSeasonData, newPhase);
-  }
-
-  // 独立リーグモード: グランドチャンピオンシップ生成（10月〜）。
-  // 采配で試合を消化する経路では checkAndTriggerEvents が走らないため、
-  // ここでも生成しないと「試合を続けているとグランドCSが始まらない」不具合になる。
-  if (!updatedSeasonData.settings?.corporateMode && !updatedSeasonData.settings?.universityMode &&
-      WORLD_DATA.initialized && updatedSeasonData.currentDate.month >= 10 && !updatedSeasonData.grandChampionship?.generated) {
-    const gc = generateGrandChampionship(WORLD_DATA.userLeagueId, updatedSeasonData.standings, updatedSeasonData.settings, updatedSeasonData.year);
-    if (gc) {
-      autoPlayGrandChampionship(gc);
-      updatedSeasonData = { ...updatedSeasonData, grandChampionship: gc };
-    }
-  }
-
-  // カレンダー月を追従
-  if (updatedSeasonData?.currentDate?.month && updatedSeasonData.currentDate.month !== selectedMonth) {
-    setSelectedMonth(updatedSeasonData.currentDate.month);
-  }
+  // ⚠ **ここで日付を進めないこと**。以前は `progressDate` だけ呼んで日程進行へ戻っており、
+  //    通常の日送り（`DateProgressScreen.executeSkipDay`）が行う
+  //    他リーグ・大学リーグの試合 / 背景の社会人大会 / 推薦スカウトの日次処理 /
+  //    2ヶ月ごとの注目度 / `checkAndTriggerEvents` が**采配した日だけ丸ごと抜けていた**。
+  //    それらは日付の完全一致でしか消化しないので、後からも拾われない
+  //    （大学モードではドラフト前日の試合を采配するとドラフトまで飛んでいた）。
+  //    印を付けて日程進行へ戻り、向こうで同じ1日の処理を通す。
+  updatedSeasonData = { ...updatedSeasonData, _resumeDayAfterManagedGame: true };
 
   setSeasonData(updatedSeasonData);
 
