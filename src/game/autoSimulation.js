@@ -604,7 +604,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // 投手交代記録（理由表示用）
     pitcherChanges: [],
     // 現在の投手ID（DH制で複数pitcher判別用）
-    currentPitcherId: { home: homeStarter?.id || null, away: awayStarter?.id || null }
+    currentPitcherId: { home: homeStarter?.id || null, away: awayStarter?.id || null },
+    // 交代で退いた選手（再出場させない）。⚠ battingOrder=0 だけだと控えと区別できず、
+    //    代打で退いた選手が次の打席でまた代打に出てこられた
+    removedIds: new Set(),
+    // 投手に代打を出したチーム → { slot, phId, phPos }。イニング終了処理で必ず継投する
+    //    （⚠ 以前は代打に position='pitcher' を渡すだけで currentPitcherId が変わらず、
+    //       打順から外れた投手がそのまま投げ続けていた）
+    pitcherPinchHit: { home: null, away: null }
   };
 
   // 現在の打者を取得
@@ -641,7 +648,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
   // 現在の捕手を取得
   const getCurrentCatcher = (team) => {
-    return team.players.find(p => p.position === 'catcher') || team.players[0];
+    // ⚠ 出場中の捕手を先に探す（代打・守備固めで退いた捕手も position='catcher' のまま残る）
+    return team.players.find(p => p.position === 'catcher' && p.battingOrder > 0)
+      || team.players.find(p => p.position === 'catcher') || team.players[0];
   };
 
   // 守備データを構築（守備位置適正を反映: 適正100→100%、適正0→50%）
@@ -1104,7 +1113,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   // 盗塁判定（AI監督）- 走者の実際の走力を使用
   const attemptStolenBase = (offenseTeam, defenseTeam) => {
     const pitcher = getCurrentPitcher(defenseTeam);
-    const catcher = defenseTeam.players.find(p => p.position === 'catcher');
+    const catcher = getCurrentCatcher(defenseTeam);
 
     for (let base = 0; base < 2; base++) {
       if (gameState.bases[base] && !gameState.bases[base + 1]) {
@@ -1150,7 +1159,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             if (Math.random() < throwErr) {
               const runnerObj = gameState.bases[base];
               gameState.bases[base] = false;
-              const dest = base + 2; // 悪送球で1つ余分に進む
+              // 悪送球で1つ余分に進む。⚠ 先の塁が埋まっていたら盗んだ塁で止まる
+              //    （以前は三塁走者を上書きして消していた）
+              const dest = (base + 2 <= 2 && gameState.bases[base + 2]) ? base + 1 : base + 2;
               if (dest <= 2) {
                 gameState.bases[dest] = runnerObj;
               } else {
@@ -1169,6 +1180,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             }
             gameState.bases[base] = false;
             gameState.outs++;
+            // ⚠ 盗塁死のアウトも投手の投球回に入る（以前は抜けていて、投球回が試合で26や23になった）
+            if (pitcher?.gameStats?.pitching) pitcher.gameStats.pitching.outs++;
             // 盗塁死を走者の成績に記録する（従来は記録されておらず成功率が常に100%だった）
             if (typeof runner === 'object' && runner?.gameStats?.batting) {
               runner.gameStats.batting.caughtStealing = (runner.gameStats.batting.caughtStealing || 0) + 1;
@@ -1284,9 +1297,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   // 代打判定（AI監督）- 状況判断・理由付き版
   const considerPinchHitter = (offenseTeam, batter) => {
     const benchFielders = offenseTeam.players.filter(p =>
-      p.battingOrder === 0 && !isPitcher(p)
+      p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
     );
     if (benchFielders.length === 0) return batter;
+    const offenseKey = offenseTeam === gameState.homeTeam ? 'home' : 'away';
 
     // 控え選手の中から最強打者を選ぶヘルパー
     const getBestBench = () => benchFielders.reduce((best, p) => {
@@ -1300,9 +1314,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       const batterData = offenseTeam.players.find(p => p.id === batter.id);
       const phData = offenseTeam.players.find(p => p.id === pinchHitter.id);
       if (batterData && phData) {
+        const forPitcher = batterData.id === gameState.currentPitcherId[offenseKey];
         phData.battingOrder = batterData.battingOrder;
-        phData.position = batterData.position;
+        if (forPitcher) {
+          // 投手の打順に入った代打は、次の守備で継投の投手と入れ替わる（守備には就かない）
+          gameState.pitcherPinchHit[offenseKey] = { slot: batterData.battingOrder, phId: phData.id };
+        } else {
+          phData.position = batterData.position;
+        }
         batterData.battingOrder = 0;
+        gameState.removedIds.add(batterData.id);
         return pinchHitter;
       }
       return batter;
@@ -1318,11 +1339,22 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const runnersOn = gameState.bases.filter(Boolean).length;
     const isScoring = gameState.bases[1] || gameState.bases[2];
 
-    // 1. 投手の打順：6回以降で代打（投手は打撃が弱い）
-    if (isPitcher(batter) && gameState.inning >= 6) {
-      if (bestBench && ((bestBench.batting?.meet || 0) > (batter.batting?.meet || 0) + 5)) {
-        return executePinchHit(bestBench, `${gameState.inning}回、投手に代わり打力アップ`);
+    // 1. 投手の打順：代打を出すと**その投手は降板する**（次の守備で継投）。
+    //    ⚠ 「6回以降・控えの方が少しでも打てる」だけで出すと、控えは必ず投手より打てるので
+    //    好投中の先発まで6回で降ろしてしまう（実測 先発の平均投球回 5.20→4.51回、
+    //    6回以上 41%→24%）。代打は「点が欲しい場面」か「先発がもう限界」のときだけ。
+    if (isPitcher(batter)) {
+      const stRate = (batter.currentStamina || 0) / Math.max(1, batter.pitching?.stamina || 100);
+      const tired = stRate < 0.40 || (batter.gameStats?.pitching?.pitches || 0) >= 95;
+      const needRuns = scoreDiff <= 0 && (isScoring || gameState.inning >= 8);
+      if (gameState.inning >= 6 && (tired || needRuns)
+          && bestBench && ((bestBench.batting?.meet || 0) > (batter.batting?.meet || 0) + 5)) {
+        return executePinchHit(bestBench,
+          needRuns ? `${gameState.inning}回、投手に代打（${scoreDiff < 0 ? '反撃' : '勝ち越し'}の好機）`
+                   : `${gameState.inning}回、疲れの見える投手に代打`);
       }
+      // ⚠ 投手の打席には以下の汎用ルールを当てない（どれも「控えの方が打てる」で成立するため）
+      return batter;
     }
 
     // 2. 7回以降、得点圏にランナーがいて打撃力差が大きい
@@ -1361,7 +1393,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       : gameState.score.away - gameState.score.home;
 
     const benchFielders = defenseTeam.players.filter(p =>
-      p.battingOrder === 0 && !isPitcher(p)
+      p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
     );
     if (benchFielders.length === 0) return;
 
@@ -1379,36 +1411,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               replacement.battingOrder = starter.battingOrder;
               replacement.position = starter.position;
               starter.battingOrder = 0;
+              gameState.removedIds.add(starter.id);
             }
           }
         }
       });
     }
 
-    // 2. 8回以降リード時: 代走要員（足が速い控えで塁上のランナーを入れ替え）
-    if (gameState.inning >= 8 && isLeading && scoreDiff <= 3) {
-      for (let base = 2; base >= 0; base--) {
-        const runner = gameState.bases[base];
-        if (runner) {
-          const runnerSpeed = runner.physical?.speed || 50;
-          if (runnerSpeed < 55) {
-            const fastRunner = benchFielders.find(p =>
-              p.battingOrder === 0 &&
-              (p.physical?.speed || 0) > runnerSpeed + 15
-            );
-            if (fastRunner) {
-              const runnerData = defenseTeam.players.find(p => p.id === runner.id);
-              if (runnerData) {
-                fastRunner.battingOrder = runnerData.battingOrder;
-                fastRunner.position = runnerData.position;
-                runnerData.battingOrder = 0;
-                gameState.bases[base] = fastRunner;
-              }
-            }
-          }
-        }
-      }
-    }
+    // ⚠ 旧「2. 8回以降リード時の代走」は撤去した。この関数はイニング終了時に呼ばれるので
+    //    塁上は**終わった攻撃の残塁**で、代走の意味が無いうえ、残塁していた投手を
+    //    代走と入れ替えて position='pitcher' の野手を打順9に作り、継投時に打順が重複していた
 
     // 3. 6回以降大量リード: 控え野手を順番に出場させる（経験積ませる）
     if (gameState.inning >= 6 && scoreDiff >= 5) {
@@ -1433,6 +1445,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           leastUsed.battingOrder = weakest.battingOrder;
           leastUsed.position = weakest.position;
           weakest.battingOrder = 0;
+          gameState.removedIds.add(weakest.id);
         }
       }
     }
@@ -1744,10 +1757,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       const relieverOldPos = relieverData.position;
       const isTwoWaySwap = relieverOldOrder > 0 && relieverOldOrder < 9;
 
+      const pitcherSlot = useDH ? 0 : (pitcherData.battingOrder || 9);
       pitcherData.battingOrder = 0;
       pitcherData.position = 'pitcher';
+      gs.removedIds.add(pitcherData.id);
 
-      relieverData.battingOrder = useDH ? 0 : 9;
+      relieverData.battingOrder = pitcherSlot;
       relieverData.position = 'pitcher';
       relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
@@ -1789,15 +1804,36 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     }
   };
 
+  // バント安打の走者の進め方。⚠ 以前は `bases[2]=bases[1]` の後に二塁を空けておらず、
+  //    同じ走者が二・三塁の両方に残っていた（600試合で26件）。
+  //    一塁走者は押し出されて二塁へ、二塁走者は一塁が空いていても三塁へ進む（送りバントの形）。
+  const advanceOnBuntHit = (batter, pitcher) => {
+    const b = gameState.bases;
+    if (b[0]) {
+      if (b[1]) {
+        if (b[2]) {   // 満塁の押し出し
+          if (gameState.isTopInning) gameState.score.away++; else gameState.score.home++;
+          batter.gameStats.batting.rbis++;
+          pitcher.gameStats.pitching.runsAllowed++;
+          creditRuns(pitcher, 1, b[2]?._reachedOnError ? 1 : 0);
+        }
+        b[2] = b[1];
+      }
+      b[1] = b[0];
+    } else if (b[1] && !b[2]) {
+      b[2] = b[1];
+      b[1] = false;
+    }
+    b[0] = batter;
+  };
+
   // 打席シミュレーション
   const simulateAtBat = () => {
     const offenseTeam = gameState.isTopInning ? gameState.awayTeam : gameState.homeTeam;
     const defenseTeam = gameState.isTopInning ? gameState.homeTeam : gameState.awayTeam;
 
     let batter = getCurrentBatter(offenseTeam);
-    const pitcher = getCurrentPitcher(defenseTeam);
-    const catcher = getCurrentCatcher(defenseTeam);
-    const defense = buildDefense(defenseTeam);
+    let pitcher = getCurrentPitcher(defenseTeam);
 
     if (!batter) {
       console.error('打者が取得できません', offenseTeam);
@@ -1813,6 +1849,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
     // AI監督: 打席間のピンチ投手交代（ランナー状況・スタミナ考慮）
     considerMidInningPitcherChange(defenseTeam, pitcher, gameState);
+    // ⚠ 交代したらこの打者には**新しい投手**が投げる。以前は交代前に取った
+    //    `const pitcher` のまま打席を進めており、全打席の約6%で交代済みの投手が投げていた
+    //    （左のワンポイントは狙った左打者ではなく次の打者と対戦していた）
+    pitcher = getCurrentPitcher(defenseTeam) || pitcher;
+    const catcher = getCurrentCatcher(defenseTeam);
+    const defense = buildDefense(defenseTeam);
 
     let atBatOver = false;
     let pitchCount = 0;
@@ -1862,9 +1904,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             batter.gameStats.batting.atBats++;
             batter.gameStats.batting.hits++;
             // 走者進塁 + 打者1塁
-            if (gameState.bases[1]) { gameState.bases[2] = gameState.bases[1]; }
-            if (gameState.bases[0]) { gameState.bases[1] = gameState.bases[0]; }
-            gameState.bases[0] = batter;
+            advanceOnBuntHit(batter, pitcher);
           }
           atBatDamagePoints += 4;
           atBatOver = true;
@@ -1887,9 +1927,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           } else {
             batter.gameStats.batting.atBats++;
             batter.gameStats.batting.hits++;
-            if (gameState.bases[1]) { gameState.bases[2] = gameState.bases[1]; }
-            if (gameState.bases[0]) { gameState.bases[1] = gameState.bases[0]; }
-            gameState.bases[0] = batter;
+            advanceOnBuntHit(batter, pitcher);
           }
           atBatDamagePoints += 4;
           atBatOver = true;
@@ -1902,9 +1940,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           } else {
             batter.gameStats.batting.atBats++;
             batter.gameStats.batting.hits++;
-            if (gameState.bases[1]) { gameState.bases[2] = gameState.bases[1]; }
-            if (gameState.bases[0]) { gameState.bases[1] = gameState.bases[0]; }
-            gameState.bases[0] = batter;
+            advanceOnBuntHit(batter, pitcher);
             atBatDamagePoints += 4;
           }
           atBatOver = true;
@@ -1912,7 +1948,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       }
     }
 
+    const isWalkOff = () => !gameState.isTopInning && gameState.inning >= 9
+      && gameState.score.home > gameState.score.away;
     while (!atBatOver && pitchCount < maxPitches) {
+      // 暴投・盗塁の悪送球でサヨナラの走者が還ったら、その時点で試合終了
+      if (isWalkOff()) break;
       pitchCount++;
 
       // AI監督: 盗塁を検討（各球で検討、ただし1打席1回まで）
@@ -2252,6 +2292,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     while (gameState.outs < 3 && atBats < 50) {  // 無限ループ防止（打席数制限）
       simulateAtBat();
       atBats++;
+      // サヨナラ: 9回以降の裏にホームが勝ち越した時点で試合終了。
+      // ⚠ 以前は3アウトまで攻撃が続き、余分な得点が打者・投手の成績と勝敗に混ざっていた
+      if (!gameState.isTopInning && gameState.inning >= 9
+          && gameState.score.home > gameState.score.away) {
+        gameState.walkOff = true;
+        break;
+      }
     }
 
     if (atBats >= 50) {
@@ -2295,17 +2342,21 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             pitcher.pitching.stamina
           );
 
-          // リリーフ投手のイニング追跡
-          if (reliefTrack.currentRelieverId === pitcher.id) {
-            reliefTrack.relieverOutsPitched += 3; // 1イニング = 3アウト
-          }
-
           // このイニングで守備したかどうかを判定
           // ※ isTopInning は既に反転済み
           // 表終了後: isTopInning = false → home が守備していた
           // 裏終了後: isTopInning = true, inning++ → away が守備していた
           const defendedThisInning = (!gameState.isTopInning && teamKey === 'home') ||
                                      (gameState.isTopInning && teamKey === 'away');
+          // 次の半イニングで守備に就くか（継投はその直前にだけ行う）
+          const defendsNext = !defendedThisInning;
+
+          // リリーフ投手のイニング追跡。⚠ 実際に取ったアウトで数えること。
+          //    以前は半イニングごとに**守備していない側にも** +3 を足しており、
+          //    守護神の「2イニング」が実質1イニング、ロングの3イニングが約1.5で打ち切られていた
+          if (reliefTrack.currentRelieverId === pitcher.id && defendedThisInning) {
+            reliefTrack.relieverOutsPitched = pitcherData.gameStats?.pitching?.outs || 0;
+          }
           // 今イニングの失点数を計算
           const inningRunsAllowed = defendedThisInning
             ? (pitcherData.gameStats?.pitching?.runsAllowed || 0) - (gameState.inningStartRuns[teamKey] || 0)
@@ -2324,8 +2375,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           const totalPitches = pitcherData.gameStats?.pitching?.pitches || 0;
           const isReliever = reliefTrack.currentRelieverId === pitcher.id;
 
+          // 投手に代打を出した → 次の守備は必ず継投（打順から外れた投手は投げられない）
+          const phForPitcher = gameState.pitcherPinchHit[teamKey];
+          if (phForPitcher) {
+            shouldChange = true;
+            situation = scoreDiff > 0 && scoreDiff <= 3 && gameState.inning >= 8 ? 'hold'
+              : scoreDiff < 0 ? 'behind' : 'middle';
+            changeReason = `${pitcher.name}に代打が出たため継投`;
+          }
+
           // リリーフ投手の役割完了チェック（登板制限を役割ベースに変更）
-          if (isReliever && defendedThisInning) {
+          if (!shouldChange && isReliever && defendedThisInning) {
             const relieverRole = pitcherRoles[pitcher.id] || 'auto_r';
             const inningRuns = (pitcherData.gameStats?.pitching?.runsAllowed || 0) - (gameState.inningStartRuns[teamKey] || 0);
 
@@ -2379,7 +2439,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
                 situation = 'middle';
               }
             }
-          } else if (isReliever && !defendedThisInning) {
+          } else if (!shouldChange && isReliever && !defendedThisInning) {
             // 守備していないイニングでもワンポイントのフォールバックチェック
             const relieverRole = pitcherRoles[pitcher.id] || 'auto_r';
             if (relieverRole === 'onepoint' && reliefTrack.relieverBattersFaced >= 1) {
@@ -2439,7 +2499,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             }
           }
           // 9回、同点〜3点差以内のリード → クローザー（同点を含める理由は上記）
-          if (!shouldChange && gameState.inning >= 9 && scoreDiff >= 0 && scoreDiff <= 3) {
+          // ⚠ 勝ちパターン・温存の継投は「次に守るチーム」にだけ行う（攻撃前に守護神を
+          //    登板扱いにすると、投げないのに登板記録と疲労だけが付く）
+          if (!shouldChange && defendsNext && gameState.inning >= 9 && scoreDiff >= 0 && scoreDiff <= 3) {
             const closerId = rotation?.closer;
             if (closerId && pitcher.id !== closerId) {
               shouldChange = true;
@@ -2448,7 +2510,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             }
           }
           // 8回で僅差リード → セットアッパー
-          if (!shouldChange && gameState.inning === 8 && scoreDiff > 0 && Math.abs(scoreDiff) <= 2 && !isReliever) {
+          if (!shouldChange && defendsNext && gameState.inning === 8 && scoreDiff > 0 && Math.abs(scoreDiff) <= 2 && !isReliever) {
             shouldChange = true;
             situation = 'hold';
             changeReason = `8回僅差リード、セットアッパーへ`;
@@ -2632,10 +2694,19 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               const relieverOldPos2 = relieverData.position;
               const isTwoWaySwap2 = relieverOldOrder2 > 0 && relieverOldOrder2 < 9;
 
+              // 投手に代打が出ていたら、継投の投手はその代打の打順に入り、代打は退く
+              const ph = gameState.pitcherPinchHit[teamKey];
+              const pitcherSlot = useDH ? 0 : (ph ? ph.slot : (pitcherData.battingOrder || 9));
+              if (ph) {
+                const phData = team.players.find(p => p.id === ph.phId);
+                if (phData) { phData.battingOrder = 0; gameState.removedIds.add(phData.id); }
+                gameState.pitcherPinchHit[teamKey] = null;
+              }
               pitcherData.battingOrder = 0;
               pitcherData.position = 'pitcher';
+              gameState.removedIds.add(pitcherData.id);
 
-              relieverData.battingOrder = useDH ? 0 : 9;
+              relieverData.battingOrder = pitcherSlot;
               relieverData.position = 'pitcher';
               relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
@@ -2662,8 +2733,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               gameState.currentPitcherId[pitcherTeamKey2] = reliever.id;
 
               if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
-                TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
-                  (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 30;
+                // ⚠ 打席間の交代・aiManager と同じ +50・上限150（ここだけ +30・上限なしだった）
+                TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] = Math.min(150,
+                  (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 50);
               }
             }
           }
@@ -2676,16 +2748,20 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   };
 
   // 試合実行
-  while (gameState.inning <= 9 || (gameState.inning > 9 && gameState.score.home === gameState.score.away)) {
-    // 9回裏でホームリードなら終了
-    if (gameState.inning === 9 && !gameState.isTopInning && gameState.score.home > gameState.score.away) {
-      break;
-    }
-
-    // 延長12回まで
-    if (gameState.inning > 12) break;
-
-    simulateInning();
+  // ⚠ 終了判定は**半イニングごと**に行うこと。以前は
+  //    `inning <= 9 || (inning > 9 && 同点)` だったので、延長の表に勝ち越した瞬間に
+  //    （裏を打たせずに）試合が終わっていた（延長で決着した試合の約6%＝全試合の約6%）。
+  //    9回以降: 表の終了時にホームがリード → 裏は不要 / 裏の終了時に差がある → 決着。
+  //    延長は12回まで（12回裏を終えて同点なら引き分け）
+  const MAX_INNINGS = 12;
+  for (;;) {
+    simulateInning();                         // 終わると isTopInning が反転済み
+    const endedTop = !gameState.isTopInning;  // いま終わったのが表か
+    const inn = endedTop ? gameState.inning : gameState.inning - 1;
+    if (inn < 9) continue;
+    const { home, away } = gameState.score;
+    if (endedTop && home > away) break;
+    if (!endedTop && (home !== away || inn >= MAX_INNINGS)) break;
   }
 
   // 試合結果
@@ -2744,7 +2820,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       //    シーズン成績から丸ごと落ちる（実測で死球が9%欠けていた）
       if (player.gameStats.batting.atBats > 0
           || player.gameStats.batting.walks > 0
-          || player.gameStats.batting.hitByPitch > 0) {
+          || player.gameStats.batting.hitByPitch > 0
+          || (player.gameStats.batting.sacrificeBunts || 0) > 0) {   // 犠打だけの試合も出場
         const b = player.gameStats.batting;
         const season = playerData.seasonStats.batting;
 
