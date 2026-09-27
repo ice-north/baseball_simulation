@@ -918,14 +918,25 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
   //    まだ取られていない先頭から窓の分だけを見て、ポジション需要＋地元が最も高い選手を取る。
   // ⚠ **ポジション需要をここで見ること**。以前は純粋な能力順のラウンドロビンで
   //    均衡を一切見ておらず、12年で独立が 92.6% 投手になっていた。
+  // ⚠ **窓は群（投手/捕手/野手）ごとに取ること**。1本の窓だと、プール（投手28%前後）の
+  //    先頭8人に投手が1人も居ない列ではポジション需要の加点が何も効かず、
+  //    入団がルート枠の導入後に野手へ偏って独立の投手比が 37%→25%（15年）まで落ちた。
+  //    群ごとに先頭 HOME_WINDOW 人までなら「群の中で下位まで拾いに行く」ことにはならない。
   const pickInWindow = (list, teamInfo) => {
     const teamBlock = blockOfCorporate(teamInfo.team);
-    let best = null, bestAdj = -Infinity, seen = 0;
+    let best = null, bestAdj = -Infinity;
+    const seen = { pitcher: 0, catcher: 0, fielder: 0 };
     for (const e of list) {
       if (recruited.has(e.player)) continue;
-      const adj = recruitPositionBoost(e.player, teamInfo.team) + homeZ(e.player, teamBlock);
+      const g = e.player.position === 'pitcher' ? 'pitcher'
+        : e.player.position === 'catcher' ? 'catcher' : 'fielder';
+      if (seen[g] >= HOME_WINDOW) {
+        if (seen.pitcher >= HOME_WINDOW && seen.catcher >= HOME_WINDOW && seen.fielder >= HOME_WINDOW) break;
+        continue;
+      }
+      seen[g]++;
+      const adj = e.score + recruitPositionBoost(e.player, teamInfo.team) + homeZ(e.player, teamBlock);
       if (adj > bestAdj) { bestAdj = adj; best = e; }
-      if (++seen >= HOME_WINDOW) break;
     }
     return best;
   };

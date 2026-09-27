@@ -1308,6 +1308,25 @@ export function advanceToNextYear(seasonData, allTeams) {
         return total > 0 ? pitchers / total : 0.35;
       };
 
+      // ⚠ **行き先は「その群が一番足りないクラブ」で選ぶこと**。以前は「人数が最も
+      //    少ないクラブ」だけで選んでおり、捕手も野手の人数も見ていなかった。クラブの
+      //    年齢引退が入ると人数が15人台へ縮み、8年目に **208チーム中191が野手9人未満 /
+      //    52が捕手0人** になった（捕手0は引退を入れる前から51チームあった）。
+      const groupOf = (p) => p.position === 'pitcher' ? 'pitcher' : p.position === 'catcher' ? 'catcher' : 'fielder';
+      const groupCount = (c, g) => (c.team.players || []).filter(x => groupOf(x) === g).length;
+      const placed = new Set();
+      const placeInClub = (p, targetClub) => {
+        p._nextYearTeam = targetClub.name;
+        const player = { ...p };
+        player.isStarter   = false;
+        player.battingOrder = 0;
+        player.careerHistory = [...(p.careerHistory || [])];
+        player.careerHistory.push({ type: 'club_join', year: currentYear + 1, label: `${targetClub.name}入部` });
+        addToRoster(targetClub.team, player);
+        targetClub.count++;
+        placed.add(p);
+      };
+
       for (const p of clubCandidates) {
         // 人数が最も少ないクラブを選択（投手/野手バランスも考慮）
         const needsPitcher = sortedClubs.some(c => c.count < CLUB_ROSTER_CAP && getClubPitcherRatio(c) < 0.30);
@@ -1325,18 +1344,48 @@ export function advanceToNextYear(seasonData, allTeams) {
           if (strict && p.position !== 'pitcher' && needsPitcher && ratio < 0.25) return false;
           return true;
         };
-        const targetClub = sortedClubs.find(c => fits(c, true)) || sortedClubs.find(c => fits(c, false));
+        const g = groupOf(p);
+        const pickNeediest = (strict) => {
+          let best = null, bestKey = Infinity;
+          for (const c of sortedClubs) {
+            if (!fits(c, strict) || !c.team.players) continue;
+            const key = groupCount(c, g) * 100 + c.count;   // 群が手薄 → 全体が少ない の順
+            if (key < bestKey) { bestKey = key; best = c; }
+          }
+          return best;
+        };
+        const targetClub = pickNeediest(true) || pickNeediest(false);
 
-        if (!targetClub || !targetClub.team.players) continue;
-        p._nextYearTeam = targetClub.name;
-        const player = { ...p };
-        player.isStarter   = false;
-        player.battingOrder = 0;
-        if (!player.careerHistory) player.careerHistory = [];
-        player.careerHistory.push({ type: 'club_join', year: currentYear + 1, label: `${targetClub.name}入部` });
-        addToRoster(targetClub.team, player);
-        targetClub.count++;
+        if (!targetClub) continue;
+        placeInClub(p, targetClub);
         sortedClubs.sort((a, b) => a.count - b.count);
+      }
+
+      // 補充の底上げ: 捕手2人・野手10人（捕手込み）に届かないクラブは、今年野球を
+      // 離れる高卒から地元の若手を迎える（クラブの実態＝地域の受け皿）。
+      // ⚠ **ここを省くと人数が引退に負けて縮み続ける**（上記の実測）。
+      const CLUB_MIN_CATCHERS = 2;
+      const CLUB_MIN_FIELDERS = 10;
+      const topUpPool = (hsDistribution.retired || [])
+        .filter(p => !placed.has(p) && (p.personality?.discipline ?? 50) >= 35)
+        .sort((a, b) => scoreForClub(b) - scoreForClub(a));
+      const takeFromTopUp = (pred) => {
+        const i = topUpPool.findIndex(pred);
+        return i >= 0 ? topUpPool.splice(i, 1)[0] : null;
+      };
+      for (const c of sortedClubs) {
+        if (!c.team.players) continue;
+        while (groupCount(c, 'catcher') < CLUB_MIN_CATCHERS && c.count < CLUB_ROSTER_CAP) {
+          const p = takeFromTopUp(x => x.position === 'catcher');
+          if (!p) break;
+          placeInClub(p, c);
+        }
+        while (c.team.players.filter(x => x.position !== 'pitcher').length < CLUB_MIN_FIELDERS
+               && c.count < CLUB_ROSTER_CAP) {
+          const p = takeFromTopUp(x => x.position !== 'pitcher');
+          if (!p) break;
+          placeInClub(p, c);
+        }
       }
     }
   }
