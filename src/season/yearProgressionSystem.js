@@ -25,7 +25,7 @@ import { addToRoster, replaceRoster } from '../state/roster.js';
 // 従来 export されていた3関数は互換性維持のため再エクスポートする。
 import { updateGrowthModifiers, applyFreeAgentGrowth, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts } from './growthSystem.js';
 // CPU並行世界のロスター管理（大学卒業/新入生・社会人/独立の戦力外/補充）は rosterProgression.js に抽出
-import { processUniversityTeamGraduation, releaseCPUCorporatePlayers, replenishCorporateRosters, replenishIndependentLeagueRosters, buildRecruitNorms, abilityZ } from './rosterProgression.js';
+import { processUniversityTeamGraduation, releaseCPUCorporatePlayers, replenishCorporateRosters, replenishIndependentLeagueRosters, buildRecruitNorms, abilityZ, markFreshRoute, processLowerTierTurnover } from './rosterProgression.js';
 export { updateGrowthModifiers, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts };
 import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
@@ -1172,6 +1172,7 @@ export function advanceToNextYear(seasonData, allTeams) {
       grad.postGradPath = 'retired';
     }
     if (grad.postGradPath !== 'retired') {
+      markFreshRoute(grad, 'university', currentYear);   // 企業の入団ルート（大卒）
       addToReleasedPool(grad);
     }
   });
@@ -1198,14 +1199,24 @@ export function advanceToNextYear(seasonData, allTeams) {
     hsDistribution.corporate.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
+      markFreshRoute(p, 'highschool', currentYear);   // 企業の入団ルート（高卒）
       addToReleasedPool(p);
     });
     // 独立候補もリリースプールへ
     hsDistribution.independent.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
+      markFreshRoute(p, 'highschool', currentYear);
       addToReleasedPool(p);
     });
+  }
+
+  // 5.7. 独立・クラブの新陳代謝（独立は25歳から去り、実力があれば社会人・クラブへ。
+  //      クラブは年齢で引退）。⚠ 補充（5.8〜）より前に置くこと——空いた枠を
+  //      同じオフの新卒で埋めるため。自リーグは ContractScreen が担当するので除外
+  {
+    const turnover = processLowerTierTurnover(teamsAfterRetirement, currentYear, seasonData.settings?.teamNames || []);
+    retirements.push(...turnover.retirements);
   }
 
   // 5.75. CPU社会人・独立チームの自動戦力外通告（非社会人モードのみ）
@@ -1256,9 +1267,12 @@ export function advanceToNextYear(seasonData, allTeams) {
       });
     }
     // リリースプールから30歳以下の一部（企業・独立からの退団者）
+    // ⚠ **今年独立を辞めた選手は全員をクラブの候補にすること**。社会人に拾われ
+    //    なかった分の受け皿がここしか無い（1割の抽選だと実力があっても大半が消える）
     for (let i = releasedPlayersPool.length - 1; i >= 0; i--) {
       const p = releasedPlayersPool[i];
-      if (p.age && p.age <= 30 && Math.random() < 0.1) {
+      const indLeaver = p._freshRoute === 'independent' && p._freshYear === currentYear;
+      if (indLeaver || (p.age && p.age <= 30 && Math.random() < 0.1)) {
         clubCandidatesRaw.push(p);
         releasedPlayersPool.splice(i, 1);
       }

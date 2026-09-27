@@ -63,7 +63,9 @@ export function processCorporateRetirements(allTeams, userTeamName) {
     }
 
     // AIチームの自動戦力外
-    if (teamName !== userTeamName) {
+    // ⚠ 独立は `processLowerTierTurnover`（年度替わり）が唯一の担当。
+    //    ここでも切ると同じチームから年に二度放出することになる
+    if (teamName !== userTeamName && !team.independentLeagueId) {
       const releases = getCorporateAIReleases(team.players, retired.map(r => r.id));
       if (releases.length > 0) {
         aiReleases[teamName] = releases;

@@ -74,8 +74,11 @@ r.band('人口保存(最終/初年)', last ? last.population / startPopulation :
 r.band('年間指名数(最小)', draftMin, 60, 140, v => v.toFixed(0) + '名');
 r.band('年間指名数(最大)', draftMax, 60, 140, v => v.toFixed(0) + '名');
 r.band('クラブ指名シェア(最大)', maxClubShare, 0, 8, v => v.toFixed(1) + '%');
-r.band('年間引退数(最小)', retMin, 150, 600, v => v.toFixed(0) + '名');
-r.band('年間引退数(最大)', retMax, 150, 600, v => v.toFixed(0) + '名');
+// ⚠ 上限 600 は独立・クラブの新陳代謝（`processLowerTierTurnover`）を入れる前の実測。
+//    独立は25歳から年4〜8割が去り、クラブも年齢で引退するので、年550〜620名が正しい姿
+//    （人口保存は 99% 台のまま）。帯が落ちたらまず人口保存を見ること
+r.band('年間引退数(最小)', retMin, 150, 750, v => v.toFixed(0) + '名');
+r.band('年間引退数(最大)', retMax, 150, 750, v => v.toFixed(0) + '名');
 // 年齢ピラミッド健全性: 若年層ほど厚い（単調減少）であること
 r.assert('年齢ピラミッドが単調減少',
   g['18-21'] > g['22-25'] && g['22-25'] > g['26-29'] &&

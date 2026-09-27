@@ -145,6 +145,126 @@ function recruitPositionBoost(player, team) {
 const homeZ = (player, teamBlock) =>
   (teamBlock && homeBlockOf(player) === teamBlock) ? HOME_Z : 0;
 
+// ============================================================
+// 入団ルート（今年どこから出てきた選手か）
+//
+// リリースプールには 大学の新卒 / 高校の新卒 / 放出されたベテラン / 独立を
+// 辞めた選手 が**1本に混ざる**。能力順に取ると、19歳の高卒は大卒やベテランに
+// 必ず負けるので、企業に若手が1人も入らなくなっていた
+// （実測: 企業の22歳以下が 初年6% → 3年で2% → 15年で**0%**）。
+// 実際の社会人の入社は 大卒6割 / 高卒3割 / クラブ・独立などは例外。
+// ⚠ 印は**その年だけ**有効（`_freshYear`）。拾われずにプールに残った選手は
+//    翌年は「その他」になる——新卒は1年しか新卒ではない。
+// ============================================================
+export const ENTRY_ROUTE_SHARE = { university: 0.60, highschool: 0.30, other: 0.10 };
+const ENTRY_ROUTES = ['university', 'highschool', 'other'];
+
+export function markFreshRoute(p, route, year) {
+  p._freshRoute = route;
+  p._freshYear = year;
+}
+const freshRouteOf = (p, year) => (p?._freshYear === year ? p._freshRoute : null);
+const corpEntryRoute = (p, year) => {
+  const r = freshRouteOf(p, year);
+  return (r === 'university' || r === 'highschool') ? r : 'other';
+};
+const clearFreshRoute = (p) => { delete p._freshRoute; delete p._freshYear; };
+
+// ============================================================
+// 独立・クラブの新陳代謝（`processLowerTierTurnover`）
+// ============================================================
+// 独立はプロへの通過点。プロの目が届くのはせいぜい24歳までなので、
+// 25歳から年齢とともに去る。⚠ 旧実装は「30歳以上かつ出場が少ない」ときしか
+// 放出候補にならず、20代は一度も入れ替わらなかった（実測 入れ替わり 年1〜8%、
+// 平均年齢 23→28歳、28〜32歳が最大66%）。
+const IND_LEAVE_BY_AGE = (age) =>
+  age >= 28 ? 0.85 : age === 27 ? 0.70 : age === 26 ? 0.55 : age === 25 ? 0.40 : 0;
+/** 24歳以下でもチーム内の下位3分の1は見切りをつける */
+const IND_YOUNG_WEAK_LEAVE = 0.25;
+/** 独立が新たに受け入れる年齢の上限（去る年齢帯の手前） */
+const IND_MAX_ENTRY_AGE = 26;
+/** これ以上の実力（独立の中の同じ群での z）なら社会人・クラブへ続ける道を残す */
+const IND_RESCUE_Z = -0.3;
+/**
+ * クラブは実力が低いか、趣味で続ける場所。辞める理由は能力より生活なので
+ * **年齢だけ**で決める。⚠ 旧実装にはクラブ固有の引退が無く、最年長が
+ * 34歳→47歳と伸び続けた。40代が居るのは良いが、細らせる。
+ */
+const CLUB_RETIRE_BY_AGE = (age) =>
+  age >= 45 ? 0.50 : age >= 40 ? 0.25 : age >= 35 ? 0.12 : age >= 30 ? 0.06 : 0.03;
+
+const toRetirementEntry = (player, teamName, reason) => ({
+  name: player.name, team: teamName, age: player.age, position: player.position,
+  throws: player.physical?.throws || 'right', bats: player.batting?.bats || 'right',
+  hallOfFame: false, reason, careerStats: player.careerStats,
+  careerHistory: player.careerHistory || null, secondCareer: null,
+  draftInfo: player.draftInfo || null, yearsPlayed: player.yearsPlayed,
+});
+
+/**
+ * 独立・クラブの年ごとの入れ替わり。**独立の戦力外はここが唯一の担当**
+ * （`releaseCPUCorporatePlayers` / `processCorporateRetirements` は独立を扱わない。
+ * 「戦力外は1チーム年1回・1箇所」）。
+ * 自リーグ（`excludeTeams`）と自チームは対象外——`ContractScreen` が担当する。
+ * @returns {{ retirements: Array, rescued: number }}
+ */
+export function processLowerTierTurnover(allTeams, currentYear, excludeTeams = []) {
+  const userTeamName = Object.keys(allTeams)[0];
+  const skip = new Set([userTeamName, ...excludeTeams]);
+  const retirements = [];
+  let rescued = 0;
+
+  // 独立の実力の物差しは独立の全選手から作る（群ごと）
+  const indNorms = buildRecruitNorms(
+    Object.values(allTeams).filter(t => t?.independentLeagueId).flatMap(t => t.players || []));
+
+  for (const [teamName, team] of Object.entries(allTeams)) {
+    if (skip.has(teamName) || !team?.players?.length) continue;
+    const isInd = !!team.independentLeagueId;
+    const isClub = !isInd && team.corporateData?.type === 'club';
+    if (!isInd && !isClub) continue;
+
+    const leaving = new Set();   // ⚠ id ではなく実体で消す（id はチーム間で衝突する）
+    if (isInd) {
+      const zOf = new Map(team.players.map(p => [p, abilityZ(p, indNorms)]));
+      const sorted = [...zOf.values()].sort((a, b) => a - b);
+      const weakCut = sorted[Math.floor(sorted.length / 3)] ?? -Infinity;
+      for (const p of team.players) {
+        const age = p.age || 20;
+        const z = zOf.get(p);
+        const prob = age >= 25 ? IND_LEAVE_BY_AGE(age) : (z <= weakCut ? IND_YOUNG_WEAK_LEAVE : 0);
+        if (Math.random() >= prob) continue;
+        leaving.add(p);
+        if (z >= IND_RESCUE_Z) {
+          // 救済: 実力があれば社会人・クラブで続ける道を残す（リリースプールへ）
+          const c = JSON.parse(JSON.stringify(p));
+          c.isStarter = false;
+          c.battingOrder = 0;
+          c.releasedYear = currentYear;
+          c.previousTeam = teamName;
+          c.isReleasedCandidate = true;
+          if (!c.careerHistory) c.careerHistory = [];
+          c.careerHistory.push({ type: 'released', year: currentYear, label: `${teamName}退団` });
+          markFreshRoute(c, 'independent', currentYear);
+          addToReleasedPool(c);
+          rescued++;
+        } else {
+          retirements.push(toRetirementEntry(p, teamName, '引退（独立）'));
+        }
+      }
+    } else {
+      for (const p of team.players) {
+        if (Math.random() < CLUB_RETIRE_BY_AGE(p.age || 20)) {
+          leaving.add(p);
+          retirements.push(toRetirementEntry(p, teamName, '引退（クラブ）'));
+        }
+      }
+    }
+    if (leaving.size) team.players = team.players.filter(p => !leaving.has(p));
+  }
+  return { retirements, rescued };
+}
+
 /**
  * 大学モード: TEAMS_DATA上のチームから4年生を卒業させ、新入生を補充
  * - 4年生(age>=22)は卒業 → NPBドラフト済みは除去済み、残りは進路振り分け
@@ -213,9 +333,11 @@ export function processUniversityTeamGraduation(allTeams, seasonData, currentYea
 
     if (idx < corpCut) {
       grad.postGradPath = 'corporate';
+      markFreshRoute(grad, 'university', currentYear);
       addToReleasedPool(grad);
     } else if (idx < indCut) {
       grad.postGradPath = 'independent';
+      markFreshRoute(grad, 'university', currentYear);
       addToReleasedPool(grad);
     } else if (gp >= 1.1 && discipline >= 60) {
       grad.postGradPath = 'club';
@@ -515,7 +637,9 @@ export function releaseCPUCorporatePlayers(allTeams, currentYear, excludeTeams =
   for (const [teamName, team] of Object.entries(allTeams)) {
     if (skip.has(teamName)) continue;   // 自チーム＋自リーグは ContractScreen が担当
     if (!team?.corporateData) continue;
-    if (team.corporateData.type === 'club') continue;  // クラブは step 5.65 で管理
+    if (team.corporateData.type === 'club') continue;  // クラブは processLowerTierTurnover
+    // ⚠ 独立は `processLowerTierTurnover` が唯一の担当（ここでも切ると年に二度放出になる）
+    if (team.independentLeagueId) continue;
 
     const players = team.players;
     if (!players || players.length === 0) continue;
@@ -646,10 +770,20 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
         if (usedIndices.has(idx)) return null;
         if (p.age && p.age > 32) return null;
         const base = isCDRank ? prospectZ(p, norms) : abilityZ(p, norms);
-        return { player: p, idx, base: base + homeZ(p, teamBlock) };
+        return { player: p, idx, base: base + homeZ(p, teamBlock), route: corpEntryRoute(p, currentYear) };
       })
       .filter(Boolean)
       .sort((a, b) => b.base - a.base);
+    // 入団ルートごとに分けて並べておく（大卒6割 / 高卒3割 / その他1割）
+    // ⚠ **ルートの中で能力を比べること**。1本の順位表にすると、19歳の高卒は
+    //    大卒やベテランに必ず負けて企業に若手が入らなくなる（冒頭の注記参照）
+    const byRoute = Object.fromEntries(ENTRY_ROUTES.map(r => [r, candidates.filter(e => e.route === r)]));
+    const takenByRoute = { university: 0, highschool: 0, other: 0 };
+    // 今いちばん枠に足りていないルートから順に。空ならその次へ
+    const routeOrder = () => ENTRY_ROUTES
+      .map(r => [r, ENTRY_ROUTE_SHARE[r] * (added + 1) - takenByRoute[r]])
+      .sort((a, b) => b[1] - a[1])
+      .map(([r]) => r);
 
     // ⚠ **ポジション需要は1人取るごとに測り直すこと**。以前は補充を始める前に
     //    1回だけ計算していたので、Sランク（17人補充）が最初の判断のまま
@@ -666,7 +800,11 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
     };
 
     while (added < teamInfo.needed) {
-      const entry = pickFrom(candidates);
+      let entry = null;
+      for (const r of routeOrder()) {
+        entry = pickFrom(byRoute[r]);
+        if (entry) break;
+      }
       if (!entry) break;
 
       const p = entry.player;
@@ -674,8 +812,11 @@ export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
       const player = { ...p };
       player.isStarter  = false;
       player.battingOrder = 0;
-      if (!player.careerHistory) player.careerHistory = [];
-      player.careerHistory.push({ type: 'corporate_join', year: currentYear + 1, label: teamInfo.teamName });
+      clearFreshRoute(player);
+      // ⚠ 経歴は配列ごとコピーしてから積む（`{...p}` は浅いのでプール側と共有してしまう）
+      player.careerHistory = [...(p.careerHistory || [])];
+      player.careerHistory.push({ type: 'corporate_join', year: currentYear + 1, label: teamInfo.teamName, route: entry.route });
+      takenByRoute[entry.route]++;
       addToRoster(teamInfo.team, player);
       usedIndices.add(entry.idx);
       added++;
@@ -743,7 +884,10 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
 
   // プール候補をスコア順にソート（能力は社会人と同じ z の物差し）
   const norms = buildRecruitNorms(releasedPlayersPool);
+  // ⚠ **独立を辞めた選手・年長の選手を独立が拾い直さないこと**。拾い直すと
+  //    `processLowerTierTurnover` で退団させた意味が消える（25歳以降は去る場所）
   const poolCandidates = releasedPlayersPool
+    .filter(p => freshRouteOf(p, currentYear) !== 'independent' && (p.age || 0) <= IND_MAX_ENTRY_AGE)
     .map(p => ({ player: p, score: recruitBaseZ(p, norms) }))
     .sort((a, b) => b.score - a.score);
 
@@ -792,6 +936,7 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
       p.isStarter = false;
       p.battingOrder = 0;
       p.seasonStats = { batting: {}, pitching: {}, fielding: {} };
+      clearFreshRoute(p);
       p.careerHistory = p.careerHistory || [];
       p.careerHistory.push({ type: 'independent', label: `${teamInfo.teamName}入団`, year: currentYear + 1 });
       addToRoster(teamInfo.team, p);
