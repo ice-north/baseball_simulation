@@ -183,6 +183,12 @@ const IND_LEAVE_BY_AGE = (age) =>
 const IND_YOUNG_WEAK_LEAVE = 0.25;
 /** 独立が新たに受け入れる年齢の上限（去る年齢帯の手前） */
 const IND_MAX_ENTRY_AGE = 26;
+/**
+ * 独立の入団ルート。トライアウトは高卒も大卒も大勢受ける。
+ * ⚠ 企業（大卒6割）より高卒を厚くする——大学4年を待たずに試合で勝負したい
+ * 高卒が集まる場所（`distributeHighSchoolGraduates` の「即戦力志向型」と同じ考え）
+ */
+export const IND_ENTRY_ROUTE_SHARE = { university: 0.45, highschool: 0.40, other: 0.15 };
 /** これ以上の実力（独立の中の同じ群での z）なら社会人・クラブへ続ける道を残す */
 const IND_RESCUE_Z = -0.3;
 /**
@@ -888,8 +894,12 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
   //    `processLowerTierTurnover` で退団させた意味が消える（25歳以降は去る場所）
   const poolCandidates = releasedPlayersPool
     .filter(p => freshRouteOf(p, currentYear) !== 'independent' && (p.age || 0) <= IND_MAX_ENTRY_AGE)
-    .map(p => ({ player: p, score: recruitBaseZ(p, norms) }))
+    .map(p => ({ player: p, score: recruitBaseZ(p, norms), route: corpEntryRoute(p, currentYear) }))
     .sort((a, b) => b.score - a.score);
+  // 入団ルートごとの列（大卒 / 高卒 / その他）。⚠ **ルートの中で能力を比べること**。
+  //    1本の列だと先頭の窓が大卒で埋まり、19歳の高卒は窓に入る前に取り尽くされる
+  //    （実測: 独立の22歳以下がほぼ0%、23〜27歳が100%）。
+  const byRoute = Object.fromEntries(ENTRY_ROUTES.map(r => [r, poolCandidates.filter(e => e.route === r)]));
 
   // プールの60%をAIチームに配分、40%はユーザーのトライアウト用に残す
   const maxTake = Math.floor(poolCandidates.length * 0.6);
@@ -898,9 +908,31 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
 
   // チーム順をシャッフルして公平に配分（ラウンドロビン）
   const shuffled = [...teamsNeedingPlayers].sort(() => Math.random() - 0.5);
+  shuffled.forEach(t => { t.taken = { university: 0, highschool: 0, other: 0 }; t.added = 0; });
   const recruitedIds = new Set();
+  const recruited = new Set();   // ⚠ 取った判定は実体で（id はプール間で衝突する）
   let taken = 0;
-  let candidateIdx = 0;
+
+  // ⚠ **列全体から探してはいけない**——能力順に並んでいるので、地元や
+  //    ポジションというだけで下位の選手まで拾いに行くとチーム戦力がそれで決まる。
+  //    まだ取られていない先頭から窓の分だけを見て、ポジション需要＋地元が最も高い選手を取る。
+  // ⚠ **ポジション需要をここで見ること**。以前は純粋な能力順のラウンドロビンで
+  //    均衡を一切見ておらず、12年で独立が 92.6% 投手になっていた。
+  const pickInWindow = (list, teamInfo) => {
+    const teamBlock = blockOfCorporate(teamInfo.team);
+    let best = null, bestAdj = -Infinity, seen = 0;
+    for (const e of list) {
+      if (recruited.has(e.player)) continue;
+      const adj = recruitPositionBoost(e.player, teamInfo.team) + homeZ(e.player, teamBlock);
+      if (adj > bestAdj) { bestAdj = adj; best = e; }
+      if (++seen >= HOME_WINDOW) break;
+    }
+    return best;
+  };
+  const routeOrderFor = (t) => ENTRY_ROUTES
+    .map(r => [r, IND_ENTRY_ROUTE_SHARE[r] * (t.added + 1) - t.taken[r]])
+    .sort((a, b) => b[1] - a[1])
+    .map(([r]) => r);
 
   // ラウンドロビン: 各チームに1人ずつ順番に配る
   let anyRecruited = true;
@@ -908,29 +940,13 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
     anyRecruited = false;
     for (const teamInfo of shuffled) {
       if (teamInfo.needed <= 0) continue;
-      // 次のまだ獲得されていない候補を探す
-      while (candidateIdx < poolCandidates.length && recruitedIds.has(poolCandidates[candidateIdx].player.id)) {
-        candidateIdx++;
-      }
-      if (candidateIdx >= poolCandidates.length) break;
       if (taken >= availableFromPool) break;
-
-      // ⚠ **プール全体から探してはいけない**——能力順に並んでいるので、地元や
-      //    ポジションというだけで下位の選手まで拾いに行くとチーム戦力がそれで決まる。
-      //    直後の窓だけを見て、その中でポジション需要＋地元が最も高い選手を取る。
-      // ⚠ **ポジション需要をここで見ること**。以前は純粋な能力順のラウンドロビンで
-      //    均衡を一切見ておらず、12年で独立が 92.6% 投手になっていた。
-      let pickIdx = candidateIdx;
-      const teamBlock = blockOfCorporate(teamInfo.team);
-      let bestAdj = -Infinity;
-      for (let k = candidateIdx, seen = 0; k < poolCandidates.length && seen < HOME_WINDOW; k++) {
-        if (recruitedIds.has(poolCandidates[k].player.id)) continue;
-        seen++;
-        const cand = poolCandidates[k].player;
-        const adj = recruitPositionBoost(cand, teamInfo.team) + homeZ(cand, teamBlock);
-        if (adj > bestAdj) { bestAdj = adj; pickIdx = k; }
+      let candidate = null;
+      for (const r of routeOrderFor(teamInfo)) {
+        candidate = pickInWindow(byRoute[r], teamInfo);
+        if (candidate) break;
       }
-      const candidate = poolCandidates[pickIdx];
+      if (!candidate) break;
       candidate.player._nextYearTeam = teamInfo.teamName; // レポート転記用
       const p = JSON.parse(JSON.stringify(candidate.player));
       p.isStarter = false;
@@ -938,12 +954,14 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
       p.seasonStats = { batting: {}, pitching: {}, fielding: {} };
       clearFreshRoute(p);
       p.careerHistory = p.careerHistory || [];
-      p.careerHistory.push({ type: 'independent', label: `${teamInfo.teamName}入団`, year: currentYear + 1 });
+      p.careerHistory.push({ type: 'independent', label: `${teamInfo.teamName}入団`, year: currentYear + 1, route: candidate.route });
       addToRoster(teamInfo.team, p);
+      recruited.add(candidate.player);
       recruitedIds.add(candidate.player.id);
+      teamInfo.taken[candidate.route]++;
+      teamInfo.added++;
       teamInfo.needed--;
       taken++;
-      if (pickIdx === candidateIdx) candidateIdx++;
       anyRecruited = true;
     }
   }
