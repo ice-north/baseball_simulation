@@ -1305,7 +1305,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
         let baseVelocity = Math.round(pitcher.velocity * (pitchingFormEffect.velocityMult || 1.0)) + velocityPenalty;
         // 球種ごとの球速減は自動シミュと共有（constants.js）
-        baseVelocity -= pitchVelocityDrop(selectedBall.type, selectedBall.level ?? 50, pitcher.velocity);
+        baseVelocity -= pitchVelocityDrop(selectedBall.type, selectedBall.level ?? 50);
         const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
 
         const loc = resolvePitchLocation({

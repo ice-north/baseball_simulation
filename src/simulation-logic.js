@@ -191,7 +191,7 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   //    遅さに罰せられ（防御率の差 100km と 145km で 0.75 ずつ）、「遅いから転向する」が出なかった
   if (isUnreadablePitch(pitch.type) && KNUCKLE_TIMING.indep > 0) {
     const ref = KNUCKLE_TIMING.refFastball;
-    const refWindow = (1000 / ((ref - pitchVelocityDrop(pitch.type, pitch.level ?? 50, ref)) / 3.6)) * coefFor(ref);
+    const refWindow = (1000 / ((ref - pitchVelocityDrop(pitch.type, pitch.level ?? 50)) / 3.6)) * coefFor(ref);
     timingWindow *= (refWindow / timingWindow) ** KNUCKLE_TIMING.indep;
   }
 
@@ -246,7 +246,7 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // （自動シミュ=スタミナ補正後 / 采配モード=素の値）ため揃わない。
   // 采配モードでは疲れたアンダースローのストレートまで「大きな緩急」に化ける。
   // `pitchVelocityDrop` は両エンジンが実際の球速を出すのに使っている当の関数。
-  const typeDrop = pitchVelocityDrop(pitch.type, pitch.level ?? 50, pitcher?.velocity);
+  const typeDrop = pitchVelocityDrop(pitch.type, pitch.level ?? 50);
   if (typeDrop > 0) {
     const drop = typeDrop / Math.max(80, pitchVelocity + typeDrop);
     timingWindow *= (1 - drop * OFFSPEED_WHIFF_K * (1 - meetDeceptionResistance));

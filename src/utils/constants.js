@@ -285,41 +285,15 @@ export const formPitchBonus = (form, type) => {
  *
  * レベルで少し伸びる（磨いた球ほど緩急がはっきりする）。
  */
-export const pitchVelocityDrop = (type, level = 50, fastball = null) => {
+export const pitchVelocityDrop = (type, level = 50) => {
   const base = BALL_EFFECTS[type]?.velocityMinus ?? 0;
   if (!base) return 0;
-  const drop = base * (0.72 + Math.max(0, Math.min(100, level)) / 100 * 0.28);
-  // 準備中の切り替え（下記 `VELOCITY_DROP_MODE`）。既定は off＝従来どおり絶対値
-  if (VELOCITY_DROP_MODE.scaleWithFastball && fastball != null && VELOCITY_DROP_MODE.types.has(type)) {
-    const r = Math.max(VELOCITY_DROP_MODE.minRatio, Math.min(VELOCITY_DROP_MODE.maxRatio, fastball / VELOCITY_DROP_MODE.ref));
-    return drop * r;
-  }
-  return drop;
+  return base * (0.72 + Math.max(0, Math.min(100, level)) / 100 * 0.28);
 };
-
-/**
- * ⚠ **準備だけしてある切り替え（既定 off）**。遅い投手のナックルが弱すぎる件
- * （CLAUDE.md「曲がりの効きは130km/h付近が頂点」の「超スローボールの投手は逆に不利」）。
- *
- * `velocityMinus` が**絶対値**なので、球速100km/hの投手のナックルは到達70km/hになり
- * `breakEfficiency` が0.60まで落ちる。実際のナックルボーラーのナックルは
- * 直球より10km/h程度しか遅くない＝**減速量は投手自身の直球に比例する**。
- * on にすると、`types` の球種だけ減速量を `直球 / ref` 倍する（`minRatio`〜`maxRatio`）。
- *
- * - ⚠ **4箇所の呼び出しは全部 `fastball` を渡してある**（自動シミュ・采配モード・物理・
- *   捕手の球種スコア）。渡さない経路は従来どおり絶対値になるので、片方だけ on にならない
- * - ⚠ **切り替えはこのオブジェクトで行う**（関数の中で毎回読む）。モジュール定数を
- *   `globalThis` で差し替えても静的 import の巻き上げで効かない（CLAUDE.md「計測」の⚠）
- * - 測定: `node tools/sim-harness/knuckle-probe.mjs`（off/on を同一ロスターで比べる）
- * - ⚠ on にするなら `VALUE_DIST` / 捕手の球種スコア（`scoreBall` の回帰）への影響を測ること
- */
-export const VELOCITY_DROP_MODE = {
-  scaleWithFastball: false,
-  types: new Set(['knuckle']),
-  ref: 140,
-  minRatio: 0.35,
-  maxRatio: 1.0,
-};
+// ⚠ かつてここに「減速量を投手の直球に比例させる」切り替え（`VELOCITY_DROP_MODE`）を
+//    準備していたが、遅い投手のナックルの到達球速を 70→79km にしても防御率は誤差内
+//    （8シード×80試合で 3.53 対 3.52）だった。原因は到達球速ではなく
+//    効き（`pitchBreakEfficiency`）とタイミングの窓（`KNUCKLE_TIMING`）だったので撤去した
 
 /**
  * **ナックルの打ちにくさは速さでほとんど決まらない**（`calculatePhysicsContact`）。
@@ -328,9 +302,10 @@ export const VELOCITY_DROP_MODE = {
  * 遅いことがそのまま当てやすさにならない。
  * `indep` の割合だけ、窓を「素の球速 `refFastball` の投手が投げたナックル」の窓へ寄せる
  * （0＝速さどおり / 1＝速さに全く依らない）。基準の投手（140km/h）の窓は変わらない。
- * ⚠ **関数の中で毎回読む**（計測で差し替えられるように。`VELOCITY_DROP_MODE` と同じ理由）
+ * ⚠ **関数の中で毎回読む**（計測で差し替えられるように。モジュール定数を `globalThis` で
+ *   差し替えても静的 import の巻き上げで効かない——CLAUDE.md「計測」の⚠）
  */
-export const KNUCKLE_TIMING = { indep: 0.6, refFastball: 140 };
+export const KNUCKLE_TIMING = { indep: 1.0, refFastball: 140 };
 
 /**
  * **読めない球**。打者が球種を張り当てても効果が出ない。
