@@ -698,9 +698,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-white">{campTitle} - {userTeamName}</h1>
+            <h1 className="text-xl font-bold text-ink">{campTitle} - {userTeamName}</h1>
             {dispatchedPlayers.length > 0 && (
-              <span className="text-orange-400 text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
+              <span className="text-orange-900 text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -710,7 +710,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   : r === currentRound ? 'seg-on ring-2' : 'seg'
               }`}>{r}</div>
             ))}
-            <span className="text-gray-400 text-xs ml-1">{currentRound}/{MAX_CAMP_ROUNDS}</span>
+            <span className="text-ink-sub text-xs ml-1">{currentRound}/{MAX_CAMP_ROUNDS}</span>
           </div>
         </div>
 
@@ -807,7 +807,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 return m >= 1.0 ? `×${m.toFixed(2)}` : `×${m.toFixed(2)}`;
               };
               return (
-                <div className="mb-2 flex items-center gap-3 bg-gray-800/60 rounded px-3 py-1.5 text-xs flex-wrap">
+                <div className="mb-2 flex items-center gap-3 bg-surface-2 rounded px-3 py-1.5 text-xs flex-wrap">
                   <span className="text-gray-300 font-bold">コーチ効果:</span>
                   {items.map(it => (
                     <span key={it.label} className="text-gray-300">
@@ -835,7 +835,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 部分集合だった（弱点克服=短所 / 長所強化=長所 / フィジカル・技術=フェーズ）
                 ので、二重にせずこちらへ集約してある。 */}
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-              <span className="text-gray-300 text-xs font-bold" title="選手の希望と噛み合うとやる気が上がります">育成方針:</span>
+              <span className="text-ink text-xs font-bold" title="選手の希望と噛み合うとやる気が上がります">育成方針:</span>
               {Object.values(DIRECTIONS).map(d => (
                 <button
                   key={d.key}
@@ -846,7 +846,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   {d.icon} {d.name}
                 </button>
               ))}
-              <span className="text-gray-300 mx-0.5">×</span>
+              <span className="text-ink-sub mx-0.5">×</span>
               {Object.values(PHASES).map(ph => (
                 <button
                   key={ph.key}
@@ -857,7 +857,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   {ph.icon} {ph.name}
                 </button>
               ))}
-              <span className="text-gray-300 mx-1">|</span>
+              <span className="text-ink-sub mx-1">|</span>
               {/* 2軸とは別枠。選手ごとに本人の希望を採るので、方向もフェーズも選手ごとに変わる */}
               <button
                 onClick={() => applyPolicy(WISH_KEY, policyPhase)}
@@ -866,8 +866,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               >
                 🙂 やりたい練習
               </button>
-              <span className="text-gray-300 mx-1">|</span>
-              <span className="text-gray-300 text-xs font-bold" title="タブに関係なく全選手に適用します">全員に一括:</span>
+              <span className="text-ink-sub mx-1">|</span>
+              <span className="text-ink text-xs font-bold" title="タブに関係なく全選手に適用します">全員に一括:</span>
               {Object.entries(TRAINING_MENUS).filter(([k, m]) => !['newpitch'].includes(k) && !m.intensive).map(([key, menu]) => (
                 <button
                   key={key}
@@ -918,7 +918,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   </button>
                 );
               })}
-              <span className="text-gray-400 text-xs ml-2">
+              {/* ⚠ 地色の上に直に載る注記。text-gray-400 は紙の上でコントラスト約1.1で読めなかった */}
+              <span className="text-ink-sub text-xs ml-2">
                 {isPitchTab ? '投球系の能力を表示中。打撃練習をさせたい投手は「野手へ…」で行き先のタブを選んで移せます'
                             : '打撃・守備系の能力を表示中。投球練習をさせたい選手は「投手へ」で移せます'}
               </span>
@@ -1557,7 +1558,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           return (
             <>
               <div className="flex items-center justify-between mb-2">
-                <h1 className="text-xl font-bold text-white">{campTitle}成長レポート - {userTeamName}</h1>
+                <h1 className="text-xl font-bold text-ink">{campTitle}成長レポート - {userTeamName}</h1>
               </div>
               <div className="flex gap-4 text-xs mb-1 ml-1">
                 <span className="text-green-400">■ キャンプ成長</span>

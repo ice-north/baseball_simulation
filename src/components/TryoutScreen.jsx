@@ -282,18 +282,25 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
   const currentTeam = currentPick < draftOrder.length ? draftOrder[currentPick].team : null;
   const isUserTurn = currentTeam === 'ユーザー';
+  // 内部キー 'ユーザー' を画面に出さない（自分のチーム名で表示する）
+  const teamLabel = (t) => {
+    if (t !== 'ユーザー') return t;
+    const names = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams || {});
+    return names[0] || 'あなたのチーム';
+  };
 
   return (
     <div className="p-4">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-1">トライアウト</h1>
-        <p className="text-gray-400 text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>
+        {/* ⚠ 地色（明るい紙）の上の見出しは text-ink。カード（rounded-xl）は不透明な bg-surface-2 */}
+        <h1 className="text-xl font-bold text-ink mb-1">トライアウト</h1>
+        <p className="text-ink-sub text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>
 
         <TutorialHint id="tryout-intro" title="選手を指名してチームを作る">
           自分の番になったら候補から1人ずつ指名します。<b className="text-cyan-200">投手・捕手・内野・外野をバランス良く</b>集めましょう（不足があれば警告が出ます）。若くて<b className="text-cyan-200">将来性（伸びしろ）</b>の高い選手を獲ると、育成で化ける可能性があります。候補の ⓘ で詳細能力を確認できます。
         </TutorialHint>
 
-        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
+        <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-5 mb-5">
           <div className="grid grid-cols-3 gap-4 text-white">
             <div>
               <div className="text-xs text-gray-300 mb-1">現在のピック</div>
@@ -315,7 +322,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           )}
           {!isUserTurn && currentTeam && (
             <div className="mt-4 text-yellow-400 text-sm">
-              {currentTeam} が選択中...
+              {teamLabel(currentTeam)} が選択中...
             </div>
           )}
           {!draftComplete && isUserTurn && userRoster.length > 0 && (
@@ -343,7 +350,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           )}
         </div>
 
-        <div className="flex gap-1.5 mb-4 bg-gray-800/60 rounded-xl p-1.5 border border-gray-700/50">
+        <div className="flex gap-1.5 mb-4 bg-surface-2 rounded-xl p-1.5 border border-gray-700/50">
           {[
             { key: 'draft', label: 'ドラフト' },
             { key: 'roster', label: '現有戦力' },
@@ -363,7 +370,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         </div>
 
         {viewTab === 'draft' && userRoster.length > 0 && (
-          <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-4 mb-4">
+          <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
               {(() => {
                 const _tn = (Array.isArray(allTeams) ? allTeams : Object.keys(allTeams))[0];
@@ -433,7 +440,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         )}
 
         {viewTab === 'roster' && (
-          <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
+          <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-5 mb-5">
             <h2 className="text-lg font-bold text-white mb-4">現有戦力一覧</h2>
             {(() => {
               const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
@@ -540,7 +547,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         )}
 
         {viewTab === 'history' && (
-          <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
+          <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-5 mb-5">
             <h2 className="text-lg font-bold text-white mb-4">ドラフト指名結果</h2>
             {draftHistory.length > 0 ? (
               <div className="space-y-1 max-h-[520px] overflow-y-auto">
@@ -553,7 +560,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <span className="text-gray-400 font-bold w-24 shrink-0">ドラフト{entry.round}位</span>
                         <span className="text-gray-400 w-24 shrink-0">---</span>
                         <span className="text-gray-400 w-16 shrink-0">{entry.reason}</span>
-                        <span className="text-gray-400">{entry.team}</span>
+                        <span className="text-gray-400">{teamLabel(entry.team)}</span>
                       </div>
                     );
                   }
@@ -569,7 +576,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                       <span className="text-white font-bold w-24 shrink-0">{entry.player.name}</span>
                       <span className="text-gray-300 w-16 shrink-0">{positionLabel}</span>
                       <span className="text-gray-300 w-12 shrink-0">{entry.player.age}歳</span>
-                      <span className={`font-bold ${isUserTeam ? 'text-blue-400' : 'text-gray-300'}`}>{entry.team}</span>
+                      <span className={`font-bold ${isUserTeam ? 'text-blue-400' : 'text-gray-300'}`}>{teamLabel(entry.team)}</span>
                     </div>
                   );
                 })}
@@ -583,7 +590,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         {viewTab === 'details' && (
           <div className="space-y-4 mb-6">
             {userRoster.length > 0 && (
-              <div className="bg-blue-900/30 rounded-xl border border-blue-700/50 p-5">
+              <div className="bg-surface-2 rounded-xl border border-blue-700/50 p-5">
                 <h2 className="text-lg font-bold text-white mb-4">あなたのチーム ({userRoster.length}/24人)</h2>
                 <div className="space-y-4">
                   {['pitcher', 'catcher', 'infielder', 'outfielder'].map(category => {
@@ -608,7 +615,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               </div>
             )}
 
-            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-5">
               <h2 className="text-lg font-bold text-white mb-4">各チームのドラフト状況</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {Object.keys(teamRosters).map(teamName => {
@@ -639,7 +646,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         {viewTab === 'draft' && (
           <>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <div className="flex gap-1 bg-gray-800/60 rounded-xl p-1 border border-gray-700/50">
+              <div className="flex gap-1 bg-surface-2 rounded-xl p-1 border border-gray-700/50">
                 {[
                   { key: 'all', label: '全選手' },
                   { key: 'pitcher', label: '投手' },
@@ -658,7 +665,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                   </button>
                 ))}
               </div>
-              <div className="text-gray-300 text-sm ml-auto">候補者: {filteredCandidates.length} 人</div>
+              <div className="text-ink-sub text-sm ml-auto">候補者: {filteredCandidates.length} 人</div>
             </div>
 
             {/* おすすめ候補 */}
@@ -686,7 +693,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               });
               if (needs.length === 0) return null;
               return (
-                <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 p-3 mb-3">
+                <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-3 mb-3">
                   <div className="text-xs text-gray-300 font-bold mb-2">おすすめ候補</div>
                   <div className="flex gap-2 flex-wrap">
                     {needs.map(n => (
@@ -719,7 +726,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               );
             })()}
 
-            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 mb-5">
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 mb-5">
               <table className="w-full text-xs text-left">
                 <thead className="bg-surface-2 text-gray-300 text-xs sticky top-0 border-b border-gray-700/50">
                   <tr>
@@ -855,7 +862,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         )}
 
         {userRoster.length > 24 && draftComplete && (
-          <div className="mt-6 bg-red-900/40 border border-red-700/60 rounded-xl p-5">
+          <div className="mt-6 bg-surface-2 border border-red-700 rounded-xl p-5">
             <div className="flex items-center gap-3">
               <div>
                 <div className="text-red-300 font-bold mb-1">ロスター人数が24人を超えています</div>

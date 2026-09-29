@@ -317,10 +317,10 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       <div className="p-4">
         {/* 背景は全幅のまま、本文だけ 7xl で止める（他の画面と本文の位置を揃える） */}
         <div className="max-w-7xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-3">契約更改完了</h1>
+        <h1 className="text-xl font-bold text-ink mb-3">契約更改完了</h1>
         {totalRetirements + retireCount > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-yellow-400 mb-2">
+            <h2 className="text-sm font-bold text-yellow-900 mb-2">
               引退選手 ({totalRetirements + retireCount}名)
             </h2>
             <div className="grid grid-cols-2 gap-1">
@@ -343,7 +343,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         )}
         {(releaseCount > 0 || totalAiReleases > 0) && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-red-400 mb-2">解雇 ({releaseCount + totalAiReleases}名)</h2>
+            <h2 className="text-sm font-bold text-red-900 mb-2">解雇 ({releaseCount + totalAiReleases}名)</h2>
             <p className="text-xs text-gray-300 mb-1">
               自チーム: {releaseCount}名 / 他チーム: {totalAiReleases}名
             </p>
@@ -352,7 +352,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         {/* スタッフ転向 */}
         {Object.keys(staffConversions).filter(pid => staffConversions[pid] && staffPreviews[pid]).length > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-cyan-400 mb-2">スタッフ転向</h2>
+            <h2 className="text-sm font-bold text-cyan-900 mb-2">スタッフ転向</h2>
             <div className="grid grid-cols-2 gap-1">
               {Object.entries(staffConversions).filter(([, v]) => v).map(([pid]) => {
                 const preview = staffPreviews[pid];
@@ -395,8 +395,9 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     <div className="p-4">
       {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
       <div className="max-w-7xl mx-auto">
-      <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目 11月末</h1>
-      <p className="text-gray-300 text-xs mb-2">選手をクリックして「契約 → 解雇 → 引退」を切り替えてください</p>
+      {/* ⚠ 地色（明るい紙）の上に直に載る見出しは text-ink。11/9 の画面なので「11月末」ではない */}
+      <h1 className="text-xl font-bold text-ink mb-1">契約更改 - {seasonData?.year || 1}年目 11月</h1>
+      <p className="text-ink-sub text-xs mb-2">選手をクリックして「契約 → 解雇 → 引退」を切り替えてください</p>
 
       {/* 予算サマリー（クラブチームは予算なし） */}
       {!isClub && <div className="mb-3 bg-surface-2 rounded-lg p-3">
@@ -428,7 +429,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
       {/* スポンサーオファー */}
       {!isClub && sponsorOffers && sponsorOffers.length > 0 && (
-        <div className="mb-3 bg-purple-900/20 border border-purple-700/50 rounded-lg p-3">
+        <div className="mb-3 bg-surface-2 border border-purple-700/50 rounded-lg p-3">
           <h2 className="text-sm font-bold text-purple-300 mb-2">スポンサーオファー</h2>
           <div className="space-y-1.5">
             {sponsorOffers.map((offer, i) => {
@@ -459,7 +460,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         const userRetirements = retirements.filter(r => r.team === userTeamName);
         const otherCount = retirements.filter(r => r.team !== userTeamName).length;
         return (
-          <div className="mb-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded">
+          <div className="mb-2 p-2 bg-surface-2 border border-yellow-700 rounded">
             <p className="text-yellow-400 text-xs font-bold mb-1">
               自動引退{otherCount > 0 ? ` (他チーム${otherCount}名)` : ''}
             </p>
@@ -504,11 +505,12 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       })()}
 
       {totalAiReleases > 0 && (
-        <p className="text-xs text-gray-400 mb-2">他チーム自動戦力外: {totalAiReleases}名</p>
+        <p className="text-xs text-ink-sub mb-2">他チーム自動戦力外: {totalAiReleases}名</p>
       )}
 
-      {/* 選手一覧 */}
-      <div className="overflow-x-auto mb-3">
+      {/* 選手一覧。⚠ 表の行は背景を持たないので、不透明なカードの上に載せる
+           （以前は明るい地色の上に直に載り、選手名がほぼ読めなかった） */}
+      <div className="overflow-x-auto mb-3 bg-surface-2 rounded-lg">
         <table className="w-full text-xs text-gray-300 border-collapse">
           <thead className="bg-surface-2 text-gray-300">
             <tr>

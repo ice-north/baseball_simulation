@@ -194,10 +194,11 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       <div className="p-4">
         {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
         <div className="max-w-7xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-2">交渉結果</h1>
-        <p className="text-sm text-gray-300 mb-5">
+        {/* ⚠ 地色（明るい紙）の上の見出しは text-ink / text-ink-sub */}
+        <h1 className="text-xl font-bold text-ink mb-2">交渉結果</h1>
+        <p className="text-sm text-ink-sub mb-5">
           {negotiationResults.length}名に打診 → {successes.length}名が入団承諾
-          {totalAcquired > 0 && <span className="text-green-400 ml-2">(累計{totalAcquired}名獲得)</span>}
+          {totalAcquired > 0 && <span className="text-green-900 font-bold ml-2">(累計{totalAcquired}名獲得)</span>}
         </p>
 
         <div className="space-y-3 mb-6">
@@ -209,9 +210,11 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
               : <span className="text-gray-300">独立リーグトライアウト</span>;
             return (
               <div key={p.id} className={`p-4 rounded-lg border ${
-                success ? 'bg-green-900/20 border-green-700'
-                  : rivalResult ? 'bg-red-900/10 border-red-900/30'
-                  : 'bg-yellow-900/10 border-yellow-700/30'
+                // ⚠ 面は不透明に（半透明だと明るい地色の上で淡くなり、載っている文字が消える）。
+                //    結果の色は枠が持つ
+                success ? 'bg-surface-2 border-green-600'
+                  : rivalResult ? 'bg-surface-2 border-red-700'
+                  : 'bg-surface-2 border-yellow-700'
               }`}>
                 <div className="flex items-center gap-3 text-base">
                   <span className={`font-black text-xl w-8 text-center ${
@@ -283,13 +286,13 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       <div className="p-4">
         {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
         <div className="max-w-7xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-4">スカウト入団完了</h1>
+        <h1 className="text-xl font-bold text-ink mb-4">スカウト入団完了</h1>
         {totalAcquired > 0 ? (
           <div className="mb-5">
-            <p className="text-green-400 text-base mb-3">今シーズンは{totalAcquired}名を獲得しました</p>
+            <p className="text-green-900 font-bold text-base mb-3">今シーズンは{totalAcquired}名を獲得しました</p>
             <div className="space-y-2">
               {allResults.filter(r => r.success).map(({ player: p }, i) => (
-                <div key={i} className="flex items-center gap-3 text-sm bg-green-900/20 border border-green-700/30 rounded-lg p-3">
+                <div key={i} className="flex items-center gap-3 text-sm bg-surface-2 border border-green-700 rounded-lg p-3">
                   <span className="text-yellow-400 font-bold">{POSITION_NAMES[p.position]}</span>
                   <span className="text-white font-bold text-base">{p.name}</span>
                   <span className="text-gray-300">({p.age}歳)</span>
@@ -299,17 +302,17 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
             </div>
           </div>
         ) : (
-          <p className="text-gray-300 text-base mb-5">今シーズンは選手を獲得しませんでした。</p>
+          <p className="text-ink-sub text-base mb-5">今シーズンは選手を獲得しませんでした。</p>
         )}
 
         {totalAiRecruited > 0 && (
           <div className="mb-5">
-            <h2 className="text-base font-bold text-blue-400 mb-3">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
+            <h2 className="text-base font-bold text-blue-900 mb-3">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
             {/* 1列で並べると160チーム超で縦4000px近くなり、横は左400pxしか使わない。
                 多段にして1〜2画面に収める（情報は減らさない） */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1">
               {Object.entries(aiResults).map(([team, players]) => (
-                <div key={team} className="text-sm text-gray-300">
+                <div key={team} className="text-sm text-ink-sub">
                   {team}: {players.map(p => `${p.name}(${POSITION_NAMES[p.position]})`).join(', ')}
                 </div>
               ))}
@@ -317,9 +320,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           </div>
         )}
 
-        <p className="text-sm text-gray-400 mb-4">
+        <p className="text-sm text-ink-sub mb-4">
           現在のロスター: {teamData?.players?.length || 0}名
-          {totalAcquired > 0 && <span className="text-green-400 ml-2">(入団した選手はキャンプから合流します)</span>}
+          {totalAcquired > 0 && <span className="text-green-900 font-bold ml-2">(入団した選手はキャンプから合流します)</span>}
         </p>
         <button onClick={onComplete}
           className="btn-primary px-8 py-2.5 rounded-lg text-base"
@@ -333,13 +336,13 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     <div className="p-4">
       {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
       <div className="max-w-7xl mx-auto">
-      <h1 className="text-xl font-bold text-white mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
-      <div className="flex items-center gap-5 text-sm text-gray-300 mb-3">
-        <span>注目度: <span className={reputation >= 50 ? 'text-yellow-400 font-bold' : 'text-gray-300'}>{reputation}</span></span>
-        <span>ランク: <span className="text-white font-bold">{rank}</span></span>
+      <h1 className="text-xl font-bold text-ink mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
+      <div className="flex items-center gap-5 text-sm text-ink-sub mb-3">
+        <span>注目度: <span className={reputation >= 50 ? 'text-yellow-900 font-bold' : 'text-ink'}>{reputation}</span></span>
+        <span>ランク: <span className="text-ink font-bold">{rank}</span></span>
         <span>ロスター: {teamData?.players?.length || 0}名</span>
-        <span>選択中: <span className="text-green-400 font-bold">{selectedIds.length}名</span></span>
-        {totalAcquired > 0 && <span className="text-green-400 font-bold">獲得済: {totalAcquired}名</span>}
+        <span>選択中: <span className="text-green-900 font-bold">{selectedIds.length}名</span></span>
+        {totalAcquired > 0 && <span className="text-green-900 font-bold">獲得済: {totalAcquired}名</span>}
       </div>
 
       {scouts.length > 0 && (
@@ -376,7 +379,8 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       )}
 
       {candidates.length > 0 ? (
-        <div className="overflow-x-auto mb-4">
+        <div className="overflow-x-auto mb-4 bg-surface-2 rounded-lg">
+          {/* ⚠ 表の行は背景を持たないので不透明なカードに載せる（明るい地色の上で文字が消える） */}
           <table className="w-full text-sm border-collapse">
             <thead className="bg-surface-2 border-b border-gray-700">
               <tr className="text-left">
@@ -418,7 +422,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                     key={player.id}
                     onClick={() => toggleSelect(player.id)}
                     className={`cursor-pointer border-b border-gray-800 transition ${
-                      selected ? 'bg-green-900/30' : 'hover:bg-gray-800/80'
+                      selected ? 'bg-green-900/40' : 'hover:bg-gray-600'
                     }`}
                   >
                     <td className="px-1.5 py-2 text-center">
@@ -485,7 +489,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           </table>
         </div>
       ) : (
-        <div className="bg-gray-800/50 rounded-lg p-8 text-center mb-4">
+        <div className="bg-surface-2 rounded-lg p-8 text-center mb-4">
           <p className="text-gray-300 text-base mb-2">スカウト候補者がいません</p>
           <p className="text-gray-400 text-sm">シーズン中にチーム運営画面からスカウトを派遣してください</p>
         </div>

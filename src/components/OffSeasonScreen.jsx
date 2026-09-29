@@ -202,7 +202,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   const slotNames = ['スロット1', 'スロット2', 'スロット3'];
 
   const SaveSlotSelector = () => (
-    <div className="bg-gray-700/40 rounded-xl border border-gray-600/40 p-4 mb-5">
+    <div className="bg-surface-2 rounded-xl border border-gray-600/40 p-4 mb-5">
       <h3 className="text-base font-black text-white mb-3 flex items-center gap-2">
         <span>💾</span> セーブ
       </h3>
@@ -258,21 +258,21 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     return (
       <ScreenShell width="form">
           <div className="mb-6">
-            <p className="text-gray-300 text-sm font-semibold tracking-[0.15em] uppercase">Graduation Report</p>
-            <h1 className="text-xl font-bold text-white">🎓 卒業・入部レポート</h1>
+            <p className="text-ink-sub text-sm font-semibold tracking-[0.15em] uppercase">Graduation Report</p>
+            <h1 className="text-xl font-bold text-ink">🎓 卒業・入部レポート</h1>
           </div>
 
           {/* サマリー */}
           <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="bg-gray-800/60 rounded-xl p-3 text-center border border-gray-700/40">
+            <div className="bg-surface-2 rounded-xl p-3 text-center border border-gray-700/40">
               <div className="text-gray-300 text-xs mb-1">卒業生</div>
               <div className="text-white font-black text-2xl">{r.graduated.length}</div>
             </div>
-            <div className="bg-red-900/20 rounded-xl p-3 text-center border border-red-800/30">
+            <div className="bg-surface-2 rounded-xl p-3 text-center border border-red-800/30">
               <div className="text-red-400 text-xs mb-1">NPB指名</div>
               <div className="text-red-300 font-black text-2xl">{npbDrafted.length}</div>
             </div>
-            <div className="bg-emerald-900/20 rounded-xl p-3 text-center border border-emerald-800/30">
+            <div className="bg-surface-2 rounded-xl p-3 text-center border border-emerald-800/30">
               <div className="text-emerald-400 text-xs mb-1">新入生</div>
               <div className="text-emerald-300 font-black text-2xl">{r.recruited.length}</div>
             </div>
@@ -280,7 +280,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
           {/* NPB指名 */}
           {npbDrafted.length > 0 && (
-            <div className="bg-red-900/15 border border-red-800/30 rounded-xl p-4 mb-5">
+            <div className="bg-surface-2 border border-red-800/30 rounded-xl p-4 mb-5">
               <h3 className="text-sm font-black text-red-400 mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-red-400"></span>
                 NPBドラフト指名
@@ -301,7 +301,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
           {/* 卒業生進路一覧（チーム別） */}
           {r.graduated.length > 0 && (
-            <div className="bg-amber-900/15 border border-amber-700/30 rounded-xl p-4 mb-5">
+            <div className="bg-surface-2 border border-amber-700/30 rounded-xl p-4 mb-5">
               <h3 className="text-sm font-black text-amber-400 mb-1 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-amber-400"></span>
                 卒業生の進路
@@ -355,7 +355,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               recTeamGroups[p.team].push(p);
             });
             return (
-              <div className="bg-emerald-900/15 border border-emerald-700/30 rounded-xl p-4 mb-5">
+              <div className="bg-surface-2 border border-emerald-700/30 rounded-xl p-4 mb-5">
                 <h3 className="text-sm font-black text-emerald-400 mb-1 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                   新入生
@@ -415,10 +415,10 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       <div className="max-w-3xl mx-auto">
         {/* ヘッダー */}
         <div className="mb-6">
-          <p className="text-gray-300 text-sm font-semibold tracking-[0.15em] uppercase">Off Season</p>
-          <h1 className="text-xl font-bold text-white">{seasonData.year}年目 シーズン終了</h1>
+          <p className="text-ink-sub text-sm font-semibold tracking-[0.15em] uppercase">Off Season</p>
+          <h1 className="text-xl font-bold text-ink">{seasonData.year}年目 シーズン終了</h1>
           {gameMode === 'sandbox' && (
-            <span className="inline-block mt-1 bg-orange-500/20 text-orange-400 border border-orange-500/40 text-sm font-bold px-3 py-0.5 rounded-full">
+            <span className="inline-block mt-1 bg-orange-900 text-orange-100 border border-orange-700 text-sm font-bold px-3 py-0.5 rounded-full">
               箱庭モード
             </span>
           )}
@@ -426,7 +426,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
         {/* 優勝チームカード */}
         {seasonSummary?.champion && (
-          <div className="champion-card bg-gradient-to-r from-yellow-900/60 via-yellow-800/40 to-yellow-900/60 rounded-2xl border border-yellow-500/50 p-5 mb-5 text-center">
+          <div className="champion-card bg-gradient-to-r from-yellow-950 via-yellow-900 to-yellow-950 rounded-2xl border border-yellow-500/50 p-5 mb-5 text-center">
             <div className="trophy-icon text-5xl mb-2 inline-block">🏆</div>
             <p className="text-yellow-400/80 text-sm font-bold tracking-widest uppercase mb-1">Champion</p>
             <h2 className="text-3xl font-black text-white mb-1">{seasonSummary.champion.team}</h2>
@@ -455,7 +455,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           return titles.length > 0 && (
             <div className="grid grid-cols-4 gap-2.5 mb-5">
               {titles.map((t, i) => (
-                <div key={i} className={`bg-gray-800/80 rounded-xl border ${t.border} p-2.5 text-center`}>
+                <div key={i} className={`bg-surface-2 rounded-xl border ${t.border} p-2.5 text-center`}>
                   <p className={`${t.titleColor} text-xs font-bold tracking-wide mb-0.5`}>{t.label}</p>
                   <p className="text-white font-black text-sm leading-tight">{t.name}</p>
                   <p className={`${t.valueColor} text-lg font-black mt-0.5`}>{t.value}</p>
@@ -495,7 +495,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
             : null;
           const fallLabel = gameMode === 'university' ? '秋季最終順位' : '最終順位表';
           return (
-            <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-5">
+            <div className="bg-surface-2 rounded-2xl border border-gray-700/50 p-4 mb-5">
               {springRows && (
                 <>
                   <h3 className="text-base font-black text-white mb-3">春季最終順位</h3>
@@ -517,7 +517,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           const userTeamName = seasonData.settings?.teamNames?.[0] || Object.keys(TEAMS_DATA)[0];
           const cd = TEAMS_DATA[userTeamName]?.corporateData;
           if (!cd) return null;
-          const rankColors = { S: 'text-yellow-400 border-yellow-500/40 bg-yellow-900/20', A: 'text-blue-400 border-blue-500/40 bg-blue-900/20', B: 'text-green-400 border-green-500/40 bg-green-900/20', C: 'text-gray-300 border-gray-500/40 bg-gray-800/40', D: 'text-gray-400 border-gray-600/40 bg-gray-800/20' };
+          const rankColors = { S: 'text-yellow-400 border-yellow-500/40 bg-surface-2', A: 'text-blue-400 border-blue-500/40 bg-surface-2', B: 'text-green-400 border-green-500/40 bg-surface-2', C: 'text-gray-300 border-gray-500/40 bg-surface-2', D: 'text-gray-400 border-gray-600/40 bg-surface-2' };
           const colors = rankColors[cd.rank] || rankColors.C;
           return (
             <div className={`rounded-xl border p-4 mb-5 ${colors}`}>
@@ -546,7 +546,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
         {/* 監督移籍（年度末のみ・カテゴリを跨いで就任できる） */}
         {gameMode !== 'sandbox' && (
-          <div className="bg-gray-700/40 rounded-xl border border-gray-600/40 p-4 mb-5">
+          <div className="bg-surface-2 rounded-xl border border-gray-600/40 p-4 mb-5">
             <div className="flex items-center gap-3 flex-wrap">
               <h3 className="text-base font-black text-white flex items-center gap-2">
                 <span>🧳</span> 監督移籍

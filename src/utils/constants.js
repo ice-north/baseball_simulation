@@ -388,15 +388,17 @@ export const POSITION_COLORS = {
  * （投手=赤 / 捕手=水色 / 内野=黄 / 外野=緑）を群にまとめただけ。
  * 選択中は塗り、非選択は同系の枠と文字だけにして、識別色は保ったまま格を落とす。
  */
+// ⚠ 非選択も不透明にすること。このタブ列はキャンプの紙（明るい地色）の上に直に載るので、
+//    `bg-*-900/25` だと淡く薄まって文字が 1.8〜2.3:1 まで落ちていた
 export const POSITION_GROUP_COLORS = {
   pitcher:  { on: 'bg-red-600 text-white border-red-500',
-              off: 'bg-red-900/25 text-red-300 border-red-700/50 hover:bg-red-900/40' },
+              off: 'bg-red-950 text-red-300 border-red-700 hover:bg-red-900' },
   catcher:  { on: 'bg-sky-600 text-white border-sky-500',
-              off: 'bg-sky-900/25 text-sky-300 border-sky-700/50 hover:bg-sky-900/40' },
+              off: 'bg-sky-950 text-sky-300 border-sky-700 hover:bg-sky-900' },
   infield:  { on: 'bg-yellow-600 text-white border-yellow-500',
-              off: 'bg-yellow-900/25 text-yellow-300 border-yellow-700/50 hover:bg-yellow-900/40' },
+              off: 'bg-yellow-950 text-yellow-300 border-yellow-700 hover:bg-yellow-900' },
   outfield: { on: 'bg-green-600 text-white border-green-500',
-              off: 'bg-green-900/25 text-green-300 border-green-700/50 hover:bg-green-900/40' },
+              off: 'bg-green-950 text-green-300 border-green-700 hover:bg-green-900' },
 };
 
 // ============================================================
