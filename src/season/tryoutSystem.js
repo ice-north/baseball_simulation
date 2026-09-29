@@ -113,11 +113,15 @@ function applyLeagueLevelShift(player, rank) {
     if (!obj || typeof obj[key] !== 'number') return;
     obj[key] = Math.max(lo, Math.min(hi, Math.round(obj[key] + amount)));
   };
-  shift(player.batting, 'meet', d); shift(player.batting, 'power', d);
-  shift(player.batting, 'eye', d);  shift(player.batting, 'steal', d * 0.6);
+  // ⚠ 打撃は投球より緩く下げること。一律 d だとパワーの平均が D で1桁台まで落ち、
+  //    Dリーグの長打率−打率が .012・本塁打 0.06/チーム試合（4本/75試合）、得点は
+  //    四球(16%)と失策だけで作られていた。現実の格下リーグはむしろ打ち合いになる
+  //    （投手・守備の質の落ち方の方が大きい）。パワーは半分・ミート/選球眼は3/4
+  shift(player.batting, 'meet', d * 0.6); shift(player.batting, 'power', d * 0.25);
+  shift(player.batting, 'eye', d * 0.75);  shift(player.batting, 'steal', d * 0.6);
   shift(player.fielding, 'defense', d);
   shift(player.physical, 'speed', d * 0.6); shift(player.physical, 'arm', d * 0.6);
-  shift(player.pitching, 'control', d);
+  shift(player.pitching, 'control', d * 0.75);
   // 球速は km スケールなので効きを弱める（D で約 -11km）
   shift(player.pitching, 'velocity', d * 0.45, 105, 168);
 }
