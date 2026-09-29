@@ -425,7 +425,7 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velo
   // whiff/gb/weak に `breakEfficiency(到達球速)` と `formPitchBonus(フォーム,球種)`
   // を掛けている。捕手側がこれを見ないと、サイド・アンダースローの投手で
   // シンカーを過小評価し、遅い投手で曲がりの落ちた球を過大評価する。
-  const arrival = velocity - pitchVelocityDrop(ball.type, ball.level ?? 50);
+  const arrival = velocity - pitchVelocityDrop(ball.type, ball.level ?? 50, velocity);
   const mult = breakEfficiency(arrival) * formPitchBonus(form, ball.type);
   // 習熟度そのもの。**ここが最大の項**（未熟な球は球種を問わず使えない）
   let score = LEAD_W_LEVEL * levelFactor;
@@ -440,7 +440,7 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velo
   // 実例: スライダー20/カーブ20/シュート100 の投手で、カーブLv20（実際の減速
   // 17.8km）がシュートLv100 と同格に選ばれていた。実測の価値は
   // シュートLv100 ≈ 0.72 に対しカーブLv20 ≈ 0.46 で逆。
-  score += pitchVelocityDrop(ball.type, ball.level ?? 50) / 100 * LEAD_W_DEPTH;
+  score += pitchVelocityDrop(ball.type, ball.level ?? 50, velocity) / 100 * LEAD_W_DEPTH;
   // ※「未熟な球は制球を損なう」ぶんは上の LEAD_W_LEVEL に含まれている
   // （回帰では -(1-lv)×0.765 と +lv×0.765 が定数差でしかない）。
   // 球種そのものの投げにくさ（TYPE_SIGMA。ナックル0.13 / フォーク0.06 …）。

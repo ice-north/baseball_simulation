@@ -807,7 +807,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // 球種ごとの球速減。**采配モードと同じ式を使う**（constants.js）。
     // 以前はここだけ `8 + level/100×15` で、Lv100なら全球種が一律 -23 だった
     let pitchVelocityFinal = effectiveVelocity
-      - pitchVelocityDrop(selectedPitch.type, selectedPitch.level ?? 50);
+      - pitchVelocityDrop(selectedPitch.type, selectedPitch.level ?? 50, pitcher.velocity);
 
     // 緩急ペナルティ: **前球との**球速差で打者のタイミングが狂う（比率ベース）。
     // 遅い投手ほど同じ球速差でも体感の緩急が大きくなる。

@@ -1257,6 +1257,7 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
 - `src/game/gameControls.js` (~105行) - resetGame・multiPitch・simMode
 - `src/game/gameSetup.js` (~680行) - setupManagedGame・handleManagedGameEnd
 - `src/game/pitcherDecisions.js` (~155行) - 勝利・敗戦・セーブ・ホールドの判定（両エンジン共有）
+- `src/game/baseState.js` (~110行) - 塁の状態の共通関数（走者の識別への移行の土台）
 - `src/game/saveSystem.js` (~650行) - セーブ/ロード/ファイル書き出し・読み込み
 - `src/game/seasonProgress.js` (~420行) - 日程進行ハンドラー
 - `src/simulation-logic.js` (~1090行) - 物理演算（打球・投球）
@@ -5146,6 +5147,7 @@ EVを上げると本塁打が激増するので、角度分布と飛距離係数
   （実NPB 0.55・72-75%）
 - ⚠ 采配モードの `bases` は boolean で走者を識別できないため、走者の走力・
   盗塁スキルは**打者のもので近似**している（積極進塁と同じ構造的制約）
+  → 移行の準備は「采配モードの走者の識別」の節
 
 ## 球速・緩急と打球方向（`VEL_DIR` / `SEQ_DIR` / `PULL_BASE`）
 打球方向に効く要素を3つに分けて持つ。旧モデルは全部を `velShift` の係数に
@@ -5385,6 +5387,52 @@ NPB_CARRY）/ `judgeFielderReach`（CATCH・フェンス・pickOutfielder）/
 **まだ揃っていないもの（既知）**
 - 走者の足: 采配モードの `bases` は boolean で走者を識別できないため、
   積極進塁の走力は打線9人の平均で近似している（構造的制約）
+
+### 采配モードの走者の識別（準備済み・移行は未着手）— `src/game/baseState.js`
+采配モードの `bases` は `[true, false, true]` のような boolean で、**誰が塁に居るか分からない**。
+そのため「盗塁を走者本人に付ける」「積極進塁・盗塁を走者の足で判定する」ができず、
+打者の値で近似している。自動シミュは最初から**選手オブジェクト**を置いている。
+
+**準備したもの**: `baseState.js`（`forceAdvance` / `advanceAll` / `moveRunner` / `removeRunner` /
+`runnerOf` / `asFlags`）。**`true` と走者オブジェクトのどちらが入っていても同じに動く**
+（値をそのまま動かすだけで作り直さない）ので、**1箇所ずつ置き換えても途中で壊れない**。
+`npm run check` の `base-state-check.mjs` が、同じ走者が動くこと・人数が保たれること・
+埋まった塁を上書きしないこと・入力を書き換えないことを毎回確かめる。
+
+**移行の手順**（`App.jsx` の THROW_PITCH と `handleBunt` に `newBases[k] = true/false` が約50箇所）
+1. 打者が出塁する所（四球・死球・安打・失策・野選・バント安打）で、`true` の代わりに
+   **打者オブジェクト**を置く（`forceAdvance(b, batter)` / `advanceAll(b, n, batter)`）
+2. 走者の手書きの移動（`newBases[2] = true; newBases[1] = false`）を `moveRunner` に置き換える。
+   ⚠ **`newBases[2] = newBases[1]` の形に直すだけでも識別は保たれる**（true を書かないこと）
+3. 盗塁（`stealAttemptRate` の所）で `runnerOf(bases[from])` を取り、盗塁・盗塁死を
+   **その走者**に付け、`stealSuccessRate` と `tryExtraAdvance` に走者の足を渡す
+4. 代走を出す画面で、塁の走者オブジェクトを差し替える（打順と同じ扱い）
+5. `RenderBases` などの表示は真偽値で読んでいるので `asFlags` を通せば変えなくてよい
+- ⚠ **1〜2 が全部済むまで 3 はやらないこと**。`true` が残っている塁では `runnerOf` が null を
+  返すので、その回だけ従来の近似へ落とす分岐が要る（全部済めば分岐ごと消せる）
+- ⚠ 采配モードはハーネスで実行されない（「采配モードはハーネスで実行されない」の節）。
+  **検証はブラウザで投げて**、盗塁が走者に付くこと・塁の人数が合うことを確かめる
+
+### 遅い投手のナックル（準備済み・既定 off）— `VELOCITY_DROP_MODE`（`utils/constants.js`）
+変化球の減速量が**絶対値**なので、球速100km/hの投手のナックルは到達70km/hになり
+`breakEfficiency` が落ちる（「曲がりの効きは130km/h付近が頂点」の既知の限界）。
+`pitchVelocityDrop(type, level, fastball)` に**投手自身の直球**を渡す口を全4経路に付け、
+`VELOCITY_DROP_MODE.scaleWithFastball` を立てると `types`（既定はナックルだけ）の減速量が
+`直球 / 140` 倍になる。**既定は off＝従来と完全に同じ**。
+
+**実測（`node tools/sim-harness/knuckle-probe.mjs 2 50`・ナックルLv100だけの投手・同一ロスター）**
+
+| 直球 | 到達（off → on） | 防御率（off → on） |
+|---|---|---|
+| 100km | 70 → 79km | 3.48 → 3.41 |
+| 115km | 85 → 90km | 3.69 → 3.69 |
+| 130km | 100 → 102km | 3.37 → 3.29 |
+| 145km | 115 → 115km | 2.59 → 2.61 |
+
+- ⚠ **この設定では効きが小さい**。遅い投手が弱いのは主に**直球そのものの遅さ**
+  （タイミング窓）で、ナックルの到達球速ではなかった。on にするだけでは「遅いから転向する」
+  現実の因果は出ないので、直すときは `breakEfficiency` の頂点の位置と合わせて較正すること
+- ⚠ on にするなら捕手の球種スコア（`scoreBall` の回帰）と `VALUE_DIST` を測り直すこと
 - 盗塁阻止: 采配モードは独自式（`baseThrowout - speedReduction + …`）で、
   自動シミュの捕手肩＋送球エラー判定とは別物
 
