@@ -68,7 +68,9 @@ function evaluateSchool(school) {
     ? (lineup.reduce((s, p) => s + sluggerScore(p), 0) / lineup.length - 26) * 0.55 : -6;
 
   return {
-    strength: Math.max(8, base + aceBonus + lineupBonus),
+    // ⚠ 素の値は 19〜77（σ16）と開きすぎで、一発勝負でも戦力上位4校が40年で35回優勝した。
+    //    50を中心に0.55倍へ縮める（順位は変えずに番狂わせの余地だけ作る）
+    strength: Math.max(8, 50 + (base + aceBonus + lineupBonus - 50) * 0.55),
     ace, slugger,
   };
 }
@@ -101,15 +103,19 @@ function runPrefectureQualifiers(schools) {
 }
 
 /** 1試合。戦力差から勝敗とスコアを決める */
+// ⚠ 1試合の振れ幅（`KOSHIEN_NOISE`）。±13 では戦力上位4校が40年で35回優勝し、
+//    一発勝負の番狂わせがほとんど起きなかった。±20 で広げてある
+const KOSHIEN_NOISE = 20;
 function playGame(a, b, strengthOf) {
-  const sa = strengthOf(a) + (Math.random() * 26 - 13);
-  const sb = strengthOf(b) + (Math.random() * 26 - 13);
+  const sa = strengthOf(a) + (Math.random() * 2 - 1) * KOSHIEN_NOISE;
+  const sb = strengthOf(b) + (Math.random() * 2 - 1) * KOSHIEN_NOISE;
   const aWins = sa >= sb;
   // 高校野球は点差が開きやすい。ロースコアの接戦も残す
   const base = () => Math.floor(Math.random() * 4) + Math.floor(Math.random() * 4);
   let scoreA = base(), scoreB = base();
   const gap = Math.abs(sa - sb);
-  const bonus = Math.floor(gap / 8) + 1;
+  // 力の差が大きいと大差になる（高校野球は10点差のコールドも珍しくない）
+  const bonus = Math.floor(gap / 8) + 1 + (gap > 30 ? Math.floor(Math.random() * 6) : 0);
   if (aWins && scoreA <= scoreB) scoreA = scoreB + bonus;
   if (!aWins && scoreB <= scoreA) scoreB = scoreA + bonus;
   return { scoreA, scoreB, winner: aWins ? a : b };
@@ -136,8 +142,13 @@ export function simulateKoshien(year) {
     strengthMap.set(s.name, ev.strength);
     detail.set(s.name, { ...s, ...ev });
   }
-  // 強い順に並べてからブラケットに渡す（createBracket はシード順を前提にしている）
-  reps.sort((a, b) => strengthMap.get(b.name) - strengthMap.get(a.name));
+  // ⚠ 甲子園に**シードは無い**（組み合わせは抽選）。以前は強い順に並べて
+  //    createBracket（シード順を前提にする）へ渡しており、戦力上位が必ず1回戦を
+  //    免除され、40年で39回 戦前の上位4校が優勝していた。抽選どおり無作為に並べる
+  for (let i = reps.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [reps[i], reps[j]] = [reps[j], reps[i]];
+  }
 
   const bracket = createBracket(reps.map(s => s.name));
   if (!bracket) return null;

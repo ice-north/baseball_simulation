@@ -274,11 +274,24 @@ export function simulateQuickMatch(team1Def, team2Def) {
   const bothExist = !!(TEAMS_DATA?.[t1Name]?.players && TEAMS_DATA?.[t2Name]?.players);
   const result = bothExist ? autoSimulateGame(t1Name, t2Name, true) : null;
   if (result && (result.homeScore !== undefined) && (result.homeScore + result.awayScore > 0)) {
-    const homeWon = result.homeScore > result.awayScore;
+    let h = result.homeScore, a = result.awayScore;
+    if (h === a) {
+      // トーナメントに引き分けは無い（タイブレークで決着する）。
+      // ⚠ 以前は同点のまま「アウェイの勝ち」になり、決勝が 5-5 で優勝校が決まっていた。
+      //    タイブレークは走者を置いて始めるので得点が入りやすい。勝敗はチームの力の比で決め、
+      //    勝った側に1〜2点を足す（負けた側にも0〜1点）
+      const s1 = RANK_STRENGTH[team1Def.rank] || 50;
+      const s2 = RANK_STRENGTH[team2Def.rank] || 50;
+      const homeWins = Math.random() < s1 / (s1 + s2);
+      const loseAdd = Math.random() < 0.4 ? 1 : 0;
+      const winAdd = loseAdd + 1 + (Math.random() < 0.35 ? 1 : 0);
+      if (homeWins) { h += winAdd; a += loseAdd; } else { a += winAdd; h += loseAdd; }
+    }
+    const homeWon = h > a;
     return {
       winner: homeWon ? t1Name : t2Name,
       loser: homeWon ? t2Name : t1Name,
-      score: [result.homeScore, result.awayScore],
+      score: [h, a],
     };
   }
 

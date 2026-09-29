@@ -398,6 +398,13 @@ function generateHighSchoolPlayer(id) {
     };
   }
 
+  // 能力値の上限（100）。⚠ 下限しか切っておらず、専門型の加点（強肩 +18〜30 等）が
+  //    乗ると 肩107・パワー113 のような尺度外の高校生が10万人に24人出ていた。
+  //    球速（km/h）とスタミナ（尺度が200まで）は対象外
+  for (const k of ['meet', 'power', 'eye', 'steal', 'speed', 'arm', 'defense', 'bodyStamina', 'recovery', 'control']) {
+    if (typeof abilities[k] === 'number' && abilities[k] > 100) abilities[k] = 100;
+  }
+
   // 成長力: ランクにほぼ依存しない（生まれ持った素質）
   const gpCenter = { S: 1.02, A: 0.98, B: 0.95, C: 0.92, D: 0.90, E: 0.88 };
   const u1 = Math.random() || 0.001;

@@ -243,12 +243,12 @@ export const autoPlayGrandChampionship = (gc) => {
         const away = TEAMS_DATA[match.team2];
         if (home && away) {
           const result = autoSimulateGame(match.team1, match.team2, true);
-          // トーナメントは決着必須。延長引き分け(result.winner=null)は
-          // スコアで判定し、それでも同点なら上位シード(team1)勝ちとする。
-          winner = result.homeScore > result.awayScore ? match.team1
-                 : result.awayScore > result.homeScore ? match.team2
-                 : match.team1;
-          match.score = `${result.homeScore}-${result.awayScore}`;
+          // トーナメントは決着必須。延長引き分けはタイブレークで決める。
+          // ⚠ 以前は同点のまま上位シード(team1)の勝ちにし、スコアも同点のまま残していた
+          let h = result.homeScore, a = result.awayScore;
+          if (h === a) { if (Math.random() < 0.5) h += 1; else a += 1; }
+          winner = h > a ? match.team1 : match.team2;
+          match.score = `${h}-${a}`;
         } else {
           winner = match.team1;
           match.score = 'W/O';
