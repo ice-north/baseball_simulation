@@ -618,12 +618,20 @@ export function applyCorporatePlayerGrowth(allTeams) {
         }
       }
 
-      // 知名度の蓄積: クラブでプロ意識が高い選手は地域で評判になる
-      let fameGain = Math.floor(Math.random() * 3);
+      // 知名度の蓄積。⚠ 以前は全員に毎年 0〜2（平均+1）を無条件に足しており、
+      //    実績と関係なく在籍年数だけで社会人の知名度の中央値が 1→37（15年）まで積み上がった。
+      //    ドラフト評価に fame×0.3 が乗るので、在籍年数がそのまま評価点になっていた。
+      //    **試合に出ている選手だけ**が名前を知られ、出ていない選手は少しずつ忘れられる
+      const seasonAct = player.position === 'pitcher'
+        ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
+        : (player.seasonStats?.batting?.atBats || 0);
+      let fameGain = seasonAct >= 200 ? 1 + (Math.random() < 0.5 ? 1 : 0)
+        : seasonAct >= 80 ? (Math.random() < 0.5 ? 1 : 0)
+        : ((player.fame || 0) > 0 ? -1 : 0);
       if (isClub && discipline >= 65) {
         fameGain += Math.floor((discipline - 50) * 0.08);
       }
-      player.fame = Math.min(100, (player.fame || 0) + fameGain);
+      player.fame = Math.max(0, Math.min(100, (player.fame || 0) + fameGain));
     }
   }
 }

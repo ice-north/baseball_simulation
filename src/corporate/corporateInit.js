@@ -33,7 +33,7 @@ import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
-import { seedInitialUniversityClasses, warmUpPlayerPipeline, universityPool } from '../season/universityPool.js';
+import { seedInitialUniversityClasses, warmUpPlayerPipeline, universityPool, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
 import { assignInitialUniversityBackgrounds } from '../university/universityPipeSystem.js';
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 
@@ -1019,6 +1019,10 @@ export const initializeCorporateGame = (teamDef) => {
   initializeWorld('corporate', 'corporate');
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
   clearReleasedPlayersPool();
+  // ⚠ 高校生・大学のプールも空にする（前のゲームの高校生が残ると、ウォームアップが
+  //    それを引き継いだまま動く。大学モードの初期化だけが空にしていた）
+  clearUniversityPool();
+  clearHighSchoolPool();
 
   // 社会人179チーム生成
   const userTeamName = teamDef.displayName || teamDef.name;
@@ -1054,6 +1058,8 @@ export const initializeCorporateGame = (teamDef) => {
 export const initializeParallelWorldForIndependent = (userLeagueId, userTeamNames) => {
   initializeWorld('independent', userLeagueId);
   corporatePlayerIdBase = 20000;
+  clearUniversityPool();
+  clearHighSchoolPool();
 
   // 社会人チーム全179チーム生成（3経路で共有。クラブのスタッフ・予算と同名の改名もここ）
   const { allTeamNames: corpTeamNames } = buildAllCorporateTeams();

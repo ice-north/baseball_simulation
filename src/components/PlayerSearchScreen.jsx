@@ -378,7 +378,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                             onClick={() => {
                               const teamData = TEAMS_DATA[userTeamName];
                               const uniRank = teamData?.universityData?.rank || 'C';
-                              const reputation = teamData?.universityData?.reputation || 30;
+                              const reputation = teamData?.universityData?.reputation ?? 30;
                               const result = addHighSchoolPlayerToScoutList(p, uniRank, reputation);
                               setScoutAddMsg(result.success ? `${p.name} を候補追加` : '追加失敗');
                               setTimeout(() => setScoutAddMsg(null), 2000);

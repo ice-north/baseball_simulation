@@ -27,7 +27,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const userTeamName = teamNames[0] || '';
   const teamData = TEAMS_DATA[userTeamName];
   const rank = teamData?.universityData?.rank || 'C';
-  const reputation = teamData?.universityData?.reputation || 30;
+  const reputation = teamData?.universityData?.reputation ?? 30;
   const maxSlots = getUniversityScoutSlots(rank);
 
   const maxApproaches = getMaxApproaches(rank);

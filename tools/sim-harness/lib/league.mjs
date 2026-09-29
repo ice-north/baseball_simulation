@@ -69,13 +69,20 @@ export function runSeason(names, gamesPerTeam = 130) {
   const days = buildSchedule(names, gamesPerTeam);
   let games = 0;
   let dayIndex = 0;
-  for (const day of days) {
+  let next = 0;
+  while (next < days.length) {
     dayIndex++;
-    // 週6日制: 7日ごとに休養日（試合なし・回復のみ）
+    // 週6日制: 7日ごとに休養日（試合なし・回復のみ）。
+    // ⚠ 休養日は日程を**消費しない**こと。以前は `for (const day of days)` の中で
+    //    `continue` しており、7日目の試合が丸ごと捨てられていた。各チームが
+    //    予定の6/7（86%）しか試合をしないのに、規定打席・投球回は予定の試合数で
+    //    計算していたので、「レギュラーの出場が85%」「規定到達が1チーム0.75人」
+    //    「防御率王・首位打者が極端」はこの計測の誤りだった
     if (dayIndex % 7 === 0) {
       if (!skipRecovery) recoverAllPitcherFatigue();
       continue;
     }
+    const day = days[next++];
     for (const [home, away] of day) {
       autoSimulateGame(home, away);
       games++;

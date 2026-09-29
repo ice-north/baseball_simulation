@@ -1065,6 +1065,9 @@ export function advanceToNextYear(seasonData, allTeams) {
   const npbYear = seasonData.settings?.year || seasonData.year || 1;
   processNpbCareers(allTeams, npbYear);
 
+  // 0.4. 今オフの入団の印を消す（スカウト候補から外すためだけの一時フラグ）
+  for (const t of Object.values(allTeams)) for (const p of (t?.players || [])) delete p._justRecruited;
+
   // 0.5. 仮置きのプールに残った在学生を名簿へ（旧セーブの移行。大学生の実体は名簿ひとつ）
   //      ⚠ 加齢（4）より前に置くこと——名簿の選手として一緒に歳を取らせる
   absorbUniversityPoolIntoRosters(allTeams, seasonData.year);

@@ -894,7 +894,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     // 大学モード: スカウト調査＋注目ボーナスの日次処理
     if (isUniversity && WORLD_DATA._universityScout?.candidates) {
       const uniRank = TEAMS_DATA[userTeamName]?.universityData?.rank || 'C';
-      const uniRep = TEAMS_DATA[userTeamName]?.universityData?.reputation || 30;
+      const uniRep = TEAMS_DATA[userTeamName]?.universityData?.reputation ?? 30;
       processUniversityScoutDay(WORLD_DATA._universityScout.candidates, newSeasonData.currentDate, uniRank, uniRep);
     }
 

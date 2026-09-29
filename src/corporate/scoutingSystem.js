@@ -321,7 +321,7 @@ function getHighSchoolScoutPool() {
 export function generateScoutCandidates(teamData, year) {
   const staffBonus = getTeamStaffBonus(teamData.staff || []);
   const scoutEye = staffBonus.scoutingEye || 50;
-  const reputation = teamData.corporateData?.reputation || 30;
+  const reputation = teamData.corporateData?.reputation ?? 30;
 
   // 候補者数: スカウト眼で4〜12人（赤字ペナルティで減少）
   const baseCount = 4;
@@ -648,6 +648,9 @@ export function recruitPlayer(team, player) {
   delete recruit._poolRef;
   delete recruit._scoutSource;
   recruit.origin = 'scout';
+  // 今オフに入団した印。⚠ これが無いと、入団したばかりの選手が次のチームのスカウト候補
+  //   （他球団の選手）として拾い直され、同じ日に4球団を渡り歩いていた。年度替わりで消す
+  recruit._justRecruited = true;
   recruit.isStarter = false;
   recruit.battingOrder = 0;
   recruit.fatigue = 0;
@@ -1150,7 +1153,7 @@ export function getAllScoutedPlayers(cd) {
  */
 function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
   const scoutEye = staffScoutEye || 30;
-  const reputation = teamData.corporateData?.reputation || 30;
+  const reputation = teamData.corporateData?.reputation ?? 30;
   const reputationMult = getReputationScoutBonus(reputation);
 
   let pool = [];
@@ -1257,6 +1260,7 @@ function getIndependentScoutPool(excludeTeam) {
     if (!team?.players || !team.independentLeagueId) return;
     if (teamName === excludeName) return;
     team.players.forEach((p, idx) => {
+      if (p._justRecruited) return;   // 今オフに入団したばかりの選手は引き抜かない
       pool.push({ player: p, source: 'independent', teamName, poolIndex: idx });
     });
   });
@@ -1274,6 +1278,7 @@ function getCorporateScoutPool(excludeTeam) {
     if (team.corporateData.type === 'club') return;
     if (teamName === excludeName) return;
     team.players.forEach((p, idx) => {
+      if (p._justRecruited) return;   // 今オフに入団したばかりの選手は引き抜かない
       pool.push({ player: p, source: 'corporate_team', teamName, poolIndex: idx });
     });
   });
@@ -1291,6 +1296,7 @@ function getClubScoutPool(excludeTeam) {
     if (team.corporateData.type !== 'club') return;
     if (teamName === excludeName) return;
     team.players.forEach((p, idx) => {
+      if (p._justRecruited) return;   // 今オフに入団したばかりの選手は引き抜かない
       pool.push({ player: p, source: 'club_team', teamName, poolIndex: idx });
     });
   });
@@ -1442,6 +1448,9 @@ function recruitPlayerToTeam(team, player) {
   delete recruit._investigationCount;
   delete recruit._revealLevel;
   recruit.origin = 'scout';
+  // 今オフに入団した印。⚠ これが無いと、入団したばかりの選手が次のチームのスカウト候補
+  //   （他球団の選手）として拾い直され、同じ日に4球団を渡り歩いていた。年度替わりで消す
+  recruit._justRecruited = true;
   recruit.isStarter = false;
   recruit.battingOrder = 0;
   recruit.fatigue = 0;
@@ -1591,7 +1600,7 @@ const INITIAL_SCOUT_COUNT = { S: 16, A: 13, B: 11, C: 9, D: 8 };
 export function initUniversityScoutList(teamData, rank) {
   if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
 
-  const reputation = teamData?.universityData?.reputation || 30;
+  const reputation = teamData?.universityData?.reputation ?? 30;
   const initialCount = INITIAL_SCOUT_COUNT[rank] || 10;
 
   // 4月初期発見は20%スタート（以前から目をつけていた選手）

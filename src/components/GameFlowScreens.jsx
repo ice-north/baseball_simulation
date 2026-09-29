@@ -9,6 +9,8 @@ import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 import { initializeCorporateGame, initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { initializeWorld, WORLD_DATA } from '../corporate/worldData.js';
+import { clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
 import { initializeUniversityGame, getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 
 let selectedIndependentLeague = null;
@@ -493,6 +495,12 @@ const GameFlowScreens = ({
   if (gameFlowState === 'sandbox_regulations') {
     return <NewGameRegulationsScreen
       onComplete={(regulations) => {
+        // ⚠ 箱庭は背景の世界を持たないが、前のゲームの WORLD_DATA・プールは消すこと
+        //    （以前は何も戻さず、前のゲームの大会・監督履歴・高校生が残っていた）
+        initializeWorld('sandbox');
+        WORLD_DATA.initialized = false;
+        clearUniversityPool();
+        clearHighSchoolPool();
         initializeNewGame(regulations);
         setGameFlowState('sandbox_setup');
       }}

@@ -484,3 +484,24 @@ export function generateLeagueAbbreviations(names) {
 
   return result;
 }
+
+// ============================================================
+// 新規ゲームで UNIVERSITY_TEAMS の可変な状態を初期値へ戻す
+// ⚠ ランク変動（corporateInit）が rank / reputation / rankingScore … を
+//    このモジュールの定数配列へ直接書き込む。ページを再読込せずにタイトルから
+//    新しく始めると、**前のゲームの大学ランクがそのまま残っていた**
+// ============================================================
+const MUTABLE_UNI_FIELDS = ['rank', 'reputation', 'reputationHistory', 'rankPosition', 'rankingScore'];
+const INITIAL_UNI_STATE = UNIVERSITY_TEAMS.map(t => {
+  const snap = {};
+  for (const k of MUTABLE_UNI_FIELDS) if (k in t) snap[k] = JSON.parse(JSON.stringify(t[k]));
+  return snap;
+});
+export function resetUniversityTeamsState() {
+  UNIVERSITY_TEAMS.forEach((t, i) => {
+    for (const k of MUTABLE_UNI_FIELDS) {
+      if (k in INITIAL_UNI_STATE[i]) t[k] = JSON.parse(JSON.stringify(INITIAL_UNI_STATE[i][k]));
+      else delete t[k];
+    }
+  });
+}
