@@ -26,6 +26,7 @@ import { generateUniversityChampionship, generateMeijiJinguTournament, simulateU
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 import PreGameModal from './dateProgress/PreGameModal.jsx';
 import NewspaperModal, { buildNewspaperData } from './dateProgress/Newspaper.jsx';
+import { decisionsFromResult } from '../game/pitcherDecisions.js';
 import { KoshienNoticeModal, PhaseTransitionModal } from './dateProgress/Modals.jsx';
 import { renderBracketWithLines as renderBracketWithLinesImpl } from './dateProgress/bracketRenderer.jsx';
 
@@ -161,103 +162,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return null;
   };
 
-  const determinePitcherDecisions = (gameResult, homeTeamData, awayTeamData) => {
-    const decisions = { winningPitcher: null, losingPitcher: null, savePitcher: null, holdPitchers: [] };
-    if (!gameResult || gameResult.homeScore === gameResult.awayScore) return decisions;
-    const isHomeWin = gameResult.homeScore > gameResult.awayScore;
-    const winningTeam = isHomeWin ? gameResult.homeTeam : gameResult.awayTeam;
-    const losingTeam = isHomeWin ? gameResult.awayTeam : gameResult.homeTeam;
-    if (!winningTeam?.players || !losingTeam?.players) return decisions;
-
-    const winPitchers = winningTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-    const losePitchers = losingTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-    if (winPitchers.length === 0 || losePitchers.length === 0) {
-      console.warn('[投手判定] 投球記録のある投手が見つかりません', { winPitchers: winPitchers.length, losePitchers: losePitchers.length, homeScore: gameResult.homeScore, awayScore: gameResult.awayScore });
-      return decisions;
-    }
-
-    // 先発投手を特定: pitcherAppearancesはリリーフのみ記録されるため、
-    // リリーフリストに含まれない投手で投球イニングがある投手＝先発投手
-    const winTeamKey = isHomeWin ? 'home' : 'away';
-    const loseTeamKey = isHomeWin ? 'away' : 'home';
-    const winReliefIds = new Set(gameResult.pitcherAppearances?.[winTeamKey]?.map(a => a.id) || []);
-    const loseReliefIds = new Set(gameResult.pitcherAppearances?.[loseTeamKey]?.map(a => a.id) || []);
-    const winStarter = winPitchers.find(p => !winReliefIds.has(p.id)) || winPitchers[0];
-
-    // 勝ち投手: 先発が5回（15アウト）以上→先発の勝ち
-    // それ以外→先発を除く最多投球回リリーフの勝ち（先発は5回未満では勝ち資格なし）
-    if (winStarter && winStarter.gameStats.pitching.outs >= 15) {
-      decisions.winningPitcher = winStarter;
-    } else {
-      const relievers = winPitchers.filter(p => p !== winStarter);
-      if (relievers.length > 0) {
-        relievers.sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs);
-        decisions.winningPitcher = relievers[0];
-      } else if (winPitchers.length > 0) {
-        // リリーフなし（雨天コールド等）のみ先発に付与
-        decisions.winningPitcher = winPitchers[0];
-      }
-    }
-
-    // 負け投手: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
-    const loseStarter = losePitchers.find(p => !loseReliefIds.has(p.id)) || losePitchers[0];
-    if (loseStarter && (loseStarter.gameStats?.pitching?.runsAllowed || 0) > 0) {
-      decisions.losingPitcher = loseStarter;
-    } else {
-      losePitchers.sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed);
-      decisions.losingPitcher = losePitchers[0];
-    }
-
-    // セーブ: 以下の条件をすべて満たすリリーフ
-    // 1) 勝ちチームで最後に投球したリリーフ投手 2) 勝ち投手ではない 3) 先発投手ではない
-    // 4) 以下のいずれか:
-    //    a) 3点差以内でリード時に1アウト以上取得
-    //    b) 3イニング以上投げた
-    const scoreDiff = Math.abs(gameResult.homeScore - gameResult.awayScore);
-    if (winPitchers.length > 1) {
-      const teamKey = isHomeWin ? 'home' : 'away';
-      const appearances = gameResult.pitcherAppearances?.[teamKey] || [];
-      // pitcherAppearancesを逆順に検索し、実際にアウトを取った最後のリリーフを特定
-      // （最後に登板した投手が0アウトの場合は1つ前のリリーフを探す）
-      let lastPitcher;
-      for (let i = appearances.length - 1; i >= 0; i--) {
-        const found = winPitchers.find(p => p.id === appearances[i].id);
-        if (found) { lastPitcher = found; break; }
-      }
-      // リリーフ投手（winReliefIdsに含まれる）かつ勝ち投手でない場合のみセーブ対象
-      if (lastPitcher && lastPitcher !== decisions.winningPitcher && winReliefIds.has(lastPitcher.id)) {
-        const outs = lastPitcher.gameStats.pitching.outs;
-        if ((scoreDiff <= 3 && outs >= 3) || outs >= 9) {
-          decisions.savePitcher = lastPitcher;
-        }
-      }
-    }
-
-    // ホールド: 勝ちチームのリリーフで、勝ち投手でもセーブ投手でもなく、
-    // リードを保って次の投手に繋いだ投手（1アウト以上取得）
-    winPitchers.forEach(p => {
-      if (p !== decisions.winningPitcher && p !== decisions.savePitcher && p.gameStats.pitching.outs >= 1) {
-        // 先発投手はホールド対象外
-        if (winStarter === p) return;
-        decisions.holdPitchers.push(p);
-      }
-    });
-
-    return decisions;
-  };
-
-  const recordPitcherDecision = (pitcher, stat, gameHome, gameAway, isHomeWin) => {
-    if (!pitcher?.id) { console.warn('[投手記録] pitcher が無効:', pitcher); return; }
-    const teamName = stat === 'losses' ? (isHomeWin ? gameAway : gameHome) : (isHomeWin ? gameHome : gameAway);
-    const teamData = TEAMS_DATA[teamName];
-    if (!teamData) { console.warn('[投手記録] チーム未発見:', teamName); return; }
-    const p = teamData.players.find(pl => pl.id === pitcher.id);
-    if (!p) { console.warn('[投手記録] 選手未発見:', pitcher.name, pitcher.id, 'in', teamName); return; }
-    if (!p.seasonStats) p.seasonStats = { batting: {}, pitching: {} };
-    if (!p.seasonStats.pitching) p.seasonStats.pitching = {};
-    const prev = p.seasonStats.pitching[stat] || 0;
-    p.seasonStats.pitching[stat] = (isNaN(prev) ? 0 : prev) + 1;
-  };
+  // ⚠ 勝敗・セーブ・ホールドの判定と記録は `autoSimulateGame` の中（pitcherDecisions.js）。
+  //    以前はここに独自の判定があり、この画面を通る試合にしか勝敗が付かなかった
+  //    （社会人モードの大会・背景のリーグ戦は全員0勝0敗）。表示に使うのは結果の `decisions`
+  const determinePitcherDecisions = (gameResult) => gameResult?.decisions || decisionsFromResult(gameResult);
 
   const simulateGamesOnDate = (sData) => {
     const gamesOnDate = getScheduleByDate(sData.schedule, sData.currentDate);
@@ -272,17 +180,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const awayTeam = TEAMS_DATA[game.away];
       if (!homeTeam || !awayTeam) return;
       const result = autoSimulateGame(game.home, game.away);
-      const decisions = determinePitcherDecisions(result, homeTeam, awayTeam);
+      const decisions = determinePitcherDecisions(result);
       const isHomeWin = result.homeScore > result.awayScore;
       console.log(`[投手判定] ${game.home} vs ${game.away}: ${result.homeScore}-${result.awayScore}`,
         'W:', decisions.winningPitcher?.name || 'なし',
         'L:', decisions.losingPitcher?.name || 'なし',
         'S:', decisions.savePitcher?.name || 'なし',
         'H:', decisions.holdPitchers.length);
-      if (decisions.winningPitcher) recordPitcherDecision(decisions.winningPitcher, 'wins', game.home, game.away, isHomeWin);
-      if (decisions.losingPitcher) recordPitcherDecision(decisions.losingPitcher, 'losses', game.home, game.away, isHomeWin);
-      if (decisions.savePitcher) recordPitcherDecision(decisions.savePitcher, 'saves', game.home, game.away, isHomeWin);
-      decisions.holdPitchers.forEach(hp => recordPitcherDecision(hp, 'holds', game.home, game.away, isHomeWin));
+      // 記録は autoSimulateGame が済ませている（二重に積まない）
       const scheduleIndex = updatedSchedule.findIndex(g => g.id === game.id);
       const decisionsForDisplay = {
         winningPitcher: decisions.winningPitcher ? { id: decisions.winningPitcher.id, name: decisions.winningPitcher.name } : null,
@@ -2282,8 +2187,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                             </div>
                             {/* 勝敗投手・セーブ表示 */}
                             {(() => {
-                              const dec = game.result.decisions || determinePitcherDecisions(game.result,
-                                TEAMS_DATA[game.home], TEAMS_DATA[game.away]);
+                              const dec = game.result.decisions || determinePitcherDecisions(game.result);
                               const parts = [];
                               if (dec.winningPitcher) parts.push(<span key="w" className="text-green-400">○{dec.winningPitcher.name}</span>);
                               if (dec.losingPitcher) parts.push(<span key="l" className="text-red-400">●{dec.losingPitcher.name}</span>);

@@ -6,6 +6,7 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { generateAILineup } from './autoSimulation.js';
 import { recordGameResult } from '../season/dateProgression.js';
+import { decidePitchers, recordDecisions } from './pitcherDecisions.js';
 import { adjustGrowthModifier, applyFatigueGrowthPenalty } from '../utils/constants.js';
 import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
 
@@ -246,7 +247,7 @@ export function executeSetupManagedGame(ctx, gameInfo) {
  */
 export function executeHandleManagedGameEnd(ctx) {
   const {
-    managedGameInfoRef, score, homeTeam, awayTeam,
+    managedGameInfoRef, score, homeTeam, awayTeam, decisionLog,
     seasonData, setSeasonData, selectedMonth, setSelectedMonth,
     setManagedGameInfo, setScreenMode, setManagementView
   } = ctx;
@@ -302,13 +303,17 @@ export function executeHandleManagedGameEnd(ctx) {
         if (appeared) playerData._playedToday = true;
       }
 
-      if (gs.atBats > 0 || gs.walks > 0 || gs.hitByPitch > 0) {
+      if (gs.atBats > 0 || gs.walks > 0 || gs.hitByPitch > 0 || gs.sacrificeBunts > 0) {
         if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
         if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
         const season = playerData.seasonStats.batting;
         season.games = (season.games || 0) + 1;
         season.atBats = (season.atBats || 0) + (gs.atBats || 0);
         season.hits = (season.hits || 0) + (gs.hits || 0);
+        // ⚠ 二塁打・三塁打・犠打は以前ここで集計しておらず、采配した試合の分だけ落ちていた
+        season.doubles = (season.doubles || 0) + (gs.doubles || 0);
+        season.triples = (season.triples || 0) + (gs.triples || 0);
+        season.sacrificeBunts = (season.sacrificeBunts || 0) + (gs.sacrificeBunts || 0);
         season.homeruns = (season.homeruns || 0) + (gs.homeruns || 0);
         season.rbis = (season.rbis || 0) + (gs.rbis || 0);
         season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
@@ -395,78 +400,26 @@ export function executeHandleManagedGameEnd(ctx) {
   updateManagedGameStats(homeTeam, htn);
   updateManagedGameStats(awayTeam, atn);
 
-  // 勝敗セーブの記録
-  if (finalScore.home !== finalScore.away) {
-    const isHomeWin = finalScore.home > finalScore.away;
-    const winTeamState = isHomeWin ? homeTeam : awayTeam;
-    const loseTeamState = isHomeWin ? awayTeam : homeTeam;
-    const winTeamName = isHomeWin ? htn : atn;
-    const loseTeamName = isHomeWin ? atn : htn;
-
-    // 先発IDをローテーションから特定（試合後はインデックス+1済みなので-1で逆算）
-    const getRotStarterId = (teamName) => {
-      const rot = TEAMS_DATA[teamName]?.pitchingRotation;
-      if (!rot?.starters?.length) return null;
-      const idx = ((rot.currentStarterIndex || 0) - 1 + rot.starters.length) % rot.starters.length;
-      return rot.starters[idx];
-    };
-    const winStarterId = getRotStarterId(winTeamName);
-
-    // 勝利投手判定: 先発が5回以上→先発、それ以外→最多投球回リリーフ
-    const winPitchers = winTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
-      .sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
-    const winStarter = winPitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9);
-    const winPitcher = winStarter && (winStarter.stats?.pitching?.outs || 0) >= 15
-      ? winStarter
-      : (winPitchers.filter(p => p !== winStarter)[0] || winPitchers[0]);
-
-    // 敗戦投手判定: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
-    const losePitchers = loseTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
-    const loseStarter = losePitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9)
-      || [...losePitchers].sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0))[0];
-    const losePitcher = loseStarter && (loseStarter.stats?.pitching?.runsAllowed || 0) > 0
-      ? loseStarter
-      : [...losePitchers].sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0))[0] || null;
-
-    // セーブ投手判定: 勝ち投手・先発を除いた最少アウト（最後に登板）の投手
-    const scoreDiff = Math.abs(finalScore.home - finalScore.away);
-    let savePitcher = null;
-    if (winPitchers.length > 1) {
-      const saveEligible = winPitchers.filter(p =>
-        p !== winPitcher &&
-        (winStarterId ? p.id !== winStarterId : p !== winStarter)
-      );
-      const lastPitcher = saveEligible.length > 0 ? saveEligible[saveEligible.length - 1] : null;
-      if (lastPitcher) {
-        const outs = lastPitcher.stats?.pitching?.outs || 0;
-        if ((scoreDiff <= 3 && outs >= 3) || outs >= 9) {
-          savePitcher = lastPitcher;
-        }
-      }
+  // 勝敗・セーブ・ホールド（自動シミュと同じ判定。pitcherDecisions.js）。
+  // ⚠ 以前はここに独自の推定があり（先発が5回以上なら先発の勝ち／最少アウト＝最後の投手）、
+  //    0-0で5回に降りた先発に勝ちが付き、1-0の9回の守護神にセーブが付かなかった
+  if (finalScore.home !== finalScore.away && decisionLog) {
+    const teamState = { home: homeTeam, away: awayTeam };
+    const outsOf = (side, id) => teamState[side]?.players?.find(p => p.id === id)?.stats?.pitching?.outs || 0;
+    const d = decidePitchers({
+      finalScore, appearances: decisionLog.appearances, lastLead: decisionLog.lastLead, outsOf,
+    });
+    if (d.winSide) {
+      const find = (side, id) => (id == null ? null : teamState[side].players.find(p => p.id === id) || null);
+      const loseSide = d.winSide === 'home' ? 'away' : 'home';
+      const nameOf = { home: htn, away: atn };
+      recordDecisions({
+        winningPitcher: find(d.winSide, d.win),
+        losingPitcher: find(loseSide, d.loss),
+        savePitcher: find(d.winSide, d.save),
+        holdPitchers: d.holds.map(id => find(d.winSide, id)).filter(Boolean),
+      }, { winTeam: nameOf[d.winSide], loseTeam: nameOf[loseSide] }, TEAMS_DATA);
     }
-
-    // ホールド: 勝ちチームのリリーフで、勝ち投手・セーブ・先発でなく1アウト以上
-    const holdPitchers = winPitchers.filter(p =>
-      p !== winPitcher && p !== savePitcher && p !== winStarter &&
-      (winStarterId ? p.id !== winStarterId : true) &&
-      (p.stats?.pitching?.outs || 0) >= 1
-    );
-
-    // TEAMS_DATAに反映
-    const updatePitcherDecision = (playerState, teamName, stat) => {
-      const teamData = TEAMS_DATA[teamName];
-      if (!teamData) return;
-      const playerData = teamData.players.find(pl => pl.id === playerState.id);
-      if (!playerData) return;
-      if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
-      if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
-      playerData.seasonStats.pitching[stat] = (playerData.seasonStats.pitching[stat] || 0) + 1;
-    };
-
-    if (winPitcher) updatePitcherDecision(winPitcher, winTeamName, 'wins');
-    if (losePitcher) updatePitcherDecision(losePitcher, loseTeamName, 'losses');
-    if (savePitcher) updatePitcherDecision(savePitcher, winTeamName, 'saves');
-    holdPitchers.forEach(hp => updatePitcherDecision(hp, winTeamName, 'holds'));
   }
 
   // ⚠ 同じ日の他の試合はここで消化しない。日付送りと一緒に日程進行の

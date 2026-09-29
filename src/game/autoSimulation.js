@@ -1,3 +1,4 @@
+import { createDecisionLog, observeDecisionLog, decisionsFromResult, recordDecisions } from './pitcherDecisions.js';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate, spinAdjustedArsenal } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
@@ -611,8 +612,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // 投手に代打を出したチーム → { slot, phId, phPos }。イニング終了処理で必ず継投する
     //    （⚠ 以前は代打に position='pitcher' を渡すだけで currentPitcherId が変わらず、
     //       打順から外れた投手がそのまま投げ続けていた）
-    pitcherPinchHit: { home: null, away: null }
+    pitcherPinchHit: { home: null, away: null },
+    // 勝敗・セーブ・ホールドの判定用（登板順とリードの移り変わり。pitcherDecisions.js）
+    decisionLog: createDecisionLog()
   };
+  const observeDecisions = () => observeDecisionLog(gameState.decisionLog, {
+    score: gameState.score, pitcherIds: gameState.currentPitcherId,
+  });
 
   // 現在の打者を取得
   const getCurrentBatter = (team) => {
@@ -1853,6 +1859,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     //    `const pitcher` のまま打席を進めており、全打席の約6%で交代済みの投手が投げていた
     //    （左のワンポイントは狙った左打者ではなく次の打者と対戦していた）
     pitcher = getCurrentPitcher(defenseTeam) || pitcher;
+    observeDecisions();   // この打者に投げる投手を登板順に記録（登板時の点差つき）
     const catcher = getCurrentCatcher(defenseTeam);
     const defense = buildDefense(defenseTeam);
 
@@ -2027,6 +2034,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               else gameState.score.home++;
               pitcher.gameStats.pitching.runsAllowed++;
               creditRuns(pitcher, 1, gameState.bases[2]?._reachedOnError ? 1 : 0);
+              batter.gameStats.batting.rbis++;   // 押し出しは打点（以前は付いていなかった）
               atBatDamagePoints += 10; // 失点=10ダメージ
               gameState.bases[2] = gameState.bases[1];
               gameState.bases[1] = gameState.bases[0];
@@ -2054,6 +2062,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             else gameState.score.home++;
             pitcher.gameStats.pitching.runsAllowed++;
             creditRuns(pitcher, 1, gameState.bases[2]?._reachedOnError ? 1 : 0);
+            batter.gameStats.batting.rbis++;   // 押し出し死球も打点
             atBatDamagePoints += 10;
             gameState.bases[2] = gameState.bases[1];
             gameState.bases[1] = gameState.bases[0];
@@ -2292,6 +2301,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     while (gameState.outs < 3 && atBats < 50) {  // 無限ループ防止（打席数制限）
       simulateAtBat();
       atBats++;
+      observeDecisions();   // リードが入れ替わったら、その時の両チームの投手を責任投手として記録
       // サヨナラ: 9回以降の裏にホームが勝ち越した時点で試合終了。
       // ⚠ 以前は3アウトまで攻撃が続き、余分な得点が打者・投手の成績と勝敗に混ざっていた
       if (!gameState.isTopInning && gameState.inning >= 9
@@ -2946,8 +2956,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           }
         }
 
-        // 勝敗はDateProgressScreen.determinePitcherDecisionsで正式判定・記録する
-        // ここでは二重計上を防ぐため記録しない
+        // 勝敗・セーブ・ホールドは試合の最後に `recordDecisions` がまとめて記録する
       }
 
       // 守備成績の集計
@@ -2967,6 +2976,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   updatePlayerSeasonStats(gameState.homeTeam, winner === homeTeamName ? true : winner === awayTeamName ? false : null);
   updatePlayerSeasonStats(gameState.awayTeam, winner === awayTeamName ? true : winner === homeTeamName ? false : null);
 
+  // 勝利・敗戦・セーブ・ホールド（リードの移り変わりから。pitcherDecisions.js）
+  const decisions = decisionsFromResult({
+    homeScore, awayScore, homeTeam: gameState.homeTeam, awayTeam: gameState.awayTeam,
+    decisionLog: gameState.decisionLog,
+  });
+  if (winner) {
+    recordDecisions(decisions, {
+      winTeam: winner, loseTeam: winner === homeTeamName ? awayTeamName : homeTeamName,
+    }, TEAMS_DATA);
+  }
+
   return {
     homeScore,
     awayScore,
@@ -2975,6 +2995,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     homeTeam: gameState.homeTeam,
     awayTeam: gameState.awayTeam,
     pitcherChanges: gameState.pitcherChanges,
+    decisionLog: gameState.decisionLog,
+    decisions,
     pitcherAppearances: gameState.pitcherAppearances
   };
 };
