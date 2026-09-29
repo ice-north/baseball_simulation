@@ -6,19 +6,21 @@ const Y = +process.argv[2] || 5;
 const o = console.log; console.log = () => {}; console.warn = () => {};
 let { seasonData } = bootstrapWorld();
 const src = (s) => s === 'university_team' ? 'university' : s;
-const byRound = {}; const all = {};
+const byRound = {}; const all = {}; const ageBy = {};
 for (let y = 0; y < Y; y++) {
   const r = advanceYear(seasonData); seasonData = r.nextSeasonData;
   for (const d of r.draftedPlayers || []) {
     const k = src(d.source); const rd = d.draftRound === 'ドラフト1位' ? 'R1' : /育成/.test(d.draftRound) ? 'iku' : 'R2+';
     (byRound[rd] ||= {})[k] = (byRound[rd][k] || 0) + 1;
     all[k] = (all[k] || 0) + 1;
+    const ab = (ageBy[k] ||= {}); ab[d.age] = (ab[d.age] || 0) + 1;
   }
 }
 console.log = o;
 const fmt = (m) => { const t = Object.values(m).reduce((a, b) => a + b, 0); return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${(v / t * 100).toFixed(0)}%`).join(' / ') + `  (n=${t})`; };
 o('全体 ', fmt(all));
 for (const rd of ['R1', 'R2+', 'iku']) if (byRound[rd]) o(rd.padEnd(4), fmt(byRound[rd]));
+for (const k of Object.keys(ageBy)) o(`  ${k} の年齢: ` + Object.entries(ageBy[k]).sort((a, b) => a[0] - b[0]).map(([a, v]) => `${a}:${v}`).join(' '));
 // カテゴリ別の水準（スタメン相当 = 野手の上位9人・投手の上位6人の中央値）
 const q = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor((s.length - 1) * p)] ?? 0; };
 const cat = (t) => t.universityData ? 'univ' + (t.universityData.rank || '') : t.corporateData ? t.corporateData.type + (t.corporateData.rank || '') : 'other';

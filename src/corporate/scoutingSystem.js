@@ -2079,9 +2079,11 @@ export function getUniversityScoutRecommendation(player, uniRank) {
   // ⚠ 高校生プールの生成や `evaluatePlayerScore` を変えたら**測り直すこと**
   //    （`VALUE_DIST` / `BAND_SD` と同じ性質の、実測から取った定数）
   const isP = player.position === 'pitcher';
-  const base = (isP ? { S: 74, A: 64, B: 57, C: 49, D: 41 }
-                    : { S: 124, A: 112, B: 102, C: 92, D: 82 })[uniRank]
-             ?? (isP ? 57 : 102);
+  const base = (isP ? { S: 74, A: 64, B: 57, C: 50, D: 41 }
+                    : { S: 122, A: 110, B: 100, C: 91, D: 80 })[uniRank]
+             ?? (isP ? 57 : 100);
+  // 最終測定: 高校生の打撃の上の裾を畳んだ（`batTaperHigh`）後に
+  // `tools/sim-harness/scout-grade-probe.mjs` で測った帯の中央。野手が 1〜2 下がった
   const rel = (score - base) / base;
   if (rel >= 0.50) return 'S';
   if (rel >= 0.25) return 'A';

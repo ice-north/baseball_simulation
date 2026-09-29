@@ -38,11 +38,19 @@ const REGULAR_THRESHOLD = 68;
 //       **リーグ全体の一軍到達率は動かさずに、投打の内訳だけを入れ替えている。**
 // ⚠ レギュラーは分けない。実NPBは 先発ローテ5〜6＋勝ちパターン3 ＝ 投手8〜9 に対し
 //    スタメン8＋DH ＝ 野手9 とほぼ同数で、ここに投打の差は無い。
-const NPB_FIRST_TEAM_SHARE = { pitcher: 0.66, fielder: 0.49 };
-const NPB_REGULAR_SHARE = { pitcher: 0.13, fielder: 0.13 };
+// ⚠ **分母は「支配下＋育成」**。57%（一軍出場者480人 ÷ 支配下840人）をそのまま使っていたが、
+//    指名クラスには育成指名（全体の約4分の1）も入るので、プールは支配下＋育成（約1190人）に
+//    相当する。支配下の割合を全員に当てると一軍到達64% / レギュラー到達27%（実NPB 40〜50% /
+//    15〜20%）と甘く出ていた。480/1190 ≒ 40%、レギュラー110/1190 ≒ 9% に直してある。
+//    投打の比（66 対 49）はそのまま保つ
+const NPB_FIRST_TEAM_SHARE = { pitcher: 0.47, fielder: 0.35 };
+const NPB_REGULAR_SHARE = { pitcher: 0.09, fielder: 0.09 };
 const isPitcher = (a) => a?.position === 'pitcher';
 // その年のめぐり合わせ（故障・チーム事情・出来）。総合力に足す振れ幅
-const OPPORTUNITY_SD = 3.0;
+// ⚠ 3.0 から下げた。在籍が延びると（戦力外を緩めた）めぐり合わせの抽選回数が増え、
+//    一度だけ一軍に顔を出す選手で一軍到達が膨らむため
+const OPPORTUNITY_SD = 2.0;
+const HS_ROOKIE_PLAN = -4;
 
 /** 平均0・標準偏差1の正規乱数（Box-Muller） */
 function gauss() {
@@ -177,19 +185,22 @@ function generateBatterSeason(ability, isRegular) {
  * 34歳を超えると急速に引退が増える。
  */
 function shouldRetire(a, ability) {
-  if (a.age >= 40) return true;
-  if (ability < 45 && a.age >= 26) return Math.random() < 0.55;
-  if (a.age >= 34) return Math.random() < 0.18 + (a.age - 34) * 0.14;
-  if (ability < 52 && a.age >= 30) return Math.random() < 0.35;
+  const why = (r) => { a._retireReason = r; return true; };
+  if (a.age >= 40) return why('40歳');
+  if (ability < 45 && a.age >= 26) return Math.random() < 0.55 && why('能力45未満');
+  if (a.age >= 34) return Math.random() < 0.18 + (a.age - 34) * 0.14 && why('34歳以上');
+  if (ability < 52 && a.age >= 30) return Math.random() < 0.35 && why('30歳・能力52未満');
   // 二軍暮らしが続けば戦力外になる。これが無いと、一軍に上がれないまま
   // 34歳まで在籍し続ける選手だらけになり、8年以内の脱落が2%しか起きなかった。
+  // ⚠ 旧値（24歳から 30%+8%/年）では**8年以内の引退が76%**で、指名クラスの在籍が
+  //    972人（支配下＋育成の実数 約1190人）に留まっていた。25歳から 12%+6%/年 に緩めてある
   // ⚠ **「3年連続で二軍」を条件にしてはいけない**。めぐり合わせ(OPPORTUNITY_SD)で
   //    年に一度でも一軍に顔を出すとカウンタがリセットされ、この規則が
   //    ほとんど発火しなくなる（実測で在籍が969人まで膨らみ、実NPBの840を超えた）。
   //    **直近3年のうち一軍が1年以下**なら二軍暮らしと見なす。
   const recent = (a.npbSeasons || []).slice(-3);
-  if (recent.length >= 3 && recent.filter(s => s.level === '一軍').length <= 1 && a.age >= 24) {
-    return Math.random() < 0.30 + (a.age - 24) * 0.08;
+  if (recent.length >= 3 && recent.filter(s => s.level === '一軍').length <= 1 && a.age >= 25) {
+    return Math.random() < 0.12 + (a.age - 25) * 0.06 && why('二軍暮らし');
   }
   return false;
 }
@@ -227,7 +238,14 @@ export function advanceNpbCareer(a, year, ctx = null) {
   //    実際は故障・チーム事情・その年の出来で「掴む年」と「棒に振る年」がある。
   //    **その年のめぐり合わせ**を毎年引き直して能力に足す。平均0なので枠の割合は動かない。
   const chance = gauss() * OPPORTUNITY_SD;
-  const shown = ability + chance;
+  // 高卒1年目は二軍で体を作る（`HS_ROOKIE_PLAN`）。1年目からレギュラーの高卒が
+  // 学年あたり1.1人（実NPB 0.2〜0.3人）出ていた。
+  // ⚠ **年功の項ではない**——効くのは「指名翌年に19歳」の1年だけで、2年目以降は無い。
+  //    全員に「1年目は控えめに」を掛けると大卒・社会人の即戦力（栗林・森下型）の
+  //    経路まで消える（下記「1年目からレギュラーになる選手は塞がない」）。
+  //    線より十分上の逸材はこの割引を越えて1年目から出てくる
+  const plan = (a.age <= 19 && (a.npbSeasons || []).length === 0) ? HS_ROOKIE_PLAN : 0;
+  const shown = ability + chance + plan;
   const isFirstTeam = shown >= firstLine;
   const isRegular = isFirstTeam && shown >= regLine;
 

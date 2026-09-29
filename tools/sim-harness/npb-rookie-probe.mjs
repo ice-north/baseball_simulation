@@ -66,13 +66,21 @@ const ss = (a) => a.npbSeasons.slice().sort((x, y) => x.year - y.year);
 const debutIdx = (a) => ss(a).findIndex(s => s.level === '一軍');
 
 console.log(`\n■ 指名クラス全体の影のNPB（${YEARS}年 / 指名 ${pool.length}名 / 出場記録あり ${played.length}名）`);
-console.log(`  現役 ${pool.filter(a => !a.retired).length}名（実NPBの支配下は約840名）`);
+console.log(`  現役 ${pool.filter(a => !a.retired).length}名（実NPBは支配下約840＋育成約350＝約1190名。指名クラス全体には育成指名も入るので後者と比べる）`);
 console.log('─'.repeat(72));
 const old8 = played.filter(a => a.draftYear + 8 <= YEARS);
 console.log(`  一軍到達（キャリア中1度でも） ${pct(played.filter(a => debutIdx(a) >= 0).length, played.length)}   実NPB 40〜50%`);
 console.log(`  レギュラー到達               ${pct(played.filter(a => a.npbSeasons.some(s => s.regular)).length, played.length)}   実NPB 15〜20%`);
-console.log(`  8年以内に引退                ${pct(old8.filter(a => a.retired).length, old8.length)}   実NPB 40前後   （母数 ${old8.length}）`);
+console.log(`  8年以内に引退                ${pct(old8.filter(a => a.retired).length, old8.length)}   実NPB 50〜60%前後（「5年で半数」と言われる。確かな統計ではない）   （母数 ${old8.length}）`);
 
+{ const rr = {}; const ages = {};
+  for (const a of old8.filter(a => a.retired && a.retiredYear <= a.draftYear + 8)) {
+    rr[a._retireReason || '不明'] = (rr[a._retireReason || '不明'] || 0) + 1;
+    const n = a.npbSeasons.length; ages[n] = (ages[n] || 0) + 1;
+  }
+  console.log('  　引退の理由: ' + Object.entries(rr).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${v}`).join(' / '));
+  console.log('  　在籍年数: ' + Object.entries(ages).sort((x, y) => x[0] - y[0]).map(([k, v]) => `${k}年:${v}`).join(' '));
+}
 console.log('\n■ 1年目（投手 / 野手）');
 console.log('─'.repeat(72));
 console.log('            人数    1年目一軍    1年目レギュラー');

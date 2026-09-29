@@ -397,7 +397,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   // **1巡目の指名にだけ**若さの上乗せを割り引く。評価点そのものは変えないので、
   // 1位を逃した高校生は2位以下でそのまま指名される（全体の構成比は動かない）。
   // ⚠ 年齢で決めること（CLAUDE.md「加点として許すのは年齢だけ」）。出どころでは分けない
-  const FIRST_ROUND_READINESS = { 18: -12, 19: -10, 20: -5 };
+  const FIRST_ROUND_READINESS = { 18: -14, 19: -12, 20: -5 };
   const firstRoundPref = (team, c) =>
     getTeamPreferenceScore(team, c) + (FIRST_ROUND_READINESS[c.player.age] || 0);
 
