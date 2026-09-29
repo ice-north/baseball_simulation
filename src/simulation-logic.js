@@ -3,7 +3,7 @@
 // 野球シミュレーションの物理計算と判定ロジック
 // ============================================================
 import { PITCHING_FORM_EFFECTS } from './utils/constants.js';
-import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop, isUnreadablePitch } from './utils/constants.js';
+import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop, isUnreadablePitch, KNUCKLE_TIMING } from './utils/constants.js';
 
 // ============================================================
 // 球種の効果を物理エンジンへ繋ぐ係数（BALL_EFFECTS → 物理）
@@ -179,10 +179,21 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   //   0.40 のまま: 打率.2334 / 三振23.5% / 失点3.46（三振が実データ帯19-22%を超過）
   //   0.42:        打率.2386 / 三振21.9% / 失点3.69（実NPB 失点3.70 に一致）
   // 打者個々の能力ではなく物理の基準を動かしているので、能力の相対関係は不変。
-  const windowCoef = 0.42 - (clampedVel - 120) * 0.00511;
+  const coefFor = (v) => 0.42 - (Math.max(120, Math.min(165, v)) - 120) * 0.00511;
+  const windowCoef = coefFor(basePitcherVelocity);
 
   // 窓の計算は実際の球速で（速い変化球は打ちにくい）
   let timingWindow = (1000 / (pitchVelocity / 3.6)) * windowCoef;
+
+  // ナックルは揺れで打ち損じさせる球なので、遅いことがそのまま当てやすさにならない。
+  // 窓を「基準の投手（素の球速 refFastball）が投げたナックル」の窓へ indep の割合だけ寄せる。
+  // ⚠ 以前は球速100km/hの投手がナックルに転向しても、ストレートだけの投手と同じだけ
+  //    遅さに罰せられ（防御率の差 100km と 145km で 0.75 ずつ）、「遅いから転向する」が出なかった
+  if (isUnreadablePitch(pitch.type) && KNUCKLE_TIMING.indep > 0) {
+    const ref = KNUCKLE_TIMING.refFastball;
+    const refWindow = (1000 / ((ref - pitchVelocityDrop(pitch.type, pitch.level ?? 50, ref)) / 3.6)) * coefFor(ref);
+    timingWindow *= (refWindow / timingWindow) ** KNUCKLE_TIMING.indep;
+  }
 
   // ミート窓ボーナス（ミート力が高いと窓が広がる）
   const meetBonus = (batter.meet / 100) * 0.20;  // 最大+20%（打率+0.5割相当の強化）

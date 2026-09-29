@@ -11,7 +11,11 @@ import { SRC } from './lib/bootstrap.mjs';
 import { buildLeague, runSeason, TEAMS_DATA } from './lib/league.mjs';
 import { aggregateStats } from './lib/stats.mjs';
 
-const { VELOCITY_DROP_MODE, pitchVelocityDrop } = await import(SRC + '/utils/constants.js');
+const { VELOCITY_DROP_MODE, pitchVelocityDrop, KNUCKLE_TIMING } = await import(SRC + '/utils/constants.js');
+// KNUCKLE_INDEP=0.5 のように渡すと、ナックルの速さ依存の抜き具合を差し替えて測れる
+if (process.env.KNUCKLE_INDEP != null) KNUCKLE_TIMING.indep = Number(process.env.KNUCKLE_INDEP);
+// ONLY_OFF=1 で on（減速量を直球に比例させる）の列を省いて速く回す
+const MODES = process.env.ONLY_OFF ? ['base', 'off'] : ['base', 'off', 'on'];
 const SEEDS = +process.argv[2] || 3, G = +process.argv[3] || 60;
 const o = console.log; console.log = () => {}; console.warn = () => {};
 
@@ -35,7 +39,7 @@ const acc = {};   // acc[v][mode] = [era...]
 for (let s = 0; s < SEEDS; s++) {
   const names = buildLeague(6, 28, 1);
   const saved = structuredClone(Object.fromEntries(names.map(n => [n, TEAMS_DATA[n].players])));
-  for (const v of SPEEDS) for (const mode of ['base', 'off', 'on']) {
+  for (const v of SPEEDS) for (const mode of MODES) {
     for (const n of names) TEAMS_DATA[n].players = structuredClone(saved[n]);
     setPitchers(names, v, mode !== 'base');
     reset(names);
@@ -52,8 +56,8 @@ const rows = SPEEDS.map(v => {
   VELOCITY_DROP_MODE.scaleWithFastball = true;
   const on = pitchVelocityDrop('knuckle', 100, v);
   VELOCITY_DROP_MODE.scaleWithFastball = false;
-  return `  ${String(v).padStart(3)}km   到達 off ${Math.round(v - off)} / on ${Math.round(v - on)}km   防御率 ストレートだけ ${m(a.base).toFixed(2)} → ナックル off ${m(a.off).toFixed(2)}（${(m(a.off) - m(a.base)).toFixed(2)}）/ on ${m(a.on).toFixed(2)}（${(m(a.on) - m(a.base)).toFixed(2)}）`;
+  return `  ${String(v).padStart(3)}km   到達 off ${Math.round(v - off)} / on ${Math.round(v - on)}km   防御率 ストレートだけ ${m(a.base).toFixed(2)} → ナックル off ${m(a.off).toFixed(2)}（${(m(a.off) - m(a.base)).toFixed(2)}）${a.on ? ` / on ${m(a.on).toFixed(2)}（${(m(a.on) - m(a.base)).toFixed(2)}）` : ''}`;
 });
 console.log = o;
-o(`ナックルLv100だけの投手（ストレート封印）・6チーム×${G}試合×${SEEDS}シード・同一ロスター`);
+o(`ナックルLv100だけの投手（ストレート封印）・6チーム×${G}試合×${SEEDS}シード・同一ロスター・indep ${KNUCKLE_TIMING.indep}`);
 rows.forEach(r => o(r));
