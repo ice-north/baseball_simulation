@@ -3,7 +3,7 @@
 // 野球シミュレーションの物理計算と判定ロジック
 // ============================================================
 import { PITCHING_FORM_EFFECTS } from './utils/constants.js';
-import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop } from './utils/constants.js';
+import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop, isUnreadablePitch } from './utils/constants.js';
 
 // ============================================================
 // 球種の効果を物理エンジンへ繋ぐ係数（BALL_EFFECTS → 物理）
@@ -22,6 +22,19 @@ import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop } from './utils/constan
 const BREAK_PEAK = 130;
 export const breakEfficiency = (v) =>
   Math.max(0.60, 1.18 - ((v - BREAK_PEAK) / 50) ** 2 * 0.58);
+
+// 【ナックルは遅くても効きが落ちない】（`pitchBreakEfficiency`）
+// 上の「遅すぎると曲がりが見える」は**回転で曲がる球**の話。ナックルは回転を殺して
+// 不規則に揺れる球で、打者が長く見られても行き先は読めない（`UNREADABLE_PITCHES`）。
+// そのため**頂点より遅い側では効きを落とさない**。速すぎる側（揺れる前に届く）は同じ。
+// ⚠ かつては球速100km/hの投手のナックルが到達70〜79km/hで効きが下限0.60まで落ち、
+//    145km/hの投手のナックル（1.13）の半分しか揺れなかった。ナックルへの転向で
+//    得をするのが**速い投手と遅い投手で同じ**（防御率 -1.0 前後）になり、
+//    「遅いから転向する」という現実の因果が出ていなかった
+// ⚠ 捕手の球種スコア（`pitchCalling.scoreBall`）も**この関数**を使うこと。
+//    物理と捕手の物差しが違うと、効いていない球を要求する
+export const pitchBreakEfficiency = (type, v) =>
+  (isUnreadablePitch(type) && v < BREAK_PEAK) ? breakEfficiency(BREAK_PEAK) : breakEfficiency(v);
 
 // 【速球の空振りは球速そのもので決まる】
 // `BALL_EFFECTS.whiffBonus` は「変化による欺き」なのでストレートは 0 だが、
@@ -238,7 +251,7 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     const lv = pitch.level / 100;
     // ツーシームのように whiffBonus が負の球種は逆に当てやすくなる
     timingWindow *= (1 - (ballEffect.whiffBonus || 0) * BALL_WHIFF_W * lv
-      * breakEfficiency(pitchVelocity) * formPitchBonus(pitcher.form, pitch.type)
+      * pitchBreakEfficiency(pitch.type, pitchVelocity) * formPitchBonus(pitcher.form, pitch.type)
       * (1 - meetDeceptionResistance));
   }
 
@@ -325,7 +338,7 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     const weakEff = BALL_EFFECTS[pitch.type];
     if (weakEff && pitch.level) {
       const weakness = (weakEff.weakBonus || 0) * (pitch.level / 100)
-        * breakEfficiency(pitchVelocity) * formPitchBonus(pitcher.form, pitch.type)
+        * pitchBreakEfficiency(pitch.type, pitchVelocity) * formPitchBonus(pitcher.form, pitch.type)
         * (1 - meetQuality * 0.5);
       exitVelocity -= weakness * BALL_WEAK_W;
     }
@@ -497,7 +510,7 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   const gbEff = BALL_EFFECTS[pitch.type];
   const ballGroundAdj = gbEff
     ? -(gbEff.groundballBonus || 0) * ((pitch.level ?? 50) / 100)
-      * breakEfficiency(pitchVelocity) * formPitchBonus(pitcher.form, pitch.type) * BALL_GB_W
+      * pitchBreakEfficiency(pitch.type, pitchVelocity) * formPitchBonus(pitcher.form, pitch.type) * BALL_GB_W
     : 0;
   // 速球で差し込まれるとゴロになりやすい（NPBデータ: 160+で50.7%GB）
   let velocityAngleAdj = 0;

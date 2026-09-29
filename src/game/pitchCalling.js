@@ -23,7 +23,7 @@
 // ============================================================
 
 import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop } from '../utils/constants.js';
-import { breakEfficiency } from '../simulation-logic.js';
+import { pitchBreakEfficiency } from '../simulation-logic.js';
 import { resolvePitchCell, pickTargetCell } from './pitchZone.js';
 import { objectiveAimShift, objectiveBallWeight } from './pitchSituation.js';
 import { naturalCourse, shapeSigma, TYPE_SIGMA } from './pitchShape.js';
@@ -426,7 +426,7 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velo
   // を掛けている。捕手側がこれを見ないと、サイド・アンダースローの投手で
   // シンカーを過小評価し、遅い投手で曲がりの落ちた球を過大評価する。
   const arrival = velocity - pitchVelocityDrop(ball.type, ball.level ?? 50, velocity);
-  const mult = breakEfficiency(arrival) * formPitchBonus(form, ball.type);
+  const mult = pitchBreakEfficiency(ball.type, arrival) * formPitchBonus(form, ball.type);
   // 習熟度そのもの。**ここが最大の項**（未熟な球は球種を問わず使えない）
   let score = LEAD_W_LEVEL * levelFactor;
   // 打球になる球（ゴロ・凡打）は味方の守備が良いほど価値が上がる
