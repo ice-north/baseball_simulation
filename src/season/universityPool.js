@@ -13,7 +13,7 @@ import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRa
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { dexterityMult } from './growthUtils.js';
-import { STAT_GROWTH, growthThreshold, growthDecayRate, stochasticRound } from './growthSystem.js';
+import { STAT_GROWTH, growthThreshold, growthDecayRate, stochasticRound, ceilOf } from './growthSystem.js';
 import { generateHandedness } from '../utils/handedness.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { buildToolNorms, toolProfile } from '../game/scoutTools.js';
@@ -23,6 +23,12 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 import { syncPositionToFitness } from '../utils/physics.js';
 
 export const HIGH_SCHOOL_CLASS_SIZE = 5000;
+
+// 高校生の打撃（ミート・パワー・選球眼）の上の裾を畳む。境より上を係数で圧縮するだけなので
+// 中央値と順位は変わらない。`taperLow`（下の裾）と対になる考え方。
+const BAT_TAPER_AT = 45;
+const BAT_TAPER_K = 0.7;
+export const batTaperHigh = (v) => (v > BAT_TAPER_AT ? Math.round(BAT_TAPER_AT + (v - BAT_TAPER_AT) * BAT_TAPER_K) : v);
 
 /**
  * 大学プール: **初期化の途中だけ使う仮置き場**。
@@ -384,6 +390,14 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'contact') { meet += r(14, 24); eye += r(8, 15); }
     else if (specialty === 'glove') defense += r(14, 24);
     else if (specialty === 'cannon') baseArm += r(18, 30);
+
+    // ⚠ **打撃の上の裾だけ畳む**（`batTaperHigh`）。才能オフセット（S+28）と
+    //    専門型の加点（+14〜24）が重なり、高校生の上位3%がミート55・上位1%が61と、
+    //    **高卒の時点でNPBレギュラー基準（ミート58）に届く打者**が毎年出ていた。
+    //    その層がそのまま大学S・社会人Sのスタメンになるので、アマの上位の打撃が
+    //    プロより強くなる根になっていた。中央値は動かさず、45より上だけを圧縮する
+    //    （順位は保つ＝「たまに凄い高校生」は残る）。
+    meet = batTaperHigh(meet); power = batTaperHigh(power); eye = batTaperHigh(eye);
 
     abilities = {
       meet: Math.max(5, meet), power: Math.max(8, power),
@@ -1130,7 +1144,7 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
     const g = STAT_GROWTH[key];
     let amount = g.base * baseMult * UNIV_GAIN * gp * rankMult * disciplineMult
       * specMult(spec) * (0.7 + Math.random() * 0.6);
-    amount *= decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp));
+    amount *= decayMult(current, growthThreshold(ceilOf(g).threshold, gp), growthDecayRate(ceilOf(g).rate, gp), ceilOf(g).floor);
     return Math.min(capOverride ?? g.cap, current + stochasticRound(amount));
   };
 

@@ -157,18 +157,24 @@ const RANK_VELOCITY_FLOOR = { S: 128, A: 125, B: 120, C: 112, D: 105 };
 const RANK_VELOCITY_REDUCTION = { S: 0, A: -3, B: -5, C: -8, D: -15 };
 
 // ランク別の投手制球追加補正（teamOffsetだけでは不十分なので投手専用補正）
-const RANK_CONTROL_OFFSET = { S: 8, A: 5, B: 0, C: -5, D: -15 };
+const RANK_CONTROL_OFFSET = { S: 4, A: 2, B: 0, C: -5, D: -15 };
 
 // ランク別の制球キャップ（社会人野球はプロ未満）
 // 通常選手の上限。スター/プロ注目は+8まで許容
-const RANK_CONTROL_CAP = { S: 78, A: 72, B: 65, C: 55, D: 45 };
+// ⚠ S/A を下げてある（旧 78/72）。社会人Sの制球の中央値が 67 と NPB基準（60）を超えていたため
+const RANK_CONTROL_CAP = { S: 70, A: 66, B: 62, C: 55, D: 45 };
 
 // ランク別の変化球レベル倍率（Dランクはアマチュアレベル）
 const RANK_ARSENAL_MULT = { S: 1.1, A: 1.0, B: 0.85, C: 0.65, D: 0.45 };
 
 // ランク別の打撃能力キャップ（初期生成時）
 // 成長してピークでS級ならOKだが、初期生成で85超は非現実的
-const RANK_BATTING_CAP = { S: 72, A: 66, B: 60, C: 52, D: 45 };
+// ⚠ **打撃はアマの水準に抑える**（`growthSystem` の `AMA_BAT` と同じ理由）。
+//    旧値 S72/A66 と倍率そのままでは、社会人Sのスタメン野手の中央値が
+//    ミート60/パワー59 から始まり、NPBレギュラー基準（58/55）を超えていた。
+//    ソフトキャップなので上振れの逸材（超過分の2〜5割が残る）は出る。
+const RANK_BATTING_CAP = { S: 64, A: 60, B: 55, C: 49, D: 43 };
+const BAT_LEVEL = 0.88;   // ミート・パワー・選球眼だけに掛ける水準
 
 // ランク別の初期注目度（0-100）
 // 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
@@ -383,9 +389,9 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
   // `taperLow` は utils/constants.js に一本化してある（高校生プールと共有）
 
   candidates.forEach(p => {
-    p.batting.meet = scaleAndJitter(p.batting.meet, 6);
-    p.batting.power = scaleAndJitter(p.batting.power, 6);
-    p.batting.eye = scaleAndJitter(p.batting.eye, 5);
+    p.batting.meet = scaleAndJitter(p.batting.meet * BAT_LEVEL, 6);
+    p.batting.power = scaleAndJitter(p.batting.power * BAT_LEVEL, 6);
+    p.batting.eye = scaleAndJitter(p.batting.eye * BAT_LEVEL, 5);
     p.batting.steal = scaleAndJitter(p.batting.steal, 5);
     // 走力・体力・回復はランクに依存しない（生まれ持った身体能力）
     p.physical.speed = taperLow(clamp(p.physical.speed + randInt(-8, 8) + randInt(-5, 5), 1, 99));
@@ -602,7 +608,7 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
 
   // ソフトキャップ: キャップを超過した分を確率的に削減（上限に張り付かない自然な分布）
   const ctrlMax = controlCap + 8;
-  const IL_BATTING_CAP = { B: 60, C: 51, D: 42 };
+  const IL_BATTING_CAP = { B: 55, C: 49, D: 41 };
   const batCap = (isIndependent ? IL_BATTING_CAP[rank] : null) ?? (RANK_BATTING_CAP[rank] || 52);
   const softCap = (val, cap) => {
     if (val <= cap) return val;

@@ -389,6 +389,18 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   // 逆ウェーバー制: 左上→右下（上位球団から指名）
   const reverseWaiverOrder = [...npbStandings];
 
+  // === 1巡目は「即戦力」を少し重く見る（`FIRST_ROUND_READINESS`）===
+  // 評価点には若さの上乗せ（年齢ボーナス・成長力・将来性倍率）が入っている。
+  // それを全巡目で同じように効かせると、**5000人の高校生プールの上の裾**が
+  // 1巡目を独占する（実測 1位の高校生 60〜71%。実NPBは概ね4割）。
+  // 1位は球団の看板で、翌年から戦力になる選手を優先するのが実際の傾向なので、
+  // **1巡目の指名にだけ**若さの上乗せを割り引く。評価点そのものは変えないので、
+  // 1位を逃した高校生は2位以下でそのまま指名される（全体の構成比は動かない）。
+  // ⚠ 年齢で決めること（CLAUDE.md「加点として許すのは年齢だけ」）。出どころでは分けない
+  const FIRST_ROUND_READINESS = { 18: -12, 19: -10, 20: -5 };
+  const firstRoundPref = (team, c) =>
+    getTeamPreferenceScore(team, c) + (FIRST_ROUND_READINESS[c.player.age] || 0);
+
   // === 1巡目: 同時指名 + 抽選 + 外れ再指名ループ ===
   const firstRoundData = { phases: [] };
   const MAX_CONTESTED = 8;
@@ -406,7 +418,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       // 上位候補に絞って評価（全候補を見るのは不要）
       const topN = eligible.filter(c => !takenIds.has(c.player.id)).slice(0, 40);
       for (const c of topN) {
-        const prefBonus = getTeamPreferenceScore(team, c);
+        const prefBonus = firstRoundPref(team, c);
         const noise = (Math.random() - 0.5) * 20;
         const pref = c.score + prefBonus + noise;
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
@@ -441,7 +453,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         const altCands = eligible.filter(c => !allPickedIds.has(c.player.id) && !takenIds.has(c.player.id)).slice(0, 30);
         let bestCand = null, bestScore = -Infinity;
         for (const c of altCands) {
-          const prefBonus = getTeamPreferenceScore(team, c);
+          const prefBonus = firstRoundPref(team, c);
           const pref = c.score + prefBonus + (Math.random() - 0.5) * 15;
           if (pref > bestScore) { bestScore = pref; bestCand = c; }
         }
@@ -493,7 +505,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       const remaining = eligible.filter(c => !takenIds.has(c.player.id)).slice(0, 30);
       let bestCand = null, bestScore = -Infinity;
       for (const c of remaining) {
-        const prefBonus = getTeamPreferenceScore(team, c);
+        const prefBonus = firstRoundPref(team, c);
         const pref = c.score + prefBonus + (Math.random() - 0.5) * 15;
         if (pref > bestScore) { bestScore = pref; bestCand = c; }
       }

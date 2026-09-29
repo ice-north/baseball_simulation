@@ -398,11 +398,11 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
   // ⚠ **カテゴリ加点を全廃したので、構成比を決めるのはこの年齢カーブと成長だけ**。
   //    高卒の +33 は「素材への投機」として大きすぎ、高校生が指名の45%を占めていた
   //    （プールの81%が高校生なので、少しの下駄でも大量に通ってしまう）。
-  const ageBonusMap = { 18: 10, 19: 10, 20: 9, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
+  const ageBonusMap = { 18: 33, 19: 30, 20: 18, 21: 10, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
   const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 33 : -65);
 
   // 将来性投影倍率（若い選手の能力を伸びしろ込みで評価）
-  const potentialMult = age <= 18 ? 1.10 : age <= 19 ? 1.07 : age <= 20 ? 1.03 : age <= 21 ? 1.01 : 1.0;
+  const potentialMult = age <= 18 ? 1.03 : age <= 19 ? 1.02 : age <= 20 ? 1.01 : 1.0;
 
   // 成長力ボーナス（若い選手ほど成長力が大きく評価される）
   const gp = player.growthPotential || 1.0;
@@ -428,7 +428,7 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
   // 倍率が変わり、せっかく揃えた投打のスケールがまたずれる（実測 投手32%止まり）。
   const dev = deviationOf(player, main, sub);
   const abilityFactor = Math.max(0, Math.min(1.0, (dev - 25) / 50));
-  const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.60) * 45) * abilityFactor
+  const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.60) * 25) * abilityFactor
                       : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
                       : Math.max(0, (gp - 1.0) * 15);
 

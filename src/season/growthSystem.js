@@ -158,15 +158,37 @@ export const growthDecayRate = (base, gp = 1.0) =>
 //    「伸びにくい」ことと「ピークが早い」ことは別の話なので、軸を分ける。
 //    実データのピーク: 走力22-24 / 肩24-26 / パワー27-29 / ミート26-27 /
 //                     守備26-28 / 選球眼28-32（晩成）/ 球速24-26 / 制球28-32
+// ⚠ **アマの打撃（ミート・パワー・選球眼）だけ天井を低く・急にしてある**（`ama`）。
+//    守備・制球と同じ 52 / 0.05 だった頃は、大学S・社会人Sのスタメン野手の中央値が
+//    ミート66/パワー66 と **NPBレギュラー基準（ミート58/パワー55）を上回り**、
+//    大学Sのリーグで 打率.345 / 本塁打3.0本/チーム試合 という打ち合いになっていた。
+//    アマチュアの平均はプロのレギュラーより下にあるべきなので、平均を下げる。
+//    天井は gp で上へずれて緩む（`growthThreshold` / `growthDecayRate`）ので、
+//    才能のある選手はここを越える＝「たまに凄い打者がいる」は残る。
+// ⚠ **プロ（`CATEGORY_GROWTH.npb` の `pro: true`）は `ama` を使わない**。
+//    共通の値を下げるとプロの打者まで伸びなくなる。
+// ⚠ 天井を読むときは `ceilOf(g, isPro)` を通すこと（大学・自由契約・社会人の3経路）
+export const ceilOf = (g, isPro = false) => (!isPro && g.ama) ? g.ama : g;
+// floor … 天井を越えてからも残る伸びの割合（共通は 0.10）。アマの打撃は 0.02 にして
+//         「天井の先は才能（gp）がある選手だけが進める」形にする。0.10 のままだと
+//         社会人の厚い練習量（ミートの実効重み4.7）で毎年じりじり伸び、平均が下がらない
+const AMA_BAT = { threshold: 42, rate: 0.09, floor: 0.02 };
+// ⚠ **打撃だけ下げると投手が勝ちすぎる**。リーグの成績は能力の絶対値ではなく
+//    打者と投手の「比」で決まるので、打撃の天井だけ下げたら社会人Sが 打率.210 /
+//    2.8点/試合、自リーグ（独立）が 打率.168 まで落ちた。社会人Sの投手の制球は
+//    中央値67〜69 と NPB基準（60）を超えていたので、制球にも同じアマの天井を掛ける。
+//    球速は NPB基準（146）より既に低い（中央値136〜142）ので触らない
+const AMA_CTL = { threshold: 46, rate: 0.08, floor: 0.03 };
+
 export const STAT_GROWTH = {
-  meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, decline: 0.66 },
-  power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, decline: 1.78 },
-  eye:      { peak: 2, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, decline: 0.25 },
+  meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 0.66 },
+  power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 1.78 },
+  eye:      { peak: 2, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 0.25 },
   defense:  { peak: -1, ref: 50, base: 1.7, cap: 99,  threshold: 52, rate: 0.05, decline: 0.80 },
   speed:    { peak: 4, ref: 50, base: 0.5, cap: 99,  threshold: 62, rate: 0.03, decline: 5.70 },
   arm:      { peak: 6, ref: 50, base: 0.5, cap: 99,  threshold: 62, rate: 0.03, decline: 6.20 },
   armP:     { peak: 6, ref: 50, base: 1.0, cap: 99,  threshold: 62, rate: 0.03, decline: 3.30 },  // 投手の肩
-  control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, decline: 0.44 },
+  control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_CTL, decline: 0.44 },
   stamina:  { peak: 2, base: 2.0, cap: 200, threshold: 62, rate: 0.03, decline: 1.48 },
   velocity: { peak: 5, base: 0.5, cap: null, threshold: 142, rate: 0.20, decline: 6.00 },
   // 体力・体幹・器用さ。年次成長では直接伸ばさないが、**大学とキャンプが使うので
@@ -193,9 +215,9 @@ export const STAT_GROWTH = {
 const FA_VOLUME = 0.55;   // 自主トレのみ。実戦も指導者も無い
 const FA_GAIN = 0.80;     // 環境も無い（チーム所属のランクD 0.80 相当）
 export function applyFreeAgentGrowth(pool) {
-  const decayMult = (current, threshold, rate) => {
+  const decayMult = (current, threshold, rate, floor = 0.10) => {
     if (current < threshold) return 1.0;
-    return Math.max(0.10, 1.0 - (current - threshold) * rate);
+    return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
 
   for (const player of pool) {
@@ -214,7 +236,7 @@ export function applyFreeAgentGrowth(pool) {
       const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
       const delta = g.base * baseMult * (statBasal + practice) * FA_GAIN * (0.6 + Math.random() * 0.6);
       if (delta >= 0) {
-        return Math.min(capOverride ?? g.cap, current + stochasticRound(delta * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
+        return Math.min(capOverride ?? g.cap, current + stochasticRound(delta * decayMult(current, growthThreshold(ceilOf(g).threshold, gp), growthDecayRate(ceilOf(g).rate, gp), ceilOf(g).floor)));
       }
       return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
     };
@@ -430,6 +452,7 @@ const CATEGORY_GROWTH = {
   //    そのまま効くので、「二軍暮らしが続くと伸びない」が自然に出る。
   npb: {
     volume: 1.00, gain: 0.80, ceilingShift: 14, topN: 2, strength: 1.25, weak: 0.85,
+    pro: true,   // アマ専用の天井（`STAT_GROWTH[].ama`）を使わない
     // ⚠ focus は成長だけでなく**衰えの止まりにくさ**にも効く（練習項が基礎成長の
     //    マイナスを打ち消すため）。28→38歳の実測が 守備-15% 対 走力-16% と
     //    ほぼ並んでいた（実データは 守備-10 対 走力-22）。「体から落ち、技術は残る」を
@@ -456,9 +479,9 @@ const CATEGORY_GROWTH = {
 // @param opts.activity 出場量を外から与える（プロは一軍/二軍で決まる）
 // ============================================================
 export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
-  const decayMult = (current, threshold, rate) => {
+  const decayMult = (current, threshold, rate, floor = 0.10) => {
     if (current < threshold) return 1.0;
-    return Math.max(0.10, 1.0 - (current - threshold) * rate);
+    return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
     const age = player.age || 25;
     const gp = player.growthPotential || 1.0;
@@ -551,7 +574,7 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
         //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
         const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * formMult;
         return Math.min(capOverride ?? g.cap,
-          current + stochasticRound(delta * phys * decayMult(current, growthThreshold(g.threshold + (prof.ceilingShift ?? 0), gp), growthDecayRate(g.rate, gp))));
+          current + stochasticRound(delta * phys * decayMult(current, growthThreshold(ceilOf(g, prof.pro).threshold + (prof.ceilingShift ?? 0), gp), growthDecayRate(ceilOf(g, prof.pro).rate, gp), ceilOf(g, prof.pro).floor)));
       }
 
       return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
@@ -560,9 +583,9 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
 }
 
 export function applyCorporatePlayerGrowth(allTeams) {
-  const decayMult = (current, threshold, rate) => {
+  const decayMult = (current, threshold, rate, floor = 0.10) => {
     if (current < threshold) return 1.0;
-    return Math.max(0.10, 1.0 - (current - threshold) * rate);
+    return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
 
   for (const [, team] of Object.entries(allTeams)) {
