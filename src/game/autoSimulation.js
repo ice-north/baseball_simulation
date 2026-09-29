@@ -31,8 +31,31 @@ const PITCH_LIMITS = {
   onepoint: 15, behind: 50, mopup: 50, auto_r: 35
 };
 
-// イニング別ダメージ閾値: 1回=45, 2回=40, ..., 9回=5
-const INNING_DAMAGE_THRESHOLDS = [45, 40, 35, 30, 25, 20, 15, 10, 5];
+// 先発の球数上限はスタミナで決める（`quality` / `ace` / 自動）。
+// ⚠ 固定の100球だと、スタミナ110でも150でも同じ所で降りて投球回がスタミナに依存しない。
+//    スタミナ100→95球 / 120→102球 / 140→109球、エースは+8（上限はどちらも120）。
+//    完投型・ショート・オープナーは起用法そのものなので固定値のまま
+const STAMINA_PITCH_ROLES = new Set(['quality', 'ace', 'auto_s']);
+const pitchLimitFor = (role, isReliever, stamina = 100) => {
+  if (!isReliever && (STAMINA_PITCH_ROLES.has(role) || !role)) {
+    const base = 60 + stamina * 0.35 + (role === 'ace' ? 8 : 0);
+    return Math.round(Math.min(120, base));
+  }
+  return PITCH_LIMITS[role] || (isReliever ? 35 : 100);
+};
+
+// イニング別ダメージ閾値（残りスタミナで伸び縮みする。下の `damageThreshold`）
+// ⚠ 旧値は 45→5 と5刻みで落ち、7回15・8回10・9回5 だった。終盤は単打1本と失点1で
+//    必ず降板になり、スタミナが残っていても7回以降を投げられなかった（スタミナ130〜150で平均5.3回）
+const INNING_DAMAGE_THRESHOLDS = [45, 40, 36, 32, 28, 25, 22, 19, 16];
+// ⚠ **ダメージの許容量は残りスタミナで伸び縮みさせる**。
+//    旧実装はイニングだけで決まり、先発の降板理由の約半分がダメージだった
+//    （スタミナ120以上でも平均4.9回・78球で降りていた）。これだと投球回が
+//    **打たれ方だけで決まってスタミナに依存しない**。（×0.7〜1.7）余力のある投手は多少打たれても
+//    続投し、疲れてきた投手は少しの綻びで代える——采配モードの `aiManager` が
+//    スタミナで判断しているのと同じ考え方に揃える。
+const damageThreshold = (inning, staminaRate) =>
+  Math.round((INNING_DAMAGE_THRESHOLDS[Math.min(inning - 1, 8)] || 5) * (0.7 + Math.max(0, Math.min(1, staminaRate))));
 
 // リリーフを reliefFatigue の少ない順に並べるための比較関数。
 // ⚠ **守護神だけは最後に回す**。守護神はセーブ場面（実測で1チーム110試合あたり
@@ -1514,7 +1537,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
     // 条件1: 球数制限（ロール別）
     if (!shouldChange) {
-      const pitchLimit = PITCH_LIMITS[currentPitcherRole] || (isRelieverMid ? 35 : 100);
+      const pitchLimit = pitchLimitFor(currentPitcherRole, isRelieverMid, currentPitcher.pitching?.stamina);
       if (totalPitchesMid >= pitchLimit) {
         shouldChange = true;
         situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
@@ -1531,8 +1554,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
     // 条件3: ダメージポイント制（先発のみ）
     if (!shouldChange && !isRelieverMid) {
-      const inningIdx = Math.min(gs.inning - 1, 8);
-      const threshold = INNING_DAMAGE_THRESHOLDS[inningIdx] || 5;
+      const threshold = damageThreshold(gs.inning, staminaRate);
       const currentDamage = gs.starterDamagePoints[teamKey];
       if (currentDamage >= threshold) {
         shouldChange = true;
@@ -2466,7 +2488,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
           // --- 条件1: 球数制限（先発・リリーフ共通） ---
           if (!shouldChange) {
-            const pitchLimit = PITCH_LIMITS[currentRole] || (isReliever ? 35 : 100);
+            const pitchLimit = pitchLimitFor(currentRole, isReliever, pitcher.pitching?.stamina);
             if (totalPitches >= pitchLimit) {
               shouldChange = true;
               situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
@@ -2499,8 +2521,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
           // --- 条件3: ダメージポイント制（先発のみ） ---
           if (!shouldChange && !isReliever && defendedThisInning) {
-            const inningIdx = Math.min(gameState.inning - 1, 8); // 0-indexed, 延長は9回の閾値(5)を使用
-            const threshold = INNING_DAMAGE_THRESHOLDS[inningIdx] || 5;
+            const threshold = damageThreshold(gameState.inning, staminaRate); // 延長は9回の閾値
             const currentDamage = gameState.starterDamagePoints[teamKey];
             if (currentDamage >= threshold) {
               shouldChange = true;

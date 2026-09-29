@@ -684,3 +684,15 @@ export const generateCatcherLead = (age = 25) => {
   const ageShift = Math.max(-6, Math.min(8, (age ?? 25) - 25)) * LEAD_AGE_SLOPE;
   return Math.max(5, Math.min(95, Math.round(54 + ageShift + normal * 16)));
 };
+
+// ============================================================
+// 先発の自動ロール（`teams-data.initializeAllPitchingRotations` と
+// `lineupGenerator.generatePitchingRotation` で共有。表を二重に作らないこと）
+//
+// ⚠ **スタミナの低い先発を自動で「ショートスターター」（球数上限65）にしないこと**。
+//    スタミナは1球ごとに1減り25%で降板するので、スタミナの低い投手は放っておいても
+//    早く降りる。そこへ65球の上限を重ねると、先発の3割（スタミナ110未満）が
+//    スタミナに関係なく3.9回で降りていた。ショートは采配で選ぶ起用法として残す
+// ============================================================
+export const autoStarterRole = (index, stamina = 80) =>
+  index === 0 ? 'ace' : stamina >= 170 ? 'complete' : 'quality';

@@ -1,4 +1,5 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
+import { autoStarterRole } from '../utils/constants.js';
 
 // ポジション別の攻守バランス重み
 const POSITION_WEIGHTS = {
@@ -579,16 +580,7 @@ export const generatePitchingRotation = (teamName) => {
     .sort((a, b) => b.score - a.score);
 
   scoredStarters.forEach((p, i) => {
-    const stamina = p.pitching?.stamina || 80;
-    if (i === 0) {
-      pitcherRoles[p.id] = 'ace';
-    } else if (stamina >= 170) {
-      pitcherRoles[p.id] = 'complete';
-    } else if (stamina < 110) {
-      pitcherRoles[p.id] = 'short';
-    } else {
-      pitcherRoles[p.id] = 'quality';
-    }
+    pitcherRoles[p.id] = autoStarterRole(i, p.pitching?.stamina || 80);
   });
 
   const closer = scoredRelievers[0] || null;

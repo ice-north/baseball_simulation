@@ -5,6 +5,7 @@
 
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
 import { clearUniversityPool, clearHighSchoolPool } from './season/universityPool.js';
+import { autoStarterRole } from './utils/constants.js';
 
 /**
  * チームデータ構造（動的に拡張可能）
@@ -186,20 +187,7 @@ export const initializePitchingRotation = (teamName) => {
   })).sort((a, b) => b.starterScore - a.starterScore);
 
   scoredStarters.forEach((p, i) => {
-    const stamina = p.pitching?.stamina || 80;
-    if (i === 0) {
-      // 1番手: エース
-      pitcherRoles[p.id] = 'ace';
-    } else if (stamina >= 170) {
-      // 高スタミナ: 完投型
-      pitcherRoles[p.id] = 'complete';
-    } else if (stamina < 110) {
-      // 低スタミナ: ショートスターター
-      pitcherRoles[p.id] = 'short';
-    } else {
-      // 通常: 勝ち権利
-      pitcherRoles[p.id] = 'quality';
-    }
+    pitcherRoles[p.id] = autoStarterRole(i, p.pitching?.stamina || 80);
   });
 
   // 1. 守護神: 最高能力の投手（球速・制球重視）
