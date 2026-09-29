@@ -36,6 +36,7 @@ import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
 import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './game/stealing.js';
+import { makeRunner, runnerOf, asFlags, forceAdvance } from './game/baseState.js';
 import { effectiveArsenalSize, activeArsenal } from './game/arsenal.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -446,8 +447,9 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const pitchSeqRef = React.useRef({ key: null, seq: createSequence() });
 
       // --- 自責点（防御率）判定用 ---
-      // 采配モードの bases は boolean 配列で走者を識別できないため、
-      // 「失策で免れたアウト数」と「失策で出塁した走者の在塁数」をイニング単位で数える。
+      // 采配モードの自責点はイニング単位の近似。「失策で免れたアウト数」と
+      // 「失策で出塁した走者の在塁数」を数える（塁の走者は識別できるようになったので、
+      // makeRunner に失策出塁の印を持たせれば自動シミュと同じ追い方に揃えられる。未着手）。
       // 得点時に (a) 失策出塁の走者ぶん (b) 失策が無ければ既に3アウトだった後の得点 を非自責とする。
       const inningErrorOutsRef = React.useRef(0);
       const errorRunnersOnBaseRef = React.useRef(0);
@@ -841,6 +843,9 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         return team.players.find(p => p.battingOrder === team.currentBatterOrder) || team.players[0];
       };
       
+      // 打者を塁に置くときの走者（誰が塁に居るかを識別する。baseState.js）
+      const batterAsRunner = () => makeRunner(getCurrentBatter(), isTopInning ? 'away' : 'home');
+
       // 現在の投手を取得（守備チームから）
       const getCurrentPitcher = () => {
         const team = getDefenseTeam();
@@ -1592,8 +1597,8 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         
         const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
 
-        // 積極進塁の判定に使う守備値。采配モードの bases は boolean で走者を識別
-        // できないため、走者の走力は攻撃側の平均で近似する。
+        // 積極進塁の判定に使う守備値。走者の足は塁に置いた走者本人のもの
+        // （識別できない旧形式の `true` だけ攻撃側の平均で近似する）
         const defTeam = getDefenseTeam();
         const def = {};
         defTeam.players.forEach(p => { if (p.battingOrder >= 1) def[p.position] = p; });
@@ -1615,7 +1620,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               // avgArm だけだと「強肩の外野手を置く」意味が出ない
               const thrower = fieldingPosition ? def?.[fieldingPosition] : null;
               const { attempt, thrownOut } = tryExtraAdvance({
-                hitType, fromBase: i, runnerSpeed: avgSpeed, avgArm,
+                hitType, fromBase: i, runnerSpeed: runnerOf(bases[i])?.speed ?? avgSpeed, avgArm,
                 throwerArm: thrower?.physical?.arm ?? null,
                 currentOuts: outs, cutoffDefense: def?.short?.fielding?.defense ?? 60,
               });
@@ -1624,18 +1629,20 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
                 recordFielding(fieldingPosition, { chance: 1, assist: 1 });   // 捕殺
                 continue;
               }
-              if (attempt) newBase++;
+              // ⚠ 先を走る走者が既にその塁に居たら止まる（以前は同じ塁に2人が重なり、
+              //    boolean の塁では1人が黙って消えていた）
+              if (attempt && (newBase + 1 >= 3 || !newBases[newBase + 1])) newBase++;
             }
             if (newBase >= 3) {
               runsScored++;
             } else {
-              newBases[newBase] = true;
+              newBases[newBase] = bases[i];
             }
           }
         }
         
         if (advancement < 3) {
-          newBases[advancement - 1] = true;
+          newBases[advancement - 1] = batterAsRunner();
         } else {
           runsScored++;
         }
@@ -1768,7 +1775,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             launchAngle: result.launchAngle,
             distance: result.distance,
             meetQuality: result.meetQuality,
-            bases: [...bases],
+            bases: asFlags(bases),
             outs
           }];
           // 最新50球のみ保持（パフォーマンス最適化）
@@ -1815,9 +1822,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
                 recordRunsToCurrentPitcher(1, outs);
                 updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
               } else {
-                if (bases[1] && bases[0]) newBases[2] = true;
-                if (bases[0]) newBases[1] = true;
-                newBases[0] = true;
+                newBases = forceAdvance(bases, batterAsRunner()).bases;
               }
               atBatOver = true;
               addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '四球');
@@ -1842,9 +1847,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               recordRunsToCurrentPitcher(1, outs);   // 押し出し（自責の判定込み）
               updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
             } else {
-              if (bases[1] && bases[0]) newBases[2] = true;
-              if (bases[0]) newBases[1] = true;
-              newBases[0] = true;
+              newBases = forceAdvance(bases, batterAsRunner()).bases;
             }
             atBatOver = true;
             addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '死球');
@@ -2007,8 +2010,9 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               const ssDefense = defense.short?.defense || 50;
               const sbDefense = defense.second?.defense || 50;
               const ifAvg = (ssDefense + sbDefense) / 2;
-              // 走者の足は采配モードでは走者オブジェクトを持たないので基準値のまま
-              const dpBase = DP_BASE + (ifAvg - 50) * 0.35;
+              // 一塁走者の足が速いと二塁が間に合わない（自動シミュと同じ式）
+              const dpRunnerSpeed = runnerOf(newBases[0])?.speed ?? 55;
+              const dpBase = DP_BASE + (ifAvg - 50) * 0.35 - (dpRunnerSpeed - 55) * 0.30;
               if (Math.random() * 100 < dpBase) {
                 isDoublePlay = true;
                 recordFielding('first', { chance: 1 });   // 一塁でのアウト
@@ -2045,17 +2049,18 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             if (!isDoublePlay) updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
             setLastResult({ ...result, description: (result.description || 'アウト') + '（進塁打）' });
           }
-          if (adv.secondToThird) { newBases[2] = true; newBases[1] = false; }
+          if (adv.secondToThird) { newBases[2] = newBases[1]; newBases[1] = false; }
         }
 
             // タッチアップ判定（外野フライのみ）
         if (result.isOutfieldFly && newOuts < 3) {
           const throwbackChance = result.tagupThrowbackChance || 0;
-          const runnerSpeed = batter.speed / 100; // 走者の速さ（簡易的に打者と同じ）
-          
+          // 走者の速さは塁に居る走者本人のもの（識別できない旧形式は打者で近似）
+          const tagupSpeed = (at) => (runnerOf(newBases[at])?.speed ?? batter.speed) / 100;
+
           // 三塁ランナーがいる場合（ホーム進塁）
           if (newBases[2]) {
-            const tagupSuccess = Math.random() > (throwbackChance - runnerSpeed * 0.3);
+            const tagupSuccess = Math.random() > (throwbackChance - tagupSpeed(2) * 0.3);
             if (tagupSuccess) {
               // ⚠ newScore に足すこと。`setScore(prev => …)` は投球の最後の
               //    `setScore(newScore)` に上書きされ、犠飛の得点がスコアから消えていた
@@ -2072,8 +2077,8 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           // 以前は1塁走者まで無条件にタッグアップさせており、自動シミュレーション
           // （2塁走者のみ・確率0.4基準）より大幅に走者が進んでいた。
           if (newBases[1] && !newBases[2] && newOuts < 3) {
-            if (Math.random() < 0.4 - throwbackChance * 0.5 + runnerSpeed * 0.15) {
-              newBases[2] = true;
+            if (Math.random() < 0.4 - throwbackChance * 0.5 + tagupSpeed(1) * 0.15) {
+              newBases[2] = newBases[1];
               newBases[1] = false;
             }
           }
@@ -2119,14 +2124,15 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             // ãƒ¯ã‚¤ãƒ«ãƒ‰ãƒ”ãƒƒãƒç™ºç”Ÿ
             
             const catcherArm = defense.catcher.arm / 100;
-            const runnerSpeed = batter.speed / 100;
-            const throwoutChance = Math.max(0, catcherArm * 0.40 - runnerSpeed * 0.20);
+            // 刺されるかは走る走者本人の足で決まる（識別できない旧形式は打者で近似）
+            const throwoutChance = (at) =>
+              Math.max(0, catcherArm * 0.40 - (runnerOf(newBases[at])?.speed ?? batter.speed) / 100 * 0.20);
             
             let wpDescription = '💥 ワイルドピッチ！';
             
             // 三塁→ホーム
             if (newBases[2]) {
-              if (Math.random() < throwoutChance) {
+              if (Math.random() < throwoutChance(2)) {
                 wpDescription += ' 🛡️ 捕手が三塁ランナーを刺した！';
                 newOuts++;
                 updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
@@ -2140,11 +2146,12 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             
             // 二塁→三塁
             if (newBases[1] && newOuts < 3) {
-              if (Math.random() < throwoutChance) {
+              if (Math.random() < throwoutChance(1)) {
                 wpDescription += ' 🛡️ 二塁ランナーを刺した！';
                 newOuts++;
+                updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
               } else {
-                newBases[2] = true;
+                newBases[2] = newBases[1];
                 wpDescription += ' ⚡ 二塁ランナーが三塁へ';
               }
               newBases[1] = false;
@@ -2152,11 +2159,12 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             
             // 一塁→二塁
             if (newBases[0] && newOuts < 3) {
-              if (Math.random() < throwoutChance) {
+              if (Math.random() < throwoutChance(0)) {
                 wpDescription += ' 🛡️ 一塁ランナーを刺した！';
                 newOuts++;
+                updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
               } else {
-                newBases[1] = true;
+                newBases[1] = newBases[0];
                 wpDescription += ' ⚡ 一塁ランナーが二塁へ';
               }
               newBases[0] = false;
@@ -2171,18 +2179,22 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         
         // 盗塁判定
         if (!atBatOver && newOuts < 3 && result.type !== 'foul' && result.type !== 'foul_2strike' && (bases[0] || bases[1])) {
-          // 二塁盗塁試行
-          if (bases[0] && !bases[1]) {
+          // 二塁盗塁試行（⚠ 暴投で既に動いた走者は走らないので、投球後の塁でも確かめる）
+          if (bases[0] && !bases[1] && newBases[0] && !newBases[1]) {
             // 盗塁の判断・成否は自動シミュレーションと共有する（stealing.js）。
-            // ⚠ 采配モードの bases は boolean で走者を識別できないため、
-            //    走者の走力・盗塁スキルは打者のもので近似している（構造的制約）
+            // 走者の足と盗塁の技術は**一塁走者本人**のもの（baseState.js）。
+            // ⚠ 以前は塁が boolean で走者を識別できず、打者の値で近似していた
+            //    （俊足の走者でも鈍足の打者の打席では走れなかった）
+            const runner1 = runnerOf(newBases[0]);
+            const r1Speed = runner1?.speed ?? batter.speed;
+            const r1Steal = runner1?.steal ?? batter.steal;
             const stealRate2 = stealSuccessRate({
-              runnerSpeed: batter.speed, runnerSteal: batter.steal,
+              runnerSpeed: r1Speed, runnerSteal: r1Steal,
               catcherArm: defense.catcher.arm, pitcherControl: pitcher.control,
               pitcherThrows: pitcher.throws, toBase: 2,
             });
             let stealAttempt = stealAttemptRate({
-              successRate: stealRate2, runnerSteal: batter.steal, outs: newOuts, toBase: 2,
+              successRate: stealRate2, runnerSteal: r1Steal, outs: newOuts, toBase: 2,
             });
 
             // 監督AI：盗塁判断（Phase 3）
@@ -2198,12 +2210,12 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               const scoreDiff = Math.abs(score.home - score.away);
               const isCloseGame = scoreDiff <= 3;
 
-              const stealMultiplier = autoStealingDecision(batter, {
+              const stealMultiplier = autoStealingDecision(runner1, {
                 scoreDiff,
                 isCloseGame,
                 outs: newOuts,
                 batterType,
-                runnerSteal: batter.steal
+                runnerSteal: r1Steal
               });
 
               stealAttempt *= stealMultiplier;
@@ -2214,16 +2226,18 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
 
             if (Math.random() < stealAttempt) {
               if (Math.random() < stealRate2) {
-                // 盗塁成功
-        newBases[1] = true;
+                // 盗塁成功（盗塁は走者本人に付ける）
+        newBases[1] = newBases[0];
         newBases[0] = false;
+        if (runner1) updateBatterStats(runner1.id, runner1.side, { stolenBases: 1 });
         setGameLog(prev => {
-          const updated = [...prev, { description: '🏃 盗塁成功！一塁→二塁', isSpecial: true }];
+          const updated = [...prev, { description: `🏃 盗塁成功！${runner1 ? runner1.name + ' ' : ''}一塁→二塁`, isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
         });
       } else {
         // 盗塁失敗（盗塁死のアウトも投手の投球回に入る）
         newBases[0] = false;
+        if (runner1) updateBatterStats(runner1.id, runner1.side, { caughtStealing: 1 });
         newOuts++;
         updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
         setGameLog(prev => {
@@ -2235,15 +2249,19 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
   }
   
   // 三塁盗塁試行
-  if (bases[1] && !bases[2] && newOuts < 3) {
+  if (bases[1] && !bases[2] && newBases[1] && !newBases[2] && newOuts < 3) {
     // 判断・成否は自動シミュレーションと共有（stealing.js）。三塁は成功しやすいが試行は少ない
+    // ⚠ 投球後の塁（newBases）で見ること。この球で二塁走者が既に動いていれば走らない
+    const runner2 = runnerOf(newBases[1]);
+    const r2Speed = runner2?.speed ?? batter.speed;
+    const r2Steal = runner2?.steal ?? batter.steal;
     const stealRate3 = stealSuccessRate({
-      runnerSpeed: batter.speed, runnerSteal: batter.steal,
+      runnerSpeed: r2Speed, runnerSteal: r2Steal,
       catcherArm: defense.catcher.arm, pitcherControl: pitcher.control,
       pitcherThrows: pitcher.throws, toBase: 3,
     });
     let stealThirdAttempt = stealAttemptRate({
-      successRate: stealRate3, runnerSteal: batter.steal, outs: newOuts, toBase: 3,
+      successRate: stealRate3, runnerSteal: r2Steal, outs: newOuts, toBase: 3,
     });
 
     // 監督AI：盗塁判断（Phase 3）
@@ -2259,12 +2277,12 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const scoreDiff = Math.abs(score.home - score.away);
       const isCloseGame = scoreDiff <= 3;
 
-      const stealMultiplier = autoStealingDecision(batter, {
+      const stealMultiplier = autoStealingDecision(runner2, {
         scoreDiff,
         isCloseGame,
         outs: newOuts,
         batterType,
-        runnerSteal: batter.steal
+        runnerSteal: r2Steal
       });
 
       stealThirdAttempt *= stealMultiplier; // 三塁盗塁
@@ -2272,16 +2290,18 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
 
     if (Math.random() < stealThirdAttempt) {
               if (Math.random() < stealRate3) {
-                // 盗塁成功
-        newBases[2] = true;
+                // 盗塁成功（盗塁は走者本人に付ける）
+        newBases[2] = newBases[1];
         newBases[1] = false;
+        if (runner2) updateBatterStats(runner2.id, runner2.side, { stolenBases: 1 });
         setGameLog(prev => {
-          const updated = [...prev, { description: '🏃 盗塁成功！二塁→三塁', isSpecial: true }];
+          const updated = [...prev, { description: `🏃 盗塁成功！${runner2 ? runner2.name + ' ' : ''}二塁→三塁`, isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
         });
       } else {
         // 盗塁失敗（盗塁死のアウトも投手の投球回に入る）
         newBases[1] = false;
+        if (runner2) updateBatterStats(runner2.id, runner2.side, { caughtStealing: 1 });
         newOuts++;
         updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
         setGameLog(prev => {
@@ -2478,6 +2498,20 @@ if (newOuts === 3) {
         let newCount = { ...count };
         let atBatOver = false;
 
+        // バント安打の進塁。一塁が埋まっていれば押し出し、二塁だけなら三塁へ進める。
+        // ⚠ 以前は満塁のバント安打で三塁走者を上書きしており、1点と走者が消えていた。
+        //    二塁走者を三塁へ送ったら二塁を空けること（二塁にも残ると走者が1人増える）
+        const advanceOnBuntHit = () => {
+          if (!newBases[0] && newBases[1] && !newBases[2]) { newBases[2] = newBases[1]; newBases[1] = false; }
+          const fa = forceAdvance(newBases, batterAsRunner());
+          newBases = fa.bases;
+          if (fa.scored.length) {
+            isTopInning ? newScore.away++ : newScore.home++;
+            recordRunsToCurrentPitcher(1, outs);
+            updateBatterStats(currentBatter.id, isTopInning ? 'away' : 'home', { rbis: 1 });
+          }
+        };
+
         if (roll < popupRate) {
           // バントフライ → アウト
           newOuts++;
@@ -2574,10 +2608,7 @@ if (newOuts === 3) {
                 hits: 1
               });
               updatePitcherStats(currentPitcher.id, defenseTeamType, { hits: 1 });   // バント安打も被安打
-              // ⚠ 二塁走者を三塁へ送ったら二塁を空けること（以前は二塁にも残り、走者が1人増えていた）
-              if (newBases[0]) { if (newBases[1]) newBases[2] = true; newBases[1] = true; }
-              else if (newBases[1] && !newBases[2]) { newBases[2] = true; newBases[1] = false; }
-              newBases[0] = true;
+              advanceOnBuntHit();
               setLastResult({ description: 'スクイズバント安打！' });
               addAtBatResult(currentBatter.id, offenseTeamType, '安打');
             }
@@ -2602,10 +2633,7 @@ if (newOuts === 3) {
                 hits: 1
               });
               updatePitcherStats(currentPitcher.id, defenseTeamType, { hits: 1 });   // バント安打も被安打
-              // ⚠ 二塁走者を三塁へ送ったら二塁を空けること（以前は二塁にも残り、走者が1人増えていた）
-              if (newBases[0]) { if (newBases[1]) newBases[2] = true; newBases[1] = true; }
-              else if (newBases[1] && !newBases[2]) { newBases[2] = true; newBases[1] = false; }
-              newBases[0] = true;
+              advanceOnBuntHit();
               setLastResult({ description: 'バント安打！' });
               addAtBatResult(currentBatter.id, offenseTeamType, '安打');
             }
@@ -2624,10 +2652,7 @@ if (newOuts === 3) {
                 hits: 1
               });
               updatePitcherStats(currentPitcher.id, defenseTeamType, { hits: 1 });   // バント安打も被安打
-              // ⚠ 二塁走者を三塁へ送ったら二塁を空けること（以前は二塁にも残り、走者が1人増えていた）
-              if (newBases[0]) { if (newBases[1]) newBases[2] = true; newBases[1] = true; }
-              else if (newBases[1] && !newBases[2]) { newBases[2] = true; newBases[1] = false; }
-              newBases[0] = true;
+              advanceOnBuntHit();
               setLastResult({ description: 'セーフティバント成功！' });
               addAtBatResult(currentBatter.id, offenseTeamType, '安打');
             }

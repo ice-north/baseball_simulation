@@ -319,6 +319,9 @@ export function executeHandleManagedGameEnd(ctx) {
         season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
         season.walks = (season.walks || 0) + (gs.walks || 0);
         season.hitByPitch = (season.hitByPitch || 0) + (gs.hitByPitch || 0);
+        // 盗塁・盗塁死（采配モードは塁で走者を識別できるようになって初めて付く。baseState.js）
+        season.stolenBases = (season.stolenBases || 0) + (gs.stolenBases || 0);
+        season.caughtStealing = (season.caughtStealing || 0) + (gs.caughtStealing || 0);
 
         // 成長率変動: 摩耗ペナルティはスタメン出場(3打席以上)時のみ、疲労度に応じて段階的に適用
         // （代打・代走・守備固めではペナルティ無し）

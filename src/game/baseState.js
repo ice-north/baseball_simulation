@@ -15,6 +15,24 @@
 //    移行の手順は CLAUDE.md「采配モードの走者の識別（準備）」を参照
 // ============================================================
 
+/**
+ * 采配モードで塁に置く走者（選手の要約）。
+ * ⚠ **選手オブジェクトそのものを置かないこと**。采配モードの選手は React の state で、
+ *    成績を足すたびに `{...p}` で作り直されるので、塁に置いた実体はすぐ古くなる。
+ *    塁が要るのは「誰か（id）」「どちらのチームか」「足」だけ
+ * @param side 'home' | 'away'（成績を足すチーム。`updateBatterStats` の teamType）
+ */
+export function makeRunner(player, side) {
+  if (!player) return true;   // 選手が引けなければ従来どおり「誰か居る」
+  return {
+    id: player.id,
+    name: player.name,
+    side,
+    speed: player.physical?.speed ?? 55,
+    steal: player.batting?.steal ?? 50,
+  };
+}
+
 /** 空き塁 */
 export const emptyBases = () => [false, false, false];
 
