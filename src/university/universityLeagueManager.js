@@ -118,8 +118,8 @@ function updateStandings(standings, home, away, homeScore, awayScore) {
   if (homeScore > awayScore) { sh.wins++; sa.losses++; }
   else if (awayScore > homeScore) { sa.wins++; sh.losses++; }
   else { sh.draws = (sh.draws || 0) + 1; sa.draws = (sa.draws || 0) + 1; }
-  sh.winRate = sh.gamesPlayed > 0 ? sh.wins / sh.gamesPlayed : 0;
-  sa.winRate = sa.gamesPlayed > 0 ? sa.wins / sa.gamesPlayed : 0;
+  sh.winRate = (sh.wins + sh.losses) > 0 ? sh.wins / (sh.wins + sh.losses) : 0;
+  sa.winRate = (sa.wins + sa.losses) > 0 ? sa.wins / (sa.wins + sa.losses) : 0;
   standings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
 }
 
@@ -291,11 +291,12 @@ export function getAllUniversityLeagues() {
   return Object.entries(leagues).map(([id, data]) => {
     const springDone = data.spring?.done || false;
     const fallDone = data.fall?.done || false;
-    const fallHasGames = data.fall?.schedule?.some(g => g.result) || false;
+    // ユーザーリーグは手動試合のためscheduleにresultが入らない。_activeフラグで秋季開始を検出
+    const fallHasGames = data.fall?.schedule?.some(g => g.result) || data.fall?._active || false;
 
     // 秋季開始前は春季結果を表示
     let displayKey, seasonLabel;
-    if (!springDone) {
+    if (!springDone && !fallHasGames) {
       displayKey = 'spring'; seasonLabel = '春季';
     } else if (!fallDone && !fallHasGames) {
       displayKey = 'spring'; seasonLabel = '春季終了';
@@ -336,8 +337,14 @@ export function getAllUniversityLeagues() {
   });
 }
 
-// 部制リーグの入替戦処理（1部最下位 ↔ 2部1位）
-export function processUniversityPromotionRelegation() {
+// 部制リーグの入替戦処理（各部の最下位 ↔ 1つ下の部の1位）
+// ⚠ 春季用と秋季用が **65行/56行のほぼ同一のコピー** で並んでいた。
+//    違いは「どちらのシーズンの順位表を見るか」だけ…のはずが、実際にはドリフトしていて
+//    **秋季版だけ順位表を並べ替えずに先頭/末尾を取っていた**。
+//    `updateStandings` が毎試合ソートするので現状は同じ結果になるが、
+//    セーブから復元した順位表など「ソート済みでない配列」を渡されると
+//    **昇格・降格するチームを取り違える**。防御的な春季版を正として1つに畳んである。
+function processPromotionRelegation(seasonKey) {
   const leagues = WORLD_DATA.universityLeagues;
   if (!leagues) return [];
 
@@ -347,17 +354,15 @@ export function processUniversityPromotionRelegation() {
     if (!league.divisions || !league.divTeams) continue;
     const numDiv = league.numDivisions || 2;
 
-    // 秋季リーグの順位で判定
-    const fallData = league.fall;
-    if (!fallData?.done) continue;
+    const seasonData = league[seasonKey];
+    if (!seasonData?.done) continue;
 
     for (let d = 1; d < numDiv; d++) {
-      const upperStandings = fallData[`standings${d}`];
-      const lowerStandings = fallData[`standings${d + 1}`];
-      if (!upperStandings?.length || !lowerStandings?.length) continue;
-
-      const relegated = upperStandings[upperStandings.length - 1]?.team;
-      const promoted = lowerStandings[0]?.team;
+      const byRank = (s) => [...(s || [])].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+      const upper = byRank(seasonData[`standings${d}`]);
+      const lower = byRank(seasonData[`standings${d + 1}`]);
+      const relegated = upper[upper.length - 1]?.team;
+      const promoted = lower[0]?.team;
       if (!relegated || !promoted) continue;
 
       // divTeamsを入替
@@ -401,8 +406,40 @@ export function processUniversityPromotionRelegation() {
   return changes;
 }
 
-export function resetUniversityLeagues() {
-  if (WORLD_DATA.universityLeagues) {
-    WORLD_DATA.universityLeagues = {};
+// 秋季終了後の入替戦処理（年度末）
+export function processUniversityPromotionRelegation() {
+  return processPromotionRelegation('fall');
+}
+
+// 春季終了後の入替戦処理（春季順位表ベース）
+// ※ユーザーリーグのspring.doneは呼び出し元が事前にセットすること
+export function processSpringPromotionRelegation() {
+  return processPromotionRelegation('spring');
+}
+
+// 入替戦後の新divTeamsで全リーグの秋季スケジュール＋順位表を再生成
+export function regenerateFallSchedules(year) {
+  const leagues = WORLD_DATA.universityLeagues;
+  if (!leagues) return;
+
+  for (const league of Object.values(leagues)) {
+    const numDivisions = league.numDivisions || 1;
+    if (numDivisions >= 2 && league.divTeams) {
+      let schedule = [];
+      const standings = {};
+      for (let d = 1; d <= numDivisions; d++) {
+        const divTeamNames = league.divTeams[d] || [];
+        schedule = schedule.concat(generateLeagueSchedule(divTeamNames, year, 'fall'));
+        standings[`standings${d}`] = divTeamNames.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }));
+      }
+      league.fall = { schedule, ...standings, done: false };
+    } else {
+      const teamNames = league.teams || [];
+      league.fall = {
+        schedule: generateLeagueSchedule(teamNames, year, 'fall'),
+        standings: teamNames.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 })),
+        done: false,
+      };
+    }
   }
 }

@@ -6,7 +6,8 @@ import { autoSimulateGame } from './autoSimulation.js';
 import { updateAllTeamReputations } from '../corporate/corporateInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, generateNihonSenshuken, generateClubSenshuken, createSenshukenMainTournament, generateRegionalTournament, autoPlayBracket } from '../corporate/toshitaikou.js';
-import { generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
+import { generateGrandChampionship, autoPlayGrandChampionship, processSpringPromotionRelegation, regenerateFallSchedules } from '../corporate/parallelWorldManager.js';
+import { getUserFallSchedule } from '../university/universityInit.js';
 
 // 注目度の中間更新月（2ヶ月ごと: 6月, 8月, 10月）
 const REPUTATION_UPDATE_MONTHS = new Set([6, 8, 10]);
@@ -31,9 +32,60 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
 
   const { month, day } = newSeasonData.currentDate;
   const isCorporate = newSeasonData.settings?.corporateMode;
+  const isUniversityMode = newSeasonData.settings?.universityMode;
 
   // 社会人モード: 都市対抗予選（6月） - DateProgressScreen側で処理するためここでは何もしない
   // 社会人モード: 都市対抗本戦（8月） - DateProgressScreen側で処理するためここでは何もしない
+
+  // 大学モード: 夏季合宿（8月20日）
+  if (isUniversityMode && month === 8 && day >= 20 && !newSeasonData.summerCampDone) {
+    setSeasonData(newSeasonData);
+    setScreenMode('management');
+    setManagementView('summer_camp');
+    return null;
+  }
+
+  // 大学モード: 9月突入 → 春季入替戦＋秋季スケジュール再生成
+  if (isUniversityMode && month >= 9 && !newSeasonData.springPromotionDone && WORLD_DATA.universityLeagues) {
+    const uniInfo = WORLD_DATA.universityLeague;
+    const userRegionId = uniInfo?.userRegion;
+    const userDiv = uniInfo?.userDivision || 1;
+    const hasDivisions = (uniInfo?.numDivisions || 1) >= 2;
+    const league = WORLD_DATA.universityLeagues?.[userRegionId];
+    if (league) {
+      const springObj = league.spring;
+      if (springObj) {
+        const rows = newSeasonData.standings.map(s => ({
+          team: s.team, wins: s.wins || 0, losses: s.losses || 0,
+          draws: s.draws || 0, winRate: s.winRate || 0, gamesPlayed: s.gamesPlayed || 0,
+        }));
+        if (hasDivisions) springObj[`standings${userDiv}`] = rows;
+        else springObj.standings = rows;
+        springObj.done = true;
+      }
+    }
+    processSpringPromotionRelegation();
+    regenerateFallSchedules(newSeasonData.currentDate.year);
+    if (userRegionId) {
+      const fallGames = getUserFallSchedule(userRegionId);
+      const springGames = newSeasonData.schedule.filter(g => g.season !== 'fall');
+      const nextId = springGames.length;
+      const newFallGames = fallGames.map((g, i) => ({ ...g, id: nextId + i }));
+      const newLeagueTeams = WORLD_DATA.universityLeague?.leagueTeams;
+      const fallStandingsInit = newLeagueTeams
+        ? newLeagueTeams.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }))
+        : newSeasonData.standings.map(s => ({ team: s.team, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }));
+      newSeasonData = {
+        ...newSeasonData,
+        schedule: [...springGames, ...newFallGames],
+        springPromotionDone: true,
+        springStandings: newSeasonData.standings.map(s => ({ ...s })),
+        standings: fallStandingsInit,
+      };
+    } else {
+      newSeasonData = { ...newSeasonData, springPromotionDone: true };
+    }
+  }
 
   // 11月9日: 契約更改強制
   if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
@@ -44,7 +96,6 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
   }
 
   // 11月10日〜29日: トライアウト強制（大学モードは11/29に別途university_scoutが発火するため除外）
-  const isUniversityMode = newSeasonData.settings?.universityMode;
   if (!isUniversityMode && month === 11 && day >= 10 && day < 30 && (newPhase === SEASON_PHASES.TRYOUT || newPhase === SEASON_PHASES.CONTRACT)) {
     newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.TRYOUT };
     setSeasonData(newSeasonData);
@@ -349,7 +400,7 @@ export const handleProgressToNextPhase = ({ seasonData, setSeasonData, setSelect
   // フェーズスキップ時: グランドチャンピオンシップを生成・消化（独立リーグモード）
   if (!newSeasonData.settings?.corporateMode && !newSeasonData.settings?.universityMode &&
       WORLD_DATA.initialized && newSeasonData.currentDate.month >= 10 && !newSeasonData.grandChampionship?.generated) {
-    const gc = generateGrandChampionship(WORLD_DATA.userLeagueId, newSeasonData.standings, newSeasonData.settings);
+    const gc = generateGrandChampionship(WORLD_DATA.userLeagueId, newSeasonData.standings, newSeasonData.settings, newSeasonData.year);
     if (gc) {
       autoPlayGrandChampionship(gc);
       newSeasonData = { ...newSeasonData, grandChampionship: gc };

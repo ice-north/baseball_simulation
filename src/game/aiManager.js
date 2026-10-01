@@ -52,7 +52,7 @@ export function executeAutoSubstitutePitcher(ctx) {
   const isScoringSituation = bases[1] || bases[2];
 
   // 先発ロール別のイニング上限・スタミナ閾値
-  const isStarter = ['ace', 'complete', 'short', 'quality', 'auto_s'].includes(currentRole);
+  const isStarter = ['ace', 'complete', 'short', 'quality', 'opener', 'auto_s'].includes(currentRole);
   let shouldSubstitute = false;
   let reason = '';
 
@@ -91,6 +91,15 @@ export function executeAutoSubstitutePitcher(ctx) {
       } else if (inning >= 7) {
         shouldSubstitute = true;
         reason = `${currentPitcher.name}が${inning - 1}回を投げ切り交代`;
+      } else if (staminaRate <= 0.30) {
+        shouldSubstitute = true;
+        reason = `スタミナ限界(${Math.round(staminaRate * 100)}%)`;
+      }
+    } else if (currentRole === 'opener') {
+      // オープナー: 2回を投げ切ったら役割完了（3回開始前に継投）
+      if (inning >= 3) {
+        shouldSubstitute = true;
+        reason = `オープナー${currentPitcher.name}が2回を投げ切り、ロングへ`;
       } else if (staminaRate <= 0.30) {
         shouldSubstitute = true;
         reason = `スタミナ限界(${Math.round(staminaRate * 100)}%)`;
@@ -211,67 +220,56 @@ export function executeAutoSubstitutePitcher(ctx) {
 
   const isTwoWayReliever = selectedPitcher.isStarter && selectedPitcher.position !== 'pitcher';
 
-  setTeam(prev => {
-    const players = [...prev.players];
-    const oldPitcher = players.find(p => p.id === currentPitcher.id);
-    const newPitcher = players.find(p => p.id === selectedPitcher.id);
+  // ⚠ **更新関数は純粋に書くこと**（選手オブジェクトを書き換えない・副作用を置かない）。
+  //    以前は `setTeam(prev => …)` の中で `oldPitcher.battingOrder = 0` のように元の
+  //    オブジェクトを書き換え、ログ追加・疲労加算もその中でやっていた。React は開発時に
+  //    更新関数を2回呼ぶので、2回目には旧投手の打順が既に0で**新しい投手が打順0に入り**、
+  //    交代ログと登板疲労も二重になっていた。打順などは呼ぶ前に確定させる
+  const slot = currentPitcher.battingOrder;
+  const oldFieldPos = selectedPitcher.position;
+  const oldFieldOrder = selectedPitcher.battingOrder;
+  let replacementId = null;
+  if (isTwoWayReliever) {
+    const benchFielders = defenseTeam.players.filter(p =>
+      !p.isStarter && !p.hasSubbedOut && p.position !== 'pitcher' && p.id !== selectedPitcher.id
+    ).sort((a, b) => (b.positionFitness?.[oldFieldPos] || 0) - (a.positionFitness?.[oldFieldPos] || 0));
+    replacementId = benchFielders[0]?.id ?? null;
+  }
 
-    if (oldPitcher && newPitcher) {
-      oldPitcher.isStarter = false;
-      oldPitcher.hasSubbedOut = true;
-      oldPitcher.battingOrder = 0;
-
-      if (isTwoWayReliever) {
-        // 二刀流リリーバー：野手→投手にポジションチェンジ
-        const oldFieldPos = newPitcher.position;
-        const oldFieldOrder = newPitcher.battingOrder;
-
-        newPitcher.battingOrder = currentPitcher.battingOrder;
-        newPitcher.position = 'pitcher';
-
-        // 空いた野手スロットにベンチから最適な野手を補充
-        const benchFielders = players.filter(p =>
-          !p.isStarter && !p.hasSubbedOut && p.position !== 'pitcher' && p.id !== newPitcher.id
-        );
-        if (benchFielders.length > 0) {
-          benchFielders.sort((a, b) =>
-            (b.positionFitness?.[oldFieldPos] || 0) - (a.positionFitness?.[oldFieldPos] || 0)
-          );
-          const replacement = benchFielders[0];
-          replacement.isStarter = true;
-          replacement.battingOrder = oldFieldOrder;
-          replacement.position = oldFieldPos;
-        }
-      } else {
-        newPitcher.isStarter = true;
-        newPitcher.battingOrder = currentPitcher.battingOrder;
-        newPitcher.position = 'pitcher';
+  setTeam(prev => ({
+    ...prev,
+    players: prev.players.map(p => {
+      if (p.id === currentPitcher.id) return { ...p, isStarter: false, hasSubbedOut: true, battingOrder: 0 };
+      if (p.id === selectedPitcher.id) return { ...p, isStarter: true, battingOrder: slot, position: 'pitcher' };
+      if (replacementId != null && p.id === replacementId) {
+        return { ...p, isStarter: true, battingOrder: oldFieldOrder, position: oldFieldPos };
       }
+      return p;
+    }),
+  }));
 
-      setTimeout(() => {
-        const maxSt = newPitcher.pitching.stamina;
-        const fat = newPitcher.fatigue || 0;
-        setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
-      }, 0);
+  {
+    const maxSt = selectedPitcher.pitching?.stamina || 80;
+    const fat = selectedPitcher.fatigue || 0;
+    setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
+  }
 
-      const twoWayLabel = isTwoWayReliever ? '二刀流' : '';
-      setGameLog(prev => {
-        const teamLabel = teamType === 'home' ? 'ホーム' : 'アウェイ';
-        const updated = [...prev, {
-          description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamLabel}: 投手交代 ${oldPitcher.name} → ${newPitcher.name}（${twoWayLabel}${roleLabel}）【${reason}】`,
-          isSpecial: true
-        }];
-        return updated.length > 50 ? updated.slice(-50) : updated;
-      });
-
-      if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
-        TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] =
-          (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] || 0) + 30;
-      }
-    }
-
-    return { ...prev, players };
+  const twoWayLabel = isTwoWayReliever ? '二刀流' : '';
+  setGameLog(prev => {
+    const teamLabel = teamType === 'home' ? 'ホーム' : 'アウェイ';
+    // ⚠ 表=isTopInning（以前は逆に書かれており、9回表の交代が「9回裏」と出ていた）
+    const updated = [...prev, {
+      description: `⚾ [${inning}回${isTopInning ? '表' : '裏'}] ${teamLabel}: 投手交代 ${currentPitcher.name} → ${selectedPitcher.name}（${twoWayLabel}${roleLabel}）【${reason}】`,
+      isSpecial: true
+    }];
+    return updated.length > 50 ? updated.slice(-50) : updated;
   });
+
+  if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
+    // 自動シミュレーション(autoSimulation.js)と同じ +50 / 上限150 にする。
+    TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] = Math.min(150,
+      (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] || 0) + 50);
+  }
 
   setTimeout(() => {
     isSubstituting.current = false;
@@ -340,31 +338,25 @@ export function executeAutoSubstitutePinchHitter(ctx) {
 
   isSubstituting.current = true;
 
-  setTeam(prev => {
-    const players = [...prev.players];
-    const oldBatter = players.find(p => p.id === currentBatter.id);
-    const newBatter = players.find(p => p.id === bestPH.id);
-
-    if (oldBatter && newBatter) {
-      oldBatter.isStarter = false;
-      oldBatter.hasSubbedOut = true;
-      oldBatter.battingOrder = 0;
-
-      newBatter.isStarter = true;
-      newBatter.battingOrder = currentBatter.battingOrder;
-      newBatter.position = currentBatter.position;
-
-      setGameLog(prev => {
-        const teamLabel = teamType === 'home' ? 'ホーム' : 'アウェイ';
-        const updated = [...prev, {
-          description: `🏏 [${inning}回${isTopInning ? '表' : '裏'}] ${teamLabel}: 代打 ${newBatter.name}←${oldBatter.name}【${reason}】`,
-          isSpecial: true
-        }];
-        return updated.length > 50 ? updated.slice(-50) : updated;
-      });
-    }
-
-    return { ...prev, players };
+  // ⚠ 更新関数は純粋に（投手交代と同じ理由。2回呼ばれると代打の打順が0になり、
+  //    元の打者と代打の両方が打順から消えていた）
+  const slot = currentBatter.battingOrder;
+  const pos = currentBatter.position;
+  setTeam(prev => ({
+    ...prev,
+    players: prev.players.map(p => {
+      if (p.id === currentBatter.id) return { ...p, isStarter: false, hasSubbedOut: true, battingOrder: 0 };
+      if (p.id === bestPH.id) return { ...p, isStarter: true, battingOrder: slot, position: pos };
+      return p;
+    }),
+  }));
+  setGameLog(prev => {
+    const teamLabel = teamType === 'home' ? 'ホーム' : 'アウェイ';
+    const updated = [...prev, {
+      description: `🏏 [${inning}回${isTopInning ? '表' : '裏'}] ${teamLabel}: 代打 ${bestPH.name}←${currentBatter.name}【${reason}】`,
+      isSpecial: true
+    }];
+    return updated.length > 50 ? updated.slice(-50) : updated;
   });
 
   setTimeout(() => {
@@ -420,8 +412,10 @@ export function executeAutoDefensiveSubstitution(ctx) {
       if (defender) {
         isSubstituting.current = true;
 
+        // ⚠ 更新関数は2回呼ばれうる（開発時の React）。複製に対して書き換え、ログは key で重複させない
+        const logKey = `${Date.now()}-${Math.random()}`;
         setTeam(prev => {
-          const players = [...prev.players];
+          const players = prev.players.map(p => ({ ...p }));
           const oldPlayer = players.find(p => p.id === starter.id);
           const newPlayer = players.find(p => p.id === defender.id);
 
@@ -435,9 +429,11 @@ export function executeAutoDefensiveSubstitution(ctx) {
             newPlayer.position = starter.position;
 
             setGameLog(prev => {
+              if (prev.some(e => e.key === logKey)) return prev;
               const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
               const updated = [...prev, {
-                description: `🛡️ [${inning}回${isTopInning ? '裏' : '表'}] ${teamName}: 守備固め ${newPlayer.name} (${oldPlayer.name} → 交代)`,
+                key: logKey,
+                description: `🛡️ [${inning}回${isTopInning ? '表' : '裏'}] ${teamName}: 守備固め ${newPlayer.name} (${oldPlayer.name} → 交代)`,
                 isSpecial: true
               }];
               return updated.length > 50 ? updated.slice(-50) : updated;
@@ -546,8 +542,10 @@ export function executeAutoOptimizePitcherUsage(ctx) {
     if (closerPitcher) {
       isSubstituting.current = true;
 
+      // ⚠ 更新関数は2回呼ばれうる（開発時の React）。複製に対して書き換え、ログは key で重複させない
+      const logKey = `${Date.now()}-${Math.random()}`;
       setTeam(prev => {
-        const players = [...prev.players];
+        const players = prev.players.map(p => ({ ...p }));
         const oldPitcher = players.find(p => p.id === currentPitcher.id);
         const newPitcher = players.find(p => p.id === closerPitcher.id);
 
@@ -568,9 +566,11 @@ export function executeAutoOptimizePitcherUsage(ctx) {
           }
 
           setGameLog(prev => {
+            if (prev.some(e => e.key === logKey)) return prev;
             const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
             const updated = [...prev, {
-              description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamName}: 抑え投手起用 ${oldPitcher.name} → ${newPitcher.name}`,
+              key: logKey,
+              description: `⚾ [${inning}回${isTopInning ? '表' : '裏'}] ${teamName}: 抑え投手起用 ${oldPitcher.name} → ${newPitcher.name}`,
               isSpecial: true
             }];
             return updated.length > 50 ? updated.slice(-50) : updated;
@@ -597,8 +597,10 @@ export function executeAutoOptimizePitcherUsage(ctx) {
     if (setupPitcher) {
       isSubstituting.current = true;
 
+      // ⚠ 更新関数は2回呼ばれうる（開発時の React）。複製に対して書き換え、ログは key で重複させない
+      const logKey = `${Date.now()}-${Math.random()}`;
       setTeam(prev => {
-        const players = [...prev.players];
+        const players = prev.players.map(p => ({ ...p }));
         const oldPitcher = players.find(p => p.id === currentPitcher.id);
         const newPitcher = players.find(p => p.id === setupPitcher.id);
 
@@ -619,9 +621,11 @@ export function executeAutoOptimizePitcherUsage(ctx) {
           }
 
           setGameLog(prev => {
+            if (prev.some(e => e.key === logKey)) return prev;
             const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
             const updated = [...prev, {
-              description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamName}: セットアッパー起用 ${oldPitcher.name} → ${newPitcher.name}`,
+              key: logKey,
+              description: `⚾ [${inning}回${isTopInning ? '表' : '裏'}] ${teamName}: セットアッパー起用 ${oldPitcher.name} → ${newPitcher.name}`,
               isSpecial: true
             }];
             return updated.length > 50 ? updated.slice(-50) : updated;

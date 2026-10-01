@@ -1,4 +1,55 @@
 import React from 'react';
+import { FORM_SHORT, getPitchTypeName, POSITION_NAMES, sortBenchByPosition, formatAtBatResult, atBatResultColor } from '../utils/constants.js';
+import { formatInnings, getAbilityTextColor } from '../utils/physics.js';
+import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
+import { calculateDefensiveFitness } from '../simulation-logic.js';
+
+// ============================================================
+// 画面の外枠と見出し（全画面で共通）
+//
+// ⚠ **画面ごとに padding / max-w / 見出しの大きさを書かないこと**。
+//    実測で余白が `p-3 / p-4 / p-6 / p-8` の4種類、本文幅が
+//    `max-w-7xl / max-w-3xl / 指定なし` の3通り、見出しが
+//    `text-lg / xl / 2xl / 3xl`（しかも資料室だけ黄色）に散っていて、
+//    画面を移動するたび余白も本文幅も文字の大きさも変わっていた。
+//    `.btn-*` や `.seg` と同じで、**語彙を1箇所に置く**。
+//
+// ⚠ 画面は**自前の背景を持たない**。地色は App.jsx の `bg-surface-0` ひとつで、
+//    カードが `bg-surface-2`。画面ごとに `bg-surface-1 min-h-screen` を足すと
+//    地色が2層になり、カードとの対比も画面ごとに変わる。
+// ============================================================
+
+// コンテンツ幅は3段だけ（CLAUDE.md「コンテンツ幅は3段だけ」と同じ区分）
+const SHELL_WIDTH = {
+  wide: 'max-w-7xl',        // 1280 表・一覧が主役（ロスター・日程・成績・資料室・チーム運営）
+  mid:  'max-w-5xl',        // 1024 設定・選択・カード一覧（レギュレーション・マニュアル）
+  form: 'max-w-3xl',        // 768  フォーム・確認（セーブ/ロード・オフシーズン）
+  panel: 'max-w-[1800px]',  // 1800 多パネルの例外（試合画面の3カラム等）
+};
+
+export const ScreenShell = ({ width = 'wide', className = '', children }) => (
+  <div className={`mx-auto p-4 ${SHELL_WIDTH[width] || SHELL_WIDTH.wide} ${className}`}>
+    {children}
+  </div>
+);
+
+/**
+ * 画面の見出し。大きさ・色は1つに揃える。
+ * @param title 画面名（絵文字は付けない。サイドバーのアイコンと重複するため）
+ * @param sub   補足の1行
+ * @param right 右端に置く操作（タブ・フィルタ・戻るなど）
+ */
+export const ScreenHeader = ({ title, sub = null, right = null }) => (
+  <div className="flex items-end justify-between gap-4 mb-4">
+    <div className="min-w-0">
+      {/* 見出しはカードではなく**地色の上**に載る。地色が明るいのでここだけ暗い文字
+          （`text-white` のままだと 1.4:1 で消える。実測） */}
+      <h1 className="text-xl font-bold text-ink truncate">{title}</h1>
+      {sub && <p className="text-xs text-ink-sub mt-1">{sub}</p>}
+    </div>
+    {right && <div className="shrink-0 flex items-center gap-2">{right}</div>}
+  </div>
+);
 
 // --- PositionControl コンポーネント ---
 export const PositionControl = ({ position, label, defense, setDefense }) => {
@@ -10,12 +61,12 @@ export const PositionControl = ({ position, label, defense, setDefense }) => {
       <button
         type="button"
         onClick={() => setShow(!show)}
-        className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 shadow-lg border-2 border-white"
+        className="btn-primary w-8 h-8 rounded-full text-xs shadow-lg border-2 border-white"
       >
         {label}
       </button>
       {show && (
-        <div className="absolute z-10 bg-gray-800 border border-gray-600 rounded-xl shadow-xl w-48 text-xs p-3"
+        <div className="absolute z-10 bg-surface-2 border border-gray-600 rounded-xl shadow-xl w-48 text-xs p-3"
              style={{left: '50%', transform: 'translateX(-50%)', marginTop: '4px'}}>
           <div className="mb-1.5">
             <label className="block font-bold text-gray-300">守:{defense[position].defense}</label>
@@ -50,7 +101,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
       <h4 className="font-bold text-sm mb-3 text-gray-300">全ポジション一括設定</h4>
       <div className="grid grid-cols-1 gap-3">
         <div>
-          <label className="block text-xs font-semibold mb-1 text-gray-400">
+          <label className="block text-xs font-semibold mb-1 text-gray-300">
             守備力: <span className="text-blue-400">{defense.first.defense}</span>
           </label>
           <input
@@ -76,7 +127,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold mb-1 text-gray-400">
+          <label className="block text-xs font-semibold mb-1 text-gray-300">
             足: <span className="text-green-400">{defense.first.speed}</span>
           </label>
           <input
@@ -102,7 +153,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold mb-1 text-gray-400">
+          <label className="block text-xs font-semibold mb-1 text-gray-300">
             肩: <span className="text-orange-400">{defense.first.arm}</span>
           </label>
           <input
@@ -303,7 +354,7 @@ export const Tooltip = ({ text, children, position = 'top' }) => {
     <span className="relative inline-flex" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
       {children}
       {show && text && (
-        <span className={`absolute z-50 px-2 py-1 rounded text-[11px] text-gray-100 bg-gray-900 border border-gray-700 shadow-lg whitespace-nowrap pointer-events-none ${posStyles[position] || posStyles.top}`}>
+        <span className={`absolute z-50 px-2 py-1 rounded text-xs text-gray-100 bg-surface-1 border border-gray-700 shadow-lg whitespace-nowrap pointer-events-none ${posStyles[position] || posStyles.top}`}>
           {text}
         </span>
       )}
@@ -321,21 +372,22 @@ const STAT_TOOLTIPS = {
   '試': '試合出場数', 'HR': '本塁打', '打点': '打点',
 };
 
+// ツールチップは native title で付ける（Tooltipで<th>をラップすると<tr>直下が
+// <span>になり、テーブルの列がデータ行とズレるため）
 export const StatHeader = ({ label, sortKey, sortActive, sortAsc, onClick, className = '' }) => (
-  <Tooltip text={STAT_TOOLTIPS[label]}>
-    <th
-      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600/40 transition select-none text-center ${sortActive ? 'text-yellow-400' : ''} ${className}`}
-      onClick={onClick}
-    >
-      {label}{sortActive ? (sortAsc ? '↑' : '↓') : ''}
-    </th>
-  </Tooltip>
+  <th
+    title={STAT_TOOLTIPS[label]}
+    className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600/40 transition select-none text-center ${sortActive ? 'text-yellow-400' : ''} ${className}`}
+    onClick={onClick}
+  >
+    {label}{sortActive ? (sortAsc ? '↑' : '↓') : ''}
+  </th>
 );
 
 // --- AbilityLegend 能力値凡例 ---
 export const AbilityLegend = ({ className = '' }) => (
-  <div className={`flex items-center gap-1.5 text-[10px] ${className}`}>
-    <span className="text-gray-500 font-bold">能力:</span>
+  <div className={`flex items-center gap-1.5 text-xs ${className}`}>
+    <span className="text-gray-400 font-bold">能力:</span>
     {[
       { min: 90, color: 'text-pink-400', label: '90+' },
       { min: 80, color: 'text-red-400', label: '80+' },
@@ -343,7 +395,7 @@ export const AbilityLegend = ({ className = '' }) => (
       { min: 60, color: 'text-yellow-400', label: '60+' },
       { min: 50, color: 'text-green-400', label: '50+' },
       { min: 40, color: 'text-blue-400', label: '40+' },
-      { min: 0, color: 'text-gray-400', label: '40未満' },
+      { min: 0, color: 'text-gray-300', label: '40未満' },
     ].map(t => (
       <span key={t.min} className={t.color}>{t.label}</span>
     ))}
@@ -353,7 +405,7 @@ export const AbilityLegend = ({ className = '' }) => (
 // --- GameButton 共通ボタンコンポーネント ---
 const BUTTON_VARIANTS = {
   primary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',
-  secondary: 'bg-gray-600 hover:bg-gray-500 text-gray-100',
+  secondary: 'btn-secondary',
   danger: 'bg-red-600 hover:bg-red-500 text-white',
   success: 'bg-green-600 hover:bg-green-500 text-white',
   ghost: 'bg-transparent hover:bg-gray-700/60 text-gray-300 hover:text-white',
@@ -382,8 +434,7 @@ export const TabBar = ({ tabs, activeKey, onChange, className = '' }) => (
         onClick={() => onChange(key)}
         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
           activeKey === key
-            ? 'bg-blue-600 text-white shadow-sm'
-            : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+            ? 'seg-on' : 'seg'
         }`}
       >
         {icon && <span className="text-base leading-none">{icon}</span>}
@@ -402,24 +453,37 @@ export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
       className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-700/40 transition text-left"
     >
       <span className="font-semibold text-gray-200">{title}</span>
-      <span className="text-gray-500 text-sm">{isExpanded ? '▼' : '▶'}</span>
+      <span className={`text-gray-300 text-xs transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
     </button>
-    {isExpanded && (
-      <div className="p-4 border-t border-gray-700/50">
-        {children}
+    <div className={`grid transition-all duration-200 ease-in-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+      <div className="overflow-hidden">
+        <div className="p-4 border-t border-gray-700/50">
+          {children}
+        </div>
       </div>
-    )}
+    </div>
   </div>
 );
 
 // --- SidebarButton コンポーネント ---
-const BLOCKING_VIEWS = new Set(['draft', 'contract', 'tryout', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement', 'university_scout']);
+// この画面を開いている間はサイドバーで抜けさせない（その年のイベントを飛ばせてしまうため）
+const BLOCKING_VIEWS = new Set(['draft', 'contract', 'tryout', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement']);
 
-export const SidebarButton = ({ view, icon, label, color = 'green', onActiveClick, screenMode, managementView, setScreenMode, setManagementView }) => {
+// ⚠ **推薦スカウトは日付で判定する**。シーズン中はサイドバーから随時見に行ける画面なので
+//   常時ブロックすると戻れなくなる。11/29 の強制イベントのときだけ抜けさせない
+//   （`ManagementScreen` の `isForced` と同じ条件。あちらは「戻る」ボタンを消している）。
+const isNavBlocked = (managementView, seasonData) => {
+  if (BLOCKING_VIEWS.has(managementView)) return true;
+  if (managementView === 'university_scout') {
+    const d = seasonData?.currentDate;
+    return d?.month === 11 && (d?.day ?? 0) >= 29;
+  }
+  return false;
+};
+
+export const SidebarButton = ({ view, icon, label, onActiveClick, screenMode, managementView, seasonData, setScreenMode, setManagementView }) => {
   const isActive = screenMode === 'management' && managementView === view;
-  const isBlocked = screenMode === 'management' && BLOCKING_VIEWS.has(managementView) && !isActive;
-  const activeColors = { green: 'bg-green-600/20 text-green-300 border-green-400', yellow: 'bg-yellow-600/20 text-yellow-300 border-yellow-400', blue: 'bg-blue-600/20 text-blue-300 border-blue-400' };
-  const hoverColors = { green: 'hover:bg-green-900/20 hover:text-green-300', yellow: 'hover:bg-yellow-900/20 hover:text-yellow-300', blue: 'hover:bg-blue-900/20 hover:text-blue-300' };
+  const isBlocked = screenMode === 'management' && isNavBlocked(managementView, seasonData) && !isActive;
   return (
     <button
       onClick={() => {
@@ -429,10 +493,10 @@ export const SidebarButton = ({ view, icon, label, color = 'green', onActiveClic
       }}
       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2.5 ${
         isBlocked
-          ? 'text-gray-600 border-l-[3px] border-transparent cursor-not-allowed'
+          ? 'text-gray-400 border-l-[3px] border-transparent cursor-not-allowed'
           : isActive
-          ? `${activeColors[color] || activeColors.green} border-l-[3px] shadow-sm`
-          : `text-gray-400 ${hoverColors[color] || hoverColors.green} border-l-[3px] border-transparent`
+          ? 'seg-on border-l-[3px] border-l-[var(--accent)] shadow-sm'
+          : 'text-gray-300 hover:bg-gray-700/60 hover:text-white border-l-[3px] border-transparent'
       }`}
     >
       <span className="text-base w-5 text-center shrink-0">{icon}</span>
@@ -451,55 +515,519 @@ export const Sidebar = ({
   managementView,
   setScreenMode,
   setManagementView,
-  advanceDayRef,
-  exportTeam,
-  importTeam
+  advanceDayRef
 }) => (
   <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-700/50">
     <div className="px-4 py-4 border-b border-gray-700/50 bg-gray-800/30">
       <h2 className={`text-lg font-black tracking-tight ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
-      <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
-        {gameMode === 'sandbox' && <span className="text-orange-400/80 bg-orange-400/10 px-1.5 py-0.5 rounded text-[10px] font-bold">箱庭</span>}
-        {gameMode === 'university' && <span className="text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded text-[10px] font-bold">大学</span>}
+      <div className="text-xs text-gray-300 mt-1 flex items-center gap-1.5">
+        {gameMode === 'sandbox' && <span className="text-orange-400/80 bg-orange-400/10 px-1.5 py-0.5 rounded text-xs font-bold">箱庭</span>}
+        {gameMode === 'university' && <span className="text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded text-xs font-bold">大学</span>}
         <span>{seasonData?.year || 1}年目</span>
-        <span className="text-gray-600">|</span>
+        <span className="text-gray-400">|</span>
         <span>{seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}</span>
       </div>
     </div>
 
-    <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">進行</div>
-      <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="ranking" icon="📰" label="能力ランキング" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="team_ranking" icon="🏅" label="チームランキング" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+    <nav className="flex-1 min-h-0 overflow-y-auto px-2 py-3 space-y-0.5">
+      <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">進行</div>
+      <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="ranking" icon="📰" label="能力ランキング" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="team_ranking" icon="🏅" label="チームランキング" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
-      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">チーム</div>
-      <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      {gameMode !== 'corporate' && gameMode !== 'university' && <SidebarButton view="trade" icon="🔄" label="トレード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      <SidebarButton view="halloffame" icon="🏆" label="資料室" color="yellow" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="player_search" icon="🔎" label="選手検索" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">チーム</div>
+      <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
+      {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
+      {gameMode !== 'corporate' && gameMode !== 'university' && <SidebarButton view="trade" icon="🔄" label="トレード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
+      <SidebarButton view="halloffame" icon="🏆" label="資料室" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="player_search" icon="🔎" label="選手検索" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
-      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">システム</div>
-      <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <button
-        onClick={() => exportTeam(userTeamName)}
-        className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all flex items-center gap-2.5 border-l-[3px] border-transparent"
-      >
-        <span className="text-base w-5 text-center shrink-0">📤</span><span>エクスポート</span>
-      </button>
-      <button
-        onClick={() => importTeam(userTeamName)}
-        className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all flex items-center gap-2.5 border-l-[3px] border-transparent"
-      >
-        <span className="text-base w-5 text-center shrink-0">📥</span><span>インポート</span>
-      </button>
+      <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">システム</div>
+      <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
     </nav>
+  </div>
+);
+
+// ============================================================
+// 試合画面 左右カラムの投手欄（試合中=投手成績 / 試合前=予告先発）
+//
+// ⚠ **アウェイ用とホーム用で115行を丸ごとコピペしていた**（L3388-3502 と
+//    L4914-5028）。チーム参照を置換するとバイト単位で一致しており、
+//    片方だけ直す事故が起きる形だった（この作品が繰り返し踏んでいる
+//    「表を二重に作らない」違反そのもの）。
+//
+// ⚠ **ここの getValueColor / getBgColor が使う正規化は共有の物差しと違う**
+//    （球速 `(v-100)*2` / スタミナ `v/2`。共有は `normVelocity` = `(v-115)*2.5`）。
+//    抽出時は**挙動を変えないため元の係数のまま**にしてある。
+//    揃えると色が変わる（140km は 赤 → 黄）ので、直すなら別の変更として測ること。
+// ============================================================
+const panelValueColor = (val) => {
+  if (val >= 80) return 'text-red-400';
+  if (val >= 70) return 'text-orange-400';
+  if (val >= 60) return 'text-yellow-400';
+  if (val >= 50) return 'text-green-400';
+  return 'text-gray-300';
+};
+const panelBgColor = (val) => {
+  if (val >= 80) return 'bg-red-500';
+  if (val >= 70) return 'bg-orange-500';
+  if (val >= 60) return 'bg-yellow-500';
+  if (val >= 50) return 'bg-green-500';
+  return 'bg-gray-500';
+};
+
+export const TeamPitcherPanel = ({ team, gameStarted }) => (
+  <div className="mt-2 pt-2 border-t border-gray-700">
+    {gameStarted ? (
+      <>
+        <div className="text-sm text-gray-300 mb-1 font-semibold">📊 試合スタッツ</div>
+        {/* 投手成績 */}
+        <div className="bg-surface-2 rounded p-2 mb-1">
+          <div className="text-xs text-blue-400 mb-0.5">投手</div>
+          <div className="text-sm">
+            {(() => {
+              const pitchers = team.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
+              const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
+              const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
+              return (
+                <>
+                  {pitchers.map(p => {
+                    const s = p.stats?.pitching || {};
+                    const outs = s.outs || 0;
+                    const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
+                    const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                    return (
+                      <div key={p.id} className="flex justify-between text-gray-300 gap-1">
+                        <span className="truncate">{p.name}</span>
+                        <span className="text-gray-300 whitespace-nowrap text-xs">
+                          {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {pitchers.length > 1 && (
+                    <div className="flex justify-between text-yellow-400 text-xs mt-1 pt-1 border-t border-gray-700">
+                      <span>合計イニング</span>
+                      <span>{totalIP}</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      </>
+    ) : (
+      <>
+        <div className="text-sm font-bold text-gray-300 mb-1">⚾ 予告先発</div>
+        {(() => {
+          const pitcher = team.players.find(p => p.isStarter && p.position === 'pitcher');
+          if (!pitcher) return null;
+          const formNames = FORM_SHORT;
+          const velocityScore = Math.min(100, (pitcher.pitching.velocity - 100) * 2);
+          const staminaScore = Math.min(100, pitcher.pitching.stamina / 2);
+          return (
+            <div className="bg-surface-2 rounded p-3 border-2 border-gray-700">
+              <div className="text-base text-white mb-2 font-bold flex items-center gap-2">
+                <span>⚾</span>
+                <span>{pitcher.name}</span>
+                <span className="text-sm text-gray-300">#{pitcher.number || pitcher.id}</span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-xs text-gray-300">投げ手:</span>
+                  <span className="text-white font-bold">{pitcher.physical.throws === 'right' ? '右投' : '左投'}</span>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-white">{formNames[pitcher.pitching.form]}</span>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-xs text-gray-300">球速:</span>
+                  <span className={`text-lg font-bold ${panelValueColor(velocityScore)}`}>{pitcher.pitching.velocity}</span>
+                  <span className="text-xs text-gray-400">km/h</span>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-xs text-gray-300">回転:</span>
+                  <span className={`text-sm font-bold ${panelValueColor(pitcher.pitching.spinRate ?? 50)}`}>{pitcher.pitching.spinRate ?? 50}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-300 w-12">制球</span>
+                  <div className="flex-1 bg-gray-700 rounded h-3 overflow-hidden">
+                    <div className={`h-full ${panelBgColor(pitcher.pitching.control)}`} style={{ width: `${pitcher.pitching.control}%` }} />
+                  </div>
+                  <span className={`text-sm font-bold ${panelValueColor(pitcher.pitching.control)}`}>{pitcher.pitching.control}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-300 w-12">体力</span>
+                  <div className="flex-1 bg-gray-700 rounded h-3 overflow-hidden">
+                    <div className={`h-full ${panelBgColor(staminaScore)}`} style={{ width: `${staminaScore}%` }} />
+                  </div>
+                  <span className={`text-sm font-bold ${panelValueColor(staminaScore)}`}>{pitcher.pitching.stamina}</span>
+                </div>
+                <div className="pt-1 border-t border-gray-700">
+                  <div className="text-xs text-gray-300 mb-1">変化球</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pitcher.pitching.arsenal.map((ball, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded font-semibold">
+                        {getPitchTypeName(ball.type)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </>
+    )}
+  </div>
+);
+
+/**
+ * 左右のメンバー表（打順・守備位置・成績・打席結果）。
+ * ⚠ かつて App.jsx の RENDER にアウェイ用とホーム用が並んで書かれており、
+ *    正規化して比べると 335行中 328行が同一だった。ドリフトも実際に起きていて、
+ *    アウェイ側だけ `text-red-400`（チーム色分け。表と裏で意味が反転するので使わない決まり）と
+ *    `truncate min-w-0` 無しが残っていた。ホーム側を正として1つに畳んである。
+ * - `side` は 'away' | 'home'。ヘッダーの並び（得点とチーム名の左右）と
+ *   handleXxxClick の teamType を兼ねる
+ * - `isBatting` はこのチームが攻撃中か（旧: アウェイ=isTopInning / ホーム=!isTopInning）
+ */
+/**
+ * ベンチメンバーの行（交代要員の一覧）。
+ * ⚠ **`TeamMemberPanel` の中に同じ38行が2度書かれていた**——試合前の「右: 控え選手」の欄と、
+ *    試合中の「⚡ 選手交代」アコーディオンの中。正規化すると完全に一致していた。
+ *    `TeamMemberPanel` 自体が「左右で335行中328行が同一だった」のを畳んだものなので、
+ *    同じファイルの中で同じことをもう一度やっていたことになる。
+ *    ⚠ 外側の枠（高さ・余白）だけ2箇所で違うので、**枠は呼び出し側に残して中身だけ共有する**。
+ */
+const BenchList = ({ team, side, selectedSubstitute, handleSubstituteClick, getPositionColor }) => (
+  <>
+    {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
+        ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
+    {sortBenchByPosition(team.players.filter(p => !p.isStarter))
+      .map(player => {
+        const isPitcher = player.position === 'pitcher';
+        const throwHand = player.physical.throws === 'right' ? '右' : '左';
+        const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+        const isSubSelected = selectedSubstitute === player.id;
+        const isSubbedOut = player.hasSubbedOut;
+
+        return (
+          <div
+            key={player.id}
+            onClick={() => !isSubbedOut && handleSubstituteClick(side, player.id)}
+            className={`p-1.5 rounded transition ${
+              isSubbedOut
+                ? 'bg-surface-1 opacity-50 cursor-not-allowed'
+                : isSubSelected
+                  ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
+            }`}
+          >
+            <div className="flex items-center gap-1">
+              <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{POSITION_NAMES[player.position]}</span>
+              <span className="font-medium text-sm truncate flex-1">{player.name}</span>
+              <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
+              {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
+              {isSubSelected && <span className="text-blue-300">👆</span>}
+            </div>
+            <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
+              <span>M{player.batting.meet}</span>
+              <span>P{player.batting.power}</span>
+              <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
+            </div>
+          </div>
+        );
+      })}
+  </>
+);
+
+export const TeamMemberPanel = ({
+  side, team, score, isBatting, gameStarted, gameOver,
+  selectedBatter, selectedPosition, selectedSubstitute, showBench, setShowBench,
+  handleBatterClick, handlePositionClick, handleSubstituteClick,
+  getPositionColor, getPositionColorHighlighted,
+}) => (
+  <div className="bg-surface-1 rounded-lg p-2 text-white min-w-0 overflow-hidden">
+    {/* 長いチーム名で2行にならないよう truncate。チーム色分けは使わない
+        （表と裏で色の意味が反転するため）。左右で得点とチーム名の並びだけ鏡像にする */}
+    <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
+      {side === 'away' ? (
+        <>
+          <h3 className="font-bold text-gray-100 truncate min-w-0" title={team.name}>✈️ {team.name}</h3>
+          <span className="text-2xl font-bold text-gray-100 tabular-nums shrink-0 ml-2">{score || 0}</span>
+        </>
+      ) : (
+        <>
+          <span className="text-2xl font-bold text-gray-100 tabular-nums shrink-0 mr-2">{score || 0}</span>
+          <h3 className="font-bold text-gray-100 truncate min-w-0 text-right" title={team.name}>🏠 {team.name}</h3>
+        </>
+      )}
+    </div>
+    
+    {/* スタメンと控え選手を横並び表示 */}
+    {!gameStarted ? (
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        {/* 左: スタメン */}
+        <div>
+          <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">スターティングメンバー</div>
+          <div className="space-y-1 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
+            {team.players
+              .filter(p => p.isStarter)
+              .sort((a, b) => a.battingOrder - b.battingOrder)
+              .map(player => {
+                const isPitcher = player.position === 'pitcher';
+                const posNames = POSITION_NAMES;
+                const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+                const isSubSelected = selectedSubstitute === player.id;
+                const isSelected = selectedBatter === player.battingOrder;
+                const isPositionSelected = selectedPosition === player.id;
+
+                return (
+                  <div
+                    key={player.id}
+                    onClick={() => handleSubstituteClick(side, player.id)}
+                    className={`p-1.5 rounded cursor-pointer transition ${
+                      isSubSelected ? 'seg-on ring-2' : 'seg'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBatterClick(side, player.battingOrder);
+                        }}
+                        className="w-4 text-gray-300 text-xs hover:text-blue-400 transition font-bold"
+                      >
+                        {player.battingOrder}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePositionClick(side, player.id);
+                        }}
+                        className={`w-6 text-center rounded text-sm py-0.5 font-bold transition ${
+                          isPositionSelected
+                            ? 'bg-purple-600 text-white ring-2 ring-purple-400'
+                            : getPositionColor(player.position) + ' hover:opacity-80'
+                        }`}
+                      >
+                        {posNames[player.position]}
+                      </button>
+                      <span className="font-medium text-base truncate flex-1">
+                        {player.name}
+                        <span className={`ml-0.5 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                      </span>
+                      <span className="text-xs text-gray-400 font-mono font-bold">#{player.number || player.id}</span>
+<span className="text-sm text-gray-300 font-semibold">{throwHand}{batHand}</span>
+                      {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
+                      {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
+                      {isPositionSelected && <span className="text-purple-300 animate-pulse">◀</span>}
+                    </div>
+                    <div className="ml-9 mt-0.5">
+                      <div className="flex gap-3 text-xs text-gray-400 font-bold">
+                        <span className="w-7 text-center">ミ</span>
+                        <span className="w-7 text-center">パ</span>
+                        <span className="w-7 text-center">走</span>
+                        <span className="w-7 text-center">肩</span>
+                        <span className="w-7 text-center">守</span>
+                      </div>
+                      <div className="flex gap-3 text-sm font-bold">
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.batting.meet)}`}>{player.batting.meet}</span>
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.batting.power)}`}>{player.batting.power}</span>
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.physical.speed)}`}>{player.physical.speed}</span>
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.physical.arm)}`}>{player.physical.arm}</span>
+                        <span className={`w-7 text-center ${getAbilityTextColor(player.fielding.defense)}`}>{player.fielding.defense}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        {/* 右: 控え選手 */}
+        <div>
+          <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">ベンチメンバー</div>
+          <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
+            <BenchList team={team} side={side} selectedSubstitute={selectedSubstitute}
+              handleSubstituteClick={handleSubstituteClick} getPositionColor={getPositionColor} />
+          </div>
+        </div>
+      </div>
+    ) : (
+      /* 試合中/試合終了後は現在フィールドにいる選手のみ表示 */
+      <div className="mb-2">
+        <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
+          {team.players
+            .filter(p => {
+              // 試合終了後：実際に出場した選手のみ
+              if (gameOver) {
+                const hasBattingStats = p.stats?.batting && (p.stats.batting.atBats > 0 || p.stats.batting.walks > 0 || p.stats.batting.hits > 0);
+                const hasPitchingStats = p.stats?.pitching && p.stats.pitching.outs > 0;
+                const isOnField = p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
+                return hasBattingStats || hasPitchingStats || isOnField;
+              }
+              // 試合中：現在フィールドにいる選手
+              return p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
+            })
+            .sort((a, b) => a.battingOrder - b.battingOrder)
+            .map(player => {
+            const isCurrentBatter = gameStarted && isBatting && player.battingOrder === team.currentBatterOrder;
+            const isPitcher = player.position === 'pitcher';
+            const posNames = POSITION_NAMES;
+            const getPosColor = (pos) => getPositionColorHighlighted(pos, isCurrentBatter);
+
+          const throwHand = player.physical.throws === 'right' ? '右' : '左';
+          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+
+          const isSelected = !gameStarted && selectedBatter === player.battingOrder;
+          const isPositionSelected = !gameStarted && selectedPosition === player.id;
+          const isSubSelected = gameStarted && selectedSubstitute === player.id;
+          const isSubbedOut = player.hasSubbedOut;
+          const fitness = calculateDefensiveFitness(player, player.position);
+
+          return (
+            <div
+              key={player.id}
+              onClick={() => {
+                if (gameStarted && !isSubbedOut) {
+                  handleSubstituteClick(side, player.id);
+                } else if (!gameStarted) {
+                  handleBatterClick(side, player.battingOrder);
+                }
+              }}
+              className={`p-2 rounded transition ${
+                isSubbedOut ? 'opacity-50 cursor-not-allowed' :
+                isCurrentBatter ? 'bg-yellow-500 text-black cursor-pointer' :
+                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer' :
+                isSelected ? 'seg-on cursor-pointer' : 'seg cursor-pointer'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <span className={`w-5 shrink-0 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-300'}`}>{player.battingOrder}</span>
+                {!gameStarted ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePositionClick(side, player.id);
+                    }}
+                    className={`w-6 shrink-0 text-center rounded text-xs py-0.5 font-semibold transition ${
+                      isPositionSelected
+                        ? 'bg-purple-600 text-white ring-2 ring-purple-400'
+                        : getPosColor(player.position) + ' hover:opacity-80'
+                    }`}
+                  >
+                    {posNames[player.position]}
+                  </button>
+                ) : (
+                  <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(player.position)}`}>{posNames[player.position]}</span>
+                )}
+                <span className="font-bold truncate">{player.name}</span>
+                <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-300'}`}>{throwHand}{batHand}</span>
+                <span className="flex-1"></span>
+                {isSubbedOut && <span className="text-red-400 text-xs shrink-0">交代済</span>}
+                {isCurrentBatter && <span className="shrink-0">⚾</span>}
+                {isSubSelected && <span className="text-orange-300 shrink-0">⚡</span>}
+                {isSelected && <span className="shrink-0">👆</span>}
+                {isPositionSelected && <span className="shrink-0">🔄</span>}
+              </div>
+              {/* 2行目: 成績（打率・本塁打・打点）と打席結果。
+                  打席結果を1行目に置くと選手名が切れるのでこちらへ移した。
+                  成績は固定幅の右寄せで縦に揃えつつ、間隔を詰めて1かたまりに見せる。
+                  バッジは右端に寄せ、入り切らない場合は**古い方から隠れる**
+                  （justify-end + overflow-hidden） */}
+              {gameStarted ? (
+                <div className="flex items-center gap-2 ml-6 mt-0.5 text-xs">
+                  <div className={`flex gap-1 font-bold tabular-nums shrink-0 ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
+                    {(() => {
+                      const ss = player.seasonStats?.batting;
+                      if (ss && ss.atBats > 0) {
+                        const avg = (ss.hits / ss.atBats).toFixed(3);
+                        return <>
+                          <span className="w-8 text-right">.{avg.split('.')[1]}</span>
+                          <span className="w-9 text-right">{ss.homeruns || 0}本</span>
+                          <span className="w-10 text-right">{ss.rbis || 0}点</span>
+                        </>;
+                      }
+                      if (isPitcher) {
+                        const ps = player.seasonStats?.pitching;
+                        if (ps && ps.inningsPitched > 0) {
+                          const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
+                          return <span>防御率 {era}</span>;
+                        }
+                      }
+                      return <span className={isCurrentBatter ? '' : 'text-gray-300'}>出場なし</span>;
+                    })()}
+                  </div>
+                  {player.gameStats?.atBatResults?.length > 0 && (
+                    /* **左から右へ増やす**。右寄せ(justify-end)にすると
+                       打席が増えるたびに既存のバッジが左へずれて落ち着かない。
+                       先頭から並べれば N打席目は常に同じ位置に出る。
+                       slice も先頭からにすること（-6 だと6打席目で全部ずれる） */
+                    <div className="flex gap-0.5 flex-1 min-w-0 overflow-hidden">
+                      {player.gameStats.atBatResults.slice(0, 6).map((r, i) => (
+                        <span key={i} title={r}
+                          style={{ textAlignLast: 'justify' }}
+                          className={`w-10 shrink-0 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
+                          {formatAtBatResult(r)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className={`grid grid-cols-4 gap-1 text-xs ml-6 mt-0.5 tabular-nums ${isSelected ? 'text-blue-200' : 'text-gray-300'}`}>
+                    <span>M{player.batting.meet}</span>
+                    <span>P{player.batting.power}</span>
+                    <span>E{player.batting.eye}</span>
+                    <span className={isSelected ? 'text-blue-200' : 'text-blue-300'}>
+                      {isPitcher ? `⚡${player.pitching.velocity}` : ''}
+                    </span>
+                  </div>
+                  <div className={`text-xs ml-6 mt-0.5 ${
+                    fitness.grade === 'S' ? 'text-yellow-400' :
+                    fitness.grade === 'A' ? 'text-green-400' :
+                    fitness.grade === 'B' ? 'text-blue-400' :
+                    fitness.grade === 'D' ? 'text-red-400' :
+                    'text-gray-300'
+                  }`}>
+                    守備適性 [{fitness.grade}] {fitness.comments}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 試合中の選手交代アコーディオン */}
+      <div className="mt-2">
+        <button
+          onClick={() => setShowBench(!showBench)}
+          className="w-full p-2 bg-surface-2 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
+        >
+          <span>⚡ 選手交代</span>
+          <span>{showBench ? '▼' : '▶'}</span>
+        </button>
+
+        {showBench && (
+          <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
+            <BenchList team={team} side={side} selectedSubstitute={selectedSubstitute}
+              handleSubstituteClick={handleSubstituteClick} getPositionColor={getPositionColor} />
+          </div>
+        )}
+      </div>
+    </div>
+    )}
+
+    {/* このチームの試合スタッツ/投手詳細 */}
+    <TeamPitcherPanel team={team} gameStarted={gameStarted} />
   </div>
 );

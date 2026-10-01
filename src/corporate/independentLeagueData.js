@@ -85,12 +85,4 @@ export const INDEPENDENT_LEAGUES = {
 
 export const ALL_INDEPENDENT_LEAGUE_IDS = Object.keys(INDEPENDENT_LEAGUES);
 
-export const getIndependentLeague = (leagueId) => INDEPENDENT_LEAGUES[leagueId] || null;
 
-export const getAllIndependentTeams = () => {
-  const teams = [];
-  for (const league of Object.values(INDEPENDENT_LEAGUES)) {
-    teams.push(...league.teams);
-  }
-  return teams;
-};

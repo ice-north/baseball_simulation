@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import { processCorporateRetirements, executeDepartures } from '../corporate/scoutingSystem.js';
 import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES, MAX_STAFF } from '../corporate/staffData.js';
 import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
@@ -219,7 +220,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const SortHeader = ({ label, sortKeyVal, className = '' }) => (
     <th
-      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none text-[10px] ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
+      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none text-xs ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
       onClick={() => handleSort(sortKeyVal)}
     >
       {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
@@ -230,26 +231,26 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const totalRetirements = retirements.length;
 
   const gradeColor = (grade) => {
-    const colors = { S: 'text-red-400', A: 'text-orange-400', B: 'text-yellow-400', C: 'text-green-400', D: 'text-gray-400' };
-    return colors[grade] || 'text-gray-400';
+    const colors = { S: 'text-red-400', A: 'text-orange-400', B: 'text-yellow-400', C: 'text-green-400', D: 'text-gray-300' };
+    return colors[grade] || 'text-gray-300';
   };
 
   const StaffPreview = ({ preview }) => (
     <div className="mt-1 pl-2 border-l-2 border-cyan-700/50">
-      <div className="flex items-center gap-2 text-[10px]">
+      <div className="flex items-center gap-2 text-xs">
         <span className={`font-bold ${gradeColor(preview.grade)}`}>{STAFF_GRADES[preview.grade]?.label}</span>
         <span className="text-cyan-400">コーチ</span>
-        <span className="text-gray-400">年俸{getStaffSalary(preview).toLocaleString()}万</span>
+        <span className="text-gray-300">年俸{getStaffSalary(preview).toLocaleString()}万</span>
         <span className="text-cyan-600">元選手</span>
       </div>
-      <div className="flex gap-2 mt-0.5 text-[10px] flex-wrap">
+      <div className="flex gap-2 mt-0.5 text-xs flex-wrap">
         {preview.strengths.map(key => (
           <span key={key} className="bg-cyan-900/30 text-cyan-400 px-1 py-0.5 rounded">
             {STAFF_ABILITIES[key]?.name || key}
           </span>
         ))}
       </div>
-      <div className="flex gap-2 mt-0.5 text-[10px] text-gray-500">
+      <div className="flex gap-2 mt-0.5 text-xs text-gray-400">
         {Object.entries(STAFF_ABILITIES).slice(0, 5).map(([key, info]) => (
           <span key={key}>
             {info.name.slice(0, 2)}
@@ -267,7 +268,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       if (staffReplacements[playerId]) {
         const replaced = staff.find(s => s.id === staffReplacements[playerId]);
         return replaced ? (
-          <div className="mt-1 text-[10px] text-orange-400">
+          <div className="mt-1 text-xs text-orange-400">
             → {replaced.name}（{STAFF_GRADES[replaced.grade]?.label}）と入替
             <button onClick={() => {
               const next = { ...staffReplacements };
@@ -276,63 +277,65 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
               const nextConv = { ...staffConversions };
               delete nextConv[playerId];
               setStaffConversions(nextConv);
-            }} className="ml-2 text-gray-500 hover:text-gray-300">取消</button>
+            }} className="ml-2 text-gray-400 hover:text-gray-300">取消</button>
           </div>
         ) : null;
       }
       return null;
     }
     return (
-      <div className="mt-2 p-2 bg-gray-800 rounded border border-orange-700/50">
-        <p className="text-[10px] text-orange-400 mb-1.5 font-bold">スタッフ枠が上限（{MAX_STAFF}名）です。入替えるスタッフを選んでください：</p>
+      <div className="mt-2 p-2 bg-surface-2 rounded border border-orange-700/50">
+        <p className="text-xs text-orange-400 mb-1.5 font-bold">スタッフ枠が上限（{MAX_STAFF}名）です。入替えるスタッフを選んでください：</p>
         <div className="space-y-1">
           {staff.map(s => (
             <button key={s.id}
               onClick={() => selectStaffToReplace(playerId, s.id)}
-              className="w-full flex items-center gap-2 px-2 py-1 bg-gray-700 hover:bg-red-900/40 rounded text-left text-[10px] transition">
+              className="btn-danger w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs transition">
               <span className={`font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
               <span className="text-white">{s.name}</span>
-              <span className="text-gray-400">{s.role === 'coach' ? 'コーチ' : s.role === 'manager' ? 'マネ' : 'トレ'}</span>
-              <span className="text-gray-500">年俸{getStaffSalary(s).toLocaleString()}万</span>
+              <span className="text-gray-300">{s.role === 'coach' ? 'コーチ' : s.role === 'manager' ? 'マネ' : 'トレ'}</span>
+              <span className="text-gray-400">年俸{getStaffSalary(s).toLocaleString()}万</span>
               {s.isFormerPlayer && <span className="text-cyan-600">元選手</span>}
-              <span className="ml-auto text-gray-500">{s.strengths?.map(k => STAFF_ABILITIES[k]?.name?.slice(0, 2)).join(' ')}</span>
+              <span className="ml-auto text-gray-400">{s.strengths?.map(k => STAFF_ABILITIES[k]?.name?.slice(0, 2)).join(' ')}</span>
             </button>
           ))}
         </div>
         <button onClick={() => setReplaceStaffFor(null)}
-          className="mt-1.5 text-[10px] text-gray-500 hover:text-gray-300">キャンセル</button>
+          className="mt-1.5 text-xs text-gray-400 hover:text-gray-300">キャンセル</button>
       </div>
     );
   };
 
   const DecisionBadge = ({ decision }) => {
-    if (decision === 'release') return <span className="text-red-400 font-bold text-[10px] bg-red-900/40 px-1.5 py-0.5 rounded">解雇</span>;
-    if (decision === 'retire') return <span className="text-yellow-400 font-bold text-[10px] bg-yellow-900/40 px-1.5 py-0.5 rounded">引退</span>;
-    return <span className="text-green-400 font-bold text-[10px] bg-green-900/40 px-1.5 py-0.5 rounded">契約</span>;
+    if (decision === 'release') return <span className="text-red-400 font-bold text-xs bg-red-900/40 px-1.5 py-0.5 rounded">解雇</span>;
+    if (decision === 'retire') return <span className="text-yellow-400 font-bold text-xs bg-yellow-900/40 px-1.5 py-0.5 rounded">引退</span>;
+    return <span className="text-green-400 font-bold text-xs bg-green-900/40 px-1.5 py-0.5 rounded">契約</span>;
   };
 
   if (confirmed) {
     return (
-      <div className="p-4 bg-gray-900 min-h-screen">
-        <h1 className="text-xl font-bold text-white mb-3">契約更改完了</h1>
+      <div className="p-4">
+        {/* 背景は全幅のまま、本文だけ 7xl で止める（他の画面と本文の位置を揃える） */}
+        <div className="max-w-7xl mx-auto">
+        <h1 className="text-xl font-bold text-ink mb-3">契約更改完了</h1>
         {totalRetirements + retireCount > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-yellow-400 mb-2">
+            <h2 className="text-sm font-bold text-yellow-900 mb-2">
               引退選手 ({totalRetirements + retireCount}名)
             </h2>
             <div className="grid grid-cols-2 gap-1">
               {retirements.map(r => (
-                <div key={r.id} className="text-xs text-gray-300 bg-gray-800 p-1 rounded">
+                <div key={r.id} className="text-xs text-gray-300 bg-surface-2 p-1 rounded">
                   <span className="text-yellow-300">{POSITION_NAMES[r.position]}</span> {r.name}
-                  <span className="text-gray-500 ml-1">({r.age}歳・{r.team})</span>
-                  <span className="text-gray-500 ml-1">{r.reason}</span>
+                  <span className="text-gray-400 ml-1">({r.age}歳・{r.team})</span>
+                  <span className="text-gray-400 ml-1">{r.reason}</span>
                 </div>
               ))}
               {activePlayers.filter(p => playerDecisions[p.id] === 'retire').map(p => (
-                <div key={p.id} className="text-xs text-gray-300 bg-gray-800 p-1 rounded">
+                <div key={p.id} className="text-xs text-gray-300 bg-surface-2 p-1 rounded">
                   <span className="text-yellow-300">{POSITION_NAMES[p.position]}</span> {p.name}
-                  <span className="text-gray-500 ml-1">({p.age}歳・自チーム)</span>
-                  <span className="text-gray-500 ml-1">引退勧告</span>
+                  <span className="text-gray-400 ml-1">({p.age}歳・自チーム)</span>
+                  <span className="text-gray-400 ml-1">引退勧告</span>
                 </div>
               ))}
             </div>
@@ -340,8 +343,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         )}
         {(releaseCount > 0 || totalAiReleases > 0) && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-red-400 mb-2">解雇 ({releaseCount + totalAiReleases}名)</h2>
-            <p className="text-xs text-gray-400 mb-1">
+            <h2 className="text-sm font-bold text-red-900 mb-2">解雇 ({releaseCount + totalAiReleases}名)</h2>
+            <p className="text-xs text-gray-300 mb-1">
               自チーム: {releaseCount}名 / 他チーム: {totalAiReleases}名
             </p>
           </div>
@@ -349,28 +352,28 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         {/* スタッフ転向 */}
         {Object.keys(staffConversions).filter(pid => staffConversions[pid] && staffPreviews[pid]).length > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-cyan-400 mb-2">スタッフ転向</h2>
+            <h2 className="text-sm font-bold text-cyan-900 mb-2">スタッフ転向</h2>
             <div className="grid grid-cols-2 gap-1">
               {Object.entries(staffConversions).filter(([, v]) => v).map(([pid]) => {
                 const preview = staffPreviews[pid];
                 if (!preview) return null;
                 return (
-                  <div key={pid} className="text-xs text-gray-300 bg-gray-800 p-1.5 rounded flex items-center gap-2">
+                  <div key={pid} className="text-xs text-gray-300 bg-surface-2 p-1.5 rounded flex items-center gap-2">
                     <span className={`font-bold ${gradeColor(preview.grade)}`}>{STAFF_GRADES[preview.grade]?.label}</span>
                     <span className="text-cyan-400">コーチ</span>
                     <span className="text-white font-medium">{preview.name}</span>
-                    <span className="text-gray-500">({preview.age}歳)</span>
-                    <span className="text-cyan-600 text-[10px]">元選手</span>
+                    <span className="text-gray-400">({preview.age}歳)</span>
+                    <span className="text-cyan-600 text-xs">元選手</span>
                   </div>
                 );
               })}
             </div>
           </div>
         )}
-        <div className="mb-4 bg-gray-800 rounded p-3">
-          <div className="text-xs text-gray-400">来季ロスター: <span className="text-white font-bold">{contractCount}名</span></div>
+        <div className="mb-4 bg-surface-2 rounded p-3">
+          <div className="text-xs text-gray-300">来季ロスター: <span className="text-white font-bold">{contractCount}名</span></div>
           {!isClub && (
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-gray-300 mt-1">
               来季予算残: <span className={`font-bold ${budgetBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {budgetBalance >= 0 ? '+' : ''}{budgetBalance.toLocaleString()}万円
               </span>
@@ -379,39 +382,43 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         </div>
         <button
           onClick={onComplete}
-          className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
+          className="btn-primary mt-4 px-6 py-2 rounded"
         >
           {isClub ? '入部希望者の受付へ進む' : 'スカウト入団へ進む'}
         </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-3 bg-gray-900 min-h-screen">
-      <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目 11月末</h1>
-      <p className="text-gray-400 text-xs mb-2">選手をクリックして「契約 → 解雇 → 引退」を切り替えてください</p>
+    <div className="p-4">
+      {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
+      <div className="max-w-7xl mx-auto">
+      {/* ⚠ 地色（明るい紙）の上に直に載る見出しは text-ink。11/9 の画面なので「11月末」ではない */}
+      <h1 className="text-xl font-bold text-ink mb-1">契約更改 - {seasonData?.year || 1}年目 11月</h1>
+      <p className="text-ink-sub text-xs mb-2">選手をクリックして「契約 → 解雇 → 引退」を切り替えてください</p>
 
       {/* 予算サマリー（クラブチームは予算なし） */}
-      {!isClub && <div className="mb-3 bg-gray-800 rounded-lg p-3">
+      {!isClub && <div className="mb-3 bg-surface-2 rounded-lg p-3">
         <div className="flex items-center gap-4 text-xs">
           <div>
-            <span className="text-gray-400">総予算: </span>
+            <span className="text-gray-300">総予算: </span>
             <span className="text-white font-bold">{totalBudget.toLocaleString()}万</span>
           </div>
           <div>
-            <span className="text-gray-400">人件費: </span>
+            <span className="text-gray-300">人件費: </span>
             <span className="text-white font-bold">{totalSalary.toLocaleString()}万</span>
-            <span className="text-gray-600 ml-1">(選手{projectedPlayerSalary.toLocaleString()} + スタッフ{staffSalaryTotal.toLocaleString()})</span>
+            <span className="text-gray-400 ml-1">(選手{projectedPlayerSalary.toLocaleString()} + スタッフ{staffSalaryTotal.toLocaleString()})</span>
           </div>
           <div>
-            <span className="text-gray-400">残額: </span>
+            <span className="text-gray-300">残額: </span>
             <span className={`font-bold ${budgetBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {budgetBalance >= 0 ? '+' : ''}{budgetBalance.toLocaleString()}万
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-500">
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
           <span>基本{baseBudget.toLocaleString()}</span>
           {reputationBonus > 0 && <span className="text-green-500">+注目度{reputationBonus.toLocaleString()}</span>}
           {managingBonus > 0 && <span className="text-cyan-500">+マネージング{managingBonus.toLocaleString()}</span>}
@@ -422,22 +429,22 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
       {/* スポンサーオファー */}
       {!isClub && sponsorOffers && sponsorOffers.length > 0 && (
-        <div className="mb-3 bg-purple-900/20 border border-purple-700/50 rounded-lg p-3">
+        <div className="mb-3 bg-surface-2 border border-purple-700/50 rounded-lg p-3">
           <h2 className="text-sm font-bold text-purple-300 mb-2">スポンサーオファー</h2>
           <div className="space-y-1.5">
             {sponsorOffers.map((offer, i) => {
               const tierInfo = SPONSOR_TIERS[offer.tier];
               return (
                 <div key={i} className="flex items-center gap-3 bg-gray-800/80 rounded p-2">
-                  <span className={`text-xs font-bold w-16 ${tierInfo?.color || 'text-gray-400'}`}>
+                  <span className={`text-xs font-bold w-16 ${tierInfo?.color || 'text-gray-300'}`}>
                     {tierInfo?.label || offer.tier}
                   </span>
                   <span className="text-white text-sm font-medium flex-1">{offer.name}</span>
                   <span className="text-yellow-400 text-xs font-bold">+{offer.income.toLocaleString()}万/年</span>
-                  <span className="text-gray-500 text-xs">{offer.duration}年契約</span>
+                  <span className="text-gray-400 text-xs">{offer.duration}年契約</span>
                   <button
                     onClick={() => handleAcceptSponsor(offer, i)}
-                    className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded"
+                    className="btn-secondary px-3 py-1 text-xs rounded"
                   >
                     契約
                   </button>
@@ -453,7 +460,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         const userRetirements = retirements.filter(r => r.team === userTeamName);
         const otherCount = retirements.filter(r => r.team !== userTeamName).length;
         return (
-          <div className="mb-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded">
+          <div className="mb-2 p-2 bg-surface-2 border border-yellow-700 rounded">
             <p className="text-yellow-400 text-xs font-bold mb-1">
               自動引退{otherCount > 0 ? ` (他チーム${otherCount}名)` : ''}
             </p>
@@ -468,15 +475,14 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                       <div className="flex items-center gap-2">
                         <span className="text-yellow-300 text-xs">{POSITION_NAMES[r.position]}</span>
                         <span className="text-gray-300 text-xs font-medium">{r.name}</span>
-                        <span className="text-gray-500 text-[10px]">{r.age}歳 / {r.reason}</span>
+                        <span className="text-gray-400 text-xs">{r.age}歳 / {r.reason}</span>
                         {!isClub && <button
                           onClick={() => {
                             if (player) toggleStaffConversion(r.id);
                           }}
-                          className={`ml-auto px-2 py-0.5 text-[10px] font-bold rounded transition ${
+                          className={`ml-auto px-2 py-0.5 text-xs font-bold rounded transition ${
                             isConverting
-                              ? 'bg-cyan-700 text-cyan-100'
-                              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                              ? 'seg-on' : 'seg'
                           }`}
                         >
                           {isConverting ? 'コーチ就任' : 'スタッフ転向'}
@@ -492,22 +498,23 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
               </div>
             )}
             {userRetirements.length === 0 && (
-              <p className="text-gray-500 text-xs">自チーム: なし</p>
+              <p className="text-gray-400 text-xs">自チーム: なし</p>
             )}
           </div>
         );
       })()}
 
       {totalAiReleases > 0 && (
-        <p className="text-xs text-gray-500 mb-2">他チーム自動戦力外: {totalAiReleases}名</p>
+        <p className="text-xs text-ink-sub mb-2">他チーム自動戦力外: {totalAiReleases}名</p>
       )}
 
-      {/* 選手一覧 */}
-      <div className="overflow-x-auto mb-3">
-        <table className="w-full text-[10px] text-gray-300 border-collapse">
-          <thead className="bg-gray-800 text-gray-400">
+      {/* 選手一覧。⚠ 表の行は背景を持たないので、不透明なカードの上に載せる
+           （以前は明るい地色の上に直に載り、選手名がほぼ読めなかった） */}
+      <div className="overflow-x-auto mb-3 bg-surface-2 rounded-lg">
+        <table className="w-full text-xs text-gray-300 border-collapse">
+          <thead className="bg-surface-2 text-gray-300">
             <tr>
-              <th className="py-1 px-1 w-12 text-[10px]">判定</th>
+              <th className="py-1 px-1 w-12 text-xs">判定</th>
               <SortHeader label="名前" sortKeyVal="name" />
               <SortHeader label="年齢" sortKeyVal="age" />
               <SortHeader label="守" sortKeyVal="position" />
@@ -537,7 +544,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                   className={`cursor-pointer border-b border-gray-800 transition ${
                     decision === 'release' ? 'bg-red-900/30 opacity-70' :
                     decision === 'retire' ? 'bg-yellow-900/20 opacity-70' :
-                    'hover:bg-gray-800'
+                    'hover:bg-surface-2'
                   }`}
                 >
                   <td className="py-0.5 px-1 text-center">
@@ -546,13 +553,13 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                   <td className={`py-0.5 px-1 font-medium ${decision !== 'contract' ? 'line-through' : ''}`}>{player.name}</td>
                   <td className="py-0.5 px-1 text-center">{player.age}</td>
                   <td className="py-0.5 px-1 text-center">{POSITION_NAMES[player.position]}</td>
-                  {!isClub && <td className={`py-0.5 px-1 text-right ${decision === 'contract' ? 'text-yellow-400' : 'text-gray-600'}`}>
+                  {!isClub && <td className={`py-0.5 px-1 text-right ${decision === 'contract' ? 'text-yellow-400' : 'text-gray-400'}`}>
                     {salary.toLocaleString()}万
                   </td>}
-                  <td className={`py-0.5 px-1 text-center ${isPitcher ? 'text-gray-600' : getAbilityColor(player.batting?.meet)}`}>
+                  <td className={`py-0.5 px-1 text-center ${isPitcher ? 'text-gray-400' : getAbilityColor(player.batting?.meet)}`}>
                     {player.batting?.meet || 0}
                   </td>
-                  <td className={`py-0.5 px-1 text-center ${isPitcher ? 'text-gray-600' : getAbilityColor(player.batting?.power)}`}>
+                  <td className={`py-0.5 px-1 text-center ${isPitcher ? 'text-gray-400' : getAbilityColor(player.batting?.power)}`}>
                     {player.batting?.power || 0}
                   </td>
                   <td className={`py-0.5 px-1 text-center ${getAbilityColor(player.physical?.speed)}`}>
@@ -561,14 +568,14 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                   <td className={`py-0.5 px-1 text-center ${getAbilityColor(player.fielding?.defense)}`}>
                     {player.fielding?.defense || 0}
                   </td>
-                  <td className={`py-0.5 px-1 text-center ${!isPitcher ? 'text-gray-600' : getAbilityColor((player.pitching?.velocity - 120) * 1.5)}`}>
-                    {player.pitching?.velocity || '-'}
+                  <td className="py-0.5 px-1 text-center">
+                    {isPitcher ? <AbilityValue value={player.pitching?.velocity} isVel placeholder="-" /> : <span className="text-gray-400">-</span>}
                   </td>
-                  <td className={`py-0.5 px-1 text-center ${!isPitcher ? 'text-gray-600' : getAbilityColor(player.pitching?.control)}`}>
+                  <td className={`py-0.5 px-1 text-center ${!isPitcher ? 'text-gray-400' : getAbilityColor(player.pitching?.control)}`}>
                     {player.pitching?.control || '-'}
                   </td>
-                  <td className={`py-0.5 px-1 text-center ${!isPitcher ? 'text-gray-600' : ''}`}>
-                    {isPitcher ? (player.pitching?.stamina || 0) : '-'}
+                  <td className="py-0.5 px-1 text-center">
+                    {isPitcher ? <AbilityValue value={player.pitching?.stamina} isSta placeholder="-" /> : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="py-0.5 px-1 text-center">{games}</td>
                 </tr>
@@ -578,10 +585,9 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleStaffConversion(player.id); }}
-                          className={`px-2 py-0.5 text-[10px] font-bold rounded transition ${
+                          className={`px-2 py-0.5 text-xs font-bold rounded transition ${
                             staffConversions[player.id]
-                              ? 'bg-cyan-700 text-cyan-100'
-                              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                              ? 'seg-on' : 'seg'
                           }`}
                         >
                           {staffConversions[player.id] ? 'コーチ就任確定' : 'スタッフとして残す'}
@@ -607,7 +613,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           <p className="text-red-400 text-xs font-bold mb-1">
             ⚠️ 予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です
           </p>
-          <div className="text-[10px] text-red-300 space-y-0.5">
+          <div className="text-xs text-red-300 space-y-0.5">
             <p>赤字のまま確定すると以下のペナルティが発生します:</p>
             <p>• 注目度低下（最大-15）</p>
             <p>• スポンサー離脱リスク</p>
@@ -631,25 +637,22 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           onClick={handleConfirm}
           disabled={replaceStaffFor !== null}
           className={`px-5 py-2 rounded font-bold text-sm ${
-            replaceStaffFor !== null
-              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              : !isClub && budgetBalance < 0
-                ? 'bg-red-700 hover:bg-red-600 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            !isClub && budgetBalance < 0 ? 'btn-danger' : 'btn-primary'
           }`}
         >
           {!isClub && budgetBalance < 0 ? '赤字のまま確定' : '契約更改を確定'}
         </button>
-        <div className="text-xs text-gray-400 space-x-3">
+        <div className="text-xs text-gray-300 space-x-3">
           <span className="text-green-400">契約{contractCount}名</span>
           {releaseCount > 0 && <span className="text-red-400">解雇{releaseCount}名</span>}
           {retireCount > 0 && <span className="text-yellow-400">引退{retireCount}名</span>}
           {Object.values(staffConversions).filter(Boolean).length > 0 && (
             <span className="text-cyan-400">スタッフ転向{Object.values(staffConversions).filter(Boolean).length}名</span>
           )}
-          <span className="text-gray-500">→ 来季{contractCount}名</span>
+          <span className="text-gray-400">→ 来季{contractCount}名</span>
         </div>
       </div>
+    </div>
     </div>
   );
 };

@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
+import { POSITION_COLORS } from '../utils/constants.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import LineupSettingScreen from './LineupSettingScreen.jsx';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
+import { AbilityValue, OverallBadge } from './AbilityValue.jsx';
+import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 
 const POS_NAMES = {
   pitcher: '投', catcher: '捕', first: '一', second: '二',
   third: '三', short: '遊', left: '左', center: '中', right: '右'
 };
-const POS_ORDER = ['pitcher', 'catcher', 'short', 'second', 'third', 'first', 'left', 'center', 'right'];
+const POS_ORDER = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
 const POS_LABEL = {
   pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁',
   third: '三塁', short: '遊撃', left: '左翼', center: '中堅', right: '右翼'
@@ -54,15 +58,12 @@ export const autoSelectActive = (players) => {
   pitchers.slice(0, pitcherSlots).forEach(p => { p.isActive = true; });
 };
 
-// 能力値セル（ラベル上・値下の縦2行）
-const Stat = ({ label, value, low, high }) => {
-  const color = value >= high ? 'text-green-400 font-bold'
-    : value >= low ? 'text-yellow-300'
-    : 'text-gray-500';
+// 能力値セル（ラベル上・値下の縦2行）。配色は共通の AbilityValue（S〜Fランク色）に統一。
+const Stat = ({ label, value, isVel, isSta }) => {
   return (
-    <span className="flex flex-col items-center w-8 flex-shrink-0">
-      <span className="text-[8px] text-gray-600 leading-none">{label}</span>
-      <span className={`text-[11px] leading-none mt-0.5 ${color}`}>{value}</span>
+    <span className="flex flex-col items-center w-9 flex-shrink-0">
+      <span className="text-xs text-gray-300 leading-none truncate w-full text-center">{label}</span>
+      <span className="text-xs leading-none mt-0.5"><AbilityValue value={value} isVel={isVel} isSta={isSta} /></span>
     </span>
   );
 };
@@ -76,60 +77,75 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
     ? (isStarter ? 'スタメン出場中のため変更不可' : 'ベンチ外に移動')
     : (canActivate ? '登録選手に追加' : `登録枠満員（${ACTIVE_LIMIT}名）`);
 
+  // ⚠ **「移動できない」を opacity で表さないこと**。カード全体を薄くすると
+  //    前景も背景も一緒に地色へ寄るので、`opacity-50` で選手名が **2.87:1**、
+  //    先発の黄色い名前が **2.44:1** まで落ちて読めなくなっていた（実測）。
+  //    行は「選手を見比べる情報」なので薄くしてはいけない。
+  //    操作できないことは カーソル・ツールチップ・先発チップ・枠線が担う。
   return (
     <div
       title={tooltip}
       onClick={blocked ? undefined : onClick}
       className={`flex items-center gap-1.5 px-2 py-1.5 rounded border text-xs select-none transition-colors
-        ${blocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
+        ${blocked ? 'cursor-not-allowed' : 'cursor-pointer'}
         ${isActive
-          ? 'bg-gray-800 border-gray-600 ' + (blocked ? '' : 'hover:bg-red-950/60')
-          : 'bg-gray-900 border-gray-700 ' + (blocked ? '' : 'hover:bg-green-950/60')}
+          ? 'bg-surface-2 border-gray-600 ' + (blocked ? '' : 'hover:bg-red-950/60')
+          : 'bg-surface-1 border-gray-700 ' + (blocked ? '' : 'hover:bg-green-950/60')}
         ${isStarter ? 'border-yellow-600/40' : ''}`}
     >
       {/* ポジションバッジ */}
-      <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded text-[10px] font-bold
-        ${isPitcher ? 'bg-blue-700 text-blue-100' : 'bg-emerald-700 text-emerald-100'}`}>
+      {/* ⚠ 色は `POSITION_COLORS` を使う。ここに独自の表を持っていたため、
+          同じ「内野=黄」でも文字色が違い（yellow-100）2.74:1 まで落ちていた */}
+      <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded text-xs font-bold ${
+        POSITION_COLORS[player.position] || POSITION_COLORS.dh
+      }`}>
         {POS_NAMES[player.position] || '?'}
       </span>
 
+      {/* 総合ランク */}
+      <OverallBadge player={player} />
+
+      {/* 背番号 */}
+      {player.number != null && (
+        <span className="w-6 flex-shrink-0 text-right tabular-nums text-xs font-bold text-gray-300">{player.number}</span>
+      )}
       {/* 名前 */}
       <span className={`w-20 flex-shrink-0 font-medium truncate ${isStarter ? 'text-yellow-300' : 'text-white'}`}>
         {player.name}
       </span>
 
       {/* 学年/年齢 */}
-      <span className="text-gray-500 w-6 text-center flex-shrink-0 text-[10px]">{grade}</span>
+      <span className="text-gray-300 w-6 text-center flex-shrink-0 text-xs">{grade}</span>
 
       {/* 先発バッジ */}
-      {isStarter && <span className="text-[9px] text-yellow-500 flex-shrink-0 bg-yellow-950/60 px-1 rounded">先発</span>}
+      {isStarter && <span className="text-xs text-yellow-500 flex-shrink-0 bg-yellow-950/60 px-1 rounded">先発</span>}
 
       {/* 能力値 */}
       <div className="flex items-center flex-1 justify-end">
         {isPitcher ? (
           <>
-            <Stat label="球速" value={player.pitching?.velocity || 0} low={130} high={145} />
-            <Stat label="制球" value={player.pitching?.control || 0} low={40} high={58} />
-            <Stat label="スタ" value={player.pitching?.stamina || 0} low={40} high={60} />
-            <span className="flex flex-col items-center w-8 flex-shrink-0">
-              <span className="text-[8px] text-gray-600 leading-none">変化球</span>
-              <span className="text-[11px] text-gray-300 leading-none mt-0.5">{player.pitching?.arsenal?.length || 0}種</span>
+            <Stat label="球速" value={player.pitching?.velocity || 0} isVel />
+            <Stat label="制球" value={player.pitching?.control || 0} />
+            <Stat label="スタ" value={player.pitching?.stamina || 0} isSta />
+            <span className="flex flex-col items-center w-9 flex-shrink-0">
+              <span className="text-xs text-gray-300 leading-none">変化</span>
+              <span className="text-xs text-gray-300 leading-none mt-0.5 font-bold">{player.pitching?.arsenal?.length || 0}種</span>
             </span>
           </>
         ) : (
           <>
-            <Stat label="ミート" value={player.batting?.meet || 0} low={35} high={52} />
-            <Stat label="パワー" value={player.batting?.power || 0} low={25} high={42} />
-            <Stat label="守備" value={player.fielding?.defense || 0} low={35} high={52} />
-            <Stat label="走力" value={player.physical?.speed || 0} low={30} high={48} />
-            <Stat label="選球眼" value={player.batting?.eye || 0} low={25} high={42} />
+            <Stat label="ミト" value={player.batting?.meet || 0} />
+            <Stat label="パワ" value={player.batting?.power || 0} />
+            <Stat label="走力" value={player.physical?.speed || 0} />
+            <Stat label="肩力" value={player.physical?.arm || 0} />
+            <Stat label="守備" value={player.fielding?.defense || 0} />
           </>
         )}
       </div>
 
       {/* 切替矢印 */}
-      <span className={`flex-shrink-0 font-bold text-[11px] ml-1
-        ${blocked ? 'text-gray-600' : isActive ? 'text-red-400' : 'text-green-400'}`}>
+      <span className={`flex-shrink-0 font-bold text-xs ml-1
+        ${blocked ? 'text-gray-400' : isActive ? 'text-red-400' : 'text-green-400'}`}>
         {isActive ? '▶' : '◀'}
       </span>
     </div>
@@ -147,8 +163,9 @@ const PosStats = ({ activePlayers }) => {
   return (
     <div className="mt-3 grid grid-cols-4 gap-2 text-xs text-center">
       {stats.map(({ label, count }) => (
-        <div key={label} className="bg-gray-800/60 rounded p-2">
-          <div className="text-gray-400">{label}</div>
+        /* ⚠ 半透明だと明るい地の上で薄まり、ラベルが 2.77:1 になる（実測）。不透明に */
+        <div key={label} className="bg-surface-2 rounded p-2">
+          <div className="text-gray-300">{label}</div>
           <div className="text-white font-bold text-base">{count}</div>
         </div>
       ))}
@@ -171,12 +188,17 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   }
 
   const isUniversityMode = gameMode === 'university';
+  ensureTeamJerseyNumbers(team); // 背番号を（未設定なら）割り当て
   const players = team.players || [];
   const lineup = team.lineupSettings?.battingOrder || [];
 
-  // isActive 未初期化なら自動選択
-  if (isUniversityMode && players.length > 0 && players.every(p => p.isActive === undefined)) {
-    autoSelectActive(players);
+  // isActive 未初期化なら自動選択、一部だけundefinedならfalse(ベンチ外)に正規化
+  if (isUniversityMode && players.length > 0) {
+    if (players.every(p => p.isActive === undefined)) {
+      autoSelectActive(players);
+    } else {
+      players.forEach(p => { if (p.isActive === undefined) p.isActive = false; });
+    }
   }
 
   const starterIds = new Set(
@@ -227,45 +249,43 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   const activeGroups = sortAndGroup(activePlayers);
   const inactiveGroups = sortAndGroup(inactivePlayers);
 
+  // ⚠ `LineupSettingScreen` は自前で `ScreenShell` と見出しを持つ。
+  //    ここで枠と H1 を重ねると余白が二重になり、見出しも2つ出る。
   if (!isUniversityMode) {
-    return (
-      <div className="p-4 max-w-7xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-4">スタメン・ロスター管理</h1>
-        <LineupSettingScreen teamName={userTeamName} onBack={null} />
-      </div>
-    );
+    return <LineupSettingScreen teamName={userTeamName} onBack={null} />;
   }
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-white">ロスター・スタメン管理</h1>
-          <p className="text-xs text-gray-400 mt-0.5">大学野球 公式試合ベンチ登録枠：最大 {ACTIVE_LIMIT} 名</p>
-        </div>
-        {activeTab === 'roster' && (
-          <div className="flex items-center gap-3">
+    <ScreenShell>
+      {/* ⚠ ここは手書きの見出しだった（`text-white` / `text-gray-300`）。地色の上に
+          直に載るので実測 **2.18:1 / 1.27:1** ——補足行はほぼ見えていなかった。
+          共有の `ScreenHeader`（`text-ink` 6.53 / `text-ink-sub` 4.51）を使う。
+          ⚠ 登録数のバッジも `bg-*-950/30` の半透明で、明るい地の上では薄まる。不透明に */}
+      <ScreenHeader
+        title="ロスター管理"
+        sub={`大学野球 公式試合ベンチ登録枠：最大 ${ACTIVE_LIMIT} 名`}
+        right={activeTab === 'roster' ? (
+          <>
             <div className={`text-sm font-bold px-3 py-1 rounded border
-              ${isFull ? 'border-red-500 text-red-400 bg-red-950/40' : 'border-green-600 text-green-400 bg-green-950/30'}`}>
+              ${isFull ? 'border-red-500 text-red-300 bg-red-950' : 'border-green-600 text-green-300 bg-green-950'}`}>
               登録 {activePlayers.length} / {ACTIVE_LIMIT} 名
             </div>
             <button
               onClick={handleAutoSelect}
-              className="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded transition-colors"
+              className="btn-primary text-xs px-3 py-1.5 rounded transition-colors"
             >
               AI自動選択
             </button>
-          </div>
-        )}
-      </div>
+          </>
+        ) : null}
+      />
 
       {/* タブ切り替え */}
-      <div className="flex gap-1 bg-gray-800/60 rounded-xl p-1 border border-gray-700/50 mb-4">
+      <div className="flex gap-1 bg-surface-2 rounded-xl p-1 border border-gray-700/50 mb-4">
         <button
           onClick={() => setActiveTab('roster')}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-            activeTab === 'roster' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+            activeTab === 'roster' ? 'seg-on' : 'seg'
           }`}
         >
           📋 ベンチ登録（{activePlayers.length}/{ACTIVE_LIMIT}）
@@ -273,7 +293,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <button
           onClick={() => setActiveTab('lineup')}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-            activeTab === 'lineup' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+            activeTab === 'lineup' ? 'seg-on' : 'seg'
           }`}
         >
           ⚾ スタメン設定
@@ -290,22 +310,22 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <>
           {/* 説明 + 並替 */}
           <div className="flex items-center gap-3 mb-3">
-            <div className="bg-gray-800/70 rounded px-3 py-2 text-xs text-gray-400 flex-1">
+            <div className="bg-surface-2 rounded px-3 py-2 text-xs text-gray-300 flex-1">
               選手をクリックして<span className="text-white font-medium">登録選手 ↔ ベンチ外</span>を切り替えます。
               <span className="text-yellow-400 ml-2">先発</span>表示中は変更不可。
               <span className="ml-3 text-green-400">■</span><span className="ml-0.5">高値</span>
               <span className="ml-2 text-yellow-300">■</span><span className="ml-0.5">平均</span>
-              <span className="ml-2 text-gray-500">■</span><span className="ml-0.5">低値</span>
+              <span className="ml-2 text-gray-400">■</span><span className="ml-0.5">低値</span>
             </div>
-            <div className="flex items-center gap-1 flex-shrink-0 bg-gray-800/70 rounded px-2 py-1.5">
-              <span className="text-[10px] text-gray-500 mr-1">並替:</span>
+            <div className="flex items-center gap-1 flex-shrink-0 bg-surface-2 rounded px-2 py-1.5">
+              <span className="text-xs text-gray-400 mr-1">並替:</span>
               {[
                 { key: 'position', label: 'ポジション' },
                 { key: 'score',    label: 'スコア順' },
                 { key: 'year',     label: '学年順' },
               ].map(s => (
                 <button key={s.key} onClick={() => setSortMode(s.key)}
-                  className={`text-[10px] px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                  className={`text-xs px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'seg-on' : 'seg'}`}>
                   {s.label}
                 </button>
               ))}
@@ -319,20 +339,20 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-white">
                   登録選手
-                  <span className={`ml-1.5 ${isFull ? 'text-red-400' : 'text-gray-400'}`}>
+                  <span className={`ml-1.5 ${isFull ? 'text-red-400' : 'text-gray-300'}`}>
                     ({activePlayers.length}/{ACTIVE_LIMIT})
                   </span>
                 </h2>
-                {isFull && <span className="text-[10px] text-red-400 font-bold">満員</span>}
+                {isFull && <span className="text-xs text-red-400 font-bold">満員</span>}
               </div>
 
               <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
                 {activeGroups.length === 0
-                  ? <p className="text-gray-500 text-xs text-center py-8">登録選手なし</p>
+                  ? <p className="text-gray-400 text-xs text-center py-8">登録選手なし</p>
                   : activeGroups.map(({ pos, players: ps }, i) => (
                     <div key={pos || i}>
                       {pos && (
-                        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-0.5 px-1">
+                        <div className="text-xs font-bold text-gray-300 tracking-wider mb-0.5 px-1">
                           {POS_LABEL[pos] || pos}（{ps.length}）
                         </div>
                       )}
@@ -353,20 +373,20 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-white">
                   ベンチ外
-                  <span className="ml-1.5 text-gray-400">({inactivePlayers.length}名)</span>
+                  <span className="ml-1.5 text-gray-300">({inactivePlayers.length}名)</span>
                 </h2>
-                {isFull && <span className="text-[10px] text-gray-500">枠が満員のため追加不可</span>}
+                {isFull && <span className="text-xs text-gray-400">枠が満員のため追加不可</span>}
               </div>
 
               <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
                 {inactiveGroups.length === 0
-                  ? <p className="text-gray-500 text-xs text-center py-8">
+                  ? <p className="text-gray-400 text-xs text-center py-8">
                       {players.length <= ACTIVE_LIMIT ? '全員が登録済み' : 'ベンチ外なし'}
                     </p>
                   : inactiveGroups.map(({ pos, players: ps }, i) => (
                     <div key={pos || i}>
                       {pos && (
-                        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-0.5 px-1">
+                        <div className="text-xs font-bold text-gray-300 tracking-wider mb-0.5 px-1">
                           {POS_LABEL[pos] || pos}（{ps.length}）
                         </div>
                       )}
@@ -386,7 +406,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
           <PosStats activePlayers={activePlayers} />
         </>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

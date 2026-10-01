@@ -27,16 +27,11 @@ export const CONDITION_COLORS = {
   [CONDITION_LEVELS.GOOD]: 'text-orange-400',
   [CONDITION_LEVELS.NORMAL]: 'text-yellow-300',
   [CONDITION_LEVELS.BAD]: 'text-blue-400',
-  [CONDITION_LEVELS.WORST]: 'text-blue-700'
+  // ⚠ `text-blue-700` は暗いカードの上で **1.3:1** で見えなかった。冷たい側の
+  //    階調は保ったまま読める色にする（indigo-400 は 4.36:1）
+  [CONDITION_LEVELS.WORST]: 'text-indigo-400'
 };
 
-export const CONDITION_BG_COLORS = {
-  [CONDITION_LEVELS.BEST]: 'bg-red-500',
-  [CONDITION_LEVELS.GOOD]: 'bg-orange-400',
-  [CONDITION_LEVELS.NORMAL]: 'bg-yellow-300',
-  [CONDITION_LEVELS.BAD]: 'bg-blue-400',
-  [CONDITION_LEVELS.WORST]: 'bg-blue-700'
-};
 
 export const CONDITION_ICONS = {
   [CONDITION_LEVELS.BEST]: '🔥',
@@ -46,14 +41,43 @@ export const CONDITION_ICONS = {
   [CONDITION_LEVELS.WORST]: '😰'
 };
 
-// 打撃への影響（ミート・パワー）
+// 打撃への影響。選球眼は対象外。
+//
+// ⚠ **ミートとパワーで幅が違う**。1つの表に2つの値を持たせてあるので、
+//    表を2枚に分けないこと（片方だけ直す事故になる）。
+//
+// ⚠ **リーグ平均は動かない**。分布(10/15/50/15/10)も補正も対称なので平均0。
+//    実測でも ±5 / ±8 / ±10 / ±12 のどれでもリーグの打率 .2441〜.2449 /
+//    防御率 3.57〜3.63 と誤差内に収まる。動くのは**個人の振れ幅だけ**。
+//
+// ⚠ **幅は「同じ条件に固定したリーグ」で測ること**。実戦では毎日引き直されて
+//    シーズンでは均されるので、通常のリーグ集計では差が見えない。
+//    全打者を同じコンディションに固定して回した実測:
+//
+//      設定              絶不調 → 普通 → 絶好調   打率の幅  長打率の幅  本塁打の比
+//      ミ±5  パ±5 (旧)   .227    .241   .264      37pt       94pt       —
+//      ミ±10 パ±10       .207    .244   .296      89pt      243pt      6.0倍
+//      ミ±10 パ±5  (現)  .214    .244   .280      66pt      160pt      3.0倍
+//
+// ⚠ **パワーはミートより激しく効く**。本塁打がパワーに対して凸なので、
+//    両方を ±10 にすると長打率が .252 → .495 と倍近く振れ、本塁打が6倍出た。
+//    **ミートだけ広げ、パワーは ±5 のまま**にしてある。
+//
+// ⚠ **打率の幅はミートだけでは決まらない**。パワーを据え置くと打率の幅も
+//    89pt → 66pt に縮む（強い打球はヒットにもなるため）。片方だけ動かすときは
+//    打率と長打率の両方を測ること。
 export const CONDITION_BATTING_MODIFIER = {
-  [CONDITION_LEVELS.BEST]: 5,
-  [CONDITION_LEVELS.GOOD]: 2,
-  [CONDITION_LEVELS.NORMAL]: 0,
-  [CONDITION_LEVELS.BAD]: -2,
-  [CONDITION_LEVELS.WORST]: -5
+  [CONDITION_LEVELS.BEST]:   { meet:  10, power:  5 },
+  [CONDITION_LEVELS.GOOD]:   { meet:   4, power:  2 },
+  [CONDITION_LEVELS.NORMAL]: { meet:   0, power:  0 },
+  [CONDITION_LEVELS.BAD]:    { meet:  -4, power: -2 },
+  [CONDITION_LEVELS.WORST]:  { meet: -10, power: -5 }
 };
+
+/** コンディションから打撃補正 { meet, power } を引く。未設定は「普通」扱い */
+export const conditionBattingMod = (condition) =>
+  CONDITION_BATTING_MODIFIER[condition ?? CONDITION_LEVELS.NORMAL]
+  || CONDITION_BATTING_MODIFIER[CONDITION_LEVELS.NORMAL];
 
 // 投手への影響（制球）
 export const CONDITION_PITCHING_MODIFIER = {
@@ -184,27 +208,4 @@ export const initializeAllPlayersCondition = () => {
   });
 };
 
-/**
- * コンディションを考慮した打撃能力値を取得
- * @param {Object} player - 選手オブジェクト
- * @returns {Object} { meet, power } コンディション補正済み
- */
-export const getConditionAdjustedBatting = (player) => {
-  const condition = player.condition ?? CONDITION_LEVELS.NORMAL;
-  const mod = CONDITION_BATTING_MODIFIER[condition] || 0;
-  return {
-    meet: (player.batting?.meet || 50) + mod,
-    power: (player.batting?.power || 50) + mod
-  };
-};
 
-/**
- * コンディションを考慮した制球能力値を取得
- * @param {Object} player - 選手オブジェクト
- * @returns {number} コンディション補正済み制球値
- */
-export const getConditionAdjustedControl = (player) => {
-  const condition = player.condition ?? CONDITION_LEVELS.NORMAL;
-  const mod = CONDITION_PITCHING_MODIFIER[condition] || 0;
-  return (player.pitching?.control || 50) + mod;
-};

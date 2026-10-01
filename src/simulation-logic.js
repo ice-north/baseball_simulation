@@ -3,6 +3,149 @@
 // 野球シミュレーションの物理計算と判定ロジック
 // ============================================================
 import { PITCHING_FORM_EFFECTS } from './utils/constants.js';
+import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop, isUnreadablePitch, KNUCKLE_TIMING } from './utils/constants.js';
+
+// ============================================================
+// 球種の効果を物理エンジンへ繋ぐ係数（BALL_EFFECTS → 物理）
+//
+// ⚠ **打球初速や打出し角の分布を広げたら必ず測り直すこと**。
+// 段階②で EV のσが約1.7倍・打出し角の範囲も広がったため、
+// 同じ絶対値の補正では相対的な効きが薄まり、**球種ごとの性格
+// （ゴロ系は本塁打を抑える／空振り系は三振を取る）がほぼ消えていた**。
+//   実測（旧係数）: 三振率 19.2〜20.0% / 本塁打 0.638〜0.691 と
+//   whiffBonus が -0.05〜+0.10 も違うのに差が出ていなかった。
+// ============================================================
+// 【曲がりの効き】実際の変化量は **回転数 ÷ 球速** に比例するので物理的には
+// 遅いほど曲がる。しかし遅すぎると打者に見極める時間ができるので、
+// 打者にとっての実効的な効きは **130km/h 付近が頂点**になる。
+// 速球（150km+）は曲がりきる前に到達し、超スローボールは曲がっても見える。
+const BREAK_PEAK = 130;
+export const breakEfficiency = (v) =>
+  Math.max(0.60, 1.18 - ((v - BREAK_PEAK) / 50) ** 2 * 0.58);
+
+// 【ナックルは遅くても効きが落ちない】（`pitchBreakEfficiency`）
+// 上の「遅すぎると曲がりが見える」は**回転で曲がる球**の話。ナックルは回転を殺して
+// 不規則に揺れる球で、打者が長く見られても行き先は読めない（`UNREADABLE_PITCHES`）。
+// そのため**頂点より遅い側では効きを落とさない**。速すぎる側（揺れる前に届く）は同じ。
+// ⚠ かつては球速100km/hの投手のナックルが到達70〜79km/hで効きが下限0.60まで落ち、
+//    145km/hの投手のナックル（1.13）の半分しか揺れなかった。ナックルへの転向で
+//    得をするのが**速い投手と遅い投手で同じ**（防御率 -1.0 前後）になり、
+//    「遅いから転向する」という現実の因果が出ていなかった
+// ⚠ 捕手の球種スコア（`pitchCalling.scoreBall`）も**この関数**を使うこと。
+//    物理と捕手の物差しが違うと、効いていない球を要求する
+export const pitchBreakEfficiency = (type, v) =>
+  (isUnreadablePitch(type) && v < BREAK_PEAK) ? breakEfficiency(BREAK_PEAK) : breakEfficiency(v);
+
+// 【速球の空振りは球速そのもので決まる】
+// `BALL_EFFECTS.whiffBonus` は「変化による欺き」なのでストレートは 0 だが、
+// 実際のフォーシームは球速で空振りを取る（実MLB: 145km→18% / 153km→24% /
+// 161km→30%。平均22%はこれを均した値）。旧実装は球速→タイミング窓の経路しか
+// なく、実測でストレートの空振り率が 12.6%（実22%）しか出ていなかった。
+// 142km/h を境に、速ければ空振りが増え、遅ければ当てられやすくなる。
+const FASTBALL_WHIFF_REF = 138;
+const FASTBALL_WHIFF_W = 0.0060;
+const FASTBALL_TYPES = new Set(['straight']);
+
+// 【遅い球は「時間をくれる球」ではない】
+// 基準のタイミング窓は `1000 / (球速/3.6)` なので、**遅い球ほど窓が広い**。
+// これは球速を知っている打者には正しいが、打者は投手の速球にタイミングを
+// 合わせて振り出すので、遅い球は「余裕ができる」のではなく **早く振ってしまう**。
+// 旧実装はこの経路が無く、空振り率の順位が到達球速でほぼ決まっていた:
+//   スプリッター(到達134) 21.5% > スライダー(129) 18.8% > フォーク(125) 15.8%
+//   …3つとも whiffBonus は同じ 0.09。カーブ(120) 6.6% / チェンジアップ(121) 7.0% と、
+//   **遅さが武器の球ほど損をする**逆転が起きていた（実MLBはどちらも31%）。
+// 速球からの落差そのものを欺きとして窓に効かせ、この handicap を打ち消す。
+//
+// ⚠ **落差は「km/h」ではなく「その投手の速球に対する比」で効かせること**。
+// 窓は 1/球速 に比例するので、打ち消すのに必要な量は投手の球速に依存する
+// （速球140kmなら 1km あたり 1/140、122km なら 1/122）。絶対値の係数にすると
+// 独立リーグ（速球122km）で打ち消し切れず、カーブ・チェンジアップだけ
+// 空振りが取れないままだった。1.0 = ちょうど相殺 ＝「タイミングの持ち時間は
+// 実際の球速ではなく、打者が身構えている速球で決まる」。
+const OFFSPEED_WHIFF_K = 1.0;
+
+// 【球の出どころ】成瀬善久のように球速も決め球も無いのに打たれない投手がいる。
+// 球持ちが長く、体の陰から腕が出るのでリリースが見えない＝打者の反応が遅れる。
+// `deception` は名前+IDから決定的に導出する（src/game/deception.js）。
+// ⚠ ここは**球速と同じ効果**（反応時間を削る）。球速と違うのは「球種・コースを
+// 見分けにくくする」方で、そちらは `guessSuccessRate` に入れてある。
+// 窓は 1/球速 に比例するので、**遅い投手ほど同じ割合でも削れる ms が大きい**。
+// これが「遅いのに打ちにくい」を成立させる。
+// 較正: deception 20→80（実測レンジのほぼ両端）で K/9 +0.82 ± 0.05 /
+// 防御率 -0.17 ± 0.05。捕手のリード(18→81 で -0.35)の半分ほどの重みにしてある。
+const DECEPTION_W = 0.18;
+
+// ============================================================
+// 【回転数(spinRate)】直球に大きく・変化球に少し
+//
+// ⚠ 旧実装は直球 0.36 / 変化球 0.38 で、**変化球のほうが回転の恩恵が大きかった**。
+// spinVelocityBoost（遅い球ほど増幅）まで乗るので実測はさらに開いていた:
+//   回転0→100の空振り率の伸び ストレート+23.3pt に対し
+//   カーブ+31.8 / チェンジアップ+31.3 / フォーク+28.6 / スライダー+27.6pt。
+// 「伸びのあるストレート」という能力の位置づけと逆になっていたので、
+// 直接項は直球に寄せ、変化球へは **実効変化量**（下）という別経路で少しだけ渡す。
+//
+// ⚠ 生成される回転数は**中央値38・p5=19・p95=71 と 50 より下に寄っている**ので、
+// 直球側の係数を上げるとリーグの大多数は「罰を受ける側」で効きが強まる。
+// 打高へ振れていないかは必ずシーズンで確認すること（spin-probe / season-check）。
+// 実測ではリーグ集計はシード間のブレ（防御率で±0.25）の内側に収まっている。
+const SPIN_FASTBALL_W = 0.48;   // 直球系: ホップ成分そのもの。回転数の主戦場
+const SPIN_BREAKING_W = 0.14;   // 変化球: 直接項は控えめ（本体は実効変化量経由）
+const SPIN_BREAK_LEVEL_W = 0.16; // 実効変化量: 回転100で +8 / 回転0で -8
+
+// 回転が「球の動き」そのものを作る球種。
+// ⚠ FASTBALL_TYPES（球速で空振りを取る球）とは目的が違う別の集合。
+// ツーシームは球速で空振りを取る球ではないが、動きは回転で決まるのでこちらには入る。
+const SPIN_FASTBALL_TYPES = new Set(['straight', 'twoSeam']);
+export const isSpinFastball = (pitchType) => SPIN_FASTBALL_TYPES.has(pitchType);
+
+/**
+ * 回転数を織り込んだ変化球の「実効変化量」。
+ * 回転を掛けられる投手は変化球の変化量も少し大きくなる（直球ほどではない）。
+ *
+ * ⚠ **呼び出し側で一度だけ掛けること**。物理エンジンは受け取った `pitch.level` を
+ *    そのまま使う（内部では補正しない）。両エンジンとも投球を選ぶ前に
+ *    `spinAdjustedArsenal()` でアーセナル全体に一度掛けてあるので、
+ *    球速減(pitchVelocityDrop)・コース・スイング判断・物理エンジンの
+ *    すべてが同じ実効変化量で揃う。個別に掛け直すと二重適用になる。
+ */
+export const getEffectiveBreakLevel = (pitchType, level, spinRate) => {
+  const lv = level ?? 50;
+  if (isSpinFastball(pitchType)) return lv;
+  return Math.max(1, Math.min(100, Math.round(lv + ((spinRate ?? 50) - 50) * SPIN_BREAK_LEVEL_W)));
+};
+
+/** アーセナル全体の変化量を実効値へ差し替えた配列を返す（元配列は変更しない） */
+export const spinAdjustedArsenal = (arsenal, spinRate) =>
+  (arsenal || []).map((a) => ({ ...a, level: getEffectiveBreakLevel(a.type, a.level, spinRate) }));
+
+const BALL_WHIFF_W = 2.2;   // 空振り: タイミング窓を狭める強さ
+const BALL_WEAK_W = 46;     // 凡打誘発: 打球初速を落とす km/h 係数
+const BALL_GB_W = 58;       // ゴロ誘発: 打出し角を下げる度数係数
+
+// ============================================================
+// 打球初速（Exit Velocity）— **実データと同じ km/h スケール**
+//
+// 飛距離の式 `carryBase = (EV - 75) × 1.1 + 28` は実測に合わせて較正されている
+// （EV153→114m / EV161→123m は実際の 95mph→113m / 100mph→122m と一致）。
+// つまりEVは実物の単位なのに、旧係数では中央値が128km/hしか出ておらず
+// （実MLB 145km/h）、ハードヒット率(153km+)が **1.8%**（実35-40%）だった。
+//
+// **それでも本塁打率が合っていたのは、バレル帯(26-34度)に入る打球が
+// 18.7%（実MLB 約13%）と多かったため**。「そこまで強くない当たりが完璧な角度で
+// 入る」ことで帳尻が合っていた（本作の本塁打の平均初速147km/h。実MLB 166km/h）。
+//
+// 実測のmeetQuality分布に対して分位が実データと一致するよう当てはめた値。
+// **バレル帯の割合（calculateLaunchAngle）とセットで較正すること**。
+// 片方だけ動かすと本塁打が激変する。
+//   分位 5% 105 / 25% 125 / 中央 143 / 75% 160 / 95% 177（実 103/126/145/161/175）
+// ============================================================
+const EV_PTR = 1.20;           // パワー伝達効率の指数。大きいほど「崩されると飛ばない」
+const EV_SWEET = 33;           // 芯を捉えたときのミート由来の上乗せ
+const EV_BASE = 86;            // 当たっただけの打球の下限あたり
+const EV_POWER = 0.31;         // パワーの寄与（伝達効率が掛かる）
+const EV_QUALITY = 37;         // 芯品質そのものの寄与
+const EV_QUALITY_POWER = 0.38; // 芯品質 × パワーの寄与
 
 /**
  * 物理衝突モデルによるコンタクト計算
@@ -29,19 +172,42 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // ★修正: 係数は投手の「素の球速」で連続的に決定
   const basePitcherVelocity = pitcher.velocity;
   const clampedVel = Math.max(120, Math.min(165, basePitcherVelocity));
-  const windowCoef = 0.40 - (clampedVel - 120) * 0.00511;
+  // 基準係数 0.42。**一連のコースシステム（段階1〜8）で捕手が段階的に賢くなり、
+  // その累積で打者が不利になったぶんを戻す再較正**。
+  // 弱点狙い・場面別の目的・球種に合ったコース要求…はどれも「捕手が良い仕事を
+  // する」方向なので、全捕手が行うぶんリーグ全体が投手寄りに寄っていた。
+  //   0.40 のまま: 打率.2334 / 三振23.5% / 失点3.46（三振が実データ帯19-22%を超過）
+  //   0.42:        打率.2386 / 三振21.9% / 失点3.69（実NPB 失点3.70 に一致）
+  // 打者個々の能力ではなく物理の基準を動かしているので、能力の相対関係は不変。
+  const coefFor = (v) => 0.42 - (Math.max(120, Math.min(165, v)) - 120) * 0.00511;
+  const windowCoef = coefFor(basePitcherVelocity);
 
   // 窓の計算は実際の球速で（速い変化球は打ちにくい）
   let timingWindow = (1000 / (pitchVelocity / 3.6)) * windowCoef;
+
+  // ナックルは揺れで打ち損じさせる球なので、遅いことがそのまま当てやすさにならない。
+  // 窓を「基準の投手（素の球速 refFastball）が投げたナックル」の窓へ indep の割合だけ寄せる。
+  // ⚠ 以前は球速100km/hの投手がナックルに転向しても、ストレートだけの投手と同じだけ
+  //    遅さに罰せられ（防御率の差 100km と 145km で 0.75 ずつ）、「遅いから転向する」が出なかった
+  if (isUnreadablePitch(pitch.type) && KNUCKLE_TIMING.indep > 0) {
+    const ref = KNUCKLE_TIMING.refFastball;
+    const refWindow = (1000 / ((ref - pitchVelocityDrop(pitch.type, pitch.level ?? 50)) / 3.6)) * coefFor(ref);
+    timingWindow *= (refWindow / timingWindow) ** KNUCKLE_TIMING.indep;
+  }
 
   // ミート窓ボーナス（ミート力が高いと窓が広がる）
   const meetBonus = (batter.meet / 100) * 0.20;  // 最大+20%（打率+0.5割相当の強化）
   timingWindow *= (1 + meetBonus);
 
-  // 読みが当たれば窓が広がる（準備ができている）
-  if (isGuessRight) {
-    timingWindow *= 1.3;  // ×1.3
-  }
+  // 読みが当たれば窓が広がる（準備ができている）。
+  // **球種とコースの両方を張り当てると別格**（1つ=×1.30 / 両方=×1.50）。
+  // 采配モードでプレイヤーが張って外した場合は負の値が来る（×0.84）。
+  // 旧来の boolean もそのまま「1つ的中」として動く。
+  const guessLevel = isGuessRight === true ? 1 : (Number(isGuessRight) || 0);
+  if (guessLevel >= 2) timingWindow *= 1.50;
+  else if (guessLevel >= 1) timingWindow *= 1.30;
+  else if (guessLevel <= -2) timingWindow *= 0.72;   // 球種もコースも張り外し
+  else if (guessLevel <= -1) timingWindow *= 0.84;   // どちらかを張り外し
 
   // ミート力による「緩急・変化球への耐性」
   // ミートが高い打者はタイミングを外されにくい（最大50%軽減）
@@ -54,23 +220,62 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
 
   // 変化球はさらに窓を狭める（軌道予測が難しい、レベルが高いほど曲がる）
   // ミート高打者は変化球にも対応しやすい
+  //
+  // ⚠ ここは**球種を問わない一律の項**なので、大きくすると `whiffBonus` の
+  // 性格を薄めてしまう。0.18 だったころは詰まらせる球（シンカー・シュート・
+  // カッター、実MLBの空振りは 15〜25% でストレート 22% と同等以下）まで
+  // ストレートより空振りが増えていた。**性格は whiffBonus に持たせ、
+  // ここは「ストレートでない」ことの最小限の取り分だけにする**。
   if (pitch.type !== 'straight' && pitch.level) {
-    const breakingBallPenalty = (pitch.level / 100) * 0.18 * (1 - meetDeceptionResistance);  // 最大18%
+    const breakingBallPenalty = (pitch.level / 100) * 0.06 * (1 - meetDeceptionResistance);
     timingWindow *= (1 - breakingBallPenalty);
+  }
+
+  // 球種固有の空振り性能（BALL_EFFECTS.whiffBonus）。
+  // 従来この値は捕手の球種選択スコアでしか使われておらず、物理エンジンは
+  // 読んでいなかった。そのため「スライダーは空振りが取れる」という設定が
+  // 結果に一切反映されず、球種はレベルと球速差でしか差が出ていなかった。
+  // 速球は球速が上がるほど空振りが取れる（遅ければ逆に当てられる）
+  if (FASTBALL_TYPES.has(pitch.type)) {
+    const fw = (pitchVelocity - FASTBALL_WHIFF_REF) * FASTBALL_WHIFF_W;
+    timingWindow *= (1 - fw * (1 - meetDeceptionResistance));
+  }
+
+  // ⚠ 落差は**球種自身の減速量**から取る。`pitcher.velocity - pitch.velocity` で
+  // 引き算すると、2エンジンで `pitcher.velocity` の意味が違う
+  // （自動シミュ=スタミナ補正後 / 采配モード=素の値）ため揃わない。
+  // 采配モードでは疲れたアンダースローのストレートまで「大きな緩急」に化ける。
+  // `pitchVelocityDrop` は両エンジンが実際の球速を出すのに使っている当の関数。
+  const typeDrop = pitchVelocityDrop(pitch.type, pitch.level ?? 50);
+  if (typeDrop > 0) {
+    const drop = typeDrop / Math.max(80, pitchVelocity + typeDrop);
+    timingWindow *= (1 - drop * OFFSPEED_WHIFF_K * (1 - meetDeceptionResistance));
+  }
+
+  // 出どころの見づらさ。ミートの高い打者は騙されにくい（他の欺きと同じ扱い）
+  if (pitcher.deception) {
+    timingWindow *= (1 - pitcher.deception * DECEPTION_W * (1 - meetDeceptionResistance));
+  }
+
+  const ballEffect = BALL_EFFECTS[pitch.type];
+  if (ballEffect && pitch.level) {
+    const lv = pitch.level / 100;
+    // ツーシームのように whiffBonus が負の球種は逆に当てやすくなる
+    timingWindow *= (1 - (ballEffect.whiffBonus || 0) * BALL_WHIFF_W * lv
+      * pitchBreakEfficiency(pitch.type, pitchVelocity) * formPitchBonus(pitcher.form, pitch.type)
+      * (1 - meetDeceptionResistance));
   }
 
   // 回転数によるタイミング窓補正（MLB Statcast準拠）
   // 高回転ストレート: ホップ成分が大きく打者の予測軌道とズレる → 空振り増
-  // 高回転変化球: 変化量が大きく軌道予測が困難 → 空振り増
+  // 変化球: ここでの直接項は控えめ。実効変化量(getEffectiveBreakLevel)からも入るが、
+  //         ⚠ **量としてはこの直接項が主**（実測: 回転20→95 の空振り +8.6pt のうち
+  //         実効変化量経由は 1.0pt ＝ 12%）。実効変化量の値打ちは空振りより
+  //         制球・球速差・釣り球など「変化量が上がる」こと全体に効く点にある
   const spinRate = pitcher.spinRate ?? 50;
   if (spinRate !== 50) {
     const spinDeviation = (spinRate - 50) / 100;
-    let spinEffect;
-    if (pitch.type === 'straight' || pitch.type === 'twoSeam') {
-      spinEffect = spinDeviation * 0.36;
-    } else {
-      spinEffect = spinDeviation * 0.38;
-    }
+    let spinEffect = spinDeviation * (isSpinFastball(pitch.type) ? SPIN_FASTBALL_W : SPIN_BREAKING_W);
     // 遅い球は滞空時間が長く、回転による変化量が増幅される
     const spinVelocityBoost = 1 + Math.max(0, (150 - pitchVelocity) / 50);
     spinEffect *= spinVelocityBoost;
@@ -120,17 +325,17 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   if (isContact) {
     // 【パワー伝達効率】タイミングを外されるとパワーが打球に乗らない
     // 泳がされ・詰まり時はフルスイングできず、パワーが活きない
-    // meetQuality=1.0 → 100%, 0.5 → 66%, 0.2 → 38%, 0.02 → 11%
-    const powerTransferRate = Math.pow(meetQuality, 0.6);
+    // meetQuality=1.0 → 100%, 0.5 → 44%, 0.2 → 15%, 0.02 → 1%
+    const powerTransferRate = Math.pow(meetQuality, EV_PTR);
 
     // 基本初速: パワーが主体、ミートは芯を捉えた時に大きく寄与
-    // sweetSpotBonus: ミート100で完璧な芯を捉えた時に最大+18km/h
+    // sweetSpotBonus: ミート100で完璧な芯を捉えた時に最大+33km/h
     // → ミート打者が長打圏EVに到達する唯一の経路
-    const sweetSpotBonus = (batter.meet / 100) * Math.pow(meetQuality, 1.5) * 18;
-    const baseVelocity = 90 + (batter.power * 0.17 * powerTransferRate) + sweetSpotBonus;
+    const sweetSpotBonus = (batter.meet / 100) * Math.pow(meetQuality, 1.5) * EV_SWEET;
+    const baseVelocity = EV_BASE + (batter.power * EV_POWER * powerTransferRate) + sweetSpotBonus;
 
     // ミート品質ボーナス: パワー主体
-    const qualityBonus = meetQuality * (30 + batter.power * 0.17);
+    const qualityBonus = meetQuality * (EV_QUALITY + batter.power * EV_QUALITY_POWER);
 
     // 投球速度の反発ボーナス: 最大+15km/h
     // 詰まった打球には反発も乗らない
@@ -138,11 +343,22 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
 
     exitVelocity = baseVelocity + qualityBonus + pitchBonus;
 
+    // 球種固有の凡打誘発（BALL_EFFECTS.weakBonus）。
+    // シンカー/シュート(0.23)のような手元で動く球は打球が弱くなる。
+    // 芯を捉えられた時ほど影響は小さい（差し込まれるから弱くなる）。
+    const weakEff = BALL_EFFECTS[pitch.type];
+    if (weakEff && pitch.level) {
+      const weakness = (weakEff.weakBonus || 0) * (pitch.level / 100)
+        * pitchBreakEfficiency(pitch.type, pitchVelocity) * formPitchBonus(pitcher.form, pitch.type)
+        * (1 - meetQuality * 0.5);
+      exitVelocity -= weakness * BALL_WEAK_W;
+    }
+
     // ランダム要素（±5km/h）
     exitVelocity += (Math.random() * 10 - 5);
 
-    // 現実的な範囲に制限: 70-175km/h
-    exitVelocity = Math.max(70, Math.min(175, exitVelocity));
+    // 現実的な範囲に制限: 70-190km/h（実MLBの最大は約190km/h）
+    exitVelocity = Math.max(70, Math.min(190, exitVelocity));
   }
 
   return {
@@ -180,29 +396,48 @@ export const getTunnelingEffect = (lastPitch, currentPitch, catcherLead) => {
 /**
  * 打出し角度の計算（コンタクト品質から）
  */
+// 芯を捉えた打球のうちバレル帯(26-34度)に入る割合。
+// **打球初速(EV_*)とセットで較正すること**。EVを上げると本塁打が増えるので、
+// ここを下げて戻す。実MLBの全打球に占めるバレル帯の割合は約13%。
+// NPB公認球の飛距離係数（MLB球=1.0）
+export const NPB_CARRY = 0.94;
+
+const BARREL_SHARE = 0.26;
+// バレル帯の下端と幅。**狭いとフライが最適角に密集して本塁打が増える**。
+// 実データのフライ(25-50度)のうち26-34度に入るのは約35%だが、
+// 26-34度に決め打ちすると本作では56%が集中していた。
+const BARREL_LO = 24;
+const BARREL_W = 15;
+
 export const calculateLaunchAngle = (meetQuality, batter) => {
+  // 打出し角度は「バットのどこに当たったか（上下方向）」で決まり、タイミングの良さとは
+  // 半ば独立している。芯を捉えても上を叩けばゴロになるため、どの品質帯でも広い分布を持たせる。
+  // 分布は実際の野球（ゴロ44% / ライナー21% / フライ30% / ポップ5%）に較正済み。
+  // ※旧実装は meetQuality>0.8 を全てバレル(25-35度)にしていたため、フライが55%まで
+  //   膨らみ、ゴロが23%しか出ず内野に打球が飛ばない状態になっていた。
   let baseLaunchAngle;
 
   if (meetQuality > 0.8) {
-    // 完璧なコンタクト: バレルゾーン（25-35度）
-    baseLaunchAngle = 25 + Math.random() * 10;
+    // 芯を捉えた打球: 一部がバレル帯、残りは上下のズレでゴロ〜高いフライに散る。
+    // ⚠ 上端は**必ず45度以上まで伸ばす**こと。以前は 32度で頭打ちだったため
+    // 「飛距離の出ない高いフライ(40-50度)」がほとんど存在せず、フライが全部
+    // 最適角に密集して本塁打が実データの3倍出ていた。
+    baseLaunchAngle = Math.random() < BARREL_SHARE
+      ? BARREL_LO + Math.random() * BARREL_W   // バレル帯
+      : -18 + Math.random() * 62;  // 強いゴロ〜高いフライ
   } else if (meetQuality > 0.6) {
-    // 高品質: ライナー中心だが硬いゴロも出る（NPB準拠）
-    if (Math.random() < 0.30) {
-      baseLaunchAngle = -5 + Math.random() * 15;  // 硬いゴロ〜低いライナー
-    } else {
-      baseLaunchAngle = 10 + Math.random() * 30;  // ライナー〜フライ
-    }
+    // 高品質: ゴロとライナー〜フライが半々
+    baseLaunchAngle = Math.random() < 0.50
+      ? -10 + Math.random() * 23   // 硬いゴロ〜低いライナー
+      : -6 + Math.random() * 50;   // ライナー〜高いフライ
   } else if (meetQuality > 0.4) {
-    // 中品質: 幅広い分布（-10〜50度、ゴロ寄り）
-    baseLaunchAngle = -10 + Math.random() * 60;
+    // 中品質: 幅広い分布（ゴロ寄り）
+    baseLaunchAngle = -14 + Math.random() * 72;
   } else {
-    // 低品質: ポップフライかボテボテ
-    if (Math.random() < 0.5) {
-      baseLaunchAngle = -15 + Math.random() * 20;  // ボテボテゴロ
-    } else {
-      baseLaunchAngle = 55 + Math.random() * 30;  // ポップフライ
-    }
+    // 低品質: ボテボテゴロが主、残りはポップフライ
+    baseLaunchAngle = Math.random() < 0.42
+      ? -18 + Math.random() * 26   // ボテボテゴロ
+      : 50 + Math.random() * 35;   // ポップフライ
   }
 
   // パワー打者は角度がつきやすい傾向
@@ -228,13 +463,67 @@ export const getSpinRateAngleAdjust = (pitchType, spinRate) => {
 /**
  * 物理エンジン：打球パラメータの計算
  */
-export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult) => {
+// ============================================================
+// 投球コース → 打球傾向（25分割グリッド 段階5）
+//
+//   内角 → 引っ張り / 外角 → 流し打ち（バットが出る位置で打球方向が決まる）
+//   低め → ゴロ     / 高め → フライ  （スイング平面と球の高さの関係）
+//
+// **打者から見た向きで効かせる**（col 4 = その打者にとっての内角）。
+// 引っ張り方向は右打者=三塁側(負)・左打者=一塁側(正)なので `batSide` で反転する。
+//
+// 中心値は「打球になった投球」の平均コース。ここがずれるとリーグ全体の
+// ゴロ率・引っ張り率が動いてしまう（打球種別は較正済みの数字）。
+// **実測すると両方ほぼ0だった**（13048打球で colAxis -0.001 / rowAxis +0.009）。
+// 誘い球は外角低めに偏っているが、そもそも打球になりにくいので効いてこない。
+// 誘い球の配分や弱点狙いを変えたときは測り直すこと。
+const LOC_COL_MEAN = 0.00;
+const LOC_ROW_MEAN = 0.01;
+// 球速そのものによる方向のずれ（度/km/h）。142km/hを基準に、速いほど流し打ち。
+// 実MLBの球種間の引っ張り率差（約6pt）に合わせて 0.67 → 0.15 へ下げた。
+const VEL_DIR = 0.15;
+// 打者は基本的に引っ張る（バットの軌道が前で最速になる）。
+// 旧モデルはこれを velShift の係数に混ぜ込んでいたため、係数を実データに
+// 合わせて下げるとリーグ全体の引っ張り率まで 44.8%→28.2% に落ちてしまった。
+// **「球種による差」と「そもそも引っ張り気味」は別の要素**なので分けて持つ。
+const PULL_BASE = 6.0;
+// **前の球からの速度差**による方向のずれ（度/km/h）。
+// 速球→遅球で早く振り出して引っ張り、遅球→速球で振り遅れて流す。
+// 絶対球速より効きを強くしてある（タイミングは相対的なものなので）。
+const SEQ_DIR = 0.22;
+
+// 内角/外角いっぱいで±8度。11度では内外角の引っ張り率の差が **39.6pt** あり、
+// 実MLBの約30ptに対して効きすぎていた（8度で 29.7pt）。
+const LOC_PULL_DEG = 8;
+// 高め/低めいっぱいで±7.5度。5度ではゴロ率の差が **14.0pt** しかなく、
+// 実MLBの約22ptに届いていなかった（7.5度で 21.6pt）。
+//
+// ⚠ かつて「5度が上限。6度にすると打球種別が ゴロ42.9/ライナー27.1 まで崩れる」と
+// 記録していたが、**その後 `calculateLaunchAngle` を書き直した（バレル帯を
+// BARREL_LO/BARREL_W で持ち、各分岐の上端を50度台まで伸ばした）ので、
+// もう当てはまらない**。7.5度での実測は ゴロ46.2/ライナー21.2/フライ26.6/ポップ6.0 で、
+// 5度のとき（47.7/20.1/27.2/5.0）より**むしろ実データ(44/20/27/8)に近い**。
+// 本塁打も 0.624 → 0.654 と実NPB 0.70 へ寄る。
+const LOC_ANGLE_DEG = 7.5;
+
+const locAxis = (v) => Math.max(-1, Math.min(1, v - 2));
+
+export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult, pitchLoc = null, lastPitch = null) => {
   const { exitVelocity, meetQuality } = physicsResult;
+  const locCol = pitchLoc ? locAxis(pitchLoc.col) - LOC_COL_MEAN : 0;
+  const locRow = pitchLoc ? locAxis(pitchLoc.row) - LOC_ROW_MEAN : 0;
 
   // 打出し角度（投手の回転数で補正）
   const spinAngleAdj = getSpinRateAngleAdjust(pitch.type, pitcher.spinRate);
-  // 速球で差し込まれるとゴロになりやすい（NPBデータ: 160+で50.7%GB）
+  // 球種固有のゴロ誘発（BALL_EFFECTS.groundballBonus）。
+  // シンカー(0.15)/チェンジアップ(0.14)/ツーシーム(0.12) は打球が上がりにくい。
   const pitchVelocity = pitch.velocity || pitcher.velocity;
+  const gbEff = BALL_EFFECTS[pitch.type];
+  const ballGroundAdj = gbEff
+    ? -(gbEff.groundballBonus || 0) * ((pitch.level ?? 50) / 100)
+      * pitchBreakEfficiency(pitch.type, pitchVelocity) * formPitchBonus(pitcher.form, pitch.type) * BALL_GB_W
+    : 0;
+  // 速球で差し込まれるとゴロになりやすい（NPBデータ: 160+で50.7%GB）
   let velocityAngleAdj = 0;
   if (meetQuality < 0.75) {
     const deficit = 1 - meetQuality;
@@ -244,8 +533,10 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
       velocityAngleAdj = -((135 - pitchVelocity) / 15) * deficit * 8;
     }
   }
-  const launchAngle = calculateLaunchAngle(meetQuality, batter) + spinAngleAdj + velocityAngleAdj;
-
+  // 低めはゴロ・高めはフライ
+  const locAngleAdj = -locRow * LOC_ANGLE_DEG;
+  const launchAngle = calculateLaunchAngle(meetQuality, batter)
+    + spinAngleAdj + velocityAngleAdj + ballGroundAdj + locAngleAdj;
   // 物理シミュレーション（飛距離・滞空時間）
   const rad = launchAngle * Math.PI / 180;
   const v = exitVelocity / 3.6;  // km/h to m/s
@@ -255,26 +546,57 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   const hangTime = Math.max(0.5, (2 * v * Math.sin(Math.max(0, rad))) / g);
 
   // 打球方向（-45〜45度）- NPBデータ準拠（振り遅れ効果含む）
+  // スイッチヒッターは投手と逆の打席に立つ（`throwingArm` は誰も設定しておらず、
+  // 実際のフィールドは `throws`。従来スイッチは常に右打者扱いになっていた）
   const batSide = batter.bats === 'left' ? -1
-    : batter.bats === 'switch' ? (pitcher.throwingArm === 'left' ? -1 : 1)
+    : batter.bats === 'switch' ? ((pitcher.throws || pitcher.throwingArm) === 'left' ? 1 : -1)
     : 1;
+  // 【球速そのもの】速い球は差し込まれて流し打ち、遅い球は引っ張り。
+  // ⚠ 係数は 0.67/0.50 だったが**実データより3〜4倍効きすぎていた**
+  // （実測で球種間の引っ張り率が20pt動く。実MLBは速球37%対カーブ43%で6pt程度）。
+  // 165km/hに対して右打者がほぼ全打球を右方向へ打つ状態だった。
   const velDiff = pitchVelocity - 142;
-  const velShift = (velDiff >= 0 ? velDiff * 0.67 : velDiff * 0.50) * batSide;
+  const velShift = velDiff * VEL_DIR * batSide;
+
+  // 【緩急】**前の球との速度差**。打者は直前の球にタイミングを合わせているので、
+  //   速球のあとの遅球 → 早く振り出す → 引っ張り
+  //   遅球のあとの速球 → 振り遅れる     → 流し打ち
+  // 絶対的な球速（上の velShift）とは別の要素で、配球の「奥行き」が
+  // 打球方向に出るのはここ。前球が無い初球は0。
+  // 母集団の平均は0（球速は上下に振れるだけ）なのでリーグ成績は動かない。
+  const seqDiff = lastPitch?.velocity ? (pitchVelocity - lastPitch.velocity) : 0;
+  const seqShift = seqDiff * SEQ_DIR * batSide;
   // 打者傾向: power>meetなら引っ張り、meet>powerなら広角（逆方向に打てる）
   // RHBの引っ張り=負方向なのでpower優位で負にシフト
   const pullTendency = ((batter.power || 50) - (batter.meet || 50)) * -0.12 * batSide;
-  let direction = Math.random() * 90 - 45 + pullTendency + velShift;
+  // 内角は引っ張り、外角は流し打ち（引っ張り＝右打者は負・左打者は正）
+  const locPullAdj = -locCol * LOC_PULL_DEG * batSide;
+  // C型（方向決定型）: 引っ張ると決めていれば引っ張り方向へ寄る（batterType.js）
+  const dirBiasAdj = -(batter.dirBias || 0) * 9 * batSide;
+  // 打球方向は**ベル型**にする。以前は ±45度の一様分布だったため、
+  // フライの半分が両翼寄り（フェンスが100mと短い側）へ飛んでいた。
+  // 実測: |方向| の中央値 25.0度 → 実データは約15度。これが本塁打が
+  // 実データの4倍出ていた最大の原因で、飛距離やEVの問題ではなかった。
+  // 三角分布（一様2つの和）で SD 18.4度・範囲は±45度（フェアゾーン）ちょうど。
+  const spray = (Math.random() + Math.random() - 1) * 45;
+  let direction = spray - PULL_BASE * batSide + pullTendency + velShift + seqShift + locPullAdj + dirBiasAdj;
   direction = Math.max(-45, Math.min(45, direction));
 
   // 飛距離（メートル）- MLB実測値ベース（空気抵抗込み）
   // EV155→112m, EV145→102m, EV135→91m, EV125→80m, EV115→69m
   let distance;
   if (launchAngle <= 0) {
-    // ゴロ: 内野を転がる距離
-    distance = 15 + exitVelocity * 0.15 + Math.random() * 20;
+    // ゴロ: 内野を転がる距離。弱い打球は投手前で止まるため下限を設けない
+    // （旧式は必ず15m以上になり、投手ゴロの条件 distance<15 が構造的に成立しなかった）
+    distance = 2 + exitVelocity * 0.17 + Math.random() * 20;
   } else {
     // フライ/ライナー: EV基準の標準飛距離
-    const carryBase = Math.max(0, (exitVelocity - 75) * 1.1 + 28);
+    // 実測点に合わせた較正: EV145→99m / 153→108m / 161→116m
+    // （MLB Statcast 90mph→100m / 95mph→110m / 100mph→117m）
+    // そこに NPB_CARRY を掛ける。**NPBの公認球はMLB球より飛ばない**（反発係数が低い）。
+    // 実際 HR/フライは MLB 12-14% に対し NPB 8-10%、本塁打も 1.2 対 0.70/試合。
+    // MLBの物理をそのまま使うとNPBの2倍近い本塁打が出るので、ここで吸収する。
+    const carryBase = Math.max(0, ((exitVelocity - 75) * 1.06 + 25) * NPB_CARRY);
     // 打出し角度補正: 30度が最適
     const angleFactor = Math.max(0.3, 1 - Math.abs(launchAngle - 30) / 60);
     distance = carryBase * angleFactor;
@@ -304,117 +626,175 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   };
 };
 
+// ============================================================
+// 打球種別ごとの捕球率の基準値
+//
+// 【なぜ分けて持つか】実データの安打率は打球種別で桁違いに違う。
+//   ゴロ .240 / ライナー .660 / フライ .210(本塁打込) / ポップ .020
+// **ライナーが最も安打になる打球**で、ゴロの3倍近い。ここを揃えないと
+// 「強い当たりが正面を突かれた」と「ボテボテが抜けた」が同じ価値になり、
+// 打者の質が打球の質に反映されない。
+//
+// ⚠ 4つは**必ずセットで較正する**こと。リーグ全体のBABIPは
+//   Σ(打球種別の割合 × 安打率) で決まるので、1つだけ動かすと打率が壊れる。
+// ============================================================
+const CATCH = {
+  groundFront: 0.915,   // 内野ゴロ・正面
+  groundSide:  0.85,   // 内野ゴロ・横（difficulty で減衰）
+  linerInfield: 0.60,  // 内野ライナー
+  linerOutfield: 0.44, // 外野ライナー
+  flyInfield: 0.97,    // 内野フライ
+  popup: 0.95,         // ポップフライ（50度以上）
+  flyShallow: 0.985,    // 浅い外野フライ (<70m)
+  flyMedium: 0.96,     // 中間 (70-90m)
+  flyDeep: 0.93,       // 深い (90m~)
+};
+
 /**
  * 守備の「時間競合」モデル
  * 野手が打球地点に物理的に到達できるかで判定
  * アウト率は旧モデル基準に調整
  */
+/**
+ * 守備力に応じた失策率を返す（1守備機会あたり）。
+ * 守備力の水準イメージ:
+ *   20=小学生 / 30=中学生 / 40=高校生 / 50=大学生 / 60=プロの及第点
+ * 60を基準に、下回るほど急激に、上回るほど緩やかに失策率が変わる。
+ *   守備20→約10.6% / 30→8.4% / 40→6.2% / 50→4.0% / 60→1.8% / 70→1.2% / 80→0.8%
+ * @param {number} defense 守備力
+ * @param {number} arm 肩力（送球ミスの寄与。省略時は守備力に準ずる）
+ * @param {number} difficulty 打球の難易度 0〜1（横っ飛び等ほど高い）
+ */
+export const getErrorRate = (defense, arm = null, difficulty = 0) => {
+  const d = typeof defense === 'number' ? defense : 50;
+  const a = typeof arm === 'number' ? arm : d;
+  const base = d >= 60
+    ? Math.max(0.004, 0.018 - (d - 60) * 0.0006)
+    : 0.018 + (60 - d) * 0.0022;
+  // 肩が弱いと送球エラーが増える（守備力ほどではない）
+  const armPenalty = Math.max(0, (60 - a)) * 0.0004;
+  // 難しい打球ほど失敗しやすい（最大2倍）
+  return (base + armPenalty) * (1 + difficulty);
+};
+
+/**
+ * 送球エラー率。捕球とは独立した判定で、送り手の肩と受け手の守備の両方が効く。
+ * 「肩は強いが受け手が下手」「連携の良い内野」といった差を作るための係数。
+ * 捕球エラー(getErrorRate)より低めに設定し、二重に厳しくならないようにする。
+ * @param {number} throwerArm 送球する野手の肩力
+ * @param {number} receiverDefense 受け手（一塁手・各塁のカバー）の守備力
+ * @param {number} difficulty 体勢の悪さ 0〜1
+ */
+export const getThrowErrorRate = (throwerArm, receiverDefense, difficulty = 0) => {
+  const a = typeof throwerArm === 'number' ? throwerArm : 60;
+  const r = typeof receiverDefense === 'number' ? receiverDefense : 60;
+  // 肩60・受け手60を基準に、双方が下回るほど悪送球・捕り損ねが増える
+  const throwPart = a >= 60 ? Math.max(0.002, 0.008 - (a - 60) * 0.00025) : 0.008 + (60 - a) * 0.0010;
+  const receivePart = r >= 60 ? Math.max(0.001, 0.004 - (r - 60) * 0.00015) : 0.004 + (60 - r) * 0.0007;
+  return (throwPart + receivePart) * (1 + difficulty);
+};
+
+/**
+ * 打球方向から担当する外野手を返す。中堅手は左右両翼より広い範囲を守る。
+ *
+ * **内野を抜けた打球を「誰が拾うか」にも使う**。ゴロやライナーが内野手の脇を
+ * 抜けたとき、記録上の担当は抜かれた内野手ではなく**回り込んだ外野手**。
+ * ここを内野手のままにすると、積極進塁の判定（走者の足 対 外野の肩）に
+ * 内野手の肩が使われてしまい、強肩の外野手を置く意味がなくなる。
+ */
+export function pickOutfielder(direction, defense = {}) {
+  const cfSpeed = defense.center?.speed || 65;
+  const cfExpand = (cfSpeed - 65) / 100 * 9;    // 足90→+2.3度拡張
+  const cfLeft = -11 - cfExpand;
+  const cfRight = 11 + cfExpand;
+  if (direction < cfLeft) {
+    const lfExpand = ((defense.left?.speed || 65) - 65) / 100 * 7;
+    return (direction >= cfLeft - lfExpand) && Math.random() < 0.3 ? 'center' : 'left';
+  }
+  if (direction <= cfRight) return 'center';
+  const rfExpand = ((defense.right?.speed || 65) - 65) / 100 * 7;
+  return (direction <= cfRight + rfExpand) && Math.random() < 0.3 ? 'center' : 'right';
+}
+
 export const judgeFielderReach = (battedBall, defense, batter) => {
   // 防御的チェック: defenseがnullまたはundefinedの場合はデフォルト値を使用
   const safeDefense = defense || {};
   const { exitVelocity, launchAngle, distance, hangTime, direction } = battedBall || {};
 
-  // 本塁打判定（バレルゾーン）
-  // MLB基準: EV154km/h以上かつフェンス越えの飛距離
-  if (distance > 108 && launchAngle >= 23 && launchAngle <= 37 && exitVelocity >= 153) {
-    // 確率的HR: EV高いほど確実、境界EVでは取られることもある
-    // EV153: 42%, EV163: 80%, EV173: 95%（上限）
-    const hr1Prob = Math.min(0.95, 0.42 + (exitVelocity - 153) / 27);
-    if (Math.random() < hr1Prob) {
-      return { result: 'homerun', bases: 4, description: 'ホームラン！' };
+  // スタジアム形状: ポール際99m, センター122m, 方向で補間
+  // direction 0°=センター→122m, ±45°=ポール際→99m をcos²で補間
+  const absDir = Math.abs(direction || 0);
+  // スタジアム形状: 両翼100m / 左中間・右中間116m / 中堅122m（実NPBの平均的な球場規模）。
+  // 以前は cos² 補間で 99m/110m/122m としていたが、中間(パワーアレイ)が浅すぎて
+  // 引っ張った打球が実際より容易にスタンドインし、逆に中堅方向は遠すぎた。
+  const fenceDistBase = 100 + 22 * Math.cos(absDir * Math.PI / 90);
+
+  // ===== 本塁打判定 =====
+  // 【重要】飛距離がフェンスを越えていて打出し角度がHR帯なら、原則そのまま本塁打。
+  // 旧実装は「越えていても球速とパワーで20〜40%しかHRにしない」確率判定だったため、
+  // フェンス超えの打球の6割以上が外野フライに落とされていた（実測: 塀を越える打球は
+  // 打球全体の2.69% = 0.72本/試合ありながら、HRは0.24本/試合しか出ていなかった）。
+  // 飛距離側（carryBase × 角度補正 × パワー補正）で既に能力差は表現されている。
+  if (distance > fenceDistBase && launchAngle >= 20 && launchAngle <= 45) {
+    // 塀際の好捕・向かい風でごく稀に阻まれる。余裕が小さいほど阻まれやすい
+    const margin = distance - fenceDistBase;
+    const robbedRate = Math.min(0.22, 0.04 + Math.max(0, 5 - margin) / 5 * 0.16);
+    if (Math.random() >= robbedRate) {
+      return { result: 'homerun', bases: 4, description: margin > 10 ? 'ホームラン！' : 'ホームラン！（フェンス越え）' };
     }
   }
 
-  // 長打圏フライ（100m以上の深いフライ、速度とパワー依存確率）
-  // 中堅〜パワー型の境界HRを底上げしつつ、過度なHR量産は抑える
-  if (distance > 100 && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 144) {
-    // 速度要因: EV144-162で 0→1
-    const velocityFactor = Math.max(0, (exitVelocity - 144) / 18);
-    // パワー要因: power 30-95 で 0→1（低パワーでも芯を食えばHRの可能性）
-    const powerFactor = Math.max(0, ((batter.power || 50) - 30) / 65);
-    // velocity主体 + power補正（最大約25%）
-    const hrProb = velocityFactor * 0.16 + powerFactor * 0.09;
-    if (Math.random() < hrProb) {
-      return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス越え）' };
-    }
-  }
-
-  // 風や打球の伸びによるフェンスギリギリHR（低パワーでもごく稀に出る）
-  if (distance > 93 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 135) {
-    const evFactor = Math.max(0, (exitVelocity - 135) / 20);
-    const distFactor = Math.max(0, (distance - 93) / 15);
-    const hrProb = evFactor * distFactor * 0.04;
-    if (Math.random() < hrProb) {
+  // ギリギリ届かない打球（フェンス6m手前から）は打球の伸び・追い風で越えることがある
+  if (distance > fenceDistBase - 6 && launchAngle >= 22 && launchAngle <= 40) {
+    const carryProb = (distance - (fenceDistBase - 6)) / 6 * 0.20;
+    if (Math.random() < carryProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス直撃）' };
     }
-  }
-
-  // ポップフライ（60度以上）- 旧モデル: 95-97%アウト
-  if (launchAngle >= 60) {
-    const catchProb = 0.95 + (safeDefense.catcher?.defense || 70) / 2000;
-    if (Math.random() < catchProb) {
-      return { result: 'out', bases: 0, description: 'フライアウト（ポップフライ）', isOutfieldFly: false, fieldingPosition: 'catcher' };
-    }
-    return { result: 'single', bases: 1, description: 'ポテンヒット' };
   }
 
   // 担当野手の決定（守備重要度: SS/CF > 2B/RF > LF/3B > 1B）
   // 足が速い野手は守備範囲が広がる（隣接ゾーンの打球もカバー）
   let fielder, position, isOutfield;
 
-  if (distance < 40) {
+  // ゴロは飛距離に関わらず内野手がまず処理する（抜けて初めて外野への安打になる）。
+  // 以前は distance>=40 のゴロが外野手の担当になり、内野の打球が全体の1割しか
+  // 発生しないという不自然な分布になっていた。
+  const isGrounder = launchAngle < 10;
+  if (distance < 40 || isGrounder) {
     // 内野 - 遊撃手の守備範囲を広く設定
     isOutfield = false;
-    if (distance < 15) {
+    if (distance < 13 || (launchAngle >= 70 && distance < 25)) {
+      // ホーム目前で止まった打球（バント性の当たり）と、ほぼ真上に打ち上げた
+      // 高角度のポップフライは捕手が処理する
+      position = 'catcher';
+    } else if (distance < 29 && Math.abs(direction) < 14) {
+      // 投手正面の弱い打球（マウンドは本塁から18.4m。中央方向の緩い当たりは投手が処理）
       position = 'pitcher';
-    } else if (direction < -20) {
+    } else if (direction < -23) {
       // 三塁側 - 遊撃手の足で範囲拡張
       const ssSpeed = safeDefense.short?.speed || 60;
       const ssExpand = (ssSpeed - 60) / 100 * 8; // 足90→+2.4度拡張（走力強化）
-      if (direction >= -20 - ssExpand) {
+      if (direction >= -23 - ssExpand) {
         position = 'short'; // 遊撃手がカバー
       } else {
         position = 'third';
       }
-    } else if (direction < 5) {
-      position = 'short'; // -20〜+5: 遊撃手の広い範囲（25度幅）
-    } else if (direction < 20) {
-      position = 'second'; // +5〜+20: 二塁手（15度幅）
+    } else if (direction < 3) {
+      position = 'short'; // -24〜+3: 遊撃手の広い範囲
+    } else if (direction < 23) {
+      position = 'second'; // +3〜+26: 二塁手（一塁手は線寄りのみを守るため二塁の範囲を広く取る）
     } else {
       // 一塁側 - 二塁手の足で範囲拡張
       const sbSpeed = safeDefense.second?.speed || 60;
       const sbExpand = (sbSpeed - 60) / 100 * 7; // 走力強化
-      if (direction < 20 + sbExpand) {
-        position = 'second';
-      } else {
-        position = 'first';
-      }
+      position = direction < 23 + sbExpand ? 'second' : 'first';
     }
     fielder = safeDefense[position] || { defense: 70, speed: 60, arm: 65 };
   } else {
-    // 外野 - 中堅手の守備範囲を広く設定
     isOutfield = true;
-    const cfSpeed = safeDefense.center?.speed || 65;
-    const cfExpand = (cfSpeed - 65) / 100 * 12; // 足90→+3度拡張（走力強化）
-    const cfLeft = -15 - cfExpand;  // 中堅の左端（基準-15）
-    const cfRight = 15 + cfExpand;  // 中堅の右端（基準+15）
-
-    if (direction < cfLeft) {
-      // 左翼側 - 左翼手の足でもカバー拡張
-      const lfSpeed = safeDefense.left?.speed || 65;
-      const lfExpand = (lfSpeed - 65) / 100 * 7; // 走力強化
-      position = (direction >= cfLeft - lfExpand) && Math.random() < 0.3 ? 'center' : 'left';
-    } else if (direction <= cfRight) {
-      position = 'center'; // 中堅手の広い範囲（30度幅＋足で拡張）
-    } else {
-      // 右翼側 - 右翼手の足でもカバー拡張
-      const rfSpeed = safeDefense.right?.speed || 65;
-      const rfExpand = (rfSpeed - 65) / 100 * 7; // 走力強化
-      position = (direction <= cfRight + rfExpand) && Math.random() < 0.3 ? 'center' : 'right';
-    }
+    position = pickOutfielder(direction, safeDefense);
     fielder = safeDefense[position] || { defense: 70, speed: 65, arm: 70 };
   }
-
   // ポジション別守備重要度係数（ライナー・フライ用の総合係数）
   const positionWeight = {
     short: 1.5, center: 1.5,
@@ -441,8 +821,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   };
 
   // ===== ゴロの場合 =====
+  // ゴロは常に内野手が最初に処理を試みる。抜けたら外野への安打になる。
   if (launchAngle < 10) {
-    if (distance < 40) {
+    {
       // 内野ゴロ - 打球方向と野手定位置の角度差で正面/横を判定
       const pw = posStatWeights[position] || { defense: 1.0, speed: 1.0, arm: 1.0 };
       const homeAngle = fielderHomeAngles[position] || 0;
@@ -454,35 +835,56 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       let catchProb;
       if (offset <= frontZone) {
         // 正面: ルーティンプレー（守備力で微調整）
-        catchProb = 0.97 + (fielder.defense - 50) / 100 * 0.02;
+        catchProb = CATCH.groundFront + (fielder.defense - 50) / 100 * 0.02;
         catchProb -= (batter.speed - 60) / 100 * 0.04;
       } else {
         // 横の打球: 距離に応じて難易度が上がり、守備力が重要になる
         const difficulty = Math.min(1.0, (offset - frontZone) / 14);
-        catchProb = 0.88 - difficulty * 0.30;
+        catchProb = CATCH.groundSide - difficulty * 0.30;
         catchProb += (fielder.defense - 50) / 100 * 0.20 * pw.defense * (1 + difficulty * 0.5);
         catchProb += (fielder.speed - 50) / 100 * 0.06 * pw.speed;
         catchProb += ((fielder.arm || 60) - 50) / 100 * 0.05 * pw.arm;
         catchProb -= (batter.speed - 60) / 100 * 0.12;
         catchProb -= Math.max(0, (batter.meet || 50) - 30) / 100 * 0.10;
       }
-      catchProb = Math.min(0.995, Math.max(0.40, catchProb));
+      // 強い打球ほど反応が難しく、内野を抜けやすい（初速130km/hから効き始める）
+      catchProb -= Math.max(0, (exitVelocity - 147)) / 100 * 1.2;
+      catchProb = Math.min(0.995, Math.max(0.10, catchProb));
 
       if (Math.random() < catchProb) {
-        const errorRate = 0.002 + (100 - fielder.defense) / 1500 + (100 - (fielder.arm || 60)) / 3000;
-        if (Math.random() < errorRate) {
-          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
+        // 横っ飛びなど難しい打球ほど失策率が上がる
+        const errDifficulty = offset <= frontZone ? 0 : Math.min(1.0, (offset - frontZone) / 14);
+        if (Math.random() < getErrorRate(fielder.defense, fielder.arm, errDifficulty)) {
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）',
+            isError: true, errorPosition: position, fieldingPosition: position };
+        }
+        // 捕球成功後の「一塁への送球」を別判定にする。
+        // 送り手の肩・受け手（一塁手）の守備の両方が効くので、内野の連携精度が結果に出る。
+        // 一塁手自身の打球はベースを踏むだけなので送球判定を行わない。
+        if (position !== 'first') {
+          const firstBase = defense?.first || { defense: 60, arm: 60 };
+          const throwErr = getThrowErrorRate(fielder.arm, firstBase.defense, errDifficulty);
+          if (Math.random() < throwErr) {
+            return {
+              result: 'single', bases: 1, description: 'エラー（悪送球）',
+              isError: true, errorPosition: position, fieldingPosition: position,
+              isThrowingError: true,
+            };
+          }
         }
         return { result: 'out', bases: 0, description: `${position === 'pitcher' ? '投' : position === 'first' ? '一' : position === 'second' ? '二' : position === 'short' ? '遊' : '三'}ゴロ`, isOutfieldFly: false, fieldingPosition: position };
       }
-      return { result: 'single', bases: 1, description: '内野安打', fieldingPosition: position };
-    } else {
-      // 外野への速いゴロ - 足と守備で大きく変動
-      const catchProb = 0.25 + (fielder.speed / 100) * 0.25 * weight + (fielder.defense / 100) * 0.15 * weight;
-      if (Math.random() < catchProb) {
-        return { result: 'out', bases: 0, description: '外野ゴロアウト', isOutfieldFly: false, fieldingPosition: position };
+      // 内野を処理できず → 内野安打 or 外野へ抜ける安打（強い打球は外野を転がり二塁打も）
+      if (distance >= 40) {
+        // **抜けた打球を拾うのは外野手**。抜かれた内野手を担当にすると、
+        // 積極進塁の判定に内野手の肩が使われてしまう
+        const of = pickOutfielder(direction, safeDefense);
+        if (exitVelocity >= 167 && Math.abs(direction) > 28 && Math.random() < 0.25) {
+          return { result: 'double', bases: 2, description: '左右を破る二塁打！', fieldingPosition: of };
+        }
+        return { result: 'single', bases: 1, description: '外野への安打', fieldingPosition: of };
       }
-      return { result: 'single', bases: 1, description: '外野への安打' };
+      return { result: 'single', bases: 1, description: '内野安打', fieldingPosition: position };
     }
   }
 
@@ -490,7 +892,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   if (launchAngle < 25) {
     if (distance < 40) {
       // 内野ライナー - ポジション重要度で守備力の効きが変わる
-      const baseOutRate = 0.88;
+      const baseOutRate = CATCH.linerInfield;
       const defenseBonus = (fielder.defense - 70) / 100 * 0.13 * weight;
       const speedBonus = (fielder.speed - 60) / 100 * 0.10 * weight;
       // ミートが高い打者は鋭いライナーで野手の正面を避けやすい（ミート30以上から段階的に効果）
@@ -498,12 +900,19 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const catchProb = Math.min(0.96, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
 
       if (Math.random() < catchProb) {
+        // 内野ライナーは捕球が難しく、弾くことがある
+        if (Math.random() < getErrorRate(fielder.defense, fielder.arm, 0.5)) {
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）',
+            isError: true, errorPosition: position, fieldingPosition: position };
+        }
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: false, fieldingPosition: position };
       }
-      return { result: 'single', bases: 1, description: 'ヒット！' };
+      // 内野手の脇を抜けたライナーも、拾うのは外野手
+      return { result: 'single', bases: 1, description: 'ヒット！',
+        fieldingPosition: pickOutfielder(direction, safeDefense) };
     } else {
       // 外野ライナー - CF/RFの守備・足が大きく効く
-      const baseOutRate = 0.78;
+      const baseOutRate = CATCH.linerOutfield;
       const defenseBonus = (fielder.defense - 70) / 100 * 0.18 * weight;
       const speedBonus = (fielder.speed - 65) / 100 * 0.18 * weight;
       // ミートが高い打者は野手の間を抜く鋭いライナーを打てる（ミート30以上から段階的に効果）
@@ -511,37 +920,53 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const catchProb = Math.min(0.94, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
 
       if (Math.random() < catchProb) {
+        // 外野ライナーの目測・捕球ミス
+        if (Math.random() < getErrorRate(fielder.defense, fielder.arm, 0.5)) {
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）',
+            isError: true, errorPosition: position, fieldingPosition: position };
+        }
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: true, tagupThrowbackChance: (fielder.arm / 100) * 0.5, fieldingPosition: position };
       }
       // 長打判定
-      if (distance > 70 && exitVelocity >= 140) {
-        return { result: 'double', bases: 2, description: '二塁打！' };
+      if (distance > 70 && exitVelocity >= 157) {
+        return { result: 'double', bases: 2, description: '二塁打！', fieldingPosition: position };
       }
-      return { result: 'single', bases: 1, description: 'ヒット！' };
+      return { result: 'single', bases: 1, description: 'ヒット！', fieldingPosition: position };
     }
+  }
+
+  // ===== ポップフライ（50度以上。実データの定義に合わせる）=====
+  // ほぼアウト。以前は無条件に「捕手」で記録していたが、実際は打球の位置に応じて
+  // 内野手（時に外野手）が処理する。上で決定した担当野手をそのまま使う。
+  if (launchAngle >= 50) {
+    const catchProb = CATCH.popup + (fielder.defense || 70) / 2000;
+    if (Math.random() < catchProb) {
+      return { result: 'out', bases: 0, description: 'フライアウト（ポップフライ）', isOutfieldFly: isOutfield, fieldingPosition: position };
+    }
+    return { result: 'single', bases: 1, description: 'ポテンヒット', fieldingPosition: position };
   }
 
   // ===== フライの場合 =====
   if (distance < 40) {
     // 内野フライ - 旧モデル: 97%アウト
-    const catchProb = 0.97 + (fielder.defense / 100) * 0.02;
+    const catchProb = CATCH.flyInfield + (fielder.defense / 100) * 0.02;
     if (Math.random() < catchProb) {
       return { result: 'out', bases: 0, description: 'フライアウト', isOutfieldFly: false, fieldingPosition: position };
     }
-    return { result: 'single', bases: 1, description: 'ポテンヒット' };
+    return { result: 'single', bases: 1, description: 'ポテンヒット', fieldingPosition: position };
   }
 
   // 外野フライ
   let baseOutRate;
   if (distance < 70) {
     // 浅いフライ（ポテンヒットがたまに発生）
-    baseOutRate = 0.93;
+    baseOutRate = CATCH.flyShallow;
   } else if (distance < 90) {
     // 中堅フライ（ポテンヒット多め）
-    baseOutRate = 0.84;
+    baseOutRate = CATCH.flyMedium;
   } else {
     // 深いフライ
-    baseOutRate = 0.71;
+    baseOutRate = CATCH.flyDeep;
   }
 
   const defenseBonus = (fielder.defense - 70) / 100 * 0.10 * weight;
@@ -549,11 +974,16 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   // ミート打者は野手の間を狙って打てる（ミート30以上から段階的に効果）
   const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.14;
   // 強い打球ほど野手の頭を越えやすい
-  const exitVeloBonus = Math.max(0, (exitVelocity - 130) / 100) * 0.18;
+  const exitVeloBonus = Math.max(0, (exitVelocity - 147) / 100) * 0.18;
   const catchProb = Math.min(0.995, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus - exitVeloBonus);
 
   if (Math.random() < catchProb) {
     const isDeepFly = distance > 70;
+    // 落球（深い打球ほど難しい）。守備力の低い外野手は目測を誤る
+    if (Math.random() < getErrorRate(fielder.defense, fielder.arm, isDeepFly ? 0.5 : 0.2)) {
+      return { result: 'single', bases: 1, description: 'エラー（落球）',
+        isError: true, errorPosition: position, fieldingPosition: position };
+    }
     return {
       result: 'out',
       bases: 0,
@@ -568,24 +998,39 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   const batterSpeed = batter.speed || 60;
   const isCorner = Math.abs(direction) > 26;
 
-  // 三塁打: コーナー寄り + 速い打球 + 足の速い走者 のみ
-  if (isCorner && distance > 95 && exitVelocity >= 144 && batterSpeed >= 65) {
-    const tripleProb = 0.20 + (batterSpeed - 65) / 100 * 0.3;
+  // 三塁打: コーナー寄り（＝外野手が追う距離が長い）+ 深い打球 + 足のある走者
+  if (isCorner && distance > 84 && batterSpeed >= 55) {
+    const tripleProb = 0.85 + (batterSpeed - 55) / 100 * 1.4;
     if (Math.random() < tripleProb) {
-      return { result: 'triple', bases: 3, description: '三塁打！' };
+      return { result: 'triple', bases: 3, description: '三塁打！', fieldingPosition: position };
     }
   }
 
-  // 二塁打: 深いフライ(95m+)かつ速い打球(EV 142+) または非常に速い打球(EV 148+)
-  // 打球が本当に強くないと二塁打にはならない
-  if (launchAngle >= 15 && launchAngle <= 40) {
-    if ((distance > 95 && exitVelocity >= 142) || exitVelocity >= 148) {
-      return { result: 'double', bases: 2, description: '二塁打！' };
+  // 二塁打: 野手から遠く落ちるほど、打球が強いほど、走者が速いほど二塁を狙える。
+  // 旧実装は「95m超かつEV142+」の階段状の閾値で、外野の間を抜ける当たりの大半が
+  // 単打になっていた（二塁打が安打の12%。実際は18%前後）。
+  if (launchAngle >= 12 && launchAngle <= 42) {
+    let doubleProb = 0;
+    if (distance > 78) doubleProb += (distance - 78) / 25 * 1.10;   // 78m→0 / 103m→+1.10
+    if (exitVelocity > 147) doubleProb += (exitVelocity - 147) / 20 * 0.55; // 167km→+0.55
+    doubleProb += (batterSpeed - 60) / 100 * 0.30;
+    if (Math.random() < Math.min(0.85, doubleProb)) {
+      return { result: 'double', bases: 2, description: '二塁打！', fieldingPosition: position };
     }
   }
 
   // それ以外は単打（野手の前に落ちた or 弱い打球が抜けた）
-  return { result: 'single', bases: 1, description: 'ヒット！' };
+  // 中継ミス: 外野手の返球〜内野の中継が乱れると走者が余分に進む。
+  // 送り手＝外野手の肩、受け手＝遊撃/二塁の守備（カットマン）で判定する。
+  const cutoff = defense?.short || defense?.second || { defense: 60 };
+  if (Math.random() < getThrowErrorRate(fielder.arm, cutoff.defense, 0.3)) {
+    return {
+      result: 'single', bases: 1, description: 'ヒット！（中継ミス）',
+      isError: true, errorPosition: position, fieldingPosition: position,
+      isThrowingError: true, extraAdvance: true,
+    };
+  }
+  return { result: 'single', bases: 1, description: 'ヒット！', fieldingPosition: position };
 };
 
 /**
