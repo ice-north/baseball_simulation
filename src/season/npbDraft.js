@@ -26,8 +26,11 @@ import { amateurRoute, CORPORATE_DRAFT_MIN_AGE } from '../utils/constants.js';
  *    （gain は 0.62〜0.88 を掃引しても 11〜12% のまま動かない＝レバーではない）。
  * ⚠ **export してあるのは掃引して測るため**（`ind-share-probe.mjs`）。
  *    育成の採点のたびに引くので、import 後に書き換えれば効く
+ * ⚠ **独立を 18 から下げるときは 12 が底**。0 まで落とすと育成の独立が 9% に
+ *    なって「独立はプロへの通過点」という位置づけそのものが消える（実測 全体7%）。
+ *    12 で全体が目標の 10% に乗る（育成23% / R2+ 8% / R1 3%）
  */
-export const IKU_SOURCE_BONUS = { highschool: 22, independent: 18, club: 18 };
+export const IKU_SOURCE_BONUS = { highschool: 22, independent: 12, club: 18 };
 
 /**
  * NPBドラフト処理（統一評価・グローバルTop-N方式）
