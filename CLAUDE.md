@@ -3431,7 +3431,10 @@ Cリーグでは **+37 の格差**があった。ランクを渡せば +3.9 に�
   - 防御率と失点率の差: 高校生4.69→3.62 / プロ及第点2.73→2.48
 - **自責点**: 失策絡みの得点は防御率から除外される（下記）
   - (a) 失策で出塁した走者の生還 (b) 失策が無ければ3アウトだった後の得点 は非自責
-  - 自動試合は走者に `_reachedOnError` を付けて追跡、采配モードはイニング単位の近似
+  - **2エンジンとも走者ごとに追う**。自動シミュは走者に `_reachedOnError`、采配モードは
+    塁に置く走者の印（`baseState.makeRunner` の `onError` / `isUnearnedRunner`）。
+    (b) の「失策が無ければ免れていたアウト」だけは両方ともイニング単位で持つ
+    （`gameState.inningErrorOuts` / `inningErrorOutsRef`）
   - `earnedRuns` のフォールバックは `??` を使うこと（自責点0が失点で上書きされるため `||` は不可）
 
 ## 投げ手・打席の左右比率（`src/utils/handedness.js`）
@@ -5383,10 +5386,30 @@ NPB_CARRY）/ `judgeFielderReach`（CATCH・フェンス・pickOutfielder）/
    自分で采配した試合だけ守備成績が付かないという状態だった
    （`recordFielding` を追加し、`gameSetup` で seasonStats へ転記）
 
-**まだ揃っていないもの（既知）**
-- 自責点: 自動シミュは走者に `_reachedOnError` を付けて追うが、采配モードは
-  イニング単位の近似（`inningErrorOutsRef` / `errorRunnersOnBaseRef`）のまま。
-  塁の走者は識別できるようになったので、`makeRunner` に印を持たせれば揃えられる（未着手）
+### 自責点を走者ごとに追う（是正済み）— `makeRunner` の `onError`
+采配モードの自責点は**イニング単位の近似**だった。`errorRunnersOnBaseRef` で
+「失策で出塁した走者が今いくつ塁に居るか」を数え、その数を得点から引いていたので、
+**誰が還ったかを見ていなかった**——失策で出た走者が残塁して**別の走者が還っても非自責**になる。
+
+塁に置く走者の要約（`makeRunner`）に印を持たせて、自動シミュの `_reachedOnError` と
+同じ追い方に揃えた。塁の移動は**値をそのまま動かす**ので、印は走者に追随する。
+
+| | 自動シミュ | 采配モード |
+|---|---|---|
+| (a) 失策で出塁した走者本人の生還 | 走者の `_reachedOnError` | 塁の走者の `onError`（`isUnearnedRunner` / `unearnedAt`） |
+| (b) 失策が無ければ既に3アウトだった後の得点 | `gameState.inningErrorOuts` | `inningErrorOutsRef`（**イニング単位のままで正しい**） |
+| 判定 | `creditRuns` | `takeEarnedRuns(runs, outs, unearned)` |
+
+- ⚠ **(b) だけはイニング単位で持つのが正しい**。「免れたアウト」は走者に紐づかない
+  のでここは近似ではない。近似だったのは (a) の方だけ
+- ⚠ **印を増やす順序を自動シミュと揃えること**。失策の分岐では
+  **先に `inningErrorOutsRef` を足してから**判定する（走者本人の印は塁の値に乗って
+  いるので、そちらは `advanceRunners` が数えて返す）
+- ⚠ **得点する経路は8つあり、全部に非自責の数を渡すこと**。四球・死球の押し出し /
+  内野ゴロの進塁 / 犠飛 / 暴投 / スクイズ / バント安打の押し出し / 本塁打 / 走者の生還。
+  **内野ゴロは三塁を空ける前に `unearnedAt(newBases, 2)` を読む**（空けた後だと印が消える）
+- `base-state-check`（`npm run check`）が印の追随を見る——押し出しと暴投で塁を
+  移っても `isUnearnedRunner` が残り、生還した走者の印を数えられること（全13項目PASS）
 
 ### 采配モードの走者の識別（是正済み）— `src/game/baseState.js`
 采配モードの `bases` は `[true, false, true]` のような boolean で、**誰が塁に居るか分からなかった**。

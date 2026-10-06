@@ -17,6 +17,19 @@ import { buildToolNorms, toolProfile, toolHuntRateForRound, TOOL_HUNT_RATE_IKU,
 import { amateurRoute, CORPORATE_DRAFT_MIN_AGE } from '../utils/constants.js';
 
 /**
+ * 育成指名の「大穴出身」加点（`ikuScore` の素点に足す）。
+ * 本指名はソース別の加点を持たないが、育成だけは「今は使えないが1つだけ
+ * figure が立つ」を取りに行く枠なので、ここだけ出どころに下駄を履かせてある。
+ * ⚠ **指名の独立シェアを決めているのはここ**。独立の指名は育成枠に集まる
+ *    （実測 R1 2-5% / R2+ 6-8% に対し **育成 27-34%**）ので、全体の比率を
+ *    動かしたいときに触るのはこの表で、`CATEGORY_GROWTH.independent.gain` ではない
+ *    （gain は 0.62〜0.88 を掃引しても 11〜12% のまま動かない＝レバーではない）。
+ * ⚠ **export してあるのは掃引して測るため**（`ind-share-probe.mjs`）。
+ *    育成の採点のたびに引くので、import 後に書き換えれば効く
+ */
+export const IKU_SOURCE_BONUS = { highschool: 22, independent: 18, club: 18 };
+
+/**
  * NPBドラフト処理（統一評価・グローバルTop-N方式）
  *
  * 全ソース（高校/大学/社会人/独立）から候補を収集し、
@@ -114,10 +127,12 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     });
   });
 
-  // ⚠ **ソース別の加点は置かない**（旧 `SOURCE_DRAFT_BONUS = { independent: 35 }` を撤廃）。
+  // ⚠ **本指名ではソース別の加点を置かない**（旧 `SOURCE_DRAFT_BONUS = { independent: 35 }` を撤廃）。
   // 指名の構成比は「そのカテゴリに何人いて、どれだけ育っているか」だけで決まるべきで、
   // 出身で下駄を履かせると育成の良し悪しが結果に出なくなる。
   // 加点として残してよいのは**年齢**（`ageBonus` / `potentialMult`）だけ。
+  // ⚠ ただし**育成指名だけは例外**（`IKU_SOURCE_BONUS`）。そこは「今は使えないが
+  // 1つだけ figure が立つ」を取りに行く枠なので、大穴の出どころに下駄を履かせてある。
 
   // === 「一芸」の計測（scoutTools.js）===
   // 総合点だけで上から取ると必ず「全部そこそこ高い選手」が並ぶ。
@@ -590,9 +605,9 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         + Math.max(0, gp - 1.0) * 60                          // 成長力ボーナス（gp1.3→+18, gp1.5→+30）
         + Math.max(0, discipline - 40) * 0.6;                 // プロ意識ボーナス（80→+24）
       // 大穴出身ボーナス: 高校・独立・クラブを優先
-      if (c.source === 'highschool') ikuScore += 22;
-      else if (c.source === 'independent') ikuScore += 18;
-      else if (c.isClub) ikuScore += 18;
+      if (c.source === 'highschool') ikuScore += IKU_SOURCE_BONUS.highschool;
+      else if (c.source === 'independent') ikuScore += IKU_SOURCE_BONUS.independent;
+      else if (c.isClub) ikuScore += IKU_SOURCE_BONUS.club;
       return { ...c, ikuScore };
     })
     .sort((a, b) => b.ikuScore - a.ikuScore);

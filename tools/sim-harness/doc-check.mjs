@@ -71,6 +71,7 @@ const REMOVED_ON_PURPOSE = {
   batterStats:     '同上',
   pitcherStats:    '同上',
   catcherStats:    '同上',
+  errorRunnersOnBaseRef: '采配モードの自責点のイニング単位の近似。走者ごとの印（makeRunner の onError）に置き換えて除去（歴史の記録）',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');
