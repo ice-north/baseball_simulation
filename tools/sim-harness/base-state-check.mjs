@@ -54,6 +54,17 @@ const A = { id: 1, name: 'A' }, Bn = { id: 2, name: 'B' }, C = { id: 3, name: 'C
   r.assert('true だけでも人数が保たれる', B.countRunners(bases) === 3 && B.runnerOf(bases[0]) === null, '');
   r.assert('asFlags は boolean の配列', JSON.stringify(B.asFlags([A, false, true])) === '[true,false,true]', '');
 }
+// 失策で出塁した印は、塁を移っても走者に追随する（自責点の判定）
+{
+  const E = { id: 7, name: '失策で出塁', onError: true };
+  r.assert('失策出塁の走者を見分けられる', B.isUnearnedRunner(E) && !B.isUnearnedRunner(A) && !B.isUnearnedRunner(true), '');
+  const s1 = B.forceAdvance([E, false, false], bat);          // 四球で E が二塁へ
+  const s2 = B.moveRunner(s1.bases, 1, 2);                    // 暴投で三塁へ
+  r.assert('押し出し・暴投で印が追随する', B.isUnearnedRunner(s2.bases[2]) && B.unearnedAt(s2.bases, 2) === 1, '');
+  const s3 = B.advanceAll(s2.bases, 2, bat);                  // 二塁打で生還
+  r.assert('生還した走者の印を数えられる', s3.scored.filter(B.isUnearnedRunner).length === 1 && B.unearnedAt(s3.bases, 2) === 0, '');
+  r.assert('印の無い走者は自責のまま', B.unearnedAt([A, Bn, C], 2) === 0, '');
+}
 // 入力を書き換えない（React の state をそのまま渡しても安全）
 {
   const src = [A, Bn, false];

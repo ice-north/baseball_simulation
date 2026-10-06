@@ -432,7 +432,9 @@ const declineScale = (current, ref) => {
 // ⚠ **基礎成長に `volume` は掛からない**。身体が勝手に育つ分は所属先で変わらない。
 // draft-check は `growYears` を指定して `applyCorporatePlayerGrowth` を
 // 実際に回してから指名する（0 だと成長を一度も通らず、ここを動かしても測定に映らない）。
-const CATEGORY_GROWTH = {
+// ⚠ **export してあるのは掃引して測るため**（`ind-share-probe.mjs` が `gain` を差し替える）。
+//    関数の中で毎回 `CATEGORY_GROWTH[...]` を引くので、import 後に書き換えれば効く
+export const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
   independent: { volume: 1.34, gain: 0.88, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。

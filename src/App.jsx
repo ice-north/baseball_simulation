@@ -36,7 +36,7 @@ import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
 import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './game/stealing.js';
-import { makeRunner, runnerOf, asFlags, forceAdvance } from './game/baseState.js';
+import { makeRunner, runnerOf, asFlags, forceAdvance, isUnearnedRunner, unearnedAt } from './game/baseState.js';
 import { effectiveArsenalSize, activeArsenal } from './game/arsenal.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -447,34 +447,32 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const pitchSeqRef = React.useRef({ key: null, seq: createSequence() });
 
       // --- 自責点（防御率）判定用 ---
-      // 采配モードの自責点はイニング単位の近似。「失策で免れたアウト数」と
-      // 「失策で出塁した走者の在塁数」を数える（塁の走者は識別できるようになったので、
-      // makeRunner に失策出塁の印を持たせれば自動シミュと同じ追い方に揃えられる。未着手）。
-      // 得点時に (a) 失策出塁の走者ぶん (b) 失策が無ければ既に3アウトだった後の得点 を非自責とする。
+      // 自動シミュと同じ追い方。(a) **失策で出塁した走者本人**（塁に置いた走者の
+      // `onError`。塁を移っても値ごと動くので追随する）の生還と、
+      // (b) 失策が無ければ既に3アウトだった後の得点 を非自責とする。
+      // ⚠ かつては「失策で出塁した走者の在塁数」をイニング単位で数える近似で、
+      //    誰が還ったかを見ていなかった（失策の走者が残塁して別の走者が還っても非自責になった）。
+      // (b) の「免れたアウト数」だけはイニング単位で持つ（自動シミュの `inningErrorOuts` と同じ）。
       const inningErrorOutsRef = React.useRef(0);
-      const errorRunnersOnBaseRef = React.useRef(0);
-      // イニング開始時に呼ぶ（両カウンタをリセット）
+      // イニング開始時に呼ぶ
       const resetEarnedRunTracking = () => {
         inningErrorOutsRef.current = 0;
-        errorRunnersOnBaseRef.current = 0;
       };
-      // 失点のうち自責点となる数を返し、消費した非自責走者を減算する
-      const takeEarnedRuns = (runs, currentOuts) => {
+      // 失点のうち自責点となる数を返す。unearned は生還した走者のうち失策出塁だった数
+      const takeEarnedRuns = (runs, currentOuts, unearned = 0) => {
         if (runs <= 0) return 0;
         if ((currentOuts + inningErrorOutsRef.current) >= 3) return 0; // (b) 想定3アウト後は全て非自責
-        const unearned = Math.min(runs, errorRunnersOnBaseRef.current); // (a) 失策出塁の走者ぶん
-        errorRunnersOnBaseRef.current -= unearned;
-        return Math.max(0, runs - unearned);
+        return Math.max(0, runs - unearned);                            // (a) 失策出塁の走者ぶん
       };
       // 犠飛・暴投・スクイズ等の失点を現在の投手の個人成績にも反映する。
       // （これらは従来ボックススコア用の集計にしか加算されておらず、
       //   個人の失点・防御率に載っていなかった）
-      const recordRunsToCurrentPitcher = (runs, currentOuts) => {
+      const recordRunsToCurrentPitcher = (runs, currentOuts, unearned = 0) => {
         if (runs <= 0) return;
         const p = getCurrentPitcher();
         if (!p) return;
         const defenseTeamType = isTopInning ? 'home' : 'away';
-        const earned = takeEarnedRuns(runs, currentOuts);
+        const earned = takeEarnedRuns(runs, currentOuts, unearned);
         updatePitcherStats(p.id, defenseTeamType, {
           runsAllowed: runs,
           earnedRuns: earned,
@@ -844,7 +842,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       };
       
       // 打者を塁に置くときの走者（誰が塁に居るかを識別する。baseState.js）
-      const batterAsRunner = () => makeRunner(getCurrentBatter(), isTopInning ? 'away' : 'home');
+      const batterAsRunner = (onError = false) => makeRunner(getCurrentBatter(), isTopInning ? 'away' : 'home', onError);
 
       // 現在の投手を取得（守備チームから）
       const getCurrentPitcher = () => {
@@ -1585,14 +1583,16 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         }));
       };
 
-      const advanceRunners = (hitType, fieldingPosition = null) => {
+      const advanceRunners = (hitType, fieldingPosition = null, isError = false) => {
         const newBases = [false, false, false];
         let runsScored = 0;
-        
+        let unearnedScored = 0;   // 生還した走者のうち失策で出塁していた数（自責点の判定）
+
         if (hitType === 'homerun') {
           runsScored = 1 + bases.filter(b => b).length;
+          unearnedScored = bases.reduce((n, b) => n + (isUnearnedRunner(b) ? 1 : 0), 0) + (isError ? 1 : 0);
           // setBases([false, false, false]); ← 削除
-          return { bases: [false, false, false], runsScored };
+          return { bases: [false, false, false], runsScored, unearnedScored };
         }
         
         const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
@@ -1635,6 +1635,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             }
             if (newBase >= 3) {
               runsScored++;
+              if (isUnearnedRunner(bases[i])) unearnedScored++;
             } else {
               newBases[newBase] = bases[i];
             }
@@ -1642,13 +1643,14 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         }
         
         if (advancement < 3) {
-          newBases[advancement - 1] = batterAsRunner();
+          newBases[advancement - 1] = batterAsRunner(isError);
         } else {
           runsScored++;
+          if (isError) unearnedScored++;
         }
-        
+
         // setBases(newBases); ← 削除
-        return { bases: newBases, runsScored, outsMade: outsFromThrow };
+        return { bases: newBases, runsScored, unearnedScored, outsMade: outsFromThrow };
       };
 
       // [SECTION: THROW_PITCH] throwPitch（投球シミュレーション本体）
@@ -1819,7 +1821,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
                 
                 // 押し出し: 投手の失点（自責の判定込み）と打者の打点。
                 // ⚠ 以前は失点だけ足して自責点に入らず、打点も付いていなかった
-                recordRunsToCurrentPitcher(1, outs);
+                recordRunsToCurrentPitcher(1, outs, unearnedAt(bases, 2));
                 updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
               } else {
                 newBases = forceAdvance(bases, batterAsRunner()).bases;
@@ -1844,7 +1846,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             }
             if (bases[0] && bases[1] && bases[2]) {
               isTopInning ? newScore.away++ : newScore.home++;
-              recordRunsToCurrentPitcher(1, outs);   // 押し出し（自責の判定込み）
+              recordRunsToCurrentPitcher(1, outs, unearnedAt(bases, 2));   // 押し出し（自責の判定込み）
               updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
             } else {
               newBases = forceAdvance(bases, batterAsRunner()).bases;
@@ -1900,7 +1902,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           case 'double':
           case 'triple':
           case 'homerun':
-            const { bases: updatedBases, runsScored: runs, outsMade: throwOuts = 0 } = advanceRunners(result.type, result.fieldingPosition);
+            const { bases: updatedBases, runsScored: runs, unearnedScored = 0, outsMade: throwOuts = 0 } = advanceRunners(result.type, result.fieldingPosition, !!result.isError);
             
             // 打者成績: ヒット
             const bases_earned = result.type === 'single' ? 1 : result.type === 'double' ? 2 : result.type === 'triple' ? 3 : 4;
@@ -1924,12 +1926,10 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
                 rbis: (reachedOnError ? 0 : runs)
               });
               
-              // 失策での出塁は非自責走者として計上（失策が無ければアウトだったので想定アウトも+1）
-              if (result.isError) {
-                inningErrorOutsRef.current++;
-                errorRunnersOnBaseRef.current++;
-              }
-              const earned = takeEarnedRuns(runs, outs);
+              // 失策が無ければアウトだったので「免れたアウト」を+1（走者本人の印は
+              // advanceRunners が batterAsRunner(isError) で塁に持たせている）
+              if (result.isError) inningErrorOutsRef.current++;
+              const earned = takeEarnedRuns(runs, outs, unearnedScored);
               // ⚠ 被安打・被本塁打は以前一度も記録していなかった（采配した試合だけ被安打0）。
               //    積極進塁で刺した走者のアウトも投手の投球回に入る
               updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
@@ -2042,9 +2042,10 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             infieldDefense: infVals.reduce((a, b) => a + b, 0) / infVals.length,
           });
           if (adv.scoreFromThird) {
+            const unearned = unearnedAt(newBases, 2);   // ⚠ 塁を空ける前に読む
             newBases[2] = false;
             if (isTopInning) newScore.away++; else newScore.home++;
-            recordRunsToCurrentPitcher(1, outs);
+            recordRunsToCurrentPitcher(1, outs, unearned);
             // 内野ゴロの間の生還は打点（併殺の場合は付かない）
             if (!isDoublePlay) updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
             setLastResult({ ...result, description: (result.description || 'アウト') + '（進塁打）' });
@@ -2066,7 +2067,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               //    `setScore(newScore)` に上書きされ、犠飛の得点がスコアから消えていた
               //    （投手の失点にだけ入り、犠飛でのサヨナラも成立しなかった）
               if (isTopInning) newScore.away++; else newScore.home++;
-              recordRunsToCurrentPitcher(1, outs);
+              recordRunsToCurrentPitcher(1, outs, unearnedAt(newBases, 2));
               updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
               newBases[2] = false;
               setLastResult({ ...result, description: result.description + '（犠牲フライ）' });
@@ -2138,7 +2139,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
                 updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
               } else {
                 isTopInning ? newScore.away++ : newScore.home++;
-              recordRunsToCurrentPitcher(1, outs);
+                recordRunsToCurrentPitcher(1, outs, unearnedAt(newBases, 2));
                 wpDescription += ' ⚡ 三塁ランナーがホームイン';
               }
               newBases[2] = false;
@@ -2507,7 +2508,7 @@ if (newOuts === 3) {
           newBases = fa.bases;
           if (fa.scored.length) {
             isTopInning ? newScore.away++ : newScore.home++;
-            recordRunsToCurrentPitcher(1, outs);
+            recordRunsToCurrentPitcher(1, outs, isUnearnedRunner(fa.scored[0]) ? 1 : 0);
             updateBatterStats(currentBatter.id, isTopInning ? 'away' : 'home', { rbis: 1 });
           }
         };
@@ -2583,7 +2584,7 @@ if (newOuts === 3) {
 
               if (squeezeRunnerSafe) {
                 isTopInning ? newScore.away++ : newScore.home++;
-                recordRunsToCurrentPitcher(1, outs);
+                recordRunsToCurrentPitcher(1, outs, unearnedAt(newBases, 2));
                 updateBatterStats(currentBatter.id, offenseTeamType, { rbis: 1 });   // スクイズは打点
                 newBases[2] = false;
               } else {
