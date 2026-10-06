@@ -1,14 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createDecisionLog, observeDecisionLog, decidePitchers } from './game/pitcherDecisions.js';
 
 // Utility imports
-import {
-  BALL_EFFECTS,
-  PITCHING_FORM_EFFECTS,
-  FORM_PITCH_SYNERGY,
-  POSITION_NAMES,
-  POSITION_COLORS,
-  HAND_LABELS
-} from './utils/constants.js';
+import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY, POSITION_NAMES, POSITION_COLORS, HAND_LABELS, sortBenchByPosition, pitchVelocityDrop, isUnreadablePitch, formatAtBatResult, atBatResultColor, getPitchTypeName, DP_BASE, FORM_SHORT } from './utils/constants.js';
 
 import {
   formatInnings,
@@ -26,12 +20,31 @@ import { initializeTeamsData, TEAMS_DATA, LEAGUE_SETTINGS, initializeTeamsForCou
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
-import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
+import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect, spinAdjustedArsenal } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
-import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
+import { useGameStrategy } from './game/useGameStrategy.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, infieldDefenseOf, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
+import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
+import { getDeception, deceptionAxis, describeDeception } from './game/deception.js';
+import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt,
+  zoneHeatmap, describeZoneProfile } from './game/batterZone.js';
+import { decideSwingPower, getSwingPowerEffect, swingPowerLabel } from './game/swingType.js';
+import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
+  pushSwingQuality, decayFooled, fooledLevel } from './game/pitchSequence.js';
+import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
+import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
+import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
+import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
+import { stealSuccessRate, stealAttemptRate } from './game/stealing.js';
+import { makeRunner, runnerOf, asFlags, forceAdvance, isUnearnedRunner, unearnedAt } from './game/baseState.js';
+import { effectiveArsenalSize, activeArsenal } from './game/arsenal.js';
+import TutorialHint from './components/TutorialHint.jsx';
+import { setGameSnapshotProvider } from './game/crashRecovery.js';
+import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
+import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, conditionBattingMod, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
-import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, exportTeam, importTeam } from './game/saveSystem.js';
+import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, autoSave, isAutosaveEnabled, AUTOSAVE_KEY } from './game/saveSystem.js';
 
 // Game controls imports
 import { executeResetGame, executeMultiPitch, executeStartSimMode } from './game/gameControls.js';
@@ -50,28 +63,26 @@ import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
 import { generateTryoutCandidates, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
-import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining, processNPBDraft } from './season/yearProgressionSystem.js';
-import { initializeParallelWorldForIndependent } from './corporate/corporateInit.js';
+import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
+import { processNPBDraft } from './season/npbDraft.js';
+import { initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged, recoverMissingParallelTeams } from './corporate/corporateInit.js';
+import { WORLD_DATA } from './corporate/worldData.js';
 
 // Component imports
 import ManagementScreen from './components/ManagementScreen.jsx';
 import GameFlowScreens from './components/GameFlowScreens.jsx';
-import { Sidebar, RenderBases, AccordionSection } from './components/GameUIComponents.jsx';
+import { Sidebar, RenderBases, AccordionSection, TeamPitcherPanel, TeamMemberPanel } from './components/GameUIComponents.jsx';
+import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
 
     // ========================================================================
     // App.jsx セクション構成 (行番号はおおよその目安)
     // ========================================================================
-    // [SECTION: IMPORTS]         L1-57    : import文
-    // [SECTION: APP_STATE]       L58-340  : アプリ全体のstate定義
-    // [SECTION: GAME_HANDLERS]   L341-595 : 成績更新・選手交代ハンドラー
-    // [SECTION: AI_MANAGER]      L596-610 : → aiManager.js に抽出済み（ラッパーのみ）
-    // [SECTION: THROW_PITCH]     L611-2030: throwPitch（投球シミュレーション本体）
-    // [SECTION: GAME_CONTROLS]   L2031-2080: → gameControls.js に抽出済み（ラッパーのみ）
-    // [SECTION: GAME_SETUP]      L2081-2100: → gameSetup.js に抽出済み（ラッパーのみ）
-    // [SECTION: SEASON_PROGRESS] L2101-2110: → seasonProgress.js に抽出済み（ラッパーのみ）
-    // [SECTION: MANAGEMENT]      L2111-2112: → ManagementScreen.jsx に抽出済み
-    // [SECTION: GAME_FLOW]       L2113-2130: → GameFlowScreens.jsx に抽出済み
-    // [SECTION: RENDER]          L2131-END : メインreturn（試合画面UI）
+    // ⚠ **セクションの行番号をここに書かないこと**。以前はこの位置に
+    //    「L611-2030: throwPitch」のような表があったが、コードが伸びて
+    //    実際は L1751、RENDER も L2131 のはずが L2995 とずれていた。
+    //    しかも同じ表が CLAUDE.md にもあり、2箇所とも腐っていた。
+    //    各セクションの先頭に `// [SECTION: 名前]` を置いてあるので、
+    //    `grep -n "\[SECTION:" src/App.jsx` で現在地を引くこと。
     //
     // ★ 分割作業は完了しました。今後は通常の開発（機能追加・バグ修正）に集中できます。
     // ========================================================================
@@ -84,6 +95,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       }, []);
 
       // 画面モード管理
+      // [SECTION: APP_STATE] アプリ全体のstate定義
       const [screenMode, setScreenMode] = useState('start'); // 'start', 'game', 'management'
       const [gameFlowState, setGameFlowState] = useState('title'); // 'title', 'newgame_regulations', 'newgame_tryout', 'newgame_camp', 'sandbox_regulations', 'sandbox_setup', 'season'
       const [gameMode, setGameMode] = useState('normal'); // 'normal', 'sandbox'
@@ -187,33 +199,125 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         LEAGUE_SETTINGS.useDH = seasonData?.settings?.useDH || false;
       }, [seasonData?.settings?.useDH]);
 
-      const saveGame = async (slotIndex = 0) => {
+      const [autoSaveFlash, setAutoSaveFlash] = useState(false); // オートセーブ完了の一時表示
+
+      const saveGame = async (slotIndex = 0, onProgress) => {
         const result = await saveGameToSlot(slotIndex, {
           seasonData, leagueConfig, screenMode, managementView,
           gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory
-        });
+        }, onProgress);
         if (result.success) await refreshSaveSlots();
         return result;
       };
 
-      const loadGame = async (slotIndex = 0) => {
-        const result = await loadGameFromSlot(slotIndex);
-        if (!result.success) return result;
+      // 画面スケール（ズーム）: 'auto'はビューポートに合わせて自動縮小し、
+      // 情報量・レイアウトを保ったまま1画面に収める（はみ出し・スクロールバー抑制）。
+      //
+      // ⚠ **かつては横幅しか見ておらず、一度も発動していなかった**。
+      // レイアウトが flex/% の流動幅なので `root.scrollWidth` は常にビューポート幅と
+      // 一致し、`natural > vw` が成立しない。実測でも 1024px 幅で zoom は 1 のままだった。
+      // 実際に溢れるのは**縦**で、1536×864（Full HDの125%スケーリング。実世界で最も多い
+      // 構成のひとつ）ではブラウザの可視高が約730pxしかなく、試合画面が下へ切れていた。
+      //
+      // ⚠ **縦のフィットは「1画面に収める設計の画面」だけに掛けること**（`data-fit-height`）。
+      // 能力ランキングのように縦に読み進める画面（自然高1900px超）まで縮めると、
+      // 文字が小さくなるだけで何の得もない。
+      const refitRef = React.useRef(null);
+      React.useEffect(() => {
+        let pending = 0;
+        const applyFit = () => {
+          pending = 0;
+          const root = document.getElementById('root');
+          if (!root) return;
+          const scale = getUiScale();
+          if (scale !== 'auto') { root.style.zoom = scale; return; }
+          root.style.zoom = '1'; // 一旦等倍で自然サイズを測る
+          const de = document.documentElement;
+          const vw = de.clientWidth, vh = de.clientHeight;
+          let z = root.scrollWidth > vw ? vw / root.scrollWidth : 1;
+          if (root.querySelector('[data-fit-height]') && root.scrollHeight > vh) {
+            z = Math.min(z, vh / root.scrollHeight);
+          }
+          // 下限0.7。これ以上縮めると text-xs(12px) が 8px 台になって読めない
+          root.style.zoom = z < 1 ? String(Math.max(0.7, z)) : '1';
+        };
+        // rAFで束ねる。1フレームに何度呼ばれても実測は1回
+        const schedule = () => { if (!pending) pending = requestAnimationFrame(applyFit); };
+        refitRef.current = schedule;
+        schedule();
+        window.addEventListener('resize', schedule);
+        window.addEventListener(UISCALE_EVENT, schedule);
+        return () => {
+          if (pending) cancelAnimationFrame(pending);
+          refitRef.current = null;
+          window.removeEventListener('resize', schedule);
+          window.removeEventListener(UISCALE_EVENT, schedule);
+        };
+      }, []);
 
+      // ⚠ **依存配列を持たせない**（毎レンダー後に再フィット）。
+      // 以前は [screenMode, managementView, gameFlowState] だけを見ていたため、
+      // **画面内で中身の高さが変わっても再計算されなかった**。実際
+      // 「試合開始」を押すと gameStarted が変わって掲示板・采配パネルが増えるのに
+      // 再フィットが走らず、57px はみ出したまま切れていた（gameStarted は
+      // このフックより後で宣言されるので依存に入れられない、という事情もあった）。
+      // 打者交代・チュートリアルヒントの開閉でも高さは動くので、レンダーに追従させる。
+      // 実測は rAF で束ねてあるので1フレーム1回。
+      React.useEffect(() => { refitRef.current?.(); });
+
+      // クラッシュ時の緊急保存用に、現在のゲーム状態を返すスナップショットを登録
+      React.useEffect(() => {
+        setGameSnapshotProvider(() => ({
+          seasonData, leagueConfig, screenMode, managementView,
+          gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory,
+        }));
+      }, [seasonData, leagueConfig, screenMode, managementView, gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory]);
+
+      // ロード結果(saveData)を各stateへ適用する共通処理（通常ロード/オートセーブロード共用）
+      const applyLoadedGame = (result) => {
+        if (!result.success) return result;
         const saveData = result.data;
         if (saveData.seasonData) setSeasonData(saveData.seasonData);
         if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
         if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
         if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
         if (saveData.teamHistory) setTeamHistory(saveData.teamHistory);
-        setGameMode(saveData.gameMode || 'normal');
+        const loadedMode = saveData.gameMode || 'normal';
+        setGameMode(loadedMode);
+
+        // 独立モードの旧セーブ: 自リーグのチームに独立リーグ用マーカーが無いと
+        // チームランキング/トレードから漏れるため、ロード時に補完する
+        if (loadedMode === 'normal') {
+          ensureUserIndependentLeagueTagged(
+            saveData.seasonData?.settings?.teamNames || [],
+            saveData.seasonData?.settings?.preset || null
+          );
+          // 旧バージョンの年度移行バグで並行世界（他の独立リーグ・社会人・大学）が
+          // 削除されたセーブを復旧する。社会人/大学チームが1つも無ければ欠落と判断。
+          const hasParallel = Object.values(TEAMS_DATA).some(t => t.corporateTeamId || t.universityTeamId);
+          if (!hasParallel) {
+            const userLeague = WORLD_DATA.userLeagueId || saveData.seasonData?.settings?.preset || null;
+            recoverMissingParallelTeams(userLeague);
+          }
+        }
 
         initializeAllPlayersCondition();
 
         setScreenMode('management');
-        // オフシーズンで保存された場合はオフシーズン画面に戻す（12/1等の日付が日程画面に表示されるバグを防ぐ）
-        const savedPhase = saveData.seasonData?.phase;
-        if (savedPhase === 'off_season') {
+        // オフシーズン画面で保存したならそこへ戻す（12/1等の日付が日程画面に出るのを防ぐ）。
+        //
+        // ⚠ **`phase` で判定してはいけない**。`getCurrentPhase` は独立・社会人モードで
+        // **10/21〜11/29 の「イベントの谷間」も `off_season` を返す**（プレーオフ後、
+        // ドラフト前後、契約更改の前後…）。そのため 11/5 のセーブをロードすると
+        // 契約更改(11/9)・トライアウト/スカウト入団(11/10)・年度末決算(11/30)を
+        // まるごと飛ばして翌年へ進んでしまっていた（実測: 社会人・独立で再現。
+        // 大学モードは `universityMode` 分岐が 11/29 まで REGULAR_SEASON なので無事だった）。
+        // 保存時にどの画面を開いていたかは `managementView` に入っているのでそれを使う。
+        const savedView = saveData.managementView;
+        const d = saveData.seasonData?.currentDate;
+        // managementView を持たない旧セーブ向けの保険。12月以降だけオフシーズン扱い
+        const deepOffseason = (d?.month ?? 0) >= 12 || (d?.month === 11 && (d?.day ?? 0) >= 30);
+        if (savedView === 'offseason' || (!savedView && deepOffseason)) {
           setManagementView('offseason');
         } else {
           setManagementView('dateprogress');
@@ -221,6 +325,45 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         setGameFlowState('season');
         return result;
       };
+
+      const loadGame = async (slotIndex = 0) => {
+        const result = await loadGameFromSlot(slotIndex);
+        return applyLoadedGame(result);
+      };
+
+      // オートセーブ枠からロード
+      const loadAutosave = async () => {
+        const result = await loadGameFromSlot(0, AUTOSAVE_KEY);
+        return applyLoadedGame(result);
+      };
+
+      // オートセーブ: 月替わり・年替わりの節目で自動保存（手動3スロットとは別枠）
+      const _autoSaveKey = seasonData ? `${seasonData.year}-${seasonData.currentDate?.month}` : null;
+      const _prevAutoSaveKey = React.useRef(null);
+      React.useEffect(() => {
+        if (!_autoSaveKey || gameFlowState !== 'season') return;
+        // 初回（ロード直後等）はスキップし、以降の節目変化でのみ保存
+        if (_prevAutoSaveKey.current === null) { _prevAutoSaveKey.current = _autoSaveKey; return; }
+        if (_prevAutoSaveKey.current === _autoSaveKey) return;
+        _prevAutoSaveKey.current = _autoSaveKey;
+        if (!isAutosaveEnabled()) return;
+        // オートセーブは全世界(数百チーム)のシリアライズで数百ms〜メインスレッドを占有する。
+        // 月替わりの日程進行をブロックしないよう、アイドル時間へ逃がして実行する
+        // （画面の切り替わりを先に描画し、保存は空き時間に行う）。
+        const runAutoSave = () => {
+          autoSave({
+            seasonData, leagueConfig, screenMode, managementView,
+            gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory,
+          }).then(r => { if (r.success) { setAutoSaveFlash(true); setTimeout(() => setAutoSaveFlash(false), 2000); } });
+        };
+        const ric = typeof window !== 'undefined' && window.requestIdleCallback;
+        if (ric) {
+          const id = window.requestIdleCallback(runAutoSave, { timeout: 4000 });
+          return () => window.cancelIdleCallback?.(id);
+        }
+        const t = setTimeout(runAutoSave, 300);
+        return () => clearTimeout(t);
+      }, [_autoSaveKey, gameFlowState]);
 
       const deleteSave = async (slotIndex = 0) => {
         const result = await deleteSaveSlot(slotIndex);
@@ -262,6 +405,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       // 采配モード（日程進行から起動した試合）
       const [managedGameInfo, setManagedGameInfo] = useState(null);  // { gameId, home, away, otherGames }
       const managedGameInfoRef = useRef(null);
+      // 勝敗・セーブ・ホールドの判定用（登板順とリードの移り変わり。自動シミュと同じ帳簿）
+      const decisionLogRef = useRef(createDecisionLog());
       const advanceDayRef = useRef(null);
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
@@ -283,8 +428,56 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const [bases, setBases] = useState([false, false, false]);
       const [outs, setOuts] = useState(0);
       const [remainingPitches, setRemainingPitches] = useState(0);  // 残り投球数（自動投球用）
+      // 采配 state（打撃方針/守備シフト/盗塁/エンドラン/敬遠）を1箇所に集約。
+      // 詳細は src/game/useGameStrategy.js 参照。
+      const strategy = useGameStrategy();
+      const {
+        battingApproach, pitchAim, pitchTypeIndex,
+        setBattingApproach, setPitchAim, setPitchTypeIndex,
+        triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
+        battingApproachRef, pitchAimRef, pitchTypeIndexRef,
+        batGuessType, batGuessZone, setBatGuessType, setBatGuessZone,
+        batGuessTypeRef, batGuessZoneRef,
+        forceStealRef, forceSwingRef, intentionalWalkRef,
+      } = strategy;
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
       const outOccurredRef = React.useRef(false); // アウト発生フラグ
+      // 打席ごとの配球メモリ（前球の位置・球速・引き出し）。自動シミュレーションと同じ
+      // モデルを共有する（src/game/pitchSequence.js）。打者が変わったら作り直す。
+      const pitchSeqRef = React.useRef({ key: null, seq: createSequence() });
+
+      // --- 自責点（防御率）判定用 ---
+      // 自動シミュと同じ追い方。(a) **失策で出塁した走者本人**（塁に置いた走者の
+      // `onError`。塁を移っても値ごと動くので追随する）の生還と、
+      // (b) 失策が無ければ既に3アウトだった後の得点 を非自責とする。
+      // ⚠ かつては「失策で出塁した走者の在塁数」をイニング単位で数える近似で、
+      //    誰が還ったかを見ていなかった（失策の走者が残塁して別の走者が還っても非自責になった）。
+      // (b) の「免れたアウト数」だけはイニング単位で持つ（自動シミュの `inningErrorOuts` と同じ）。
+      const inningErrorOutsRef = React.useRef(0);
+      // イニング開始時に呼ぶ
+      const resetEarnedRunTracking = () => {
+        inningErrorOutsRef.current = 0;
+      };
+      // 失点のうち自責点となる数を返す。unearned は生還した走者のうち失策出塁だった数
+      const takeEarnedRuns = (runs, currentOuts, unearned = 0) => {
+        if (runs <= 0) return 0;
+        if ((currentOuts + inningErrorOutsRef.current) >= 3) return 0; // (b) 想定3アウト後は全て非自責
+        return Math.max(0, runs - unearned);                            // (a) 失策出塁の走者ぶん
+      };
+      // 犠飛・暴投・スクイズ等の失点を現在の投手の個人成績にも反映する。
+      // （これらは従来ボックススコア用の集計にしか加算されておらず、
+      //   個人の失点・防御率に載っていなかった）
+      const recordRunsToCurrentPitcher = (runs, currentOuts, unearned = 0) => {
+        if (runs <= 0) return;
+        const p = getCurrentPitcher();
+        if (!p) return;
+        const defenseTeamType = isTopInning ? 'home' : 'away';
+        const earned = takeEarnedRuns(runs, currentOuts, unearned);
+        updatePitcherStats(p.id, defenseTeamType, {
+          runsAllowed: runs,
+          earnedRuns: earned,
+        });
+      };
       
       // チームシステム（ホーム vs アウェイ対戦機能）
       const [homeTeam, setHomeTeam] = useState({
@@ -346,7 +539,16 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const [showEditScreen, setShowEditScreen] = useState(false);  // エディット画面表示フラグ
       
       // 選手成績更新関数（元の定義を維持）
-      const updateBatterStats = (playerId, teamType, statUpdates) => {
+      // ⚠ **増分を渡すこと**（`{ atBats: 1 }`）。以前は呼び出し側が「描画時点の値 + 1」を
+      //    絶対値で渡しており、1球の中で2回更新すると後の更新が前を上書きしていた
+      //    （併殺の2つ目のアウト・スクイズの走者と打者の2アウトが投手に付かなかった）。
+      //    ここで state の最新値に足す
+      const addDeltas = (base, deltas) => {
+        const next = { ...(base || {}) };
+        for (const [k, v] of Object.entries(deltas)) next[k] = (next[k] || 0) + (v || 0);
+        return next;
+      };
+      const updateBatterStats = (playerId, teamType, statDeltas) => {
         const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
         setTeam(prev => ({
           ...prev,
@@ -354,8 +556,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             p.id === playerId
               ? {
                   ...p,
-                  stats: { ...(p.stats || {}), batting: { ...(p.stats?.batting || {}), ...statUpdates } },
-                  gameStats: { ...(p.gameStats || {}), ...statUpdates }
+                  stats: { ...(p.stats || {}), batting: addDeltas(p.stats?.batting, statDeltas) },
+                  gameStats: addDeltas(p.gameStats, statDeltas)
                 }
               : p
           )
@@ -374,13 +576,13 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }));
       };
 
-      const updatePitcherStats = (playerId, teamType, statUpdates) => {
+      const updatePitcherStats = (playerId, teamType, statUpdates) => {   // 増分（上の⚠）
         const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
         setTeam(prev => ({
           ...prev,
           players: prev.players.map(p =>
             p.id === playerId
-              ? { ...p, stats: { ...(p.stats || {}), pitching: { ...(p.stats?.pitching || {}), ...statUpdates } } }
+              ? { ...p, stats: { ...(p.stats || {}), pitching: addDeltas(p.stats?.pitching, statUpdates) } }
               : p
           )
         }));
@@ -639,6 +841,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         return team.players.find(p => p.battingOrder === team.currentBatterOrder) || team.players[0];
       };
       
+      // 打者を塁に置くときの走者（誰が塁に居るかを識別する。baseState.js）
+      const batterAsRunner = (onError = false) => makeRunner(getCurrentBatter(), isTopInning ? 'away' : 'home', onError);
+
       // 現在の投手を取得（守備チームから）
       const getCurrentPitcher = () => {
         const team = getDefenseTeam();
@@ -657,14 +862,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       // 能力値バーを表示するコンポーネント（コンパクト版）
       const AbilityBar = ({ label, value }) => (
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-gray-400 w-3">{label}</span>
+          <span className="text-xs text-gray-300 w-3">{label}</span>
           <div className="flex-1 bg-gray-700 rounded-full h-1 overflow-hidden">
             <div
               className={`h-full ${getAbilityColor(value)} transition-all`}
               style={{ width: `${value}%` }}
             />
           </div>
-          <span className="text-[10px] text-gray-300 w-4 text-right font-mono">{value}</span>
+          <span className="text-xs text-gray-300 w-4 text-right font-mono">{value}</span>
         </div>
       );
 
@@ -828,97 +1033,22 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       // 直近の投球履歴（球速）
       const [recentVelocities, setRecentVelocities] = useState([]);
       
-      // 打者・投手の成績
-      const [batterStats, setBatterStats] = useState({
-        plateAppearances: 0, // 打席数
-        atBats: 0,
-        hits: 0,
-        homeruns: 0,
-        walks: 0,
-        strikeouts: 0,
-        totalBases: 0,
-        stolenBases: 0,       // 盗塁成功数
-        caughtStealing: 0     // 盗塁失敗数
-      });
-      
-      const [pitcherStats, setPitcherStats] = useState({
-        pitches: 0,
-        outs: 0,
-        strikeouts: 0,
-        walks: 0,
-        runsAllowed: 0,
-        errors: 0,  // エラー数
-        wildPitches: 0,  // 暴投数を追加
-        doublePlay: 0  // 併殺打
-      });
-      
-      // 捕手統計を追加
-      const [catcherStats, setCatcherStats] = useState({
-        stolenBasesAllowed: 0,  // 盗塁許可数
-        caughtStealing: 0,      // 盗塁刺
-        wildPitchesBlocked: 0   // 暴投阻止数
-      });
-      
-      // 打球統計
-      const [battedBallStats, setBattedBallStats] = useState({
-        innerGrounder: { total: 0, hits: 0 }, // 内野ゴロ
-        innerLiner: { total: 0, hits: 0 },    // 内野ライナー
-        innerFly: { total: 0, hits: 0 },      // 内野フライ
-        shallowOuter: { total: 0, hits: 0 },  // 浅い外野
-        outerLiner: { total: 0, hits: 0 },    // 外野ライナー
-        shallowFly: { total: 0, hits: 0 },    // 浅いフライ
-        mediumFly: { total: 0, hits: 0 },     // 中堅フライ
-        deepFly: { total: 0, hits: 0 },       // 深いフライ
-        outerGrounder: { total: 0, hits: 0 }, // 外野ゴロ
-        homerun: { total: 0, hits: 0 }        // 本塁打
-      });
-      
-      // 打球タイプ別統計
-      const [battedBallTypeStats, setBattedBallTypeStats] = useState({
-        grounder: 0,  // ゴロ
-        liner: 0,     // ライナー
-        fly: 0,       // フライ
-        popup: 0      // ポップフライ
-      });
-      
-      // 打球方向別統計（5方向）
-      const [battedBallDirectionStats, setBattedBallDirectionStats] = useState({
-        left: 0,        // 左
-        leftCenter: 0,  // 左中間
-        center: 0,      // 中央
-        rightCenter: 0, // 右中間
-        right: 0        // 右
-      });
-      
-      // 打球エリア別統計（方向×タイプ）- 詳細版（5方向×5タイプ）
-      const [battedBallAreaStats, setBattedBallAreaStats] = useState({
-        'left-homerun': { total: 0, outs: 0, hits: 0 },
-        'left-fly': { total: 0, outs: 0, hits: 0 },
-        'left-liner': { total: 0, outs: 0, hits: 0 },
-        'left-popup': { total: 0, outs: 0, hits: 0 },
-        'left-grounder': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-homerun': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-fly': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-liner': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-popup': { total: 0, outs: 0, hits: 0 },
-        'leftCenter-grounder': { total: 0, outs: 0, hits: 0 },
-        'center-homerun': { total: 0, outs: 0, hits: 0 },
-        'center-fly': { total: 0, outs: 0, hits: 0 },
-        'center-liner': { total: 0, outs: 0, hits: 0 },
-        'center-popup': { total: 0, outs: 0, hits: 0 },
-        'center-grounder': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-homerun': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-fly': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-liner': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-popup': { total: 0, outs: 0, hits: 0 },
-        'rightCenter-grounder': { total: 0, outs: 0, hits: 0 },
-        'right-homerun': { total: 0, outs: 0, hits: 0 },
-        'right-fly': { total: 0, outs: 0, hits: 0 },
-        'right-liner': { total: 0, outs: 0, hits: 0 },
-        'right-popup': { total: 0, outs: 0, hits: 0 },
-        'right-grounder': { total: 0, outs: 0, hits: 0 }
-      });
+      // ⚠ ここに **打者・投手・捕手の成績3種**（batterStats / pitcherStats /
+      //    catcherStats）の useState が31行あったが、**書き込み52箇所・読み出し0**で
+      //    一度も描画されていなかったので除去した。1球ごとに setState していたので、
+      //    誰も見ないデータのために再描画コストだけ払っていたことになる
+      //    （`lastGameResults` / 打球統計4種 と同じ defect。これで3度目）。
+      //    ⚠ 選手ごとの成績は `updateBatterStats` / `updatePitcherStats`（別物・現役）が
+      //    `player.stats` に積んでおり、画面もシーズン集計もそちらを読む。
+      //
+      // ⚠ ここに打球統計4種（battedBallStats / …Type / …Direction / …Area）の
+      //    useState が58行あったが、**一度も描画されていなかった**ので除去した。
+      //    2つは打球のたびに setState していて、誰も見ないデータのために
+      //    再描画コストだけ払っていた（`lastGameResults` と同じ defect）。
+      //    リセット側（gameControls.js）にも同じ形が52行あり、二重定義でもあった。
+      //    復活させるなら**描く場所を先に決めてから**にすること。
 
+      // [SECTION: GAME_HANDLERS] 投球生成・接触判定・走者進塁・守備記録・成績更新
       const addPitch = () => {
         const newId = pitcher.pitches.length > 0 
           ? Math.max(...pitcher.pitches.map(b => b.id)) + 1 
@@ -970,7 +1100,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       /**
        * 物理演算ベースのコンタクト結果判定（新エンジン）
        */
-      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null, lastPitchArg = null) => {
+      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null, lastPitchArg = null, pitchLoc = null) => {
         const effectiveBatter = batter || { meet: 60, power: 60, eye: 60, speed: 60 };
         const effectiveCatcher = catcher || { lead: 50 };
         const safeCount = count || { balls: 0, strikes: 0 };
@@ -995,6 +1125,11 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           tunnelingEffect,
           handEffect
         );
+
+        // 崩されたか（芯品質）を打席の記憶に残す。次の球の振り方に効く。
+        // ※ pitchSeqRef は ref なので別関数からでも安全に参照できる
+        pushSwingQuality(pitchSeqRef.current.seq,
+          physicsResult.isContact ? physicsResult.meetQuality : null);
 
         // 空振り判定（物理モデルから）
         if (!physicsResult.isContact) {
@@ -1030,7 +1165,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
 
         // 物理演算で打球パラメータを計算
-        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult);
+        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult, pitchLoc, lastPitch);
 
         // 角度によるファウル判定（強化）
         if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {  // 55%→70%
@@ -1040,43 +1175,30 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
         }
 
-        // 打球統計を記録
-        const battedBallType = battedBall.launchAngle < 10 ? 'grounder' :
-                               battedBall.launchAngle < 25 ? 'liner' :
-                               battedBall.launchAngle < 50 ? 'fly' : 'popup';
-
-        setBattedBallTypeStats(prev => ({
-          ...prev,
-          [battedBallType]: prev[battedBallType] + 1
-        }));
-
-        // 打球方向を記録
-        let ballDirection;
-        if (battedBall.direction < -20) ballDirection = 'left';
-        else if (battedBall.direction < -5) ballDirection = 'leftCenter';
-        else if (battedBall.direction <= 5) ballDirection = 'center';
-        else if (battedBall.direction <= 20) ballDirection = 'rightCenter';
-        else ballDirection = 'right';
-
-        setBattedBallDirectionStats(prev => ({
-          ...prev,
-          [ballDirection]: prev[ballDirection] + 1
-        }));
-
         // 時間競合モデルで守備判定
         const fieldingResult = judgeFielderReach(battedBall, defense, effectiveBatter);
 
         // 結果を変換して返す
+        // ⚠ **自動シミュレーションと同じ情報を持たせること**。以前は 'out' にしか
+        //   fieldingPosition が載っておらず、采配モードだけ
+        //   「積極進塁で使う外野手の肩」と「守備成績の記録先」が分からなかった。
+        const fp = fieldingResult.fieldingPosition;
+        const ep = fieldingResult.errorPosition;
         const resultMap = {
           'homerun': { type: 'homerun', description: fieldingResult.description, hit: true },
-          'triple': { type: 'triple', description: fieldingResult.description, hit: true },
-          'double': { type: 'double', description: fieldingResult.description, hit: true },
-          'single': { type: 'single', description: fieldingResult.description, hit: true, isError: fieldingResult.isError },
+          'triple': { type: 'triple', description: fieldingResult.description, hit: true, fieldingPosition: fp },
+          'double': { type: 'double', description: fieldingResult.description, hit: true, fieldingPosition: fp },
+          'single': { type: 'single', description: fieldingResult.description, hit: true,
+            isError: fieldingResult.isError, errorPosition: ep, fieldingPosition: fp },
           'out': {
             type: 'out',
             description: fieldingResult.description,
             hit: false,
+            // 打席結果を「中飛」「右直」と書くのに使う（バッジの表記を揃えるため）
+            fieldingPosition: fp,
             isOutfieldFly: fieldingResult.isOutfieldFly,
+            // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
+            isGroundOut: battedBall.launchAngle < 10 && !fieldingResult.isOutfieldFly,
             tagupThrowbackChance: fieldingResult.tagupThrowbackChance
           }
         };
@@ -1097,7 +1219,11 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       };
 
       // 共通投球シミュレーション関数（通常試合・自動シミュレーション共用）
-      const simulateSinglePitch = (batter, pitcher, catcher, defense, count, currentStamina, lastPitch = null) => {
+      const simulateSinglePitch = (batter, pitcher, catcher, defense, count, currentStamina, sequence = null) => {
+        // 前球（打席内の配球メモリ。自動シミュレーションと共有 / pitchSequence.js）
+        const lastPitch = lastCall(sequence);
+        // この場面で捕手が求める結果（併殺狙い / 三振狙い / 通常。pitchSituation.js）
+        const objective = decidePitchObjective(bases, outs);
         // スタミナを1減らす
         const newStamina = Math.max(0, currentStamina - 1);
 
@@ -1111,119 +1237,221 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // まず球種を選択（全ての球種から選ぶ）
         const totalPitchTypes = pitcher.pitches.length;
 
-        // 新しい予測式: 球種が増えるほど予測が外れやすくなる
-        let basePredictionRate;
-        if (totalPitchTypes === 1) {
-          basePredictionRate = 1.00;
-        } else {
-          const leadReduction = (catcher.lead / 100) * 0.02 * (totalPitchTypes - 1);
-          const baseRates = { 2: 0.50, 3: 0.313, 4: 0.21, 5: 0.16, 6: 0.106 };
-          basePredictionRate = baseRates[totalPitchTypes] || (0.106 - (totalPitchTypes - 6) * 0.02);
-          basePredictionRate = Math.max(0, basePredictionRate - leadReduction);
-        }
+        // 打者の狙い球（自動シミュレーションと共有。pitchCalling.js）。
+        // 従来はリード係数が0.02しかなく、3球種の投手でリード100でも
+        // 的中率が 0.313→0.273 と13%しか下がらなかった。
+        const predictionCorrect = Math.random() < guessSuccessRate({
+          catcherLead: catcher.lead ?? 50,
+          // 持ち球の「幅」で読まれにくさが決まる（arsenal.js）
+          arsenalSize: effectiveArsenalSize(pitcher.pitches),
+          batterEye: batter.eye,
+          // 崩された直後は球種を読むどころではない（pitchSequence.js）
+          fooled: fooledLevel(sequence),
+          // 出どころが見えなければ球種も判断できない（deception.js）
+          deception: pitcher.deception ?? 0,
+        });
 
-        const finalPredictionRate = basePredictionRate;
-        const predictionCorrect = Math.random() < finalPredictionRate;
-
-        // キャッチャーリードで配球を最適化
+        // 捕手のリードで球種を選ぶ（自動シミュレーションと共有。pitchCalling.js）。
+        // 従来はここだけがスコア選択で、自動側は変化球を完全ランダムに選んでいた。
         let pitchChoice;
         let selectedBall;
-
-        if (catcher.lead > 0) {
-          const leadInfluence = catcher.lead / 100;
-          const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-          const ballScores = pitcher.pitches.map((ball, index) => {
-            const effect = ballEffects[ball.type];
-            const levelFactor = ball.level / 100;
-            let score = (effect.whiffBonus + effect.groundballBonus + effect.weakBonus) * levelFactor;
-
-            // 投球フォームとの相性ボーナスを適用
-            const synergyPitches = FORM_PITCH_SYNERGY[pitcher.form] || [];
-            if (synergyPitches.includes(ball.type)) {
-              if (['curve', 'fork', 'splitter', 'knuckle'].includes(ball.type)) {
-                score += pitchingFormEffect.verticalBreakBonus * levelFactor;
-              }
-              if (['slider', 'shoot', 'cutter', 'twoSeam'].includes(ball.type)) {
-                score += pitchingFormEffect.horizontalBreakBonus * levelFactor;
-              }
-            }
-            return { index, score, ball };
+        {
+          const chosen = selectPitchType({
+            arsenal: pitcher.pitches,
+            catcherLead: catcher.lead ?? 50,
+            form: pitcher.form || 'threeQuarter',
+            strikes: safeCount.strikes,
+            ballEffects,
+            // 奥行き: 速球のあとは変化球、変化球のあとは速球
+            lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
+            // 場面: 走者一塁ならゴロ系、走者三塁なら空振り系の決め球
+            objective: objective.goal,
+            // 到達球速で曲がりの効き(breakEfficiency)が変わるので投手の速球を渡す
+            velocity: (pitcher.velocity || 140) + velocityPenalty,
+            // 崩した直後は球速帯を替えずに畳み掛けてよい
+            fooled: fooledLevel(sequence),
+            // 守備の堅いチームではゴロ・凡打を狙う球の値打ちが上がる
+            infieldDefense: infieldDefenseOf(defense),
           });
-
-          if (Math.random() < leadInfluence) {
-            ballScores.sort((a, b) => b.score - a.score);
-            const topChoices = ballScores.slice(0, Math.max(1, Math.floor(ballScores.length / 2)));
-            const chosen = topChoices[Math.floor(Math.random() * topChoices.length)];
-            pitchChoice = chosen.index;
-          } else {
-            pitchChoice = Math.floor(Math.random() * totalPitchTypes);
-          }
-        } else {
-          pitchChoice = Math.floor(Math.random() * totalPitchTypes);
+          pitchChoice = Math.max(0, pitcher.pitches.indexOf(chosen));
         }
 
+        // プレイヤーが球種を指定していればそれを使う（'auto' は捕手のリードに任せる）
+        const aimedTypeIndex = pitchTypeIndexRef.current;
+        if (aimedTypeIndex !== 'auto' && pitcher.pitches[aimedTypeIndex]) {
+          pitchChoice = Number(aimedTypeIndex);
+        }
         selectedBall = pitcher.pitches[pitchChoice];
 
-        // 球種レベルによる制球ペナルティ + スタミナペナルティ
-        let effectiveControl = pitcher.control + controlPenalty;
-        if (selectedBall && selectedBall.type !== 'straight') {
-          const ballControlPenalty = 30 - (selectedBall.level / 100) * 30;
-          effectiveControl = Math.max(0, effectiveControl - ballControlPenalty);
-        }
+        // スタミナペナルティのみ。変化球のばらつきは pitchShape.shapeSigma に一本化
+        // （旧 ballControlPenalty。自動シミュとは係数が違っていた）
+        const effectiveControl = Math.max(0, pitcher.control + controlPenalty);
 
-        // ストライクゾーン確率を実効制球で計算
-        const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65;
-        const isInStrikeZone = Math.random() < (strikeZoneProb * adjustment.strikeZone);
+        // ===== 配球 → 投球位置 → スイング判定 =====
+        // 自動シミュレーションと同じ共有モデル（src/game/pitchCalling.js）を使う。
+        // 以前は采配モードだけ「ゾーン率=0.25+制球*0.65（制球60で64%）」という
+        // 独自式で、自動モードの48%と全く違う世界になっていた。
+        const isBreakingPitch = selectedBall.type !== 'straight';
+        // プレイヤーが狙いを指定していればそれを使う（'auto' は捕手AIに任せる）
+        const aimChoice = pitchAimRef.current;
+        const aim = (aimChoice && aimChoice !== 'auto') ? aimChoice : callPitchTarget({
+          balls: safeCount.balls, strikes: safeCount.strikes, batterEye: batter.eye,
+          catcherLead: catcher.lead ?? 50,
+          pitcherControl: effectiveControl, objective,
+        });
+        // 投球フォームの効果を適用（球速は配球の「奥行き」に使うので位置決定より前に出す）
+        const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
+        let baseVelocity = Math.round(pitcher.velocity * (pitchingFormEffect.velocityMult || 1.0)) + velocityPenalty;
+        // 球種ごとの球速減は自動シミュと共有（constants.js）
+        baseVelocity -= pitchVelocityDrop(selectedBall.type, selectedBall.level ?? 50);
+        const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
 
-        const catcherLeadEffect = (catcher.lead / 100) * 0.10;
+        const loc = resolvePitchLocation({
+          aim, control: effectiveControl, catcherDefense: catcher.defense ?? 50,
+          // 捕手は打者の弱点コースを要求する（狙いの配分は変えない）
+          batterZone: batter.zone, catcherLead: catcher.lead ?? 50,
+          // 前球との関係（対角へ動かす／同じ引き出しを続けない）
+          sequence, velocity: actualVelocity, isBreaking: isBreakingPitch,
+          // 場面: 併殺が欲しければ低め、三振が欲しければ高め
+          objective: objective.goal,
+          // 球種に合ったコースと、変化球レベルによる決まりやすさ
+          pitchType: selectedBall.type, pitchLevel: selectedBall.level ?? 50,
+          pitcherThrows: pitcher.throws, batterBats: batter.bats,
+        });
+        const isInStrikeZone = loc.inZone;
 
-        let swingProb;
-        if (isInStrikeZone) {
-          if (safeCount.strikes === 2) {
-            swingProb = 0.90 + ((100 - batter.eye) / 100) * 0.08;
-          } else if (safeCount.balls >= 2) {
-            swingProb = 0.60 + ((100 - batter.eye) / 100) * 0.30;
-          } else {
-            swingProb = 0.75 + ((100 - batter.eye) / 100) * 0.20;
-          }
-          swingProb = swingProb * (1 - catcherLeadEffect);
-        } else {
-          if (safeCount.strikes === 2) {
-            swingProb = 0.20 + ((100 - batter.eye) / 100) * 0.30;
-          } else {
-            swingProb = 0.15 + ((100 - batter.eye) / 100) * 0.30;
-          }
-        }
+        // 揺さぶれた球は打ちにくく、同じ所へ続けた球は打たれやすい（リーグ平均で±0）
+        const shiftMeet = shiftMeetAdjust(sequenceShift(lastPitch,
+          { col: loc.col, row: loc.row, velocity: actualVelocity }));
+        // 同じ引き出しが続くと打者に読まれる（効果は球種の読みと同じ）
+        // 打者の狙い球（コース）。捕手の要求の偏りと引き出しの繰り返しで読む
+        const locationRead = Math.random()
+          < locationReadChance(sequence, loc.col, loc.row, isBreakingPitch, batter.eye, loc.readSignal);
+
+        // そのセルが打者にとってどれだけ苦手か。スイング判断・打撃補正・振り方で共有する
+        const weakness = zoneWeaknessAt(loc, batter.zone);
+
+        // 采配: 自チームの攻撃中はプレイヤーが狙い球を張れる。
+        // 張った次元はAIの読み合いを置き換える（当たれば+1 / 外せば-1）。
+        const userIsBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
+        const gType = userIsBatting ? batGuessTypeRef.current : 'auto';
+        const gZone = userIsBatting ? batGuessZoneRef.current : 'auto';
+        const committed = gType !== 'auto' || gZone !== 'auto';
+        // ナックルは読み合いが成立しない（誰にもどこへ来るか分からない）。
+        // 球種を張っても当たり外れが付かず、コースだけが残る
+        const unreadable = isUnreadablePitch(selectedBall.type);
+        const guess = committed
+          ? resolveBatterGuess(unreadable ? 'auto' : gType, gZone,
+              { isBreaking: isBreakingPitch, col: loc.col, row: loc.row })
+          : { delta: 0 };
+        // プレイヤーが張らない打者（＝相手チーム、または「おまかせ」）は
+        // 打者の型（野村の4分類）に従って自分で狙う。batterType.js
+        const aiG = resolveAiBatterGuess({
+          type: batter.type || 'D', player: batter.player,
+          balls: safeCount.balls, strikes: safeCount.strikes,
+          isBreaking: isBreakingPitch, col: loc.col,
+          guessRight: !unreadable && predictionCorrect,
+          sequence, batterEye: batter.eye,
+        });
+        // プレイヤーが張った次元はAIの読みを使わない
+        const anyCommit = gType !== 'auto' || gZone !== 'auto';
+        const aiLevel = anyCommit ? 0 : aiG.level;
+        const aiZone = gZone === 'auto' && locationRead ? 1 : 0;
+        const guessLevel = Math.max(-2, Math.min(2, guess.delta + aiLevel + aiZone));
+        const dirBias = anyCommit ? 0 : aiG.dirBias;
+        pushCall(sequence, {
+          col: loc.col, row: loc.row, isBreaking: isBreakingPitch,
+          velocity: actualVelocity, type: selectedBall.type,
+        });
+        let swingProb = swingProbability({
+          inZone: loc.inZone, quality: loc.quality, strikes: safeCount.strikes,
+          batterEye: batter.eye, pitcherControl: effectiveControl,
+          isBreaking: isBreakingPitch, breakingLevel: selectedBall.level || 50,
+          // 打者は自分の得意コースをより振る
+          zoneWeakness: weakness,
+          // 崩された打者はゾーンを広げる（pitchCalling.js）
+          fooled: fooledLevel(sequence),
+        });
+        // 捕手のリードは打者の狙いを外す（スイング判断を鈍らせる）
+        swingProb *= 1 - (catcher.lead / 100) * 0.08;
         swingProb *= adjustment.swingRate;
+        // B型は張っていないコースを見送る（プレイヤーが張っている場合は適用しない）
+        if (!anyCommit) swingProb *= (aiG.swingMult ?? 1);
+        // 采配: 自チームが攻撃中のとき打撃方針を反映（待て=見送り増/積極=打ちにいく）
+        if ((isTopInning ? awayTeam.name : homeTeam.name) === userTeamName) {
+          const _bam = battingApproachRef.current === 'take' ? 0.55
+            : battingApproachRef.current === 'aggressive' ? 1.3 : 1.0;
+          swingProb *= _bam;
+        }
+        // 采配: エンドランは打者を必ず打ちにいかせる（走者を守るため空振りしにくく）
+        // ※ throwPitch のローカル変数ではなく ref を直接参照する（simulateSinglePitch は
+        //   throwPitch と別関数のためローカル変数は参照できない）。
+        if (forceSwingRef.current) swingProb = Math.max(swingProb, 0.92);
 
         const doesSwing = Math.random() < swingProb;
 
         const pitchTypeName = ballEffects[selectedBall.type].name;
 
-        // 投球フォームの効果を適用
-        const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-        let baseVelocity = Math.round(pitcher.velocity * (pitchingFormEffect.velocityMult || 1.0)) + velocityPenalty;
-        baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
-        const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
+        // 投球位置（試合画面のコース表示用）。セル内のどこに来たかは描画時に
+        // 揺らすのではなく**ここで一度だけ決める**。再レンダリングのたびに
+        // 点が動いてしまうため。
+        const pitchLoc = {
+          col: loc.col, row: loc.row, inZone: loc.inZone, quality: loc.quality,
+          // 表示のマーカー形状は球種で決まるので、生のキーを持たせる
+          // （gameLog の pitchType は日本語の表示名なので逆引きできない）
+          type: selectedBall.type,
+          jx: Math.random(), jy: Math.random(),
+        };
 
         if (!doesSwing) {
-          const result = isInStrikeZone
-            ? { type: 'called_strike', description: '見逃しストライク' }
-            : { type: 'ball', description: 'ボール' };
-          return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity }, newStamina };
+          decayFooled(sequence);
+          // あまりにも内角へ外れた球は打者に当たる（pitchZone.js）
+          // 死球は疲労が大きく溜まる。隠れたコストにしないよう投球ログにも出す
+          const hbpFat = hitByPitchFatigue(actualVelocity, batter.player?.physical?.bodyStamina ?? 50);
+          const result = !isInStrikeZone && Math.random() < hitByPitchChance(loc.col, loc.row)
+            ? { type: 'hit_by_pitch', description: `死球（疲労+${hbpFat}）`, hbpFatigue: hbpFat }
+            : isInStrikeZone
+              ? { type: 'called_strike', description: '見逃しストライク' }
+              : { type: 'ball', description: 'ボール' };
+          return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc }, newStamina };
         }
 
+        // 振り方: 得意コース・打者有利カウントならフルスイング、
+        // 苦手コース・2ストライクなら当てにいく（swingType.js）。
+        // 采配モードでは自チームの打撃方針（待て/おまかせ/積極）がここに乗る。
+        const swingPower = decideSwingPower({
+          weakness, balls: safeCount.balls, strikes: safeCount.strikes,
+          // 前の球で崩されていれば当てにいく（pitchSequence.js）
+          fooled: fooledLevel(sequence),
+          meet: batter.meet, power: batter.power,
+          approach: userIsBatting ? battingApproachRef.current : 'balanced',
+        });
+        pitchLoc.swing = swingPowerLabel(swingPower);
+
+        // コース適性 + 振り方 + 前球からの揺さぶり（どれもリーグ平均では±0）
+        const zoneMatchup = combineBatterEffects(
+          combineBatterEffects(
+            combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
+              // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
+              getHeightPitchEffect(loc.row, isBreakingPitch)),
+            getSwingPowerEffect(swingPower)),
+          { meet: shiftMeet, power: shiftMeet * 0.6 });
+
         if (!isInStrikeZone) {
-          // ボール球でもバットに当たることがある（引っ掛けゴロ、泳いでフライ等）
-          // 選球眼が低い打者ほどボール球に手を出しやすく、当てやすい
-          const ballContactRate = 0.25 + ((100 - batter.eye) / 100) * 0.15;
-          if (Math.random() < ballContactRate) {
+          // ボール球でもバットに当たる（引っ掛けゴロ、泳いでフライ等）。
+          // 品質を落として物理エンジンに通すので、ほとんどが凡打になる。
+          if (Math.random() < ballZoneContactChance(batter.eye)) {
             const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
-            const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher, lastPitch);
-            return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true }, newStamina };
+            const bz = combineBatterEffects(BALL_ZONE_PENALTY, zoneMatchup);
+            const weakBatter = { ...batter, dirBias,
+              meet: Math.max(1, batter.meet + bz.meet),
+              power: Math.max(1, batter.power + bz.power) };
+            const result = determineContactResultPhysics(selectedBall, guessLevel, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch, loc);
+            return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true, pitchLoc }, newStamina };
           }
+          pushSwingQuality(sequence, null);
           return {
-            result: { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity },
+            result: { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc },
             newStamina
           };
         }
@@ -1231,9 +1459,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 左右の相性効果を取得
         const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
 
-        // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる
-        const result = determineContactResultPhysics(selectedBall, predictionCorrect, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher, lastPitch);
-        return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity) }, newStamina };
+        // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる。
+        // 甘く入った失投(meatball)は長打され、際どいコース(edge)は打ち損じる。
+        const q = combineBatterEffects(getPitchQualityEffect(loc.quality), zoneMatchup);
+        const zoneBatter = { ...batter, dirBias,
+          meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
+          power: Math.max(1, Math.min(100, batter.power + q.power)) };
+        // コースを読み切った場合も球種を読んだのと同じ効果
+        const result = determineContactResultPhysics(selectedBall, guessLevel, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch, loc);
+        return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), pitchLoc }, newStamina };
       };
 
       const simulatePitch = () => {
@@ -1243,7 +1477,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const currentCatcher = getCurrentCatcher();
 
         // コンディション補正
-        const batterCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+        const batterCondMod = conditionBattingMod(currentBatter.condition);
         const pitcherCondMod = CONDITION_PITCHING_MODIFIER[currentPitcher.condition ?? CONDITION_LEVELS.NORMAL] || 0;
 
         // 精神力によるチャンス/ピンチ補正（得点圏にランナー）
@@ -1254,12 +1488,18 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 選手データから必要な情報を展開
         const batter = {
           name: currentBatter.name,
-          meet: currentBatter.batting.meet + batterCondMod + batterMentalMod,
-          power: currentBatter.batting.power + batterCondMod + batterMentalMod,
+          meet: currentBatter.batting.meet + batterCondMod.meet + batterMentalMod,
+          power: currentBatter.batting.power + batterCondMod.power + batterMentalMod,
           eye: currentBatter.batting.eye,
           speed: currentBatter.physical.speed,
           steal: currentBatter.batting.steal,
-          bats: currentBatter.batting.bats
+          bats: currentBatter.batting.bats,
+          // コース適性（内外角・高低の得手不得手）。自動シミュレーションと同じ導出
+          zone: getZoneProfile(currentBatter),
+          // 打者の型と選手実体。simulateSinglePitch は別関数なので
+          // currentBatter を直接は参照できない（ここで詰めて渡す）
+          type: getBatterType(currentBatter),
+          player: currentBatter,
         };
 
         const pitcher = {
@@ -1268,15 +1508,21 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           control: currentPitcher.pitching.control + pitcherCondMod + pitcherMentalMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
-          pitches: currentPitcher.pitching.arsenal,
+          // 封印した球は投げない（arsenal.js）。回転数を変化量へ織り込む
+          // （ここで一度だけ。simulation-logic.js の getEffectiveBreakLevel 参照）
+          pitches: spinAdjustedArsenal(activeArsenal(currentPitcher.pitching.arsenal),
+            currentPitcher.pitching.spinRate ?? 50),
           form: currentPitcher.pitching.form,
-          spinRate: currentPitcher.pitching.spinRate ?? 50
+          spinRate: currentPitcher.pitching.spinRate ?? 50,
+          // 球の出どころの見づらさ（deception.js）。-1=丸見え 〜 +1=見えない
+          deception: deceptionAxis(getDeception(currentPitcher))
         };
 
         const catcher = {
           name: currentCatcher.name,
           lead: currentCatcher.catching.lead,
           arm: currentCatcher.physical.arm,
+          defense: currentCatcher.fielding?.defense ?? 50,
           throws: currentCatcher.physical.throws
         };
         
@@ -1294,11 +1540,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           };
         });
 
-        // 前球情報を取得
-        const lastPitch = gameLog.length > 0 ? gameLog[gameLog.length - 1] : null;
+        // 打席ごとの配球メモリ。打者が変わったらリセットする
+        const seqKey = `${currentBatter.id}-${currentBatter.name}`;
+        if (pitchSeqRef.current.key !== seqKey) {
+          pitchSeqRef.current = { key: seqKey, seq: createSequence() };
+        }
 
         // 共通関数を呼び出し
-        const { result, newStamina } = simulateSinglePitch(batter, pitcher, catcher, defense, count, currentStamina, lastPitch);
+        const { result, newStamina } = simulateSinglePitch(batter, pitcher, catcher, defense, count, currentStamina, pitchSeqRef.current.seq);
 
         // スタミナを更新
         setCurrentStamina(newStamina);
@@ -1312,45 +1561,113 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         return determineContactResultPhysics(selectedBall, predictionCorrect, tempoGroundballBonus, handEffect, actualVelocity, batter, pitcher, defense, null);
       };
 
-      const advanceRunners = (hitType) => {
+      // 守備成績（守備機会＝刺殺+補殺 / 失策）を記録する。
+      // ⚠ **采配モードには従来これが一切なかった**。自動シミュ（スキップ）だけが
+      //    記録しており、自分で采配した試合の守備成績が誰にも付かなかった。
+      const recordFielding = (position, { chance = 0, error = 0, assist = 0 } = {}) => {
+        if (!position) return;
+        const defenseTeamType = isTopInning ? 'home' : 'away';
+        const setTeam = defenseTeamType === 'home' ? setHomeTeam : setAwayTeam;
+        setTeam(prev => ({
+          ...prev,
+          players: prev.players.map(p => {
+            if (p.position !== position || !(p.battingOrder > 0)) return p;
+            const g = p.gameStats || {};
+            return { ...p, gameStats: {
+              ...g,
+              fieldingChances: (g.fieldingChances || 0) + chance + error,
+              fieldErrors: (g.fieldErrors || 0) + error,
+              assists: (g.assists || 0) + assist,
+            } };
+          }),
+        }));
+      };
+
+      const advanceRunners = (hitType, fieldingPosition = null, isError = false) => {
         const newBases = [false, false, false];
         let runsScored = 0;
-        
+        let unearnedScored = 0;   // 生還した走者のうち失策で出塁していた数（自責点の判定）
+
         if (hitType === 'homerun') {
           runsScored = 1 + bases.filter(b => b).length;
+          unearnedScored = bases.reduce((n, b) => n + (isUnearnedRunner(b) ? 1 : 0), 0) + (isError ? 1 : 0);
           // setBases([false, false, false]); ← 削除
-          return { bases: [false, false, false], runsScored };
+          return { bases: [false, false, false], runsScored, unearnedScored };
         }
         
         const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
-        
+
+        // 積極進塁の判定に使う守備値。走者の足は塁に置いた走者本人のもの
+        // （識別できない旧形式の `true` だけ攻撃側の平均で近似する）
+        const defTeam = getDefenseTeam();
+        const def = {};
+        defTeam.players.forEach(p => { if (p.battingOrder >= 1) def[p.position] = p; });
+        const ofArms = ['left', 'center', 'right'].map(p => def?.[p]?.physical?.arm ?? 60);
+        const avgArm = ofArms.reduce((a, b) => a + b, 0) / 3;
+        const offense = isTopInning ? awayTeam : homeTeam;
+        const starters = offense.players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9);
+        const avgSpeed = starters.length
+          ? starters.reduce((sum, p) => sum + (p.physical?.speed ?? 55), 0) / starters.length : 55;
+        let outsFromThrow = 0;
+
         for (let i = 2; i >= 0; i--) {
           if (bases[i]) {
-            const newBase = i + advancement;
+            let newBase = i + advancement;
+            // 積極進塁（単打で 2塁→本塁 / 1塁→3塁、二塁打で 1塁→本塁）。
+            // 自動シミュレーションと同じ判定を共有する（baserunning.js）。
+            if (outsFromThrow === 0) {
+              // 打球を処理した野手の肩で判定する（自動シミュと同じ）。
+              // avgArm だけだと「強肩の外野手を置く」意味が出ない
+              const thrower = fieldingPosition ? def?.[fieldingPosition] : null;
+              const { attempt, thrownOut } = tryExtraAdvance({
+                hitType, fromBase: i, runnerSpeed: runnerOf(bases[i])?.speed ?? avgSpeed, avgArm,
+                throwerArm: thrower?.physical?.arm ?? null,
+                currentOuts: outs, cutoffDefense: def?.short?.fielding?.defense ?? 60,
+              });
+              if (attempt && thrownOut) {
+                outsFromThrow++;
+                recordFielding(fieldingPosition, { chance: 1, assist: 1 });   // 捕殺
+                continue;
+              }
+              // ⚠ 先を走る走者が既にその塁に居たら止まる（以前は同じ塁に2人が重なり、
+              //    boolean の塁では1人が黙って消えていた）
+              if (attempt && (newBase + 1 >= 3 || !newBases[newBase + 1])) newBase++;
+            }
             if (newBase >= 3) {
               runsScored++;
+              if (isUnearnedRunner(bases[i])) unearnedScored++;
             } else {
-              newBases[newBase] = true;
+              newBases[newBase] = bases[i];
             }
           }
         }
         
         if (advancement < 3) {
-          newBases[advancement - 1] = true;
+          newBases[advancement - 1] = batterAsRunner(isError);
         } else {
           runsScored++;
+          if (isError) unearnedScored++;
         }
-        
+
         // setBases(newBases); ← 削除
-        return { bases: newBases, runsScored };
+        return { bases: newBases, runsScored, unearnedScored, outsMade: outsFromThrow };
       };
 
+      // [SECTION: THROW_PITCH] throwPitch（投球シミュレーション本体）
       const throwPitch = () => {
         // ガード: countがundefinedの場合は早期リターン
         if (!count || count.balls === undefined) {
           console.warn('count is not ready');
           return;
         }
+
+        // 采配フラグを 1 球分だけ有効。値は先にスナップショット、消費（= false に戻す）は
+        // simulatePitch() 呼び出し後 (strategy.consumeOneShot()) に行う。
+        // 理由: simulateSinglePitch は forceSwingRef.current を直接参照するので、
+        //       呼び出し時点ではまだ true のまま残っていないといけない。
+        const strat = strategy.snapshot();
+        const doForceSteal = strat.forceSteal;
+        const doIntentionalWalk = strat.intentionalWalk;
 
         // 打席の最初（カウント0-0）で代打チェック
         if (count.balls === 0 && count.strikes === 0) {
@@ -1364,14 +1681,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const defenseTeam = getDefenseTeam();
         
         // コンディション補正
-        const bCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+        const bCondMod = conditionBattingMod(currentBatter.condition);
         const pCondMod = CONDITION_PITCHING_MODIFIER[currentPitcher.condition ?? CONDITION_LEVELS.NORMAL] || 0;
 
         // ローカル変数として展開
         const batter = {
           name: currentBatter.name,
-          meet: currentBatter.batting.meet + bCondMod,
-          power: currentBatter.batting.power + bCondMod,
+          meet: currentBatter.batting.meet + bCondMod.meet,
+          power: currentBatter.batting.power + bCondMod.power,
           eye: currentBatter.batting.eye,
           speed: currentBatter.physical.speed,
           steal: currentBatter.batting.steal,
@@ -1385,15 +1702,21 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           control: currentPitcher.pitching.control + pCondMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
-          pitches: currentPitcher.pitching.arsenal,
+          // 封印した球は投げない（arsenal.js）。回転数を変化量へ織り込む
+          // （ここで一度だけ。simulation-logic.js の getEffectiveBreakLevel 参照）
+          pitches: spinAdjustedArsenal(activeArsenal(currentPitcher.pitching.arsenal),
+            currentPitcher.pitching.spinRate ?? 50),
           form: currentPitcher.pitching.form,
-          spinRate: currentPitcher.pitching.spinRate ?? 50
+          spinRate: currentPitcher.pitching.spinRate ?? 50,
+          // 球の出どころの見づらさ（deception.js）。-1=丸見え 〜 +1=見えない
+          deception: deceptionAxis(getDeception(currentPitcher))
         };
         
         const catcher = {
           name: currentCatcher.name,
           lead: currentCatcher.catching.lead,
           arm: currentCatcher.physical.arm,
+          defense: currentCatcher.fielding?.defense ?? 50,
           throws: currentCatcher.physical.throws
         };
         
@@ -1410,8 +1733,16 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           };
         });
         
-        const result = simulatePitch();
-        
+        let result = simulatePitch();
+        // simulateSinglePitch が読み終わったので采配のワンショットフラグを消費
+        strategy.consumeOneShot();
+        // 采配: 敬遠指示があればこの1球で四球にする（ボール扱い）
+        if (doIntentionalWalk) {
+          result = { type: 'ball', description: '敬遠', pitchType: '—', velocity: 0 };
+        }
+        // 【守備シフトは廃止】打球方向モデル（段階5）を作った後も、シフトは
+        // 「単打の35%をアウトに書き換える」後付け処理のままで整合していなかった。
+        // 守備は全て基本配置とする。
         // 球速履歴を更新（最新2球分のみ保持）
         setRecentVelocities(prev => {
           const updated = [...prev, result.velocity];
@@ -1419,17 +1750,13 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         });
         
         // 投手成績の更新
-        setPitcherStats(prev => ({
-          ...prev,
-          pitches: prev.pitches + 1
-        }));
         
         // 投手個別の投球数を更新
         {
           const currentPitcherPlayer = getCurrentPitcher();
           const defenseTeamType = isTopInning ? 'home' : 'away';
           updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-            pitches: (currentPitcherPlayer.stats?.pitching?.pitches || 0) + 1
+            pitches: 1
           });
         }
         
@@ -1441,12 +1768,16 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             result: result.description,
             pitchType: result.pitchType,
             velocity: result.velocity,
+            // コース表示用。paKey は打席の識別子（打者が変わったら描き直す）
+            pitchLoc: result.pitchLoc,
+            resultType: result.type,
+            paKey: pitchSeqRef.current.key,
             // 打球物理データ（インプレー時のみ）
             exitVelocity: result.exitVelocity,
             launchAngle: result.launchAngle,
             distance: result.distance,
             meetQuality: result.meetQuality,
-            bases: [...bases],
+            bases: asFlags(bases),
             outs
           }];
           // 最新50球のみ保持（パフォーマンス最適化）
@@ -1463,17 +1794,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         switch (result.type) {
           case 'ball':
             newCount.balls++;
+            // 敬遠: この1球で四球成立させる
+            if (doIntentionalWalk) { newCount.balls = 4; }
             if (newCount.balls === 4) {
               // 打者成績: 四球
-              setBatterStats(prev => ({
-                ...prev,
-                plateAppearances: prev.plateAppearances + 1,
-                walks: prev.walks + 1
-              }));
-              setPitcherStats(prev => ({
-                ...prev,
-                walks: prev.walks + 1
-              }));
               
               // 選手個別成績を更新
               {
@@ -1483,55 +1807,59 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
                 const defenseTeamType = isTopInning ? 'home' : 'away';
                 
                 updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
-                  walks: (currentBatterPlayer.stats?.batting?.walks || 0) + 1
+                  walks: 1
                 });
                 
                 updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-                  walks: (currentPitcherPlayer.stats?.pitching?.walks || 0) + 1
+                  walks: 1
                 });
               }
               
               if (bases[0] && bases[1] && bases[2]) {
                 const run = 1;
                 isTopInning ? newScore.away++ : newScore.home++;
-                setPitcherStats(prev => ({
-                  ...prev,
-                  runsAllowed: prev.runsAllowed + run
-                }));
                 
-                // 押し出しの得点も投手成績に
-                {
-                  const currentPitcherPlayer = getCurrentPitcher();
-                  const defenseTeamType = isTopInning ? 'home' : 'away';
-                  updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-                    runsAllowed: (currentPitcherPlayer.stats?.pitching?.runsAllowed || 0) + 1
-                  });
-                }
+                // 押し出し: 投手の失点（自責の判定込み）と打者の打点。
+                // ⚠ 以前は失点だけ足して自責点に入らず、打点も付いていなかった
+                recordRunsToCurrentPitcher(1, outs, unearnedAt(bases, 2));
+                updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
               } else {
-                if (bases[1] && bases[0]) newBases[2] = true;
-                if (bases[0]) newBases[1] = true;
-                newBases[0] = true;
+                newBases = forceAdvance(bases, batterAsRunner()).bases;
               }
               atBatOver = true;
               addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '四球');
             }
             break;
+          case 'hit_by_pitch': {
+            // 死球。四球と同じ押し出し進塁だが、打数にも四球にも計上しない
+            {
+              const b = getCurrentBatter();
+              const pi = getCurrentPitcher();
+              // 故障は作らないが、**疲労は大きく溜まる**（速い球ほど・体力が無いほど）
+              updateBatterStats(b.id, isTopInning ? 'away' : 'home', {
+                hitByPitch: 1,
+                hbpFatigue: (result.hbpFatigue || 0)
+              });
+              updatePitcherStats(pi.id, isTopInning ? 'home' : 'away', {
+                hitBatters: 1
+              });
+            }
+            if (bases[0] && bases[1] && bases[2]) {
+              isTopInning ? newScore.away++ : newScore.home++;
+              recordRunsToCurrentPitcher(1, outs, unearnedAt(bases, 2));   // 押し出し（自責の判定込み）
+              updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
+            } else {
+              newBases = forceAdvance(bases, batterAsRunner()).bases;
+            }
+            atBatOver = true;
+            addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '死球');
+            break;
+          }
           case 'called_strike':
           case 'swinging_strike':
             newCount.strikes++;
             if (newCount.strikes === 3) {
               // 打者成績: 三振
-              setBatterStats(prev => ({
-                ...prev,
-                plateAppearances: prev.plateAppearances + 1,
-                atBats: prev.atBats + 1,
-                strikeouts: prev.strikeouts + 1
-              }));
-              setPitcherStats(prev => ({
-                ...prev,
-                outs: prev.outs + 1,
-                strikeouts: prev.strikeouts + 1
-              }));
               
               // 選手個別成績を更新
               {
@@ -1541,36 +1869,30 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
                 const defenseTeamType = isTopInning ? 'home' : 'away';
                 
                 updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
-                  atBats: (currentBatterPlayer.stats?.batting?.atBats || 0) + 1,
-                  strikeouts: (currentBatterPlayer.stats?.batting?.strikeouts || 0) + 1
+                  atBats: 1,
+                  strikeouts: 1
                 });
                 
                 updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-                  outs: (currentPitcherPlayer.stats?.pitching?.outs || 0) + 1,
-                  strikeouts: (currentPitcherPlayer.stats?.pitching?.strikeouts || 0) + 1
+                  outs: 1,
+                  strikeouts: 1
                 });
               }
               
               newOuts++;
               atBatOver = true;
+              recordFielding('catcher', { chance: 1 });   // 三振は捕手の刺殺
               addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '三振');
             }
             break;
           case 'double_play':
             // ダブルプレー処理
-            setBatterStats(prev => ({
-              ...prev,
-              plateAppearances: prev.plateAppearances + 1,
-              atBats: prev.atBats + 1
-            }));
-            setPitcherStats(prev => ({
-              ...prev,
-              outs: prev.outs + 2,
-              doublePlay: (prev.doublePlay || 0) + 1  // 併殺打カウント
-            }));
             newOuts += 2;  // 2アウト追加
             newBases[0] = false;  // 一塁ランナー消える
             atBatOver = true;
+            // 打数と投手の2アウト（以前はどちらも記録されていなかった）
+            updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { atBats: 1 });
+            updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 2 });
             addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '併殺');
             break;
           case 'foul':
@@ -1580,18 +1902,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           case 'double':
           case 'triple':
           case 'homerun':
-            const { bases: updatedBases, runsScored: runs } = advanceRunners(result.type);
+            const { bases: updatedBases, runsScored: runs, unearnedScored = 0, outsMade: throwOuts = 0 } = advanceRunners(result.type, result.fieldingPosition, !!result.isError);
             
             // 打者成績: ヒット
             const bases_earned = result.type === 'single' ? 1 : result.type === 'double' ? 2 : result.type === 'triple' ? 3 : 4;
-            setBatterStats(prev => ({
-              ...prev,
-              plateAppearances: prev.plateAppearances + 1,
-              atBats: prev.atBats + 1,
-              hits: prev.hits + 1,
-              homeruns: prev.homeruns + (result.type === 'homerun' ? 1 : 0),
-              totalBases: prev.totalBases + bases_earned
-            }));
+            // 失策での出塁は「安打」ではない（打数のみ加算）
+            const reachedOnError = !!result.isError;
             
             // 選手個別成績を更新
             {
@@ -1601,56 +1917,64 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               const defenseTeamType = isTopInning ? 'home' : 'away';
               
               updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
-                atBats: (currentBatterPlayer.stats?.batting?.atBats || 0) + 1,
-                hits: (currentBatterPlayer.stats?.batting?.hits || 0) + 1,
-                homeruns: (currentBatterPlayer.stats?.batting?.homeruns || 0) + (result.type === 'homerun' ? 1 : 0),
-                rbis: (currentBatterPlayer.stats?.batting?.rbis || 0) + runs
+                atBats: 1,
+                hits: (reachedOnError ? 0 : 1),
+                doubles: (!reachedOnError && result.type === 'double' ? 1 : 0),
+                triples: (!reachedOnError && result.type === 'triple' ? 1 : 0),
+                homeruns: (!reachedOnError && result.type === 'homerun' ? 1 : 0),
+                // 失策による得点には打点が付かない
+                rbis: (reachedOnError ? 0 : runs)
               });
               
+              // 失策が無ければアウトだったので「免れたアウト」を+1（走者本人の印は
+              // advanceRunners が batterAsRunner(isError) で塁に持たせている）
+              if (result.isError) inningErrorOutsRef.current++;
+              const earned = takeEarnedRuns(runs, outs, unearnedScored);
+              // ⚠ 被安打・被本塁打は以前一度も記録していなかった（采配した試合だけ被安打0）。
+              //    積極進塁で刺した走者のアウトも投手の投球回に入る
               updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-                runsAllowed: (currentPitcherPlayer.stats?.pitching?.runsAllowed || 0) + runs
+                runsAllowed: runs,
+                earnedRuns: earned,
+                hits: reachedOnError ? 0 : 1,
+                homeruns: (!reachedOnError && result.type === 'homerun') ? 1 : 0,
+                outs: throwOuts,
               });
             }
             
             // チーム別安打・打点をカウント（エラーの場合はエラーもカウント）
+        // ⚠ 失策での出塁は安打ではない（チームの安打数にも数えない）
         if (isTopInning) {
-          setTeamHits(prev => ({ ...prev, away: prev.away + 1 }));
+          if (!result.isError) setTeamHits(prev => ({ ...prev, away: prev.away + 1 }));
           setTeamRBIs(prev => ({ ...prev, away: prev.away + runs }));
           if (result.isError) {
             setTeamErrors(prev => ({ ...prev, home: prev.home + 1 }));
+            recordFielding(result.errorPosition, { error: 1 });
           }
         } else {
-          setTeamHits(prev => ({ ...prev, home: prev.home + 1 }));
+          if (!result.isError) setTeamHits(prev => ({ ...prev, home: prev.home + 1 }));
           setTeamRBIs(prev => ({ ...prev, home: prev.home + runs }));
           if (result.isError) {
             setTeamErrors(prev => ({ ...prev, away: prev.away + 1 }));
+            recordFielding(result.errorPosition, { error: 1 });
           }
         }
         
-        setPitcherStats(prev => ({
-          ...prev,
-          runsAllowed: prev.runsAllowed + runs
-        }));
         
         isTopInning ? (newScore.away += runs) : (newScore.home += runs);
         newBases = updatedBases;
+        // 捕殺: 積極進塁を狙って刺された走者はアウトになる
+        if (throwOuts > 0) {
+          newOuts += throwOuts;
+        }
         atBatOver = true;
         {
-          const hitLabel = result.type === 'homerun' ? '本塁打' : result.type === 'triple' ? '三塁打' : result.type === 'double' ? '二塁打' : '安打';
+          const hitLabel = result.isError ? '失策'
+            : result.type === 'homerun' ? '本塁打' : result.type === 'triple' ? '三塁打' : result.type === 'double' ? '二塁打' : '安打';
           addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', hitLabel);
         }
         break;
       case 'out':
         // 打者成績: アウト
-        setBatterStats(prev => ({
-          ...prev,
-          plateAppearances: prev.plateAppearances + 1,
-          atBats: prev.atBats + 1
-        }));
-        setPitcherStats(prev => ({
-          ...prev,
-          outs: prev.outs + 1
-        }));
         
         // 選手個別成績を更新
             {
@@ -1660,79 +1984,103 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               const defenseTeamType = isTopInning ? 'home' : 'away';
               
               updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
-                atBats: (currentBatterPlayer.stats?.batting?.atBats || 0) + 1
+                atBats: 1
               });
               
               updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-                outs: (currentPitcherPlayer.stats?.pitching?.outs || 0) + 1
+                outs: 1
               });
             }
             
             newOuts++;
 
+            // 守備機会（刺殺・補殺）。内野ゴロは「捕った野手の補殺＋一塁手の刺殺」
+            recordFielding(result.fieldingPosition, { chance: 1 });
+            if (result.isGroundOut && result.fieldingPosition && result.fieldingPosition !== 'first') {
+              recordFielding('first', { chance: 1 });
+            }
+
             // 併殺打判定（一塁ランナーがいて内野ゴロの場合）
             let isDoublePlay = false;
+            // **内野ゴロのアウトなら距離は問わない**（自動シミュと同じ条件）。
+            // 外野へ抜けた打球はそもそも 'out' にならないので、距離を足すと
+            // 二重の門番になって併殺が実NPBの1/4しか出なくなる
             if (newBases[0] && result.launchAngle != null && result.launchAngle < 10
-                && result.distance != null && result.distance < 40 && newOuts < 3) {
+                && !result.isOutfieldFly && newOuts < 3) {
               const ssDefense = defense.short?.defense || 50;
               const sbDefense = defense.second?.defense || 50;
               const ifAvg = (ssDefense + sbDefense) / 2;
-              const dpBase = 15 + (ifAvg - 50) * 0.35;
+              // 一塁走者の足が速いと二塁が間に合わない（自動シミュと同じ式）
+              const dpRunnerSpeed = runnerOf(newBases[0])?.speed ?? 55;
+              const dpBase = DP_BASE + (ifAvg - 50) * 0.35 - (dpRunnerSpeed - 55) * 0.30;
               if (Math.random() * 100 < dpBase) {
                 isDoublePlay = true;
+                recordFielding('first', { chance: 1 });   // 一塁でのアウト
                 newOuts++;
                 newBases[0] = false;
-                setPitcherStats(prev => ({
-                  ...prev,
-                  outs: prev.outs + 1,
-                  doublePlay: (prev.doublePlay || 0) + 1
-                }));
                 {
                   const currentPitcherPlayer = getCurrentPitcher();
                   const defenseTeamType = isTopInning ? 'home' : 'away';
                   updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-                    outs: (currentPitcherPlayer.stats?.pitching?.outs || 0) + 1
+                    outs: 1
                   });
                 }
                 setLastResult({ ...result, description: result.description + '（併殺打）' });
               }
             }
 
+            // 内野ゴロでの走者進塁（ゴロGO・進塁打）。詳細は baserunning.js 参照
+        if (result.isGroundOut && !result.isOutfieldFly && newOuts < 3) {
+          const dt = getDefenseTeam();
+          const infPos = ['first', 'second', 'third', 'short'];
+          const infVals = infPos.map(pos => {
+            const pl = dt.players.find(p => p.position === pos && p.battingOrder >= 1);
+            return pl?.fielding?.defense ?? 50;
+          });
+          const adv = resolveGroundOutAdvance({
+            hasThird: !!newBases[2], hasSecond: !!newBases[1],
+            infieldDefense: infVals.reduce((a, b) => a + b, 0) / infVals.length,
+          });
+          if (adv.scoreFromThird) {
+            const unearned = unearnedAt(newBases, 2);   // ⚠ 塁を空ける前に読む
+            newBases[2] = false;
+            if (isTopInning) newScore.away++; else newScore.home++;
+            recordRunsToCurrentPitcher(1, outs, unearned);
+            // 内野ゴロの間の生還は打点（併殺の場合は付かない）
+            if (!isDoublePlay) updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
+            setLastResult({ ...result, description: (result.description || 'アウト') + '（進塁打）' });
+          }
+          if (adv.secondToThird) { newBases[2] = newBases[1]; newBases[1] = false; }
+        }
+
             // タッチアップ判定（外野フライのみ）
         if (result.isOutfieldFly && newOuts < 3) {
           const throwbackChance = result.tagupThrowbackChance || 0;
-          const runnerSpeed = batter.speed / 100; // 走者の速さ（簡易的に打者と同じ）
-          
+          // 走者の速さは塁に居る走者本人のもの（識別できない旧形式は打者で近似）
+          const tagupSpeed = (at) => (runnerOf(newBases[at])?.speed ?? batter.speed) / 100;
+
           // 三塁ランナーがいる場合（ホーム進塁）
           if (newBases[2]) {
-            const tagupSuccess = Math.random() > (throwbackChance - runnerSpeed * 0.3);
+            const tagupSuccess = Math.random() > (throwbackChance - tagupSpeed(2) * 0.3);
             if (tagupSuccess) {
-              if (isTopInning) {
-                setScore(prev => ({ ...prev, away: prev.away + 1 }));
-              } else {
-                setScore(prev => ({ ...prev, home: prev.home + 1 }));
-              }
-              setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+              // ⚠ newScore に足すこと。`setScore(prev => …)` は投球の最後の
+              //    `setScore(newScore)` に上書きされ、犠飛の得点がスコアから消えていた
+              //    （投手の失点にだけ入り、犠飛でのサヨナラも成立しなかった）
+              if (isTopInning) newScore.away++; else newScore.home++;
+              recordRunsToCurrentPitcher(1, outs, unearnedAt(newBases, 2));
+              updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
               newBases[2] = false;
               setLastResult({ ...result, description: result.description + '（犠牲フライ）' });
             }
           }
           
-          // 二塁ランナーがいる場合（三塁進塁）
-          if (newBases[1]) {
-            const tagupSuccess = Math.random() > (throwbackChance * 0.7 - runnerSpeed * 0.2);
-            if (tagupSuccess) {
-              newBases[2] = true;
+          // 二塁ランナーの三塁進塁（三塁が空いている深いフライのみ）。
+          // 以前は1塁走者まで無条件にタッグアップさせており、自動シミュレーション
+          // （2塁走者のみ・確率0.4基準）より大幅に走者が進んでいた。
+          if (newBases[1] && !newBases[2] && newOuts < 3) {
+            if (Math.random() < 0.4 - throwbackChance * 0.5 + tagupSpeed(1) * 0.15) {
+              newBases[2] = newBases[1];
               newBases[1] = false;
-            }
-          }
-          
-          // 一塁ランナーがいる場合（二塁進塁）
-          if (newBases[0]) {
-            const tagupSuccess = Math.random() > (throwbackChance * 0.5 - runnerSpeed * 0.15);
-            if (tagupSuccess) {
-              newBases[1] = true;
-              newBases[0] = false;
             }
           }
         }
@@ -1741,8 +2089,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (isDoublePlay) {
           addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '併殺');
         } else {
+          // スコアブックと同じ表記にする（遊ゴロ / 中飛 / 右直）。
+          // 元は description から「アウト」を削るだけで、ゴロは3文字・
+          // ライナーは4文字・フライは3文字とバラバラだった
           const desc = result.description || '';
-          const outLabel = desc.replace('アウト', '').replace('（ポップフライ）', '') || 'アウト';
+          const pc = POSITION_NAMES[result.fieldingPosition] || '';
+          const outLabel = desc.includes('ゴロ') ? (desc.replace('アウト', '') || 'ゴロ')
+            : desc.includes('ライナー') ? (pc ? `${pc}直` : '直線')
+            : desc.includes('フライ') ? (pc ? `${pc}飛` : '飛球')
+            : (desc.replace('アウト', '').replace('（ポップフライ）', '') || 'アウト');
           addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', outLabel);
         }
         break;
@@ -1768,23 +2123,23 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           
           if (Math.random() < wildPitchRate) {
             // ãƒ¯ã‚¤ãƒ«ãƒ‰ãƒ”ãƒƒãƒç™ºç”Ÿ
-            setPitcherStats(prev => ({ ...prev, wildPitches: prev.wildPitches + 1 }));
             
             const catcherArm = defense.catcher.arm / 100;
-            const runnerSpeed = batter.speed / 100;
-            const throwoutChance = Math.max(0, catcherArm * 0.40 - runnerSpeed * 0.20);
+            // 刺されるかは走る走者本人の足で決まる（識別できない旧形式は打者で近似）
+            const throwoutChance = (at) =>
+              Math.max(0, catcherArm * 0.40 - (runnerOf(newBases[at])?.speed ?? batter.speed) / 100 * 0.20);
             
             let wpDescription = '💥 ワイルドピッチ！';
             
             // 三塁→ホーム
             if (newBases[2]) {
-              if (Math.random() < throwoutChance) {
-                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
+              if (Math.random() < throwoutChance(2)) {
                 wpDescription += ' 🛡️ 捕手が三塁ランナーを刺した！';
                 newOuts++;
+                updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
               } else {
                 isTopInning ? newScore.away++ : newScore.home++;
-                setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+                recordRunsToCurrentPitcher(1, outs, unearnedAt(newBases, 2));
                 wpDescription += ' ⚡ 三塁ランナーがホームイン';
               }
               newBases[2] = false;
@@ -1792,12 +2147,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             
             // 二塁→三塁
             if (newBases[1] && newOuts < 3) {
-              if (Math.random() < throwoutChance) {
-                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
+              if (Math.random() < throwoutChance(1)) {
                 wpDescription += ' 🛡️ 二塁ランナーを刺した！';
                 newOuts++;
+                updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
               } else {
-                newBases[2] = true;
+                newBases[2] = newBases[1];
                 wpDescription += ' ⚡ 二塁ランナーが三塁へ';
               }
               newBases[1] = false;
@@ -1805,12 +2160,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             
             // 一塁→二塁
             if (newBases[0] && newOuts < 3) {
-              if (Math.random() < throwoutChance) {
-                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
+              if (Math.random() < throwoutChance(0)) {
                 wpDescription += ' 🛡️ 一塁ランナーを刺した！';
                 newOuts++;
+                updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
               } else {
-                newBases[1] = true;
+                newBases[1] = newBases[0];
                 wpDescription += ' ⚡ 一塁ランナーが二塁へ';
               }
               newBases[0] = false;
@@ -1825,29 +2180,23 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         
         // 盗塁判定
         if (!atBatOver && newOuts < 3 && result.type !== 'foul' && result.type !== 'foul_2strike' && (bases[0] || bases[1])) {
-          const runnerSpeed = batter.speed / 100;
-          const stealSkill = batter.steal / 100;
-          const pitcherControl = pitcher.control / 100;
-          const pitchVelocity = result.velocity || pitcher.velocity;
-          
-          // 盗塁試行率
-          const stealSkillBonus = Math.pow(stealSkill, 1.5) * 0.18;  // 0-18%
-          const speedBonus = runnerSpeed * 0.02;  // 0-2%
-          const countBonus = newCount.balls >= 2 ? 0.01 : 0;  // 1%
-          const outsBonus = 0;  // アウトカウントボーナス廃止
-          
-          // 二塁盗塁試行
-          if (bases[0] && !bases[1]) {
-            // 二塁盗塁は正面への送球なので左右ペナルティなし
-            let catcherArm = defense.catcher.arm / 100;
-            let catcherDeterrent = catcherArm * 0.18;  // 捕手の肩による牽制効果 0-18%
-            
-            // 左投手は牽制ボーナス
-            if (pitcher.throws === 'left') {
-              catcherDeterrent += 0.03;  // +3%の牽制ボーナス
-            }
-            
-            let stealAttempt = Math.max(0, stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrent);
+          // 二塁盗塁試行（⚠ 暴投で既に動いた走者は走らないので、投球後の塁でも確かめる）
+          if (bases[0] && !bases[1] && newBases[0] && !newBases[1]) {
+            // 盗塁の判断・成否は自動シミュレーションと共有する（stealing.js）。
+            // 走者の足と盗塁の技術は**一塁走者本人**のもの（baseState.js）。
+            // ⚠ 以前は塁が boolean で走者を識別できず、打者の値で近似していた
+            //    （俊足の走者でも鈍足の打者の打席では走れなかった）
+            const runner1 = runnerOf(newBases[0]);
+            const r1Speed = runner1?.speed ?? batter.speed;
+            const r1Steal = runner1?.steal ?? batter.steal;
+            const stealRate2 = stealSuccessRate({
+              runnerSpeed: r1Speed, runnerSteal: r1Steal,
+              catcherArm: defense.catcher.arm, pitcherControl: pitcher.control,
+              pitcherThrows: pitcher.throws, toBase: 2,
+            });
+            let stealAttempt = stealAttemptRate({
+              successRate: stealRate2, runnerSteal: r1Steal, outs: newOuts, toBase: 2,
+            });
 
             // 監督AI：盗塁判断（Phase 3）
             if (autoManagerMode) {
@@ -1862,60 +2211,36 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               const scoreDiff = Math.abs(score.home - score.away);
               const isCloseGame = scoreDiff <= 3;
 
-              const stealMultiplier = autoStealingDecision(batter, {
+              const stealMultiplier = autoStealingDecision(runner1, {
                 scoreDiff,
                 isCloseGame,
                 outs: newOuts,
                 batterType,
-                runnerSteal: batter.steal
+                runnerSteal: r1Steal
               });
 
               stealAttempt *= stealMultiplier;
             }
 
+            // 采配: 盗塁指示/エンドランがあれば強制的に試行（成否は走力・肩で決まる）
+            if (doForceSteal) { stealAttempt = 1; }
+
             if (Math.random() < stealAttempt) {
-              // 成功率システム
-              // ステップ1: 走力による基本成功率（30%-90%）
-              const baseRate = 0.30 + runnerSpeed * 0.60;
-
-              // ステップ2: 各種補正
-              const stealBonus = stealSkill * 0.15;  // 0-15%
-              const velocityEffect = (pitchVelocity - 135) / 350;  // ±10%
-              const controlEffect = pitcherControl * 0.05;  // 0-5%
-
-              const adjustedRate = baseRate + stealBonus - velocityEffect - controlEffect;
-
-              // ステップ3: 捕手の肩による阻止（二乗スケール: 肩が弱いとほぼ刺せない）
-              const catcherArmSq = catcherArm * catcherArm;
-              let catcherBlock;
-              if (adjustedRate < 0.30) {
-                catcherBlock = adjustedRate * catcherArmSq * 0.80;
-              } else if (adjustedRate > 0.60) {
-                catcherBlock = adjustedRate * catcherArmSq * 0.35;
-              } else {
-                const t = (adjustedRate - 0.30) / 0.30;
-                catcherBlock = adjustedRate * catcherArmSq * (0.80 - t * 0.45);
-              }
-
-              const stealSuccess = Math.max(0.05, Math.min(0.95, adjustedRate - catcherBlock));
-              
-              if (Math.random() < stealSuccess) {
-                // 盗塁成功
-        newBases[1] = true;
+              if (Math.random() < stealRate2) {
+                // 盗塁成功（盗塁は走者本人に付ける）
+        newBases[1] = newBases[0];
         newBases[0] = false;
-        setCatcherStats(prev => ({ ...prev, stolenBasesAllowed: prev.stolenBasesAllowed + 1 }));
-        setBatterStats(prev => ({ ...prev, stolenBases: prev.stolenBases + 1 }));
+        if (runner1) updateBatterStats(runner1.id, runner1.side, { stolenBases: 1 });
         setGameLog(prev => {
-          const updated = [...prev, { description: '🏃 盗塁成功！一塁→二塁', isSpecial: true }];
+          const updated = [...prev, { description: `🏃 盗塁成功！${runner1 ? runner1.name + ' ' : ''}一塁→二塁`, isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
         });
       } else {
-        // 盗塁失敗
+        // 盗塁失敗（盗塁死のアウトも投手の投球回に入る）
         newBases[0] = false;
+        if (runner1) updateBatterStats(runner1.id, runner1.side, { caughtStealing: 1 });
         newOuts++;
-        setCatcherStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
-        setBatterStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
-        setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
+        updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
         setGameLog(prev => {
           const updated = [...prev, { description: '❌ 盗塁失敗、アウト', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
@@ -1925,23 +2250,20 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
   }
   
   // 三塁盗塁試行
-  if (bases[1] && !bases[2] && newOuts < 3) {
-    // 三塁盗塁は体の向きを変える必要があるため左投げペナルティあり
-    let catcherArmForThird = defense.catcher.arm / 100;
-    
-    // 左投げ捕手は三塁送球でペナルティ
-    if (catcher.throws === 'left') {
-      catcherArmForThird = Math.max(0, catcherArmForThird - 0.20);  // -20%
-    }
-    
-    let catcherDeterrentThird = catcherArmForThird * 0.22;
-    
-    // 左投手は牽制ボーナス
-    if (pitcher.throws === 'left') {
-      catcherDeterrentThird += 0.05;
-    }
-    
-    let stealThirdAttempt = Math.max(0, (stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrentThird) * 0.5);
+  if (bases[1] && !bases[2] && newBases[1] && !newBases[2] && newOuts < 3) {
+    // 判断・成否は自動シミュレーションと共有（stealing.js）。三塁は成功しやすいが試行は少ない
+    // ⚠ 投球後の塁（newBases）で見ること。この球で二塁走者が既に動いていれば走らない
+    const runner2 = runnerOf(newBases[1]);
+    const r2Speed = runner2?.speed ?? batter.speed;
+    const r2Steal = runner2?.steal ?? batter.steal;
+    const stealRate3 = stealSuccessRate({
+      runnerSpeed: r2Speed, runnerSteal: r2Steal,
+      catcherArm: defense.catcher.arm, pitcherControl: pitcher.control,
+      pitcherThrows: pitcher.throws, toBase: 3,
+    });
+    let stealThirdAttempt = stealAttemptRate({
+      successRate: stealRate3, runnerSteal: r2Steal, outs: newOuts, toBase: 3,
+    });
 
     // 監督AI：盗塁判断（Phase 3）
     if (autoManagerMode) {
@@ -1956,60 +2278,33 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const scoreDiff = Math.abs(score.home - score.away);
       const isCloseGame = scoreDiff <= 3;
 
-      const stealMultiplier = autoStealingDecision(batter, {
+      const stealMultiplier = autoStealingDecision(runner2, {
         scoreDiff,
         isCloseGame,
         outs: newOuts,
         batterType,
-        runnerSteal: batter.steal
+        runnerSteal: r2Steal
       });
 
       stealThirdAttempt *= stealMultiplier; // 三塁盗塁
     }
 
     if (Math.random() < stealThirdAttempt) {
-      // 三塁盗塁は基本成功率が高い
-      // ステップ1: 走力による基本成功率（40%-100%）
-      const baseRate = 0.40 + runnerSpeed * 0.60;
-
-      // ステップ2: 各種補正
-      const stealBonus = stealSkill * 0.12;  // 0-12%
-      const velocityEffect = (pitchVelocity - 135) / 350;  // ±10%
-      const controlEffect = pitcherControl * 0.04;  // 0-4%
-
-      const adjustedRate = baseRate + stealBonus - velocityEffect - controlEffect;
-
-      // ステップ3: 捕手の肩による阻止（二乗スケール）
-              const catcherArmThirdSq = catcherArmForThird * catcherArmForThird;
-              let catcherBlock;
-              if (adjustedRate < 0.30) {
-                catcherBlock = adjustedRate * catcherArmThirdSq * 0.80;
-              } else if (adjustedRate > 0.60) {
-                catcherBlock = adjustedRate * catcherArmThirdSq * 0.35;
-              } else {
-                const t = (adjustedRate - 0.30) / 0.30;
-                catcherBlock = adjustedRate * catcherArmThirdSq * (0.80 - t * 0.45);
-              }
-
-              const stealThirdSuccess = Math.max(0.05, Math.min(0.95, adjustedRate - catcherBlock));
-              
-              if (Math.random() < stealThirdSuccess) {
-                // 盗塁成功
-        newBases[2] = true;
+              if (Math.random() < stealRate3) {
+                // 盗塁成功（盗塁は走者本人に付ける）
+        newBases[2] = newBases[1];
         newBases[1] = false;
-        setCatcherStats(prev => ({ ...prev, stolenBasesAllowed: prev.stolenBasesAllowed + 1 }));
-        setBatterStats(prev => ({ ...prev, stolenBases: prev.stolenBases + 1 }));
+        if (runner2) updateBatterStats(runner2.id, runner2.side, { stolenBases: 1 });
         setGameLog(prev => {
-          const updated = [...prev, { description: '🏃 盗塁成功！二塁→三塁', isSpecial: true }];
+          const updated = [...prev, { description: `🏃 盗塁成功！${runner2 ? runner2.name + ' ' : ''}二塁→三塁`, isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
         });
       } else {
-        // 盗塁失敗
+        // 盗塁失敗（盗塁死のアウトも投手の投球回に入る）
         newBases[1] = false;
+        if (runner2) updateBatterStats(runner2.id, runner2.side, { caughtStealing: 1 });
         newOuts++;
-        setCatcherStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
-        setBatterStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
-        setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
+        updatePitcherStats(getCurrentPitcher().id, isTopInning ? 'home' : 'away', { outs: 1 });
         setGameLog(prev => {
           const updated = [...prev, { description: '❌ 盗塁失敗、アウト', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
@@ -2087,6 +2382,7 @@ if (newOuts === 3) {
           } else {
             if (isTopInning) {
               setIsTopInning(false);
+              resetEarnedRunTracking(); // 自責点判定はイニング単位
               // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
               setTimeout(() => {
                 autoDefensiveSubstitution();
@@ -2097,6 +2393,7 @@ if (newOuts === 3) {
               }, 100);
             } else {
               setIsTopInning(true);
+              resetEarnedRunTracking(); // 自責点判定はイニング単位
               setInning(inning + 1);
               // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
               setTimeout(() => {
@@ -2168,10 +2465,10 @@ if (newOuts === 3) {
         const currentCatcher = getCurrentCatcher();
         const defenseTeam = getDefenseTeam();
 
-        const bCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+        const bCondMod = conditionBattingMod(currentBatter.condition);
 
         const buntSkill = currentBatter.batting?.bunt || 30;
-        const meet = (currentBatter.batting?.meet || 50) + bCondMod;
+        const meet = (currentBatter.batting?.meet || 50) + bCondMod.meet;
         const speed = currentBatter.physical?.speed || 50;
 
         // バント種別を状況から自動判定
@@ -2184,11 +2481,10 @@ if (newOuts === 3) {
 
         // スタミナ消費（1球分）
         setCurrentStamina(prev => Math.max(0, prev - 1));
-        setPitcherStats(prev => ({ ...prev, pitches: prev.pitches + 1 }));
         {
           const defenseTeamType = isTopInning ? 'home' : 'away';
           updatePitcherStats(currentPitcher.id, defenseTeamType, {
-            pitches: (currentPitcher.stats?.pitching?.pitches || 0) + 1
+            pitches: 1
           });
         }
 
@@ -2203,16 +2499,28 @@ if (newOuts === 3) {
         let newCount = { ...count };
         let atBatOver = false;
 
+        // バント安打の進塁。一塁が埋まっていれば押し出し、二塁だけなら三塁へ進める。
+        // ⚠ 以前は満塁のバント安打で三塁走者を上書きしており、1点と走者が消えていた。
+        //    二塁走者を三塁へ送ったら二塁を空けること（二塁にも残ると走者が1人増える）
+        const advanceOnBuntHit = () => {
+          if (!newBases[0] && newBases[1] && !newBases[2]) { newBases[2] = newBases[1]; newBases[1] = false; }
+          const fa = forceAdvance(newBases, batterAsRunner());
+          newBases = fa.bases;
+          if (fa.scored.length) {
+            isTopInning ? newScore.away++ : newScore.home++;
+            recordRunsToCurrentPitcher(1, outs, isUnearnedRunner(fa.scored[0]) ? 1 : 0);
+            updateBatterStats(currentBatter.id, isTopInning ? 'away' : 'home', { rbis: 1 });
+          }
+        };
+
         if (roll < popupRate) {
           // バントフライ → アウト
           newOuts++;
-          setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1 }));
-          setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
           {
             const offenseTeamType = isTopInning ? 'away' : 'home';
             const defenseTeamType = isTopInning ? 'home' : 'away';
-            updateBatterStats(currentBatter.id, offenseTeamType, { atBats: (currentBatter.stats?.batting?.atBats || 0) + 1 });
-            updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
+            updateBatterStats(currentBatter.id, offenseTeamType, { atBats: 1 });
+            updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: 1 });
           }
           setLastResult({ description: 'バントフライ アウト' });
           addAtBatResult(currentBatter.id, isTopInning ? 'away' : 'home', 'バ飛');
@@ -2222,18 +2530,16 @@ if (newOuts === 3) {
           if (count.strikes >= 2) {
             // 2ストライクからのバントファウルは三振
             newOuts++;
-            setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1, strikeouts: prev.strikeouts + 1 }));
-            setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1, strikeouts: prev.strikeouts + 1 }));
             {
               const offenseTeamType = isTopInning ? 'away' : 'home';
               const defenseTeamType = isTopInning ? 'home' : 'away';
               updateBatterStats(currentBatter.id, offenseTeamType, {
-                atBats: (currentBatter.stats?.batting?.atBats || 0) + 1,
-                strikeouts: (currentBatter.stats?.batting?.strikeouts || 0) + 1
+                atBats: 1,
+                strikeouts: 1
               });
               updatePitcherStats(currentPitcher.id, defenseTeamType, {
-                outs: (currentPitcher.stats?.pitching?.outs || 0) + 1,
-                strikeouts: (currentPitcher.stats?.pitching?.strikeouts || 0) + 1
+                outs: 1,
+                strikeouts: 1
               });
             }
             setLastResult({ description: 'バントファウル → 三振！' });
@@ -2278,36 +2584,32 @@ if (newOuts === 3) {
 
               if (squeezeRunnerSafe) {
                 isTopInning ? newScore.away++ : newScore.home++;
-                setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
-                setBatterStats(prev => ({ ...prev, rbis: prev.rbis + 1 }));
+                recordRunsToCurrentPitcher(1, outs, unearnedAt(newBases, 2));
+                updateBatterStats(currentBatter.id, offenseTeamType, { rbis: 1 });   // スクイズは打点
                 newBases[2] = false;
               } else {
                 newOuts++;
-                setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
-                updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
+                updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: 1 });
                 newBases[2] = false;
               }
             }
 
             if (batterOut) {
               newOuts++;
-              setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
-              updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
+              updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: 1 });
               updateBatterStats(currentBatter.id, offenseTeamType, {
-                sacrificeBunts: (currentBatter.stats?.batting?.sacrificeBunts || 0) + 1
+                sacrificeBunts: 1
               });
               const qualityText = quality === 'dead' ? '絶妙な' : quality === 'hard' ? '強い' : '';
               setLastResult({ description: `${qualityText}スクイズ${squeezeRunnerSafe ? '成功！' : '（本塁封殺）'}` });
               addAtBatResult(currentBatter.id, offenseTeamType, '犠打');
             } else {
-              setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1, hits: prev.hits + 1 }));
               updateBatterStats(currentBatter.id, offenseTeamType, {
-                atBats: (currentBatter.stats?.batting?.atBats || 0) + 1,
-                hits: (currentBatter.stats?.batting?.hits || 0) + 1
+                atBats: 1,
+                hits: 1
               });
-              if (newBases[1]) { newBases[2] = newBases[1]; }
-              if (newBases[0]) { newBases[1] = newBases[0]; }
-              newBases[0] = true;
+              updatePitcherStats(currentPitcher.id, defenseTeamType, { hits: 1 });   // バント安打も被安打
+              advanceOnBuntHit();
               setLastResult({ description: 'スクイズバント安打！' });
               addAtBatResult(currentBatter.id, offenseTeamType, '安打');
             }
@@ -2315,10 +2617,9 @@ if (newOuts === 3) {
           } else if (buntType === 'sacrifice') {
             if (batterOut) {
               newOuts++;
-              setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
-              updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
+              updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: 1 });
               updateBatterStats(currentBatter.id, offenseTeamType, {
-                sacrificeBunts: (currentBatter.stats?.batting?.sacrificeBunts || 0) + 1
+                sacrificeBunts: 1
               });
               if (newOuts < 3) {
                 if (newBases[1]) { newBases[2] = newBases[1]; newBases[1] = false; }
@@ -2328,14 +2629,12 @@ if (newOuts === 3) {
               setLastResult({ description: `${qualityText}犠打成功` });
               addAtBatResult(currentBatter.id, offenseTeamType, '犠打');
             } else {
-              setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1, hits: prev.hits + 1 }));
               updateBatterStats(currentBatter.id, offenseTeamType, {
-                atBats: (currentBatter.stats?.batting?.atBats || 0) + 1,
-                hits: (currentBatter.stats?.batting?.hits || 0) + 1
+                atBats: 1,
+                hits: 1
               });
-              if (newBases[1]) { newBases[2] = newBases[1]; }
-              if (newBases[0]) { newBases[1] = newBases[0]; }
-              newBases[0] = true;
+              updatePitcherStats(currentPitcher.id, defenseTeamType, { hits: 1 });   // バント安打も被安打
+              advanceOnBuntHit();
               setLastResult({ description: 'バント安打！' });
               addAtBatResult(currentBatter.id, offenseTeamType, '安打');
             }
@@ -2344,21 +2643,17 @@ if (newOuts === 3) {
             // セーフティバント
             if (batterOut) {
               newOuts++;
-              setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1 }));
-              setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
-              updateBatterStats(currentBatter.id, offenseTeamType, { atBats: (currentBatter.stats?.batting?.atBats || 0) + 1 });
-              updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: (currentPitcher.stats?.pitching?.outs || 0) + 1 });
+              updateBatterStats(currentBatter.id, offenseTeamType, { atBats: 1 });
+              updatePitcherStats(currentPitcher.id, defenseTeamType, { outs: 1 });
               setLastResult({ description: 'セーフティバント失敗' });
               addAtBatResult(currentBatter.id, offenseTeamType, 'バ失');
             } else {
-              setBatterStats(prev => ({ ...prev, plateAppearances: prev.plateAppearances + 1, atBats: prev.atBats + 1, hits: prev.hits + 1 }));
               updateBatterStats(currentBatter.id, offenseTeamType, {
-                atBats: (currentBatter.stats?.batting?.atBats || 0) + 1,
-                hits: (currentBatter.stats?.batting?.hits || 0) + 1
+                atBats: 1,
+                hits: 1
               });
-              if (newBases[1]) { newBases[2] = newBases[1]; }
-              if (newBases[0]) { newBases[1] = newBases[0]; }
-              newBases[0] = true;
+              updatePitcherStats(currentPitcher.id, defenseTeamType, { hits: 1 });   // バント安打も被安打
+              advanceOnBuntHit();
               setLastResult({ description: 'セーフティバント成功！' });
               addAtBatResult(currentBatter.id, offenseTeamType, '安打');
             }
@@ -2381,8 +2676,10 @@ if (newOuts === 3) {
           } else {
             if (isTopInning) {
               setIsTopInning(false);
+              resetEarnedRunTracking(); // 自責点判定はイニング単位
             } else {
               setIsTopInning(true);
+              resetEarnedRunTracking(); // 自責点判定はイニング単位
               setInning(inning + 1);
             }
           }
@@ -2413,11 +2710,9 @@ if (newOuts === 3) {
         setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
         setGameLog, setLastResult, setStatistics, setRecentVelocities,
         setHomeTeam, setAwayTeam, setCurrentStamina,
-        setBatterStats, setPitcherStats, setCatcherStats,
-        setBattedBallStats, setBattedBallTypeStats,
-        setBattedBallDirectionStats, setBattedBallAreaStats,
         setIsAutoSimulating
       };
+      // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）
       const resetGame = () => executeResetGame(gameControlsCtx);
       const multiPitch = (pitchCount) => executeMultiPitch(gameControlsCtx, pitchCount);
       const startSimMode = (mode) => executeStartSimMode(gameControlsCtx, mode);
@@ -2474,16 +2769,33 @@ if (newOuts === 3) {
         setHomeTeam, setAwayTeam, setCurrentStamina,
         setManagedGameInfo, managedGameInfoRef, setScreenMode
       };
+      // [SECTION: GAME_SETUP] → gameSetup.js に抽出済み（ラッパーのみ）
       const setupManagedGame = (gameInfo) => executeSetupManagedGame(gameSetupCtx, gameInfo);
 
+      // 試合中の両チームの投手とリードを記録する（試合開始で帳簿を作り直す）。
+      // ⚠ 以前の采配モードは「先発が5回以上なら先発の勝ち」「最少アウトの投手＝最後の投手」
+      //    という推定で勝敗を付けており、0-0で5回に降りた先発に勝ちが付いていた
+      const currentPitcherIdOf = (team) =>
+        team?.players?.find(p => p.isStarter && p.position === 'pitcher')?.id ?? null;
+      useEffect(() => {
+        if (gameStarted) decisionLogRef.current = createDecisionLog();
+      }, [gameStarted]);
+      useEffect(() => {
+        if (!gameStarted) return;
+        observeDecisionLog(decisionLogRef.current, {
+          score, pitcherIds: { home: currentPitcherIdOf(homeTeam), away: currentPitcherIdOf(awayTeam) },
+        });
+      }, [gameStarted, score.home, score.away, homeTeam, awayTeam]);
+
       const handleManagedGameEnd = () => executeHandleManagedGameEnd({
-        managedGameInfoRef, score, homeTeam, awayTeam,
+        managedGameInfoRef, score, homeTeam, awayTeam, decisionLog: decisionLogRef.current,
         seasonData, setSeasonData, selectedMonth, setSelectedMonth,
         setManagedGameInfo, setScreenMode, setManagementView
       });
 
   // 日程進行ハンドラー（seasonProgress.jsからインポート済み、stateバインド用ラッパー）
   const seasonProgressCtx = { seasonData, setSeasonData, setSelectedMonth, selectedMonth, userTeamName, setScreenMode, setManagementView };
+      // [SECTION: SEASON_PROGRESS] → seasonProgress.js に抽出済み（ラッパーのみ）
   const handleProgressDate = (days) => progressDateHandler(days, seasonProgressCtx);
   const handleProgressToNextGame = () => progressToNextGameHandler(seasonProgressCtx);
   const handleProgressToNextPhase = () => progressToNextPhaseHandler(seasonProgressCtx);
@@ -2505,6 +2817,7 @@ if (newOuts === 3) {
           hasSaveData={hasSaveData}
           saveSlots={saveSlots}
           loadGame={loadGame}
+          loadAutosave={loadAutosave}
           initializeNewGame={initializeNewGame}
           setScreenMode={setScreenMode}
           setManagementView={setManagementView}
@@ -2525,9 +2838,22 @@ if (newOuts === 3) {
         return 'bg-gray-700';
       };
 
+      // ⚠ ここはアプリ全体の地色。かつて `from-green-900 to-green-800` の緑だった。
+      //    カードは全て surface-* の紺なので、**中身が短い画面では緑の帯が剥き出しになり**
+      //    （日程進行のシーズン序盤で 800×460px）、さらに `bg-gray-800/30` のような
+      //    半透明のサーフェスが全部この緑の上で合成されて画面全体が緑がかっていた。
+      //    地色は最深部（surface-0）にして、サイドバー(surface-1)・カード(surface-2) と
+      //    3段の深度を作る。
+      // [SECTION: RENDER] メインreturn（試合画面UI・管理シェル）
       return (
-        <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
-          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement', 'university_scout'].includes(managementView) && <Sidebar
+        <div className="min-h-screen bg-surface-0">
+          {/* オートセーブ完了トースト */}
+          {autoSaveFlash && (
+            <div className="fixed bottom-3 right-3 z-[60] bg-gray-900/95 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none">
+              💾 オートセーブしました
+            </div>
+          )}
+          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) && <Sidebar
             gameMode={gameMode}
             userTeamName={userTeamName}
             seasonData={seasonData}
@@ -2537,15 +2863,15 @@ if (newOuts === 3) {
             setScreenMode={setScreenMode}
             setManagementView={setManagementView}
             advanceDayRef={advanceDayRef}
-            exportTeam={exportTeam}
-            importTeam={(name) => importTeam(name)}
           />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement', 'university_scout'].includes(managementView) ? 'ml-56' : ''}>
+          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
-              <div className="p-2">
+              /* data-fit-height: 縦も1画面に収める対象。自動フィットが高さを見る印
+                 （縦に読み進める管理画面には付けないこと） */
+              <div className="p-1" data-fit-height>
           {/* 管理画面へボタン（采配モード中は非表示） */}
-          <div className="max-w-[1800px] mx-auto mb-2 flex justify-between items-center">
+          <div className="max-w-[1800px] mx-auto flex justify-between items-center">
             {managedGameInfo && (
               <span className="text-yellow-400 text-sm font-bold">
                 {formatDate(seasonData?.currentDate)} - 采配モード
@@ -2578,486 +2904,43 @@ if (newOuts === 3) {
             </div>
           </div>
 
-          {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は1:1:1 */}
-          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '1fr 1fr 1fr' : '5fr 3fr 5fr'}}>
+          {/* 3カラムレイアウト。試合前は選手を並べ替えるので選手欄重視(5-3-5)、
+              試合中は中央（掲示板・対戦カード・コース図・ログ・采配）が主役なので
+              中央を広げる(3-5-3)。左右のメンバー表は試合中は参照用 */}
+          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '3fr 5fr 3fr' : '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
-            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
-              <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
-                <h3 className="font-bold text-red-400">✈️ {awayTeam.name}</h3>
-                <span className="text-2xl font-bold text-red-400">{score?.away || 0}</span>
-              </div>
-              
-              {/* スタメンと控え選手を横並び表示 */}
-              {!gameStarted ? (
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  {/* 左: スタメン */}
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">スターティングメンバー</div>
-                    <div className="space-y-1 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
-                      {awayTeam.players
-                        .filter(p => p.isStarter)
-                        .sort((a, b) => a.battingOrder - b.battingOrder)
-                        .map(player => {
-                          const isPitcher = player.position === 'pitcher';
-                          const posNames = POSITION_NAMES;
-                          const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-                          const isSubSelected = selectedSubstituteAway === player.id;
-                          const isSelected = selectedBatterAway === player.battingOrder;
-                          const isPositionSelected = selectedPositionAway === player.id;
-
-                          return (
-                            <div
-                              key={player.id}
-                              onClick={() => handleSubstituteClick('away', player.id)}
-                              className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-blue-600 text-white ring-2 ring-blue-400' :
-                                'bg-gray-800 hover:bg-gray-700'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleBatterClick('away', player.battingOrder);
-                                  }}
-                                  className="w-4 text-gray-400 text-xs hover:text-blue-400 transition font-bold"
-                                >
-                                  {player.battingOrder}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePositionClick('away', player.id);
-                                  }}
-                                  className={`w-6 text-center rounded text-sm py-0.5 font-bold transition ${
-                                    isPositionSelected
-                                      ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                                      : getPositionColor(player.position) + ' hover:opacity-80'
-                                  }`}
-                                >
-                                  {posNames[player.position]}
-                                </button>
-                                <span className="font-medium text-base truncate flex-1">
-                                  {player.name}
-                                  <span className={`ml-0.5 text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
-                                </span>
-                                <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
-<span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
-                                {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
-                                {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
-                                {isPositionSelected && <span className="text-purple-300 animate-pulse">◀</span>}
-                              </div>
-                              <div className="ml-9 mt-0.5">
-                                <div className="flex gap-3 text-xs text-gray-500 font-bold">
-                                  <span className="w-7 text-center">ミ</span>
-                                  <span className="w-7 text-center">パ</span>
-                                  <span className="w-7 text-center">走</span>
-                                  <span className="w-7 text-center">肩</span>
-                                  <span className="w-7 text-center">守</span>
-                                </div>
-                                <div className="flex gap-3 text-sm font-bold">
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.batting.meet)}`}>{player.batting.meet}</span>
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.batting.power)}`}>{player.batting.power}</span>
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.physical.speed)}`}>{player.physical.speed}</span>
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.physical.arm)}`}>{player.physical.arm}</span>
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.fielding.defense)}`}>{player.fielding.defense}</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-
-                  {/* 右: 控え選手 */}
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">ベンチメンバー</div>
-                    <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
-                      {awayTeam.players
-                        .filter(p => !p.isStarter)
-                        .map(player => {
-                          const posNames = POSITION_NAMES;
-                          const isPitcher = player.position === 'pitcher';
-                          const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-                          const isSubSelected = selectedSubstituteAway === player.id;
-                          const isSubbedOut = player.hasSubbedOut;
-
-                          return (
-                            <div
-                              key={player.id}
-                              onClick={() => !isSubbedOut && handleSubstituteClick('away', player.id)}
-                              className={`p-1.5 rounded transition ${
-                                isSubbedOut
-                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
-                                  : isSubSelected
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
-                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1">
-                                <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
-                                <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
-                                {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
-                                {isSubSelected && <span className="text-blue-300">👆</span>}
-                              </div>
-                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
-                                <span>M{player.batting.meet}</span>
-                                <span>P{player.batting.power}</span>
-                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* 試合中/試合終了後は現在フィールドにいる選手のみ表示 */
-                <div className="mb-2">
-                  <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
-                    {awayTeam.players
-                      .filter(p => {
-                        // 試合終了後：実際に出場した選手のみ
-                        if (gameOver) {
-                          const hasBattingStats = p.stats?.batting && (p.stats.batting.atBats > 0 || p.stats.batting.walks > 0 || p.stats.batting.hits > 0);
-                          const hasPitchingStats = p.stats?.pitching && p.stats.pitching.outs > 0;
-                          const isOnField = p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
-                          return hasBattingStats || hasPitchingStats || isOnField;
-                        }
-                        // 試合中：現在フィールドにいる選手
-                        return p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
-                      })
-                      .sort((a, b) => a.battingOrder - b.battingOrder)
-                      .map(player => {
-                    const isCurrentBatter = gameStarted && isTopInning && player.battingOrder === awayTeam.currentBatterOrder;
-                    const isPitcher = player.position === 'pitcher';
-                    const posNames = POSITION_NAMES;
-                    const getPosColor = (pos) => getPositionColorHighlighted(pos, isCurrentBatter);
-
-                    const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                    const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-
-                    const isSelected = !gameStarted && selectedBatterAway === player.battingOrder;
-                    const isPositionSelected = !gameStarted && selectedPositionAway === player.id;
-                    const isSubSelected = gameStarted && selectedSubstituteAway === player.id;
-                    const isSubbedOut = player.hasSubbedOut;
-                    const fitness = calculateDefensiveFitness(player, player.position);
-
-                    return (
-                      <div
-                        key={player.id}
-                        onClick={() => {
-                          if (gameStarted && !isSubbedOut) {
-                            handleSubstituteClick('away', player.id);
-                          } else if (!gameStarted) {
-                            handleBatterClick('away', player.battingOrder);
-                          }
-                        }}
-                        className={`p-2 rounded transition ${
-                          isSubbedOut ? 'opacity-50 cursor-not-allowed' :
-                          isCurrentBatter ? 'bg-yellow-500 text-black cursor-pointer' :
-                          isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer' :
-                          isSelected ? 'bg-blue-600 text-white cursor-pointer' :
-                          'hover:bg-gray-800 cursor-pointer'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 overflow-hidden">
-                          <span className={`w-5 shrink-0 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
-                          {!gameStarted ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handlePositionClick('away', player.id);
-                              }}
-                              className={`w-6 shrink-0 text-center rounded text-xs py-0.5 font-semibold transition ${
-                                isPositionSelected
-                                  ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                                  : getPosColor(player.position) + ' hover:opacity-80'
-                              }`}
-                            >
-                              {posNames[player.position]}
-                            </button>
-                          ) : (
-                            <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(player.position)}`}>{posNames[player.position]}</span>
-                          )}
-                          <span className="font-bold truncate">{player.name}</span>
-                          <span className={`text-[10px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
-                          <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
-                          {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap shrink-0">
-                              {player.gameStats.atBatResults.map((r, i) => (
-                                <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
-                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
-                                  r === '本塁打' ? 'bg-red-600' :
-                                  r === '三振' ? 'bg-blue-700' :
-                                  r === '四球' ? 'bg-green-700' :
-                                  r === '併殺' ? 'bg-purple-700' :
-                                  'bg-gray-600'
-                                }`}>{r}</span>
-                              ))}
-                            </span>
-                          )}
-                          <span className="flex-1"></span>
-                          {isSubbedOut && <span className="text-red-400 text-xs shrink-0">交代済</span>}
-                          {isCurrentBatter && <span className="shrink-0">⚾</span>}
-                          {isSubSelected && <span className="text-orange-300 shrink-0">⚡</span>}
-                          {isSelected && <span className="shrink-0">👆</span>}
-                          {isPositionSelected && <span className="shrink-0">🔄</span>}
-                        </div>
-                        {gameStarted ? (
-                          <div className={`flex gap-2 text-xs ml-6 mt-0.5 font-bold ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
-                            {(() => {
-                              const ss = player.seasonStats?.batting;
-                              if (ss && ss.atBats > 0) {
-                                const avg = (ss.hits / ss.atBats).toFixed(3);
-                                return <>
-                                  <span>.{avg.split('.')[1]}</span>
-                                  <span>{ss.homeruns || 0}本</span>
-                                  <span>{ss.rbis || 0}点</span>
-                                  <span>{ss.hits || 0}安</span>
-                                </>;
-                              }
-                              if (isPitcher) {
-                                const ps = player.seasonStats?.pitching;
-                                if (ps && ps.inningsPitched > 0) {
-                                  const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
-                                  return <span>ERA {era}</span>;
-                                }
-                              }
-                              return <span>---</span>;
-                            })()}
-                          </div>
-                        ) : (
-                          <>
-                            <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
-                              <span>M{player.batting.meet}</span>
-                              <span>P{player.batting.power}</span>
-                              <span>E{player.batting.eye}</span>
-                              {isPitcher && <span className={isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
-                            </div>
-                            <div className={`text-[10px] ml-6 mt-0.5 ${
-                              fitness.grade === 'S' ? 'text-yellow-400' :
-                              fitness.grade === 'A' ? 'text-green-400' :
-                              fitness.grade === 'B' ? 'text-blue-400' :
-                              fitness.grade === 'D' ? 'text-red-400' :
-                              'text-gray-400'
-                            }`}>
-                              守備適性 [{fitness.grade}] {fitness.comments}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 試合中の選手交代アコーディオン */}
-                <div className="mt-2">
-                  <button
-                    onClick={() => setShowBenchAway(!showBenchAway)}
-                    className="w-full p-2 bg-gray-800 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
-                  >
-                    <span>⚡ 選手交代</span>
-                    <span>{showBenchAway ? '▼' : '▶'}</span>
-                  </button>
-
-                  {showBenchAway && (
-                    <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
-                      {awayTeam.players
-                        .filter(p => !p.isStarter)
-                        .map(player => {
-                          const posNames = POSITION_NAMES;
-                          const isPitcher = player.position === 'pitcher';
-                          const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-                          const isSubSelected = selectedSubstituteAway === player.id;
-                          const isSubbedOut = player.hasSubbedOut;
-
-                          return (
-                            <div
-                              key={player.id}
-                              onClick={() => !isSubbedOut && handleSubstituteClick('away', player.id)}
-                              className={`p-1.5 rounded transition ${
-                                isSubbedOut
-                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
-                                  : isSubSelected
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
-                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1">
-                                <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
-                                <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
-                                {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
-                                {isSubSelected && <span className="text-blue-300">👆</span>}
-                              </div>
-                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
-                                <span>M{player.batting.meet}</span>
-                                <span>P{player.batting.power}</span>
-                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              </div>
-              )}
-
-              {/* アウェイチーム 試合スタッツ/投手詳細 */}
-              <div className="mt-2 pt-2 border-t border-gray-700">
-                {gameStarted ? (
-                  <>
-                    <div className="text-sm text-gray-400 mb-1">📊 試合スタッツ</div>
-                    {/* 投手成績 */}
-                    <div className="bg-gray-800 rounded p-2 mb-1">
-                      <div className="text-xs text-blue-400 mb-0.5">投手</div>
-                      <div className="text-sm">
-                        {(() => {
-                          const pitchers = awayTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
-                          const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
-                          const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
-                          return (
-                            <>
-                              {pitchers.map(p => {
-                                const s = p.stats?.pitching || {};
-                                const outs = s.outs || 0;
-                                const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
-                                const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
-                                return (
-                                  <div key={p.id} className="flex justify-between text-gray-300 gap-1">
-                                    <span className="truncate">{p.name}</span>
-                                    <span className="text-gray-400 whitespace-nowrap text-xs">
-                                      {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {pitchers.length > 1 && (
-                                <div className="flex justify-between text-yellow-400 text-xs mt-1 pt-1 border-t border-gray-700">
-                                  <span>合計イニング</span>
-                                  <span>{totalIP}</span>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-sm font-bold text-gray-300 mb-1">⚾ 予告先発</div>
-                    {(() => {
-                      const pitcher = awayTeam.players.find(p => p.isStarter && p.position === 'pitcher');
-                      if (!pitcher) return null;
-                      const formNames = {
-                        overhand: 'オーバー',
-                        threeQuarter: 'スリークォーター',
-                        sidearm: 'サイドアーム',
-                        submarine: 'アンダースロー'
-                      };
-                      const ballTypeNames = {
-                        straight: 'ストレート',
-                        slider: 'スライダー',
-                        curveball: 'カーブ',
-                        curve: 'カーブ',
-                        changeup: 'チェンジアップ',
-                        fork: 'フォーク',
-                        sinker: 'シンカー',
-                        cutter: 'カッター',
-                        splitter: 'スプリット',
-                        knuckleball: 'ナックル',
-                        shoot: 'シュート'
-                      };
-                      const getValueColor = (val) => {
-                        if (val >= 80) return 'text-red-400';
-                        if (val >= 70) return 'text-orange-400';
-                        if (val >= 60) return 'text-yellow-400';
-                        if (val >= 50) return 'text-green-400';
-                        return 'text-gray-400';
-                      };
-                      const getBgColor = (val) => {
-                        if (val >= 80) return 'bg-red-500';
-                        if (val >= 70) return 'bg-orange-500';
-                        if (val >= 60) return 'bg-yellow-500';
-                        if (val >= 50) return 'bg-green-500';
-                        return 'bg-gray-500';
-                      };
-                      const velocityScore = Math.min(100, (pitcher.pitching.velocity - 100) * 2);
-                      const staminaScore = Math.min(100, pitcher.pitching.stamina / 2);
-                      return (
-                        <div className="bg-gray-800 rounded p-3 border-2 border-gray-700">
-                          <div className="text-base text-white mb-2 font-bold flex items-center gap-2">
-                            <span>⚾</span>
-                            <span>{pitcher.name}</span>
-                            <span className="text-sm text-gray-400">#{pitcher.number || pitcher.id}</span>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="text-xs text-gray-400">投げ手:</span>
-                              <span className="text-white font-bold">{pitcher.physical.throws === 'right' ? '右投' : '左投'}</span>
-                              <span className="text-gray-600">|</span>
-                              <span className="text-white">{formNames[pitcher.pitching.form]}</span>
-                              <span className="text-gray-600">|</span>
-                              <span className="text-xs text-gray-400">球速:</span>
-                              <span className={`text-lg font-bold ${getValueColor(velocityScore)}`}>{pitcher.pitching.velocity}</span>
-                              <span className="text-xs text-gray-500">km/h</span>
-                              <span className="text-gray-600">|</span>
-                              <span className="text-xs text-gray-400">回転:</span>
-                              <span className={`text-sm font-bold ${getValueColor(pitcher.pitching.spinRate ?? 50)}`}>{pitcher.pitching.spinRate ?? 50}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400 w-12">制球</span>
-                              <div className="flex-1 bg-gray-700 rounded h-3 overflow-hidden">
-                                <div className={`h-full ${getBgColor(pitcher.pitching.control)}`} style={{ width: `${pitcher.pitching.control}%` }} />
-                              </div>
-                              <span className={`text-sm font-bold ${getValueColor(pitcher.pitching.control)}`}>{pitcher.pitching.control}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400 w-12">体力</span>
-                              <div className="flex-1 bg-gray-700 rounded h-3 overflow-hidden">
-                                <div className={`h-full ${getBgColor(staminaScore)}`} style={{ width: `${staminaScore}%` }} />
-                              </div>
-                              <span className={`text-sm font-bold ${getValueColor(staminaScore)}`}>{pitcher.pitching.stamina}</span>
-                            </div>
-                            <div className="pt-1 border-t border-gray-700">
-                              <div className="text-xs text-gray-400 mb-1">変化球</div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {pitcher.pitching.arsenal.map((ball, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded font-semibold">
-                                    {ballTypeNames[ball.type] || ball.type}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
-            </div>
+            <TeamMemberPanel
+              side="away"
+              team={awayTeam}
+              score={score?.away}
+              isBatting={isTopInning}
+              gameStarted={gameStarted}
+              gameOver={gameOver}
+              selectedBatter={selectedBatterAway}
+              selectedPosition={selectedPositionAway}
+              selectedSubstitute={selectedSubstituteAway}
+              showBench={showBenchAway}
+              setShowBench={setShowBenchAway}
+              handleBatterClick={handleBatterClick}
+              handlePositionClick={handlePositionClick}
+              handleSubstituteClick={handleSubstituteClick}
+              getPositionColor={getPositionColor}
+              getPositionColorHighlighted={getPositionColorHighlighted}
+            />
             
             {/* ===== 中央カラム: メイン試合画面 ===== */}
             <div className="space-y-2 min-w-0">
 
               {/* 試合開始前の画面 */}
               {!gameStarted && (
-                <div className="bg-gray-900 rounded-lg p-4 text-white text-center">
+                <div className="bg-surface-1 rounded-lg p-4 text-white text-center">
                   <h2 className="text-2xl font-bold mb-3">⚾ 野球シミュレーター</h2>
                   <p className="text-sm text-blue-400 mb-1">👆 選手パネルクリック → スタメン⇔ベンチ交代</p>
                   <p className="text-sm text-purple-400 mb-4">🔄 守備位置クリック → 守備交換</p>
 
                   {/* 監督AI設定 */}
-                  <div className="mb-6 p-3 bg-gray-800 rounded-lg">
+                  <div className="mb-6 p-3 bg-surface-2 rounded-lg">
                     <div className="flex items-center justify-center gap-3">
                       <span className="text-sm font-semibold">🤖 監督AI</span>
                       <button
@@ -3072,11 +2955,11 @@ if (newOuts === 3) {
                           }`}
                         />
                       </button>
-                      <span className={`text-xs ${autoManagerMode ? 'text-green-400' : 'text-gray-400'}`}>
+                      <span className={`text-xs ${autoManagerMode ? 'text-green-400' : 'text-gray-300'}`}>
                         {autoManagerMode ? 'ON (自動采配)' : 'OFF (手動采配)'}
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-500 mt-2 text-center">
+                    <p className="text-xs text-gray-400 mt-2 text-center">
                       {autoManagerMode
                         ? '投手のスタミナが20%以下になると自動的に交代します'
                         : '選手交代は手動で行います'}
@@ -3095,18 +2978,20 @@ if (newOuts === 3) {
                         ...prev,
                         players: prev.players.map(p => ({
                           ...p,
-                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [],
+                            fieldingChances: 0, fieldErrors: 0, assists: 0 }
                         }))
                       }));
                       setHomeTeam(prev => ({
                         ...prev,
                         players: prev.players.map(p => ({
                           ...p,
-                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [],
+                            fieldingChances: 0, fieldErrors: 0, assists: 0 }
                         }))
                       }));
                     }}
-                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-12 rounded-lg text-xl transition shadow-lg"
+                    className="btn-primary py-4 px-12 rounded-lg text-xl transition shadow-lg"
                   >
                     ⚾ 試合開始
                   </button>
@@ -3115,59 +3000,65 @@ if (newOuts === 3) {
 
               {/* 電光掲示板風スコアボード */}
               {gameStarted && (
-              <div className="bg-black rounded-lg p-1 font-mono border-4 border-gray-800 shadow-2xl overflow-hidden">
+              <div className="bg-black rounded-lg p-0.5 font-mono border-2 border-gray-800 shadow-2xl overflow-hidden">
                 {/* 上段: イニングスコア（電光掲示板風） */}
-                <div className="bg-black rounded-t overflow-x-auto p-1">
+                <div className="bg-black rounded-t overflow-x-auto p-0.5">
                   <table className="w-full text-center text-xs table-fixed">
                     {/* ヘッダー行 */}
                     <thead>
                       <tr className="border-b border-gray-700">
-                        <th className="py-1 px-1 text-left text-orange-600" style={{width: '20%'}}>TEAM</th>
+                        {/* ⚠ ここは長らく `TEAM` という**情報を持たない固定ラベル**だった。
+                            一方で「いま何回の表裏か」は投球ログの文中にしか無く、画面のどこにも
+                            大きく出ていない。テレビ中継のテロップが「9回ウラ」を最大級の見出しに
+                            するのはこれが1球ごとに要る情報だからで、掲示板でも同じ扱いにする。 */}
+                        <th className="py-0.5 px-1 text-left text-orange-300 font-bold" style={{width: '20%', textShadow: '0 0 8px #fb923c'}}>
+                          <span className="tabular-nums">{inning}</span>回{isTopInning ? '表' : '裏'}
+                        </th>
                         {inning <= 9 ? (
                           // 9回まで: 1-9回を表示
                           [1,2,3,4,5,6,7,8,9].map(i => (
-                            <th key={i} className={`py-1 px-0 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
+                            <th key={i} className={`py-0.5 px-0 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
                           ))
                         ) : (
                           // 延長: 10回以降を表示（最大3イニング分）
                           [0,1,2].map(i => {
                             const extraInn = 10 + i;
                             return (
-                              <th key={i} className={`py-1 px-0 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
+                              <th key={i} className={`py-0.5 px-0 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
                             );
                           })
                         )}
-                        <th className="py-1 px-1 text-orange-400 font-bold border-l border-gray-700" style={{width: '8%'}}>計</th>
-                        <th className="py-1 px-1 text-orange-600" style={{width: '7%'}}>安</th>
-                        <th className="py-1 px-1 text-orange-600" style={{width: '7%'}}>失</th>
+                        <th className="py-0.5 px-1 text-orange-400 font-bold border-l border-gray-700" style={{width: '8%'}}>計</th>
+                        <th className="py-0.5 px-1 text-orange-400" style={{width: '7%'}}>安</th>
+                        <th className="py-0.5 px-1 text-orange-400" style={{width: '7%'}}>失</th>
                       </tr>
                     </thead>
                     <tbody>
                       {/* アウェイチーム */}
                       <tr className="border-b border-gray-800">
-                        <td className={`py-1 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
+                        <td className={`py-0.5 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => (
-                            <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                            <td key={i} className="py-0.5 px-0 text-orange-400 font-bold" style={{textShadow: inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                               {inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? inningScores.away[i] : ''}
                             </td>
                           ))
                         ) : (
                           // 延長（アウェイ）
                           [0,1,2].map(i => (
-                            <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                            <td key={i} className="py-0.5 px-0 text-orange-400 font-bold" style={{textShadow: extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                               {extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? extraInningScores.away[i] : ''}
                             </td>
                           ))
                         )}
-                        <td className="py-1 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
-                        <td className="py-1 px-1 text-orange-400">{teamHits?.away || 0}</td>
-                        <td className="py-1 px-1 text-orange-400">{teamErrors?.home || 0}</td>
+                        <td className="py-0.5 px-1 font-black text-2xl leading-none tabular-nums text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
+                        <td className="py-0.5 px-1 text-orange-400">{teamHits?.away || 0}</td>
+                        <td className="py-0.5 px-1 text-orange-400">{teamErrors?.away || 0}</td>
                       </tr>
                       {/* ホームチーム */}
                       <tr>
-                        <td className={`py-1 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
+                        <td className={`py-0.5 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => {
@@ -3175,7 +3066,7 @@ if (newOuts === 3) {
                             // 9回裏、ホームチームがリードしている場合に「X」を表示する判定
                             const showX = i === 8 && inning === 9 && !isTopInning && (score?.home || 0) > (score?.away || 0) && homeScore === null;
                             return (
-                              <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined || showX ? '0 0 6px #fb923c' : 'none'}}>
+                              <td key={i} className="py-0.5 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined || showX ? '0 0 6px #fb923c' : 'none'}}>
                                 {showX ? 'X' : (homeScore !== null && homeScore !== undefined ? homeScore : '')}
                               </td>
                             );
@@ -3185,35 +3076,35 @@ if (newOuts === 3) {
                           [0,1,2].map(i => {
                             const homeScore = extraInningScores?.home?.[i];
                             return (
-                              <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                              <td key={i} className="py-0.5 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                                 {homeScore !== null && homeScore !== undefined ? homeScore : ''}
                               </td>
                             );
                           })
                         )}
-                        <td className="py-1 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
-                        <td className="py-1 px-1 text-orange-400">{teamHits?.home || 0}</td>
-                        <td className="py-1 px-1 text-orange-400">{teamErrors?.away || 0}</td>
+                        <td className="py-0.5 px-1 font-black text-2xl leading-none tabular-nums text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
+                        <td className="py-0.5 px-1 text-orange-400">{teamHits?.home || 0}</td>
+                        <td className="py-0.5 px-1 text-orange-400">{teamErrors?.home || 0}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
                 
                 {/* 下段: BSO + 塁状況 + 投球数 + 球速（固定幅） */}
-                <div className="bg-black p-2 rounded-b flex items-center justify-between border-t border-gray-800">
+                <div className="bg-black p-1 rounded-b flex items-center justify-between border-t border-gray-800">
                   {/* BSO (3-2-2) 緑・黄・赤 - 固定幅 */}
                   <div className="flex flex-col gap-0.5 w-24 flex-shrink-0">
                     <div className="flex items-center gap-1">
                       <span className="w-4 text-xs text-green-500 font-bold">B</span>
                       {[0,1,2].map(i => (
-                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.balls || 0) ? 'bg-green-500 border-green-400' : 'bg-gray-900 border-gray-700'}`} 
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.balls || 0) ? 'bg-green-500 border-green-400' : 'bg-surface-1 border-gray-700'}`} 
                              style={{boxShadow: i < (count?.balls || 0) ? '0 0 6px #22c55e' : 'none'}} />
                       ))}
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="w-4 text-xs text-yellow-400 font-bold">S</span>
                       {[0,1].map(i => (
-                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.strikes || 0) ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.strikes || 0) ? 'bg-yellow-400 border-yellow-300' : 'bg-surface-1 border-gray-700'}`}
                              style={{boxShadow: i < (count?.strikes || 0) ? '0 0 6px #facc15' : 'none'}} />
                       ))}
                       <div className="w-4 h-4" />
@@ -3221,7 +3112,7 @@ if (newOuts === 3) {
                     <div className="flex items-center gap-1">
                       <span className="w-4 text-xs text-red-500 font-bold">O</span>
                       {[0,1].map(i => (
-                        <div key={i} className={`w-4 h-4 rounded-full border ${i < outs ? 'bg-red-500 border-red-400' : 'bg-gray-900 border-gray-700'}`}
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < outs ? 'bg-red-500 border-red-400' : 'bg-surface-1 border-gray-700'}`}
                              style={{boxShadow: i < outs ? '0 0 6px #ef4444' : 'none'}} />
                       ))}
                       <div className="w-4 h-4" />
@@ -3234,13 +3125,13 @@ if (newOuts === 3) {
                   {/* 塁状況（固定幅） */}
                   <div className="relative w-16 h-14 flex items-center justify-center flex-shrink-0">
                     {/* 二塁 */}
-                    <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-5 h-5 rotate-45 border ${bases[1] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                    <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-5 h-5 rotate-45 border ${bases[1] ? 'bg-yellow-400 border-yellow-300' : 'bg-surface-1 border-gray-700'}`}
                          style={{boxShadow: bases[1] ? '0 0 8px #facc15' : 'none'}} />
                     {/* 三塁 */}
-                    <div className={`absolute top-1/2 left-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[2] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                    <div className={`absolute top-1/2 left-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[2] ? 'bg-yellow-400 border-yellow-300' : 'bg-surface-1 border-gray-700'}`}
                          style={{boxShadow: bases[2] ? '0 0 8px #facc15' : 'none'}} />
                     {/* 一塁 */}
-                    <div className={`absolute top-1/2 right-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[0] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                    <div className={`absolute top-1/2 right-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[0] ? 'bg-yellow-400 border-yellow-300' : 'bg-surface-1 border-gray-700'}`}
                          style={{boxShadow: bases[0] ? '0 0 8px #facc15' : 'none'}} />
                   </div>
                   
@@ -3248,20 +3139,39 @@ if (newOuts === 3) {
                   <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
                   
                   {/* 投手名・投球数（固定幅） */}
-                  <div className="text-center w-20 flex-shrink-0">
-                    <div className="text-orange-500 text-[10px] truncate">{getCurrentPitcher().name}</div>
-                    <div className="text-orange-600 text-xs">投球数</div>
-                    <div className="text-orange-400 text-xl font-bold font-mono" style={{textShadow: '0 0 6px #f97316'}}>
+                  <div className="text-center w-24 flex-shrink-0">
+                    <div className="text-orange-500 text-xs">P</div>
+                    <div className="text-orange-300 text-xs truncate" style={{textShadow: '0 0 6px #f97316'}}>{getCurrentPitcher().name}</div>
+                    <div className="text-orange-400 text-xl font-bold font-mono leading-tight" style={{textShadow: '0 0 6px #f97316'}}>
                       {String(getCurrentPitcher().stats?.pitching?.pitches || 0).padStart(3, ' ')}
                     </div>
+                    <div className="text-orange-500 text-xs leading-none">球</div>
                   </div>
-                  
+
+                  {/* 区切り線 */}
+                  <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
+
+                  {/* 打者（球場の電光掲示板は打順・名前・打率を出す） */}
+                  <div className="text-center w-24 flex-shrink-0">
+                    <div className="text-orange-500 text-xs">B {currentBatterOrder}</div>
+                    <div className="text-orange-300 text-xs truncate" style={{textShadow: '0 0 6px #f97316'}}>{getCurrentBatter().name}</div>
+                    <div className="text-orange-400 text-xl font-bold font-mono leading-tight" style={{textShadow: '0 0 6px #f97316'}}>
+                      {(() => {
+                        const b = getCurrentBatter();
+                        const ab = (b.seasonStats?.batting?.atBats || 0) + (b.gameStats?.atBats || 0);
+                        const h = (b.seasonStats?.batting?.hits || 0) + (b.gameStats?.hits || 0);
+                        return ab > 0 ? (h / ab).toFixed(3).replace(/^0/, '') : '.---';
+                      })()}
+                    </div>
+                    <div className="text-orange-500 text-xs leading-none">打率</div>
+                  </div>
+
                   {/* 区切り線 */}
                   <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
                   
                   {/* 球種・球速表示（固定幅） */}
                   <div className="text-center w-20 flex-shrink-0">
-                    <div className="text-orange-500 text-xs truncate">
+                    <div className="text-orange-300 text-xs truncate">
                       {(() => {
                         const lastPitch = [...gameLog].reverse().find(log => log.velocity !== undefined);
                         return lastPitch ? lastPitch.pitchType : '---';
@@ -3281,100 +3191,390 @@ if (newOuts === 3) {
 
               {/* 対戦カード & 操作ボタン */}
               {gameStarted && (
-              <div className="bg-white rounded-lg p-3 shadow-lg">
-                <div className="flex items-center justify-between mb-3">
-                  {/* 投手情報 */}
-                  <div className="text-center flex-1">
-                    <div className="text-xs text-gray-500">投手 ({isTopInning ? homeTeam.name : awayTeam.name})</div>
-                    <div className="font-bold text-xl text-blue-600">{getCurrentPitcher().name}</div>
-                    <div className="text-sm text-gray-600">
-                      {getCurrentPitcher().physical.throws === 'right' ? '右投' : '左投'} |
-                      {getCurrentPitcher().pitching.velocity}km/h |
-                      回転<span className="font-bold">{getCurrentPitcher().pitching.spinRate ?? 50}</span>
+              <div className="bg-surface-2 rounded-lg p-2 shadow-lg border border-gray-700/50">
+                {/* 対戦カード。**チーム色分けは使わない**（表裏で意味が反転するため）。
+                    守備側=amber / 攻撃側=cyan で采配パネルと語彙を揃える。
+                    名前は白、数字は tabular-nums で「目に入りやすさ」を優先する */}
+                <div className="flex items-stretch gap-2 mb-2">
+                  {/* ===== 守備側 ===== */}
+                  <div className="flex-1 min-w-0 bg-gray-900/50 rounded px-2 py-1.5 border-l-2 border-amber-600/70">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-bold text-amber-300 shrink-0">守備</span>
+                      <span className="text-xs text-gray-300 truncate">{isTopInning ? homeTeam.name : awayTeam.name}</span>
                     </div>
-                    <div className="text-sm font-bold text-blue-700">
-                      防御率 {(() => {
+                    <div className="font-bold text-xl text-gray-100 truncate leading-tight">{getCurrentPitcher().name}</div>
+                    <div className="text-xs text-gray-300 tabular-nums">
+                      {getCurrentPitcher().physical.throws === 'right' ? '右投' : '左投'}
+                      <span className="mx-1 text-gray-400">|</span>{getCurrentPitcher().pitching.velocity}km
+                      <span className="mx-1 text-gray-400">|</span>回転{getCurrentPitcher().pitching.spinRate ?? 50}
+                      <span className="mx-1 text-gray-400">|</span>防{(() => {
                         const p = getCurrentPitcher();
-                        const seasonIP = p.seasonStats?.pitching?.inningsPitched || 0;
-                        const gameOuts = p.stats?.pitching?.outs || 0;
-                        const totalOuts = seasonIP + gameOuts;
+                        const totalOuts = (p.seasonStats?.pitching?.inningsPitched || 0) + (p.stats?.pitching?.outs || 0);
                         if (totalOuts === 0) return '-.--';
-                        const seasonER = p.seasonStats?.pitching?.earnedRuns || 0;
-                        const gameER = p.stats?.pitching?.earnedRuns || p.stats?.pitching?.runsAllowed || 0;
-                        return ((seasonER + gameER) * 27 / totalOuts).toFixed(2);
+                        const er = (p.seasonStats?.pitching?.earnedRuns || 0)
+                          + (p.stats?.pitching?.earnedRuns ?? p.stats?.pitching?.runsAllowed ?? 0);
+                        return (er * 27 / totalOuts).toFixed(2);
                       })()}
                     </div>
-                    <div className="text-xs text-orange-500 mt-1">
-                      スタミナ: {currentStamina}/{getCurrentPitcher().pitching.stamina}
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                      <div 
-                        className="bg-orange-500 h-1.5 rounded-full" 
-                        style={{width: `${(currentStamina / getCurrentPitcher().pitching.stamina) * 100}%`}}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="text-3xl font-bold text-gray-300 px-4">VS</div>
-                  
-                  {/* 打者情報 */}
-                  <div className="text-center flex-1">
-                    <div className="text-xs text-gray-500">{currentBatterOrder}番打者 ({isTopInning ? awayTeam.name : homeTeam.name})</div>
-                    <div className="font-bold text-xl text-red-600">{getCurrentBatter().name}</div>
-                    <div className="text-sm text-gray-600">
-                      {getCurrentBatter().batting.bats === 'switch' ? '両打' : getCurrentBatter().batting.bats === 'right' ? '右打' : '左打'}
-                    </div>
-                    <div className="text-sm font-bold text-red-700">
-                      {(() => {
-                        const b = getCurrentBatter();
-                        const sAB = b.seasonStats?.batting?.atBats || 0;
-                        const sH = b.seasonStats?.batting?.hits || 0;
-                        const gAB = b.gameStats?.atBats || 0;
-                        const gH = b.gameStats?.hits || 0;
-                        const totalAB = sAB + gAB;
-                        const totalH = sH + gH;
-                        const avg = totalAB > 0 ? (totalH / totalAB).toFixed(3) : '.000';
-                        const hr = (b.seasonStats?.batting?.homeruns || 0) + (b.gameStats?.homeruns || 0);
-                        const rbi = (b.seasonStats?.batting?.rbis || 0) + (b.gameStats?.rbis || 0);
-                        return `${avg} | ${hr}本 | ${rbi}打点`;
-                      })()}
-                    </div>
-                    <div className="text-xs mt-1">
-                      <span className={`px-2 py-0.5 rounded ${
-                        getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).meetBonus 
-                          ? 'bg-blue-100 text-blue-700' 
-                          : 'bg-red-100 text-red-700'
-                      }`}>
-                        {getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).label}
+                    {/* スタミナ */}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs text-gray-300 shrink-0">体力</span>
+                      <div className="flex-1 bg-gray-700 rounded-full h-1.5 min-w-0">
+                        <div className="bg-amber-500 h-1.5 rounded-full transition-all"
+                          style={{width: `${(currentStamina / getCurrentPitcher().pitching.stamina) * 100}%`}} />
+                      </div>
+                      <span className="text-xs text-gray-200 tabular-nums shrink-0">
+                        {currentStamina}/{getCurrentPitcher().pitching.stamina}
                       </span>
+                    </div>
+                    {/* 捕手。このゲームで配球を決めているのは捕手なので試合画面に出す */}
+                    {(() => {
+                      const c = getCurrentCatcher();
+                      if (!c) return null;
+                      const lead = c.catching?.lead ?? 50;
+                      const def = c.fielding?.defense ?? 50;
+                      return (
+                        <div className="text-xs text-gray-300 mt-1 truncate"
+                          title="リード=配球の巧さ（弱点を突く・読ませない） / 守備=フレーミング・暴投抑止">
+                          捕 <span className="text-gray-100">{c.name}</span>
+                          <span className="ml-1 tabular-nums">リード<span className={`font-bold ${getAbilityTextColor(lead)}`}>{lead}</span></span>
+                          <span className="ml-1 tabular-nums">守<span className={`font-bold ${getAbilityTextColor(def)}`}>{def}</span></span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="self-center text-lg font-bold text-gray-400 px-1 shrink-0">VS</div>
+
+                  {/* ===== 攻撃側 ===== */}
+                  <div className="flex-1 min-w-0 bg-gray-900/50 rounded px-2 py-1.5 border-r-2 border-cyan-600/70">
+                    <div className="flex items-baseline gap-2 justify-end">
+                      <span className="text-xs text-gray-300 truncate">{isTopInning ? awayTeam.name : homeTeam.name}</span>
+                      <span className="text-xs font-bold text-cyan-300 shrink-0">攻撃 {currentBatterOrder}番</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-xl text-gray-100 truncate leading-tight">{getCurrentBatter().name}</div>
+                        <div className="text-xs text-gray-300 tabular-nums">
+                          {getCurrentBatter().batting.bats === 'switch' ? '両打' : getCurrentBatter().batting.bats === 'right' ? '右打' : '左打'}
+                          {(() => {
+                            const b = getCurrentBatter();
+                            const ab = (b.seasonStats?.batting?.atBats || 0) + (b.gameStats?.atBats || 0);
+                            const h = (b.seasonStats?.batting?.hits || 0) + (b.gameStats?.hits || 0);
+                            const hr = (b.seasonStats?.batting?.homeruns || 0) + (b.gameStats?.homeruns || 0);
+                            const rbi = (b.seasonStats?.batting?.rbis || 0) + (b.gameStats?.rbis || 0);
+                            return <>
+                              <span className="mx-1 text-gray-400">|</span>{ab > 0 ? (h / ab).toFixed(3).replace(/^0/, '') : '.---'}
+                              <span className="mx-1 text-gray-400">|</span>{hr}本
+                              <span className="mx-1 text-gray-400">|</span>{rbi}点
+                            </>;
+                          })()}
+                        </div>
+                        {/* 打者の型（野村の4分類）。狙い方が型で変わるので配球の材料になる */}
+                        {(() => {
+                          const t = getBatterType(getCurrentBatter());
+                          const prof = getZoneProfile(getCurrentBatter());
+                          const desc = describeZoneProfile(prof);
+                          return (
+                            <div className="flex items-center gap-1 justify-end flex-wrap mt-1">
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-900/70 text-cyan-200 font-bold"
+                                title={BATTER_TYPE_NOTE[t]}>{BATTER_TYPE_LABEL[t]}</span>
+                              {desc.length > 0 && (
+                                <span className="text-xs text-gray-300">{desc.join('・')}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        <div className="text-xs mt-1">
+                          <span className={`px-2 py-0.5 rounded ${
+                            getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).meetBonus
+                              ? 'bg-blue-900/50 text-blue-200'
+                              : 'bg-red-900/50 text-red-200'
+                          }`}>
+                            {getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).label}
+                          </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-                
-                {/* 操作ボタン */}
-                <div className="flex justify-center gap-2 flex-wrap">
+
+                {/* 投球コース（投手視点）と投球ログ。図と文字を同じ行に並べて
+                    「どこに来て何が起きたか」を目線を動かさずに追えるようにする */}
+                <div className="flex items-start gap-3 mb-2">
+                  <div className="shrink-0">
+                    {/* カウントは図のすぐ上に置く。配球を決める時に電光掲示板まで
+                        目線を戻さずに済ませるため（掲示板側にも残してある） */}
+                    <div className="flex items-center gap-2 mb-0.5 h-4">
+                      {[['B', count?.balls || 0, 3, 'bg-green-500'],
+                        ['S', count?.strikes || 0, 2, 'bg-yellow-400'],
+                        ['O', outs, 2, 'bg-red-500']].map(([label, n, max, on]) => (
+                        <span key={label} className="flex items-center gap-0.5">
+                          <span className="text-xs font-bold text-gray-300 mr-0.5">{label}</span>
+                          {Array.from({ length: max }, (_, i) => (
+                            <span key={i} className={`w-2 h-2 rounded-full ${i < n ? on : 'bg-gray-700'}`} />
+                          ))}
+                        </span>
+                      ))}
+                    </div>
+                    {/* 打者の得手不得手（heat）は図に重ねる。別の小さいヒートマップを
+                        対戦カードに置くと2枚を見比べることになって読みにくい */}
+                    <PitchZonePlot size={168}
+                      bats={getCurrentBatter().batting?.bats}
+                      pitcherThrows={getCurrentPitcher().physical?.throws}
+                      heat={zoneHeatmap(getZoneProfile(getCurrentBatter()))}
+                      pitches={(() => {
+                        const key = pitchSeqRef.current.key;
+                        return gameLog.filter(l => l.pitchLoc && l.paKey === key);
+                      })()} />
+                  </div>
+                  {/* 投球ログ。コースの右いっぱいに広げる
+                      （flex内のスクロール領域なので高さを明示すること） */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5 h-4">
+                      <span className="text-xs font-bold text-gray-300">投球ログ</span>
+                      <span className="text-xs text-gray-300 tabular-nums">
+                        この打席 {gameLog.filter(l => l.pitchLoc && l.paKey === pitchSeqRef.current.key).length}球
+                      </span>
+                      {/* コース図の凡例。図の下に1行取ると縦を20px食うので、
+                          空いているこの見出し行の右端へ寄せる（情報は減らさない） */}
+                      <span className="ml-auto flex items-center gap-2 text-xs text-gray-300">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ background: HEAT_HOT, opacity: 0.55 }} />得意
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ background: HEAT_COLD, opacity: 0.55 }} />苦手
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-[168px] overflow-y-auto text-xs space-y-0.5 pr-1">
+                      {gameLog.slice().reverse().slice(0, 30).map((log, i) => (
+                        <div key={i} className={`px-1.5 py-1 rounded leading-tight ${
+                          i === 0 ? 'bg-blue-900/40' : 'bg-gray-700/40'}`}>
+                          {log.isSpecial ? (
+                            <span className="font-bold text-purple-300">{log.description}</span>
+                          ) : (
+                            <>
+                              <span className="text-gray-300">{log.inning}回{log.isTop ? '表' : '裏'}</span>
+                              <span className="mx-1 text-gray-400">|</span>
+                              <span className="font-mono tabular-nums text-gray-300">
+                                {log.count?.balls || 0}-{log.count?.strikes || 0}
+                              </span>
+                              <span className="mx-1 text-gray-400">|</span>
+                              <span className="text-blue-300">{log.pitchType}</span>
+                              <span className="text-gray-300 ml-1 tabular-nums">{log.velocity}km</span>
+                              <span className="mx-1 text-gray-400">→</span>
+                              <span className="font-bold text-gray-100">{log.result}</span>
+                              {/* 振り方（得意コース・打者有利カウントならフルスイング） */}
+                              {log.pitchLoc?.swing && (
+                                <span className={`ml-1 ${log.pitchLoc.swing === 'フルスイング'
+                                  ? 'text-orange-300' : 'text-sky-300'}`}>[{log.pitchLoc.swing}]</span>
+                              )}
+                              {log.exitVelocity && (
+                                <span className="text-gray-300 ml-1 tabular-nums">
+                                  {/* 打出し角は整数で出す。物理側は回転数・球速・コースの補正を
+                                      足した生の小数（16.15000000000002 のような値）を持っている。
+                                      ⚠ 丸めるのは表示だけ。judgeFielderReach が
+                                      「20〜45度なら本塁打」「10度未満はゴロ」と閾値で見ているので、
+                                      物理側の値を丸めると境目の打球の判定が変わってしまう */}
+                                  （EV{log.exitVelocity} {Math.round(log.launchAngle ?? 0)}° {log.distance}m 芯{log.meetQuality}%）
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {gameLog.length === 0 && (
+                        <div className="text-gray-300 text-center py-2">まだ投球がありません</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 最新結果 */}
+                {gameStarted && lastResult && (() => {
+                  // 結果種別で色分け（安打=緑/長打=金/三振=赤/四死球=青/アウト=灰）
+                  const d = lastResult.description || '';
+                  const cat = /本塁打|ホームラン|三塁打|３塁打|二塁打|２塁打/.test(d) ? 'xbh'
+                    : /ヒット|安打|出塁/.test(d) ? 'hit'
+                    : /三振/.test(d) ? 'k'
+                    : /四球|死球|フォアボール|敬遠/.test(d) ? 'bb'
+                    : /アウト|ゴロ|フライ|併殺|邪飛|ライナー|失敗/.test(d) ? 'out'
+                    : 'neutral';
+                  const S = {
+                    xbh: { box: 'border-amber-400 bg-amber-900/30', text: 'text-amber-200', icon: '💥' },
+                    hit: { box: 'border-green-500 bg-green-900/25', text: 'text-green-200', icon: '🟢' },
+                    k: { box: 'border-red-500 bg-red-900/25', text: 'text-red-200', icon: '❌' },
+                    bb: { box: 'border-blue-500 bg-blue-900/25', text: 'text-blue-200', icon: '🎫' },
+                    out: { box: 'border-gray-600 bg-surface-2', text: 'text-gray-200', icon: '' },
+                    neutral: { box: 'border-yellow-500/60 bg-surface-2', text: 'text-yellow-100', icon: '' },
+                  }[cat];
+                  // 打球の飛距離バー（0-140m目安）
+                  const distPct = lastResult.distance ? Math.max(4, Math.min(100, (lastResult.distance / 140) * 100)) : 0;
+                  // 1行に畳む。球種・球速は電光掲示板とログに出ているので繰り返さない
+                  return (
+                    <div className={`rounded-lg px-3 py-1 border mb-1 flex items-center gap-3 ${S.box}`}>
+                      <div className="shrink-0">
+                        {S.icon && <span className="mr-1">{S.icon}</span>}
+                        <span className={`font-bold text-lg ${S.text}`}>{d}</span>
+                      </div>
+                      {lastResult.exitVelocity ? (
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-300 tabular-nums text-right">
+                            EV {lastResult.exitVelocity} / {Math.round(lastResult.launchAngle ?? 0)}° / {lastResult.distance}m / 芯 {lastResult.meetQuality}%
+                          </div>
+                          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mt-0.5">
+                            <div className={`h-full rounded-full ${cat === 'xbh' ? 'bg-amber-400' : cat === 'hit' ? 'bg-green-500' : 'bg-gray-500'}`} style={{ width: `${distPct}%` }} />
+                          </div>
+                        </div>
+                      ) : lastResult.timingWindow ? (
+                        <div className="flex-1 text-xs text-gray-300 tabular-nums text-right">
+                          タイミング窓 {lastResult.timingWindow}ms / 誤差 {lastResult.timingError}ms
+                        </div>
+                      ) : <div className="flex-1" />}
+                    </div>
+                  );
+                })()}
+
+                {/* 采配コントロール。攻撃中は攻撃の指示だけ、守備中は配球だけを出す
+                    （従来は両方を常に並べて、使えない側を薄く表示していた） */}
+                <TutorialHint id="ingame-tactics" title="試合の采配">
+                  <b className="text-cyan-200">攻撃中</b>は打撃方針・狙い球（球種／コース）・盗塁・エンドラン・バント、
+                  <b className="text-amber-200">守備中</b>は配球（球種／狙い）・敬遠を指示できます。
+                  いま操作できる側だけが表示されます。おまかせにすれば監督AIと捕手AIが自動で判断します。
+                </TutorialHint>
+                {(() => {
+                  const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
+                  const busy = isAutoSimulating || gameOver;
+                  const pick = (active, color) => `px-2.5 py-0.5 rounded text-xs font-bold transition ${
+                    active ? `${color} text-white` : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`;
+                  const act = 'px-2.5 py-0.5 rounded text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed';
+                  const row = 'flex items-center justify-center gap-1.5 flex-wrap';
+                  const tag = (color) => `text-xs w-14 text-right ${color}`;
+
+                  // ===== 攻撃中 =====
+                  if (isUserBatting) {
+                    const aiming = batGuessType !== 'auto' || batGuessZone !== 'auto';
+                    return (
+                      <div className="bg-cyan-950/30 border border-cyan-800/40 rounded px-2 py-1 mb-1 space-y-1">
+                        <div className={row}>
+                          <span className={tag('text-cyan-300')}>打撃</span>
+                          {[['take', '待て'], ['normal', 'おまかせ'], ['aggressive', '積極']].map(([v, label]) => (
+                            <button key={v} onClick={() => setBattingApproach(v)} disabled={gameOver}
+                              title={v === 'take' ? '見送りを増やして球数を稼ぐ。振るときも当てにいく'
+                                : v === 'aggressive' ? '早いカウントから積極的に打ちにいく。フルスイングが増える'
+                                : '監督AIに任せる（得意コースはフルスイング／追い込まれたら当てにいく）'}
+                              className={pick(battingApproach === v, 'bg-cyan-600')}>{label}</button>
+                          ))}
+                          <span className="text-xs text-gray-400">｜</span>
+                          <button onClick={() => triggerSteal(throwPitch)} disabled={!bases[0] || busy}
+                            title="一塁走者が次球で盗塁"
+                            className={`${act} bg-cyan-700 text-white hover:bg-cyan-600`}>🏃 盗塁</button>
+                          <button onClick={() => triggerHitAndRun(throwPitch)} disabled={!bases[0] || outs >= 2 || busy}
+                            title="走者を走らせ打者は必ず打ちにいく"
+                            className={`${act} bg-cyan-800 text-cyan-50 hover:bg-cyan-700`}>エンドラン</button>
+                          <button onClick={() => handleBunt()} disabled={busy}
+                            title="送りバント"
+                            className={`${act} bg-cyan-900 text-cyan-100 hover:bg-cyan-800`}>バント</button>
+                          <button onClick={() => handleBunt()} disabled={!bases[2] || outs > 1 || busy}
+                            title="三塁走者を還すスクイズバント"
+                            className={`${act} bg-cyan-950 text-cyan-100 hover:bg-cyan-900`}>スクイズ</button>
+                        </div>
+                        <div className={row}>
+                          <span className={tag('text-cyan-300')}>狙い球</span>
+                          <button onClick={() => setBatGuessType('auto')} disabled={gameOver}
+                            title="球種は張らない（読み合いはAIに任せる）"
+                            className={pick(batGuessType === 'auto', 'bg-cyan-700')}>おまかせ</button>
+                          {['straight', 'breaking'].map(v => (
+                            <button key={v} onClick={() => setBatGuessType(v)} disabled={gameOver}
+                              title={`${GUESS_TYPE_LABEL[v]}に張る。来れば強く振れるが、違えば対応が遅れる`}
+                              className={pick(batGuessType === v, 'bg-cyan-700')}>{GUESS_TYPE_LABEL[v]}</button>
+                          ))}
+                          <span className="text-xs text-gray-400">｜</span>
+                          <span className={tag('text-cyan-300')}>コース</span>
+                          <button onClick={() => setBatGuessZone('auto')} disabled={gameOver}
+                            title="コースは張らない"
+                            className={pick(batGuessZone === 'auto', 'bg-cyan-700')}>おまかせ</button>
+                          {['in', 'out', 'high', 'low'].map(v => (
+                            <button key={v} onClick={() => setBatGuessZone(v)} disabled={gameOver}
+                              title={`${GUESS_ZONE_LABEL[v]}に張る。その半面に来れば読み切れる`}
+                              className={pick(batGuessZone === v, 'bg-cyan-700')}>{GUESS_ZONE_LABEL[v]}</button>
+                          ))}
+                          {aiming && (
+                            <span className="text-xs px-2 py-1 rounded bg-amber-900 text-amber-200"
+                              title="張った次元が当たれば読み、外せば対応が遅れる。両方当てるとタイミング窓が1.5倍">
+                              ヤマ張り中
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ===== 守備中 =====
+                  const arsenal = getCurrentPitcher()?.pitches || [];
+                  const obj = decidePitchObjective(bases, outs);
+                  return (
+                    <div className="bg-amber-950/30 border border-amber-800/40 rounded px-2 py-1 mb-1 space-y-1">
+                      <div className={row}>
+                        <span className={tag('text-amber-300')}>配球</span>
+                        <button onClick={() => setPitchTypeIndex('auto')} disabled={gameOver}
+                          title="球種は捕手のリードに任せる"
+                          className={pick(pitchTypeIndex === 'auto', 'bg-amber-700')}>おまかせ</button>
+                        {arsenal.map((b, i) => (
+                          <button key={i} onClick={() => setPitchTypeIndex(i)} disabled={gameOver}
+                            title={`${ballEffects[b.type]?.name || b.type} Lv${b.level}`}
+                            className={pick(pitchTypeIndex === i, 'bg-amber-700')}>
+                            {ballEffects[b.type]?.name || b.type}
+                          </button>
+                        ))}
+                      </div>
+                      <div className={row}>
+                        <span className={tag('text-amber-300')}>狙い</span>
+                        <button onClick={() => setPitchAim('auto')} disabled={gameOver}
+                          title="狙いも捕手のリードに任せる"
+                          className={pick(pitchAim === 'auto', 'bg-amber-700')}>おまかせ</button>
+                        {['zone', 'edge', 'chase'].map(v => (
+                          <button key={v} onClick={() => setPitchAim(v)} disabled={gameOver}
+                            title={v === 'zone' ? 'ゾーンで勝負。ストライクは取れるが打たれやすい'
+                              : v === 'edge' ? '際どいコース。打ち損じを誘うが四球のリスク'
+                              : '誘い球（ボール球）。振らせれば凡打、見逃されれば四球に近づく'}
+                            className={pick(pitchAim === v, 'bg-amber-700')}>{AIM_LABEL[v]}</button>
+                        ))}
+                        <span className="text-xs text-gray-400">｜</span>
+                        <button onClick={() => triggerIntentionalWalk(throwPitch)} disabled={busy}
+                          title="現在の打者を敬遠"
+                          className={`${act} bg-amber-800 text-amber-50 hover:bg-amber-700`}>敬遠</button>
+                        {/* 場面から捕手が求める結果。プレイヤーは操作しないが何を狙っているかは見せる */}
+                        {obj.goal !== 'normal' && (
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            obj.goal === 'groundball' ? 'bg-amber-900 text-amber-100' : 'bg-amber-950 text-amber-200 ring-1 ring-amber-700'}`}
+                            title={OBJECTIVE_NOTE[obj.goal] + (obj.avoidWalk ? '（満塁なので押し出しを避ける）' : '')}>
+                            {OBJECTIVE_LABEL[obj.goal]}{obj.avoidWalk ? '・押し出し回避' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {/* 試合進行。采配（上）と進行（下）を分ける */}
+                <div className="flex justify-center items-center gap-2 flex-wrap border-t border-gray-700/60 pt-1">
                   <button onClick={throwPitch} disabled={isAutoSimulating || gameOver}
-                    className="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 disabled:opacity-50">
+                    className="btn-primary px-5 py-1.5 rounded disabled:opacity-50">
                     ⚾ 1球
                   </button>
-                  <button onClick={handleBunt} disabled={isAutoSimulating || gameOver}
-                    className="bg-yellow-600 text-white px-3 py-2 rounded text-sm font-bold hover:bg-yellow-700 disabled:opacity-50">
-                    バント
-                  </button>
                   <button onClick={() => startSimMode('out')} disabled={isAutoSimulating || gameOver}
-                    className="bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50">
+                    className="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-50">
                     1アウトまで
                   </button>
                   <button onClick={() => startSimMode('end')} disabled={isAutoSimulating || gameOver}
-                    className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50">
+                    className="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-50">
                     試合終了まで
                   </button>
-                  <button
-                    onClick={() => setAutoManagerMode(!autoManagerMode)}
-                    className={`px-3 py-2 rounded text-sm font-semibold transition ${
-                      autoManagerMode ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                    }`}
-                  >
+                  <span className="w-px h-7 bg-gray-700 mx-1" />
+                  <button onClick={() => setAutoManagerMode(!autoManagerMode)}
+                    title="監督AIに采配を任せる"
+                    className={`px-3 py-1.5 rounded text-sm font-semibold transition ${
+                      autoManagerMode ? 'seg-on' : 'seg'
+                    }`}>
                     🤖 {autoManagerMode ? 'AI ON' : 'AI OFF'}
                   </button>
                   {managedGameInfo && !gameOver && (
@@ -3388,7 +3588,7 @@ if (newOuts === 3) {
                         setSubModalSelected(null);
                         setShowSubModal(true);
                       }}
-                      className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded text-sm font-semibold transition"
+                      className="btn-secondary px-3 py-1.5 rounded text-sm font-semibold transition"
                     >
                       選手交代
                     </button>
@@ -3405,7 +3605,8 @@ if (newOuts === 3) {
                 const fieldPlayers = userTeam.players
                   .filter(p => p.isStarter && !p.hasSubbedOut && (p.battingOrder > 0 || p.position === 'pitcher'))
                   .sort((a, b) => (a.battingOrder || 10) - (b.battingOrder || 10));
-                const benchPlayers = userTeam.players.filter(p => !p.isStarter && !p.hasSubbedOut);
+                // 交代モーダルも同じ並び（捕→一→…→右→投）
+                const benchPlayers = sortBenchByPosition(userTeam.players.filter(p => !p.isStarter && !p.hasSubbedOut));
                 const posNames = POSITION_NAMES;
                 const selectedPlayer = subModalSelected ? userTeam.players.find(p => p.id === subModalSelected) : null;
                 const selectedIsField = selectedPlayer?.isStarter && !selectedPlayer?.hasSubbedOut && (selectedPlayer?.battingOrder > 0 || selectedPlayer?.position === 'pitcher');
@@ -3471,15 +3672,15 @@ if (newOuts === 3) {
 
                 return (
                   <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => { setShowSubModal(false); setSubModalSelected(null); }}>
-                    <div className="bg-gray-900 rounded-xl p-4 max-w-lg w-full mx-4 border border-gray-600 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <div className="bg-surface-1 rounded-xl p-4 max-w-lg w-full mx-4 border border-gray-600 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white font-bold text-lg">選手交代</h3>
-                        <button onClick={() => { setShowSubModal(false); setSubModalSelected(null); }} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                        <button onClick={() => { setShowSubModal(false); setSubModalSelected(null); }} className="text-gray-300 hover:text-white text-xl">&times;</button>
                       </div>
-                      <p className="text-xs text-gray-400 mb-3">フィールド選手を選んでからベンチ選手を選ぶと交代します</p>
+                      <p className="text-xs text-gray-300 mb-3">フィールド選手を選んでからベンチ選手を選ぶと交代します</p>
 
                       <div className="mb-3">
-                        <div className="text-xs text-gray-500 font-bold mb-1">フィールド</div>
+                        <div className="text-xs text-gray-400 font-bold mb-1">フィールド</div>
                         <div className="space-y-1">
                           {fieldPlayers.map(p => {
                             const isPitcher = p.position === 'pitcher';
@@ -3489,15 +3690,15 @@ if (newOuts === 3) {
                             const fitness = calculateDefensiveFitness(p, p.position);
                             return (
                               <div key={p.id} onClick={() => handleModalClick(p.id)}
-                                className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-orange-600 ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                                className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-orange-600 ring-2 ring-orange-400' : 'bg-surface-2 hover:bg-gray-700'}`}>
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-gray-400 w-4 text-center text-xs">{p.battingOrder}</span>
+                                  <span className="text-gray-300 w-4 text-center text-xs">{p.battingOrder}</span>
                                   <span className={`w-6 text-center text-xs font-bold rounded ${getPositionColor(p.position)}`}>{posNames[p.position]}</span>
                                   <span className="text-white text-sm font-medium truncate flex-1">{p.name}</span>
-                                  <span className="text-gray-400 text-xs">{throwH}{batH}</span>
-                                  <span className="text-gray-500 text-xs">M{p.batting.meet} P{p.batting.power}</span>
+                                  <span className="text-gray-300 text-xs">{throwH}{batH}</span>
+                                  <span className="text-gray-400 text-xs">M{p.batting.meet} P{p.batting.power}</span>
                                   {isPitcher && <span className="text-blue-400 text-xs">{p.pitching.velocity}km</span>}
-                                  <span className={`text-[10px] ${fitness.grade === 'S' ? 'text-yellow-400' : fitness.grade === 'A' ? 'text-green-400' : fitness.grade === 'B' ? 'text-blue-400' : fitness.grade === 'D' ? 'text-red-400' : 'text-gray-500'}`}>{fitness.grade}</span>
+                                  <span className={`text-xs ${fitness.grade === 'S' ? 'text-yellow-400' : fitness.grade === 'A' ? 'text-green-400' : fitness.grade === 'B' ? 'text-blue-400' : fitness.grade === 'D' ? 'text-red-400' : 'text-gray-400'}`}>{fitness.grade}</span>
                                 </div>
                               </div>
                             );
@@ -3506,9 +3707,9 @@ if (newOuts === 3) {
                       </div>
 
                       <div>
-                        <div className="text-xs text-gray-500 font-bold mb-1">ベンチ</div>
+                        <div className="text-xs text-gray-400 font-bold mb-1">ベンチ</div>
                         {benchPlayers.length === 0 ? (
-                          <div className="text-xs text-gray-600 p-2">交代可能な選手がいません</div>
+                          <div className="text-xs text-gray-400 p-2">交代可能な選手がいません</div>
                         ) : (
                           <div className="space-y-1">
                             {benchPlayers.map(p => {
@@ -3518,12 +3719,12 @@ if (newOuts === 3) {
                               const isSelected = subModalSelected === p.id;
                               return (
                                 <div key={p.id} onClick={() => handleModalClick(p.id)}
-                                  className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-blue-600 ring-2 ring-blue-400' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                                  className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-blue-600 ring-2 ring-blue-400' : 'bg-surface-2 hover:bg-gray-700'}`}>
                                   <div className="flex items-center gap-1.5">
                                     <span className={`w-6 text-center text-xs font-bold rounded ${getPositionColor(p.position)}`}>{posNames[p.position]}</span>
                                     <span className="text-white text-sm font-medium truncate flex-1">{p.name}</span>
-                                    <span className="text-gray-400 text-xs">{throwH}{batH}</span>
-                                    <span className="text-gray-500 text-xs">M{p.batting.meet} P{p.batting.power}</span>
+                                    <span className="text-gray-300 text-xs">{throwH}{batH}</span>
+                                    <span className="text-gray-400 text-xs">M{p.batting.meet} P{p.batting.power}</span>
                                     {isPitcher && <span className="text-blue-400 text-xs">{p.pitching.velocity}km</span>}
                                   </div>
                                 </div>
@@ -3537,70 +3738,6 @@ if (newOuts === 3) {
                 );
               })()}
 
-              {/* 最新結果 */}
-              {gameStarted && lastResult && (
-                <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-2 text-center">
-                  <div className="flex flex-col items-center gap-0.5">
-                    <div>
-                      <span className="font-bold text-lg">{lastResult.description}</span>
-                      {lastResult.pitchType && (
-                        <span className="ml-2 text-gray-600 text-sm">
-                          ({lastResult.pitchType} {lastResult.velocity}km/h)
-                        </span>
-                      )}
-                    </div>
-                    {/* 打球物理データ */}
-                    {lastResult.exitVelocity && (
-                      <div className="text-[10px] text-gray-500">
-                        EV:{lastResult.exitVelocity} LA:{lastResult.launchAngle}° {lastResult.distance}m 芯:{lastResult.meetQuality}%
-                      </div>
-                    )}
-                  </div>
-                  {/* タイミングデータ（空振り時など） */}
-                  {lastResult.timingWindow && !lastResult.exitVelocity && (
-                    <div className="text-xs text-red-500 mt-1">
-                      窓: {lastResult.timingWindow}ms | 誤差: {lastResult.timingError}ms
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 試合ログ */}
-              {gameStarted && (
-              <div className="bg-white rounded-lg p-2 shadow-lg">
-                <h4 className="font-bold text-sm text-gray-700 mb-1">📝 試合ログ</h4>
-                <div className="max-h-40 overflow-y-auto text-xs space-y-0.5">
-                  {gameLog.slice().reverse().slice(0, 20).map((log, i) => (
-                    <div key={i} className={`p-1 rounded ${i === 0 ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                      {log.isSpecial ? (
-                        <span className="font-bold text-purple-600">{log.description}</span>
-                      ) : (
-                        <>
-                          <span className="text-gray-500">{log.inning}回{log.isTop ? '表' : '裏'}</span>
-                          <span className="mx-1">|</span>
-                          <span className="font-mono">{log.count?.balls || 0}-{log.count?.strikes || 0}</span>
-                          <span className="mx-1">|</span>
-                          <span className="text-blue-600">{log.pitchType}</span>
-                          <span className="text-gray-500 ml-1">{log.velocity}km</span>
-                          <span className="mx-1">→</span>
-                          <span className="font-bold">{log.result}</span>
-                          {/* 打球物理データ（ヒット/アウト時のみ表示） */}
-                          {log.exitVelocity && (
-                            <span className="ml-2 text-gray-400 text-[10px]">
-                              EV:{log.exitVelocity} LA:{log.launchAngle}° {log.distance}m 芯:{log.meetQuality}%
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ))}
-                  {gameLog.length === 0 && (
-                    <div className="text-gray-400 text-center py-2">試合ログがありません</div>
-                  )}
-                </div>
-              </div>
-              )}
-
               {/* 試合結果（下段に配置） */}
               {gameOver && (() => {
                 // 勝利/敗戦/セーブ投手と本塁打の判定
@@ -3609,23 +3746,18 @@ if (newOuts === 3) {
                 const winTeam = isHomeWin ? homeTeam : awayTeam;
                 const loseTeam = isHomeWin ? awayTeam : homeTeam;
 
-                // 勝利投手: 勝ちチームで最も長く投げた投手（先発5回以上 or 最多アウト）
-                const winPitchers = winTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0).sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
-                const starter = winPitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9);
-                const winPitcher = !isDraw ? (starter && (starter.stats?.pitching?.outs || 0) >= 15 ? starter : winPitchers[0]) : null;
-
-                // 敗戦投手: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
-                const losePitchers = loseTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
-                const loseStarter = losePitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9) || losePitchers.sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0))[0];
-                const losePitcher = !isDraw ? (
-                  loseStarter && (loseStarter.stats?.pitching?.runsAllowed || 0) > 0
-                    ? loseStarter
-                    : losePitchers.sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0))[0] || null
-                ) : null;
-
-                // セーブ投手: 勝ちチームの最後の投手（勝利投手と異なり、3アウト以上取得）
-                const lastPitcher = winPitchers.length > 1 ? winPitchers.find(p => p !== winPitcher && p.position === 'pitcher') || winPitchers.find(p => p !== winPitcher) : null;
-                const savePitcher = !isDraw && lastPitcher && lastPitcher !== winPitcher && (lastPitcher.stats?.pitching?.outs || 0) >= 3 ? lastPitcher : null;
+                // 勝利・敗戦・セーブは記録（gameSetup）と同じ判定を使う（pitcherDecisions.js）。
+                // ⚠ 以前はここにも独自の推定があり、画面と記録で別の投手が出うる形だった
+                const decLog = decisionLogRef.current;
+                const sideOfTeam = { home: homeTeam, away: awayTeam };
+                const dec = !isDraw ? decidePitchers({
+                  finalScore: score, appearances: decLog.appearances, lastLead: decLog.lastLead,
+                  outsOf: (side, id) => sideOfTeam[side]?.players?.find(p => p.id === id)?.stats?.pitching?.outs || 0,
+                }) : { win: null, loss: null, save: null };
+                const findIn = (team, id) => (id == null ? null : team.players.find(p => p.id === id) || null);
+                const winPitcher = findIn(winTeam, dec.win);
+                const losePitcher = findIn(loseTeam, dec.loss);
+                const savePitcher = findIn(winTeam, dec.save);
 
                 // 本塁打を打った選手
                 const hrHitters = [
@@ -3718,14 +3850,14 @@ if (newOuts === 3) {
                 const scrollText = scrollParts.join('　　');
 
                 return (
-                <div className="bg-gray-900 rounded-lg p-4 text-white">
+                <div className="bg-surface-1 rounded-lg p-4 text-white">
                   <h3 className="text-2xl font-bold mb-3 text-center text-yellow-400">🏆 試合終了</h3>
                   <div className="flex justify-center items-center gap-8 text-xl font-bold mb-4">
                     <div className="text-red-400">
                       <div>{awayTeam.name}</div>
                       <div className="text-4xl mt-1">{score.away}</div>
                     </div>
-                    <div className="text-3xl text-gray-500">-</div>
+                    <div className="text-3xl text-gray-400">-</div>
                     <div className="text-blue-400">
                       <div>{homeTeam.name}</div>
                       <div className="text-4xl mt-1">{score.home}</div>
@@ -3733,7 +3865,7 @@ if (newOuts === 3) {
                   </div>
 
                   {/* スクロールテロップ */}
-                  <div className="overflow-hidden bg-gray-800 rounded-lg mb-3 py-2">
+                  <div className="overflow-hidden bg-surface-2 rounded-lg mb-3 py-2">
                     <div className="whitespace-nowrap text-lg font-bold text-yellow-300" style={{
                       display: 'inline-block',
                       animation: 'marquee 12s linear infinite',
@@ -3756,27 +3888,27 @@ if (newOuts === 3) {
                       <div className="flex items-center gap-1">
                         <span className="text-red-400 font-bold">○</span>
                         <span>{winPitcher.name}</span>
-                        <span className="text-gray-400 text-xs">{getPitcherRecord(winPitcher, winTeam, 'win')}</span>
+                        <span className="text-gray-300 text-xs">{getPitcherRecord(winPitcher, winTeam, 'win')}</span>
                       </div>
                     )}
                     {losePitcher && (
                       <div className="flex items-center gap-1">
                         <span className="text-blue-400 font-bold">●</span>
                         <span>{losePitcher.name}</span>
-                        <span className="text-gray-400 text-xs">{getPitcherRecord(losePitcher, loseTeam, 'lose')}</span>
+                        <span className="text-gray-300 text-xs">{getPitcherRecord(losePitcher, loseTeam, 'lose')}</span>
                       </div>
                     )}
                     {savePitcher && (
                       <div className="flex items-center gap-1">
                         <span className="text-green-400 font-bold">S</span>
                         <span>{savePitcher.name}</span>
-                        <span className="text-gray-400 text-xs">{getPitcherRecord(savePitcher, winTeam, 'save')}</span>
+                        <span className="text-gray-300 text-xs">{getPitcherRecord(savePitcher, winTeam, 'save')}</span>
                       </div>
                     )}
                   </div>
                   {hrHitters.length > 0 && (
                     <div className="text-center text-sm mb-3">
-                      <span className="text-gray-400 mr-2">本塁打</span>
+                      <span className="text-gray-300 mr-2">本塁打</span>
                       {hrHitters.map((p, i) => {
                         const seasonHR = (p.seasonStats?.batting?.homeruns || 0) + (p.gameStats?.homeruns || 0);
                         const count = p.gameStats?.homeruns || 0;
@@ -3789,43 +3921,47 @@ if (newOuts === 3) {
                     </div>
                   )}
 
-                  {/* 打撃成績サマリー */}
+                  {/* 打撃成績サマリー。**列を固定した表**にする。
+                      以前は「名前: N打数 N安打 NHR N打点」という自由文で、
+                      名前の長さで数字の位置が毎行ずれて縦に読めなかった。
+                      ⚠ players.sort() は state配列を破壊するので必ずコピーしてから並べる */}
                   <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <h4 className="font-bold text-red-400 mb-2">✈️ {awayTeam.name} 打撃成績</h4>
-                      <div className="space-y-1">
-                        {awayTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).slice(0, 3).map(player => {
-                          const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
-                          return (
-                            <div key={player.id} className="text-xs text-gray-400">
-                              {player.name}: {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}HR {stats.rbis || 0}打点
-                            </div>
-                          );
-                        })}
-                        <div className="text-xs text-gray-500 mt-1">他{awayTeam.players.length - 3}名...</div>
+                    {[[awayTeam, '✈️'], [homeTeam, '🏠']].map(([team, icon]) => (
+                      <div key={team.name} className="min-w-0">
+                        <h4 className="font-bold text-gray-100 mb-2 truncate" title={team.name}>
+                          {icon} {team.name} 打撃成績
+                        </h4>
+                        <div className="grid grid-cols-[1fr_2rem_2rem_2rem_2rem] gap-x-1 text-xs tabular-nums">
+                          <span className="text-gray-300">選手</span>
+                          <span className="text-gray-300 text-right">打数</span>
+                          <span className="text-gray-300 text-right">安打</span>
+                          <span className="text-gray-300 text-right">本</span>
+                          <span className="text-gray-300 text-right">打点</span>
+                          {[...team.players]
+                            .filter(p => (p.gameStats?.atBats || 0) > 0 || (p.gameStats?.hits || 0) > 0)
+                            .sort((a, b) => (a.battingOrder || 99) - (b.battingOrder || 99))
+                            .map(player => {
+                              const st = player.gameStats || {};
+                              return (
+                                <React.Fragment key={player.id}>
+                                  <span className="text-gray-200 truncate" title={player.name}>{player.name}</span>
+                                  <span className="text-gray-200 text-right">{st.atBats || 0}</span>
+                                  <span className="text-gray-200 text-right">{st.hits || 0}</span>
+                                  <span className={`text-right ${st.homeruns ? 'text-amber-300 font-bold' : 'text-gray-200'}`}>{st.homeruns || 0}</span>
+                                  <span className="text-gray-200 text-right">{st.rbis || 0}</span>
+                                </React.Fragment>
+                              );
+                            })}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-blue-400 mb-2">🏠 {homeTeam.name} 打撃成績</h4>
-                      <div className="space-y-1">
-                        {homeTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).slice(0, 3).map(player => {
-                          const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
-                          return (
-                            <div key={player.id} className="text-xs text-gray-400">
-                              {player.name}: {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}HR {stats.rbis || 0}打点
-                            </div>
-                          );
-                        })}
-                        <div className="text-xs text-gray-500 mt-1">他{homeTeam.players.length - 3}名...</div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
 
                   <div className="text-center mt-4 flex justify-center gap-3">
                     {managedGameInfo ? (
                       <button
                         onClick={handleManagedGameEnd}
-                        className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition text-lg"
+                        className="btn-warn py-3 px-8 rounded-lg transition text-lg"
                       >
                         結果確定・翌日へ
                       </button>
@@ -3837,7 +3973,7 @@ if (newOuts === 3) {
                           setSelectedBatterAway(null);
                           setSelectedBatterHome(null);
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                        className="btn-primary py-2 px-6 rounded-lg transition"
                       >
                         新しい試合
                       </button>
@@ -3849,499 +3985,54 @@ if (newOuts === 3) {
             </div>
 
             {/* ===== 右カラム: ホームチーム ===== */}
-            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
-              <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
-                <span className="text-2xl font-bold text-blue-400">{score?.home || 0}</span>
-                <h3 className="font-bold text-blue-400">🏠 {homeTeam.name}</h3>
-              </div>
-              
-              {/* スタメンと控え選手を横並び表示 */}
-              {!gameStarted ? (
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  {/* 左: スタメン */}
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">スターティングメンバー</div>
-                    <div className="space-y-1 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
-                      {homeTeam.players
-                        .filter(p => p.isStarter)
-                        .sort((a, b) => a.battingOrder - b.battingOrder)
-                        .map(player => {
-                          const isPitcher = player.position === 'pitcher';
-                          const posNames = POSITION_NAMES;
-                          const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-                          const isSubSelected = selectedSubstituteHome === player.id;
-                          const isSelected = selectedBatterHome === player.battingOrder;
-                          const isPositionSelected = selectedPositionHome === player.id;
-
-                          return (
-                            <div
-                              key={player.id}
-                              onClick={() => handleSubstituteClick('home', player.id)}
-                              className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-blue-600 text-white ring-2 ring-blue-400' :
-                                'bg-gray-800 hover:bg-gray-700'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleBatterClick('home', player.battingOrder);
-                                  }}
-                                  className="w-4 text-gray-400 text-xs hover:text-blue-400 transition font-bold"
-                                >
-                                  {player.battingOrder}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePositionClick('home', player.id);
-                                  }}
-                                  className={`w-6 text-center rounded text-sm py-0.5 font-bold transition ${
-                                    isPositionSelected
-                                      ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                                      : getPositionColor(player.position) + ' hover:opacity-80'
-                                  }`}
-                                >
-                                  {posNames[player.position]}
-                                </button>
-                                <span className="font-medium text-base truncate flex-1">
-                                  {player.name}
-                                  <span className={`ml-0.5 text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
-                                </span>
-                                <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
-<span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
-                                {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
-                                {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
-                                {isPositionSelected && <span className="text-purple-300 animate-pulse">◀</span>}
-                              </div>
-                              <div className="ml-9 mt-0.5">
-                                <div className="flex gap-3 text-xs text-gray-500 font-bold">
-                                  <span className="w-7 text-center">ミ</span>
-                                  <span className="w-7 text-center">パ</span>
-                                  <span className="w-7 text-center">走</span>
-                                  <span className="w-7 text-center">肩</span>
-                                  <span className="w-7 text-center">守</span>
-                                </div>
-                                <div className="flex gap-3 text-sm font-bold">
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.batting.meet)}`}>{player.batting.meet}</span>
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.batting.power)}`}>{player.batting.power}</span>
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.physical.speed)}`}>{player.physical.speed}</span>
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.physical.arm)}`}>{player.physical.arm}</span>
-                                  <span className={`w-7 text-center ${getAbilityTextColor(player.fielding.defense)}`}>{player.fielding.defense}</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-
-                  {/* 右: 控え選手 */}
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">ベンチメンバー</div>
-                    <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
-                      {homeTeam.players
-                        .filter(p => !p.isStarter)
-                        .map(player => {
-                          const posNames = POSITION_NAMES;
-                          const isPitcher = player.position === 'pitcher';
-                          const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-                          const isSubSelected = selectedSubstituteHome === player.id;
-                          const isSubbedOut = player.hasSubbedOut;
-
-                          return (
-                            <div
-                              key={player.id}
-                              onClick={() => !isSubbedOut && handleSubstituteClick('home', player.id)}
-                              className={`p-1.5 rounded transition ${
-                                isSubbedOut
-                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
-                                  : isSubSelected
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
-                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1">
-                                <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
-                                <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
-                                {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
-                                {isSubSelected && <span className="text-blue-300">👆</span>}
-                              </div>
-                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
-                                <span>M{player.batting.meet}</span>
-                                <span>P{player.batting.power}</span>
-                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* 試合中/試合終了後は現在フィールドにいる選手のみ表示 */
-                <div className="mb-2">
-                  <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
-                    {homeTeam.players
-                      .filter(p => {
-                        // 試合終了後：実際に出場した選手のみ
-                        if (gameOver) {
-                          const hasBattingStats = p.stats?.batting && (p.stats.batting.atBats > 0 || p.stats.batting.walks > 0 || p.stats.batting.hits > 0);
-                          const hasPitchingStats = p.stats?.pitching && p.stats.pitching.outs > 0;
-                          const isOnField = p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
-                          return hasBattingStats || hasPitchingStats || isOnField;
-                        }
-                        // 試合中：現在フィールドにいる選手
-                        return p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
-                      })
-                      .sort((a, b) => a.battingOrder - b.battingOrder)
-                      .map(player => {
-                      const isCurrentBatter = gameStarted && !isTopInning && player.battingOrder === homeTeam.currentBatterOrder;
-                      const isPitcher = player.position === 'pitcher';
-                      const posNames = POSITION_NAMES;
-                      const getPosColor = (pos) => getPositionColorHighlighted(pos, isCurrentBatter);
-
-                    const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                    const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-
-                    const isSelected = !gameStarted && selectedBatterHome === player.battingOrder;
-                    const isPositionSelected = !gameStarted && selectedPositionHome === player.id;
-                    const isSubSelected = gameStarted && selectedSubstituteHome === player.id;
-                    const isSubbedOut = player.hasSubbedOut;
-                    const fitness = calculateDefensiveFitness(player, player.position);
-
-                    return (
-                      <div
-                        key={player.id}
-                        onClick={() => {
-                          if (gameStarted && !isSubbedOut) {
-                            handleSubstituteClick('home', player.id);
-                          } else if (!gameStarted) {
-                            handleBatterClick('home', player.battingOrder);
-                          }
-                        }}
-                        className={`p-2 rounded transition ${
-                          isSubbedOut ? 'opacity-50 cursor-not-allowed' :
-                          isCurrentBatter ? 'bg-yellow-500 text-black cursor-pointer' :
-                          isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer' :
-                          isSelected ? 'bg-blue-600 text-white cursor-pointer' :
-                          'hover:bg-gray-800 cursor-pointer'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 overflow-hidden">
-                          <span className={`w-5 shrink-0 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
-                          {!gameStarted ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handlePositionClick('home', player.id);
-                              }}
-                              className={`w-6 shrink-0 text-center rounded text-xs py-0.5 font-semibold transition ${
-                                isPositionSelected
-                                  ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                                  : getPosColor(player.position) + ' hover:opacity-80'
-                              }`}
-                            >
-                              {posNames[player.position]}
-                            </button>
-                          ) : (
-                            <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(player.position)}`}>{posNames[player.position]}</span>
-                          )}
-                          <span className="font-bold truncate">{player.name}</span>
-                          <span className={`text-[10px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
-                          <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
-                          {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap shrink-0">
-                              {player.gameStats.atBatResults.map((r, i) => (
-                                <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
-                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
-                                  r === '本塁打' ? 'bg-red-600' :
-                                  r === '三振' ? 'bg-blue-700' :
-                                  r === '四球' ? 'bg-green-700' :
-                                  r === '併殺' ? 'bg-purple-700' :
-                                  'bg-gray-600'
-                                }`}>{r}</span>
-                              ))}
-                            </span>
-                          )}
-                          <span className="flex-1"></span>
-                          {isSubbedOut && <span className="text-red-400 text-xs shrink-0">交代済</span>}
-                          {isCurrentBatter && <span className="shrink-0">⚾</span>}
-                          {isSubSelected && <span className="text-orange-300">⚡</span>}
-                          {isSelected && <span>👆</span>}
-                          {isPositionSelected && <span>🔄</span>}
-                        </div>
-                        {gameStarted ? (
-                          <div className={`flex gap-2 text-xs ml-6 mt-0.5 font-bold ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
-                            {(() => {
-                              const ss = player.seasonStats?.batting;
-                              if (ss && ss.atBats > 0) {
-                                const avg = (ss.hits / ss.atBats).toFixed(3);
-                                return <>
-                                  <span>.{avg.split('.')[1]}</span>
-                                  <span>{ss.homeruns || 0}本</span>
-                                  <span>{ss.rbis || 0}点</span>
-                                  <span>{ss.hits || 0}安</span>
-                                </>;
-                              }
-                              if (isPitcher) {
-                                const ps = player.seasonStats?.pitching;
-                                if (ps && ps.inningsPitched > 0) {
-                                  const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
-                                  return <span>ERA {era}</span>;
-                                }
-                              }
-                              return <span>---</span>;
-                            })()}
-                          </div>
-                        ) : (
-                          <>
-                            <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
-                              <span>M{player.batting.meet}</span>
-                              <span>P{player.batting.power}</span>
-                              <span>E{player.batting.eye}</span>
-                              {isPitcher && <span className={isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
-                            </div>
-                            <div className={`text-[10px] ml-6 mt-0.5 ${
-                              fitness.grade === 'S' ? 'text-yellow-400' :
-                              fitness.grade === 'A' ? 'text-green-400' :
-                              fitness.grade === 'B' ? 'text-blue-400' :
-                              fitness.grade === 'D' ? 'text-red-400' :
-                              'text-gray-400'
-                            }`}>
-                              守備適性 [{fitness.grade}] {fitness.comments}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 試合中の選手交代アコーディオン */}
-                <div className="mt-2">
-                  <button
-                    onClick={() => setShowBenchHome(!showBenchHome)}
-                    className="w-full p-2 bg-gray-800 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
-                  >
-                    <span>⚡ 選手交代</span>
-                    <span>{showBenchHome ? '▼' : '▶'}</span>
-                  </button>
-
-                  {showBenchHome && (
-                    <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
-                      {homeTeam.players
-                        .filter(p => !p.isStarter)
-                        .map(player => {
-                          const posNames = POSITION_NAMES;
-                          const isPitcher = player.position === 'pitcher';
-                          const throwHand = player.physical.throws === 'right' ? '右' : '左';
-                          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
-                          const isSubSelected = selectedSubstituteHome === player.id;
-                          const isSubbedOut = player.hasSubbedOut;
-
-                          return (
-                            <div
-                              key={player.id}
-                              onClick={() => !isSubbedOut && handleSubstituteClick('home', player.id)}
-                              className={`p-1.5 rounded transition ${
-                                isSubbedOut
-                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
-                                  : isSubSelected
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
-                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1">
-                                <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
-                                <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
-                                {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
-                                {isSubSelected && <span className="text-blue-300">👆</span>}
-                              </div>
-                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
-                                <span>M{player.batting.meet}</span>
-                                <span>P{player.batting.power}</span>
-                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              </div>
-              )}
-
-              {/* ホームチーム試合スタッツ/投手詳細 */}
-              <div className="mt-2 pt-2 border-t border-gray-700">
-                {gameStarted ? (
-                  <>
-                    <div className="text-sm text-gray-400 mb-1">📊 試合スタッツ</div>
-                    {/* 投手成績 */}
-                    <div className="bg-gray-800 rounded p-2 mb-1">
-                      <div className="text-xs text-blue-400 mb-0.5">投手</div>
-                      <div className="text-sm">
-                        {(() => {
-                          const pitchers = homeTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
-                          const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
-                          const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
-                          return (
-                            <>
-                              {pitchers.map(p => {
-                                const s = p.stats?.pitching || {};
-                                const outs = s.outs || 0;
-                                const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
-                                const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
-                                return (
-                                  <div key={p.id} className="flex justify-between text-gray-300 gap-1">
-                                    <span className="truncate">{p.name}</span>
-                                    <span className="text-gray-400 whitespace-nowrap text-xs">
-                                      {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {pitchers.length > 1 && (
-                                <div className="flex justify-between text-yellow-400 text-xs mt-1 pt-1 border-t border-gray-700">
-                                  <span>合計イニング</span>
-                                  <span>{totalIP}</span>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-sm font-bold text-gray-300 mb-1">⚾ 予告先発</div>
-                    {(() => {
-                      const pitcher = homeTeam.players.find(p => p.isStarter && p.position === 'pitcher');
-                      if (!pitcher) return null;
-                      const formNames = {
-                        overhand: 'オーバー',
-                        threeQuarter: 'スリークォーター',
-                        sidearm: 'サイドアーム',
-                        submarine: 'アンダースロー'
-                      };
-                      const ballTypeNames = {
-                        straight: 'ストレート',
-                        slider: 'スライダー',
-                        curveball: 'カーブ',
-                        curve: 'カーブ',
-                        changeup: 'チェンジアップ',
-                        fork: 'フォーク',
-                        sinker: 'シンカー',
-                        cutter: 'カッター',
-                        splitter: 'スプリット',
-                        knuckleball: 'ナックル',
-                        shoot: 'シュート'
-                      };
-                      const getValueColor = (val) => {
-                        if (val >= 80) return 'text-red-400';
-                        if (val >= 70) return 'text-orange-400';
-                        if (val >= 60) return 'text-yellow-400';
-                        if (val >= 50) return 'text-green-400';
-                        return 'text-gray-400';
-                      };
-                      const getBgColor = (val) => {
-                        if (val >= 80) return 'bg-red-500';
-                        if (val >= 70) return 'bg-orange-500';
-                        if (val >= 60) return 'bg-yellow-500';
-                        if (val >= 50) return 'bg-green-500';
-                        return 'bg-gray-500';
-                      };
-                      const velocityScore = Math.min(100, (pitcher.pitching.velocity - 100) * 2);
-                      const staminaScore = Math.min(100, pitcher.pitching.stamina / 2);
-                      return (
-                        <div className="bg-gray-800 rounded p-3 border-2 border-gray-700">
-                          <div className="text-base text-white mb-2 font-bold flex items-center gap-2">
-                            <span>⚾</span>
-                            <span>{pitcher.name}</span>
-                            <span className="text-sm text-gray-400">#{pitcher.number || pitcher.id}</span>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="text-xs text-gray-400">投げ手:</span>
-                              <span className="text-white font-bold">{pitcher.physical.throws === 'right' ? '右投' : '左投'}</span>
-                              <span className="text-gray-600">|</span>
-                              <span className="text-white">{formNames[pitcher.pitching.form]}</span>
-                              <span className="text-gray-600">|</span>
-                              <span className="text-xs text-gray-400">球速:</span>
-                              <span className={`text-lg font-bold ${getValueColor(velocityScore)}`}>{pitcher.pitching.velocity}</span>
-                              <span className="text-xs text-gray-500">km/h</span>
-                              <span className="text-gray-600">|</span>
-                              <span className="text-xs text-gray-400">回転:</span>
-                              <span className={`text-sm font-bold ${getValueColor(pitcher.pitching.spinRate ?? 50)}`}>{pitcher.pitching.spinRate ?? 50}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400 w-12">制球</span>
-                              <div className="flex-1 bg-gray-700 rounded h-3 overflow-hidden">
-                                <div className={`h-full ${getBgColor(pitcher.pitching.control)}`} style={{ width: `${pitcher.pitching.control}%` }} />
-                              </div>
-                              <span className={`text-sm font-bold ${getValueColor(pitcher.pitching.control)}`}>{pitcher.pitching.control}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400 w-12">体力</span>
-                              <div className="flex-1 bg-gray-700 rounded h-3 overflow-hidden">
-                                <div className={`h-full ${getBgColor(staminaScore)}`} style={{ width: `${staminaScore}%` }} />
-                              </div>
-                              <span className={`text-sm font-bold ${getValueColor(staminaScore)}`}>{pitcher.pitching.stamina}</span>
-                            </div>
-                            <div className="pt-1 border-t border-gray-700">
-                              <div className="text-xs text-gray-400 mb-1">変化球</div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {pitcher.pitching.arsenal.map((ball, i) => (
-                                  <span key={i} className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded font-semibold">
-                                    {ballTypeNames[ball.type] || ball.type}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
-            </div>
+            <TeamMemberPanel
+              side="home"
+              team={homeTeam}
+              score={score?.home}
+              isBatting={!isTopInning}
+              gameStarted={gameStarted}
+              gameOver={gameOver}
+              selectedBatter={selectedBatterHome}
+              selectedPosition={selectedPositionHome}
+              selectedSubstitute={selectedSubstituteHome}
+              showBench={showBenchHome}
+              setShowBench={setShowBenchHome}
+              handleBatterClick={handleBatterClick}
+              handlePositionClick={handlePositionClick}
+              handleSubstituteClick={handleSubstituteClick}
+              getPositionColor={getPositionColor}
+              getPositionColorHighlighted={getPositionColorHighlighted}
+            />
           </div>
           
           {/* 選手編集モーダル */}
           {editingPlayer && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-surface-2 rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-700">
                 <div className="p-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold">📝 {editingPlayer.name} を編集</h2>
-                    <button onClick={() => setEditingPlayer(null)} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                    <h2 className="text-xl font-bold text-gray-100">{editingPlayer.name} を編集</h2>
+                    <button onClick={() => setEditingPlayer(null)} className="text-gray-300 hover:text-white text-2xl">&times;</button>
                   </div>
-                  
+
                   {/* 基本情報 */}
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">名前</label>
+                    <label className="block text-sm font-medium text-gray-200 mb-1">名前</label>
                     <input
                       type="text"
                       value={editingPlayer.name}
                       onChange={(e) => setEditingPlayer({...editingPlayer, name: e.target.value})}
-                      className="w-full border border-gray-300 rounded px-3 py-2"
+                      className="w-full bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2"
                     />
                   </div>
 
                   {/* 守備位置選択 */}
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">守備位置</label>
+                    <label className="block text-sm font-medium text-gray-200 mb-1">守備位置</label>
                     <select
                       value={editingPlayer.position}
                       onChange={(e) => setEditingPlayer({...editingPlayer, position: e.target.value})}
-                      className="w-full border border-gray-300 rounded px-3 py-2"
+                      className="w-full bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2"
                     >
                       <option value="pitcher">投手</option>
                       <option value="catcher">捕手</option>
@@ -4357,11 +4048,11 @@ if (newOuts === 3) {
                       const fitness = calculateDefensiveFitness(editingPlayer, editingPlayer.position);
                       return (
                         <div className={`mt-1 text-xs ${
-                          fitness.grade === 'S' ? 'text-yellow-600' :
-                          fitness.grade === 'A' ? 'text-green-600' :
-                          fitness.grade === 'B' ? 'text-blue-600' :
-                          fitness.grade === 'D' ? 'text-red-600' :
-                          'text-gray-600'
+                          fitness.grade === 'S' ? 'text-yellow-400' :
+                          fitness.grade === 'A' ? 'text-green-400' :
+                          fitness.grade === 'B' ? 'text-blue-400' :
+                          fitness.grade === 'D' ? 'text-red-400' :
+                          'text-gray-300'
                         }`}>
                           守備適性: [{fitness.grade}] {fitness.comments}
                         </div>
@@ -4371,7 +4062,7 @@ if (newOuts === 3) {
                   
                   {/* 打撃能力 */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-700 mb-2">打撃能力</h3>
+                    <h3 className="font-bold text-sm text-gray-200 mb-2">打撃能力</h3>
                     <div className="space-y-2">
                       {[
                         {key: 'meet', label: 'ミート', color: 'blue'},
@@ -4380,7 +4071,7 @@ if (newOuts === 3) {
                         {key: 'steal', label: '盗塁', color: 'purple'}
                       ].map(({key, label, color}) => (
                         <div key={key}>
-                          <label className="block text-xs text-gray-600">{label}: <span className={`font-bold text-${color}-600`}>{editingPlayer.batting[key]}</span></label>
+                          <label className="block text-xs text-gray-300">{label}: <span className={`font-bold text-${color}-400`}>{editingPlayer.batting[key]}</span></label>
                           <input type="range" min="0" max="100" value={editingPlayer.batting[key]}
                             onChange={(e) => setEditingPlayer({...editingPlayer, batting: {...editingPlayer.batting, [key]: parseInt(e.target.value)}})}
                             className="w-full" />
@@ -4391,35 +4082,35 @@ if (newOuts === 3) {
                   
                   {/* 身体能力 */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-700 mb-2">身体能力</h3>
+                    <h3 className="font-bold text-sm text-gray-200 mb-2">身体能力</h3>
                     <div className="space-y-2">
                       <div>
-                        <label className="block text-xs text-gray-600">走力: <span className="font-bold">{editingPlayer.physical.speed}</span></label>
+                        <label className="block text-xs text-gray-300">走力: <span className="font-bold text-gray-100">{editingPlayer.physical.speed}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.physical.speed}
                           onChange={(e) => setEditingPlayer({...editingPlayer, physical: {...editingPlayer.physical, speed: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600">肩力: <span className="font-bold">{editingPlayer.physical.arm}</span></label>
+                        <label className="block text-xs text-gray-300">肩力: <span className="font-bold text-gray-100">{editingPlayer.physical.arm}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.physical.arm}
                           onChange={(e) => setEditingPlayer({...editingPlayer, physical: {...editingPlayer.physical, arm: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* 守備能力 */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-700 mb-2">守備能力</h3>
+                    <h3 className="font-bold text-sm text-gray-200 mb-2">守備能力</h3>
                     <div className="space-y-2">
                       <div>
-                        <label className="block text-xs text-gray-600">守備力: <span className="font-bold text-yellow-600">{editingPlayer.fielding?.defense || 50}</span></label>
+                        <label className="block text-xs text-gray-300">守備力: <span className="font-bold text-yellow-400">{editingPlayer.fielding?.defense || 50}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.fielding?.defense || 50}
                           onChange={(e) => setEditingPlayer({...editingPlayer, fielding: {...(editingPlayer.fielding || {}), defense: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600">キャッチャーリード: <span className="font-bold text-orange-600">{editingPlayer.catching?.lead || 50}</span></label>
+                        <label className="block text-xs text-gray-300">キャッチャーリード: <span className="font-bold text-orange-400">{editingPlayer.catching?.lead || 50}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.catching?.lead || 50}
                           onChange={(e) => setEditingPlayer({...editingPlayer, catching: {...(editingPlayer.catching || {}), lead: parseInt(e.target.value)}})}
                           className="w-full" />
@@ -4429,22 +4120,22 @@ if (newOuts === 3) {
                   
                   {/* 投手能力 */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-700 mb-2">投手能力</h3>
+                    <h3 className="font-bold text-sm text-gray-200 mb-2">投手能力</h3>
                     <div className="space-y-2">
                       <div>
-                        <label className="block text-xs text-gray-600">球速: <span className="font-bold">{editingPlayer.pitching.velocity}km/h</span></label>
+                        <label className="block text-xs text-gray-300">球速: <span className="font-bold text-gray-100">{editingPlayer.pitching.velocity}km/h</span></label>
                         <input type="range" min="100" max="170" value={editingPlayer.pitching.velocity}
                           onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, velocity: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600">制球: <span className="font-bold">{editingPlayer.pitching.control}</span></label>
+                        <label className="block text-xs text-gray-300">制球: <span className="font-bold text-gray-100">{editingPlayer.pitching.control}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.pitching.control}
                           onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, control: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600">スタミナ: <span className="font-bold">{editingPlayer.pitching.stamina}</span></label>
+                        <label className="block text-xs text-gray-300">スタミナ: <span className="font-bold text-gray-100">{editingPlayer.pitching.stamina}</span></label>
                         <input type="range" min="50" max="250" value={editingPlayer.pitching.stamina}
                           onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, stamina: parseInt(e.target.value)}})}
                           className="w-full" />
@@ -4453,7 +4144,7 @@ if (newOuts === 3) {
 
                     {/* 持ち球 */}
                     <div className="mt-3">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">持ち球</label>
+                      <label className="block text-xs font-medium text-gray-300 mb-1">持ち球</label>
                       <div className="space-y-1">
                         {editingPlayer.pitching.arsenal.map((ball, index) => (
                           <div key={ball.id} className="flex items-center gap-2 text-sm">
@@ -4464,7 +4155,7 @@ if (newOuts === 3) {
                                 newArsenal[index] = {...newArsenal[index], type: e.target.value};
                                 setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
                               }}
-                              className="border rounded px-2 py-1 text-xs flex-1"
+                              className="bg-gray-700 border border-gray-600 text-gray-100 rounded px-2 py-1 text-xs flex-1"
                             >
                               {Object.keys(ballEffects).filter(type => 
                                 type === ball.type || !editingPlayer.pitching.arsenal.some((b, i) => i !== index && b.type === type)
@@ -4479,7 +4170,7 @@ if (newOuts === 3) {
                                 newArsenal[index] = {...newArsenal[index], level: parseInt(e.target.value) || 0};
                                 setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
                               }}
-                              className="border rounded px-2 py-1 w-14 text-xs" />
+                              className="bg-gray-700 border border-gray-600 text-gray-100 rounded px-2 py-1 w-14 text-xs" />
                             {index > 0 && (
                               <button onClick={() => {
                                 const newArsenal = editingPlayer.pitching.arsenal.filter((_, i) => i !== index);
@@ -4507,9 +4198,9 @@ if (newOuts === 3) {
                   {/* 保存ボタン */}
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setEditingPlayer(null)}
-                      className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
+                      className="px-4 py-2 border border-gray-600 text-gray-200 rounded hover:bg-gray-700">キャンセル</button>
                     <button onClick={() => { updatePlayer(editingPlayer.id, editingPlayer); setEditingPlayer(null); }}
-                      className="px-20 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">保存</button>
+                      className="btn-primary px-20 py-2 rounded">保存</button>
                   </div>
                 </div>
               </div>
@@ -4519,13 +4210,13 @@ if (newOuts === 3) {
           {/* エディット画面 */}
           {showEditScreen && (
             <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg w-full max-w-7xl max-h-[90vh] overflow-y-auto">
+              <div className="bg-surface-1 rounded-lg w-full max-w-7xl max-h-[90vh] overflow-y-auto border border-gray-700">
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-4 border-b z-10">
-                    <h2 className="text-2xl font-bold">✏️ 選手エディット</h2>
+                  <div className="flex justify-between items-center mb-6 sticky top-0 bg-surface-1 pb-4 border-b border-gray-700 z-10">
+                    <h2 className="text-2xl font-bold text-gray-100">選手エディット</h2>
                     <button
                       onClick={() => setShowEditScreen(false)}
-                      className="text-gray-500 hover:text-gray-700 text-3xl"
+                      className="text-gray-300 hover:text-white text-3xl"
                     >
                       ×
                     </button>
@@ -4533,540 +4224,15 @@ if (newOuts === 3) {
 
                   {/* 2カラムレイアウト */}
                   <div className="grid grid-cols-2 gap-6">
-                    {/* 左: アウェイチーム */}
-                    <div>
-                    <h3 className="text-xl font-bold text-red-500 mb-4">✈️ {awayTeam.name}</h3>
-                    <div className="space-y-6">
-                      {awayTeam.players.map(player => (
-                        <div key={player.id} className="bg-gray-50 p-3 rounded-lg">
-                          <div className="mb-3">
-                            <label className="block text-xs text-gray-600 mb-1">選手名</label>
-                            <input
-                              type="text"
-                              value={player.name}
-                              onChange={(e) => {
-                                const newValue = e.target.value;
-                                const teamSetter = awayTeam.players.find(p => p.id === player.id) ? setAwayTeam : setHomeTeam;
-                                teamSetter(prev => ({
-                                  ...prev,
-                                  players: prev.players.map(p =>
-                                    p.id === player.id ? { ...p, name: newValue } : p
-                                  )
-                                }));
-                              }}
-                              className="w-full px-2 py-1 border rounded text-sm"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            {/* 打撃能力 */}
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">ミート: <span className="font-bold text-blue-600">{player.batting.meet}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.batting.meet}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setAwayTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, batting: { ...p.batting, meet: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">パワー: <span className="font-bold text-blue-600">{player.batting.power}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.batting.power}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setAwayTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, batting: { ...p.batting, power: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">選球眼: <span className="font-bold text-blue-600">{player.batting.eye}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.batting.eye}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setAwayTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, batting: { ...p.batting, eye: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">走力: <span className="font-bold text-blue-600">{player.physical.speed}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.physical.speed}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setAwayTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, physical: { ...p.physical, speed: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            {/* 守備能力 */}
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">守備: <span className="font-bold text-green-600">{player.fielding.defense}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.fielding.defense}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setAwayTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, fielding: { ...p.fielding, defense: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">肩: <span className="font-bold text-green-600">{player.physical.arm}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.physical.arm}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setAwayTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, physical: { ...p.physical, arm: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            {/* 投手能力（全選手） */}
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">球速: <span className="font-bold text-red-600">{player.pitching.velocity}km/h</span></label>
-                              <input
-                                type="range"
-                                min="100"
-                                max="170"
-                                value={player.pitching.velocity}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setAwayTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, pitching: { ...p.pitching, velocity: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full h-2"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">制球: <span className="font-bold text-red-600">{player.pitching.control}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.pitching.control}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setAwayTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, pitching: { ...p.pitching, control: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full h-2"
-                              />
-                            </div>
-                            {/* 投球フォーム */}
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">投球フォーム: <span className="font-bold text-orange-600">{PITCHING_FORM_EFFECTS[player.pitching.form]?.name || player.pitching.form}</span></label>
-                              <select
-                                value={player.pitching.form}
-                                onChange={(e) => {
-                                  const newValue = e.target.value;
-                                  const teamSetter = awayTeam.players.find(p => p.id === player.id) ? setAwayTeam : setHomeTeam;
-                                  teamSetter(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, pitching: { ...p.pitching, form: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full px-2 py-1 border rounded text-sm"
-                              >
-                                <option value="overhand">オーバースロー</option>
-                                <option value="threeQuarter">スリークォーター</option>
-                                <option value="sidearm">サイドスロー</option>
-                                <option value="submarine">アンダースロー</option>
-                              </select>
-                            </div>
-                            {/* 変化球 */}
-                            <div className="mt-2 pt-2 border-t border-gray-300">
-                              <label className="block text-sm font-semibold text-gray-700 mb-2">変化球</label>
-                              {player.pitching.arsenal.map((ball) => (
-                                <div key={ball.id} className="mb-2">
-                                  <label className="block text-xs text-gray-600 mb-1">
-                                    {BALL_EFFECTS[ball.type]?.name || ball.type}: <span className="font-bold text-purple-600">{ball.level}</span>
-                                  </label>
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={ball.level}
-                                    onChange={(e) => {
-                                      const newValue = parseInt(e.target.value);
-                                      setAwayTeam(prev => ({
-                                        ...prev,
-                                        players: prev.players.map(p =>
-                                          p.id === player.id
-                                            ? {
-                                                ...p,
-                                                pitching: {
-                                                  ...p.pitching,
-                                                  arsenal: p.pitching.arsenal.map(b =>
-                                                    b.id === ball.id ? { ...b, level: newValue } : b
-                                                  )
-                                                }
-                                              }
-                                            : p
-                                        )
-                                      }));
-                                    }}
-                                    className="w-full h-2"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    </div>
-
-                    {/* 右: ホームチーム */}
-                    <div>
-                    <h3 className="text-xl font-bold text-blue-500 mb-4">🏠 {homeTeam.name}</h3>
-                    <div className="space-y-6">
-                      {homeTeam.players.map(player => (
-                        <div key={player.id} className="bg-gray-50 p-3 rounded-lg">
-                          <div className="mb-3">
-                            <label className="block text-xs text-gray-600 mb-1">選手名</label>
-                            <input
-                              type="text"
-                              value={player.name}
-                              onChange={(e) => {
-                                const newValue = e.target.value;
-                                const teamSetter = awayTeam.players.find(p => p.id === player.id) ? setAwayTeam : setHomeTeam;
-                                teamSetter(prev => ({
-                                  ...prev,
-                                  players: prev.players.map(p =>
-                                    p.id === player.id ? { ...p, name: newValue } : p
-                                  )
-                                }));
-                              }}
-                              className="w-full px-2 py-1 border rounded text-sm"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            {/* 打撃能力 */}
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">ミート: <span className="font-bold text-blue-600">{player.batting.meet}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.batting.meet}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setHomeTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, batting: { ...p.batting, meet: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">パワー: <span className="font-bold text-blue-600">{player.batting.power}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.batting.power}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setHomeTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, batting: { ...p.batting, power: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">選球眼: <span className="font-bold text-blue-600">{player.batting.eye}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.batting.eye}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setHomeTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, batting: { ...p.batting, eye: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">走力: <span className="font-bold text-blue-600">{player.physical.speed}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.physical.speed}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setHomeTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, physical: { ...p.physical, speed: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            {/* 守備能力 */}
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">守備: <span className="font-bold text-green-600">{player.fielding.defense}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.fielding.defense}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setHomeTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, fielding: { ...p.fielding, defense: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">肩: <span className="font-bold text-green-600">{player.physical.arm}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.physical.arm}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setHomeTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, physical: { ...p.physical, arm: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full"
-                              />
-                            </div>
-                            {/* 投手能力（全選手） */}
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">球速: <span className="font-bold text-red-600">{player.pitching.velocity}km/h</span></label>
-                              <input
-                                type="range"
-                                min="100"
-                                max="170"
-                                value={player.pitching.velocity}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setHomeTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, pitching: { ...p.pitching, velocity: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full h-2"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">制球: <span className="font-bold text-red-600">{player.pitching.control}</span></label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={player.pitching.control}
-                                onChange={(e) => {
-                                  const newValue = parseInt(e.target.value);
-                                  setHomeTeam(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, pitching: { ...p.pitching, control: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full h-2"
-                              />
-                            </div>
-                            {/* 投球フォーム */}
-                            <div>
-                              <label className="block text-sm text-gray-600 mb-1">投球フォーム: <span className="font-bold text-orange-600">{PITCHING_FORM_EFFECTS[player.pitching.form]?.name || player.pitching.form}</span></label>
-                              <select
-                                value={player.pitching.form}
-                                onChange={(e) => {
-                                  const newValue = e.target.value;
-                                  const teamSetter = awayTeam.players.find(p => p.id === player.id) ? setAwayTeam : setHomeTeam;
-                                  teamSetter(prev => ({
-                                    ...prev,
-                                    players: prev.players.map(p =>
-                                      p.id === player.id
-                                        ? { ...p, pitching: { ...p.pitching, form: newValue } }
-                                        : p
-                                    )
-                                  }));
-                                }}
-                                className="w-full px-2 py-1 border rounded text-sm"
-                              >
-                                <option value="overhand">オーバースロー</option>
-                                <option value="threeQuarter">スリークォーター</option>
-                                <option value="sidearm">サイドスロー</option>
-                                <option value="submarine">アンダースロー</option>
-                              </select>
-                            </div>
-                            {/* 変化球 */}
-                            <div className="mt-2 pt-2 border-t border-gray-300">
-                              <label className="block text-sm font-semibold text-gray-700 mb-2">変化球</label>
-                              {player.pitching.arsenal.map((ball) => (
-                                <div key={ball.id} className="mb-2">
-                                  <label className="block text-xs text-gray-600 mb-1">
-                                    {BALL_EFFECTS[ball.type]?.name || ball.type}: <span className="font-bold text-purple-600">{ball.level}</span>
-                                  </label>
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={ball.level}
-                                    onChange={(e) => {
-                                      const newValue = parseInt(e.target.value);
-                                      setHomeTeam(prev => ({
-                                        ...prev,
-                                        players: prev.players.map(p =>
-                                          p.id === player.id
-                                            ? {
-                                                ...p,
-                                                pitching: {
-                                                  ...p.pitching,
-                                                  arsenal: p.pitching.arsenal.map(b =>
-                                                    b.id === ball.id ? { ...b, level: newValue } : b
-                                                  )
-                                                }
-                                              }
-                                            : p
-                                        )
-                                      }));
-                                    }}
-                                    className="w-full h-2"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    </div>
+                    <PlayerEditColumn team={awayTeam} setTeam={setAwayTeam} icon="✈️" titleColor="text-red-500" />
+                    <PlayerEditColumn team={homeTeam} setTeam={setHomeTeam} icon="🏠" titleColor="text-blue-500" />
                   </div>
 
                   {/* 閉じるボタン */}
-                  <div className="flex justify-end sticky bottom-0 bg-white pt-4 border-t">
+                  <div className="flex justify-end sticky bottom-0 bg-surface-1 pt-4 border-t border-gray-700">
                     <button
                       onClick={() => setShowEditScreen(false)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg"
+                      className="btn-primary py-3 px-8 rounded-lg"
                     >
                       完了
                     </button>
@@ -5094,6 +4260,8 @@ if (newOuts === 3) {
                 userTeamName={userTeamName}
                 allTeams={allTeams}
                 gameMode={gameMode}
+                setGameMode={setGameMode}
+                setLeagueConfig={setLeagueConfig}
                 hallOfFamePlayers={hallOfFamePlayers}
                 setHallOfFamePlayers={setHallOfFamePlayers}
                 teamHistory={teamHistory}
@@ -5103,6 +4271,7 @@ if (newOuts === 3) {
                 saveSlots={saveSlots}
                 saveGame={saveGame}
                 loadGame={loadGame}
+                loadAutosave={loadAutosave}
                 deleteSave={deleteSave}
                 refreshSaveSlots={refreshSaveSlots}
                 setupManagedGame={setupManagedGame}

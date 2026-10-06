@@ -77,19 +77,36 @@ export const getDaysInMonth = (year, month) => {
 };
 
 /**
+ * 10月第4木曜日（NPBドラフト開催日）を返す
+ * @param {number} year - ゲーム内年度
+ * @returns {number} 日付（例: 24）
+ */
+export const getNPBDraftDay = (year) => {
+  // 10月1日の曜日を取得（0=日, 1=月, ..., 4=木, 6=土）
+  const oct1DayOfWeek = new Date(year, 9, 1).getDay();
+  // 最初の木曜日までの日数
+  const daysToFirstThursday = (4 - oct1DayOfWeek + 7) % 7;
+  const firstThursday = 1 + daysToFirstThursday;
+  return firstThursday + 21; // 第4木曜日 = 第1木曜日 + 21日
+};
+
+/**
  * 現在のフェーズを取得
  * @param {number} month
  * @param {number} day
  * @param {Object} [options] - { universityMode: bool }
+ * @param {number} [year] - ゲーム内年度（ドラフト日の曜日計算に使用）
  */
-export const getCurrentPhase = (month, day, options) => {
+export const getCurrentPhase = (month, day, options, year) => {
+  const draftDay = year ? getNPBDraftDay(year) : 24;
+
   if (options?.universityMode) {
     // 大学モード: プレーオフ/契約更改/トライアウトなし
     if (month >= 1 && month <= 3) return SEASON_PHASES.SPRING_CAMP;
     if (month >= 4 && month <= 9) return SEASON_PHASES.REGULAR_SEASON;
-    if (month === 10 && day < 24) return SEASON_PHASES.REGULAR_SEASON;
-    if (month === 10 && day === 24) return SEASON_PHASES.DRAFT;
-    if (month === 10 && day > 24) return SEASON_PHASES.REGULAR_SEASON;
+    if (month === 10 && day < draftDay) return SEASON_PHASES.REGULAR_SEASON;
+    if (month === 10 && day === draftDay) return SEASON_PHASES.DRAFT;
+    if (month === 10 && day > draftDay) return SEASON_PHASES.REGULAR_SEASON;
     if (month === 11 && day < 30) return SEASON_PHASES.REGULAR_SEASON; // 明治神宮大会は11月中旬〜下旬
     return SEASON_PHASES.OFF_SEASON;
   }
@@ -102,11 +119,11 @@ export const getCurrentPhase = (month, day, options) => {
     return SEASON_PHASES.REGULAR_SEASON;
   } else if (month === 10 && day >= 10 && day <= 20) {
     return SEASON_PHASES.PLAYOFFS;
-  } else if (month === 10 && day >= 21 && day < 24) {
+  } else if (month === 10 && day >= 21 && day < draftDay) {
     return SEASON_PHASES.OFF_SEASON;
-  } else if (month === 10 && day === 24) {
+  } else if (month === 10 && day === draftDay) {
     return SEASON_PHASES.DRAFT;
-  } else if (month === 10 && day > 24) {
+  } else if (month === 10 && day > draftDay) {
     return SEASON_PHASES.OFF_SEASON;
   } else if (month === 11 && day < 9) {
     return SEASON_PHASES.OFF_SEASON;
@@ -209,67 +226,6 @@ export const isGameDay = (date, phase) => {
   return false;
 };
 
-/**
- * レギュラーシーズンの試合スケジュールを生成
- * @param {Array} teams - チーム配列 ['チームA', 'チームB', ...]
- * @param {number} gamesPerOpponent - 各対戦相手との試合数
- * @param {number} startYear - 開始年
- * @returns {Array} スケジュール配列
- */
-export const generateRegularSeasonSchedule = (teams, gamesPerOpponent = 20, startYear = 2024) => {
-  const schedule = [];
-  const teamsCount = teams.length;
-
-  // 各チームペアの対戦カードを作成
-  const matchups = [];
-  for (let i = 0; i < teamsCount; i++) {
-    for (let j = i + 1; j < teamsCount; j++) {
-      matchups.push({ team1: teams[i], team2: teams[j] });
-    }
-  }
-
-  // 3月1日から開始
-  let currentDate = { year: startYear, month: 3, day: 1 };
-  const endDate = { year: startYear, month: 9, day: 30 };
-
-  // 各対戦カードごとに試合を分散配置
-  let gameCount = 0;
-  const totalGamesNeeded = matchups.length * gamesPerOpponent;
-
-  while (compareDates(currentDate, endDate) <= 0 && gameCount < totalGamesNeeded) {
-    const phase = getCurrentPhase(currentDate.month, currentDate.day);
-
-    if (isGameDay(currentDate, phase)) {
-      // この日に複数試合を配置（同時開催可能）
-      const gamesThisDay = Math.min(Math.floor(teamsCount / 2), totalGamesNeeded - gameCount);
-
-      for (let i = 0; i < gamesThisDay; i++) {
-        const matchupIndex = (gameCount + i) % matchups.length;
-        const matchup = matchups[matchupIndex];
-        const gameNumber = Math.floor((gameCount + i) / matchups.length);
-
-        // ホーム/アウェイを交互に
-        const isHomeTeam1 = gameNumber % 2 === 0;
-
-        schedule.push({
-          date: { ...currentDate },
-          home: isHomeTeam1 ? matchup.team1 : matchup.team2,
-          away: isHomeTeam1 ? matchup.team2 : matchup.team1,
-          homePitcher: null,  // 後で設定
-          awayPitcher: null,  // 後で設定
-          result: null,
-          phase: SEASON_PHASES.REGULAR_SEASON
-        });
-      }
-
-      gameCount += gamesThisDay;
-    }
-
-    currentDate = advanceDate(currentDate, 1);
-  }
-
-  return schedule;
-};
 
 /**
  * プレーオフスケジュールを生成
@@ -496,5 +452,38 @@ export const generateMonthCalendar = (year, month, schedule) => {
 
   return calendar;
 };
+
+
+// ============================================================
+// 規定打席・規定投球回（タイトルの資格）
+//
+// ⚠ **定義をここ以外に書かないこと**。以前は3箇所にバラバラの式があった:
+//     シーズン中のランキング(DateProgressScreen) … 試合数×3.1 / 試合数×1.0
+//     シーズン終了時のタイトル(processSeasonEnd)  … **100打数 / 30 固定**
+//     検証ハーネス(lib/stats.mjs)                 … 試合数×2.5 / 試合数×0.5
+//   その結果「防御率ランキング1位」と「防御率王」が別人になっていた。
+//
+// ⚠ **`inningsPitched` はアウト数を持っている**（`+= p.outs`、ERAは `×27/outs`）。
+//   タイトル側の `inningsPitched >= 30` は「30回」のつもりが**30アウト＝10回**で、
+//   実測75試合のシーズンで投手78人中74人が規定到達、
+//   **17.7回で防御率0.00の中継ぎが防御率王**になっていた（首位打者は.454）。
+//
+// 実NPB: 規定打席 = 試合数 × 3.1（**打席**であって打数ではない） /
+//        規定投球回 = 試合数 × 1.0（イニング）
+// ============================================================
+export const PA_PER_GAME = 3.1;
+export const INNINGS_PER_GAME = 1.0;
+
+/** 規定打席（打席数）。シーズン途中は進行度で按分する */
+export const qualifiedPA = (totalGames, progress = 1) =>
+  Math.max(1, Math.floor((totalGames || 0) * PA_PER_GAME * Math.max(0, Math.min(1, progress))));
+
+/** 規定投球回を**アウト数**で返す（seasonStats.pitching.inningsPitched と同じ単位） */
+export const qualifiedOuts = (totalGames, progress = 1) =>
+  Math.max(3, Math.floor((totalGames || 0) * INNINGS_PER_GAME * Math.max(0, Math.min(1, progress))) * 3);
+
+/** 打席数。打席そのものは保存していないので 打数+四球+死球 で近似する（犠打犠飛は未集計） */
+export const plateAppearances = (b) =>
+  (b?.atBats || 0) + (b?.walks || 0) + (b?.hitByPitch || 0);
 
 // ES module exports

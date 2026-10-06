@@ -1,14 +1,47 @@
 import React, { useState, useMemo } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
-import { getUniversityPoolSummary } from '../season/universityPool.js';
+import { generatePitchingRotation } from '../game/lineupGenerator.js';
+import { getTransferCandidates, transferManagerTo, CATEGORY_LABEL, getTeamCategory } from '../game/managerTransfer.js';
 
-const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots, gameMode }) => {
+const RANK_TEXT = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
+
+const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots, gameMode, setGameMode, setLeagueConfig, setSelectedMonth, userTeamName }) => {
   const [processing, setProcessing] = useState(false);
   const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
   const [saveStatus, setSaveStatus] = useState(null);
   const [graduationReport, setGraduationReport] = useState(null);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferCat, setTransferCat] = useState(null);
+  const [transferSearch, setTransferSearch] = useState('');
+  const [transferResult, setTransferResult] = useState(null);
+
+  const myTeamName = userTeamName || seasonData?.settings?.teamNames?.[0] || null;
+  const transferCandidates = useMemo(
+    () => (showTransfer ? getTransferCandidates(myTeamName) : null),
+    [showTransfer, myTeamName]
+  );
+
+  const handleTransfer = (teamName) => {
+    const label = CATEGORY_LABEL[getTeamCategory(teamName)] || '';
+    if (!window.confirm(
+      `「${teamName}」（${label}）の監督に就任します。\n\n`
+      + `・${myTeamName || '現チーム'} の指揮官を退任します\n`
+      + `・翌シーズンから新チームで開始します\n`
+      + `・選手や世界はそのまま引き継がれます\n\nよろしいですか？`
+    )) return;
+    const r = transferManagerTo(teamName, {
+      seasonData, setSeasonData, setLeagueConfig, setGameMode, setSelectedMonth,
+    });
+    if (r.success) {
+      setTransferResult({ ok: true, msg: `${teamName} の監督に就任しました（${label}）。「${(seasonData?.year || 1) + 1}年目へ進む」で新チームのシーズンが始まります。` });
+      setShowTransfer(false);
+    } else {
+      setTransferResult({ ok: false, msg: r.error || '移籍に失敗しました' });
+    }
+  };
 
   const handleSaveToSlot = async () => {
     if (onSave) {
@@ -100,7 +133,32 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
             winRate: s.winRate, mvpBatter, mvpPitcher
           };
         });
-        onRecordTeamHistory({ year: seasonData.year, standings: teamRecords });
+        // 年鑑（歴代タイトル/記録）用に、その年のタイトルホルダーを軽量化して保存。
+        // frozenAwards はプレーオフ確定時に seasonData に凍結済み。
+        const fa = seasonData.frozenAwards;
+        const slimAward = (a, statKeys) => {
+          if (!a) return null;
+          const out = { name: a.name, team: a.team };
+          statKeys.forEach(k => { if (a[k] !== undefined) out[k] = a[k]; });
+          return out;
+        };
+        const awardsArchive = fa ? {
+          battingChampion: slimAward(fa.battingChampion, ['avg']),
+          homeRunKing:     slimAward(fa.homeRunKing, ['homeruns']),
+          rbiKing:         slimAward(fa.rbiKing, ['rbis']),
+          stolenBaseKing:  slimAward(fa.stolenBaseKing, ['stolenBases']),
+          eraChampion:     slimAward(fa.eraChampion, ['era']),
+          winsLeader:      slimAward(fa.winsLeader, ['wins']),
+          savesLeader:     slimAward(fa.savesLeader, ['saves']),
+          strikeoutKing:   slimAward(fa.strikeoutKing, ['strikeouts']),
+        } : null;
+        onRecordTeamHistory({
+          year: seasonData.year,
+          standings: teamRecords,
+          awards: awardsArchive,
+          leagueChampion: fa?.champion || sortedStandings[0]?.team || null,
+          playoffChampion: seasonData.playoffChampion || null,
+        });
       }
 
       const result = gameMode === 'sandbox'
@@ -109,6 +167,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       setSeasonData(result.newSeasonData);
       Object.keys(result.updatedTeams).forEach(teamName => {
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];
+      });
+      // 全CPUチームのピッチングローテーションを新ロスターで再生成
+      // （引退・加入後にIDが陳腐化するのを防ぐ。ユーザーチームは手動設定を保持）
+      const userTeamNameForRotation = seasonData.settings?.teamNames?.[0];
+      Object.keys(TEAMS_DATA).forEach(teamName => {
+        if (teamName !== userTeamNameForRotation) {
+          try { generatePitchingRotation(teamName); } catch (e) { /* skip */ }
+        }
       });
       if (onAddHallOfFamePlayers && result.retirements && result.retirements.length > 0) {
         const retiredPlayers = result.retirements.map(r => ({
@@ -136,7 +202,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   const slotNames = ['スロット1', 'スロット2', 'スロット3'];
 
   const SaveSlotSelector = () => (
-    <div className="bg-gray-700/40 rounded-xl border border-gray-600/40 p-4 mb-5">
+    <div className="bg-surface-2 rounded-xl border border-gray-600/40 p-4 mb-5">
       <h3 className="text-base font-black text-white mb-3 flex items-center gap-2">
         <span>💾</span> セーブ
       </h3>
@@ -149,21 +215,25 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               onClick={() => setSelectedSaveSlot(idx)}
               className={`flex-1 p-2.5 rounded-xl text-left transition-all duration-150 ${
                 selectedSaveSlot === idx
-                  ? 'bg-blue-600 text-white ring-1 ring-blue-400 shadow-lg shadow-blue-900/40'
-                  : 'bg-gray-600/60 text-gray-300 hover:bg-gray-500/60'
+                  ? 'seg-on ring-1' : 'seg'
               }`}
             >
               <div className="font-bold text-sm">{name}</div>
-              <div className="text-xs opacity-70 mt-0.5">
-                {info ? `${info.year}年目 ${info.date?.month}/${info.date?.day}` : '空き'}
-              </div>
+              {info ? (
+                <div className="mt-0.5">
+                  <div className="text-xs opacity-80">{info.year}年目 {info.date?.month}/{info.date?.day}</div>
+                  {info.teamName && <div className="text-xs font-bold truncate opacity-90">{info.teamName}</div>}
+                </div>
+              ) : (
+                <div className="text-xs opacity-70 mt-0.5">空き</div>
+              )}
             </button>
           );
         })}
       </div>
       <button
         onClick={handleSaveToSlot}
-        className="w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold text-base transition-all duration-150 hover:shadow-lg hover:shadow-blue-900/30"
+        className="btn-primary w-full px-4 py-2.5 rounded-xl text-base transition-all duration-150 hover:shadow-lg"
       >
         {slotNames[selectedSaveSlot]}に保存
       </button>
@@ -186,24 +256,23 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       teamGroups[g.team].push(g);
     });
     return (
-      <div className="p-4">
-        <div className="max-w-3xl mx-auto">
+      <ScreenShell width="form">
           <div className="mb-6">
-            <p className="text-gray-400 text-sm font-semibold tracking-[0.15em] uppercase">Graduation Report</p>
-            <h1 className="text-3xl font-black text-white">🎓 卒業・入部レポート</h1>
+            <p className="text-ink-sub text-sm font-semibold tracking-[0.15em] uppercase">Graduation Report</p>
+            <h1 className="text-xl font-bold text-ink">🎓 卒業・入部レポート</h1>
           </div>
 
           {/* サマリー */}
           <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="bg-gray-800/60 rounded-xl p-3 text-center border border-gray-700/40">
-              <div className="text-gray-400 text-xs mb-1">卒業生</div>
+            <div className="bg-surface-2 rounded-xl p-3 text-center border border-gray-700/40">
+              <div className="text-gray-300 text-xs mb-1">卒業生</div>
               <div className="text-white font-black text-2xl">{r.graduated.length}</div>
             </div>
-            <div className="bg-red-900/20 rounded-xl p-3 text-center border border-red-800/30">
+            <div className="bg-surface-2 rounded-xl p-3 text-center border border-red-800/30">
               <div className="text-red-400 text-xs mb-1">NPB指名</div>
               <div className="text-red-300 font-black text-2xl">{npbDrafted.length}</div>
             </div>
-            <div className="bg-emerald-900/20 rounded-xl p-3 text-center border border-emerald-800/30">
+            <div className="bg-surface-2 rounded-xl p-3 text-center border border-emerald-800/30">
               <div className="text-emerald-400 text-xs mb-1">新入生</div>
               <div className="text-emerald-300 font-black text-2xl">{r.recruited.length}</div>
             </div>
@@ -211,7 +280,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
           {/* NPB指名 */}
           {npbDrafted.length > 0 && (
-            <div className="bg-red-900/15 border border-red-800/30 rounded-xl p-4 mb-5">
+            <div className="bg-surface-2 border border-red-800/30 rounded-xl p-4 mb-5">
               <h3 className="text-sm font-black text-red-400 mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-red-400"></span>
                 NPBドラフト指名
@@ -221,8 +290,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                   <div key={i} className="flex items-center gap-2 bg-red-900/25 rounded-lg px-3 py-2 text-sm">
                     <span className="text-red-300/70 text-xs font-bold w-20 shrink-0">{d.draftRound}</span>
                     <span className="text-white font-bold flex-1">{d.name}</span>
-                    <span className="text-gray-400 text-xs">{posLabel[d.position] || d.position}</span>
-                    <span className="text-gray-500 text-xs">{d.team}</span>
+                    <span className="text-gray-300 text-xs">{posLabel[d.position] || d.position}</span>
+                    <span className="text-gray-400 text-xs">{d.team}</span>
                     <span className="text-red-300 font-bold text-xs shrink-0">→ {d.npbTeam}</span>
                   </div>
                 ))}
@@ -232,17 +301,17 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
           {/* 卒業生進路一覧（チーム別） */}
           {r.graduated.length > 0 && (
-            <div className="bg-amber-900/15 border border-amber-700/30 rounded-xl p-4 mb-5">
+            <div className="bg-surface-2 border border-amber-700/30 rounded-xl p-4 mb-5">
               <h3 className="text-sm font-black text-amber-400 mb-1 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-amber-400"></span>
                 卒業生の進路
               </h3>
-              <p className="text-xs text-gray-500 mb-3">
+              <p className="text-xs text-gray-400 mb-3">
                 社会人 {r.postGradPaths.corporate}名 / 独立リーグ {r.postGradPaths.independent}名 / クラブ {r.postGradPaths.club || 0}名 / 引退 {r.postGradPaths.retired}名
               </p>
               {Object.entries(teamGroups).map(([team, grads]) => (
                 <div key={team} className="mb-3 last:mb-0">
-                  <div className="text-xs font-bold text-gray-400 mb-1 px-1">{team}</div>
+                  <div className="text-xs font-bold text-gray-300 mb-1 px-1">{team}</div>
                   <div className="space-y-1">
                     {grads.map((g, i) => (
                       <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
@@ -251,19 +320,19 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                         g.path === 'club' ? 'bg-cyan-900/20' :
                         'bg-gray-800/30'
                       }`}>
-                        <span className={`font-bold text-[10px] w-14 text-center rounded px-1 py-0.5 ${
+                        <span className={`font-bold text-xs w-14 text-center rounded px-1 py-0.5 ${
                           g.path === 'corporate' ? 'bg-blue-800/50 text-blue-300' :
                           g.path === 'independent' ? 'bg-green-800/50 text-green-300' :
                           g.path === 'club' ? 'bg-cyan-800/50 text-cyan-300' :
-                          'bg-gray-700/50 text-gray-400'
+                          'bg-gray-700/50 text-gray-300'
                         }`}>{pathLabel[g.path]}</span>
                         <span className="text-white font-bold flex-1">{g.name}</span>
-                        <span className="text-gray-400 text-xs w-6 text-center">{posLabel[g.position] || g.position}</span>
+                        <span className="text-gray-300 text-xs w-6 text-center">{posLabel[g.position] || g.position}</span>
                         {g.nextYearTeam && (
-                          <span className="text-amber-400/80 text-[10px] font-bold shrink-0">→ {g.nextYearTeam}</span>
+                          <span className="text-amber-400/80 text-xs font-bold shrink-0">→ {g.nextYearTeam}</span>
                         )}
                         {g.stats && (
-                          <span className="text-gray-500 text-[10px] tabular-nums w-28 text-right">
+                          <span className="text-gray-400 text-xs tabular-nums w-28 text-right">
                             {g.position === 'pitcher'
                               ? `${g.stats.velocity}km / 制球${g.stats.control}`
                               : `M${g.stats.meet} P${g.stats.power} E${g.stats.eye} S${g.stats.speed}`
@@ -286,26 +355,26 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               recTeamGroups[p.team].push(p);
             });
             return (
-              <div className="bg-emerald-900/15 border border-emerald-700/30 rounded-xl p-4 mb-5">
+              <div className="bg-surface-2 border border-emerald-700/30 rounded-xl p-4 mb-5">
                 <h3 className="text-sm font-black text-emerald-400 mb-1 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                   新入生
                 </h3>
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="text-xs text-gray-400 mb-3">
                   推薦入学 {r.recruited.filter(p => p.type === 'recommended').length}名 / 一般入部 {r.recruited.filter(p => p.type === 'general').length}名
                 </p>
                 {Object.entries(recTeamGroups).map(([team, players]) => (
                   <div key={team} className="mb-2 last:mb-0">
-                    <div className="text-xs font-bold text-gray-400 mb-1 px-1">{team}</div>
+                    <div className="text-xs font-bold text-gray-300 mb-1 px-1">{team}</div>
                     <div className="flex flex-wrap gap-1.5">
                       {players.map((p, i) => (
                         <span key={i} className={`text-xs rounded px-2 py-1 ${
                           p.type === 'recommended'
                             ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/40'
-                            : 'bg-gray-800/60 text-gray-400'
+                            : 'bg-gray-800/60 text-gray-300'
                         }`}>
                           {p.name}
-                          <span className="text-gray-500 ml-1">{posLabel[p.position] || p.position}</span>
+                          <span className="text-gray-400 ml-1">{posLabel[p.position] || p.position}</span>
                           {p.type === 'recommended' && <span className="ml-1 text-emerald-500 font-bold">推</span>}
                         </span>
                       ))}
@@ -319,13 +388,12 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           <div className="text-center">
             <button
               onClick={() => { if (onStartNextSeason) onStartNextSeason(); }}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:shadow-green-900/40 hover:scale-105 active:scale-95"
+              className="btn-primary px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:scale-105 active:scale-95"
             >
               キャンプへ進む →
             </button>
           </div>
-        </div>
-      </div>
+      </ScreenShell>
     );
   }
 
@@ -347,10 +415,10 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       <div className="max-w-3xl mx-auto">
         {/* ヘッダー */}
         <div className="mb-6">
-          <p className="text-gray-400 text-sm font-semibold tracking-[0.15em] uppercase">Off Season</p>
-          <h1 className="text-3xl font-black text-white">{seasonData.year}年目 シーズン終了</h1>
+          <p className="text-ink-sub text-sm font-semibold tracking-[0.15em] uppercase">Off Season</p>
+          <h1 className="text-xl font-bold text-ink">{seasonData.year}年目 シーズン終了</h1>
           {gameMode === 'sandbox' && (
-            <span className="inline-block mt-1 bg-orange-500/20 text-orange-400 border border-orange-500/40 text-sm font-bold px-3 py-0.5 rounded-full">
+            <span className="inline-block mt-1 bg-orange-900 text-orange-100 border border-orange-700 text-sm font-bold px-3 py-0.5 rounded-full">
               箱庭モード
             </span>
           )}
@@ -358,7 +426,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
         {/* 優勝チームカード */}
         {seasonSummary?.champion && (
-          <div className="champion-card bg-gradient-to-r from-yellow-900/60 via-yellow-800/40 to-yellow-900/60 rounded-2xl border border-yellow-500/50 p-5 mb-5 text-center">
+          <div className="champion-card bg-gradient-to-r from-yellow-950 via-yellow-900 to-yellow-950 rounded-2xl border border-yellow-500/50 p-5 mb-5 text-center">
             <div className="trophy-icon text-5xl mb-2 inline-block">🏆</div>
             <p className="text-yellow-400/80 text-sm font-bold tracking-widest uppercase mb-1">Champion</p>
             <h2 className="text-3xl font-black text-white mb-1">{seasonSummary.champion.team}</h2>
@@ -387,8 +455,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           return titles.length > 0 && (
             <div className="grid grid-cols-4 gap-2.5 mb-5">
               {titles.map((t, i) => (
-                <div key={i} className={`bg-gray-800/80 rounded-xl border ${t.border} p-2.5 text-center`}>
-                  <p className={`${t.titleColor} text-[10px] font-bold tracking-wide mb-0.5`}>{t.label}</p>
+                <div key={i} className={`bg-surface-2 rounded-xl border ${t.border} p-2.5 text-center`}>
+                  <p className={`${t.titleColor} text-xs font-bold tracking-wide mb-0.5`}>{t.label}</p>
                   <p className="text-white font-black text-sm leading-tight">{t.name}</p>
                   <p className={`${t.valueColor} text-lg font-black mt-0.5`}>{t.value}</p>
                 </div>
@@ -398,54 +466,69 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         })()}
 
         {/* 順位表（コンパクト） */}
-        {seasonSummary?.standings && seasonSummary.standings.length > 1 && (
-          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-5">
-            <h3 className="text-base font-black text-white mb-3">最終順位表</h3>
-            <div className="space-y-1.5">
-              {seasonSummary.standings.map((s, idx) => (
-                <div
-                  key={s.team}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
-                    idx === 0
-                      ? 'bg-yellow-800/30 border border-yellow-600/30'
-                      : 'bg-gray-700/40'
-                  }`}
-                >
-                  <span className={`font-black text-base w-6 text-center ${
-                    idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'
-                  }`}>{idx + 1}</span>
-                  <span className={`font-bold text-base flex-1 ${idx === 0 ? 'text-yellow-200' : 'text-white'}`}>
-                    {s.team}
-                  </span>
-                  <span className="text-gray-300 text-sm font-semibold tabular-nums">
-                    {s.wins}勝{s.losses}敗{s.draws > 0 ? `${s.draws}分` : ''}
-                  </span>
-                  <span className="text-gray-400 text-sm tabular-nums w-12 text-right">
-                    {(s.winRate || 0).toFixed(3)}
-                  </span>
-                </div>
-              ))}
+        {seasonSummary?.standings && seasonSummary.standings.length > 1 && (() => {
+          const renderStandingsRows = (rows) => rows.map((s, idx) => (
+            <div
+              key={s.team}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
+                idx === 0
+                  ? 'bg-yellow-800/30 border border-yellow-600/30'
+                  : 'bg-gray-700/40'
+              }`}
+            >
+              <span className={`font-black text-base w-6 text-center ${
+                idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-400'
+              }`}>{idx + 1}</span>
+              <span className={`font-bold text-base flex-1 ${idx === 0 ? 'text-yellow-200' : 'text-white'}`}>
+                {s.team}
+              </span>
+              <span className="text-gray-300 text-sm font-semibold tabular-nums">
+                {s.wins}勝{s.losses}敗{s.draws > 0 ? `${s.draws}分` : ''}
+              </span>
+              <span className="text-gray-300 text-sm tabular-nums w-12 text-right">
+                {(s.winRate || 0).toFixed(3)}
+              </span>
             </div>
-          </div>
-        )}
+          ));
+          const springRows = gameMode === 'university' && seasonData.springStandings?.length > 0
+            ? [...seasonData.springStandings].sort((a, b) => b.winRate - a.winRate)
+            : null;
+          const fallLabel = gameMode === 'university' ? '秋季最終順位' : '最終順位表';
+          return (
+            <div className="bg-surface-2 rounded-2xl border border-gray-700/50 p-4 mb-5">
+              {springRows && (
+                <>
+                  <h3 className="text-base font-black text-white mb-3">春季最終順位</h3>
+                  <div className="space-y-1.5 mb-5">
+                    {renderStandingsRows(springRows)}
+                  </div>
+                </>
+              )}
+              <h3 className="text-base font-black text-white mb-3">{fallLabel}</h3>
+              <div className="space-y-1.5">
+                {renderStandingsRows(seasonSummary.standings)}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 社会人モード: チーム注目度・ランク */}
         {(() => {
           const userTeamName = seasonData.settings?.teamNames?.[0] || Object.keys(TEAMS_DATA)[0];
           const cd = TEAMS_DATA[userTeamName]?.corporateData;
           if (!cd) return null;
-          const rankColors = { S: 'text-yellow-400 border-yellow-500/40 bg-yellow-900/20', A: 'text-blue-400 border-blue-500/40 bg-blue-900/20', B: 'text-green-400 border-green-500/40 bg-green-900/20', C: 'text-gray-300 border-gray-500/40 bg-gray-800/40', D: 'text-gray-500 border-gray-600/40 bg-gray-800/20' };
+          const rankColors = { S: 'text-yellow-400 border-yellow-500/40 bg-surface-2', A: 'text-blue-400 border-blue-500/40 bg-surface-2', B: 'text-green-400 border-green-500/40 bg-surface-2', C: 'text-gray-300 border-gray-500/40 bg-surface-2', D: 'text-gray-400 border-gray-600/40 bg-surface-2' };
           const colors = rankColors[cd.rank] || rankColors.C;
           return (
             <div className={`rounded-xl border p-4 mb-5 ${colors}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-400 mb-1">チームランク・注目度</h3>
+                  <h3 className="text-sm font-bold text-gray-300 mb-1">チームランク・注目度</h3>
                   <div className="flex items-center gap-3">
                     <span className={`text-3xl font-black ${colors.split(' ')[0]}`}>{cd.rank}</span>
                     <div>
                       <div className="text-white text-sm font-bold">{userTeamName}</div>
-                      <div className="text-gray-400 text-xs">注目度: {Math.round(cd.reputation)} / 100</div>
+                      <div className="text-gray-300 text-xs">注目度: {Math.round(cd.reputation)} / 100</div>
                     </div>
                   </div>
                 </div>
@@ -461,33 +544,102 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
         <SaveSlotSelector />
 
-        {/* 大学モード: 卒業レポートは年度進行後に専用画面で表示 */}
-
-        {(() => {
-          const uniSummary = getUniversityPoolSummary();
-          if (uniSummary.totalStudents > 0) {
-            return (
-              <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700/40 rounded-xl">
-                <h3 className="text-sm font-bold text-blue-400 mb-1">大学野球プール</h3>
-                <p className="text-xs text-gray-400">
-                  在学中: {uniSummary.totalStudents}名
-                  {Object.entries(uniSummary.byYear).map(([yr, info]) => (
-                    <span key={yr} className="ml-2 text-gray-500">
-                      ({yr}年入学: {info.count}名)
-                    </span>
-                  ))}
-                </p>
+        {/* 監督移籍（年度末のみ・カテゴリを跨いで就任できる） */}
+        {gameMode !== 'sandbox' && (
+          <div className="bg-surface-2 rounded-xl border border-gray-600/40 p-4 mb-5">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <span>🧳</span> 監督移籍
+              </h3>
+              <span className="text-xs text-gray-300">
+                現職: <span className="font-bold text-white">{myTeamName || '—'}</span>
+              </span>
+              <button
+                onClick={() => { setShowTransfer(v => !v); setTransferResult(null); }}
+                className="btn-warn ml-auto px-4 py-1.5 rounded-lg text-sm transition"
+              >
+                {showTransfer ? '閉じる' : '他チームの監督に就任する'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-300 mt-2">
+              大学・社会人・独立リーグを跨いで監督キャリアを歩めます。選手と世界はそのまま引き継がれ、教え子と再会することもあります。
+            </p>
+            {transferResult && (
+              <div className={`mt-3 text-sm font-bold ${transferResult.ok ? 'text-green-300' : 'text-red-300'}`}>
+                {transferResult.ok ? '✓ ' : '✕ '}{transferResult.msg}
               </div>
-            );
-          }
-          return null;
-        })()}
+            )}
+
+            {showTransfer && transferCandidates && (
+              <div className="mt-3">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  {['independent', 'corporate', 'club', 'university'].map(cat => {
+                    const n = transferCandidates[cat]?.length || 0;
+                    if (n === 0) return null;
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setTransferCat(transferCat === cat ? null : cat)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                          transferCat === cat ? 'seg-on' : 'seg'
+                        }`}
+                      >
+                        {CATEGORY_LABEL[cat]} <span className="opacity-80">{n}</span>
+                      </button>
+                    );
+                  })}
+                  <input
+                    type="text"
+                    value={transferSearch}
+                    onChange={(e) => setTransferSearch(e.target.value)}
+                    placeholder="チーム名で検索…"
+                    className="ml-auto bg-surface-2 text-white text-xs rounded px-2 py-1 border border-gray-600 w-48"
+                  />
+                </div>
+
+                {!transferCat && !transferSearch ? (
+                  <div className="text-xs text-gray-300 py-3 text-center">
+                    カテゴリを選ぶか、チーム名で検索してください。
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto space-y-1 pr-1">
+                    {(transferSearch
+                      ? ['independent', 'corporate', 'club', 'university'].flatMap(c =>
+                          (transferCandidates[c] || []).map(t => ({ ...t, cat: c })))
+                      : (transferCandidates[transferCat] || []).map(t => ({ ...t, cat: transferCat }))
+                    )
+                      .filter(t => !transferSearch || t.name.includes(transferSearch) || (t.leagueName || '').includes(transferSearch))
+                      .slice(0, 120)
+                      .map(t => (
+                        <div key={t.name} className="flex items-center gap-2 bg-gray-800/60 rounded px-2 py-1.5 text-xs">
+                          <span className={`font-black w-4 text-center ${RANK_TEXT[t.rank] || 'text-gray-300'}`}>{t.rank}</span>
+                          <span className="text-white font-bold truncate w-40">{t.name}</span>
+                          <span className="text-gray-300 truncate w-40 hidden md:block">{t.leagueName}</span>
+                          <span className="text-gray-300 hidden lg:block">注目{t.reputation}</span>
+                          <span className="text-gray-300 hidden lg:block">{t.rosterSize}人</span>
+                          <span className="text-amber-300 ml-auto hidden sm:block">{CATEGORY_LABEL[t.cat]}</span>
+                          <button
+                            onClick={() => handleTransfer(t.name)}
+                            className="btn-warn px-2 py-1 rounded flex-shrink-0"
+                          >
+                            就任
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 大学モード: 卒業レポートは年度進行後に専用画面で表示 */}
 
         <div className="text-center">
           <button
             onClick={handleAdvanceYear}
             disabled={processing}
-            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-600 disabled:to-gray-600 text-white px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:shadow-green-900/40 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="btn-primary px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:scale-105 active:scale-95 disabled:opacity-60"
           >
             {processing ? (
               <span className="flex items-center gap-2">

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { formatInnings } from '../utils/physics.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
@@ -62,8 +63,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.batting : getCombinedCareer(p, 'batting');
       const avg = stats.atBats > 0 ? (stats.hits / stats.atBats) : 0;
-      const pa = stats.atBats + (stats.walks || 0);
-      const obp = pa > 0 ? ((stats.hits + (stats.walks || 0)) / pa) : 0;
+      const pa = stats.atBats + (stats.walks || 0) + (stats.hitByPitch || 0);
+      const obp = pa > 0 ? ((stats.hits + (stats.walks || 0) + (stats.hitByPitch || 0)) / pa) : 0;
       const singles = stats.hits - (stats.doubles || 0) - (stats.triples || 0) - stats.homeruns;
       const slg = stats.atBats > 0 ? ((singles + (stats.doubles || 0) * 2 + (stats.triples || 0) * 3 + stats.homeruns * 4) / stats.atBats) : 0;
       const ops = obp + slg;
@@ -108,7 +109,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
 
   const SortableHeader = ({ label, sortKey, currentKey, currentDir, onClick, align = 'right' }) => (
     <th
-      className={`py-1.5 px-1.5 text-${align} cursor-pointer hover:bg-gray-600/50 transition text-[10px] ${currentKey === sortKey ? 'text-yellow-400' : 'text-gray-500'}`}
+      className={`py-1.5 px-1.5 text-${align} cursor-pointer hover:bg-gray-600/50 transition text-xs ${currentKey === sortKey ? 'text-yellow-400' : 'text-gray-400'}`}
       onClick={() => onClick(sortKey)}
     >
       {label} {currentKey === sortKey && (currentDir === 'asc' ? '▲' : '▼')}
@@ -153,7 +154,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
         </svg>
         <span className="text-xs font-semibold" style={{ color }}>{last}</span>
         {delta !== 0 && (
-          <span className={`text-[10px] ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`text-xs ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
             {delta > 0 ? `+${delta}` : delta}
           </span>
         )}
@@ -166,14 +167,13 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     : [];
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-bold text-white">選手成績</h1>
+    <ScreenShell>
+      <ScreenHeader title="選手成績" right={
         <div className="flex gap-1">
           <button
             onClick={() => setStatsTab('growth')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'growth' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              statsTab === 'growth' ? 'seg-on' : 'seg'
             }`}
           >
             成長
@@ -182,7 +182,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsTab('season')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'season' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              statsTab === 'season' ? 'seg-on' : 'seg'
             }`}
           >
             シーズン
@@ -190,7 +190,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsTab('career')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'career' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              statsTab === 'career' ? 'seg-on' : 'seg'
             }`}
           >
             通算
@@ -199,7 +199,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsType('batting')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsType === 'batting' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              statsType === 'batting' ? 'seg-on' : 'seg'
             }`}
           >
             野手
@@ -207,27 +207,27 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsType('pitching')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsType === 'pitching' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              statsType === 'pitching' ? 'seg-on' : 'seg'
             }`}
           >
             投手
           </button>
         </div>
-      </div>
+      } />
 
       {statsTab === 'growth' && (
         <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700/50">
             <h2 className="text-sm font-semibold text-white">自チーム選手 能力成長履歴</h2>
-            <p className="text-xs text-gray-500 mt-0.5">キャンプ完了時にスナップショットを記録。2年目以降から表示されます。</p>
+            <p className="text-xs text-gray-400 mt-0.5">キャンプ完了時にスナップショットを記録。2年目以降から表示されます。</p>
           </div>
           {growthPlayers.length === 0 ? (
-            <div className="py-12 text-center text-gray-500 text-sm">選手データがありません</div>
+            <div className="py-12 text-center text-gray-400 text-sm">選手データがありません</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
+              <table className="tabular-nums w-full text-xs text-left">
                 <thead>
-                  <tr className="bg-gray-800 border-b border-gray-700/50 text-[10px] text-gray-400">
+                  <tr className="bg-surface-2 border-b border-gray-700/50 text-xs text-gray-300">
                     <th className="py-2 px-3 font-medium">選手</th>
                     <th className="py-2 px-2 font-medium">守備</th>
                     <th className="py-2 px-2 font-medium text-center">齢</th>
@@ -238,7 +238,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                     <th className="py-2 px-2 font-medium text-red-400/80 border-l border-gray-700/40">球速</th>
                     <th className="py-2 px-2 font-medium text-blue-400/80">制球</th>
                     <th className="py-2 px-2 font-medium text-green-400/80">スタミナ</th>
-                    <th className="py-2 px-2 font-medium text-gray-500 border-l border-gray-700/40">履歴</th>
+                    <th className="py-2 px-2 font-medium text-gray-400 border-l border-gray-700/40">履歴</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -250,8 +250,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                     return (
                       <tr key={player.id || i} className="border-b border-gray-700/30 hover:bg-gray-700/30 transition">
                         <td className="py-1.5 px-3 font-bold text-white">{player.name}</td>
-                        <td className="py-1.5 px-2 text-gray-400">{POSITION_NAMES_LOCAL[player.position] || player.position}</td>
-                        <td className="py-1.5 px-2 text-gray-500 text-center">{player.age}</td>
+                        <td className="py-1.5 px-2 text-gray-300">{POSITION_NAMES_LOCAL[player.position] || player.position}</td>
+                        <td className="py-1.5 px-2 text-gray-400 text-center">{player.age}</td>
                         {/* 野手能力 */}
                         <td className="py-1.5 px-2 text-blue-300">{player.batting?.meet || 0}</td>
                         <td className="py-1.5 px-2 text-red-300">{player.batting?.power || 0}</td>
@@ -267,13 +267,13 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                             <div className="flex flex-col gap-0.5">
                               {keyStats.map(s => (
                                 <div key={s.key} className="flex items-center gap-1">
-                                  <span className="text-[9px] text-gray-600 w-6">{s.label.slice(0,2)}</span>
+                                  <span className="text-xs text-gray-400 w-6">{s.label.slice(0,2)}</span>
                                   <Sparkline history={hist} statKey={s.key} color={s.color} />
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-gray-700 text-[10px]">2年目以降</span>
+                            <span className="text-gray-700 text-xs">2年目以降</span>
                           )}
                         </td>
                       </tr>
@@ -287,17 +287,17 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       )}
 
       {statsType === 'batting' && (
-        <div className="bg-gray-800 rounded-lg p-3">
+        <div className="bg-surface-2 rounded-lg p-3">
           <h2 className="text-sm font-bold mb-2 text-white">
             {statsTab === 'season' ? 'シーズン' : '通算'}野手成績 (上位20)
           </h2>
           <div className="overflow-x-auto">
-            <table className="w-full text-white text-xs">
+            <table className="tabular-nums w-full text-white text-xs">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">#</th>
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">選手</th>
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">チーム</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">#</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">選手</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">チーム</th>
                   <SortableHeader label="試" sortKey="games" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="打席" sortKey="atBats" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="安打" sortKey="hits" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
@@ -318,33 +318,33 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                   const draftCheck = statsTab === 'career' ? checkNPBDraftEligibility(player) : { isDraftEligible: false, reasons: [] };
                   return (
                     <tr key={player.id + player.teamName} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                      <td className="py-1.5 px-1.5 text-gray-500">{index + 1}</td>
+                      <td className="py-1.5 px-1.5 text-gray-400">{index + 1}</td>
                       <td className="py-1.5 px-1.5 font-bold">
                         {player.name}
                         {draftCheck.isDraftEligible && (
-                          <span className="ml-1 text-[10px] bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
+                          <span className="ml-1 text-xs bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 text-gray-400">{player.teamName}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.games}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.atBats}</td>
+                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.games}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.atBats}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.hits}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.homeruns}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.rbis}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.stolenBases || 0}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.walks}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.strikeouts}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.walks}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.strikeouts}</td>
                       <td className="py-1.5 px-1.5 text-right font-bold text-yellow-400">{player.avg.toFixed(3)}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.obp.toFixed(3)}</td>
                       <td className="py-1.5 px-1.5 text-right font-bold text-cyan-400">{player.ops.toFixed(3)}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{(player.stats.fieldingChances || 0) > 0 ? player.fieldingPct.toFixed(3) : '-'}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.errors || 0}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.errors || 0}</td>
                     </tr>
                   );
                 })}
                 {battingStats.length === 0 && (
                   <tr>
-                    <td colSpan="16" className="py-6 text-center text-gray-500 text-sm">
+                    <td colSpan="16" className="py-6 text-center text-gray-400 text-sm">
                       まだ野手成績がありません。試合を進行してください。
                     </td>
                   </tr>
@@ -356,17 +356,17 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       )}
 
       {statsType === 'pitching' && (
-        <div className="bg-gray-800 rounded-lg p-3">
+        <div className="bg-surface-2 rounded-lg p-3">
           <h2 className="text-sm font-bold mb-2 text-white">
             {statsTab === 'season' ? 'シーズン' : '通算'}投手成績 (上位20)
           </h2>
           <div className="overflow-x-auto">
-            <table className="w-full text-white text-xs">
+            <table className="tabular-nums w-full text-white text-xs">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">#</th>
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">選手</th>
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">チーム</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">#</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">選手</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">チーム</th>
                   <SortableHeader label="試" sortKey="games" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="勝" sortKey="wins" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="敗" sortKey="losses" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
@@ -388,23 +388,23 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                   const draftCheck = statsTab === 'career' ? checkNPBDraftEligibility(player) : { isDraftEligible: false, reasons: [] };
                   return (
                     <tr key={player.id + player.teamName} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                      <td className="py-1.5 px-1.5 text-gray-500">{index + 1}</td>
+                      <td className="py-1.5 px-1.5 text-gray-400">{index + 1}</td>
                       <td className="py-1.5 px-1.5 font-bold">
                         {player.name}
                         {draftCheck.isDraftEligible && (
-                          <span className="ml-1 text-[10px] bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
+                          <span className="ml-1 text-xs bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 text-gray-400">{player.teamName}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.games}</td>
+                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.games}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.wins}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.losses}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.holds || 0}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.saves || 0}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.holds || 0}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.saves || 0}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.ip}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.runsAllowed}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.runsAllowed}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.strikeouts}</td>
-                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.walks}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.walks}</td>
                       <td className="py-1.5 px-1.5 text-right font-bold text-yellow-400">{player.era.toFixed(2)}</td>
                       <td className="py-1.5 px-1.5 text-right text-cyan-400">{player.whip.toFixed(2)}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.kbb >= 99 ? '-' : player.kbb.toFixed(2)}</td>
@@ -415,7 +415,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                 })}
                 {pitchingStats.length === 0 && (
                   <tr>
-                    <td colSpan="17" className="py-6 text-center text-gray-500 text-sm">
+                    <td colSpan="17" className="py-6 text-center text-gray-400 text-sm">
                       まだ投手成績がありません。試合を進行してください。
                     </td>
                   </tr>
@@ -425,7 +425,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           </div>
         </div>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

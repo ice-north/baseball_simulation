@@ -87,12 +87,6 @@ export const createCareerStats = () => ({
   }
 });
 
-/**
- * 選手に背番号を割り当てる（IDをそのまま使用）
- */
-export const assignJerseyNumbers = (players) => {
-  return players.map(p => ({ ...p, number: p.id }));
-};
 
 /**
  * ホームチーム用のデフォルト選手を生成

@@ -1,5 +1,7 @@
 import React from 'react';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations } from '../season/regulationSettings.js';
+import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 
 const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
@@ -75,17 +77,19 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
   );
 
   return (
-    <div className="p-4 max-w-3xl mx-auto">
-      <h1 className="text-xl font-bold mb-4 text-white">レギュレーション設定</h1>
+    <ScreenShell width="form">
+      <ScreenHeader title="レギュレーション設定" />
 
+      {/* ⚠ この帯は**地色の上に直に載る**。半透明のままだと明るい紙の上で薄まり、
+          載っている黄色い文字が 2.69:1 で読めなくなる（実測）。不透明にすること */}
       {!canModify && (
-        <div className="bg-yellow-900/50 border border-yellow-700/50 rounded-lg p-3 mb-3">
+        <div className="bg-yellow-950 border border-yellow-700/50 rounded-lg p-3 mb-3">
           <p className="text-yellow-200 font-bold text-sm">レギュレーション変更はオフシーズンのみ可能です</p>
           <p className="text-yellow-300/70 text-xs mt-0.5">現在: {phaseInfo.name}</p>
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-lg p-4 mb-3">
+      <div className="bg-surface-2 rounded-lg p-4 mb-3">
         <h2 className="text-sm font-bold mb-2 text-white">詳細設定</h2>
         <div className="space-y-0">
           <SettingRow label="DH制（指名打者）">
@@ -136,6 +140,18 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
             >
               {(() => {
                 const tc = tempSettings.teamsCount || 4;
+                const isTwoLeague = tempSettings.leagueFormat === 'two' && tc >= 4;
+                if (isTwoLeague) {
+                  const validCounts = getValidTwoLeagueGameCounts(tc, 150);
+                  if (validCounts.length === 0) {
+                    return <option value={tempSettings.gamesPerSeason}>{tempSettings.gamesPerSeason}試合</option>;
+                  }
+                  return validCounts.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.value}試合（リーグ内各{opt.intra}戦・交流各{opt.inter}戦）
+                    </option>
+                  ));
+                }
                 const d = Math.max(1, tc - 1);
                 const options = [];
                 for (let i = 1; d * i <= 150; i++) options.push(d * i);
@@ -152,13 +168,13 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               <option value="tournament">4チームトーナメント</option>
             </select>
           </SettingRow>
-          <div className="text-[10px] text-gray-500 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
+          <div className="text-xs text-gray-400 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
           <SettingRow label="延長最大回数">
             <input type="number" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({ ...tempSettings, maxExtraInnings: parseInt(e.target.value) })} disabled={!canModify} min="0" max="30" className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-20" />
           </SettingRow>
         </div>
         <div className="mt-3">
-          <button onClick={handleSaveSettings} disabled={!canModify} className={`w-full py-2 rounded-lg font-bold text-sm transition ${canModify ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-900 text-gray-600 cursor-not-allowed'}`}>
+          <button onClick={handleSaveSettings} disabled={!canModify} className={`w-full py-2 rounded-lg font-bold text-sm transition ${'btn-primary'}`}>
             設定を保存
           </button>
         </div>
@@ -166,7 +182,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
 
       {/* チーム名設定 */}
       {canModify && (
-        <div className="bg-gray-800 rounded-lg p-4 mb-3">
+        <div className="bg-surface-2 rounded-lg p-4 mb-3">
           <h2 className="text-sm font-bold mb-2 text-white">チーム名設定</h2>
           {tempSettings.leagueFormat === 'two' ? (
             <>
@@ -232,7 +248,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {(tempSettings.teamNames || []).map((name, index) => (
                 <div key={index} className="flex items-center gap-1.5">
-                  <span className="text-gray-400 text-xs w-6">#{index + 1}</span>
+                  <span className="text-gray-300 text-xs w-6">#{index + 1}</span>
                   <input
                     type="text"
                     value={name}
@@ -252,11 +268,11 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               ))}
             </div>
           )}
-          <p className="text-gray-500 text-[10px] mt-2">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表で使用</p>
+          <p className="text-gray-400 text-xs mt-2">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表で使用</p>
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-lg p-4">
+      <div className="bg-surface-2 rounded-lg p-4">
         <h2 className="text-sm font-bold mb-2 text-white">現在の設定</h2>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-300">
           <div>DH制: <span className="text-white">{seasonData.settings.useDH ? '有効' : '無効'}</span></div>
@@ -280,13 +296,13 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               setSeasonData(prev => ({ ...prev, settings: tempSettings }));
               onConfirm(tempSettings);
             }}
-            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold text-base transition shadow"
+            className="btn-primary px-8 py-3 rounded-lg text-base transition shadow"
           >
             確定 → キャンプへ進む
           </button>
         </div>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

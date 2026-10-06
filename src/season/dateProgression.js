@@ -3,8 +3,8 @@
 // 日付を進めてフェーズを遷移
 // ============================================================
 
-import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
-import { generateFullSeasonSchedule } from './scheduleGenerator.js';
+import { advanceDate, getCurrentPhase, getNPBDraftDay, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
+import { generateFullSeasonSchedule, getNextGame } from './scheduleGenerator.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 import { updateAllPlayersCondition } from '../game/condition.js';
 
@@ -17,7 +17,7 @@ import { updateAllPlayersCondition } from '../game/condition.js';
 export const progressDate = (seasonData, days = 1) => {
   const newDate = advanceDate(seasonData.currentDate, days);
   const phaseOpts = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts);
+  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts, newDate.year);
 
   // 投手の疲労を回復（1日あたり20）+ コンディション更新
   for (let i = 0; i < days; i++) {
@@ -48,7 +48,7 @@ export const progressToNextGame = (seasonData, teamName = null) => {
 
   const newDate = { ...nextGame.date };
   const phaseOpts = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts);
+  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts, newDate.year);
 
   return {
     ...seasonData,
@@ -75,8 +75,8 @@ export const progressToNextPhase = (seasonData) => {
 
     case SEASON_PHASES.REGULAR_SEASON:
       if (seasonData.settings?.universityMode) {
-        // 大学モード: レギュラーシーズン → ドラフト（10月24日）
-        targetDate = { year: seasonData.currentDate.year, month: 10, day: 24 };
+        // 大学モード: レギュラーシーズン → ドラフト（10月第4木曜日）
+        targetDate = { year: seasonData.currentDate.year, month: 10, day: getNPBDraftDay(seasonData.currentDate.year) };
       } else {
         // レギュラーシーズン → プレーオフ（10月10日）
         targetDate = { year: seasonData.currentDate.year, month: 10, day: 10 };
@@ -84,8 +84,8 @@ export const progressToNextPhase = (seasonData) => {
       break;
 
     case SEASON_PHASES.PLAYOFFS:
-      // プレーオフ → ドラフト（10月24日）
-      targetDate = { year: seasonData.currentDate.year, month: 10, day: 24 };
+      // プレーオフ → ドラフト（10月第4木曜日）
+      targetDate = { year: seasonData.currentDate.year, month: 10, day: getNPBDraftDay(seasonData.currentDate.year) };
       break;
 
     case SEASON_PHASES.DRAFT:
@@ -119,7 +119,7 @@ export const progressToNextPhase = (seasonData) => {
   }
 
   const phaseOpts2 = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts2);
+  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts2, targetDate.year);
 
   return {
     ...seasonData,
@@ -129,22 +129,6 @@ export const progressToNextPhase = (seasonData) => {
   };
 };
 
-/**
- * 指定日まで進行
- * @param {Object} seasonData - シーズンデータ
- * @param {Object} targetDate - 目標日付 {year, month, day}
- * @returns {Object} 更新されたシーズンデータ
- */
-export const progressToDate = (seasonData, targetDate) => {
-  const phaseOpts3 = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts3);
-
-  return {
-    ...seasonData,
-    currentDate: targetDate,
-    phase: newPhase
-  };
-};
 
 /**
  * 試合結果を記録
@@ -290,32 +274,6 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
   return updatedSeasonData;
 };
 
-/**
- * 年度を進める（新シーズン開始）
- * @param {Object} seasonData - シーズンデータ
- * @returns {Object} 新しいシーズンデータ
- */
-export const startNewSeason = (seasonData) => {
-  const newYear = seasonData.year + 1;
-  const newSeasonData = createSeasonData(newYear);
-
-  // 設定を引き継ぎ
-  newSeasonData.settings = { ...seasonData.settings };
-
-  // スケジュールを再生成
-  const teams = seasonData.standings.map(t => t.team);
-  const schedule = generateFullSeasonSchedule({
-    teams,
-    gamesPerSeason: newSeasonData.settings.gamesPerSeason,
-    startDate: { year: 2024 + newYear, month: 3, day: 1 },
-    endDate: { year: 2024 + newYear, month: 9, day: 30 }
-  });
-
-  newSeasonData.schedule = schedule;
-  newSeasonData.standings = initializeStandings(teams);
-
-  return newSeasonData;
-};
 
 export { updatePlayoffProgress };
 

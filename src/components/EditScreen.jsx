@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, FORM_OPTIONS } from '../utils/constants.js';
 
 const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, allTeams }) => {
   const [editingTeam, setEditingTeam] = useState(allTeams[0] || 'チームA');
@@ -105,8 +106,8 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
   };
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6 text-white">エディット画面（開発用）</h1>
+    <ScreenShell>
+      <h1 className="text-xl font-bold mb-6 text-white">エディット画面（開発用）</h1>
 
       <div className="mb-6 flex gap-4 flex-wrap">
         {currentTeams.map((teamName) => (
@@ -124,7 +125,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
         ))}
       </div>
 
-      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+      <div className="bg-surface-2 rounded-lg p-6 mb-6">
         <h2 className="text-xl font-bold mb-4 text-white">チーム情報</h2>
         <div className="text-white">
           {editingTeamName ? (
@@ -138,8 +139,8 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
                 className="bg-gray-700 border border-gray-500 text-white px-3 py-1 rounded w-48 focus:border-blue-400 focus:outline-none"
                 autoFocus
               />
-              <button onClick={saveTeamName} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-sm">保存</button>
-              <button onClick={() => setEditingTeamName(false)} className="text-gray-400 hover:text-white px-2 py-1 text-sm">取消</button>
+              <button onClick={saveTeamName} className="btn-primary px-3 py-1 rounded text-sm">保存</button>
+              <button onClick={() => setEditingTeamName(false)} className="text-gray-300 hover:text-white px-2 py-1 text-sm">取消</button>
             </div>
           ) : (
             <div className="mb-2 flex items-center gap-2">
@@ -147,7 +148,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
               <button onClick={startEditTeamName} className="text-blue-400 hover:text-blue-300 text-sm ml-2">変更</button>
             </div>
           )}
-          <div className="text-sm text-gray-400">選手数: {team.players.length}人</div>
+          <div className="text-sm text-gray-300">選手数: {team.players.length}人</div>
         </div>
         <div className="mt-4 flex gap-3">
           <button
@@ -156,25 +157,25 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
               generatePitchingRotation(editingTeam);
               alert(`${editingTeam}のAIオーダー編成と投手ローテーションを設定しました！`);
             }}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-bold transition"
+            className="btn-secondary px-4 py-2 rounded transition"
           >
             🤖 AIオーダー編成
           </button>
           <button
             onClick={() => generateAllTeamsLineup()}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-bold transition"
+            className="btn-primary px-4 py-2 rounded transition"
           >
             🤖 全チーム一括編成
           </button>
         </div>
       </div>
 
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-surface-2 rounded-lg p-6">
         <h2 className="text-xl font-bold mb-4 text-white">選手一覧（{team.players.length}人）</h2>
         <div className="text-sm text-blue-400 mb-4">💡 選手カードをクリックして能力値を編集できます</div>
 
         {team.players.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">選手データがありません。</div>
+          <div className="text-center text-gray-400 py-8">選手データがありません。</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {team.players.map((player) => (
@@ -185,7 +186,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
               >
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-bold text-white">{player.name}</span>
-                  <span className="text-xs text-gray-400">#{player.number || player.id}</span>
+                  <span className="text-xs text-gray-300">#{player.number || player.id}</span>
                 </div>
                 <div className="text-sm text-gray-300">
                   <div>ポジション: {POSITION_NAMES[player.position] || player.position}</div>
@@ -201,16 +202,16 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
 
       {editingPlayer && editFormData && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface-2 rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-3">
                 <input type="text" value={editFormData.name || ''}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
                   className="text-2xl font-bold text-white bg-gray-700 border border-gray-600 rounded px-3 py-1 focus:border-blue-500 focus:outline-none"
                   placeholder="選手名" />
-                <span className="text-gray-400 text-sm">の能力値編集</span>
+                <span className="text-gray-300 text-sm">の能力値編集</span>
               </div>
-              <button onClick={cancelEdit} className="text-gray-400 hover:text-white text-2xl">✕</button>
+              <button onClick={cancelEdit} className="text-gray-300 hover:text-white text-2xl">✕</button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -364,10 +365,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
                     <select value={editFormData.pitching?.form || 'threeQuarter'}
                       onChange={(e) => updatePitchingForm(e.target.value)}
                       className="w-full bg-gray-600 text-white px-3 py-2 rounded">
-                      <option value="overhand">オーバースロー</option>
-                      <option value="threeQuarter">スリークォーター</option>
-                      <option value="sidearm">サイドスロー</option>
-                      <option value="submarine">アンダースロー</option>
+                      {FORM_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -421,13 +419,13 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
             </div>
 
             <div className="flex justify-end gap-4 mt-6">
-              <button onClick={cancelEdit} className="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition">キャンセル</button>
-              <button onClick={savePlayerEdit} className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition">保存</button>
+              <button onClick={cancelEdit} className="px-6 py-2 btn-secondary rounded transition">キャンセル</button>
+              <button onClick={savePlayerEdit} className="btn-primary px-6 py-2 rounded transition">保存</button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </ScreenShell>
   );
 };
 

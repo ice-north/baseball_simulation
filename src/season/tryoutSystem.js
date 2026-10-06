@@ -4,51 +4,15 @@
 // ============================================================
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
-import { releasedPlayersPool } from '../teams-data.js';
+import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
+import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
+import { getUtilityScore, generateCatcherLead, RANK_ASC } from '../utils/constants.js';
+import { generateBats } from '../utils/handedness.js';
 
-/**
- * 利き手を決定（左投・左打の発生率を強化）
- * - 右投右打: 40%
- * - 右投左打: 30%
- * - 左投左打: 25%
- * - 右投両打: 4%
- * - 左投右打: 1%（レア）
- */
-function determineHandedness() {
-  const rand = Math.random() * 100;
-  if (rand < 40) {
-    return { throws: 'right', bats: 'right' };
-  } else if (rand < 70) {
-    return { throws: 'right', bats: 'left' };
-  } else if (rand < 95) {
-    return { throws: 'left', bats: 'left' };
-  } else if (rand < 99) {
-    return { throws: 'right', bats: 'switch' };
-  } else {
-    return { throws: 'left', bats: 'right' }; // レアな左投右打
-  }
-}
-
-/**
- * 左投げ選手のポジションを決定
- * 左投げは投手、一塁手、外野手が99%、捕手は1%
- */
-function getPositionForLeftHander() {
-  const rand = Math.random() * 100;
-  if (rand < 40) {
-    return 'pitcher';
-  } else if (rand < 55) {
-    return 'first';
-  } else if (rand < 70) {
-    return 'left';
-  } else if (rand < 85) {
-    return 'center';
-  } else if (rand < 99) {
-    return 'right';
-  } else {
-    return 'catcher'; // 1%の確率で左投げ捕手
-  }
-}
+// 2年目以降トライアウトの1チームあたり基準受験者数
+// 構成比はリーグ注目度(developmentReputation)で変動する（下記 generateTryoutCandidates 参照）:
+//   低注目度: 素材型の高校生中心 / 高注目度: 大学卒・元プロ(FA)が集まる
+const TRYOUT_TOTAL_PER_TEAM = 10;
 
 /**
  * 特性の数を決定（確率分布）
@@ -107,54 +71,171 @@ function getPlayerTraits(isPitcher) {
 
 
 /**
+ * 受験者の実効ランクを決める。約10%は1つ上のランク基準でスケールする。
+ * 意図: 同格の中で埋もれるより、少し格下のリーグで試合に出て活躍・目立つほうが賢い、という逸材を再現。
+ */
+function effectiveTryoutRank(baseRank) {
+  if (!baseRank) return baseRank;
+  if (Math.random() < 0.10) {
+    const i = RANK_ASC.indexOf(baseRank);
+    if (i >= 0 && i < RANK_ASC.length - 1) return RANK_ASC[i + 1];
+  }
+  return baseRank;
+}
+
+/**
+ * リーグの格は「**どの層の選手が受けに来るか**」だけを決める。
+ *
+ * ⚠ **能力に上限やスケールを掛けてはいけない**（旧 `applyLeagueRankScaling` を撤廃）。
+ *    旧実装はランク別に 球速・制球・ミート・パワー・選球眼へ上限を掛け、
+ *    さらに守備・走力を 0.58〜0.98 倍していた。**帯で絞ったうえに能力も削る二重制限**で、
+ *      ・走力100の快足が D リーグでは 58 に潰される
+ *      ・球速150の投手が C リーグでは 133 で頭打ち
+ *    と、**尖った選手ほど削られて一芸型が入って来られなかった**。
+ *    現実には格下リーグにも「1つだけ図抜けた選手」は普通に来る。
+ *
+ * 代わりに、ランクを抽出帯（`qualityBias`）に写す。帯が上がれば良い選手が来るし、
+ * 帯の中にどんな形の選手が居るかは母集団のまま——尖った選手はそのまま尖って来る。
+ */
+const RANK_BAND_BIAS = { S: 0.90, A: 0.70, B: 0.50, C: 0.30, D: 0.12 };
+const rankBandBias = (rank) => RANK_BAND_BIAS[rank] ?? 0.30;
+
+/**
+ * 生成候補（初回トライアウト）だけに使う、リーグの格の**平行移動**。
+ * 上限でも倍率でもないので、能力の差＝選手の形は保たれる。
+ */
+const RANK_LEVEL_SHIFT = { S: 6, A: 0, B: -8, C: -16, D: -24 };
+function applyLeagueLevelShift(player, rank) {
+  if (!rank || !player) return;
+  const d = RANK_LEVEL_SHIFT[rank] ?? -10;
+  if (d === 0) return;
+  const shift = (obj, key, amount, lo = 1, hi = 99) => {
+    if (!obj || typeof obj[key] !== 'number') return;
+    obj[key] = Math.max(lo, Math.min(hi, Math.round(obj[key] + amount)));
+  };
+  // ⚠ 打撃は投球より緩く下げること。一律 d だとパワーの平均が D で1桁台まで落ち、
+  //    Dリーグの長打率−打率が .012・本塁打 0.06/チーム試合（4本/75試合）、得点は
+  //    四球(16%)と失策だけで作られていた。現実の格下リーグはむしろ打ち合いになる
+  //    （投手・守備の質の落ち方の方が大きい）。パワーは半分・ミート/選球眼は3/4
+  shift(player.batting, 'meet', d * 0.6); shift(player.batting, 'power', d * 0.25);
+  shift(player.batting, 'eye', d * 0.75);  shift(player.batting, 'steal', d * 0.6);
+  shift(player.fielding, 'defense', d);
+  shift(player.physical, 'speed', d * 0.6); shift(player.physical, 'arm', d * 0.6);
+  shift(player.pitching, 'control', d * 0.75);
+  // 球速は km スケールなので効きを弱める（D で約 -11km）
+  shift(player.pitching, 'velocity', d * 0.45, 105, 168);
+}
+
+/**
+ * 候補の守備位置は「24人ロスターの需要」に合わせる（投手10 / 捕手2 / 内野6 / 外野6）。
+ *
+ * ⚠ 8ポジションから一様に引くと捕手が候補全体の **5.0%** しか出ない。
+ *    4チーム96指名の初回トライアウトで捕手が8人（1チーム2人）に満たない回が 29/40、
+ *    1人も取れないチームが出る回が 5/40 あった。捕手が1人のロスターは
+ *    休養・故障で守れる選手が居なくなり、AIオーダー編成が適性30の外野手を捕手に置く。
+ * ⚠ 左投げはほぼ捕手・二塁・三塁・遊撃を守らないので、その分の重みは右投げ側が背負う。
+ *    左右比率(`handedness.js`)を変えたら測り直すこと。
+ */
+// 需要の比率そのもの（投手10/24=41.7% 捕手8.3% 内野25% 外野25%）。
+// 候補は指名数の1.25倍居るので、どの群も同じ 1.25倍の余裕を持つ。
+const TRYOUT_POSITION_QUOTA = [
+  ['pitcher', 42], ['catcher', 8],
+  ['first', 6], ['second', 6], ['third', 6], ['short', 7],
+  ['left', 8], ['center', 9], ['right', 8],
+];
+
+/**
+ * ⚠ **確率ではなく枚数で配る**。重み付き抽選にすると捕手は n=120・p=0.09 で σ≈3 あり、
+ *    60回中9回は8人（1チーム2人）に届かなかった。初回トライアウトは
+ *    ゲーム開始時に一度だけ起きるので、裾を引くと「その周回だけ捕手が居ない」league になる。
+ */
+const buildPositionBag = (count) => {
+  const total = TRYOUT_POSITION_QUOTA.reduce((s, [, w]) => s + w, 0);
+  const bag = [];
+  let acc = 0;
+  for (const [pos, w] of TRYOUT_POSITION_QUOTA) {
+    acc += (count * w) / total;
+    while (bag.length < Math.min(Math.round(acc), count)) bag.push(pos);
+  }
+  while (bag.length < count) bag.push('pitcher');
+  for (let i = bag.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [bag[i], bag[j]] = [bag[j], bag[i]];
+  }
+  return bag;
+};
+
+/**
+ * 実在プール（高校生・大学4年生）から引いた候補を、上と同じ需要の比率へ均す。
+ *
+ * ⚠ プールの抽出は `evaluatePlayerPotential` の順に並べた帯から取るので、
+ *    **ドラフト評価の偏りがそのまま構成比になる**。投手の評価点は野手より低く出る
+ *    既知の偏り（CLAUDE.md「投手が指名されにくい」）があるため、実測で
+ *    投手 25.5% / 捕手 8.1%（捕手が0人の回もあり）と、24人ロスターの需要
+ *    （投手41.7% / 捕手8.3%）から大きく外れていた。
+ *    多めに引いてから群ごとに間引く。帯の中はシャッフル済みなので質の分布は変わらない。
+ */
+const TRYOUT_GROUP_MIX = { pitcher: 0.40, catcher: 0.09, infield: 0.26, outfield: 0.25 };
+const TRYOUT_OVERDRAW = 3;
+const positionGroupOf = (p) => p === 'pitcher' ? 'pitcher'
+  : p === 'catcher' ? 'catcher'
+  : ['first', 'second', 'third', 'short'].includes(p) ? 'infield' : 'outfield';
+const balanceByPosition = (pool, size) => {
+  if (!Array.isArray(pool) || pool.length <= size) return pool || [];
+  const buckets = { pitcher: [], catcher: [], infield: [], outfield: [] };
+  pool.forEach(p => buckets[positionGroupOf(p.position)].push(p));
+  const picked = [], leftovers = [];
+  for (const g of Object.keys(buckets)) {
+    const want = Math.round(size * TRYOUT_GROUP_MIX[g]);
+    picked.push(...buckets[g].slice(0, want));
+    leftovers.push(...buckets[g].slice(want));
+  }
+  // 群が枯れて枠に届かない分は残りから補い、人数だけは保つ
+  for (let i = 0; picked.length < size && i < leftovers.length; i++) picked.push(leftovers[i]);
+  // 群の順に並んだままだと、端数を切るときに常に同じ群（外野）が落ちる
+  for (let i = picked.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [picked[i], picked[j]] = [picked[j], picked[i]];
+  }
+  return picked.slice(0, size);
+};
+
+// 左投げがまず就かないポジション。ここを右投げに寄せるぶん、
+// 一塁・外野の左投げ率が上がって全体は handedness.js の目標（左25%）に収まる。
+// 割合は従来の左投げの内訳（投40/一15/左15/中15/右14/捕1）と同じ像になるよう合わせてある。
+const RIGHT_ONLY_POSITIONS = new Set(['catcher', 'second', 'third', 'short']);
+const LEFT_THROW_RATE = { pitcher: 0.25, first: 0.47, left: 0.47, center: 0.47, right: 0.47 };
+const throwsForPosition = (pos) => {
+  if (RIGHT_ONLY_POSITIONS.has(pos)) return Math.random() < 0.01 ? 'left' : 'right';
+  return Math.random() < (LEFT_THROW_RATE[pos] ?? 0.25) ? 'left' : 'right';
+};
+
+/**
  * 不足分補充用のランダム候補生成（2年目以降用）
  * generateTryoutCandidatesと同じロジックだが少数のみ生成
  */
 function generateRandomFillCandidates(count, year, independentLeagueRank) {
   const candidates = [];
-  const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
   const idBase = (year || 1) * 10000 + 5000;
+  const positionBag = buildPositionBag(count);
 
   for (let i = 1; i <= count; i++) {
-    const handedness = determineHandedness();
-    const throws = handedness.throws;
-    const bats = handedness.bats;
+    // ポジションを先に配ってから、そのポジションに合う利き手を引く。
+    // （利き手から決めると捕手・二遊三が左投げに食われて枠が埋まらない）
+    const position = positionBag[i - 1];
+    const isPitcher = position === 'pitcher';
+    const throws = throwsForPosition(position);
+    const bats = generateBats(throws);
 
     const isTwoWay = Math.random() < 0.08;
-    let isPitcher = Math.random() < 0.5;
-    let position;
-    let twoWaySubPosition = null;
     const leftHandFieldPositions = ['first', 'left', 'center', 'right'];
     const allFieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
-
-    if (isTwoWay) {
-      const twoWayRoll = Math.random();
-      if (twoWayRoll < 0.7) {
-        position = 'pitcher';
-        isPitcher = true;
-        twoWaySubPosition = throws === 'left'
+    // 二刀流の投手だけサブ守備位置を持つ（野手側は枠を崩さないよう本職のまま）
+    const twoWaySubPosition = (isTwoWay && isPitcher)
+      ? (throws === 'left'
           ? leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)]
-          : allFieldPositions[Math.floor(Math.random() * allFieldPositions.length)];
-      } else if (twoWayRoll < 0.9) {
-        position = throws === 'left'
-          ? leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)]
-          : (Math.random() < 0.5 ? 'short' : 'center');
-        isPitcher = false;
-      } else {
-        if (throws === 'left') {
-          position = leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)];
-        } else {
-          const otherPositions = ['catcher', 'first', 'second', 'third', 'left', 'right'];
-          position = otherPositions[Math.floor(Math.random() * otherPositions.length)];
-        }
-        isPitcher = false;
-      }
-    } else if (throws === 'left') {
-      position = getPositionForLeftHander();
-      isPitcher = position === 'pitcher';
-    } else {
-      position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
-    }
+          : allFieldPositions[Math.floor(Math.random() * allFieldPositions.length)])
+      : null;
 
     const hasTraits = !isTwoWay && Math.random() < 0.65;
     const playerTraits = hasTraits ? getPlayerTraits(isPitcher) : [];
@@ -220,7 +301,7 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
         defense: abilities.defense
       },
       catching: {
-        lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 35 : Math.floor(Math.random() * 26) + 20
+        lead: position === 'catcher' ? generateCatcherLead(age) : Math.floor(Math.random() * 26) + 20
       },
       pitching: {
         velocity: abilities.velocity,
@@ -237,6 +318,7 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
       },
       traits: playerTraits,
       scoutComment: null,
+      isNewcomer: true, // 新卒（FAではない新規候補）
       growthPotential: (() => {
         const u1 = Math.random() || 0.001;
         const u2 = Math.random();
@@ -271,26 +353,11 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
       }
     };
 
-    if (independentLeagueRank) {
-      const ilr = independentLeagueRank;
-      const IL_VEL_CAP = { B: 140, C: 133, D: 126 };
-      const IL_CTRL_CAP = { B: 58, C: 48, D: 38 };
-      const IL_BAT_CAP = { B: 52, C: 44, D: 36 };
-      const IL_SCALE = { B: 0.80, C: 0.70, D: 0.58 };
-      const vc = IL_VEL_CAP[ilr] || 145;
-      const cc = IL_CTRL_CAP[ilr] || 55;
-      const bc = IL_BAT_CAP[ilr] || 50;
-      const sc = IL_SCALE[ilr] || 0.85;
-      if (isPitcher) {
-        player.pitching.velocity = Math.min(player.pitching.velocity, vc + Math.floor(Math.random() * 4));
-        player.pitching.control = Math.min(player.pitching.control, cc + Math.floor(Math.random() * 4));
-      }
-      player.batting.meet = Math.min(player.batting.meet, bc + Math.floor(Math.random() * 4));
-      player.batting.power = Math.min(player.batting.power, bc + Math.floor(Math.random() * 4));
-      player.batting.eye = Math.min(player.batting.eye, bc + Math.floor(Math.random() * 3));
-      player.fielding.defense = Math.round(player.fielding.defense * sc);
-      player.physical.speed = Math.round(player.physical.speed * sc);
-    }
+    // 初回トライアウトの候補は生成物なので、帯から引くことができない。
+    // リーグの格は**平行移動**で表す（上限や倍率ではない）。
+    // ⚠ 倍率だと 走力100 の快足が D リーグで 58 に潰れる。差が保たれる加算なら
+    //    格下リーグでも「1つだけ図抜けた選手」がそのまま図抜けたまま来る。
+    applyLeagueLevelShift(player, effectiveTryoutRank(independentLeagueRank));
 
     player.scoutComment = generateScoutComment(player);
     candidates.push(player);
@@ -359,6 +426,50 @@ function getReleasedCandidatesFromPool(maxPlayers = null) {
 }
 
 /**
+ * クラブチーム（社会人クラブ）の選手からトライアウト受験者を抽出する。
+ * クラブ選手はプロ志向でトライアウトを受けに来る想定。若手中心に抽出しクローンを返す。
+ * @param {number} count - 抽出人数
+ * @returns {Array} クラブ選手候補（_tryoutSource='club'）
+ */
+function getClubTryoutCandidates(count) {
+  if (count <= 0) return [];
+  const pool = [];
+  for (const [teamName, team] of Object.entries(TEAMS_DATA)) {
+    if (team?.corporateData?.type !== 'club') continue;
+    for (const p of team.players || []) {
+      if ((p.age || 25) > 27) continue; // 若手中心（プロ志向）
+      pool.push({ p, teamName });
+    }
+  }
+  if (pool.length === 0) return [];
+  pool.sort(() => Math.random() - 0.5);
+  return pool.slice(0, count).map(({ p, teamName }) => {
+    const c = JSON.parse(JSON.stringify(p));
+    c.origin = 'club';
+    c._tryoutSource = 'club';
+    c._previousClub = teamName;
+    c.isReleasedCandidate = false;
+    c.isNewcomer = false;
+    return c;
+  });
+}
+
+/**
+ * トライアウトで指名されたクラブ選手を、所属クラブのロスターから除去する。
+ * （指名者を残すと同一選手が2チームに存在してしまうため）
+ * @param {Array<number>} draftedIds - 指名された選手のIDリスト
+ */
+export function removeDraftedFromClubTeams(draftedIds) {
+  if (!draftedIds || draftedIds.length === 0) return;
+  const drafted = new Set(draftedIds);
+  for (const team of Object.values(TEAMS_DATA)) {
+    if (team?.corporateData?.type !== 'club') continue;
+    if (!team.players?.length) continue;
+    team.players = team.players.filter(p => !drafted.has(p.id));
+  }
+}
+
+/**
  * トライアウト後に解雇プールを更新
  * - 獲得された選手はプールから削除
  * - 獲得されなかった選手は attemptsInPool++（base snapshotの能力値・年齢は変更しない）
@@ -392,35 +503,75 @@ export function updateReleasedPoolAfterTryout(draftedIds) {
  * @param {boolean} isInitial - 初回トライアウトかどうか
  * @returns {Array} トライアウト候補者の配列
  */
-export function generateTryoutCandidates(year, teamCount, isInitial = false, independentLeagueRank = null) {
+export function generateTryoutCandidates(year, teamCount, isInitial = false, independentLeagueRank = null, leagueReputation = 0) {
   // リリースプール（ドラフト漏れ・大学卒業生・戦力外）を主体にする
   // 初回も2年目以降も同じロジック（warmUpPipelineで事前にプール生成済み）
   const candidates = [];
   const existingIds = new Set();
+  const addCandidate = (c) => {
+    if (!c || existingIds.has(c.id)) return;
+    existingIds.add(c.id);
+    if (!c.scoutComment) c.scoutComment = generateScoutComment(c);
+    candidates.push(c);
+  };
 
-  // 1. リリースプールから候補を取得（メインソース）
-  // isInitialかつ大量チームの初期化時は上限を設けてシャッフル（重複選手の蔓延を防ぐ）
-  const releasedLimit = isInitial ? Math.min(releasedPlayersPool?.length || 0, 50) : null;
-  const releasedCandidates = getReleasedCandidatesFromPool(releasedLimit);
-  releasedCandidates.forEach(rc => {
-    if (!existingIds.has(rc.id)) {
-      existingIds.add(rc.id);
-      if (!rc.scoutComment) rc.scoutComment = generateScoutComment(rc);
-      candidates.push(rc);
+  // === 初回トライアウト: プール未整備のため生成で供給 ===
+  if (isInitial) {
+    const releasedLimit = Math.min(releasedPlayersPool?.length || 0, 50);
+    getReleasedCandidatesFromPool(releasedLimit).forEach(addCandidate);
+    const minCandidates = teamCount * 30;
+    const freshCount = Math.max(0, minCandidates - candidates.length);
+    if (freshCount > 0) {
+      generateRandomFillCandidates(freshCount, year, independentLeagueRank).forEach(addCandidate);
     }
-  });
+    return candidates;
+  }
 
-  // 2. 不足分をランダム補充（初回は30人/チーム、2年目以降は8人/チーム が最低保証）
-  const minCandidates = isInitial ? teamCount * 30 : teamCount * 8;
+  // === 2年目以降: 実在プールから供給（生成しない）===
+  // 受験者の構成比・質・人数はリーグ注目度(leagueReputation 0-100)で変動する。
+  //   低注目度: 大学卒40/高卒52/FA8 → 素材型の高校生中心
+  //   高注目度: 大学卒55/高卒25/FA20 → 大学卒・元プロ(FA)が集まり、質も上位帯に
+  // 大学でプロに届かなかった4年生が最多という現実的な像は維持しつつ、
+  // リーグを育てる（プロ輩出でdevelopmentReputationが上がる）動機付けにする。
+  const t = Math.max(0, Math.min(1, (leagueReputation || 0) / 60));
+  const uniShare = 0.40 + 0.15 * t;
+  const faShare = 0.08 + 0.12 * t;
+  const hsShare = Math.max(0.20, 1 - uniShare - faShare);
+  const total = teamCount * (TRYOUT_TOTAL_PER_TEAM + Math.round(2 * t)); // 注目度で受験者数も微増
+  const uniCount = Math.max(Math.round(total * uniShare), 6);
+  const hsCount = Math.max(Math.round(total * hsShare), 5);
+  const faCount = Math.max(Math.round(total * faShare), 3);
+  // リーグの格は**どの層から引くか**だけを決める（`RANK_BAND_BIAS`）。
+  // ⚠ 能力に上限や倍率を掛けない。帯で絞ったうえに能力も削ると二重制限になり、
+  //    一芸型（走力100・ミート30 のような選手）が真っ先に削られて来られなくなる。
+  // 注目度(t) は帯をさらに少しだけ上へ動かす（リーグを育てる動機付け）。
+  const qualityBias = Math.max(0, Math.min(1, rankBandBias(independentLeagueRank) + t * 0.25));
+  // 約10%は「格上の逸材」＝もう一段上の帯から引く。
+  //   意図: 同格で埋もれるより、少し格下のリーグで試合に出て活躍するほうが賢いという選手。
+  const gemBias = Math.min(1, qualityBias + 0.25);
+  // 通常枠（90%）とgem枠（10%）に分割
+  const split = (n) => { const gem = Math.max(1, Math.round(n * 0.1)); return { main: Math.max(0, n - gem), gem }; };
+  const hsS = split(hsCount), uniS = split(uniCount);
+  // 多めに引いてから守備位置の群で間引く（プールの評価順に構成比が引きずられるのを断つ）
+  const drawHS = (n, bias) => balanceByPosition(getHighSchoolTryoutCandidates(n * TRYOUT_OVERDRAW, bias), n);
+  const drawUni = (n, bias) => balanceByPosition(getUniversitySeniorTryoutCandidates(year, n * TRYOUT_OVERDRAW, bias), n);
+  // 1. 高校卒業予定
+  drawHS(hsS.main, qualityBias).forEach(addCandidate);
+  drawHS(hsS.gem, gemBias).forEach(c => { c._gem = true; addCandidate(c); });
+  // 2. 大学4年生（卒業予定・NPB未指名）
+  drawUni(uniS.main, qualityBias).forEach(addCandidate);
+  drawUni(uniS.gem, gemBias).forEach(c => { c._gem = true; addCandidate(c); });
+  // 3. FA組（リリースプール ＋ クラブチーム選手）
+  //    FA枠の半分はクラブチームのプロ志向選手から供給する
+  const clubCount = Math.max(Math.round(faCount * 0.5), 2);
+  const releasedCount = Math.max(faCount - clubCount, 2);
+  getReleasedCandidatesFromPool(releasedCount).forEach(addCandidate);
+  getClubTryoutCandidates(clubCount).forEach(addCandidate);
+
+  // 4. 安全網: 実在候補が極端に少ない場合のみ生成で補完（通常は発生しない）
+  const minCandidates = teamCount * 4;
   if (candidates.length < minCandidates) {
-    const fillCount = minCandidates - candidates.length;
-    const fillCandidates = generateRandomFillCandidates(fillCount, year, independentLeagueRank);
-    fillCandidates.forEach(fc => {
-      if (!existingIds.has(fc.id)) {
-        existingIds.add(fc.id);
-        candidates.push(fc);
-      }
-    });
+    generateRandomFillCandidates(minCandidates - candidates.length, year, independentLeagueRank).forEach(addCandidate);
   }
 
   return candidates;
@@ -962,6 +1113,23 @@ export const generatePositionFitness = (mainPosition) => {
     group.secondary.forEach(adj => {
       fitness[adj] = Math.floor(Math.random() * 25) + 50; // 50-75
     });
+  }
+
+  // ユーティリティ型（約12%）: 複数ポジションを守れる器用な選手を出す。
+  // 内野型は内野中心（+一部外野）、外野型は外野中心（+一部内野）に広げる。
+  if (mainPosition !== 'pitcher' && Math.random() < 0.12) {
+    const infield = ['catcher', 'first', 'second', 'third', 'short'];
+    const outfield = ['left', 'center', 'right'];
+    const isOF = outfield.includes(mainPosition);
+    let pool = isOF
+      ? [...outfield, ...(Math.random() < 0.4 ? ['second', 'third', 'first'] : [])]
+      : [...infield, ...(Math.random() < 0.4 ? outfield : [])];
+    pool = pool.filter(p => p !== mainPosition).sort(() => Math.random() - 0.5);
+    const extra = randRange(2, 4);
+    for (let i = 0; i < Math.min(extra, pool.length); i++) {
+      const pos = pool[i];
+      fitness[pos] = Math.max(fitness[pos] || 0, Math.floor(Math.random() * 20) + 68); // 68-88
+    }
   }
 
   return fitness;
@@ -1585,6 +1753,8 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
     if (offense >= 55 && player.physical.speed >= 60 && player.fielding.defense >= 60) {
       bonusScore += 15;
     }
+    // ユーティリティ（守備の幅）ボーナス。控え・守備固め要員として価値が上がる。
+    bonusScore += Math.round(getUtilityScore(player) * 0.15); // 最大+15
   }
 
   // 年齢による指名優先度補正（素材型 vs 即戦力）
@@ -1609,7 +1779,7 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
  * @param {Array} currentRoster - 現在のロスター（配列形式）
  * @returns {Object} 選択された選手
  */
-export function selectPlayerForAI(candidates, currentRoster = []) {
+export function selectPlayerForAI(candidates, currentRoster = [], teamContext = null) {
   // ロスター配列をオブジェクトから配列に変換（後方互換性のため）
   let rosterArray = currentRoster;
   if (!Array.isArray(currentRoster)) {
@@ -1662,9 +1832,40 @@ export function selectPlayerForAI(candidates, currentRoster = []) {
     }
   });
 
-  // ランダム要素を加えて各チームの個性を出す（±15pt）
+  // チーム状況（勝率）に応じた指名方針: 再建中は若手・成長力、優勝狙いは即戦力
+  const contendBias = Math.max(-1, Math.min(1, ((teamContext?.winRate ?? 0.5) - 0.5) * 2));
+  if (contendBias !== 0) {
+    // 年齢補正を含まない「現能力そのもの」（即戦力度の指標）
+    const rawOverall = (p) => {
+      if (p.position === 'pitcher') {
+        const arr = p.pitching?.arsenal || [];
+        const bestArs = arr.length ? Math.max(...arr.map(a => a.level || 0)) : 0;
+        return ((p.pitching?.velocity || 130) - 130) * 2 * 0.3 + (p.pitching?.control || 0) * 0.25 + (p.pitching?.stamina || 0) / 2 * 0.25 + bestArs * 0.2;
+      }
+      return (p.batting?.meet || 0) * 0.3 + (p.batting?.power || 0) * 0.25 + (p.physical?.speed || 0) * 0.2 + (p.fielding?.defense || 0) * 0.15 + (p.physical?.arm || 0) * 0.1;
+    };
+    scoredCandidates.forEach(candidate => {
+      const age = candidate.age || 22;
+      if (contendBias < 0) {
+        // 再建: 若さ＋成長力を重視、伸びしろの無い年長は敬遠
+        const youth = age <= 18 ? 1 : age <= 20 ? 0.7 : age <= 22 ? 0.3 : 0;
+        const growth = Math.max(0, (candidate.growthPotential || 1.0) - 1.0) * 2;
+        candidate.valueScore += (-contendBias) * (youth * 25 + growth * 25);
+        if (age >= 24) candidate.valueScore -= (-contendBias) * 15;
+      } else {
+        // 優勝狙い: 現能力の高さ（即戦力）＋出来上がった年齢を重視、未完成の若手は敬遠
+        const ro = rawOverall(candidate);
+        const ready = (age >= 21 && age <= 27) ? 1 : age >= 20 ? 0.5 : 0;
+        candidate.valueScore += contendBias * ((ro - 40) * 0.9 + ready * 20);
+        if (age <= 18) candidate.valueScore -= contendBias * 20;
+      }
+    });
+  }
+
+  // ランダム要素を加えて各チームの個性を出す（±8pt。CPUが好素材を取り逃しにくくし、
+  // ユーザーの人力ドラフトとの戦力差を縮める）
   scoredCandidates.forEach(candidate => {
-    candidate.valueScore += (Math.random() - 0.5) * 30;
+    candidate.valueScore += (Math.random() - 0.5) * 16;
   });
 
   // スコアが高い順にソート
@@ -1685,8 +1886,19 @@ export function selectPlayerForAI(candidates, currentRoster = []) {
  * @param {number} rosterSize - ロスターサイズ（デフォルト24）
  * @returns {Array} 選手配列
  */
-export function generateExpansionRoster(year = 1, rosterSize = 24) {
-  const candidates = generateTryoutCandidates(year, 1, true);
+/**
+ * 新規参入チームのロスターを一括生成する。
+ *
+ * ⚠ **リーグの格（`independentLeagueRank`）を必ず渡すこと**。渡さないと
+ *    `applyLeagueLevelShift` が `!rank` で素通りし、**どのリーグに入っても
+ *    Aリーグ相当の選手**が生成される。実測（スタメン野手のミート+パワー）:
+ *      初回トライアウト A 106.7 / B 84.0 / C 64.2 / D 50.1
+ *      エキスパンション（ランクなし） 103.3  ← Cリーグなら +39 の格差
+ *    ランクを渡せば 30人から24人を取る形のままでも既存チームと揃う
+ *    （A で 103.3 対 106.7）。
+ */
+export function generateExpansionRoster(year = 1, rosterSize = 24, independentLeagueRank = null) {
+  const candidates = generateTryoutCandidates(year, 1, true, independentLeagueRank);
   const roster = [];
   const remaining = [...candidates];
 
