@@ -7,6 +7,7 @@
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from './universityTeamsData.js';
 import { TEAMS_DATA } from '../teams-data.js';
+import { RANK_ORDER } from '../utils/constants.js';
 import {
   createBracket,
   recordResult,
@@ -26,11 +27,23 @@ export function getLeagueChampions(seasonKey, userSeasonData = null) {
     let champion = null;
 
     if (region.id === userRegion && userSeasonData) {
-      // ユーザーリーグ: seasonData.standings から取得
-      const standings = userSeasonData.standings;
-      if (standings && standings.length > 0) {
-        const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-        champion = sorted[0].team;
+      const userDiv = WORLD_DATA.universityLeague?.userDivision || 1;
+      if (!region.divisions || userDiv === 1) {
+        // ユーザーが1部（または部制なし）: userSeasonData.standings から取得
+        const standings = userSeasonData.standings;
+        if (standings && standings.length > 0) {
+          const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          champion = sorted[0].team;
+        }
+      } else {
+        // ユーザーが2部以下: WORLD_DATA の1部standings から1部優勝チームを取得
+        // 2部優勝チームは全日本・明治神宮大会に出場資格なし
+        const league = WORLD_DATA.universityLeagues?.[region.id];
+        const seasonData = league?.[seasonKey];
+        if (seasonData?.standings1?.length > 0) {
+          const sorted = [...seasonData.standings1].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          champion = sorted[0].team;
+        }
       }
     } else {
       // 他リーグ: WORLD_DATA から取得
@@ -94,10 +107,10 @@ export function generateUniversityChampionship(userSeasonData, calendarYear = 20
   const teamDefsMap = buildTeamDefsMap(champions);
 
   // ランク順でシード（S→A→B→C→D）
-  const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
   teamNames.sort((a, b) => (RANK_ORDER[teamDefsMap[a].rank] || 4) - (RANK_ORDER[teamDefsMap[b].rank] || 4));
 
   const bracket = createBracket(teamNames);
+  if (bracket) { bracket.achievementTournament = '全日本大学選手権'; bracket.achievementGameYear = calendarYear - 2023; }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 6, day: 10 }, 4);
 
   const userRegion = WORLD_DATA.universityLeague?.userRegion;
@@ -124,10 +137,10 @@ export function generateMeijiJinguTournament(userSeasonData, calendarYear = 2024
   const teamNames = champions.map(c => c.name);
   const teamDefsMap = buildTeamDefsMap(champions);
 
-  const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
   teamNames.sort((a, b) => (RANK_ORDER[teamDefsMap[a].rank] || 4) - (RANK_ORDER[teamDefsMap[b].rank] || 4));
 
   const bracket = createBracket(teamNames);
+  if (bracket) { bracket.achievementTournament = '明治神宮大会'; bracket.achievementGameYear = calendarYear - 2023; }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 11, day: 10 }, 4);
 
   const userTeamName = WORLD_DATA.universityLeague?.userTeam;

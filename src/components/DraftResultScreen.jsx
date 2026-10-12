@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor, getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 
 const NPB_TEAMS_INFO = [
   { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', textColor: '#000', league: 'ce', flag: 'giants' },
@@ -68,6 +68,7 @@ const SOURCE_LABELS = {
   university: { label: '大学', color: 'text-blue-400 bg-blue-900/40 border-blue-600/40' },
   corporate:  { label: '社会人', color: 'text-orange-400 bg-orange-900/40 border-orange-600/40' },
   independent: { label: '独立', color: 'text-purple-400 bg-purple-900/40 border-purple-600/40' },
+  club: { label: 'クラブ', color: 'text-rose-400 bg-rose-900/40 border-rose-600/40' },
 };
 
 const DRAFT_POSITION_NAMES = {
@@ -198,14 +199,61 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     return currentPhase.picks.map(p => p.npbTeam).sort((a, b) => (pos[a] ?? 99) - (pos[b] ?? 99));
   }, [currentPhase, gridOrder]);
 
+  // 各チームが最初に選択終了になるラウンドindex（本指名ラウンドのみ）
+  const firstSelectionComplete = useMemo(() => {
+    const result = {};
+    NPB_TEAMS_INFO.forEach(t => {
+      for (let i = 0; i < activeRounds.length; i++) {
+        const rd = activeRounds[i];
+        if (rd.startsWith('育成')) continue;
+        const picks = roundData[rd]?.[t.name] || [];
+        if (picks.length === 0) { result[t.name] = i; break; }
+      }
+    });
+    return result;
+  }, [roundData, activeRounds]);
+
+  // 各チームが育成ラウンドで最初に選択終了になるラウンドindex
+  const firstIkuSelectionComplete = useMemo(() => {
+    const result = {};
+    NPB_TEAMS_INFO.forEach(t => {
+      for (let i = 0; i < activeRounds.length; i++) {
+        const rd = activeRounds[i];
+        if (!rd.startsWith('育成')) continue;
+        const picks = roundData[rd]?.[t.name] || [];
+        if (picks.length === 0) { result[t.name] = i; break; }
+      }
+    });
+    return result;
+  }, [roundData, activeRounds]);
+
   const waiverRevealOrder = useMemo(() => {
     if (!currentTeamMap || isFirstRound) return [];
-    const roundPicks = draftedPlayers.filter(p => p.draftRound === currentRound);
-    const seen = new Set();
-    return roundPicks
-      .filter(p => { if (seen.has(p.npbTeam)) return false; seen.add(p.npbTeam); return true; })
-      .map(p => p.npbTeam);
-  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound]);
+    const isIku = currentRound?.startsWith('育成');
+    const roundPicks = new Set(draftedPlayers.filter(p => p.draftRound === currentRound).map(p => p.npbTeam));
+    const filtered = gridOrder.filter(t => {
+      if (roundPicks.has(t.name)) return true;
+      // 初回選択終了のみフラッグ開示に含める（2回目以降は即表示）
+      // 育成ラウンドは育成内での初回を別途追跡
+      const sc = isIku ? firstIkuSelectionComplete[t.name] : firstSelectionComplete[t.name];
+      return sc === currentRoundIdx;
+    });
+    // ウェーバー（下位から）か逆ウェーバー（上位から）かで発表順を変える
+    // 本指名: ドラフト2位(idx=1)=ウェーバー, 3位(idx=2)=逆ウェーバー, 4位(idx=3)=ウェーバー…
+    // 育成: 育成1巡目=ウェーバー, 育成2巡目=逆ウェーバー…
+    let isWaiverRound = false;
+    if (isIku) {
+      const ikuNum = parseInt(currentRound.match(/\d+/)?.[0] || '1');
+      isWaiverRound = ikuNum % 2 === 1;
+    } else {
+      const roundNum = parseInt(currentRound.match(/(\d+)/)?.[1] || '1');
+      // ドラフトN位 → yearProgressionSystemのround変数 = N-1
+      // round=1(2位)→ウェーバー, round=2(3位)→逆ウェーバー
+      isWaiverRound = roundNum >= 2 && (roundNum - 1) % 2 === 1;
+    }
+    const ordered = isWaiverRound ? [...filtered].reverse() : filtered;
+    return ordered.map(t => t.name);
+  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder, firstSelectionComplete, firstIkuSelectionComplete, currentRoundIdx]);
 
   const collisionColors = useMemo(() => {
     if (!currentPhase) return {};
@@ -235,7 +283,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
   useEffect(() => {
     if (isFirstRound || roundComplete) return;
-    if (waiverRevealOrder.length > 0 && waiverRevealOrder.every(n => waiverRevealed.has(n))) {
+    if (waiverRevealOrder.length === 0 || waiverRevealOrder.every(n => waiverRevealed.has(n))) {
       setRoundComplete(true);
     }
   }, [isFirstRound, waiverRevealOrder, waiverRevealed, roundComplete]);
@@ -327,7 +375,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />
             <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
               <span className="text-gray-600 truncate">{team.short}</span>
-              {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
+              {rank && <span className="text-gray-500 text-xs shrink-0">{rank}</span>}
             </div>
           </div>
           <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
@@ -359,23 +407,23 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             {revealed && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
             <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
               <span className="text-gray-600 truncate">{team.short}</span>
-              {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
+              {rank && <span className="text-gray-500 text-xs shrink-0">{rank}</span>}
             </div>
           </div>
           <div className={`${cardBg} ${borderClass} flex-1 flex flex-col justify-center p-2 min-h-0`}>
             {phaseState === 'lotteryShown' && isLoser ? (
               <div className="text-center">
                 <div className="text-red-400 text-xs font-bold">抽選外れ</div>
-                <div className="text-gray-400 text-[10px] mt-1">再指名待ち...</div>
+                <div className="text-gray-500 text-xs mt-1">再指名待ち...</div>
               </div>
             ) : (
               <div className="w-full space-y-1">
                 <PlayerCardContent name={phasePick.name} position={phasePick.position} teamName={phasePick.teamName} />
                 {(phaseState === 'revealing' || phaseState === 'allRevealed') && hasCollision && cStyle && (
-                  <div className={`text-center text-[10px] font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
+                  <div className={`text-center text-xs font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
                 )}
                 {phaseState === 'lotteryShown' && isWinner && (
-                  <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 抽選当選</div>
+                  <div className="text-center text-green-600 text-xs font-bold mt-1">✓ 抽選当選</div>
                 )}
               </div>
             )}
@@ -394,7 +442,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />
           <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
             <span className="text-gray-600 truncate">{team.short}</span>
-            {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
+            {rank && <span className="text-gray-500 text-xs shrink-0">{rank}</span>}
           </div>
         </div>
         <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
@@ -409,19 +457,22 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const hasPick = picks.length > 0;
     const revealed = waiverRevealed.has(team.name);
     const rank = rankLabels[team.name];
-    const showHeader = !hasPick || revealed;
+    // 初回選択終了はフラッグ開示、2回目以降は即表示（育成ラウンドは育成内での初回を追跡）
+    const sc = isIkuRound ? firstIkuSelectionComplete[team.name] : firstSelectionComplete[team.name];
+    const isFirstSC = !hasPick && sc === currentRoundIdx;
+    const needsReveal = hasPick || isFirstSC;
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
         <div className="flex items-center bg-gray-200 px-1 py-0.5 shrink-0" style={{ minHeight: '24px', maxHeight: '28px' }}>
-          {showHeader && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
+          {(revealed || !needsReveal) && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
           <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
             <span className="text-gray-600 truncate">{team.short}</span>
-            {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
+            {rank && <span className="text-gray-500 text-xs shrink-0">{rank}</span>}
           </div>
         </div>
         <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
           {!hasPick ? (
-            <div className="text-gray-300 text-xs text-center">指名なし</div>
+            <div className="text-gray-900 text-base text-center font-bold">選択終了</div>
           ) : (
             <div className="w-full space-y-1">
               {picks.map((entry, pi) => (
@@ -430,7 +481,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             </div>
           )}
         </div>
-        {hasPick && (
+        {needsReveal && (
           <div className="absolute inset-0 z-20"
                style={{ opacity: revealed ? 0 : 1, transition: revealed ? 'opacity 0.8s ease-out' : 'none', pointerEvents: revealed ? 'none' : 'auto' }}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
@@ -447,11 +498,11 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
         return (
           <>
             <button onClick={revealNext} disabled={isRevealing || allDone}
-              className="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
+              className="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-400 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
               次の指名を発表
             </button>
             <button onClick={revealAll} className="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-2.5 rounded-lg font-bold text-sm transition active:scale-95">一斉発表</button>
-            <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+            <button onClick={onComplete} className="text-gray-400 hover:text-gray-200 text-xs transition underline">スキップ</button>
           </>
         );
       }
@@ -462,7 +513,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
               抽選を行う
             </button>
-            <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+            <button onClick={onComplete} className="text-gray-400 hover:text-gray-200 text-xs transition underline">スキップ</button>
           </>
         );
       }
@@ -475,7 +526,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
               {hasMore ? `外れ${loserCount}チーム 再指名へ` : '1巡目確定'}
             </button>
-            <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+            <button onClick={onComplete} className="text-gray-400 hover:text-gray-200 text-xs transition underline">スキップ</button>
           </>
         );
       }
@@ -486,7 +537,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-blue-500/30 active:scale-95">
               確定
             </button>
-            <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+            <button onClick={onComplete} className="text-gray-400 hover:text-gray-200 text-xs transition underline">スキップ</button>
           </>
         );
       }
@@ -496,7 +547,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-blue-500/30 active:scale-95">
             {currentRoundIdx < activeRounds.length - 1 ? `次のラウンドへ → ${activeRounds[currentRoundIdx + 1]}` : '結果一覧へ →'}
           </button>
-          <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+          <button onClick={onComplete} className="text-gray-400 hover:text-gray-200 text-xs transition underline">スキップ</button>
         </>
       );
     }
@@ -504,11 +555,11 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
       return (
         <>
           <button onClick={revealNext} disabled={isRevealing || waiverRevealOrder.every(n => waiverRevealed.has(n))}
-            className="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
+            className="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-400 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
             次の指名を発表
           </button>
           <button onClick={revealAll} className="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-2.5 rounded-lg font-bold text-sm transition active:scale-95">一斉発表</button>
-          <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+          <button onClick={onComplete} className="text-gray-400 hover:text-gray-200 text-xs transition underline">スキップ</button>
         </>
       );
     }
@@ -518,7 +569,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-blue-500/30 active:scale-95">
           {currentRoundIdx < activeRounds.length - 1 ? `次のラウンドへ → ${activeRounds[currentRoundIdx + 1]}` : '結果一覧へ →'}
         </button>
-        <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+        <button onClick={onComplete} className="text-gray-400 hover:text-gray-200 text-xs transition underline">スキップ</button>
       </>
     );
   };
@@ -534,7 +585,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               {currentPhase.lotteryResults.map((lr, idx) => (
                 <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap">
                   <span className="text-gray-900 font-black text-sm">{lr.playerName}</span>
-                  <span className="text-gray-400 text-xs">←</span>
+                  <span className="text-gray-500 text-xs">←</span>
                   {lr.competitors.map(t => {
                     const ti = getTeamInfo(t);
                     return <span key={t} className="text-xs font-bold px-2 py-0.5 rounded inline-flex items-center gap-1" style={{ backgroundColor: ti.color, color: ti.textColor }}><TeamFlag teamName={t} size={14} />{ti.short}</span>;
@@ -558,12 +609,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
                 return (
                   <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap">
                     <span className="text-gray-900 font-black text-sm">{lr.playerName}</span>
-                    <span className="text-gray-400 text-xs">→</span>
+                    <span className="text-gray-500 text-xs">→</span>
                     <span className="text-xs font-bold px-2 py-0.5 rounded inline-flex items-center gap-1" style={{ backgroundColor: winnerInfo.color, color: winnerInfo.textColor }}>
                       <TeamFlag teamName={lr.winner} size={14} />
                       {winnerInfo.short} 当選
                     </span>
-                    <span className="text-gray-400 text-xs ml-2">
+                    <span className="text-gray-500 text-xs ml-2">
                       ({lr.competitors.filter(t => t !== lr.winner).map(t => getTeamInfo(t).short).join('・')} 外れ)
                     </span>
                   </div>
@@ -597,7 +648,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <div className="text-center mb-5">
-        <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
+        <div className="text-green-300/60 text-xs tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">プロ野球ドラフト会議</h1>
         <div className="flex items-center justify-center gap-4 mt-2">
           <div className="h-px w-16 bg-gradient-to-r from-transparent to-red-500/60" />
@@ -611,7 +662,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           </span>
           <div className="h-px w-16 bg-gradient-to-l from-transparent to-red-500/60" />
         </div>
-        <div className="text-gray-500 text-xs mt-1.5 mb-1">
+        <div className="text-gray-400 text-xs mt-1.5 mb-1">
           {currentRoundIdx + 1} / {activeRounds.length} ラウンド
           {isFirstRound && ' (入札制)'}
           {!isFirstRound && currentRoundIdx % 2 === 1 && ' (ウェーバー制 ← 下位球団から)'}
@@ -627,7 +678,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               }}
             />
           </div>
-          <span className="text-[10px] text-gray-500 whitespace-nowrap">{Math.round(((currentRoundIdx + 1) / activeRounds.length) * 100)}%</span>
+          <span className="text-xs text-gray-400 whitespace-nowrap">{Math.round(((currentRoundIdx + 1) / activeRounds.length) * 100)}%</span>
         </div>
       </div>
 
@@ -641,18 +692,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
         {renderButtons()}
       </div>
 
-      <div className="text-center mt-3 text-gray-600 text-xs">{statusText()}</div>
+      <div className="text-center mt-3 text-gray-400 text-xs">{statusText()}</div>
     </div>
   );
 };
 
-const PITCH_NAMES = {
-  straight: 'ストレート', slider: 'スライダー', curve: 'カーブ',
-  fork: 'フォーク', changeup: 'チェンジアップ', sinker: 'シンカー',
-  shoot: 'シュート', cutter: 'カッター', splitter: 'スプリッター',
-  twoSeam: 'ツーシーム', palm: 'パーム', knuckle: 'ナックル',
-};
-const FORM_NAMES = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+const FORM_NAMES = FORM_SHORT;
 const FULL_POS_NAMES = { pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手', third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手' };
 
 const TRAIT_NAMES = {
@@ -702,7 +747,7 @@ const DraftPlayerDetail = ({ player }) => {
       {traits.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {traits.map((t, i) => (
-            <span key={i} className="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded">
+            <span key={i} className="text-xs font-bold px-1.5 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded">
               {TRAIT_NAMES[t] || t}
             </span>
           ))}
@@ -711,7 +756,7 @@ const DraftPlayerDetail = ({ player }) => {
 
       {isPitcher && (
         <div>
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">投球能力</div>
+          <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">投球能力</div>
           <div className="space-y-1">
             <StatBar label="球速" value={p.pitching?.velocity || 0} suffix="km" maxVal={170} />
             <StatBar label="制球" value={p.pitching?.control || 0} />
@@ -719,11 +764,11 @@ const DraftPlayerDetail = ({ player }) => {
           </div>
           {p.pitching?.arsenal?.length > 0 && (
             <div className="mt-2">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">球種</div>
+              <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">球種</div>
               <div className="flex flex-wrap gap-1.5">
                 {p.pitching.arsenal.map((b, i) => (
                   <span key={i} className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-0.5 text-xs">
-                    <span className="text-gray-700">{PITCH_NAMES[b.type] || b.type}</span>
+                    <span className="text-gray-700">{getPitchTypeName(b.type)}</span>
                     <span className={`font-bold ${getAbilityColor(b.level)}`}>{b.level}</span>
                   </span>
                 ))}
@@ -734,7 +779,7 @@ const DraftPlayerDetail = ({ player }) => {
       )}
 
       <div>
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">打撃能力</div>
+        <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">打撃能力</div>
         <div className="space-y-1">
           <StatBar label="ミート" value={p.batting?.meet || 0} />
           <StatBar label="パワー" value={p.batting?.power || 0} />
@@ -745,7 +790,7 @@ const DraftPlayerDetail = ({ player }) => {
       </div>
 
       <div>
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">フィジカル</div>
+        <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">フィジカル</div>
         <div className="space-y-1">
           <StatBar label="走力" value={p.physical?.speed || 0} />
           <StatBar label="肩力" value={p.physical?.arm || 0} />
@@ -757,13 +802,13 @@ const DraftPlayerDetail = ({ player }) => {
 
       {p.position === 'catcher' && p.catching?.lead != null && (
         <div>
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">捕手能力</div>
+          <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">捕手能力</div>
           <StatBar label="リード" value={p.catching.lead} />
         </div>
       )}
 
       <div>
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">素質</div>
+        <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">素質</div>
         <div className="space-y-1">
           {p.growthPotential != null && <StatBar label="成長力" value={Math.round(p.growthPotential * 50)} />}
           {p.personality?.discipline != null && <StatBar label="プロ意識" value={p.personality.discipline} />}
@@ -787,9 +832,9 @@ const DraftPlayerModal = ({ entry, onClose }) => {
               entry.draftRound?.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
             }`}>{entry.draftRound?.replace('ドラフト', '')}</span>
             <span className="font-bold text-gray-900 text-lg">{entry.name}</span>
-            <span className="text-gray-400 text-sm">({entry.age}歳)</span>
+            <span className="text-gray-500 text-sm">({entry.age}歳)</span>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors">✕</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl leading-none px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors">✕</button>
         </div>
         <div className="px-5 py-4">
           <div className="text-xs text-gray-500 mb-3">{entry.teamName} / {DRAFT_POSITION_NAMES[entry.position] || entry.position}</div>
@@ -817,7 +862,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <div className="text-center mb-5">
-        <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
+        <div className="text-green-300/60 text-xs tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">全球団指名一覧</h1>
       </div>
       <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
@@ -841,7 +886,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                       {isFirst && misses.length > 0 && (
                         <div className="px-3 py-1.5 bg-red-50">
                           {misses.map((m, mi) => (
-                            <div key={mi} className="flex items-center gap-1.5 text-red-400 text-[10px]">
+                            <div key={mi} className="flex items-center gap-1.5 text-red-400 text-xs">
                               <span className="font-bold">✕ 外れ{mi > 0 ? '外れ'.repeat(mi) : ''}</span>
                               <span>{m.playerName}</span>
                             </div>
@@ -851,14 +896,14 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                       <div className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
                            onClick={() => setSelectedEntry(entry)}>
                         <div className="flex items-baseline gap-1.5 whitespace-nowrap overflow-hidden">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
                             isFirst ? 'bg-red-100 text-red-700' :
                             entry.draftRound.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
                           }`}>{displayLabel}</span>
                           <span className="text-gray-900 font-bold text-sm shrink-0">{entry.name}</span>
                           <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
                           <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
-                          <span className="text-gray-400 text-xs truncate">{entry.teamName}</span>
+                          <span className="text-gray-500 text-xs truncate">{entry.teamName}</span>
                         </div>
                       </div>
                     </div>
@@ -897,7 +942,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
       `}</style>
 
       <div className="text-center mb-6">
-        <p className="text-gray-400 text-sm font-semibold tracking-[0.2em] uppercase mb-1">NPB Draft</p>
+        <p className="text-gray-300 text-sm font-semibold tracking-[0.2em] uppercase mb-1">NPB Draft</p>
         <h1 className="text-4xl font-black text-white tracking-tight">ドラフト結果</h1>
         <div className="flex items-center justify-center gap-3 mt-2">
           <div className="h-px w-20 bg-gradient-to-r from-transparent to-yellow-500/80" />
@@ -908,9 +953,9 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
 
       {draftBySource && hasDrafted && (
         <div className="flex items-center justify-center gap-3 flex-wrap mb-4">
-          {[['highschool', '高校'], ['university', '大学'], ['corporate', '社会人'], ['independent', '独立']].map(([key, label]) => (
+          {[['highschool', '高校'], ['university', '大学'], ['corporate', '社会人'], ['independent', '独立'], ['club', 'クラブ']].map(([key, label]) => (
             <div key={key} className="bg-gray-800/80 rounded-xl px-4 py-2 border border-gray-700/50 text-center min-w-[80px]">
-              <div className="text-xs text-gray-400">{label}</div>
+              <div className="text-xs text-gray-300">{label}</div>
               <div className={`text-lg font-black ${SOURCE_LABELS[key]?.color?.split(' ')[0] || 'text-white'}`}>{draftBySource[key] || 0}名</div>
             </div>
           ))}
@@ -925,12 +970,15 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
         <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-4">
           <h2 className="text-base font-black text-yellow-400 mb-3 flex items-center gap-2">
             自チームからの指名選手
-            <span className="ml-auto text-sm font-bold text-gray-400">{myTeamDrafted.length}名</span>
+            <span className="ml-auto text-sm font-bold text-gray-300">{myTeamDrafted.length}名</span>
           </h2>
           <div className="space-y-2.5">
             {[...myTeamDrafted].sort((a, b) => sortRound(a.draftRound) - sortRound(b.draftRound)).map((entry, idx) => {
               const style = ROUND_STYLES[entry.draftRound] || (entry.draftRound.startsWith('育成') ? IKU_ROUND_STYLE : DEFAULT_ROUND_STYLE);
-              const filteredReasons = entry.reasons.filter(r => !/ミート|パワー|選球眼|走力|守備|肩力|盗塁|球速|制球|スタミナ|俊足/.test(r));
+              // 能力値そのものの列挙（「守備65」「球速148km」）だけを落とす。
+              // ⚠ **数字を伴うものに限ること**。能力名だけで弾くと
+              //    一芸指名の「守備のスペシャリスト」まで消える
+              const filteredReasons = entry.reasons.filter(r => !/(ミート|パワー|選球眼|走力|守備|肩力|盗塁|球速|制球力?|スタミナ|俊足|変化球)\d/.test(r));
               return (
                 <div key={idx} className={`draft-card bg-gray-700/60 rounded-xl p-3.5 ${style.border} ${style.glow}`} style={{ animationDelay: `${idx * 0.07}s` }}>
                   <div className="flex items-center gap-2.5 whitespace-nowrap overflow-hidden">
@@ -940,14 +988,14 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
                       {entry.npbTeam}
                     </span>
                     <span className="text-white font-black text-lg shrink-0">{entry.name}</span>
-                    <span className="text-gray-400 text-sm shrink-0">{entry.age}歳</span>
+                    <span className="text-gray-300 text-sm shrink-0">{entry.age}歳</span>
                     <span className="text-blue-400 font-semibold text-sm shrink-0">{POSITION_NAMES[entry.position] || entry.position}</span>
                     {entry.player?.physical && entry.player?.batting && (
                       <span className="text-sm shrink-0">
-                        <span className={entry.player.physical.throws === 'left' ? 'text-green-400 font-bold' : 'text-gray-400'}>
+                        <span className={entry.player.physical.throws === 'left' ? 'text-green-400 font-bold' : 'text-gray-300'}>
                           {entry.player.physical.throws === 'left' ? '左' : '右'}投
                         </span>
-                        <span className={entry.player.batting.bats === 'left' ? 'text-green-400 font-bold' : entry.player.batting.bats === 'switch' ? 'text-purple-400 font-bold' : 'text-gray-400'}>
+                        <span className={entry.player.batting.bats === 'left' ? 'text-green-400 font-bold' : entry.player.batting.bats === 'switch' ? 'text-purple-400 font-bold' : 'text-gray-300'}>
                           {entry.player.batting.bats === 'left' ? '左' : entry.player.batting.bats === 'switch' ? '両' : '右'}打
                         </span>
                       </span>
@@ -960,12 +1008,12 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
               );
             })}
           </div>
-          <p className="text-gray-500 text-sm mt-3">指名された選手はチームから離脱し、NPBへ移籍しました。</p>
+          <p className="text-gray-400 text-sm mt-3">指名された選手はチームから離脱し、NPBへ移籍しました。</p>
         </div>
       ) : (
         <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-10 mb-4 text-center">
           <p className="text-gray-200 font-bold text-lg mb-1">今シーズン、自チームからのNPB指名はありませんでした</p>
-          <p className="text-gray-500 text-sm">選手がドラフト指名条件に達しませんでした。来シーズンに期待しましょう。</p>
+          <p className="text-gray-400 text-sm">選手がドラフト指名条件に達しませんでした。来シーズンに期待しましょう。</p>
         </div>
       )}
 
@@ -979,8 +1027,9 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
                   <span className="text-white font-bold text-base">{bonus.teamName}</span>
                   <span className="text-green-400 font-black text-base">+{bonus.reputationGain} 育成評判</span>
                 </div>
-                <div className="text-gray-400 text-sm flex gap-4 flex-wrap">
+                <div className="text-gray-300 text-sm flex gap-4 flex-wrap">
                   <span>プロ輩出 {bonus.draftCount}人</span>
+                  {bonus.totalProduced > 0 && <span className="text-yellow-300 font-semibold">通算輩出 {bonus.totalProduced}人</span>}
                   <span>育成評判 {bonus.currentReputation}pt</span>
                   {bonus.boostedYoungPlayers > 0 && <span className="text-green-300 font-semibold">若手{bonus.boostedYoungPlayers}人が刺激を受けて成長!</span>}
                 </div>
@@ -998,7 +1047,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
               <div key={idx} className="bg-gray-700/40 rounded-xl p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-white font-bold text-base">{entry.name}</span>
-                  <span className="text-gray-400 text-sm">{entry.age}歳</span>
+                  <span className="text-gray-300 text-sm">{entry.age}歳</span>
                   <span className="text-blue-400 font-semibold text-sm">{POSITION_NAMES[entry.position] || entry.position}</span>
                 </div>
                 <div className="text-sm text-orange-300/80">{entry.reasons.join(' / ')}</div>
@@ -1010,7 +1059,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
 
       <div className="text-center pt-2">
         <button onClick={onContinue}
-          className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-12 py-3.5 rounded-xl font-black text-lg transition-all duration-200 shadow-lg hover:shadow-blue-500/30 hover:scale-105 active:scale-95">
+          className="btn-primary px-12 py-3.5 rounded-xl font-black text-lg transition-all duration-200 shadow-lg hover:scale-105 active:scale-95">
           次へ進む →
         </button>
       </div>
@@ -1058,7 +1107,7 @@ const DraftTitleOverlay = ({ onComplete }) => {
         <h1 className="text-4xl sm:text-6xl font-black text-white" style={{ animation: 'draftTitleIn 3s ease-in-out forwards' }}>
           プロ野球ドラフト会議
         </h1>
-        <div className="mt-6 text-gray-400 text-sm tracking-[0.4em] uppercase" style={{ animation: 'draftSubIn 3s ease-in-out forwards' }}>
+        <div className="mt-6 text-gray-300 text-sm tracking-[0.4em] uppercase" style={{ animation: 'draftSubIn 3s ease-in-out forwards' }}>
           NPB Draft Conference
         </div>
       </div>

@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import TutorialHint from './TutorialHint.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES, getAbilityRank, getRankColor, POSITION_ORDER } from '../utils/constants.js';
+import { DIRECTIONS, PHASES, resolveTraining, moodMultiplier, describeMood, playerWish } from '../season/trainingPolicy.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
+import { POSITION_NAMES, POSITION_ORDER, getAbilityColor, POSITION_GROUP_COLORS, FORM_SHORT } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
 
@@ -31,10 +34,10 @@ function getCampCoachComment(player, round) {
     return { text: ['順調に伸びている', '良い成長を見せている'][Math.floor(Math.random() * 2)], color: 'text-green-400' };
   }
   if (gp <= 0.7 && Math.random() < 0.5) {
-    return { text: ['伸び悩みか…', '壁にぶつかっている'][Math.floor(Math.random() * 2)], color: 'text-gray-500' };
+    return { text: ['伸び悩みか…', '壁にぶつかっている'][Math.floor(Math.random() * 2)], color: 'text-gray-400' };
   }
   if (gp <= 0.85 && Math.random() < 0.3) {
-    return { text: '現状維持が精一杯か', color: 'text-gray-500' };
+    return { text: '現状維持が精一杯か', color: 'text-gray-400' };
   }
   return null;
 }
@@ -59,15 +62,12 @@ function fielderStatToMain(statKey) {
   return 'batting';
 }
 function pitcherStatToSub(statKey) {
-  if (statKey === 'velocity') return 'muscle';
-  if (statKey === 'stamina') return 'running';
-  return 'running';
+  return 'physique';
 }
 function fielderStatToSub(statKey) {
   if (statKey === 'eye') return 'eye';
-  if (statKey === 'speed') return 'running';
   if (statKey === 'defense') return 'defense_sub';
-  return 'muscle';
+  return 'physique';
 }
 
 const CAMP_PRESETS = {
@@ -92,16 +92,12 @@ const CAMP_PRESETS = {
     },
     getSub: (p) => {
       if (p.position === 'pitcher') {
-        const top = sortedStatKeys(getPitcherStats(p), false)[0];
-        if (top === 'velocity') return 'muscle';
-        if (top === 'stamina') return 'running';
         return 'stretch';
       }
       const top = sortedStatKeys(getFielderStats(p), false)[0];
       if (top === 'eye') return 'eye';
-      if (top === 'speed') return 'running';
       if (top === 'defense') return 'defense_sub';
-      return 'muscle';
+      return 'physique';
     },
   },
   balanced: {
@@ -117,13 +113,12 @@ const CAMP_PRESETS = {
       return 'baserunning';
     },
     getSub: (p) => {
-      if (p.position === 'pitcher') return 'running';
-      return 'running';
+      return 'physique';
     },
   },
   physical: {
     name: 'フィジカル', icon: '🏃',
-    desc: '投手は球速、野手は走力・パワーを重点強化',
+    desc: '投手は球速強化、野手は走力・パワーを重点強化',
     getMain: (p) => {
       if (p.position === 'pitcher') return 'velocity';
       const spd = p.physical?.speed||0;
@@ -131,8 +126,7 @@ const CAMP_PRESETS = {
       return spd <= pow ? 'baserunning' : 'batting';
     },
     getSub: (p) => {
-      if (p.position === 'pitcher') return 'running';
-      return 'muscle';
+      return 'physique';
     },
   },
   technical: {
@@ -149,11 +143,10 @@ const CAMP_PRESETS = {
   },
   role_focused: {
     name: '実戦重視', icon: '🏟️',
-    desc: '先発投手はスタミナ、リリーフは制球、野手は打撃/守備を強化',
+    desc: '投手は制球・投げ込み、野手は打撃/守備を強化',
     getMain: (p) => {
       if (p.position === 'pitcher') {
-        const stamina = p.pitching?.stamina || 80;
-        return stamina >= 90 ? 'control' : 'stamina';
+        return 'control';
       }
       const meet = p.batting?.meet||0;
       const def = p.fielding?.defense||0;
@@ -162,10 +155,10 @@ const CAMP_PRESETS = {
     getSub: (p) => {
       if (p.position === 'pitcher') {
         const control = p.pitching?.control || 50;
-        return control >= 55 ? 'breaking' : 'running';
+        return control >= 55 ? 'breaking' : 'physique';
       }
       const def = p.fielding?.defense||0;
-      return def < 40 ? 'defense_sub' : 'running';
+      return def < 40 ? 'defense_sub' : 'physique';
     },
   },
   coach: {
@@ -183,15 +176,14 @@ const CAMP_PRESETS = {
         const avgBreaking = breakingCount > 0
           ? arsenal.filter(a => a.name !== 'ストレート').reduce((sum, a) => sum + (a.level || 0), 0) / breakingCount
           : 0;
-        if (s < 65) return 'stamina';
+        if (s < 65) return 'control';
         if (c < 35) return 'control';
         if (breakingCount <= 1) return 'newpitch';
         if (age <= 23 && v < 148) return 'velocity';
         if (age <= 23 && v >= 148 && c < 50) return 'control';
         if (c < 50) return 'control';
         if (avgBreaking < 40 && breakingCount >= 2) return 'control';
-        if (s < 90 && s <= c) return 'stamina';
-        if (age >= 29) return c <= s ? 'control' : 'stamina';
+        if (age >= 29) return 'control';
         return v < 145 ? 'velocity' : 'control';
       }
       const meet = p.batting?.meet || 0;
@@ -235,10 +227,10 @@ const CAMP_PRESETS = {
           ? arsenal.filter(a => a.name !== 'ストレート').reduce((sum, a) => sum + (a.level || 0), 0) / breakingCount
           : 0;
         if (avgBreaking < 35 && breakingCount >= 2) return 'breaking';
-        if (s < 80) return 'running';
+        if (s < 80) return 'physique';
         if (breakingCount >= 2 && avgBreaking < 55) return 'breaking';
         if (age >= 29) return 'stretch';
-        return 'running';
+        return 'physique';
       }
       const def = p.fielding?.defense || 0;
       const eye = p.batting?.eye || 0;
@@ -248,8 +240,7 @@ const CAMP_PRESETS = {
       if (def < 35) return 'defense_sub';
       if (eye < 30) return 'eye';
       if (age >= 29) return 'stretch';
-      if (speed < 40) return 'running';
-      return 'muscle';
+      return 'physique';
     },
   },
 };
@@ -262,20 +253,24 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const currentYear = seasonData?.year || 1;
 
   const [currentRound, setCurrentRound] = useState(1);
+  const [policyDir, setPolicyDir] = useState('balanced');
+  const [policyPhase, setPolicyPhase] = useState('skill');
   const [assignments, setAssignments] = useState(() => {
     const init = {};
     userTeam?.players?.forEach(p => {
-      init[p.id] = p.position === 'pitcher' ? 'stamina' : 'batting';
+      init[p.id] = p.position === 'pitcher' ? 'control' : 'batting';
     });
     return init;
   });
   const [subAssignments, setSubAssignments] = useState(() => {
     const init = {};
-    userTeam?.players?.forEach(p => { init[p.id] = 'running'; });
+    userTeam?.players?.forEach(p => { init[p.id] = 'physique'; });
     return init;
   });
   const [newPitchSelections, setNewPitchSelections] = useState({});
   const [subPositionSelections, setSubPositionSelections] = useState({});
+  // 変化球練習で1球種を指定して集中練習する（未指定なら従来どおり全球種に分配）
+  const [subPitchSelections, setSubPitchSelections] = useState({});
   const [formSelections, setFormSelections] = useState({});
   const [batsSelections, setBatsSelections] = useState({});
   const [roundResults, setRoundResults] = useState(null);
@@ -286,7 +281,22 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const [sortKey, setSortKey] = useState('position');
   const [sortAsc, setSortAsc] = useState(true);
   const [showCampReview, setShowCampReview] = useState(false);
-  const [campFilter, setCampFilter] = useState('all');
+  const [campTab, setCampTab] = useState('pitcher');
+  // 「投手だが打撃練習をさせたい」等のために、選手を反対側のタブへ移せるようにする。
+  // 表示する列が投手系／野手系で違うので、練習を変えたら見たい数字も変わるため。
+  // ⚠ キャンプ中だけの表示上の割り当て。選手データ(position)は変えない
+  const [trainingSide, setTrainingSide] = useState({});   // { [playerId]: 'pitcher' | 'fielder' }
+
+  // 旧セーブデータ対応: 第2適性が未設定の投手にキャンプ開始時に初期値を付与
+  useEffect(() => {
+    const team = TEAMS_DATA[userTeamName];
+    if (!team?.players) return;
+    team.players.forEach(p => {
+      if (p.position === 'pitcher' && p.pitching && p.pitching.secondAffinity === undefined) {
+        p.pitching.secondAffinity = calcSecondAffinity(p.pitching.arsenal || []);
+      }
+    });
+  }, [userTeamName]);
 
   // キャンプ開始時のステータスを保存（成長合計計算用）
   const [preCampStats] = useState(() => {
@@ -342,6 +352,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         case 'stamina': return p.pitching?.stamina || 0;
         case 'bodyStamina': return p.physical?.bodyStamina || 0;
         case 'recovery': return p.physical?.recovery || 0;
+        case 'muscle': return p.physical?.muscle ?? 50;
         default: return 0;
       }
     };
@@ -354,21 +365,40 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
   const isPitcher = (player) => player.position === 'pitcher';
 
-  const StatValue = ({ value, label, isVelocity = false, isStamina = false }) => {
-    const rank = getAbilityRank(value, isVelocity, isStamina);
-    const color = getRankColor(rank);
-    return <span className={`${color} font-bold`} title={`${label}: ${value}`}>{value}</span>;
-  };
+  // 能力表示は共通の AbilityValue に集約（配色の単一の真実の源）
+  const StatValue = ({ value, label, isVelocity = false, isStamina = false }) => (
+    <span title={`${label}: ${value}`}><AbilityValue value={value} isVel={isVelocity} isSta={isStamina} /></span>
+  );
 
   const FitnessValue = ({ value }) => {
     if (value === undefined || value === null) return <span className="text-gray-700">-</span>;
     const color = value >= 80 ? 'text-green-400' : value >= 60 ? 'text-yellow-400' : value >= 40 ? 'text-orange-400' : 'text-red-400';
-    return <span className={`${color} text-[10px]`}>{value}</span>;
+    return <span className={`${color} text-xs`}>{value}</span>;
   };
 
   const getAvailableNewPitches = (player) => {
     const existing = (player.pitching?.arsenal || []).map(p => p.type);
     return ALL_PITCH_TYPES.filter(t => !existing.includes(t));
+  };
+
+  // 育成方針（方向性 × フェーズ）。既定値を作るだけで、個別の上書きは残る。
+  // 方針は「方向 × フェーズ」の2軸だが、`'wish'` だけは擬似的な方向で
+  // **選手ごとに本人の希望をそのまま採る**（＝やる気が必ず最大の 意欲的 ×1.15 になる）。
+  // ⚠ **希望どおりが正解ではない**。やる気は効率にだけ効き、何を伸ばすべきかは
+  //    選手の水準と目的（勝敗かドラフトか）が決める。指導者が方向を変えるのが仕事。
+  const WISH_KEY = 'wish';
+  const policyFor = (pl, dir = policyDir, phase = policyPhase) =>
+    (dir === WISH_KEY ? playerWish(pl) : { direction: dir, phase });
+
+  const applyPolicy = (dir, phase) => {
+    setPolicyDir(dir); setPolicyPhase(phase);
+    const newAssign = {}; const newSubAssign = {};
+    userTeam?.players?.forEach(p => {
+      const eff = policyFor(p, dir, phase);
+      const r = resolveTraining(p, eff.direction, eff.phase);
+      newAssign[p.id] = r.main; newSubAssign[p.id] = r.sub;
+    });
+    setAssignments(newAssign); setSubAssignments(newSubAssign);
   };
 
   const applyPreset = (presetKey) => {
@@ -390,20 +420,26 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     const finalAssignments = {};
     userTeam.players.forEach(p => {
       if (p.dispatchedThisCamp) return; // 派遣済みの選手はスキップ
-      finalAssignments[p.id] = assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting');
+      finalAssignments[p.id] = assignments[p.id] || (isPitcher(p) ? 'control' : 'batting');
     });
 
     const userStaffBonus = userTeam.corporateData?.staff ? getTeamStaffBonus(userTeam.corporateData.staff) : null;
     const awakeningMult = gameMode === 'university' ? 0.5 : gameMode === 'independent' ? 1.5 : 1.0;
+    // 選手の希望と指示の噛み合い＝やる気。
+    // ⚠ **希望どおりが正解ではない**。指示が正しいかは選手の水準と目的が決めるもので、
+    //    ここは効率（身が入るか）にだけ効く。指導者が当たりということもある。
+    const moodMults = {};
+    userTeam.players.forEach(p => { const e = policyFor(p); moodMults[p.id] = moodMultiplier(p, e.direction, e.phase); });
     const { updatedTeam, allReports } = executeTeamCampTraining(
-      userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult
+      userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult, moodMults
     );
     TEAMS_DATA[userTeamName] = updatedTeam;
 
     updatedTeam.players.forEach(p => {
-      const subType = subAssignments[p.id] || 'running';
+      const subType = subAssignments[p.id] || 'physique';
       const subOptions = {
         targetPosition: subPositionSelections[p.id],
+        targetPitch: subPitchSelections[p.id],
         targetForm: formSelections[p.id],
         targetBats: batsSelections[p.id],
       };
@@ -466,7 +502,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
       }
 
       const aiAssign = {};
-      const pitcherMenus = ['stamina', 'control', 'velocity', 'newpitch'];
+      const pitcherMenus = ['control', 'velocity', 'newpitch'];
       const batterMenus = ['batting', 'baserunning', 'fielding'];
       aiTeam.players.forEach(p => {
         if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
@@ -499,12 +535,19 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     setCurrentRound(currentRound + 1);
     setRoundResults(null);
     setViewMode('select');
+    // 新球種選択のステイル状態をクリア（前クールで習得した球種が残り続けるのを防ぐ）
+    setNewPitchSelections({});
   };
 
   const getArsenalDisplay = (player) => {
     const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
-    if (arsenal.length === 0) return '-';
-    return arsenal.map(a => `${getPitchTypeName(a.type)}${a.level}`).join(' ');
+    if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
+    // 変化球はレベルで色付け（0-100スケールなのでgetAbilityColorをそのまま使用）
+    return arsenal.map((a, i) => (
+      <span key={i} className={getAbilityColor(a.level || 0)}>
+        {i > 0 ? ' ' : ''}{getPitchTypeName(a.type)}{a.level}
+      </span>
+    ));
   };
 
   const subPosHeaders = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
@@ -512,13 +555,39 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
   // 派遣中でない選手のみ表示
   const allActivePlayers = sortedPlayers.filter(p => !p.dispatchedThisCamp);
-  const activePlayers = campFilter === 'all' ? allActivePlayers
-    : campFilter === 'pitcher' ? allActivePlayers.filter(p => p.position === 'pitcher')
-    : allActivePlayers.filter(p => p.position !== 'pitcher');
+
+  // どのタブに出すか。`trainingSide` は**行き先のタブそのもの**を持つ
+  // （'pitcher' / 'catcher' / 'infield' / 'outfield'）。
+  //
+  // ⚠ **投手の行き先を `positionFitness` から推測してはいけない**。投手は
+  //    投手100 / 他は**一律30**で、どの守備位置も完全に同点になる。
+  //    以前は `reduce(..., 'left')` で最大値を探しており、`0 > 0` が偽なので
+  //    初期値の 'left' を一度も上回らず、**移した投手が全員外野手タブへ落ちていた**。
+  //    能力で決める案も試したが、投手は肩が高く打力がほぼ0なので
+  //    今度は**97%が捕手**になった（偏りの向きが変わるだけ）。
+  //    ゲームが投手の守備位置を持っていない以上、推測せず**選ばせる**のが正しい。
+  const INFIELD = ['first', 'second', 'third', 'short'];
+  const naturalTabOf = (pl) => {
+    if (isPitcher(pl)) return 'pitcher';
+    const pos = pl.position;
+    return pos === 'catcher' ? 'catcher' : INFIELD.includes(pos) ? 'infield' : 'outfield';
+  };
+  const tabOf = (pl) => trainingSide[pl.id] || naturalTabOf(pl);
+  const sideOf = (pl) => (tabOf(pl) === 'pitcher' ? 'pitcher' : 'fielder');
+  const CAMP_TABS = [
+    { key: 'pitcher',  label: '投手' },
+    { key: 'catcher',  label: '捕手' },
+    { key: 'infield',  label: '内野手' },
+    { key: 'outfield', label: '外野手' },
+  ];
+  const activePlayers = allActivePlayers.filter(pl => tabOf(pl) === campTab);
+  // 列の出し分け。37列すべてを常に出すと1536pxで幅が尽きる（実測1512/1512）
+  const isPitchTab = campTab === 'pitcher';
+  const showCLead = campTab === 'catcher';
   const dispatchedPlayers = sortedPlayers.filter(p => p.dispatchedThisCamp);
 
   return (
-    <div className="p-3 bg-gray-900 min-h-screen">
+    <div className="p-4">
       <div className="max-w-full mx-auto">
         {/* 派遣確認モーダル */}
         {dispatchConfirm && (() => {
@@ -531,11 +600,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             const uniOptions = getUniversityDispatchOptions(userTeam);
             return (
               <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-                <div className="bg-gray-800 rounded-xl max-w-lg w-full p-5">
+                <div className="bg-surface-2 rounded-xl max-w-lg w-full p-5">
                   <h2 className="text-base font-bold text-white mb-3 text-center">🎓 派遣先大学を選択</h2>
                   <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
                     <div className="text-white font-bold text-lg mb-1">{player.name}</div>
-                    <div className="text-gray-400 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
+                    <div className="text-gray-300 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
                     {(() => {
                       const dispatched = (userTeam?.players || []).filter(p => p.dispatchedThisCamp === 'university').length;
                       const max = DISPATCH_LIMITS.perTeamUniversity;
@@ -543,12 +612,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     })()}
                   </div>
                   {uniOptions.length === 0 ? (
-                    <div className="text-gray-400 text-sm text-center mb-3">OBのいる大学がありません</div>
+                    <div className="text-gray-300 text-sm text-center mb-3">OBのいる大学がありません</div>
                   ) : (
                     <div className="space-y-1.5 max-h-64 overflow-y-auto mb-3">
                       {uniOptions.map(uni => {
                         const canDispatch = uni.remaining > 0;
-                        const rankColors = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-400' };
+                        const rankColors = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
                         return (
                           <button
                             key={uni.universityId}
@@ -566,15 +635,15 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 <span className="text-white font-bold text-sm">{uni.universityName}</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-gray-400 text-[10px]">OB {uni.obCount}人</span>
-                                <span className={`text-xs font-bold ${canDispatch ? 'text-orange-400' : 'text-gray-500'}`}>
+                                <span className="text-gray-300 text-xs">OB {uni.obCount}人</span>
+                                <span className={`text-xs font-bold ${canDispatch ? 'text-orange-400' : 'text-gray-400'}`}>
                                   残{uni.remaining}/{uni.slots}枠
                                 </span>
                               </div>
                             </div>
                             <div className="flex gap-1 flex-wrap">
                               {uni.specialties.map(s => (
-                                <span key={s} className="px-1.5 py-0 rounded text-[10px] bg-gray-600/80 text-gray-300">
+                                <span key={s} className="px-1.5 py-0 rounded text-xs bg-gray-600/80 text-gray-300">
                                   {SPECIALTY_ICONS?.[s] || ''}{SPECIALTY_LABELS?.[s] || s}
                                 </span>
                               ))}
@@ -585,7 +654,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     </div>
                   )}
                   <div className="flex gap-2 justify-center">
-                    <button onClick={() => setDispatchConfirm(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
+                    <button onClick={() => setDispatchConfirm(null)} className="btn-secondary px-6 py-2 rounded-lg text-sm font-bold transition">
                       キャンセル
                     </button>
                   </div>
@@ -597,11 +666,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           const selectedUniName = dispatchConfirm.universityName;
           return (
             <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-              <div className="bg-gray-800 rounded-xl max-w-md w-full p-5">
+              <div className="bg-surface-2 rounded-xl max-w-md w-full p-5">
                 <h2 className="text-base font-bold text-white mb-3 text-center">{dest.icon} {dest.name}に派遣</h2>
                 <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
                   <div className="text-white font-bold text-lg mb-1">{player.name}</div>
-                  <div className="text-gray-400 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
+                  <div className="text-gray-300 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
                 </div>
                 {selectedUniName && (
                   <div className="bg-orange-900/30 border border-orange-500/30 rounded-lg p-2 mb-3 text-center">
@@ -614,10 +683,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   <p>派遣後もシーズンには通常通り出場できます</p>
                 </div>
                 <div className="flex gap-2 justify-center">
-                  <button onClick={() => setDispatchConfirm(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
+                  <button onClick={() => setDispatchConfirm(null)} className="btn-secondary px-6 py-2 rounded-lg text-sm font-bold transition">
                     キャンセル
                   </button>
-                  <button onClick={() => handleDispatch(dispatchConfirm.playerId, dispatchConfirm.destKey, dispatchConfirm.universityId)} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
+                  <button onClick={() => handleDispatch(dispatchConfirm.playerId, dispatchConfirm.destKey, dispatchConfirm.universityId)} className="btn-warn px-6 py-2 rounded-lg text-sm transition">
                     派遣する
                   </button>
                 </div>
@@ -629,22 +698,26 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-white">{campTitle} - {userTeamName}</h1>
+            <h1 className="text-xl font-bold text-ink">{campTitle} - {userTeamName}</h1>
             {dispatchedPlayers.length > 0 && (
-              <span className="text-orange-400 text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
+              <span className="text-orange-900 text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
             )}
           </div>
           <div className="flex items-center gap-2">
             {Array.from({ length: MAX_CAMP_ROUNDS }, (_, i) => i + 1).map(r => (
               <div key={r} className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
                 r < currentRound ? 'bg-green-600 text-white'
-                  : r === currentRound ? 'bg-blue-600 text-white ring-2 ring-blue-400'
-                  : 'bg-gray-700 text-gray-500'
+                  : r === currentRound ? 'seg-on ring-2' : 'seg'
               }`}>{r}</div>
             ))}
-            <span className="text-gray-500 text-xs ml-1">{currentRound}/{MAX_CAMP_ROUNDS}</span>
+            <span className="text-ink-sub text-xs ml-1">{currentRound}/{MAX_CAMP_ROUNDS}</span>
           </div>
         </div>
+
+        <TutorialHint id="camp-intro" title="キャンプで選手を育てる">
+          各クールごとに選手へ<b className="text-cyan-200">メイン練習＋サブ練習</b>を割り当てて能力を伸ばします。<b className="text-cyan-200">若い選手ほど伸びやすく</b>（19歳の伸びは25歳の2倍以上）、<b className="text-cyan-200">精神</b>グレードが高いほど練習が身につきます。
+          <br />選手が伸びるのは練習だけではありません。<b className="text-cyan-200">シーズン中に試合へ出た量も同じくらい効きます</b>——1年フル出場した若手は、出番の無かった選手の2倍以上成長します。体力を鍛えると疲労に強く選手寿命が延びます。Year2以降は有望株を<b className="text-cyan-200">派遣</b>に出して大きく伸ばすこともできます。
+        </TutorialHint>
 
         {/* ランク変動通知 */}
         {currentRound === 1 && seasonData?.rankChanges?.length > 0 && (() => {
@@ -656,7 +729,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <span className={`font-black text-lg ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                 {isUp ? '↑' : '↓'} ランク{isUp ? '昇格' : '降格'}: {userChange.from} → {userChange.to}
               </span>
-              <span className="text-gray-400 text-xs ml-2">(注目度: {Math.round(userChange.reputation)})</span>
+              <span className="text-gray-300 text-xs ml-2">(注目度: {Math.round(userChange.reputation)})</span>
             </div>
           );
         })()}
@@ -673,7 +746,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <span className={`font-black text-lg ${isPromoted ? 'text-green-400' : 'text-red-400'}`}>
                 {isPromoted ? '↑' : '↓'} {isPromoted ? '昇格' : '降格'}: {isPromoted ? userPromo.promoted.from : userPromo.relegated.from} → {isPromoted ? userPromo.promoted.to : userPromo.relegated.to}
               </span>
-              <span className="text-gray-400 text-xs ml-2">({userPromo.league})</span>
+              <span className="text-gray-300 text-xs ml-2">({userPromo.league})</span>
             </div>
           );
         })()}
@@ -686,7 +759,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               {seasonData.staffRetirements.map((s, idx) => {
                 const roleNames = { coach: 'コーチ', manager: 'マネージャー', trainer: 'トレーナー' };
                 return (
-                  <div key={idx} className="text-xs text-gray-400">
+                  <div key={idx} className="text-xs text-gray-300">
                     <span className="text-white font-bold">{s.name}</span>
                     <span className="ml-1">({roleNames[s.role] || s.role} / {s.age}歳 / {s.grade}級)</span>
                     <span className="ml-1 text-orange-400">{s.reason === '定年退職' ? '定年退職' : '退職'}しました</span>
@@ -694,7 +767,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 );
               })}
             </div>
-            <div className="text-[10px] text-gray-500 mt-1">チーム運営画面からスタッフを補充できます</div>
+            <div className="text-xs text-gray-400 mt-1">チーム運営画面からスタッフを補充できます</div>
           </div>
         )}
 
@@ -711,7 +784,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 </div>
               ))}
             </div>
-            <div className="text-[10px] text-gray-500 mt-1">来季は予算内での運営を心がけましょう</div>
+            <div className="text-xs text-gray-400 mt-1">来季は予算内での運営を心がけましょう</div>
           </div>
         )}
 
@@ -734,15 +807,15 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 return m >= 1.0 ? `×${m.toFixed(2)}` : `×${m.toFixed(2)}`;
               };
               return (
-                <div className="mb-2 flex items-center gap-3 bg-gray-800/60 rounded px-3 py-1.5 text-[10px] flex-wrap">
-                  <span className="text-gray-500 font-bold">コーチ効果:</span>
+                <div className="mb-2 flex items-center gap-3 bg-surface-2 rounded px-3 py-1.5 text-xs flex-wrap">
+                  <span className="text-gray-300 font-bold">コーチ効果:</span>
                   {items.map(it => (
-                    <span key={it.label} className="text-gray-400">
+                    <span key={it.label} className="text-gray-300">
                       {it.label}
-                      <span className={`font-bold ml-0.5 ${it.val >= 70 ? 'text-yellow-400' : it.val >= 40 ? 'text-green-400' : 'text-gray-500'}`}>
+                      <span className={`font-bold ml-0.5 ${it.val >= 70 ? 'text-yellow-400' : it.val >= 40 ? 'text-green-400' : 'text-gray-300'}`}>
                         {it.val}
                       </span>
-                      <span className="text-gray-600 ml-0.5">
+                      <span className="text-gray-400 ml-0.5">
                         ({it.label === 'モチベ管理'
                           ? (it.val >= 20 ? `+プロ意識` : '効果なし')
                           : it.label === 'フィットネス'
@@ -757,32 +830,55 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 </div>
               );
             })()}
-            {/* プリセット一括設定 */}
+            {/* 育成方針（方向性 × フェーズ）。選んだ時点で全選手のメニューが埋まり、
+                個別に上書きもできる。⚠ 旧プリセット5種はこの2軸を平らに潰した
+                部分集合だった（弱点克服=短所 / 長所強化=長所 / フィジカル・技術=フェーズ）
+                ので、二重にせずこちらへ集約してある。 */}
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-              <span className="text-gray-500 text-xs font-bold">プリセット:</span>
-              {Object.entries(CAMP_PRESETS).map(([key, preset]) => (
+              <span className="text-ink text-xs font-bold" title="選手の希望と噛み合うとやる気が上がります">育成方針:</span>
+              {Object.values(DIRECTIONS).map(d => (
                 <button
-                  key={key}
-                  onClick={() => applyPreset(key)}
-                  title={preset.desc}
-                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded px-2 py-0.5 text-[11px] text-gray-300 hover:text-blue-300 transition"
+                  key={d.key}
+                  onClick={() => applyPolicy(d.key, policyPhase)}
+                  title={d.description}
+                  className={`rounded px-2 py-0.5 text-xs transition ${policyDir === d.key ? 'seg seg-on' : 'seg'}`}
                 >
-                  {preset.icon} {preset.name}
+                  {d.icon} {d.name}
                 </button>
               ))}
-              <span className="text-gray-500 mx-1">|</span>
-              <span className="text-gray-500 text-xs font-bold">一括:</span>
+              <span className="text-ink-sub mx-0.5">×</span>
+              {Object.values(PHASES).map(ph => (
+                <button
+                  key={ph.key}
+                  onClick={() => applyPolicy(policyDir === WISH_KEY ? 'balanced' : policyDir, ph.key)}
+                  title={ph.description}
+                  className={`rounded px-2 py-0.5 text-xs transition ${policyDir !== WISH_KEY && policyPhase === ph.key ? 'seg seg-on' : 'seg'}`}
+                >
+                  {ph.icon} {ph.name}
+                </button>
+              ))}
+              <span className="text-ink-sub mx-1">|</span>
+              {/* 2軸とは別枠。選手ごとに本人の希望を採るので、方向もフェーズも選手ごとに変わる */}
+              <button
+                onClick={() => applyPolicy(WISH_KEY, policyPhase)}
+                title="選手ごとに本人がやりたい練習を割り当てます。やる気が必ず最大（意欲的 ×1.15）になりますが、希望どおりが正解とは限りません"
+                className={`rounded px-2 py-0.5 text-xs transition ${policyDir === WISH_KEY ? 'seg seg-on' : 'seg'}`}
+              >
+                🙂 やりたい練習
+              </button>
+              <span className="text-ink-sub mx-1">|</span>
+              <span className="text-ink text-xs font-bold" title="タブに関係なく全選手に適用します">全員に一括:</span>
               {Object.entries(TRAINING_MENUS).filter(([k, m]) => !['newpitch'].includes(k) && !m.intensive).map(([key, menu]) => (
                 <button
                   key={key}
                   onClick={() => {
                     const updated = {};
                     userTeam?.players?.forEach(p => {
-                      updated[p.id] = TRAINING_MENUS[key] ? key : (assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting'));
+                      updated[p.id] = TRAINING_MENUS[key] ? key : (assignments[p.id] || (isPitcher(p) ? 'control' : 'batting'));
                     });
                     setAssignments(updated);
                   }}
-                  className="px-2 py-0.5 text-[11px] rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition"
+                  className="btn-secondary px-2 py-0.5 text-xs rounded transition"
                 >
                   {menu.icon} {menu.name}
                 </button>
@@ -792,7 +888,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
             {/* 派遣中の選手 */}
             {dispatchedPlayers.length > 0 && (
-              <div className="bg-gray-800 rounded-lg p-2 mb-2">
+              <div className="bg-surface-2 rounded-lg p-2 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-orange-400 text-xs font-bold">派遣中:</span>
                   {dispatchedPlayers.map((p, idx) => {
@@ -800,9 +896,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     const uniName = p.dispatchUniversityName;
                     return (
                       <div key={idx} className="flex items-center gap-1 bg-gray-700/50 rounded px-2 py-0.5">
-                        <span className={`font-bold text-[10px] ${p.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
-                        <span className="text-gray-500 text-[10px]">{dest?.icon} {uniName || dest?.name}</span>
-                        <span className="text-orange-400 text-[10px]">（結果はキャンプ終了時）</span>
+                        <span className={`font-bold text-xs ${p.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
+                        <span className="text-gray-400 text-xs">{dest?.icon} {uniName || dest?.name}</span>
+                        <span className="text-orange-400 text-xs">（結果はキャンプ終了時）</span>
                       </div>
                     );
                   })}
@@ -810,76 +906,79 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               </div>
             )}
 
-            {/* 投手/野手フィルタ */}
+            {/* ポジション別タブ。列を投手系／野手系で出し分けて表を1画面に収める */}
             <div className="flex items-center gap-1.5 mb-2">
-              <span className="text-gray-500 text-xs font-bold">表示:</span>
-              {[
-                { key: 'all', label: '全員', count: allActivePlayers.length },
-                { key: 'pitcher', label: '投手', count: allActivePlayers.filter(p => p.position === 'pitcher').length },
-                { key: 'fielder', label: '野手', count: allActivePlayers.filter(p => p.position !== 'pitcher').length },
-              ].map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => setCampFilter(f.key)}
-                  className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
-                    campFilter === f.key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-700'
-                  }`}
-                >
-                  {f.label} <span className="opacity-60">{f.count}</span>
-                </button>
-              ))}
+              {CAMP_TABS.map(t => {
+                const n = allActivePlayers.filter(pl => tabOf(pl) === t.key).length;
+                return (
+                  <button key={t.key} onClick={() => setCampTab(t.key)}
+                    className={`px-3 py-1 rounded border text-xs font-semibold transition ${
+                      POSITION_GROUP_COLORS[t.key][campTab === t.key ? 'on' : 'off']}`}>
+                    {t.label} <span className="opacity-60 tabular-nums">{n}</span>
+                  </button>
+                );
+              })}
+              {/* ⚠ 地色の上に直に載る注記。text-gray-400 は紙の上でコントラスト約1.1で読めなかった */}
+              <span className="text-ink-sub text-xs ml-2">
+                {isPitchTab ? '投球系の能力を表示中。打撃練習をさせたい投手は「野手へ…」で行き先のタブを選んで移せます'
+                            : '打撃・守備系の能力を表示中。投球練習をさせたい選手は「投手へ」で移せます'}
+              </span>
             </div>
 
             {/* 選手テーブル */}
-            <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto">
+            <div className="bg-surface-2 rounded-lg overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+                  <tr className="bg-gray-700/80 text-gray-300 text-xs">
                     {(() => {
+                      // ⚠ 見出しは **nowrap を付けないと折り返す**。`w-*` を広げても
+                      //    列幅の「目安」でしかないので、「プロ意識」が「プロ意/識」に割れた
                       const S = ({ k, w, children, title, align = 'center' }) => (
-                        <th className={`py-1.5 px-1 ${align === 'left' ? 'text-left px-2' : 'text-center'} ${w || ''}`} title={title}>
+                        <th className={`py-1.5 px-1 whitespace-nowrap ${align === 'left' ? 'text-left px-2' : 'text-center'} ${w || ''}`} title={title}>
                           <button onClick={() => toggleSort(k)} className={`hover:text-white transition ${sortKey === k ? 'text-yellow-400' : ''}`}>
                             {children}{sortKey === k ? (sortAsc ? '↑' : '↓') : ''}
                           </button>
                         </th>
                       );
                       return (<>
-                        <th className="py-1.5 px-2 text-left w-20">選手</th>
-                        <S k="position" w="w-7">位</S>
-                        <S k="age" w="w-6">齢</S>
-                        <S k="build" w="w-7" title="体格">体</S>
+                        <th className="py-1.5 px-2 text-left w-28 whitespace-nowrap">氏名</th>
+                        <S k="position" w="w-9">ポジ</S>
+                        <S k="age" w="w-9">年齢</S>
+                        <S k="build" w="w-9" title="体格">体格</S>
                         <S k="growth" w="w-10" title="成長率 (基礎+変動)">成長</S>
-                        <S k="discipline" w="w-8" title="プロ意識">プ意</S>
-                        <S k="mental" w="w-8" title="精神力">精神</S>
-                        <th className="py-1.5 px-1 text-center w-8">投/打</th>
-                        <th className="py-1.5 px-1 text-center w-12">フォーム</th>
-                        <S k="meet" w="w-8">ミ</S>
-                        <S k="power" w="w-8">パ</S>
-                        <S k="speed" w="w-8">走</S>
+                        <S k="discipline" title="練習成長への乗算。高いほど練習が身につき、覚醒も起きやすい">プロ意識</S>
+                        <S k="mental" w="w-8" title="チャンス・ピンチでの強さ">精神</S>
+                        <th className="py-1.5 px-1 text-center w-14 whitespace-nowrap" title="この選手が今の方針をどう受け止めているか。希望と噛み合うと効率が上がる（正しい指示かどうかとは別）">意欲</th>
+                        <th className="py-1.5 px-1 text-center w-8 whitespace-nowrap">投/打</th>
+                        {isPitchTab && <th className="py-1.5 px-1 text-center whitespace-nowrap">フォーム</th>}
+                        {!isPitchTab && <S k="meet" w="w-12">ミート</S>}
+                        {!isPitchTab && <S k="power" w="w-12">パワー</S>}
+                        {!isPitchTab && <S k="speed" w="w-9">走力</S>}
+                        {/* 肩は球速の上限を決めるので投手タブにも出す */}
                         <S k="arm" w="w-8">肩</S>
-                        <S k="dexterity" w="w-8" title="器用さ">器</S>
-                        <S k="defense" w="w-8">守</S>
-                        <S k="clead" w="w-8">Cリ</S>
-                        <S k="eye" w="w-8">眼</S>
-                        <S k="bunt" w="w-8">バ</S>
-                        <S k="velocity" w="w-9">速</S>
-                        <S k="control" w="w-8">制</S>
-                        <th className="py-1.5 px-1 text-center w-8">伸び</th>
-                        <S k="stamina" w="w-9">ス</S>
-                        <S k="bodyStamina" w="w-8">体</S>
-                        <S k="recovery" w="w-8">回</S>
-                        <th className="py-1.5 px-2 text-left">変化球</th>
-                        <th className="py-1.5 px-2 text-left">前年成績</th>
+                        {!isPitchTab && <S k="dexterity" w="w-9" title="器用さ">器用</S>}
+                        {!isPitchTab && <S k="defense" w="w-9">守備</S>}
+                        {showCLead && <S k="clead" w="w-8">Cリ</S>}
+                        {!isPitchTab && <S k="eye" w="w-9">選球</S>}
+                        {!isPitchTab && <S k="bunt" w="w-12">バント</S>}
+                        {isPitchTab && <S k="velocity" w="w-9">球速</S>}
+                        {isPitchTab && <S k="control" w="w-9">制球</S>}
+                        {isPitchTab && <th className="py-1.5 px-1 text-center whitespace-nowrap" title="球の回転数">スピン</th>}
+                        {isPitchTab && <S k="stamina" title="1試合で投げ続けられる体力（30〜150）">スタミナ</S>}
+                        <S k="bodyStamina" w="w-9">体力</S>
+                        <S k="recovery" w="w-9">回復</S>
+                        <S k="muscle" w="w-9" title="体幹（成長倍率に影響）">体幹</S>
+                        {isPitchTab && <th className="py-1.5 px-2 text-left whitespace-nowrap">変化球</th>}
+                        <th className="py-1.5 px-2 text-left whitespace-nowrap">前年成績</th>
                       </>);
                     })()}
-                    {/* サブポジション適性 */}
-                    {subPosHeaders.map(pos => (
+                    {/* サブポジション適性（投手タブでは不要） */}
+                    {!isPitchTab && subPosHeaders.map(pos => (
                       <th key={pos} className="py-1.5 px-0.5 text-center w-6" title={POSITION_NAMES[pos]}>{subPosShort[pos]}</th>
                     ))}
                     <th className="py-1.5 px-2 text-left w-28">メイン</th>
                     <th className="py-1.5 px-2 text-left w-28">サブ</th>
+                    <th className="py-1.5 px-1 text-center w-16">練習側</th>
                     {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && <th className="py-1.5 px-1 text-center w-16">派遣</th>}
                   </tr>
                 </thead>
@@ -890,32 +989,32 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     const ph = player.physical || {};
                     const f = player.fielding || {};
                     const pf = player.positionFitness || {};
-                    const currentTraining = assignments[player.id] || (isPitcher(player) ? 'stamina' : 'batting');
+                    const currentTraining = assignments[player.id] || (isPitcher(player) ? 'control' : 'batting');
                     const showNewPitchSelect = currentTraining === 'newpitch';
                     const availableNewPitches = getAvailableNewPitches(player);
 
                     return (
                       <tr key={player.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                        <td className="py-1 px-2">
+                        <td className="py-1 px-2 whitespace-nowrap">
                           <span className={`font-bold text-xs ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>
                             {player.name}
                           </span>
                         </td>
-                        <td className="py-1 px-1 text-center">
-                          <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
+                        <td className="py-1 px-1 text-center whitespace-nowrap">
+                          <span className="text-xs text-gray-300">{POSITION_NAMES[player.position] || player.position}</span>
                         </td>
-                        <td className="py-1 px-1 text-center text-gray-500 text-[10px]">{player.age || 20}</td>
-                        <td className="py-1 px-1 text-center text-[10px]">
-                          <span className={ph.build === 'large' ? 'text-orange-400' : ph.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
+                        <td className="py-1 px-1 text-center text-gray-300 text-xs whitespace-nowrap">{player.age || 20}</td>
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
+                          <span className={ph.build === 'large' ? 'text-orange-400' : ph.build === 'small' ? 'text-cyan-400' : 'text-gray-300'}>
                             {ph.build === 'large' ? '大柄' : ph.build === 'small' ? '小柄' : '中肉'}
                           </span>
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px]">
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             const base = player.growthPotential ?? 1.0;
                             const mod = player.growthModifier || 0;
                             const effective = Math.max(0.3, Math.min(1.8, base + mod));
-                            const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-400';
+                            const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-300';
                             return (
                               <span className={color} title={`基礎:${base.toFixed(2)} 変動:${mod >= 0 ? '+' : ''}${mod.toFixed(2)}`}>
                                 {effective.toFixed(2)}
@@ -923,48 +1022,59 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             );
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px]">
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             const d = player.personality?.discipline ?? 50;
-                            const c = d >= 80 ? 'text-red-400' : d >= 60 ? 'text-orange-400' : d >= 40 ? 'text-yellow-400' : d >= 20 ? 'text-blue-400' : 'text-gray-400';
+                            const c = d >= 80 ? 'text-red-400' : d >= 60 ? 'text-orange-400' : d >= 40 ? 'text-yellow-400' : d >= 20 ? 'text-blue-400' : 'text-gray-300';
                             return <span className={c}>{d}</span>;
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px]">
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             const m = player.personality?.mental ?? 50;
-                            const c = m >= 80 ? 'text-red-400' : m >= 60 ? 'text-orange-400' : m >= 40 ? 'text-yellow-400' : m >= 20 ? 'text-blue-400' : 'text-gray-400';
+                            const c = m >= 80 ? 'text-red-400' : m >= 60 ? 'text-orange-400' : m >= 40 ? 'text-yellow-400' : m >= 20 ? 'text-blue-400' : 'text-gray-300';
                             return <span className={c}>{m}</span>;
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px]">
-                          <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>{ph.throws === 'left' ? '左' : '右'}</span>
-                          <span className="text-gray-500">/</span>
-                          <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
+                          {(() => {
+                            const e = policyFor(player);
+                            const mood = describeMood(player, e.direction, e.phase);
+                            const w = playerWish(player);
+                            const c = mood.tone === 'good' ? 'text-green-400' : mood.tone === 'bad' ? 'text-orange-400' : 'text-gray-300';
+                            return <span className={c}
+                              title={`本人の希望: ${DIRECTIONS[w.direction].name} × ${PHASES[w.phase].name}`}>{mood.label}</span>;
+                          })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px] text-gray-400">
-                          {({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-')}
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
+                          <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-300'}>{ph.throws === 'left' ? '左' : '右'}</span>
+                          <span className="text-gray-400">/</span>
+                          <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-300'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
                         </td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.speed||0} label="走力" /></td>
+                        {isPitchTab && <td className="py-1 px-1 text-center text-xs text-gray-300 whitespace-nowrap">
+                          {FORM_SHORT[p.form] || '-'}
+                        </td>}
+                        {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>}
+                        {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>}
+                        {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.speed||0} label="走力" /></td>}
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.arm||0} label="肩力" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.dexterity||50} label="器用さ" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={f.defense||0} label="守備" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={player.catching?.lead||0} label="Cリード" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={b.eye||0} label="選球眼" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={b.bunt||0} label="バント" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.spinRate||0} label="伸び" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
+                        {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.dexterity||50} label="器用さ" /></td>}
+                        {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={f.defense||0} label="守備" /></td>}
+                        {showCLead && <td className="py-1 px-1 text-center font-mono"><StatValue value={player.catching?.lead||0} label="Cリード" /></td>}
+                        {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={b.eye||0} label="選球眼" /></td>}
+                        {!isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={b.bunt||0} label="バント" /></td>}
+                        {isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>}
+                        {isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>}
+                        {isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={p.spinRate||0} label="伸び" /></td>}
+                        {isPitchTab && <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>}
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
-                        <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
-                        <td className="py-1 px-2 text-[10px] font-mono text-gray-400 whitespace-nowrap">
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.muscle??50} label="体幹" /></td>
+                        {isPitchTab && <td className="py-1 px-2 text-xs font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>}
+                        <td className="py-1 px-2 text-xs font-mono text-gray-300 whitespace-nowrap">
                           {(() => {
                             const prev = player.previousSeasonStats;
-                            if (!prev) return <span className="text-gray-500">-</span>;
+                            if (!prev) return <span className="text-gray-400">-</span>;
                             if (isPitcher(player)) {
                               const ip = prev.pitching?.inningsPitched || 0;
                               const era = ip > 0 ? ((prev.pitching?.earnedRuns || 0) / ip * 9).toFixed(2) : '-';
@@ -976,11 +1086,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             }
                           })()}
                         </td>
-                        {/* サブポジション適性 */}
-                        {subPosHeaders.map(pos => (
+                        {/* サブポジション適性（投手タブでは不要） */}
+                        {!isPitchTab && subPosHeaders.map(pos => (
                           <td key={pos} className="py-1 px-0.5 text-center font-mono">
                             {pos === player.position
-                              ? <span className="text-white text-[10px] font-bold">主</span>
+                              ? <span className="text-white text-xs font-bold">主</span>
                               : <FitnessValue value={pf[pos]} />
                             }
                           </td>
@@ -990,16 +1100,18 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             <select
                               value={currentTraining}
                               onChange={(e) => setAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
-                              className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-32"
+                              className="bg-gray-700 text-white text-xs px-1 py-1 rounded w-32"
                             >
                               {Object.entries(TRAINING_MENUS).filter(([, m]) => !m.intensive)
                                 .map(([key, menu]) => (
-                                <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                                <option key={key} value={key}>
+                                  {menu.name}
+                                </option>
                               ))}
                               <option disabled>── 集中コース ──</option>
                               {Object.entries(TRAINING_MENUS).filter(([, m]) => m.intensive)
                                 .map(([key, menu]) => (
-                                <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                                <option key={key} value={key}>{menu.name}</option>
                               ))}
                             </select>
                             {showNewPitchSelect && availableNewPitches.length > 0 && (
@@ -1009,8 +1121,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-28"
                               >
                                 {availableNewPitches.map(pt => {
-                                  const hasAffinity = FORM_PITCH_AFFINITY[p.form]?.[pt];
-                                  return <option key={pt} value={pt}>{getPitchTypeName(pt)}{hasAffinity ? ' ★適性' : ''}</option>;
+                                  const hasForm = !!FORM_PITCH_AFFINITY[p.form]?.[pt];
+                                  const hasSecond = p.secondAffinity === pt;
+                                  const tag = (hasForm && hasSecond) ? ' ★◆適性'
+                                    : hasForm ? ' ★フォーム適性'
+                                    : hasSecond ? ' ◆緩急適性'
+                                    : '';
+                                  return <option key={pt} value={pt}>{getPitchTypeName(pt)}{tag}</option>;
                                 })}
                               </select>
                             )}
@@ -1019,16 +1136,16 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-2">
                           <div className="flex items-center gap-1">
                             <select
-                              value={subAssignments[player.id] || 'running'}
+                              value={subAssignments[player.id] || 'physique'}
                               onChange={(e) => setSubAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
-                              className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
+                              className="bg-gray-700 text-white text-xs px-1 py-1 rounded w-28"
                             >
                               {Object.entries(SUB_TRAINING_MENUS)
                                 .map(([key, menu]) => (
-                                <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                                <option key={key} value={key}>{menu.name}</option>
                               ))}
                             </select>
-                            {(subAssignments[player.id] || 'running') === 'subposition' && (
+                            {(subAssignments[player.id] || 'physique') === 'subposition' && (
                               <select
                                 value={subPositionSelections[player.id] || ''}
                                 onChange={(e) => setSubPositionSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
@@ -1040,19 +1157,36 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                   .map(pos => <option key={pos} value={pos}>{POSITION_NAMES[pos]}</option>)}
                               </select>
                             )}
-                            {(subAssignments[player.id] || 'running') === 'form_change' && player.position === 'pitcher' && (
+                            {(subAssignments[player.id] || 'physique') === 'breaking' && player.position === 'pitcher' && (
+                              <select
+                                value={subPitchSelections[player.id] || ''}
+                                onChange={(e) => setSubPitchSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                title="1球種を選ぶと分散させず集中して磨く（伸びが速い）"
+                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-24"
+                              >
+                                <option value="">全部（分配）</option>
+                                {(player.pitching?.arsenal || [])
+                                  .filter(a => a.type !== 'straight' && (a.level ?? 0) < 100)
+                                  .map(a => (
+                                    <option key={a.type} value={a.type}>
+                                      {getPitchTypeName(a.type)} {a.level}
+                                    </option>
+                                  ))}
+                              </select>
+                            )}
+                            {(subAssignments[player.id] || 'physique') === 'form_change' && player.position === 'pitcher' && (
                               <select
                                 value={formSelections[player.id] || ''}
                                 onChange={(e) => setFormSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
                                 className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-20"
                               >
                                 <option value="">自動</option>
-                                {[['overhand','オーバー'],['threeQuarter','スリクォ'],['sidearm','サイド'],['submarine','アンダー']]
+                                {Object.entries(FORM_SHORT)
                                   .filter(([k]) => k !== player.pitching?.form)
                                   .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                               </select>
                             )}
-                            {(subAssignments[player.id] || 'running') === 'switch_hit' && (
+                            {(subAssignments[player.id] || 'physique') === 'switch_hit' && (
                               <select
                                 value={batsSelections[player.id] || ''}
                                 onChange={(e) => setBatsSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
@@ -1065,6 +1199,36 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                               </select>
                             )}
                           </div>
+                        </td>
+                        {/* 練習側の移動。position は変えず、表示するタブ＝見える列だけを切り替える */}
+                        <td className="py-1 px-1 text-center">
+                          {(() => {
+                            // 投手タブからは**行き先の野手タブを選ばせる**。
+                            // 逆向き（野手 → 投手）は1つしか行き先が無いのでボタンのまま。
+                            if (sideOf(player) === 'pitcher') {
+                              return (
+                                <select
+                                  value=""
+                                  onChange={(e) => e.target.value && setTrainingSide(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                  title="打撃・守備の数字を見ながら組めるよう、野手側のタブへ移す（ポジションは変わりません）"
+                                  className="bg-gray-700 text-white text-xs px-1 py-0.5 rounded"
+                                >
+                                  <option value="">野手へ…</option>
+                                  <option value="catcher">捕手タブ</option>
+                                  <option value="infield">内野手タブ</option>
+                                  <option value="outfield">外野手タブ</option>
+                                </select>
+                              );
+                            }
+                            return (
+                              <button
+                                onClick={() => setTrainingSide(prev => ({ ...prev, [player.id]: 'pitcher' }))}
+                                title="投球の数字を見ながら組めるよう、投手タブへ移す（ポジションは変わりません）"
+                                className="btn-secondary px-1.5 py-0.5 rounded text-xs whitespace-nowrap">
+                                投手へ
+                              </button>
+                            );
+                          })()}
                         </td>
                         {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && (
                           <td className="py-1 px-1 text-center">
@@ -1083,10 +1247,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                     onClick={() => eligible && setDispatchConfirm({ playerId: player.id, destKey })}
                                     disabled={!eligible}
                                     title={eligible ? `${dest.name}に派遣\n${dest.desc}` : reason}
-                                    className={`px-1 py-0.5 rounded text-[10px] font-bold transition ${
-                                      eligible
-                                        ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
-                                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                    className={`px-1 py-0.5 rounded text-xs font-bold transition ${
+                                      'btn-primary cursor-pointer'
                                     }`}
                                   >
                                     {dest.icon}
@@ -1103,10 +1265,17 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               </table>
             </div>
 
-            <div className="text-center mt-3">
+            {/* 進行ボタンは画面下に貼り付ける。
+                大学の56人ロスターだと内野手タブが23行になり、表の下に置くと
+                ボタンが1200px地点＝画面外に出て、全部スクロールしないと押せなかった。
+                ⚠ sticky は祖先に overflow:hidden があると効かない。ここは表の
+                コンテナ（overflow-hidden）の**外**なので成立している。
+                表が短いときは自然位置に収まる（sticky の性質） */}
+            <div className="sticky bottom-0 z-10 text-center mt-3 py-2 -mx-3 px-3
+                            bg-surface-1/95 backdrop-blur border-t border-gray-700/60">
               <button
                 onClick={handleExecuteTraining}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
               >
                 第{currentRound}クール練習を実行
               </button>
@@ -1117,18 +1286,23 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         {viewMode === 'results' && (
           <>
             {/* 練習結果 */}
-            <div className="bg-gray-800 rounded-lg overflow-hidden mb-3">
+            <div className="bg-surface-2 rounded-lg overflow-hidden mb-3">
               <div className="px-3 py-2 bg-gray-700/80 border-b border-gray-600">
                 <h2 className="text-sm font-bold text-white">第{currentRound}クール 練習結果</h2>
               </div>
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-700/50 text-gray-400 text-[10px]">
-                    <th className="py-1 px-2 text-left w-20">選手</th>
-                    <th className="py-1 px-2 text-left w-20">メイン</th>
-                    <th className="py-1 px-2 text-left">メイン結果</th>
-                    <th className="py-1 px-2 text-left w-20">サブ</th>
-                    <th className="py-1 px-2 text-left">サブ結果</th>
+                  <tr className="bg-gray-700/50 text-gray-300 text-xs">
+                    <th className="py-1 px-2 text-left whitespace-nowrap">氏名</th>
+                    {/* ⚠ メニュー名は折り返さない。w-20(80px) では「🎯 投げ込み」
+                        「🏃 基礎体力」が2行になっていた */}
+                    <th className="py-1 px-2 text-left whitespace-nowrap">メイン</th>
+                    {/* ⚠ 余白は**最後の列に吸わせる**（`w-full`）。`table w-full` は
+                        余った横幅を各列へ配分するので、途中の列に w-px を付けても縮まない。
+                        これが無いとメイン結果が伸びきってサブ列が右端へ飛び、行が読めなかった */}
+                    <th className="py-1 px-2 text-left whitespace-nowrap">メイン結果</th>
+                    <th className="py-1 px-2 text-left whitespace-nowrap">サブ</th>
+                    <th className="py-1 px-2 text-left w-full">サブ結果</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1141,30 +1315,31 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     const coachComment = getCampCoachComment(result.player, currentRound);
                     return (
                     <tr key={idx} className="border-b border-gray-700/50">
-                      <td className="py-1 px-2">
+                      {/* ⚠ 氏名も折り返さない。最後の列に w-full を付けると他の列が
+                          最小幅まで押し込まれ、`w-20` では名前が1文字ずつ縦に割れる */}
+                      <td className="py-1 px-2 align-top whitespace-nowrap">
                         <span className={`font-bold ${isPitcher(result.player) ? 'text-red-400' : 'text-blue-300'}`}>
                           {result.player.name}
                         </span>
                         {coachComment && (
-                          <div className={`text-[9px] ${coachComment.color}`}>📋{coachComment.text}</div>
+                          <div className={`text-xs ${coachComment.color}`}>📋{coachComment.text}</div>
                         )}
                       </td>
-                      <td className="py-1 px-2 text-gray-500 text-[10px]">
+                      <td className="py-1 px-2 text-gray-300 text-xs whitespace-nowrap align-top">
                         {TRAINING_MENUS[result.trainingType]?.icon} {TRAINING_MENUS[result.trainingType]?.name}
                       </td>
-                      <td className="py-1 px-2">
-                        <div className="flex flex-wrap gap-0.5">
+                      <td className="py-1 px-2 align-top">
+                        <div className="flex gap-0.5 whitespace-nowrap">
                           {result.growthReport.map((growth, gIdx) => (
                             <span
                               key={gIdx}
-                              className={`px-1.5 py-0 rounded text-[10px] leading-relaxed ${
+                              className={`px-1.5 py-0 rounded text-xs leading-relaxed ${
                                 growth.isPenalty
                                   ? 'bg-red-700/80 text-red-100'
                                   : growth.isAwakening
                                   ? 'bg-yellow-500 text-black font-bold'
                                   : growth.growth > 0
-                                    ? 'bg-green-700/80 text-green-100'
-                                    : 'bg-gray-600/50 text-gray-400'
+                                    ? 'seg-on' : 'seg'
                               }`}
                             >
                               {growth.statName}: {growth.before}→{growth.after}
@@ -1175,28 +1350,27 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           ))}
                           {result.growthReport.length === 0 && (
-                            <span className="text-gray-500 text-[10px]">変化なし</span>
+                            <span className="text-gray-400 text-xs">変化なし</span>
                           )}
                         </div>
                       </td>
-                      <td className="py-1 px-2 text-gray-500 text-[10px]">
+                      <td className="py-1 px-2 text-gray-300 text-xs whitespace-nowrap align-top">
                         {result.subTrainingType && SUB_TRAINING_MENUS[result.subTrainingType] && (
                           <>{SUB_TRAINING_MENUS[result.subTrainingType].icon} {SUB_TRAINING_MENUS[result.subTrainingType].name}</>
                         )}
                       </td>
-                      <td className="py-1 px-2">
-                        <div className="flex flex-wrap gap-0.5">
+                      <td className="py-1 px-2 align-top">
+                        <div className="flex gap-0.5 whitespace-nowrap">
                           {(result.subGrowthReport || []).map((growth, gIdx) => (
                             <span
                               key={gIdx}
-                              className={`px-1.5 py-0 rounded text-[10px] leading-relaxed ${
+                              className={`px-1.5 py-0 rounded text-xs leading-relaxed ${
                                 growth.isAwakening
                                   ? 'bg-yellow-500 text-black font-bold'
                                   : growth.growth > 0
                                     ? 'bg-teal-700/80 text-teal-100'
                                     : growth.growth < 0
-                                      ? 'bg-red-700/80 text-red-100'
-                                      : 'bg-gray-600/50 text-gray-400'
+                                      ? 'seg-on' : 'seg'
                               }`}
                             >
                               {growth.statName}: {growth.before}→{growth.after}
@@ -1206,7 +1380,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           ))}
                           {(!result.subGrowthReport || result.subGrowthReport.length === 0) && (
-                            <span className="text-gray-500 text-[10px]">変化なし</span>
+                            <span className="text-gray-400 text-xs">変化なし</span>
                           )}
                         </div>
                       </td>
@@ -1221,7 +1395,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               {currentRound < MAX_CAMP_ROUNDS ? (
                 <button
                   onClick={handleNextRound}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                  className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
                 >
                   次のクールへ（第{currentRound + 1}クール）
                 </button>
@@ -1229,7 +1403,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 <>
                 <button
                   onClick={() => setShowCampReview(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                  className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
                 >
                   キャンプ終了 → 成長確認
                 </button>
@@ -1264,7 +1438,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   };
                   return (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowCampReview(false)}>
-                      <div className="bg-gray-800 rounded-xl border border-gray-600 max-w-md w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                      <div className="bg-surface-2 rounded-xl border border-gray-600 max-w-md w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-white font-bold text-lg mb-3">キャンプ終了確認</h3>
                         <div className="bg-gray-900/60 rounded-lg p-3 mb-3 space-y-2 text-sm">
                           <div className="flex justify-between text-gray-300">
@@ -1282,12 +1456,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </div>
                           )}
                         </div>
-                        <p className="text-gray-400 text-xs mb-4">キャンプを終了して成長結果を確認します。この操作は取り消せません。</p>
+                        <p className="text-gray-300 text-xs mb-4">キャンプを終了して成長結果を確認します。この操作は取り消せません。</p>
                         <div className="flex gap-3 justify-end">
                           <button onClick={() => setShowCampReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
                             戻る
                           </button>
-                          <button onClick={finalizeCamp} className="bg-green-600 hover:bg-green-500 text-white px-5 py-1.5 rounded font-bold text-sm transition">
+                          <button onClick={finalizeCamp} className="btn-primary px-5 py-1.5 rounded text-sm transition">
                             キャンプ終了
                           </button>
                         </div>
@@ -1303,7 +1477,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
         {viewMode === 'dispatchResults' && (
           <>
-            <div className="bg-gray-800 rounded-lg overflow-hidden mb-3">
+            <div className="bg-surface-2 rounded-lg overflow-hidden mb-3">
               <div className="px-3 py-2 bg-orange-700/80 border-b border-orange-600">
                 <h2 className="text-sm font-bold text-white">派遣結果報告</h2>
               </div>
@@ -1319,13 +1493,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     <div key={idx} className="bg-gray-700/50 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`font-bold text-sm ${result.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{result.player.name}</span>
-                        <span className="text-gray-400 text-xs">{result.destination}</span>
+                        <span className="text-gray-300 text-xs">{result.destination}</span>
                         <span className={`px-2 py-0.5 rounded text-xs font-bold ${outcomeColor}`}>{outcomeLabel}</span>
                       </div>
                       {result.growthReport.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {result.growthReport.map((g, gIdx) => (
-                            <span key={gIdx} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            <span key={gIdx} className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                               g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
                             }`}>
                               {g.statName}: {g.before}→{g.after} +{g.growth}{g.isAwakening && ' 覚醒!'}
@@ -1333,7 +1507,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           ))}
                         </div>
                       ) : (
-                        <span className="text-gray-500 text-xs">成長なし... 派遣の成果は得られませんでした</span>
+                        <span className="text-gray-400 text-xs">成長なし... 派遣の成果は得られませんでした</span>
                       )}
                     </div>
                   );
@@ -1343,7 +1517,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             <div className="text-center">
               <button
                 onClick={() => setViewMode('summary')}
-                className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
               >
                 成長確認へ
               </button>
@@ -1372,6 +1546,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             { key: 'pitching.stamina', stat: 'stamina', name: 'ス', get: (s) => s.pitching?.stamina || 0, isStamina: true },
             { key: 'physical.bodyStamina', stat: 'bodyStamina', name: '体', get: (s) => s.physical?.bodyStamina || 50 },
             { key: 'physical.recovery', stat: 'recovery', name: '回', get: (s) => s.physical?.recovery || 50 },
+            { key: 'physical.muscle', stat: 'muscle', name: '幹', get: (s) => s.physical?.muscle ?? 50 },
           ];
           const ageReports = seasonData?.ageReports || [];
           const ageReportMap = {};
@@ -1383,19 +1558,19 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           return (
             <>
               <div className="flex items-center justify-between mb-2">
-                <h1 className="text-xl font-bold text-white">{campTitle}成長レポート - {userTeamName}</h1>
+                <h1 className="text-xl font-bold text-ink">{campTitle}成長レポート - {userTeamName}</h1>
               </div>
-              <div className="flex gap-4 text-[10px] mb-1 ml-1">
+              <div className="flex gap-4 text-xs mb-1 ml-1">
                 <span className="text-green-400">■ キャンプ成長</span>
                 <span className="text-cyan-400">■ 自然成長()</span>
                 <span className="text-red-400">■ 衰退</span>
               </div>
-              <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto mb-3">
+              <div className="bg-surface-2 rounded-lg overflow-hidden overflow-x-auto mb-3">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
-                      <th className="py-1.5 px-2 text-left w-20">選手</th>
-                      <th className="py-1.5 px-1 text-center w-7">位</th>
+                    <tr className="bg-gray-700/80 text-gray-300 text-xs">
+                      <th className="py-1.5 px-2 text-left w-20">氏名</th>
+                      <th className="py-1.5 px-1 text-center w-9">ポジ</th>
                       {STAT_DEFS.map(sd => (
                         <th key={sd.key} className="py-1.5 px-1 text-center w-16">{sd.name}</th>
                       ))}
@@ -1431,41 +1606,41 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           </td>
                           <td className="py-1 px-1 text-center">
-                            <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
+                            <span className="text-xs text-gray-400">{POSITION_NAMES[player.position] || player.position}</span>
                           </td>
                           {diffs.map(d => {
                             const bgClass = d.diff >= 5 ? 'bg-yellow-400/15' : d.diff >= 3 ? 'bg-green-400/10' : d.diff < -2 ? 'bg-red-400/10' : '';
                             return (
-                              <td key={d.key} className={`py-1 px-1 text-center font-mono text-[10px] ${bgClass}`}>
+                              <td key={d.key} className={`py-1 px-1 text-center font-mono text-xs ${bgClass}`}>
                                 {d.diff !== 0 ? (
                                   <span>
-                                    <span className={`font-bold text-[11px] ${d.diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    <span className={`font-bold text-xs ${d.diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
                                       {d.diff > 0 ? `+${d.diff}` : d.diff}
                                     </span>
-                                    <span className="text-gray-600 ml-0.5 text-[9px]">{d.after}</span>
+                                    <span className="text-gray-400 ml-0.5 text-xs">{d.after}</span>
                                     {d.naturalDiff !== 0 && (
-                                      <span className={`ml-0.5 text-[9px] ${d.naturalDiff > 0 ? 'text-cyan-400' : 'text-red-300'}`}>
+                                      <span className={`ml-0.5 text-xs ${d.naturalDiff > 0 ? 'text-cyan-400' : 'text-red-300'}`}>
                                         ({d.naturalDiff > 0 ? `+${d.naturalDiff}` : d.naturalDiff})
                                       </span>
                                     )}
                                   </span>
                                 ) : (
-                                  <span className="text-gray-600">-</span>
+                                  <span className="text-gray-400">-</span>
                                 )}
                               </td>
                             );
                           })}
-                          <td className="py-1 px-2 text-[10px]">
+                          <td className="py-1 px-2 text-xs">
                             {newPitches.length > 0 ? (
                               <span className="text-yellow-400 font-bold">
                                 {newPitches.map(t => getPitchTypeName(t)).join(', ')}
                               </span>
                             ) : (
-                              <span className="text-gray-500">-</span>
+                              <span className="text-gray-400">-</span>
                             )}
                           </td>
                           <td className="py-1 px-1 text-center">
-                            <span className={`font-bold text-xs ${totalGrowth >= 10 ? 'text-yellow-400' : totalGrowth >= 5 ? 'text-green-400' : totalGrowth > 0 ? 'text-blue-300' : 'text-gray-500'}`}>
+                            <span className={`font-bold text-xs ${totalGrowth >= 10 ? 'text-yellow-400' : totalGrowth >= 5 ? 'text-green-400' : totalGrowth > 0 ? 'text-blue-300' : 'text-gray-400'}`}>
                               {totalGrowth > 0 ? `+${totalGrowth}` : '-'}
                             </span>
                           </td>
@@ -1478,7 +1653,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <div className="text-center">
                 <button
                   onClick={onComplete}
-                  className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                  className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
                 >
                   {completeLabel}
                 </button>

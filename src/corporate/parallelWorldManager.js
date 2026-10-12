@@ -6,9 +6,10 @@
 import { WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
-import { simulateUniversityLeagueDate, getAllUniversityLeagues } from '../university/universityLeagueManager.js';
+import { simulateUniversityLeagueDate, getAllUniversityLeagues, processSpringPromotionRelegation, regenerateFallSchedules } from '../university/universityLeagueManager.js';
 import { generateUniversityChampionship, generateMeijiJinguTournament, autoPlayUniversityTournament } from '../university/universityTournament.js';
 import { INDEPENDENT_LEAGUES } from './independentLeagueData.js';
+import { recordTeamAchievement } from '../season/achievements.js';
 
 const getScheduleByDateForLeague = (schedule, date) => {
   if (!schedule || !date) return [];
@@ -110,16 +111,7 @@ export const simulateParallelWorldDate = (currentDate) => {
   }
 };
 
-export const getParallelLeagueStandings = (leagueId) => {
-  const league = WORLD_DATA.independentLeagues?.[leagueId];
-  return league?.standings || [];
-};
 
-export const getParallelLeagueResults = (leagueId, limit = 10) => {
-  const league = WORLD_DATA.independentLeagues?.[leagueId];
-  if (!league?.results) return [];
-  return league.results.slice(-limit);
-};
 
 export const getAllParallelLeagues = () => {
   if (!WORLD_DATA.initialized) return [];
@@ -163,7 +155,7 @@ const extractLeagueChampions = (standings, teamOrder, leagueId, leagueDef, fallb
   return results;
 };
 
-export const generateGrandChampionship = (userLeagueId, userStandings, userSettings = null) => {
+export const generateGrandChampionship = (userLeagueId, userStandings, userSettings = null, gameYear = null) => {
   const champions = [];
 
   // ユーザーのリーグ
@@ -223,6 +215,7 @@ export const generateGrandChampionship = (userLeagueId, userStandings, userSetti
     bracket: { size, teamCount: teamNames.length, rounds, champion: null, runnerUp: null },
     generated: true,
     done: false,
+    achievementGameYear: gameYear,
   };
 };
 
@@ -241,28 +234,51 @@ export const autoPlayGrandChampionship = (gc) => {
   for (let r = 0; r < rounds.length; r++) {
     for (let m = 0; m < rounds[r].length; m++) {
       const match = rounds[r][m];
-      if (match.winner || !match.team1 || !match.team2) continue;
+      if (match.winner) continue;              // 既に決着済み
+      if (!match.team1 && !match.team2) continue; // 空カード（対戦相手なし）
 
-      const home = TEAMS_DATA[match.team1];
-      const away = TEAMS_DATA[match.team2];
-      if (home && away) {
-        const result = autoSimulateGame(match.team1, match.team2);
-        match.winner = result.winner;
-        match.score = `${result.homeScore}-${result.awayScore}`;
+      let winner;
+      if (match.team1 && match.team2) {
+        const home = TEAMS_DATA[match.team1];
+        const away = TEAMS_DATA[match.team2];
+        if (home && away) {
+          const result = autoSimulateGame(match.team1, match.team2, true);
+          // トーナメントは決着必須。延長引き分けはタイブレークで決める。
+          // ⚠ 以前は同点のまま上位シード(team1)の勝ちにし、スコアも同点のまま残していた
+          let h = result.homeScore, a = result.awayScore;
+          if (h === a) { if (Math.random() < 0.5) h += 1; else a += 1; }
+          winner = h > a ? match.team1 : match.team2;
+          match.score = `${h}-${a}`;
+        } else {
+          winner = match.team1;
+          match.score = 'W/O';
+        }
       } else {
-        match.winner = match.team1;
-        match.score = 'W/O';
+        // 不戦勝（byeで片方だけ在籍）→ その team が次に進出。
+        // これを処理しないと空きスロットがnullのまま決勝まで伝播し、
+        // champion=null / done=false となりグランドCSが確定しない。
+        winner = match.team1 || match.team2;
+        match.isBye = true;
+        match.score = 'BYE';
       }
 
-      advanceWinner(rounds, r, m, match.winner);
+      match.winner = winner;
+      // 敗者も記録する（年度末のランク計算がブラケットからElo変動を算出するため）
+      if (!match.isBye && match.team1 && match.team2) {
+        match.loser = winner === match.team1 ? match.team2 : match.team1;
+      }
+      advanceWinner(rounds, r, m, winner);
 
       if (r === rounds.length - 1) {
-        gc.bracket.champion = match.winner;
-        gc.bracket.runnerUp = match.winner === match.team1 ? match.team2 : match.team1;
+        gc.bracket.champion = winner;
+        gc.bracket.runnerUp = winner === match.team1 ? match.team2 : match.team1;
         gc.done = true;
+        // 独立リーグ日本一を選手経歴に記録
+        recordTeamAchievement(gc.bracket.champion, { tournament: 'グランドチャンピオンシップ', gameYear: gc.achievementGameYear });
+        if (gc.bracket.runnerUp) recordTeamAchievement(gc.bracket.runnerUp, { tournament: 'グランドチャンピオンシップ', gameYear: gc.achievementGameYear, isRunnerUp: true });
       }
     }
   }
 };
 
-export { getAllUniversityLeagues };
+export { getAllUniversityLeagues, processSpringPromotionRelegation, regenerateFallSchedules };

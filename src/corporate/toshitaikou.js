@@ -8,6 +8,8 @@
 
 import { getTeamsByRegion, getAllTeamsEffective } from './corporateTeamsData.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
+import { TEAMS_DATA } from '../teams-data.js';
+import { recordBracketAchievements } from '../season/achievements.js';
 
 // ============================================================
 // 定数
@@ -37,7 +39,6 @@ export const TOSHITAIKOU_REGION_NAMES = {
 };
 
 const MAX_QUALIFIER_TEAMS = 32;
-const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 const RANK_STRENGTH = { S: 88, A: 73, B: 58, C: 43, D: 30 };
 
 function shuffleArray(arr) {
@@ -246,23 +247,13 @@ export function recordResult(bracket, roundIdx, matchIdx, winnerName, score) {
     else bracket.rounds[roundIdx + 1][nm].team2 = winnerName;
   } else {
     bracket.champion = winnerName;
+    // 全国大会本戦の決着 → 優勝/準優勝を選手経歴に記録
+    recordBracketAchievements(bracket, winnerName, match.loser);
   }
 
   return bracket;
 }
 
-// 次の未消化試合を取得（team1, team2が揃っていてwinnerが未定のもの）
-export function getNextUnplayedMatch(bracket) {
-  for (let r = 0; r < bracket.rounds.length; r++) {
-    for (let m = 0; m < bracket.rounds[r].length; m++) {
-      const match = bracket.rounds[r][m];
-      if (!match.winner && !match.isBye && match.team1 && match.team2) {
-        return { roundIdx: r, matchIdx: m, match };
-      }
-    }
-  }
-  return null;
-}
 
 export function isBracketComplete(bracket) {
   return bracket != null && bracket.champion != null;
@@ -276,13 +267,31 @@ export function simulateQuickMatch(team1Def, team2Def) {
   const t1Name = team1Def.displayName || team1Def.name;
   const t2Name = team2Def.displayName || team2Def.name;
 
-  const result = autoSimulateGame(t1Name, t2Name);
+  // ⚠ **TEAMS_DATA にあるか先に確かめる**。明治神宮大会は27リーグの優勝校が集まるが、
+  // 自リーグ以外の大学は WORLD_DATA 側の簡易シミュレーションでしか存在しない。
+  // 確認せずに呼ぶと autoSimulateGame が毎試合 console.error を出す
+  // （0-0を返してランクベースに落ちるので結果は正しいが、本物の不具合が埋もれる）。
+  const bothExist = !!(TEAMS_DATA?.[t1Name]?.players && TEAMS_DATA?.[t2Name]?.players);
+  const result = bothExist ? autoSimulateGame(t1Name, t2Name, true) : null;
   if (result && (result.homeScore !== undefined) && (result.homeScore + result.awayScore > 0)) {
-    const homeWon = result.homeScore > result.awayScore;
+    let h = result.homeScore, a = result.awayScore;
+    if (h === a) {
+      // トーナメントに引き分けは無い（タイブレークで決着する）。
+      // ⚠ 以前は同点のまま「アウェイの勝ち」になり、決勝が 5-5 で優勝校が決まっていた。
+      //    タイブレークは走者を置いて始めるので得点が入りやすい。勝敗はチームの力の比で決め、
+      //    勝った側に1〜2点を足す（負けた側にも0〜1点）
+      const s1 = RANK_STRENGTH[team1Def.rank] || 50;
+      const s2 = RANK_STRENGTH[team2Def.rank] || 50;
+      const homeWins = Math.random() < s1 / (s1 + s2);
+      const loseAdd = Math.random() < 0.4 ? 1 : 0;
+      const winAdd = loseAdd + 1 + (Math.random() < 0.35 ? 1 : 0);
+      if (homeWins) { h += winAdd; a += loseAdd; } else { a += winAdd; h += loseAdd; }
+    }
+    const homeWon = h > a;
     return {
       winner: homeWon ? t1Name : t2Name,
       loser: homeWon ? t2Name : t1Name,
-      score: [result.homeScore, result.awayScore],
+      score: [h, a],
     };
   }
 
@@ -535,6 +544,7 @@ export function createMainTournament(qualifiedByRegion, defendingChampionName, c
     seededTop.forEach((t, i) => { appliedSeeds[t.name] = i + 1; });
     bracket.seeds = appliedSeeds;
   }
+  if (bracket) { bracket.achievementTournament = '都市対抗野球'; bracket.achievementGameYear = calendarYear - 2023; }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 7, day: 15 }, 3);
 
   return {
@@ -606,17 +616,6 @@ export function assignMainTournamentDates(bracket, startDate, matchesPerDay = 3)
   }
 }
 
-// ブラケットの各ラウンドに日付を割り当て
-// startDate: {year, month, day}, intervalDays: ラウンド間の日数
-export function assignBracketDates(bracket, startDate, intervalDays = 2) {
-  if (!bracket) return;
-  bracket.roundDates = [];
-  let d = new Date(startDate.year, startDate.month - 1, startDate.day);
-  for (let r = 0; r < bracket.rounds.length; r++) {
-    bracket.roundDates.push({ year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
-    d.setDate(d.getDate() + intervalDays);
-  }
-}
 
 // 週末のみの日程割り当て（土日だけに試合を配置）
 export function assignWeekendQualifierDates(bracket, startDate, matchesPerDay = 3) {
@@ -669,28 +668,6 @@ export function assignWeekendQualifierDates(bracket, startDate, matchesPerDay = 
   }
 }
 
-// 予選ブラケットに週末のみ日程を割り当て（勝者側+敗者復活）
-export function assignWeekendQualifier(qualifier, startDate, matchesPerDay = 3) {
-  assignWeekendQualifierDates(qualifier.mainBracket, startDate, matchesPerDay);
-  const mainMD = qualifier.mainBracket.matchDates;
-  let lastDate = null;
-  if (mainMD) {
-    for (let r = mainMD.length - 1; r >= 0; r--) {
-      for (let m = (mainMD[r]?.length || 0) - 1; m >= 0; m--) {
-        if (mainMD[r][m]) { lastDate = mainMD[r][m]; break; }
-      }
-      if (lastDate) break;
-    }
-  }
-  if (!lastDate) lastDate = startDate;
-  // 次の週末を敗者復活の開始日にする
-  const ld = new Date(lastDate.year, lastDate.month - 1, lastDate.day);
-  ld.setDate(ld.getDate() + 1);
-  while (ld.getDay() !== 6 && ld.getDay() !== 0) {
-    ld.setDate(ld.getDate() + 1);
-  }
-  qualifier.losersStartDate = { year: ld.getFullYear(), month: ld.getMonth() + 1, day: ld.getDate() };
-}
 
 // 予選ブラケットに日程を割り当て（勝者側+敗者復活、1日matchesPerDay試合）
 export function assignQualifierDates(qualifier, startDate, matchesPerDay = 3) {
@@ -991,84 +968,28 @@ const CLUB_SENSHUKEN_SLOTS = {
   kyushu: 3,
 };
 
-export function generateNihonSenshuken(options = {}) {
-  const {
-    userTeamName = null,
-    calendarYear = 2024,
-    seeds = null,
-  } = options;
-
+/**
+ * 地区予選（日本選手権 / クラブ選手権）の共通生成。
+ * ⚠ この41行はかつて `generateNihonSenshuken` と `generateClubSenshuken` に
+ *    まるごと2回書かれていた。違いは4つ（枠数の表・チーム種別・シードのキー・
+ *    2チーム未満の扱い）だけ。
+ * ⚠ 2チーム未満の扱いは実際にドリフトしていた。クラブ側は `continue` で飛ばすのに
+ *    企業側は素通りしており、`createBracket` が null を返すので
+ *    **phase が 'main' のまま 'done' にならない予選** が生まれる（自チームがそこに
+ *    居ると `userQualifierDone` が永久に false になり本戦へ進めない）。
+ *    クラブ側の挙動を正として統一してある。実データでは最少の地区でも
+ *    企業3・クラブ3なので現状は発火しないが、戻さないこと。
+ */
+function buildRegionalQualifiers({ slotsMap, teamType, seedsKey, userTeamName, calendarYear, seeds }) {
   const qualifiers = {};
   let userRegionId = null;
 
-  for (const regionId of Object.keys(SENSHUKEN_SLOTS)) {
+  for (const regionId of Object.keys(slotsMap)) {
     const allTeams = getTeamsByRegion(regionId);
-    const corporateTeams = allTeams.filter(t => t.type === 'corporate');
-    const regionSeeds = seeds?.senshukenQualifiers?.[regionId] || null;
-    const { teams, appliedSeeds } = applySeeds(corporateTeams, regionSeeds);
-    const slots = SENSHUKEN_SLOTS[regionId] || 1;
-
-    const teamNames = teams.map(t => t.displayName || t.name);
-    const teamDefsMap = {};
-    teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
-
-    const mainBracket = createBracket(teamNames);
-    if (mainBracket && appliedSeeds) mainBracket.seeds = appliedSeeds;
-
-    const qualifier = {
-      regionId,
-      regionName: TOSHITAIKOU_REGION_NAMES[regionId],
-      slots,
-      teamDefs: teams,
-      teamDefsMap,
-      mainBracket,
-      losersBracket: null,
-      qualifiedTeams: [],
-      phase: 'main',
-    };
-
-    assignQualifierDates(qualifier, { year: calendarYear, month: 9, day: 1 }, 5);
-
-    if (userTeamName && teamDefsMap[userTeamName]) {
-      userRegionId = regionId;
-    }
-
-    qualifiers[regionId] = qualifier;
-  }
-
-  const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';
-
-  return {
-    qualifiers,
-    mainTournament: null,
-    userRegionId,
-    userQualifierDone,
-    champion: null,
-    runnerUp: null,
-    phase: 'qualifiers',
-  };
-}
-
-// ============================================================
-// 全日本クラブ野球選手権大会（9月予選、10月本戦、クラブチームのみ）
-// ============================================================
-
-export function generateClubSenshuken(options = {}) {
-  const {
-    userTeamName = null,
-    calendarYear = 2024,
-    seeds = null,
-  } = options;
-
-  const qualifiers = {};
-  let userRegionId = null;
-
-  for (const regionId of Object.keys(CLUB_SENSHUKEN_SLOTS)) {
-    const allTeams = getTeamsByRegion(regionId);
-    const clubTeams = allTeams.filter(t => t.type === 'club');
-    const regionSeeds = seeds?.clubQualifiers?.[regionId] || null;
-    const { teams, appliedSeeds } = applySeeds(clubTeams, regionSeeds);
-    const slots = CLUB_SENSHUKEN_SLOTS[regionId] || 1;
+    const targetTeams = allTeams.filter(t => t.type === teamType);
+    const regionSeeds = seeds?.[seedsKey]?.[regionId] || null;
+    const { teams, appliedSeeds } = applySeeds(targetTeams, regionSeeds);
+    const slots = slotsMap[regionId] || 1;
 
     if (teams.length < 2) continue;
 
@@ -1113,6 +1034,30 @@ export function generateClubSenshuken(options = {}) {
   };
 }
 
+export function generateNihonSenshuken(options = {}) {
+  const { userTeamName = null, calendarYear = 2024, seeds = null } = options;
+  return buildRegionalQualifiers({
+    slotsMap: SENSHUKEN_SLOTS,
+    teamType: 'corporate',
+    seedsKey: 'senshukenQualifiers',
+    userTeamName, calendarYear, seeds,
+  });
+}
+
+// ============================================================
+// 全日本クラブ野球選手権大会（9月予選、10月本戦、クラブチームのみ）
+// ============================================================
+
+export function generateClubSenshuken(options = {}) {
+  const { userTeamName = null, calendarYear = 2024, seeds = null } = options;
+  return buildRegionalQualifiers({
+    slotsMap: CLUB_SENSHUKEN_SLOTS,
+    teamType: 'club',
+    seedsKey: 'clubQualifiers',
+    userTeamName, calendarYear, seeds,
+  });
+}
+
 export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, teamType = null, seedNames = null) {
   const allQualified = [];
   for (const regionId of Object.keys(qualifiers)) {
@@ -1153,6 +1098,10 @@ export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, t
     const appliedSeeds = {};
     seededTop.forEach((t, i) => { appliedSeeds[t.name] = i + 1; });
     bracket.seeds = appliedSeeds;
+  }
+  if (bracket) {
+    bracket.achievementTournament = teamType === 'club' ? '社会人クラブ選手権' : '社会人野球日本選手権';
+    bracket.achievementGameYear = calendarYear - 2023;
   }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 10, day: 1 }, 3);
 

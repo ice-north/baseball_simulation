@@ -1,13 +1,16 @@
 import React from 'react';
+import { RANK_COLORS, RANK_LABELS } from '../utils/constants.js';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
 import { SEASON_PHASES, createSeasonData } from '../season/seasonManager.js';
 import { REGULATION_PRESETS } from '../season/regulationSettings.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
-import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
+import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, ensureAllTeamsReady } from '../game/lineupGenerator.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
-import { initializeCorporateGame, initializeParallelWorldForIndependent } from '../corporate/corporateInit.js';
+import { initializeCorporateGame, initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { initializeWorld, WORLD_DATA } from '../corporate/worldData.js';
+import { clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
 import { initializeUniversityGame, getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 
 let selectedIndependentLeague = null;
@@ -34,6 +37,7 @@ const GameFlowScreens = ({
   hasSaveData,
   saveSlots,
   loadGame,
+  loadAutosave,
   initializeNewGame,
   setScreenMode,
   setManagementView,
@@ -59,6 +63,10 @@ const GameFlowScreens = ({
       }}
       onEditCorporateNames={() => setGameFlowState('edit_corporate_names')}
       onManual={() => setGameFlowState('manual')}
+      onContinueAutosave={async () => {
+        const result = await loadAutosave();
+        if (!result?.success) alert(result?.error || 'オートセーブのロードに失敗しました');
+      }}
       hasSaveData={hasSaveData}
       saveSlots={saveSlots}
     />;
@@ -83,11 +91,15 @@ const GameFlowScreens = ({
       { key: 'hokkaido', icon: '🐻' },
       { key: 'kansai', icon: '🏯' },
     ];
+    // 開始前の「表紙」なので CorporateSelect / UniversitySelect / SandboxSetup と
+    // 同じ語彙にする（地色のグラデ ＋ max-w-5xl ＋ 見出し text-3xl 中央）。
+    // ⚠ ここだけ ScreenShell（本編の語彙）を使っていて、直後のローディング画面が
+    //    グラデ地色だったため、同じ流れの中で地色が2度変わっていた。
     return (
-      <div className="p-8 bg-gray-900 min-h-screen">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
-          <p className="text-gray-400 text-sm mb-6">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-2 text-center">リーグ選択</h1>
+          <p className="text-gray-300 mb-8 text-center">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {leagueList.map(({ key, icon }) => {
               const leagueDef = INDEPENDENT_LEAGUES[key];
@@ -97,7 +109,7 @@ const GameFlowScreens = ({
                     selectedIndependentLeague = key;
                     setGameFlowState('newgame_team_select');
                   }}
-                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group"
+                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group flex flex-col"
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-3xl">{icon}</span>
@@ -105,14 +117,14 @@ const GameFlowScreens = ({
                       <div className="text-lg font-bold text-white group-hover:text-blue-400 transition">{leagueDef?.name}</div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-2">
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-300 mt-2">
                     <span>{leagueDef?.teams?.length || 4}チーム</span>
                     <span>{leagueDef?.gamesPerSeason || 60}試合</span>
                     <span>{leagueDef?.leagueFormat === 'two' ? '2リーグ制' : '1リーグ制'}</span>
                   </div>
                   <div className="flex flex-wrap gap-1 mt-2">
                     {leagueDef?.teams?.map(t => (
-                      <span key={t.id} className="text-xs text-gray-400 bg-gray-700/50 px-1.5 py-0.5 rounded">{t.abbreviation}</span>
+                      <span key={t.id} className="text-xs text-gray-300 bg-gray-700/60 px-1.5 py-0.5 rounded">{t.abbreviation}</span>
                     ))}
                   </div>
                 </button>
@@ -123,23 +135,23 @@ const GameFlowScreens = ({
                 selectedIndependentLeague = null;
                 setGameFlowState('newgame_regulations');
               }}
-              className="bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-green-500 rounded-xl p-5 text-left transition group"
+              className="bg-surface-2 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-green-500 rounded-xl p-5 text-left transition group flex flex-col"
             >
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-3xl">🛠️</span>
                 <div>
                   <div className="text-lg font-bold text-white group-hover:text-green-400 transition">リーグ作成</div>
-                  <div className="text-xs text-gray-400">チーム数・試合数・ルールを自由に設定</div>
+                  <div className="text-xs text-gray-300">チーム数・試合数・ルールを自由に設定</div>
                 </div>
               </div>
-              <div className="flex gap-3 text-xs text-gray-500 mt-2">
+              <div className="flex gap-3 text-xs text-gray-300 mt-2">
                 <span>カスタム設定</span>
                 <span>全5リーグ平行世界あり</span>
               </div>
             </button>
           </div>
           <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_mode_select')} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
+            <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-surface-2 text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
@@ -150,13 +162,11 @@ const GameFlowScreens = ({
   if (gameFlowState === 'newgame_team_select') {
     const leagueDef = INDEPENDENT_LEAGUES[selectedIndependentLeague];
     const teams = leagueDef?.teams || [];
-    const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
-    const RANK_LABELS = { S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興' };
     return (
-      <div className="p-8 bg-gray-900 min-h-screen">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2">{leagueDef?.name}</h1>
-          <p className="text-gray-400 text-sm mb-6">監督を務めるチームを選んでください</p>
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-2 text-center">{leagueDef?.name}</h1>
+          <p className="text-gray-300 mb-8 text-center">監督を務めるチームを選んでください</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {teams.map((team) => (
               <button key={team.id}
@@ -182,23 +192,25 @@ const GameFlowScreens = ({
                       return t && !t.corporateTeamId && !t.independentLeagueId;
                     });
                     initializeParallelWorldForIndependent(selectedIndependentLeague, teamNames);
+                    // 自リーグを独立リーグの一員としてタグ付け（ランキング/トレード/注目度に含める）
+                    ensureUserIndependentLeagueTagged(regulations.teamNames, selectedIndependentLeague);
                     setGameFlowState('newgame_tryout');
                   }, 50);
                 }}
-                className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-green-500 rounded-xl p-5 text-left transition group"
+                className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-green-500 rounded-xl p-5 text-left transition group flex flex-col"
               >
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-lg font-bold text-white group-hover:text-green-400 transition">{team.name}</div>
-                  <span className={`text-xs font-bold ${RANK_COLORS[team.rank] || 'text-gray-400'}`}>
+                  <span className={`text-xs font-bold ${RANK_COLORS[team.rank] || 'text-gray-300'}`}>
                     {team.rank} ({RANK_LABELS[team.rank] || ''})
                   </span>
                 </div>
-                <div className="text-xs text-gray-500">{team.city}</div>
+                <div className="text-xs text-gray-400">{team.city}</div>
               </button>
             ))}
           </div>
           <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_league_select')} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
+            <button onClick={() => setGameFlowState('newgame_league_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-surface-2 text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
@@ -242,18 +254,9 @@ const GameFlowScreens = ({
           if (isClubTeam) {
             // クラブチームはキャンプなし → 直接シーズンへ
             initializeAllPlayersCondition();
-            Object.keys(TEAMS_DATA).forEach(teamName => {
-              const teamData = TEAMS_DATA[teamName];
-              if (teamData && teamData.players && teamData.players.length > 0) {
-                if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-                  generatePitchingRotation(teamName);
-                }
-                if (teamName === result.userTeamName) {
-                  setRecommendedLineup(teamData, teamName);
-                } else {
-                  generateAILineup(teamData, teamName);
-                }
-              }
+            ensureAllTeamsReady({
+              userTeamName: result.userTeamName,
+              generatePitchingRotation, setRecommendedLineup, generateAILineup,
             });
             const calYear = 2024;
             const rt = generateRegionalTournament({ userTeamName: result.userTeamName, calendarYear: calYear, seeds: null });
@@ -262,7 +265,7 @@ const GameFlowScreens = ({
             newSeasonData.regionalTournament = { ...rt, generated: true };
             setSeasonData(newSeasonData);
             setSelectedMonth(4);
-            setManagementView('dateprogress');
+            setManagementView('jersey');
             setScreenMode('management');
             setGameFlowState('season');
           } else {
@@ -281,7 +284,7 @@ const GameFlowScreens = ({
         <div className="text-center">
           <div className="text-4xl mb-4">⚾</div>
           <div className="text-white text-xl font-bold mb-2">全チームを初期化中...</div>
-          <div className="text-gray-400 text-sm">179チームの選手を生成しています</div>
+          <div className="text-gray-300 text-sm">179チームの選手を生成しています</div>
           <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
           </div>
@@ -297,18 +300,9 @@ const GameFlowScreens = ({
       allTeams={allTeams}
       onComplete={() => {
         initializeAllPlayersCondition();
-        Object.keys(TEAMS_DATA).forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players && teamData.players.length > 0) {
-            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-              generatePitchingRotation(teamName);
-            }
-            if (teamName === userTeamName) {
-              setRecommendedLineup(teamData, teamName);
-            } else {
-              generateAILineup(teamData, teamName);
-            }
-          }
+        ensureAllTeamsReady({
+          userTeamName: userTeamName,
+          generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;
@@ -322,7 +316,7 @@ const GameFlowScreens = ({
           regionalTournament: { ...rt, generated: true },
         }));
         setSelectedMonth(4);
-        setManagementView('dateprogress');
+        setManagementView('jersey');
         setScreenMode('management');
         setGameFlowState('season');
       }}
@@ -375,7 +369,7 @@ const GameFlowScreens = ({
         <div className="text-center">
           <div className="text-4xl mb-4">🎓</div>
           <div className="text-white text-xl font-bold mb-2">大学野球の世界を構築中...</div>
-          <div className="text-gray-400 text-sm">リーグチームと並行世界を生成しています</div>
+          <div className="text-gray-300 text-sm">リーグチームと並行世界を生成しています</div>
           <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
             <div className="h-full bg-amber-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
           </div>
@@ -391,18 +385,9 @@ const GameFlowScreens = ({
       allTeams={allTeams}
       onComplete={() => {
         initializeAllPlayersCondition();
-        Object.keys(TEAMS_DATA).forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players && teamData.players.length > 0) {
-            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-              generatePitchingRotation(teamName);
-            }
-            if (teamName === userTeamName) {
-              setRecommendedLineup(teamData, teamName);
-            } else {
-              generateAILineup(teamData, teamName);
-            }
-          }
+        ensureAllTeamsReady({
+          userTeamName: userTeamName,
+          generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;
@@ -412,7 +397,7 @@ const GameFlowScreens = ({
           phase: SEASON_PHASES.REGULAR_SEASON,
         }));
         setSelectedMonth(4);
-        setManagementView('dateprogress');
+        setManagementView('jersey');
         setScreenMode('management');
         setGameFlowState('season');
       }}
@@ -444,6 +429,7 @@ const GameFlowScreens = ({
             return team && !team.corporateTeamId && !team.independentLeagueId;
           });
           initializeParallelWorldForIndependent(presetKey || '__custom__', teamNames);
+          ensureUserIndependentLeagueTagged(regulations.teamNames, presetKey || '__custom__');
           setGameFlowState('newgame_tryout');
         }, 50);
       }}
@@ -457,7 +443,7 @@ const GameFlowScreens = ({
         <div className="text-center">
           <div className="text-4xl mb-4">⚾</div>
           <div className="text-white text-xl font-bold mb-2">平行世界を初期化中...</div>
-          <div className="text-gray-400 text-sm">社会人チーム179チーム＋独立リーグの選手を生成しています</div>
+          <div className="text-gray-300 text-sm">社会人チーム179チーム＋独立リーグの選手を生成しています</div>
           <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
             <div className="h-full bg-green-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
           </div>
@@ -486,18 +472,9 @@ const GameFlowScreens = ({
       allTeams={allTeams}
       onComplete={() => {
         initializeAllPlayersCondition();
-        Object.keys(TEAMS_DATA).forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players && teamData.players.length > 0) {
-            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-              generatePitchingRotation(teamName);
-            }
-            if (teamName === userTeamName) {
-              setRecommendedLineup(teamData, teamName);
-            } else {
-              generateAILineup(teamData, teamName);
-            }
-          }
+        ensureAllTeamsReady({
+          userTeamName: userTeamName,
+          generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;
@@ -507,7 +484,7 @@ const GameFlowScreens = ({
           phase: SEASON_PHASES.REGULAR_SEASON
         }));
         setSelectedMonth(4);
-        setManagementView('dateprogress');
+        setManagementView('jersey');
         setScreenMode('management');
         setGameFlowState('season');
       }}
@@ -518,6 +495,12 @@ const GameFlowScreens = ({
   if (gameFlowState === 'sandbox_regulations') {
     return <NewGameRegulationsScreen
       onComplete={(regulations) => {
+        // ⚠ 箱庭は背景の世界を持たないが、前のゲームの WORLD_DATA・プールは消すこと
+        //    （以前は何も戻さず、前のゲームの大会・監督履歴・高校生が残っていた）
+        initializeWorld('sandbox');
+        WORLD_DATA.initialized = false;
+        clearUniversityPool();
+        clearHighSchoolPool();
         initializeNewGame(regulations);
         setGameFlowState('sandbox_setup');
       }}
@@ -533,18 +516,9 @@ const GameFlowScreens = ({
       generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
       onComplete={() => {
         initializeAllPlayersCondition();
-        Object.keys(TEAMS_DATA).forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players && teamData.players.length > 0) {
-            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-              generatePitchingRotation(teamName);
-            }
-            if (teamName === userTeamName) {
-              setRecommendedLineup(teamData, teamName);
-            } else {
-              generateAILineup(teamData, teamName);
-            }
-          }
+        ensureAllTeamsReady({
+          userTeamName: userTeamName,
+          generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;
@@ -554,7 +528,7 @@ const GameFlowScreens = ({
           phase: SEASON_PHASES.REGULAR_SEASON
         }));
         setSelectedMonth(4);
-        setManagementView('dateprogress');
+        setManagementView('jersey');
         setScreenMode('management');
         setGameFlowState('season');
       }}

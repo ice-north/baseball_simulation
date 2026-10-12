@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations, releasedPlayersPool } from '../teams-data.js';
+import { addToReleasedPool } from '../state/pools.js';
 import { SEASON_PHASES } from '../season/seasonManager.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
-import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
-import { processNPBDraft, processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, ensureAllTeamsReady } from '../game/lineupGenerator.js';
+import { processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { processNPBDraft } from '../season/npbDraft.js';
 import { generateExpansionRoster } from '../season/tryoutSystem.js';
+import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 
 import ScheduleScreen from './ScheduleScreen.jsx';
@@ -22,6 +25,7 @@ import OffSeasonScreen from './OffSeasonScreen.jsx';
 import RegulationsScreen from './RegulationsScreen.jsx';
 import SandboxSetupScreen from './SandboxSetupScreen.jsx';
 import CampScreen from './CampScreen.jsx';
+import JerseyNumberScreen from './JerseyNumberScreen.jsx';
 import PlayerStatsScreen from './PlayerStatsScreen.jsx';
 import HallOfFameScreen from './HallOfFameScreen.jsx';
 import SaveLoadScreen from './SaveLoadScreen.jsx';
@@ -36,6 +40,99 @@ import BudgetSettlementScreen from './BudgetSettlementScreen.jsx';
 import UniversityScoutScreen from './UniversityScoutScreen.jsx';
 import PlayerSearchScreen from './PlayerSearchScreen.jsx';
 import TeamRankingScreen from './TeamRankingScreen.jsx';
+
+// ============================================================
+// 翌年のレギュレーション確定（新規参入・解散・日程の作り直し）
+//
+// ⚠ **通常(`regulations_next`)と箱庭(`sandbox_next_regulations`)の2箇所で
+//    79行を丸ごとコピペしていた**（違いは最後の遷移先だけ）。CLAUDE.md にも
+//    「呼び出し側は ManagementScreen の2箇所。片方だけ直さないこと」という
+//    ⚠ を置いて運用で回避していたが、関数にすれば⚠ごと要らなくなる。
+// ============================================================
+function applyNextSeasonRegulations({
+  confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
+  setManagementView, nextView,
+}) {
+  const settings = confirmedSettings || seasonData.settings || {};
+  const calendarYear = 2024 + seasonData.year - 1;
+
+  // 新チーム検出: settings.teamNamesにあるがTEAMS_DATAに存在しないチーム
+  const configuredTeams = settings.teamNames || [];
+  const existingTeams = new Set(Object.keys(TEAMS_DATA));
+  const newTeamNames = configuredTeams.filter(t => !existingTeams.has(t));
+
+  if (newTeamNames.length > 0) {
+    const abbrs = settings.teamAbbreviations || [];
+    // ⚠ **リーグの格を渡すこと**。渡さないと新チームだけAリーグ相当の選手で
+    //    埋まる（Cリーグなら スタメン野手のミ+パ が 64 対 103）。格の算出は
+    //    TryoutScreen と同じ `getLeagueRankFromTeams` を使う（表を二重に作らない）。
+    const expansionRank = getLeagueRankFromTeams(configuredTeams.filter(t => existingTeams.has(t)));
+    newTeamNames.forEach(teamName => {
+      const idx = configuredTeams.indexOf(teamName);
+      const abbr = abbrs[idx] || teamName.slice(0, 3);
+      TEAMS_DATA[teamName] = {
+        name: teamName,
+        abbreviation: abbr,
+        players: generateExpansionRoster(seasonData.year || 1, 24, expansionRank),
+        pitchingRotation: null
+      };
+      generatePitchingRotation(teamName);
+    });
+  }
+
+  // 解散チーム検出: 「前年の自リーグ所属」だが今年の設定に居ないチームのみ。
+  // ※ TEAMS_DATA全体を対象にすると、並行世界（他の独立リーグ・社会人・大学）まで
+  //   まとめて削除してしまい、翌年トレード相手やランキングから消える不具合になる。
+  const configuredSet = new Set(configuredTeams);
+  const prevLeagueTeams = seasonData.settings?.teamNames || [];
+  const dissolvedTeamNames = prevLeagueTeams.filter(t => configuredTeams.length > 0 && !configuredSet.has(t) && TEAMS_DATA[t]);
+  let dissolvedPlayerCount = 0;
+
+  if (dissolvedTeamNames.length > 0) {
+    dissolvedTeamNames.forEach(teamName => {
+      const teamData = TEAMS_DATA[teamName];
+      if (teamData && teamData.players) {
+        teamData.players.forEach(player => {
+          addToReleasedPool({
+            ...JSON.parse(JSON.stringify(player)),
+            formerTeam: teamName,
+            attemptsInPool: 0
+          });
+          dissolvedPlayerCount++;
+        });
+      }
+      delete TEAMS_DATA[teamName];
+    });
+  }
+
+  const teams = configuredTeams.length > 0 ? configuredTeams : Object.keys(TEAMS_DATA);
+  const schedule = generateFullSeasonSchedule({
+    teams,
+    gamesPerSeason: settings.gamesPerSeason || 60,
+    startDate: { year: calendarYear, month: 3, day: 1 },
+    endDate: { year: calendarYear, month: 9, day: 30 },
+    leagueFormat: settings.leagueFormat || 'single',
+    leagueNames: settings.leagueNames
+  });
+  setSeasonData(prev => ({
+    ...prev,
+    currentDate: { year: calendarYear, month: 1, day: 1 },
+    schedule,
+    standings: teams.map(t => ({
+      team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
+    }))
+  }));
+  const alerts = [];
+  if (newTeamNames.length > 0) {
+    alerts.push(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
+  }
+  if (dissolvedTeamNames.length > 0) {
+    alerts.push(`${dissolvedTeamNames.join('、')}が解散しました。所属${dissolvedPlayerCount}名の選手はフリーエージェントプールに移動し、次回トライアウトに参加します`);
+  }
+  if (alerts.length > 0) {
+    alert(alerts.join('\n\n'));
+  }
+}
 
 const ManagementScreen = ({
   managementView,
@@ -53,6 +150,8 @@ const ManagementScreen = ({
   userTeamName,
   allTeams,
   gameMode,
+  setGameMode,
+  setLeagueConfig,
   hallOfFamePlayers,
   setHallOfFamePlayers,
   teamHistory,
@@ -62,6 +161,7 @@ const ManagementScreen = ({
   saveSlots,
   saveGame,
   loadGame,
+  loadAutosave,
   deleteSave,
   refreshSaveSlots,
   setupManagedGame,
@@ -88,6 +188,7 @@ const ManagementScreen = ({
     onProgressToNextGame={handleProgressToNextGame}
     onProgressToNextPhase={handleProgressToNextPhase}
     onStartGame={() => setScreenMode('game')}
+    onGoToDateProgress={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'tryout') return <TryoutScreen
     seasonData={seasonData}
@@ -204,6 +305,7 @@ const ManagementScreen = ({
   if (managementView === 'teaminfo') return <TeamInfoScreen gameMode={gameMode} />;
   if (managementView === 'trade') return <TradeScreen
     userTeamName={userTeamName}
+    seasonData={seasonData}
     onBack={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'dateprogress') return <DateProgressScreen
@@ -215,7 +317,7 @@ const ManagementScreen = ({
       if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement' || eventType === 'university_scout')) {
         const update = {};
         if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
-        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         if (Object.keys(update).length > 0) setSeasonData(prev => ({ ...prev, ...update }));
         setManagementView('offseason');
         return;
@@ -225,13 +327,14 @@ const ManagementScreen = ({
       else if (eventType === 'corporate_scout') setManagementView('corporate_scout');
       else if (eventType === 'club_recruit') setManagementView('club_recruit');
       else if (eventType === 'university_scout') setManagementView('university_scout');
+      else if (eventType === 'summer_camp') setManagementView('summer_camp');
       else if (eventType === 'budget_settlement') setManagementView('budget_settlement');
       else if (eventType === 'tryout') setManagementView('tryout');
       else if (eventType === 'draft') {
         // プロ指名で選手が消える前にランキング・表彰を確定する
         const preUpdate = {};
         if (!seasonData.frozenAwards) preUpdate.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
-        if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         if (Object.keys(preUpdate).length > 0) setSeasonData(prev => ({ ...prev, ...preUpdate }));
         const results = processNPBDraft(TEAMS_DATA, seasonData.year);
         setDraftResults(results);
@@ -283,7 +386,7 @@ const ManagementScreen = ({
       else if (eventType === 'offseason') {
         const update = {};
         if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
-        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         if (Object.keys(update).length > 0) setSeasonData(prev => ({ ...prev, ...update }));
         setManagementView('offseason');
       }
@@ -293,6 +396,10 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     gameMode={gameMode}
+    setGameMode={setGameMode}
+    setLeagueConfig={setLeagueConfig}
+    setSelectedMonth={setSelectedMonth}
+    userTeamName={userTeamName}
     onSave={async (slotIndex) => { await saveGame(slotIndex); }}
     saveSlots={saveSlots}
     onStartNextSeason={() => {
@@ -302,21 +409,10 @@ const ManagementScreen = ({
         if (seasonData?.settings?.clubMode) {
           // クラブチームはキャンプなし → 直接シーズンへ
           initializeAllPlayersCondition();
-          Object.keys(TEAMS_DATA).forEach(teamName => {
-            const teamData = TEAMS_DATA[teamName];
-            if (teamData && teamData.players && teamData.players.length > 0) {
-              if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-                generatePitchingRotation(teamName);
-              }
-              if (teamName === userTeamName) {
-                if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
-                  setRecommendedLineup(teamData, teamName);
-                }
-              } else {
-                generateAILineup(teamData, teamName);
-              }
-            }
-          });
+          ensureAllTeamsReady({
+      userTeamName, generatePitchingRotation, setRecommendedLineup, generateAILineup,
+      preserveUserLineup: true,
+    });
           snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
           const calYear = 2024 + (seasonData?.year || 1) - 1;
           const rtSeeds = seasonData?.tournamentSeeds || null;
@@ -347,77 +443,10 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     onConfirm={(confirmedSettings) => {
-      const settings = confirmedSettings || seasonData.settings || {};
-      const calendarYear = 2024 + seasonData.year - 1;
-      const configuredTeams = settings.teamNames || [];
-
-      // 新チーム追加
-      const existingTeams = new Set(Object.keys(TEAMS_DATA));
-      const newTeamNames = configuredTeams.filter(t => !existingTeams.has(t));
-      if (newTeamNames.length > 0) {
-        const abbrs = settings.teamAbbreviations || [];
-        newTeamNames.forEach(teamName => {
-          const idx = configuredTeams.indexOf(teamName);
-          const abbr = abbrs[idx] || teamName.slice(0, 3);
-          TEAMS_DATA[teamName] = {
-            name: teamName,
-            abbreviation: abbr,
-            players: generateExpansionRoster(seasonData.year || 1, 24),
-            pitchingRotation: null
-          };
-          generatePitchingRotation(teamName);
-        });
-      }
-
-      // 解散チーム処理
-      const configuredSet = new Set(configuredTeams);
-      const dissolvedTeamNames = Object.keys(TEAMS_DATA).filter(t => configuredTeams.length > 0 && !configuredSet.has(t));
-      let dissolvedPlayerCount = 0;
-      if (dissolvedTeamNames.length > 0) {
-        dissolvedTeamNames.forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players) {
-            teamData.players.forEach(player => {
-              releasedPlayersPool.push({
-                ...JSON.parse(JSON.stringify(player)),
-                formerTeam: teamName,
-                attemptsInPool: 0
-              });
-              dissolvedPlayerCount++;
-            });
-          }
-          delete TEAMS_DATA[teamName];
-        });
-      }
-
-      const teams = configuredTeams.length > 0 ? configuredTeams : Object.keys(TEAMS_DATA);
-      const schedule = generateFullSeasonSchedule({
-        teams,
-        gamesPerSeason: settings.gamesPerSeason || 60,
-        startDate: { year: calendarYear, month: 3, day: 1 },
-        endDate: { year: calendarYear, month: 9, day: 30 },
-        leagueFormat: settings.leagueFormat || 'single',
-        leagueNames: settings.leagueNames
+      applyNextSeasonRegulations({
+        confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
+        setManagementView, nextView: 'sandbox_setup',
       });
-      setSeasonData(prev => ({
-        ...prev,
-        currentDate: { year: calendarYear, month: 1, day: 1 },
-        schedule,
-        standings: teams.map(t => ({
-          team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
-        }))
-      }));
-      const alerts = [];
-      if (newTeamNames.length > 0) {
-        alerts.push(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
-      }
-      if (dissolvedTeamNames.length > 0) {
-        alerts.push(`${dissolvedTeamNames.join('、')}が解散しました。所属${dissolvedPlayerCount}名の選手はフリーエージェントプールに移動し、次回トライアウトに参加します`);
-      }
-      if (alerts.length > 0) {
-        alert(alerts.join('\n\n'));
-      }
-      setManagementView('sandbox_setup');
     }}
   />;
   if (managementView === 'sandbox_setup') return <SandboxSetupScreen
@@ -427,21 +456,10 @@ const ManagementScreen = ({
     generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
     onComplete={() => {
       initializeAllPlayersCondition();
-      Object.keys(TEAMS_DATA).forEach(teamName => {
-        const teamData = TEAMS_DATA[teamName];
-        if (teamData && teamData.players && teamData.players.length > 0) {
-          if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-            generatePitchingRotation(teamName);
-          }
-          if (teamName === userTeamName) {
-            if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
-              setRecommendedLineup(teamData, teamName);
-            }
-          } else {
-            generateAILineup(teamData, teamName);
-          }
-        }
-      });
+      ensureAllTeamsReady({
+      userTeamName, generatePitchingRotation, setRecommendedLineup, generateAILineup,
+      preserveUserLineup: true,
+    });
       snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
       setSeasonData(prev => {
         const calYear = 2024 + prev.year - 1;
@@ -459,79 +477,10 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     onConfirm={(confirmedSettings) => {
-      const settings = confirmedSettings || seasonData.settings || {};
-      const calendarYear = 2024 + seasonData.year - 1;
-
-      // 新チーム検出: settings.teamNamesにあるがTEAMS_DATAに存在しないチーム
-      const configuredTeams = settings.teamNames || [];
-      const existingTeams = new Set(Object.keys(TEAMS_DATA));
-      const newTeamNames = configuredTeams.filter(t => !existingTeams.has(t));
-
-      if (newTeamNames.length > 0) {
-        const abbrs = settings.teamAbbreviations || [];
-        newTeamNames.forEach(teamName => {
-          const idx = configuredTeams.indexOf(teamName);
-          const abbr = abbrs[idx] || teamName.slice(0, 3);
-          TEAMS_DATA[teamName] = {
-            name: teamName,
-            abbreviation: abbr,
-            players: generateExpansionRoster(seasonData.year || 1, 24),
-            pitchingRotation: null
-          };
-          generatePitchingRotation(teamName);
-        });
-      }
-
-      // 解散チーム検出: TEAMS_DATAにあるがsettings.teamNamesに存在しないチーム
-      const configuredSet = new Set(configuredTeams);
-      const dissolvedTeamNames = Object.keys(TEAMS_DATA).filter(t => configuredTeams.length > 0 && !configuredSet.has(t));
-      let dissolvedPlayerCount = 0;
-
-      if (dissolvedTeamNames.length > 0) {
-        dissolvedTeamNames.forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          if (teamData && teamData.players) {
-            teamData.players.forEach(player => {
-              releasedPlayersPool.push({
-                ...JSON.parse(JSON.stringify(player)),
-                formerTeam: teamName,
-                attemptsInPool: 0
-              });
-              dissolvedPlayerCount++;
-            });
-          }
-          delete TEAMS_DATA[teamName];
-        });
-      }
-
-      const teams = configuredTeams.length > 0 ? configuredTeams : Object.keys(TEAMS_DATA);
-      const schedule = generateFullSeasonSchedule({
-        teams,
-        gamesPerSeason: settings.gamesPerSeason || 60,
-        startDate: { year: calendarYear, month: 3, day: 1 },
-        endDate: { year: calendarYear, month: 9, day: 30 },
-        leagueFormat: settings.leagueFormat || 'single',
-        leagueNames: settings.leagueNames
+      applyNextSeasonRegulations({
+        confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
+        setManagementView, nextView: 'camp',
       });
-      setSeasonData(prev => ({
-        ...prev,
-        currentDate: { year: calendarYear, month: 1, day: 1 },
-        schedule,
-        standings: teams.map(t => ({
-          team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
-        }))
-      }));
-      const alerts = [];
-      if (newTeamNames.length > 0) {
-        alerts.push(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
-      }
-      if (dissolvedTeamNames.length > 0) {
-        alerts.push(`${dissolvedTeamNames.join('、')}が解散しました。所属${dissolvedPlayerCount}名の選手はフリーエージェントプールに移動し、次回トライアウトに参加します`);
-      }
-      if (alerts.length > 0) {
-        alert(alerts.join('\n\n'));
-      }
-      setManagementView('camp');
     }}
   />;
   if (managementView === 'summer_camp') return <CampScreen
@@ -551,21 +500,10 @@ const ManagementScreen = ({
     allTeams={allTeams}
     gameMode={gameMode}
     onComplete={() => {
-      Object.keys(TEAMS_DATA).forEach(teamName => {
-        const teamData = TEAMS_DATA[teamName];
-        if (teamData && teamData.players && teamData.players.length > 0) {
-          if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
-            generatePitchingRotation(teamName);
-          }
-          if (teamName === userTeamName) {
-            if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
-              setRecommendedLineup(teamData, teamName);
-            }
-          } else {
-            generateAILineup(teamData, teamName);
-          }
-        }
-      });
+      ensureAllTeamsReady({
+      userTeamName, generatePitchingRotation, setRecommendedLineup, generateAILineup,
+      preserveUserLineup: true,
+    });
       snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
       setSeasonData(prev => {
         const calYear = 2024 + prev.year - 1;
@@ -576,8 +514,13 @@ const ManagementScreen = ({
         };
       });
       setSelectedMonth(4);
-      setManagementView('dateprogress');
+      setManagementView('jersey'); // シーズン開始直前に背番号設定
     }}
+  />;
+  if (managementView === 'jersey') return <JerseyNumberScreen
+    userTeamName={userTeamName}
+    seasonData={seasonData}
+    onComplete={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'stats') return <PlayerStatsScreen
     seasonData={seasonData}
@@ -588,6 +531,7 @@ const ManagementScreen = ({
   if (managementView === 'team_ranking') return <TeamRankingScreen
     userTeamName={userTeamName}
     gameMode={gameMode}
+    seasonData={seasonData}
     onBack={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'halloffame') return <HallOfFameScreen
@@ -600,9 +544,11 @@ const ManagementScreen = ({
   if (managementView === 'save') return <SaveLoadScreen
     onSave={saveGame}
     onLoad={loadGame}
+    onLoadAutosave={loadAutosave}
     onDelete={deleteSave}
     saveSlots={saveSlots}
     seasonData={seasonData}
+    onSlotsChanged={refreshSaveSlots}
     onReturnToTitle={() => {
       setScreenMode('start');
       setGameFlowState('title');

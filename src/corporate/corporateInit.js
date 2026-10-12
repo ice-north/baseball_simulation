@@ -23,6 +23,7 @@
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
+import { taperLow, RANK_ORDER, RANK_DESC } from '../utils/constants.js';
 import { generateStaff, STAFF_GRADE_CAP } from './staffData.js';
 import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
@@ -32,8 +33,9 @@ import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
-import { seedInitialUniversityClasses, warmUpPlayerPipeline } from '../season/universityPool.js';
+import { seedInitialUniversityClasses, warmUpPlayerPipeline, universityPool, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
 import { assignInitialUniversityBackgrounds } from '../university/universityPipeSystem.js';
+import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 
 // ============================================================
 // ランク別チーム構成
@@ -155,18 +157,24 @@ const RANK_VELOCITY_FLOOR = { S: 128, A: 125, B: 120, C: 112, D: 105 };
 const RANK_VELOCITY_REDUCTION = { S: 0, A: -3, B: -5, C: -8, D: -15 };
 
 // ランク別の投手制球追加補正（teamOffsetだけでは不十分なので投手専用補正）
-const RANK_CONTROL_OFFSET = { S: 8, A: 5, B: 0, C: -5, D: -15 };
+const RANK_CONTROL_OFFSET = { S: 4, A: 2, B: 0, C: -5, D: -15 };
 
 // ランク別の制球キャップ（社会人野球はプロ未満）
 // 通常選手の上限。スター/プロ注目は+8まで許容
-const RANK_CONTROL_CAP = { S: 78, A: 72, B: 65, C: 55, D: 45 };
+// ⚠ S/A を下げてある（旧 78/72）。社会人Sの制球の中央値が 67 と NPB基準（60）を超えていたため
+const RANK_CONTROL_CAP = { S: 70, A: 66, B: 62, C: 55, D: 45 };
 
 // ランク別の変化球レベル倍率（Dランクはアマチュアレベル）
 const RANK_ARSENAL_MULT = { S: 1.1, A: 1.0, B: 0.85, C: 0.65, D: 0.45 };
 
 // ランク別の打撃能力キャップ（初期生成時）
 // 成長してピークでS級ならOKだが、初期生成で85超は非現実的
-const RANK_BATTING_CAP = { S: 72, A: 66, B: 60, C: 52, D: 45 };
+// ⚠ **打撃はアマの水準に抑える**（`growthSystem` の `AMA_BAT` と同じ理由）。
+//    旧値 S72/A66 と倍率そのままでは、社会人Sのスタメン野手の中央値が
+//    ミート60/パワー59 から始まり、NPBレギュラー基準（58/55）を超えていた。
+//    ソフトキャップなので上振れの逸材（超過分の2〜5割が残る）は出る。
+const RANK_BATTING_CAP = { S: 64, A: 60, B: 55, C: 49, D: 43 };
+const BAT_LEVEL = 0.88;   // ミート・パワー・選球眼だけに掛ける水準
 
 // ランク別の初期注目度（0-100）
 // 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
@@ -183,11 +191,59 @@ const ELO_CLAMP_MIN = 100;
 const ELO_CLAMP_MAX = 2000;
 
 // 試合重要度係数（I）
+// ランクの帯。**ここが唯一の定義**。
+// ⚠ `TeamRankingScreen` にも同じ表がコピーされていて、片方だけ直した結果
+//    画面には「上位5% / 6-20% / …」と旧い帯が出ていた。表を二重に作らないこと。
+export const RANK_BAND_CUM = { S: 0.04, A: 0.12, B: 0.28, C: 0.56 };
+export const RANK_BAND_LABEL = { S: '上位4%', A: '5-12%', B: '13-28%', C: '29-56%', D: '下位44%' };
+export const buildRankBands = (total) => ([
+  { rank: 'S', end: Math.max(1, Math.round(total * RANK_BAND_CUM.S)) },
+  { rank: 'A', end: Math.max(2, Math.round(total * RANK_BAND_CUM.A)) },
+  { rank: 'B', end: Math.max(3, Math.round(total * RANK_BAND_CUM.B)) },
+  { rank: 'C', end: Math.max(4, Math.round(total * RANK_BAND_CUM.C)) },
+  { rank: 'D', end: total },
+]);
+/** スコア降順に並んだ配列へランクを割り当てる（UIの暫定ランキングと共有） */
+export const assignRankByPercentile = (entries, setRank = (e, r) => { e.rank = r; }) => {
+  const bands = buildRankBands(entries.length);
+  let bandIdx = 0;
+  entries.forEach((e, i) => {
+    while (bandIdx < bands.length - 1 && i >= bands[bandIdx].end) bandIdx++;
+    setRank(e, bands[bandIdx].rank);
+  });
+};
+
 const ELO_I = {
   regular: 50,      // 社会人レギュラーシーズン（シーズン全体を1単位として計算）
   league: 40,       // 大学・独立リーグ（春・秋それぞれ）
-  tournament: 40,   // 社会人全国大会（1試合あたり基礎値、後半戦ほど上昇）
+  tournament: 40,   // 社会人全国大会・独立GC（1試合あたり基礎値、後半戦ほど上昇）
   uniNational: 35,  // 大学全国大会（1試合あたり基礎値）
+  gcChampion: 40,   // 独立グランドCS優勝（全国王座の栄誉）
+  gcRunnerUp: 18,   // 独立グランドCS準優勝
+  proDrafted: 15,   // プロ輩出1名あたり（育成実績はチームの格を直接押し上げる）
+  // ⚠ **地域大会・都市対抗予選・クラブ選手権が一度も計上されていなかった**。
+  //    低ランクのチームのシーズンはこの3つで出来ているので、
+  //    「何をやってもランクが動かない」状態になっていた（実測: クラブ208チームの
+  //    rankingScore は4年間で相異なる値が3〜5個しか無く、動く経路はプロ輩出+15 だけ）。
+  //    全国大会より格は下なので重みは小さくする。
+  qualifier: 20,    // 地域大会・都市対抗地区予選（1試合あたり基礎値）
+  clubNational: 30, // クラブ選手権（クラブチームにとっての全国大会）
+};
+
+// リーグ最終順位ボーナス（優勝を明確に評価し、勝ち続ければ数年で昇格できるようにする）。
+// 期待勝率ベースのElo変動(±10前後/年)だけでは、弱小リーグで優勝しても昇格が遅すぎるため加算する。
+const finishBonus = (pos) => pos === 1 ? 30 : pos === 2 ? 15 : pos === 3 ? 6 : 0;
+// 順位ボーナスを標準的な順位表配列(team/winRate/wins)に適用する
+const applyFinishBonus = (rows, addDelta, scoreMap) => {
+  if (!Array.isArray(rows) || rows.length < 2) return;
+  const sorted = [...rows].sort((a, b) => (b.winRate || 0) - (a.winRate || 0) || (b.wins || 0) - (a.wins || 0));
+  sorted.forEach((st, i) => {
+    if (scoreMap[st.team] === undefined) return;
+    const games = (st.wins || 0) + (st.losses || 0) + (st.draws || 0);
+    if (games === 0) return;
+    const b = finishBonus(i + 1);
+    if (b) addDelta(st.team, b);
+  });
 };
 
 // 期待勝率 We
@@ -311,15 +367,36 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     return clamp(Math.round(val * scale) + j, 1, 99);
   };
 
+  // ============================================================
+  // 「実在しない水準」だけを畳む（`taperLow`）
+  //
+  // ⚠ **倍率スケール（RANK_SCALE 0.58〜0.95）は左の裾を0へ引きずる**。
+  //    守備30の候補が D ランクでは 17、守備10なら 6 になり、実測で
+  //    社会人・独立の野手の約1割が**守備20未満＝小学生以下**だった
+  //    （能力値の水準: 20=小学生 / 30=中学生 / 40=高校生 / 50=大学生 / 60=プロ）。
+  //    走力8・肩7・制球1 のように「走れない・投げられない・ストライクが入らない」
+  //    選手がチームに載っていた。
+  //
+  // ⚠ **`clamp` で下限を切ってはいけない**。平均が押し上がってリーグの較正が動く
+  //    （守備で試算すると clamp(28) は平均 +2.3）。境より下だけを境に向かって
+  //    圧縮すれば、**中央値と99%点は完全に不変**のまま最小値だけが上がる（平均 +0.9）。
+  //
+  // ⚠ 対象は **全員が必ずやる身体動作**（守る・走る・投げる）に限る。
+  //    ミート・パワー・選球眼・走塁・バント・**制球**には入れない——
+  //    「守備の名手で打てない」「ノーコンだが速い」という一芸型を潰してしまうため。
+  // ⚠ 実際に制球へ入れたら **防御率 -0.27 / BB/9 -0.51** と実害が出た。
+  //    制球は捨ててよい能力（ノーコン速球派は成立する）なので対象外にしてある。
+  // `taperLow` は utils/constants.js に一本化してある（高校生プールと共有）
+
   candidates.forEach(p => {
-    p.batting.meet = scaleAndJitter(p.batting.meet, 6);
-    p.batting.power = scaleAndJitter(p.batting.power, 6);
-    p.batting.eye = scaleAndJitter(p.batting.eye, 5);
+    p.batting.meet = scaleAndJitter(p.batting.meet * BAT_LEVEL, 6);
+    p.batting.power = scaleAndJitter(p.batting.power * BAT_LEVEL, 6);
+    p.batting.eye = scaleAndJitter(p.batting.eye * BAT_LEVEL, 5);
     p.batting.steal = scaleAndJitter(p.batting.steal, 5);
     // 走力・体力・回復はランクに依存しない（生まれ持った身体能力）
-    p.physical.speed = clamp(p.physical.speed + randInt(-8, 8) + randInt(-5, 5), 1, 99);
-    p.physical.arm = scaleAndJitter(p.physical.arm, 5);
-    p.fielding.defense = scaleAndJitter(p.fielding.defense, 5);
+    p.physical.speed = taperLow(clamp(p.physical.speed + randInt(-8, 8) + randInt(-5, 5), 1, 99));
+    p.physical.arm = taperLow(scaleAndJitter(p.physical.arm, 5));
+    p.fielding.defense = taperLow(scaleAndJitter(p.fielding.defense, 5));
     p.physical.bodyStamina = clamp((p.physical.bodyStamina || 50) + randInt(-8, 8) + randInt(-5, 5), 15, 99);
     p.physical.recovery = clamp((p.physical.recovery || 50) + randInt(-8, 8) + randInt(-5, 5), 15, 99);
 
@@ -531,7 +608,7 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
 
   // ソフトキャップ: キャップを超過した分を確率的に削減（上限に張り付かない自然な分布）
   const ctrlMax = controlCap + 8;
-  const IL_BATTING_CAP = { B: 60, C: 51, D: 42 };
+  const IL_BATTING_CAP = { B: 55, C: 49, D: 41 };
   const batCap = (isIndependent ? IL_BATTING_CAP[rank] : null) ?? (RANK_BATTING_CAP[rank] || 52);
   const softCap = (val, cap) => {
     if (val <= cap) return val;
@@ -539,6 +616,16 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     const cut = Math.round(excess * (0.5 + Math.random() * 0.3));
     return cap + Math.max(0, excess - cut);
   };
+  // ⚠ **経歴を組み立てる前に大学歴を決めること**。以前はこの呼び出しが下の
+  //    `careerHistory` ループの**後**にあり、L639 の
+  //    `const uniName = p.universityTeamName || p.universityName` が常に undefined で、
+  //    **生成された社会人・独立・クラブの選手は1人も `type:'university'` を持たなかった**
+  //    （実測 6563人中 0人。`universityTeamId` の方は 56% に付いていたので、
+  //     大学パイプだけが動き、経歴とドラフトの大卒判定だけが死んでいた）。
+  //    `npbDraft` の「大卒は2年（age<24 は対象外）」がこれで一度も発火していない。
+  //    「名前より先に高校を決めること」（`generateHighSchoolPlayer`）と同じ型の順序バグ。
+  assignInitialUniversityBackgrounds(roster, { teamRank: rank });
+
   roster.forEach(p => {
     const pCtrlMax = p._standoutRank ? (RANK_CONTROL_CAP[p._standoutRank] + 8) : ctrlMax;
     const pBatCap = p._standoutRank ? (RANK_BATTING_CAP[p._standoutRank] || batCap) : batCap;
@@ -569,7 +656,13 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     if (uniName && !p.careerHistory.some(h => h.type === 'university')) {
       p.careerHistory.push({ type: 'university', label: uniName });
     }
-    p.careerHistory.push({ type: 'corporate', label: teamDef.name || teamDef.displayName });
+    // ⚠ 経歴の type は**そのチームの種別**にすること。クラブ・独立の選手まで
+    //    `corporate` で積むと、経歴を見ても「どこで苦労したか」が分からない。
+    //    ラベルが無いと `[corporate]undefined` という壊れたチップが出る。
+    const originType = teamDef.type === 'club' ? 'club'
+      : teamDef.type === 'independent' ? 'independent' : 'corporate';
+    const originLabel = teamDef.name || teamDef.displayName || teamDef.id;
+    if (originLabel) p.careerHistory.push({ type: originType, label: originLabel });
   });
 
   // 二刀流選手の保証（1-2人）
@@ -603,7 +696,6 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     }
   }
 
-  assignInitialUniversityBackgrounds(roster, { teamRank: rank });
   return roster;
 };
 
@@ -645,12 +737,21 @@ export const initializeIndependentLeagues = (excludeLeagueId = null, existingTea
       if (TEAMS_DATA[teamDef.name] || existingSet.has(teamDef.name)) continue;
 
       const roster = generateCorporateRoster(teamDef, 1);
+      const indRank = teamDef.rank || 'C';
       TEAMS_DATA[teamDef.name] = {
         name: teamDef.name,
         abbreviation: teamDef.abbreviation || makeAbbreviation(teamDef.name),
         players: roster,
         pitchingRotation: null,
         independentLeagueId: leagueId,
+        corporateData: {
+          rank: indRank,
+          type: 'independent',
+          reputation: RANK_INITIAL_REPUTATION[indRank] || 20,
+          rankingScore: INITIAL_RANKING_SCORE[indRank] || 900,
+          proDraftCount: 0,
+          tournamentWins: 0,
+        },
       };
       teamNames.push(teamDef.name);
     }
@@ -674,6 +775,32 @@ export const initializeIndependentLeagues = (excludeLeagueId = null, existingTea
   }
 };
 
+// 年度移行時に独立リーグのスケジュール・順位表を新年度でリセット
+export const resetIndependentLeagueSchedules = (calendarYear) => {
+  for (const [leagueId, leagueData] of Object.entries(WORLD_DATA.independentLeagues)) {
+    if (!leagueData) continue;
+    // プリセット定義が無いリーグ（監督移籍で背景へ回ったカスタムリーグ等）は、
+    // 登録時に控えたレギュレーションを使う。ここで弾くと翌年以降シミュが止まる。
+    const leagueDef = INDEPENDENT_LEAGUES[leagueId] || leagueData.regulation;
+    if (!leagueDef) continue;
+    const teams = leagueData.teams;
+    if (!teams || teams.length === 0) continue;
+
+    const schedule = generateFullSeasonSchedule({
+      teams,
+      gamesPerSeason: leagueDef.gamesPerSeason || 60,
+      startDate: { year: calendarYear, month: 4, day: 1 },
+      endDate: { year: calendarYear, month: 9, day: 30 },
+      leagueFormat: leagueDef.leagueFormat || 'single',
+      leagueNames: leagueDef.leagueNames,
+    });
+
+    leagueData.schedule = schedule;
+    leagueData.standings = initializeStandings(teams);
+    leagueData.results = [];
+  }
+};
+
 // ============================================================
 // 地域リーグ生成（社会人モードのレギュラーシーズン）
 // ユーザーの地域から8-12チームを選出してリーグ戦を組む
@@ -694,71 +821,203 @@ const NEIGHBOR_REGIONS = {
   kyushu: ['chugoku', 'shikoku'],
 };
 
-const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 const TARGET_LEAGUE_SIZE = 10;
 const GAMES_PER_SEASON = 30;
 
-export const generateRegionalLeague = (userTeamName, userRegion, allTeamDefs) => {
-  // 同地域のチームを取得（ランク順）
-  const regionTeams = allTeamDefs
-    .filter(d => d.region === userRegion)
-    .map(d => d.displayName || d.name)
-    .filter(name => TEAMS_DATA[name]);
 
-  // ユーザーチームを含むリーグメンバーを構築
-  let leagueTeams = [...regionTeams];
+// ============================================================
+// 全234大学チームをTEAMS_DATAに追加（並行世界として全モードで選手追跡・移籍を有効化）
+// warmUpPlayerPipeline() 実行後に呼ぶこと。
+// universityPool のプレイヤーを各大学チームのロスターに移動し、
+// 翌年以降の processUniversityTeamGraduation で正しく卒業処理される。
+// ============================================================
 
-  // 地域のチーム数が多すぎる場合: ユーザー＋上位チームを選出
-  if (leagueTeams.length > TARGET_LEAGUE_SIZE + 2) {
-    const userIncluded = leagueTeams.includes(userTeamName);
-    const sorted = leagueTeams
-      .filter(name => name !== userTeamName)
-      .sort((a, b) => {
-        const ra = RANK_ORDER[TEAMS_DATA[a]?.corporateData?.rank] ?? 4;
-        const rb = RANK_ORDER[TEAMS_DATA[b]?.corporateData?.rank] ?? 4;
-        return ra - rb;
-      });
-    leagueTeams = userIncluded ? [userTeamName, ...sorted.slice(0, TARGET_LEAGUE_SIZE - 1)] : sorted.slice(0, TARGET_LEAGUE_SIZE);
-  }
+const UNI_VELOCITY_CAP_PW = { S: 150, A: 148, B: 143, C: 136, D: 130 };
+const UNI_CONTROL_CAP_PW  = { S: 72,  A: 66,  B: 58,  C: 48,  D: 38  };
+const UNI_BATTING_CAP_PW  = { S: 68,  A: 62,  B: 55,  C: 47,  D: 40  };
+const UNI_GRADE_SIZE_PW   = { S: 14,  A: 12,  B: 10,  C: 8,   D: 6   };
 
-  // 地域のチーム数が少なすぎる場合: 近隣地域から補充
-  if (leagueTeams.length < 6) {
-    const neighbors = NEIGHBOR_REGIONS[userRegion] || [];
-    for (const nRegion of neighbors) {
-      if (leagueTeams.length >= 8) break;
-      const nTeams = allTeamDefs
-        .filter(d => d.region === nRegion)
-        .map(d => d.displayName || d.name)
-        .filter(name => TEAMS_DATA[name] && !leagueTeams.includes(name))
-        .sort((a, b) => {
-          const ra = RANK_ORDER[TEAMS_DATA[a]?.corporateData?.rank] ?? 4;
-          const rb = RANK_ORDER[TEAMS_DATA[b]?.corporateData?.rank] ?? 4;
-          return ra - rb;
-        });
-      const needed = Math.min(nTeams.length, 8 - leagueTeams.length);
-      leagueTeams.push(...nTeams.slice(0, needed));
+const generateUniversityRosterPW = (def) => {
+  const rank = def.rank || 'C';
+  const perGrade = UNI_GRADE_SIZE_PW[rank] || 8;
+  const fakeDef = { ...def, type: 'corporate', id: `uni_${def.id}` };
+  const roster = generateCorporateRoster(fakeDef, 1, perGrade * 4);
+  roster.forEach((p, i) => {
+    const grade = (i % 4) + 1;
+    p.age = 18 + grade;
+    p.universityYear = grade;
+    p.universityTeamId = def.id;
+    p.universityTeamName = def.name;
+    if (p.position === 'pitcher') {
+      const velCap = UNI_VELOCITY_CAP_PW[rank] || 140;
+      const ctrlCap = UNI_CONTROL_CAP_PW[rank] || 50;
+      if (p.pitching.velocity > velCap) p.pitching.velocity = velCap + Math.round((p.pitching.velocity - velCap) * 0.3);
+      if (p.pitching.control > ctrlCap) p.pitching.control = ctrlCap + Math.round((p.pitching.control - ctrlCap) * 0.3);
+    }
+    const batCap = UNI_BATTING_CAP_PW[rank] || 50;
+    p.batting.meet  = Math.min(p.batting.meet,  batCap + Math.floor(Math.random() * 6));
+    p.batting.power = Math.min(p.batting.power, batCap + Math.floor(Math.random() * 6));
+    p.batting.eye   = Math.min(p.batting.eye,   batCap + Math.floor(Math.random() * 4));
+    p.careerHistory = [{ type: 'highschool', label: '高校卒' }, { type: 'university', year: 1, label: def.name }];
+  });
+  return roster;
+};
+
+const initializeUniversityTeamsForParallelWorld = () => {
+  // universityPool プレイヤーを大学チーム名でグループ化
+  const teamPlayers = {};
+  for (const [enrollYear, entries] of Object.entries(universityPool || {})) {
+    if (!entries) continue;
+    for (const entry of entries) {
+      const teamName = entry.universityTeamName;
+      if (!teamName) continue;
+      if (!teamPlayers[teamName]) teamPlayers[teamName] = [];
+      // 在学年数（WORLD_DATA.year=1 時点）: enrollYear -2 → 4年生 など
+      const yearsInUni = (WORLD_DATA.year || 1) - entry.enrollYear;
+      entry.player.universityYear = Math.max(1, Math.min(4, yearsInUni + 1));
+      entry.player.universityTeamId = entry.universityTeamId || null;
+      entry.player.universityTeamName = teamName;
+      teamPlayers[teamName].push(entry.player);
     }
   }
 
-  // スケジュール生成
-  const schedule = generateFullSeasonSchedule({
-    teams: leagueTeams,
-    gamesPerSeason: GAMES_PER_SEASON,
-    startDate: { year: 2024, month: 4, day: 1 },
-    endDate: { year: 2024, month: 9, day: 30 },
-    leagueFormat: 'single',
-  });
+  // 使用したプレイヤーをプールから除去（TEAMS_DATA で管理するため二重管理を防止）
+  for (const enrollYear of Object.keys(universityPool || {})) {
+    const entries = universityPool[enrollYear] || [];
+    universityPool[enrollYear] = entries.filter(e => !e.universityTeamName || !teamPlayers[e.universityTeamName]);
+    if (!universityPool[enrollYear].length) delete universityPool[enrollYear];
+  }
 
-  return {
-    leagueTeams,
-    schedule,
-    gamesPerSeason: GAMES_PER_SEASON,
-  };
+  // 全234大学チームを TEAMS_DATA に追加
+  for (const def of UNIVERSITY_TEAMS) {
+    if (TEAMS_DATA[def.name]) continue;
+    const poolRoster = teamPlayers[def.name] || [];
+    const roster = poolRoster.length > 0 ? poolRoster : generateUniversityRosterPW(def);
+    TEAMS_DATA[def.name] = {
+      name: def.name,
+      abbreviation: makeAbbreviation(def.name),
+      players: roster,
+      pitchingRotation: null,
+      universityTeamId: def.id,
+      universityData: {
+        rank: def.rank,
+        region: def.region,
+        budget: def.budget || 5000,
+        leagueName: (UNIVERSITY_REGIONS.find(r => r.id === def.region)?.name || ''),
+        reputation: ({ S: 85, A: 65, B: 40, C: 20, D: 5 }[def.rank] || 20),
+        proDraftCount: 0,
+        tournamentWins: 0,
+      },
+    };
+  }
 };
 
 // ============================================================
 // 社会人モードの完全初期化（全チーム＋独立リーグのロスターを生成）
 // ============================================================
+
+// ============================================================
+// 社会人（企業＋クラブ）全チームの生成 — 3つの初期化経路で共有する
+//
+// ⚠ **同じ 28行が 社会人 / 独立 / 大学 の3経路にコピペされており、
+//    片方にしか無い処理が2種類あった**（実測）:
+//
+//   | | 社会人 | 独立 | 大学 |
+//   |---|---|---|---|
+//   | クラブがスタッフを持つ（本来0） | 0 | **208** | **208** |
+//   | クラブの予算>0（本来0） | 0 | **208** | **208** |
+//   | 同名の改名 | 無し(同名17件) | 無し(10件) | **有り(1件)** |
+//
+//   クラブは「キャンプも無く指導者も居ない」前提で成長モデルが組まれているのに
+//   （CLAUDE.md「クラブチームのプロ意識駆動成長」）、独立・大学モードでは
+//   208クラブ全部がスタッフと予算12000を持っていた。
+//   **コピペを関数にすれば、この種の食い違いは構造的に起きなくなる。**
+// ============================================================
+
+/** 社会人チーム1つぶんの TEAMS_DATA エントリを作る */
+const createCorporateTeamEntry = (def) => {
+  const name = def.displayName || def.name;
+  const roster = generateCorporateRoster(def, 1);
+  // ⚠ クラブはスタッフも予算も持たない。3経路のうち社会人モードにしか無かった分岐
+  const isClub = def.type === 'club';
+  const staff = isClub ? [] : generateInitialStaff(def.rank);
+  TEAMS_DATA[name] = {
+    name,
+    abbreviation: makeAbbreviation(name),
+    players: roster,
+    pitchingRotation: null,
+    corporateTeamId: def.id,
+    corporateData: {
+      rank: def.rank, region: def.region, city: def.city, type: def.type,
+      budget: isClub ? 0 : (BUDGET_BY_RANK[def.rank] || 12000),
+      staff,
+      reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
+      proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
+      tournamentBudgetBonus: 0, sponsors: [],
+    },
+  };
+  return { name, roster, staff };
+};
+
+/**
+ * 同名の選手を改名する（リリースプール経由で同じ名前が複数チームに入るため）。
+ * ⚠ 母集団が約1.6万人・実効の組み合わせが169万通りなので**同名そのものは自然に出る**。
+ *    ここで消しているのは「初期化で同時に生まれた同名」だけ。
+ */
+const dedupeCorporatePlayerNames = (teamNames) => {
+  const seenPlayerNames = new Set();
+  for (const teamName of teamNames) {
+    for (const player of TEAMS_DATA[teamName]?.players || []) {
+      if (!player.name) continue;
+      if (seenPlayerNames.has(player.name)) {
+        let newName = generateRandomPlayerName();
+        while (seenPlayerNames.has(newName)) newName = generateRandomPlayerName();
+        player.name = newName;
+      }
+      seenPlayerNames.add(player.name);
+    }
+  }
+};
+
+/**
+ * 社会人全チームを TEAMS_DATA に作り、`WORLD_DATA.corporateLeague.teams` へ登録する。
+ * @param {string|null} userTeamName 指定するとそのチームを**最初に**作る
+ *   （⚠ App.jsx が `Object.keys(TEAMS_DATA)[0]` を自チームとして読むため順序が意味を持つ）
+ */
+const buildAllCorporateTeams = (userTeamName = null) => {
+  const allTeamDefs = getAllTeamsEffective();
+  const allTeamNames = [];
+  let userRoster = null;
+  let userStaff = null;
+
+  const add = (def) => {
+    const { name, roster, staff } = createCorporateTeamEntry(def);
+    allTeamNames.push(name);
+    return { roster, staff };
+  };
+
+  if (userTeamName) {
+    const userDef = allTeamDefs.find(d => (d.displayName || d.name) === userTeamName);
+    if (userDef) {
+      const { roster, staff } = add(userDef);
+      userRoster = roster;
+      userStaff = staff;
+    }
+  }
+  for (const def of allTeamDefs) {
+    const name = def.displayName || def.name;
+    if (TEAMS_DATA[name]) continue;
+    add(def);
+  }
+
+  WORLD_DATA.corporateLeague.teams = {};
+  for (const name of allTeamNames) {
+    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
+  }
+  dedupeCorporatePlayerNames(allTeamNames);
+
+  return { allTeamNames, userRoster, userStaff };
+};
 
 export const initializeCorporateGame = (teamDef) => {
   corporatePlayerIdBase = 20000;
@@ -766,58 +1025,17 @@ export const initializeCorporateGame = (teamDef) => {
   initializeWorld('corporate', 'corporate');
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
   clearReleasedPlayersPool();
+  // ⚠ 高校生・大学のプールも空にする（前のゲームの高校生が残ると、ウォームアップが
+  //    それを引き継いだまま動く。大学モードの初期化だけが空にしていた）
+  clearUniversityPool();
+  clearHighSchoolPool();
 
   // 社会人179チーム生成
-  const allTeamDefs = getAllTeamsEffective();
   const userTeamName = teamDef.displayName || teamDef.name;
   const userRegion = teamDef.region;
-  const allTeamNames = [];
-  let userRoster = null;
-  let userStaff = null;
-
-  const createTeamEntry = (def) => {
-    const name = def.displayName || def.name;
-    const roster = generateCorporateRoster(def, 1);
-    const isClub = def.type === 'club';
-    const staff = isClub ? [] : generateInitialStaff(def.rank);
-    TEAMS_DATA[name] = {
-      name,
-      abbreviation: makeAbbreviation(name),
-      players: roster,
-      pitchingRotation: null,
-      corporateTeamId: def.id,
-      corporateData: {
-        rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: isClub ? 0 : (BUDGET_BY_RANK[def.rank] || 12000),
-        staff,
-        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
-        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
-        tournamentBudgetBonus: 0, sponsors: [],
-      },
-    };
-    allTeamNames.push(name);
-    return { roster, staff };
-  };
-
-  // ユーザーチームを最初に追加（Object.keys(TEAMS_DATA)[0]で取得されるため）
-  const userDef = allTeamDefs.find(d => (d.displayName || d.name) === userTeamName);
-  if (userDef) {
-    const { roster, staff } = createTeamEntry(userDef);
-    userRoster = roster;
-    userStaff = staff;
-  }
-
-  for (const def of allTeamDefs) {
-    const name = def.displayName || def.name;
-    if (TEAMS_DATA[name]) continue;
-    createTeamEntry(def);
-  }
+  const { allTeamNames, userRoster, userStaff } = buildAllCorporateTeams(userTeamName);
 
   WORLD_DATA.corporateLeague.userTeam = userTeamName;
-  WORLD_DATA.corporateLeague.teams = {};
-  for (const name of allTeamNames) {
-    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
-  }
 
   // 独立リーグ4つも生成
   initializeIndependentLeagues(null, allTeamNames);
@@ -830,6 +1048,8 @@ export const initializeCorporateGame = (teamDef) => {
   // パイプラインウォームアップ: 4年分の高校→ドラフト→進路→大学成長→卒業→社会人補充を事前シミュレート
   // これによりYear2以降のドラフトでも全ソースからバランスよく候補が出る
   warmUpPlayerPipeline(1);
+  // 全234大学チームをTEAMS_DATAに追加（並行世界として選手追跡・移籍を有効化）
+  initializeUniversityTeamsForParallelWorld();
 
   return {
     userTeamName, allTeamNames, roster: userRoster, staff: userStaff,
@@ -844,37 +1064,11 @@ export const initializeCorporateGame = (teamDef) => {
 export const initializeParallelWorldForIndependent = (userLeagueId, userTeamNames) => {
   initializeWorld('independent', userLeagueId);
   corporatePlayerIdBase = 20000;
+  clearUniversityPool();
+  clearHighSchoolPool();
 
-  // 社会人チーム全179チーム生成
-  const allCorpDefs = getAllTeamsEffective();
-  const corpTeamNames = [];
-  for (const def of allCorpDefs) {
-    const name = def.displayName || def.name;
-    if (TEAMS_DATA[name]) continue;
-
-    const roster = generateCorporateRoster(def, 1);
-    const staff = generateInitialStaff(def.rank);
-    TEAMS_DATA[name] = {
-      name,
-      abbreviation: makeAbbreviation(name),
-      players: roster,
-      pitchingRotation: null,
-      corporateTeamId: def.id,
-      corporateData: {
-        rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: BUDGET_BY_RANK[def.rank] || 12000,
-        staff,
-        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
-        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
-        tournamentBudgetBonus: 0, sponsors: [],
-      },
-    };
-    corpTeamNames.push(name);
-  }
-  WORLD_DATA.corporateLeague.teams = {};
-  for (const name of corpTeamNames) {
-    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
-  }
+  // 社会人チーム全179チーム生成（3経路で共有。クラブのスタッフ・予算と同名の改名もここ）
+  const { allTeamNames: corpTeamNames } = buildAllCorporateTeams();
 
   // ユーザーのリーグ以外の独立リーグを生成
   initializeIndependentLeagues(userLeagueId, [...userTeamNames, ...corpTeamNames]);
@@ -882,6 +1076,114 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
   // 大学リーグ初期化
   initializeUniversityLeagues(2024);
   warmUpPlayerPipeline(1);
+  // 全234大学チームをTEAMS_DATAに追加
+  initializeUniversityTeamsForParallelWorld();
+};
+
+// 独立リーグモードの「自リーグ」チームに独立リーグ用のマーカーを付与する。
+// 自リーグは initializeNewGame(=通常のチーム生成) で作られ corporateData を持たないため、
+// チームランキング(Elo)・注目度・トレードなど独立リーグ系システムから漏れていた。
+// リーグの「格」＝所属チームの現ランクの最頻値（同数なら上位ランクを採用）。
+// トライアウト受験者の質もこの値でスケールされるため、表示と挙動を一致させる目的で共有する。
+export const getLeagueRankFromTeams = (teamNames) => {
+  if (!Array.isArray(teamNames) || teamNames.length === 0) return null;
+  const counts = {};
+  teamNames.forEach(n => {
+    const r = TEAMS_DATA[n]?.corporateData?.rank || TEAMS_DATA[n]?.universityData?.rank;
+    if (r) counts[r] = (counts[r] || 0) + 1;
+  });
+  const ranks = Object.keys(counts);
+  if (ranks.length === 0) return null;
+  ranks.sort((a, b) => (counts[b] - counts[a]) || (RANK_DESC.indexOf(a) - RANK_DESC.indexOf(b)));
+  return ranks[0];
+};
+
+// 名前一致でリーグ定義のランクを引く。定義が無い新規カスタム独立リーグは 'D' スタート
+// （弱小から勝ち上がって昇格を目指す設計）。既存プリセットは定義のランクを使う。新規/ロード両対応。
+export const ensureUserIndependentLeagueTagged = (teamNames, preset) => {
+  if (!Array.isArray(teamNames)) return;
+  const leagueDef = preset ? INDEPENDENT_LEAGUES[preset] : null;
+  for (const name of teamNames) {
+    const team = TEAMS_DATA[name];
+    if (!team || team.corporateData || team.universityData) continue;
+    const def = leagueDef?.teams?.find(t => t.name === name);
+    const rank = def?.rank || 'D';
+    team.independentLeagueId = preset || '__custom__';
+    team.corporateData = {
+      rank,
+      type: 'independent',
+      reputation: RANK_INITIAL_REPUTATION[rank] ?? 20,
+      rankingScore: INITIAL_RANKING_SCORE[rank] ?? 900,
+      proDraftCount: 0,
+      tournamentWins: 0,
+    };
+  }
+};
+
+// 欠落した並行世界チーム（他の独立リーグ・社会人・大学）を静的定義から復旧する。
+// 旧バージョンの年度移行バグで並行世界が削除されたセーブを、WORLD_DATAを壊さずに
+// 修復するための関数。既存チームはスキップし、欠けているチームだけ再生成する。
+// ロスターは新規生成（元の選手は復元不可）だが、背景世界として機能を回復させる。
+export const recoverMissingParallelTeams = (userLeagueId) => {
+  // 既存の選手IDと衝突しないよう採番基点を最大ID超に設定
+  // （TEAMS_DATA＋大学プール＝大学チーム復元時に取り込まれる選手も含める）
+  let maxId = 20000;
+  const bump = (p) => { if (p && typeof p.id === 'number' && p.id > maxId) maxId = p.id; };
+  for (const t of Object.values(TEAMS_DATA)) { for (const p of (t.players || [])) bump(p); }
+  for (const cohort of Object.values(universityPool || {})) {
+    if (Array.isArray(cohort)) for (const e of cohort) bump(e?.player);
+  }
+  corporatePlayerIdBase = maxId + 1;
+  const year = WORLD_DATA.year || 1;
+  let recovered = 0;
+
+  // 社会人（企業/クラブ）
+  for (const def of getAllTeamsEffective()) {
+    const name = def.displayName || def.name;
+    if (TEAMS_DATA[name]) continue;
+    const rank = def.rank;
+    TEAMS_DATA[name] = {
+      name, abbreviation: makeAbbreviation(name),
+      players: generateCorporateRoster(def, year),
+      pitchingRotation: null, corporateTeamId: def.id,
+      corporateData: {
+        rank, region: def.region, city: def.city, type: def.type,
+        budget: BUDGET_BY_RANK[rank] || 12000, staff: generateInitialStaff(rank),
+        reputation: RANK_INITIAL_REPUTATION[rank] || 5, rankingScore: INITIAL_RANKING_SCORE[rank] || 900,
+        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0, tournamentBudgetBonus: 0, sponsors: [],
+      },
+    };
+    recovered++;
+  }
+
+  // 他の独立リーグ（自リーグは除く）
+  for (const lid of ALL_INDEPENDENT_LEAGUE_IDS) {
+    if (lid === userLeagueId) continue;
+    const leagueDef = INDEPENDENT_LEAGUES[lid];
+    for (const teamDef of (leagueDef?.teams || [])) {
+      if (TEAMS_DATA[teamDef.name]) continue;
+      const rank = teamDef.rank || 'C';
+      TEAMS_DATA[teamDef.name] = {
+        name: teamDef.name, abbreviation: teamDef.abbreviation || makeAbbreviation(teamDef.name),
+        players: generateCorporateRoster(teamDef, year), pitchingRotation: null,
+        independentLeagueId: lid,
+        corporateData: {
+          rank, type: 'independent',
+          reputation: RANK_INITIAL_REPUTATION[rank] || 20, rankingScore: INITIAL_RANKING_SCORE[rank] || 900,
+          proDraftCount: 0, tournamentWins: 0,
+        },
+      };
+      recovered++;
+    }
+  }
+
+  // 大学（欠落分のみ再生成）
+  if (UNIVERSITY_TEAMS.some(d => !TEAMS_DATA[d.name])) {
+    initializeUniversityTeamsForParallelWorld();
+    recovered++;
+  }
+
+  return recovered;
 };
 
 // ============================================================
@@ -890,49 +1192,9 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
 
 export const initializeCorporateParallelWorld = (existingTeamNames = []) => {
   corporatePlayerIdBase = 20000;
-  const allCorpDefs = getAllTeamsEffective();
-  const corpTeamNames = [];
-  for (const def of allCorpDefs) {
-    const name = def.displayName || def.name;
-    if (TEAMS_DATA[name]) continue;
-    const roster = generateCorporateRoster(def, 1);
-    const staff = generateInitialStaff(def.rank);
-    TEAMS_DATA[name] = {
-      name,
-      abbreviation: makeAbbreviation(name),
-      players: roster,
-      pitchingRotation: null,
-      corporateTeamId: def.id,
-      corporateData: {
-        rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: BUDGET_BY_RANK[def.rank] || 12000,
-        staff,
-        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
-        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
-        tournamentBudgetBonus: 0, sponsors: [],
-      },
-    };
-    corpTeamNames.push(name);
-  }
-  WORLD_DATA.corporateLeague.teams = {};
-  for (const name of corpTeamNames) {
-    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
-  }
+  // 3経路で共有（クラブのスタッフ・予算と同名の改名もここが持つ）
+  const { allTeamNames: corpTeamNames } = buildAllCorporateTeams();
   initializeIndependentLeagues(null, [...existingTeamNames, ...corpTeamNames]);
-
-  // 重複名選手の改名（同一選手がリリースプール経由で複数チームに入るケースを修正）
-  const seenPlayerNames = new Set();
-  for (const teamName of corpTeamNames) {
-    for (const player of TEAMS_DATA[teamName]?.players || []) {
-      if (!player.name) continue;
-      if (seenPlayerNames.has(player.name)) {
-        let newName = generateRandomPlayerName();
-        while (seenPlayerNames.has(newName)) newName = generateRandomPlayerName();
-        player.name = newName;
-      }
-      seenPlayerNames.add(player.name);
-    }
-  }
 };
 
 // ============================================================
@@ -974,66 +1236,6 @@ const TOURNAMENT_BUDGET_BONUS = {
 
 export const getTournamentBudgetBonus = (cd) => cd?.tournamentBudgetBonus || 0;
 
-export const computeTournamentBonuses = (seasonData) => {
-  const toshitaikouEntries = new Set();
-  const senshukenEntries = new Set();
-  const mainTournamentWinsMap = {};
-  const td = seasonData.toshitaikou;
-  if (td?.qualifiers) {
-    for (const regionId of Object.keys(td.qualifiers)) {
-      const q = td.qualifiers[regionId];
-      if (q.qualifiedTeams) q.qualifiedTeams.forEach(t => toshitaikouEntries.add(t));
-    }
-  }
-  if (td?.mainTournament) {
-    const mtWins = countBracketWins(td.mainTournament);
-    for (const [team, w] of Object.entries(mtWins)) {
-      mainTournamentWinsMap[team] = (mainTournamentWinsMap[team] || 0) + w;
-    }
-  }
-  const ns = seasonData.nihonSenshuken;
-  if (ns?.mainTournament?.bracket) {
-    if (ns.mainTournament.bracket.rounds?.[0]) {
-      for (const match of ns.mainTournament.bracket.rounds[0]) {
-        if (match.team1) senshukenEntries.add(match.team1);
-        if (match.team2) senshukenEntries.add(match.team2);
-      }
-    }
-    const nsWins = countBracketWins(ns.mainTournament.bracket);
-    for (const [team, w] of Object.entries(nsWins)) {
-      mainTournamentWinsMap[team] = (mainTournamentWinsMap[team] || 0) + w;
-    }
-  } else if (ns?.qualifiers) {
-    for (const q of Object.values(ns.qualifiers)) {
-      if (q.qualifiedTeams) q.qualifiedTeams.forEach(t => senshukenEntries.add(t));
-    }
-  }
-  const toshitaikouChampion = td?.mainTournament?.champion || td?.champion || null;
-  const toshitaikouFinal = td?.mainTournament?.bracket?.rounds?.slice(-1)[0] || [];
-  const toshitaikouRunnerUp = toshitaikouFinal.length > 0 ? (toshitaikouFinal[0]?.loser || null) : null;
-  const senshukenChampion = ns?.mainTournament?.champion || ns?.champion || null;
-  const senshukenFinal = ns?.mainTournament?.bracket?.rounds?.slice(-1)[0] || [];
-  const senshukenRunnerUp = senshukenFinal.length > 0 ? (senshukenFinal[0]?.loser || null) : null;
-
-  for (const teamName of Object.keys(TEAMS_DATA)) {
-    const teamData = TEAMS_DATA[teamName];
-    if (!teamData?.corporateData) continue;
-    const cd = teamData.corporateData;
-    let entryCount = 0;
-    if (toshitaikouEntries.has(teamName)) entryCount++;
-    if (senshukenEntries.has(teamName)) entryCount++;
-    if (entryCount === 0 && !mainTournamentWinsMap[teamName]) continue;
-    const isChamp = teamName === toshitaikouChampion || teamName === senshukenChampion;
-    const isRunner = teamName === toshitaikouRunnerUp || teamName === senshukenRunnerUp;
-    const tWins = mainTournamentWinsMap[teamName] || 0;
-    let tBonus = 0;
-    if (isChamp) tBonus = TOURNAMENT_BUDGET_BONUS.champion;
-    else if (isRunner) tBonus = TOURNAMENT_BUDGET_BONUS.runnerUp;
-    else if (tWins >= 2) tBonus = TOURNAMENT_BUDGET_BONUS.semiFinal;
-    else if (entryCount > 0) tBonus = TOURNAMENT_BUDGET_BONUS.entry;
-    cd.tournamentBudgetBonus = tBonus;
-  }
-};
 
 // スポンサー契約 → 年間収入（万円）
 // 注目度と実績に応じてスポンサーが付く
@@ -1157,47 +1359,17 @@ export const applyReputationDecay = (teamData) => {
   cd.currentSeasonGain = 0;
   cd.yearlyBudgetBonus = getReputationBudgetBonus(cd.reputation);
   cd.proDraftCount = cd.proDraftCount || 0;
+  // ※ proDraftCountSeason は updateAllRanks が読むため、ここではリセットしない
+  //   （減衰はランク判定より先に走る）。リセットは updateAllRanks の末尾で行う。
 };
 
-// 注目度からランクを再判定（昇格/降格）
-// 昇格閾値は初期値より少し低め（努力で到達可能に）、降格閾値はさらに低め（ヒステリシス）
-const RANK_PROMOTE_THRESHOLD = { S: 75, A: 55, B: 32, C: 15 };
-const RANK_DEMOTE_THRESHOLD  = { S: 60, A: 40, B: 22, C: 8 };
-
-export const updateRankFromReputation = (teamData) => {
-  const cd = teamData.corporateData;
-  if (!cd) return null;
-
-  const rep = cd.reputation;
-  const oldRank = cd.rank;
-  let newRank = oldRank;
-
-  if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.A) newRank = 'A';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.B) newRank = 'B';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.C) newRank = 'C';
-  else newRank = 'D';
-
-  // ヒステリシス: 降格は低い閾値を下回った場合のみ
-  const rankOrder = ['D', 'C', 'B', 'A', 'S'];
-  const oldIdx = rankOrder.indexOf(oldRank);
-  const newIdx = rankOrder.indexOf(newRank);
-  if (newIdx < oldIdx) {
-    const demoteThreshold = oldRank === 'S' ? RANK_DEMOTE_THRESHOLD.S
-      : oldRank === 'A' ? RANK_DEMOTE_THRESHOLD.A
-      : oldRank === 'B' ? RANK_DEMOTE_THRESHOLD.B
-      : RANK_DEMOTE_THRESHOLD.C;
-    if (rep >= demoteThreshold) {
-      newRank = oldRank;
-    }
-  }
-
-  if (newRank !== oldRank) {
-    cd.rank = newRank;
-    return { team: teamData.name, from: oldRank, to: newRank, reputation: rep };
-  }
-  return null;
-};
+// ⚠ **ランクの権威は `updateAllRanks`（rankingScore のパーセンタイル）ひとつだけ**。
+//    以前はここに注目度(reputation)の閾値でランクを決める
+//    `updateRankFromReputation` / `updateUniversityRankFromReputation` があり、
+//    CLAUDE.md にも「昇格閾値 S≥75 / A≥55 …」と書かれていたが、
+//    **どちらも一度も呼ばれていない死んだコード**だった（export だけされていた）。
+//    ランクを決める式が2つあると必ず食い違うので、表を二重に作らずここには置かない。
+//    注目度はスカウト・予算・入団交渉の成功率にだけ効く別系統。
 
 // トーナメントブラケットからチームごとの勝利数を集計
 const countBracketWins = (bracket) => {
@@ -1281,7 +1453,8 @@ export const updateAllTeamReputations = (seasonData) => {
       const leaguePosition = sorted.findIndex(st => st.team === teamName) + 1;
       const seasonResults = {
         leaguePosition: leaguePosition || 0,
-        proDraftedCount: 0,
+        // プロ輩出を注目度に反映（ドラフトで記録した今季分）
+        proDraftedCount: teamData.corporateData.proDraftCountSeason || 0,
       };
       updateUniversityReputation(teamData, seasonResults);
       continue;
@@ -1293,7 +1466,8 @@ export const updateAllTeamReputations = (seasonData) => {
       wins: s?.wins || 0,
       isChampion: teamName === champion,
       tournamentMainWins: mainTournamentWinsMap[teamName] || 0,
-      proDraftedCount: 0,
+      // プロ輩出を注目度に反映（ドラフトで記録した今季分）
+      proDraftedCount: teamData.corporateData.proDraftCountSeason || 0,
     };
 
     updateReputation(teamData, seasonResults);
@@ -1345,34 +1519,7 @@ export const applyUniversityReputationDecay = (teamData) => {
   if (ud.reputationHistory.length > 2) ud.reputationHistory.shift();
   ud.reputation = clamp((ud.reputation || 0) - UNI_REPUTATION_DECAY, 0, 100);
   ud.currentSeasonGain = 0;
-};
-
-export const updateUniversityRankFromReputation = (teamData) => {
-  const ud = teamData.universityData;
-  if (!ud) return null;
-  const rep = ud.reputation;
-  const oldRank = ud.rank;
-  let newRank;
-  if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.A) newRank = 'A';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.B) newRank = 'B';
-  else if (rep >= RANK_PROMOTE_THRESHOLD.C) newRank = 'C';
-  else newRank = 'D';
-  const rankOrder = ['D', 'C', 'B', 'A', 'S'];
-  const oldIdx = rankOrder.indexOf(oldRank);
-  const newIdx = rankOrder.indexOf(newRank);
-  if (newIdx < oldIdx) {
-    const dt = oldRank === 'S' ? RANK_DEMOTE_THRESHOLD.S
-      : oldRank === 'A' ? RANK_DEMOTE_THRESHOLD.A
-      : oldRank === 'B' ? RANK_DEMOTE_THRESHOLD.B
-      : RANK_DEMOTE_THRESHOLD.C;
-    if (rep >= dt) newRank = oldRank;
-  }
-  if (newRank !== oldRank) {
-    ud.rank = newRank;
-    return { team: teamData.name, from: oldRank, to: newRank, reputation: rep, type: 'university' };
-  }
-  return null;
+  // ※ proDraftCountSeason は updateAllRanks が読むため、ここではリセットしない
 };
 
 // 全チーム（社会人＋独立＋大学）のランク変動を一括処理（FIFAスタイルElo方式）
@@ -1393,7 +1540,8 @@ export const updateAllRanks = (seasonData) => {
     updateUniversityReputation(teamData, {
       leaguePosition,
       tournamentChampion: teamName === ucChampion || teamName === mjChampion,
-      proDraftedCount: 0,
+      // プロ輩出を注目度に反映（ドラフトで記録した今季分）
+      proDraftedCount: teamData.universityData.proDraftCountSeason || 0,
     });
   }
 
@@ -1487,6 +1635,7 @@ export const updateAllRanks = (seasonData) => {
       const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
       addDelta(st.team, ELO_I.regular * (W - getExpectedWinRate(selfScore, avgScore)));
     }
+    applyFinishBonus(corpSt, addDelta, scoreMap);
   }
 
   // 3b. 独立リーグ（全独立チームをひとまとめに）
@@ -1501,6 +1650,7 @@ export const updateAllRanks = (seasonData) => {
       const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
       addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
     }
+    applyFinishBonus(indSt, addDelta, scoreMap);
   }
 
   // 3c. TEAMS_DATA大学チームのリーグElo
@@ -1515,6 +1665,7 @@ export const updateAllRanks = (seasonData) => {
       const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
       addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
     }
+    applyFinishBonus(uniMgSt, addDelta, scoreMap);
   }
 
   // 3d. WORLD_DATA大学リーグ（春・秋、部別に適用）
@@ -1537,6 +1688,7 @@ export const updateAllRanks = (seasonData) => {
             const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
             addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
           }
+          applyFinishBonus(divSt, addDelta, scoreMap);
         }
       }
     }
@@ -1556,11 +1708,39 @@ export const updateAllRanks = (seasonData) => {
     }
   };
   // 社会人全国大会
-  applyBracketElo(seasonData.toshitaikou?.mainTournament?.bracket, ELO_I.tournament);
-  applyBracketElo(seasonData.nihonSenshuken?.mainTournament?.bracket, ELO_I.tournament);
+  // ⚠ **置き場所はモードで変わる**。社会人モードでは seasonData、独立・大学モードでは
+  //    WORLD_DATA 側に入る。片方だけ見ていると、そのモードでは丸ごと計上されない。
+  const td = seasonData.toshitaikou || WORLD_DATA.corporateToshitaikou;
+  const ns = seasonData.nihonSenshuken || WORLD_DATA.corporateNihonSenshuken;
+  const cs = seasonData.clubSenshuken || WORLD_DATA.corporateClubSenshuken;
+  const rt = seasonData.regionalTournament || WORLD_DATA.corporateRegionalTournament;
+  applyBracketElo(td?.mainTournament?.bracket, ELO_I.tournament);
+  applyBracketElo(ns?.mainTournament?.bracket, ELO_I.tournament);
+  // クラブの全国大会。208チームのクラブにとってはここが最上位の舞台
+  applyBracketElo(cs?.mainTournament?.bracket, ELO_I.clubNational);
+  // 地域大会・都市対抗地区予選。下位チームのシーズンはここで出来ている
+  for (const reg of Object.values(rt?.brackets || {})) applyBracketElo(reg?.bracket, ELO_I.qualifier);
+  for (const q of Object.values(td?.qualifiers || {})) {
+    applyBracketElo(q?.mainBracket, ELO_I.qualifier);
+    applyBracketElo(q?.losersBracket, ELO_I.qualifier);
+  }
+  for (const q of Object.values(ns?.qualifiers || {})) applyBracketElo(q?.mainBracket, ELO_I.qualifier);
+  for (const q of Object.values(cs?.qualifiers || {})) applyBracketElo(q?.mainBracket, ELO_I.qualifier);
   // 大学全国大会
   applyBracketElo(ucSource?.bracket, ELO_I.uniNational);
   applyBracketElo(mjSource?.bracket, ELO_I.uniNational);
+  // 独立リーグ グランドチャンピオンシップ（各リーグ王者による全国王座決定戦）
+  const gcSource = seasonData.grandChampionship || WORLD_DATA.grandChampionship;
+  applyBracketElo(gcSource?.bracket, ELO_I.tournament);
+  // 王者・準優勝には追加の栄誉ボーナス
+  if (gcSource?.bracket?.champion) addDelta(gcSource.bracket.champion, ELO_I.gcChampion);
+  if (gcSource?.bracket?.runnerUp) addDelta(gcSource.bracket.runnerUp, ELO_I.gcRunnerUp);
+
+  // 3f. プロ輩出Elo（NPBに選手を送り出した実績はチームの格を直接押し上げる）
+  for (const e of allEntries) {
+    const produced = e.dataObj?.proDraftCountSeason || 0;
+    if (produced > 0) addDelta(e.name, produced * ELO_I.proDrafted);
+  }
 
   // === Step 4: デルタをrankingScoreに一括適用 ===
   for (const e of allEntries) {
@@ -1571,14 +1751,16 @@ export const updateAllRanks = (seasonData) => {
   // === Step 5: rankingScoreでソートしてパーセンテージ別ランク割り当て ===
   allEntries.sort((a, b) => b.dataObj.rankingScore - a.dataObj.rankingScore);
 
+  // ⚠ **帯は初期分布と一致していなければならない**。
+  //    初期のランクは RANK_CONFIG が team ごとに手で割り当てており、実測の内訳は
+  //    S20 / A45 / B88 / C160 / D243（＝3.6 / 8.1 / 15.8 / 28.8 / 43.7%）。
+  //    ところが帯は S5 / A20 / B45 / C75% で、**D の枠が139しか無いのに D が243チーム**
+  //    あった。そのため初年度の年度末に **104チームが成績と無関係に D→C へ機械的に
+  //    昇格**していた（実測: Dスタートの43%が1年目に昇格し、以後6年間まったく動かない）。
+  //    「1年ですぐ上がって、その後は何をしても動かない」の正体はこれ。
+  //    クラブ208チームを含む母集団なので、下位が厚いのが正しい姿。
   const total = allEntries.length;
-  const PCT_BANDS = [
-    { rank: 'S', end: Math.max(1, Math.round(total * 0.05)) },
-    { rank: 'A', end: Math.max(2, Math.round(total * 0.20)) },
-    { rank: 'B', end: Math.max(3, Math.round(total * 0.45)) },
-    { rank: 'C', end: Math.max(4, Math.round(total * 0.75)) },
-    { rank: 'D', end: total },
-  ];
+  const PCT_BANDS = buildRankBands(total);
 
   const rankChanges = [];
   let bandIdx = 0;
@@ -1604,6 +1786,12 @@ export const updateAllRanks = (seasonData) => {
         rankChanges.push({ team: e.name, from: oldRank, to: newRank, score: e.dataObj.rankingScore, type: 'university' });
       }
     }
+  }
+
+  // 今季のプロ輩出数をリセット（注目度・Eloへの反映が済んだのでここで消費する。
+  // 通算 proDraftCount は保持）
+  for (const e of allEntries) {
+    if (e.dataObj) e.dataObj.proDraftCountSeason = 0;
   }
 
   // === Step 6: ランキングスナップショット保存（TeamRankingScreenで参照）===

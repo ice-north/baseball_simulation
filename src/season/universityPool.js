@@ -4,20 +4,44 @@
 // 大学4年間 → 卒業後に再びドラフト/入団候補
 // ============================================================
 
-import { generateRandomPlayerName } from '../data/playerNames.js';
+import { generateRandomPlayerName, getRandomGivenName } from '../data/playerNames.js';
+import { getRegionalSurname, REGIONAL_SHARE } from '../data/prefectureNames.js';
+import { homeBlockOf, blockOfUniversity, HOME_UNIV_PREF } from '../data/regions.js';
+import { generateCatcherLead, taperLow } from '../utils/constants.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
+import { dexterityMult } from './growthUtils.js';
+import { STAT_GROWTH, growthThreshold, growthDecayRate, stochasticRound, ceilOf } from './growthSystem.js';
+import { generateHandedness } from '../utils/handedness.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
+import { buildToolNorms, toolProfile } from '../game/scoutTools.js';
+import { addToReleasedPool, replaceReleasedPool } from '../state/pools.js';
+import { addToRoster } from '../state/roster.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { syncPositionToFitness } from '../utils/physics.js';
 
 export const HIGH_SCHOOL_CLASS_SIZE = 5000;
 
+// 高校生の打撃（ミート・パワー・選球眼）の上の裾を畳む。境より上を係数で圧縮するだけなので
+// 中央値と順位は変わらない。`taperLow`（下の裾）と対になる考え方。
+const BAT_TAPER_AT = 45;
+const BAT_TAPER_K = 0.7;
+export const batTaperHigh = (v) => (v > BAT_TAPER_AT ? Math.round(BAT_TAPER_AT + (v - BAT_TAPER_AT) * BAT_TAPER_K) : v);
+
 /**
- * 大学プール: グローバルミュータブル
+ * 大学プール: **初期化の途中だけ使う仮置き場**。
  * { [enrollYear]: [ { player, enrollYear, graduateYear } ] }
+ *
+ * ⚠ **大学生の実体は TEAMS_DATA の大学チームの名簿ひとつだけ**。かつてはこのプールと
+ *    名簿が別々に在学生を持っており、同じ「近畿大学」に名簿56人とプール60人が別人として
+ *    居た（大学生の総数が設計の約2倍の 17,800人）。しかも成長はプール側にしか掛からず、
+ *    画面に出る名簿の選手は伸びないまま、S校のスタメンが5年でミート63→30に落ちていた。
+ *    いまは `enrollInUniversity` が名簿へ直接入れ、年次の成長・知名度・卒業は
+ *    `processUniversityTeamGraduation`（名簿側）が担う。ここに入るのは
+ *    **大学チームがまだ TEAMS_DATA に無い初期化の途中**だけで、
+ *    `initializeUniversityTeamsForParallelWorld` / `absorbUniversityPoolIntoRosters` が名簿へ移す。
  */
 export const universityPool = {};
 
@@ -71,15 +95,12 @@ function weightedPick(weights) {
 }
 
 function generateHighSchoolPlayer(id) {
-  const name = generateRandomPlayerName();
+  // ⚠ **名前はここで作らない**。出身校（＝県）が決まってからでないと
+  //    県別の姓を引けない。以前はここで `generateRandomPlayerName()` を呼び、
+  //    高校の割り当ては 300行ほど下で行っていた。順序を入れ替えてある。
 
-  const handRoll = Math.random() * 100;
-  let throws, bats;
-  if (handRoll < 42) { throws = 'right'; bats = 'right'; }
-  else if (handRoll < 70) { throws = 'right'; bats = 'left'; }
-  else if (handRoll < 93) { throws = 'left'; bats = 'left'; }
-  else if (handRoll < 98) { throws = 'right'; bats = 'switch'; }
-  else { throws = 'left'; bats = 'right'; }
+  // 左右比率は src/utils/handedness.js に一元化（右打56% / 左打41% / 両打3%）
+  const { throws, bats } = generateHandedness();
 
   // === 体格 ===
   const buildRoll = Math.random();
@@ -111,23 +132,49 @@ function generateHighSchoolPlayer(id) {
     return mu + sigma * Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * b);
   };
 
+  // === 共通の運動能力因子（五ツール型を生まれさせる）===
+  // ⚠ 旧実装は能力を**独立に**引いていたため、能力どうしの相関がほぼ0だった
+  //    （実測: 走力-肩 -0.03 / 走力-守備 0.10 / ミート-パワー 0.17）。
+  //    実データのツール間相関は 0.2〜0.4 で、特に運動能力系（走力・肩・守備）は
+  //    互いに高い。相関が無いと**「走攻守そろった逸材」も「全部だめな選手」も
+  //    出ない**——全員が凸凹の寄せ集めになり、ドラフト1位の見た目が地味になる。
+  // ⚠ **周辺分布を変えないこと**。共通因子を足すだけだと各能力の分散が増えて
+  //    リーグの較正が動く。σ を √(1-af²) に絞って合計の分散を保つ。
+  const ath = nrm(0, 1);
+  const ATH = {   // 各能力が運動能力因子から受け取る割合（相関 = af_i × af_j）
+    speed: 0.60, arm: 0.60, defense: 0.50, steal: 0.50, power: 0.45, bodyStamina: 0.40,
+    meet: 0.30, eye: 0.25, velocity: 0.35, control: 0.15, stamina: 0.30, recovery: 0.25,
+  };
+  const athAdd = (stat, sigma) => ath * sigma * (ATH[stat] ?? 0);
+  const athSigma = (stat, sigma) => sigma * Math.sqrt(1 - (ATH[stat] ?? 0) ** 2);
+
   // === 才能ランク（連続分布）===
   const talentRoll = Math.random() * 100;
   let tier, off;
-  if (talentRoll < 1)        { tier = 'S'; off = 22; }
-  else if (talentRoll < 4)   { tier = 'A'; off = 15; }
-  else if (talentRoll < 12)  { tier = 'B'; off = 7; }
+  // ⚠ オフセットの幅＝才能ランクの差。旧値（S+22〜E-4 の26点）では
+  //    `calculatePlayerRank` の素点で S39.9 対 E23.1 の **16.8点 = 1.7ランク**しかなく、
+  //    「才能ランクの差が小さい」と感じる水準だった。35点に広げて約2.4ランクにする。
+  if (talentRoll < 1)        { tier = 'S'; off = 28; }
+  else if (talentRoll < 4)   { tier = 'A'; off = 19; }
+  else if (talentRoll < 12)  { tier = 'B'; off = 9; }
   else if (talentRoll < 28)  { tier = 'C'; off = 2; }
   else if (talentRoll < 68)  { tier = 'D'; off = 0; }
-  else                       { tier = 'E'; off = -4; }
+  else                       { tier = 'E'; off = -7; }
 
   // === Phase 2: 基礎身体能力を先に生成（投手/野手決定の材料）===
-  let baseArm = Math.max(1, Math.round(nrm(38, 14) + off * 0.5 + buildMod.arm));
-  let baseSpeed = Math.max(1, Math.round(nrm(35, 14) + buildMod.speed));
+  // ⚠ 走る・投げるは**全員が必ずやる身体動作**なので、実在しない水準（20未満）は畳む。
+  //    以前は高校生プールが素通りで、ドラフト1〜2位に**走力8**の選手が出ていた。
+  let baseArm = taperLow(Math.max(1, Math.round(nrm(38, athSigma('arm', 14)) + athAdd('arm', 14) + off * 0.5 + buildMod.arm)));
+  let baseSpeed = taperLow(Math.max(1, Math.round(nrm(35, athSigma('speed', 14)) + athAdd('speed', 14) + buildMod.speed)));
 
   // === Phase 3: 投手/野手を肩力ベースで決定 ===
-  // 肩が強いほど投手になる確率が上がる（全体で約40%が投手）
-  let pitcherChance = cl(0.12 + baseArm * 0.007, 0.10, 0.75);
+  // 肩が強いほど投手になる確率が上がる。
+  // ⚠ **指名の投打比率はここで決まる**。`deviationValue` が群（投手/捕手/野手）
+  //    ごとに偏差値化しているので、カテゴリ加点が無ければ
+  //    **指名比率はプール比率にほぼ一致する**（実測 プール投手41% → 指名も41%）。
+  //    実NPBの支配下登録は約半分が投手なので、母集団も50%に合わせる。
+  //    ⚠ 加点(`DRAFT_DEMAND`)で寄せないこと——価値の物差しが歪む。
+  let pitcherChance = cl(0.185 + baseArm * 0.0076, 0.13, 0.79);
   if (throws === 'left') pitcherChance = cl(pitcherChance + 0.10, 0.10, 0.80);
   const isPitcher = Math.random() < pitcherChance;
 
@@ -156,7 +203,8 @@ function generateHighSchoolPlayer(id) {
     position = weightedPick(w);
   } else {
     const w = {
-      catcher: 12 + Math.max(0, baseArm - 35) * 0.4 + (build === 'large' ? 5 : build === 'small' ? -5 : 0),
+      // 捕手も同じ理由で母集団の比率が指名比率になる。実NPBの捕手は約8%
+      catcher: 21 + Math.max(0, baseArm - 35) * 0.5 + (build === 'large' ? 6 : build === 'small' ? -5 : 0),
       first:   10 + (build === 'large' ? 10 : build === 'small' ? -3 : 0) + Math.max(0, 40 - baseSpeed) * 0.3,
       second:  12 + Math.max(0, baseSpeed - 30) * 0.3 + (build === 'small' ? 8 : build === 'large' ? -5 : 0),
       third:   12 + Math.max(0, baseArm - 30) * 0.3 + (build === 'large' ? 3 : 0),
@@ -177,8 +225,11 @@ function generateHighSchoolPlayer(id) {
   }
 
   // === Phase 5: 能力生成 ===
-  const g = (mu, sigma, tf = 0, floor = 1) =>
-    Math.max(floor, Math.round(nrm(mu, sigma) + off * tf));
+  /** stat 名を渡すと運動能力因子が乗る。渡さなければ従来どおり独立 */
+  const g = (mu, sigma, tf = 0, floor = 1, stat = null) =>
+    Math.max(floor, Math.round(
+      nrm(mu, stat ? athSigma(stat, sigma) : sigma)
+      + (stat ? athAdd(stat, sigma) : 0) + off * tf));
 
   let abilities;
   if (isTwoWay) {
@@ -186,52 +237,52 @@ function generateHighSchoolPlayer(id) {
     if (isPitcher) {
       // 投手登録二刀流: 投手能力メイン、打撃は野手水準（転向候補を上回る本物の両刀）
       const twoWayArm = Math.max(10, baseArm + r(8, 16));
+      const twoWayVelCap = getVelocityCap(twoWayArm);
       let velocity = Math.round(nrm(126, 7) + velTierBonus[tier]);
       if (isSideOrUnder) velocity -= 3;
       if (throws === 'left') velocity -= 3;
       abilities = {
-        meet:  g(36, 8, 0.8, 15),
-        power: g(28, 10, 0.7, 8),
-        eye:   g(33, 8, 0.7, 10),
+        meet:  g(46, 8, 0.8, 15, 'meet'),
+        power: g(39, 10, 0.7, 8, 'power'),
+        eye:   g(45, 8, 0.7, 10, 'eye'),
         steal: Math.max(1, Math.round(nrm(24, 8) + buildMod.steal * 0.7)),
         speed: baseSpeed,
         arm: twoWayArm,
-        defense: g(42, 10, 0.5, 5),
+        defense: taperLow(g(42, 10, 0.5, 5, 'defense')),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
-        recovery: g(44, 10, 0, 15),
-        velocity: Math.max(110, Math.min(165, velocity)),
+        recovery: g(62, 9, 0, 42),
+        velocity: Math.max(110, Math.min(twoWayVelCap, velocity)),
         control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
-        stamina: Math.max(25, Math.round(nrm(63, 12) + off * 1.5))
+        stamina: Math.max(60, Math.round(nrm(70, 12) + off * 1.5))
       };
     } else {
       // 野手登録二刀流: 野手能力メイン、肩が強く投手もそこそこ
       const twoWayArm = Math.max(10, baseArm + r(10, 20));
       const velCap = getVelocityCap(twoWayArm); // 野手二刀流は肩力依存の自然な球速上限を維持
       abilities = {
-        meet: Math.max(5, Math.round(nrm(22, 9) + off)),
-        power: Math.max(3, Math.round(nrm(18, 10) + off + buildMod.power)),
-        eye: Math.max(5, Math.round(nrm(20, 8) + off * 0.8)),
+        meet: Math.max(5, Math.round(nrm(35, 9) + off)),
+        power: Math.max(8, Math.round(nrm(32, 10) + off + buildMod.power)),
+        eye: Math.max(5, Math.round(nrm(32, 8) + off * 0.8)),
         steal: Math.max(1, Math.round(nrm(22, 8) + off * 0.4 + buildMod.steal)),
         speed: baseSpeed,
         arm: twoWayArm,
         defense: Math.max(1, Math.round(nrm(42, 10) + off * 0.6 + buildMod.defense)),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
-        recovery: g(44, 10, 0, 15),
+        recovery: g(62, 9, 0, 42),
         velocity: Math.max(100, Math.min(velCap, Math.round(nrm(110 + twoWayArm * 0.3, 5)))),
         control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
-        stamina: Math.max(25, Math.round(nrm(55, 10) + off))
+        stamina: Math.max(50, Math.round(nrm(62, 10) + off))
       };
     }
   } else if (isPitcher) {
     // ランクボーナスを大きめに設定（S才能投手で150km超えが年数人現れる程度）
-    // 初期生成時はvelCapを適用しない（18歳時点の球速は才能そのもの）
-    // velCapは成長フェーズで使用（肩力以上には鍛えられない）
+    // velCapは生成・成長すべてに適用（肩力が球速の物理的上限を決める）
     const velTierBonus = { S: 12, A: 6, B: 2, C: 0, D: -2, E: -4 };
     let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
     if (isSideOrUnder) velocity -= 3;
     if (throws === 'left') velocity -= 3;
     let control = Math.round(nrm(24, 9) + off + controlAdjust);
-    let stamina = Math.round(nrm(63, 14) + off * 1.5);
+    let stamina = Math.round(nrm(70, 14) + off * 1.5);
 
     if (specialty === 'power_arm') velocity += r(5, 10);
     else if (specialty === 'technician') control += r(10, 20);
@@ -261,34 +312,35 @@ function generateHighSchoolPlayer(id) {
     }
 
     const armValue = Math.max(10, baseArm + r(2, 8));
+    const velCap = getVelocityCap(armValue);
     abilities = isPositionCandidate ? {
       // 野手向き投手: 打撃能力は準野手レベル、転向候補
-      meet:  g(30, 9, 0.7, 12),
-      power: g(25, 11, 0.6, 5),
-      eye:   g(27, 8, 0.6, 8),
+      meet:  g(40, 9, 0.7, 12, 'meet'),
+      power: g(39, 11, 0.6, 8, 'power'),
+      eye:   g(39, 8, 0.6, 8, 'eye'),
       steal: Math.max(1, Math.round(nrm(24, 9) + buildMod.steal * 0.8)),
       speed: baseSpeed,
       arm: armValue,
-      defense: g(40, 10, 0.5, 5),
+      defense: taperLow(g(40, 10, 0.5, 5, 'defense')),
       bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
-      recovery: g(44, 10, 0, 15),
-      velocity: Math.max(110, Math.min(165, velocity)),
+      recovery: g(62, 9, 0, 42),
+      velocity: Math.max(110, Math.min(velCap, velocity)),
       control: Math.max(5, control),
-      stamina: Math.max(25, stamina)
+      stamina: Math.max(60, stamina)
     } : {
       // 通常投手: 打撃は野手より低いが、チームの中心選手らしく一定の素質あり
-      meet:  g(20, 8, 0.4, 5),
-      power: g(16, 10, 0.4, 3),
-      eye:   g(20, 7, 0.4, 5),
+      meet:  g(30, 8, 0.4, 5, 'meet'),
+      power: g(30, 10, 0.4, 6, 'power'),
+      eye:   g(32, 7, 0.4, 5, 'eye'),
       steal: Math.max(1, Math.round(nrm(18, 8) + buildMod.steal * 0.6)),
       speed: baseSpeed,
       arm: armValue,
-      defense: g(36, 10, 0.4, 1),
+      defense: taperLow(g(36, 10, 0.4, 1, 'defense')),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
-      recovery: g(43, 10, 0, 15),
-      velocity: Math.max(110, Math.min(165, velocity)),
+      recovery: g(62, 9, 0, 42),
+      velocity: Math.max(110, Math.min(velCap, velocity)),
       control: Math.max(5, control),
-      stamina: Math.max(25, stamina)
+      stamina: Math.max(60, stamina)
     };
   } else {
     // ポジション別補正
@@ -321,11 +373,17 @@ function generateHighSchoolPlayer(id) {
     baseSpeed = Math.max(1, baseSpeed + physMod.speedAdj);
     baseArm   = Math.max(1, baseArm   + physMod.armAdj);
 
-    let meet = Math.round(nrm(19, 9) + off + pm.meet);
-    let power = Math.round(nrm(15, 12) + off + buildMod.power + pm.power);
-    let eye = Math.round(nrm(18, 8) + off * 0.8 + pm.eye);
-    let defense = Math.round(nrm(38, 13) + off * 0.6 + buildMod.defense + pm.defense);
-    let steal = Math.round(nrm(22, 9) + off * 0.4 + buildMod.steal + pm.steal);
+    // ⚠ **打撃だけ「小学生水準」で生成されていた**。能力値の物差し
+    //    （20=小学生 / 30=中学生 / 40=高校生 / 50=大学生 / 60=プロ及第点）に対し、
+    //    走力36.7・肩38.9・守備39.5 と身体系は高校生水準なのに、
+    //    ミート20.1・パワー20.9・選球眼19.0 と打撃だけ小学生水準だった。
+    //    その結果、リーグが高校生出身で埋まると**打撃だけが取り残されて打低になる**
+    //    （定常リーグ 打率.222 対 初期ロスター.248）。高校生水準へ引き上げる。
+    let meet = Math.round(nrm(29, athSigma('meet', 9)) + athAdd('meet', 9) + off + pm.meet);
+    let power = Math.round(nrm(27, athSigma('power', 12)) + athAdd('power', 12) + off + buildMod.power + pm.power);
+    let eye = Math.round(nrm(28, athSigma('eye', 8)) + athAdd('eye', 8) + off * 0.8 + pm.eye);
+    let defense = Math.round(nrm(38, athSigma('defense', 13)) + athAdd('defense', 13) + off * 0.6 + buildMod.defense + pm.defense);
+    let steal = Math.round(nrm(22, athSigma('steal', 9)) + athAdd('steal', 9) + off * 0.4 + buildMod.steal + pm.steal);
 
     if (specialty === 'speedster') { baseSpeed += r(14, 26); steal += r(10, 18); }
     else if (specialty === 'slugger') power += r(14, 26);
@@ -333,17 +391,32 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'glove') defense += r(14, 24);
     else if (specialty === 'cannon') baseArm += r(18, 30);
 
+    // ⚠ **打撃の上の裾だけ畳む**（`batTaperHigh`）。才能オフセット（S+28）と
+    //    専門型の加点（+14〜24）が重なり、高校生の上位3%がミート55・上位1%が61と、
+    //    **高卒の時点でNPBレギュラー基準（ミート58）に届く打者**が毎年出ていた。
+    //    その層がそのまま大学S・社会人Sのスタメンになるので、アマの上位の打撃が
+    //    プロより強くなる根になっていた。中央値は動かさず、45より上だけを圧縮する
+    //    （順位は保つ＝「たまに凄い高校生」は残る）。
+    meet = batTaperHigh(meet); power = batTaperHigh(power); eye = batTaperHigh(eye);
+
     abilities = {
-      meet: Math.max(5, meet), power: Math.max(3, power),
+      meet: Math.max(5, meet), power: Math.max(8, power),
       eye: Math.max(5, eye), steal: Math.max(1, steal),
-      speed: Math.max(1, baseSpeed), arm: Math.max(1, baseArm),
-      defense: Math.max(1, defense),
+      speed: taperLow(Math.max(1, baseSpeed)), arm: taperLow(Math.max(1, baseArm)),
+      defense: taperLow(Math.max(1, defense)),
       bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
-      recovery: g(43, 10, 0, 15),
+      recovery: g(62, 9, 0, 42),
       velocity: Math.max(90, Math.round(nrm(85 + baseArm * 0.6, 5))),
       control: g(20, 7, 0.3, 5),
       stamina: g(42, 8, 0.3, 20)
     };
+  }
+
+  // 能力値の上限（100）。⚠ 下限しか切っておらず、専門型の加点（強肩 +18〜30 等）が
+  //    乗ると 肩107・パワー113 のような尺度外の高校生が10万人に24人出ていた。
+  //    球速（km/h）とスタミナ（尺度が200まで）は対象外
+  for (const k of ['meet', 'power', 'eye', 'steal', 'speed', 'arm', 'defense', 'bodyStamina', 'recovery', 'control']) {
+    if (typeof abilities[k] === 'number' && abilities[k] > 100) abilities[k] = 100;
   }
 
   // 成長力: ランクにほぼ依存しない（生まれ持った素質）
@@ -354,6 +427,13 @@ function generateHighSchoolPlayer(id) {
   const growthPotential = cl(gpCenter[tier] + normal * 0.28, 0.35, 1.50);
 
   const highSchool = assignHighSchool(tier);
+
+  // 出身校の県に固有の姓の表があればそちらから引く（現状は沖縄のみ）。
+  // 名（下の名前）は本土と共通なので全国のまま。
+  const regional = highSchool?.pref ? getRegionalSurname(highSchool.pref) : null;
+  const name = (regional && Math.random() < REGIONAL_SHARE)
+    ? regional + ' ' + getRandomGivenName()
+    : generateRandomPlayerName();
 
   // 高校知名度の計算: 出身校ランク + 能力（投手=球速、野手=パワー） + 揺らぎ
   // 高校野球分析サイトの評価軸（強豪校在籍・MAX球速・通算本塁打）を模倣
@@ -385,17 +465,21 @@ function generateHighSchoolPlayer(id) {
     },
     fielding: { defense: abilities.defense },
     catching: {
-      lead: position === 'catcher' ? r(25, 55) : r(10, 30)
+      lead: position === 'catcher' ? generateCatcherLead(18) : r(10, 30)
     },
     pitching: {
       velocity: abilities.velocity, control: abilities.control,
       stamina: abilities.stamina, spinRate: r(20, 50),
       form: pitchingForm,
-      arsenal: (isPitcher || isTwoWay) ? generateRandomArsenal(0, true) : generateFielderArsenalBasic()
+      arsenal: (isPitcher || isTwoWay) ? (() => { const rv = Math.random(); const ex = rv < 0.4 ? 0 : rv < 0.7 ? 1 : rv < 0.9 ? 2 : 3; return generateRandomArsenal(ex, true); })() : generateFielderArsenalBasic()
     },
     isTwoWay,
     twoWaySubPosition,
     growthPotential,
+    // 生成時の才能ランク（S〜E）。育成の効きを測る基準として保持する。
+    // ⚠ これは「生まれ持ったもの」であって現在の実力ではない。
+    //    実力の表示は `calculatePlayerRank`（能力から毎回計算）を使うこと。
+    talentTier: tier,
     growthModifier: 0,
     personality: {
       discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
@@ -586,6 +670,39 @@ export function processHighSchoolNPBDraft() {
  * @returns {{ university: Object, corporate: Array, independent: Array, retired: Array }}
  *   university: { S: [...], A: [...], ... } ランク別に分類
  */
+
+// ============================================================
+// ⚠ 進路の振り分けは「群ごとに順位を付けてから」帯を切る
+//
+// `evaluatePlayerPotential` は**投手の評価点が野手より低く出る既知の偏り**を持つ
+// （`npbDraft` の節）。1本の順位表を作って上から帯で切ると、その偏りが
+// **そのまま進路の構成比になる**。実測で高校生プールは投手50.6%なのに
+// **大学プールは19.2%**しか無く、高校の投手の半分が「引退」へ落ちていた。
+//
+// 群（投手/野手）ごとに順位を付け、母集団の比率どおりに交互へ並べ直す。
+// **群の中の順位は完全に保たれる**ので「良い選手ほど良い進路」は変わらず、
+// **どの帯を切っても投手の割合が母集団と同じ**になる。
+//
+// ⚠ 倍率や加点でスケールを揃えようとしないこと——ドラフト評価で2度失敗している。
+// ⚠ トライアウトは別経路で既に是正済み（`TRYOUT_OVERDRAW` + `balanceByPosition`）。
+//    そちらへこの関数を持ち込むと二重に効く。
+// ⚠ **大学推薦スカウトの候補の帯も同じ順位表を切っている**ので、そちらからも呼ぶ
+//    （`scoutingSystem.discoverCandidatesFromPool`）。**同じ並べ替えを書き写さないこと**。
+export function balanceRankByPosition(scored) {
+  const P = scored.filter(e => e.player?.position === 'pitcher');
+  const F = scored.filter(e => e.player?.position !== 'pitcher');
+  if (P.length === 0 || F.length === 0) return scored;
+  const total = P.length + F.length;
+  const out = [];
+  let pi = 0, fi = 0;
+  for (let k = 0; k < total; k++) {
+    const wantP = (k + 1) * P.length / total;   // ここまでに出ているべき投手の数
+    if (pi < P.length && (fi >= F.length || pi < wantP)) out.push(P[pi++]);
+    else out.push(F[fi++]);
+  }
+  return out;
+}
+
 export function distributeHighSchoolGraduates(enrollYear) {
   const players = highSchoolPool.players.filter(p => !p._universityReserved);
   if (players.length === 0) {
@@ -593,11 +710,22 @@ export function distributeHighSchoolGraduates(enrollYear) {
   }
 
   // 潜在能力でソート（降順）
-  const scored = players.map(p => ({
+  const scored = balanceRankByPosition(players.map(p => ({
     player: p,
     score: evaluatePlayerPotential(p)
-  }));
-  scored.sort((a, b) => b.score - a.score);
+  })).sort((a, b) => b.score - a.score));
+
+  // === 進路は「水準」だけでなく「形」でも決まる（弱者の兵法）===
+  // 総合能力に優れた選手は大学・社会人へ進んで万能を目指し、
+  // 一芸型は独立・クラブへ進んでその武器を磨く。
+  // ⚠ 物差しは候補プールそのものから作る（`scoutTools`。表を二重に作らない）。
+  const toolNorms = buildToolNorms(players);
+  const spikeCache = new Map();
+  const spikeOf = (p) => {
+    // `shape`（足切りなし）を使う。`spike` だと能力の低い一芸型が全員0になる
+    if (!spikeCache.has(p.id)) spikeCache.set(p.id, toolProfile(p, toolNorms).shape || 0);
+    return spikeCache.get(p.id);
+  };
 
   // === 即戦力志望型 独立直行 ===
   // B〜C帯スコア範囲で成長力が高い選手が、大学4年待ちより独立リーグを選ぶ
@@ -612,7 +740,9 @@ export function distributeHighSchoolGraduates(enrollYear) {
     const gp = p.growthPotential || 1.0;
     if (gp < 1.05) continue;
     // 成長力が高いほど独立を選ぶ確率が上がる（gp1.05→3%, gp1.20→9%, gp1.35→15%）
-    const prob = Math.min(0.18, (gp - 1.0) * 0.60);
+    // 一芸型はさらに独立を選びやすい（大学で4年かけて万能を目指すより、
+    // 試合に出て武器で勝負するほうが自分に向いていると分かっている）
+    const prob = Math.min(0.30, (gp - 1.0) * 0.60 * (1 + spikeOf(p) * 0.5));
     if (Math.random() < prob) {
       p.age = Math.max(p.age || 18, 19);
       p.origin = 'independent_impatient';
@@ -639,23 +769,35 @@ export function distributeHighSchoolGraduates(enrollYear) {
     const corpCount = Math.floor(uniCount * corpRatio / (1 - corpRatio - indRatio));
     const indCount = Math.floor(uniCount * indRatio / (1 - corpRatio - indRatio));
     const slotCount = Math.min(uniCount + corpCount + indCount, total - cursor);
+    // 同じランク帯（＝ほぼ同じ水準）の中では、**形**で進路が分かれる。
+    // ⚠ 大学・社会人・独立をこの順に並べてはいけない。社会人と独立は枠が小さく
+    //    隣り合うので、尖り順に切ると**社会人と独立がほぼ同じ集団になる**
+    //    （実測 尖り 社会人2.34 対 独立2.28）。
+    //    「総合力に優れるほど大学・社会人、一芸ほど独立」なので、
+    //    **先に独立へ一芸型を抜いてから**、残りを従来どおり成績順に大学・社会人へ配る。
     const slice = remaining.slice(cursor, cursor + slotCount);
     cursor += slotCount;
+    const bySpike = [...slice].sort((a, b) => spikeOf(b.player) - spikeOf(a.player));
+    const toIndependent = new Set(bySpike.slice(0, indCount).map(e => e.player.id));
+    const rest = slice.filter(e => !toIndependent.has(e.player.id));   // 成績順のまま
 
-    slice.forEach((entry, i) => {
+    for (const entry of bySpike.slice(0, indCount)) {
+      const p = entry.player;
+      p.age = Math.max(p.age || 18, 19);
+      p.origin = 'independent_candidate';
+      p._destinationRank = rank;
+      independent.push(p);
+    }
+    rest.forEach((entry, i) => {
       const p = entry.player;
       p.age = Math.max(p.age || 18, 19);
       if (i < uniCount) {
         p._destinationRank = rank;
         university[rank].push(p);
-      } else if (i < uniCount + corpCount) {
+      } else {
         p.origin = 'corporate_candidate';
         p._destinationRank = rank;
         corporate.push(p);
-      } else {
-        p.origin = 'independent_candidate';
-        p._destinationRank = rank;
-        independent.push(p);
       }
     });
   }
@@ -668,6 +810,133 @@ export function distributeHighSchoolGraduates(enrollYear) {
   highSchoolPool.players = reserved;
 
   return { university, corporate, independent, retired };
+}
+
+// ============================================================
+// 独立リーグ トライアウト供給（2年目以降）
+// トライアウトはオフシーズンの振り分け前に行われるため、指名者は
+// removeDraftedFromGraduatePools() でプールから除去して二重計上を防ぐ。
+// 選手の一次供給元は高校生プール。大学4年生・FAは補助的に加える。
+// ============================================================
+
+const _cloneForTryout = (p) => JSON.parse(JSON.stringify(p));
+
+const _shuffleInPlace = (arr) => {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+};
+
+// 高校卒業予定選手を独立適性帯から抽出（クローンを返す）
+// qualityBias(0-1): 高いほど上位帯から抽出（注目度の高いリーグは良い選手が集まる）
+export function getHighSchoolTryoutCandidates(count, qualityBias = 0) {
+  const pool = (highSchoolPool.players || []).filter(p => !p._universityReserved);
+  if (pool.length === 0 || count <= 0) return [];
+  const scored = pool.map(p => ({ p, s: evaluatePlayerPotential(p) })).sort((a, b) => b.s - a.s);
+  // リーグの格・注目度(qualityBias)が「**どの層から来るか**」を決める。
+  // ⚠ 帯は**ランクごとに明確に分離する**こと。旧値（bias 0で8〜60% / bias 1で2〜45%）は
+  //    ほぼ重なっており、実測でDリーグとSリーグの受験者の質がほとんど同じだった
+  //    （ミート平均 27.2 対 29.8）。能力の上限を撤廃した以上、リーグの格は
+  //    この帯だけで表現される——ここが効かないと「昇格しても何も変わらない」になる。
+  //    bias 0(D) → 上位30〜68% / 0.5(B) → 17〜44% / 1.0(S) → 5〜20%
+  // エリートの最上位（NPB/大学S志望）は独立に来ないので start に下限を残す。
+  const bias = Math.max(0, Math.min(1, qualityBias));
+  const start = Math.floor(scored.length * (0.30 - 0.25 * bias));
+  const end = Math.max(start + count, Math.floor(scored.length * (0.68 - 0.48 * bias)));
+  const band = _shuffleInPlace(scored.slice(start, end));
+  return band.slice(0, count).map(({ p }) => {
+    const c = _cloneForTryout(p);
+    // 年末トライアウト時点では高校3年生=18歳。入団後の年次進行で翌キャンプに19歳になる。
+    c.age = c.age || 18;
+    c.origin = 'independent_candidate';
+    c._tryoutSource = 'highschool';
+    c.isNewcomer = true;
+    return c;
+  });
+}
+
+// 卒業予定の大学4年生（NPB未指名）を抽出（クローンを返す）
+// qualityBias(0-1): 高いほど上位帯から抽出
+export function getUniversitySeniorTryoutCandidates(currentYear, count, qualityBias = 0) {
+  if (count <= 0) return [];
+  const seniors = [];
+  // 名簿の4年生（大学生の実体はここ）。指名されたら `removeDraftedFromGraduatePools` が
+  // `_srcUniTeam` を頼りに名簿から外す
+  const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
+  for (const [teamName, team] of Object.entries(TEAMS_DATA)) {
+    if (!team?.universityData || teamName === userUniTeam) continue;
+    for (const p of team.players || []) {
+      if ((p.universityYear || 0) >= 4 || (p.age || 18) >= 22) {
+        seniors.push({ player: p, universityRank: team.universityData.rank,
+          universityTeamId: team.universityTeamId, universityTeamName: teamName, _roster: true });
+      }
+    }
+  }
+  for (const enrollYear of Object.keys(universityPool)) {
+    const cohort = universityPool[enrollYear];
+    if (!cohort) continue;
+    for (const entry of cohort) {
+      const p = entry.player;
+      const yearsInUni = currentYear - entry.enrollYear;
+      // 卒業予定の4年生のみ。3年生(21歳/在学2年)は対象外。
+      // 4年生は在学3年目 or 22歳（高卒18→入学19→…→4年22）。
+      if (yearsInUni >= 3 || (p.age || 18) >= 22) seniors.push(entry);
+    }
+  }
+  if (seniors.length === 0) return [];
+  const scored = seniors.map(e => ({ e, s: evaluatePlayerPotential(e.player) })).sort((a, b) => b.s - a.s);
+  // エリート(社会人/NPB志望)上位は避け、リーグの格に応じた帯から
+  // （高校生プールと同じ考え方。帯はランクごとに分離する）
+  const bias = Math.max(0, Math.min(1, qualityBias));
+  const start = Math.floor(scored.length * (0.28 - 0.24 * bias));
+  const end = Math.max(start + count, Math.floor(scored.length * (0.75 - 0.45 * bias)));
+  const band = _shuffleInPlace(scored.slice(start, end));
+  return band.slice(0, count).map(({ e }) => {
+    // 既存プールで所属大学が未設定（旧不具合で配属されなかった）の場合はランク相当の大学を補填
+    if (!e.universityTeamName) {
+      const rank = e.universityRank || 'C';
+      const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
+      const pool = UNIVERSITY_TEAMS.filter(t => t.rank === rank && t.name !== userUniTeam);
+      const team = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+      if (team) { e.universityTeamName = team.name; e.universityTeamId = team.id; }
+    }
+    const c = _cloneForTryout(e.player);
+    if (e._roster) c._srcUniTeam = e.universityTeamName;
+    if (e.universityRank) c.universityRank = e.universityRank;
+    if (e.universityTeamName) { c.universityName = e.universityTeamName; c.universityTeamName = e.universityTeamName; }
+    c.origin = 'university';
+    c._tryoutSource = 'university';
+    c.isNewcomer = true;
+    return c;
+  });
+}
+
+// トライアウトで指名された選手を高校生プール・大学プールから除去する
+export function removeDraftedFromGraduatePools(draftedIds, draftedPlayers = []) {
+  // 大学の名簿から来た4年生は、その大学の名簿から外す（id は名簿の中でだけ一意）
+  for (const p of draftedPlayers) {
+    if (!p?._srcUniTeam) continue;
+    const team = TEAMS_DATA[p._srcUniTeam];
+    if (team?.players) {
+      const i = team.players.findIndex(x => x.id === p.id && x.name === p.name);
+      if (i >= 0) team.players.splice(i, 1);
+    }
+    delete p._srcUniTeam;
+  }
+  if (!draftedIds || draftedIds.length === 0) return;
+  const drafted = new Set(draftedIds);
+  if (highSchoolPool.players?.length) {
+    highSchoolPool.players = highSchoolPool.players.filter(p => !drafted.has(p.id));
+  }
+  for (const enrollYear of Object.keys(universityPool)) {
+    const cohort = universityPool[enrollYear];
+    if (!cohort) continue;
+    const remaining = cohort.filter(entry => !drafted.has(entry.player?.id));
+    if (remaining.length === 0) delete universityPool[enrollYear];
+    else universityPool[enrollYear] = remaining;
+  }
 }
 
 // ============================================================
@@ -845,21 +1114,47 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
     return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
 
-  const grow = (current, base, spec, cap = 99, threshold = null, rate = 0.05) => {
-    let amount = base * gp * rankMult * specMult(spec) * (0.7 + Math.random() * 0.6);
-    if (threshold != null) {
-      amount *= decayMult(current, threshold, rate);
-    }
-    return Math.min(cap, current + Math.round(amount));
+  // ⚠ **能力の物差し（伸びやすさ・天井・ピーク年齢）は `STAT_GROWTH` が単一の権威**。
+  //    以前は大学だけ完全に別実装で、base も閾値もハードコードされていた
+  //    （技術系は社会人の2.6倍、走力・肩は4〜7倍）。そのため社会人側で天井を
+  //    下げても大学卒業生の上位1%が 79→77 としか動かず、
+  //    **同じ「ミート60」が進路によって別の意味を持つ**状態だった。
+  //    3作品（高校野球版・本作・プロ野球版）で能力値を共有する構想があるので、
+  //    ここが分かれていると作品間でスケールがずれる。
+  // 大学の性格（ランク・specialties・マイルドなプロ意識）は乗数側で表す。
+  const UNIV_GAIN = 2.6;   // STAT_GROWTH の base を大学の成長量に合わせる係数
+
+  // プロ意識。**大学は他カテゴリよりマイルド**にする。
+  // 意図: 怠け者でも練習環境があり、ある程度は強制的に練習させられるので、
+  //       意識の差は出るが独立（0.55〜1.90）やクラブ（0.10〜2.60）ほど開かない。
+  // ⚠ **下限を切ることで「強制的に練習させられる環境」を表す**。
+  //    傾き 0.0048（下限なし）では4年間の幅が 3.1点＝0.31ランクしかなく、
+  //    マイルドを通り越して事実上無効だった。
+  //   意識20→0.78(下限) / 50→1.00 / 80→1.39 / 100→1.65
+  //   参考: 独立 0.55〜1.90 / クラブ 0.10〜2.60 と比べて感度は約半分、
+  //         かつ怠けても0.78より下がらない（＝落ちはしない）。
+  const discipline = player.personality?.discipline ?? 50;
+  const disciplineMult = Math.max(0.78, 1.0 + (discipline - 50) * 0.013);
+
+  /**
+   * @param key STAT_GROWTH のキー（伸びやすさ・天井・ピーク年齢の出どころ）
+   * @param spec 大学の得意分野（specialties）のキー
+   */
+  const grow = (current, key, spec, capOverride = null, baseMult = 1) => {
+    const g = STAT_GROWTH[key];
+    let amount = g.base * baseMult * UNIV_GAIN * gp * rankMult * disciplineMult
+      * specMult(spec) * (0.7 + Math.random() * 0.6);
+    amount *= decayMult(current, growthThreshold(ceilOf(g).threshold, gp), growthDecayRate(ceilOf(g).rate, gp), ceilOf(g).floor);
+    return Math.min(capOverride ?? g.cap, current + stochasticRound(amount));
   };
 
   if (isPitcher) {
-    player.pitching.control = grow(player.pitching.control, 5, 'technique', 99, 70, 0.05);
-    player.pitching.stamina = grow(player.pitching.stamina, 7, 'stamina', 200, 80, 0.03);
-    player.physical.arm = grow(player.physical.arm, 3.5, 'athletic', 99, 80, 0.03);
+    player.pitching.control = grow(player.pitching.control, 'control', 'technique');
+    player.pitching.stamina = grow(player.pitching.stamina, 'stamina', 'stamina');
+    player.physical.arm = grow(player.physical.arm, 'armP', 'athletic');
     const uniVelCap = getVelocityCap(player.physical.arm);
     const uniVelCatchup = getVelocityCatchupMult(player.physical.arm, player.pitching.velocity);
-    player.pitching.velocity = grow(player.pitching.velocity, 2.0 * uniVelCatchup, 'power', uniVelCap, 150, 0.20);
+    player.pitching.velocity = grow(player.pitching.velocity, 'velocity', 'power', uniVelCap, uniVelCatchup);
     if (player.pitching.arsenal) {
       const techBonus = has('technique') ? 1.3 : 1.0;
       player.pitching.arsenal.forEach(pitch => {
@@ -868,13 +1163,15 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
         }
       });
     }
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 'stamina', 99, 80, 0.03);
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 'bodyStamina', 'stamina');
 
     // 新球種習得チャンス（technique or versatility持ちの大学で確率UP）
     const arsenal = player.pitching?.arsenal || [];
     const existingTypes = arsenal.map(p => p.type);
     const hasNewPitchChance = has('technique') || has('versatility');
-    const newPitchRate = hasNewPitchChance ? 0.15 : 0.05;
+    // ⚠ 器用さも掛ける（器用さ50で従来どおり）。社会人・独立の
+    //    `tryLearnNewPitch` と揃えること——片方だけだと進路で意味が変わる
+    const newPitchRate = (hasNewPitchChance ? 0.15 : 0.05) * dexterityMult(player, 0.5);
     if (Math.random() < newPitchRate) {
       const form = player.pitching?.form || 'overhand';
       const affinityTypes = UNI_FORM_PITCH_AFFINITY[form] || [];
@@ -893,13 +1190,13 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
       }
     }
   } else {
-    player.batting.meet = grow(player.batting.meet, 5, 'technique', 99, 70, 0.05);
-    player.batting.power = grow(player.batting.power, 3.5, 'power', 99, 70, 0.05);
-    player.batting.eye = grow(player.batting.eye, 3.5, 'mental', 99, 70, 0.05);
-    player.physical.speed = grow(player.physical.speed, 2, 'athletic', 99, 80, 0.03);
-    player.fielding.defense = grow(player.fielding.defense, 3.5, 'defense', 99, 70, 0.05);
-    player.physical.arm = grow(player.physical.arm, 2, 'athletic', 99, 80, 0.03);
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 'stamina', 99, 80, 0.03);
+    player.batting.meet = grow(player.batting.meet, 'meet', 'technique');
+    player.batting.power = grow(player.batting.power, 'power', 'power');
+    player.batting.eye = grow(player.batting.eye, 'eye', 'mental');
+    player.physical.speed = grow(player.physical.speed, 'speed', 'athletic');
+    player.fielding.defense = grow(player.fielding.defense, 'defense', 'defense');
+    player.physical.arm = grow(player.physical.arm, 'arm', 'athletic');
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 'bodyStamina', 'stamina');
 
     // サブポジ成長（defense or versatility持ちの大学で確率UP）
     if (player.positionFitness) {
@@ -912,7 +1209,9 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
         const targets = weak.length > 0 ? weak : nonMain;
         const picked = targets[Math.floor(Math.random() * targets.length)];
         const old = player.positionFitness[picked] || 0;
-        const gain = Math.floor(Math.random() * 8) + (hasSubPosChance ? 7 : 4);
+        // ⚠ キャンプの `subposition` と同じ幅(0.4)にすること
+        const gain = Math.max(1, Math.round(
+          (Math.floor(Math.random() * 8) + (hasSubPosChance ? 7 : 4)) * dexterityMult(player, 0.4)));
         player.positionFitness[picked] = Math.min(100, old + gain);
       }
       syncPositionToFitness(player);
@@ -920,9 +1219,9 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
   }
 
   // フィジカル共通
-  player.physical.muscle = grow(player.physical.muscle || 40, 2, 'athletic', 99, 80, 0.03);
-  player.physical.dexterity = grow(player.physical.dexterity || 40, 2, 'athletic', 99, 80, 0.03);
-  player.physical.recovery = grow(player.physical.recovery || 40, 2, 'stamina', 99, 80, 0.03);
+  player.physical.muscle = grow(player.physical.muscle || 40, 'muscle', 'athletic');
+  player.physical.dexterity = grow(player.physical.dexterity || 40, 'dexterity', 'athletic');
+  player.physical.recovery = grow(player.physical.recovery || 40, 'recovery', 'stamina');
 }
 
 // ============================================================
@@ -934,15 +1233,39 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
  * @param {Array|Object} players - 大学進学する選手の配列、またはランク別オブジェクト { S: [...], A: [...], ... }
  * @param {number} enrollYear - 入学年度
  */
-export function enrollInUniversity(players, enrollYear) {
-  if (!universityPool[enrollYear]) {
-    universityPool[enrollYear] = [];
-  }
+export function enrollInUniversity(players, enrollYear, allTeams = TEAMS_DATA) {
+  const stage = (entry) => {
+    if (!universityPool[enrollYear]) universityPool[enrollYear] = [];
+    universityPool[enrollYear].push(entry);
+  };
+  // 名簿があればそこへ入れる（大学生の実体は名簿ひとつ）。無ければ初期化中の仮置き
+  const place = (player, rank, team) => {
+    const roster = team?.name ? allTeams[team.name] : null;
+    if (roster?.players) {
+      prepareUniversityFreshman(player, rank, team);
+      addToRoster(roster, player);
+    } else {
+      stage({
+        player, enrollYear, graduateYear: enrollYear + 4,
+        universityRank: rank,
+        universityTeamId: team?.id || null,
+        universityTeamName: team?.name || null,
+      });
+    }
+  };
 
   const teamCounts = {};
-  const assignTeam = (rank) => {
-    // TEAMS_DATAに存在するチーム（ユーザーの実プレイ大学）はNPC配属から除外
-    const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank && !TEAMS_DATA[t.name]);
+  // ユーザーが操作している大学（大学モード）のみNPC配属から除外する。
+  // 独立/社会人モードでは234大学がすべてTEAMS_DATAに載るため、TEAMS_DATA全体で
+  // 除外すると配属先が無くなり所属が「大学」表記になってしまう不具合を防ぐ。
+  const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
+  // 捕手は「捕手の少ない大学」へ。⚠ 以前は守備位置を見ずに配っており、
+  //   捕手0人の大学が常に13〜23校あった（亜細亜大学: 60人中 捕手0・投手29）
+  const catchersOf = (t) => (allTeams[t.name]?.players || []).filter(p => p.position === 'catcher').length
+    + (teamCatchers[t.id] || 0);
+  const teamCatchers = {};
+  const assignTeam = (rank, homeBlock = null, position = null) => {
+    const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank && t.name !== userUniTeam);
     if (teams.length === 0) return null;
     let minCount = Infinity;
     let candidates = [];
@@ -955,8 +1278,19 @@ export function enrollInUniversity(players, enrollYear) {
         candidates.push(t);
       }
     });
-    const team = candidates[Math.floor(Math.random() * candidates.length)];
+    // 地元優先。⚠ **枠は均等割り（最も空いている大学）のまま**にすること。
+    //    地元だからと空きを無視して入れると、人口の多い地区の大学だけ膨らむ。
+    //    同じだけ空いている大学が複数あるときに、地元をより高い確率で選ぶ。
+    if (position === 'catcher') {
+      const least = Math.min(...candidates.map(catchersOf));
+      candidates = candidates.filter(t => catchersOf(t) === least);
+    }
+    const home = homeBlock ? candidates.filter(t => blockOfUniversity(t) === homeBlock) : [];
+    const pick = (home.length && Math.random() < HOME_UNIV_PREF) ? home : candidates;
+    const team = pick[Math.floor(Math.random() * pick.length)];
     teamCounts[team.id] = (teamCounts[team.id] || 0) + 1;
+    // 名簿に入る場合は名簿の人数に数えられるので、仮置き（名簿なし）のときだけ数える
+    if (position === 'catcher' && !allTeams[team.name]?.players) teamCatchers[team.id] = (teamCatchers[team.id] || 0) + 1;
     return team;
   };
 
@@ -970,32 +1304,87 @@ export function enrollInUniversity(players, enrollYear) {
   if (Array.isArray(players)) {
     players.forEach(player => {
       const rank = player._destinationRank || 'C';
-      const team = assignTeam(rank);
+      const team = assignTeam(rank, homeBlockOf(player), player.position);
       addUniHistory(player, team);
       player.age = Math.max(player.age || 18, 19);
-      universityPool[enrollYear].push({
-        player, enrollYear, graduateYear: enrollYear + 4,
-        universityRank: rank,
-        universityTeamId: team?.id || null,
-        universityTeamName: team?.name || null,
-      });
+      place(player, rank, team);
     });
   } else {
     for (const rank of ['S', 'A', 'B', 'C', 'D']) {
       if (!players[rank]) continue;
       players[rank].forEach(player => {
-        const team = assignTeam(rank);
+        const team = assignTeam(rank, homeBlockOf(player), player.position);
         addUniHistory(player, team);
         player.age = Math.max(player.age || 18, 19);
-        universityPool[enrollYear].push({
-          player, enrollYear, graduateYear: enrollYear + 4,
-          universityRank: rank,
-          universityTeamId: team?.id || null,
-          universityTeamName: team?.name || null,
-        });
+        place(player, rank, team);
       });
     }
   }
+}
+
+const blankSeasonStats = () => ({
+  batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 },
+  pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 },
+});
+
+// 名簿に入る新1年生の支度（所属・学年・成績欄）
+function prepareUniversityFreshman(player, rank, team, universityYear = 1) {
+  player.universityTeamId = team.id ?? player.universityTeamId ?? null;
+  player.universityTeamName = team.name;
+  player.universityRank = rank;
+  player.universityYear = universityYear;
+  player.recruitType = player.recruitType || 'recommended';
+  player.isStarter = false;
+  player.battingOrder = 0;
+  delete player._destinationRank;
+  if (!player.positionFitness) player.positionFitness = generatePositionFitness(player.position);
+  syncPositionToFitness(player);
+  if (!player.seasonStats) player.seasonStats = blankSeasonStats();
+}
+
+/**
+ * 大学在学生1人の1年分（成長＋知名度）。**名簿の選手に掛ける唯一の経路**。
+ * ⚠ 以前は成長がプールの選手にしか掛からず、名簿の大学生は年齢カーブの
+ *    わずかな変動しか受けていなかった（3年でミート +1.4 対 プール +11.4）。
+ * @param {number} universityYear この1年を終えた時点の学年（1〜4）
+ */
+export function applyUniversityYear(player, { rank, teamId, teamName, universityYear, currentYear, grow = true }) {
+  applyUniversityFame({
+    player, universityRank: rank, universityTeamName: teamName,
+    enrollYear: currentYear - (universityYear - 1),
+  }, currentYear);
+  if (grow) applyUniversityGrowth(player, rank, teamId);
+}
+
+/** 大学生（名簿＋初期化中の仮置き）の総数 */
+export function countUniversityStudents(allTeams = TEAMS_DATA) {
+  let n = Object.values(universityPool).reduce((sum, c) => sum + (c?.length || 0), 0);
+  for (const t of Object.values(allTeams)) if (t?.universityData) n += t.players?.length || 0;
+  return n;
+}
+
+/**
+ * 仮置きのプールに残った在学生を名簿へ移す（旧セーブの移行もここ）。
+ * ⚠ 旧セーブはプールと名簿の**両方に別人の在学生**を持つので、移すと一時的に
+ *    名簿が大きくなる（4年で卒業して元の規模に戻る）。どちらも実在の選手なので捨てない。
+ */
+export function absorbUniversityPoolIntoRosters(allTeams = TEAMS_DATA, currentYear = 1) {
+  let moved = 0;
+  for (const enrollYear of Object.keys(universityPool)) {
+    const cohort = universityPool[enrollYear] || [];
+    const rest = [];
+    for (const e of cohort) {
+      const roster = e.universityTeamName ? allTeams[e.universityTeamName] : null;
+      if (!roster?.players || !e.player) { rest.push(e); continue; }
+      const grade = Math.max(1, Math.min(4, currentYear - Number(enrollYear) + 1));
+      prepareUniversityFreshman(e.player, e.universityRank || roster.universityData?.rank || 'C',
+        { id: e.universityTeamId, name: e.universityTeamName }, grade);
+      addToRoster(roster, e.player);
+      moved++;
+    }
+    if (rest.length) universityPool[enrollYear] = rest; else delete universityPool[enrollYear];
+  }
+  return moved;
 }
 
 /**
@@ -1005,8 +1394,9 @@ export function enrollInUniversity(players, enrollYear) {
  * @param {number} gameYear - 現在のゲーム年度
  */
 export function seedInitialUniversityClasses(gameYear) {
-  const existingCount = Object.values(universityPool).reduce((sum, cohort) => sum + (cohort?.length || 0), 0);
-  if (existingCount > 0) return;
+  // ⚠ 名簿も数えること。プールは仮置きなので普段は空で、プールだけ見ると
+  //    毎回8920人を作り直して名簿へ足してしまう（この関数は日送りのたびに呼ばれる）
+  if (countUniversityStudents() > 0) return;
 
   const classesNeeded = 4;
   const uniSlots = getUniversitySlotsByRank();
@@ -1024,8 +1414,12 @@ export function seedInitialUniversityClasses(gameYear) {
       players.push(p);
     }
 
-    const scored = players.map(p => ({ player: p, score: evaluatePlayerPotential(p) }));
-    scored.sort((a, b) => b.score - a.score);
+    // ⚠ **枠の2.5倍を生成して上位だけ採る**ので、順位表の偏りがそのまま構成比になる。
+    //    群ごとに順位を付け直してから切ること（`balanceRankByPosition`）。
+    const scored = balanceRankByPosition(
+      players.map(p => ({ player: p, score: evaluatePlayerPotential(p) }))
+        .sort((a, b) => b.score - a.score)
+    );
     const uniPlayers = { S: [], A: [], B: [], C: [], D: [] };
     let cursor = 0;
     for (const rank of ['S', 'A', 'B', 'C', 'D']) {
@@ -1038,7 +1432,8 @@ export function seedInitialUniversityClasses(gameYear) {
       });
     }
 
-    enrollInUniversity(uniPlayers, enrollYear);
+    // 一旦プールに仮置きしてから成長させ、最後に名簿へ移す
+    enrollInUniversity(uniPlayers, enrollYear, {});
 
     const cohort = universityPool[enrollYear];
     if (cohort) {
@@ -1049,6 +1444,7 @@ export function seedInitialUniversityClasses(gameYear) {
       }
     }
   }
+  absorbUniversityPoolIntoRosters(TEAMS_DATA, gameYear);
 }
 
 // ============================================================
@@ -1214,7 +1610,7 @@ export function warmUpPlayerPipeline(gameYear) {
         grad.postGradPath = 'retired';
       }
       if (grad.postGradPath !== 'retired') {
-        releasedPlayersPool.push(grad);
+        addToReleasedPool(grad);
       }
     });
 
@@ -1223,21 +1619,23 @@ export function warmUpPlayerPipeline(gameYear) {
     highSchoolPool.year = simYear;
     const hsDistribution = distributeHighSchoolGraduates(enrollYear);
 
-    // 大学入学
-    enrollInUniversity(hsDistribution.university, enrollYear);
+    // 大学入学。⚠ ウォームアップ中は必ずプールに仮置きする（`{}` を渡す）。大学モードでは
+    //    自リーグの大学が既に TEAMS_DATA に居るので、名簿へ直接入れると
+    //    ウォームアップの加齢・成長・卒業を通らない選手が名簿に混ざる
+    enrollInUniversity(hsDistribution.university, enrollYear, {});
 
     // 社会人・独立候補はリリースプールへ（高卒1年目=19歳）
     hsDistribution.corporate.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
       p.age = Math.max(19, p.age);
-      releasedPlayersPool.push(p);
+      addToReleasedPool(p);
     });
     hsDistribution.independent.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
       p.age = Math.max(19, p.age);
-      releasedPlayersPool.push(p);
+      addToReleasedPool(p);
     });
   }
 
@@ -1294,8 +1692,8 @@ function distributeToCorporateTeams(gameYear) {
       p.isStarter = false;
       p.battingOrder = 0;
       if (!p.careerHistory) p.careerHistory = [];
-      p.careerHistory.push({ type: 'corporate_join', year: gameYear, label: `${teamInfo.name}入社` });
-      teamInfo.team.players.push(p);
+      p.careerHistory.push({ type: 'corporate_join', year: gameYear, label: teamInfo.name });
+      addToRoster(teamInfo.team, p);
       usedIndices.add(entry.idx);
       added++;
     }
@@ -1318,7 +1716,7 @@ function distributeToCorporateTeams(gameYear) {
       p.battingOrder = 0;
       if (!p.careerHistory) p.careerHistory = [];
       p.careerHistory.push({ type: 'club_join', year: gameYear, label: `${teamInfo.name}入部` });
-      teamInfo.team.players.push(p);
+      addToRoster(teamInfo.team, p);
       usedIndices.add(scored[i].idx);
       added++;
     }
@@ -1326,44 +1724,9 @@ function distributeToCorporateTeams(gameYear) {
 
   // 使用した選手をリリースプールから除去
   const remaining = releasedPlayersPool.filter((_, idx) => !usedIndices.has(idx));
-  releasedPlayersPool.length = 0;
-  remaining.forEach(p => releasedPlayersPool.push(p));
+  replaceReleasedPool(remaining);
 }
 
-/**
- * 大学プールの現在の状態サマリーを取得
- */
-export function getUniversityPoolSummary() {
-  const summary = {
-    totalStudents: 0,
-    byYear: {},
-    byRank: { S: 0, A: 0, B: 0, C: 0, D: 0, unknown: 0 },
-    byTeam: {},
-  };
-  Object.entries(universityPool).forEach(([year, cohort]) => {
-    summary.byYear[year] = {
-      count: cohort.length,
-      pitchers: cohort.filter(e => e.player.position === 'pitcher').length,
-      fielders: cohort.filter(e => e.player.position !== 'pitcher').length
-    };
-    summary.totalStudents += cohort.length;
-    cohort.forEach(entry => {
-      const rank = entry.universityRank;
-      if (rank && summary.byRank[rank] !== undefined) {
-        summary.byRank[rank]++;
-      } else {
-        summary.byRank.unknown++;
-      }
-      if (entry.universityTeamName) {
-        if (!summary.byTeam[entry.universityTeamName]) {
-          summary.byTeam[entry.universityTeamName] = { count: 0, rank: entry.universityRank };
-        }
-        summary.byTeam[entry.universityTeamName].count++;
-      }
-    });
-  });
-  return summary;
-}
 
 /**
  * セーブ/ロード用: 大学プール+高校生プールをシリアライズ
@@ -1371,7 +1734,7 @@ export function getUniversityPoolSummary() {
 function clonePlayerLite(p) {
   const clone = {};
   for (const key of Object.keys(p)) {
-    if (key === 'seasonStats' || key === 'careerStats' || key === 'careerHistory' || key === 'gameLog' || key === 'lastAtBat' || key === 'lastPitch') continue;
+    if (key === 'seasonStats' || key === 'careerStats' || key === 'gameLog' || key === 'lastAtBat' || key === 'lastPitch') continue;
     const v = p[key];
     clone[key] = (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
   }

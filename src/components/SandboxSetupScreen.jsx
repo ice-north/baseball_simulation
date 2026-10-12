@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { addToRoster, addManyToRoster, removeFromRosterById } from '../state/roster.js';
+import { POSITION_NAMES, FORM_OPTIONS } from '../utils/constants.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { importDraftedPlayers, convertDraftedPlayerToSandboxPlayer } from '../game/saveSystem.js';
+import { getObRegistry, convertObToPlayer } from '../game/obRegistry.js';
 
 /**
  * 箱庭モード用のデフォルト選手を作成
@@ -89,6 +91,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editFormData, setEditFormData] = useState(null);
   const [, setUpdateTrigger] = useState(0);
+  const [showObPicker, setShowObPicker] = useState(false);
 
   const forceUpdate = () => setUpdateTrigger(prev => prev + 1);
 
@@ -106,16 +109,14 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   // 選手追加
   const addPlayer = (position) => {
     const newPlayer = createDefaultPlayer(getNextId(), position);
-    TEAMS_DATA[activeTeam].players.push(newPlayer);
+    addToRoster(TEAMS_DATA[activeTeam], newPlayer);
     forceUpdate();
     startEditPlayer(newPlayer);
   };
 
   // 選手削除
   const removePlayer = (playerId) => {
-    const idx = TEAMS_DATA[activeTeam].players.findIndex(p => p.id === playerId);
-    if (idx !== -1) {
-      TEAMS_DATA[activeTeam].players.splice(idx, 1);
+    if (removeFromRosterById(TEAMS_DATA[activeTeam], playerId)) {
       forceUpdate();
     }
   };
@@ -160,10 +161,18 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
         nextId += 1;
         return player;
       });
-      TEAMS_DATA[activeTeam].players.push(...converted);
+      addManyToRoster(TEAMS_DATA[activeTeam], converted);
       forceUpdate();
       alert(`${converted.length}名のドラフト指名選手を「${activeTeam}」にインポートしました`);
     });
+  };
+
+  // OB名鑑（歴代の教え子）から現在のチームに追加
+  const handleAddOb = (ob) => {
+    if (!TEAMS_DATA[activeTeam]) return;
+    const player = convertObToPlayer(ob, getNextId());
+    addToRoster(TEAMS_DATA[activeTeam], player);
+    forceUpdate();
   };
 
   // 全チームの選手数チェック
@@ -180,12 +189,12 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   const fielders = team.players.filter(p => p.position !== 'pitcher');
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
+      <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-orange-400">箱庭モード - チーム設定</h1>
-            <p className="text-sm text-gray-400 mt-1">各チームの選手を自由に設定してください（最低16人/チーム）</p>
+            <h1 className="text-3xl font-bold text-orange-400">箱庭モード - チーム設定</h1>
+            <p className="text-sm text-gray-300 mt-1">各チームの選手を自由に設定してください（最低16人/チーム）</p>
           </div>
           <button
             onClick={() => {
@@ -197,9 +206,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
             }}
             disabled={!canStart()}
             className={`px-8 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
-              canStart()
-                ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              'btn-primary'
             }`}
           >
             シーズン開始 →
@@ -229,7 +236,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
         </div>
 
         {/* チーム操作 */}
-        <div className="bg-gray-800 rounded-lg p-4 mb-4">
+        <div className="bg-surface-2 rounded-lg p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-white">{team.name} - {team.players.length}人</h2>
             <div className="flex gap-2">
@@ -239,34 +246,41 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   generatePitchingRotation(activeTeam);
                   forceUpdate();
                 }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                className="btn-secondary px-3 py-1.5 rounded text-sm transition"
               >
                 AIオーダー編成
               </button>
               <button
                 onClick={() => { generateAllTeamsLineup(); forceUpdate(); }}
-                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                className="btn-primary px-3 py-1.5 rounded text-sm transition"
               >
                 全チーム一括編成
               </button>
               <button
                 onClick={handleImportDraftedPlayers}
-                className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                className="btn-secondary px-3 py-1.5 rounded text-sm transition"
                 title="資料室からエクスポートしたドラフト指名選手JSONを読み込み"
               >
                 📤 ドラフト指名選手をインポート
+              </button>
+              <button
+                onClick={() => setShowObPicker(true)}
+                className="btn-secondary px-3 py-1.5 rounded text-sm transition"
+                title="これまでプロへ送り出した歴代の教え子を呼び出す"
+              >
+                🎓 OB名鑑から追加
               </button>
             </div>
           </div>
 
           {/* 選手追加ボタン */}
           <div className="flex gap-1.5 flex-wrap mb-4">
-            <span className="text-gray-400 text-xs self-center mr-1">追加:</span>
+            <span className="text-gray-300 text-xs self-center mr-1">追加:</span>
             {POSITIONS.map(pos => (
               <button
                 key={pos}
                 onClick={() => addPlayer(pos)}
-                className="bg-gray-600 hover:bg-gray-500 text-white px-2.5 py-1 rounded text-xs font-bold transition"
+                className="btn-secondary px-2.5 py-1 rounded text-xs font-bold transition"
               >
                 + {POSITION_NAMES[pos]}
               </button>
@@ -282,15 +296,15 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   <div className="cursor-pointer flex-1 min-w-0" onClick={() => startEditPlayer(player)}>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-sm truncate">{player.name}</span>
-                      <span className="text-xs text-gray-400">{player.age}歳</span>
+                      <span className="text-xs text-gray-300">{player.age}歳</span>
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className="text-xs text-gray-300 mt-0.5">
                       {player.pitching?.velocity}km/h | 制球{player.pitching?.control} | スタ{player.pitching?.stamina}
                     </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); removePlayer(player.id); }}
-                    className="text-gray-500 hover:text-red-400 ml-2 opacity-0 group-hover:opacity-100 transition"
+                    className="text-gray-400 hover:text-red-400 ml-2 opacity-0 group-hover:opacity-100 transition"
                     title="削除"
                   >
                     ✕
@@ -309,15 +323,15 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   <div className="cursor-pointer flex-1 min-w-0" onClick={() => startEditPlayer(player)}>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-sm truncate">{player.name}</span>
-                      <span className="text-xs text-gray-400">{POSITION_NAMES[player.position]} | {player.age}歳</span>
+                      <span className="text-xs text-gray-300">{POSITION_NAMES[player.position]} | {player.age}歳</span>
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className="text-xs text-gray-300 mt-0.5">
                       ミ{player.batting?.meet} パ{player.batting?.power} 走{player.physical?.speed} 守{player.fielding?.defense}
                     </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); removePlayer(player.id); }}
-                    className="text-gray-500 hover:text-red-400 ml-2 opacity-0 group-hover:opacity-100 transition"
+                    className="text-gray-400 hover:text-red-400 ml-2 opacity-0 group-hover:opacity-100 transition"
                     title="削除"
                   >
                     ✕
@@ -332,23 +346,23 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
       {/* 選手編集モーダル */}
       {editingPlayer && editFormData && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-5 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface-2 rounded-lg p-5 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-white">選手編集</h2>
-              <button onClick={cancelEdit} className="text-gray-400 hover:text-white text-2xl">✕</button>
+              <button onClick={cancelEdit} className="text-gray-300 hover:text-white text-2xl">✕</button>
             </div>
 
             {/* 基本情報 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">名前</label>
+                <label className="block text-xs text-gray-300 mb-1">名前</label>
                 <div className="flex gap-1">
                   <input type="text" value={editFormData.name}
                     onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
                     className="flex-1 bg-gray-700 text-white px-2 py-1.5 rounded text-sm" />
                   <button
                     onClick={() => setEditFormData(prev => ({ ...prev, name: generateRandomPlayerName() }))}
-                    className="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs"
+                    className="btn-secondary px-2 py-1 rounded text-xs"
                     title="ランダム名前"
                   >
                     🎲
@@ -356,13 +370,13 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">年齢</label>
+                <label className="block text-xs text-gray-300 mb-1">年齢</label>
                 <input type="number" min="16" max="50" value={editFormData.age || 22}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, age: Math.max(16, Math.min(50, parseInt(e.target.value) || 22)) }))}
                   className="w-full bg-gray-700 text-white px-2 py-1.5 rounded text-sm" />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">ポジション</label>
+                <label className="block text-xs text-gray-300 mb-1">ポジション</label>
                 <select value={editFormData.position}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, position: e.target.value }))}
                   className="w-full bg-gray-700 text-white px-2 py-1.5 rounded text-sm">
@@ -372,7 +386,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">打席 / 投げ手</label>
+                <label className="block text-xs text-gray-300 mb-1">打席 / 投げ手</label>
                 <div className="flex gap-1">
                   <select value={editFormData.batting?.bats || 'right'}
                     onChange={(e) => setEditFormData(prev => ({ ...prev, batting: { ...prev.batting, bats: e.target.value } }))}
@@ -480,10 +494,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   <select value={editFormData.pitching?.form || 'overhand'}
                     onChange={(e) => setEditFormData(prev => ({ ...prev, pitching: { ...prev.pitching, form: e.target.value } }))}
                     className="flex-1 bg-gray-600 text-white px-1 py-1 rounded text-xs">
-                    <option value="overhand">オーバー</option>
-                    <option value="threeQuarter">スリークォーター</option>
-                    <option value="sidearm">サイド</option>
-                    <option value="submarine">アンダー</option>
+                    {FORM_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.short}</option>)}
                   </select>
                 </div>
               </div>
@@ -548,12 +559,65 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
 
             {/* ボタン */}
             <div className="flex justify-end gap-3">
-              <button onClick={cancelEdit} className="px-5 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition text-sm">キャンセル</button>
-              <button onClick={savePlayerEdit} className="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition text-sm font-bold">保存</button>
+              <button onClick={cancelEdit} className="px-5 py-2 btn-secondary rounded transition text-sm">キャンセル</button>
+              <button onClick={savePlayerEdit} className="btn-primary px-5 py-2 rounded transition text-sm">保存</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* OB名鑑ピッカー: 歴代の教え子を選んでチームに追加 */}
+      {showObPicker && (() => {
+        const obs = getObRegistry();
+        return (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowObPicker(false)}>
+            <div className="bg-surface-2 rounded-xl border border-gray-700 w-full max-w-3xl flex flex-col" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2 flex-shrink-0">
+                <h3 className="text-white font-bold">🎓 OB名鑑</h3>
+                <span className="text-xs text-gray-300">プロへ送り出した歴代の教え子 {obs.length}名</span>
+                <span className="text-xs text-gray-300 ml-1">→「{activeTeam}」に追加</span>
+                <button onClick={() => setShowObPicker(false)} className="ml-auto text-gray-300 hover:text-white text-xl leading-none px-1">✕</button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                {obs.length === 0 ? (
+                  <div className="text-center py-10 text-gray-300 text-sm">
+                    まだOBがいません。<br />
+                    <span className="text-gray-300">通常モードでドラフト指名された所属選手がここに蓄積されます。</span>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {obs.map((ob, i) => {
+                      const isP = ob.position === 'pitcher';
+                      const abil = isP
+                        ? `速${ob.pitching?.velocity ?? '-'} 制${ob.pitching?.control ?? '-'} スタ${ob.pitching?.stamina ?? '-'}`
+                        : `ミ${ob.batting?.meet ?? '-'} パ${ob.batting?.power ?? '-'} 走${ob.physical?.speed ?? '-'} 守${ob.fielding?.defense ?? '-'}`;
+                      return (
+                        <div key={`${ob.playerId}-${ob.draftYear}-${i}`} className="flex items-center gap-2 bg-gray-700/40 rounded px-2 py-1.5 text-xs">
+                          <span className="text-gray-300 w-6 text-center">{POSITION_NAMES[ob.position] || '-'}</span>
+                          <span className="text-white font-bold w-24 truncate">{ob.name}</span>
+                          <span className="text-gray-300 w-8 text-right tabular-nums">{ob.age}歳</span>
+                          <span className="text-gray-300 truncate w-32 hidden md:block">{ob.fromTeam || '—'}</span>
+                          <span className="text-amber-300 truncate w-32 hidden lg:block">{ob.npbTeam}</span>
+                          <span className="text-gray-200 font-mono tabular-nums flex-1 truncate">{abil}</span>
+                          <button
+                            onClick={() => handleAddOb(ob)}
+                            className="btn-primary px-2 py-1 rounded flex-shrink-0"
+                          >
+                            追加
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="px-4 py-2 border-t border-gray-700 text-xs text-gray-300 flex-shrink-0">
+                指名時点の能力で復元されます。同じ選手を複数回追加することもできます。
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

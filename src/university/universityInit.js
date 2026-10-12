@@ -5,10 +5,10 @@
 
 import { TEAMS_DATA, clearReleasedPlayersPool, initializeAllPitchingRotations } from '../teams-data.js';
 import { WORLD_DATA, initializeWorld } from '../corporate/worldData.js';
-import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from './universityTeamsData.js';
+import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS, generateLeagueAbbreviations } from './universityTeamsData.js';
 import { initializeUniversityLeagues } from './universityLeagueManager.js';
 import { generateCorporateRoster, initializeCorporateParallelWorld } from '../corporate/corporateInit.js';
-import { seedInitialUniversityClasses, warmUpPlayerPipeline, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
+import { seedInitialUniversityClasses, warmUpPlayerPipeline, clearUniversityPool, clearHighSchoolPool, universityPool, absorbUniversityPoolIntoRosters } from '../season/universityPool.js';
 
 // 大学チームの学年あたり人数（1〜4年生 × 人数 = 総在籍数）
 const UNI_PLAYERS_PER_GRADE = { S: 14, A: 12, B: 10, C: 8, D: 6 };
@@ -58,6 +58,15 @@ const makeAbbreviation = (name) => {
   return name.slice(0, 3);
 };
 
+// TEAMS_DATA 内の大学チーム（同一リーグ）の略称を一意化して再設定する。
+// 新規初期化・セーブロード後の両方から呼べるようにエクスポートする。
+export const refreshUniversityAbbreviations = () => {
+  const uniNames = Object.keys(TEAMS_DATA).filter(n => TEAMS_DATA[n]?.universityTeamId);
+  if (uniNames.length === 0) return;
+  const abbrs = generateLeagueAbbreviations(uniNames);
+  uniNames.forEach(n => { TEAMS_DATA[n].abbreviation = abbrs[n]; });
+};
+
 // 大学生の年齢分布（19-22歳、1-4年生）
 const assignUniversityAge = (player) => {
   const roll = Math.random();
@@ -91,7 +100,7 @@ const generateUniversityRoster = (teamDef, isUserTeam = false) => {
   roster.forEach((p, i) => {
     // 学年を均等配分: grade 1〜4 を繰り返す
     const grade = (i % 4) + 1;
-    p.age = 18 + grade;
+    p.age = 18 + grade; // 1年生=19歳、2年生=20歳、3年生=21歳、4年生=22歳
 
     // 大学生らしい能力レンジに調整（ソフトキャップ）
     if (p.position === 'pitcher') {
@@ -154,7 +163,9 @@ export const initializeUniversityGame = (teamDef) => {
 
   const createTeamEntry = (def) => {
     const name = def.name;
-    const roster = generateUniversityRoster(def);
+    // プールに在学生が居る大学は名簿を空で作り、`absorbUniversityPoolIntoRosters` で移す
+    const hasPoolStudents = Object.values(universityPool).some(c => c?.some(e => e.universityTeamName === name));
+    const roster = hasPoolStudents ? [] : generateUniversityRoster(def);
     TEAMS_DATA[name] = {
       name,
       abbreviation: makeAbbreviation(name),
@@ -199,11 +210,24 @@ export const initializeUniversityGame = (teamDef) => {
     userRoster = roster;
   }
 
+  // パイプラインウォームアップ（全大学の在学生4学年 + 社会人補充）。
+  // ⚠ 同リーグの大学を作る**前**に回すこと。在学生はまずプールに仮置きされるので、
+  //    その大学の名簿はプールの在学生から作る（`generateUniversityRoster` で別に作ると、
+  //    同じ大学に名簿とプールの**別人の在学生**が並ぶ＝大学生の二重化）
+  // ⚠ 自チームには在学生を配らない（推薦・一般入部で自前に持つ）。`enrollInUniversity` は
+  //    `WORLD_DATA.universityLeague.userTeam` で除外するので、ウォームアップより前に置く
+  WORLD_DATA.universityLeague = { ...(WORLD_DATA.universityLeague || {}), userTeam: userTeamName };
+  warmUpPlayerPipeline(1);
+
   // 同リーグの全チームをTEAMS_DATAに追加（部制でも全チーム生成）
   for (const def of leagueTeams) {
     if (TEAMS_DATA[def.name]) continue;
     createTeamEntry(def);
+    absorbUniversityPoolIntoRosters(TEAMS_DATA, 1);   // その大学の在学生を名簿へ
   }
+
+  // リーグ内で一意な略称に再設定（同地名大学の3文字重複を解消）
+  refreshUniversityAbbreviations();
 
   // 部制の場合、ユーザーの部のチーム名のみをallTeamNamesに
   if (numDivisions >= 2) {
@@ -222,9 +246,6 @@ export const initializeUniversityGame = (teamDef) => {
 
   // 大学リーグ初期化（全16リーグ）
   initializeUniversityLeagues(2024);
-
-  // パイプラインウォームアップ（他リーグの大学生 + 社会人補充）
-  warmUpPlayerPipeline(1);
 
   // 社会人チーム＋独立リーグも並行世界として生成
   initializeCorporateWorldForUniversity();
@@ -257,6 +278,7 @@ const initializeCorporateWorldForUniversity = () => {
   initializeCorporateParallelWorld(Object.keys(TEAMS_DATA));
 };
 
+
 // ユーザーのリーグスケジュールをseasonData.schedule形式で取得
 export const getUniversityLeagueSchedule = (regionId) => {
   const league = WORLD_DATA.universityLeagues?.[regionId];
@@ -288,6 +310,19 @@ export const getUniversityLeagueSchedule = (regionId) => {
   }
 
   return schedule;
+};
+
+// 春季入替後の新divTeamsでユーザーの秋季スケジュールを取得
+export const getUserFallSchedule = (regionId) => {
+  const league = WORLD_DATA.universityLeagues?.[regionId];
+  if (!league?.fall?.schedule) return [];
+  const userDiv = WORLD_DATA.universityLeague?.userDivision || 1;
+  const divTeamSet = (league.divisions && league.divTeams?.[userDiv])
+    ? new Set(league.divTeams[userDiv])
+    : null;
+  return league.fall.schedule
+    .filter(g => !divTeamSet || divTeamSet.has(g.home))
+    .map((g, i) => ({ id: i, date: { ...g.date }, home: g.home, away: g.away, result: null, season: 'fall' }));
 };
 
 // ユーザーリーグの順位表を初期化（部制の場合はユーザーの部のみ）

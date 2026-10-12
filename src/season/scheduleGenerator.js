@@ -549,19 +549,6 @@ export const getScheduleByDate = (schedule, date) => {
   );
 };
 
-/**
- * 特定月のスケジュールを取得
- * @param {Array} schedule - 全体スケジュール
- * @param {number} year - 年
- * @param {number} month - 月
- * @returns {Array} その月の試合
- */
-export const getScheduleByMonth = (schedule, year, month) => {
-  return schedule.filter(game =>
-    game.date.year === year &&
-    game.date.month === month
-  );
-};
 
 /**
  * 次の試合を取得
@@ -586,26 +573,5 @@ export const getNextGame = (schedule, currentDate, teamName = null) => {
   return filteredSchedule.find(game => compareDates(game.date, currentDate) >= 0) || null;
 };
 
-/**
- * レギュラーシーズンの試合数をカウント
- * @param {Array} schedule - スケジュール
- * @param {string} teamName - チーム名（オプション）
- * @returns {Object} {total: 総試合数, played: 実施済み, remaining: 残り}
- */
-export const countGames = (schedule, teamName = null) => {
-  let filteredSchedule = schedule;
-
-  if (teamName) {
-    filteredSchedule = schedule.filter(game =>
-      game.home === teamName || game.away === teamName
-    );
-  }
-
-  const total = filteredSchedule.length;
-  const played = filteredSchedule.filter(game => game.result !== null).length;
-  const remaining = total - played;
-
-  return { total, played, remaining };
-};
 
 // ES module exports

@@ -1,8 +1,12 @@
 import React from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { generateTeamCalendar } from '../season/calendarUI.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
+import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 
 // 全選手の成績を取得してランキング形式に変換（IDで重複排除）
 // teamNames を渡すとそのチームのみに絞り込む（大学/社会人モードで並行世界チームを除外）
@@ -137,7 +141,7 @@ const getOPSRanking = (teamNames) => {
     .filter(p => p.seasonStats?.batting?.atBats > 0)
     .map(p => {
       const s = p.seasonStats.batting;
-      const obp = (s.hits + s.walks) / (s.atBats + s.walks);
+      const obp = (s.hits + s.walks + (s.hitByPitch || 0)) / (s.atBats + s.walks + (s.hitByPitch || 0));
       const totalBases = (s.hits - (s.doubles || 0) - (s.triples || 0) - s.homeruns) + (s.doubles || 0) * 2 + (s.triples || 0) * 3 + s.homeruns * 4;
       const slg = totalBases / s.atBats;
       return { rank: 0, name: p.name, team: p.teamName, value: (obp + slg).toFixed(3), sortValue: obp + slg };
@@ -203,9 +207,9 @@ const RankingTable = ({ title, data, valueLabel }) => (
     <div className="px-4 py-2.5 border-b border-gray-700/50">
       <h3 className="text-sm font-semibold text-white">{title}</h3>
     </div>
-    <table className="w-full text-sm">
+    <table className="tabular-nums w-full text-sm">
       <thead>
-        <tr className="border-b border-gray-700/40 text-[10px] text-gray-500 font-medium">
+        <tr className="border-b border-gray-700/40 text-xs text-gray-400 font-medium">
           <th className="text-left py-1.5 pl-3 w-8">#</th>
           <th className="text-left py-1.5">選手名</th>
           <th className="text-left py-1.5 w-14">チーム</th>
@@ -216,15 +220,15 @@ const RankingTable = ({ title, data, valueLabel }) => (
         {data.length > 0 ? (
           data.map((player, index) => (
             <tr key={index} className={`border-b border-gray-700/30 hover:bg-gray-700/30 transition-colors ${index === 0 ? 'bg-yellow-900/10' : ''}`}>
-              <td className={`py-1.5 pl-3 font-bold text-xs ${index === 0 ? 'text-yellow-400' : index < 3 ? 'text-gray-300' : 'text-gray-600'}`}>{player.rank}</td>
+              <td className={`py-1.5 pl-3 font-bold text-xs ${index === 0 ? 'text-yellow-400' : index < 3 ? 'text-gray-300' : 'text-gray-400'}`}>{player.rank}</td>
               <td className="py-1.5 text-white text-xs font-medium">{player.name}</td>
-              <td className="py-1.5 text-[10px] text-gray-400">{getTeamAbbreviation(player.team)}</td>
+              <td className="py-1.5 text-xs text-gray-300">{getTeamAbbreviation(player.team)}</td>
               <td className={`text-right py-1.5 pr-3 font-bold text-sm ${index === 0 ? 'text-yellow-300' : 'text-gray-200'}`}>{player.value}</td>
             </tr>
           ))
         ) : (
           <tr>
-            <td colSpan="4" className="py-6 text-center text-gray-600 text-xs">データなし</td>
+            <td colSpan="4" className="py-6 text-center text-gray-400 text-xs">データなし</td>
           </tr>
         )}
       </tbody>
@@ -248,6 +252,7 @@ const ScheduleScreen = ({
   onProgressToNextGame,
   onProgressToNextPhase,
   onStartGame,
+  onGoToDateProgress,
 }) => {
   const leagueFormat = seasonData?.settings?.leagueFormat || 'single';
   const isTwoLeague = leagueFormat === 'two';
@@ -259,11 +264,18 @@ const ScheduleScreen = ({
 
   const getStartingPitcher = (teamName) => {
     const team = TEAMS_DATA[teamName];
-    if (!team || !team.pitchingRotation || !team.pitchingRotation.starters) return null;
+    if (!team || !team.pitchingRotation?.starters?.length) return null;
     const rotation = team.pitchingRotation;
-    const index = rotation.currentStarterIndex || 0;
-    const starterId = rotation.starters[index];
-    return team.players.find(p => p.id === starterId);
+    const starters = rotation.starters;
+    if (!starters.length) return null;
+    const index = (rotation.currentStarterIndex || 0) % starters.length;
+    const exact = team.players.find(p => p.id === starters[index]);
+    if (exact) return exact;
+    for (let i = 1; i < starters.length; i++) {
+      const candidate = team.players.find(p => p.id === starters[(index + i) % starters.length]);
+      if (candidate) return candidate;
+    }
+    return null;
   };
 
   // 当月のカレンダーデータを生成
@@ -282,8 +294,7 @@ const ScheduleScreen = ({
     : { name: '', color: 'bg-gray-100', description: '' };
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 py-5">
+    <ScreenShell>
       {/* シーズンタイムライン */}
       {(() => {
         const isUniversity = seasonData?.settings?.universityMode;
@@ -321,7 +332,7 @@ const ScheduleScreen = ({
                 return (
                   <div key={p.key} className="absolute h-4 rounded-sm flex items-center justify-center overflow-hidden transition-all"
                     style={{ left: `${left}%`, width: `${width}%`, backgroundColor: isActive ? p.color : `${p.color}33`, border: isActive ? `1.5px solid ${p.color}` : '1px solid transparent' }}>
-                    <span className={`text-[9px] font-bold ${isActive ? 'text-white' : 'text-gray-500'}`}>{p.label}</span>
+                    <span className={`text-xs font-bold ${isActive ? 'text-white' : 'text-gray-400'}`}>{p.label}</span>
                   </div>
                 );
               })}
@@ -340,7 +351,7 @@ const ScheduleScreen = ({
             </div>
             <div className="flex justify-between mt-1">
               {[1,4,7,10,12].map(m => (
-                <span key={m} className={`text-[9px] ${currentDate.month === m ? 'text-white font-bold' : 'text-gray-600'}`}>{m}月</span>
+                <span key={m} className={`text-xs ${currentDate.month === m ? 'text-white font-bold' : 'text-gray-400'}`}>{m}月</span>
               ))}
             </div>
           </div>
@@ -356,35 +367,22 @@ const ScheduleScreen = ({
               {phaseInfo.name}
             </span>
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-sm text-gray-400 mt-0.5">
             {currentDate.year}年{currentDate.month}月{currentDate.day}日（{['日','月','火','水','木','金','土'][new Date(currentDate.year, currentDate.month - 1, currentDate.day).getDay()]}）
           </p>
         </div>
-        {/* 日付進行ボタン（階層化） */}
+        {/* 日付進行は完全な「日程進行」画面に一本化（ジャンプ送りでのイベント取りこぼし防止）。
+            この画面は閲覧専用とし、進行は日程進行画面へ誘導する。 */}
         <div className="flex items-center gap-3">
-          {/* メインアクション */}
           {todayGames.some(g => g.home === userTeamName || g.away === userTeamName) ? (
-            <button onClick={onStartGame} className="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-green-600/20 border border-green-500/50">
+            <button onClick={onStartGame} className="btn-primary px-5 py-2 rounded-lg text-sm transition shadow-lg border">
               ⚾ 試合開始
             </button>
           ) : (
-            <button onClick={onProgressToNextGame} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-sm">
-              ⏩ 次の試合日へ
+            <button onClick={onGoToDateProgress} className="btn-primary px-5 py-2 rounded-lg text-sm transition shadow-sm" title="日程進行画面で1日ずつ安全に進めます">
+              ▶ 日程を進める
             </button>
           )}
-          {/* セカンダリ */}
-          <div className="flex gap-1">
-            <button onClick={() => onProgressDate(1)} className="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-2.5 py-1.5 rounded text-xs font-medium transition">
-              +1日
-            </button>
-            <button onClick={() => onProgressDate(3)} className="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-2.5 py-1.5 rounded text-xs font-medium transition">
-              +3日
-            </button>
-          </div>
-          {/* 危険操作 */}
-          <button onClick={onProgressToNextPhase} className="text-gray-500 hover:text-orange-400 text-xs font-medium transition px-2 py-1.5 rounded hover:bg-gray-800" title="次のフェーズまで一気に進めます">
-            次フェーズ »
-          </button>
         </div>
       </div>
 
@@ -397,7 +395,7 @@ const ScheduleScreen = ({
         <select
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(Number(e.target.value))}
-          className="bg-gray-800 text-white text-sm font-bold px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 appearance-none text-center min-w-[5rem] cursor-pointer"
+          className="bg-surface-2 text-white text-sm font-bold px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 appearance-none text-center min-w-[5rem] cursor-pointer"
         >
           {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
             <option key={m} value={m}>{m}月{m === currentDate.month ? ' ●' : ''}</option>
@@ -409,7 +407,7 @@ const ScheduleScreen = ({
         >▶</button>
         <button
           onClick={() => setSelectedMonth(currentDate.month)}
-          className="px-2 py-1 rounded-lg text-xs font-semibold bg-blue-700/60 text-blue-200 hover:bg-blue-600 transition ml-1"
+          className="btn-primary px-2 py-1 rounded-lg text-xs font-semibold transition ml-1"
         >今月</button>
       </div>
 
@@ -417,13 +415,13 @@ const ScheduleScreen = ({
       <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-3 mb-4">
         <div className="text-xs font-semibold text-gray-300 mb-2 px-1">{selectedMonth}月の日程（{userTeamName}）</div>
         <div className="grid grid-cols-7 gap-0.5">
-          <div className="text-center text-red-400 font-bold py-1 text-[10px]">日</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">月</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">火</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">水</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">木</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">金</div>
-          <div className="text-center text-blue-400 font-bold py-1 text-[10px]">土</div>
+          <div className="text-center text-red-400 font-bold py-1 text-xs">日</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">月</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">火</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">水</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">木</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">金</div>
+          <div className="text-center text-blue-400 font-bold py-1 text-xs">土</div>
           {calendarData.map((day, index) => {
             if (!day.day) {
               return <div key={index} className="p-2"></div>;
@@ -440,10 +438,10 @@ const ScheduleScreen = ({
                     ? 'bg-orange-600 border-2 border-orange-400'
                     : day.opponent
                     ? 'bg-gray-700 hover:bg-gray-600 cursor-pointer'
-                    : 'bg-gray-900'
+                    : 'bg-surface-1'
                 }`}
               >
-                <div className={`text-xs mb-0.5 ${isCurrentDate ? 'text-white font-bold' : 'text-gray-400'}`}>
+                <div className={`text-xs mb-0.5 ${isCurrentDate ? 'text-white font-bold' : 'text-gray-300'}`}>
                   {day.day}日
                 </div>
                 {day.opponent ? (
@@ -458,23 +456,23 @@ const ScheduleScreen = ({
                         {day.result}
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-500">未消化</div>
+                      <div className="text-xs text-gray-400">未消化</div>
                     )}
                   </>
                 ) : day.eventLabel ? (
-                  <div className={`text-xs font-bold ${
+                  <div className={`font-bold ${day.eventLabel === 'セレクション' ? 'text-sm' : 'text-xs'} ${
                     day.eventLabel === 'シーズン終了' ? 'text-red-400' :
                     day.eventLabel === 'プレーオフ' ? 'text-yellow-400' :
                     day.eventLabel === '契約更改' ? 'text-teal-400' :
                     day.eventLabel === 'トライアウト' ? 'text-orange-400' :
-                    day.eventLabel === 'オフシーズン' ? 'text-gray-400' :
+                    day.eventLabel === 'オフシーズン' ? 'text-gray-300' :
                     day.eventLabel === 'キャンプ' ? 'text-green-400' :
                     day.eventLabel === 'ドラフト' ? 'text-purple-400' :
-                    day.eventLabel === '推薦締切' ? 'text-pink-400' :
-                    'text-gray-500'
+                    day.eventLabel === 'セレクション' ? 'text-pink-400' :
+                    'text-gray-400'
                   }`}>{day.eventLabel}</div>
                 ) : (
-                  <div className="text-xs text-gray-600">-</div>
+                  <div className="text-xs text-gray-400">-</div>
                 )}
               </div>
             );
@@ -498,20 +496,20 @@ const ScheduleScreen = ({
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-center flex-1">
                         <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.away)}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">{awayP ? awayP.name : '先発未定'}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{awayP ? awayP.name : '先発未定'}</div>
                       </div>
-                      <div className="text-gray-600 text-xs font-mono px-1">
+                      <div className="text-gray-400 text-xs font-mono px-1">
                         {game.result ? (
                           <span>
-                            <span className={game.result.awayScore > game.result.homeScore ? 'text-green-400 font-bold' : 'text-gray-400'}>{game.result.awayScore}</span>
-                            <span className="text-gray-600 mx-0.5">-</span>
-                            <span className={game.result.homeScore > game.result.awayScore ? 'text-green-400 font-bold' : 'text-gray-400'}>{game.result.homeScore}</span>
+                            <span className={game.result.awayScore > game.result.homeScore ? 'text-green-400 font-bold' : 'text-gray-300'}>{game.result.awayScore}</span>
+                            <span className="text-gray-400 mx-0.5">-</span>
+                            <span className={game.result.homeScore > game.result.awayScore ? 'text-green-400 font-bold' : 'text-gray-300'}>{game.result.homeScore}</span>
                           </span>
-                        ) : <span className="text-gray-600">vs</span>}
+                        ) : <span className="text-gray-400">vs</span>}
                       </div>
                       <div className="text-center flex-1">
                         <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.home)}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">{homeP ? homeP.name : '先発未定'}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{homeP ? homeP.name : '先発未定'}</div>
                       </div>
                     </div>
                   </div>
@@ -520,7 +518,7 @@ const ScheduleScreen = ({
             </div>
           );
           if (todayGames.length === 0) {
-            return <div className="text-center text-gray-600 text-xs py-3">本日は試合がありません（休養日）</div>;
+            return <div className="text-center text-gray-400 text-xs py-3">本日は試合がありません（休養日）</div>;
           }
           if (isTwoLeague) {
             const l1Games = todayGames.filter(g => league1Teams.includes(g.home) && league1Teams.includes(g.away));
@@ -559,8 +557,7 @@ const ScheduleScreen = ({
             onClick={() => setScheduleTab(key)}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
               scheduleTab === key
-                ? 'bg-green-600 text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+                ? 'seg-on' : 'seg'
             }`}
           >
             <span>{icon}</span>
@@ -589,20 +586,20 @@ const ScheduleScreen = ({
           })();
 
           return (
-            <div className="bg-gray-800 rounded-lg p-6">
+            <div className="bg-surface-2 rounded-lg p-6">
               <h2 className={`text-2xl font-bold mb-4 ${titleColor || 'text-white'}`}>{title}</h2>
-              <table className="w-full text-white">
+              <table className="tabular-nums w-full text-white">
                 <thead>
                   <tr className="border-b border-gray-700">
-                    <th className="text-left py-3 text-lg">順位</th>
-                    <th className="text-left py-3 text-lg">チーム</th>
-                    <th className="text-center py-3 text-lg">試</th>
-                    <th className="text-center py-3 text-lg">勝</th>
-                    <th className="text-center py-3 text-lg">敗</th>
-                    <th className="text-center py-3 text-lg">分</th>
-                    <th className="text-center py-3 text-lg">勝率</th>
-                    <th className="text-center py-3 text-lg">差</th>
-                    <th className="text-center py-3 text-lg">M</th>
+                    <th className="text-left py-2 text-sm font-bold">順位</th>
+                    <th className="text-left py-2 text-sm font-bold">チーム</th>
+                    <th className="text-center py-2 text-sm font-bold">試</th>
+                    <th className="text-center py-2 text-sm font-bold">勝</th>
+                    <th className="text-center py-2 text-sm font-bold">敗</th>
+                    <th className="text-center py-2 text-sm font-bold">分</th>
+                    <th className="text-center py-2 text-sm font-bold">勝率</th>
+                    <th className="text-center py-2 text-sm font-bold">差</th>
+                    <th className="text-center py-2 text-sm font-bold">M</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -635,25 +632,25 @@ const ScheduleScreen = ({
                       : index === 0 ? 'bg-blue-900/15'
                       : index <= 2 && gbNum <= 5 && remaining > 0 ? 'bg-green-900/10'
                       : '';
-                    const dimClass = isEliminated ? 'text-gray-500' : '';
+                    const dimClass = isEliminated ? 'text-gray-400' : '';
                     return (
                       <tr key={index} className={`border-b border-gray-700 ${rowBg}`}>
-                        <td className={`py-3 text-lg font-bold ${dimClass}`}>{index + 1}</td>
-                        <td className={`py-3 text-lg font-bold ${
-                          index === 0 && lIsChampion ? 'text-yellow-300' : isEliminated ? 'text-gray-500' : index === 0 ? 'text-blue-300' : ''
+                        <td className={`py-2 text-sm font-bold ${dimClass}`}>{index + 1}</td>
+                        <td className={`py-2 text-sm font-bold ${
+                          index === 0 && lIsChampion ? 'text-yellow-300' : isEliminated ? 'text-gray-400' : index === 0 ? 'text-blue-300' : ''
                         }`}>{team.team}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{played}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.wins}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.losses}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.draws}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
-                        <td className={`text-center py-3 text-lg font-bold ${
-                          index === 0 && lIsChampion ? 'text-yellow-400' : isEliminated ? 'text-gray-600' : 'text-gray-300'
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{played}</td>
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{team.wins}</td>
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{team.losses}</td>
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{team.draws}</td>
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
+                        <td className={`text-center py-2 text-sm font-bold ${
+                          index === 0 && lIsChampion ? 'text-yellow-400' : isEliminated ? 'text-gray-400' : 'text-gray-300'
                         }`}>
                           {gameBehind}
                           {isEliminated && <span className="text-red-500/70 text-xs ml-1">消</span>}
                         </td>
-                        <td className="text-center py-3 text-lg text-red-400 font-bold">{magic}</td>
+                        <td className="text-center py-2 text-sm text-red-400 font-bold">{magic}</td>
                       </tr>
                     );
                   })}
@@ -668,9 +665,13 @@ const ScheduleScreen = ({
         const month = currentDate?.month || 4;
         const isFallSeason = isUniversity && springStandings != null;
         const isSummerBreak = isUniversity && !isFallSeason && month >= 7 && month <= 8;
+        const userLeagueName = isUniversity
+          ? (UNIVERSITY_REGIONS.find(r => r.id === WORLD_DATA.userLeagueId)?.name || '')
+          : (INDEPENDENT_LEAGUES[WORLD_DATA.userLeagueId]?.name || '');
+        const leaguePrefix = userLeagueName ? userLeagueName + '　' : '';
         const activeLabel = isUniversity
-          ? isFallSeason ? '秋季順位表' : isSummerBreak ? '春季最終順位' : '春季順位表'
-          : 'リーグ順位表';
+          ? isFallSeason ? `${leaguePrefix}秋季順位表` : isSummerBreak ? `${leaguePrefix}春季最終順位` : `${leaguePrefix}春季順位表`
+          : `${leaguePrefix}順位`;
 
         if (isTwoLeague) {
           const l1 = leagueStandings.filter(s => league1Teams.includes(s.team));
@@ -691,7 +692,7 @@ const ScheduleScreen = ({
               return (
                 <div className="bg-gray-800/60 rounded-lg p-4 border border-gray-700/40">
                   <h2 className="text-lg font-bold text-green-400 mb-3">春季最終順位</h2>
-                  <table className="w-full text-white text-sm">
+                  <table className="tabular-nums w-full text-white text-sm">
                     <thead>
                       <tr className="border-b border-gray-700">
                         <th className="text-left py-2">順位</th>
@@ -745,8 +746,7 @@ const ScheduleScreen = ({
           <RankingTable title="セーブランキング" data={seasonData?.finalRankings?.saves || getSavesRanking(teamNamesList)} valueLabel="セーブ" />
         </div>
       )}
-    </div>
-      </div>
+    </ScreenShell>
   );
 };
 

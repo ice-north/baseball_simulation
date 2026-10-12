@@ -397,12 +397,15 @@ export const SPECIALTY_RANK_BOOST = {
 // 大学のランクによって在学中の成長速度が変わる
 // ============================================================
 
+// ⚠ カテゴリ加点を全廃したので、**指名構成比はこの成長倍率で決まる**。
+// 大学は指名の40%を占めるべき層（プールの11%）。1.55〜0.85 では 22% しか通らず、
+// 空いた枠が社会人（35%）へ流れていた。4年かけて完成させる場所として引き上げる。
 export const UNIVERSITY_RANK_GROWTH = {
-  S: 1.55,
-  A: 1.35,
-  B: 1.15,
-  C: 1.00,
-  D: 0.85,
+  S: 1.06,
+  A: 0.94,
+  B: 0.82,
+  C: 0.70,
+  D: 0.60,
 };
 
 // ============================================================
@@ -421,33 +424,84 @@ export function getUniversityTeamsByRank(rank) {
   return UNIVERSITY_TEAMS.filter(t => t.rank === rank);
 }
 
-/**
- * 大学の得意分野リストを返す
- * 7分野: technique, power, stamina, defense, versatility, athletic, mental
- * specialtiesに含まれる分野は100%成長、含まれない分野は80%（SPECIALTY_RANK_BOOSTで補正）
- */
-export function getUniversitySpecialties(universityId) {
-  const team = UNIVERSITY_TEAMS.find(t => t.id === universityId);
-  return team?.specialties || [];
-}
 
-/**
- * 指定した得意分野キーが大学の得意分野に含まれるか判定する
- * stat→specialty のマッピングは呼び出し側（dispatchSystem等）で行うこと
- */
-export function hasUniversitySpecialty(universityId, specialtyKey) {
-  const specialties = getUniversitySpecialties(universityId);
-  if (specialties.length === 0) return true; // 得意分野未定義ならすべてOK
-  return specialties.includes(specialtyKey);
-}
 
-/**
- * 大学の得意分野ブースト値を返す（非得意分野の底上げ倍率）
- */
-export function getSpecialtyRankBoost(rank) {
-  return SPECIALTY_RANK_BOOST[rank] || 1.0;
-}
 
 export function getSpecialtyLabel(key) {
   return SPECIALTY_LABELS[key] || key;
+}
+
+/**
+ * 同一リーグ内で一意な大学略称を生成する（A案: 共通の地名を落とし、識別部分＋「大」）。
+ *   例）札幌大学=札幌大 / 札幌国際大学=国際大 / 北海道大学=北海道大 / 北海道文教大学=文教大
+ * @param {string[]} names 同一リーグ（region）の全チーム名
+ * @returns {Object} { 正式名: 略称 } のマップ
+ */
+export function generateLeagueAbbreviations(names) {
+  const commonPrefixLen = (a, b) => {
+    let n = 0;
+    while (n < a.length && n < b.length && a[n] === b[n]) n++;
+    return n;
+  };
+  // 大学名から「大学」「末尾の大」を除いた語幹（＝地名＋識別部分）
+  const stemOf = (name) => {
+    const s = name.replace(/大学/g, '').replace(/大$/, '');
+    return s.length >= 1 ? s : name;
+  };
+  const stems = {};
+  names.forEach(n => { stems[n] = stemOf(n); });
+
+  const coreOf = (name) => {
+    const s = stems[name];
+    // 他チームと共有する最長の接頭辞（＝地名）の長さ
+    let shared = 0;
+    names.forEach(o => { if (o !== name) shared = Math.max(shared, commonPrefixLen(s, stems[o])); });
+    // 語幹が他校の接頭辞に完全包含される基幹校（例: 北海道大）→ 地名をそのまま残す
+    if (shared >= s.length) return s;
+    // 識別部分（地名を落とした残り）
+    let tail = s.slice(shared);
+    // 語幹中に現れる「大」以降を落として二重「大」を防ぐ（例: 教育大岩見沢→教育。先頭の大＝大谷等は残す）
+    const daIdx = tail.indexOf('大', 1);
+    if (daIdx > 0) tail = tail.slice(0, daIdx);
+    if (tail.length > 3) tail = tail.slice(0, 3);
+    return tail || s;
+  };
+
+  const result = {};
+  names.forEach(n => { result[n] = coreOf(n) + '大'; });
+
+  // 一意化: 衝突したら語幹を多めに使ってフォールバック、最後は元名先頭4文字
+  const collisions = () => {
+    const counts = {};
+    names.forEach(n => { counts[result[n]] = (counts[result[n]] || 0) + 1; });
+    return names.filter(n => counts[result[n]] > 1);
+  };
+  collisions().forEach(n => {
+    const full = stems[n];
+    result[n] = (full.length > 4 ? full.slice(0, 4) : full) + '大';
+  });
+  collisions().forEach(n => { result[n] = n.slice(0, 4); });
+
+  return result;
+}
+
+// ============================================================
+// 新規ゲームで UNIVERSITY_TEAMS の可変な状態を初期値へ戻す
+// ⚠ ランク変動（corporateInit）が rank / reputation / rankingScore … を
+//    このモジュールの定数配列へ直接書き込む。ページを再読込せずにタイトルから
+//    新しく始めると、**前のゲームの大学ランクがそのまま残っていた**
+// ============================================================
+const MUTABLE_UNI_FIELDS = ['rank', 'reputation', 'reputationHistory', 'rankPosition', 'rankingScore'];
+const INITIAL_UNI_STATE = UNIVERSITY_TEAMS.map(t => {
+  const snap = {};
+  for (const k of MUTABLE_UNI_FIELDS) if (k in t) snap[k] = JSON.parse(JSON.stringify(t[k]));
+  return snap;
+});
+export function resetUniversityTeamsState() {
+  UNIVERSITY_TEAMS.forEach((t, i) => {
+    for (const k of MUTABLE_UNI_FIELDS) {
+      if (k in INITIAL_UNI_STATE[i]) t[k] = JSON.parse(JSON.stringify(INITIAL_UNI_STATE[i][k]));
+      else delete t[k];
+    }
+  });
 }

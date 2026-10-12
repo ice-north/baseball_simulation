@@ -5,6 +5,7 @@
 
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
 import { clearUniversityPool, clearHighSchoolPool } from './season/universityPool.js';
+import { autoStarterRole } from './utils/constants.js';
 
 /**
  * チームデータ構造（動的に拡張可能）
@@ -85,33 +86,9 @@ export const getTeamAbbreviation = (teamName) => {
   return (teamName || '').slice(0, 3);
 };
 
-/**
- * チームAの選手データ（元のホームチーム）
- */
-export const createTeamAPlayers = () => {
-  return window.createDefaultPlayers ? window.createDefaultPlayers() : [];
-};
 
-/**
- * チームAのベンチ
- */
-export const createTeamABench = () => {
-  return window.createHomeBench ? window.createHomeBench() : [];
-};
 
-/**
- * チームBの選手データ（元のアウェイチーム）
- */
-export const createTeamBPlayers = () => {
-  return window.createAwayPlayers ? window.createAwayPlayers() : [];
-};
 
-/**
- * チームBのベンチ
- */
-export const createTeamBBench = () => {
-  return window.createAwayBench ? window.createAwayBench() : [];
-};
 
 /**
  * 全チームデータを初期化（4チームの場合）
@@ -120,13 +97,13 @@ export const initializeTeamsData = () => {
   // デフォルト4チームを初期化
   initializeTeamsForCount(4);
 
-  // players.jsの関数が読み込まれているか確認
-  if (typeof createDefaultPlayers === 'function') {
-    TEAMS_DATA['チームA'].players = [...createDefaultPlayers(), ...createHomeBench()];
-  }
-  if (typeof createAwayPlayers === 'function') {
-    TEAMS_DATA['チームB'].players = [...createAwayPlayers(), ...createAwayBench()];
-  }
+  // 【削除済み】ここに players.js の固定ロスターを読み込む分岐があったが、
+  // `typeof createDefaultPlayers === 'function'` というガードで囲まれており、
+  // このファイルは players.js を import していないため**一度も実行されていなかった**
+  // （ESモジュールなので typeof は必ず 'undefined'）。
+  // 実際のロスターは initializeTeamsForCount() が生成している。
+  // 今さら有効にすると新規ゲームのチームA/Bだけ固定ロスターに変わってしまうため、
+  // 到達しないコードとして除去した。
 
   // 全選手に背番号と初期成績を設定
   Object.keys(TEAMS_DATA).forEach(teamName => {
@@ -210,20 +187,7 @@ export const initializePitchingRotation = (teamName) => {
   })).sort((a, b) => b.starterScore - a.starterScore);
 
   scoredStarters.forEach((p, i) => {
-    const stamina = p.pitching?.stamina || 80;
-    if (i === 0) {
-      // 1番手: エース
-      pitcherRoles[p.id] = 'ace';
-    } else if (stamina >= 170) {
-      // 高スタミナ: 完投型
-      pitcherRoles[p.id] = 'complete';
-    } else if (stamina < 110) {
-      // 低スタミナ: ショートスターター
-      pitcherRoles[p.id] = 'short';
-    } else {
-      // 通常: 勝ち権利
-      pitcherRoles[p.id] = 'quality';
-    }
+    pitcherRoles[p.id] = autoStarterRole(i, p.pitching?.stamina || 80);
   });
 
   // 1. 守護神: 最高能力の投手（球速・制球重視）

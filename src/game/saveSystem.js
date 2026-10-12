@@ -1,10 +1,12 @@
-import { compressData, decompressData, getLocalStorageUsage } from '../utils/compression.js';
-import { TEAMS_DATA } from '../teams-data.js';
+import { compressData, compressDataAsync, decompressData, decompressDataAsync, getLocalStorageUsage } from '../utils/compression.js';
+import { TEAMS_DATA, releasedPlayersPool, clearReleasedPlayersPool } from '../teams-data.js';
+import { addManyToReleasedPool } from '../state/pools.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
-import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
-import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
-import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage } from '../utils/indexedDBStorage.js';
+import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses, absorbUniversityPoolIntoRosters } from '../season/universityPool.js';
+import { UNIVERSITY_TEAMS, generateLeagueAbbreviations } from '../university/universityTeamsData.js';
+import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage, requestPersistentStorage } from '../utils/indexedDBStorage.js';
+import { migrateSaveData, CURRENT_SAVE_VERSION } from './saveMigration.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
 
@@ -14,6 +16,11 @@ let _migrationDone = false;
 export async function ensureMigration() {
   if (_migrationDone || !useIDB) return;
   _migrationDone = true;
+  // ⚠ **保存領域の永続化を申告する**。既定は best-effort で、ディスクが逼迫すると
+  //    ブラウザが IndexedDB を勝手に捨てる（＝セーブが消える）。
+  requestPersistentStorage().then(r => {
+    if (r.supported && !r.persisted) console.warn('保存領域の永続化が許可されませんでした（空き容量が減ると消える可能性があります）');
+  });
   try {
     const count = await migrateLocalStorageToIDB(SAVE_SLOT_KEYS);
     const oldKey = 'baseballSim_saveData';
@@ -38,11 +45,21 @@ async function storageGetItem(key) {
   return localStorage.getItem(key);
 }
 
+// ⚠ **読みと書きで対称にすること**。読み（`storageGetItem`）は IndexedDB が
+//    失敗したら localStorage へ落ちるのに、書きは落ちずにそのまま throw していた。
+//    `isIndexedDBAvailable()` は `typeof indexedDB` を見るだけなので、
+//    **「オブジェクトはあるが open が失敗する」環境**（Firefox の `file://`、
+//    Safari のプライベート、容量超過）で保存だけが丸ごと失敗する。
+//    IndexedDB が駄目なら localStorage に書く。両方駄目なら初めて throw する。
 async function storageSetItem(key, value) {
   if (useIDB) {
-    await idbSetItem(key, value);
-    try { localStorage.removeItem(key); } catch { /* ignore */ }
-    return;
+    try {
+      await idbSetItem(key, value);
+      try { localStorage.removeItem(key); } catch { /* ignore */ }
+      return;
+    } catch (e) {
+      console.warn('IndexedDBへの保存に失敗。localStorageへ切り替えます:', e);
+    }
   }
   localStorage.setItem(key, value);
 }
@@ -54,6 +71,132 @@ async function storageRemoveItem(key) {
   try { localStorage.removeItem(key); } catch { /* ignore */ }
 }
 
+// ============================================================
+// バックアップ & 緊急保存
+// ============================================================
+const backupKey = (slotIndex) => `${SAVE_SLOT_KEYS[slotIndex]}_bak`;
+export const EMERGENCY_KEY = 'baseballSim_emergency';
+
+// スロット上書き前に既存データを1世代バックアップ（破損・誤上書きからの復旧用）
+async function backupExistingSlot(slotIndex) {
+  try {
+    const existing = await storageGetItem(SAVE_SLOT_KEYS[slotIndex]);
+    if (existing) await storageSetItem(backupKey(slotIndex), existing);
+  } catch (e) { /* バックアップ失敗はセーブ本体を止めない */ }
+}
+
+// バックアップの有無・メタ情報を取得
+export const getBackupInfo = async (slotIndex) => {
+  try {
+    const raw = await storageGetItem(backupKey(slotIndex));
+    if (!raw) return null;
+    const data = await decompressDataAsync(raw);
+    if (!data) return null;
+    return { timestamp: data.timestamp || null, year: data.seasonData?.year ?? null, gameMode: data.gameMode || null };
+  } catch { return null; }
+};
+
+// バックアップをスロットへ復元
+export const restoreBackup = async (slotIndex) => {
+  try {
+    const raw = await storageGetItem(backupKey(slotIndex));
+    if (!raw) return { success: false, error: 'バックアップがありません' };
+    await storageSetItem(SAVE_SLOT_KEYS[slotIndex], raw);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: '復元に失敗しました: ' + e.message };
+  }
+};
+
+// 緊急保存: クラッシュ時に同期的（localStorage）へ現在状態を書き出す。
+// IndexedDBは非同期のためクラッシュ中は不確実 → 確実に残る localStorage を使う。
+export const saveEmergency = (gameState) => {
+  try {
+    const saveData = buildSaveData(gameState, gameState?.slotIndex ?? 0);
+    saveData._emergency = true;
+    const compressed = compressData(saveData);
+    localStorage.setItem(EMERGENCY_KEY, compressed);
+    return true;
+  } catch (e) {
+    console.error('緊急保存失敗:', e);
+    return false;
+  }
+};
+
+// 緊急保存の有無・メタ情報
+export const getEmergencyInfo = () => {
+  try {
+    const raw = localStorage.getItem(EMERGENCY_KEY);
+    if (!raw) return null;
+    const data = decompressData(raw);
+    if (!data) return null;
+    return { timestamp: data.timestamp || null, year: data.seasonData?.year ?? null, gameMode: data.gameMode || null };
+  } catch { return null; }
+};
+
+export const clearEmergencySave = () => {
+  try { localStorage.removeItem(EMERGENCY_KEY); } catch { /* ignore */ }
+};
+
+// ============================================================
+// オートセーブ（節目で自動保存する専用スロット。手動3スロットとは別枠）
+// ============================================================
+export const AUTOSAVE_KEY = 'baseballSim_autosave';
+const AUTOSAVE_ENABLED_KEY = 'baseballSim_autosave_enabled';
+
+export const isAutosaveEnabled = () => {
+  try {
+    const v = localStorage.getItem(AUTOSAVE_ENABLED_KEY);
+    return v === null ? true : v === '1'; // 既定ON
+  } catch { return true; }
+};
+export const setAutosaveEnabled = (on) => {
+  try { localStorage.setItem(AUTOSAVE_ENABLED_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+};
+
+// 現在の状態をオートセーブ枠へ保存（非同期・圧縮）。
+export const autoSave = async (gameState) => {
+  try {
+    const saveData = buildSaveData(gameState, gameState?.slotIndex ?? 0);
+    saveData._autosave = true;
+    const compressed = await compressDataAsync(saveData);
+    await storageSetItem(AUTOSAVE_KEY, compressed);
+    return { success: true };
+  } catch (e) {
+    console.warn('オートセーブ失敗:', e);
+    return { success: false, error: e.message };
+  }
+};
+
+// オートセーブのメタ情報（存在チェック・表示用）。
+export const getAutosaveInfo = async () => {
+  try {
+    const raw = await storageGetItem(AUTOSAVE_KEY);
+    if (!raw) return null;
+    const data = await decompressDataAsync(raw);
+    if (!data) return null;
+    return {
+      timestamp: data.timestamp || null,
+      year: data.seasonData?.year ?? null,
+      date: data.seasonData?.currentDate || null,
+      phase: data.seasonData?.phase || null,
+      gameMode: data.gameMode || null,
+    };
+  } catch { return null; }
+};
+
+// 緊急保存をスロットへ書き込んで通常ロード可能にする
+export const promoteEmergencyToSlot = async (slotIndex) => {
+  try {
+    const raw = localStorage.getItem(EMERGENCY_KEY);
+    if (!raw) return { success: false, error: '緊急保存がありません' };
+    await storageSetItem(SAVE_SLOT_KEYS[slotIndex], raw);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: '復元に失敗しました: ' + e.message };
+  }
+};
+
 // セーブスロット情報を読み取り（async版）
 export const readSaveSlots = async () => {
   await ensureMigration();
@@ -62,13 +205,16 @@ export const readSaveSlots = async () => {
     try {
       const savedData = await storageGetItem(key);
       if (!savedData) { results.push(null); continue; }
-      const data = decompressData(savedData);
+      const data = await decompressDataAsync(savedData);
       if (!data) { results.push(null); continue; }
       results.push({
         timestamp: data.timestamp,
         year: data.seasonData?.year || 1,
         date: data.seasonData?.currentDate || { month: 4, day: 1 },
         phase: data.seasonData?.phase || 'regular_season',
+        teamName: data.seasonData?.settings?.teamNames?.[0]
+          || (data.leagueConfig?.leagues || []).flatMap(l => l.teams || [])[0]
+          || null,
         version: data.version || 'unknown'
       });
     } catch { results.push(null); }
@@ -94,65 +240,95 @@ export const migrateOldSaveData = () => {
 };
 
 // ゲームデータを保存（async版）
-export const saveGameToSlot = async (slotIndex, gameState) => {
+// セーブ用データオブジェクトを構築（saveGameToSlot / 緊急バックアップで共用）
+export const buildSaveData = (gameState, slotIndex = 0) => {
+  const worldDataSnapshot = WORLD_DATA.initialized ? {
+    initialized: WORLD_DATA.initialized,
+    mode: WORLD_DATA.mode,
+    userLeagueId: WORLD_DATA.userLeagueId,
+    year: WORLD_DATA.year,
+    independentLeagues: JSON.parse(JSON.stringify(WORLD_DATA.independentLeagues)),
+    universityLeagues: WORLD_DATA.universityLeagues ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeagues)) : {},
+    corporateLeague: { teams: Object.keys(WORLD_DATA.corporateLeague?.teams || {}), userTeam: WORLD_DATA.corporateLeague?.userTeam },
+    draft: JSON.parse(JSON.stringify(WORLD_DATA.draft)),
+    // 夏の甲子園。ブラケット全体は嵩むので、表示に使う結果だけを残す
+    koshien: WORLD_DATA.koshien ? {
+      year: WORLD_DATA.koshien.year,
+      champion: WORLD_DATA.koshien.champion,
+      runnerUp: WORLD_DATA.koshien.runnerUp,
+      entries: WORLD_DATA.koshien.entries,
+      notable: WORLD_DATA.koshien.notable,
+    } : null,
+    corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
+      generated: WORLD_DATA.corporateToshitaikou.generated,
+      qualifiersDone: WORLD_DATA.corporateToshitaikou.qualifiersDone,
+      mainDone: WORLD_DATA.corporateToshitaikou.mainDone,
+      champion: WORLD_DATA.corporateToshitaikou.champion,
+      runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
+    } : null,
+    // 注目選手リスト（playerIdだけ保持。現在地は表示時に各プールを引いて解決する）
+    watchList: Array.isArray(WORLD_DATA.watchList) ? JSON.parse(JSON.stringify(WORLD_DATA.watchList)) : [],
+    corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken ? {
+      generated: WORLD_DATA.corporateNihonSenshuken.generated,
+      done: WORLD_DATA.corporateNihonSenshuken.done,
+      champion: WORLD_DATA.corporateNihonSenshuken.champion,
+      runnerUp: WORLD_DATA.corporateNihonSenshuken.runnerUp,
+    } : null,
+    corporateClubSenshuken: WORLD_DATA.corporateClubSenshuken ? {
+      generated: WORLD_DATA.corporateClubSenshuken.generated,
+      done: WORLD_DATA.corporateClubSenshuken.done,
+      champion: WORLD_DATA.corporateClubSenshuken.champion,
+      runnerUp: WORLD_DATA.corporateClubSenshuken.runnerUp,
+    } : null,
+    corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? {
+      generated: WORLD_DATA.corporateRegionalTournament.generated,
+      done: WORLD_DATA.corporateRegionalTournament.phase === 'done' || !!WORLD_DATA.corporateRegionalTournament.done,
+    } : null,
+    universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
+    _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
+    _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
+    managerCareer: Array.isArray(WORLD_DATA.managerCareer) ? JSON.parse(JSON.stringify(WORLD_DATA.managerCareer)) : [],
+    _uniTeamRepData: UNIVERSITY_TEAMS.reduce((acc, t) => {
+      if (t.reputation !== undefined || t.reputationHistory || t.rankPosition !== undefined || t.rankingScore !== undefined) {
+        acc[t.name] = { rank: t.rank, reputation: t.reputation, reputationHistory: t.reputationHistory, rankPosition: t.rankPosition, rankingScore: t.rankingScore };
+      }
+      return acc;
+    }, {}),
+  } : null;
+
+  return {
+    version: CURRENT_SAVE_VERSION,
+    timestamp: new Date().toISOString(),
+    slotIndex,
+    seasonData: gameState.seasonData,
+    leagueConfig: gameState.leagueConfig,
+    teamsData: JSON.parse(JSON.stringify(TEAMS_DATA)),
+    worldData: worldDataSnapshot,
+    screenMode: gameState.screenMode,
+    managementView: gameState.managementView,
+    gameFlowState: gameState.gameFlowState,
+    gameMode: gameState.gameMode,
+    selectedMonth: gameState.selectedMonth,
+    hallOfFamePlayers: gameState.hallOfFamePlayers,
+    teamHistory: gameState.teamHistory,
+    universityPool: serializeUniversityPool(),
+    releasedPlayersPool: JSON.parse(JSON.stringify(releasedPlayersPool)),
+  };
+};
+
+export const saveGameToSlot = async (slotIndex, gameState, onProgress) => {
+  const progress = (pct) => { if (onProgress) onProgress(pct); };
   try {
-    const worldDataSnapshot = WORLD_DATA.initialized ? {
-      initialized: WORLD_DATA.initialized,
-      mode: WORLD_DATA.mode,
-      userLeagueId: WORLD_DATA.userLeagueId,
-      year: WORLD_DATA.year,
-      independentLeagues: JSON.parse(JSON.stringify(WORLD_DATA.independentLeagues)),
-      universityLeagues: WORLD_DATA.universityLeagues ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeagues)) : {},
-      corporateLeague: { teams: Object.keys(WORLD_DATA.corporateLeague?.teams || {}), userTeam: WORLD_DATA.corporateLeague?.userTeam },
-      draft: JSON.parse(JSON.stringify(WORLD_DATA.draft)),
-      corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
-        generated: WORLD_DATA.corporateToshitaikou.generated,
-        mainDone: WORLD_DATA.corporateToshitaikou.mainDone,
-        champion: WORLD_DATA.corporateToshitaikou.champion,
-        runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
-      } : null,
-      corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken ? {
-        done: WORLD_DATA.corporateNihonSenshuken.done,
-        champion: WORLD_DATA.corporateNihonSenshuken.champion,
-        runnerUp: WORLD_DATA.corporateNihonSenshuken.runnerUp,
-      } : null,
-      corporateClubSenshuken: WORLD_DATA.corporateClubSenshuken ? {
-        done: WORLD_DATA.corporateClubSenshuken.done,
-        champion: WORLD_DATA.corporateClubSenshuken.champion,
-        runnerUp: WORLD_DATA.corporateClubSenshuken.runnerUp,
-      } : null,
-      corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? { done: true } : null,
-      universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
-      _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
-      _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
-      _uniTeamRepData: UNIVERSITY_TEAMS.reduce((acc, t) => {
-        if (t.reputation !== undefined || t.reputationHistory || t.rankPosition !== undefined || t.rankingScore !== undefined) {
-          acc[t.name] = { rank: t.rank, reputation: t.reputation, reputationHistory: t.reputationHistory, rankPosition: t.rankPosition, rankingScore: t.rankingScore };
-        }
-        return acc;
-      }, {}),
-    } : null;
-
-    const saveData = {
-      version: '2.14.0',
-      timestamp: new Date().toISOString(),
-      slotIndex,
-      seasonData: gameState.seasonData,
-      leagueConfig: gameState.leagueConfig,
-      teamsData: JSON.parse(JSON.stringify(TEAMS_DATA)),
-      worldData: worldDataSnapshot,
-      screenMode: gameState.screenMode,
-      managementView: gameState.managementView,
-      gameFlowState: gameState.gameFlowState,
-      gameMode: gameState.gameMode,
-      selectedMonth: gameState.selectedMonth,
-      hallOfFamePlayers: gameState.hallOfFamePlayers,
-      teamHistory: gameState.teamHistory,
-      universityPool: serializeUniversityPool()
-    };
-
-    const compressed = compressData(saveData);
+    progress(10);
+    const saveData = buildSaveData(gameState, slotIndex);
+    progress(30);
+    // 上書き前に既存セーブをバックアップ（新セーブ破損時に復旧できるよう1世代保持）
+    await backupExistingSlot(slotIndex);
+    progress(45);
+    const compressed = await compressDataAsync(saveData);
+    progress(85);
     await storageSetItem(SAVE_SLOT_KEYS[slotIndex], compressed);
+    progress(100);
     return { success: true, storage: useIDB ? 'IndexedDB' : 'localStorage' };
   } catch (error) {
     console.error('セーブ失敗:', error);
@@ -177,18 +353,23 @@ const validateSaveData = (data) => {
   return null;
 };
 
-// ゲームデータを読み込み（async版）
-export const loadGameFromSlot = async (slotIndex) => {
+// ゲームデータを読み込み（async版）。keyOverride指定時はそのキーから読む（オートセーブ等）。
+export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
   try {
-    const savedData = await storageGetItem(SAVE_SLOT_KEYS[slotIndex]);
+    const savedData = await storageGetItem(keyOverride || SAVE_SLOT_KEYS[slotIndex]);
     if (!savedData) {
       return { success: false, error: 'セーブデータがありません' };
     }
 
-    const saveData = decompressData(savedData);
-    if (!saveData) {
+    const rawData = await decompressDataAsync(savedData);
+    if (!rawData) {
       return { success: false, error: 'セーブデータの解凍に失敗しました。データが破損している可能性があります。' };
     }
+
+    // バージョン移行＋正規化（旧セーブの欠損フィールドをここでバックフィル）
+    const { data: saveData, fromVersion, applied, warnings } = migrateSaveData(rawData);
+    if (warnings.length) console.warn('セーブ移行の注意:', warnings.join(' / '));
+    if (applied.length) console.log(`セーブを ${fromVersion} → ${CURRENT_SAVE_VERSION} に移行しました`);
 
     const validationError = validateSaveData(saveData);
     if (validationError) {
@@ -206,6 +387,16 @@ export const loadGameFromSlot = async (slotIndex) => {
       Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
       Object.keys(backup).forEach(k => { TEAMS_DATA[k] = backup[k]; });
       return { success: false, error: 'データの復元中にエラーが発生しました。元の状態に戻しました。' };
+    }
+
+    // ⚠ 旧セーブの幽霊OBレコードの除去は `saveMigration.normalizeSaveData` が担当する
+    //    （`pruneGhostAlumni`）。ここに書き写さないこと——移行の置き場所は1つ。
+
+    // 大学チームの略称をリーグ内で一意化（旧セーブの3文字重複を解消）
+    const uniNames = Object.keys(TEAMS_DATA).filter(n => TEAMS_DATA[n]?.universityTeamId);
+    if (uniNames.length > 0) {
+      const abbrs = generateLeagueAbbreviations(uniNames);
+      uniNames.forEach(n => { TEAMS_DATA[n].abbreviation = abbrs[n]; });
     }
 
     // WORLD_DATA復元
@@ -227,13 +418,21 @@ export const loadGameFromSlot = async (slotIndex) => {
         }
       }
       WORLD_DATA.draft = wd.draft || { draftedPlayers: [], history: [] };
-      WORLD_DATA.corporateToshitaikou = wd.corporateToshitaikou || null;
-      WORLD_DATA.corporateNihonSenshuken = wd.corporateNihonSenshuken || null;
-      WORLD_DATA.corporateClubSenshuken = wd.corporateClubSenshuken || null;
-      WORLD_DATA.corporateRegionalTournament = wd.corporateRegionalTournament || null;
+      WORLD_DATA.koshien = wd.koshien || null;
+      WORLD_DATA.watchList = Array.isArray(wd.watchList) ? wd.watchList : [];
+      // 未完了トーナメントはnullにリセット → checkAndTriggerEventsで再生成＋キャッチアップ
+      const ctd = wd.corporateToshitaikou;
+      WORLD_DATA.corporateToshitaikou = (ctd && ctd.mainDone) ? ctd : null;
+      const cns = wd.corporateNihonSenshuken;
+      WORLD_DATA.corporateNihonSenshuken = (cns && cns.done) ? cns : null;
+      const ccs = wd.corporateClubSenshuken;
+      WORLD_DATA.corporateClubSenshuken = (ccs && ccs.done) ? ccs : null;
+      const crt = wd.corporateRegionalTournament;
+      WORLD_DATA.corporateRegionalTournament = (crt && crt.done) ? { generated: true, done: true, phase: 'done' } : null;
       WORLD_DATA.universityLeague = wd.universityLeague || null;
       WORLD_DATA._universityScout = wd._universityScout || null;
       WORLD_DATA._teamRanking = wd._teamRanking || null;
+      WORLD_DATA.managerCareer = Array.isArray(wd.managerCareer) ? wd.managerCareer : [];
       // UNIVERSITY_TEAMSの注目度データを復元
       if (wd._uniTeamRepData) {
         for (const teamDef of UNIVERSITY_TEAMS) {
@@ -254,29 +453,18 @@ export const loadGameFromSlot = async (slotIndex) => {
       deserializeUniversityPool(saveData.universityPool);
     }
     const loadedYear = saveData.seasonData?.year || 1;
+    // 旧セーブはプールにも在学生を持つ。大学生の実体は名簿ひとつなので名簿へ移す
+    absorbUniversityPoolIntoRosters(TEAMS_DATA, loadedYear);
     seedInitialUniversityClasses(loadedYear);
 
-    // 旧セーブデータ互換: バント能力値 + 性格パラメータの移行
-    Object.values(TEAMS_DATA).forEach(team => {
-      if (team?.players) {
-        team.players.forEach(p => {
-          if (p.batting && p.batting.bunt === undefined) {
-            p.batting.bunt = Math.min(99, Math.max(1, Math.round(
-              (p.batting.meet || 50) * 0.4 + (p.physical?.speed || 50) * 0.3 + Math.random() * 20
-            )));
-          }
-          if (!p.personality) {
-            const norm = () => Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18)));
-            p.personality = { discipline: norm(), mental: norm() };
-          }
-          if (p.position === 'dh') {
-            const fitness = p.positionFitness || {};
-            const bestPos = Object.entries(fitness).sort((a, b) => b[1] - a[1])[0];
-            p.position = bestPos ? bestPos[0] : 'first';
-          }
-        });
-      }
-    });
+    // リリースプール復元
+    clearReleasedPlayersPool();
+    if (saveData.releasedPlayersPool && Array.isArray(saveData.releasedPlayersPool)) {
+      addManyToReleasedPool(saveData.releasedPlayersPool);
+    }
+
+    // ※旧セーブの選手フィールド補完（バント/性格/DH等）は migrateSaveData で
+    //   復元前に済ませているため、ここでの追加処理は不要。
 
     return { success: true, data: saveData };
   } catch (error) {
@@ -296,68 +484,92 @@ export const deleteSaveSlot = async (slotIndex) => {
   }
 };
 
+// ============================================================
+// セーブのファイル書き出し／読み込み
+//
+// ⚠ **ブラウザの保存領域はオリジン（scheme+ホスト+ポート）に閉じている**。
+//    `localhost:3000` で作ったセーブは `localhost:3001` からは1件も見えず、
+//    **ページ内のコードでは絶対に跨げない**（同一オリジンポリシー）。
+//    ポートがずれた・別のブラウザに乗り換えた・PCを変えた、のいずれでも
+//    ファイルに出す以外の持ち出し手段が無いので、ここが唯一の避難経路になる。
+// ⚠ 中身は保存されている圧縮文字列**そのまま**を包むだけにすること。
+//    ここで作り直すと、セーブの形式が2箇所に分かれて必ず腐る。
+// ============================================================
+const SAVE_FILE_TYPE = 'baseball_sim_save';
+
+export const exportSaveSlotToFile = async (slotIndex) => {
+  try {
+    const raw = await storageGetItem(SAVE_SLOT_KEYS[slotIndex]);
+    if (!raw) return { success: false, error: 'このスロットにセーブがありません' };
+    // メタはファイル名と取り違え防止のためだけに持つ（正本は payload）
+    let meta = {};
+    try {
+      const d = await decompressDataAsync(raw);
+      meta = {
+        year: d?.seasonData?.year ?? null,
+        timestamp: d?.timestamp ?? null,
+        // ⚠ チーム名の引き方は `readSaveSlots` と同じにすること（表を二重に作らない）
+        teamName: d?.seasonData?.settings?.teamNames?.[0]
+          || (d?.leagueConfig?.leagues || []).flatMap(l => l.teams || [])[0]
+          || null,
+      };
+    } catch { /* メタが読めなくても書き出しは通す */ }
+    const blob = new Blob([JSON.stringify({
+      type: SAVE_FILE_TYPE, version: CURRENT_SAVE_VERSION,
+      exportDate: new Date().toISOString(), slotIndex, meta, payload: raw,
+    })], { type: 'application/json' });
+    // ⚠ **ファイル名は ASCII にすること**。日本語を入れると Chromium が
+    //    `download` 属性ごと無視して、**拡張子の無い `download` という名前**で落とす
+    //    （実測: `野球シミュレーター_セーブ1_….json` → `download` /
+    //    `baseball-sim_save1_….json` → そのまま）。拡張子が消えると読み込みで選べない。
+    // ⚠ アンカーはDOMに挿してからクリックし、revoke は次のタスクまで待つ
+    //    （4MBのセーブは即 revoke すると転送が間に合わないことがある）。
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `baseball-sim_save${slotIndex + 1}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: '書き出しに失敗しました: ' + e.message };
+  }
+};
+
+export const importSaveFileToSlot = async (slotIndex, file) => {
+  try {
+    const text = await file.text();
+    let env;
+    try { env = JSON.parse(text); } catch { return { success: false, error: 'セーブファイルとして読めませんでした' }; }
+    if (env?.type !== SAVE_FILE_TYPE || typeof env.payload !== 'string') {
+      return { success: false, error: 'このゲームのセーブファイルではありません' };
+    }
+    // ⚠ **書き込む前に必ず中身を検証する**。壊れたファイルでスロットを潰さない
+    const data = await decompressDataAsync(env.payload);
+    const invalid = validateSaveData(data);
+    if (invalid) return { success: false, error: 'セーブデータが壊れています: ' + invalid };
+    await backupExistingSlot(slotIndex);
+    await storageSetItem(SAVE_SLOT_KEYS[slotIndex], env.payload);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: '読み込みに失敗しました: ' + e.message };
+  }
+};
+
 // ストレージ使用量を取得
+// ⚠ **今は誰も呼んでいない**（未使用exportの掃除で見つかった）。消さずに残してあるのは、
+//    これが `getIDBUsage` / `getLocalStorageUsage` の唯一の呼び出し口で、消すと3ファイルに
+//    またがって道連れになるため。セーブは約1.46MB あり、容量が逼迫するとブラウザが
+//    IndexedDB を捨てる（`requestPersistentStorage` を足したのはそのため）ので、
+//    セーブ画面に使用量を出すときにここを使う。
 export async function getStorageUsage() {
   if (useIDB) {
     return getIDBUsage();
   }
   return getLocalStorageUsage();
 }
-
-// チームエクスポート（JSON形式でダウンロード）
-export const exportTeam = (teamName) => {
-  const team = TEAMS_DATA[teamName];
-  if (!team) return;
-  const exportData = {
-    version: '2.0',
-    exportDate: new Date().toISOString(),
-    teamName: teamName,
-    team: JSON.parse(JSON.stringify(team))
-  };
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `team_${teamName.replace(/[^a-zA-Z0-9぀-鿿]/g, '_')}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-// チームインポート（JSONファイルから読み込み）
-export const importTeam = (targetTeamName, onComplete) => {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (!data.team || !data.team.players) {
-          alert('無効なチームデータです');
-          return;
-        }
-        const maxId = Object.values(TEAMS_DATA).flatMap(t => t.players || []).reduce((max, p) => Math.max(max, p.id || 0), 0);
-        data.team.players.forEach((p, i) => { p.id = maxId + i + 1; });
-        TEAMS_DATA[targetTeamName] = {
-          ...TEAMS_DATA[targetTeamName],
-          players: data.team.players,
-          lineupSettings: data.team.lineupSettings || null,
-          pitchingRotation: data.team.pitchingRotation || { starters: [], middleRelievers: [], setupMen: [], closer: null, currentStarterIndex: 0, pitcherRoles: {} },
-          strategy: data.team.strategy || null
-        };
-        if (onComplete) onComplete();
-        alert(`${data.teamName || 'チーム'}のデータを${targetTeamName}にインポートしました（選手${data.team.players.length}名）`);
-      } catch (err) {
-        alert('ファイルの読み込みに失敗しました: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
-};
 
 // ============================================================
 // ドラフト指名選手のエクスポート/インポート

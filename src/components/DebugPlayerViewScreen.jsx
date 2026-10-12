@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
@@ -165,14 +166,16 @@ export default function DebugPlayerViewScreen({ onBack }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4">
+    <ScreenShell className="text-white">
+      {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
+      <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           {onBack && (
             <button onClick={onBack} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm">戻る</button>
           )}
           <h1 className="text-xl font-bold">デバッグ用 全選手閲覧</h1>
-          <span className="text-gray-400 text-sm">({sortedEntries.length} / {allEntries.length}人)</span>
+          <span className="text-gray-300 text-sm">({sortedEntries.length} / {allEntries.length}人)</span>
         </div>
       </div>
 
@@ -182,7 +185,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
             key={tab.key}
             onClick={() => { setSourceFilter(tab.key); setAgeFilter(null); }}
             className={`px-3 py-1 rounded text-sm transition-colors ${
-              sourceFilter === tab.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              sourceFilter === tab.key ? 'seg-on' : 'seg'
             }`}
           >
             {tab.label}
@@ -194,36 +197,36 @@ export default function DebugPlayerViewScreen({ onBack }) {
         <input
           type="text" value={searchText} onChange={e => setSearchText(e.target.value)}
           placeholder="選手名で検索..."
-          className="w-64 px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          className="w-64 px-3 py-1.5 bg-surface-2 border border-gray-600 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
         />
       </div>
 
       <div className="flex flex-wrap gap-1 mb-4">
         <button onClick={() => setAgeFilter(null)}
-          className={`px-2 py-0.5 rounded text-xs transition-colors ${ageFilter === null ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+          className={`px-2 py-0.5 rounded text-xs transition-colors ${ageFilter === null ? 'seg-on' : 'seg'}`}>
           全年齢
         </button>
         {availableAges.map(age => (
           <button key={age} onClick={() => setAgeFilter(age)}
-            className={`px-2 py-0.5 rounded text-xs transition-colors ${ageFilter === age ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+            className={`px-2 py-0.5 rounded text-xs transition-colors ${ageFilter === age ? 'seg-on' : 'seg'}`}>
             {age}歳
           </button>
         ))}
       </div>
 
       {sortedEntries.length === 0 ? (
-        <div className="text-gray-500 text-center py-8">該当する選手がいません</div>
+        <div className="text-gray-400 text-center py-8">該当する選手がいません</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
-            <thead className="sticky top-0 bg-gray-900">
+            <thead className="sticky top-0 bg-surface-1">
               <tr className="border-b border-gray-700">
                 {COLUMNS.map(col => (
                   <th key={col.key}
                     onClick={() => handleSort(col.key)}
                     className={`py-1 px-1 cursor-pointer hover:text-white select-none transition-colors ${col.w} ${
                       col.key === 'name' || col.key === 'source' ? 'text-left' : 'text-center'
-                    } ${sortKey === col.key ? 'text-cyan-400' : 'text-gray-400'}`}>
+                    } ${sortKey === col.key ? 'text-cyan-400' : 'text-gray-300'}`}>
                     {col.label}{sortKey === col.key ? (sortAsc ? '▲' : '▼') : ''}
                   </th>
                 ))}
@@ -238,6 +241,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
         </div>
       )}
     </div>
+    </ScreenShell>
   );
 }
 
@@ -256,7 +260,7 @@ function PlayerRow({ entry }) {
     return <span className={getAbilityColor(isVel ? Math.min(99, (v - 115) * 2.5) : v)}>{v}</span>;
   };
 
-  const gpColor = gp >= 1.3 ? 'text-red-400' : gp >= 1.1 ? 'text-orange-400' : gp >= 0.9 ? 'text-yellow-300' : gp >= 0.7 ? 'text-blue-400' : 'text-gray-500';
+  const gpColor = gp >= 1.3 ? 'text-red-400' : gp >= 1.1 ? 'text-orange-400' : gp >= 0.9 ? 'text-yellow-300' : gp >= 0.7 ? 'text-blue-400' : 'text-gray-400';
 
   return (
     <tr className="border-b border-gray-800 hover:bg-gray-800/50">
@@ -268,7 +272,7 @@ function PlayerRow({ entry }) {
       <td className="py-0.5 px-1 text-center text-gray-300">{BUILD_LABEL[player.physical?.build] || '-'}</td>
       <td className="py-0.5 px-1 text-center text-gray-300">{player.physical?.throws === 'left' ? '左' : '右'}</td>
       <td className="py-0.5 px-1 text-center text-gray-300">{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</td>
-      <td className="py-0.5 px-1 text-gray-400 truncate max-w-[7rem]" title={sourceLabel}>{sourceLabel}</td>
+      <td className="py-0.5 px-1 text-gray-300 truncate max-w-[7rem]" title={sourceLabel}>{sourceLabel}</td>
       <td className="py-0.5 px-1 text-center">{isPitcher && vel != null ? <C v={vel} isVel /> : <span className="text-gray-700">-</span>}</td>
       <td className="py-0.5 px-1 text-center">{isPitcher ? <C v={ctrl} /> : <span className="text-gray-700">-</span>}</td>
       <td className="py-0.5 px-1 text-center">{isPitcher ? <C v={stm} isVel={false} /> : <span className="text-gray-700">-</span>}</td>

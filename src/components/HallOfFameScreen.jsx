@@ -1,7 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
+import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { exportDraftedPlayers } from '../game/saveSystem.js';
+import { summarizeNpbCareer } from '../game/npbCareer.js';
+import { resolveWatchList, removeFromWatchList, WATCH_STATUS_LABEL } from '../game/watchList.js';
 import { POSITION_NAMES } from '../utils/constants.js';
+import { SECOND_CAREER_META } from '../season/secondCareer.js';
+import PlayerDetailModal from './PlayerDetailModal.jsx';
 
 const NPB_TEAMS_CE = [
   { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', flag: 'giants' },
@@ -43,6 +48,46 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const [activeTab, setActiveTab] = useState('npbdraft');
   const [statCategory, setStatCategory] = useState('avg');
   const [expandedPlayer, setExpandedPlayer] = useState(null);
+  const [modalPlayer, setModalPlayer] = useState(null);
+  const [refreshWatch, setRefreshWatch] = useState(0);   // 注目リスト解除後の再描画
+
+  // OB名鑑: プロへ送り出した教え子（team.npbAlumni）を年度降順で集約
+  const alumniByYear = useMemo(() => {
+    const rows = [];
+    Object.entries(allTeams || {}).forEach(([teamName, team]) => {
+      (team?.npbAlumni || []).forEach(a => rows.push({ ...a, fromTeam: teamName }));
+    });
+    const byYear = {};
+    rows.forEach(a => {
+      const y = a.draftYear || 0;
+      if (!byYear[y]) byYear[y] = [];
+      byYear[y].push(a);
+    });
+    Object.values(byYear).forEach(list => list.sort((x, y) => (y.draftScore || 0) - (x.draftScore || 0)));
+    return Object.keys(byYear)
+      .map(Number)
+      .sort((a, b) => b - a)
+      .map(year => ({ year, players: byYear[year] }));
+  }, [allTeams]);
+  const alumniTotal = useMemo(
+    () => alumniByYear.reduce((s, g) => s + g.players.length, 0),
+    [alumniByYear]
+  );
+
+  const openModal = (entry) => {
+    // draftStats にドラフト時点の能力値スナップショットが入っている
+    const ds = entry.draftStats || {};
+    const normalized = {
+      ...entry,
+      physical: { ...(ds.physical || {}), ...(entry.physical || {}), throws: entry.throws || entry.physical?.throws || 'right' },
+      batting: { ...(ds.batting || {}), ...(entry.batting || {}), bats: entry.bats || entry.batting?.bats || 'right' },
+      fielding: ds.fielding || entry.fielding,
+      pitching: ds.pitching || entry.pitching,
+      positionFitness: ds.positionFitness || entry.positionFitness,
+      traits: ds.traits || entry.traits,
+    };
+    setModalPlayer(normalized);
+  };
   const [selectedTeamForHistory, setSelectedTeamForHistory] = useState(null);
   const [expandedYear, setExpandedYear] = useState(null);
   const [draftHistoryYear, setDraftHistoryYear] = useState(null);
@@ -186,6 +231,67 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
     [draftHistoryByYear]
   );
 
+  // ===== 年鑑（歴代タイトル・記録）データ =====
+  // teamHistory[].awards（OffSeasonScreenで各年に凍結）から集計する。
+  const TITLE_DEFS = [
+    { key: 'battingChampion', label: '首位打者', stat: 'avg',        color: 'text-blue-300',   higher: true,  fmt: v => v },
+    { key: 'homeRunKing',     label: '本塁打王', stat: 'homeruns',    color: 'text-red-300',    higher: true,  fmt: v => `${v}本` },
+    { key: 'rbiKing',         label: '打点王',   stat: 'rbis',        color: 'text-orange-300', higher: true,  fmt: v => `${v}点` },
+    { key: 'stolenBaseKing',  label: '盗塁王',   stat: 'stolenBases', color: 'text-emerald-300',higher: true,  fmt: v => `${v}個` },
+    { key: 'winsLeader',      label: '最多勝',   stat: 'wins',        color: 'text-green-300',  higher: true,  fmt: v => `${v}勝` },
+    { key: 'eraChampion',     label: '最優秀防御率', stat: 'era',     color: 'text-cyan-300',   higher: false, fmt: v => v },
+    { key: 'savesLeader',     label: '最多セーブ', stat: 'saves',     color: 'text-purple-300', higher: true,  fmt: v => `${v}S` },
+    { key: 'strikeoutKing',   label: '最多奪三振', stat: 'strikeouts',color: 'text-indigo-300', higher: true,  fmt: v => `${v}K` },
+  ];
+
+  const almanac = useMemo(() => {
+    const withAwards = (teamHistory || []).filter(h => h.awards).sort((a, b) => b.year - a.year);
+    // 通算タイトル数（選手別）
+    const titleCounts = {}; // name -> { name, team, total, byKey: {key: n} }
+    // 歴代シーズン記録（各タイトルの最高値）
+    const bestSeason = {}; // key -> { name, team, year, value }
+    // 球団別リーグ優勝回数
+    const champCounts = {}; // team -> n
+
+    withAwards.forEach(h => {
+      TITLE_DEFS.forEach(def => {
+        const a = h.awards[def.key];
+        if (!a || !a.name) return;
+        const rawVal = a[def.stat];
+        const num = parseFloat(rawVal);
+        // タイトル数
+        if (!titleCounts[a.name]) titleCounts[a.name] = { name: a.name, team: a.team, total: 0, byKey: {} };
+        titleCounts[a.name].total++;
+        titleCounts[a.name].byKey[def.key] = (titleCounts[a.name].byKey[def.key] || 0) + 1;
+        titleCounts[a.name].team = a.team; // 最新の所属
+        // シーズン記録（防御率は小さいほど良い）
+        if (!isNaN(num)) {
+          const cur = bestSeason[def.key];
+          const better = !cur || (def.higher ? num > cur.value : num < cur.value);
+          if (better) bestSeason[def.key] = { name: a.name, team: a.team, year: h.year, value: num, display: def.fmt(rawVal) };
+        }
+      });
+      const champ = h.leagueChampion || h.standings?.[0]?.team;
+      if (champ) champCounts[champ] = (champCounts[champ] || 0) + 1;
+    });
+
+    const titleRanking = Object.values(titleCounts).sort((a, b) => b.total - a.total).slice(0, 20);
+    const champRanking = Object.entries(champCounts).map(([team, n]) => ({ team, n })).sort((a, b) => b.n - a.n);
+
+    // 引退者のセカンドキャリア（監督/コーチ/スカウト）を新しい順に
+    const roleOrder = { manager: 0, coach: 1, scout: 2 };
+    const secondCareers = (hallOfFamePlayers || [])
+      .filter(p => p.secondCareer)
+      .map(p => ({
+        name: p.name, team: p.secondCareer.team || p.teamName || p.team,
+        role: p.secondCareer.role, title: p.secondCareer.title,
+        year: p.secondCareer.year ?? p.year ?? 0, position: p.position,
+      }))
+      .sort((a, b) => (b.year - a.year) || (roleOrder[a.role] - roleOrder[b.role]));
+
+    return { years: withAwards, titleRanking, bestSeason, champRanking, secondCareers };
+  }, [teamHistory, hallOfFamePlayers]);
+
   const battingCategories = [
     { key: 'avg', label: '打率', getValue: (s) => { const ab = s.batting?.atBats || 0; return ab >= 30 ? (s.batting?.hits || 0) / ab : 0; }, format: (v) => v > 0 ? v.toFixed(3) : '.000', minAB: 30 },
     { key: 'hits', label: '安打', getValue: (s) => s.batting?.hits || 0, format: (v) => v },
@@ -226,7 +332,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const statusColor = (status) => {
     if (status === '現役') return 'text-green-400';
     if (status === 'NPB') return 'text-yellow-400';
-    return 'text-gray-500';
+    return 'text-gray-400';
   };
 
   const teamNames = useMemo(() => {
@@ -255,18 +361,14 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   }, [teamHistory]);
 
   return (
-    <div className="p-4 bg-gray-900 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        {/* ヘッダー + タブ */}
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h1 className="text-xl font-bold text-yellow-400">資料室</h1>
-          <div className="flex gap-1 flex-wrap">
+    <ScreenShell>
+        <ScreenHeader title="資料室" right={
+          <div className="flex gap-1 flex-wrap justify-end">
             <button
               onClick={() => setActiveTab('npbdraft')}
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'npbdraft'
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  ? 'seg-on' : 'seg'
               }`}
             >
               NPBドラフト
@@ -275,8 +377,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               onClick={() => setActiveTab('roster')}
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'roster'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  ? 'seg-on' : 'seg'
               }`}
             >
               入団記録
@@ -285,8 +386,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               onClick={() => setActiveTab('stats')}
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'stats'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  ? 'seg-on' : 'seg'
               }`}
             >
               通算成績
@@ -295,34 +395,57 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               onClick={() => setActiveTab('teamhistory')}
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'teamhistory'
-                  ? 'bg-green-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  ? 'seg-on' : 'seg'
               }`}
             >
               チーム成績
             </button>
-            {seasonData?.settings?.corporateMode && (
-              <button
-                onClick={() => setActiveTab('tournaments')}
-                className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                  activeTab === 'tournaments'
-                    ? 'bg-yellow-600 text-white shadow-sm'
-                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                }`}
-              >
-                大会記録
-              </button>
-            )}
+            <button
+              onClick={() => setActiveTab('almanac')}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'almanac'
+                  ? 'seg-on' : 'seg'
+              }`}
+            >
+              年鑑
+            </button>
+            <button
+              onClick={() => setActiveTab('tournaments')}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'tournaments'
+                  ? 'seg-on' : 'seg'
+              }`}
+            >
+              大会記録
+            </button>
+            <button
+              onClick={() => setActiveTab('alumni')}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'alumni'
+                  ? 'seg-on' : 'seg'
+              }`}
+            >
+              OB名鑑
+            </button>
+            <button
+              onClick={() => setActiveTab('watch')}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'watch'
+                  ? 'seg-on' : 'seg'
+              }`}
+            >
+              注目選手
+            </button>
           </div>
-        </div>
+        } />
 
         {/* NPBドラフトタブ（3×4グリッド年度別表示） */}
         {activeTab === 'npbdraft' && (
           <div>
             {npbDraftYears.length === 0 ? (
-              <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-400">まだNPBドラフト記録がありません</p>
-                <p className="text-gray-500 text-sm mt-1">10月のNPBドラフト会議で指名された選手がここに記録されます</p>
+              <div className="bg-surface-2 rounded-lg p-6 text-center">
+                <p className="text-gray-300">まだNPBドラフト記録がありません</p>
+                <p className="text-gray-400 text-sm mt-1">10月のNPBドラフト会議で指名された選手がここに記録されます</p>
               </div>
             ) : (
               <>
@@ -333,8 +456,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       onClick={() => setNpbDraftYear(year)}
                       className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${
                         npbDraftYear === year
-                          ? 'bg-red-600 text-white shadow-md'
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          ? 'seg-on' : 'seg'
                       }`}
                     >
                       {year}年目
@@ -345,9 +467,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 {npbDraftGridData && (
                   <div>
                     {/* サマリー */}
-                    <div className="bg-gray-800 rounded-lg p-3 mb-3 flex items-center gap-4 flex-wrap">
+                    <div className="bg-surface-2 rounded-lg p-3 mb-3 flex items-center gap-4 flex-wrap">
                       <span className="text-white font-bold">{npbDraftYear}年目 NPBドラフト会議</span>
-                      <span className="text-gray-400 text-sm">指名 {npbDraftGridData.total}名</span>
+                      <span className="text-gray-300 text-sm">指名 {npbDraftGridData.total}名</span>
                       {(() => {
                         const src = { highschool: 0, university: 0, corporate: 0, independent: 0 };
                         npbDraftGridData.yearPlayers.forEach(p => {
@@ -377,15 +499,15 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             >
                               <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '18px', width: '27px' }} />
                               <span className="text-white font-bold text-xs">{team.short}</span>
-                              <span className="text-gray-500 text-[10px] ml-auto">{picks.length}名</span>
+                              <span className="text-gray-400 text-xs ml-auto">{picks.length}名</span>
                             </div>
                             <div className="bg-gray-800/90 p-2" style={{ minHeight: '60px' }}>
                               {picks.length === 0 ? (
-                                <div className="flex items-center justify-center h-full text-gray-500 text-sm min-h-[40px]">
+                                <div className="flex items-center justify-center h-full text-gray-400 text-sm min-h-[40px]">
                                   指名なし
                                 </div>
                               ) : (
-                                <table className="w-full text-[11px]">
+                                <table className="w-full text-xs">
                                   <tbody>
                                   {picks.map((entry, pi) => {
                                     const srcInfo = SOURCE_LABELS[entry.source];
@@ -403,13 +525,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                     return (
                                       <tr key={pi} className={pi > 0 ? 'border-t border-gray-700/30' : ''}>
                                         <td className="py-1 pr-1" style={{ width: '34px' }}>
-                                          <span className={`text-[10px] font-bold px-1 py-0.5 rounded block text-center whitespace-nowrap ${
+                                          <span className={`text-xs font-bold px-1 py-0.5 rounded block text-center whitespace-nowrap ${
                                             rd === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
                                             isIkusei ? 'bg-green-700/70 text-green-200' :
                                             'bg-yellow-700/70 text-yellow-200'
                                           }`}>{roundLabel}</span>
                                         </td>
-                                        <td className="py-1 pl-1 text-white font-bold text-xs whitespace-nowrap" style={{ minWidth: '7em' }}>{entry.name}</td>
+                                        <td className="py-1 pl-1 text-white font-bold text-xs whitespace-nowrap cursor-pointer hover:text-yellow-300 transition" style={{ minWidth: '7em' }} onClick={() => openModal(entry)}>{entry.name}</td>
                                         <td className="py-1 whitespace-nowrap pl-1">
                                           <span className="text-blue-300">{getPositionName(entry.position)}</span>
                                           <span className="inline-block w-2" />
@@ -417,7 +539,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                           <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{batHand}</span>
                                           <span className="inline-block w-2" />
                                           <span className="text-white">{entry.age}歳</span>
-                                          <span className="text-gray-400 ml-3">{entry.teamName}</span>
+                                          <span className="text-gray-300 ml-3">{entry.teamName}</span>
                                         </td>
                                       </tr>
                                     );
@@ -433,13 +555,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
 
                     {/* 詳細テーブル（折りたたみ） */}
                     <details className="mt-4">
-                      <summary className="cursor-pointer text-sm text-gray-400 hover:text-gray-200 transition bg-gray-800 rounded-lg px-4 py-2">
+                      <summary className="cursor-pointer text-sm text-gray-300 hover:text-gray-200 transition bg-surface-2 rounded-lg px-4 py-2">
                         指名選手一覧（詳細テーブル） — {npbDraftGridData.total}名
                       </summary>
-                      <div className="bg-gray-800 rounded-b-lg overflow-hidden mt-px">
+                      <div className="bg-surface-2 rounded-b-lg overflow-hidden mt-px">
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="bg-gray-700/80 text-gray-400 text-xs">
+                            <tr className="bg-gray-700/80 text-gray-300 text-xs">
                               <th className="py-1.5 px-2 text-left">順位</th>
                               <th className="py-1.5 px-2 text-left">選手名</th>
                               <th className="py-1.5 px-1 text-center">守</th>
@@ -469,9 +591,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 }
                                 const srcInfo = SOURCE_LABELS[player.source];
                                 return (
-                                  <tr key={idx} className={`border-b border-gray-700/50 hover:bg-gray-700/30 ${player.hallOfFame ? 'bg-yellow-900/20' : ''}`}>
+                                  <tr key={idx} className={`border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer ${player.hallOfFame ? 'bg-yellow-900/20' : ''}`} onClick={() => openModal(player)}>
                                     <td className="py-1.5 px-2">
-                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
                                         player.draftRound === 'ドラフト1位' ? 'bg-red-600/60 text-red-200' :
                                         player.draftRound === 'ドラフト2位' ? 'bg-orange-600/60 text-orange-200' :
                                         player.draftRound === '育成指名' ? 'bg-gray-600/60 text-gray-300' :
@@ -483,25 +605,25 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                         {player.hallOfFame && '🏛️ '}{player.name}
                                       </span>
                                       {srcInfo && (
-                                        <span className={`ml-1 text-[9px] font-bold px-1 py-0.5 rounded border ${srcInfo.color}`}>
+                                        <span className={`ml-1 text-xs font-bold px-1 py-0.5 rounded border ${srcInfo.color}`}>
                                           {srcInfo.label}
                                         </span>
                                       )}
                                     </td>
-                                    <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
-                                    <td className="py-1.5 px-1 text-center text-[10px]">
-                                      <span className={player.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>
+                                    <td className="py-1.5 px-1 text-center text-gray-400">{getPositionName(player.position)}</td>
+                                    <td className="py-1.5 px-1 text-center text-xs">
+                                      <span className={player.throws === 'left' ? 'text-green-400' : 'text-gray-400'}>
                                         {player.throws === 'left' ? '左' : '右'}
                                       </span>
-                                      <span className="text-gray-500">/</span>
-                                      <span className={player.bats === 'left' ? 'text-green-400' : player.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>
+                                      <span className="text-gray-400">/</span>
+                                      <span className={player.bats === 'left' ? 'text-green-400' : player.bats === 'switch' ? 'text-purple-400' : 'text-gray-400'}>
                                         {player.bats === 'left' ? '左' : player.bats === 'switch' ? '両' : '右'}
                                       </span>
                                     </td>
-                                    <td className="py-1.5 px-1 text-center text-gray-500">{player.age}</td>
-                                    <td className="py-1.5 px-2 text-gray-400 text-[10px]">{player.teamName}</td>
-                                    <td className="py-1.5 px-2 text-yellow-400 font-bold text-[10px]">{player.npbTeam}</td>
-                                    <td className="py-1.5 px-2 text-right text-gray-300 font-mono text-[10px]">{mainStat}</td>
+                                    <td className="py-1.5 px-1 text-center text-gray-400">{player.age}</td>
+                                    <td className="py-1.5 px-2 text-gray-300 text-xs">{player.teamName}</td>
+                                    <td className="py-1.5 px-2 text-yellow-400 font-bold text-xs">{player.npbTeam}</td>
+                                    <td className="py-1.5 px-2 text-right text-gray-300 font-mono text-xs">{mainStat}</td>
                                   </tr>
                                 );
                               })}
@@ -514,7 +636,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     <div className="mt-3 flex justify-end">
                       <button
                         onClick={() => exportDraftedPlayers(npbDraftGridData.yearPlayers)}
-                        className="bg-orange-700 hover:bg-orange-800 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm"
+                        className="btn-warn px-3 py-1.5 rounded text-xs transition shadow-sm"
                       >
                         📥 {npbDraftYear}年目のドラフトをエクスポート
                       </button>
@@ -530,9 +652,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         {activeTab === 'roster' && (
           <div>
             {draftYears.length === 0 ? (
-              <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-400">まだ入団記録がありません</p>
-                <p className="text-gray-500 text-sm mt-1">トライアウトで指名した選手の記録がここに表示されます</p>
+              <div className="bg-surface-2 rounded-lg p-6 text-center">
+                <p className="text-gray-300">まだ入団記録がありません</p>
+                <p className="text-gray-400 text-sm mt-1">トライアウトで指名した選手の記録がここに表示されます</p>
               </div>
             ) : (
               <div>
@@ -542,8 +664,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       onClick={() => setDraftHistoryYear(draftHistoryYear === year ? null : year)}
                       className={`px-3 py-1 rounded text-xs font-bold transition ${
                         draftHistoryYear === year
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          ? 'seg-on' : 'seg'
                       }`}
                     >
                       {year}年目
@@ -561,31 +682,31 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                   const teamNames = Object.keys(teamMap).sort();
                   return (
                     <div>
-                      <div className="bg-gray-800 rounded-lg p-3 mb-3 flex items-center gap-4 flex-wrap">
+                      <div className="bg-surface-2 rounded-lg p-3 mb-3 flex items-center gap-4 flex-wrap">
                         <span className="text-white font-bold">{draftHistoryYear}年目 入団</span>
-                        <span className="text-gray-400 text-sm">{yearRecords.length}名 / {teamNames.length}チーム</span>
+                        <span className="text-gray-300 text-sm">{yearRecords.length}名 / {teamNames.length}チーム</span>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {teamNames.map(tn => {
                           const picks = teamMap[tn];
                           return (
-                            <div key={tn} className="rounded-lg overflow-hidden bg-gray-800">
+                            <div key={tn} className="rounded-lg overflow-hidden bg-surface-2">
                               <div className="px-2.5 py-1.5 bg-purple-900/40 border-b border-purple-700/30 flex items-center justify-between">
                                 <span className="text-white font-bold text-xs truncate">{tn}</span>
-                                <span className="text-purple-400 text-[10px] font-bold">{picks.length}名</span>
+                                <span className="text-purple-400 text-xs font-bold">{picks.length}名</span>
                               </div>
                               <div className="p-2 space-y-1.5">
                                 {picks.map((p, pi) => (
                                   <div key={pi} className={pi > 0 ? 'pt-1.5 border-t border-gray-700/40' : ''}>
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-purple-400 text-[10px] font-bold w-4 text-right">{p.draftRound}</span>
+                                      <span className="text-purple-400 text-xs font-bold w-4 text-right">{p.draftRound}</span>
                                       <span className={`font-bold text-sm ${p.isPitcher ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
                                     </div>
                                     <div className="flex items-center gap-1.5 ml-5 mt-0.5">
-                                      <span className="text-blue-400 text-[10px]">{getPositionName(p.position)}</span>
-                                      <span className="text-gray-500 text-[10px]">{p.draftAge}歳</span>
+                                      <span className="text-blue-400 text-xs">{getPositionName(p.position)}</span>
+                                      <span className="text-gray-400 text-xs">{p.draftAge}歳</span>
                                       {isCorporate && p.source && (
-                                        <span className="text-cyan-400 text-[9px]">{p.source}</span>
+                                        <span className="text-cyan-400 text-xs">{p.source}</span>
                                       )}
                                     </div>
                                   </div>
@@ -599,8 +720,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                   );
                 })()}
                 {!draftHistoryYear && (
-                  <div className="bg-gray-800 rounded-lg p-6 text-center">
-                    <p className="text-gray-500 text-sm">年度を選択してください</p>
+                  <div className="bg-surface-2 rounded-lg p-6 text-center">
+                    <p className="text-gray-400 text-sm">年度を選択してください</p>
                   </div>
                 )}
               </div>
@@ -611,17 +732,16 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         {/* 通算成績ランキングタブ */}
         {activeTab === 'stats' && (
           <div>
-            <div className="bg-gray-800 rounded-lg p-2 mb-2">
+            <div className="bg-surface-2 rounded-lg p-2 mb-2">
               <div className="flex items-center gap-1 mb-1">
-                <span className="text-gray-500 text-[10px] mr-1 w-8">打撃</span>
+                <span className="text-gray-400 text-xs mr-1 w-8">打撃</span>
                 {battingCategories.map(cat => (
                   <button
                     key={cat.key}
                     onClick={() => setStatCategory(cat.key)}
-                    className={`px-2 py-0.5 text-[11px] rounded transition ${
+                    className={`px-2 py-0.5 text-xs rounded transition ${
                       statCategory === cat.key
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
+                        ? 'seg-on' : 'seg'
                     }`}
                   >
                     {cat.label}
@@ -629,15 +749,14 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 ))}
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-gray-500 text-[10px] mr-1 w-8">投手</span>
+                <span className="text-gray-400 text-xs mr-1 w-8">投手</span>
                 {pitchingCategories.map(cat => (
                   <button
                     key={cat.key}
                     onClick={() => setStatCategory(cat.key)}
-                    className={`px-2 py-0.5 text-[11px] rounded transition ${
+                    className={`px-2 py-0.5 text-xs rounded transition ${
                       statCategory === cat.key
-                        ? 'bg-red-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
+                        ? 'seg-on' : 'seg'
                     }`}
                   >
                     {cat.label}
@@ -647,14 +766,14 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             </div>
 
             {rankings.length === 0 ? (
-              <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-500">データがありません</p>
+              <div className="bg-surface-2 rounded-lg p-6 text-center">
+                <p className="text-gray-400">データがありません</p>
               </div>
             ) : (
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
+              <div className="bg-surface-2 rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-gray-700/80 text-gray-400 text-xs">
+                    <tr className="bg-gray-700/80 text-gray-300 text-xs">
                       <th className="py-1.5 px-2 text-center w-8">#</th>
                       <th className="py-1.5 px-2 text-left">選手名</th>
                       <th className="py-1.5 px-1 text-center">位</th>
@@ -668,18 +787,18 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       const val = currentCategory.getValue(player.careerStats);
                       const isP = player.position === 'pitcher';
                       return (
-                        <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                        <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer" onClick={() => openModal(player)}>
                           <td className="py-1.5 px-2 text-center">
-                            <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
+                            <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-400'}`}>
                               {idx + 1}
                             </span>
                           </td>
                           <td className="py-1.5 px-2">
                             <span className={`font-bold ${isP ? 'text-red-400' : 'text-blue-300'}`}>{player.name}</span>
                           </td>
-                          <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
-                          <td className="py-1.5 px-2 text-gray-400">{player.teamName}</td>
-                          <td className={`py-1.5 px-1 text-center text-[10px] font-bold ${statusColor(player.status)}`}>
+                          <td className="py-1.5 px-1 text-center text-gray-400">{getPositionName(player.position)}</td>
+                          <td className="py-1.5 px-2 text-gray-300">{player.teamName}</td>
+                          <td className={`py-1.5 px-1 text-center text-xs font-bold ${statusColor(player.status)}`}>
                             {player.status}
                           </td>
                           <td className="py-1.5 px-2 text-right font-bold text-white text-sm">
@@ -699,21 +818,20 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         {activeTab === 'teamhistory' && (
           <div>
             {teamHistory.length === 0 ? (
-              <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-400">まだチーム成績データがありません</p>
-                <p className="text-gray-500 text-sm mt-1">シーズン終了後にチーム成績が記録されます</p>
+              <div className="bg-surface-2 rounded-lg p-6 text-center">
+                <p className="text-gray-300">まだチーム成績データがありません</p>
+                <p className="text-gray-400 text-sm mt-1">シーズン終了後にチーム成績が記録されます</p>
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="bg-gray-800 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-2">チームを選択して年度別成績を表示</div>
+                <div className="bg-surface-2 rounded-lg p-3">
+                  <div className="text-xs text-gray-300 mb-2">チームを選択して年度別成績を表示</div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => { setSelectedTeamForHistory(null); setExpandedYear(null); }}
                       className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                         !selectedTeamForHistory
-                          ? 'bg-green-600 text-white shadow-sm'
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          ? 'seg-on' : 'seg'
                       }`}
                     >
                       全体
@@ -724,8 +842,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         onClick={() => { setSelectedTeamForHistory(name); setExpandedYear(null); }}
                         className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                           selectedTeamForHistory === name
-                            ? 'bg-green-600 text-white shadow-sm'
-                            : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            ? 'seg-on' : 'seg'
                         }`}
                       >
                         {name}
@@ -740,7 +857,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       const isExpanded = expandedYear === entry.year;
                       const champion = entry.standings?.[0];
                       return (
-                        <div key={entry.year} className="bg-gray-800 rounded-lg overflow-hidden">
+                        <div key={entry.year} className="bg-surface-2 rounded-lg overflow-hidden">
                           <button
                             onClick={() => setExpandedYear(isExpanded ? null : entry.year)}
                             className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-700/50 transition"
@@ -753,13 +870,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 </span>
                               )}
                             </div>
-                            <span className="text-gray-500">{isExpanded ? '▲' : '▼'}</span>
+                            <span className="text-gray-400">{isExpanded ? '▲' : '▼'}</span>
                           </button>
                           {isExpanded && entry.standings && (
                             <div className="px-4 pb-3">
                               <table className="w-full text-sm">
                                 <thead>
-                                  <tr className="text-gray-400 text-xs border-b border-gray-700">
+                                  <tr className="text-gray-300 text-xs border-b border-gray-700">
                                     <th className="py-1.5 px-2 text-center w-8">順位</th>
                                     <th className="py-1.5 px-2 text-left">チーム</th>
                                     <th className="py-1.5 px-2 text-center">勝</th>
@@ -774,34 +891,34 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                   {entry.standings.map((s, si) => (
                                     <tr key={si} className={`border-b border-gray-700/50 ${si === 0 ? 'bg-yellow-900/20' : ''}`}>
                                       <td className="py-2 px-2 text-center">
-                                        <span className={`font-bold ${si === 0 ? 'text-yellow-400' : si === 1 ? 'text-gray-300' : si === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
+                                        <span className={`font-bold ${si === 0 ? 'text-yellow-400' : si === 1 ? 'text-gray-300' : si === 2 ? 'text-orange-400' : 'text-gray-400'}`}>
                                           {s.rank}
                                         </span>
                                       </td>
                                       <td className="py-2 px-2 font-bold text-white">{s.team}</td>
                                       <td className="py-2 px-2 text-center text-green-400 font-bold">{s.wins}</td>
                                       <td className="py-2 px-2 text-center text-red-400">{s.losses}</td>
-                                      <td className="py-2 px-2 text-center text-gray-400">{s.draws || 0}</td>
+                                      <td className="py-2 px-2 text-center text-gray-300">{s.draws || 0}</td>
                                       <td className="py-2 px-2 text-center text-white font-mono">{(s.winRate || 0).toFixed(3)}</td>
                                       <td className="py-2 px-2 text-xs">
                                         {s.mvpBatter ? (
                                           <span className="text-blue-300">
                                             {s.mvpBatter.name}
-                                            <span className="text-gray-500 ml-1">
+                                            <span className="text-gray-400 ml-1">
                                               {s.mvpBatter.avg} {s.mvpBatter.hr}HR {s.mvpBatter.rbi}打点
                                             </span>
                                           </span>
-                                        ) : <span className="text-gray-500">-</span>}
+                                        ) : <span className="text-gray-400">-</span>}
                                       </td>
                                       <td className="py-2 px-2 text-xs">
                                         {s.mvpPitcher ? (
                                           <span className="text-red-300">
                                             {s.mvpPitcher.name}
-                                            <span className="text-gray-500 ml-1">
+                                            <span className="text-gray-400 ml-1">
                                               {s.mvpPitcher.wins}勝{s.mvpPitcher.losses}敗 {s.mvpPitcher.saves > 0 ? `${s.mvpPitcher.saves}S ` : ''}防{s.mvpPitcher.era}
                                             </span>
                                           </span>
-                                        ) : <span className="text-gray-500">-</span>}
+                                        ) : <span className="text-gray-400">-</span>}
                                       </td>
                                     </tr>
                                   ))}
@@ -818,14 +935,14 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 {selectedTeamForHistory && (
                   <div>
                     {selectedTeamHistory.length === 0 ? (
-                      <div className="bg-gray-800 rounded-lg p-6 text-center">
-                        <p className="text-gray-500">{selectedTeamForHistory}の成績データがありません</p>
+                      <div className="bg-surface-2 rounded-lg p-6 text-center">
+                        <p className="text-gray-400">{selectedTeamForHistory}の成績データがありません</p>
                       </div>
                     ) : (
-                      <div className="bg-gray-800 rounded-lg overflow-hidden">
+                      <div className="bg-surface-2 rounded-lg overflow-hidden">
                         <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-3">
                           <span className="text-lg font-bold text-white">{selectedTeamForHistory}</span>
-                          <span className="text-sm text-gray-400">
+                          <span className="text-sm text-gray-300">
                             通算 {selectedTeamHistory.reduce((s, r) => s + r.wins, 0)}勝
                             {selectedTeamHistory.reduce((s, r) => s + r.losses, 0)}敗
                             {selectedTeamHistory.reduce((s, r) => s + (r.draws || 0), 0) > 0 && ` ${selectedTeamHistory.reduce((s, r) => s + (r.draws || 0), 0)}分`}
@@ -836,7 +953,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         </div>
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="bg-gray-700/60 text-gray-400 text-xs">
+                            <tr className="bg-gray-700/60 text-gray-300 text-xs">
                               <th className="py-1.5 px-3 text-left">年度</th>
                               <th className="py-1.5 px-2 text-center">順位</th>
                               <th className="py-1.5 px-2 text-center">勝</th>
@@ -852,33 +969,33 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                               <tr key={ri} className={`border-b border-gray-700/50 ${record.rank === 1 ? 'bg-yellow-900/20' : ''}`}>
                                 <td className="py-2 px-3 font-bold text-white">{record.year}年目</td>
                                 <td className="py-2 px-2 text-center">
-                                  <span className={`font-bold text-base ${record.rank === 1 ? 'text-yellow-400' : record.rank === 2 ? 'text-gray-300' : record.rank === 3 ? 'text-orange-400' : 'text-gray-500'}`}>
+                                  <span className={`font-bold text-base ${record.rank === 1 ? 'text-yellow-400' : record.rank === 2 ? 'text-gray-300' : record.rank === 3 ? 'text-orange-400' : 'text-gray-400'}`}>
                                     {record.rank}位
                                   </span>
                                 </td>
                                 <td className="py-2 px-2 text-center text-green-400 font-bold">{record.wins}</td>
                                 <td className="py-2 px-2 text-center text-red-400">{record.losses}</td>
-                                <td className="py-2 px-2 text-center text-gray-400">{record.draws || 0}</td>
+                                <td className="py-2 px-2 text-center text-gray-300">{record.draws || 0}</td>
                                 <td className="py-2 px-2 text-center text-white font-mono">{(record.winRate || 0).toFixed(3)}</td>
                                 <td className="py-2 px-2 text-xs">
                                   {record.mvpBatter ? (
                                     <div>
                                       <span className="text-blue-300 font-bold">{record.mvpBatter.name}</span>
-                                      <div className="text-gray-500 text-[10px]">
+                                      <div className="text-gray-400 text-xs">
                                         {record.mvpBatter.avg} {record.mvpBatter.hr}HR {record.mvpBatter.rbi}打点 {record.mvpBatter.hits}安
                                       </div>
                                     </div>
-                                  ) : <span className="text-gray-500">-</span>}
+                                  ) : <span className="text-gray-400">-</span>}
                                 </td>
                                 <td className="py-2 px-2 text-xs">
                                   {record.mvpPitcher ? (
                                     <div>
                                       <span className="text-red-300 font-bold">{record.mvpPitcher.name}</span>
-                                      <div className="text-gray-500 text-[10px]">
+                                      <div className="text-gray-400 text-xs">
                                         {record.mvpPitcher.wins}勝{record.mvpPitcher.losses}敗 {record.mvpPitcher.saves > 0 ? `${record.mvpPitcher.saves}S ` : ''}防{record.mvpPitcher.era} {record.mvpPitcher.strikeouts}K
                                       </div>
                                     </div>
-                                  ) : <span className="text-gray-500">-</span>}
+                                  ) : <span className="text-gray-400">-</span>}
                                 </td>
                               </tr>
                             ))}
@@ -893,107 +1010,166 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           </div>
         )}
 
-        {/* 大会記録タブ（社会人モード） */}
+        {/* 大会記録タブ（全モード） */}
         {activeTab === 'tournaments' && (() => {
           const history = seasonData?.tournamentHistory || [];
           const currentYear = seasonData?.year;
+          const isCorporate = seasonData?.settings?.corporateMode;
+          const isUniversity = seasonData?.settings?.universityMode;
           const allRecords = [...history];
+
+          // 今シーズンの進行中データを追加
           const rt = seasonData?.regionalTournament;
           const td = seasonData?.toshitaikou;
           const ns = seasonData?.nihonSenshuken;
           const cs = seasonData?.clubSenshuken;
-          const hasCurrent = rt?.generated || td?.generated || ns?.generated || cs?.generated;
-          if (hasCurrent) {
+          const uc = seasonData?.universityChampionship;
+          const mj = seasonData?.meijiJingu;
+          const fa = seasonData?.frozenAwards;
+
+          const hasCorporateCurrent = isCorporate && (rt?.generated || td?.generated || ns?.generated || cs?.generated);
+          const hasUniversityCurrent = isUniversity && (uc?.phase || mj?.phase);
+          const hasIndependentCurrent = !isCorporate && !isUniversity && fa?.champion;
+
+          if (hasCorporateCurrent || hasUniversityCurrent || hasIndependentCurrent) {
             const cur = { year: currentYear, calendarYear: seasonData?.currentDate?.year, isCurrent: true };
-            if (rt?.phase === 'done' && rt.brackets) {
-              cur.regional = {};
-              Object.entries(rt.brackets).forEach(([rid, region]) => {
-                cur.regional[rid] = { regionName: region.regionName, champion: region.champion };
-              });
+            if (hasCorporateCurrent) {
+              if (rt?.phase === 'done' && rt.brackets) {
+                cur.regional = {};
+                Object.entries(rt.brackets).forEach(([rid, region]) => {
+                  cur.regional[rid] = { regionName: region.regionName, champion: region.champion };
+                });
+              }
+              if (td?.generated) cur.toshitaikou = { champion: td.champion, runnerUp: td.runnerUp };
+              if (ns?.generated) cur.senshuken = { champion: ns.champion, runnerUp: ns.runnerUp };
+              if (cs?.generated) cur.club = { champion: cs.champion, runnerUp: cs.runnerUp };
             }
-            if (td?.generated) cur.toshitaikou = { champion: td.champion, runnerUp: td.runnerUp };
-            if (ns?.generated) cur.senshuken = { champion: ns.champion, runnerUp: ns.runnerUp };
-            if (cs?.generated) cur.club = { champion: cs.champion, runnerUp: cs.runnerUp };
+            if (hasUniversityCurrent) {
+              if (uc?.phase) cur.universityChampionship = { champion: uc.champion, runnerUp: uc.runnerUp };
+              if (mj?.phase) cur.meijiJingu = { champion: mj.champion, runnerUp: mj.runnerUp };
+            }
+            if (hasIndependentCurrent) {
+              cur.leagueChampion = fa.champion;
+            }
             allRecords.push(cur);
           }
+
           const sorted = [...allRecords].sort((a, b) => (b.year || 0) - (a.year || 0));
           return (
             <div>
               {sorted.length === 0 ? (
-                <div className="bg-gray-800 rounded-lg p-6 text-center">
-                  <p className="text-gray-400">まだ大会記録がありません</p>
-                  <p className="text-gray-500 text-sm mt-1">シーズン中の大会結果がここに記録されます</p>
+                <div className="bg-surface-2 rounded-lg p-6 text-center">
+                  <p className="text-gray-300">まだ大会記録がありません</p>
+                  <p className="text-gray-400 text-sm mt-1">シーズン終了後に大会結果がここに記録されます</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {sorted.map((rec, ri) => (
-                    <div key={ri} className="bg-gray-800 rounded-lg overflow-hidden">
+                    <div key={ri} className="bg-surface-2 rounded-lg overflow-hidden">
                       <div className="px-4 py-2.5 border-b border-gray-700 flex items-center gap-3">
                         <span className="text-lg font-bold text-white">{rec.year}年目</span>
-                        {rec.calendarYear && <span className="text-gray-500 text-sm">({rec.calendarYear}年)</span>}
+                        {rec.calendarYear && <span className="text-gray-400 text-sm">({rec.calendarYear}年)</span>}
                         {rec.isCurrent && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded font-bold">今季</span>}
                       </div>
                       <div className="p-3 space-y-2">
-                        {/* 都市対抗 */}
+                        {/* 独立リーグ: リーグ優勝 */}
+                        {rec.leagueChampion && (
+                          <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-700/30 rounded-lg px-3 py-2">
+                            <span className="text-blue-400 font-bold text-sm w-28 shrink-0">リーグ優勝</span>
+                            <span className="text-yellow-400 font-bold">{rec.leagueChampion}</span>
+                          </div>
+                        )}
+                        {/* 独立リーグ: プレーオフ優勝 */}
+                        {rec.playoffChampion && (
+                          <div className="flex items-center gap-3 bg-yellow-900/20 border border-yellow-700/30 rounded-lg px-3 py-2">
+                            <span className="text-yellow-300 font-bold text-sm w-28 shrink-0">プレーオフ優勝</span>
+                            <span className="text-yellow-400 font-bold">{rec.playoffChampion}</span>
+                          </div>
+                        )}
+                        {/* 大学: 全日本大学選手権 */}
+                        {rec.universityChampionship && (
+                          <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-700/30 rounded-lg px-3 py-2">
+                            <span className="text-blue-400 font-bold text-sm w-36 shrink-0">全日本大学選手権</span>
+                            {rec.universityChampionship.champion ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-yellow-400 font-bold">優勝: {rec.universityChampionship.champion}</span>
+                                {rec.universityChampionship.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.universityChampionship.runnerUp}</span>}
+                              </div>
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
+                          </div>
+                        )}
+                        {/* 大学: 明治神宮大会 */}
+                        {rec.meijiJingu && (
+                          <div className="flex items-center gap-3 bg-purple-900/20 border border-purple-700/30 rounded-lg px-3 py-2">
+                            <span className="text-purple-400 font-bold text-sm w-36 shrink-0">明治神宮大会</span>
+                            {rec.meijiJingu.champion ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-yellow-400 font-bold">優勝: {rec.meijiJingu.champion}</span>
+                                {rec.meijiJingu.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.meijiJingu.runnerUp}</span>}
+                              </div>
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
+                          </div>
+                        )}
+                        {/* 社会人: 都市対抗 */}
                         {rec.toshitaikou && (
                           <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-700/30 rounded-lg px-3 py-2">
                             <span className="text-blue-400 font-bold text-sm w-24 shrink-0">都市対抗</span>
                             {rec.toshitaikou.champion ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-yellow-400 font-bold">優勝: {rec.toshitaikou.champion}</span>
-                                {rec.toshitaikou.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.toshitaikou.runnerUp}</span>}
+                                {rec.toshitaikou.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.toshitaikou.runnerUp}</span>}
                               </div>
-                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
                           </div>
                         )}
-                        {/* 日本選手権 */}
+                        {/* 社会人: 日本選手権 */}
                         {rec.senshuken && (
                           <div className="flex items-center gap-3 bg-red-900/20 border border-red-700/30 rounded-lg px-3 py-2">
                             <span className="text-red-400 font-bold text-sm w-24 shrink-0">日本選手権</span>
                             {rec.senshuken.champion ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-yellow-400 font-bold">優勝: {rec.senshuken.champion}</span>
-                                {rec.senshuken.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.senshuken.runnerUp}</span>}
+                                {rec.senshuken.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.senshuken.runnerUp}</span>}
                               </div>
-                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
                           </div>
                         )}
-                        {/* クラブ選手権 */}
+                        {/* 社会人: クラブ選手権 */}
                         {rec.club && (
                           <div className="flex items-center gap-3 bg-purple-900/20 border border-purple-700/30 rounded-lg px-3 py-2">
                             <span className="text-purple-400 font-bold text-sm w-24 shrink-0">クラブ選手権</span>
                             {rec.club.champion ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-yellow-400 font-bold">優勝: {rec.club.champion}</span>
-                                {rec.club.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.club.runnerUp}</span>}
+                                {rec.club.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.club.runnerUp}</span>}
                               </div>
-                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
                           </div>
                         )}
-                        {/* 地域トーナメント */}
+                        {/* 社会人: 地域トーナメント */}
                         {rec.regional && (
                           <div className="bg-green-900/20 border border-green-700/30 rounded-lg px-3 py-2">
                             <div className="text-green-400 font-bold text-sm mb-1">地域トーナメント</div>
                             <div className="flex flex-wrap gap-x-4 gap-y-1">
                               {Object.values(rec.regional).map((r, i) => (
                                 <span key={i} className="text-xs">
-                                  <span className="text-gray-400">{r.regionName}:</span>
+                                  <span className="text-gray-300">{r.regionName}:</span>
                                   <span className="text-white font-bold ml-1">{r.champion || '未決定'}</span>
                                 </span>
                               ))}
                             </div>
                           </div>
                         )}
-                        {/* 都市対抗予選結果 */}
+                        {/* 社会人: 都市対抗予選 */}
                         {rec.toshitaikouQualifiers && (
                           <details className="group">
-                            <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200 transition px-1">
+                            <summary className="cursor-pointer text-xs text-gray-300 hover:text-gray-200 transition px-1">
                               都市対抗 地区予選結果 ▼
                             </summary>
                             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 px-1">
                               {Object.values(rec.toshitaikouQualifiers).map((q, i) => (
                                 <span key={i} className="text-xs">
-                                  <span className="text-gray-400">{q.regionName}:</span>
+                                  <span className="text-gray-300">{q.regionName}:</span>
                                   <span className="text-blue-300 ml-1">{q.qualifiedTeams?.join(', ') || '-'}</span>
                                 </span>
                               ))}
@@ -1009,6 +1185,308 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           );
         })()}
 
+        {activeTab === 'almanac' && (
+          (almanac.years.length === 0 && almanac.secondCareers.length === 0) ? (
+            <div className="bg-surface-2 rounded-lg p-6 text-center">
+              <p className="text-gray-300">まだ年鑑データがありません</p>
+              <p className="text-gray-400 text-sm mt-1">シーズンを終えるごとに、その年のタイトルホルダーが記録されていきます</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* 歴代シーズン記録（各タイトルの最高値） */}
+              <div>
+                <h2 className="text-sm font-bold text-amber-300 mb-2">歴代シーズン記録</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {TITLE_DEFS.map(def => {
+                    const b = almanac.bestSeason[def.key];
+                    return (
+                      <div key={def.key} className="bg-surface-2 border border-gray-700/60 rounded-lg p-2.5">
+                        <div className={`text-xs font-bold ${def.color} mb-1`}>{def.label}</div>
+                        {b ? (
+                          <>
+                            <div className="text-lg font-bold text-white tabular-nums leading-tight">{b.display}</div>
+                            <div className="text-xs text-gray-300 truncate">{b.name}</div>
+                            <div className="text-xs text-gray-400">{b.team}・{b.year}年目</div>
+                          </>
+                        ) : <div className="text-gray-400 text-sm">-</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 通算タイトル数ランキング */}
+              <div>
+                <h2 className="text-sm font-bold text-amber-300 mb-2">通算タイトル数</h2>
+                {almanac.titleRanking.length === 0 ? (
+                  <div className="bg-surface-2 rounded-lg p-4 text-center text-gray-400 text-sm">記録なし</div>
+                ) : (
+                  <div className="bg-surface-2 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-gray-300 text-xs border-b border-gray-700">
+                          <th className="py-1.5 px-2 text-center w-8">#</th>
+                          <th className="py-1.5 px-2 text-left">選手</th>
+                          <th className="py-1.5 px-2 text-center w-16">タイトル</th>
+                          <th className="py-1.5 px-2 text-left">内訳</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {almanac.titleRanking.map((p, i) => (
+                          <tr key={p.name + i} className="border-b border-gray-700/40">
+                            <td className="py-1.5 px-2 text-center font-bold text-gray-300">{i + 1}</td>
+                            <td className="py-1.5 px-2 font-bold text-white whitespace-nowrap">
+                              {p.name}<span className="text-gray-400 font-normal text-xs ml-1">{p.team}</span>
+                            </td>
+                            <td className="py-1.5 px-2 text-center">
+                              <span className="text-amber-300 font-bold text-base tabular-nums">{p.total}</span>
+                              <span className="text-gray-400 text-xs">冠</span>
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <div className="flex flex-wrap gap-1">
+                                {TITLE_DEFS.filter(d => p.byKey[d.key]).map(d => (
+                                  <span key={d.key} className={`text-xs ${d.color}`}>
+                                    {d.label}{p.byKey[d.key] > 1 ? `×${p.byKey[d.key]}` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* 球団別リーグ優勝回数 */}
+              {almanac.champRanking.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-bold text-amber-300 mb-2">球団別リーグ優勝回数</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {almanac.champRanking.map(c => (
+                      <div key={c.team} className="bg-surface-2 border border-gray-700/60 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                        <span className="text-yellow-400">🏆</span>
+                        <span className="text-white font-bold text-sm">{c.team}</span>
+                        <span className="text-yellow-300 font-bold tabular-nums">{c.n}</span>
+                        <span className="text-gray-400 text-xs">回</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 引退者のセカンドキャリア（監督・コーチ・スカウト） */}
+              {almanac.secondCareers.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-bold text-amber-300 mb-2">セカンドキャリア（引退後の指導者）</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {almanac.secondCareers.map((sc, i) => {
+                      const meta = SECOND_CAREER_META[sc.role] || SECOND_CAREER_META.coach;
+                      return (
+                        <div key={sc.name + i} className="bg-surface-2 border border-gray-700/60 rounded-lg px-3 py-2 flex items-center gap-2">
+                          <span className="text-lg">{meta.icon}</span>
+                          <span className="text-white font-bold text-sm">{sc.name}</span>
+                          <span className={`text-xs font-bold ${meta.color}`}>{sc.title}</span>
+                          <span className="text-gray-400 text-xs ml-auto whitespace-nowrap">{sc.team}・{sc.year}年目〜</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 歴代タイトルホルダー（年度別） */}
+              <div>
+                <h2 className="text-sm font-bold text-amber-300 mb-2">歴代タイトルホルダー</h2>
+                <div className="bg-surface-2 rounded-lg overflow-x-auto">
+                  <table className="w-full text-xs whitespace-nowrap">
+                    <thead>
+                      <tr className="text-gray-300 border-b border-gray-700">
+                        <th className="py-2 px-2 text-center sticky left-0 bg-surface-2">年</th>
+                        <th className="py-2 px-2 text-left">優勝</th>
+                        {TITLE_DEFS.map(d => <th key={d.key} className="py-2 px-2 text-left">{d.label}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {almanac.years.map(h => (
+                        <tr key={h.year} className="border-b border-gray-700/40">
+                          <td className="py-1.5 px-2 text-center font-bold text-white sticky left-0 bg-surface-2">{h.year}</td>
+                          <td className="py-1.5 px-2 text-yellow-300 font-bold">
+                            {h.leagueChampion || h.standings?.[0]?.team || '-'}
+                          </td>
+                          {TITLE_DEFS.map(d => {
+                            const a = h.awards?.[d.key];
+                            return (
+                              <td key={d.key} className="py-1.5 px-2">
+                                {a && a.name ? (
+                                  <>
+                                    <span className="text-white">{a.name}</span>
+                                    <span className={`ml-1 ${d.color}`}>{d.fmt(a[d.stat])}</span>
+                                  </>
+                                ) : <span className="text-gray-400">-</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )
+        )}
+
+        {/* 注目選手: 高校時代に目を付けた選手を、進路が分かれた後も追い続ける */}
+        {activeTab === 'watch' && (() => {
+          const rows = (refreshWatch, resolveWatchList());
+          const color = { highschool: 'text-emerald-300', university: 'text-sky-300', team: 'text-cyan-300',
+            npb: 'text-amber-300', released: 'text-gray-300', gone: 'text-gray-300' };
+          return (
+            <div>
+              {rows.length === 0 ? (
+                <div className="text-center py-12 text-gray-300 text-sm">
+                  注目している選手はいません。<br />
+                  <span className="text-gray-300">甲子園の結果やスカウト画面の ☆ から登録すると、進路先まで追えます。</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-300">
+                    注目中 <span className="text-cyan-300 font-bold tabular-nums">{rows.length}</span> 名
+                    <span className="text-gray-300 ml-2">（高校・大学・社会人・独立・プロを横断して現在地を追跡します）</span>
+                  </div>
+                  <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-x-auto">
+                    <table className="w-full text-xs whitespace-nowrap">
+                      <thead>
+                        <tr className="text-gray-300 border-b border-gray-700/50">
+                          <th className="text-left py-1.5 px-2 font-medium">選手</th>
+                          <th className="text-center py-1.5 px-2 font-medium">現在地</th>
+                          <th className="text-left py-1.5 px-2 font-medium">所属</th>
+                          <th className="text-left py-1.5 px-2 font-medium">状況</th>
+                          <th className="text-left py-1.5 px-2 font-medium">登録時からの変化</th>
+                          <th className="text-left py-1.5 px-2 font-medium">きっかけ</th>
+                          <th className="py-1.5 px-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r) => (
+                          <tr key={r.playerId} className="border-b border-gray-700/30 hover:bg-gray-700/30">
+                            <td className="py-1.5 px-2 text-white font-bold">
+                              {r.name}
+                              {r.snapshot?.school && <span className="text-gray-300 ml-1.5 font-normal">{r.snapshot.school}</span>}
+                            </td>
+                            <td className={`py-1.5 px-2 text-center font-bold ${color[r.status] || 'text-gray-300'}`}>
+                              {WATCH_STATUS_LABEL[r.status]}
+                            </td>
+                            <td className="py-1.5 px-2 text-gray-200">{r.location}</td>
+                            <td className="py-1.5 px-2 text-gray-200">{r.detail}</td>
+                            <td className="py-1.5 px-2 text-gray-200 tabular-nums">{r.growth || '—'}</td>
+                            <td className="py-1.5 px-2 text-gray-300">{r.addedYear}年目 {r.note}</td>
+                            <td className="py-1.5 px-2 text-right">
+                              <button onClick={() => { removeFromWatchList(r.playerId); setRefreshWatch(v => v + 1); }}
+                                className="text-gray-300 hover:text-red-300 text-sm px-1" title="注目を外す">✕</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* OB名鑑: プロへ送り出した教え子を能力込みで保存・閲覧 */}
+        {activeTab === 'alumni' && (
+          <div>
+            {alumniTotal === 0 ? (
+              <div className="text-center py-12 text-gray-300 text-sm">
+                まだプロへ送り出した選手はいません。<br />
+                <span className="text-gray-300">ドラフトで指名された所属選手がここに記録されます。</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-sm text-gray-300">
+                  プロへ送り出した教え子 <span className="text-cyan-300 font-bold tabular-nums">{alumniTotal}</span> 名
+                  <span className="text-gray-300 ml-2">（指名時の能力を保存。サンドボックスモードで再登場させられます）</span>
+                  <div className="text-xs text-gray-300 mt-1">
+                    プロでの成績は毎年オフに更新されます。<b className="text-amber-200">操作はできません</b>——送り出した後の姿を見届ける階層です。
+                  </div>
+                </div>
+                {alumniByYear.map(({ year, players }) => (
+                  <div key={year} className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-hidden">
+                    <div className="px-3 py-2 bg-gray-900/60 border-b border-gray-700/50 flex items-center gap-2">
+                      <span className="text-cyan-300 font-bold text-sm">{year}年目ドラフト</span>
+                      <span className="text-xs text-gray-300">{players.length}名</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs whitespace-nowrap">
+                        <thead>
+                          <tr className="text-gray-300 border-b border-gray-700/50">
+                            <th className="text-left py-1.5 px-2 font-medium">選手</th>
+                            <th className="text-center py-1.5 px-1 font-medium">守備</th>
+                            <th className="text-center py-1.5 px-1 font-medium">齢</th>
+                            <th className="text-left py-1.5 px-2 font-medium">在籍</th>
+                            <th className="text-left py-1.5 px-2 font-medium">指名球団</th>
+                            <th className="text-left py-1.5 px-2 font-medium">順位</th>
+                            <th className="text-left py-1.5 px-2 font-medium">指名時の能力</th>
+                            <th className="text-center py-1.5 px-2 font-medium">評価</th>
+                            <th className="text-center py-1.5 px-2 font-medium">現況</th>
+                            <th className="text-left py-1.5 px-2 font-medium">プロ通算</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {players.map((a, i) => {
+                            const isP = a.position === 'pitcher';
+                            const abil = isP
+                              ? `速${a.pitching?.velocity ?? '-'} 制${a.pitching?.control ?? '-'} スタ${a.pitching?.stamina ?? '-'}`
+                              : `ミ${a.batting?.meet ?? '-'} パ${a.batting?.power ?? '-'} 走${a.physical?.speed ?? '-'} 守${a.fielding?.defense ?? '-'}`;
+                            return (
+                              <tr
+                                key={`${a.playerId}-${i}`}
+                                className="border-b border-gray-700/30 hover:bg-gray-700/30 cursor-pointer"
+                                onClick={() => setModalPlayer(a)}
+                                title="クリックで詳細能力を表示"
+                              >
+                                <td className="py-1.5 px-2 text-white font-bold">{a.name}</td>
+                                <td className="py-1.5 px-1 text-center text-gray-300">{POSITION_NAMES[a.position] || '-'}</td>
+                                <td className="py-1.5 px-1 text-center text-gray-300 tabular-nums">{a.age}</td>
+                                <td className="py-1.5 px-2 text-gray-300">{a.fromTeam}</td>
+                                <td className="py-1.5 px-2 text-amber-300">{a.npbTeam}</td>
+                                <td className="py-1.5 px-2 text-gray-300">{a.draftRound}</td>
+                                <td className="py-1.5 px-2 text-gray-200 font-mono tabular-nums">{abil}</td>
+                                <td className="py-1.5 px-2 text-center text-cyan-300 font-bold tabular-nums">{a.draftScore}</td>
+                                {(() => {
+                                  const seasons = a.npbSeasons || [];
+                                  const last = seasons[seasons.length - 1];
+                                  const status = a.retired ? `引退(${a.retiredYear}年)`
+                                    : last ? `${last.level} ${a.age}歳` : '入団直後';
+                                  const color = a.retired ? 'text-gray-300'
+                                    : last?.level === '一軍' ? 'text-emerald-300' : 'text-gray-300';
+                                  return (
+                                    <>
+                                      <td className={`py-1.5 px-2 text-center ${color} font-medium`}>{status}</td>
+                                      <td className="py-1.5 px-2 text-gray-200 tabular-nums">
+                                        {seasons.length ? summarizeNpbCareer(a).line : '—'}
+                                      </td>
+                                    </>
+                                  );
+                                })()}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {onClose && (
           <div className="text-center mt-4">
             <button
@@ -1019,8 +1497,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             </button>
           </div>
         )}
-      </div>
-    </div>
+      {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
+    </ScreenShell>
   );
 };
 

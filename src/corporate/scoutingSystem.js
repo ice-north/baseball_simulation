@@ -5,13 +5,16 @@
 // ============================================================
 
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
+import { addToReleasedPool, removeFromReleasedPoolById } from '../state/pools.js';
+import { addToRoster, removeFromRosterById } from '../state/roster.js';
 import { checkRetirement } from '../season/yearProgressionSystem.js';
 import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
-import { universityPool, highSchoolPool } from '../season/universityPool.js';
+import { universityPool, highSchoolPool, balanceRankByPosition } from '../season/universityPool.js';
 import { getUniversityPipes } from '../university/universityPipeSystem.js';
 import { WORLD_DATA } from './worldData.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
+import { buildToolNorms, toolProfile } from '../game/scoutTools.js';
 
 // ============================================================
 // 退団システム
@@ -31,6 +34,12 @@ export function processCorporateRetirements(allTeams, userTeamName) {
 
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team?.players) return;
+    // ⚠ **大学は対象外**。大学に戦力外という概念は無く、
+    // `processUniversityTeamGraduation`（卒業のみ）が担当する。
+    // 以前はここで全 TEAMS_DATA を回しており、234校から毎年7人前後——
+    // 実測で**4136名/年**（1〜3年生を能力で切っていた）を放出していた。
+    // 独立モードの `ContractScreen` で踏んだのと同じ穴。
+    if (team.universityData) return;
 
     const retired = [];
     team.players.forEach(player => {
@@ -54,7 +63,9 @@ export function processCorporateRetirements(allTeams, userTeamName) {
     }
 
     // AIチームの自動戦力外
-    if (teamName !== userTeamName) {
+    // ⚠ 独立は `processLowerTierTurnover`（年度替わり）が唯一の担当。
+    //    ここでも切ると同じチームから年に二度放出することになる
+    if (teamName !== userTeamName && !team.independentLeagueId) {
       const releases = getCorporateAIReleases(team.players, retired.map(r => r.id));
       if (releases.length > 0) {
         aiReleases[teamName] = releases;
@@ -138,7 +149,7 @@ export function executeDepartures(allTeams, retiredIds, releases, currentYear) {
           snapshot.attemptsInPool = 0;
           if (!snapshot.careerHistory) snapshot.careerHistory = [];
           snapshot.careerHistory.push({ type: 'released', year: currentYear, label: `${teamName}退団` });
-          releasedPlayersPool.push(snapshot);
+          addToReleasedPool(snapshot);
         }
       }
     });
@@ -237,6 +248,18 @@ export function estimateRivalCount(player) {
  */
 function getUniversityScoutPool(currentYear) {
   const pool = [];
+  // 大学生の実体は TEAMS_DATA の大学の名簿（4年生のみ）。`teamName` を持たせて
+  // `removeFromPool` が獲得した選手を名簿から外せるようにする
+  const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
+  Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+    if (!team?.universityData || teamName === userUniTeam) return;
+    (team.players || []).forEach((p, idx) => {
+      if ((p.universityYear || 0) < 4 && (p.age || 18) < 22) return;
+      p.universityTeamName = p.universityTeamName || teamName;
+      p.universityTeamId = p.universityTeamId ?? team.universityTeamId;
+      pool.push({ player: p, source: 'university', teamName, poolIndex: idx, yearsInUni: 3 });
+    });
+  });
   Object.entries(universityPool).forEach(([enrollYear, cohort]) => {
     const yr = parseInt(enrollYear);
     cohort.forEach((entry, idx) => {
@@ -298,7 +321,7 @@ function getHighSchoolScoutPool() {
 export function generateScoutCandidates(teamData, year) {
   const staffBonus = getTeamStaffBonus(teamData.staff || []);
   const scoutEye = staffBonus.scoutingEye || 50;
-  const reputation = teamData.corporateData?.reputation || 30;
+  const reputation = teamData.corporateData?.reputation ?? 30;
 
   // 候補者数: スカウト眼で4〜12人（赤字ペナルティで減少）
   const baseCount = 4;
@@ -318,7 +341,20 @@ export function generateScoutCandidates(teamData, year) {
   const uniPool = getUniversityScoutPool(year);
   const relPool = getReleasedScoutPool();
   const hsPool = getHighSchoolScoutPool();
-  const allPool = [...uniPool, ...relPool, ...hsPool];
+  // クラブからの引き上げ。**これが無いとクラブは行き止まりになる**。
+  // クラブは「どこにも入団できなかった選手の受け皿」で、稀に非常に意識の高い
+  // 選手が紛れ込んで突然変異のように伸びる。プロまで届かなくても
+  // **社会人へ拾われて次の階層へ上がる**流れを作る。
+  // ⚠ 既存の `getClubScoutPool`（視察用）を再利用する——同じプールの取得を
+  //    二重に書かない。社会人が獲る年齢帯だけに絞る。
+  const clubPool = getClubScoutPool().filter(e => {
+    const age = e.player?.age || 22;
+    return age >= 19 && age <= 27;
+  });
+  // ⚠ source は `club_team` のまま使うこと。`removeFromPool` がこの名前で
+  //    移籍元のロスターから削除する。別名にすると**クラブに残ったまま
+  //    社会人にも登録される**（二重登録）。
+  const allPool = [...uniPool, ...relPool, ...hsPool, ...clubPool];
 
   if (allPool.length === 0) return [];
 
@@ -413,6 +449,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         arm: hidden,
         dexterity: hidden,
         recovery: hidden,
+        bodyStamina: hidden,
       },
       fielding: {
         defense: visible.has('defense') ? blur(player.fielding?.defense || 0) : hidden,
@@ -439,6 +476,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         arm: blur(player.physical?.arm || 0),
         dexterity: blur(player.physical?.dexterity || 50),
         recovery: hidden,
+        bodyStamina: blur(player.physical?.bodyStamina || 50),
       },
       fielding: {
         defense: isPitcher ? hidden : blur(player.fielding?.defense || 0),
@@ -465,6 +503,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
       arm: blur(player.physical?.arm || 0),
       dexterity: blur(player.physical?.dexterity || 50),
       recovery: blur(player.physical?.recovery || 50),
+      bodyStamina: blur(player.physical?.bodyStamina || 50),
     },
     fielding: {
       defense: blur(player.fielding?.defense || 0),
@@ -556,8 +595,9 @@ function removeFromPool(player) {
   if (!ref) return;
 
   if (ref.source === 'highschool') {
-    const idx = highSchoolPool.players.findIndex(p => p.id === player.id);
-    if (idx >= 0) highSchoolPool.players.splice(idx, 1);
+    removeFromRosterById(highSchoolPool, player.id);
+  } else if (ref.source === 'university' && ref.teamName && TEAMS_DATA[ref.teamName]?.universityData) {
+    removeFromRosterById(TEAMS_DATA[ref.teamName], player.id);
   } else if (ref.source === 'university') {
     const cohort = universityPool[ref.enrollYear];
     if (cohort) {
@@ -566,14 +606,32 @@ function removeFromPool(player) {
       if (cohort.length === 0) delete universityPool[ref.enrollYear];
     }
   } else if (ref.source === 'released') {
-    const idx = releasedPlayersPool.findIndex(p => p.id === player.id);
-    if (idx >= 0) releasedPlayersPool.splice(idx, 1);
+    removeFromReleasedPoolById(player.id);
   } else if ((ref.source === 'independent' || ref.source === 'corporate_team' || ref.source === 'club_team') && ref.teamName) {
     const srcTeam = TEAMS_DATA[ref.teamName];
     if (srcTeam?.players) {
-      const idx = srcTeam.players.findIndex(p => p.id === player.id);
-      if (idx >= 0) srcTeam.players.splice(idx, 1);
+      removeFromRosterById(srcTeam, player.id);
     }
+  }
+}
+
+/**
+ * 入団時に「どこから来たか」を経歴へ残す。
+ *
+ * 【なぜ必要か】経歴が全部追えると、指名された社会人の経歴に「クラブ」があって
+ * 「苦労したんだな」と分かる——それ自体が読み物になる。
+ * ⚠ 経歴を残すのは `_poolRef` を消す**前**。消した後だと出身が分からなくなる。
+ */
+function pushOriginHistory(recruit, ref, year) {
+  if (!ref) return;
+  if (!recruit.careerHistory) recruit.careerHistory = [];
+  const has = (t) => recruit.careerHistory.some(h => h.type === t);
+  if (ref.source === 'club_team' && ref.teamName && !has('club')) {
+    recruit.careerHistory.push({ type: 'club', year, label: ref.teamName });
+  } else if (ref.source === 'independent' && ref.teamName && !has('independent')) {
+    recruit.careerHistory.push({ type: 'independent', year, label: ref.teamName });
+  } else if (ref.source === 'corporate_team' && ref.teamName) {
+    recruit.careerHistory.push({ type: 'corporate', year, label: ref.teamName });
   }
 }
 
@@ -584,17 +642,22 @@ function removeFromPool(player) {
 export function recruitPlayer(team, player) {
   removeFromPool(player);
   const recruit = { ...player };
+  const originRef = player._poolRef;
   delete recruit.scoutAccuracy;
   delete recruit.scoutedAbilities;
   delete recruit._poolRef;
   delete recruit._scoutSource;
   recruit.origin = 'scout';
+  // 今オフに入団した印。⚠ これが無いと、入団したばかりの選手が次のチームのスカウト候補
+  //   （他球団の選手）として拾い直され、同じ日に4球団を渡り歩いていた。年度替わりで消す
+  recruit._justRecruited = true;
   recruit.isStarter = false;
   recruit.battingOrder = 0;
   recruit.fatigue = 0;
+  pushOriginHistory(recruit, originRef, null);
   if (!recruit.careerHistory) recruit.careerHistory = [];
   recruit.careerHistory.push({ type: 'corporate', year: null, label: team.name });
-  team.players.push(recruit);
+  addToRoster(team, recruit);
 }
 
 /**
@@ -746,9 +809,6 @@ export function cancelScoutTask(teamData, staffId) {
   }
 }
 
-export function getScoutTask(teamData, staffId) {
-  return teamData?.corporateData?.scoutTasks?.[staffId] || null;
-}
 
 export function getAllScoutTasks(teamData) {
   return teamData?.corporateData?.scoutTasks || {};
@@ -1093,7 +1153,7 @@ export function getAllScoutedPlayers(cd) {
  */
 function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
   const scoutEye = staffScoutEye || 30;
-  const reputation = teamData.corporateData?.reputation || 30;
+  const reputation = teamData.corporateData?.reputation ?? 30;
   const reputationMult = getReputationScoutBonus(reputation);
 
   let pool = [];
@@ -1200,6 +1260,7 @@ function getIndependentScoutPool(excludeTeam) {
     if (!team?.players || !team.independentLeagueId) return;
     if (teamName === excludeName) return;
     team.players.forEach((p, idx) => {
+      if (p._justRecruited) return;   // 今オフに入団したばかりの選手は引き抜かない
       pool.push({ player: p, source: 'independent', teamName, poolIndex: idx });
     });
   });
@@ -1217,6 +1278,7 @@ function getCorporateScoutPool(excludeTeam) {
     if (team.corporateData.type === 'club') return;
     if (teamName === excludeName) return;
     team.players.forEach((p, idx) => {
+      if (p._justRecruited) return;   // 今オフに入団したばかりの選手は引き抜かない
       pool.push({ player: p, source: 'corporate_team', teamName, poolIndex: idx });
     });
   });
@@ -1234,6 +1296,7 @@ function getClubScoutPool(excludeTeam) {
     if (team.corporateData.type !== 'club') return;
     if (teamName === excludeName) return;
     team.players.forEach((p, idx) => {
+      if (p._justRecruited) return;   // 今オフに入団したばかりの選手は引き抜かない
       pool.push({ player: p, source: 'club_team', teamName, poolIndex: idx });
     });
   });
@@ -1376,6 +1439,7 @@ export function pickRandomDestination(player, excludeTeam) {
 function recruitPlayerToTeam(team, player) {
   removeFromPool(player);
   const recruit = { ...player };
+  const originRef = player._poolRef;
   delete recruit.scoutAccuracy;
   delete recruit.scoutedAbilities;
   delete recruit._poolRef;
@@ -1384,12 +1448,16 @@ function recruitPlayerToTeam(team, player) {
   delete recruit._investigationCount;
   delete recruit._revealLevel;
   recruit.origin = 'scout';
+  // 今オフに入団した印。⚠ これが無いと、入団したばかりの選手が次のチームのスカウト候補
+  //   （他球団の選手）として拾い直され、同じ日に4球団を渡り歩いていた。年度替わりで消す
+  recruit._justRecruited = true;
   recruit.isStarter = false;
   recruit.battingOrder = 0;
   recruit.fatigue = 0;
+  pushOriginHistory(recruit, originRef, null);
   if (!recruit.careerHistory) recruit.careerHistory = [];
   recruit.careerHistory.push({ type: 'corporate', year: null, label: team.name });
-  team.players.push(recruit);
+  addToRoster(team, recruit);
 }
 
 /**
@@ -1532,7 +1600,7 @@ const INITIAL_SCOUT_COUNT = { S: 16, A: 13, B: 11, C: 9, D: 8 };
 export function initUniversityScoutList(teamData, rank) {
   if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
 
-  const reputation = teamData?.universityData?.reputation || 30;
+  const reputation = teamData?.universityData?.reputation ?? 30;
   const initialCount = INITIAL_SCOUT_COUNT[rank] || 10;
 
   // 4月初期発見は20%スタート（以前から目をつけていた選手）
@@ -1561,32 +1629,87 @@ function discoverCandidatesFromPool(count, rank, reputation, initialGauge = 0) {
   const bandHi = BAND_HI[rank] ?? 0.84;
 
   // 全選手を能力順にソートして帯を切り出す
-  const byAbility = [...available]
-    .map((p, idx) => ({ player: p, poolIndex: highSchoolPool.players.indexOf(p), ability: evaluatePlayerScore(p) }))
-    .sort((a, b) => b.ability - a.ability);
+  // ⚠ **群ごとに順位を付け直してから切ること**（`balanceRankByPosition`）。
+  //    `evaluatePlayerScore` は 投手 `(球速-120)×1.5+制球+スタミナ×0.4` / 野手
+  //    `ミート+パワー+走×0.5+守×0.3+肩×0.3` と**スケールが揃っていない**ので、
+  //    高校生では野手のスコアが systematically 高く出る。1本の順位表を帯で切ると
+  //    **上の帯が野手だらけ・下の帯が投手だらけ**になっていた
+  //    （実測 S大学の候補の投手 17% / D大学 86%。プールは51%）。
+  //    S大学は投手を獲りたくても候補に居ない、という形になる。
+  //    ⚠ 進路の振り分けで踏んだのと同じ轍。**並べ替えを書き写さず共有すること**
+  const byAbility = balanceRankByPosition([...available]
+    .map((p) => ({ player: p, poolIndex: highSchoolPool.players.indexOf(p), ability: evaluatePlayerScore(p), score: evaluatePlayerScore(p) }))
+    .sort((a, b) => b.ability - a.ability));
 
   const n = byAbility.length;
   const loIdx = Math.floor(n * bandLo);
   const hiIdx = Math.min(n, Math.floor(n * bandHi));
   const band = byAbility.slice(loIdx, hiIdx);
 
-  // 帯内では知名度・成長力・ランダムで選手を発見
-  // 低知名度の逸材(fame低+growthPotential高)は鋭いスカウトが見つけられる
-  const reputationMult = 0.8 + (reputation / 100) * 0.4;
-  const scored = band.map(({ player: p, poolIndex, ability }) => {
-    const fame = p.fame || 0;
-    const gp = p.growthPotential || 1.0;
-    const noise = (Math.random() - 0.5) * 30;
-    const repBonus = (reputationMult - 1.0) * 10;
-    // 知名度が高い選手=見つかりやすい、低い選手=埋もれがち
-    const fameScore = fame * 0.5;
-    // 成長力が高い選手=素材の良さが滲み出て目に留まりやすい
-    const gemBonus = (gp - 1.0) * 25;
-    return { player: p, poolIndex, score: fameScore + gemBonus + noise + repBonus };
-  });
-  scored.sort((a, b) => b.score - a.score);
+  // ============================================================
+  // ⚠ **1本の順位表から上位を取ると、毎年同じ顔ぶれになる**
+  //
+  // 旧実装は `知名度×0.5 + (成長率-1.0)×25 + ノイズ±15` の1本で上位を取っていた。
+  // 4月は知名度がほぼ0（プール平均5.6）なので知名度の項が効かず、
+  // **2300人の帯から9人を取ると「成長率の最上位＋運」だけが残る**。
+  // 実測: 帯の中で成長率1.2以上は14.9%しかいないのに、**載った選手の99.7%が1.2以上**。
+  // 載った選手の成長率の平均は S大学1.434 〜 D大学1.432 と**ランクを問わず同じ**だった。
+  //
+  // さらに `evaluatePlayerScore` は `+(成長率-0.9)×30` を含むので、
+  // **選抜に使った成長率が評価点にも二重に乗り**、おすすめ度が S に張り付いていた
+  // （実測 S大学79% / C大学54% が S評価。C・D評価は 0%）。
+  // 「選ぶ基準と見せる基準は別」（`scoutTools` の節）と同じ轍。
+  //
+  // **枠を3つに分ける**。ドラフトの一芸指名で同じ問題を解いたのと同じ手で、
+  // ⚠ 物差しは `scoutTools` を流用する（**道具の表を二重に作らないこと**）。
+  //   ① 知名度 … 全国区の名前。**帯の上を越えて挙がる**（届かなくても話題には出る）
+  //   ② 格相応 … 帯の中央。ライバルが少なく**実際に獲れる見込みのある層**
+  //   ③ 一芸  … 総合力は帯の下でも、1つの道具が figure として立つ選手
+  // ============================================================
+  const nFame = Math.max(1, Math.round(count * 0.3));
+  const nTool = Math.max(1, Math.round(count * 0.3));
+  // ⚠ 3つの合計を `count` に一致させること。`Math.max(1, …)` にすると
+  //    月次追加（D大学は2名）で合計3になり、`slice` で**一芸枠だけ毎回捨てられる**
+  const nFit = Math.max(0, count - nFame - nTool);
 
-  return scored.slice(0, count).map(entry => {
+  // ⚠ **道具の物差しはプール全体から作ること**（帯の中だけで標準化すると
+  //    「その帯の中で相対的にマシな道具」になり、一芸の意味が薄まる）
+  const norms = buildToolNorms(available);
+  const taken = new Set();
+  const out = [];
+  // `balance` を立てた枠は**群ごとに順位を付けてから取る**。
+  // ⚠ 一芸枠は立てること——投手の道具は4種・野手は8種なので、
+  //    「最も突出した道具の偏差」で素直に並べると **max(8個) > max(4個)** で
+  //    野手が構造的に勝つ（ドラフトの `HUNT_PITCHER_SHARE` と同じ話）
+  const pick = (rows, k, scoreFn, balance = false) => {
+    let cand = rows.filter(r => !taken.has(r.player.id))
+      .map(r => ({ ...r, s: scoreFn(r) + (Math.random() - 0.5) * 12 }))
+      .sort((a, b) => b.s - a.s);
+    if (balance) cand = balanceRankByPosition(cand);
+    for (const r of cand.slice(0, k)) { taken.add(r.player.id); out.push(r); }
+  };
+
+  // ① 知名度枠。⚠ **ここだけ帯の上限を越える**——甲子園に出た選手は
+  //    どのランクの大学でも名前は挙がる（獲れるかは交渉率が決める）。
+  //    ⚠ 注目度(reputation)はここで**実際に効かせる**。旧実装の `repBonus` は
+  //    全候補に同じ値を足すだけで**順位を1つも動かしていなかった**（定数）。
+  //    注目度が高い大学ほど上の層まで情報が入る、という形にする。
+  const reach = 0.06 + (reputation / 100) * 0.14;          // 帯の上へ 6〜20%
+  const fameBand = byAbility.slice(Math.floor(n * Math.max(0, bandLo - reach)), hiIdx);
+  pick(fameBand, nFame, r => (r.player.fame || 0) * 1.5);
+
+  // ② 格相応枠。帯の中央半分から素直に引く（＝その大学の水準どおりの選手）。
+  //    ここに順位を付ける項を置かないこと——置いた瞬間にまた一色になる
+  const fitLo = loIdx + Math.floor((hiIdx - loIdx) * 0.25);
+  const fitHi = loIdx + Math.floor((hiIdx - loIdx) * 0.75);
+  pick(byAbility.slice(fitLo, fitHi), nFit, () => 0);
+
+  // ③ 一芸枠。`top` は「自分の中で最も突出した道具の偏差」
+  //    ⚠ 成長力はここに**小さく**だけ残す（素材の良さが滲み出る程度）。
+  //       ×25 は選抜を独占するので ×8 まで下げてある
+  pick(band, nTool, r => toolProfile(r.player, norms).top * 10 + ((r.player.growthPotential || 1) - 1) * 8, true);
+
+  return out.slice(0, count).map(entry => {
     const p = JSON.parse(JSON.stringify(entry.player));
     const accuracy = 40 + Math.floor(reputation * 0.2) + Math.floor(Math.random() * 10);
     p.scoutAccuracy = Math.min(75, accuracy);
@@ -1802,11 +1925,6 @@ export function toggleUniversityWatch(candidate) {
   return candidate._watching;
 }
 
-export function attemptUniversityRecruit(player, uniRank, reputation) {
-  const rate = player.recruitRate || calculateUniversityRecruitRate(player, uniRank, reputation);
-  const roll = Math.random() * 100;
-  return { success: roll < rate, rate };
-}
 
 // ============================================================
 // 接近ゲージシステム
@@ -1853,23 +1971,21 @@ export function calculateDailyGaugeRate(player, uniRank, reputation) {
 // ============================================================
 
 const RANK_REPUTATION_BASE = { S: 85, A: 65, B: 40, C: 20, D: 5 };
-const RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
 
 function generateRivals(player, userRank) {
   const score = evaluatePlayerScore(player);
   const fame = player.fame || 0;
 
   // 知名度が低い選手は他大学のスカウトに発見されにくい
-  // 高校生の知名度は最大30程度なので30を基準にスケール
-  // fame=0: 10% / fame=10: 37% / fame=20: 63% / fame=30: 90%
-  const discoverChance = Math.min(0.90, 0.10 + (fame / 30) * 0.80);
+  // fame=0: 25% / fame=10: 48% / fame=20: 72% / fame=30: 95%
+  const discoverChance = Math.min(0.95, 0.25 + (fame / 30) * 0.70);
   if (Math.random() > discoverChance) return [];
 
-  // 知名度で上限人数を制限（無名選手が多数のライバルから注目されるのは不自然）
-  const maxByFame = fame < 8 ? 1 : fame < 18 ? 2 : 3;
-  const maxByScore = score >= 70 ? 3 : score >= 50 ? 2 : score >= 30 ? 1 : (Math.random() < 0.4 ? 1 : 0);
+  // 知名度で上限人数を制限
+  const maxByFame = fame < 6 ? 1 : fame < 15 ? 2 : fame < 28 ? 3 : 4;
+  // 能力でも上限を設定（低能力選手にも最低1校は接近）
+  const maxByScore = score >= 70 ? 4 : score >= 50 ? 3 : score >= 30 ? 2 : 1;
   const rivalCount = Math.min(maxByScore, maxByFame);
-  if (rivalCount === 0) return [];
 
   const userTeamName = Object.keys(TEAMS_DATA)[0] || '';
   const userTeamId = UNIVERSITY_TEAMS.find(t => t.name === userTeamName)?.id;
@@ -1889,9 +2005,10 @@ function generateRivals(player, userRank) {
 
   return picked.map(t => {
     const rep = RANK_REPUTATION_BASE[t.rank] || 40;
-    const fameOffset = Math.floor((100 - (player.fame || 0)) * 0.3); // 知名度100→+0日, 知名度0→+30日
-    const startDelay = Math.floor(Math.random() * 30) + 30 + fameOffset;
-    // 知名度100: 30-59日(5月〜6月初) / 知名度50: 45-74日(5月中〜6月中) / 知名度0: 60-89日(6月〜7月)
+    // 知名度が高い選手は4月から即座に動き出す
+    // fame=30: delay 0-14日(4月) / fame=15: delay 7-22日(4月中〜下) / fame=0: delay 15-30日(4月下〜5月)
+    const fameOffset = Math.floor((30 - Math.min(30, fame)) * 0.5);
+    const startDelay = Math.floor(Math.random() * 15) + fameOffset;
     return {
       universityName: t.name,
       rank: t.rank,
@@ -1948,12 +2065,30 @@ export function getRivalInfo(candidate) {
 
 export function getUniversityScoutRecommendation(player, uniRank) {
   const score = evaluatePlayerScore(player);
-  const baseline = { S: 80, A: 65, B: 50, C: 40, D: 30 }[uniRank] || 50;
-  const diff = score - baseline;
-  if (diff >= 30) return 'S';
-  if (diff >= 15) return 'A';
-  if (diff >= 0) return 'B';
-  if (diff >= -15) return 'C';
+  // ⚠ **baseline はその大学に見えている帯の中央に置くこと**。旧値
+  //    （S80/A65/B50/C40/D30）は帯の中央より 22〜28 も低く、`diff>=30 で S` の
+  //    閾値に対して**帯の中央がほぼ A〜S の境目**に来ていた。そのため候補の
+  //    46〜79% が S評価で、**C・D評価は1件も出なかった**——「どの選手も
+  //    Sランクに見える」の正体。帯の中央を 0（＝B＝その大学にとって普通）に置く。
+  // ⚠ **投手と野手で別の baseline を持つこと**。`evaluatePlayerScore` は
+  //    投手 `(球速-120)×1.5+制球+スタミナ×0.4` / 野手 `ミート+パワー+走×0.5+…` と
+  //    スケールが揃っておらず、実測で**同じ帯の中央でも 40〜50点ひらく**
+  //    （C大学で 投手49 対 野手92）。1つの baseline では投手だけ不当に低く出る。
+  // ⚠ 閾値も**baseline に対する割合**で持つこと。絶対値だと野手のほうが
+  //    スケールが大きいぶん同じ +30 が別の意味になる。
+  // ⚠ 高校生プールの生成や `evaluatePlayerScore` を変えたら**測り直すこと**
+  //    （`VALUE_DIST` / `BAND_SD` と同じ性質の、実測から取った定数）
+  const isP = player.position === 'pitcher';
+  const base = (isP ? { S: 74, A: 64, B: 57, C: 50, D: 41 }
+                    : { S: 122, A: 110, B: 100, C: 91, D: 80 })[uniRank]
+             ?? (isP ? 57 : 100);
+  // 最終測定: 高校生の打撃の上の裾を畳んだ（`batTaperHigh`）後に
+  // `tools/sim-harness/scout-grade-probe.mjs` で測った帯の中央。野手が 1〜2 下がった
+  const rel = (score - base) / base;
+  if (rel >= 0.50) return 'S';
+  if (rel >= 0.25) return 'A';
+  if (rel >= 0) return 'B';
+  if (rel >= -0.25) return 'C';
   return 'D';
 }
 
