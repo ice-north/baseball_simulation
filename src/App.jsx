@@ -36,6 +36,8 @@ import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
 import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './game/stealing.js';
+import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
+         buntThrowOutChance, squeezeHomeThrowChance } from './game/bunting.js';
 import { makeRunner, runnerOf, asFlags, forceAdvance, isUnearnedRunner, unearnedAt } from './game/baseState.js';
 import { effectiveArsenalSize, activeArsenal } from './game/arsenal.js';
 import TutorialHint from './components/TutorialHint.jsx';
@@ -2488,10 +2490,8 @@ if (newOuts === 3) {
           });
         }
 
-        // Step 1: フェア/ファウル/フライ
-        const fairRate = Math.min(85, 40 + buntSkill * 0.40 + meet * 0.10);
-        const popupRate = Math.max(2, 15 - buntSkill * 0.12);
-        const roll = Math.random() * 100;
+        // Step 1: フェア/ファウル/フライ（式は `bunting.js` で自動シミュと共有）
+        const contact = classifyBuntContact(Math.random() * 100, buntSkill, meet);
 
         let newOuts = outs;
         let newBases = [...bases];
@@ -2513,7 +2513,7 @@ if (newOuts === 3) {
           }
         };
 
-        if (roll < popupRate) {
+        if (contact === 'popup') {
           // バントフライ → アウト
           newOuts++;
           {
@@ -2525,7 +2525,7 @@ if (newOuts === 3) {
           setLastResult({ description: 'バントフライ アウト' });
           addAtBatResult(currentBatter.id, isTopInning ? 'away' : 'home', 'バ飛');
           atBatOver = true;
-        } else if (roll >= popupRate + fairRate) {
+        } else if (contact === 'foul') {
           // バントファウル
           if (count.strikes >= 2) {
             // 2ストライクからのバントファウルは三振
@@ -2552,25 +2552,14 @@ if (newOuts === 3) {
           }
         } else {
           // フェアバント
-          const qualityScore = buntSkill * 0.5 + meet * 0.2 + (Math.random() * 20 - 10);
-          const quality = qualityScore >= 70 ? 'dead' : qualityScore >= 40 ? 'normal' : 'hard';
+          const quality = rollBuntQuality(buntSkill, meet);
 
-          const pitcherDef = defenseTeam.players.find(p => p.position === 'pitcher' && p.battingOrder >= 1)?.fielding?.defense || 50;
-          const firstDef = defenseTeam.players.find(p => p.position === 'first' && p.battingOrder >= 1)?.fielding?.defense || 50;
-          const thirdDef = defenseTeam.players.find(p => p.position === 'third' && p.battingOrder >= 1)?.fielding?.defense || 50;
-          const catcherDef = currentCatcher?.fielding?.defense || 50;
-          const avgFieldDef = (pitcherDef + firstDef + thirdDef + catcherDef) / 4;
-
-          let baseThrowout;
-          if (buntType === 'sacrifice') baseThrowout = 75;
-          else if (buntType === 'squeeze') baseThrowout = 85;
-          else baseThrowout = 60;
-
-          const speedReduction = speed * (buntType === 'safety' ? 0.35 : 0.15);
-          const qualityMod = quality === 'dead' ? (buntType === 'safety' ? -20 : -15) : quality === 'hard' ? (buntType === 'safety' ? 15 : 10) : 0;
-          const fieldingMod = (avgFieldDef - 50) * 0.3;
-          const throwOutChance = Math.max(5, Math.min(95, baseThrowout - speedReduction + qualityMod + fieldingMod));
-          const batterOut = Math.random() * 100 < throwOutChance;
+          const fieldOf = (pos) => defenseTeam.players
+            .find(p => p.position === pos && p.battingOrder >= 1)?.fielding?.defense;
+          const avgFieldDef = buntFieldDefense(
+            fieldOf('pitcher'), fieldOf('first'), fieldOf('third'),
+            currentCatcher?.fielding?.defense);
+          const batterOut = Math.random() * 100 < buntThrowOutChance(buntType, speed, quality, avgFieldDef);
 
           const offenseTeamType = isTopInning ? 'away' : 'home';
           const defenseTeamType = isTopInning ? 'home' : 'away';
@@ -2579,8 +2568,7 @@ if (newOuts === 3) {
             // スクイズ: 3塁ランナーの生還判定
             let squeezeRunnerSafe = true;
             if (newBases[2]) {
-              const homeThrowChance = Math.max(5, 15 + (avgFieldDef - 50) * 0.4 - (quality === 'dead' ? 15 : quality === 'hard' ? -5 : 0));
-              squeezeRunnerSafe = Math.random() * 100 >= homeThrowChance;
+              squeezeRunnerSafe = Math.random() * 100 >= squeezeHomeThrowChance(quality, avgFieldDef);
 
               if (squeezeRunnerSafe) {
                 isTopInning ? newScore.away++ : newScore.home++;

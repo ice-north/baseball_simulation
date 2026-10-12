@@ -17,6 +17,8 @@ import { getBatterType, resolveAiBatterGuess } from './batterType.js';
 import { getDeception, deceptionAxis } from './deception.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './stealing.js';
+import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
+         buntThrowOutChance, squeezeHomeThrowChance } from './bunting.js';
 import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
@@ -1235,46 +1237,24 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const meet = batterPlayer.batting?.meet || 50;
     const speed = batterPlayer.physical?.speed || 50;
 
-    // Step 1: フェア/ファウル/フライ判定
-    const fairRate = Math.min(85, 40 + buntSkill * 0.40 + meet * 0.10);
-    const popupRate = Math.max(2, 15 - buntSkill * 0.12);
-    const roll = Math.random() * 100;
-
-    if (roll < popupRate) {
-      return { type: 'bunt_popup' };
-    }
-    if (roll >= popupRate + fairRate) {
-      return { type: 'bunt_foul' };
-    }
+    // Step 1: フェア/ファウル/フライ判定（式は `bunting.js` で采配モードと共有）
+    const contact = classifyBuntContact(Math.random() * 100, buntSkill, meet);
+    if (contact === 'popup') return { type: 'bunt_popup' };
+    if (contact === 'foul') return { type: 'bunt_foul' };
 
     // Step 2: バントの質
-    const qualityScore = buntSkill * 0.5 + meet * 0.2 + (Math.random() * 20 - 10);
-    const quality = qualityScore >= 70 ? 'dead' : qualityScore >= 40 ? 'normal' : 'hard';
+    const quality = rollBuntQuality(buntSkill, meet);
 
     // Step 3: 守備の送球アウト判定
-    const pitcherDef = defense.pitcher?.defense || 50;
-    const firstDef = defense.first?.defense || 50;
-    const thirdDef = defense.third?.defense || 50;
-    const catcherDef = catcherPlayer?.fielding?.defense || 50;
-    const avgFieldDef = (pitcherDef + firstDef + thirdDef + catcherDef) / 4;
-
-    let baseThrowout;
-    if (buntType === 'sacrifice') baseThrowout = 75;
-    else if (buntType === 'squeeze') baseThrowout = 85;
-    else baseThrowout = 60;
-
-    const speedReduction = speed * (buntType === 'safety' ? 0.35 : 0.15);
-    const qualityMod = quality === 'dead' ? (buntType === 'safety' ? -20 : -15) : quality === 'hard' ? (buntType === 'safety' ? 15 : 10) : 0;
-    const fieldingMod = (avgFieldDef - 50) * 0.3;
-    const throwOutChance = Math.max(5, Math.min(95, baseThrowout - speedReduction + qualityMod + fieldingMod));
-
-    const batterOut = Math.random() * 100 < throwOutChance;
+    const avgFieldDef = buntFieldDefense(
+      defense.pitcher?.defense, defense.first?.defense,
+      defense.third?.defense, catcherPlayer?.fielding?.defense);
+    const batterOut = Math.random() * 100 < buntThrowOutChance(buntType, speed, quality, avgFieldDef);
 
     // スクイズ時の本塁送球判定（3塁走者のセーフ/アウト）
     let squeezeRunnerSafe = true;
     if (buntType === 'squeeze' && bases[2]) {
-      const homeThrowChance = Math.max(5, 15 + (avgFieldDef - 50) * 0.4 - (quality === 'dead' ? 15 : quality === 'hard' ? -5 : 0));
-      squeezeRunnerSafe = Math.random() * 100 >= homeThrowChance;
+      squeezeRunnerSafe = Math.random() * 100 >= squeezeHomeThrowChance(quality, avgFieldDef);
     }
 
     return { type: 'bunt_fair', batterOut, quality, buntType, squeezeRunnerSafe };
