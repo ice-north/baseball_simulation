@@ -2,11 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
-import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth } from '../season/seasonManager.js';
+import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth, getPlayoffChampion } from '../season/seasonManager.js';
 import { RANK_COLORS } from '../utils/constants.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
+import { scheduledGameSeed } from '../game/rng.js';
+import { ensureCompleteLineup } from '../game/lineup.js';
+import { getModeCapabilities } from '../game/modeCapabilities.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, autoPlayBracket, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
 import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues, generateGrandChampionship, autoPlayGrandChampionship, processSpringPromotionRelegation, regenerateFallSchedules } from '../corporate/parallelWorldManager.js';
 import { getUserFallSchedule } from '../university/universityInit.js';
@@ -77,7 +80,7 @@ const PHASE_EVENT_INFO = {
   offseason: { label: 'オフシーズン', desc: 'シーズンが終了しました。表彰・引退・進路決定を行います。' },
 };
 
-const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
+const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
@@ -121,11 +124,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [pendingPhaseEvent, setPendingPhaseEvent] = useState(null);
   const newspaperFameDateRef = React.useRef(null);
 
-  if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
-
   const userTeamName = Object.keys(TEAMS_DATA || {})[0] || 'チームA';
-  const isCorporate = !!seasonData.settings?.corporateMode;
-  const isUniversity = !!seasonData.settings?.universityMode;
+  const modeCapabilities = getModeCapabilities(seasonData.settings);
+  const isCorporate = modeCapabilities.corporate;
+  const isUniversity = modeCapabilities.university;
   const currentPhase = seasonData.phase || 'off_season';
   const phaseInfo = PHASE_INFO[currentPhase] || { name: '', color: 'bg-gray-100', description: '' };
   const currentDate = seasonData.currentDate || { month: 4, day: 1, year: 1 };
@@ -171,7 +173,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const gamesOnDate = getScheduleByDate(sData.schedule, sData.currentDate);
     if (gamesOnDate.length === 0) return { data: sData, results: [] };
     let updatedSchedule = [...sData.schedule];
-    let updatedStandings = [...sData.standings];
+    const scheduleIndexById = new Map(sData.schedule.map((game, index) => [game.id, index]));
+    let updatedStandings = sData.standings.map(entry => ({ ...entry }));
     let updatedResults = [...sData.results];
     const gameResults = [];
     gamesOnDate.forEach(game => {
@@ -179,7 +182,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const homeTeam = TEAMS_DATA[game.home];
       const awayTeam = TEAMS_DATA[game.away];
       if (!homeTeam || !awayTeam) return;
-      const result = autoSimulateGame(game.home, game.away);
+      const seed = scheduledGameSeed(game);
+      const result = autoSimulateGame(game.home, game.away, false, seed);
       const decisions = determinePitcherDecisions(result);
       const isHomeWin = result.homeScore > result.awayScore;
       console.log(`[投手判定] ${game.home} vs ${game.away}: ${result.homeScore}-${result.awayScore}`,
@@ -188,7 +192,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         'S:', decisions.savePitcher?.name || 'なし',
         'H:', decisions.holdPitchers.length);
       // 記録は autoSimulateGame が済ませている（二重に積まない）
-      const scheduleIndex = updatedSchedule.findIndex(g => g.id === game.id);
+      const scheduleIndex = scheduleIndexById.get(game.id) ?? -1;
       const decisionsForDisplay = {
         winningPitcher: decisions.winningPitcher ? { id: decisions.winningPitcher.id, name: decisions.winningPitcher.name } : null,
         losingPitcher: decisions.losingPitcher ? { id: decisions.losingPitcher.id, name: decisions.losingPitcher.name } : null,
@@ -196,12 +200,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         holdPitchers: decisions.holdPitchers.map(p => ({ id: p.id, name: p.name }))
       };
       const resultWithChanges = { ...result, pitcherChanges: result.pitcherChanges || [], decisions: decisionsForDisplay };
-      if (scheduleIndex !== -1) updatedSchedule[scheduleIndex] = { ...game, result: resultWithChanges };
+      if (scheduleIndex !== -1) updatedSchedule[scheduleIndex] = { ...game, rngSeed: seed, result: resultWithChanges };
       gameResults.push({ gameId: game.id, home: game.home, away: game.away, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.winner, decisions, pitcherChanges: result.pitcherChanges || [] });
       updatedResults.push({ gameId: game.id, date: { ...sData.currentDate }, home: game.home, away: game.away, result: resultWithChanges });
       const standingHome = updatedStandings.find(s => s.team === game.home);
       const standingAway = updatedStandings.find(s => s.team === game.away);
-      if (standingHome && standingAway) {
+      if (game.phase !== SEASON_PHASES.PLAYOFFS && standingHome && standingAway) {
         standingHome.gamesPlayed++; standingAway.gamesPlayed++;
         if (result.homeScore > result.awayScore) { standingHome.wins++; standingAway.losses++; }
         else if (result.awayScore > result.homeScore) { standingAway.wins++; standingHome.losses++; }
@@ -231,7 +235,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       newData = handlePhaseTransition(newData, newPhase);
     }
     const { month, day } = newData.currentDate;
-    const isCorporate = newData.settings?.corporateMode;
+    const capabilities = getModeCapabilities(newData.settings);
+    const isCorporate = capabilities.corporate;
 
     // 4月1日: 高校3年生を生成
     if (month === 4 && day <= 3 && !newData._highSchoolGenerated) {
@@ -476,13 +481,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
-    // 独立リーグモード: グランドチャンピオンシップ（10月1日〜）
-    if (!isCorporate && !isUniversity && WORLD_DATA.initialized && month >= 10 && !newData.grandChampionship?.generated) {
+    // 独立リーグの優勝決定シリーズが終わってから全国大会を開催する。
+    const playoffGames = newData.schedule.filter(game => game.phase === SEASON_PHASES.PLAYOFFS);
+    const playoffChampion = getPlayoffChampion(newData.schedule);
+    if (capabilities.grandChampionship && WORLD_DATA.initialized
+      && (month > 10 || (month === 10 && day >= 21))
+      && (playoffGames.length === 0 || playoffChampion)
+      && !newData.grandChampionship?.generated) {
       const gc = generateGrandChampionship(
         WORLD_DATA.userLeagueId,
         newData.standings,
         newData.settings,
-        newData.year
+        newData.year,
+        playoffChampion
       );
       if (gc) {
         autoPlayGrandChampionship(gc);
@@ -631,70 +642,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     renderBracketWithLinesImpl(bracket, teamDefsMap, userTeamName);
 
   const autoFillLineup = () => {
-    const team = TEAMS_DATA[userTeamName];
-    if (!team) return true;
-    const settings = team.lineupSettings;
-    if (!settings) return false;
-    if (!settings.battingOrder) settings.battingOrder = [];
-    const lineup = settings.battingOrder;
-    const useDH = LEAGUE_SETTINGS.useDH;
-    const maxSlots = useDH ? 9 : 9;
-
-    // 存在しない選手のエントリを除去
-    for (let i = lineup.length - 1; i >= 0; i--) {
-      const e = lineup[i];
-      if (e.battingOrder >= 1 && e.battingOrder <= maxSlots && !team.players.some(p => p.id === e.playerId)) {
-        lineup.splice(i, 1);
-      }
-    }
-
-    const validStarters = lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= maxSlots);
-    if (validStarters.length >= maxSlots) return true;
-
-    // 空き打順を特定
-    const usedOrders = new Set(validStarters.map(e => e.battingOrder));
-    const missingOrders = [];
-    for (let i = 1; i <= maxSlots; i++) {
-      if (!usedOrders.has(i)) missingOrders.push(i);
-    }
-
-    const lineupPlayerIds = new Set(lineup.map(e => e.playerId));
-
-    // 投手枠がなければ自動追加（非DH制）
-    if (!useDH && !lineup.some(e => e.position === 'pitcher')) {
-      const rotation = team.pitchingRotation;
-      const starterId = rotation?.starters?.[0] || team.players.find(p => p.position === 'pitcher')?.id;
-      if (starterId && missingOrders.length > 0) {
-        const order = missingOrders.pop();
-        lineup.push({ playerId: starterId, position: 'pitcher', battingOrder: order });
-        lineupPlayerIds.add(starterId);
-      }
-    }
-
-    // 残りの空き枠をベンチ野手で補完
-    const fieldPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
-    const usedPositions = new Set(lineup.filter(e => e.position !== 'pitcher' && e.position !== 'dh').map(e => e.position));
-
-    for (const order of [...missingOrders]) {
-      const benchFielders = team.players.filter(p =>
-        p.position !== 'pitcher' && !lineupPlayerIds.has(p.id)
-      );
-      if (benchFielders.length === 0) break;
-      const player = benchFielders[0];
-      let pos = player.position;
-      if (usedPositions.has(pos)) {
-        const avail = fieldPositions.filter(fp => !usedPositions.has(fp));
-        pos = avail.length > 0 ? avail[0] : (useDH ? 'dh' : player.position);
-      }
-      usedPositions.add(pos);
-      lineup.push({ playerId: player.id, position: pos, battingOrder: order });
-      lineupPlayerIds.add(player.id);
-      missingOrders.shift();
-    }
-
-    lineup.sort((a, b) => a.battingOrder - b.battingOrder);
-    const finalValid = lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= maxSlots);
-    return finalValid.length >= maxSlots;
+    return ensureCompleteLineup(TEAMS_DATA[userTeamName], LEAGUE_SETTINGS.useDH);
   };
 
   const handleProgressDate = (days) => {
@@ -1095,7 +1043,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       else if (isUniversity && selectedMonth === 11 && day === 29) eventLabel = 'セレクション';
       else if (isUniversity && selectedMonth === 8 && day >= 20 && day <= 31) eventLabel = '夏合宿';
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
-      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'グランドCS';
+      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'プレーオフ';
+      else if (!isCorporate && !isUniversity && selectedMonth === 10 && day === 21) eventLabel = 'グランドCS';
       else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
       else if (phase === SEASON_PHASES.CONTRACT) eventLabel = isCorporate ? '退団' : '契約更改';
       else if (phase === SEASON_PHASES.TRYOUT) eventLabel = isCorporate ? 'スカウト入団' : 'トライアウト';
@@ -1105,7 +1054,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       cells.push({ day, games: gamesOnDay, isToday, eventLabel, tournamentEvents });
     }
     return cells;
-  }, [seasonData.schedule, seasonData.currentDate, year, selectedMonth, daysInMonth, firstDay, tournamentCalendarDates, isCorporate]);
+  }, [seasonData.schedule, seasonData.currentDate, year, selectedMonth, daysInMonth, firstDay, tournamentCalendarDates, isCorporate, isUniversity]);
 
   const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
 
@@ -3689,5 +3638,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     </ScreenShell>
   );
 };
+
+const DateProgressScreen = (props) => props.seasonData
+  ? <DateProgressContent {...props} />
+  : <div className="p-8 text-white">読み込み中...</div>;
 
 export default DateProgressScreen;

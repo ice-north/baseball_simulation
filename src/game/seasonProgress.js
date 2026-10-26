@@ -1,8 +1,10 @@
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
+import { ensureCompleteLineup } from './lineup.js';
 import { SEASON_PHASES, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from './autoSimulation.js';
+import { scheduledGameSeed } from './rng.js';
 import { updateAllTeamReputations } from '../corporate/corporateInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, generateNihonSenshuken, generateClubSenshuken, createSenshukenMainTournament, generateRegionalTournament, autoPlayBracket } from '../corporate/toshitaikou.js';
@@ -128,15 +130,7 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
 
 // ユーザーチームのスタメンが完成しているか確認
 export const checkUserLineupComplete = (userTeamName) => {
-  const team = TEAMS_DATA[userTeamName];
-  if (!team) return true;
-  const settings = team.lineupSettings;
-  if (!settings || !settings.battingOrder || settings.battingOrder.length === 0) return false;
-  const validStarters = settings.battingOrder.filter(e => {
-    if (e.battingOrder < 1 || e.battingOrder > 9) return false;
-    return team.players.some(p => p.id === e.playerId);
-  });
-  return validStarters.length >= 9;
+  return ensureCompleteLineup(TEAMS_DATA[userTeamName], LEAGUE_SETTINGS.useDH);
 };
 
 // 指定日の試合を自動シミュレーション
@@ -156,14 +150,15 @@ export const simulateGamesOnDate = (seasonData) => {
     const awayTeam = TEAMS_DATA?.[game.away];
     if (!homeTeam || !awayTeam) return;
 
-    const gameResult = autoSimulateGame?.(game.home, game.away);
+    const gameResult = autoSimulateGame?.(game.home, game.away, false, scheduledGameSeed(game));
     if (gameResult) {
       updatedSeasonData = recordGameResult(updatedSeasonData, {
         date: currentDate,
         home: game.home,
         away: game.away,
         homeScore: gameResult.homeScore,
-        awayScore: gameResult.awayScore
+        awayScore: gameResult.awayScore,
+        rngSeed: gameResult.rngSeed
       });
     }
   });
@@ -198,11 +193,12 @@ export const simulateAllRemainingGames = (seasonData) => {
       const awayTeam = TEAMS_DATA?.[game.away];
       if (!homeTeam || !awayTeam) break;
 
-      const gameResult = autoSimulateGame?.(game.home, game.away);
+      const gameResult = autoSimulateGame?.(game.home, game.away, false, scheduledGameSeed(game));
       if (gameResult) {
         updatedSeasonData = recordGameResult(updatedSeasonData, {
           date: game.date, home: game.home, away: game.away,
-          homeScore: gameResult.homeScore, awayScore: gameResult.awayScore
+          homeScore: gameResult.homeScore, awayScore: gameResult.awayScore,
+          rngSeed: gameResult.rngSeed
         });
         updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
       } else {
@@ -220,11 +216,12 @@ export const simulateAllRemainingGames = (seasonData) => {
       const homeTeam = TEAMS_DATA?.[game.home];
       const awayTeam = TEAMS_DATA?.[game.away];
       if (!homeTeam || !awayTeam) return;
-      const gameResult = autoSimulateGame?.(game.home, game.away);
+      const gameResult = autoSimulateGame?.(game.home, game.away, false, scheduledGameSeed(game));
       if (gameResult) {
         updatedSeasonData = recordGameResult(updatedSeasonData, {
           date: game.date, home: game.home, away: game.away,
-          homeScore: gameResult.homeScore, awayScore: gameResult.awayScore
+          homeScore: gameResult.homeScore, awayScore: gameResult.awayScore,
+          rngSeed: gameResult.rngSeed
         });
       }
     });

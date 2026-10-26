@@ -8,6 +8,7 @@ import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
 import { getUtilityScore, generateCatcherLead, RANK_ASC } from '../utils/constants.js';
 import { generateBats } from '../utils/handedness.js';
+import { reservePlayerIds } from '../state/playerIds.js';
 
 // 2年目以降トライアウトの1チームあたり基準受験者数
 // 構成比はリーグ注目度(developmentReputation)で変動する（下記 generateTryoutCandidates 参照）:
@@ -216,7 +217,7 @@ const throwsForPosition = (pos) => {
  */
 function generateRandomFillCandidates(count, year, independentLeagueRank) {
   const candidates = [];
-  const idBase = (year || 1) * 10000 + 5000;
+  const nextId = reservePlayerIds((year || 1) * 10000 + 5001);
   const positionBag = buildPositionBag(count);
 
   for (let i = 1; i <= count; i++) {
@@ -271,7 +272,7 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
     const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay, playerTraits);
 
     const player = {
-      id: idBase + i,
+      id: nextId(),
       name: name,
       age: age,
       position: position,

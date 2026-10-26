@@ -44,8 +44,10 @@ export async function idbSetItem(key, value) {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const req = store.put(value, key);
-    req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onabort = () => reject(tx.error || new Error('IndexedDBへの保存が中断されました'));
+    tx.onerror = () => reject(tx.error || new Error('IndexedDBへの保存に失敗しました'));
   });
 }
 
@@ -55,8 +57,10 @@ export async function idbRemoveItem(key) {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const req = store.delete(key);
-    req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onabort = () => reject(tx.error || new Error('IndexedDBからの削除が中断されました'));
+    tx.onerror = () => reject(tx.error || new Error('IndexedDBからの削除に失敗しました'));
   });
 }
 

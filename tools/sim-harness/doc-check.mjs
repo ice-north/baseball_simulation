@@ -20,7 +20,8 @@ import { fileURLToPath } from 'url';
 import { Report } from './lib/report.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const md = fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8');
+const md = ['CLAUDE.md', 'docs/archive/CLAUDE-full.md']
+  .map(file => fs.readFileSync(path.join(ROOT, file), 'utf8')).join('\n');
 
 // ソース全体を1本に（識別子の実在確認用）
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {

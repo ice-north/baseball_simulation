@@ -6,6 +6,7 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { importDraftedPlayers, convertDraftedPlayerToSandboxPlayer } from '../game/saveSystem.js';
 import { getObRegistry, convertObToPlayer } from '../game/obRegistry.js';
+import { reservePlayerIds } from '../state/playerIds.js';
 
 /**
  * 箱庭モード用のデフォルト選手を作成
@@ -98,17 +99,9 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   const team = TEAMS_DATA[activeTeam] || { name: activeTeam, players: [] };
 
   // 新しいIDを生成
-  const getNextId = () => {
-    let maxId = 0;
-    Object.values(TEAMS_DATA).forEach(t => {
-      (t.players || []).forEach(p => { if (p.id > maxId) maxId = p.id; });
-    });
-    return maxId + 1;
-  };
-
   // 選手追加
   const addPlayer = (position) => {
-    const newPlayer = createDefaultPlayer(getNextId(), position);
+    const newPlayer = createDefaultPlayer(reservePlayerIds()(), position);
     addToRoster(TEAMS_DATA[activeTeam], newPlayer);
     forceUpdate();
     startEditPlayer(newPlayer);
@@ -155,10 +148,9 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   const handleImportDraftedPlayers = () => {
     importDraftedPlayers((importedPlayers) => {
       if (!TEAMS_DATA[activeTeam]) return;
-      let nextId = getNextId();
+      const nextId = reservePlayerIds();
       const converted = importedPlayers.map(p => {
-        const player = convertDraftedPlayerToSandboxPlayer(p, nextId);
-        nextId += 1;
+        const player = convertDraftedPlayerToSandboxPlayer(p, nextId());
         return player;
       });
       addManyToRoster(TEAMS_DATA[activeTeam], converted);
@@ -170,7 +162,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   // OB名鑑（歴代の教え子）から現在のチームに追加
   const handleAddOb = (ob) => {
     if (!TEAMS_DATA[activeTeam]) return;
-    const player = convertObToPlayer(ob, getNextId());
+    const player = convertObToPlayer(ob, reservePlayerIds()());
     addToRoster(TEAMS_DATA[activeTeam], player);
     forceUpdate();
   };

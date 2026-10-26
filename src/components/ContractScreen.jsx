@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
 import { POSITION_NAMES, getAbilityColor, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
@@ -87,29 +87,21 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     // 自チームは必ず含める（設定が壊れているセーブでも画面が空にならないように）
     return scoped.includes(userTeamName) ? scoped : [userTeamName, ...scoped];
   }, [seasonData, userTeamName]);
-  const [releasedPlayers, setReleasedPlayers] = useState({});
-  const [aiProcessed, setAiProcessed] = useState(false);
+  const [releasedPlayers, setReleasedPlayers] = useState(() => {
+    const aiReleases = {};
+    teamNames.forEach(teamName => {
+      if (teamName === userTeamName) return;
+      const team = TEAMS_DATA[teamName];
+      if (!team?.players) return;
+      const candidates = getAIReleaseCandidates(team.players);
+      if (candidates.length > 0) aiReleases[teamName] = candidates;
+    });
+    return aiReleases;
+  });
   const [confirmed, setConfirmed] = useState(false);
   const [sortKey, setSortKey] = useState(null);
   const [sortAsc, setSortAsc] = useState(false);
   const [showReview, setShowReview] = useState(false);
-
-  // AI チームの自動解雇処理
-  useEffect(() => {
-    if (aiProcessed) return;
-    const aiReleases = {};
-    teamNames.forEach(teamName => {
-      if (teamName === userTeamName) return; // ユーザーチームはスキップ
-      const team = TEAMS_DATA[teamName];
-      if (!team?.players) return;
-      const candidates = getAIReleaseCandidates(team.players);
-      if (candidates.length > 0) {
-        aiReleases[teamName] = candidates;
-      }
-    });
-    setReleasedPlayers(prev => ({ ...prev, ...aiReleases }));
-    setAiProcessed(true);
-  }, []);
 
   const teamData = TEAMS_DATA[userTeamName];
   const players = teamData?.players || [];

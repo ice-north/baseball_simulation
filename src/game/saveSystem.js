@@ -2,47 +2,68 @@ import { compressData, compressDataAsync, decompressData, decompressDataAsync, g
 import { TEAMS_DATA, releasedPlayersPool, clearReleasedPlayersPool } from '../teams-data.js';
 import { addManyToReleasedPool } from '../state/pools.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
-import { WORLD_DATA } from '../corporate/worldData.js';
-import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses, absorbUniversityPoolIntoRosters } from '../season/universityPool.js';
+import { WORLD_DATA, initializeWorld } from '../corporate/worldData.js';
+import { universityPool, highSchoolPool, serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses, absorbUniversityPoolIntoRosters } from '../season/universityPool.js';
 import { UNIVERSITY_TEAMS, generateLeagueAbbreviations } from '../university/universityTeamsData.js';
 import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage, requestPersistentStorage } from '../utils/indexedDBStorage.js';
 import { migrateSaveData, CURRENT_SAVE_VERSION } from './saveMigration.js';
+import { getPlayerIdCounter, reservePlayerIds, setPlayerIdCounter } from '../state/playerIds.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
 
 const useIDB = isIndexedDBAvailable();
 
-let _migrationDone = false;
+let _migrationPromise = null;
 export async function ensureMigration() {
-  if (_migrationDone || !useIDB) return;
-  _migrationDone = true;
-  // ⚠ **保存領域の永続化を申告する**。既定は best-effort で、ディスクが逼迫すると
-  //    ブラウザが IndexedDB を勝手に捨てる（＝セーブが消える）。
-  requestPersistentStorage().then(r => {
-    if (r.supported && !r.persisted) console.warn('保存領域の永続化が許可されませんでした（空き容量が減ると消える可能性があります）');
-  });
-  try {
-    const count = await migrateLocalStorageToIDB(SAVE_SLOT_KEYS);
-    const oldKey = 'baseballSim_saveData';
-    const oldData = localStorage.getItem(oldKey);
-    if (oldData) {
-      await idbSetItem(SAVE_SLOT_KEYS[0], oldData);
-      localStorage.removeItem(oldKey);
-    }
-    if (count > 0) console.log(`IndexedDBに${count}件のセーブデータを移行しました`);
-  } catch (e) {
-    console.warn('IndexedDB移行失敗（localStorageにフォールバック）:', e);
+  if (!useIDB) return;
+  if (!_migrationPromise) {
+    _migrationPromise = (async () => {
+      // 同時に呼ばれた読み込みも移行の完了まで待つ。
+      requestPersistentStorage().then(r => {
+        if (r.supported && !r.persisted) console.warn('保存領域の永続化が許可されませんでした（空き容量が減ると消える可能性があります）');
+      }).catch(() => {});
+      const count = await migrateLocalStorageToIDB(SAVE_SLOT_KEYS);
+      const oldKey = 'baseballSim_saveData';
+      const oldData = localStorage.getItem(oldKey);
+      if (oldData) {
+        const existing = await idbGetItem(SAVE_SLOT_KEYS[0]);
+        const localExisting = localStorage.getItem(SAVE_SLOT_KEYS[0]);
+        // 既存スロットがあれば旧キーは残す。どちらが新しいか判定せず上書きしない。
+        if (!existing && !localExisting) {
+          await idbSetItem(SAVE_SLOT_KEYS[0], oldData);
+          if (await idbGetItem(SAVE_SLOT_KEYS[0]) === oldData) localStorage.removeItem(oldKey);
+        }
+      }
+      if (count > 0) console.log(`IndexedDBに${count}件のセーブデータを移行しました`);
+    })().catch(e => {
+      _migrationPromise = null;
+      console.warn('IndexedDB移行失敗（localStorageにフォールバック）:', e);
+    });
   }
+  await _migrationPromise;
 }
 
+const savedAt = async (raw) => {
+  try {
+    const data = await decompressDataAsync(raw);
+    const time = Date.parse(data?.timestamp || '');
+    return Number.isFinite(time) ? time : -Infinity;
+  } catch { return -Infinity; }
+};
+
 async function storageGetItem(key) {
+  let localValue = null;
+  try { localValue = localStorage.getItem(key); } catch { /* IndexedDB が使える場合は続行 */ }
   if (useIDB) {
     try {
       const val = await idbGetItem(key);
+      if (val !== null && localValue !== null) {
+        return (await savedAt(localValue)) >= (await savedAt(val)) ? localValue : val;
+      }
       if (val !== null) return val;
     } catch { /* fall through */ }
   }
-  return localStorage.getItem(key);
+  return localValue;
 }
 
 // ⚠ **読みと書きで対称にすること**。読み（`storageGetItem`）は IndexedDB が
@@ -56,19 +77,23 @@ async function storageSetItem(key, value) {
     try {
       await idbSetItem(key, value);
       try { localStorage.removeItem(key); } catch { /* ignore */ }
-      return;
+      return 'IndexedDB';
     } catch (e) {
       console.warn('IndexedDBへの保存に失敗。localStorageへ切り替えます:', e);
     }
   }
   localStorage.setItem(key, value);
+  return 'localStorage';
 }
 
 async function storageRemoveItem(key) {
+  let idbError = null;
+  let localError = null;
   if (useIDB) {
-    try { await idbRemoveItem(key); } catch { /* ignore */ }
+    try { await idbRemoveItem(key); } catch (error) { idbError = error; }
   }
-  try { localStorage.removeItem(key); } catch { /* ignore */ }
+  try { localStorage.removeItem(key); } catch (error) { localError = error; }
+  if (idbError || localError) throw idbError || localError;
 }
 
 // ============================================================
@@ -233,8 +258,10 @@ export const migrateOldSaveData = () => {
   const oldData = localStorage.getItem('baseballSim_saveData');
   if (oldData && !localStorage.getItem(SAVE_SLOT_KEYS[0])) {
     localStorage.setItem(SAVE_SLOT_KEYS[0], oldData);
-    localStorage.removeItem('baseballSim_saveData');
-    return true;
+    if (localStorage.getItem(SAVE_SLOT_KEYS[0]) === oldData) {
+      localStorage.removeItem('baseballSim_saveData');
+      return true;
+    }
   }
   return false;
 };
@@ -285,6 +312,8 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
       done: WORLD_DATA.corporateRegionalTournament.phase === 'done' || !!WORLD_DATA.corporateRegionalTournament.done,
     } : null,
     universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
+    _uniTournaments: WORLD_DATA._uniTournaments ? JSON.parse(JSON.stringify(WORLD_DATA._uniTournaments)) : null,
+    grandChampionship: WORLD_DATA.grandChampionship ? JSON.parse(JSON.stringify(WORLD_DATA.grandChampionship)) : null,
     _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
     _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
     managerCareer: Array.isArray(WORLD_DATA.managerCareer) ? JSON.parse(JSON.stringify(WORLD_DATA.managerCareer)) : [],
@@ -313,6 +342,7 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
     teamHistory: gameState.teamHistory,
     universityPool: serializeUniversityPool(),
     releasedPlayersPool: JSON.parse(JSON.stringify(releasedPlayersPool)),
+    playerIdCounter: getPlayerIdCounter(),
   };
 };
 
@@ -327,9 +357,9 @@ export const saveGameToSlot = async (slotIndex, gameState, onProgress) => {
     progress(45);
     const compressed = await compressDataAsync(saveData);
     progress(85);
-    await storageSetItem(SAVE_SLOT_KEYS[slotIndex], compressed);
+    const storage = await storageSetItem(SAVE_SLOT_KEYS[slotIndex], compressed);
     progress(100);
-    return { success: true, storage: useIDB ? 'IndexedDB' : 'localStorage' };
+    return { success: true, storage };
   } catch (error) {
     console.error('セーブ失敗:', error);
     if (error.name === 'QuotaExceededError') {
@@ -355,6 +385,7 @@ const validateSaveData = (data) => {
 
 // ゲームデータを読み込み（async版）。keyOverride指定時はそのキーから読む（オートセーブ等）。
 export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
+  let previousState = null;
   try {
     const savedData = await storageGetItem(keyOverride || SAVE_SLOT_KEYS[slotIndex]);
     if (!savedData) {
@@ -376,18 +407,22 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       return { success: false, error: validationError };
     }
 
-    // TEAMS_DATAを安全に復元（バックアップを取ってから入れ替え）
-    const backup = JSON.parse(JSON.stringify(TEAMS_DATA));
-    try {
-      Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
-      Object.keys(saveData.teamsData).forEach(teamName => {
-        TEAMS_DATA[teamName] = saveData.teamsData[teamName];
-      });
-    } catch (restoreError) {
-      Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
-      Object.keys(backup).forEach(k => { TEAMS_DATA[k] = backup[k]; });
-      return { success: false, error: 'データの復元中にエラーが発生しました。元の状態に戻しました。' };
-    }
+    // 後続の復元処理が失敗しても、実行中の世界全体を元に戻せるよう参照を保持する。
+    // ここからの処理は旧オブジェクトを変更せず、新しい枝へ差し替える。
+    const uniKeys = ['rank', 'reputation', 'reputationHistory', 'rankPosition', 'rankingScore'];
+    previousState = {
+      teams: { ...TEAMS_DATA },
+      world: { ...WORLD_DATA },
+      university: UNIVERSITY_TEAMS.map(team => Object.fromEntries(
+        uniKeys.filter(key => Object.hasOwn(team, key)).map(key => [key, team[key]])
+      )),
+      universityPool: { ...universityPool },
+      highSchoolPool: { players: highSchoolPool.players, year: highSchoolPool.year },
+      releasedPlayers: [...releasedPlayersPool],
+      playerIdCounter: getPlayerIdCounter(),
+    };
+    Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
+    Object.assign(TEAMS_DATA, saveData.teamsData);
 
     // ⚠ 旧セーブの幽霊OBレコードの除去は `saveMigration.normalizeSaveData` が担当する
     //    （`pruneGhostAlumni`）。ここに書き写さないこと——移行の置き場所は1つ。
@@ -399,7 +434,11 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       uniNames.forEach(n => { TEAMS_DATA[n].abbreviation = abbrs[n]; });
     }
 
-    // WORLD_DATA復元
+    // WORLD_DATA復元。旧セーブにworldDataが無くても前のゲームの世界を残さない。
+    const mode = saveData.gameMode === 'normal' ? 'independent' : (saveData.gameMode || 'independent');
+    initializeWorld(mode, saveData.seasonData?.settings?.preset || null);
+    WORLD_DATA.year = saveData.seasonData?.year || 1;
+    WORLD_DATA.initialized = false;
     if (saveData.worldData && saveData.worldData.initialized) {
       const wd = saveData.worldData;
       WORLD_DATA.initialized = true;
@@ -430,6 +469,8 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       const crt = wd.corporateRegionalTournament;
       WORLD_DATA.corporateRegionalTournament = (crt && crt.done) ? { generated: true, done: true, phase: 'done' } : null;
       WORLD_DATA.universityLeague = wd.universityLeague || null;
+      WORLD_DATA._uniTournaments = wd._uniTournaments || null;
+      WORLD_DATA.grandChampionship = wd.grandChampionship || null;
       WORLD_DATA._universityScout = wd._universityScout || null;
       WORLD_DATA._teamRanking = wd._teamRanking || null;
       WORLD_DATA.managerCareer = Array.isArray(wd.managerCareer) ? wd.managerCareer : [];
@@ -449,9 +490,7 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
     }
 
     // 大学プール復元
-    if (saveData.universityPool) {
-      deserializeUniversityPool(saveData.universityPool);
-    }
+    deserializeUniversityPool(saveData.universityPool || null);
     const loadedYear = saveData.seasonData?.year || 1;
     // 旧セーブはプールにも在学生を持つ。大学生の実体は名簿ひとつなので名簿へ移す
     absorbUniversityPoolIntoRosters(TEAMS_DATA, loadedYear);
@@ -463,11 +502,31 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       addManyToReleasedPool(saveData.releasedPlayersPool);
     }
 
+    setPlayerIdCounter(saveData.playerIdCounter);
+    reservePlayerIds();
+
     // ※旧セーブの選手フィールド補完（バント/性格/DH等）は migrateSaveData で
     //   復元前に済ませているため、ここでの追加処理は不要。
 
     return { success: true, data: saveData };
   } catch (error) {
+    if (previousState) {
+      Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
+      Object.assign(TEAMS_DATA, previousState.teams);
+      Object.keys(WORLD_DATA).forEach(k => delete WORLD_DATA[k]);
+      Object.assign(WORLD_DATA, previousState.world);
+      const uniKeys = ['rank', 'reputation', 'reputationHistory', 'rankPosition', 'rankingScore'];
+      UNIVERSITY_TEAMS.forEach((team, index) => {
+        for (const key of uniKeys) {
+          if (Object.hasOwn(previousState.university[index], key)) team[key] = previousState.university[index][key];
+          else delete team[key];
+        }
+      });
+      deserializeUniversityPool({ university: previousState.universityPool, highSchool: previousState.highSchoolPool });
+      clearReleasedPlayersPool();
+      addManyToReleasedPool(previousState.releasedPlayers);
+      setPlayerIdCounter(previousState.playerIdCounter);
+    }
     console.error('ロード失敗:', error);
     return { success: false, error: 'ロードに失敗しました: ' + error.message };
   }
@@ -497,6 +556,17 @@ export const deleteSaveSlot = async (slotIndex) => {
 // ============================================================
 const SAVE_FILE_TYPE = 'baseball_sim_save';
 
+const downloadJson = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
+};
+
 export const exportSaveSlotToFile = async (slotIndex) => {
   try {
     const raw = await storageGetItem(SAVE_SLOT_KEYS[slotIndex]);
@@ -524,14 +594,7 @@ export const exportSaveSlotToFile = async (slotIndex) => {
     //    `baseball-sim_save1_….json` → そのまま）。拡張子が消えると読み込みで選べない。
     // ⚠ アンカーはDOMに挿してからクリックし、revoke は次のタスクまで待つ
     //    （4MBのセーブは即 revoke すると転送が間に合わないことがある）。
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `baseball-sim_save${slotIndex + 1}_${new Date().toISOString().slice(0, 10)}.json`;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
+    downloadJson(blob, `baseball-sim_save${slotIndex + 1}_${new Date().toISOString().slice(0, 10)}.json`);
     return { success: true };
   } catch (e) {
     return { success: false, error: '書き出しに失敗しました: ' + e.message };
@@ -604,12 +667,7 @@ export const exportDraftedPlayers = (draftedPlayers) => {
     }))
   };
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `drafted_players_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadJson(blob, `drafted_players_${new Date().toISOString().slice(0, 10)}.json`);
 };
 
 // ドラフト指名選手をJSONファイルからインポート

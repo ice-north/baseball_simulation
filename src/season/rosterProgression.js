@@ -20,6 +20,7 @@ import { addToRoster, replaceRoster } from '../state/roster.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { homeBlockOf, blockOfCorporate, HOME_WINDOW } from '../data/regions.js';
 import { calcPlayerOverall } from './dispatchSystem.js';
+import { reservePlayerIds } from '../state/playerIds.js';
 
 // ============================================================
 // プールからの補充の物差し（社会人・独立で共有）
@@ -535,9 +536,9 @@ function generateUniversityFreshmen(count, rank, teamName, teamData, currentYear
   // プール不足時のフォールバック生成
   if (newPlayers.length < count) {
     const remaining = count - newPlayers.length;
-    const maxId = Object.values(TEAMS_DATA).flatMap(t => t.players || []).reduce((max, p) => Math.max(max, p.id || 0), 10000);
+    const nextId = reservePlayerIds(10001);
     for (let i = 0; i < remaining; i++) {
-      const player = generateFreshmanPlayer(maxId + newPlayers.length + i + 1, rank, false);
+      const player = generateFreshmanPlayer(nextId(), rank, false);
       player.universityTeamId = teamData.universityTeamId;
       player.universityTeamName = teamName;
       player.universityYear = 1;
@@ -997,10 +998,10 @@ export function replenishIndependentLeagueRosters(allTeams, currentYear) {
   removeFromReleasedPoolByIds(recruitedIds);
 
   // プールで足りない分は新規選手を生成
-  let nextId = (currentYear + 1) * 10000 + 8000;
+  const nextId = reservePlayerIds((currentYear + 1) * 10000 + 8000);
   for (const teamInfo of shuffled) {
     while (teamInfo.needed > 0) {
-      const newPlayer = generateIndependentNewcomer(nextId++, currentYear + 1);
+      const newPlayer = generateIndependentNewcomer(nextId(), currentYear + 1);
       newPlayer.careerHistory = [{ type: 'independent', label: `${teamInfo.teamName}入団`, year: currentYear + 1 }];
       addToRoster(teamInfo.team, newPlayer);
       teamInfo.needed--;

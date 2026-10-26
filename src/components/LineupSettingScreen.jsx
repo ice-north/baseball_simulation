@@ -15,7 +15,7 @@ import { surnameOf } from '../data/playerNames.js';
 const throwsLabel = (player) => (player.physical?.throws === 'left' ? '左投' : '右投');
 const formLabel = (player) => FORM_SHORT[player.pitching?.form] || '';
 
-const LineupSettingScreen = ({ teamName, onBack }) => {
+const LineupSettingContent = ({ teamName, onBack, team }) => {
   const [tab, setTab] = useState('lineup');
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [selectedBattingOrder, setSelectedBattingOrder] = useState(null);
@@ -39,8 +39,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tapSelectedPitcherId, setTapSelectedPitcherId] = useState(null); // 投手起用: タップ選択(タッチ用)
   const SLOT_OVER_CLASSES = ['ring-1', 'ring-blue-400/60', 'border-blue-400', 'bg-blue-900/20'];
 
-  const team = TEAMS_DATA[teamName];
-  if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
   ensureTeamJerseyNumbers(team); // 背番号を（未設定なら）割り当て
 
   // 体力バーの色を値に応じて変える
@@ -97,6 +95,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
   const useDH = LEAGUE_SETTINGS.useDH;
   const maxFielderSlots = useDH ? 9 : 8;
+  const activeFielderCount = lineup.filter(e => e.position !== 'pitcher' && e.battingOrder >= 1 && e.battingOrder <= maxFielderSlots).length;
+  const pitcherEntry = lineup.find(e => e.position === 'pitcher' && e.battingOrder === 9);
+  const rotationStarters = team.pitchingRotation?.starters || [];
+  const nextStarterId = rotationStarters.length
+    ? rotationStarters[(team.pitchingRotation.currentStarterIndex || 0) % rotationStarters.length]
+    : pitcherEntry?.playerId;
+  const nextStarter = team.players.find(p => p.id === nextStarterId && p.position === 'pitcher' && p.isActive !== false)
+    || team.players.find(p => p.id === pitcherEntry?.playerId && p.position === 'pitcher' && p.isActive !== false);
+  const activeStarterCount = activeFielderCount + (useDH ? 0 : Number(!!pitcherEntry && !!nextStarter));
 
   const { fielders, pitchers, lineupPlayerIds, benchPlayers } = useMemo(() => {
     // isActive=falseの選手（練習生）はスタメン・控えから除外。未設定は全員有効（大学モード以外）
@@ -1141,7 +1148,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         {tab === 'lineup' && (
           <>
           <TutorialHint id="lineup-dnd" title="スタメンの組み方">
-            右の控え選手を<b className="text-cyan-200">ドラッグ＆ドロップ</b>で打順枠へ入れられます。枠どうしをドラッグすれば打順の入れ替え、控えへ戻せば外せます（クリック操作も可）。「自動」ボタンで最適オーダーを組むこともできます。
+            右の控え選手を<b className="text-cyan-200">ドラッグ＆ドロップ</b>で打順枠へ入れられます。枠どうしをドラッグすれば打順を入れ替えられます。<b className="text-cyan-200">守備位置は選手名の横のメニュー</b>から変更でき、使用中の位置を選ぶと交換します。「自動」ボタンで最適オーダーも組めます。
           </TutorialHint>
           <TutorialHint id="lineup-playing-time" title="起用は育成でもある">
             <b className="text-cyan-200">試合に出た選手ほど伸びます。</b>1年フル出場した若手は、ほとんど出番の無かった選手の<b className="text-cyan-200">2倍以上</b>成長します（実測: 300打席で能力合計 +12.7 に対し、0打席では +5.8）。
@@ -1151,20 +1158,18 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             {/* 左側: スタメン (4/12) */}
             <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-700/50">
-                <div className="flex items-center gap-2">
-                  <h2 className="font-semibold text-white text-sm">スタメン設定</h2>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                    lineup.filter(e => e.position !== 'pitcher').length === maxFielderSlots
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="font-semibold text-white text-sm whitespace-nowrap">スタメン設定</h2>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${
+                    activeStarterCount === 9
                       ? 'bg-green-900/60 text-green-400 border border-green-700/40'
                       : 'bg-gray-700 text-gray-300'
                   }`}>
-                    {lineup.filter(e => e.position !== 'pitcher').length}/{maxFielderSlots}
+                    {activeStarterCount}/9
                   </span>
-                  {useDH && <span className="text-xs text-purple-400 font-medium">DH制</span>}
-                  {(swapSource !== null || selectedBenchPlayer !== null) ? (
-                    <span className="text-blue-400 text-xs ml-auto">→ 入替先を選択</span>
-                  ) : (
-                    <span className="text-gray-400 text-xs ml-auto hidden md:inline">ドラッグで配置・入替 / クリックでも操作可</span>
+                  <span className="text-xs text-gray-400 basis-full whitespace-nowrap">{useDH ? '野手9人・DH制' : `野手${activeFielderCount}人＋投手${pitcherEntry && nextStarter ? 1 : 0}人`}</span>
+                  {(swapSource !== null || selectedBenchPlayer !== null) && (
+                    <span className="text-blue-400 text-xs basis-full">→ 入替先を選択</span>
                   )}
                 </div>
                 <div className="flex gap-1 mt-2">
@@ -1278,7 +1283,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         {isPitcherSlot ? (
                           <div className="flex-1 flex items-center">
                             <span className="text-indigo-400 font-semibold text-base">投手</span>
-                            <span className="text-xs text-gray-400 ml-2">先発投手が自動起用</span>
+                            <span className="text-xs text-gray-400 ml-2">{nextStarter ? `${nextStarter.name}（ローテーションから自動起用）` : '先発投手が未設定'}</span>
                           </div>
                         ) : player ? (
                           <div className="flex-1 min-w-0">
@@ -1295,7 +1300,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {(() => {
-                                  const takenPositions = new Set(lineup.filter(e => e.battingOrder !== order).map(e => e.position));
                                   const opts = [
                                     ...(!useDH ? [{ value: 'pitcher', label: '投手' }] : []),
                                     { value: 'catcher', label: '捕手' },
@@ -1309,7 +1313,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                     ...(useDH ? [{ value: 'dh', label: 'DH' }] : []),
                                   ];
                                   return opts.map(({ value, label }) => (
-                                    <option key={value} value={value} disabled={takenPositions.has(value)}>
+                                    <option key={value} value={value} disabled={value === 'pitcher' && entry.position !== 'pitcher'}>
                                       {label}
                                     </option>
                                   ));
@@ -2592,6 +2596,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         )}
     </ScreenShell>
   );
+};
+
+const LineupSettingScreen = ({ teamName, onBack }) => {
+  const team = TEAMS_DATA[teamName];
+  if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
+  return <LineupSettingContent teamName={teamName} onBack={onBack} team={team} />;
 };
 
 export default LineupSettingScreen;

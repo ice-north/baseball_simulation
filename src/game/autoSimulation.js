@@ -4,7 +4,8 @@ import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach,
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
   pitchVelocityDrop, isUnreadablePitch } from '../utils/constants.js';
 import { conditionBattingMod, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
-import { getPositionFitness } from '../utils/physics.js';
+import { getPositionFitness, getHandednessEffect } from '../utils/physics.js';
+import { contactFoulProbability, isDirectionalFoul } from './contactRules.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, infieldDefenseOf, guessSuccessRate } from './pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './batterZone.js';
@@ -20,6 +21,7 @@ import { stealSuccessRate, stealAttemptRate } from './stealing.js';
 import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
          buntThrowOutChance, squeezeHomeThrowChance } from './bunting.js';
 import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
+import { withSeededRandom } from './rng.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
 const PITCHER_REST_FATIGUE_THRESHOLD = 40;
@@ -385,7 +387,7 @@ const SIM_CLONE_OMIT = new Set([
 const cloneTeamForSim = (team) =>
   JSON.parse(JSON.stringify(team, (k, v) => (SIM_CLONE_OMIT.has(k) ? undefined : v)));
 
-export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
+const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
   // TEAMS_DATAからチームデータを取得
   if (!TEAMS_DATA || !TEAMS_DATA[homeTeamName] || !TEAMS_DATA[awayTeamName]) {
@@ -773,8 +775,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const effectiveVelocity = pitcher.velocity * (0.88 + 0.12 * staminaCurve);
 
     // 左右相性
-    const sameHand = pitcher.throws === batter.bats;
-    const handBonus = sameHand ? -5 : 5;
+    const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
 
     // 投球する球種を選択（捕手のリードが効く。詳細は pitchCalling.js）。
     // 従来はここで変化球を完全ランダムに選んでおり、采配モードだけが
@@ -913,10 +914,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         velocity: pitchVelocityFinal,
         level: selectedPitch.level || 50
       };
-      const handEffect = {
-        powerBonus: sameHand ? -3 : 3,
-        meetBonus: sameHand ? -3 : 3
-      };
       const tunnelingEffect = lastPitch ? getTunnelingEffect(lastPitch, pitchData, catcherPlayer?.catching?.lead || 50) : 0;
 
       // 物理コンタクト計算
@@ -943,7 +940,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       // ファウル: タイミングを外した打球は左右のファウルゾーンへ切れる。
       // 実データでは全投球の約17%（＝コンタクトの4割弱）がファウルで、打席が長引く。
       // これが無いとコンタクトが即座に打席を終わらせてしまい、四球が構造的に出ない。
-      const foulProb = 0.72 - physicsResult.meetQuality * 0.40;
+      const foulProb = contactFoulProbability(physicsResult.meetQuality, count.strikes);
       if (Math.random() < foulProb) {
         return { type: 'foul' };
       }
@@ -951,6 +948,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       // 打球物理パラメータ計算
       // 緩急（前球との速度差）を打球方向に効かせるため lastPitch を渡す
       const battedBall = calculateBattedBallPhysics(effBatter, pitcher, pitchData, physicsResult, loc, lastPitch);
+
+      if (isDirectionalFoul(battedBall.direction)) return { type: 'foul' };
 
       // 守備判定
       const fieldResult = judgeFielderReach(battedBall, defense, effBatter);
@@ -1023,7 +1022,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       if (!swung) { decayFooled(sequence); return { type: 'called_strike' }; }
       const q = combineBatterEffects(getPitchQualityEffect(loc.quality), matchup);
       const breakingPenalty = isBreaking ? (selectedPitch.level || 50) * 0.12 : 0;
-      const contactChance = 82 + (batter.meet + q.meet) * 0.45 + handBonus - breakingPenalty - speedDiffPenalty;
+      const contactChance = 82 + (batter.meet + q.meet) * 0.45
+        + (handEffect.meetBonus || handEffect.meetPenalty || 0) - breakingPenalty - speedDiffPenalty;
       if (Math.random() * 100 >= contactChance) { pushSwingQuality(sequence, null); return { type: 'swinging_strike' }; }
       return resolveContact(q);
     }
@@ -1816,6 +1816,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   //    同じ走者が二・三塁の両方に残っていた（600試合で26件）。
   //    一塁走者は押し出されて二塁へ、二塁走者は一塁が空いていても三塁へ進む（送りバントの形）。
   const advanceOnBuntHit = (batter, pitcher) => {
+    pitcher.gameStats.pitching.hits = (pitcher.gameStats.pitching.hits || 0) + 1;
     const b = gameState.bases;
     if (b[0]) {
       if (b[1]) {
@@ -3001,4 +3002,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     pitcherAppearances: gameState.pitcherAppearances
   };
 };
+
+export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false, seed = null) =>
+  seed === null ? simulateGame(homeTeamName, awayTeamName, isCupGame)
+    : withSeededRandom(seed, () => ({ ...simulateGame(homeTeamName, awayTeamName, isCupGame), rngSeed: seed }));
 

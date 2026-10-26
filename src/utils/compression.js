@@ -410,21 +410,27 @@ function stripPoolPlayer(p) {
 }
 
 export function optimizeSaveData(saveData) {
-  // saveData is already a deep clone — mutate in-place instead of re-cloning
+  // 保存元の React state やグローバルデータを変更しない。必要な枝だけコピーする。
+  const optimized = { ...saveData };
 
   // Optimize teamsData - remove non-essential player fields
-  if (saveData.teamsData) {
-    Object.keys(saveData.teamsData).forEach(teamName => {
-      const team = saveData.teamsData[teamName];
+  if (optimized.teamsData) {
+    optimized.teamsData = { ...optimized.teamsData };
+    Object.keys(optimized.teamsData).forEach(teamName => {
+      const team = { ...optimized.teamsData[teamName] };
+      optimized.teamsData[teamName] = team;
       if (team.players) {
         team.players = team.players.map(p => {
           // Remove large nested objects that can be recalculated
           const { gameLog, lastAtBat, lastPitch, ...essentialData } = p;
           // Trim pitching change balls to just names (not full objects)
           if (essentialData.pitching?.changeBalls) {
-            essentialData.pitching.changeBalls = essentialData.pitching.changeBalls.map(b =>
-              typeof b === 'object' ? b.name || b.type : b
-            );
+            essentialData.pitching = {
+              ...essentialData.pitching,
+              changeBalls: essentialData.pitching.changeBalls.map(b =>
+                typeof b === 'object' ? b.name || b.type : b
+              )
+            };
           }
           return essentialData;
         });
@@ -432,61 +438,29 @@ export function optimizeSaveData(saveData) {
     });
   }
 
-  // Optimize seasonData - remove detailed game logs from results
-  if (saveData.seasonData) {
-    // Trim results to essential info only
-    if (saveData.seasonData.results) {
-      saveData.seasonData.results = saveData.seasonData.results.map(r => ({
-        gameId: r.gameId,
-        date: r.date,
-        home: r.home,
-        away: r.away,
-        homeScore: r.homeScore,
-        awayScore: r.awayScore,
-        winner: r.winner,
-        phase: r.phase,
-        result: r.result,
-      }));
-    }
-
-    // Trim schedule - for completed games, remove unnecessary fields
-    if (saveData.seasonData.schedule) {
-      saveData.seasonData.schedule = saveData.seasonData.schedule.map(g => {
-        if (g.result) {
-          return {
-            gameId: g.gameId,
-            date: g.date,
-            home: g.home,
-            away: g.away,
-            phase: g.phase,
-            result: {
-              homeScore: g.result.homeScore,
-              awayScore: g.result.awayScore,
-              winner: g.result.winner
-            }
-          };
-        }
-        return g;
-      });
-    }
-  }
+  // seasonData は試合詳細・中止フラグ・シリーズ情報を再開時にも使うので削らない。
 
   // Optimize universityPool - strip zero-value stats from pool players
-  if (saveData.universityPool) {
-    if (saveData.universityPool.highSchool?.players) {
-      saveData.universityPool.highSchool.players = saveData.universityPool.highSchool.players.map(stripPoolPlayer);
+  if (optimized.universityPool) {
+    optimized.universityPool = { ...optimized.universityPool };
+    if (optimized.universityPool.highSchool?.players) {
+      optimized.universityPool.highSchool = {
+        ...optimized.universityPool.highSchool,
+        players: optimized.universityPool.highSchool.players.map(stripPoolPlayer)
+      };
     }
-    if (saveData.universityPool.university) {
-      for (const year of Object.keys(saveData.universityPool.university)) {
-        saveData.universityPool.university[year] = saveData.universityPool.university[year].map(entry => {
-          if (entry.player) entry.player = stripPoolPlayer(entry.player);
+    if (optimized.universityPool.university) {
+      optimized.universityPool.university = { ...optimized.universityPool.university };
+      for (const year of Object.keys(optimized.universityPool.university)) {
+        optimized.universityPool.university[year] = optimized.universityPool.university[year].map(entry => {
+          if (entry.player) return { ...entry, player: stripPoolPlayer(entry.player) };
           return entry;
         });
       }
     }
   }
 
-  return saveData;
+  return optimized;
 }
 
 /**
@@ -495,20 +469,18 @@ export function optimizeSaveData(saveData) {
  * @returns {string} Compressed string
  */
 export function compressData(data) {
-  optimizeSaveData(data);
-  const jsonStr = JSON.stringify(data);
+  const jsonStr = JSON.stringify(optimizeSaveData(data));
   return 'LZ:' + compressToBase64(jsonStr);
 }
 
 /**
  * Compress JSON data using native CompressionStream API (async, much faster).
  * Falls back to synchronous LZ if CompressionStream is unavailable.
- * @param {Object} data - Data to compress (will be mutated by optimizeSaveData)
+ * @param {Object} data - Data to compress
  * @returns {Promise<string>} Compressed string with 'GZ:' or 'LZ:' prefix
  */
 export async function compressDataAsync(data) {
-  optimizeSaveData(data);
-  const jsonStr = JSON.stringify(data);
+  const jsonStr = JSON.stringify(optimizeSaveData(data));
 
   if (typeof CompressionStream !== 'undefined') {
     try {

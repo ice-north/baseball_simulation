@@ -6,6 +6,7 @@ import { cleanupPlayerReferences, draftAbilityScore } from '../season/yearProgre
 import { deviationValue } from '../game/playerValue.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import { reservePlayerIds } from '../state/playerIds.js';
 
 // チームが所属する独立リーグIDを返す（無ければ null）。
 // マーカー(independentLeagueId/corporateData)が欠落していても、WORLD_DATAの
@@ -30,15 +31,6 @@ const isTradeablePartner = (name, team) => {
   return true; // マーカー未設定の自リーグ等
 };
 
-// 全チーム横断で未使用の選手IDを返す。
-const nextGlobalPlayerId = () => {
-  let max = 0;
-  for (const t of Object.values(TEAMS_DATA)) {
-    for (const p of (t.players || [])) { if (typeof p.id === 'number' && p.id > max) max = p.id; }
-  }
-  return max + 1;
-};
-
 // 選手を受け入れ先チームへ移籍させる。
 // 他の独立リーグとのトレードでは選手IDがリーグ間で衝突しうる（別系列で採番されるため）。
 // 受け入れ先に同一IDが既に存在すると addToRoster が重複防止で弾き、相手選手だけ入らない不具合になる。
@@ -46,7 +38,7 @@ const nextGlobalPlayerId = () => {
 const givePlayerToTeam = (destTeam, player) => {
   if (!destTeam || !player) return false;
   if (destTeam.players?.some(p => p.id === player.id)) {
-    player.id = nextGlobalPlayerId();
+    player.id = reservePlayerIds()();
   }
   return addToRoster(destTeam, player);
 };
@@ -89,7 +81,7 @@ const AbilityLine = ({ player }) => (
   </div>
 );
 
-const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
+const TradeContent = ({ userTeamName, seasonData, onBack }) => {
   const [selectedMyPlayer, setSelectedMyPlayer] = useState(null);
   const [selectedTargetTeam, setSelectedTargetTeam] = useState('');
   const [selectedTargetPlayer, setSelectedTargetPlayer] = useState(null);
@@ -120,8 +112,6 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
     return [...groups.entries()].sort((a, b) => (a[0] === myLeagueLabel ? -1 : 0) - (b[0] === myLeagueLabel ? -1 : 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userTeamName, updateTrigger, myLeagueLabel, Object.keys(TEAMS_DATA).length]);
-
-  if (!myTeam) return <div className="p-8 text-white">チームが見つかりません</div>;
 
   // ⚠ **独自の評価式を持たないこと**。以前はここに投手／野手それぞれの式があり、
   // ドラフト評価（checkNPBDraftEligibility）とも別物だった。投打のスケールが
@@ -660,5 +650,9 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
     </div>
   );
 };
+
+const TradeScreen = (props) => TEAMS_DATA[props.userTeamName]
+  ? <TradeContent {...props} />
+  : <div className="p-8 text-white">チームが見つかりません</div>;
 
 export default TradeScreen;

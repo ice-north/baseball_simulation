@@ -7,6 +7,7 @@ import { advanceDate, getCurrentPhase, getNPBDraftDay, createSeasonData, initial
 import { generateFullSeasonSchedule, getNextGame } from './scheduleGenerator.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 import { updateAllPlayersCondition } from '../game/condition.js';
+import { getModeCapabilities } from '../game/modeCapabilities.js';
 
 /**
  * 日付を進行（1日/1週間/1ヶ月）
@@ -169,9 +170,11 @@ export const recordGameResult = (seasonData, gameResult) => {
     ) {
       return {
         ...game,
+        ...(gameResult.rngSeed == null ? {} : { rngSeed: gameResult.rngSeed }),
         result: {
           homeScore: gameResult.homeScore,
-          awayScore: gameResult.awayScore
+          awayScore: gameResult.awayScore,
+          ...(gameResult.rngSeed == null ? {} : { rngSeed: gameResult.rngSeed })
         }
       };
     }
@@ -179,7 +182,12 @@ export const recordGameResult = (seasonData, gameResult) => {
   });
 
   // 順位表を更新
-  const updatedStandings = updateStandings(baseData.standings, gameResult);
+  const updatedStandings = gameResult.phase === SEASON_PHASES.PLAYOFFS
+    || baseData.schedule.some(game => game.phase === SEASON_PHASES.PLAYOFFS
+      && game.home === gameResult.home && game.away === gameResult.away
+      && game.date.year === gameResult.date.year && game.date.month === gameResult.date.month
+      && game.date.day === gameResult.date.day)
+    ? baseData.standings : updateStandings(baseData.standings, gameResult);
 
   // 試合結果リストに追加
   const updatedResults = [...baseData.results, gameResult];
@@ -204,11 +212,7 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
   switch (newPhase) {
     case SEASON_PHASES.PLAYOFFS: {
       // 社会人モードは都市対抗・日本選手権がプレーオフ代替→リーグ戦プレーオフはスキップ
-      if (seasonData.settings?.corporateMode) {
-        break;
-      }
-      // 独立リーグ・大学モードはリーグ戦プレーオフなし
-      break;
+      if (!getModeCapabilities(seasonData.settings).leaguePlayoffs) break;
       // プレーオフ開始時：上位チームを取得してプレーオフスケジュールを生成
       let topTeams;
       const playoffFormat = seasonData.settings.playoffFormat;
@@ -241,6 +245,7 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
           .map(t => t.team);
       }
 
+      if (topTeams.length < teamsNeeded) break;
       const playoffSchedule = generatePlayoffSchedule(
         topTeams,
         playoffFormat,

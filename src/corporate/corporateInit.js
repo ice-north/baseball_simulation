@@ -28,6 +28,7 @@ import { generateStaff, STAFF_GRADE_CAP } from './staffData.js';
 import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA, clearReleasedPlayersPool, initializeAllPitchingRotations } from '../teams-data.js';
+import { reservePlayerIds } from '../state/playerIds.js';
 import { INDEPENDENT_LEAGUES, ALL_INDEPENDENT_LEAGUE_IDS } from './independentLeagueData.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
@@ -336,8 +337,9 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
   const candidateTeams = Math.max(2, Math.ceil(rosterSize / 25));
   const candidates = generateTryoutCandidates(year, candidateTeams, true);
 
-  corporatePlayerIdBase += 1000;
-  candidates.forEach((p, i) => { p.id = corporatePlayerIdBase + i; });
+  const nextId = reservePlayerIds(corporatePlayerIdBase + 1000);
+  candidates.forEach(p => { p.id = nextId(); });
+  corporatePlayerIdBase = candidates.at(-1)?.id || corporatePlayerIdBase;
 
   // 独立リーグは球速・制球・変化球すべて社会人より低い
   const IL_VEL_CAP = { B: 145, C: 138, D: 131 };
@@ -1125,15 +1127,7 @@ export const ensureUserIndependentLeagueTagged = (teamNames, preset) => {
 // 修復するための関数。既存チームはスキップし、欠けているチームだけ再生成する。
 // ロスターは新規生成（元の選手は復元不可）だが、背景世界として機能を回復させる。
 export const recoverMissingParallelTeams = (userLeagueId) => {
-  // 既存の選手IDと衝突しないよう採番基点を最大ID超に設定
-  // （TEAMS_DATA＋大学プール＝大学チーム復元時に取り込まれる選手も含める）
-  let maxId = 20000;
-  const bump = (p) => { if (p && typeof p.id === 'number' && p.id > maxId) maxId = p.id; };
-  for (const t of Object.values(TEAMS_DATA)) { for (const p of (t.players || [])) bump(p); }
-  for (const cohort of Object.values(universityPool || {})) {
-    if (Array.isArray(cohort)) for (const e of cohort) bump(e?.player);
-  }
-  corporatePlayerIdBase = maxId + 1;
+  corporatePlayerIdBase = reservePlayerIds(20001)() - 1;
   const year = WORLD_DATA.year || 1;
   let recovered = 0;
 

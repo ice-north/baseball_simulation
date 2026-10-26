@@ -20,6 +20,7 @@ import { buildToolNorms, toolProfile } from '../game/scoutTools.js';
 import { addToReleasedPool, replaceReleasedPool } from '../state/pools.js';
 import { addToRoster } from '../state/roster.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import { reservePlayerIds } from '../state/playerIds.js';
 import { syncPositionToFitness } from '../utils/physics.js';
 
 export const HIGH_SCHOOL_CLASS_SIZE = 5000;
@@ -69,10 +70,10 @@ export const clearHighSchoolPool = () => {
  */
 export function generateHighSchoolClass(year, count = HIGH_SCHOOL_CLASS_SIZE) {
   const players = [];
-  const idBase = year * 100000 + 50000;
+  const nextId = reservePlayerIds(year * 100000 + 50000);
 
   for (let i = 0; i < count; i++) {
-    players.push(generateHighSchoolPlayer(idBase + i));
+    players.push(generateHighSchoolPlayer(nextId()));
   }
 
   return players;
@@ -1406,10 +1407,10 @@ export function seedInitialUniversityClasses(gameYear) {
     const enrollYear = gameYear - classesNeeded + i + 1;
     const yearsInUni = gameYear - enrollYear;
     const count = Math.floor(totalUniSlots * 2.5);
-    const idBase = (enrollYear + 10000) * 100000 + 70000;
+    const nextId = reservePlayerIds((enrollYear + 10000) * 100000 + 70000);
     const players = [];
     for (let j = 0; j < count; j++) {
-      const p = generateHighSchoolPlayer(idBase + j);
+      const p = generateHighSchoolPlayer(nextId());
       p.age = 19 + yearsInUni;
       players.push(p);
     }

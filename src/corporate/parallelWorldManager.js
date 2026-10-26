@@ -6,6 +6,7 @@
 import { WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
+import { scheduledGameSeed } from '../game/rng.js';
 import { simulateUniversityLeagueDate, getAllUniversityLeagues, processSpringPromotionRelegation, regenerateFallSchedules } from '../university/universityLeagueManager.js';
 import { generateUniversityChampionship, generateMeijiJinguTournament, autoPlayUniversityTournament } from '../university/universityTournament.js';
 import { INDEPENDENT_LEAGUES } from './independentLeagueData.js';
@@ -89,7 +90,9 @@ export const simulateParallelWorldDate = (currentDate) => {
       const awayTeam = TEAMS_DATA[game.away];
       if (!homeTeam || !awayTeam) continue;
 
-      const result = autoSimulateGame(game.home, game.away);
+      const seed = scheduledGameSeed(game);
+      const result = autoSimulateGame(game.home, game.away, false, seed);
+      game.rngSeed = seed;
       game.result = {
         homeScore: result.homeScore,
         awayScore: result.awayScore,
@@ -155,7 +158,7 @@ const extractLeagueChampions = (standings, teamOrder, leagueId, leagueDef, fallb
   return results;
 };
 
-export const generateGrandChampionship = (userLeagueId, userStandings, userSettings = null, gameYear = null) => {
+export const generateGrandChampionship = (userLeagueId, userStandings, userSettings = null, gameYear = null, playoffChampion = null) => {
   const champions = [];
 
   // ユーザーのリーグ
@@ -165,7 +168,11 @@ export const generateGrandChampionship = (userLeagueId, userStandings, userSetti
     const effectiveFormat = userSettings?.leagueFormat || leagueDef?.leagueFormat || 'single';
     const effectiveDef = leagueDef || { leagueFormat: effectiveFormat, leagueNames: userSettings?.leagueNames };
     const name = leagueDef?.name || userSettings?.leagueName || 'ユーザーリーグ';
-    champions.push(...extractLeagueChampions(userStandings, teamOrder, userLeagueId || '__user__', effectiveDef, name));
+    if (playoffChampion) {
+      champions.push({ team: playoffChampion, league: userLeagueId || '__user__', leagueName: name });
+    } else {
+      champions.push(...extractLeagueChampions(userStandings, teamOrder, userLeagueId || '__user__', effectiveDef, name));
+    }
   }
 
   // 他の独立リーグ（平行世界）

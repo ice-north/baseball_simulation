@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "lint": "eslint src",
     "preview": "vite preview",
-    "check": "node tools/sim-harness/scope-check.mjs && node tools/sim-harness/season-check.mjs && node tools/sim-harness/draft-check.mjs && node tools/sim-harness/bracket-check.mjs && node tools/sim-harness/contract-scope-check.mjs && node tools/sim-harness/pool-leak-check.mjs && node tools/sim-harness/base-state-check.mjs && node tools/sim-harness/bunt-check.mjs && node tools/sim-harness/doc-check.mjs",
+    "check": "npm run lint -- --quiet && node tools/sim-harness/scope-check.mjs && node tools/sim-harness/save-check.mjs && node tools/sim-harness/review-check.mjs && node tools/sim-harness/season-check.mjs && node tools/sim-harness/draft-check.mjs && node tools/sim-harness/bracket-check.mjs && node tools/sim-harness/contract-scope-check.mjs && node tools/sim-harness/pool-leak-check.mjs && node tools/sim-harness/base-state-check.mjs && node tools/sim-harness/bunt-check.mjs && node tools/sim-harness/doc-check.mjs",
     "check:season": "node tools/sim-harness/season-check.mjs",
     "check:draft": "node tools/sim-harness/draft-check.mjs",
     "check:bracket": "node tools/sim-harness/bracket-check.mjs",
@@ -26,6 +27,8 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
     "vite": "^5.0.12",

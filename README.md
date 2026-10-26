@@ -84,6 +84,8 @@ npm run dev -- --port 3001
 └── tailwind.config.js
 ```
 
+Vite移行前のHTML、旧チームエディターとその `js/`、資料は `docs/archive/legacy-app/` に保存しています。
+
 ## ✨ 機能
 
 - リアルタイム試合シミュレーション

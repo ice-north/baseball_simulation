@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
@@ -6,30 +6,24 @@ import { processCorporateRetirements, executeDepartures } from '../corporate/sco
 import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES, MAX_STAFF } from '../corporate/staffData.js';
 import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
 import { getTeamStaffBonus, STAFF_GRADES } from '../corporate/staffData.js';
+import { hashSeed, withSeededRandom } from '../game/rng.js';
 
 const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
   const userTeamName = teamNames[0] || '';
-  const [retirements, setRetirements] = useState([]);
-  const [aiReleases, setAiReleases] = useState({});
+  const [{ retirements, aiReleases }] = useState(() => processCorporateRetirements(TEAMS_DATA, userTeamName));
   const [playerDecisions, setPlayerDecisions] = useState({});
-  const [processed, setProcessed] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [sortKey, setSortKey] = useState('salary');
   const [sortAsc, setSortAsc] = useState(false);
-  const [sponsorOffers, setSponsorOffers] = useState(null);
+  const [sponsorOffers, setSponsorOffers] = useState(() => withSeededRandom(
+    hashSeed(`sponsor:${seasonData?.year}:${userTeamName}`),
+    () => generateSponsorOffers(TEAMS_DATA[userTeamName]?.corporateData)
+  ));
   const [staffConversions, setStaffConversions] = useState({});
   const [staffPreviews, setStaffPreviews] = useState({});
   const [replaceStaffFor, setReplaceStaffFor] = useState(null);
   const [staffReplacements, setStaffReplacements] = useState({});
-
-  useEffect(() => {
-    if (processed) return;
-    const result = processCorporateRetirements(TEAMS_DATA, userTeamName);
-    setRetirements(result.retirements);
-    setAiReleases(result.aiReleases);
-    setProcessed(true);
-  }, []);
 
   const teamData = TEAMS_DATA[userTeamName];
   const cd = teamData?.corporateData;
@@ -50,14 +44,6 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const tournamentBonus = getTournamentBudgetBonus(cd);
   const currentSponsorIncome = getSponsorIncome(cd);
   const staffSalaryTotal = staff.reduce((sum, s) => sum + getStaffSalary(s), 0);
-
-  // スポンサーオファー生成
-  useEffect(() => {
-    if (processed && cd && sponsorOffers === null) {
-      const offers = generateSponsorOffers(cd);
-      setSponsorOffers(offers);
-    }
-  }, [processed]);
 
   // スタッフ転向する選手の追加人件費
   const conversionSalaryTotal = Object.entries(staffPreviews).reduce((sum, [pid, sp]) => {

@@ -22,6 +22,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 // Game logic imports
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect, spinAdjustedArsenal } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
+import { contactFoulProbability, isDirectionalFoul } from './game/contactRules.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, infieldDefenseOf, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
 import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
@@ -1147,14 +1148,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
 
         // ===== ファウル判定（大幅強化）=====
         // ミート品質が低いほどファウルになりやすい
-        const foulBaseRate = 0.35;  // 基本ファウル率35%
-        const qualityPenalty = (1 - physicsResult.meetQuality) * 0.25;  // 芯を外すほど+25%
-        let foulRate = foulBaseRate + qualityPenalty;
-
-        // 2ストライク時は粘りやすい（ファウル率上昇）
-        if (safeCount.strikes === 2) {
-          foulRate += 0.10;
-        }
+        const foulRate = contactFoulProbability(physicsResult.meetQuality, safeCount.strikes);
 
         const pitchTypeName = ballEffects[currentPitch.type]?.name || 'ストレート';
         const roundedVelocity = Math.round(actualVelocity);
@@ -1170,7 +1164,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult, pitchLoc, lastPitch);
 
         // 角度によるファウル判定（強化）
-        if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {  // 55%→70%
+        if (isDirectionalFoul(battedBall.direction)) {
           if (safeCount.strikes === 2) {
             return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
           }
@@ -2498,11 +2492,31 @@ if (newOuts === 3) {
         let newScore = { ...score };
         let newCount = { ...count };
         let atBatOver = false;
+        const offense = isTopInning ? 'away' : 'home';
+        const recordBuntInningScore = () => {
+          if (inning <= 9) {
+            setInningScores(prev => {
+              const next = { ...prev, [offense]: [...prev[offense]] };
+              const priorRuns = next[offense].slice(0, inning - 1).filter(v => v !== null).reduce((sum, v) => sum + v, 0);
+              next[offense][inning - 1] = newScore[offense] - priorRuns;
+              return next;
+            });
+          } else {
+            setExtraInningScores(prev => {
+              const next = { ...prev, [offense]: [...prev[offense]] };
+              const regularRuns = inningScores[offense].filter(v => v !== null).reduce((sum, v) => sum + v, 0);
+              const priorExtraRuns = next[offense].slice(0, inning - 10).reduce((sum, v) => sum + (v || 0), 0);
+              next[offense][inning - 10] = newScore[offense] - regularRuns - priorExtraRuns;
+              return next;
+            });
+          }
+        };
 
         // バント安打の進塁。一塁が埋まっていれば押し出し、二塁だけなら三塁へ進める。
         // ⚠ 以前は満塁のバント安打で三塁走者を上書きしており、1点と走者が消えていた。
         //    二塁走者を三塁へ送ったら二塁を空けること（二塁にも残ると走者が1人増える）
         const advanceOnBuntHit = () => {
+          setTeamHits(prev => ({ ...prev, [offense]: prev[offense] + 1 }));
           if (!newBases[0] && newBases[1] && !newBases[2]) { newBases[2] = newBases[1]; newBases[1] = false; }
           const fa = forceAdvance(newBases, batterAsRunner());
           newBases = fa.bases;
@@ -2510,6 +2524,7 @@ if (newOuts === 3) {
             isTopInning ? newScore.away++ : newScore.home++;
             recordRunsToCurrentPitcher(1, outs, isUnearnedRunner(fa.scored[0]) ? 1 : 0);
             updateBatterStats(currentBatter.id, isTopInning ? 'away' : 'home', { rbis: 1 });
+            setTeamRBIs(prev => ({ ...prev, [offense]: prev[offense] + 1 }));
           }
         };
 
@@ -2574,6 +2589,7 @@ if (newOuts === 3) {
                 isTopInning ? newScore.away++ : newScore.home++;
                 recordRunsToCurrentPitcher(1, outs, unearnedAt(newBases, 2));
                 updateBatterStats(currentBatter.id, offenseTeamType, { rbis: 1 });   // スクイズは打点
+                setTeamRBIs(prev => ({ ...prev, [offense]: prev[offense] + 1 }));
                 newBases[2] = false;
               } else {
                 newOuts++;
@@ -2650,17 +2666,25 @@ if (newOuts === 3) {
         }
 
         // 3アウトチェンジ
-        if (newOuts >= 3) {
+        const halfInningEnded = newOuts >= 3;
+        if (halfInningEnded) {
           newOuts = 0;
           newBases = [false, false, false];
           atBatOver = true;
+          recordBuntInningScore();
 
           if (inning >= 9 && !isTopInning && newScore.home > newScore.away && !gameOver) {
             setGameOver(true);
-            setLastResult({ description: `サヨナラ！ ${homeTeam.name} の勝利！` });
+            setLastResult({ description: `試合終了！ ${homeTeam.name} の勝利！` });
           } else if (inning >= 9 && isTopInning && newScore.home > newScore.away && !gameOver) {
             setGameOver(true);
             setLastResult({ description: `試合終了！ ${homeTeam.name} の勝利！` });
+          } else if (inning >= 9 && !isTopInning && newScore.home !== newScore.away && !gameOver) {
+            setGameOver(true);
+            setLastResult({ description: `試合終了！ ${newScore.home > newScore.away ? homeTeam.name : awayTeam.name} の勝利！` });
+          } else if (inning >= maxExtraInnings && !isTopInning && !gameOver) {
+            setGameOver(true);
+            setLastResult({ description: `試合終了！ 延長${maxExtraInnings}回 引き分け` });
           } else {
             if (isTopInning) {
               setIsTopInning(false);
@@ -2674,9 +2698,10 @@ if (newOuts === 3) {
         }
 
         // サヨナラ判定
-        if (inning >= 9 && !isTopInning && newScore.home > newScore.away && !gameOver) {
+        if (!halfInningEnded && inning >= 9 && !isTopInning && newScore.home > newScore.away && !gameOver) {
+          recordBuntInningScore();
           setGameOver(true);
-          setLastResult(prev => ({ ...prev, description: (prev?.description || '') + ` サヨナラ！` }));
+          setLastResult({ description: `サヨナラ！ ${homeTeam.name} の勝利！` });
         }
 
         if (atBatOver) {

@@ -4,9 +4,7 @@ import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations 
 import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 
-const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
-  if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
-
+const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
   const currentPhase = seasonData.phase || 'off_season';
   const canModify = onConfirm ? true : canModifyRegulations(currentPhase);
   const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
@@ -305,5 +303,9 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
     </ScreenShell>
   );
 };
+
+const RegulationsScreen = (props) => props.seasonData
+  ? <RegulationsContent {...props} />
+  : <div className="p-8 text-white">読み込み中...</div>;
 
 export default RegulationsScreen;

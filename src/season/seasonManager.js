@@ -292,13 +292,27 @@ export const generatePlayoffSchedule = (teams, format = 'short', year = 2024) =>
   return schedule;
 };
 
+export const getPlayoffChampion = (schedule = []) => {
+  const finals = schedule.filter(game => game.phase === SEASON_PHASES.PLAYOFFS && game.playoffRound === 'final');
+  if (finals.length === 0) return null;
+  const wins = new Map();
+  for (const game of finals) {
+    if (!game.result || game.result.cancelled) continue;
+    const winner = game.result.homeScore > game.result.awayScore ? game.home
+      : game.result.awayScore > game.result.homeScore ? game.away : null;
+    if (winner) wins.set(winner, (wins.get(winner) || 0) + 1);
+  }
+  const required = Math.ceil(finals.length / 2);
+  return [...wins].find(([, count]) => count >= required)?.[0] || null;
+};
+
 /**
  * プレーオフシリーズの進行を管理
  * 3戦先取なら3勝した時点でシリーズ終了、残りの試合をスキップ
  * 準決勝が終わったら決勝のTBDチームを確定
  */
 export const updatePlayoffProgress = (seasonData) => {
-  const schedule = seasonData.schedule;
+  const schedule = seasonData.schedule.map(game => ({ ...game }));
   const playoffGames = schedule.filter(g => g.phase === SEASON_PHASES.PLAYOFFS);
   if (playoffGames.length === 0) return seasonData;
 
@@ -371,8 +385,9 @@ export const updatePlayoffProgress = (seasonData) => {
 export const updateStandings = (standings, gameResult) => {
   const { home, away, homeScore, awayScore } = gameResult;
 
-  const homeTeam = standings.find(t => t.team === home);
-  const awayTeam = standings.find(t => t.team === away);
+  const updated = standings.map(team => ({ ...team }));
+  const homeTeam = updated.find(t => t.team === home);
+  const awayTeam = updated.find(t => t.team === away);
 
   if (!homeTeam || !awayTeam) return standings;
 
@@ -395,7 +410,7 @@ export const updateStandings = (standings, gameResult) => {
   awayTeam.winRate = (awayTeam.wins + awayTeam.losses) > 0 ? awayTeam.wins / (awayTeam.wins + awayTeam.losses) : 0;
 
   // 順位でソート
-  return standings.sort((a, b) => b.winRate - a.winRate);
+  return updated.sort((a, b) => b.winRate - a.winRate);
 };
 
 /**

@@ -22,13 +22,18 @@ export function compareVersions(a, b) {
   return 0;
 }
 
-// 正規分布ノイズ（既定値のばらつき用）。
-const norm = (mu, sigma) =>
-  Math.max(1, Math.min(100, Math.round(mu + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * sigma)));
+import { createSeededRandom, hashSeed } from './rng.js';
 
 // 1選手に必須フィールドの既定値をバックフィルする（破壊しない・欠損のみ補う）。
 export function normalizePlayer(p) {
   if (!p || typeof p !== 'object') return p;
+  const playerKey = p.id ?? `${p.name || ''}:${p.age || ''}:${p.position || ''}`;
+  const fieldRandom = field => createSeededRandom(hashSeed(`${playerKey}:${field}`));
+  const norm = (field, mu, sigma) => {
+    const random = fieldRandom(field);
+    const noise = Math.sqrt(-2 * Math.log(random() || 0.001)) * Math.cos(2 * Math.PI * random());
+    return Math.max(1, Math.min(100, Math.round(mu + noise * sigma)));
+  };
 
   // 能力コンテナが欠けていても参照でクラッシュしないよう保証
   if (!p.physical) p.physical = {};
@@ -39,31 +44,31 @@ export function normalizePlayer(p) {
 
   const ph = p.physical, ba = p.batting, fi = p.fielding;
   // フィジカル
-  if (ph.speed == null) ph.speed = norm(45, 12);
-  if (ph.arm == null) ph.arm = norm(50, 12);
+  if (ph.speed == null) ph.speed = norm('physical.speed', 45, 12);
+  if (ph.arm == null) ph.arm = norm('physical.arm', 50, 12);
   if (ph.throws == null) ph.throws = 'right';
-  if (ph.bodyStamina == null) ph.bodyStamina = norm(50, 10);
-  if (ph.recovery == null) ph.recovery = norm(55, 10);
+  if (ph.bodyStamina == null) ph.bodyStamina = norm('physical.bodyStamina', 50, 10);
+  if (ph.recovery == null) ph.recovery = norm('physical.recovery', 55, 10);
   if (ph.muscle == null) ph.muscle = 50;
   if (ph.dexterity == null) ph.dexterity = 50;
   // 打撃
-  if (ba.meet == null) ba.meet = norm(40, 12);
-  if (ba.power == null) ba.power = norm(35, 12);
-  if (ba.eye == null) ba.eye = norm(35, 10);
-  if (ba.steal == null) ba.steal = norm(30, 10);
+  if (ba.meet == null) ba.meet = norm('batting.meet', 40, 12);
+  if (ba.power == null) ba.power = norm('batting.power', 35, 12);
+  if (ba.eye == null) ba.eye = norm('batting.eye', 35, 10);
+  if (ba.steal == null) ba.steal = norm('batting.steal', 30, 10);
   if (ba.bats == null) ba.bats = 'right';
   // バント（旧セーブ互換: 従来はミート/走力から推定）
   if (ba.bunt == null) {
-    ba.bunt = Math.min(99, Math.max(1, Math.round((ba.meet || 50) * 0.4 + (ph.speed || 50) * 0.3 + Math.random() * 20)));
+    ba.bunt = Math.min(99, Math.max(1, Math.round((ba.meet || 50) * 0.4 + (ph.speed || 50) * 0.3 + fieldRandom('batting.bunt')() * 20)));
   }
   // 守備
-  if (fi.defense == null) fi.defense = norm(40, 12);
+  if (fi.defense == null) fi.defense = norm('fielding.defense', 40, 12);
   // 投手
   if (isPitcher && p.pitching) {
     const pi = p.pitching;
-    if (pi.velocity == null) pi.velocity = norm(130, 6);
-    if (pi.control == null) pi.control = norm(40, 12);
-    if (pi.stamina == null) pi.stamina = norm(70, 15);
+    if (pi.velocity == null) pi.velocity = norm('pitching.velocity', 130, 6);
+    if (pi.control == null) pi.control = norm('pitching.control', 40, 12);
+    if (pi.stamina == null) pi.stamina = norm('pitching.stamina', 70, 15);
     if (!Array.isArray(pi.arsenal)) pi.arsenal = [];
   }
 
@@ -71,10 +76,10 @@ export function normalizePlayer(p) {
   if (p.growthPotential == null) p.growthPotential = 1.0;
   if (p.growthModifier == null) p.growthModifier = 0;
   if (p.fame == null) p.fame = 0;
-  if (!p.personality) p.personality = { discipline: norm(50, 18), mental: norm(50, 18) };
+  if (!p.personality) p.personality = { discipline: norm('personality.discipline', 50, 18), mental: norm('personality.mental', 50, 18) };
   else {
-    if (p.personality.discipline == null) p.personality.discipline = norm(50, 18);
-    if (p.personality.mental == null) p.personality.mental = norm(50, 18);
+    if (p.personality.discipline == null) p.personality.discipline = norm('personality.discipline', 50, 18);
+    if (p.personality.mental == null) p.personality.mental = norm('personality.mental', 50, 18);
   }
   if (!p.positionFitness) p.positionFitness = {};
 
