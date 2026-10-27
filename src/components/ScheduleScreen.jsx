@@ -249,7 +249,6 @@ const ScheduleScreen = ({
   springStandings,
   userTeamName,
   onProgressDate,
-  onProgressToNextGame,
   onProgressToNextPhase,
   onStartGame,
   onGoToDateProgress,

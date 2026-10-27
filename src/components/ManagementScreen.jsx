@@ -169,7 +169,6 @@ const ManagementScreen = ({
   setScreenMode,
   setGameFlowState,
   handleProgressDate,
-  handleProgressToNextGame,
   handleProgressToNextPhase
 }) => {
   const draftedIds = seasonData?.draftedPlayerIds || [];
@@ -185,7 +184,6 @@ const ManagementScreen = ({
     leagueStandings={leagueStandings}
     userTeamName={userTeamName}
     onProgressDate={handleProgressDate}
-    onProgressToNextGame={handleProgressToNextGame}
     onProgressToNextPhase={handleProgressToNextPhase}
     onStartGame={() => setScreenMode('game')}
     onGoToDateProgress={() => setManagementView('dateprogress')}

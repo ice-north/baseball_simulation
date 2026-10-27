@@ -57,7 +57,7 @@ import { executeSetupManagedGame, executeHandleManagedGameEnd } from './game/gam
 import { executeAutoSubstitutePitcher, executeAutoSubstitutePinchHitter, executeAutoDefensiveSubstitution, executeAutoStealingDecision, executeAutoOptimizePitcherUsage } from './game/aiManager.js';
 
 // Season progress imports
-import { handleProgressDate as progressDateHandler, handleProgressToNextGame as progressToNextGameHandler, handleProgressToNextPhase as progressToNextPhaseHandler } from './game/seasonProgress.js';
+import { handleProgressDate as progressDateHandler, handleProgressToNextPhase as progressToNextPhaseHandler } from './game/seasonProgress.js';
 
 // Season management imports
 import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
@@ -2810,7 +2810,6 @@ if (newOuts === 3) {
   const seasonProgressCtx = { seasonData, setSeasonData, setSelectedMonth, selectedMonth, userTeamName, setScreenMode, setManagementView };
       // [SECTION: SEASON_PROGRESS] → seasonProgress.js に抽出済み（ラッパーのみ）
   const handleProgressDate = (days) => progressDateHandler(days, seasonProgressCtx);
-  const handleProgressToNextGame = () => progressToNextGameHandler(seasonProgressCtx);
   const handleProgressToNextPhase = () => progressToNextPhaseHandler(seasonProgressCtx);
 
 
@@ -4292,7 +4291,6 @@ if (newOuts === 3) {
                 setScreenMode={setScreenMode}
                 setGameFlowState={setGameFlowState}
                 handleProgressDate={handleProgressDate}
-                handleProgressToNextGame={handleProgressToNextGame}
                 handleProgressToNextPhase={handleProgressToNextPhase}
               />
             )}

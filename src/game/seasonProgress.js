@@ -2,7 +2,7 @@ import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { ensureCompleteLineup } from './lineup.js';
 import { SEASON_PHASES, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
-import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
+import { progressDate, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from './autoSimulation.js';
 import { scheduledGameSeed } from './rng.js';
 import { updateAllTeamReputations } from '../corporate/corporateInit.js';
@@ -253,36 +253,6 @@ export const handleProgressDate = (days, { seasonData, setSeasonData, setSelecte
   checkMidSeasonReputationUpdate(seasonData.currentDate, newSeasonData.currentDate, newSeasonData);
 
   // カレンダー月を現在日付に自動追従
-  if (newSeasonData?.currentDate?.month && newSeasonData.currentDate.month !== selectedMonth) {
-    setSelectedMonth(newSeasonData.currentDate.month);
-  }
-
-  const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData, { setSeasonData, setScreenMode, setManagementView });
-  if (result !== null) setSeasonData(result);
-};
-
-// 次の試合まで進行
-export const handleProgressToNextGame = ({ seasonData, setSeasonData, setSelectedMonth, selectedMonth, userTeamName, setScreenMode, setManagementView }) => {
-  if (!seasonData) return;
-
-  if ((seasonData.phase === SEASON_PHASES.REGULAR_SEASON || seasonData.phase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete(userTeamName)) {
-    alert('スタメンが9人揃っていません。スタメン設定画面で打順を設定してください。');
-    return;
-  }
-
-  let newSeasonData = progressToNextGame(seasonData, userTeamName);
-
-  const oldPhase = seasonData.phase;
-  const newPhase = newSeasonData.phase;
-  if (oldPhase !== newPhase) {
-    newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
-  }
-
-  newSeasonData = simulateGamesOnDate(newSeasonData);
-
-  // 2ヶ月ごとの注目度更新
-  checkMidSeasonReputationUpdate(seasonData.currentDate, newSeasonData.currentDate, newSeasonData);
-
   if (newSeasonData?.currentDate?.month && newSeasonData.currentDate.month !== selectedMonth) {
     setSelectedMonth(newSeasonData.currentDate.month);
   }

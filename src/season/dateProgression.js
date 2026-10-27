@@ -4,7 +4,7 @@
 // ============================================================
 
 import { advanceDate, getCurrentPhase, getNPBDraftDay, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
-import { generateFullSeasonSchedule, getNextGame } from './scheduleGenerator.js';
+import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 import { updateAllPlayersCondition } from '../game/condition.js';
 import { getModeCapabilities } from '../game/modeCapabilities.js';
@@ -33,30 +33,14 @@ export const progressDate = (seasonData, days = 1) => {
   };
 };
 
-/**
- * 次の試合日まで進行
- * @param {Object} seasonData - シーズンデータ
- * @param {string} teamName - チーム名（オプション）
- * @returns {Object} 更新されたシーズンデータ
- */
-export const progressToNextGame = (seasonData, teamName = null) => {
-  const nextGame = getNextGame(seasonData.schedule, seasonData.currentDate, teamName);
-
-  if (!nextGame) {
-    // 次の試合がない場合は1日進める
-    return progressDate(seasonData, 1);
-  }
-
-  const newDate = { ...nextGame.date };
-  const phaseOpts = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts, newDate.year);
-
-  return {
-    ...seasonData,
-    currentDate: newDate,
-    phase: newPhase
-  };
-};
+// ⚠ **`progressToNextGame`（次の試合日まで一気に進める）はここから除去した**。
+//    `currentDate` を次の試合日に差し替えるだけだったので、間の日の試合・背景の大会・
+//    イベント判定に加えて、`progressDate` の日数ループ
+//    （`recoverAllPitcherFatigue` と `updateAllPlayersCondition`）まで抜けていた。
+//    イベントは日付の完全一致でしか発火しないので、飛ばした日の分は戻ってこない。
+//    「次の試合まで」は `DateProgressScreen` 側で**1日進行を繰り返す**形に作り直した。
+//    呼び出し元（`handleProgressToNextGame` → `ScheduleScreen` の未使用プロップ）も
+//    まとめて除去済み。復活させないこと。
 
 /**
  * 次のフェーズまで進行

@@ -73,6 +73,8 @@ const REMOVED_ON_PURPOSE = {
   pitcherStats:    '同上',
   catcherStats:    '同上',
   errorRunnersOnBaseRef: '采配モードの自責点のイニング単位の近似。走者ごとの印（makeRunner の onError）に置き換えて除去（歴史の記録）',
+  progressToNextGame: '日付を次の試合日に差し替えるだけで、間の日の試合・イベント・疲労回復/コンディション更新が抜けていた。1日進行の繰り返しに置き換えて除去（歴史の記録）',
+  handleProgressToNextGame: '同上の呼び出し元。ScheduleScreen の未使用プロップごと除去（歴史の記録）',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');

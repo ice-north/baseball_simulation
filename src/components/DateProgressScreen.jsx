@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
-import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth, getPlayoffChampion } from '../season/seasonManager.js';
+import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth, getPlayoffChampion, advanceDate, compareDates } from '../season/seasonManager.js';
 import { RANK_COLORS } from '../utils/constants.js';
-import { getScheduleByDate } from '../season/scheduleGenerator.js';
+import { getScheduleByDate, getNextGame } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { scheduledGameSeed } from '../game/rng.js';
@@ -645,18 +645,22 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     return ensureCompleteLineup(TEAMS_DATA[userTeamName], LEAGUE_SETTINGS.useDH);
   };
 
+  // 戻り値は「日付を進めたか」。false は**何かが引き止めた**（モーダルを出した・
+  // スタメンが作れなかった）という意味で、「次の試合まで」の連続進行がここで止まる。
+  // ⚠ 止まる条件をループ側に書き写さないこと。条件はこの関数が唯一の正本で、
+  //    写しを置くと片方だけ増えて取りこぼす（大会が6種類あるので特に危ない）。
   const handleProgressDate = (days) => {
-    if (isSimulating) return;
+    if (isSimulating) return false;
     // 未処理のフェーズ移行イベントがあれば、日付を進めずにダイアログを出し直す
     if (seasonData.pendingPhaseEvent) {
       const t = seasonData.pendingPhaseEvent;
       const info = PHASE_EVENT_INFO[t];
       setPendingPhaseEvent({ eventType: t, label: info?.label || t, desc: info?.desc || '', data: seasonData });
-      return;
+      return false;
     }
     if ((currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS) && !autoFillLineup()) {
       alert('スタメンを自動補完できませんでした。ロスター管理で打順を設定してください。');
-      return;
+      return false;
     }
 
     // 都市対抗トーナメントのユーザー試合チェック
@@ -664,7 +668,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       const tournamentMatch = getUserMatchOnDate(seasonData.toshitaikou, seasonData.currentDate, userTeamName);
       if (tournamentMatch) {
         setShowTournamentMatchModal(tournamentMatch);
-        return;
+        return false;
       }
     }
 
@@ -673,7 +677,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       const rtMatch = getUserRegionalTournamentMatchOnDate(seasonData.regionalTournament, seasonData.currentDate, userTeamName);
       if (rtMatch) {
         setShowTournamentMatchModal(rtMatch);
-        return;
+        return false;
       }
     }
 
@@ -682,7 +686,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       const nsMatch = getUserNihonSenshukenMatchOnDate(seasonData.nihonSenshuken, seasonData.currentDate, userTeamName);
       if (nsMatch) {
         setShowTournamentMatchModal(nsMatch);
-        return;
+        return false;
       }
     }
 
@@ -692,7 +696,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       if (csMatch) {
         const clubMatch = { ...csMatch, bracketType: csMatch.bracketType?.replace('nihon_senshuken', 'club_senshuken') || 'club_senshuken', type: csMatch.type?.replace('nihon_senshuken', 'club_senshuken') || 'club_senshuken' };
         setShowTournamentMatchModal(clubMatch);
-        return;
+        return false;
       }
     }
 
@@ -701,14 +705,14 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       const ucMatch = getUserUniversityTournamentMatchOnDate(seasonData.universityChampionship, seasonData.currentDate, userTeamName);
       if (ucMatch) {
         setShowTournamentMatchModal({ ...ucMatch, type: 'university_championship' });
-        return;
+        return false;
       }
     }
     if (seasonData.meijiJingu?.generated && seasonData.meijiJingu.phase !== 'done') {
       const mjMatch = getUserUniversityTournamentMatchOnDate(seasonData.meijiJingu, seasonData.currentDate, userTeamName);
       if (mjMatch) {
         setShowTournamentMatchModal({ ...mjMatch, type: 'meiji_jingu' });
-        return;
+        return false;
       }
     }
 
@@ -718,11 +722,12 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
     if (userGame && onSetupManagedGame && (currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS)) {
       setShowGameChoiceModal(true);
-      return;
+      return false;
     }
 
     // 試合がない日 or ユーザー試合がない → 通常進行
     executeSkipDay(days);
+    return true;
   };
 
   const executeSkipDay = (days) => {
@@ -895,6 +900,66 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     executeSkipDay(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seasonData?._resumeDayAfterManagedGame]);
+
+  // ── 「次の試合まで」: 1日進行を繰り返す ──────────────────────────────
+  // ⚠ **`progressToNextGame` で日付を飛ばしてはいけない**。あれは `currentDate` を
+  //    次の試合日に差し替えるだけなので、間の日の試合・背景の大会・イベント判定に加えて
+  //    `progressDate` の日数ループ（`recoverAllPitcherFatigue` と
+  //    `updateAllPlayersCondition`）まで丸ごと抜ける。イベントは日付の完全一致でしか
+  //    発火しないから、飛ばした日の分は後から戻ってこない。
+  //    （`dateProgression.js` の `progressToNextGame` と `seasonProgress.js` の
+  //    `handleProgressToNextGame` は、この理由で死んだまま残っていたので除去した。
+  //    復活させず、1日進行をそのまま繰り返すこと。）
+  const nextUserGame = useMemo(() => {
+    if (!seasonData?.schedule || !seasonData?.currentDate) return null;
+    return getNextGame(seasonData.schedule, seasonData.currentDate, userTeamName);
+  }, [seasonData?.schedule, seasonData?.currentDate, userTeamName]);
+
+  // 繰り返しの上限。⚠ 日数は**ゲームの暦**（`advanceDate`）で数えること。
+  //    `getDaysInMonth` を持っている暦なので、JSの Date で引き算すると合わない年がある。
+  //    今日の試合（まだ結果が無いもの）は 0 を返す＝「次の試合まで」は出番なし。
+  const daysToNextGame = useMemo(() => {
+    if (!nextUserGame) return -1;
+    let n = 0;
+    let d = seasonData.currentDate;
+    while (compareDates(d, nextUserGame.date) < 0 && n < 60) { d = advanceDate(d, 1); n++; }
+    return compareDates(d, nextUserGame.date) === 0 ? n : -1;
+  }, [nextUserGame, seasonData?.currentDate]);
+
+  const [autoAdvanceLeft, setAutoAdvanceLeft] = useState(0);
+  const autoAdvanceDayRef = React.useRef(null);
+
+  const startAutoAdvance = () => {
+    if (isSimulating || daysToNextGame < 1) return;
+    // 押し直したときに動き出すよう、始める時に印を落とす（下の latch の説明を参照）
+    autoAdvanceDayRef.current = null;
+    // ⚠ **+1 すること**。試合日に「着く」だけだと試合前モーダルが出ず、
+    //    着いた画面でもう一度ボタンを押させることになる（実測でそうなった）。
+    //    試合日にもう一度 `handleProgressDate` を呼べば、その中の試合チェックが
+    //    モーダルを出して false を返す＝そこが終点になる。
+    //    采配できないモード・フェーズなら試合は自動消化されて1日だけ余分に進むが、
+    //    それは「1日進める」を押したのと同じ結果で、残り日数が0なのでそこで止まる。
+    setAutoAdvanceLeft(daysToNextGame + 1);
+  };
+
+  useEffect(() => {
+    if (autoAdvanceLeft <= 0) return;
+    // 注意を要するダイアログが開いたら、そこが終点
+    if (showGameChoiceModal || showTournamentMatchModal || pendingPhaseEvent || koshienNotice || showNewspaper) {
+      setAutoAdvanceLeft(0);
+      return;
+    }
+    const d = seasonData?.currentDate;
+    const key = `${d?.year}-${d?.month}-${d?.day}`;
+    // 同じ日で2回進めない。`StrictMode` のマウント時2回実行と、
+    // 「進まなかった日での再入」を同時に塞ぐ（`resumedDayRef` と同じ書き方）
+    if (autoAdvanceDayRef.current === key) { setAutoAdvanceLeft(0); return; }
+    autoAdvanceDayRef.current = key;
+    // 進めたら残りを減らす。引き止められたら（モーダルが出た等）そこで終わり
+    if (handleProgressDate(1)) setAutoAdvanceLeft(n => n - 1);
+    else setAutoAdvanceLeft(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAdvanceLeft, seasonData?.currentDate]);
 
   const handleGameChoice = (choice) => {
     if (isSimulating) return;
@@ -1851,7 +1916,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   return (
     <ScreenShell>
       <TutorialHint id="dateprogress-intro" title="シーズンの進め方">
-        ここが基本画面です。左サイドバーの<b className="text-cyan-200">「日程進行」をもう一度押す</b>と1日進み、試合が自動で消化されて順位表・成績が更新されます。自分の試合は采配してプレイすることもできます。サイドバーからロスター管理・注目選手などへ移動できます。
+        ここが基本画面です。カレンダー右上の<b className="text-cyan-200">「1日進める」</b>で1日進み、試合が自動で消化されて順位表・成績が更新されます。<b className="text-cyan-200">「次の試合まで」</b>を押すと、自分の試合の直前まで1日ずつまとめて進みます。自分の試合は采配してプレイすることもできます。サイドバーからロスター管理・注目選手などへ移動できます。
       </TutorialHint>
 
       {/* ⚠ **画面の先頭にあった進行バーは撤去した**（日付＋本日の予定＋次の自チーム戦＋
@@ -1860,8 +1925,11 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
           日付 → カレンダーの見出しへ統合 / 本日の予定 → 下の「本日の試合」欄 /
           次の自チーム戦 → カレンダーの色分け（自チーム戦=青・自トーナメント=黄）/
           1日進める → サイドバーの「日程進行」の再クリック（`onActiveClick`）。
-          ⚠ **「一番よく押す操作に押す場所が無い」は、これで再び当てはまる**。
-          復活させるなら**縦を増やさない置き方**にすること（この帯は実測66px使っていた）。 */}
+          ⚠ このうち**「1日進める」だけは置き場所を戻した**。サイドバーの再クリックは
+          押せると分かる手がかりが無く、「一番よく押す操作に押す場所が無い」状態だったため。
+          帯は復活させず、**カレンダーの見出し行**（月送りの ◀▶ の隣）に置いてある
+          ＝縦は1pxも増えない。この帯は実測66px使っていた。
+          再クリックの経路も残してある（覚えた人の手を止めないため）。 */}
       {/* ⚠ **「昨日の結果」パネルはここにあったが、日程進行が縦に長くなりすぎたため撤去した**。
           押した手応えを返すのが役目だったので、消したことで
           「押しても何が起きたか画面に返らない」が部分的に戻っている。
@@ -1909,9 +1977,38 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                   </span>
                 )}
               </h2>
-              <div className="flex gap-1">
-                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white w-10 h-10 rounded-xl flex items-center justify-center text-base transition-all active:scale-90 border border-gray-600/30 hover:border-gray-500">◀</button>
-                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white w-10 h-10 rounded-xl flex items-center justify-center text-base transition-all active:scale-90 border border-gray-600/30 hover:border-gray-500">▶</button>
+              {/* 日送りの置き場所。⚠ **この行に置くこと＝縦を増やさない**。
+                  月送りの ◀▶ が w-10 h-10 で既に行の高さを決めているので、
+                  同じ高さのボタンを横に足しても帯は1pxも伸びない。
+                  （以前ここに専用の進行バーを置いて、縦に長すぎるので撤去した。
+                  そのとき日送りはサイドバーの再クリックだけになり、
+                  「一番よく押す操作に押す場所が無い」状態に戻っていた。）
+                  ⚠ 月送り（見る月を変える）と日送り（世界を進める）は別の仕事なので、
+                  区切り線で分けて、▶ の字も日送り側には持たせない
+                  （同じ行に ▶ が2つ並ぶと、どちらが日を進めるのか読めなかった）。 */}
+              <div className="flex items-center gap-1">
+                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} title="前の月を見る" className="bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white w-10 h-10 rounded-xl flex items-center justify-center text-base transition-all active:scale-90 border border-gray-600/30 hover:border-gray-500">◀</button>
+                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} title="次の月を見る" className="bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white w-10 h-10 rounded-xl flex items-center justify-center text-base transition-all active:scale-90 border border-gray-600/30 hover:border-gray-500">▶</button>
+                <div className="w-px h-6 bg-gray-600/50 mx-1.5" aria-hidden="true" />
+                <button
+                  onClick={startAutoAdvance}
+                  disabled={isSimulating || autoAdvanceLeft > 0 || daysToNextGame < 1}
+                  title={daysToNextGame === 0 ? '今日が試合の日です（「1日進める」で試合へ）'
+                    : daysToNextGame < 0 ? '次の試合が予定されていません'
+                    : `${daysToNextGame}日進めて、次の試合の前で止まります`}
+                  className="btn-secondary h-10 px-3 rounded-xl text-sm whitespace-nowrap transition-all active:scale-95"
+                >
+                  次の試合まで{daysToNextGame > 1 && <span className="ml-1 text-xs opacity-70 tabular-nums">{daysToNextGame}日</span>}
+                </button>
+                <button
+                  onClick={() => handleProgressDate(1)}
+                  disabled={isSimulating || autoAdvanceLeft > 0}
+                  title="1日進める"
+                  className="btn-primary h-10 px-4 rounded-xl text-sm whitespace-nowrap transition-all active:scale-95"
+                >
+                  {/* 残りは「試合日まで」で数える（`autoAdvanceLeft` は試合日に呼ぶ1回分を含む） */}
+                  {autoAdvanceLeft > 1 ? `進行中… 残り${autoAdvanceLeft - 1}日` : autoAdvanceLeft === 1 ? '進行中…' : '1日進める'}
+                </button>
               </div>
             </div>
 
@@ -1934,8 +2031,11 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                     // ⚠ 「今日」は緑のベタ塗り＋グロー＋リングで、画面で一番強い要素だった。
                     //    現在地は「次に押すもの」ではないので、サイドバー・タブと同じ
                     //    アクセント（＝ここに居る）の語彙に揃える。
-                    //    ⚠ **この画面でアクセントを持つのはここだけ**にすること
+                    //    ⚠ **この画面でアクセントを持つ「箱」はここだけ**にすること
                     //    （見出しの日付にも同じ枠を付けたら、強い箱が2つになった）
+                    //    ⚠ 見出し行の「1日進める」は `.btn-primary`（塗り）でアクセントを持つが、
+                    //    これは別の役目（＝次に押すもの）で、この枠は輪郭だけの現在地なので
+                    //    競合しない。実機で並べて確認済み。増やすならここまで
                     cell.isToday ? 'bg-[var(--accent-soft)] border border-[var(--accent)]' :
                     hasUserTournament ? 'bg-yellow-900/30 border border-yellow-500/30 hover:border-yellow-400/40' :
                     hasUserGame && !cell.games.some(g => g.result) ? 'bg-blue-900/30 border border-blue-500/20 hover:border-blue-400/40' :
