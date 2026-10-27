@@ -874,8 +874,25 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
   // 采配した試合の後は、その日の残り（他の試合・背景の大会・日次処理・イベント判定）を
   // 通常の日送りと同じ経路で済ませてから翌日へ進む（`gameSetup` が印を付けて戻ってくる）
+  //
+  // ⚠ **印（フラグ）だけでは二重実行を止められない**。印を落とすのは `executeSkipDay` の中の
+  //    `setSeasonData` 経由なので、同じコミットで2回走ると**どちらも印が立ったまま**通る。
+  //    `isSimulating` も `setState` なので同じ理由で間に合わない（旧実装はこれだけだった）。
+  //    `executeSkipDay` は先頭で `simulateGamesOnDate` を呼ぶので、2回通ると
+  //    **その日の他の試合が二重に計算され、順位表の試合数がずれる**。
+  //    ⚠ 「開発時の React が effect を2回実行するだけ」で済ませないこと——
+  //    `aiManager` の `setTeam(prev => …)` で交代ログと登板疲労が二重になったのと同じ型で、
+  //    あのときも**冪等にして**直した。印を落とす経路に頼らず、ここで2回目を捨てる。
+  //    キーは日付（`newspaperFameDateRef` と同じ書き方）。1日に采配する自チームの試合は
+  //    1つなので日付で一意になり、翌日は自然にキーが変わる＝latch の掃除が要らない
+  const resumedDayRef = React.useRef(null);
   useEffect(() => {
-    if (seasonData?._resumeDayAfterManagedGame && !isSimulating) executeSkipDay(1);
+    if (!seasonData?._resumeDayAfterManagedGame) return;
+    const d = seasonData.currentDate;
+    const key = `${d?.year}-${d?.month}-${d?.day}`;
+    if (resumedDayRef.current === key) return;
+    resumedDayRef.current = key;
+    executeSkipDay(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seasonData?._resumeDayAfterManagedGame]);
 
@@ -1250,7 +1267,13 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       else if (lost) { losses++; results.push('loss'); }
       else { draws++; results.push('draw'); }
     });
-    const winRate = (wins + losses) > 0 ? (wins / (wins + losses)).toFixed(3).slice(2) : '---';
+    // ⚠ 旧実装は `.toFixed(3).slice(2)` で、表示側が `(.{winRate})` と頭に点を付けていた。
+    //    `"0.667" → "667"` の前提なので、**全勝の `"1.000"` が `"000"` に潰れて `.000` と出る**
+    //    （1勝0敗と0勝1敗が同じ表示になり、勝率が真逆に読める）。野球の慣習どおり
+    //    先頭の 0 だけを落とし、1.000 はそのまま出す
+    const winRate = (wins + losses) > 0
+      ? (wins / (wins + losses)).toFixed(3).replace(/^0/, '')
+      : '---';
     return { wins, losses, draws, results, winRate };
   }, [calendarCells, userTeamName]);
 
@@ -1881,7 +1904,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                     <span className="text-red-400 ml-1">{monthlyStats.losses}敗</span>
                     {monthlyStats.draws > 0 && <span className="text-gray-300 ml-1">{monthlyStats.draws}分</span>}
                     <span className="text-gray-300 ml-1.5 font-normal text-xs">
-                      (.{monthlyStats.winRate})
+                      ({monthlyStats.winRate})
                     </span>
                   </span>
                 )}
