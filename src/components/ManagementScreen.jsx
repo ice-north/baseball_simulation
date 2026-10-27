@@ -525,7 +525,7 @@ const ManagementScreen = ({
     allTeams={allTeams}
     userTeamName={userTeamName}
   />;
-  if (managementView === 'ranking') return <AbilityRankingScreen />;
+  if (managementView === 'ranking') return <AbilityRankingScreen seasonData={seasonData} userTeamName={userTeamName} />;
   if (managementView === 'team_ranking') return <TeamRankingScreen
     userTeamName={userTeamName}
     gameMode={gameMode}

@@ -195,9 +195,15 @@ const ScoutBadges = ({ npbScouts, amScouts }) => {
   );
 };
 
-const AbilityRankingScreen = () => {
+const SCOPES = [['team', '自チーム'], ['league', '自リーグ'], ['all', '全体']];
+
+const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
   const [mode, setMode] = useState('player');
   const [category, setCategory] = useState('all');
+  // ⚠ ここの既定は「全体」のままにすること。この画面はドラフト候補まで含めた
+  //    世界全体の見渡しが役目で、既定を自チームにすると画面の意味が変わる。
+  //    混ざって困るときのために絞り込みを足す、という順番。
+  const [scope, setScope] = useState('all');
   const [sortKey, setSortKey] = useState('overall');
   const [limit, setLimit] = useState(50);
   // 選手名クリックで詳細（選手検索・チーム情報・推薦スカウトと同じ共有モーダル）
@@ -264,8 +270,29 @@ const AbilityRankingScreen = () => {
     return { allPlayers: players, hsPlayers: hs };
   }, [Object.keys(TEAMS_DATA).length]);
 
+  // 自リーグ＝順位表に載っているチーム（`settings.teamNames` は社会人／大学モードでは
+  // 自チームしか持たないので使えない。選手成績・日程進行の個人成績と同じ作り方）
+  const leagueTeamSet = useMemo(() => {
+    const t = new Set((seasonData?.standings || []).map(x => x.team));
+    (seasonData?.springStandings || []).forEach(x => t.add(x.team));
+    return t;
+  }, [seasonData?.standings, seasonData?.springStandings]);
+
+  // ⚠ `teamName` は `TEAMS_DATA` のキー（順位表の `team` と `userTeamName` も同じ）。
+  //    高校生プールはチームを持たないので、自チーム・自リーグでは自然に外れる
+  const inScope = React.useCallback((p) => {
+    if (scope === 'team') return p.teamName === userTeamName;
+    if (scope === 'league') return leagueTeamSet.size === 0 || leagueTeamSet.has(p.teamName);
+    return true;
+  }, [scope, userTeamName, leagueTeamSet]);
+
+  const scopedTotal = useMemo(
+    () => (scope === 'all' ? allPlayers.length : allPlayers.filter(inScope).length),
+    [allPlayers, scope, inScope]);
+
   const filteredPlayers = useMemo(() => {
     let list = sortKey === 'draft' ? [...allPlayers, ...hsPlayers] : allPlayers;
+    if (scope !== 'all') list = list.filter(inScope);
     if (category === 'pitcher') list = list.filter(p => p.position === 'pitcher');
     else if (category === 'catcher') list = list.filter(p => p.position === 'catcher');
     else if (category === 'infielder') list = list.filter(p => ['first', 'second', 'third', 'short'].includes(p.position));
@@ -291,7 +318,7 @@ const AbilityRankingScreen = () => {
     });
 
     return list.slice(0, limit);
-  }, [allPlayers, hsPlayers, category, sortKey, limit]);
+  }, [allPlayers, hsPlayers, category, sortKey, limit, scope, inScope]);
 
   const filteredHsPlayers = useMemo(() => {
     let list = hsPlayers;
@@ -384,7 +411,9 @@ const AbilityRankingScreen = () => {
               const typeInfo = TYPE_LABEL[p.teamType] || TYPE_LABEL.user;
               const bestBrk = getBestBreaking(p);
               return (
-                <tr key={`${p.id}-${i}`} className={`border-b border-gray-700/30 hover:bg-gray-700/30 ${i < 3 ? 'bg-gray-700/20' : ''}`}>
+                <tr key={`${p.id}-${i}`} className={`border-b border-gray-700/30 hover:bg-gray-700/30 ${
+                  p.teamName === userTeamName ? 'bg-[var(--accent-soft)]' : i < 3 ? 'bg-gray-700/20' : ''
+                }`}>
                   <td className="px-1.5 py-1.5 text-gray-400 text-xs">{i + 1}</td>
                   <td className="px-1.5 py-1.5 text-xs">
                     <button onClick={() => setDetailPlayer(p)}
@@ -451,6 +480,20 @@ const AbilityRankingScreen = () => {
                 }`}
               >{t.label}</button>
             ))}
+            {mode === 'player' && (
+              <>
+                <div className="w-px h-6 bg-gray-600/50 mx-2 self-center" aria-hidden="true" />
+                <span className="text-xs text-ink-sub self-center mr-1">範囲</span>
+                {SCOPES.map(([key, label]) => (
+                  <button key={key}
+                    onClick={() => setScope(key)}
+                    className={`px-3 py-1.5 rounded text-sm font-bold transition ${
+                      scope === key ? 'seg-on' : 'seg'
+                    }`}
+                  >{label}</button>
+                ))}
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-3 mb-3">
@@ -479,7 +522,7 @@ const AbilityRankingScreen = () => {
             <>
               {renderPlayerTable(filteredPlayers, sortKey === 'draft')}
               <div className="text-xs text-ink-sub mt-2">
-                全{allPlayers.length}選手{sortKey === 'draft' && hsPlayers.length > 0 ? ` + 高校生${hsPlayers.length}名` : ''}中 上位{Math.min(limit, filteredPlayers.length)}名を表示
+                {SCOPES.find(([k]) => k === scope)?.[1]} 全{scopedTotal}選手{scope === 'all' && sortKey === 'draft' && hsPlayers.length > 0 ? ` + 高校生${hsPlayers.length}名` : ''}中 上位{Math.min(limit, filteredPlayers.length)}名を表示
               </div>
             </>
           ) : (

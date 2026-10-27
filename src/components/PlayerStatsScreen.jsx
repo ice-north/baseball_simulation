@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { formatInnings } from '../utils/physics.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
+import { qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances } from '../season/seasonManager.js';
 
 const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
   const [statsTab, setStatsTab] = useState('season');
   const [statsType, setStatsType] = useState('batting');
+  // ⚠ 既定は「自リーグ」「規定到達者のみ」。世界の全選手（実測で約18,000人）から
+  //    上位20人を出していたので、大学モードでも社会人クラブの選手が並び、
+  //    1打数1安打の打率1.000が上位を埋めて、自チームの選手が1人も出なかった。
+  const [scope, setScope] = useState('league');          // 'team' | 'league' | 'all'
+  const [qualifiedOnly, setQualifiedOnly] = useState(true);
   const [battingSortKey, setBattingSortKey] = useState('avg');
   const [battingSortDir, setBattingSortDir] = useState('desc');
   const [pitchingSortKey, setPitchingSortKey] = useState('era');
   const [pitchingSortDir, setPitchingSortDir] = useState('asc');
+
+  const SCOPES = [['team', '自チーム'], ['league', '自リーグ'], ['all', '全体']];
+  const scopeLabel = SCOPES.find(([k]) => k === scope)?.[1] || '全体';
 
   const getAllPlayerStats = () => {
     const seen = new Set();
@@ -20,13 +29,45 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       team.players.forEach(player => {
         if (player.id != null && seen.has(player.id)) return;
         if (player.id != null) seen.add(player.id);
-        allPlayers.push({ ...player, teamName: team.name });
+        // ⚠ 表示名（`team.name`）と `TEAMS_DATA` のキーは別物として扱うこと。
+        //    順位表の `team` も `userTeamName` もキーのほうなので、
+        //    絞り込みは `teamKey` で行い、表示だけ `teamName` を使う
+        allPlayers.push({ ...player, teamName: team.name, teamKey: teamName });
       });
     });
     return allPlayers;
   };
 
-  const allPlayers = getAllPlayerStats();
+  // 自リーグ＝順位表に載っているチーム。
+  // ⚠ `settings.teamNames` は社会人／大学モードでは自チームしか持たないので使えない
+  //    （日程進行の個人成績ランキングも同じ理由で順位表から作っている）。
+  const leagueTeamSet = useMemo(() => {
+    const s = new Set((seasonData?.standings || []).map(x => x.team));
+    (seasonData?.springStandings || []).forEach(x => s.add(x.team));
+    return s;
+  }, [seasonData?.standings, seasonData?.springStandings]);
+
+  // 規定打席・規定投球回。⚠ 式は `seasonManager` に一本化されている。
+  //    ここで別に持つと「ランキング1位」と「◯◯王」が別人になる（過去にそうなっていた）。
+  const totalGames = seasonData?.settings?.gamesPerSeason || 60;
+  const seasonProgress = useMemo(() => {
+    const played = (seasonData?.standings || []).map(s => s.gamesPlayed || 0);
+    return Math.min(Math.max(...played, 1) / totalGames, 1);
+  }, [seasonData?.standings, totalGames]);
+  const qualifiedAB = qualifiedPA(totalGames, seasonProgress);
+  const qualifiedOuts = qualifiedOutsFor(totalGames, seasonProgress);
+
+  // ⚠ 規定は**シーズンの値**なので通算には当てはめない（通算では絞り込みを無効にする）
+  const canFilterQualified = statsTab === 'season';
+  const applyQualified = qualifiedOnly && canFilterQualified;
+
+  const inScope = (p) => {
+    if (scope === 'team') return p.teamKey === userTeamName;
+    if (scope === 'league') return leagueTeamSet.size === 0 || leagueTeamSet.has(p.teamKey);
+    return true;
+  };
+
+  const allPlayers = getAllPlayerStats().filter(inScope);
 
   const handleBattingSort = (key) => {
     if (battingSortKey === key) {
@@ -55,10 +96,12 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     return combined;
   };
 
-  const battingStats = allPlayers
+  const battingRanked = allPlayers
     .filter(p => {
       const stats = statsTab === 'season' ? p.seasonStats?.batting : getCombinedCareer(p, 'batting');
-      return stats && stats.atBats > 0;
+      if (!stats || !(stats.atBats > 0)) return false;
+      if (applyQualified && plateAppearances(stats) < qualifiedAB) return false;
+      return true;
     })
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.batting : getCombinedCareer(p, 'batting');
@@ -79,13 +122,15 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       else if (battingSortKey === 'fieldingPct') { valA = a.fieldingPct; valB = b.fieldingPct; }
       else { valA = a.stats[battingSortKey] || 0; valB = b.stats[battingSortKey] || 0; }
       return battingSortDir === 'asc' ? valA - valB : valB - valA;
-    })
-    .slice(0, 20);
+    });
+  const battingStats = battingRanked.slice(0, 20);
 
-  const pitchingStats = allPlayers
+  const pitchingRanked = allPlayers
     .filter(p => {
       const stats = statsTab === 'season' ? p.seasonStats?.pitching : getCombinedCareer(p, 'pitching');
-      return stats && stats.inningsPitched > 0;
+      if (!stats || !(stats.inningsPitched > 0)) return false;
+      if (applyQualified && stats.inningsPitched < qualifiedOuts) return false;
+      return true;
     })
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.pitching : getCombinedCareer(p, 'pitching');
@@ -104,8 +149,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       else if (pitchingSortKey === 'inningsPitched') { valA = a.stats.inningsPitched || 0; valB = b.stats.inningsPitched || 0; }
       else { valA = a.stats[pitchingSortKey] || 0; valB = b.stats[pitchingSortKey] || 0; }
       return pitchingSortDir === 'asc' ? valA - valB : valB - valA;
-    })
-    .slice(0, 20);
+    });
+  const pitchingStats = pitchingRanked.slice(0, 20);
 
   const SortableHeader = ({ label, sortKey, currentKey, currentDir, onClick, align = 'right' }) => (
     <th
@@ -215,6 +260,42 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
         </div>
       } />
 
+      {/* 絞り込み。⚠ **この画面の既定が「全世界の上位20人」だった**ことが
+          「数字が多くて把握しきれない」の正体なので、ここは常に見えるところに置く
+          （ヘッダー右はタブで埋まっているため、表の上に1行だけ足す）。 */}
+      {statsTab !== 'growth' && (
+        <div className="flex items-center flex-wrap gap-1.5 mb-2 px-1">
+          <span className="text-xs text-gray-400 mr-0.5">範囲</span>
+          {SCOPES.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setScope(key)}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition ${scope === key ? 'seg-on' : 'seg'}`}
+            >
+              {label}
+            </button>
+          ))}
+          <div className="w-px h-5 bg-gray-600/50 mx-1.5" aria-hidden="true" />
+          <button
+            onClick={() => setQualifiedOnly(v => !v)}
+            disabled={!canFilterQualified}
+            title={canFilterQualified
+              ? '規定打席・規定投球回に届いた選手だけを出す'
+              : '規定はシーズンの値なので、通算成績には当てはめません'}
+            className={`px-3 py-1 rounded-md text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed ${applyQualified ? 'seg-on' : 'seg'}`}
+          >
+            規定到達者のみ
+          </button>
+          {applyQualified ? (
+            <span className="text-xs text-gray-400 tabular-nums ml-1">
+              規定打席 {qualifiedAB} / 規定投球回 {(qualifiedOuts / 3).toFixed(1)}
+            </span>
+          ) : canFilterQualified ? null : (
+            <span className="text-xs text-gray-500 ml-1">通算では規定を使いません</span>
+          )}
+        </div>
+      )}
+
       {statsTab === 'growth' && (
         <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700/50">
@@ -289,7 +370,10 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       {statsType === 'batting' && (
         <div className="bg-surface-2 rounded-lg p-3">
           <h2 className="text-sm font-bold mb-2 text-white">
-            {statsTab === 'season' ? 'シーズン' : '通算'}野手成績 (上位20)
+            {statsTab === 'season' ? 'シーズン' : '通算'}野手成績
+            <span className="text-gray-400 font-normal ml-2 text-xs tabular-nums">
+              {scopeLabel} / 該当{battingRanked.length}人中 上位{battingStats.length}
+            </span>
           </h2>
           <div className="overflow-x-auto">
             <table className="tabular-nums w-full text-white text-xs">
@@ -317,7 +401,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                 {battingStats.map((player, index) => {
                   const draftCheck = statsTab === 'career' ? checkNPBDraftEligibility(player) : { isDraftEligible: false, reasons: [] };
                   return (
-                    <tr key={player.id + player.teamName} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                    <tr key={player.id + player.teamName} className={`border-b border-gray-700/50 hover:bg-gray-700/30 ${player.teamKey === userTeamName ? 'bg-[var(--accent-soft)]' : ''}`}>
                       <td className="py-1.5 px-1.5 text-gray-400">{index + 1}</td>
                       <td className="py-1.5 px-1.5 font-bold">
                         {player.name}
@@ -358,7 +442,10 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       {statsType === 'pitching' && (
         <div className="bg-surface-2 rounded-lg p-3">
           <h2 className="text-sm font-bold mb-2 text-white">
-            {statsTab === 'season' ? 'シーズン' : '通算'}投手成績 (上位20)
+            {statsTab === 'season' ? 'シーズン' : '通算'}投手成績
+            <span className="text-gray-400 font-normal ml-2 text-xs tabular-nums">
+              {scopeLabel} / 該当{pitchingRanked.length}人中 上位{pitchingStats.length}
+            </span>
           </h2>
           <div className="overflow-x-auto">
             <table className="tabular-nums w-full text-white text-xs">
@@ -387,7 +474,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                 {pitchingStats.map((player, index) => {
                   const draftCheck = statsTab === 'career' ? checkNPBDraftEligibility(player) : { isDraftEligible: false, reasons: [] };
                   return (
-                    <tr key={player.id + player.teamName} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                    <tr key={player.id + player.teamName} className={`border-b border-gray-700/50 hover:bg-gray-700/30 ${player.teamKey === userTeamName ? 'bg-[var(--accent-soft)]' : ''}`}>
                       <td className="py-1.5 px-1.5 text-gray-400">{index + 1}</td>
                       <td className="py-1.5 px-1.5 font-bold">
                         {player.name}
