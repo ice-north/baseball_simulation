@@ -4,11 +4,12 @@ import { RenderBases } from '../components/GameUIComponents.jsx';
 import { getPitchTypeName } from '../utils/constants.js';
 import {
   TACTIC_FIELDS,
+  STRATEGY_FIELDS,
   TACTIC_DEFAULTS,
   STARTER_ROLES,
   RELIEF_ROLES,
 } from './tactics.js';
-import { replayLabel as label } from './replayText.js';
+import { replayLabel as label, replayPitchResult } from './replayText.js';
 import { AbilityGrade } from './PlayerPerformance.jsx';
 import { POS } from './api.js';
 import { teamShort } from './gameText.js';
@@ -262,7 +263,7 @@ export default function ReplayViewer({ game }) {
                 .map((f) => ({
                   pitchLoc: f.pitch,
                   pitchType: f.pitch.type,
-                  resultType: f.result,
+                  resultType: replayPitchResult(f),
                 }))}
             />
           </div>
@@ -320,6 +321,17 @@ export default function ReplayViewer({ game }) {
         <details>
           <summary>この試合の自球団の事前設定</summary>
           <dl className="online-replay-applied">
+            {Object.entries(STRATEGY_FIELDS).map(([key, [label, options]]) => (
+              <div key={key}>
+                <dt>{label}</dt>
+                <dd>
+                  {options[
+                    replay.appliedPlan.strategy?.[key] ??
+                      Object.keys(options)[0]
+                  ] || '記録なし'}
+                </dd>
+              </div>
+            ))}
             {Object.entries(TACTIC_FIELDS).map(([key, [label, options]]) => (
               <div key={key}>
                 <dt>{label}</dt>

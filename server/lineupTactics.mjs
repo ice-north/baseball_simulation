@@ -24,7 +24,11 @@ export function validateTactics(team, plan, rotationChanged) {
     tactics = {};
     for (const [key, [, options]] of Object.entries(TACTIC_FIELDS)) {
       const value = plan.tactics[key] ?? TACTIC_DEFAULTS[key];
-      requireOnline(Object.hasOwn(options, value), '自動采配の値が不正です');
+      requireOnline(
+        typeof value === typeof TACTIC_DEFAULTS[key] &&
+          Object.hasOwn(options, value),
+        '自動采配の値が不正です',
+      );
       tactics[key] =
         typeof TACTIC_DEFAULTS[key] === 'number' ? Number(value) : value;
     }
@@ -47,6 +51,7 @@ export function validateTactics(team, plan, rotationChanged) {
         const p = pitchers.find((p) => String(p.id) === id);
         requireOnline(
           p &&
+            typeof role === 'string' &&
             Object.hasOwn(
               plan.starters.includes(p.id) ? STARTER_ROLES : RELIEF_ROLES,
               role,

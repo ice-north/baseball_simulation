@@ -1,4 +1,27 @@
 // 対人版の事前方針。未指定なら既存の自動試合と同じ判断・乱数消費を保つ。
+export const STRATEGY_FIELDS = {
+  batting: [
+    '打撃方針',
+    { balanced: 'バランス', patient: '慎重', aggressive: '積極' },
+  ],
+  pitching: [
+    '投球方針',
+    { balanced: 'バランス', strikeout: '三振狙い', contact: '打たせて取る' },
+  ],
+  baseRunning: [
+    '走塁方針',
+    {
+      normal: '標準',
+      aggressive: '積極',
+      conservative: '慎重',
+      never: '盗塁しない',
+    },
+  ],
+  defense: [
+    '守備方針',
+    { normal: '標準', infield_in: '前進守備', shift: '守備シフト' },
+  ],
+};
 export const STARTER_ROLES = {
   auto_s: 'おまかせ',
   ace: 'ゲームメーカー',
@@ -92,7 +115,8 @@ export function tacticalDamageLimit(limit, tactics) {
       : limit;
 }
 export function roleFor(role, starter) {
-  return Object.hasOwn(starter ? STARTER_ROLES : RELIEF_ROLES, role)
+  return typeof role === 'string' &&
+    Object.hasOwn(starter ? STARTER_ROLES : RELIEF_ROLES, role)
     ? role
     : starter
       ? 'auto_s'

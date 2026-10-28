@@ -2322,6 +2322,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           break;
       }
       observeReplay('pitch', {
+        pitchResult: result.type,
         result: result.isError ? 'error' : result.type === 'ball' && gameState.count.balls >= 4 ? 'walk'
           : ['called_strike', 'swinging_strike'].includes(result.type) && gameState.count.strikes >= 3 ? 'strikeout' : result.type,
         completed: atBatOver,

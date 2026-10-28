@@ -31,6 +31,8 @@ import {
   tacticalPitchLimit,
 } from '../../src/online/tactics.js';
 import { performanceFor } from '../../server/performanceLabels.mjs';
+import { createReplay } from '../../server/replayRecord.mjs';
+import { replayPitchResult, replayLabel } from '../../src/online/replayText.js';
 const log = console.log;
 console.log = () => {};
 const now = '2026-10-28T00:00:00.000Z';
@@ -71,6 +73,30 @@ assert.deepEqual(
   plainWorld,
   '通常ゲームの世界に追加記録を書き込まない',
 );
+for (const seed of [1, 2, 17, 29, 93, 119, 283, 701]) {
+  restoreWorld(before);
+  const expected = autoSimulateGame(home, away, false, seed),
+    expectedWorld = captureWorld();
+  restoreWorld(before);
+  const recorder = createReplay();
+  const actual = autoSimulateGame(home, away, false, seed, {
+    start: recorder.start,
+    replay: recorder.frame,
+    pitchDetail: recorder.pitchDetail,
+    plateAppearance() {},
+    runnerOut() {},
+  });
+  assert.deepEqual(
+    actual,
+    expected,
+    `全投球観測で試合結果/RNGを変えない: ${seed}`,
+  );
+  assert.deepEqual(
+    captureWorld(),
+    expectedWorld,
+    `全投球観測で試合後の世界を変えない: ${seed}`,
+  );
+}
 assert.ok(events.filter((e) => e.completed).length > 40);
 for (const name of [home, away]) {
   const total = events
@@ -116,6 +142,24 @@ const replay = observer.replayRecord;
 assert.ok(replay.frames.length > 100, '実投球・走塁の経過を保存');
 assert.equal(replay.frames.at(-1).homeScore, result.homeScore);
 assert.equal(replay.frames.at(-1).awayScore, result.awayScore);
+for (const f of replay.frames.filter((f) => f.kind === 'pitch')) {
+  assert.equal(
+    typeof f.pitchResult,
+    'string',
+    '打席結果と独立した実投球結果を記録',
+  );
+  if (f.result === 'walk') assert.equal(replayPitchResult(f), 'ball');
+  if (f.result === 'strikeout')
+    assert.ok(
+      ['called_strike', 'swinging_strike'].includes(replayPitchResult(f)),
+    );
+}
+assert.equal(
+  replayPitchResult({ result: 'walk' }),
+  'ball',
+  '旧記録の四球もボールとして描画',
+);
+assert.equal(replayLabel({ result: 'foul_2strike' }), 'ファウル');
 assert.ok(
   replay.frames
     .filter((f) => f.kind === 'pitch')
@@ -696,6 +740,30 @@ tacticalPlan.tactics = {
   starterLimit: 60,
 };
 const unchangedTactical = JSON.stringify(tacticalTeam);
+for (const tactics of [
+  { sacrificeBunt: ['never'] },
+  { hook: ['early'] },
+  { starterLimit: [60] },
+  { starterLimit: '60' },
+  { pinchHitFrom: false },
+])
+  assert.throws(
+    () => saveLineup(tacticalLeague, 'a', { ...tacticalPlan, tactics }),
+    /不正/,
+    '配列や型違いを采配の値として受け付けない',
+  );
+assert.throws(
+  () =>
+    saveLineup(tacticalLeague, 'a', {
+      ...tacticalPlan,
+      pitcherRoles: {
+        ...tacticalPlan.pitcherRoles,
+        [tacticalPlan.starters[0]]: ['opener'],
+      },
+    }),
+  /役割/,
+  '配列を投手の役割として受け付けない',
+);
 assert.throws(
   () =>
     saveLineup(tacticalLeague, 'a', {

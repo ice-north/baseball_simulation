@@ -4,6 +4,7 @@ const RESULTS = {
   swinging_strike: '空振り',
   strikeout: '三振',
   foul: 'ファウル',
+  foul_2strike: 'ファウル',
   single: '単打',
   double: '二塁打',
   triple: '三塁打',
@@ -29,3 +30,7 @@ export const replayLabel = (frame) =>
       : frame.kind === 'wild_pitch'
         ? '暴投・捕逸で進塁'
         : RESULTS[frame.result] || frame.result || 'プレー';
+
+// 打席の結末（四球・三振）と、投球図のボール/見逃し/空振りを分ける。
+export const replayPitchResult = (frame) =>
+  frame.pitchResult || (frame.result === 'walk' ? 'ball' : frame.result);

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import MobileTactics from './MobileTactics.jsx';
 import { PitcherRoles, AutoTactics } from './PreGameTactics.jsx';
-import { roleFor } from './tactics.js';
+import { roleFor, STRATEGY_FIELDS } from './tactics.js';
 import { useDraftState } from './Drafts.jsx';
 import GameHistory, { GameRecordButton } from './GameHistory.jsx';
 import { decisionText, formatRate, ownOutcome, teamShort } from './gameText.js';
@@ -802,33 +802,7 @@ export function LineupPanel({
         )}
         {!mobile && section === 'strategy' && (
           <>
-            {Object.entries({
-              batting: [
-                '打撃方針',
-                { balanced: 'バランス', patient: '慎重', aggressive: '積極' },
-              ],
-              pitching: [
-                '投球方針',
-                {
-                  balanced: 'バランス',
-                  strikeout: '三振狙い',
-                  contact: '打たせて取る',
-                },
-              ],
-              baseRunning: [
-                '走塁方針',
-                {
-                  normal: '標準',
-                  aggressive: '積極',
-                  conservative: '慎重',
-                  never: '盗塁しない',
-                },
-              ],
-              defense: [
-                '守備方針',
-                { normal: '標準', infield_in: '前進守備', shift: '守備シフト' },
-              ],
-            }).map(([key, [label, values]]) => (
+            {Object.entries(STRATEGY_FIELDS).map(([key, [label, values]]) => (
               <label key={key}>
                 {label}
                 <select

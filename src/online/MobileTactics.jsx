@@ -4,34 +4,12 @@ import { PageNav } from './PageNav.jsx';
 import { PlayerStatsButton, ConditionMark } from './PlayerPerformance.jsx';
 import {
   STARTER_ROLES,
+  STRATEGY_FIELDS,
   RELIEF_ROLES,
   TACTIC_FIELDS,
   TACTIC_DEFAULTS,
   roleFor,
 } from './tactics.js';
-const STRATEGY = {
-  batting: [
-    '打撃方針',
-    { balanced: 'バランス', patient: '慎重', aggressive: '積極' },
-  ],
-  pitching: [
-    '投球方針',
-    { balanced: 'バランス', strikeout: '三振狙い', contact: '打たせて取る' },
-  ],
-  baseRunning: [
-    '走塁方針',
-    {
-      normal: '標準',
-      aggressive: '積極',
-      conservative: '慎重',
-      never: '盗塁しない',
-    },
-  ],
-  defense: [
-    '守備方針',
-    { normal: '標準', infield_in: '前進守備', shift: '守備シフト' },
-  ],
-};
 const GROUPS = {
   basic: '基本方針',
   bunt: 'バント',
@@ -110,7 +88,7 @@ export default function MobileTactics({
       )}
       <fieldset disabled={busy} className="online-mobile-tactic-fields">
         {group === 'basic' &&
-          Object.entries(STRATEGY).map(([key, [label, options]]) => (
+          Object.entries(STRATEGY_FIELDS).map(([key, [label, options]]) => (
             <label key={key}>
               {label}
               <select
@@ -198,7 +176,9 @@ export default function MobileTactics({
         </>
       ) : (
         <p className="online-mobile-tactic-note">
-          次の試合から反映。状況判断はAIが行います。
+          {group === 'pitcher'
+            ? '球数による交代は打席の区切りで判断します。'
+            : '次の試合から反映。状況判断はAIが行います。'}
         </p>
       )}
     </MobilePanel>

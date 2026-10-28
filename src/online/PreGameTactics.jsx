@@ -55,7 +55,7 @@ export function AutoTactics({ plan, change }) {
   return (
     <section className="online-pregame-settings">
       <p>
-        AIが状況を判断する範囲を指定します。球数上限は役割の上限より低い場合に適用し、疲労限界による交代は維持します。
+        AIが状況を判断する範囲を指定します。球数上限は役割の上限より低い場合に打席の区切りで判断し、疲労限界による交代は維持します。
       </p>
       <div className="online-tactics-grid">
         {Object.entries(TACTIC_FIELDS).map(([key, [label, options]]) => (

@@ -11,6 +11,7 @@ import {
   projectTeamInfo,
 } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
+import { STRATEGY_FIELDS } from '../../src/online/tactics.js';
 const league = structuredClone(recordedFixture);
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -142,6 +143,17 @@ try {
   await watch.getByLabel('観戦位置').focus();
   await page.keyboard.press('End');
   const game = league.records.seasons[1].games[1];
+  const walkIndex = game.replay.frames.findIndex((f) => f.result === 'walk');
+  assert.ok(walkIndex >= 0, '四球のある実試合で投球図を検査');
+  await watch.getByLabel('観戦位置').press('Home');
+  for (let n = 0; n < walkIndex; n++)
+    await watch.getByLabel('観戦位置').press('ArrowRight');
+  const marker = watch.locator('.online-replay-pitch-zone svg > g').last();
+  assert.ok(
+    (await marker.locator('[stroke="#22c55e"]').count()) > 0,
+    '四球の最後の投球をボールの緑で表示',
+  );
+  await watch.getByLabel('観戦位置').press('End');
   assert.deepEqual(
     await watch
       .getByRole('table', { name: 'イニングスコア' })
@@ -151,6 +163,21 @@ try {
     '観戦末尾と実試合結果の得点一致',
   );
   await watch.getByText('この試合の自球団の事前設定', { exact: true }).click();
+  for (const [key, [label, options]] of Object.entries(STRATEGY_FIELDS)) {
+    assert.equal(
+      await watch
+        .locator('.online-replay-applied dt')
+        .filter({ hasText: new RegExp(`^${label}$`) })
+        .locator('..')
+        .locator('dd')
+        .innerText(),
+      options[
+        game.replay.appliedPlans[ownTeam].strategy[key] ??
+          Object.keys(options)[0]
+      ],
+      '実際の基本方針も観戦から確認できる',
+    );
+  }
   assert.ok(
     (await watch.locator('.online-replay-controls').boundingBox()).height < 70,
     'PCの再生操作は1行に収める',
