@@ -302,7 +302,7 @@ export const getPlayoffChampion = (schedule = []) => {
       : game.result.awayScore > game.result.homeScore ? game.away : null;
     if (winner) wins.set(winner, (wins.get(winner) || 0) + 1);
   }
-  const required = Math.ceil(finals.length / 2);
+  const required = finals[0].seriesWinsRequired || Math.ceil(finals.length / 2);
   return [...wins].find(([, count]) => count >= required)?.[0] || null;
 };
 
@@ -344,7 +344,7 @@ export const updatePlayoffProgress = (seasonData) => {
 
     // シリーズ決着判定: 最大試合数から必要勝数を計算（5試合→3勝、3試合→2勝、1試合→1勝）
     const maxGames = series.games.length;
-    const winsNeeded = maxGames === 1 ? 1 : Math.ceil(maxGames / 2);
+    const winsNeeded = series.games[0].seriesWinsRequired || (maxGames === 1 ? 1 : Math.ceil(maxGames / 2));
     const winner = teams.find(t => (wins[t] || 0) >= winsNeeded);
     if (winner) {
       series.games.forEach(g => {
