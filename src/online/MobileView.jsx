@@ -6,6 +6,7 @@ import {
   PhasePanel,
   LineupPanel,
 } from './LeaguePanels.jsx';
+import { CompactRoster } from './PlayerPerformance.jsx';
 export default function MobileView(props) {
   const { view } = props;
   const [tab, setTab] = useState('today');
@@ -37,6 +38,14 @@ export default function MobileView(props) {
         </>
       )}
       {tab === 'games' && <Results view={view} compact />}
+      {tab === 'players' && (
+        <>
+          <button className="online-back" onClick={() => setTab('lineup')}>
+            ← 打順に戻る
+          </button>
+          <CompactRoster view={view} />
+        </>
+      )}
       {tab === 'news' && (
         <>
           <button className="online-back" onClick={() => setTab('today')}>
@@ -45,20 +54,28 @@ export default function MobileView(props) {
           <Notices view={view} compact />
         </>
       )}
-      {tab === 'lineup' &&
-        (view.phase ? (
-          <section className="online-card">
-            <h2>打順</h2>
-            <p>{view.phase.label}の決定待ちです。キャンプ後に設定できます。</p>
-            <button onClick={() => setTab('decisions')}>手続きへ</button>
-          </section>
-        ) : (
-          <LineupPanel
-            key={`${view.year}:${view.teamName}`}
-            {...props}
-            mobile
-          />
-        ))}
+      {(tab === 'lineup' || tab === 'players') && (
+        <div hidden={tab === 'players'}>
+          {view.phase ? (
+            <section className="online-card">
+              <h2>打順</h2>
+              <p>
+                {view.phase.label}の決定待ちです。キャンプ後に設定できます。
+              </p>
+              <button onClick={() => setTab('decisions')}>手続きへ</button>
+              <button onClick={() => setTab('players')}>選手成績</button>
+            </section>
+          ) : (
+            <LineupPanel
+              key={`${view.year}:${view.teamName}`}
+              {...props}
+              mobile
+              onShowRoster={() => setTab('players')}
+              hidden={tab === 'players'}
+            />
+          )}
+        </div>
+      )}
       {tab === 'decisions' &&
         (view.phase ? (
           <PhasePanel key={view.phase.id} {...props} mobile />
@@ -74,7 +91,9 @@ export default function MobileView(props) {
             key={id}
             aria-label={label}
             aria-current={
-              tab === id || (id === 'today' && tab === 'news')
+              tab === id ||
+              (id === 'today' && tab === 'news') ||
+              (id === 'lineup' && tab === 'players')
                 ? 'page'
                 : undefined
             }

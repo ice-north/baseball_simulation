@@ -58,6 +58,7 @@ npx playwright install chromium
 npm run check:online:ui
 npm run check:online:auth-ui
 npm run check:online:edit-ui
+npm run check:online:label-ui
 ```
 
 インストール済みChromeを使う場合は `PLAYWRIGHT_CHROME_CHANNEL=chrome npm run check:online:ui`。
@@ -145,3 +146,5 @@ Supabaseの休止・容量上限・Storage/DBの復旧手段、Vercelの実測�
 
 第2回レビュー: [別タブの編集競合・保存世代の読取り・画面復帰](REVIEW_20261028_2.md)。
 PCで保存済みの提出が別タブから変更された場合は「最新の提出を読み直す」、編成は「編集を戻す」で再取得する。スマホの確認画面は最新の保存案へ追従する。保存中は入力を停止し、古い案による上書きをAPIでも拒否する。
+
+成績ラベル: [対人版だけの基本ラベル・表示・検証と後続範囲](PERFORMANCE_LABELS.md)。PCは「選手」、スマホは「打順」の選手名または「選手成績」から確認できる。

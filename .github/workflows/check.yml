@@ -49,6 +49,7 @@ jobs:
           ONLINE_TEST_URL=http://127.0.0.1:3000 npm run check:online:ui
           npm run check:online:auth-ui
           npm run check:online:edit-ui
+          npm run check:online:label-ui
 
       - name: Upload online UI evidence
         if: always()

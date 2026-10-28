@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { api, POS, MENUS } from './api.js';
 import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
+import { PlayerStatsButton } from './PlayerPerformance.jsx';
+import { PageNav } from './PageNav.jsx';
+export { PageNav } from './PageNav.jsx';
 
 export function Login({ local, login, busy }) {
   const [email, setEmail] = useState('');
@@ -89,33 +92,7 @@ export function Standings({ view }) {
     </section>
   );
 }
-export function PageNav({ page, count, size, setPage }) {
-  const pages = Math.max(1, Math.ceil(count / size));
-  useEffect(() => {
-    if (page >= pages) setPage(pages - 1);
-  }, [page, pages, setPage]);
-  return (
-    <div className="online-pager">
-      <button
-        aria-label="前のページ"
-        disabled={page <= 0}
-        onClick={() => setPage(page - 1)}
-      >
-        ←
-      </button>
-      <span>
-        {Math.min(page + 1, pages)} / {pages}
-      </span>
-      <button
-        aria-label="次のページ"
-        disabled={page >= pages - 1}
-        onClick={() => setPage(page + 1)}
-      >
-        →
-      </button>
-    </div>
-  );
-}
+
 export function Results({ view, compact = false }) {
   const [mode, setMode] = useState('results');
   const [page, setPage] = useState(0);
@@ -507,7 +484,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     </section>
   );
 }
-export function LineupPanel({ view, mobile, busy, run, command }) {
+export function LineupPanel({
+  view,
+  mobile,
+  busy,
+  run,
+  command,
+  onShowRoster,
+  hidden = false,
+}) {
   const [plan, setPlan] = useState(() => structuredClone(view.lineup));
   const [dirty, setDirty] = useState(false);
   const [baseLineup, setBaseLineup] = useState(() =>
@@ -536,9 +521,19 @@ export function LineupPanel({ view, mobile, busy, run, command }) {
   };
   const fielders = view.roster.filter((p) => p.position !== 'pitcher');
   return (
-    <section className="online-card online-lineup-card">
+    <section className="online-card online-lineup-card" hidden={hidden}>
       <fieldset className="online-form-fields" disabled={busy}>
-        <h2>{mobile ? '打順の入れ替え' : '編成・采配'}</h2>
+        <div className="online-card-heading">
+          <h2>{mobile ? '打順の入れ替え' : '編成・采配'}</h2>
+          {mobile && onShowRoster && (
+            <button
+              onClick={onShowRoster}
+              aria-label="投手・控えを含む選手成績 →"
+            >
+              選手成績
+            </button>
+          )}
+        </div>
         {!mobile && (
           <div className="online-segments">
             {[
@@ -570,7 +565,9 @@ export function LineupPanel({ view, mobile, busy, run, command }) {
                 <span>{POS[entry.position]}</span>
                 {mobile ? (
                   <span>
-                    {view.roster.find((p) => p.id === entry.playerId)?.name}
+                    <PlayerStatsButton
+                      player={view.roster.find((p) => p.id === entry.playerId)}
+                    />
                   </span>
                 ) : (
                   <select

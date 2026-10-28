@@ -73,3 +73,5 @@ SQLの実適用、RLS、Supabase Auth・トークン更新、実Storageの公開
 追加レビューの指摘と再現条件は [REVIEW_20261028.md](REVIEW_20261028.md) に記録。認証競合は `npm run check:online:auth-ui`、サーバー境界と復元は `check:online` で再現する。
 
 第2回レビューは [REVIEW_20261028_2.md](REVIEW_20261028_2.md)。同一ログインの別タブで提出・編成を保存し、古い入力を保持する側が最新revisionを取得しても上書きできないことを確認する。`check:online:edit-ui` は標準案の読込み失敗・別手続きの応答・保存中入力・スマホ確認と一覧縮小を配布HTML/API fixtureで検査する。
+
+成績ラベルは [PERFORMANCE_LABELS.md](PERFORMANCE_LABELS.md)。通常ゲームのソース変更がないこと、サーバーが自チーム以外の3球団も平均に含めること、欠損から盗塁成功率を作らないこと、ラベルを試合計算に使わないことを確認する。`check:online:label-ui`で閲覧・投打切替・打順の未保存編集の保持を再現できる。

@@ -8,6 +8,7 @@ import {
   PageNav,
 } from './LeaguePanels.jsx';
 import { POS } from './api.js';
+import { PlayerStatsButton, StatLabels } from './PlayerPerformance.jsx';
 export default function DesktopView(props) {
   const { view } = props;
   const [tab, setTab] = useState('today');
@@ -110,9 +111,21 @@ export default function DesktopView(props) {
 }
 function Roster({ view }) {
   const [page, setPage] = useState(0);
+  const [category, setCategory] = useState('batting');
   return (
     <section className="online-card">
       <h2>所属選手 · {view.roster.length}人</h2>
+      <div className="online-segments" aria-label="成績区分">
+        {['batting', 'pitching'].map((id) => (
+          <button
+            key={id}
+            aria-pressed={category === id}
+            onClick={() => setCategory(id)}
+          >
+            {id === 'batting' ? '打撃' : '投球'}
+          </button>
+        ))}
+      </div>
       <table>
         <thead>
           <tr>
@@ -129,7 +142,10 @@ function Roster({ view }) {
         <tbody>
           {view.roster.slice(page * 10, page * 10 + 10).map((p) => (
             <tr key={p.id}>
-              <th>{p.name}</th>
+              <th>
+                <PlayerStatsButton player={p} category={category} />
+                <StatLabels player={p} category={category} />
+              </th>
               <td>{p.age}</td>
               <td>{POS[p.position]}</td>
               <td>{p.batting?.meet ?? '–'}</td>

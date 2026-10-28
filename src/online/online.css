@@ -617,7 +617,7 @@
   .online-decision .online-actions button {
     flex: 1;
   }
-  .online:has(.online-lineup-card) main,
+  .online:has(.online-lineup-card:not([hidden])) main,
   .online:has(.online-decision) main {
     padding-bottom: 150px;
   }
@@ -715,4 +715,106 @@
   padding: 10px;
   margin-bottom: 12px;
   background: var(--accent-soft);
+}
+
+.online .online-player-name {
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+.online-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.online-card-heading h2 {
+  margin: 0;
+}
+.online-mobile .online-card-heading button {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+.online-stat-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+  font-weight: normal;
+}
+.online-stat-label {
+  display: inline-block;
+  border: 1px solid #668196;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+.online-stat-bad {
+  border-color: #af9393;
+}
+.online-player-dialog {
+  background: var(--surface-2);
+  color: #f1f5f9;
+  border: 1px solid #668196;
+  border-radius: 10px;
+  padding: 16px;
+  width: min(430px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+}
+.online-player-dialog::backdrop {
+  background: #0f172ab3;
+}
+.online-player-dialog header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.online-player-dialog h2 {
+  margin: 0 0 5px;
+  font-size: 18px;
+}
+.online-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 18px 0 0;
+}
+.online-stat-grid dt {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-stat-grid dd {
+  margin: 3px 0 0;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.online-compact-roster article {
+  padding: 4px 0;
+  border-bottom: 1px solid #668196;
+}
+.online-compact-roster article > small {
+  margin-left: 10px;
+  color: #cbd5e1;
+}
+.online-mobile .online-lineup .online-player-name {
+  font-size: 12px;
+  line-height: 1.4;
+}
+.online-mobile:has(.online-compact-roster) .online-season,
+.online-mobile:has(.online-compact-roster) .online-clock-info {
+  display: none;
 }

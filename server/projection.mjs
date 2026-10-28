@@ -1,4 +1,5 @@
 import { PHASE_LABELS } from '../src/online/shared.js';
+import { leagueComparison, performanceFor } from './performanceLabels.mjs';
 
 const playerView = (p) => ({
   id: p.id,
@@ -26,6 +27,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   const member = l.members.find((m) => m.userId === userId);
   if (!member) return null;
   const team = l.game.teams[member.teamName];
+  const comparison = leagueComparison(l);
   const phase = l.phase;
   return {
     revision: l.revision,
@@ -57,7 +59,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       .filter((g) => !g.result && g.home !== 'TBD' && g.away !== 'TBD')
       .slice(0, 6)
       .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away })),
-    roster: team.players.map(playerView),
+    roster: team.players.map((p) => ({
+      ...playerView(p),
+      performance: performanceFor(p, comparison),
+    })),
     lineup: projectLineup(team),
     phase: phase
       ? {
