@@ -5,6 +5,7 @@ import { api, AUTH_KEY, dateTime, STATUS } from './api.js';
 import { Login } from './LeaguePanels.jsx';
 import DesktopView from './DesktopView.jsx';
 import MobileView from './MobileView.jsx';
+import { Drafts } from './Drafts.jsx';
 import {
   readAuth,
   sameSession,
@@ -358,33 +359,38 @@ export default function OnlineApp() {
                 {view.error}
               </p>
             )}
-            {mobile ? (
-              <MobileView
-                tab={screen === 'admin' ? 'today' : screen}
-                setTab={setScreen}
-                view={view}
-                local={config.local}
-                loading={busy}
-                reloadView={() => run(reload)}
-                logout={logout}
-                showTimes={() => setShowTimes(true)}
-                auth={auth}
-                busy={busy || !view.writable}
-                run={run}
-                command={command}
-              />
-            ) : (
-              <DesktopView
-                tab={screen === 'news' ? 'games' : screen}
-                setTab={setScreen}
-                view={view}
-                auth={auth}
-                local={config.local}
-                busy={busy || !view.writable}
-                run={run}
-                command={command}
-              />
-            )}
+            <Drafts
+              key={`${auth.userId}:${auth.sessionId}:${view.year}:${view.teamName}:${view.phase?.id || 'season'}`}
+              scope={`${auth.userId}:${auth.sessionId}:${view.year}:${view.teamName}:${view.phase?.id || 'season'}`}
+            >
+              {mobile ? (
+                <MobileView
+                  tab={screen === 'admin' ? 'today' : screen}
+                  setTab={setScreen}
+                  view={view}
+                  local={config.local}
+                  loading={busy}
+                  reloadView={() => run(reload)}
+                  logout={logout}
+                  showTimes={() => setShowTimes(true)}
+                  auth={auth}
+                  busy={busy || !view.writable}
+                  run={run}
+                  command={command}
+                />
+              ) : (
+                <DesktopView
+                  tab={screen === 'news' ? 'games' : screen}
+                  setTab={setScreen}
+                  view={view}
+                  auth={auth}
+                  local={config.local}
+                  busy={busy || !view.writable}
+                  run={run}
+                  command={command}
+                />
+              )}
+            </Drafts>
           </>
         )}
         {showTimes && (

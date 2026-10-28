@@ -132,6 +132,100 @@ async function click(page, text) {
     .waitFor({ state: 'hidden' });
 }
 try {
+  const draft = await scene();
+  draft.page.on('dialog', (dialog) => dialog.accept());
+  await click(draft.page, '手続き');
+  await draft.page.getByLabel('球団の主練習（全4回）').selectOption('velocity');
+  await click(draft.page, '今日');
+  await click(draft.page, '手続き');
+  assert.equal(
+    await draft.page.getByLabel('球団の主練習（全4回）').inputValue(),
+    'velocity',
+    '画面移動でも提出案を保持',
+  );
+  await draft.page.setViewportSize({ width: 390, height: 844 });
+  await draft.page.getByText('練習方針: 球速練習', { exact: false }).waitFor();
+  await draft.page
+    .getByText('編集中の内容（未保存）です。', { exact: false })
+    .waitFor();
+  await draft.page.reload();
+  await click(draft.page, '手続き');
+  await draft.page.getByText('練習方針: 球速練習', { exact: false }).waitFor();
+  await draft.page.setViewportSize({ width: 1280, height: 844 });
+  assert.equal(
+    await draft.page.getByLabel('球団の主練習（全4回）').inputValue(),
+    'velocity',
+    '再読込・表示切替後も未保存案を復元',
+  );
+  draft.view.phase.id = '2:camp';
+  draft.view.revision++;
+  await click(draft.page, '更新');
+  await draft.page.waitForFunction(
+    () =>
+      document.querySelector('.online-decision select')?.value === 'standard',
+  );
+  assert.equal(draft.payloads.length, 0, '復元するだけで自動送信しない');
+  await draft.context.close();
+
+  const lineupDraft = await scene();
+  lineupDraft.page.on('dialog', (dialog) => dialog.accept());
+  lineupDraft.view.phase = null;
+  lineupDraft.view.status = 'running';
+  const positions = [
+    'catcher',
+    'first',
+    'second',
+    'third',
+    'short',
+    'left',
+    'center',
+    'right',
+  ];
+  lineupDraft.view.roster = positions.map((position, i) => ({
+    id: i + 1,
+    name: `打者${i + 1}`,
+    position,
+    condition: 2,
+  }));
+  lineupDraft.view.lineup.battingOrder = positions.map((position, i) => ({
+    playerId: i + 1,
+    position,
+    battingOrder: i + 1,
+  }));
+  await click(lineupDraft.page, '更新');
+  await click(lineupDraft.page, '編成');
+  await click(lineupDraft.page, '2番を上げる');
+  await click(lineupDraft.page, '今日');
+  await click(lineupDraft.page, '編成');
+  assert.equal(
+    await lineupDraft.page
+      .getByLabel('1番の選手', { exact: true })
+      .inputValue(),
+    '2',
+  );
+  await lineupDraft.page.setViewportSize({ width: 390, height: 844 });
+  await lineupDraft.page
+    .getByRole('button', { name: '打者2の選手情報を見る', exact: true })
+    .waitFor();
+  await lineupDraft.page.reload();
+  await click(lineupDraft.page, '打順');
+  await lineupDraft.page.setViewportSize({ width: 1280, height: 844 });
+  assert.equal(
+    await lineupDraft.page
+      .getByLabel('1番の選手', { exact: true })
+      .inputValue(),
+    '2',
+    '編成もホーム移動・表示切替・再読込を通して保持',
+  );
+  await click(lineupDraft.page, '編集を戻す');
+  assert.equal(
+    await lineupDraft.page
+      .getByLabel('1番の選手', { exact: true })
+      .inputValue(),
+    '1',
+  );
+  await lineupDraft.context.close();
+
   const retry = await scene({ defaultsFail: true });
   await click(retry.page, '手続き');
   await retry.page

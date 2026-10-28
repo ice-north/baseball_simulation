@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useDraftState } from './Drafts.jsx';
 import { api, POS, MENUS } from './api.js';
 import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
 import {
@@ -264,9 +265,13 @@ export function Notices({ view, compact = false }) {
 
 export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const phase = view.phase;
-  const [plan, setPlan] = useState(phase.submission?.plan || null);
+  const [plan, setPlan] = useDraftState(
+    'phase.plan',
+    phase.submission?.plan || null,
+  );
+  const [dirty, setDirty] = useDraftState('phase.dirty', false);
   const [planRevision, setPlanRevision] = useState(null);
-  const [baseSubmission, setBaseSubmission] = useState(() =>
+  const [baseSubmission, setBaseSubmission] = useDraftState('phase.base', () =>
     structuredClone(phase.submission || null),
   );
   const [error, setError] = useState('');
@@ -297,11 +302,18 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     phase.submission || null,
   );
   useEffect(() => {
-    if (mobile && submissionChanged) {
+    if (mobile && submissionChanged && !dirty) {
       setPlan(phase.submission ? structuredClone(phase.submission.plan) : null);
       setBaseSubmission(structuredClone(phase.submission || null));
     }
-  }, [mobile, submissionChanged, phase.submission]);
+  }, [
+    mobile,
+    submissionChanged,
+    phase.submission,
+    dirty,
+    setPlan,
+    setBaseSubmission,
+  ]);
   const submit = (ready) =>
     run(async () => {
       await command('submit', {
@@ -311,6 +323,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         baseSubmission,
       });
       setBaseSubmission({ plan: structuredClone(plan), ready });
+      setDirty(false);
     });
   const resetSubmission = () =>
     run(async () => {
@@ -327,12 +340,14 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         }
         setPlan(structuredClone(next));
         setBaseSubmission(structuredClone(phase.submission || null));
+        setDirty(false);
       } catch (error) {
         setError(error.message);
         throw error;
       }
     });
   const move = (index, delta) => {
+    setDirty(true);
     const rankedIds = [...plan.rankedIds];
     [rankedIds[index], rankedIds[index + delta]] = [
       rankedIds[index + delta],
@@ -364,7 +379,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
             </button>
           </div>
         )}
-        {!mobile && submissionChanged && (
+        {submissionChanged && (!mobile || dirty) && (
           <div role="alert" className="online-edit-notice">
             <p>
               別の操作で提出が更新されました。現在の入力を破棄して保存済みの内容を読み直せます。
@@ -384,9 +399,11 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                       ? `退団予定 ${plan.releaseIds.length}人`
                       : 'シーズンを締めて次年度へ進みます。'}
                 <br />
-                {phase.submission
-                  ? '保存済みの内容を確認します。'
-                  : '標準案を使用します。'}{' '}
+                {dirty
+                  ? '編集中の内容（未保存）です。'
+                  : phase.submission
+                    ? '保存済みの内容を確認します。'
+                    : '標準案を使用します。'}{' '}
                 詳細はPCで調整できます。
               </p>
             ) : (
@@ -401,9 +418,10 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                         min="0"
                         max={Math.max(0, 24 - view.roster.length)}
                         value={plan.count}
-                        onChange={(e) =>
-                          setPlan({ ...plan, count: Number(e.target.value) })
-                        }
+                        onChange={(e) => {
+                          setDirty(true);
+                          setPlan({ ...plan, count: Number(e.target.value) });
+                        }}
                       />
                     </label>
                     <p>
@@ -472,13 +490,14 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                           <input
                             type="checkbox"
                             checked={plan.releaseIds.includes(p.id)}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              setDirty(true);
                               setPlan({
                                 releaseIds: e.target.checked
                                   ? [...plan.releaseIds, p.id]
                                   : plan.releaseIds.filter((id) => id !== p.id),
-                              })
-                            }
+                              });
+                            }}
                           />
                           {p.name}（{p.age}歳 / {POS[p.position]}）
                         </label>
@@ -494,7 +513,10 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                     球団の主練習（全4回）
                     <select
                       value={plan.menu}
-                      onChange={(e) => setPlan({ menu: e.target.value })}
+                      onChange={(e) => {
+                        setDirty(true);
+                        setPlan({ menu: e.target.value });
+                      }}
                     >
                       {Object.entries(MENUS).map(([id, label]) => (
                         <option value={id} key={id}>
@@ -551,9 +573,11 @@ export function LineupPanel({
   onShowRoster,
   hidden = false,
 }) {
-  const [plan, setPlan] = useState(() => structuredClone(view.lineup));
-  const [dirty, setDirty] = useState(false);
-  const [baseLineup, setBaseLineup] = useState(() =>
+  const [plan, setPlan] = useDraftState('lineup.plan', () =>
+    structuredClone(view.lineup),
+  );
+  const [dirty, setDirty] = useDraftState('lineup.dirty', false);
+  const [baseLineup, setBaseLineup] = useDraftState('lineup.base', () =>
     structuredClone(view.lineup),
   );
   const [section, setSection] = useState('batting');
@@ -562,7 +586,7 @@ export function LineupPanel({
       setPlan(structuredClone(view.lineup));
       setBaseLineup(structuredClone(view.lineup));
     }
-  }, [view.lineup, dirty]);
+  }, [view.lineup, dirty, setPlan, setBaseLineup]);
   const change = (next) => {
     setPlan(next);
     setDirty(true);
