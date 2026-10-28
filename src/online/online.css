@@ -1060,6 +1060,59 @@
 .online-ability-grade {
   font-weight: 750;
 }
+.online-game-dialog {
+  width: min(640px, calc(100% - 24px));
+}
+.online-player-dialog .online-stat-tools select {
+  min-width: 0;
+  width: 0;
+  flex: 1;
+  font-size: 12px;
+}
+.online-record-table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.online-record-table th:first-child {
+  width: 36%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-record-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.online-record-table th,
+.online-record-table td {
+  padding: 6px 2px;
+  height: 44px;
+}
+.online-record-table th button {
+  padding: 0;
+  border: 0;
+  font-size: 10px;
+  min-width: 0;
+  width: 100%;
+}
+.online-game-history-list article {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 12px;
+  border-bottom: 1px solid #536b85;
+}
+.online-game-history-list article > span {
+  flex: 1;
+  min-width: 0;
+}
+.online-game-history-list article button {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 4px;
+}
 .online-roster-name small {
   font-size: 11px;
   margin-left: 8px;

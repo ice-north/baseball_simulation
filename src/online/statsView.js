@@ -168,6 +168,16 @@ export const STAT_GROUPS = {
       ],
     },
     {
+      id: 'sacrifices',
+      label: '犠打飛・守備補助',
+      columns: [
+        b('sacrificeBunts', '犠打'),
+        b('sacrificeFlies', '犠飛'),
+        b('hitByPitch', '死球'),
+        b('assists', '捕殺'),
+      ],
+    },
+    {
       id: 'running',
       label: '走塁',
       columns: [
@@ -273,6 +283,16 @@ export const STAT_GROUPS = {
         p('wins', '勝利'),
         p('losses', '敗戦', 'asc'),
         p('saves', 'セーブ'),
+      ],
+    },
+    {
+      id: 'usage',
+      label: '先発・対戦打者',
+      columns: [
+        p('gamesStarted', '先発'),
+        p('battersFaced', '対戦打者'),
+        p('hitBatters', '死球', 'asc'),
+        p('wildPitches', '暴投', 'asc'),
       ],
     },
     {

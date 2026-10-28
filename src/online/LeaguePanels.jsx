@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDraftState } from './Drafts.jsx';
+import GameHistory, { GameRecordButton } from './GameHistory.jsx';
 import { api, POS, MENUS } from './api.js';
 import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
 import {
@@ -172,6 +173,9 @@ export function Results({ view, compact = false }) {
                   .join('・')}
               </small>
             )}
+            {mode === 'results' && view.gameDetailsAvailable && (
+              <GameRecordButton game={g} year={view.year} />
+            )}
           </article>
         ))
       ) : (
@@ -182,6 +186,7 @@ export function Results({ view, compact = false }) {
         </p>
       )}
       <PageNav page={page} count={list.length} size={size} setPage={setPage} />
+      {view.gameDetailsAvailable && <GameHistory view={view} />}
     </section>
   );
 }

@@ -247,6 +247,52 @@ try {
     path: '/tmp/baseball-online-mobile-results.png',
     fullPage: true,
   });
+  const boxResponse = m.waitForResponse(
+    (response) => new URL(response.url()).searchParams.get('action') === 'game',
+  );
+  await m
+    .getByRole('button', { name: /の試合成績$/ })
+    .first()
+    .click();
+  const boxData = await (await boxResponse).json();
+  assert.ok(
+    boxData.teams?.[boxData.home]?.length > 0,
+    '実試合から保存された個人成績を取得',
+  );
+  const box = m.getByRole('dialog', { name: '試合成績', exact: true });
+  await box.locator('tbody tr').first().waitFor();
+  await box
+    .getByRole('button', { name: '試合成績を閉じる', exact: true })
+    .click();
+  const historyResponse = m.waitForResponse(
+    (response) =>
+      new URL(response.url()).searchParams.get('action') === 'games',
+  );
+  await click(m, '過去の試合・個人成績');
+  assert.ok((await (await historyResponse).json()).count > 0);
+  await m
+    .getByRole('button', { name: '試合記録を閉じる', exact: true })
+    .click();
+  await click(m, 'ホーム');
+  await click(m, '選手成績');
+  const playerResponse = m.waitForResponse(
+    (response) =>
+      new URL(response.url()).searchParams.get('action') === 'player',
+  );
+  await m.locator('.online-roster-row').first().click();
+  const playerData = await (await playerResponse).json();
+  assert.ok(
+    playerData.periods.find((period) => period.id === 'current')?.seasonStats
+      ?.batting?.measured,
+    '実APIの対人記録と期間を閲覧',
+  );
+  const playerDialog = m.getByRole('dialog');
+  await playerDialog
+    .getByRole('button', { name: '場面別', exact: true })
+    .click();
+  await playerDialog
+    .getByRole('button', { name: '選手成績を閉じる', exact: true })
+    .click();
   // 同じoriginでも一人用の保存キーへ書き込まない。
   assert.deepEqual(await m.evaluate(() => Object.keys(localStorage)), [
     'baseball-online-auth-v1',

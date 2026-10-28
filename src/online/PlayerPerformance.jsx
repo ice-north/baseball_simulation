@@ -3,6 +3,8 @@ import { POS } from './api.js';
 import { formatGameDate } from './shared.js';
 import { PageNav } from './PageNav.jsx';
 import PlayerAbilities from './PlayerAbilities.jsx';
+import { useRead } from './useRead.js';
+import SplitStats from './SplitStats.jsx';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import {
   STAT_GROUPS,
@@ -77,6 +79,22 @@ const SHORT_LABELS = {
   'pitch-bb': '四球',
   control: '制球○',
   'pitch-hr': '一発',
+  'chance-good': '好機B',
+  'chance-bad': '好機F',
+  'pinch-good': '対ピB',
+  'pinch-bad': '対ピF',
+  'left-good': '対左B',
+  'left-bad': '対左F',
+  'pinch-hit': '代打○',
+  'first-pitch': '初球○',
+  persistent: '粘り',
+  'bunt-good': 'バン○',
+  'bunt-bad': 'バン×',
+  'double-play': '併殺',
+  'start-good': '立上○',
+  'start-bad': '出遅れ',
+  'strong-finish': '尻上り',
+  'multi-hit': '固打ち',
 };
 
 export function StatLabels({
@@ -128,7 +146,7 @@ export function ConditionMark({ player }) {
     </span>
   );
 }
-function GroupSelect({ category, value, onChange }) {
+function GroupSelect({ category, value, onChange, historic = false }) {
   return (
     <select
       className="online-stat-group"
@@ -136,16 +154,21 @@ function GroupSelect({ category, value, onChange }) {
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >
-      {STAT_GROUPS[category].map((group) => (
-        <option key={group.id} value={group.id}>
-          {group.label}
-        </option>
-      ))}
+      {STAT_GROUPS[category]
+        .filter(
+          (group) =>
+            !historic || !['state', 'abilities', 'defense'].includes(group.id),
+        )
+        .map((group) => (
+          <option key={group.id} value={group.id}>
+            {group.label}
+          </option>
+        ))}
     </select>
   );
 }
-function Approximation({ columns }) {
-  return columns.some((column) => column.approximate) ? (
+function Approximation({ columns, precise = false }) {
+  return !precise && columns.some((column) => column.approximate) ? (
     <small className="online-stat-note">※ 出塁率・OPS・打席関連は概算</small>
   ) : null;
 }
@@ -154,6 +177,19 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
   const [category, setCategory] = useState(initialCategory);
   const [groupId, setGroupId] = useState(initialGroup);
   const [pane, setPane] = useState(initialPane);
+  const [periodId, setPeriodId] = useState('current');
+  const info = useRead(player.detailAvailable ? 'player' : null, {
+    id: player.id,
+  });
+  const period =
+    info.data?.periods.find((p) => p.id === periodId) || info.data?.periods[0];
+  const shown = period
+    ? {
+        ...player,
+        seasonStats: period.seasonStats,
+        performance: period.performance,
+      }
+    : player;
   useEffect(() => {
     const node = dialog.current;
     const trigger = document.activeElement;
@@ -185,9 +221,15 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
         <div>
           <h2 id="online-player-title">{player.name}</h2>
           <small>
-            今季 · {POS[player.position]} · <ConditionMark player={player} />
-            {CONDITION_TEXT[conditionValue(player)] || '調子未記録'} · 疲労
-            {player.fatigue ?? '—'}
+            {pane === 'abilities' ? '現在' : period?.label || '今季'} ·{' '}
+            {POS[player.position]} ·{' '}
+            {(pane === 'abilities' || periodId === 'current') && (
+              <>
+                <ConditionMark player={player} />
+                {CONDITION_TEXT[conditionValue(player)] || '調子未記録'} · 疲労
+                {player.fatigue ?? '—'}
+              </>
+            )}
           </small>
         </div>
         <button onClick={dismiss} aria-label="選手成績を閉じる">
@@ -207,7 +249,45 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
         >
           能力・人物
         </button>
+        <button
+          aria-pressed={pane === 'splits'}
+          onClick={() => setPane('splits')}
+        >
+          場面別
+        </button>
       </nav>
+      {pane !== 'abilities' && (
+        <>
+          {info.data?.periods.length > 1 && (
+            <select
+              aria-label="成績の期間"
+              value={period?.id || 'current'}
+              onChange={(e) => {
+                setPeriodId(e.target.value);
+                setGroupId('basic');
+              }}
+            >
+              {info.data.periods.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {period && (
+            <small className="online-stat-note">
+              {period.source}
+              {period.partial ? '・記録開始後の場面集計' : ''}
+            </small>
+          )}
+          {info.error && (
+            <div role="alert">
+              {info.error}
+              <button onClick={info.retry}>選手記録を再取得</button>
+            </div>
+          )}
+        </>
+      )}
       {pane === 'stats' ? (
         <>
           <div className="online-stat-tools">
@@ -222,21 +302,37 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
               category={category}
               value={group.id}
               onChange={setGroupId}
+              historic={periodId !== 'current'}
             />
           </div>
-          <StatLabels player={player} category={category} />
+          <StatLabels player={shown} category={category} />
           <dl className="online-stat-grid">
             {group.columns.map((column) => (
               <div key={column.id}>
                 <dt>
                   {column.label}
-                  {column.approximate ? '※' : ''}
+                  {column.approximate && !shown.seasonStats?.batting?.measured
+                    ? '※'
+                    : ''}
                 </dt>
-                <dd>{formatStat(column, column.get(player), true)}</dd>
+                <dd>{formatStat(column, column.get(shown), true)}</dd>
               </div>
             ))}
           </dl>
-          <Approximation columns={group.columns} />
+          <Approximation
+            columns={group.columns}
+            precise={!!shown.seasonStats?.batting?.measured}
+          />
+        </>
+      ) : pane === 'splits' ? (
+        <>
+          <Category value={category} setValue={setCategory} />
+          <StatLabels player={shown} category={category} />
+          {info.loading ? (
+            <p>記録を読み込んでいます…</p>
+          ) : (
+            <SplitStats period={period} category={category} />
+          )}
         </>
       ) : (
         <PlayerAbilities player={player} />
@@ -424,7 +520,10 @@ export function CompactRoster({ view, desktop = false }) {
           </article>
         ))}
       </div>
-      <Approximation columns={group.columns} />
+      <Approximation
+        columns={group.columns}
+        precise={view.roster.every((p) => p.seasonStats?.batting?.measured)}
+      />
       <PageNav
         page={page}
         count={view.roster.length}

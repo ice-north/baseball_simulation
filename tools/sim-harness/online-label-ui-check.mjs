@@ -2,7 +2,17 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { projectLeague } from '../../server/projection.mjs';
+import {
+  projectLeague,
+  projectPlayerInfo,
+  projectGameInfo,
+  projectGames,
+} from '../../server/projection.mjs';
+import {
+  zeroLine,
+  BATTING_KEYS,
+  PITCHING_KEYS,
+} from '../../src/online/recordStats.js';
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
   'utf8',
@@ -150,6 +160,97 @@ const league = {
     ),
   },
 };
+league.season.year = 2;
+const line = (hits) => ({ ...zeroLine(), pa: 20, atBats: 20, hits });
+const key = `A:1:${stars[0].name}`;
+const annual = {
+  key,
+  id: 1,
+  name: stars[0].name,
+  teams: ['A'],
+  stats: {
+    batting: {
+      ...zeroLine(BATTING_KEYS),
+      games: 20,
+      plateAppearances: 40,
+      atBats: 40,
+      hits: 12,
+    },
+    pitching: zeroLine(PITCHING_KEYS),
+  },
+  splits: {
+    batting: {
+      all: { ...zeroLine(), pa: 40, atBats: 40, hits: 12 },
+      risp: line(10),
+      emptyRisp: line(2),
+    },
+    pitching: {},
+  },
+  games: [],
+  starts: [],
+};
+const oldGames = Object.fromEntries(
+  Array.from({ length: 20 }, (_, i) => {
+    const home = i % 3 === 0 ? 'C' : 'A',
+      away = i % 3 === 0 ? 'D' : 'B';
+    return [
+      i + 1,
+      {
+        gameId: i + 1,
+        year: 1,
+        date: { year: 2024, month: 4, day: i + 1 },
+        home,
+        away,
+        homeScore: 4,
+        awayScore: 2,
+        teams: {
+          [home]: stars.slice(0, 12).map((p, n) => ({
+            id: p.id,
+            name: p.name,
+            battingOrder: n < 9 ? n + 1 : 0,
+            batting: {
+              ...zeroLine(BATTING_KEYS),
+              plateAppearances: 12,
+              atBats: 12,
+              hits: n + 1,
+              rbis: n,
+            },
+            pitching: {
+              ...zeroLine(PITCHING_KEYS),
+              pitches: n === 8 ? 80 : 0,
+              inningsPitched: n === 8 ? 18 : 0,
+            },
+          })),
+          [away]: [],
+        },
+      },
+    ];
+  }),
+);
+league.records = {
+  version: 1,
+  seasons: {
+    1: {
+      year: 1,
+      league: 'shikoku',
+      complete: true,
+      players: { [key]: annual },
+      games: oldGames,
+      comparison: null,
+    },
+  },
+};
+stars[0].statsHistory = [
+  {
+    year: 1,
+    batting: { ...stars[0].seasonStats.batting, hitByPitch: 2 },
+    pitching: stars[0].seasonStats.pitching,
+  },
+];
+stars[0].careerStats = {
+  batting: { atBats: 100, hits: 45 },
+  pitching: { inningsPitched: 54, strikeouts: 10 },
+};
 const view = projectLeague(
   { league, sessions: { a: 'fixture' } },
   'a',
@@ -223,12 +324,37 @@ async function scene(width, height = 844, scale = 1) {
       return route.fulfill({ contentType: 'text/html', body: html });
     const action = new URL(route.request().url()).searchParams.get('action');
     assert.ok(
-      ['config', 'view'].includes(action),
+      ['config', 'view', 'player', 'game', 'games'].includes(action),
       '閲覧だけで更新APIを呼ばない',
     );
     return route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify(action === 'config' ? { local: true } : view),
+      body: JSON.stringify(
+        action === 'config'
+          ? { local: true }
+          : action === 'player'
+            ? projectPlayerInfo(
+                { league },
+                'a',
+                new URL(route.request().url()).searchParams.get('id'),
+              )
+            : action === 'game'
+              ? projectGameInfo(
+                  { league },
+                  'a',
+                  new URL(route.request().url()).searchParams.get('id'),
+                  new URL(route.request().url()).searchParams.get('year'),
+                )
+              : action === 'games'
+                ? projectGames(
+                    { league },
+                    'a',
+                    Object.fromEntries(
+                      new URL(route.request().url()).searchParams,
+                    ),
+                  )
+                : view,
+      ),
     });
   });
   const page = await context.newPage();
@@ -354,6 +480,25 @@ try {
       path: `/tmp/baseball-online-labels-mobile-${width}.png`,
       fullPage: true,
     });
+    await d.getByLabel('成績の期間').selectOption('online:1');
+    await d.getByRole('button', { name: '場面別', exact: true }).click();
+    assert.deepEqual(
+      await d.locator('.online-stat-grid dd').allTextContents(),
+      ['20', '.500', '.500', '1.000'],
+      '過去年の場面別集計を取得できる',
+    );
+    await d.getByLabel('場面別の区分').selectOption('emptyRisp');
+    assert.deepEqual(
+      await d.locator('.online-stat-grid dd').allTextContents(),
+      ['20', '.100', '.100', '.200'],
+    );
+    await d.getByRole('button', { name: '成績', exact: true }).click();
+    await d.getByLabel('成績の期間').selectOption('career');
+    await d.getByText('.300', { exact: true }).waitFor();
+    await d.getByLabel('成績の期間').selectOption('legacy-career');
+    await d.getByLabel('成績の表示項目').selectOption('discipline');
+    await d.getByText('2', { exact: true }).waitFor();
+    await d.getByLabel('成績の期間').selectOption('current');
     await d
       .getByRole('button', { name: '選手成績を閉じる', exact: true })
       .click();
@@ -602,6 +747,60 @@ try {
       1,
       '選手成績を見て戻っても編集中の打順を維持する',
     );
+    await m.setViewportSize({ width, height: 640 });
+    await m.getByRole('button', { name: 'ホーム', exact: true }).click();
+    await m.getByRole('button', { name: '試合', exact: true }).click();
+    await m
+      .getByRole('button', { name: '過去の試合・個人成績', exact: true })
+      .click();
+    const historyPanel = m.getByRole('dialog', {
+      name: '試合記録',
+      exact: true,
+    });
+    await historyPanel.getByLabel('試合記録の年度').selectOption('1');
+    await historyPanel
+      .locator('.online-game-history-list article')
+      .first()
+      .waitFor();
+    await historyPanel.getByLabel('試合記録の範囲').selectOption('league');
+    await historyPanel
+      .getByRole('button', { name: 'A対Bの試合成績', exact: true })
+      .first()
+      .click();
+    const box = m.getByRole('dialog', { name: '試合成績', exact: true });
+    await box
+      .getByRole('button', { name: '安打で並べ替え', exact: true })
+      .click();
+    assert.equal(
+      await box.locator('tbody tr').first().locator('th').innerText(),
+      '成績選手12',
+      '試合の全出場選手をソートしてからページ分割',
+    );
+    assert.ok(
+      await box.evaluate((node) => node.scrollHeight <= node.clientHeight + 1),
+      '打撃成績も6人ずつで縦スクロールなし',
+    );
+    await box.getByLabel('試合成績の表示項目').selectOption('pitching:basic');
+    await box.getByText('6.0', { exact: true }).waitFor();
+    await m.setViewportSize({ width, height: 640 });
+    assert.ok(
+      await box.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+      '試合成績が横にはみ出さない',
+    );
+    assert.ok(
+      await box.evaluate((node) => node.scrollHeight <= node.clientHeight + 1),
+      '試合成績で長いスクロールを要求しない',
+    );
+    await m.screenshot({
+      path: `/tmp/baseball-online-game-record-${width}.png`,
+      fullPage: true,
+    });
+    await box
+      .getByRole('button', { name: '試合成績を閉じる', exact: true })
+      .click();
+    await historyPanel
+      .getByRole('button', { name: '試合記録を閉じる', exact: true })
+      .click();
     await c.close();
   }
   assert.deepEqual(errors, []);

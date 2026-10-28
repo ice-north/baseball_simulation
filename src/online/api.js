@@ -41,23 +41,26 @@ export const dateTime = (value) =>
         minute: '2-digit',
       })
     : '停止中';
-export async function api(action, auth, body) {
+export async function api(action, auth, body, query = {}) {
   let response;
   try {
-    response = await fetch(`/api/online?action=${action}`, {
-      method: body ? 'POST' : 'GET',
-      headers: {
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-        ...(auth
-          ? {
-              Authorization: `Bearer ${auth.accessToken}`,
-              'X-Online-Session': auth.sessionId,
-            }
-          : {}),
+    response = await fetch(
+      `/api/online?${new window.URLSearchParams({ action, ...query })}`,
+      {
+        method: body ? 'POST' : 'GET',
+        headers: {
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+          ...(auth
+            ? {
+                Authorization: `Bearer ${auth.accessToken}`,
+                'X-Online-Session': auth.sessionId,
+              }
+            : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: window.AbortSignal.timeout(290000),
       },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: window.AbortSignal.timeout(290000),
-    });
+    );
   } catch {
     throw new Error(
       '通信結果を確認できません。再読込して最新の状態を確認してください',
