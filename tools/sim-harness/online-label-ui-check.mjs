@@ -235,7 +235,7 @@ try {
       '行の高さを変えずにラベルを最大3個表示する',
     );
     assert.deepEqual(await labels.allTextContents(), [
-      'AH',
+      'アベヒ',
       '選球眼',
       '扇風機',
     ]);

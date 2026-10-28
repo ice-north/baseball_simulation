@@ -3,8 +3,8 @@ import { POS } from './api.js';
 import { PageNav } from './PageNav.jsx';
 
 const SHORT_LABELS = {
-  average: 'AH',
-  power: 'PH',
+  average: 'アベヒ',
+  power: 'パワヒ',
   'extra-base': '長打',
   eye: '選球眼',
   'on-base': '出塁',
