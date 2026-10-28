@@ -39,6 +39,7 @@ async function fixture({
   let release = () => {};
   let refreshes = 0;
   let logouts = 0;
+  let commandCount = 0;
   const views = [];
   const gameView = {
     revision: 1,
@@ -94,6 +95,7 @@ async function fixture({
       logouts++;
       value = { ok: true };
     } else if (action === 'command' && commands) {
+      commandCount++;
       commandRequested();
       await new Promise((resolve) => {
         releaseCommand = resolve;
@@ -136,6 +138,7 @@ async function fixture({
     releaseCommand: () => releaseCommand(),
     refreshes: () => refreshes,
     logouts: () => logouts,
+    commandCount: () => commandCount,
     views,
   };
 }
@@ -218,6 +221,82 @@ try {
     '古いタブの更新で新しいログインを巻き戻さない',
   );
   await tabs.context.close();
+
+  const switched = await fixture({ commands: true });
+  await switched.page
+    .getByRole('button', { name: '管理', exact: true })
+    .click();
+  const switchTab = await switched.context.newPage();
+  await switchTab.goto(`${base}/switch`);
+  await switchTab.evaluate(
+    ({ key, auth }) => localStorage.setItem(key, JSON.stringify(auth)),
+    {
+      key,
+      auth: {
+        ...switched.old,
+        userId: 'b',
+        sessionId: 'other-user',
+        accessToken: 'other-access',
+      },
+    },
+  );
+  await switched.page
+    .getByText(
+      '別の端末でログインしたため閲覧のみです。操作するにはログインし直してください。',
+      { exact: true },
+    )
+    .waitFor();
+  const nextView = switched.page.waitForResponse(
+    (response) => new URL(response.url()).searchParams.get('action') === 'view',
+  );
+  await switched.page.bringToFront();
+  await switched.page.evaluate(() =>
+    document.dispatchEvent(new Event('visibilitychange')),
+  );
+  await nextView;
+  switched.release();
+  await withDeadline(switched.refreshFinished, '交代後の古い認証更新');
+  await switched.page.waitForLoadState('networkidle');
+  assert.ok(
+    await switched.page
+      .getByRole('button', { name: '進行を停止', exact: true })
+      .isDisabled(),
+    '別アカウントへの交代後も再取得で旧タブの操作権限を復活させない',
+  );
+  await switched.context.close();
+
+  const staleClick = await fixture({ commands: true });
+  await staleClick.page
+    .getByRole('button', { name: '管理', exact: true })
+    .click();
+  await staleClick.page.evaluate(
+    ({ key, auth }) => {
+      // storageイベントで画面が無効化されるより先に操作した場合も送信しない。
+      localStorage.setItem(
+        key,
+        JSON.stringify({ ...auth, userId: 'b', sessionId: 'other-user' }),
+      );
+      [...document.querySelectorAll('button')]
+        .find((button) => button.textContent === '進行を停止')
+        .click();
+    },
+    { key, auth: staleClick.old },
+  );
+  staleClick.release();
+  await withDeadline(staleClick.refreshFinished, '送信拒否後の古い認証更新');
+  await staleClick.page
+    .getByRole('alert')
+    .filter({
+      hasText:
+        '別のタブでログインが変更されました。操作するにはログインし直してください。',
+    })
+    .waitFor();
+  assert.equal(
+    staleClick.commandCount(),
+    0,
+    '表示更新より早いクリックでも旧資格情報で送信しない',
+  );
+  await staleClick.context.close();
 
   const saving = await fixture({ commands: true });
   await saving.page.getByRole('button', { name: '管理', exact: true }).click();

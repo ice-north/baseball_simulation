@@ -12,6 +12,13 @@ import {
   persistRefresh,
   clearAuth,
 } from './authState.js';
+// 別アカウントへ切替後も、旧タブの読取り応答で書込み権限を復活させない。
+const viewForSession = (result, current) => ({
+  ...result,
+  writable:
+    sameSession(readAuth(), current) &&
+    !!(result.setupRequired || result.writable),
+});
 function useMobile() {
   const [mobile, setMobile] = useState(
     () => window.matchMedia('(max-width: 767px)').matches,
@@ -82,9 +89,7 @@ export default function OnlineApp() {
         setAuth(next);
       } else {
         viewSequence.current++;
-        setView((old) =>
-          old && !old.setupRequired ? { ...old, writable: false } : old,
-        );
+        setView((old) => (old ? { ...old, writable: false } : old));
       }
     };
     window.addEventListener('storage', sync);
@@ -112,7 +117,7 @@ export default function OnlineApp() {
       sameSession(authRef.current, current) &&
       sequence === viewSequence.current
     )
-      setView(result);
+      setView(viewForSession(result, current));
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -126,7 +131,8 @@ export default function OnlineApp() {
       try {
         const sequence = ++viewSequence.current;
         const result = await api('view', auth);
-        if (!cancelled && sequence === viewSequence.current) setView(result);
+        if (!cancelled && sequence === viewSequence.current)
+          setView(viewForSession(result, auth));
       } catch (e) {
         if (!cancelled) setError(e.message);
       }
@@ -191,10 +197,18 @@ export default function OnlineApp() {
   };
   const command = async (type, payload) => {
     const current = authRef.current;
+    const checkSession = (credentials) => {
+      if (!sameSession(readAuth(), credentials))
+        throw new Error(
+          '別のタブでログインが変更されました。操作するにはログインし直してください。',
+        );
+    };
+    checkSession(current);
     const credentials =
       current?.refreshToken && current.expiresAt <= Date.now()
         ? await renewAuth(current)
         : current;
+    checkSession(credentials);
     await api('command', credentials, {
       requestId: crypto.randomUUID(),
       revision: view?.revision || 0,
@@ -293,7 +307,7 @@ export default function OnlineApp() {
             {view.isAdmin && !mobile ? (
               <button
                 className="online-primary"
-                disabled={busy}
+                disabled={busy || !view.writable}
                 onClick={() => run(() => command('create'))}
               >
                 リーグを作成
