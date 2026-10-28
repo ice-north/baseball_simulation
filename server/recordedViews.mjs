@@ -133,8 +133,18 @@ function weightedSituations(entries) {
     for (const category of ['batting', 'pitching'])
       for (const [key, own] of Object.entries(record.splits[category])) {
         if (!own.pa) continue;
-        const mean = comparison.splits[category][key];
-        if (!mean?.pa) return null;
+        const baseline =
+          category === 'batting' && ['left', 'right'].includes(key)
+            ? comparison.byBats?.[record.bats]
+            : comparison.splits[category];
+        const mean = baseline?.[key];
+        if (!mean?.pa) {
+          if (category === 'batting' && ['left', 'right'].includes(key)) {
+            combined.missingHand = true;
+            continue;
+          }
+          return null;
+        }
         const scale = own.pa / mean.pa;
         const weighted = Object.fromEntries(
           PA_KEYS.map((field) => [field, (mean[field] || 0) * scale]),
@@ -142,6 +152,8 @@ function weightedSituations(entries) {
         addCounts((combined.splits[category][key] ||= zeroLine()), weighted);
       }
   }
+  if (!combined.missingHand)
+    combined.byBats = { weighted: combined.splits.batting };
   return combined;
 }
 export function playerPeriods(league, team, player) {
@@ -153,7 +165,9 @@ export function playerPeriods(league, team, player) {
       id: 'current',
       label: '今季',
       year: league.season.year,
-      source: currentSeason?.complete ? '対人リーグ' : '既存の今季記録',
+      source: currentSeason?.complete
+        ? '対人リーグ（プレーオフ込み・グランドCS除外）'
+        : '既存の今季記録（グランドCS込み）',
       ...current,
       splits: currentRecord?.splits || null,
       partial: !!currentSeason && !currentSeason.complete,
@@ -177,7 +191,7 @@ export function playerPeriods(league, team, player) {
       id: `online:${season.year}`,
       label: `${season.year}年・対人`,
       year: season.year,
-      source: '対人リーグ',
+      source: '対人リーグ（プレーオフ込み・グランドCS除外）',
       partial: !season.complete,
       seasonStats: stats,
       splits: record.splits,
@@ -195,14 +209,17 @@ export function playerPeriods(league, team, player) {
     periods.splice(1, 0, {
       id: 'career',
       label: '対人通算',
-      source: '記録開始後の対人リーグ',
+      source: '記録開始後の対人リーグ（グランドCS除外）',
       partial: entries.some((e) => !e.complete),
       seasonStats: stats,
       splits: career.splits,
       performance: performanceFor(
         { seasonStats: stats },
         careerComparison(entries),
-        situationalCandidates(career, weightedSituations(entries)),
+        situationalCandidates(
+          { ...career, bats: 'weighted' },
+          weightedSituations(entries),
+        ),
       ),
     });
   }
@@ -211,7 +228,8 @@ export function playerPeriods(league, team, player) {
     if (
       h.year === league.season.year ||
       (league.records?.seasons?.[h.year]?.complete &&
-        recordForPlayer(league, player, team, h.year))
+        recordForPlayer(league, player, team, h.year) &&
+        !league.records.seasons[h.year].grandChampionshipExcluded)
     )
       continue;
     const stats = { batting: h.batting || {}, pitching: h.pitching || {} };
@@ -219,7 +237,7 @@ export function playerPeriods(league, team, player) {
       id: `legacy:${h.year}`,
       label: `${h.year}年・既存`,
       year: h.year,
-      source: '既存記録（リーグ比較値なし）',
+      source: '既存記録（グランドCS込み・リーグ比較値なし）',
       seasonStats: stats,
       splits: null,
       performance: performanceFor({ seasonStats: stats }, null),
@@ -291,6 +309,8 @@ export function storedGame(league, id, year) {
           p.gameStats &&
           (p.gameStats.batting?.atBats ||
             p.gameStats.batting?.walks ||
+            p.gameStats.batting?.hitByPitch ||
+            p.gameStats.batting?.sacrificeBunts ||
             p.gameStats.pitching?.pitches ||
             p.battingOrder),
       )

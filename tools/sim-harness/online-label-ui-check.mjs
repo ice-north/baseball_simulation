@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { withDeadline } from './lib/deadline.mjs';
 import {
   projectLeague,
   projectPlayerInfo,
@@ -289,7 +290,13 @@ const browser = await chromium.launch({
 });
 const errors = [];
 let activeContext;
-async function scene(width, height = 844, scale = 1) {
+async function scene(width, height = 844, scale = 1, holdDetail = false) {
+  let requests = 0,
+    signalDetail,
+    releaseDetail;
+  const started = new Promise((resolve) => {
+    signalDetail = resolve;
+  });
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: scale,
@@ -323,6 +330,13 @@ async function scene(width, height = 844, scale = 1) {
     if (route.request().resourceType() === 'document')
       return route.fulfill({ contentType: 'text/html', body: html });
     const action = new URL(route.request().url()).searchParams.get('action');
+    if (['player', 'game', 'games'].includes(action)) requests++;
+    if (action === 'player' && holdDetail) {
+      signalDetail();
+      await new Promise((resolve) => {
+        releaseDetail = resolve;
+      });
+    }
     assert.ok(
       ['config', 'view', 'player', 'game', 'games'].includes(action),
       '閲覧だけで更新APIを呼ばない',
@@ -360,7 +374,13 @@ async function scene(width, height = 844, scale = 1) {
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('http://localhost:3000/online');
-  return { page, context };
+  return {
+    page,
+    context,
+    detailRequests: () => requests,
+    started,
+    release: () => releaseDetail(),
+  };
 }
 try {
   const { page: p, context } = await scene(1440, 1000);
@@ -803,6 +823,62 @@ try {
       .click();
     await c.close();
   }
+  const switched = await scene(1440, 1000);
+  await switched.page
+    .getByRole('button', { name: '選手', exact: true })
+    .click();
+  const switchAuth = async (page) =>
+    page.evaluate(() => {
+      localStorage.setItem(
+        'baseball-online-auth-v1',
+        JSON.stringify({
+          userId: 'b',
+          sessionId: 'other-session',
+          accessToken: 'other-account',
+        }),
+      );
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'baseball-online-auth-v1' }),
+      );
+    });
+  await switchAuth(switched.page);
+  await switched.page
+    .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
+    .click();
+  await switched.page
+    .getByText(
+      '別のタブでログインが変更されました。ログインし直してください。',
+      { exact: false },
+    )
+    .waitFor();
+  assert.equal(
+    switched.detailRequests(),
+    0,
+    '別アカウントの認証で旧画面の詳細を取得しない',
+  );
+  await switched.context.close();
+  const staleRead = await scene(1440, 1000, 1, true);
+  await staleRead.page
+    .getByRole('button', { name: '選手', exact: true })
+    .click();
+  await staleRead.page
+    .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
+    .click();
+  await withDeadline(staleRead.started, '選手詳細の取得開始');
+  await switchAuth(staleRead.page);
+  staleRead.release();
+  await staleRead.page
+    .getByText(
+      '別のタブでログインが変更されました。ログインし直してください。',
+      { exact: false },
+    )
+    .waitFor();
+  assert.equal(
+    staleRead.detailRequests(),
+    1,
+    'セッション変更前の応答も画面へ適用しない',
+  );
+  await staleRead.context.close();
   assert.deepEqual(errors, []);
   console.log(
     'online-label-ui-check PASS（配布HTMLと実projection・PC/スマホ320〜767px・1080x1920縦持ち・投打切替・詳細/閉じる/フォーカス・高さに応じた行数・ページ送り・閲覧のみ / 通信はfixture）',

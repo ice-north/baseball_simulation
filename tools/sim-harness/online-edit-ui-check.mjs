@@ -132,6 +132,24 @@ async function click(page, text) {
     .waitFor({ state: 'hidden' });
 }
 try {
+  const oversized = await scene();
+  await click(oversized.page, '手続き');
+  await oversized.page.getByLabel('球団の主練習（全4回）').waitFor();
+  await oversized.page.evaluate(() =>
+    sessionStorage.setItem(
+      'baseball-online-draft:a:fixture:1:検証球団:1:camp',
+      'x'.repeat(64000),
+    ),
+  );
+  await oversized.page.reload();
+  await oversized.page
+    .getByText(
+      '未保存案が大きすぎるため復元できませんでした。サーバーに保存済みの内容を表示します。',
+      { exact: true },
+    )
+    .waitFor();
+  await oversized.context.close();
+
   const draft = await scene();
   draft.page.on('dialog', (dialog) => dialog.accept());
   await click(draft.page, '手続き');

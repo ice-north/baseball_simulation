@@ -146,7 +146,11 @@ export class SupabaseStore {
           '年度の指定が不正です',
         );
       try {
-        const index = await this.archive(row, kind, year);
+        const missingYear =
+          kind === 'games' &&
+          row.views?._records?.games &&
+          !Object.hasOwn(row.views._records.games, year);
+        const index = missingYear ? {} : await this.archive(row, kind, year);
         if (!index) return project(await this.read(), year);
         if (kind === 'players') {
           const own = index[userId];
@@ -202,13 +206,28 @@ export class SupabaseStore {
     return { path, hash };
   }
   async createArchive(bundle, previous) {
-    const data = buildArchiveIndex(bundle);
+    const retainedYears = Object.keys(previous?.games || {}).filter(
+      (year) =>
+        previous?.version === 2 &&
+        Number(year) < bundle.league?.season.year &&
+        bundle.league.records?.seasons?.[year]?.archiveToken &&
+        previous.games[year].finalizedToken ===
+          bundle.league.records.seasons[year].archiveToken,
+    );
+    const data = buildArchiveIndex(bundle, retainedYears);
     if (!data) return null;
     const players = await this.publishArchive(data.players, previous?.players),
-      games = {};
+      games = Object.fromEntries(
+        retainedYears.map((year) => [year, previous.games[year]]),
+      );
     for (const [year, value] of Object.entries(data.games))
-      games[year] = await this.publishArchive(value, previous?.games?.[year]);
+      games[year] = {
+        ...(await this.publishArchive(value, previous?.games?.[year])),
+        finalizedToken:
+          bundle.league.records?.seasons?.[year]?.archiveToken || null,
+      };
     return {
+      version: 2,
       players,
       games,
       previous: [
