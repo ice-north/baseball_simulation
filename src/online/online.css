@@ -629,7 +629,7 @@
     font-size: 11px;
     padding: 5px 7px;
   }
-  .online-decision > p {
+  .online-decision p {
     font-size: 12px;
   }
   .online-news-list article {
@@ -702,4 +702,17 @@
 }
 .online-overlay::backdrop {
   background: transparent;
+}
+
+.online-form-fields {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.online-edit-notice {
+  border-left: 3px solid var(--accent);
+  padding: 10px;
+  margin-bottom: 12px;
+  background: var(--accent-soft);
 }

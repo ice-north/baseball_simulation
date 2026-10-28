@@ -39,7 +39,7 @@ try {
     requestId: 'clock:boundary',
     revision: 1,
     type: 'submit',
-    payload: {},
+    payload: { baseSubmission: null },
   });
   const league = (await store.read()).league;
   assert.equal(

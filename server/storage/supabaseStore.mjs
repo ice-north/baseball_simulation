@@ -1,6 +1,6 @@
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
-import { requireOnline } from '../../src/online/shared.js';
+import { requireOnline, OnlineError } from '../../src/online/shared.js';
 import { projectLeague } from '../projection.mjs';
 export class SupabaseStore {
   constructor({ url, serviceKey, members, adminId, fetchImpl = fetch }) {
@@ -28,12 +28,15 @@ export class SupabaseStore {
       body: body ? (raw ? body : JSON.stringify(body)) : undefined,
       signal: AbortSignal.timeout(25000),
     });
-    requireOnline(
-      response.ok,
-      '共有保存先との通信に失敗しました',
-      503,
-      'storage',
-    );
+    if (!response.ok) {
+      const error = new OnlineError(
+        '共有保存先との通信に失敗しました',
+        503,
+        'storage',
+      );
+      error.storageStatus = response.status;
+      throw error;
+    }
     if (raw && method === 'GET')
       return Buffer.from(await response.arrayBuffer());
     const text = await response.text();
@@ -60,7 +63,20 @@ export class SupabaseStore {
     );
   }
   async read() {
-    return this.load(await this.control());
+    const row = await this.control();
+    try {
+      return await this.load(row);
+    } catch (error) {
+      if (error.storageStatus !== 404) throw error;
+      const current = await this.control();
+      if (
+        !current?.snapshot_path ||
+        current.snapshot_path === row?.snapshot_path
+      )
+        throw error;
+      // 読取り中に旧世代が整理された場合だけ、最新の一式を一度再取得する。
+      return this.load(current);
+    }
   }
   async isDue(now) {
     const row = await this.control();
@@ -78,7 +94,10 @@ export class SupabaseStore {
       return row.snapshot_path
         ? null
         : { setupRequired: true, isAdmin: userId === this.adminId };
-    return { ...view, writable: !!sessionId && row.sessions[userId] === sessionId };
+    return {
+      ...view,
+      writable: !!sessionId && row.sessions[userId] === sessionId,
+    };
   }
   async transaction(fn) {
     const token = randomUUID();

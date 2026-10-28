@@ -71,3 +71,5 @@ SQLの実適用、RLS、Supabase Auth・トークン更新、実Storageの公開
 無料枠で収まるかは実測が必要。CIの成功だけで外部サービスの受入完了と判断しない。
 
 追加レビューの指摘と再現条件は [REVIEW_20261028.md](REVIEW_20261028.md) に記録。認証競合は `npm run check:online:auth-ui`、サーバー境界と復元は `check:online` で再現する。
+
+第2回レビューは [REVIEW_20261028_2.md](REVIEW_20261028_2.md)。同一ログインの別タブで提出・編成を保存し、古い入力を保持する側が最新revisionを取得しても上書きできないことを確認する。`check:online:edit-ui` は標準案の読込み失敗・別手続きの応答・保存中入力・スマホ確認と一覧縮小を配布HTML/API fixtureで検査する。

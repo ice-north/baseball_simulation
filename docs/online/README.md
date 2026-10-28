@@ -57,10 +57,11 @@ ONLINE_DISABLE_TIMER=1 ONLINE_DATA_FILE="$(mktemp -d)/ui.json.gz" npm run dev:on
 npx playwright install chromium
 npm run check:online:ui
 npm run check:online:auth-ui
+npm run check:online:edit-ui
 ```
 
 インストール済みChromeを使う場合は `PLAYWRIGHT_CHROME_CHANNEL=chrome npm run check:online:ui`。
-CIも同じ検査を実行し、スクリーンショットを保存する。認証競合の画面検査は配布HTMLとAuthのfixtureを使う。
+CIも同じ検査を実行し、スクリーンショットを保存する。認証競合と編集復帰の画面検査は配布HTMLとAPI/Authのfixtureを使う。
 ブラウザ検査は初期編成・二人の決定・キャンプ・編成保存・スマホ操作・旧端末拒否・試合結果・320〜767px幅を確認する。
 
 ## 外部アカウント設定後の作業
@@ -141,3 +142,6 @@ Supabaseの休止・容量上限・Storage/DBの復旧手段、Vercelの実測�
 - [お知らせ4件のページ送り](images/mobile-news.png)
 
 追加レビュー: [PR全体の指摘・修正・再発確認](REVIEW_20261028.md)。
+
+第2回レビュー: [別タブの編集競合・保存世代の読取り・画面復帰](REVIEW_20261028_2.md)。
+PCで保存済みの提出が別タブから変更された場合は「最新の提出を読み直す」、編成は「編集を戻す」で再取得する。スマホの確認画面は最新の保存案へ追従する。保存中は入力を停止し、古い案による上書きをAPIでも拒否する。

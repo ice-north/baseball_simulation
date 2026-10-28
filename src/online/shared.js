@@ -138,3 +138,16 @@ export function validateLineup(team, plan) {
     '初版では先発投手と野手の兼任はできません',
   );
 }
+
+// JSONで往復する編集内容を比較する。オブジェクトのキー順は変更と扱わない。
+export function sameEditState(a, b) {
+  const canonical = (_key, value) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((key) => [key, value[key]]),
+        )
+      : value;
+  return JSON.stringify(a, canonical) === JSON.stringify(b, canonical);
+}

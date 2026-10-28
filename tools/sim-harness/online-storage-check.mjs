@@ -15,6 +15,7 @@ let lease = null;
 let rejectPublish = false;
 let loseResponse = false;
 let gets = 0;
+let beforeDownload = null;
 const fetchImpl = async (url, options) => {
   const path = new URL(url).pathname;
   const body =
@@ -65,8 +66,15 @@ const fetchImpl = async (url, options) => {
       objects.set(key, body);
       value = {};
     } else {
+      if (beforeDownload) {
+        const effect = beforeDownload;
+        beforeDownload = null;
+        await effect();
+      }
       gets++;
-      return new Response(objects.get(key));
+      return objects.has(key)
+        ? new Response(objects.get(key))
+        : new Response('', { status: 404 });
     }
   } else throw new Error(path);
   return new Response(JSON.stringify(value));
@@ -131,6 +139,28 @@ await assert.rejects(
   (error) => error.code === 'busy',
 );
 lease = null;
+// メタデータ取得後に3世代進み、読もうとした旧オブジェクトが削除される競合。
+const oldPath = row.snapshot_path;
+beforeDownload = async () => {
+  for (let i = 0; i < 3; i++)
+    await store.transaction((b) => {
+      b.sessions.a = `concurrent:${i}`;
+    });
+};
+assert.equal(
+  (await store.read()).sessions.a,
+  'concurrent:2',
+  '削除された旧世代から最新の一式へ再取得する',
+);
+assert.equal(objects.has(oldPath), false);
+const currentObject = objects.get(row.snapshot_path);
+objects.delete(row.snapshot_path);
+await assert.rejects(
+  store.read(),
+  (error) => error.code === 'storage',
+  '現行の保存自体が欠けた場合は空のリーグとして初期化しない',
+);
+objects.set(row.snapshot_path, currentObject);
 // HTTP認証、メソッド、JSON/CORS、ユーザーID偽装の入口を確認する。
 const handler = createHandler(
   {

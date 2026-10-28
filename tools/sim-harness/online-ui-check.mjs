@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { withDeadline } from './lib/deadline.mjs';
 const base = process.env.ONLINE_TEST_URL || 'http://localhost:3000';
 assert.ok(
   ['localhost', '127.0.0.1'].includes(new URL(base).hostname),
@@ -83,6 +84,30 @@ try {
   await click(m, 'ログアウト');
   await m.setViewportSize({ width: 390, height: 844 });
 
+  const draftTab = await pc.newPage();
+  draftTab.on('pageerror', (e) => errors.push(e.message));
+  await draftTab.goto(`${base}/online`);
+  await click(draftTab, '手続き');
+  await draftTab.locator('input[type=number]').fill('23');
+  await click(draftTab, '下書きを保存');
+  await click(p, '更新');
+  await click(p, '下書きを保存');
+  await p
+    .getByText(
+      '保存済みの提出が更新されています。最新の提出を読み直してください',
+      { exact: false },
+    )
+    .waitFor();
+  await click(p, '最新の提出を読み直す');
+  assert.equal(await p.locator('input[type=number]').inputValue(), '23');
+  await p.locator('input[type=number]').fill('24');
+  await click(p, '下書きを保存');
+  assert.equal(
+    await p.locator('.online-edit-notice').count(),
+    0,
+    'キー順が異なる自分の提出を競合と誤認しない',
+  );
+  await draftTab.close();
   await p.screenshot({
     path: '/tmp/baseball-online-desktop-tryout.png',
     fullPage: true,
@@ -110,12 +135,53 @@ try {
   const second = await selects.nth(1).inputValue();
   await selects.nth(0).selectOption(second);
   await selects.nth(1).selectOption(first);
-  await click(p, '編成を保存');
+  let releaseSave;
+  let saveStarted;
+  const savingStarted = new Promise((resolve) => {
+    saveStarted = resolve;
+  });
+  await p.route('**/api/online?*', async (route) => {
+    if (
+      new URL(route.request().url()).searchParams.get('action') === 'command'
+    ) {
+      saveStarted();
+      await new Promise((resolve) => {
+        releaseSave = resolve;
+      });
+    }
+    await route.continue();
+  });
+  await p.getByRole('button', { name: '編成を保存', exact: true }).click();
+  await withDeadline(savingStarted, '編成保存の開始');
+  assert.ok(
+    await selects.nth(0).isDisabled(),
+    '保存の応答待ち中は入力を変更できない',
+  );
+  releaseSave();
+  await waitIdle(p);
+  await p.unroute('**/api/online?*');
+  assert.ok(await selects.nth(0).isEnabled());
   await p.getByText('保存しました', { exact: true }).waitFor();
   await p.screenshot({
     path: '/tmp/baseball-online-desktop.png',
     fullPage: true,
   });
+  const lineupTab = await pc.newPage();
+  lineupTab.on('pageerror', (e) => errors.push(e.message));
+  await lineupTab.goto(`${base}/online`);
+  await click(lineupTab, '編成');
+  await p.getByRole('button', { name: '2番を上げる', exact: true }).click();
+  await click(lineupTab, '采配');
+  await lineupTab.getByLabel('打撃方針').selectOption('patient');
+  await click(lineupTab, '編成を保存');
+  await click(p, '更新');
+  await click(p, '編成を保存');
+  await p.getByText('編成が更新されています。', { exact: false }).waitFor();
+  await click(p, '編集を戻す');
+  await click(p, '采配');
+  assert.equal(await p.getByLabel('打撃方針').inputValue(), 'patient');
+  await click(p, '打順・守備');
+  await lineupTab.close();
   await login(m, 1);
   await m.getByRole('button', { name: '打順', exact: true }).click();
   await m.getByRole('button', { name: '2番を上げる', exact: true }).click();

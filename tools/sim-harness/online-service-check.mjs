@@ -19,13 +19,19 @@ try {
   let view = await service.view('a', a);
   assert.equal(view.setupRequired, true);
   let seq = 0;
-  const command = async (user, session, type, payload, revision) =>
-    service.command(user, session, {
+  const command = async (user, session, type, payload, revision) => {
+    const frame = await service.view(user, session);
+    if (type === 'lineup')
+      payload = { ...payload, baseLineup: payload?.baseLineup ?? frame.lineup };
+    if (type === 'submit' && !Object.hasOwn(payload, 'baseSubmission'))
+      payload = { ...payload, baseSubmission: frame.phase?.submission || null };
+    return service.command(user, session, {
       requestId: `request:${++seq}`,
-      revision: revision ?? (await service.view(user, session)).revision ?? 0,
+      revision: revision ?? frame.revision ?? 0,
       type,
       payload,
     });
+  };
   await assert.rejects(
     command('b', b, 'create'),
     (error) => error.status === 403,
@@ -63,6 +69,7 @@ try {
           phaseId: defaults.phaseId,
           plan: defaults.plan,
           ready: true,
+          baseSubmission: (await service.view(user, session)).phase.submission,
         },
       };
       await service.command(user, session, cmd);
@@ -102,7 +109,10 @@ try {
     requestId: `request:${++seq}`,
     revision: (await service.view('a', nextA)).revision,
     type: 'lineup',
-    payload: (await service.view('a', nextA)).lineup,
+    payload: {
+      ...(await service.view('a', nextA)).lineup,
+      baseLineup: (await service.view('a', nextA)).lineup,
+    },
   };
   await service.command('a', nextA, validCommand);
   await assert.rejects(

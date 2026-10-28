@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, POS, MENUS } from './api.js';
-import { formatGameDate, PHASE_LABELS } from './shared.js';
+import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
 
 export function Login({ local, login, busy }) {
   const [email, setEmail] = useState('');
@@ -91,6 +91,9 @@ export function Standings({ view }) {
 }
 export function PageNav({ page, count, size, setPage }) {
   const pages = Math.max(1, Math.ceil(count / size));
+  useEffect(() => {
+    if (page >= pages) setPage(pages - 1);
+  }, [page, pages, setPage]);
   return (
     <div className="online-pager">
       <button
@@ -101,7 +104,7 @@ export function PageNav({ page, count, size, setPage }) {
         ←
       </button>
       <span>
-        {page + 1} / {pages}
+        {Math.min(page + 1, pages)} / {pages}
       </span>
       <button
         aria-label="次のページ"
@@ -177,6 +180,13 @@ export function Notices({ view, compact = false }) {
   const history = view.history[Number(index)];
   const picks = kind === 'notice' ? notice?.picks || [] : [];
   const size = compact ? 4 : 8;
+  useEffect(() => {
+    if (!view.notices.length && !view.history.length) return;
+    if ((kind === 'notice' && !notice) || (kind === 'history' && !history)) {
+      setSelected(view.notices.length ? 'notice:0' : 'history:0');
+      setPage(0);
+    }
+  }, [kind, notice, history, view.notices.length, view.history.length]);
   return (
     <section className="online-card">
       <h2>リーグ便り</h2>
@@ -211,7 +221,8 @@ export function Notices({ view, compact = false }) {
                 {picks.slice(page * size, page * size + size).map((p, j) => (
                   <article key={j}>
                     <b>
-                      {typeof p.round === 'number' ? `${p.round}巡` : p.round} {p.name}
+                      {typeof p.round === 'number' ? `${p.round}巡` : p.round}{' '}
+                      {p.name}
                     </b>
                     <span>→ {p.npbTeam || p.team}</span>
                   </article>
@@ -243,6 +254,9 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const phase = view.phase;
   const [plan, setPlan] = useState(phase.submission?.plan || null);
   const [planRevision, setPlanRevision] = useState(null);
+  const [baseSubmission, setBaseSubmission] = useState(() =>
+    structuredClone(phase.submission || null),
+  );
   const [error, setError] = useState('');
   useEffect(() => {
     let cancelled = false;
@@ -250,6 +264,11 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
       api('defaults', auth)
         .then((d) => {
           if (!cancelled) {
+            if (d.phaseId !== phase.id) {
+              setError('手続きが更新されました。最新状態を確認してください');
+              return;
+            }
+            setError('');
             setPlan((old) => old || d.plan);
             setPlanRevision(d.revision);
           }
@@ -261,6 +280,46 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
       cancelled = true;
     };
   }, [auth, phase.id, phase.submission]);
+  const submissionChanged = !sameEditState(
+    baseSubmission,
+    phase.submission || null,
+  );
+  useEffect(() => {
+    if (mobile && submissionChanged) {
+      setPlan(phase.submission ? structuredClone(phase.submission.plan) : null);
+      setBaseSubmission(structuredClone(phase.submission || null));
+    }
+  }, [mobile, submissionChanged, phase.submission]);
+  const submit = (ready) =>
+    run(async () => {
+      await command('submit', {
+        phaseId: phase.id,
+        plan,
+        ready,
+        baseSubmission,
+      });
+      setBaseSubmission({ plan: structuredClone(plan), ready });
+    });
+  const resetSubmission = () =>
+    run(async () => {
+      setError('');
+      try {
+        let next = phase.submission?.plan;
+        if (!next) {
+          const defaults = await api('defaults', auth);
+          if (defaults.phaseId !== phase.id)
+            throw new Error(
+              '手続きが更新されました。最新状態を確認してください',
+            );
+          next = defaults.plan;
+        }
+        setPlan(structuredClone(next));
+        setBaseSubmission(structuredClone(phase.submission || null));
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      }
+    });
   const move = (index, delta) => {
     const rankedIds = [...plan.rankedIds];
     [rankedIds[index], rankedIds[index + delta]] = [
@@ -271,197 +330,195 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   };
   return (
     <section className="online-card online-decision">
-      <h2>{PHASE_LABELS[phase.kind]}</h2>
-      <p>
-        {mobile
-          ? '両者が決定すると進みます。'
-          : '両者が決定すると一度だけ処理します。相手が決定する前なら再提出できます。'}
-      </p>
-      <ul className="online-ready">
-        {view.members.map((m) => (
-          <li key={m.teamName}>
-            {m.label} · {m.ready ? '決定済み' : '検討中'}
-          </li>
-        ))}
-      </ul>
-      {error && <p role="alert">{error}</p>}
-      {plan && (
-        <>
-          {mobile ? (
+      <fieldset className="online-form-fields" disabled={busy}>
+        <h2>{PHASE_LABELS[phase.kind]}</h2>
+        <p>
+          {mobile
+            ? '両者が決定すると進みます。'
+            : '両者が決定すると一度だけ処理します。相手が決定する前なら再提出できます。'}
+        </p>
+        <ul className="online-ready">
+          {view.members.map((m) => (
+            <li key={m.teamName}>
+              {m.label} · {m.ready ? '決定済み' : '検討中'}
+            </li>
+          ))}
+        </ul>
+        {error && (
+          <div role="alert">
+            <p>{error}</p>
+            <button onClick={resetSubmission}>
+              {phase.submission ? '保存案を読み直す' : '標準案を再取得'}
+            </button>
+          </div>
+        )}
+        {!mobile && submissionChanged && (
+          <div role="alert" className="online-edit-notice">
             <p>
-              {phase.kind === 'camp'
-                ? `練習方針: ${MENUS[plan.menu]}`
-                : plan.rankedIds
-                  ? `${plan.count}人を獲得する希望リスト（${plan.rankedIds.length}候補）`
-                  : plan.releaseIds
-                    ? `退団予定 ${plan.releaseIds.length}人`
-                    : 'シーズンを締めて次年度へ進みます。'}
-              <br />
-              {phase.submission
-                ? '保存済みの内容を確認します。'
-                : '標準案を使用します。'}{' '}
-              詳細はPCで調整できます。
+              別の操作で提出が更新されました。現在の入力を破棄して保存済みの内容を読み直せます。
             </p>
-          ) : (
-            <>
-              {plan.rankedIds && (
-                <>
-                  <label>
-                    獲得希望人数（最大{Math.max(0, 24 - view.roster.length)}人）
-                    <input
-                      type="number"
-                      min="0"
-                      max={Math.max(0, 24 - view.roster.length)}
-                      value={plan.count}
-                      onChange={(e) =>
-                        setPlan({ ...plan, count: Number(e.target.value) })
-                      }
-                    />
-                  </label>
-                  <p>
-                    上から優先します。他球団に選ばれた選手は飛ばします。全候補を残すと競合時の代替候補を確保できます。
-                  </p>
-                  <div className="online-candidates">
-                    {plan.rankedIds.map((id, i) => {
-                      const p = phase.candidates.find((p) => p.id === id);
-                      return (
-                        <div className="online-candidate" key={id}>
-                          <span>
-                            {i + 1}. {p.name}{' '}
-                            <small>
-                              {p.age}歳 / {POS[p.position]} /{' '}
-                              {p.position === 'pitcher'
-                                ? `球速${p.pitching?.velocity} 制球${p.pitching?.control}`
-                                : `巧打${p.batting?.meet} 長打${p.batting?.power}`}
-                            </small>
-                          </span>
-                          <button
-                            aria-label={`${p.name}の希望順位を上げる`}
-                            disabled={i === 0 || busy}
-                            onClick={() => move(i, -1)}
-                          >
-                            ↑
-                          </button>
-                          <button
-                            aria-label={`${p.name}の希望順位を下げる`}
-                            disabled={i === plan.rankedIds.length - 1 || busy}
-                            onClick={() => move(i, 1)}
-                          >
-                            ↓
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-              {plan.releaseIds && (
-                <>
-                  <p>
-                    チェックした選手が退団します。最低9人を残してください。既に9人未満の場合は新たな退団はできません。
-                  </p>
-                  {view.roster.map((p) => (
-                    <label className="online-check" key={p.id}>
+            <button onClick={resetSubmission}>最新の提出を読み直す</button>
+          </div>
+        )}
+        {plan && (
+          <>
+            {mobile ? (
+              <p>
+                {phase.kind === 'camp'
+                  ? `練習方針: ${MENUS[plan.menu]}`
+                  : plan.rankedIds
+                    ? `${plan.count}人を獲得する希望リスト（${plan.rankedIds.length}候補）`
+                    : plan.releaseIds
+                      ? `退団予定 ${plan.releaseIds.length}人`
+                      : 'シーズンを締めて次年度へ進みます。'}
+                <br />
+                {phase.submission
+                  ? '保存済みの内容を確認します。'
+                  : '標準案を使用します。'}{' '}
+                詳細はPCで調整できます。
+              </p>
+            ) : (
+              <>
+                {plan.rankedIds && (
+                  <>
+                    <label>
+                      獲得希望人数（最大{Math.max(0, 24 - view.roster.length)}
+                      人）
                       <input
-                        type="checkbox"
-                        checked={plan.releaseIds.includes(p.id)}
+                        type="number"
+                        min="0"
+                        max={Math.max(0, 24 - view.roster.length)}
+                        value={plan.count}
                         onChange={(e) =>
-                          setPlan({
-                            releaseIds: e.target.checked
-                              ? [...plan.releaseIds, p.id]
-                              : plan.releaseIds.filter((id) => id !== p.id),
-                          })
+                          setPlan({ ...plan, count: Number(e.target.value) })
                         }
                       />
-                      {p.name}（{p.age}歳 / {POS[p.position]}）
                     </label>
-                  ))}
-                </>
-              )}
-              {plan.menu && (
-                <label>
-                  球団の主練習（全4回）
-                  <select
-                    value={plan.menu}
-                    onChange={(e) => setPlan({ menu: e.target.value })}
-                  >
-                    {Object.entries(MENUS).map(([id, label]) => (
-                      <option value={id} key={id}>
-                        {label}
-                      </option>
+                    <p>
+                      上から優先します。他球団に選ばれた選手は飛ばします。全候補を残すと競合時の代替候補を確保できます。
+                    </p>
+                    <div className="online-candidates">
+                      {plan.rankedIds.map((id, i) => {
+                        const p = phase.candidates.find((p) => p.id === id);
+                        return (
+                          <div className="online-candidate" key={id}>
+                            <span>
+                              {i + 1}. {p.name}{' '}
+                              <small>
+                                {p.age}歳 / {POS[p.position]} /{' '}
+                                {p.position === 'pitcher'
+                                  ? `球速${p.pitching?.velocity} 制球${p.pitching?.control}`
+                                  : `巧打${p.batting?.meet} 長打${p.batting?.power}`}
+                              </small>
+                            </span>
+                            <button
+                              aria-label={`${p.name}の希望順位を上げる`}
+                              disabled={i === 0 || busy}
+                              onClick={() => move(i, -1)}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              aria-label={`${p.name}の希望順位を下げる`}
+                              disabled={i === plan.rankedIds.length - 1 || busy}
+                              onClick={() => move(i, 1)}
+                            >
+                              ↓
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+                {plan.releaseIds && (
+                  <>
+                    <p>
+                      チェックした選手が退団します。最低9人を残してください。既に9人未満の場合は新たな退団はできません。
+                    </p>
+                    {view.roster.map((p) => (
+                      <label className="online-check" key={p.id}>
+                        <input
+                          type="checkbox"
+                          checked={plan.releaseIds.includes(p.id)}
+                          onChange={(e) =>
+                            setPlan({
+                              releaseIds: e.target.checked
+                                ? [...plan.releaseIds, p.id]
+                                : plan.releaseIds.filter((id) => id !== p.id),
+                            })
+                          }
+                        />
+                        {p.name}（{p.age}歳 / {POS[p.position]}）
+                      </label>
                     ))}
-                  </select>
-                </label>
+                  </>
+                )}
+                {plan.menu && (
+                  <label>
+                    球団の主練習（全4回）
+                    <select
+                      value={plan.menu}
+                      onChange={(e) => setPlan({ menu: e.target.value })}
+                    >
+                      {Object.entries(MENUS).map(([id, label]) => (
+                        <option value={id} key={id}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {phase.kind === 'offseason' && (
+                  <p>最終順位を保存し、次年度のキャンプへ進みます。</p>
+                )}
+              </>
+            )}
+            {planRevision !== null &&
+              planRevision !== view.revision &&
+              !phase.submission && (
+                <p className="online-muted">
+                  他の操作で更新がありました。提出時に現在の内容を再検証します。
+                </p>
               )}
-              {phase.kind === 'offseason' && (
-                <p>最終順位を保存し、次年度のキャンプへ進みます。</p>
+            <div className="online-actions">
+              <button
+                className="online-primary"
+                disabled={busy}
+                onClick={() => submit(true)}
+              >
+                この内容で決定
+              </button>
+              {!mobile && (
+                <button disabled={busy} onClick={() => submit(false)}>
+                  下書きを保存
+                </button>
               )}
-            </>
-          )}
-          {planRevision !== null &&
-            planRevision !== view.revision &&
-            !phase.submission && (
-              <p className="online-muted">
-                他の操作で更新がありました。提出時に現在の内容を再検証します。
-              </p>
-            )}
-          <div className="online-actions">
-            <button
-              className="online-primary"
-              disabled={busy}
-              onClick={() =>
-                run(() =>
-                  command('submit', { phaseId: phase.id, plan, ready: true }),
-                )
-              }
-            >
-              この内容で決定
-            </button>
-            {!mobile && (
-              <button
-                disabled={busy}
-                onClick={() =>
-                  run(() =>
-                    command('submit', {
-                      phaseId: phase.id,
-                      plan,
-                      ready: false,
-                    }),
-                  )
-                }
-              >
-                下書きを保存
-              </button>
-            )}
-            {phase.submission?.ready && (
-              <button
-                disabled={busy}
-                onClick={() =>
-                  run(() =>
-                    command('submit', {
-                      phaseId: phase.id,
-                      plan,
-                      ready: false,
-                    }),
-                  )
-                }
-              >
-                決定を取り消す
-              </button>
-            )}
-          </div>
-        </>
-      )}
-      {!plan && !error && <p>標準案を準備しています…</p>}
+              {phase.submission?.ready && (
+                <button disabled={busy} onClick={() => submit(false)}>
+                  決定を取り消す
+                </button>
+              )}
+            </div>
+          </>
+        )}
+        {!plan && !error && <p>標準案を準備しています…</p>}
+      </fieldset>
     </section>
   );
 }
 export function LineupPanel({ view, mobile, busy, run, command }) {
   const [plan, setPlan] = useState(() => structuredClone(view.lineup));
   const [dirty, setDirty] = useState(false);
+  const [baseLineup, setBaseLineup] = useState(() =>
+    structuredClone(view.lineup),
+  );
   const [section, setSection] = useState('batting');
   useEffect(() => {
-    if (!dirty) setPlan(structuredClone(view.lineup));
+    if (!dirty) {
+      setPlan(structuredClone(view.lineup));
+      setBaseLineup(structuredClone(view.lineup));
+    }
   }, [view.lineup, dirty]);
   const change = (next) => {
     setPlan(next);
@@ -480,177 +537,179 @@ export function LineupPanel({ view, mobile, busy, run, command }) {
   const fielders = view.roster.filter((p) => p.position !== 'pitcher');
   return (
     <section className="online-card online-lineup-card">
-      <h2>{mobile ? '打順の入れ替え' : '編成・采配'}</h2>
-      {!mobile && (
-        <div className="online-segments">
-          {[
-            ['batting', '打順・守備'],
-            ['pitchers', '先発'],
-            ['strategy', '采配'],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              aria-pressed={section === id}
-              onClick={() => setSection(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-      <p className="online-muted">
-        {mobile
-          ? '上下で入れ替え、保存で次の試合に反映。'
-          : '次回の進行から反映します。'}
-      </p>
-      {(mobile || section === 'batting') &&
-        [...plan.battingOrder]
-          .sort((a, b) => a.battingOrder - b.battingOrder)
-          .map((entry, i) => (
-            <div className="online-lineup" key={entry.battingOrder}>
-              <b>{entry.battingOrder}</b>
-              <span>{POS[entry.position]}</span>
-              {mobile ? (
-                <span>
-                  {view.roster.find((p) => p.id === entry.playerId)?.name}
-                </span>
-              ) : (
+      <fieldset className="online-form-fields" disabled={busy}>
+        <h2>{mobile ? '打順の入れ替え' : '編成・采配'}</h2>
+        {!mobile && (
+          <div className="online-segments">
+            {[
+              ['batting', '打順・守備'],
+              ['pitchers', '先発'],
+              ['strategy', '采配'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                aria-pressed={section === id}
+                onClick={() => setSection(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="online-muted">
+          {mobile
+            ? '上下で入れ替え、保存で次の試合に反映。'
+            : '次回の進行から反映します。'}
+        </p>
+        {(mobile || section === 'batting') &&
+          [...plan.battingOrder]
+            .sort((a, b) => a.battingOrder - b.battingOrder)
+            .map((entry, i) => (
+              <div className="online-lineup" key={entry.battingOrder}>
+                <b>{entry.battingOrder}</b>
+                <span>{POS[entry.position]}</span>
+                {mobile ? (
+                  <span>
+                    {view.roster.find((p) => p.id === entry.playerId)?.name}
+                  </span>
+                ) : (
+                  <select
+                    aria-label={`${entry.battingOrder}番の選手`}
+                    value={entry.playerId}
+                    onChange={(e) =>
+                      change({
+                        ...plan,
+                        battingOrder: plan.battingOrder.map((x) =>
+                          x === entry
+                            ? {
+                                ...x,
+                                playerId: fielders.find(
+                                  (p) => String(p.id) === e.target.value,
+                                )?.id,
+                              }
+                            : x,
+                        ),
+                      })
+                    }
+                  >
+                    {fielders.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}（{POS[p.position]}）
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  aria-label={`${entry.battingOrder}番を上げる`}
+                  disabled={busy || i === 0}
+                  onClick={() => move(i, -1)}
+                >
+                  ↑
+                </button>
+                <button
+                  aria-label={`${entry.battingOrder}番を下げる`}
+                  disabled={busy || i === 7}
+                  onClick={() => move(i, 1)}
+                >
+                  ↓
+                </button>
+              </div>
+            ))}
+        {!mobile && section === 'pitchers' && (
+          <>
+            <h3>先発ローテーション</h3>
+            <p>
+              選択した順に先発します。並びを変更した場合は先頭から再開します。
+            </p>
+            {view.roster
+              .filter((p) => p.position === 'pitcher')
+              .map((p) => (
+                <label className="online-check" key={p.id}>
+                  <input
+                    type="checkbox"
+                    checked={plan.starters.includes(p.id)}
+                    onChange={(e) =>
+                      change({
+                        ...plan,
+                        starters: e.target.checked
+                          ? [...plan.starters, p.id]
+                          : plan.starters.filter((id) => id !== p.id),
+                      })
+                    }
+                  />
+                  {p.name}（疲労{p.fatigue}）
+                  {plan.starters.includes(p.id) &&
+                    ` · ${plan.starters.indexOf(p.id) + 1}番手`}
+                </label>
+              ))}
+          </>
+        )}
+        {!mobile && section === 'strategy' && (
+          <>
+            {Object.entries({
+              batting: [
+                '打撃方針',
+                { balanced: 'バランス', patient: '慎重', aggressive: '積極' },
+              ],
+              pitching: [
+                '投球方針',
+                {
+                  balanced: 'バランス',
+                  strikeout: '三振狙い',
+                  contact: '打たせて取る',
+                },
+              ],
+              baseRunning: [
+                '走塁方針',
+                { normal: '標準', aggressive: '積極', conservative: '慎重' },
+              ],
+            }).map(([key, [label, values]]) => (
+              <label key={key}>
+                {label}
                 <select
-                  aria-label={`${entry.battingOrder}番の選手`}
-                  value={entry.playerId}
+                  value={plan.strategy[key] || Object.keys(values)[0]}
                   onChange={(e) =>
                     change({
                       ...plan,
-                      battingOrder: plan.battingOrder.map((x) =>
-                        x === entry
-                          ? {
-                              ...x,
-                              playerId: fielders.find(
-                                (p) => String(p.id) === e.target.value,
-                              )?.id,
-                            }
-                          : x,
-                      ),
+                      strategy: { ...plan.strategy, [key]: e.target.value },
                     })
                   }
                 >
-                  {fielders.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}（{POS[p.position]}）
+                  {Object.entries(values).map(([v, text]) => (
+                    <option key={v} value={v}>
+                      {text}
                     </option>
                   ))}
                 </select>
-              )}
-              <button
-                aria-label={`${entry.battingOrder}番を上げる`}
-                disabled={busy || i === 0}
-                onClick={() => move(i, -1)}
-              >
-                ↑
-              </button>
-              <button
-                aria-label={`${entry.battingOrder}番を下げる`}
-                disabled={busy || i === 7}
-                onClick={() => move(i, 1)}
-              >
-                ↓
-              </button>
-            </div>
-          ))}
-      {!mobile && section === 'pitchers' && (
-        <>
-          <h3>先発ローテーション</h3>
-          <p>
-            選択した順に先発します。並びを変更した場合は先頭から再開します。
-          </p>
-          {view.roster
-            .filter((p) => p.position === 'pitcher')
-            .map((p) => (
-              <label className="online-check" key={p.id}>
-                <input
-                  type="checkbox"
-                  checked={plan.starters.includes(p.id)}
-                  onChange={(e) =>
-                    change({
-                      ...plan,
-                      starters: e.target.checked
-                        ? [...plan.starters, p.id]
-                        : plan.starters.filter((id) => id !== p.id),
-                    })
-                  }
-                />
-                {p.name}（疲労{p.fatigue}）
-                {plan.starters.includes(p.id) &&
-                  ` · ${plan.starters.indexOf(p.id) + 1}番手`}
               </label>
             ))}
-        </>
-      )}
-      {!mobile && section === 'strategy' && (
-        <>
-          {Object.entries({
-            batting: [
-              '打撃方針',
-              { balanced: 'バランス', patient: '慎重', aggressive: '積極' },
-            ],
-            pitching: [
-              '投球方針',
-              {
-                balanced: 'バランス',
-                strikeout: '三振狙い',
-                contact: '打たせて取る',
-              },
-            ],
-            baseRunning: [
-              '走塁方針',
-              { normal: '標準', aggressive: '積極', conservative: '慎重' },
-            ],
-          }).map(([key, [label, values]]) => (
-            <label key={key}>
-              {label}
-              <select
-                value={plan.strategy[key] || Object.keys(values)[0]}
-                onChange={(e) =>
-                  change({
-                    ...plan,
-                    strategy: { ...plan.strategy, [key]: e.target.value },
-                  })
-                }
-              >
-                {Object.entries(values).map(([v, text]) => (
-                  <option key={v} value={v}>
-                    {text}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </>
-      )}
+          </>
+        )}
 
-      <div className="online-actions">
-        <button
-          className="online-primary"
-          disabled={busy || !dirty}
-          onClick={() =>
-            run(async () => {
-              await command('lineup', plan);
+        <div className="online-actions">
+          <button
+            className="online-primary"
+            disabled={busy || !dirty}
+            onClick={() =>
+              run(async () => {
+                await command('lineup', { ...plan, baseLineup });
+                setDirty(false);
+              })
+            }
+          >
+            編成を保存
+          </button>
+          <button
+            disabled={busy || !dirty}
+            onClick={() => {
+              setPlan(structuredClone(view.lineup));
               setDirty(false);
-            })
-          }
-        >
-          編成を保存
-        </button>
-        <button
-          disabled={busy || !dirty}
-          onClick={() => {
-            setPlan(structuredClone(view.lineup));
-            setDirty(false);
-          }}
-        >
-          編集を戻す
-        </button>
-      </div>
+            }}
+          >
+            編集を戻す
+          </button>
+        </div>
+      </fieldset>
     </section>
   );
 }

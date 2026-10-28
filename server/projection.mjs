@@ -11,6 +11,15 @@ const playerView = (p) => ({
   fielding: p.fielding,
   seasonStats: p.seasonStats,
 });
+export function projectLineup(team) {
+  return {
+    battingOrder: (team.lineupSettings?.battingOrder || []).filter(
+      (e) => e.position !== 'pitcher',
+    ),
+    starters: team.pitchingRotation?.starters || [],
+    strategy: team.strategy || {},
+  };
+}
 export function projectLeague(bundle, userId, sessionId, adminId) {
   const l = bundle.league;
   if (!l) return { setupRequired: true, isAdmin: userId === adminId };
@@ -35,29 +44,21 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       ready: !!phase?.submissions[m.userId]?.ready,
     })),
     standings: l.season.standings,
-    results: l.season.results
-      .slice(-14)
-      .map((g) => ({
-        gameId: g.gameId,
-        date: g.date,
-        home: g.home,
-        away: g.away,
-        homeScore: g.result.homeScore,
-        awayScore: g.result.awayScore,
-        decisions: g.result.decisions,
-      })),
+    results: l.season.results.slice(-14).map((g) => ({
+      gameId: g.gameId,
+      date: g.date,
+      home: g.home,
+      away: g.away,
+      homeScore: g.result.homeScore,
+      awayScore: g.result.awayScore,
+      decisions: g.result.decisions,
+    })),
     upcoming: l.season.schedule
       .filter((g) => !g.result && g.home !== 'TBD' && g.away !== 'TBD')
       .slice(0, 6)
       .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away })),
     roster: team.players.map(playerView),
-    lineup: {
-      battingOrder: (team.lineupSettings?.battingOrder || []).filter(
-        (e) => e.position !== 'pitcher',
-      ),
-      starters: team.pitchingRotation?.starters || [],
-      strategy: team.strategy || {},
-    },
+    lineup: projectLineup(team),
     phase: phase
       ? {
           id: phase.id,

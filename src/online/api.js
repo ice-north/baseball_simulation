@@ -63,9 +63,22 @@ export async function api(action, auth, body) {
       '通信結果を確認できません。再読込して最新の状態を確認してください',
     );
   }
-  const result = await response.json();
+  let result;
+  try {
+    result = await response.json();
+    if (!result || typeof result !== 'object' || Array.isArray(result))
+      throw new Error();
+  } catch {
+    throw new Error(
+      'サーバーの応答を確認できません。再読み込みして状態を確認してください',
+    );
+  }
   if (!response.ok) {
-    const error = new Error(result.error);
+    const error = new Error(
+      typeof result.error === 'string'
+        ? result.error
+        : 'サーバー処理に失敗しました。最新状態を確認してください',
+    );
     error.code = result.code;
     throw error;
   }

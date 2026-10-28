@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { withDeadline } from './lib/deadline.mjs';
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
   'utf8',
@@ -124,7 +125,7 @@ async function fixture({
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${base}/online`);
-  await requestStarted;
+  await withDeadline(requestStarted, '認証更新の開始');
   return {
     context,
     page,
@@ -179,7 +180,7 @@ try {
     .click();
   await logout.page.getByLabel('メールアドレス').waitFor();
   logout.release();
-  await logout.refreshFinished;
+  await withDeadline(logout.refreshFinished, 'ログアウト中の認証更新');
   await logout.page.waitForLoadState('networkidle');
   await logout.page.waitForFunction(
     (key) => localStorage.getItem(key) === null,
@@ -206,7 +207,7 @@ try {
     { key, auth: newer },
   );
   tabs.release();
-  await tabs.refreshFinished;
+  await withDeadline(tabs.refreshFinished, '別タブの認証更新');
   await tabs.page.waitForLoadState('networkidle');
   assert.equal(
     await tabs.page.evaluate(
@@ -223,9 +224,9 @@ try {
   await saving.page
     .getByRole('button', { name: '進行を停止', exact: true })
     .click();
-  await saving.commandStarted;
+  await withDeadline(saving.commandStarted, '操作の開始');
   saving.release();
-  await saving.refreshFinished;
+  await withDeadline(saving.refreshFinished, '操作中の認証更新');
   await saving.page.waitForFunction(
     (key) =>
       JSON.parse(localStorage.getItem(key)).accessToken === 'renewed-access',

@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import {
   requireOnline,
   nextProgressionAt,
   assertLeagueVersion,
 } from '../src/online/shared.js';
-import { projectLeague } from './projection.mjs';
+import { projectLeague, projectLineup } from './projection.mjs';
 import { saveLineup } from './lineupCommand.mjs';
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -119,13 +120,46 @@ export class LeagueService {
               !Array.isArray(command.payload),
             '提出内容が不正です',
           );
-        if (command.type === 'submit')
+        if (command.type === 'submit') {
+          requireOnline(
+            Object.hasOwn(command.payload, 'baseSubmission'),
+            '画面を再読み込みしてから提出してください',
+            400,
+            'edit_base',
+          );
+          const submitted = l.phase?.submissions?.[userId] || null;
+          requireOnline(
+            isDeepStrictEqual(
+              JSON.parse(JSON.stringify(submitted)),
+              command.payload.baseSubmission,
+            ),
+            '保存済みの提出が更新されています。最新の提出を読み直してください',
+            409,
+            'edit_conflict',
+          );
           await this.engine((engine) =>
             engine.submitPhase(l, userId, command.payload, now),
           );
-        else if (command.type === 'lineup')
+        } else if (command.type === 'lineup') {
+          requireOnline(
+            command.payload.baseLineup &&
+              typeof command.payload.baseLineup === 'object',
+            '画面を再読み込みしてから編成を保存してください',
+            400,
+            'edit_base',
+          );
+          const member = l.members.find((m) => m.userId === userId);
+          const currentLineup = JSON.parse(
+            JSON.stringify(projectLineup(l.game.teams[member.teamName])),
+          );
+          requireOnline(
+            isDeepStrictEqual(currentLineup, command.payload.baseLineup),
+            '編成が更新されています。「編集を戻す」で最新の編成を読み直してください',
+            409,
+            'edit_conflict',
+          );
           saveLineup(l, userId, command.payload);
-        else if (command.type === 'pause') {
+        } else if (command.type === 'pause') {
           requireOnline(
             userId === this.adminId && l.status === 'running',
             '進行中に管理者が停止してください',
