@@ -17,8 +17,7 @@ import {
   StatLabels,
 } from './PlayerPerformance.jsx';
 export default function DesktopView(props) {
-  const { view } = props;
-  const [tab, setTab] = useState('today');
+  const { view, tab, setTab } = props;
   const tabs = [
     ['today', '今日'],
     ['games', '試合'],

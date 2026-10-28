@@ -39,6 +39,8 @@ export default function OnlineApp() {
   const [message, setMessage] = useState('');
   const [showTimes, setShowTimes] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 表示幅でPC/スマホの部品が切り替わっても、選択中の画面は失わない。
+  const [screen, setScreen] = useState('today');
   const locked = useRef(false);
   const viewSequence = useRef(0);
   const refreshFlight = useRef(null);
@@ -52,6 +54,7 @@ export default function OnlineApp() {
     viewSequence.current++;
     setAuth(value);
     setView(null);
+    setScreen('today');
   }, []);
   const renewAuth = useCallback(async (expected) => {
     const pending = refreshFlight.current;
@@ -244,6 +247,7 @@ export default function OnlineApp() {
         setAuth(null);
         setView(null);
         setShowTimes(false);
+        setScreen('today');
       }
     });
   const compactMobile = mobile && view && !view.setupRequired;
@@ -356,6 +360,8 @@ export default function OnlineApp() {
             )}
             {mobile ? (
               <MobileView
+                tab={screen === 'admin' ? 'today' : screen}
+                setTab={setScreen}
                 view={view}
                 local={config.local}
                 loading={busy}
@@ -369,6 +375,8 @@ export default function OnlineApp() {
               />
             ) : (
               <DesktopView
+                tab={screen === 'news' ? 'games' : screen}
+                setTab={setScreen}
                 view={view}
                 auth={auth}
                 local={config.local}

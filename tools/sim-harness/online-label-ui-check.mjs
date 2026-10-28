@@ -199,7 +199,7 @@ async function scene(width, height = 844, scale = 1) {
   context.on('close', () => {
     if (activeContext === context) activeContext = null;
   });
-  await context.addInitScript(() =>
+  await context.addInitScript(() => {
     localStorage.setItem(
       'baseball-online-auth-v1',
       JSON.stringify({
@@ -207,8 +207,17 @@ async function scene(width, height = 844, scale = 1) {
         sessionId: 'fixture',
         accessToken: 'fixture',
       }),
-    ),
-  );
+    );
+    window.__onlineViewportChanges = [];
+    const media = matchMedia('(max-width: 767px)');
+    media.addEventListener('change', (event) => {
+      window.__onlineViewportChanges.push({
+        matches: event.matches,
+        width: innerWidth,
+        height: innerHeight,
+      });
+    });
+  });
   await context.route('http://localhost:3000/**', async (route) => {
     if (route.request().resourceType() === 'document')
       return route.fulfill({ contentType: 'text/html', body: html });
@@ -265,10 +274,27 @@ try {
     '選手',
     '詳細を閉じても元の一覧に留まる',
   );
+  await p.setViewportSize({ width: 700, height: 1000 });
+  await p.locator('.online-mobile-controls').waitFor();
+  await p.setViewportSize({ width: 1440, height: 1000 });
+  assert.equal(
+    await p
+      .locator('.online-page-nav [aria-current="page"]')
+      .getAttribute('aria-label'),
+    '選手',
+    '表示形式を往復しても選手画面を維持する',
+  );
   await p.screenshot({
     path: '/tmp/baseball-online-labels-desktop.png',
     fullPage: true,
   });
+  assert.equal(
+    await p
+      .locator('.online-page-nav [aria-current="page"]')
+      .getAttribute('aria-label'),
+    '選手',
+    '全体キャプチャ後も選手画面を維持する',
+  );
   await p.getByRole('button', { name: '成績一覧', exact: true }).click();
   await p.getByLabel('成績の表示項目').selectOption('sabers');
   await p.getByRole('button', { name: 'OPSで並べ替え', exact: true }).click();
@@ -590,6 +616,9 @@ try {
         JSON.stringify({
           url: page.url(),
           errors,
+          viewportChanges: await page
+            .evaluate(() => window.__onlineViewportChanges)
+            .catch(() => null),
           state: await page
             .locator('body')
             .innerText()

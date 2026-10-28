@@ -10,8 +10,8 @@ import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatGameDate } from './shared.js';
 import { dateTime, STATUS } from './api.js';
 export default function MobileView(props) {
-  const { view, local, loading, reloadView, logout, showTimes } = props;
-  const [tab, setTab] = useState('today');
+  const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
+    props;
   const [playersFrom, setPlayersFrom] = useState('today');
   const [menuOpen, setMenuOpen] = useState(false);
   const tabs = [
