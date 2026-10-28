@@ -8,40 +8,10 @@ import {
   STARTER_ROLES,
   RELIEF_ROLES,
 } from './tactics.js';
+import { replayLabel as label } from './replayText.js';
 import { AbilityGrade } from './PlayerPerformance.jsx';
 import { POS } from './api.js';
 import { teamShort } from './gameText.js';
-const RESULTS = {
-  ball: 'ボール',
-  called_strike: '見逃し',
-  swinging_strike: '空振り',
-  strikeout: '三振',
-  foul: 'ファウル',
-  single: '単打',
-  double: '二塁打',
-  triple: '三塁打',
-  homerun: '本塁打',
-  out: 'アウト',
-  double_play: '併殺',
-  hit_by_pitch: '死球',
-  walk: '四球',
-  error: '失策',
-  bunt_fair: 'バント・フェア',
-  bunt_popup: 'バント・飛球',
-  bunt_foul: 'バント・ファウル',
-};
-const label = (frame) =>
-  frame.kind === 'matchup'
-    ? frame.pinchHit
-      ? '代打'
-      : '打席開始'
-    : frame.kind === 'steal'
-      ? frame.success
-        ? '盗塁成功'
-        : '盗塁死'
-      : frame.kind === 'wild_pitch'
-        ? '暴投・捕逸で進塁'
-        : RESULTS[frame.result] || frame.result || 'プレー';
 export default function ReplayViewer({ game }) {
   const replay = game.replay;
   const [index, setIndex] = useState(0);
@@ -258,7 +228,9 @@ export default function ReplayViewer({ game }) {
                   {team === game.home ? frame.homeScore : frame.awayScore}
                 </td>
                 <td>{team === game.home ? frame.homeHits : frame.awayHits}</td>
-                <td>{team === game.home ? frame.homeErrors : frame.awayErrors}</td>
+                <td>
+                  {team === game.home ? frame.homeErrors : frame.awayErrors}
+                </td>
               </tr>
             ))}
           </tbody>

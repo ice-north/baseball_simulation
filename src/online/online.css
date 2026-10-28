@@ -1540,3 +1540,51 @@
 .online-replay-controls select { width: auto; flex: 0 0 110px; }
 .online-replay-controls input[type='range'] { width: auto; flex: 1; min-width: 140px; }
 .online-replay-controls button { min-height: 34px; font-size: 12px; padding: 4px 8px; }
+/* スマホの采配は項目ごとのパネル。共通の下書きを使い、画面移動では送信しない。 */
+.online-mobile-panel { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; padding: 12px; border: 0; color: #f1f5f9; background: var(--surface-2); }
+.online-mobile-panel[open] { display: flex; flex-direction: column; gap: 8px; }
+.online-mobile-panel::backdrop { background: #0009; }
+.online-mobile-panel > header { flex: 0 0 auto; }
+.online-mobile-panel > header h2 { font-size: 18px; margin: 0; }
+.online-mobile-panel-content { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.online-mobile-panel-content > select { flex-shrink: 0; }
+.online-mobile-tactic-fields { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; }
+.online-mobile-tactic-fields:empty { display: none; }
+.online-mobile-tactic-fields label { display: grid; gap: 3px; font-size: 13px; margin: 0; }
+.online-mobile-panel select { font-size: 16px; }
+.online-mobile-tactic-note { font-size: 12px; margin: 0 !important; color: #cbd5e1; }
+.online-mobile-role-list { flex: 1; min-height: 0; }
+.online-mobile-role-list article { min-height: 58px; padding: 6px 0; border-bottom: 1px solid #ffffff24; }
+.online-mobile-role-list article > div { display: flex; align-items: center; gap: 8px; }
+.online-mobile-role-list small { font-size: 12px; }
+.online-mobile-panel > footer { flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom); }
+.online-mobile-panel > footer > small { display: block; font-size: 12px; margin-bottom: 6px; }
+.online-mobile-panel > footer > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* モバイルの試合経過は、回/表示粒度とページ送りで全投球を確認できる。 */
+.online-mobile-replay { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 6px; }
+.online-mobile-replay-tools { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.online-mobile-replay-tools select { width: 85px; padding: 4px; flex-shrink: 0; }
+.online-mobile-replay-tools button { flex: 1; padding: 4px; font-size: 12px; white-space: nowrap; }
+.online-mobile-play-state { padding: 8px; border-radius: 5px; background: #020203; color: #fb923c; flex-shrink: 0; }
+.online-mobile-play-state > strong { display: block; text-align: center; font-size: 16px; }
+.online-mobile-play-state p { margin: 3px 0; font-size: 11px; }
+.online-mobile-play-state p span { display: block; overflow-wrap: anywhere; }
+.online-mobile-runners { display: flex; gap: 6px; font-size: 11px; }
+.online-mobile-runners span { flex: 1; text-align: center; color: #b1bdcd; }
+.online-mobile-runners .is-occupied { color: #facc15; }
+.online-mobile-play-list { flex: 1; min-height: 44px; overflow: hidden; }
+.online-mobile-play-list button { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px; width: 100%; height: 44px; border-radius: 0; border: 0; border-bottom: 1px solid #ffffff24; padding: 4px; align-items: center; gap: 4px; text-align: left; font-size: 12px; }
+.online-mobile-play-list button > span, .online-mobile-play-list button > b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-mobile-play-list button[aria-current='true'] { background: var(--accent-soft); outline: 1px solid var(--accent); outline-offset: -1px; }
+.online-mobile-replay > small { font-size: 11px; flex-shrink: 0; }
+.online-mobile-replay .online-pager { flex-shrink: 0; margin: 0; padding: 0; min-height: 44px; }
+.online-mobile-replay-footer { display: flex; gap: 8px; flex-shrink: 0; }
+.online-mobile-replay-footer .online-pager { flex: 1; }
+.online-replay-launch button[aria-pressed='true'], .online-mobile-replay-tools button[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); color: #67e8f9; }
+@media (max-width: 767px) {
+  .online-game-dialog .online-replay-launch { display: flex; margin: 0 0 4px; gap: 4px; }
+  .online-game-dialog .online-replay-launch button { flex: 1; padding: 4px 8px; min-height: 36px; font-size: 12px; }
+  .online-game-dialog.online-mobile-replay-dialog { height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); overflow: hidden; }
+  .online-mobile-replay-dialog[open] { display: flex; flex-direction: column; }
+  .online-mobile-replay-dialog > header, .online-mobile-replay-dialog > .online-replay-launch { flex-shrink: 0; }
+}

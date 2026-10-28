@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReplayViewer from './ReplayViewer.jsx';
+import MobileReplay from './MobileReplay.jsx';
 import { useRead } from './useRead.js';
 import { PageNav } from './PageNav.jsx';
 import { formatGameDate } from './shared.js';
@@ -91,7 +92,7 @@ const GROUPS = {
     ],
   ],
 };
-function Panel({ title, close, children, wide = false }) {
+function Panel({ title, close, children, wide = false, mobileReplay = false }) {
   const ref = useRef(null);
   useEffect(() => {
     const node = ref.current,
@@ -109,7 +110,7 @@ function Panel({ title, close, children, wide = false }) {
   return (
     <dialog
       ref={ref}
-      className={`online-player-dialog online-game-dialog ${wide ? 'online-replay-dialog' : ''}`}
+      className={`online-player-dialog online-game-dialog ${wide ? 'online-replay-dialog' : ''} ${mobileReplay ? 'online-mobile-replay-dialog' : ''}`}
       aria-label={title}
       onCancel={(e) => {
         e.preventDefault();
@@ -121,9 +122,11 @@ function Panel({ title, close, children, wide = false }) {
     >
       <header>
         <h2>{title}</h2>
-        <button aria-label={`${title}を閉じる`} onClick={dismiss}>
-          閉じる
-        </button>
+        {!mobileReplay && (
+          <button aria-label={`${title}を閉じる`} onClick={dismiss}>
+            閉じる
+          </button>
+        )}
       </header>
       {children}
     </dialog>
@@ -310,11 +313,17 @@ export function GameRecordButton({ game, year, ownTeam, children }) {
   );
 }
 function GameRecord({ id, year, ownTeam, close }) {
+  const compact = window.matchMedia('(max-width: 767px)').matches;
   const [watch, setWatch] = useState(false);
   const result = useRead('game', { id, year }),
     game = result.data;
   return (
-    <Panel title="試合成績" close={close} wide={watch}>
+    <Panel
+      title="試合成績"
+      close={close}
+      wide={watch && !compact}
+      mobileReplay={watch && compact && !!game}
+    >
       <RequestState result={result} />
       {game && (
         <>
@@ -324,7 +333,7 @@ function GameRecord({ id, year, ownTeam, close }) {
                 個人成績
               </button>
               <button aria-pressed={watch} onClick={() => setWatch(true)}>
-                観戦リプレイ
+                {compact ? '試合経過' : '観戦リプレイ'}
               </button>
             </nav>
           )}
@@ -339,7 +348,11 @@ function GameRecord({ id, year, ownTeam, close }) {
             </p>
           )}
           {watch ? (
-            <ReplayViewer game={game} />
+            compact ? (
+              <MobileReplay game={game} close={close} />
+            ) : (
+              <ReplayViewer game={game} />
+            )
           ) : game.teams ? (
             <BoxScore game={game} ownTeam={ownTeam} />
           ) : (

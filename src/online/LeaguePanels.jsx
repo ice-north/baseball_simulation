@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import MobileTactics from './MobileTactics.jsx';
 import { PitcherRoles, AutoTactics } from './PreGameTactics.jsx';
 import { roleFor } from './tactics.js';
 import { useDraftState } from './Drafts.jsx';
@@ -597,6 +598,19 @@ export function LineupPanel({
     structuredClone(view.lineup),
   );
   const [section, setSection] = useState('batting');
+  const [showTactics, setShowTactics] = useState(false);
+  const [tacticsError, setTacticsError] = useState('');
+  const save = () =>
+    run(async () => {
+      setTacticsError('');
+      try {
+        await command('lineup', { ...plan, baseLineup });
+        setDirty(false);
+      } catch (error) {
+        setTacticsError(error.message);
+        throw error;
+      }
+    });
   useEffect(() => {
     if (!dirty) {
       setPlan(structuredClone(view.lineup));
@@ -634,25 +648,26 @@ export function LineupPanel({
   const fielders = view.roster.filter((p) => p.position !== 'pitcher');
   return (
     <section className="online-card online-lineup-card" hidden={hidden}>
+      <div className="online-card-heading">
+        {mobile ? (
+          <div>
+            <h2>打順</h2>
+            <p className="online-muted">次の試合から反映</p>
+          </div>
+        ) : (
+          <h2>編成・采配</h2>
+        )}
+        {mobile && <button onClick={() => setShowTactics(true)}>采配</button>}
+        {mobile && onShowRoster && (
+          <button
+            onClick={onShowRoster}
+            aria-label="投手・控えを含む選手成績 →"
+          >
+            選手成績
+          </button>
+        )}
+      </div>
       <fieldset className="online-form-fields" disabled={busy}>
-        <div className="online-card-heading">
-          {mobile ? (
-            <div>
-              <h2>打順</h2>
-              <p className="online-muted">保存後、次の試合から反映</p>
-            </div>
-          ) : (
-            <h2>編成・采配</h2>
-          )}
-          {mobile && onShowRoster && (
-            <button
-              onClick={onShowRoster}
-              aria-label="投手・控えを含む選手成績 →"
-            >
-              選手成績
-            </button>
-          )}
-        </div>
         {!mobile && (
           <div className="online-segments">
             {[
@@ -840,12 +855,7 @@ export function LineupPanel({
           <button
             className="online-primary"
             disabled={busy || !dirty}
-            onClick={() =>
-              run(async () => {
-                await command('lineup', { ...plan, baseLineup });
-                setDirty(false);
-              })
-            }
+            onClick={save}
           >
             編成を保存
           </button>
@@ -860,6 +870,18 @@ export function LineupPanel({
           </button>
         </div>
       </fieldset>
+      {mobile && showTactics && (
+        <MobileTactics
+          view={view}
+          plan={plan}
+          change={change}
+          busy={busy}
+          dirty={dirty}
+          save={save}
+          error={tacticsError}
+          close={() => setShowTactics(false)}
+        />
+      )}
     </section>
   );
 }
