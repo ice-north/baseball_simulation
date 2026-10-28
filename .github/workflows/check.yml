@@ -31,3 +31,27 @@ jobs:
       # progression-check（多年次の人口保存・年齢ピラミッド・ポジション均衡）。重いので別ステップ。
       - name: Progression check
         run: npm run check:progression
+
+      - name: Online actual daily season (year 1 to year 2)
+        run: npm run check:online:season
+
+      - name: Install browser for online UI check
+        run: npx playwright install --with-deps chromium
+
+      - name: Online PC and mobile UI
+        run: |
+          ONLINE_DATA_FILE="$RUNNER_TEMP/online-ui.json.gz" npm run dev:online > "$RUNNER_TEMP/online-api.log" 2>&1 &
+          npm run dev -- --host 127.0.0.1 > "$RUNNER_TEMP/online-vite.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent 'http://127.0.0.1:3000/api/online?action=config'; then break; fi
+            sleep 1
+          done
+          ONLINE_TEST_URL=http://127.0.0.1:3000 npm run check:online:ui
+
+      - name: Upload online UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: online-ui
+          path: /tmp/baseball-online-*.png
+          if-no-files-found: ignore

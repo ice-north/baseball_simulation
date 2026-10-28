@@ -15,7 +15,7 @@ export default defineConfig({
     //    **黙って別のオリジンへ移るより、起動に失敗して気づかせる方が良い。**
     strictPort: true,
     proxy: { '/api/online': 'http://127.0.0.1:3002' },
-    open: true
+    open: !process.env.CI
   },
   build: {
     outDir: 'dist',

@@ -22,7 +22,8 @@
     "check:bunt": "node tools/sim-harness/bunt-check.mjs",
     "check:online": "node tools/sim-harness/online-core-check.mjs && node tools/sim-harness/online-service-check.mjs && npm run check:online:storage && node tools/sim-harness/online-boundary-check.mjs",
     "check:online:season": "node tools/sim-harness/online-engine-check.mjs",
-    "check:online:storage": "node tools/sim-harness/online-storage-check.mjs"
+    "check:online:storage": "node tools/sim-harness/online-storage-check.mjs",
+    "check:online:ui": "node tools/sim-harness/online-ui-check.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",
