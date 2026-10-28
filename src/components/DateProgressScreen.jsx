@@ -1,3 +1,5 @@
+import { simulateScheduledGamesOnDate } from '../game/daySimulation.js';
+import { generateBackgroundTournaments, advanceBackgroundTournaments } from '../game/backgroundProgression.js';
 import React, { useState, useEffect, useMemo } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell } from './GameUIComponents.jsx';
@@ -169,59 +171,6 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   //    （社会人モードの大会・背景のリーグ戦は全員0勝0敗）。表示に使うのは結果の `decisions`
   const determinePitcherDecisions = (gameResult) => gameResult?.decisions || decisionsFromResult(gameResult);
 
-  const simulateGamesOnDate = (sData) => {
-    const gamesOnDate = getScheduleByDate(sData.schedule, sData.currentDate);
-    if (gamesOnDate.length === 0) return { data: sData, results: [] };
-    let updatedSchedule = [...sData.schedule];
-    const scheduleIndexById = new Map(sData.schedule.map((game, index) => [game.id, index]));
-    let updatedStandings = sData.standings.map(entry => ({ ...entry }));
-    let updatedResults = [...sData.results];
-    const gameResults = [];
-    gamesOnDate.forEach(game => {
-      if (game.result) return;
-      const homeTeam = TEAMS_DATA[game.home];
-      const awayTeam = TEAMS_DATA[game.away];
-      if (!homeTeam || !awayTeam) return;
-      const seed = scheduledGameSeed(game);
-      const result = autoSimulateGame(game.home, game.away, false, seed);
-      const decisions = determinePitcherDecisions(result);
-      const isHomeWin = result.homeScore > result.awayScore;
-      console.log(`[投手判定] ${game.home} vs ${game.away}: ${result.homeScore}-${result.awayScore}`,
-        'W:', decisions.winningPitcher?.name || 'なし',
-        'L:', decisions.losingPitcher?.name || 'なし',
-        'S:', decisions.savePitcher?.name || 'なし',
-        'H:', decisions.holdPitchers.length);
-      // 記録は autoSimulateGame が済ませている（二重に積まない）
-      const scheduleIndex = scheduleIndexById.get(game.id) ?? -1;
-      const decisionsForDisplay = {
-        winningPitcher: decisions.winningPitcher ? { id: decisions.winningPitcher.id, name: decisions.winningPitcher.name } : null,
-        losingPitcher: decisions.losingPitcher ? { id: decisions.losingPitcher.id, name: decisions.losingPitcher.name } : null,
-        savePitcher: decisions.savePitcher ? { id: decisions.savePitcher.id, name: decisions.savePitcher.name } : null,
-        holdPitchers: decisions.holdPitchers.map(p => ({ id: p.id, name: p.name }))
-      };
-      const resultWithChanges = { ...result, pitcherChanges: result.pitcherChanges || [], decisions: decisionsForDisplay };
-      if (scheduleIndex !== -1) updatedSchedule[scheduleIndex] = { ...game, rngSeed: seed, result: resultWithChanges };
-      gameResults.push({ gameId: game.id, home: game.home, away: game.away, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.winner, decisions, pitcherChanges: result.pitcherChanges || [] });
-      updatedResults.push({ gameId: game.id, date: { ...sData.currentDate }, home: game.home, away: game.away, result: resultWithChanges });
-      const standingHome = updatedStandings.find(s => s.team === game.home);
-      const standingAway = updatedStandings.find(s => s.team === game.away);
-      if (game.phase !== SEASON_PHASES.PLAYOFFS && standingHome && standingAway) {
-        standingHome.gamesPlayed++; standingAway.gamesPlayed++;
-        if (result.homeScore > result.awayScore) { standingHome.wins++; standingAway.losses++; }
-        else if (result.awayScore > result.homeScore) { standingAway.wins++; standingHome.losses++; }
-        else { standingHome.draws = (standingHome.draws || 0) + 1; standingAway.draws = (standingAway.draws || 0) + 1; }
-        standingHome.winRate = standingHome.gamesPlayed > 0 ? standingHome.wins / standingHome.gamesPlayed : 0;
-        standingAway.winRate = standingAway.gamesPlayed > 0 ? standingAway.wins / standingAway.gamesPlayed : 0;
-      }
-    });
-    updatedStandings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-    let updatedData = { ...sData, schedule: updatedSchedule, standings: updatedStandings, results: updatedResults };
-    // プレーオフ進行を更新（シリーズ決着・TBD確定）
-    if (sData.phase === SEASON_PHASES.PLAYOFFS) {
-      updatedData = updatePlayoffProgress(updatedData);
-    }
-    return { data: updatedData, results: gameResults };
-  };
 
   const checkAndTriggerEvents = (oldData, newData) => {
     // 大学プールの初期化。従来はセーブのロード時にしか呼ばれておらず、
@@ -357,129 +306,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       return newData;
     }
 
-    // 非社会人モード: 社会人トーナメントを生成（日付進行で消化）
-    if (!isCorporate && WORLD_DATA.initialized) {
-      const calYear = newData.currentDate.year;
-      // 地域トーナメント（4月〜生成）
-      const rtWasNull = !WORLD_DATA.corporateRegionalTournament?.generated;
-      if (month >= 4 && !WORLD_DATA.corporateRegionalTournament?.generated) {
-        try {
-          const rt = generateRegionalTournament({ userTeamName: null, calendarYear: calYear });
-          WORLD_DATA.corporateRegionalTournament = { ...rt, generated: true };
-        } catch (_) {
-          WORLD_DATA.corporateRegionalTournament = { generated: true, done: true };
-        }
-      }
-      // catch-up: 6月以降に初回生成（セーブロード後の再生成）→ 即完了
-      if (rtWasNull && WORLD_DATA.corporateRegionalTournament?.generated && !WORLD_DATA.corporateRegionalTournament.done && month >= 6) {
-        const rt = WORLD_DATA.corporateRegionalTournament;
-        for (const regionId of Object.keys(rt.brackets || {})) {
-          const r = rt.brackets[regionId];
-          autoPlayBracket(r.bracket, r.teamDefsMap);
-          if (r.bracket.champion) { r.champion = r.bracket.champion; r.phase = 'done'; }
-        }
-        rt.phase = 'done'; rt.done = true;
-      }
-      // 都市対抗予選（5月〜生成）
-      const toshiWasNull = !WORLD_DATA.corporateToshitaikou?.generated;
-      if (month >= 5 && !WORLD_DATA.corporateToshitaikou?.generated) {
-        try {
-          const tournament = generateToshitaikou({ userTeamName: null, calendarYear: calYear });
-          WORLD_DATA.corporateToshitaikou = { ...tournament, generated: true, qualifiersDone: false, mainDone: false };
-        } catch (_) {
-          WORLD_DATA.corporateToshitaikou = { generated: true, qualifiersDone: true, mainDone: true };
-        }
-      }
-      // catch-up: 7月以降に初回生成 → 予選を即完了
-      if (toshiWasNull && WORLD_DATA.corporateToshitaikou?.generated && !WORLD_DATA.corporateToshitaikou.qualifiersDone && WORLD_DATA.corporateToshitaikou.qualifiers && month >= 7) {
-        const td = WORLD_DATA.corporateToshitaikou;
-        for (const rid of Object.keys(td.qualifiers)) autoPlayQualifier(td.qualifiers[rid], null);
-        td.qualifiersDone = true;
-      }
-      // 都市対抗本戦（予選完了後に生成）
-      const toshiMainWasNull = !!(WORLD_DATA.corporateToshitaikou?.qualifiersDone && !WORLD_DATA.corporateToshitaikou?.mainTournament && !WORLD_DATA.corporateToshitaikou?.mainDone);
-      if (WORLD_DATA.corporateToshitaikou?.qualifiersDone && !WORLD_DATA.corporateToshitaikou?.mainTournament && !WORLD_DATA.corporateToshitaikou?.mainDone) {
-        try {
-          const td = WORLD_DATA.corporateToshitaikou;
-          const mainTournament = createMainTournament(td.qualifiers, null, calYear);
-          WORLD_DATA.corporateToshitaikou = { ...td, mainTournament };
-        } catch (_) {
-          WORLD_DATA.corporateToshitaikou = { ...WORLD_DATA.corporateToshitaikou, mainDone: true };
-        }
-      }
-      // catch-up: 9月以降に本戦が初回生成 → 即完了
-      if (toshiMainWasNull && WORLD_DATA.corporateToshitaikou?.mainTournament && !WORLD_DATA.corporateToshitaikou.mainDone && month >= 9) {
-        const td = WORLD_DATA.corporateToshitaikou;
-        autoPlayMainTournament(td.mainTournament);
-        td.champion = td.mainTournament.champion; td.runnerUp = td.mainTournament.runnerUp; td.mainDone = true;
-      }
-      // 日本選手権（9月〜生成）
-      const nsWasNull = !WORLD_DATA.corporateNihonSenshuken?.generated;
-      if (month >= 9 && !WORLD_DATA.corporateNihonSenshuken?.generated) {
-        try {
-          const ns = generateNihonSenshuken({ userTeamName: null, calendarYear: calYear });
-          WORLD_DATA.corporateNihonSenshuken = { ...ns, generated: true, phase: 'qualifiers' };
-        } catch (_) {
-          WORLD_DATA.corporateNihonSenshuken = { generated: true, done: true };
-        }
-      }
-      // catch-up: 11月以降に初回生成 → 予選を即完了
-      if (nsWasNull && WORLD_DATA.corporateNihonSenshuken?.generated && !WORLD_DATA.corporateNihonSenshuken.done && WORLD_DATA.corporateNihonSenshuken.qualifiers && month >= 11) {
-        const ns = WORLD_DATA.corporateNihonSenshuken;
-        for (const rid of Object.keys(ns.qualifiers)) autoPlayQualifier(ns.qualifiers[rid], null);
-        ns.phase = 'qualifiers_done';
-      }
-      // 日本選手権本戦（予選完了後に生成）
-      const nsMainWasNull = !!(WORLD_DATA.corporateNihonSenshuken?.phase === 'qualifiers_done' && !WORLD_DATA.corporateNihonSenshuken?.mainTournament);
-      if (WORLD_DATA.corporateNihonSenshuken?.phase === 'qualifiers_done' && !WORLD_DATA.corporateNihonSenshuken?.mainTournament) {
-        try {
-          const ns = WORLD_DATA.corporateNihonSenshuken;
-          const mainTournament = createSenshukenMainTournament(ns.qualifiers, calYear, 'corporate');
-          WORLD_DATA.corporateNihonSenshuken = { ...ns, mainTournament, phase: 'main' };
-        } catch (_) {
-          WORLD_DATA.corporateNihonSenshuken = { ...WORLD_DATA.corporateNihonSenshuken, done: true };
-        }
-      }
-      // catch-up: 11月以降に本戦が初回生成 → 即完了
-      if (nsMainWasNull && WORLD_DATA.corporateNihonSenshuken?.mainTournament && !WORLD_DATA.corporateNihonSenshuken.done && month >= 11) {
-        const ns = WORLD_DATA.corporateNihonSenshuken;
-        autoPlayMainTournament(ns.mainTournament);
-        ns.champion = ns.mainTournament.champion; ns.runnerUp = ns.mainTournament.runnerUp; ns.done = true;
-      }
-      // クラブ選手権（9月〜生成）
-      const csWasNull = !WORLD_DATA.corporateClubSenshuken?.generated;
-      if (month >= 9 && !WORLD_DATA.corporateClubSenshuken?.generated) {
-        try {
-          const cs = generateClubSenshuken({ userTeamName: null, calendarYear: calYear });
-          WORLD_DATA.corporateClubSenshuken = { ...cs, generated: true, phase: 'qualifiers' };
-        } catch (_) {
-          WORLD_DATA.corporateClubSenshuken = { generated: true, done: true };
-        }
-      }
-      // catch-up: 11月以降に初回生成 → 予選を即完了
-      if (csWasNull && WORLD_DATA.corporateClubSenshuken?.generated && !WORLD_DATA.corporateClubSenshuken.done && WORLD_DATA.corporateClubSenshuken.qualifiers && month >= 11) {
-        const cs = WORLD_DATA.corporateClubSenshuken;
-        for (const rid of Object.keys(cs.qualifiers)) autoPlayQualifier(cs.qualifiers[rid], null);
-        cs.phase = 'qualifiers_done';
-      }
-      // クラブ選手権本戦（予選完了後に生成）
-      const csMainWasNull = !!(WORLD_DATA.corporateClubSenshuken?.phase === 'qualifiers_done' && !WORLD_DATA.corporateClubSenshuken?.mainTournament);
-      if (WORLD_DATA.corporateClubSenshuken?.phase === 'qualifiers_done' && !WORLD_DATA.corporateClubSenshuken?.mainTournament) {
-        try {
-          const cs = WORLD_DATA.corporateClubSenshuken;
-          const mainTournament = createSenshukenMainTournament(cs.qualifiers, calYear, 'club');
-          WORLD_DATA.corporateClubSenshuken = { ...cs, mainTournament, phase: 'main' };
-        } catch (_) {
-          WORLD_DATA.corporateClubSenshuken = { ...WORLD_DATA.corporateClubSenshuken, done: true };
-        }
-      }
-      // catch-up: 11月以降に本戦が初回生成 → 即完了
-      if (csMainWasNull && WORLD_DATA.corporateClubSenshuken?.mainTournament && !WORLD_DATA.corporateClubSenshuken.done && month >= 11) {
-        const cs = WORLD_DATA.corporateClubSenshuken;
-        autoPlayMainTournament(cs.mainTournament);
-        cs.champion = cs.mainTournament.champion; cs.runnerUp = cs.mainTournament.runnerUp; cs.done = true;
-      }
-    }
+    if (!isCorporate) generateBackgroundTournaments(newData.currentDate);
 
     // 独立リーグの優勝決定シリーズが終わってから全国大会を開催する。
     const playoffGames = newData.schedule.filter(game => game.phase === SEASON_PHASES.PLAYOFFS);
@@ -732,7 +559,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
   const executeSkipDay = (days) => {
     setIsSimulating(true);
-    const { data: afterSimData } = simulateGamesOnDate(seasonData);
+    const { data: afterSimData } = simulateScheduledGamesOnDate(seasonData);
     let newSeasonData = progressDate(afterSimData, days);
     if (newSeasonData._resumeDayAfterManagedGame) newSeasonData = { ...newSeasonData, _resumeDayAfterManagedGame: false };
 
@@ -790,59 +617,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       newSeasonData = { ...newSeasonData, clubSenshuken: cs };
     }
 
-    // 非社会人モード: WORLD_DATAの社会人トーナメントを日付ベースで進行
-    if (!seasonData.settings?.corporateMode && WORLD_DATA.initialized) {
-      const dateObj = seasonData.currentDate;
-      // 地域トーナメント
-      const wdRT = WORLD_DATA.corporateRegionalTournament;
-      if (wdRT?.generated && wdRT.phase !== 'done') {
-        simulateRegionalTournamentOnDate(wdRT, dateObj, null);
-      }
-      // 都市対抗予選
-      const wdTD = WORLD_DATA.corporateToshitaikou;
-      if (wdTD?.generated && !wdTD.mainDone) {
-        if (!wdTD.qualifiersDone && wdTD.qualifiers) {
-          for (const regionId of Object.keys(wdTD.qualifiers)) {
-            simulateQualifierOnDate(wdTD.qualifiers[regionId], dateObj, null);
-          }
-          wdTD.qualifiersDone = Object.values(wdTD.qualifiers).every(q => q.phase === 'done');
-        }
-        if (wdTD.mainTournament && wdTD.mainTournament.phase !== 'done') {
-          simulateMainTournamentOnDate(wdTD.mainTournament, dateObj, null);
-          if (wdTD.mainTournament.phase === 'done') {
-            wdTD.champion = wdTD.mainTournament.champion;
-            wdTD.runnerUp = wdTD.mainTournament.runnerUp;
-            wdTD.mainDone = true;
-          }
-        }
-      }
-      // 日本選手権
-      const wdNS = WORLD_DATA.corporateNihonSenshuken;
-      if (wdNS?.generated && !wdNS.done) {
-        simulateNihonSenshukenOnDate(wdNS, dateObj, null);
-        if (wdNS.mainTournament?.phase === 'done') {
-          wdNS.champion = wdNS.mainTournament.champion;
-          wdNS.runnerUp = wdNS.mainTournament.runnerUp;
-          wdNS.done = true;
-        } else if (wdNS.phase === 'qualifiers') {
-          const allQDone = wdNS.qualifiers && Object.values(wdNS.qualifiers).every(q => q.phase === 'done');
-          if (allQDone) wdNS.phase = 'qualifiers_done';
-        }
-      }
-      // クラブ選手権
-      const wdCS = WORLD_DATA.corporateClubSenshuken;
-      if (wdCS?.generated && !wdCS.done) {
-        simulateNihonSenshukenOnDate(wdCS, dateObj, null);
-        if (wdCS.mainTournament?.phase === 'done') {
-          wdCS.champion = wdCS.mainTournament.champion;
-          wdCS.runnerUp = wdCS.mainTournament.runnerUp;
-          wdCS.done = true;
-        } else if (wdCS.phase === 'qualifiers') {
-          const allQDone = wdCS.qualifiers && Object.values(wdCS.qualifiers).every(q => q.phase === 'done');
-          if (allQDone) wdCS.phase = 'qualifiers_done';
-        }
-      }
-    }
+    if (!seasonData.settings?.corporateMode) advanceBackgroundTournaments(seasonData.currentDate);
 
     // 大学モード: スカウト調査＋注目ボーナスの日次処理
     if (isUniversity && WORLD_DATA._universityScout?.candidates) {

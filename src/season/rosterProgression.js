@@ -1,3 +1,4 @@
+import { humanTeamNames } from '../game/teamControl.js';
 // ============================================================
 // CPU並行世界のロスター管理 - src/season/rosterProgression.js
 //
@@ -217,7 +218,7 @@ const toRetirementEntry = (player, teamName, reason) => ({
  */
 export function processLowerTierTurnover(allTeams, currentYear, excludeTeams = []) {
   const userTeamName = Object.keys(allTeams)[0];
-  const skip = new Set([userTeamName, ...excludeTeams]);
+  const skip = new Set([...humanTeamNames(allTeams, userTeamName), ...excludeTeams]);
   const retirements = [];
   let rescued = 0;
 
@@ -655,7 +656,7 @@ const CORP_ROSTER_TARGET = { S: 35, A: 32, B: 28, C: 25, D: 18 };
 // ============================================================
 export function releaseCPUCorporatePlayers(allTeams, currentYear, excludeTeams = []) {
   const userTeamName = Object.keys(allTeams)[0];
-  const skip = new Set([userTeamName, ...excludeTeams]);
+  const skip = new Set([...humanTeamNames(allTeams, userTeamName), ...excludeTeams]);
 
   for (const [teamName, team] of Object.entries(allTeams)) {
     if (skip.has(teamName)) continue;   // 自チーム＋自リーグは ContractScreen が担当
@@ -752,12 +753,12 @@ export function releaseCPUCorporatePlayers(allTeams, currentYear, excludeTeams =
 // tierFilter: 処理するランクの配列 (例: ['S','A'] or ['B','C','D'])。省略時は全ランク
 // 優先度: S→A→独立(別関数)→B→C→D の順で処理することで、上位チームが良い選手を先に確保できる
 export function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
-  const userTeamName = Object.keys(allTeams)[0];
+  const humanTeams = new Set(humanTeamNames(allTeams));
   const allowedRanks = tierFilter ? new Set(tierFilter) : new Set(['S', 'A', 'B', 'C', 'D']);
 
   const teamsNeedingPlayers = [];
   for (const [teamName, team] of Object.entries(allTeams)) {
-    if (teamName === userTeamName) continue;
+    if (humanTeams.has(teamName)) continue;
     if (!team?.corporateData) continue;
     if (team.corporateData.type === 'club') continue;  // クラブは別処理
     if (team.independentLeagueId) continue;            // 独立は replenishIndependentLeagueRosters で処理
@@ -886,13 +887,13 @@ function recruitBaseZ(p, norms) {
 }
 
 export function replenishIndependentLeagueRosters(allTeams, currentYear) {
-  const userTeamName = Object.keys(allTeams)[0];
+  const humanTeams = new Set(humanTeamNames(allTeams));
 
   // 補充が必要なAI独立リーグチームを収集（ユーザーのリーグのライバルも含む）
   // 独立リーグチームは corporateData と independentLeagueId の両方を持つ
   const teamsNeedingPlayers = [];
   for (const [teamName, team] of Object.entries(allTeams)) {
-    if (teamName === userTeamName) continue;
+    if (humanTeams.has(teamName)) continue;
     if (!team?.players) continue;
     // 独立リーグID を持つチームのみ対象（社会人・大学は replenishCorporateRosters で処理）
     if (!team.independentLeagueId) continue;

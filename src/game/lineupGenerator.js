@@ -1,3 +1,4 @@
+import { humanTeamNames } from './teamControl.js';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { autoStarterRole } from '../utils/constants.js';
 
@@ -661,13 +662,14 @@ export function ensureAllTeamsReady({
   generateAILineup: genAILineup,
   preserveUserLineup = false,
 }) {
+  const humanTeams = new Set(humanTeamNames(TEAMS_DATA, userTeamName));
   Object.keys(TEAMS_DATA).forEach(teamName => {
     const teamData = TEAMS_DATA[teamName];
     if (!teamData?.players?.length) return;
     if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
       genRotation(teamName);
     }
-    if (teamName === userTeamName) {
+    if (humanTeams.has(teamName)) {
       const alreadySet = teamData.lineupSettings?.battingOrder?.length > 0;
       if (!preserveUserLineup || !alreadySet) setUserLineup(teamData, teamName);
     } else {

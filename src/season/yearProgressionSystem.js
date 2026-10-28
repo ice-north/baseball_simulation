@@ -1,3 +1,4 @@
+import { humanTeamNames } from '../game/teamControl.js';
 // ============================================================
 // 年間進行システム - yearProgressionSystem.js
 // シーズン終了処理、年度更新、引退、解雇
@@ -929,10 +930,10 @@ export function recordAwardsToPlayers(allTeams, awards, totalGames = 0) {
 // 引退判定・成長計算でも利用できる状態にする
 // ============================================================
 function simulateParallelWorldStats(allTeams) {
-  const userTeamName = Object.keys(allTeams)[0];
+  const humanTeams = new Set(humanTeamNames(allTeams));
 
   for (const [teamName, team] of Object.entries(allTeams)) {
-    if (teamName === userTeamName) continue;
+    if (humanTeams.has(teamName)) continue;
     if (!team?.players?.length) continue;
 
     // チームタイプ別試合数
