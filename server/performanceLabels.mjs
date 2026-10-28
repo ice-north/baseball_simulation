@@ -27,7 +27,10 @@ export function battingMetrics(s) {
     return null;
   // 既存集計には犠飛・敬遠の区別がない。正確な打席/出塁率と混同しない。
   const hbp = valid(s.hitByPitch) ? s.hitByPitch : 0;
-  const pa = s.atBats + s.walks + hbp + s.sacrificeBunts;
+  const sf = valid(s.sacrificeFlies) ? s.sacrificeFlies : 0;
+  const pa = valid(s.plateAppearances)
+    ? s.plateAppearances
+    : s.atBats + s.walks + hbp + s.sacrificeBunts + sf;
   return {
     pa,
     avg: divide(s.hits, s.atBats),
@@ -35,7 +38,7 @@ export function battingMetrics(s) {
     hrRate: divide(s.homeruns, pa),
     bbRate: divide(s.walks, pa),
     kRate: divide(s.strikeouts, pa),
-    obp: divide(s.hits + s.walks + hbp, s.atBats + s.walks + hbp),
+    obp: divide(s.hits + s.walks + hbp, s.atBats + s.walks + hbp + sf),
     homeruns: s.homeruns,
     stolenBases: valid(s.stolenBases) ? s.stolenBases : null,
     stealAttempts: has(s, ['stolenBases', 'caughtStealing'])
@@ -95,10 +98,10 @@ function choose(candidates) {
     .slice(0, LABEL_RULES.maxLabels)
     .map(({ id, text, tone }) => ({ id, text, tone }));
 }
-export function performanceFor(player, comparison) {
+export function performanceFor(player, comparison, situational = null) {
   const batting = battingMetrics(player.seasonStats?.batting);
   const pitching = pitchingMetrics(player.seasonStats?.pitching);
-  const labels = { batting: [], pitching: [] };
+  const candidates = { batting: [], pitching: [] };
   const add = (list, id, text, tone, score) =>
     list.push({ id, text, tone, score, order: list.length });
   const high = (value, mean, factor) =>
@@ -110,7 +113,7 @@ export function performanceFor(player, comparison) {
     b?.pa >= LABEL_RULES.battingPA
   ) {
     const m = batting,
-      list = [];
+      list = candidates.batting;
     if (m.avg !== null && b.avg !== null && atLeast(m.avg, b.avg + 0.035))
       add(
         list,
@@ -143,7 +146,6 @@ export function performanceFor(player, comparison) {
       else if (m.stealRate < 0.6)
         add(list, 'steal-bad', '盗塁F', 'bad', 1 + (0.6 - m.stealRate) / 0.6);
     }
-    labels.batting = choose(list);
   }
   const p = comparison?.pitching;
   if (
@@ -152,7 +154,7 @@ export function performanceFor(player, comparison) {
     p?.outs >= LABEL_RULES.pitchingOuts
   ) {
     const m = pitching,
-      list = [];
+      list = candidates.pitching;
     if (high(m.k9, p.k9, 1.3))
       add(list, 'pitch-k', '奪三振', 'good', m.k9 / p.k9 / 1.3);
     if (high(m.bb9, p.bb9, 1.4))
@@ -167,10 +169,27 @@ export function performanceFor(player, comparison) {
       );
     if (high(m.hr9, p.hr9, 1.5))
       add(list, 'pitch-hr', '一発', 'bad', m.hr9 / p.hr9 / 1.5);
-    labels.pitching = choose(list);
   }
   return {
-    batting: { metrics: batting, labels: labels.batting },
-    pitching: { metrics: pitching, labels: labels.pitching },
+    batting: {
+      metrics: batting,
+      labels: choose([
+        ...candidates.batting,
+        ...(situational?.batting || []).map((c, i) => ({
+          ...c,
+          order: candidates.batting.length + i,
+        })),
+      ]),
+    },
+    pitching: {
+      metrics: pitching,
+      labels: choose([
+        ...candidates.pitching,
+        ...(situational?.pitching || []).map((c, i) => ({
+          ...c,
+          order: candidates.pitching.length + i,
+        })),
+      ]),
+    },
   };
 }

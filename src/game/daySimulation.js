@@ -6,7 +6,7 @@ import { autoSimulateGame } from './autoSimulation.js';
 import { scheduledGameSeed } from './rng.js';
 import { decisionsFromResult } from './pitcherDecisions.js';
 
-export const simulateScheduledGamesOnDate = (sData) => {
+export const simulateScheduledGamesOnDate = (sData, recording = null) => {
   const gamesOnDate = getScheduleByDate(sData.schedule, sData.currentDate);
   if (gamesOnDate.length === 0) return { data: sData, results: [] };
   let updatedSchedule = [...sData.schedule];
@@ -20,7 +20,9 @@ export const simulateScheduledGamesOnDate = (sData) => {
     const awayTeam = TEAMS_DATA[game.away];
     if (!homeTeam || !awayTeam) return;
     const seed = scheduledGameSeed(game);
-    const result = autoSimulateGame(game.home, game.away, false, seed);
+    const observer = recording?.begin(game);
+    const result = autoSimulateGame(game.home, game.away, false, seed, observer);
+    recording?.finish(game, result, observer);
     const decisions = result.decisions || decisionsFromResult(result);
     const isHomeWin = result.homeScore > result.awayScore;
     // 記録は autoSimulateGame が済ませている（二重に積まない）

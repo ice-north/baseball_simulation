@@ -9,6 +9,7 @@ import {
 import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { gzipSync } from 'node:zlib';
 import { nextProgressionAt } from '../../src/online/shared.js';
+import { projectPlayerInfo } from '../../server/projection.mjs';
 
 assert.equal(
   nextProgressionAt('2026-10-27T23:00:00Z'),
@@ -95,6 +96,20 @@ assert.deepEqual(seen, [
   'offseason',
 ]);
 assert.ok(league.history[0].standings.every((s) => s.gamesPlayed === 75));
+const recordedYear = league.records.seasons[1];
+assert.ok(recordedYear.comparison, '年度・リーグの比較値を確定して残す');
+assert.ok(
+  Object.keys(recordedYear.games).length >= 150,
+  '公式150試合とプレーオフのボックス成績を保持',
+);
+for (const r of Object.values(recordedYear.players)) {
+  assert.equal(
+    r.splits.pitching.all?.outs || 0,
+    r.stats.pitching.inningsPitched,
+    '年間の走者アウトも投球回へ一致',
+  );
+  assert.equal(r.splits.batting.all?.pa || 0, r.stats.batting.plateAppearances);
+}
 resolve();
 assert.equal(league.status, 'running');
 assert.deepEqual(league.season.currentDate, { year: 2025, month: 4, day: 1 });
@@ -111,6 +126,34 @@ for (const name of league.season.settings.teamNames) {
     '自リーグへ架空の次年度成績を注入しない',
   );
 }
+const member = league.members[0],
+  retained = league.game.teams[member.teamName].players.find(
+    (p) => recordedYear.players[p.onlinePlayerId],
+  );
+assert.ok(retained, '過年度の実記録を持つ選手が残る');
+const periods = projectPlayerInfo(
+  { league },
+  member.userId,
+  retained.id,
+).periods;
+const annual = periods.find((p) => p.id === 'online:1'),
+  career = periods.find((p) => p.id === 'career');
+assert.ok(annual && career, '次年度でも年度別と対人通算を取得');
+assert.equal(
+  career.seasonStats.batting.hitByPitch,
+  annual.seasonStats.batting.hitByPitch,
+  '死球の通算引継ぎ',
+);
+assert.equal(
+  career.seasonStats.batting.caughtStealing,
+  annual.seasonStats.batting.caughtStealing,
+  '盗塁死の通算引継ぎ',
+);
+assert.equal(
+  career.seasonStats.batting.sacrificeBunts,
+  annual.seasonStats.batting.sacrificeBunts,
+  '犠打の通算引継ぎ',
+);
 console.log(`online-engine-check PASS (${days}日・2年目開幕)`);
 
 console.log(

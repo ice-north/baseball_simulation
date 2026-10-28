@@ -5,7 +5,13 @@ import {
   nextProgressionAt,
   assertLeagueVersion,
 } from '../src/online/shared.js';
-import { projectLeague, projectLineup } from './projection.mjs';
+import {
+  projectLeague,
+  projectLineup,
+  projectPlayerInfo,
+  projectGames,
+  projectGameInfo,
+} from './projection.mjs';
 import { saveLineup } from './lineupCommand.mjs';
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -46,6 +52,19 @@ export class LeagueService {
       bundle.sessions[userId] = sessionId;
       return { value: { sessionId } };
     });
+  }
+  async playerInfo(userId, id) {
+    if (this.store.readPlayerInfo) return this.store.readPlayerInfo(userId, id);
+    return projectPlayerInfo(await this.store.read(), userId, id);
+  }
+  async games(userId, query) {
+    if (this.store.readGames) return this.store.readGames(userId, query);
+    return projectGames(await this.store.read(), userId, query);
+  }
+  async gameInfo(userId, id, year) {
+    if (this.store.readGameInfo)
+      return this.store.readGameInfo(userId, id, year);
+    return projectGameInfo(await this.store.read(), userId, id, year);
   }
   async logout(userId, sessionId) {
     requireOnline(

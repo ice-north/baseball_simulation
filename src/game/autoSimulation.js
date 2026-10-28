@@ -387,7 +387,7 @@ const SIM_CLONE_OMIT = new Set([
 const cloneTeamForSim = (team) =>
   JSON.parse(JSON.stringify(team, (k, v) => (SIM_CLONE_OMIT.has(k) ? undefined : v)));
 
-const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
+const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = null) => {
 
   // TEAMS_DATAからチームデータを取得
   if (!TEAMS_DATA || !TEAMS_DATA[homeTeamName] || !TEAMS_DATA[awayTeamName]) {
@@ -1853,6 +1853,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
       return;
     }
 
+    const scheduledBatterId = observer ? batter.id : null;
     // AI監督: 代打を検討
     batter = considerPinchHitter(offenseTeam, batter);
 
@@ -1865,6 +1866,24 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
     observeDecisions();   // この打者に投げる投手を登板順に記録（登板時の点差つき）
     const catcher = getCurrentCatcher(defenseTeam);
     const defense = buildDefense(defenseTeam);
+
+    // 対人版から明示的に指定された時だけ観測する。通常試合の記録・判定・乱数には触れない。
+    const observed = observer ? {
+      before: { ...batter.gameStats.batting },
+      pitcherOuts: pitcher.gameStats.pitching.outs,
+      batterId: batter.id, batterName: batter.name, pitcherId: pitcher.id, pitcherName: pitcher.name,
+      offense: offenseTeam.name, defense: defenseTeam.name,
+      inning: gameState.inning, pinchHit: batter.id !== scheduledBatterId,
+      throws: pitcher.physical?.throws || 'right',
+      starter: pitcher.id === (defenseTeam === gameState.homeTeam ? homeStarter?.id : awayStarter?.id),
+      pitches: 0, twoStrikes: false, fouls: 0, result: null,
+    } : null;
+    const observeSituation = () => {
+      if (!observed) return;
+      observed.risp = !!(gameState.bases[1] || gameState.bases[2]);
+      observed.dpPossible = gameState.outs < 2 && !!gameState.bases[0];
+      observed.resultStartOuts = pitcher.gameStats.pitching.outs;
+    };
 
     let atBatOver = false;
     let pitchCount = 0;
@@ -1881,7 +1900,13 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
       pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
       pitcherData.gameStats.pitching.pitches++;
 
+      observeSituation();
       const buntResult = executeBunt(buntDecision, batter, pitcher, catcher, defense, gameState.bases, gameState.outs);
+      if (observed) {
+        observed.bunt = buntDecision;
+        observed.pitches++;
+        observed.result = buntResult;
+      }
 
       if (buntResult.type === 'bunt_popup') {
         batter.gameStats.batting.atBats++;
@@ -1967,7 +1992,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
       // AI監督: 盗塁を検討（各球で検討、ただし1打席1回まで）
       if (pitchCount <= 3 && gameState.outs < 2 && !gameState._stolenAttempted) {
+        const stealBefore = observed ? {outs:pitcher.gameStats.pitching.outs,risp:!!(gameState.bases[1] || gameState.bases[2])} : null;
         const stealResult = attemptStolenBase(offenseTeam, defenseTeam);
+        if (observed && pitcher.gameStats.pitching.outs > stealBefore.outs) observer.runnerOut?.({...observed,risp:stealBefore.risp,outs:pitcher.gameStats.pitching.outs-stealBefore.outs});
         if (stealResult) gameState._stolenAttempted = true;
         if (stealResult && !stealResult.success && gameState.outs >= 3) {
           // 盗塁死で3アウトなら打席終了
@@ -2015,7 +2042,19 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
       // 一球シミュレーション（simulation-logic.jsの物理エンジンを使用）
       // 前球の記録は simulateOnePitch 内で sequence に積まれる（緩急・対角の判定に使う）
+      if (observed) {
+        observeSituation();
+        observed.twoStrikes ||= gameState.count.strikes >= 2;
+      }
       const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, sequence, offenseStrategy, defenseStrategy);
+      if (observed) {
+        observed.pitches++;
+        observed.result = result;
+        if (result.type === 'foul') {
+          observed.fouls++;
+          if (gameState.count.strikes >= 2) observed.twoStrikeFouls=(observed.twoStrikeFouls || 0)+1;
+        }
+      }
 
       // スタミナ減少
       pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
@@ -2252,6 +2291,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
           atBatOver = true;
           break;
       }
+    }
+
+    if (observed) {
+      const after = batter.gameStats.batting;
+      const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
+      // 盗塁死や暴投サヨナラ、球数上限の未完了打席は対戦打席へ加えない。
+      const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts > 0;
+      observer.plateAppearance({ ...observed, delta, completed, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs) });
     }
 
     // 先発投手のダメージポイント積算（先発のみに適用）
@@ -3003,7 +3050,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
   };
 };
 
-export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false, seed = null) =>
-  seed === null ? simulateGame(homeTeamName, awayTeamName, isCupGame)
-    : withSeededRandom(seed, () => ({ ...simulateGame(homeTeamName, awayTeamName, isCupGame), rngSeed: seed }));
+export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false, seed = null, observer = null) =>
+  seed === null ? simulateGame(homeTeamName, awayTeamName, isCupGame, observer)
+    : withSeededRandom(seed, () => ({ ...simulateGame(homeTeamName, awayTeamName, isCupGame, observer), rngSeed: seed }));
 

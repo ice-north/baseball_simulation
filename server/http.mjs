@@ -95,6 +95,19 @@ export function createHandler(
           value = await service.view(userId, sessionId);
         else if (action === 'defaults' && req.method === 'GET')
           value = await service.defaults(userId, sessionId);
+        else if (action === 'player' && req.method === 'GET')
+          value = await service.playerInfo(userId, url.searchParams.get('id'));
+        else if (action === 'games' && req.method === 'GET')
+          value = await service.games(
+            userId,
+            Object.fromEntries(url.searchParams),
+          );
+        else if (action === 'game' && req.method === 'GET')
+          value = await service.gameInfo(
+            userId,
+            url.searchParams.get('id'),
+            url.searchParams.get('year'),
+          );
         else if (action === 'command' && req.method === 'POST')
           value = await service.command(userId, sessionId, body);
         else throw new OnlineError('操作先が見つかりません', 404);

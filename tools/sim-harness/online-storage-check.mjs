@@ -15,6 +15,7 @@ let lease = null;
 let rejectPublish = false;
 let loseResponse = false;
 let gets = 0;
+const downloads = [];
 let beforeDownload = null;
 let missingStatus = 404;
 let missingDetail = null;
@@ -74,6 +75,7 @@ const fetchImpl = async (url, options) => {
         await effect();
       }
       gets++;
+      downloads.push(key);
       return objects.has(key)
         ? new Response(objects.get(key))
         : new Response(JSON.stringify(missingDetail), {
@@ -188,6 +190,104 @@ for (const detail of [
   };
   await assert.rejects(store.read(), (error) => error.storageStatus === 400);
 }
+// 詳細閲覧用の小さい派生記録も同じ公開世代で切り替え、世界一式を読み出さない。
+beforeDownload = null;
+missingStatus = 404;
+missingDetail = null;
+await store.transaction((bundle) => {
+  const player = (id) => ({
+    id,
+    name: `参照選手${id}`,
+    position: 'center',
+    seasonStats: { batting: {}, pitching: {} },
+  });
+  bundle.league = {
+    schema: 1,
+    engineVersion: 'online-1',
+    revision: 1,
+    status: 'running',
+    members: [
+      { userId: 'a', teamName: 'A' },
+      { userId: 'b', teamName: 'B' },
+    ],
+    history: [],
+    notices: [],
+    game: {
+      teams: { A: { players: [player(1)] }, B: { players: [player(2)] } },
+    },
+    season: {
+      year: 1,
+      currentDate: { year: 2024, month: 4, day: 2 },
+      settings: { teamNames: ['A', 'B'] },
+      standings: [],
+      schedule: [],
+      results: [
+        {
+          gameId: 1,
+          date: { year: 2024, month: 4, day: 1 },
+          home: 'A',
+          away: 'B',
+          result: { homeScore: 1, awayScore: 0 },
+        },
+      ],
+    },
+  };
+});
+downloads.length = 0;
+assert.equal((await store.readPlayerInfo('a', 1)).name, '参照選手1');
+assert.equal((await store.readGames('a', {})).count, 1);
+assert.equal((await store.readGameInfo('a', 1, 1)).homeScore, 1);
+assert.ok(
+  downloads.length > 0 &&
+    downloads.every((path) => path.startsWith('archives/')),
+  '閲覧は派生記録だけを読む',
+);
+assert.equal(
+  (await store.readView('a', 'session'))._records,
+  undefined,
+  '内部Storageパスを画面へ渡さない',
+);
+await assert.rejects(
+  store.readPlayerInfo('a', 2),
+  (error) => error.status === 404,
+  '相手の選手詳細を返さない',
+);
+await assert.rejects(
+  store.readPlayerInfo('stranger', 1),
+  (error) => error.status === 403,
+);
+await assert.rejects(
+  store.readGameInfo('a', 'constructor', 1),
+  (error) => error.status === 400,
+);
+await assert.rejects(
+  store.readGames('a', { year: 'bad' }),
+  (error) => error.status === 400,
+);
+const archived = row.views._records;
+await store.transaction((bundle) => {
+  bundle.sessions.a = 'archive-session';
+});
+assert.equal(
+  row.views._records.players.path,
+  archived.players.path,
+  'ログインだけで不変の詳細記録を再転送しない',
+);
+assert.equal(row.views._records.games[1].path, archived.games[1].path);
+const oldArchivePath = row.views._records.players.path;
+store.archiveCache.clear();
+beforeDownload = async () => {
+  for (let i = 0; i < 3; i++)
+    await store.transaction((bundle) => {
+      bundle.league.game.teams.A.players[0].name = `更新${i}`;
+    });
+};
+assert.equal(
+  (await store.readPlayerInfo('a', 1)).name,
+  '更新2',
+  '読取り中に旧派生記録が整理されたら最新世代へ再取得',
+);
+assert.equal(objects.has(oldArchivePath), false, '派生記録も3世代で整理する');
 // HTTP認証、メソッド、JSON/CORS、ユーザーID偽装の入口を確認する。
 const handler = createHandler(
   {

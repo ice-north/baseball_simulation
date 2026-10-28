@@ -81,6 +81,7 @@ import {
 import { addToReleasedPool } from '../src/state/pools.js';
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
+import { createRecorder, freezeComparison } from './recordedStats.mjs';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -479,6 +480,7 @@ function resolvePhase(league, now) {
     generateBackgroundTournaments(league.season.currentDate);
   }
   if (kind === 'offseason') {
+    freezeComparison(league);
     league.history.push({
       year: league.season.year,
       standings: clone(league.season.standings),
@@ -549,7 +551,10 @@ export function advanceLeagueDay(league, operationId, now) {
       .map((name) => prepareDailyLineup(TEAMS_DATA[name], name));
     let season;
     try {
-      season = simulateScheduledGamesOnDate(league.season).data;
+      season = simulateScheduledGamesOnDate(
+        league.season,
+        createRecorder(league, TEAMS_DATA),
+      ).data;
     } finally {
       for (const restore of restoreRotations) restore();
     }
@@ -588,6 +593,7 @@ export function advanceLeagueDay(league, operationId, now) {
       }
     }
     if (month === 10 && day === getNPBDraftDay(year) && !season._draftDone) {
+      freezeComparison(league);
       season.frozenAwards = processSeasonEnd(season, TEAMS_DATA);
       season.finalRankings = snapshotRankings(
         TEAMS_DATA,

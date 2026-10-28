@@ -1,5 +1,12 @@
 import { PHASE_LABELS } from '../src/online/shared.js';
-import { leagueComparison, performanceFor } from './performanceLabels.mjs';
+import {
+  currentPlayerStats,
+  playerPeriods,
+  storedGame,
+  gameSummary,
+  statisticsContext,
+} from './recordedViews.mjs';
+import { requireOnline } from '../src/online/shared.js';
 
 const playerView = (p) => ({
   id: p.id,
@@ -62,7 +69,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   const member = l.members.find((m) => m.userId === userId);
   if (!member) return null;
   const team = l.game.teams[member.teamName];
-  const comparison = leagueComparison(l);
+  const statistics = statisticsContext(l);
   const phase = l.phase;
   return {
     revision: l.revision,
@@ -96,8 +103,17 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away })),
     roster: team.players.map((p) => ({
       ...playerView(p),
-      performance: performanceFor(p, comparison),
+      ...currentPlayerStats(l, member.teamName, p, statistics),
+      detailAvailable: true,
     })),
+    seasonYears: [
+      ...new Set([
+        l.season.year,
+        ...Object.keys(l.records?.seasons || {}).map(Number),
+        ...l.history.map((h) => h.year),
+      ]),
+    ].sort((a, b) => b - a),
+    gameDetailsAvailable: true,
     lineup: projectLineup(team),
     nextStarterId: team.pitchingRotation?.starters?.length
       ? team.pitchingRotation.starters[
@@ -117,4 +133,86 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     history: l.history,
     notices: l.notices.slice(0, 4),
   };
+}
+
+function ownedPlayer(bundle, userId, id) {
+  const l = bundle.league,
+    member = l?.members.find((m) => m.userId === userId);
+  requireOnline(member, '参加者ではありません', 403);
+  const player = l.game.teams[member.teamName].players.find(
+    (p) => String(p.id) === String(id),
+  );
+  requireOnline(player, '選手が見つかりません', 404);
+  return { l, member, player };
+}
+export function projectPlayerInfo(bundle, userId, id) {
+  const { l, member, player } = ownedPlayer(bundle, userId, id);
+  return {
+    id: player.id,
+    name: player.name,
+    revision: l.revision,
+    periods: playerPeriods(l, member.teamName, player),
+  };
+}
+export function projectGames(
+  bundle,
+  userId,
+  { year, page = 0, scope = 'own' } = {},
+) {
+  const l = bundle.league,
+    member = l?.members.find((m) => m.userId === userId);
+  requireOnline(member, '参加者ではありません', 403);
+  year = Number(year || l.season.year);
+  page = Number(page);
+  requireOnline(
+    Number.isSafeInteger(year) &&
+      year > 0 &&
+      Number.isSafeInteger(page) &&
+      page >= 0 &&
+      ['own', 'league'].includes(scope),
+    '試合一覧の指定が不正です',
+  );
+  const games = new Map();
+  if (year === l.season.year)
+    for (const game of l.season.results)
+      games.set(String(game.gameId), gameSummary(game));
+  for (const game of Object.values(l.records?.seasons?.[year]?.games || {}))
+    games.set(String(game.gameId), gameSummary(game));
+  const all = [...games.values()]
+    .filter(
+      (g) =>
+        scope === 'league' ||
+        g.home === member.teamName ||
+        g.away === member.teamName,
+    )
+    .sort(
+      (a, b) =>
+        b.date.month - a.date.month ||
+        b.date.day - a.date.day ||
+        b.gameId - a.gameId,
+    );
+  return {
+    year,
+    page,
+    count: all.length,
+    size: 6,
+    games: all.slice(page * 6, page * 6 + 6),
+  };
+}
+export function projectGameInfo(bundle, userId, id, year) {
+  const l = bundle.league;
+  requireOnline(
+    l?.members.some((m) => m.userId === userId),
+    '参加者ではありません',
+    403,
+  );
+  requireOnline(
+    Number.isSafeInteger(Number(id)) && Number(id) > 0,
+    '試合の指定が不正です',
+  );
+  year = Number(year || l.season.year);
+  requireOnline(Number.isSafeInteger(year) && year > 0, '年度の指定が不正です');
+  const game = storedGame(l, id, year);
+  requireOnline(game, '試合記録が見つかりません', 404);
+  return structuredClone(game);
 }

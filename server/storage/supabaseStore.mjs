@@ -1,7 +1,13 @@
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { requireOnline, OnlineError } from '../../src/online/shared.js';
-import { projectLeague } from '../projection.mjs';
+import {
+  projectLeague,
+  projectGames,
+  projectGameInfo,
+  projectPlayerInfo,
+} from '../projection.mjs';
+import { buildArchiveIndex, archiveReferences } from '../archiveIndex.mjs';
 export class SupabaseStore {
   constructor({ url, serviceKey, members, adminId, fetchImpl = fetch }) {
     requireOnline(
@@ -14,6 +20,7 @@ export class SupabaseStore {
     this.members = members;
     this.adminId = adminId;
     this.fetch = fetchImpl;
+    this.archiveCache = new Map();
   }
   async request(path, { method = 'GET', body, raw = false } = {}) {
     const response = await this.fetch(`${this.url}${path}`, {
@@ -109,6 +116,109 @@ export class SupabaseStore {
       writable: !!sessionId && row.sessions[userId] === sessionId,
     };
   }
+  async archive(row, kind, year) {
+    const meta = row.views?._records;
+    const descriptor = kind === 'players' ? meta?.players : meta?.games?.[year];
+    if (!descriptor) return null;
+    if (this.archiveCache.has(descriptor.path))
+      return this.archiveCache.get(descriptor.path);
+    const value = JSON.parse(
+      gunzipSync(
+        await this.request(
+          `/storage/v1/object/online-world/${descriptor.path}`,
+          { raw: true },
+        ),
+      ),
+    );
+    this.archiveCache.set(descriptor.path, value);
+    while (this.archiveCache.size > 3)
+      this.archiveCache.delete(this.archiveCache.keys().next().value);
+    return value;
+  }
+  async readRecord(userId, kind, query, project) {
+    let row = await this.control();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      requireOnline(row.views?.[userId], '参加者ではありません', 403);
+      const year = Number(query.year || row.views[userId].year);
+      if (kind === 'games')
+        requireOnline(
+          Number.isSafeInteger(year) && year > 0,
+          '年度の指定が不正です',
+        );
+      try {
+        const index = await this.archive(row, kind, year);
+        if (!index) return project(await this.read(), year);
+        if (kind === 'players') {
+          const own = index[userId];
+          requireOnline(
+            own && Object.hasOwn(own, query.id),
+            '選手が見つかりません',
+            404,
+          );
+          return structuredClone(own[query.id]);
+        }
+        // 共通の権限・ページ検証を使い、世界本体を展開しない。
+        return project(
+          {
+            league: {
+              members: [{ userId, teamName: row.views[userId].teamName }],
+              season: { year: row.views[userId].year, results: [] },
+              records: { seasons: { [year]: { games: index } } },
+            },
+          },
+          year,
+        );
+      } catch (error) {
+        if (error.storageStatus !== 404 || attempt === 1) throw error;
+        row = await this.control();
+      }
+    }
+  }
+  readPlayerInfo(userId, id) {
+    return this.readRecord(userId, 'players', { id }, (bundle) =>
+      projectPlayerInfo(bundle, userId, id),
+    );
+  }
+  readGames(userId, query) {
+    return this.readRecord(userId, 'games', query, (bundle) =>
+      projectGames(bundle, userId, query),
+    );
+  }
+  readGameInfo(userId, id, year) {
+    return this.readRecord(userId, 'games', { id, year }, (bundle, resolved) =>
+      projectGameInfo(bundle, userId, id, resolved),
+    );
+  }
+  async publishArchive(data, previous) {
+    const json = JSON.stringify(data),
+      hash = createHash('sha256').update(json).digest('hex');
+    if (previous?.hash === hash) return previous;
+    const path = `archives/${randomUUID()}.json.gz`;
+    await this.request(`/storage/v1/object/online-world/${path}`, {
+      method: 'POST',
+      raw: true,
+      body: gzipSync(json),
+    });
+    return { path, hash };
+  }
+  async createArchive(bundle, previous) {
+    const data = buildArchiveIndex(bundle);
+    if (!data) return null;
+    const players = await this.publishArchive(data.players, previous?.players),
+      games = {};
+    for (const [year, value] of Object.entries(data.games))
+      games[year] = await this.publishArchive(value, previous?.games?.[year]);
+    return {
+      players,
+      games,
+      previous: [
+        previous ? { players: previous.players, games: previous.games } : null,
+        ...(previous?.previous || []),
+      ]
+        .filter(Boolean)
+        .slice(0, 2),
+    };
+  }
   async transaction(fn) {
     const token = randomUUID();
     const row = (await this.rpc('online_claim', { p_token: token }))[0];
@@ -140,6 +250,8 @@ export class SupabaseStore {
           ),
         ]),
       );
+      const archives = await this.createArchive(value, row.views?._records);
+      if (archives) views._records = archives;
       published = await this.rpc('online_publish', {
         p_token: token,
         p_generation: row.generation,
@@ -157,7 +269,13 @@ export class SupabaseStore {
       const keep = [row.snapshot_path, ...(row.previous_paths || [])].filter(
         Boolean,
       );
-      const obsolete = keep.slice(2);
+      const retainedArchives = archiveReferences(archives);
+      const obsolete = [
+        ...keep.slice(2),
+        ...[...archiveReferences(row.views?._records)].filter(
+          (path) => !retainedArchives.has(path),
+        ),
+      ];
       if (obsolete.length)
         await this.request('/storage/v1/object/online-world', {
           method: 'DELETE',
