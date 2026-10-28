@@ -55,4 +55,3 @@ export const getAIReleaseCandidates = (players) => {
 
   return scored.slice(0, releaseCount).map(s => s.player.id);
 };
-
