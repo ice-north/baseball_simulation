@@ -177,7 +177,13 @@ try {
       .click();
     const d = m.getByRole('dialog', { name: '成績選手1', exact: true });
     await d.waitFor();
+    const detailBounds = await d.boundingBox();
+    assert.ok(
+      Math.abs(detailBounds.width - width) <= 1,
+      'スマホの詳細パネルは画面幅いっぱいに使う',
+    );
     assert.equal(await d.locator('.online-stat-label').count(), 3);
+    await d.getByText('アベレージヒッター', { exact: true }).waitFor();
     assert.ok(
       await d.evaluate((e) => e.scrollHeight <= e.clientHeight + 1),
       '成績詳細は縦スクロール不要',
@@ -218,6 +224,46 @@ try {
     await m.waitForFunction(
       () =>
         document.querySelectorAll('.online-compact-roster article').length >= 9,
+    );
+    const labels = m
+      .locator('.online-compact-roster article')
+      .first()
+      .locator('.online-stat-label');
+    assert.equal(
+      await labels.count(),
+      3,
+      '行の高さを変えずにラベルを最大3個表示する',
+    );
+    assert.deepEqual(await labels.allTextContents(), [
+      'AH',
+      '選球眼',
+      '扇風機',
+    ]);
+    assert.ok(
+      (await labels.allTextContents()).every((text) => [...text].length <= 3),
+      '一覧の略称は3文字以内',
+    );
+    assert.equal(
+      await labels.first().getAttribute('aria-label'),
+      'アベレージヒッター',
+      '略称でも正式名を読み上げる',
+    );
+    assert.equal(
+      await labels.first().getAttribute('title'),
+      'アベレージヒッター',
+    );
+    assert.ok(
+      await labels.evaluateAll((nodes) =>
+        nodes.every((node) => {
+          const box = node.getBoundingClientRect();
+          return (
+            box.right <=
+              node.closest('button').getBoundingClientRect().right - 30 &&
+            box.height <= 20
+          );
+        }),
+      ),
+      '3個の札が成績の数値を圧迫せず44px行に収まる',
     );
     assert.equal(
       await m.locator('.online-mobile-controls button').count(),

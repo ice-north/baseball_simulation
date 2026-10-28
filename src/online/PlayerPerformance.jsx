@@ -2,7 +2,28 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { POS } from './api.js';
 import { PageNav } from './PageNav.jsx';
 
-export function StatLabels({ player, category = 'batting', limit = 3 }) {
+const SHORT_LABELS = {
+  average: 'AH',
+  power: 'PH',
+  'extra-base': '長打',
+  eye: '選球眼',
+  'on-base': '出塁',
+  whiff: '扇風機',
+  strikeout: '三振',
+  'steal-good': '盗塁B',
+  'steal-bad': '盗塁F',
+  'pitch-k': '奪三振',
+  'pitch-bb': '四球',
+  control: '制球○',
+  'pitch-hr': '一発',
+};
+
+export function StatLabels({
+  player,
+  category = 'batting',
+  limit = 3,
+  compact = false,
+}) {
   const labels = player?.performance?.[category]?.labels || [];
   return labels.length ? (
     <span className="online-stat-labels" aria-label="成績の特徴">
@@ -10,8 +31,10 @@ export function StatLabels({ player, category = 'batting', limit = 3 }) {
         <span
           key={label.id}
           className={`online-stat-label online-stat-${label.tone === 'bad' ? 'bad' : 'good'}`}
+          aria-label={label.text}
+          title={label.text}
         >
-          {label.text}
+          {compact ? SHORT_LABELS[label.id] || label.text : label.text}
         </span>
       ))}
     </span>
@@ -184,7 +207,7 @@ export function CompactRoster({ view }) {
                   {player.name}
                   <small>{POS[player.position]}</small>
                 </span>
-                <StatLabels player={player} category={category} limit={1} />
+                <StatLabels player={player} category={category} compact />
               </span>
               <span className="online-roster-value">
                 {category === 'batting'

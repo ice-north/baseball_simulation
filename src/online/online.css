@@ -729,17 +729,27 @@
   font-weight: normal;
 }
 .online-stat-label {
-  display: inline-block;
-  border: 1px solid #668196;
-  border-radius: 4px;
-  padding: 2px 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #4f9bc5;
+  border-bottom-color: #236794;
+  border-radius: 3px;
+  padding: 1px 5px;
   font-size: 11px;
-  line-height: 1.35;
-  color: #e2e8f0;
+  font-weight: 750;
+  line-height: 1.25;
+  color: #153e67;
+  background: linear-gradient(#effbff, #b8e3ff);
+  box-shadow: inset 0 1px 0 #ffffffc0;
+  text-shadow: 0 1px 0 #ffffff80;
   white-space: nowrap;
 }
 .online-stat-bad {
-  border-color: #af9393;
+  color: #842137;
+  background: linear-gradient(#fff1f1, #ffc0c9);
+  border-color: #cf7c89;
+  border-bottom-color: #9d4357;
 }
 .online-player-dialog {
   background: var(--surface-2);
@@ -939,25 +949,11 @@
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
-.online-mobile .online-stat-label {
-  border: 0;
-  padding: 0;
-  font-size: 11px;
-  color: #b9e3ed;
-}
-.online-mobile .online-stat-bad {
-  color: #f0c5c5;
-}
 .online-roster-row .online-stat-labels {
-  display: block;
+  display: flex;
+  flex-wrap: nowrap;
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 15px;
-}
-.online-roster-row .online-stat-label {
-  display: inline;
+  line-height: 18px;
 }
 .online-compact-roster .online-pager {
   margin: 0;
@@ -966,6 +962,7 @@
 }
 .online-mobile .online-player-dialog {
   width: 100%;
+  max-width: none;
   margin: auto 0 0;
   border: 0;
   border-radius: 0;
@@ -1023,6 +1020,7 @@
   background: var(--surface-2);
   color: #f1f5f9;
   width: 100%;
+  max-width: none;
   border: 0;
   border-radius: 0;
   margin: auto 0 0;
