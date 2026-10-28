@@ -9,6 +9,7 @@ import SplitStats from './SplitStats.jsx';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import {
   STAT_GROUPS,
+  overviewGroup,
   statGroup,
   formatStat,
   sortedRoster,
@@ -164,7 +165,13 @@ export function ConditionMark({ player }) {
     </span>
   );
 }
-function GroupSelect({ category, value, onChange, historic = false }) {
+function GroupSelect({
+  category,
+  value,
+  onChange,
+  historic = false,
+  overview = false,
+}) {
   return (
     <select
       className="online-stat-group"
@@ -172,6 +179,7 @@ function GroupSelect({ category, value, onChange, historic = false }) {
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >
+      {overview && <option value="overview">主要成績一覧</option>}
       {STAT_GROUPS[category]
         .filter(
           (group) =>
@@ -405,13 +413,16 @@ export function PlayerStatsButton({
 export function CompactRoster({ view, desktop = false, teamSelector }) {
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
-  const [groupId, setGroupId] = useState('basic');
+  const [groupId, setGroupId] = useState(desktop ? 'overview' : 'basic');
   const [sort, setSort] = useState(null);
-  const group = statGroup(category, groupId);
+  const group =
+    desktop && groupId === 'overview'
+      ? overviewGroup(category)
+      : statGroup(category, groupId);
   const order = sortedRoster(view.roster, sort?.column, sort?.direction);
   const chooseCategory = (next) => {
     setCategory(next);
-    setGroupId('basic');
+    setGroupId(desktop ? 'overview' : 'basic');
     setSort(null);
     setPage(0);
   };
@@ -479,17 +490,21 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
   }, [desktop]);
   return (
     <section
+      data-wide={desktop && group.columns.length > 4}
       className={`${desktop ? '' : 'online-card '}online-compact-roster`}
     >
       <div className="online-roster-toolbar">
         <div>
           {teamSelector || <h2>選手成績</h2>}
-          <small>今季 · {view.roster.length}人</small>
+          <small>
+            {view.readOnly ? '今季・閲覧' : '今季'} · {view.roster.length}人
+          </small>
         </div>
         <GroupSelect
           category={category}
           value={group.id}
           onChange={chooseGroup}
+          overview={desktop}
         />
         <Category value={category} setValue={chooseCategory} />
       </div>

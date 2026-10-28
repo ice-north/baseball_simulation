@@ -401,3 +401,42 @@ export function sortedRoster(players, column, direction) {
     })
     .map((entry) => entry.player);
 }
+
+export function overviewGroup(category) {
+  const ids =
+    category === 'batting'
+      ? [
+          'games',
+          'pa',
+          'avg',
+          'homeruns',
+          'rbis',
+          'stolenBases',
+          'obp',
+          'slg',
+          'ops',
+          'strikeouts',
+          'walks',
+          'sacrificeBunts',
+        ]
+      : [
+          'games',
+          'era',
+          'wins',
+          'losses',
+          'saves',
+          'holds',
+          'outs',
+          'strikeouts',
+          'walks',
+          'k9',
+          'bb9',
+          'whip',
+        ];
+  const columns = STAT_GROUPS[category].flatMap((g) => g.columns);
+  return {
+    id: 'overview',
+    label: '主要成績一覧',
+    columns: ids.map((id) => columns.find((c) => c.id === id)).filter(Boolean),
+  };
+}

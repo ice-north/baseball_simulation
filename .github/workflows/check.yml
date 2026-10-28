@@ -51,6 +51,7 @@ jobs:
           npm run check:online:auth-ui
           npm run check:online:edit-ui
           npm run check:online:label-ui
+          npm run check:online:replay-ui
 
       - name: Upload online UI evidence
         if: always()

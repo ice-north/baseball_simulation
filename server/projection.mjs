@@ -1,3 +1,4 @@
+import { roleFor } from '../src/online/tactics.js';
 import { PHASE_LABELS } from '../src/online/shared.js';
 import {
   currentPlayerStats,
@@ -11,6 +12,7 @@ import { requireOnline } from '../src/online/shared.js';
 
 const playerView = (p) => ({
   id: p.id,
+  isActive: p.isActive !== false,
   name: p.name,
   age: p.age,
   condition:
@@ -62,6 +64,32 @@ export function projectLineup(team) {
     ),
     starters: team.pitchingRotation?.starters || [],
     strategy: team.strategy || {},
+    ...(team.pitchingRotation?.pitcherRoles ||
+    team.pitchingRotation?.closer ||
+    team.pitchingRotation?.setupMen?.length ||
+    team.pitchingRotation?.middleRelievers?.length
+      ? {
+          pitcherRoles: Object.fromEntries(
+            team.players
+              .filter((p) => p.position === 'pitcher' && p.isActive !== false)
+              .map((p) => [
+                p.id,
+                roleFor(
+                  team.pitchingRotation.pitcherRoles?.[p.id] ??
+                    (team.pitchingRotation.closer === p.id
+                      ? 'closer'
+                      : team.pitchingRotation.setupMen?.includes(p.id)
+                        ? 'setup'
+                        : team.pitchingRotation.middleRelievers?.includes(p.id)
+                          ? 'long'
+                          : undefined),
+                  team.pitchingRotation.starters?.includes(p.id),
+                ),
+              ]),
+          ),
+        }
+      : {}),
+    ...(team.onlineTactics ? { tactics: team.onlineTactics } : {}),
   };
 }
 export function projectLeague(bundle, userId, sessionId, adminId) {
@@ -154,6 +182,7 @@ export function projectTeamInfo(bundle, userId, teamName) {
   const statistics = statisticsContext(l);
   return {
     teamName,
+    readOnly: true,
     year: l.season.year,
     roster: l.game.teams[teamName].players.map((p) => {
       const visible = playerView(p);
@@ -252,5 +281,12 @@ export function projectGameInfo(bundle, userId, id, year) {
   requireOnline(Number.isSafeInteger(year) && year > 0, '年度の指定が不正です');
   const game = storedGame(l, id, year);
   requireOnline(game, '試合記録が見つかりません', 404);
-  return structuredClone(game);
+  const result = structuredClone(game);
+  if (result.replay?.appliedPlans) {
+    const ownTeam = l.members.find((m) => m.userId === userId).teamName;
+    result.replay.appliedPlan = result.replay.appliedPlans[ownTeam] || null;
+    result.replay.appliedTeam = ownTeam;
+    delete result.replay.appliedPlans;
+  }
+  return result;
 }

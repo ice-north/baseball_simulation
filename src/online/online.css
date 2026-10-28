@@ -1489,3 +1489,54 @@
 .online-mobile .online-team-roster > .online-compact-roster { flex: 1; min-height: 0; }
 
 .online-mobile .online-roster-toolbar > div:first-child select { width: 126px; max-width: 100%; font-size: 12px; padding: 3px; min-height: 28px; }
+
+/* 通常ゲームと同じ球場SVG・左右のメンバー表・電光掲示板で観戦する。 */
+.online-replay-launch { display: flex; gap: 8px; margin-bottom: 8px; }
+.online-replay-dialog { width: min(1740px, 97vw); max-width: 97vw; height: 95dvh; max-height: 95dvh; }
+.online-replay-controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.online-replay-controls input { flex: 1; min-width: 100px; }
+.online-replay-board { margin: 8px 0; padding: 8px; background: #020203; color: #fb923c; border: 2px solid #374151; border-radius: 8px; font-family: monospace; }
+.online-replay-board table { width: 100%; text-align: center; }
+.online-replay-board th, .online-replay-board td { padding: 3px; color: #fb923c; }
+.online-replay-board > strong { font-size: 18px; color: #fdba74; }
+.online-replay-board p { margin: 4px 0 0; }
+.online-replay-layout { display: grid; grid-template-columns: 3fr 5fr 3fr; gap: 10px; align-items: start; }
+.online-replay-team { padding: 8px; background: var(--surface-2); min-width: 0; border-radius: 8px; }
+.online-replay-team h3 { font-size: 15px; margin: 0 0 8px; }
+.online-replay-team ol { margin: 0; padding: 0; list-style: none; }
+.online-replay-team li { display: grid; grid-template-columns: 20px 24px 1fr 24px 24px; align-items: center; gap: 3px; min-height: 34px; border-bottom: 1px solid #ffffff18; }
+.online-replay-team li button { border: 0; padding: 3px 0; background: transparent; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-replay-active { background: var(--accent-soft); }
+.online-replay-team details { margin-top: 10px; }
+.online-replay-team details > button { display: block; padding: 4px; }
+.online-replay-center { min-width: 0; }
+.online-replay-center svg { max-height: 330px; }
+.online-replay-batter { background: var(--surface-2); padding: 8px; border-radius: 8px; }
+.online-replay-batter small { margin-left: 10px; }
+.online-replay-batter dl { display: flex; gap: 16px; margin: 6px 0 0; }
+.online-replay-batter dd { margin: 0; font-variant-numeric: tabular-nums; }
+.online-replay-log { max-height: 120px; overflow: auto; padding: 6px; background: var(--surface-2); margin: 8px 0; }
+.online-replay-log p { margin: 2px 0; font-size: 12px; }
+@media (max-width: 767px) { .online-replay-launch { display: none; } }
+
+.online-tactics-grid, .online-pitcher-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+.online-tactics-grid label, .online-pitcher-role-grid label { display: grid; gap: 6px; min-width: 0; }
+.online-tactics-grid select, .online-pitcher-role-grid select { width: 100%; }
+.online-pregame-settings > p { color: #cbd5e1; font-size: 13px; }
+
+.online-replay-center { position: relative; }
+.online-replay-pitch-zone { position: absolute; right: 0; top: 0; z-index: 1; }
+.online-replay-applied { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.online-replay-applied dd { margin: 0; }
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-values { width: 75%; flex-basis: 75%; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-person { max-width: 25%; }
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-columns > button { width: 25%; }
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-columns button { font-size: 11px; padding-left: 2px; padding-right: 2px; }
+
+.online-replay-dialog > header { position: sticky; top: 0; z-index: 6; background: var(--surface-2); }
+.online-replay-dialog > .online-replay-launch { position: sticky; top: 56px; z-index: 5; background: var(--surface-2); }
+.online-replay-dialog .online-replay-controls { position: sticky; top: 108px; z-index: 4; background: var(--surface-2); padding: 4px 0; }
+@media (min-width: 768px) { .online-game-dialog:not(.online-replay-dialog) { width: min(1240px, 96vw); max-width: 96vw; } }
+.online-replay-controls select { width: auto; flex: 0 0 110px; }
+.online-replay-controls input[type='range'] { width: auto; flex: 1; min-width: 140px; }
+.online-replay-controls button { min-height: 34px; font-size: 12px; padding: 4px 8px; }

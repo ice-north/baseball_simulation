@@ -17,7 +17,11 @@ export default function TeamRoster({ view, children }) {
       ].filter(Boolean),
     ),
   ];
-  const shown = own ? view : result.data;
+  const shown = own
+    ? view
+    : result.data?.teamName === selected
+      ? result.data
+      : null;
   const selector = (
     <select
       aria-label="閲覧する球団"

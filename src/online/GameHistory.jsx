@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ReplayViewer from './ReplayViewer.jsx';
 import { useRead } from './useRead.js';
 import { PageNav } from './PageNav.jsx';
 import { formatGameDate } from './shared.js';
@@ -90,7 +91,7 @@ const GROUPS = {
     ],
   ],
 };
-function Panel({ title, close, children }) {
+function Panel({ title, close, children, wide = false }) {
   const ref = useRef(null);
   useEffect(() => {
     const node = ref.current,
@@ -108,7 +109,7 @@ function Panel({ title, close, children }) {
   return (
     <dialog
       ref={ref}
-      className="online-player-dialog online-game-dialog"
+      className={`online-player-dialog online-game-dialog ${wide ? 'online-replay-dialog' : ''}`}
       aria-label={title}
       onCancel={(e) => {
         e.preventDefault();
@@ -139,15 +140,37 @@ function RequestState({ result }) {
   ) : null;
 }
 function BoxScore({ game, ownTeam }) {
+  const [pageSize, setPageSize] = useState(() =>
+    window.matchMedia('(min-width: 768px)').matches ? 12 : 6,
+  );
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)');
+    const update = () => {
+      setPageSize(media.matches ? 12 : 6);
+      setPage(0);
+      setGroup(media.matches ? 'overview' : 'basic');
+    };
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const [team, setTeam] = useState(
       [game.home, game.away].includes(ownTeam) ? ownTeam : game.home,
     ),
     [category, setCategory] = useState('batting'),
-    [groupId, setGroup] = useState('basic'),
+    [groupId, setGroup] = useState(() =>
+      window.matchMedia('(min-width: 768px)').matches ? 'overview' : 'basic',
+    ),
     [page, setPage] = useState(0),
     [sort, setSort] = useState(null);
+  const overviewColumns = [
+    ...new Map(
+      GROUPS[category].flatMap((g) => g[2]).map((c) => [c[0], c]),
+    ).values(),
+  ];
   const group =
-    GROUPS[category].find(([id]) => id === groupId) || GROUPS[category][0];
+    pageSize === 12 && groupId === 'overview'
+      ? ['overview', '主要成績一覧', overviewColumns]
+      : GROUPS[category].find(([id]) => id === groupId) || GROUPS[category][0];
   const rows = [...(game.teams?.[team] || [])].filter((p) =>
     category === 'batting'
       ? (p.batting?.plateAppearances ||
@@ -199,6 +222,12 @@ function BoxScore({ game, ownTeam }) {
             setSort(null);
           }}
         >
+          {pageSize === 12 &&
+            ['batting', 'pitching'].map((c) => (
+              <option key={c} value={`${c}:overview`}>
+                {c === 'batting' ? '打撃' : '投球'}・主要成績一覧
+              </option>
+            ))}
           {Object.entries(GROUPS).flatMap(([c, groups]) =>
             groups.map(([id, label]) => (
               <option key={`${c}:${id}`} value={`${c}:${id}`}>
@@ -233,7 +262,7 @@ function BoxScore({ game, ownTeam }) {
           </tr>
         </thead>
         <tbody>
-          {rows.slice(page * 6, page * 6 + 6).map((p) => (
+          {rows.slice(page * pageSize, page * pageSize + pageSize).map((p) => (
             <tr key={p.key || p.id}>
               <th title={p.name}>{p.name}</th>
               {group[2].map(([key, , format = 'count']) => (
@@ -244,7 +273,12 @@ function BoxScore({ game, ownTeam }) {
         </tbody>
       </table>
       {!rows.length && <p>この区分の出場記録はありません。</p>}
-      <PageNav page={page} count={rows.length} size={6} setPage={setPage} />
+      <PageNav
+        page={page}
+        count={rows.length}
+        size={pageSize}
+        setPage={setPage}
+      />
       {game.legacy && (
         <small className="online-stat-note">
           既存試合の保存値です。未記録の項目は「—」です。
@@ -276,22 +310,37 @@ export function GameRecordButton({ game, year, ownTeam, children }) {
   );
 }
 function GameRecord({ id, year, ownTeam, close }) {
+  const [watch, setWatch] = useState(false);
   const result = useRead('game', { id, year }),
     game = result.data;
   return (
-    <Panel title="試合成績" close={close}>
+    <Panel title="試合成績" close={close} wide={watch}>
       <RequestState result={result} />
       {game && (
         <>
-          <p className="online-game-summary">
-            <small>{formatGameDate(game.date)}</small>
-            <strong>
-              <span title={game.away}>{teamShort(game.away)}</span>{' '}
-              {game.awayScore} – {game.homeScore}{' '}
-              <span title={game.home}>{teamShort(game.home)}</span>
-            </strong>
-          </p>
-          {game.teams ? (
+          {game.replay?.frames?.length > 0 && (
+            <nav className="online-replay-launch" aria-label="試合の表示">
+              <button aria-pressed={!watch} onClick={() => setWatch(false)}>
+                個人成績
+              </button>
+              <button aria-pressed={watch} onClick={() => setWatch(true)}>
+                観戦リプレイ
+              </button>
+            </nav>
+          )}
+          {!watch && (
+            <p className="online-game-summary">
+              <small>{formatGameDate(game.date)}</small>
+              <strong>
+                <span title={game.away}>{teamShort(game.away)}</span>{' '}
+                {game.awayScore} – {game.homeScore}{' '}
+                <span title={game.home}>{teamShort(game.home)}</span>
+              </strong>
+            </p>
+          )}
+          {watch ? (
+            <ReplayViewer game={game} />
+          ) : game.teams ? (
             <BoxScore game={game} ownTeam={ownTeam} />
           ) : (
             <p>この試合は得点のみの記録です。</p>

@@ -180,14 +180,14 @@ try {
   await lineupTab.goto(`${base}/online`);
   await click(lineupTab, '編成');
   await p.getByRole('button', { name: '2番を上げる', exact: true }).click();
-  await click(lineupTab, '采配');
+  await click(lineupTab, '基本方針');
   await lineupTab.getByLabel('打撃方針').selectOption('patient');
   await click(lineupTab, '編成を保存');
   await click(p, '更新');
   await click(p, '編成を保存');
   await p.getByText('編成が更新されています。', { exact: false }).waitFor();
   await click(p, '編集を戻す');
-  await click(p, '采配');
+  await click(p, '基本方針');
   assert.equal(await p.getByLabel('打撃方針').inputValue(), 'patient');
   await click(p, '打順・守備');
   await lineupTab.close();

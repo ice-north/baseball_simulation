@@ -22,6 +22,14 @@ import {
 import { situationalCandidates } from '../../server/situationalLabels.mjs';
 import { zeroLine, addCounts, rates } from '../../src/online/recordStats.js';
 import { storedGame } from '../../server/recordedViews.mjs';
+import { saveLineup } from '../../server/lineupCommand.mjs';
+import { projectLineup } from '../../server/projection.mjs';
+import {
+  TACTIC_DEFAULTS,
+  tacticalChance,
+  tacticalDamageLimit,
+  tacticalPitchLimit,
+} from '../../src/online/tactics.js';
 import { performanceFor } from '../../server/performanceLabels.mjs';
 const log = console.log;
 console.log = () => {};
@@ -88,8 +96,38 @@ restoreWorld(before);
 const recorder = createRecorder(league, TEAMS_DATA);
 const game = { id: 1, date: { year: 2024, month: 4, day: 1 }, home, away };
 const observer = recorder.begin(game);
+const replayBefore = captureWorld();
+const replayPlain = autoSimulateGame(home, away, false, 70281);
+const replayPlainWorld = captureWorld();
+restoreWorld(replayBefore);
 const result = autoSimulateGame(home, away, false, 70281, observer);
+assert.deepEqual(
+  result,
+  replayPlain,
+  '全投球・開始名簿の記録でも試合結果/RNGを変えない',
+);
+assert.deepEqual(
+  captureWorld(),
+  replayPlainWorld,
+  '観戦記録でも試合後の世界を変えない',
+);
 recorder.finish(game, result, observer);
+const replay = observer.replayRecord;
+assert.ok(replay.frames.length > 100, '実投球・走塁の経過を保存');
+assert.equal(replay.frames.at(-1).homeScore, result.homeScore);
+assert.equal(replay.frames.at(-1).awayScore, result.awayScore);
+assert.ok(
+  replay.frames
+    .filter((f) => f.kind === 'pitch')
+    .every(
+      (f) =>
+        Number.isFinite(f.pitch?.velocity) && typeof f.pitch.type === 'string',
+    ),
+);
+assert.ok(
+  !JSON.stringify(replay.teams).includes('strategy'),
+  '観戦用の選手情報へ戦術や契約を含めない',
+);
 league.game = captureWorld();
 const season = league.records.seasons[1];
 for (const r of Object.values(season.players)) {
@@ -599,6 +637,13 @@ const own = league.game.teams[home].players.find((p) =>
 const info = projectPlayerInfo({ league }, 'a', own.id);
 assert.ok(info.periods.some((p) => p.id === 'career'));
 assert.equal(projectGameInfo({ league }, 'a', 1, 1).gameId, 1);
+const ownReplay = projectGameInfo({ league }, 'a', 1, 1).replay;
+assert.ok(ownReplay.appliedPlan);
+assert.equal(ownReplay.appliedTeam, home);
+assert.ok(
+  !Object.hasOwn(ownReplay, 'appliedPlans'),
+  '観戦でも相手の事前設定を公開しない',
+);
 assert.equal(projectGames({ league }, 'a', { year: 1 }).count, 1);
 assert.throws(
   () => projectPlayerInfo({ league }, 'stranger', own.id),
@@ -621,7 +666,130 @@ assert.deepEqual(
   { atBats: 1 },
   '入れ子を数値加算しない',
 );
+// 事前方針の境界と、未指定/既定値で同じ試合が続くことを確認。
+assert.equal(tacticalChance(0.4, undefined), 0.4);
+assert.equal(tacticalChance(0.4, 'never'), 0);
+assert.ok(Math.abs(tacticalChance(0.4, 'aggressive') - 0.6) < 1e-12);
+assert.equal(tacticalPitchLimit(100, false, { starterLimit: 60 }), 60);
+assert.equal(tacticalPitchLimit(35, true, { starterLimit: 60 }), 35);
+assert.equal(tacticalDamageLimit(40, { hook: 'early' }), 30);
+const tacticalLeague = structuredClone(league);
+const tacticalTeam = tacticalLeague.game.teams[home];
+tacticalLeague.status = 'running';
+const tacticalPlan = structuredClone(projectLineup(tacticalTeam));
+const activePitchers = tacticalTeam.players.filter(
+  (p) => p.position === 'pitcher' && p.isActive !== false,
+);
+tacticalPlan.pitcherRoles = Object.fromEntries(
+  activePitchers.map((p) => [
+    p.id,
+    tacticalPlan.starters.includes(p.id) ? 'opener' : 'auto_r',
+  ]),
+);
+const relievers = activePitchers.filter(
+  (p) => !tacticalPlan.starters.includes(p.id),
+);
+if (relievers[0]) tacticalPlan.pitcherRoles[relievers[0].id] = 'closer';
+tacticalPlan.tactics = {
+  ...TACTIC_DEFAULTS,
+  sacrificeBunt: 'never',
+  starterLimit: 60,
+};
+const unchangedTactical = JSON.stringify(tacticalTeam);
+assert.throws(
+  () =>
+    saveLineup(tacticalLeague, 'a', {
+      ...tacticalPlan,
+      tactics: { hook: 'unknown' },
+    }),
+  /不正/,
+);
+assert.throws(
+  () =>
+    saveLineup(tacticalLeague, 'a', {
+      ...tacticalPlan,
+      pitcherRoles: { foreign: 'closer' },
+    }),
+  /自球団/,
+);
+assert.equal(
+  JSON.stringify(tacticalTeam),
+  unchangedTactical,
+  '不正な方針で編成を一部だけ保存しない',
+);
+saveLineup(tacticalLeague, 'a', tacticalPlan);
+assert.equal(tacticalTeam.onlineTactics.sacrificeBunt, 'never');
+assert.equal(tacticalTeam.onlineTactics.starterLimit, 60);
+if (relievers[0])
+  assert.equal(tacticalTeam.pitchingRotation.closer, relievers[0].id);
+if (relievers[0]) {
+  const legacy = structuredClone(tacticalLeague),
+    team = legacy.game.teams[home];
+  delete team.pitchingRotation.pitcherRoles;
+  const legacyPlan = projectLineup(team);
+  assert.equal(
+    legacyPlan.pitcherRoles[relievers[0].id],
+    'closer',
+    '旧形式の抑え指定を役割欄へ引き継ぐ',
+  );
+  saveLineup(legacy, 'a', legacyPlan);
+  assert.equal(team.pitchingRotation.closer, relievers[0].id);
+}
+
+loadLeagueWorld(league);
+const neutralBefore = captureWorld();
+const withoutPolicy = autoSimulateGame(home, away, false, 81991);
+restoreWorld(neutralBefore);
+for (const name of [home, away])
+  TEAMS_DATA[name].onlineTactics = { ...TACTIC_DEFAULTS };
+const withNeutralPolicy = autoSimulateGame(home, away, false, 81991);
+// 方針自体はチーム返却値に含まれるので、その追加メタデータだけ外して比較する。
+for (const team of [withNeutralPolicy.homeTeam, withNeutralPolicy.awayTeam])
+  delete team.onlineTactics;
+assert.deepEqual(
+  withNeutralPolicy,
+  withoutPolicy,
+  '既定の事前方針は元の試合結果/RNGを変えない',
+);
+restoreWorld(neutralBefore);
+for (const name of [home, away]) {
+  TEAMS_DATA[name].onlineTactics = {
+    ...TACTIC_DEFAULTS,
+    sacrificeBunt: 'never',
+    squeeze: 'never',
+    safetyBunt: 'never',
+    pinchHit: 'never',
+    defensiveSub: 'never',
+    starterLimit: 60,
+  };
+  TEAMS_DATA[name].strategy = {
+    ...TEAMS_DATA[name].strategy,
+    baseRunning: 'never',
+  };
+}
+const noBunts = [];
+const configuredResult = autoSimulateGame(home, away, false, 81991, {
+  plateAppearance: (e) => noBunts.push(e),
+});
+assert.ok(
+  noBunts.every((e) => !e.bunt && !e.pinchHit),
+  '設定したバント/代打禁止が実試合で反映される',
+);
+assert.ok(
+  [configuredResult.homeTeam, configuredResult.awayTeam].every((t) =>
+    t.players.every(
+      (p) =>
+        !(
+          p.gameStats?.batting?.stolenBases ||
+          p.gameStats?.batting?.caughtStealing
+        ),
+    ),
+  ),
+  '盗塁禁止を反映',
+);
+restoreWorld(neutralBefore);
 console.log = log;
 console.log(
   'online-records-check PASS（通常試合/RNGの同一性・完了打席/犠飛/未完了・左右/代打/得点圏・比較値確定・通算・閲覧権限・重複防止）',
 );
+export { league as recordedFixture };

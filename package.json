@@ -26,6 +26,7 @@
     "check:online:ui": "node tools/sim-harness/online-ui-check.mjs",
     "check:online:auth-ui": "node tools/sim-harness/online-auth-ui-check.mjs",
     "check:online:edit-ui": "node tools/sim-harness/online-edit-ui-check.mjs",
+    "check:online:replay-ui": "node tools/sim-harness/online-replay-ui-check.mjs",
     "check:online:label-ui": "node tools/sim-harness/online-label-ui-check.mjs"
   },
   "dependencies": {

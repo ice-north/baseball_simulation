@@ -1,3 +1,4 @@
+import { createReplay } from './replayRecord.mjs';
 import { createHash } from 'node:crypto';
 import {
   PA_KEYS,
@@ -74,8 +75,13 @@ export function createRecorder(league, teams) {
   return {
     begin(game) {
       const events = [];
+      const replay = createReplay();
       return {
         events,
+        replayRecord: replay.value,
+        start: replay.start,
+        replay: replay.frame,
+        pitchDetail: replay.pitchDetail,
         plateAppearance(event) {
           events.push(event);
         },
@@ -229,6 +235,10 @@ export function createRecorder(league, teams) {
         awayScore: result.awayScore,
         decisions: clone(result.decisions),
         teams: {},
+        replay: observer.replayRecord?.frames.length
+          ? observer.replayRecord
+          : null,
+        pitcherChanges: clone(result.pitcherChanges || []),
       };
       for (const team of [result.homeTeam, result.awayTeam]) {
         box.teams[team.name] = [];

@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { PitcherRoles, AutoTactics } from './PreGameTactics.jsx';
+import { roleFor } from './tactics.js';
 import { useDraftState } from './Drafts.jsx';
 import GameHistory, { GameRecordButton } from './GameHistory.jsx';
 import { decisionText, formatRate, ownOutcome, teamShort } from './gameText.js';
@@ -602,6 +604,20 @@ export function LineupPanel({
     }
   }, [view.lineup, dirty, setPlan, setBaseLineup]);
   const change = (next) => {
+    if (next.starters && next.starters !== plan.starters && next.pitcherRoles) {
+      next = {
+        ...next,
+        pitcherRoles: Object.fromEntries(
+          Object.entries(next.pitcherRoles).map(([id, role]) => [
+            id,
+            roleFor(
+              role,
+              next.starters.some((x) => String(x) === id),
+            ),
+          ]),
+        ),
+      };
+    }
     setPlan(next);
     setDirty(true);
   };
@@ -642,7 +658,9 @@ export function LineupPanel({
             {[
               ['batting', '打順・守備'],
               ['pitchers', '先発'],
-              ['strategy', '采配'],
+              ['roles', '投手の役割'],
+              ['strategy', '基本方針'],
+              ['autoTactics', '自動采配'],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -761,6 +779,12 @@ export function LineupPanel({
               ))}
           </>
         )}
+        {!mobile && section === 'roles' && (
+          <PitcherRoles view={view} plan={plan} change={change} />
+        )}
+        {!mobile && section === 'autoTactics' && (
+          <AutoTactics plan={plan} change={change} />
+        )}
         {!mobile && section === 'strategy' && (
           <>
             {Object.entries({
@@ -778,7 +802,16 @@ export function LineupPanel({
               ],
               baseRunning: [
                 '走塁方針',
-                { normal: '標準', aggressive: '積極', conservative: '慎重' },
+                {
+                  normal: '標準',
+                  aggressive: '積極',
+                  conservative: '慎重',
+                  never: '盗塁しない',
+                },
+              ],
+              defense: [
+                '守備方針',
+                { normal: '標準', infield_in: '前進守備', shift: '守備シフト' },
               ],
             }).map(([key, [label, values]]) => (
               <label key={key}>

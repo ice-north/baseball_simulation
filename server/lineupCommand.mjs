@@ -1,3 +1,4 @@
+import { validateTactics } from './lineupTactics.mjs';
 import {
   requireOnline,
   validateLineup,
@@ -20,7 +21,8 @@ export function saveLineup(league, userId, plan) {
     const allowed = {
       batting: ['balanced', 'aggressive', 'patient'],
       pitching: ['balanced', 'strikeout', 'contact'],
-      baseRunning: ['normal', 'aggressive', 'conservative'],
+      baseRunning: ['normal', 'aggressive', 'conservative', 'never'],
+      defense: ['normal', 'infield_in', 'shift'],
     };
     strategy = {};
     for (const [key, values] of Object.entries(allowed)) {
@@ -34,6 +36,7 @@ export function saveLineup(league, userId, plan) {
     team.pitchingRotation.starters.some(
       (id, index) => id !== plan.starters[index],
     );
+  const tactical = validateTactics(team, plan, rotationChanged);
   team.lineupSettings = {
     battingOrder: plan.battingOrder.map(
       ({ playerId, battingOrder, position }) => ({
@@ -56,4 +59,7 @@ export function saveLineup(league, userId, plan) {
   team.pitchingRotation.starters = [...plan.starters];
   team.pitchingRotation.currentStarterIndex = index;
   if (strategy) team.strategy = strategy;
+  if (tactical.tactics) team.onlineTactics = tactical.tactics;
+  if (tactical.rotation)
+    Object.assign(team.pitchingRotation, tactical.rotation);
 }
