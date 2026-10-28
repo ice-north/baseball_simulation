@@ -16,6 +16,8 @@ let rejectPublish = false;
 let loseResponse = false;
 let gets = 0;
 let beforeDownload = null;
+let missingStatus = 404;
+let missingDetail = null;
 const fetchImpl = async (url, options) => {
   const path = new URL(url).pathname;
   const body =
@@ -74,7 +76,9 @@ const fetchImpl = async (url, options) => {
       gets++;
       return objects.has(key)
         ? new Response(objects.get(key))
-        : new Response('', { status: 404 });
+        : new Response(JSON.stringify(missingDetail), {
+            status: missingStatus,
+          });
     }
   } else throw new Error(path);
   return new Response(JSON.stringify(value));
@@ -140,27 +144,50 @@ await assert.rejects(
 );
 lease = null;
 // メタデータ取得後に3世代進み、読もうとした旧オブジェクトが削除される競合。
-const oldPath = row.snapshot_path;
-beforeDownload = async () => {
-  for (let i = 0; i < 3; i++)
-    await store.transaction((b) => {
-      b.sessions.a = `concurrent:${i}`;
-    });
-};
-assert.equal(
-  (await store.read()).sessions.a,
-  'concurrent:2',
-  '削除された旧世代から最新の一式へ再取得する',
-);
-assert.equal(objects.has(oldPath), false);
-const currentObject = objects.get(row.snapshot_path);
-objects.delete(row.snapshot_path);
-await assert.rejects(
-  store.read(),
-  (error) => error.code === 'storage',
-  '現行の保存自体が欠けた場合は空のリーグとして初期化しない',
-);
-objects.set(row.snapshot_path, currentObject);
+for (const [status, detail] of [
+  [404, null],
+  [400, { statusCode: '404', code: 'NoSuchKey', error: 'not_found' }],
+  [400, { statusCode: '404', error: 'not_found' }],
+]) {
+  missingStatus = status;
+  missingDetail = detail;
+  const oldPath = row.snapshot_path;
+  beforeDownload = async () => {
+    for (let i = 0; i < 3; i++)
+      await store.transaction((b) => {
+        b.sessions.a = `concurrent:${i}`;
+      });
+  };
+  assert.equal(
+    (await store.read()).sessions.a,
+    'concurrent:2',
+    `不存在応答 ${status} から最新の一式へ再取得する`,
+  );
+  assert.equal(objects.has(oldPath), false);
+  const currentObject = objects.get(row.snapshot_path);
+  objects.delete(row.snapshot_path);
+  await assert.rejects(
+    store.read(),
+    (error) => error.code === 'storage',
+    '現行の保存自体が欠けた場合は空のリーグとして初期化しない',
+  );
+  objects.set(row.snapshot_path, currentObject);
+}
+// 本文が404以外のエラーは、ポインタが変わっていても再取得しない。
+for (const detail of [
+  { statusCode: '403', code: 'AccessDenied' },
+  { statusCode: '400', code: 'InvalidRequest' },
+]) {
+  missingStatus = 400;
+  missingDetail = detail;
+  beforeDownload = async () => {
+    for (let i = 0; i < 3; i++)
+      await store.transaction((b) => {
+        b.sessions.a = `blocked:${i}`;
+      });
+  };
+  await assert.rejects(store.read(), (error) => error.storageStatus === 400);
+}
 // HTTP認証、メソッド、JSON/CORS、ユーザーID偽装の入口を確認する。
 const handler = createHandler(
   {

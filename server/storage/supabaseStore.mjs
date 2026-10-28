@@ -35,6 +35,16 @@ export class SupabaseStore {
         'storage',
       );
       error.storageStatus = response.status;
+      if (raw && method === 'GET' && response.status === 400) {
+        // Storage RESTは不存在をHTTP 400と本文内404で返す形式もある。
+        const detail = await response.json().catch(() => null);
+        if (
+          detail?.code === 'NoSuchKey' ||
+          (String(detail?.statusCode) === '404' &&
+            detail?.error === 'not_found')
+        )
+          error.storageStatus = 404;
+      }
       throw error;
     }
     if (raw && method === 'GET')
