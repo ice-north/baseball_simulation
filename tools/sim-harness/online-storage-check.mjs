@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { gzipSync } from 'node:zlib';
+import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
 import { SupabaseStore } from '../../server/storage/supabaseStore.mjs';
 import { createHandler } from '../../server/http.mjs';
 import { Readable } from 'node:stream';
@@ -264,6 +265,25 @@ await assert.rejects(
   store.readGames('a', { year: 'bad' }),
   (error) => error.status === 400,
 );
+downloads.length = 0;
+assert.equal((await store.readGames('a', { year: 9999 })).count, 0);
+await assert.rejects(store.readGameInfo('a', 1, 9999), (e) => e.status === 404);
+assert.deepEqual(downloads, [], '存在しない年度で世界本体を取得しない');
+// 保持対象年度の試合本文へ触れず、確定済み識別子が一致する場合のみ参照を再利用する。
+const skipBundle = {
+  league: {
+    members: [],
+    game: { teams: {} },
+    season: { year: 2, results: [] },
+    records: { seasons: { 1: {} } },
+  },
+};
+Object.defineProperty(skipBundle.league.records.seasons[1], 'games', {
+  get() {
+    throw new Error('確定年度本文を再生成した');
+  },
+});
+assert.deepEqual(buildArchiveIndex(skipBundle, ['1']).games, { 2: {} });
 const archived = row.views._records;
 await store.transaction((bundle) => {
   bundle.sessions.a = 'archive-session';
@@ -288,6 +308,41 @@ assert.equal(
   '読取り中に旧派生記録が整理されたら最新世代へ再取得',
 );
 assert.equal(objects.has(oldArchivePath), false, '派生記録も3世代で整理する');
+beforeDownload = null;
+await store.transaction((bundle) => {
+  bundle.league.records = {
+    seasons: {
+      1: {
+        year: 1,
+        players: {},
+        games: {},
+        comparison: {
+          stats: { batting: {}, pitching: {} },
+          splits: { batting: {}, pitching: {} },
+        },
+        archiveToken: 'finalized-year-1',
+      },
+    },
+  };
+});
+const finalized = row.views._records.games[1];
+await store.transaction((bundle) => {
+  bundle.league.season.year = 2;
+  bundle.league.season.results = [];
+});
+assert.deepEqual(
+  row.views._records.games[1],
+  finalized,
+  '年度更新後は確定年度の参照をそのまま保持',
+);
+await store.transaction((bundle) => {
+  bundle.league.records.seasons[1].archiveToken = 'restored-another-year-1';
+});
+assert.equal(
+  row.views._records.games[1].finalizedToken,
+  'restored-another-year-1',
+  '異なるバックアップの確定年度を以前の参照で上書きしない',
+);
 // HTTP認証、メソッド、JSON/CORS、ユーザーID偽装の入口を確認する。
 const handler = createHandler(
   {

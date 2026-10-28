@@ -1,6 +1,6 @@
 import { projectPlayerInfo } from './projection.mjs';
 import { storedGame } from './recordedViews.mjs';
-export function buildArchiveIndex(bundle) {
+export function buildArchiveIndex(bundle, retainedYears = []) {
   const league = bundle.league;
   if (!league) return null;
   const players = {};
@@ -18,6 +18,7 @@ export function buildArchiveIndex(bundle) {
     ...Object.keys(league.records?.seasons || {}).map(Number),
   ]);
   for (const year of years) {
+    if (retainedYears.includes(String(year))) continue;
     const ids = new Set(
       Object.keys(league.records?.seasons?.[year]?.games || {}),
     );

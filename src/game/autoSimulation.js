@@ -1904,6 +1904,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const buntResult = executeBunt(buntDecision, batter, pitcher, catcher, defense, gameState.bases, gameState.outs);
       if (observed) {
         observed.bunt = buntDecision;
+        observed.buntOutcome = buntResult.type;
         observed.pitches++;
         observed.result = buntResult;
       }

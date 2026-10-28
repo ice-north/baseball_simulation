@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   PA_KEYS,
   BATTING_KEYS,
@@ -40,6 +41,7 @@ function playerRecord(season, team, player) {
     key,
     id: player.id,
     name: player.name,
+    bats: player.batting?.bats || null,
     teams: [],
     stats: {
       batting: zeroLine(BATTING_KEYS),
@@ -132,10 +134,15 @@ export function createRecorder(league, teams) {
           safetyAttempts: 0,
           squeezeAttempts: 0,
         };
-        if (e.bunt === 'sacrifice') {
+        if (
+          e.bunt === 'sacrifice' &&
+          ['bunt_fair', 'bunt_popup'].includes(e.buntOutcome)
+        ) {
           extra.buntAttempts = 1;
           extra.buntSuccess =
-            e.completed && (e.delta.sacrificeBunts > 0 || e.delta.hits > 0)
+            e.buntOutcome === 'bunt_fair' &&
+            e.completed &&
+            (e.delta.sacrificeBunts > 0 || e.delta.hits > 0)
               ? 1
               : 0;
         }
@@ -193,6 +200,7 @@ export function createRecorder(league, teams) {
         if (e.twoStrikes)
           splitAdd(batter.record.splits.batting, 'twoStrikes', line);
         if (
+          !e.bunt &&
           e.pitches === 1 &&
           [
             'single',
@@ -201,7 +209,6 @@ export function createRecorder(league, teams) {
             'homerun',
             'out',
             'double_play',
-            'bunt_fair',
           ].includes(e.result?.type)
         )
           splitAdd(batter.record.splits.batting, 'firstPitch', line);
@@ -305,6 +312,7 @@ export function createRecorder(league, teams) {
         }
       }
       season.games[game.id] = box;
+      delete season.archiveToken;
     },
   };
 }
@@ -319,6 +327,10 @@ export function freezeComparison(league) {
   const season = observedSeason(league);
   if (season && !season.comparison)
     season.comparison = clone(comparisonForSeason(season));
+  if (season && !season.archiveToken)
+    season.archiveToken = createHash('sha256')
+      .update(JSON.stringify(season.games))
+      .digest('hex');
 }
 export function comparisonForSeason(season) {
   if (!season) return null;
@@ -329,8 +341,14 @@ export function comparisonForSeason(season) {
       pitching: zeroLine(PITCHING_KEYS),
     },
     splits: { batting: {}, pitching: {} },
+    byBats: {},
   };
   for (const r of Object.values(season.players)) {
+    if (r.bats) {
+      const splits = (totals.byBats[r.bats] ||= {});
+      for (const [key, line] of Object.entries(r.splits.batting))
+        splitAdd(splits, key, line);
+    }
     addCounts(totals.stats.batting, r.stats.batting, BATTING_KEYS);
     addCounts(totals.stats.pitching, r.stats.pitching, PITCHING_KEYS);
     for (const category of ['batting', 'pitching'])

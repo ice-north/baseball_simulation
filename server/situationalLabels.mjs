@@ -1,18 +1,50 @@
 import { rates, addCounts, zeroLine } from '../src/online/recordStats.js';
 export const SITUATION_RULES = Object.freeze({
-  pa: 15,
+  pa: 60,
+  z: 2,
   starts: 3,
   bunts: 10,
   multiGames: 20,
 });
 const enough = (line) => line?.pa >= SITUATION_RULES.pa;
 const usable = (line) => enough(line) && rates(line)?.ops !== null;
+// OPSの出塁率・長打率の共分散を含めた、打席結果からの標準誤差。
+// 各区分60打席に加え、差が2標準誤差以上の場合にだけ傾向を示す。
+function opsVariance(line) {
+  const r = rates(line);
+  if (!r || r.ops === null || !line.atBats) return Infinity;
+  const den = line.atBats + line.walks + line.hitByPitch + line.sacrificeFlies;
+  const outcomes = [
+    [line.hits - line.doubles - line.triples - line.homeruns, 1, 1, true],
+    [line.doubles, 1, 2, true],
+    [line.triples, 1, 3, true],
+    [line.homeruns, 1, 4, true],
+    [line.atBats - line.hits, 0, 0, true],
+    [line.walks + line.hitByPitch, 1, 0, false],
+    [line.sacrificeFlies, 0, 0, false],
+  ];
+  return outcomes.reduce((sum, [count, reached, bases, ab]) => {
+    const influence =
+      (reached - r.obp) / den + (ab ? (bases - r.slg) / line.atBats : 0);
+    return sum + Math.max(0, count) * influence ** 2;
+  }, 0);
+}
+const clearDifference = (
+  a,
+  b,
+  delta = rates(a).ops - rates(b).ops,
+  extraVariance = 0,
+) =>
+  Math.abs(delta) >=
+  SITUATION_RULES.z *
+    Math.sqrt(opsVariance(a) + opsVariance(b) + extraVariance);
 export function situationalCandidates(record, comparison) {
   const out = { batting: [], pitching: [] };
   if (!record) return out;
   const b = record.splits.batting,
     p = record.splits.pitching,
-    lb = comparison?.splits?.batting || {};
+    lb = comparison?.splits?.batting || {},
+    hand = comparison?.byBats?.[record.bats];
   const add = (category, id, text, tone, score) =>
     out[category].push({ id, text, tone, score });
   const difference = (
@@ -28,6 +60,7 @@ export function situationalCandidates(record, comparison) {
   ) => {
     if (!usable(a) || !usable(z)) return;
     const delta = (rates(a).ops - rates(z).ops) * (lower ? -1 : 1);
+    if (!clearDifference(a, z, delta)) return;
     if (delta >= threshold)
       add(category, good, positive, 'good', delta / threshold);
     else if (delta <= -threshold)
@@ -54,26 +87,39 @@ export function situationalCandidates(record, comparison) {
     0.1,
     true,
   );
-  if ([b.left, b.right, lb.left, lb.right].every(usable)) {
+  if ([b.left, b.right, hand?.left, hand?.right].every(usable)) {
     const d =
       rates(b.left).ops -
       rates(b.right).ops -
-      (rates(lb.left).ops - rates(lb.right).ops);
-    if (d >= 0.12) add('batting', 'left-good', '対左投手B', 'good', d / 0.12);
-    else if (d <= -0.12)
-      add('batting', 'left-bad', '対左投手F', 'bad', -d / 0.12);
+      (rates(hand.left).ops - rates(hand.right).ops);
+    if (
+      clearDifference(
+        b.left,
+        b.right,
+        d,
+        opsVariance(hand.left) + opsVariance(hand.right),
+      )
+    ) {
+      if (d >= 0.12) add('batting', 'left-good', '対左投手B', 'good', d / 0.12);
+      else if (d <= -0.12)
+        add('batting', 'left-bad', '対左投手F', 'bad', -d / 0.12);
+    }
   }
   if ([b.pinch, b.normal, lb.pinch].every(usable)) {
     const margin = Math.min(
       rates(b.pinch).ops - rates(b.normal).ops,
       rates(b.pinch).ops - rates(lb.pinch).ops,
     );
-    if (margin > 0)
+    if (
+      margin >= 0.15 &&
+      clearDifference(b.pinch, b.normal) &&
+      clearDifference(b.pinch, lb.pinch)
+    )
       add('batting', 'pinch-hit', '代打○', 'good', 1 + margin / 0.1);
   }
   if ([b.firstPitch, lb.firstPitch].every(usable)) {
     const delta = rates(b.firstPitch).ops - rates(lb.firstPitch).ops;
-    if (delta >= 0.15)
+    if (delta >= 0.15 && clearDifference(b.firstPitch, lb.firstPitch))
       add('batting', 'first-pitch', '初球○', 'good', delta / 0.15);
   }
   if ([b.twoStrikes, lb.twoStrikes].every(enough)) {
@@ -83,6 +129,12 @@ export function situationalCandidates(record, comparison) {
       a.obp !== null &&
       mean.obp !== null &&
       a.obp - mean.obp >= 0.05 &&
+      a.obp - mean.obp >=
+        SITUATION_RULES.z *
+          Math.sqrt(
+            (a.obp * (1 - a.obp)) / b.twoStrikes.pa +
+              (mean.obp * (1 - mean.obp)) / lb.twoStrikes.pa,
+          ) &&
       a.kRate <= mean.kRate
     )
       add(
@@ -166,6 +218,7 @@ export function situationalCandidates(record, comparison) {
         usable(early) &&
         usable(later) &&
         rates(early).ops - rates(later).ops >= 0.12 &&
+        clearDifference(early, later) &&
         rates(later).kRate - rates(early).kRate >= 0.03
       ) {
         out.pitching = out.pitching.filter(

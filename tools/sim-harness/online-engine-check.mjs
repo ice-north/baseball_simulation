@@ -99,6 +99,14 @@ assert.ok(league.history[0].standings.every((s) => s.gamesPlayed === 75));
 const recordedYear = league.records.seasons[1];
 assert.ok(recordedYear.comparison, '年度・リーグの比較値を確定して残す');
 assert.ok(
+  recordedYear.archiveToken,
+  '確定年度の派生データを安全に再利用できる',
+);
+assert.ok(
+  recordedYear.grandChampionshipExcluded,
+  'グランドCSの対象外を記録する',
+);
+assert.ok(
   Object.keys(recordedYear.games).length >= 150,
   '公式150試合とプレーオフのボックス成績を保持',
 );
@@ -139,6 +147,11 @@ const periods = projectPlayerInfo(
 const annual = periods.find((p) => p.id === 'online:1'),
   career = periods.find((p) => p.id === 'career');
 assert.ok(annual && career, '次年度でも年度別と対人通算を取得');
+assert.match(annual.source, /グランドCS除外/);
+assert.ok(
+  periods.some((p) => p.id === 'legacy:1'),
+  'グランドCS込みの既存年度成績も選択できる',
+);
 assert.equal(
   career.seasonStats.batting.hitByPitch,
   annual.seasonStats.batting.hitByPitch,

@@ -14,8 +14,10 @@ export function Drafts({ scope, children }) {
   const cache = useMemo(() => {
     const key = prefix + scope;
     let values = {};
+    let restoreError = false;
     try {
       const raw = sessionStorage.getItem(key);
+      if (raw && raw.length >= 64000) restoreError = true;
       if (raw && raw.length < 64000) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
@@ -27,6 +29,7 @@ export function Drafts({ scope, children }) {
     return {
       key,
       values,
+      restoreError,
       write(name, value) {
         this.values[name] = value;
         try {
@@ -58,7 +61,16 @@ export function Drafts({ scope, children }) {
       }
     };
   }, [cache]);
-  return <Context.Provider value={cache}>{children}</Context.Provider>;
+  return (
+    <Context.Provider value={cache}>
+      {cache.restoreError && (
+        <p role="alert" className="online-alert">
+          未保存案が大きすぎるため復元できませんでした。サーバーに保存済みの内容を表示します。
+        </p>
+      )}
+      {children}
+    </Context.Provider>
+  );
 }
 
 // 同時に表示するフォームは一つ。保存先の値を同期更新し、アンマウント直前の入力も保持する。

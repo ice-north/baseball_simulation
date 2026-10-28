@@ -20,6 +20,7 @@ import {
 } from '../../server/projection.mjs';
 import { situationalCandidates } from '../../server/situationalLabels.mjs';
 import { zeroLine, addCounts, rates } from '../../src/online/recordStats.js';
+import { storedGame } from '../../server/recordedViews.mjs';
 import { performanceFor } from '../../server/performanceLabels.mjs';
 const log = console.log;
 console.log = () => {};
@@ -49,6 +50,7 @@ restoreWorld(before);
 const events = [];
 const observed = autoSimulateGame(home, away, false, 70281, {
   plateAppearance: (e) => events.push(e),
+  runnerOut: (e) => assert.ok(e.outs > 0),
 });
 assert.deepEqual(
   observed,
@@ -132,7 +134,12 @@ const tiny = {
   season: { year: 1, results: [], settings: { teamNames: ['A', 'B'] } },
   records: null,
 };
-const p = (id) => ({ id, name: `選手${id}`, position: 'center' });
+const p = (id) => ({
+  id,
+  name: `選手${id}`,
+  position: 'center',
+  batting: { bats: 'left' },
+});
 const teams = { A: { players: [p(1)] }, B: { players: [p(2)] } };
 const r = createRecorder(tiny, teams),
   g = { id: 7, date: game.date, home: 'A', away: 'B' },
@@ -196,6 +203,11 @@ r.finish(
 const br = Object.values(tiny.records.seasons[1].players).find(
   (p) => p.id === 1,
 );
+assert.equal(br.bats, 'left', '打者左右は通常ゲームと同じbatting.batsを使う');
+assert.equal(
+  comparisonForSeason(tiny.records.seasons[1]).byBats.left.risp.pa,
+  1,
+);
 assert.equal(br.stats.batting.atBats, 0);
 assert.equal(br.stats.batting.sacrificeFlies, 1);
 assert.equal(br.stats.batting.plateAppearances, 1);
@@ -203,8 +215,14 @@ assert.equal(br.splits.batting.firstPitch.pa, 1);
 assert.equal(br.splits.batting.pinch.pa, 1);
 assert.equal(rates(br.splits.batting.risp).obp, 0);
 // 倍率の平均0・両区分の必要量・リーグ左右差補正。
-const line = (hits, pa = 20) => ({ ...zeroLine(), pa, atBats: pa, hits });
+const line = (hits, pa = 20) => ({
+  ...zeroLine(),
+  pa: pa * 4,
+  atBats: pa * 4,
+  hits: hits * 4,
+});
 const record = {
+  bats: 'left',
   splits: {
     batting: {
       risp: line(10),
@@ -220,6 +238,7 @@ const record = {
 };
 const comparison = {
   splits: { batting: { left: line(10), right: line(2) }, pitching: {} },
+  byBats: { left: { left: line(10), right: line(2) } },
 };
 const candidates = situationalCandidates(record, comparison);
 assert.ok(candidates.batting.some((c) => c.id === 'chance-good'));
@@ -261,8 +280,8 @@ const chosen = performanceFor(
 assert.ok(chosen.batting.labels.length <= 3);
 const candidateIds = (b = {}, p = {}, lb = {}, starts = [], games = []) =>
   situationalCandidates(
-    { splits: { batting: b, pitching: p }, starts, games },
-    { splits: { batting: lb, pitching: {} } },
+    { bats: 'left', splits: { batting: b, pitching: p }, starts, games },
+    { splits: { batting: lb, pitching: {} }, byBats: { left: lb } },
   );
 assert.ok(
   candidateIds({ risp: line(2), emptyRisp: line(10) }).batting.some(
@@ -386,6 +405,164 @@ assert.ok(
     Array.from({ length: 20 }, () => ({ atBats: 4, hits: 1 })),
   ).batting.some((c) => c.id === 'multi-hit'),
   '同じ打率でも安打の集中が無ければ固め打ちを付けない',
+);
+// 少数・僅差は偶然の変動として表示しない。大きな差も打者左右の期待差なら除外。
+assert.ok(
+  !candidateIds({ risp: line(8, 15), emptyRisp: line(7, 15) }).batting.some(
+    (c) => c.id.startsWith('chance-'),
+  ),
+);
+assert.ok(
+  !candidateIds({ risp: line(7, 10), emptyRisp: line(1, 10) }).batting.some(
+    (c) => c.id.startsWith('chance-'),
+  ),
+);
+assert.ok(
+  !candidateIds(
+    { pinch: line(7), normal: line(6) },
+    {},
+    { pinch: line(6) },
+  ).batting.some((c) => c.id === 'pinch-hit'),
+);
+const sameHand = {
+  bats: 'left',
+  splits: { batting: { left: line(2), right: line(10) }, pitching: {} },
+};
+assert.ok(
+  !situationalCandidates(sameHand, {
+    splits: { batting: { left: line(5), right: line(5) } },
+    byBats: { left: sameHand.splits.batting },
+  }).batting.some((c) => c.id.startsWith('left-')),
+);
+assert.ok(
+  !situationalCandidates(sameHand, {
+    splits: { batting: { left: line(5), right: line(5) } },
+  }).batting.some((c) => c.id.startsWith('left-')),
+  '旧記録の打者左右が不明なら推測しない',
+);
+// 同一打者へファウル後安打/四球、バント安打、ポップフライ、初球安打を入力する。
+const buntTiny = structuredClone(tiny);
+buntTiny.records = null;
+const buntRecorder = createRecorder(buntTiny, teams),
+  buntGame = { ...g, id: 8 },
+  buntObserver = buntRecorder.begin(buntGame);
+for (const e of [
+  {
+    bunt: 'sacrifice',
+    buntOutcome: 'bunt_foul',
+    pitches: 2,
+    result: { type: 'single' },
+    delta: { atBats: 1, hits: 1 },
+  },
+  {
+    bunt: 'sacrifice',
+    buntOutcome: 'bunt_foul',
+    pitches: 5,
+    result: { type: 'walk' },
+    delta: { walks: 1 },
+  },
+  {
+    bunt: 'sacrifice',
+    buntOutcome: 'bunt_fair',
+    result: { type: 'bunt_fair' },
+    delta: { atBats: 1, hits: 1 },
+  },
+  {
+    bunt: 'sacrifice',
+    buntOutcome: 'bunt_popup',
+    result: { type: 'bunt_popup' },
+    delta: { atBats: 1 },
+  },
+  { result: { type: 'single' }, delta: { atBats: 1, hits: 1 } },
+])
+  buntObserver.plateAppearance({ ...event, ...e });
+buntRecorder.finish(
+  buntGame,
+  {
+    ...result,
+    homeTeam: {
+      name: 'A',
+      players: [
+        {
+          ...teams.A.players[0],
+          battingOrder: 1,
+          gameStats: { batting: {}, pitching: {}, fielding: {} },
+        },
+      ],
+    },
+    awayTeam: { name: 'B', players: [] },
+  },
+  buntObserver,
+);
+const buntRecord = Object.values(buntTiny.records.seasons[1].players).find(
+  (p) => p.id === 1,
+);
+assert.equal(
+  buntRecord.splits.batting.all.buntAttempts,
+  2,
+  'ファウル後の通常打撃を犠打成功率から除く',
+);
+assert.equal(
+  buntRecord.splits.batting.all.buntSuccess,
+  1,
+  '実際のバント安打だけを成功にする',
+);
+assert.equal(
+  buntRecord.splits.batting.firstPitch.pa,
+  1,
+  '初球バントは初球打ちから除く',
+);
+let randomState = 2801;
+const random = () =>
+  (randomState = (1664525 * randomState + 1013904223) >>> 0) / 4294967296;
+let noiseLabels = 0;
+for (let sample = 0; sample < 1000; sample++) {
+  const nullLine = () => ({
+    ...zeroLine(),
+    pa: 60,
+    atBats: 60,
+    hits: Array.from({ length: 60 }, () => random() < 0.25).filter(Boolean)
+      .length,
+  });
+  if (
+    candidateIds({ risp: nullLine(), emptyRisp: nullLine() }).batting.some(
+      (c) => c.id.startsWith('chance-'),
+    )
+  )
+    noiseLabels++;
+}
+assert.ok(
+  noiseLabels < 100,
+  `同じ実力の1000標本へ過剰付与しない: ${noiseLabels}`,
+);
+const legacyGame = storedGame(
+  {
+    season: {
+      year: 1,
+      results: [
+        {
+          gameId: 9,
+          result: {
+            homeTeam: {
+              name: 'A',
+              players: [
+                { id: 1, gameStats: { batting: { hitByPitch: 1 } } },
+                { id: 2, gameStats: { batting: { sacrificeBunts: 1 } } },
+              ],
+            },
+            awayTeam: { name: 'B', players: [] },
+          },
+        },
+      ],
+    },
+  },
+  9,
+  1,
+);
+assert.equal(
+  legacyGame.teams.A.length,
+  2,
+  '死球/犠打だけの代打も旧ボックスから落とさない',
 );
 // 閲覧権限と保存後・過去年の参照を確認。
 const own = league.game.teams[home].players.find((p) =>

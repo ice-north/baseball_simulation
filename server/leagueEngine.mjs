@@ -588,6 +588,9 @@ export function advanceLeagueDay(league, operationId, now) {
         );
         if (gc) {
           autoPlayGrandChampionship(gc);
+          if (league.records?.seasons?.[season.year])
+            league.records.seasons[season.year].grandChampionshipExcluded =
+              true;
           season.grandChampionship = gc;
         }
       }

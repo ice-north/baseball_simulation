@@ -278,6 +278,7 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
             <small className="online-stat-note">
               {period.source}
               {period.partial ? '・記録開始後の場面集計' : ''}
+              {period.splits ? '／打撃の試合数は完了打席のある試合' : ''}
             </small>
           )}
           {info.error && (
