@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDraftState } from './Drafts.jsx';
 import GameHistory, { GameRecordButton } from './GameHistory.jsx';
+import { decisionText, formatRate, ownOutcome, teamShort } from './gameText.js';
 import { api, POS, MENUS } from './api.js';
 import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
 import {
@@ -90,7 +91,7 @@ export function Standings({ view }) {
               <td>{s.wins}</td>
               <td>{s.losses}</td>
               <td>{s.draws || 0}</td>
-              <td>{s.winRate.toFixed(3)}</td>
+              <td>{formatRate(s.winRate)}</td>
             </tr>
           ))}
         </tbody>
@@ -145,39 +146,40 @@ export function Results({ view, compact = false }) {
         ))}
       </div>
       {list.length ? (
-        list.slice(page * size, page * size + size).map((g) => (
-          <article className="online-score" key={g.gameId || g.id}>
-            <small>{formatGameDate(g.date)}</small>
-            <div>
-              <span>{g.away}</span>
-              <strong>
-                {mode === 'results' ? `${g.awayScore} – ${g.homeScore}` : '×'}
-              </strong>
-              <span>{g.home}</span>
-            </div>
-            {g.decisions?.winningPitcher && (
-              <small>
-                勝 {g.decisions.winningPitcher.name}
-                {g.decisions.savePitcher &&
-                  ` / S ${g.decisions.savePitcher.name}`}
-              </small>
-            )}
-            {g.decisions?.losingPitcher && (
-              <small>敗 {g.decisions.losingPitcher.name}</small>
-            )}
-            {!!g.decisions?.holdPitchers?.length && (
-              <small>
-                H{' '}
-                {g.decisions.holdPitchers
-                  .map((player) => player.name)
-                  .join('・')}
-              </small>
-            )}
-            {mode === 'results' && view.gameDetailsAvailable && (
-              <GameRecordButton game={g} year={view.year} />
-            )}
-          </article>
-        ))
+        list.slice(page * size, page * size + size).map((g) => {
+          const outcome = mode === 'results' && ownOutcome(g, view.teamName);
+          const decisions = decisionText(g.decisions);
+          const name = compact ? teamShort : (team) => team;
+          return (
+            <article className="online-score" key={g.gameId || g.id}>
+              <header>
+                <small>{formatGameDate(g.date)}</small>
+                {outcome && (
+                  <span className={`online-outcome is-${outcome.tone}`}>
+                    {outcome.mark}
+                  </span>
+                )}
+                {mode === 'results' && view.gameDetailsAvailable && (
+                  <GameRecordButton
+                    game={g}
+                    year={view.year}
+                    ownTeam={view.teamName}
+                  />
+                )}
+              </header>
+              <div>
+                <span title={g.away}>{name(g.away)}</span>
+                <strong>
+                  {mode === 'results' ? `${g.awayScore} – ${g.homeScore}` : '×'}
+                </strong>
+                <span title={g.home}>{name(g.home)}</span>
+              </div>
+              {decisions && (
+                <small className="online-score-decisions">{decisions}</small>
+              )}
+            </article>
+          );
+        })
       ) : (
         <p className="online-empty">
           {mode === 'results'
@@ -197,7 +199,7 @@ export function Notices({ view, compact = false }) {
   const notice = view.notices[Number(index)];
   const history = view.history[Number(index)];
   const picks = kind === 'notice' ? notice?.picks || [] : [];
-  const size = compact ? 4 : 8;
+  const size = 8;
   useEffect(() => {
     if (!view.notices.length && !view.history.length) return;
     if ((kind === 'notice' && !notice) || (kind === 'history' && !history)) {
@@ -235,14 +237,21 @@ export function Notices({ view, compact = false }) {
           </select>
           {kind === 'notice' ? (
             <>
-              <div className="online-news-list">
+              <div
+                className={`online-news-list ${compact ? 'is-compact' : ''}`}
+              >
                 {picks.slice(page * size, page * size + size).map((p, j) => (
                   <article key={j}>
                     <b>
                       {typeof p.round === 'number' ? `${p.round}巡` : p.round}{' '}
                       {p.name}
                     </b>
-                    <span>→ {p.npbTeam || p.team}</span>
+                    <span>
+                      →{' '}
+                      {compact
+                        ? teamShort(p.npbTeam || p.team)
+                        : p.npbTeam || p.team}
+                    </span>
                   </article>
                 ))}
               </div>

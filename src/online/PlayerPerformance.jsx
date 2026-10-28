@@ -4,6 +4,7 @@ import { formatGameDate } from './shared.js';
 import { PageNav } from './PageNav.jsx';
 import PlayerAbilities from './PlayerAbilities.jsx';
 import { useRead } from './useRead.js';
+import { ownOutcome, teamShort } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import {
@@ -32,6 +33,10 @@ export function TeamBrief({ view }) {
   const starter = view.roster.find(
     (player) => player.id === view.nextStarterId,
   );
+  const last = [...view.results]
+    .reverse()
+    .find((game) => ownOutcome(game, view.teamName));
+  const lastOutcome = last && ownOutcome(last, view.teamName);
   return (
     <section className="online-team-brief" aria-label="次の行動の確認">
       {view.phase ? (
@@ -46,10 +51,23 @@ export function TeamBrief({ view }) {
         </p>
       ) : (
         <>
+          {last && (
+            <p>
+              前回：{last.date.month}/{last.date.day}{' '}
+              <span className={`online-outcome is-${lastOutcome.tone}`}>
+                {lastOutcome.mark}
+              </span>{' '}
+              {last.home === view.teamName
+                ? `${last.homeScore}–${last.awayScore}`
+                : `${last.awayScore}–${last.homeScore}`}{' '}
+              対{' '}
+              {teamShort(last.home === view.teamName ? last.away : last.home)}
+            </p>
+          )}
           <p>
             次の試合：
             {next
-              ? `${formatGameDate(next.date)} 対 ${next.home === view.teamName ? next.away : next.home}`
+              ? `${formatGameDate(next.date)} 対 ${teamShort(next.home === view.teamName ? next.away : next.home)}`
               : '予定なし'}
           </p>
           {starter && (

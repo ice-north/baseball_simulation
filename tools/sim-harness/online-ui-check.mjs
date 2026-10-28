@@ -323,12 +323,12 @@ try {
   await m
     .getByRole('button', { name: 'リーグ便り・過去のシーズン →', exact: true })
     .click();
-  assert.ok((await m.locator('.online-news-list article').count()) <= 4);
+  assert.ok((await m.locator('.online-news-list article').count()) <= 8);
   assert.ok(
     await m.evaluate(
       () => document.documentElement.scrollHeight <= innerHeight * 1.3,
     ),
-    '96人のトライアウト結果も4件ずつ表示する',
+    '96人のトライアウト結果も1行8件ずつ表示する',
   );
   await m.screenshot({
     path: '/tmp/baseball-online-mobile-news.png',

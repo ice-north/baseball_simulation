@@ -1351,3 +1351,129 @@
 .online-check-info .online-check {
   flex: 1;
 }
+
+/* 試合カード：日付・自球団の勝敗・成績ボタンを1行、責任投手は区切り付きの1行。 */
+.online-score header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+.online-score div span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.online-score .online-score-decisions {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.online .online-record-button {
+  min-height: 36px;
+  margin-left: auto;
+  padding: 2px 12px;
+  font-size: 12px;
+}
+.online-outcome {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+}
+.online-outcome.is-win {
+  background: #0e7490;
+  color: #ecfeff;
+}
+.online-outcome.is-loss {
+  background: #9f1239;
+  color: #fff1f2;
+}
+.online-outcome.is-draw {
+  background: #475569;
+  color: #f1f5f9;
+}
+.online-outcome.is-none {
+  visibility: hidden;
+}
+/* 過去の試合：日付・勝敗・対戦を1行にして、6試合が縦スクロールなしで収まるようにする。 */
+.online-game-history-list article {
+  display: grid;
+  grid-template-columns: 38px 22px minmax(0, 1fr) auto;
+}
+.online-game-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.online-game-line b,
+.online-game-summary strong {
+  font-variant-numeric: tabular-nums;
+}
+.online-game-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.online-game-summary small {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+.online-game-summary strong {
+  font-size: 18px;
+}
+.online-game-dialog {
+  min-height: min(420px, 70dvh);
+}
+.online-record-table th button {
+  background: transparent;
+  color: #cbd5e1;
+  font-weight: 650;
+}
+.online-record-table th button[aria-pressed='true'] {
+  color: var(--accent);
+}
+.online-player-dialog header {
+  margin-bottom: 8px;
+}
+.online-player-dialog .online-stat-note {
+  margin: 2px 0 8px;
+}
+.online-game-dialog .online-stat-tools .online-segments button {
+  min-width: 56px;
+  padding: 6px 10px;
+}
+.online .online-history-button {
+  margin-top: 12px;
+}
+.online-player-dialog .online-segments {
+  margin-bottom: 10px;
+}
+.online-player-dialog .online-stat-labels {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 4px 0 10px;
+}
+/* スマホのリーグ便りは1行1人にして、1ページ8人をスクロールなしで見せる。 */
+.online-news-list.is-compact article {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+.online-news-list.is-compact article b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-news-list.is-compact article span {
+  flex-shrink: 0;
+}

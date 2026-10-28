@@ -327,7 +327,7 @@ try {
   news.view.notices = Array.from({ length: 4 }, (_, n) => ({
     year: n + 1,
     type: 'tryout',
-    picks: Array.from({ length: 12 }, (_, i) => ({
+    picks: Array.from({ length: 24 }, (_, i) => ({
       name: `選手${i}`,
       round: i + 1,
       team: 'A',

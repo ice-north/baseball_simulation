@@ -122,7 +122,9 @@ export default function SplitStats({ period, category }) {
         <p>この区分の記録はまだありません。</p>
       )}
       <small className="online-stat-note">
-        投球区分の率は被打撃成績です。犠打企図は送りバントのみ。
+        {category === 'pitching'
+          ? '投球区分の率は被打撃成績です。'
+          : '犠打企図は送りバントのみ。'}
       </small>
     </>
   );

@@ -3,6 +3,7 @@ import { useRead } from './useRead.js';
 import { PageNav } from './PageNav.jsx';
 import { formatGameDate } from './shared.js';
 import { formatStat } from './statsView.js';
+import { ownOutcome, teamShort } from './gameText.js';
 const GROUPS = {
   batting: [
     [
@@ -137,8 +138,10 @@ function RequestState({ result }) {
     </div>
   ) : null;
 }
-function BoxScore({ game }) {
-  const [team, setTeam] = useState(game.home),
+function BoxScore({ game, ownTeam }) {
+  const [team, setTeam] = useState(
+      [game.home, game.away].includes(ownTeam) ? ownTeam : game.home,
+    ),
     [category, setCategory] = useState('batting'),
     [groupId, setGroup] = useState('basic'),
     [page, setPage] = useState(0),
@@ -169,18 +172,22 @@ function BoxScore({ game }) {
   return (
     <>
       <div className="online-stat-tools">
-        <select
-          aria-label="試合成績の球団"
-          value={team}
-          onChange={(e) => {
-            setTeam(e.target.value);
-            setPage(0);
-          }}
-        >
-          {[game.home, game.away].map((name) => (
-            <option key={name}>{name}</option>
+        <div className="online-segments" aria-label="試合成績の球団">
+          {[game.away, game.home].map((name) => (
+            <button
+              key={name}
+              title={name}
+              aria-label={name}
+              aria-pressed={team === name}
+              onClick={() => {
+                setTeam(name);
+                setPage(0);
+              }}
+            >
+              {teamShort(name)}
+            </button>
           ))}
-        </select>
+        </div>
         <select
           aria-label="試合成績の表示項目"
           value={`${category}:${group[0]}`}
@@ -246,23 +253,29 @@ function BoxScore({ game }) {
     </>
   );
 }
-export function GameRecordButton({ game, year, children }) {
+export function GameRecordButton({ game, year, ownTeam, children }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
+        className="online-record-button"
         onClick={() => setOpen(true)}
         aria-label={`${game.home}対${game.away}の試合成績`}
       >
         {children || '個人成績'}
       </button>
       {open && (
-        <GameRecord id={game.gameId} year={year} close={() => setOpen(false)} />
+        <GameRecord
+          id={game.gameId}
+          year={year}
+          ownTeam={ownTeam}
+          close={() => setOpen(false)}
+        />
       )}
     </>
   );
 }
-function GameRecord({ id, year, close }) {
+function GameRecord({ id, year, ownTeam, close }) {
   const result = useRead('game', { id, year }),
     game = result.data;
   return (
@@ -270,13 +283,16 @@ function GameRecord({ id, year, close }) {
       <RequestState result={result} />
       {game && (
         <>
-          <p>
-            {formatGameDate(game.date)}
-            <br />
-            {game.home} {game.homeScore}－{game.awayScore} {game.away}
+          <p className="online-game-summary">
+            <small>{formatGameDate(game.date)}</small>
+            <strong>
+              <span title={game.away}>{teamShort(game.away)}</span>{' '}
+              {game.awayScore} – {game.homeScore}{' '}
+              <span title={game.home}>{teamShort(game.home)}</span>
+            </strong>
           </p>
           {game.teams ? (
-            <BoxScore game={game} />
+            <BoxScore game={game} ownTeam={ownTeam} />
           ) : (
             <p>この試合は得点のみの記録です。</p>
           )}
@@ -289,7 +305,9 @@ export default function GameHistory({ view }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button onClick={() => setOpen(true)}>過去の試合・個人成績</button>
+      <button className="online-history-button" onClick={() => setOpen(true)}>
+        過去の試合・個人成績
+      </button>
       {open && <History view={view} close={() => setOpen(false)} />}
     </>
   );
@@ -312,7 +330,7 @@ function History({ view, close }) {
         >
           {(view.seasonYears || [view.year]).map((n) => (
             <option key={n} value={n}>
-              {n}年
+              {n}年目
             </option>
           ))}
         </select>
@@ -332,15 +350,34 @@ function History({ view, close }) {
       {result.data && (
         <>
           <div className="online-game-history-list">
-            {result.data.games.map((g) => (
-              <article key={g.gameId}>
-                <span>
-                  {g.date.month}/{g.date.day} {g.home} {g.homeScore}－
-                  {g.awayScore} {g.away}
-                </span>
-                <GameRecordButton game={g} year={year} />
-              </article>
-            ))}
+            {result.data.games.map((g) => {
+              const outcome = ownOutcome(g, view.teamName);
+              return (
+                <article key={g.gameId}>
+                  <small>
+                    {g.date.month}/{g.date.day}
+                  </small>
+                  <span
+                    className={`online-outcome ${outcome ? `is-${outcome.tone}` : 'is-none'}`}
+                    aria-label={outcome ? `自球団の${outcome.mark}` : undefined}
+                  >
+                    {outcome?.mark || ''}
+                  </span>
+                  <span className="online-game-line">
+                    <span title={g.away}>{teamShort(g.away)}</span>{' '}
+                    <b>
+                      {g.awayScore} – {g.homeScore}
+                    </b>{' '}
+                    <span title={g.home}>{teamShort(g.home)}</span>
+                  </span>
+                  <GameRecordButton
+                    game={g}
+                    year={year}
+                    ownTeam={view.teamName}
+                  />
+                </article>
+              );
+            })}
           </div>
           {!result.data.count && <p>この年度の試合記録はありません。</p>}
           <PageNav
