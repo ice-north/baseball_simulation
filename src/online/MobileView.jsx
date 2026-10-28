@@ -6,6 +6,7 @@ import {
   PhasePanel,
   LineupPanel,
 } from './LeaguePanels.jsx';
+import TeamRoster from './TeamRoster.jsx';
 import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatGameDate } from './shared.js';
 import { dateTime, STATUS } from './api.js';
@@ -59,7 +60,17 @@ export default function MobileView(props) {
         </>
       )}
       {tab === 'games' && <Results view={view} compact />}
-      {tab === 'players' && <CompactRoster view={view} />}
+      {tab === 'players' && (
+        <TeamRoster view={view}>
+          {(shown, selector) => (
+            <CompactRoster
+              key={shown.teamName}
+              view={shown}
+              teamSelector={selector}
+            />
+          )}
+        </TeamRoster>
+      )}
       {tab === 'news' && (
         <>
           <Notices view={view} compact />

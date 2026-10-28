@@ -6,6 +6,7 @@ import {
   projectGames,
   projectGameInfo,
   projectPlayerInfo,
+  projectTeamInfo,
 } from '../projection.mjs';
 import { buildArchiveIndex, archiveReferences } from '../archiveIndex.mjs';
 export class SupabaseStore {
@@ -118,7 +119,12 @@ export class SupabaseStore {
   }
   async archive(row, kind, year) {
     const meta = row.views?._records;
-    const descriptor = kind === 'players' ? meta?.players : meta?.games?.[year];
+    const descriptor =
+      kind === 'players'
+        ? meta?.players
+        : kind === 'teams'
+          ? meta?.teams
+          : meta?.games?.[year];
     if (!descriptor) return null;
     if (this.archiveCache.has(descriptor.path))
       return this.archiveCache.get(descriptor.path);
@@ -152,6 +158,14 @@ export class SupabaseStore {
           !Object.hasOwn(row.views._records.games, year);
         const index = missingYear ? {} : await this.archive(row, kind, year);
         if (!index) return project(await this.read(), year);
+        if (kind === 'teams') {
+          requireOnline(
+            Object.hasOwn(index, query.team),
+            '球団が見つかりません',
+            404,
+          );
+          return structuredClone(index[query.team]);
+        }
         if (kind === 'players') {
           const own = index[userId];
           requireOnline(
@@ -177,6 +191,11 @@ export class SupabaseStore {
         row = await this.control();
       }
     }
+  }
+  readTeamInfo(userId, teamName) {
+    return this.readRecord(userId, 'teams', { team: teamName }, (bundle) =>
+      projectTeamInfo(bundle, userId, teamName),
+    );
   }
   readPlayerInfo(userId, id) {
     return this.readRecord(userId, 'players', { id }, (bundle) =>
@@ -217,6 +236,7 @@ export class SupabaseStore {
     const data = buildArchiveIndex(bundle, retainedYears);
     if (!data) return null;
     const players = await this.publishArchive(data.players, previous?.players),
+      teams = await this.publishArchive(data.teams, previous?.teams),
       games = Object.fromEntries(
         retainedYears.map((year) => [year, previous.games[year]]),
       );
@@ -229,9 +249,16 @@ export class SupabaseStore {
     return {
       version: 2,
       players,
+      teams,
       games,
       previous: [
-        previous ? { players: previous.players, games: previous.games } : null,
+        previous
+          ? {
+              players: previous.players,
+              teams: previous.teams,
+              games: previous.games,
+            }
+          : null,
         ...(previous?.previous || []),
       ]
         .filter(Boolean)

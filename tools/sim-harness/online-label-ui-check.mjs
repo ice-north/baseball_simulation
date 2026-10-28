@@ -6,6 +6,7 @@ import { withDeadline } from './lib/deadline.mjs';
 import {
   projectLeague,
   projectPlayerInfo,
+  projectTeamInfo,
   projectGameInfo,
   projectGames,
 } from '../../server/projection.mjs';
@@ -338,7 +339,7 @@ async function scene(width, height = 844, scale = 1, holdDetail = false) {
       });
     }
     assert.ok(
-      ['config', 'view', 'player', 'game', 'games'].includes(action),
+      ['config', 'view', 'player', 'game', 'games', 'team'].includes(action),
       '閲覧だけで更新APIを呼ばない',
     );
     return route.fulfill({
@@ -346,28 +347,34 @@ async function scene(width, height = 844, scale = 1, holdDetail = false) {
       body: JSON.stringify(
         action === 'config'
           ? { local: true }
-          : action === 'player'
-            ? projectPlayerInfo(
+          : action === 'team'
+            ? projectTeamInfo(
                 { league },
                 'a',
-                new URL(route.request().url()).searchParams.get('id'),
+                new URL(route.request().url()).searchParams.get('team'),
               )
-            : action === 'game'
-              ? projectGameInfo(
+            : action === 'player'
+              ? projectPlayerInfo(
                   { league },
                   'a',
                   new URL(route.request().url()).searchParams.get('id'),
-                  new URL(route.request().url()).searchParams.get('year'),
                 )
-              : action === 'games'
-                ? projectGames(
+              : action === 'game'
+                ? projectGameInfo(
                     { league },
                     'a',
-                    Object.fromEntries(
-                      new URL(route.request().url()).searchParams,
-                    ),
+                    new URL(route.request().url()).searchParams.get('id'),
+                    new URL(route.request().url()).searchParams.get('year'),
                   )
-                : view,
+                : action === 'games'
+                  ? projectGames(
+                      { league },
+                      'a',
+                      Object.fromEntries(
+                        new URL(route.request().url()).searchParams,
+                      ),
+                    )
+                  : view,
       ),
     });
   });
@@ -385,6 +392,22 @@ async function scene(width, height = 844, scale = 1, holdDetail = false) {
 try {
   const { page: p, context } = await scene(1440, 1000);
   await p.getByRole('button', { name: '選手', exact: true }).click();
+  await p.getByLabel('閲覧する球団').selectOption('B');
+  await p
+    .getByRole('button', { name: '成績選手100の選手情報を見る', exact: true })
+    .waitFor();
+  await p
+    .getByRole('button', { name: '成績選手100の選手情報を見る', exact: true })
+    .click();
+  await p
+    .getByRole('dialog', { name: '成績選手100', exact: true })
+    .getByRole('button', { name: '能力・人物', exact: true })
+    .click();
+  await p.keyboard.press('Escape');
+  await p.getByLabel('閲覧する球団').selectOption('A');
+  await p
+    .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
+    .waitFor();
   const first = p.locator('tbody tr').first();
   assert.equal(await first.locator('.online-stat-label').count(), 3);
   await p

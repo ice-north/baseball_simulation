@@ -7,6 +7,7 @@ import {
   LineupPanel,
   PageNav,
 } from './LeaguePanels.jsx';
+import TeamRoster from './TeamRoster.jsx';
 import { POS } from './api.js';
 import {
   CompactRoster,
@@ -84,7 +85,13 @@ export default function DesktopView(props) {
           <Notices view={view} />
         </div>
       )}
-      {tab === 'players' && <Roster view={view} />}
+      {tab === 'players' && (
+        <TeamRoster view={view}>
+          {(shown, selector) => (
+            <Roster key={shown.teamName} view={shown} teamSelector={selector} />
+          )}
+        </TeamRoster>
+      )}
       {tab === 'lineup' &&
         (view.phase ? (
           <section className="online-card">
@@ -116,12 +123,13 @@ export default function DesktopView(props) {
     </>
   );
 }
-function Roster({ view }) {
+function Roster({ view, teamSelector }) {
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
   const [stats, setStats] = useState(false);
   return (
     <section className="online-card">
+      <div className="online-team-selector">{teamSelector}</div>
       <div className="online-segments">
         <button onClick={() => setStats(false)} aria-pressed={!stats}>
           能力一覧

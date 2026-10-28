@@ -9,6 +9,7 @@ import {
   projectLeague,
   projectLineup,
   projectPlayerInfo,
+  projectTeamInfo,
   projectGames,
   projectGameInfo,
 } from './projection.mjs';
@@ -52,6 +53,11 @@ export class LeagueService {
       bundle.sessions[userId] = sessionId;
       return { value: { sessionId } };
     });
+  }
+  async teamInfo(userId, teamName) {
+    if (this.store.readTeamInfo)
+      return this.store.readTeamInfo(userId, teamName);
+    return projectTeamInfo(await this.store.read(), userId, teamName);
   }
   async playerInfo(userId, id) {
     if (this.store.readPlayerInfo) return this.store.readPlayerInfo(userId, id);

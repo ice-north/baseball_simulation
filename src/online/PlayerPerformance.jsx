@@ -200,7 +200,19 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
     id: player.id,
   });
   const period =
-    info.data?.periods.find((p) => p.id === periodId) || info.data?.periods[0];
+    info.data?.periods.find((p) => p.id === periodId) ||
+    info.data?.periods[0] ||
+    (player.publicOnly
+      ? {
+          id: 'current',
+          label: '今季',
+          source: player.publicSource,
+          seasonStats: player.seasonStats,
+          performance: player.performance,
+          splits: player.publicSplits,
+          partial: player.publicPartial,
+        }
+      : null);
   const shown = period
     ? {
         ...player,
@@ -390,7 +402,7 @@ export function PlayerStatsButton({
     </>
   );
 }
-export function CompactRoster({ view, desktop = false }) {
+export function CompactRoster({ view, desktop = false, teamSelector }) {
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
   const [groupId, setGroupId] = useState('basic');
@@ -471,7 +483,7 @@ export function CompactRoster({ view, desktop = false }) {
     >
       <div className="online-roster-toolbar">
         <div>
-          <h2>選手成績</h2>
+          {teamSelector || <h2>選手成績</h2>}
           <small>今季 · {view.roster.length}人</small>
         </div>
         <GroupSelect

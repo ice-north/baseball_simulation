@@ -1477,3 +1477,15 @@
 .online-news-list.is-compact article span {
   flex-shrink: 0;
 }
+
+/* 球団を切り替えて同じ一覧を使い、スマホで縦に積み増さない。 */
+.online-team-roster { min-width: 0; }
+.online-team-selector { display: flex; gap: 8px; align-items: center; padding: 4px 0 8px; }
+.online-team-selector select { min-width: 0; max-width: 100%; }
+.online-team-selector small { white-space: nowrap; }
+.online-mobile.online-compact-shell .online-team-roster { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.online-mobile .online-team-selector { padding: 4px 12px; }
+.online-mobile .online-team-selector select { flex: 1; width: 0; }
+.online-mobile .online-team-roster > .online-compact-roster { flex: 1; min-height: 0; }
+
+.online-mobile .online-roster-toolbar > div:first-child select { width: 126px; max-width: 100%; font-size: 12px; padding: 3px; min-height: 28px; }

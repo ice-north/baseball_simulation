@@ -15,6 +15,7 @@ import {
 } from '../../server/recordedStats.mjs';
 import {
   projectPlayerInfo,
+  projectTeamInfo,
   projectGameInfo,
   projectGames,
 } from '../../server/projection.mjs';
@@ -563,6 +564,33 @@ assert.equal(
   legacyGame.teams.A.length,
   2,
   '死球/犠打だけの代打も旧ボックスから落とさない',
+);
+const beforePublic = JSON.stringify(league);
+const opposing = projectTeamInfo({ league }, 'a', away);
+assert.equal(opposing.teamName, away);
+assert.equal(opposing.roster.length, league.game.teams[away].players.length);
+assert.ok(opposing.roster.every((p) => p.publicOnly && !p.detailAvailable));
+for (const key of [
+  'lineup',
+  'strategy',
+  'phase',
+  'nextStarterId',
+  'submissions',
+])
+  assert.ok(!Object.hasOwn(opposing, key));
+assert.ok(opposing.roster.every((p) => !Object.hasOwn(p, 'growthPotential')));
+assert.equal(
+  JSON.stringify(league),
+  beforePublic,
+  '相手球団の閲覧は世界を変えない',
+);
+assert.throws(
+  () => projectTeamInfo({ league }, 'stranger', away),
+  (e) => e.status === 403,
+);
+assert.throws(
+  () => projectTeamInfo({ league }, 'a', 'constructor'),
+  (e) => e.status === 404,
 );
 // 閲覧権限と保存後・過去年の参照を確認。
 const own = league.game.teams[home].players.find((p) =>

@@ -95,6 +95,8 @@ export function createHandler(
           value = await service.view(userId, sessionId);
         else if (action === 'defaults' && req.method === 'GET')
           value = await service.defaults(userId, sessionId);
+        else if (action === 'team' && req.method === 'GET')
+          value = await service.teamInfo(userId, url.searchParams.get('team'));
         else if (action === 'player' && req.method === 'GET')
           value = await service.playerInfo(userId, url.searchParams.get('id'));
         else if (action === 'games' && req.method === 'GET')

@@ -284,6 +284,20 @@ Object.defineProperty(skipBundle.league.records.seasons[1], 'games', {
   },
 });
 assert.deepEqual(buildArchiveIndex(skipBundle, ['1']).games, { 2: {} });
+downloads.length = 0;
+assert.equal((await store.readTeamInfo('a', 'B')).roster[0].id, 2);
+assert.ok(
+  downloads.every((p) => p.startsWith('archives/')),
+  '相手球団も世界本体を展開しない',
+);
+await assert.rejects(
+  store.readTeamInfo('stranger', 'B'),
+  (e) => e.status === 403,
+);
+await assert.rejects(
+  store.readTeamInfo('a', '__proto__'),
+  (e) => e.status === 404,
+);
 const archived = row.views._records;
 await store.transaction((bundle) => {
   bundle.sessions.a = 'archive-session';

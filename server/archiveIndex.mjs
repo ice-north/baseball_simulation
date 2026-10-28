@@ -1,4 +1,4 @@
-import { projectPlayerInfo } from './projection.mjs';
+import { projectPlayerInfo, projectTeamInfo } from './projection.mjs';
 import { storedGame } from './recordedViews.mjs';
 export function buildArchiveIndex(bundle, retainedYears = []) {
   const league = bundle.league;
@@ -12,6 +12,11 @@ export function buildArchiveIndex(bundle, retainedYears = []) {
       players[member.userId][p.id] = info;
     }
   }
+  const teams = Object.fromEntries(
+    (league.members.length ? league.season.settings.teamNames : []).map(
+      (name) => [name, projectTeamInfo(bundle, league.members[0].userId, name)],
+    ),
+  );
   const games = {};
   const years = new Set([
     league.season.year,
@@ -28,7 +33,7 @@ export function buildArchiveIndex(bundle, retainedYears = []) {
       [...ids].map((id) => [id, storedGame(league, id, year)]),
     );
   }
-  return { players, games };
+  return { players, teams, games };
 }
 export function archiveReferences(meta) {
   return new Set(
@@ -36,6 +41,7 @@ export function archiveReferences(meta) {
       .filter(Boolean)
       .flatMap((index) => [
         index.players?.path,
+        index.teams?.path,
         ...Object.values(index.games || {}).map((x) => x.path),
       ])
       .filter(Boolean),

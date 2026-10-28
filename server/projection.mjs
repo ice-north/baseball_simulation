@@ -6,6 +6,7 @@ import {
   gameSummary,
   statisticsContext,
 } from './recordedViews.mjs';
+import { recordForPlayer } from './recordedStats.mjs';
 import { requireOnline } from '../src/online/shared.js';
 
 const playerView = (p) => ({
@@ -77,6 +78,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     error: l.error,
     teamName: member.teamName,
     year: l.season.year,
+    teamNames: l.season.settings.teamNames,
     currentDate: l.season.currentDate,
     nextAdvanceAt: l.nextAdvanceAt,
     isAdmin: userId === adminId,
@@ -132,6 +134,42 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       : null,
     history: l.history,
     notices: l.notices.slice(0, 4),
+  };
+}
+
+// 参加者向けに、確定済み名簿・今季成績・能力だけを公開する。
+// 編成、次回先発、戦術、契約、未提出案や成長の内部値を含めない。
+export function projectTeamInfo(bundle, userId, teamName) {
+  const l = bundle.league;
+  requireOnline(
+    l?.members.some((m) => m.userId === userId),
+    '参加者ではありません',
+    403,
+  );
+  requireOnline(
+    l.season.settings.teamNames.includes(teamName),
+    '球団が見つかりません',
+    404,
+  );
+  const statistics = statisticsContext(l);
+  return {
+    teamName,
+    year: l.season.year,
+    roster: l.game.teams[teamName].players.map((p) => {
+      const visible = playerView(p);
+      delete visible.growthPotential;
+      delete visible.growthModifier;
+      return {
+        ...visible,
+        ...currentPlayerStats(l, teamName, p, statistics),
+        publicOnly: true,
+        publicSplits: recordForPlayer(l, p, teamName)?.splits || null,
+        publicPartial: !!statistics.season && !statistics.season.complete,
+        publicSource: statistics.season?.complete
+          ? '対人リーグ（プレーオフ込み・グランドCS除外）'
+          : '既存の今季記録（場面別は記録開始後）',
+      };
+    }),
   };
 }
 
