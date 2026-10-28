@@ -929,8 +929,8 @@ export function recordAwardsToPlayers(allTeams, awards, totalGames = 0) {
 // resetSeasonStats 後に呼び出すことで通算成績に積み上がりつつ、
 // 引退判定・成長計算でも利用できる状態にする
 // ============================================================
-function simulateParallelWorldStats(allTeams) {
-  const humanTeams = new Set(humanTeamNames(allTeams));
+function simulateParallelWorldStats(allTeams, playedTeamNames = []) {
+  const humanTeams = new Set([...humanTeamNames(allTeams), ...playedTeamNames]);
 
   for (const [teamName, team] of Object.entries(allTeams)) {
     if (humanTeams.has(teamName)) continue;
@@ -1061,7 +1061,7 @@ function simulateParallelWorldStats(allTeams) {
  * @param {Object} allTeams - 全チームデータ
  * @returns {Object} - { newSeasonData, updatedTeams, awards, retirements }
  */
-export function advanceToNextYear(seasonData, allTeams) {
+export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [] } = {}) {
   // 0. プロへ送り出した教え子のキャリアを1年進める（NPBは観るだけの階層）
   const npbYear = seasonData.settings?.year || seasonData.year || 1;
   processNpbCareers(allTeams, npbYear);
@@ -1129,7 +1129,7 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 3.5. CPU並行世界チームにシーズン成績を注入
   // resetSeasonStats後に入れることで通算成績に正しく積み上がり、
   // 以降の引退判定(step5)・成長計算(step4.6)でも使われる
-  simulateParallelWorldStats(updatedTeams);
+  simulateParallelWorldStats(updatedTeams, playedTeamNames);
 
   // 4. 選手の年齢を更新
   updatedTeams = updateAllPlayerAges(updatedTeams);

@@ -19,7 +19,8 @@
     "check:pool": "node tools/sim-harness/pool-leak-check.mjs",
     "check:doc": "node tools/sim-harness/doc-check.mjs",
     "check:bunt": "node tools/sim-harness/bunt-check.mjs",
-    "check:online": "node tools/sim-harness/online-core-check.mjs"
+    "check:online": "node tools/sim-harness/online-core-check.mjs",
+    "check:online:season": "node tools/sim-harness/online-engine-check.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",
