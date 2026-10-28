@@ -8,7 +8,14 @@ import {
   PageNav,
 } from './LeaguePanels.jsx';
 import { POS } from './api.js';
-import { PlayerStatsButton, StatLabels } from './PlayerPerformance.jsx';
+import {
+  CompactRoster,
+  AbilityGrade,
+  TeamBrief,
+  ConditionMark,
+  PlayerStatsButton,
+  StatLabels,
+} from './PlayerPerformance.jsx';
 export default function DesktopView(props) {
   const { view } = props;
   const [tab, setTab] = useState('today');
@@ -46,6 +53,7 @@ export default function DesktopView(props) {
           <Standings view={view} />
           <section className="online-card">
             <h2>今日の球団</h2>
+            <TeamBrief view={view} />
             <p>
               {view.teamName} · 所属{view.roster.length}人
             </p>
@@ -112,57 +120,84 @@ export default function DesktopView(props) {
 function Roster({ view }) {
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
+  const [stats, setStats] = useState(false);
   return (
     <section className="online-card">
-      <h2>所属選手 · {view.roster.length}人</h2>
-      <div className="online-segments" aria-label="成績区分">
-        {['batting', 'pitching'].map((id) => (
-          <button
-            key={id}
-            aria-pressed={category === id}
-            onClick={() => setCategory(id)}
-          >
-            {id === 'batting' ? '打撃' : '投球'}
-          </button>
-        ))}
+      <div className="online-segments">
+        <button onClick={() => setStats(false)} aria-pressed={!stats}>
+          能力一覧
+        </button>
+        <button onClick={() => setStats(true)} aria-pressed={stats}>
+          成績一覧
+        </button>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>選手</th>
-            <th>年齢</th>
-            <th>位置</th>
-            <th>ミート</th>
-            <th>パワー</th>
-            <th>球速</th>
-            <th>制球</th>
-            <th>疲労</th>
-          </tr>
-        </thead>
-        <tbody>
-          {view.roster.slice(page * 10, page * 10 + 10).map((p) => (
-            <tr key={p.id}>
-              <th>
-                <PlayerStatsButton player={p} category={category} />
-                <StatLabels player={p} category={category} />
-              </th>
-              <td>{p.age}</td>
-              <td>{POS[p.position]}</td>
-              <td>{p.batting?.meet ?? '–'}</td>
-              <td>{p.batting?.power ?? '–'}</td>
-              <td>{p.pitching?.velocity ?? '–'}</td>
-              <td>{p.pitching?.control ?? '–'}</td>
-              <td>{p.fatigue}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <PageNav
-        page={page}
-        count={view.roster.length}
-        size={10}
-        setPage={setPage}
-      />
+      {stats ? (
+        <CompactRoster view={view} desktop />
+      ) : (
+        <>
+          <h2>所属選手 · {view.roster.length}人</h2>
+          <div className="online-segments" aria-label="成績区分">
+            {['batting', 'pitching'].map((id) => (
+              <button
+                key={id}
+                aria-pressed={category === id}
+                onClick={() => setCategory(id)}
+              >
+                {id === 'batting' ? '打撃' : '投球'}
+              </button>
+            ))}
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>選手</th>
+                <th>年齢</th>
+                <th>位置</th>
+                <th>ミート</th>
+                <th>パワー</th>
+                <th>球速</th>
+                <th>制球</th>
+                <th>調子</th>
+                <th>疲労</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.roster.slice(page * 10, page * 10 + 10).map((p) => (
+                <tr key={p.id}>
+                  <th>
+                    <PlayerStatsButton player={p} category={category} />
+                    <StatLabels player={p} category={category} />
+                  </th>
+                  <td>{p.age}</td>
+                  <td>{POS[p.position]}</td>
+                  <td>
+                    <AbilityGrade value={p.batting?.meet} />
+                  </td>
+                  <td>
+                    <AbilityGrade value={p.batting?.power} />
+                  </td>
+                  <td>
+                    <AbilityGrade value={p.pitching?.velocity} velocity />
+                  </td>
+                  <td>
+                    <AbilityGrade value={p.pitching?.control} />
+                  </td>
+                  <td>
+                    <ConditionMark player={p} />
+                  </td>
+                  <td>{p.fatigue}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <PageNav
+            page={page}
+            count={view.roster.length}
+            size={10}
+            setPage={setPage}
+          />
+        </>
+      )}
     </section>
   );
 }

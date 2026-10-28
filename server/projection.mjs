@@ -5,11 +5,46 @@ const playerView = (p) => ({
   id: p.id,
   name: p.name,
   age: p.age,
+  condition:
+    Number.isInteger(p.condition) && p.condition >= 0 && p.condition <= 4
+      ? p.condition
+      : null,
   position: p.position,
+  number: p.number,
   fatigue: p.fatigue || 0,
   batting: p.batting,
-  pitching: p.position === 'pitcher' ? p.pitching : undefined,
+  pitching: p.pitching,
   fielding: p.fielding,
+  physical:
+    p.physical &&
+    Object.fromEntries(
+      [
+        'speed',
+        'arm',
+        'throws',
+        'bodyStamina',
+        'recovery',
+        'muscle',
+        'dexterity',
+        'build',
+      ]
+        .filter((key) => p.physical[key] !== undefined)
+        .map((key) => [key, p.physical[key]]),
+    ),
+  catching: p.catching && { lead: p.catching.lead },
+  personality: p.personality && {
+    discipline: p.personality.discipline,
+    mental: p.personality.mental,
+  },
+  positionFitness: p.positionFitness,
+  zoneProfile: p.zoneProfile,
+  growthPotential: p.growthPotential,
+  growthModifier: p.growthModifier,
+  origin: {
+    highSchool: p.highSchool?.name,
+    university: p.universityTeamName || p.universityName,
+    previousTeam: p.previousTeam,
+  },
   seasonStats: p.seasonStats,
 });
 export function projectLineup(team) {
@@ -64,6 +99,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       performance: performanceFor(p, comparison),
     })),
     lineup: projectLineup(team),
+    nextStarterId: team.pitchingRotation?.starters?.length
+      ? team.pitchingRotation.starters[
+          (team.pitchingRotation.currentStarterIndex || 0) %
+            team.pitchingRotation.starters.length
+        ]
+      : null,
     phase: phase
       ? {
           id: phase.id,

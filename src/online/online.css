@@ -907,7 +907,7 @@
   justify-content: space-between;
   font-size: 11px;
   color: #cbd5e1;
-  min-height: 22px;
+  min-height: 44px;
   border-bottom: 1px solid #668196;
 }
 .online-roster-rows {
@@ -932,22 +932,252 @@
 .online-roster-person {
   display: block;
   min-width: 0;
+  flex: 1;
 }
 .online-roster-name {
-  display: block;
+  display: flex;
+  align-items: center;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 14px;
   line-height: 20px;
+}
+.online-roster-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.online-roster-name .online-condition,
+.online-roster-name small {
+  flex-shrink: 0;
+}
+.online-lineup-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.online-lineup-picker select {
+  min-width: 0;
+  flex: 1;
+}
+.online-lineup-picker .online-player-name {
+  flex-shrink: 0;
+}
+.online-player-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.online-player-tabs button {
+  min-width: 80px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.online-player-tabs button[aria-pressed='true'] {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+.online-ability-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.online-ability-select select {
+  width: auto;
+  min-width: 140px;
+  padding: 4px 8px;
+}
+.online-player-abilities .online-stat-grid dd {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.online-player-abilities .online-profile-grid {
+  grid-template-columns: 1fr 1fr;
+}
+.online-player-abilities .online-profile-grid dd {
+  font-size: 14px;
+}
+.online-batter-type {
+  margin: 12px 0 4px !important;
+  font-size: 14px;
+}
+.online-player-abilities > small,
+.online-zone-legend,
+.online-player-abilities li {
+  font-size: 12px;
+}
+.online-zone-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 22px);
+  gap: 2px;
+  margin: 10px auto;
+  width: max-content;
+}
+.online-zone-grid span {
+  width: 22px;
+  height: 22px;
+}
+.online-zone-hot {
+  background: #c54750;
+}
+.online-zone-warm {
+  background: #b77544;
+}
+.online-zone-neutral {
+  background: #607284;
+}
+.online-zone-cool {
+  background: #365d98;
+}
+.online-zone-cold {
+  background: #3b79cb;
+}
+.online-zone-strike {
+  outline: 1px solid #e1eaf2;
+  outline-offset: -1px;
+}
+.online-zone-legend {
+  text-align: center;
+}
+.online-team-brief {
+  font-size: 12px;
+  padding: 4px 12px;
+}
+.online-team-brief p {
+  margin: 0 0 3px;
+}
+.online-team-brief .online-player-name {
+  min-height: 32px;
+}
+.online-card-heading select {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.online-ability-grade {
+  font-weight: 750;
 }
 .online-roster-name small {
   font-size: 11px;
   margin-left: 8px;
   color: #cbd5e1;
 }
-.online-roster-value {
-  font-size: 14px;
+.online-roster-values {
+  display: grid;
+  grid-template-columns: repeat(4, 34px);
+  gap: 4px;
+  width: 148px;
+  flex: 0 0 148px;
+  text-align: right;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+.online-roster-values > span {
+  white-space: nowrap;
+}
+.online-roster-values .online-stat-percent {
+  font-size: 11px;
+}
+.online-roster-values .online-stat-condition {
+  font-size: 11px;
+}
+.online-roster-columns button {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  height: 44px;
+  font-size: 10px;
+  background: transparent;
+  position: relative;
+}
+.online-roster-columns > button {
+  font-size: 11px;
+}
+.online-roster-columns button[aria-pressed='true'] {
+  color: var(--accent);
+}
+.online-sort-direction {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  font-size: 8px;
+  line-height: 9px;
+}
+.online .online-stat-group {
+  width: 104px;
+  flex: 0 0 104px;
+  min-width: 0;
+  padding: 4px;
+  font-size: 12px !important;
+}
+.online-stat-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.online-stat-tools .online-segments {
+  margin: 0;
+}
+.online-roster-toolbar > div:first-child {
+  flex: 0 0 60px;
+  min-width: 60px;
+  white-space: nowrap;
+}
+.online-stat-note {
+  display: block;
+  font-size: 10px;
+  line-height: 18px;
+  min-height: 18px;
+  color: #cbd5e1;
+}
+.online-roster-row .online-stat-label {
+  padding: 1px 3px;
+}
+.online-condition {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  margin: 0 2px;
+  font-weight: bold;
+}
+.online-condition-4 {
+  color: #ff9caf;
+}
+.online-condition-3 {
+  color: #ffc678;
+}
+.online-condition-2 {
+  color: #f8e57d;
+}
+.online-condition-1 {
+  color: #98d8ff;
+}
+.online-condition-0 {
+  color: #c1b1ff;
+}
+.online-condition-unknown {
+  color: #bdc8d4;
+}
+.online-desktop .online-roster-values {
+  width: 48%;
+  flex-basis: 48%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  font-size: 14px;
+}
+.online-desktop .online-roster-columns button {
+  font-size: 12px;
+}
+.online-desktop .online-compact-roster {
+  padding: 12px 0;
+}
+.online-desktop .online-roster-rows {
+  height: auto;
 }
 .online-roster-row .online-stat-labels {
   display: flex;
@@ -976,6 +1206,9 @@
 }
 .online-mobile .online-stat-grid dd {
   font-size: 18px;
+}
+.online-mobile .online-profile-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .online-mobile .online-stat-grid dt {
   font-size: 11px;
@@ -1055,4 +1288,13 @@
   font-size: 10px;
   color: #cbd5e1;
   margin-top: 8px;
+}
+
+.online-check-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.online-check-info .online-check {
+  flex: 1;
 }

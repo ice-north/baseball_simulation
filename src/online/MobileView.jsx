@@ -6,7 +6,7 @@ import {
   PhasePanel,
   LineupPanel,
 } from './LeaguePanels.jsx';
-import { CompactRoster } from './PlayerPerformance.jsx';
+import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatGameDate } from './shared.js';
 import { dateTime, STATUS } from './api.js';
 export default function MobileView(props) {
@@ -31,6 +31,7 @@ export default function MobileView(props) {
             </span>
             <small>次の進行 {dateTime(view.nextAdvanceAt)}</small>
           </section>
+          <TeamBrief view={view} />
           <nav className="online-home-actions" aria-label="オンラインの画面">
             {tabs
               .filter(([id]) => id !== 'today')

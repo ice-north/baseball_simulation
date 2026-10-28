@@ -1,5 +1,7 @@
 # 取り込み前のAIレビュー
 
+選手情報の追加分は [PLAYER_INFORMATION.md](PLAYER_INFORMATION.md) を参照。`statsView.js` の計算・欠損・全名簿ソート、`playerInfo.js` の既存能力参照、一覧の既存ランク共用と詳細の実数値、`projection.mjs` の非破壊性を確認する。`check:online` に指標検査を追加済み。`check:online:label-ui` は投打全項目の列幅、ランク→実数値、未保存編成維持も検査する。
+
 ## レビュー依頼文
 
 以下をレビュー担当AIへ渡してください。

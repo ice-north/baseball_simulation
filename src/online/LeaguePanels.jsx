@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { api, POS, MENUS } from './api.js';
 import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
-import { PlayerStatsButton } from './PlayerPerformance.jsx';
+import {
+  AbilityGrade,
+  ConditionMark,
+  PlayerStatsButton,
+} from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 export { PageNav } from './PageNav.jsx';
 
@@ -96,11 +100,31 @@ export function Standings({ view }) {
 export function Results({ view, compact = false }) {
   const [mode, setMode] = useState('results');
   const [page, setPage] = useState(0);
-  const list = mode === 'results' ? [...view.results].reverse() : view.upcoming;
+  const [scope, setScope] = useState(compact ? 'own' : 'league');
+  const all = mode === 'results' ? [...view.results].reverse() : view.upcoming;
+  const list =
+    scope === 'own'
+      ? all.filter(
+          (game) => game.home === view.teamName || game.away === view.teamName,
+        )
+      : all;
   const size = compact ? 2 : 4;
   return (
     <section className="online-card">
-      <h2>試合</h2>
+      <div className="online-card-heading">
+        <h2>試合</h2>
+        <select
+          aria-label="試合の表示範囲"
+          value={scope}
+          onChange={(event) => {
+            setScope(event.target.value);
+            setPage(0);
+          }}
+        >
+          <option value="own">自球団</option>
+          <option value="league">リーグ全体</option>
+        </select>
+      </div>
       <div className="online-segments">
         {[
           ['results', '結果'],
@@ -134,6 +158,17 @@ export function Results({ view, compact = false }) {
                 勝 {g.decisions.winningPitcher.name}
                 {g.decisions.savePitcher &&
                   ` / S ${g.decisions.savePitcher.name}`}
+              </small>
+            )}
+            {g.decisions?.losingPitcher && (
+              <small>敗 {g.decisions.losingPitcher.name}</small>
+            )}
+            {!!g.decisions?.holdPitchers?.length && (
+              <small>
+                H{' '}
+                {g.decisions.holdPitchers
+                  .map((player) => player.name)
+                  .join('・')}
               </small>
             )}
           </article>
@@ -380,12 +415,30 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                         return (
                           <div className="online-candidate" key={id}>
                             <span>
-                              {i + 1}. {p.name}{' '}
+                              {i + 1}.{' '}
+                              <PlayerStatsButton player={p} panel="abilities" />{' '}
                               <small>
                                 {p.age}歳 / {POS[p.position]} /{' '}
-                                {p.position === 'pitcher'
-                                  ? `球速${p.pitching?.velocity} 制球${p.pitching?.control}`
-                                  : `巧打${p.batting?.meet} 長打${p.batting?.power}`}
+                                {p.position === 'pitcher' ? (
+                                  <>
+                                    球速
+                                    <AbilityGrade
+                                      value={p.pitching?.velocity}
+                                      velocity
+                                    />{' '}
+                                    制球
+                                    <AbilityGrade value={p.pitching?.control} />
+                                  </>
+                                ) : (
+                                  <>
+                                    ミート
+                                    <AbilityGrade
+                                      value={p.batting?.meet}
+                                    />{' '}
+                                    パワー
+                                    <AbilityGrade value={p.batting?.power} />
+                                  </>
+                                )}
                               </small>
                             </span>
                             <button
@@ -414,20 +467,25 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                       チェックした選手が退団します。最低9人を残してください。既に9人未満の場合は新たな退団はできません。
                     </p>
                     {view.roster.map((p) => (
-                      <label className="online-check" key={p.id}>
-                        <input
-                          type="checkbox"
-                          checked={plan.releaseIds.includes(p.id)}
-                          onChange={(e) =>
-                            setPlan({
-                              releaseIds: e.target.checked
-                                ? [...plan.releaseIds, p.id]
-                                : plan.releaseIds.filter((id) => id !== p.id),
-                            })
-                          }
-                        />
-                        {p.name}（{p.age}歳 / {POS[p.position]}）
-                      </label>
+                      <div className="online-check-info" key={p.id}>
+                        <label className="online-check" key={p.id}>
+                          <input
+                            type="checkbox"
+                            checked={plan.releaseIds.includes(p.id)}
+                            onChange={(e) =>
+                              setPlan({
+                                releaseIds: e.target.checked
+                                  ? [...plan.releaseIds, p.id]
+                                  : plan.releaseIds.filter((id) => id !== p.id),
+                              })
+                            }
+                          />
+                          {p.name}（{p.age}歳 / {POS[p.position]}）
+                        </label>
+                        <PlayerStatsButton player={p} panel="abilities">
+                          情報
+                        </PlayerStatsButton>
+                      </div>
                     ))}
                   </>
                 )}
@@ -568,36 +626,50 @@ export function LineupPanel({
                 <span>{POS[entry.position]}</span>
                 {mobile ? (
                   <span>
+                    <ConditionMark
+                      player={
+                        view.roster.find((p) => p.id === entry.playerId) || {}
+                      }
+                    />
                     <PlayerStatsButton
                       player={view.roster.find((p) => p.id === entry.playerId)}
+                      panel="abilities"
                     />
                   </span>
                 ) : (
-                  <select
-                    aria-label={`${entry.battingOrder}番の選手`}
-                    value={entry.playerId}
-                    onChange={(e) =>
-                      change({
-                        ...plan,
-                        battingOrder: plan.battingOrder.map((x) =>
-                          x === entry
-                            ? {
-                                ...x,
-                                playerId: fielders.find(
-                                  (p) => String(p.id) === e.target.value,
-                                )?.id,
-                              }
-                            : x,
-                        ),
-                      })
-                    }
-                  >
-                    {fielders.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}（{POS[p.position]}）
-                      </option>
-                    ))}
-                  </select>
+                  <div className="online-lineup-picker">
+                    <select
+                      aria-label={`${entry.battingOrder}番の選手`}
+                      value={entry.playerId}
+                      onChange={(e) =>
+                        change({
+                          ...plan,
+                          battingOrder: plan.battingOrder.map((x) =>
+                            x === entry
+                              ? {
+                                  ...x,
+                                  playerId: fielders.find(
+                                    (p) => String(p.id) === e.target.value,
+                                  )?.id,
+                                }
+                              : x,
+                          ),
+                        })
+                      }
+                    >
+                      {fielders.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}（{POS[p.position]}）
+                        </option>
+                      ))}
+                    </select>
+                    <PlayerStatsButton
+                      player={view.roster.find((p) => p.id === entry.playerId)}
+                      panel="abilities"
+                    >
+                      情報
+                    </PlayerStatsButton>
+                  </div>
                 )}
                 <button
                   aria-label={`${entry.battingOrder}番を上げる`}
@@ -624,23 +696,30 @@ export function LineupPanel({
             {view.roster
               .filter((p) => p.position === 'pitcher')
               .map((p) => (
-                <label className="online-check" key={p.id}>
-                  <input
-                    type="checkbox"
-                    checked={plan.starters.includes(p.id)}
-                    onChange={(e) =>
-                      change({
-                        ...plan,
-                        starters: e.target.checked
-                          ? [...plan.starters, p.id]
-                          : plan.starters.filter((id) => id !== p.id),
-                      })
-                    }
-                  />
-                  {p.name}（疲労{p.fatigue}）
-                  {plan.starters.includes(p.id) &&
-                    ` · ${plan.starters.indexOf(p.id) + 1}番手`}
-                </label>
+                <div className="online-check-info" key={p.id}>
+                  <label className="online-check" key={p.id}>
+                    <input
+                      type="checkbox"
+                      checked={plan.starters.includes(p.id)}
+                      onChange={(e) =>
+                        change({
+                          ...plan,
+                          starters: e.target.checked
+                            ? [...plan.starters, p.id]
+                            : plan.starters.filter((id) => id !== p.id),
+                        })
+                      }
+                    />
+                    {p.name}（
+                    <ConditionMark player={p} />
+                    疲労{p.fatigue}）
+                    {plan.starters.includes(p.id) &&
+                      ` · ${plan.starters.indexOf(p.id) + 1}番手`}
+                  </label>
+                  <PlayerStatsButton player={p} panel="abilities">
+                    情報
+                  </PlayerStatsButton>
+                </div>
               ))}
           </>
         )}

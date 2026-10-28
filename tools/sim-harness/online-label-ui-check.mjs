@@ -11,12 +11,53 @@ const player = (id, overrides = {}) => ({
   id,
   name: `成績選手${id}`,
   age: 22,
+  condition: id % 5,
+  fatigue: (id % 10) * 2,
   position: id === 9 ? 'pitcher' : 'center',
   batting: { meet: 50, power: 50 },
-  pitching: { velocity: 140, control: 50 },
+  pitching: {
+    velocity: 140,
+    control: 50,
+    stamina: 120,
+    spinRate: 65,
+    form: 'threeQuarter',
+    arsenal: [
+      { type: 'straight', level: 100 },
+      { type: 'slider', level: 45 },
+    ],
+  },
+  physical: {
+    speed: 70,
+    arm: 65,
+    throws: 'right',
+    bodyStamina: 72,
+    recovery: 68,
+    muscle: 55,
+    dexterity: 62,
+    build: 'medium',
+  },
+  personality: { discipline: 70, mental: 55 },
+  catching: { lead: 60 },
+  positionFitness: {
+    pitcher: 20,
+    catcher: 50,
+    first: 70,
+    second: 80,
+    third: 60,
+    short: 50,
+    left: 80,
+    center: 100,
+    right: 80,
+  },
   seasonStats: {
     batting: {
+      games: 30,
       atBats: 100,
+      rbis: id === 24 ? 200 : 42,
+      hitByPitch: 0,
+      caughtStealing: 0,
+      errors: 1,
+      fieldingChances: 20,
       hits: 25,
       doubles: 4,
       triples: 0,
@@ -28,6 +69,16 @@ const player = (id, overrides = {}) => ({
       ...overrides,
     },
     pitching: {
+      games: 10,
+      wins: 2,
+      losses: 1,
+      saves: 0,
+      holds: 0,
+      hits: 10,
+      runsAllowed: 6,
+      pitches: 500,
+      qualityStarts: 4,
+      highQualityStarts: 1,
       inningsPitched: 54,
       strikeouts: id === 9 ? 40 : 12,
       walks: id === 9 ? 0 : 4,
@@ -90,6 +141,29 @@ const view = projectLeague(
   'fixture',
   'a',
 );
+const beforeProjection = JSON.stringify(league);
+const previousRandom = Math.random;
+try {
+  Math.random = () => {
+    throw new Error('閲覧projectionで乱数を消費しない');
+  };
+  projectLeague({ league, sessions: { a: 'fixture' } }, 'a', 'fixture', 'a');
+} finally {
+  Math.random = previousRandom;
+}
+assert.equal(
+  JSON.stringify(league),
+  beforeProjection,
+  '閲覧で元の世界を変更しない',
+);
+assert.equal(view.roster[0].physical.speed, 70);
+assert.equal(view.roster[4].condition, 0, '絶不調0を欠損にしない');
+assert.equal(
+  view.roster[0].pitching.velocity,
+  140,
+  '野手の投球能力も閲覧できる',
+);
+assert.equal(view.nextStarterId, 9);
 assert.equal(view.roster[0].performance.batting.labels.length, 3);
 const browser = await chromium.launch({
   ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
@@ -138,7 +212,7 @@ try {
   const first = p.locator('tbody tr').first();
   assert.equal(await first.locator('.online-stat-label').count(), 3);
   await p
-    .getByRole('button', { name: '成績選手1の成績を見る', exact: true })
+    .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
     .click();
   const dialog = p.getByRole('dialog', { name: '成績選手1', exact: true });
   await dialog.waitFor();
@@ -147,13 +221,13 @@ try {
   await dialog.waitFor({ state: 'hidden' });
   assert.ok(
     await p
-      .getByRole('button', { name: '成績選手1の成績を見る', exact: true })
+      .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
       .evaluate((e) => document.activeElement === e),
     'Escape後に選手名へフォーカスを戻す',
   );
   await p.getByRole('button', { name: '投球', exact: true }).click();
   await p
-    .getByRole('button', { name: '成績選手9の成績を見る', exact: true })
+    .getByRole('button', { name: '成績選手9の選手情報を見る', exact: true })
     .click();
   await p
     .getByRole('dialog', { name: '成績選手9', exact: true })
@@ -164,6 +238,14 @@ try {
     path: '/tmp/baseball-online-labels-desktop.png',
     fullPage: true,
   });
+  await p.getByRole('button', { name: '成績一覧', exact: true }).click();
+  await p.getByLabel('成績の表示項目').selectOption('sabers');
+  await p.getByRole('button', { name: 'OPSで並べ替え', exact: true }).click();
+  await p
+    .locator('.online-roster-rows article')
+    .first()
+    .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
+    .waitFor();
   await context.close();
   for (const width of [320, 360, 390, 767]) {
     const { page: m, context: c } = await scene(
@@ -173,10 +255,27 @@ try {
     );
     await m.getByRole('button', { name: '打順', exact: true }).click();
     await m
-      .getByRole('button', { name: '成績選手1の成績を見る', exact: true })
+      .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
       .click();
     const d = m.getByRole('dialog', { name: '成績選手1', exact: true });
     await d.waitFor();
+    await d.getByLabel('能力の表示項目').selectOption('physical');
+    assert.equal(
+      await d
+        .locator('dt')
+        .filter({ hasText: /^走力$/ })
+        .locator('..')
+        .locator('dd')
+        .innerText(),
+      '70',
+    );
+    await m.screenshot({
+      path: `/tmp/baseball-online-mobile-abilities-${width}.png`,
+      fullPage: true,
+    });
+    await d.getByLabel('能力の表示項目').selectOption('arsenal');
+    await d.getByText('スライダー', { exact: true }).waitFor();
+    await d.getByRole('button', { name: '成績', exact: true }).click();
     const detailBounds = await d.boundingBox();
     assert.ok(
       Math.abs(detailBounds.width - width) <= 1,
@@ -258,13 +357,108 @@ try {
           const box = node.getBoundingClientRect();
           return (
             box.right <=
-              node.closest('button').getBoundingClientRect().right - 30 &&
-            box.height <= 20
+              node
+                .closest('button')
+                .querySelector('.online-roster-values')
+                .getBoundingClientRect().left -
+                1 && box.height <= 20
           );
         }),
       ),
       '3個の札が成績の数値を圧迫せず44px行に収まる',
     );
+    const firstRow = m.locator('.online-compact-roster article').first();
+    assert.deepEqual(
+      await firstRow.locator('.online-roster-values > span').allTextContents(),
+      ['.450', '2', '42', '0'],
+      '基本成績を4列で比較できる',
+    );
+    await m
+      .getByRole('button', { name: '打点で並べ替え', exact: true })
+      .click();
+    await firstRow
+      .getByRole('button', { name: '成績選手24の選手情報を見る', exact: true })
+      .waitFor();
+    await m
+      .getByRole('button', { name: '打点で並べ替え', exact: true })
+      .click();
+    await firstRow
+      .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
+      .waitFor();
+    const groups = m.getByLabel('成績の表示項目');
+    await groups.selectOption('sabers');
+    assert.deepEqual(
+      await firstRow.locator('.online-roster-values > span').allTextContents(),
+      ['1.127', '.577', '.550', '.100'],
+    );
+    await m
+      .getByText('※ 出塁率・OPS・打席関連は概算', { exact: true })
+      .waitFor();
+    await m.getByRole('button', { name: 'OPSで並べ替え', exact: true }).click();
+    await firstRow
+      .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
+      .waitFor();
+    await m.getByRole('button', { name: 'OPSで並べ替え', exact: true }).click();
+    await firstRow
+      .getByRole('button', { name: '成績選手2の選手情報を見る', exact: true })
+      .waitFor();
+    await m.screenshot({
+      path: `/tmp/baseball-online-mobile-sabers-${width}.png`,
+      fullPage: true,
+    });
+    for (const id of await groups
+      .locator('option')
+      .evaluateAll((options) => options.map((option) => option.value))) {
+      await groups.selectOption(id);
+      assert.equal(
+        await firstRow.locator('.online-roster-values > span').count(),
+        4,
+      );
+      assert.ok(
+        await firstRow
+          .locator('.online-roster-values > span')
+          .evaluateAll((cells) =>
+            cells.every((cell) => cell.scrollWidth <= cell.clientWidth + 1),
+          ),
+        `${width}px ${id}で数値を切り落とさない: ${JSON.stringify(await firstRow.locator('.online-roster-values > span').evaluateAll((cells) => cells.map((cell) => ({ text: cell.textContent, w: cell.clientWidth, s: cell.scrollWidth, font: getComputedStyle(cell).fontSize }))))}`,
+      );
+      assert.ok(
+        await m
+          .locator('main')
+          .evaluate(
+            (element) => element.scrollHeight <= element.clientHeight + 1,
+          ),
+        '各項目群で縦スクロールなし',
+      );
+    }
+    await groups.selectOption('abilities');
+    await m.screenshot({
+      path: `/tmp/baseball-online-mobile-grades-${width}.png`,
+      fullPage: true,
+    });
+    assert.deepEqual(
+      await firstRow.locator('.online-roster-values > span').allTextContents(),
+      ['D', 'D', '—', 'B'],
+      '一覧は既存PC判定の色付きランク',
+    );
+    await firstRow.getByRole('button').click();
+    const numericDetail = m.getByRole('dialog');
+    assert.deepEqual(
+      await numericDetail.locator('.online-stat-grid dd').allTextContents(),
+      ['50', '50', '—', '70'],
+      '同じ能力でも詳細は実数値',
+    );
+    await m.keyboard.press('Escape');
+    await groups.selectOption('state');
+    await m
+      .getByRole('button', { name: '調子で並べ替え', exact: true })
+      .click();
+    await firstRow.getByLabel('調子: 絶好調', { exact: true }).waitFor();
+    await m.screenshot({
+      path: `/tmp/baseball-online-mobile-state-${width}.png`,
+      fullPage: true,
+    });
+    await groups.selectOption('basic');
     assert.equal(
       await m.locator('.online-mobile-controls button').count(),
       3,
@@ -291,8 +485,22 @@ try {
       '一覧のために画面全体をスクロールしない',
     );
     await m.getByRole('button', { name: '投球', exact: true }).click();
+    for (const id of await groups
+      .locator('option')
+      .evaluateAll((options) => options.map((option) => option.value))) {
+      await groups.selectOption(id);
+      assert.ok(
+        await firstRow
+          .locator('.online-roster-values > span')
+          .evaluateAll((cells) =>
+            cells.every((cell) => cell.scrollWidth <= cell.clientWidth + 1),
+          ),
+        `${width}px 投球${id}で数値が収まる`,
+      );
+    }
+    await groups.selectOption('basic');
     await m
-      .getByRole('button', { name: '成績選手9の成績を見る', exact: true })
+      .getByRole('button', { name: '成績選手9の選手情報を見る', exact: true })
       .click();
     await m
       .getByRole('dialog', { name: '成績選手9', exact: true })
@@ -321,7 +529,7 @@ try {
     )
       await m.getByRole('button', { name: '次のページ', exact: true }).click();
     await m
-      .getByRole('button', { name: '成績選手24の成績を見る', exact: true })
+      .getByRole('button', { name: '成績選手24の選手情報を見る', exact: true })
       .waitFor();
     await m.getByRole('button', { name: '戻る', exact: true }).click();
     await m.getByRole('heading', { name: '打順', exact: true }).waitFor();
@@ -329,7 +537,7 @@ try {
       await m
         .locator('.online-lineup')
         .first()
-        .getByRole('button', { name: '成績選手2の成績を見る', exact: true })
+        .getByRole('button', { name: '成績選手2の選手情報を見る', exact: true })
         .count(),
       1,
       '選手成績を見て戻っても編集中の打順を維持する',
