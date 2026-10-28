@@ -15,3 +15,9 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# オンラインのローカル共有状態（既存の一人用セーブと別管理）
+.online-data/
+.env
+.env.*
+!.env.example

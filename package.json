@@ -5,6 +5,7 @@
   "description": "野球シミュレーションゲーム",
   "scripts": {
     "dev": "vite",
+    "dev:online": "node server/dev.mjs",
     "build": "vite build",
     "lint": "eslint src",
     "preview": "vite preview",
@@ -19,8 +20,9 @@
     "check:pool": "node tools/sim-harness/pool-leak-check.mjs",
     "check:doc": "node tools/sim-harness/doc-check.mjs",
     "check:bunt": "node tools/sim-harness/bunt-check.mjs",
-    "check:online": "node tools/sim-harness/online-core-check.mjs",
-    "check:online:season": "node tools/sim-harness/online-engine-check.mjs"
+    "check:online": "node tools/sim-harness/online-core-check.mjs && node tools/sim-harness/online-service-check.mjs && npm run check:online:storage",
+    "check:online:season": "node tools/sim-harness/online-engine-check.mjs",
+    "check:online:storage": "node tools/sim-harness/online-storage-check.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -31,6 +33,7 @@
     "autoprefixer": "^10.4.17",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "playwright": "^1.58.2",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
     "vite": "^5.0.12",

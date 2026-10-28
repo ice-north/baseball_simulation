@@ -1,0 +1,13 @@
+import { createServer } from 'node:http';
+import { resolve } from 'node:path';
+import { FileStore } from './storage/fileStore.mjs';
+import { LeagueService } from './leagueService.mjs';
+import { createHandler } from './http.mjs';
+if (process.env.NODE_ENV === 'production' || process.env.VERCEL) throw new Error('開発用認証は本番環境で使用できません');
+const store = new FileStore(resolve(process.env.ONLINE_DATA_FILE || '.online-data/league.json.gz'));
+const service = new LeagueService(store, { local: true, adminId: 'player1', members: [{ userId: 'player1', label: 'プレイヤー1' }, { userId: 'player2', label: 'プレイヤー2' }] });
+const handler = createHandler(service, { local: true });
+const server = createServer(handler);
+server.listen(3002, '127.0.0.1', () => console.log('開発専用API http://127.0.0.1:3002 / 画面 http://localhost:3000/online'));
+const timer = setInterval(() => service.tick().catch(error => console.error('定期処理の保存に失敗:', error.message)), 60000);
+server.on('close', () => clearInterval(timer));
