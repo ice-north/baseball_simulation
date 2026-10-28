@@ -400,15 +400,25 @@ export function CompactRoster({ view, desktop = false }) {
                 />
               </span>
               <span className="online-roster-values">
-                {group.columns.map((column) => (
-                  <span
-                    key={column.id}
-                    className={`online-stat-${column.format} ${statRank(column, column.get(player)) ? `online-ability-grade ${getRankColor(statRank(column, column.get(player)))}` : ''}`}
-                    title={`${column.label}: ${formatStat(column, column.get(player))}`}
-                  >
-                    {formatStat(column, column.get(player))}
-                  </span>
-                ))}
+                {group.columns.map((column) => {
+                  const value = column.get(player);
+                  const text = formatStat(column, value);
+                  const rank = statRank(column, value);
+                  return (
+                    <span
+                      key={column.id}
+                      className={`online-stat-${column.format} ${rank ? `online-ability-grade ${getRankColor(rank)}` : ''}`}
+                      style={
+                        !desktop && text.length > 5
+                          ? { fontSize: `${60 / text.length}px` }
+                          : undefined
+                      }
+                      title={`${column.label}: ${text}`}
+                    >
+                      {text}
+                    </span>
+                  );
+                })}
               </span>
             </PlayerStatsButton>
           </article>

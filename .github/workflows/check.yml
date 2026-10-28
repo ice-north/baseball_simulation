@@ -56,5 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: online-ui
-          path: /tmp/baseball-online-*.png
+          path: |
+            /tmp/baseball-online-*.png
+            /tmp/baseball-online-*-failure.zip
           if-no-files-found: ignore

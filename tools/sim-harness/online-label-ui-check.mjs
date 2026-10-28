@@ -91,6 +91,21 @@ const stars = [
   player(1, { hits: 45, walks: 30, strikeouts: 65 }),
   ...Array.from({ length: 23 }, (_, i) => player(i + 2)),
 ];
+// 初登板で1/3回・4失点なら防御率108.00。通常範囲の大きな値でも列を跨がない。
+Object.assign(stars[0].seasonStats.pitching, {
+  games: 1,
+  wins: 0,
+  losses: 1,
+  hits: 3,
+  walks: 2,
+  strikeouts: 1,
+  inningsPitched: 1,
+  runsAllowed: 4,
+  earnedRuns: 4,
+  pitches: 30,
+  qualityStarts: 0,
+  highQualityStarts: 0,
+});
 const positions = [
   'catcher',
   'first',
@@ -172,11 +187,17 @@ const browser = await chromium.launch({
   headless: true,
 });
 const errors = [];
+let activeContext;
 async function scene(width, height = 844, scale = 1) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: scale,
     isMobile: width < 768,
+  });
+  activeContext = context;
+  await context.tracing.start({ screenshots: true, snapshots: true });
+  context.on('close', () => {
+    if (activeContext === context) activeContext = null;
   });
   await context.addInitScript(() =>
     localStorage.setItem(
@@ -234,6 +255,16 @@ try {
     .getByText('制球安定', { exact: true })
     .waitFor();
   await p.keyboard.press('Escape');
+  await p
+    .getByRole('dialog', { name: '成績選手9', exact: true })
+    .waitFor({ state: 'hidden' });
+  assert.equal(
+    await p
+      .locator('.online-page-nav [aria-current="page"]')
+      .getAttribute('aria-label'),
+    '選手',
+    '詳細を閉じても元の一覧に留まる',
+  );
   await p.screenshot({
     path: '/tmp/baseball-online-labels-desktop.png',
     fullPage: true,
@@ -499,6 +530,9 @@ try {
       );
     }
     await groups.selectOption('basic');
+    await firstRow.getByRole('button').click();
+    await m.getByRole('dialog').getByText('108.00', { exact: true }).waitFor();
+    await m.keyboard.press('Escape');
     await m
       .getByRole('button', { name: '成績選手9の選手情報を見る', exact: true })
       .click();
@@ -548,6 +582,25 @@ try {
   console.log(
     'online-label-ui-check PASS（配布HTMLと実projection・PC/スマホ320〜767px・1080x1920縦持ち・投打切替・詳細/閉じる/フォーカス・高さに応じた行数・ページ送り・閲覧のみ / 通信はfixture）',
   );
+} catch (error) {
+  if (activeContext) {
+    for (const page of activeContext.pages())
+      console.error(
+        '失敗時の画面',
+        JSON.stringify({
+          url: page.url(),
+          errors,
+          state: await page
+            .locator('body')
+            .innerText()
+            .catch(() => null),
+        }),
+      );
+    await activeContext.tracing
+      .stop({ path: '/tmp/baseball-online-label-ui-failure.zip' })
+      .catch(() => {});
+  }
+  throw error;
 } finally {
   await browser.close();
 }
