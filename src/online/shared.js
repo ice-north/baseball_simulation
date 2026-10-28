@@ -1,4 +1,5 @@
 export const ONLINE_SCHEMA = 1;
+export const ONLINE_ENGINE_VERSION = 'online-1';
 export const PROGRESSION_TIMES = [
   '08:00',
   '10:30',
@@ -24,6 +25,16 @@ export function requireOnline(
   code = 'invalid',
 ) {
   if (!condition) throw new OnlineError(message, status, code);
+}
+
+export function assertLeagueVersion(league) {
+  requireOnline(
+    league?.schema === ONLINE_SCHEMA &&
+      league.engineVersion === ONLINE_ENGINE_VERSION,
+    'ゲームのバージョンが対応していません。更新を確認してください',
+    409,
+    'version',
+  );
 }
 
 // サーバー時刻を基準にする。日本時間に夏時間はない。

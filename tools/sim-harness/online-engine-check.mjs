@@ -81,6 +81,12 @@ assert.ok(
   league.notices.some((n) => n.type === 'draft' && n.picks.length > 0),
   'NPBドラフトを実行する',
 );
+assert.ok(
+  league.notices
+    .find((n) => n.type === 'draft')
+    .picks.every((p) => p.name && p.playerId != null && p.npbTeam && p.round),
+  'ドラフトのお知らせに選手名・ID・指名先を残す',
+);
 assert.deepEqual(seen, [
   'initial_tryout',
   'camp',

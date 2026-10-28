@@ -23,11 +23,16 @@ server.listen(3002, '127.0.0.1', () =>
     '開発専用API http://127.0.0.1:3002 / 画面 http://localhost:3000/online',
   ),
 );
-const timer = setInterval(
-  () =>
-    service
-      .tick()
-      .catch((error) => console.error('定期処理の保存に失敗:', error.message)),
-  60000,
-);
+const timer =
+  process.env.ONLINE_DISABLE_TIMER === '1'
+    ? null
+    : setInterval(
+        () =>
+          service
+            .tick()
+            .catch((error) =>
+              console.error('定期処理の保存に失敗:', error.message),
+            ),
+        60000,
+      );
 server.on('close', () => clearInterval(timer));

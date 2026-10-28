@@ -5,13 +5,13 @@ import { api, AUTH_KEY, dateTime, STATUS } from './api.js';
 import { Login } from './LeaguePanels.jsx';
 import DesktopView from './DesktopView.jsx';
 import MobileView from './MobileView.jsx';
-function readAuth() {
-  try {
-    return JSON.parse(localStorage.getItem(AUTH_KEY));
-  } catch {
-    return null;
-  }
-}
+import {
+  readAuth,
+  sameSession,
+  isCurrentAuth,
+  persistRefresh,
+  clearAuth,
+} from './authState.js';
 function useMobile() {
   const [mobile, setMobile] = useState(
     () => window.matchMedia('(max-width: 767px)').matches,
@@ -34,30 +34,95 @@ export default function OnlineApp() {
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
   const viewSequence = useRef(0);
+  const refreshFlight = useRef(null);
+  const timesDialog = useRef(null);
   const mobile = useMobile();
   const authRef = useRef(auth);
   authRef.current = auth;
   const saveAuth = useCallback((value) => {
     localStorage.setItem(AUTH_KEY, JSON.stringify(value));
+    authRef.current = value;
+    viewSequence.current++;
     setAuth(value);
     setView(null);
   }, []);
+  const renewAuth = useCallback(async (expected) => {
+    const pending = refreshFlight.current;
+    if (
+      pending &&
+      pending.auth.accessToken === expected.accessToken &&
+      sameSession(pending.auth, expected)
+    )
+      return pending.promise;
+    const promise = api('refresh', null, {
+      refreshToken: expected.refreshToken,
+    }).then((result) => {
+      const next = { ...expected, ...result };
+      if (authRef.current === expected && persistRefresh(expected, next)) {
+        authRef.current = next;
+        setAuth(next);
+        setError('');
+      }
+      return next;
+    });
+    const flight = { auth: expected, promise };
+    refreshFlight.current = flight;
+    try {
+      return await promise;
+    } finally {
+      if (refreshFlight.current === flight) refreshFlight.current = null;
+    }
+  }, []);
   useEffect(() => {
+    const sync = (event) => {
+      if (event.key !== AUTH_KEY) return;
+      const next = readAuth();
+      if (sameSession(next, authRef.current)) {
+        authRef.current = next;
+        setAuth(next);
+      } else {
+        viewSequence.current++;
+        setView((old) =>
+          old && !old.setupRequired ? { ...old, writable: false } : old,
+        );
+      }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
     api('config')
-      .then(setConfig)
-      .catch((e) => setError(e.message));
+      .then((value) => {
+        if (!cancelled) setConfig(value);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   const reload = useCallback(async () => {
-    if (!auth) return;
+    const current = authRef.current;
+    if (!current) return;
     const sequence = ++viewSequence.current;
-    const result = await api('view', auth);
-    if (authRef.current === auth && sequence === viewSequence.current)
+    const result = await api('view', current);
+    if (
+      sameSession(authRef.current, current) &&
+      sequence === viewSequence.current
+    )
       setView(result);
-  }, [auth]);
+  }, []);
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
-      if (document.hidden || locked.current) return;
+      if (
+        document.hidden ||
+        locked.current ||
+        (auth?.refreshToken && auth.expiresAt <= Date.now())
+      )
+        return;
       try {
         const sequence = ++viewSequence.current;
         const result = await api('view', auth);
@@ -79,26 +144,30 @@ export default function OnlineApp() {
   useEffect(() => {
     if (!auth?.refreshToken) return;
     let cancelled = false;
-    const timer = setInterval(async () => {
-      if (auth.expiresAt > Date.now() + 120000 || locked.current) return;
+    const refresh = async () => {
+      if (
+        cancelled ||
+        locked.current ||
+        !isCurrentAuth(auth) ||
+        auth.expiresAt > Date.now() + 120000
+      )
+        return;
       try {
-        const result = await api('refresh', null, {
-          refreshToken: auth.refreshToken,
-        });
-        if (!cancelled) {
-          const next = { ...auth, ...result };
-          localStorage.setItem(AUTH_KEY, JSON.stringify(next));
-          setAuth(next);
-        }
+        await renewAuth(auth);
       } catch (e) {
-        if (!cancelled) setError(e.message);
+        if (!cancelled && authRef.current === auth && isCurrentAuth(auth))
+          setError(e.message);
       }
-    }, 30000);
+    };
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
     };
-  }, [auth, saveAuth]);
+  }, [auth, renewAuth]);
   const run = async (fn) => {
     if (locked.current) return;
     locked.current = true;
@@ -121,7 +190,12 @@ export default function OnlineApp() {
     }
   };
   const command = async (type, payload) => {
-    await api('command', auth, {
+    const current = authRef.current;
+    const credentials =
+      current?.refreshToken && current.expiresAt <= Date.now()
+        ? await renewAuth(current)
+        : current;
+    await api('command', credentials, {
       requestId: crypto.randomUUID(),
       revision: view?.revision || 0,
       type,
@@ -137,12 +211,27 @@ export default function OnlineApp() {
     const timer = setTimeout(() => setMessage(''), 3500);
     return () => clearTimeout(timer);
   }, [message]);
-  const logout = () => {
-    localStorage.removeItem(AUTH_KEY);
-    setAuth(null);
-    setView(null);
-    setError('');
-  };
+  useEffect(() => {
+    if (showTimes) timesDialog.current?.showModal();
+  }, [showTimes]);
+  const logout = () =>
+    run(async () => {
+      const expected = authRef.current;
+      try {
+        const current =
+          expected.refreshToken && expected.expiresAt <= Date.now()
+            ? await renewAuth(expected)
+            : expected;
+        await api('logout', current, {});
+      } finally {
+        clearAuth(expected);
+        authRef.current = null;
+        viewSequence.current++;
+        setAuth(null);
+        setView(null);
+        setShowTimes(false);
+      }
+    });
   return (
     <div className={`online ${mobile ? 'online-mobile' : 'online-desktop'}`}>
       <header className="online-header">
@@ -165,9 +254,20 @@ export default function OnlineApp() {
         {error && (
           <div role="alert" className="online-alert">
             {error}
-            <button onClick={() => run(reload)} disabled={busy || !auth}>
-              最新状態を確認
-            </button>
+            {(!config || auth) && (
+              <button
+                onClick={() =>
+                  run(
+                    config
+                      ? reload
+                      : async () => setConfig(await api('config')),
+                  )
+                }
+                disabled={busy}
+              >
+                {config ? '最新状態を確認' : '接続を再確認'}
+              </button>
+            )}
           </div>
         )}
         {message && (
@@ -252,10 +352,10 @@ export default function OnlineApp() {
           </>
         )}
         {showTimes && (
-          <div
+          <dialog
+            ref={timesDialog}
             className="online-overlay"
-            role="dialog"
-            aria-modal="true"
+            onClose={() => setShowTimes(false)}
             aria-label="進行時刻"
           >
             <section className="online-card">
@@ -264,11 +364,11 @@ export default function OnlineApp() {
               <p>
                 各時刻に1日進みます。決定待ち・停止中の分は後からまとめて進めません。
               </p>
-              <button autoFocus onClick={() => setShowTimes(false)}>
+              <button autoFocus onClick={() => timesDialog.current.close()}>
                 閉じる
               </button>
             </section>
-          </div>
+          </dialog>
         )}
         {busy && (
           <p role="status" className="online-working">

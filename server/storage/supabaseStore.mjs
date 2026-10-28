@@ -78,7 +78,7 @@ export class SupabaseStore {
       return row.snapshot_path
         ? null
         : { setupRequired: true, isAdmin: userId === this.adminId };
-    return { ...view, writable: row.sessions[userId] === sessionId };
+    return { ...view, writable: !!sessionId && row.sessions[userId] === sessionId };
   }
   async transaction(fn) {
     const token = randomUUID();

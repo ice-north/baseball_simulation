@@ -133,7 +133,11 @@ await assert.rejects(
 lease = null;
 // HTTP認証、メソッド、JSON/CORS、ユーザーID偽装の入口を確認する。
 const handler = createHandler(
-  { members: [{ userId: 'a' }], view: async () => ({ ok: true }) },
+  {
+    members: [{ userId: 'a' }],
+    view: async () => ({ ok: true }),
+    login: async () => ({ sessionId: 'fixture' }),
+  },
   {
     local: false,
     authenticate: async (header) => {
@@ -141,10 +145,14 @@ const handler = createHandler(
       return 'a';
     },
     cronSecret: 'secret',
+    signIn: async (body) => {
+      assert.equal(body.password, '検証用の日本語');
+      return { userId: 'a' };
+    },
   },
 );
 async function http(action, method, body, headers = {}) {
-  const req = Readable.from(body ? [body] : []);
+  const req = Readable.from(Array.isArray(body) ? body : body ? [body] : []);
   Object.assign(req, {
     url: `/?action=${action}`,
     method,
@@ -169,6 +177,18 @@ assert.equal(
 assert.equal((await http('command', 'POST', '{')).statusCode, 400);
 assert.equal((await http('tick', 'POST', '{}')).statusCode, 401);
 assert.equal((await http('view', 'DELETE')).statusCode, 405);
+const encoded = Buffer.from(JSON.stringify({ password: '検証用の日本語' }));
+const split = encoded.indexOf(Buffer.from('検')) + 1;
+assert.equal(
+  (
+    await http('login', 'POST', [
+      encoded.subarray(0, split),
+      encoded.subarray(split),
+    ])
+  ).statusCode,
+  200,
+  'UTF-8の途中で分割されたHTTPチャンクを壊さない',
+);
 console.log(
   'online-storage-check PASS（Storage公開境界・リース失効・応答喪失・小さい閲覧・HTTP入口 / 外部サービスはfixture）',
 );

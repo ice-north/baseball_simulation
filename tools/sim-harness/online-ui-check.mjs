@@ -96,6 +96,12 @@ try {
   await click(b, '更新');
   await click(b, 'この内容で決定');
   await click(p, '更新');
+  await click(p, '進行時刻');
+  await p.getByRole('dialog', { name: '進行時刻', exact: true }).waitFor();
+  await p.keyboard.press('Escape');
+  await p
+    .getByRole('dialog', { name: '進行時刻', exact: true })
+    .waitFor({ state: 'hidden' });
   await click(p, '編成');
   await p.getByRole('heading', { name: '編成・采配', exact: true }).waitFor();
   // 数値選手IDを文字列へ変えずに保存できることを実画面から確認。

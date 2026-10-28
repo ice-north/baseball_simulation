@@ -1,5 +1,11 @@
 import './engine-bootstrap.mjs';
 import {
+  getStaffIdCounter,
+  setStaffIdCounter,
+  getStaffNameHistory,
+  setStaffNameHistory,
+} from '../src/corporate/staffData.js';
+import {
   TEAMS_DATA,
   LEAGUE_SETTINGS,
   releasedPlayersPool,
@@ -45,6 +51,8 @@ export function captureWorld() {
     pools: serializeUniversityPool(),
     released: releasedPlayersPool,
     playerIdCounter: getPlayerIdCounter(),
+    staffIdCounter: getStaffIdCounter(),
+    staffNames: getStaffNameHistory(),
   });
 }
 
@@ -65,6 +73,25 @@ export function restoreWorld(snapshot) {
   deserializeUniversityPool(data.pools);
   releasedPlayersPool.splice(0, releasedPlayersPool.length, ...data.released);
   setPlayerIdCounter(data.playerIdCounter);
+  const minimumStaffId = Object.values(TEAMS_DATA).reduce(
+    (next, team) =>
+      (team.corporateData?.staff || []).reduce(
+        (id, staff) => Math.max(id, (staff.id || 4999) + 1),
+        next,
+      ),
+    5000,
+  );
+  const savedCounter = Number.isSafeInteger(data.staffIdCounter)
+    ? data.staffIdCounter
+    : minimumStaffId;
+  setStaffIdCounter(Math.max(minimumStaffId, savedCounter));
+  setStaffNameHistory(
+    Array.isArray(data.staffNames)
+      ? data.staffNames
+      : Object.values(TEAMS_DATA).flatMap((team) =>
+          (team.corporateData?.staff || []).map((staff) => staff.name),
+        ),
+  );
   const ranks = new Map(data.universityRanks.map((team) => [team.id, team]));
   for (const team of UNIVERSITY_TEAMS) {
     const rank = ranks.get(team.id);

@@ -21,7 +21,7 @@
 | 年間進行 | `server/leagueEngine.mjs` | 実試合・背景球界・両者の提出・年度更新・NPBドラフト |
 | 引き分け | `server/playoffReplay.mjs` / `seasonManager.js` | 再試合を追加しても必要勝数を増やさない。旧形式の既定判定を変えない |
 | 毎日の編成 | `server/dailyLineup.mjs` / `lineupCommand.mjs` | 無効選手・重複・疲労・代役・予約ローテの保持 |
-| 完全保存 | `server/worldSnapshot.mjs` | 未完了の背景大会、共有参照、プール、大学評価、ID採番 |
+| 完全保存 | `server/worldSnapshot.mjs` | 未完了の背景大会、共有参照、プール、大学評価、選手/スタッフID採番、スタッフ氏名履歴 |
 | 認証・版・再送 | `server/leagueService.mjs` / `http.mjs` | 参加者・最新端末・revision・操作IDと内容の一致 |
 | 本番の保存 | `server/storage/supabaseStore.mjs` / SQL migration | DBリース・期限・世代比較・公開ポインタ・service_role限定 |
 | 小さい応答 | `server/projection.mjs` | 相手の未確定案や巨大な世界データを返さない |
@@ -69,3 +69,5 @@ npm run check:online:season
 SQLの実適用、RLS、Supabase Auth・トークン更新、実Storageの公開切替、複数関数インスタンス、Vercel上の日次計算の時間・メモリ、Cron、退避ツール、iOS/Android実機は未実施。
 `README.md`の公開環境受入が終わるまで本運用開始は保留する。
 無料枠で収まるかは実測が必要。CIの成功だけで外部サービスの受入完了と判断しない。
+
+追加レビューの指摘と再現条件は [REVIEW_20261028.md](REVIEW_20261028.md) に記録。認証競合は `npm run check:online:auth-ui`、サーバー境界と復元は `check:online` で再現する。

@@ -1,7 +1,11 @@
-import { requireOnline, validateLineup } from '../src/online/shared.js';
-const clone = (value) => structuredClone(value);
+import {
+  requireOnline,
+  validateLineup,
+  assertLeagueVersion,
+} from '../src/online/shared.js';
 
 export function saveLineup(league, userId, plan) {
+  assertLeagueVersion(league);
   requireOnline(
     league.status === 'running' || league.status === 'paused',
     'この期間は編成変更できません',
@@ -11,31 +15,45 @@ export function saveLineup(league, userId, plan) {
   requireOnline(member, '参加者ではありません', 403);
   const team = league.game.teams[member.teamName];
   validateLineup(team, plan);
-  team.lineupSettings = {
-    battingOrder: clone(plan.battingOrder),
-    benchPlayers: [],
-    substitutionRules: { pinchHitter: [], pinchRunner: [] },
-  };
-  const starter = plan.starters[0];
-  team.lineupSettings.battingOrder.push({
-    playerId: starter,
-    battingOrder: 9,
-    position: 'pitcher',
-  });
-  team.pitchingRotation.starters = [...plan.starters];
-  team.pitchingRotation.currentStarterIndex = 0;
+  let strategy = team.strategy;
   if (plan.strategy) {
     const allowed = {
       batting: ['balanced', 'aggressive', 'patient'],
       pitching: ['balanced', 'strikeout', 'contact'],
       baseRunning: ['normal', 'aggressive', 'conservative'],
     };
-    const strategy = {};
+    strategy = {};
     for (const [key, values] of Object.entries(allowed)) {
       const value = plan.strategy[key] ?? team.strategy?.[key] ?? values[0];
       requireOnline(values.includes(value), '采配方針が不正です');
       strategy[key] = value;
     }
-    team.strategy = strategy;
   }
+  const rotationChanged =
+    team.pitchingRotation.starters.length !== plan.starters.length ||
+    team.pitchingRotation.starters.some(
+      (id, index) => id !== plan.starters[index],
+    );
+  team.lineupSettings = {
+    battingOrder: plan.battingOrder.map(
+      ({ playerId, battingOrder, position }) => ({
+        playerId,
+        battingOrder,
+        position,
+      }),
+    ),
+    benchPlayers: [],
+    substitutionRules: { pinchHitter: [], pinchRunner: [] },
+  };
+  const index = rotationChanged
+    ? 0
+    : (team.pitchingRotation.currentStarterIndex || 0) % plan.starters.length;
+  team.lineupSettings.battingOrder.push({
+    playerId: plan.starters[index],
+    battingOrder: 9,
+    position: 'pitcher',
+  });
+  team.pitchingRotation.starters = [...plan.starters];
+  team.pitchingRotation.currentStarterIndex = index;
+  if (strategy) team.strategy = strategy;
 }

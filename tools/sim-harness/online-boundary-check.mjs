@@ -91,3 +91,51 @@ assert.throws(
 console.log(
   'online-boundary-check PASS（引き分け再試合・必要勝数固定・疲労代役・予約維持・不正編成）',
 );
+
+// 打順だけの変更で、翌日の先発が先頭へ巻き戻らないこと。
+const { saveLineup } = await import('../../server/lineupCommand.mjs');
+for (const p of team.players.filter((p) => p.position === 'pitcher'))
+  p.pitching = {};
+team.pitchingRotation.starters = [9, 10];
+team.pitchingRotation.currentStarterIndex = 1;
+const league = {
+  schema: 1,
+  engineVersion: 'online-1',
+  status: 'running',
+  members: [{ userId: 'a', teamName: 'test' }],
+  game: { teams: { test: team } },
+};
+const plan = {
+  battingOrder: team.lineupSettings.battingOrder.filter(
+    (e) => e.position !== 'pitcher',
+  ),
+  starters: [9, 10],
+  strategy: {
+    batting: 'balanced',
+    pitching: 'balanced',
+    baseRunning: 'normal',
+  },
+};
+saveLineup(league, 'a', plan);
+assert.equal(
+  team.pitchingRotation.currentStarterIndex,
+  1,
+  '打順・采配だけの保存では次の先発を変えない',
+);
+const beforeInvalid = structuredClone(team);
+assert.throws(() =>
+  saveLineup(league, 'a', { ...plan, strategy: { batting: 'invalid' } }),
+);
+assert.deepEqual(
+  team,
+  beforeInvalid,
+  '不正な采配を受け付ける前に編成を書き換えない',
+);
+league.engineVersion = 'unsupported';
+assert.throws(
+  () => saveLineup(league, 'a', plan),
+  (error) => error.code === 'version',
+);
+console.log(
+  'online-review-boundaries PASS（先発維持・入力エラーの原子性・版の検証）',
+);

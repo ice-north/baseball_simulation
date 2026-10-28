@@ -27,16 +27,16 @@ export function createHandler(
         );
       let body = req.body;
       if (req.method === 'POST' && body === undefined) {
-        let raw = '';
+        const chunks = [];
+        let bytes = 0;
         for await (const chunk of req) {
-          raw += chunk;
-          requireOnline(
-            Buffer.byteLength(raw) <= 64000,
-            '送信内容が大きすぎます',
-            413,
-          );
+          const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          chunks.push(buffer);
+          bytes += buffer.length;
+          requireOnline(bytes <= 64000, '送信内容が大きすぎます', 413);
         }
         try {
+          const raw = Buffer.concat(chunks).toString('utf8');
           body = raw ? JSON.parse(raw) : {};
         } catch {
           throw new OnlineError('JSONが不正です');
@@ -89,7 +89,9 @@ export function createHandler(
           401,
         );
         const sessionId = req.headers['x-online-session'];
-        if (action === 'view' && req.method === 'GET')
+        if (action === 'logout' && req.method === 'POST')
+          value = await service.logout(userId, sessionId);
+        else if (action === 'view' && req.method === 'GET')
           value = await service.view(userId, sessionId);
         else if (action === 'defaults' && req.method === 'GET')
           value = await service.defaults(userId, sessionId);

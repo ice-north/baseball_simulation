@@ -22,7 +22,10 @@ import {
   getNPBDraftDay,
   getPlayoffChampion,
 } from '../src/season/seasonManager.js';
-import { generateFullSeasonSchedule } from '../src/season/scheduleGenerator.js';
+import {
+  generateFullSeasonSchedule,
+  getScheduleByDate,
+} from '../src/season/scheduleGenerator.js';
 import {
   progressDate,
   handlePhaseTransition,
@@ -70,17 +73,23 @@ import {
   applyMotivationEffect,
   applyBatteryMentalEffect,
 } from '../src/season/campTraining.js';
-import { getTeamStaffBonus } from '../src/corporate/staffData.js';
+import {
+  getTeamStaffBonus,
+  setStaffIdCounter,
+  setStaffNameHistory,
+} from '../src/corporate/staffData.js';
 import { addToReleasedPool } from '../src/state/pools.js';
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
 import {
   ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
+  assertLeagueVersion,
   nextProgressionAt,
   requireOnline,
 } from '../src/online/shared.js';
 
-export const ENGINE_VERSION = 'online-1';
+export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export const CAMP_MENUS = [
   'batting',
   'baserunning',
@@ -194,6 +203,8 @@ export function createLeague({
   league.season = season;
   seeded(league, 'create', () => {
     setPlayerIdCounter(0);
+    setStaffIdCounter(5000);
+    setStaffNameHistory([]);
     initializeTeamsForCount(
       4,
       names,
@@ -216,12 +227,7 @@ export function createLeague({
 }
 
 export function loadLeagueWorld(league) {
-  requireOnline(
-    league.schema === ONLINE_SCHEMA && league.engineVersion === ENGINE_VERSION,
-    'ゲームのバージョンが対応していません。更新を確認してください',
-    409,
-    'version',
-  );
+  assertLeagueVersion(league);
   restoreWorld(league.game);
   assignTeamControllers(
     TEAMS_DATA,
@@ -270,7 +276,10 @@ function validatePhasePlan(league, teamName, plan) {
       const remaining = team.players.filter(
         (p) => !plan.releaseIds.includes(p.id),
       );
-      requireOnline(remaining.length >= 9, '契約後も最低9人は残してください');
+      requireOnline(
+        remaining.length >= Math.min(9, team.players.length),
+        '契約後も最低9人は残してください。既に9人未満の場合は新たな退団はできません',
+      );
       return { releaseIds: [...plan.releaseIds] };
     }
     case 'camp':
@@ -530,9 +539,14 @@ export function advanceLeagueDay(league, operationId, now) {
   loadLeagueWorld(league);
   seeded(league, `day:${operationId}`, () => {
     const oldDate = league.season.currentDate;
-    const restoreRotations = league.season.settings.teamNames.map((name) =>
-      prepareDailyLineup(TEAMS_DATA[name], name),
+    const playingTeams = new Set(
+      getScheduleByDate(league.season.schedule, oldDate)
+        .filter((game) => !game.result)
+        .flatMap((game) => [game.home, game.away]),
     );
+    const restoreRotations = league.season.settings.teamNames
+      .filter((name) => playingTeams.has(name))
+      .map((name) => prepareDailyLineup(TEAMS_DATA[name], name));
     let season;
     try {
       season = simulateScheduledGamesOnDate(league.season).data;
@@ -584,7 +598,8 @@ export function advanceLeagueDay(league, operationId, now) {
         type: 'draft',
         year: season.year,
         picks: result.draftedPlayers.map((p) => ({
-          name: p.name,
+          name: p.player.name,
+          playerId: p.player.id,
           team: p.teamName,
           npbTeam: p.npbTeam,
           round: p.draftRound,

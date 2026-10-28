@@ -211,7 +211,7 @@ export function Notices({ view, compact = false }) {
                 {picks.slice(page * size, page * size + size).map((p, j) => (
                   <article key={j}>
                     <b>
-                      {p.round}巡 {p.name}
+                      {typeof p.round === 'number' ? `${p.round}巡` : p.round} {p.name}
                     </b>
                     <span>→ {p.npbTeam || p.team}</span>
                   </article>
@@ -357,7 +357,9 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
               )}
               {plan.releaseIds && (
                 <>
-                  <p>チェックした選手が退団します。最低9人を残してください。</p>
+                  <p>
+                    チェックした選手が退団します。最低9人を残してください。既に9人未満の場合は新たな退団はできません。
+                  </p>
                   {view.roster.map((p) => (
                     <label className="online-check" key={p.id}>
                       <input
@@ -558,7 +560,9 @@ export function LineupPanel({ view, mobile, busy, run, command }) {
       {!mobile && section === 'pitchers' && (
         <>
           <h3>先発ローテーション</h3>
-          <p>選択した順に先発します。保存すると先頭の投手から再開します。</p>
+          <p>
+            選択した順に先発します。並びを変更した場合は先頭から再開します。
+          </p>
           {view.roster
             .filter((p) => p.position === 'pitcher')
             .map((p) => (

@@ -1,5 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { requireOnline, nextProgressionAt } from '../src/online/shared.js';
+import {
+  requireOnline,
+  nextProgressionAt,
+  assertLeagueVersion,
+} from '../src/online/shared.js';
 import { projectLeague } from './projection.mjs';
 import { saveLineup } from './lineupCommand.mjs';
 const digest = (value) =>
@@ -42,6 +46,19 @@ export class LeagueService {
       return { value: { sessionId } };
     });
   }
+  async logout(userId, sessionId) {
+    requireOnline(
+      this.members.some((m) => m.userId === userId),
+      '参加者ではありません',
+      403,
+    );
+    return this.store.transaction((bundle) => {
+      if (!sessionId || bundle.sessions[userId] !== sessionId)
+        return { unchanged: true, value: { ok: true } };
+      delete bundle.sessions[userId];
+      return { value: { ok: true } };
+    });
+  }
   async command(userId, sessionId, command) {
     requireOnline(
       command && typeof command === 'object' && !Array.isArray(command),
@@ -77,6 +94,7 @@ export class LeagueService {
         'revision',
       );
       const now = this.clock();
+      const previousStatus = l?.status;
       if (command.type === 'create') {
         requireOnline(
           userId === this.adminId && !l,
@@ -92,6 +110,8 @@ export class LeagueService {
           '参加者ではありません',
           403,
         );
+        if (['submit', 'lineup', 'step', 'resume'].includes(command.type))
+          assertLeagueVersion(l);
         if (['submit', 'lineup'].includes(command.type))
           requireOnline(
             command.payload &&
@@ -142,19 +162,31 @@ export class LeagueService {
             409,
           );
           const revision = l.revision;
+          assertLeagueVersion(bundle.backup.league);
           bundle.league = clone(bundle.backup.league);
           bundle.league.revision = revision;
           bundle.league.status = bundle.league.phase ? 'waiting' : 'paused';
           bundle.league.nextAdvanceAt = null;
           // 復元前の操作を再実行させない。過去のログイン権限を復活させない。
         } else if (command.type === 'step' && this.local) {
+          requireOnline(
+            userId === this.adminId,
+            '検証用の進行操作は管理者専用です',
+            403,
+          );
           await this.engine((engine) =>
             engine.advanceLeagueDay(l, `local:${command.requestId}`, now),
           );
         } else requireOnline(false, '未対応の操作です');
         bundle.league.revision++;
       }
-      bundle.league.updatedAt = now;
+      const completedAt = this.clock();
+      if (
+        bundle.league.status === 'running' &&
+        (previousStatus !== 'running' || command.type === 'step')
+      )
+        bundle.league.nextAdvanceAt = nextProgressionAt(completedAt);
+      bundle.league.updatedAt = completedAt;
       const value = { ok: true, revision: bundle.league.revision };
       bundle.receipts[key] = { hash, value };
       const keys = Object.keys(bundle.receipts);
@@ -185,6 +217,7 @@ export class LeagueService {
       409,
       'session',
     );
+    assertLeagueVersion(bundle.league);
     return this.engine((engine) => ({
       phaseId: bundle.league.phase.id,
       revision: bundle.league.revision,
@@ -226,7 +259,10 @@ export class LeagueService {
         }
       }
       bundle.league.revision++;
-      bundle.league.updatedAt = now;
+      const completedAt = this.clock();
+      if (bundle.league.status === 'running')
+        bundle.league.nextAdvanceAt = nextProgressionAt(completedAt);
+      bundle.league.updatedAt = completedAt;
       return {
         value: {
           advanced:

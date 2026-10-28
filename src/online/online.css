@@ -688,3 +688,18 @@
   font-size: 11px;
   color: #cbd5e1;
 }
+
+.online-overlay {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: 0;
+}
+.online-overlay:not([open]) {
+  display: none;
+}
+.online-overlay::backdrop {
+  background: transparent;
+}

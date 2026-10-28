@@ -37,6 +37,12 @@ try {
     (error) => error.code === 'session',
   );
   assert.equal((await service.view('a', a)).writable, false);
+  await service.logout('a', a);
+  assert.equal(
+    (await service.view('a', nextA)).writable,
+    true,
+    '古い端末のログアウトで現在の端末を失効させない',
+  );
   const newStore = new FileStore(join(dir, 'state.gz'));
   assert.equal(
     (await newStore.read()).sessions.a,
@@ -77,6 +83,11 @@ try {
   }
   view = await service.view('a', nextA);
   assert.equal(view.status, 'running');
+  await assert.rejects(
+    command('b', b, 'step'),
+    (error) => error.status === 403,
+    '検証用でも管理者以外の手動進行を拒否する',
+  );
   const rev = view.revision;
   const concurrent = await Promise.allSettled([
     command('a', nextA, 'lineup', view.lineup, rev),
@@ -137,6 +148,13 @@ try {
   assert.ok(
     Buffer.byteLength(JSON.stringify(view)) < 250000,
     '全世界データを画面に転送しない',
+  );
+  await service.logout('a', nextA);
+  assert.equal((await service.view('a', nextA)).writable, false);
+  assert.equal((await service.view('a', undefined)).writable, false);
+  await assert.rejects(
+    command('a', nextA, 'pause'),
+    (error) => error.code === 'session',
   );
   console.log(
     'online-service-check PASS（永続化・競合・再送・端末交代・秘密提出・停止復元・重複Cron）',

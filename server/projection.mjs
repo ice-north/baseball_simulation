@@ -27,7 +27,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     currentDate: l.season.currentDate,
     nextAdvanceAt: l.nextAdvanceAt,
     isAdmin: userId === adminId,
-    writable: bundle.sessions[userId] === sessionId,
+    writable: !!sessionId && bundle.sessions[userId] === sessionId,
     hasBackup: !!bundle.backup,
     members: l.members.map((m) => ({
       label: m.label,

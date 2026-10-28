@@ -110,6 +110,12 @@ export const getPlayerSalary = (player) =>
 
 let nextStaffId = 5000;
 
+// サーバーの再起動・復元で採番を巻き戻さないための保存境界。
+export const getStaffIdCounter = () => nextStaffId;
+export const setStaffIdCounter = value => {
+  nextStaffId = Number.isSafeInteger(value) && value >= 5000 ? value : 5000;
+};
+
 export const generateStaff = (role, grade = null, maxGrade = null) => {
   const id = nextStaffId++;
   const profile = STAFF_ROLE_PROFILES[role];
@@ -409,6 +415,11 @@ export const advanceStaffYear = (staffList, autoReplenish = false, teamRank = nu
 // ============================================================
 
 const usedStaffNames = new Set();
+export const getStaffNameHistory = () => [...usedStaffNames];
+export const setStaffNameHistory = names => {
+  usedStaffNames.clear();
+  for (const name of names || []) if (typeof name === 'string') usedStaffNames.add(name);
+};
 
 const generateStaffName = () => {
   for (let i = 0; i < 20; i++) {

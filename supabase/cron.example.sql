@@ -15,9 +15,11 @@ select cron.schedule(job_name, expression, $command$
   );
 $command$)
 from (values
-  ('online-day-hour', '0 4,9,14,23 * * *'),
-  ('online-day-half', '30 1,6,11 * * *')
+  ('online-day-hour', '0,5,10 4,9,14,23 * * *'),
+  ('online-day-half', '30,35,40 1,6,11 * * *')
 ) as jobs(job_name, expression);
 -- JST 08:00 / 10:30 / 13:00 / 15:30 / 18:00 / 20:30 / 23:00。
 -- cron.job_run_detailsのSQL成功だけではHTTP/ゲーム更新成功を証明しない。
 -- net._http_responseとゲームのrevision/日付も確認する。
+
+-- 各枠の5分後・10分後は通知欠落/処理中に備えた再送。進行はnextAdvanceAtで1回に限定する。

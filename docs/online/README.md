@@ -48,7 +48,7 @@ npm run check:online:season
 Viteは3000番の既存サーバーを利用できる。
 
 ```sh
-ONLINE_DATA_FILE="$(mktemp -d)/ui.json.gz" npm run dev:online
+ONLINE_DISABLE_TIMER=1 ONLINE_DATA_FILE="$(mktemp -d)/ui.json.gz" npm run dev:online
 ```
 
 別端末から実行する。
@@ -56,10 +56,11 @@ ONLINE_DATA_FILE="$(mktemp -d)/ui.json.gz" npm run dev:online
 ```sh
 npx playwright install chromium
 npm run check:online:ui
+npm run check:online:auth-ui
 ```
 
 インストール済みChromeを使う場合は `PLAYWRIGHT_CHROME_CHANNEL=chrome npm run check:online:ui`。
-CIも同じ検査を実行し、スクリーンショットを保存する。
+CIも同じ検査を実行し、スクリーンショットを保存する。認証競合の画面検査は配布HTMLとAuthのfixtureを使う。
 ブラウザ検査は初期編成・二人の決定・キャンプ・編成保存・スマホ操作・旧端末拒否・試合結果・320〜767px幅を確認する。
 
 ## 外部アカウント設定後の作業
@@ -90,6 +91,7 @@ CIも同じ検査を実行し、スクリーンショットを保存する。
 JST 08:00 / 10:30 / 13:00 / 15:30 / 18:00 / 20:30 / 23:00に1日ずつ進む。
 イベント決定待ち・管理者の停止・エラー中は進まない。再開は次の未来の枠から。
 15分を超える遅延通知は停止扱いにし、空白期間を自動消化しない。
+Cronの例は通知欠落や処理中に備え、各枠の5分後・10分後にも再送する。進行は予定時刻を確認して1枠1回に限定する。
 プレーオフは引き分けで未決着なら翌日に再試合を追加し、2勝先取の条件を維持する。10月20日までに決着しない異常時は停止する。
 
 エラー時は最後の正常なスナップショットを残し、状態を確認して管理者が再開する。
@@ -122,7 +124,7 @@ DBのポインタが失われた場合も、同じ二人の設定と新設テー
 ## コストと運用上の制限
 
 外部サービスの無料枠は実際のプロジェクト設定で確認する。常時起動のサーバー、WebSocket、Redis、常時ポーリングのCronは使わない。
-画面は表示中に約1分ごと、Cronは1日7枠。画面APIは全世界の巨大なスナップショットを転送しない。
+画面は表示中に約1分ごと、Cronは1日7枠（各枠は再送を含め最大3回の通知）。画面APIは全世界の巨大なスナップショットを転送しない。
 ただし認証・更新・背景球界処理には通信と計算が必要で、無料運用を保証するものではない。
 Supabaseの休止・容量上限・Storage/DBの復旧手段、Vercelの実測時間を公開前に確認する。
 
@@ -137,3 +139,5 @@ Supabaseの休止・容量上限・Storage/DBの復旧手段、Vercelの実測�
 - [スマホの打順と固定操作欄](images/mobile-lineup.png)
 - [320×640の手続き確認](images/mobile-decision.png)
 - [お知らせ4件のページ送り](images/mobile-news.png)
+
+追加レビュー: [PR全体の指摘・修正・再発確認](REVIEW_20261028.md)。

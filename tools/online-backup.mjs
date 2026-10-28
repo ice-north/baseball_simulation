@@ -2,7 +2,7 @@
 import { writeFile, readFile } from 'node:fs/promises';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { SupabaseStore } from '../server/storage/supabaseStore.mjs';
-import { requireOnline, ONLINE_SCHEMA } from '../src/online/shared.js';
+import { requireOnline, assertLeagueVersion } from '../src/online/shared.js';
 const [mode, path] = process.argv.slice(2);
 requireOnline(
   ['export', 'restore'].includes(mode) && path,
@@ -36,11 +36,7 @@ if (mode === 'export') {
   console.log('共有状態一式を退避しました（既存ファイルは上書きしません）');
 } else {
   const source = JSON.parse(gunzipSync(await readFile(path)));
-  requireOnline(
-    source.league?.schema === ONLINE_SCHEMA &&
-      source.league.engineVersion === 'online-1',
-    'バックアップのバージョンが対応していません',
-  );
+  assertLeagueVersion(source.league);
   requireOnline(
     source.league.members
       .map((m) => m.userId)
