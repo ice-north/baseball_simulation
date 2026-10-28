@@ -9,7 +9,8 @@ on:
 
 jobs:
   build-and-check:
-    runs-on: ubuntu-latest
+    # Playwright 1.58.x が対応するOSへ固定し、latestの更新による導入失敗を防ぐ。
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
