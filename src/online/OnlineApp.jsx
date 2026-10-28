@@ -232,23 +232,28 @@ export default function OnlineApp() {
         setShowTimes(false);
       }
     });
+  const compactMobile = mobile && view && !view.setupRequired;
   return (
-    <div className={`online ${mobile ? 'online-mobile' : 'online-desktop'}`}>
-      <header className="online-header">
-        <a href="/online" className="online-brand">
-          NEXT STAGE <span>オンラインペナント</span>
-        </a>
-        <nav>
-          <a href="/">一人用</a>
-          {auth && (
-            <button onClick={logout} disabled={busy}>
-              ログアウト
-            </button>
-          )}
-        </nav>
-      </header>
+    <div
+      className={`online ${mobile ? 'online-mobile' : 'online-desktop'} ${compactMobile ? 'online-compact-shell' : ''}`}
+    >
+      {!compactMobile && (
+        <header className="online-header">
+          <a href="/online" className="online-brand">
+            NEXT STAGE <span>オンラインペナント</span>
+          </a>
+          <nav>
+            <a href="/">一人用</a>
+            {auth && (
+              <button onClick={logout} disabled={busy}>
+                ログアウト
+              </button>
+            )}
+          </nav>
+        </header>
+      )}
       <main>
-        {config?.local && (
+        {config?.local && !compactMobile && (
           <p className="online-dev">ローカル検証モード（公開環境では無効）</p>
         )}
         {error && (
@@ -299,28 +304,32 @@ export default function OnlineApp() {
           </section>
         ) : (
           <>
-            <section className="online-season">
-              <div>
-                <p>
-                  SEASON {view.year} · {view.teamName}
-                </p>
-                <h1>
-                  {formatGameDate(view.currentDate)}{' '}
-                  <small>{STATUS[view.status]}</small>
-                </h1>
-              </div>
-              <div className="online-next">
-                次の進行（日本時間）
-                <strong>{dateTime(view.nextAdvanceAt)}</strong>
-                <button disabled={busy} onClick={() => run(reload)}>
-                  更新
-                </button>
-              </div>
-            </section>
-            <div className="online-clock-info">
-              <span>1日7回・夜間は休止</span>
-              <button onClick={() => setShowTimes(true)}>進行時刻</button>
-            </div>
+            {!compactMobile && (
+              <>
+                <section className="online-season">
+                  <div>
+                    <p>
+                      SEASON {view.year} · {view.teamName}
+                    </p>
+                    <h1>
+                      {formatGameDate(view.currentDate)}{' '}
+                      <small>{STATUS[view.status]}</small>
+                    </h1>
+                  </div>
+                  <div className="online-next">
+                    次の進行（日本時間）
+                    <strong>{dateTime(view.nextAdvanceAt)}</strong>
+                    <button disabled={busy} onClick={() => run(reload)}>
+                      更新
+                    </button>
+                  </div>
+                </section>
+                <div className="online-clock-info">
+                  <span>1日7回・夜間は休止</span>
+                  <button onClick={() => setShowTimes(true)}>進行時刻</button>
+                </div>
+              </>
+            )}
             {!view.writable && (
               <p role="alert" className="online-alert">
                 別の端末でログインしたため閲覧のみです。操作するにはログインし直してください。
@@ -334,6 +343,11 @@ export default function OnlineApp() {
             {mobile ? (
               <MobileView
                 view={view}
+                local={config.local}
+                loading={busy}
+                reloadView={() => run(reload)}
+                logout={logout}
+                showTimes={() => setShowTimes(true)}
                 auth={auth}
                 busy={busy || !view.writable}
                 run={run}

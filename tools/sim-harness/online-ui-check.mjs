@@ -36,6 +36,14 @@ try {
       .waitFor({ state: 'hidden', timeout: 290000 });
   };
   const click = async (page, text) => {
+    if (
+      ['更新', 'ログアウト', '進行時刻'].includes(text) &&
+      !(await page.getByRole('button', { name: text, exact: true }).count()) &&
+      (await page
+        .getByRole('button', { name: 'メニュー', exact: true })
+        .count())
+    )
+      await page.getByRole('button', { name: 'メニュー', exact: true }).click();
     await page.getByRole('button', { name: text, exact: true }).click();
     await waitIdle(page);
   };
@@ -68,7 +76,7 @@ try {
     .getByRole('button', { name: 'この内容で決定', exact: true })
     .boundingBox();
   assert.ok(
-    decisionBox.y >= 0 && decisionBox.y + decisionBox.height <= 640 - 60,
+    decisionBox.y >= 0 && decisionBox.y + decisionBox.height <= 640 - 48,
     '小さいスマホでも決定ボタンがスクロールせず押せる',
   );
   assert.ok(
@@ -81,6 +89,7 @@ try {
     path: '/tmp/baseball-online-mobile-decision.png',
     fullPage: true,
   });
+  await click(m, 'ホーム');
   await click(m, 'ログアウト');
   await m.setViewportSize({ width: 390, height: 844 });
 
@@ -205,14 +214,14 @@ try {
     .getByRole('button', { name: '編成を保存', exact: true })
     .boundingBox();
   assert.ok(
-    saveBox.y >= 0 && saveBox.y + saveBox.height <= 844 - 60,
+    saveBox.y >= 0 && saveBox.y + saveBox.height <= 844 - 48,
     '打順の保存ボタンがスクロールせず押せる',
   );
   await click(p, '更新');
   await p
     .getByText('別の端末でログインしたため閲覧のみです。', { exact: false })
     .waitFor();
-  await m.getByRole('button', { name: '今日', exact: true }).click();
+  await m.getByRole('button', { name: 'ホーム', exact: true }).click();
   await m.screenshot({
     path: '/tmp/baseball-online-mobile.png',
     fullPage: true,
@@ -244,8 +253,9 @@ try {
   ]);
   for (const width of [320, 375, 430, 767]) {
     await m.setViewportSize({ width, height: 844 });
-    for (const tab of ['今日', '試合', '打順', '手続き']) {
-      await click(m, tab);
+    for (const tab of ['ホーム', '試合', '打順', '手続き']) {
+      await click(m, 'ホーム');
+      if (tab !== 'ホーム') await click(m, tab);
       const metrics = await m.evaluate(() => ({
         width: document.documentElement.scrollWidth,
         height: document.documentElement.scrollHeight,
@@ -263,7 +273,7 @@ try {
     }
   }
   await m.setViewportSize({ width: 390, height: 844 });
-  await click(m, '今日');
+  await click(m, 'ホーム');
   await m
     .getByRole('button', { name: 'リーグ便り・過去のシーズン →', exact: true })
     .click();

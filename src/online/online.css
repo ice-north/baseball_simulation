@@ -554,28 +554,6 @@
   .online-clock-info button {
     min-height: 32px;
   }
-  .online-bottom-nav {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    background: var(--surface-1);
-    border-top: 1px solid #63778f;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 20;
-    padding: 7px 8px max(8px, env(safe-area-inset-bottom));
-  }
-  .online-bottom-nav button {
-    border-color: transparent;
-    padding: 7px 4px;
-    font-size: 13px;
-  }
-  .online-bottom-nav button[aria-current] {
-    color: var(--accent);
-    background: var(--accent-soft);
-  }
   .online-next-action {
     display: flex;
     justify-content: space-between;
@@ -817,4 +795,266 @@
 .online-mobile:has(.online-compact-roster) .online-season,
 .online-mobile:has(.online-compact-roster) .online-clock-info {
   display: none;
+}
+
+/* スマホの対人画面は一枚の面。常設する操作は戻る・ホームだけ。 */
+.online-mobile.online-compact-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-2);
+  color: #f1f5f9;
+}
+.online-mobile.online-compact-shell main {
+  height: 100dvh;
+  min-height: 0;
+  max-width: none;
+  padding: 0 0 calc(48px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.online-compact-shell main > * {
+  flex-shrink: 0;
+}
+.online-mobile.online-compact-shell .online-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 8px 12px;
+  margin: 0;
+}
+.online-mobile-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding: 8px 12px;
+}
+.online-mobile-overview strong {
+  width: 100%;
+  font-size: 15px;
+}
+.online-mobile-overview small {
+  align-self: center;
+  color: #cbd5e1;
+}
+.online-home-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 12px 6px;
+}
+.online-home-actions .online-dot {
+  margin-left: 6px;
+}
+.online-compact-shell .online-news-link {
+  border: 0;
+  border-radius: 0;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.online-compact-shell:has(.online-lineup-card:not([hidden])) main,
+.online-compact-shell:has(.online-decision) main {
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
+}
+.online-compact-shell .online-lineup-card .online-actions,
+.online-compact-shell .online-decision .online-actions {
+  bottom: calc(48px + env(safe-area-inset-bottom));
+  padding-bottom: 10px;
+}
+.online-mobile.online-compact-shell .online-compact-roster {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px;
+}
+.online-roster-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+}
+.online-roster-toolbar small {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+.online-roster-toolbar .online-segments {
+  margin: 0;
+}
+.online-roster-toolbar .online-segments button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 14px;
+}
+.online-roster-toolbar .online-segments button[aria-pressed='true'] {
+  border-bottom: 2px solid var(--accent);
+}
+.online-roster-columns {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #cbd5e1;
+  min-height: 22px;
+  border-bottom: 1px solid #668196;
+}
+.online-roster-rows {
+  flex: 1;
+  min-height: 0;
+}
+.online-compact-roster .online-roster-rows article {
+  height: 44px;
+  padding: 0;
+  border-bottom: 1px solid #536b85;
+}
+.online .online-roster-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  height: 44px;
+  text-decoration: none;
+  gap: 8px;
+}
+.online-roster-person {
+  display: block;
+  min-width: 0;
+}
+.online-roster-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  line-height: 20px;
+}
+.online-roster-name small {
+  font-size: 11px;
+  margin-left: 8px;
+  color: #cbd5e1;
+}
+.online-roster-value {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.online-mobile .online-stat-label {
+  border: 0;
+  padding: 0;
+  font-size: 11px;
+  color: #b9e3ed;
+}
+.online-mobile .online-stat-bad {
+  color: #f0c5c5;
+}
+.online-roster-row .online-stat-labels {
+  display: block;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 15px;
+}
+.online-roster-row .online-stat-label {
+  display: inline;
+}
+.online-compact-roster .online-pager {
+  margin: 0;
+  min-height: 44px;
+  padding: 0;
+}
+.online-mobile .online-player-dialog {
+  width: 100%;
+  margin: auto 0 0;
+  border: 0;
+  border-radius: 0;
+  padding: 12px;
+  max-height: 100dvh;
+}
+.online-mobile .online-stat-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 8px;
+  margin-top: 12px;
+}
+.online-mobile .online-stat-grid dd {
+  font-size: 18px;
+}
+.online-mobile .online-stat-grid dt {
+  font-size: 11px;
+}
+.online-compact-shell .online-card-heading p {
+  margin: 0;
+  font-size: 12px;
+}
+.online-mobile.online-compact-shell .online-card td,
+.online-mobile.online-compact-shell .online-card th {
+  padding: 7px 4px;
+}
+
+.online-mobile-controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  height: calc(48px + env(safe-area-inset-bottom));
+  padding: 0 0 env(safe-area-inset-bottom);
+  background: var(--surface-1);
+}
+.online-mobile-controls button {
+  flex: 1;
+  height: 48px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  font-size: 24px;
+}
+.online-roster-toolbar h2 {
+  font-size: 14px;
+  line-height: 18px;
+  margin: 0;
+}
+.online-roster-toolbar > div:first-child {
+  line-height: 15px;
+}
+.online-mobile-menu-panel {
+  background: var(--surface-2);
+  color: #f1f5f9;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  margin: auto 0 0;
+  padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+}
+.online-mobile-menu-panel::backdrop {
+  background: #0f172ab3;
+}
+.online-mobile-menu-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.online-mobile-menu-panel h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.online-mobile-menu-panel > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.online-mobile-menu-panel a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+.online-mobile-menu-panel small {
+  display: block;
+  font-size: 10px;
+  color: #cbd5e1;
+  margin-top: 8px;
 }

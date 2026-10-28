@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { POS } from './api.js';
 import { PageNav } from './PageNav.jsx';
 
@@ -110,17 +110,22 @@ function Detail({ player, initialCategory, close }) {
     </dialog>
   );
 }
-export function PlayerStatsButton({ player, category = 'batting' }) {
+export function PlayerStatsButton({
+  player,
+  category = 'batting',
+  children,
+  className = '',
+}) {
   const [open, setOpen] = useState(false);
   if (!player) return null;
   return (
     <>
       <button
-        className="online-player-name"
+        className={`online-player-name ${className}`}
         onClick={() => setOpen(true)}
         aria-label={`${player.name}の成績を見る`}
       >
-        {player.name}
+        {children || player.name}
       </button>
       {open && (
         <Detail
@@ -135,21 +140,65 @@ export function PlayerStatsButton({ player, category = 'batting' }) {
 export function CompactRoster({ view }) {
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
+  const [size, setSize] = useState(8);
+  const rows = useRef(null);
+  const previousSize = useRef(8);
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (!rows.current) return;
+      const next = Math.max(1, Math.floor(rows.current.clientHeight / 44));
+      const old = previousSize.current;
+      if (next === old) return;
+      previousSize.current = next;
+      setPage((p) => Math.floor((p * old) / next));
+      setSize(next);
+    };
+    measure();
+    const observer = new window.ResizeObserver(measure);
+    observer.observe(rows.current);
+    return () => observer.disconnect();
+  }, []);
   return (
     <section className="online-card online-compact-roster">
-      <h2>選手成績</h2>
-      <Category value={category} setValue={setCategory} />
-      {view.roster.slice(page * 3, page * 3 + 3).map((player) => (
-        <article key={player.id}>
-          <PlayerStatsButton player={player} category={category} />
-          <small>{POS[player.position]}</small>
-          <StatLabels player={player} category={category} limit={1} />
-        </article>
-      ))}
+      <div className="online-roster-toolbar">
+        <div>
+          <h2>選手成績</h2>
+          <small>今季 · {view.roster.length}人</small>
+        </div>
+        <Category value={category} setValue={setCategory} />
+      </div>
+      <div className="online-roster-columns">
+        <span>選手・成績の特徴</span>
+        <span>{category === 'batting' ? '打率' : '防御率'}</span>
+      </div>
+      <div className="online-roster-rows" ref={rows}>
+        {view.roster.slice(page * size, page * size + size).map((player) => (
+          <article key={player.id}>
+            <PlayerStatsButton
+              player={player}
+              category={category}
+              className="online-roster-row"
+            >
+              <span className="online-roster-person">
+                <span className="online-roster-name">
+                  {player.name}
+                  <small>{POS[player.position]}</small>
+                </span>
+                <StatLabels player={player} category={category} limit={1} />
+              </span>
+              <span className="online-roster-value">
+                {category === 'batting'
+                  ? average(player.performance?.batting?.metrics?.avg)
+                  : number(player.performance?.pitching?.metrics?.era, 2)}
+              </span>
+            </PlayerStatsButton>
+          </article>
+        ))}
+      </div>
       <PageNav
         page={page}
         count={view.roster.length}
-        size={3}
+        size={size}
         setPage={setPage}
       />
     </section>

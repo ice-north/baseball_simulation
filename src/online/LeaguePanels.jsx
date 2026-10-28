@@ -524,7 +524,14 @@ export function LineupPanel({
     <section className="online-card online-lineup-card" hidden={hidden}>
       <fieldset className="online-form-fields" disabled={busy}>
         <div className="online-card-heading">
-          <h2>{mobile ? '打順の入れ替え' : '編成・采配'}</h2>
+          {mobile ? (
+            <div>
+              <h2>打順</h2>
+              <p className="online-muted">保存後、次の試合から反映</p>
+            </div>
+          ) : (
+            <h2>編成・采配</h2>
+          )}
           {mobile && onShowRoster && (
             <button
               onClick={onShowRoster}
@@ -551,11 +558,7 @@ export function LineupPanel({
             ))}
           </div>
         )}
-        <p className="online-muted">
-          {mobile
-            ? '上下で入れ替え、保存で次の試合に反映。'
-            : '次回の進行から反映します。'}
-        </p>
+        {!mobile && <p className="online-muted">次回の進行から反映します。</p>}
         {(mobile || section === 'batting') &&
           [...plan.battingOrder]
             .sort((a, b) => a.battingOrder - b.battingOrder)

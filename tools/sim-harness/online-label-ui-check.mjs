@@ -38,7 +38,7 @@ const player = (id, overrides = {}) => ({
 });
 const stars = [
   player(1, { hits: 45, walks: 30, strikeouts: 65 }),
-  ...Array.from({ length: 8 }, (_, i) => player(i + 2)),
+  ...Array.from({ length: 23 }, (_, i) => player(i + 2)),
 ];
 const positions = [
   'catcher',
@@ -98,9 +98,10 @@ const browser = await chromium.launch({
   headless: true,
 });
 const errors = [];
-async function scene(width, height = 844) {
+async function scene(width, height = 844, scale = 1) {
   const context = await browser.newContext({
     viewport: { width, height },
+    deviceScaleFactor: scale,
     isMobile: width < 768,
   });
   await context.addInitScript(() =>
@@ -164,8 +165,12 @@ try {
     fullPage: true,
   });
   await context.close();
-  for (const width of [320, 390, 767]) {
-    const { page: m, context: c } = await scene(width, 640);
+  for (const width of [320, 360, 390, 767]) {
+    const { page: m, context: c } = await scene(
+      width,
+      640,
+      width === 360 ? 3 : 1,
+    );
     await m.getByRole('button', { name: '打順', exact: true }).click();
     await m
       .getByRole('button', { name: '成績選手1の成績を見る', exact: true })
@@ -191,10 +196,44 @@ try {
       .getByRole('button', { name: '選手成績を閉じる', exact: true })
       .click();
     await m.getByRole('button', { name: '2番を上げる', exact: true }).click();
+    await m.getByRole('button', { name: 'メニュー', exact: true }).click();
+    const menu = m.getByRole('dialog', { name: 'メニュー', exact: true });
+    await menu.waitFor();
+    await menu.getByRole('button', { name: '更新', exact: true }).waitFor();
+    await m.screenshot({
+      path: `/tmp/baseball-online-mobile-menu-${width}.png`,
+      fullPage: true,
+    });
+    await m.keyboard.press('Escape');
+    await menu.waitFor({ state: 'hidden' });
+    assert.ok(
+      await m
+        .getByRole('button', { name: 'メニュー', exact: true })
+        .evaluate((e) => e === document.activeElement),
+      'メニューを閉じて下部ボタンにフォーカスが戻る',
+    );
     await m
       .getByRole('button', { name: '投手・控えを含む選手成績 →', exact: true })
       .click();
-    assert.equal(await m.locator('.online-compact-roster article').count(), 3);
+    await m.waitForFunction(
+      () =>
+        document.querySelectorAll('.online-compact-roster article').length >= 9,
+    );
+    assert.equal(
+      await m.locator('.online-mobile-controls button').count(),
+      3,
+      '下部の共通操作は戻る・ホーム・メニューのみ',
+    );
+    const controls = await m.locator('.online-mobile-controls').boundingBox();
+    assert.ok(
+      controls.y >= 590 && controls.y + controls.height <= 640,
+      '操作を親指の届く下部に置く',
+    );
+    assert.equal(
+      await m.locator('.online-header').count(),
+      0,
+      'ブランドヘッダを重ねない',
+    );
     await m.screenshot({
       path: `/tmp/baseball-online-labels-roster-${width}.png`,
       fullPage: true,
@@ -203,11 +242,9 @@ try {
       await m.evaluate(
         () => document.documentElement.scrollHeight <= innerHeight + 1,
       ),
-      '一覧は3件ずつで長い縦スクロールにしない',
+      '一覧のために画面全体をスクロールしない',
     );
     await m.getByRole('button', { name: '投球', exact: true }).click();
-    await m.getByRole('button', { name: '次のページ', exact: true }).click();
-    await m.getByRole('button', { name: '次のページ', exact: true }).click();
     await m
       .getByRole('button', { name: '成績選手9の成績を見る', exact: true })
       .click();
@@ -216,10 +253,32 @@ try {
       .getByText('制球安定', { exact: true })
       .waitFor();
     await m.keyboard.press('Escape');
-    await m.getByRole('button', { name: '← 打順に戻る', exact: true }).click();
+    const pager = await m
+      .getByRole('button', { name: '次のページ', exact: true })
+      .boundingBox();
+    assert.ok(pager.y + pager.height <= 592, 'ページ送りが画面内に収まる');
+    const row = await m
+      .locator('.online-compact-roster article')
+      .last()
+      .boundingBox();
+    assert.ok(row.y + row.height <= pager.y, '最終行とページ送りが重ならない');
+    await m.setViewportSize({ width, height: 844 });
+    await m.waitForFunction(
+      () =>
+        document.querySelectorAll('.online-compact-roster article').length >=
+        14,
+    );
+    while (
+      await m
+        .getByRole('button', { name: '次のページ', exact: true })
+        .isEnabled()
+    )
+      await m.getByRole('button', { name: '次のページ', exact: true }).click();
     await m
-      .getByRole('heading', { name: '打順の入れ替え', exact: true })
+      .getByRole('button', { name: '成績選手24の成績を見る', exact: true })
       .waitFor();
+    await m.getByRole('button', { name: '戻る', exact: true }).click();
+    await m.getByRole('heading', { name: '打順', exact: true }).waitFor();
     assert.equal(
       await m
         .locator('.online-lineup')
@@ -233,7 +292,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-label-ui-check PASS（配布HTMLと実projection・PC/スマホ320〜767px・投打切替・詳細/閉じる/フォーカス・3件ページ・閲覧のみ / 通信はfixture）',
+    'online-label-ui-check PASS（配布HTMLと実projection・PC/スマホ320〜767px・1080x1920縦持ち・投打切替・詳細/閉じる/フォーカス・高さに応じた行数・ページ送り・閲覧のみ / 通信はfixture）',
   );
 } finally {
   await browser.close();

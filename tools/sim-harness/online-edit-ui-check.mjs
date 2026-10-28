@@ -120,6 +120,12 @@ async function scene({
   return state;
 }
 async function click(page, text) {
+  if (
+    ['更新', 'ログアウト', '進行時刻'].includes(text) &&
+    !(await page.getByRole('button', { name: text, exact: true }).count()) &&
+    (await page.getByRole('button', { name: 'メニュー', exact: true }).count())
+  )
+    await page.getByRole('button', { name: 'メニュー', exact: true }).click();
   await page.getByRole('button', { name: text, exact: true }).click();
   await page
     .getByText('処理中です。画面を閉じずにお待ちください…', { exact: true })
