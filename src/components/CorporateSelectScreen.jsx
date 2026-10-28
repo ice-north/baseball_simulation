@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RANK_COLORS, RANK_LABELS, RANK_ORDER } from '../utils/constants.js';
+import SelectShell from './select/SelectShell.jsx';
 import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, getAllMasterTeamsEffective, addCustomTeam, updateCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam } from '../corporate/corporateTeamsData.js';
 
 const TYPE_LABELS = {
@@ -81,28 +82,34 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
     university: onSelectUniversity, corporate: onSelectCorporate, independent: onSelectIndependent,
   };
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center p-6">
-      <div className="max-w-5xl w-full mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-1 text-center">GAME MODE</h1>
-        <p className="text-gray-300 mb-8 text-center">
-          どれも同じ1つの球界。違うのは
-          <span className="text-white font-bold mx-1">どのチームを操作し、どのカレンダーで進むか</span>
-          だけ
-        </p>
-
+    <SelectShell
+      kicker="GAME MODE"
+      title="どの球界で始めるか"
+      sub={<>どれも同じ1つの球界。違うのは<span className="text-white font-bold mx-1">どのチームを操作し、どのカレンダーで進むか</span>だけ</>}
+      footer={(
+        <div className="text-center">
+          <button onClick={onBack} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-surface-2 text-sm transition">← 戻る</button>
+        </div>
+      )}
+    >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {MODES.map(m => (
+            // ⚠ **カード全面を色で塗らないこと**。以前は本体ごと
+            //    `from-blue-700 to-indigo-700` で、3枚が「色つきの紙」に見えていた。
+            //    色は**見出しの帯だけ**が持ち、本体は本編と同じ暗い面にする。
+            //    こうするとチーム選択のカードとも語彙が揃う
             <button
               key={m.key}
               onClick={handlers[m.key]}
-              className={`group bg-gradient-to-b ${m.grad} ${m.hover} text-white rounded-xl transition-all shadow-lg active:scale-[0.98] text-left overflow-hidden flex flex-col`}
+              className="lift-card group text-white rounded-2xl text-left overflow-hidden flex flex-col border border-gray-700/70 hover:border-gray-500 bg-surface-2/80"
             >
-              <div className="px-5 pt-5 pb-3">
-                <div className="text-2xl font-bold">{m.title}</div>
-                <div className={`text-xs ${m.accent}`}>{m.sub}</div>
+              <div className={`bg-gradient-to-br ${m.grad} ${m.hover} px-5 pt-5 pb-4 transition-colors`}
+                   style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)' }}>
+                <div className="text-2xl font-black leading-tight">{m.title}</div>
+                <div className="text-xs text-white/75 mt-0.5">{m.sub}</div>
               </div>
-              <div className="px-5 pb-3">
-                <div className="text-sm font-normal text-white/90">{m.lead}</div>
+              <div className="px-5 pt-4 pb-3">
+                <div className="text-sm font-normal text-gray-200">{m.lead}</div>
               </div>
               {/* 3つの軸で並べると、モード間の違いが縦に読み比べられる */}
               <div className="px-5 pb-3 space-y-1.5">
@@ -120,24 +127,14 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
                   ))}
                 </div>
               </div>
-              <div className="px-5 py-2.5 bg-black/25 flex items-center justify-between">
-                <span className="text-xs font-normal text-white/80">難易度の目安</span>
+              <div className="px-5 py-2.5 bg-black/30 border-t border-white/5 flex items-center justify-between">
+                <span className="text-xs font-normal text-gray-400">難易度の目安</span>
                 {DIFF_DOTS(m.difficulty)}
               </div>
             </button>
           ))}
         </div>
-
-        <div className="text-center">
-          <button
-            onClick={onBack}
-            className="mt-7 inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-surface-2 text-sm transition"
-          >
-            ← 戻る
-          </button>
-        </div>
-      </div>
-    </div>
+    </SelectShell>
   );
 };
 
@@ -206,11 +203,12 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   // 地区選択
   if (!selectedRegion) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2 text-center">地区を選択</h1>
-          <p className="text-gray-300 mb-8 text-center">監督として就任する地区を選んでください</p>
-
+      <SelectShell kicker="CORPORATE" title="地区を選択" sub="監督として就任する地区を選んでください"
+        footer={(
+          <div className="text-center">
+            <button onClick={onBack} className="text-gray-300 hover:text-white text-sm transition">← 戻る</button>
+          </div>
+        )}>
           <div className="grid grid-cols-3 gap-3">
             {REGIONS.map(region => {
               const teams = getTeamsByRegion(region.id);
@@ -220,7 +218,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                 <button
                   key={region.id}
                   onClick={() => setSelectedRegion(region.id)}
-                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-lg p-4 text-left transition flex flex-col"
+                  className="lift-card bg-surface-2/80 border border-gray-700/70 hover:border-gray-500 rounded-xl p-4 text-left flex flex-col"
                 >
                   <div className="text-white font-bold text-lg">{region.name}</div>
                   <div className="text-gray-300 text-sm">{teams.length}チーム</div>
@@ -232,30 +230,27 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
               );
             })}
           </div>
-
-          <div className="text-center mt-6">
-            <button onClick={onBack} className="text-gray-400 hover:text-gray-300 text-sm">
-              戻る
-            </button>
-          </div>
-        </div>
-      </div>
+      </SelectShell>
     );
   }
 
   // チーム選択
+  // ⚠ ここは共通カード（`TeamSelectCard`）に置き換えないこと。行の中に
+  //    改名・初期化の操作を持っていて、置き換えると機能が落ちる。
+  //    外枠と質感だけ他の選択画面と揃える。
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-      <div className="max-w-5xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-1 text-center">
-          {REGIONS.find(r => r.id === selectedRegion)?.name} のチーム
-        </h1>
-        <p className="text-gray-300 mb-4 text-center text-sm">
-          監督として就任するチームを選んでください
-          <span className="text-gray-300 ml-2">全{regionTeams.length}チーム</span>
-        </p>
+    <SelectShell
+      kicker="TEAM SELECT"
+      title={`${REGIONS.find(r => r.id === selectedRegion)?.name} のチーム`}
+      sub={`監督として就任するチームを選んでください（全${regionTeams.length}チーム）`}
+      fitHeight={false}
+    >
 
-        {/* 2列にして幅を使う。1列だと9チームでスクロールアウトしていた */}
+        {/* 2列にして幅を使う。1列だと9チームでスクロールアウトしていた。
+            ⚠ **下端にフェードを掛けること**。掛けないと最終行が途中でぶつ切りになり、
+            「描画が壊れている」ように見える（実測で行の高さの半分で切れていた）。
+            フェードがあれば「続きがある」と読める。 */}
+        <div className="relative">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[58vh] overflow-y-auto pr-1">
           {regionTeams.map(team => {
             const typeInfo = TYPE_LABELS[team.type] || TYPE_LABELS.club;
@@ -267,10 +262,10 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
               <div
                 key={team.id}
                 onClick={() => { if (editingNameId !== team.id) setSelectedTeam(team); }}
-                className={`group w-full p-2.5 rounded-lg border transition cursor-pointer ${
+                className={`lift-card group w-full p-2.5 rounded-lg border cursor-pointer ${
                   isSelected
                     ? (isClub ? 'bg-green-900/50 border-green-500' : 'bg-blue-900/50 border-blue-500')
-                    : 'bg-surface-2 border-gray-700 hover:border-gray-500'
+                    : 'bg-surface-2/80 border-gray-700/70 hover:border-gray-500'
                 }`}
               >
                 {editingNameId === team.id ? (
@@ -320,6 +315,9 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
               </div>
             );
           })}
+        </div>
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-10"
+             style={{ background: 'linear-gradient(0deg, #0a111a 0%, rgba(10,17,26,0) 100%)' }} />
         </div>
 
         <div className="text-xs text-gray-300 mt-2 text-center">
@@ -386,8 +384,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </SelectShell>
   );
 };
 

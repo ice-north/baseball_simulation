@@ -125,6 +125,67 @@ body {
   }
 }
 
+/* ============================================================
+   導入画面（タイトル／モード選択／チーム選択）の質感
+
+   【なぜ専用の語彙を持つか】本編のUIは「情報を読む」ための面なので、
+   地は沈め・装飾は持たせない。導入の3画面だけは**「これから始まる」を
+   感じさせる役目**があり、同じ素材では足りなかった。
+   ⚠ **ここのクラスを本編の画面に持ち込まないこと**。読む面が光り出すと
+   情報より装飾が勝つ（電光掲示板の語彙を試合画面に閉じているのと同じ理由）。
+   ⚠ 題材は**ナイター中継**。夜の球場・照明・すりガラス。
+   オレンジのLEDグロー（＝試合画面の語彙）は使わない。
+   ============================================================ */
+
+/* すりガラスのパネル。縁の内側に光を1本入れて厚みを出す。
+   ⚠ 影だけでは浮かない。暗い地の上では**縁の光**が効く */
+.glass-panel {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.78), rgba(15, 23, 32, 0.86));
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 0 0 1px rgba(148, 163, 184, 0.14),
+    0 24px 60px -12px rgba(0, 0, 0, 0.75);
+}
+
+/* 選べるカード。浮き上がりと縁の光で「押せる」を出す。
+   ⚠ `transform` で持ち上げること（`margin` だと隣が動く） */
+.lift-card {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 10px 24px -10px rgba(0, 0, 0, 0.7);
+}
+.lift-card:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 18px 38px -12px rgba(0, 0, 0, 0.8);
+}
+.lift-card:active:not(:disabled) { transform: translateY(-1px); }
+
+/* 照明の明滅とヘイズの流れ。⚠ **ごく弱く**（振れ幅が大きいと安っぽくなる） */
+@keyframes ns-flicker {
+  0%, 100% { opacity: 0.92; }
+  45%      { opacity: 1; }
+  70%      { opacity: 0.86; }
+}
+@keyframes ns-drift {
+  0%   { transform: translateX(-2%); }
+  100% { transform: translateX(2%); }
+}
+.ns-flicker { animation: ns-flicker 7s ease-in-out infinite; }
+.ns-drift   { animation: ns-drift 28s ease-in-out infinite alternate; }
+
+/* ⚠ **動きを止める設定を必ず尊重すること**。背景の明滅は装飾なので、
+   止めても情報は一切失われない */
+@media (prefers-reduced-motion: reduce) {
+  .ns-flicker, .ns-drift { animation: none; }
+  .lift-card { transition: none; }
+  .lift-card:hover:not(:disabled) { transform: none; }
+}
+
 #root {
   width: 100%;
   min-height: 100vh;

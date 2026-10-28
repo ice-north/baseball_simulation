@@ -1,5 +1,7 @@
 import React from 'react';
-import { RANK_COLORS, RANK_LABELS } from '../utils/constants.js';
+import { RANK_LABELS, RANK_HEX } from '../utils/constants.js';
+import SelectShell from './select/SelectShell.jsx';
+import TeamSelectCard from './select/TeamSelectCard.jsx';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
 import { SEASON_PHASES, createSeasonData } from '../season/seasonManager.js';
 import { REGULATION_PRESETS } from '../season/regulationSettings.js';
@@ -163,13 +165,23 @@ const GameFlowScreens = ({
     const leagueDef = INDEPENDENT_LEAGUES[selectedIndependentLeague];
     const teams = leagueDef?.teams || [];
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2 text-center">{leagueDef?.name}</h1>
-          <p className="text-gray-300 mb-8 text-center">監督を務めるチームを選んでください</p>
+      <SelectShell
+        kicker="TEAM SELECT"
+        title={leagueDef?.name}
+        sub="監督を務めるチームを選んでください"
+        footer={(
+          <div className="text-center">
+            <button onClick={() => setGameFlowState('newgame_league_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-surface-2 text-sm transition">← 戻る</button>
+          </div>
+        )}
+      >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {teams.map((team) => (
-              <button key={team.id}
+              <TeamSelectCard key={team.id}
+                name={team.name}
+                accent={RANK_HEX[team.rank] || '#94a3b8'}
+                rank={team.rank}
+                rankLabel={[RANK_LABELS[team.rank], team.city].filter(Boolean).join('・')}
                 onClick={() => {
                   const regulations = {
                     useDH: leagueDef.useDH || false,
@@ -197,23 +209,10 @@ const GameFlowScreens = ({
                     setGameFlowState('newgame_tryout');
                   }, 50);
                 }}
-                className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-green-500 rounded-xl p-5 text-left transition group flex flex-col"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-lg font-bold text-white group-hover:text-green-400 transition">{team.name}</div>
-                  <span className={`text-xs font-bold ${RANK_COLORS[team.rank] || 'text-gray-300'}`}>
-                    {team.rank} ({RANK_LABELS[team.rank] || ''})
-                  </span>
-                </div>
-                <div className="text-xs text-gray-400">{team.city}</div>
-              </button>
+              />
             ))}
           </div>
-          <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_league_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-surface-2 text-sm transition">← 戻る</button>
-          </div>
-        </div>
-      </div>
+      </SelectShell>
     );
   }
 

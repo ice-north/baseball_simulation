@@ -446,6 +446,22 @@ export const RANK_COLORS = {
 };
 
 /**
+ * ランク色の実値。`RANK_COLORS` と**同じ意味**で、Tailwind のクラス名では
+ * 書けない場所（SVG の fill / グラデーション / box-shadow）のために持つ。
+ * ⚠ **`RANK_COLORS` と必ず揃えること**。片方だけ変えると、同じランクが
+ *   文字とバッジで違う色になる。
+ * ⚠ 背景色はここに置かない。`RANK_BG` は画面ごとに濃さが別物
+ *   （`TeamRankingScreen` は900段、`UniversitySelectScreen` は500/20）。
+ */
+export const RANK_HEX = {
+  S: '#facc15',
+  A: '#f87171',
+  B: '#60a5fa',
+  C: '#4ade80',
+  D: '#d1d5db',
+};
+
+/**
  * 利き手ラベル（日本語表記）
  */
 export const HAND_LABELS = {

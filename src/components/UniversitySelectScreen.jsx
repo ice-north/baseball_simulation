@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { RANK_COLORS, RANK_LABELS, RANK_ORDER } from '../utils/constants.js';
-import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
+import { RANK_COLORS, RANK_LABELS, RANK_ORDER, RANK_HEX } from '../utils/constants.js';
+import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS, SPECIALTY_LABELS } from '../university/universityTeamsData.js';
+import SelectShell from './select/SelectShell.jsx';
+import TeamSelectCard from './select/TeamSelectCard.jsx';
 
 const RANK_BG = {
   S: 'bg-yellow-500/20 border-yellow-500/40',
@@ -18,11 +20,12 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
 
   if (!selectedRegion) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2 text-center">リーグ選択</h1>
-          <p className="text-gray-300 mb-8 text-center">所属するリーグを選んでください</p>
-
+      <SelectShell kicker="UNIVERSITY" title="リーグ選択" sub="所属するリーグを選んでください" fitHeight={false}
+        footer={(
+          <div className="text-center">
+            <button onClick={onBack} className="text-gray-300 hover:text-white text-sm transition">← 戻る</button>
+          </div>
+        )}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {UNIVERSITY_REGIONS.map(region => {
               const teams = UNIVERSITY_TEAMS.filter(t => t.region === region.id);
@@ -36,11 +39,11 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
                 //    見出しは上端・内訳は `mt-auto` で下端に固定する。
                 <button key={region.id}
                   onClick={() => setSelectedRegion(region)}
-                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-amber-500 rounded-xl p-4 text-left transition group flex flex-col"
+                  className="lift-card bg-surface-2/80 border border-gray-700/70 hover:border-gray-500 rounded-xl p-4 text-left group flex flex-col"
                 >
                   {/* 見出し行。名前が長くても崩れないよう、伸縮するのは名前だけにする */}
                   <div className="flex items-center gap-2 w-full">
-                    <div className="text-base font-bold text-white group-hover:text-amber-400 transition truncate min-w-0 flex-1">{region.name}</div>
+                    <div className="text-base font-bold text-white truncate min-w-0 flex-1">{region.name}</div>
                     <span className={`text-xs font-bold w-6 text-center py-0.5 rounded border shrink-0 ${RANK_BG[leagueRank]} ${RANK_COLORS[leagueRank]}`}>{leagueRank}</span>
                     <span className="text-xs text-gray-300 tabular-nums whitespace-nowrap shrink-0 w-9 text-right">{teams.length}校</span>
                   </div>
@@ -63,12 +66,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
               );
             })}
           </div>
-
-          <div className="text-center mt-6">
-            <button onClick={onBack} className="text-gray-300 hover:text-white text-sm transition">← 戻る</button>
-          </div>
-        </div>
-      </div>
+      </SelectShell>
     );
   }
 
@@ -78,27 +76,41 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
   const perDiv = numDivisions >= 2 ? Math.floor(teams.length / numDivisions) : 0;
   const hasDivisions = numDivisions >= 2;
 
+  // ⚠ 校名とランク文字だけのカードだった。`budget` と `specialties` は
+  //    データにあるのにどこにも出ておらず、6校が見た目でも中身でも区別できなかった
   const renderTeamButton = (team) => (
-    <button key={team.id}
+    <TeamSelectCard
+      key={team.id}
+      name={team.name}
+      accent={RANK_HEX[team.rank]}
+      rank={team.rank}
+      rankLabel={RANK_LABELS[team.rank]}
+      meter={{ label: '強化予算', value: team.budget, max: 100 }}
+      chips={(team.specialties || []).map(k => SPECIALTY_LABELS[k] || k)}
+      selected={selectedTeam?.id === team.id}
       onClick={() => setSelectedTeam(team)}
-      className={`bg-surface-2 hover:bg-gray-700 border rounded-lg p-4 text-left transition group ${
-        selectedTeam?.id === team.id ? 'border-amber-400 bg-gray-700' : 'border-gray-700 hover:border-amber-500'
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="text-base font-bold text-white group-hover:text-amber-400 transition">{team.name}</div>
-        <span className={`text-sm font-bold ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
-      </div>
-      <div className="text-xs text-gray-400 mt-1">{RANK_LABELS[team.rank]}</div>
-    </button>
+    />
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-      <div className="max-w-5xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-1 text-center">{selectedRegion.name}</h1>
-        <p className="text-gray-300 mb-8 text-center">監督を務めるチームを選んでください</p>
-
+    <SelectShell
+      kicker="TEAM SELECT"
+      title={selectedRegion.name}
+      sub="監督を務めるチームを選んでください"
+      footer={(
+        <div className="flex justify-between items-center">
+          <button onClick={() => { setSelectedRegion(null); setSelectedTeam(null); }}
+            className="text-gray-300 hover:text-white text-sm transition">← リーグ選択に戻る</button>
+          {/* ⚠ 選ぶまで出さないこと。空の場所取りを置くと「押せないボタン」に見える */}
+          {selectedTeam && (
+            <button onClick={() => onSelect(selectedTeam)}
+              className="btn-primary px-7 py-2.5 rounded-xl text-base transition active:scale-[0.99]">
+              {selectedTeam.name}で始める
+            </button>
+          )}
+        </div>
+      )}
+    >
         {hasDivisions ? (
           <>
             {Array.from({ length: numDivisions }, (_, d) => {
@@ -120,18 +132,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
           </div>
         )}
 
-        <div className="flex justify-between items-center">
-          <button onClick={() => { setSelectedRegion(null); setSelectedTeam(null); }}
-            className="text-gray-300 hover:text-white text-sm transition">← リーグ選択に戻る</button>
-          {selectedTeam && (
-            <button onClick={() => onSelect(selectedTeam)}
-              className="btn-warn px-6 py-2 rounded-lg transition">
-              {selectedTeam.name}で始める
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    </SelectShell>
   );
 };
 

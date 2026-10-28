@@ -10,6 +10,9 @@ import { getUiScale, cycleUiScale, UI_SCALE_LABEL } from '../game/uiSettings.js'
  */
 const FIELD = {
   night:  '#141b24',   // ナイターの空・スタンドの影
+  sky:    '#0a111a',   // 空の天頂（夜はてっぺんが一番暗い）
+  stand:  '#0d141d',   // スタンドのシルエット
+  lamp:   '#dbeafe',   // 照明の光（⚠ 白ではなく**青白い**。白だと電球色に見える）
   turfHi: '#2c4a33',   // 芝（手前）
   turfLo: '#1d3324',   // 芝（奥）
   dirtHi: '#7a5540',   // 内野の土（手前）
@@ -19,6 +22,40 @@ const FIELD = {
   strike: '#facc15',   // 黄=ストライク
   out:    '#ef4444',   // 赤=アウト
 };
+
+/**
+ * 照明塔。⚠ **x は 290〜1310 の内側に置くこと**。
+ *   viewBox は `slice` なので縦長の画面では左右が切られ、実測（1440×900）で
+ *   見えているのは x=240〜1360 だけだった。端に置くと画面から消える。
+ */
+const LightTower = ({ x, flip = false }) => (
+  <g transform={`translate(${x},0)${flip ? ' scale(-1,1)' : ''}`}>
+    {/* 支柱。⚠ **空より明るい灰**にすること。`stand` と同じ色だと夜空に沈んで、
+        ランプだけが宙に浮いた「点の格子」に見えた（実測でそうなった） */}
+    <rect x="-5" y="150" width="10" height="210" fill="#243040" />
+    <rect x="-5" y="150" width="2" height="210" fill="#3b4b60" />
+    <path d="M-5,360 L-24,360 L-5,248 Z" fill="#1c2634" />
+    {/* ランプの箱（格子） */}
+    <rect x="-54" y="94" width="108" height="60" rx="5" fill="#222d3c" />
+    <rect x="-54" y="94" width="108" height="2" rx="1" fill="#44566e" />
+    <g className="ns-flicker">
+      {/* にじみ（先に敷く） */}
+      {[0, 1, 2].map(r => [0, 1, 2, 3, 4].map(c => (
+        <circle key={`g${r}-${c}`} cx={-40 + c * 20} cy={110 + r * 17} r="13"
+                fill={FIELD.lamp} opacity={0.16} />
+      )))}
+      {[0, 1, 2].map(r => [0, 1, 2, 3, 4].map(c => (
+        <circle key={`${r}-${c}`} cx={-40 + c * 20} cy={110 + r * 17} r="6.5"
+                fill="#f8fbff" />
+      )))}
+    </g>
+    {/* 光のにじみ。⚠ これが無いとランプが「ただの白い点の列」に見える */}
+    <g className="ns-flicker">
+      <ellipse cx="0" cy="124" rx="190" ry="130" fill="url(#ns-flare)" />
+      <ellipse cx="0" cy="124" rx="70" ry="52" fill="url(#ns-flare)" />
+    </g>
+  </g>
+);
 
 /**
  * 捕手の後ろから内野を見た画。画像を持たずSVGだけで描く。
@@ -41,6 +78,24 @@ const FieldBackdrop = () => (
       <linearGradient id="ns-dirt" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stopColor={FIELD.dirtLo} /><stop offset="100%" stopColor={FIELD.dirtHi} />
       </linearGradient>
+      {/* 夜空。⚠ **てっぺんを一番暗く**すること。地平線side を暗くすると
+          照明に照らされた空気の感じが消えて「ただの濃紺の板」になる */}
+      <linearGradient id="ns-sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={FIELD.sky} />
+        <stop offset="70%" stopColor={FIELD.night} />
+        <stop offset="100%" stopColor="#1b2634" />
+      </linearGradient>
+      {/* 照明のにじみ */}
+      <radialGradient id="ns-flare">
+        <stop offset="0%" stopColor={FIELD.lamp} stopOpacity="0.55" />
+        <stop offset="45%" stopColor={FIELD.lamp} stopOpacity="0.16" />
+        <stop offset="100%" stopColor={FIELD.lamp} stopOpacity="0" />
+      </radialGradient>
+      {/* 照明に照らされた空気。芝の上にうっすら乗せる */}
+      <linearGradient id="ns-air" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={FIELD.lamp} stopOpacity="0.12" />
+        <stop offset="100%" stopColor={FIELD.lamp} stopOpacity="0" />
+      </linearGradient>
       {/* 空から芝への継ぎ目を溶かす（硬い水平線だと「帯」に見える） */}
       <linearGradient id="ns-haze" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stopColor={FIELD.night} stopOpacity="1" />
@@ -52,10 +107,44 @@ const FieldBackdrop = () => (
         <stop offset="65%" stopColor={FIELD.night} stopOpacity="0.55" />
         <stop offset="100%" stopColor={FIELD.night} stopOpacity="0" />
       </radialGradient>
+      {/* 四隅を落とす（中継のレンズの感じ） */}
+      <radialGradient id="ns-vignette" cx="50%" cy="50%" r="75%">
+        <stop offset="62%" stopColor="#000" stopOpacity="0" />
+        <stop offset="100%" stopColor="#000" stopOpacity="0.38" />
+      </radialGradient>
+      {/* 粒子。⚠ **ごく薄く**（0.04 を超えると画面が汚れて見える） */}
+      <filter id="ns-grain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" stitchTiles="stitch" />
+        <feColorMatrix type="saturate" values="0" />
+      </filter>
     </defs>
+
+    {/* 夜空 */}
+    <rect width="1600" height="380" fill="url(#ns-sky)" />
+
+    {/* スタンドのシルエット。⚠ 観客を描き込まないこと——この距離では
+        粒が見えるだけで、描くほど density が上がって「砂嵐」になる。
+        輪郭（屋根の傾き）と、まばらな光の粒だけで足りる */}
+    <path d="M0,318 L300,292 L640,282 L960,282 L1300,292 L1600,318 V372 H0 Z" fill={FIELD.stand} />
+    <g fill={FIELD.lamp} opacity="0.16">
+      {Array.from({ length: 64 }, (_, i) => (
+        <circle key={i} cx={20 + i * 25 + (i % 3) * 7} cy={300 + (i % 5) * 9} r="1.6" />
+      ))}
+    </g>
 
     {/* 芝 */}
     <path d="M0,360 H1600 V800 H0 Z" fill="url(#ns-turf)" />
+    {/* 刈り跡。⚠ **手前ほど太くする**（等間隔だと遠近が消えて「縞の壁」になる） */}
+    <g fill={FIELD.chalk} opacity="0.028">
+      {(() => {
+        const bands = []; let y = 360, h = 13;
+        for (let i = 0; i < 11; i++) {
+          if (i % 2 === 0) bands.push(<rect key={i} x="0" y={y} width="1600" height={h} />);
+          y += h; h = Math.round(h * 1.30);
+        }
+        return bands;
+      })()}
+    </g>
     {/* 内野の土。⚠ **半円にしないこと**——真ん中が盛り上がって「茶色いドーム」に見える。
         実際の内野はホームから外へ広がる楔なので、**ファウルラインで挟んだ形**にする。 */}
     {/* ホーム周りの土（実際の球場にある円）。これが無いと楔の先端が尖って矢印に見える */}
@@ -77,7 +166,17 @@ const FieldBackdrop = () => (
     </g>
 
     <rect y="300" width="1600" height="120" fill="url(#ns-haze)" />
+    {/* 照明に照らされた空気。芝の上に薄く乗せると奥行きが出る */}
+    <rect className="ns-drift" y="330" width="1600" height="230" fill="url(#ns-air)" />
     <rect width="1600" height="800" fill="url(#ns-scrim)" />
+    {/* ⚠ **照明塔はスクリムより手前に描くこと**。スクリムはメニューの背後を
+        落とすための暗幕だが、半径が広いので塔にも掛かる。先に描いていたときは
+        実測で**不透明度0.62の黒**が光源に乗り、ランプが灰色の点の格子に見えた。
+        照明は画面で一番明るいものなので、暗幕の影響を受けさせない。 */}
+    <LightTower x={380} />
+    <LightTower x={1220} flip />
+    <rect width="1600" height="800" fill="url(#ns-vignette)" />
+    <rect width="1600" height="800" filter="url(#ns-grain)" opacity="0.035" />
   </svg>
 );
 
@@ -177,8 +276,11 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
   );
 
   // メニューを載せるカード。本編のカード（surface-2 + gray-700）と同じ見た目にする
+  // メニューを載せるカード。⚠ 導入画面だけの素材（`.glass-panel`）を使う。
+  //    本編のカード（surface-2 + gray-700）と同じ見た目だと、球場の絵の上で
+  //    ただの灰色の箱になって浮かなかった
   const MenuCard = ({ title, children }) => (
-    <div className="w-full max-w-xl rounded-2xl border border-gray-700/60 bg-surface-2/70 backdrop-blur p-7 shadow-2xl">
+    <div className="w-full max-w-xl rounded-2xl glass-panel p-7">
       {title && <p className="text-sm text-gray-300 mb-3">{title}</p>}
       {children}
     </div>
@@ -197,15 +299,26 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
     // （1366×640 / 1280×600）では App.jsx の自動フィットが縮めて収める。
     // ⚠ これが無いと 640 で44px・600 で84px はみ出す。
     <div data-fit-height className="min-h-screen relative overflow-hidden flex items-center justify-center py-8"
-         style={{ backgroundColor: FIELD.night }}>
+         style={{ backgroundColor: FIELD.sky }}>
       <FieldBackdrop />
 
       <div className="relative w-full max-w-xl px-6 flex flex-col items-center">
-        {/* タイトル。白線と同じチョーク色で、球場に引かれたラインの延長に見せる */}
+        {/* タイトル。白線と同じチョーク色を基調に、上を明るく下を沈めて厚みを出す。
+            ⚠ `background-clip: text` を使うので、影は `text-shadow` ではなく
+            `drop-shadow` で掛けること（文字色が transparent になるため）。
+            ⚠ 2本目の drop-shadow は**照明の色**（青白）。ここを白にすると
+            ただのボケになり、球場の光に照らされている感じが出ない。 */}
         <h1 className="text-7xl font-black tracking-tight leading-none"
-            style={{ color: FIELD.chalk, textShadow: '0 2px 18px rgba(0,0,0,0.55)' }}>
+            style={{
+              backgroundImage: 'linear-gradient(180deg,#ffffff 0%,#f2f0e8 44%,#aeb8c4 100%)',
+              WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+              filter: `drop-shadow(0 3px 20px rgba(0,0,0,0.65)) drop-shadow(0 0 30px ${FIELD.lamp}30)`,
+            }}>
           NEXT STAGE
         </h1>
+        {/* ロゴの下に1本。両端を消してアクセントの帯に見せる（枠にしない） */}
+        <div className="mt-4 h-px w-72"
+             style={{ background: `linear-gradient(90deg,transparent,var(--accent),transparent)`, opacity: 0.75 }} />
         {/* ⚠ 罫線で挟んだ大文字サブタイトルは定番手なのでやめた。
             代わりに**カウントのランプ**（緑=ボール / 黄=ストライク / 赤=アウト）を置く。
             本編の意味色そのままなので、この作品の語彙で「野球」と言える。 */}

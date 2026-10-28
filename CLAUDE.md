@@ -17,6 +17,7 @@
 - `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用。
 - `src/game/saveSystem.js`: スロット、バックアップ、ロード、ファイル入出力。形式移行は `src/game/saveMigration.js`。
 - `src/corporate/worldData.js`: 並行世界の初期化。`TEAMS_DATA` とともにロード失敗時の復元対象。
+- `src/components/StartScreen.jsx` と `src/components/select/`: タイトルと導入画面。意匠はナイター中継で、本編とは別の語彙（`.glass-panel` と `.lift-card`）を使う。
 
 ## 変更時の不変条件
 
