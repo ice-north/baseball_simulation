@@ -1,7 +1,32 @@
 import { SupabaseStore } from './storage/supabaseStore.mjs';
 import { LeagueService } from './leagueService.mjs';
 import { createHandler } from './http.mjs';
-import { requireOnline } from '../src/online/shared.js';
+import { requireOnline, OnlineError } from '../src/online/shared.js';
+
+/**
+ * 不足・不正なサーバー環境変数の**名前**を返す。
+ *
+ * ⚠ **値は絶対に含めないこと**。返すのは変数名と、長さなどの条件だけ。
+ * ⚠ `SUPABASE_URL` と `SUPABASE_SERVICE_ROLE_KEY` もここで見る。
+ *    以前は `SupabaseStore` の中まで行って別のメッセージで落ちており、
+ *    呼び出し元の `api/online.mjs` が全部同じ503へ潰していた。
+ */
+export function missingOnlineConfig(env = process.env) {
+  const missing = [];
+  if (!env.SUPABASE_URL?.startsWith('https://')) missing.push('SUPABASE_URL');
+  if (!env.SUPABASE_ANON_KEY) missing.push('SUPABASE_ANON_KEY');
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+  if (!env.ONLINE_MEMBER_1) missing.push('ONLINE_MEMBER_1');
+  if (!env.ONLINE_MEMBER_2) missing.push('ONLINE_MEMBER_2');
+  else if (env.ONLINE_MEMBER_1 === env.ONLINE_MEMBER_2) {
+    missing.push('ONLINE_MEMBER_2(ONLINE_MEMBER_1と同じ値)');
+  }
+  if (!env.ONLINE_CRON_SECRET) missing.push('ONLINE_CRON_SECRET');
+  else if (env.ONLINE_CRON_SECRET.length < 32) {
+    missing.push('ONLINE_CRON_SECRET(32文字以上が必要)');
+  }
+  return missing;
+}
 let handler;
 export function productionHandler() {
   if (handler) return handler;
@@ -13,11 +38,16 @@ export function productionHandler() {
     ONLINE_MEMBER_2: second,
     ONLINE_CRON_SECRET: cronSecret,
   } = process.env;
-  requireOnline(
-    first && second && first !== second && anonKey && cronSecret?.length >= 32,
-    'オンライン環境の初期設定が必要です',
-    503,
-  );
+  const missing = missingOnlineConfig(process.env);
+  if (missing.length) {
+    const error = new OnlineError(
+      'オンライン環境の初期設定が必要です',
+      503,
+      'config',
+    );
+    error.missing = missing;
+    throw error;
+  }
   const members = [
     { userId: first, label: 'プレイヤー1' },
     { userId: second, label: 'プレイヤー2' },
