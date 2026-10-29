@@ -140,6 +140,13 @@ const seeded = (league, key, fn) =>
 // ⚠ 順位表は**平たい配列のまま**でよい。更新は球団名で行われるので、
 //    リーグ分けは表示と昇降格のときだけ見ればよい。
 function createSchedule(season, teams) {
+  // ⚠ **渡し忘れを黙って通さない**。以前は undefined が渡ると
+  //    `pyramidSchedule` の中で「undefined の filter」で落ち、
+  //    どこの呼び出しが悪いのか分からなかった。
+  requireOnline(
+    Array.isArray(teams) && teams.length > 0,
+    '日程を組むには球団表が必要です',
+  );
   season.schedule = pyramidSeasonSchedule(teams, {
     year: season.currentDate.year,
   });
@@ -544,7 +551,10 @@ function resolvePhase(league, now) {
       TEAMS_DATA,
       league.members.map((m) => m.teamName),
     );
-    createSchedule(league.season);
+    // ⚠ **球団表を渡すこと**。翌シーズンの日程もリーグ分けが要る。
+    //    渡し忘れると `pyramidSchedule` が undefined を filter して落ちる
+    //    （通年検査が年度更新で踏んだ）。
+    createSchedule(league.season, league.teams);
     // 一人用と同じく年度末にCPUローテを再構築。人間の編成は有効な範囲で保持する。
     const humans = new Set(humanTeamNames(TEAMS_DATA));
     for (const name of Object.keys(TEAMS_DATA))
