@@ -14,6 +14,8 @@ import {
   generatePyramidTeams,
   pyramidMovements,
   pyramidSchedule,
+  standingsByLeague,
+  applyPyramidMovements,
   SEASON_TURNS,
 } from '../../src/online/pyramidLeague.js';
 
@@ -160,5 +162,52 @@ assert.ok(
   Math.min(...homes) >= 68 && Math.max(...homes) <= 76,
   `ホーム試合数が偏っている: ${Math.min(...homes)}〜${Math.max(...homes)}`,
 );
+
+// --- 順位表からの入れ替え -----------------------------------------
+// ⚠ 順位表は**全球団を通した並び**（勝率順）。そのままでは「2部の1位」が
+//    分からないので、リーグで絞り直してから順位を見る必要がある。
+{
+  const live = generatePyramidTeams(777).map((t) => ({ ...t }));
+  // 全球団を混ぜた順位表を作る（1部と2部が入り混じる並び）
+  const table = live.map((t, i) => ({
+    team: t.name,
+    wins: 100 - i * 3,
+    winRate: (100 - i * 3) / 144,
+  }));
+  const order = standingsByLeague(live, table);
+  for (const l of PYRAMID_LEAGUES) {
+    assert.equal(order[l.id].length, TEAMS_PER_LEAGUE, `${l.id} の人数がちがう`);
+    // リーグ内で勝率の降順になっていること
+    const rates = order[l.id].map((n) => table.find((x) => x.team === n).winRate);
+    assert.deepEqual(rates, [...rates].sort((a, b) => b - a), `${l.id} の並びが順位順でない`);
+  }
+  // 並びが決まっていること（同成績でも実行のたびに変わらない）
+  assert.deepEqual(standingsByLeague(live, table), order);
+
+  const before = Object.fromEntries(live.map((t) => [t.name, t.league]));
+  const moves = applyPyramidMovements(live, table);
+  assert.ok(moves.length > 0, '入れ替えが起きない');
+  // 所属が実際に書き換わっている
+  for (const mv of moves) {
+    assert.equal(before[mv.teamId], mv.from);
+    assert.equal(live.find((t) => t.name === mv.teamId).league, mv.to);
+  }
+  // 入れ替え後も各リーグの球団数が保たれる（ここが本丸）
+  for (const l of PYRAMID_LEAGUES) {
+    assert.equal(
+      live.filter((t) => t.league === l.id).length,
+      TEAMS_PER_LEAGUE,
+      `入れ替え後に ${l.id} の球団数がちがう`,
+    );
+  }
+  // 最下位が降り、1位が上がっている
+  const bottomTier = Math.max(...PYRAMID_LEAGUES.map((x) => x.tier));
+  for (const mv of moves) {
+    const fromLeague = PYRAMID_LEAGUES.find((x) => x.id === mv.from);
+    const place = order[mv.from].indexOf(mv.teamId) + 1;
+    if (fromLeague.tier === bottomTier) assert.equal(place, 1, '上がるのは1位');
+    else if (fromLeague.up.length === 0) assert.equal(place, TEAMS_PER_LEAGUE, '降りるのは最下位');
+  }
+}
 
 console.log(`■ 階層リーグ: OK（${PYRAMID_LEAGUES.length}リーグ${PYRAMID_TEAM_COUNT}球団 / 出入りが釣り合う / 再現する / ${SEASON_TURNS}ターンの日程）`);

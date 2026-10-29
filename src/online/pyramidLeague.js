@@ -270,3 +270,46 @@ export function pyramidSeasonSchedule(teams, { year, turns = SEASON_TURNS } = {}
     league: g.league,
   }));
 }
+
+/**
+ * 順位表をリーグごとの並び（1位から最下位）に分ける。
+ *
+ * ⚠ **順位表は全球団を通した並び**（勝率順）なので、そのままでは
+ *    「2部の1位」が分からない。リーグで絞り直してから順位を見ること。
+ * ⚠ 最後に球団名まで見て並びを決める。勝率も勝利数も並んだとき、
+ *    順序が実行のたびに変わると昇降格の相手が変わってしまう。
+ */
+export function standingsByLeague(teams, standings = []) {
+  const leagueOf = Object.fromEntries(teams.map((t) => [t.name, t.league]));
+  const byName = Object.fromEntries(standings.map((s) => [s.team, s]));
+  const result = {};
+  for (const league of PYRAMID_LEAGUES) {
+    result[league.id] = teams
+      .filter((t) => leagueOf[t.name] === league.id)
+      .map((t) => t.name)
+      .sort((a, b) => {
+        const sa = byName[a] || {};
+        const sb = byName[b] || {};
+        return (
+          (sb.winRate || 0) - (sa.winRate || 0) ||
+          (sb.wins || 0) - (sa.wins || 0) ||
+          (a < b ? -1 : a > b ? 1 : 0)
+        );
+      });
+  }
+  return result;
+}
+
+/**
+ * 昇降格を `teams` へ反映する。移動した一覧を返す。
+ * ⚠ **日程を作り直す前に呼ぶこと**。所属が変わってから日程を組まないと、
+ *    昇格した球団が元のリーグの相手と戦い続ける。
+ */
+export function applyPyramidMovements(teams, standings) {
+  const moves = pyramidMovements(standingsByLeague(teams, standings));
+  for (const move of moves) {
+    const team = teams.find((t) => t.name === move.teamId);
+    if (team) team.league = move.to;
+  }
+  return moves;
+}

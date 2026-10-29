@@ -92,6 +92,7 @@ import {
 import {
   generatePyramidTeams,
   pyramidSeasonSchedule,
+  applyPyramidMovements,
   PYRAMID_TEAM_COUNT,
   SEASON_TURNS,
 } from '../src/online/pyramidLeague.js';
@@ -551,6 +552,18 @@ function resolvePhase(league, now) {
       TEAMS_DATA,
       league.members.map((m) => m.teamName),
     );
+    // ⚠ **昇降格は日程を作り直す前に適用すること**。所属が変わってから
+    //    日程を組まないと、昇格した球団が元のリーグの相手と戦い続ける。
+    const movements = applyPyramidMovements(
+      league.teams,
+      league.history.at(-1)?.standings || [],
+    );
+    if (movements.length)
+      league.notices.unshift({
+        type: 'promotion',
+        year: league.history.at(-1)?.year,
+        moves: movements,
+      });
     // ⚠ **球団表を渡すこと**。翌シーズンの日程もリーグ分けが要る。
     //    渡し忘れると `pyramidSchedule` が undefined を filter して落ちる
     //    （通年検査が年度更新で踏んだ）。
