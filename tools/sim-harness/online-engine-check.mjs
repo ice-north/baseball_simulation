@@ -10,6 +10,7 @@ import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { gzipSync } from 'node:zlib';
 import { nextProgressionAt } from '../../src/online/shared.js';
 import { projectPlayerInfo } from '../../server/projection.mjs';
+import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
 
 // 1ターン＝1時間（毎正時）。⚠ 境界は「その時刻ちょうど」を含めず、次の枠へ送る。
 // 08:00 JST ちょうど → 09:00 JST
@@ -99,7 +100,12 @@ assert.deepEqual(seen, [
   'tryout',
   'offseason',
 ]);
-assert.ok(league.history[0].standings.every((s) => s.gamesPlayed === 75));
+// ⚠ **定数から導くこと**。75 が直に書かれており、1シーズン144ターンへ
+//    変えたときに取り残された。試合数を変えるたびに直すのでは忘れる。
+assert.ok(
+  league.history[0].standings.every((s) => s.gamesPlayed === SEASON_TURNS),
+  `全球団が${SEASON_TURNS}試合しているはず`,
+);
 const recordedYear = league.records.seasons[1];
 assert.ok(recordedYear.comparison, '年度・リーグの比較値を確定して残す');
 assert.ok(
