@@ -1,3 +1,4 @@
+import { tacticalChance, tacticalPitchLimit, tacticalDamageLimit } from '../online/tactics.js';
 import { createDecisionLog, observeDecisionLog, decisionsFromResult, recordDecisions } from './pitcherDecisions.js';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate, spinAdjustedArsenal } from '../simulation-logic.js';
@@ -387,7 +388,7 @@ const SIM_CLONE_OMIT = new Set([
 const cloneTeamForSim = (team) =>
   JSON.parse(JSON.stringify(team, (k, v) => (SIM_CLONE_OMIT.has(k) ? undefined : v)));
 
-const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
+const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = null) => {
 
   // TEAMS_DATAからチームデータを取得
   if (!TEAMS_DATA || !TEAMS_DATA[homeTeamName] || !TEAMS_DATA[awayTeamName]) {
@@ -643,6 +644,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
     // 勝敗・セーブ・ホールドの判定用（登板順とリードの移り変わり。pitcherDecisions.js）
     decisionLog: createDecisionLog()
   };
+  observer?.start?.({ homeTeam: gameState.homeTeam, awayTeam: gameState.awayTeam });
   const observeDecisions = () => observeDecisionLog(gameState.decisionLog, {
     score: gameState.score, pitcherIds: gameState.currentPitcherId,
   });
@@ -885,6 +887,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
       col: loc.col, row: loc.row, isBreaking,
       velocity: pitchVelocityFinal, type: selectedPitch.type,
     });
+
+    observer?.pitchDetail?.({ type: selectedPitch.type, velocity: pitchVelocityFinal, col: loc.col, row: loc.row });
 
     // そのセルが打者にとってどれだけ苦手か。スイング判断・打撃補正・振り方で共有する
     const weakness = zoneWeaknessAt(loc, batter.zone);
@@ -1143,6 +1147,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
   // 盗塁判定（AI監督）- 走者の実際の走力を使用
   const attemptStolenBase = (offenseTeam, defenseTeam) => {
+    if (offenseTeam.strategy?.baseRunning === 'never') return null;
     const pitcher = getCurrentPitcher(defenseTeam);
     const catcher = getCurrentCatcher(defenseTeam);
 
@@ -1277,7 +1282,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
       const squeezeChance = isPitcherBatter ? 0.60 :
                             (buntSkill >= 60 && batterTotal < 110) ? 0.40 :
                             (buntSkill >= 50) ? 0.25 : 0.10;
-      if (Math.random() < squeezeChance) return 'squeeze';
+      if (Math.random() < tacticalChance(squeezeChance, offenseTeam.onlineTactics?.squeeze)) return 'squeeze';
     }
 
     // 犠打: 1塁or2塁ランナー、0-1アウト、弱打者or投手
@@ -1288,7 +1293,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
       if (shouldSacrifice) {
         const sacChance = isPitcherBatter ? 0.70 :
                           (gameState.inning >= 7 && isCloseGame) ? 0.50 : 0.35;
-        if (Math.random() < sacChance) return 'sacrifice';
+        if (Math.random() < tacticalChance(sacChance, offenseTeam.onlineTactics?.sacrificeBunt)) return 'sacrifice';
       }
     }
 
@@ -1296,7 +1301,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
     if (batterSpeed >= 75 && buntSkill >= 55 && outs <= 1) {
       if (!bases[0] || (bases[0] && !bases[1] && !bases[2])) {
         const safetyChance = 0.05 + (batterSpeed - 75) * 0.003 + (buntSkill - 55) * 0.002;
-        if (Math.random() < safetyChance) return 'safety';
+        if (Math.random() < tacticalChance(safetyChance, offenseTeam.onlineTactics?.safetyBunt)) return 'safety';
       }
     }
 
@@ -1305,6 +1310,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
   // 代打判定（AI監督）- 状況判断・理由付き版
   const considerPinchHitter = (offenseTeam, batter) => {
+    if (offenseTeam.onlineTactics?.pinchHit === 'never' || gameState.inning < (offenseTeam.onlineTactics?.pinchHitFrom || 0)) return batter;
     const benchFielders = offenseTeam.players.filter(p =>
       p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
     );
@@ -1394,6 +1400,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
   // 守備固め判定（AI監督）- イニング終了時に呼ばれる
   const considerDefensiveReplacement = (defenseTeam) => {
+    if (defenseTeam.onlineTactics?.defensiveSub === 'never' || gameState.inning < (defenseTeam.onlineTactics?.defenseFrom || 0)) return;
     const isLeading = gameState.isTopInning
       ? gameState.score.home > gameState.score.away
       : gameState.score.away > gameState.score.home;
@@ -1517,7 +1524,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
     // 条件1: 球数制限（ロール別）
     if (!shouldChange) {
-      const pitchLimit = pitchLimitFor(currentPitcherRole, isRelieverMid, currentPitcher.pitching?.stamina);
+      const pitchLimit = tacticalPitchLimit(pitchLimitFor(currentPitcherRole, isRelieverMid, currentPitcher.pitching?.stamina), isRelieverMid, defenseTeam.onlineTactics);
       if (totalPitchesMid >= pitchLimit) {
         shouldChange = true;
         situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
@@ -1534,7 +1541,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
     // 条件3: ダメージポイント制（先発のみ）
     if (!shouldChange && !isRelieverMid) {
-      const threshold = damageThreshold(gs.inning, staminaRate);
+      const threshold = tacticalDamageLimit(damageThreshold(gs.inning, staminaRate), defenseTeam.onlineTactics);
       const currentDamage = gs.starterDamagePoints[teamKey];
       if (currentDamage >= threshold) {
         shouldChange = true;
@@ -1853,6 +1860,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
       return;
     }
 
+    const scheduledBatterId = observer ? batter.id : null;
     // AI監督: 代打を検討
     batter = considerPinchHitter(offenseTeam, batter);
 
@@ -1865,6 +1873,43 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
     observeDecisions();   // この打者に投げる投手を登板順に記録（登板時の点差つき）
     const catcher = getCurrentCatcher(defenseTeam);
     const defense = buildDefense(defenseTeam);
+
+    // 対人版から明示的に指定された時だけ観測する。通常試合の記録・判定・乱数には触れない。
+    const observed = observer ? {
+      before: { ...batter.gameStats.batting },
+      pitcherOuts: pitcher.gameStats.pitching.outs,
+      batterId: batter.id, batterName: batter.name, pitcherId: pitcher.id, pitcherName: pitcher.name,
+      offense: offenseTeam.name, defense: defenseTeam.name,
+      inning: gameState.inning, pinchHit: batter.id !== scheduledBatterId,
+      throws: pitcher.physical?.throws || 'right',
+      starter: pitcher.id === (defenseTeam === gameState.homeTeam ? homeStarter?.id : awayStarter?.id),
+      pitches: 0, twoStrikes: false, fouls: 0, result: null,
+    } : null;
+    const observeReplay = (kind, extra = {}) => {
+      if (!observer?.replay) return;
+      observer.replay({
+        kind, inning: gameState.inning, top: gameState.isTopInning,
+        outs: gameState.outs, balls: gameState.count.balls, strikes: gameState.count.strikes,
+        homeScore: gameState.score.home, awayScore: gameState.score.away,
+        batterId: batter.id, pitcherId: pitcher.id, order: batter.battingOrder,
+        bases: gameState.bases.map(r => r ? (r.id ?? true) : null),
+        stamina: pitcher.currentStamina ?? null,
+        pitcherPitches: pitcher.gameStats?.pitching?.pitches || 0,
+        homeHits: gameState.homeTeam.players.reduce((n,p) => n + (p.gameStats?.batting?.hits || 0), 0),
+        awayHits: gameState.awayTeam.players.reduce((n,p) => n + (p.gameStats?.batting?.hits || 0), 0),
+        homeErrors: gameState.homeTeam.players.reduce((n,p) => n + (p.gameStats?.fielding?.errors || 0), 0),
+        awayErrors: gameState.awayTeam.players.reduce((n,p) => n + (p.gameStats?.fielding?.errors || 0), 0),
+        ...(kind === 'matchup' ? { lineups: Object.fromEntries([offenseTeam, defenseTeam].map(t => [t.name, t.players.filter(p => p.battingOrder > 0).map(p => ({ id: p.id, order: p.battingOrder, position: p.position }))])) } : {}),
+        ...extra,
+      });
+    };
+    observeReplay('matchup', { pinchHit: batter.id !== scheduledBatterId });
+    const observeSituation = () => {
+      if (!observed) return;
+      observed.risp = !!(gameState.bases[1] || gameState.bases[2]);
+      observed.dpPossible = gameState.outs < 2 && !!gameState.bases[0];
+      observed.resultStartOuts = pitcher.gameStats.pitching.outs;
+    };
 
     let atBatOver = false;
     let pitchCount = 0;
@@ -1881,7 +1926,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
       pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
       pitcherData.gameStats.pitching.pitches++;
 
+      observeSituation();
       const buntResult = executeBunt(buntDecision, batter, pitcher, catcher, defense, gameState.bases, gameState.outs);
+      if (observed) {
+        observed.bunt = buntDecision;
+        observed.buntOutcome = buntResult.type;
+        observed.pitches++;
+        observed.result = buntResult;
+      }
 
       if (buntResult.type === 'bunt_popup') {
         batter.gameStats.batting.atBats++;
@@ -1960,6 +2012,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
     const isWalkOff = () => !gameState.isTopInning && gameState.inning >= 9
       && gameState.score.home > gameState.score.away;
+    if (buntDecision) observeReplay('bunt', { result: observed?.buntOutcome || null, completed: atBatOver });
     while (!atBatOver && pitchCount < maxPitches) {
       // 暴投・盗塁の悪送球でサヨナラの走者が還ったら、その時点で試合終了
       if (isWalkOff()) break;
@@ -1967,8 +2020,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
       // AI監督: 盗塁を検討（各球で検討、ただし1打席1回まで）
       if (pitchCount <= 3 && gameState.outs < 2 && !gameState._stolenAttempted) {
+        const stealBefore = observed ? {outs:pitcher.gameStats.pitching.outs,risp:!!(gameState.bases[1] || gameState.bases[2])} : null;
         const stealResult = attemptStolenBase(offenseTeam, defenseTeam);
+        if (observed && pitcher.gameStats.pitching.outs > stealBefore.outs) observer.runnerOut?.({...observed,risp:stealBefore.risp,outs:pitcher.gameStats.pitching.outs-stealBefore.outs});
         if (stealResult) gameState._stolenAttempted = true;
+        if (stealResult) observeReplay('steal', { success: stealResult.success, base: stealResult.base });
         if (stealResult && !stealResult.success && gameState.outs >= 3) {
           // 盗塁死で3アウトなら打席終了
           atBatOver = true;
@@ -2002,6 +2058,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
               gameState.bases[b + 1] = r;
             }
           }
+          observeReplay('wild_pitch');
         }
       }
 
@@ -2015,7 +2072,19 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
       // 一球シミュレーション（simulation-logic.jsの物理エンジンを使用）
       // 前球の記録は simulateOnePitch 内で sequence に積まれる（緩急・対角の判定に使う）
+      if (observed) {
+        observeSituation();
+        observed.twoStrikes ||= gameState.count.strikes >= 2;
+      }
       const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, sequence, offenseStrategy, defenseStrategy);
+      if (observed) {
+        observed.pitches++;
+        observed.result = result;
+        if (result.type === 'foul') {
+          observed.fouls++;
+          if (gameState.count.strikes >= 2) observed.twoStrikeFouls=(observed.twoStrikeFouls || 0)+1;
+        }
+      }
 
       // スタミナ減少
       pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
@@ -2252,6 +2321,21 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
           atBatOver = true;
           break;
       }
+      observeReplay('pitch', {
+        pitchResult: result.type,
+        result: result.isError ? 'error' : result.type === 'ball' && gameState.count.balls >= 4 ? 'walk'
+          : ['called_strike', 'swinging_strike'].includes(result.type) && gameState.count.strikes >= 3 ? 'strikeout' : result.type,
+        completed: atBatOver,
+        pitch: lastCall(sequence) ? { ...lastCall(sequence) } : null,
+      });
+    }
+
+    if (observed) {
+      const after = batter.gameStats.batting;
+      const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
+      // 盗塁死や暴投サヨナラ、球数上限の未完了打席は対戦打席へ加えない。
+      const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts > 0;
+      observer.plateAppearance({ ...observed, delta, completed, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs) });
     }
 
     // 先発投手のダメージポイント積算（先発のみに適用）
@@ -2469,7 +2553,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
           // --- 条件1: 球数制限（先発・リリーフ共通） ---
           if (!shouldChange) {
-            const pitchLimit = pitchLimitFor(currentRole, isReliever, pitcher.pitching?.stamina);
+            const pitchLimit = tacticalPitchLimit(pitchLimitFor(currentRole, isReliever, pitcher.pitching?.stamina), isReliever, team.onlineTactics);
             if (totalPitches >= pitchLimit) {
               shouldChange = true;
               situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
@@ -2502,7 +2586,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
           // --- 条件3: ダメージポイント制（先発のみ） ---
           if (!shouldChange && !isReliever && defendedThisInning) {
-            const threshold = damageThreshold(gameState.inning, staminaRate); // 延長は9回の閾値
+            const threshold = tacticalDamageLimit(damageThreshold(gameState.inning, staminaRate), team.onlineTactics); // 延長は9回の閾値
             const currentDamage = gameState.starterDamagePoints[teamKey];
             if (currentDamage >= threshold) {
               shouldChange = true;
@@ -3003,7 +3087,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
   };
 };
 
-export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false, seed = null) =>
-  seed === null ? simulateGame(homeTeamName, awayTeamName, isCupGame)
-    : withSeededRandom(seed, () => ({ ...simulateGame(homeTeamName, awayTeamName, isCupGame), rngSeed: seed }));
+export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false, seed = null, observer = null) =>
+  seed === null ? simulateGame(homeTeamName, awayTeamName, isCupGame, observer)
+    : withSeededRandom(seed, () => ({ ...simulateGame(homeTeamName, awayTeamName, isCupGame, observer), rngSeed: seed }));
 

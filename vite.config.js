@@ -14,7 +14,8 @@ export default defineConfig({
     //    起動スクリプトを二重に叩いた・前のウィンドウが残っていた、で普通に起きる。
     //    **黙って別のオリジンへ移るより、起動に失敗して気づかせる方が良い。**
     strictPort: true,
-    open: true
+    proxy: { '/api/online': 'http://127.0.0.1:3002' },
+    open: !process.env.CI
   },
   build: {
     outDir: 'dist',

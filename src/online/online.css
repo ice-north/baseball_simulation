@@ -1,0 +1,1590 @@
+/* 既存PC版のsurface/accentを共用。カード上と地色上の文字色を分ける。 */
+.online {
+  min-height: 100dvh;
+  background: var(--surface-0);
+  color: var(--ink);
+  font:
+    15px/1.6 -apple-system,
+    BlinkMacSystemFont,
+    'Hiragino Kaku Gothic ProN',
+    sans-serif;
+}
+.online *,
+.online *::before,
+.online *::after {
+  box-sizing: border-box;
+}
+.online h1,
+.online h2,
+.online h3,
+.online p {
+  margin: 0 0 12px;
+}
+.online h1 {
+  font-size: 28px;
+  font-weight: 750;
+}
+.online h2 {
+  font-size: 19px;
+  font-weight: 700;
+}
+.online h3 {
+  margin-top: 18px;
+  font-weight: 700;
+}
+.online button,
+.online input,
+.online select {
+  font: inherit;
+}
+.online button {
+  min-height: 44px;
+  border: 1px solid #5b7188;
+  background: var(--surface-1);
+  color: #f1f5f9;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.online button:hover:enabled {
+  background: #3c526b;
+}
+.online button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.online button:focus-visible,
+.online a:focus-visible,
+.online input:focus-visible,
+.online select:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.online button.online-primary {
+  background: var(--accent-strong);
+  color: #06232b;
+  border-color: var(--accent-strong);
+  font-weight: 700;
+}
+.online button.online-primary:hover:enabled {
+  background: var(--accent);
+}
+.online a {
+  color: inherit;
+  text-decoration: none;
+}
+.online a:hover {
+  text-decoration: underline;
+}
+.online-header {
+  background: var(--surface-1);
+  color: #f1f5f9;
+  padding: 18px max(22px, calc((100vw - 1200px) / 2));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.online-header nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.online-brand {
+  font-size: 24px;
+  letter-spacing: 0.06em;
+  font-weight: 800;
+}
+.online-brand span {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: #cad5e2;
+}
+.online main {
+  max-width: 1240px;
+  padding: 20px 22px 50px;
+  margin: auto;
+}
+.online-card {
+  background: var(--surface-2);
+  color: #f1f5f9;
+  border: 1px solid #4f6984;
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 3px 9px #10203912;
+  min-width: 0;
+}
+.online-season {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 16px 0 10px;
+}
+.online-season p,
+.online-eyebrow {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-sub);
+}
+.online-card .online-eyebrow {
+  color: var(--accent);
+}
+.online-season h1 {
+  margin-bottom: 0;
+}
+.online-season small {
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+  padding: 3px 9px;
+  margin-left: 8px;
+  border-radius: 16px;
+  color: #e5ecf6;
+  background: var(--surface-1);
+  vertical-align: middle;
+}
+.online-next {
+  text-align: right;
+  font-size: 11px;
+}
+.online-next strong {
+  display: inline-block;
+  margin: 0 12px;
+  font-size: 17px;
+}
+.online-muted {
+  font-size: 13px;
+  color: var(--ink-sub);
+}
+.online-card .online-muted {
+  color: #d0d9e5;
+}
+.online-dev {
+  color: var(--ink-sub);
+  font-size: 11px;
+  margin-bottom: 5px !important;
+}
+.online-alert {
+  background: #5b3028;
+  color: #ffded2;
+  padding: 12px 16px;
+  border: 1px solid #b67863;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.online-alert button {
+  margin-left: 12px;
+}
+.online-success {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  padding: 9px 16px;
+  background: #1f453a;
+  color: #c7f2dc;
+  border: 1px solid #6aa08d;
+  border-radius: 8px;
+  z-index: 30;
+  box-shadow: 0 3px 12px #0003;
+}
+.online-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.online-form-width {
+  max-width: 740px;
+}
+.online table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.online td,
+.online th {
+  padding: 11px 6px;
+  text-align: center;
+  border-bottom: 1px solid #536b85;
+}
+.online th:first-child {
+  text-align: left;
+}
+.online thead {
+  color: #d0d9e5;
+}
+.online-own {
+  background: var(--accent-soft);
+}
+.online-rank {
+  display: inline-block;
+  margin-right: 9px;
+  color: #c4d4e5;
+}
+.online-score {
+  padding: 14px 0;
+  border-bottom: 1px solid #536b85;
+}
+.online-score small {
+  color: #d0d9e5;
+  font-size: 12px;
+}
+.online-score div {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.online-score div span:last-child {
+  text-align: right;
+}
+.online-score strong {
+  font-size: 24px;
+  color: #fff;
+}
+.online label {
+  display: block;
+  margin: 14px 0;
+  font-size: 14px;
+}
+.online input:not([type='checkbox']),
+.online select {
+  width: 100%;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: var(--surface-1);
+  color: #f1f5f9;
+  border: 1px solid #71839b;
+  min-height: 44px;
+}
+.online input[type='number'] {
+  max-width: 110px;
+  display: block;
+}
+.online .online-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+.online input[type='checkbox'] {
+  width: 19px;
+  height: 19px;
+  accent-color: var(--accent-strong);
+}
+.online-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 18px;
+}
+.online-login {
+  max-width: 580px;
+  margin: 50px auto;
+  padding: 36px;
+}
+.online-ready {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+  margin: 12px 0;
+}
+.online-ready li {
+  background: var(--surface-1);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.online-candidates {
+  max-height: 430px;
+  overflow-y: auto;
+  border: 1px solid #536b85;
+  padding: 0 10px;
+  border-radius: 8px;
+}
+.online-candidate {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 0;
+  border-bottom: 1px solid #536b85;
+}
+.online-candidate span {
+  flex: 1;
+}
+.online-candidate small {
+  display: block;
+  font-size: 12px;
+  color: #d0d9e5;
+}
+.online-lineup {
+  display: grid;
+  grid-template-columns: 20px 20px minmax(0, 1fr) 44px 44px;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+.online-lineup button {
+  padding: 6px;
+}
+.online-working {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  background: #172736;
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  z-index: 40;
+  width: max-content;
+  max-width: 94vw;
+}
+.online-page-nav,
+.online-segments {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.online-page-nav {
+  margin: 18px 0 22px;
+}
+.online-page-nav button {
+  min-width: 86px;
+}
+.online-page-nav button[aria-current],
+.online-segments button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.online-page-nav button[aria-current] {
+  background: var(--surface-1);
+}
+.online-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.online-spaced {
+  margin-top: 24px !important;
+}
+.online-clock-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--ink-sub);
+  font-size: 12px;
+}
+.online-clock-info button {
+  min-height: 32px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.online-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.online-pager button {
+  min-width: 48px;
+}
+.online-news-list article {
+  padding: 12px 0;
+  border-bottom: 1px solid #536b85;
+  font-size: 14px;
+}
+.online-news-list article span {
+  display: block;
+  color: #d0d9e5;
+  font-size: 12px;
+}
+.online-history-row {
+  padding-top: 14px;
+}
+.online-empty {
+  padding: 40px 0;
+  color: #d0d9e5;
+}
+.online-overlay {
+  position: fixed;
+  inset: 0;
+  background: #111b2ccc;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.online-overlay .online-card {
+  max-width: 440px;
+  margin: 0;
+}
+.online-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+@media (max-width: 767px) {
+  .online {
+    font-size: 14px;
+  }
+  .online-header {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .online-brand {
+    font-size: 18px;
+  }
+  .online-brand span {
+    font-size: 10px;
+  }
+  .online-header nav {
+    gap: 10px;
+    font-size: 11px;
+  }
+  .online-header button {
+    padding: 6px 9px;
+    font-size: 11px;
+  }
+  .online main {
+    padding: 8px 12px 88px;
+  }
+  .online-card {
+    padding: 16px 12px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+  .online-season {
+    align-items: center;
+    margin: 8px 0 4px;
+    gap: 8px;
+  }
+  .online h1 {
+    font-size: 23px;
+  }
+  .online-season h1 small {
+    font-size: 10px;
+    padding: 2px 6px;
+    margin-left: 5px;
+  }
+  .online-season p {
+    font-size: 10px;
+    margin-bottom: 3px;
+  }
+  .online-next strong {
+    display: block;
+    margin: 1px 0 3px;
+    font-size: 14px;
+  }
+  .online-next {
+    flex-shrink: 0;
+    font-size: 10px;
+  }
+  .online-next button {
+    min-height: 32px;
+    padding: 3px 12px;
+    font-size: 12px;
+  }
+  .online table {
+    font-size: 12px;
+  }
+  .online td,
+  .online th {
+    padding: 12px 3px;
+  }
+  .online-rank {
+    margin-right: 6px;
+  }
+  .online-lineup {
+    grid-template-columns: 16px 16px minmax(0, 1fr) 44px 44px;
+    gap: 5px;
+    margin: 3px 0;
+  }
+  .online-lineup-card .online-muted {
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .online-login {
+    padding: 25px 18px;
+    margin: 25px auto;
+  }
+  .online-login h1 {
+    font-size: 23px;
+  }
+  .online-score {
+    padding: 12px 0;
+  }
+  .online-score div {
+    font-size: 12px;
+    gap: 5px;
+  }
+  .online-score strong {
+    font-size: 23px;
+  }
+  .online-alert {
+    font-size: 12px;
+  }
+  .online-alert button {
+    margin: 6px 0 0;
+  }
+  .online-clock-info {
+    margin-bottom: 12px;
+    font-size: 11px;
+  }
+  .online-clock-info button {
+    min-height: 32px;
+  }
+  .online-next-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    background: var(--surface-1);
+    color: #fff;
+    font-size: 13px;
+  }
+  .online-news-link {
+    display: block;
+    width: 100%;
+    text-align: left;
+  }
+  .online-back {
+    margin-bottom: 10px;
+  }
+  .online-success {
+    top: 70px;
+    right: 12px;
+    font-size: 12px;
+  }
+  .online-lineup-card .online-actions,
+  .online-decision .online-actions {
+    position: fixed;
+    bottom: 65px;
+    left: 0;
+    right: 0;
+    z-index: 15;
+    background: var(--surface-1);
+    padding: 10px 12px;
+    margin: 0;
+    border-top: 1px solid #63778f;
+  }
+  .online-lineup-card .online-actions button,
+  .online-decision .online-actions button {
+    flex: 1;
+  }
+  .online:has(.online-lineup-card:not([hidden])) main,
+  .online:has(.online-decision) main {
+    padding-bottom: 150px;
+  }
+  .online-ready {
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .online-ready li {
+    font-size: 11px;
+    padding: 5px 7px;
+  }
+  .online-decision p {
+    font-size: 12px;
+  }
+  .online-news-list article {
+    padding: 8px 0;
+  }
+  .online-pager {
+    margin-top: 12px;
+  }
+}
+/* PCの主ナビは既存管理画面と同じ左列。詳細操作は選んだ画面だけに置く。 */
+.online-desktop .online-header {
+  margin-left: 224px;
+  padding: 16px 22px;
+}
+.online-desktop main {
+  max-width: 1240px;
+  margin-left: 224px;
+  margin-right: auto;
+}
+.online-desktop .online-page-nav {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 224px;
+  margin: 0;
+  padding: 20px 12px;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-1);
+  border-right: 1px solid #536b85;
+}
+.online-desktop .online-page-nav button {
+  text-align: left;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 7px;
+  padding-left: 15px;
+}
+.online-desktop .online-page-nav button[aria-current] {
+  border-left-color: var(--accent);
+  background: #103d49;
+}
+.online-nav-context {
+  color: #f1f5f9;
+  margin: 0 0 18px;
+  padding: 0 6px 18px;
+  border-bottom: 1px solid #536b85;
+}
+.online-nav-context strong {
+  display: block;
+  font-size: 14px;
+  color: var(--accent);
+}
+.online-nav-context small {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.online-overlay {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: 0;
+}
+.online-overlay:not([open]) {
+  display: none;
+}
+.online-overlay::backdrop {
+  background: transparent;
+}
+
+.online-form-fields {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.online-edit-notice {
+  border-left: 3px solid var(--accent);
+  padding: 10px;
+  margin-bottom: 12px;
+  background: var(--accent-soft);
+}
+
+.online .online-player-name {
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+.online-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.online-card-heading h2 {
+  margin: 0;
+}
+.online-mobile .online-card-heading button {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+.online-stat-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+  font-weight: normal;
+}
+.online-stat-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #4f9bc5;
+  border-bottom-color: #236794;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.25;
+  color: #153e67;
+  background: linear-gradient(#effbff, #b8e3ff);
+  box-shadow: inset 0 1px 0 #ffffffc0;
+  text-shadow: 0 1px 0 #ffffff80;
+  white-space: nowrap;
+}
+.online-stat-bad {
+  color: #842137;
+  background: linear-gradient(#fff1f1, #ffc0c9);
+  border-color: #cf7c89;
+  border-bottom-color: #9d4357;
+}
+.online-player-dialog {
+  background: var(--surface-2);
+  color: #f1f5f9;
+  border: 1px solid #668196;
+  border-radius: 10px;
+  padding: 16px;
+  width: min(430px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+}
+.online-player-dialog::backdrop {
+  background: #0f172ab3;
+}
+.online-player-dialog header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.online-player-dialog h2 {
+  margin: 0 0 5px;
+  font-size: 18px;
+}
+.online-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 18px 0 0;
+}
+.online-stat-grid dt {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-stat-grid dd {
+  margin: 3px 0 0;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.online-compact-roster article {
+  padding: 4px 0;
+  border-bottom: 1px solid #668196;
+}
+.online-compact-roster article > small {
+  margin-left: 10px;
+  color: #cbd5e1;
+}
+.online-mobile .online-lineup .online-player-name {
+  font-size: 12px;
+  line-height: 1.4;
+}
+.online-mobile:has(.online-compact-roster) .online-season,
+.online-mobile:has(.online-compact-roster) .online-clock-info {
+  display: none;
+}
+
+/* スマホの対人画面は一枚の面。常設する操作は戻る・ホームだけ。 */
+.online-mobile.online-compact-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-2);
+  color: #f1f5f9;
+}
+.online-mobile.online-compact-shell main {
+  height: 100dvh;
+  min-height: 0;
+  max-width: none;
+  padding: 0 0 calc(48px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.online-compact-shell main > * {
+  flex-shrink: 0;
+}
+.online-mobile.online-compact-shell .online-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 8px 12px;
+  margin: 0;
+}
+.online-mobile-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding: 8px 12px;
+}
+.online-mobile-overview strong {
+  width: 100%;
+  font-size: 15px;
+}
+.online-mobile-overview small {
+  align-self: center;
+  color: #cbd5e1;
+}
+.online-home-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 12px 6px;
+}
+.online-home-actions .online-dot {
+  margin-left: 6px;
+}
+.online-compact-shell .online-news-link {
+  border: 0;
+  border-radius: 0;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.online-compact-shell:has(.online-lineup-card:not([hidden])) main,
+.online-compact-shell:has(.online-decision) main {
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
+}
+.online-compact-shell .online-lineup-card .online-actions,
+.online-compact-shell .online-decision .online-actions {
+  bottom: calc(48px + env(safe-area-inset-bottom));
+  padding-bottom: 10px;
+}
+.online-mobile.online-compact-shell .online-compact-roster {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px;
+}
+.online-roster-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+}
+.online-roster-toolbar small {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+.online-roster-toolbar .online-segments {
+  margin: 0;
+}
+.online-roster-toolbar .online-segments button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 14px;
+}
+.online-roster-toolbar .online-segments button[aria-pressed='true'] {
+  border-bottom: 2px solid var(--accent);
+}
+.online-roster-columns {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #cbd5e1;
+  min-height: 44px;
+  border-bottom: 1px solid #668196;
+}
+.online-roster-rows {
+  flex: 1;
+  min-height: 0;
+}
+.online-compact-roster .online-roster-rows article {
+  height: 44px;
+  padding: 0;
+  border-bottom: 1px solid #536b85;
+}
+.online .online-roster-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  height: 44px;
+  text-decoration: none;
+  gap: 8px;
+}
+.online-roster-person {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+.online-roster-name {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  line-height: 20px;
+}
+.online-roster-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.online-roster-name .online-condition,
+.online-roster-name small {
+  flex-shrink: 0;
+}
+.online-lineup-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.online-lineup-picker select {
+  min-width: 0;
+  flex: 1;
+}
+.online-lineup-picker .online-player-name {
+  flex-shrink: 0;
+}
+.online-player-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.online-player-tabs button {
+  min-width: 80px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.online-player-tabs button[aria-pressed='true'] {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+.online-ability-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.online-ability-select select {
+  width: auto;
+  min-width: 140px;
+  padding: 4px 8px;
+}
+.online-player-abilities .online-stat-grid dd {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.online-player-abilities .online-profile-grid {
+  grid-template-columns: 1fr 1fr;
+}
+.online-player-abilities .online-profile-grid dd {
+  font-size: 14px;
+}
+.online-batter-type {
+  margin: 12px 0 4px !important;
+  font-size: 14px;
+}
+.online-player-abilities > small,
+.online-zone-legend,
+.online-player-abilities li {
+  font-size: 12px;
+}
+.online-zone-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 22px);
+  gap: 2px;
+  margin: 10px auto;
+  width: max-content;
+}
+.online-zone-grid span {
+  width: 22px;
+  height: 22px;
+}
+.online-zone-hot {
+  background: #c54750;
+}
+.online-zone-warm {
+  background: #b77544;
+}
+.online-zone-neutral {
+  background: #607284;
+}
+.online-zone-cool {
+  background: #365d98;
+}
+.online-zone-cold {
+  background: #3b79cb;
+}
+.online-zone-strike {
+  outline: 1px solid #e1eaf2;
+  outline-offset: -1px;
+}
+.online-zone-legend {
+  text-align: center;
+}
+.online-team-brief {
+  font-size: 12px;
+  padding: 4px 12px;
+}
+.online-team-brief p {
+  margin: 0 0 3px;
+}
+.online-team-brief .online-player-name {
+  min-height: 32px;
+}
+.online-card-heading select {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.online-ability-grade {
+  font-weight: 750;
+}
+.online-game-dialog {
+  width: min(640px, calc(100% - 24px));
+}
+.online-player-dialog .online-stat-tools select {
+  min-width: 0;
+  width: 0;
+  flex: 1;
+  font-size: 12px;
+}
+.online-record-table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.online-record-table th:first-child {
+  width: 36%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-record-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.online-record-table th,
+.online-record-table td {
+  padding: 6px 2px;
+  height: 44px;
+}
+.online-record-table th button {
+  padding: 0;
+  border: 0;
+  font-size: 10px;
+  min-width: 0;
+  width: 100%;
+}
+.online-game-history-list article {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 12px;
+  border-bottom: 1px solid #536b85;
+}
+.online-game-history-list article > span {
+  flex: 1;
+  min-width: 0;
+}
+.online-game-history-list article button {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 4px;
+}
+.online-roster-name small {
+  font-size: 11px;
+  margin-left: 8px;
+  color: #cbd5e1;
+}
+.online-roster-values {
+  display: grid;
+  grid-template-columns: repeat(4, 34px);
+  gap: 4px;
+  width: 148px;
+  flex: 0 0 148px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.online-roster-values > span {
+  white-space: nowrap;
+}
+.online-roster-values .online-stat-percent {
+  font-size: 11px;
+}
+.online-roster-values .online-stat-condition {
+  font-size: 11px;
+}
+.online-roster-columns button {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  height: 44px;
+  font-size: 10px;
+  background: transparent;
+  position: relative;
+}
+.online-roster-columns > button {
+  font-size: 11px;
+}
+.online-roster-columns button[aria-pressed='true'] {
+  color: var(--accent);
+}
+.online-sort-direction {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  font-size: 8px;
+  line-height: 9px;
+}
+.online .online-stat-group {
+  width: 104px;
+  flex: 0 0 104px;
+  min-width: 0;
+  padding: 4px;
+  font-size: 12px !important;
+}
+.online-stat-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.online-stat-tools .online-segments {
+  margin: 0;
+}
+.online-roster-toolbar > div:first-child {
+  flex: 0 0 60px;
+  min-width: 60px;
+  white-space: nowrap;
+}
+.online-stat-note {
+  display: block;
+  font-size: 10px;
+  line-height: 18px;
+  min-height: 18px;
+  color: #cbd5e1;
+}
+.online-roster-row .online-stat-label {
+  padding: 1px 3px;
+}
+.online-condition {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  margin: 0 2px;
+  font-weight: bold;
+}
+.online-condition-4 {
+  color: #ff9caf;
+}
+.online-condition-3 {
+  color: #ffc678;
+}
+.online-condition-2 {
+  color: #f8e57d;
+}
+.online-condition-1 {
+  color: #98d8ff;
+}
+.online-condition-0 {
+  color: #c1b1ff;
+}
+.online-condition-unknown {
+  color: #bdc8d4;
+}
+.online-desktop .online-roster-values {
+  width: 48%;
+  flex-basis: 48%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  font-size: 14px;
+}
+.online-desktop .online-roster-columns button {
+  font-size: 12px;
+}
+.online-desktop .online-compact-roster {
+  padding: 12px 0;
+}
+.online-desktop .online-roster-rows {
+  height: auto;
+}
+.online-roster-row .online-stat-labels {
+  display: flex;
+  flex-wrap: nowrap;
+  margin: 0;
+  line-height: 18px;
+}
+.online-compact-roster .online-pager {
+  margin: 0;
+  min-height: 44px;
+  padding: 0;
+}
+.online-mobile .online-player-dialog {
+  width: 100%;
+  max-width: none;
+  margin: auto 0 0;
+  border: 0;
+  border-radius: 0;
+  padding: 12px;
+  max-height: 100dvh;
+}
+.online-mobile .online-stat-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 8px;
+  margin-top: 12px;
+}
+.online-mobile .online-stat-grid dd {
+  font-size: 18px;
+}
+.online-mobile .online-profile-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.online-mobile .online-stat-grid dt {
+  font-size: 11px;
+}
+.online-compact-shell .online-card-heading p {
+  margin: 0;
+  font-size: 12px;
+}
+.online-mobile.online-compact-shell .online-card td,
+.online-mobile.online-compact-shell .online-card th {
+  padding: 7px 4px;
+}
+
+.online-mobile-controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  height: calc(48px + env(safe-area-inset-bottom));
+  padding: 0 0 env(safe-area-inset-bottom);
+  background: var(--surface-1);
+}
+.online-mobile-controls button {
+  flex: 1;
+  height: 48px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  font-size: 24px;
+}
+.online-roster-toolbar h2 {
+  font-size: 14px;
+  line-height: 18px;
+  margin: 0;
+}
+.online-roster-toolbar > div:first-child {
+  line-height: 15px;
+}
+.online-mobile-menu-panel {
+  background: var(--surface-2);
+  color: #f1f5f9;
+  width: 100%;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  margin: auto 0 0;
+  padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+}
+.online-mobile-menu-panel::backdrop {
+  background: #0f172ab3;
+}
+.online-mobile-menu-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.online-mobile-menu-panel h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.online-mobile-menu-panel > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.online-mobile-menu-panel a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+.online-mobile-menu-panel small {
+  display: block;
+  font-size: 10px;
+  color: #cbd5e1;
+  margin-top: 8px;
+}
+
+.online-check-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.online-check-info .online-check {
+  flex: 1;
+}
+
+/* 試合カード：日付・自球団の勝敗・成績ボタンを1行、責任投手は区切り付きの1行。 */
+.online-score header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+.online-score div span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.online-score .online-score-decisions {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.online .online-record-button {
+  min-height: 36px;
+  margin-left: auto;
+  padding: 2px 12px;
+  font-size: 12px;
+}
+.online-outcome {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+}
+.online-outcome.is-win {
+  background: #0e7490;
+  color: #ecfeff;
+}
+.online-outcome.is-loss {
+  background: #9f1239;
+  color: #fff1f2;
+}
+.online-outcome.is-draw {
+  background: #475569;
+  color: #f1f5f9;
+}
+.online-outcome.is-none {
+  visibility: hidden;
+}
+/* 過去の試合：日付・勝敗・対戦を1行にして、6試合が縦スクロールなしで収まるようにする。 */
+.online-game-history-list article {
+  display: grid;
+  grid-template-columns: 38px 22px minmax(0, 1fr) auto;
+}
+.online-game-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.online-game-line b,
+.online-game-summary strong {
+  font-variant-numeric: tabular-nums;
+}
+.online-game-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.online-game-summary small {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+.online-game-summary strong {
+  font-size: 18px;
+}
+.online-game-dialog {
+  min-height: min(420px, 70dvh);
+}
+.online-record-table th button {
+  background: transparent;
+  color: #cbd5e1;
+  font-weight: 650;
+}
+.online-record-table th button[aria-pressed='true'] {
+  color: var(--accent);
+}
+.online-player-dialog header {
+  margin-bottom: 8px;
+}
+.online-player-dialog .online-stat-note {
+  margin: 2px 0 8px;
+}
+.online-game-dialog .online-stat-tools .online-segments button {
+  min-width: 56px;
+  padding: 6px 10px;
+}
+.online .online-history-button {
+  margin-top: 12px;
+}
+.online-player-dialog .online-segments {
+  margin-bottom: 10px;
+}
+.online-player-dialog .online-stat-labels {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 4px 0 10px;
+}
+/* スマホのリーグ便りは1行1人にして、1ページ8人をスクロールなしで見せる。 */
+.online-news-list.is-compact article {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+.online-news-list.is-compact article b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-news-list.is-compact article span {
+  flex-shrink: 0;
+}
+
+/* 球団を切り替えて同じ一覧を使い、スマホで縦に積み増さない。 */
+.online-team-roster { min-width: 0; }
+.online-team-selector { display: flex; gap: 8px; align-items: center; padding: 4px 0 8px; }
+.online-team-selector select { min-width: 0; max-width: 100%; }
+.online-team-selector small { white-space: nowrap; }
+.online-mobile.online-compact-shell .online-team-roster { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.online-mobile .online-team-selector { padding: 4px 12px; }
+.online-mobile .online-team-selector select { flex: 1; width: 0; }
+.online-mobile .online-team-roster > .online-compact-roster { flex: 1; min-height: 0; }
+
+.online-mobile .online-roster-toolbar > div:first-child select { width: 126px; max-width: 100%; font-size: 12px; padding: 3px; min-height: 28px; }
+
+/* 通常ゲームと同じ球場SVG・左右のメンバー表・電光掲示板で観戦する。 */
+.online-replay-launch { display: flex; gap: 8px; margin-bottom: 8px; }
+.online-replay-dialog { width: min(1740px, 97vw); max-width: 97vw; height: 95dvh; max-height: 95dvh; }
+.online-replay-controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.online-replay-controls input { flex: 1; min-width: 100px; }
+.online-replay-board { margin: 8px 0; padding: 8px; background: #020203; color: #fb923c; border: 2px solid #374151; border-radius: 8px; font-family: monospace; }
+.online-replay-board table { width: 100%; text-align: center; }
+.online-replay-board th, .online-replay-board td { padding: 3px; color: #fb923c; }
+.online-replay-board > strong { font-size: 18px; color: #fdba74; }
+.online-replay-board p { margin: 4px 0 0; }
+.online-replay-layout { display: grid; grid-template-columns: 3fr 5fr 3fr; gap: 10px; align-items: start; }
+.online-replay-team { padding: 8px; background: var(--surface-2); min-width: 0; border-radius: 8px; }
+.online-replay-team h3 { font-size: 15px; margin: 0 0 8px; }
+.online-replay-team ol { margin: 0; padding: 0; list-style: none; }
+.online-replay-team li { display: grid; grid-template-columns: 20px 24px 1fr 24px 24px; align-items: center; gap: 3px; min-height: 34px; border-bottom: 1px solid #ffffff18; }
+.online-replay-team li button { border: 0; padding: 3px 0; background: transparent; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-replay-active { background: var(--accent-soft); }
+.online-replay-team details { margin-top: 10px; }
+.online-replay-team details > button { display: block; padding: 4px; }
+.online-replay-center { min-width: 0; }
+.online-replay-center svg { max-height: 330px; }
+.online-replay-batter { background: var(--surface-2); padding: 8px; border-radius: 8px; }
+.online-replay-batter small { margin-left: 10px; }
+.online-replay-batter dl { display: flex; gap: 16px; margin: 6px 0 0; }
+.online-replay-batter dd { margin: 0; font-variant-numeric: tabular-nums; }
+.online-replay-log { max-height: 120px; overflow: auto; padding: 6px; background: var(--surface-2); margin: 8px 0; }
+.online-replay-log p { margin: 2px 0; font-size: 12px; }
+@media (max-width: 767px) { .online-replay-launch { display: none; } }
+
+.online-tactics-grid, .online-pitcher-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+.online-tactics-grid label, .online-pitcher-role-grid label { display: grid; gap: 6px; min-width: 0; }
+.online-tactics-grid select, .online-pitcher-role-grid select { width: 100%; }
+.online-pregame-settings > p { color: #cbd5e1; font-size: 13px; }
+
+.online-replay-center { position: relative; }
+.online-replay-pitch-zone { position: absolute; right: 0; top: 0; z-index: 1; }
+.online-replay-applied { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.online-replay-applied dd { margin: 0; }
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-values { width: 75%; flex-basis: 75%; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-person { max-width: 25%; }
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-columns > button { width: 25%; }
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-columns button { font-size: 11px; padding-left: 2px; padding-right: 2px; }
+
+.online-replay-dialog > header { position: sticky; top: 0; z-index: 6; background: var(--surface-2); }
+.online-replay-dialog > .online-replay-launch { position: sticky; top: 56px; z-index: 5; background: var(--surface-2); }
+.online-replay-dialog .online-replay-controls { position: sticky; top: 108px; z-index: 4; background: var(--surface-2); padding: 4px 0; }
+@media (min-width: 768px) { .online-game-dialog:not(.online-replay-dialog) { width: min(1240px, 96vw); max-width: 96vw; } }
+.online-replay-controls select { width: auto; flex: 0 0 110px; }
+.online-replay-controls input[type='range'] { width: auto; flex: 1; min-width: 140px; }
+.online-replay-controls button { min-height: 34px; font-size: 12px; padding: 4px 8px; }
+/* スマホの采配は項目ごとのパネル。共通の下書きを使い、画面移動では送信しない。 */
+.online-mobile-panel { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; padding: 12px; border: 0; color: #f1f5f9; background: var(--surface-2); }
+.online-mobile-panel[open] { display: flex; flex-direction: column; gap: 8px; }
+.online-mobile-panel::backdrop { background: #0009; }
+.online-mobile-panel > header { flex: 0 0 auto; }
+.online-mobile-panel > header h2 { font-size: 18px; margin: 0; }
+.online-mobile-panel-content { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.online-mobile-panel-content > select { flex-shrink: 0; }
+.online-mobile-tactic-fields { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; }
+.online-mobile-tactic-fields:empty { display: none; }
+.online-mobile-tactic-fields label { display: grid; gap: 3px; font-size: 13px; margin: 0; }
+.online-mobile-panel select { font-size: 16px; }
+.online-mobile-tactic-note { font-size: 12px; margin: 0 !important; color: #cbd5e1; }
+.online-mobile-role-list { flex: 1; min-height: 0; }
+.online-mobile-role-list article { min-height: 58px; padding: 6px 0; border-bottom: 1px solid #ffffff24; }
+.online-mobile-role-list article > div { display: flex; align-items: center; gap: 8px; }
+.online-mobile-role-list small { font-size: 12px; }
+.online-mobile-panel > footer { flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom); }
+.online-mobile-panel > footer > small { display: block; font-size: 12px; margin-bottom: 6px; }
+.online-mobile-panel > footer > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* モバイルの試合経過は、回/表示粒度とページ送りで全投球を確認できる。 */
+.online-mobile-replay { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 6px; }
+.online-mobile-replay-tools { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.online-mobile-replay-tools select { width: 85px; padding: 4px; flex-shrink: 0; }
+.online-mobile-replay-tools button { flex: 1; padding: 4px; font-size: 12px; white-space: nowrap; }
+.online-mobile-play-state { padding: 8px; border-radius: 5px; background: #020203; color: #fb923c; flex-shrink: 0; }
+.online-mobile-play-state > strong { display: block; text-align: center; font-size: 16px; }
+.online-mobile-play-state p { margin: 3px 0; font-size: 11px; }
+.online-mobile-play-state p span { display: block; overflow-wrap: anywhere; }
+.online-mobile-runners { display: flex; gap: 6px; font-size: 11px; }
+.online-mobile-runners span { flex: 1; text-align: center; color: #b1bdcd; }
+.online-mobile-runners .is-occupied { color: #facc15; }
+.online-mobile-play-list { flex: 1; min-height: 44px; overflow: hidden; }
+.online-mobile-play-list button { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px; width: 100%; height: 44px; border-radius: 0; border: 0; border-bottom: 1px solid #ffffff24; padding: 4px; align-items: center; gap: 4px; text-align: left; font-size: 12px; }
+.online-mobile-play-list button > span, .online-mobile-play-list button > b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-mobile-play-list button[aria-current='true'] { background: var(--accent-soft); outline: 1px solid var(--accent); outline-offset: -1px; }
+.online-mobile-replay > small { font-size: 11px; flex-shrink: 0; }
+.online-mobile-replay .online-pager { flex-shrink: 0; margin: 0; padding: 0; min-height: 44px; }
+.online-mobile-replay-footer { display: flex; gap: 8px; flex-shrink: 0; }
+.online-mobile-replay-footer .online-pager { flex: 1; }
+.online-replay-launch button[aria-pressed='true'], .online-mobile-replay-tools button[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); color: #67e8f9; }
+@media (max-width: 767px) {
+  .online-game-dialog .online-replay-launch { display: flex; margin: 0 0 4px; gap: 4px; }
+  .online-game-dialog .online-replay-launch button { flex: 1; padding: 4px 8px; min-height: 36px; font-size: 12px; }
+  .online-game-dialog.online-mobile-replay-dialog { height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); overflow: hidden; }
+  .online-mobile-replay-dialog[open] { display: flex; flex-direction: column; }
+  .online-mobile-replay-dialog > header, .online-mobile-replay-dialog > .online-replay-launch { flex-shrink: 0; }
+}

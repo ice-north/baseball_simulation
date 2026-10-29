@@ -94,10 +94,10 @@ export const PositionControl = ({ position, label, defense, setDefense }) => {
 
 // --- renderBases (フィールドSVG + ポジション設定UI) ---
 // Returns JSX. Caller should invoke as: <RenderBases defense={...} setDefense={...} bases={...} />
-export const RenderBases = ({ defense, setDefense, bases }) => (
+export const RenderBases = ({ defense, setDefense, bases, readOnly = false }) => (
   <div className="relative w-full max-w-2xl mx-auto">
     {/* 全ポジション一括設定 */}
-    <div className="bg-gray-800/60 border border-gray-700/50 p-4 rounded-xl mb-4">
+    {!readOnly && <div className="bg-gray-800/60 border border-gray-700/50 p-4 rounded-xl mb-4">
       <h4 className="font-bold text-sm mb-3 text-gray-300">全ポジション一括設定</h4>
       <div className="grid grid-cols-1 gap-3">
         <div>
@@ -179,7 +179,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
           />
         </div>
       </div>
-    </div>
+    </div>}
 
     <svg viewBox="0 0 400 350" className="w-full h-full">
       {/* スタジアム外周（グレー） */}
@@ -292,7 +292,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
     </svg>
 
     {/* ポジション別パラメータ設定UI */}
-    <div className="absolute inset-0 pointer-events-none">
+    {!readOnly && <div className="absolute inset-0 pointer-events-none">
       {/* 投手 */}
       <div className="absolute pointer-events-auto" style={{left: '48%', top: '58%'}}>
         <PositionControl position="pitcher" label="投" defense={defense} setDefense={setDefense} />
@@ -337,7 +337,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
       <div className="absolute pointer-events-auto" style={{left: '71%', top: '28%'}}>
         <PositionControl position="right" label="右" defense={defense} setDefense={setDefense} />
       </div>
-    </div>
+    </div>}
   </div>
 );
 

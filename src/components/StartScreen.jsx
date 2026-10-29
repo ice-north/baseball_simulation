@@ -403,6 +403,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                 はじめから
               </button>
             </div>
+            {window.location.protocol.startsWith('http') && <a href="/online" className="block mt-3 w-full text-center text-cyan-200 hover:text-white py-3 rounded-lg border border-cyan-700/60">オンラインペナント</a>}
 
             <div className="border-t border-gray-700/60 my-3" />
 
