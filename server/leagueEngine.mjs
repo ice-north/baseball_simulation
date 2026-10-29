@@ -609,7 +609,10 @@ export function advanceLeagueDay(league, operationId, now) {
     try {
       season = simulateScheduledGamesOnDate(
         league.season,
-        createRecorder(league, TEAMS_DATA),
+        // ⚠ 観戦記録は既定で残さない（容量）。`ONLINE_RECORD_REPLAY=1` で有効
+        createRecorder(league, TEAMS_DATA, {
+          replay: process.env.ONLINE_RECORD_REPLAY === '1',
+        }),
       ).data;
     } finally {
       for (const restore of restoreRotations) restore();

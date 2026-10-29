@@ -64,7 +64,19 @@ export function recordForPlayer(
 }
 const splitAdd = (splits, key, line) =>
   addCounts((splits[key] ||= zeroLine()), line);
-export function createRecorder(league, teams) {
+import { createReplay } from './replayRecord.mjs';
+
+/**
+ * `replay`: 1球ごとの観戦記録を残すか。**既定は残さない**。
+ *
+ * ⚠ 実測で1試合218KBのうち182KB＝84%を占め、42球団3024試合では670MBとなり
+ *    `JSON.stringify` の上限（約512MB）を超えて保存が成立しない。
+ *    成績だけなら1試合30KB・1シーズン89MBで収まる。
+ * ⚠ 観戦の画面そのものは残してある。球団数の少ないリーグで観戦したいときは
+ *    `ONLINE_RECORD_REPLAY=1` で有効にする。容量は球団数と試合数に比例するので、
+ *    有効にする前に上の数字で見積もること。
+ */
+export function createRecorder(league, teams, { replay: keepReplay = false } = {}) {
   const season = seasonFor(league);
   if (!completeCoverage(league, season)) season.complete = false;
   // IDは対人サーバーだけで付与。移籍・年度更新・退団プールへの複製でも引き継ぐ。
@@ -79,17 +91,21 @@ export function createRecorder(league, teams) {
   return {
     begin(game) {
       const events = [];
-      // ⚠ **観戦リプレイ（1球ごとの記録）は保存しない**。
-      //    実測で1試合218KBのうち182KB＝84%を占め、42球団3024試合では670MBになり、
-      //    `JSON.stringify` の上限（約512MB）を超えて保存そのものが成立しない。
-      //    成績だけ残す方針に決めた（容量は1試合30KBへ）。
-      //    ⚠ `start` / `replay` / `pitchDetail` を**渡さない**ことで記録が飛ぶ。
-      //    `autoSimulation` 側は `observer?.replay` のように保護されている。
-      //    箱の `replay` は null になり、画面は「記録が無い試合」として扱う
-      //    （元から旧試合のためにその経路がある）。
-      //    戻すときはここで `createReplay()` を使う形に直すだけでよい。
+      // ⚠ 観戦記録を残さないときは `start` / `replay` / `pitchDetail` を**渡さない**。
+      //    `autoSimulation` 側は `observer?.replay` のように保護されているので、
+      //    渡さなければ記録が飛ぶ。箱の `replay` は null になり、画面は
+      //    「記録が無い試合」として扱う（元から旧試合のためにその経路がある）。
+      const replay = keepReplay ? createReplay() : null;
       return {
         events,
+        ...(replay
+          ? {
+              replayRecord: replay.value,
+              start: replay.start,
+              replay: replay.frame,
+              pitchDetail: replay.pitchDetail,
+            }
+          : {}),
         plateAppearance(event) {
           events.push(event);
         },

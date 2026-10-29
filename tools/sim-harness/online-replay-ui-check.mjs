@@ -1,4 +1,7 @@
 // 実際に消化した1試合の記録と実projectionを配布HTMLに接続。通信だけfixture。
+// ⚠ 観戦記録は本番では残さない（容量）。この検査が使う fixture は
+//    `online-records-check` 側で明示的に記録を有効にして作っている。
+//    ここで `process.env` を立てても **ESM の import が先に走るので間に合わない**。
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';

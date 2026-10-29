@@ -122,7 +122,9 @@ for (const name of [home, away]) {
   assert.equal(total, expected, '完了打席だけを一度記録する');
 }
 restoreWorld(before);
-const recorder = createRecorder(league, TEAMS_DATA);
+// ⚠ 観戦記録は**既定では残さない**（容量）。この fixture は観戦画面の検査でも
+//    使うので、ここでは明示的に有効にして記録を持たせる。
+const recorder = createRecorder(league, TEAMS_DATA, { replay: true });
 const game = { id: 1, date: { year: 2024, month: 4, day: 1 }, home, away };
 const observer = recorder.begin(game);
 const replayBefore = captureWorld();
@@ -142,20 +144,33 @@ assert.deepEqual(
 );
 recorder.finish(game, result, observer);
 const season0 = league.records.seasons[1];
-// ⚠ **リプレイ（1球ごとの観戦記録）は保存しない方針にした**。
-//    実測で1試合218KBのうち182KBを占め、42球団3024試合では670MBとなり
-//    `JSON.stringify` の上限を超えて保存が成立しなかった。成績だけ残す。
-//    `createRecorder` は `replay` / `start` / `pitchDetail` を渡さないので、
-//    `autoSimulation` 側の保護により記録が飛ぶ。
-assert.equal(observer.replayRecord, undefined, 'リプレイを作らない');
-assert.equal(
-  season0.games[game.id].replay,
-  null,
-  '試合の箱にリプレイを残さない',
-);
-// 成績のほうは残っていること（こちらが本命）
+// --- 観戦記録の切り替え ---------------------------------------
+// ⚠ **既定では観戦記録を作らない**。実測で1試合218KBのうち182KB＝84%を占め、
+//    42球団3024試合では670MBとなり `JSON.stringify` の上限を超える。
+//    成績だけなら1試合30KB。観戦画面は残してあるので、球団数の少ないリーグでは
+//    `ONLINE_RECORD_REPLAY=1` で有効にできる。
+const plainObserver = createRecorder(league, TEAMS_DATA).begin({
+  id: 999,
+  date: game.date,
+  home,
+  away,
+});
+assert.equal(plainObserver.replayRecord, undefined, '既定では観戦記録を作らない');
+assert.equal(plainObserver.replay, undefined, '記録用の関数も渡さない');
+// 有効にしたときは残る
+const replay = observer.replayRecord;
+assert.ok(replay, '有効にすれば観戦記録を作る');
+assert.ok(replay.frames.length > 100, '実投球・走塁の経過を保存');
+assert.equal(replay.frames.at(-1).homeScore, result.homeScore);
+assert.equal(replay.frames.at(-1).awayScore, result.awayScore);
 assert.ok(
-  Object.keys(season0.games[game.id].teams).length === 2,
+  !JSON.stringify(replay.teams).includes('strategy'),
+  '観戦用の選手情報へ戦術や契約を含めない',
+);
+// 成績は切り替えに関係なく残る（こちらが本命）
+assert.equal(
+  Object.keys(season0.games[game.id].teams).length,
+  2,
   '両球団のボックス成績は残す',
 );
 
@@ -678,11 +693,13 @@ assert.equal(projectGameInfo({ league }, 'a', 1, 1).gameId, 1);
 //    ここは元々「相手の事前設定を公開しない」ことを見ていた箇所で、
 //    記録そのものが無ければ漏れようがない。**無いことを明示的に押さえる**
 //    （黙って消すと、将来戻したときに漏れても気づけない）。
-const ownGame = projectGameInfo({ league }, 'a', 1, 1);
-assert.equal(ownGame.replay, null, '観戦記録を返さない');
+const ownReplay = projectGameInfo({ league }, 'a', 1, 1).replay;
+assert.ok(ownReplay.appliedPlan);
+assert.equal(ownReplay.appliedTeam, home);
+// ⚠ 観戦でも相手の事前設定は公開しない（記録を有効にしたときの安全性）
 assert.ok(
-  !JSON.stringify(ownGame).includes('appliedPlans'),
-  '相手の事前設定を公開しない',
+  !Object.hasOwn(ownReplay, 'appliedPlans'),
+  '観戦でも相手の事前設定を公開しない',
 );
 assert.equal(projectGames({ league }, 'a', { year: 1 }).count, 1);
 assert.throws(
