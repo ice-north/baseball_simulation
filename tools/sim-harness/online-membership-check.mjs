@@ -19,7 +19,12 @@ import {
   applyJoin,
   assertMemberCount,
 } from '../../src/online/membership.js';
-import { generatePyramidTeams, PYRAMID_LEAGUES } from '../../src/online/pyramidLeague.js';
+import {
+  generatePyramidTeams,
+  PYRAMID_LEAGUES,
+  PYRAMID_TEAM_COUNT,
+  TEAMS_PER_LEAGUE,
+} from '../../src/online/pyramidLeague.js';
 import { createSeededRandom } from '../../src/game/rng.js';
 
 const fresh = () => ({
@@ -33,15 +38,15 @@ const invite = (league, code) => {
 };
 
 // --- 人数の境界 ---------------------------------------------------
-assert.equal(MAX_MEMBERS, 42);
+assert.equal(MAX_MEMBERS, PYRAMID_TEAM_COUNT);
 assert.throws(() => assertMemberCount([]), /1人も居ません/);
 assert.doesNotThrow(() => assertMemberCount([{ userId: 'a' }]));
 assert.doesNotThrow(() =>
-  assertMemberCount(Array.from({ length: 42 }, (_, i) => ({ userId: `u${i}` }))),
+  assertMemberCount(Array.from({ length: MAX_MEMBERS }, (_, i) => ({ userId: `u${i}` }))),
 );
 assert.throws(
-  () => assertMemberCount(Array.from({ length: 43 }, (_, i) => ({ userId: `u${i}` }))),
-  /42人まで/,
+  () => assertMemberCount(Array.from({ length: MAX_MEMBERS + 1 }, (_, i) => ({ userId: `u${i}` }))),
+  new RegExp(`${MAX_MEMBERS}人まで`),
 );
 assert.throws(() => assertMemberCount([{ userId: 'a' }, { userId: 'a' }]), /重複/);
 assert.throws(() => assertMemberCount([{ userId: '' }]), /識別子/);
@@ -67,17 +72,20 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
 // --- 途中参加の入り先 ---------------------------------------------
 {
   const l = fresh();
-  assert.equal(cpuTeams(l).length, 42, '誰も参加していなければ全球団がCPU');
+  assert.equal(cpuTeams(l).length, PYRAMID_TEAM_COUNT, '誰も参加していなければ全球団がCPU');
 
   const target = weakestJoinableTeam(l);
   const leagueOf = Object.fromEntries(PYRAMID_LEAGUES.map((x) => [x.id, x.tier]));
-  // ⚠ **リーグ名を直に書くこと**。`JOIN_TIER` で `JOIN_TIER` を検証すると、
-  //    定数を書き換えたときに素通りする（実際そうなっていた）。
-  assert.ok(
-    ['C1', 'C2', 'C3', 'C4'].includes(target.league),
-    `途中参加はCリーグに入る: ${target.league}`,
+  // ⚠ **最下層であることを構造から確かめる**。`JOIN_TIER` で `JOIN_TIER` を
+  //    検証すると定数を書き換えたときに素通りするので、
+  //    「階層の最大値＝一番下」であることを別途求めて突き合わせる。
+  const bottomTier = Math.max(...PYRAMID_LEAGUES.map((x) => x.tier));
+  assert.equal(
+    leagueOf[target.league],
+    bottomTier,
+    `途中参加は最下層に入る: ${target.league}`,
   );
-  assert.equal(leagueOf[target.league], JOIN_TIER, 'JOIN_TIER がCの階層を指している');
+  assert.equal(JOIN_TIER, bottomTier, 'JOIN_TIER が最下層を指している');
 
   // ⚠ 何度呼んでも同じ球団であること（開幕前は全球団が同成績）
   assert.equal(weakestJoinableTeam(l).name, target.name);
@@ -118,8 +126,8 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
   assert.equal(l.members.length, 1);
   assert.equal(l.members[0].teamName, '新潟ドリーマーズ');
   // ⚠ 球団数は42のまま（A方式＝引き継ぎ。球団は消えない）
-  assert.equal(l.teams.length, 42, '参加で球団数が変わってはいけない');
-  assert.equal(cpuTeams(l).length, 41);
+  assert.equal(l.teams.length, PYRAMID_TEAM_COUNT, '参加で球団数が変わってはいけない');
+  assert.equal(cpuTeams(l).length, PYRAMID_TEAM_COUNT - 1);
   // 引き継ぎ元を記録している（Bへ変えるときの手がかり）
   assert.equal(l.teams.find((t) => t.name === '新潟ドリーマーズ').takenOverFrom, beforeName);
   // 招待コードが使い捨てになっている
@@ -151,7 +159,7 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
 {
   const l = fresh();
   invite(l, 'DUP00001');
-  const taken = l.teams.find((t) => t.league === 'A').name;
+  const taken = l.teams.find((t) => t.league !== weakestJoinableTeam(l).league).name;
   assert.throws(
     () => applyJoin(l, { userId: 'u1', teamName: taken, code: 'DUP00001', now: 'x' }),
     /使われています/,
@@ -162,7 +170,7 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
 {
   const l = fresh();
   let joined = 0;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < PYRAMID_TEAM_COUNT + 6; i++) {
     invite(l, `BULK${String(i).padStart(4, '0')}`);
     try {
       applyJoin(l, { userId: `b${i}`, teamName: `球団${i}`, code: `BULK${String(i).padStart(4, '0')}`, now: 'x' });
@@ -172,9 +180,13 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
       break;
     }
   }
-  // Cリーグは4つ×6＝24球団。そこが埋まったら途中参加は止まる
-  assert.equal(joined, 24, `Cの枠だけ埋まるはず: ${joined}`);
-  assert.equal(l.teams.length, 42, '球団数は42のまま');
+  // 最下層の枠が埋まったら途中参加は止まる
+  const bottom = Math.max(...PYRAMID_LEAGUES.map((x) => x.tier));
+  const slots = PYRAMID_LEAGUES.filter((x) => x.tier === bottom).length * TEAMS_PER_LEAGUE;
+  assert.equal(joined, slots, `最下層の枠だけ埋まるはず: ${joined} / ${slots}`);
+  assert.equal(l.teams.length, PYRAMID_TEAM_COUNT, '球団数は変わらない');
 }
 
-console.log('■ 参加者モデル: OK（1〜42人 / 招待は使い捨て / 途中参加はCのCPU最下位）');
+console.log(
+  `■ 参加者モデル: OK（1〜${MAX_MEMBERS}人 / 招待は使い捨て / 途中参加は最下層のCPU最下位）`,
+);

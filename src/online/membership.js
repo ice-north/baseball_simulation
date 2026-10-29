@@ -19,10 +19,14 @@ import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
 export const MAX_MEMBERS = PYRAMID_TEAM_COUNT; // 42
 
 /**
- * 途中参加が入れる階層。⚠ **最下層（C）だけ**。
+ * 途中参加が入れる階層。**最下層だけ**。
  * 上の階層から始められると、昇降格で積み上げた順位の意味が消える。
+ *
+ * ⚠ **構造から導くこと**。以前は `2` と直に書いており、
+ *    7リーグ（最下層=2）から2部制（最下層=1）へ変えたときに
+ *    「誰も参加できないリーグ」になるところだった。
  */
-export const JOIN_TIER = 2;
+export const JOIN_TIER = Math.max(...PYRAMID_LEAGUES.map((l) => l.tier));
 
 export const joinableLeagueIds = () =>
   PYRAMID_LEAGUES.filter((l) => l.tier === JOIN_TIER).map((l) => l.id);

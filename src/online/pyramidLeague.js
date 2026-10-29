@@ -22,26 +22,39 @@ import { advanceDate, SEASON_PHASES } from '../season/seasonManager.js';
 export const TEAMS_PER_LEAGUE = 6;
 
 /**
- * 階層の定義。`up` は昇格先、`down` は降格先。
- * ⚠ **降格先を2つ書くリーグは、1位ぶんずつ受け取る**（B1 は C1 と C2 から1つずつ）。
- *    ここを片側に寄せると球団数が崩れる。
+ * 階層の定義。
+ *
+ * - `up`   … 上位から順に、1位・2位…の行き先
+ * - `down` … 下位から順に、5位・6位…の行き先
+ *
+ * ⚠ **どちらも配列で書くこと**。片方を単数にすると「1部は2つ落ちるのに
+ *    2部からは1つしか上がらない」という不均衡に気づけない。
+ *    7リーグ構成では B1 が C1 と C2 から1つずつ受け取る形になる。
+ * ⚠ 構造を変えたら `pyramidBalance()` で出入りの釣り合いを確かめること。
+ *    検査（`online-pyramid-check`）が自動で見ている。
+ *
+ * いまは**2部制12球団**。1部6・2部6で、1部の5位6位が落ち、2部の1位2位が上がる。
+ * 7リーグ42球団の構成は保存の容量が無料枠に収まらず見送った
+ * （`docs/online/PYRAMID_LEAGUE.md` に実測を残してある）。
  */
 export const PYRAMID_LEAGUES = [
-  { id: 'A',  name: 'Aリーグ',  tier: 0, up: null, down: ['B1', 'B2'] },
-  { id: 'B1', name: 'B1リーグ', tier: 1, up: 'A',  down: ['C1', 'C2'] },
-  { id: 'B2', name: 'B2リーグ', tier: 1, up: 'A',  down: ['C3', 'C4'] },
-  { id: 'C1', name: 'C1リーグ', tier: 2, up: 'B1', down: [] },
-  { id: 'C2', name: 'C2リーグ', tier: 2, up: 'B1', down: [] },
-  { id: 'C3', name: 'C3リーグ', tier: 2, up: 'B2', down: [] },
-  { id: 'C4', name: 'C4リーグ', tier: 2, up: 'B2', down: [] },
+  { id: 'A', name: '1部', tier: 0, up: [],    down: ['B'] },
+  { id: 'B', name: '2部', tier: 1, up: ['A'], down: [] },
 ];
 
 export const PYRAMID_TEAM_COUNT = PYRAMID_LEAGUES.length * TEAMS_PER_LEAGUE; // 42
 
-/** 降格する順位（1始まり）。最下層は降格しない */
-export const RELEGATION_PLACES = [5, 6];
-/** 昇格する順位（1始まり）。最上位は昇格しない */
-export const PROMOTION_PLACE = 1;
+/**
+ * 昇格する順位（1始まり・上から数える）。`up` の並びと対応する。
+ * 最上位リーグは `up` が空なので昇格しない。
+ */
+export const PROMOTION_PLACES = [1];
+/**
+ * 降格する順位（**下から数える**。1 なら最下位）。`down` の並びと対応する。
+ * ⚠ **「6位」と上から書かないこと**。1リーグの球団数を変えたときに、
+ *    最下位ではない球団が落ちる（6球団から8球団にしたら6位は真ん中になる）。
+ */
+export const RELEGATION_FROM_BOTTOM = [1];
 
 /**
  * 各リーグの出入りが釣り合っているかを数える。
@@ -55,12 +68,12 @@ export function pyramidBalance() {
     incoming[l.id] = 0;
   }
   for (const l of PYRAMID_LEAGUES) {
-    if (l.up) {
-      out[l.id] += 1;              // 1位が上がる
-      incoming[l.up] += 1;
+    for (const upper of l.up) {
+      out[l.id] += 1;
+      incoming[upper] += 1;
     }
     for (const lower of l.down) {
-      out[l.id] += 1;              // 降格枠ぶん下がる（降格先ごとに1）
+      out[l.id] += 1;
       incoming[lower] += 1;
     }
   }
@@ -92,10 +105,10 @@ const NICKNAMES = [
 ];
 
 // 階層ごとの強さ。⚠ 上の階層ほど強いこと（昇降格に意味を持たせるため）
+//    ⚠ 階層を増やすときはここも足すこと。足りないと `undefined` を引く
 const TIER_RANKS = [
-  ['S', 'S', 'A'],       // A
-  ['A', 'A', 'B'],       // B1 / B2
-  ['B', 'C', 'C', 'D'],  // C1〜C4
+  ['S', 'S', 'A', 'A'],  // 1部
+  ['B', 'B', 'C', 'D'],  // 2部
 ];
 
 /** 配列をシード乱数で並べ替える（元の配列は変えない） */
@@ -149,11 +162,13 @@ export function pyramidMovements(standings) {
   const moves = [];
   for (const league of PYRAMID_LEAGUES) {
     const order = standings[league.id] || [];
-    if (league.up && order[PROMOTION_PLACE - 1]) {
-      moves.push({ teamId: order[PROMOTION_PLACE - 1], from: league.id, to: league.up });
-    }
+    league.up.forEach((target, i) => {
+      const teamId = order[PROMOTION_PLACES[i] - 1];
+      if (teamId) moves.push({ teamId, from: league.id, to: target });
+    });
     league.down.forEach((target, i) => {
-      const teamId = order[RELEGATION_PLACES[i] - 1];
+      // 下から数える。order.length が球団数なので、1 なら最後尾
+      const teamId = order[order.length - RELEGATION_FROM_BOTTOM[i]];
       if (teamId) moves.push({ teamId, from: league.id, to: target });
     });
   }

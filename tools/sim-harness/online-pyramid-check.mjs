@@ -18,19 +18,18 @@ import {
 } from '../../src/online/pyramidLeague.js';
 
 // --- 構造 ---------------------------------------------------------
-assert.equal(PYRAMID_LEAGUES.length, 7);
-assert.equal(PYRAMID_TEAM_COUNT, 42);
-assert.deepEqual(
-  PYRAMID_LEAGUES.map((l) => l.id),
-  ['A', 'B1', 'B2', 'C1', 'C2', 'C3', 'C4'],
-);
-// 階層は A=0 / B=1 / C=2 の3段
-assert.deepEqual([...new Set(PYRAMID_LEAGUES.map((l) => l.tier))], [0, 1, 2]);
+// いまは2部制12球団。⚠ 個々のリーグ名を決め打ちにしない——構造は変わりうる。
+//    **変わっても壊れてはいけない性質**だけをここで押さえる。
+assert.ok(PYRAMID_LEAGUES.length >= 2, 'リーグが2つ以上ある');
+assert.equal(PYRAMID_TEAM_COUNT, PYRAMID_LEAGUES.length * TEAMS_PER_LEAGUE);
+// 階層は 0 から連番で埋まっている（飛びがあると昇降格の相手が居なくなる）
+const tiers = [...new Set(PYRAMID_LEAGUES.map((l) => l.tier))].sort((a, b) => a - b);
+assert.deepEqual(tiers, tiers.map((_, i) => i), '階層が0から連番でない');
 // 最上位は昇格先を持たない。最下層は降格先を持たない
-assert.equal(PYRAMID_LEAGUES.find((l) => l.id === 'A').up, null);
-for (const id of ['C1', 'C2', 'C3', 'C4']) {
-  assert.equal(PYRAMID_LEAGUES.find((l) => l.id === id).down.length, 0);
-}
+const top = PYRAMID_LEAGUES.filter((l) => l.tier === 0);
+const bottom = PYRAMID_LEAGUES.filter((l) => l.tier === Math.max(...tiers));
+for (const l of top) assert.equal(l.up.length, 0, `${l.id} に昇格先がある`);
+for (const l of bottom) assert.equal(l.down.length, 0, `${l.id} に降格先がある`);
 
 // --- 出入りの釣り合い（この検査の主目的） --------------------------
 const balance = pyramidBalance();
@@ -39,16 +38,15 @@ assert.ok(
   `昇降格の出入りが釣り合っていない: ${JSON.stringify(balance.rows)}`,
 );
 // A は2つ出て2つ入る / B は6つ出て6つ入る（2リーグ合計）/ C は4つ出て4つ入る
-const byId = Object.fromEntries(balance.rows.map((r) => [r.id, r]));
-assert.equal(byId.A.out, 2);
-assert.equal(byId.A.in, 2);
-assert.equal(byId.B1.out + byId.B2.out, 6);
-assert.equal(byId.B1.in + byId.B2.in, 6);
-assert.equal(byId.C1.out + byId.C2.out + byId.C3.out + byId.C4.out, 4);
+// 入れ替えが1つも起きない構造は設計の誤り（昇降格が無いのと同じ）
+assert.ok(
+  balance.rows.some((r) => r.out > 0),
+  '入れ替えが1つも起きない',
+);
 
 // --- 生成 ---------------------------------------------------------
 const teams = generatePyramidTeams(20261029);
-assert.equal(teams.length, 42);
+assert.equal(teams.length, PYRAMID_TEAM_COUNT);
 // 各リーグちょうど6球団
 for (const l of PYRAMID_LEAGUES) {
   assert.equal(
@@ -59,7 +57,7 @@ for (const l of PYRAMID_LEAGUES) {
 }
 // 名前・ID・都市が重複しない（同名だとどちらの話か分からなくなる）
 for (const key of ['id', 'name', 'city']) {
-  assert.equal(new Set(teams.map((t) => t[key])).size, 42, `${key} が重複している`);
+  assert.equal(new Set(teams.map((t) => t[key])).size, PYRAMID_TEAM_COUNT, `${key} が重複している`);
 }
 // 必要な属性が揃っている（既存の独立リーグと同じ形）
 for (const t of teams) {
@@ -74,13 +72,13 @@ assert.notDeepEqual(generatePyramidTeams(777), teams, 'シードを変えても�
 
 // 上の階層ほど強い（昇降格に意味を持たせるため）
 const strength = { S: 4, A: 3, B: 2, C: 1, D: 0 };
-const tierAvg = [0, 1, 2].map((tier) => {
+const tierAvg = tiers.map((tier) => {
   const ids = PYRAMID_LEAGUES.filter((l) => l.tier === tier).map((l) => l.id);
   const list = teams.filter((t) => ids.includes(t.league));
   return list.reduce((s, t) => s + strength[t.rank], 0) / list.length;
 });
 assert.ok(
-  tierAvg[0] > tierAvg[1] && tierAvg[1] > tierAvg[2],
+  tierAvg.every((v, i) => i === 0 || tierAvg[i - 1] > v),
   `階層の強さが逆転している: ${tierAvg.map((v) => v.toFixed(2)).join(' / ')}`,
 );
 
@@ -91,8 +89,9 @@ const standings = Object.fromEntries(
 );
 const moves = pyramidMovements(standings);
 
-// 動くのは 昇格6（A以外の6リーグ）＋ 降格6（A2・B1が2・B2が2）
-assert.equal(moves.length, 12, `移動数がちがう: ${moves.length}`);
+// 昇格と降格の数は釣り合っているので、移動数は「出る数の合計」と一致する
+const expectedMoves = balance.rows.reduce((n, r) => n + r.out, 0);
+assert.equal(moves.length, expectedMoves, `移動数がちがう: ${moves.length}`);
 
 // 移動後も各リーグ6球団であること（この検査の本丸）
 const after = Object.fromEntries(PYRAMID_LEAGUES.map((l) => [l.id, TEAMS_PER_LEAGUE]));
@@ -120,7 +119,11 @@ assert.doesNotThrow(() => pyramidMovements({ A: [], B1: ['x'] }));
 // ⚠ 既存の generateFullSeasonSchedule は single / two しか対応しておらず
 //    7リーグを組めない。独自に組んでいるぶん、ここで性質を押さえる。
 const schedule = pyramidSchedule(teams);
-assert.equal(schedule.length, 7 * 3 * SEASON_TURNS, '7リーグ×3試合×144ターン');
+assert.equal(
+  schedule.length,
+  PYRAMID_LEAGUES.length * (TEAMS_PER_LEAGUE / 2) * SEASON_TURNS,
+  'リーグ数×1ターンの試合数×ターン数',
+);
 
 const played = {};
 const homeCount = {};
@@ -129,7 +132,7 @@ for (const g of schedule) {
   played[g.away] = (played[g.away] || 0) + 1;
   homeCount[g.home] = (homeCount[g.home] || 0) + 1;
 }
-assert.equal(Object.keys(played).length, 42, '42球団すべてに試合がある');
+assert.equal(Object.keys(played).length, PYRAMID_TEAM_COUNT, '全球団に試合がある');
 for (const [name, n] of Object.entries(played)) {
   assert.equal(n, SEASON_TURNS, `${name} の試合数が144でない: ${n}`);
 }
@@ -140,7 +143,7 @@ const byTurn = {};
 for (const g of schedule) (byTurn[g.turn] ||= []).push(g.home, g.away);
 for (const [turn, names] of Object.entries(byTurn)) {
   assert.equal(new Set(names).size, names.length, `ターン${turn}に2試合する球団がいる`);
-  assert.equal(names.length, 42, `ターン${turn}で全球団が試合していない`);
+  assert.equal(names.length, PYRAMID_TEAM_COUNT, `ターン${turn}で全球団が試合していない`);
 }
 
 // リーグをまたぐ対戦は無い
@@ -158,4 +161,4 @@ assert.ok(
   `ホーム試合数が偏っている: ${Math.min(...homes)}〜${Math.max(...homes)}`,
 );
 
-console.log('■ 階層リーグ: OK（7リーグ42球団 / 出入りが釣り合う / 再現する / 144ターンの日程）');
+console.log(`■ 階層リーグ: OK（${PYRAMID_LEAGUES.length}リーグ${PYRAMID_TEAM_COUNT}球団 / 出入りが釣り合う / 再現する / ${SEASON_TURNS}ターンの日程）`);
