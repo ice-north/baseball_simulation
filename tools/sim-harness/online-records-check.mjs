@@ -218,6 +218,12 @@ assert.equal(
 // 別の簡潔なfixtureで、未完了・犠飛・併殺・代打・初球の境界を明示する。
 const tiny = {
   season: { year: 1, results: [], settings: { teamNames: ['A', 'B'] } },
+  // ⚠ **参加者を持たせること**。記録は対人公式試合だけが対象なので、
+  //    A と B の所有者が居ないと `begin` が null を返して観測されない。
+  members: [
+    { userId: 'a', teamName: 'A' },
+    { userId: 'b', teamName: 'B' },
+  ],
   records: null,
 };
 const p = (id) => ({

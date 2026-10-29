@@ -72,8 +72,22 @@ export function createRecorder(league, teams) {
   for (const name of league.season.settings.teamNames)
     for (const player of teams[name].players)
       player.onlinePlayerId ||= keyFor(name, player);
+  // ⚠ **対人公式試合だけを記録する**（文書どおりの範囲）。
+  //    以前はここに条件が無く、CPU同士も含めた全試合の打席単位の記録を貯めていた。
+  //    4球団150試合では収まっていたが、42球団3024試合にすると
+  //    `JSON.stringify(season.games)` が文字列の上限を超えて落ちた
+  //    （通年検査の200日目で RangeError: Invalid string length）。
+  //    ⚠ **これは上限を遠ざけただけで、無くしたわけではない**。
+  //    人間が42人まで増えると全試合が対人になり、同じ壁に当たる。
+  //    そのときは1試合あたりの保存量を減らすか、古い試合の詳細を間引く必要がある。
+  const humanTeams = new Set(
+    (league.members || []).map((m) => m.teamName).filter(Boolean),
+  );
+  const observed = (game) =>
+    humanTeams.has(game.home) && humanTeams.has(game.away);
   return {
     begin(game) {
+      if (!observed(game)) return null;
       const events = [];
       const replay = createReplay();
       return {
@@ -91,6 +105,8 @@ export function createRecorder(league, teams) {
       };
     },
     finish(game, result, observer) {
+      // ⚠ `begin` が null を返した試合（CPU同士）は記録しない
+      if (!observer) return;
       if (season.games[game.id])
         throw new Error('対人の試合記録を重複適用できません');
       const local = new Map();
