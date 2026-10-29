@@ -13,6 +13,8 @@ import {
   pyramidBalance,
   generatePyramidTeams,
   pyramidMovements,
+  pyramidSchedule,
+  SEASON_TURNS,
 } from '../../src/online/pyramidLeague.js';
 
 // --- 構造 ---------------------------------------------------------
@@ -114,4 +116,46 @@ for (const m of moves) {
 // 順位が足りないリーグ（参加者不足など）でも落ちない
 assert.doesNotThrow(() => pyramidMovements({ A: [], B1: ['x'] }));
 
-console.log('■ 階層リーグ: OK（7リーグ42球団 / 出入りが釣り合う / シードで再現する）');
+// --- 日程 ---------------------------------------------------------
+// ⚠ 既存の generateFullSeasonSchedule は single / two しか対応しておらず
+//    7リーグを組めない。独自に組んでいるぶん、ここで性質を押さえる。
+const schedule = pyramidSchedule(teams);
+assert.equal(schedule.length, 7 * 3 * SEASON_TURNS, '7リーグ×3試合×144ターン');
+
+const played = {};
+const homeCount = {};
+for (const g of schedule) {
+  played[g.home] = (played[g.home] || 0) + 1;
+  played[g.away] = (played[g.away] || 0) + 1;
+  homeCount[g.home] = (homeCount[g.home] || 0) + 1;
+}
+assert.equal(Object.keys(played).length, 42, '42球団すべてに試合がある');
+for (const [name, n] of Object.entries(played)) {
+  assert.equal(n, SEASON_TURNS, `${name} の試合数が144でない: ${n}`);
+}
+
+// ⚠ **1ターンに2試合する球団がいないこと**。1ターン＝1時間＝1試合なので、
+//    重複すると「全球団が毎時1試合」という前提が崩れる。
+const byTurn = {};
+for (const g of schedule) (byTurn[g.turn] ||= []).push(g.home, g.away);
+for (const [turn, names] of Object.entries(byTurn)) {
+  assert.equal(new Set(names).size, names.length, `ターン${turn}に2試合する球団がいる`);
+  assert.equal(names.length, 42, `ターン${turn}で全球団が試合していない`);
+}
+
+// リーグをまたぐ対戦は無い
+const leagueOfTeam = Object.fromEntries(teams.map((t) => [t.name, t.league]));
+for (const g of schedule) {
+  assert.equal(leagueOfTeam[g.home], g.league, 'ホームのリーグが違う');
+  assert.equal(leagueOfTeam[g.away], g.league, 'ビジターのリーグが違う');
+}
+
+// ⚠ **ホームが偏らないこと**。1巡ごとに本拠地を入れ替えないと、同じ相手に
+//    片方がずっとホームになり、144試合ぶん有利不利が積み上がる。
+const homes = Object.values(homeCount);
+assert.ok(
+  Math.min(...homes) >= 68 && Math.max(...homes) <= 76,
+  `ホーム試合数が偏っている: ${Math.min(...homes)}〜${Math.max(...homes)}`,
+);
+
+console.log('■ 階層リーグ: OK（7リーグ42球団 / 出入りが釣り合う / 再現する / 144ターンの日程）');

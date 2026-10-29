@@ -158,3 +158,70 @@ export function pyramidMovements(standings) {
   }
   return moves;
 }
+
+// ============================================================
+// 日程
+//
+// ⚠ **既存の `generateFullSeasonSchedule` は使えない**。あちらは
+//    `leagueFormat` が `'single'` か `'two'` の2通りしか対応しておらず、
+//    7リーグは作れない（実装を読んで確認した）。
+//    階層リーグの日程は単純（各リーグ6球団の総当たりの繰り返し）なので、
+//    ここで独自に組む。
+// ============================================================
+
+/**
+ * 6球団の総当たり表を作る（サークル法）。
+ * 1巡は5節で、**どの節も全球団が1試合する**。
+ * これが「1ターンで全球団が1試合」という設計にそのまま対応する。
+ */
+function roundRobin(ids) {
+  const n = ids.length;
+  requireEven(n);
+  const arr = [...ids];
+  const rounds = [];
+  for (let r = 0; r < n - 1; r++) {
+    const pairs = [];
+    for (let i = 0; i < n / 2; i++) pairs.push([arr[i], arr[n - 1 - i]]);
+    rounds.push(pairs);
+    arr.splice(1, 0, arr.pop()); // 先頭を固定して残りを回す
+  }
+  return rounds;
+}
+
+function requireEven(n) {
+  if (n % 2 !== 0 || n < 2) {
+    throw new Error(`総当たりは偶数の球団数が必要です: ${n}`);
+  }
+}
+
+/** 1シーズンのターン数。月〜土の24ターン×6日 */
+export const SEASON_TURNS = 144;
+
+/**
+ * 階層リーグ全体の日程を組む。
+ * 返り値は `{ turn, league, home, away }` の配列（`turn` は0始まり）。
+ *
+ * ⚠ **1巡ごとに本拠地を入れ替えること**。入れ替えないと、同じ相手に対して
+ *    片方がずっとホームになり、144試合ぶん積み上がって有利不利が出る。
+ */
+export function pyramidSchedule(teams, { turns = SEASON_TURNS } = {}) {
+  const games = [];
+  for (const league of PYRAMID_LEAGUES) {
+    const ids = teams.filter((t) => t.league === league.id).map((t) => t.name);
+    if (ids.length < 2) continue;
+    const rounds = roundRobin(ids);
+    for (let turn = 0; turn < turns; turn++) {
+      const round = rounds[turn % rounds.length];
+      const flip = Math.floor(turn / rounds.length) % 2 === 1;
+      for (const [a, b] of round) {
+        games.push({
+          turn,
+          league: league.id,
+          home: flip ? b : a,
+          away: flip ? a : b,
+        });
+      }
+    }
+  }
+  return games;
+}
