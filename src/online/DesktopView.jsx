@@ -208,7 +208,7 @@ function Roster({ view, teamSelector }) {
     </section>
   );
 }
-function Admin({ view, busy, run, command, local }) {
+function Admin({ view, busy, run, command, allowStep }) {
   const [restoreConfirm, setRestoreConfirm] = useState(false);
   return (
     <section className="online-card">
@@ -234,9 +234,11 @@ function Admin({ view, busy, run, command, local }) {
             バックアップから復元
           </button>
         )}
-        {local && view.status === 'running' && (
+        {/* ⚠ 1ターン＝1時間＝1試合日。本番で出すのは検証中だけ
+            （`ONLINE_ALLOW_STEP`）。遊び始めたら設定を外すこと。 */}
+        {allowStep && view.status === 'running' && (
           <button disabled={busy} onClick={() => run(() => command('step'))}>
-            検証用：1日進める
+            検証用：1時間進める
           </button>
         )}
       </div>

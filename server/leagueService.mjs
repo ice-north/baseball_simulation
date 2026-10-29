@@ -27,6 +27,9 @@ export class LeagueService {
       adminId,
       clock = () => new Date().toISOString(),
       local = false,
+      // ⚠ `local` とは別に持つこと。`local` は CORS をローカルへ開く印でもあるので、
+      //    検証用の進行を本番で使いたいからといって `local` を立ててはいけない。
+      allowStep = false,
     } = {},
   ) {
     this.store = store;
@@ -34,6 +37,7 @@ export class LeagueService {
     this.adminId = adminId;
     this.clock = clock;
     this.local = local;
+    this.allowStep = allowStep || local;
   }
   async view(userId, sessionId) {
     const view = this.store.readView
@@ -227,14 +231,14 @@ export class LeagueService {
           bundle.league.status = bundle.league.phase ? 'waiting' : 'paused';
           bundle.league.nextAdvanceAt = null;
           // 復元前の操作を再実行させない。過去のログイン権限を復活させない。
-        } else if (command.type === 'step' && this.local) {
+        } else if (command.type === 'step' && this.allowStep) {
           requireOnline(
             userId === this.adminId,
             '検証用の進行操作は管理者専用です',
             403,
           );
           await this.engine((engine) =>
-            engine.advanceLeagueDay(l, `local:${command.requestId}`, now),
+            engine.advanceLeagueDay(l, `step:${command.requestId}`, now),
           );
         } else requireOnline(false, '未対応の操作です');
         bundle.league.revision++;

@@ -37,6 +37,10 @@ export function productionHandler() {
     ONLINE_MEMBER_1: first,
     ONLINE_MEMBER_2: second,
     ONLINE_CRON_SECRET: cronSecret,
+    // 検証用の「1時間進める」を本番でも出すための任意設定。
+    // ⚠ **遊び始めたら外すこと**。管理者だけとはいえ、好きな時に進められるのは
+    //    多人数の対戦として公平ではない。未設定なら出ない。
+    ONLINE_ALLOW_STEP: allowStep,
   } = process.env;
   const missing = missingOnlineConfig(process.env);
   if (missing.length) {
@@ -53,7 +57,11 @@ export function productionHandler() {
     { userId: second, label: 'プレイヤー2' },
   ];
   const store = new SupabaseStore({ url, serviceKey, members, adminId: first });
-  const service = new LeagueService(store, { members, adminId: first });
+  const service = new LeagueService(store, {
+    members,
+    adminId: first,
+    allowStep: allowStep === '1' || allowStep === 'true',
+  });
   const auth = async (path, options = {}) => {
     const response = await fetch(`${url}/auth/v1/${path}`, {
       ...options,
@@ -80,6 +88,7 @@ export function productionHandler() {
   });
   handler = createHandler(service, {
     cronSecret,
+    allowStep: service.allowStep,
     authenticate: async (header) => {
       requireOnline(
         /^Bearer [^ ]+$/.test(header || ''),

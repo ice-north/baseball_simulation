@@ -1,12 +1,32 @@
 export const ONLINE_SCHEMA = 1;
 export const ONLINE_ENGINE_VERSION = 'online-1';
+// 1ターン＝1時間。毎正時に1つ進む。24ターン×7日＝168ターンで1シーズン。
+// ⚠ **夜間も止めない**。月〜土の144ターンが試合、日曜の24ターンがストーブリーグ。
+//    以前は1日7回・夜間休止だったが、多人数ペナントの設計で毎正時に変えた。
 export const PROGRESSION_TIMES = [
+  '00:00',
+  '01:00',
+  '02:00',
+  '03:00',
+  '04:00',
+  '05:00',
+  '06:00',
+  '07:00',
   '08:00',
-  '10:30',
+  '09:00',
+  '10:00',
+  '11:00',
+  '12:00',
   '13:00',
-  '15:30',
+  '14:00',
+  '15:00',
+  '16:00',
+  '17:00',
   '18:00',
-  '20:30',
+  '19:00',
+  '20:00',
+  '21:00',
+  '22:00',
   '23:00',
 ];
 
@@ -50,7 +70,11 @@ export function nextProgressionAt(now) {
     const candidate = midnight + (h * 60 + m) * 60000;
     if (candidate > ms) return new Date(candidate).toISOString();
   }
-  return new Date(midnight + 86400000 + 8 * 3600000).toISOString();
+  // 今日のぶんを使い切ったら、翌日の最初の枠へ。
+  // ⚠ **先頭の枠から求めること**。以前は 8時 を直に書いており、
+  //    `PROGRESSION_TIMES` を変えても追従しなかった。
+  const [fh, fm] = PROGRESSION_TIMES[0].split(':').map(Number);
+  return new Date(midnight + 86400000 + (fh * 60 + fm) * 60000).toISOString();
 }
 
 export const formatGameDate = (date) =>

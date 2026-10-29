@@ -395,6 +395,7 @@ export default function OnlineApp() {
                     setTab={setScreen}
                     view={view}
                     local={config.local}
+                    allowStep={config.allowStep}
                     loading={busy}
                     reloadView={() => run(reload)}
                     logout={logout}
@@ -411,6 +412,7 @@ export default function OnlineApp() {
                     view={view}
                     auth={auth}
                     local={config.local}
+                    allowStep={config.allowStep}
                     busy={busy || !view.writable}
                     run={run}
                     command={command}

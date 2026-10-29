@@ -15,10 +15,10 @@ select cron.schedule(job_name, expression, $command$
   );
 $command$)
 from (values
-  ('online-day-hour', '0,5,10 4,9,14,23 * * *'),
-  ('online-day-half', '30,35,40 1,6,11 * * *')
+  ('online-turn', '0,5,10 * * * *')
 ) as jobs(job_name, expression);
--- JST 08:00 / 10:30 / 13:00 / 15:30 / 18:00 / 20:30 / 23:00。
+-- 1ターン＝1時間。毎正時に1つ進む（24ターン×7日＝168ターンで1シーズン）。
+-- 毎時なのでUTCとJSTのずれは効かないが、DB/CronのタイムゾーンはUTCのままでよい。
 -- cron.job_run_detailsのSQL成功だけではHTTP/ゲーム更新成功を証明しない。
 -- net._http_responseとゲームのrevision/日付も確認する。
 

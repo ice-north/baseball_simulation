@@ -1,7 +1,7 @@
 import { requireOnline, OnlineError } from '../src/online/shared.js';
 export function createHandler(
   service,
-  { local = false, authenticate, signIn, refresh, cronSecret } = {},
+  { local = false, allowStep = false, authenticate, signIn, refresh, cronSecret } = {},
 ) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -56,7 +56,8 @@ export function createHandler(
           413,
         );
       let value;
-      if (action === 'config' && req.method === 'GET') value = { local };
+      if (action === 'config' && req.method === 'GET')
+        value = { local, allowStep: allowStep || local };
       else if (action === 'tick') {
         requireOnline(
           req.method === 'POST' &&
