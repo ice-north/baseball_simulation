@@ -69,6 +69,9 @@ CIも同じ検査を実行し、スクリーンショットを保存する。認
 
 ## 外部アカウント設定後の作業
 
+⚠ 作者の本番環境について、**実際に構築したときの固有情報とつまずいた点**は
+[PRODUCTION_SETUP.md](PRODUCTION_SETUP.md) に分けてある。こちらは手順の一般形。
+
 1. SupabaseプロジェクトとVercelプロジェクトを作成する。課金・プラン変更はこの実装では行わない。
 2. Supabase Authに二人分のメール・パスワードのユーザーを作成する。招待受付・公開サインアップは提供しない。
 3. `supabase/migrations/202610280001_online.sql` を適用する。新設テーブル・RPCはservice_roleだけ、Storageバケットはprivate。
