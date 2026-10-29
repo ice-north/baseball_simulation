@@ -72,22 +72,13 @@ export function createRecorder(league, teams) {
   for (const name of league.season.settings.teamNames)
     for (const player of teams[name].players)
       player.onlinePlayerId ||= keyFor(name, player);
-  // ⚠ **対人公式試合だけを記録する**（文書どおりの範囲）。
-  //    以前はここに条件が無く、CPU同士も含めた全試合の打席単位の記録を貯めていた。
-  //    4球団150試合では収まっていたが、42球団3024試合にすると
-  //    `JSON.stringify(season.games)` が文字列の上限を超えて落ちた
-  //    （通年検査の200日目で RangeError: Invalid string length）。
-  //    ⚠ **これは上限を遠ざけただけで、無くしたわけではない**。
-  //    人間が42人まで増えると全試合が対人になり、同じ壁に当たる。
-  //    そのときは1試合あたりの保存量を減らすか、古い試合の詳細を間引く必要がある。
-  const humanTeams = new Set(
-    (league.members || []).map((m) => m.teamName).filter(Boolean),
-  );
-  const observed = (game) =>
-    humanTeams.has(game.home) && humanTeams.has(game.away);
+  // ⚠ **記録の範囲は「公式日程の全試合」**。CPU同士も含む
+  //    （`RECORDED_STATISTICS.md`「対人サーバーの公式日程で自動消化する試合」）。
+  //    「対人」はオンライン版のサーバーという意味で、人間同士という意味ではない。
+  //    相手球団・CPU球団の成績を閲覧する機能がこの記録に依存しているので、
+  //    人間同士に絞ってはいけない（一度絞って通年検査に止められた）。
   return {
     begin(game) {
-      if (!observed(game)) return null;
       const events = [];
       const replay = createReplay();
       return {
@@ -105,8 +96,6 @@ export function createRecorder(league, teams) {
       };
     },
     finish(game, result, observer) {
-      // ⚠ `begin` が null を返した試合（CPU同士）は記録しない
-      if (!observer) return;
       if (season.games[game.id])
         throw new Error('対人の試合記録を重複適用できません');
       const local = new Map();
@@ -353,10 +342,19 @@ export function freezeComparison(league) {
   const season = observedSeason(league);
   if (season && !season.comparison)
     season.comparison = clone(comparisonForSeason(season));
-  if (season && !season.archiveToken)
-    season.archiveToken = createHash('sha256')
-      .update(JSON.stringify(season.games))
-      .digest('hex');
+  if (season && !season.archiveToken) {
+    // ⚠ **全試合を1本の文字列にしないこと**。42球団3024試合では
+    //    `JSON.stringify(season.games)` が文字列の上限を超えて落ちる
+    //    （通年検査の200日目で RangeError: Invalid string length）。
+    //    試合ごとに流し込めば同じ識別子が得られて上限にも当たらない。
+    //    ⚠ 順序を固定すること（キー順）。順序が変わると内容が同じでも別物になる。
+    const hash = createHash('sha256');
+    for (const key of Object.keys(season.games).sort()) {
+      hash.update(key);
+      hash.update(JSON.stringify(season.games[key]));
+    }
+    season.archiveToken = hash.digest('hex');
+  }
 }
 export function comparisonForSeason(season) {
   if (!season) return null;
