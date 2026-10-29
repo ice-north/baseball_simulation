@@ -1,4 +1,3 @@
-import { createReplay } from './replayRecord.mjs';
 import { createHash } from 'node:crypto';
 import {
   PA_KEYS,
@@ -80,13 +79,17 @@ export function createRecorder(league, teams) {
   return {
     begin(game) {
       const events = [];
-      const replay = createReplay();
+      // ⚠ **観戦リプレイ（1球ごとの記録）は保存しない**。
+      //    実測で1試合218KBのうち182KB＝84%を占め、42球団3024試合では670MBになり、
+      //    `JSON.stringify` の上限（約512MB）を超えて保存そのものが成立しない。
+      //    成績だけ残す方針に決めた（容量は1試合30KBへ）。
+      //    ⚠ `start` / `replay` / `pitchDetail` を**渡さない**ことで記録が飛ぶ。
+      //    `autoSimulation` 側は `observer?.replay` のように保護されている。
+      //    箱の `replay` は null になり、画面は「記録が無い試合」として扱う
+      //    （元から旧試合のためにその経路がある）。
+      //    戻すときはここで `createReplay()` を使う形に直すだけでよい。
       return {
         events,
-        replayRecord: replay.value,
-        start: replay.start,
-        replay: replay.frame,
-        pitchDetail: replay.pitchDetail,
         plateAppearance(event) {
           events.push(event);
         },
