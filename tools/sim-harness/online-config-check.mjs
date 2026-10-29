@@ -12,8 +12,7 @@ const FULL = {
   SUPABASE_URL: 'https://example.supabase.co',
   SUPABASE_ANON_KEY: 'anon-xxx',
   SUPABASE_SERVICE_ROLE_KEY: 'service-xxx',
-  ONLINE_MEMBER_1: 'uuid-1',
-  ONLINE_MEMBER_2: 'uuid-2',
+  ONLINE_ADMIN: 'uuid-1',
   ONLINE_CRON_SECRET: 'x'.repeat(32),
 };
 
@@ -24,24 +23,18 @@ assert.deepEqual(missingOnlineConfig(FULL), []);
 assert.deepEqual(missingOnlineConfig({ ...FULL, SUPABASE_URL: undefined }), ['SUPABASE_URL']);
 assert.deepEqual(missingOnlineConfig({ ...FULL, SUPABASE_ANON_KEY: '' }), ['SUPABASE_ANON_KEY']);
 assert.deepEqual(missingOnlineConfig({ ...FULL, SUPABASE_SERVICE_ROLE_KEY: '' }), ['SUPABASE_SERVICE_ROLE_KEY']);
-assert.deepEqual(missingOnlineConfig({ ...FULL, ONLINE_MEMBER_1: '' }), ['ONLINE_MEMBER_1']);
-assert.deepEqual(missingOnlineConfig({ ...FULL, ONLINE_MEMBER_2: '' }), ['ONLINE_MEMBER_2']);
+assert.deepEqual(missingOnlineConfig({ ...FULL, ONLINE_ADMIN: '' }), ['ONLINE_ADMIN']);
 
 // ⚠ httpsでないURLは「設定済み」に見えるが使えない。欠落と同じ扱いにする
 assert.deepEqual(missingOnlineConfig({ ...FULL, SUPABASE_URL: 'http://example.co' }), ['SUPABASE_URL']);
-
-// ⚠ 2人が同じUUIDだと対戦が成立しない。空欄と区別できる文言で返す
-assert.deepEqual(missingOnlineConfig({ ...FULL, ONLINE_MEMBER_2: 'uuid-1' }), [
-  'ONLINE_MEMBER_2(ONLINE_MEMBER_1と同じ値)',
-]);
 
 // ⚠ Cron秘密値は長さまで見る（短いと総当たりで進行を叩かれる）
 assert.deepEqual(missingOnlineConfig({ ...FULL, ONLINE_CRON_SECRET: 'x'.repeat(31) }), [
   'ONLINE_CRON_SECRET(32文字以上が必要)',
 ]);
 
-// 何も無いときは6件すべてを挙げる（1件ずつ直させない）
-assert.equal(missingOnlineConfig({}).length, 6);
+// 何も無いときは5件すべてを挙げる（1件ずつ直させない）
+assert.equal(missingOnlineConfig({}).length, 5);
 
 // --- 実際の応答 -------------------------------------------------
 // ⚠ **値が本文に出ていないこと**をここで押さえる
@@ -59,11 +52,10 @@ assert.equal(res.statusCode, 503);
 assert.equal(payload.code, 'config');
 assert.deepEqual(payload.missing, [
   'SUPABASE_SERVICE_ROLE_KEY',
-  'ONLINE_MEMBER_1',
-  'ONLINE_MEMBER_2',
+  'ONLINE_ADMIN',
   'ONLINE_CRON_SECRET',
 ]);
 assert.ok(!body.includes('SECRET-ANON-VALUE'), '秘密値が応答に漏れている');
 assert.ok(!body.includes('example.supabase.co'), 'URLが応答に漏れている');
 
-console.log('■ オンライン設定の診断: OK（不足6種の切り分け / 値を漏らさない）');
+console.log('■ オンライン設定の診断: OK（不足5種の切り分け / 値を漏らさない）');

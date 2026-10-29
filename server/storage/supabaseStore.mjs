@@ -285,8 +285,14 @@ export class SupabaseStore {
         raw: true,
         body: gzipSync(JSON.stringify(value)),
       });
+      // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
+      //    `this.members` を使うと、招待で増えた人のぶんが作られず、
+      //    その人は自分の球団を見られなくなる。
+      const viewMembers = value.league?.members?.length
+        ? value.league.members
+        : this.members;
       const views = Object.fromEntries(
-        this.members.map((m) => [
+        viewMembers.map((m) => [
           m.userId,
           projectLeague(
             value,

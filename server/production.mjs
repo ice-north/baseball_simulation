@@ -16,11 +16,9 @@ export function missingOnlineConfig(env = process.env) {
   if (!env.SUPABASE_URL?.startsWith('https://')) missing.push('SUPABASE_URL');
   if (!env.SUPABASE_ANON_KEY) missing.push('SUPABASE_ANON_KEY');
   if (!env.SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
-  if (!env.ONLINE_MEMBER_1) missing.push('ONLINE_MEMBER_1');
-  if (!env.ONLINE_MEMBER_2) missing.push('ONLINE_MEMBER_2');
-  else if (env.ONLINE_MEMBER_1 === env.ONLINE_MEMBER_2) {
-    missing.push('ONLINE_MEMBER_2(ONLINE_MEMBER_1と同じ値)');
-  }
+  // ⚠ **参加者は環境変数で持たない**。リーグのデータ側が正本で、招待で増える。
+  //    ここで要るのは「誰が管理者か」だけ。
+  if (!env.ONLINE_ADMIN) missing.push('ONLINE_ADMIN');
   if (!env.ONLINE_CRON_SECRET) missing.push('ONLINE_CRON_SECRET');
   else if (env.ONLINE_CRON_SECRET.length < 32) {
     missing.push('ONLINE_CRON_SECRET(32文字以上が必要)');
@@ -34,8 +32,7 @@ export function productionHandler() {
     SUPABASE_URL: url,
     SUPABASE_SERVICE_ROLE_KEY: serviceKey,
     SUPABASE_ANON_KEY: anonKey,
-    ONLINE_MEMBER_1: first,
-    ONLINE_MEMBER_2: second,
+    ONLINE_ADMIN: admin,
     ONLINE_CRON_SECRET: cronSecret,
     // 検証用の「1時間進める」を本番でも出すための任意設定。
     // ⚠ **遊び始めたら外すこと**。管理者だけとはいえ、好きな時に進められるのは
@@ -52,14 +49,12 @@ export function productionHandler() {
     error.missing = missing;
     throw error;
   }
-  const members = [
-    { userId: first, label: 'プレイヤー1' },
-    { userId: second, label: 'プレイヤー2' },
-  ];
-  const store = new SupabaseStore({ url, serviceKey, members, adminId: first });
+  // リーグ作成時の種。以降の参加者はリーグのデータ側で増える
+  const members = [{ userId: admin, label: '管理者' }];
+  const store = new SupabaseStore({ url, serviceKey, members, adminId: admin });
   const service = new LeagueService(store, {
     members,
-    adminId: first,
+    adminId: admin,
     allowStep: allowStep === '1' || allowStep === 'true',
   });
   const auth = async (path, options = {}) => {

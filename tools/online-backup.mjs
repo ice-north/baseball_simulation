@@ -8,19 +8,15 @@ requireOnline(
   ['export', 'restore'].includes(mode) && path,
   '使用法: node --env-file=.env tools/online-backup.mjs export|restore /保存先/world.json.gz',
 );
-const members = [
-  { userId: process.env.ONLINE_MEMBER_1 },
-  { userId: process.env.ONLINE_MEMBER_2 },
-];
-requireOnline(
-  members.every((m) => m.userId) && members[0].userId !== members[1].userId,
-  '参加者の設定が必要です',
-);
+// ⚠ 参加者はリーグのデータ側が正本。ここで要るのは管理者だけ
+const adminId = process.env.ONLINE_ADMIN;
+requireOnline(adminId, '管理者（ONLINE_ADMIN）の設定が必要です');
+const members = [{ userId: adminId }];
 const store = new SupabaseStore({
   url: process.env.SUPABASE_URL,
   serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   members,
-  adminId: members[0].userId,
+  adminId,
 });
 if (mode === 'export') {
   // 1つの公開済みbundleを読む。書込み中の途中状態を混ぜない。
@@ -37,16 +33,12 @@ if (mode === 'export') {
 } else {
   const source = JSON.parse(gunzipSync(await readFile(path)));
   assertLeagueVersion(source.league);
+  // ⚠ **別の環境のバックアップを持ち込ませない**。以前は参加者の集合が
+  //    環境変数と完全一致することを求めていたが、参加者は招待で増えるので
+  //    もう固定の集合ではない。管理者が含まれているかで判断する。
   requireOnline(
-    source.league.members
-      .map((m) => m.userId)
-      .sort()
-      .join() ===
-      members
-        .map((m) => m.userId)
-        .sort()
-        .join(),
-    'バックアップの参加者が異なります',
+    source.league.members.some((m) => m.userId === adminId),
+    'このバックアップに管理者が含まれていません（別の環境のものです）',
   );
   await store.transaction((current) => {
     requireOnline(

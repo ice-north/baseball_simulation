@@ -33,7 +33,11 @@ export class LeagueService {
     } = {},
   ) {
     this.store = store;
-    this.members = members;
+    // ⚠ **参加者の正本はリーグのデータ側**（`bundle.league.members`）。
+    //    ここに渡すのはリーグがまだ無いときの種（管理者1人）と、
+    //    リーグを作らずに動かす検査・開発サーバー向けの控え。
+    //    環境変数で参加者を固定していた頃の名残なので、増やさないこと。
+    this.members = members || [];
     this.adminId = adminId;
     this.clock = clock;
     this.local = local;
@@ -46,13 +50,27 @@ export class LeagueService {
     requireOnline(view, 'このリーグの参加者ではありません', 403);
     return view;
   }
+  /** 参加者の一覧。リーグがあればそちらを正本にする */
+  memberIds(bundle) {
+    const inLeague = (bundle?.league?.members || []).map((m) => m.userId);
+    return inLeague.length ? inLeague : this.members.map((m) => m.userId);
+  }
+
+  /**
+   * ⚠ **管理者は常に通すこと**。リーグを作る前は誰も参加者ではないので、
+   *    参加者だけに絞ると管理者がログインできず、リーグを作れなくなる。
+   */
+  isMember(bundle, userId) {
+    return userId === this.adminId || this.memberIds(bundle).includes(userId);
+  }
+
   async login(userId) {
-    requireOnline(
-      this.members.some((m) => m.userId === userId),
-      'このリーグの参加者ではありません',
-      403,
-    );
     return this.store.transaction((bundle) => {
+      requireOnline(
+        this.isMember(bundle, userId),
+        'このリーグの参加者ではありません',
+        403,
+      );
       const sessionId = randomUUID();
       bundle.sessions[userId] = sessionId;
       return { value: { sessionId } };
@@ -77,12 +95,12 @@ export class LeagueService {
     return projectGameInfo(await this.store.read(), userId, id, year);
   }
   async logout(userId, sessionId) {
-    requireOnline(
-      this.members.some((m) => m.userId === userId),
-      '参加者ではありません',
-      403,
-    );
     return this.store.transaction((bundle) => {
+      requireOnline(
+        this.isMember(bundle, userId),
+        '参加者ではありません',
+        403,
+      );
       if (!sessionId || bundle.sessions[userId] !== sessionId)
         return { unchanged: true, value: { ok: true } };
       delete bundle.sessions[userId];
@@ -132,7 +150,13 @@ export class LeagueService {
           403,
         );
         bundle.league = await this.engine((engine) =>
-          engine.createLeague({ members: this.members, now }),
+          // ⚠ 作成時の参加者は**管理者1人**。以降は招待で増える
+          engine.createLeague({
+            members: this.members.length
+              ? this.members
+              : [{ userId: this.adminId, label: '管理者' }],
+            now,
+          }),
         );
       } else {
         requireOnline(
