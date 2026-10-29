@@ -24,8 +24,23 @@ export const MAX_MEMBERS = PYRAMID_TEAM_COUNT; // 42
  */
 export const JOIN_TIER = 2;
 
-const joinableLeagueIds = () =>
+export const joinableLeagueIds = () =>
   PYRAMID_LEAGUES.filter((l) => l.tier === JOIN_TIER).map((l) => l.id);
+
+/**
+ * 参加者に割り当てる順の球団。**下の階層から**並べる。
+ * ⚠ 上の階層から埋めると、昇降格で積み上げた順位の意味が消える。
+ *    Cが埋まったらB、それも埋まったらA、という順で続ける。
+ */
+export function assignmentOrder(teams) {
+  const tierOf = Object.fromEntries(PYRAMID_LEAGUES.map((l) => [l.id, l.tier]));
+  return [...teams].sort(
+    (a, b) =>
+      (tierOf[b.league] ?? 0) - (tierOf[a.league] ?? 0) ||
+      (a.league < b.league ? -1 : a.league > b.league ? 1 : 0) ||
+      (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+  );
+}
 
 /** 招待コードの文字種。⚠ 0/O/1/I/l を除く（読み上げ・書き写しの事故を防ぐ） */
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';

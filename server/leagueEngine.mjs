@@ -89,6 +89,16 @@ import {
   nextProgressionAt,
   requireOnline,
 } from '../src/online/shared.js';
+import {
+  generatePyramidTeams,
+  pyramidSeasonSchedule,
+  PYRAMID_TEAM_COUNT,
+  SEASON_TURNS,
+} from '../src/online/pyramidLeague.js';
+import {
+  assertMemberCount,
+  assignmentOrder,
+} from '../src/online/membership.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export const CAMP_MENUS = [
@@ -123,13 +133,15 @@ const seeded = (league, key, fn) =>
     ),
   );
 
-function createSchedule(season) {
-  season.schedule = generateFullSeasonSchedule({
-    teams: season.settings.teamNames,
-    gamesPerSeason: 75,
-    startDate: { year: season.currentDate.year, month: 4, day: 1 },
-    endDate: { year: season.currentDate.year, month: 9, day: 30 },
-    leagueFormat: 'single',
+// ⚠ **`generateFullSeasonSchedule` は使えない**。`leagueFormat` が
+//    `'single'` か `'two'` の2通りしか対応しておらず、7リーグを組めない
+//    （実装を読んで確認した）。階層リーグの日程は `pyramidSeasonSchedule`
+//    （1ターン＝1日＝全球団が1試合）で組む。
+// ⚠ 順位表は**平たい配列のまま**でよい。更新は球団名で行われるので、
+//    リーグ分けは表示と昇降格のときだけ見ればよい。
+function createSchedule(season, teams) {
+  season.schedule = pyramidSeasonSchedule(teams, {
+    year: season.currentDate.year,
   });
   season.standings = initializeStandings(season.settings.teamNames);
 }
@@ -146,7 +158,9 @@ function openPhase(league, kind) {
       ) / names.length;
     phase.candidates = generateTryoutCandidates(
       league.season.year,
-      4,
+      // ⚠ **球団数を渡すこと**。以前は 4 が直に書かれており、
+      //    42球団にすると候補が足りず名簿を埋められない
+      names.length,
       kind === 'initial_tryout',
       rank,
       reputation,
@@ -163,15 +177,13 @@ export function createLeague({
   members,
   now = new Date().toISOString(),
 }) {
-  requireOnline(
-    Array.isArray(members) &&
-      members.length === 2 &&
-      new Set(members.map((m) => m.userId)).size === 2 &&
-      members.every((m) => typeof m.userId === 'string' && m.userId.length > 0),
-    '参加者2人を指定してください',
-  );
-  const defs = INDEPENDENT_LEAGUES.shikoku.teams;
+  // ⚠ 人数は1〜42。0人は拒む（誰も居ないと停止も再開もできない）
+  assertMemberCount(members);
+  // ⚠ 42球団は seed から生成する。同じ seed なら必ず同じ世界になる
+  const defs = generatePyramidTeams(seed);
   const names = defs.map((t) => t.name);
+  // ⚠ 参加者は**下の階層から**割り当てる
+  const order = assignmentOrder(defs);
   const league = {
     schema: ONLINE_SCHEMA,
     engineVersion: ENGINE_VERSION,
@@ -182,10 +194,13 @@ export function createLeague({
     createdAt: now,
     updatedAt: now,
     nextAdvanceAt: null,
+    // 階層リーグの球団表。参加者の割り当てと昇降格でこれを見る
+    teams: defs,
+    invites: [],
     members: members.map((m, i) => ({
       userId: m.userId,
       label: m.label || `プレイヤー${i + 1}`,
-      teamName: names[i],
+      teamName: order[i].name,
     })),
     history: [],
     notices: [],
@@ -194,9 +209,9 @@ export function createLeague({
   season.settings = {
     ...season.settings,
     teamNames: names,
-    teamsCount: 4,
-    preset: 'shikoku',
-    gamesPerSeason: 75,
+    teamsCount: PYRAMID_TEAM_COUNT,
+    preset: 'pyramid',
+    gamesPerSeason: SEASON_TURNS,
     leagueFormat: 'single',
     playoffFormat: 'short',
     useDH: false,
@@ -207,7 +222,7 @@ export function createLeague({
     setStaffIdCounter(5000);
     setStaffNameHistory([]);
     initializeTeamsForCount(
-      4,
+      PYRAMID_TEAM_COUNT,
       names,
       defs.map((t) => t.abbreviation),
     );
@@ -220,7 +235,7 @@ export function createLeague({
     );
     generateAprilHighSchoolClass(1);
     season._highSchoolGenerated = true;
-    createSchedule(season);
+    createSchedule(season, defs);
     openPhase(league, 'initial_tryout');
   });
   league.game = captureWorld();
@@ -349,6 +364,20 @@ function resolveTryout(league, plans) {
   const remaining = clone(phase.candidates);
   const acquired = Object.fromEntries(names.map((name) => [name, []]));
   const allPicked = [];
+  // ⚠ **希望順位は静的だが、ドラフトは動的**。4球団なら自分の番までに
+  //    ほとんど取られないが、42球団だと24巡目には約1000人が消えており、
+  //    好みの順だけで取ると**捕手が一度も浮上しない**ことがある。
+  //    そのまま進むと「投手・捕手・野手が不足」で**フェーズ全体が解決できず、
+  //    1球団の都合で全員が止まる**（実際にそうなった）。
+  //    残り指名枠が不足ぶんと同じになったら、必要な守備位置を優先する。
+  const isPitcher = (p) => p.position === 'pitcher';
+  const shortfall = (list) => {
+    const fielders = list.filter((p) => !isPitcher(p)).length;
+    const needPitcher = !list.some(isPitcher);
+    const needCatcher = !list.some((p) => p.position === 'catcher');
+    const needFielders = Math.max(8 - fielders, needCatcher ? 1 : 0);
+    return { needPitcher, needCatcher, needFielders };
+  };
   for (const pick of generateSnakeDraftOrder(names, 24)) {
     const team = TEAMS_DATA[pick.team];
     const plan = plans[pick.team];
@@ -357,11 +386,28 @@ function resolveTryout(league, plans) {
       (plan && acquired[pick.team].length >= plan.count)
     )
       continue;
-    const player = plan
-      ? plan.rankedIds
-          .map((id) => remaining.find((p) => p.id === id))
-          .find(Boolean)
-      : selectPlayerForAI(remaining, [...team.players, ...acquired[pick.team]]);
+    const roster = [...team.players, ...acquired[pick.team]];
+    const { needPitcher, needCatcher, needFielders } = shortfall(roster);
+    const slotsLeft = 24 - roster.length;
+    const mustFill = (needPitcher ? 1 : 0) + needFielders;
+    let forced = null;
+    if (slotsLeft <= mustFill) {
+      // 足りないものから順に埋める（投手 → 捕手 → 野手）
+      const want = needPitcher
+        ? isPitcher
+        : needCatcher
+          ? (p) => p.position === 'catcher'
+          : (p) => !isPitcher(p);
+      const pool = remaining.filter(want);
+      forced = pool.length ? selectPlayerForAI(pool, roster) || pool[0] : null;
+    }
+    const player = forced
+      ? forced
+      : plan
+        ? plan.rankedIds
+            .map((id) => remaining.find((p) => p.id === id))
+            .find(Boolean)
+        : selectPlayerForAI(remaining, roster);
     if (!player) continue;
     remaining.splice(
       remaining.findIndex((p) => p.id === player.id),

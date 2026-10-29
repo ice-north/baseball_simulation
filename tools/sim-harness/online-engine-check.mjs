@@ -11,14 +11,18 @@ import { gzipSync } from 'node:zlib';
 import { nextProgressionAt } from '../../src/online/shared.js';
 import { projectPlayerInfo } from '../../server/projection.mjs';
 
+// 1ターン＝1時間（毎正時）。⚠ 境界は「その時刻ちょうど」を含めず、次の枠へ送る。
+// 08:00 JST ちょうど → 09:00 JST
 assert.equal(
   nextProgressionAt('2026-10-27T23:00:00Z'),
-  '2026-10-28T01:30:00.000Z',
+  '2026-10-28T00:00:00.000Z',
 );
+// ⚠ その日の最後の枠（23:00 JST）ちょうどなら、翌日の最初の枠（00:00 JST）へ送る
 assert.equal(
   nextProgressionAt('2026-10-28T14:00:00Z'),
-  '2026-10-28T23:00:00.000Z',
+  '2026-10-28T15:00:00.000Z',
 );
+// 1秒前なら同じ日の枠に入る
 assert.equal(
   nextProgressionAt('2026-10-28T13:59:59Z'),
   '2026-10-28T14:00:00.000Z',

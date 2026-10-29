@@ -17,6 +17,7 @@
 //    `Math.random()` をここで呼ばない。
 // ============================================================
 import { createSeededRandom } from '../game/rng.js';
+import { advanceDate, SEASON_PHASES } from '../season/seasonManager.js';
 
 export const TEAMS_PER_LEAGUE = 6;
 
@@ -224,4 +225,33 @@ export function pyramidSchedule(teams, { turns = SEASON_TURNS } = {}) {
     }
   }
   return games;
+}
+
+/**
+ * エンジンが食べられる形の年間日程に変換する。
+ * 1ターン＝1日。144ターンぶんの日付を 4/1 から連続で割り当てる。
+ *
+ * ⚠ **1ターンに1つの日付**。エンジンは `getScheduleByDate` で日付ごとに試合を拾い、
+ *    `simulateScheduledGamesOnDate` がその日ぶんを消化する。ターンと日付が
+ *    1対1でないと「1ターンで全球団が1試合」が崩れる。
+ * ⚠ 4/1 から144日は 8月下旬まで。既存の 4/1〜9/30 の枠に収まる。
+ */
+export function pyramidSeasonSchedule(teams, { year, turns = SEASON_TURNS } = {}) {
+  const dates = [];
+  let date = { year, month: 4, day: 1 };
+  for (let t = 0; t < turns; t++) {
+    dates.push({ ...date });
+    date = advanceDate(date, 1);
+  }
+  return pyramidSchedule(teams, { turns }).map((g, i) => ({
+    id: i + 1,
+    date: dates[g.turn],
+    home: g.home,
+    away: g.away,
+    starterHome: null,
+    starterAway: null,
+    result: null,
+    phase: SEASON_PHASES.REGULAR_SEASON,
+    league: g.league,
+  }));
 }

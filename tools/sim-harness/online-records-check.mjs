@@ -53,7 +53,10 @@ while (league.phase) {
   );
 }
 loadLeagueWorld(league);
-const [home, away] = league.season.settings.teamNames;
+// ⚠ **参加者の球団を使うこと**。`teamNames` の先頭はAリーグのCPU球団で、
+//    参加者はCリーグに割り当てられる。先頭2つを使うと所有者が違い、
+//    閲覧権限の検査が 404 になる（階層リーグ化で実際に踏んだ）。
+const [home, away] = league.members.map((m) => m.teamName);
 const before = captureWorld();
 const plain = autoSimulateGame(home, away, false, 70281);
 const plainWorld = captureWorld();
