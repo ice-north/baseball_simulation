@@ -157,10 +157,14 @@ for (const g of schedule) {
 
 // ⚠ **ホームが偏らないこと**。1巡ごとに本拠地を入れ替えないと、同じ相手に
 //    片方がずっとホームになり、144試合ぶん有利不利が積み上がる。
+// ⚠ **試合数から導くこと**。68〜76 と直に書いており、144ターンから
+//    120ターンへ変えたとき「60〜60（完全に均等）」が範囲外で落ちた。
+//    許容は「半分±4」。狭すぎると正しい均等配分まで落とす
 const homes = Object.values(homeCount);
+const half = SEASON_TURNS / 2;
 assert.ok(
-  Math.min(...homes) >= 68 && Math.max(...homes) <= 76,
-  `ホーム試合数が偏っている: ${Math.min(...homes)}〜${Math.max(...homes)}`,
+  Math.min(...homes) >= half - 4 && Math.max(...homes) <= half + 4,
+  `ホーム試合数が偏っている: ${Math.min(...homes)}〜${Math.max(...homes)}（半分=${half}）`,
 );
 
 // --- 順位表からの入れ替え -----------------------------------------

@@ -175,3 +175,59 @@ export function sameEditState(a, b) {
       : value;
   return JSON.stringify(a, canonical) === JSON.stringify(b, canonical);
 }
+
+// ============================================================
+// フェーズの締め切り
+//
+// ⚠ **1人が決めないと全員が止まる**のを避けるための仕組み。
+//    非同期で遊ぶゲームなので、待ち続ける設計だと誰かの都合で週が進まない。
+//    締め切りを過ぎたら未提出の人に既定案を当てて先へ進める。
+//
+// 曜日の割り当ては締め切りの置き方で決まる。シーズンは月曜0時に始まり、
+// 120ターン（24×5日）で**金曜23時に終わる**。そこから、
+//
+//   土曜  ストーブリーグ（契約更改・トライアウト・オフシーズン）→ 締め切り 日曜0時
+//   日曜  キャンプ・編成                                       → 締め切り 月曜0時
+//   月曜  新シーズン開幕
+//
+// ⚠ 締め切りが曜日合わせを兼ねている。全員が早く決めても、次の開幕は
+//    月曜0時まで来ない（曜日がずれない）。
+// ============================================================
+
+/** フェーズを行う曜日（JST。0=日曜 … 6=土曜）。初期編成は締め切りを設けない */
+export const PHASE_WEEKDAY = {
+  contract: 6,
+  tryout: 6,
+  offseason: 6,
+  camp: 0,
+};
+
+/** JSTでの曜日（0=日曜 … 6=土曜） */
+export function jstWeekday(iso) {
+  return new Date(new Date(iso).getTime() + 9 * 3600000).getUTCDay();
+}
+
+/**
+ * 指定した曜日の0時（JST）のうち、`now` より後で一番近いものを返す。
+ * ⚠ `now` がちょうどその曜日の0時でも、**次の週**を返す（先へ進むため）。
+ */
+export function nextWeekdayStart(now, weekday) {
+  const ms = new Date(now).getTime();
+  requireOnline(Number.isFinite(ms), '時刻が不正です');
+  const jst = new Date(ms + 9 * 3600000);
+  const midnight =
+    Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()) -
+    9 * 3600000;
+  const diff = (weekday - jst.getUTCDay() + 7) % 7 || 7;
+  return new Date(midnight + diff * 86400000).toISOString();
+}
+
+/**
+ * フェーズの締め切り。担当曜日の**翌日0時**（JST）。
+ * 担当が決まっていないフェーズ（初期編成）は `null`＝待ち続ける。
+ */
+export function phaseDeadlineAt(kind, now) {
+  const weekday = PHASE_WEEKDAY[kind];
+  if (weekday === undefined) return null;
+  return nextWeekdayStart(now, (weekday + 1) % 7);
+}

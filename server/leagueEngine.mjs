@@ -87,6 +87,7 @@ import {
   ONLINE_ENGINE_VERSION,
   assertLeagueVersion,
   nextProgressionAt,
+  phaseDeadlineAt,
   requireOnline,
 } from '../src/online/shared.js';
 import {
@@ -154,8 +155,16 @@ function createSchedule(season, teams) {
   season.standings = initializeStandings(season.settings.teamNames);
 }
 
-function openPhase(league, kind) {
-  const phase = { id: `${league.season.year}:${kind}`, kind, submissions: {} };
+function openPhase(league, kind, now) {
+  // ⚠ **締め切りを持たせること**。待ち続ける設計だと、1人が決めないだけで
+  //    全員の週が止まる。締め切りが曜日合わせも兼ねている
+  //    （土曜＝ストーブリーグ／日曜＝キャンプ／月曜＝開幕）。
+  const phase = {
+    id: `${league.season.year}:${kind}`,
+    kind,
+    deadline: now ? phaseDeadlineAt(kind, now) : null,
+    submissions: {},
+  };
   if (kind === 'initial_tryout' || kind === 'tryout') {
     const names = league.season.settings.teamNames;
     const rank = getLeagueRankFromTeams(names) || 'B';
@@ -244,7 +253,7 @@ export function createLeague({
     generateAprilHighSchoolClass(1);
     season._highSchoolGenerated = true;
     createSchedule(season, defs);
-    openPhase(league, 'initial_tryout');
+    openPhase(league, 'initial_tryout', now);
   });
   league.game = captureWorld();
   return league;
@@ -576,7 +585,7 @@ function resolvePhase(league, now) {
   league.phase = null;
   delete league.season.pendingPhaseEvent;
   if (kind === 'initial_tryout' || kind === 'offseason')
-    openPhase(league, 'camp');
+    openPhase(league, 'camp', now);
   else {
     league.status = 'running';
     league.nextAdvanceAt = nextProgressionAt(now);
@@ -688,12 +697,45 @@ export function advanceLeagueDay(league, operationId, now) {
       });
       season._draftDone = true;
     }
-    if (month === 11 && day === 9) openPhase(league, 'contract');
-    else if (month === 11 && day === 10) openPhase(league, 'tryout');
-    else if (month === 11 && day === 30) openPhase(league, 'offseason');
+    if (month === 11 && day === 9) openPhase(league, 'contract', now);
+    else if (month === 11 && day === 10) openPhase(league, 'tryout', now);
+    else if (month === 11 && day === 30) openPhase(league, 'offseason', now);
   });
   if (league.status === 'running')
     league.nextAdvanceAt = nextProgressionAt(now);
   league.notices = league.notices.slice(0, 20);
   league.game = captureWorld();
+}
+
+/**
+ * 締め切りを過ぎたフェーズを、未提出の人に既定案を当てて解決する。
+ *
+ * ⚠ **非同期で遊ぶゲームなので、待ち続けてはいけない**。1人が決めないと
+ *    全員の週が止まる。既定案（`defaultPhasePlan`）はAIの選び方そのものなので、
+ *    放置しても不利になりすぎない。
+ * ⚠ 解決すると次のフェーズが開くことがある（契約更改→トライアウト→オフシーズン）。
+ *    そちらの締め切りも過ぎていれば、同じティックで続けて解決する。
+ */
+export function autoResolvePhase(league, now) {
+  loadLeagueWorld(league);
+  const resolved = [];
+  // ⚠ 上限を置く。開く→解決の繰り返しが想定外に続いても回り続けない
+  for (let guard = 0; guard < 10; guard++) {
+    const phase = league.phase;
+    if (!phase?.deadline || phase.deadline > now) break;
+    const id = phase.id;
+    resolved.push(phase.kind);
+    for (const member of league.members) {
+      if (league.phase?.id !== id) break;
+      if (phase.submissions[member.userId]?.ready) continue;
+      submitPhase(
+        league,
+        member.userId,
+        { phaseId: id, plan: defaultPhasePlan(league, member.teamName), ready: true },
+        now,
+      );
+    }
+    if (league.phase?.id === id) break; // 誰も居ない等で解決しなかった
+  }
+  return resolved;
 }

@@ -344,6 +344,25 @@ export class LeagueService {
     return this.store.transaction(async (bundle) => {
       const l = bundle.league;
       const now = this.clock();
+      // ⚠ **締め切り超過の手続きを先に片付ける**。手続き中は status が
+      //    running でないので、下の判定だけだと永遠に動かない。
+      if (l?.phase?.deadline && l.phase.deadline <= now) {
+        const working = clone(l);
+        try {
+          const resolved = await this.engine((engine) =>
+            engine.autoResolvePhase(working, now),
+          );
+          bundle.league = working;
+          bundle.league.revision++;
+          bundle.league.updatedAt = this.clock();
+          if (bundle.league.status === 'running' && !bundle.league.nextAdvanceAt)
+            bundle.league.nextAdvanceAt = nextProgressionAt(bundle.league.updatedAt);
+          return { value: { advanced: true, autoResolved: resolved } };
+        } catch (error) {
+          console.error('online auto resolve failed:', error.stack);
+          return { unchanged: true, value: { advanced: false } };
+        }
+      }
       if (
         !l ||
         l.status !== 'running' ||

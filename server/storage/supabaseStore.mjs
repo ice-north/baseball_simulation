@@ -99,6 +99,10 @@ export class SupabaseStore {
   async isDue(now) {
     const row = await this.control();
     const view = row.views[this.adminId];
+    // ⚠ **フェーズの締め切り超過でも起動すること**。手続き中は status が
+    //    running でないので、進行時刻だけ見ていると締め切りが来ても
+    //    誰も動かさず、1人の未提出で全員の週が止まる。
+    if (view?.phaseDeadline && view.phaseDeadline <= now) return true;
     return !!(
       view?.status === 'running' &&
       view.nextAdvanceAt &&
