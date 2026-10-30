@@ -121,6 +121,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     isAdmin: userId === adminId,
     writable: !!sessionId && bundle.sessions[userId] === sessionId,
     hasBackup: !!bundle.backup,
+    // ⚠ **招待コードは管理者にだけ返す**。参加者全員に見せると、
+    //    管理者を通さずに人を呼べてしまう（招待制の意味が無くなる）。
+    invites:
+      userId === adminId
+        ? (l.invites || []).filter((i) => !i.usedBy).map((i) => i.code)
+        : undefined,
     members: l.members.map((m) => ({
       label: m.label,
       teamName: m.teamName,

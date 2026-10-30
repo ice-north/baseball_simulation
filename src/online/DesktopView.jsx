@@ -234,6 +234,10 @@ function Admin({ view, busy, run, command, allowStep }) {
             バックアップから復元
           </button>
         )}
+        {/* 招待コードの発行。⚠ 参加者を増やすのに環境変数は触らない */}
+        <button disabled={busy} onClick={() => run(() => command('invite'))}>
+          招待コードを発行
+        </button>
         {/* ⚠ 1ターン＝1時間＝1試合日。本番で出すのは検証中だけ
             （`ONLINE_ALLOW_STEP`）。遊び始めたら設定を外すこと。 */}
         {allowStep && view.status === 'running' && (
@@ -242,6 +246,21 @@ function Admin({ view, busy, run, command, allowStep }) {
           </button>
         )}
       </div>
+      {/* ⚠ 未使用のコードだけ出す。使用済みを並べても渡し間違いの元になる。
+          ⚠ 投影側で**管理者にしか返していない**（参加者全員に見せると、
+          管理者を通さずに人を呼べて招待制の意味が消える）。 */}
+      {view.invites?.length > 0 && (
+        <div className="online-invites">
+          <p>未使用の招待コード</p>
+          <ul>
+            {view.invites.map((code) => (
+              <li key={code}>
+                <code>{code}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {restoreConfirm && (
         <div role="alert">
           <p>

@@ -8,13 +8,14 @@ if (process.env.NODE_ENV === 'production' || process.env.VERCEL)
 const store = new FileStore(
   resolve(process.env.ONLINE_DATA_FILE || '.online-data/league.json.gz'),
 );
+// ⚠ **種は管理者1人だけにする**。以前はプレイヤー2も入れていたが、
+//    本番は招待コードで参加する流れなので、ここで2人揃えてしまうと
+//    参加の経路（招待の発行 → コード入力）をローカルで一度も通らない。
+//    プレイヤー2は本番と同じく招待されて入る。
 const service = new LeagueService(store, {
   local: true,
   adminId: 'player1',
-  members: [
-    { userId: 'player1', label: 'プレイヤー1' },
-    { userId: 'player2', label: 'プレイヤー2' },
-  ],
+  members: [{ userId: 'player1', label: 'プレイヤー1' }],
 });
 const handler = createHandler(service, { local: true });
 const server = createServer(handler);

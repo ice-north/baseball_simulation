@@ -15,6 +15,62 @@ import {
 import { PageNav } from './PageNav.jsx';
 export { PageNav } from './PageNav.jsx';
 
+/**
+ * 招待コードで参加する画面。
+ *
+ * ⚠ **ログイン直後の非参加者がここに来る**。参加するにはログインが要るが、
+ *    ログインに参加者であることを求めると永遠に入れない（鶏と卵）。
+ *    サーバーは非参加者にも `joinRequired` のビューを返すので、
+ *    ここでコードを受け取る。
+ * ⚠ 球団名は**表示名**として扱われる。内部の球団名は引き継いだ球団のまま
+ *    （記録の選手キーまで名前で繋がっているため）。
+ */
+export function JoinLeague({ busy, join, logout }) {
+  const [code, setCode] = useState('');
+  const [teamName, setTeamName] = useState('');
+  return (
+    <section className="online-card online-login">
+      <p className="online-eyebrow">JOIN</p>
+      <h1>リーグに参加する</h1>
+      <p>
+        管理者から受け取った招待コードを入れてください。
+        空いている球団のうち、一番下のものを引き継ぎます。
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          join({ code: code.trim(), teamName: teamName.trim() });
+        }}
+      >
+        <label>
+          招待コード
+          <input
+            required
+            value={code}
+            maxLength={16}
+            autoCapitalize="characters"
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </label>
+        <label>
+          球団名（空なら元の名前のまま）
+          <input
+            value={teamName}
+            maxLength={24}
+            onChange={(e) => setTeamName(e.target.value)}
+          />
+        </label>
+        <button className="online-primary" type="submit" disabled={busy || !code.trim()}>
+          参加する
+        </button>
+      </form>
+      <button disabled={busy} onClick={logout}>
+        別のアカウントでログインし直す
+      </button>
+    </section>
+  );
+}
+
 export function Login({ local, login, busy }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

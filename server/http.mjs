@@ -84,11 +84,13 @@ export function createHandler(
         const userId = local
           ? req.headers.authorization?.replace(/^Bearer local:/, '')
           : await authenticate(req.headers.authorization);
-        requireOnline(
-          service.members.some((m) => m.userId === userId),
-          'ログインしてください',
-          401,
-        );
+        // ⚠ **ここで参加者かどうかを見ないこと**。`service.members` は
+        //    リーグを作るときの種（管理者1人）でしかなく、招待で増えた人は
+        //    入っていない。ここで弾くと、参加した人が全リクエストで401になる
+        //    （実機で踏んだ。検査は service を直接叩くのでこの層を通らない）。
+        //    ここで確かめるのは「本人であること」だけ。
+        //    何ができるかは `LeagueService` 側が参加者一覧を見て決める。
+        requireOnline(userId, 'ログインしてください', 401);
         const sessionId = req.headers['x-online-session'];
         if (action === 'logout' && req.method === 'POST')
           value = await service.logout(userId, sessionId);

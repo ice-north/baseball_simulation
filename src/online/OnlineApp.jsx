@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { formatGameDate, PROGRESSION_TIMES } from './shared.js';
 import './online.css';
 import { api, AUTH_KEY, dateTime, STATUS } from './api.js';
-import { Login } from './LeaguePanels.jsx';
+import { Login, JoinLeague } from './LeaguePanels.jsx';
 import DesktopView from './DesktopView.jsx';
 import MobileView from './MobileView.jsx';
 import { ReadContext } from './useRead.js';
@@ -330,10 +330,16 @@ export default function OnlineApp() {
           <Login local={config.local} login={login} busy={busy} />
         ) : !view ? (
           <p>リーグを読み込んでいます…</p>
+        ) : view.joinRequired ? (
+          <JoinLeague
+            busy={busy || !view.writable}
+            logout={logout}
+            join={(payload) => run(() => command('join', payload))}
+          />
         ) : view.setupRequired ? (
           <section className="online-card">
             <h1>リーグの準備</h1>
-            <p>固定4球団、参加者2人でスタートします。</p>
+            <p>1部6球団・2部6球団の12球団でスタートします。</p>
             {view.isAdmin && !mobile ? (
               <button
                 className="online-primary"
