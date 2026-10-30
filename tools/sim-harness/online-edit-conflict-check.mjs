@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
+import { ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 const positions = [
   'catcher',
   'first',
@@ -43,8 +44,8 @@ try {
   await store.transaction((b) => {
     b.sessions = { a: 'same-session', b: 'other-session' };
     b.league = {
-      schema: 1,
-      engineVersion: 'online-1',
+      schema: ONLINE_SCHEMA,
+      engineVersion: ONLINE_ENGINE_VERSION,
       revision: 1,
       status: 'running',
       members: [

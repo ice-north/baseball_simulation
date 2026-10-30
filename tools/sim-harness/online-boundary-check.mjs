@@ -6,7 +6,7 @@ import {
 } from '../../src/season/seasonManager.js';
 import { schedulePlayoffReplay } from '../../server/playoffReplay.mjs';
 import { prepareDailyLineup } from '../../server/dailyLineup.mjs';
-import { validateLineup } from '../../src/online/shared.js';
+import { validateLineup, ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 const schedule = generatePlayoffSchedule(['A', 'B'], 'short', 2024);
 schedule[0].result = { homeScore: 1, awayScore: 0 };
 schedule[1].result = { homeScore: 1, awayScore: 0 }; // ホームが入れ替わるので1勝1敗
@@ -99,8 +99,8 @@ for (const p of team.players.filter((p) => p.position === 'pitcher'))
 team.pitchingRotation.starters = [9, 10];
 team.pitchingRotation.currentStarterIndex = 1;
 const league = {
-  schema: 1,
-  engineVersion: 'online-1',
+  schema: ONLINE_SCHEMA,
+  engineVersion: ONLINE_ENGINE_VERSION,
   status: 'running',
   members: [{ userId: 'a', teamName: 'test' }],
   game: { teams: { test: team } },

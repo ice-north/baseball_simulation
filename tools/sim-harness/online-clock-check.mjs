@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
-import { nextProgressionAt } from '../../src/online/shared.js';
+import { nextProgressionAt, ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 const dir = await mkdtemp(join(tmpdir(), 'pennant-clock-'));
 try {
   const store = new FileStore(join(dir, 'state.gz'));
   await store.transaction((b) => {
     b.league = {
-      schema: 1,
-      engineVersion: 'online-1',
+      schema: ONLINE_SCHEMA,
+      engineVersion: ONLINE_ENGINE_VERSION,
       revision: 1,
       status: 'waiting',
       phase: {},

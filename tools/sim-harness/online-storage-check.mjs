@@ -4,6 +4,7 @@ import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
 import { SupabaseStore } from '../../server/storage/supabaseStore.mjs';
 import { createHandler } from '../../server/http.mjs';
 import { Readable } from 'node:stream';
+import { ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 let row = {
   generation: 0,
   snapshot_path: null,
@@ -203,8 +204,8 @@ await store.transaction((bundle) => {
     seasonStats: { batting: {}, pitching: {} },
   });
   bundle.league = {
-    schema: 1,
-    engineVersion: 'online-1',
+    schema: ONLINE_SCHEMA,
+    engineVersion: ONLINE_ENGINE_VERSION,
     revision: 1,
     status: 'running',
     members: [

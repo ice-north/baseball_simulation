@@ -196,6 +196,33 @@ node --env-file=.env tools/online-backup.mjs restore /安全な保存先/world.j
   別環境のデータを持ち込むには、ファイル内のUUIDを書き換える必要がある。
 - ⚠ `.env` には `service_role` キーが入る。作業後は扱いに注意する。
 
+## リーグを作り直す（保存の形を変えたとき）
+
+`ONLINE_SCHEMA` を上げると、古い形のリーグは
+「ゲームのバージョンが対応していません」で止まる。**自動では作り直らない。**
+`create` は既存リーグがあると拒むので、制御行を空にしてから作り直す。
+
+⚠ **実行すると、これまでの試合も成績も戻らない。** 残したいときは先に
+上の `export` で退避する（ただし古い形の退避は新しいコードでは復元できない）。
+⚠ **対象のプロジェクトが本番用か、実行前に必ず確認すること。**
+
+Supabase の SQL Editor で:
+
+```sql
+update public.online_control
+   set snapshot_path = null,
+       previous_paths = '{}',
+       views          = '{}'::jsonb,
+       generation     = generation + 1
+ where id = 'pennant';
+```
+
+その後、**管理者のアカウントで**ログインすると「リーグを作成」が出る。
+作成したら「管理」画面で招待コードを発行し、参加者に渡す。
+
+バケットに残った古い `snapshots/` と `archives/` は参照されないが、
+容量を使うので Storage の画面から消してよい。
+
 ## この形は他の作品にも使い回せる
 
 骨格は作品に依存しない。

@@ -7,6 +7,11 @@
 import assert from 'node:assert/strict';
 import { missingOnlineConfig } from '../../server/production.mjs';
 import handler from '../../api/online.mjs';
+import {
+  assertLeagueVersion,
+  ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
+} from '../../src/online/shared.js';
 
 const FULL = {
   SUPABASE_URL: 'https://example.supabase.co',
@@ -58,4 +63,28 @@ assert.deepEqual(payload.missing, [
 assert.ok(!body.includes('SECRET-ANON-VALUE'), '秘密値が応答に漏れている');
 assert.ok(!body.includes('example.supabase.co'), 'URLが応答に漏れている');
 
-console.log('■ オンライン設定の診断: OK（不足5種の切り分け / 値を漏らさない）');
+// --- 保存された世界の版 ---------------------------------------------
+// ⚠ **古い形のリーグを受け付けないこと**。保存の形を変えたのに版を上げないと、
+//    `assertLeagueVersion` を素通りして読み込まれ、遠くで落ちる。
+//    実際、固定4球団・2人の頃のリーグが残ったまま2部制のコードが本番へ出て、
+//    原因の分からない状態になった。版の門番はここでしか見ていない。
+const current = { schema: ONLINE_SCHEMA, engineVersion: ONLINE_ENGINE_VERSION };
+assert.doesNotThrow(() => assertLeagueVersion(current), '今の版が弾かれている');
+for (const stale of [
+  { ...current, schema: ONLINE_SCHEMA - 1 },
+  { ...current, engineVersion: `${ONLINE_ENGINE_VERSION}-old` },
+  {},
+  null,
+]) {
+  assert.throws(
+    () => assertLeagueVersion(stale),
+    (error) => error.status === 409 && error.code === 'version',
+    `古い版が通ってしまう: ${JSON.stringify(stale)}`,
+  );
+}
+// ⚠ 2部制12球団・招待制へ変えたときに上げた。1 は固定4球団・2人の形
+assert.ok(ONLINE_SCHEMA >= 2, '2部制へ変えたのに版が上がっていない');
+
+console.log(
+  '■ オンライン設定の診断: OK（不足5種の切り分け / 値を漏らさない / 古い版を拒む）',
+);
