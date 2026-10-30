@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { issueInvite } from './invites.mjs';
+import { applyJoin } from '../src/online/membership.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   requireOnline,
@@ -66,11 +68,10 @@ export class LeagueService {
 
   async login(userId) {
     return this.store.transaction((bundle) => {
-      requireOnline(
-        this.isMember(bundle, userId),
-        'このリーグの参加者ではありません',
-        403,
-      );
+      // ⚠ **参加者でなくてもログインは通すこと**。招待された人は
+      //    ログインしてからコードを入れるので、ここで締め出すと参加できない
+      //    （鶏と卵になる）。公開サインアップは無いので、ここに来られるのは
+      //    管理者が作ったアカウントだけ。できることは `command` 側で絞る。
       const sessionId = randomUUID();
       bundle.sessions[userId] = sessionId;
       return { value: { sessionId } };
@@ -158,6 +159,32 @@ export class LeagueService {
             now,
           }),
         );
+      } else if (command.type === 'invite') {
+        // ⚠ 招待コードを作れるのは管理者だけ
+        requireOnline(l, 'リーグがまだありません', 409);
+        requireOnline(
+          userId === this.adminId,
+          '招待コードを作れるのは管理者だけです',
+          403,
+        );
+        assertLeagueVersion(l);
+        l.invites = [...(l.invites || []), issueInvite(l, now)];
+        // ⚠ **revision を進めること**。これは楽観ロックの要で、
+        //    進め忘れると2人が同時に操作したとき片方が黙って消える。
+        //    既存の `revision++` は非作成コマンドの else の中にあり、
+        //    ここ（create と並ぶ階層）には掛からない。
+        l.revision++;
+      } else if (command.type === 'join') {
+        // ⚠ **参加者チェックより前に置くこと**。参加する人はまだ参加者ではない
+        requireOnline(l, 'リーグがまだありません', 409);
+        assertLeagueVersion(l);
+        applyJoin(l, {
+          userId,
+          teamName: command.payload?.teamName,
+          code: command.payload?.code,
+          now,
+        });
+        l.revision++; // ⚠ 上と同じ理由
       } else {
         requireOnline(
           l?.members.some((m) => m.userId === userId),

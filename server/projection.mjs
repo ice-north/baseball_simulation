@@ -96,7 +96,16 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   const l = bundle.league;
   if (!l) return { setupRequired: true, isAdmin: userId === adminId };
   const member = l.members.find((m) => m.userId === userId);
-  if (!member) return null;
+  // ⚠ **参加者でなくても「招待コードを入れる画面」までは返すこと**。
+  //    ここで null（＝403）にすると、招待された人はログインした途端に
+  //    締め出され、コードを入れる場所に辿り着けない（鶏と卵になる）。
+  if (!member)
+    return {
+      joinRequired: true,
+      isAdmin: userId === adminId,
+      revision: l.revision,
+      writable: !!sessionId && bundle.sessions[userId] === sessionId,
+    };
   const team = l.game.teams[member.teamName];
   const statistics = statisticsContext(l);
   const phase = l.phase;

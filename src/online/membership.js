@@ -128,7 +128,14 @@ export function assertCanJoin(league, userId, code) {
  * 参加を反映する。`league` を書き換えて返す。
  *
  * 弾かれたCPU球団の扱いは **A方式（引き継ぎ）**。
- * 新しい参加者がその枠と選手をそのまま受け取り、球団名だけ自分のものにする。
+ * 新しい参加者がその枠と選手をそのまま受け取り、**表示名**を自分のものにする。
+ *
+ * ⚠ **内部の球団名（`name`）は変えないこと。** 名前は
+ *    `TEAMS_DATA` のキー・日程の対戦相手・順位表・試合結果・
+ *    記録の選手キー（`onlinePlayerId`）まで貫いており、
+ *    参加のたびに付け替えると記録が迷子になる。
+ *    見せる名前は `displayName` で持ち、内部の同一性は `name` が担う
+ *    （一人用の社会人球団と同じ作り）。
  * ⚠ B方式（球団ごと消して新規に作る）へ変えるなら**ここだけ**を差し替える。
  *    選手の行き先（プール・分配・消滅）を決める必要がある。
  */
@@ -137,22 +144,36 @@ export function assertCanJoin(league, userId, code) {
 //    比べたいなら**文字列で控えてから**呼ぶこと（検査で実際に踏んだ）。
 export function applyJoin(league, { userId, label, teamName, code, now }) {
   const { invite, team } = assertCanJoin(league, userId, code);
-  const name = String(teamName || '').trim() || team.name;
+  const shown = String(teamName || '').trim() || team.name;
+  requireOnline(shown.length <= 24, '球団名が長すぎます', 400);
+  // ⚠ 内部名と表示名の**両方**と見比べる。片方だけだと同じ名前が2つ並ぶ
   requireOnline(
-    !(league.teams || []).some((t) => t.name === name && t.name !== team.name),
+    !(league.teams || []).some(
+      (t) => t !== team && (t.name === shown || t.displayName === shown),
+    ),
     'その球団名は使われています',
     409,
   );
-  const previousName = team.name;
-  team.name = name;
-  team.takenOverFrom = team.takenOverFrom || previousName;
+  team.displayName = shown;
   league.members = [
     ...(league.members || []),
-    { userId, label: label || name, teamName: name, joinedAt: now },
+    {
+      userId,
+      label: label || shown,
+      // ⚠ `teamName` は**内部名**。参加後の照合はすべてこれで行う
+      teamName: team.name,
+      displayName: shown,
+      joinedAt: now,
+    },
   ];
   invite.usedBy = userId;
   invite.usedAt = now;
-  return { league, teamName: name, previousName, leagueId: team.league };
+  return {
+    league,
+    teamName: team.name,
+    displayName: shown,
+    leagueId: team.league,
+  };
 }
 
 /**

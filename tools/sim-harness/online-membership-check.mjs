@@ -121,15 +121,20 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
     now: '2026-10-29T01:00:00.000Z',
   });
 
-  assert.equal(result.teamName, '新潟ドリーマーズ');
-  assert.equal(result.previousName, beforeName, '弾かれたCPU球団の名前を返す');
+  // ⚠ **内部名は変わらない**。変えると記録の選手キーまで迷子になる
+  assert.equal(result.teamName, beforeName, '内部名は引き継いだ球団のまま');
+  assert.equal(result.displayName, '新潟ドリーマーズ');
   assert.equal(l.members.length, 1);
-  assert.equal(l.members[0].teamName, '新潟ドリーマーズ');
+  assert.equal(l.members[0].teamName, beforeName, '照合は内部名で行う');
+  assert.equal(l.members[0].displayName, '新潟ドリーマーズ');
   // ⚠ 球団数は42のまま（A方式＝引き継ぎ。球団は消えない）
   assert.equal(l.teams.length, PYRAMID_TEAM_COUNT, '参加で球団数が変わってはいけない');
   assert.equal(cpuTeams(l).length, PYRAMID_TEAM_COUNT - 1);
-  // 引き継ぎ元を記録している（Bへ変えるときの手がかり）
-  assert.equal(l.teams.find((t) => t.name === '新潟ドリーマーズ').takenOverFrom, beforeName);
+  assert.equal(
+    l.teams.find((t) => t.name === beforeName).displayName,
+    '新潟ドリーマーズ',
+    '表示名だけを付け替える',
+  );
   // 招待コードが使い捨てになっている
   assert.equal(l.invites[0].usedBy, 'u1');
   assert.throws(() => assertCanJoin(l, 'u2', 'JOIN0001'), /使用済み/);
@@ -152,7 +157,7 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
   invite(l, 'EMPTY001');
   const emptyBefore = weakestJoinableTeam(l).name;
   const r = applyJoin(l, { userId: 'u9', teamName: '   ', code: 'EMPTY001', now: 'x' });
-  assert.equal(r.teamName, emptyBefore);
+  assert.equal(r.displayName, emptyBefore, '空なら元の球団名をそのまま使う');
 }
 
 // 既に使われている球団名は拒む
@@ -163,6 +168,11 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
   assert.throws(
     () => applyJoin(l, { userId: 'u1', teamName: taken, code: 'DUP00001', now: 'x' }),
     /使われています/,
+  );
+  // 長すぎる名前は拒む
+  assert.throws(
+    () => applyJoin(l, { userId: 'u2', teamName: 'あ'.repeat(25), code: 'DUP00001', now: 'x' }),
+    /長すぎます/,
   );
 }
 
