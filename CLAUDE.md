@@ -14,7 +14,7 @@
 - `src/App.jsx`: 手動試合、管理画面の接続。`[SECTION:]` マーカーで対象箇所を探す。
 - `src/game/autoSimulation.js`: 自動試合。共通の物理演算は `src/simulation-logic.js`、投球判断は `src/game/pitchCalling.js`。
 - `src/components/DateProgressScreen.jsx`: 日付進行とイベント。フェーズの定義は `src/season/seasonManager.js` と `src/season/dateProgression.js`。
-- `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用。
+- `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用。オンライン版も `LineupSettingContent` をそのまま使う（`src/online/OnlineLineup.jsx`、view との変換は `src/online/lineupBridge.js`）。
 - `src/game/saveSystem.js`: スロット、バックアップ、ロード、ファイル入出力。形式移行は `src/game/saveMigration.js`。
 - `src/corporate/worldData.js`: 並行世界の初期化。`TEAMS_DATA` とともにロード失敗時の復元対象。
 - `src/components/StartScreen.jsx` と `src/components/select/`: タイトルと導入画面。意匠はナイター中継で、本編とは別の語彙（`.glass-panel` と `.lift-card`）を使う。
@@ -27,4 +27,6 @@
 - 日付を飛ばす操作でも強制イベントを一度だけ処理する。試合日程を変更したらプレーオフと全国大会の順序も確認する。
 - 日をまとめて進める導線は1日進行の繰り返しで作る。日付を差し替える実装は間の日の試合・イベント判定・疲労回復とコンディション更新を落とし、取りこぼしは戻らない。止まる条件は `handleProgressDate` の戻り値を唯一の正本とし、呼ぶ側に書き写さない。
 - 采配後の日の再開（`_resumeDayAfterManagedGame`）は冪等に保つ。`StrictMode` がマウント時に effect を2回実行し、印を落とすのは `setState` 経由なので印だけでは門番にならない。順位表は作り直しで自己修復するが `TEAMS_DATA` の選手成績は二重に積まれる。
+- 一人用の画面をオンラインへ持ち込むときは、`team` をプロップで受け取る形に直してから渡し、`TEAMS_DATA` を名前で引く関数には `team` も渡す。引けないと `console.error` を出して戻るだけなので、画面は操作できたまま何も起きない。
+- 持ち込んだ画面は `.online` の**外**（ポータル）に出す。`online.css` は `.online button` のように要素名で当てており、詳細度が Tailwind の単一クラスより強いので、内側に入れるとボタンが全部同じ高さ・同じ色に潰れる。
 - 既存の数値調整は `npm run check:season` で集計を確認する。

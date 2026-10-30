@@ -375,7 +375,10 @@ export default function OnlineApp() {
                   </div>
                 </section>
                 <div className="online-clock-info">
-                  <span>1日7回・夜間は休止</span>
+                  {/* ⚠ 進行の刻みを変えたらここも直すこと。
+                      毎正時24ターンに変えたあと「1日7回・夜間は休止」が
+                      残っていた（画面だけ古い説明を出し続けていた）。 */}
+                  <span>毎正時・月〜金が試合／土日は手続き</span>
                   <button onClick={() => setShowTimes(true)}>進行時刻</button>
                 </div>
               </>

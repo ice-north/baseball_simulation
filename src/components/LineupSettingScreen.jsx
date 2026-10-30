@@ -15,7 +15,12 @@ import { surnameOf } from '../data/playerNames.js';
 const throwsLabel = (player) => (player.physical?.throws === 'left' ? '左投' : '右投');
 const formLabel = (player) => FORM_SHORT[player.pitching?.form] || '';
 
-const LineupSettingContent = ({ teamName, onBack, team }) => {
+// ⚠ **オンライン版からも使う**（`src/online/OnlineLineup.jsx`）。
+//    この部品は `team` を**プロップで受け取り、その場で書き換える**作りなので、
+//    `TEAMS_DATA` の球団でなくても動く。オンライン側は view から組み立てた
+//    複製を渡し、書き換えられた結果を読んでサーバーへ送る。
+//    ⚠ ここで `TEAMS_DATA` を直に読まないこと（結合が戻る）。
+export const LineupSettingContent = ({ teamName, onBack, team }) => {
   const [tab, setTab] = useState('lineup');
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [selectedBattingOrder, setSelectedBattingOrder] = useState(null);
@@ -1179,7 +1184,7 @@ const LineupSettingContent = ({ teamName, onBack, team }) => {
                     { mode: 'defense', label: '守備重視' },
                   ].map(({ mode, label }) => (
                     <button key={mode} onClick={() => {
-                      generateOptimalLineup(teamName, mode);
+                      generateOptimalLineup(teamName, mode, team);
                       setSwapSource(null);
                       setSelectedBenchPlayer(null);
                       setSelectedBattingOrder(null);
@@ -1902,7 +1907,7 @@ const LineupSettingContent = ({ teamName, onBack, team }) => {
                 <span className="text-xs text-gray-300 shrink-0">投手起用</span>
                 <button
                   onClick={() => {
-                    generatePitchingRotation(teamName);
+                    generatePitchingRotation(teamName, team);
                     setUpdateTrigger(prev => prev + 1);
                   }}
                   className="btn-primary text-xs px-3 py-1 rounded font-medium transition"

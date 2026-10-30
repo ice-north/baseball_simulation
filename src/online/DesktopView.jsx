@@ -8,6 +8,7 @@ import {
   PageNav,
 } from './LeaguePanels.jsx';
 import TeamRoster from './TeamRoster.jsx';
+import OnlineLineup from './OnlineLineup.jsx';
 import { POS } from './api.js';
 import {
   CompactRoster,
@@ -18,7 +19,9 @@ import {
   StatLabels,
 } from './PlayerPerformance.jsx';
 export default function DesktopView(props) {
-  const { view, tab, setTab } = props;
+  const { view, tab, setTab, busy, run, command } = props;
+  // 一人用の編成画面を全画面で開いているか
+  const [fullLineup, setFullLineup] = useState(false);
   const tabs = [
     ['today', '今日'],
     ['games', '試合'],
@@ -99,8 +102,24 @@ export default function DesktopView(props) {
             <p>{view.phase.label}の決定待ちです。キャンプ後に設定できます。</p>
             <button onClick={() => setTab('decisions')}>手続きへ</button>
           </section>
+        ) : fullLineup ? (
+          /* ⚠ 一人用の編成画面をそのまま使う。全画面で開くのは、
+             オンライン側の枠（左ナビ＋カード）に入れると
+             2カラムの表と衝突して読めなくなるため */
+          <OnlineLineup
+            view={view}
+            busy={busy}
+            onClose={() => setFullLineup(false)}
+            onSave={async (plan, baseLineup) => {
+              await run(() => command('lineup', { ...plan, baseLineup }));
+              setFullLineup(false);
+            }}
+          />
         ) : (
           <div className="online-form-width">
+            <button className="online-primary" onClick={() => setFullLineup(true)}>
+              詳しい編成を開く
+            </button>
             <LineupPanel key={`${view.year}:${view.teamName}`} {...props} />
           </div>
         ))}

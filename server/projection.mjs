@@ -116,6 +116,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     teamName: member.teamName,
     year: l.season.year,
     teamNames: l.season.settings.teamNames,
+    // ⚠ 一人用の編成画面が `LEAGUE_SETTINGS.useDH` を見るので、
+    //    リーグの設定をビューにも載せる（打順が8枠か9枠かが変わる）
+    useDH: !!l.season.settings.useDH,
     currentDate: l.season.currentDate,
     nextAdvanceAt: l.nextAdvanceAt,
     isAdmin: userId === adminId,

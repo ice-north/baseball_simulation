@@ -354,13 +354,15 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
 
 // AIオーダー編成関数
 // mode: 'standard' | 'offense' | 'defense'
-export const generateOptimalLineup = (teamName, mode = 'standard') => {
-  if (!TEAMS_DATA || !TEAMS_DATA[teamName]) {
+// ⚠ `given` を渡せば TEAMS_DATA を引かない。オンライン版は名簿をサーバーから
+//    受け取るので TEAMS_DATA に居ない（渡さないと黙って何もしない関数になる）
+export const generateOptimalLineup = (teamName, mode = 'standard', given = null) => {
+  const team = given || TEAMS_DATA?.[teamName];
+  if (!team) {
     console.error('チームデータが見つかりません:', teamName);
     return;
   }
 
-  const team = TEAMS_DATA[teamName];
   const useDH = LEAGUE_SETTINGS.useDH;
   // isActive=false（練習生）は除外。未設定は全員有効（大学モード以外の後方互換）
   const fielders = team.players.filter(p =>
@@ -526,13 +528,14 @@ export const generateAllTeamsLineup = (allTeams) => {
 };
 
 // 投手ローテーション生成関数（AI監督用）
-export const generatePitchingRotation = (teamName) => {
-  if (!TEAMS_DATA || !TEAMS_DATA[teamName]) {
+// ⚠ `given` の扱いは generateOptimalLineup と同じ（オンライン版から渡る）
+export const generatePitchingRotation = (teamName, given = null) => {
+  const team = given || TEAMS_DATA?.[teamName];
+  if (!team) {
     console.error('チームデータが見つかりません:', teamName);
     return;
   }
 
-  const team = TEAMS_DATA[teamName];
   // 投手判定は isPitcherPlayer と揃える。野手も pitching.stamina を持つ（40〜93程度）ため
   // 「stamina > 0」で拾うと全野手が投手集合に混入し、余った野手が敗戦処理ロールに
   // 割り当てられてしまう（大学モードのロスター再登録で顕在化していた不具合）。
