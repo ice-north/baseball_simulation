@@ -8,6 +8,7 @@ import {
   assertLeagueVersion,
   ONLINE_SCHEMA,
 } from '../src/online/shared.js';
+import { isCurrent, migrateLeague } from '../src/online/leagueMigration.js';
 import {
   projectLeague,
   projectLineup,
@@ -33,6 +34,10 @@ export class LeagueService {
       // ⚠ `local` とは別に持つこと。`local` は CORS をローカルへ開く印でもあるので、
       //    検証用の進行を本番で使いたいからといって `local` を立ててはいけない。
       allowStep = false,
+      // ⚠ **ハーネス専用**。保存の移行の手順表を差し替える。段がまだ0本なので、
+      //    これが無いと「古いリーグを直して保存する」経路を一度も試せない。
+      //    本番は渡さない（既定の表と `ONLINE_SCHEMA` を使う）。
+      migrations = undefined,
     } = {},
   ) {
     this.store = store;
@@ -44,6 +49,7 @@ export class LeagueService {
     this.adminId = adminId;
     this.clock = clock;
     this.local = local;
+    this.migrations = migrations;
     this.allowStep = allowStep || local;
   }
   async view(userId, sessionId) {
@@ -52,11 +58,25 @@ export class LeagueService {
       : projectLeague(await this.store.read(), userId, sessionId, this.adminId);
     requireOnline(view, 'このリーグの参加者ではありません', 403);
     // ⚠ **ここが版の門番の抜け道だった**。`assertLeagueVersion` は命令のときしか
-    //    走らず、最初の画面は保存済みのビューをそのまま出す。そのため、
+    //    走らず、最初の画面は**保存済みのビュー**をそのまま出す経路がある
+    //    （`SupabaseStore.readView`）。その経路はリーグ本体を読まないので、
     //    固定4球団の頃のリーグが2部制のコードで表示され、どこも壊れていないように
-    //    見えてしまった。リーグがあるビューには版の印が要る。
-    if (!view.setupRequired && !view.joinRequired && view.schema !== ONLINE_SCHEMA)
-      return { versionMismatch: true, isAdmin: userId === this.adminId };
+    //    見えてしまった。保存済みのビューには版の印が要る。
+    // ⚠ リーグ本体から作ったビュー（`projectLeague`）は、もう自分で版を見て
+    //    `versionMismatch` を返している。二重に潰すと `canMigrate` が消える
+    if (
+      !view.setupRequired &&
+      !view.joinRequired &&
+      !view.versionMismatch &&
+      view.schema !== ONLINE_SCHEMA
+    )
+      return {
+        versionMismatch: true,
+        isAdmin: userId === this.adminId,
+        // ⚠ 保存済みのビューからはリーグの中身を見られないので、直せるかは
+        //    判定できない。画面は管理者に押させ、理由は命令の側が返す
+        writable: !!view.writable,
+      };
     return view;
   }
   /** 参加者の一覧。リーグがあればそちらを正本にする */
@@ -115,6 +135,25 @@ export class LeagueService {
       return { value: { ok: true } };
     });
   }
+  /**
+   * 保存されたリーグを、いまのコードが読める形へ直す。
+   * ⚠ **複製に当ててから差し替える**こと。途中で例外が出たリーグを保存すると、
+   *    半分だけ新しい形になって次の移行も通らなくなる。
+   * ⚠ **revision は上げない**。中身の形が変わっただけで、誰かの操作ではない。
+   *    上げると、送信中だった提出が「他の操作で更新されました」で弾かれる。
+   */
+  ensureMigrated(bundle) {
+    const l = bundle.league;
+    // ⚠ `migrations` はハーネス専用の差し替え口。段がまだ0本なので、
+    //    これが無いと「本物のリーグを直して保存する」経路を一度も通せない
+    if (!l || isCurrent(l, this.migrations?.target))
+      return { applied: [], changed: false };
+    const working = clone(l);
+    const result = migrateLeague(working, this.migrations);
+    bundle.league = working;
+    bundle.league.updatedAt = this.clock();
+    return result;
+  }
   async command(userId, sessionId, command) {
     requireOnline(
       command && typeof command === 'object' && !Array.isArray(command),
@@ -142,7 +181,20 @@ export class LeagueService {
         );
         return { unchanged: true, value: bundle.receipts[key].value };
       }
+      // ⚠ **版の照合より先に移行する**。古い形のままでは他の命令が通らず、
+      //    「更新したらリーグが読めなくなった」が起きる。どの命令で入っても
+      //    ここを通るので、誰かが何か操作すれば自然に直る。
+      const migrated = this.ensureMigrated(bundle);
       const l = bundle.league;
+      // ⚠ 取り込みだけは**版の照合を飛ばす**。古い形の画面は revision を
+      //    持っていないので、照合すると取り込みボタンが押せない
+      if (command.type === 'migrate') {
+        requireOnline(l, 'リーグがまだありません', 409);
+        return {
+          ...(migrated.changed ? {} : { unchanged: true }),
+          value: { ok: true, applied: migrated.applied },
+        };
+      }
       requireOnline(
         l ? command.revision === l.revision : command.revision === 0,
         '他の操作で更新されました。最新状態を読み直してください',
@@ -349,6 +401,16 @@ export class LeagueService {
     if (this.store.isDue && !(await this.store.isDue(this.clock())))
       return { advanced: false };
     return this.store.transaction(async (bundle) => {
+      // ⚠ **定期処理でも移行する**。誰も操作しなくても、次の正時に自然に直る。
+      //    直せない形（作り直すしかない版）なら止めるだけにして、
+      //    定期処理そのものを例外で落とさない
+      let migrated = { applied: [], changed: false };
+      try {
+        migrated = this.ensureMigrated(bundle);
+      } catch (error) {
+        console.error('online migrate failed:', error.message);
+        return { unchanged: true, value: { advanced: false } };
+      }
       const l = bundle.league;
       const now = this.clock();
       // ⚠ **締め切り超過の手続きを先に片付ける**。手続き中は status が
@@ -376,7 +438,11 @@ export class LeagueService {
         !l.nextAdvanceAt ||
         l.nextAdvanceAt > now
       )
-        return { unchanged: true, value: { advanced: false } };
+        // ⚠ 移行したのに `unchanged` で返すと、直した形が保存されず
+        //    毎回やり直しになる（画面は古いままに見える）
+        return migrated.changed
+          ? { value: { advanced: false, migrated: migrated.applied } }
+          : { unchanged: true, value: { advanced: false } };
       const due = l.nextAdvanceAt;
       // 15分以上遅れた通知を巻き戻し実行しない。停止して明示的な再開を待つ。
       if (Date.parse(now) - Date.parse(due) > 15 * 60000) {

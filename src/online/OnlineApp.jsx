@@ -17,9 +17,11 @@ import {
 // 別アカウントへ切替後も、旧タブの読取り応答で書込み権限を復活させない。
 const viewForSession = (result, current) => ({
   ...result,
+  // ⚠ `versionMismatch` も書ける扱いにする。ここを外すと「更新を取り込む」が
+  //    押せず、古い形から抜け出せなくなる（取り込みは書き込みなので）
   writable:
     sameSession(readAuth(), current) &&
-    !!(result.setupRequired || result.writable),
+    !!(result.setupRequired || result.versionMismatch || result.writable),
 });
 function useMobile() {
   const [mobile, setMobile] = useState(
@@ -338,20 +340,31 @@ export default function OnlineApp() {
           />
         ) : view.versionMismatch ? (
           /* ⚠ 古い形のリーグ。**黙って表示しないこと**。以前は版の印が無く、
-             4球団の頃のリーグが2部制のコードでそのまま出ていた */
+             4球団の頃のリーグが2部制のコードでそのまま出ていた。
+             ⚠ `canMigrate` が false でも管理者には押させる。保存済みのビューを
+             返す経路では中身を見られないので判定できず、ここで隠すと
+             「取り込めるのにボタンが無い」が起きる。押せば理由が返る */
           <section className="online-card">
-            <h1>保存されているリーグが古い形式です</h1>
+            <h1>ゲームの更新を取り込みます</h1>
             <p>
-              ゲームの更新で、保存される世界の形が変わりました。いまのリーグは読み込めません。
+              保存されている世界の形が、いまのゲームと違います。取り込むまで試合は進みません。
             </p>
+            {view.reason && <p className="online-muted">{view.reason}</p>}
             {view.isAdmin ? (
-              <p>
-                管理者の作業が必要です。データベースの制御行を空にしてから、リーグを作り直してください。手順は
-                <code>docs/online/PRODUCTION_SETUP.md</code>
-                の「リーグを作り直す」にあります。
-              </p>
+              <>
+                <button
+                  className="online-primary"
+                  disabled={busy || !view.writable}
+                  onClick={() => run(() => command('migrate'))}
+                >
+                  更新を取り込む
+                </button>
+                <p className="online-muted online-spaced">
+                  次の正時の自動処理でも取り込まれます。取り込めない形式だった場合は、押すと理由が表示されます。
+                </p>
+              </>
             ) : (
-              <p>管理者がリーグを作り直すまでお待ちください。</p>
+              <p>管理者が取り込むまでお待ちください。自動でも取り込まれます。</p>
             )}
           </section>
         ) : view.setupRequired ? (

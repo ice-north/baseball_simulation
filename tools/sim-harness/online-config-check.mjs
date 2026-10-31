@@ -108,15 +108,18 @@ assert.ok(ONLINE_SCHEMA >= 2, '2部制へ変えたのに版が上がっていな
     const blocked = await serviceFor(stale).view('admin', 's');
     assert.deepEqual(
       blocked,
-      { versionMismatch: true, isAdmin: true },
+      // ⚠ `writable` も返すこと。これが無いと画面の「更新を取り込む」が
+      //    押せず、古い形から抜け出せなくなる
+      { versionMismatch: true, isAdmin: true, writable: false },
       `古い版のビューが通ってしまう: ${JSON.stringify(stale)}`,
     );
     assert.ok(!('teamName' in blocked), '古いリーグの中身が漏れている');
   }
   // 管理者でない人にも同じ理由で止まる（isAdmin だけ違う）
   assert.deepEqual(
-    await serviceFor({ teamName: 'X', schema: ONLINE_SCHEMA - 1 }).view('other', 's'),
-    { versionMismatch: true, isAdmin: false },
+    await serviceFor({ teamName: 'X', schema: ONLINE_SCHEMA - 1, writable: true }).view('other', 's'),
+    { versionMismatch: true, isAdmin: false, writable: true },
+    '保存済みのビューの writable が引き継がれていない',
   );
   // 今の版はそのまま通る
   const ok = { teamName: 'X', schema: ONLINE_SCHEMA };

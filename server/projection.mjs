@@ -1,5 +1,6 @@
 import { roleFor } from '../src/online/tactics.js';
 import { PHASE_LABELS, ONLINE_SCHEMA } from '../src/online/shared.js';
+import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
 import {
   currentPlayerStats,
   playerPeriods,
@@ -95,6 +96,19 @@ export function projectLineup(team) {
 export function projectLeague(bundle, userId, sessionId, adminId) {
   const l = bundle.league;
   if (!l) return { setupRequired: true, isAdmin: userId === adminId };
+  // ⚠ **古い形のまま投影しない**。ビューには最新の版の印を押すので、
+  //    中身が古いまま投影すると「新しい形です」と嘘をつくことになる。
+  //    移行できる場合は画面から取り込めるので、それも伝える。
+  if (!isCurrent(l)) {
+    const info = migrationState(l);
+    return {
+      versionMismatch: true,
+      isAdmin: userId === adminId,
+      canMigrate: info.state === 'migratable',
+      reason: info.reason || null,
+      writable: !!sessionId && bundle.sessions[userId] === sessionId,
+    };
+  }
   const member = l.members.find((m) => m.userId === userId);
   // ⚠ **参加者でなくても「招待コードを入れる画面」までは返すこと**。
   //    ここで null（＝403）にすると、招待された人はログインした途端に

@@ -1,6 +1,10 @@
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { randomUUID, createHash } from 'node:crypto';
-import { requireOnline, OnlineError } from '../../src/online/shared.js';
+import {
+  requireOnline,
+  OnlineError,
+  ONLINE_SCHEMA,
+} from '../../src/online/shared.js';
 import {
   projectLeague,
   projectGames,
@@ -102,6 +106,10 @@ export class SupabaseStore {
     // ⚠ **フェーズの締め切り超過でも起動すること**。手続き中は status が
     //    running でないので、進行時刻だけ見ていると締め切りが来ても
     //    誰も動かさず、1人の未提出で全員の週が止まる。
+    // ⚠ **古い形のまま放置しない**。更新で保存の形が変わったとき、
+    //    進行時刻だけ見ていると誰も触らない限り直らない。次の正時に
+    //    定期処理が入って移行できるよう、ここでも起こす
+    if (row.snapshot_path && view && view.schema !== ONLINE_SCHEMA) return true;
     if (view?.phaseDeadline && view.phaseDeadline <= now) return true;
     return !!(
       view?.status === 'running' &&
