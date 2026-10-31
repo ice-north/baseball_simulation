@@ -6,6 +6,10 @@ import {
   performanceFor,
 } from '../../server/performanceLabels.mjs';
 import { projectLeague } from '../../server/projection.mjs';
+import {
+  ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
+} from '../../src/online/shared.js';
 const batting = {
   atBats: 100,
   hits: 25,
@@ -147,6 +151,10 @@ assert.equal(
   3,
 );
 const league = {
+  // ⚠ 版を載せること。`projectLeague` は古い形のリーグを投影せず
+  //    「更新を取り込みます」だけ返すので、載せ忘れると `roster` が無くなる
+  schema: ONLINE_SCHEMA,
+  engineVersion: ONLINE_ENGINE_VERSION,
   revision: 1,
   members: [{ userId: 'a', teamName: 'A' }],
   season: {

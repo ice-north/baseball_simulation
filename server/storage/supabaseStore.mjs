@@ -119,15 +119,32 @@ export class SupabaseStore {
   }
   async readView(userId, sessionId) {
     const row = await this.control();
+    const writable = !!sessionId && row.sessions[userId] === sessionId;
     const view = row.views[userId];
-    if (!view)
-      return row.snapshot_path
-        ? null
-        : { setupRequired: true, isAdmin: userId === this.adminId };
-    return {
-      ...view,
-      writable: !!sessionId && row.sessions[userId] === sessionId,
-    };
+    if (!view) {
+      if (!row.snapshot_path)
+        return { setupRequired: true, isAdmin: userId === this.adminId };
+      // ⚠ **招待された人は、まだ参加者ではないのでビューが無い**。ここで
+      //    null（＝403「このリーグの参加者ではありません」）を返すと、
+      //    招待コードを入れる画面に辿り着けず、永久に参加できない。
+      //    ローカル（`projectLeague`）は毎回リーグ本体から作るので通ってしまい、
+      //    本番だけで起きる。実際にそれで友人がログインできなかった。
+      // ⚠ 名簿の中身を読むためにスナップショットを取りに行かないこと。
+      //    参加していない人が画面を開くたびに数MBを読むことになる。
+      //    必要なのは `revision` だけで、それは参加者のビューに載っている
+      //    （全員同じ値）。
+      const member = Object.entries(row.views).find(
+        ([key, v]) => !key.startsWith('_') && Number.isInteger(v?.revision),
+      )?.[1];
+      if (!member) return null;
+      return {
+        joinRequired: true,
+        isAdmin: userId === this.adminId,
+        revision: member.revision,
+        writable,
+      };
+    }
+    return { ...view, writable };
   }
   async archive(row, kind, year) {
     const meta = row.views?._records;

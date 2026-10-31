@@ -4,6 +4,10 @@ import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 import {
+  ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
+} from '../../src/online/shared.js';
+import {
   projectLeague,
   projectPlayerInfo,
   projectTeamInfo,
@@ -129,6 +133,10 @@ const positions = [
   'right',
 ];
 const league = {
+  // ⚠ 版を載せること。`projectLeague` は古い形のリーグを投影せず
+  //    「更新を取り込みます」だけ返すので、載せ忘れると名簿が空になる
+  schema: ONLINE_SCHEMA,
+  engineVersion: ONLINE_ENGINE_VERSION,
   revision: 1,
   status: 'running',
   season: {

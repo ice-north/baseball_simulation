@@ -416,6 +416,48 @@ assert.equal(
   200,
   'UTF-8の途中で分割されたHTTPチャンクを壊さない',
 );
+// --- 招待された人（まだ参加者でない）が画面を開けるか -----------------
+// ⚠ **本番だけで起きた抜け**。ローカルは毎回リーグ本体から画面を作るので
+//    「招待コードを入れる」画面に辿り着くが、本番は**保存済みの画面データ**を
+//    返す作りで、それは参加者ぶんしか無かった。該当なし → 403
+//    「このリーグの参加者ではありません」で、招待された人が永久に参加できない。
+//    ハーネスは `LeagueService` を直に呼ぶか FileStore を使うので捕まらなかった。
+{
+  const before = gets;
+  row = {
+    ...row,
+    snapshot_path: 'snapshots/live.json.gz',
+    sessions: { a: 'sa', c: 'sc' },
+    views: {
+      a: { teamName: '甲', revision: 7, schema: ONLINE_SCHEMA },
+      _records: { games: {} },
+    },
+  };
+  const join = await store.readView('c', 'sc');
+  assert.equal(join.joinRequired, true, '招待された人が参加画面に辿り着けない');
+  // ⚠ `revision` が要る。参加の命令は版を照合するので、0のままだと弾かれる。
+  //    参加者のビューから借りる（全員同じ値）
+  assert.equal(join.revision, 7, '参加の命令に使う revision が取れていない');
+  assert.equal(join.writable, true, '参加の操作ができない');
+  assert.equal(join.isAdmin, false);
+  assert.ok(!('teamName' in join), '他球団の中身が漏れている');
+  // ⚠ **スナップショットを取りに行かないこと**。参加していない人が画面を開く
+  //    たびに数MBを読むことになる
+  assert.equal(gets, before, '参加前の画面で巨大スナップショットを読んでいる');
+  // 参加者は自分のビューのまま
+  assert.equal((await store.readView('a', 'sa')).teamName, '甲');
+  // ⚠ `_records` は参加者のビューではない。これを参加者と取り違えない
+  row = { ...row, views: { _records: { games: {} } } };
+  assert.equal(
+    await store.readView('c', 'sc'),
+    null,
+    '_records を参加者のビューと取り違えている',
+  );
+  // リーグがまだ無ければ、参加ではなく作成の画面
+  row = { ...row, snapshot_path: null, views: {} };
+  assert.equal((await store.readView('a', 'sa')).setupRequired, true);
+}
+
 console.log(
-  'online-storage-check PASS（Storage公開境界・リース失効・応答喪失・小さい閲覧・HTTP入口 / 外部サービスはfixture）',
+  'online-storage-check PASS（Storage公開境界・リース失効・応答喪失・小さい閲覧・招待された人の入口・HTTP入口 / 外部サービスはfixture）',
 );
