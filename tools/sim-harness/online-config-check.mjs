@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict';
 import { missingOnlineConfig } from '../../server/production.mjs';
 import handler from '../../api/online.mjs';
+import { LeagueService } from '../../server/leagueService.mjs';
 import {
   assertLeagueVersion,
   ONLINE_SCHEMA,
@@ -85,6 +86,51 @@ for (const stale of [
 // ⚠ 2部制12球団・招待制へ変えたときに上げた。1 は固定4球団・2人の形
 assert.ok(ONLINE_SCHEMA >= 2, '2部制へ変えたのに版が上がっていない');
 
+// --- ビューの経路も塞がっているか -----------------------------------
+// ⚠ **ここが実際に抜けていた所**。`assertLeagueVersion` は命令のときしか走らず、
+//    最初の画面は**保存済みのビュー**をそのまま返す（`SupabaseStore.readView`）。
+//    その経路はリーグ本体を読まないので版を一度も見ず、固定4球団の頃のリーグが
+//    2部制のコードでそのまま表示された。リーグ本体を作らずに済むよう、
+//    ビューだけ返す保管庫を立てて `LeagueService.view` を直に見る。
+{
+  const viewStore = (view) => ({
+    readView: async () => view,
+    read: async () => ({ league: null, sessions: {}, receipts: {} }),
+  });
+  const serviceFor = (view) =>
+    new LeagueService(viewStore(view), {
+      members: [{ userId: 'admin', label: '管理者' }],
+      adminId: 'admin',
+    });
+
+  // 古い版のビューは中身を出さず、作り直しが要ることだけ返す
+  for (const stale of [{ teamName: 'X', schema: ONLINE_SCHEMA - 1 }, { teamName: 'X' }]) {
+    const blocked = await serviceFor(stale).view('admin', 's');
+    assert.deepEqual(
+      blocked,
+      { versionMismatch: true, isAdmin: true },
+      `古い版のビューが通ってしまう: ${JSON.stringify(stale)}`,
+    );
+    assert.ok(!('teamName' in blocked), '古いリーグの中身が漏れている');
+  }
+  // 管理者でない人にも同じ理由で止まる（isAdmin だけ違う）
+  assert.deepEqual(
+    await serviceFor({ teamName: 'X', schema: ONLINE_SCHEMA - 1 }).view('other', 's'),
+    { versionMismatch: true, isAdmin: false },
+  );
+  // 今の版はそのまま通る
+  const ok = { teamName: 'X', schema: ONLINE_SCHEMA };
+  assert.deepEqual(await serviceFor(ok).view('admin', 's'), ok, '今の版が止められている');
+  // ⚠ リーグがまだ無い画面と、招待コードを入れる画面は版を持たない。
+  //    ここを止めると、作り直しも参加もできなくなる（出口を塞ぐ）
+  for (const pass of [
+    { setupRequired: true, isAdmin: true },
+    { joinRequired: true, isAdmin: false },
+  ]) {
+    assert.deepEqual(await serviceFor(pass).view('admin', 's'), pass, '出口を塞いでいる');
+  }
+}
+
 console.log(
-  '■ オンライン設定の診断: OK（不足5種の切り分け / 値を漏らさない / 古い版を拒む）',
+  '■ オンライン設定の診断: OK（不足5種の切り分け / 値を漏らさない / 古い版を拒む / ビューの経路も塞ぐ）',
 );

@@ -336,6 +336,24 @@ export default function OnlineApp() {
             logout={logout}
             join={(payload) => run(() => command('join', payload))}
           />
+        ) : view.versionMismatch ? (
+          /* ⚠ 古い形のリーグ。**黙って表示しないこと**。以前は版の印が無く、
+             4球団の頃のリーグが2部制のコードでそのまま出ていた */
+          <section className="online-card">
+            <h1>保存されているリーグが古い形式です</h1>
+            <p>
+              ゲームの更新で、保存される世界の形が変わりました。いまのリーグは読み込めません。
+            </p>
+            {view.isAdmin ? (
+              <p>
+                管理者の作業が必要です。データベースの制御行を空にしてから、リーグを作り直してください。手順は
+                <code>docs/online/PRODUCTION_SETUP.md</code>
+                の「リーグを作り直す」にあります。
+              </p>
+            ) : (
+              <p>管理者がリーグを作り直すまでお待ちください。</p>
+            )}
+          </section>
         ) : view.setupRequired ? (
           <section className="online-card">
             <h1>リーグの準備</h1>

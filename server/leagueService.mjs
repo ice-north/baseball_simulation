@@ -6,6 +6,7 @@ import {
   requireOnline,
   nextProgressionAt,
   assertLeagueVersion,
+  ONLINE_SCHEMA,
 } from '../src/online/shared.js';
 import {
   projectLeague,
@@ -50,6 +51,12 @@ export class LeagueService {
       ? await this.store.readView(userId, sessionId)
       : projectLeague(await this.store.read(), userId, sessionId, this.adminId);
     requireOnline(view, 'このリーグの参加者ではありません', 403);
+    // ⚠ **ここが版の門番の抜け道だった**。`assertLeagueVersion` は命令のときしか
+    //    走らず、最初の画面は保存済みのビューをそのまま出す。そのため、
+    //    固定4球団の頃のリーグが2部制のコードで表示され、どこも壊れていないように
+    //    見えてしまった。リーグがあるビューには版の印が要る。
+    if (!view.setupRequired && !view.joinRequired && view.schema !== ONLINE_SCHEMA)
+      return { versionMismatch: true, isAdmin: userId === this.adminId };
     return view;
   }
   /** 参加者の一覧。リーグがあればそちらを正本にする */

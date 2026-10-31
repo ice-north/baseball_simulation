@@ -1,5 +1,5 @@
 import { roleFor } from '../src/online/tactics.js';
-import { PHASE_LABELS } from '../src/online/shared.js';
+import { PHASE_LABELS, ONLINE_SCHEMA } from '../src/online/shared.js';
 import {
   currentPlayerStats,
   playerPeriods,
@@ -110,6 +110,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   const statistics = statisticsContext(l);
   const phase = l.phase;
   return {
+    // ⚠ **このビューを作ったコードの版**。`LeagueService.view` がここを見て、
+    //    古い形のリーグを表示させない。ビューは保存済みのものがそのまま
+    //    返ることがあり（`SupabaseStore.readView`）、その経路はリーグ本体を
+    //    読まないので `assertLeagueVersion` が一度も走らない。実際、
+    //    固定4球団の頃のリーグが2部制のコードで**そのまま表示された**。
+    schema: ONLINE_SCHEMA,
     revision: l.revision,
     status: l.status,
     error: l.error,
