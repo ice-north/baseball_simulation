@@ -183,6 +183,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           id: phase.id,
           kind: phase.kind,
           label: PHASE_LABELS[phase.kind],
+          // ⚠ 締め切りの有無で画面の文面が変わる（初期編成だけは全員を待つ）
+          deadline: phase.deadline || null,
           candidates: phase.candidates?.map(playerView),
           submission: phase.submissions[userId] || null,
         }

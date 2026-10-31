@@ -13,6 +13,7 @@ import {
   PlayerStatsButton,
 } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
+import TryoutPlanner from './TryoutPlanner.jsx';
 export { PageNav } from './PageNav.jsx';
 
 /**
@@ -419,23 +420,20 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         throw error;
       }
     });
-  const move = (index, delta) => {
-    setDirty(true);
-    const rankedIds = [...plan.rankedIds];
-    [rankedIds[index], rankedIds[index + delta]] = [
-      rankedIds[index + delta],
-      rankedIds[index],
-    ];
-    setPlan({ ...plan, rankedIds });
-  };
   return (
     <section className="online-card online-decision">
       <fieldset className="online-form-fields" disabled={busy}>
         <h2>{PHASE_LABELS[phase.kind]}</h2>
+        {/* ⚠ 2人固定だった頃の「両者」という書き方を残さない。
+            いまは1〜12人で、締め切りが来れば未提出でも先へ進む */}
         <p>
-          {mobile
-            ? '両者が決定すると進みます。'
-            : '両者が決定すると一度だけ処理します。相手が決定する前なら再提出できます。'}
+          {phase.deadline
+            ? mobile
+              ? '全員が決定するか、締め切りで進みます。'
+              : '全員が決定すると一度だけ処理します。締め切りを過ぎると、未提出の球団は標準案で進みます。決定後も締め切り前なら出し直せます。'
+            : mobile
+              ? '全員が決定すると進みます。'
+              : '全員が決定すると一度だけ処理します。この手続きに締め切りはありません。決定後も出し直せます。'}
         </p>
         <ul className="online-ready">
           {view.members.map((m) => (
@@ -482,75 +480,18 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
             ) : (
               <>
                 {plan.rankedIds && (
-                  <>
-                    <label>
-                      獲得希望人数（最大{Math.max(0, 24 - view.roster.length)}
-                      人）
-                      <input
-                        type="number"
-                        min="0"
-                        max={Math.max(0, 24 - view.roster.length)}
-                        value={plan.count}
-                        onChange={(e) => {
-                          setDirty(true);
-                          setPlan({ ...plan, count: Number(e.target.value) });
-                        }}
-                      />
-                    </label>
-                    <p>
-                      上から優先します。他球団に選ばれた選手は飛ばします。全候補を残すと競合時の代替候補を確保できます。
-                    </p>
-                    <div className="online-candidates">
-                      {plan.rankedIds.map((id, i) => {
-                        const p = phase.candidates.find((p) => p.id === id);
-                        return (
-                          <div className="online-candidate" key={id}>
-                            <span>
-                              {i + 1}.{' '}
-                              <PlayerStatsButton player={p} panel="abilities" />{' '}
-                              <small>
-                                {p.age}歳 / {POS[p.position]} /{' '}
-                                {p.position === 'pitcher' ? (
-                                  <>
-                                    球速
-                                    <AbilityGrade
-                                      value={p.pitching?.velocity}
-                                      velocity
-                                    />{' '}
-                                    制球
-                                    <AbilityGrade value={p.pitching?.control} />
-                                  </>
-                                ) : (
-                                  <>
-                                    ミート
-                                    <AbilityGrade
-                                      value={p.batting?.meet}
-                                    />{' '}
-                                    パワー
-                                    <AbilityGrade value={p.batting?.power} />
-                                  </>
-                                )}
-                              </small>
-                            </span>
-                            <button
-                              aria-label={`${p.name}の希望順位を上げる`}
-                              disabled={i === 0 || busy}
-                              onClick={() => move(i, -1)}
-                            >
-                              ↑
-                            </button>
-                            <button
-                              aria-label={`${p.name}の希望順位を下げる`}
-                              disabled={i === plan.rankedIds.length - 1 || busy}
-                              onClick={() => move(i, 1)}
-                            >
-                              ↓
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
+                  <TryoutPlanner
+                    plan={plan}
+                    candidates={phase.candidates}
+                    roster={view.roster}
+                    maxCount={Math.max(0, 24 - view.roster.length)}
+                    busy={busy}
+                    onChange={(next) => {
+                      setDirty(true);
+                      setPlan(next);
+                    }}
+                    onReset={resetSubmission}
+                  />
                 )}
                 {plan.releaseIds && (
                   <>

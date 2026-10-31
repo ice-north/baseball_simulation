@@ -65,7 +65,10 @@ try {
   await p
     .getByRole('button', { name: 'この内容で決定', exact: true })
     .waitFor();
-  await p.locator('.online-candidate').first().waitFor();
+  // ⚠ 初期編成は「希望リスト＋候補を探す」の2欄になった。候補が1行も出ない
+  //    （＝選べない）状態で先へ進まないよう、両方が描けていることを見る
+  await p.locator('.online-tryout-wanted .online-tryout-list li').first().waitFor();
+  await p.locator('.online-tryout-pool .online-tryout-list li').first().waitFor();
   await login(m, 2);
   await m.setViewportSize({ width: 320, height: 640 });
   await click(m, '手続き');

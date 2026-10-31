@@ -201,6 +201,11 @@
 .online-form-width {
   max-width: 740px;
 }
+/* 希望リストと候補を左右に並べる画面だけ広げる。1100px を下回ると
+   `.online-tryout-grid` が1列に折り返すので、それより広く取る */
+.online-wide-width {
+  max-width: 1180px;
+}
 .online table {
   width: 100%;
   border-collapse: collapse;
@@ -302,27 +307,124 @@
   border-radius: 6px;
   font-size: 13px;
 }
-.online-candidates {
-  max-height: 430px;
-  overflow-y: auto;
-  border: 1px solid #536b85;
-  padding: 0 10px;
-  border-radius: 8px;
+/* 初期編成・トライアウトの希望リスト。
+   ⚠ 左＝獲得予定（並べ替える）／右＝候補を探す（絞り込んで指名する）。
+      以前は360人を1本のリストにして ↑↓ で動かさせており、
+      300番目を1番に上げるのに299回押す必要があった。 */
+.online-tryout-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
 }
-.online-candidate {
+.online-tryout-head label {
+  display: grid;
+  gap: 4px;
+}
+.online-tryout-head input {
+  width: 120px;
+}
+.online-tryout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.online-tryout-grid > section {
+  min-width: 0;
+  border: 1px solid #536b85;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.online-tryout-grid h3 {
+  margin-top: 0;
+  font-size: 15px;
+}
+.online-tryout-grid h3 small {
+  font-weight: 400;
+  font-size: 12px;
+  color: #d0d9e5;
+}
+.online-tryout-warn {
+  font-size: 12px;
+  color: #fbbf24;
+  margin: 0 0 8px;
+}
+/* ⚠ 助言(warn)と、そのままでは決定できない事(block)を見た目で分ける */
+.online-tryout-block {
+  font-size: 13px;
+  color: #fecaca;
+  background: #7f1d1d66;
+  border: 1px solid #b91c1c;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 0 0 8px;
+}
+.online-tryout-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 440px;
+  overflow-y: auto;
+}
+.online-tryout-list li {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 7px 0;
+  padding: 6px 0;
   border-bottom: 1px solid #536b85;
 }
-.online-candidate span {
-  flex: 1;
+.online-tryout-list li[data-wanted] {
+  background: var(--accent-soft);
 }
-.online-candidate small {
+.online-tryout-rank {
+  flex: 0 0 24px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #d0d9e5;
+}
+.online-tryout-person {
+  flex: 1;
+  min-width: 0;
+}
+.online-tryout-person small {
   display: block;
   font-size: 12px;
   color: #d0d9e5;
+}
+.online-tryout-list button {
+  min-height: 34px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.online-tryout-mark {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #67e8f9;
+}
+.online-tryout-bench-toggle {
+  margin-top: 8px;
+  width: 100%;
+}
+.online-tryout-bench {
+  margin-top: 6px;
+}
+.online-tryout-tools {
+  display: flex;
+  gap: 10px;
+  margin: 8px 0;
+}
+.online-tryout-tools label {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .online-tryout-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .online-lineup {
   display: grid;

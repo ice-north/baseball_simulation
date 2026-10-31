@@ -125,7 +125,13 @@ export default function DesktopView(props) {
         ))}
       {tab === 'decisions' &&
         (view.phase ? (
-          <div className="online-form-width">
+          /* ⚠ 初期編成・トライアウトだけ横に広げる。希望リストと候補を
+             左右に並べるので、740pxだと能力の表示が折り返して読めない */
+          <div
+            className={
+              view.phase.candidates ? 'online-wide-width' : 'online-form-width'
+            }
+          >
             <PhasePanel key={view.phase.id} {...props} />
           </div>
         ) : (
