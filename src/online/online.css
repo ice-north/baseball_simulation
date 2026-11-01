@@ -1690,3 +1690,23 @@
   .online-mobile-replay-dialog[open] { display: flex; flex-direction: column; }
   .online-mobile-replay-dialog > header, .online-mobile-replay-dialog > .online-replay-launch { flex-shrink: 0; }
 }
+
+/* 起用の札（スタメン・先発・リリーフ）。
+   ⚠ 一覧から「誰がスタメンで誰がリリーフか」が分からない、という指摘への対応。 */
+.online-role-mark {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #ffffff1f;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+.online-role-mark.is-starter {
+  background: var(--accent-soft);
+  color: #67e8f9;
+}
+.online-role-mark.is-bench {
+  background: transparent;
+  color: #94a3b8;
+}

@@ -402,6 +402,18 @@ export function sortedRoster(players, column, direction) {
     .map((entry) => entry.player);
 }
 
+/**
+ * 並べ替えを指定していないときの既定。
+ *
+ * ⚠ **出場量の多い順にすること**。名簿の順（ドラフト順）のままだと、
+ *    打撃の1ページ目が投手だけで埋まり、スタメンが3ページ目まで出てこない。
+ *    実測でそうなっていた。投球も同じで、先発ローテが埋もれる。
+ */
+export const defaultSort = (category) => ({
+  column: category === 'batting' ? pa : outs,
+  direction: 'desc',
+});
+
 export function overviewGroup(category) {
   const ids =
     category === 'batting'

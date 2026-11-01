@@ -17,6 +17,9 @@ import {
   standingsByLeague,
   applyPyramidMovements,
   SEASON_TURNS,
+  REST_EVERY,
+  gamesPerTeam,
+  isRestTurn,
 } from '../../src/online/pyramidLeague.js';
 
 // --- 構造 ---------------------------------------------------------
@@ -121,10 +124,33 @@ assert.doesNotThrow(() => pyramidMovements({ A: [], B1: ['x'] }));
 // ⚠ 既存の generateFullSeasonSchedule は single / two しか対応しておらず
 //    7リーグを組めない。独自に組んでいるぶん、ここで性質を押さえる。
 const schedule = pyramidSchedule(teams);
+// ⚠ **休養日のぶんを引くこと**。毎ターン試合があると、出ずっぱりの選手は
+//    一度も疲労が回復しない（`_playedToday`）。実測で20試合の時点で
+//    一人用が平均24・最大97なのに対し、オンラインは平均104・最大281まで積み上がり、
+//    本塁打が一人用の1/5になっていた。
 assert.equal(
   schedule.length,
-  PYRAMID_LEAGUES.length * (TEAMS_PER_LEAGUE / 2) * SEASON_TURNS,
-  'リーグ数×1ターンの試合数×ターン数',
+  PYRAMID_LEAGUES.length * (TEAMS_PER_LEAGUE / 2) * gamesPerTeam(),
+  'リーグ数×1ターンの試合数×試合のあるターン数',
+);
+assert.equal(gamesPerTeam(), SEASON_TURNS - SEASON_TURNS / REST_EVERY);
+assert.ok(
+  gamesPerTeam() % (TEAMS_PER_LEAGUE - 1) === 0,
+  `試合数 ${gamesPerTeam()} が総当たり（${TEAMS_PER_LEAGUE - 1}相手）に割り切れない`,
+);
+assert.ok(gamesPerTeam() % 2 === 0, 'ホームとビジターが半々にならない');
+// 休養ターンには試合が無く、試合のあるターンには全球団ぶんある
+const turnsWithGames = new Set(schedule.map((g) => g.turn));
+for (let turn = 0; turn < SEASON_TURNS; turn += 1)
+  assert.equal(
+    turnsWithGames.has(turn),
+    !isRestTurn(turn),
+    `ターン${turn}の休養日の扱いがちがう`,
+  );
+assert.equal(
+  SEASON_TURNS - turnsWithGames.size,
+  SEASON_TURNS / REST_EVERY,
+  '休養ターンの数がちがう',
 );
 
 const played = {};
@@ -136,7 +162,7 @@ for (const g of schedule) {
 }
 assert.equal(Object.keys(played).length, PYRAMID_TEAM_COUNT, '全球団に試合がある');
 for (const [name, n] of Object.entries(played)) {
-  assert.equal(n, SEASON_TURNS, `${name} の試合数が144でない: ${n}`);
+  assert.equal(n, gamesPerTeam(), `${name} の試合数がちがう: ${n}`);
 }
 
 // ⚠ **1ターンに2試合する球団がいないこと**。1ターン＝1時間＝1試合なので、
@@ -161,7 +187,7 @@ for (const g of schedule) {
 //    120ターンへ変えたとき「60〜60（完全に均等）」が範囲外で落ちた。
 //    許容は「半分±4」。狭すぎると正しい均等配分まで落とす
 const homes = Object.values(homeCount);
-const half = SEASON_TURNS / 2;
+const half = gamesPerTeam() / 2;
 assert.ok(
   Math.min(...homes) >= half - 4 && Math.max(...homes) <= half + 4,
   `ホーム試合数が偏っている: ${Math.min(...homes)}〜${Math.max(...homes)}（半分=${half}）`,
@@ -176,7 +202,7 @@ assert.ok(
   const table = live.map((t, i) => ({
     team: t.name,
     wins: 100 - i * 3,
-    winRate: (100 - i * 3) / 144,
+    winRate: (100 - i * 3) / gamesPerTeam(),
   }));
   const order = standingsByLeague(live, table);
   for (const l of PYRAMID_LEAGUES) {
@@ -214,4 +240,6 @@ assert.ok(
   }
 }
 
-console.log(`■ 階層リーグ: OK（${PYRAMID_LEAGUES.length}リーグ${PYRAMID_TEAM_COUNT}球団 / 出入りが釣り合う / 再現する / ${SEASON_TURNS}ターンの日程）`);
+console.log(
+  `■ 階層リーグ: OK（${PYRAMID_LEAGUES.length}リーグ${PYRAMID_TEAM_COUNT}球団 / 出入りが釣り合う / 再現する / ${SEASON_TURNS}ターン中${gamesPerTeam()}試合・${SEASON_TURNS / REST_EVERY}休養日）`,
+);

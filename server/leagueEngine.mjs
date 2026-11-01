@@ -12,6 +12,7 @@ import { INDEPENDENT_LEAGUES } from '../src/corporate/independentLeagueData.js';
 import {
   initializeParallelWorldForIndependent,
   ensureUserIndependentLeagueTagged,
+  applyIndependentRank,
   getLeagueRankFromTeams,
   updateAllTeamReputations,
 } from '../src/corporate/corporateInit.js';
@@ -96,6 +97,7 @@ import {
   applyPyramidMovements,
   PYRAMID_TEAM_COUNT,
   SEASON_TURNS,
+  gamesPerTeam,
 } from '../src/online/pyramidLeague.js';
 import {
   assertMemberCount,
@@ -229,7 +231,8 @@ export function createLeague({
     teamNames: names,
     teamsCount: PYRAMID_TEAM_COUNT,
     preset: 'pyramid',
-    gamesPerSeason: SEASON_TURNS,
+    // ⚠ 休養日のぶん試合数はターン数より少ない（規定打席などの基準になる）
+    gamesPerSeason: gamesPerTeam(),
     leagueFormat: 'single',
     playoffFormat: 'short',
     useDH: false,
@@ -247,6 +250,12 @@ export function createLeague({
     LEAGUE_SETTINGS.useDH = false;
     initializeParallelWorldForIndependent('shikoku', names);
     ensureUserIndependentLeagueTagged(names, 'shikoku');
+    // ⚠ **生成した球団の格付けを当て直すこと**。上の関数はプリセット定義と
+    //    名前で照合するので、その場で作った球団名は全部 'D'（最弱）になる。
+    //    初期トライアウトの候補の質はこの格付けで決まるため、リーグ全体の
+    //    選手が弱くなっていた（実測でミート43.9→36.8、制球44.5→36.6）。
+    for (const def of defs)
+      applyIndependentRank(def.name, def.rank, 'pyramid');
     assignTeamControllers(
       TEAMS_DATA,
       league.members.map((m) => m.teamName),

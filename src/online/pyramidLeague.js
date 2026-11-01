@@ -223,6 +223,27 @@ function requireEven(n) {
 export const SEASON_TURNS = 120;
 
 /**
+ * 何ターンに1回を休養日にするか。
+ *
+ * ⚠ **休養日が無いと、レギュラーは一度も疲労が回復しない。**
+ *    `recoverAllPitcherFatigue` は「その日出場した選手は回復させない」
+ *    （`_playedToday`）ので、毎ターン試合があると出ずっぱりの選手の疲労が
+ *    積み上がり続ける。実測で、20試合の時点で一人用が平均24（最大97）なのに対し
+ *    オンラインは平均104（最大281）。疲れた打者は打てないので、
+ *    **本塁打が一人用の1/5**（1試合あたり 0.68 → 0.13）になっていた。
+ * ⚠ 6ターンに1回にすると 120ターン中 **100試合**。6球団の総当たり（1巡5節）に
+ *    割り切れ、どの相手とも20試合・ホーム50/ビジター50で揃う。
+ */
+export const REST_EVERY = 6;
+
+/** 休養日を除いた、1球団あたりの試合数 */
+export const gamesPerTeam = (turns = SEASON_TURNS) =>
+  turns - Math.floor(turns / REST_EVERY);
+
+/** そのターンが休養日か。⚠ 巡の区切りとずらさないこと（下の注記） */
+export const isRestTurn = (turn) => turn % REST_EVERY === REST_EVERY - 1;
+
+/**
  * 階層リーグ全体の日程を組む。
  * 返り値は `{ turn, league, home, away }` の配列（`turn` は0始まり）。
  *
@@ -235,9 +256,14 @@ export function pyramidSchedule(teams, { turns = SEASON_TURNS } = {}) {
     const ids = teams.filter((t) => t.league === league.id).map((t) => t.name);
     if (ids.length < 2) continue;
     const rounds = roundRobin(ids);
+    // ⚠ **巡は試合のあるターンだけで数えること**。`turn` で数えると休養日のぶん
+    //    巡が飛び、同じ相手との対戦数と本拠地の割り当てが崩れる
+    let played = 0;
     for (let turn = 0; turn < turns; turn++) {
-      const round = rounds[turn % rounds.length];
-      const flip = Math.floor(turn / rounds.length) % 2 === 1;
+      if (isRestTurn(turn)) continue;
+      const round = rounds[played % rounds.length];
+      const flip = Math.floor(played / rounds.length) % 2 === 1;
+      played += 1;
       for (const [a, b] of round) {
         games.push({
           turn,

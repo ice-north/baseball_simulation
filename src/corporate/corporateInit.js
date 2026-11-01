@@ -179,14 +179,15 @@ const BAT_LEVEL = 0.88;   // ミート・パワー・選球眼だけに掛ける
 
 // ランク別の初期注目度（0-100）
 // 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
-const RANK_INITIAL_REPUTATION = { S: 85, A: 65, B: 40, C: 20, D: 5 };
+// ⚠ オンラインの階層リーグからも使う（`applyIndependentRank`）。表を二重に持たない
+export const RANK_INITIAL_REPUTATION = { S: 85, A: 65, B: 40, C: 20, D: 5 };
 
 // ============================================================
 // Eloランキングスコア（FIFAランキング方式）
 // rankingScore: 試合結果に基づく加算型スコア（0-100上限の reputation とは独立）
 // 式: ΔP = I × (W - We), We = 1 / (10^(-(self - opp)/400) + 1)
 // ============================================================
-const INITIAL_RANKING_SCORE = { S: 1200, A: 1050, B: 900, C: 750, D: 600 };
+export const INITIAL_RANKING_SCORE = { S: 1200, A: 1050, B: 900, C: 750, D: 600 };
 const ELO_DIVISOR = 400;
 const ELO_CLAMP_MIN = 100;
 const ELO_CLAMP_MAX = 2000;
@@ -1087,6 +1088,30 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
 // チームランキング(Elo)・注目度・トレードなど独立リーグ系システムから漏れていた。
 // リーグの「格」＝所属チームの現ランクの最頻値（同数なら上位ランクを採用）。
 // トライアウト受験者の質もこの値でスケールされるため、表示と挙動を一致させる目的で共有する。
+/**
+ * 独立リーグの球団に**格付けを直に当てる**。
+ *
+ * ⚠ `ensureUserIndependentLeagueTagged` は既存のプリセット定義と**名前で**
+ *    照合するので、定義に無い球団は全部 'D'（最弱）になる。オンラインの
+ *    階層リーグは球団名をその場で作るため、全12球団が 'D' で登録されていた。
+ *    初期トライアウトの候補の質はこの格付けで決まるので、リーグ全体の選手が
+ *    弱くなる（実測でミート43.9→36.8、制球44.5→36.6）。
+ */
+export const applyIndependentRank = (teamName, rank, leagueId) => {
+  const team = TEAMS_DATA[teamName];
+  if (!team) return;
+  team.independentLeagueId = leagueId || team.independentLeagueId || '__custom__';
+  team.corporateData = {
+    ...(team.corporateData || {}),
+    rank,
+    type: 'independent',
+    reputation: RANK_INITIAL_REPUTATION[rank] ?? 20,
+    rankingScore: INITIAL_RANKING_SCORE[rank] ?? 900,
+    proDraftCount: team.corporateData?.proDraftCount || 0,
+    tournamentWins: team.corporateData?.tournamentWins || 0,
+  };
+};
+
 export const getLeagueRankFromTeams = (teamNames) => {
   if (!Array.isArray(teamNames) || teamNames.length === 0) return null;
   const counts = {};

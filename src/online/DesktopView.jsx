@@ -17,6 +17,8 @@ import {
   ConditionMark,
   PlayerStatsButton,
   StatLabels,
+  RoleMark,
+  rosterByRole,
 } from './PlayerPerformance.jsx';
 export default function DesktopView(props) {
   const { view, tab, setTab, busy, run, command } = props;
@@ -150,6 +152,8 @@ export default function DesktopView(props) {
 }
 function Roster({ view, teamSelector }) {
   const [page, setPage] = useState(0);
+  // ⚠ 名簿の順のままだと1ページ目が投手だけになり、スタメンが出てこない
+  const order = rosterByRole(view.roster, view.lineup);
   const [category, setCategory] = useState('batting');
   const [stats, setStats] = useState(false);
   return (
@@ -194,10 +198,11 @@ function Roster({ view, teamSelector }) {
               </tr>
             </thead>
             <tbody>
-              {view.roster.slice(page * 10, page * 10 + 10).map((p) => (
+              {order.slice(page * 10, page * 10 + 10).map((p) => (
                 <tr key={p.id}>
                   <th>
                     <PlayerStatsButton player={p} category={category} />
+                    <RoleMark player={p} lineup={view.lineup} />
                     <StatLabels player={p} category={category} />
                   </th>
                   <td>{p.age}</td>

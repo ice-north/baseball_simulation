@@ -13,6 +13,7 @@ import {
   statGroup,
   formatStat,
   sortedRoster,
+  defaultSort,
   CONDITION_TEXT,
   conditionValue,
   statRank,
@@ -410,6 +411,60 @@ export function PlayerStatsButton({
     </>
   );
 }
+
+// 起用の札（自球団だけ）。
+// ⚠ **「スタメンが誰か」「誰がリリーフか」が一覧から分からない**という指摘への対応。
+//    打順と投手の役割は view に載っているので、名前の横に短く出す。
+//    他球団の閲覧（`readOnly`）には編成が載らないので何も出さない。
+const ROLE_SHORT = {
+  ace: '先発', complete: '先発', quality: '先発', short: '先発', opener: '先発', auto_s: '先発',
+  long: 'ロング', ace_relief: '中継', setup: 'セット', closer: '抑え',
+  onepoint: 'ワンP', behind: 'ビハ', mopup: '敗戦',
+};
+/**
+ * 起用の順に並べる（スタメン → 控え野手 → 先発ローテ → リリーフ）。
+ * ⚠ 名簿の順（ドラフト順）のままだと**1ページ目が投手だけ**になり、
+ *    スタメンが3ページ目まで出てこない。実測でそうなっていた。
+ * ⚠ 編成が分からない他球団（`readOnly`）は元の順のまま。
+ */
+export function rosterByRole(roster, lineup) {
+  if (!lineup) return roster;
+  const slot = new Map(
+    (lineup.battingOrder || []).map((e) => [e.playerId, e.battingOrder]),
+  );
+  const rotation = new Map((lineup.starters || []).map((id, i) => [id, i]));
+  const rank = (p) => {
+    if (slot.has(p.id)) return [0, slot.get(p.id)];
+    if (rotation.has(p.id)) return [2, rotation.get(p.id)];
+    return p.position === 'pitcher' ? [3, 0] : [1, 0];
+  };
+  return roster
+    .map((player, index) => ({ player, index, key: rank(player) }))
+    .sort(
+      (a, b) =>
+        a.key[0] - b.key[0] || a.key[1] - b.key[1] || a.index - b.index,
+    )
+    .map((e) => e.player);
+}
+
+export function RoleMark({ player, lineup }) {
+  if (!lineup) return null;
+  if (player.position === 'pitcher') {
+    const starter = lineup.starters?.indexOf(player.id) ?? -1;
+    if (starter >= 0)
+      return <span className="online-role-mark is-starter">先発{starter + 1}</span>;
+    const role = lineup.pitcherRoles?.[player.id];
+    const label = ROLE_SHORT[role];
+    return label ? <span className="online-role-mark">{label}</span> : null;
+  }
+  const slot = lineup.battingOrder?.find((e) => e.playerId === player.id);
+  return slot ? (
+    <span className="online-role-mark is-starter">{slot.battingOrder}番</span>
+  ) : (
+    <span className="online-role-mark is-bench">控え</span>
+  );
+}
+
 export function CompactRoster({ view, desktop = false, teamSelector }) {
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
@@ -419,7 +474,10 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
     desktop && groupId === 'overview'
       ? overviewGroup(category)
       : statGroup(category, groupId);
-  const order = sortedRoster(view.roster, sort?.column, sort?.direction);
+  // ⚠ 指定が無いときは**出場量の多い順**。名簿の順のままだと、打撃の
+  //    1ページ目が投手だけで埋まり、スタメンが3ページ目まで出てこない
+  const active = sort || defaultSort(category);
+  const order = sortedRoster(view.roster, active.column, active.direction);
   const chooseCategory = (next) => {
     setCategory(next);
     setGroupId(desktop ? 'overview' : 'basic');
@@ -448,7 +506,7 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
   const sortButton = (column, label) => (
     <button
       aria-label={`${label}で並べ替え`}
-      aria-pressed={sort?.column === column}
+      aria-pressed={active.column === column}
       title={label}
       onClick={() => sortBy(column)}
     >
@@ -459,9 +517,9 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
             ? '本塁率'
             : label}
       </span>
-      {sort?.column === column && (
+      {active.column === column && (
         <span className="online-sort-direction" aria-hidden="true">
-          {sort.direction === 'asc' ? '▲' : '▼'}
+          {active.direction === 'asc' ? '▲' : '▼'}
         </span>
       )}
     </button>
@@ -534,6 +592,7 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
                   </span>
                   <ConditionMark player={player} />
                   <small>{POS[player.position]}</small>
+                  <RoleMark player={player} lineup={view.lineup} />
                 </span>
                 <StatLabels
                   player={player}
