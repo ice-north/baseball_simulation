@@ -6,7 +6,14 @@
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
-import { getUtilityScore, generateCatcherLead, RANK_ASC } from '../utils/constants.js';
+import {
+  getUtilityScore,
+  generateCatcherLead,
+  RANK_ASC,
+  ROSTER_TARGETS,
+  rosterGroup,
+  rosterCounts as countRoster,
+} from '../utils/constants.js';
 import { generateBats } from '../utils/handedness.js';
 import { reservePlayerIds } from '../state/playerIds.js';
 
@@ -1788,29 +1795,19 @@ export function selectPlayerForAI(candidates, currentRoster = [], teamContext = 
   }
 
   // ポジション別カウント
-  const rosterCounts = {
-    pitcher: 0,
-    catcher: 0,
-    infielder: 0,
-    outfielder: 0
-  };
-
-  rosterArray.forEach(player => {
-    if (player.position === 'pitcher') rosterCounts.pitcher++;
-    else if (player.position === 'catcher') rosterCounts.catcher++;
-    else if (['first', 'second', 'third', 'short'].includes(player.position)) rosterCounts.infielder++;
-    else rosterCounts.outfielder++;
-  });
+  // ⚠ 区分の分け方も目標人数も `ROSTER_TARGETS` 側が正本。ここに書き直さないこと
+  //    （人の希望リストの解決と食い違うと、人とCPUで別の名簿ができる）
+  const rosterCounts = countRoster(rosterArray);
 
   // ロスターの能力バランスを分析
   const rosterAnalysis = analyzeRosterBalance(rosterArray);
 
   // 優先ポジション設定（不足しているポジション）
   let preferredPositions = [];
-  if (rosterCounts.pitcher < 10) preferredPositions.push('pitcher');
-  if (rosterCounts.catcher < 2) preferredPositions.push('catcher');
-  if (rosterCounts.infielder < 6) preferredPositions.push('first', 'second', 'third', 'short');
-  if (rosterCounts.outfielder < 6) preferredPositions.push('left', 'center', 'right');
+  if (rosterCounts.pitcher < ROSTER_TARGETS.pitcher) preferredPositions.push('pitcher');
+  if (rosterCounts.catcher < ROSTER_TARGETS.catcher) preferredPositions.push('catcher');
+  if (rosterCounts.infielder < ROSTER_TARGETS.infielder) preferredPositions.push('first', 'second', 'third', 'short');
+  if (rosterCounts.outfielder < ROSTER_TARGETS.outfielder) preferredPositions.push('left', 'center', 'right');
 
   // 全候補者に価値スコアを付与
   const scoredCandidates = candidates.map(player => ({
@@ -1823,9 +1820,7 @@ export function selectPlayerForAI(candidates, currentRoster = [], teamContext = 
   scoredCandidates.forEach(candidate => {
     if (candidate.isPreferredPosition) {
       // 不足ポジションには大きなボーナス
-      if (rosterCounts[candidate.position === 'pitcher' ? 'pitcher' :
-                       candidate.position === 'catcher' ? 'catcher' :
-                       ['first', 'second', 'third', 'short'].includes(candidate.position) ? 'infielder' : 'outfielder'] === 0) {
+      if (rosterCounts[rosterGroup(candidate.position)] === 0) {
         candidate.valueScore += 50; // 0人の場合は最優先
       } else {
         candidate.valueScore += 30; // 不足している場合

@@ -728,3 +728,37 @@ export const generateCatcherLead = (age = 25) => {
 // ============================================================
 export const autoStarterRole = (index, stamina = 80) =>
   index === 0 ? 'ace' : stamina >= 170 ? 'complete' : 'quality';
+
+/**
+ * ドラフトの目標構成（24人の名簿）。
+ *
+ * ⚠ **CPUの指名と、人の希望リストの解決で共有すること**。表を二重に持つと、
+ *    人とCPUで別の名簿ができる。実際、人の希望リストだけこの目標を見ておらず、
+ *    順番どおりに取った結果 **投手15人・野手9人**（控えゼロ）になっていた。
+ *    CPUは全球団が投手10・野手14で揃っていた。
+ * ⚠ 目標は「寄せる先」であって上限ではない。CPU側は不足ポジションに
+ *    点数の下駄を履かせるだけなので、捕1・内7 のように振れる。
+ */
+export const ROSTER_TARGETS = {
+  pitcher: 10,
+  catcher: 2,
+  infielder: 6,
+  outfielder: 6,
+};
+
+/** 守備位置 → 目標構成の区分 */
+export const rosterGroup = (position) =>
+  position === 'pitcher'
+    ? 'pitcher'
+    : position === 'catcher'
+      ? 'catcher'
+      : ['first', 'second', 'third', 'short'].includes(position)
+        ? 'infielder'
+        : 'outfielder';
+
+/** 名簿を目標の区分ごとに数える */
+export const rosterCounts = (players) => {
+  const counts = { pitcher: 0, catcher: 0, infielder: 0, outfielder: 0 };
+  for (const p of players || []) counts[rosterGroup(p.position)] += 1;
+  return counts;
+};

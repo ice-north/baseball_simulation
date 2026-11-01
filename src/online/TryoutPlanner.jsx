@@ -7,7 +7,6 @@ import {
   SORT_KEYS,
   filterCandidates,
   moveRanked,
-  swapRanked,
   planSummary,
 } from './tryoutPlan.js';
 
@@ -73,15 +72,19 @@ export default function TryoutPlanner({
     [candidates],
   );
   const count = Math.min(plan.count, plan.rankedIds.length);
-  const wanted = plan.rankedIds.slice(0, count);
-  const bench = plan.rankedIds.slice(count);
-  const wantedSet = useMemo(() => new Set(wanted), [wanted]);
-  const { counts, blocking, warnings } = planSummary(
+  // ⚠ **希望順の上から count 人、ではない**。サーバーは目標構成
+  //    （投手10・捕手2・内野6・外野6）を超える区分を飛ばすので、
+  //    同じ規則で「実際に取る顔ぶれ」を出す。ここを希望順の先頭にすると、
+  //    画面に並んでいる顔ぶれと実際に取る顔ぶれが食い違う
+  const { counts, picked, targets, blocking, warnings } = planSummary(
     plan.rankedIds,
     candidates,
     count,
     roster,
   );
+  const wanted = picked.map((p) => p.id);
+  const wantedSet = useMemo(() => new Set(wanted), [wanted.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  const bench = plan.rankedIds.filter((id) => !wantedSet.has(id));
 
   const pool = useMemo(
     () => filterCandidates(candidates, { group, query, sortKey }),
@@ -117,15 +120,21 @@ export default function TryoutPlanner({
       </div>
       <p className="online-muted">
         上から順に取りにいきます。他球団に先を越された選手は飛ばして、控えから繰り上がります。
+        名簿が偏らないよう、<strong>投{targets.pitcher}・捕{targets.catcher}・内
+        {targets.infielder}・外{targets.outfielder}</strong>
+        を超える区分は飛ばします（CPUの球団も同じ目標です）。
       </p>
 
       <div className="online-tryout-grid">
         <section className="online-tryout-wanted">
           <h3>
             獲得予定 {wanted.length}人
+            {/* ⚠ 目標も並べて出す。超えたぶんは飛ばされるので、
+                数字だけだと「希望したのに入らない」理由が分からない */}
             <small>
-              　投{counts.pitcher} 捕{counts.catcher} 内{counts.infield} 外
-              {counts.outfield}
+              　投{counts.pitcher}/{targets.pitcher} 捕{counts.catcher}/
+              {targets.catcher} 内{counts.infielder}/{targets.infielder} 外
+              {counts.outfielder}/{targets.outfielder}
             </small>
           </h3>
           {/* ⚠ 成り立たない編成は、提出した瞬間ではなく**ここ**で知らせる。
@@ -151,11 +160,22 @@ export default function TryoutPlanner({
                 <span className="online-tryout-person">
                   <Line player={byId.get(id)} />
                 </span>
+                {/* ⚠ 希望リストの隣ではなく**獲得予定の隣**と入れ替える。
+                    間に飛ばされた選手が挟まっていると、希望リストの中で
+                    1つ動かしても画面の並びが変わらず、壊れて見える */}
                 <button
                   type="button"
                   aria-label={`${byId.get(id)?.name}の希望順位を上げる`}
                   disabled={i === 0 || busy}
-                  onClick={() => setRanked(swapRanked(plan.rankedIds, i, -1))}
+                  onClick={() =>
+                    setRanked(
+                      moveRanked(
+                        plan.rankedIds,
+                        id,
+                        plan.rankedIds.indexOf(wanted[i - 1]),
+                      ),
+                    )
+                  }
                 >
                   ↑
                 </button>
@@ -163,7 +183,15 @@ export default function TryoutPlanner({
                   type="button"
                   aria-label={`${byId.get(id)?.name}の希望順位を下げる`}
                   disabled={i === wanted.length - 1 || busy}
-                  onClick={() => setRanked(swapRanked(plan.rankedIds, i, 1))}
+                  onClick={() =>
+                    setRanked(
+                      moveRanked(
+                        plan.rankedIds,
+                        id,
+                        plan.rankedIds.indexOf(wanted[i + 1]),
+                      ),
+                    )
+                  }
                 >
                   ↓
                 </button>

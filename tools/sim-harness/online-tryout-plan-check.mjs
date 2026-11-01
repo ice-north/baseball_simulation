@@ -21,7 +21,10 @@ import {
   moveRanked,
   swapRanked,
   planSummary,
+  nextFromPlan,
+  plannedPicks,
 } from '../../src/online/tryoutPlan.js';
+import { ROSTER_TARGETS, rosterCounts } from '../../src/utils/constants.js';
 
 // --- 並べ替えと絞り込み（候補を作らずに済む部分） --------------------
 {
@@ -154,6 +157,8 @@ try {
   );
   assert.equal(new Set(plan.rankedIds).size, plan.rankedIds.length, '重複している');
 
+  const posOf = (id) => candidates.find((p) => p.id === id).position;
+
   // サーバーが受け取れること（ここが本丸）
   const current = (await store.read()).league;
   await service.command('admin', sessionId, {
@@ -170,54 +175,141 @@ try {
   const saved = (await store.read()).league.phase.submissions.admin.plan;
   assert.deepEqual(saved.rankedIds, plan.rankedIds, '並べ替えがサーバーに届いていない');
 
+  // --- 実際にドラフトを解決した名簿 -----------------------------------
+  // ⚠ **ここが本当の不具合があった所**。純粋な関数だけ見ていても捕まらない。
+  //    人の希望リストは順番どおりに取るだけで目標構成を見ておらず、
+  //    実測で人の球団だけ**投手15人・野手9人**（控えゼロ）になった。
+  //    CPUは全球団が投手10・野手14で揃っていたので、人だけ構造的に不利だった。
+  {
+    const live = (await store.read()).league;
+    // ⚠ 投手だけを上に並べた希望で出す。順番どおりに取る実装だと投手だらけになる
+    const pitcherFirst = [
+      ...plan.rankedIds.filter((id) => posOf(id) === 'pitcher'),
+      ...plan.rankedIds.filter((id) => posOf(id) !== 'pitcher'),
+    ];
+    await service.command('admin', sessionId, {
+      requestId: 'submit-1',
+      revision: live.revision,
+      type: 'submit',
+      payload: {
+        phaseId: live.phase.id,
+        plan: { count: plan.count, rankedIds: pitcherFirst },
+        ready: true,
+        baseSubmission: { plan: saved, ready: false },
+      },
+    });
+    const after = (await store.read()).league;
+    // 初期編成が終わると次（キャンプ）へ進む
+    assert.notEqual(
+      after.phase?.kind,
+      'initial_tryout',
+      '初期編成が解決していない',
+    );
+    const mine = rosterCounts(after.game.teams[teamName].players);
+    const cpuNames = after.season.settings.teamNames.filter((n) => n !== teamName);
+    const cpus = cpuNames.map((n) => rosterCounts(after.game.teams[n].players));
+    // ⚠ 目標は「寄せる先」であって上限ではない（CPUも 捕1・内7 などに振れる）。
+    //    見るのは**人がCPUより不利にならないこと**。以前は人だけ投手15人だった。
+    assert.ok(
+      mine.pitcher <= ROSTER_TARGETS.pitcher,
+      `人の球団の投手が目標 ${ROSTER_TARGETS.pitcher} を超えた: ${mine.pitcher}（${JSON.stringify(mine)}）`,
+    );
+    const worstCpu = Math.max(...cpus.map((c) => c.pitcher));
+    assert.ok(
+      mine.pitcher <= worstCpu,
+      `人の球団だけ投手が多い: 人${mine.pitcher} / CPU最大${worstCpu}`,
+    );
+    assert.ok(mine.catcher >= 1, `捕手が居ない: ${JSON.stringify(mine)}`);
+    // ⚠ **控えが居ること**。野手9人だと代打も守備固めも出せず、
+    //    レギュラーが全試合に出続けるので、成績の出方が一人用と別物になる。
+    //    実測で、直す前は野手9人（CPUは14人）だった
+    const fielders = after.game.teams[teamName].players.length - mine.pitcher;
+    const cpuFielders = Math.min(...cpus.map((c) => 24 - c.pitcher));
+    assert.ok(
+      fielders >= 12,
+      `野手が ${fielders}人しかいない（控えが出せない / CPUは最少${cpuFielders}人）`,
+    );
+  }
+
   // 守備位置の内訳
   const roster = league.game.teams[teamName].players;
   const summary = planSummary(plan.rankedIds, candidates, plan.count, roster);
+  assert.equal(summary.picked.length, plan.count, '獲得予定の人数が合わない');
   const total = Object.values(summary.counts).reduce((a, b) => a + b, 0);
   assert.equal(total, plan.count, '内訳の合計が獲得予定人数と合わない');
   assert.deepEqual(summary.blocking, [], '既定案が「決定できない」になっている');
 
-  // ⚠ **サーバーが拒む編成を、提出前に知らせること**。手続きは全員ぶんまとめて
-  //    処理されるので、1球団が成り立たないと全員が先へ進めない。
-  //    実測で、獲得希望人数を10にすると野手が6人になり、サーバーが
-  //    「投手・捕手・野手が不足します」で手続き全体を失敗させた。
+  // ⚠ **目標構成を超える区分は飛ばすこと**。候補の38%が投手なので、希望順を
+  //    そのまま取ると投手だらけになる。実測で、人の球団だけ投手15人・野手9人
+  //    （控えゼロ）になり、CPUは全球団が投手10・野手14で揃っていた。
+  for (const [group, target] of Object.entries(ROSTER_TARGETS)) {
+    assert.ok(
+      summary.counts[group] <= target,
+      `${group} が目標 ${target} を超えている: ${summary.counts[group]}`,
+    );
+  }
+  // 投手だけを並べた希望でも、投手ばかりにはならない
+  const allPitchersFirst = [
+    ...plan.rankedIds.filter((id) => posOf(id) === 'pitcher'),
+    ...plan.rankedIds.filter((id) => posOf(id) !== 'pitcher'),
+  ];
+  const skewed = planSummary(allPitchersFirst, candidates, 24, []);
+  assert.equal(
+    skewed.counts.pitcher,
+    ROSTER_TARGETS.pitcher,
+    `投手だけ並べたのに投手が ${skewed.counts.pitcher}人になった`,
+  );
+  assert.ok(
+    skewed.counts.catcher > 0 && skewed.counts.infielder > 0,
+    `野手が入っていない: ${JSON.stringify(skewed.counts)}`,
+  );
+  assert.deepEqual(skewed.blocking, [], '目標どおりなのに決定できない');
+
+  // ⚠ どの区分も埋まったら、希望の先頭に戻す（枠が余るのに誰も取らない回を作らない）
+  const full = Object.entries(ROSTER_TARGETS).flatMap(([g, n]) =>
+    Array.from({ length: n }, () => ({
+      position: g === 'infielder' ? 'short' : g === 'outfielder' ? 'left' : g,
+    })),
+  );
+  const ordered = plan.rankedIds.map((id) => candidates.find((p) => p.id === id));
+  assert.equal(
+    nextFromPlan(ordered, full)?.id,
+    ordered[0].id,
+    '目標が埋まっていると誰も取らない',
+  );
+  assert.equal(nextFromPlan([], []), null, '候補が尽きても落ちない');
+
+  // ⚠ **画面とサーバーが同じ規則を使うこと**。片方だけ直すと、画面に出ている
+  //    顔ぶれと実際に取る顔ぶれが食い違う
+  const simulated = rosterCounts(plannedPicks(plan.rankedIds, candidates, 24, []));
+  for (const [group, target] of Object.entries(ROSTER_TARGETS))
+    assert.ok(simulated[group] <= target, `画面側の予定が ${group} で目標を超えた`);
+
+  // ⚠ 成り立たない編成は提出前に知らせる（詳細は下）
   const few = planSummary(plan.rankedIds, candidates, 10, roster);
   assert.ok(few.blocking.length > 0, '野手が足りないのに知らせていない');
   assert.ok(
     few.blocking.some((t) => t.includes('野手')),
     `野手の不足を名指ししていない: ${JSON.stringify(few.blocking)}`,
   );
-  // ⚠ 成り立たないときは助言を出さない（赤と黄が同時に出ると、どちらが
-  //    致命的なのか分からなくなる）
   assert.deepEqual(few.warnings, [], '決定できない状態で助言も出している');
 
   // 捕手を1人も入れない並びは、捕手の不足として名指しする
-  const posOf = (id) => candidates.find((p) => p.id === id).position;
   const noCatcher = [
     ...plan.rankedIds.filter((id) => posOf(id) !== 'catcher'),
     ...plan.rankedIds.filter((id) => posOf(id) === 'catcher'),
   ];
   assert.ok(
-    planSummary(noCatcher, candidates, plan.count, roster).blocking.includes(
-      '捕手が1人もいません',
-    ),
-    '捕手が0人でも知らせない',
-  );
-  // 捕手を先頭に置けば消える
-  const catcherFirst = moveRanked(noCatcher, candidates.find((p) => p.position === 'catcher').id, 0);
-  assert.ok(
-    !planSummary(catcherFirst, candidates, plan.count, roster).blocking.some((t) =>
-      t.includes('捕手'),
-    ),
-    '捕手が居るのに知らせている',
+    planSummary(noCatcher, candidates, 9, roster).blocking.length > 0,
+    '成り立たない編成を知らせない',
   );
   // ⚠ 既に名簿が埋まっている球団なら、0人でも成り立つ（初期編成だけの話にしない）
-  const full = Array.from({ length: 12 }, (_, i) => ({
+  const already = Array.from({ length: 12 }, (_, i) => ({
     id: -1 - i,
     position: i === 0 ? 'pitcher' : i === 1 ? 'catcher' : 'left',
   }));
   assert.deepEqual(
-    planSummary(plan.rankedIds, candidates, 0, full).blocking,
+    planSummary(plan.rankedIds, candidates, 0, already).blocking,
     [],
     '名簿が足りている球団で「決定できない」になる',
   );
@@ -226,5 +318,5 @@ try {
 }
 
 console.log(
-  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・成り立たない編成を提出前に知らせる）',
+  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・成り立たない編成を提出前に知らせる・人の名簿がCPUより不利にならない）',
 );

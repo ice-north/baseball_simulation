@@ -101,6 +101,7 @@ import {
   assertMemberCount,
   assignmentOrder,
 } from '../src/online/membership.js';
+import { nextFromPlan } from '../src/online/tryoutPlan.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export const CAMP_MENUS = [
@@ -421,9 +422,16 @@ function resolveTryout(league, plans) {
     const player = forced
       ? forced
       : plan
-        ? plan.rankedIds
-            .map((id) => remaining.find((p) => p.id === id))
-            .find(Boolean)
+        ? // ⚠ **希望順だけで取らないこと**。候補の38%が投手なので、順番どおりに
+          //    取ると投手15人・野手9人（控えゼロ）になる。CPUは
+          //    `selectPlayerForAI` が目標構成を見ているので投手10・野手14で揃い、
+          //    人の球団だけ構造的に不利だった。同じ目標に従って飛ばす
+          nextFromPlan(
+            plan.rankedIds
+              .map((id) => remaining.find((p) => p.id === id))
+              .filter(Boolean),
+            roster,
+          )
         : selectPlayerForAI(remaining, roster);
     if (!player) continue;
     remaining.splice(

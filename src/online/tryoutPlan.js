@@ -1,3 +1,8 @@
+import {
+  ROSTER_TARGETS,
+  rosterGroup,
+  rosterCounts,
+} from '../utils/constants.js';
 // ============================================================
 // 初期編成・トライアウトの希望リストを組み立てる計算。
 //
@@ -11,6 +16,49 @@
 //    ここでは「上位（獲得予定）だけを並べ、残りは推奨順のまま控える」形にする。
 // ============================================================
 
+
+// --- 希望リストを実際の指名へ変える規則 --------------------------------
+//
+// ⚠ **CPUと同じ目標構成に従うこと**（`ROSTER_TARGETS`）。以前は希望リストを
+//    順番どおりに取るだけで構成を見ておらず、候補の38%が投手なので
+//    **投手15人・野手9人**（控えゼロ）になっていた。CPUは全球団が
+//    投手10・野手14で揃っており、人の球団だけ構造的に不利だった。
+// ⚠ サーバーの解決（`resolveTryout`）と画面の「獲得予定」が**同じ関数を使う**こと。
+//    片方だけ直すと、画面に出ている顔ぶれと実際に取る顔ぶれが食い違う。
+
+/** 希望順の中から、いま取るべき1人を選ぶ。目標を満たした区分は飛ばす */
+export function nextFromPlan(ordered, roster) {
+  const counts = rosterCounts(roster);
+  const room = (player) => {
+    const group = rosterGroup(player.position);
+    return counts[group] < ROSTER_TARGETS[group];
+  };
+  // ⚠ どの区分も埋まっているときは**希望の先頭に戻す**。ここで null を返すと
+  //    枠が余っているのに誰も取らない回ができてしまう
+  return ordered.find(room) || ordered[0] || null;
+}
+
+/**
+ * 他球団と競合しなかった場合に、実際に取る顔ぶれ。画面の「獲得予定」に使う。
+ * ⚠ 希望リストの上から count 人、ではない。目標構成で飛ばされるぶんがある
+ */
+export function plannedPicks(rankedIds, candidates, count, roster = []) {
+  const byId = new Map(candidates.map((p) => [p.id, p]));
+  const pool = rankedIds.map((id) => byId.get(id)).filter(Boolean);
+  const taken = [];
+  const have = [...roster];
+  for (let i = 0; i < count; i += 1) {
+    const player = nextFromPlan(
+      pool.filter((p) => !taken.includes(p)),
+      have,
+    );
+    if (!player) break;
+    taken.push(player);
+    have.push(player);
+  }
+  return taken;
+}
+
 /** 守備位置のまとまり。画面の絞り込みと、偏りの警告に使う */
 export const POSITION_GROUPS = [
   { key: 'all', label: '全部', positions: null },
@@ -20,8 +68,6 @@ export const POSITION_GROUPS = [
   { key: 'outfield', label: '外野', positions: ['left', 'center', 'right'] },
 ];
 
-const groupOf = (position) =>
-  POSITION_GROUPS.find((g) => g.positions?.includes(position))?.key || 'all';
 
 // ⚠ **球速とスタミナは0〜100ではない**（球速は115〜155km/h、スタミナは0〜200）。
 //    そのまま足すと投手が全員上位に来る。`getAbilityRank` と同じ式で揃える。
@@ -119,15 +165,11 @@ export function swapRanked(rankedIds, index, delta) {
  *    「希望どおりにならない」という意味。
  */
 export function planSummary(rankedIds, candidates, count, roster = []) {
-  const byId = new Map(candidates.map((p) => [p.id, p]));
-  const counts = { pitcher: 0, catcher: 0, infield: 0, outfield: 0 };
-  const picked = [];
-  for (const id of rankedIds.slice(0, count)) {
-    const player = byId.get(id);
-    if (!player) continue;
-    counts[groupOf(player.position)] += 1;
-    picked.push(player);
-  }
+  // ⚠ **希望順の上から count 人、ではない**。目標構成で飛ばされるぶんがあるので、
+  //    サーバーと同じ規則で「実際に取る顔ぶれ」を出してから数える。
+  //    ここを `slice(0, count)` に戻すと、画面の顔ぶれと実際が食い違う
+  const picked = plannedPicks(rankedIds, candidates, count, roster);
+  const counts = rosterCounts(picked);
   const combined = [...roster, ...picked];
   const fielders = combined.filter((p) => p.position !== 'pitcher').length;
   const pitchers = combined.filter((p) => p.position === 'pitcher').length;
@@ -140,8 +182,8 @@ export function planSummary(rankedIds, candidates, count, roster = []) {
   const warnings = [];
   if (!blocking.length) {
     if (counts.pitcher < 5) warnings.push('投手が5人未満です');
-    if (counts.infield < 4) warnings.push('内野手が4人未満です');
-    if (counts.outfield < 3) warnings.push('外野手が3人未満です');
+    if (counts.infielder < 4) warnings.push('内野手が4人未満です');
+    if (counts.outfielder < 3) warnings.push('外野手が3人未満です');
   }
-  return { counts, blocking, warnings };
+  return { counts, picked, targets: ROSTER_TARGETS, blocking, warnings };
 }
