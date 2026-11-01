@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { issueInvite } from './invites.mjs';
 import { applyJoin } from '../src/online/membership.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -34,10 +33,6 @@ export class LeagueService {
       // ⚠ `local` とは別に持つこと。`local` は CORS をローカルへ開く印でもあるので、
       //    検証用の進行を本番で使いたいからといって `local` を立ててはいけない。
       allowStep = false,
-      // ⚠ **ハーネス専用**。保存の移行の手順表を差し替える。段がまだ0本なので、
-      //    これが無いと「古いリーグを直して保存する」経路を一度も試せない。
-      //    本番は渡さない（既定の表と `ONLINE_SCHEMA` を使う）。
-      migrations = undefined,
     } = {},
   ) {
     this.store = store;
@@ -49,7 +44,6 @@ export class LeagueService {
     this.adminId = adminId;
     this.clock = clock;
     this.local = local;
-    this.migrations = migrations;
     this.allowStep = allowStep || local;
   }
   async view(userId, sessionId) {
@@ -144,12 +138,9 @@ export class LeagueService {
    */
   ensureMigrated(bundle) {
     const l = bundle.league;
-    // ⚠ `migrations` はハーネス専用の差し替え口。段がまだ0本なので、
-    //    これが無いと「本物のリーグを直して保存する」経路を一度も通せない
-    if (!l || isCurrent(l, this.migrations?.target))
-      return { applied: [], changed: false };
+    if (!l || isCurrent(l)) return { applied: [], changed: false };
     const working = clone(l);
-    const result = migrateLeague(working, this.migrations);
+    const result = migrateLeague(working);
     bundle.league = working;
     bundle.league.updatedAt = this.clock();
     return result;
@@ -210,7 +201,7 @@ export class LeagueService {
           403,
         );
         bundle.league = await this.engine((engine) =>
-          // ⚠ 作成時の参加者は**管理者1人**。以降は招待で増える
+          // ⚠ 作成時の参加者は**管理者1人**。以降はログインした人が空き球団に入る
           engine.createLeague({
             members: this.members.length
               ? this.members
@@ -218,21 +209,6 @@ export class LeagueService {
             now,
           }),
         );
-      } else if (command.type === 'invite') {
-        // ⚠ 招待コードを作れるのは管理者だけ
-        requireOnline(l, 'リーグがまだありません', 409);
-        requireOnline(
-          userId === this.adminId,
-          '招待コードを作れるのは管理者だけです',
-          403,
-        );
-        assertLeagueVersion(l);
-        l.invites = [...(l.invites || []), issueInvite(l, now)];
-        // ⚠ **revision を進めること**。これは楽観ロックの要で、
-        //    進め忘れると2人が同時に操作したとき片方が黙って消える。
-        //    既存の `revision++` は非作成コマンドの else の中にあり、
-        //    ここ（create と並ぶ階層）には掛からない。
-        l.revision++;
       } else if (command.type === 'join') {
         // ⚠ **参加者チェックより前に置くこと**。参加する人はまだ参加者ではない
         requireOnline(l, 'リーグがまだありません', 409);
@@ -240,7 +216,6 @@ export class LeagueService {
         applyJoin(l, {
           userId,
           teamName: command.payload?.teamName,
-          code: command.payload?.code,
           now,
         });
         l.revision++; // ⚠ 上と同じ理由

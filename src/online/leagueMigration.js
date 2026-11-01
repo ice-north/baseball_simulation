@@ -30,7 +30,16 @@ export const OLDEST_MIGRATABLE = 2;
 
 /** 版を1つずつ上げる手順。⚠ 順番に並べ、飛ばさないこと */
 export const MIGRATIONS = [
-  // 例) { from: 2, to: 3, note: '…', apply(league) { … } },
+  {
+    from: 2,
+    to: 3,
+    note: '招待コードを廃止した',
+    apply(league) {
+      // ⚠ 消すだけ。参加の可否は `assertCanJoin` が見るようになったので、
+      //    残っていても害は無いが、読む人が「まだ要るのか」と迷う
+      delete league.invites;
+    },
+  },
 ];
 
 // ⚠ **手順表と目標の版を差し替えられるようにしてある**。段がまだ0本なので、

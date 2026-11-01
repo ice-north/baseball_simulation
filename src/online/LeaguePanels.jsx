@@ -17,42 +17,33 @@ import TryoutPlanner from './TryoutPlanner.jsx';
 export { PageNav } from './PageNav.jsx';
 
 /**
- * 招待コードで参加する画面。
+ * リーグに参加する画面。
  *
  * ⚠ **ログイン直後の非参加者がここに来る**。参加するにはログインが要るが、
  *    ログインに参加者であることを求めると永遠に入れない（鶏と卵）。
- *    サーバーは非参加者にも `joinRequired` のビューを返すので、
- *    ここでコードを受け取る。
+ *    サーバーは非参加者にも `joinRequired` のビューを返す。
+ * ⚠ **招待コードは廃止した**。アカウントは管理者が Supabase で作らない限り
+ *    増えない（公開サインアップは無効）ので、入口はそこで絞れている。
+ *    その上にコードを重ねると、人を呼ぶたびに発行と受け渡しの手間が増えるだけだった。
  * ⚠ 球団名は**表示名**として扱われる。内部の球団名は引き継いだ球団のまま
  *    （記録の選手キーまで名前で繋がっているため）。
  */
 export function JoinLeague({ busy, join, logout }) {
-  const [code, setCode] = useState('');
   const [teamName, setTeamName] = useState('');
   return (
     <section className="online-card online-login">
       <p className="online-eyebrow">JOIN</p>
       <h1>リーグに参加する</h1>
       <p>
-        管理者から受け取った招待コードを入れてください。
-        空いている球団のうち、一番下のものを引き継ぎます。
+        空いている球団のうち、下の階層で一番弱いものを引き継ぎます。
+        球団名は好きに付けられます。
       </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          join({ code: code.trim(), teamName: teamName.trim() });
+          join({ teamName: teamName.trim() });
         }}
       >
-        <label>
-          招待コード
-          <input
-            required
-            value={code}
-            maxLength={16}
-            autoCapitalize="characters"
-            onChange={(e) => setCode(e.target.value)}
-          />
-        </label>
         <label>
           球団名（空なら元の名前のまま）
           <input
@@ -61,7 +52,7 @@ export function JoinLeague({ busy, join, logout }) {
             onChange={(e) => setTeamName(e.target.value)}
           />
         </label>
-        <button className="online-primary" type="submit" disabled={busy || !code.trim()}>
+        <button className="online-primary" type="submit" disabled={busy}>
           参加する
         </button>
       </form>

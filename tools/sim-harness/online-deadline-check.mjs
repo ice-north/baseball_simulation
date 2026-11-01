@@ -78,18 +78,15 @@ try {
     });
 
   await run('admin', adminSession, 'create', 0);
-  // 2人目を招待して入れる（1人だと提出した時点で必ず揃ってしまう）
+  // 2人目を入れる（1人だと提出した時点で必ず揃ってしまう）
   let view = await service.view('admin', adminSession);
   // ⚠ **本物のリーグから作ったビューに版の印が載ること**。
   //    印が無いと `LeagueService.view` が全部「古い形式です」で止める。
   //    `online-config-check` は作り物のビューで門番を見ているので、
   //    印を付け忘れた側はここでしか捕まらない（実際に取りこぼした）。
   assert.equal(view.schema, ONLINE_SCHEMA, 'ビューに版の印が無い');
-  await run('admin', adminSession, 'invite', view.revision);
-  const code = (await store.read()).league.invites[0].code;
   const guest = (await service.login('guest')).sessionId;
   await run('guest', guest, 'join', (await store.read()).league.revision, {
-    code,
     teamName: 'テスト球団',
   });
 

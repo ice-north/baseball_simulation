@@ -1,20 +1,18 @@
-// 参加者モデル（1〜42人・招待制・途中参加）の検査。
+// 参加者モデル（1〜12人・途中参加）の検査。
 //
-// ⚠ 主目的は3つ。
-//    1. 人数の境界（0人を拒む / 1人で成立する / 42人を超えない）
-//    2. 途中参加が**必ずCリーグのCPU最下位**に入ること
-//    3. 招待コードが**使い捨て**であること
+// ⚠ 主目的は2つ。
+//    1. 人数の境界（0人を拒む / 1人で成立する / 上限を超えない）
+//    2. 途中参加が**必ず最下層のCPU最下位**に入ること
+// ⚠ 招待コードは廃止した。アカウントは管理者が Supabase で作らない限り増えない
+//    ので、入口はそこで絞れている。
 // ⚠ 「最下位が実行のたびに変わらない」ことも見る。開幕前は全球団が同成績なので、
 //    比べ方が足りないと参加するたびに違う球団が弾かれる。
 import assert from 'node:assert/strict';
 import {
   MAX_MEMBERS,
   JOIN_TIER,
-  newInviteCode,
-  INVITE_CODE_LENGTH,
   cpuTeams,
   weakestJoinableTeam,
-  findInvite,
   assertCanJoin,
   applyJoin,
   assertMemberCount,
@@ -30,12 +28,7 @@ import { createSeededRandom } from '../../src/game/rng.js';
 const fresh = () => ({
   teams: generatePyramidTeams(20261029).map((t) => ({ ...t })),
   members: [],
-  invites: [],
 });
-const invite = (league, code) => {
-  league.invites.push({ code, createdAt: '2026-10-29T00:00:00.000Z', usedBy: null });
-  return code;
-};
 
 // --- 人数の境界 ---------------------------------------------------
 assert.equal(MAX_MEMBERS, PYRAMID_TEAM_COUNT);
@@ -50,24 +43,6 @@ assert.throws(
 );
 assert.throws(() => assertMemberCount([{ userId: 'a' }, { userId: 'a' }]), /重複/);
 assert.throws(() => assertMemberCount([{ userId: '' }]), /識別子/);
-
-// --- 招待コード ---------------------------------------------------
-const rand = createSeededRandom(1234);
-const code = newInviteCode(rand);
-assert.equal(code.length, INVITE_CODE_LENGTH);
-// ⚠ 読み間違えやすい文字を含まないこと
-assert.ok(!/[01OIL]/.test(code), `紛らわしい文字が入っている: ${code}`);
-// シードが同じなら同じコード（サーバーと検査で同じ経路を通す）
-assert.equal(newInviteCode(createSeededRandom(1234)), code);
-
-// 大文字小文字・前後の空白を無視して引ける
-{
-  const l = fresh();
-  invite(l, 'ABCD2345');
-  assert.ok(findInvite(l, ' abcd2345 '));
-  assert.equal(findInvite(l, 'ZZZZZZZZ'), null);
-  assert.equal(findInvite(l, ''), null);
-}
 
 // --- 途中参加の入り先 ---------------------------------------------
 {
@@ -110,14 +85,12 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
 // --- 参加の反映 ---------------------------------------------------
 {
   const l = fresh();
-  invite(l, 'JOIN0001');
   // ⚠ **名前は文字列で控えること**。`applyJoin` は球団オブジェクトを
   //    その場で書き換えるので、参照で持つと比較対象まで新しい名前に変わる。
   const beforeName = weakestJoinableTeam(l).name;
   const result = applyJoin(l, {
     userId: 'u1',
     teamName: '新潟ドリーマーズ',
-    code: 'join0001',
     now: '2026-10-29T01:00:00.000Z',
   });
 
@@ -135,55 +108,57 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
     '新潟ドリーマーズ',
     '表示名だけを付け替える',
   );
-  // 招待コードが使い捨てになっている
-  assert.equal(l.invites[0].usedBy, 'u1');
-  assert.throws(() => assertCanJoin(l, 'u2', 'JOIN0001'), /使用済み/);
+  // ⚠ 同じ人は二度入れない
+  assert.throws(() => assertCanJoin(l, 'u1'), /すでに参加しています/);
+  // 別の人はそのまま入れる（コードは要らない）
+  assert.doesNotThrow(() => assertCanJoin(l, 'u2'));
 }
 
 // --- 断る理由が分かれていること -----------------------------------
 {
   const l = fresh();
-  invite(l, 'GOOD0001');
-  assert.throws(() => assertCanJoin(l, 'u1', 'BAD00001'), /招待コードが違います/);
-  applyJoin(l, { userId: 'u1', teamName: '', code: 'GOOD0001', now: 'x' });
-  invite(l, 'GOOD0002');
-  assert.throws(() => assertCanJoin(l, 'u1', 'GOOD0002'), /すでに参加しています/);
-  assert.throws(() => assertCanJoin(null, 'u2', 'GOOD0002'), /リーグがまだありません/);
+  applyJoin(l, { userId: 'u1', teamName: '', now: 'x' });
+  assert.throws(() => assertCanJoin(l, 'u1'), /すでに参加しています/);
+  assert.throws(() => assertCanJoin(null, 'u2'), /リーグがまだありません/);
+  // ⚠ 満員なら断る（コードが無くなったぶん、ここが唯一の上限）
+  const full = fresh();
+  full.members = Array.from({ length: MAX_MEMBERS }, (_, i) => ({
+    userId: `u${i}`,
+    teamName: full.teams[i].name,
+  }));
+  assert.throws(() => assertCanJoin(full, 'over'), new RegExp(`${MAX_MEMBERS}人まで`));
 }
 
 // 球団名を空で参加すると、引き継いだ球団の名前をそのまま使う
 {
   const l = fresh();
-  invite(l, 'EMPTY001');
   const emptyBefore = weakestJoinableTeam(l).name;
-  const r = applyJoin(l, { userId: 'u9', teamName: '   ', code: 'EMPTY001', now: 'x' });
+  const r = applyJoin(l, { userId: 'u9', teamName: '   ', now: 'x' });
   assert.equal(r.displayName, emptyBefore, '空なら元の球団名をそのまま使う');
 }
 
 // 既に使われている球団名は拒む
 {
   const l = fresh();
-  invite(l, 'DUP00001');
   const taken = l.teams.find((t) => t.league !== weakestJoinableTeam(l).league).name;
   assert.throws(
-    () => applyJoin(l, { userId: 'u1', teamName: taken, code: 'DUP00001', now: 'x' }),
+    () => applyJoin(l, { userId: 'u1', teamName: taken, now: 'x' }),
     /使われています/,
   );
   // 長すぎる名前は拒む
   assert.throws(
-    () => applyJoin(l, { userId: 'u2', teamName: 'あ'.repeat(25), code: 'DUP00001', now: 'x' }),
+    () => applyJoin(l, { userId: 'u2', teamName: 'あ'.repeat(25), now: 'x' }),
     /長すぎます/,
   );
 }
 
-// --- 42人まで入れる（Cの24枠を超えたら空きが無くなる） ------------
+// --- 最下層の枠まで入れる（埋まったら空きが無くなる） --------------
 {
   const l = fresh();
   let joined = 0;
   for (let i = 0; i < PYRAMID_TEAM_COUNT + 6; i++) {
-    invite(l, `BULK${String(i).padStart(4, '0')}`);
     try {
-      applyJoin(l, { userId: `b${i}`, teamName: `球団${i}`, code: `BULK${String(i).padStart(4, '0')}`, now: 'x' });
+      applyJoin(l, { userId: `b${i}`, teamName: `球団${i}`, now: 'x' });
       joined++;
     } catch (error) {
       assert.match(error.message, /空いている球団がありません/);
@@ -198,5 +173,5 @@ assert.equal(newInviteCode(createSeededRandom(1234)), code);
 }
 
 console.log(
-  `■ 参加者モデル: OK（1〜${MAX_MEMBERS}人 / 招待は使い捨て / 途中参加は最下層のCPU最下位）`,
+  `■ 参加者モデル: OK（1〜${MAX_MEMBERS}人 / コード不要で参加 / 満員と二重参加は断る / 途中参加は最下層のCPU最下位）`,
 );

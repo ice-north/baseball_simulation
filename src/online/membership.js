@@ -46,22 +46,6 @@ export function assignmentOrder(teams) {
   );
 }
 
-/** 招待コードの文字種。⚠ 0/O/1/I/l を除く（読み上げ・書き写しの事故を防ぐ） */
-const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-export const INVITE_CODE_LENGTH = 8;
-
-/**
- * 招待コードを作る。`rand` は 0〜1 を返す関数（シード乱数を渡すこと）。
- * ⚠ **生成はここでしない**。呼ぶ側が乱数を渡す（サーバーとテストで同じ経路にする）。
- */
-export function newInviteCode(rand) {
-  let code = '';
-  for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
-    code += CODE_ALPHABET[Math.floor(rand() * CODE_ALPHABET.length)];
-  }
-  return code;
-}
-
 /** 人間が持っていない球団（＝CPU） */
 export function cpuTeams(league) {
   const held = new Set((league.members || []).map((m) => m.teamName));
@@ -92,19 +76,16 @@ export function weakestJoinableTeam(league, standings = {}) {
   })[0];
 }
 
-/** 未使用の招待コードを探す。大文字小文字と空白は無視する */
-export function findInvite(league, code) {
-  const key = String(code || '').trim().toUpperCase();
-  if (!key) return null;
-  return (league.invites || []).find((i) => i.code === key) || null;
-}
-
 /**
  * 参加できるかを検査する。できないときは理由付きで止める。
- * ⚠ **理由を分けて返すこと**。「参加できません」だけだと、コードが違うのか
- *    満員なのか既に参加済みなのかが分からず、受け取った人が詰む。
+ *
+ * ⚠ **招待コードは廃止した**。アカウントは管理者が Supabase で作らない限り
+ *    増えない（公開サインアップは無効）ので、入口はそこで絞れている。
+ *    その上にコードを重ねると、人を呼ぶたびに発行と受け渡しの手間が増えるだけだった。
+ * ⚠ **理由を分けて返すこと**。「参加できません」だけだと、満員なのか
+ *    既に参加済みなのかが分からず、受け取った人が詰む。
  */
-export function assertCanJoin(league, userId, code) {
+export function assertCanJoin(league, userId) {
   requireOnline(league, 'リーグがまだありません', 409);
   requireOnline(
     !(league.members || []).some((m) => m.userId === userId),
@@ -116,12 +97,9 @@ export function assertCanJoin(league, userId, code) {
     `参加できるのは${MAX_MEMBERS}人までです`,
     409,
   );
-  const invite = findInvite(league, code);
-  requireOnline(invite, '招待コードが違います', 403);
-  requireOnline(!invite.usedBy, 'この招待コードは使用済みです', 409);
   const team = weakestJoinableTeam(league);
   requireOnline(team, '空いている球団がありません', 409);
-  return { invite, team };
+  return { team };
 }
 
 /**
@@ -142,8 +120,8 @@ export function assertCanJoin(league, userId, code) {
 // ⚠ **この関数は `league` と、その中の球団オブジェクトを書き換える**（engine 側の流儀に合わせている）。
 //    呼ぶ側が「参加前の球団名」を参照で持っていると、書き換えで一緒に変わる。
 //    比べたいなら**文字列で控えてから**呼ぶこと（検査で実際に踏んだ）。
-export function applyJoin(league, { userId, label, teamName, code, now }) {
-  const { invite, team } = assertCanJoin(league, userId, code);
+export function applyJoin(league, { userId, label, teamName, now }) {
+  const { team } = assertCanJoin(league, userId);
   const shown = String(teamName || '').trim() || team.name;
   requireOnline(shown.length <= 24, '球団名が長すぎます', 400);
   // ⚠ 内部名と表示名の**両方**と見比べる。片方だけだと同じ名前が2つ並ぶ
@@ -166,8 +144,6 @@ export function applyJoin(league, { userId, label, teamName, code, now }) {
       joinedAt: now,
     },
   ];
-  invite.usedBy = userId;
-  invite.usedAt = now;
   return {
     league,
     teamName: team.name,

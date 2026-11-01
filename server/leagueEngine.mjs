@@ -216,7 +216,6 @@ export function createLeague({
     nextAdvanceAt: null,
     // 階層リーグの球団表。参加者の割り当てと昇降格でこれを見る
     teams: defs,
-    invites: [],
     members: members.map((m, i) => ({
       userId: m.userId,
       label: m.label || `プレイヤー${i + 1}`,

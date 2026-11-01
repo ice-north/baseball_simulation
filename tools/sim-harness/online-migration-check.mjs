@@ -164,22 +164,25 @@ try {
   assert.equal(okView.schema, ONLINE_SCHEMA);
 
   // ⚠ **古い形のまま投影しないこと**。ビューには最新の版の印を押すので、
-  //    中身が古いまま投影すると「新しい形です」と嘘になる
+  //    中身が古いまま投影すると「新しい形です」と嘘になる。
+  // ⚠ ここで使う版は **`OLDEST_MIGRATABLE - 1`**（＝直せない版）。
+  //    「いまの版-1」にすると、段が増えた瞬間に“直せる版”に変わって
+  //    この区画の意味が消える（実際に段を1本入れた時に変わった）。
+  const UNMIGRATABLE = OLDEST_MIGRATABLE - 1;
   await store.transaction((bundle) => {
-    bundle.league.schema = ONLINE_SCHEMA - 1;
+    bundle.league.schema = UNMIGRATABLE;
     return { value: null };
   });
   const blockedView = await service.view('admin', sessionId);
   assert.ok(blockedView.versionMismatch, '古い形のまま投影している');
   assert.ok(!('teamName' in blockedView), '古いリーグの中身が漏れている');
   assert.equal(blockedView.isAdmin, true);
-  // いまは段が0本なので、2未満＝直せない
-  assert.equal(blockedView.canMigrate, OLDEST_MIGRATABLE <= ONLINE_SCHEMA - 1);
+  assert.equal(blockedView.canMigrate, false, '直せない版を直せると言っている');
 
   // ⚠ 直せない形でも、定期処理が例外で落ちないこと（毎正時が止まる）
   assert.deepEqual(await service.tick(), { advanced: false }, '定期処理が落ちた');
   // 直せないので保存は古いまま（黙って半分だけ直さない）
-  assert.equal((await store.read()).league.schema, ONLINE_SCHEMA - 1);
+  assert.equal((await store.read()).league.schema, UNMIGRATABLE);
 
   // 取り込みの命令も、理由を返して止まる
   await assert.rejects(
@@ -221,36 +224,17 @@ try {
     '取り込みで球団が入れ替わっている',
   );
 
-  // --- 段が入ったときに、本当に直って保存されるか ---------------------
-  // ⚠ ここがこの検査の山。段が0本のままだと、仕組みは一度も動かないまま
-  //    「できているつもり」になる。手順表を差し替えて、本物のリーグを
-  //    1つ古い版へ落とし、命令と定期処理の両方で直ることを見る。
-  //    ⚠ 行き先は**本物の `ONLINE_SCHEMA`**にする。そうしないと、直した後の
-  //       投影（既定の版で判定する）がまた「古い形」と言ってしまう。
-  const probe = {
-    steps: [
-      {
-        from: ONLINE_SCHEMA - 1,
-        to: ONLINE_SCHEMA,
-        note: '検査用',
-        apply(l) {
-          l._probe = (l._probe || 0) + 1;
-        },
-      },
-    ],
-    oldest: ONLINE_SCHEMA - 1,
-  };
-  const upgradable = new LeagueService(store, {
-    members: [{ userId: 'admin', label: '管理者' }],
-    adminId: 'admin',
-    clock: () => now,
-    migrations: probe,
-  });
-
+  // --- 本物の段で、直って保存されるか ---------------------------------
+  // ⚠ 本物のリーグを1つ古い版へ落として、命令・定期処理・ふつうの操作の
+  //    どれでも直ることを見る。段が0本だった頃は手順表を差し替える口を
+  //    付けていたが、2→3 の段が入ったので本物で通せるようになった。
+  const upgradable = service;
+  // ⚠ 段（2→3）は `delete league.invites` なので、古い形を作るときに
+  //    `invites` を生やしておき、消えることで「当たった」と判る
   const downgrade = () =>
     store.transaction((bundle) => {
       bundle.league.schema = ONLINE_SCHEMA - 1;
-      delete bundle.league._probe;
+      bundle.league.invites = [{ code: 'OLD', usedBy: null }];
       return { value: null };
     });
 
@@ -267,7 +251,7 @@ try {
   assert.equal(applied.applied.length, 1, `当てた段がちがう: ${JSON.stringify(applied.applied)}`);
   const fixed = (await store.read()).league;
   assert.equal(fixed.schema, ONLINE_SCHEMA, '直した形が保存されていない');
-  assert.equal(fixed._probe, 1, '段が当たっていない');
+  assert.ok(!fixed.invites, '段が当たっていない（invites が残っている）');
   // ⚠ 取り込みで revision を上げない（送信中の提出が弾かれる）
   assert.equal(fixed.revision, before.revision, '取り込みで revision が動いた');
   // 中身は保たれている
@@ -287,27 +271,28 @@ try {
     type: 'migrate',
   });
   assert.deepEqual(again.applied, [], '済んだ段をもう一度当てている');
-  assert.equal((await store.read()).league._probe, 1, '段が二重に当たった');
+  assert.ok(!(await store.read()).league.invites, '取り込み後に invites が戻っている');
 
   // 3) 誰も操作しなくても、定期処理で直る
   await downgrade();
   await upgradable.tick();
   const byTick = (await store.read()).league;
   assert.equal(byTick.schema, ONLINE_SCHEMA, '定期処理で直っていない');
-  assert.equal(byTick._probe, 1, '定期処理で段が当たっていない');
+  assert.ok(!byTick.invites, '定期処理で段が当たっていない');
 
   // 4) ふつうの命令でも直る（取り込みボタンを押さなくても、誰かが何かすれば直る）
   await downgrade();
   const stale2 = (await store.read()).league;
   await upgradable.command('admin', sessionId, {
-    requestId: 'invite-0',
+    requestId: 'backup-0',
     revision: stale2.revision,
-    type: 'invite',
+    type: 'backup',
   });
   const byCommand = (await store.read()).league;
   assert.equal(byCommand.schema, ONLINE_SCHEMA, 'ふつうの命令で直っていない');
-  assert.equal(byCommand._probe, 1);
-  assert.equal(byCommand.invites.length, 1, '命令そのものが実行されていない');
+  assert.ok(!byCommand.invites, 'ふつうの命令で段が当たっていない');
+  // 命令そのものも実行されていること（移行だけして本題を落とさない）
+  assert.ok((await store.read()).backup, '命令そのものが実行されていない');
 } finally {
   await rm(dir, { recursive: true, force: true });
 }

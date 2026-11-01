@@ -1,9 +1,11 @@
-// 招待と参加をAPIの経路で通す検査。
+// 参加をAPIの経路で通す検査。
 //
-// ⚠ 主目的は「**招待された人が実際に入れること**」。
+// ⚠ 主目的は「**まだ参加していない人が実際に入れること**」。
 //    参加の道には鶏と卵の罠がある——参加するにはログインが要るが、
-//    ログインに参加者であることを求めると、招待された人は永遠に入れない。
+//    ログインに参加者であることを求めると、呼ばれた人は永遠に入れない。
 //    ここでその経路を丸ごと通す。
+// ⚠ 招待コードは廃止した。アカウントは管理者が Supabase で作らない限り
+//    増えないので、入口はそこで絞れている。
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -42,49 +44,25 @@ try {
     '最下層から始まる',
   );
 
-  // --- 招待されていない人 -------------------------------------------
-  // ⚠ ログインは通る（通さないとコードを入れる画面に来られない）
+  // --- まだ参加していない人 -----------------------------------------
+  // ⚠ ログインは通る（通さないと参加の画面に来られない）
   const guestSession = (await service.login('guest')).sessionId;
   const guestView = await service.view('guest', guestSession);
   assert.ok(guestView.joinRequired, '参加前は「参加が必要」と返す');
   assert.ok(!guestView.teamName, '球団はまだ持たない');
   assert.equal(guestView.isAdmin, false);
+  assert.ok(Number.isInteger(guestView.revision), '参加の命令に使う版が無い');
 
-  // コード無しでは入れない
-  await assert.rejects(
-    () => run('guest', guestSession, 'join', guestView.revision, { code: 'XXXXXXXX' }),
-    /招待コードが違います/,
-  );
-
-  // --- 管理者が招待コードを発行 --------------------------------------
-  // ⚠ 管理者以外は作れない
-  const guestRevision = (await service.view('guest', guestSession)).revision;
-  await assert.rejects(
-    () => run('guest', guestSession, 'invite', guestRevision),
-    /管理者だけ/,
-  );
-  let adminView = await service.view('admin', adminSession);
-  await run('admin', adminSession, 'invite', adminView.revision);
-  const league1 = (await store.read()).league;
-  assert.equal(league1.invites.length, 1, '招待コードが1つ増える');
-  // ⚠ **revision が進むこと**。楽観ロックの要で、進め忘れると2人が同時に
-  //    操作したとき片方が黙って消える。操作ごとに直接押さえる
-  //    （「2回目の発行が効くか」だけで見ていたら、join 側の進め忘れを
-  //    まったく検出できなかった）。
-  assert.ok(league1.revision > league0.revision, '発行で revision が進む');
-  const code = league1.invites[0].code;
-  assert.equal(code.length, 8);
-  assert.equal(league1.invites[0].usedBy, null, '未使用で発行される');
-
-  // --- 招待された人が参加する ----------------------------------------
-  const before = league1.members.length;
-  await run('guest', guestSession, 'join', league1.revision, {
-    code,
+  // --- そのまま参加できる --------------------------------------------
+  const before = league0.members.length;
+  await run('guest', guestSession, 'join', guestView.revision, {
     teamName: '多摩川ブリーズ',
   });
   const league2 = (await store.read()).league;
   assert.equal(league2.members.length, before + 1, '参加者が増える');
-  assert.ok(league2.revision > league1.revision, '参加で revision が進む');
+  // ⚠ **revision が進むこと**。楽観ロックの要で、進め忘れると2人が同時に
+  //    操作したとき片方が黙って消える。操作ごとに直接押さえる
+  assert.ok(league2.revision > league0.revision, '参加で revision が進む');
   const joined = league2.members.find((m) => m.userId === 'guest');
   assert.ok(joined, '参加者として記録される');
   assert.equal(joined.displayName, '多摩川ブリーズ');
@@ -107,24 +85,23 @@ try {
   assert.ok(!afterView.joinRequired, '参加後は「参加が必要」を返さない');
   assert.equal(afterView.teamName, joined.teamName);
 
-  // --- 招待コードは使い捨て -------------------------------------------
-  const other = (await service.login('other')).sessionId;
+  // --- 二重参加は断る -------------------------------------------------
   await assert.rejects(
-    () => run('other', other, 'join', league2.revision, { code }),
-    /使用済み/,
-  );
-  // 同じ人が二重に参加できない（新しいコードでも）
-  adminView = await service.view('admin', adminSession);
-  await run('admin', adminSession, 'invite', adminView.revision);
-  const league3 = (await store.read()).league;
-  const code2 = league3.invites.find((i) => !i.usedBy).code;
-  await assert.rejects(
-    () => run('guest', guestSession, 'join', league3.revision, { code: code2 }),
+    () => run('guest', guestSession, 'join', league2.revision, { teamName: '別名' }),
     /すでに参加しています/,
+  );
+  // ⚠ 別の人は**何も要らずに**入れる。ここが「コード不要」の本体
+  const other = (await service.login('other')).sessionId;
+  await run('other', other, 'join', league2.revision, { teamName: '湘南サンズ' });
+  const league3 = (await store.read()).league;
+  assert.equal(league3.members.length, before + 2, '2人目が入れない');
+  assert.ok(
+    league3.members.some((m) => m.userId === 'other'),
+    '2人目が記録されていない',
   );
 
   console.log(
-    '■ 招待と参加: OK（非参加者もログインできる / 管理者だけが発行 / 使い捨て / 最下層へ入る）',
+    '■ 参加: OK（非参加者もログインできる / コード不要で入れる / 二重参加は断る / 最下層へ入る）',
   );
 } finally {
   await rm(dir, { recursive: true, force: true });

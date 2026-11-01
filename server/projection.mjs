@@ -147,12 +147,6 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // ⚠ 締め切りはビューに載せる。定期進行の判定（`isDue`）がこれを見て、
     //    フェーズ中（status が running でない）でも起動する必要がある
     phaseDeadline: l.phase?.deadline || null,
-    // ⚠ **招待コードは管理者にだけ返す**。参加者全員に見せると、
-    //    管理者を通さずに人を呼べてしまう（招待制の意味が無くなる）。
-    invites:
-      userId === adminId
-        ? (l.invites || []).filter((i) => !i.usedBy).map((i) => i.code)
-        : undefined,
     members: l.members.map((m) => ({
       label: m.label,
       teamName: m.teamName,
