@@ -6,7 +6,18 @@ const ABBREVIATIONS = new Map(
     league.teams.map((team) => [team.name, team.abbreviation]),
   ),
 );
-export const teamShort = (name) => ABBREVIATIONS.get(name) || name;
+// 球団の**表示名**。内部名は記録の選手キーまで貫いているので変えられないが、
+// 参加した人が付けた名前は画面に出す。
+// ⚠ **表示専用**。保存データ・日程・順位表の照合は内部名のまま行うこと。
+// ⚠ モジュールの変数に置いている。画面は一度に1つのリーグしか出さないので足りる。
+//    `OnlineApp` がビューを受け取るたびに差し替える。
+let LABELS = {};
+export function setTeamLabels(map) {
+  LABELS = map || {};
+}
+export const teamLabel = (name) => LABELS[name]?.label || name;
+export const teamShort = (name) =>
+  LABELS[name]?.short || ABBREVIATIONS.get(name) || name;
 
 // 自球団から見た勝敗。自球団の試合でなければnull。
 export function ownOutcome(game, teamName) {

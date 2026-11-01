@@ -6,6 +6,7 @@ import { Login, JoinLeague } from './LeaguePanels.jsx';
 import DesktopView from './DesktopView.jsx';
 import MobileView from './MobileView.jsx';
 import { ReadContext } from './useRead.js';
+import { setTeamLabels, teamLabel } from './gameText.js';
 import { Drafts } from './Drafts.jsx';
 import {
   readAuth,
@@ -15,14 +16,19 @@ import {
   clearAuth,
 } from './authState.js';
 // 別アカウントへ切替後も、旧タブの読取り応答で書込み権限を復活させない。
-const viewForSession = (result, current) => ({
+const viewForSession = (result, current) => {
+  // ⚠ **描画より前に差し替えること**。球団名の表示は
+  //    `gameText` のモジュール変数を引くので、ビューを受け取った時点で入れる
+  setTeamLabels(result.teamLabels);
+  return {
   ...result,
   // ⚠ `versionMismatch` も書ける扱いにする。ここを外すと「更新を取り込む」が
   //    押せず、古い形から抜け出せなくなる（取り込みは書き込みなので）
   writable:
     sameSession(readAuth(), current) &&
     !!(result.setupRequired || result.versionMismatch || result.writable),
-});
+  };
+};
 function useMobile() {
   const [mobile, setMobile] = useState(
     () => window.matchMedia('(max-width: 767px)').matches,
@@ -390,7 +396,7 @@ export default function OnlineApp() {
                 <section className="online-season">
                   <div>
                     <p>
-                      SEASON {view.year} · {view.teamName}
+                      SEASON {view.year} · {teamLabel(view.teamName)}
                     </p>
                     <h1>
                       {formatGameDate(view.currentDate)}{' '}

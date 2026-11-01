@@ -10,6 +10,7 @@ import {
 import TeamRoster from './TeamRoster.jsx';
 import OnlineLineup from './OnlineLineup.jsx';
 import { POS } from './api.js';
+import { teamLabel } from './gameText.js';
 import {
   CompactRoster,
   AbilityGrade,
@@ -36,7 +37,7 @@ export default function DesktopView(props) {
     <>
       <nav className="online-page-nav" aria-label="オンラインの画面">
         <div className="online-nav-context">
-          <strong>{view.teamName}</strong>
+          <strong>{teamLabel(view.teamName)}</strong>
           <small>独立リーグ · {view.year}年目</small>
         </div>
         {tabs.map(([id, label]) => (
@@ -60,7 +61,7 @@ export default function DesktopView(props) {
             <h2>今日の球団</h2>
             <TeamBrief view={view} />
             <p>
-              {view.teamName} · 所属{view.roster.length}人
+              {teamLabel(view.teamName)} · 所属{view.roster.length}人
             </p>
             {view.phase ? (
               <>

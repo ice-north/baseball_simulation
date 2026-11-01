@@ -147,6 +147,20 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // ⚠ 締め切りはビューに載せる。定期進行の判定（`isDue`）がこれを見て、
     //    フェーズ中（status が running でない）でも起動する必要がある
     phaseDeadline: l.phase?.deadline || null,
+    // ⚠ **表示名は内部名と別に渡す**。参加した人が付けた球団名を画面に出すため。
+    //    内部名（`teamName` / 順位表 / 日程）は記録の選手キーまで貫いているので
+    //    変えられない。表示のときだけこの表で引く。
+    teamLabels: Object.fromEntries(
+      (l.teams || []).map((t) => [
+        t.name,
+        {
+          label: t.displayName || t.name,
+          short: t.displayName
+            ? [...t.displayName].slice(0, 3).join('')
+            : t.abbreviation || t.name,
+        },
+      ]),
+    ),
     members: l.members.map((m) => ({
       label: m.label,
       teamName: m.teamName,

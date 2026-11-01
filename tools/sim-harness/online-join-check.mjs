@@ -85,6 +85,34 @@ try {
   assert.ok(!afterView.joinRequired, '参加後は「参加が必要」を返さない');
   assert.equal(afterView.teamName, joined.teamName);
 
+  // ⚠ **付けた球団名が画面に届くこと**。内部名は記録の選手キーまで貫いていて
+  //    変えられないので、表示名は別に渡す。これが無いと、名前を付けても
+  //    画面には引き継いだCPU球団の名前が出たまま（実際にそうなっていた）。
+  assert.equal(
+    afterView.teamLabels[joined.teamName].label,
+    '多摩川ブリーズ',
+    '付けた球団名が表示用に渡っていない',
+  );
+  assert.ok(
+    afterView.teamLabels[joined.teamName].short,
+    '短い表記が無い（試合一覧で空欄になる）',
+  );
+  // ⚠ 名前を変えていない球団は内部名のまま返す（表が歯抜けだと素の名前が出ない）
+  const untouched = league2.teams.find((t) => !t.displayName);
+  assert.equal(afterView.teamLabels[untouched.name].label, untouched.name);
+  // 管理者から見ても同じ表が届く（順位表は全球団ぶん必要）
+  const adminAfter = await service.view('admin', adminSession);
+  assert.equal(
+    Object.keys(adminAfter.teamLabels).length,
+    league2.teams.length,
+    '順位表に出す全球団ぶんの表示名が無い',
+  );
+  assert.equal(
+    adminAfter.teamLabels[joined.teamName].label,
+    '多摩川ブリーズ',
+    '他の人が付けた球団名が見えない',
+  );
+
   // --- 二重参加は断る -------------------------------------------------
   await assert.rejects(
     () => run('guest', guestSession, 'join', league2.revision, { teamName: '別名' }),
@@ -101,7 +129,7 @@ try {
   );
 
   console.log(
-    '■ 参加: OK（非参加者もログインできる / コード不要で入れる / 二重参加は断る / 最下層へ入る）',
+    '■ 参加: OK（非参加者もログインできる / コード不要で入れる / 二重参加は断る / 最下層へ入る / 付けた球団名が画面に届く）',
   );
 } finally {
   await rm(dir, { recursive: true, force: true });

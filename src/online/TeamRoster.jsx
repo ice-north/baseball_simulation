@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRead } from './useRead.js';
+import { teamLabel } from './gameText.js';
 export default function TeamRoster({ view, children }) {
   const [selected, setSelected] = useState(view.teamName);
   const own = selected === view.teamName;
@@ -30,7 +31,8 @@ export default function TeamRoster({ view, children }) {
     >
       {names.map((name) => (
         <option key={name} value={name}>
-          {name}
+          {/* ⚠ 値は内部名のまま（名簿の取得に使う）。見せる名前だけ差し替える */}
+          {teamLabel(name)}
           {name === view.teamName ? '（自球団）' : ''}
         </option>
       ))}

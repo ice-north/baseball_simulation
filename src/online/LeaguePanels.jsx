@@ -4,7 +4,13 @@ import { PitcherRoles, AutoTactics } from './PreGameTactics.jsx';
 import { roleFor, STRATEGY_FIELDS } from './tactics.js';
 import { useDraftState } from './Drafts.jsx';
 import GameHistory, { GameRecordButton } from './GameHistory.jsx';
-import { decisionText, formatRate, ownOutcome, teamShort } from './gameText.js';
+import {
+  decisionText,
+  formatRate,
+  ownOutcome,
+  teamShort,
+  teamLabel,
+} from './gameText.js';
 import { api, POS, MENUS } from './api.js';
 import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
 import {
@@ -137,7 +143,7 @@ export function Standings({ view }) {
             >
               <th>
                 <span className="online-rank">{i + 1}</span>
-                {s.team}
+                {teamLabel(s.team)}
               </th>
               <td>{s.wins}</td>
               <td>{s.losses}</td>
@@ -316,7 +322,7 @@ export function Notices({ view, compact = false }) {
           ) : (
             history?.standings.map((s, i) => (
               <p className="online-history-row" key={s.team}>
-                {i + 1}. {s.team}　{s.wins}勝{s.losses}敗
+                {i + 1}. {teamLabel(s.team)}　{s.wins}勝{s.losses}敗
               </p>
             ))
           )}
@@ -429,7 +435,8 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         <ul className="online-ready">
           {view.members.map((m) => (
             <li key={m.teamName}>
-              {m.label} · {m.ready ? '決定済み' : '検討中'}
+              {/* ⚠ 参加者が付けた球団名を出す。`label` は作成時の呼び名のまま */}
+              {teamLabel(m.teamName)} · {m.ready ? '決定済み' : '検討中'}
             </li>
           ))}
         </ul>

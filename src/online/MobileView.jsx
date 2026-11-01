@@ -10,6 +10,7 @@ import TeamRoster from './TeamRoster.jsx';
 import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatGameDate } from './shared.js';
 import { dateTime, STATUS } from './api.js';
+import { teamLabel } from './gameText.js';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
     props;
@@ -26,7 +27,7 @@ export default function MobileView(props) {
       {tab === 'today' && (
         <>
           <section className="online-mobile-overview">
-            <strong>{view.teamName}</strong>
+            <strong>{teamLabel(view.teamName)}</strong>
             <span>
               {formatGameDate(view.currentDate)} · {STATUS[view.status]}
             </span>
