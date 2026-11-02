@@ -5,7 +5,7 @@ import { useRead } from './useRead.js';
 import { PageNav } from './PageNav.jsx';
 import { formatGameDate } from './shared.js';
 import { formatStat } from './statsView.js';
-import { ownOutcome, teamShort } from './gameText.js';
+import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 const GROUPS = {
   batting: [
     [
@@ -297,7 +297,7 @@ export function GameRecordButton({ game, year, ownTeam, children }) {
       <button
         className="online-record-button"
         onClick={() => setOpen(true)}
-        aria-label={`${game.home}対${game.away}の試合成績`}
+        aria-label={`${teamLabel(game.home)}対${teamLabel(game.away)}の試合成績`}
       >
         {children || '個人成績'}
       </button>
@@ -341,9 +341,9 @@ function GameRecord({ id, year, ownTeam, close }) {
             <p className="online-game-summary">
               <small>{formatGameDate(game.date)}</small>
               <strong>
-                <span title={game.away}>{teamShort(game.away)}</span>{' '}
+                <span title={teamLabel(game.away)}>{teamShort(game.away)}</span>{' '}
                 {game.awayScore} – {game.homeScore}{' '}
-                <span title={game.home}>{teamShort(game.home)}</span>
+                <span title={teamLabel(game.home)}>{teamShort(game.home)}</span>
               </strong>
             </p>
           )}
@@ -426,11 +426,11 @@ function History({ view, close }) {
                     {outcome?.mark || ''}
                   </span>
                   <span className="online-game-line">
-                    <span title={g.away}>{teamShort(g.away)}</span>{' '}
+                    <span title={teamLabel(g.away)}>{teamShort(g.away)}</span>{' '}
                     <b>
                       {g.awayScore} – {g.homeScore}
                     </b>{' '}
-                    <span title={g.home}>{teamShort(g.home)}</span>
+                    <span title={teamLabel(g.home)}>{teamShort(g.home)}</span>
                   </span>
                   <GameRecordButton
                     game={g}

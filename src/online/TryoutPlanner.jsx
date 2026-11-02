@@ -109,7 +109,12 @@ export default function TryoutPlanner({
             onChange={(e) =>
               onChange({
                 ...plan,
-                count: Math.max(0, Math.min(maxCount, Number(e.target.value))),
+                // ⚠ 整数に丸める。「2.5」や不正な値をそのまま送ると、
+                //    サーバーの「獲得人数が不正です」で弾かれる
+                count: Math.max(
+                  0,
+                  Math.min(maxCount, Math.trunc(Number(e.target.value)) || 0),
+                ),
               })
             }
           />

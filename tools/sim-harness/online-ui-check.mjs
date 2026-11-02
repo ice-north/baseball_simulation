@@ -70,6 +70,12 @@ try {
   await p.locator('.online-tryout-wanted .online-tryout-list li').first().waitFor();
   await p.locator('.online-tryout-pool .online-tryout-list li').first().waitFor();
   await login(m, 2);
+  // ⚠ 開発用サーバーの初期参加者は管理者1人だけ。プレイヤー2はログイン直後に
+  //    参加画面が出るので、先に参加する（招待コードを廃止したときに取り残された）
+  await m
+    .getByLabel('球団名（空なら元の名前のまま）')
+    .fill('検査ドリーマーズ');
+  await click(m, '参加する');
   await m.setViewportSize({ width: 320, height: 640 });
   await click(m, '手続き');
   await m

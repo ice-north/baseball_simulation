@@ -159,8 +159,8 @@ export default function DesktopView(props) {
 function Roster({ view, teamSelector }) {
   const [page, setPage] = useState(0);
   // ⚠ 名簿の順のままだと1ページ目が投手だけになり、スタメンが出てこない
-  const order = rosterByRole(view.roster, view.lineup);
   const [category, setCategory] = useState('batting');
+  const order = rosterByRole(view.roster, view.lineup, category);
   const [stats, setStats] = useState(false);
   return (
     <section className="online-card">
@@ -183,7 +183,10 @@ function Roster({ view, teamSelector }) {
               <button
                 key={id}
                 aria-pressed={category === id}
-                onClick={() => setCategory(id)}
+                onClick={() => {
+                  setCategory(id);
+                  setPage(0);
+                }}
               >
                 {id === 'batting' ? '打撃' : '投球'}
               </button>

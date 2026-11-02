@@ -41,6 +41,17 @@ function useMobile() {
   }, []);
   return mobile;
 }
+const COMMAND_MESSAGES = {
+  create: 'リーグを作成しました',
+  join: 'リーグに参加しました',
+  migrate: '保存を新しい形式に移しました',
+  pause: '進行を停止しました',
+  resume: '進行を再開しました',
+  backup: 'バックアップを取りました',
+  restore: 'バックアップから戻しました',
+  step: '1日進めました',
+};
+
 export default function OnlineApp() {
   const [auth, setAuth] = useState(readAuth);
   const [config, setConfig] = useState(null);
@@ -257,7 +268,8 @@ export default function OnlineApp() {
       payload,
     });
     await reload();
-    setMessage('保存しました');
+    // ⚠ 操作ごとに文言を変える。作成や参加でも「保存しました」と出ていた
+    setMessage(COMMAND_MESSAGES[type] || '保存しました');
   };
   const login = (fields) =>
     run(async () => saveAuth(await api('login', null, fields)));
