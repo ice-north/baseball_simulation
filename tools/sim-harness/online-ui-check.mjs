@@ -109,8 +109,39 @@ try {
     const moved = await wantedNames();
     assert.equal(moved[1], added[0], '↓で1つ下がらない');
     assert.deepEqual([...moved].sort(), [...added].sort(), '↓で顔ぶれが変わった');
-    await click(p, 'おすすめ順に戻す');
-    assert.deepEqual(await wantedNames(), start, 'おすすめ順に戻らない');
+    await click(p, '標準案に戻す');
+    assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+    // 重視する能力の重みから、評価値の順でおすすめを作れる
+    const scoresOf = async (selector) =>
+      (await p.locator(`${selector} .online-tryout-score`).allInnerTexts()).map((t) =>
+        Number(t.replace(/[^0-9]/g, '')),
+      );
+    await p.getByText('重視する能力（評価値の重み）', { exact: true }).click();
+    await p.getByLabel('パワーの重み', { exact: true }).fill('5');
+    await p.getByLabel('ミートの重み', { exact: true }).fill('0');
+    await p
+      .getByRole('button', { name: 'この重みでおすすめ順を作る', exact: true })
+      .click();
+    const weighted = await scoresOf('.online-tryout-wanted > ol.online-tryout-list');
+    assert.equal(weighted.length, start.length, '重みのおすすめで獲得予定の人数が変わった');
+    assert.ok(
+      weighted.every((v, i) => i === 0 || weighted[i - 1] >= v),
+      `獲得予定が評価の高い順になっていない: ${weighted.join(',')}`,
+    );
+    assert.notDeepEqual(await wantedNames(), start, '重みを変えてもおすすめが変わらない');
+    const poolScores = await scoresOf('.online-tryout-pool .online-tryout-list');
+    assert.ok(
+      poolScores.every((v, i) => i === 0 || poolScores[i - 1] >= v),
+      '候補が評価値の順に並んでいない',
+    );
+    await p.getByRole('button', { name: '重みを標準に戻す', exact: true }).click();
+    await click(p, '標準案に戻す');
+    assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+    assert.equal(
+      await p.getByText('おすすめ順を作り直しました', { exact: false }).count(),
+      0,
+      '標準案に戻したのに「作り直しました」が残っている',
+    );
     await p
       .locator('.online-tryout-pool .online-segments button', { hasText: '全部' })
       .click();

@@ -446,6 +446,64 @@
   flex: 1;
   min-width: 0;
 }
+/* 重視する能力の重み。野手・投手・共通を横に並べ、狭ければ折り返す */
+.online-tryout-weights {
+  border: 1px solid #536b85;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 10px 0;
+}
+.online-tryout-weights summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.online-tryout-weights fieldset {
+  display: inline-grid;
+  gap: 4px;
+  vertical-align: top;
+  min-width: 220px;
+  margin: 6px 12px 6px 0;
+  border: 0;
+  padding: 0;
+}
+.online-tryout-weights legend {
+  font-size: 12px;
+  color: #d0d9e5;
+  padding: 0;
+}
+.online-tryout-weights label {
+  display: grid;
+  grid-template-columns: 5em minmax(0, 1fr) 1.5em;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+/* ⚠ `.online label`（上下14pxの余白）と `.online input`（高さ44px・枠つき）が
+   効くので、詳細度を揃えて打ち消す。打ち消さないと重みの行が間延びする */
+.online .online-tryout-weights label {
+  margin: 0;
+}
+.online .online-tryout-weights input[type='range'] {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent-strong);
+}
+.online-tryout-weights output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.online-tryout-weight-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.online-tryout-score {
+  color: #67e8f9;
+  font-weight: 600;
+}
 @media (max-width: 1100px) {
   .online-tryout-grid {
     grid-template-columns: minmax(0, 1fr);
