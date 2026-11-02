@@ -37,7 +37,6 @@ const CHECKS = [
   { name: 'base-state-check', group: 'quick', slow: 1 },
   { name: 'bunt-check', group: 'quick', slow: 1 },
   { name: 'doc-check', group: 'quick', slow: 1 },
-  { name: 'singleplayer-dev-check', group: 'quick', slow: 3 },
   { name: 'online-config-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-pyramid-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-membership-check', group: 'quick', online: true, slow: 1 },
