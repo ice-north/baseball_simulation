@@ -223,7 +223,11 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
         }
       } else {
         // 1リーグ制: 年間順位から上位チームを取得
+        // `playoffTeamNames` は対人版（2部制）だけが渡す。1部の球団に絞らないと
+        // 2部の首位がプレーオフに出て優勝してしまう。一人用は渡さないので従来どおり
+        const eligible = seasonData.settings.playoffTeamNames;
         topTeams = [...seasonData.standings]
+          .filter(t => !Array.isArray(eligible) || eligible.includes(t.team))
           .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)
           .slice(0, teamsNeeded)
           .map(t => t.team);

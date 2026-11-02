@@ -89,12 +89,14 @@ import {
   assertLeagueVersion,
   nextProgressionAt,
   phaseDeadlineAt,
+  seasonStartAt,
   requireOnline,
 } from '../src/online/shared.js';
 import {
   generatePyramidTeams,
   pyramidSeasonSchedule,
   applyPyramidMovements,
+  topTierTeamNames,
   PYRAMID_TEAM_COUNT,
   SEASON_TURNS,
   gamesPerTeam,
@@ -608,7 +610,9 @@ function resolvePhase(league, now) {
     openPhase(league, 'camp', now);
   else {
     league.status = 'running';
-    league.nextAdvanceAt = nextProgressionAt(now);
+    // キャンプの後は開幕。月曜0時に揃える（`seasonStartAt` の説明を参照）
+    league.nextAdvanceAt =
+      kind === 'camp' ? seasonStartAt(now) : nextProgressionAt(now);
   }
 }
 
@@ -634,10 +638,79 @@ export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
 
 export { saveLineup } from './lineupCommand.mjs';
 
+/**
+ * 保存する試合結果から、両球団の丸ごとの写し（`homeTeam` / `awayTeam`）を外す。
+ *
+ * ⚠ **1試合で約100KBあり、しかも2か所に入っていた**（`season.results` と
+ *    `season.schedule[].result`）。1シーズンで保存が約190MB（圧縮後24MB）まで
+ *    膨らみ、Supabase の無料枠を数年で食い潰す大きさだった。
+ * ⚠ 外してよい理由：個人成績と試合の詳細は試合の直後に記録（`createRecorder`）が
+ *    取り終えている。保存後にこの写しを読むのは、記録が無い古いリーグ向けの
+ *    `storedGame` の予備経路だけで、そこは写しが無ければ要約を返す。
+ *    点数・勝敗投手・継投（`pitcherChanges`）は残す。
+ * ⚠ 保存の**項目を減らすのではなく、中身を軽くするだけ**。古いコードが読んでも
+ *    同じ予備経路に入るだけなので、`ONLINE_SCHEMA` は上げない。
+ */
+export function slimStoredResults(season) {
+  const slim = (result) => {
+    if (!result || !('homeTeam' in result || 'awayTeam' in result))
+      return result;
+    const { homeTeam, awayTeam, ...rest } = result;
+    return rest;
+  };
+  for (const game of season.results || []) game.result = slim(game.result);
+  for (const game of season.schedule || []) game.result = slim(game.result);
+}
+
+/**
+ * 1回の定期進行で、試合の無い日をまとめて進める上限。
+ * ⚠ 1日ずつ進める処理を繰り返すだけで、日付を飛ばしはしない
+ *    （間の日の大会・ドラフト・手続きの判定を落とさないため）。
+ * ⚠ 上限は**日数で決める**（時間で打ち切らない）。時間で切ると、同じ保存から
+ *    やり直したときに区切りが変わって結果が変わる。実測で1日あたり約0.1秒。
+ */
+export const IDLE_DAYS_PER_TICK = 60;
+
+/** その日に消化する試合が無く、レギュラーシーズンも終わっているか */
+function idleDay(league) {
+  const season = league.season;
+  if (league.status !== 'running' || league.phase) return false;
+  if (
+    season.schedule.some(
+      (g) => g.phase === SEASON_PHASES.REGULAR_SEASON && !g.result,
+    )
+  )
+    return false;
+  return !getScheduleByDate(season.schedule, season.currentDate).some(
+    (g) => !g.result,
+  );
+}
+
+/**
+ * 定期進行1回ぶん。
+ *
+ * ⚠ **シーズン後の試合の無い日はまとめて進める**。1ターン＝1日のままだと、
+ *    レギュラーシーズン（120日・7月末まで）の後、プレーオフ（10月）と
+ *    ドラフト・契約更改（11月）までの空の日を1時間に1日ずつ進めることになり、
+ *    1年に約240時間かかっていた。週の割り当て（月〜金＝シーズン、
+ *    土＝ストーブリーグ、日＝キャンプ）が成り立たない。
+ * ⚠ **レギュラーシーズン中は1日ずつ**。休養日（試合の無い日）も1ターンとして
+ *    数える設計なので、そこまでまとめると週の長さが変わる。
+ */
 export function advanceLeagueDay(league, operationId, now) {
   requireOnline(league.status === 'running', '現在は進行を停止しています', 409);
   loadLeagueWorld(league);
-  seeded(league, `day:${operationId}`, () => {
+  advanceOneDay(league, `day:${operationId}`, now);
+  for (let n = 1; n <= IDLE_DAYS_PER_TICK && idleDay(league); n++)
+    advanceOneDay(league, `day:${operationId}:${n}`, now);
+  if (league.status === 'running')
+    league.nextAdvanceAt = nextProgressionAt(now);
+  league.notices = league.notices.slice(0, 20);
+  league.game = captureWorld();
+}
+
+function advanceOneDay(league, key, now) {
+  seeded(league, key, () => {
     const oldDate = league.season.currentDate;
     const playingTeams = new Set(
       getScheduleByDate(league.season.schedule, oldDate)
@@ -659,6 +732,7 @@ export function advanceLeagueDay(league, operationId, now) {
     } finally {
       for (const restore of restoreRotations) restore();
     }
+    slimStoredResults(season);
     season = progressDate(season, 1);
     simulateParallelWorldDate(oldDate);
     advanceBackgroundTournaments(oldDate);
@@ -667,8 +741,21 @@ export function advanceLeagueDay(league, operationId, now) {
       [6, 8, 10].includes(season.currentDate.month)
     )
       updateAllTeamReputations(season);
-    if (league.season.phase !== season.phase)
-      season = handlePhaseTransition(season, season.phase);
+    if (league.season.phase !== season.phase) {
+      // ⚠ **プレーオフは1部の球団だけで組む**。順位表は全12球団を通した並びなので、
+      //    そのままだと2部の首位がプレーオフに出て優勝できてしまう（実測で起きた）。
+      //    出場できる球団は**その場で渡すだけ**にして保存には残さない。
+      //    保存の形を変えずに済み、昇降格のたびに書き直す必要もない。
+      const settings = season.settings;
+      season = handlePhaseTransition(
+        {
+          ...season,
+          settings: { ...settings, playoffTeamNames: topTierTeamNames(league.teams) },
+        },
+        season.phase,
+      );
+      season.settings = settings;
+    }
     schedulePlayoffReplay(season);
     league.season = season;
     const { month, day, year } = season.currentDate;
@@ -721,10 +808,6 @@ export function advanceLeagueDay(league, operationId, now) {
     else if (month === 11 && day === 10) openPhase(league, 'tryout', now);
     else if (month === 11 && day === 30) openPhase(league, 'offseason', now);
   });
-  if (league.status === 'running')
-    league.nextAdvanceAt = nextProgressionAt(now);
-  league.notices = league.notices.slice(0, 20);
-  league.game = captureWorld();
 }
 
 /**

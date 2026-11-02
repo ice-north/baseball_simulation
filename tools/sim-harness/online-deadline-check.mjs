@@ -15,6 +15,7 @@ import {
   phaseDeadlineAt,
   PHASE_WEEKDAY,
   ONLINE_SCHEMA,
+  seasonStartAt,
 } from '../../src/online/shared.js';
 import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
 import { FileStore } from '../../server/storage/fileStore.mjs';
@@ -57,6 +58,52 @@ assert.equal(
 );
 // ⚠ 初期編成は締め切りを設けない（最初だけは全員を待つ）
 assert.equal(phaseDeadlineAt('initial_tryout', satMidnight), null);
+
+// ⚠ **担当の曜日を過ぎてから開いた手続きは、翌週まで待たせない**。
+//    契約更改が日曜0時の締め切りで決まると、続くトライアウトは日曜に開く。
+//    以前は「次の日曜0時」＝**7日後**が締め切りになり、1週間止まっていた
+const sunOne = '2026-10-31T16:00:00.000Z'; // 日曜1時JST
+assert.equal(
+  phaseDeadlineAt('tryout', sunOne),
+  '2026-11-01T04:00:00.000Z',
+  '日曜に開いたトライアウトは12時間で締める（日曜13時）',
+);
+assert.equal(
+  phaseDeadlineAt('offseason', '2026-11-01T05:00:00.000Z'),
+  '2026-11-01T09:00:00.000Z',
+  '日曜14時に開いたオフシーズンは4時間で締める（日曜18時）',
+);
+// 土曜のうちに開いたものは従来どおり日曜0時
+assert.equal(
+  phaseDeadlineAt('tryout', '2026-10-31T03:00:00.000Z'),
+  '2026-10-31T15:00:00.000Z',
+  '土曜に開いたトライアウトは日曜0時',
+);
+// 担当の曜日より前（金曜）に開いたものも、早めに締めずに日曜0時まで待つ
+assert.equal(
+  phaseDeadlineAt('contract', '2026-10-30T13:00:00.000Z'),
+  '2026-10-31T15:00:00.000Z',
+  '金曜に開いた契約更改は日曜0時',
+);
+// キャンプは遅れて開いても月曜0時（月曜0時が開幕の基準）
+assert.equal(
+  phaseDeadlineAt('camp', '2026-11-01T09:00:00.000Z'),
+  '2026-11-01T15:00:00.000Z',
+  'キャンプは月曜0時',
+);
+
+// ⚠ **開幕は月曜0時に揃える**。以前はキャンプが決まった次の正時に始まり、
+//    火曜12時に全員が決めると火曜13時に開幕していた
+assert.equal(
+  seasonStartAt('2026-10-27T03:00:00.000Z'), // 火曜12時JST
+  '2026-11-01T15:00:00.000Z',
+  '火曜に決まったら次の月曜0時に開幕',
+);
+assert.equal(
+  seasonStartAt('2026-11-01T15:00:05.000Z'), // 月曜0時すぎ（締め切りでの自動決定）
+  '2026-11-01T16:00:00.000Z',
+  '月曜に入ってから決まったら次の正時から始める（翌週まで待たせない）',
+);
 
 // --- 実際に自動決定されるか -----------------------------------------
 const dir = await mkdtemp(join(tmpdir(), 'pennant-deadline-'));

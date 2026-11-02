@@ -230,11 +230,50 @@ export function nextWeekdayStart(now, weekday) {
 }
 
 /**
+ * 担当の曜日を過ぎてから開いた手続きに与える猶予（時間）。
+ *
+ * ⚠ **ストーブリーグの3つは同じ土曜に並んでいる**。契約更改が日曜0時の
+ *    締め切りまでかかると、続くトライアウトは日曜に開く。そのまま
+ *    「次の日曜0時」を締め切りにすると**丸1週間待つ**ことになり、
+ *    シーズンの曜日も1週ずれる（以前は実際にそうなっていた）。
+ *    担当の曜日を過ぎていたら翌週を待たせず、この時間で締める。
+ *    トライアウト12時間＋オフシーズン4時間で日曜のうちに収まり、
+ *    キャンプは従来どおり月曜0時に締まる。
+ */
+export const LATE_PHASE_GRACE_HOURS = {
+  contract: 12,
+  tryout: 12,
+  offseason: 4,
+};
+
+/**
  * フェーズの締め切り。担当曜日の**翌日0時**（JST）。
  * 担当が決まっていないフェーズ（初期編成）は `null`＝待ち続ける。
+ * 担当の曜日を過ぎてから開いたときは `LATE_PHASE_GRACE_HOURS` だけ待つ。
  */
 export function phaseDeadlineAt(kind, now) {
   const weekday = PHASE_WEEKDAY[kind];
   if (weekday === undefined) return null;
-  return nextWeekdayStart(now, (weekday + 1) % 7);
+  const regular = nextWeekdayStart(now, (weekday + 1) % 7);
+  const grace = LATE_PHASE_GRACE_HOURS[kind];
+  const ms = new Date(now).getTime();
+  // 締め切りが5日以上先＝担当の曜日を過ぎた直後に開いた（遅れて開いた）
+  if (grace === undefined || new Date(regular).getTime() - ms < 5 * 86400000)
+    return regular;
+  return new Date(ms + grace * 3600000).toISOString();
+}
+
+/**
+ * キャンプが終わったあと、新シーズンの最初の試合を進める時刻。
+ *
+ * ⚠ **開幕は月曜0時に揃える**。以前はキャンプが決まった次の正時に始めていたため、
+ *    全員が早く決めると火曜に開幕して、120ターン後の終わりも
+ *    土曜にずれ込んでいた（ストーブリーグの土曜とぶつかる）。
+ * ⚠ 月曜に入ってから決まった（締め切りの月曜0時の自動決定を含む）ときは、
+ *    次の週まで待たせず次の正時から始める。
+ */
+export function seasonStartAt(now) {
+  return jstWeekday(now) === 1
+    ? nextProgressionAt(now)
+    : nextWeekdayStart(now, 1);
 }

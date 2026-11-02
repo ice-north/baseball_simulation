@@ -20,7 +20,10 @@ import {
   REST_EVERY,
   gamesPerTeam,
   isRestTurn,
+  pyramidSeasonSchedule,
+  topTierTeamNames,
 } from '../../src/online/pyramidLeague.js';
+import { upcomingGames } from '../../server/projection.mjs';
 
 // --- 構造 ---------------------------------------------------------
 // いまは2部制12球団。⚠ 個々のリーグ名を決め打ちにしない——構造は変わりうる。
@@ -238,6 +241,39 @@ assert.ok(
     if (fromLeague.tier === bottomTier) assert.equal(place, 1, '上がるのは1位');
     else if (fromLeague.up.length === 0) assert.equal(place, TEAMS_PER_LEAGUE, '降りるのは最下位');
   }
+}
+
+// --- これからの試合（画面の「日程」と「次の試合」） ---------------------
+// ⚠ 日程の配列は**日付順ではない**（リーグごとに1年ぶんを並べている）。
+//    以前は先頭から6件を取っていて、2部の球団には自球団の予定が
+//    シーズン中ずっと出なかった（参加者は全員2部から始まる）
+{
+  const teams = generatePyramidTeams(7);
+  const schedule = pyramidSeasonSchedule(teams, { year: 2024 });
+  const bottom = teams.find(
+    (t) => t.league === PYRAMID_LEAGUES.at(-1).id,
+  ).name;
+  const list = upcomingGames(schedule, bottom);
+  assert.ok(
+    list.some((g) => g.home === bottom || g.away === bottom),
+    '2部の球団の次の試合が出ていない',
+  );
+  const key = (d) => d.month * 100 + d.day;
+  assert.ok(
+    list.every((g, i) => i === 0 || key(list[i - 1].date) <= key(g.date)),
+    '日付順に並んでいない',
+  );
+  assert.equal(key(list[0].date), 401, '一番近い日の試合から出ていない');
+  // 消化した試合は出さない
+  for (const g of schedule.slice(0, 40)) g.result = { homeScore: 0, awayScore: 0 };
+  assert.ok(
+    upcomingGames(schedule, bottom).every((g) => !schedule.find((s) => s.id === g.id).result),
+    '消化した試合が出ている',
+  );
+  // プレーオフに出られるのは1部だけ
+  const top = topTierTeamNames(teams);
+  assert.equal(top.length, TEAMS_PER_LEAGUE);
+  assert.ok(top.every((name) => teams.find((t) => t.name === name).league === PYRAMID_LEAGUES[0].id));
 }
 
 console.log(

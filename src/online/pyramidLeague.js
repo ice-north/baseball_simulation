@@ -335,6 +335,12 @@ export function standingsByLeague(teams, standings = []) {
   return result;
 }
 
+/** 最上位リーグ（1部）の球団名。プレーオフに出られるのはここだけ */
+export function topTierTeamNames(teams = []) {
+  const top = PYRAMID_LEAGUES.find((league) => league.tier === 0)?.id;
+  return teams.filter((t) => t.league === top).map((t) => t.name);
+}
+
 /**
  * 昇降格を `teams` へ反映する。移動した一覧を返す。
  * ⚠ **日程を作り直す前に呼ぶこと**。所属が変わってから日程を組まないと、

@@ -58,6 +58,33 @@ const playerView = (p) => ({
   },
   seasonStats: p.seasonStats,
 });
+const dateKey = (d) =>
+  d ? (d.year || 0) * 10000 + (d.month || 0) * 100 + (d.day || 0) : Infinity;
+
+/**
+ * これからの試合。リーグ全体の直近と、自球団の直近を合わせて日付順に返す。
+ *
+ * ⚠ **日程の配列は日付順ではない**。`pyramidSchedule` はリーグごとに
+ *    1年ぶんを並べてから次のリーグへ進むので、先頭は1部の試合で埋まる。
+ *    以前は先頭から6件を取っていて、2部の球団には自球団の予定が
+ *    シーズン中ずっと出なかった。
+ * ⚠ 自球団の分を別に足すのは、画面の「自球団」絞り込みがこの一覧を
+ *    絞るだけだから。リーグ全体の6件に自球団が無いと空になる。
+ */
+export function upcomingGames(schedule, ownTeam, size = 6) {
+  const open = schedule
+    .filter((g) => !g.result && g.home !== 'TBD' && g.away !== 'TBD')
+    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const league = open.slice(0, size);
+  const own = open
+    .filter((g) => g.home === ownTeam || g.away === ownTeam)
+    .slice(0, size);
+  const ids = new Set(league.map((g) => g.id));
+  return [...league, ...own.filter((g) => !ids.has(g.id))]
+    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id)
+    .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away }));
+}
+
 export function projectLineup(team) {
   return {
     battingOrder: (team.lineupSettings?.battingOrder || []).filter(
@@ -161,6 +188,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
         },
       ]),
     ),
+    // 球団ごとの所属リーグ（'A'＝1部、'B'＝2部）。順位表を部ごとに分けるため。
+    // ⚠ 順位表（`standings`）は全12球団を通した並びなので、そのままだと
+    //    1部と2部が混ざって見える。
+    teamLeagues: Object.fromEntries(
+      (l.teams || []).map((t) => [t.name, t.league]),
+    ),
     members: l.members.map((m) => ({
       label: m.label,
       teamName: m.teamName,
@@ -176,10 +209,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       awayScore: g.result.awayScore,
       decisions: g.result.decisions,
     })),
-    upcoming: l.season.schedule
-      .filter((g) => !g.result && g.home !== 'TBD' && g.away !== 'TBD')
-      .slice(0, 6)
-      .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away })),
+    upcoming: upcomingGames(l.season.schedule, member.teamName),
     roster: team.players.map((p) => ({
       ...playerView(p),
       ...currentPlayerStats(l, member.teamName, p, statistics),
