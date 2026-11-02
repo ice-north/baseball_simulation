@@ -60,6 +60,7 @@ import {
 } from '../src/game/backgroundProgression.js';
 import { generatePitchingRotation } from '../src/game/lineupGenerator.js';
 import { setRecommendedLineup } from '../src/game/autoSimulation.js';
+import { ensureCompleteLineup } from '../src/game/lineup.js';
 import { prepareDailyLineup } from './dailyLineup.mjs';
 import { initializeAllPlayersCondition } from '../src/game/condition.js';
 import { simulateScheduledGamesOnDate } from '../src/game/daySimulation.js';
@@ -384,6 +385,30 @@ function releasePlayers(teamName, ids, year) {
   team.players = team.players.filter((p) => !ids.includes(p.id));
 }
 
+/**
+ * 手続きの後の先発ローテと打順。CPUは作り直す。
+ * ⚠ **人の球団は、保存した編成がまだ成り立つならそのまま残す**。以前は全球団を
+ *    作り直していたため、キャンプの間に決めた打順・ローテが開幕の時点で
+ *    おすすめに戻っていた（手続き中も編成画面は開けて保存できる）。
+ *    ローテの投手が名簿から消えた・打順が埋まらないときだけ作り直す。
+ */
+function refreshTeamPlan(league, name) {
+  const team = TEAMS_DATA[name];
+  const human = league.members.some((m) => m.teamName === name);
+  if (human) {
+    const ids = new Set(team.players.map((p) => p.id));
+    const starters = team.pitchingRotation?.starters || [];
+    if (
+      starters.length > 0 &&
+      starters.every((id) => ids.has(id)) &&
+      ensureCompleteLineup(team, false)
+    )
+      return;
+  }
+  generatePitchingRotation(name);
+  setRecommendedLineup(team, name);
+}
+
 function resolveTryout(league, plans) {
   const phase = league.phase;
   const names =
@@ -409,7 +434,12 @@ function resolveTryout(league, plans) {
     const needFielders = Math.max(8 - fielders, needCatcher ? 1 : 0);
     return { needPitcher, needCatcher, needFielders };
   };
-  for (const pick of generateSnakeDraftOrder(names, 24)) {
+  const order = generateSnakeDraftOrder(names, 24);
+  const picksLeftOf = Object.fromEntries(names.map((name) => [name, 0]));
+  for (const pick of order) picksLeftOf[pick.team] += 1;
+  for (const pick of order) {
+    // この指名を含めて、この球団に残っている指名の回数
+    const picksLeft = picksLeftOf[pick.team]--;
     const team = TEAMS_DATA[pick.team];
     const plan = plans[pick.team];
     const roster = [...team.players, ...acquired[pick.team]];
@@ -423,18 +453,23 @@ function resolveTryout(league, plans) {
     //    足りないぶんは必要な守備位置から自動で補う。
     const planFull = !!plan && acquired[pick.team].length >= plan.count;
     if (slotsLeft <= 0 || (planFull && mustFill === 0)) continue;
-    let forced = null;
-    if (slotsLeft <= mustFill || planFull) {
-      // 足りないものから順に埋める（投手 → 捕手 → 野手）
+    // 足りないものから順に埋める（投手 → 捕手 → 野手）
+    const pickForShortfall = () => {
       const want = needPitcher
         ? isPitcher
         : needCatcher
           ? (p) => p.position === 'catcher'
           : (p) => !isPitcher(p);
       const pool = remaining.filter(want);
-      forced = pool.length ? selectPlayerForAI(pool, roster) || pool[0] : null;
-    }
-    const player = forced
+      return pool.length ? selectPlayerForAI(pool, roster) || pool[0] : null;
+    };
+    let forced = null;
+    // ⚠ 残りの**指名回数**でも判定する。枠（24人）だけで見ていると、希望順位の
+    //    候補が全員他球団に取られて指名を見送り続けた球団は、枠が空いたまま
+    //    巡目が尽き、最低限の構成に届かずにトライアウト全体が解決できなかった。
+    if (slotsLeft <= mustFill || picksLeft <= mustFill || planFull)
+      forced = pickForShortfall();
+    let player = forced
       ? forced
       : planFull
         ? null
@@ -450,6 +485,8 @@ function resolveTryout(league, plans) {
             roster,
           )
         : selectPlayerForAI(remaining, roster);
+    // 希望順位の候補が尽きても、最低限が欠けていれば必要な守備位置から補う
+    if (!player && mustFill > 0) player = pickForShortfall();
     if (!player) continue;
     remaining.splice(
       remaining.findIndex((p) => p.id === player.id),
@@ -497,10 +534,7 @@ function resolveTryout(league, plans) {
       round,
     })),
   });
-  for (const name of names) {
-    generatePitchingRotation(name);
-    setRecommendedLineup(TEAMS_DATA[name], name);
-  }
+  for (const name of names) refreshTeamPlan(league, name);
 }
 
 function resolvePhase(league, now) {
@@ -553,10 +587,8 @@ function resolvePhase(league, now) {
       }
     }
     initializeAllPlayersCondition();
-    for (const name of league.season.settings.teamNames) {
-      generatePitchingRotation(name);
-      setRecommendedLineup(TEAMS_DATA[name], name);
-    }
+    for (const name of league.season.settings.teamNames)
+      refreshTeamPlan(league, name);
     league.season.currentDate = {
       year: 2023 + league.season.year,
       month: 4,
@@ -844,7 +876,27 @@ export function autoResolvePhase(league, now) {
     resolved.push(phase.kind);
     for (const member of league.members) {
       if (league.phase?.id !== id) break;
-      if (phase.submissions[member.userId]?.ready) continue;
+      const saved = phase.submissions[member.userId];
+      if (saved?.ready) continue;
+      // ⚠ **保存した下書きがあれば、それで決める**。以前は下書きを捨てて標準案で
+      //    決めていたため、契約更改で「誰も解雇しない」と下書きを保存したまま
+      //    締め切りを迎えた球団が、標準案どおりに選手を解雇されていた。
+      //    下書きが今は通らない（検証で弾かれる）ときだけ標準案に戻す。
+      // ⚠ 検証は記録を書き換える前に済むので、弾かれても状態は汚れない。
+      if (saved?.plan) {
+        try {
+          submitPhase(
+            league,
+            member.userId,
+            { phaseId: id, plan: saved.plan, ready: true },
+            now,
+          );
+          continue;
+        } catch (error) {
+          if (league.phase?.id !== id || league.phase.submissions[member.userId]?.ready)
+            throw error;
+        }
+      }
       submitPhase(
         league,
         member.userId,

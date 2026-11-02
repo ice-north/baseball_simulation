@@ -363,9 +363,17 @@ export class LeagueService {
         bundle.league.revision++;
       }
       const completedAt = this.clock();
+      // ⚠ 手続きの解決で開幕したときは、エンジンが決めた時刻（キャンプ後は
+      //    月曜0時の `seasonStartAt`）が**まだ先なら上書きしない**。以前は無条件に
+      //    完了時刻の次の正時へ書き換えていたため、全員が早くキャンプを決めると
+      //    火曜開幕になり、締め切りでの自動決定（月曜開幕）と食い違っていた。
+      //    処理の間に枠を過ぎてしまったとき（`online-clock-check`）だけ、
+      //    完了時刻から数え直す。
       if (
         bundle.league.status === 'running' &&
-        (previousStatus !== 'running' || command.type === 'step')
+        (command.type === 'step' ||
+          (previousStatus !== 'running' &&
+            !(bundle.league.nextAdvanceAt > completedAt)))
       )
         bundle.league.nextAdvanceAt = nextProgressionAt(completedAt);
       bundle.league.updatedAt = completedAt;

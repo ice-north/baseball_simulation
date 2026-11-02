@@ -162,15 +162,66 @@ try {
   // ⚠ **手続きは1回の定期処理につき1つずつ解決する**。次の手続きの締め切りは
   //    「開いた時刻」から数えるので、まとめて片付きはしない。それでよい——
   //    止まらないことが大事で、急いで進めることが目的ではない
+  // ⚠ **保存した下書きは、締め切りでもそのまま使うこと**。以前は下書きを捨てて
+  //    標準案で決めていた（契約更改で「誰も解雇しない」と保存した球団が、
+  //    標準案どおりに解雇された）。
+  // ⚠ 下書きは「相手球団が先に取りそうな選手だけ・捕手なし」の希望順位にする。
+  //    以前は希望の候補が全員取られると指名を見送り続け、巡目が尽きて
+  //    捕手・野手が足りないまま「トライアウト全体が解決できない」で止まった。
+  const guestTeam = league.members.find((m) => m.userId === 'guest').teamName;
+  const adminTeam = league.members.find((m) => m.userId === 'admin').teamName;
+  const byId = new Map(league.phase.candidates.map((p) => [p.id, p]));
+  const contested = defaultPhasePlan(league, adminTeam)
+    .rankedIds.filter((id) => byId.get(id).position !== 'catcher')
+    .slice(0, 12);
+  await run('guest', guest, 'submit', league.revision, {
+    phaseId: league.phase.id,
+    plan: { count: 12, rankedIds: contested },
+    ready: false,
+    baseSubmission: null,
+  });
   now = league.phase.deadline;
   const first = await service.tick();
   assert.ok(first.advanced, '締め切りを過ぎても進まない');
   assert.deepEqual(first.autoResolved, ['initial_tryout'], '初期編成が自動決定されない');
   const camped = (await store.read()).league;
   assert.equal(camped.phase?.kind, 'camp', '初期編成の次はキャンプ');
+  {
+    const roster = camped.game.teams[guestTeam].players;
+    // 標準案は24人取る。下書きは12人まで（希望が先に取られたぶんは最低限の補充だけ）
+    assert.equal(defaultPhasePlan(league, guestTeam).count, 24, '前提: 標準案は24人');
+    assert.ok(
+      roster.length >= 9 && roster.length <= 12,
+      `保存した下書きが使われていない（${roster.length}人）`,
+    );
+    assert.ok(
+      roster.some((p) => p.position === 'catcher'),
+      '希望の候補が尽きた球団に捕手が補われていない',
+    );
+    assert.ok(roster.some((p) => p.position === 'pitcher'), '投手がいない');
+    assert.ok(roster.filter((p) => p.position !== 'pitcher').length >= 8, '野手が足りない');
+  }
   assert.ok(camped.phase.deadline, 'キャンプに締め切りが無い');
   // ⚠ 開幕は**月曜0時**。初期編成を土曜扱いにしてあるのはこのため
   assert.equal(jstWeekday(camped.phase.deadline), 1, '開幕が月曜でない');
+
+  // ⚠ **キャンプ（手続き中）でも打順を保存でき、開幕後もその打順が残ること**。
+  //    以前は手続き中の保存を「この期間は編成変更できません」で弾き、
+  //    さらにキャンプの解決で全球団の打順をおすすめに作り直していた。
+  const guestView = await service.view('guest', guest);
+  const swapped = guestView.lineup.battingOrder.map((e) => ({ ...e }));
+  const leadoff = swapped.find((e) => e.battingOrder === 1);
+  const twoHole = swapped.find((e) => e.battingOrder === 2);
+  [leadoff.playerId, twoHole.playerId] = [twoHole.playerId, leadoff.playerId];
+  [leadoff.position, twoHole.position] = [twoHole.position, leadoff.position];
+  await run('guest', guest, 'lineup', guestView.revision, {
+    ...guestView.lineup,
+    battingOrder: swapped,
+    baseLineup: guestView.lineup,
+  });
+  const savedOrder = swapped
+    .sort((a, b) => a.battingOrder - b.battingOrder)
+    .map((e) => e.playerId);
 
   now = camped.phase.deadline;
   // ⚠ **自動決定が失敗したら、止めて理由を残すこと**。以前はログに出すだけで
@@ -199,6 +250,14 @@ try {
   const opened = (await store.read()).league;
   assert.ok(!opened.phase, '手続きが残っている');
   assert.equal(opened.status, 'running', '誰も提出していないのに開幕しない');
+  assert.deepEqual(
+    opened.game.teams[guestTeam].lineupSettings.battingOrder
+      .filter((e) => e.position !== 'pitcher')
+      .sort((a, b) => a.battingOrder - b.battingOrder)
+      .map((e) => e.playerId),
+    savedOrder,
+    'キャンプ中に保存した打順が開幕で作り直された',
+  );
 
   // ⚠ **全員が提出したら締め切り前でも進むこと**。時間は下限であって、
   //    待たせるためのものではない。別のリーグを立てて、その経路を見る
@@ -236,6 +295,14 @@ try {
     const done = (await store2.read()).league;
     assert.ok(!done.phase, '全員が提出しても手続きが残っている');
     assert.equal(done.status, 'running', '全員が提出しても開幕しない');
+    // ⚠ 早く決まっても開幕は**月曜0時**のまま（`seasonStartAt`）。以前は
+    //    提出の処理の最後で次の正時に書き換わり、火曜開幕になっていた
+    assert.equal(
+      done.nextAdvanceAt,
+      seasonStartAt(clock2),
+      '全員が早く決めたときに開幕が月曜0時からずれた',
+    );
+    assert.equal(jstWeekday(done.nextAdvanceAt), 1, '開幕が月曜でない');
     // ⚠ 締め切りより前でも開幕する（待たせない）
     assert.ok(
       Date.parse(clock2) < Date.parse(opened.phase?.deadline || '2999-01-01'),
@@ -249,5 +316,5 @@ try {
 }
 
 console.log(
-  '■ 締め切りと自動決定: OK（120ターン / 初期編成にも締め切り / 誰も提出しなくても月曜に開幕 / 全員提出なら締め切り前でも開幕）',
+  '■ 締め切りと自動決定: OK（120ターン / 初期編成にも締め切り / 誰も提出しなくても月曜に開幕 / 全員提出なら締め切り前でも開幕・それでも開幕は月曜 / 下書きは締め切りでも使う / 希望が尽きても最低限を補う / キャンプ中に保存した打順が開幕後も残る）',
 );
