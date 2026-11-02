@@ -143,15 +143,16 @@ export const WEIGHT_MAX = 5; // WEIGHT_LEVELS の最後の番号
  * 重みの段階。画面では言葉で選び、計算には右の倍率を使う。
  * ⚠ **段階の番号をそのまま掛けないこと**。0〜5をそのまま倍率にすると
  *    「少し」と「最重視」が5倍も開き、1段の差が段によってばらばらに効く。
- *    「普通」を1として、軽く＝半分、重視＝2倍、最重視＝3倍、という常識的な開きにする。
+ *    「普通」を1として、軽く＝半分、重視＝1.5倍、最重視＝2倍、という常識的な開きにする
+ *    （最重視を3倍にすると他の能力がほとんど効かなくなるので2倍まで）。
  */
 export const WEIGHT_LEVELS = [
   { label: '無視', factor: 0 },
   { label: '軽く', factor: 0.5 },
   { label: '普通', factor: 1 },
-  { label: 'やや重視', factor: 1.5 },
-  { label: '重視', factor: 2 },
-  { label: '最重視', factor: 3 },
+  { label: 'やや重視', factor: 1.25 },
+  { label: '重視', factor: 1.5 },
+  { label: '最重視', factor: 2 },
 ];
 /** 段階の番号（0〜WEIGHT_MAX）。0＝無視、2＝普通、4＝重視 */
 export const DEFAULT_WEIGHTS = {
