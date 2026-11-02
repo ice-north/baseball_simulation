@@ -53,6 +53,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
         setSaveStatus({ type: 'error', message: result?.error || 'ロードに失敗しました' });
       }
       setTimeout(() => setSaveStatus(null), 4000);
+      return result;
     }
   };
 
@@ -83,12 +84,16 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
 
   // 緊急バックアップを指定スロットへ復元してロード
   const handleRestoreEmergency = async (slotIndex) => {
-    if (!window.confirm(`緊急バックアップをスロット${slotIndex + 1}へ復元してプレイします。よろしいですか？`)) return;
+    if (!window.confirm(`緊急バックアップをスロット${slotIndex + 1}へ復元してプレイします。${saveSlots[slotIndex] ? '（上書き前のデータは「1つ前のセーブに戻す」で戻せます）' : ''}よろしいですか？`)) return;
     const r = await promoteEmergencyToSlot(slotIndex);
     if (r.success) {
-      clearEmergencySave();
-      setEmergencyInfo(null);
-      await handleLoad(slotIndex, true);
+      // ⚠ **ロードできてから緊急保存を消す**。以前は先に消していたため、
+      //    ロードに失敗すると緊急保存も失われ、やり直す手段が無くなった
+      const loaded = await handleLoad(slotIndex, true);
+      if (loaded?.success) {
+        clearEmergencySave();
+        setEmergencyInfo(null);
+      }
     } else {
       setSaveStatus({ type: 'error', message: r.error || '復元に失敗しました' });
       setTimeout(() => setSaveStatus(null), 4000);

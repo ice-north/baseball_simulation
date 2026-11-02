@@ -148,7 +148,7 @@ try {
   await oversized.page.getByLabel('球団の主練習（全4回）').waitFor();
   await oversized.page.evaluate(() =>
     sessionStorage.setItem(
-      'baseball-online-draft:a:fixture:1:検証球団:1:camp',
+      'baseball-online-draft:a:fixture:1:検証球団',
       'x'.repeat(64000),
     ),
   );

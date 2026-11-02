@@ -8,6 +8,24 @@ import { UNIVERSITY_TEAMS, generateLeagueAbbreviations } from '../university/uni
 import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage, requestPersistentStorage } from '../utils/indexedDBStorage.js';
 import { migrateSaveData, CURRENT_SAVE_VERSION } from './saveMigration.js';
 import { getPlayerIdCounter, reservePlayerIds, setPlayerIdCounter } from '../state/playerIds.js';
+import { getStaffIdCounter, setStaffIdCounter } from '../corporate/staffData.js';
+
+/**
+ * スタッフの採番をロードした世界に合わせる。
+ * ⚠ **採番は保存に入れること**。以前は保存しておらず、ロードすると 5000 に戻ったため、
+ *    次に雇ったスタッフが在籍中のスタッフと同じ id になった（解雇・入れ替えが
+ *    id で引くので、別人を解雇する）。古い保存は在籍スタッフの最大 id の次から数える。
+ */
+const restoreStaffIdCounter = (saved) => {
+  const minimum = Object.values(TEAMS_DATA).reduce(
+    (next, team) => (team?.corporateData?.staff || []).reduce(
+      (id, staff) => Math.max(id, Number.isSafeInteger(staff?.id) ? staff.id + 1 : id),
+      next,
+    ),
+    5000,
+  );
+  setStaffIdCounter(Math.max(minimum, Number.isSafeInteger(saved) ? saved : minimum));
+};
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
 
@@ -215,6 +233,9 @@ export const promoteEmergencyToSlot = async (slotIndex) => {
   try {
     const raw = localStorage.getItem(EMERGENCY_KEY);
     if (!raw) return { success: false, error: '緊急保存がありません' };
+    // ⚠ 上書きする前に、いまのスロットを1世代バックアップする（通常の保存と同じ）。
+    //    以前は無言で上書きし、選んだスロットの進行が戻せなくなっていた
+    await backupExistingSlot(slotIndex);
     await storageSetItem(SAVE_SLOT_KEYS[slotIndex], raw);
     return { success: true };
   } catch (e) {
@@ -343,6 +364,7 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
     universityPool: serializeUniversityPool(),
     releasedPlayersPool: JSON.parse(JSON.stringify(releasedPlayersPool)),
     playerIdCounter: getPlayerIdCounter(),
+    staffIdCounter: getStaffIdCounter(),
   };
 };
 
@@ -420,6 +442,7 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       highSchoolPool: { players: highSchoolPool.players, year: highSchoolPool.year },
       releasedPlayers: [...releasedPlayersPool],
       playerIdCounter: getPlayerIdCounter(),
+      staffIdCounter: getStaffIdCounter(),
     };
     Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
     Object.assign(TEAMS_DATA, saveData.teamsData);
@@ -504,6 +527,7 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
 
     setPlayerIdCounter(saveData.playerIdCounter);
     reservePlayerIds();
+    restoreStaffIdCounter(saveData.staffIdCounter);
 
     // ※旧セーブの選手フィールド補完（バント/性格/DH等）は migrateSaveData で
     //   復元前に済ませているため、ここでの追加処理は不要。
@@ -526,6 +550,7 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       clearReleasedPlayersPool();
       addManyToReleasedPool(previousState.releasedPlayers);
       setPlayerIdCounter(previousState.playerIdCounter);
+      setStaffIdCounter(previousState.staffIdCounter);
     }
     console.error('ロード失敗:', error);
     return { success: false, error: 'ロードに失敗しました: ' + error.message };

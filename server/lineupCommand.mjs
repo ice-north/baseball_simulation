@@ -7,8 +7,12 @@ import {
 
 export function saveLineup(league, userId, plan) {
   assertLeagueVersion(league);
+  // ⚠ **手続きの間（waiting）も保存できること**。画面は手続き中も編成を開ける
+  //    設計（「打順や投手起用はいつ決めてもよい」）なのに、以前はここで弾いており、
+  //    キャンプ中に決めた打順を保存しようとすると毎回「この期間は編成変更できません」
+  //    になっていた。手続きの解決は、成り立つ限り人の編成を残す（`refreshTeamPlan`）。
   requireOnline(
-    league.status === 'running' || league.status === 'paused',
+    ['running', 'paused', 'waiting'].includes(league.status),
     'この期間は編成変更できません',
     409,
   );
