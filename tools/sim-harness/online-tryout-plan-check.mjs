@@ -31,6 +31,11 @@ import {
   addToPlan,
   benchFromPlan,
   shiftInPlan,
+  DEFAULT_WEIGHTS,
+  WEIGHT_FIELDS,
+  sanitizeWeights,
+  weightedScore,
+  weightedRanked,
 } from '../../src/online/tryoutPlan.js';
 import { ROSTER_TARGETS, rosterCounts } from '../../src/utils/constants.js';
 
@@ -457,10 +462,62 @@ try {
     const n2 = addToPlan(ids2, candidates, c2, pitchers, benchPitcher.id);
     assert.equal(new Set(n2).size, candidates.length, '入れられない指名で提出が壊れた');
   }
+
+  // --- 重視する能力の重みから、おすすめ順を作る ---------------------------
+  // 【なぜ】標準案と「総合」は決まった配分でしか見ない。参加者が重みを決め、
+  //    その評価値でおすすめ順を組めるようにした（画面だけの計算。提出の形は同じ）。
+  {
+    const none = [];
+    for (const p of candidates) {
+      const v = weightedScore(p, DEFAULT_WEIGHTS);
+      assert.ok(v >= 0 && v <= 100, `評価値が0〜100を外れた: ${p.id} ${v}`);
+    }
+    const ranked = weightedRanked(candidates, DEFAULT_WEIGHTS, none);
+    // ⚠ 提出の条件を壊さない（全員・重複なし）
+    assert.equal(ranked.length, candidates.length, '重みのおすすめで候補が減った');
+    assert.equal(new Set(ranked).size, ranked.length, '重みのおすすめで重複した');
+    // 獲得予定は目標構成どおり、評価の高い順
+    const picks = plannedPicks(ranked, candidates, base.count, none);
+    assert.deepEqual(rosterCounts(picks), ROSTER_TARGETS, '重みのおすすめが目標構成にならない');
+    assert.deepEqual(picks.map((p) => p.id), ranked.slice(0, picks.length), '獲得予定が先頭に並ばない');
+    const sc = picks.map((p) => weightedScore(p, DEFAULT_WEIGHTS));
+    assert.ok(sc.every((v, i) => i === 0 || sc[i - 1] >= v), '獲得予定が評価の高い順でない');
+    // パワーだけを見る重みなら、獲得予定の内野手は残りの内野手よりパワーが高い
+    const onlyPower = Object.fromEntries(WEIGHT_FIELDS.map((f) => [f.key, 0]));
+    onlyPower.power = 5;
+    onlyPower.velocity = 5;
+    const pw = plannedPicks(weightedRanked(candidates, onlyPower, none), candidates, base.count, none);
+    const infield = (p) => ['first', 'second', 'third', 'short'].includes(p.position);
+    const minPicked = Math.min(...pw.filter(infield).map((p) => p.batting.power));
+    const maxLeft = Math.max(
+      ...candidates.filter((p) => infield(p) && !pw.includes(p)).map((p) => p.batting.power),
+    );
+    assert.ok(minPicked >= maxLeft, `パワー重視なのにパワーの低い内野手を取る: ${minPicked} < ${maxLeft}`);
+    // 若さだけを見る重みなら、獲得予定は候補全体より若い
+    const onlyYouth = Object.fromEntries(WEIGHT_FIELDS.map((f) => [f.key, 0]));
+    onlyYouth.youth = 5;
+    const young = plannedPicks(weightedRanked(candidates, onlyYouth, none), candidates, base.count, none);
+    const avg = (xs) => xs.reduce((n, p) => n + p.age, 0) / xs.length;
+    assert.ok(avg(young) < avg(candidates), '若さ重視なのに若い選手を取らない');
+    // 名簿がある球団（2年目以降のトライアウト）では、名簿の分だけ区分の空きが減る
+    const roster10 = Array.from({ length: 10 }, (_, i) => ({ id: -200 - i, position: 'pitcher' }));
+    const withRoster = plannedPicks(
+      weightedRanked(candidates, DEFAULT_WEIGHTS, roster10),
+      candidates,
+      14,
+      roster10,
+    );
+    assert.equal(rosterCounts(withRoster).pitcher, 0, '投手が埋まっている球団に投手を勧める');
+    // 壊れた重みは直す（0〜5の整数。知らない値は既定）
+    assert.deepEqual(
+      sanitizeWeights({ meet: 9, power: -3, eye: '2.7', speed: 'x' }),
+      { ...DEFAULT_WEIGHTS, meet: 5, power: 0, eye: 2, speed: DEFAULT_WEIGHTS.speed },
+    );
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・成り立たない編成を提出前に知らせる・人の名簿がCPUより不利にならない・入れ替えを繰り返しても押したとおりに動く）',
+  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・成り立たない編成を提出前に知らせる・人の名簿がCPUより不利にならない・入れ替えを繰り返しても押したとおりに動く・重みからおすすめ順を作る）',
 );

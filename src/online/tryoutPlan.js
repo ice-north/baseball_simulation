@@ -109,14 +109,154 @@ export const SORT_KEYS = [
   { key: 'defense', label: '守備', of: (p) => p.fielding?.defense || 0 },
 ];
 
+// --- 重視する能力からの評価値とおすすめ順 --------------------------------
+//
+// 【なぜ必要か】「標準案に戻す」の標準案（サーバーの `selectPlayerForAI`）と
+// 「総合」の並べ替えは、決まった配分でしか見ない。どの能力を重く見るかは
+// 参加者ごとに違うので、**重みを画面で決め、その重みで評価値を出して
+// おすすめ順を組む**。
+// ⚠ **画面の中だけの計算**。提出は従来どおり `{ count, rankedIds }` で、
+//    重みはサーバーにも保存データにも送らない（保存の形は変えない）。
+//    締め切りで未提出のときに使われる標準案は、従来どおりサーバーが作る。
+// ⚠ 評価値は**投手と野手で別の能力の重み付き平均**（0〜100）。
+//    区分ごとの人数は目標構成で決まるので、投手と野手の点を比べるのは
+//    「どちらを先に取りにいくか」の順番だけ。
+
+export const WEIGHTED_SORT_KEY = 'weighted';
+
+/** 重みを付けられる能力。`group` は 'fielder'（野手）・'pitcher'（投手）・'common'（両方） */
+export const WEIGHT_FIELDS = [
+  { key: 'meet', label: 'ミート', group: 'fielder' },
+  { key: 'power', label: 'パワー', group: 'fielder' },
+  { key: 'eye', label: '選球眼', group: 'fielder' },
+  { key: 'speed', label: '走力', group: 'fielder' },
+  { key: 'defense', label: '守備', group: 'fielder' },
+  { key: 'arm', label: '肩', group: 'fielder' },
+  { key: 'velocity', label: '球速', group: 'pitcher' },
+  { key: 'control', label: '制球', group: 'pitcher' },
+  { key: 'stamina', label: 'スタミナ', group: 'pitcher' },
+  { key: 'breaking', label: '変化球', group: 'pitcher' },
+  { key: 'youth', label: '若さ', group: 'common' },
+];
+export const WEIGHT_MAX = 5;
+export const DEFAULT_WEIGHTS = {
+  meet: 3,
+  power: 3,
+  eye: 1,
+  speed: 2,
+  defense: 2,
+  arm: 1,
+  velocity: 3,
+  control: 3,
+  stamina: 2,
+  breaking: 2,
+  youth: 1,
+};
+
+/** 重みを 0〜WEIGHT_MAX の整数に揃える。知らない項目・壊れた値は既定に戻す */
+export function sanitizeWeights(weights) {
+  return Object.fromEntries(
+    WEIGHT_FIELDS.map(({ key }) => {
+      const v = Math.trunc(Number(weights?.[key]));
+      return [
+        key,
+        Number.isFinite(v) ? Math.max(0, Math.min(WEIGHT_MAX, v)) : DEFAULT_WEIGHTS[key],
+      ];
+    }),
+  );
+}
+
+const clamp100 = (v) => Math.max(0, Math.min(100, v || 0));
+
+/**
+ * 能力1つを 0〜100 に揃えた値。
+ * ⚠ 球速（115〜155km/h）とスタミナ（0〜200）はそのままだと尺度が違う。
+ *    変化球は持ち球（直球を除く）の一番良いもの。若さは18歳=100・32歳=0。
+ */
+export function abilityValue(player, key) {
+  switch (key) {
+    case 'meet':
+    case 'power':
+    case 'eye':
+      return clamp100(player.batting?.[key]);
+    case 'speed':
+    case 'arm':
+      return clamp100(player.physical?.[key]);
+    case 'defense':
+      return clamp100(player.fielding?.defense);
+    case 'velocity':
+      return clamp100(normalizedVelocity(player.pitching?.velocity));
+    case 'control':
+      return clamp100(player.pitching?.control);
+    case 'stamina':
+      return clamp100(normalizedStamina(player.pitching?.stamina));
+    case 'breaking': {
+      const levels = (player.pitching?.arsenal || [])
+        .filter((a) => a.type !== 'straight')
+        .map((a) => a.level || 0);
+      return clamp100(levels.length ? Math.max(...levels) : 0);
+    }
+    case 'youth':
+      return clamp100(((32 - (player.age || 25)) * 100) / 14);
+    default:
+      return 0;
+  }
+}
+
+/** 重み付きの評価値（0〜100）。重みが全部0なら0 */
+export function weightedScore(player, weights) {
+  if (!player) return 0;
+  const side = player.position === 'pitcher' ? 'pitcher' : 'fielder';
+  let total = 0;
+  let sum = 0;
+  for (const { key, group } of WEIGHT_FIELDS) {
+    if (group !== side && group !== 'common') continue;
+    const w = weights?.[key] || 0;
+    total += w * abilityValue(player, key);
+    sum += w;
+  }
+  return sum ? total / sum : 0;
+}
+
+/**
+ * 重みからおすすめの希望順を作る。
+ * 評価値の高い順に見て、**目標構成（投10・捕2・内6・外6）に空きのある区分から**取る
+ * （画面の獲得予定・サーバーの解決と同じ規則）。区分が全部埋まったあとは評価値順。
+ * ⚠ 候補は全員並べる（競合したときの繰り上がりのため。消さない）。
+ */
+export function weightedRanked(candidates, weights, roster = []) {
+  const score = new Map(candidates.map((p) => [p.id, weightedScore(p, weights)]));
+  const sorted = [...candidates].sort(
+    (a, b) => score.get(b.id) - score.get(a.id) || a.id - b.id,
+  );
+  const counts = rosterCounts(roster);
+  const head = [];
+  const tail = [];
+  for (const p of sorted) {
+    const group = rosterGroup(p.position);
+    if (counts[group] < ROSTER_TARGETS[group]) {
+      counts[group] += 1;
+      head.push(p.id);
+    } else tail.push(p.id);
+  }
+  return [...head, ...tail];
+}
+
 /**
  * 候補の絞り込みと並べ替え。
  * ⚠ **並びを決定的にすること**。同点で順番が揺れると、押した行と動く行がずれる。
  */
-export function filterCandidates(candidates, { group = 'all', query = '', sortKey = 'overall', desc = true } = {}) {
+export function filterCandidates(
+  candidates,
+  { group = 'all', query = '', sortKey = 'overall', desc = true, scoreOf = null } = {},
+) {
   const positions = POSITION_GROUPS.find((g) => g.key === group)?.positions;
   const needle = query.trim();
-  const of = SORT_KEYS.find((s) => s.key === sortKey)?.of || overallScore;
+  // `weighted`（評価値）は重みが画面の状態なので、点数の関数を外から受け取る
+  const of =
+    (sortKey === WEIGHTED_SORT_KEY && scoreOf) ||
+    SORT_KEYS.find((s) => s.key === sortKey)?.of ||
+    overallScore;
   return candidates
     .filter((p) => !positions || positions.includes(p.position))
     .filter((p) => !needle || p.name.includes(needle))

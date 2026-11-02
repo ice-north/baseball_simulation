@@ -12,6 +12,13 @@ import {
   addToPlan,
   benchFromPlan,
   shiftInPlan,
+  WEIGHT_FIELDS,
+  WEIGHT_MAX,
+  WEIGHTED_SORT_KEY,
+  DEFAULT_WEIGHTS,
+  sanitizeWeights,
+  weightedScore,
+  weightedRanked,
 } from './tryoutPlan.js';
 
 // ============================================================
@@ -37,12 +44,37 @@ const GROUP_LABELS = {
   outfielder: '外野手',
 };
 
-function Line({ player }) {
+// 重みはこのブラウザにだけ覚える（サーバーへは送らない。保存の形を変えない）。
+// ⚠ 読めない・書けないブラウザ（プライベートモードなど）でも画面は動かす
+const WEIGHTS_KEY = 'baseball-online-tryout-weights';
+function loadWeights() {
+  try {
+    const raw = localStorage.getItem(WEIGHTS_KEY);
+    if (raw) return sanitizeWeights(JSON.parse(raw));
+  } catch {
+    /* 既定の重みで続ける */
+  }
+  return { ...DEFAULT_WEIGHTS };
+}
+function storeWeights(weights) {
+  try {
+    localStorage.setItem(WEIGHTS_KEY, JSON.stringify(weights));
+  } catch {
+    /* 覚えられなくても、この画面の間は使える */
+  }
+}
+
+function Line({ player, score }) {
   if (!player) return null;
   return (
     <>
       <PlayerStatsButton player={player} panel="abilities" />
       <small>
+        {score !== undefined && (
+          <b className="online-tryout-score" title="重視する能力から出した評価値（0〜100）">
+            評価{Math.round(score)}{' '}
+          </b>
+        )}
         {player.age}歳 / {POS[player.position]} /{' '}
         {player.position === 'pitcher' ? (
           <>
@@ -72,11 +104,29 @@ export default function TryoutPlanner({
   onReset,
 }) {
   const [group, setGroup] = useState('all');
-  const [sortKey, setSortKey] = useState('overall');
+  // ⚠ 既定は「評価値」。重みを変えたら、候補の並びもその重みで見えるようにする
+  const [sortKey, setSortKey] = useState(WEIGHTED_SORT_KEY);
+  const [weights, setWeightsState] = useState(loadWeights);
+  const setWeights = (next) => {
+    const clean = sanitizeWeights(next);
+    setWeightsState(clean);
+    storeWeights(clean);
+  };
+  const scores = useMemo(
+    () => new Map(candidates.map((p) => [p.id, weightedScore(p, weights)])),
+    [candidates, weights],
+  );
+  const scoreOf = (p) => scores.get(p.id) ?? 0;
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const [showBench, setShowBench] = useState(false);
-  const [notice, setNotice] = useState('');
+  // ⚠ お知らせは**出したときの希望順と組で持つ**。「標準案に戻す」など外から
+  //    希望順が変わったら出さない（「作り直しました」が標準案の上に残っていた）
+  const [noticeState, setNoticeState] = useState(null);
+  const notice =
+    noticeState && noticeState.for === plan.rankedIds ? noticeState.text : '';
+  const setNotice = (text, rankedIds = plan.rankedIds) =>
+    setNoticeState(text ? { text, for: rankedIds } : null);
 
   const byId = useMemo(
     () => new Map(candidates.map((p) => [p.id, p])),
@@ -98,8 +148,9 @@ export default function TryoutPlanner({
   const bench = plan.rankedIds.filter((id) => !wantedSet.has(id));
 
   const pool = useMemo(
-    () => filterCandidates(candidates, { group, query, sortKey }),
-    [candidates, group, query, sortKey],
+    () => filterCandidates(candidates, { group, query, sortKey, scoreOf }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scoreOf は scores から決まる
+    [candidates, group, query, sortKey, scores],
   );
   const shown = pool.slice(page * PAGE, page * PAGE + PAGE);
 
@@ -152,9 +203,68 @@ export default function TryoutPlanner({
           />
         </label>
         <button type="button" disabled={busy} onClick={onReset}>
-          おすすめ順に戻す
+          標準案に戻す
         </button>
       </div>
+      {/* ⚠ 標準案（サーバーが作る既定の希望順）は決まった配分でしか見ない。
+          どの能力を重く見るかを参加者が決め、その評価値でおすすめ順を作れるようにする */}
+      <details className="online-tryout-weights">
+        <summary>重視する能力（評価値の重み）</summary>
+        <p className="online-muted">
+          0〜{WEIGHT_MAX}で重みを付けると、能力の重み付き平均を「評価」（0〜100）として出します。
+          投手と野手は別の能力で計算します。重みはこのブラウザに覚えます。
+        </p>
+        {[
+          ['fielder', '野手'],
+          ['pitcher', '投手'],
+          ['common', '共通'],
+        ].map(([side, title]) => (
+          <fieldset key={side}>
+            <legend>{title}</legend>
+            {WEIGHT_FIELDS.filter((f) => f.group === side).map((f) => (
+              <label key={f.key}>
+                <span>{f.label}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max={WEIGHT_MAX}
+                  step="1"
+                  value={weights[f.key]}
+                  aria-label={`${f.label}の重み`}
+                  onChange={(e) =>
+                    setWeights({ ...weights, [f.key]: e.target.value })
+                  }
+                />
+                <output>{weights[f.key]}</output>
+              </label>
+            ))}
+          </fieldset>
+        ))}
+        <div className="online-tryout-weight-actions">
+          <button
+            type="button"
+            className="online-primary"
+            disabled={busy}
+            onClick={() => {
+              const next = weightedRanked(candidates, weights, roster);
+              setRanked(next);
+              setNotice(
+                '評価の高い順に、投・捕・内・外の目標人数を守っておすすめ順を作り直しました。',
+                next,
+              );
+            }}
+          >
+            この重みでおすすめ順を作る
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setWeights(DEFAULT_WEIGHTS)}
+          >
+            重みを標準に戻す
+          </button>
+        </div>
+      </details>
       <p className="online-muted">
         上から順に取りにいきます。他球団に先を越された選手は飛ばして、控えから繰り上がります。
         名簿が偏らないよう、<strong>投{targets.pitcher}・捕{targets.catcher}・内
@@ -200,7 +310,7 @@ export default function TryoutPlanner({
               <li key={id}>
                 <span className="online-tryout-rank">{i + 1}</span>
                 <span className="online-tryout-person">
-                  <Line player={byId.get(id)} />
+                  <Line player={byId.get(id)} score={scores.get(id)} />
                 </span>
                 {/* ⚠ 希望リストの隣ではなく**獲得予定の隣**と入れ替える。
                     間に飛ばされた選手が挟まっていると、希望リストの中で
@@ -245,7 +355,7 @@ export default function TryoutPlanner({
               {bench.slice(0, 40).map((id) => (
                 <li key={id}>
                   <span className="online-tryout-person">
-                    <Line player={byId.get(id)} />
+                    <Line player={byId.get(id)} score={scores.get(id)} />
                   </span>
                   <button
                     type="button"
@@ -292,6 +402,7 @@ export default function TryoutPlanner({
                   setPage(0);
                 }}
               >
+                <option value={WEIGHTED_SORT_KEY}>評価値（重み）</option>
                 {SORT_KEYS.map((s) => (
                   <option key={s.key} value={s.key}>
                     {s.label}
@@ -315,7 +426,7 @@ export default function TryoutPlanner({
             {shown.map((p) => (
               <li key={p.id} data-wanted={wantedSet.has(p.id) || undefined}>
                 <span className="online-tryout-person">
-                  <Line player={p} />
+                  <Line player={p} score={scores.get(p.id)} />
                 </span>
                 {wantedSet.has(p.id) ? (
                   <span className="online-tryout-mark">
