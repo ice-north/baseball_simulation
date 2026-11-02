@@ -2,12 +2,16 @@ import React, { useMemo, useState } from 'react';
 import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
+import { rosterGroup } from '../utils/constants.js';
 import {
   POSITION_GROUPS,
   SORT_KEYS,
   filterCandidates,
-  moveRanked,
   planSummary,
+  plannedPicks,
+  addToPlan,
+  benchFromPlan,
+  shiftInPlan,
 } from './tryoutPlan.js';
 
 // ============================================================
@@ -26,6 +30,12 @@ import {
 // ============================================================
 
 const PAGE = 12;
+const GROUP_LABELS = {
+  pitcher: '投手',
+  catcher: '捕手',
+  infielder: '内野手',
+  outfielder: '外野手',
+};
 
 function Line({ player }) {
   if (!player) return null;
@@ -66,6 +76,7 @@ export default function TryoutPlanner({
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const [showBench, setShowBench] = useState(false);
+  const [notice, setNotice] = useState('');
 
   const byId = useMemo(
     () => new Map(candidates.map((p) => [p.id, p])),
@@ -92,9 +103,30 @@ export default function TryoutPlanner({
   );
   const shown = pool.slice(page * PAGE, page * PAGE + PAGE);
 
-  const setRanked = (rankedIds) => onChange({ ...plan, rankedIds });
+  const setRanked = (rankedIds) => {
+    setNotice('');
+    onChange({ ...plan, rankedIds });
+  };
+  // ⚠ 操作は**獲得予定を基準に**行う（`tryoutPlan.js` の説明を参照）。
+  //    `rankedIds` の位置で動かすと、目標構成で飛ばされる選手が挟まったときに
+  //    押した選手が入らない・消える・別の選手が入る、が起きていた
   // ⚠ 「外す」は**消さずに末尾へ**。消すと競合したときの繰り上がりが無くなる
-  const drop = (id) => setRanked(moveRanked(plan.rankedIds, id, plan.rankedIds.length));
+  const drop = (id) =>
+    setRanked(benchFromPlan(plan.rankedIds, candidates, count, roster, id));
+  const shift = (index, delta) =>
+    setRanked(shiftInPlan(plan.rankedIds, candidates, count, roster, index, delta));
+  const add = (id, first) => {
+    const next = addToPlan(plan.rankedIds, candidates, count, roster, id, { first });
+    // ⚠ 黙って何も起きない、を作らない。今の名簿だけでその区分が目標を超えていると、
+    //    サーバーも取りにいかないので、獲得予定には入れられない
+    if (!plannedPicks(next, candidates, count, roster).some((p) => p.id === id)) {
+      setNotice(
+        `${byId.get(id)?.name}は、今の名簿だけで${GROUP_LABELS[rosterGroup(byId.get(id)?.position)]}が目標人数に達しているため、獲得予定に入れられません。`,
+      );
+      return;
+    }
+    setRanked(next);
+  };
 
   return (
     <div className="online-tryout">
@@ -157,6 +189,11 @@ export default function TryoutPlanner({
               　この位置は人数が足りないと自動で埋められます。
             </p>
           )}
+          {notice && (
+            <p role="status" className="online-tryout-warn">
+              {notice}
+            </p>
+          )}
           {wanted.length === 0 && <p>獲得希望人数を1人以上にしてください。</p>}
           <ol className="online-tryout-list">
             {wanted.map((id, i) => (
@@ -172,15 +209,7 @@ export default function TryoutPlanner({
                   type="button"
                   aria-label={`${byId.get(id)?.name}の希望順位を上げる`}
                   disabled={i === 0 || busy}
-                  onClick={() =>
-                    setRanked(
-                      moveRanked(
-                        plan.rankedIds,
-                        id,
-                        plan.rankedIds.indexOf(wanted[i - 1]),
-                      ),
-                    )
-                  }
+                  onClick={() => shift(i, -1)}
                 >
                   ↑
                 </button>
@@ -188,15 +217,7 @@ export default function TryoutPlanner({
                   type="button"
                   aria-label={`${byId.get(id)?.name}の希望順位を下げる`}
                   disabled={i === wanted.length - 1 || busy}
-                  onClick={() =>
-                    setRanked(
-                      moveRanked(
-                        plan.rankedIds,
-                        id,
-                        plan.rankedIds.indexOf(wanted[i + 1]),
-                      ),
-                    )
-                  }
+                  onClick={() => shift(i, 1)}
                 >
                   ↓
                 </button>
@@ -220,7 +241,7 @@ export default function TryoutPlanner({
             控え {bench.length}人{showBench ? ' を閉じる' : ' を見る'}
           </button>
           {showBench && (
-            <ol className="online-tryout-list online-tryout-bench" start={count + 1}>
+            <ol className="online-tryout-list online-tryout-bench" start={wanted.length + 1}>
               {bench.slice(0, 40).map((id) => (
                 <li key={id}>
                   <span className="online-tryout-person">
@@ -229,7 +250,7 @@ export default function TryoutPlanner({
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => setRanked(moveRanked(plan.rankedIds, id, 0))}
+                    onClick={() => add(id, true)}
                   >
                     最優先へ
                   </button>
@@ -298,23 +319,23 @@ export default function TryoutPlanner({
                 </span>
                 {wantedSet.has(p.id) ? (
                   <span className="online-tryout-mark">
-                    指名中 {plan.rankedIds.indexOf(p.id) + 1}位
+                    {/* ⚠ 獲得予定の番号で出す。希望リスト全体の位置だと、
+                        飛ばされた選手のぶん左の一覧の番号とずれる */}
+                    指名中 {wanted.indexOf(p.id) + 1}位
                   </span>
                 ) : (
                   <>
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => setRanked(moveRanked(plan.rankedIds, p.id, 0))}
+                      onClick={() => add(p.id, true)}
                     >
                       最優先へ
                     </button>
                     <button
                       type="button"
                       disabled={busy || count === 0}
-                      onClick={() =>
-                        setRanked(moveRanked(plan.rankedIds, p.id, count - 1))
-                      }
+                      onClick={() => add(p.id, false)}
                     >
                       指名に加える
                     </button>

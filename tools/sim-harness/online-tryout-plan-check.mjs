@@ -27,6 +27,10 @@ import {
   planSummary,
   nextFromPlan,
   plannedPicks,
+  normalizeRanked,
+  addToPlan,
+  benchFromPlan,
+  shiftInPlan,
 } from '../../src/online/tryoutPlan.js';
 import { ROSTER_TARGETS, rosterCounts } from '../../src/utils/constants.js';
 
@@ -359,10 +363,104 @@ try {
     // 補うのは最低限だけ。希望していない選手で24人まで埋めない
     assert.ok(zero.length <= 10, `0人の案なのに ${zero.length}人も取った`);
   }
+
+  // --- 画面の操作を何度繰り返しても、押したとおりに動くこと ---------------
+  // ⚠ **以前は入れ替えるほど画面が壊れて見えた**。操作を `rankedIds` の位置で
+  //    していたので、目標構成で飛ばされる選手が間に挟まると、
+  //    - 「指名に加える」は候補336人中301人で何も起きなかった
+  //      （最後の獲得予定と同じ区分の選手しか入らない）
+  //    - 「↓」で選手が獲得予定から消え、控えの選手が代わりに入った
+  //    いまは獲得予定を基準に操作し、毎回並べ直す。
+  {
+    const count = base.count;
+    const none = [];
+    const wantedOf = (ids) => plannedPicks(ids, candidates, count, none).map((p) => p.id);
+    const sameSet = (a, b) => [...a].sort().join() === [...b].sort().join();
+    let ids = normalizeRanked(base.rankedIds, candidates, count, none);
+    // 1) どの控えの選手でも「指名に加える」で獲得予定に入る
+    {
+      const wanted = wantedOf(ids);
+      let missed = 0;
+      for (const p of candidates) {
+        if (wanted.includes(p.id)) continue;
+        const next = addToPlan(ids, candidates, count, none, p.id);
+        const after = wantedOf(next);
+        if (!after.includes(p.id) || after.length !== wanted.length) missed++;
+      }
+      assert.equal(missed, 0, `「指名に加える」で入らない選手が${missed}人いる`);
+    }
+    // 2) 操作を無作為に500回当てても、毎回押したとおりになる
+    let seed = 12345;
+    const rand = (n) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    for (let step = 0; step < 500; step++) {
+      const wanted = wantedOf(ids);
+      // ⚠ 画面の並び＝サーバーが取りにいく順（`rankedIds` の先頭）
+      assert.deepEqual(ids.slice(0, wanted.length), wanted, `${step}回目: 画面の並びと希望順がずれた`);
+      const bench = ids.filter((id) => !wanted.includes(id));
+      const op = rand(5);
+      let next;
+      if (op === 0 || op === 1) {
+        const i = rand(wanted.length);
+        const delta = op === 0 ? -1 : 1;
+        next = shiftInPlan(ids, candidates, count, none, i, delta);
+        const after = wantedOf(next);
+        assert.ok(sameSet(after, wanted), `${step}回目: ↑↓で顔ぶれが変わった`);
+        const j = i + delta;
+        if (j >= 0 && j < wanted.length)
+          assert.equal(after[j], wanted[i], `${step}回目: ↑↓で1つ動かない`);
+      } else if (op === 2) {
+        const id = wanted[rand(wanted.length)];
+        next = benchFromPlan(ids, candidates, count, none, id);
+        const after = wantedOf(next);
+        assert.ok(!after.includes(id), `${step}回目: 控えへ回した選手が残った`);
+        assert.equal(after.length, wanted.length, `${step}回目: 控えへで人数が減った`);
+      } else {
+        const id = bench[rand(Math.min(bench.length, 60))];
+        const first = op === 3;
+        next = addToPlan(ids, candidates, count, none, id, { first });
+        const after = wantedOf(next);
+        assert.ok(after.includes(id), `${step}回目: 指名した選手が入らない`);
+        if (first) assert.equal(after[0], id, `${step}回目: 最優先へで先頭にならない`);
+        assert.equal(after.length, wanted.length, `${step}回目: 指名で人数が変わった`);
+        assert.equal(
+          after.filter((x) => !wanted.includes(x)).length,
+          1,
+          `${step}回目: 指名で2人以上入れ替わった`,
+        );
+      }
+      // ⚠ 提出の条件（全員が候補・重複なし・人数そのまま）を壊さない
+      assert.equal(next.length, candidates.length, `${step}回目: 候補の人数が変わった`);
+      assert.equal(new Set(next).size, next.length, `${step}回目: 重複した`);
+      ids = next;
+    }
+    // 3) 獲得人数を減らしてもずれない
+    for (const c of [23, 20, 10]) {
+      const w = plannedPicks(ids, candidates, c, none).map((p) => p.id);
+      const n = normalizeRanked(ids, candidates, c, none);
+      assert.deepEqual(n.slice(0, w.length), w, `${c}人で並べ直すとずれる`);
+    }
+    // 4) 名簿だけで投手が目標を超えている球団は、投手を指名しても入らない
+    //    （サーバーも取りにいかない）。そのとき提出を壊さない
+    const pitchers = Array.from({ length: ROSTER_TARGETS.pitcher + 2 }, (_, i) => ({
+      id: -100 - i,
+      position: 'pitcher',
+    }));
+    const c2 = 24 - pitchers.length;
+    const ids2 = normalizeRanked(base.rankedIds, candidates, c2, pitchers);
+    const w2 = plannedPicks(ids2, candidates, c2, pitchers).map((p) => p.id);
+    const benchPitcher = candidates.find(
+      (p) => p.position === 'pitcher' && !w2.includes(p.id),
+    );
+    const n2 = addToPlan(ids2, candidates, c2, pitchers, benchPitcher.id);
+    assert.equal(new Set(n2).size, candidates.length, '入れられない指名で提出が壊れた');
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・成り立たない編成を提出前に知らせる・人の名簿がCPUより不利にならない）',
+  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・成り立たない編成を提出前に知らせる・人の名簿がCPUより不利にならない・入れ替えを繰り返しても押したとおりに動く）',
 );
