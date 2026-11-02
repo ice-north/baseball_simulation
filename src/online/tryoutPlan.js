@@ -138,22 +138,37 @@ export const WEIGHT_FIELDS = [
   { key: 'breaking', label: '変化球', group: 'pitcher' },
   { key: 'youth', label: '若さ', group: 'common' },
 ];
-export const WEIGHT_MAX = 5;
+export const WEIGHT_MAX = 5; // WEIGHT_LEVELS の最後の番号
+/**
+ * 重みの段階。画面では言葉で選び、計算には右の倍率を使う。
+ * ⚠ **段階の番号をそのまま掛けないこと**。0〜5をそのまま倍率にすると
+ *    「少し」と「最重視」が5倍も開き、1段の差が段によってばらばらに効く。
+ *    「普通」を1として、軽く＝半分、重視＝2倍、最重視＝3倍、という常識的な開きにする。
+ */
+export const WEIGHT_LEVELS = [
+  { label: '無視', factor: 0 },
+  { label: '軽く', factor: 0.5 },
+  { label: '普通', factor: 1 },
+  { label: 'やや重視', factor: 1.5 },
+  { label: '重視', factor: 2 },
+  { label: '最重視', factor: 3 },
+];
+/** 段階の番号（0〜WEIGHT_MAX）。0＝無視、2＝普通、4＝重視 */
 export const DEFAULT_WEIGHTS = {
-  meet: 3,
-  power: 3,
+  meet: 4,
+  power: 4,
   eye: 1,
   speed: 2,
   defense: 2,
   arm: 1,
-  velocity: 3,
-  control: 3,
+  velocity: 4,
+  control: 4,
   stamina: 2,
   breaking: 2,
   youth: 1,
 };
 
-/** 重みを 0〜WEIGHT_MAX の整数に揃える。知らない項目・壊れた値は既定に戻す */
+/** 重み（段階の番号）を 0〜WEIGHT_MAX の整数に揃える。知らない項目・壊れた値は既定に戻す */
 export function sanitizeWeights(weights) {
   return Object.fromEntries(
     WEIGHT_FIELDS.map(({ key }) => {
@@ -203,7 +218,13 @@ export function abilityValue(player, key) {
   }
 }
 
-/** 重み付きの評価値（0〜100）。重みが全部0なら0 */
+/** 段階の番号 → 倍率 */
+export const weightFactor = (level) => WEIGHT_LEVELS[level]?.factor ?? 0;
+
+/**
+ * 重み付きの評価値（0〜100）。各能力に段階の倍率を掛けて足し、倍率の合計で割る
+ * （重み付き平均）。全部「無視」なら0
+ */
 export function weightedScore(player, weights) {
   if (!player) return 0;
   const side = player.position === 'pitcher' ? 'pitcher' : 'fielder';
@@ -211,7 +232,7 @@ export function weightedScore(player, weights) {
   let sum = 0;
   for (const { key, group } of WEIGHT_FIELDS) {
     if (group !== side && group !== 'common') continue;
-    const w = weights?.[key] || 0;
+    const w = weightFactor(weights?.[key] || 0);
     total += w * abilityValue(player, key);
     sum += w;
   }

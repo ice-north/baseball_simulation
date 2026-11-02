@@ -473,7 +473,7 @@
 }
 .online-tryout-weights label {
   display: grid;
-  grid-template-columns: 5em minmax(0, 1fr) 1.5em;
+  grid-template-columns: 5em minmax(0, 1fr) 4.5em;
   align-items: center;
   gap: 6px;
   font-size: 13px;
@@ -491,7 +491,8 @@
   accent-color: var(--accent-strong);
 }
 .online-tryout-weights output {
-  text-align: right;
+  text-align: left;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .online-tryout-weight-actions {
