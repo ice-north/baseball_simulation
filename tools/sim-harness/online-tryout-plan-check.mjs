@@ -12,7 +12,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
-import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
+import {
+  createLeague,
+  defaultPhasePlan,
+  submitPhase,
+} from '../../server/leagueEngine.mjs';
 import {
   POSITION_GROUPS,
   SORT_KEYS,
@@ -313,6 +317,48 @@ try {
     [],
     '名簿が足りている球団で「決定できない」になる',
   );
+
+  // --- 1人が成り立たない案を出しても、全員が止まらないこと ---------------
+  // ⚠ **以前は0人の案1つでトライアウト全体が解決できなかった**。サーバーは
+  //    0人を受け付けるのに、解決の最後で「投手・捕手・野手が不足」で落ち、
+  //    締め切りの自動解決も同じ所で失敗して、黙ったまま全員が止まった。
+  //    いまは足りないぶんだけ必要な守備位置から自動で補う。
+  {
+    const two = createLeague({
+      members: [{ userId: 'a' }, { userId: 'b' }],
+      now: '2026-10-26T15:00:00.000Z',
+    });
+    const [ma, mb] = two.members;
+    submitPhase(
+      two,
+      ma.userId,
+      { phaseId: two.phase.id, plan: { count: 0, rankedIds: [] }, ready: true },
+      '2026-10-26T15:00:00.000Z',
+    );
+    submitPhase(
+      two,
+      mb.userId,
+      {
+        phaseId: two.phase.id,
+        plan: defaultPhasePlan(two, mb.teamName),
+        ready: true,
+      },
+      '2026-10-26T15:00:00.000Z',
+    );
+    assert.notEqual(
+      two.phase?.kind,
+      'initial_tryout',
+      '0人の案が1つあるだけで初期編成が解決しない',
+    );
+    const zero = two.game.teams[ma.teamName].players;
+    const zc = rosterCounts(zero);
+    assert.ok(
+      zero.length - zc.pitcher >= 8 && zc.pitcher >= 1 && zc.catcher >= 1,
+      `0人の案の球団が最低限を満たさない: ${JSON.stringify(zc)}`,
+    );
+    // 補うのは最低限だけ。希望していない選手で24人まで埋めない
+    assert.ok(zero.length <= 10, `0人の案なのに ${zero.length}人も取った`);
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }

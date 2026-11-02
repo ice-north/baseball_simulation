@@ -136,6 +136,27 @@ try {
     'まだ誰も提出していない',
   );
   now = camp.phase.deadline;
+  // ⚠ **自動決定が失敗したら、止めて理由を残すこと**。以前はログに出すだけで
+  //    保存を変えず、毎時同じ失敗を黙って繰り返していた（誰も気づけない）
+  {
+    const engine = service.engine;
+    service.engine = async () => {
+      throw new Error('検査用の失敗');
+    };
+    await service.tick();
+    service.engine = engine;
+    const stopped = (await store.read()).league;
+    assert.equal(stopped.status, 'error', '自動決定の失敗で止まっていない');
+    assert.match(stopped.error, /締め切りの自動決定に失敗しました（検査用の失敗）/);
+    // 止めている間は、定期処理でやり直さない
+    assert.deepEqual(await service.tick(), { advanced: false });
+    assert.equal((await store.read()).league.status, 'error');
+    // 管理者が再開すると待機に戻り、次の定期処理でやり直す
+    await run('admin', adminSession, 'resume', stopped.revision);
+    const resumed = (await store.read()).league;
+    assert.equal(resumed.status, 'waiting', '再開で待機に戻らない');
+    assert.ok(!resumed.error, '再開しても理由が残っている');
+  }
   const result = await service.tick();
   assert.ok(result.advanced, '締め切りを過ぎたら進む');
   assert.deepEqual(result.autoResolved, ['camp'], 'キャンプが自動決定される');

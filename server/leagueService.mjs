@@ -390,7 +390,9 @@ export class LeagueService {
       const now = this.clock();
       // ⚠ **締め切り超過の手続きを先に片付ける**。手続き中は status が
       //    running でないので、下の判定だけだと永遠に動かない。
-      if (l?.phase?.deadline && l.phase.deadline <= now) {
+      // ⚠ 自動決定に失敗して止めた後（status が error）は、管理者が再開するまで
+      //    やり直さない。毎時同じ失敗を繰り返して記録を埋めないため。
+      if (l?.phase?.deadline && l.phase.deadline <= now && l.status !== 'error') {
         const working = clone(l);
         try {
           const resolved = await this.engine((engine) =>
@@ -403,8 +405,17 @@ export class LeagueService {
             bundle.league.nextAdvanceAt = nextProgressionAt(bundle.league.updatedAt);
           return { value: { advanced: true, autoResolved: resolved } };
         } catch (error) {
+          // ⚠ **黙って握りつぶさない**。以前はログに出すだけで保存を変えず、
+          //    画面は「締め切り済み」のまま何も起きない状態が続いた
+          //    （誰も原因に気づけない）。止めて理由を画面に出す。
+          //    管理者が「再開」すると待機に戻り、次の定期処理でやり直す。
           console.error('online auto resolve failed:', error.stack);
-          return { unchanged: true, value: { advanced: false } };
+          l.status = 'error';
+          l.nextAdvanceAt = null;
+          l.error = `締め切りの自動決定に失敗しました（${error.message}）。提出内容を確認して管理者が再開してください`;
+          l.revision++;
+          l.updatedAt = this.clock();
+          return { value: { advanced: false, autoResolveFailed: true } };
         }
       }
       if (

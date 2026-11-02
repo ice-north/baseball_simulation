@@ -407,17 +407,19 @@ function resolveTryout(league, plans) {
   for (const pick of generateSnakeDraftOrder(names, 24)) {
     const team = TEAMS_DATA[pick.team];
     const plan = plans[pick.team];
-    if (
-      team.players.length + acquired[pick.team].length >= 24 ||
-      (plan && acquired[pick.team].length >= plan.count)
-    )
-      continue;
     const roster = [...team.players, ...acquired[pick.team]];
     const { needPitcher, needCatcher, needFielders } = shortfall(roster);
     const slotsLeft = 24 - roster.length;
     const mustFill = (needPitcher ? 1 : 0) + needFielders;
+    // ⚠ **希望人数に達しても、最低限が欠けていれば取り続ける**。
+    //    以前は希望人数（0人も選べる）で打ち切っていたため、投手・捕手・野手が
+    //    足りない球団が1つあるだけで下の検査に落ち、**全員のトライアウトが
+    //    解決できずに止まった**（締め切りの自動解決も同じ所で失敗する）。
+    //    足りないぶんは必要な守備位置から自動で補う。
+    const planFull = !!plan && acquired[pick.team].length >= plan.count;
+    if (slotsLeft <= 0 || (planFull && mustFill === 0)) continue;
     let forced = null;
-    if (slotsLeft <= mustFill) {
+    if (slotsLeft <= mustFill || planFull) {
       // 足りないものから順に埋める（投手 → 捕手 → 野手）
       const want = needPitcher
         ? isPitcher
@@ -429,7 +431,9 @@ function resolveTryout(league, plans) {
     }
     const player = forced
       ? forced
-      : plan
+      : planFull
+        ? null
+        : plan
         ? // ⚠ **希望順だけで取らないこと**。候補の38%が投手なので、順番どおりに
           //    取ると投手15人・野手9人（控えゼロ）になる。CPUは
           //    `selectPlayerForAI` が目標構成を見ているので投手10・野手14で揃い、
@@ -456,7 +460,7 @@ function resolveTryout(league, plans) {
       combined.filter((p) => p.position !== 'pitcher').length >= 8 &&
         combined.some((p) => p.position === 'pitcher') &&
         combined.some((p) => p.position === 'catcher'),
-      `${name}の投手・捕手・野手が不足します。希望順位を見直してください`,
+      `${league.teams?.find((t) => t.name === name)?.displayName || name}の投手・捕手・野手が不足します。希望順位を見直してください`,
       409,
       'roster',
     );
