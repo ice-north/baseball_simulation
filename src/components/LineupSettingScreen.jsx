@@ -404,7 +404,10 @@ export const LineupSettingContent = ({ teamName, onBack, team, canConvertPositio
     const player = team.players.find(p => p.id === playerId);
     if (!player) return;
     // 野手を投手枠にドロップしたら投手へコンバートしてから役割付与
+    // ⚠ **登録の変更を出さない画面（オンライン）では受け付けない**。ボタンは隠していても
+    //    ドラッグでは素通りし、野手が投手登録に変わったまま保存しようとして弾かれていた
     if (player.position !== 'pitcher') {
+      if (!canConvertPosition) return;
       handleConvertPosition(playerId, 'pitcher');
     }
     handleSetPitcherRole(playerId, roleKey);

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import MobileTactics from './MobileTactics.jsx';
 import { PitcherRoles, AutoTactics } from './PreGameTactics.jsx';
 import { roleFor, STRATEGY_FIELDS } from './tactics.js';
-import { useDraftState } from './Drafts.jsx';
+import { useDraftState, phaseDraftName } from './Drafts.jsx';
 import GameHistory, { GameRecordButton } from './GameHistory.jsx';
 import {
   decisionText,
@@ -410,12 +410,12 @@ export function Notices({ view, compact = false }) {
 export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const phase = view.phase;
   const [plan, setPlan] = useDraftState(
-    'phase.plan',
+    phaseDraftName(phase.id, 'plan'),
     phase.submission?.plan || null,
   );
-  const [dirty, setDirty] = useDraftState('phase.dirty', false);
+  const [dirty, setDirty] = useDraftState(phaseDraftName(phase.id, 'dirty'), false);
   const [planRevision, setPlanRevision] = useState(null);
-  const [baseSubmission, setBaseSubmission] = useDraftState('phase.base', () =>
+  const [baseSubmission, setBaseSubmission] = useDraftState(phaseDraftName(phase.id, 'base'), () =>
     structuredClone(phase.submission || null),
   );
   const [error, setError] = useState('');
@@ -520,7 +520,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
           {phase.deadline
             ? mobile
               ? `締め切り ${formatDeadline(phase.deadline)}。全員が決定するか、締め切りで進みます。`
-              : `締め切りは ${formatDeadline(phase.deadline)}。全員が決定した時点で処理します。締め切りを過ぎると、未提出の球団は標準案で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。`
+              : `締め切りは ${formatDeadline(phase.deadline)}。全員が決定した時点で処理します。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。`
             : mobile
               ? '全員が決定すると進みます。'
               : '全員が決定した時点で処理します。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。'}
