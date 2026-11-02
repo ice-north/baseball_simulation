@@ -22,6 +22,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   const [sortDir, setSortDir] = useState('desc');
   const [draftHistory, setDraftHistory] = useState([]);
   const draftFinalizedRef = useRef(false);
+  // 自チームの指名を打ち切ったか。⚠ 打ち切っても**他球団の指名は最後まで続ける**
+  //    （以前は「指名終了」でドラフト全体を締めていたため、全球団が9〜10人・
+  //    捕手0人のまま開幕し、自チームは打順が組めず1日も進められなかった）。
+  const [userDone, setUserDone] = useState(false);
   const candidatesGeneratedRef = useRef(false);
 
   const getPositionName = (position) => POSITION_NAMES_FULL[position] || position;
@@ -100,6 +104,20 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   useEffect(() => {
     if (currentPick >= draftOrder.length || tryoutCandidates.length === 0) return;
     const currentTeam = draftOrder[currentPick].team;
+    if (currentTeam === 'ユーザー' && userDone) {
+      const t = setTimeout(() => {
+        setDraftHistory(prev => [...prev, {
+          pick: currentPick + 1,
+          round: draftOrder[currentPick].round,
+          team: (Array.isArray(allTeams) ? allTeams : Object.keys(allTeams))[0],
+          player: null,
+          skipped: true,
+          reason: '指名終了'
+        }]);
+        setCurrentPick(currentPick + 1);
+      }, 50);
+      return () => clearTimeout(t);
+    }
     if (currentTeam !== 'ユーザー') {
       setTimeout(() => {
         const existingCount = TEAMS_DATA[currentTeam]?.players?.length || 0;
@@ -139,7 +157,34 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         }
       }, 500);
     }
-  }, [currentPick, draftOrder, tryoutCandidates, teamRosters]);
+  }, [currentPick, draftOrder, tryoutCandidates, teamRosters, userDone]);
+
+  // 試合に出られる最低限の構成か（投手1・捕手1・野手8、DH制なら野手9）。
+  // ⚠ 人数だけで見ないこと。9人でも捕手がいない・野手が足りないと、
+  //    日程画面の「スタメンを自動補完できませんでした」で1日も進めなくなる。
+  const getUserShortage = () => {
+    const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+    const roster = [...(TEAMS_DATA[teamsArray[0]]?.players || []), ...(teamRosters['ユーザー'] || [])];
+    const pitchers = roster.filter(p => p.position === 'pitcher').length;
+    const catchers = roster.filter(p => p.position === 'catcher').length;
+    const fielders = roster.length - pitchers;
+    const needFielders = seasonData?.settings?.useDH ? 9 : 8;
+    const missing = [];
+    if (pitchers < 1) missing.push('投手1人');
+    if (catchers < 1) missing.push('捕手1人');
+    if (fielders < needFielders) missing.push(`野手${needFielders - fielders}人`);
+    return missing;
+  };
+
+  const endUserPicks = () => {
+    const missing = getUserShortage();
+    if (missing.length > 0 && tryoutCandidates.length > 0) {
+      alert(`試合に必要な選手が足りません（あと${missing.join('・')}）。指名を続けてください。`);
+      return;
+    }
+    if (!window.confirm('自チームの指名をここで終えます（他球団の指名は最後まで続きます）。よろしいですか？')) return;
+    setUserDone(true);
+  };
 
   const finalizeDraft = (skipCheck = false) => {
     if (draftFinalizedRef.current || draftComplete) return;
@@ -281,7 +326,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     });
 
   const currentTeam = currentPick < draftOrder.length ? draftOrder[currentPick].team : null;
-  const isUserTurn = currentTeam === 'ユーザー';
+  const isUserTurn = currentTeam === 'ユーザー' && !userDone;
   // 内部キー 'ユーザー' を画面に出さない（自分のチーム名で表示する）
   const teamLabel = (t) => {
     if (t !== 'ユーザー') return t;
@@ -325,9 +370,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               {teamLabel(currentTeam)} が選択中...
             </div>
           )}
-          {!draftComplete && isUserTurn && userRoster.length > 0 && (
+          {!draftComplete && userDone && (
+            <div className="mt-4 text-gray-300 text-sm">
+              自チームの指名は終えました。他球団の指名が終わるまでお待ちください。
+            </div>
+          )}
+          {!draftComplete && isUserTurn && (userRoster.length > 0 || !isInitialTryout) && (
             <button
-              onClick={() => finalizeDraft()}
+              onClick={endUserPicks}
               className="btn-danger mt-4 px-5 py-2 rounded-lg font-semibold transition text-sm"
             >
               指名終了

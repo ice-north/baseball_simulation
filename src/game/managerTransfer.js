@@ -283,6 +283,24 @@ export const transferManagerTo = (targetTeamName, ctx) => {
     categoryLabel: CATEGORY_LABEL[category] || category,
   });
 
+  // --- 自チームを TEAMS_DATA の先頭へ ---
+  // ⚠ **多くの画面と年度処理が `Object.keys(TEAMS_DATA)[0]` を自チームとして読む**
+  //    （日程画面・ロスター・契約更改・キャンプ・スカウト・年度替わりの名簿処理）。
+  //    以前は並べ替えなかったため、移籍後もそれらが**元のチーム**を自チームとして扱い、
+  //    キャンプの見出しが元の球団のまま・打順の自動補完や戦力外が元の球団に
+  //    掛かっていた。新しい所属リーグの球団を先頭（自チームが1番目）に並べ直す。
+  {
+    const front = [targetTeamName, ...(setup.settings?.teamNames || [])]
+      .filter((name, i, list) => TEAMS_DATA[name] && list.indexOf(name) === i);
+    const entries = Object.entries(TEAMS_DATA);
+    const ordered = [
+      ...front.map(name => [name, TEAMS_DATA[name]]),
+      ...entries.filter(([name]) => !front.includes(name)),
+    ];
+    for (const [name] of entries) delete TEAMS_DATA[name];
+    for (const [name, team] of ordered) TEAMS_DATA[name] = team;
+  }
+
   // --- React state を差し替え ---
   setLeagueConfig?.(setup.leagueConfig);
   setGameMode?.(setup.gameMode);
