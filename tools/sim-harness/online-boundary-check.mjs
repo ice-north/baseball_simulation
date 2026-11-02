@@ -4,7 +4,7 @@ import {
   generatePlayoffSchedule,
   updatePlayoffProgress,
 } from '../../src/season/seasonManager.js';
-import { schedulePlayoffReplay } from '../../server/playoffReplay.mjs';
+import { schedulePlayoffReplay, PLAYOFF_REPLAY } from '../../server/playoffReplay.mjs';
 import { prepareDailyLineup } from '../../server/dailyLineup.mjs';
 import { validateLineup, ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 const schedule = generatePlayoffSchedule(['A', 'B'], 'short', 2024);
@@ -12,7 +12,10 @@ schedule[0].result = { homeScore: 1, awayScore: 0 };
 schedule[1].result = { homeScore: 1, awayScore: 0 }; // ホームが入れ替わるので1勝1敗
 schedule[2].result = { homeScore: 0, awayScore: 0 };
 const season = { schedule, currentDate: { year: 2024, month: 10, day: 13 } };
-assert.equal(getPlayoffChampion(schedule), null);
+// ⚠ 対人版は未決着なら再試合を足すので、勝者を読むときは PLAYOFF_REPLAY を渡す。
+//    一人用（既定）は再試合を持たないため、全試合を終えたら勝ち数→上位シードで決める
+assert.equal(getPlayoffChampion(schedule, PLAYOFF_REPLAY), null);
+assert.equal(getPlayoffChampion(schedule), 'A', '一人用は1勝1敗1分なら上位シード（第1戦のホーム）');
 schedulePlayoffReplay(season);
 assert.equal(schedule.length, 4);
 assert.equal(schedule[3].date.day, 13);

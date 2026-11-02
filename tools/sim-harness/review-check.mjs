@@ -36,6 +36,14 @@ const dhTeam = structuredClone(lineupTeam);
 dhTeam.players.push({ id: 10, position: 'first' });
 assert.equal(ensureCompleteLineup(dhTeam, true), true, 'DH制でも9打順を揃える');
 assert.equal(dhTeam.lineupSettings.battingOrder.filter(entry => entry.position === 'dh').length, 1);
+// ⚠ DH制で次の先発投手を打順に入れても、その枠は控えで埋める
+//    （試合では先発の打順が外れるので、残すと8人で戦うことになっていた）
+const dhStarter = structuredClone(dhTeam);
+dhStarter.players.push({ id: 11, position: 'left' });
+dhStarter.lineupSettings.battingOrder[2] = { ...dhStarter.lineupSettings.battingOrder[2], playerId: 9 };
+assert.equal(ensureCompleteLineup(dhStarter, true), true, 'DH制で先発投手を外しても9人揃う');
+assert.ok(!dhStarter.lineupSettings.battingOrder.some(entry => entry.playerId === 9), 'DH制で次の先発投手が打順に残っている');
+assert.equal(new Set(dhStarter.lineupSettings.battingOrder.map(entry => entry.playerId)).size, 9);
 
 const oldPlayer = { id: 42, name: '旧選手', position: 'pitcher' };
 const a = normalizePlayer(structuredClone(oldPlayer));
@@ -82,6 +90,22 @@ const progressed = updatePlayoffProgress({ ...playoff, schedule: games });
 assert.deepEqual(games, beforeProgress, 'シリーズ進行で元日程を変えない');
 assert.equal(getPlayoffChampion(progressed.schedule), games[0].home);
 assert.equal(progressed.schedule[2].result.cancelled, true);
+// ⚠ 引き分けを挟んで全試合を終えても誰も2勝に届かないとき、以前は優勝が決まらなかった。
+//    勝ち数の多い方、同数なら上位シード（第1戦のホーム）が勝ち上がる
+{
+  const seed = playoff.schedule[0].home;
+  const other = playoff.schedule[0].away;
+  const drawn = playoff.schedule.map(game => ({ ...game, result: { homeScore: 1, awayScore: 1 } }));
+  assert.equal(getPlayoffChampion(drawn), seed, '全試合引き分けで上位シードが優勝にならない');
+  const split = playoff.schedule.map(game => ({ ...game }));
+  split[0].result = split[0].home === other ? { homeScore: 2, awayScore: 0 } : { homeScore: 0, awayScore: 2 };
+  split[1].result = { homeScore: 3, awayScore: 3 };
+  split[2].result = { homeScore: 1, awayScore: 1 };
+  assert.equal(getPlayoffChampion(split), other, '1勝0敗2分のチームが優勝にならない');
+  const pending = playoff.schedule.map(game => ({ ...game }));
+  pending[0].result = { homeScore: 1, awayScore: 1 };
+  assert.equal(getPlayoffChampion(pending), null, '試合が残っているのに優勝を決めた');
+}
 WORLD_DATA.independentLeagues = {
   other: { name: '他リーグ', teams: ['X', 'Y'], standings: [
     { team: 'X', winRate: 0.8, wins: 8 }, { team: 'Y', winRate: 0.2, wins: 2 },

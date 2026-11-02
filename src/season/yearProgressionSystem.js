@@ -5,7 +5,7 @@ import { humanTeamNames } from '../game/teamControl.js';
 // 年齢カーブによる成長・衰退システム
 // ============================================================
 
-import { createSeasonData, initializeStandings, qualifiedPA, qualifiedOuts, plateAppearances } from './seasonManager.js';
+import { createSeasonData, initializeStandings, qualifiedPA, qualifiedOuts, plateAppearances, compareStandings, getPlayoffChampion } from './seasonManager.js';
 import { processNpbCareers } from '../game/npbCareer.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
@@ -125,11 +125,9 @@ export function processSeasonEnd(seasonData, allTeams) {
   };
 
   if (seasonData.standings && seasonData.standings.length > 0) {
-    const sortedStandings = [...seasonData.standings].sort((a, b) => {
-      if (b.wins !== a.wins) return b.wins - a.wins;
-      if (a.losses !== b.losses) return a.losses - b.losses;
-      return b.winRate - a.winRate;
-    });
+    // 順位表・プレーオフと同じ並べ方（勝率→勝利数）。以前はここだけ勝利数が先で、
+    // 引き分けの多いチームの扱いが順位表と食い違っていた
+    const sortedStandings = [...seasonData.standings].sort(compareStandings);
     awards.champion = sortedStandings[0].team;
   }
 
@@ -1508,18 +1506,10 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [] }
     const yearRecord = { year: seasonData.year, calendarYear: seasonData.currentDate?.year };
     if (awards.champion) yearRecord.leagueChampion = awards.champion;
     // プレーオフ決勝の優勝チームを集計
-    const playoffFinals = (seasonData.schedule || []).filter(g =>
-      g.phase === 'playoffs' && g.playoffRound === 'final' && g.result && !g.result.cancelled
-    );
-    if (playoffFinals.length > 0) {
-      const teamWins = {};
-      playoffFinals.forEach(g => {
-        const winner = g.result.homeScore > g.result.awayScore ? g.home : g.away;
-        teamWins[winner] = (teamWins[winner] || 0) + 1;
-      });
-      const sorted = Object.entries(teamWins).sort((a, b) => b[1] - a[1]);
-      if (sorted.length > 0) yearRecord.playoffChampion = sorted[0][0];
-    }
+    // ⚠ 引き分けを「ビジターの勝ち」と数えないこと（以前はそう数えて、シリーズを
+    //    勝っていないチームを優勝として残すことがあった）。決め方は順位表側と同じ
+    const playoffChampion = getPlayoffChampion(seasonData.schedule || []);
+    if (playoffChampion) yearRecord.playoffChampion = playoffChampion;
     newSeasonData.tournamentHistory = [...prevHistory, yearRecord];
     // スケジュールはレギュレーション設定後に生成
     const teams = Object.keys(teamsAfterRetirement);

@@ -1,5 +1,5 @@
 import './engine-bootstrap.mjs';
-import { schedulePlayoffReplay } from './playoffReplay.mjs';
+import { schedulePlayoffReplay, PLAYOFF_REPLAY } from './playoffReplay.mjs';
 import {
   TEAMS_DATA,
   LEAGUE_SETTINGS,
@@ -605,7 +605,7 @@ function resolvePhase(league, now) {
       year: league.season.year,
       standings: clone(league.season.standings),
       awards: clone(league.season.frozenAwards || {}),
-      playoffChampion: getPlayoffChampion(league.season.schedule),
+      playoffChampion: getPlayoffChampion(league.season.schedule, PLAYOFF_REPLAY),
     });
     const result = advanceToNextYear(league.season, TEAMS_DATA, {
       playedTeamNames: league.season.settings.teamNames,
@@ -763,6 +763,7 @@ function advanceOneDay(league, key, now) {
         createRecorder(league, TEAMS_DATA, {
           replay: process.env.ONLINE_RECORD_REPLAY === '1',
         }),
+        PLAYOFF_REPLAY,
       ).data;
     } finally {
       for (const restore of restoreRotations) restore();
@@ -800,7 +801,7 @@ function advanceOneDay(league, key, now) {
       season._koshienDone = true;
     }
     if (month === 10 && day >= 21 && !season.grandChampionship?.generated) {
-      const champion = getPlayoffChampion(season.schedule);
+      const champion = getPlayoffChampion(season.schedule, PLAYOFF_REPLAY);
       if (champion) {
         const gc = generateGrandChampionship(
           'shikoku',

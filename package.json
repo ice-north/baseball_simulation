@@ -9,7 +9,7 @@
     "build": "vite build",
     "lint": "eslint src",
     "preview": "vite preview",
-    "check": "npm run lint -- --quiet && node tools/sim-harness/scope-check.mjs && node tools/sim-harness/save-check.mjs && node tools/sim-harness/review-check.mjs && node tools/sim-harness/season-check.mjs && node tools/sim-harness/draft-check.mjs && node tools/sim-harness/bracket-check.mjs && node tools/sim-harness/contract-scope-check.mjs && node tools/sim-harness/oneplayer-fix-check.mjs && node tools/sim-harness/pool-leak-check.mjs && node tools/sim-harness/base-state-check.mjs && node tools/sim-harness/bunt-check.mjs && node tools/sim-harness/doc-check.mjs && npm run check:online",
+    "check": "npm run lint -- --quiet && node tools/sim-harness/scope-check.mjs && node tools/sim-harness/save-check.mjs && node tools/sim-harness/review-check.mjs && node tools/sim-harness/sim-integrity-check.mjs && node tools/sim-harness/season-check.mjs && node tools/sim-harness/draft-check.mjs && node tools/sim-harness/bracket-check.mjs && node tools/sim-harness/contract-scope-check.mjs && node tools/sim-harness/oneplayer-fix-check.mjs && node tools/sim-harness/pool-leak-check.mjs && node tools/sim-harness/base-state-check.mjs && node tools/sim-harness/bunt-check.mjs && node tools/sim-harness/doc-check.mjs && npm run check:online",
     "check:season": "node tools/sim-harness/season-check.mjs",
     "check:draft": "node tools/sim-harness/draft-check.mjs",
     "check:bracket": "node tools/sim-harness/bracket-check.mjs",
