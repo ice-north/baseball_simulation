@@ -754,7 +754,9 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     setDevLeft(days);
   };
   useEffect(() => {
-    if (devLeft <= 0 || isSimulating) return;
+    // 大会の組み合わせを作っている間（読み込み画面）は待つ。作り終えた状態が入ってから
+    // 続ける。待たずに進めると、後から入る古い日付の状態で上書きされる
+    if (devLeft <= 0 || isSimulating || isGeneratingTournament) return;
     if (pendingPhaseEvent || showTournamentMatchModal) { setDevLeft(0); return; }
     if (koshienNotice) { setKoshienNotice(null); return; }
     if (showGameChoiceModal) {
@@ -773,7 +775,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     // 次の回で同じ日のキーに当たって止まる。どちらでも1回はやり直させる。
     else setDevTick(t => t + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [devLeft, devTick, isSimulating, seasonData?.currentDate, showGameChoiceModal, koshienNotice, pendingPhaseEvent, showTournamentMatchModal]);
+  }, [devLeft, devTick, isSimulating, isGeneratingTournament, seasonData?.currentDate, showGameChoiceModal, koshienNotice, pendingPhaseEvent, showTournamentMatchModal]);
 
   const handleGameChoice = (choice) => {
     if (isSimulating) return;
