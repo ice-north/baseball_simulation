@@ -1,8 +1,9 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LineupSettingContent } from '../components/LineupSettingScreen.jsx';
 import { LEAGUE_SETTINGS } from '../teams-data.js';
 import { teamFromView, planFromTeam } from './lineupBridge.js';
+import { teamLabel } from './gameText.js';
 
 // ============================================================
 // オンライン版の編成画面。**一人用の編成画面をそのまま使う**。
@@ -35,16 +36,30 @@ export default function OnlineLineup({ view, busy, onSave, onClose }) {
     return teamRef.current;
   }, [view]);
 
+  const [saveError, setSaveError] = useState('');
+  const save = async () => {
+    setSaveError('');
+    const result = await onSave(planFromTeam(team), baseRef.current);
+    if (result && !result.ok) setSaveError(result.error || '保存できませんでした');
+  };
+
   // ⚠ 一人用の画面は `LEAGUE_SETTINGS.useDH` を見る。オンラインのリーグ設定に合わせる
   LEAGUE_SETTINGS.useDH = !!view.useDH;
 
   return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto bg-surface-0">
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-700 bg-surface-1 px-4 py-2">
-        <strong className="text-white">{view.teamName} · 編成</strong>
-        <span className="text-xs text-gray-300">
-          保存するまでサーバーには送られません
-        </span>
+        <strong className="text-white">{teamLabel(view.teamName)} · 編成</strong>
+        {saveError ? (
+          // ⚠ 失敗の文言はここに出す。画面上部の帯はこの全画面の裏に隠れる
+          <span role="alert" className="text-xs text-red-300">
+            保存できませんでした：{saveError}（編集は残っています）
+          </span>
+        ) : (
+          <span className="text-xs text-gray-300">
+            保存するまでサーバーには送られません
+          </span>
+        )}
         <div className="ml-auto flex gap-2">
           <button
             type="button"
@@ -57,14 +72,20 @@ export default function OnlineLineup({ view, busy, onSave, onClose }) {
           <button
             type="button"
             disabled={busy}
-            onClick={() => onSave(planFromTeam(team), baseRef.current)}
+            onClick={save}
             className="rounded bg-cyan-500 px-3 py-1.5 text-sm font-bold text-cyan-950 hover:bg-cyan-400 disabled:opacity-50"
           >
             この編成で保存
           </button>
         </div>
       </div>
-      <LineupSettingContent teamName={view.teamName} team={team} />
+      {/* ⚠ teamName は内部名のまま渡す（画面の中で名前による照合に使われる） */}
+      <LineupSettingContent
+        teamName={view.teamName}
+        displayName={teamLabel(view.teamName)}
+        team={team}
+        canConvertPosition={false}
+      />
     </div>,
     document.body,
   );

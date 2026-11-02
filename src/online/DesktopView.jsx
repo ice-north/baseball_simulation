@@ -114,8 +114,13 @@ export default function DesktopView(props) {
             busy={busy}
             onClose={() => setFullLineup(false)}
             onSave={async (plan, baseLineup) => {
-              await run(() => command('lineup', { ...plan, baseLineup }));
-              setFullLineup(false);
+              // ⚠ **失敗したら閉じない**。以前は成否に関係なく閉じていて、
+              //    保存に失敗すると編集がまるごと消えた（文言も全画面の裏に隠れていた）
+              const result = await run(() =>
+                command('lineup', { ...plan, baseLineup }),
+              );
+              if (result?.ok) setFullLineup(false);
+              return result;
             }}
           />
         ) : (

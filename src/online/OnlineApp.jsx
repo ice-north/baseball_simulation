@@ -211,8 +211,10 @@ export default function OnlineApp() {
     },
     [renewAuth],
   );
+  // 結果を `{ ok, error }` で返す。⚠ 失敗しても例外は外へ出さない（文言は上の帯に出す）。
+  //    呼ぶ側が成否で振る舞いを変えたいとき（全画面の編成を閉じるか）に使う
   const run = async (fn) => {
-    if (locked.current) return;
+    if (locked.current) return { ok: false, error: '別の操作を処理中です' };
     locked.current = true;
     viewSequence.current++;
     setBusy(true);
@@ -220,6 +222,7 @@ export default function OnlineApp() {
     setMessage('');
     try {
       await fn();
+      return { ok: true };
     } catch (e) {
       setError(e.message);
       try {
@@ -227,6 +230,7 @@ export default function OnlineApp() {
       } catch {
         /* 通信失敗の文言を保持 */
       }
+      return { ok: false, error: e.message };
     } finally {
       locked.current = false;
       setBusy(false);
