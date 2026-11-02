@@ -88,8 +88,35 @@ assert.throws(
   () => validateLineup(team, { battingOrder: Array(8).fill(null) }),
   (error) => error.status === 400,
 );
+// --- 人の球団の野手は、疲れ切ったらその日だけ控えと替える -------------
+// ⚠ 以前は保存した打順のまま毎試合出続け、遊撃手の疲労が396まで積み上がった
+{
+  const shortEntry = () =>
+    team.lineupSettings.battingOrder.find((e) => e.position === 'short');
+  const regular = shortEntry().playerId;
+  team.players.find((p) => p.id === regular).fatigue = 120;
+  team.players.push(
+    { id: 20, position: 'short', fatigue: 0 },
+    { id: 21, position: 'left', fatigue: 0, positionFitness: { short: 30 } },
+  );
+  // CPUの球団（controlType が human でない）には手を出さない
+  prepareDailyLineup(team, 'test')();
+  assert.equal(shortEntry().playerId, regular, 'CPUの打順まで差し替えた');
+  team.controlType = 'human';
+  const restoreDay = prepareDailyLineup(team, 'test');
+  assert.equal(shortEntry().playerId, 20, '疲れた遊撃手が休んでいない');
+  restoreDay();
+  assert.equal(shortEntry().playerId, regular, '保存した打順に戻っていない');
+  // 守れる控えが居なければ休ませない（守備に穴を開けない）
+  team.players.find((p) => p.id === 20).isActive = false;
+  prepareDailyLineup(team, 'test')();
+  assert.equal(shortEntry().playerId, regular, '守れない控えを遊撃に入れた');
+  team.players = team.players.filter((p) => p.id < 20);
+  team.players.find((p) => p.id === regular).fatigue = 0;
+  delete team.controlType;
+}
 console.log(
-  'online-boundary-check PASS（引き分け再試合・必要勝数固定・疲労代役・予約維持・不正編成）',
+  'online-boundary-check PASS（引き分け再試合・必要勝数固定・疲労代役・予約維持・不正編成・疲れた野手の休養）',
 );
 
 // 打順だけの変更で、翌日の先発が先頭へ巻き戻らないこと。

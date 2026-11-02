@@ -118,11 +118,9 @@ export class LeagueService {
   }
   async logout(userId, sessionId) {
     return this.store.transaction((bundle) => {
-      requireOnline(
-        this.isMember(bundle, userId),
-        '参加者ではありません',
-        403,
-      );
+      // ⚠ **参加者でなくてもログアウトは通す**。ログインは非参加者にも通すので
+      //    （参加画面へ進むため）、ここで弾くと参加画面の「ログアウト」が
+      //    403になって抜けられなかった。消すのは自分のセッションだけ
       if (!sessionId || bundle.sessions[userId] !== sessionId)
         return { unchanged: true, value: { ok: true } };
       delete bundle.sessions[userId];

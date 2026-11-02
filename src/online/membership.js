@@ -97,7 +97,13 @@ export function assertCanJoin(league, userId) {
     `参加できるのは${MAX_MEMBERS}人までです`,
     409,
   );
-  const team = weakestJoinableTeam(league);
+  // ⚠ **順位表を渡すこと**。渡さないと勝敗が見られず、常に「格付けが低い→名前順」で
+  //    決まる（シーズン途中だと2部の首位のCPU球団を引き継ぐこともあった）。
+  //    順位表は配列なので、球団名で引ける形にして渡す
+  const standings = Object.fromEntries(
+    (league.season?.standings || []).map((s) => [s.team, s]),
+  );
+  const team = weakestJoinableTeam(league, standings);
   requireOnline(team, '空いている球団がありません', 409);
   return { team };
 }
