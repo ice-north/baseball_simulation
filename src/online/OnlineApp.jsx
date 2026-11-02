@@ -49,7 +49,9 @@ const COMMAND_MESSAGES = {
   resume: '進行を再開しました',
   backup: 'バックアップを取りました',
   restore: 'バックアップから戻しました',
-  step: '1時間ぶん進めました',
+  step: 'ターンを進めました',
+  testmode: '検証モードを切り替えました',
+  resolve: '手続きを締め切りました',
 };
 
 export default function OnlineApp() {
