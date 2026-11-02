@@ -36,6 +36,7 @@ import {
   sanitizeWeights,
   weightedScore,
   weightedRanked,
+  weightFactor,
 } from '../../src/online/tryoutPlan.js';
 import { ROSTER_TARGETS, rosterCounts } from '../../src/utils/constants.js';
 
@@ -508,6 +509,20 @@ try {
       roster10,
     );
     assert.equal(rosterCounts(withRoster).pitcher, 0, '投手が埋まっている球団に投手を勧める');
+    // 段階は番号をそのまま掛けない（普通＝1、重視＝2倍、最重視＝3倍）
+    assert.deepEqual(
+      [0, 1, 2, 3, 4, 5].map(weightFactor),
+      [0, 0.5, 1, 1.5, 2, 3],
+      '段階の倍率が想定と違う',
+    );
+    {
+      // ミート「最重視」・パワー「普通」なら、評価は ミート3：パワー1 の平均
+      const w = Object.fromEntries(WEIGHT_FIELDS.map((f) => [f.key, 0]));
+      w.meet = 5;
+      w.power = 2;
+      const one = { position: 'first', batting: { meet: 80, power: 40 } };
+      assert.equal(weightedScore(one, w), (80 * 3 + 40 * 1) / 4, '重み付き平均になっていない');
+    }
     // 壊れた重みは直す（0〜5の整数。知らない値は既定）
     assert.deepEqual(
       sanitizeWeights({ meet: 9, power: -3, eye: '2.7', speed: 'x' }),

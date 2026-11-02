@@ -14,6 +14,7 @@ import {
   shiftInPlan,
   WEIGHT_FIELDS,
   WEIGHT_MAX,
+  WEIGHT_LEVELS,
   WEIGHTED_SORT_KEY,
   DEFAULT_WEIGHTS,
   sanitizeWeights,
@@ -211,7 +212,8 @@ export default function TryoutPlanner({
       <details className="online-tryout-weights">
         <summary>重視する能力（評価値の重み）</summary>
         <p className="online-muted">
-          0〜{WEIGHT_MAX}で重みを付けると、能力の重み付き平均を「評価」（0〜100）として出します。
+          能力ごとに「無視・軽く・普通・やや重視・重視・最重視」を選ぶと、
+          普通を1として 0・0.5・1・1.5・2・3 倍で重み付けした平均を「評価」（0〜100）として出します。
           投手と野手は別の能力で計算します。重みはこのブラウザに覚えます。
         </p>
         {[
@@ -231,11 +233,12 @@ export default function TryoutPlanner({
                   step="1"
                   value={weights[f.key]}
                   aria-label={`${f.label}の重み`}
+                  aria-valuetext={WEIGHT_LEVELS[weights[f.key]]?.label}
                   onChange={(e) =>
                     setWeights({ ...weights, [f.key]: e.target.value })
                   }
                 />
-                <output>{weights[f.key]}</output>
+                <output>{WEIGHT_LEVELS[weights[f.key]]?.label}</output>
               </label>
             ))}
           </fieldset>
