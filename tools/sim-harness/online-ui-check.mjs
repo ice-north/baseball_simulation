@@ -69,6 +69,52 @@ try {
   //    （＝選べない）状態で先へ進まないよう、両方が描けていることを見る
   await p.locator('.online-tryout-wanted .online-tryout-list li').first().waitFor();
   await p.locator('.online-tryout-pool .online-tryout-list li').first().waitFor();
+  // ⚠ 希望リストの操作は**獲得予定を基準に**動くこと。以前は希望順の位置で
+  //    動かしていて、初期編成（24人＝目標構成の合計ちょうど）では
+  //    「指名に加える」が候補の約9割で何も起きず、「↓」で選手が消えたりした
+  {
+    const wantedNames = async () =>
+      (
+        await p
+          .locator('.online-tryout-wanted > ol.online-tryout-list > li .online-tryout-person button')
+          .allInnerTexts()
+      ).map((s) => s.trim());
+    const start = await wantedNames();
+    await p
+      .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
+      .click();
+    const row = p
+      .locator('.online-tryout-pool .online-tryout-list li:not([data-wanted])')
+      .first();
+    const name = (
+      await row.locator('.online-tryout-person button').first().innerText()
+    ).trim();
+    await row.getByRole('button', { name: '指名に加える', exact: true }).click();
+    const added = await wantedNames();
+    assert.ok(added.includes(name), '「指名に加える」で獲得予定に入らない');
+    assert.equal(added.length, start.length, '指名で獲得予定の人数が変わった');
+    assert.equal(
+      (
+        await p
+          .locator('.online-tryout-pool .online-tryout-list li', { hasText: name })
+          .locator('.online-tryout-mark')
+          .innerText()
+      ).trim(),
+      `指名中 ${added.indexOf(name) + 1}位`,
+      '「指名中 N位」が獲得予定の番号とずれる',
+    );
+    await p
+      .getByRole('button', { name: `${added[0]}の希望順位を下げる`, exact: true })
+      .click();
+    const moved = await wantedNames();
+    assert.equal(moved[1], added[0], '↓で1つ下がらない');
+    assert.deepEqual([...moved].sort(), [...added].sort(), '↓で顔ぶれが変わった');
+    await click(p, 'おすすめ順に戻す');
+    assert.deepEqual(await wantedNames(), start, 'おすすめ順に戻らない');
+    await p
+      .locator('.online-tryout-pool .online-segments button', { hasText: '全部' })
+      .click();
+  }
   await login(m, 2);
   // ⚠ 開発用サーバーの初期参加者は管理者1人だけ。プレイヤー2はログイン直後に
   //    参加画面が出るので、先に参加する（招待コードを廃止したときに取り残された）

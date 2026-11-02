@@ -490,6 +490,24 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         throw error;
       }
     });
+  // 「おすすめ順に戻す」。⚠ **保存済みの下書きではなく、いつも標準案を取り直す**。
+  //    以前は上の `resetSubmission`（保存案を読み直す）を流用しており、
+  //    下書きを一度保存すると、押しても下書きに戻るだけで、おすすめ順には戻らなかった。
+  //    保存済みの提出があるなら、戻した内容は未保存の編集として扱う
+  const resetToDefaults = () =>
+    run(async () => {
+      setError('');
+      try {
+        const defaults = await api('defaults', auth);
+        if (defaults.phaseId !== phase.id)
+          throw new Error('手続きが更新されました。最新状態を確認してください');
+        setPlan(structuredClone(defaults.plan));
+        setDirty(!!phase.submission);
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      }
+    });
   return (
     <section className="online-card online-decision">
       <fieldset className="online-form-fields" disabled={busy}>
@@ -563,7 +581,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                       setDirty(true);
                       setPlan(next);
                     }}
-                    onReset={resetSubmission}
+                    onReset={resetToDefaults}
                   />
                 )}
                 {plan.releaseIds && (
