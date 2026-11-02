@@ -49,7 +49,7 @@ const COMMAND_MESSAGES = {
   resume: '進行を再開しました',
   backup: 'バックアップを取りました',
   restore: 'バックアップから戻しました',
-  step: '1日進めました',
+  step: '1時間ぶん進めました',
 };
 
 export default function OnlineApp() {

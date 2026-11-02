@@ -243,7 +243,8 @@ try {
   a.on('pageerror', (e) => errors.push(e.message));
   await login(a, 1);
   await click(a, '管理');
-  for (let i = 0; i < 3; i++) await click(a, '検証用：1日進める');
+  // ⚠ ボタンの名前は「1時間進める」（1ターン＝1時間にしたときに変わった）
+  for (let i = 0; i < 3; i++) await click(a, '検証用：1時間進める');
   await click(m, '更新');
   await m.getByRole('button', { name: '試合', exact: true }).click();
   await m.locator('.online-score').first().waitFor();
