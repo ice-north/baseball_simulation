@@ -124,7 +124,28 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const userTeamName = allTeams[0] || 'チームA';
 
       // === 新システム: シーズンデータ統合管理 ===
-      const [seasonData, setSeasonData] = useState(null);
+      const [seasonData, setSeasonDataState] = useState(null);
+      // ⚠ **最新の seasonData を同期的に持つ印**。オートセーブは `TEAMS_DATA`（選手成績）と
+      //    一緒に保存するので、日付も「いまの世界」と揃っていないといけない。
+      //    画面の再描画を待つ `seasonData` だと、月替わりの描画のあとに子の自動進行が
+      //    先に1日進め（子の effect は親より先に走る）、さらにアイドル待ちの間にも
+      //    進むので、**日付だけ古く選手成績は新しい**保存ができていた。ロードすると
+      //    その間の試合をもう一度消化し、成績が二重に積まれる。
+      //    日を進める処理は世界を書き換えた直後に同期で setSeasonData を呼ぶので、
+      //    ここで印を更新すれば保存の瞬間の世界と必ず揃う。
+      const seasonDataLiveRef = React.useRef(null);
+      const setSeasonData = React.useCallback((next) => {
+        if (typeof next === 'function') {
+          setSeasonDataState(prev => {
+            const value = next(prev);
+            seasonDataLiveRef.current = value;
+            return value;
+          });
+        } else {
+          seasonDataLiveRef.current = next;
+          setSeasonDataState(next);
+        }
+      }, []);
       const [selectedMonth, setSelectedMonth] = useState(4); // カレンダー表示月
 
       // シーズンデータの初期化（NEW GAMEフローから呼ばれる）
@@ -271,7 +292,8 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       // クラッシュ時の緊急保存用に、現在のゲーム状態を返すスナップショットを登録
       React.useEffect(() => {
         setGameSnapshotProvider(() => ({
-          seasonData, leagueConfig, screenMode, managementView,
+          // 呼ばれた瞬間の世界と揃った日付（`seasonDataLiveRef` の説明を参照）
+          seasonData: seasonDataLiveRef.current || seasonData, leagueConfig, screenMode, managementView,
           gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory,
         }));
       }, [seasonData, leagueConfig, screenMode, managementView, gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory]);
@@ -283,8 +305,14 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         if (saveData.seasonData) setSeasonData(saveData.seasonData);
         if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
         if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
-        if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
-        if (saveData.teamHistory) setTeamHistory(saveData.teamHistory);
+        // ⚠ 持っていない保存でも**空に戻す**。残すと、直前に遊んでいた別の保存の
+        //    殿堂入り・球団の年度成績がそのまま引き継がれて、次の保存に混ざる
+        setHallOfFamePlayers(saveData.hallOfFamePlayers || []);
+        setTeamHistory(saveData.teamHistory || []);
+        // ⚠ ロード直後の月を「前回の節目」として数え直す。古い印のままだと、
+        //    ロードしただけで節目が変わったと判断し、**別の保存の進行を入れていた
+        //    オートセーブを、いまロードした保存で上書きしていた**
+        _prevAutoSaveKey.current = null;
         const loadedMode = saveData.gameMode || 'normal';
         setGameMode(loadedMode);
 
@@ -320,7 +348,15 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         const d = saveData.seasonData?.currentDate;
         // managementView を持たない旧セーブ向けの保険。12月以降だけオフシーズン扱い
         const deepOffseason = (d?.month ?? 0) >= 12 || (d?.month === 11 && (d?.day ?? 0) >= 30);
-        if (savedView === 'offseason' || (!savedView && deepOffseason)) {
+        // ⚠ **年度替わりの手続きの画面も、保存したところへ戻す**。「2年目へ進む」で
+        //    日付が1月1日に替わった瞬間にオートセーブが走り、その時の画面は
+        //    規定の見直し・キャンプ（社会人・大学）・背番号のどれか。以前は全部
+        //    日程画面に戻していたため、ロードすると規定・キャンプを飛ばし、
+        //    独立リーグでは日程が空のまま（日程は規定の確定で作る）試合が無くなった。
+        const RESUMABLE_VIEWS = ['regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'camp', 'jersey'];
+        if (RESUMABLE_VIEWS.includes(savedView)) {
+          setManagementView(savedView);
+        } else if (savedView === 'offseason' || (!savedView && deepOffseason)) {
           setManagementView('offseason');
         } else {
           setManagementView('dateprogress');
@@ -354,8 +390,10 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         // 月替わりの日程進行をブロックしないよう、アイドル時間へ逃がして実行する
         // （画面の切り替わりを先に描画し、保存は空き時間に行う）。
         const runAutoSave = () => {
+          // 保存の瞬間の世界（`TEAMS_DATA`）と揃った日付を使う（`seasonDataLiveRef` の説明を参照）
+          const liveSeasonData = seasonDataLiveRef.current || seasonData;
           autoSave({
-            seasonData, leagueConfig, screenMode, managementView,
+            seasonData: liveSeasonData, leagueConfig, screenMode, managementView,
             gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory,
           }).then(r => { if (r.success) { setAutoSaveFlash(true); setTimeout(() => setAutoSaveFlash(false), 2000); } });
         };
@@ -367,6 +405,15 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         const t = setTimeout(runAutoSave, 300);
         return () => clearTimeout(t);
       }, [_autoSaveKey, gameFlowState]);
+
+      // 新しく始めるときは、前の保存から持ち越した殿堂入り・年度成績・オートセーブの印を捨てる
+      // （タイトルへ戻ってから始め直すと、以前は前のゲームの殿堂入りが新しいゲームに残った）
+      React.useEffect(() => {
+        if (gameFlowState !== 'newgame_mode_select' && gameFlowState !== 'sandbox_regulations') return;
+        setHallOfFamePlayers([]);
+        setTeamHistory([]);
+        _prevAutoSaveKey.current = null;
+      }, [gameFlowState]);
 
       const deleteSave = async (slotIndex = 0) => {
         const result = await deleteSaveSlot(slotIndex);
