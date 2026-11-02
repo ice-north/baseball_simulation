@@ -18,7 +18,7 @@ import {
   seasonStartAt,
 } from '../../src/online/shared.js';
 import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
-import { FileStore } from '../../server/storage/fileStore.mjs';
+import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 
@@ -108,7 +108,7 @@ assert.equal(
 // --- 実際に自動決定されるか -----------------------------------------
 const dir = await mkdtemp(join(tmpdir(), 'pennant-deadline-'));
 try {
-  const store = new FileStore(join(dir, 'state.gz'));
+  const store = createTestStore(join(dir, 'state.gz'));
   let now = '2026-10-26T15:00:00.000Z'; // 月曜0時JST
   const service = new LeagueService(store, {
     members: [{ userId: 'admin', label: '管理者' }],
