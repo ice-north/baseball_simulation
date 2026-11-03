@@ -17,7 +17,17 @@ export const TEAMS_DATA = {};
  * seasonData.settings から同期される
  */
 export const LEAGUE_SETTINGS = {
-  useDH: false
+  useDH: false,
+  // 延長の上限（この回の裏を終えて同点なら引き分け）。規定の `maxExtraInnings` を写す。
+  // ⚠ 以前は規定で変えられるのに、自動試合は12回、采配試合も12回で固定だった
+  maxExtraInnings: 12,
+};
+
+/** 規定の延長上限を試合で使える値にする（9回未満・不正値は扱えないので丸める） */
+export const normalizeMaxExtraInnings = (value) => {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return 12;
+  return Math.min(30, Math.max(9, n));
 };
 
 /**

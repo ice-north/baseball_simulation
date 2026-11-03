@@ -253,6 +253,7 @@ export function createLeague({
       defs.map((t) => t.abbreviation),
     );
     LEAGUE_SETTINGS.useDH = false;
+    LEAGUE_SETTINGS.maxExtraInnings = 12;
     initializeParallelWorldForIndependent('shikoku', names);
     ensureUserIndependentLeagueTagged(names, 'shikoku');
     // ⚠ **生成した球団の格付けを当て直すこと**。上の関数はプリセット定義と
