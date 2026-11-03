@@ -146,7 +146,7 @@ export function Standings({ view }) {
     <section className="online-card">
       <h2>リーグ順位</h2>
       {leagues.map(({ league, rows }) => (
-        <table key={league?.id || 'all'}>
+        <table key={league?.id || 'all'} className="online-standings">
           {league && <caption>{league.name}</caption>}
           <thead>
             <tr>
@@ -155,6 +155,10 @@ export function Standings({ view }) {
               <th>敗</th>
               <th>分</th>
               <th>勝率</th>
+              {/* ⚠ チーム打率・チーム防御率は**サーバーが選手成績から足し上げる**
+                  （`teamSeasonStats`）。順位表は勝敗しか持っていない */}
+              <th>打率</th>
+              <th>防</th>
             </tr>
           </thead>
           <tbody>
@@ -168,7 +172,7 @@ export function Standings({ view }) {
                 <tr
                   key={s.team}
                   className={[
-                    s.team === view.teamName ? 'online-own' : '',
+                    s.team === view.teamName ? 'online-own online-own-text' : '',
                     up ? 'is-promotion' : '',
                     down ? 'is-relegation' : '',
                   ]
@@ -196,6 +200,17 @@ export function Standings({ view }) {
                   <td>{s.losses}</td>
                   <td>{s.draws || 0}</td>
                   <td>{formatRate(s.winRate)}</td>
+                  {/* ⚠ 打席・投球回が0なら「—」。開幕前は全球団がこれ */}
+                  <td>
+                    {view.teamStats?.[s.team]?.average != null
+                      ? formatRate(view.teamStats[s.team].average)
+                      : '—'}
+                  </td>
+                  <td>
+                    {view.teamStats?.[s.team]?.era != null
+                      ? view.teamStats[s.team].era.toFixed(2)
+                      : '—'}
+                  </td>
                 </tr>
               );
             })}

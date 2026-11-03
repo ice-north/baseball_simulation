@@ -1,7 +1,11 @@
 import { roleFor } from '../src/online/tactics.js';
 import { PHASE_LABELS, ONLINE_SCHEMA } from '../src/online/shared.js';
 import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
-import { withStarters, leagueLeaders, seasonCalendar } from './leagueBoard.mjs';
+import {
+  withStarters,
+  leagueLeaders,
+  teamSeasonStats,
+} from './leagueBoard.mjs';
 import { packSummary } from '../src/online/rosterPack.js';
 import {
   currentPlayerStats,
@@ -87,6 +91,27 @@ export function upcomingGames(schedule, ownTeam, size = 6) {
     .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away }));
 }
 
+/**
+ * 自球団のこれからの試合を、近い順に。ホームの「今後の5試合」に使う。
+ *
+ * ⚠ **自球団だけ**。リーグ全体の一覧は `upcomingGames`（試合結果の画面が使う）。
+ * ⚠ 相手の決まっていない試合（`TBD`）は出さない。プレーオフの決勝は準決勝が
+ *    終わるまで `TBD` で置かれる。
+ */
+export function ownUpcomingGames(schedule, ownTeam, size = 5) {
+  return schedule
+    .filter(
+      (g) =>
+        !g.result &&
+        g.home !== 'TBD' &&
+        g.away !== 'TBD' &&
+        (g.home === ownTeam || g.away === ownTeam),
+    )
+    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id)
+    .slice(0, size)
+    .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away }));
+}
+
 export function projectLineup(team) {
   return {
     battingOrder: (team.lineupSettings?.battingOrder || []).filter(
@@ -166,6 +191,17 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     ]),
   );
   const labelOf = (name) => teamLabels[name]?.label || name;
+  // ⚠ 成績の引き当ては**1回だけ**。12球団×24人＝288人を、ベスト5と
+  //    チーム打率・チーム防御率で別々に引くと、同じ計算を2度する
+  const seasonStatsCache = new Map();
+  const seasonStatsOf = (teamName, player) => {
+    if (!seasonStatsCache.has(player.id))
+      seasonStatsCache.set(
+        player.id,
+        currentPlayerStats(l, teamName, player, statistics).seasonStats,
+      );
+    return seasonStatsCache.get(player.id);
+  };
   const phase = l.phase;
   return {
     // ⚠ **このビューを作ったコードの版**。`LeagueService.view` がここを見て、
@@ -219,12 +255,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     })),
     standings: l.season.standings,
     // ⚠ 各項目のベスト5。12球団×24人をなめるので**1回の投影で1度だけ**作る
-    leaders: leagueLeaders(
-      l,
-      (teamName, player) =>
-        currentPlayerStats(l, teamName, player, statistics).seasonStats,
-      labelOf,
-    ),
+    leaders: leagueLeaders(l, seasonStatsOf, labelOf),
+    // ⚠ 順位表に添えるチーム打率・チーム防御率。**同じ引き当て**を渡して
+    //    選手成績と揃える（別に数えると画面の中で数字が食い違う）
+    teamStats: teamSeasonStats(l, seasonStatsOf),
     results: l.season.results.slice(-14).map((g) => ({
       gameId: g.gameId,
       date: g.date,
@@ -234,9 +268,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       awayScore: g.result.awayScore,
       decisions: g.result.decisions,
     })),
-    // ⚠ カレンダーに出す1年ぶんの日程。球団名は `calendar.teams` に1度だけ
-    //    置き、試合は添字で指す（名前を毎試合書くと60KBを超える）
-    calendar: seasonCalendar(l.season.schedule, l.season.currentDate),
+    // ⚠ ホームに出す**自球団の次の5試合**。リーグ全体の一覧（`upcoming`）とは
+    //    別物。試合結果の画面はリーグ全体を使うので、そちらを絞らないこと
+    nextGames: withStarters(
+      ownUpcomingGames(l.season.schedule, member.teamName),
+      l.game.teams,
+    ),
     // ⚠ 並べ方は `upcomingGames` が正本（日付順・自球団を必ず含む）。
     //    先発予定はその上に重ねるだけにする
     upcoming: withStarters(

@@ -119,37 +119,34 @@ export function leagueLeaders(league, statsOf, labelOf = (n) => n, top = 5) {
 }
 
 /**
- * カレンダーに出す1年ぶんの日程。
+ * 球団ごとのチーム打率・チーム防御率。順位表に添える。
  *
- * ⚠ **球団名を毎試合書かないこと**。12球団の1年は約600試合あり、名前を
- *    そのまま入れると投影だけで60KBを超える。名前は `teams` に1度だけ置き、
- *    試合は添字で指す。1試合は
- *      `[日付キー, ビジター添字, ホーム添字, ビジター得点, ホーム得点]`
- *    の5つ組。得点は未消化なら `null`。日付キーは `20240406` の形。
- * ⚠ 並べ方は**日付順**。`pyramidSchedule` はリーグごとに1年ぶんを並べてから
- *    次のリーグへ進むので、配列の順のままでは月が飛ぶ。
- * ⚠ 中止・不戦は `result` があって得点が無いことがある。得点が数でなければ
- *    未消化と同じ扱いにする（画面では対戦だけ出す）。
+ * ⚠ **選手の成績から足し上げること**。順位表（`season.standings`）は勝敗しか
+ *    持っていない。別に数えた値を置くと、選手成績と合わない数字が出る。
+ * ⚠ `inningsPitched` は**アウト数**（`leagueLeaders` の防御率と同じ式を使う）。
+ *    イニング数だと思って9を掛けると3倍の防御率になる。
+ * ⚠ 打席・投球回が0の球団は `null`。0除算を画面に出さない（開幕前は全球団）。
+ * ⚠ 288人をなめるので、`leagueLeaders` と**同じ成績の引き当て**を渡すこと
+ *    （投影で2回数え直さない）。
  */
-export function seasonCalendar(schedule, today) {
-  const names = [];
-  const indexOf = (name) => {
-    let i = names.indexOf(name);
-    if (i < 0) i = names.push(name) - 1;
-    return i;
-  };
-  const games = schedule
-    .filter((g) => g.date && g.home !== 'TBD' && g.away !== 'TBD')
-    .map((g) => {
-      const score = (v) => (typeof v === 'number' ? v : null);
-      return [
-        g.date.year * 10000 + g.date.month * 100 + g.date.day,
-        indexOf(g.away),
-        indexOf(g.home),
-        score(g.result?.awayScore),
-        score(g.result?.homeScore),
-      ];
-    })
-    .sort((a, b) => a[0] - b[0]);
-  return { today, teams: names, games };
+export function teamSeasonStats(league, statsOf) {
+  const out = {};
+  for (const name of league.season.settings.teamNames || []) {
+    let hits = 0;
+    let atBats = 0;
+    let earnedRuns = 0;
+    let outs = 0;
+    for (const player of league.game.teams[name]?.players || []) {
+      const stats = statsOf(name, player);
+      hits += stats?.batting?.hits || 0;
+      atBats += stats?.batting?.atBats || 0;
+      earnedRuns += stats?.pitching?.earnedRuns || 0;
+      outs += stats?.pitching?.inningsPitched || 0;
+    }
+    out[name] = {
+      average: atBats > 0 ? hits / atBats : null,
+      era: outs > 0 ? (earnedRuns * 27) / outs : null,
+    };
+  }
+  return out;
 }

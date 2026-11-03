@@ -223,8 +223,32 @@
 .online thead {
   color: #d0d9e5;
 }
+/* ⚠ 順位表は**7列**（勝・敗・分・勝率・打率・防）になるので、数字の列を
+   詰める。既定の padding のままだと、自球団の行（持ち主の名前＋昇格圏の
+   印が付く）だけ2行に折り返した。 */
+.online-standings td,
+.online-standings thead th {
+  padding: 9px 3px;
+  font-variant-numeric: tabular-nums;
+}
+.online-standings th:first-child {
+  padding-right: 6px;
+}
+.online-standings .online-owner,
+.online-standings .online-move {
+  white-space: nowrap;
+}
 .online-own {
   background: var(--accent-soft);
+}
+/* ⚠ **自球団は文字も黄色にする**。塗りだけだと、12球団の表で自分の行を
+   探すのに毎回目で追うことになる（一人用も同じ黄色で強調している）。
+   ⚠ 色は `#fde68a`（amber-200）。カード地の上で 10:1 を超えるので、
+   小さい文字でも読める。 */
+.online-own-text,
+.online-own-text th,
+.online-own-text td {
+  color: #fde68a;
 }
 .online-rank {
   display: inline-block;
@@ -1864,139 +1888,39 @@
   }
 }
 
-/* --- 月間カレンダー --------------------------------------------------- */
-.online-calendar-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.online-calendar-head h2 {
-  margin: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.online-calendar-head h2 small {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--accent);
-}
-.online-calendar-record {
-  margin: 0;
-  font-size: 12px;
-  color: #cbd5e1;
-  font-variant-numeric: tabular-nums;
-}
-.online-calendar-record strong {
-  font-size: 14px;
-  margin: 0 1px 0 4px;
-}
-.online-calendar-record span {
-  margin-left: 6px;
-  color: #9fb0c4;
-}
-.online-calendar-nav {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-}
-.online-calendar-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 2px;
-  margin-bottom: 2px;
-}
-.online-calendar-weekdays span {
-  text-align: center;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 0;
-  border-radius: 4px;
-  background: #ffffff10;
-  color: #cbd5e1;
-}
-/* ⚠ 日曜と土曜は色で分ける。7列を数えずに週の切れ目が読めるようにする */
-.online-calendar-weekdays span[data-weekday='0'],
-.online-calendar-day[data-weekday='0'] .online-calendar-date {
-  color: #fca5a5;
-}
-.online-calendar-weekdays span[data-weekday='6'],
-.online-calendar-day[data-weekday='6'] .online-calendar-date {
-  color: #93c5fd;
-}
-.online-calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 2px;
-}
-.online-calendar-day {
-  min-height: 58px;
-  padding: 3px;
-  border-radius: 6px;
-  background: #ffffff0c;
-  border: 1px solid transparent;
-}
-.online-calendar-day.is-empty {
-  background: #ffffff06;
-}
-/* ⚠ マスに付ける印は**現在地だけ**。12球団は全球団が毎試合日に試合をするので、
-   「自球団の試合がある日」で塗ると試合日が全部塗られる（実測で31日中26日）。
-   自球団はその行だけ色を変える。 */
-.online-calendar-day.is-today {
-  border-color: var(--accent);
-}
-.online-calendar-date {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: #e2e8f0;
-}
-.online-calendar-game {
-  display: block;
-  font-size: 10px;
-  line-height: 1.35;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #dbe4ee;
-  font-variant-numeric: tabular-nums;
-}
-.online-calendar-game.is-mine {
-  color: #fde68a;
-  font-weight: 700;
-}
-.online-calendar-game b {
-  font-weight: 700;
-  margin: 0 1px;
-}
-
-/* --- その日の対戦 ----------------------------------------------------- */
+/* --- 今後の5試合 ------------------------------------------------------ */
 .online-matchups {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 8px;
   margin-bottom: 10px;
 }
 .online-matchup {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #ffffff0c;
+}
+.online-matchup-date {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: #9fb0c4;
+}
+.online-matchup-teams {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #ffffff0c;
-  border: 1px solid transparent;
 }
-.online-matchup.is-mine {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-.online-matchup div {
+.online-matchup-teams div {
   min-width: 0;
   text-align: center;
+}
+/* ⚠ 自球団は黄色。左右どちらが自分かを一目で分けるため */
+.online-matchup-teams .is-own strong {
+  color: #fde68a;
 }
 .online-matchup strong {
   display: block;

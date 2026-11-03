@@ -11,11 +11,8 @@ import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
-import {
-  leagueLeaders,
-  withStarters,
-  seasonCalendar,
-} from '../../server/leagueBoard.mjs';
+import { leagueLeaders, withStarters } from '../../server/leagueBoard.mjs';
+import { ownUpcomingGames } from '../../server/projection.mjs';
 import {
   PYRAMID_LEAGUES,
   TEAMS_PER_LEAGUE,
@@ -246,109 +243,118 @@ try {
       () => ({ batting: {}, pitching: {} }),
     ),
   );
-  // --- カレンダー（1年ぶんの日程） -----------------------------------
-  // ⚠ 一人用の日程画面と同じ月間カレンダーをホームに出す。投影は
-  //    **添字の5つ組**（`[日付キー, ビジター, ホーム, ビジター得点, ホーム得点]`）。
+  // --- 今後の5試合（自球団だけ） --------------------------------------
+  // ⚠ ホームに出すのは**自球団の次の5試合**。リーグ全体の一覧（`upcoming`）は
+  //    試合結果の画面が使うので、そちらを絞らないこと。
   {
     const live = (await store.read()).league;
-    const cal = view.calendar;
-    assert.ok(cal, 'カレンダーが渡っていない');
-    assert.deepEqual(cal.today, live.season.currentDate, '今日の日付がちがう');
-
-    // ⚠ **日付順に並んでいること**。`pyramidSchedule` はリーグごとに1年ぶんを
-    //    並べてから次のリーグへ進むので、配列の順のままでは月が飛ぶ
-    const keys = cal.games.map((g) => g[0]);
-    assert.deepEqual(
-      keys,
-      [...keys].sort((x, y) => x - y),
-      'カレンダーが日付順に並んでいない',
-    );
-
-    // 中身が日程と合っている
-    const playable = live.season.schedule.filter(
-      (g) => g.date && g.home !== 'TBD' && g.away !== 'TBD',
-    );
-    assert.equal(cal.games.length, playable.length, '試合数が日程と合わない');
-    const teamSet = new Set(live.season.settings.teamNames);
-    for (const [key, away, home, as, hs] of cal.games) {
+    const own = view.teamName;
+    const next = view.nextGames;
+    assert.ok(Array.isArray(next), '今後の5試合が渡っていない');
+    assert.ok(next.length > 0 && next.length <= 5, `試合数がちがう: ${next.length}`);
+    for (const game of next)
       assert.ok(
-        teamSet.has(cal.teams[away]) && teamSet.has(cal.teams[home]),
-        `添字が球団に解けない: ${key}`,
+        game.home === own || game.away === own,
+        `自球団の試合でないものが混ざっている: ${game.away}@${game.home}`,
       );
-      assert.notEqual(cal.teams[away], cal.teams[home], '同じ球団同士の試合');
-      assert.ok(
-        String(key).length === 8,
-        `日付キーの形がちがう: ${key}`,
-      );
-      // ⚠ 得点は**両方そろって数**か、**両方 null**。片方だけ数だと
-      //    画面が「0-」のような半端な表示になる
-      assert.equal(
-        typeof as === 'number',
-        typeof hs === 'number',
-        `得点の片方だけが数: ${key}`,
-      );
-    }
-
-    // ⚠ **消化済みの試合に得点が入っていること**。入っていないとカレンダーが
-    //    1年じゅう「対戦カードだけ」になる
-    const played = cal.games.filter((g) => typeof g[3] === 'number');
-    assert.equal(
-      played.length,
-      live.season.schedule.filter((g) => g.result).length,
-      '消化済みの試合数と得点のある試合数が合わない',
+    // ⚠ 日付順。順が崩れると「次の試合」が次でなくなる
+    const keys = next.map(
+      (g) => g.date.year * 10000 + g.date.month * 100 + g.date.day,
     );
-    assert.ok(played.length > 0, '前提: 試合が消化されている');
-    // 得点そのものが結果と一致する
-    for (const result of live.season.results.slice(-5)) {
-      const key =
-        result.date.year * 10000 + result.date.month * 100 + result.date.day;
-      const row = cal.games.find(
-        (g) =>
-          g[0] === key &&
-          cal.teams[g[1]] === result.away &&
-          cal.teams[g[2]] === result.home,
-      );
-      assert.ok(row, `結果に対応する試合がカレンダーに無い: ${key}`);
-      assert.equal(row[3], result.result.awayScore, 'ビジターの得点がちがう');
-      assert.equal(row[4], result.result.homeScore, 'ホームの得点がちがう');
-    }
-
-    // ⚠ **球団名を毎試合書かないこと**。12球団の1年は約600試合あり、
-    //    名前をそのまま入れると投影だけで60KBを超える
-    const body = JSON.stringify(cal.games);
-    for (const name of teamSet)
-      assert.ok(!body.includes(name), `試合に球団名が入っている: ${name}`);
-    const kb = Buffer.byteLength(JSON.stringify(cal)) / 1024;
-    assert.ok(kb < 30, `カレンダーの投影が重い: ${Math.round(kb)}KB`);
+    assert.deepEqual(keys, [...keys].sort((a, b) => a - b), '日付順でない');
+    // ⚠ **消化済みを混ぜない**
+    const results = new Set(live.season.results.map((g) => g.gameId));
+    for (const game of next)
+      assert.ok(!results.has(game.id), '消化済みの試合が混ざっている');
+    // ⚠ いちばん近い試合であること（間を飛ばしていない）
+    const earliest = live.season.schedule
+      .filter((g) => !g.result && (g.home === own || g.away === own))
+      .map((g) => g.date.year * 10000 + g.date.month * 100 + g.date.day)
+      .sort((a, b) => a - b)[0];
+    assert.equal(keys[0], earliest, '次の試合を飛ばしている');
+    // ⚠ 先発予定が入っていること（ローテを回すのは `withStarters` の検査で見る）
+    assert.ok(
+      next.some((g) => g.homeStarter && g.awayStarter),
+      '先発予定が入っていない',
+    );
+    // ⚠ 自球団の先発が**毎試合同じでない**こと。5試合すべて同じ投手だと、
+    //    ローテが回っていない（`withStarters` を通していない）
+    const mine = next.map((g) => (g.home === own ? g.homeStarter : g.awayStarter));
+    assert.ok(new Set(mine).size > 1, `自球団の先発が全部同じ: ${mine[0]}`);
   }
 
-  // ⚠ **相手の決まっていない試合は出さないこと**（作り物の日程で見る）。
-  //    プレーオフの決勝は準決勝が終わるまで `home: 'TBD'` で置かれる
-  //    （`seasonManager` の `addSeries`）。そのまま出すと、カレンダーに
-  //    「TBD-TBD」の行が5つ並ぶ。本物のリーグはこの検査の時点で
-  //    レギュラーシーズンの途中なので、ここは作り物で押さえる。
+  // ⚠ **日付順に並べ直すこと**（作り物の日程で見る）。`pyramidSchedule` が
+  //    作る配列は、1球団ぶんを抜き出すとたまたま日付順になっているので、
+  //    本物のリーグでは並べ直しを外しても気づけない（実測で素通りした）。
+  //    プレーオフの試合は後から足されるので、順を当てにはできない。
   {
-    const date = { year: 2026, month: 9, day: 1 };
-    const cal = seasonCalendar(
+    const day = (d) => ({ year: 2026, month: 9, day: d });
+    const games = ownUpcomingGames(
       [
-        { id: 1, date, home: '甲府ウルブズ', away: '松本ディアーズ', result: null },
-        { id: 2, date, home: 'TBD', away: 'TBD', result: null },
-        { id: 3, date, home: '甲府ウルブズ', away: 'TBD', result: null },
-        { id: 4, date: null, home: '甲府ウルブズ', away: '松本ディアーズ', result: null },
+        { id: 3, date: day(9), home: '甲府ウルブズ', away: '松本ディアーズ', result: null },
+        { id: 1, date: day(3), home: '松本ディアーズ', away: '甲府ウルブズ', result: null },
+        { id: 2, date: day(5), home: '甲府ウルブズ', away: '長岡サンダー', result: null },
+        { id: 4, date: day(1), home: '長岡サンダー', away: '松本ディアーズ', result: null },
       ],
-      date,
+      '甲府ウルブズ',
     );
-    assert.equal(cal.games.length, 1, '相手未定・日付無しの試合を出している');
     assert.deepEqual(
-      cal.teams.sort(),
-      ['松本ディアーズ', '甲府ウルブズ'].sort(),
-      'TBD を球団として数えている',
+      games.map((g) => g.date.day),
+      [3, 5, 9],
+      '自球団の予定が日付順になっていない',
     );
   }
+
+  // --- 順位表に添えるチーム打率・チーム防御率 --------------------------
+  {
+    const live = (await store.read()).league;
+    const stats = view.teamStats;
+    assert.ok(stats, 'チーム成績が渡っていない');
+    assert.deepEqual(
+      Object.keys(stats).sort(),
+      [...live.season.settings.teamNames].sort(),
+      '全球団ぶんのチーム成績が無い',
+    );
+    let counted = 0;
+    for (const [name, row] of Object.entries(stats)) {
+      if (row.average === null) continue;
+      counted += 1;
+      // ⚠ 独立リーグの打率は実測で .2 前後。3倍（イニングをアウト数と
+      //    取り違えるなど）や0になっていないこと
+      assert.ok(
+        row.average > 0.1 && row.average < 0.4,
+        `${name} のチーム打率が外れている: ${row.average}`,
+      );
+      // ⚠ `inningsPitched` は**アウト数**。イニング数だと思って9を掛けると
+      //    防御率が3倍になる（実測で3前後 → 9前後）
+      assert.ok(
+        row.era > 0 && row.era < 9,
+        `${name} のチーム防御率が外れている: ${row.era}`,
+      );
+    }
+    assert.equal(counted, live.season.settings.teamNames.length, '打てていない球団がある');
+
+    // ⚠ **選手成績と合っていること**。別に数えると画面の中で数字が食い違う
+    const own = view.teamName;
+    const hits = view.roster.reduce(
+      (n, p) => n + (p.seasonStats?.batting?.hits || 0),
+      0,
+    );
+    const atBats = view.roster.reduce(
+      (n, p) => n + (p.seasonStats?.batting?.atBats || 0),
+      0,
+    );
+    assert.ok(atBats > 0, '前提: 自球団が打席に立っている');
+    assert.ok(
+      Math.abs(stats[own].average - hits / atBats) < 1e-9,
+      `自球団のチーム打率が名簿の合計と合わない: ${stats[own].average} / ${hits / atBats}`,
+    );
+  }
+
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・カレンダーが日付順で軽い）',
+  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・自球団の次の5試合・チーム打率と防御率が名簿の合計と合う）',
 );
