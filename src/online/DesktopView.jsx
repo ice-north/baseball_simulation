@@ -13,7 +13,7 @@ import LeagueBoard from './LeagueBoard.jsx';
 import { dateTime, STATUS } from './api.js';
 import { formatGameDate } from './shared.js';
 import { teamLabel } from './gameText.js';
-import { PYRAMID_LEAGUES } from './pyramidLeague.js';
+import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
 import { CompactRoster } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import { rebaseLineupSave, LINEUP_EDITOR_KEYS } from './lineupBridge.js';
@@ -85,13 +85,19 @@ const TITLES = {
   admin: 'リーグ管理',
 };
 
-/** 自球団の部・順位・勝敗（順位表から引く。サーバーの並びが順位） */
+/**
+ * 自球団の部・順位・勝敗。
+ * ⚠ 順位表（`Standings`）と**同じ並べ方**（`compareLeagueStanding`）で数えること。
+ *    サーバーの並びのままだと、同率のとき（開幕前の0勝0敗など）左メニューの
+ *    順位と表の順位が食い違っていた
+ */
 function ownStanding(view) {
   const leagueId = view.teamLeagues?.[view.teamName];
   const league = PYRAMID_LEAGUES.find((l) => l.id === leagueId);
   const rows = (view.standings || []).filter(
     (s) => !view.teamLeagues || view.teamLeagues[s.team] === leagueId,
   );
+  if (view.teamLeagues) rows.sort(compareLeagueStanding);
   const index = rows.findIndex((s) => s.team === view.teamName);
   return index < 0
     ? null
@@ -160,16 +166,23 @@ function RenameDialog({ view, busy, run, command, close }) {
     node.showModal();
     return () => node.open && node.close();
   }, []);
+  // ⚠ 閉じるのは**自分で呼ぶ**（`close` イベントに頼らない。ほかのダイアログと同じ）。
+  //    開発時の StrictMode は effect を「付ける→外す→付ける」と2回走らせるので、
+  //    外したときの `node.close()` が遅れて `close` イベントを出し、開き直した
+  //    ダイアログがすぐ閉じていた（`npm run dev` で名前を変えられなかった）
   return (
     <dialog
       ref={dialog}
       className="online-player-dialog online-rename-dialog"
       aria-labelledby="online-rename-title"
-      onClose={close}
+      onCancel={(e) => {
+        e.preventDefault();
+        close();
+      }}
     >
       <header>
         <h2 id="online-rename-title">球団名・名前を変える</h2>
-        <button onClick={() => dialog.current.close()}>閉じる</button>
+        <button onClick={close}>閉じる</button>
       </header>
       <p className="online-muted">
         順位表には「球団名（あなたの名前）」と出ます。いつでも変えられます。
@@ -184,7 +197,7 @@ function RenameDialog({ view, busy, run, command, close }) {
               playerName: playerName.trim(),
             }),
           );
-          if (result?.ok) dialog.current?.close();
+          if (result?.ok) close();
           else setError(result?.error || '保存できませんでした');
         }}
       >
@@ -363,7 +376,10 @@ export default function DesktopView(props) {
         <DesktopTactics key={`${view.year}:${view.teamName}`} {...props} />
       )}
       {/* ⚠ **途中参加の初期メンバー選択を先に出す**。リーグ全体の手続きより、
-          自分の名簿が決まっていないことのほうが先に片付く */}
+          自分の名簿が決まっていないことのほうが先に片付く
+          ⚠ セットを待っている間の手続き（ストーブリーグ・キャンプ）は出さない。
+          その球団はキャンプで名簿が丸ごと入れ替わるのでCPUが決め、サーバーも
+          この人の決定を待たない（`leagueEngine` の `waitsFor`） */}
       {current === 'decisions' && view.pendingPack && (
         <PendingPackPanel {...props} />
       )}

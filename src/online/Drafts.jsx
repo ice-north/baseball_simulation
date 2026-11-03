@@ -109,6 +109,10 @@ export function useDraftMemoryPeek(name) {
   const cache = useContext(Context);
   return cache?.memory.get(name);
 }
+/** 保存しない大きな値の入れ物そのもの（PCとスマホの編成画面で、同じ編集中の球団を受け渡す） */
+export function useDraftMemoryStore() {
+  return useContext(Context)?.memory || null;
+}
 
 // 同時に表示するフォームは一つ。保存先の値を同期更新し、アンマウント直前の入力も保持する。
 export function useDraftState(name, initial) {

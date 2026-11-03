@@ -10,21 +10,6 @@ export const POS = {
   center: '中',
   right: '右',
 };
-export const MENUS = {
-  standard: '標準（投手は制球・野手は打撃）',
-  batting: '打撃練習',
-  baserunning: '走塁練習',
-  fielding: 'ノック',
-  control: '投げ込み',
-  velocity: '球速練習',
-  intensive_power: '長打集中',
-  intensive_meet: '巧打集中',
-  intensive_speed: '走力集中',
-  intensive_control: '制球集中',
-  intensive_velocity: '球速集中',
-  intensive_defense: '守備集中',
-  intensive_eye: '選球眼集中',
-};
 export const STATUS = {
   running: '進行中',
   waiting: '決定待ち',

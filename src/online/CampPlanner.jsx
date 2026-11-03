@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { TRAINING_MENUS } from '../season/campTraining.js';
+import { TRAINING_MENUS, menuFitsPlayer } from '../season/campTraining.js';
 import {
   DIRECTIONS,
   PHASES,
@@ -37,16 +37,20 @@ import { AbilityGrade, PlayerStatsButton, ConditionMark } from './PlayerPerforma
  */
 export const menusFor = (isPitcher) =>
   Object.entries(TRAINING_MENUS).filter(
-    ([key, menu]) =>
+    ([key]) =>
       CAMP_MENUS.includes(key) &&
-      (isPitcher ? menu.category !== 'batting' : menu.category !== 'pitching'),
+      menuFitsPlayer(key, { position: isPitcher ? 'pitcher' : 'catcher' }),
   );
 
 const MOOD_TONE = { good: '意欲的', mid: '納得', bad: '身が入らない' };
 
-/** ⚠ 受け取れないメニューに落ちたら既定へ戻す（提出で弾かれないように） */
+/**
+ * ⚠ 受け取れないメニュー・守備位置に合わないメニューに落ちたら既定へ戻す。
+ *    方針から引いた結果は、野手に投球系が出ることがある（選択肢に無いので
+ *    一覧には「打撃練習」と出るのに、サーバーは球速練習で処理していた）
+ */
 export const clampMenu = (key, player) =>
-  CAMP_MENUS.includes(key)
+  CAMP_MENUS.includes(key) && menuFitsPlayer(key, player)
     ? key
     : player.position === 'pitcher'
       ? 'control'
@@ -136,7 +140,10 @@ export default function CampPlanner({ view, plan, busy, onChange }) {
   const assignments = plan.assignments || {};
   const defaultFor = (player) =>
     player.position === 'pitcher' ? 'control' : 'batting';
-  const valueOf = (player) => assignments[player.id] || defaultFor(player);
+  // ⚠ 保存済みの割り当てが守備位置に合わないとき（以前の一括設定の残り）は、
+  //    サーバーと同じく既定で見せる（サーバーは合わないものを落とす）
+  const valueOf = (player) =>
+    clampMenu(assignments[player.id] || defaultFor(player), player);
   const setOne = (id, key) =>
     onChange({ ...plan, assignments: { ...assignments, [id]: key } });
   // ⚠ 一括設定は**方針から引く**（`resolveTraining`）。選手ごとに長所・短所が

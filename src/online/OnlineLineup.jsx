@@ -5,7 +5,7 @@ import { LEAGUE_SETTINGS } from '../teams-data.js';
 import { teamFromView, planFromTeam } from './lineupBridge.js';
 import { teamLabel } from './gameText.js';
 import { Page } from './Page.jsx';
-import { useDraftMemory } from './Drafts.jsx';
+import { useDraftMemory, useDraftMemoryStore } from './Drafts.jsx';
 
 /** 全画面の編成に、保存していない編集が残っているか（回転で作り直したときに開き直す判断に使う） */
 export function hasUnsavedFullLineup(editing) {
@@ -56,14 +56,38 @@ function EmbeddedLineup({ view, busy, tab, title, hidden, onSave, onDirty }) {
   const [history, setHistory] = useState(null);
   const [generation, setGeneration] = useState(0);
   const [saveError, setSaveError] = useState('');
-  const dirty = !!history?.dirty;
+  // ⚠ **スマホの全画面編成と、編集中の球団を受け渡す**（下書きの入れ物 'lineup.full'）。
+  //    スマホを横にすると幅が768px以上になり、PCの画面（この部品）に切り替わる。
+  //    受け渡さないと、縦で編集した打順が横では消えて見え、横で保存して縦に戻すと
+  //    古い編集が開き直されて「編成が更新されています」で保存できなかった
+  const memory = useDraftMemoryStore();
+  // 縦で保存していない編集を引き継いだか。引き継いだ編集は、中の画面の履歴から
+  // 見ると「最初の状態」なので、未保存の印をこちらで立てておく
+  const [restored, setRestored] = useState(() =>
+    hasUnsavedFullLineup(memory?.get('lineup.full')),
+  );
+  const dirty = !!history?.dirty || restored;
   const teamRef = useRef(null);
   const baseRef = useRef(null);
   const builtFor = useRef(null);
   if (!teamRef.current || (!dirty && builtFor.current !== view.revision)) {
     // ⚠ 未保存の編集があるあいだは作り直さない（作り直すと編集が消える）
-    teamRef.current = teamFromView(view);
-    baseRef.current = clone(view.lineup || {});
+    const kept = !teamRef.current ? memory?.get('lineup.full') : null;
+    if (restored && kept && hasUnsavedFullLineup(kept)) {
+      teamRef.current = kept.team;
+      baseRef.current = kept.base;
+    } else {
+      const fresh = teamFromView(view);
+      teamRef.current = fresh;
+      baseRef.current = clone(view.lineup || {});
+      // 中の画面は `team` をその場で書き換えるので、入れ物に入れておけば
+      // 縦に戻したときにスマホの全画面編成がそのまま引き継げる
+      memory?.set('lineup.full', {
+        team: fresh,
+        base: baseRef.current,
+        basePlan: JSON.stringify(planFromTeam(fresh)),
+      });
+    }
     builtFor.current = view.revision;
   }
   const team = teamRef.current;
@@ -94,12 +118,16 @@ function EmbeddedLineup({ view, busy, tab, title, hidden, onSave, onDirty }) {
       return;
     }
     // ⚠ 保存できたら、保存した内容を新しい起点にする（元に戻すの履歴も切る）
+    memory?.delete('lineup.full');
     teamRef.current = null;
+    setRestored(false);
     setHistory(null);
     setGeneration((g) => g + 1);
   };
   const discard = () => {
+    memory?.delete('lineup.full');
     teamRef.current = null;
+    setRestored(false);
     setHistory(null);
     setSaveError('');
     setGeneration((g) => g + 1);
