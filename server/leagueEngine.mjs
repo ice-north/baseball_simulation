@@ -92,6 +92,7 @@ import {
   phaseDeadlineAt,
   seasonStartAt,
   requireOnline,
+  CAMP_MENUS,
 } from '../src/online/shared.js';
 import {
   generatePyramidTeams,
@@ -110,20 +111,7 @@ import { nextFromPlan } from '../src/online/tryoutPlan.js';
 import { generateRosterPacks } from '../src/online/rosterPack.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
-export const CAMP_MENUS = [
-  'batting',
-  'baserunning',
-  'fielding',
-  'control',
-  'velocity',
-  'intensive_power',
-  'intensive_meet',
-  'intensive_speed',
-  'intensive_control',
-  'intensive_velocity',
-  'intensive_defense',
-  'intensive_eye',
-];
+export { CAMP_MENUS };
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const quiet = (fn) => {
   const log = console.log;
@@ -351,7 +339,8 @@ export function defaultPhasePlan(league, teamName) {
   }
   if (kind === 'contract')
     return { releaseIds: getAIReleaseCandidates(team.players) };
-  if (kind === 'camp') return { menu: 'standard' };
+  // ⚠ 既定は全体の方針だけ。選手ごとの割り当ては画面で決める
+  if (kind === 'camp') return { menu: 'standard', assignments: {} };
   if (kind === 'offseason') return {};
   return seeded(league, `default:${league.phase.id}:${teamName}`, () => {
     const pool = clone(league.phase.candidates);
@@ -393,12 +382,24 @@ function validatePhasePlan(league, teamName, plan) {
       );
       return { releaseIds: [...plan.releaseIds] };
     }
-    case 'camp':
+    case 'camp': {
       requireOnline(
         plan.menu === 'standard' || CAMP_MENUS.includes(plan.menu),
         '練習方針が不正です',
       );
-      return { menu: plan.menu };
+      // ⚠ **選手ごとの割り当て**。一人用のキャンプ画面と同じく、1人ずつ
+      //    メニューを決められる。`menu` は全体の既定（割り当ての無い選手）。
+      // ⚠ 自分の名簿の選手だけ。他球団の選手を混ぜられると練習が飛ぶ
+      const own = new Set(team.players.map((p) => p.id));
+      const assignments = {};
+      for (const [id, key] of Object.entries(plan.assignments || {})) {
+        const playerId = Number(id);
+        if (!own.has(playerId)) continue;
+        requireOnline(CAMP_MENUS.includes(key), '練習メニューが不正です');
+        assignments[playerId] = key;
+      }
+      return { menu: plan.menu, assignments };
+    }
     case 'pack_select': {
       // ⚠ 居ないセットを受け付けない。解決のときに「足りません」で
       //    手続き全体が止まる（1球団の都合で全員が止まる）
@@ -685,15 +686,19 @@ function resolvePhase(league, now) {
     for (let round = 0; round < 4; round++) {
       for (const [name, team] of Object.entries(TEAMS_DATA)) {
         if (!team.players?.length) continue;
-        const menu = plans[name]?.menu || 'standard';
+        const plan = plans[name];
+        const menu = plan?.menu || 'standard';
+        // ⚠ **選手ごとの割り当てを優先する**。無い選手だけ全体の方針で埋める
+        //    （携帯や未提出の球団は全体の方針しか持たない）。
         const assignments = Object.fromEntries(
           team.players.map((p) => [
             p.id,
-            menu === 'standard'
-              ? p.position === 'pitcher'
-                ? 'control'
-                : 'batting'
-              : menu,
+            plan?.assignments?.[p.id] ||
+              (menu === 'standard'
+                ? p.position === 'pitcher'
+                  ? 'control'
+                  : 'batting'
+                : menu),
           ]),
         );
         const staff = team.corporateData?.staff

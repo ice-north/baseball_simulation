@@ -21,6 +21,7 @@ import {
 import { PageNav } from './PageNav.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
 import PackSelect from './PackSelect.jsx';
+import CampPlanner from './CampPlanner.jsx';
 import {
   PYRAMID_LEAGUES,
   PROMOTION_PLACES,
@@ -684,23 +685,18 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                     ))}
                   </>
                 )}
-                {plan.menu && (
-                  <label>
-                    球団の主練習（全4回）
-                    <select
-                      value={plan.menu}
-                      onChange={(e) => {
-                        setDirty(true);
-                        setPlan({ menu: e.target.value });
-                      }}
-                    >
-                      {Object.entries(MENUS).map(([id, label]) => (
-                        <option value={id} key={id}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                {/* ⚠ キャンプは**選手ごとに**割り当てる（一人用と同じ作り）。
+                    以前は球団で1つ選ぶだけだった */}
+                {phase.kind === 'camp' && (
+                  <CampPlanner
+                    view={view}
+                    plan={plan}
+                    busy={busy}
+                    onChange={(next) => {
+                      setDirty(true);
+                      setPlan(next);
+                    }}
+                  />
                 )}
                 {phase.kind === 'offseason' && (
                   <p>最終順位を保存し、次年度のキャンプへ進みます。</p>
