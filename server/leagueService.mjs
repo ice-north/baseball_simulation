@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { applyJoin } from '../src/online/membership.js';
 import { isDeepStrictEqual } from 'node:util';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import {
   requireOnline,
   nextProgressionAt,
@@ -20,6 +21,19 @@ import { saveLineup } from './lineupCommand.mjs';
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone = (value) => structuredClone(value);
+// ⚠ **バックアップは圧縮した文字列で持つ**。リーグ（世界の写し込み）をそのまま
+//    抱えると、操作のたびに読み書きする一式が倍の大きさになり、
+//    取り込み・書き出しの時間とメモリも倍かかっていた。
+//    文字列なら JSON の読み書きは一瞬で、中身は復元のときだけ開く。
+//    以前の形（`backup.league` に生のリーグ）もそのまま読める。
+const packBackup = (league, takenAt) => ({
+  packed: gzipSync(JSON.stringify(league)).toString('base64'),
+  takenAt,
+});
+const unpackBackup = (backup) =>
+  typeof backup?.packed === 'string'
+    ? JSON.parse(gunzipSync(Buffer.from(backup.packed, 'base64')).toString())
+    : clone(backup?.league);
 // エンジンはグローバル世界を使うため、同一Nodeプロセス内でも全storeをまたいで直列化する。
 let engineQueue = Promise.resolve();
 export class LeagueService {
@@ -303,11 +317,7 @@ export class LeagueService {
             '進行を停止してからバックアップしてください',
             403,
           );
-          bundle.backup = clone({
-            league: l,
-            sessions: bundle.sessions,
-            receipts: bundle.receipts,
-          });
+          bundle.backup = packBackup(l, now);
         } else if (command.type === 'restore') {
           requireOnline(
             userId === this.adminId &&
@@ -317,8 +327,14 @@ export class LeagueService {
             409,
           );
           const revision = l.revision;
-          assertLeagueVersion(bundle.backup.league);
-          bundle.league = clone(bundle.backup.league);
+          // ⚠ **古い版で取ったバックアップは移行してから戻す**。版を上げたあとに
+          //    復元すると、以前は「バージョンが対応していません」で必ず失敗した。
+          //    直せない版（作り直すしかない形）は従来どおり断る。
+          const restored = unpackBackup(bundle.backup);
+          if (restored && !isCurrent(restored))
+            migrateLeague(restored, { now: this.clock() });
+          assertLeagueVersion(restored);
+          bundle.league = restored;
           bundle.league.revision = revision;
           bundle.league.status = bundle.league.phase ? 'waiting' : 'paused';
           bundle.league.nextAdvanceAt = null;
