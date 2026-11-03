@@ -650,6 +650,23 @@ export const getAllTeamsEffective = () =>
 export const getAllMasterTeamsEffective = () =>
   getMasterTeams().map(t => getEffectiveTeam(t));
 
+/**
+ * その名前を、ほかのチーム（`exceptId` 以外）がもう使っていれば、そのチームを返す。
+ *
+ * ⚠ 名前はそのままチームの鍵（`TEAMS_DATA` のキー）になる。同じ名前を2球団に
+ *    付けると1つに重なり、片方の選手と成績が消える。名前を付ける・変える入口は
+ *    4つ（設定の追加・設定の編集・選択画面の名前変更・選択画面の新規作成）あり、
+ *    **全部でこれを通すこと**。以前は設定の編集でしか確かめていなかった。
+ * @param {object} [options] `{ masterOnly }` 設定画面（このプレイ限りのチームを含めない）
+ */
+export const findTeamNameClash = (name, exceptId = null, { masterOnly = false } = {}) => {
+  const wanted = String(name ?? '').trim();
+  if (!wanted) return null;
+  const teams = masterOnly ? getAllMasterTeamsEffective() : getAllTeamsEffective();
+  return teams.find(t => t.id !== exceptId
+    && ((t.displayName || t.name) === wanted || t.name === wanted)) || null;
+};
+
 
 
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RANK_COLORS, RANK_LABELS, RANK_ORDER } from '../utils/constants.js';
 import SelectShell from './select/SelectShell.jsx';
-import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, getAllMasterTeamsEffective, addCustomTeam, updateCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam } from '../corporate/corporateTeamsData.js';
+import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, getAllMasterTeamsEffective, findTeamNameClash, addCustomTeam, updateCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam } from '../corporate/corporateTeamsData.js';
 
 const TYPE_LABELS = {
   corporate: { label: '企業', color: 'bg-blue-800 text-blue-200' },
@@ -163,6 +163,12 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
 
   const saveEditName = (teamId) => {
     if (editNameValue.trim()) {
+      // ⚠ 名前はチームの鍵になる。ほかのチームと同じ名前にすると2球団が重なる
+      const clash = findTeamNameClash(editNameValue, teamId);
+      if (clash) {
+        alert(`「${editNameValue.trim()}」は既に別のチームが使っています。別の名前にしてください`);
+        return;
+      }
       setTeamDisplayName(teamId, editNameValue.trim());
     }
     setEditingNameId(null);
@@ -184,6 +190,10 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   const handleCreateTeam = () => {
     if (!createForm.name.trim() || !createForm.city.trim()) {
       alert('チーム名と都市名を入力してください');
+      return;
+    }
+    if (findTeamNameClash(createForm.name)) {
+      alert(`「${createForm.name.trim()}」は既に別のチームが使っています。別の名前にしてください`);
       return;
     }
     const newTeam = addGameSessionCustomTeam({
@@ -431,8 +441,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
       alert('チーム名を入力してください');
       return;
     }
-    const clash = getAllMasterTeamsEffective().find(t => t.id !== teamId
-      && ((t.displayName || t.name) === newName || t.name === newName));
+    const clash = findTeamNameClash(newName, teamId, { masterOnly: true });
     if (clash) {
       alert(`「${newName}」は既に別のチームが使っています。別の名前にしてください`);
       return;
@@ -474,6 +483,10 @@ const CorporateNameEditScreen = ({ onBack }) => {
   const handleAdd = () => {
     if (!addForm.name.trim() || !addForm.city.trim()) {
       alert('チーム名と都市名を入力してください');
+      return;
+    }
+    if (findTeamNameClash(addForm.name, null, { masterOnly: true })) {
+      alert(`「${addForm.name.trim()}」は既に別のチームが使っています。別の名前にしてください`);
       return;
     }
     addCustomTeam({

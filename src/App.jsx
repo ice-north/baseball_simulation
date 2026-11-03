@@ -299,6 +299,8 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         }));
       }, [seasonData, leagueConfig, screenMode, managementView, gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory]);
 
+      // ロードしたときに戻る画面（データ編集から「ゲームに戻る」で使う）
+      const resumeViewRef = React.useRef('dateprogress');
       // ロード結果(saveData)を各stateへ適用する共通処理（通常ロード/オートセーブロード共用）
       const applyLoadedGame = (result) => {
         if (!result.success) return result;
@@ -355,13 +357,16 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         //    日程画面に戻していたため、ロードすると規定・キャンプを飛ばし、
         //    独立リーグでは日程が空のまま（日程は規定の確定で作る）試合が無くなった。
         const RESUMABLE_VIEWS = ['regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'camp', 'jersey'];
-        if (RESUMABLE_VIEWS.includes(savedView)) {
-          setManagementView(savedView);
-        } else if (savedView === 'offseason' || (!savedView && deepOffseason)) {
-          setManagementView('offseason');
-        } else {
-          setManagementView('dateprogress');
-        }
+        const resumeView = RESUMABLE_VIEWS.includes(savedView)
+          ? savedView
+          : (savedView === 'offseason' || (!savedView && deepOffseason))
+            ? 'offseason'
+            : 'dateprogress';
+        // ⚠ データ編集（タイトルの「編集」）から「ゲームに戻る」ときも、ここで決めた
+        //    画面へ戻すこと。ロードの直後に 'edit' で上書きするので、覚えておかないと
+        //    日程画面へ戻り、規定の確定（独立リーグはここで日程を作る）を飛ばしていた
+        resumeViewRef.current = resumeView;
+        setManagementView(resumeView);
         setGameFlowState('season');
         return result;
       };
@@ -432,11 +437,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       // 変化球の効果設定（外部ファイルから読み込み）
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
 
-      // レギュレーション設定（拡張可能な設定）
-      // 延長最大回数。規定（seasonData.settings.maxExtraInnings）に従う。
-      // ⚠ 以前は12で固定の state で、規定を変えても采配試合に効かなかった
-      const maxExtraInnings = normalizeMaxExtraInnings(seasonData?.settings?.maxExtraInnings ?? 12);
-
       // 試合状態（先に定義が必要）
       const [isTopInning, setIsTopInning] = useState(true);
       const [inning, setInning] = useState(1);
@@ -458,6 +458,15 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       // 采配モード（日程進行から起動した試合）
       const [managedGameInfo, setManagedGameInfo] = useState(null);  // { gameId, home, away, otherGames }
       const managedGameInfoRef = useRef(null);
+      // レギュレーション設定（拡張可能な設定）
+      // 延長最大回数。規定（seasonData.settings.maxExtraInnings）に従う。
+      // ⚠ 以前は12で固定の state で、規定を変えても采配試合に効かなかった
+      // ⚠ 大会の試合（`isTournament`）は規定を使わず12回まで。自動の大会試合
+      //    （`autoSimulateGame` の `isCupGame`）と同じ。規定を9回にしていると、
+      //    自分で采配した大会の試合だけ9回で打ち切られ、勝敗がコイン投げで決まっていた
+      const maxExtraInnings = managedGameInfo?.isTournament
+        ? 12
+        : normalizeMaxExtraInnings(seasonData?.settings?.maxExtraInnings ?? 12);
       // 勝敗・セーブ・ホールドの判定用（登板順とリードの移り変わり。自動シミュと同じ帳簿）
       const decisionLogRef = useRef(createDecisionLog());
       const advanceDayRef = useRef(null);
@@ -1237,7 +1246,11 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           'single': { type: 'single', description: fieldingResult.description, hit: true,
             isError: fieldingResult.isError, errorPosition: ep, fieldingPosition: fp,
             // 中継ミス: 安打のあとの失策。走者が余分に1つ進む（自動試合と同じ）
-            hitWithError: !!fieldingResult.hitWithError, extraAdvance: !!fieldingResult.extraAdvance },
+            // ⚠ 内野の悪送球（`isThrowingError` だけが立つ）も1つ余分に進む。
+            //    自動試合は `extraAdvance || isThrowingError` で見ているので、
+            //    こちらも同じにする（以前は采配の試合だけ進まなかった）
+            hitWithError: !!fieldingResult.hitWithError,
+            extraAdvance: !!fieldingResult.extraAdvance || !!fieldingResult.isThrowingError },
           'out': {
             type: 'out',
             description: fieldingResult.description,
@@ -4314,6 +4327,7 @@ if (newOuts === 3) {
               <ManagementScreen
                 managementView={managementView}
                 setManagementView={setManagementView}
+                resumeViewRef={resumeViewRef}
                 seasonData={seasonData}
                 setSeasonData={setSeasonData}
                 selectedMonth={selectedMonth}

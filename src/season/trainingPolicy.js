@@ -129,6 +129,14 @@ const BROAD_BY_STAT = {
   control: 'control', stamina: 'control', velocity: 'velocity',
   bodyStamina: 'velocity',
 };
+/**
+ * 能力 → 幅広いメニュー。
+ * ⚠ 基礎体力（bodyStamina）は投手なら球速練習でよいが、**野手には走塁練習**を当てる。
+ *    以前は野手にも球速練習を当てていて、野手が使わない球速・スタミナだけが伸び、
+ *    体作りの段階で野手のキャンプが丸ごと空振りしていた。
+ */
+const broadFor = (stat, isPitcher) =>
+  !isPitcher && stat === 'bodyStamina' ? 'baserunning' : BROAD_BY_STAT[stat] || 'batting';
 const SUB_BY_PHASE = {
   physique: { sharpen: 'weight', balanced: 'physique', patch: 'physique' },
   skill:    { sharpen: 'eye',    balanced: 'stretch',  patch: 'defense_sub' },
@@ -151,11 +159,11 @@ export function resolveTraining(player, direction = 'balanced', phase = 'skill')
 
   const { best, worst } = poleStats(player, phase);
   if (direction === 'sharpen' && best) {
-    return { main: INTENSIVE_BY_STAT[best] || BROAD_BY_STAT[best] || 'batting', sub, phase, direction, target: best };
+    return { main: INTENSIVE_BY_STAT[best] || broadFor(best, isPitcher), sub, phase, direction, target: best };
   }
   if (direction === 'patch' && worst) {
     // 短所は集中コースを使わない（他能力を削るため）
-    return { main: BROAD_BY_STAT[worst] || 'batting', sub, phase, direction, target: worst };
+    return { main: broadFor(worst, isPitcher), sub, phase, direction, target: worst };
   }
   // 全体: そのフェーズの標準メニュー
   const main = phase === 'physique'

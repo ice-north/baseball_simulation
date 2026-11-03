@@ -2918,7 +2918,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   //    （裏を打たせずに）試合が終わっていた（延長で決着した試合の約6%＝全試合の約6%）。
   //    9回以降: 表の終了時にホームがリード → 裏は不要 / 裏の終了時に差がある → 決着。
   //    延長は規定の上限まで（既定12回。その回の裏を終えて同点なら引き分け）
-  const MAX_INNINGS = normalizeMaxExtraInnings(LEAGUE_SETTINGS.maxExtraInnings);
+  // ⚠ 勝ち抜きの大会（`isCupGame`）は規定の上限を使わず、従来どおり12回まで。
+  //    規定はリーグ戦のためのもので、上限を9回にすると、裏で回っている
+  //    大会の試合まで引き分けが増え、勝者が強さのくじ（`simulateQuickMatch`）で決まっていた
+  const MAX_INNINGS = isCupGame ? 12 : normalizeMaxExtraInnings(LEAGUE_SETTINGS.maxExtraInnings);
   for (;;) {
     simulateInning();                         // 終わると isTopInning が反転済み
     const endedTop = !gameState.isTopInning;  // いま終わったのが表か

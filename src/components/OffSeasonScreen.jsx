@@ -83,6 +83,10 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     try {
       const allTeams = TEAMS_DATA || {};
 
+      // ⚠ 球団史は**年度送りが通ってから**記録する。以前は先に記録していたので、
+      //    年度送りがエラーで止まってもう一度押すと、同じ年が2行になっていた
+      //    （中身は成績を通算へ移す前の今季の数字なので、ここで先に作っておく）
+      let historyEntry = null;
       if (onRecordTeamHistory && seasonData.standings) {
         const sortedStandings = [...seasonData.standings].sort((a, b) => b.winRate - a.winRate);
         const teamRecords = sortedStandings.map((s, idx) => {
@@ -153,7 +157,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           savesLeader:     slimAward(fa.savesLeader, ['saves']),
           strikeoutKing:   slimAward(fa.strikeoutKing, ['strikeouts']),
         } : null;
-        onRecordTeamHistory({
+        historyEntry = {
           year: seasonData.year,
           standings: teamRecords,
           awards: awardsArchive,
@@ -161,12 +165,13 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           // ⚠ `seasonData.playoffChampion` はどこでも設定されず、球団史の優勝が常に空だった。
           //    日程のプレーオフ決勝から決める（年度の記録と同じ判定）
           playoffChampion: getPlayoffChampion(seasonData.schedule || []) || null,
-        });
+        };
       }
 
       const result = gameMode === 'sandbox'
         ? advanceToNextYearSandbox(seasonData, allTeams)
         : advanceToNextYear(seasonData, allTeams);
+      if (historyEntry) onRecordTeamHistory(historyEntry);
       setSeasonData(result.newSeasonData);
       Object.keys(result.updatedTeams).forEach(teamName => {
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];

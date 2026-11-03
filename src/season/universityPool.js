@@ -1766,14 +1766,6 @@ export function deserializeUniversityPool(data) {
   clearHighSchoolPool();
   if (!data) return;
 
-  // 後方互換: 旧形式（大学プールのみ）の場合
-  if (!data.university && !data.highSchool) {
-    Object.entries(data).forEach(([year, cohort]) => {
-      universityPool[year] = cohort;
-    });
-    return;
-  }
-
   // ⚠ 保存ではプールの選手の成績欄を落としている（まだ試合に出ていないので空）。
   //    ロードで戻さないと、大学・社会人・ドラフトで名簿に入った選手が成績欄の無いまま
   //    年度替わりを迎え、通算成績が作られなかった（実測で通算成績の無い選手が約2700人）
@@ -1782,6 +1774,16 @@ export function deserializeUniversityPool(data) {
     if (!player.seasonStats) player.seasonStats = createEmptyStats();
     if (!player.careerStats) player.careerStats = createEmptyStats();
   };
+  // 後方互換: 旧形式（大学プールのみ）の場合
+  // ⚠ 旧形式でも成績欄を戻すこと（新形式と同じ理由）
+  if (!data.university && !data.highSchool) {
+    Object.entries(data).forEach(([year, cohort]) => {
+      universityPool[year] = cohort;
+      if (Array.isArray(cohort)) cohort.forEach(entry => restoreStats(entry?.player));
+    });
+    return;
+  }
+
   if (data.university) {
     Object.entries(data.university).forEach(([year, cohort]) => {
       universityPool[year] = cohort;
