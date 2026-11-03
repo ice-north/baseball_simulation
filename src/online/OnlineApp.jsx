@@ -316,7 +316,9 @@ export default function OnlineApp() {
         setScreen('today');
       }
     });
-  const compactMobile = mobile && view && !view.setupRequired;
+  // ⚠ 更新の取り込み待ちの画面ではヘッダー（ログアウト）を隠さない。
+  //    スマホではここに戻る手段が他に無く、ログアウトできなくなっていた
+  const compactMobile = mobile && view && !view.setupRequired && !view.versionMismatch;
   return (
     <div
       className={`online ${mobile ? 'online-mobile' : 'online-desktop'} ${compactMobile ? 'online-compact-shell' : ''}`}

@@ -24,6 +24,7 @@ import {
   PYRAMID_LEAGUES,
   PROMOTION_PLACES,
   RELEGATION_FROM_BOTTOM,
+  compareLeagueStanding,
 } from './pyramidLeague.js';
 export { PageNav } from './PageNav.jsx';
 
@@ -136,9 +137,9 @@ export function Standings({ view }) {
   const leagues = view.teamLeagues
     ? PYRAMID_LEAGUES.map((league) => ({
         league,
-        rows: view.standings.filter(
-          (s) => view.teamLeagues[s.team] === league.id,
-        ),
+        rows: view.standings
+          .filter((s) => view.teamLeagues[s.team] === league.id)
+          .sort(compareLeagueStanding),
       })).filter((group) => group.rows.length)
     : [{ league: null, rows: view.standings }];
   return (

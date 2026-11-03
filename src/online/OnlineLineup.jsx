@@ -1,9 +1,15 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LineupSettingContent } from '../components/LineupSettingScreen.jsx';
 import { LEAGUE_SETTINGS } from '../teams-data.js';
 import { teamFromView, planFromTeam } from './lineupBridge.js';
 import { teamLabel } from './gameText.js';
+import { useDraftMemory } from './Drafts.jsx';
+
+/** 全画面の編成に、保存していない編集が残っているか（回転で作り直したときに開き直す判断に使う） */
+export function hasUnsavedFullLineup(editing) {
+  return !!editing && JSON.stringify(planFromTeam(editing.team)) !== editing.basePlan;
+}
 
 // ============================================================
 // オンライン版の編成画面。**一人用の編成画面をそのまま使う**。
@@ -25,22 +31,34 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 
 export default function OnlineLineup({ view, busy, onSave, onClose }) {
   // ⚠ 画面は `team` を書き換えるので、開いている間は同じオブジェクトを保つ。
-  //    毎回作り直すと編集が消える
-  const teamRef = useRef(null);
-  const baseRef = useRef(null);
-  const team = useMemo(() => {
-    if (!teamRef.current) {
-      teamRef.current = teamFromView(view);
-      baseRef.current = clone(view.lineup || {});
-    }
-    return teamRef.current;
-  }, [view]);
+  //    毎回作り直すと編集が消える。
+  // ⚠ 部品の中（useRef）ではなく下書きの入れ物に持つ。スマホの回転でスマホ用と
+  //    PC用の画面が入れ替わると、この部品ごと作り直されて編集が消えていた
+  //    編集していない写しは使い回さない（開き直したら最新の編成から始める）
+  const [editing, discard] = useDraftMemory(
+    'lineup.full',
+    () => {
+      const fresh = teamFromView(view);
+      return {
+        team: fresh,
+        base: clone(view.lineup || {}),
+        basePlan: JSON.stringify(planFromTeam(fresh)),
+      };
+    },
+    hasUnsavedFullLineup,
+  );
+  const team = editing.team;
 
   const [saveError, setSaveError] = useState('');
   const save = async () => {
     setSaveError('');
-    const result = await onSave(planFromTeam(team), baseRef.current);
+    const result = await onSave(planFromTeam(team), editing.base);
     if (result && !result.ok) setSaveError(result.error || '保存できませんでした');
+    else if (result?.ok) discard();
+  };
+  const close = () => {
+    discard();
+    onClose();
   };
 
   // ⚠ 一人用の画面は `LEAGUE_SETTINGS.useDH` を見る。オンラインのリーグ設定に合わせる
@@ -64,7 +82,7 @@ export default function OnlineLineup({ view, busy, onSave, onClose }) {
           <button
             type="button"
             disabled={busy}
-            onClick={onClose}
+            onClick={close}
             className="rounded border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-600 disabled:opacity-50"
           >
             方針・采配の設定へ（保存しない）

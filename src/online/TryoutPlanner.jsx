@@ -168,6 +168,12 @@ export default function TryoutPlanner({
   const shift = (index, delta) =>
     setRanked(shiftInPlan(plan.rankedIds, candidates, count, roster, index, delta));
   const add = (id, first) => {
+    // ⚠ 獲得希望人数が0人のときは誰も入れられない。以前はこの場合も
+    //    「目標人数に達しているため」と別の理由を出していた
+    if (count <= 0) {
+      setNotice('獲得希望人数が0人のため、獲得予定に入れられません。先に人数を増やしてください。');
+      return;
+    }
     const next = addToPlan(plan.rankedIds, candidates, count, roster, id, { first });
     // ⚠ 黙って何も起きない、を作らない。今の名簿だけでその区分が目標を超えていると、
     //    サーバーも取りにいかないので、獲得予定には入れられない
@@ -362,7 +368,7 @@ export default function TryoutPlanner({
                   </span>
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || count === 0}
                     onClick={() => add(id, true)}
                   >
                     最優先へ
@@ -441,7 +447,7 @@ export default function TryoutPlanner({
                   <>
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || count === 0}
                       onClick={() => add(p.id, true)}
                     >
                       最優先へ
