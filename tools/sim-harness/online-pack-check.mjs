@@ -11,7 +11,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
-import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
+import {
+  defaultPhasePlan,
+  openPhase,
+  loadLeagueWorld,
+} from '../../server/leagueEngine.mjs';
+import { captureWorld } from '../../server/worldSnapshot.mjs';
 import {
   generateRosterPacks,
   packSummary,
@@ -268,10 +273,120 @@ try {
     names[0],
   );
   assert.ok(plan.packId, '既定の選択が空');
+
+  // --- 途中参加した人のセット選択 ---------------------------------------
+  // ⚠ 開幕後に参加した人は、引き継いだCPUの名簿のままでは自分で選んだ24人で
+  //    始められない。**自分のセットを選び、次のキャンプで入れ替わる**。
+  // ⚠ シーズン途中で入れ替えないこと（順位表と選手成績が合わなくなる）。
+  {
+    const late = (await store.read()).league;
+    assert.ok(!late.phase || late.phase.kind !== 'pack_select', '前提: セット選択は終わっている');
+    const joiner = (await service.login('late1')).sessionId;
+    await service.command('late1', joiner, {
+      requestId: 'packchk-join-late1',
+      revision: late.revision,
+      type: 'join',
+      payload: {},
+    });
+    const joined = (await store.read()).league;
+    const me = joined.members.find((m) => m.userId === 'late1');
+    assert.ok(me, '参加できていない');
+    // ⚠ **種を持つこと**。セット（20×24人）は保存せず、種から作り直す
+    assert.ok(Number.isFinite(me.packSeed), '個別の種が配られていない');
+    assert.equal(me.pendingPackId, null, '選ぶ前なのに選択が入っている');
+    const myTeam = me.teamName;
+    const inherited = joined.game.teams[myTeam].players.map((p) => p.id);
+    assert.ok(inherited.length > 0, '前提: 引き継いだ名簿がある');
+
+    // ビューにセットが渡る
+    const joinerView = await service.view('late1', joiner);
+    assert.equal(joinerView.pendingPack?.packs.length, PACK_COUNT, 'セットが渡っていない');
+    assert.equal(joinerView.pendingPack.chosen, null, '選ぶ前なのに選択済み');
+    // ⚠ 種から作り直したセットが**毎回同じ**こと。違うと、見た顔ぶれと
+    //    実際に入る顔ぶれが食い違う
+    const again = await service.view('late1', joiner);
+    assert.deepEqual(
+      again.pendingPack.packs.map((x) => x.players.map((p) => p.id)),
+      joinerView.pendingPack.packs.map((x) => x.players.map((p) => p.id)),
+      '見るたびに違う選手になる',
+    );
+
+    // 居ないセットは受け付けない
+    const liveRev = () => store.read().then((b) => b.league.revision);
+    const badRevision = await liveRev();
+    await assert.rejects(
+      () =>
+        service.command('late1', joiner, {
+          requestId: 'packchk-late-bad',
+          revision: badRevision,
+          type: 'pack',
+          payload: { packId: 'pack-999' },
+        }),
+      /初期メンバーの選択が不正/,
+    );
+
+    const wanted = joinerView.pendingPack.packs[3];
+    await service.command('late1', joiner, {
+      requestId: 'packchk-late-pick',
+      revision: await liveRev(),
+      type: 'pack',
+      payload: { packId: wanted.id },
+    });
+    const picked = (await store.read()).league;
+    assert.equal(
+      picked.members.find((m) => m.userId === 'late1').pendingPackId,
+      wanted.id,
+      '選択が保存されていない',
+    );
+    // ⚠ **まだ名簿を入れ替えないこと**
+    assert.deepEqual(
+      picked.game.teams[myTeam].players.map((p) => p.id),
+      inherited,
+      'キャンプ前なのに名簿が入れ替わった',
+    );
+
+    // キャンプで入れ替わる
+    await store.transaction((bundle) => {
+      loadLeagueWorld(bundle.league);
+      openPhase(bundle.league, 'camp', now);
+      bundle.league.game = captureWorld();
+      return { value: null };
+    });
+    const camp = (await store.read()).league;
+    for (const m of camp.members)
+      await service.command(m.userId, m.userId === 'admin' ? admin : m.userId === 'guest' ? guest : joiner, {
+        requestId: `packchk-camp-${m.userId}`,
+        revision: await liveRev(),
+        type: 'submit',
+        payload: {
+          phaseId: camp.phase.id,
+          plan: { menu: 'standard' },
+          ready: true,
+          baseSubmission: null,
+        },
+      });
+    const done = (await store.read()).league;
+    const mine = done.game.teams[myTeam].players;
+    assert.equal(mine.length, PACK_SIZE, `キャンプ後の人数がちがう: ${mine.length}`);
+    assert.deepEqual(
+      mine.map((p) => p.id).sort(),
+      wanted.players.map((p) => p.id).sort(),
+      '選んだセットが名簿に入っていない',
+    );
+    // ⚠ 済んだら印を消すこと。残ると毎キャンプで名簿が作り直される
+    const after2 = done.members.find((m) => m.userId === 'late1');
+    assert.ok(!after2.packSeed && !after2.pendingPackId, '選択の印が残っている');
+    // ⚠ **全球団を通して選手のidが重複しないこと**。種を人ごとにずらさないと、
+    //    別の球団に同じidの選手ができて記録がどちらのものか分からなくなる
+    const allIds = done.season.settings.teamNames.flatMap((n) =>
+      done.game.teams[n].players.map((p) => p.id),
+    );
+    assert.equal(new Set(allIds).size, allIds.length, '同じidの選手が2人いる');
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 格と構成が揃う / 合計の開きが4%以内 / 取り合いを解く / 288人が重複しない）`,
+  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 格と構成が揃う / 合計の開きが4%以内 / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
 );

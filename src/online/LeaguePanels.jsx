@@ -41,33 +41,24 @@ export { PageNav } from './PageNav.jsx';
  *    （記録の選手キーまで名前で繋がっているため）。
  */
 export function JoinLeague({ busy, join, logout }) {
-  const [teamName, setTeamName] = useState('');
   return (
     <section className="online-card online-login">
       <p className="online-eyebrow">JOIN</p>
       <h1>リーグに参加する</h1>
+      {/* ⚠ **ここでは名前を聞かない**。始める手順は
+          「参加する → セットを選ぶ → 球団名とプレイヤー名 → 決定」で、
+          名前はセットの下で決める。2か所で聞くと、どちらが効くのか分からない */}
       <p>
         空いている球団のうち、下の階層で一番弱いものを引き継ぎます。
-        球団名は好きに付けられます。
+        このあと初期メンバーのセットを選び、球団名とプレイヤー名を決めます。
       </p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          join({ teamName: teamName.trim() });
-        }}
+      <button
+        className="online-primary"
+        disabled={busy}
+        onClick={() => join({})}
       >
-        <label>
-          球団名（空なら元の名前のまま）
-          <input
-            value={teamName}
-            maxLength={24}
-            onChange={(e) => setTeamName(e.target.value)}
-          />
-        </label>
-        <button className="online-primary" type="submit" disabled={busy}>
-          参加する
-        </button>
-      </form>
+        参加する
+      </button>
       <button disabled={busy} onClick={logout}>
         別のアカウントでログインし直す
       </button>
@@ -428,6 +419,44 @@ export function Notices({ view, compact = false }) {
       ) : (
         <p>リーグの動きがここに届きます。</p>
       )}
+    </section>
+  );
+}
+
+/**
+ * 途中参加した人の初期メンバー選択。
+ *
+ * ⚠ **リーグ全体の手続きではない**。締め切りも全員の決定も関係しないので、
+ *    選んだ時点で保存する（`pack` 命令）。
+ * ⚠ 名簿に入るのは**次のキャンプ**。それまで球団はCPUが動かす。
+ *    画面にそう書くこと——書かないと「選んだのに選手が変わらない」と見える。
+ */
+export function PendingPackPanel({ view, busy, run, command }) {
+  const pending = view.pendingPack;
+  if (!pending) return null;
+  const chosen = pending.packs.find((p) => p.id === pending.chosen);
+  return (
+    <section className="online-card online-decision">
+      <h2>初期メンバー選択</h2>
+      <p>
+        20セットから1つ選びます。選んだ24人は
+        <strong>次の日曜のキャンプで名簿に入り</strong>、月曜の開幕から
+        あなたの球団になります。それまでは引き継いだ選手でCPUが戦います。
+      </p>
+      <p className="online-muted">
+        {chosen
+          ? `いま選んでいるのは「${chosen.name}」です。キャンプまでは何度でも選び直せます。`
+          : 'まだ選んでいません。決めずにキャンプを迎えると、1つ目のセットになります。'}
+      </p>
+      <PackSelect
+        packs={pending.packs}
+        plan={{ packId: pending.chosen }}
+        busy={busy}
+        view={view}
+        run={run}
+        command={command}
+        onChange={(next) => run(() => command('pack', { packId: next.packId }))}
+      />
     </section>
   );
 }

@@ -162,6 +162,45 @@ function createSchedule(season, teams) {
   season.standings = initializeStandings(season.settings.teamNames);
 }
 
+/**
+ * 途中参加した人に見せるセットのid。**検査用ではなく命令の検証に使う**。
+ * ⚠ セットは保存していない（種から作り直す）ので、選択が正しいかは
+ *    ここで作り直して確かめるしかない。
+ */
+export function packIdsFor(seed) {
+  return generateRosterPacks(seed).map((p) => p.id);
+}
+
+/**
+ * 途中参加した人が選んだセットを、名簿に入れる。**キャンプのときだけ**呼ぶ。
+ *
+ * ⚠ シーズン途中で入れ替えないこと。順位表と選手成績が合わなくなる。
+ *    キャンプは新シーズンの直前なので、ここで入れ替えれば勝敗は0から始まる。
+ * ⚠ 選ばなかった人（締め切りまでに決めなかった人）には**標準で1つ目**を渡す。
+ *    空のまま開幕させない。
+ * ⚠ 入れ替えで消える24人は、引き継いだCPU球団の選手。プールへは戻さない
+ *    （戻すと翌年のトライアウトに同じ顔ぶれが並ぶ）。
+ */
+function applyPendingPacks(league) {
+  for (const member of league.members || []) {
+    if (!member.packSeed) continue;
+    const packs = generateRosterPacks(member.packSeed);
+    const pack =
+      packs.find((p) => p.id === member.pendingPackId) || packs[0];
+    const team = TEAMS_DATA[member.teamName];
+    if (!team) continue;
+    team.players = clone(pack.players);
+    for (const player of team.players)
+      player.careerHistory = [
+        ...(player.careerHistory || []),
+        { type: 'independent', year: league.season.year, label: member.teamName },
+      ];
+    refreshTeamPlan(league, member.teamName);
+    delete member.packSeed;
+    delete member.pendingPackId;
+  }
+}
+
 export function openPhase(league, kind, now) {
   // ⚠ **締め切りを持たせること**。待ち続ける設計だと、1人が決めないだけで
   //    全員の週が止まる。締め切りが曜日合わせも兼ねている
@@ -672,6 +711,9 @@ function resolvePhase(league, now) {
         }
       }
     }
+    // ⚠ **キャンプの練習より後に入れ替えること**。先に入れ替えると、
+    //    選んだばかりの24人がキャンプで成長してしまい、セットの釣り合いが崩れる
+    applyPendingPacks(league);
     initializeAllPlayersCondition();
     for (const name of league.season.settings.teamNames)
       refreshTeamPlan(league, name);

@@ -4,6 +4,7 @@ import {
   Results,
   Notices,
   PhasePanel,
+  PendingPackPanel,
   LineupPanel,
   PageNav,
 } from './LeaguePanels.jsx';
@@ -90,7 +91,7 @@ export default function DesktopView(props) {
                 onClick={() => setTab(id)}
               >
                 {label}
-                {id === 'decisions' && view.phase && (
+                {id === 'decisions' && (view.phase || view.pendingPack) && (
                   <span className="online-dot" aria-label="未完了の手続き" />
                 )}
               </button>
@@ -148,7 +149,15 @@ export default function DesktopView(props) {
           <LineupPanel key={`${view.year}:${view.teamName}`} {...props} />
         </div>
       )}
+      {/* ⚠ **途中参加の初期メンバー選択を先に出す**。リーグ全体の手続きより、
+          自分の名簿が決まっていないことのほうが先に片付く */}
+      {tab === 'decisions' && view.pendingPack && (
+        <div className="online-wide-width">
+          <PendingPackPanel {...props} />
+        </div>
+      )}
       {tab === 'decisions' &&
+        !view.pendingPack &&
         (view.phase ? (
           /* ⚠ 初期編成・トライアウトだけ横に広げる。希望リストと候補を
              左右に並べるので、740pxだと能力の表示が折り返して読めない */
