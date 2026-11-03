@@ -77,7 +77,7 @@ CIも同じ検査を実行し、スクリーンショットを保存する。認
 
 1. SupabaseプロジェクトとVercelプロジェクトを作成する。課金・プラン変更はこの実装では行わない。
 2. Supabase Authで公開サインアップを無効にし（手順は [PRODUCTION_SETUP.md](PRODUCTION_SETUP.md)）、参加する人数分のメール・パスワードのユーザーを管理者が作成する。
-3. `supabase/migrations/202610280001_online.sql` を適用する。新設テーブル・RPCはservice_roleだけ、Storageバケットはprivate。
+3. `supabase/migrations/` のSQLを日付の古い順にすべて適用する（`202610280001_online.sql` → `202611030001_online_lease.sql`）。新設テーブル・RPCはservice_roleだけ、Storageバケットはprivate。適用済みの環境では新しいファイルだけを続けて適用する。
 4. `.env.example` の値をVercelのサーバー環境変数へ設定する。管理者のUUIDは `ONLINE_ADMIN`。`VITE_`を付けて公開しない。
 5. Vercelへこのブランチをデプロイする。Node関数のFluid Computeと300秒上限を確認する。
 6. まずCronを無効のままログイン・参加・初期編成・全員の決定を検証する。

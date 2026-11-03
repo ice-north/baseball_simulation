@@ -274,7 +274,8 @@ export class LeagueService {
           );
           requireOnline(
             isDeepStrictEqual(currentLineup, command.payload.baseLineup),
-            '編成が更新されています。「編集を戻す」で最新の編成を読み直してください',
+            // ⚠ 詳しい編成（全画面）には「編集を戻す」が無い。どちらの画面でも分かる案内にする
+            '編成がほかの画面で更新されています。簡易編成は「編集を戻す」、詳しい編成は閉じて開き直して、最新の編成から編集し直してください',
             409,
             'edit_conflict',
           );

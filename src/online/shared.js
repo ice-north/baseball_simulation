@@ -251,6 +251,11 @@ export function nextWeekdayStart(now, weekday) {
  *    トライアウト12時間＋オフシーズン4時間で日曜のうちに収まり、
  *    キャンプは従来どおり月曜0時に締まる。
  */
+/** 締め切りまでに最低限残す時間（時間）。足りなければ翌週の同じ締め切りにする */
+export const MIN_PHASE_HOURS = {
+  initial_tryout: 12,
+};
+
 export const LATE_PHASE_GRACE_HOURS = {
   contract: 12,
   tryout: 12,
@@ -265,9 +270,15 @@ export const LATE_PHASE_GRACE_HOURS = {
 export function phaseDeadlineAt(kind, now) {
   const weekday = PHASE_WEEKDAY[kind];
   if (weekday === undefined) return null;
-  const regular = nextWeekdayStart(now, (weekday + 1) % 7);
+  let regular = nextWeekdayStart(now, (weekday + 1) % 7);
   const grace = LATE_PHASE_GRACE_HOURS[kind];
   const ms = new Date(now).getTime();
+  // ⚠ 初期編成は最初の手続きで、ドラフトの希望を考える時間が要る。土曜の夜に
+  //    リーグを作ると締め切り（日曜0時）まで数分しかなく、全員が標準案で
+  //    決まっていた。短すぎるときは翌週の日曜0時にする（全員が決めれば待たずに進む）
+  const minimum = MIN_PHASE_HOURS[kind];
+  if (minimum && new Date(regular).getTime() - ms < minimum * 3600000)
+    regular = new Date(new Date(regular).getTime() + 7 * 86400000).toISOString();
   // 締め切りが5日以上先＝担当の曜日を過ぎた直後に開いた（遅れて開いた）
   if (grace === undefined || new Date(regular).getTime() - ms < 5 * 86400000)
     return regular;
