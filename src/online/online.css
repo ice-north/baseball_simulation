@@ -248,6 +248,63 @@
 .online-standings .online-move {
   white-space: nowrap;
 }
+/* --- キャンプの割り当て ------------------------------------------------ */
+.online-camp-bulk {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #ffffff0c;
+}
+.online-camp-bulk h3,
+.online-camp-group h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--accent);
+}
+.online-camp-bulk-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.online-camp-bulk-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-camp-bulk p {
+  margin: 6px 0 0;
+}
+.online-camp-group + .online-camp-group {
+  margin-top: 16px;
+}
+.online-camp-group th small {
+  margin-left: 5px;
+  font-weight: 400;
+  color: #9fb0c4;
+}
+.online-camp-group select {
+  min-width: 150px;
+}
+/* ⚠ `.online td` の中央寄せより強く当てる（クラスだけだと負けて中央に寄っていた） */
+.online td.online-camp-wish {
+  text-align: left;
+}
+.online-camp-wish small {
+  display: block;
+  font-size: 11px;
+  color: #9fb0c4;
+}
+/* ⚠ やる気は**色だけに頼らない**（文字でも出す）。色覚に依らず読めるように */
+.online-mood.is-good {
+  color: #86efac;
+}
+.online-mood.is-bad {
+  color: #fca5a5;
+}
+
 /* --- 球団名とプレイヤー名（セット選択の下） --------------------------- */
 .online-identity {
   margin-top: 14px;
@@ -2510,6 +2567,18 @@
 .online-desktop td .online-player-name,
 .online-desktop th .online-player-name {
   min-height: 0;
+}
+/* キャンプの割り当て表。⚠ 行の中のコンボボックスで行を高くしない
+   （既定の高さのままだと、この表だけ行が56pxになった） */
+.online-desktop .online-camp-group td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.online-desktop .online-camp-group select {
+  width: auto;
+  min-height: 0;
+  height: 32px;
+  padding: 2px 8px;
 }
 
 /* --- 試合結果 ------------------------------------------------------------ */

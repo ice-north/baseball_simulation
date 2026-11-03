@@ -18,10 +18,24 @@ const here = dirname(fileURLToPath(import.meta.url));
 const entry = `
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import { Notices, Standings, formatDeadline } from '../../src/online/LeaguePanels.jsx';
+import {
+  Notices,
+  Standings,
+  formatDeadline,
+} from '../../src/online/LeaguePanels.jsx';
+import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
-export { React, renderToString, Notices, Standings, formatDeadline, setTeamLabels, PackSelect };
+export {
+  React,
+  renderToString,
+  Notices,
+  Standings,
+  DesktopTactics,
+  formatDeadline,
+  setTeamLabels,
+  PackSelect,
+};
 `;
 const result = await build({
   stdin: { contents: entry, resolveDir: here, loader: 'jsx' },
@@ -49,6 +63,7 @@ try {
     formatDeadline,
     setTeamLabels,
     PackSelect,
+    DesktopTactics,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -213,6 +228,62 @@ try {
       );
   }
 
+  // --- 方針・采配（PC。`DesktopTactics`） ---------------------------------
+  // ⚠ **打順・守備・先発・投手の役割をここに残さないこと**。移植した
+  //    「スタメン設定／投手起用／守備分析」と丸ごと被り、同じことを2か所で
+  //    設定できる状態になる（どちらが効くのか分からない）。
+  {
+    const lineupView = {
+      teamName: '宮崎アトラス',
+      roster: [
+        {
+          id: 1, name: '投手 一郎', position: 'pitcher', age: 24, fatigue: 0,
+          pitching: { velocity: 140, control: 50, stamina: 50 },
+        },
+        {
+          id: 2, name: '野手 二郎', position: 'left', age: 23, fatigue: 0,
+          batting: { meet: 50, power: 50 },
+        },
+      ],
+      lineup: {
+        battingOrder: [{ playerId: 2, battingOrder: 1, position: 'left' }],
+        starters: [1],
+        strategy: {},
+        pitcherRoles: {},
+        autoTactics: {},
+      },
+    };
+    const html = render(
+      h(DesktopTactics, {
+        view: lineupView,
+        busy: false,
+        run: () => {},
+        command: () => {},
+      }),
+    );
+    assert.match(html, /方針・采配/, '見出しが変わっていない');
+    assert.match(html, /基本方針/, '基本方針が出ていない');
+    assert.match(html, /自動采配/, '自動采配が出ていない');
+    // ⚠ 区分の切り替え（タブ）を置かない。項目は2つだけなので要らない。
+    //    ボタンを並べた選択肢（`Choice`）は `online-segments` を使うので、
+    //    **どの並びも選択肢の中にある**ことで見る
+    const segments = html.match(/class="online-segments"/g)?.length ?? 0;
+    const choices = html.match(/class="online-choice"/g)?.length ?? 0;
+    assert.ok(choices > 0, '選択肢がボタンで出ていない');
+    assert.equal(segments, choices, '区分の切り替えが残っている');
+    // ⚠ スタメン設定と被る**操作**を出さない。文面での案内は残してよい
+    //    （「打順は『スタメン設定』で」と書いてある）ので、見出しと部品で見る
+    const headings = [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/g)].map((m) => m[1]);
+    assert.deepEqual(
+      headings,
+      ['基本方針', '自動采配'],
+      `小見出しがちがう: ${headings.join('・')}`,
+    );
+    // 打順の行・先発のチェック欄そのものを出さない（PCは移植画面で設定する）
+    assert.doesNotMatch(html, /class="online-lineup"/, 'PCに打順の行が残っている');
+    assert.doesNotMatch(html, /online-check-info/, 'PCに先発のチェック欄が残っている');
+  }
+
   // --- 締め切りの表示（日本時間） ---------------------------------------
   assert.equal(formatDeadline('2026-11-07T15:00:00.000Z'), '11/8(日) 0:00');
 } finally {
@@ -220,5 +291,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / セットの下に名前を決める欄が出る）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ）',
 );

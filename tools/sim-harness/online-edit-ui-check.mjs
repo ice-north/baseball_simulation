@@ -5,15 +5,15 @@ import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 // ⚠ PCの左メニューは「現在の手続き」「選手成績」「ホーム」（3a8592d で名前が変わった）。
 //    スマホのホームのボタンは「手続き」「打順」のまま。
-// ⚠ PCのキャンプの練習方針は**ボタンの列**（`role="group"`、押されている＝今の値）。
-//    以前はコンボボックスだった
-const MENU = '球団の主練習（全4回）';
-const menuGroup = (page) => page.getByRole('group', { name: MENU, exact: true });
-const chooseMenu = (page, label) =>
-  menuGroup(page).getByRole('button', { name: label, exact: true }).click();
-const pressedMenu = async (page) =>
-  (await menuGroup(page).locator('[aria-pressed="true"]').innerText()).trim();
-const STANDARD_MENU = '標準（投手は制球・野手は打撃）';
+// ⚠ PCのキャンプは**選手ごとに**練習を割り当てる（`CampPlanner`）。以前は球団で
+//    1つ選ぶだけだった。ここでは名簿の投手1人の「練習」の欄で、未保存案の保持を見る。
+//    割り当ての無い投手は「投げ込み」（`control`）になる
+const PITCHER = '検証 投手';
+const menuGroup = (page) =>
+  page.getByRole('combobox', { name: `${PITCHER}の練習`, exact: true });
+const chooseMenu = (page, value) => menuGroup(page).selectOption(value);
+const pressedMenu = (page) => menuGroup(page).inputValue();
+const STANDARD_MENU = 'control';
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
   'utf8',
@@ -37,7 +37,19 @@ const initial = () => ({
   isAdmin: true,
   hasBackup: false,
   members: [],
-  roster: [],
+  roster: [
+    {
+      id: 1,
+      name: PITCHER,
+      age: 24,
+      position: 'pitcher',
+      condition: 2,
+      pitching: { velocity: 140, control: 50, stamina: 50 },
+      batting: { meet: 20, power: 20, eye: 20 },
+      physical: { speed: 40 },
+      fielding: { defense: 40, arm: 50 },
+    },
+  ],
   standings: [],
   results: [],
   upcoming: [],
@@ -164,33 +176,35 @@ try {
   const draft = await scene();
   draft.page.on('dialog', (dialog) => dialog.accept());
   await click(draft.page, '現在の手続き');
-  await chooseMenu(draft.page, '球速練習');
+  await chooseMenu(draft.page, 'velocity');
   await click(draft.page, 'ホーム');
   await click(draft.page, '現在の手続き');
-  assert.equal(await pressedMenu(draft.page), '球速練習', '画面移動でも提出案を保持');
+  assert.equal(await pressedMenu(draft.page), 'velocity', '画面移動でも提出案を保持');
+  // ⚠ スマホは選手ごとの割り当てを持たない（全体の方針だけを出す）。
+  //    未保存の編集があることだけは同じように出す
   await draft.page.setViewportSize({ width: 390, height: 844 });
-  await draft.page.getByText('練習方針: 球速練習', { exact: false }).waitFor();
+  await draft.page.getByText('練習方針: 標準', { exact: false }).waitFor();
   await draft.page
     .getByText('編集中の内容（未保存）です。', { exact: false })
     .waitFor();
   await draft.page.reload();
   await click(draft.page, '手続き');
-  await draft.page.getByText('練習方針: 球速練習', { exact: false }).waitFor();
+  await draft.page
+    .getByText('編集中の内容（未保存）です。', { exact: false })
+    .waitFor();
   await draft.page.setViewportSize({ width: 1280, height: 844 });
   assert.equal(
     await pressedMenu(draft.page),
-    '球速練習',
+    'velocity',
     '再読込・表示切替後も未保存案を復元',
   );
   draft.view.phase.id = '2:camp';
   draft.view.revision++;
   await click(draft.page, '更新');
   await draft.page.waitForFunction(
-    (label) =>
-      document
-        .querySelector('.online-decision [role=group] [aria-pressed="true"]')
-        ?.textContent.trim() === label,
-    STANDARD_MENU,
+    ([name, value]) =>
+      document.querySelector(`select[aria-label="${name}"]`)?.value === value,
+    [`${PITCHER}の練習`, STANDARD_MENU],
   );
   assert.equal(draft.payloads.length, 0, '復元するだけで自動送信しない');
   await draft.context.close();
@@ -278,7 +292,7 @@ try {
     .click();
   await withDeadline(retry.commandStarted, '提出保存の開始');
   assert.ok(
-    await menuGroup(retry.page).getByRole('button').first().isDisabled(),
+    await menuGroup(retry.page).isDisabled(),
     '提出の保存中は練習方針も変更できない',
   );
   retry.release();

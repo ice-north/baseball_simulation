@@ -5,8 +5,9 @@ import {
   withStarters,
   leagueLeaders,
   teamSeasonStats,
+  abilityLeaders,
 } from './leagueBoard.mjs';
-import { packSummary } from '../src/online/rosterPack.js';
+import { packSummary, generateRosterPacks } from '../src/online/rosterPack.js';
 import {
   currentPlayerStats,
   playerPeriods,
@@ -16,6 +17,31 @@ import {
 } from './recordedViews.mjs';
 import { recordForPlayer } from './recordedStats.mjs';
 import { requireOnline } from '../src/online/shared.js';
+
+/**
+ * セット（24人）を**選ぶのに要る分だけ**にする。
+ * ⚠ 20セット×24人＝480人。全員の全項目を載せるとビューが重くなる。
+ */
+const packView = (pack) => ({
+  ...packSummary(pack),
+  takenBy: pack.takenBy || null,
+  players: pack.players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    age: p.age,
+    position: p.position,
+    rank: p.rank || 'C',
+    isTwoWay: !!p.isTwoWay,
+    batting: { meet: p.batting?.meet, power: p.batting?.power },
+    physical: { speed: p.physical?.speed },
+    fielding: { defense: p.fielding?.defense },
+    pitching: {
+      velocity: p.pitching?.velocity,
+      control: p.pitching?.control,
+      stamina: p.pitching?.stamina,
+    },
+  })),
+});
 
 const playerView = (p) => ({
   id: p.id,
@@ -274,6 +300,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // ⚠ 順位表に添えるチーム打率・チーム防御率。**同じ引き当て**を渡して
     //    選手成績と揃える（別に数えると画面の中で数字が食い違う）
     teamStats: teamSeasonStats(l, seasonStatsOf),
+    // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
+    //    持っていないので、並べ替えはここで済ませて渡す
+    abilityLeaders: abilityLeaders(l, labelOf),
     results: l.season.results.slice(-14).map((g) => ({
       gameId: g.gameId,
       date: g.date,
@@ -325,30 +354,18 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           label: PHASE_LABELS[phase.kind],
           // ⚠ 締め切りの有無で画面の文面が変わる
           deadline: phase.deadline || null,
-          // ⚠ 初期メンバー選択。20セット×24人＝480人なので、選ぶのに要る分だけ渡す
-          //    （全員の全項目を載せるとビューが重くなる）
-          packs: l.packs?.map((pack) => ({
-            ...packSummary(pack),
-            takenBy: pack.takenBy || null,
-            players: pack.players.map((p) => ({
-              id: p.id,
-              name: p.name,
-              age: p.age,
-              position: p.position,
-              rank: p.rank || 'C',
-              isTwoWay: !!p.isTwoWay,
-              batting: { meet: p.batting?.meet, power: p.batting?.power },
-              physical: { speed: p.physical?.speed },
-              fielding: { defense: p.fielding?.defense },
-              pitching: {
-                velocity: p.pitching?.velocity,
-                control: p.pitching?.control,
-                stamina: p.pitching?.stamina,
-              },
-            })),
-          })),
+          packs: l.packs?.map(packView),
           candidates: phase.candidates?.map(playerView),
           submission: phase.submissions[userId] || null,
+        }
+      : null,
+    // ⚠ **途中参加した人の初期メンバー選択**。リーグ全体の手続きではなく、
+    //    その人だけのもの。選んだセットは**次のキャンプ**で名簿に入る。
+    //    セットは種から作り直す（20セット×24人を保存に抱えないため）。
+    pendingPack: member.packSeed
+      ? {
+          chosen: member.pendingPackId || null,
+          packs: generateRosterPacks(member.packSeed).map(packView),
         }
       : null,
     history: l.history,

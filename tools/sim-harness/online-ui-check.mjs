@@ -173,10 +173,8 @@ try {
   await p.locator('.online-pack-card').nth(1).waitFor();
   await login(m, 2);
   // ⚠ 開発用サーバーの初期参加者は管理者1人だけ。プレイヤー2はログイン直後に
-  //    参加画面が出るので、先に参加する（招待コードを廃止したときに取り残された）
-  await m
-    .getByLabel('球団名（空なら元の名前のまま）')
-    .fill('検査ドリーマーズ');
+  //    参加画面が出るので、先に参加する（招待コードを廃止したときに取り残された）。
+  //    ⚠ 参加画面では名前を聞かない（セットの下で決める）
   await click(m, '参加する');
   await m.setViewportSize({ width: 320, height: 640 });
   await click(m, '手続き');

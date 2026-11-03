@@ -174,6 +174,7 @@ export function applyJoin(league, { userId, label, teamName, now }) {
   const shown = String(teamName || '').trim() || team.name;
   assertTeamNameFree(league, team, shown);
   team.displayName = shown;
+  const index = (league.members || []).length;
   league.members = [
     ...(league.members || []),
     {
@@ -183,6 +184,19 @@ export function applyJoin(league, { userId, label, teamName, now }) {
       teamName: team.name,
       displayName: shown,
       joinedAt: now,
+      // ⚠ **開幕後に参加した人には、自分のセットを選ばせる**。引き継いだCPUの
+      //    名簿のままだと、自分で選んだ24人で始められない。
+      //    選んだセットは**次のキャンプ**で名簿に入る（シーズン途中で入れ替えると
+      //    順位表と成績が合わなくなる）。
+      // ⚠ セットそのものは保存しない。20セット×24人＝480人を抱えることになる。
+      //    **種だけ**持ち、見るたびに作り直す（`generateRosterPacks` はシードから
+      //    決まるので、何度作っても同じ選手になる）。
+      // ⚠ 種は人ごとにずらすこと。選手のidは `種×1000＋1〜480` なので、
+      //    同じ種を使うと**別の人の名簿に同じidの選手**ができる。
+      ...(league.phase?.kind === 'pack_select'
+        ? // 開幕前の手続きの最中なら、その手続きで一緒に選ぶ
+          null
+        : { packSeed: (league.seed || 0) + 7 + index, pendingPackId: null }),
     },
   ];
   return {

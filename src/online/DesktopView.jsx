@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Results, Notices, PhasePanel } from './LeaguePanels.jsx';
+import {
+  Results,
+  Notices,
+  PhasePanel,
+  PendingPackPanel,
+} from './LeaguePanels.jsx';
 import DesktopTactics from './DesktopTactics.jsx';
+import AbilityRanking from './AbilityRanking.jsx';
 import TeamRoster from './TeamRoster.jsx';
 import OnlineLineup from './OnlineLineup.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
@@ -29,10 +35,10 @@ import { rebaseLineupSave, LINEUP_EDITOR_KEYS } from './lineupBridge.js';
 //    コンボボックス版の打順と投手の役割があり、同じものが2通りの操作で
 //    編集できていた（しかも名前しか出ず、判断に使える情報が無かった）。
 // ⚠ 消した入口:
-//    - 能力ランキング … 選手成績の表で「打撃能力」などを選び、列を押せば
-//      同じ並びになる。別ページにすると同じ表が2つになる
 //    - 自チーム情報 … 所属・順位・成績は左メニューの球団名の下に出す。
 //      名前の変更は頻繁ではないので、左メニューの「名前を変える」から開く
+// ⚠ 能力ランキングは残す。**リーグ全球団**の中の並びで、選手成績の表
+//    （1球団ずつ）では作れないため
 // ============================================================
 const NAV = [
   {
@@ -40,6 +46,7 @@ const NAV = [
     label: '情報',
     items: [
       ['players', '選手成績'],
+      ['ranking', '能力ランキング'],
       ['games', '試合結果'],
     ],
   },
@@ -67,6 +74,7 @@ const LINEUP_TABS = { lineup: 'lineup', rotation: 'rotation', defense: 'defense'
 const TITLES = {
   today: 'ホーム',
   players: '選手成績',
+  ranking: '能力ランキング',
   games: '試合結果',
   lineup: 'スタメン設定',
   rotation: '投手起用',
@@ -220,7 +228,7 @@ function RenameDialog({ view, busy, run, command, close }) {
 export default function DesktopView(props) {
   const { view, tab, setTab, busy, run, command, reload, showTimes } = props;
   const [renaming, setRenaming] = useState(false);
-  // ⚠ 消した入口（能力ランキング・自チーム情報）で開いていたら、ホームへ戻す
+  // ⚠ 消した入口（自チーム情報）で開いていたら、ホームへ戻す
   const current = TITLES[tab] ? tab : 'today';
   const lineupTab = LINEUP_TABS[current];
   // ⚠ 編成の画面は**ほかのページへ移っても外さない**（未保存の編集を残す）。
@@ -262,7 +270,7 @@ export default function DesktopView(props) {
                 onClick={() => setTab(id)}
               >
                 {label}
-                {id === 'decisions' && view.phase && (
+                {id === 'decisions' && (view.phase || view.pendingPack) && (
                   <span className="online-dot" aria-label="未完了の手続き" />
                 )}
                 {LINEUP_TABS[id] && lineupDirty && (
@@ -309,6 +317,7 @@ export default function DesktopView(props) {
           </div>
         </Page>
       )}
+      {current === 'ranking' && <AbilityRanking view={view} />}
       {current === 'players' && (
         <TeamRoster view={view}>
           {(shown, selector) => (
@@ -353,7 +362,13 @@ export default function DesktopView(props) {
       {current === 'tactics' && (
         <DesktopTactics key={`${view.year}:${view.teamName}`} {...props} />
       )}
+      {/* ⚠ **途中参加の初期メンバー選択を先に出す**。リーグ全体の手続きより、
+          自分の名簿が決まっていないことのほうが先に片付く */}
+      {current === 'decisions' && view.pendingPack && (
+        <PendingPackPanel {...props} />
+      )}
       {current === 'decisions' &&
+        !view.pendingPack &&
         (view.phase ? (
           <PhasePanel key={view.phase.id} {...props} />
         ) : (

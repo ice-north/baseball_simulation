@@ -4,6 +4,7 @@ import {
   Results,
   Notices,
   PhasePanel,
+  PendingPackPanel,
   LineupPanel,
 } from './LeaguePanels.jsx';
 import TeamRoster from './TeamRoster.jsx';
@@ -42,7 +43,7 @@ export default function MobileView(props) {
               .map(([id, label]) => (
                 <button key={id} aria-label={label} onClick={() => setTab(id)}>
                   {label}
-                  {id === 'decisions' && view.phase && (
+                  {id === 'decisions' && (view.phase || view.pendingPack) && (
                     <span className="online-dot" aria-label="未完了の手続き" />
                   )}
                 </button>
@@ -121,7 +122,13 @@ export default function MobileView(props) {
           )}
         </div>
       )}
+      {/* ⚠ **途中参加の初期メンバー選択は携帯でも出す**。PCでしか選べないと、
+          携帯で参加した人は名簿が決まらないままキャンプを迎える */}
+      {tab === 'decisions' && view.pendingPack && (
+        <PendingPackPanel {...props} mobile />
+      )}
       {tab === 'decisions' &&
+        !view.pendingPack &&
         (view.phase ? (
           <PhasePanel key={view.phase.id} {...props} mobile />
         ) : (

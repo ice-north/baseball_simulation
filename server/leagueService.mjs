@@ -351,6 +351,24 @@ export class LeagueService {
             teamName: command.payload?.teamName,
             playerName: command.payload?.playerName,
           });
+        } else if (command.type === 'pack') {
+          // ⚠ **途中参加した人だけの選択**。リーグ全体の手続き（`submit`）とは別。
+          //    選んだセットは次のキャンプで名簿に入る。
+          const me = l.members.find((m) => m.userId === userId);
+          requireOnline(
+            me?.packSeed,
+            '初期メンバーを選ぶ段階ではありません',
+            409,
+          );
+          const ids = new Set(
+            (await this.engine((engine) => engine.packIdsFor(me.packSeed))) || [],
+          );
+          requireOnline(
+            typeof command.payload?.packId === 'string' &&
+              ids.has(command.payload.packId),
+            '初期メンバーの選択が不正です',
+          );
+          me.pendingPackId = command.payload.packId;
         } else if (command.type === 'testmode') {
           // ⚠ 切り替えは管理者だけ。ONの間は管理者が好きな時に進められるので、
           //    遊び始めたらOFFに戻すこと

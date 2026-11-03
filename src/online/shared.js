@@ -216,6 +216,28 @@ export function sameEditState(a, b) {
  *    月曜0時に締め切られて**月曜開幕**になるため。初期編成を日曜に置くと、
  *    キャンプの締め切りが1週間先になって開幕が遅れる。
  */
+/**
+ * キャンプで選べる練習。**サーバーと画面で同じ表を見る**。
+ *
+ * ⚠ 画面にだけメニューを増やさないこと。`TRAINING_MENUS` には
+ *    「新球種習得（newpitch）」のようにオンラインのエンジンが動かさないものが
+ *    あり、出すと選べるのに提出で弾かれる（実測で画面に出ていた）。
+ */
+export const CAMP_MENUS = [
+  'batting',
+  'baserunning',
+  'fielding',
+  'control',
+  'velocity',
+  'intensive_power',
+  'intensive_meet',
+  'intensive_speed',
+  'intensive_control',
+  'intensive_velocity',
+  'intensive_defense',
+  'intensive_eye',
+];
+
 export const PHASE_WEEKDAY = {
   // ⚠ 初期メンバー選択も土曜扱い（締め切り日曜0時）。続くキャンプが
   //    月曜0時に締め切られて月曜開幕になる

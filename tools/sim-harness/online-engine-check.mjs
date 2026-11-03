@@ -114,8 +114,11 @@ assert.ok(
     .picks.every((p) => p.name && p.playerId != null && p.npbTeam && p.round),
   'ドラフトのお知らせに選手名・ID・指名先を残す',
 );
+// ⚠ 開幕前は**初期メンバー選択**（`pack_select`）。初期編成（360人の希望
+//    リスト）から置き換えた。ここは `check` の束に入っていない別枠の検査なので、
+//    フェーズを変えたときに取り残された（`check:online:season` を回すこと）。
 assert.deepEqual(seen, [
-  'initial_tryout',
+  'pack_select',
   'camp',
   'contract',
   'tryout',
