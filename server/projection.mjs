@@ -5,6 +5,7 @@ import {
   withStarters,
   leagueLeaders,
   teamSeasonStats,
+  abilityLeaders,
 } from './leagueBoard.mjs';
 import { packSummary, generateRosterPacks } from '../src/online/rosterPack.js';
 import {
@@ -299,6 +300,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // ⚠ 順位表に添えるチーム打率・チーム防御率。**同じ引き当て**を渡して
     //    選手成績と揃える（別に数えると画面の中で数字が食い違う）
     teamStats: teamSeasonStats(l, seasonStatsOf),
+    // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
+    //    持っていないので、並べ替えはここで済ませて渡す
+    abilityLeaders: abilityLeaders(l, labelOf),
     results: l.season.results.slice(-14).map((g) => ({
       gameId: g.gameId,
       date: g.date,

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import MobileTactics from './MobileTactics.jsx';
-import { PitcherRoles, AutoTactics } from './PreGameTactics.jsx';
+import { AutoTactics } from './PreGameTactics.jsx';
 import { roleFor, STRATEGY_FIELDS } from './tactics.js';
 import { useDraftState, phaseDraftName } from './Drafts.jsx';
 import GameHistory, { GameRecordButton } from './GameHistory.jsx';
@@ -756,7 +756,11 @@ export function LineupPanel({
   const [baseLineup, setBaseLineup] = useDraftState('lineup.base', () =>
     structuredClone(view.lineup),
   );
-  const [section, setSection] = useState('batting');
+  // ⚠ PCの区分切り替えは**無くした**。打順・守備・先発・投手の役割は
+  //    移植した「スタメン設定／投手起用／守備分析」と丸ごと被っていて、
+  //    同じことを2か所で設定できる状態だった（どちらが効くのか分からない）。
+  //    ここに残すのは、あちらに無い**基本方針と自動采配**だけ。
+  //    携帯は移植画面を持たないので、従来どおり打順と采配をここで出す。
   const [showTactics, setShowTactics] = useState(false);
   const [tacticsError, setTacticsError] = useState('');
   const save = () =>
@@ -814,7 +818,7 @@ export function LineupPanel({
             <p className="online-muted">次の試合から反映</p>
           </div>
         ) : (
-          <h2>編成・采配</h2>
+          <h2>方針・采配</h2>
         )}
         {mobile && <button onClick={() => setShowTactics(true)}>采配</button>}
         {mobile && onShowRoster && (
@@ -828,26 +832,12 @@ export function LineupPanel({
       </div>
       <fieldset className="online-form-fields" disabled={busy}>
         {!mobile && (
-          <div className="online-segments">
-            {[
-              ['batting', '打順・守備'],
-              ['pitchers', '先発'],
-              ['roles', '投手の役割'],
-              ['strategy', '基本方針'],
-              ['autoTactics', '自動采配'],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                aria-pressed={section === id}
-                onClick={() => setSection(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <p className="online-muted">
+            次回の進行から反映します。打順・守備位置・先発ローテーション・投手の
+            役割は「スタメン設定」「投手起用」「守備分析」で設定します。
+          </p>
         )}
-        {!mobile && <p className="online-muted">次回の進行から反映します。</p>}
-        {(mobile || section === 'batting') &&
+        {mobile &&
           [...plan.battingOrder]
             .sort((a, b) => a.battingOrder - b.battingOrder)
             .map((entry, i) => (
@@ -917,50 +907,9 @@ export function LineupPanel({
                 </button>
               </div>
             ))}
-        {!mobile && section === 'pitchers' && (
+        {!mobile && (
           <>
-            <h3>先発ローテーション</h3>
-            <p>
-              選択した順に先発します。並びを変更した場合は先頭から再開します。
-            </p>
-            {view.roster
-              .filter((p) => p.position === 'pitcher')
-              .map((p) => (
-                <div className="online-check-info" key={p.id}>
-                  <label className="online-check" key={p.id}>
-                    <input
-                      type="checkbox"
-                      checked={plan.starters.includes(p.id)}
-                      onChange={(e) =>
-                        change({
-                          ...plan,
-                          starters: e.target.checked
-                            ? [...plan.starters, p.id]
-                            : plan.starters.filter((id) => id !== p.id),
-                        })
-                      }
-                    />
-                    {p.name}（
-                    <ConditionMark player={p} />
-                    疲労{p.fatigue}）
-                    {plan.starters.includes(p.id) &&
-                      ` · ${plan.starters.indexOf(p.id) + 1}番手`}
-                  </label>
-                  <PlayerStatsButton player={p} panel="abilities">
-                    情報
-                  </PlayerStatsButton>
-                </div>
-              ))}
-          </>
-        )}
-        {!mobile && section === 'roles' && (
-          <PitcherRoles view={view} plan={plan} change={change} />
-        )}
-        {!mobile && section === 'autoTactics' && (
-          <AutoTactics plan={plan} change={change} />
-        )}
-        {!mobile && section === 'strategy' && (
-          <>
+            <h3>基本方針</h3>
             {Object.entries(STRATEGY_FIELDS).map(([key, [label, values]]) => (
               <label key={key}>
                 {label}
@@ -981,6 +930,8 @@ export function LineupPanel({
                 </select>
               </label>
             ))}
+            <h3>自動采配</h3>
+            <AutoTactics plan={plan} change={change} />
           </>
         )}
 

@@ -437,6 +437,55 @@ try {
     );
   }
 
+  // --- 能力ランキング（リーグ全球団） ----------------------------------
+  // ⚠ 以前は自球団の中だけだった。12球団288人の中での位置が分からないと、
+  //    自分の選手が強いのか弱いのか判断できない。
+  {
+    const live = (await store.read()).league;
+    const fields = view.abilityLeaders;
+    assert.ok(Array.isArray(fields) && fields.length >= 8, '能力ランキングが渡っていない');
+    const names = live.season.settings.teamNames;
+    const byId = new Map(
+      names.flatMap((n) => live.game.teams[n].players.map((p) => [p.id, { team: n, p }])),
+    );
+    const teamsSeen = new Set();
+    for (const field of fields) {
+      assert.ok(field.rows.length > 0, `${field.label} が空`);
+      // ⚠ **全球団から選ぶこと**。自球団だけだと、どの行も同じ球団になる
+      for (const row of field.rows) {
+        const found = byId.get(row.id);
+        assert.ok(found, `${row.name} が名簿に居ない`);
+        assert.equal(row.team, found.team, '球団がちがう');
+        teamsSeen.add(row.team);
+        // ⚠ 投手の項目は投手だけ、野手の項目は野手だけ。混ぜると
+        //    「走力ランキングが投手で埋まる」
+        assert.equal(
+          row.position === 'pitcher',
+          field.side === 'pitching',
+          `${field.label} に ${row.position} が混ざっている`,
+        );
+      }
+      // 降順に並んでいる
+      const values = field.rows.map((r) => r.value);
+      assert.deepEqual(
+        values,
+        [...values].sort((a, b) => b - a),
+        `${field.label} が降順でない`,
+      );
+    }
+    assert.ok(
+      teamsSeen.size > 1,
+      `自球団の中だけで並べている（出た球団: ${[...teamsSeen].join('・')}）`,
+    );
+    // ⚠ 同値は名前で分ける。見るたび違う人が1位になると順位表の意味が無い
+    const again = await service.view('admin', admin);
+    assert.deepEqual(
+      again.abilityLeaders.map((f) => f.rows.map((r) => r.id)),
+      fields.map((f) => f.rows.map((r) => r.id)),
+      '見るたびに並びが変わる',
+    );
+  }
+
   // --- 順位表に添えるチーム打率・チーム防御率 --------------------------
   {
     const live = (await store.read()).league;
@@ -488,5 +537,5 @@ try {
 }
 
 console.log(
-  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム打率と防御率が名簿の合計と合う）',
+  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム打率と防御率が名簿の合計と合う・能力ランキングが全球団から並ぶ）',
 );

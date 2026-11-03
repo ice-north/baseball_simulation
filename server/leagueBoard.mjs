@@ -177,3 +177,83 @@ export function teamSeasonStats(league, statsOf) {
   }
   return out;
 }
+
+// ⚠ 能力ランキングの項目表は**サーバーが持つ**。全球団をなめる必要があり、
+//    画面には並べ替えの材料が無い（自球団の名簿しか持っていない）。
+//    画面に同じ表を置くと、足したときに片方だけ直して食い違う。
+const ABILITY_FIELDS = [
+  { id: 'meet', label: 'ミート', side: 'batting', of: (p) => p.batting?.meet },
+  { id: 'power', label: 'パワー', side: 'batting', of: (p) => p.batting?.power },
+  { id: 'speed', label: '走力', side: 'batting', of: (p) => p.physical?.speed },
+  { id: 'defense', label: '守備', side: 'batting', of: (p) => p.fielding?.defense },
+  { id: 'arm', label: '肩', side: 'batting', of: (p) => p.physical?.arm },
+  {
+    id: 'velocity', label: '球速', side: 'pitching', velocity: true,
+    of: (p) => p.pitching?.velocity,
+  },
+  { id: 'control', label: '制球', side: 'pitching', of: (p) => p.pitching?.control },
+  {
+    id: 'stamina', label: 'スタミナ', side: 'pitching', stamina: true,
+    of: (p) => p.pitching?.stamina,
+  },
+];
+
+/**
+ * 能力ランキング（**リーグ全球団**の中での上位）。
+ *
+ * ⚠ 以前は自球団の中だけだった。12球団288人の中での位置が分からないと、
+ *    自分の選手が強いのか弱いのか判断できない。
+ * ⚠ 能力は元から公開の情報（他球団の名簿は「選手成績」から能力も見られる）。
+ *    ここで新しく秘密を開けているわけではない。
+ * ⚠ 並びを決定的にすること（同値は名前で分ける）。実行のたびに順位が
+ *    入れ替わると、見るたび違う人が1位になる。
+ * ⚠ 投手の項目は投手だけ、野手の項目は野手だけで競う。混ぜると
+ *    「走力ランキングが投手で埋まる」ようなことが起きる。
+ */
+export function abilityLeaders(league, labelOf = (n) => n, top = 5) {
+  const entries = [];
+  for (const team of league.season.settings.teamNames || [])
+    for (const player of league.game.teams[team]?.players || [])
+      entries.push({ team, player });
+  return ABILITY_FIELDS.map((field) => {
+    const pool = entries.filter(({ player }) =>
+      field.side === 'pitching'
+        ? player.position === 'pitcher'
+        : player.position !== 'pitcher',
+    );
+    const rows = pool
+      .map(({ team, player }) => ({ team, player, value: field.of(player) }))
+      .filter((row) => typeof row.value === 'number')
+      .sort(
+        (a, b) =>
+          b.value - a.value || a.player.name.localeCompare(b.player.name, 'ja'),
+      )
+      .slice(0, top)
+      .map(({ team, player, value }) => ({
+        id: player.id,
+        name: player.name,
+        team,
+        label: labelOf(team),
+        position: player.position,
+        age: player.age,
+        value,
+        // 選手情報の小窓に出すぶんだけ（全項目は載せない）
+        batting: { meet: player.batting?.meet, power: player.batting?.power },
+        physical: { speed: player.physical?.speed, arm: player.physical?.arm },
+        fielding: { defense: player.fielding?.defense },
+        pitching: {
+          velocity: player.pitching?.velocity,
+          control: player.pitching?.control,
+          stamina: player.pitching?.stamina,
+        },
+      }));
+    return {
+      id: field.id,
+      label: field.label,
+      side: field.side,
+      velocity: !!field.velocity,
+      stamina: !!field.stamina,
+      rows,
+    };
+  });
+}
