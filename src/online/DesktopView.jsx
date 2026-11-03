@@ -9,6 +9,9 @@ import {
 } from './LeaguePanels.jsx';
 import TeamRoster from './TeamRoster.jsx';
 import OnlineLineup from './OnlineLineup.jsx';
+import LeagueBoard from './LeagueBoard.jsx';
+import TeamProfile from './TeamProfile.jsx';
+import AbilityRanking from './AbilityRanking.jsx';
 import { POS } from './api.js';
 import { teamLabel } from './gameText.js';
 import {
@@ -21,19 +24,47 @@ import {
   RoleMark,
   rosterByRole,
 } from './PlayerPerformance.jsx';
+// ⚠ **左メニューは3つのまとまりに分ける**。以前は「今日/試合/選手/編成/手続き」が
+//    並ぶだけで、どこに何があるか辿れないという指摘を受けた。
+//    見る（情報）・決める（ロスター管理）・動かす（手続き）で分ける。
+// ⚠ ロスター管理の3つは、移植した一人用画面の**中のタブ**へ直に入る。
+//    `OnlineLineup` に開く位置を渡す。
+const NAV = [
+  {
+    id: 'info',
+    label: '情報',
+    items: [
+      ['profile', '自チーム情報'],
+      ['players', '選手成績'],
+      ['ranking', '能力ランキング'],
+      ['games', '試合結果'],
+    ],
+  },
+  {
+    id: 'roster',
+    label: 'ロスター管理',
+    items: [
+      ['lineup', 'スタメン設定'],
+      ['rotation', '投手起用'],
+      ['defense', '守備分析'],
+      ['tactics', '方針・采配'],
+    ],
+  },
+  {
+    id: 'moves',
+    label: '手続き',
+    items: [
+      ['decisions', '現在の手続き'],
+      ['transfer', '移籍・解雇'],
+    ],
+  },
+];
+/** ロスター管理のどの項目が、移植画面のどのタブに当たるか */
+const LINEUP_TABS = { lineup: 'lineup', rotation: 'rotation', defense: 'defense' };
+
 export default function DesktopView(props) {
   const { view, tab, setTab, busy, run, command } = props;
-  // ⚠ 一人用の編成画面を**既定で**全画面で開く。閉じると、オンライン側だけの
-  //    設定（基本方針・自動采配）が並ぶパネルに戻る
-  const [fullLineup, setFullLineup] = useState(true);
-  const tabs = [
-    ['today', '今日'],
-    ['games', '試合'],
-    ['players', '選手'],
-    ['lineup', '編成'],
-    ['decisions', '手続き'],
-    ...(view.isAdmin ? [['admin', '管理']] : []),
-  ];
+  const lineupTab = LINEUP_TABS[tab];
   return (
     <>
       <nav className="online-page-nav" aria-label="オンラインの画面">
@@ -41,51 +72,46 @@ export default function DesktopView(props) {
           <strong>{teamLabel(view.teamName)}</strong>
           <small>独立リーグ · {view.year}年目</small>
         </div>
-        {tabs.map(([id, label]) => (
-          <button
-            key={id}
-            aria-label={label}
-            aria-current={tab === id ? 'page' : undefined}
-            onClick={() => setTab(id)}
-          >
-            {label}
-            {id === 'decisions' && view.phase && (
-              <span className="online-dot" aria-label="未完了の手続き" />
-            )}
-          </button>
+        <button
+          className="online-nav-home"
+          aria-current={tab === 'today' ? 'page' : undefined}
+          onClick={() => setTab('today')}
+        >
+          ホーム
+        </button>
+        {NAV.map((group) => (
+          <div key={group.id} className="online-nav-group">
+            <p>{group.label}</p>
+            {group.items.map(([id, label]) => (
+              <button
+                key={id}
+                aria-label={label}
+                aria-current={tab === id ? 'page' : undefined}
+                onClick={() => setTab(id)}
+              >
+                {label}
+                {id === 'decisions' && view.phase && (
+                  <span className="online-dot" aria-label="未完了の手続き" />
+                )}
+              </button>
+            ))}
+          </div>
         ))}
+        {view.isAdmin && (
+          <div className="online-nav-group">
+            <p>管理</p>
+            <button
+              aria-label="リーグ管理"
+              aria-current={tab === 'admin' ? 'page' : undefined}
+              onClick={() => setTab('admin')}
+            >
+              リーグ管理
+            </button>
+          </div>
+        )}
       </nav>
-      {tab === 'today' && (
-        <div className="online-dashboard">
-          <Standings view={view} />
-          <section className="online-card">
-            <h2>今日の球団</h2>
-            <TeamBrief view={view} />
-            <p>
-              {teamLabel(view.teamName)} · 所属{view.roster.length}人
-            </p>
-            {view.phase ? (
-              <>
-                <p>{view.phase.label}の決定を待っています。</p>
-                <button
-                  className="online-primary"
-                  onClick={() => setTab('decisions')}
-                >
-                  手続きの内容を確認
-                </button>
-              </>
-            ) : (
-              <>
-                <p>次の進行までに編成を見直せます。</p>
-                <button onClick={() => setTab('lineup')}>編成を確認</button>
-              </>
-            )}
-            <p className="online-muted online-spaced">
-              試合結果・選手一覧・管理操作は、それぞれの画面から確認できます。
-            </p>
-          </section>
-        </div>
-      )}
+      {tab === 'today' && <LeagueBoard view={view} />}
+      {tab === 'profile' && <TeamProfile {...props} />}
       {tab === 'games' && (
         <div className="online-dashboard">
           <Results view={view} />
@@ -99,30 +125,27 @@ export default function DesktopView(props) {
           )}
         </TeamRoster>
       )}
-      {tab === 'lineup' &&
-        /* ⚠ **手続き中でも開けること**。以前は「決定待ちです」の1行だけにして
-           いたが、移植した編成画面に一度も辿り着けないという指摘を受けた。
-           打順や投手起用はいつ決めてもよく、止める理由が無い。
-           ⚠ **既定で移植した画面を出す**。ボタンの奥に隠すと、タブを開いた
-           時点の見た目が以前と変わらず「移植されていない」ように見える。 */
-        (fullLineup ? (
-          <OnlineLineup
-            view={view}
-            busy={busy}
-            onClose={() => setFullLineup(false)}
-            onSave={async (plan, baseLineup) => {
-              await run(() => command('lineup', { ...plan, baseLineup }));
-              setFullLineup(false);
-            }}
-          />
-        ) : (
-          <div className="online-form-width">
-            <button className="online-primary" onClick={() => setFullLineup(true)}>
-              打順・守備・投手起用を開く
-            </button>
-            <LineupPanel key={`${view.year}:${view.teamName}`} {...props} />
-          </div>
-        ))}
+      {tab === 'ranking' && <AbilityRanking view={view} />}
+      {/* ⚠ **手続き中でも開けること**。以前は「決定待ちです」の1行だけにして
+          いたが、移植した編成画面に一度も辿り着けないという指摘を受けた。
+          打順や投手起用はいつ決めてもよく、止める理由が無い。
+          ⚠ 左メニューの3項目は、移植画面の**中のタブ**へ直に入る */}
+      {lineupTab && (
+        <OnlineLineup
+          view={view}
+          busy={busy}
+          tab={lineupTab}
+          onClose={() => setTab('tactics')}
+          onSave={async (plan, baseLineup) => {
+            await run(() => command('lineup', { ...plan, baseLineup }));
+          }}
+        />
+      )}
+      {tab === 'tactics' && (
+        <div className="online-form-width">
+          <LineupPanel key={`${view.year}:${view.teamName}`} {...props} />
+        </div>
+      )}
       {tab === 'decisions' &&
         (view.phase ? (
           /* ⚠ 初期編成・トライアウトだけ横に広げる。希望リストと候補を
@@ -137,9 +160,28 @@ export default function DesktopView(props) {
         ) : (
           <section className="online-card">
             <h2>手続き</h2>
-            <p>現在、決定待ちの手続きはありません。</p>
+            <p>現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。</p>
           </section>
         ))}
+      {tab === 'transfer' && (
+        <section className="online-card online-form-width">
+          <h2>移籍・解雇</h2>
+          {/* ⚠ **まだ作っていない**。できないことを、できるように見せない */}
+          <p>この画面はまだありません。いまできるのは次の2つです。</p>
+          <ul>
+            <li>
+              <strong>解雇</strong> — 土曜の「契約更改」で、退団させる選手を選べます
+            </li>
+            <li>
+              <strong>選手の獲得</strong> — 土曜の「トライアウト」で、希望リストを出せます
+            </li>
+          </ul>
+          <p className="online-muted">
+            球団間のトレードとオークションは、これから作るところです。
+          </p>
+          <button onClick={() => setTab('decisions')}>現在の手続きへ</button>
+        </section>
+      )}
       {tab === 'admin' && (
         <div className="online-form-width">
           <Admin {...props} />

@@ -120,11 +120,12 @@ export function assertCanJoin(league, userId) {
 // ⚠ **この関数は `league` と、その中の球団オブジェクトを書き換える**（engine 側の流儀に合わせている）。
 //    呼ぶ側が「参加前の球団名」を参照で持っていると、書き換えで一緒に変わる。
 //    比べたいなら**文字列で控えてから**呼ぶこと（検査で実際に踏んだ）。
-export function applyJoin(league, { userId, label, teamName, now }) {
-  const { team } = assertCanJoin(league, userId);
-  const shown = String(teamName || '').trim() || team.name;
+/**
+ * 球団名が使えるか。⚠ 内部名と表示名の**両方**と見比べる。
+ *    片方だけだと同じ名前が2つ並ぶ。
+ */
+export function assertTeamNameFree(league, team, shown) {
   requireOnline(shown.length <= 24, '球団名が長すぎます', 400);
-  // ⚠ 内部名と表示名の**両方**と見比べる。片方だけだと同じ名前が2つ並ぶ
   requireOnline(
     !(league.teams || []).some(
       (t) => t !== team && (t.name === shown || t.displayName === shown),
@@ -132,6 +133,40 @@ export function applyJoin(league, { userId, label, teamName, now }) {
     'その球団名は使われています',
     409,
   );
+}
+
+/**
+ * 球団名とプレイヤー名を後から変える。
+ *
+ * ⚠ **参加のときしか名前を付けられなかった**。リーグを作った管理者には
+ *    その機会すら無く、順位表に「湘南サンズ（湘南サンズ）」のように
+ *    球団名が2回出ていた（参加時の呼び名が既定で球団名だったため）。
+ * ⚠ 内部名（`name`）は変えない。記録の選手キーまで貫いている。
+ */
+export function applyProfile(league, { userId, teamName, playerName }) {
+  requireOnline(league, 'リーグがまだありません', 409);
+  const member = (league.members || []).find((m) => m.userId === userId);
+  requireOnline(member, '参加者ではありません', 403);
+  const team = (league.teams || []).find((t) => t.name === member.teamName);
+  requireOnline(team, '球団が見つかりません', 409);
+  if (teamName !== undefined) {
+    const shown = String(teamName || '').trim() || team.name;
+    assertTeamNameFree(league, team, shown);
+    team.displayName = shown;
+    member.displayName = shown;
+  }
+  if (playerName !== undefined) {
+    const who = String(playerName || '').trim();
+    requireOnline(who.length <= 24, '名前が長すぎます', 400);
+    member.label = who || member.displayName || team.name;
+  }
+  return { teamName: team.name, displayName: team.displayName, label: member.label };
+}
+
+export function applyJoin(league, { userId, label, teamName, now }) {
+  const { team } = assertCanJoin(league, userId);
+  const shown = String(teamName || '').trim() || team.name;
+  assertTeamNameFree(league, team, shown);
   team.displayName = shown;
   league.members = [
     ...(league.members || []),

@@ -20,8 +20,11 @@ const formLabel = (player) => FORM_SHORT[player.pitching?.form] || '';
 //    `TEAMS_DATA` の球団でなくても動く。オンライン側は view から組み立てた
 //    複製を渡し、書き換えられた結果を読んでサーバーへ送る。
 //    ⚠ ここで `TEAMS_DATA` を直に読まないこと（結合が戻る）。
-export const LineupSettingContent = ({ teamName, onBack, team }) => {
-  const [tab, setTab] = useState('lineup');
+export const LineupSettingContent = ({ teamName, onBack, team, initialTab = 'lineup' }) => {
+  // ⚠ オンライン版は左メニューから「スタメン設定/投手起用/守備分析」へ
+  //    直に入るので、開く位置を外から渡せるようにしてある
+  const [tab, setTab] = useState(initialTab);
+  useEffect(() => setTab(initialTab), [initialTab]);
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [selectedBattingOrder, setSelectedBattingOrder] = useState(null);
   const [benchSortKey, setBenchSortKey] = useState(null);

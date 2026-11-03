@@ -2,6 +2,11 @@ import { roleFor } from '../src/online/tactics.js';
 import { PHASE_LABELS, ONLINE_SCHEMA } from '../src/online/shared.js';
 import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
 import {
+  divisionStandings,
+  upcomingGames,
+  leagueLeaders,
+} from './leagueBoard.mjs';
+import {
   currentPlayerStats,
   playerPeriods,
   storedGame,
@@ -122,6 +127,21 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     };
   const team = l.game.teams[member.teamName];
   const statistics = statisticsContext(l);
+  // ⚠ **表示名は内部名と別に持つ**。参加した人が付けた球団名を画面に出すため。
+  //    内部名（`teamName` / 順位表 / 日程）は記録の選手キーまで貫いているので
+  //    変えられない。表示のときだけこの表で引く。
+  const teamLabels = Object.fromEntries(
+    (l.teams || []).map((t) => [
+      t.name,
+      {
+        label: t.displayName || t.name,
+        short: t.displayName
+          ? [...t.displayName].slice(0, 3).join('')
+          : t.abbreviation || t.name,
+      },
+    ]),
+  );
+  const labelOf = (name) => teamLabels[name]?.label || name;
   const phase = l.phase;
   return {
     // ⚠ **このビューを作ったコードの版**。`LeagueService.view` がここを見て、
@@ -149,26 +169,25 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     phaseDeadline: l.phase?.deadline || null,
     // ⚠ 検証モード。管理画面に手動進行のボタンを出すかの判断に使う
     testMode: l.testMode === true,
-    // ⚠ **表示名は内部名と別に渡す**。参加した人が付けた球団名を画面に出すため。
-    //    内部名（`teamName` / 順位表 / 日程）は記録の選手キーまで貫いているので
-    //    変えられない。表示のときだけこの表で引く。
-    teamLabels: Object.fromEntries(
-      (l.teams || []).map((t) => [
-        t.name,
-        {
-          label: t.displayName || t.name,
-          short: t.displayName
-            ? [...t.displayName].slice(0, 3).join('')
-            : t.abbreviation || t.name,
-        },
-      ]),
-    ),
+    teamLabels,
     members: l.members.map((m) => ({
       label: m.label,
       teamName: m.teamName,
+      // ⚠ 自チーム情報の画面が「いまの球団名」を出すのに使う
+      displayName: m.displayName || teamLabels[m.teamName]?.label || m.teamName,
       ready: !!phase?.submissions[m.userId]?.ready,
     })),
     standings: l.season.standings,
+    // ⚠ 「今日」の画面に出すリーグ全体の眺め。12球団×24人をなめるので
+    //    **1回の投影で1度だけ**作る（参加者ごとに作らない）
+    divisions: divisionStandings(l, labelOf),
+    upcoming: upcomingGames(l, l.game.teams),
+    leaders: leagueLeaders(
+      l,
+      (teamName, player) =>
+        currentPlayerStats(l, teamName, player, statistics).seasonStats,
+      labelOf,
+    ),
     results: l.season.results.slice(-14).map((g) => ({
       gameId: g.gameId,
       date: g.date,
@@ -178,10 +197,6 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       awayScore: g.result.awayScore,
       decisions: g.result.decisions,
     })),
-    upcoming: l.season.schedule
-      .filter((g) => !g.result && g.home !== 'TBD' && g.away !== 'TBD')
-      .slice(0, 6)
-      .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away })),
     roster: team.players.map((p) => ({
       ...playerView(p),
       ...currentPlayerStats(l, member.teamName, p, statistics),

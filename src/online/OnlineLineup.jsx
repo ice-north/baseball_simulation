@@ -18,11 +18,14 @@ import { teamFromView, planFromTeam } from './lineupBridge.js';
 //    `.bg-gray-700`（0,1,0）より強いため、中に入れると一人用の画面の
 //    ボタンが全部44pxの同じ高さ・同じ色に潰れて、小さな操作が読めなくなる。
 //    ポータルで body 直下へ出せば、一人用の画面と同じ見え方になる。
+// ⚠ **左メニューの上に被せないこと**。全画面にしたら、スタメン設定から
+//    投手起用へ移れなくなった（メニューがポータルの下敷きになる）。
+//    PCではサイドバーのぶんだけ左を空ける（`.online-lineup-portal`）。
 // ============================================================
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
-export default function OnlineLineup({ view, busy, onSave, onClose }) {
+export default function OnlineLineup({ view, busy, tab, onSave, onClose }) {
   // ⚠ 画面は `team` を書き換えるので、開いている間は同じオブジェクトを保つ。
   //    毎回作り直すと編集が消える
   const teamRef = useRef(null);
@@ -39,7 +42,7 @@ export default function OnlineLineup({ view, busy, onSave, onClose }) {
   LEAGUE_SETTINGS.useDH = !!view.useDH;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-surface-0">
+    <div className="online-lineup-portal fixed inset-0 z-50 overflow-y-auto bg-surface-0">
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-700 bg-surface-1 px-4 py-2">
         <strong className="text-white">{view.teamName} · 編成</strong>
         <span className="text-xs text-gray-300">
@@ -52,7 +55,7 @@ export default function OnlineLineup({ view, busy, onSave, onClose }) {
             onClick={onClose}
             className="rounded border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-600 disabled:opacity-50"
           >
-            方針・采配の設定へ（保存しない）
+            方針・采配へ（保存しない）
           </button>
           <button
             type="button"
@@ -64,7 +67,8 @@ export default function OnlineLineup({ view, busy, onSave, onClose }) {
           </button>
         </div>
       </div>
-      <LineupSettingContent teamName={view.teamName} team={team} />
+      {/* ⚠ 左メニューの項目から、画面の中のタブへ直に入る */}
+      <LineupSettingContent teamName={view.teamName} team={team} initialTab={tab} />
     </div>,
     document.body,
   );

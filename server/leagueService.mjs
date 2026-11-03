@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { applyJoin } from '../src/online/membership.js';
+import { applyJoin, applyProfile } from '../src/online/membership.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   requireOnline,
@@ -324,6 +324,13 @@ export class LeagueService {
           bundle.league.status = bundle.league.phase ? 'waiting' : 'paused';
           bundle.league.nextAdvanceAt = null;
           // 復元前の操作を再実行させない。過去のログイン権限を復活させない。
+        } else if (command.type === 'profile') {
+          // ⚠ 参加のときしか名前を付けられず、管理者には機会すら無かった
+          applyProfile(l, {
+            userId,
+            teamName: command.payload?.teamName,
+            playerName: command.payload?.playerName,
+          });
         } else if (command.type === 'testmode') {
           // ⚠ 切り替えは管理者だけ。ONの間は管理者が好きな時に進められるので、
           //    遊び始めたらOFFに戻すこと

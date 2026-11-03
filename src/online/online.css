@@ -1728,3 +1728,123 @@
   width: 100%;
   margin-bottom: 10px;
 }
+
+/* 左メニューのまとまり。見る（情報）・決める（ロスター管理）・動かす（手続き）。
+   ⚠ 以前は項目が平らに並ぶだけで、どこに何があるか辿れなかった。 */
+.online-desktop .online-nav-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px;
+}
+.online-desktop .online-nav-group > p {
+  margin: 0 0 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #9fb0c4;
+}
+.online-desktop .online-nav-group button {
+  font-size: 13px;
+  padding-left: 18px;
+}
+.online-desktop .online-nav-home {
+  margin-bottom: 14px;
+  font-weight: 700;
+}
+
+/* ホームの眺め。左に順位表、右に日程とリーグ上位。 */
+.online-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.online-board-side {
+  min-width: 0;
+}
+.online-division + .online-division {
+  margin-top: 16px;
+}
+.online-division h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--accent);
+}
+.online-owner {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #cbd5e1;
+}
+.online-leaders {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+.online-leaders h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.online-leaders ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.online-leaders li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  padding: 2px 0;
+  border-bottom: 1px solid #ffffff14;
+}
+.online-leader-rank {
+  flex: 0 0 14px;
+  color: #9fb0c4;
+}
+.online-leader-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-leader-name small {
+  margin-left: 5px;
+  color: #9fb0c4;
+}
+.online-leader-value {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.online-profile-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+.online-profile-facts dt {
+  font-size: 11px;
+  color: #9fb0c4;
+}
+.online-profile-facts dd {
+  margin: 0;
+  font-weight: 700;
+}
+@media (max-width: 1100px) {
+  .online-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .online-leaders {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 移植した編成画面は全画面で出すが、**左メニューは覆わない**。
+   ⚠ 覆うと、スタメン設定から投手起用へ移れなくなる（実機で踏んだ）。 */
+@media (min-width: 768px) {
+  .online-lineup-portal {
+    left: 224px;
+  }
+}
