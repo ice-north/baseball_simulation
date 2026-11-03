@@ -1,10 +1,10 @@
-import { PYRAMID_LEAGUES, standingsByLeague } from '../src/online/pyramidLeague.js';
-
 // ============================================================
-// 「今日」の画面に出す、リーグ全体の眺め。
-//   1. 2部制の順位表（人が持っている球団はプレイヤー名を添える）
-//   2. 今後の日程（対戦相手と先発予定）
-//   3. 各項目のベスト5
+// ホームに出すリーグ全体の眺めのうち、サーバーで作る分。
+//   1. 今後の日程に重ねる先発予定（`withStarters`）
+//   2. 各項目のベスト5（`leagueLeaders`）
+//
+// ⚠ 順位表の2部制分けは `projection.teamLeagues` ＋ 画面側の `Standings` が持つ。
+//    ここで作り直さないこと（同じものが2つになる）。
 //
 // ⚠ **投影（表示用）であって、保存データではない**。ここで作った値を
 //    判定や保存に使わないこと。内部名（`name`）での照合は呼ぶ側が行う。
@@ -12,53 +12,17 @@ import { PYRAMID_LEAGUES, standingsByLeague } from '../src/online/pyramidLeague.
 //    （参加者ごとに呼ぶと人数ぶん重くなる）。
 // ============================================================
 
-/** 2部制の順位表。上の階層から順に返す */
-export function divisionStandings(league, labelOf = (n) => n) {
-  const teams = league.teams || [];
-  const order = standingsByLeague(teams, league.season.standings || []);
-  const byName = Object.fromEntries(
-    (league.season.standings || []).map((s) => [s.team, s]),
-  );
-  // 人が持っている球団 → その人の呼び名
-  const ownerOf = Object.fromEntries(
-    (league.members || []).map((m) => [m.teamName, m.label || m.displayName]),
-  );
-  return [...PYRAMID_LEAGUES]
-    .sort((a, b) => a.tier - b.tier)
-    .map((division) => ({
-      id: division.id,
-      name: division.name,
-      rows: (order[division.id] || []).map((name, index) => {
-        const s = byName[name] || {};
-        return {
-          rank: index + 1,
-          team: name,
-          label: labelOf(name),
-          // ⚠ 人が持っている球団かどうか。CPUとの区別はこれで行う
-          human: Object.hasOwn(ownerOf, name),
-          // ⚠ 呼び名が球団名と同じときは出さない。参加時の既定が球団名なので、
-          //    そのままだと「湘南サンズ（湘南サンズ）」と2回並ぶ
-          player:
-            ownerOf[name] && ownerOf[name] !== labelOf(name)
-              ? ownerOf[name]
-              : null,
-          wins: s.wins || 0,
-          losses: s.losses || 0,
-          draws: s.draws || 0,
-          winRate: s.winRate || 0,
-          gamesPlayed: s.gamesPlayed || 0,
-        };
-      }),
-    }));
-}
-
 /**
- * これから行う試合。先発予定を添える。
- * ⚠ **予定であって確定ではない**。実際の先発は試合当日の疲労で入れ替わる
+ * これから行う試合に**先発予定を重ねる**。
+ *
+ * ⚠ 並べ方（日付順・自球団を必ず含める）は `projection.upcomingGames` が正本。
+ *    ここでは順番を変えず、先発だけ足す。並べ直すと出どころが2つになる。
+ * ⚠ **予定であって確定ではない**。実際の先発は当日の疲労で入れ替わる
  *    （`prepareDailyLineup` が疲れた投手を外す）。画面にもそう書くこと。
+ * ⚠ 同じ球団が続けて出るときは**ローテを回すこと**。毎回同じだと
+ *    1人が全試合に先発する予定になる。
  */
-export function upcomingGames(league, teams, limit = 8) {
-  // 球団ごとに「あと何試合目か」を数えて、ローテを回した位置を見る
+export function withStarters(games, teams) {
   const seen = {};
   const nextStarter = (name, offset) => {
     const rotation = teams[name]?.pitchingRotation;
@@ -68,23 +32,17 @@ export function upcomingGames(league, teams, limit = 8) {
     const id = list[(base + offset) % list.length];
     return teams[name].players.find((p) => p.id === id)?.name || null;
   };
-  return (league.season.schedule || [])
-    .filter((g) => !g.result && g.home !== 'TBD' && g.away !== 'TBD')
-    .slice(0, limit)
-    .map((g) => {
-      const homeOffset = seen[g.home] || 0;
-      const awayOffset = seen[g.away] || 0;
-      seen[g.home] = homeOffset + 1;
-      seen[g.away] = awayOffset + 1;
-      return {
-        id: g.id,
-        date: g.date,
-        home: g.home,
-        away: g.away,
-        homeStarter: nextStarter(g.home, homeOffset),
-        awayStarter: nextStarter(g.away, awayOffset),
-      };
-    });
+  return games.map((g) => {
+    const homeOffset = seen[g.home] || 0;
+    const awayOffset = seen[g.away] || 0;
+    seen[g.home] = homeOffset + 1;
+    seen[g.away] = awayOffset + 1;
+    return {
+      ...g,
+      homeStarter: nextStarter(g.home, homeOffset),
+      awayStarter: nextStarter(g.away, awayOffset),
+    };
+  });
 }
 
 // ⚠ 率の項目は**規定に届いた選手だけ**で競う。届かない人を混ぜると、

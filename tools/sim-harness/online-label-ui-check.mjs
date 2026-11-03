@@ -752,6 +752,22 @@ try {
       );
     }
     await groups.selectOption('basic');
+    // ⚠ 投球の一覧は既定で「投球回の多い順」になった（c2c46b9）。防御率108.00の
+    //    選手（1/3回・4失点）は先頭に来ないので、防御率で並べ替えて先頭に出す。
+    //    以前は先頭に来る前提のまま取り残され、ここで落ちていた
+    const eraSort = m.getByRole('button', { name: '防御率で並べ替え', exact: true });
+    await eraSort.click();
+    if (!(await firstRow.getByText('108.00', { exact: true }).count()))
+      await eraSort.click();
+    await firstRow.getByText('108.00', { exact: true }).waitFor();
+    assert.ok(
+      await firstRow
+        .locator('.online-roster-values > span')
+        .evaluateAll((cells) =>
+          cells.every((cell) => cell.scrollWidth <= cell.clientWidth + 1),
+        ),
+      `${width}px 防御率108.00でも列を跨がない`,
+    );
     await firstRow.getByRole('button').click();
     await m.getByRole('dialog').getByText('108.00', { exact: true }).waitFor();
     await m.keyboard.press('Escape');

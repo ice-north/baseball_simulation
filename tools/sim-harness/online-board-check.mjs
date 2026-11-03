@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
-import { leagueLeaders, upcomingGames } from '../../server/leagueBoard.mjs';
+import { leagueLeaders, withStarters } from '../../server/leagueBoard.mjs';
 import {
   PYRAMID_LEAGUES,
   TEAMS_PER_LEAGUE,
@@ -67,43 +67,40 @@ try {
   }
   const view = await service.view('admin', admin);
 
-  // --- 2部制の順位表 -------------------------------------------------
-  assert.equal(view.divisions.length, PYRAMID_LEAGUES.length, '部の数がちがう');
-  // ⚠ 上の階層から並べる。順番が逆だと2部が上に出る
-  assert.deepEqual(
-    view.divisions.map((d) => d.id),
-    [...PYRAMID_LEAGUES].sort((a, b) => a.tier - b.tier).map((d) => d.id),
-    '部の並びが上の階層からでない',
+  // --- 2部制の順位表に必要なもの -------------------------------------
+  // ⚠ 分け方そのものは画面側（`LeaguePanels` の `Standings`）が持つ。
+  //    ここで作り直さない。投影が渡す材料だけを見る。
+  assert.ok(view.teamLeagues, '所属リーグの表が無い（順位表を部ごとに分けられない）');
+  assert.equal(
+    Object.keys(view.teamLeagues).length,
+    PYRAMID_LEAGUES.length * TEAMS_PER_LEAGUE,
+    '全球団ぶんの所属リーグが無い',
   );
-  for (const division of view.divisions) {
-    assert.equal(division.rows.length, TEAMS_PER_LEAGUE, `${division.id} の球団数`);
-    // 勝率の降順
-    const rates = division.rows.map((r) => r.winRate);
-    assert.deepEqual(rates, [...rates].sort((a, b) => b - a), '勝率順でない');
-    assert.deepEqual(
-      division.rows.map((r) => r.rank),
-      division.rows.map((_, i) => i + 1),
-      '順位の番号が連番でない',
+  for (const division of PYRAMID_LEAGUES)
+    assert.equal(
+      Object.values(view.teamLeagues).filter((id) => id === division.id).length,
+      TEAMS_PER_LEAGUE,
+      `${division.id} の球団数がちがう`,
     );
-  }
-  const all = view.divisions.flatMap((d) => d.rows);
-  const human = all.filter((r) => r.human);
-  assert.equal(human.length, 2, '人が持つ球団の数がちがう');
-  // ⚠ CPUに括弧を付けない（誰かが持っているように見える）
-  for (const row of all.filter((r) => !r.human))
-    assert.equal(row.player, null, `CPUに名前が付いている: ${row.team}`);
-  // ⚠ 呼び名が球団名と同じときは出さない。参加時の既定が球団名なので、
-  //    そのままだと「湘南サンズ（湘南サンズ）」と2回並ぶ
-  const joined = all.find((r) => r.label === '湘南サンズ');
-  assert.ok(joined?.human, '参加した球団が人扱いになっていない');
-  assert.equal(joined.player, null, '球団名と同じ呼び名を括弧で出している');
+
+  // ⚠ 人が持っている球団だけ名前を添える。CPUに付けると持ち主が居るように見える
+  assert.ok(view.teamOwners, '持ち主の表が無い');
+  assert.deepEqual(
+    Object.keys(view.teamOwners).sort(),
+    (await store.read()).league.members.map((m) => m.teamName).sort(),
+    '持ち主の表が参加者と合っていない',
+  );
+  // ⚠ 呼び名が球団名と同じときは空で返す。参加時の既定が球団名なので、
+  //    そのまま出すと「湘南サンズ（湘南サンズ）」と2回並ぶ
+  const joinedTeam = (await store.read()).league.members.find(
+    (m) => m.userId === 'guest',
+  ).teamName;
+  assert.equal(view.teamOwners[joinedTeam], '', '球団名と同じ呼び名を返している');
 
   // 名前を付けると出る
   await send('guest', guest, 'profile', { playerName: 'あいす' });
-  const named = (await service.view('guest', guest)).divisions
-    .flatMap((d) => d.rows)
-    .find((r) => r.label === '湘南サンズ');
-  assert.equal(named.player, 'あいす', '付けた名前が順位表に出ない');
+  const named = await service.view('guest', guest);
+  assert.equal(named.teamOwners[joinedTeam], 'あいす', '付けた名前が渡っていない');
   // 球団名も変えられる（内部名は変わらない）
   const before = (await store.read()).league.members.find((m) => m.userId === 'guest');
   await send('guest', guest, 'profile', { teamName: '湘南ドルフィンズ' });
@@ -141,16 +138,12 @@ try {
       },
       C: { players: [], pitchingRotation: { starters: [] } },
     };
-    const fake = {
-      season: {
-        schedule: [
-          { id: 1, date: { year: 1, month: 4, day: 1 }, home: 'A', away: 'B' },
-          { id: 2, date: { year: 1, month: 4, day: 2 }, home: 'A', away: 'B' },
-          { id: 3, date: { year: 1, month: 4, day: 3 }, home: 'A', away: 'C' },
-        ],
-      },
-    };
-    const rows = upcomingGames(fake, teams);
+    const fake = [
+      { id: 1, date: { year: 1, month: 4, day: 1 }, home: 'A', away: 'B' },
+      { id: 2, date: { year: 1, month: 4, day: 2 }, home: 'A', away: 'B' },
+      { id: 3, date: { year: 1, month: 4, day: 3 }, home: 'A', away: 'C' },
+    ];
+    const rows = withStarters(fake, teams);
     assert.deepEqual(
       rows.map((g) => g.homeStarter),
       ['一番手', '二番手', '三番手'],
@@ -163,12 +156,16 @@ try {
     // ⚠ 途中から始めても回る（`currentStarterIndex` を見る）
     teams.A.pitchingRotation.currentStarterIndex = 2;
     assert.deepEqual(
-      upcomingGames(fake, teams).map((g) => g.homeStarter),
+      withStarters(fake, teams).map((g) => g.homeStarter),
       ['三番手', '一番手', '二番手'],
       '現在のローテ位置を見ていない',
     );
-    // 上限を超えて返さない
-    assert.equal(upcomingGames(fake, teams, 2).length, 2);
+    // ⚠ 並べ替えや絞り込みをしないこと（それは投影側の仕事）
+    assert.deepEqual(
+      withStarters(fake, teams).map((g) => g.id),
+      [1, 2, 3],
+      '渡された順を変えている',
+    );
   }
 
   // --- ベスト5 --------------------------------------------------------
@@ -250,5 +247,5 @@ try {
 }
 
 console.log(
-  '■ ホームの眺め: OK（2部制の順位表・CPUに名前を付けない・先発予定がローテを回る・規定未満を混ぜない・並びが決まる）',
+  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる）',
 );

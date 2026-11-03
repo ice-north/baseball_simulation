@@ -9,9 +9,9 @@ const store = new FileStore(
   resolve(process.env.ONLINE_DATA_FILE || '.online-data/league.json.gz'),
 );
 // ⚠ **種は管理者1人だけにする**。以前はプレイヤー2も入れていたが、
-//    本番は招待コードで参加する流れなので、ここで2人揃えてしまうと
-//    参加の経路（招待の発行 → コード入力）をローカルで一度も通らない。
-//    プレイヤー2は本番と同じく招待されて入る。
+//    本番はログインした人が参加画面から入る流れなので、ここで2人揃えてしまうと
+//    参加の経路（ログイン → 参加画面で球団名を付けて参加）をローカルで一度も通らない。
+//    プレイヤー2は本番と同じく、ログイン後に参加して入る。
 const service = new LeagueService(store, {
   local: true,
   adminId: 'player1',

@@ -127,10 +127,14 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     }
   };
 
-  const handleConfirm = () => {
+  // ⚠ **解雇する一覧は引数で受け取る**。「解雇せずに確定」は自チームの印を消してから
+  //    確定するが、`setReleasedPlayers` は次の描画まで反映されないので、state を
+  //    読むと消す前の印のまま解雇していた（2人に印を付けて押すと2人とも解雇され、
+  //    画面には「自チーム: 0人」と出ていた）。
+  const handleConfirm = (releases = releasedPlayers) => {
     const currentYear = seasonData?.year || 1;
     // 全チームの解雇を実行
-    Object.entries(releasedPlayers).forEach(([teamName, playerIds]) => {
+    Object.entries(releases).forEach(([teamName, playerIds]) => {
       const td = TEAMS_DATA[teamName];
       if (td && playerIds.length > 0) {
         // 解雇される選手を解雇プールに追加（若年〜中堅のみ再トライアウト可能）
@@ -290,15 +294,16 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
           <div className="flex gap-3">
             <button
-              onClick={() => userReleased.length > 0 ? setShowReview(true) : handleConfirm()}
+              onClick={() => userReleased.length > 0 ? setShowReview(true) : handleConfirm(releasedPlayers)}
               className="btn-primary px-5 py-1.5 rounded text-sm"
             >
               契約更改を確定する
             </button>
             <button
               onClick={() => {
-                setReleasedPlayers(prev => ({ ...prev, [userTeamName]: [] }));
-                handleConfirm();
+                const withoutUser = { ...releasedPlayers, [userTeamName]: [] };
+                setReleasedPlayers(withoutUser);
+                handleConfirm(withoutUser);
               }}
               className="btn-secondary px-4 py-1.5 rounded text-sm"
             >
@@ -333,7 +338,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                   <button onClick={() => setShowReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
                     戻る
                   </button>
-                  <button onClick={() => { setShowReview(false); handleConfirm(); }} className="btn-danger px-5 py-1.5 rounded text-sm transition">
+                  <button onClick={() => { setShowReview(false); handleConfirm(releasedPlayers); }} className="btn-danger px-5 py-1.5 rounded text-sm transition">
                     解雇を確定する
                   </button>
                 </div>

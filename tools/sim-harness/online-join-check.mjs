@@ -10,13 +10,13 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FileStore } from '../../server/storage/fileStore.mjs';
+import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { PYRAMID_LEAGUES } from '../../src/online/pyramidLeague.js';
 
 const dir = await mkdtemp(join(tmpdir(), 'pennant-join-'));
 try {
-  const store = new FileStore(join(dir, 'state.gz'));
+  const store = createTestStore(join(dir, 'state.gz'));
   const service = new LeagueService(store, {
     members: [{ userId: 'admin', label: '管理者' }],
     adminId: 'admin',
@@ -128,8 +128,14 @@ try {
     '2人目が記録されていない',
   );
 
+  // ⚠ 参加していない人も**ログアウトできる**こと。参加画面にも「ログアウト」があり、
+  //    以前は403で抜けられなかった
+  const visitor = (await service.login('visitor')).sessionId;
+  assert.deepEqual(await service.logout('visitor', visitor), { ok: true });
+  assert.ok(!(await store.read()).sessions.visitor, 'セッションが消えていない');
+
   console.log(
-    '■ 参加: OK（非参加者もログインできる / コード不要で入れる / 二重参加は断る / 最下層へ入る / 付けた球団名が画面に届く）',
+    '■ 参加: OK（非参加者もログインできる / コード不要で入れる / 二重参加は断る / 最下層へ入る / 付けた球団名が画面に届く / 非参加者もログアウトできる）',
   );
 } finally {
   await rm(dir, { recursive: true, force: true });

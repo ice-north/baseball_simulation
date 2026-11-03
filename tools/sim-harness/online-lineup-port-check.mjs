@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FileStore } from '../../server/storage/fileStore.mjs';
+import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { projectLineup } from '../../server/projection.mjs';
@@ -24,7 +24,7 @@ import { TEAMS_DATA } from '../../src/teams-data.js';
 
 const dir = await mkdtemp(join(tmpdir(), 'pennant-lineup-port-'));
 try {
-  const store = new FileStore(join(dir, 'state.gz'));
+  const store = createTestStore(join(dir, 'state.gz'));
   let now = '2026-10-26T15:00:00.000Z'; // 月曜0時JST
   const service = new LeagueService(store, {
     members: [{ userId: 'admin', label: '管理者' }],
@@ -94,7 +94,7 @@ try {
   const pitcherSlots = order.filter((e) => e.position === 'pitcher');
   assert.equal(pitcherSlots.length, 1, '投手の枠が1つでない');
   assert.equal(pitcherSlots[0].battingOrder, 9, '投手が9番でない');
-  assert.equal(pitcherSlots[0].playerId, plan.starters[0], '次の先発が入っていない');
+  assert.equal(pitcherSlots[0].playerId, view.nextStarterId, '次の先発が入っていない');
   // ⚠ 送る側では投手を外す。`validateLineup` は野手8人ちょうどを求める
   assert.equal(plan.battingOrder.length, 8, '送る打順が8人でない');
   assert.doesNotThrow(() => validateLineup(serverTeam, plan), '自分の投影が通らない');
@@ -125,6 +125,37 @@ try {
   const afterFirst = after.battingOrder.find((e) => e.battingOrder === 1);
   assert.equal(afterFirst.playerId, secondId, '入れ替えがサーバーに届いていない');
 
+  // --- 投手と野手の打順を入れ替えても保存できるか -------------------
+  // ⚠ 画面では投手の枠（9番）と野手を入れ替えられる。以前はそのまま送って
+  //    野手が 1,2,4…9 になり、サーバーの「打順は1〜8」で弾かれていた
+  //    （保存に失敗すると編集も消えていた）
+  {
+    const t = teamFromView(view);
+    const entries = t.lineupSettings.battingOrder;
+    const pitcherEntry = entries.find((e) => e.position === 'pitcher');
+    const third = entries.find((e) => e.battingOrder === 3);
+    pitcherEntry.battingOrder = 3;
+    third.battingOrder = 9;
+    const p = planFromTeam(t);
+    assert.deepEqual(
+      p.battingOrder.map((e) => e.battingOrder),
+      [1, 2, 3, 4, 5, 6, 7, 8],
+      '投手と入れ替えたあとの打順が1〜8に振り直されていない',
+    );
+    assert.equal(p.battingOrder.at(-1).playerId, third.playerId, '9番に回した野手が最後に来ていない');
+    assert.doesNotThrow(() => validateLineup(serverTeam, p), '投手と入れ替えると保存できない');
+  }
+
+  // --- 次の先発が並びの先頭でないとき ---------------------------------
+  // ⚠ 打順の投手は「次の先発」。並びの先頭を入れると、次の試合で投げない投手が出る
+  {
+    const second = view.lineup.starters[1];
+    const t = teamFromView({ ...view, nextStarterId: second });
+    const slot = t.lineupSettings.battingOrder.find((e) => e.position === 'pitcher');
+    assert.equal(slot.playerId, second, '次の先発でない投手が打順に入っている');
+    assert.equal(t.pitchingRotation.currentStarterIndex, 1, '次の先発の位置が合っていない');
+  }
+
   // --- TEAMS_DATA を引かずに自動編成できるか -------------------------
   // ⚠ オンラインの球団は `TEAMS_DATA` に居ない。`generateOptimalLineup` が
   //    名前で引く作りのままだと、「自動」を押しても**黙って何も起きない**
@@ -148,5 +179,5 @@ try {
 }
 
 console.log(
-  '■ 編成画面の移植: OK（投影と往復する / 複製を渡す / 編集が届く / TEAMS_DATA 無しで自動編成）',
+  '■ 編成画面の移植: OK（投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / TEAMS_DATA 無しで自動編成）',
 );

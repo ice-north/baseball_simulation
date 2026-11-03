@@ -292,18 +292,39 @@ export const generatePlayoffSchedule = (teams, format = 'short', year = 2024) =>
   return schedule;
 };
 
-export const getPlayoffChampion = (schedule = []) => {
+export const getPlayoffChampion = (schedule = [], options = {}) => {
   const finals = schedule.filter(game => game.phase === SEASON_PHASES.PLAYOFFS && game.playoffRound === 'final');
   if (finals.length === 0) return null;
+  return decideSeriesWinner(finals, options);
+};
+
+/**
+ * プレーオフの1シリーズの勝者。決まっていなければ null。
+ * ⚠ **引き分けを挟んで全試合を終えても決まらないときは、勝ち数の多い方、
+ *    同数なら上位シード（第1戦のホーム）が勝ち上がる**（NPBのクライマックスシリーズと
+ *    同じ考え方）。以前は誰も必要勝数に届かないとシリーズが永久に決着せず、
+ *    優勝チームが空のまま・トーナメント形式では決勝が「未定」のまま残っていた。
+ * ⚠ **対人版（server/）は `settleDraws: false` を渡す**。対人版は未決着なら翌日に
+ *    再試合を足す設計（`server/playoffReplay.mjs`）で、ここで決めてしまうと
+ *    再試合が組まれずにシードの上の球団が優勝する。一人用は再試合を持たないので既定で決める。
+ */
+export const decideSeriesWinner = (games = [], { settleDraws = true } = {}) => {
+  if (games.length === 0) return null;
   const wins = new Map();
-  for (const game of finals) {
+  for (const game of games) {
     if (!game.result || game.result.cancelled) continue;
     const winner = game.result.homeScore > game.result.awayScore ? game.home
       : game.result.awayScore > game.result.homeScore ? game.away : null;
     if (winner) wins.set(winner, (wins.get(winner) || 0) + 1);
   }
-  const required = finals[0].seriesWinsRequired || Math.ceil(finals.length / 2);
-  return [...wins].find(([, count]) => count >= required)?.[0] || null;
+  const required = games[0].seriesWinsRequired || (games.length === 1 ? 1 : Math.ceil(games.length / 2));
+  const clinched = [...wins].find(([, count]) => count >= required)?.[0];
+  if (clinched) return clinched;
+  if (!settleDraws) return null;
+  if (games.some(game => !game.result)) return null; // まだ試合が残っている
+  const first = [...games].sort((a, b) => (a.id ?? 0) - (b.id ?? 0))[0];
+  if (!first || first.home === 'TBD' || first.away === 'TBD') return null;
+  return (wins.get(first.away) || 0) > (wins.get(first.home) || 0) ? first.away : first.home;
 };
 
 /**
@@ -311,7 +332,7 @@ export const getPlayoffChampion = (schedule = []) => {
  * 3戦先取なら3勝した時点でシリーズ終了、残りの試合をスキップ
  * 準決勝が終わったら決勝のTBDチームを確定
  */
-export const updatePlayoffProgress = (seasonData) => {
+export const updatePlayoffProgress = (seasonData, options = {}) => {
   const schedule = seasonData.schedule.map(game => ({ ...game }));
   const playoffGames = schedule.filter(g => g.phase === SEASON_PHASES.PLAYOFFS);
   if (playoffGames.length === 0) return seasonData;
@@ -333,19 +354,9 @@ export const updatePlayoffProgress = (seasonData) => {
     const teams = [...series.teams];
     if (teams.length < 2 || teams.includes('TBD')) return;
 
-    const wins = {};
-    teams.forEach(t => { wins[t] = 0; });
-
-    const completedGames = series.games.filter(g => g.result);
-    completedGames.forEach(g => {
-      if (g.result.homeScore > g.result.awayScore) wins[g.home] = (wins[g.home] || 0) + 1;
-      else if (g.result.awayScore > g.result.homeScore) wins[g.away] = (wins[g.away] || 0) + 1;
-    });
-
-    // シリーズ決着判定: 最大試合数から必要勝数を計算（5試合→3勝、3試合→2勝、1試合→1勝）
-    const maxGames = series.games.length;
-    const winsNeeded = series.games[0].seriesWinsRequired || (maxGames === 1 ? 1 : Math.ceil(maxGames / 2));
-    const winner = teams.find(t => (wins[t] || 0) >= winsNeeded);
+    // シリーズ決着判定: 最大試合数から必要勝数を計算（5試合→3勝、3試合→2勝、1試合→1勝）。
+    // 引き分けで誰も届かずに全試合を終えたときの扱いは `decideSeriesWinner` を参照
+    const winner = decideSeriesWinner(series.games, options);
     if (winner) {
       series.games.forEach(g => {
         if (!g.result) {
@@ -405,13 +416,25 @@ export const updateStandings = (standings, gameResult) => {
     awayTeam.draws++;
   }
 
-  // 勝率計算（引き分けを除外: 勝利 / (勝利 + 敗北)）
-  homeTeam.winRate = (homeTeam.wins + homeTeam.losses) > 0 ? homeTeam.wins / (homeTeam.wins + homeTeam.losses) : 0;
-  awayTeam.winRate = (awayTeam.wins + awayTeam.losses) > 0 ? awayTeam.wins / (awayTeam.wins + awayTeam.losses) : 0;
+  homeTeam.winRate = standingWinRate(homeTeam);
+  awayTeam.winRate = standingWinRate(awayTeam);
 
   // 順位でソート
-  return updated.sort((a, b) => b.winRate - a.winRate);
+  return updated.sort(compareStandings);
 };
+
+/**
+ * 順位表の勝率（引き分けを除く: 勝利 / (勝利 + 敗北)。NPBと同じ）。
+ * ⚠ **勝率と並べ方はここだけで決める**。以前は自動の日（`daySimulation`）と
+ *    並行世界が「勝利 / 試合数」、采配した試合（このファイル）と画面が
+ *    「勝利 / (勝利+敗北)」で、采配した試合の直後だけ順位が入れ替わり、
+ *    プレーオフの進出・シードがどちらで締まったかで変わっていた。
+ */
+export const standingWinRate = (s) =>
+  (s.wins + s.losses) > 0 ? s.wins / (s.wins + s.losses) : 0;
+
+/** 順位の並べ方: 勝率の高い順、同率なら勝利数の多い順 */
+export const compareStandings = (a, b) => (b.winRate - a.winRate) || (b.wins - a.wins);
 
 /**
  * 順位表を初期化

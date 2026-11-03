@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
+// ⚠ PCの編成タブは移植した画面が既定で開く（78bfd27）。方針・采配の設定・簡易の打順は
+//    その奥にあるので、開いていたら閉じる（開いていなければ何もしない）
+const closeFullLineup = async (page) => {
+  const button = page.getByRole('button', { name: '方針・采配の設定へ（保存しない）', exact: true });
+  // 描画を少し待つ（タブを押した直後はまだ無いことがある）
+  const shown = await button
+    .waitFor({ timeout: 3000 })
+    .then(() => true)
+    .catch(() => false);
+  if (shown) await button.click();
+};
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
   'utf8',
@@ -137,7 +148,7 @@ try {
   await oversized.page.getByLabel('球団の主練習（全4回）').waitFor();
   await oversized.page.evaluate(() =>
     sessionStorage.setItem(
-      'baseball-online-draft:a:fixture:1:検証球団:1:camp',
+      'baseball-online-draft:a:fixture:1:検証球団',
       'x'.repeat(64000),
     ),
   );
@@ -212,9 +223,11 @@ try {
   }));
   await click(lineupDraft.page, '更新');
   await click(lineupDraft.page, '編成');
+  await closeFullLineup(lineupDraft.page);
   await click(lineupDraft.page, '2番を上げる');
   await click(lineupDraft.page, '今日');
   await click(lineupDraft.page, '編成');
+  await closeFullLineup(lineupDraft.page);
   assert.equal(
     await lineupDraft.page
       .getByLabel('1番の選手', { exact: true })
@@ -228,6 +241,7 @@ try {
   await lineupDraft.page.reload();
   await click(lineupDraft.page, '打順');
   await lineupDraft.page.setViewportSize({ width: 1280, height: 844 });
+  await closeFullLineup(lineupDraft.page);
   assert.equal(
     await lineupDraft.page
       .getByLabel('1番の選手', { exact: true })

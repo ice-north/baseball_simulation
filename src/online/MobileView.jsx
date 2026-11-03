@@ -89,10 +89,12 @@ export default function MobileView(props) {
               busy={props.busy}
               onClose={() => setFullLineup(false)}
               onSave={async (plan, baseLineup) => {
-                await props.run(() =>
+                // ⚠ **失敗したら閉じない**（PCと同じ）。閉じると編集がまるごと消える
+                const result = await props.run(() =>
                   props.command('lineup', { ...plan, baseLineup }),
                 );
-                setFullLineup(false);
+                if (result?.ok) setFullLineup(false);
+                return result;
               }}
             />
           ) : (

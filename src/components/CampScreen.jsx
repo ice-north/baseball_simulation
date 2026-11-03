@@ -436,6 +436,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     TEAMS_DATA[userTeamName] = updatedTeam;
 
     updatedTeam.players.forEach(p => {
+      if (p.dispatchedThisCamp) return; // 派遣中は副練習もしない
       const subType = subAssignments[p.id] || 'physique';
       const subOptions = {
         targetPosition: subPositionSelections[p.id],
@@ -521,6 +522,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
       }
       const subMenuKeys = Object.keys(SUB_TRAINING_MENUS);
       aiResult.updatedTeam.players.forEach(p => {
+        if (p.dispatchedThisCamp) return; // 派遣中は副練習もしない
         const aiSubType = subMenuKeys[Math.floor(Math.random() * subMenuKeys.length)];
         executeSubTraining(p, aiSubType, {}, aiStaffBonus);
       });

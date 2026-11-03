@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import MobileTactics from './MobileTactics.jsx';
 import { PitcherRoles, AutoTactics } from './PreGameTactics.jsx';
 import { roleFor, STRATEGY_FIELDS } from './tactics.js';
-import { useDraftState } from './Drafts.jsx';
+import { useDraftState, phaseDraftName } from './Drafts.jsx';
 import GameHistory, { GameRecordButton } from './GameHistory.jsx';
 import {
   decisionText,
@@ -20,6 +20,11 @@ import {
 } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
+import {
+  PYRAMID_LEAGUES,
+  PROMOTION_PLACES,
+  RELEGATION_FROM_BOTTOM,
+} from './pyramidLeague.js';
 export { PageNav } from './PageNav.jsx';
 
 /**
@@ -76,7 +81,7 @@ export function Login({ local, login, busy }) {
     <section className="online-card online-login">
       <p className="online-eyebrow">ONLINE LEAGUE</p>
       <h1>今日の球団を、見に行こう。</h1>
-      <p>二人で育てる独立リーグ。留守の間も、ペナントは少しずつ進みます。</p>
+      <p>参加者みんなで育てる独立リーグ。留守の間も、ペナントは少しずつ進みます。</p>
       {local ? (
         <div className="online-actions">
           <button disabled={busy} onClick={() => login({ user: 'player1' })}>
@@ -121,38 +126,81 @@ export function Login({ local, login, busy }) {
     </section>
   );
 }
+/**
+ * 順位表。部ごとに分け、昇格・降格の線を引く。
+ * ⚠ **`view.standings` は全球団を通した並び**。1部と2部を混ぜたまま出すと、
+ *    2部の首位が表の1位に見えて「優勝争い」と取り違える（実測で起きた）。
+ *    `teamLeagues` が無い古いビューでは従来どおり1つの表で出す。
+ */
 export function Standings({ view }) {
+  const leagues = view.teamLeagues
+    ? PYRAMID_LEAGUES.map((league) => ({
+        league,
+        rows: view.standings.filter(
+          (s) => view.teamLeagues[s.team] === league.id,
+        ),
+      })).filter((group) => group.rows.length)
+    : [{ league: null, rows: view.standings }];
   return (
     <section className="online-card">
       <h2>リーグ順位</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>球団</th>
-            <th>勝</th>
-            <th>敗</th>
-            <th>分</th>
-            <th>勝率</th>
-          </tr>
-        </thead>
-        <tbody>
-          {view.standings.map((s, i) => (
-            <tr
-              key={s.team}
-              className={s.team === view.teamName ? 'online-own' : ''}
-            >
-              <th>
-                <span className="online-rank">{i + 1}</span>
-                {teamLabel(s.team)}
-              </th>
-              <td>{s.wins}</td>
-              <td>{s.losses}</td>
-              <td>{s.draws || 0}</td>
-              <td>{formatRate(s.winRate)}</td>
+      {leagues.map(({ league, rows }) => (
+        <table key={league?.id || 'all'}>
+          {league && <caption>{league.name}</caption>}
+          <thead>
+            <tr>
+              <th>球団</th>
+              <th>勝</th>
+              <th>敗</th>
+              <th>分</th>
+              <th>勝率</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((s, i) => {
+              const up = league && league.up.length && i < PROMOTION_PLACES[0];
+              const down =
+                league &&
+                league.down.length &&
+                i >= rows.length - RELEGATION_FROM_BOTTOM[0];
+              return (
+                <tr
+                  key={s.team}
+                  className={[
+                    s.team === view.teamName ? 'online-own' : '',
+                    up ? 'is-promotion' : '',
+                    down ? 'is-relegation' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <th>
+                    <span className="online-rank">{i + 1}</span>
+                    {teamLabel(s.team)}
+                    {/* ⚠ 人が持っている球団だけ、名前を括弧で添える。
+                        CPUに付けると誰かが持っているように見える。
+                        呼び名が球団名と同じときはサーバーが空で返す */}
+                    {view.teamOwners &&
+                      Object.hasOwn(view.teamOwners, s.team) && (
+                        <small className="online-owner">
+                          （{view.teamOwners[s.team] || 'プレイヤー'}）
+                        </small>
+                      )}
+                    {up ? <small className="online-move">昇格圏</small> : null}
+                    {down ? (
+                      <small className="online-move">降格圏</small>
+                    ) : null}
+                  </th>
+                  <td>{s.wins}</td>
+                  <td>{s.losses}</td>
+                  <td>{s.draws || 0}</td>
+                  <td>{formatRate(s.winRate)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      ))}
     </section>
   );
 }
@@ -206,7 +254,7 @@ export function Results({ view, compact = false }) {
         list.slice(page * size, page * size + size).map((g) => {
           const outcome = mode === 'results' && ownOutcome(g, view.teamName);
           const decisions = decisionText(g.decisions);
-          const name = compact ? teamShort : (team) => team;
+          const name = compact ? teamShort : teamLabel;
           return (
             <article className="online-score" key={g.gameId || g.id}>
               <header>
@@ -225,11 +273,11 @@ export function Results({ view, compact = false }) {
                 )}
               </header>
               <div>
-                <span title={g.away}>{name(g.away)}</span>
+                <span title={teamLabel(g.away)}>{name(g.away)}</span>
                 <strong>
                   {mode === 'results' ? `${g.awayScore} – ${g.homeScore}` : '×'}
                 </strong>
-                <span title={g.home}>{name(g.home)}</span>
+                <span title={teamLabel(g.home)}>{name(g.home)}</span>
               </div>
               {decisions && (
                 <small className="online-score-decisions">{decisions}</small>
@@ -249,13 +297,41 @@ export function Results({ view, compact = false }) {
     </section>
   );
 }
+/**
+ * お知らせの種類ごとの見出し。
+ * ⚠ **種類を足したらここにも足すこと**。昇降格（`promotion`）は
+ *    `picks` ではなく `moves` を持つので、`noticeItems` も合わせて見る。
+ *    以前は `n.picks.length` を直接読んでいて、1年目の終わりに
+ *    昇降格のお知らせが入るとリーグ便りごと画面が落ちていた。
+ */
+const NOTICE_LABELS = {
+  draft: 'NPBドラフト',
+  tryout: 'トライアウト',
+  promotion: '昇格・降格',
+};
+/** 締め切りの日時を日本時間で「11/8(日) 0:00」の形にする */
+export function formatDeadline(iso) {
+  const d = new Date(new Date(iso).getTime() + 9 * 3600000);
+  if (Number.isNaN(d.getTime())) return '';
+  const week = '日月火水木金土'[d.getUTCDay()];
+  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${week}) ${d.getUTCHours()}:${minutes}`;
+}
+const noticeItems = (notice) => notice?.picks || notice?.moves || [];
+const leagueName = (id) =>
+  PYRAMID_LEAGUES.find((league) => league.id === id)?.name || id;
+const tierOf = (id) =>
+  PYRAMID_LEAGUES.find((league) => league.id === id)?.tier ?? 0;
+const isPromotion = (move) => tierOf(move.to) < tierOf(move.from);
+
 export function Notices({ view, compact = false }) {
   const [selected, setSelected] = useState('notice:0');
   const [page, setPage] = useState(0);
   const [kind, index] = selected.split(':');
   const notice = view.notices[Number(index)];
   const history = view.history[Number(index)];
-  const picks = kind === 'notice' ? notice?.picks || [] : [];
+  const picks = kind === 'notice' ? noticeItems(notice) : [];
+  const label = compact ? teamShort : teamLabel;
   const size = 8;
   useEffect(() => {
     if (!view.notices.length && !view.history.length) return;
@@ -282,8 +358,9 @@ export function Notices({ view, compact = false }) {
           >
             {view.notices.map((n, i) => (
               <option key={`n:${i}`} value={`notice:${i}`}>
-                {n.year}年 {n.type === 'draft' ? 'NPBドラフト' : 'トライアウト'}
-                （{n.picks.length}人）
+                {n.year}年 {NOTICE_LABELS[n.type] || 'お知らせ'}
+                （{noticeItems(n).length}
+                {n.type === 'promotion' ? '球団' : '人'}）
               </option>
             ))}
             {view.history.map((h, i) => (
@@ -297,20 +374,25 @@ export function Notices({ view, compact = false }) {
               <div
                 className={`online-news-list ${compact ? 'is-compact' : ''}`}
               >
-                {picks.slice(page * size, page * size + size).map((p, j) => (
-                  <article key={j}>
-                    <b>
-                      {typeof p.round === 'number' ? `${p.round}巡` : p.round}{' '}
-                      {p.name}
-                    </b>
-                    <span>
-                      →{' '}
-                      {compact
-                        ? teamShort(p.npbTeam || p.team)
-                        : p.npbTeam || p.team}
-                    </span>
-                  </article>
-                ))}
+                {picks.slice(page * size, page * size + size).map((p, j) =>
+                  notice?.type === 'promotion' ? (
+                    <article key={j}>
+                      <b>{label(p.teamId)}</b>
+                      <span>
+                        {leagueName(p.from)} → {leagueName(p.to)}
+                        {isPromotion(p) ? '（昇格）' : '（降格）'}
+                      </span>
+                    </article>
+                  ) : (
+                    <article key={j}>
+                      <b>
+                        {typeof p.round === 'number' ? `${p.round}巡` : p.round}{' '}
+                        {p.name}
+                      </b>
+                      <span>→ {label(p.npbTeam || p.team)}</span>
+                    </article>
+                  ),
+                )}
               </div>
               <PageNav
                 page={page}
@@ -337,12 +419,12 @@ export function Notices({ view, compact = false }) {
 export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const phase = view.phase;
   const [plan, setPlan] = useDraftState(
-    'phase.plan',
+    phaseDraftName(phase.id, 'plan'),
     phase.submission?.plan || null,
   );
-  const [dirty, setDirty] = useDraftState('phase.dirty', false);
+  const [dirty, setDirty] = useDraftState(phaseDraftName(phase.id, 'dirty'), false);
   const [planRevision, setPlanRevision] = useState(null);
-  const [baseSubmission, setBaseSubmission] = useDraftState('phase.base', () =>
+  const [baseSubmission, setBaseSubmission] = useDraftState(phaseDraftName(phase.id, 'base'), () =>
     structuredClone(phase.submission || null),
   );
   const [error, setError] = useState('');
@@ -417,6 +499,24 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         throw error;
       }
     });
+  // 「標準案に戻す」（以前の「おすすめ順に戻す」）。⚠ **保存済みの下書きではなく、いつも標準案を取り直す**。
+  //    以前は上の `resetSubmission`（保存案を読み直す）を流用しており、
+  //    下書きを一度保存すると、押しても下書きに戻るだけで、おすすめ順には戻らなかった。
+  //    保存済みの提出があるなら、戻した内容は未保存の編集として扱う
+  const resetToDefaults = () =>
+    run(async () => {
+      setError('');
+      try {
+        const defaults = await api('defaults', auth);
+        if (defaults.phaseId !== phase.id)
+          throw new Error('手続きが更新されました。最新状態を確認してください');
+        setPlan(structuredClone(defaults.plan));
+        setDirty(!!phase.submission);
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      }
+    });
   return (
     <section className="online-card online-decision">
       <fieldset className="online-form-fields" disabled={busy}>
@@ -424,13 +524,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         {/* ⚠ 2人固定だった頃の「両者」という書き方を残さない。
             いまは1〜12人で、締め切りが来れば未提出でも先へ進む */}
         <p>
+          {/* ⚠ 「決定後も出し直せる」のは**ほかに検討中の人がいる間だけ**。
+              最後の1人が決定した瞬間に処理されるので、無条件には書かない */}
           {phase.deadline
             ? mobile
-              ? '全員が決定するか、締め切りで進みます。'
-              : '全員が決定すると一度だけ処理します。締め切りを過ぎると、未提出の球団は標準案で進みます。決定後も締め切り前なら出し直せます。'
+              ? `締め切り ${formatDeadline(phase.deadline)}。全員が決定するか、締め切りで進みます。`
+              : `締め切りは ${formatDeadline(phase.deadline)}。全員が決定した時点で処理します。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。`
             : mobile
               ? '全員が決定すると進みます。'
-              : '全員が決定すると一度だけ処理します。この手続きに締め切りはありません。決定後も出し直せます。'}
+              : '全員が決定した時点で処理します。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。'}
         </p>
         <ul className="online-ready">
           {view.members.map((m) => (
@@ -488,7 +590,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                       setDirty(true);
                       setPlan(next);
                     }}
-                    onReset={resetSubmission}
+                    onReset={resetToDefaults}
                   />
                 )}
                 {plan.releaseIds && (

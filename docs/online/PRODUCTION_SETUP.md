@@ -38,7 +38,8 @@
 
 ## 参加者と球団
 
-球団は `INDEPENDENT_LEAGUES.shikoku.teams` の**固定順**で割り当たる。選べない。
+参加すると、最下層（2部）の空いているCPU球団のうち**成績が一番低い球団**を引き継ぐ。
+球団そのものは選べない（名前は付けられる）。
 
 ⚠ **四国4球団・2人固定は廃止した。** いまは**2部制12球団**（1部6・2部6）で、参加者は1〜12人。
 詳細は [PYRAMID_LEAGUE.md](PYRAMID_LEAGUE.md)。
@@ -68,11 +69,31 @@ ONLINE_ALLOW_STEP       ← 任意。検証用の「1時間進める」を出す
 入口はそこで絞れている。環境変数に残っていても無視される。
 
 - ⚠ **`VITE_` を付けない。** 付けるとブラウザに配られるコードへ埋め込まれ、全員に見える。
-- `ONLINE_MEMBER_1` / `2` は **Config** 型にしておくと後から読み返せる。
-  取り違えが致命的な箇所なので、確認できるほうがよい。UUIDは鍵ではない。
+- `ONLINE_ADMIN` と `ONLINE_ALLOW_STEP` は **Config** 型にしておくと後から読み返せる。
+  UUIDは鍵ではない。
 - 残り4つは **Secret** 型。保存すると二度と読めない。
 - ⚠ **`ONLINE_CRON_SECRET` は Supabase Vault にも同じ値を入れる。**
   Secret で保存すると読み返せないので、**Vault への登録を済ませるまで手元に控えておく**。
+
+## 公開サインアップを無効にする（必須）
+
+⚠ **参加の入口はここだけで絞っている。** 招待コードを廃止したので、Supabase に
+ログインできる人は誰でも空き球団に入れる。Supabase は**新規プロジェクトの既定が
+「サインアップ有効」**なので、切り忘れると、URLを知った誰でもアカウントを作って参加できる。
+
+1. Supabase → Authentication → Sign In / Providers を開く
+2. 「Allow new users to sign up」をオフにして保存する
+3. 参加者のアカウントは Authentication → Users → Add user で管理者が作る
+
+確認方法（オフになっていれば、登録が断られる）：
+
+```
+curl -s -X POST "$SUPABASE_URL/auth/v1/signup" \
+  -H "apikey: $SUPABASE_ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"email":"signup-test@example.com","password":"test-password-123"}'
+# → "Signups not allowed for this instance" のような拒否が返ればよい。
+#   ユーザーが作られてしまったら、すぐ Users から削除して設定を見直す
+```
 
 ## Vault（Supabase → Project Settings → Vault → Secrets）
 

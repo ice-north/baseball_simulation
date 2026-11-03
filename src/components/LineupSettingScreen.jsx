@@ -20,9 +20,21 @@ const formLabel = (player) => FORM_SHORT[player.pitching?.form] || '';
 //    `TEAMS_DATA` の球団でなくても動く。オンライン側は view から組み立てた
 //    複製を渡し、書き換えられた結果を読んでサーバーへ送る。
 //    ⚠ ここで `TEAMS_DATA` を直に読まないこと（結合が戻る）。
-export const LineupSettingContent = ({ teamName, onBack, team, initialTab = 'lineup' }) => {
-  // ⚠ オンライン版は左メニューから「スタメン設定/投手起用/守備分析」へ
-  //    直に入るので、開く位置を外から渡せるようにしてある
+// `canConvertPosition`: ポジション登録の変更を出すか。⚠ 一人用は既定の true のまま。
+// オンラインはサーバーが登録変更を受け付けない（送る項目が無い）ので false で渡す。
+// 出したままだと画面の上では変わって見え、保存すると黙って元に戻る
+// `displayName`: 見出しに出す名前。省略時は teamName（一人用はこちら）。
+// ⚠ teamName は名前による照合にも使うので、表示名で上書きしないこと
+// `initialTab`: 開く位置。⚠ オンラインは左メニューから
+// 「スタメン設定/投手起用/守備分析」へ直に入るので外から渡す
+export const LineupSettingContent = ({
+  teamName,
+  onBack,
+  team,
+  canConvertPosition = true,
+  displayName,
+  initialTab = 'lineup',
+}) => {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
   const [updateTrigger, setUpdateTrigger] = useState(0);
@@ -402,7 +414,10 @@ export const LineupSettingContent = ({ teamName, onBack, team, initialTab = 'lin
     const player = team.players.find(p => p.id === playerId);
     if (!player) return;
     // 野手を投手枠にドロップしたら投手へコンバートしてから役割付与
+    // ⚠ **登録の変更を出さない画面（オンライン）では受け付けない**。ボタンは隠していても
+    //    ドラッグでは素通りし、野手が投手登録に変わったまま保存しようとして弾かれていた
     if (player.position !== 'pitcher') {
+      if (!canConvertPosition) return;
       handleConvertPosition(playerId, 'pitcher');
     }
     handleSetPitcherRole(playerId, roleKey);
@@ -524,10 +539,10 @@ export const LineupSettingContent = ({ teamName, onBack, team, initialTab = 'lin
               <span>{getThrowsLabel(ph.throws)}{getBatsLabel(b.bats || ph.bats)}</span>
               {isPitcher && p.form && <span>{getFormLabel(p.form)}</span>}
               <span className="font-medium text-gray-300">{POSITION_NAMES[player.position]}</span>
-              <button
+              {canConvertPosition && <button
                 onClick={() => { onClose(); setPosConvertPlayer(player); }}
                 className="px-1.5 py-0.5 text-xs font-bold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-300 transition"
-              >変更</button>
+              >変更</button>}
               <div className="flex items-center gap-1 ml-auto">
                 <span className="text-xs">疲労</span>
                 <div className="w-12 h-1.5 bg-gray-600 rounded-full overflow-hidden">
@@ -1049,13 +1064,15 @@ export const LineupSettingContent = ({ teamName, onBack, team, initialTab = 'lin
         </td>
         <td className="py-1.5 px-1 text-xs text-gray-300 text-center">{player.age}</td>
         <td className="py-1.5 px-1 text-xs whitespace-nowrap">
-          <button
+          {canConvertPosition ? <button
             onClick={(e) => { e.stopPropagation(); setPosConvertPlayer(player); }}
             className={`${isPitcher ? 'text-indigo-300 font-medium' : 'text-gray-300'} hover:underline hover:brightness-125`}
             title="ポジション登録変更"
           >
             {POSITION_NAMES[player.position] || player.position}
-          </button>
+          </button> : <span className={isPitcher ? 'text-indigo-300 font-medium' : 'text-gray-300'}>
+            {POSITION_NAMES[player.position] || player.position}
+          </span>}
           {!isPitcher && (() => {
             const subs = getSubPositions(player, player.position);
             if (subs.length === 0) return null;
@@ -1136,7 +1153,7 @@ export const LineupSettingContent = ({ teamName, onBack, team, initialTab = 'lin
 
   return (
     <ScreenShell>
-        <ScreenHeader title="ロスター管理" sub={teamName}
+        <ScreenHeader title="ロスター管理" sub={displayName || teamName}
           right={onBack && (
             <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">← 戻る</button>
           )} />

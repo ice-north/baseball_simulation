@@ -4,7 +4,7 @@ import { formatGameDate } from './shared.js';
 import { PageNav } from './PageNav.jsx';
 import PlayerAbilities from './PlayerAbilities.jsx';
 import { useRead } from './useRead.js';
-import { ownOutcome, teamShort } from './gameText.js';
+import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import {
@@ -47,7 +47,9 @@ export function TeamBrief({ view }) {
           {view.members
             .map(
               (member) =>
-                `${member.label} ${member.ready ? '決定済み' : '検討中'}`,
+                // ⚠ 球団の表示名で出す。`member.label`（「プレイヤー1」）だと
+                //    他の画面の球団名と混ざってどの球団か分からない
+                `${teamLabel(member.teamName)} ${member.ready ? '決定済み' : '検討中'}`,
             )
             .join('／')}
         </p>
@@ -427,16 +429,20 @@ const ROLE_SHORT = {
  *    スタメンが3ページ目まで出てこない。実測でそうなっていた。
  * ⚠ 編成が分からない他球団（`readOnly`）は元の順のまま。
  */
-export function rosterByRole(roster, lineup) {
+// `category` が 'pitching' のときは投手を先に並べる（先発→救援→スタメン→控え）。
+// ⚠ 「投球」に切り替えても野手が先だと、投手の成績が3ページ目まで出てこなかった
+export function rosterByRole(roster, lineup, category = 'batting') {
   if (!lineup) return roster;
   const slot = new Map(
     (lineup.battingOrder || []).map((e) => [e.playerId, e.battingOrder]),
   );
   const rotation = new Map((lineup.starters || []).map((id, i) => [id, i]));
+  const pitchingFirst = category === 'pitching';
   const rank = (p) => {
-    if (slot.has(p.id)) return [0, slot.get(p.id)];
-    if (rotation.has(p.id)) return [2, rotation.get(p.id)];
-    return p.position === 'pitcher' ? [3, 0] : [1, 0];
+    if (slot.has(p.id)) return [pitchingFirst ? 2 : 0, slot.get(p.id)];
+    if (rotation.has(p.id)) return [pitchingFirst ? 0 : 2, rotation.get(p.id)];
+    if (p.position === 'pitcher') return [pitchingFirst ? 1 : 3, 0];
+    return [pitchingFirst ? 3 : 1, 0];
   };
   return roster
     .map((player, index) => ({ player, index, key: rank(player) }))

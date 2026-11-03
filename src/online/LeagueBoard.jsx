@@ -1,67 +1,18 @@
 import React from 'react';
 import { formatGameDate } from './shared.js';
 import { teamLabel } from './gameText.js';
+import { Standings } from './LeaguePanels.jsx';
 
 // ============================================================
 // 「ホーム」に出すリーグ全体の眺め。
-//   1. 2部制の順位表（人が持っている球団は名前を添える）
+//   1. 2部制の順位表（`LeaguePanels` の `Standings` をそのまま使う）
 //   2. 今後の日程（対戦相手と先発予定）
 //   3. 各項目のベスト5
 //
-// ⚠ 数字はすべてサーバーが作る（`server/leagueBoard.mjs`）。ここでは並べるだけ。
-//    画面で計算し直すと、同じ数字の出どころが2つになる。
+// ⚠ 順位表は**作り直さないこと**。昇格・降格の線まで入った実装が
+//    `LeaguePanels` にある。ここで別に書くと同じものが2つになる。
+// ⚠ 数字はサーバーが作る（`server/leagueBoard.mjs`）。ここでは並べるだけ。
 // ============================================================
-
-function Standings({ divisions, ownTeam }) {
-  if (!divisions?.length) return null;
-  return (
-    <section className="online-card">
-      <h2>順位表</h2>
-      {divisions.map((division) => (
-        <div key={division.id} className="online-division">
-          <h3>{division.name}</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>球団</th>
-                <th>勝</th>
-                <th>敗</th>
-                <th>分</th>
-                <th>勝率</th>
-              </tr>
-            </thead>
-            <tbody>
-              {division.rows.map((row) => (
-                <tr
-                  key={row.team}
-                  className={row.team === ownTeam ? 'online-own' : ''}
-                >
-                  <th>
-                    {row.rank}. {row.label}
-                    {/* ⚠ CPUには括弧を出さない。人が持っている球団だけ */}
-                    {row.human && (
-                      <small className="online-owner">
-                        （{row.player || 'プレイヤー'}）
-                      </small>
-                    )}
-                  </th>
-                  <td>{row.wins}</td>
-                  <td>{row.losses}</td>
-                  <td>{row.draws}</td>
-                  <td>
-                    {row.gamesPlayed
-                      ? row.winRate.toFixed(3).replace(/^0\./, '.')
-                      : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
-    </section>
-  );
-}
 
 function Upcoming({ upcoming, ownTeam }) {
   if (!upcoming?.length) return null;
@@ -147,7 +98,7 @@ function Leaders({ leaders }) {
 export default function LeagueBoard({ view }) {
   return (
     <div className="online-board">
-      <Standings divisions={view.divisions} ownTeam={view.teamName} />
+      <Standings view={view} />
       <div className="online-board-side">
         <Upcoming upcoming={view.upcoming} ownTeam={view.teamName} />
         <Leaders leaders={view.leaders} />

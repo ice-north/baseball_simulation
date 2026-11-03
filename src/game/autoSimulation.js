@@ -75,6 +75,29 @@ const closerLast = (fatigue, closerId, tieBreak = null) => (a, b) => {
   return d || (tieBreak ? tieBreak(a, b) : 0);
 };
 
+// 9回の「守護神を投入」を出してよいか＝守護神がいまマウンドに上がれるか。
+// ⚠ **上がれないときに交代の合図だけ出さないこと**。以前は「いまの投手が守護神で
+//    ない」だけで合図していたため、守護神が既に投げて降りた・疲れている・いない
+//    ときは、**打者ごと（延長なら回ごと）に別の中継ぎを呼び続け**、先発まで
+//    使い切っていた。上がれないなら、いまの投手に任せる（他の条件の継投は残る）。
+const closerCanEnter = (rotation, gs, teamKey, currentPitcherId, players) => {
+  const id = rotation?.closer;
+  if (!id || id === currentPitcherId) return false;
+  if (gs.removedIds?.has(id)) return false;
+  if ((gs.pitcherAppearances?.[teamKey] || []).some(a => a.id === id)) return false;
+  if (((rotation.reliefFatigue || {})[id] || 0) >= 50) return false;
+  const closer = players?.find(p => p.id === id);
+  return !!closer && (closer.battingOrder || 0) === 0;
+};
+
+// 試合で既に退いた選手（降板した先発を含む）を再登板の候補から外す。
+// ⚠ 先発は `pitcherAppearances`（救援の記録）に入らないので、それだけで判定すると
+//    緊急時の経路で**降板した先発がもう一度マウンドに上がっていた**。
+const addRemovedIds = (ids, gs) => {
+  for (const id of gs.removedIds || []) ids.add(id);
+  return ids;
+};
+
 // 選手が投手かどうかを判定（positionだけでなく能力値も確認）
 export const isPitcherPlayer = (player) => {
   // 明示的にpitcherと設定されている場合
@@ -630,6 +653,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     starterDamagePoints: { home: 0, away: 0 },
     // 投手登板記録（セーブ・ホールド判定用）
     pitcherAppearances: { home: [], away: [] },
+    // 守り終えた直後に決めた継投を、次に守る直前まで持ち越す（攻撃中に投手を代えない）
+    pendingPitcherChange: { home: null, away: null },
     // 投手交代記録（理由表示用）
     pitcherChanges: [],
     // 現在の投手ID（DH制で複数pitcher判別用）
@@ -684,7 +709,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   // 現在の捕手を取得
   const getCurrentCatcher = (team) => {
     // ⚠ 出場中の捕手を先に探す（代打・守備固めで退いた捕手も position='catcher' のまま残る）
-    return team.players.find(p => p.position === 'catcher' && p.battingOrder > 0)
+    return team.players.find(p => p.position === 'catcher' && p.battingOrder > 0 && !p._isDH)
       || team.players.find(p => p.position === 'catcher') || team.players[0];
   };
 
@@ -1052,7 +1077,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   // 守備機会（刺殺・補殺）を1つ記録する。守備位置が取れないものは無視する
   const addFieldingChance = (team, position) => {
     if (!position || !team) return;
-    const f = team.players.find(p => p.position === position && p.battingOrder >= 1);
+    const f = team.players.find(p => p.position === position && p.battingOrder >= 1 && !p._isDH);
     if (f?.gameStats?.fielding) f.gameStats.fielding.chances++;
   };
 
@@ -1190,7 +1215,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             // 刺すはずの送球が乱れると走者は生き、さらに次の塁まで進む（捕手の失策）。
             // 送り手＝捕手の肩、受け手＝二塁/三塁カバーの守備で判定する。
             const coverPos = base === 0 ? 'second' : 'third';
-            const cover = defenseTeam.players.find(p => p.position === coverPos && p.battingOrder >= 1);
+            const cover = defenseTeam.players.find(p => p.position === coverPos && p.battingOrder >= 1 && !p._isDH);
             const throwErr = getThrowErrorRate(catcherArm, cover?.fielding?.defense ?? 60, 0.4);
             if (Math.random() < throwErr) {
               const runnerObj = gameState.bases[base];
@@ -1334,8 +1359,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         if (forPitcher) {
           // 投手の打順に入った代打は、次の守備で継投の投手と入れ替わる（守備には就かない）
           gameState.pitcherPinchHit[offenseKey] = { slot: batterData.battingOrder, phId: phData.id };
+        } else if (batterData._isDH) {
+          // ⚠ **DHへの代打はDHのまま**（守備には就かない）。以前は守備位置だけ写して
+          //    DHの印を付けず、代打が本来の野手と同じ守備位置に重なっていた
+          //    （守備の記録がDHに付く・捕手が二人になる、など）
+          phData._isDH = true;
         } else {
           phData.position = batterData.position;
+          delete phData._isDH;
         }
         batterData.battingOrder = 0;
         gameState.removedIds.add(batterData.id);
@@ -1555,8 +1586,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     //    セーブ機会（1チーム110試合あたり32.6回）だけだと登板が28%に留まり、
     //    実NPBの35〜42%に届かない。同点を足して34%になる。
     if (!shouldChange && gs.inning >= 9 && scoreDiff >= 0 && scoreDiff <= 3) {
-      const isCloser = rotation.closer && currentPitcher.id === rotation.closer;
-      if (!isCloser) {
+      if (closerCanEnter(rotation, gs, teamKey, currentPitcher.id, defenseTeam.players)) {
         shouldChange = true;
         situation = 'save';
         changeReason = scoreDiff === 0 ? `9回同点、守護神を投入` : `9回${scoreDiff}点リード、守護神を投入`;
@@ -1614,9 +1644,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     let selectedRoleLabel = '';
 
     // 今試合で既に登板した投手のIDセット（再登板防止）
-    const alreadyPitchedIds = new Set(
+    const alreadyPitchedIds = addRemovedIds(new Set(
       gs.pitcherAppearances[teamKey].map(a => a.id)
-    );
+    ), gs);
     alreadyPitchedIds.add(currentPitcher.id);
     // 登板間隔のゲート。絶対値50だけで判定すると、全員が50を超えた時点で
     // ロール別の経路が総崩れになり、疲労を見ない緊急経路へ流れる（実測24%）。
@@ -2291,7 +2321,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
           // エラー記録（守備側の該当野手）
           if (result.isError && result.errorPosition) {
-            const errorFielder = defenseTeam.players.find(p => p.position === result.errorPosition && p.battingOrder >= 1);
+            const errorFielder = defenseTeam.players.find(p => p.position === result.errorPosition && p.battingOrder >= 1 && !p._isDH);
             if (errorFielder) {
               errorFielder.gameStats.fielding.errors++;
               errorFielder.gameStats.fielding.chances++;
@@ -2310,7 +2340,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             gameState.outs += outsMade;
             pitcher.gameStats.pitching.outs = (pitcher.gameStats.pitching.outs || 0) + outsMade;
             if (assistBy) {
-              const assistFielder = defenseTeam.players.find(p => p.position === assistBy && p.battingOrder >= 1);
+              const assistFielder = defenseTeam.players.find(p => p.position === assistBy && p.battingOrder >= 1 && !p._isDH);
               if (assistFielder?.gameStats?.fielding) {
                 assistFielder.gameStats.fielding.assists = (assistFielder.gameStats.fielding.assists || 0) + 1;
                 assistFielder.gameStats.fielding.chances++;
@@ -2419,6 +2449,18 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         gameState.starterDamagePoints[key] = Math.max(0, gameState.starterDamagePoints[key] - 10);
       }
     });
+
+    // ⚠ **試合が終わった半イニングの後は、継投も守備固めもしない**。以前はここが
+    //    試合終了後にも走り、投げない投手に登板記録と救援疲労（+50）が付き、
+    //    守備固めで入った控えは「出場した」扱いで翌日の回復を失っていた。
+    //    判定は下の試合ループ（`MAX_INNINGS`）と同じ。
+    {
+      const endedTop = !gameState.isTopInning;
+      const inn = endedTop ? gameState.inning : gameState.inning - 1;
+      const { home, away } = gameState.score;
+      if (gameState.walkOff || (inn >= 9 && ((endedTop && home > away)
+          || (!endedTop && (home !== away || inn >= MAX_INNINGS))))) return;
+    }
 
     // 投手スタミナ回復 & AI監督機能（役割ベースの投手交代・登板制限）
     [gameState.homeTeam, gameState.awayTeam].forEach(team => {
@@ -2598,8 +2640,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           // ⚠ 勝ちパターン・温存の継投は「次に守るチーム」にだけ行う（攻撃前に守護神を
           //    登板扱いにすると、投げないのに登板記録と疲労だけが付く）
           if (!shouldChange && defendsNext && gameState.inning >= 9 && scoreDiff >= 0 && scoreDiff <= 3) {
-            const closerId = rotation?.closer;
-            if (closerId && pitcher.id !== closerId) {
+            if (closerCanEnter(rotation, gameState, teamKey, pitcher.id, team.players)) {
               shouldChange = true;
               situation = 'save';
               changeReason = scoreDiff === 0 ? `9回同点、守護神を投入` : `9回セーブ場面、守護神を投入`;
@@ -2618,15 +2659,33 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             changeReason = scoreDiff >= 5 ? `大量リードで先発${pitcher.name}を温存` : `大量ビハインドで先発${pitcher.name}を温存`;
           }
 
+          // ⚠ **これから攻撃する側の投手は、ここでは代えない**。守り終えた直後に決めた
+          //    継投は、次に守りに就く直前（次の半イニングの終わり）まで持ち越す。
+          //    以前はその場で代えていたため、投げない救援投手に登板記録と疲労が付き、
+          //    その攻撃で勝ち越すと**1球も投げていない投手に勝ちが付いていた**
+          //    （本来は直前の回を投げた投手の勝ち）。
+          if (!defendsNext) {
+            if (shouldChange) gameState.pendingPitcherChange[teamKey] = { situation, changeReason };
+            shouldChange = false;
+          } else {
+            const pending = gameState.pendingPitcherChange[teamKey];
+            gameState.pendingPitcherChange[teamKey] = null;
+            if (!shouldChange && pending) {
+              shouldChange = true;
+              situation = pending.situation;
+              changeReason = pending.changeReason;
+            }
+          }
+
           if (shouldChange) {
             let reliever = null;
             const fatigue = rotation?.reliefFatigue || {};
             let selectedRoleLabel = '';
 
             // 今試合で既に登板した投手のIDセット（再登板防止）
-            const alreadyPitchedIds = new Set(
+            const alreadyPitchedIds = addRemovedIds(new Set(
               gameState.pitcherAppearances[teamKey].map(a => a.id)
-            );
+            ), gameState);
             // 現在の投手も除外対象に追加
             alreadyPitchedIds.add(pitcher.id);
             // 選手が起用可能かチェック（未登板 & 疲労OK & 現在の投手でない）
@@ -2739,7 +2798,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
                 // 最終手段: 先発ローテーション投手も除外せず最もスタミナの残っている投手を選ぶ
                 // （先発がpitcherAppearancesに入るとセーブ判定が狂うため、先発は除外して探す）
                 const allPitchers = team.players
-                  .filter(p => isPitcher(p) && p.battingOrder === 0 && p.isActive !== false && p.id !== pitcher.id && !starterIds.has(p.id))
+                  .filter(p => isPitcher(p) && p.battingOrder === 0 && p.isActive !== false && !alreadyPitchedIds.has(p.id) && !starterIds.has(p.id))
                   .sort(closerLast(fatigue, rotation?.closer, (a, b) => (b.currentStamina || 0) - (a.currentStamina || 0)));
                 if (allPitchers.length > 0) {
                   reliever = allPitchers[0];
@@ -2747,7 +2806,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
                 } else {
                   // 本当に誰もいない場合のみ先発投手を緊急起用
                   const starterPitchers = team.players
-                    .filter(p => isPitcher(p) && p.battingOrder === 0 && p.isActive !== false && p.id !== pitcher.id && starterIds.has(p.id))
+                    .filter(p => isPitcher(p) && p.battingOrder === 0 && p.isActive !== false && !alreadyPitchedIds.has(p.id) && starterIds.has(p.id))
                     .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
                   if (starterPitchers.length > 0) {
                     reliever = starterPitchers[0];
@@ -2969,7 +3028,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       }
 
       // 投手成績の集計
-      if (player.gameStats.pitching.outs > 0) {
+      // ⚠ **アウトを1つも取れなかった登板も数える**（采配試合の `gameSetup` と同じ条件）。
+      //    以前は `outs > 0` だけで、打者に投げて1死も取れずに降りた投手の
+      //    失点・被安打・四球・登板数・疲労がまるごと消えていた（防御率が良く見える）。
+      if (player.gameStats.pitching.outs > 0 || player.gameStats.pitching.pitches > 0) {
         const p = player.gameStats.pitching;
         const season = playerData.seasonStats.pitching;
 

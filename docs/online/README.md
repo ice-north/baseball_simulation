@@ -76,11 +76,11 @@ CIも同じ検査を実行し、スクリーンショットを保存する。認
 [PRODUCTION_SETUP.md](PRODUCTION_SETUP.md) に分けてある。こちらは手順の一般形。
 
 1. SupabaseプロジェクトとVercelプロジェクトを作成する。課金・プラン変更はこの実装では行わない。
-2. Supabase Authに二人分のメール・パスワードのユーザーを作成する。招待受付・公開サインアップは提供しない。
+2. Supabase Authで公開サインアップを無効にし（手順は [PRODUCTION_SETUP.md](PRODUCTION_SETUP.md)）、参加する人数分のメール・パスワードのユーザーを管理者が作成する。
 3. `supabase/migrations/202610280001_online.sql` を適用する。新設テーブル・RPCはservice_roleだけ、Storageバケットはprivate。
-4. `.env.example` の値をVercelのサーバー環境変数へ設定する。`ONLINE_MEMBER_1`が管理者。`VITE_`を付けて公開しない。
+4. `.env.example` の値をVercelのサーバー環境変数へ設定する。管理者のUUIDは `ONLINE_ADMIN`。`VITE_`を付けて公開しない。
 5. Vercelへこのブランチをデプロイする。Node関数のFluid Computeと300秒上限を確認する。
-6. まずCronを無効のままログイン・初期編成・二人の決定を検証する。
+6. まずCronを無効のままログイン・参加・初期編成・全員の決定を検証する。
 7. Supabaseでpg_cron・pg_netを有効にし、VaultへURLとCron秘密値を保存する。`supabase/cron.example.sql` を参照して設定する。Cronの時刻はUTC。
 8. 次の公開環境受入を実行する。受入前の本運用開始は保留する。
 

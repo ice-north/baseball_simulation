@@ -259,6 +259,21 @@ export function executeHandleManagedGameEnd(ctx) {
   const htn = homeTeam.name;
   const atn = awayTeam.name;
 
+  // トーナメントの勝ち上がり。⚠ **引き分けを「ホームの負け」にしないこと**。
+  //    采配した大会の試合はユーザーがホームなので、以前は同点で終わると
+  //    無条件にユーザーの敗退になっていた。自動の試合（`simulateQuickMatch`）と同じく
+  //    タイブレークで決着させる（采配試合はチームの格が引けないので五分）。
+  const tournamentOutcome = () => {
+    let h = finalScore.home, a = finalScore.away;
+    if (h === a) {
+      const homeWins = Math.random() < 0.5;
+      const loseAdd = Math.random() < 0.4 ? 1 : 0;
+      const winAdd = loseAdd + 1 + (Math.random() < 0.35 ? 1 : 0);
+      if (homeWins) { h += winAdd; a += loseAdd; } else { a += winAdd; h += loseAdd; }
+    }
+    return { userWon: h > a, winnerName: h > a ? htn : atn, scoreArr: [h, a] };
+  };
+
   const gameResult = {
     date: seasonData.currentDate,
     home: htn,
@@ -283,9 +298,14 @@ export function executeHandleManagedGameEnd(ctx) {
     }
   });
 
-  const updateManagedGameStats = (teamState, teamName) => {
+  const updateManagedGameStats = (teamState, teamName, side) => {
     const teamData = TEAMS_DATA[teamName];
     if (!teamData) return;
+    // この試合の先発＝登板記録の最初の投手。⚠ ローテに入っているかで決めないこと
+    //    （以前はそうしていて、救援に回ったローテ投手が先発扱いの疲労を背負い、
+    //    逆に采配試合の先発には先発数・QSが一度も付かなかった）
+    const gameStarterId = (decisionLog?.appearances?.[side] || []).find(a => a.isStarter)?.id
+      ?? decisionLog?.appearances?.[side]?.[0]?.id ?? null;
 
     teamState.players.forEach(p => {
       const playerData = teamData.players.find(pl => pl.id === p.id);
@@ -366,6 +386,7 @@ export function executeHandleManagedGameEnd(ctx) {
         sp.hits = (sp.hits || 0) + (ps.hits || 0);
         sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
         sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
+        sp.wildPitches = (sp.wildPitches || 0) + (ps.wildPitches || 0);
 
         // 成長率変動: 摩耗ペナルティは10球以上投げた登板のみ、疲労度に応じて段階的に適用
         // （10球以下のワンポイント起用ではペナルティ無し）
@@ -376,10 +397,18 @@ export function executeHandleManagedGameEnd(ctx) {
         const staminaBonus = (bodyStamina / 100) * 1.5;
         const pitcherRoles = teamData.pitchingRotation?.pitcherRoles || {};
         const starterIds = new Set(teamData.pitchingRotation?.starters || []);
-        const isStarter = starterIds.has(p.id);
+        const isStarter = gameStarterId != null ? p.id === gameStarterId : starterIds.has(p.id);
         const baseDivisor = isStarter ? 1.5 : 3;
         const pitchFatigue = Math.floor((ps.pitches || 0) / (baseDivisor + staminaBonus));
-        const startBonus = isStarter ? 30 : 0;
+        // 自動試合と同じく、1イニング以上投げた先発にだけ付ける
+        const startBonus = (isStarter && (ps.outs || 0) >= 3) ? 30 : 0;
+        if (isStarter) {
+          // 先発数・QS（6回以上・自責3以下）・HQS（7回以上・自責2以下）。自動試合と同じ判定
+          const er = ps.earnedRuns ?? ps.runsAllowed ?? 0;
+          sp.gamesStarted = (sp.gamesStarted || 0) + 1;
+          if ((ps.outs || 0) >= 18 && er <= 3) sp.qualityStarts = (sp.qualityStarts || 0) + 1;
+          if ((ps.outs || 0) >= 21 && er <= 2) sp.highQualityStarts = (sp.highQualityStarts || 0) + 1;
+        }
         const fatigue = isStarter ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
         playerData.fatigue = (playerData.fatigue || 0) + fatigue;
         if (isStarter) {
@@ -400,8 +429,8 @@ export function executeHandleManagedGameEnd(ctx) {
     });
   };
 
-  updateManagedGameStats(homeTeam, htn);
-  updateManagedGameStats(awayTeam, atn);
+  updateManagedGameStats(homeTeam, htn, 'home');
+  updateManagedGameStats(awayTeam, atn, 'away');
 
   // 勝敗・セーブ・ホールド（自動シミュと同じ判定。pitcherDecisions.js）。
   // ⚠ 以前はここに独自の推定があり（先発が5回以上なら先発の勝ち／最少アウト＝最後の投手）、
@@ -434,9 +463,7 @@ export function executeHandleManagedGameEnd(ctx) {
     const utPending = updatedSeasonData[tournamentKey]?.pendingMatch;
     if (utPending && info.isTournament) {
       const ut = { ...updatedSeasonData[tournamentKey] };
-      const userWon = finalScore.home > finalScore.away;
-      const winnerName = userWon ? htn : atn;
-      const scoreArr = [finalScore.home, finalScore.away];
+      const { userWon, winnerName, scoreArr } = tournamentOutcome();
 
       recordResult(ut.bracket, utPending.roundIdx, utPending.matchIdx, winnerName, scoreArr);
       if (isBracketComplete(ut.bracket)) {
@@ -461,9 +488,7 @@ export function executeHandleManagedGameEnd(ctx) {
   const rtPending = updatedSeasonData.regionalTournament?.pendingMatch;
   if (rtPending && info.isTournament) {
     const rt = { ...updatedSeasonData.regionalTournament };
-    const userWon = finalScore.home > finalScore.away;
-    const winnerName = userWon ? htn : atn;
-    const scoreArr = [finalScore.home, finalScore.away];
+    const { userWon, winnerName, scoreArr } = tournamentOutcome();
 
     const region = rt.brackets?.[rtPending.regionId];
     if (region) {
@@ -493,9 +518,7 @@ export function executeHandleManagedGameEnd(ctx) {
   const nsPending = updatedSeasonData.nihonSenshuken?.pendingMatch;
   if (nsPending && info.isTournament) {
     const ns = { ...updatedSeasonData.nihonSenshuken };
-    const userWon = finalScore.home > finalScore.away;
-    const winnerName = userWon ? htn : atn;
-    const scoreArr = [finalScore.home, finalScore.away];
+    const { userWon, winnerName, scoreArr } = tournamentOutcome();
 
     if (nsPending.bracketType === 'nihon_senshuken' && ns.mainTournament) {
       recordResult(ns.mainTournament.bracket, nsPending.roundIdx, nsPending.matchIdx, winnerName, scoreArr);
@@ -552,9 +575,7 @@ export function executeHandleManagedGameEnd(ctx) {
   const csPending = updatedSeasonData.clubSenshuken?.pendingMatch;
   if (csPending && info.isTournament) {
     const cs = { ...updatedSeasonData.clubSenshuken };
-    const userWon = finalScore.home > finalScore.away;
-    const winnerName = userWon ? htn : atn;
-    const scoreArr = [finalScore.home, finalScore.away];
+    const { userWon, winnerName, scoreArr } = tournamentOutcome();
 
     if (csPending.bracketType === 'club_senshuken' && cs.mainTournament) {
       recordResult(cs.mainTournament.bracket, csPending.roundIdx, csPending.matchIdx, winnerName, scoreArr);
@@ -611,9 +632,7 @@ export function executeHandleManagedGameEnd(ctx) {
   const pendingMatch = updatedSeasonData.toshitaikou?.pendingMatch;
   if (pendingMatch && info.isTournament) {
     const td = { ...updatedSeasonData.toshitaikou };
-    const userWon = finalScore.home > finalScore.away;
-    const winnerName = userWon ? htn : atn;
-    const scoreArr = [finalScore.home, finalScore.away];
+    const { userWon, winnerName, scoreArr } = tournamentOutcome();
 
     if (pendingMatch.bracketType === 'main_tournament' && td.mainTournament) {
       // 本戦の結果記録

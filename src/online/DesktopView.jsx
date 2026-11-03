@@ -126,19 +126,21 @@ export default function DesktopView(props) {
         </TeamRoster>
       )}
       {tab === 'ranking' && <AbilityRanking view={view} />}
-      {/* ⚠ **手続き中でも開けること**。以前は「決定待ちです」の1行だけにして
-          いたが、移植した編成画面に一度も辿り着けないという指摘を受けた。
-          打順や投手起用はいつ決めてもよく、止める理由が無い。
-          ⚠ 左メニューの3項目は、移植画面の**中のタブ**へ直に入る */}
+      {/* ⚠ **手続き中でも開けること**。打順や投手起用はいつ決めてもよく、
+          止める理由が無い。
+          ⚠ 左メニューの3項目は、移植画面の**中のタブ**へ直に入る。
+          ⚠ **保存に失敗しても閉じない**。閉じると編集がまるごと消える。
+             ここでは成否に関わらず開いたままにしてある（画面を離れるのは
+             左メニューの操作だけ）。 */}
       {lineupTab && (
         <OnlineLineup
           view={view}
           busy={busy}
           tab={lineupTab}
           onClose={() => setTab('tactics')}
-          onSave={async (plan, baseLineup) => {
-            await run(() => command('lineup', { ...plan, baseLineup }));
-          }}
+          onSave={(plan, baseLineup) =>
+            run(() => command('lineup', { ...plan, baseLineup }))
+          }
         />
       )}
       {tab === 'tactics' && (
@@ -193,8 +195,8 @@ export default function DesktopView(props) {
 function Roster({ view, teamSelector }) {
   const [page, setPage] = useState(0);
   // ⚠ 名簿の順のままだと1ページ目が投手だけになり、スタメンが出てこない
-  const order = rosterByRole(view.roster, view.lineup);
   const [category, setCategory] = useState('batting');
+  const order = rosterByRole(view.roster, view.lineup, category);
   const [stats, setStats] = useState(false);
   return (
     <section className="online-card">
@@ -217,7 +219,10 @@ function Roster({ view, teamSelector }) {
               <button
                 key={id}
                 aria-pressed={category === id}
-                onClick={() => setCategory(id)}
+                onClick={() => {
+                  setCategory(id);
+                  setPage(0);
+                }}
               >
                 {id === 'batting' ? '打撃' : '投球'}
               </button>

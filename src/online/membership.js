@@ -1,11 +1,11 @@
 // ============================================================
-// 多人数ペナントの参加者（1〜42人・招待制・途中参加）
+// 多人数ペナントの参加者（ログインして参加・途中参加）
 //
 // 設計は docs/online/PYRAMID_LEAGUE.md。
 //
 // 【なぜ必要か】現行は参加者を環境変数（ONLINE_MEMBER_1 / 2）で固定しており、
 // 1人増やすたびに設定の編集と再デプロイが要る。`createLeague` にも
-// `members.length === 2` の強制がある。これでは1人でも42人でも遊べない。
+// `members.length === 2` の強制があった。これでは2人以外で遊べない。
 // **参加者はリーグのデータ側で持つ**形に変える。
 //
 // ⚠ **ここは純粋な計算だけを持つこと**。保存・通信・乱数の生成に触らない。
@@ -16,7 +16,7 @@ import { requireOnline } from './shared.js';
 import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
 
 /** 参加できる上限。球団数と同じ（全球団が人間でも成立する） */
-export const MAX_MEMBERS = PYRAMID_TEAM_COUNT; // 42
+export const MAX_MEMBERS = PYRAMID_TEAM_COUNT; // 12（2部制）
 
 /**
  * 途中参加が入れる階層。**最下層だけ**。
@@ -53,7 +53,7 @@ export function cpuTeams(league) {
 }
 
 /**
- * 途中参加者が入る枠を決める。**C リーグのCPUの中で一番弱い球団**。
+ * 途中参加者が入る枠を決める。**最下層（2部）のCPUの中で一番弱い球団**。
  *
  * 弱さの順は 勝利数 → 勝率 → 球団の格付け → 名前 の順で比べる。
  * ⚠ **最後に名前まで見ること**。開幕前は全球団が 0勝0敗・同じ格付けになり得るので、
@@ -97,7 +97,13 @@ export function assertCanJoin(league, userId) {
     `参加できるのは${MAX_MEMBERS}人までです`,
     409,
   );
-  const team = weakestJoinableTeam(league);
+  // ⚠ **順位表を渡すこと**。渡さないと勝敗が見られず、常に「格付けが低い→名前順」で
+  //    決まる（シーズン途中だと2部の首位のCPU球団を引き継ぐこともあった）。
+  //    順位表は配列なので、球団名で引ける形にして渡す
+  const standings = Object.fromEntries(
+    (league.season?.standings || []).map((s) => [s.team, s]),
+  );
+  const team = weakestJoinableTeam(league, standings);
   requireOnline(team, '空いている球団がありません', 409);
   return { team };
 }

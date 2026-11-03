@@ -1,12 +1,12 @@
 // 当日の実試合・順位・成績の記録。UIとサーバーで同じ経路を使う。
 import { TEAMS_DATA } from '../teams-data.js';
-import { SEASON_PHASES, updatePlayoffProgress } from '../season/seasonManager.js';
+import { SEASON_PHASES, updatePlayoffProgress, standingWinRate, compareStandings } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { autoSimulateGame } from './autoSimulation.js';
 import { scheduledGameSeed } from './rng.js';
 import { decisionsFromResult } from './pitcherDecisions.js';
 
-export const simulateScheduledGamesOnDate = (sData, recording = null) => {
+export const simulateScheduledGamesOnDate = (sData, recording = null, { settleDraws = true } = {}) => {
   const gamesOnDate = getScheduleByDate(sData.schedule, sData.currentDate);
   if (gamesOnDate.length === 0) return { data: sData, results: [] };
   let updatedSchedule = [...sData.schedule];
@@ -44,15 +44,16 @@ export const simulateScheduledGamesOnDate = (sData, recording = null) => {
       if (result.homeScore > result.awayScore) { standingHome.wins++; standingAway.losses++; }
       else if (result.awayScore > result.homeScore) { standingAway.wins++; standingHome.losses++; }
       else { standingHome.draws = (standingHome.draws || 0) + 1; standingAway.draws = (standingAway.draws || 0) + 1; }
-      standingHome.winRate = standingHome.gamesPlayed > 0 ? standingHome.wins / standingHome.gamesPlayed : 0;
-      standingAway.winRate = standingAway.gamesPlayed > 0 ? standingAway.wins / standingAway.gamesPlayed : 0;
+      standingHome.winRate = standingWinRate(standingHome);
+      standingAway.winRate = standingWinRate(standingAway);
     }
   });
-  updatedStandings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+  updatedStandings.sort(compareStandings);
   let updatedData = { ...sData, schedule: updatedSchedule, standings: updatedStandings, results: updatedResults };
   // プレーオフ進行を更新（シリーズ決着・TBD確定）
   if (sData.phase === SEASON_PHASES.PLAYOFFS) {
-    updatedData = updatePlayoffProgress(updatedData);
+    // 対人版は引き分けで未決着なら再試合を足すので、ここでは決めない（settleDraws: false）
+    updatedData = updatePlayoffProgress(updatedData, { settleDraws });
   }
   return { data: updatedData, results: gameResults };
 };

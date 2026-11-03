@@ -19,7 +19,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import './lib/bootstrap.mjs';
-import { FileStore } from '../../server/storage/fileStore.mjs';
+import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { buildLeague, runSeason, TEAMS_DATA } from './lib/league.mjs';
@@ -99,7 +99,7 @@ function summarize(teams) {
 const dir = await mkdtemp(join(tmpdir(), 'pennant-parity-'));
 let online, onlineRank, onlineGames;
 try {
-  const store = new FileStore(join(dir, 'state.gz'));
+  const store = createTestStore(join(dir, 'state.gz'));
   let now = '2026-10-26T15:00:00.000Z';
   const service = new LeagueService(store, {
     members: [{ userId: 'admin', label: '管理者' }],
@@ -186,26 +186,45 @@ assert.ok(
 );
 
 // --- 一人用側 ---------------------------------------------------------
-Math.random = createSeededRandom(20261101);
-const names = quiet(() => buildLeague(PYRAMID_TEAM_COUNT, 24, 1));
-quiet(() => {
-  // ⚠ オンラインと同じ初期トライアウトから名簿を作る
-  const pool = generateTryoutCandidates(1, names.length, true, onlineRank, 0);
-  for (const n of names) TEAMS_DATA[n].players = [];
-  for (let round = 0; round < 24; round += 1)
-    for (const n of names) {
-      const picked = selectPlayerForAI(pool, TEAMS_DATA[n].players) || pool[0];
-      if (!picked) break;
-      pool.splice(
-        pool.findIndex((p) => p.id === picked.id),
-        1,
-      );
-      TEAMS_DATA[n].players.push(picked);
-    }
-  initializeAllPitchingRotations();
-  runSeason(names, onlineGames);
+// ⚠ **一人用側は種を変えて3回組み、平均を取る**。15試合ほどでは本塁打率が
+//    1回ごとに大きく振れ、旧コードでも種を変えるだけで 0.49〜0.66 まで動いた
+//    （2026-11 の継投修正のあと、たまたま 0.357 を引いて落ちた）。1回だけだと
+//    「乱数の当たり外れ」と「本物のずれ」を区別できない。平均で揺れを抑え、
+//    許容幅は変えない。
+// ⚠ 最少・最多だけは平均でなく最も厳しい値を取る（1球団の崩れを埋もれさせない）
+const SINGLE_SEEDS = [20261101, 1, 2];
+const singleRuns = SINGLE_SEEDS.map((seed) => {
+  Math.random = createSeededRandom(seed);
+  const names = quiet(() => buildLeague(PYRAMID_TEAM_COUNT, 24, 1));
+  quiet(() => {
+    // ⚠ オンラインと同じ初期トライアウトから名簿を作る
+    const pool = generateTryoutCandidates(1, names.length, true, onlineRank, 0);
+    for (const n of names) TEAMS_DATA[n].players = [];
+    for (let round = 0; round < 24; round += 1)
+      for (const n of names) {
+        const picked = selectPlayerForAI(pool, TEAMS_DATA[n].players) || pool[0];
+        if (!picked) break;
+        pool.splice(
+          pool.findIndex((p) => p.id === picked.id),
+          1,
+        );
+        TEAMS_DATA[n].players.push(picked);
+      }
+    initializeAllPitchingRotations();
+    runSeason(names, onlineGames);
+  });
+  return summarize(names.map((n) => TEAMS_DATA[n]));
 });
-const single = summarize(names.map((n) => TEAMS_DATA[n]));
+const single = {};
+for (const key of Object.keys(singleRuns[0])) {
+  const values = singleRuns.map((r) => r[key]);
+  single[key] =
+    key === '野手の最少'
+      ? Math.min(...values)
+      : key === '投手の最多'
+        ? Math.max(...values)
+        : values.reduce((a, b) => a + b, 0) / values.length;
+}
 
 // --- 突き合わせ -------------------------------------------------------
 // 各項目: [差の許容, 何を捕まえるか]
