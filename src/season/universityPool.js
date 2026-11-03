@@ -1774,13 +1774,23 @@ export function deserializeUniversityPool(data) {
     return;
   }
 
+  // ⚠ 保存ではプールの選手の成績欄を落としている（まだ試合に出ていないので空）。
+  //    ロードで戻さないと、大学・社会人・ドラフトで名簿に入った選手が成績欄の無いまま
+  //    年度替わりを迎え、通算成績が作られなかった（実測で通算成績の無い選手が約2700人）
+  const restoreStats = (player) => {
+    if (!player || typeof player !== 'object') return;
+    if (!player.seasonStats) player.seasonStats = createEmptyStats();
+    if (!player.careerStats) player.careerStats = createEmptyStats();
+  };
   if (data.university) {
     Object.entries(data.university).forEach(([year, cohort]) => {
       universityPool[year] = cohort;
+      if (Array.isArray(cohort)) cohort.forEach(entry => restoreStats(entry?.player));
     });
   }
   if (data.highSchool) {
     highSchoolPool.players = data.highSchool.players || [];
     highSchoolPool.year = data.highSchool.year || 0;
+    highSchoolPool.players.forEach(restoreStats);
   }
 }

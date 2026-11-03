@@ -11,7 +11,7 @@ import { saveEmergency } from '../game/saveSystem.js';
 export default class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null, emergencySaved: false, showDetail: false };
+    this.state = { hasError: false, error: null, emergencySaved: false, emergencySaving: false, showDetail: false };
   }
 
   static getDerivedStateFromError(error) {
@@ -20,13 +20,20 @@ export default class AppErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     console.error('アプリでエラーが発生しました:', error, info);
-    // 現在のゲーム状態を緊急保存（localStorageへ同期書き込み）
-    let saved = false;
+    // 現在のゲーム状態を緊急保存（状態の写しはここで同期的に取り、書き込みは非同期）
+    let pending = null;
     try {
       const snap = getGameSnapshot();
-      if (snap && snap.seasonData) saved = saveEmergency(snap);
+      if (snap && snap.seasonData) pending = saveEmergency(snap);
     } catch (e) { /* 緊急保存の失敗はここで握りつぶす */ }
-    this.setState({ emergencySaved: saved });
+    if (!pending) {
+      this.setState({ emergencySaved: false });
+      return;
+    }
+    this.setState({ emergencySaving: true });
+    pending
+      .then(saved => this.setState({ emergencySaved: !!saved, emergencySaving: false }))
+      .catch(() => this.setState({ emergencySaved: false, emergencySaving: false }));
   }
 
   render() {
@@ -57,7 +64,9 @@ export default class AppErrorBoundary extends React.Component {
             borderRadius: 10, padding: '10px 14px', marginBottom: 18, fontSize: 13,
             color: this.state.emergencySaved ? '#6ee7a8' : '#aab6cc',
           }}>
-            {this.state.emergencySaved
+            {this.state.emergencySaving
+              ? '… 進行中データを緊急バックアップしています（再読み込みは完了まで待ってください）'
+              : this.state.emergencySaved
               ? '✓ 緊急バックアップを作成しました'
               : 'ℹ 進行中データの緊急バックアップは作成されませんでした（直近のセーブは無事です）'}
           </div>

@@ -1372,7 +1372,7 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
 - `src/game/pitcherDecisions.js` (~155行) - 勝利・敗戦・セーブ・ホールドの判定（両エンジン共有）
 - `src/game/baseState.js` (~125行) - 塁の状態の共通関数（采配モードの走者の識別・`makeRunner`）
 - `src/game/bunting.js` (~69行) - バントの解決モデル（両エンジン共有。フェア率・質・送球アウト・スクイズ）
-- `src/game/saveSystem.js` (~650行) - セーブ/ロード/ファイル書き出し・読み込み
+- `src/game/saveSystem.js` (~800行) - セーブ/ロード/ファイル書き出し・読み込み
 - `src/game/seasonProgress.js` (~420行) - 日程進行ハンドラー
 - `src/simulation-logic.js` (~1090行) - 物理演算（打球・投球）
 - `src/components/ScheduleScreen.jsx` (~750行) - 日程/順位表/成績ランキング

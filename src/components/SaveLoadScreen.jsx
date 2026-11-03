@@ -14,7 +14,8 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
   useEffect(() => {
     let alive = true;
     (async () => {
-      setEmergencyInfo(getEmergencyInfo());
+      const emergency = await getEmergencyInfo();
+      if (alive) setEmergencyInfo(emergency);
       setAutosaveInfo(await getAutosaveInfo());
       const infos = await Promise.all([0, 1, 2].map(i => getBackupInfo(i)));
       if (alive) setBackupInfos(infos);
