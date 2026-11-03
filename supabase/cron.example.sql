@@ -3,6 +3,14 @@
 -- online_tick_url: https://YOUR_DEPLOYMENT/api/online?action=tick
 -- online_cron_secret: VercelのONLINE_CRON_SECRETと同じ32文字以上のランダム値
 -- DB/CronのタイムゾーンをUTCとして設定する（JSTではない）。
+
+-- ⚠ 以前の版のジョブ（1日2回・半日刻みの頃）が残っていたら先に止める。
+--    残ったままだと、正時以外にも余計な起動が続く（進行は nextAdvanceAt で
+--    1回に限られるが、毎回スナップショットを読みに行く）。無ければ何もしない。
+select cron.unschedule(jobname)
+from cron.job
+where jobname in ('online-day-hour', 'online-day-half');
+
 select cron.schedule(job_name, expression, $command$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'online_tick_url' limit 1),
@@ -17,7 +25,8 @@ $command$)
 from (values
   ('online-turn', '0,5,10 * * * *')
 ) as jobs(job_name, expression);
--- 1ターン＝1時間。毎正時に1つ進む（24ターン×7日＝168ターンで1シーズン）。
+-- 1ターン＝1時間。毎正時に1つ進む（月〜金の120ターンでレギュラーシーズン。
+-- シーズン後の試合の無い日はまとめて進み、土曜にストーブリーグ、日曜にキャンプ）。
 -- 毎時なのでUTCとJSTのずれは効かないが、DB/CronのタイムゾーンはUTCのままでよい。
 -- cron.job_run_detailsのSQL成功だけではHTTP/ゲーム更新成功を証明しない。
 -- net._http_responseとゲームのrevision/日付も確認する。

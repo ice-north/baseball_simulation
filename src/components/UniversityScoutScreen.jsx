@@ -134,7 +134,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const handleConfirmRecruit = (id, force = false) => {
     const c = candidates.find(p => p.id === id);
     const gauge = c?._approachGauge || 0;
-    const eligible = c._gaugeComplete || (force && gauge >= 80);
+    const eligible = c?._gaugeComplete || (force && gauge >= 80);
     if (!c || !eligible || c._reservedBy || remainingSlots <= 0) return;
     const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
     if (orig) orig._universityReserved = userTeamName;

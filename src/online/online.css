@@ -231,6 +231,27 @@
   margin-right: 9px;
   color: #c4d4e5;
 }
+/* 順位表は部ごとに分けて並べる。昇格圏・降格圏は左端の線で示す */
+.online table caption {
+  padding: 12px 0 4px;
+  text-align: left;
+  font-weight: 700;
+  color: #e6edf5;
+}
+.online table + table {
+  margin-top: 8px;
+}
+.online tr.is-promotion th:first-child {
+  box-shadow: inset 3px 0 0 #5fbf7f;
+}
+.online tr.is-relegation th:first-child {
+  box-shadow: inset 3px 0 0 #d9735f;
+}
+.online-move {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #c4d4e5;
+}
 .online-score {
   padding: 14px 0;
   border-bottom: 1px solid #536b85;
@@ -292,6 +313,10 @@
   max-width: 580px;
   margin: 50px auto;
   padding: 36px;
+}
+/* 参加画面の「参加する」と「ログインし直す」が隙間なく接していた */
+.online-login form + button {
+  margin-top: 12px;
 }
 .online-ready {
   display: flex;
@@ -420,6 +445,65 @@
   font-size: 12px;
   flex: 1;
   min-width: 0;
+}
+/* 重視する能力の重み。野手・投手・共通を横に並べ、狭ければ折り返す */
+.online-tryout-weights {
+  border: 1px solid #536b85;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 10px 0;
+}
+.online-tryout-weights summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.online-tryout-weights fieldset {
+  display: inline-grid;
+  gap: 4px;
+  vertical-align: top;
+  min-width: 220px;
+  margin: 6px 12px 6px 0;
+  border: 0;
+  padding: 0;
+}
+.online-tryout-weights legend {
+  font-size: 12px;
+  color: #d0d9e5;
+  padding: 0;
+}
+.online-tryout-weights label {
+  display: grid;
+  grid-template-columns: 5em minmax(0, 1fr) 4.5em;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+/* ⚠ `.online label`（上下14pxの余白）と `.online input`（高さ44px・枠つき）が
+   効くので、詳細度を揃えて打ち消す。打ち消さないと重みの行が間延びする */
+.online .online-tryout-weights label {
+  margin: 0;
+}
+.online .online-tryout-weights input[type='range'] {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent-strong);
+}
+.online-tryout-weights output {
+  text-align: left;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.online-tryout-weight-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.online-tryout-score {
+  color: #67e8f9;
+  font-weight: 600;
 }
 @media (max-width: 1100px) {
   .online-tryout-grid {
@@ -1165,8 +1249,10 @@
 .online-game-dialog {
   width: min(640px, calc(100% - 24px));
 }
+/* ⚠ 幅0から伸ばす指定だと、試合成績のように横に並ぶものが無いダイアログで
+   伸びる先が無く、▼だけに潰れていた。最低限の幅を持たせる */
 .online-player-dialog .online-stat-tools select {
-  min-width: 0;
+  min-width: 7em;
   width: 0;
   flex: 1;
   font-size: 12px;
@@ -1591,6 +1677,10 @@
 .online-mobile .online-team-roster > .online-compact-roster { flex: 1; min-height: 0; }
 
 .online-mobile .online-roster-toolbar > div:first-child select { width: 126px; max-width: 100%; font-size: 12px; padding: 3px; min-height: 28px; }
+/* ⚠ 球団の切り替えがあるときは、選択欄と「今季 · 24人」を縦に積む。
+   左の欄は幅60pxに固定されていたので、選択欄が入るとはみ出して
+   右の「基本」の選択欄の下に人数が潜り込んでいた */
+.online-mobile .online-roster-toolbar > div:first-child:has(select) { flex: 0 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 
 /* 通常ゲームと同じ球場SVG・左右のメンバー表・電光掲示板で観戦する。 */
 .online-replay-launch { display: flex; gap: 8px; margin-bottom: 8px; }

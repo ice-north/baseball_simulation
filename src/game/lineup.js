@@ -10,12 +10,23 @@ export function ensureCompleteLineup(team, useDH = false) {
   const lineup = [];
   const usedOrders = new Set();
   const usedPlayers = new Set();
+  // ⚠ DH制では**次の先発投手を打順に残さない**。試合では先発に決まった投手の
+  //    打順を外す（`selectStarterFromRotation`）ので、打順に入れたままだと
+  //    その枠と守備位置が空き、8人で戦うことになっていた（空いた打席は
+  //    1人目の選手が代わりに立ち、1試合7打席になる）。外した枠は控えで埋める。
+  const rotationStarters = team.pitchingRotation?.starters || [];
+  const startIndex = team.pitchingRotation?.currentStarterIndex || 0;
+  const nextStarterId = useDH
+    ? [...rotationStarters.slice(startIndex), ...rotationStarters.slice(0, startIndex)]
+      .find(id => active.get(id)?.position === 'pitcher')
+    : undefined;
   for (const entry of source) {
     const player = active.get(entry.playerId);
     const order = entry.battingOrder;
     if (!player || !Number.isInteger(order) || order < 1 || order > 9
       || usedOrders.has(order) || usedPlayers.has(player.id)) continue;
     if (useDH && entry.position === 'pitcher') continue;
+    if (useDH && nextStarterId !== undefined && player.id === nextStarterId) continue;
     if (!useDH && (order === 9 || entry.position === 'pitcher')) continue;
     lineup.push({ ...entry });
     usedOrders.add(order);

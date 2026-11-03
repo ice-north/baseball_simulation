@@ -399,10 +399,14 @@ function getReleasedCandidatesFromPool(maxPlayers = null) {
       continue;
     }
 
-    // プール滞在年数（0回目の再挑戦=解雇直後の翌年 → +1歳, 1回目の不指名後の再挑戦=+2歳）
-    const yearsInPool = (p.attemptsInPool || 0) + 1;
-    aged.age = (p.age || 20) + yearsInPool;
-    // 能力値の微減衰: 滞在年数に応じて累積（1年あたり各-1〜-2）
+    // プールで過ごした年数＝不指名の回数（解雇直後の初回は0年）。
+    // ⚠ **ここで年齢を足さないこと**。プールの選手は年度替わりに加齢する
+    //    （`yearProgressionSystem` の「自由契約選手も加齢」）。以前はここでも
+    //    「滞在年数＋1」歳を足しており、11/9 に解雇された25歳が翌日のトライアウトで
+    //    26歳・能力も1年ぶん落ちた姿で出て、入団すると翌季は27歳になっていた。
+    const yearsInPool = p.attemptsInPool || 0;
+    aged.age = p.age || 20;
+    // 能力値の微減衰: プールで過ごした年数に応じて累積（1年あたり各-1〜-2）
     const decay = (val, min = 1) => {
       let result = val;
       for (let y = 0; y < yearsInPool; y++) {
@@ -496,8 +500,8 @@ export function updateReleasedPoolAfterTryout(draftedIds) {
     }
     // 不指名: attempts++（base age/能力は保持）
     p.attemptsInPool = (p.attemptsInPool || 0) + 1;
-    // 引退判定: 2回連続不指名 or 実年齢（base + 次回表示時の滞在年数）が33以上
-    const nextDisplayAge = (p.age || 20) + (p.attemptsInPool + 1);
+    // 引退判定: 2回連続不指名 or 次のトライアウト時の年齢（年度替わりで1つ上がる）が33以上
+    const nextDisplayAge = (p.age || 20) + 1;
     if (p.attemptsInPool >= 2 || nextDisplayAge >= 33) {
       releasedPlayersPool.splice(i, 1);
     }

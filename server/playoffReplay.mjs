@@ -3,11 +3,16 @@ import {
   SEASON_PHASES,
 } from '../src/season/seasonManager.js';
 import { requireOnline } from '../src/online/shared.js';
+// ⚠ 対人版は引き分けで未決着のシリーズに再試合を足す。一人用の「勝ち数→上位シード」
+//    の決め方（`decideSeriesWinner` の既定）を使うと再試合が組まれないので、
+//    対人版でプレーオフの勝者を読むときは必ずこれを渡す
+export const PLAYOFF_REPLAY = Object.freeze({ settleDraws: false });
+
 export function schedulePlayoffReplay(season) {
   const finals = season.schedule.filter((g) => g.playoffRound === 'final');
   if (
     !finals.length ||
-    getPlayoffChampion(season.schedule) ||
+    getPlayoffChampion(season.schedule, PLAYOFF_REPLAY) ||
     finals.some((g) => !g.result)
   )
     return;

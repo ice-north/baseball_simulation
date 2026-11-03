@@ -10,7 +10,11 @@ import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { gzipSync } from 'node:zlib';
 import { nextProgressionAt } from '../../src/online/shared.js';
 import { projectPlayerInfo } from '../../server/projection.mjs';
-import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
+import {
+  SEASON_TURNS,
+  gamesPerTeam,
+  topTierTeamNames,
+} from '../../src/online/pyramidLeague.js';
 
 // 1ターン＝1時間（毎正時）。⚠ 境界は「その時刻ちょうど」を含めず、次の枠へ送る。
 // 08:00 JST ちょうど → 09:00 JST
@@ -67,13 +71,30 @@ assert.deepEqual(
   '未完了の背景大会も含めて完全に復元する',
 );
 const startYear = league.season.year;
+const firstTopTier = topTierTeamNames(league.teams);
 let days = 0;
+let slimChecked = 0;
 while (league.season.year === startYear && days < 300) {
   if (league.status === 'waiting') resolve();
   else {
     now = new Date(now.getTime() + 4 * 3600000);
     advanceLeagueDay(league, `acceptance:${days}`, now.toISOString());
     days++;
+    // ⚠ 保存する試合結果に両球団の名簿の写しを残さない。1試合約100KBが
+    //    2か所に入り、1シーズンで保存が約190MBに膨らんでいた
+    if (league.season.results.length) {
+      const last = league.season.results.at(-1);
+      const inSchedule = league.season.schedule.find((g) => g.id === last.gameId);
+      assert.ok(
+        !last.result?.homeTeam && !inSchedule?.result?.homeTeam,
+        '試合結果に球団の写しが残っている',
+      );
+      assert.ok(
+        last.result && Number.isFinite(last.result.homeScore),
+        '軽くしたあとも点数は残る',
+      );
+      slimChecked++;
+    }
     if (days % 40 === 0)
       console.log(
         `online-engine: ${days}日 / ${JSON.stringify(league.season.currentDate)}`,
@@ -102,10 +123,29 @@ assert.deepEqual(seen, [
 ]);
 // ⚠ **定数から導くこと**。75 が直に書かれており、1シーズン144ターンへ
 //    変えたときに取り残された。試合数を変えるたびに直すのでは忘れる。
+// ⚠ ターン数ではなく**試合数**と比べる。休養日（6ターンに1回）を入れたので
+//    120ターンで100試合。ターン数と比べていて、この検査はずっと落ちていた
 assert.ok(
-  league.history[0].standings.every((s) => s.gamesPlayed === SEASON_TURNS),
-  `全球団が${SEASON_TURNS}試合しているはず`,
+  league.history[0].standings.every((s) => s.gamesPlayed === gamesPerTeam()),
+  `全球団が${gamesPerTeam()}試合しているはず`,
 );
+// ⚠ **プレーオフは1部の球団だけ**。順位表は全12球団を通した並びなので、
+//    絞らないと2部の首位が出て優勝していた（実測で起きた）
+assert.ok(
+  firstTopTier.includes(league.history[0].playoffChampion),
+  `1部でない球団が優勝した: ${league.history[0].playoffChampion}`,
+);
+// 昇降格のお知らせが積まれる（リーグ便りが読む形であること）
+const promotion = league.notices.find((n) => n.type === 'promotion');
+assert.ok(promotion?.moves?.length > 0, '昇降格のお知らせが無い');
+// ⚠ **シーズン後の空き日はまとめて進む**。1日ずつだと1年に約240ターンかかり、
+//    週の割り当て（月〜金＝シーズン、土日＝手続き）が成り立たなかった。
+//    レギュラーシーズン120ターン＋プレーオフ数ターン＋まとめ進めの数ターン
+assert.ok(
+  days <= SEASON_TURNS + 20,
+  `1年の進行に${days}ターンかかった（シーズン後の空き日がまとまっていない）`,
+);
+assert.ok(slimChecked > 0, '試合結果の軽量化を一度も確かめていない');
 const recordedYear = league.records.seasons[1];
 assert.ok(recordedYear.comparison, '年度・リーグの比較値を確定して残す');
 assert.ok(

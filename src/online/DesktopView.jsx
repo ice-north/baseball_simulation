@@ -111,8 +111,13 @@ export default function DesktopView(props) {
             busy={busy}
             onClose={() => setFullLineup(false)}
             onSave={async (plan, baseLineup) => {
-              await run(() => command('lineup', { ...plan, baseLineup }));
-              setFullLineup(false);
+              // ⚠ **失敗したら閉じない**。以前は成否に関係なく閉じていて、
+              //    保存に失敗すると編集がまるごと消えた（文言も全画面の裏に隠れていた）
+              const result = await run(() =>
+                command('lineup', { ...plan, baseLineup }),
+              );
+              if (result?.ok) setFullLineup(false);
+              return result;
             }}
           />
         ) : (
@@ -151,8 +156,8 @@ export default function DesktopView(props) {
 function Roster({ view, teamSelector }) {
   const [page, setPage] = useState(0);
   // ⚠ 名簿の順のままだと1ページ目が投手だけになり、スタメンが出てこない
-  const order = rosterByRole(view.roster, view.lineup);
   const [category, setCategory] = useState('batting');
+  const order = rosterByRole(view.roster, view.lineup, category);
   const [stats, setStats] = useState(false);
   return (
     <section className="online-card">
@@ -175,7 +180,10 @@ function Roster({ view, teamSelector }) {
               <button
                 key={id}
                 aria-pressed={category === id}
-                onClick={() => setCategory(id)}
+                onClick={() => {
+                  setCategory(id);
+                  setPage(0);
+                }}
               >
                 {id === 'batting' ? '打撃' : '投球'}
               </button>

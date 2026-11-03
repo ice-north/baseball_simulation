@@ -1,15 +1,14 @@
 // ============================================================
-// 多人数ペナントの階層リーグ（7リーグ・42球団）
+// 多人数ペナントの階層リーグ（いまは2部制・12球団）
 //
 // 設計は docs/online/PYRAMID_LEAGUE.md。
 //
-//            A        （6球団）
-//        B1     B2    （各6球団）
-//     C1 C2 C3 C4     （各6球団）
+//      A  1部（6球団）
+//      B  2部（6球団）
 //
 // ⚠ **昇降格の出入りが各階層で釣り合うこと**が、この構造の肝。
-//    A は降格2・昇格2。B は昇格2＋降格4＝6が出て、A から2・C から4＝6が入る。
-//    C は昇格4が出て、B から4が入る。C の5位6位は最下層なので行き先が無い。
+//    いまは1部の最下位と2部の1位が入れ替わる（1つずつ）。
+//    以前は7リーグ42球団（A / B1 B2 / C1〜C4）で設計していたが、保存の容量で見送った。
 //    リーグを足すときは `pyramidBalance()` で釣り合いを確かめること。
 //
 // ⚠ **生成はシードから決まること**。サーバーと再現で同じ世界にならないと、
@@ -33,7 +32,7 @@ export const TEAMS_PER_LEAGUE = 6;
  * ⚠ 構造を変えたら `pyramidBalance()` で出入りの釣り合いを確かめること。
  *    検査（`online-pyramid-check`）が自動で見ている。
  *
- * いまは**2部制12球団**。1部6・2部6で、1部の5位6位が落ち、2部の1位2位が上がる。
+ * いまは**2部制12球団**。1部6・2部6で、1部の最下位が落ち、2部の1位が上がる。
  * 7リーグ42球団の構成は保存の容量が無料枠に収まらず見送った
  * （`docs/online/PYRAMID_LEAGUE.md` に実測を残してある）。
  */
@@ -42,7 +41,7 @@ export const PYRAMID_LEAGUES = [
   { id: 'B', name: '2部', tier: 1, up: ['A'], down: [] },
 ];
 
-export const PYRAMID_TEAM_COUNT = PYRAMID_LEAGUES.length * TEAMS_PER_LEAGUE; // 42
+export const PYRAMID_TEAM_COUNT = PYRAMID_LEAGUES.length * TEAMS_PER_LEAGUE; // 12
 
 /**
  * 昇格する順位（1始まり・上から数える）。`up` の並びと対応する。
@@ -122,8 +121,8 @@ const shuffled = (list, rand) => {
 };
 
 /**
- * 42球団を生成する。`{ id, name, abbreviation, city, rank, league }`。
- * ⚠ 同じ `seed` なら必ず同じ42球団になる。
+ * 全球団（いまは12）を生成する。`{ id, name, abbreviation, city, rank, league }`。
+ * ⚠ 同じ `seed` なら必ず同じ球団になる。
  */
 export function generatePyramidTeams(seed = 20261029) {
   const rand = createSeededRandom(seed);
@@ -180,7 +179,7 @@ export function pyramidMovements(standings) {
 //
 // ⚠ **既存の `generateFullSeasonSchedule` は使えない**。あちらは
 //    `leagueFormat` が `'single'` か `'two'` の2通りしか対応しておらず、
-//    7リーグは作れない（実装を読んで確認した）。
+//    階層リーグ（部ごとの総当たり）は作れない（実装を読んで確認した）。
 //    階層リーグの日程は単純（各リーグ6球団の総当たりの繰り返し）なので、
 //    ここで独自に組む。
 // ============================================================
@@ -333,6 +332,12 @@ export function standingsByLeague(teams, standings = []) {
       });
   }
   return result;
+}
+
+/** 最上位リーグ（1部）の球団名。プレーオフに出られるのはここだけ */
+export function topTierTeamNames(teams = []) {
+  const top = PYRAMID_LEAGUES.find((league) => league.tier === 0)?.id;
+  return teams.filter((t) => t.league === top).map((t) => t.name);
 }
 
 /**

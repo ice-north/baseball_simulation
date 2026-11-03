@@ -130,4 +130,41 @@ assert.ok(TEAMS_DATA.original && !TEAMS_DATA.loaded, 'ロード失敗後にチ�
 assert.equal(WORLD_DATA.userLeagueId, 'before-load', 'ロード失敗後に並行世界を戻す');
 assert.equal(getPlayerIdCounter(), 90001, 'ロード失敗後に採番位置を戻す');
 
+// ⚠ 緊急保存をスロットへ戻すときも、上書き前のスロットを1世代バックアップする
+{
+  const { getBackupInfo } = await import('../../src/game/saveSystem.js');
+  idbValues.set(SAVE_SLOT_KEYS[2], oldSave(5));
+  localValues.set(EMERGENCY_KEY, oldSave(6));
+  assert.equal((await promoteEmergencyToSlot(2)).success, true);
+  assert.equal((await readSaveSlots())[2].year, 6, '緊急保存がスロットに入っていない');
+  assert.equal((await getBackupInfo(2))?.year, 5, '緊急保存で上書きしたスロットのバックアップが無い');
+}
+
+// ⚠ スタッフの採番は保存に入れ、ロードで戻す。古い保存（採番なし）は在籍スタッフの次から
+{
+  const { getStaffIdCounter, setStaffIdCounter } = await import('../../src/corporate/staffData.js');
+  setStaffIdCounter(7123);
+  assert.equal(buildSaveData({ seasonData: { year: 1 } }).staffIdCounter, 7123, '保存にスタッフの採番が無い');
+  const save = (extra) => JSON.stringify({
+    version: '2.15.0', timestamp: '2026-10-27T00:00:00.000Z',
+    seasonData: { year: 1 },
+    teamsData: { S: { name: 'S', players: [], corporateData: { staff: [{ id: 6000 }, { id: 6400 }] } } },
+    universityPool: { university: {}, highSchool: { players: [], year: 1 } },
+    ...extra,
+  });
+  setStaffIdCounter(5000);
+  idbValues.set(SAVE_SLOT_KEYS[1], save({}));
+  const quiet = console.error;
+  console.error = () => {};
+  let r;
+  try { r = await loadGameFromSlot(1); } finally { console.error = quiet; }
+  assert.equal(r.success, true, r.error);
+  assert.equal(getStaffIdCounter(), 6401, '古い保存で在籍スタッフと同じ id を配ってしまう');
+  idbValues.set(SAVE_SLOT_KEYS[1], save({ staffIdCounter: 8000 }));
+  console.error = () => {};
+  try { r = await loadGameFromSlot(1); } finally { console.error = quiet; }
+  assert.equal(r.success, true, r.error);
+  assert.equal(getStaffIdCounter(), 8000, '保存したスタッフの採番が戻らない');
+}
+
 console.log('save-check PASS');

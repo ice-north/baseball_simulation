@@ -80,6 +80,24 @@ assert.throws(() => assertMemberCount([{ userId: '' }]), /識別子/);
     cTeams.map((t) => [t.name, { wins: 5, winRate: t.name === other.name ? 0.1 : 0.9 }]),
   );
   assert.equal(weakestJoinableTeam(l, tie).name, other.name, '勝率の低い球団が選ばれる');
+
+  // ⚠ **参加の入口（assertCanJoin）が順位表を渡していること**。関数単体だけ見ると
+  //    通ってしまう。以前は入口が順位表を渡しておらず、勝敗が効いていなかった
+  const withSeason = {
+    ...l,
+    season: {
+      standings: cTeams.map((t) => ({
+        team: t.name,
+        wins: t.name === other.name ? 1 : 10,
+        winRate: 0.5,
+      })),
+    },
+  };
+  assert.equal(
+    assertCanJoin(withSeason, 'new-user').team.name,
+    other.name,
+    '参加の入口で順位が効いていない',
+  );
 }
 
 // --- 参加の反映 ---------------------------------------------------

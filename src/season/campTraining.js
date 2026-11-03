@@ -1333,6 +1333,10 @@ export function applyBatteryMentalEffect(players, staffBonus) {
 export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null, awakeningMult = 1.0, moodMults = {}) {
   const allReports = [];
   const updatedPlayers = team.players.map(player => {
+    // ⚠ 派遣中の選手は派遣先で鍛えるので、キャンプの練習はしない。以前は画面側で
+    //    割り当てから外しても、ここで「割り当て無し＝自動の練習」に拾われ、
+    //    派遣の成長に加えて4クールぶんの練習も積んでいた（CPU球団も同じ）
+    if (player.dispatchedThisCamp) return player;
     const trainingType = trainingAssignments[player.id];
     if (!trainingType) {
       const autoTraining = player.position === 'pitcher' ? 'control' : 'batting';

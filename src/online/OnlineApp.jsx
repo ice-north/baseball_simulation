@@ -41,6 +41,19 @@ function useMobile() {
   }, []);
   return mobile;
 }
+const COMMAND_MESSAGES = {
+  create: 'リーグを作成しました',
+  join: 'リーグに参加しました',
+  migrate: '保存を新しい形式に移しました',
+  pause: '進行を停止しました',
+  resume: '進行を再開しました',
+  backup: 'バックアップを取りました',
+  restore: 'バックアップから戻しました',
+  step: 'ターンを進めました',
+  testmode: '検証モードを切り替えました',
+  resolve: '手続きを締め切りました',
+};
+
 export default function OnlineApp() {
   const [auth, setAuth] = useState(readAuth);
   const [config, setConfig] = useState(null);
@@ -211,8 +224,10 @@ export default function OnlineApp() {
     },
     [renewAuth],
   );
+  // 結果を `{ ok, error }` で返す。⚠ 失敗しても例外は外へ出さない（文言は上の帯に出す）。
+  //    呼ぶ側が成否で振る舞いを変えたいとき（全画面の編成を閉じるか）に使う
   const run = async (fn) => {
-    if (locked.current) return;
+    if (locked.current) return { ok: false, error: '別の操作を処理中です' };
     locked.current = true;
     viewSequence.current++;
     setBusy(true);
@@ -220,6 +235,7 @@ export default function OnlineApp() {
     setMessage('');
     try {
       await fn();
+      return { ok: true };
     } catch (e) {
       setError(e.message);
       try {
@@ -227,6 +243,7 @@ export default function OnlineApp() {
       } catch {
         /* 通信失敗の文言を保持 */
       }
+      return { ok: false, error: e.message };
     } finally {
       locked.current = false;
       setBusy(false);
@@ -246,14 +263,29 @@ export default function OnlineApp() {
         ? await renewAuth(current)
         : current;
     checkSession(credentials);
-    await api('command', credentials, {
-      requestId: crypto.randomUUID(),
-      revision: view?.revision || 0,
-      type,
-      payload,
-    });
+    const send = (revision) =>
+      api('command', credentials, {
+        requestId: crypto.randomUUID(),
+        revision,
+        type,
+        payload,
+      });
+    try {
+      await send(view?.revision || 0);
+    } catch (error) {
+      // ⚠ **編成と手続きの提出は、版のずれだけなら最新の版で1回だけ送り直す**。
+      //    版はリーグ全体で1つなので、毎正時の進行や他の参加者の操作だけで
+      //    「他の操作で更新されました」になり、編成を保存し直す羽目になっていた。
+      //    どちらも自分の保存済みの内容（`baseLineup` / `baseSubmission`）で
+      //    本当の食い違いを別に確かめているので、送り直しても上書き事故は起きない。
+      if (error?.code !== 'revision' || !['lineup', 'submit'].includes(type))
+        throw error;
+      const latest = await api('view', credentials);
+      await send(latest?.revision || 0);
+    }
     await reload();
-    setMessage('保存しました');
+    // ⚠ 操作ごとに文言を変える。作成や参加でも「保存しました」と出ていた
+    setMessage(COMMAND_MESSAGES[type] || '保存しました');
   };
   const login = (fields) =>
     run(async () => saveAuth(await api('login', null, fields)));
@@ -431,9 +463,14 @@ export default function OnlineApp() {
               </p>
             )}
             <ReadContext.Provider value={readDetail}>
+              {/* ⚠ **手続きの切り替わりで作り直さないこと**（鍵に手続きを入れない）。
+                  以前は手続きが締め切られた瞬間に下の画面がまるごと作り直され、
+                  編集中の打順（全画面の編成も含む）が黙って消えていた。
+                  手続きごとの下書きは、名前に手続きの id を入れて分けている（`PhasePanel`）。 */}
               <Drafts
-                key={`${auth.userId}:${auth.sessionId}:${view.year}:${view.teamName}:${view.phase?.id || 'season'}`}
-                scope={`${auth.userId}:${auth.sessionId}:${view.year}:${view.teamName}:${view.phase?.id || 'season'}`}
+                key={`${auth.userId}:${auth.sessionId}:${view.year}:${view.teamName}`}
+                scope={`${auth.userId}:${auth.sessionId}:${view.year}:${view.teamName}`}
+                phaseId={view.phase?.id || null}
               >
                 {mobile ? (
                   <MobileView

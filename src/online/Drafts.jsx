@@ -10,7 +10,10 @@ import React, {
 
 const Context = createContext(null);
 const prefix = 'baseball-online-draft:';
-export function Drafts({ scope, children }) {
+export function Drafts({ scope, phaseId = null, children }) {
+  // 閉じる前の確認は、いま開いている手続きの下書きだけを見る（終わった手続きの印で警告しない）
+  const phaseRef = useRef(phaseId);
+  phaseRef.current = phaseId;
   const cache = useMemo(() => {
     const key = prefix + scope;
     let values = {};
@@ -47,7 +50,7 @@ export function Drafts({ scope, children }) {
       /* メモリ内には残す。 */
     }
     const warn = (event) => {
-      if (!cache.values['lineup.dirty'] && !cache.values['phase.dirty']) return;
+      if (!cache.values['lineup.dirty'] && !cache.values[phaseDraftName(phaseRef.current, 'dirty')]) return;
       event.preventDefault();
       event.returnValue = '';
     };
@@ -72,6 +75,9 @@ export function Drafts({ scope, children }) {
     </Context.Provider>
   );
 }
+
+/** 手続きごとの下書きの名前。手続きが替わったら別の下書きになる */
+export const phaseDraftName = (phaseId, name) => `phase:${phaseId || 'none'}.${name}`;
 
 // 同時に表示するフォームは一つ。保存先の値を同期更新し、アンマウント直前の入力も保持する。
 export function useDraftState(name, initial) {

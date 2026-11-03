@@ -118,11 +118,9 @@ export class LeagueService {
   }
   async logout(userId, sessionId) {
     return this.store.transaction((bundle) => {
-      requireOnline(
-        this.isMember(bundle, userId),
-        '参加者ではありません',
-        403,
-      );
+      // ⚠ **参加者でなくてもログアウトは通す**。ログインは非参加者にも通すので
+      //    （参加画面へ進むため）、ここで弾くと参加画面の「ログアウト」が
+      //    403になって抜けられなかった。消すのは自分のセッションだけ
       if (!sessionId || bundle.sessions[userId] !== sessionId)
         return { unchanged: true, value: { ok: true } };
       delete bundle.sessions[userId];
@@ -365,9 +363,17 @@ export class LeagueService {
         bundle.league.revision++;
       }
       const completedAt = this.clock();
+      // ⚠ 手続きの解決で開幕したときは、エンジンが決めた時刻（キャンプ後は
+      //    月曜0時の `seasonStartAt`）が**まだ先なら上書きしない**。以前は無条件に
+      //    完了時刻の次の正時へ書き換えていたため、全員が早くキャンプを決めると
+      //    火曜開幕になり、締め切りでの自動決定（月曜開幕）と食い違っていた。
+      //    処理の間に枠を過ぎてしまったとき（`online-clock-check`）だけ、
+      //    完了時刻から数え直す。
       if (
         bundle.league.status === 'running' &&
-        (previousStatus !== 'running' || command.type === 'step')
+        (command.type === 'step' ||
+          (previousStatus !== 'running' &&
+            !(bundle.league.nextAdvanceAt > completedAt)))
       )
         bundle.league.nextAdvanceAt = nextProgressionAt(completedAt);
       bundle.league.updatedAt = completedAt;
@@ -426,7 +432,9 @@ export class LeagueService {
       const now = this.clock();
       // ⚠ **締め切り超過の手続きを先に片付ける**。手続き中は status が
       //    running でないので、下の判定だけだと永遠に動かない。
-      if (l?.phase?.deadline && l.phase.deadline <= now) {
+      // ⚠ 自動決定に失敗して止めた後（status が error）は、管理者が再開するまで
+      //    やり直さない。毎時同じ失敗を繰り返して記録を埋めないため。
+      if (l?.phase?.deadline && l.phase.deadline <= now && l.status !== 'error') {
         const working = clone(l);
         try {
           const resolved = await this.engine((engine) =>
@@ -439,8 +447,17 @@ export class LeagueService {
             bundle.league.nextAdvanceAt = nextProgressionAt(bundle.league.updatedAt);
           return { value: { advanced: true, autoResolved: resolved } };
         } catch (error) {
+          // ⚠ **黙って握りつぶさない**。以前はログに出すだけで保存を変えず、
+          //    画面は「締め切り済み」のまま何も起きない状態が続いた
+          //    （誰も原因に気づけない）。止めて理由を画面に出す。
+          //    管理者が「再開」すると待機に戻り、次の定期処理でやり直す。
           console.error('online auto resolve failed:', error.stack);
-          return { unchanged: true, value: { advanced: false } };
+          l.status = 'error';
+          l.nextAdvanceAt = null;
+          l.error = `締め切りの自動決定に失敗しました（${error.message}）。提出内容を確認して管理者が再開してください`;
+          l.revision++;
+          l.updatedAt = this.clock();
+          return { value: { advanced: false, autoResolveFailed: true } };
         }
       }
       if (

@@ -128,8 +128,14 @@ try {
     '2人目が記録されていない',
   );
 
+  // ⚠ 参加していない人も**ログアウトできる**こと。参加画面にも「ログアウト」があり、
+  //    以前は403で抜けられなかった
+  const visitor = (await service.login('visitor')).sessionId;
+  assert.deepEqual(await service.logout('visitor', visitor), { ok: true });
+  assert.ok(!(await store.read()).sessions.visitor, 'セッションが消えていない');
+
   console.log(
-    '■ 参加: OK（非参加者もログインできる / コード不要で入れる / 二重参加は断る / 最下層へ入る / 付けた球団名が画面に届く）',
+    '■ 参加: OK（非参加者もログインできる / コード不要で入れる / 二重参加は断る / 最下層へ入る / 付けた球団名が画面に届く / 非参加者もログアウトできる）',
   );
 } finally {
   await rm(dir, { recursive: true, force: true });

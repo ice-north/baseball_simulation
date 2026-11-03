@@ -46,6 +46,16 @@ try {
       await page.getByRole('button', { name: 'メニュー', exact: true }).click();
     await page.getByRole('button', { name: text, exact: true }).click();
     await waitIdle(page);
+    if (text === '編成') await onlinePanel(page);
+  };
+  // ⚠ 編成タブは一人用から移植した画面を既定で開く（画面を作り直すと開き直す）。
+  //    この検査で見るのはオンライン側だけのパネル（方針・采配）なので、出ていたら閉じる
+  const onlinePanel = async (page) => {
+    const close = page.getByRole('button', {
+      name: '方針・采配の設定へ（保存しない）',
+      exact: true,
+    });
+    if (await close.count()) await close.click();
   };
   async function login(page, player) {
     await page.goto(`${base}/online`);
@@ -69,7 +79,90 @@ try {
   //    （＝選べない）状態で先へ進まないよう、両方が描けていることを見る
   await p.locator('.online-tryout-wanted .online-tryout-list li').first().waitFor();
   await p.locator('.online-tryout-pool .online-tryout-list li').first().waitFor();
+  // ⚠ 希望リストの操作は**獲得予定を基準に**動くこと。以前は希望順の位置で
+  //    動かしていて、初期編成（24人＝目標構成の合計ちょうど）では
+  //    「指名に加える」が候補の約9割で何も起きず、「↓」で選手が消えたりした
+  {
+    const wantedNames = async () =>
+      (
+        await p
+          .locator('.online-tryout-wanted > ol.online-tryout-list > li .online-tryout-person button')
+          .allInnerTexts()
+      ).map((s) => s.trim());
+    const start = await wantedNames();
+    await p
+      .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
+      .click();
+    const row = p
+      .locator('.online-tryout-pool .online-tryout-list li:not([data-wanted])')
+      .first();
+    const name = (
+      await row.locator('.online-tryout-person button').first().innerText()
+    ).trim();
+    await row.getByRole('button', { name: '指名に加える', exact: true }).click();
+    const added = await wantedNames();
+    assert.ok(added.includes(name), '「指名に加える」で獲得予定に入らない');
+    assert.equal(added.length, start.length, '指名で獲得予定の人数が変わった');
+    assert.equal(
+      (
+        await p
+          .locator('.online-tryout-pool .online-tryout-list li', { hasText: name })
+          .locator('.online-tryout-mark')
+          .innerText()
+      ).trim(),
+      `指名中 ${added.indexOf(name) + 1}位`,
+      '「指名中 N位」が獲得予定の番号とずれる',
+    );
+    await p
+      .getByRole('button', { name: `${added[0]}の希望順位を下げる`, exact: true })
+      .click();
+    const moved = await wantedNames();
+    assert.equal(moved[1], added[0], '↓で1つ下がらない');
+    assert.deepEqual([...moved].sort(), [...added].sort(), '↓で顔ぶれが変わった');
+    await click(p, '標準案に戻す');
+    assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+    // 重視する能力の重みから、評価値の順でおすすめを作れる
+    const scoresOf = async (selector) =>
+      (await p.locator(`${selector} .online-tryout-score`).allInnerTexts()).map((t) =>
+        Number(t.replace(/[^0-9]/g, '')),
+      );
+    await p.getByText('重視する能力（評価値の重み）', { exact: true }).click();
+    await p.getByLabel('パワーの重み', { exact: true }).fill('5');
+    await p.getByLabel('ミートの重み', { exact: true }).fill('0');
+    await p
+      .getByRole('button', { name: 'この重みでおすすめ順を作る', exact: true })
+      .click();
+    const weighted = await scoresOf('.online-tryout-wanted > ol.online-tryout-list');
+    assert.equal(weighted.length, start.length, '重みのおすすめで獲得予定の人数が変わった');
+    assert.ok(
+      weighted.every((v, i) => i === 0 || weighted[i - 1] >= v),
+      `獲得予定が評価の高い順になっていない: ${weighted.join(',')}`,
+    );
+    assert.notDeepEqual(await wantedNames(), start, '重みを変えてもおすすめが変わらない');
+    const poolScores = await scoresOf('.online-tryout-pool .online-tryout-list');
+    assert.ok(
+      poolScores.every((v, i) => i === 0 || poolScores[i - 1] >= v),
+      '候補が評価値の順に並んでいない',
+    );
+    await p.getByRole('button', { name: '重みを標準に戻す', exact: true }).click();
+    await click(p, '標準案に戻す');
+    assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+    assert.equal(
+      await p.getByText('おすすめ順を作り直しました', { exact: false }).count(),
+      0,
+      '標準案に戻したのに「作り直しました」が残っている',
+    );
+    await p
+      .locator('.online-tryout-pool .online-segments button', { hasText: '全部' })
+      .click();
+  }
   await login(m, 2);
+  // ⚠ 開発用サーバーの初期参加者は管理者1人だけ。プレイヤー2はログイン直後に
+  //    参加画面が出るので、先に参加する（招待コードを廃止したときに取り残された）
+  await m
+    .getByLabel('球団名（空なら元の名前のまま）')
+    .fill('検査ドリーマーズ');
+  await click(m, '参加する');
   await m.setViewportSize({ width: 320, height: 640 });
   await click(m, '手続き');
   await m
@@ -182,6 +275,7 @@ try {
   lineupTab.on('pageerror', (e) => errors.push(e.message));
   await lineupTab.goto(`${base}/online`);
   await click(lineupTab, '編成');
+  await onlinePanel(p);
   await p.getByRole('button', { name: '2番を上げる', exact: true }).click();
   await click(lineupTab, '基本方針');
   await lineupTab.getByLabel('打撃方針').selectOption('patient');
@@ -237,7 +331,8 @@ try {
   a.on('pageerror', (e) => errors.push(e.message));
   await login(a, 1);
   await click(a, '管理');
-  for (let i = 0; i < 3; i++) await click(a, '検証用：1日進める');
+  // ⚠ ボタンの名前は「1ターン進める（ゲーム内1日）」（検証モードを足したときに変わった）
+  for (let i = 0; i < 3; i++) await click(a, '1ターン進める（ゲーム内1日）');
   await click(m, '更新');
   await m.getByRole('button', { name: '試合', exact: true }).click();
   await m.locator('.online-score').first().waitFor();
