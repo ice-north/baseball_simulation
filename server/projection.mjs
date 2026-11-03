@@ -93,23 +93,38 @@ export function upcomingGames(schedule, ownTeam, size = 6) {
 
 /**
  * 自球団のこれからの試合を、近い順に。ホームの「今後の6試合」に使う。
+ * 試合には**その球団の何試合目か**（`number`）を添える。
  *
  * ⚠ **自球団だけ**。リーグ全体の一覧は `upcomingGames`（試合結果の画面が使う）。
  * ⚠ 相手の決まっていない試合（`TBD`）は出さない。プレーオフの決勝は準決勝が
  *    終わるまで `TBD` で置かれる。
  */
 export function ownUpcomingGames(schedule, ownTeam, size = 6) {
-  return schedule
+  // ⚠ **その球団の何試合目かを数える**。日付はゲーム内の暦で、1ターン＝1日の
+  //    うえ休養日が飛ぶので、「4/18」と言われても何試合目かが読めない。
+  //    消化済みも含めて日付順に並べ、その位置を番号にする。
+  const own = schedule
     .filter(
       (g) =>
-        !g.result &&
+        g.date &&
         g.home !== 'TBD' &&
         g.away !== 'TBD' &&
         (g.home === ownTeam || g.away === ownTeam),
     )
-    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id)
-    .slice(0, size)
-    .map((g) => ({ id: g.id, date: g.date, home: g.home, away: g.away }));
+    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const upcoming = [];
+  own.forEach((g, i) => {
+    if (g.result) return;
+    upcoming.push({
+      id: g.id,
+      date: g.date,
+      // 1始まり。消化済みを含めた通し番号
+      number: i + 1,
+      home: g.home,
+      away: g.away,
+    });
+  });
+  return upcoming.slice(0, size);
 }
 
 export function projectLineup(team) {

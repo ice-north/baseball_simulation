@@ -238,6 +238,27 @@
 .online-standings .online-move {
   white-space: nowrap;
 }
+/* ⚠ 見出しの検証用ボタン。**本番では出ない**（管理者＋検証モードのときだけ）。
+   見出しは本来「どこに居るか」を出す場所なので、押せるものを増やしすぎない。 */
+.online-testbar {
+  display: flex;
+  gap: 6px;
+  margin-left: 18px;
+  /* ⚠ 見出しは space-between なので、これが無いと中央に浮く。
+     「NEXT STAGE」のすぐ右に置く */
+  margin-right: auto;
+}
+.online-testbar button {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+/* ⚠ 消す操作だけ赤。押し間違いで全員の成績が消えるので、
+   色でも「ここから先は違う」と分かるようにする */
+.online-testbar .online-danger {
+  background: #b91c1c;
+  border-color: #ef4444;
+  color: #fff;
+}
 .online-own {
   background: var(--accent-soft);
 }
@@ -1907,6 +1928,11 @@
   margin: 0 0 4px;
   font-size: 11px;
   color: #9fb0c4;
+}
+.online-matchup-date strong {
+  font-size: 12px;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
 }
 .online-matchup-teams {
   display: grid;

@@ -1,5 +1,4 @@
 import React from 'react';
-import { formatGameDate } from './shared.js';
 import { teamLabel, teamShort } from './gameText.js';
 import { Standings } from './LeaguePanels.jsx';
 
@@ -61,7 +60,9 @@ function NextGames({ view }) {
               return (
                 <div key={game.id} className="online-matchup">
                   <p className="online-matchup-date">
-                    {formatGameDate(game.date)}
+                    {/* ⚠ 日付ではなく**何試合目か**。1ターン＝ゲーム内1日で
+                        休養日が飛ぶので、暦の日付では進み具合が読めない */}
+                    <strong>{game.number}試合目</strong>
                     {/* ⚠ ホームかビジターかを書く。「@」だけだと、
                         自球団が左右どちらに出るかで読み違える */}
                     <span>{home ? 'ホーム' : 'ビジター'}</span>

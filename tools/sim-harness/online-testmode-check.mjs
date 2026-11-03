@@ -131,6 +131,19 @@ try {
     '1回で24ターンを超えて進んだ',
   );
 
+  // --- 全データリセット -------------------------------------------------
+  // ⚠ 検証用。**遊んでいるリーグで押せてはいけない**（全員の成績が消える）。
+  await assert.rejects(
+    () => send('guest', guest, 'reset'),
+    (e) => e.status === 403,
+    '参加者がリセットできる',
+  );
+  // バックアップを取っておく（リセットで一緒に消えること）
+  await send('admin', admin, 'pause');
+  await send('admin', admin, 'backup');
+  assert.ok((await store.read()).backup, '前提: バックアップがある');
+  await send('admin', admin, 'resume');
+
   // --- OFFに戻せる -----------------------------------------------------
   await send('admin', admin, 'testmode', { on: false });
   assert.equal((await store.read()).league.testMode, false, 'OFFに戻せない');
@@ -139,10 +152,36 @@ try {
     (e) => e.status === 403,
     'OFFに戻したのに進められる',
   );
+  // ⚠ OFFのうちはリセットも拒む
+  await assert.rejects(
+    () => send('admin', admin, 'reset'),
+    (e) => e.status === 403,
+    'OFFなのにリセットできた',
+  );
+
+  // ONに戻せば消せる
+  await send('admin', admin, 'testmode', { on: true });
+  await send('admin', admin, 'reset');
+  const wiped = await store.read();
+  assert.equal(wiped.league, null, 'リーグが消えていない');
+  // ⚠ バックアップも消すこと。残すと「リセットしたのに復元できる」状態になる
+  assert.ok(!wiped.backup, 'バックアップが残っている');
+  // ⚠ 消したあとは**作り直せる**こと（版は0から）
+  await assert.rejects(
+    () => send('admin', admin, 'reset'),
+    (e) => e.status === 409,
+    'リーグが無いのにリセットできた',
+  );
+  await send('admin', admin, 'create', undefined, 'again');
+  const rebuilt = (await store.read()).league;
+  assert.ok(rebuilt, '作り直せない');
+  assert.equal(rebuilt.season.results.length, 0, '前の成績が残っている');
+  // ⚠ 作り直した直後は検証モードがOFFに戻る（消したのだから当然）
+  assert.equal(rebuilt.testMode, false, '検証モードが残っている');
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 検証モード: OK（既定OFF / 管理者だけ / OFFなら拒む / 手続きを締め切れる / まとめて進めても1日ずつ）',
+  '■ 検証モード: OK（既定OFF / 管理者だけ / OFFなら拒む / 手続きを締め切れる / まとめて進めても1日ずつ / 全データリセットは管理者＋ON のときだけ）',
 );

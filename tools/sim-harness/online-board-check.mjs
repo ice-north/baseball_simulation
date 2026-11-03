@@ -282,6 +282,20 @@ try {
     const mine = next.map((g) => (g.home === own ? g.homeStarter : g.awayStarter));
     assert.ok(new Set(mine).size > 1, `自球団の先発が全部同じ: ${mine[0]}`);
 
+    // ⚠ **何試合目かが付いていること**。画面は日付ではなくこれを出す
+    //    （1ターン＝ゲーム内1日で休養日が飛ぶので、暦では進み具合が読めない）。
+    const played = live.season.standings.find((r) => r.team === own).gamesPlayed;
+    assert.equal(
+      next[0].number,
+      played + 1,
+      `次の試合の番号が合わない: ${next[0].number}（消化${played}）`,
+    );
+    assert.deepEqual(
+      next.map((g) => g.number),
+      next.map((_, i) => played + 1 + i),
+      '試合番号が連続していない',
+    );
+
     // ⚠ **先発の投げる手と今季成績が付いていること**。名前だけだと、
     //    どちらが有利な相手かを画面で判断できない
     const roster = new Map(
@@ -376,6 +390,28 @@ try {
     assert.ok(
       !('homeStarterInfo' in plain[0]),
       '成績を渡していないのに先発の情報が付いている',
+    );
+  }
+
+  // ⚠ **番号は消化済みも数えること**（作り物の日程で見る）。これから行う試合
+  //    だけで1から振ると、シーズン中ずっと「1試合目」から始まる。
+  {
+    const day = (d) => ({ year: 2026, month: 9, day: d });
+    const games = ownUpcomingGames(
+      [
+        { id: 1, date: day(1), home: '甲府ウルブズ', away: '松本ディアーズ', result: {} },
+        { id: 2, date: day(2), home: '長岡サンダー', away: '甲府ウルブズ', result: {} },
+        { id: 3, date: day(3), home: '甲府ウルブズ', away: '長岡サンダー', result: null },
+        { id: 4, date: day(4), home: '松本ディアーズ', away: '甲府ウルブズ', result: null },
+        // 他球団の試合は数に入れない
+        { id: 5, date: day(2), home: '松本ディアーズ', away: '長岡サンダー', result: {} },
+      ],
+      '甲府ウルブズ',
+    );
+    assert.deepEqual(
+      games.map((g) => g.number),
+      [3, 4],
+      '消化済みを数えずに番号を振っている',
     );
   }
 

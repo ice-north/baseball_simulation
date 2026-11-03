@@ -52,6 +52,7 @@ const COMMAND_MESSAGES = {
   step: 'ターンを進めました',
   testmode: '検証モードを切り替えました',
   resolve: '手続きを締め切りました',
+  reset: 'すべて消しました。リーグを作り直してください',
 };
 
 export default function OnlineApp() {
@@ -326,6 +327,13 @@ export default function OnlineApp() {
           <a href="/online" className="online-brand">
             NEXT STAGE <span>オンラインペナント</span>
           </a>
+          <TestControls
+            view={view}
+            allowStep={config?.allowStep}
+            busy={busy}
+            run={run}
+            command={command}
+          />
           <nav>
             <a href="/">一人用</a>
             {auth && (
@@ -530,6 +538,67 @@ export default function OnlineApp() {
           </p>
         )}
       </main>
+    </div>
+  );
+}
+
+/**
+ * 見出しに置く検証用のボタン（管理者・検証モードの間だけ）。
+ *
+ * ⚠ **遊んでいるリーグでは出さないこと**。1日進められる／全部消せるのは、
+ *    作っている間に時間を待たずに試すためのもの。検証モード（`testMode`）か
+ *    環境変数（`ONLINE_ALLOW_STEP`）が立っているときだけ出す。
+ * ⚠ 「1日程進める」は、決定待ちの手続きがあれば**それを締め切る**。
+ *    手続き中は試合が進まないので、そうしないとボタンが効かない日が続く。
+ * ⚠ リセットは**二度押し**にする。押し間違いで全員の成績が消える。
+ */
+function TestControls({ view, allowStep, busy, run, command }) {
+  const [confirming, setConfirming] = useState(false);
+  // ⚠ **リーグがまだ無いときは出さない**。押しても「リーグがまだありません」で
+  //    断られるだけで、リセット直後に押せるように見えるのが紛らわしい
+  if (!view || view.setupRequired || view.joinRequired) return null;
+  if (!view.isAdmin || !(view.testMode || allowStep)) return null;
+  const waiting = !!view.phase;
+  return (
+    <div className="online-testbar">
+      <button
+        disabled={busy || (!waiting && view.status !== 'running')}
+        title={
+          waiting
+            ? '決定待ちの手続きをいま締め切ります'
+            : '1ターン（ゲーム内1日・1試合）進めます'
+        }
+        onClick={() => run(() => command(waiting ? 'resolve' : 'step'))}
+      >
+        1日程進める
+      </button>
+      {confirming ? (
+        <>
+          <button
+            className="online-danger"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                await command('reset');
+                setConfirming(false);
+              })
+            }
+          >
+            本当に消す
+          </button>
+          <button disabled={busy} onClick={() => setConfirming(false)}>
+            やめる
+          </button>
+        </>
+      ) : (
+        <button
+          disabled={busy}
+          title="リーグも成績もすべて消して、作成前の状態に戻します"
+          onClick={() => setConfirming(true)}
+        >
+          全データリセット
+        </button>
+      )}
     </div>
   );
 }
