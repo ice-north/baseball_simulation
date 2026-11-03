@@ -282,7 +282,7 @@ try {
   await click(lineupTab, '編成を保存');
   await click(p, '更新');
   await click(p, '編成を保存');
-  await p.getByText('編成が更新されています。', { exact: false }).waitFor();
+  await p.getByText('編成がほかの画面で更新されています。', { exact: false }).waitFor();
   await click(p, '編集を戻す');
   await click(p, '基本方針');
   assert.equal(await p.getByLabel('打撃方針').inputValue(), 'patient');

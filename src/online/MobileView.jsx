@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useDraftMemoryPeek } from './Drafts.jsx';
 import {
   Standings,
   Results,
@@ -8,7 +9,7 @@ import {
   LineupPanel,
 } from './LeaguePanels.jsx';
 import TeamRoster from './TeamRoster.jsx';
-import OnlineLineup from './OnlineLineup.jsx';
+import OnlineLineup, { hasUnsavedFullLineup } from './OnlineLineup.jsx';
 import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatGameDate } from './shared.js';
 import { dateTime, STATUS } from './api.js';
@@ -18,7 +19,10 @@ export default function MobileView(props) {
     props;
   const [playersFrom, setPlayersFrom] = useState('today');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [fullLineup, setFullLineup] = useState(false);
+  // ⚠ 全画面の編成に保存していない編集が残っていれば開いたまま始める。
+  //    スマホを回すとPC用の画面と入れ替わって作り直され、以前は編集が消えていた
+  const unsavedFull = hasUnsavedFullLineup(useDraftMemoryPeek('lineup.full'));
+  const [fullLineup, setFullLineup] = useState(unsavedFull);
   const tabs = [
     ['today', '今日'],
     ['games', '試合'],

@@ -141,6 +141,21 @@ try {
   );
   assert.match(table, /昇格圏/, '2部の1位に昇格圏の印が無い');
   assert.match(table, /降格圏/, '1部の最下位に降格圏の印が無い');
+  // ⚠ 同率のときは、昇降格を決める順（勝率→勝利数→球団名）で並べる。
+  //    全体の並びのまま出すと、昇格圏の印と実際に昇格する球団が食い違っていた
+  const tied = render(
+    h(Standings, {
+      view: {
+        standings: [
+          { team: 'Z球団', wins: 40, losses: 30, winRate: 40 / 70 },
+          { team: 'C球団', wins: 40, losses: 30, winRate: 40 / 70 },
+        ],
+        teamName: 'x',
+        teamLeagues: { Z球団: 'B', C球団: 'B' },
+      },
+    }),
+  );
+  assert.ok(tied.indexOf('C球団') < tied.indexOf('Z球団'), '同率の並びが昇降格の判定と違う');
   // 部の情報が無い古いビューでは、従来どおり1つの表で出す（落ちない）
   assert.doesNotThrow(() =>
     renderToString(h(Standings, { view: { standings, teamName: 'x' } })),

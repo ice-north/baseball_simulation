@@ -347,10 +347,56 @@ try {
   assert.ok(migrated(byCommand), 'ふつうの命令で段が当たっていない');
   // 命令そのものも実行されていること（移行だけして本題を落とさない）
   assert.ok((await store.read()).backup, '命令そのものが実行されていない');
+
+  // 5) バックアップは圧縮した文字列で持つ（一式が倍の大きさにならない）
+  const packedBackup = (await store.read()).backup;
+  assert.equal(typeof packedBackup.packed, 'string', 'バックアップを生のリーグで抱えている');
+  assert.ok(!packedBackup.league, 'バックアップにリーグの写しが残っている');
+
+  // 6) 古い版で取ったバックアップ（以前の形・生のリーグ）を、今のコードで復元できる
+  await store.transaction((bundle) => {
+    const old = structuredClone(bundle.league);
+    old.schema = OLDEST_MIGRATABLE;
+    old.invites = [{ code: 'OLD', usedBy: null }];
+    delete old.testMode;
+    if (old.phase) old.phase.deadline = null;
+    old.backupMark = 'old-backup';
+    bundle.backup = { league: old, sessions: bundle.sessions, receipts: {} };
+    bundle.league.status = 'paused';
+    return { value: null };
+  });
+  const beforeRestore = (await store.read()).league;
+  await upgradable.command('admin', sessionId, {
+    requestId: 'restore-old',
+    revision: beforeRestore.revision,
+    type: 'restore',
+  });
+  const restoredOld = (await store.read()).league;
+  assert.equal(restoredOld.backupMark, 'old-backup', '古い形のバックアップが戻っていない');
+  assert.equal(restoredOld.schema, ONLINE_SCHEMA, '古い版のバックアップを移行せずに戻した');
+  assert.ok(migrated(restoredOld), '古い版のバックアップに段が当たっていない');
+
+  // 7) 新しい形（圧縮した文字列）でも取って戻せる
+  await store.transaction((bundle) => {
+    bundle.league.status = 'paused';
+    delete bundle.league.backupMark;
+    return { value: null };
+  });
+  let rev = (await store.read()).league.revision;
+  await upgradable.command('admin', sessionId, { requestId: 'backup-new', revision: rev, type: 'backup' });
+  await store.transaction((bundle) => {
+    bundle.league.backupMark = 'after-backup';
+    return { value: null };
+  });
+  rev = (await store.read()).league.revision;
+  await upgradable.command('admin', sessionId, { requestId: 'restore-new', revision: rev, type: 'restore' });
+  const restoredNew = (await store.read()).league;
+  assert.ok(!restoredNew.backupMark, 'バックアップ後の変更が残っている（復元されていない）');
+  assert.equal(restoredNew.schema, ONLINE_SCHEMA);
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  `■ 保存の移行: OK（手順が${MIGRATIONS.length}段で${ONLINE_SCHEMA}に届く / 新しすぎる保存を触らない / 直せなくても止まらない / 命令・定期処理・取り込みのどれでも直る）`,
+  `■ 保存の移行: OK（手順が${MIGRATIONS.length}段で${ONLINE_SCHEMA}に届く / 新しすぎる保存を触らない / 直せなくても止まらない / 命令・定期処理・取り込みのどれでも直る / 古い版のバックアップも移行して復元できる）`,
 );

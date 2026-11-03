@@ -16,7 +16,7 @@ import {
 
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
-import { initializeTeamsData, TEAMS_DATA, LEAGUE_SETTINGS, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue, getTeamAbbreviation } from './teams-data.js';
+import { initializeTeamsData, TEAMS_DATA, LEAGUE_SETTINGS, normalizeMaxExtraInnings, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue, getTeamAbbreviation } from './teams-data.js';
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
@@ -221,7 +221,8 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       // LEAGUE_SETTINGSをseasonDataと同期
       useEffect(() => {
         LEAGUE_SETTINGS.useDH = seasonData?.settings?.useDH || false;
-      }, [seasonData?.settings?.useDH]);
+        LEAGUE_SETTINGS.maxExtraInnings = normalizeMaxExtraInnings(seasonData?.settings?.maxExtraInnings ?? 12);
+      }, [seasonData?.settings?.useDH, seasonData?.settings?.maxExtraInnings]);
 
       const [autoSaveFlash, setAutoSaveFlash] = useState(false); // オートセーブ完了の一時表示
 
@@ -432,7 +433,9 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
 
       // レギュレーション設定（拡張可能な設定）
-      const [maxExtraInnings, setMaxExtraInnings] = useState(12);  // 延長最大回数（変更可能）
+      // 延長最大回数。規定（seasonData.settings.maxExtraInnings）に従う。
+      // ⚠ 以前は12で固定の state で、規定を変えても采配試合に効かなかった
+      const maxExtraInnings = normalizeMaxExtraInnings(seasonData?.settings?.maxExtraInnings ?? 12);
 
       // 試合状態（先に定義が必要）
       const [isTopInning, setIsTopInning] = useState(true);
@@ -1232,7 +1235,9 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           'triple': { type: 'triple', description: fieldingResult.description, hit: true, fieldingPosition: fp },
           'double': { type: 'double', description: fieldingResult.description, hit: true, fieldingPosition: fp },
           'single': { type: 'single', description: fieldingResult.description, hit: true,
-            isError: fieldingResult.isError, errorPosition: ep, fieldingPosition: fp },
+            isError: fieldingResult.isError, errorPosition: ep, fieldingPosition: fp,
+            // 中継ミス: 安打のあとの失策。走者が余分に1つ進む（自動試合と同じ）
+            hitWithError: !!fieldingResult.hitWithError, extraAdvance: !!fieldingResult.extraAdvance },
           'out': {
             type: 'out',
             description: fieldingResult.description,
@@ -1626,7 +1631,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         }));
       };
 
-      const advanceRunners = (hitType, fieldingPosition = null, isError = false) => {
+      const advanceRunners = (hitType, fieldingPosition = null, isError = false, extraAdvance = false) => {
         const newBases = [false, false, false];
         let runsScored = 0;
         let unearnedScored = 0;   // 生還した走者のうち失策で出塁していた数（自責点の判定）
@@ -1658,7 +1663,10 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             let newBase = i + advancement;
             // 積極進塁（単打で 2塁→本塁 / 1塁→3塁、二塁打で 1塁→本塁）。
             // 自動シミュレーションと同じ判定を共有する（baserunning.js）。
-            if (outsFromThrow === 0) {
+            if (extraAdvance) {
+              // 中継ミス: 送球が乱れているので走者が余分に1つ進む（自動試合と同じ）
+              newBase++;
+            } else if (outsFromThrow === 0) {
               // 打球を処理した野手の肩で判定する（自動シミュと同じ）。
               // avgArm だけだと「強肩の外野手を置く」意味が出ない
               const thrower = fieldingPosition ? def?.[fieldingPosition] : null;
@@ -1945,12 +1953,13 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           case 'double':
           case 'triple':
           case 'homerun':
-            const { bases: updatedBases, runsScored: runs, unearnedScored = 0, outsMade: throwOuts = 0 } = advanceRunners(result.type, result.fieldingPosition, !!result.isError);
+            // 失策での出塁は「安打」ではない（打数のみ加算）。
+            // ⚠ 中継ミス（hitWithError）は安打のあとの失策なので、打者は安打で出塁している
+            const reachedOnError = !!result.isError && !result.hitWithError;
+            const { bases: updatedBases, runsScored: runs, unearnedScored = 0, outsMade: throwOuts = 0 } = advanceRunners(result.type, result.fieldingPosition, reachedOnError, !!result.extraAdvance);
             
             // 打者成績: ヒット
             const bases_earned = result.type === 'single' ? 1 : result.type === 'double' ? 2 : result.type === 'triple' ? 3 : 4;
-            // 失策での出塁は「安打」ではない（打数のみ加算）
-            const reachedOnError = !!result.isError;
             
             // 選手個別成績を更新
             {
@@ -1971,7 +1980,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               
               // 失策が無ければアウトだったので「免れたアウト」を+1（走者本人の印は
               // advanceRunners が batterAsRunner(isError) で塁に持たせている）
-              if (result.isError) inningErrorOutsRef.current++;
+              if (reachedOnError) inningErrorOutsRef.current++;
               const earned = takeEarnedRuns(runs, outs, unearnedScored);
               // ⚠ 被安打・被本塁打は以前一度も記録していなかった（采配した試合だけ被安打0）。
               //    積極進塁で刺した走者のアウトも投手の投球回に入る
@@ -1987,14 +1996,14 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
             // チーム別安打・打点をカウント（エラーの場合はエラーもカウント）
         // ⚠ 失策での出塁は安打ではない（チームの安打数にも数えない）
         if (isTopInning) {
-          if (!result.isError) setTeamHits(prev => ({ ...prev, away: prev.away + 1 }));
+          if (!reachedOnError) setTeamHits(prev => ({ ...prev, away: prev.away + 1 }));
           setTeamRBIs(prev => ({ ...prev, away: prev.away + runs }));
           if (result.isError) {
             setTeamErrors(prev => ({ ...prev, home: prev.home + 1 }));
             recordFielding(result.errorPosition, { error: 1 });
           }
         } else {
-          if (!result.isError) setTeamHits(prev => ({ ...prev, home: prev.home + 1 }));
+          if (!reachedOnError) setTeamHits(prev => ({ ...prev, home: prev.home + 1 }));
           setTeamRBIs(prev => ({ ...prev, home: prev.home + runs }));
           if (result.isError) {
             setTeamErrors(prev => ({ ...prev, away: prev.away + 1 }));
@@ -2011,7 +2020,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         }
         atBatOver = true;
         {
-          const hitLabel = result.isError ? '失策'
+          const hitLabel = reachedOnError ? '失策'
             : result.type === 'homerun' ? '本塁打' : result.type === 'triple' ? '三塁打' : result.type === 'double' ? '二塁打' : '安打';
           addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', hitLabel);
         }

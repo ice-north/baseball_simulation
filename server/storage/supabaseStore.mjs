@@ -13,6 +13,23 @@ import {
   projectTeamInfo,
 } from '../projection.mjs';
 import { buildArchiveIndex, archiveReferences } from '../archiveIndex.mjs';
+/**
+ * リーグ全体の進行情報（全員のビューで同じ値）を1つ取り出す。
+ * 定期処理の判定（`isDue`）と、まだ参加していない人の版（`revision`）に使う。
+ */
+function leagueMeta(views) {
+  const view = Object.entries(views || {}).find(
+    ([key, v]) => !key.startsWith('_') && Number.isInteger(v?.revision) && 'status' in v,
+  )?.[1];
+  if (!view) return null;
+  const { schema, revision, status, nextAdvanceAt, phaseDeadline } = view;
+  return { schema, revision, status, nextAdvanceAt, phaseDeadline };
+}
+function memberRevision(views) {
+  return Object.entries(views || {}).find(
+    ([key, v]) => !key.startsWith('_') && Number.isInteger(v?.revision),
+  )?.[1]?.revision;
+}
 export class SupabaseStore {
   constructor({ url, serviceKey, members, adminId, fetchImpl = fetch }) {
     requireOnline(
@@ -72,6 +89,44 @@ export class SupabaseStore {
       await this.request('/rest/v1/online_control?id=eq.pennant&select=*')
     )[0];
   }
+  /**
+   * 閲覧と定期処理の判定に要る列だけを読む。
+   * ⚠ `select=*` だと全参加者のビュー（1人あたり数十〜数百KB）を毎回取り、
+   *    画面の30秒ごとの更新のたびに参加人数ぶんの転送が発生していた。
+   *    ここでは自分のビューと、リーグ全体の進行情報（`views._meta`）だけを取る。
+   * ⚠ 絞り込みが通らない環境（古い保存で `_meta` が無い、PostgREST が式を
+   *    受け付けない）では、従来どおり全列を読む。
+   */
+  async controlFor(userId) {
+    const full = async () => {
+      const row = await this.control();
+      return {
+        ...row,
+        view: userId ? row?.views?.[userId] ?? null : null,
+        meta: row?.views?._meta ?? leagueMeta(row?.views),
+        anyRevision: memberRevision(row?.views),
+      };
+    };
+    if (this.narrowSelectUnsupported || (userId && !/^[\w-]+$/.test(userId)))
+      return full();
+    const columns = ['snapshot_path', 'sessions', 'meta:views->_meta'];
+    if (userId) columns.push(`view:views->"${userId}"`);
+    let row;
+    try {
+      row = (
+        await this.request(
+          `/rest/v1/online_control?id=eq.pennant&select=${encodeURIComponent(columns.join(','))}`,
+        )
+      )[0];
+    } catch (error) {
+      if (error.storageStatus !== 400) throw error;
+      this.narrowSelectUnsupported = true;
+      return full();
+    }
+    // `_meta` は次の保存から付く。無いうちは全列を読んで補う
+    if (row?.snapshot_path && !row.meta) return full();
+    return { ...row, view: row?.view ?? null, anyRevision: row?.meta?.revision };
+  }
   async load(row) {
     if (!row?.snapshot_path)
       return { league: null, sessions: {}, receipts: {} };
@@ -101,8 +156,11 @@ export class SupabaseStore {
     }
   }
   async isDue(now) {
-    const row = await this.control();
-    const view = row.views[this.adminId];
+    // ⚠ リーグ全体の進行情報（`views._meta`）で判定する。以前は管理者のビューを
+    //    見ていたので、管理者がリーグに参加していないと締め切りも進行時刻も
+    //    読めず、定期処理が一度も動かなかった
+    const row = await this.controlFor(null);
+    const view = row.meta;
     // ⚠ **フェーズの締め切り超過でも起動すること**。手続き中は status が
     //    running でないので、進行時刻だけ見ていると締め切りが来ても
     //    誰も動かさず、1人の未提出で全員の週が止まる。
@@ -118,9 +176,9 @@ export class SupabaseStore {
     );
   }
   async readView(userId, sessionId) {
-    const row = await this.control();
-    const writable = !!sessionId && row.sessions[userId] === sessionId;
-    const view = row.views[userId];
+    const row = await this.controlFor(userId);
+    const writable = !!sessionId && row.sessions?.[userId] === sessionId;
+    const view = row.view;
     if (!view) {
       if (!row.snapshot_path)
         return { setupRequired: true, isAdmin: userId === this.adminId };
@@ -133,14 +191,11 @@ export class SupabaseStore {
       //    参加していない人が画面を開くたびに数MBを読むことになる。
       //    必要なのは `revision` だけで、それは参加者のビューに載っている
       //    （全員同じ値）。
-      const member = Object.entries(row.views).find(
-        ([key, v]) => !key.startsWith('_') && Number.isInteger(v?.revision),
-      )?.[1];
-      if (!member) return null;
+      if (!Number.isInteger(row.anyRevision)) return null;
       return {
         joinRequired: true,
         isAdmin: userId === this.adminId,
-        revision: member.revision,
+        revision: row.anyRevision,
         writable,
       };
     }
@@ -333,6 +388,8 @@ export class SupabaseStore {
       );
       const archives = await this.createArchive(value, row.views?._records);
       if (archives) views._records = archives;
+      const meta = leagueMeta(views);
+      if (meta) views._meta = meta;
       published = await this.rpc('online_publish', {
         p_token: token,
         p_generation: row.generation,
