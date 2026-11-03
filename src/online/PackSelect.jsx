@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 
@@ -11,6 +11,94 @@ import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 //    ——決定は同時に開くので、画面で早い者勝ちにはできない。
 // ⚠ 合計点はセット同士の釣り合いを測る目安であって、試合の強さではない。
 //    実測で20セットの開きは1%前後。どれを選んでも極端な差は出ない。
+//
+// ⚠ **名前を決めるのはここ**（セットの下）。始める手順は
+//    「ログイン → セットを選ぶ → 球団名とプレイヤー名 → 決定」。
+//    以前は参加するときに球団名だけを聞いており、**リーグを作った人は
+//    名前を付ける機会が一度も無かった**（順位表に既定の球団名が出たまま）。
+// ============================================================
+
+/**
+ * 球団名とプレイヤー名。`profile` 命令でその場で保存する。
+ *
+ * ⚠ **手続きの提出とは別の命令**。セットの選択は締め切りで標準案に
+ *    上書きされうるが、名前は上書きされては困る（自分で付けたもの）。
+ * ⚠ 入力中にビューが更新されても**打ちかけを消さないこと**。毎正時の進行や
+ *    他の参加者の操作でビューは何度も差し替わる。保存済みの値を取り込むのは
+ *    「まだ触っていないとき」だけにする。
+ */
+function TeamIdentity({ view, busy, run, command }) {
+  const me = view.members?.find((m) => m.teamName === view.teamName);
+  const savedTeam = me?.displayName || view.teamName || '';
+  const savedPlayer = me?.label || '';
+  const [team, setTeam] = useState(savedTeam);
+  const [player, setPlayer] = useState(savedPlayer);
+  const [touched, setTouched] = useState(false);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (touched) return;
+    setTeam(savedTeam);
+    setPlayer(savedPlayer);
+  }, [touched, savedTeam, savedPlayer]);
+  const changed = team.trim() !== savedTeam || player.trim() !== savedPlayer;
+  return (
+    <section className="online-identity">
+      <h3>球団名とプレイヤー名</h3>
+      <p className="online-muted">
+        順位表や試合結果に出る名前です。あとから「自チーム情報」で変えられます。
+      </p>
+      <div className="online-identity-fields">
+        <label>
+          球団名
+          <input
+            value={team}
+            maxLength={24}
+            disabled={busy}
+            onChange={(e) => {
+              setTouched(true);
+              setDone(false);
+              setTeam(e.target.value);
+            }}
+          />
+        </label>
+        <label>
+          プレイヤー名
+          <input
+            value={player}
+            maxLength={24}
+            disabled={busy}
+            onChange={(e) => {
+              setTouched(true);
+              setDone(false);
+              setPlayer(e.target.value);
+            }}
+          />
+        </label>
+        <button
+          className="online-primary"
+          disabled={busy || !changed || !team.trim()}
+          onClick={() =>
+            run(async () => {
+              await command('profile', {
+                teamName: team.trim(),
+                playerName: player.trim(),
+              });
+              setTouched(false);
+              setDone(true);
+            })
+          }
+        >
+          この名前にする
+        </button>
+      </div>
+      {done && !changed && (
+        <p className="online-muted" role="status">
+          「{savedTeam}」（{savedPlayer || '名前なし'}）で登録しました。
+        </p>
+      )}
+    </section>
+  );
+}
 // ============================================================
 
 const GROUPS = [
@@ -94,7 +182,7 @@ function Roster({ pack }) {
   );
 }
 
-export default function PackSelect({ packs, plan, busy, onChange }) {
+export default function PackSelect({ packs, plan, busy, onChange, view, run, command }) {
   const [open, setOpen] = useState(() => plan?.packId || packs[0]?.id);
   const shown = packs.find((p) => p.id === open) || packs[0];
   return (
@@ -141,6 +229,10 @@ export default function PackSelect({ packs, plan, busy, onChange }) {
           </div>
           <Roster pack={shown} />
         </section>
+      )}
+      {/* ⚠ **名前はセットの下**。始める手順は「セットを選ぶ → 名前 → 決定」 */}
+      {view && command && (
+        <TeamIdentity view={view} busy={busy} run={run} command={command} />
       )}
     </div>
   );

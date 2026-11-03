@@ -603,6 +603,9 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                     packs={phase.packs}
                     plan={plan}
                     busy={busy}
+                    view={view}
+                    run={run}
+                    command={command}
                     onChange={(next) => {
                       setDirty(true);
                       setPlan(next);

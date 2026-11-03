@@ -8,7 +8,7 @@
 //    PC・スマホとも「画面を表示できませんでした」だけになっていた。
 //    ブラウザの検査は1年目の終わりまで進めないので、ここで部品を直接描く。
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -19,8 +19,9 @@ const entry = `
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { Notices, Standings, formatDeadline } from '../../src/online/LeaguePanels.jsx';
+import PackSelect from '../../src/online/PackSelect.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
-export { React, renderToString, Notices, Standings, formatDeadline, setTeamLabels };
+export { React, renderToString, Notices, Standings, formatDeadline, setTeamLabels, PackSelect };
 `;
 const result = await build({
   stdin: { contents: entry, resolveDir: here, loader: 'jsx' },
@@ -40,8 +41,15 @@ const dir = await mkdtemp(join(tmpdir(), 'pennant-panels-'));
 try {
   const file = join(dir, 'panels.mjs');
   await writeFile(file, result.outputFiles[0].text);
-  const { React, renderToString, Notices, Standings, formatDeadline, setTeamLabels } =
-    await import(pathToFileURL(file).href);
+  const {
+    React,
+    renderToString,
+    Notices,
+    Standings,
+    formatDeadline,
+    setTeamLabels,
+    PackSelect,
+  } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
   const render = (element) => renderToString(element).replaceAll('<!-- -->', '');
@@ -123,6 +131,88 @@ try {
     renderToString(h(Standings, { view: { standings, teamName: 'x' } })),
   );
 
+  // --- 始める手順（セットを選ぶ → 名前 → 決定） -------------------------
+  // ⚠ **名前を決める欄が出ること**。`PackSelect` は `view` と `command` を
+  //    受け取れなかったら欄ごと出さないので、親が渡し忘れても画面は
+  //    操作できたまま、名前だけ付けられない状態になる（気づけない）。
+  {
+    const pack = {
+      id: 'pack-1',
+      name: 'セット1',
+      counts: { pitcher: 12, catcher: 2, infield: 6, outfield: 4 },
+      twoWay: 2,
+      averageAge: 21.5,
+      players: [
+        {
+          id: 1,
+          name: '試験 太郎',
+          rank: 'A',
+          age: 21,
+          position: 'pitcher',
+          isTwoWay: false,
+          batting: { meet: 40, power: 40 },
+          physical: { speed: 50 },
+          fielding: { defense: 50 },
+          pitching: { velocity: 140, control: 50 },
+        },
+      ],
+    };
+    const packView = {
+      teamName: '宮崎アトラス',
+      members: [
+        { teamName: '宮崎アトラス', displayName: '湘南サンズ', label: '管理者' },
+      ],
+    };
+    const html = render(
+      h(PackSelect, {
+        packs: [pack],
+        plan: null,
+        busy: false,
+        onChange: () => {},
+        view: packView,
+        run: () => {},
+        command: () => {},
+      }),
+    );
+    assert.match(html, /球団名とプレイヤー名/, '名前を決める欄が出ていない');
+    assert.match(html, /この名前にする/, '名前を保存するボタンが無い');
+    // ⚠ 保存済みの名前が入っていること（空欄だと毎回打ち直しになる）
+    assert.match(html, /value="湘南サンズ"/, '保存済みの球団名が入っていない');
+    assert.match(html, /value="管理者"/, '保存済みのプレイヤー名が入っていない');
+    // ⚠ **名前はセットの下**。手順が「セットを選ぶ → 名前 → 決定」なので、
+    //    上に置くと名前から始まることになる
+    assert.ok(
+      html.indexOf('online-pack-list') < html.indexOf('online-identity'),
+      '名前の欄がセットより上にある',
+    );
+    // ⚠ 渡されなかったときは欄を出さない
+    const bare = render(
+      h(PackSelect, { packs: [pack], plan: null, busy: false, onChange: () => {} }),
+    );
+    assert.doesNotMatch(bare, /球団名とプレイヤー名/, '渡していないのに欄が出る');
+
+    // ⚠ **親が渡し忘れていないこと**を、呼び出し元の字面で見る。
+    //    部品だけ描いても親の渡し忘れは写らない。渡し忘れると欄が黙って
+    //    消えるだけで、画面は操作できたまま名前が付けられない
+    //    （`CLAUDE.md` の「引けないと戻るだけ」と同じ落とし穴）。
+    //    `PhasePanel` 自体は下書きの保存や通信を抱えていて素で描けないので、
+    //    ここは字面で押さえる。
+    const panels = await readFile(
+      join(here, '..', '..', 'src', 'online', 'LeaguePanels.jsx'),
+      'utf8',
+    );
+    const call = panels.slice(
+      panels.indexOf('<PackSelect'),
+      panels.indexOf('/>', panels.indexOf('<PackSelect')),
+    );
+    assert.ok(call, '`PackSelect` を呼んでいる所が見つからない');
+    for (const prop of ['view=', 'run=', 'command='])
+      assert.ok(
+        call.includes(prop),
+        `PackSelect に ${prop} を渡していない（名前の欄が黙って消える）`,
+      );
+  }
+
   // --- 締め切りの表示（日本時間） ---------------------------------------
   assert.equal(formatDeadline('2026-11-07T15:00:00.000Z'), '11/8(日) 0:00');
 } finally {
@@ -130,5 +220,5 @@ try {
 }
 
 console.log(
-  '■ リーグ便り・順位表の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / セットの下に名前を決める欄が出る）',
 );
