@@ -66,7 +66,7 @@ try {
 
   // --- 手続きをいま締め切る -------------------------------------------
   const waiting = (await store.read()).league;
-  assert.equal(waiting.phase?.kind, 'initial_tryout', '前提: 初期編成の決定待ち');
+  assert.equal(waiting.phase?.kind, 'pack_select', '前提: 初期メンバー選択の決定待ち');
   assert.ok(
     Date.parse(waiting.phase.deadline) > Date.parse(now),
     '前提: 締め切りはまだ先',

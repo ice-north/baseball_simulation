@@ -107,6 +107,7 @@ import {
   assignmentOrder,
 } from '../src/online/membership.js';
 import { nextFromPlan } from '../src/online/tryoutPlan.js';
+import { generateRosterPacks } from '../src/online/rosterPack.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export const CAMP_MENUS = [
@@ -161,7 +162,7 @@ function createSchedule(season, teams) {
   season.standings = initializeStandings(season.settings.teamNames);
 }
 
-function openPhase(league, kind, now) {
+export function openPhase(league, kind, now) {
   // ⚠ **締め切りを持たせること**。待ち続ける設計だと、1人が決めないだけで
   //    全員の週が止まる。締め切りが曜日合わせも兼ねている
   //    （土曜＝ストーブリーグ／日曜＝キャンプ／月曜＝開幕）。
@@ -171,7 +172,16 @@ function openPhase(league, kind, now) {
     deadline: now ? phaseDeadlineAt(kind, now) : null,
     submissions: {},
   };
-  if (kind === 'initial_tryout' || kind === 'tryout') {
+  if (kind === 'pack_select') {
+    // ⚠ **セットはこのときだけ作る**。20セット×24人＝480人なので、
+    //    手続きが終わったら `league.phase` ごと消えて保存から落ちる
+    league.packs = generateRosterPacks(league.seed + 7).map((pack) => ({
+      ...pack,
+      takenBy: null,
+    }));
+    phase.packIds = league.packs.map((p) => p.id);
+  }
+  if (kind === 'tryout') {
     const names = league.season.settings.teamNames;
     const rank = getLeagueRankFromTeams(names) || 'B';
     const reputation =
@@ -184,7 +194,9 @@ function openPhase(league, kind, now) {
       // ⚠ **球団数を渡すこと**。以前は 4 が直に書かれており、
       //    42球団にすると候補が足りず名簿を埋められない
       names.length,
-      kind === 'initial_tryout',
+      // ⚠ 第3引数は「初回か」。初回の名簿は**初期メンバーセット**で配るので
+      //    オンラインに初回トライアウトは無い。常に実在プールから引く
+      false,
       rank,
       reputation,
     );
@@ -268,7 +280,9 @@ export function createLeague({
     generateAprilHighSchoolClass(1);
     season._highSchoolGenerated = true;
     createSchedule(season, defs);
-    openPhase(league, 'initial_tryout', now);
+    // ⚠ 開幕前は「どのセットを選ぶか」だけ。希望リストはシーズン後の
+    //    トライアウトで使う（初期編成は置き換えた）
+    openPhase(league, 'pack_select', now);
   });
   league.game = captureWorld();
   return league;
@@ -288,6 +302,14 @@ export function loadLeagueWorld(league, { take = false } = {}) {
 export function defaultPhasePlan(league, teamName) {
   const team = league.game.teams[teamName];
   const kind = league.phase.kind;
+  if (kind === 'pack_select') {
+    // ⚠ 決めなかった人にも渡す。空いているセットから、球団名で決まる位置を取る
+    //    （乱数だと、やり直しで違うセットになって再現しない）
+    const free = (league.packs || []).filter((p) => !p.takenBy);
+    const index =
+      [...league.season.settings.teamNames].sort().indexOf(teamName) % Math.max(1, free.length);
+    return { packId: free[index]?.id || league.packs?.[0]?.id || null };
+  }
   if (kind === 'contract')
     return { releaseIds: getAIReleaseCandidates(team.players) };
   if (kind === 'camp') return { menu: 'standard' };
@@ -338,7 +360,16 @@ function validatePhasePlan(league, teamName, plan) {
         '練習方針が不正です',
       );
       return { menu: plan.menu };
-    case 'initial_tryout':
+    case 'pack_select': {
+      // ⚠ 居ないセットを受け付けない。解決のときに「足りません」で
+      //    手続き全体が止まる（1球団の都合で全員が止まる）
+      const ids = new Set((league.packs || []).map((p) => p.id));
+      requireOnline(
+        typeof plan.packId === 'string' && ids.has(plan.packId),
+        '初期メンバーの選択が不正です',
+      );
+      return { packId: plan.packId };
+    }
     case 'tryout': {
       const candidates = new Set(league.phase.candidates.map((p) => p.id));
       requireOnline(
@@ -411,14 +442,65 @@ function refreshTeamPlan(league, name) {
   setRecommendedLineup(team, name);
 }
 
+/**
+ * 初期メンバー選択を解決する。
+ *
+ * ⚠ **同じセットは1球団だけ**。選手のidと名前が重複すると、記録が
+ *    どちらの選手のものか分からなくなる。
+ * ⚠ 取り合いになったら**球団名の順で決める**。乱数で決めると、同じ
+ *    やり直しで違う結果になって再現しなくなる。
+ * ⚠ 選ばなかった球団（CPU・未提出の人）には、残りから順に配る。
+ */
+function resolvePackSelect(league, plans) {
+  const names = league.season.settings.teamNames;
+  const packs = league.packs || [];
+  const byId = new Map(packs.map((p) => [p.id, p]));
+  const assigned = {};
+  // 1) 選んだ球団から。球団名の順に見て、空いていれば渡す
+  for (const name of [...names].sort()) {
+    const wanted = plans[name]?.packId;
+    const pack = wanted ? byId.get(wanted) : null;
+    if (pack && !pack.takenBy) {
+      pack.takenBy = name;
+      assigned[name] = pack;
+    }
+  }
+  // 2) 残りを順に配る
+  const free = packs.filter((p) => !p.takenBy);
+  for (const name of names) {
+    if (assigned[name]) continue;
+    const pack = free.shift();
+    requireOnline(pack, `${name}に渡す初期メンバーが足りません`, 409);
+    pack.takenBy = name;
+    assigned[name] = pack;
+  }
+  for (const name of names) {
+    const team = TEAMS_DATA[name];
+    // ⚠ 複製を入れること。`league.packs` は手続きが終わると消えるが、
+    //    参照のまま渡すと保存の形が絡まる
+    team.players = clone(assigned[name].players);
+    for (const player of team.players) {
+      player.careerHistory = [
+        ...(player.careerHistory || []),
+        { type: 'independent', year: league.season.year, label: name },
+      ];
+    }
+  }
+  // ⚠ **打順と投手起用を作ること**。渡した名簿だけでは試合が組めない。
+  //    付け忘れると、打順が空のまま開幕して画面も壊れる（実測で
+  //    `battingOrder` に2番が無く、打順の入れ替えが例外になった）。
+  for (const name of names) refreshTeamPlan(league, name);
+  // ⚠ 配り終えたら捨てる。480人ぶんを抱えたままにしない
+  delete league.packs;
+}
+
 function resolveTryout(league, plans) {
   const phase = league.phase;
-  const names =
-    phase.kind === 'initial_tryout'
-      ? league.season.settings.teamNames
-      : [...league.season.standings]
-          .sort((a, b) => a.winRate - b.winRate)
-          .map((s) => s.team);
+  // ⚠ 指名順は**前年の順位の逆**（弱い球団から）。初回だけ球団名の順という
+  //    分岐があったが、初回の名簿はセット選択で配るのでもう通らない
+  const names = [...league.season.standings]
+    .sort((a, b) => a.winRate - b.winRate)
+    .map((s) => s.team);
   const remaining = clone(phase.candidates);
   const acquired = Object.fromEntries(names.map((name) => [name, []]));
   const allPicked = [];
@@ -517,7 +599,9 @@ function resolveTryout(league, plans) {
       { type: 'independent', year: league.season.year, label: team },
     ];
   }
-  if (phase.kind !== 'initial_tryout') {
+  // ⚠ **取った選手をプールから消すこと**。残すと翌年のトライアウトに
+  //    同じ選手がもう一度出てくる
+  {
     const ids = allPicked.map((p) => p.player.id);
     updateReleasedPoolAfterTryout(ids);
     removeDraftedFromGraduatePools(
@@ -547,8 +631,8 @@ function resolvePhase(league, now) {
       league.phase.submissions[m.userId].plan,
     ]),
   );
-  if (kind === 'initial_tryout' || kind === 'tryout')
-    resolveTryout(league, plans);
+  if (kind === 'pack_select') resolvePackSelect(league, plans);
+  if (kind === 'tryout') resolveTryout(league, plans);
   if (kind === 'contract') {
     for (const name of league.season.settings.teamNames)
       releasePlayers(
@@ -643,7 +727,7 @@ function resolvePhase(league, now) {
   }
   league.phase = null;
   delete league.season.pendingPhaseEvent;
-  if (kind === 'initial_tryout' || kind === 'offseason')
+  if (kind === 'pack_select' || kind === 'offseason')
     openPhase(league, 'camp', now);
   else {
     league.status = 'running';

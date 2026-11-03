@@ -56,6 +56,7 @@ const CHECKS = [
   { name: 'online-testmode-check', group: 'check', online: true, slow: 10 },
   { name: 'online-lineup-port-check', group: 'check', online: true, slow: 16 },
   { name: 'online-tryout-plan-check', group: 'check', online: true, slow: 10 },
+  { name: 'online-pack-check', group: 'check', online: true, slow: 12 },
   { name: 'online-board-check', group: 'check', online: true, slow: 20 },
   { name: 'online-parity-check', group: 'check', online: true, slow: 75 },
   { name: 'online-service-check', group: 'check', online: true, slow: 55 },

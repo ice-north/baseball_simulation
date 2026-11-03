@@ -113,9 +113,12 @@ const rankBandBias = (rank) => RANK_BAND_BIAS[rank] ?? 0.30;
  * 上限でも倍率でもないので、能力の差＝選手の形は保たれる。
  */
 const RANK_LEVEL_SHIFT = { S: 6, A: 0, B: -8, C: -16, D: -24 };
-function applyLeagueLevelShift(player, rank) {
-  if (!rank || !player) return;
-  const d = RANK_LEVEL_SHIFT[rank] ?? -10;
+function applyLeagueLevelShift(player, rank, override) {
+  if (!player) return;
+  if (!rank && override === undefined) return;
+  // ⚠ `override` は段差を直に渡す口。オンラインの初期セットは選手ごとに
+  //    A/B/C の段差を付けるので、リーグの格の表とは別の値が要る
+  const d = override !== undefined ? override : (RANK_LEVEL_SHIFT[rank] ?? -10);
   if (d === 0) return;
   const shift = (obj, key, amount, lo = 1, hi = 99) => {
     if (!obj || typeof obj[key] !== 'number') return;
@@ -222,153 +225,180 @@ const throwsForPosition = (pos) => {
  * 不足分補充用のランダム候補生成（2年目以降用）
  * generateTryoutCandidatesと同じロジックだが少数のみ生成
  */
+/**
+ * 候補選手を1人作る。
+ *
+ * ⚠ **生成はここ1か所**。守備位置・年齢の上限・二刀流・格を引数で受け取り、
+ *    初回トライアウトの補充（`generateRandomFillCandidates`）と
+ *    オンラインの初期セット（`src/online/rosterPack.js`）の両方から呼ぶ。
+ *    別に書くと、同じ「選手」が2通りの作られ方をして食い違う。
+ * ⚠ 乱数は `Math.random` を使う。呼ぶ側がシードを差し替えて再現する。
+ */
+export function createCandidatePlayer(options) {
+  // ポジションを先に配ってから、そのポジションに合う利き手を引く。
+  // （利き手から決めると捕手・二遊三が左投げに食われて枠が埋まらない）
+  // ⚠ 守備位置は呼ぶ側が決める。ここで引き直すと、初期セットの
+  //    「投手11・捕手2・内野5・外野4」のような構成が崩れる
+  const position = options.position;
+  const isPitcher = position === 'pitcher';
+  const throws = throwsForPosition(position);
+  const bats = generateBats(throws);
+
+  // ⚠ 二刀流も呼ぶ側が決められる（初期セットは本職ごとに1人ずつ決め打ち）
+  const isTwoWay = options.isTwoWay ?? Math.random() < 0.08;
+  const leftHandFieldPositions = ['first', 'left', 'center', 'right'];
+  const allFieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  // 二刀流の投手だけサブ守備位置を持つ（野手側は枠を崩さないよう本職のまま）
+  const twoWaySubPosition = (isTwoWay && isPitcher)
+    ? (throws === 'left'
+        ? leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)]
+        : allFieldPositions[Math.floor(Math.random() * allFieldPositions.length)])
+    : null;
+
+  const hasTraits = !isTwoWay && Math.random() < 0.65;
+  const playerTraits = hasTraits ? getPlayerTraits(isPitcher) : [];
+  const isSpecialist = playerTraits.length > 0;
+  const specialistType = playerTraits[0] || null;
+
+  const formRand = Math.random() * 100;
+  let pitchingForm;
+  if (formRand < 45) pitchingForm = 'overhand';
+  else if (formRand < 85) pitchingForm = 'threeQuarter';
+  else if (formRand < 95) pitchingForm = 'sidearm';
+  else pitchingForm = 'submarine';
+
+  const name = generateRandomPlayerName();
+  const ageWeights = [
+    { age: 19, weight: 20 },
+    { age: 20, weight: 10 },
+    { age: 21, weight: 10 },
+    { age: 22, weight: 30 },
+    { age: 23, weight: 15 },
+    { age: 24, weight: 10 },
+    { age: 25, weight: 5 },
+  ];
+  // ⚠ 年齢の上限も呼ぶ側が絞れる（初期セットは19〜24歳）
+  const allowed = ageWeights.filter((w) => w.age <= (options.maxAge ?? 25));
+  const totalWeight = allowed.reduce((sum, w) => sum + w.weight, 0);
+  const roll = Math.random() * totalWeight;
+  let cumulative = 0;
+  let age = allowed[0].age;
+  for (const entry of allowed) {
+    cumulative += entry.weight;
+    if (roll < cumulative) { age = entry.age; break; }
+  }
+
+  const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay, playerTraits);
+
+  const player = {
+    id: options.id,
+    name: name,
+    age: age,
+    position: position,
+    battingOrder: 0,
+    isStarter: false,
+    isTwoWay: isTwoWay,
+    twoWaySubPosition: twoWaySubPosition,
+    primaryRole: isTwoWay && position === 'pitcher' ? 'pitcher' : null,
+    batting: {
+      meet: abilities.meet,
+      power: abilities.power,
+      eye: abilities.eye,
+      bats: bats,
+      steal: abilities.steal,
+      bunt: abilities.bunt || 30
+    },
+    physical: {
+      speed: abilities.speed,
+      arm: abilities.arm,
+      throws: throws,
+      bodyStamina: abilities.bodyStamina || 50,
+      recovery: abilities.recovery || 50,
+      muscle: abilities.muscle || 50,
+      dexterity: abilities.dexterity || 50
+    },
+    fielding: {
+      defense: abilities.defense
+    },
+    catching: {
+      lead: position === 'catcher' ? generateCatcherLead(age) : Math.floor(Math.random() * 26) + 20
+    },
+    pitching: {
+      velocity: abilities.velocity,
+      control: abilities.control,
+      stamina: abilities.stamina,
+      spinRate: abilities.spinRate || 50,
+      form: pitchingForm,
+      arsenal: (isPitcher || isTwoWay)
+        ? generateRandomArsenal(
+            playerTraits.includes('breakingBall') ? 2 : 0,
+            playerTraits.includes('fireballer') || playerTraits.includes('strikeoutArtist')
+          )
+        : generateFielderArsenal()
+    },
+    traits: playerTraits,
+    scoutComment: null,
+    isNewcomer: true, // 新卒（FAではない新規候補）
+    growthPotential: (() => {
+      const u1 = Math.random() || 0.001;
+      const u2 = Math.random();
+      const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      const skewed = normal > 0 ? normal * 0.75 : normal;
+      let base = 0.95 + skewed * 0.2;
+      if (age <= 19) base += 0.08;
+      return Math.max(0.5, Math.min(1.5, base));
+    })(),
+    positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
+    professionalCareer: {
+      isDrafted: false,
+      draftYear: null,
+      draftTeam: null,
+      achievements: []
+    },
+    personality: {
+      discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
+      mental: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
+    },
+    fame: 0,
+    fatigue: 0,
+    experience: 0,
+    careerHistory: [{ type: 'highschool', label: '高校卒' }],
+    seasonStats: {
+      batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
+      pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
+    },
+    careerStats: {
+      batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
+      pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
+    }
+  };
+
+  // 初回トライアウトの候補は生成物なので、帯から引くことができない。
+  // リーグの格は**平行移動**で表す（上限や倍率ではない）。
+  // ⚠ 倍率だと 走力100 の快足が D リーグで 58 に潰れる。差が保たれる加算なら
+  //    格下リーグでも「1つだけ図抜けた選手」がそのまま図抜けたまま来る。
+  // ⚠ 格は**平行移動**。上限や倍率ではないので、能力の差＝選手の形が保たれる
+  applyLeagueLevelShift(player, options.rank, options.levelShift);
+  // ⚠ 引いた帯を選手に残す。初期セットの「A2名・B10名・C12名」はこれで数える
+  if (options.rank) player.rank = options.rank;
+
+  player.scoutComment = generateScoutComment(player);
+  return player;
+}
+
+/**
+ * 不足分補充用のランダム候補生成（2年目以降用）
+ * generateTryoutCandidatesと同じロジックだが少数のみ生成
+ */
 function generateRandomFillCandidates(count, year, independentLeagueRank) {
   const candidates = [];
   const nextId = reservePlayerIds((year || 1) * 10000 + 5001);
   const positionBag = buildPositionBag(count);
-
+  const rank = effectiveTryoutRank(independentLeagueRank);
   for (let i = 1; i <= count; i++) {
-    // ポジションを先に配ってから、そのポジションに合う利き手を引く。
-    // （利き手から決めると捕手・二遊三が左投げに食われて枠が埋まらない）
-    const position = positionBag[i - 1];
-    const isPitcher = position === 'pitcher';
-    const throws = throwsForPosition(position);
-    const bats = generateBats(throws);
-
-    const isTwoWay = Math.random() < 0.08;
-    const leftHandFieldPositions = ['first', 'left', 'center', 'right'];
-    const allFieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
-    // 二刀流の投手だけサブ守備位置を持つ（野手側は枠を崩さないよう本職のまま）
-    const twoWaySubPosition = (isTwoWay && isPitcher)
-      ? (throws === 'left'
-          ? leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)]
-          : allFieldPositions[Math.floor(Math.random() * allFieldPositions.length)])
-      : null;
-
-    const hasTraits = !isTwoWay && Math.random() < 0.65;
-    const playerTraits = hasTraits ? getPlayerTraits(isPitcher) : [];
-    const isSpecialist = playerTraits.length > 0;
-    const specialistType = playerTraits[0] || null;
-
-    const formRand = Math.random() * 100;
-    let pitchingForm;
-    if (formRand < 45) pitchingForm = 'overhand';
-    else if (formRand < 85) pitchingForm = 'threeQuarter';
-    else if (formRand < 95) pitchingForm = 'sidearm';
-    else pitchingForm = 'submarine';
-
-    const name = generateRandomPlayerName();
-    const ageWeights = [
-      { age: 19, weight: 20 },
-      { age: 20, weight: 10 },
-      { age: 21, weight: 10 },
-      { age: 22, weight: 30 },
-      { age: 23, weight: 15 },
-      { age: 24, weight: 10 },
-      { age: 25, weight: 5 },
-    ];
-    const totalWeight = ageWeights.reduce((sum, w) => sum + w.weight, 0);
-    const roll = Math.random() * totalWeight;
-    let cumulative = 0;
-    let age = 19;
-    for (const entry of ageWeights) {
-      cumulative += entry.weight;
-      if (roll < cumulative) { age = entry.age; break; }
-    }
-
-    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay, playerTraits);
-
-    const player = {
-      id: nextId(),
-      name: name,
-      age: age,
-      position: position,
-      battingOrder: 0,
-      isStarter: false,
-      isTwoWay: isTwoWay,
-      twoWaySubPosition: twoWaySubPosition,
-      primaryRole: isTwoWay && position === 'pitcher' ? 'pitcher' : null,
-      batting: {
-        meet: abilities.meet,
-        power: abilities.power,
-        eye: abilities.eye,
-        bats: bats,
-        steal: abilities.steal,
-        bunt: abilities.bunt || 30
-      },
-      physical: {
-        speed: abilities.speed,
-        arm: abilities.arm,
-        throws: throws,
-        bodyStamina: abilities.bodyStamina || 50,
-        recovery: abilities.recovery || 50,
-        muscle: abilities.muscle || 50,
-        dexterity: abilities.dexterity || 50
-      },
-      fielding: {
-        defense: abilities.defense
-      },
-      catching: {
-        lead: position === 'catcher' ? generateCatcherLead(age) : Math.floor(Math.random() * 26) + 20
-      },
-      pitching: {
-        velocity: abilities.velocity,
-        control: abilities.control,
-        stamina: abilities.stamina,
-        spinRate: abilities.spinRate || 50,
-        form: pitchingForm,
-        arsenal: (isPitcher || isTwoWay)
-          ? generateRandomArsenal(
-              playerTraits.includes('breakingBall') ? 2 : 0,
-              playerTraits.includes('fireballer') || playerTraits.includes('strikeoutArtist')
-            )
-          : generateFielderArsenal()
-      },
-      traits: playerTraits,
-      scoutComment: null,
-      isNewcomer: true, // 新卒（FAではない新規候補）
-      growthPotential: (() => {
-        const u1 = Math.random() || 0.001;
-        const u2 = Math.random();
-        const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-        const skewed = normal > 0 ? normal * 0.75 : normal;
-        let base = 0.95 + skewed * 0.2;
-        if (age <= 19) base += 0.08;
-        return Math.max(0.5, Math.min(1.5, base));
-      })(),
-      positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
-      professionalCareer: {
-        isDrafted: false,
-        draftYear: null,
-        draftTeam: null,
-        achievements: []
-      },
-      personality: {
-        discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
-        mental: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
-      },
-      fame: 0,
-      fatigue: 0,
-      experience: 0,
-      careerHistory: [{ type: 'highschool', label: '高校卒' }],
-      seasonStats: {
-        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-        pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-      },
-      careerStats: {
-        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-        pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-      }
-    };
-
-    // 初回トライアウトの候補は生成物なので、帯から引くことができない。
-    // リーグの格は**平行移動**で表す（上限や倍率ではない）。
-    // ⚠ 倍率だと 走力100 の快足が D リーグで 58 に潰れる。差が保たれる加算なら
-    //    格下リーグでも「1つだけ図抜けた選手」がそのまま図抜けたまま来る。
-    applyLeagueLevelShift(player, effectiveTryoutRank(independentLeagueRank));
-
-    player.scoutComment = generateScoutComment(player);
-    candidates.push(player);
+    candidates.push(
+      createCandidatePlayer({ id: nextId(), position: positionBag[i - 1], rank }),
+    );
   }
   return candidates;
 }

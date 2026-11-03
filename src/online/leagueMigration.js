@@ -1,3 +1,4 @@
+import { generateRosterPacks } from './rosterPack.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -57,6 +58,31 @@ export const MIGRATIONS = [
       //    止まったままのリーグを、移行のときに時間で進む形へ直す
       if (league.phase && !league.phase.deadline)
         league.phase.deadline = phaseDeadlineAt(league.phase.kind, now);
+    },
+  },
+  {
+    from: 4,
+    to: 5,
+    note: '初期編成を初期メンバー選択に置き換えた',
+    apply(league, { now }) {
+      // ⚠ 置き換えたのは**開幕前の手続き**だけ。すでに開幕しているリーグは
+      //    名簿が揃っているので何もしない。
+      // ⚠ 印を付けるだけでは駄目。初期編成の画面も、それを解決する処理も
+      //    もう無いので、**手続きそのものを選択へ差し替える**。
+      //    残したままだと、締め切りが来ても解決できずリーグが止まる。
+      if (league.phase?.kind !== 'initial_tryout') return;
+      league.packs = generateRosterPacks((league.seed ?? 0) + 7).map((pack) => ({
+        ...pack,
+        takenBy: null,
+      }));
+      league.phase = {
+        id: `${league.season.year}:pack_select`,
+        kind: 'pack_select',
+        // 元の締め切りを引き継ぐ（移行で待ち時間を延ばさない）
+        deadline: league.phase.deadline || phaseDeadlineAt('pack_select', now),
+        submissions: {},
+        packIds: league.packs.map((p) => p.id),
+      };
     },
   },
 ];

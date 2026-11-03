@@ -1,11 +1,12 @@
 // ⚠ **保存された世界の形を変えたら上げること**。上げないと、古い形のリーグが
 //    `assertLeagueVersion` を素通りして読み込まれ、どこか遠くで落ちる。
 //    上げれば「ゲームのバージョンが対応していません」で止まるので原因が分かる。
-//    4 = 検証モード（3 = 招待コード廃止、2 = 2部制12球団・招待制・毎正時24ターン、
+//    5 = 初期メンバー選択（4 = 検証モード、3 = 招待コード廃止、
+//    2 = 2部制12球団・招待制・毎正時24ターン、
 //    1 = 固定4球団・2人・1日7枠）。
 // ⚠ 上げてもリーグは**作り直せない**（`create` は既存リーグがあると拒む）。
 //    `docs/online/PRODUCTION_SETUP.md` の作り直し手順で制御行を空にすること。
-export const ONLINE_SCHEMA = 4;
+export const ONLINE_SCHEMA = 5;
 export const ONLINE_ENGINE_VERSION = 'online-1';
 // 1ターン＝1時間。毎正時に1つ進む。24ターン×7日＝168ターンで1週間。
 // ⚠ **夜間も止めない**。月〜金の120ターンが試合、土曜がストーブリーグ、日曜がキャンプ。
@@ -87,6 +88,9 @@ export function nextProgressionAt(now) {
 export const formatGameDate = (date) =>
   `${date.year}/${date.month}/${date.day}`;
 export const PHASE_LABELS = {
+  pack_select: '初期メンバー選択',
+  // ⚠ 初期編成はセット選択に置き換えた。移行の途中でしか現れないが、
+  //    古い保存を読んだ瞬間に空欄にしないため名前だけ残す
   initial_tryout: '初期編成',
   camp: 'キャンプ',
   contract: '契約更改',
@@ -213,6 +217,11 @@ export function sameEditState(a, b) {
  *    キャンプの締め切りが1週間先になって開幕が遅れる。
  */
 export const PHASE_WEEKDAY = {
+  // ⚠ 初期メンバー選択も土曜扱い（締め切り日曜0時）。続くキャンプが
+  //    月曜0時に締め切られて月曜開幕になる
+  pack_select: 6,
+  // ⚠ 3→4 の移行が、締め切りの無い初期編成に締め切りを入れるときに使う。
+  //    4→5 でセット選択へ差し替わるので、新しいリーグには出てこない
   initial_tryout: 6,
   contract: 6,
   tryout: 6,

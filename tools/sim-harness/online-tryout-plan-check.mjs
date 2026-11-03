@@ -11,11 +11,16 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
+import { TEAMS_DATA } from '../../src/teams-data.js';
+import { rosterGroup } from '../../src/utils/constants.js';
+import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import {
   createLeague,
   defaultPhasePlan,
   submitPhase,
+  openPhase,
+  loadLeagueWorld,
 } from '../../server/leagueEngine.mjs';
 import {
   POSITION_GROUPS,
@@ -143,16 +148,71 @@ try {
     revision: 0,
     type: 'create',
   });
+  // ⚠ **シーズン終わりの形を作る**。開幕前の手続きは初期メンバーセットの
+  //    選択になったので、トライアウトは年末（11月10日）まで来ない。
+  //    1シーズン回すとこの検査が90秒かかるため、
+  //      ①セットを選んで名簿を作る → ②戦力外を出して空きを作る →
+  //      ③トライアウトを開く
+  //    という形を直に作る。実際の年末と同じ並び（契約更改→トライアウト）。
+  const created = (await store.read()).league;
+  assert.equal(created.phase.kind, 'pack_select', '前提: 開幕前はセット選択');
+  await service.command('admin', sessionId, {
+    requestId: 'packpick-0',
+    revision: created.revision,
+    type: 'submit',
+    payload: {
+      phaseId: created.phase.id,
+      plan: { packId: created.packs[0].id },
+      ready: true,
+      baseSubmission: null,
+    },
+  });
+  // ⚠ 戦力外は**区分ごとに残す人数を決めて**出す。投手だけ減らすと
+  //    「投手を取るのが正しい」状態になり、目標構成が効いているか分からない。
+  //    残す人数は、空いた8枠が目標構成の空きとちょうど同じになるよう選ぶ
+  //    （投手+2・捕手+0・内野+2・外野+4）。こうすると、希望順を素直に取る
+  //    実装なら投手が8人増え、目標構成を見る実装なら2人しか増えない。
+  const KEEP = { pitcher: 8, catcher: 2, infielder: 4, outfielder: 2 };
+  await store.transaction((bundle) => {
+    const l = bundle.league;
+    loadLeagueWorld(l);
+    for (const name of l.season.settings.teamNames) {
+      const team = TEAMS_DATA[name];
+      const left = { ...KEEP };
+      team.players = team.players.filter((p) => {
+        const group = rosterGroup(p.position);
+        if (left[group] <= 0) return false;
+        left[group] -= 1;
+        return true;
+      });
+    }
+    openPhase(l, 'tryout', '2026-11-10T15:00:00.000Z');
+    // ⚠ 世界を保存へ書き戻すこと。`TEAMS_DATA` を触っただけでは保存に載らない
+    l.game = captureWorld();
+    return { value: null };
+  });
   const league = (await store.read()).league;
-  assert.equal(league.phase.kind, 'initial_tryout');
+  assert.equal(league.phase.kind, 'tryout');
   const candidates = league.phase.candidates;
-  // ⚠ 候補は実測360人。1本のリストで扱える数ではない、という前提の根拠
-  assert.ok(candidates.length > 200, `候補が少なすぎる: ${candidates.length}`);
+  // ⚠ 候補は実測120人（12球団ぶん）。1本のリストで扱える数ではない、
+  //    という前提の根拠。空きは12球団×8人＝96なので、全球団が埋められる
+  assert.ok(candidates.length > 90, `候補が少なすぎる: ${candidates.length}`);
+  const roomBefore = league.game.teams[league.members[0].teamName].players;
+  assert.deepEqual(
+    rosterCounts(roomBefore),
+    KEEP,
+    `前提: 戦力外のあとの構成がちがう（${JSON.stringify(rosterCounts(roomBefore))}）`,
+  );
+  const slots = 24 - roomBefore.length;
+  assert.equal(slots, 8, `前提: 空きが8人ぶん（いま${slots}）`);
 
   const teamName = league.members[0].teamName;
   const base = defaultPhasePlan(league, teamName);
   assert.equal(base.rankedIds.length, candidates.length, '既定案が全員を並べていない');
   assert.ok(base.count > 0);
+  // ⚠ **名簿が空の球団ぶん（24人）で見る計算**。このリーグは戦力外のあとで
+  //    16人残っているので `base.count` は8しかなく、目標構成が全部埋まらない
+  const FULL_COUNT = 24;
 
   // 画面の操作を順に当てる: 最下位の選手を最優先へ → 隣と入替 → 控えへ
   let plan = { ...base, rankedIds: [...base.rankedIds] };
@@ -214,20 +274,24 @@ try {
       },
     });
     const after = (await store.read()).league;
-    // 初期編成が終わると次（キャンプ）へ進む
-    assert.notEqual(
-      after.phase?.kind,
-      'initial_tryout',
-      '初期編成が解決していない',
-    );
+    // 全員が提出したので、締め切りを待たずに解決している
+    assert.notEqual(after.phase?.kind, 'tryout', 'トライアウトが解決していない');
     const mine = rosterCounts(after.game.teams[teamName].players);
+    assert.ok(
+      after.game.teams[teamName].players.length > roomBefore.length,
+      '人の球団が1人も取れていない',
+    );
     const cpuNames = after.season.settings.teamNames.filter((n) => n !== teamName);
     const cpus = cpuNames.map((n) => rosterCounts(after.game.teams[n].players));
     // ⚠ 目標は「寄せる先」であって上限ではない（CPUも 捕1・内7 などに振れる）。
     //    見るのは**人がCPUより不利にならないこと**。以前は人だけ投手15人だった。
+    // ⚠ 目標ちょうどで止まるとは限らない。他球団に先に取られて希望の区分が
+    //    尽きると、枠を空けたままにするより1人多く取るほうがましなので、
+    //    目標を1人超えることがある（実測で投手11人）。見るのは**人数の桁**。
+    const added = mine.pitcher - KEEP.pitcher;
     assert.ok(
-      mine.pitcher <= ROSTER_TARGETS.pitcher,
-      `人の球団の投手が目標 ${ROSTER_TARGETS.pitcher} を超えた: ${mine.pitcher}（${JSON.stringify(mine)}）`,
+      added <= slots / 2,
+      `投手だけ並べた希望で、${slots}枠のうち${added}枠を投手が占めた（${JSON.stringify(mine)}）`,
     );
     const worstCpu = Math.max(...cpus.map((c) => c.pitcher));
     assert.ok(
@@ -238,6 +302,12 @@ try {
     // ⚠ **控えが居ること**。野手9人だと代打も守備固めも出せず、
     //    レギュラーが全試合に出続けるので、成績の出方が一人用と別物になる。
     //    実測で、直す前は野手9人（CPUは14人）だった
+    // ⚠ 枠は埋めきること（空けたままにしない）
+    assert.equal(
+      after.game.teams[teamName].players.length,
+      24,
+      `枠が埋まっていない: ${JSON.stringify(mine)}`,
+    );
     const fielders = after.game.teams[teamName].players.length - mine.pitcher;
     const cpuFielders = Math.min(...cpus.map((c) => 24 - c.pitcher));
     assert.ok(
@@ -301,7 +371,9 @@ try {
     assert.ok(simulated[group] <= target, `画面側の予定が ${group} で目標を超えた`);
 
   // ⚠ 成り立たない編成は提出前に知らせる（詳細は下）
-  const few = planSummary(plan.rankedIds, candidates, 10, roster);
+  // ⚠ ここは**名簿が空の球団**で見る。この検査のリーグは戦力外のあとでも
+  //    16人残っているので、10人取れば野手は足りてしまい、不足を作れない
+  const few = planSummary(plan.rankedIds, candidates, 10, []);
   assert.ok(few.blocking.length > 0, '野手が足りないのに知らせていない');
   assert.ok(
     few.blocking.some((t) => t.includes('野手')),
@@ -315,7 +387,7 @@ try {
     ...plan.rankedIds.filter((id) => posOf(id) === 'catcher'),
   ];
   assert.ok(
-    planSummary(noCatcher, candidates, 9, roster).blocking.length > 0,
+    planSummary(noCatcher, candidates, 9, []).blocking.length > 0,
     '成り立たない編成を知らせない',
   );
   // ⚠ 既に名簿が埋まっている球団なら、0人でも成り立つ（初期編成だけの話にしない）
@@ -340,6 +412,45 @@ try {
       now: '2026-10-26T15:00:00.000Z',
     });
     const [ma, mb] = two.members;
+    // ⚠ **大量に戦力外を出した球団**を作る。名簿が2人しか残っていない球団が
+    //    0人の案を出しても、最低限（投手1・捕手1・野手8）まで補われること。
+    //    ⚠ 全球団を空にはできない。年末のトライアウトの候補は12球団で実測120人
+    //       しかなく、12球団×最低10人＝120人ちょうどで足りなくなる
+    //       （実測で「投手・捕手・野手が不足します」で止まった）。
+    // まずセットを配って名簿を作る（開幕前の手続き）
+    for (const m of two.members)
+      submitPhase(
+        two,
+        m.userId,
+        {
+          phaseId: two.phase.id,
+          plan: defaultPhasePlan(two, m.teamName),
+          ready: true,
+        },
+        '2026-10-26T15:00:00.000Z',
+      );
+    assert.equal(two.phase?.kind, 'camp', '前提: セット選択が解決してキャンプへ');
+    loadLeagueWorld(two);
+    const KEEP_TWO = { pitcher: 8, catcher: 2, infielder: 4, outfielder: 2 };
+    for (const name of two.season.settings.teamNames) {
+      const team = TEAMS_DATA[name];
+      const left = name === ma.teamName
+        ? { pitcher: 1, catcher: 0, infielder: 0, outfielder: 1 }
+        : { ...KEEP_TWO };
+      team.players = team.players.filter((p) => {
+        const group = rosterGroup(p.position);
+        if (left[group] <= 0) return false;
+        left[group] -= 1;
+        return true;
+      });
+    }
+    openPhase(two, 'tryout', '2026-10-26T15:00:00.000Z');
+    two.game = captureWorld();
+    assert.equal(
+      two.game.teams[ma.teamName].players.length,
+      2,
+      '前提: 大量に戦力外を出した球団',
+    );
     submitPhase(
       two,
       ma.userId,
@@ -358,8 +469,8 @@ try {
     );
     assert.notEqual(
       two.phase?.kind,
-      'initial_tryout',
-      '0人の案が1つあるだけで初期編成が解決しない',
+      'tryout',
+      '0人の案が1つあるだけでトライアウトが解決しない',
     );
     const zero = two.game.teams[ma.teamName].players;
     const zc = rosterCounts(zero);
@@ -368,7 +479,7 @@ try {
       `0人の案の球団が最低限を満たさない: ${JSON.stringify(zc)}`,
     );
     // 補うのは最低限だけ。希望していない選手で24人まで埋めない
-    assert.ok(zero.length <= 10, `0人の案なのに ${zero.length}人も取った`);
+    assert.ok(zero.length <= 12, `0人の案なのに ${zero.length}人も取った`);
   }
 
   // --- 画面の操作を何度繰り返しても、押したとおりに動くこと ---------------
@@ -379,7 +490,7 @@ try {
   //    - 「↓」で選手が獲得予定から消え、控えの選手が代わりに入った
   //    いまは獲得予定を基準に操作し、毎回並べ直す。
   {
-    const count = base.count;
+    const count = FULL_COUNT;
     const none = [];
     const wantedOf = (ids) => plannedPicks(ids, candidates, count, none).map((p) => p.id);
     const sameSet = (a, b) => [...a].sort().join() === [...b].sort().join();
@@ -479,7 +590,7 @@ try {
     assert.equal(ranked.length, candidates.length, '重みのおすすめで候補が減った');
     assert.equal(new Set(ranked).size, ranked.length, '重みのおすすめで重複した');
     // 獲得予定は目標構成どおり、評価の高い順
-    const picks = plannedPicks(ranked, candidates, base.count, none);
+    const picks = plannedPicks(ranked, candidates, FULL_COUNT, none);
     assert.deepEqual(rosterCounts(picks), ROSTER_TARGETS, '重みのおすすめが目標構成にならない');
     assert.deepEqual(picks.map((p) => p.id), ranked.slice(0, picks.length), '獲得予定が先頭に並ばない');
     const sc = picks.map((p) => weightedScore(p, DEFAULT_WEIGHTS));
@@ -489,7 +600,7 @@ try {
     const lowAll = Object.fromEntries(WEIGHT_FIELDS.map((f) => [f.key, 0]));
     const highAll = Object.fromEntries(WEIGHT_FIELDS.map((f) => [f.key, WEIGHT_MAX]));
     const picksWith = (w) =>
-      plannedPicks(weightedRanked(candidates, w, none), candidates, base.count, none);
+      plannedPicks(weightedRanked(candidates, w, none), candidates, FULL_COUNT, none);
     const avgOf = (xs, f) => xs.reduce((n, p) => n + f(p), 0) / xs.length;
     const fieldersOf = (xs) => xs.filter((p) => p.position !== 'pitcher');
     const powerUp = avgOf(fieldersOf(picksWith({ ...lowAll, power: WEIGHT_MAX })), (p) => p.batting.power);

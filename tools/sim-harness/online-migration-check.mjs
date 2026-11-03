@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
+import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
+import { PACK_COUNT } from '../../src/online/rosterPack.js';
 import { ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 import {
   MIGRATIONS,
@@ -233,7 +235,8 @@ try {
   //    最後の段しか当たらず、途中の段が壊れていても気づけない
   //    （段が2本になった時に実際に取りこぼした）。
   // ⚠ 各段が当たったことを**別々の目印**で見る。
-  //    2→3 は `invites` が消えること、3→4 は `testMode` が入ること。
+  //    2→3 は `invites` が消えること、3→4 は `testMode` が入ること、
+  //    4→5 は初期編成がセット選択に変わること。
   const downgrade = () =>
     store.transaction((bundle) => {
       bundle.league.schema = OLDEST_MIGRATABLE;
@@ -243,13 +246,26 @@ try {
       //    1人が決めないだけでリーグが永久に止まっていた。止まったままの
       //    リーグを、移行のときに時間で進む形へ直せることを見る
       if (bundle.league.phase) bundle.league.phase.deadline = null;
+      // ⚠ **初期編成で止まったリーグ**を作る。その画面も、それを解決する
+      //    処理もコードから消したので、差し替えないと締め切りが来ても
+      //    解決できずリーグが止まったままになる
+      delete bundle.league.packs;
+      bundle.league.phase = {
+        id: `${bundle.league.season.year}:initial_tryout`,
+        kind: 'initial_tryout',
+        deadline: null,
+        submissions: {},
+        candidates: [],
+      };
       return { value: null };
     });
   /** 全部の段が当たったか */
   const migrated = (league) =>
     !league.invites &&
     league.testMode === false &&
-    (!league.phase || !!league.phase.deadline);
+    (!league.phase || !!league.phase.deadline) &&
+    league.phase?.kind === 'pack_select' &&
+    league.packs?.length === PACK_COUNT;
 
   // 1) 取り込みの命令で直る
   await downgrade();
@@ -276,6 +292,19 @@ try {
   assert.ok(
     fixed.phase && Date.parse(fixed.phase.deadline) > 0,
     '締め切りの無い手続きが残っている（永久に止まる）',
+  );
+  // ⚠ **差し替えた手続きが本当に解決できること**。形だけ `pack_select` に
+  //    しても、セットが無ければ締め切りで止まる
+  assert.equal(fixed.phase.kind, 'pack_select', '初期編成が差し替わっていない');
+  assert.equal(fixed.packs.length, PACK_COUNT, 'セットが作られていない');
+  assert.deepEqual(
+    fixed.phase.packIds,
+    fixed.packs.map((x) => x.id),
+    '手続きとセットの対応がずれている',
+  );
+  assert.ok(
+    defaultPhasePlan(fixed, fixed.members[0].teamName).packId,
+    '差し替えた手続きの既定案が空（締め切りで止まる）',
   );
   // ⚠ 取り込みで revision を上げない（送信中の提出が弾かれる）
   assert.equal(fixed.revision, before.revision, '取り込みで revision が動いた');

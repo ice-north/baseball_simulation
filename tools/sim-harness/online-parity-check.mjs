@@ -8,12 +8,24 @@
 //    どれも「試合の処理」は正しく、**世界の作り方**が違っていた。個々の部品を
 //    見る検査では捕まらない。出てきた数字を一人用と並べるしかない。
 //
-// ⚠ **土台を揃えること**。一人用側も同じ初期トライアウト・同じ格付け・同じ試合数で
-//    組む。既定の `generateExpansionRoster` で組むと別の生成経路になり、
-//    能力が最初から違うので比較にならない（最初それで測って見当違いの結論を出した）。
+// ⚠ **土台を揃えること**。一人用側も同じ初期メンバーセット・同じ格付け・
+//    同じ試合数で組む。既定の `generateExpansionRoster` で組むと別の生成経路に
+//    なり、能力が最初から違うので比較にならない（最初それで測って見当違いの
+//    結論を出した）。
+// ⚠ 名簿の作り方を変えたら**ここも合わせること**。オンラインを初期編成から
+//    セット選択に変えたとき、一人用側が初期編成のままで、制球の平均が
+//    48.2 対 54.2 とずれて落ちた。土台がずれていると、試合の処理が正しくても
+//    落ちる（そして正しく落ちている——比較になっていないのだから）。
 //
 // ⚠ 許容幅は**実測から決めている**。狭すぎると乱数の揺れで落ち、広すぎると
 //    今回の不具合を通してしまう。各項目に「この幅なら何を捕まえるか」を書くこと。
+//
+// ⚠ **この検査の限界**: 突き合わせなので、**両側に同じだけ効く変更は捕まらない**。
+//    実測で、初期メンバーセットの格の段差を壊して全体を弱くしても通った
+//    （一人用側も同じセットから組むので、両方が同じだけ下がる）。
+//    共通の部品そのものは、それ専用の検査で水準を数字で押さえる
+//    （`online-pack-check` の制球の水準など）。ここで見るのは
+//    **オンラインだけに効くずれ**（世界の作り方・休養日・名簿の配り方）。
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -23,10 +35,7 @@ import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { buildLeague, runSeason, TEAMS_DATA } from './lib/league.mjs';
-import {
-  generateTryoutCandidates,
-  selectPlayerForAI,
-} from '../../src/season/tryoutSystem.js';
+import { generateRosterPacks } from '../../src/online/rosterPack.js';
 import { getLeagueRankFromTeams } from '../../src/corporate/corporateInit.js';
 import { initializeAllPitchingRotations } from '../../src/teams-data.js';
 import { createSeededRandom } from '../../src/game/rng.js';
@@ -97,7 +106,7 @@ function summarize(teams) {
 
 // --- オンライン側 -----------------------------------------------------
 const dir = await mkdtemp(join(tmpdir(), 'pennant-parity-'));
-let online, onlineRank, onlineGames;
+let online, onlineRank, onlineGames, onlineSeed;
 try {
   const store = createTestStore(join(dir, 'state.gz'));
   let now = '2026-10-26T15:00:00.000Z';
@@ -164,6 +173,10 @@ try {
     onlineRank,
     'リーグ全体の格付けが生成時の最頻値と違う',
   );
+  // ⚠ 一人用側に**同じ種**を渡す。セットは種から作られるので、これが
+  //    ずれると配られる選手が別物になる
+  onlineSeed = league.seed;
+  assert.ok(Number.isFinite(onlineSeed), 'リーグの種が読めない');
   const teams = names.map((n) => league.game.teams[n]);
   onlineGames = Math.max(
     ...teams.flatMap((t) =>
@@ -197,19 +210,15 @@ const singleRuns = SINGLE_SEEDS.map((seed) => {
   Math.random = createSeededRandom(seed);
   const names = quiet(() => buildLeague(PYRAMID_TEAM_COUNT, 24, 1));
   quiet(() => {
-    // ⚠ オンラインと同じ初期トライアウトから名簿を作る
-    const pool = generateTryoutCandidates(1, names.length, true, onlineRank, 0);
-    for (const n of names) TEAMS_DATA[n].players = [];
-    for (let round = 0; round < 24; round += 1)
-      for (const n of names) {
-        const picked = selectPlayerForAI(pool, TEAMS_DATA[n].players) || pool[0];
-        if (!picked) break;
-        pool.splice(
-          pool.findIndex((p) => p.id === picked.id),
-          1,
-        );
-        TEAMS_DATA[n].players.push(picked);
-      }
+    // ⚠ オンラインと**同じ初期メンバーセット**から名簿を作る。
+    //    セットはサーバーで `league.seed + 7` から作るので、同じ式を使う。
+    //    20セットのうちどの12セットが配られるかは並べ方で変わるが、
+    //    セット同士の合計は1%前後に揃えてあるので平均はほぼ一致する。
+    const packs = generateRosterPacks(onlineSeed + 7);
+    assert.ok(packs.length >= names.length, 'セットが球団数に足りない');
+    names.forEach((n, i) => {
+      TEAMS_DATA[n].players = packs[i].players.map((p) => ({ ...p }));
+    });
     initializeAllPitchingRotations();
     runSeason(names, onlineGames);
   });

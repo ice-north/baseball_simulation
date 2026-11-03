@@ -56,22 +56,23 @@ assert.equal(
   '2026-11-01T15:00:00.000Z',
   'キャンプの締め切りは月曜0時',
 );
-// ⚠ **初期編成にも締め切りを置くこと**。以前は「最初の1回くらいは全員を待とう」と
-//    設けなかったが、1人が決めないだけでリーグが永久に止まった（実際に止まった）。
-//    時間による進行が絶対で、決めていない人は標準案で押し通す。
-// ⚠ 初期編成は土曜扱い（締め切り日曜0時）。こうすると次のキャンプが月曜0時に
-//    締め切られて**月曜開幕**になる。日曜扱いにすると開幕が1週間ずれる
-assert.equal(PHASE_WEEKDAY.initial_tryout, 6, '初期編成が土曜扱いでない');
+// ⚠ **開幕前の手続きにも締め切りを置くこと**。以前は「最初の1回くらいは
+//    全員を待とう」と設けなかったが、1人が決めないだけでリーグが永久に
+//    止まった（実際に止まった）。時間による進行が絶対で、決めていない人は
+//    標準案で押し通す。
+// ⚠ 初期メンバー選択は土曜扱い（締め切り日曜0時）。こうすると次のキャンプが
+//    月曜0時に締め切られて**月曜開幕**になる。日曜扱いにすると開幕が1週間ずれる
+assert.equal(PHASE_WEEKDAY.pack_select, 6, '初期メンバー選択が土曜扱いでない');
 assert.equal(
-  phaseDeadlineAt('initial_tryout', satMidnight),
+  phaseDeadlineAt('pack_select', satMidnight),
   '2026-10-31T15:00:00.000Z',
-  '初期編成の締め切りは日曜0時',
+  '初期メンバー選択の締め切りは日曜0時',
 );
-// 初期編成 → キャンプ と続けると、開幕は月曜0時になる
+// 初期メンバー選択 → キャンプ と続けると、開幕は月曜0時になる
 assert.equal(
-  phaseDeadlineAt('camp', phaseDeadlineAt('initial_tryout', satMidnight)),
+  phaseDeadlineAt('camp', phaseDeadlineAt('pack_select', satMidnight)),
   '2026-11-01T15:00:00.000Z',
-  '初期編成から続けたときの開幕が月曜0時でない',
+  '初期メンバー選択から続けたときの開幕が月曜0時でない',
 );
 assert.equal(phaseDeadlineAt('unknown_kind', satMidnight), null, '知らない種類は締め切り無し');
 
@@ -154,55 +155,66 @@ try {
   });
 
   // ⚠ **誰も提出していなくても、締め切りで開幕まで進むこと**。
-  //    ここが「時間による進行が絶対」の本体。初期編成→キャンプ→開幕が
+  //    ここが「時間による進行が絶対」の本体。初期メンバー選択→キャンプ→開幕が
   //    1回の定期処理で通る（締め切りがどちらも過去になっているため）
   const league = (await store.read()).league;
-  assert.equal(league.phase.kind, 'initial_tryout');
-  assert.ok(league.phase.deadline, '初期編成に締め切りが無い');
+  assert.equal(league.phase.kind, 'pack_select');
+  assert.ok(league.phase.deadline, '初期メンバー選択に締め切りが無い');
   // ⚠ **手続きは1回の定期処理につき1つずつ解決する**。次の手続きの締め切りは
   //    「開いた時刻」から数えるので、まとめて片付きはしない。それでよい——
   //    止まらないことが大事で、急いで進めることが目的ではない
   // ⚠ **保存した下書きは、締め切りでもそのまま使うこと**。以前は下書きを捨てて
   //    標準案で決めていた（契約更改で「誰も解雇しない」と保存した球団が、
   //    標準案どおりに解雇された）。
-  // ⚠ 下書きは「相手球団が先に取りそうな選手だけ・捕手なし」の希望順位にする。
-  //    以前は希望の候補が全員取られると指名を見送り続け、巡目が尽きて
-  //    捕手・野手が足りないまま「トライアウト全体が解決できない」で止まった。
+  // ⚠ 下書きは **標準案とは別のセット**にする。同じセットだと、下書きを捨てて
+  //    標準案で決めていても気づけない。
   const guestTeam = league.members.find((m) => m.userId === 'guest').teamName;
   const adminTeam = league.members.find((m) => m.userId === 'admin').teamName;
-  const byId = new Map(league.phase.candidates.map((p) => [p.id, p]));
-  const contested = defaultPhasePlan(league, adminTeam)
-    .rankedIds.filter((id) => byId.get(id).position !== 'catcher')
-    .slice(0, 12);
+  const defaultPack = defaultPhasePlan(league, guestTeam).packId;
+  const wanted = league.packs.find((p) => p.id !== defaultPack);
+  assert.ok(wanted && wanted.id !== defaultPack, '前提: 別のセットが選べる');
   await run('guest', guest, 'submit', league.revision, {
     phaseId: league.phase.id,
-    plan: { count: 12, rankedIds: contested },
+    plan: { packId: wanted.id },
     ready: false,
     baseSubmission: null,
   });
   now = league.phase.deadline;
   const first = await service.tick();
   assert.ok(first.advanced, '締め切りを過ぎても進まない');
-  assert.deepEqual(first.autoResolved, ['initial_tryout'], '初期編成が自動決定されない');
+  assert.deepEqual(
+    first.autoResolved,
+    ['pack_select'],
+    '初期メンバー選択が自動決定されない',
+  );
   const camped = (await store.read()).league;
-  assert.equal(camped.phase?.kind, 'camp', '初期編成の次はキャンプ');
+  assert.equal(camped.phase?.kind, 'camp', '初期メンバー選択の次はキャンプ');
   {
     const roster = camped.game.teams[guestTeam].players;
-    // 標準案は24人取る。下書きは12人まで（希望が先に取られたぶんは最低限の補充だけ）
-    assert.equal(defaultPhasePlan(league, guestTeam).count, 24, '前提: 標準案は24人');
-    assert.ok(
-      roster.length >= 9 && roster.length <= 12,
-      `保存した下書きが使われていない（${roster.length}人）`,
+    assert.equal(roster.length, wanted.players.length, '人数がセットと合わない');
+    // ⚠ **下書きで選んだセットが来ていること**（標準案に上書きされていない）
+    assert.deepEqual(
+      roster.map((p) => p.name).sort(),
+      wanted.players.map((p) => p.name).sort(),
+      '保存した下書きのセットが使われていない',
     );
-    assert.ok(
-      roster.some((p) => p.position === 'catcher'),
-      '希望の候補が尽きた球団に捕手が補われていない',
-    );
+    // 名簿として成り立っている
+    assert.ok(roster.some((p) => p.position === 'catcher'), '捕手がいない');
     assert.ok(roster.some((p) => p.position === 'pitcher'), '投手がいない');
-    assert.ok(roster.filter((p) => p.position !== 'pitcher').length >= 8, '野手が足りない');
+    assert.ok(
+      roster.filter((p) => p.position !== 'pitcher').length >= 8,
+      '野手が足りない',
+    );
+    // ⚠ 決めなかった管理者にも名簿が渡っていること
+    const adminRoster = camped.game.teams[adminTeam].players;
+    assert.equal(adminRoster.length, wanted.players.length, '未提出の球団に名簿が無い');
+    assert.ok(
+      !adminRoster.some((p) => roster.some((q) => q.id === p.id)),
+      '同じセットが2球団に渡っている',
+    );
   }
   assert.ok(camped.phase.deadline, 'キャンプに締め切りが無い');
-  // ⚠ 開幕は**月曜0時**。初期編成を土曜扱いにしてあるのはこのため
+  // ⚠ 開幕は**月曜0時**。初期メンバー選択を土曜扱いにしてあるのはこのため
   assert.equal(jstWeekday(camped.phase.deadline), 1, '開幕が月曜でない');
 
   // ⚠ **キャンプ（手続き中）でも打順を保存でき、開幕後もその打順が残ること**。
@@ -316,5 +328,5 @@ try {
 }
 
 console.log(
-  '■ 締め切りと自動決定: OK（120ターン / 初期編成にも締め切り / 誰も提出しなくても月曜に開幕 / 全員提出なら締め切り前でも開幕・それでも開幕は月曜 / 下書きは締め切りでも使う / 希望が尽きても最低限を補う / キャンプ中に保存した打順が開幕後も残る）',
+  '■ 締め切りと自動決定: OK（120ターン / 初期メンバー選択にも締め切り / 誰も提出しなくても月曜に開幕 / 全員提出なら締め切り前でも開幕・それでも開幕は月曜 / 下書きのセットは締め切りでも使う / キャンプ中に保存した打順が開幕後も残る）',
 );

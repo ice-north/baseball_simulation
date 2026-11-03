@@ -1946,3 +1946,41 @@
   position: relative;
   z-index: 60;
 }
+
+/* 初期メンバーの選択。20セットを並べ、選んだセットの24人を下に出す。 */
+.online-pack-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.online-pack-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 10px;
+  position: relative;
+}
+.online-pack-card small {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+.online-pack-card[aria-current='true'] {
+  border-color: var(--accent);
+}
+.online-pack-card[aria-pressed='true'] {
+  background: var(--accent-soft);
+}
+.online-pack-chosen {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 10px;
+  color: #67e8f9;
+}
+.online-pack-detail {
+  border-top: 1px solid #536b85;
+  padding-top: 12px;
+}

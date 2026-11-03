@@ -2,6 +2,7 @@ import { roleFor } from '../src/online/tactics.js';
 import { PHASE_LABELS, ONLINE_SCHEMA } from '../src/online/shared.js';
 import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
 import { withStarters, leagueLeaders } from './leagueBoard.mjs';
+import { packSummary } from '../src/online/rosterPack.js';
 import {
   currentPlayerStats,
   playerPeriods,
@@ -264,8 +265,30 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           id: phase.id,
           kind: phase.kind,
           label: PHASE_LABELS[phase.kind],
-          // ⚠ 締め切りの有無で画面の文面が変わる（初期編成だけは全員を待つ）
+          // ⚠ 締め切りの有無で画面の文面が変わる
           deadline: phase.deadline || null,
+          // ⚠ 初期メンバー選択。20セット×24人＝480人なので、選ぶのに要る分だけ渡す
+          //    （全員の全項目を載せるとビューが重くなる）
+          packs: l.packs?.map((pack) => ({
+            ...packSummary(pack),
+            takenBy: pack.takenBy || null,
+            players: pack.players.map((p) => ({
+              id: p.id,
+              name: p.name,
+              age: p.age,
+              position: p.position,
+              rank: p.rank || 'C',
+              isTwoWay: !!p.isTwoWay,
+              batting: { meet: p.batting?.meet, power: p.batting?.power },
+              physical: { speed: p.physical?.speed },
+              fielding: { defense: p.fielding?.defense },
+              pitching: {
+                velocity: p.pitching?.velocity,
+                control: p.pitching?.control,
+                stamina: p.pitching?.stamina,
+              },
+            })),
+          })),
           candidates: phase.candidates?.map(playerView),
           submission: phase.submissions[userId] || null,
         }

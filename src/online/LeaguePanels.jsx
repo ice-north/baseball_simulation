@@ -20,6 +20,7 @@ import {
 } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
+import PackSelect from './PackSelect.jsx';
 import {
   PYRAMID_LEAGUES,
   PROMOTION_PLACES,
@@ -564,7 +565,9 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
               <p>
                 {phase.kind === 'camp'
                   ? `練習方針: ${MENUS[plan.menu]}`
-                  : plan.rankedIds
+                  : plan.packId !== undefined
+                    ? `初期メンバー: ${phase.packs?.find((x) => x.id === plan.packId)?.name || '未選択'}`
+                    : plan.rankedIds
                     ? `${plan.count}人を獲得する希望リスト（${plan.rankedIds.length}候補）`
                     : plan.releaseIds
                       ? `退団予定 ${plan.releaseIds.length}人`
@@ -579,6 +582,18 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
               </p>
             ) : (
               <>
+                {/* ⚠ 初期メンバー選択。開幕前はこれだけで、希望リストは出さない */}
+                {phase.packs && (
+                  <PackSelect
+                    packs={phase.packs}
+                    plan={plan}
+                    busy={busy}
+                    onChange={(next) => {
+                      setDirty(true);
+                      setPlan(next);
+                    }}
+                  />
+                )}
                 {plan.rankedIds && (
                   <TryoutPlanner
                     plan={plan}
