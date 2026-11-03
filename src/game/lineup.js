@@ -1,5 +1,22 @@
 const FIELD_POSITIONS = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
 
+/**
+ * 試合を組むのに足りない人数（`ensureCompleteLineup` が打順を埋められる条件）。
+ * 投手1人と野手8人（DH制は9人）。足りていれば空配列。
+ * ⚠ 人数の合計だけで確かめないこと。投手ばかりの名簿でも合計は足りてしまい、
+ *    開幕後に打順が組めず1日も進められなくなる
+ */
+export function rosterShortage(players = [], useDH = false) {
+  const active = players.filter(p => p && p.isActive !== false);
+  const pitchers = active.filter(p => p.position === 'pitcher').length;
+  const fielders = active.length - pitchers;
+  const needFielders = useDH ? 9 : 8;
+  const missing = [];
+  if (pitchers < 1) missing.push('投手1人');
+  if (fielders < needFielders) missing.push(`野手${needFielders - fielders}人`);
+  return missing;
+}
+
 // 日付進行前に打順・守備位置・先発投手を揃える。既存の有効な指定を優先する。
 export function ensureCompleteLineup(team, useDH = false) {
   if (!team) return true;

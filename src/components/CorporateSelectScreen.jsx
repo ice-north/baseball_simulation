@@ -424,6 +424,19 @@ const CorporateNameEditScreen = ({ onBack }) => {
   };
 
   const saveEdit = (teamId) => {
+    // ⚠ 球団名は世界の中で一意であること。名前がそのままチームの鍵（TEAMS_DATA のキー）に
+    //    なるので、同名にすると2球団が1つに重なり、片方の選手と成績が消える
+    const newName = String(editForm.name ?? '').trim();
+    if (!newName) {
+      alert('チーム名を入力してください');
+      return;
+    }
+    const clash = getAllMasterTeamsEffective().find(t => t.id !== teamId
+      && ((t.displayName || t.name) === newName || t.name === newName));
+    if (clash) {
+      alert(`「${newName}」は既に別のチームが使っています。別の名前にしてください`);
+      return;
+    }
     const orig = CORPORATE_TEAMS.find(t => t.id === teamId);
     if (orig) {
       for (const field of ['name', 'city', 'region', 'type', 'rank']) {

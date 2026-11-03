@@ -571,6 +571,8 @@ const ManagementScreen = ({
     generatePitchingRotation={generatePitchingRotation}
     generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
     allTeams={allTeams}
+    onOpenSave={() => setManagementView('save')}
+    onBackToGame={() => setManagementView('dateprogress')}
   />;
   return <div className="p-8 text-white">準備中...</div>;
 };

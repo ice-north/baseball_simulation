@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
+import { rosterShortage } from '../game/lineup.js';
 import { addToRoster, addManyToRoster, removeFromRosterById } from '../state/roster.js';
 import { POSITION_NAMES, FORM_OPTIONS } from '../utils/constants.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
@@ -168,12 +169,16 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   };
 
   // 全チームの選手数チェック
-  const canStart = () => {
-    return allTeams.every(teamName => {
-      const t = TEAMS_DATA[teamName];
-      return t && t.players && t.players.length >= 16;
-    });
-  };
+  // ⚠ 人数だけでなく、打順が組めること（投手1人・野手8人、DH制は9人）も確かめる。
+  //    以前は16人いれば始められ、投手ばかりの球団があると開幕後に1日も進めなかった
+  const startProblems = () => allTeams.flatMap(teamName => {
+    const t = TEAMS_DATA[teamName];
+    const players = t?.players || [];
+    if (players.length < 16) return [`${teamName}: 選手が${16 - players.length}人足りません（最低16人）`];
+    const missing = rosterShortage(players, !!LEAGUE_SETTINGS.useDH);
+    return missing.length ? [`${teamName}: 試合を組むのに${missing.join('・')}が足りません`] : [];
+  });
+  const canStart = () => startProblems().length === 0;
 
   const teamColorList = ['bg-blue-600', 'bg-red-600', 'bg-green-600', 'bg-yellow-600', 'bg-purple-600', 'bg-pink-600', 'bg-indigo-600', 'bg-teal-600'];
 
@@ -190,15 +195,17 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
           </div>
           <button
             onClick={() => {
-              if (!canStart()) {
-                alert('全チーム最低16人の選手が必要です');
+              const problems = startProblems();
+              if (problems.length > 0) {
+                alert(problems.join('\n'));
                 return;
               }
               onComplete();
             }}
-            disabled={!canStart()}
-            className={`px-8 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
-              'btn-primary'
+            // 押せない理由が分かるよう、無効にはせず押したときに足りないものを出す
+            aria-disabled={!canStart()}
+            className={`px-8 py-3 rounded-lg font-bold text-lg transition shadow-lg btn-primary ${
+              canStart() ? '' : 'opacity-50'
             }`}
           >
             シーズン開始 →

@@ -3,6 +3,7 @@ import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
+import { getPlayoffChampion } from '../season/seasonManager.js';
 import { generatePitchingRotation } from '../game/lineupGenerator.js';
 import { getTransferCandidates, transferManagerTo, CATEGORY_LABEL, getTeamCategory } from '../game/managerTransfer.js';
 
@@ -157,7 +158,9 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           standings: teamRecords,
           awards: awardsArchive,
           leagueChampion: fa?.champion || sortedStandings[0]?.team || null,
-          playoffChampion: seasonData.playoffChampion || null,
+          // ⚠ `seasonData.playoffChampion` はどこでも設定されず、球団史の優勝が常に空だった。
+          //    日程のプレーオフ決勝から決める（年度の記録と同じ判定）
+          playoffChampion: getPlayoffChampion(seasonData.schedule || []) || null,
         });
       }
 
