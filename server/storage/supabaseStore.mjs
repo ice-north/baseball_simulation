@@ -13,6 +13,7 @@ import {
   projectTeamInfo,
 } from '../projection.mjs';
 import { buildArchiveIndex, archiveReferences } from '../archiveIndex.mjs';
+import { isCurrent } from '../../src/online/leagueMigration.js';
 /**
  * リーグ全体の進行情報（全員のビューで同じ値）を1つ取り出す。
  * 定期処理の判定（`isDue`）と、まだ参加していない人の版（`revision`）に使う。
@@ -24,6 +25,29 @@ function leagueMeta(views) {
   if (!view) return null;
   const { schema, revision, status, nextAdvanceAt, phaseDeadline } = view;
   return { schema, revision, status, nextAdvanceAt, phaseDeadline };
+}
+/**
+ * 保存するリーグ本体から、進行情報（`views._meta`）を作る。
+ *
+ * ⚠ **ビューからではなくリーグから作ること**。リーグが古い形のままだと、
+ *    参加者のビューは「版が合いません」（`versionMismatch`）だけになり、
+ *    版も進行時刻も載らない。ビューから作ると `_meta` が消えて、定期処理が
+ *    「古い形なので移行する」の判定（`isDue`）まで読めなくなり、管理者が
+ *    手で取り込むまで定期進行が止まっていた。
+ * ⚠ リーグが無いとき（リセット直後）も入れる。無いと読み出しのたびに
+ *    全列の読み直し（`controlFor` の予備経路）に落ちて、往復が2回になる。
+ */
+function leagueMetaOf(league) {
+  if (!league)
+    return { schema: ONLINE_SCHEMA, revision: null, status: null, nextAdvanceAt: null, phaseDeadline: null };
+  return {
+    // 古い形のリーグは自分の版を載せる（`isDue` が移行のために起こす）
+    schema: isCurrent(league) ? ONLINE_SCHEMA : (league.schema ?? null),
+    revision: league.revision,
+    status: league.status,
+    nextAdvanceAt: league.nextAdvanceAt ?? null,
+    phaseDeadline: league.phase?.deadline || null,
+  };
 }
 function memberRevision(views) {
   return Object.entries(views || {}).find(
@@ -168,7 +192,11 @@ export class SupabaseStore {
     //    進行時刻だけ見ていると誰も触らない限り直らない。次の正時に
     //    定期処理が入って移行できるよう、ここでも起こす
     if (row.snapshot_path && view && view.schema !== ONLINE_SCHEMA) return true;
-    if (view?.phaseDeadline && view.phaseDeadline <= now) return true;
+    // ⚠ 自動決定に失敗して止まっている間（status: error）は起こさない。
+    //    定期処理はその状態では何もしない（管理者の再開を待つ）のに、毎回
+    //    ロックを取って保存一式を読み、その間の参加者の操作を「処理中」で弾いていた
+    if (view?.phaseDeadline && view.phaseDeadline <= now && view.status !== 'error')
+      return true;
     return !!(
       view?.status === 'running' &&
       view.nextAdvanceAt &&
@@ -388,8 +416,7 @@ export class SupabaseStore {
       );
       const archives = await this.createArchive(value, row.views?._records);
       if (archives) views._records = archives;
-      const meta = leagueMeta(views);
-      if (meta) views._meta = meta;
+      views._meta = leagueMetaOf(value.league);
       published = await this.rpc('online_publish', {
         p_token: token,
         p_generation: row.generation,

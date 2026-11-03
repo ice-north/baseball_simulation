@@ -166,6 +166,21 @@ export const TRAINING_MENUS = {
 };
 
 /**
+ * そのメニューがこの選手の守備位置に合うか（オンラインのキャンプの規則）。
+ * 投手に打撃系（batting）、野手に投球系（pitching）を当てない。守備系はどちらにも当てられる。
+ *
+ * ⚠ 一人用のキャンプ画面は、野手に投球系を当てること（投手への転向の準備など）も
+ *    許している。この規則はオンラインの選択肢（`CampPlanner` の `menusFor`）と
+ *    サーバーの受け付けをそろえるためのもの。野手に「球速練習」を当てても、
+ *    伸びるのは野手が使わない球速・スタミナだけになる。
+ */
+export const menuFitsPlayer = (key, player) => {
+  const category = TRAINING_MENUS[key]?.category;
+  if (!category) return false;
+  return player?.position === 'pitcher' ? category !== 'batting' : category !== 'pitching';
+};
+
+/**
  * サブ練習メニュー（基礎体力・弱点補強系）
  */
 export const SUB_TRAINING_MENUS = {

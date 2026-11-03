@@ -146,6 +146,23 @@ export function generateRosterPacks(seed, { count = PACK_COUNT } = {}) {
   }
 }
 
+const packCache = new Map();
+/**
+ * **読むだけ**の呼び出し用。同じ種のセットを作り直さない。
+ *
+ * ⚠ 1回作るのに約0.1秒（480人）かかる。途中参加でセットを待っている人の
+ *    ビューを作るたび（保存のたびに全員ぶん）と、選ぶ命令の検証のたびに
+ *    作り直していた。種から決まるので、同じ種なら同じものを使い回してよい。
+ * ⚠ 返した値は**書き換えないこと**（名簿に入れるときは複製する）。
+ */
+export function rosterPacksFor(seed) {
+  if (!packCache.has(seed)) {
+    if (packCache.size >= 16) packCache.delete(packCache.keys().next().value);
+    packCache.set(seed, generateRosterPacks(seed));
+  }
+  return packCache.get(seed);
+}
+
 /** 画面に出す要約。⚠ 選ぶのに必要な情報だけ。全選手は別に渡す */
 export function packSummary(pack) {
   const counts = { pitcher: 0, catcher: 0, infield: 0, outfield: 0 };

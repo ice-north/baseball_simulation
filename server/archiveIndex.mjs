@@ -1,13 +1,16 @@
 import { projectPlayerInfo, projectTeamInfo } from './projection.mjs';
-import { storedGame } from './recordedViews.mjs';
+import { storedGame, statisticsContext } from './recordedViews.mjs';
 export function buildArchiveIndex(bundle, retainedYears = []) {
   const league = bundle.league;
   if (!league) return null;
   const players = {};
+  // ⚠ 成績の文脈（全試合をなめて作る）は全員で1つ。1人ごとに作ると
+  //    参加者×24人ぶん、保存のたびに全試合をなめ直す
+  const context = league.members.length ? statisticsContext(league) : null;
   for (const member of league.members) {
     players[member.userId] = {};
     for (const p of league.game.teams[member.teamName].players) {
-      const info = projectPlayerInfo(bundle, member.userId, p.id);
+      const info = projectPlayerInfo(bundle, member.userId, p.id, context);
       delete info.revision;
       players[member.userId][p.id] = info;
     }

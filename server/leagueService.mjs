@@ -192,6 +192,31 @@ export class LeagueService {
         );
         return { unchanged: true, value: bundle.receipts[key].value };
       }
+      // ⚠ **全データのリセットも版の照合を飛ばす**。壊れて読めなくなった
+      //    リーグを捨てるための操作なので、版が合うことを前提にできない。
+      //    消したあとは `create` からやり直す（revision は0に戻る）。
+      // ⚠ **移行より先に置くこと**。移行できない形（作り直すしかない版）だと
+      //    移行が例外を投げ、捨てるための操作まで届かなかった
+      if (command.type === 'reset') {
+        requireOnline(
+          userId === this.adminId,
+          '全データのリセットは管理者専用です',
+          403,
+        );
+        // ⚠ **「リーグが無い」を先に見ること**。`canStep(null)` は false なので、
+        //    順を逆にすると、消したあとの2回目が「検証モードが入っていません」に
+        //    なって、何が起きているのか分からない
+        const l = bundle.league;
+        requireOnline(l, 'リーグがまだありません', 409);
+        // ⚠ 検証モードの間だけ。遊んでいるリーグで押せると、全員の成績が
+        //    管理者の一押しで消える
+        requireOnline(this.canStep(l), '検証モードが入っていません', 403);
+        bundle.league = null;
+        // ⚠ バックアップも消すこと。残すと「リセットしたのに復元できる」状態
+        //    になり、何が正本か分からなくなる
+        delete bundle.backup;
+        return { value: { ok: true, reset: true } };
+      }
       // ⚠ **版の照合より先に移行する**。古い形のままでは他の命令が通らず、
       //    「更新したらリーグが読めなくなった」が起きる。どの命令で入っても
       //    ここを通るので、誰かが何か操作すれば自然に直る。
@@ -205,28 +230,6 @@ export class LeagueService {
           ...(migrated.changed ? {} : { unchanged: true }),
           value: { ok: true, applied: migrated.applied },
         };
-      }
-      // ⚠ **全データのリセットも版の照合を飛ばす**。壊れて読めなくなった
-      //    リーグを捨てるための操作なので、版が合うことを前提にできない。
-      //    消したあとは `create` からやり直す（revision は0に戻る）。
-      if (command.type === 'reset') {
-        requireOnline(
-          userId === this.adminId,
-          '全データのリセットは管理者専用です',
-          403,
-        );
-        // ⚠ **「リーグが無い」を先に見ること**。`canStep(null)` は false なので、
-        //    順を逆にすると、消したあとの2回目が「検証モードが入っていません」に
-        //    なって、何が起きているのか分からない
-        requireOnline(l, 'リーグがまだありません', 409);
-        // ⚠ 検証モードの間だけ。遊んでいるリーグで押せると、全員の成績が
-        //    管理者の一押しで消える
-        requireOnline(this.canStep(l), '検証モードが入っていません', 403);
-        bundle.league = null;
-        // ⚠ バックアップも消すこと。残すと「リセットしたのに復元できる」状態
-        //    になり、何が正本か分からなくなる
-        delete bundle.backup;
-        return { value: { ok: true, reset: true } };
       }
       requireOnline(
         l ? command.revision === l.revision : command.revision === 0,
