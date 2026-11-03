@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
+import { tryoutService, routeToService } from './lib/serviceRoute.mjs';
 const base = process.env.ONLINE_TEST_URL || 'http://localhost:3000';
 assert.ok(
   ['localhost', '127.0.0.1'].includes(new URL(base).hostname),
@@ -46,21 +47,114 @@ try {
       await page.getByRole('button', { name: 'メニュー', exact: true }).click();
     await page.getByRole('button', { name: text, exact: true }).click();
     await waitIdle(page);
-    if (text === '編成') await onlinePanel(page);
   };
-  // ⚠ 編成タブは一人用から移植した画面を既定で開く（画面を作り直すと開き直す）。
-  //    この検査で見るのはオンライン側だけのパネル（方針・采配）なので、出ていたら閉じる
-  const onlinePanel = async (page) => {
-    const close = page.getByRole('button', {
-      name: '方針・采配の設定へ（保存しない）',
-      exact: true,
-    });
-    if (await close.count()) await close.click();
-  };
+  // ⚠ PCの左メニューは「ホーム」「選手成績」「試合結果」「スタメン設定」「投手起用」
+  //    「守備分析」「方針・采配」「現在の手続き」「リーグ管理」。スマホのホームの
+  //    ボタンは「試合」「打順」「手続き」のまま
   async function login(page, player) {
     await page.goto(`${base}/online`);
     await page.getByText('ローカル検証モード', { exact: false }).waitFor();
     await click(page, `プレイヤー${player}で入る`);
+  }
+  // --- 年末のトライアウト（希望リスト） -------------------------------------
+  // ⚠ 開幕前の手続きは初期メンバーセットの選択になり（d37ef49）、希望リストは
+  //    年末まで出てこない。1シーズン回すと遅いので、エンジンで直にトライアウトを
+  //    開いたリーグを作り、画面の通信だけをそこへつなぐ（lib/serviceRoute.mjs）
+  {
+    const fixture = await tryoutService();
+    const tc = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+    });
+    await routeToService(tc, fixture);
+    const t = await tc.newPage();
+    t.on('pageerror', (e) => errors.push(e.message));
+    await t.goto(`${base}/online`);
+    await click(t, '現在の手続き');
+    await t
+      .getByRole('button', { name: 'この内容で決定', exact: true })
+      .waitFor();
+    // ⚠ トライアウトは「希望リスト＋候補を探す」の2欄。候補が1行も出ない
+    //    （＝選べない）状態で先へ進まないよう、両方が描けていることを見る
+    await t.locator('.online-tryout-wanted .online-tryout-list li').first().waitFor();
+    await t.locator('.online-tryout-pool .online-tryout-list li').first().waitFor();
+    // ⚠ 希望リストの操作は**獲得予定を基準に**動くこと。以前は希望順の位置で
+    //    動かしていて、当時の初期編成（24人＝目標構成の合計ちょうど）では
+    //    「指名に加える」が候補の約9割で何も起きず、「↓」で選手が消えたりした
+    {
+      const wantedNames = async () =>
+        (
+          await t
+            .locator('.online-tryout-wanted > ol.online-tryout-list > li .online-tryout-person button')
+            .allInnerTexts()
+        ).map((s) => s.trim());
+      const start = await wantedNames();
+      await t
+        .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
+        .click();
+      const row = t
+        .locator('.online-tryout-pool .online-tryout-list li:not([data-wanted])')
+        .first();
+      const name = (
+        await row.locator('.online-tryout-person button').first().innerText()
+      ).trim();
+      await row.getByRole('button', { name: '指名に加える', exact: true }).click();
+      const added = await wantedNames();
+      assert.ok(added.includes(name), '「指名に加える」で獲得予定に入らない');
+      assert.equal(added.length, start.length, '指名で獲得予定の人数が変わった');
+      assert.equal(
+        (
+          await t
+            .locator('.online-tryout-pool .online-tryout-list li', { hasText: name })
+            .locator('.online-tryout-mark')
+            .innerText()
+        ).trim(),
+        `指名中 ${added.indexOf(name) + 1}位`,
+        '「指名中 N位」が獲得予定の番号とずれる',
+      );
+      await t
+        .getByRole('button', { name: `${added[0]}の希望順位を下げる`, exact: true })
+        .click();
+      const moved = await wantedNames();
+      assert.equal(moved[1], added[0], '↓で1つ下がらない');
+      assert.deepEqual([...moved].sort(), [...added].sort(), '↓で顔ぶれが変わった');
+      await click(t, '標準案に戻す');
+      assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+      // 重視する能力の重みから、評価値の順でおすすめを作れる
+      const scoresOf = async (selector) =>
+        (await t.locator(`${selector} .online-tryout-score`).allInnerTexts()).map((text) =>
+          Number(text.replace(/[^0-9]/g, '')),
+        );
+      await t.getByText('重視する能力（評価値の重み）', { exact: true }).click();
+      await t.getByLabel('パワーの重み', { exact: true }).fill('5');
+      await t.getByLabel('ミートの重み', { exact: true }).fill('0');
+      await t
+        .getByRole('button', { name: 'この重みでおすすめ順を作る', exact: true })
+        .click();
+      const weighted = await scoresOf('.online-tryout-wanted > ol.online-tryout-list');
+      assert.equal(weighted.length, start.length, '重みのおすすめで獲得予定の人数が変わった');
+      assert.ok(
+        weighted.every((v, i) => i === 0 || weighted[i - 1] >= v),
+        `獲得予定が評価の高い順になっていない: ${weighted.join(',')}`,
+      );
+      assert.notDeepEqual(await wantedNames(), start, '重みを変えてもおすすめが変わらない');
+      const poolScores = await scoresOf('.online-tryout-pool .online-tryout-list');
+      assert.ok(
+        poolScores.every((v, i) => i === 0 || poolScores[i - 1] >= v),
+        '候補が評価値の順に並んでいない',
+      );
+      await t.getByRole('button', { name: '重みを標準に戻す', exact: true }).click();
+      await click(t, '標準案に戻す');
+      assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+      assert.equal(
+        await t.getByText('おすすめ順を作り直しました', { exact: false }).count(),
+        0,
+        '標準案に戻したのに「作り直しました」が残っている',
+      );
+      await t
+        .locator('.online-tryout-pool .online-segments button', { hasText: '全部' })
+        .click();
+    }
+    await tc.close();
   }
   await p.goto(base);
   await p
@@ -71,91 +165,12 @@ try {
     .getByRole('button', { name: 'リーグを作成', exact: true })
     .waitFor({ timeout: 30000 });
   await click(p, 'リーグを作成');
-  await click(p, '手続き');
+  await click(p, '現在の手続き');
   await p
     .getByRole('button', { name: 'この内容で決定', exact: true })
     .waitFor();
-  // ⚠ 初期編成は「希望リスト＋候補を探す」の2欄になった。候補が1行も出ない
-  //    （＝選べない）状態で先へ進まないよう、両方が描けていることを見る
-  await p.locator('.online-tryout-wanted .online-tryout-list li').first().waitFor();
-  await p.locator('.online-tryout-pool .online-tryout-list li').first().waitFor();
-  // ⚠ 希望リストの操作は**獲得予定を基準に**動くこと。以前は希望順の位置で
-  //    動かしていて、初期編成（24人＝目標構成の合計ちょうど）では
-  //    「指名に加える」が候補の約9割で何も起きず、「↓」で選手が消えたりした
-  {
-    const wantedNames = async () =>
-      (
-        await p
-          .locator('.online-tryout-wanted > ol.online-tryout-list > li .online-tryout-person button')
-          .allInnerTexts()
-      ).map((s) => s.trim());
-    const start = await wantedNames();
-    await p
-      .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
-      .click();
-    const row = p
-      .locator('.online-tryout-pool .online-tryout-list li:not([data-wanted])')
-      .first();
-    const name = (
-      await row.locator('.online-tryout-person button').first().innerText()
-    ).trim();
-    await row.getByRole('button', { name: '指名に加える', exact: true }).click();
-    const added = await wantedNames();
-    assert.ok(added.includes(name), '「指名に加える」で獲得予定に入らない');
-    assert.equal(added.length, start.length, '指名で獲得予定の人数が変わった');
-    assert.equal(
-      (
-        await p
-          .locator('.online-tryout-pool .online-tryout-list li', { hasText: name })
-          .locator('.online-tryout-mark')
-          .innerText()
-      ).trim(),
-      `指名中 ${added.indexOf(name) + 1}位`,
-      '「指名中 N位」が獲得予定の番号とずれる',
-    );
-    await p
-      .getByRole('button', { name: `${added[0]}の希望順位を下げる`, exact: true })
-      .click();
-    const moved = await wantedNames();
-    assert.equal(moved[1], added[0], '↓で1つ下がらない');
-    assert.deepEqual([...moved].sort(), [...added].sort(), '↓で顔ぶれが変わった');
-    await click(p, '標準案に戻す');
-    assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
-    // 重視する能力の重みから、評価値の順でおすすめを作れる
-    const scoresOf = async (selector) =>
-      (await p.locator(`${selector} .online-tryout-score`).allInnerTexts()).map((t) =>
-        Number(t.replace(/[^0-9]/g, '')),
-      );
-    await p.getByText('重視する能力（評価値の重み）', { exact: true }).click();
-    await p.getByLabel('パワーの重み', { exact: true }).fill('5');
-    await p.getByLabel('ミートの重み', { exact: true }).fill('0');
-    await p
-      .getByRole('button', { name: 'この重みでおすすめ順を作る', exact: true })
-      .click();
-    const weighted = await scoresOf('.online-tryout-wanted > ol.online-tryout-list');
-    assert.equal(weighted.length, start.length, '重みのおすすめで獲得予定の人数が変わった');
-    assert.ok(
-      weighted.every((v, i) => i === 0 || weighted[i - 1] >= v),
-      `獲得予定が評価の高い順になっていない: ${weighted.join(',')}`,
-    );
-    assert.notDeepEqual(await wantedNames(), start, '重みを変えてもおすすめが変わらない');
-    const poolScores = await scoresOf('.online-tryout-pool .online-tryout-list');
-    assert.ok(
-      poolScores.every((v, i) => i === 0 || poolScores[i - 1] >= v),
-      '候補が評価値の順に並んでいない',
-    );
-    await p.getByRole('button', { name: '重みを標準に戻す', exact: true }).click();
-    await click(p, '標準案に戻す');
-    assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
-    assert.equal(
-      await p.getByText('おすすめ順を作り直しました', { exact: false }).count(),
-      0,
-      '標準案に戻したのに「作り直しました」が残っている',
-    );
-    await p
-      .locator('.online-tryout-pool .online-segments button', { hasText: '全部' })
-      .click();
-  }
+  // ⚠ 開幕前は20の初期メンバーセットから1つ選ぶ
+  await p.locator('.online-pack-card').nth(1).waitFor();
   await login(m, 2);
   // ⚠ 開発用サーバーの初期参加者は管理者1人だけ。プレイヤー2はログイン直後に
   //    参加画面が出るので、先に参加する（招待コードを廃止したときに取り残された）
@@ -192,10 +207,34 @@ try {
   const draftTab = await pc.newPage();
   draftTab.on('pageerror', (e) => errors.push(e.message));
   await draftTab.goto(`${base}/online`);
-  await click(draftTab, '手続き');
-  await draftTab.locator('input[type=number]').fill('23');
+  await click(draftTab, '現在の手続き');
+  // セットのカードを押して中身を見て、「このセットにする」で選ぶ。
+  // ⚠ 標準案のセットは球団名で決まる（どれが選択中かは決め打ちできない）ので、
+  //    いま選んでいない・`avoid` に無い最初のセットを選ぶ
+  const choosePack = async (page, avoid = []) => {
+    const cards = page.locator('.online-pack-card');
+    await cards.nth(1).waitFor();
+    for (let i = 0; i < (await cards.count()); i++) {
+      const card = cards.nth(i);
+      const name = (await card.locator('strong').innerText()).trim();
+      if ((await card.getAttribute('aria-pressed')) === 'true' || avoid.includes(name))
+        continue;
+      await card.click();
+      await click(page, 'このセットにする');
+      return name;
+    }
+    throw new Error('選べるセットが無い');
+  };
+  const chosenPack = async (page) =>
+    (
+      await page
+        .locator('.online-pack-card[aria-pressed="true"] strong')
+        .innerText()
+    ).trim();
+  const otherTabPack = await choosePack(draftTab);
   await click(draftTab, '下書きを保存');
   await click(p, '更新');
+  await choosePack(p, [otherTabPack]);
   await click(p, '下書きを保存');
   await p
     .getByText(
@@ -204,8 +243,8 @@ try {
     )
     .waitFor();
   await click(p, '最新の提出を読み直す');
-  assert.equal(await p.locator('input[type=number]').inputValue(), '23');
-  await p.locator('input[type=number]').fill('24');
+  assert.equal(await chosenPack(p), otherTabPack, '別タブの下書きを読み直せる');
+  await choosePack(p, [otherTabPack]);
   await click(p, '下書きを保存');
   assert.equal(
     await p.locator('.online-edit-notice').count(),
@@ -214,17 +253,19 @@ try {
   );
   await draftTab.close();
   await p.screenshot({
-    path: '/tmp/baseball-online-desktop-tryout.png',
+    path: '/tmp/baseball-online-desktop-packs.png',
     fullPage: true,
   });
   await click(p, 'この内容で決定');
   await login(b, 2);
-  await click(b, '手続き');
+  await click(b, '現在の手続き');
   await click(b, 'この内容で決定');
-  await click(p, '更新');
-  await click(p, 'この内容で決定');
-  await click(b, '更新');
-  await click(b, 'この内容で決定');
+  // セットを配り終えるとキャンプが開く。2人とも決めると開幕する
+  for (const page of [p, b]) {
+    await click(page, '更新');
+    await page.getByRole('heading', { name: 'キャンプ', exact: true }).waitFor();
+    await click(page, 'この内容で決定');
+  }
   await click(p, '更新');
   await click(p, '進行時刻');
   await p.getByRole('dialog', { name: '進行時刻', exact: true }).waitFor();
@@ -232,14 +273,49 @@ try {
   await p
     .getByRole('dialog', { name: '進行時刻', exact: true })
     .waitFor({ state: 'hidden' });
-  await click(p, '編成');
-  await p.getByRole('heading', { name: '編成・采配', exact: true }).waitFor();
-  // 数値選手IDを文字列へ変えずに保存できることを実画面から確認。
-  const selects = p.locator('.online-lineup select');
-  const first = await selects.nth(0).inputValue();
-  const second = await selects.nth(1).inputValue();
-  await selects.nth(0).selectOption(second);
-  await selects.nth(1).selectOption(first);
+  // --- PCの編成（一人用の画面をそのまま中に入れたもの） -----------------------
+  // 先発の登板順のチップ（ドラッグで並べ替え。◀▶ はキーボード用に残してある）
+  const starterOrder = async (page) =>
+    (
+      await page
+        .locator('[data-starter-order]')
+        .getByRole('button', { name: /の登板順を下げる$/ })
+        .evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label')))
+    ).map((label) => label.replace('の登板順を下げる', ''));
+  const lowerStarter = (page, name) =>
+    page
+      .getByRole('button', { name: `${name}の登板順を下げる`, exact: true })
+      .click();
+  await click(p, '投手起用');
+  await p.locator('[data-starter-order]').first().waitFor();
+  const savedOrder = await starterOrder(p);
+  assert.ok(savedOrder.length >= 2, '先発の登板順が出ていない');
+  // 元に戻す／やり直す（ボタンと Ctrl+Z / Ctrl+Shift+Z）
+  await lowerStarter(p, savedOrder[0]);
+  const movedOrder = await starterOrder(p);
+  assert.equal(movedOrder[1], savedOrder[0], '▶で登板順が1つ下がらない');
+  await p
+    .locator('.online-page-nav')
+    .getByLabel('保存していない変更')
+    .first()
+    .waitFor();
+  await click(p, '元に戻す');
+  assert.deepEqual(await starterOrder(p), savedOrder, '元に戻すで戻らない');
+  assert.ok(
+    await p.getByRole('button', { name: '保存', exact: true }).isDisabled(),
+    '元に戻したら保存するものは無い',
+  );
+  await click(p, 'やり直す');
+  assert.deepEqual(await starterOrder(p), movedOrder, 'やり直すで進まない');
+  await p.keyboard.press('Control+z');
+  assert.deepEqual(await starterOrder(p), savedOrder, 'Ctrl+Zで戻らない');
+  await p.keyboard.press('Control+Shift+z');
+  assert.deepEqual(await starterOrder(p), movedOrder, 'Ctrl+Shift+Zで進まない');
+  // ページを移っても未保存の編集が残る（隠すだけで外さない）
+  await click(p, '選手成績');
+  await click(p, '投手起用');
+  assert.deepEqual(await starterOrder(p), movedOrder, 'ページ移動で編集が消えた');
+  // 保存の応答待ちの間は触れない（送信中の編集が保存後の作り直しで消えるため）
   let releaseSave;
   let saveStarted;
   const savingStarted = new Promise((resolve) => {
@@ -256,44 +332,81 @@ try {
     }
     await route.continue();
   });
-  await p.getByRole('button', { name: '編成を保存', exact: true }).click();
+  await p.getByRole('button', { name: '保存', exact: true }).click();
   await withDeadline(savingStarted, '編成保存の開始');
-  assert.ok(
-    await selects.nth(0).isDisabled(),
-    '保存の応答待ち中は入力を変更できない',
+  assert.equal(
+    await p.locator('.online-sp[inert]').count(),
+    1,
+    '保存の応答待ち中は編成を変更できない',
   );
+  assert.ok(await p.getByRole('button', { name: '元に戻す', exact: true }).isDisabled());
   releaseSave();
   await waitIdle(p);
   await p.unroute('**/api/online?*');
-  assert.ok(await selects.nth(0).isEnabled());
   await p.getByText('保存しました', { exact: true }).waitFor();
+  assert.equal(await p.locator('.online-sp[inert]').count(), 0);
+  // 数値の選手IDのまま保存できたことを、読み直した画面で確かめる
+  await p.reload();
+  await click(p, '投手起用');
+  await p.locator('[data-starter-order]').first().waitFor();
+  assert.deepEqual(await starterOrder(p), movedOrder, '保存した登板順が残らない');
   await p.screenshot({
     path: '/tmp/baseball-online-desktop.png',
-    fullPage: true,
+    fullPage: false,
   });
+  // ⚠ 「方針・采配」と「投手起用」は**同じ編成を別の画面で編集する**。
+  //    片方を保存しても、もう片方の未保存の編集は保存できること
+  //    （自分の項目だけを最新の編成に載せて送る `rebaseLineupSave`）
   const lineupTab = await pc.newPage();
   lineupTab.on('pageerror', (e) => errors.push(e.message));
   await lineupTab.goto(`${base}/online`);
-  await click(lineupTab, '編成');
-  await onlinePanel(p);
-  await p.getByRole('button', { name: '2番を上げる', exact: true }).click();
-  await click(lineupTab, '基本方針');
-  await lineupTab.getByLabel('打撃方針').selectOption('patient');
-  await click(lineupTab, '編成を保存');
+  await click(lineupTab, '方針・采配');
+  await lowerStarter(p, movedOrder[0]);
+  const editedOrder = await starterOrder(p);
+  await lineupTab
+    .getByRole('group', { name: '打撃方針', exact: true })
+    .getByRole('button', { name: '慎重', exact: true })
+    .click();
+  await click(lineupTab, '保存');
   await click(p, '更新');
-  await click(p, '編成を保存');
-  await p.getByText('編成が更新されています。', { exact: false }).waitFor();
-  await click(p, '編集を戻す');
-  await click(p, '基本方針');
-  assert.equal(await p.getByLabel('打撃方針').inputValue(), 'patient');
-  await click(p, '打順・守備');
+  await click(p, '保存');
+  assert.equal(await p.locator('.online-sp[inert]').count(), 0);
+  await p.getByText('保存しました', { exact: true }).waitFor();
+  await click(p, '方針・采配');
+  assert.equal(
+    (
+      await p
+        .getByRole('group', { name: '打撃方針', exact: true })
+        .locator('[aria-pressed="true"]')
+        .innerText()
+    ).trim(),
+    '慎重',
+    '投手起用の保存で、別の画面で保存した方針を古い値に戻さない',
+  );
+  await click(p, '投手起用');
+  assert.deepEqual(await starterOrder(p), editedOrder);
+  // 同じ項目を別のタブで先に保存されたら、本当の食い違いとして止める
+  await click(lineupTab, '更新');
+  await click(lineupTab, '投手起用');
+  await lowerStarter(lineupTab, editedOrder[0]);
+  await click(lineupTab, '保存');
+  await lowerStarter(p, editedOrder[1]);
+  await click(p, '保存');
+  await p.getByText('編成が更新されています。', { exact: false }).first().waitFor();
+  await click(p, '変更を取り消す');
+  await click(p, '更新');
+  assert.deepEqual(
+    await starterOrder(p),
+    await starterOrder(lineupTab),
+    '取り消すと別のタブで保存した編成になる',
+  );
   await lineupTab.close();
   await login(m, 1);
   await m.getByRole('button', { name: '打順', exact: true }).click();
   await m.getByRole('button', { name: '2番を上げる', exact: true }).click();
   await click(m, '編成を保存');
   assert.equal(
-    await m.getByRole('heading', { name: '編成・采配', exact: true }).count(),
+    await m.locator('.online-sp, .online-page-nav').count(),
     0,
     'スマホでPC画面をマウントしない',
   );
@@ -330,7 +443,7 @@ try {
   const a = await admin.newPage();
   a.on('pageerror', (e) => errors.push(e.message));
   await login(a, 1);
-  await click(a, '管理');
+  await click(a, 'リーグ管理');
   // ⚠ ボタンの名前は「1ターン進める（ゲーム内1日）」（検証モードを足したときに変わった）
   for (let i = 0; i < 3; i++) await click(a, '1ターン進める（ゲーム内1日）');
   await click(m, '更新');
@@ -434,7 +547,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    'online-ui-check PASS（PC2人・別スマホ・編成保存・端末交代・実試合結果・320〜767px / Chrome実操作）',
+    'online-ui-check PASS（PC2人・別スマホ・トライアウト希望リスト・セット選択の下書き競合・編成の元に戻す/保存中ロック/別画面との同時編集・端末交代・実試合結果・320〜767px / Chrome実操作）',
   );
 } finally {
   await browser.close();

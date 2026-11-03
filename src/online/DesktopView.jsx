@@ -1,42 +1,45 @@
-import React, { useState } from 'react';
-import {
-  Standings,
-  Results,
-  Notices,
-  PhasePanel,
-  LineupPanel,
-  PageNav,
-} from './LeaguePanels.jsx';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Results, Notices, PhasePanel } from './LeaguePanels.jsx';
+import DesktopTactics from './DesktopTactics.jsx';
 import TeamRoster from './TeamRoster.jsx';
 import OnlineLineup from './OnlineLineup.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
-import TeamProfile from './TeamProfile.jsx';
-import AbilityRanking from './AbilityRanking.jsx';
-import { POS } from './api.js';
+import { dateTime, STATUS } from './api.js';
+import { formatGameDate } from './shared.js';
 import { teamLabel } from './gameText.js';
-import {
-  CompactRoster,
-  AbilityGrade,
-  TeamBrief,
-  ConditionMark,
-  PlayerStatsButton,
-  StatLabels,
-  RoleMark,
-  rosterByRole,
-} from './PlayerPerformance.jsx';
-// ⚠ **左メニューは3つのまとまりに分ける**。以前は「今日/試合/選手/編成/手続き」が
-//    並ぶだけで、どこに何があるか辿れないという指摘を受けた。
-//    見る（情報）・決める（ロスター管理）・動かす（手続き）で分ける。
-// ⚠ ロスター管理の3つは、移植した一人用画面の**中のタブ**へ直に入る。
-//    `OnlineLineup` に開く位置を渡す。
+import { PYRAMID_LEAGUES } from './pyramidLeague.js';
+import { CompactRoster } from './PlayerPerformance.jsx';
+import { Page } from './Page.jsx';
+import { rebaseLineupSave, LINEUP_EDITOR_KEYS } from './lineupBridge.js';
+// ============================================================
+// PC版の画面。**どのページも同じ形にする**:
+//
+//   左メニュー（固定）  球団・日付・次の進行 ＋ 各ページへの入口
+//   本文               ページ見出し（名前＋右に操作）→ カード
+//
+// ⚠ **ページごとに外枠を変えないこと**。以前は
+//    - 全ページの本文の上に、同じ「SEASON・日付・次の進行・進行時刻」の帯（約170px）
+//    - 移植したスタメン設定だけ、アプリの見出しが消えて別の見出しバーと
+//      左メニューと同じタブが出る
+//    - 本文の幅が 740px／全幅／2段 とページごとに違う
+//    で、ページを開くたびに見た目が変わるという指摘を受けた。
+//    日付と進行は左メニューに1回だけ置き、本文は `Page` で揃える。
+// ⚠ **同じものを2か所で編集させないこと**。打順・先発・投手の役割は
+//    移植した画面（スタメン設定・投手起用）だけで決める。方針・采配に
+//    コンボボックス版の打順と投手の役割があり、同じものが2通りの操作で
+//    編集できていた（しかも名前しか出ず、判断に使える情報が無かった）。
+// ⚠ 消した入口:
+//    - 能力ランキング … 選手成績の表で「打撃能力」などを選び、列を押せば
+//      同じ並びになる。別ページにすると同じ表が2つになる
+//    - 自チーム情報 … 所属・順位・成績は左メニューの球団名の下に出す。
+//      名前の変更は頻繁ではないので、左メニューの「名前を変える」から開く
+// ============================================================
 const NAV = [
   {
     id: 'info',
     label: '情報',
     items: [
-      ['profile', '自チーム情報'],
       ['players', '選手成績'],
-      ['ranking', '能力ランキング'],
       ['games', '試合結果'],
     ],
   },
@@ -61,20 +64,176 @@ const NAV = [
 ];
 /** ロスター管理のどの項目が、移植画面のどのタブに当たるか */
 const LINEUP_TABS = { lineup: 'lineup', rotation: 'rotation', defense: 'defense' };
+const TITLES = {
+  today: 'ホーム',
+  players: '選手成績',
+  games: '試合結果',
+  lineup: 'スタメン設定',
+  rotation: '投手起用',
+  defense: '守備分析',
+  tactics: '方針・采配',
+  decisions: '現在の手続き',
+  transfer: '移籍・解雇',
+  admin: 'リーグ管理',
+};
+
+/** 自球団の部・順位・勝敗（順位表から引く。サーバーの並びが順位） */
+function ownStanding(view) {
+  const leagueId = view.teamLeagues?.[view.teamName];
+  const league = PYRAMID_LEAGUES.find((l) => l.id === leagueId);
+  const rows = (view.standings || []).filter(
+    (s) => !view.teamLeagues || view.teamLeagues[s.team] === leagueId,
+  );
+  const index = rows.findIndex((s) => s.team === view.teamName);
+  return index < 0
+    ? null
+    : { league: league?.name, rank: index + 1, row: rows[index] };
+}
+
+/**
+ * 左メニューの上の「いまの状況」。⚠ **ここ1か所だけに出す**
+ * （以前は全ページの本文の上に同じ帯があった）。
+ */
+function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
+  const own = ownStanding(view);
+  return (
+    <div className="online-nav-context">
+      <strong>{teamLabel(view.teamName)}</strong>
+      <small>
+        {own
+          ? `${own.league ? `${own.league} ` : ''}${own.rank}位 · ${own.row.wins}勝${own.row.losses}敗${own.row.draws ? `${own.row.draws}分` : ''}`
+          : `独立リーグ · ${view.year}年目`}
+      </small>
+      <button className="online-nav-link" onClick={onRename}>
+        名前を変える
+      </button>
+      <div className="online-nav-clock">
+        <p>
+          <b>{formatGameDate(view.currentDate)}</b>
+          <span className="online-status">{STATUS[view.status]}</span>
+        </p>
+        <small>
+          {view.year}年目 · 次の進行 {dateTime(view.nextAdvanceAt)}
+        </small>
+        {/* ⚠ 進行の刻みを変えたらここも直すこと。
+            毎正時24ターンに変えたあと「1日7回・夜間は休止」が
+            残っていた（画面だけ古い説明を出し続けていた）。 */}
+        <small>毎正時・月〜金が試合／土日は手続き</small>
+        <div className="online-nav-clock-actions">
+          <button onClick={showTimes}>進行時刻</button>
+          <button disabled={busy} onClick={() => run(reload)}>
+            更新
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 球団名とプレイヤー名を変える（以前の「自チーム情報」の中身）。
+ * ⚠ **参加のときしか名前を付けられなかった**。リーグを作った管理者には
+ *    その機会すら無く、順位表に「湘南サンズ（湘南サンズ）」のように
+ *    球団名が2回出ていた（参加時の呼び名の既定が球団名だったため）。
+ * ⚠ 内部名（`teamName`）は変わらない。記録の選手キーまで貫いているので、
+ *    見せる名前だけ差し替える。
+ */
+function RenameDialog({ view, busy, run, command, close }) {
+  const dialog = useRef(null);
+  const me = (view.members || []).find((m) => m.teamName === view.teamName);
+  const [teamName, setTeamName] = useState(
+    () => me?.displayName || teamLabel(view.teamName),
+  );
+  const [playerName, setPlayerName] = useState(() => me?.label || '');
+  useEffect(() => {
+    const node = dialog.current;
+    node.showModal();
+    return () => node.open && node.close();
+  }, []);
+  return (
+    <dialog
+      ref={dialog}
+      className="online-player-dialog online-rename-dialog"
+      aria-labelledby="online-rename-title"
+      onClose={close}
+    >
+      <header>
+        <h2 id="online-rename-title">球団名・名前を変える</h2>
+        <button onClick={() => dialog.current.close()}>閉じる</button>
+      </header>
+      <p className="online-muted">
+        順位表には「球団名（あなたの名前）」と出ます。いつでも変えられます。
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(async () => {
+            await command('profile', {
+              teamName: teamName.trim(),
+              playerName: playerName.trim(),
+            });
+            dialog.current?.close();
+          });
+        }}
+      >
+        <label>
+          球団名
+          <input
+            value={teamName}
+            maxLength={24}
+            disabled={busy}
+            onChange={(e) => setTeamName(e.target.value)}
+          />
+        </label>
+        <label>
+          あなたの名前
+          <input
+            value={playerName}
+            maxLength={24}
+            disabled={busy}
+            onChange={(e) => setPlayerName(e.target.value)}
+          />
+        </label>
+        <div className="online-actions">
+          <button
+            className="online-primary"
+            type="submit"
+            disabled={busy || !teamName.trim()}
+          >
+            保存
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
 
 export default function DesktopView(props) {
-  const { view, tab, setTab, busy, run, command } = props;
-  const lineupTab = LINEUP_TABS[tab];
+  const { view, tab, setTab, busy, run, command, reload, showTimes } = props;
+  const [renaming, setRenaming] = useState(false);
+  // ⚠ 消した入口（能力ランキング・自チーム情報）で開いていたら、ホームへ戻す
+  const current = TITLES[tab] ? tab : 'today';
+  const lineupTab = LINEUP_TABS[current];
+  // ⚠ 編成の画面は**ほかのページへ移っても外さない**（未保存の編集を残す）。
+  //    隠している間は最後に開いていたタブのまま
+  const lastLineupTab = useRef('lineup');
+  if (lineupTab) lastLineupTab.current = lineupTab;
+  const [lineupDirty, setLineupDirty] = useState(false);
+  const onLineupDirty = useCallback((d) => setLineupDirty(d), []);
   return (
     <>
       <nav className="online-page-nav" aria-label="オンラインの画面">
-        <div className="online-nav-context">
-          <strong>{teamLabel(view.teamName)}</strong>
-          <small>独立リーグ · {view.year}年目</small>
-        </div>
+        <NavStatus
+          view={view}
+          busy={busy}
+          run={run}
+          reload={reload}
+          showTimes={showTimes}
+          onRename={() => setRenaming(true)}
+        />
         <button
           className="online-nav-home"
-          aria-current={tab === 'today' ? 'page' : undefined}
+          aria-current={current === 'today' ? 'page' : undefined}
           onClick={() => setTab('today')}
         >
           ホーム
@@ -86,12 +245,19 @@ export default function DesktopView(props) {
               <button
                 key={id}
                 aria-label={label}
-                aria-current={tab === id ? 'page' : undefined}
+                aria-current={current === id ? 'page' : undefined}
                 onClick={() => setTab(id)}
               >
                 {label}
                 {id === 'decisions' && view.phase && (
                   <span className="online-dot" aria-label="未完了の手続き" />
+                )}
+                {LINEUP_TABS[id] && lineupDirty && (
+                  <span
+                    className="online-dot is-unsaved"
+                    aria-label="保存していない変更"
+                    title="保存していない変更があります"
+                  />
                 )}
               </button>
             ))}
@@ -102,7 +268,7 @@ export default function DesktopView(props) {
             <p>管理</p>
             <button
               aria-label="リーグ管理"
-              aria-current={tab === 'admin' ? 'page' : undefined}
+              aria-current={current === 'admin' ? 'page' : undefined}
               onClick={() => setTab('admin')}
             >
               リーグ管理
@@ -110,212 +276,168 @@ export default function DesktopView(props) {
           </div>
         )}
       </nav>
-      {tab === 'today' && <LeagueBoard view={view} />}
-      {tab === 'profile' && <TeamProfile {...props} />}
-      {tab === 'games' && (
-        <div className="online-dashboard">
-          <Results view={view} />
-          <Notices view={view} />
-        </div>
+      {renaming && (
+        <RenameDialog {...props} close={() => setRenaming(false)} />
       )}
-      {tab === 'players' && (
+      {current === 'today' && (
+        <Page title="ホーム" sub={`SEASON ${view.year}`}>
+          <LeagueBoard view={view} />
+        </Page>
+      )}
+      {current === 'games' && (
+        <Page title="試合結果">
+          <div className="online-board">
+            <div className="online-board-main">
+              <Results view={view} />
+            </div>
+            <div className="online-board-side">
+              <Notices view={view} />
+            </div>
+          </div>
+        </Page>
+      )}
+      {current === 'players' && (
         <TeamRoster view={view}>
           {(shown, selector) => (
-            <Roster key={shown.teamName} view={shown} teamSelector={selector} />
+            <Page
+              title="選手成績"
+              sub="列の見出しを押すと並べ替えます。選手名を押すと詳しい成績と能力を開きます。"
+              actions={<div className="online-team-selector">{selector}</div>}
+            >
+              <section className="online-card">
+                <CompactRoster key={shown.teamName} view={shown} desktop />
+              </section>
+            </Page>
           )}
         </TeamRoster>
       )}
-      {tab === 'ranking' && <AbilityRanking view={view} />}
       {/* ⚠ **手続き中でも開けること**。打順や投手起用はいつ決めてもよく、
           止める理由が無い。
           ⚠ 左メニューの3項目は、移植画面の**中のタブ**へ直に入る。
           ⚠ **保存に失敗しても閉じない**。閉じると編集がまるごと消える。
              ここでは成否に関わらず開いたままにしてある（画面を離れるのは
              左メニューの操作だけ）。 */}
-      {lineupTab && (
-        <OnlineLineup
-          view={view}
-          busy={busy}
-          tab={lineupTab}
-          onClose={() => setTab('tactics')}
-          onSave={(plan, baseLineup) =>
-            run(() => command('lineup', { ...plan, baseLineup }))
-          }
-        />
+      <OnlineLineup
+        embedded
+        hidden={!lineupTab}
+        title={TITLES[lineupTab ? current : 'lineup']}
+        view={view}
+        busy={busy}
+        tab={lineupTab || lastLineupTab.current}
+        onDirty={onLineupDirty}
+        onSave={(plan, baseLineup) =>
+          // ⚠ 方針・采配で保存された方針を古い値で上書きしないよう、最新の編成に載せて送る
+          run(() =>
+            command(
+              'lineup',
+              rebaseLineupSave(plan, baseLineup, view.lineup, LINEUP_EDITOR_KEYS),
+            ),
+          )
+        }
+      />
+      {current === 'tactics' && (
+        <DesktopTactics key={`${view.year}:${view.teamName}`} {...props} />
       )}
-      {tab === 'tactics' && (
-        <div className="online-form-width">
-          <LineupPanel key={`${view.year}:${view.teamName}`} {...props} />
-        </div>
-      )}
-      {tab === 'decisions' &&
+      {current === 'decisions' &&
         (view.phase ? (
-          /* ⚠ 初期編成・トライアウトだけ横に広げる。希望リストと候補を
-             左右に並べるので、740pxだと能力の表示が折り返して読めない */
-          <div
-            className={
-              view.phase.candidates || view.phase.packs
-                ? 'online-wide-width'
-                : 'online-form-width'
-            }
-          >
-            <PhasePanel key={view.phase.id} {...props} />
-          </div>
+          <PhasePanel key={view.phase.id} {...props} />
         ) : (
-          <section className="online-card">
-            <h2>手続き</h2>
-            <p>現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。</p>
-          </section>
+          <Page title="現在の手続き">
+            <section className="online-card">
+              <p>
+                現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。
+              </p>
+            </section>
+          </Page>
         ))}
-      {tab === 'transfer' && (
-        <section className="online-card online-form-width">
-          <h2>移籍・解雇</h2>
-          {/* ⚠ **まだ作っていない**。できないことを、できるように見せない */}
-          <p>この画面はまだありません。いまできるのは次の2つです。</p>
-          <ul>
-            <li>
-              <strong>解雇</strong> — 土曜の「契約更改」で、退団させる選手を選べます
-            </li>
-            <li>
-              <strong>選手の獲得</strong> — 土曜の「トライアウト」で、希望リストを出せます
-            </li>
-          </ul>
-          <p className="online-muted">
-            球団間のトレードとオークションは、これから作るところです。
-          </p>
-          <button onClick={() => setTab('decisions')}>現在の手続きへ</button>
-        </section>
+      {current === 'transfer' && (
+        <Page title="移籍・解雇">
+          <section className="online-card">
+            {/* ⚠ **まだ作っていない**。できないことを、できるように見せない */}
+            <p>この画面はまだありません。いまできるのは次の2つです。</p>
+            <ul>
+              <li>
+                <strong>解雇</strong> — 土曜の「契約更改」で、退団させる選手を選べます
+              </li>
+              <li>
+                <strong>選手の獲得</strong> — 土曜の「トライアウト」で、希望リストを出せます
+              </li>
+            </ul>
+            <p className="online-muted">
+              球団間のトレードとオークションは、これから作るところです。
+            </p>
+            <div className="online-actions">
+              <button onClick={() => setTab('decisions')}>現在の手続きへ</button>
+            </div>
+          </section>
+        </Page>
       )}
-      {tab === 'admin' && (
-        <div className="online-form-width">
+      {current === 'admin' && (
+        <Page title="リーグ管理">
           <Admin {...props} />
-        </div>
+        </Page>
       )}
     </>
-  );
-}
-function Roster({ view, teamSelector }) {
-  const [page, setPage] = useState(0);
-  // ⚠ 名簿の順のままだと1ページ目が投手だけになり、スタメンが出てこない
-  const [category, setCategory] = useState('batting');
-  const order = rosterByRole(view.roster, view.lineup, category);
-  const [stats, setStats] = useState(false);
-  return (
-    <section className="online-card">
-      <div className="online-team-selector">{teamSelector}</div>
-      <div className="online-segments">
-        <button onClick={() => setStats(false)} aria-pressed={!stats}>
-          能力一覧
-        </button>
-        <button onClick={() => setStats(true)} aria-pressed={stats}>
-          成績一覧
-        </button>
-      </div>
-      {stats ? (
-        <CompactRoster view={view} desktop />
-      ) : (
-        <>
-          <h2>所属選手 · {view.roster.length}人</h2>
-          <div className="online-segments" aria-label="成績区分">
-            {['batting', 'pitching'].map((id) => (
-              <button
-                key={id}
-                aria-pressed={category === id}
-                onClick={() => {
-                  setCategory(id);
-                  setPage(0);
-                }}
-              >
-                {id === 'batting' ? '打撃' : '投球'}
-              </button>
-            ))}
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>選手</th>
-                <th>年齢</th>
-                <th>位置</th>
-                <th>ミート</th>
-                <th>パワー</th>
-                <th>球速</th>
-                <th>制球</th>
-                <th>調子</th>
-                <th>疲労</th>
-              </tr>
-            </thead>
-            <tbody>
-              {order.slice(page * 10, page * 10 + 10).map((p) => (
-                <tr key={p.id}>
-                  <th>
-                    <PlayerStatsButton player={p} category={category} />
-                    <RoleMark player={p} lineup={view.lineup} />
-                    <StatLabels player={p} category={category} />
-                  </th>
-                  <td>{p.age}</td>
-                  <td>{POS[p.position]}</td>
-                  <td>
-                    <AbilityGrade value={p.batting?.meet} />
-                  </td>
-                  <td>
-                    <AbilityGrade value={p.batting?.power} />
-                  </td>
-                  <td>
-                    <AbilityGrade value={p.pitching?.velocity} velocity />
-                  </td>
-                  <td>
-                    <AbilityGrade value={p.pitching?.control} />
-                  </td>
-                  <td>
-                    <ConditionMark player={p} />
-                  </td>
-                  <td>{p.fatigue}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <PageNav
-            page={page}
-            count={view.roster.length}
-            size={10}
-            setPage={setPage}
-          />
-        </>
-      )}
-    </section>
   );
 }
 function Admin({ view, busy, run, command, allowStep }) {
   const [restoreConfirm, setRestoreConfirm] = useState(false);
   return (
-    <section className="online-card">
-      <h2>リーグ管理</h2>
-      <div className="online-actions">
-        {view.status === 'running' && (
-          <button disabled={busy} onClick={() => run(() => command('pause'))}>
-            進行を停止
-          </button>
+    <div className="online-board is-even">
+      <section className="online-card online-board-main">
+        <h2>進行</h2>
+        <div className="online-actions">
+          {view.status === 'running' && (
+            <button disabled={busy} onClick={() => run(() => command('pause'))}>
+              進行を停止
+            </button>
+          )}
+          {['paused', 'error'].includes(view.status) && (
+            <button disabled={busy} onClick={() => run(() => command('resume'))}>
+              次の時刻から再開
+            </button>
+          )}
+          {view.status !== 'running' && (
+            <button disabled={busy} onClick={() => run(() => command('backup'))}>
+              現在の状態をバックアップ
+            </button>
+          )}
+          {view.hasBackup && ['paused', 'error'].includes(view.status) && (
+            <button disabled={busy} onClick={() => setRestoreConfirm(true)}>
+              バックアップから復元
+            </button>
+          )}
+        </div>
+        {restoreConfirm && (
+          <div role="alert" className="online-confirm">
+            <p>
+              現在の進行を保存済みのバックアップへ戻します。復元後は停止したままです。
+            </p>
+            <div className="online-actions">
+              <button
+                className="online-primary"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    await command('restore');
+                    setRestoreConfirm(false);
+                  })
+                }
+              >
+                復元を実行
+              </button>
+              <button disabled={busy} onClick={() => setRestoreConfirm(false)}>
+                キャンセル
+              </button>
+            </div>
+          </div>
         )}
-        {['paused', 'error'].includes(view.status) && (
-          <button disabled={busy} onClick={() => run(() => command('resume'))}>
-            次の時刻から再開
-          </button>
-        )}
-        {view.status !== 'running' && (
-          <button disabled={busy} onClick={() => run(() => command('backup'))}>
-            現在の状態をバックアップ
-          </button>
-        )}
-        {view.hasBackup && ['paused', 'error'].includes(view.status) && (
-          <button disabled={busy} onClick={() => setRestoreConfirm(true)}>
-            バックアップから復元
-          </button>
-        )}
-      </div>
+      </section>
       {/* ⚠ **検証モード**。ONの間だけ管理者が手で進められる。
           遊び始めたらOFFに戻すこと（好きな時に進められるのは公平ではない）。
           環境変数（`ONLINE_ALLOW_STEP`）でも立つが、そちらは再デプロイが要る。 */}
-      <div className="online-testmode">
+      <section className="online-card online-board-side">
+        <h2>検証モード</h2>
         <label className="online-check">
           <input
             type="checkbox"
@@ -356,28 +478,7 @@ function Admin({ view, busy, run, command, allowStep }) {
             )}
           </div>
         )}
-      </div>
-      {restoreConfirm && (
-        <div role="alert">
-          <p>
-            現在の進行を保存済みのバックアップへ戻します。復元後は停止したままです。
-          </p>
-          <button
-            disabled={busy}
-            onClick={() =>
-              run(async () => {
-                await command('restore');
-                setRestoreConfirm(false);
-              })
-            }
-          >
-            復元を実行
-          </button>
-          <button disabled={busy} onClick={() => setRestoreConfirm(false)}>
-            キャンセル
-          </button>
-        </div>
-      )}
-    </section>
+      </section>
+    </div>
   );
 }

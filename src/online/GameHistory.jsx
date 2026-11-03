@@ -214,31 +214,72 @@ function BoxScore({ game, ownTeam }) {
             </button>
           ))}
         </div>
-        <select
-          aria-label="試合成績の表示項目"
-          value={`${category}:${group[0]}`}
-          onChange={(e) => {
-            const [c, g] = e.target.value.split(':');
-            setCategory(c);
-            setGroup(g);
-            setPage(0);
-            setSort(null);
-          }}
-        >
-          {pageSize === 12 &&
-            ['batting', 'pitching'].map((c) => (
-              <option key={c} value={`${c}:overview`}>
-                {c === 'batting' ? '打撃' : '投球'}・主要成績一覧
-              </option>
-            ))}
-          {Object.entries(GROUPS).flatMap(([c, groups]) =>
-            groups.map(([id, label]) => (
-              <option key={`${c}:${id}`} value={`${c}:${id}`}>
-                {label}
-              </option>
-            )),
-          )}
-        </select>
+        {pageSize === 12 ? (
+          // ⚠ PCは**並んだタブ**（選手成績の表と同じ）。打撃・投球を選び、その区分を並べる
+          <div
+            className="online-group-tabs"
+            role="group"
+            aria-label="試合成績の表示項目"
+          >
+            <div className="online-segments">
+              {['batting', 'pitching'].map((c) => (
+                <button
+                  key={c}
+                  aria-pressed={category === c}
+                  onClick={() => {
+                    setCategory(c);
+                    setGroup('overview');
+                    setPage(0);
+                    setSort(null);
+                  }}
+                >
+                  {c === 'batting' ? '打撃' : '投球'}
+                </button>
+              ))}
+            </div>
+            <div className="online-segments">
+              {[['overview', '主要成績'], ...GROUPS[category]].map(([id, label]) => (
+                <button
+                  key={id}
+                  aria-pressed={group[0] === id}
+                  onClick={() => {
+                    setGroup(id);
+                    setPage(0);
+                    setSort(null);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <select
+            aria-label="試合成績の表示項目"
+            value={`${category}:${group[0]}`}
+            onChange={(e) => {
+              const [c, g] = e.target.value.split(':');
+              setCategory(c);
+              setGroup(g);
+              setPage(0);
+              setSort(null);
+            }}
+          >
+            {pageSize === 12 &&
+              ['batting', 'pitching'].map((c) => (
+                <option key={c} value={`${c}:overview`}>
+                  {c === 'batting' ? '打撃' : '投球'}・主要成績一覧
+                </option>
+              ))}
+            {Object.entries(GROUPS).flatMap(([c, groups]) =>
+              groups.map(([id, label]) => (
+                <option key={`${c}:${id}`} value={`${c}:${id}`}>
+                  {label}
+                </option>
+              )),
+            )}
+          </select>
+        )}
       </div>
       <table className="online-record-table">
         <thead>
@@ -396,17 +437,38 @@ function History({ view, close }) {
             </option>
           ))}
         </select>
-        <select
-          aria-label="試合記録の範囲"
-          value={scope}
-          onChange={(e) => {
-            setScope(e.target.value);
-            setPage(0);
-          }}
-        >
-          <option value="own">自球団</option>
-          <option value="league">リーグ全体</option>
-        </select>
+        {window.matchMedia('(min-width: 768px)').matches ? (
+          // ⚠ PCは試合結果のページと同じボタンの切り替え
+          <div className="online-segments" role="group" aria-label="試合記録の範囲">
+            {[
+              ['own', '自球団'],
+              ['league', 'リーグ全体'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                aria-pressed={scope === id}
+                onClick={() => {
+                  setScope(id);
+                  setPage(0);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <select
+            aria-label="試合記録の範囲"
+            value={scope}
+            onChange={(e) => {
+              setScope(e.target.value);
+              setPage(0);
+            }}
+          >
+            <option value="own">自球団</option>
+            <option value="league">リーグ全体</option>
+          </select>
+        )}
       </div>
       <RequestState result={result} />
       {result.data && (

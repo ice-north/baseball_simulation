@@ -335,6 +335,10 @@ export default function OnlineApp() {
             command={command}
           />
           <nav>
+            {/* ⚠ PCは見出しの中に置く（本文の一番上に1行使っていた） */}
+            {config?.local && !mobile && (
+              <small className="online-dev">ローカル検証モード（公開環境では無効）</small>
+            )}
             <a href="/">一人用</a>
             {auth && (
               <button onClick={logout} disabled={busy}>
@@ -345,7 +349,7 @@ export default function OnlineApp() {
         </header>
       )}
       <main>
-        {config?.local && !compactMobile && (
+        {config?.local && mobile && !compactMobile && (
           <p className="online-dev">ローカル検証モード（公開環境では無効）</p>
         )}
         {error && (
@@ -431,7 +435,10 @@ export default function OnlineApp() {
           </section>
         ) : (
           <>
-            {!compactMobile && (
+            {/* ⚠ PCは日付・次の進行を**左メニューに1回だけ**出す（`DesktopView` の
+                `NavStatus`）。以前は全ページの本文の上に同じ帯（約170px）があった。
+                ここに残るのはスマホで名簿の外枠が出ている間（作成前など）だけ */}
+            {mobile && !compactMobile && (
               <>
                 <section className="online-season">
                   <div>
@@ -452,9 +459,6 @@ export default function OnlineApp() {
                   </div>
                 </section>
                 <div className="online-clock-info">
-                  {/* ⚠ 進行の刻みを変えたらここも直すこと。
-                      毎正時24ターンに変えたあと「1日7回・夜間は休止」が
-                      残っていた（画面だけ古い説明を出し続けていた）。 */}
                   <span>毎正時・月〜金が試合／土日は手続き</span>
                   <button onClick={() => setShowTimes(true)}>進行時刻</button>
                 </div>
@@ -500,6 +504,8 @@ export default function OnlineApp() {
                   <DesktopView
                     tab={screen === 'news' ? 'games' : screen}
                     setTab={setScreen}
+                    reload={reload}
+                    showTimes={() => setShowTimes(true)}
                     view={view}
                     auth={auth}
                     local={config.local}

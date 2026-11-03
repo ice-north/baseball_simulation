@@ -15,6 +15,58 @@ import { surnameOf } from '../data/playerNames.js';
 const throwsLabel = (player) => (player.physical?.throws === 'left' ? '左投' : '右投');
 const formLabel = (player) => FORM_SHORT[player.pitching?.form] || '';
 
+// ---- 元に戻す / やり直し 用の控え ----
+// この画面が書き換えるのは「打順と守備（lineupSettings）」「投手の役割と登板順
+// （pitchingRotation）」と、選手側の登録位置・旧形式の打順・DH印・球種の封印。
+// ⚠ ここに無い項目を画面で書き換えるようにしたら、ここにも足すこと（戻らなくなる）
+const HISTORY_LIMIT = 100;
+const snapshotRoster = (team) => JSON.stringify({
+  ls: team.lineupSettings || null,
+  pr: team.pitchingRotation || null,
+  pl: (team.players || []).map(p => [
+    p.id, p.position, p.battingOrder ?? null, !!p._isDH, (p.arsenal || []).map(a => !!a.sealed),
+  ]),
+});
+const replaceContents = (target, source) => {
+  Object.keys(target).forEach(k => { delete target[k]; });
+  Object.assign(target, source || {});
+};
+const restoreRoster = (team, json) => {
+  const s = JSON.parse(json);
+  // ⚠ 打順の配列は**同じ配列のまま中身を入れ替える**。新しい配列にすると、
+  //    参照を握っている側（一人用の TEAMS_DATA を読む処理）とずれる（lineupGenerator と同じ注意）
+  if (!team.lineupSettings) team.lineupSettings = {};
+  const order = Array.isArray(team.lineupSettings.battingOrder) ? team.lineupSettings.battingOrder : [];
+  replaceContents(team.lineupSettings, s.ls);
+  order.splice(0, order.length, ...(s.ls?.battingOrder || []));
+  team.lineupSettings.battingOrder = order;
+  if (!team.pitchingRotation) team.pitchingRotation = {};
+  replaceContents(team.pitchingRotation, s.pr);
+  const byId = new Map(s.pl.map(row => [row[0], row]));
+  (team.players || []).forEach(p => {
+    const row = byId.get(p.id);
+    if (!row) return;
+    const [, position, battingOrder, isDH, sealed] = row;
+    p.position = position;
+    if (battingOrder === null) delete p.battingOrder; else p.battingOrder = battingOrder;
+    if (isDH) p._isDH = true; else delete p._isDH;
+    (p.arsenal || []).forEach((a, i) => { if (sealed[i]) a.sealed = true; else delete a.sealed; });
+  });
+};
+
+// 外から元に戻すボタンを置かないとき（一人用・スマホのオンライン）に見出しの右へ出すボタン
+const HistoryButtons = ({ canUndo, canRedo, undo, redo }) => (
+  <>
+    <button type="button" onClick={undo} disabled={!canUndo} title="元に戻す（Ctrl+Z）"
+      className="btn-secondary px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40">元に戻す</button>
+    <button type="button" onClick={redo} disabled={!canRedo} title="やり直す（Ctrl+Shift+Z）"
+      className="btn-secondary px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40">やり直す</button>
+  </>
+);
+
+// 埋め込み時の外枠。⚠ 描画のたびに作り直さないよう外で定義する（作り直すと中が全部作り直しになる）
+const EmbeddedFrame = ({ children }) => <div className="lineup-embedded">{children}</div>;
+
 // ⚠ **オンライン版からも使う**（`src/online/OnlineLineup.jsx`）。
 //    この部品は `team` を**プロップで受け取り、その場で書き換える**作りなので、
 //    `TEAMS_DATA` の球団でなくても動く。オンライン側は view から組み立てた
@@ -27,6 +79,12 @@ const formLabel = (player) => FORM_SHORT[player.pitching?.form] || '';
 // ⚠ teamName は名前による照合にも使うので、表示名で上書きしないこと
 // `initialTab`: 開く位置。⚠ オンラインは左メニューから
 // 「スタメン設定/投手起用/守備分析」へ直に入るので外から渡す
+// `embedded`: 見出し（ロスター管理）と画面内のタブを出さない。
+//    ⚠ オンラインのPC版は左メニューに同じ3項目があり、二重になるため
+// `onHistory`: 元に戻す/やり直しの状態を外へ渡す（ボタンを外の見出しに置くとき）。
+//    `{ canUndo, canRedo, dirty, undo, redo }`。渡さないときは見出しの右にボタンを出す
+// `keyboardActive`: Ctrl+Z / Ctrl+Shift+Z / Esc を受けるか。
+//    ⚠ オンラインは別ページへ移っても隠すだけで残すので、隠れている間は false にする
 export const LineupSettingContent = ({
   teamName,
   onBack,
@@ -34,6 +92,9 @@ export const LineupSettingContent = ({
   canConvertPosition = true,
   displayName,
   initialTab = 'lineup',
+  embedded = false,
+  onHistory,
+  keyboardActive = true,
 }) => {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -56,7 +117,12 @@ export const LineupSettingContent = ({
   // スタメンD&D: ドラッグ中の情報を保持（setStateするとインラインのスロット/行が
   // 再マウントされネイティブD&Dが中断されるため ref で保持）。{ kind:'bench'|'slot', playerId, order }
   const draggedLineupRef = useRef(null);
+  const draggedStarterIdRef = useRef(null); // 先発の登板順: ドラッグ中の投手
   const [tapSelectedPitcherId, setTapSelectedPitcherId] = useState(null); // 投手起用: タップ選択(タッチ用)
+  // 守備分析のドラッグ（守備位置どうしの入れ替え）。{ from, over }
+  const [defenseDrag, setDefenseDrag] = useState(null);
+  const defenseDragRef = useRef(null);
+  const suppressDefenseClickRef = useRef(false);
   const SLOT_OVER_CLASSES = ['ring-1', 'ring-blue-400/60', 'border-blue-400', 'bg-blue-900/20'];
 
   ensureTeamJerseyNumbers(team); // 背番号を（未設定なら）割り当て
@@ -155,6 +221,88 @@ export const LineupSettingContent = ({
       }
     }
   }, []);
+
+  // ---- 元に戻す / やり直し ----
+  // この画面は `team` をその場で書き換え、そのたびに `setUpdateTrigger` を呼ぶ。
+  // 呼ばれた後の描画で「編成に関わる部分」の控えを取り、直前と違えば履歴に積む。
+  // ⚠ 1回の操作の中で何度呼ばれても（役割の付け替え＋コンバート等）描画は1回なので1手になる。
+  //    「自動設定」「全員おまかせ」「自動: 標準」のような一括操作も1手として戻せる
+  // ⚠ 上の初期化（投手枠の自動設定）より後に宣言すること。起点にその結果を含めるため
+  const historyRef = useRef({ stack: [], index: -1, base: null });
+  const [historyTick, setHistoryTick] = useState(0);
+  useEffect(() => {
+    const h = historyRef.current;
+    const snap = snapshotRoster(team);
+    if (h.index < 0) {
+      h.stack = [snap];
+      h.index = 0;
+      h.base = snap;
+      setHistoryTick(t => t + 1);
+      return;
+    }
+    if (snap === h.stack[h.index]) return; // 戻した直後、または何も変わっていない
+    h.stack = h.stack.slice(0, h.index + 1);
+    h.stack.push(snap);
+    if (h.stack.length > HISTORY_LIMIT) h.stack.shift();
+    h.index = h.stack.length - 1;
+    setHistoryTick(t => t + 1);
+  }, [updateTrigger, team]);
+
+  const clearSelections = () => {
+    setSelectedDefensePos(null);
+    setSwapSource(null);
+    setSelectedBenchPlayer(null);
+    setSelectedBattingOrder(null);
+    setTapSelectedPitcherId(null);
+    defenseDragRef.current = null; // ドラッグの途中で Esc → 離しても入れ替えない
+    setDefenseDrag(null);
+  };
+  const stepHistory = (delta) => {
+    const h = historyRef.current;
+    const next = h.index + delta;
+    if (next < 0 || next >= h.stack.length) return;
+    h.index = next;
+    restoreRoster(team, h.stack[next]);
+    clearSelections();
+    setUpdateTrigger(prev => prev + 1);
+    setHistoryTick(t => t + 1);
+  };
+  const undo = () => stepHistory(-1);
+  const redo = () => stepHistory(1);
+  const historyState = historyRef.current;
+  const canUndo = historyState.index > 0;
+  const canRedo = historyState.index >= 0 && historyState.index < historyState.stack.length - 1;
+  const dirty = historyState.index >= 0 && historyState.stack[historyState.index] !== historyState.base;
+  const keyActionsRef = useRef(null);
+  keyActionsRef.current = { undo, redo, cancel: clearSelections };
+  // 履歴が動いたときだけ外へ知らせる（毎回の描画で知らせると外側が描き直し続ける）
+  const historyReportRef = useRef(null);
+  historyReportRef.current = { canUndo, canRedo, dirty, undo, redo };
+  useEffect(() => {
+    onHistory?.(historyReportRef.current);
+  }, [historyTick, onHistory]);
+  useEffect(() => {
+    if (!keyboardActive) return undefined;
+    const onKey = (e) => {
+      const t = e.target;
+      // ⚠ 文字の入力欄では効かせない（入力欄自身の元に戻すを奪わない）
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (mod && key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) keyActionsRef.current.redo();
+        else keyActionsRef.current.undo();
+      } else if (mod && key === 'y') {
+        e.preventDefault();
+        keyActionsRef.current.redo();
+      } else if (e.key === 'Escape') {
+        keyActionsRef.current.cancel();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [keyboardActive]);
 
   const handleAddToLineup = (playerId) => {
     if (!selectedBattingOrder) {
@@ -1151,24 +1299,32 @@ export const LineupSettingContent = ({
     </th>
   );
 
+  const Frame = embedded ? EmbeddedFrame : ScreenShell;
   return (
-    <ScreenShell>
-        <ScreenHeader title="ロスター管理" sub={displayName || teamName}
-          right={onBack && (
-            <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">← 戻る</button>
-          )} />
+    <Frame>
+        {!embedded && (
+          <>
+            <ScreenHeader title="ロスター管理" sub={displayName || teamName}
+              right={(onBack || !onHistory) && (
+                <>
+                  {!onHistory && <HistoryButtons canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} />}
+                  {onBack && <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">← 戻る</button>}
+                </>
+              )} />
 
-        {/* タブナビゲーション */}
-        <TabBar
-          tabs={[
-            { key: 'lineup',   label: 'スタメン設定', icon: '👥' },
-            { key: 'rotation', label: '投手起用',     icon: '⚾' },
-            { key: 'defense',  label: '守備分析',     icon: '🛡' },
-          ]}
-          activeKey={tab}
-          onChange={(key) => { setTab(key); setTapSelectedPitcherId(null); setSwapSource(null); setSelectedBenchPlayer(null); }}
-          className="mb-4"
-        />
+            {/* タブナビゲーション */}
+            <TabBar
+              tabs={[
+                { key: 'lineup',   label: 'スタメン設定', icon: '👥' },
+                { key: 'rotation', label: '投手起用',     icon: '⚾' },
+                { key: 'defense',  label: '守備分析',     icon: '🛡' },
+              ]}
+              activeKey={tab}
+              onChange={(key) => { setTab(key); clearSelections(); }}
+              className="mb-4"
+            />
+          </>
+        )}
 
         {tab === 'lineup' && (
           <>
@@ -1658,18 +1814,26 @@ export const LineupSettingContent = ({
             return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
           });
 
-          const handleSwapStarter = (displayIdx, direction) => {
+          // 先発の登板順: fromId の投手を toId の投手の位置へ動かす（間の投手は1つずつずれる）
+          // ⚠ 並べ替えるのは画面に出ている先発だけ。starters 配列の中の、それ以外の投手
+          //    （ベンチ外など）の位置は動かさない
+          const moveStarter = (fromId, toId) => {
             const starters = team.pitchingRotation.starters;
-            if (!starters) return;
-            const playerId = starterPitchers[displayIdx]?.id;
-            const targetPlayerId = starterPitchers[displayIdx + direction]?.id;
-            if (!playerId || !targetPlayerId) return;
-            const idx = starters.indexOf(playerId);
-            const targetIdx = starters.indexOf(targetPlayerId);
-            if (idx === -1 || targetIdx === -1) return;
-            starters[idx] = targetPlayerId;
-            starters[targetIdx] = playerId;
+            if (!starters || fromId == null || toId == null || fromId === toId) return;
+            const shown = starterPitchers.map(p => p.id).filter(id => starters.includes(id));
+            const from = shown.indexOf(fromId);
+            const to = shown.indexOf(toId);
+            if (from === -1 || to === -1) return;
+            const reordered = [...shown];
+            reordered.splice(from, 1);
+            reordered.splice(to, 0, fromId);
+            let k = 0;
+            team.pitchingRotation.starters = starters.map(id => (shown.includes(id) ? reordered[k++] : id));
             setUpdateTrigger(prev => prev + 1);
+          };
+          // キーボード・細かい操作用の ◀▶（隣と入れ替え）
+          const handleSwapStarter = (displayIdx, direction) => {
+            moveStarter(starterPitchers[displayIdx]?.id, starterPitchers[displayIdx + direction]?.id);
           };
 
           // リリーフをサブグループに分類
@@ -1961,29 +2125,63 @@ export const LineupSettingContent = ({
               <BullpenFlowCompact />
               <RoleLegend />
 
-              {/* 先発 登板順（開幕から誰が先に投げるか）: ◀▶で入替 */}
+              {/* 先発 登板順（開幕から誰が先に投げるか）: ドラッグで並べ替え。
+                  ⚠ 以前はここだけ ◀▶ の1つずつ入れ替えだった（ほかはドラッグなのに）。
+                     ◀▶ はキーボードで操作するとき用に小さく残す */}
               {starterPitchers.length > 0 && (
                 <div className="mb-2 bg-gray-800/40 rounded-lg border border-gray-700/40 px-2 py-1.5">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-blue-300 text-xs font-bold">先発 登板順</span>
-                    <span className="text-xs text-gray-300">◀▶ で入替（1番手から順に登板）</span>
+                    <span className="text-xs text-gray-300">ドラッグで並べ替え（1番手から順に登板）</span>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {starterPitchers.map((pl, idx) => (
-                      <div key={pl.id} className="flex items-center gap-0.5 bg-surface-2 border border-gray-700 rounded px-1 py-0.5">
-                        <button
-                          onClick={() => handleSwapStarter(idx, -1)}
-                          disabled={idx === 0}
-                          className={`text-xs px-0.5 ${idx === 0 ? 'text-gray-400' : 'text-gray-300 hover:text-white'}`}
-                        >◀</button>
+                      <div key={pl.id}
+                        draggable
+                        data-starter-order={idx + 1}
+                        onDragStart={(e) => {
+                          draggedStarterIdRef.current = pl.id;
+                          e.dataTransfer.effectAllowed = 'move';
+                          // setDataがないとFirefox等でドラッグが開始されない
+                          try { e.dataTransfer.setData('text/plain', String(pl.id)); } catch (_) {}
+                          e.currentTarget.classList.add('opacity-40');
+                        }}
+                        onDragEnd={(e) => {
+                          draggedStarterIdRef.current = null;
+                          e.currentTarget.classList.remove('opacity-40');
+                        }}
+                        onDragOver={(e) => {
+                          if (draggedStarterIdRef.current == null) return; // 役割カードのドラッグは受けない
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          e.currentTarget.classList.add(...SLOT_OVER_CLASSES);
+                        }}
+                        onDragLeave={(e) => e.currentTarget.classList.remove(...SLOT_OVER_CLASSES)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.remove(...SLOT_OVER_CLASSES);
+                          const fromId = draggedStarterIdRef.current;
+                          draggedStarterIdRef.current = null;
+                          moveStarter(fromId, pl.id);
+                        }}
+                        title="ドラッグで登板順を入れ替え"
+                        className="flex items-center gap-1 bg-surface-2 border border-gray-700 rounded px-1.5 py-1 cursor-grab active:cursor-grabbing select-none">
+                        <span className="text-gray-400 text-xs leading-none">⠿</span>
                         <span className="text-blue-400 font-bold text-xs w-3 text-center">{idx + 1}</span>
                         <span className="text-xs font-bold text-white truncate max-w-[4.5rem]">{pl.name}</span>
                         <span className="text-xs">{ROLE_ICON[getPitcherRole(pl.id)]}</span>
-                        <button
-                          onClick={() => handleSwapStarter(idx, 1)}
-                          disabled={idx === starterPitchers.length - 1}
-                          className={`text-xs px-0.5 ${idx === starterPitchers.length - 1 ? 'text-gray-400' : 'text-gray-300 hover:text-white'}`}
-                        >▶</button>
+                        <button type="button"
+                            onClick={() => handleSwapStarter(idx, -1)}
+                            disabled={idx === 0}
+                            aria-label={`${pl.name}の登板順を上げる`}
+                            className="text-[10px] px-0.5 text-gray-400 hover:text-white disabled:opacity-30"
+                          >◀</button>
+                        <button type="button"
+                            onClick={() => handleSwapStarter(idx, 1)}
+                            disabled={idx === starterPitchers.length - 1}
+                            aria-label={`${pl.name}の登板順を下げる`}
+                            className="text-[10px] px-0.5 text-gray-400 hover:text-white disabled:opacity-30"
+                          >▶</button>
                       </div>
                     ))}
                   </div>
@@ -2180,29 +2378,118 @@ export const LineupSettingContent = ({
             return { label: 'F', color: 'text-slate-400' };
           };
 
-          // 守備位置クリック → 選択 or スワップ
+          // 2つの守備位置を入れ替える（片方が空きなら、いる側がそこへ移る）
+          const swapDefense = (posA, posB) => {
+            if (!posA || !posB || posA === posB || posA === 'pitcher' || posB === 'pitcher') return;
+            const inField = (e) => e.battingOrder >= 1 && e.battingOrder <= maxFielderSlots;
+            const entry1 = lineup.find(e => e.position === posA && inField(e));
+            const entry2 = lineup.find(e => e.position === posB && inField(e));
+            if (entry1) entry1.position = posB;
+            if (entry2) entry2.position = posA;
+            setUpdateTrigger(prev => prev + 1);
+          };
+
+          // 守備位置クリック → 選択 or スワップ。
+          // ⚠ 取り消しは「同じ選手をもう一度クリック」「Esc」「何も無いところをクリック」。
+          //    以前あった「解除」ボタンは使われないので無くした
           const handleDefenseClick = (pos) => {
+            if (suppressDefenseClickRef.current) return; // ドラッグを終えた直後のクリックは無視
             if (pos === 'pitcher') return; // 投手は変更不可
             if (!selectedDefensePos) {
               setSelectedDefensePos(pos);
             } else if (selectedDefensePos === pos) {
               setSelectedDefensePos(null);
             } else {
-              // 2つの位置をスワップ
-              const entry1 = lineup.find(e => e.position === selectedDefensePos && e.battingOrder >= 1 && e.battingOrder <= maxFielderSlots);
-              const entry2 = lineup.find(e => e.position === pos && e.battingOrder >= 1 && e.battingOrder <= maxFielderSlots);
-              if (entry1 && entry2) {
-                entry1.position = pos;
-                entry2.position = selectedDefensePos;
-              } else if (entry1 && !entry2) {
-                entry1.position = pos;
-              } else if (!entry1 && entry2) {
-                entry2.position = selectedDefensePos;
-              }
+              swapDefense(selectedDefensePos, pos);
               setSelectedDefensePos(null);
-              setUpdateTrigger(prev => prev + 1);
             }
           };
+
+          // ドラッグで入れ替え。⚠ SVG の要素はブラウザ標準のドラッグ（draggable）が効かないので、
+          //    ポインターの動きを自前で追い、離した位置にある `data-defpos` を探す。
+          //    ダイヤモンドの上と右の一覧のどちらからどちらへでも動かせる
+          // ⚠ 右の一覧はタッチでは動かさない（指で縦に送れなくなる）。タッチはタップで選ぶ
+          const findDefensePos = (ev) => {
+            const el = document.elementFromPoint(ev.clientX, ev.clientY);
+            const pos = el?.closest?.('[data-defpos]')?.getAttribute('data-defpos');
+            return pos && pos !== 'pitcher' ? pos : null;
+          };
+          const startDefenseDrag = (pos, e, { allowTouch = true } = {}) => {
+            if (pos === 'pitcher' || !positionPlayers[pos]) return;
+            if (e.button !== undefined && e.button !== 0) return;
+            if (!allowTouch && e.pointerType === 'touch') return;
+            defenseDragRef.current = { from: pos, x: e.clientX, y: e.clientY, moved: false, over: undefined };
+            const stop = () => {
+              window.removeEventListener('pointermove', onMove);
+              window.removeEventListener('pointerup', onUp);
+              window.removeEventListener('pointercancel', onCancel);
+            };
+            const onMove = (ev) => {
+              const d = defenseDragRef.current;
+              if (!d) { stop(); return; }
+              if (!d.moved && Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < 6) return;
+              d.moved = true;
+              const over = findDefensePos(ev);
+              if (over !== d.over) {
+                d.over = over;
+                setDefenseDrag({ from: d.from, over: over && over !== d.from ? over : null });
+              }
+            };
+            const onUp = (ev) => {
+              stop();
+              const d = defenseDragRef.current;
+              defenseDragRef.current = null;
+              if (!d?.moved) return; // 動かしていない＝ただのクリック（onClick に任せる）
+              setDefenseDrag(null);
+              suppressDefenseClickRef.current = true;
+              setTimeout(() => { suppressDefenseClickRef.current = false; }, 0);
+              const target = findDefensePos(ev);
+              if (target && target !== d.from) {
+                swapDefense(d.from, target);
+                setSelectedDefensePos(null);
+              }
+            };
+            const onCancel = () => {
+              stop();
+              defenseDragRef.current = null;
+              setDefenseDrag(null);
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+            window.addEventListener('pointercancel', onCancel);
+          };
+
+          // 入れ替えたときの適性の変化。ドラッグ中は「元 → 先」、選んだだけなら元の側だけ
+          const swapPreview = (() => {
+            const from = defenseDrag?.from || selectedDefensePos;
+            if (!from) return null;
+            const to = defenseDrag ? defenseDrag.over : null;
+            const sides = [{ pos: from, to }];
+            if (to) sides.push({ pos: to, to: from });
+            return sides.map(({ pos, to: dest }) => {
+              const player = positionPlayers[pos] || null;
+              return {
+                pos,
+                dest,
+                player,
+                now: player ? getFitness(player, pos) : null,
+                next: player && dest ? getFitness(player, dest) : null,
+              };
+            });
+          })();
+          const fitnessChange = (side) => (
+            <span className="inline-flex items-baseline gap-1 tabular-nums">
+              <span className="text-gray-300">{posLabels[side.pos]}</span>
+              <span className="font-bold text-white">{side.now}%</span>
+              {side.dest && (
+                <>
+                  <span className="text-gray-400">→</span>
+                  <span className="text-gray-300">{posLabels[side.dest]}</span>
+                  <span className={`font-bold ${side.next >= side.now ? 'text-green-400' : 'text-red-400'}`}>{side.next}%</span>
+                </>
+              )}
+            </span>
+          );
 
           // 野手ポジションのみ（投手除く）
           const fieldPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
@@ -2242,22 +2529,38 @@ export const LineupSettingContent = ({
           };
 
           return (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4"
+              onClick={(e) => {
+                // 何も無いところをクリック → 選択を取り消す
+                if (selectedDefensePos && !e.target.closest?.('[data-defpos]')) setSelectedDefensePos(null);
+              }}>
               <div className="bg-surface-2 rounded-lg p-4 col-span-2">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-white">守備分析 - ポジション配置</h2>
-                  {selectedDefensePos && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-yellow-400 text-sm font-bold">{posFullLabels[selectedDefensePos]}を選択中</span>
-                      <span className="text-gray-300 text-xs">→ 交換先をクリック</span>
-                      <button onClick={() => setSelectedDefensePos(null)} className="btn-secondary px-2 py-0.5 rounded text-xs">解除</button>
+                <div className="flex items-center justify-between gap-3 mb-4 min-h-[1.75rem]">
+                  <h2 className="text-xl font-bold text-white shrink-0">守備分析 - ポジション配置</h2>
+                  {/* 入れ替えたときの適性（自分の今の位置 → 入れ替え先）を2人分並べる */}
+                  {swapPreview ? (
+                    <div className="flex items-center gap-2 flex-wrap justify-end text-sm" aria-live="polite">
+                      {swapPreview.map((side, i) => (
+                        <React.Fragment key={side.pos}>
+                          {i > 0 && <span className="text-yellow-400 font-bold">⇄</span>}
+                          <span className="inline-flex items-baseline gap-1.5">
+                            <span className="text-yellow-300 font-bold">{side.player?.name || '（空き）'}</span>
+                            {side.player && fitnessChange(side)}
+                          </span>
+                        </React.Fragment>
+                      ))}
+                      {!defenseDrag?.over && (
+                        <span className="text-gray-300 text-xs">→ 入れ替え先をクリックかドラッグ（Esc で取り消し）</span>
+                      )}
                     </div>
+                  ) : (
+                    <span className="text-gray-400 text-xs">選手をドラッグして守備位置を入れ替え</span>
                   )}
                 </div>
                 {/* ⚠ 表示幅を固定しておくこと。実寸 = fontSize × (表示幅/500) なので、
                     max-w-2xl(672) だと 1280幅のとき列が 645px しか無く倍率が 1.29 に落ちて
                     fontSize 9 が 11.6px（12px未満）になる。600 に固定すれば倍率は常に 1.2。 */}
-                <svg viewBox="0 -20 500 560" className="w-full max-w-[600px] mx-auto">
+                <svg viewBox="0 -20 500 560" className="w-full max-w-[600px] mx-auto select-none">
                   <defs>
                     {/* 各ポジションの守備範囲グラデーション（守備ランク色で表示） */}
                     {Object.entries(posCoords).map(([pos]) => {
@@ -2361,7 +2664,8 @@ export const LineupSettingContent = ({
                   {/* 選手マーカー（クリック可能・アニメーション付き） */}
                   {Object.entries(posCoords).map(([pos, coord], posIndex) => {
                     const player = positionPlayers[pos];
-                    const isSelected = selectedDefensePos === pos;
+                    // ドラッグ中は「持っている選手」と「離すと入れ替わる先」も選択と同じ印にする
+                    const isSelected = selectedDefensePos === pos || defenseDrag?.from === pos || defenseDrag?.over === pos;
                     const fitness = player ? getFitness(player, pos) : 0;
                     const grad = getFitnessGradient(fitness);
                     const isPitcherPos = pos === 'pitcher';
@@ -2374,8 +2678,10 @@ export const LineupSettingContent = ({
                     const animDelay = `${posIndex * 0.08}s`;
 
                     return (
-                      <g key={pos} onClick={() => !isPitcherPos && handleDefenseClick(pos)}
-                         style={{ cursor: isPitcherPos ? 'default' : 'pointer' }}>
+                      <g key={pos} data-defpos={pos}
+                         onClick={() => !isPitcherPos && handleDefenseClick(pos)}
+                         onPointerDown={(e) => !isPitcherPos && startDefenseDrag(pos, e)}
+                         style={{ cursor: isPitcherPos ? 'default' : player ? 'grab' : 'pointer', touchAction: isPitcherPos ? 'auto' : 'none' }}>
                         {/* 選択リング */}
                         {isSelected && (
                           <>
@@ -2467,7 +2773,7 @@ export const LineupSettingContent = ({
                   </g>
                 </svg>
                 <p className="text-xs text-gray-400 mt-2 text-center">
-                  ポジションをクリックして選択 → 交換先をクリックで守備位置を入れ替え（投手は変更不可）
+                  選手を別の守備位置へドラッグ（またはクリックで選んで入れ替え先をクリック）で入れ替え。右の一覧からも動かせます（投手は変更不可）
                 </p>
               </div>
 
@@ -2481,15 +2787,19 @@ export const LineupSettingContent = ({
                     const grade = getRangeGrade(range);
                     const fitness = player ? getFitness(player, pos) : 0;
                     const fitColor = fitness >= 100 ? 'text-pink-500' : fitness >= 90 ? 'text-pink-400' : fitness >= 80 ? 'text-red-400' : fitness >= 70 ? 'text-orange-400' : fitness >= 60 ? 'text-amber-400' : fitness >= 50 ? 'text-yellow-400' : fitness >= 40 ? 'text-lime-400' : fitness >= 30 ? 'text-green-400' : fitness >= 20 ? 'text-cyan-400' : fitness >= 10 ? 'text-blue-400' : 'text-indigo-400';
-                    const isSelected = selectedDefensePos === pos;
+                    const isSelected = selectedDefensePos === pos || defenseDrag?.from === pos;
+                    const isDropTarget = defenseDrag?.over === pos;
                     const isPitcherPos = pos === 'pitcher';
 
                     return (
-                      <div key={pos}
+                      <div key={pos} data-defpos={pos}
                         onClick={() => !isPitcherPos && handleDefenseClick(pos)}
-                        className={`rounded p-2 transition cursor-pointer ${isSelected ? 'bg-yellow-900 ring-1 ring-yellow-400' : 'bg-gray-700 hover:bg-gray-600'} ${isPitcherPos ? 'cursor-default opacity-60' : ''}`}>
+                        onPointerDown={(e) => !isPitcherPos && startDefenseDrag(pos, e, { allowTouch: false })}
+                        title={isPitcherPos ? undefined : 'ドラッグで守備位置を入れ替え'}
+                        className={`rounded p-2 transition select-none ${isSelected ? 'bg-yellow-900 ring-1 ring-yellow-400' : isDropTarget ? 'bg-blue-900/60 ring-1 ring-blue-400' : 'bg-gray-700 hover:bg-gray-600'} ${isPitcherPos ? 'cursor-default opacity-60' : player ? 'cursor-grab' : 'cursor-pointer'}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
+                            {!isPitcherPos && player && <span className="text-gray-400 text-xs leading-none" aria-hidden="true">⠿</span>}
                             <span className="text-blue-400 font-bold w-7 text-center text-base">{posLabels[pos]}</span>
                             <span className="text-white text-base font-bold">{player?.name || '-'}</span>
                           </div>
@@ -2516,27 +2826,42 @@ export const LineupSettingContent = ({
                 </div>
 
                 {/* 選択中ポジションの交換候補 */}
-                {selectedDefensePos && selectedPosSwapCandidates.length > 0 && (
-                  <div className="mt-3 bg-surface-1 rounded p-3">
-                    <div className="text-yellow-400 text-sm font-bold mb-2">{posFullLabels[selectedDefensePos]}と交換:</div>
-                    <div className="space-y-1">
-                      {selectedPosSwapCandidates.map(({ player, entry }) => {
-                        const targetFitness = getFitness(player, selectedDefensePos);
-                        const currentFitness = getFitness(player, entry.position);
-                        const diff = targetFitness - currentFitness;
-                        return (
-                          <div key={player.id} onClick={() => handleDefenseClick(entry.position)}
-                            className="bg-gray-700 hover:bg-gray-600 rounded px-2 py-1.5 cursor-pointer flex items-center justify-between text-sm">
-                            <span className="text-white font-bold">{posLabels[entry.position]} {player.name}</span>
-                            <span className={`font-bold ${diff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              適正{targetFitness}% ({diff >= 0 ? '+' : ''}{diff})
-                            </span>
-                          </div>
-                        );
-                      })}
+                {/* 選んだ位置と入れ替えたときの、2人それぞれの適性（今の位置 → 入れ替え先） */}
+                {selectedDefensePos && selectedPosSwapCandidates.length > 0 && (() => {
+                  const selPlayer = positionPlayers[selectedDefensePos];
+                  return (
+                    <div className="mt-3 bg-surface-1 rounded p-3">
+                      <div className="text-yellow-400 text-sm font-bold mb-2">
+                        {posFullLabels[selectedDefensePos]}{selPlayer ? `（${selPlayer.name}）` : ''}と入れ替えると
+                      </div>
+                      <div className="space-y-1">
+                        {selectedPosSwapCandidates.map(({ player, entry }) => {
+                          const them = { pos: entry.position, dest: selectedDefensePos,
+                            now: getFitness(player, entry.position), next: getFitness(player, selectedDefensePos) };
+                          const me = selPlayer ? { pos: selectedDefensePos, dest: entry.position,
+                            now: getFitness(selPlayer, selectedDefensePos), next: getFitness(selPlayer, entry.position) } : null;
+                          const total = (them.next - them.now) + (me ? me.next - me.now : 0);
+                          return (
+                            <div key={player.id} data-defpos={entry.position}
+                              onClick={() => handleDefenseClick(entry.position)}
+                              className="bg-gray-700 hover:bg-gray-600 rounded px-2 py-1.5 cursor-pointer text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-white font-bold truncate">{posLabels[entry.position]} {player.name}</span>
+                                <span className={`text-xs font-bold tabular-nums ${total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  計{total >= 0 ? '+' : ''}{total}
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-0.5 text-xs mt-0.5">
+                                <span className="flex items-baseline gap-1.5"><span className="text-gray-400 w-14 truncate">{player.name}</span>{fitnessChange(them)}</span>
+                                {me && <span className="flex items-baseline gap-1.5"><span className="text-gray-400 w-14 truncate">{selPlayer.name}</span>{fitnessChange(me)}</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* チーム守備総合評価 */}
                 {(() => {
@@ -2619,7 +2944,7 @@ export const LineupSettingContent = ({
         {detailPlayer === '__compare__' && compareIds.length >= 2 && (
           <CompareModal playerIds={compareIds} onClose={() => setDetailPlayer(null)} />
         )}
-    </ScreenShell>
+    </Frame>
   );
 };
 

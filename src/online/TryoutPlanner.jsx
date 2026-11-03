@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
@@ -65,6 +65,14 @@ function storeWeights(weights) {
   }
 }
 
+/**
+ * 選手1人の1行（名前・年齢・位置・主な能力）。
+ * ⚠ 契約更改（退団の選択）でも同じ行を使う。以前は名前・年齢・位置だけで、
+ *    誰を出すか決めるのに一人ずつ「情報」を開く必要があった
+ */
+export function PlayerLine({ player, score }) {
+  return <Line player={player} score={score} />;
+}
 function Line({ player, score }) {
   if (!player) return null;
   return (
@@ -167,6 +175,16 @@ export default function TryoutPlanner({
     setRanked(benchFromPlan(plan.rankedIds, candidates, count, roster, id));
   const shift = (index, delta) =>
     setRanked(shiftInPlan(plan.rankedIds, candidates, count, roster, index, delta));
+  // ドラッグで from 位 → to 位 へ動かす（間の選手は1つずつずれる）。
+  // ⚠ ↑↓ と同じく**獲得予定の並びで**1つずつ動かす（`shiftInPlan` の注意と同じ理由）
+  const moveTo = (from, to) => {
+    if (from === to || from < 0 || to < 0) return;
+    let ids = plan.rankedIds;
+    for (let i = from; i !== to; i += to > i ? 1 : -1)
+      ids = shiftInPlan(ids, candidates, count, roster, i, to > i ? 1 : -1);
+    setRanked(ids);
+  };
+  const dragFrom = useRef(null);
   const add = (id, first) => {
     const next = addToPlan(plan.rankedIds, candidates, count, roster, id, { first });
     // ⚠ 黙って何も起きない、を作らない。今の名簿だけでその区分が目標を超えていると、
@@ -310,7 +328,36 @@ export default function TryoutPlanner({
           {wanted.length === 0 && <p>獲得希望人数を1人以上にしてください。</p>}
           <ol className="online-tryout-list">
             {wanted.map((id, i) => (
-              <li key={id}>
+              <li
+                key={id}
+                draggable={!busy}
+                title="ドラッグで希望順位を入れ替え"
+                onDragStart={(e) => {
+                  dragFrom.current = i;
+                  e.dataTransfer.effectAllowed = 'move';
+                  // setDataがないとFirefox等でドラッグが開始されない
+                  try { e.dataTransfer.setData('text/plain', String(id)); } catch { /* 無視 */ }
+                  e.currentTarget.classList.add('is-dragging');
+                }}
+                onDragEnd={(e) => {
+                  dragFrom.current = null;
+                  e.currentTarget.classList.remove('is-dragging');
+                }}
+                onDragOver={(e) => {
+                  if (dragFrom.current === null) return;
+                  e.preventDefault();
+                  e.currentTarget.classList.add('is-drop-target');
+                }}
+                onDragLeave={(e) => e.currentTarget.classList.remove('is-drop-target')}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove('is-drop-target');
+                  const from = dragFrom.current;
+                  dragFrom.current = null;
+                  if (from !== null) moveTo(from, i);
+                }}
+              >
+                <span className="online-drag-handle" aria-hidden="true">⠿</span>
                 <span className="online-tryout-rank">{i + 1}</span>
                 <span className="online-tryout-person">
                   <Line player={byId.get(id)} score={scores.get(id)} />

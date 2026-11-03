@@ -93,22 +93,28 @@ try {
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${base}/online`);
-  // ⚠ PCの編成タブは移植した画面が既定で開く（78bfd27）。方針・采配の設定はその奥
-  await page.getByRole('button', { name: '編成', exact: true }).click();
-  await page.getByRole('button', { name: '方針・采配の設定へ（保存しない）', exact: true }).click();
-  await page.getByRole('button', { name: '自動采配', exact: true }).click();
-  await page.getByLabel('送りバント', { exact: true }).selectOption('never');
-  await page.getByLabel('先発の球数上限', { exact: true }).selectOption('80');
-  await page.getByRole('button', { name: '投手の役割', exact: true }).click();
-  assert.ok((await page.getByRole('combobox').count()) >= 2);
-  await page.getByRole('button', { name: '編成を保存', exact: true }).click();
+  // ⚠ PCの方針と自動采配は左メニューの「方針・采配」で決める。選択肢は
+  //    **ボタンの列**（`role="group"`、押されている＝今の値）で、コンボボックスは置かない
+  await page.getByRole('button', { name: '方針・采配', exact: true }).click();
+  const choose = (label, option) =>
+    page
+      .getByRole('group', { name: label, exact: true })
+      .getByRole('button', { name: option, exact: true })
+      .click();
+  await choose('送りバント', 'しない');
+  await choose('先発の球数上限', '最大80球');
+  assert.equal(
+    await page.getByRole('combobox').count(),
+    0,
+    '方針・采配に開かないと選べない選択肢を置かない',
+  );
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByText('保存しました', { exact: true }).waitFor();
   assert.equal(commands, 1);
   const ownTeam = league.members[0].teamName;
   assert.equal(league.game.teams[ownTeam].onlineTactics.sacrificeBunt, 'never');
   assert.equal(league.game.teams[ownTeam].onlineTactics.starterLimit, 80);
-  await page.getByRole('button', { name: '選手', exact: true }).click();
-  await page.getByRole('button', { name: '成績一覧', exact: true }).click();
+  await page.getByRole('button', { name: '選手成績', exact: true }).click();
   assert.equal(
     await page
       .locator('.online-roster-columns .online-roster-values button')
@@ -116,7 +122,7 @@ try {
     12,
     'PCは主要12項目を一覧表示',
   );
-  await page.getByRole('button', { name: '試合', exact: true }).click();
+  await page.getByRole('button', { name: '試合結果', exact: true }).click();
   await page
     .getByRole('button', { name: '過去の試合・個人成績', exact: true })
     .click();

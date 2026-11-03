@@ -18,13 +18,24 @@ import {
   conditionValue,
   statRank,
 } from './statsView.js';
+import { CONDITION_ICONS } from '../game/condition.js';
 
+// 能力値1つ。⚠ **PCは数字をランク色で出す**（一人用の `AbilityValue` と同じ）。
+//    以前はオンラインだけ「C」のような字だけで、移植したスタメン設定は数字、
+//    選手の詳細も数字と、画面ごとに数字と字が混ざっていた。
+//    スマホは列が狭いので字のまま（CSS で出し分ける。`.online-ability-num` / `-rank`）。
 export function AbilityGrade({ value, velocity = false, stamina = false }) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0)
     return <span>—</span>;
   const rank = getAbilityRank(value, velocity, stamina);
   return (
-    <span className={`online-ability-grade ${getRankColor(rank)}`}>{rank}</span>
+    <span
+      className={`online-ability-grade ${getRankColor(rank)}`}
+      title={`${rank}（${Math.round(value)}）`}
+    >
+      <span className="online-ability-num">{Math.round(value)}</span>
+      <span className="online-ability-rank">{rank}</span>
+    </span>
   );
 }
 
@@ -156,16 +167,58 @@ function Category({ value, setValue }) {
     </div>
   );
 }
+// 調子。⚠ **一人用と同じ顔の印にする**（`CONDITION_ICONS`）。
+//    以前はオンラインの一覧が矢印、成績の表が「普通／不調」の文字、移植した
+//    スタメン設定が顔で、同じ調子が画面ごとに3通りの見た目だった。
+//    文字はマウスを乗せると出る（`title`）。
 export function ConditionMark({ player }) {
   const level = conditionValue(player);
+  const text = CONDITION_TEXT[level] || '未記録';
   return (
     <span
       className={`online-condition online-condition-${level ?? 'unknown'}`}
-      title={`調子: ${CONDITION_TEXT[level] || '未記録'}`}
-      aria-label={`調子: ${CONDITION_TEXT[level] || '未記録'}`}
+      title={`調子: ${text}`}
+      aria-label={`調子: ${text}`}
+      role="img"
     >
-      {level === null ? '—' : ['↓', '↘', '→', '↗', '↑'][level]}
+      {level === null ? '—' : CONDITION_ICONS[level]}
     </span>
+  );
+}
+/**
+ * 成績の表示区分。PCは**並んだタブ**（コンボボックスは開かないと何があるか
+ * 分からず、隣の区分へ移るのに2手かかる、という指摘）。スマホは幅が無いので
+ * コンボボックスのまま。
+ * ⚠ 「調子・疲労」と能力の区分は、成績の区分と分けて右にまとめる。
+ */
+function GroupTabs({
+  category,
+  value,
+  onChange,
+  overview = false,
+  historic = false,
+}) {
+  // ⚠ 過去の期間には調子・能力が残っていない（`GroupSelect` と同じ絞り方）
+  const groups = STAT_GROUPS[category].filter(
+    (group) =>
+      !historic || !['state', 'abilities', 'defense'].includes(group.id),
+  );
+  const state = new Set(['state', 'abilities', 'defense']);
+  const tab = (id, label) => (
+    <button key={id} aria-pressed={value === id} onClick={() => onChange(id)}>
+      {label}
+    </button>
+  );
+  return (
+    <div className="online-group-tabs" role="group" aria-label="成績の表示項目">
+      <div className="online-segments">
+        {overview && tab('overview', '主要成績')}
+        {groups.filter((g) => !state.has(g.id)).map((g) => tab(g.id, g.label))}
+      </div>
+      <div className="online-segments">
+        {groups.filter((g) => state.has(g.id)).map((g) => tab(g.id, g.label))}
+      </div>
+    </div>
   );
 }
 function GroupSelect({
@@ -340,12 +393,23 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
                 setGroupId('basic');
               }}
             />
-            <GroupSelect
-              category={category}
-              value={group.id}
-              onChange={setGroupId}
-              historic={periodId !== 'current'}
-            />
+            {/* ⚠ PCはタブ、スマホはコンボボックス（幅）。
+                ⚠ 両方置いて CSS で隠すと、同じ名前の操作が2つになる（検査も読み上げも迷う） */}
+            {window.matchMedia('(min-width: 768px)').matches ? (
+              <GroupTabs
+                category={category}
+                value={group.id}
+                onChange={setGroupId}
+                historic={periodId !== 'current'}
+              />
+            ) : (
+              <GroupSelect
+                category={category}
+                value={group.id}
+                onChange={setGroupId}
+                historic={periodId !== 'current'}
+              />
+            )}
           </div>
           <StatLabels player={shown} category={category} />
           <dl className="online-stat-grid">
@@ -480,19 +544,25 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
     desktop && groupId === 'overview'
       ? overviewGroup(category)
       : statGroup(category, groupId);
-  // ⚠ 指定が無いときは**出場量の多い順**。名簿の順のままだと、打撃の
-  //    1ページ目が投手だけで埋まり、スタメンが3ページ目まで出てこない
-  const active = sort || defaultSort(category);
-  const order = sortedRoster(view.roster, active.column, active.direction);
+  // ⚠ 指定が無いときの並び。スマホは**出場量の多い順**（名簿の順のままだと、
+  //    打撃の1ページ目が投手だけで埋まり、スタメンが3ページ目まで出てこない）。
+  //    PCは全員を1枚に出すので**起用の順**（スタメン→控え→先発→救援）。
+  //    能力一覧の表がこの順だったので、表を1つにしても並びは変わらない。
+  const active = sort || (desktop ? null : defaultSort(category));
+  const order = active
+    ? sortedRoster(view.roster, active.column, active.direction)
+    : rosterByRole(view.roster, view.lineup, category);
   const chooseCategory = (next) => {
     setCategory(next);
     setGroupId(desktop ? 'overview' : 'basic');
     setSort(null);
     setPage(0);
   };
+  // ⚠ PCは**区分を変えても並びを保つ**。「今の表のメンバーのまま成績と能力を
+  //    切り替えたい」という指摘。並べ替えた列が次の区分に無くても、並びは残す
   const chooseGroup = (next) => {
     setGroupId(next);
-    setSort(null);
+    if (!desktop) setSort(null);
     setPage(0);
   };
   const sortBy = (column) => {
@@ -509,10 +579,12 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
     }));
     setPage(0);
   };
+  const sameColumn = (a, b) =>
+    a === b || (a && b && a !== 'name' && b !== 'name' && a.id === b.id);
   const sortButton = (column, label) => (
     <button
       aria-label={`${label}で並べ替え`}
-      aria-pressed={active.column === column}
+      aria-pressed={!!active && sameColumn(active.column, column)}
       title={label}
       onClick={() => sortBy(column)}
     >
@@ -523,7 +595,7 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
             ? '本塁率'
             : label}
       </span>
-      {active.column === column && (
+      {active && sameColumn(active.column, column) && (
         <span className="online-sort-direction" aria-hidden="true">
           {active.direction === 'asc' ? '▲' : '▼'}
         </span>
@@ -534,10 +606,7 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
   const rows = useRef(null);
   const previousSize = useRef(8);
   useLayoutEffect(() => {
-    if (desktop) {
-      setSize(10);
-      return;
-    }
+    if (desktop) return;
     const measure = () => {
       if (!rows.current) return;
       const next = Math.max(1, Math.floor(rows.current.clientHeight / 44));
@@ -552,6 +621,13 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
     observer.observe(rows.current);
     return () => observer.disconnect();
   }, [desktop]);
+  // ⚠ PCは**ページ送りをしない**（全員を1枚に）。24〜30人なら1画面で見渡せ、
+  //    送るたびに見出しの位置を探し直すほうが手間だった
+  const shown = desktop
+    ? order
+    : order.slice(page * size, page * size + size);
+  const sortedBy =
+    active && (active.column === 'name' ? '選手名' : active.column.label);
   return (
     <section
       data-wide={desktop && group.columns.length > 4}
@@ -564,14 +640,38 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
             {view.readOnly ? '今季・閲覧' : '今季'} · {view.roster.length}人
           </small>
         </div>
-        <GroupSelect
-          category={category}
-          value={group.id}
-          onChange={chooseGroup}
-          overview={desktop}
-        />
-        <Category value={category} setValue={chooseCategory} />
+        {desktop ? (
+          <>
+            <Category value={category} setValue={chooseCategory} />
+            <GroupTabs
+              category={category}
+              value={group.id}
+              onChange={chooseGroup}
+              overview
+            />
+          </>
+        ) : (
+          <>
+            <GroupSelect
+              category={category}
+              value={group.id}
+              onChange={chooseGroup}
+            />
+            <Category value={category} setValue={chooseCategory} />
+          </>
+        )}
       </div>
+      {desktop && (
+        <p className="online-roster-order">
+          並び：
+          {active
+            ? `${sortedBy}${active.direction === 'asc' ? '（小さい順）' : '（大きい順）'}`
+            : '起用の順'}
+          {active && (
+            <button onClick={() => setSort(null)}>起用の順に戻す</button>
+          )}
+        </p>
+      )}
       <div className="online-roster-columns">
         {sortButton('name', '選手名')}
         <div className="online-roster-values">
@@ -583,7 +683,7 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
         </div>
       </div>
       <div className="online-roster-rows" ref={rows}>
-        {order.slice(page * size, page * size + size).map((player) => (
+        {shown.map((player) => (
           <article key={player.id}>
             <PlayerStatsButton
               player={player}
@@ -609,7 +709,13 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
               <span className="online-roster-values">
                 {group.columns.map((column) => {
                   const value = column.get(player);
-                  const text = formatStat(column, value);
+                  if (column.format === 'condition')
+                    return (
+                      <span key={column.id} className="online-stat-condition">
+                        <ConditionMark player={player} />
+                      </span>
+                    );
+                  const text = formatStat(column, value, desktop);
                   const rank = statRank(column, value);
                   return (
                     <span
@@ -620,7 +726,7 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
                           ? { fontSize: `${60 / text.length}px` }
                           : undefined
                       }
-                      title={`${column.label}: ${text}`}
+                      title={`${column.label}: ${text}${rank && desktop ? `（${rank}）` : ''}`}
                     >
                       {text}
                     </span>
@@ -635,12 +741,14 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
         columns={group.columns}
         precise={view.roster.every((p) => p.seasonStats?.batting?.measured)}
       />
-      <PageNav
-        page={page}
-        count={view.roster.length}
-        size={size}
-        setPage={setPage}
-      />
+      {!desktop && (
+        <PageNav
+          page={page}
+          count={view.roster.length}
+          size={size}
+          setPage={setPage}
+        />
+      )}
     </section>
   );
 }
