@@ -92,13 +92,13 @@ export function upcomingGames(schedule, ownTeam, size = 6) {
 }
 
 /**
- * 自球団のこれからの試合を、近い順に。ホームの「今後の5試合」に使う。
+ * 自球団のこれからの試合を、近い順に。ホームの「今後の6試合」に使う。
  *
  * ⚠ **自球団だけ**。リーグ全体の一覧は `upcomingGames`（試合結果の画面が使う）。
  * ⚠ 相手の決まっていない試合（`TBD`）は出さない。プレーオフの決勝は準決勝が
  *    終わるまで `TBD` で置かれる。
  */
-export function ownUpcomingGames(schedule, ownTeam, size = 5) {
+export function ownUpcomingGames(schedule, ownTeam, size = 6) {
   return schedule
     .filter(
       (g) =>
@@ -268,11 +268,14 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       awayScore: g.result.awayScore,
       decisions: g.result.decisions,
     })),
-    // ⚠ ホームに出す**自球団の次の5試合**。リーグ全体の一覧（`upcoming`）とは
-    //    別物。試合結果の画面はリーグ全体を使うので、そちらを絞らないこと
+    // ⚠ ホームに出す**自球団の次の6試合**。リーグ全体の一覧（`upcoming`）とは
+    //    別物。試合結果の画面はリーグ全体を使うので、そちらを絞らないこと。
+    //    ⚠ ここだけ `seasonStatsOf` を渡して、先発予定に投げる手と今季成績を
+    //       重ねる（`upcoming` は名前だけでよい）
     nextGames: withStarters(
       ownUpcomingGames(l.season.schedule, member.teamName),
       l.game.teams,
+      seasonStatsOf,
     ),
     // ⚠ 並べ方は `upcomingGames` が正本（日付順・自球団を必ず含む）。
     //    先発予定はその上に重ねるだけにする

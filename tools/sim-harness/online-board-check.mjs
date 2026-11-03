@@ -243,15 +243,15 @@ try {
       () => ({ batting: {}, pitching: {} }),
     ),
   );
-  // --- 今後の5試合（自球団だけ） --------------------------------------
-  // ⚠ ホームに出すのは**自球団の次の5試合**。リーグ全体の一覧（`upcoming`）は
+  // --- 今後の6試合（自球団だけ） --------------------------------------
+  // ⚠ ホームに出すのは**自球団の次の6試合**。リーグ全体の一覧（`upcoming`）は
   //    試合結果の画面が使うので、そちらを絞らないこと。
   {
     const live = (await store.read()).league;
     const own = view.teamName;
     const next = view.nextGames;
     assert.ok(Array.isArray(next), '今後の5試合が渡っていない');
-    assert.ok(next.length > 0 && next.length <= 5, `試合数がちがう: ${next.length}`);
+    assert.equal(next.length, 6, `試合数がちがう: ${next.length}`);
     for (const game of next)
       assert.ok(
         game.home === own || game.away === own,
@@ -281,6 +281,102 @@ try {
     //    ローテが回っていない（`withStarters` を通していない）
     const mine = next.map((g) => (g.home === own ? g.homeStarter : g.awayStarter));
     assert.ok(new Set(mine).size > 1, `自球団の先発が全部同じ: ${mine[0]}`);
+
+    // ⚠ **先発の投げる手と今季成績が付いていること**。名前だけだと、
+    //    どちらが有利な相手かを画面で判断できない
+    const roster = new Map(
+      live.season.settings.teamNames.flatMap((name) =>
+        live.game.teams[name].players.map((p) => [p.id, p]),
+      ),
+    );
+    const byName = new Map([...roster.values()].map((p) => [p.name, p]));
+    for (const game of next) {
+      for (const side of ['home', 'away']) {
+        const info = game[`${side}StarterInfo`];
+        assert.ok(info, `${side} の先発の情報が無い`);
+        assert.equal(info.name, game[`${side}Starter`], '名前が食い違っている');
+        // ⚠ 左右は**名簿の `throws` と一致**すること。既定で右に倒すだけだと、
+        //    左投手が全員右と出る
+        assert.equal(
+          info.throws,
+          byName.get(info.name).physical?.throws === 'left' ? 'left' : 'right',
+          `${info.name} の投げる手がちがう`,
+        );
+        assert.ok(Number.isInteger(info.wins) && info.wins >= 0, '勝が数でない');
+        assert.ok(Number.isInteger(info.losses) && info.losses >= 0, '敗が数でない');
+        assert.ok(
+          info.era === null || (info.era >= 0 && info.era < 30),
+          `${info.name} の防御率が外れている: ${info.era}`,
+        );
+      }
+    }
+    // ⚠ **左投手が居ること**（全員「右」になっていないこと）。実測で
+    //    独立リーグの左投げはおよそ2割
+    const hands = new Set(
+      live.season.settings.teamNames
+        .flatMap((name) => live.game.teams[name].players)
+        .filter((p) => p.position === 'pitcher')
+        .map((p) => p.physical?.throws),
+    );
+    assert.ok(hands.has('left') && hands.has('right'), '前提: 左右の投手が居る');
+
+    // ⚠ 勝敗と防御率が**選手成績と一致**すること（別に数えていない）
+    const sample = next.find((g) => g.homeStarterInfo.wins + g.homeStarterInfo.losses > 0)
+      || next[0];
+    const player = byName.get(sample.homeStarterInfo.name);
+    const home = live.game.teams[sample.home].players.some((p) => p.id === player.id)
+      ? sample.home
+      : null;
+    assert.ok(home, '先発が所属球団の名簿に居ない');
+    const stats = player.seasonStats?.pitching || {};
+    assert.equal(sample.homeStarterInfo.wins, stats.wins || 0, '勝が名簿と合わない');
+    assert.equal(sample.homeStarterInfo.losses, stats.losses || 0, '敗が名簿と合わない');
+  }
+
+  // ⚠ **投げていない投手の防御率は `null`**（作り物の成績で見る）。0 で割った
+  //    値や 0.00 を出すと「無失点の好投手」に見える。本物のリーグはこの時点で
+  //    先発が全員投げているので、ここは作り物で押さえる。
+  {
+    const live = (await store.read()).league;
+    const [home, away] = live.season.settings.teamNames;
+    const fresh = withStarters(
+      [{ id: 1, date: live.season.currentDate, home, away }],
+      live.game.teams,
+      () => ({ pitching: { wins: 0, losses: 0, earnedRuns: 0, inningsPitched: 0 } }),
+    );
+    assert.equal(fresh[0].homeStarterInfo.era, null, '投げていないのに防御率が出る');
+    assert.equal(fresh[0].awayStarterInfo.era, null, '投げていないのに防御率が出る');
+    // 1失点・3イニング（アウト9つ）なら 3.00
+    const pitched = withStarters(
+      [{ id: 1, date: live.season.currentDate, home, away }],
+      live.game.teams,
+      () => ({ pitching: { wins: 1, losses: 2, earnedRuns: 1, inningsPitched: 9 } }),
+    );
+    assert.equal(pitched[0].homeStarterInfo.era, 3, '防御率の式がちがう');
+    assert.equal(pitched[0].homeStarterInfo.wins, 1, '勝がちがう');
+    assert.equal(pitched[0].homeStarterInfo.losses, 2, '敗がちがう');
+  }
+
+  // ⚠ **リーグ全体の一覧には重ねないこと**。投影を重くするだけで、
+  //    試合結果の画面は名前しか出さない
+  {
+    const live = (await store.read()).league;
+    const plain = withStarters(
+      [
+        {
+          id: 1,
+          date: live.season.currentDate,
+          home: live.season.settings.teamNames[0],
+          away: live.season.settings.teamNames[1],
+        },
+      ],
+      live.game.teams,
+    );
+    assert.ok(plain[0].homeStarter, '前提: 先発の名前は付く');
+    assert.ok(
+      !('homeStarterInfo' in plain[0]),
+      '成績を渡していないのに先発の情報が付いている',
+    );
   }
 
   // ⚠ **日付順に並べ直すこと**（作り物の日程で見る）。`pyramidSchedule` が
@@ -356,5 +452,5 @@ try {
 }
 
 console.log(
-  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・自球団の次の5試合・チーム打率と防御率が名簿の合計と合う）',
+  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム打率と防御率が名簿の合計と合う）',
 );

@@ -22,7 +22,7 @@
  * ⚠ 同じ球団が続けて出るときは**ローテを回すこと**。毎回同じだと
  *    1人が全試合に先発する予定になる。
  */
-export function withStarters(games, teams) {
+export function withStarters(games, teams, statsOf = null) {
   const seen = {};
   const nextStarter = (name, offset) => {
     const rotation = teams[name]?.pitchingRotation;
@@ -30,17 +30,44 @@ export function withStarters(games, teams) {
     if (!list.length) return null;
     const base = rotation.currentStarterIndex || 0;
     const id = list[(base + offset) % list.length];
-    return teams[name].players.find((p) => p.id === id)?.name || null;
+    return teams[name].players.find((p) => p.id === id) || null;
+  };
+  // ⚠ 投げる手と今季成績は `statsOf` を渡したときだけ付ける。渡さない呼び出し
+  //    （試合結果の画面が使う `upcoming`）は名前だけのままにする——あちらは
+  //    一覧に出すだけで、投影を重くする意味がない。
+  const profile = (teamName, player) => {
+    if (!player) return null;
+    const pitching = statsOf(teamName, player)?.pitching;
+    const outs = pitching?.inningsPitched || 0;
+    return {
+      name: player.name,
+      // ⚠ 投げる手は `physical.throws`（選手直下ではない）。選手直下を見ると
+      //    全員 undefined になり、**全員が右投げ**として出る。
+      // ⚠ 既定は右。未設定の選手を「左」に倒すと、左投手が実際より多く見える
+      throws: player.physical?.throws === 'left' ? 'left' : 'right',
+      wins: pitching?.wins || 0,
+      losses: pitching?.losses || 0,
+      // ⚠ `inningsPitched` はアウト数。投げていなければ null（0.00 と出さない）
+      era: outs > 0 ? ((pitching.earnedRuns || 0) * 27) / outs : null,
+    };
   };
   return games.map((g) => {
     const homeOffset = seen[g.home] || 0;
     const awayOffset = seen[g.away] || 0;
     seen[g.home] = homeOffset + 1;
     seen[g.away] = awayOffset + 1;
+    const home = nextStarter(g.home, homeOffset);
+    const away = nextStarter(g.away, awayOffset);
     return {
       ...g,
-      homeStarter: nextStarter(g.home, homeOffset),
-      awayStarter: nextStarter(g.away, awayOffset),
+      homeStarter: home?.name || null,
+      awayStarter: away?.name || null,
+      ...(statsOf
+        ? {
+            homeStarterInfo: profile(g.home, home),
+            awayStarterInfo: profile(g.away, away),
+          }
+        : null),
     };
   });
 }

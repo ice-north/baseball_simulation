@@ -1888,7 +1888,7 @@
   }
 }
 
-/* --- 今後の5試合 ------------------------------------------------------ */
+/* --- 今後の6試合 ------------------------------------------------------ */
 .online-matchups {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -1921,6 +1921,23 @@
 /* ⚠ 自球団は黄色。左右どちらが自分かを一目で分けるため */
 .online-matchup-teams .is-own strong {
   color: #fde68a;
+}
+.online-starter-name b {
+  margin-left: 4px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #ffffff1f;
+  font-size: 10px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+.online-starter-line {
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: #9fb0c4;
+}
+.online-starter-line span {
+  margin-left: 5px;
 }
 .online-matchup strong {
   display: block;

@@ -19,16 +19,37 @@ import { Standings } from './LeaguePanels.jsx';
 // ============================================================
 
 /**
- * 自球団のこれからの5試合。
+ * 先発予定の1人ぶん。名前・投げる手・今季の勝敗と防御率。
+ * ⚠ 防御率は投げていなければ `null`。0.00 と出すと「無失点の好投手」に見える。
+ * ⚠ 先頭の0は省かない（0.34 を .34 にすると桁を読み違える）。
+ */
+function Starter({ info, fallback }) {
+  if (!info) return <small>{fallback || '先発未定'}</small>;
+  return (
+    <>
+      <small className="online-starter-name">
+        {info.name}
+        <b>{info.throws === 'left' ? '左' : '右'}</b>
+      </small>
+      <small className="online-starter-line">
+        {info.wins}勝{info.losses}敗
+        <span>{info.era === null ? '防—' : `防${info.era.toFixed(2)}`}</span>
+      </small>
+    </>
+  );
+}
+
+/**
+ * 自球団のこれからの6試合。
  * ⚠ 「今日」で絞らないこと。休養日や手続きの日に開くと空になる。
- *    サーバーが近い順に5つ渡す（`ownUpcomingGames`）。
+ *    サーバーが近い順に6つ渡す（`ownUpcomingGames`）。
  */
 function NextGames({ view }) {
   const games = view.nextGames || [];
   return (
     <section className="online-card">
       <div className="online-card-heading">
-        <h2>今後の5試合</h2>
+        <h2>今後の6試合</h2>
         <small className="online-muted">{teamLabel(view.teamName)}</small>
       </div>
       {games.length ? (
@@ -48,18 +69,22 @@ function NextGames({ view }) {
                   <div className="online-matchup-teams">
                     <div className="is-own">
                       <strong>{teamShort(view.teamName)}</strong>
-                      <small>
-                        {(home ? game.homeStarter : game.awayStarter) ||
-                          '先発未定'}
-                      </small>
+                      <Starter
+                        info={
+                          home ? game.homeStarterInfo : game.awayStarterInfo
+                        }
+                        fallback={home ? game.homeStarter : game.awayStarter}
+                      />
                     </div>
                     <span className="online-matchup-vs">VS</span>
                     <div>
                       <strong>{teamShort(opponent)}</strong>
-                      <small>
-                        {(home ? game.awayStarter : game.homeStarter) ||
-                          '先発未定'}
-                      </small>
+                      <Starter
+                        info={
+                          home ? game.awayStarterInfo : game.homeStarterInfo
+                        }
+                        fallback={home ? game.awayStarter : game.homeStarter}
+                      />
                     </div>
                   </div>
                 </div>
