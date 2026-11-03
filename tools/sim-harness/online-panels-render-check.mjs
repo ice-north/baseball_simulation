@@ -21,9 +21,9 @@ import { renderToString } from 'react-dom/server';
 import {
   Notices,
   Standings,
-  LineupPanel,
   formatDeadline,
 } from '../../src/online/LeaguePanels.jsx';
+import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
 export {
@@ -31,7 +31,7 @@ export {
   renderToString,
   Notices,
   Standings,
-  LineupPanel,
+  DesktopTactics,
   formatDeadline,
   setTeamLabels,
   PackSelect,
@@ -63,7 +63,7 @@ try {
     formatDeadline,
     setTeamLabels,
     PackSelect,
-    LineupPanel,
+    DesktopTactics,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -243,7 +243,7 @@ try {
       );
   }
 
-  // --- 方針・采配（PC） -------------------------------------------------
+  // --- 方針・采配（PC。`DesktopTactics`） ---------------------------------
   // ⚠ **打順・守備・先発・投手の役割をここに残さないこと**。移植した
   //    「スタメン設定／投手起用／守備分析」と丸ごと被り、同じことを2か所で
   //    設定できる状態になる（どちらが効くのか分からない）。
@@ -269,7 +269,7 @@ try {
       },
     };
     const html = render(
-      h(LineupPanel, {
+      h(DesktopTactics, {
         view: lineupView,
         busy: false,
         run: () => {},
@@ -279,11 +279,16 @@ try {
     assert.match(html, /方針・采配/, '見出しが変わっていない');
     assert.match(html, /基本方針/, '基本方針が出ていない');
     assert.match(html, /自動采配/, '自動采配が出ていない');
-    // ⚠ 区分の切り替え（タブ）を置かない。項目は2つだけなので要らない
-    assert.doesNotMatch(html, /online-segments/, '区分の切り替えが残っている');
+    // ⚠ 区分の切り替え（タブ）を置かない。項目は2つだけなので要らない。
+    //    ボタンを並べた選択肢（`Choice`）は `online-segments` を使うので、
+    //    **どの並びも選択肢の中にある**ことで見る
+    const segments = html.match(/class="online-segments"/g)?.length ?? 0;
+    const choices = html.match(/class="online-choice"/g)?.length ?? 0;
+    assert.ok(choices > 0, '選択肢がボタンで出ていない');
+    assert.equal(segments, choices, '区分の切り替えが残っている');
     // ⚠ スタメン設定と被る**操作**を出さない。文面での案内は残してよい
     //    （「打順は『スタメン設定』で」と書いてある）ので、見出しと部品で見る
-    const headings = [...html.matchAll(/<h3[^>]*>(.*?)<\/h3>/g)].map((m) => m[1]);
+    const headings = [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/g)].map((m) => m[1]);
     assert.deepEqual(
       headings,
       ['基本方針', '自動采配'],

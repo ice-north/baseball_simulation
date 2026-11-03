@@ -75,3 +75,46 @@ export function planFromTeam(team) {
       : {}),
   };
 }
+
+export const sameValue = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keys = Object.keys(a);
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every(
+      (k) => Object.prototype.hasOwnProperty.call(b, k) && sameValue(a[k], b[k]),
+    )
+  );
+};
+
+/**
+ * 編成の保存を、**いまの編成の上に載せ直して**送る形にする。
+ *
+ * 編成（打順・先発・投手の役割・方針・自動采配）はサーバーでは1つの塊で、
+ * 保存には「編集を始めたときの塊」（`baseLineup`）を添え、サーバーの今と
+ * 違えば弾かれる（他の端末での上書き事故を防ぐため）。
+ * ⚠ PCでは「スタメン設定・投手起用」と「方針・采配」が**別の画面で同じ塊を編集する**。
+ *    そのままだと、片方を保存しただけで、もう片方の未保存の編集が
+ *    「編成が更新されています」で保存できなくなる（しかも方針は古い値で上書きしかける）。
+ * そこで、自分の画面が受け持つ項目（`ownKeys`）が編集を始めたときから
+ * 変わっていなければ、ほかの項目は最新（`latest`）のまま、自分の項目だけ差し替えて送る。
+ * 自分の項目が他で変わっていたら本当の食い違いなので、元の起点のまま送って弾かせる。
+ */
+export function rebaseLineupSave(plan, base, latest, ownKeys) {
+  const clean =
+    !!latest && ownKeys.every((k) => sameValue(base?.[k], latest[k]));
+  const from = clean ? latest : base || {};
+  const payload = clone(from);
+  ownKeys.forEach((k) => {
+    if (plan[k] === undefined) delete payload[k];
+    else payload[k] = plan[k];
+  });
+  return { ...payload, baseLineup: clone(from) };
+}
+
+/** スタメン設定・投手起用（移植した画面）が受け持つ項目 */
+export const LINEUP_EDITOR_KEYS = ['battingOrder', 'starters', 'pitcherRoles'];
+/** 方針・采配（PC）が受け持つ項目 */
+export const TACTICS_EDITOR_KEYS = ['strategy', 'tactics'];

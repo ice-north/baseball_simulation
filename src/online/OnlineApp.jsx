@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { formatGameDate, PROGRESSION_TIMES } from './shared.js';
+import { PROGRESSION_TIMES } from './shared.js';
 import './online.css';
-import { api, AUTH_KEY, dateTime, STATUS } from './api.js';
+import { api, AUTH_KEY } from './api.js';
 import { Login, JoinLeague } from './LeaguePanels.jsx';
 import DesktopView from './DesktopView.jsx';
 import MobileView from './MobileView.jsx';
 import { ReadContext } from './useRead.js';
-import { setTeamLabels, teamLabel } from './gameText.js';
+import { useMobile } from './useMobile.js';
+import { setTeamLabels } from './gameText.js';
 import { Drafts } from './Drafts.jsx';
 import {
   readAuth,
@@ -29,18 +30,6 @@ const viewForSession = (result, current) => {
     !!(result.setupRequired || result.versionMismatch || result.writable),
   };
 };
-function useMobile() {
-  const [mobile, setMobile] = useState(
-    () => window.matchMedia('(max-width: 767px)').matches,
-  );
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
-    const change = () => setMobile(media.matches);
-    media.addEventListener('change', change);
-    return () => media.removeEventListener('change', change);
-  }, []);
-  return mobile;
-}
 const COMMAND_MESSAGES = {
   create: 'リーグを作成しました',
   join: 'リーグに参加しました',
@@ -337,6 +326,10 @@ export default function OnlineApp() {
             command={command}
           />
           <nav>
+            {/* ⚠ PCは見出しの中に置く（本文の一番上に1行使っていた） */}
+            {config?.local && !mobile && (
+              <small className="online-dev">ローカル検証モード（公開環境では無効）</small>
+            )}
             <a href="/">一人用</a>
             {auth && (
               <button onClick={logout} disabled={busy}>
@@ -347,7 +340,7 @@ export default function OnlineApp() {
         </header>
       )}
       <main>
-        {config?.local && !compactMobile && (
+        {config?.local && mobile && !compactMobile && (
           <p className="online-dev">ローカル検証モード（公開環境では無効）</p>
         )}
         {error && (
@@ -433,35 +426,9 @@ export default function OnlineApp() {
           </section>
         ) : (
           <>
-            {!compactMobile && (
-              <>
-                <section className="online-season">
-                  <div>
-                    <p>
-                      SEASON {view.year} · {teamLabel(view.teamName)}
-                    </p>
-                    <h1>
-                      {formatGameDate(view.currentDate)}{' '}
-                      <small>{STATUS[view.status]}</small>
-                    </h1>
-                  </div>
-                  <div className="online-next">
-                    次の進行（日本時間）
-                    <strong>{dateTime(view.nextAdvanceAt)}</strong>
-                    <button disabled={busy} onClick={() => run(reload)}>
-                      更新
-                    </button>
-                  </div>
-                </section>
-                <div className="online-clock-info">
-                  {/* ⚠ 進行の刻みを変えたらここも直すこと。
-                      毎正時24ターンに変えたあと「1日7回・夜間は休止」が
-                      残っていた（画面だけ古い説明を出し続けていた）。 */}
-                  <span>毎正時・月〜金が試合／土日は手続き</span>
-                  <button onClick={() => setShowTimes(true)}>進行時刻</button>
-                </div>
-              </>
-            )}
+            {/* ⚠ 日付・次の進行は、PCは左メニュー（`DesktopView` の `NavStatus`）、
+                スマホはホームの先頭（`MobileView`）に**1回だけ**出す。以前はPCの
+                全ページの本文の上に同じ帯（約170px）があった */}
             {!view.writable && (
               <p role="alert" className="online-alert">
                 別の端末でログインしたため閲覧のみです。操作するにはログインし直してください。
@@ -502,6 +469,8 @@ export default function OnlineApp() {
                   <DesktopView
                     tab={screen === 'news' ? 'games' : screen}
                     setTab={setScreen}
+                    reload={reload}
+                    showTimes={() => setShowTimes(true)}
                     view={view}
                     auth={auth}
                     local={config.local}

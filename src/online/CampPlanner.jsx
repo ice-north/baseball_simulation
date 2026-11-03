@@ -9,6 +9,7 @@ import {
 } from '../season/trainingPolicy.js';
 import { POS } from './api.js';
 import { CAMP_MENUS } from './shared.js';
+import { Choice } from './Choice.jsx';
 import { AbilityGrade, PlayerStatsButton, ConditionMark } from './PlayerPerformance.jsx';
 
 // ============================================================
@@ -168,34 +169,29 @@ export default function CampPlanner({ view, plan, busy, onChange }) {
       <section className="online-camp-bulk">
         <h3>まとめて割り当てる</h3>
         <div className="online-camp-bulk-fields">
-          <label>
-            方針
-            <select
-              value={bulk.direction}
-              disabled={busy}
-              onChange={(e) => setBulk({ ...bulk, direction: e.target.value })}
-            >
-              {Object.values(DIRECTIONS).map((d) => (
-                <option key={d.key} value={d.key}>
-                  {d.icon} {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            段階
-            <select
-              value={bulk.phase}
-              disabled={busy}
-              onChange={(e) => setBulk({ ...bulk, phase: e.target.value })}
-            >
-              {['physique', 'skill'].map((key) => (
-                <option key={key} value={key}>
-                  {PHASES[key].icon} {PHASES[key].name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* ⚠ 選択肢が数個のものは**ボタンを並べる**（PC版の共通のルール。
+              コンボボックスは開かないと何があるか分からない） */}
+          <Choice
+            label="方針"
+            options={Object.fromEntries(
+              Object.values(DIRECTIONS).map((d) => [d.key, `${d.icon} ${d.name}`]),
+            )}
+            value={bulk.direction}
+            disabled={busy}
+            onChange={(direction) => setBulk({ ...bulk, direction })}
+          />
+          <Choice
+            label="段階"
+            options={Object.fromEntries(
+              ['physique', 'skill'].map((key) => [
+                key,
+                `${PHASES[key].icon} ${PHASES[key].name}`,
+              ]),
+            )}
+            value={bulk.phase}
+            disabled={busy}
+            onChange={(phase) => setBulk({ ...bulk, phase })}
+          />
           <button disabled={busy} onClick={() => applyBulk(null)}>
             全員に当てる
           </button>

@@ -18,7 +18,13 @@ import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { projectLineup } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { validateLineup } from '../../src/online/shared.js';
-import { teamFromView, planFromTeam } from '../../src/online/lineupBridge.js';
+import {
+  teamFromView,
+  planFromTeam,
+  rebaseLineupSave,
+  LINEUP_EDITOR_KEYS,
+  TACTICS_EDITOR_KEYS,
+} from '../../src/online/lineupBridge.js';
 import { generateOptimalLineup } from '../../src/game/lineupGenerator.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 
@@ -156,6 +162,75 @@ try {
     assert.equal(t.pitchingRotation.currentStarterIndex, 1, '次の先発の位置が合っていない');
   }
 
+  // --- PCの2つの編集画面が同じ編成を保存しても、互いの編集を消さないか -----
+  // ⚠ PCでは「スタメン設定・投手起用」と「方針・采配」が**同じ編成の塊**を別々に
+  //    編集する。保存には編集を始めたときの塊（`baseLineup`）を添え、サーバーの今と
+  //    違えば弾かれる。`rebaseLineupSave` は自分の項目だけを最新の塊に載せて送る。
+  {
+    const latestRevision = async () => (await store.read()).league.revision;
+    const start = (await service.view('admin', sessionId)).lineup;
+    // ① 方針・采配だけ保存（スタメン設定側は start を起点に編集中のまま）
+    const tactics = {
+      strategy: { ...start.strategy, batting: 'patient' },
+      tactics: start.tactics,
+    };
+    await run(
+      'lineup',
+      await latestRevision(),
+      rebaseLineupSave(tactics, start, start, TACTICS_EDITOR_KEYS),
+    );
+    const afterTactics = (await service.view('admin', sessionId)).lineup;
+    assert.equal(afterTactics.strategy.batting, 'patient', '方針が保存されていない');
+    // ② スタメン設定側は古い起点（start）のまま保存する。弾かれず、①の方針も残ること
+    const reordered = [...start.starters].reverse();
+    await run(
+      'lineup',
+      await latestRevision(),
+      rebaseLineupSave(
+        { ...start, starters: reordered },
+        start,
+        afterTactics,
+        LINEUP_EDITOR_KEYS,
+      ),
+    );
+    const afterLineup = (await service.view('admin', sessionId)).lineup;
+    assert.deepEqual(afterLineup.starters, reordered, '先発の並びが保存されていない');
+    assert.equal(
+      afterLineup.strategy.batting,
+      'patient',
+      'スタメン設定の保存で、別の画面で保存した方針を古い値に戻した',
+    );
+    // ③ 自分の項目（先発）が他で変わっていたら、本当の食い違いとして弾かれること
+    await assert.rejects(
+      run(
+        'lineup',
+        await latestRevision(),
+        rebaseLineupSave(
+          { ...start, starters: [...start.starters].slice(1).concat(start.starters[0]) },
+          start,
+          afterLineup,
+          LINEUP_EDITOR_KEYS,
+        ),
+      ),
+      /編成がほかの画面で更新されています/,
+      '自分の項目が他で変わっていたのに上書きできてしまう',
+    );
+    assert.deepEqual(
+      (await service.view('admin', sessionId)).lineup.starters,
+      reordered,
+      '弾かれたはずの保存で先発が変わった',
+    );
+    // ④ 方針・采配で項目を消したとき（undefined）は、送る塊からも消える
+    const dropped = rebaseLineupSave(
+      { strategy: undefined, tactics: afterLineup.tactics },
+      afterLineup,
+      afterLineup,
+      TACTICS_EDITOR_KEYS,
+    );
+    assert.ok(!('strategy' in dropped), '消した項目が送る塊に残っている');
+    assert.deepEqual(dropped.baseLineup, afterLineup, '起点が最新の塊になっていない');
+  }
+
   // --- TEAMS_DATA を引かずに自動編成できるか -------------------------
   // ⚠ オンラインの球団は `TEAMS_DATA` に居ない。`generateOptimalLineup` が
   //    名前で引く作りのままだと、「自動」を押しても**黙って何も起きない**
@@ -179,5 +254,5 @@ try {
 }
 
 console.log(
-  '■ 編成画面の移植: OK（投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / TEAMS_DATA 無しで自動編成）',
+  '■ 編成画面の移植: OK（投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / TEAMS_DATA 無しで自動編成）',
 );
