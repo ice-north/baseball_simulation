@@ -1842,15 +1842,196 @@
   font-weight: 700;
 }
 
-/* ホームの眺め。左に順位表、右に日程とリーグ上位。 */
+/* ホームの眺め。並べ方は**一人用の日程画面に合わせる**。
+   左（広い）にカレンダー・その日の対戦・個人成績、右（狭い）に順位表・便り・日程。
+   ⚠ 左右の比は、左にカレンダー（7列）が入るので一人用と同じ約6:4にする。
+      以前の 1.15:1 だと7列が潰れて、1マスに2試合書くと折り返した。 */
 .online-board {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
+.online-board-main,
 .online-board-side {
   min-width: 0;
+}
+/* ⚠ 1100px を下回ったら**縦に積む**。7列のカレンダーと順位表を
+   横に並べたままにすると、どちらも読めない幅になる */
+@media (max-width: 1100px) {
+  .online-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- 月間カレンダー --------------------------------------------------- */
+.online-calendar-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.online-calendar-head h2 {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.online-calendar-head h2 small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--accent);
+}
+.online-calendar-record {
+  margin: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+  font-variant-numeric: tabular-nums;
+}
+.online-calendar-record strong {
+  font-size: 14px;
+  margin: 0 1px 0 4px;
+}
+.online-calendar-record span {
+  margin-left: 6px;
+  color: #9fb0c4;
+}
+.online-calendar-nav {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.online-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  margin-bottom: 2px;
+}
+.online-calendar-weekdays span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 0;
+  border-radius: 4px;
+  background: #ffffff10;
+  color: #cbd5e1;
+}
+/* ⚠ 日曜と土曜は色で分ける。7列を数えずに週の切れ目が読めるようにする */
+.online-calendar-weekdays span[data-weekday='0'],
+.online-calendar-day[data-weekday='0'] .online-calendar-date {
+  color: #fca5a5;
+}
+.online-calendar-weekdays span[data-weekday='6'],
+.online-calendar-day[data-weekday='6'] .online-calendar-date {
+  color: #93c5fd;
+}
+.online-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+.online-calendar-day {
+  min-height: 58px;
+  padding: 3px;
+  border-radius: 6px;
+  background: #ffffff0c;
+  border: 1px solid transparent;
+}
+.online-calendar-day.is-empty {
+  background: #ffffff06;
+}
+/* ⚠ マスに付ける印は**現在地だけ**。12球団は全球団が毎試合日に試合をするので、
+   「自球団の試合がある日」で塗ると試合日が全部塗られる（実測で31日中26日）。
+   自球団はその行だけ色を変える。 */
+.online-calendar-day.is-today {
+  border-color: var(--accent);
+}
+.online-calendar-date {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #e2e8f0;
+}
+.online-calendar-game {
+  display: block;
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #dbe4ee;
+  font-variant-numeric: tabular-nums;
+}
+.online-calendar-game.is-mine {
+  color: #fde68a;
+  font-weight: 700;
+}
+.online-calendar-game b {
+  font-weight: 700;
+  margin: 0 1px;
+}
+
+/* --- その日の対戦 ----------------------------------------------------- */
+.online-matchups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.online-matchup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #ffffff0c;
+  border: 1px solid transparent;
+}
+.online-matchup.is-mine {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.online-matchup div {
+  min-width: 0;
+  text-align: center;
+}
+.online-matchup strong {
+  display: block;
+  font-size: 14px;
+}
+.online-matchup small {
+  display: block;
+  font-size: 11px;
+  color: #9fb0c4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-matchup-vs {
+  font-size: 11px;
+  color: #9fb0c4;
+}
+
+/* --- 個人成績ランキング ------------------------------------------------ */
+.online-leader-section + .online-leader-section {
+  margin-top: 12px;
+}
+.online-leader-section > h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.online-leader-box {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #ffffff0c;
+}
+.online-leader-box h4 {
+  margin: 0 0 3px;
+  font-size: 12px;
 }
 .online-division + .online-division {
   margin-top: 16px;
@@ -1866,14 +2047,12 @@
   font-weight: 400;
   color: #cbd5e1;
 }
+/* ⚠ 部門ごとに**3項目を横に並べる**（一人用と同じ）。1列に8項目を積むと
+   打撃と投球の切れ目が読めない */
 .online-leaders {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-}
-.online-leaders h3 {
-  margin: 0 0 4px;
-  font-size: 13px;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 8px;
 }
 .online-leaders ol {
   margin: 0;
@@ -1890,8 +2069,28 @@
   border-bottom: 1px solid #ffffff14;
 }
 .online-leader-rank {
-  flex: 0 0 14px;
+  flex: 0 0 16px;
+  text-align: center;
   color: #9fb0c4;
+}
+/* 上位3人だけ色を付ける（一人用と同じ金・銀・銅） */
+.online-leader-rank[data-rank='1'] {
+  color: #1f2937;
+  background: #fbbf24;
+  border-radius: 50%;
+  font-weight: 700;
+}
+.online-leader-rank[data-rank='2'] {
+  color: #1f2937;
+  background: #cbd5e1;
+  border-radius: 50%;
+  font-weight: 700;
+}
+.online-leader-rank[data-rank='3'] {
+  color: #1f2937;
+  background: #d8a07a;
+  border-radius: 50%;
+  font-weight: 700;
 }
 .online-leader-name {
   flex: 1;

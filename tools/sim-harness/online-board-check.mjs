@@ -11,7 +11,11 @@ import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
-import { leagueLeaders, withStarters } from '../../server/leagueBoard.mjs';
+import {
+  leagueLeaders,
+  withStarters,
+  seasonCalendar,
+} from '../../server/leagueBoard.mjs';
 import {
   PYRAMID_LEAGUES,
   TEAMS_PER_LEAGUE,
@@ -242,10 +246,109 @@ try {
       () => ({ batting: {}, pitching: {} }),
     ),
   );
+  // --- カレンダー（1年ぶんの日程） -----------------------------------
+  // ⚠ 一人用の日程画面と同じ月間カレンダーをホームに出す。投影は
+  //    **添字の5つ組**（`[日付キー, ビジター, ホーム, ビジター得点, ホーム得点]`）。
+  {
+    const live = (await store.read()).league;
+    const cal = view.calendar;
+    assert.ok(cal, 'カレンダーが渡っていない');
+    assert.deepEqual(cal.today, live.season.currentDate, '今日の日付がちがう');
+
+    // ⚠ **日付順に並んでいること**。`pyramidSchedule` はリーグごとに1年ぶんを
+    //    並べてから次のリーグへ進むので、配列の順のままでは月が飛ぶ
+    const keys = cal.games.map((g) => g[0]);
+    assert.deepEqual(
+      keys,
+      [...keys].sort((x, y) => x - y),
+      'カレンダーが日付順に並んでいない',
+    );
+
+    // 中身が日程と合っている
+    const playable = live.season.schedule.filter(
+      (g) => g.date && g.home !== 'TBD' && g.away !== 'TBD',
+    );
+    assert.equal(cal.games.length, playable.length, '試合数が日程と合わない');
+    const teamSet = new Set(live.season.settings.teamNames);
+    for (const [key, away, home, as, hs] of cal.games) {
+      assert.ok(
+        teamSet.has(cal.teams[away]) && teamSet.has(cal.teams[home]),
+        `添字が球団に解けない: ${key}`,
+      );
+      assert.notEqual(cal.teams[away], cal.teams[home], '同じ球団同士の試合');
+      assert.ok(
+        String(key).length === 8,
+        `日付キーの形がちがう: ${key}`,
+      );
+      // ⚠ 得点は**両方そろって数**か、**両方 null**。片方だけ数だと
+      //    画面が「0-」のような半端な表示になる
+      assert.equal(
+        typeof as === 'number',
+        typeof hs === 'number',
+        `得点の片方だけが数: ${key}`,
+      );
+    }
+
+    // ⚠ **消化済みの試合に得点が入っていること**。入っていないとカレンダーが
+    //    1年じゅう「対戦カードだけ」になる
+    const played = cal.games.filter((g) => typeof g[3] === 'number');
+    assert.equal(
+      played.length,
+      live.season.schedule.filter((g) => g.result).length,
+      '消化済みの試合数と得点のある試合数が合わない',
+    );
+    assert.ok(played.length > 0, '前提: 試合が消化されている');
+    // 得点そのものが結果と一致する
+    for (const result of live.season.results.slice(-5)) {
+      const key =
+        result.date.year * 10000 + result.date.month * 100 + result.date.day;
+      const row = cal.games.find(
+        (g) =>
+          g[0] === key &&
+          cal.teams[g[1]] === result.away &&
+          cal.teams[g[2]] === result.home,
+      );
+      assert.ok(row, `結果に対応する試合がカレンダーに無い: ${key}`);
+      assert.equal(row[3], result.result.awayScore, 'ビジターの得点がちがう');
+      assert.equal(row[4], result.result.homeScore, 'ホームの得点がちがう');
+    }
+
+    // ⚠ **球団名を毎試合書かないこと**。12球団の1年は約600試合あり、
+    //    名前をそのまま入れると投影だけで60KBを超える
+    const body = JSON.stringify(cal.games);
+    for (const name of teamSet)
+      assert.ok(!body.includes(name), `試合に球団名が入っている: ${name}`);
+    const kb = Buffer.byteLength(JSON.stringify(cal)) / 1024;
+    assert.ok(kb < 30, `カレンダーの投影が重い: ${Math.round(kb)}KB`);
+  }
+
+  // ⚠ **相手の決まっていない試合は出さないこと**（作り物の日程で見る）。
+  //    プレーオフの決勝は準決勝が終わるまで `home: 'TBD'` で置かれる
+  //    （`seasonManager` の `addSeries`）。そのまま出すと、カレンダーに
+  //    「TBD-TBD」の行が5つ並ぶ。本物のリーグはこの検査の時点で
+  //    レギュラーシーズンの途中なので、ここは作り物で押さえる。
+  {
+    const date = { year: 2026, month: 9, day: 1 };
+    const cal = seasonCalendar(
+      [
+        { id: 1, date, home: '甲府ウルブズ', away: '松本ディアーズ', result: null },
+        { id: 2, date, home: 'TBD', away: 'TBD', result: null },
+        { id: 3, date, home: '甲府ウルブズ', away: 'TBD', result: null },
+        { id: 4, date: null, home: '甲府ウルブズ', away: '松本ディアーズ', result: null },
+      ],
+      date,
+    );
+    assert.equal(cal.games.length, 1, '相手未定・日付無しの試合を出している');
+    assert.deepEqual(
+      cal.teams.sort(),
+      ['松本ディアーズ', '甲府ウルブズ'].sort(),
+      'TBD を球団として数えている',
+    );
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる）',
+  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・カレンダーが日付順で軽い）',
 );

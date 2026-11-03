@@ -117,3 +117,39 @@ export function leagueLeaders(league, statsOf, labelOf = (n) => n, top = 5) {
     return { id: category.id, label: category.label, digits: category.digits || 0, rows };
   });
 }
+
+/**
+ * カレンダーに出す1年ぶんの日程。
+ *
+ * ⚠ **球団名を毎試合書かないこと**。12球団の1年は約600試合あり、名前を
+ *    そのまま入れると投影だけで60KBを超える。名前は `teams` に1度だけ置き、
+ *    試合は添字で指す。1試合は
+ *      `[日付キー, ビジター添字, ホーム添字, ビジター得点, ホーム得点]`
+ *    の5つ組。得点は未消化なら `null`。日付キーは `20240406` の形。
+ * ⚠ 並べ方は**日付順**。`pyramidSchedule` はリーグごとに1年ぶんを並べてから
+ *    次のリーグへ進むので、配列の順のままでは月が飛ぶ。
+ * ⚠ 中止・不戦は `result` があって得点が無いことがある。得点が数でなければ
+ *    未消化と同じ扱いにする（画面では対戦だけ出す）。
+ */
+export function seasonCalendar(schedule, today) {
+  const names = [];
+  const indexOf = (name) => {
+    let i = names.indexOf(name);
+    if (i < 0) i = names.push(name) - 1;
+    return i;
+  };
+  const games = schedule
+    .filter((g) => g.date && g.home !== 'TBD' && g.away !== 'TBD')
+    .map((g) => {
+      const score = (v) => (typeof v === 'number' ? v : null);
+      return [
+        g.date.year * 10000 + g.date.month * 100 + g.date.day,
+        indexOf(g.away),
+        indexOf(g.home),
+        score(g.result?.awayScore),
+        score(g.result?.homeScore),
+      ];
+    })
+    .sort((a, b) => a[0] - b[0]);
+  return { today, teams: names, games };
+}

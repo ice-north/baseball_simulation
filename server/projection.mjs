@@ -1,7 +1,7 @@
 import { roleFor } from '../src/online/tactics.js';
 import { PHASE_LABELS, ONLINE_SCHEMA } from '../src/online/shared.js';
 import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
-import { withStarters, leagueLeaders } from './leagueBoard.mjs';
+import { withStarters, leagueLeaders, seasonCalendar } from './leagueBoard.mjs';
 import { packSummary } from '../src/online/rosterPack.js';
 import {
   currentPlayerStats,
@@ -234,6 +234,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       awayScore: g.result.awayScore,
       decisions: g.result.decisions,
     })),
+    // ⚠ カレンダーに出す1年ぶんの日程。球団名は `calendar.teams` に1度だけ
+    //    置き、試合は添字で指す（名前を毎試合書くと60KBを超える）
+    calendar: seasonCalendar(l.season.schedule, l.season.currentDate),
     // ⚠ 並べ方は `upcomingGames` が正本（日付順・自球団を必ず含む）。
     //    先発予定はその上に重ねるだけにする
     upcoming: withStarters(
