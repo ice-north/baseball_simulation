@@ -24,7 +24,8 @@ const snapshotRoster = (team) => JSON.stringify({
   ls: team.lineupSettings || null,
   pr: team.pitchingRotation || null,
   pl: (team.players || []).map(p => [
-    p.id, p.position, p.battingOrder ?? null, !!p._isDH, (p.arsenal || []).map(a => !!a.sealed),
+    // ⚠ 球種は `player.pitching.arsenal`（`player.arsenal` ではない）
+    p.id, p.position, p.battingOrder ?? null, !!p._isDH, (p.pitching?.arsenal || []).map(a => !!a.sealed),
   ]),
 });
 const replaceContents = (target, source) => {
@@ -50,7 +51,7 @@ const restoreRoster = (team, json) => {
     p.position = position;
     if (battingOrder === null) delete p.battingOrder; else p.battingOrder = battingOrder;
     if (isDH) p._isDH = true; else delete p._isDH;
-    (p.arsenal || []).forEach((a, i) => { if (sealed[i]) a.sealed = true; else delete a.sealed; });
+    (p.pitching?.arsenal || []).forEach((a, i) => { if (sealed[i]) a.sealed = true; else delete a.sealed; });
   });
 };
 
@@ -75,6 +76,8 @@ const EmbeddedFrame = ({ children }) => <div className="lineup-embedded">{childr
 // `canConvertPosition`: ポジション登録の変更を出すか。⚠ 一人用は既定の true のまま。
 // オンラインはサーバーが登録変更を受け付けない（送る項目が無い）ので false で渡す。
 // 出したままだと画面の上では変わって見え、保存すると黙って元に戻る
+// `canSealPitch`: 変化球の封印／解禁を出すか。理由は `canConvertPosition` と同じ
+// （オンラインの保存に封印の項目が無い）。false のときは球種を見せるだけにする
 // `displayName`: 見出しに出す名前。省略時は teamName（一人用はこちら）。
 // ⚠ teamName は名前による照合にも使うので、表示名で上書きしないこと
 // `initialTab`: 開く位置。⚠ オンラインは左メニューから
@@ -90,6 +93,7 @@ export const LineupSettingContent = ({
   onBack,
   team,
   canConvertPosition = true,
+  canSealPitch = true,
   displayName,
   initialTab = 'lineup',
   embedded = false,
@@ -257,6 +261,22 @@ export const LineupSettingContent = ({
     defenseDragRef.current = null; // ドラッグの途中で Esc → 離しても入れ替えない
     setDefenseDrag(null);
   };
+  // ⚠ **外からタブが替わったとき・隠れたときも選択中を消す**。埋め込み（オンラインのPC）は
+  //    画面内のタブを出さず、左メニューから `initialTab` で替わる。消さないと、
+  //    スタメン設定で選んだ控え選手が、投手起用から戻ったあとの次のクリックで入れ替わる
+  const selectionScope = useRef({ tab, keyboardActive });
+  useEffect(() => {
+    const prev = selectionScope.current;
+    selectionScope.current = { tab, keyboardActive };
+    if (prev.tab === tab && (prev.keyboardActive === keyboardActive || keyboardActive)) return;
+    setSelectedDefensePos(null);
+    setSwapSource(null);
+    setSelectedBenchPlayer(null);
+    setSelectedBattingOrder(null);
+    setTapSelectedPitcherId(null);
+    defenseDragRef.current = null;
+    setDefenseDrag(null);
+  }, [tab, keyboardActive]);
   const stepHistory = (delta) => {
     const h = historyRef.current;
     const next = h.index + delta;
@@ -735,19 +755,20 @@ export const LineupSettingContent = ({
             {isPitcher && (p.arsenal || []).length > 0 && (
               <div>
                 <h4 className="text-green-400 text-xs font-bold uppercase tracking-wider mb-1.5">
-                  変化球 <span className="text-gray-300 normal-case font-normal tracking-normal">
+                  変化球 {canSealPitch && <span className="text-gray-300 normal-case font-normal tracking-normal">
                     — クリックで封印／解禁（封印した球は試合で投げません）
-                  </span>
+                  </span>}
                 </h4>
                 <div className="flex flex-wrap gap-1.5">
                   {(p.arsenal || []).map((a, i) => {
                     const rank = getAbilityRank(a.level || 0);
                     const sealed = !!a.sealed;
                     // 全部は封印できない（投げる球が無くなるため）
-                    const canSeal = sealed || (p.arsenal || []).filter(x => !x.sealed).length > 1;
+                    const canSeal = canSealPitch && (sealed || (p.arsenal || []).filter(x => !x.sealed).length > 1);
                     return (
                       <button key={i} type="button" disabled={!canSeal}
-                        title={sealed ? '封印中：試合では投げません。クリックで解禁'
+                        title={!canSealPitch ? undefined
+                          : sealed ? '封印中：試合では投げません。クリックで解禁'
                           : canSeal ? '試合で投げています。クリックで封印'
                           : '最後の1球は封印できません'}
                         onClick={() => {
@@ -758,7 +779,7 @@ export const LineupSettingContent = ({
                         className={`px-2 py-0.5 rounded text-xs font-semibold transition ${
                           sealed ? 'bg-surface-2 text-gray-400 line-through ring-1 ring-gray-600'
                             : `bg-gray-700/60 ${getRankColor(rank)} hover:bg-gray-600`
-                        } ${canSeal ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                        } ${!canSealPitch ? 'cursor-default' : canSeal ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                         {sealed && '🔒'}{getPitchTypeName(a.type)} <span className="text-xs opacity-70">Lv{a.level}</span>
                       </button>
                     );

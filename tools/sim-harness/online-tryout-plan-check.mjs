@@ -36,6 +36,7 @@ import {
   addToPlan,
   benchFromPlan,
   shiftInPlan,
+  moveInPlan,
   DEFAULT_WEIGHTS,
   WEIGHT_FIELDS,
   sanitizeWeights,
@@ -518,9 +519,23 @@ try {
       // ⚠ 画面の並び＝サーバーが取りにいく順（`rankedIds` の先頭）
       assert.deepEqual(ids.slice(0, wanted.length), wanted, `${step}回目: 画面の並びと希望順がずれた`);
       const bench = ids.filter((id) => !wanted.includes(id));
-      const op = rand(5);
+      const op = rand(6);
       let next;
-      if (op === 0 || op === 1) {
+      if (op === 5) {
+        // ドラッグ: from 位の選手を to 位へ（間の選手は1つずつずれる）
+        const from = rand(wanted.length);
+        const to = rand(wanted.length);
+        next = moveInPlan(ids, candidates, count, none, wanted[from], to);
+        const after = wantedOf(next);
+        assert.ok(sameSet(after, wanted), `${step}回目: ドラッグで顔ぶれが変わった`);
+        assert.equal(after[to], wanted[from], `${step}回目: ドラッグした位置に来ない`);
+        const rest = (list, id) => list.filter((x) => x !== id);
+        assert.deepEqual(
+          rest(after, wanted[from]),
+          rest(wanted, wanted[from]),
+          `${step}回目: ドラッグで間の選手の順が崩れた`,
+        );
+      } else if (op === 0 || op === 1) {
         const i = rand(wanted.length);
         const delta = op === 0 ? -1 : 1;
         next = shiftInPlan(ids, candidates, count, none, i, delta);

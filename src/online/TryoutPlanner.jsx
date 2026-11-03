@@ -12,6 +12,7 @@ import {
   addToPlan,
   benchFromPlan,
   shiftInPlan,
+  moveInPlan,
   WEIGHT_FIELDS,
   WEIGHT_MAX,
   WEIGHT_LEVELS,
@@ -175,14 +176,10 @@ export default function TryoutPlanner({
     setRanked(benchFromPlan(plan.rankedIds, candidates, count, roster, id));
   const shift = (index, delta) =>
     setRanked(shiftInPlan(plan.rankedIds, candidates, count, roster, index, delta));
-  // ドラッグで from 位 → to 位 へ動かす（間の選手は1つずつずれる）。
-  // ⚠ ↑↓ と同じく**獲得予定の並びで**1つずつ動かす（`shiftInPlan` の注意と同じ理由）
+  // ドラッグで from 位 → to 位 へ動かす（間の選手は1つずつずれる。`moveInPlan`）
   const moveTo = (from, to) => {
-    if (from === to || from < 0 || to < 0) return;
-    let ids = plan.rankedIds;
-    for (let i = from; i !== to; i += to > i ? 1 : -1)
-      ids = shiftInPlan(ids, candidates, count, roster, i, to > i ? 1 : -1);
-    setRanked(ids);
+    if (wanted[from] === undefined) return;
+    setRanked(moveInPlan(plan.rankedIds, candidates, count, roster, wanted[from], to));
   };
   const dragFrom = useRef(null);
   const add = (id, first) => {

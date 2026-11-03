@@ -4,6 +4,7 @@ import { formatGameDate } from './shared.js';
 import { PageNav } from './PageNav.jsx';
 import PlayerAbilities from './PlayerAbilities.jsx';
 import { useRead } from './useRead.js';
+import { useMobile } from './useMobile.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
@@ -255,6 +256,7 @@ function Approximation({ columns, precise = false }) {
   ) : null;
 }
 function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
+  const mobile = useMobile();
   const dialog = useRef(null);
   const [category, setCategory] = useState(initialCategory);
   const [groupId, setGroupId] = useState(initialGroup);
@@ -395,7 +397,7 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
             />
             {/* ⚠ PCはタブ、スマホはコンボボックス（幅）。
                 ⚠ 両方置いて CSS で隠すと、同じ名前の操作が2つになる（検査も読み上げも迷う） */}
-            {window.matchMedia('(min-width: 768px)').matches ? (
+            {!mobile ? (
               <GroupTabs
                 category={category}
                 value={group.id}
@@ -565,11 +567,14 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
     if (!desktop) setSort(null);
     setPage(0);
   };
+  // ⚠ 同じ列かは**id で比べる**（`sameColumn`）。PCは区分を変えても並びを残すが、
+  //    本塁打・試合数などは区分ごとに別の列として定義されているため、
+  //    物で比べると見出しは▼なのに押しても逆順にならなかった
   const sortBy = (column) => {
     setSort((old) => ({
       column,
       direction:
-        old?.column === column
+        old?.column && sameColumn(old.column, column)
           ? old.direction === 'asc'
             ? 'desc'
             : 'asc'

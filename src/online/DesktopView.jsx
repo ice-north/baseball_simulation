@@ -145,6 +145,8 @@ function RenameDialog({ view, busy, run, command, close }) {
     () => me?.displayName || teamLabel(view.teamName),
   );
   const [playerName, setPlayerName] = useState(() => me?.label || '');
+  // ⚠ 失敗はダイアログの中に出す。画面上部の帯はダイアログ（最前面）の裏に隠れる
+  const [error, setError] = useState('');
   useEffect(() => {
     const node = dialog.current;
     node.showModal();
@@ -165,15 +167,17 @@ function RenameDialog({ view, busy, run, command, close }) {
         順位表には「球団名（あなたの名前）」と出ます。いつでも変えられます。
       </p>
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          run(async () => {
-            await command('profile', {
+          setError('');
+          const result = await run(() =>
+            command('profile', {
               teamName: teamName.trim(),
               playerName: playerName.trim(),
-            });
-            dialog.current?.close();
-          });
+            }),
+          );
+          if (result?.ok) dialog.current?.close();
+          else setError(result?.error || '保存できませんでした');
         }}
       >
         <label>
@@ -194,6 +198,11 @@ function RenameDialog({ view, busy, run, command, close }) {
             onChange={(e) => setPlayerName(e.target.value)}
           />
         </label>
+        {error && (
+          <p role="alert" className="online-error-text">
+            保存できませんでした：{error}
+          </p>
+        )}
         <div className="online-actions">
           <button
             className="online-primary"
@@ -218,6 +227,10 @@ export default function DesktopView(props) {
   //    隠している間は最後に開いていたタブのまま
   const lastLineupTab = useRef('lineup');
   if (lineupTab) lastLineupTab.current = lineupTab;
+  // ⚠ 編成の画面（一人用の約2,900行）は**初めて開くまで作らない**。開いたあとは
+  //    隠すだけで残す（未保存の編集のため）
+  const [lineupOpened, setLineupOpened] = useState(!!lineupTab);
+  if (lineupTab && !lineupOpened) setLineupOpened(true);
   const [lineupDirty, setLineupDirty] = useState(false);
   const onLineupDirty = useCallback((d) => setLineupDirty(d), []);
   return (
@@ -317,24 +330,26 @@ export default function DesktopView(props) {
           ⚠ **保存に失敗しても閉じない**。閉じると編集がまるごと消える。
              ここでは成否に関わらず開いたままにしてある（画面を離れるのは
              左メニューの操作だけ）。 */}
-      <OnlineLineup
-        embedded
-        hidden={!lineupTab}
-        title={TITLES[lineupTab ? current : 'lineup']}
-        view={view}
-        busy={busy}
-        tab={lineupTab || lastLineupTab.current}
-        onDirty={onLineupDirty}
-        onSave={(plan, baseLineup) =>
-          // ⚠ 方針・采配で保存された方針を古い値で上書きしないよう、最新の編成に載せて送る
-          run(() =>
-            command(
-              'lineup',
-              rebaseLineupSave(plan, baseLineup, view.lineup, LINEUP_EDITOR_KEYS),
-            ),
-          )
-        }
-      />
+      {lineupOpened && (
+        <OnlineLineup
+          embedded
+          hidden={!lineupTab}
+          title={TITLES[lineupTab ? current : 'lineup']}
+          view={view}
+          busy={busy}
+          tab={lineupTab || lastLineupTab.current}
+          onDirty={onLineupDirty}
+          onSave={(plan, baseLineup) =>
+            // ⚠ 方針・采配で保存された方針を古い値で上書きしないよう、最新の編成に載せて送る
+            run(() =>
+              command(
+                'lineup',
+                rebaseLineupSave(plan, baseLineup, view.lineup, LINEUP_EDITOR_KEYS),
+              ),
+            )
+          }
+        />
+      )}
       {current === 'tactics' && (
         <DesktopTactics key={`${view.year}:${view.teamName}`} {...props} />
       )}

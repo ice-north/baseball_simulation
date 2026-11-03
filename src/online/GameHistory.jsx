@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReplayViewer from './ReplayViewer.jsx';
 import MobileReplay from './MobileReplay.jsx';
 import { useRead } from './useRead.js';
+import { useMobile } from './useMobile.js';
 import { PageNav } from './PageNav.jsx';
 import { formatGameDate } from './shared.js';
 import { formatStat } from './statsView.js';
@@ -265,12 +266,6 @@ function BoxScore({ game, ownTeam }) {
               setSort(null);
             }}
           >
-            {pageSize === 12 &&
-              ['batting', 'pitching'].map((c) => (
-                <option key={c} value={`${c}:overview`}>
-                  {c === 'batting' ? '打撃' : '投球'}・主要成績一覧
-                </option>
-              ))}
             {Object.entries(GROUPS).flatMap(([c, groups]) =>
               groups.map(([id, label]) => (
                 <option key={`${c}:${id}`} value={`${c}:${id}`}>
@@ -416,6 +411,7 @@ export default function GameHistory({ view }) {
   );
 }
 function History({ view, close }) {
+  const mobile = useMobile();
   const [year, setYear] = useState(view.year),
     [page, setPage] = useState(0),
     [scope, setScope] = useState('own');
@@ -437,7 +433,7 @@ function History({ view, close }) {
             </option>
           ))}
         </select>
-        {window.matchMedia('(min-width: 768px)').matches ? (
+        {!mobile ? (
           // ⚠ PCは試合結果のページと同じボタンの切り替え
           <div className="online-segments" role="group" aria-label="試合記録の範囲">
             {[
