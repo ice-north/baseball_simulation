@@ -76,6 +76,7 @@ import {
   applyMotivationEffect,
   applyBatteryMentalEffect,
   menuFitsPlayer,
+  subMenuFitsPlayer,
   SUB_TRAINING_MENUS,
 } from '../src/season/campTraining.js';
 import { moodMultiplier, resolveTraining } from '../src/season/trainingPolicy.js';
@@ -263,6 +264,8 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
   );
   TEAMS_DATA[teamName] = updatedTeam;
   for (const player of updatedTeam.players) {
+    // ⚠ 守備位置に合うかは**入口で見ている**（`validateCampRound` と
+    //    `validatePhasePlan`）。ここで倒すと、どちらの入口が漏れても気づけない
     const key = sub?.[player.id] || resolveTraining(player, direction, phase).sub;
     if (SUB_TRAINING_MENUS[key]) executeSubTraining(player, key, {}, staff);
   }
@@ -417,21 +420,24 @@ export function captureLeagueWorld() {
 export function validateCampRound(league, teamName, payload) {
   const team = TEAMS_DATA[teamName];
   requireOnline(team, '球団が見つかりません', 409);
-  const own = new Set(team.players.map((p) => p.id));
-  const pick = (source, allowed, message) => {
+  const byId = new Map(team.players.map((p) => [p.id, p]));
+  // ⚠ **守備位置に合うかも見る**。合わないものは `runCampRound` が既定へ
+  //    倒すが、画面には「選んだのに違う練習をした」と映る。入口で断る。
+  const pick = (source, allowed, fits, message) => {
     const out = {};
     for (const [id, key] of Object.entries(source || {})) {
       const playerId = Number(id);
-      if (!own.has(playerId)) continue;
-      requireOnline(allowed.includes(key), message);
+      const player = byId.get(playerId);
+      if (!player) continue;
+      requireOnline(allowed.includes(key) && fits(key, player), message);
       out[playerId] = key;
     }
     return out;
   };
   return {
     policy: normalizeCampPolicy(payload?.policy),
-    main: pick(payload?.main, CAMP_MENUS, '練習メニューが不正です'),
-    sub: pick(payload?.sub, CAMP_SUB_MENUS, 'サブ練習が不正です'),
+    main: pick(payload?.main, CAMP_MENUS, menuFitsPlayer, '練習メニューが不正です'),
+    sub: pick(payload?.sub, CAMP_SUB_MENUS, subMenuFitsPlayer, 'サブ練習が不正です'),
   };
 }
 
@@ -534,11 +540,17 @@ function validatePhasePlan(league, teamName, plan) {
         if (!menuFitsPlayer(key, own.get(playerId))) continue;
         assignments[playerId] = key;
       }
+      // ⚠ **サブ練習も守備位置を見る**（`campRound` の入口と同じ規則）。
+      //    変化球練習を野手に当てても何も起きず、そのクールが丸ごと無駄になる
       const subAssignments = {};
       for (const [id, key] of Object.entries(plan.subAssignments || {})) {
         const playerId = Number(id);
-        if (!own.has(playerId)) continue;
-        requireOnline(CAMP_SUB_MENUS.includes(key), 'サブ練習が不正です');
+        const player = team.players.find((p) => p.id === playerId);
+        if (!player) continue;
+        requireOnline(
+          CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player),
+          'サブ練習が不正です',
+        );
         subAssignments[playerId] = key;
       }
       return {

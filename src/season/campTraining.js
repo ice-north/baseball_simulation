@@ -181,6 +181,28 @@ export const menuFitsPlayer = (key, player) => {
 };
 
 /**
+ * そのサブ練習がこの選手に効くか（オンラインのキャンプの規則）。
+ *
+ * ⚠ 効かない練習を当てると**そのクールが丸ごと無駄になる**。
+ *    変化球練習・新球種習得・スピン解析は投手にしか効かず
+ *    （`executeSubTraining` が投手以外では何もしない）、Cリード学習は
+ *    捕手のリードを上げるものなので捕手だけ。
+ * ⚠ 画面の選択肢（`CampPlanner` の `subMenusFor`）とサーバーの受け付けを
+ *    これでそろえる。
+ */
+const SUB_MENU_ONLY = {
+  breaking: 'pitcher',
+  newpitch: 'pitcher',
+  spin_analysis: 'pitcher',
+  clead_study: 'catcher',
+};
+export const subMenuFitsPlayer = (key, player) => {
+  if (!SUB_TRAINING_MENUS[key]) return false;
+  const only = SUB_MENU_ONLY[key];
+  return !only || player?.position === only;
+};
+
+/**
  * サブ練習メニュー（基礎体力・弱点補強系）
  */
 export const SUB_TRAINING_MENUS = {

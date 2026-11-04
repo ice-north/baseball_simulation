@@ -18,8 +18,12 @@ import {
   loadLeagueWorld,
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
-import { CAMP_MENUS } from '../../src/online/shared.js';
-import { TRAINING_MENUS } from '../../src/season/campTraining.js';
+import { CAMP_MENUS, CAMP_SUB_MENUS } from '../../src/online/shared.js';
+import {
+  TRAINING_MENUS,
+  SUB_TRAINING_MENUS,
+  subMenuFitsPlayer,
+} from '../../src/season/campTraining.js';
 import {
   DIRECTIONS,
   resolveTraining,
@@ -120,6 +124,41 @@ function campWith(build) {
   assert.ok(!offered(true).includes('newpitch'), '新球種習得を出している');
 }
 
+// --- サブ練習の出し分け ------------------------------------------------
+// ⚠ **効かないサブ練習を出さないこと**。変化球練習・新球種習得・スピン解析は
+//    投手にしか効かず、Cリード学習は捕手だけ。出すと、選べるのにそのクールが
+//    丸ごと無駄になる（`executeSubTraining` が何もせずに返る）。
+// ⚠ **対象を選ぶもの（サブポジ練習・フォーム改造・打席変更）は出さない**。
+//    選手ごとに「何に」を指定する置き場が提出の形に無い。
+{
+  const offered = (player) =>
+    Object.keys(SUB_TRAINING_MENUS).filter(
+      (key) => CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player),
+    );
+  const pitcher = { position: 'pitcher' };
+  const catcher = { position: 'catcher' };
+  const fielder = { position: 'left' };
+  for (const key of ['subposition', 'form_change', 'switch_hit'])
+    assert.ok(
+      !CAMP_SUB_MENUS.includes(key),
+      `対象を選ぶサブ練習を出している: ${key}`,
+    );
+  for (const key of CAMP_SUB_MENUS)
+    assert.ok(SUB_TRAINING_MENUS[key], `知らないサブ練習がある: ${key}`);
+  // 投手だけのもの
+  for (const key of ['breaking', 'newpitch', 'spin_analysis']) {
+    assert.ok(offered(pitcher).includes(key), `投手に ${key} が出ていない`);
+    assert.ok(!offered(fielder).includes(key), `野手に ${key} が出ている`);
+  }
+  // 捕手だけのもの
+  assert.ok(offered(catcher).includes('clead_study'), '捕手にCリード学習が出ていない');
+  assert.ok(!offered(fielder).includes('clead_study'), '野手にCリード学習が出ている');
+  // 誰でもできるもの
+  for (const key of ['physique', 'weight', 'stretch', 'defense_sub', 'long_throw', 'eye'])
+    for (const player of [pitcher, catcher, fielder])
+      assert.ok(offered(player).includes(key), `${player.position} に ${key} が出ていない`);
+}
+
 // --- まとめて割り当て（方針 → メニュー）がサーバーを通るか --------------
 {
   const league = leagueAtCamp();
@@ -160,6 +199,32 @@ function campWith(build) {
       ),
     /練習メニューが不正/,
   );
+  // ⚠ **提出の側でも守備位置を見ること**（`campRound` の入口と同じ規則）。
+  //    片方だけ見ていると、締め切りで回るぶんに効かない練習が混ざる
+  {
+    const fielder = roster.find((p) => p.position !== 'pitcher');
+    assert.throws(
+      () =>
+        quiet(() =>
+          submitPhase(
+            league,
+            'a',
+            {
+              phaseId: league.phase.id,
+              plan: {
+                menu: 'standard',
+                subAssignments: { [fielder.id]: 'breaking' },
+              },
+              ready: false,
+            },
+            NOW,
+          ),
+        ),
+      /サブ練習が不正/,
+      '提出で野手に変化球練習を通した',
+    );
+  }
+
   // ⚠ **他球団の選手は落とす**。混ぜられると練習が飛ぶ
   quiet(() =>
     submitPhase(
@@ -281,6 +346,47 @@ assert.ok(
       `サブ練習（基礎体力）が効いていない: 体力の伸び ${one.bodyStamina - start.bodyStamina}（${roster.length}人）`,
     );
 
+    // ⚠ **効かないサブ練習は入口で断ること**。野手に変化球練習を当てても
+    //    何も起きず、そのクールが丸ごと無駄になる
+    const outfielder = roster.find((p) => p.position !== 'pitcher');
+    await assert.rejects(
+      () =>
+        send('campRound', {
+          round: 2,
+          policy: { direction: 'balanced', phase: 'skill' },
+          main: {},
+          sub: { [outfielder.id]: 'breaking' },
+        }),
+      /サブ練習が不正/,
+      '野手に変化球練習を当てられた',
+    );
+    // ⚠ 投手なら通る
+    const pitcher = roster.find((p) => p.position === 'pitcher');
+    await send('campRound', {
+      round: 2,
+      policy: { direction: 'balanced', phase: 'skill' },
+      main: Object.fromEntries(
+        roster.map((p) => [p.id, p.position === 'pitcher' ? 'control' : 'batting']),
+      ),
+      sub: Object.fromEntries(
+        roster.map((p) => [
+          p.id,
+          p.id === pitcher.id ? 'breaking' : 'long_throw',
+        ]),
+      ),
+    });
+    // ⚠ 遠投は肩力を上げる。全員に当てたので、肩の合計は必ず伸びる
+    const afterThrow = (await store.read()).league;
+    const armOf = (l) =>
+      l.game.teams[teamName].players.reduce(
+        (n, p) => n + (p.physical?.arm || 0),
+        0,
+      );
+    assert.ok(
+      armOf(afterThrow) > armOf(after1),
+      '遠投で肩力が伸びていない',
+    );
+
     // ⚠ **同じクールを2回走らせない**。押し直しや再送で成長が二重に積まれる
     await assert.rejects(
       () => round(1),
@@ -294,9 +400,9 @@ assert.ok(
       'クールを飛ばして実行できた',
     );
 
-    await round(2);
+    await round(3);
     const two = sumOf((await store.read()).league);
-    assert.ok(two.meet > one.meet, '2クール目が効いていない');
+    assert.ok(two.meet > one.meet, '3クール目が効いていない');
 
     // ⚠ 残り2クールは締め切りで自動。合計4クールぶんで止まること
     await send('testmode', { on: true });
@@ -304,17 +410,18 @@ assert.ok(
     const done = (await store.read()).league;
     assert.notEqual(done.phase?.kind, 'camp', 'キャンプが終わっていない');
     const finished = sumOf(done);
-    // 4クールぶんの伸びは、2クールぶんの伸びのおよそ2倍。8クール回っていたら
-    // 3倍を超える（実測で2クール+4クール＝6クールぶんになっていた）
-    const perTwo = two.meet - start.meet;
+    // ⚠ ここまで**自分で3クール**回した。締め切りで回るのは残り1クールだけ。
+    //    数えていないと、さらに4クール回って合計7クールぶん伸びる。
+    //    3クールぶんの伸びを基準に、4クールぶん（約1.33倍）の範囲に収まること。
+    const perThree = two.meet - start.meet;
     const all4 = finished.meet - start.meet;
     assert.ok(
-      all4 > perTwo,
-      `残りのクールが回っていない: 2クール${perTwo} / 全部${all4}`,
+      all4 > perThree,
+      `残りのクールが回っていない: 3クール${perThree} / 全部${all4}`,
     );
     assert.ok(
-      all4 < perTwo * 2.6,
-      `自分で回したぶんが数えられていない（二重に成長した）: 2クール${perTwo} / 全部${all4}`,
+      all4 < perThree * 1.9,
+      `自分で回したぶんが数えられていない（二重に成長した）: 3クール${perThree} / 全部${all4}`,
     );
 
     // ⚠ キャンプが終わったら打順が組み直されていること（空のまま開幕させない）
