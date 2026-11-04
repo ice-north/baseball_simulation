@@ -1,4 +1,13 @@
-/* 既存PC版のsurface/accentを共用。カード上と地色上の文字色を分ける。 */
+/* 既存PC版のsurface/accentを共用。カード上と地色上の文字色を分ける。
+   ⚠ **要素名で当てる指定（`.online button` など）には `:not(:where(.online-sp *))` を付ける**。
+      PCの編成ページは一人用の画面（Tailwind）を `.online-sp` の中にそのまま入れている。
+      `.online button`（詳細度 0,1,1）は Tailwind の `.bg-gray-700`（0,1,0）より強く、
+      当たると一人用の小さなボタンが全部44pxの同じ色に潰れる。`:where()` は詳細度0なので、
+      付けても今までの指定との強さの関係は変わらない。新しく要素名の指定を足すときも付けること。
+   ⚠ ボタン・入力欄の大きさと色は**変数で持つ**（`--online-control-h` など）。
+      PCは一人用と同じ語彙（高さ32px・`btn-secondary` の色）にするため、末尾の
+      「PC版の共通の見た目」で変数だけ差し替える。個別の指定（詳細度の高いもの）は
+      そのまま効く。 */
 .online {
   min-height: 100dvh;
   background: var(--surface-0);
@@ -9,72 +18,73 @@
     'Hiragino Kaku Gothic ProN',
     sans-serif;
 }
-.online *,
-.online *::before,
-.online *::after {
+.online *:not(:where(.online-sp *)),
+.online *:not(:where(.online-sp *))::before,
+.online *:not(:where(.online-sp *))::after {
   box-sizing: border-box;
 }
-.online h1,
-.online h2,
-.online h3,
-.online p {
+.online h1:not(:where(.online-sp *)),
+.online h2:not(:where(.online-sp *)),
+.online h3:not(:where(.online-sp *)),
+.online p:not(:where(.online-sp *)) {
   margin: 0 0 12px;
 }
-.online h1 {
-  font-size: 28px;
+.online h1:not(:where(.online-sp *)) {
+  font-size: var(--online-h1, 28px);
   font-weight: 750;
 }
-.online h2 {
-  font-size: 19px;
+.online h2:not(:where(.online-sp *)) {
+  font-size: var(--online-h2, 19px);
   font-weight: 700;
 }
-.online h3 {
+.online h3:not(:where(.online-sp *)) {
   margin-top: 18px;
   font-weight: 700;
 }
-.online button,
-.online input,
-.online select {
+.online button:not(:where(.online-sp *)),
+.online input:not(:where(.online-sp *)),
+.online select:not(:where(.online-sp *)) {
   font: inherit;
+  font-size: var(--online-control-font, inherit);
 }
-.online button {
-  min-height: 44px;
-  border: 1px solid #5b7188;
-  background: var(--surface-1);
-  color: #f1f5f9;
+.online button:not(:where(.online-sp *)) {
+  min-height: var(--online-control-h, 44px);
+  border: 1px solid var(--online-btn-border, #5b7188);
+  background: var(--online-btn-bg, var(--surface-1));
+  color: var(--online-btn-ink, #f1f5f9);
   border-radius: 8px;
-  padding: 8px 14px;
+  padding: var(--online-btn-pad, 8px 14px);
   cursor: pointer;
   white-space: nowrap;
 }
-.online button:hover:enabled {
-  background: #3c526b;
+.online button:hover:enabled:not(:where(.online-sp *)) {
+  background: var(--online-btn-hover, #3c526b);
 }
-.online button:disabled {
-  opacity: 0.45;
+.online button:disabled:not(:where(.online-sp *)) {
+  opacity: var(--online-disabled-opacity, 0.45);
   cursor: default;
 }
-.online button:focus-visible,
-.online a:focus-visible,
-.online input:focus-visible,
-.online select:focus-visible {
+.online button:focus-visible:not(:where(.online-sp *)),
+.online a:focus-visible:not(:where(.online-sp *)),
+.online input:focus-visible:not(:where(.online-sp *)),
+.online select:focus-visible:not(:where(.online-sp *)) {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-.online button.online-primary {
+.online button.online-primary:not(:where(.online-sp *)) {
   background: var(--accent-strong);
   color: #06232b;
   border-color: var(--accent-strong);
   font-weight: 700;
 }
-.online button.online-primary:hover:enabled {
+.online button.online-primary:hover:enabled:not(:where(.online-sp *)) {
   background: var(--accent);
 }
-.online a {
+.online a:not(:where(.online-sp *)) {
   color: inherit;
   text-decoration: none;
 }
-.online a:hover {
+.online a:hover:not(:where(.online-sp *)) {
   text-decoration: underline;
 }
 .online-header {
@@ -103,7 +113,7 @@
   letter-spacing: 0.04em;
   color: #cad5e2;
 }
-.online main {
+.online main:not(:where(.online-sp *)) {
   max-width: 1240px;
   padding: 20px 22px 50px;
   margin: auto;
@@ -113,8 +123,8 @@
   color: #f1f5f9;
   border: 1px solid #4f6984;
   border-radius: 12px;
-  padding: 22px;
-  margin-bottom: 20px;
+  padding: var(--online-card-pad, 22px);
+  margin-bottom: var(--online-card-gap, 20px);
   box-shadow: 0 3px 9px #10203912;
   min-width: 0;
 }
@@ -206,21 +216,21 @@
 .online-wide-width {
   max-width: 1180px;
 }
-.online table {
+.online table:not(:where(.online-sp *)) {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
-.online td,
-.online th {
+.online td:not(:where(.online-sp *)),
+.online th:not(:where(.online-sp *)) {
   padding: 11px 6px;
   text-align: center;
   border-bottom: 1px solid #536b85;
 }
-.online th:first-child {
+.online th:first-child:not(:where(.online-sp *)) {
   text-align: left;
 }
-.online thead {
+.online thead:not(:where(.online-sp *)) {
   color: #d0d9e5;
 }
 /* ⚠ 順位表は**7列**（勝・敗・分・勝率・打率・防）になるので、数字の列を
@@ -278,7 +288,8 @@
 .online-camp-group select {
   min-width: 150px;
 }
-.online-camp-wish {
+/* ⚠ `.online td` の中央寄せより強く当てる（クラスだけだと負けて中央に寄っていた） */
+.online td.online-camp-wish {
   text-align: left;
 }
 .online-camp-wish small {
@@ -362,13 +373,13 @@
   color: #c4d4e5;
 }
 /* 順位表は部ごとに分けて並べる。昇格圏・降格圏は左端の線で示す */
-.online table caption {
+.online table caption:not(:where(.online-sp *)) {
   padding: 12px 0 4px;
   text-align: left;
   font-weight: 700;
   color: #e6edf5;
 }
-.online table + table {
+.online table + table:not(:where(.online-sp *)) {
   margin-top: 8px;
 }
 .online tr.is-promotion th:first-child {
@@ -403,22 +414,22 @@
   font-size: 24px;
   color: #fff;
 }
-.online label {
+.online label:not(:where(.online-sp *)) {
   display: block;
   margin: 14px 0;
   font-size: 14px;
 }
-.online input:not([type='checkbox']),
-.online select {
+.online input:not([type='checkbox']):not(:where(.online-sp *)),
+.online select:not(:where(.online-sp *)) {
   width: 100%;
   border-radius: 8px;
-  padding: 9px 10px;
+  padding: var(--online-input-pad, 9px 10px);
   background: var(--surface-1);
   color: #f1f5f9;
   border: 1px solid #71839b;
-  min-height: 44px;
+  min-height: var(--online-control-h, 44px);
 }
-.online input[type='number'] {
+.online input[type='number']:not(:where(.online-sp *)) {
   max-width: 110px;
   display: block;
 }
@@ -428,7 +439,7 @@
   gap: 10px;
   margin: 8px 0;
 }
-.online input[type='checkbox'] {
+.online input[type='checkbox']:not(:where(.online-sp *)) {
   width: 19px;
   height: 19px;
   accent-color: var(--accent-strong);
@@ -782,7 +793,7 @@
     padding: 6px 9px;
     font-size: 11px;
   }
-  .online main {
+  .online main:not(:where(.online-sp *)) {
     padding: 8px 12px 88px;
   }
   .online-card {
@@ -795,7 +806,7 @@
     margin: 8px 0 4px;
     gap: 8px;
   }
-  .online h1 {
+  .online h1:not(:where(.online-sp *)) {
     font-size: 23px;
   }
   .online-season h1 small {
@@ -821,11 +832,11 @@
     padding: 3px 12px;
     font-size: 12px;
   }
-  .online table {
+  .online table:not(:where(.online-sp *)) {
     font-size: 12px;
   }
-  .online td,
-  .online th {
+  .online td:not(:where(.online-sp *)),
+  .online th:not(:where(.online-sp *)) {
     padding: 12px 3px;
   }
   .online-rank {
@@ -911,8 +922,8 @@
   .online-decision .online-actions button {
     flex: 1;
   }
-  .online:has(.online-lineup-card:not([hidden])) main,
-  .online:has(.online-decision) main {
+  .online:has(.online-lineup-card:not([hidden])) main:not(:where(.online-sp *)),
+  .online:has(.online-decision) main:not(:where(.online-sp *)) {
     padding-bottom: 150px;
   }
   .online-ready {
@@ -938,7 +949,7 @@
   margin-left: 224px;
   padding: 16px 22px;
 }
-.online-desktop main {
+.online-desktop main:not(:where(.online-sp *)) {
   max-width: 1240px;
   margin-left: 224px;
   margin-right: auto;
@@ -1841,10 +1852,6 @@
 .online-replay-log p { margin: 2px 0; font-size: 12px; }
 @media (max-width: 767px) { .online-replay-launch { display: none; } }
 
-.online-tactics-grid, .online-pitcher-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
-.online-tactics-grid label, .online-pitcher-role-grid label { display: grid; gap: 6px; min-width: 0; }
-.online-tactics-grid select, .online-pitcher-role-grid select { width: 100%; }
-.online-pregame-settings > p { color: #cbd5e1; font-size: 13px; }
 
 .online-replay-center { position: relative; }
 .online-replay-pitch-zone { position: absolute; right: 0; top: 0; z-index: 1; }
@@ -2191,7 +2198,8 @@
 }
 
 /* 保存や失敗の文言は、全画面の編成より前に出す。
-   ⚠ 裏に隠れると、保存に失敗したことに気づけない。 */
+   ⚠ 裏に隠れると、保存に失敗したことに気づけない。
+   ⚠ PCでは `.online-success` を浮かせ直している（末尾「PC版の共通の見た目」） */
 .online-success,
 .online-alert {
   position: relative;
@@ -2234,4 +2242,509 @@
 .online-pack-detail {
   border-top: 1px solid #536b85;
   padding-top: 12px;
+}
+
+/* ============================================================
+   PC版の共通の見た目（一人用の語彙に合わせる）
+   ------------------------------------------------------------
+   ⚠ **ページごとに部品の大きさ・色を変えないこと**。以前は表が4通り、
+      切り替えがコンボボックスとボタンの混在、ボタンの高さ44px（スマホの指の大きさ）、
+      本文の幅がページごとに 740px／全幅／2段 で、開くたびに見た目が変わっていた。
+   語彙は一人用（`index.css` の `.btn-*` / `.seg`、`GameUIComponents` の
+   `ScreenHeader` / `TabBar`）と同じ:
+     ボタン      高さ32px・`btn-secondary` の色。主動作だけ `online-primary`（=btn-primary）
+     切り替え    `.online-segments` = TabBar（沈んだ面の上に、選んだものだけアクセントの枠）
+     ページ見出し h1 20px・地色の上の濃い文字。右に操作（保存はいつもここ）
+     カード      角12px・余白16px
+     表          1行36〜44px・1行に収める
+   ⚠ スマホ（`.online-mobile`）には当てない。スマホは別の作り直しが進んでいる。
+   ============================================================ */
+.online-desktop {
+  --online-control-h: 32px;
+  --online-control-font: 13px;
+  --online-btn-pad: 5px 12px;
+  --online-btn-bg: var(--surface-2);
+  --online-btn-border: rgba(148, 163, 184, 0.28);
+  --online-btn-ink: #e5e7eb;
+  --online-btn-hover: #374151;
+  --online-input-pad: 5px 8px;
+  --online-h1: 20px;
+  --online-h2: 16px;
+  --online-card-pad: 16px;
+  --online-card-gap: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+/* 使えないボタンは一人用と同じく「沈んだ灰色」（半透明だと地色が透けて読めない） */
+.online-desktop button:disabled:not(:where(.online-sp *)) {
+  background: #374151;
+  color: #9ca3af;
+  border-color: transparent;
+  opacity: 1;
+}
+.online-desktop button.online-primary:disabled:not(:where(.online-sp *)) {
+  background: #374151;
+  color: #9ca3af;
+}
+.online-desktop main:not(:where(.online-sp *)) {
+  padding: 20px 24px 48px;
+}
+.online-desktop .online-card h2 {
+  margin-bottom: 10px;
+}
+.online-desktop .online-card h3 {
+  font-size: 14px;
+  margin: 14px 0 8px;
+}
+.online-desktop .online-actions {
+  gap: 8px;
+  margin-top: 12px;
+}
+.online-desktop .online-label,
+.online-desktop label:not(:where(.online-sp *)) {
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+/* --- ページ見出し（`Page.jsx`） ---------------------------------------- */
+.online-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 16px;
+}
+.online-page-head h1 {
+  margin: 0 !important;
+  color: var(--ink);
+}
+.online-page-head p {
+  margin: 4px 0 0 !important;
+  font-size: 12px;
+  color: var(--ink-sub);
+}
+.online-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* 編集のページは見出し（＝保存ボタン）を画面の上に留める。長い一覧の下まで
+   送っても保存できるように */
+.online-page-head.is-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: -20px -24px 16px;
+  padding: 16px 24px 12px;
+  background: var(--surface-0);
+  border-bottom: 1px solid #0000001a;
+}
+.online-error-text {
+  color: #7f1d1d;
+  font-weight: 700;
+}
+.online-team-selector select {
+  width: auto;
+  min-width: 220px;
+}
+
+/* --- 切り替え（= TabBar） ---------------------------------------------- */
+.online-desktop .online-segments {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.55);
+  border: 1px solid rgba(55, 65, 81, 0.5);
+}
+.online-desktop .online-segments button,
+.online-desktop .online-roster-toolbar .online-segments button {
+  min-height: 28px;
+  padding: 3px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #d1d5db;
+  font-weight: 600;
+}
+.online-desktop .online-segments button:hover:enabled {
+  background: #374151;
+  color: #fff;
+}
+.online-desktop .online-segments button[aria-pressed='true'],
+.online-desktop .online-roster-toolbar .online-segments button[aria-pressed='true'] {
+  background: #0e3f4c;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-strong);
+  border: 0;
+  font-weight: 700;
+}
+
+/* --- 左メニュー ------------------------------------------------------ */
+.online-desktop .online-page-nav {
+  overflow-y: auto;
+  gap: 2px;
+}
+.online-desktop .online-page-nav button {
+  min-height: 32px;
+  padding: 5px 10px 5px 15px;
+  background: transparent;
+  color: #e5e7eb;
+  font-size: 13px;
+}
+.online-desktop .online-page-nav button:hover:enabled {
+  background: #ffffff12;
+}
+.online-desktop .online-nav-context strong {
+  font-size: 15px;
+}
+.online-desktop .online-nav-context > small {
+  display: block;
+  margin-top: 2px;
+}
+.online-desktop .online-page-nav .online-nav-link {
+  min-height: 0;
+  padding: 0;
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.online-nav-clock {
+  margin-top: 14px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #00000024;
+}
+.online-nav-clock p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 0 4px !important;
+}
+.online-nav-clock b {
+  font-size: 14px;
+  color: #fff;
+}
+.online-nav-clock small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+.online-status {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #06232b;
+  background: var(--accent);
+}
+.online-nav-clock-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.online-desktop .online-page-nav .online-nav-clock-actions button {
+  flex: 1;
+  min-height: 28px;
+  padding: 2px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: var(--surface-2);
+  text-align: center;
+  font-size: 12px;
+}
+.online-desktop .online-page-nav button .online-dot {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+/* 保存していない編集がある印（スタメン設定・投手起用・守備分析） */
+.online-dot.is-unsaved {
+  background: #fbbf24;
+}
+/* 検証用の注記は本文ではなく見出しの帯に置く（どのページでも同じ場所） */
+.online-desktop .online-header .online-dev {
+  margin: 0 !important;
+  color: #cbd5e1;
+}
+/* 保存しました: 右下に浮かせる（本文を押し下げない） */
+.online-desktop .online-success {
+  position: fixed;
+  top: auto;
+  bottom: 20px;
+  right: 20px;
+  margin: 0;
+}
+
+/* --- 名前を変える ------------------------------------------------------ */
+.online-rename-dialog {
+  width: min(440px, calc(100% - 24px));
+}
+.online-rename-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* --- 選手成績の表 -------------------------------------------------------- */
+/* 能力は**数字をランク色で**（一人用の AbilityValue と同じ）。スマホは幅が無いので文字 */
+.online-ability-num {
+  display: none;
+}
+.online-desktop .online-ability-num,
+.online-desktop .online-player-dialog .online-ability-num {
+  display: inline;
+  font-variant-numeric: tabular-nums;
+}
+.online-desktop .online-ability-rank {
+  display: none;
+}
+.online-group-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.online-desktop .online-group-tabs .online-segments {
+  margin: 0;
+}
+.online-desktop .online-roster-toolbar {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.online-desktop .online-roster-toolbar > div:first-child {
+  flex: 0 0 auto;
+}
+.online-desktop .online-roster-toolbar > .online-segments {
+  margin: 0;
+}
+.online-roster-order {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin: 0 0 4px !important;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-desktop .online-roster-order button {
+  min-height: 24px;
+  padding: 1px 8px;
+  font-size: 12px;
+}
+/* 列の見出しは表を下へ送っても上に残す */
+.online-desktop .online-roster-columns {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-height: 36px;
+  background: var(--surface-2);
+}
+.online-desktop .online-roster-columns button {
+  height: 36px;
+}
+.online-desktop .online-compact-roster .online-roster-rows article,
+.online-desktop .online-roster-row {
+  height: 40px;
+  min-height: 40px;
+}
+.online-desktop .online-compact-roster .online-roster-rows article:hover {
+  background: #ffffff0d;
+}
+/* ⚠ 表の中の選手名（下線のボタン）でボタンの高さ32pxを取らない。取ると
+   その表だけ行が55pxになる（初期メンバー選択の24人の表がそうだった）。
+   ほかの表（順位表・試合成績）と同じ43〜44pxの行にそろえる */
+.online-desktop td .online-player-name,
+.online-desktop th .online-player-name {
+  min-height: 0;
+}
+/* キャンプの割り当て表。⚠ 行の中のコンボボックスで行を高くしない
+   （既定の高さのままだと、この表だけ行が56pxになった） */
+.online-desktop .online-camp-group td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.online-desktop .online-camp-group select {
+  width: auto;
+  min-height: 0;
+  height: 32px;
+  padding: 2px 8px;
+}
+
+/* --- 試合結果 ------------------------------------------------------------ */
+.online-score-list {
+  display: contents;
+}
+.online-desktop .online-results .online-card-heading .online-segments {
+  margin: 0;
+}
+.online-desktop .online-score-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.online-desktop .online-score-list > .online-score {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #ffffff0c;
+}
+.online-desktop .online-score-list > .online-empty {
+  grid-column: 1 / -1;
+}
+
+/* 左右が同じ重さのページ（方針・采配、リーグ管理）は半分ずつ。
+   ⚠ 1100px を下回ったら縦に積むのはホームと同じ（`.online-board`） */
+@media (min-width: 1101px) {
+  .online-board.is-even {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+/* --- 方針・采配（`DesktopTactics`） -------------------------------------- */
+.online-choices {
+  display: grid;
+  gap: 12px;
+}
+.online-choice {
+  display: grid;
+  gap: 4px;
+}
+.online-choice-label {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-desktop .online-choice .online-segments {
+  margin: 0;
+  justify-self: start;
+}
+
+/* --- 手続き -------------------------------------------------------------- */
+.online-phase-rules p {
+  margin: 0 0 8px !important;
+  font-size: 13px;
+}
+.online-phase-rules .online-ready {
+  margin: 0;
+  gap: 6px;
+}
+.online-ready li[data-ready] {
+  color: #06232b;
+  background: var(--accent);
+}
+.online-desktop .online-decision > :last-child {
+  margin-bottom: 0;
+}
+.online-desktop .online-decision .online-check-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border-bottom: 1px solid #ffffff1a;
+}
+.online-desktop .online-decision .online-check {
+  flex: 1;
+  margin: 0;
+}
+
+/* 契約更改の退団の選択。トライアウトの候補と同じ1行を、全員2列で並べる */
+.online-release-list {
+  max-height: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+.online-release-list li {
+  gap: 10px;
+}
+.online-release-list input[type='checkbox'] {
+  flex-shrink: 0;
+}
+.online-desktop .online-tryout-list button {
+  min-height: 28px;
+}
+.online-phase-rules [role='alert'] {
+  margin-top: 10px;
+}
+
+/* --- ドラッグで並べ替える一覧（トライアウトの希望順） ----------------------- */
+.online-drag-handle {
+  color: #9fb0c4;
+  cursor: grab;
+  user-select: none;
+}
+.online-tryout-wanted .online-tryout-list li[draggable='true'] {
+  cursor: grab;
+}
+.online-tryout-list li.is-dragging {
+  opacity: 0.4;
+}
+.online-tryout-list li.is-drop-target {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+/* --- 一人用の画面を中に入れるところ（`OnlineLineup` の PC版） ------------- */
+/* ⚠ `.online` の文字の大きさ・行の高さを一人用と同じに戻す（Tailwind の既定と同じ）。
+      15px/1.6 のままだと、一人用の画面の行が少しずつ高くなってカードからはみ出す */
+.online-sp {
+  font-size: 16px;
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans',
+    'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'YuGothic', 'Noto Sans JP',
+    'Meiryo', 'Roboto', 'Helvetica Neue', sans-serif;
+}
+/* 保存の応答待ち（触れない間）は薄くして、押せないことを見せる */
+.online-sp[inert] {
+  opacity: 0.6;
+}
+
+/* --- 選手の詳細（ダイアログ） ------------------------------------------- */
+/* ⚠ 区分のタブが入るので、PCは広げる（430px だと3〜4段に折り返していた） */
+.online-desktop .online-player-dialog {
+  width: min(760px, calc(100% - 48px));
+}
+.online-desktop .online-player-dialog .online-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.online-desktop .online-player-dialog .online-stat-tools {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+/* 成績・能力・場面別の切り替えも、ほかの切り替えと同じ形（TabBar）にする */
+.online-desktop .online-player-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.55);
+  border: 1px solid rgba(55, 65, 81, 0.5);
+}
+.online-desktop .online-player-tabs button {
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 14px;
+  border: 0;
+  border-radius: 8px;
+  color: #d1d5db;
+  font-weight: 600;
+}
+.online-desktop .online-player-tabs button[aria-pressed='true'] {
+  background: #0e3f4c;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-strong);
+  border: 0;
+  font-weight: 700;
 }

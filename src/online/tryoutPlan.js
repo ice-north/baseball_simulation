@@ -396,6 +396,28 @@ export function shiftInPlan(rankedIds, candidates, count, roster, index, delta) 
   return normalizeRanked(swapRanked(normalized, index, delta), candidates, count, roster);
 }
 
+/**
+ * 獲得予定の中で、選手 `id` を `to` 番目（0始まり）へ動かす（ドラッグ用）。
+ * 間の選手は1つずつずれる。↑↓ と同じく獲得予定の並びで1つずつ動かす。
+ * ⚠ 1つ動かすたびに**その選手がいまどこにいるかを探し直す**。目標構成で並びが
+ *    整え直される（埋まった区分の選手は後ろへ回る）ので、「1つ動かせば隣にいる
+ *    はず」と決め打ちすると別の選手を動かしてしまう。動かなくなったら止める。
+ */
+export function moveInPlan(rankedIds, candidates, count, roster, id, to) {
+  let ids = normalizeRanked(rankedIds, candidates, count, roster);
+  const limit = 2 * Math.max(1, ids.length);
+  for (let guard = 0; guard < limit; guard += 1) {
+    const at = plannedPicks(ids, candidates, count, roster).findIndex(
+      (p) => p.id === id,
+    );
+    if (at < 0 || at === to) break;
+    const next = shiftInPlan(ids, candidates, count, roster, at, to > at ? 1 : -1);
+    if (next.join('\u0000') === ids.join('\u0000')) break;
+    ids = next;
+  }
+  return ids;
+}
+
 /** 隣と入れ替える（↑↓用）。端なら何もしない */
 export function swapRanked(rankedIds, index, delta) {
   const next = index + delta;

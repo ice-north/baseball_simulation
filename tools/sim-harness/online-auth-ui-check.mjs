@@ -224,7 +224,7 @@ try {
 
   const switched = await fixture({ commands: true });
   await switched.page
-    .getByRole('button', { name: '管理', exact: true })
+    .getByRole('button', { name: 'リーグ管理', exact: true })
     .click();
   const switchTab = await switched.context.newPage();
   await switchTab.goto(`${base}/switch`);
@@ -267,7 +267,7 @@ try {
 
   const staleClick = await fixture({ commands: true });
   await staleClick.page
-    .getByRole('button', { name: '管理', exact: true })
+    .getByRole('button', { name: 'リーグ管理', exact: true })
     .click();
   await staleClick.page.evaluate(
     ({ key, auth }) => {
@@ -299,7 +299,7 @@ try {
   await staleClick.context.close();
 
   const saving = await fixture({ commands: true });
-  await saving.page.getByRole('button', { name: '管理', exact: true }).click();
+  await saving.page.getByRole('button', { name: 'リーグ管理', exact: true }).click();
   await saving.page
     .getByRole('button', { name: '進行を停止', exact: true })
     .click();

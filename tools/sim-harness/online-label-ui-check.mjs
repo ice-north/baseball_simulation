@@ -399,7 +399,7 @@ async function scene(width, height = 844, scale = 1, holdDetail = false) {
 }
 try {
   const { page: p, context } = await scene(1440, 1000);
-  await p.getByRole('button', { name: '選手', exact: true }).click();
+  await p.getByRole('button', { name: '選手成績', exact: true }).click();
   await p.getByLabel('閲覧する球団').selectOption('B');
   await p
     .getByRole('button', { name: '成績選手100の選手情報を見る', exact: true })
@@ -416,7 +416,7 @@ try {
   await p
     .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
     .waitFor();
-  const first = p.locator('tbody tr').first();
+  const first = p.locator('.online-roster-rows article').first();
   assert.equal(await first.locator('.online-stat-label').count(), 3);
   await p
     .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
@@ -448,7 +448,7 @@ try {
     await p
       .locator('.online-page-nav [aria-current="page"]')
       .getAttribute('aria-label'),
-    '選手',
+    '選手成績',
     '詳細を閉じても元の一覧に留まる',
   );
   await p.setViewportSize({ width: 700, height: 1000 });
@@ -458,7 +458,7 @@ try {
     await p
       .locator('.online-page-nav [aria-current="page"]')
       .getAttribute('aria-label'),
-    '選手',
+    '選手成績',
     '表示形式を往復しても選手画面を維持する',
   );
   await p.screenshot({
@@ -469,11 +469,16 @@ try {
     await p
       .locator('.online-page-nav [aria-current="page"]')
       .getAttribute('aria-label'),
-    '選手',
+    '選手成績',
     '全体キャプチャ後も選手画面を維持する',
   );
-  await p.getByRole('button', { name: '成績一覧', exact: true }).click();
-  await p.getByLabel('成績の表示項目').selectOption('sabers');
+  // ⚠ PCの選手成績は**表が1つ**（能力一覧／成績一覧の切替は無くした）。
+  //    区分はコンボボックスではなくボタンの列
+  await p.getByRole('button', { name: '打撃', exact: true }).click();
+  await p
+    .getByRole('group', { name: '成績の表示項目', exact: true })
+    .getByRole('button', { name: '打撃指標', exact: true })
+    .click();
   await p.getByRole('button', { name: 'OPSで並べ替え', exact: true }).click();
   await p
     .locator('.online-roster-rows article')
@@ -706,7 +711,11 @@ try {
     await m
       .getByRole('button', { name: '調子で並べ替え', exact: true })
       .click();
-    await firstRow.getByLabel('調子: 絶好調', { exact: true }).waitFor();
+    // ⚠ 調子は名前の横と「調子」の列の両方に同じ顔の印が出る（列で並べ替えるため）
+    await firstRow
+      .locator('.online-stat-condition')
+      .getByLabel('調子: 絶好調', { exact: true })
+      .waitFor();
     await m.screenshot({
       path: `/tmp/baseball-online-mobile-state-${width}.png`,
       fullPage: true,
@@ -872,7 +881,7 @@ try {
   }
   const switched = await scene(1440, 1000);
   await switched.page
-    .getByRole('button', { name: '選手', exact: true })
+    .getByRole('button', { name: '選手成績', exact: true })
     .click();
   const switchAuth = async (page) =>
     page.evaluate(() => {
@@ -906,7 +915,7 @@ try {
   await switched.context.close();
   const staleRead = await scene(1440, 1000, 1, true);
   await staleRead.page
-    .getByRole('button', { name: '選手', exact: true })
+    .getByRole('button', { name: '選手成績', exact: true })
     .click();
   await staleRead.page
     .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })

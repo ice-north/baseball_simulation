@@ -194,14 +194,17 @@ try {
     await page.getByRole('button', { name: '戻る', exact: true }).click();
     if (width === 360) {
       await page.setViewportSize({ width: 1440, height: 1000 });
-      // ⚠ PCの編成タブは移植した画面が既定で開く（78bfd27）。方針・采配の設定はその奥
-      await page
-        .getByRole('button', { name: '方針・采配の設定へ（保存しない）', exact: true })
-        .click();
-      await page.getByRole('button', { name: '自動采配', exact: true }).click();
+      // ⚠ PCの方針と自動采配は左メニューの「方針・采配」。選択肢はボタンの列で、
+      //    下書きはスマホの「打順」カードと同じもの（`lineup.*`）を使う
+      await page.getByRole('button', { name: '方針・采配', exact: true }).click();
       assert.equal(
-        await page.getByLabel('送りバント', { exact: true }).inputValue(),
-        'never',
+        (
+          await page
+            .getByRole('group', { name: '送りバント', exact: true })
+            .locator('[aria-pressed="true"]')
+            .innerText()
+        ).trim(),
+        'しない',
         'PC表示にも同じ下書きが反映される',
       );
       await page.setViewportSize({ width, height: 640 });

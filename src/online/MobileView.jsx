@@ -125,7 +125,7 @@ export default function MobileView(props) {
       {/* ⚠ **途中参加の初期メンバー選択は携帯でも出す**。PCでしか選べないと、
           携帯で参加した人は名簿が決まらないままキャンプを迎える */}
       {tab === 'decisions' && view.pendingPack && (
-        <PendingPackPanel {...props} />
+        <PendingPackPanel {...props} mobile />
       )}
       {tab === 'decisions' &&
         !view.pendingPack &&
