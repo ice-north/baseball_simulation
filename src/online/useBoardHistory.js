@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ============================================================
 // PC版の編成ページ（スタメン設定 `LineupBoard.jsx`・投手起用 `PitchingBoard.jsx`）の
@@ -49,14 +49,23 @@ export function useBoardHistory({
   const [history, setHistory] = useState(() =>
     restore ? resume(view, restore) : build(view),
   );
-  const [builtFor, setBuiltFor] = useState(view.revision);
+  // ⚠ 受け取った編集で始めたときは「まだ最新で作っていない」扱いにする。受け取った
+  //    起点は古いことがあり、元に戻して未保存でなくなったら最新の view で作り直す
+  //    （古い起点のまま「保存済み」に見せない）
+  const [builtFor, setBuiltFor] = useState(() =>
+    restore ? null : view.revision,
+  );
   const [saveError, setSaveError] = useState('');
+  // 選択（行の位置で持つ画面がある）は、値が入れ替わる操作のたびに外す
+  const escape = useRef(onEscape);
+  escape.current = onEscape;
   const value = history.stack[history.index];
   const dirty = !same(value, history.base);
   if (!dirty && builtFor !== view.revision) {
     // 描画中の作り直し（React の「前回の値から状態を直す」書き方）
     setBuiltFor(view.revision);
     setHistory(build(view));
+    onEscape?.();
   }
 
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
@@ -93,21 +102,23 @@ export function useBoardHistory({
     },
     [same],
   );
-  const undo = useCallback(
-    () => setHistory((h) => (h.index > 0 ? { ...h, index: h.index - 1 } : h)),
-    [],
-  );
-  const redo = useCallback(
-    () =>
-      setHistory((h) =>
-        h.index < h.stack.length - 1 ? { ...h, index: h.index + 1 } : h,
-      ),
-    [],
-  );
+  // ⚠ ボタンでもキーでも選択を外す。外さないと、行の位置で持つ選択が
+  //    戻した後の別の選手を指したまま残り、次の操作で選んでいない選手が動く
+  const undo = useCallback(() => {
+    setHistory((h) => (h.index > 0 ? { ...h, index: h.index - 1 } : h));
+    escape.current?.();
+  }, []);
+  const redo = useCallback(() => {
+    setHistory((h) =>
+      h.index < h.stack.length - 1 ? { ...h, index: h.index + 1 } : h,
+    );
+    escape.current?.();
+  }, []);
   const discard = () => {
     setHistory(build(view));
     setBuiltFor(view.revision);
     setSaveError('');
+    onEscape?.();
   };
   const save = async () => {
     setSaveError('');
@@ -140,11 +151,9 @@ export function useBoardHistory({
       if (key === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
-        onEscape?.();
       } else if ((key === 'z' && e.shiftKey) || key === 'y') {
         e.preventDefault();
         redo();
-        onEscape?.();
       }
     };
     window.addEventListener('keydown', onKey);

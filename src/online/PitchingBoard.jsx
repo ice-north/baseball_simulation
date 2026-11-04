@@ -139,8 +139,12 @@ function PitcherCells({ player, starter }) {
 function RoleMenu({ menu, state, close, choose }) {
   const ref = useRef(null);
   useEffect(() => {
+    // ⚠ 開いた札を押したときは閉じない（札の側で閉じる。ここで閉じると、続く
+    //    クリックで開き直してしまい、同じ札で閉じられない）
     const away = (e) => {
-      if (!ref.current?.contains(e.target)) close();
+      if (ref.current?.contains(e.target)) return;
+      if (e.target.closest?.('.online-role-chip[aria-expanded="true"]')) return;
+      close();
     };
     const onKey = (e) => e.key === 'Escape' && close();
     window.addEventListener('mousedown', away);
@@ -239,20 +243,28 @@ export default function PitchingBoard({
   // ---- クリック: 行を選び、もう一方を押す（スタメン設定と同じ）
   //   行 → ほかの行: 持ち場を入れ替える（`swapPitchers`。先発どうしは登板順）
   //   救援 → 「先発ローテーション」の見出し: ローテの最後へ / 先発 → 「救援」の見出し: ローテから外す
-  const selected = selection !== null ? byId.get(selection) : null;
+  // ⚠ 名簿に居ない先発（崩れた保存）も選べる。名前は無いので行の説明で呼ぶ
+  const nameOf = (id) => byId.get(id)?.name || '名簿に居ない投手';
   const clickRow = (id) => {
-    if (selected && selected.id !== id)
-      commit(swapPitchers(state, selected.id, id));
-    else setSelection(selected?.id === id ? null : id);
+    if (selection !== null && selection !== id)
+      commit(swapPitchers(state, selection, id));
+    else setSelection(selection === id ? null : id);
   };
-  // 見出しへ移す: ローテーション → 末尾へ / 救援 → 先発から外す（役割は「おまかせ」）
+  // 見出しへ移せるか: 救援 → 「先発ローテーション」（最後へ入る）/ 先発 → 「救援」（外れる）。
+  // ⚠ 先発をローテの見出しへ落としても動かさない（見出しは1番手の上にあり、
+  //    最後へ回すと「先頭へ」のつもりのエースが最後に投げる）
+  const canMoveTo = (id, target) =>
+    target === 'rotation'
+      ? !state.starters.includes(id)
+      : state.starters.includes(id);
   const moveTo = (id, target) => {
-    if (target === 'rotation')
-      return insertStarter(state, id, state.starters.length);
-    return state.starters.includes(id) ? setRole(state, id, 'auto_r') : state;
+    if (!canMoveTo(id, target)) return state;
+    return target === 'rotation'
+      ? insertStarter(state, id, state.starters.length)
+      : setRole(state, id, 'auto_r');
   };
   const clickHead = (target) => {
-    if (selected) commit(moveTo(selected.id, target));
+    if (selection !== null) commit(moveTo(selection, target));
   };
   const openMenu = (player) => (e) => {
     e.stopPropagation();
@@ -290,6 +302,8 @@ export default function PitchingBoard({
   };
   const over = (target) => (e) => {
     if (drag === null) return;
+    if ((target === 'rotation' || target === 'relief') && !canMoveTo(drag, target))
+      return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (dropAt !== target) setDropAt(target);
@@ -332,15 +346,18 @@ export default function PitchingBoard({
   const vacant = groups
     .filter((g) => !g.players.length && g.role !== 'auto_r')
     .map((g) => g.role);
-  const help = selected
-    ? `${selected.name}を選択中：ほかの投手を押すと持ち場（登板順・役割）を入れ替えます。${
-        state.starters.includes(selected.id)
+  const help =
+    selection !== null
+    ? `${nameOf(selection)}を選択中：ほかの投手を押すと持ち場（登板順・役割）を入れ替えます。${
+        state.starters.includes(selection)
           ? '「救援」の見出しを押すとローテから外します。'
           : '「先発ローテーション」の見出しを押すとローテの最後に入れます。'
       }`
     : '役割の札を押すと役割を選び直せます。行を押して選び、ほかの投手を押すと持ち場を入れ替えます。ドラッグでも同じです（先発どうしは登板順を動かします）。';
   const pickLabel = (id, name) =>
-    selected && selected.id !== id ? `${name}と入れ替える` : `${name}を選ぶ`;
+    selection !== null && selection !== id
+      ? `${name}と入れ替える`
+      : `${name}を選ぶ`;
 
   const rowClass = (id, extra = []) =>
     [
@@ -400,7 +417,7 @@ export default function PitchingBoard({
             <tbody aria-label="先発ローテーション" data-starter-order>
               <tr
                 className={`online-lineup-bench-head ${dropAt === 'rotation' ? 'is-drop' : ''} ${
-                  selected && !state.starters.includes(selected.id)
+                  selection !== null && canMoveTo(selection, 'rotation')
                     ? 'is-target'
                     : ''
                 }`}
@@ -468,7 +485,7 @@ export default function PitchingBoard({
                         colSpan={COLUMN_COUNT - 2}
                         className="online-lineup-missing"
                       >
-                        名簿に居ない投手です。救援から先発へ入れ替えてください
+                        名簿に居ない投手です。この行を選んで救援の投手を押すと入れ替わります（「救援」の見出しへ落とすと外れます）
                       </td>
                     )}
                   </tr>
@@ -478,7 +495,7 @@ export default function PitchingBoard({
             <tbody aria-label="救援">
               <tr
                 className={`online-lineup-bench-head ${dropAt === 'relief' ? 'is-drop' : ''} ${
-                  selected && state.starters.includes(selected.id)
+                  selection !== null && canMoveTo(selection, 'relief')
                     ? 'is-target'
                     : ''
                 }`}

@@ -174,8 +174,9 @@ export function fullLineupFromBoards(view, boards) {
   return {
     team: teamFromView({ ...view, lineup }),
     base: clone(base),
+    // 起点の plan は名簿を使わない（投手の行は plan で外す）。名簿の複製を省く
     basePlan: JSON.stringify(
-      planFromTeam(teamFromView({ ...view, lineup: base })),
+      planFromTeam(teamFromView({ ...view, roster: [], lineup: base })),
     ),
   };
 }

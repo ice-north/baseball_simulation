@@ -17,6 +17,9 @@
 //    野手8人ちょうど・打順1〜8・8つの守備位置を1つずつ・投手は入れない。
 // ============================================================
 
+import { FIELDER_REST_FATIGUE, SUBSTITUTE_MIN_FITNESS } from './shared.js';
+import { getPositionFitness } from '../utils/physics.js';
+
 export const FIELD_POSITIONS = [
   'catcher',
   'first',
@@ -41,13 +44,12 @@ export const FIELDER_GROUPS = [
 
 /**
  * その守備位置の適性（0〜100）。
- * ⚠ 本職は適性の値が無くても100とみなす（`server/dailyLineup.mjs` の休養の代役選びと同じ）。
+ * ⚠ 本職は100とみなし、ほかは適性の値（無ければ0）。`server/dailyLineup.mjs` の
+ *    休養の代役選びと同じ決まり（画面の候補の並びと、試合の日の代役がずれないように）。
  */
 export function positionFitness(player, position) {
   if (!player || !position) return 0;
-  const value = player.positionFitness?.[position];
-  if (typeof value === 'number') return value;
-  return player.position === position ? 100 : 0;
+  return player.position === position ? 100 : getPositionFitness(player, position, 0);
 }
 
 /** この選手が守れる位置（適性の高い順）。`min` 未満は守れないとみなす */
@@ -161,7 +163,7 @@ export function orderProblems(order, roster) {
   return problems;
 }
 
-/** 試合に出すと休ませる疲労（`server/dailyLineup.mjs` の `FIELDER_REST_FATIGUE` と同じ値） */
-export const REST_FATIGUE = 80;
-/** 守備位置の適性がこれ未満なら注意を出す（同ファイルの代役の下限と同じ） */
-export const LOW_FITNESS = 60;
+/** 試合に出すと休ませる疲労（サーバーと同じ値。`shared.js`） */
+export const REST_FATIGUE = FIELDER_REST_FATIGUE;
+/** 守備位置の適性がこれ未満なら注意を出す（休ませた野手の代役の下限と同じ） */
+export const LOW_FITNESS = SUBSTITUTE_MIN_FITNESS;

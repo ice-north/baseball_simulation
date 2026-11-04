@@ -2877,18 +2877,18 @@
   border-radius: 6px;
   background: #ffffff0c;
 }
-.online-lineup-next-game small {
+.online-lineup-next-game small:not(:where(.online-sp *)) {
   color: #94a3b8;
 }
-.online-lineup-next-game em {
+.online-lineup-next-game em:not(:where(.online-sp *)) {
   font-style: normal;
   font-weight: 700;
   margin-left: 4px;
 }
-.online-lineup-next-game em.is-left {
+.online-lineup-next-game em.is-left:not(:where(.online-sp *)) {
   color: #fca5a5;
 }
-.online-lineup-next-game em.is-right {
+.online-lineup-next-game em.is-right:not(:where(.online-sp *)) {
   color: #93c5fd;
 }
 .online-lineup-help {
@@ -2905,13 +2905,13 @@
   font-variant-numeric: tabular-nums;
   user-select: none;
 }
-.online-desktop .online-lineup-table th,
-.online-desktop .online-lineup-table td {
+.online-desktop .online-lineup-table th:not(:where(.online-sp *)),
+.online-desktop .online-lineup-table td:not(:where(.online-sp *)) {
   height: 40px;
   padding: 0 5px;
   white-space: nowrap;
 }
-.online-desktop .online-lineup-table thead th {
+.online-desktop .online-lineup-table thead th:not(:where(.online-sp *)) {
   height: 32px;
   font-size: 12px;
   font-weight: 600;
@@ -2928,7 +2928,7 @@
   font-weight: 600;
   margin-right: 4px;
 }
-.online-lineup-person small {
+.online-lineup-person small:not(:where(.online-sp *)) {
   margin-left: 10px;
   font-size: 11px;
   color: #94a3b8;
@@ -2936,12 +2936,12 @@
 .online-lineup-table .is-stat {
   text-align: right;
 }
-.online-desktop .online-lineup-table th.online-lineup-slot,
-.online-desktop .online-lineup-table td.online-lineup-slot {
+.online-desktop .online-lineup-table th.online-lineup-slot:not(:where(.online-sp *)),
+.online-desktop .online-lineup-table td.online-lineup-slot:not(:where(.online-sp *)) {
   width: 52px;
   text-align: left;
 }
-.online-desktop .online-lineup-slot button {
+.online-desktop .online-lineup-slot button:not(:where(.online-sp *)) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3020,25 +3020,25 @@
   text-align: left !important;
   color: #fca5a5;
 }
-.online-lineup-bench-head th,
-.online-lineup-group th {
+.online-lineup-bench-head th:not(:where(.online-sp *)),
+.online-lineup-group th:not(:where(.online-sp *)) {
   text-align: left !important;
 }
-.online-desktop .online-lineup-bench-head th {
+.online-desktop .online-lineup-bench-head th:not(:where(.online-sp *)) {
   height: 44px;
   padding-top: 14px;
   font-size: 14px;
   color: #f1f5f9;
   border-bottom: 1px solid #ffffff33;
 }
-.online-lineup-bench-head small,
-.online-lineup-group small {
+.online-lineup-bench-head small:not(:where(.online-sp *)),
+.online-lineup-group small:not(:where(.online-sp *)) {
   margin-left: 10px;
   font-size: 11px;
   font-weight: 400;
   color: #94a3b8;
 }
-.online-desktop .online-lineup-group th {
+.online-desktop .online-lineup-group th:not(:where(.online-sp *)) {
   height: 28px;
   font-size: 12px;
   color: #a5f3fc;
@@ -3049,13 +3049,10 @@
 }
 .online-lineup-playable {
   display: inline-flex;
+  align-items: center;
   gap: 3px;
   font-size: 12px;
   color: #94a3b8;
-}
-.online-lineup-playable .is-main {
-  color: #f1f5f9;
-  font-weight: 700;
 }
 .online-lineup-fatigue.is-tired {
   color: #fb923c;
@@ -3064,7 +3061,7 @@
   color: #f87171;
   font-weight: 700;
 }
-.online-lineup-fitness small {
+.online-lineup-fitness small:not(:where(.online-sp *)) {
   font-size: 10px;
   color: #94a3b8;
 }
@@ -3074,9 +3071,6 @@
 .online-lineup-fitness.is-low {
   color: #f87171;
   font-weight: 700;
-}
-.online-lineup-playable {
-  align-items: center;
 }
 .online-lineup-pos.is-bench {
   font-size: 13px;
@@ -3092,8 +3086,8 @@
   border: 1px solid #22d3ee66;
   border-radius: 6px;
 }
-.online-desktop .online-lineup-slot button[aria-pressed='true'],
-.online-desktop .online-lineup-slot button:hover:enabled {
+.online-desktop .online-lineup-slot button[aria-pressed='true']:not(:where(.online-sp *)),
+.online-desktop .online-lineup-slot button:hover:enabled:not(:where(.online-sp *)) {
   background: transparent;
   color: var(--accent);
 }
@@ -3153,27 +3147,27 @@
   background: #fbbf24;
   border-radius: 4px;
 }
-.online-desktop .online-pitch-table th.online-lineup-slot,
-.online-desktop .online-pitch-table td.online-lineup-slot {
+.online-desktop .online-pitch-table th.online-lineup-slot:not(:where(.online-sp *)),
+.online-desktop .online-pitch-table td.online-lineup-slot:not(:where(.online-sp *)) {
   width: 64px;
 }
 /* 見出しの行は、移せる投手を選んでいる間だけ押せる */
 .online-pitch-table .online-lineup-bench-head.is-target {
   cursor: pointer;
 }
-.online-pitch-table .online-lineup-bench-head.is-target th {
+.online-pitch-table .online-lineup-bench-head.is-target th:not(:where(.online-sp *)) {
   color: var(--accent);
 }
-.online-pitch-table .online-lineup-bench-head.is-target:hover th {
+.online-pitch-table .online-lineup-bench-head.is-target:hover th:not(:where(.online-sp *)) {
   background: var(--accent-soft);
 }
-.online-pitch-table .online-lineup-bench-head.is-drop th {
+.online-pitch-table .online-lineup-bench-head.is-drop th:not(:where(.online-sp *)) {
   background: #22d3ee26;
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
 }
 /* 救援は役割が替わるところに線を引く（同じ役割の投手が続くときの区切り） */
-.online-pitch-table .online-lineup-row.is-role-start td {
+.online-pitch-table .online-lineup-row.is-role-start td:not(:where(.online-sp *)) {
   border-top: 1px solid #ffffff33;
 }
 .online-role-menu {
@@ -3186,18 +3180,18 @@
   border-radius: 10px;
   box-shadow: 0 12px 32px #00000080;
 }
-.online-role-menu p {
+.online-role-menu p:not(:where(.online-sp *)) {
   margin: 4px 0 6px !important;
   font-size: 11px;
   color: #94a3b8;
 }
-.online-role-menu p + div {
+.online-role-menu p + div:not(:where(.online-sp *)) {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   margin-bottom: 6px;
 }
-.online-desktop .online-role-menu button {
+.online-desktop .online-role-menu button:not(:where(.online-sp *)) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -3209,14 +3203,14 @@
   text-align: left;
   white-space: normal;
 }
-.online-role-menu button strong {
+.online-role-menu button strong:not(:where(.online-sp *)) {
   font-size: 13px;
 }
-.online-role-menu button small {
+.online-role-menu button small:not(:where(.online-sp *)) {
   font-size: 11px;
   color: #94a3b8;
 }
-.online-desktop .online-role-menu button[aria-pressed='true'] {
+.online-desktop .online-role-menu button[aria-pressed='true']:not(:where(.online-sp *)) {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);

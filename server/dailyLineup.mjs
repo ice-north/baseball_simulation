@@ -1,5 +1,10 @@
 import { ensureCompleteLineup } from '../src/game/lineup.js';
-import { requireOnline } from '../src/online/shared.js';
+import {
+  requireOnline,
+  FIELDER_REST_FATIGUE,
+  STARTER_SKIP_FATIGUE,
+  SUBSTITUTE_MIN_FITNESS,
+} from '../src/online/shared.js';
 import { getPositionFitness } from '../src/utils/physics.js';
 
 /**
@@ -12,11 +17,10 @@ import { getPositionFitness } from '../src/utils/physics.js';
  * ⚠ 80 は CPU が一番重く避ける段（疲労²/1200 が5以上＝疲労約78以上）に合わせた。
  * ⚠ **保存した打順は書き換えない**。その日だけ差し替えて、試合の後に戻す。
  */
-export const FIELDER_REST_FATIGUE = 80;
+// ⚠ 値は `src/online/shared.js` に置く（PC版の編成ページも同じ値で色を変える）
+export { FIELDER_REST_FATIGUE, STARTER_SKIP_FATIGUE };
 const FRESH_FATIGUE = 40;
-/** 先発はこの疲労以上だとその日の登板を飛ばす（PC版の投手起用 `pitchingEdit.js` も同じ値で色を変える） */
-export const STARTER_SKIP_FATIGUE = 40;
-const MIN_FITNESS = 60;
+const MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
 
 function restTiredFielders(team) {
   const order = team.lineupSettings?.battingOrder || [];

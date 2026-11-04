@@ -11,8 +11,11 @@
 //    - 守護神は1人まで
 // ⚠ オンラインでは全投手に役割が付く（無い投手は「おまかせ」）。一人用の画面に
 //    あった「未設定」の欄は、サーバーが「おまかせ」に読み替えるだけなので出さない。
+// ⚠ 保存済みの先発に名簿に居ない投手（外れた・居なくなった）が残っていることがある。
+//    隠さずにそのまま持ち、その行に救援を入れ替えて直せるようにする（役割は持たない）。
 // ============================================================
 import { STARTER_ROLES, RELIEF_ROLES, roleFor } from './tactics.js';
+import { STARTER_SKIP_FATIGUE as SKIP_FATIGUE } from './shared.js';
 
 export const MAX_STARTERS = 8;
 
@@ -56,8 +59,8 @@ export const roleLabel = (role) =>
   STARTER_ROLES[role] || RELIEF_ROLES[role] || role;
 export const isStarterRole = (role) => Object.hasOwn(STARTER_ROLES, role);
 
-/** 先発の投手で、この疲労以上はその日の登板を飛ばす（`server/dailyLineup.mjs` と同じ） */
-export const STARTER_SKIP_FATIGUE = 40;
+/** 先発の投手で、この疲労以上はその日の登板を飛ばす（サーバーと同じ値。`shared.js`） */
+export const STARTER_SKIP_FATIGUE = SKIP_FATIGUE;
 /**
  * 救援は、この疲労以上だと原則として試合で使われない（`src/game/autoSimulation.js` の
  * `fatigueGate`。救援が全員この値を超えているときだけ、一番疲れていない投手が使われる）
@@ -67,11 +70,13 @@ export const RELIEF_REST_FATIGUE = 50;
 export const isPitcher = (p) =>
   !!p && p.position === 'pitcher' && p.isActive !== false;
 
-/** 保存されている編成（view.lineup）と名簿から編集の形を作る */
+/**
+ * 保存されている編成（view.lineup）と名簿から編集の形を作る。
+ * ⚠ 名簿に居ない先発も外さない（外すと崩れた保存が隠れ、保存の検査にも出ない）。
+ */
 export function pitchingFromLineup(lineup, roster) {
   const pitchers = (roster || []).filter(isPitcher);
-  const ids = new Set(pitchers.map((p) => p.id));
-  const starters = (lineup?.starters || []).filter((id) => ids.has(id));
+  const starters = [...new Set(lineup?.starters || [])];
   const roles = Object.fromEntries(
     pitchers.map((p) => [
       p.id,
@@ -128,7 +133,17 @@ export function swapStarters(state, a, b) {
  */
 export function setRole(state, id, role, at = null) {
   const current = state.roles[id];
-  if (current === undefined || (current === role && at === null)) return state;
+  if (current === undefined) {
+    // 名簿に居ない先発: 救援の側へ移す操作は、ローテから外すだけ（役割は持たない）
+    if (
+      !isStarterRole(role) &&
+      state.starters.includes(id) &&
+      state.starters.length > 1
+    )
+      return { ...state, starters: state.starters.filter((s) => s !== id) };
+    return state;
+  }
+  if (current === role && at === null) return state;
   const toStarter = isStarterRole(role);
   const wasStarter = state.starters.includes(id);
   let starters = state.starters;
@@ -161,8 +176,18 @@ export function swapPitchers(state, a, b) {
   const ia = state.starters.indexOf(a);
   const ib = state.starters.indexOf(b);
   if (ia >= 0 && ib >= 0) return swapStarters(state, ia, ib);
-  if (state.roles[a] === undefined || state.roles[b] === undefined)
-    return state;
+  const missingA = state.roles[a] === undefined;
+  const missingB = state.roles[b] === undefined;
+  if (missingA && missingB) return state;
+  if (missingA || missingB) {
+    // 名簿に居ない先発の行へ救援を入れる: その登板順に入り、先発の「おまかせ」になる
+    const [missing, other] = missingA ? [a, b] : [b, a];
+    if (!state.starters.includes(missing)) return state;
+    return {
+      starters: state.starters.map((id) => (id === missing ? other : id)),
+      roles: { ...state.roles, [other]: 'auto_s' },
+    };
+  }
   const starters =
     ia >= 0 || ib >= 0
       ? state.starters.map((id) => (id === a ? b : id === b ? a : id))
