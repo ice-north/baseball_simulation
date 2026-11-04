@@ -1,4 +1,4 @@
-import { compressData, compressDataAsync, decompressData, decompressDataAsync, getLocalStorageUsage } from '../utils/compression.js';
+import { compressDataAsync, decompressDataAsync, getLocalStorageUsage } from '../utils/compression.js';
 import { TEAMS_DATA, releasedPlayersPool, clearReleasedPlayersPool } from '../teams-data.js';
 import { addManyToReleasedPool } from '../state/pools.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
@@ -151,14 +151,23 @@ export const restoreBackup = async (slotIndex) => {
   }
 };
 
-// 緊急保存: クラッシュ時に同期的（localStorage）へ現在状態を書き出す。
-// IndexedDBは非同期のためクラッシュ中は不確実 → 確実に残る localStorage を使う。
-export const saveEmergency = (gameState) => {
+// 緊急保存: クラッシュ時に現在状態を書き出す（エラー画面を出したまま非同期で書く）。
+// ⚠ 以前は localStorage へ同期の LZ 圧縮で書いていた。大きなセーブでは圧縮だけで
+//    20秒前後画面が固まり、localStorage の上限（約5MB）にも近く失敗しやすかった。
+//    通常の保存と同じ gzip 圧縮 + IndexedDB（使えなければ localStorage）にする。
+//    状態の写しはこの関数を呼んだ時点で同期的に取るので、書き込み中に状態が動いても混ざらない。
+export const saveEmergency = async (gameState) => {
+  let saveData;
   try {
-    const saveData = buildSaveData(gameState, gameState?.slotIndex ?? 0);
+    saveData = buildSaveData(gameState, gameState?.slotIndex ?? 0);
     saveData._emergency = true;
-    const compressed = compressData(saveData);
-    localStorage.setItem(EMERGENCY_KEY, compressed);
+  } catch (e) {
+    console.error('緊急保存失敗:', e);
+    return false;
+  }
+  try {
+    const compressed = await compressDataAsync(saveData);
+    await storageSetItem(EMERGENCY_KEY, compressed);
     return true;
   } catch (e) {
     console.error('緊急保存失敗:', e);
@@ -167,18 +176,18 @@ export const saveEmergency = (gameState) => {
 };
 
 // 緊急保存の有無・メタ情報
-export const getEmergencyInfo = () => {
+export const getEmergencyInfo = async () => {
   try {
-    const raw = localStorage.getItem(EMERGENCY_KEY);
+    const raw = await storageGetItem(EMERGENCY_KEY);
     if (!raw) return null;
-    const data = decompressData(raw);
+    const data = await decompressDataAsync(raw);
     if (!data) return null;
     return { timestamp: data.timestamp || null, year: data.seasonData?.year ?? null, gameMode: data.gameMode || null };
   } catch { return null; }
 };
 
-export const clearEmergencySave = () => {
-  try { localStorage.removeItem(EMERGENCY_KEY); } catch { /* ignore */ }
+export const clearEmergencySave = async () => {
+  try { await storageRemoveItem(EMERGENCY_KEY); } catch { /* ignore */ }
 };
 
 // ============================================================
@@ -231,7 +240,7 @@ export const getAutosaveInfo = async () => {
 // 緊急保存をスロットへ書き込んで通常ロード可能にする
 export const promoteEmergencyToSlot = async (slotIndex) => {
   try {
-    const raw = localStorage.getItem(EMERGENCY_KEY);
+    const raw = await storageGetItem(EMERGENCY_KEY);
     if (!raw) return { success: false, error: '緊急保存がありません' };
     // ⚠ 上書きする前に、いまのスロットを1世代バックアップする（通常の保存と同じ）。
     //    以前は無言で上書きし、選んだスロットの進行が戻せなくなっていた
@@ -289,6 +298,33 @@ export const migrateOldSaveData = () => {
 
 // ゲームデータを保存（async版）
 // セーブ用データオブジェクトを構築（saveGameToSlot / 緊急バックアップで共用）
+/**
+ * 進行中の背景大会（社会人の地域大会・都市対抗・日本選手権・クラブ選手権）を保存用に写す。
+ * `teamDefs` を持つ所の `teamDefsMap` は `teamDefs` から作り直せるので落とす（容量が半分になる）。
+ * 本戦の `teamDefsMap` は前年王者などを含み作り直せないので残す。
+ */
+export function serializeTournament(tournament) {
+  return JSON.parse(JSON.stringify(tournament, function (key, value) {
+    if (key === 'teamDefsMap' && Array.isArray(this?.teamDefs)) return undefined;
+    return value;
+  }));
+}
+
+/** `serializeTournament` の逆。結果だけの旧形式（`marker` の中身が無い）は null を返す */
+export function restoreTournament(saved, marker) {
+  if (!saved || !saved.generated || !saved[marker]) return null;
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node.teamDefs) && !node.teamDefsMap) {
+      node.teamDefsMap = {};
+      for (const def of node.teamDefs) node.teamDefsMap[def.displayName || def.name] = def;
+    }
+    for (const value of Object.values(node)) if (value && typeof value === 'object') walk(value);
+  };
+  walk(saved);
+  return saved;
+}
+
 export const buildSaveData = (gameState, slotIndex = 0) => {
   const worldDataSnapshot = WORLD_DATA.initialized ? {
     initialized: WORLD_DATA.initialized,
@@ -307,7 +343,12 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
       entries: WORLD_DATA.koshien.entries,
       notable: WORLD_DATA.koshien.notable,
     } : null,
-    corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
+    // ⚠ **進行中の大会は丸ごと保存する**（終わった大会は結果だけ）。以前は結果だけを残し、
+    //    ロードで作り直して「もう過ぎた日」の試合をまとめて消化していたため、途中でロードすると
+    //    大会をやり直し、出場した球団の選手成績が二重に積まれていた
+    corporateToshitaikou: WORLD_DATA.corporateToshitaikou && !WORLD_DATA.corporateToshitaikou.mainDone
+      ? serializeTournament(WORLD_DATA.corporateToshitaikou)
+      : WORLD_DATA.corporateToshitaikou ? {
       generated: WORLD_DATA.corporateToshitaikou.generated,
       qualifiersDone: WORLD_DATA.corporateToshitaikou.qualifiersDone,
       mainDone: WORLD_DATA.corporateToshitaikou.mainDone,
@@ -316,19 +357,26 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
     } : null,
     // 注目選手リスト（playerIdだけ保持。現在地は表示時に各プールを引いて解決する）
     watchList: Array.isArray(WORLD_DATA.watchList) ? JSON.parse(JSON.stringify(WORLD_DATA.watchList)) : [],
-    corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken ? {
+    corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken && !WORLD_DATA.corporateNihonSenshuken.done
+      ? serializeTournament(WORLD_DATA.corporateNihonSenshuken)
+      : WORLD_DATA.corporateNihonSenshuken ? {
       generated: WORLD_DATA.corporateNihonSenshuken.generated,
       done: WORLD_DATA.corporateNihonSenshuken.done,
       champion: WORLD_DATA.corporateNihonSenshuken.champion,
       runnerUp: WORLD_DATA.corporateNihonSenshuken.runnerUp,
     } : null,
-    corporateClubSenshuken: WORLD_DATA.corporateClubSenshuken ? {
+    corporateClubSenshuken: WORLD_DATA.corporateClubSenshuken && !WORLD_DATA.corporateClubSenshuken.done
+      ? serializeTournament(WORLD_DATA.corporateClubSenshuken)
+      : WORLD_DATA.corporateClubSenshuken ? {
       generated: WORLD_DATA.corporateClubSenshuken.generated,
       done: WORLD_DATA.corporateClubSenshuken.done,
       champion: WORLD_DATA.corporateClubSenshuken.champion,
       runnerUp: WORLD_DATA.corporateClubSenshuken.runnerUp,
     } : null,
-    corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? {
+    corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament
+      && !(WORLD_DATA.corporateRegionalTournament.phase === 'done' || WORLD_DATA.corporateRegionalTournament.done)
+      ? serializeTournament(WORLD_DATA.corporateRegionalTournament)
+      : WORLD_DATA.corporateRegionalTournament ? {
       generated: WORLD_DATA.corporateRegionalTournament.generated,
       done: WORLD_DATA.corporateRegionalTournament.phase === 'done' || !!WORLD_DATA.corporateRegionalTournament.done,
     } : null,
@@ -482,15 +530,16 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       WORLD_DATA.draft = wd.draft || { draftedPlayers: [], history: [] };
       WORLD_DATA.koshien = wd.koshien || null;
       WORLD_DATA.watchList = Array.isArray(wd.watchList) ? wd.watchList : [];
-      // 未完了トーナメントはnullにリセット → checkAndTriggerEventsで再生成＋キャッチアップ
+      // 進行中の大会は丸ごと保存してあるので、そのまま続きから進める。
+      // 結果だけの旧形式で未完了のものは null にして作り直す（進み具合が分からないため）
       const ctd = wd.corporateToshitaikou;
-      WORLD_DATA.corporateToshitaikou = (ctd && ctd.mainDone) ? ctd : null;
+      WORLD_DATA.corporateToshitaikou = (ctd && ctd.mainDone) ? ctd : restoreTournament(ctd, 'qualifiers');
       const cns = wd.corporateNihonSenshuken;
-      WORLD_DATA.corporateNihonSenshuken = (cns && cns.done) ? cns : null;
+      WORLD_DATA.corporateNihonSenshuken = (cns && cns.done) ? cns : restoreTournament(cns, 'qualifiers');
       const ccs = wd.corporateClubSenshuken;
-      WORLD_DATA.corporateClubSenshuken = (ccs && ccs.done) ? ccs : null;
+      WORLD_DATA.corporateClubSenshuken = (ccs && ccs.done) ? ccs : restoreTournament(ccs, 'qualifiers');
       const crt = wd.corporateRegionalTournament;
-      WORLD_DATA.corporateRegionalTournament = (crt && crt.done) ? { generated: true, done: true, phase: 'done' } : null;
+      WORLD_DATA.corporateRegionalTournament = (crt && crt.done) ? { generated: true, done: true, phase: 'done' } : restoreTournament(crt, 'brackets');
       WORLD_DATA.universityLeague = wd.universityLeague || null;
       WORLD_DATA._uniTournaments = wd._uniTournaments || null;
       WORLD_DATA.grandChampionship = wd.grandChampionship || null;

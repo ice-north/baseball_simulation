@@ -813,7 +813,7 @@ export function finalizePlayerSeason(player, year) {
  * @param {Object} awards - 表彰結果
  * @returns {Object} - 更新されたチームデータ
  */
-export function recordAwardsToPlayers(allTeams, awards, totalGames = 0) {
+export function recordAwardsToPlayers(allTeams, awards, totalGames = 0, eligibleTeamNames = null) {
   const updatedTeams = {};
 
   // タイトル別の知名度上昇量
@@ -821,9 +821,13 @@ export function recordAwardsToPlayers(allTeams, awards, totalGames = 0) {
   const FAME_TITLE_2ND = 8;
 
   // 2位の選手IDを収集
+  // ⚠ **1位（`processSeasonEnd`）と同じ母集団・同じ規定で数えること**。以前は全球団から
+  //    100打数／30アウト（＝10回）の固定値で拾っており、リーグの外の球団の選手や
+  //    規定に届かない投手が「2位」として知名度を得ていた
   const runnerUpIds = new Set();
   const allPlayers = [];
-  Object.values(allTeams).forEach(team => {
+  Object.entries(allTeams).forEach(([teamName, team]) => {
+    if (eligibleTeamNames?.length && !eligibleTeamNames.includes(teamName)) return;
     if (team.players) team.players.forEach(p => allPlayers.push(p));
   });
   const collectRunnerUp = (getStat, filterFn, ascending = false) => {
@@ -834,8 +838,8 @@ export function recordAwardsToPlayers(allTeams, awards, totalGames = 0) {
   };
   const getBattingAvg = p => p.seasonStats?.batting?.atBats > 0 ? p.seasonStats.batting.hits / p.seasonStats.batting.atBats : 0;
   const getEra = p => p.seasonStats?.pitching?.inningsPitched > 0 ? (p.seasonStats.pitching.earnedRuns * 27) / p.seasonStats.pitching.inningsPitched : 99.99;
-  const batFilter = p => (p.seasonStats?.batting?.atBats || 0) >= 100;
-  const pitFilter = p => (p.seasonStats?.pitching?.inningsPitched || 0) >= 30;
+  const batFilter = p => plateAppearances(p.seasonStats?.batting) >= qualifiedPA(totalGames);
+  const pitFilter = p => (p.seasonStats?.pitching?.inningsPitched || 0) >= qualifiedOuts(totalGames);
   collectRunnerUp(getBattingAvg, batFilter);
   collectRunnerUp(p => p.seasonStats?.batting?.homeruns || 0, batFilter);
   collectRunnerUp(p => p.seasonStats?.batting?.rbis || 0, batFilter);
@@ -1015,7 +1019,9 @@ function simulateParallelWorldStats(allTeams, playedTeamNames = []) {
           games: starts,
           gamesStarted: starts,
           gamesRelieved: 0,
-          inningsPitched: ip,
+          // ⚠ 投球回は**アウト数**で持つ（防御率は `自責×27÷アウト`）。回のまま入れると
+          //    防御率が3倍・規定投球回に届かない
+          inningsPitched: ip * 3,
           wins: Math.round(starts * winRate * 0.5 * (0.7 + Math.random() * 0.6)),
           losses: Math.round(starts * (1 - winRate) * 0.5 * (0.7 + Math.random() * 0.6)),
           saves: 0,
@@ -1037,7 +1043,7 @@ function simulateParallelWorldStats(allTeams, playedTeamNames = []) {
           games: apps,
           gamesStarted: 0,
           gamesRelieved: apps,
-          inningsPitched: ip,
+          inningsPitched: ip * 3,   // アウト数（先発と同じ）
           wins: Math.round(apps * 0.08 * (0.7 + Math.random() * 0.6)),
           losses: Math.round(apps * 0.06 * (0.7 + Math.random() * 0.6)),
           saves: isCloser ? Math.round(apps * winRate * 0.55 * (0.8 + Math.random() * 0.4)) : 0,
@@ -1076,7 +1082,7 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [] }
   const awards = seasonData.frozenAwards || processSeasonEnd(seasonData, allTeams);
 
   // 2. タイトルを選手に記録
-  let updatedTeams = recordAwardsToPlayers(allTeams, awards, seasonData.settings?.gamesPerSeason || seasonData.schedule?.length || 0);
+  let updatedTeams = recordAwardsToPlayers(allTeams, awards, seasonData.settings?.gamesPerSeason || seasonData.schedule?.length || 0, seasonData.settings?.teamNames);
 
   // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
   updateGrowthModifiers(updatedTeams, awards);
@@ -1127,7 +1133,19 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [] }
   // 3.5. CPU並行世界チームにシーズン成績を注入
   // resetSeasonStats後に入れることで通算成績に正しく積み上がり、
   // 以降の引退判定(step5)・成長計算(step4.6)でも使われる
-  simulateParallelWorldStats(updatedTeams, playedTeamNames);
+  // ⚠ **本当に試合をしたチームには入れないこと**。独立リーグで遊ぶときの同じリーグの
+  //    球団（`settings.teamNames`）と、日程を持って毎日試合を消化する並行世界の
+  //    独立リーグは、本物の成績を持っている。ここで作り物を入れると、その成績が
+  //    翌シーズンの開幕から乗ったまま本物の試合が足されていた（実測：開幕前で
+  //    1球団の打数が2,700前後）。成績の一覧・タイトル争いが最初から壊れる
+  const playedTeams = [
+    ...playedTeamNames,
+    ...(seasonData.settings?.teamNames || []),
+    ...Object.values(WORLD_DATA.independentLeagues || {})
+      .filter(league => league?.schedule?.length)
+      .flatMap(league => league.teams || []),
+  ];
+  simulateParallelWorldStats(updatedTeams, playedTeams);
 
   // 4. 選手の年齢を更新
   updatedTeams = updateAllPlayerAges(updatedTeams);
@@ -1629,7 +1647,7 @@ export function advanceToNextYearSandbox(seasonData, allTeams) {
   const awards = seasonData.frozenAwards || processSeasonEnd(seasonData, allTeams);
 
   // 2. タイトルを選手に記録
-  let updatedTeams = recordAwardsToPlayers(allTeams, awards, seasonData.settings?.gamesPerSeason || seasonData.schedule?.length || 0);
+  let updatedTeams = recordAwardsToPlayers(allTeams, awards, seasonData.settings?.gamesPerSeason || seasonData.schedule?.length || 0, seasonData.settings?.teamNames);
 
   // 3. シーズン統計を通算に加算してリセット
   updatedTeams = resetSeasonStats(updatedTeams, seasonData.year);

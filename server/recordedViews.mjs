@@ -45,6 +45,22 @@ export function statisticsContext(league) {
       : leagueComparison(league),
   };
 }
+/**
+ * 今季の成績だけ。順位表のチーム成績やベスト5のように、ラベル（`performance`）が
+ * 要らないところで使う。
+ * ⚠ `currentPlayerStats` は場面別の候補まで計算するので、12球団×24人に
+ *    使うと、投影のたびに要らない計算を288人ぶん回すことになっていた。
+ */
+export function currentSeasonStats(
+  league,
+  team,
+  player,
+  context = statisticsContext(league),
+) {
+  return context.season?.complete
+    ? recordedStats(recordForPlayer(league, player, team)) || emptyStats()
+    : player.seasonStats;
+}
 export function currentPlayerStats(
   league,
   team,
@@ -156,10 +172,17 @@ function weightedSituations(entries) {
     combined.byBats = { weighted: combined.splits.batting };
   return combined;
 }
-export function playerPeriods(league, team, player) {
-  const current = currentPlayerStats(league, team, player);
+export function playerPeriods(
+  league,
+  team,
+  player,
+  context = statisticsContext(league),
+) {
+  // ⚠ 文脈（全試合をなめて作る）は**1回だけ**作る。以前は1人ごとに2回作っていて、
+  //    保存のたびの記録の索引（参加者×24人）で何百回もなめていた
+  const current = currentPlayerStats(league, team, player, context);
   const currentRecord = recordForPlayer(league, player, team);
-  const currentSeason = statisticsContext(league).season;
+  const currentSeason = context.season;
   const periods = [
     {
       id: 'current',

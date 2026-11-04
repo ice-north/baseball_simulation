@@ -21,6 +21,17 @@ const downloads = [];
 let beforeDownload = null;
 let missingStatus = 404;
 let missingDetail = null;
+const controlSelects = [];
+let rejectNarrowSelect = false;
+const pickColumns = (source, select) =>
+  Object.fromEntries(
+    select.split(',').map((item) => {
+      const [alias, expr] = item.includes(':') ? item.split(':') : [item, item];
+      const [column, key] = expr.split('->');
+      const value = key === undefined ? source[column] : source[column]?.[key.replace(/^"|"$/g, '')];
+      return [alias, value ?? null];
+    }),
+  );
 const fetchImpl = async (url, options) => {
   const path = new URL(url).pathname;
   const body =
@@ -60,7 +71,14 @@ const fetchImpl = async (url, options) => {
         throw new Error('応答喪失');
       }
     }
-  } else if (path.endsWith('/online_control')) value = [row];
+  } else if (path.endsWith('/online_control')) {
+    // PostgREST の select（`列`・`別名:列->"キー"`）を最低限まねる
+    const select = new URL(url).searchParams.get('select');
+    controlSelects.push(select);
+    if (select !== '*' && rejectNarrowSelect)
+      return new Response(JSON.stringify({ message: 'bad select' }), { status: 400 });
+    value = [select === '*' ? row : pickColumns(row, select)];
+  }
   else if (path === '/storage/v1/object/online-world') {
     for (const p of body.prefixes) objects.delete(p);
     value = {};
@@ -300,6 +318,7 @@ await assert.rejects(
   (e) => e.status === 404,
 );
 const archived = row.views._records;
+assert.ok(Number.isInteger(row.views._meta?.revision) && 'status' in row.views._meta, '保存にリーグ全体の進行情報（_meta）が無い');
 await store.transaction((bundle) => {
   bundle.sessions.a = 'archive-session';
 });
@@ -456,6 +475,41 @@ assert.equal(
   // リーグがまだ無ければ、参加ではなく作成の画面
   row = { ...row, snapshot_path: null, views: {} };
   assert.equal((await store.readView('a', 'sa')).setupRequired, true);
+}
+
+// ⚠ 閲覧と定期処理の判定は、自分のビューとリーグ全体の進行情報（`_meta`）だけを読む。
+//    以前は `select=*` で全参加者のビューを毎回取り、30秒ごとの更新のたびに
+//    参加人数ぶんの転送が発生していた
+{
+  const others = Object.fromEntries(
+    Array.from({ length: 11 }, (_, i) => [`m${i}`, { teamName: `T${i}`, revision: 9, status: 'running', schema: ONLINE_SCHEMA, big: 'x'.repeat(1000) }]),
+  );
+  row = {
+    ...row,
+    snapshot_path: 'snapshots/live.json.gz',
+    sessions: { m0: 's0' },
+    views: {
+      ...others,
+      _meta: { schema: ONLINE_SCHEMA, revision: 9, status: 'running', nextAdvanceAt: '2026-01-01T00:00:00.000Z', phaseDeadline: null },
+    },
+  };
+  controlSelects.length = 0;
+  const own = await store.readView('m0', 's0');
+  assert.equal(own.teamName, 'T0');
+  assert.equal(own.writable, true);
+  assert.ok(controlSelects.every((sel) => sel !== '*'), '閲覧で全員のビューを読んでいる');
+  // 参加前の人は `_meta` の版で参加画面へ
+  assert.equal((await store.readView('newcomer', 's9')).revision, 9);
+  // ⚠ 管理者（a）がリーグに参加していなくても、定期処理は締め切り・進行時刻で起きる
+  assert.equal(await store.isDue('2026-06-01T00:00:00.000Z'), true, '管理者が不参加だと定期処理が動かない');
+  assert.equal(await store.isDue('2025-06-01T00:00:00.000Z'), false);
+  assert.ok(controlSelects.every((sel) => sel !== '*'), '定期処理の判定で全員のビューを読んでいる');
+  // 絞り込みが通らない環境では全列を読んで動く
+  rejectNarrowSelect = true;
+  const fallbackStore = new SupabaseStore({ url: 'https://fixture.test', serviceKey: 'test-only', members: [], adminId: 'a', fetchImpl });
+  assert.equal((await fallbackStore.readView('m1', 'x')).teamName, 'T1');
+  assert.equal(await fallbackStore.isDue('2026-06-01T00:00:00.000Z'), true);
+  rejectNarrowSelect = false;
 }
 
 console.log(

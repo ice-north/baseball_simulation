@@ -394,8 +394,10 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
   const candidates = [];
   const nextId = reservePlayerIds((year || 1) * 10000 + 5001);
   const positionBag = buildPositionBag(count);
-  const rank = effectiveTryoutRank(independentLeagueRank);
   for (let i = 1; i <= count; i++) {
+    // ⚠ 格上の逸材（約10%）は**1人ずつ**引くこと。まとめて1回引くと、
+    //    9割の年は1人も来ず、1割の年は全員が格上になる
+    const rank = effectiveTryoutRank(independentLeagueRank);
     candidates.push(
       createCandidatePlayer({ id: nextId(), position: positionBag[i - 1], rank }),
     );

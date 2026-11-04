@@ -73,9 +73,15 @@ export function prepareDailyLineup(team, name) {
   const current = pitchers.find((p) => p.id === starters[index]);
   let restore = () => {};
   if (!current || (current.fatigue || 0) >= 40) {
-    const rested = starters.findIndex((id) =>
-      pitchers.some((p) => p.id === id && (p.fatigue || 0) < 40),
-    );
+    // ⚠ **今の順番から先へ**探すこと（一人用の `selectStarterFromRotation` と同じ）。
+    //    以前は先頭から探していたので、4番手が疲れていると1番手に戻り、
+    //    5番手は飛ばされ、上位の先発ばかり短い間隔で投げていた
+    let rested = -1;
+    for (let i = 1; i < starters.length && rested < 0; i += 1) {
+      const candidate = (index + i) % starters.length;
+      if (pitchers.some((p) => p.id === starters[candidate] && (p.fatigue || 0) < 40))
+        rested = candidate;
+    }
     if (rested >= 0) rotation.currentStarterIndex = rested;
     else {
       const substitute = [...pitchers].sort(

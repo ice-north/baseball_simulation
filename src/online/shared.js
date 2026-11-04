@@ -206,17 +206,6 @@ export function sameEditState(a, b) {
 // ============================================================
 
 /**
- * フェーズを行う曜日（JST。0=日曜 … 6=土曜）。締め切りはその翌日0時。
- *
- * ⚠ **初期編成にも締め切りを置くこと**。以前は「最初の1回くらいは全員を待とう」と
- *    締め切りを設けなかったが、1人が決めないだけでリーグが永久に止まった
- *    （実際、開幕前の日付のまま何日も動かなくなった）。
- *    **時間による進行が絶対**で、決めていない人は標準案で押し通す。
- * ⚠ 初期編成を土曜（＝締め切り日曜0時）に置くのは、その次のキャンプが
- *    月曜0時に締め切られて**月曜開幕**になるため。初期編成を日曜に置くと、
- *    キャンプの締め切りが1週間先になって開幕が遅れる。
- */
-/**
  * キャンプで選べる練習。**サーバーと画面で同じ表を見る**。
  *
  * ⚠ 画面にだけメニューを増やさないこと。`TRAINING_MENUS` には
@@ -238,6 +227,17 @@ export const CAMP_MENUS = [
   'intensive_eye',
 ];
 
+/**
+ * フェーズを行う曜日（JST。0=日曜 … 6=土曜）。締め切りはその翌日0時。
+ *
+ * ⚠ **初期編成にも締め切りを置くこと**。以前は「最初の1回くらいは全員を待とう」と
+ *    締め切りを設けなかったが、1人が決めないだけでリーグが永久に止まった
+ *    （実際、開幕前の日付のまま何日も動かなくなった）。
+ *    **時間による進行が絶対**で、決めていない人は標準案で押し通す。
+ * ⚠ 初期編成を土曜（＝締め切り日曜0時）に置くのは、その次のキャンプが
+ *    月曜0時に締め切られて**月曜開幕**になるため。初期編成を日曜に置くと、
+ *    キャンプの締め切りが1週間先になって開幕が遅れる。
+ */
 export const PHASE_WEEKDAY = {
   // ⚠ 初期メンバー選択も土曜扱い（締め切り日曜0時）。続くキャンプが
   //    月曜0時に締め切られて月曜開幕になる
@@ -272,6 +272,19 @@ export function nextWeekdayStart(now, weekday) {
 }
 
 /**
+ * 締め切りまでに最低限残す時間（時間）。足りなければ翌週の同じ締め切りにする。
+ *
+ * ⚠ **リーグの最初の手続きに付けること**。いまの最初の手続きは初期メンバー選択
+ *    （`pack_select`）。`initial_tryout` は 3→4 の移行でしか出てこない古い形で、
+ *    以前はそちらにしか付いておらず、土曜の夜にリーグを作ると数分で締め切られて
+ *    全員が標準のセットになっていた。
+ */
+export const MIN_PHASE_HOURS = {
+  pack_select: 12,
+  initial_tryout: 12,
+};
+
+/**
  * 担当の曜日を過ぎてから開いた手続きに与える猶予（時間）。
  *
  * ⚠ **ストーブリーグの3つは同じ土曜に並んでいる**。契約更改が日曜0時の
@@ -296,9 +309,15 @@ export const LATE_PHASE_GRACE_HOURS = {
 export function phaseDeadlineAt(kind, now) {
   const weekday = PHASE_WEEKDAY[kind];
   if (weekday === undefined) return null;
-  const regular = nextWeekdayStart(now, (weekday + 1) % 7);
+  let regular = nextWeekdayStart(now, (weekday + 1) % 7);
   const grace = LATE_PHASE_GRACE_HOURS[kind];
   const ms = new Date(now).getTime();
+  // ⚠ 初期編成は最初の手続きで、ドラフトの希望を考える時間が要る。土曜の夜に
+  //    リーグを作ると締め切り（日曜0時）まで数分しかなく、全員が標準案で
+  //    決まっていた。短すぎるときは翌週の日曜0時にする（全員が決めれば待たずに進む）
+  const minimum = MIN_PHASE_HOURS[kind];
+  if (minimum && new Date(regular).getTime() - ms < minimum * 3600000)
+    regular = new Date(new Date(regular).getTime() + 7 * 86400000).toISOString();
   // 締め切りが5日以上先＝担当の曜日を過ぎた直後に開いた（遅れて開いた）
   if (grace === undefined || new Date(regular).getTime() - ms < 5 * 86400000)
     return regular;

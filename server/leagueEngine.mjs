@@ -74,6 +74,7 @@ import {
   executeTeamCampTraining,
   applyMotivationEffect,
   applyBatteryMentalEffect,
+  menuFitsPlayer,
 } from '../src/season/campTraining.js';
 import {
   getTeamStaffBonus,
@@ -108,7 +109,7 @@ import {
   assignmentOrder,
 } from '../src/online/membership.js';
 import { nextFromPlan } from '../src/online/tryoutPlan.js';
-import { generateRosterPacks } from '../src/online/rosterPack.js';
+import { generateRosterPacks, rosterPacksFor } from '../src/online/rosterPack.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export { CAMP_MENUS };
@@ -156,8 +157,15 @@ function createSchedule(season, teams) {
  *    ここで作り直して確かめるしかない。
  */
 export function packIdsFor(seed) {
-  return generateRosterPacks(seed).map((p) => p.id);
+  return rosterPacksFor(seed).map((p) => p.id);
 }
+
+/**
+ * 途中参加して、まだセットが名簿に入っていない人か。
+ * その球団は次のキャンプまでCPUが動かし、名簿はキャンプでセットに入れ替わる。
+ */
+const hasPendingPack = (league, teamName) =>
+  (league.members || []).some((m) => m.teamName === teamName && m.packSeed);
 
 /**
  * 途中参加した人が選んだセットを、名簿に入れる。**キャンプのときだけ**呼ぶ。
@@ -172,7 +180,8 @@ export function packIdsFor(seed) {
 function applyPendingPacks(league) {
   for (const member of league.members || []) {
     if (!member.packSeed) continue;
-    const packs = generateRosterPacks(member.packSeed);
+    // 名簿には複製を入れる（`clone`）ので、使い回しの値を読むだけでよい
+    const packs = rosterPacksFor(member.packSeed);
     const pack =
       packs.find((p) => p.id === member.pendingPackId) || packs[0];
     const team = TEAMS_DATA[member.teamName];
@@ -292,6 +301,7 @@ export function createLeague({
       defs.map((t) => t.abbreviation),
     );
     LEAGUE_SETTINGS.useDH = false;
+    LEAGUE_SETTINGS.maxExtraInnings = 12;
     initializeParallelWorldForIndependent('shikoku', names);
     ensureUserIndependentLeagueTagged(names, 'shikoku');
     // ⚠ **生成した球団の格付けを当て直すこと**。上の関数はプリセット定義と
@@ -332,7 +342,17 @@ export function defaultPhasePlan(league, teamName) {
   if (kind === 'pack_select') {
     // ⚠ 決めなかった人にも渡す。空いているセットから、球団名で決まる位置を取る
     //    （乱数だと、やり直しで違うセットになって再現しない）
-    const free = (league.packs || []).filter((p) => !p.takenBy);
+    // ⚠ **ほかの人が選んだセットは避けること**。標準案も解決のときは
+    //    「選んだもの」と同じ扱い（球団名の順）になるので、決めなかった人の
+    //    標準案が、ほかの人が自分で選んだセットを先に取っていた
+    const member = league.members.find((m) => m.teamName === teamName);
+    const wanted = new Set(
+      Object.entries(league.phase.submissions || {})
+        .filter(([userId]) => userId !== member?.userId)
+        .map(([, s]) => s?.plan?.packId)
+        .filter(Boolean),
+    );
+    const free = (league.packs || []).filter((p) => !p.takenBy && !wanted.has(p.id));
     const index =
       [...league.season.settings.teamNames].sort().indexOf(teamName) % Math.max(1, free.length);
     return { packId: free[index]?.id || league.packs?.[0]?.id || null };
@@ -342,6 +362,11 @@ export function defaultPhasePlan(league, teamName) {
   // ⚠ 既定は全体の方針だけ。選手ごとの割り当ては画面で決める
   if (kind === 'camp') return { menu: 'standard', assignments: {} };
   if (kind === 'offseason') return {};
+  // ⚠ **途中参加でセットを待っている球団は、トライアウトで取らない**。
+  //    名簿は次のキャンプでセットに丸ごと入れ替わるので、取った選手は
+  //    どこにも残らず消える（プールからは抜けているので世界から居なくなる）
+  if (kind === 'tryout' && hasPendingPack(league, teamName))
+    return { rankedIds: [], count: 0 };
   return seeded(league, `default:${league.phase.id}:${teamName}`, () => {
     const pool = clone(league.phase.candidates);
     const roster = clone(team.players);
@@ -390,12 +415,15 @@ function validatePhasePlan(league, teamName, plan) {
       // ⚠ **選手ごとの割り当て**。一人用のキャンプ画面と同じく、1人ずつ
       //    メニューを決められる。`menu` は全体の既定（割り当ての無い選手）。
       // ⚠ 自分の名簿の選手だけ。他球団の選手を混ぜられると練習が飛ぶ
-      const own = new Set(team.players.map((p) => p.id));
+      const own = new Map(team.players.map((p) => [p.id, p]));
       const assignments = {};
       for (const [id, key] of Object.entries(plan.assignments || {})) {
         const playerId = Number(id);
         if (!own.has(playerId)) continue;
         requireOnline(CAMP_MENUS.includes(key), '練習メニューが不正です');
+        // ⚠ 守備位置に合わないもの（野手に球速練習など）は落とす（全体の方針で埋まる）。
+        //    弾くと、保存済みの下書きが締め切りで丸ごと標準案に戻ってしまう
+        if (!menuFitsPlayer(key, own.get(playerId))) continue;
         assignments[playerId] = key;
       }
       return { menu: plan.menu, assignments };
@@ -665,10 +693,13 @@ function resolveTryout(league, plans) {
 
 function resolvePhase(league, now) {
   const kind = league.phase.kind;
+  // ⚠ 途中参加でセットを待っている人は提出しないことがある（`submitPhase`）。
+  //    その球団はCPUが動かしているので、標準案で決める
   const plans = Object.fromEntries(
     league.members.map((m) => [
       m.teamName,
-      league.phase.submissions[m.userId].plan,
+      league.phase.submissions[m.userId]?.plan ||
+        defaultPhasePlan(league, m.teamName),
     ]),
   );
   if (kind === 'pack_select') resolvePackSelect(league, plans);
@@ -690,11 +721,13 @@ function resolvePhase(league, now) {
         const menu = plan?.menu || 'standard';
         // ⚠ **選手ごとの割り当てを優先する**。無い選手だけ全体の方針で埋める
         //    （携帯や未提出の球団は全体の方針しか持たない）。
+        // ⚠ 全体の方針が守備位置に合わない選手（野手に球速練習など）は、
+        //    標準（投手は制球・野手は打撃）で埋める
         const assignments = Object.fromEntries(
           team.players.map((p) => [
             p.id,
             plan?.assignments?.[p.id] ||
-              (menu === 'standard'
+              (menu === 'standard' || !menuFitsPlayer(menu, p)
                 ? p.position === 'pitcher'
                   ? 'control'
                   : 'batting'
@@ -784,6 +817,21 @@ function resolvePhase(league, now) {
   }
 }
 
+/**
+ * 手続きがこの人の決定をまだ待っているか。
+ *
+ * ⚠ **途中参加でセットを待っている人は待たない**。その人の球団は次のキャンプで
+ *    名簿がセットに丸ごと入れ替わり、それまではCPUが動かす（画面もそう書いている）。
+ *    以前はこの人も「決定」を待っていたが、画面には初期メンバーの選択しか
+ *    出さないので決定する手段が無く、ストーブリーグとキャンプが毎回
+ *    締め切りまで止まっていた（ほかの全員が決めても進まない）。
+ *    自分で出した案があればそれを使い、無ければ標準案で決める（`resolvePhase`）。
+ */
+export function waitsFor(league, member) {
+  if (league.phase?.submissions?.[member.userId]?.ready) return false;
+  return !(member.packSeed && league.phase?.kind !== 'pack_select');
+}
+
 export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
   requireOnline(
     league.status === 'waiting' && league.phase?.id === phaseId,
@@ -799,7 +847,7 @@ export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
     plan: normalized,
     ready: ready === true,
   };
-  if (league.members.every((m) => league.phase.submissions[m.userId]?.ready))
+  if (league.members.every((m) => waitsFor(league, m) === false))
     seeded(league, `phase:${phaseId}`, () => resolvePhase(league, now));
   league.game = captureWorld();
 }

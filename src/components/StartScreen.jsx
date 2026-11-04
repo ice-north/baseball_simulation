@@ -200,7 +200,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
   // 前回クラッシュ時の緊急バックアップ／オートセーブの有無をチェック
   useEffect(() => {
-    setEmergencyInfo(getEmergencyInfo());
+    getEmergencyInfo().then(setEmergencyInfo);
     getAutosaveInfo().then(setAutosaveInfo);
   }, []);
 

@@ -10,8 +10,9 @@ import {
   teamShort,
   teamLabel,
 } from './gameText.js';
-import { api, POS, MENUS } from './api.js';
-import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
+import { api, POS } from './api.js';
+import { formatGameDate, PHASE_LABELS, sameEditState, CAMP_MENUS } from './shared.js';
+import { TRAINING_MENUS } from '../season/campTraining.js';
 import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
@@ -22,8 +23,16 @@ import {
   PYRAMID_LEAGUES,
   PROMOTION_PLACES,
   RELEGATION_FROM_BOTTOM,
+  compareLeagueStanding,
 } from './pyramidLeague.js';
 export { PageNav } from './PageNav.jsx';
+
+// キャンプのメニュー名。⚠ 名前は練習の表（`TRAINING_MENUS`）から引く。以前は
+// 別に書き写していて「ミート集中」が「巧打集中」になるなど食い違っていた
+const MENUS = {
+  standard: '標準（投手は制球・野手は打撃）',
+  ...Object.fromEntries(CAMP_MENUS.map((key) => [key, TRAINING_MENUS[key]?.name || key])),
+};
 
 /**
  * リーグに参加する画面。
@@ -125,9 +134,9 @@ export function Standings({ view }) {
   const leagues = view.teamLeagues
     ? PYRAMID_LEAGUES.map((league) => ({
         league,
-        rows: view.standings.filter(
-          (s) => view.teamLeagues[s.team] === league.id,
-        ),
+        rows: view.standings
+          .filter((s) => view.teamLeagues[s.team] === league.id)
+          .sort(compareLeagueStanding),
       })).filter((group) => group.rows.length)
     : [{ league: null, rows: view.standings }];
   return (
@@ -469,7 +478,8 @@ export function PendingPackPanel({ view, busy, run, command, mobile }) {
       <p>
         {mobile && '20セットから1つ選びます。'}選んだ24人は
         <strong>次の日曜のキャンプで名簿に入り</strong>、月曜の開幕から
-        あなたの球団になります。それまでは引き継いだ選手でCPUが戦います。
+        あなたの球団になります。それまでは引き継いだ選手でCPUが戦い、
+        ストーブリーグとキャンプの手続きもCPUが決めます。
       </p>
       {mobile && <p className="online-muted">{status}</p>}
       <PackSelect
@@ -611,7 +621,8 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
       {view.members.map((m) => (
         <li key={m.teamName} data-ready={m.ready || undefined}>
           {/* ⚠ 参加者が付けた球団名を出す。`label` は作成時の呼び名のまま */}
-          {teamLabel(m.teamName)} · {m.ready ? '決定済み' : '検討中'}
+          {teamLabel(m.teamName)} ·{' '}
+          {m.cpu ? 'CPUが決定（初期メンバー待ち）' : m.ready ? '決定済み' : '検討中'}
         </li>
       ))}
     </ul>
@@ -797,7 +808,11 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
           <>
             <p>
               {phase.kind === 'camp'
-                ? `練習方針: ${MENUS[plan.menu]}`
+                ? // ⚠ 選手ごとの割り当て（PCで決めたもの）があれば、そちらを伝える。
+                  //    全体の方針だけ出すと、決定で送る内容と違って見える
+                  Object.keys(plan.assignments || {}).length
+                  ? `練習: 選手ごとに割り当て済み（${Object.keys(plan.assignments).length}人、ほかは${MENUS[plan.menu] || MENUS.standard}）`
+                  : `練習方針: ${MENUS[plan.menu] || MENUS.standard}`
                 : plan.packId !== undefined
                   ? `初期メンバー: ${phase.packs?.find((x) => x.id === plan.packId)?.name || '未選択'}`
                   : plan.rankedIds

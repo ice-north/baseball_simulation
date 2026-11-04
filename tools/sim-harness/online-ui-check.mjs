@@ -390,7 +390,7 @@ try {
   await click(lineupTab, '保存');
   await lowerStarter(p, editedOrder[1]);
   await click(p, '保存');
-  await p.getByText('編成が更新されています。', { exact: false }).first().waitFor();
+  await p.getByText('編成がほかの画面で更新されています。', { exact: false }).first().waitFor();
   await click(p, '変更を取り消す');
   await click(p, '更新');
   assert.deepEqual(

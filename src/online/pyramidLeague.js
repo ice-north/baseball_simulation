@@ -313,6 +313,21 @@ export function pyramidSeasonSchedule(teams, { year, turns = SEASON_TURNS } = {}
  * ⚠ 最後に球団名まで見て並びを決める。勝率も勝利数も並んだとき、
  *    順序が実行のたびに変わると昇降格の相手が変わってしまう。
  */
+/**
+ * 部の中の並べ方（昇降格を決める順）。勝率→勝利数→球団名。
+ * ⚠ 順位表の画面もこれで並べること。全体の並び（勝率→勝利数）のまま出すと、
+ *    同率のとき画面の「昇格圏・降格圏」の印と実際に動く球団が食い違う
+ */
+export function compareLeagueStanding(sa = {}, sb = {}) {
+  const a = sa.team ?? '';
+  const b = sb.team ?? '';
+  return (
+    (sb.winRate || 0) - (sa.winRate || 0) ||
+    (sb.wins || 0) - (sa.wins || 0) ||
+    (a < b ? -1 : a > b ? 1 : 0)
+  );
+}
+
 export function standingsByLeague(teams, standings = []) {
   const leagueOf = Object.fromEntries(teams.map((t) => [t.name, t.league]));
   const byName = Object.fromEntries(standings.map((s) => [s.team, s]));
@@ -321,15 +336,9 @@ export function standingsByLeague(teams, standings = []) {
     result[league.id] = teams
       .filter((t) => leagueOf[t.name] === league.id)
       .map((t) => t.name)
-      .sort((a, b) => {
-        const sa = byName[a] || {};
-        const sb = byName[b] || {};
-        return (
-          (sb.winRate || 0) - (sa.winRate || 0) ||
-          (sb.wins || 0) - (sa.wins || 0) ||
-          (a < b ? -1 : a > b ? 1 : 0)
-        );
-      });
+      .sort((a, b) =>
+        compareLeagueStanding({ ...byName[a], team: a }, { ...byName[b], team: b }),
+      );
   }
   return result;
 }

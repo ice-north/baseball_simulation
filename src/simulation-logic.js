@@ -1028,6 +1028,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       result: 'single', bases: 1, description: 'ヒット！（中継ミス）',
       isError: true, errorPosition: position, fieldingPosition: position,
       isThrowingError: true, extraAdvance: true,
+      // ⚠ 打者は安打で出塁している（失策は返球の後）。「失策で出塁」と数えると
+      //    安打が消え、打者が非自責の走者になり、免れたアウトまで1つ増えていた
+      hitWithError: true,
     };
   }
   return { result: 'single', bases: 1, description: 'ヒット！', fieldingPosition: position };

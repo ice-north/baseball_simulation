@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { applyJoin, applyProfile } from '../src/online/membership.js';
 import { isDeepStrictEqual } from 'node:util';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import {
   requireOnline,
   nextProgressionAt,
@@ -20,6 +21,19 @@ import { saveLineup } from './lineupCommand.mjs';
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone = (value) => structuredClone(value);
+// ⚠ **バックアップは圧縮した文字列で持つ**。リーグ（世界の写し込み）をそのまま
+//    抱えると、操作のたびに読み書きする一式が倍の大きさになり、
+//    取り込み・書き出しの時間とメモリも倍かかっていた。
+//    文字列なら JSON の読み書きは一瞬で、中身は復元のときだけ開く。
+//    以前の形（`backup.league` に生のリーグ）もそのまま読める。
+const packBackup = (league, takenAt) => ({
+  packed: gzipSync(JSON.stringify(league)).toString('base64'),
+  takenAt,
+});
+const unpackBackup = (backup) =>
+  typeof backup?.packed === 'string'
+    ? JSON.parse(gunzipSync(Buffer.from(backup.packed, 'base64')).toString())
+    : clone(backup?.league);
 // エンジンはグローバル世界を使うため、同一Nodeプロセス内でも全storeをまたいで直列化する。
 let engineQueue = Promise.resolve();
 export class LeagueService {
@@ -178,6 +192,31 @@ export class LeagueService {
         );
         return { unchanged: true, value: bundle.receipts[key].value };
       }
+      // ⚠ **全データのリセットも版の照合を飛ばす**。壊れて読めなくなった
+      //    リーグを捨てるための操作なので、版が合うことを前提にできない。
+      //    消したあとは `create` からやり直す（revision は0に戻る）。
+      // ⚠ **移行より先に置くこと**。移行できない形（作り直すしかない版）だと
+      //    移行が例外を投げ、捨てるための操作まで届かなかった
+      if (command.type === 'reset') {
+        requireOnline(
+          userId === this.adminId,
+          '全データのリセットは管理者専用です',
+          403,
+        );
+        // ⚠ **「リーグが無い」を先に見ること**。`canStep(null)` は false なので、
+        //    順を逆にすると、消したあとの2回目が「検証モードが入っていません」に
+        //    なって、何が起きているのか分からない
+        const l = bundle.league;
+        requireOnline(l, 'リーグがまだありません', 409);
+        // ⚠ 検証モードの間だけ。遊んでいるリーグで押せると、全員の成績が
+        //    管理者の一押しで消える
+        requireOnline(this.canStep(l), '検証モードが入っていません', 403);
+        bundle.league = null;
+        // ⚠ バックアップも消すこと。残すと「リセットしたのに復元できる」状態
+        //    になり、何が正本か分からなくなる
+        delete bundle.backup;
+        return { value: { ok: true, reset: true } };
+      }
       // ⚠ **版の照合より先に移行する**。古い形のままでは他の命令が通らず、
       //    「更新したらリーグが読めなくなった」が起きる。どの命令で入っても
       //    ここを通るので、誰かが何か操作すれば自然に直る。
@@ -191,28 +230,6 @@ export class LeagueService {
           ...(migrated.changed ? {} : { unchanged: true }),
           value: { ok: true, applied: migrated.applied },
         };
-      }
-      // ⚠ **全データのリセットも版の照合を飛ばす**。壊れて読めなくなった
-      //    リーグを捨てるための操作なので、版が合うことを前提にできない。
-      //    消したあとは `create` からやり直す（revision は0に戻る）。
-      if (command.type === 'reset') {
-        requireOnline(
-          userId === this.adminId,
-          '全データのリセットは管理者専用です',
-          403,
-        );
-        // ⚠ **「リーグが無い」を先に見ること**。`canStep(null)` は false なので、
-        //    順を逆にすると、消したあとの2回目が「検証モードが入っていません」に
-        //    なって、何が起きているのか分からない
-        requireOnline(l, 'リーグがまだありません', 409);
-        // ⚠ 検証モードの間だけ。遊んでいるリーグで押せると、全員の成績が
-        //    管理者の一押しで消える
-        requireOnline(this.canStep(l), '検証モードが入っていません', 403);
-        bundle.league = null;
-        // ⚠ バックアップも消すこと。残すと「リセットしたのに復元できる」状態
-        //    になり、何が正本か分からなくなる
-        delete bundle.backup;
-        return { value: { ok: true, reset: true } };
       }
       requireOnline(
         l ? command.revision === l.revision : command.revision === 0,
@@ -296,7 +313,10 @@ export class LeagueService {
           );
           requireOnline(
             isDeepStrictEqual(currentLineup, command.payload.baseLineup),
-            '編成が更新されています。「編集を戻す」で最新の編成を読み直してください',
+            // ⚠ 取り消しのボタンは画面ごとに名前が違う（PCは「変更を取り消す」、
+            //    スマホの簡易編成は「編集を戻す」、スマホの詳しい編成は閉じて開き直す）。
+            //    どの画面から保存しても分かる案内にする
+            '編成がほかの画面で更新されています。PCは「変更を取り消す」、スマホの簡易編成は「編集を戻す」、詳しい編成は閉じて開き直して、最新の編成から編集し直してください',
             409,
             'edit_conflict',
           );
@@ -324,11 +344,7 @@ export class LeagueService {
             '進行を停止してからバックアップしてください',
             403,
           );
-          bundle.backup = clone({
-            league: l,
-            sessions: bundle.sessions,
-            receipts: bundle.receipts,
-          });
+          bundle.backup = packBackup(l, now);
         } else if (command.type === 'restore') {
           requireOnline(
             userId === this.adminId &&
@@ -338,8 +354,14 @@ export class LeagueService {
             409,
           );
           const revision = l.revision;
-          assertLeagueVersion(bundle.backup.league);
-          bundle.league = clone(bundle.backup.league);
+          // ⚠ **古い版で取ったバックアップは移行してから戻す**。版を上げたあとに
+          //    復元すると、以前は「バージョンが対応していません」で必ず失敗した。
+          //    直せない版（作り直すしかない形）は従来どおり断る。
+          const restored = unpackBackup(bundle.backup);
+          if (restored && !isCurrent(restored))
+            migrateLeague(restored, { now: this.clock() });
+          assertLeagueVersion(restored);
+          bundle.league = restored;
           bundle.league.revision = revision;
           bundle.league.status = bundle.league.phase ? 'waiting' : 'paused';
           bundle.league.nextAdvanceAt = null;

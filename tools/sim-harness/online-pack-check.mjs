@@ -273,6 +273,21 @@ try {
     names[0],
   );
   assert.ok(plan.packId, '既定の選択が空');
+  // ⚠ **ほかの人が自分で選んだセットは、標準案に入れない**。標準案も解決では
+  //    「選んだもの」と同じ扱い（球団名の順）なので、決めなかった人が先に取っていた
+  const avoiding = defaultPhasePlan(
+    {
+      ...after,
+      phase: {
+        kind: 'pack_select',
+        submissions: { someoneElse: { plan: { packId: plan.packId }, ready: true } },
+      },
+      packs,
+    },
+    names[0],
+  );
+  assert.ok(avoiding.packId, '既定の選択が空（ほかの人が選んだとき）');
+  assert.notEqual(avoiding.packId, plan.packId, '決めなかった人の標準案が、ほかの人の選んだセットを取る');
 
   // --- 途中参加した人のセット選択 ---------------------------------------
   // ⚠ 開幕後に参加した人は、引き継いだCPUの名簿のままでは自分で選んだ24人で
@@ -353,8 +368,15 @@ try {
       return { value: null };
     });
     const camp = (await store.read()).league;
-    for (const m of camp.members)
-      await service.command(m.userId, m.userId === 'admin' ? admin : m.userId === 'guest' ? guest : joiner, {
+    // ⚠ **セットを待っている人の決定は待たない**（その球団はキャンプまでCPUが動かす）。
+    //    以前は待っていたが、画面には初期メンバーの選択しか出さないので決める手段が無く、
+    //    ストーブリーグとキャンプが毎回締め切りまで止まっていた
+    const waiting = (await service.view('late1', joiner)).members.find(
+      (m) => m.teamName === myTeam,
+    );
+    assert.ok(waiting.ready && waiting.cpu, 'セットを待っている人がCPU決定として出ていない');
+    for (const m of camp.members.filter((x) => x.userId !== 'late1'))
+      await service.command(m.userId, m.userId === 'admin' ? admin : guest, {
         requestId: `packchk-camp-${m.userId}`,
         revision: await liveRev(),
         type: 'submit',
@@ -366,6 +388,11 @@ try {
         },
       });
     const done = (await store.read()).league;
+    assert.notEqual(
+      done.phase?.kind,
+      'camp',
+      'セットを待っている人の決定を待って、キャンプが締め切りまで止まる',
+    );
     const mine = done.game.teams[myTeam].players;
     assert.equal(mine.length, PACK_SIZE, `キャンプ後の人数がちがう: ${mine.length}`);
     assert.deepEqual(

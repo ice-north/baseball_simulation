@@ -3,13 +3,10 @@ import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, FORM_OPTIONS } from '../utils/constants.js';
 
-const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, allTeams }) => {
+const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, allTeams, onOpenSave, onBackToGame }) => {
   const [editingTeam, setEditingTeam] = useState(allTeams[0] || 'チームA');
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editFormData, setEditFormData] = useState(null);
-  const [editingTeamName, setEditingTeamName] = useState(false);
-  const [newTeamName, setNewTeamName] = useState('');
-  const [localTrigger, setLocalTrigger] = useState(0);
 
   const currentTeams = Object.keys(TEAMS_DATA);
 
@@ -82,32 +79,28 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
     }
   };
 
-  const startEditTeamName = () => {
-    setNewTeamName(editingTeam);
-    setEditingTeamName(true);
-  };
-
-  const saveTeamName = () => {
-    const trimmed = newTeamName.trim();
-    if (!trimmed || trimmed === editingTeam) {
-      setEditingTeamName(false);
-      return;
-    }
-    if (TEAMS_DATA[trimmed]) {
-      alert('その名前は既に使われています');
-      return;
-    }
-    TEAMS_DATA[trimmed] = TEAMS_DATA[editingTeam];
-    TEAMS_DATA[trimmed].name = trimmed;
-    delete TEAMS_DATA[editingTeam];
-    setEditingTeam(trimmed);
-    setEditingTeamName(false);
-    setLocalTrigger(prev => prev + 1);
-  };
+  // ⚠ チーム名の変更はここでは行わない。チーム名は日程・順位表・記録・ローテーション・
+  //    「TEAMS_DATA の先頭＝自チーム」の並びまで鍵として使われていて、以前ここで
+  //    キーだけ付け替えていたため、自チームが末尾へ移り日程の球団名とも食い違った。
 
   return (
     <ScreenShell>
-      <h1 className="text-xl font-bold mb-6 text-white">エディット画面（開発用）</h1>
+      <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-xl font-bold text-white">エディット画面（開発用）</h1>
+        {/* ⚠ 以前は保存も戻るボタンも無く、編集は再読み込みで消えるだけだった */}
+        <div className="flex gap-2">
+          {onOpenSave && (
+            <button onClick={onOpenSave} className="btn-primary px-4 py-2 rounded text-sm">
+              💾 セーブ画面へ（編集を保存する）
+            </button>
+          )}
+          {onBackToGame && (
+            <button onClick={onBackToGame} className="btn-secondary px-4 py-2 rounded text-sm">
+              ゲームに戻る
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="mb-6 flex gap-4 flex-wrap">
         {currentTeams.map((teamName) => (
@@ -128,26 +121,10 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
       <div className="bg-surface-2 rounded-lg p-6 mb-6">
         <h2 className="text-xl font-bold mb-4 text-white">チーム情報</h2>
         <div className="text-white">
-          {editingTeamName ? (
-            <div className="mb-2 flex items-center gap-2">
-              <span>チーム名:</span>
-              <input
-                type="text"
-                value={newTeamName}
-                onChange={(e) => setNewTeamName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') saveTeamName(); if (e.key === 'Escape') setEditingTeamName(false); }}
-                className="bg-gray-700 border border-gray-500 text-white px-3 py-1 rounded w-48 focus:border-blue-400 focus:outline-none"
-                autoFocus
-              />
-              <button onClick={saveTeamName} className="btn-primary px-3 py-1 rounded text-sm">保存</button>
-              <button onClick={() => setEditingTeamName(false)} className="text-gray-300 hover:text-white px-2 py-1 text-sm">取消</button>
-            </div>
-          ) : (
-            <div className="mb-2 flex items-center gap-2">
-              <span>チーム名: <span className="font-bold">{team.name}</span></span>
-              <button onClick={startEditTeamName} className="text-blue-400 hover:text-blue-300 text-sm ml-2">変更</button>
-            </div>
-          )}
+          <div className="mb-2">
+            チーム名: <span className="font-bold">{team.name}</span>
+            <span className="text-xs text-gray-400 ml-2">（チーム名は日程・記録に使われているため、この画面では変更できません）</span>
+          </div>
           <div className="text-sm text-gray-300">選手数: {team.players.length}人</div>
         </div>
         <div className="mt-4 flex gap-3">

@@ -1,6 +1,6 @@
 import { tacticalChance, tacticalPitchLimit, tacticalDamageLimit } from '../online/tactics.js';
 import { createDecisionLog, observeDecisionLog, decisionsFromResult, recordDecisions } from './pitcherDecisions.js';
-import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
+import { TEAMS_DATA, LEAGUE_SETTINGS, normalizeMaxExtraInnings } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate, spinAdjustedArsenal } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
   pitchVelocityDrop, isUnreadablePitch } from '../utils/constants.js';
@@ -1020,6 +1020,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         return {
           type: 'single',
           isError: fieldResult.isError || false,
+          hitWithError: !!fieldResult.hitWithError,
           errorPosition: fieldResult.errorPosition,
           fieldingPosition: fieldResult.fieldingPosition,
           // 悪送球・中継ミスは走者が余分に1つ進む
@@ -2092,6 +2093,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         }
       }
 
+      // ⚠ 盗塁の悪送球・暴投でサヨナラの走者が還ったら、この球の結果は出さない。
+      //    ループ先頭の判定だけだと、同じ球の中で決まったサヨナラの後にもう1球投げ、
+      //    打席の結果（三振・安打など）まで記録していた
+      if (isWalkOff()) break;
+
       // 投手のスタミナを取得
       const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
       const pitcherStamina = pitcherData.currentStamina;
@@ -2222,8 +2228,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             const adv = resolveGroundOutAdvance({
               hasThird: !!gameState.bases[2], hasSecond: !!gameState.bases[1],
               infieldDefense: inf.reduce((a, b) => a + b, 0) / inf.length,
-              thirdSpeed: gameState.bases[2]?.speed ?? 50,
-              secondSpeed: gameState.bases[1]?.speed ?? 50,
+              // ⚠ 塁上は選手そのもの（走力は physical.speed）。以前は `.speed` を読んで
+              //    常に 50 になり、俊足でも鈍足でもゴロでの進塁率が同じだった
+              thirdSpeed: gameState.bases[2]?.physical?.speed ?? 50,
+              secondSpeed: gameState.bases[1]?.physical?.speed ?? 50,
             });
             if (adv.scoreFromThird) {
               const unearned = gameState.bases[2]?._reachedOnError ? 1 : 0;
@@ -2292,7 +2300,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         case 'homerun':
           // 失策による出塁は「ヒット扱い」で単打として処理されるが、自責点上は非自責走者。
           // また失策が無ければアウトだったので、そのイニングの想定アウト数を1つ増やす。
-          if (result.isError) {
+          // 中継ミス（`hitWithError`）は安打のあとの失策なので、打者は安打で出塁している
+          const reachedOnError = !!result.isError && !result.hitWithError;
+          if (reachedOnError) {
             batter._reachedOnError = true;   // 失策出塁の走者＝この走者の生還は非自責
             gameState.inningErrorOuts++;     // 失策が無ければアウトだった＝想定アウトを1つ加算
           }
@@ -2302,7 +2312,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           batter.gameStats.batting.atBats++;
           // 失策での出塁は「安打」ではない（打数のみ加算し、打点も付かない）。
           // ここを安打扱いにすると失策が増えるほどリーグ打率が上振れする。
-          if (!result.isError) {
+          if (!reachedOnError) {
             batter.gameStats.batting.hits++;
             batter.gameStats.batting.rbis += runsScored;
             if (result.type === 'double') batter.gameStats.batting.doubles = (batter.gameStats.batting.doubles || 0) + 1;
@@ -2314,7 +2324,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           atBatDamagePoints += runsScored * 10;
 
           // 投手の被安打・被本塁打を記録（失策出塁は被安打にしない）
-          if (!result.isError) {
+          if (!reachedOnError) {
             pitcher.gameStats.pitching.hits = (pitcher.gameStats.pitching.hits || 0) + 1;
             if (result.type === 'homerun') pitcher.gameStats.pitching.homeruns = (pitcher.gameStats.pitching.homeruns || 0) + 1;
           }
@@ -2353,7 +2363,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       }
       observeReplay('pitch', {
         pitchResult: result.type,
-        result: result.isError ? 'error' : result.type === 'ball' && gameState.count.balls >= 4 ? 'walk'
+        result: result.isError && !result.hitWithError ? 'error' : result.type === 'ball' && gameState.count.balls >= 4 ? 'walk'
           : ['called_strike', 'swinging_strike'].includes(result.type) && gameState.count.strikes >= 3 ? 'strikeout' : result.type,
         completed: atBatOver,
         pitch: lastCall(sequence) ? { ...lastCall(sequence) } : null,
@@ -2907,8 +2917,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   //    `inning <= 9 || (inning > 9 && 同点)` だったので、延長の表に勝ち越した瞬間に
   //    （裏を打たせずに）試合が終わっていた（延長で決着した試合の約6%＝全試合の約6%）。
   //    9回以降: 表の終了時にホームがリード → 裏は不要 / 裏の終了時に差がある → 決着。
-  //    延長は12回まで（12回裏を終えて同点なら引き分け）
-  const MAX_INNINGS = 12;
+  //    延長は規定の上限まで（既定12回。その回の裏を終えて同点なら引き分け）
+  // ⚠ 勝ち抜きの大会（`isCupGame`）は規定の上限を使わず、従来どおり12回まで。
+  //    規定はリーグ戦のためのもので、上限を9回にすると、裏で回っている
+  //    大会の試合まで引き分けが増え、勝者が強さのくじ（`simulateQuickMatch`）で決まっていた
+  const MAX_INNINGS = isCupGame ? 12 : normalizeMaxExtraInnings(LEAGUE_SETTINGS.maxExtraInnings);
   for (;;) {
     simulateInning();                         // 終わると isTopInning が反転済み
     const endedTop = !gameState.isTopInning;  // いま終わったのが表か

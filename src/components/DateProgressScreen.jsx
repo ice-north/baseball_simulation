@@ -1204,11 +1204,14 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     const recentCount = (seasonData?.settings?.corporateMode || seasonData?.settings?.universityMode)
       ? Math.min(40, (seasonData.results || []).length)
       : Math.max(allTeamNames.length, 1);
+    // ⚠ `seasonData.results` の各試合は**平たい形**（`{home, away, homeScore, awayScore}`）。
+    //    点が `result` の中にあるのは日程（`schedule`）の側だけ。`r.result` を読むと
+    //    どの試合も素通りして、試合・連勝のトピックと自チームのレポートが一度も出なかった
     const recentResults = (seasonData.results || []).slice(-recentCount);
     recentResults.forEach(r => {
-      if (!r.result || r.result.cancelled) return;
-      const hs = r.result.homeScore;
-      const as = r.result.awayScore;
+      if (r.homeScore == null) return;
+      const hs = r.homeScore;
+      const as = r.awayScore;
       const diff = Math.abs(hs - as);
       if (diff >= 8) {
         const winner = hs > as ? r.home : r.away;
@@ -1268,9 +1271,9 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
     // 試合結果からの追加トピック
     recentResults.forEach(r => {
-      if (!r.result || r.result.cancelled) return;
-      const hs = r.result.homeScore;
-      const as = r.result.awayScore;
+      if (r.homeScore == null) return;
+      const hs = r.homeScore;
+      const as = r.awayScore;
       const total = hs + as;
       const diff = Math.abs(hs - as);
       if (total >= 15) {
@@ -1290,15 +1293,15 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     // チーム連勝・連敗
     allTeamNames.forEach(tn => {
       const abbr = getTeamAbbreviation(tn);
-      const teamResults = (seasonData.results || []).filter(g => g.result && !g.result.cancelled && (g.home === tn || g.away === tn));
+      const teamResults = (seasonData.results || []).filter(g => g.homeScore != null && (g.home === tn || g.away === tn));
       if (teamResults.length >= 5) {
         let streak = 0;
         let streakType = null;
         for (let i = teamResults.length - 1; i >= 0; i--) {
           const g = teamResults[i];
           const isHome = g.home === tn;
-          const won = isHome ? g.result.homeScore > g.result.awayScore : g.result.awayScore > g.result.homeScore;
-          const lost = isHome ? g.result.homeScore < g.result.awayScore : g.result.awayScore < g.result.homeScore;
+          const won = isHome ? g.homeScore > g.awayScore : g.awayScore > g.homeScore;
+          const lost = isHome ? g.homeScore < g.awayScore : g.awayScore < g.homeScore;
           if (streakType === null) {
             streakType = won ? 'win' : lost ? 'loss' : null;
             if (!streakType) break;
@@ -1514,7 +1517,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     if (!userTeam?.players) return reports;
     const players = userTeam.players;
     const results = seasonData.results || [];
-    const teamGames = results.filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
+    const teamGames = results.filter(g => g.homeScore != null && (g.home === userTeamName || g.away === userTeamName));
     if (teamGames.length < 3) return reports;
 
     // --- 直近5試合の傾向分析 ---
@@ -1522,11 +1525,11 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     let rWins = 0, rLosses = 0, rScored = 0, rAllowed = 0;
     recent.forEach(g => {
       const isHome = g.home === userTeamName;
-      const won = isHome ? g.result.homeScore > g.result.awayScore : g.result.awayScore > g.result.homeScore;
-      const lost = isHome ? g.result.homeScore < g.result.awayScore : g.result.awayScore < g.result.homeScore;
+      const won = isHome ? g.homeScore > g.awayScore : g.awayScore > g.homeScore;
+      const lost = isHome ? g.homeScore < g.awayScore : g.awayScore < g.homeScore;
       if (won) rWins++; else if (lost) rLosses++;
-      rScored += isHome ? g.result.homeScore : g.result.awayScore;
-      rAllowed += isHome ? g.result.awayScore : g.result.homeScore;
+      rScored += isHome ? g.homeScore : g.awayScore;
+      rAllowed += isHome ? g.awayScore : g.homeScore;
     });
     const avgScored = (rScored / recent.length).toFixed(1);
     const avgAllowed = (rAllowed / recent.length).toFixed(1);

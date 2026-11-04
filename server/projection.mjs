@@ -7,9 +7,10 @@ import {
   teamSeasonStats,
   abilityLeaders,
 } from './leagueBoard.mjs';
-import { packSummary, generateRosterPacks } from '../src/online/rosterPack.js';
+import { packSummary, rosterPacksFor } from '../src/online/rosterPack.js';
 import {
   currentPlayerStats,
+  currentSeasonStats,
   playerPeriods,
   storedGame,
   gameSummary,
@@ -188,6 +189,8 @@ export function projectLineup(team) {
     ...(team.onlineTactics ? { tactics: team.onlineTactics } : {}),
   };
 }
+const pendingPackAuto = (phase, member) =>
+  !!phase && !!member.packSeed && phase.kind !== 'pack_select';
 export function projectLeague(bundle, userId, sessionId, adminId) {
   const l = bundle.league;
   if (!l) return { setupRequired: true, isAdmin: userId === adminId };
@@ -239,7 +242,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     if (!seasonStatsCache.has(player.id))
       seasonStatsCache.set(
         player.id,
-        currentPlayerStats(l, teamName, player, statistics).seasonStats,
+        currentSeasonStats(l, teamName, player, statistics),
       );
     return seasonStatsCache.get(player.id);
   };
@@ -292,7 +295,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       teamName: m.teamName,
       // ⚠ 自チーム情報の画面が「いまの球団名」を出すのに使う
       displayName: m.displayName || teamLabels[m.teamName]?.label || m.teamName,
-      ready: !!phase?.submissions[m.userId]?.ready,
+      ready: !!phase?.submissions[m.userId]?.ready || pendingPackAuto(phase, m),
+      // ⚠ 途中参加でセットを待っている人の球団は、キャンプまでCPUが決める
+      //    （手続きはこの人の決定を待たない。`leagueEngine` の `waitsFor`）
+      ...(pendingPackAuto(phase, m) && !phase?.submissions[m.userId]?.ready
+        ? { cpu: true }
+        : {}),
     })),
     standings: l.season.standings,
     // ⚠ 各項目のベスト5。12球団×24人をなめるので**1回の投影で1度だけ**作る
@@ -365,7 +373,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     pendingPack: member.packSeed
       ? {
           chosen: member.pendingPackId || null,
-          packs: generateRosterPacks(member.packSeed).map(packView),
+          packs: rosterPacksFor(member.packSeed).map(packView),
         }
       : null,
     history: l.history,
@@ -420,13 +428,18 @@ function ownedPlayer(bundle, userId, id) {
   requireOnline(player, '選手が見つかりません', 404);
   return { l, member, player };
 }
-export function projectPlayerInfo(bundle, userId, id) {
+export function projectPlayerInfo(bundle, userId, id, context) {
   const { l, member, player } = ownedPlayer(bundle, userId, id);
   return {
     id: player.id,
     name: player.name,
     revision: l.revision,
-    periods: playerPeriods(l, member.teamName, player),
+    periods: playerPeriods(
+      l,
+      member.teamName,
+      player,
+      context || statisticsContext(l),
+    ),
   };
 }
 export function projectGames(

@@ -137,6 +137,7 @@ function applyNextSeasonRegulations({
 const ManagementScreen = ({
   managementView,
   setManagementView,
+  resumeViewRef,
   seasonData,
   setSeasonData,
   selectedMonth,
@@ -571,6 +572,9 @@ const ManagementScreen = ({
     generatePitchingRotation={generatePitchingRotation}
     generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
     allTeams={allTeams}
+    onOpenSave={() => setManagementView('save')}
+    // ⚠ ロードしたときに戻るはずだった画面へ（規定の確定・キャンプ・背番号など）
+    onBackToGame={() => setManagementView(resumeViewRef?.current || 'dateprogress')}
   />;
   return <div className="p-8 text-white">準備中...</div>;
 };

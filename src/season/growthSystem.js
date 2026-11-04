@@ -23,8 +23,10 @@ export function updateGrowthModifiers(allTeams, awards) {
     const veterans = team.players.filter(p => (p.age || 18) >= 30);
     let veteranBonus = 0;
     for (const vet of veterans) {
-      const disc = vet.discipline || 50;
-      const ment = vet.mental || 50;
+      // ⚠ プロ意識・精神力は `personality` の中にある。以前は `vet.discipline` を
+      //    読んでいて常に既定の50になり、この加算は一度も働いていなかった
+      const disc = vet.personality?.discipline ?? 50;
+      const ment = vet.personality?.mental ?? 50;
       const leadership = (disc + ment) / 2;
       if (leadership >= 60) {
         veteranBonus += 0.01 + (leadership - 60) * 0.0005;
@@ -480,6 +482,29 @@ export const CATEGORY_GROWTH = {
 //
 // @param opts.activity 出場量を外から与える（プロは一軍/二軍で決まる）
 // ============================================================
+
+/**
+ * この1年の出場量（成長の練習量と知名度が見る）。投手は先発20・救援3、野手は打数。
+ *
+ * ⚠ 年度送りでは `resetSeasonStats` の**後**に呼ばれる。本物の試合をした球団
+ *    （自チーム・同じリーグの球団）の `seasonStats` はもう0に戻っているので、
+ *    **0なら直前に退避した `previousSeasonStats` を読む**。以前は自チームの
+ *    レギュラーも控えも一律に最低の練習量（0.55）で、知名度は全員が下がっていた。
+ *    作り物の成績を入れた並行世界の球団は `seasonStats` に入っているのでそちらを読む。
+ * ⚠ 救援は「登板数−先発数」で数える。本物の試合は `gamesRelieved` を記録しない
+ */
+export function seasonActivity(player) {
+  const of = (stats) => {
+    if (player.position === 'pitcher') {
+      const p = stats?.pitching;
+      const started = p?.gamesStarted || 0;
+      return started * 20 + Math.max(0, (p?.games || 0) - started) * 3;
+    }
+    return stats?.batting?.atBats || 0;
+  };
+  return of(player.seasonStats) || of(player.previousSeasonStats);
+}
+
 export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
   const decayMult = (current, threshold, rate, floor = 0.10) => {
     if (current < threshold) return 1.0;
@@ -495,9 +520,9 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
     // その年の充実度（前年を引き継ぐ）。⚠ 成長方向にだけ掛ける
     const formMult = advanceGrowthForm(player);
     // 実戦に出ているほど練習量が増える（出場も練習のうち）
-    const activity = player.position === 'pitcher'
-      ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
-      : (player.seasonStats?.batting?.atBats || 0);
+    // ⚠ `opts.activity` を**読むこと**。プロ（`applyNpbGrowth`）は一軍300・二軍70を
+    //    渡しているのに、以前は無視して空の成績を読み、一軍も二軍も同じ練習量だった
+    const activity = opts.activity ?? seasonActivity(player);
     // ⚠ 旧式 `0.75 + min(0.5, activity/400)` は **200打席で上限に張り付いた**。
     //    レギュラーも準レギュラーも同じ 1.25 になり、出場量が結果を
     //    ほとんど説明しなかった（実測の説明力 0.8%）。
@@ -647,9 +672,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
       //    実績と関係なく在籍年数だけで社会人の知名度の中央値が 1→37（15年）まで積み上がった。
       //    ドラフト評価に fame×0.3 が乗るので、在籍年数がそのまま評価点になっていた。
       //    **試合に出ている選手だけ**が名前を知られ、出ていない選手は少しずつ忘れられる
-      const seasonAct = player.position === 'pitcher'
-        ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
-        : (player.seasonStats?.batting?.atBats || 0);
+      const seasonAct = seasonActivity(player);
       let fameGain = seasonAct >= 200 ? 1 + (Math.random() < 0.5 ? 1 : 0)
         : seasonAct >= 80 ? (Math.random() < 0.5 ? 1 : 0)
         : ((player.fame || 0) > 0 ? -1 : 0);

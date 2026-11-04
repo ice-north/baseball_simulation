@@ -1,10 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LineupSettingContent } from '../components/LineupSettingScreen.jsx';
 import { LEAGUE_SETTINGS } from '../teams-data.js';
 import { teamFromView, planFromTeam } from './lineupBridge.js';
 import { teamLabel } from './gameText.js';
 import { Page } from './Page.jsx';
+import { useDraftMemory, useDraftMemoryStore } from './Drafts.jsx';
+
+/** 全画面の編成に、保存していない編集が残っているか（回転で作り直したときに開き直す判断に使う） */
+export function hasUnsavedFullLineup(editing) {
+  return !!editing && JSON.stringify(planFromTeam(editing.team)) !== editing.basePlan;
+}
 
 // ============================================================
 // オンライン版の編成画面。**一人用の編成画面をそのまま使う**。
@@ -50,14 +56,38 @@ function EmbeddedLineup({ view, busy, tab, title, hidden, onSave, onDirty }) {
   const [history, setHistory] = useState(null);
   const [generation, setGeneration] = useState(0);
   const [saveError, setSaveError] = useState('');
-  const dirty = !!history?.dirty;
+  // ⚠ **スマホの全画面編成と、編集中の球団を受け渡す**（下書きの入れ物 'lineup.full'）。
+  //    スマホを横にすると幅が768px以上になり、PCの画面（この部品）に切り替わる。
+  //    受け渡さないと、縦で編集した打順が横では消えて見え、横で保存して縦に戻すと
+  //    古い編集が開き直されて「編成が更新されています」で保存できなかった
+  const memory = useDraftMemoryStore();
+  // 縦で保存していない編集を引き継いだか。引き継いだ編集は、中の画面の履歴から
+  // 見ると「最初の状態」なので、未保存の印をこちらで立てておく
+  const [restored, setRestored] = useState(() =>
+    hasUnsavedFullLineup(memory?.get('lineup.full')),
+  );
+  const dirty = !!history?.dirty || restored;
   const teamRef = useRef(null);
   const baseRef = useRef(null);
   const builtFor = useRef(null);
   if (!teamRef.current || (!dirty && builtFor.current !== view.revision)) {
     // ⚠ 未保存の編集があるあいだは作り直さない（作り直すと編集が消える）
-    teamRef.current = teamFromView(view);
-    baseRef.current = clone(view.lineup || {});
+    const kept = !teamRef.current ? memory?.get('lineup.full') : null;
+    if (restored && kept && hasUnsavedFullLineup(kept)) {
+      teamRef.current = kept.team;
+      baseRef.current = kept.base;
+    } else {
+      const fresh = teamFromView(view);
+      teamRef.current = fresh;
+      baseRef.current = clone(view.lineup || {});
+      // 中の画面は `team` をその場で書き換えるので、入れ物に入れておけば
+      // 縦に戻したときにスマホの全画面編成がそのまま引き継げる
+      memory?.set('lineup.full', {
+        team: fresh,
+        base: baseRef.current,
+        basePlan: JSON.stringify(planFromTeam(fresh)),
+      });
+    }
     builtFor.current = view.revision;
   }
   const team = teamRef.current;
@@ -88,12 +118,16 @@ function EmbeddedLineup({ view, busy, tab, title, hidden, onSave, onDirty }) {
       return;
     }
     // ⚠ 保存できたら、保存した内容を新しい起点にする（元に戻すの履歴も切る）
+    memory?.delete('lineup.full');
     teamRef.current = null;
+    setRestored(false);
     setHistory(null);
     setGeneration((g) => g + 1);
   };
   const discard = () => {
+    memory?.delete('lineup.full');
     teamRef.current = null;
+    setRestored(false);
     setHistory(null);
     setSaveError('');
     setGeneration((g) => g + 1);
@@ -172,22 +206,34 @@ function EmbeddedLineup({ view, busy, tab, title, hidden, onSave, onDirty }) {
 /** スマホ版。横に長い画面なので、押したときだけ全画面で被せる */
 function PortalLineup({ view, busy, tab, onSave, onClose }) {
   // ⚠ 画面は `team` を書き換えるので、開いている間は同じオブジェクトを保つ。
-  //    毎回作り直すと編集が消える
-  const teamRef = useRef(null);
-  const baseRef = useRef(null);
-  const team = useMemo(() => {
-    if (!teamRef.current) {
-      teamRef.current = teamFromView(view);
-      baseRef.current = clone(view.lineup || {});
-    }
-    return teamRef.current;
-  }, [view]);
+  //    毎回作り直すと編集が消える。
+  // ⚠ 部品の中（useRef）ではなく下書きの入れ物に持つ。スマホの回転でスマホ用と
+  //    PC用の画面が入れ替わると、この部品ごと作り直されて編集が消えていた
+  //    編集していない写しは使い回さない（開き直したら最新の編成から始める）
+  const [editing, discard] = useDraftMemory(
+    'lineup.full',
+    () => {
+      const fresh = teamFromView(view);
+      return {
+        team: fresh,
+        base: clone(view.lineup || {}),
+        basePlan: JSON.stringify(planFromTeam(fresh)),
+      };
+    },
+    hasUnsavedFullLineup,
+  );
+  const team = editing.team;
 
   const [saveError, setSaveError] = useState('');
   const save = async () => {
     setSaveError('');
-    const result = await onSave(planFromTeam(team), baseRef.current);
+    const result = await onSave(planFromTeam(team), editing.base);
     if (result && !result.ok) setSaveError(result.error || '保存できませんでした');
+    else if (result?.ok) discard();
+  };
+  const close = () => {
+    discard();
+    onClose();
   };
 
   // ⚠ 一人用の画面は `LEAGUE_SETTINGS.useDH` を見る。オンラインのリーグ設定に合わせる
@@ -211,10 +257,10 @@ function PortalLineup({ view, busy, tab, onSave, onClose }) {
           <button
             type="button"
             disabled={busy}
-            onClick={onClose}
+            onClick={close}
             className="rounded border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-600 disabled:opacity-50"
           >
-            方針・采配へ（保存しない）
+            方針・采配の設定へ（保存しない）
           </button>
           <button
             type="button"
