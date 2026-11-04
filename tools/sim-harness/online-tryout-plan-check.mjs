@@ -14,6 +14,26 @@ import { createTestStore } from './lib/testStore.mjs';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 import { rosterGroup } from '../../src/utils/constants.js';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
+import { createSeededRandom } from '../../src/game/rng.js';
+
+/**
+ * 種を固定して手続きを開く。
+ *
+ * ⚠ **`openPhase` を種の外で呼ばないこと**。トライアウトの候補は
+ *    `generateTryoutCandidates` が `Math.random` で作る。本物の進行は
+ *    `advanceOneDay` が `seeded(...)` の中で呼ぶので再現するが、検査が直に
+ *    呼ぶと毎回違う候補になり、人数や構成を見る判定がときどき落ちる
+ *    （実測で、同じコードのまま通ったり落ちたりした）。
+ */
+function openPhaseSeeded(league, kind, now, seed) {
+  const previous = Math.random;
+  Math.random = createSeededRandom(seed);
+  try {
+    openPhase(league, kind, now);
+  } finally {
+    Math.random = previous;
+  }
+}
 import { LeagueService } from '../../server/leagueService.mjs';
 import {
   createLeague,
@@ -187,7 +207,7 @@ try {
         return true;
       });
     }
-    openPhase(l, 'tryout', '2026-11-10T15:00:00.000Z');
+    openPhaseSeeded(l, 'tryout', '2026-11-10T15:00:00.000Z', 20261110);
     // ⚠ 世界を保存へ書き戻すこと。`TEAMS_DATA` を触っただけでは保存に載らない
     l.game = captureWorld();
     return { value: null };
@@ -445,7 +465,7 @@ try {
         return true;
       });
     }
-    openPhase(two, 'tryout', '2026-10-26T15:00:00.000Z');
+    openPhaseSeeded(two, 'tryout', '2026-10-26T15:00:00.000Z', 20261026);
     two.game = captureWorld();
     assert.equal(
       two.game.teams[ma.teamName].players.length,
