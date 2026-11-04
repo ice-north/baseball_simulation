@@ -11,8 +11,7 @@ import {
   teamLabel,
 } from './gameText.js';
 import { api, POS } from './api.js';
-import { formatGameDate, PHASE_LABELS, sameEditState, CAMP_MENUS } from './shared.js';
-import { TRAINING_MENUS } from '../season/campTraining.js';
+import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
 import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
@@ -27,12 +26,6 @@ import {
 } from './pyramidLeague.js';
 export { PageNav } from './PageNav.jsx';
 
-// キャンプのメニュー名。⚠ 名前は練習の表（`TRAINING_MENUS`）から引く。以前は
-// 別に書き写していて「ミート集中」が「巧打集中」になるなど食い違っていた
-const MENUS = {
-  standard: '標準（投手は制球・野手は打撃）',
-  ...Object.fromEntries(CAMP_MENUS.map((key) => [key, TRAINING_MENUS[key]?.name || key])),
-};
 
 /**
  * リーグに参加する画面。
@@ -609,7 +602,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         throw error;
       }
     });
-  const rulesText = phase.deadline
+  // ⚠ **キャンプは文面が別**。提出して待つものではなく、その場で1クールずつ
+  //    実行する。「下書き」「決定」の言い方をすると、何を押せば進むのか
+  //    分からなくなる
+  const rulesText =
+    phase.kind === 'camp'
+      ? phase.deadline
+        ? `締め切りは ${formatDeadline(phase.deadline)}。全員が4クール終えた時点で次へ進みます。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。`
+        : '全員が4クール終えると次へ進みます。'
+      : phase.deadline
     ? mobile
       ? `締め切り ${formatDeadline(phase.deadline)}。全員が決定するか、締め切りで進みます。`
       : `締め切りは ${formatDeadline(phase.deadline)}。全員が決定した時点で処理します。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。`
@@ -719,18 +720,10 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
           </ul>
         </>
       )}
-      {/* ⚠ キャンプは**選手ごとに**割り当てる（一人用と同じ作り）。
-          以前は球団で1つ選ぶだけだった */}
+      {/* ⚠ キャンプは**1クールずつその場で実行する**（一人用と同じ）。
+          提出して締め切りを待つ形ではないので、決定のボタンは出さない */}
       {phase.kind === 'camp' && (
-        <CampPlanner
-          view={view}
-          plan={plan}
-          busy={busy}
-          onChange={(next) => {
-            setDirty(true);
-            setPlan(next);
-          }}
-        />
+        <CampPlanner view={view} busy={busy} run={run} command={command} />
       )}
       {phase.kind === 'offseason' && (
         <p>最終順位を保存し、次年度のキャンプへ進みます。</p>
@@ -752,7 +745,10 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
           (dirty ? ' · 保存していない変更があります' : phase.submission?.ready ? ' · あなたは決定済みです' : '')
         }
         actions={
-          plan && (
+          /* ⚠ **キャンプには決定の操作を出さない**。1クールずつその場で実行する
+             形なので、提出して締め切りを待つものが無い。出すと「決定したのに
+             クールが残っている」状態が作れてしまう */
+          plan && phase.kind !== 'camp' && (
             <>
               <button disabled={busy || !dirty} onClick={resetSubmission}>
                 変更を取り消す
@@ -804,16 +800,22 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         <p>{rulesText}</p>
         {readyList}
         {alerts}
-        {plan && (
+        {/* ⚠ **キャンプは携帯でも回せるようにする**。表は23列あって携帯には
+            入らないが、1クールずつ実行するのは携帯からでもできる必要がある
+            （携帯だけの人は、出せないと4クールとも自動になる） */}
+        {phase.kind === 'camp' && (
+          <CampPlanner
+            view={view}
+            busy={busy}
+            run={run}
+            command={command}
+            compact
+          />
+        )}
+        {plan && phase.kind !== 'camp' && (
           <>
             <p>
-              {phase.kind === 'camp'
-                ? // ⚠ 選手ごとの割り当て（PCで決めたもの）があれば、そちらを伝える。
-                  //    全体の方針だけ出すと、決定で送る内容と違って見える
-                  Object.keys(plan.assignments || {}).length
-                  ? `練習: 選手ごとに割り当て済み（${Object.keys(plan.assignments).length}人、ほかは${MENUS[plan.menu] || MENUS.standard}）`
-                  : `練習方針: ${MENUS[plan.menu] || MENUS.standard}`
-                : plan.packId !== undefined
+              {plan.packId !== undefined
                   ? `初期メンバー: ${phase.packs?.find((x) => x.id === plan.packId)?.name || '未選択'}`
                   : plan.rankedIds
                   ? `${plan.count}人を獲得する希望リスト（${plan.rankedIds.length}候補）`

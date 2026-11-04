@@ -373,6 +373,61 @@ export class LeagueService {
             teamName: command.payload?.teamName,
             playerName: command.payload?.playerName,
           });
+        } else if (command.type === 'campRound') {
+          // ⚠ **キャンプは1クールずつ自分で実行する**（一人用と同じ）。
+          //    伸びた能力を見てから次のクールを決められるようにするため、
+          //    締め切りを待たずにその場で反映する。
+          requireOnline(l.phase?.kind === 'camp', 'キャンプ中ではありません', 409);
+          const me = l.members.find((m) => m.userId === userId);
+          l.phase.camp = l.phase.camp || {};
+          const state = (l.phase.camp[userId] = l.phase.camp[userId] || {
+            rounds: 0,
+          });
+          const engine = await import('./leagueEngine.mjs');
+          requireOnline(
+            state.rounds < engine.CAMP_ROUNDS,
+            'キャンプは終わっています',
+            409,
+          );
+          // ⚠ **同じクールを2回走らせないこと**。押し直しや再送で成長が二重に
+          //    積まれる。クール番号を送らせて、次の1つだけを受け付ける
+          requireOnline(
+            Number(command.payload?.round) === state.rounds + 1,
+            '別のクールが進行中です。最新状態を読み直してください',
+            409,
+          );
+          const plan = engine.validateCampRound(l, me.teamName, command.payload);
+          await this.engine((e) => {
+            e.loadLeagueWorld(l);
+            e.runCampRound(l, me.teamName, plan);
+            l.game = e.captureLeagueWorld();
+          });
+          state.rounds += 1;
+          state.plan = plan;
+          // ⚠ 4クール終わったら**提出する**。全員が終われば締め切りを待たずに
+          //    次へ進む（手続きの仕組みをそのまま使う）。
+          // ⚠ **印（`submissions[...].ready`）を直に立てないこと**。手続きを
+          //    解決するのは `submitPhase` の中（最後の1人が決定した瞬間）で、
+          //    印だけ立てても誰も解決しない。実測で、4クール終えてもキャンプが
+          //    終わらず、日付が1月1日のまま止まっていた。
+          if (state.rounds >= engine.CAMP_ROUNDS)
+            await this.engine((e) =>
+              e.submitPhase(
+                l,
+                userId,
+                {
+                  phaseId: l.phase.id,
+                  plan: {
+                    menu: 'standard',
+                    assignments: plan.main,
+                    subAssignments: plan.sub,
+                    policy: plan.policy,
+                  },
+                  ready: true,
+                },
+                now,
+              ),
+            );
         } else if (command.type === 'pack') {
           // ⚠ **途中参加した人だけの選択**。リーグ全体の手続き（`submit`）とは別。
           //    選んだセットは次のキャンプで名簿に入る。

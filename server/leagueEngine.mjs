@@ -72,10 +72,13 @@ import {
 import { getAIReleaseCandidates } from '../src/game/contractRules.js';
 import {
   executeTeamCampTraining,
+  executeSubTraining,
   applyMotivationEffect,
   applyBatteryMentalEffect,
   menuFitsPlayer,
+  SUB_TRAINING_MENUS,
 } from '../src/season/campTraining.js';
+import { moodMultiplier, resolveTraining } from '../src/season/trainingPolicy.js';
 import {
   getTeamStaffBonus,
   setStaffIdCounter,
@@ -94,6 +97,10 @@ import {
   seasonStartAt,
   requireOnline,
   CAMP_MENUS,
+  CAMP_SUB_MENUS,
+  CAMP_DIRECTIONS,
+  CAMP_PHASES,
+  CAMP_ROUNDS,
 } from '../src/online/shared.js';
 import {
   generatePyramidTeams,
@@ -112,7 +119,7 @@ import { nextFromPlan } from '../src/online/tryoutPlan.js';
 import { generateRosterPacks, rosterPacksFor } from '../src/online/rosterPack.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
-export { CAMP_MENUS };
+export { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_DIRECTIONS, CAMP_PHASES, CAMP_ROUNDS };
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const quiet = (fn) => {
   const log = console.log;
@@ -195,6 +202,73 @@ function applyPendingPacks(league) {
     refreshTeamPlan(league, member.teamName);
     delete member.packSeed;
     delete member.pendingPackId;
+  }
+}
+
+/**
+ * 育成方針（やる気に効く）。⚠ 受け取れない値は標準へ倒す。
+ *    画面の値をそのまま信じると、知らない方針で `moodMultiplier` が
+ *    「全部不一致」になり、全員のやる気が下がる。
+ */
+export function normalizeCampPolicy(policy) {
+  const direction = CAMP_DIRECTIONS.includes(policy?.direction)
+    ? policy.direction
+    : 'balanced';
+  const phase = CAMP_PHASES.includes(policy?.phase) ? policy.phase : 'skill';
+  return { direction, phase };
+}
+
+/**
+ * キャンプを**1クールだけ**走らせる。
+ *
+ * ⚠ 人の球団は画面で1クールずつ実行し、伸びた能力を見てから次を決める
+ *    （一人用と同じ）。締め切りで残りを回すぶんもここを通す。
+ * ⚠ **やる気は方針との噛み合いで決まる**（`moodMultiplier`）。方針が無ければ
+ *    「全体を伸ばす×技術」として扱う。希望どおりが正解ではなく、噛み合いは
+ *    効率にだけ効く。
+ * ⚠ サブ練習が無い選手は `physique`（基礎体力）。一人用の既定と同じ。
+ * ⚠ 世界（`TEAMS_DATA`）を直に書き換える。呼ぶ側が `captureWorld()` すること。
+ */
+export function runCampRound(league, teamName, { policy, main, sub } = {}) {
+  const team = TEAMS_DATA[teamName];
+  if (!team?.players?.length) return;
+  const direction = policy?.direction || 'balanced';
+  const phase = policy?.phase || 'skill';
+  const staff = team.corporateData?.staff
+    ? getTeamStaffBonus(team.corporateData.staff)
+    : null;
+  // ⚠ 独立リーグの覚醒倍率。一人用の `gameMode === 'independent'` と揃える
+  const awakening = 1.5;
+  const assignments = {};
+  const moods = {};
+  for (const player of team.players) {
+    // ⚠ **守備位置に合わないメニューは標準へ倒す**（投手に打撃練習など）。
+    //    倒さないと、伸びるのはその選手が使わない能力だけになる。
+    //    画面の選択肢（`CampPlanner` の `menusFor`）と同じ規則。
+    const wanted = main?.[player.id] || resolveTraining(player, direction, phase).main;
+    assignments[player.id] = menuFitsPlayer(wanted, player)
+      ? wanted
+      : player.position === 'pitcher'
+        ? 'control'
+        : 'batting';
+    moods[player.id] = moodMultiplier(player, direction, phase);
+  }
+  const { updatedTeam } = executeTeamCampTraining(
+    team,
+    assignments,
+    {},
+    staff,
+    awakening,
+    moods,
+  );
+  TEAMS_DATA[teamName] = updatedTeam;
+  for (const player of updatedTeam.players) {
+    const key = sub?.[player.id] || resolveTraining(player, direction, phase).sub;
+    if (SUB_TRAINING_MENUS[key]) executeSubTraining(player, key, {}, staff);
+  }
+  if (staff) {
+    applyMotivationEffect(updatedTeam.players, staff);
+    applyBatteryMentalEffect(updatedTeam.players, staff);
   }
 }
 
@@ -327,6 +401,40 @@ export function createLeague({
 
 // `take`: 写しを複製せずに渡す（`restoreWorld` の説明を参照）。最後に
 // `league.game = captureWorld()` で差し替える呼び出しだけが使ってよい。
+/**
+ * 世界を保存の形へ書き戻す。⚠ `TEAMS_DATA` を触ったら必ず呼ぶこと
+ *    （触っただけでは保存に載らない）。
+ */
+export function captureLeagueWorld() {
+  return captureWorld();
+}
+
+/**
+ * キャンプ1クールぶんの指示を検証する。
+ * ⚠ 自分の名簿の選手だけ・受け取れるメニューだけ。画面の値をそのまま
+ *    信じると、知らないメニューで練習が飛ぶ。
+ */
+export function validateCampRound(league, teamName, payload) {
+  const team = TEAMS_DATA[teamName];
+  requireOnline(team, '球団が見つかりません', 409);
+  const own = new Set(team.players.map((p) => p.id));
+  const pick = (source, allowed, message) => {
+    const out = {};
+    for (const [id, key] of Object.entries(source || {})) {
+      const playerId = Number(id);
+      if (!own.has(playerId)) continue;
+      requireOnline(allowed.includes(key), message);
+      out[playerId] = key;
+    }
+    return out;
+  };
+  return {
+    policy: normalizeCampPolicy(payload?.policy),
+    main: pick(payload?.main, CAMP_MENUS, '練習メニューが不正です'),
+    sub: pick(payload?.sub, CAMP_SUB_MENUS, 'サブ練習が不正です'),
+  };
+}
+
 export function loadLeagueWorld(league, { take = false } = {}) {
   assertLeagueVersion(league);
   restoreWorld(league.game, { take });
@@ -413,7 +521,7 @@ function validatePhasePlan(league, teamName, plan) {
         '練習方針が不正です',
       );
       // ⚠ **選手ごとの割り当て**。一人用のキャンプ画面と同じく、1人ずつ
-      //    メニューを決められる。`menu` は全体の既定（割り当ての無い選手）。
+      //    メイン練習とサブ練習を決められる。
       // ⚠ 自分の名簿の選手だけ。他球団の選手を混ぜられると練習が飛ぶ
       const own = new Map(team.players.map((p) => [p.id, p]));
       const assignments = {};
@@ -426,7 +534,20 @@ function validatePhasePlan(league, teamName, plan) {
         if (!menuFitsPlayer(key, own.get(playerId))) continue;
         assignments[playerId] = key;
       }
-      return { menu: plan.menu, assignments };
+      const subAssignments = {};
+      for (const [id, key] of Object.entries(plan.subAssignments || {})) {
+        const playerId = Number(id);
+        if (!own.has(playerId)) continue;
+        requireOnline(CAMP_SUB_MENUS.includes(key), 'サブ練習が不正です');
+        subAssignments[playerId] = key;
+      }
+      return {
+        menu: plan.menu,
+        assignments,
+        subAssignments,
+        // ⚠ 方針は**やる気**に効く（噛み合うと伸びやすい）。無ければ標準
+        policy: normalizeCampPolicy(plan.policy),
+      };
     }
     case 'pack_select': {
       // ⚠ 居ないセットを受け付けない。解決のときに「足りません」で
@@ -714,40 +835,25 @@ function resolvePhase(league, now) {
       );
   }
   if (kind === 'camp') {
-    for (let round = 0; round < 4; round++) {
-      for (const [name, team] of Object.entries(TEAMS_DATA)) {
-        if (!team.players?.length) continue;
-        const plan = plans[name];
-        const menu = plan?.menu || 'standard';
-        // ⚠ **選手ごとの割り当てを優先する**。無い選手だけ全体の方針で埋める
-        //    （携帯や未提出の球団は全体の方針しか持たない）。
-        // ⚠ 全体の方針が守備位置に合わない選手（野手に球速練習など）は、
-        //    標準（投手は制球・野手は打撃）で埋める
-        const assignments = Object.fromEntries(
-          team.players.map((p) => [
-            p.id,
-            plan?.assignments?.[p.id] ||
-              (menu === 'standard' || !menuFitsPlayer(menu, p)
-                ? p.position === 'pitcher'
-                  ? 'control'
-                  : 'batting'
-                : menu),
-          ]),
-        );
-        const staff = team.corporateData?.staff
-          ? getTeamStaffBonus(team.corporateData.staff)
-          : null;
-        TEAMS_DATA[name] = executeTeamCampTraining(
-          team,
-          assignments,
-          {},
-          staff,
-        ).updatedTeam;
-        if (staff) {
-          applyMotivationEffect(TEAMS_DATA[name].players, staff);
-          applyBatteryMentalEffect(TEAMS_DATA[name].players, staff);
-        }
-      }
+    // ⚠ **自分で回したクールは数えること**。人の球団は画面で1クールずつ
+    //    実行する（`runCampRound`）。締め切りで残りだけを回す。
+    //    数えないと、自分で4回やった球団がもう4回やって8クールぶん成長する。
+    const done = league.phase.camp || {};
+    for (const [name, team] of Object.entries(TEAMS_DATA)) {
+      if (!team.players?.length) continue;
+      const member = league.members.find((m) => m.teamName === name);
+      const already = member ? done[member.userId]?.rounds || 0 : 0;
+      // ⚠ 自分で回したときの指示があればそれを使う（残りのクールも同じ方針で）。
+      //    無ければ提出した案、それも無ければ標準
+      const saved = member ? done[member.userId]?.plan : null;
+      const plan = plans[name];
+      const rest = saved || {
+        policy: plan?.policy,
+        main: plan?.assignments,
+        sub: plan?.subAssignments,
+      };
+      for (let round = already; round < CAMP_ROUNDS; round += 1)
+        runCampRound(league, name, rest);
     }
     // ⚠ **キャンプの練習より後に入れ替えること**。先に入れ替えると、
     //    選んだばかりの24人がキャンプで成長してしまい、セットの釣り合いが崩れる

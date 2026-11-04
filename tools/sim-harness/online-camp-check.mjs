@@ -7,6 +7,11 @@
 //    `TRAINING_MENUS` にはオンラインのエンジンが動かさないもの
 //    （新球種習得）があり、実測で画面に出ていた。選べるのに提出で弾かれる。
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileStore } from '../../server/storage/fileStore.mjs';
+import { LeagueService } from '../../server/leagueService.mjs';
 import {
   createLeague,
   submitPhase,
@@ -66,6 +71,7 @@ const totals = (players) => {
     speed: sum((p) => p.physical?.speed),
     control: sum((p) => p.pitching?.control),
     velocity: sum((p) => p.pitching?.velocity),
+    bodyStamina: sum((p) => p.physical?.bodyStamina),
   };
 };
 
@@ -206,6 +212,192 @@ assert.ok(
   `球速練習で球速が伸びていない: 球速${velocity.velocity} / 投げ込み${control.velocity}`,
 );
 
+// --- 1クールずつ自分で実行する（ここが本丸） ---------------------------
+// ⚠ **自分で回したクールを数えること**。数えないと、画面で4回やった球団が
+//    締め切りでもう4回やって**8クールぶん**成長する。
+{
+  const dir = await mkdtemp(join(tmpdir(), 'pennant-camp-'));
+  try {
+    const store = new FileStore(join(dir, 'state.gz'));
+    const service = new LeagueService(store, {
+      members: [{ userId: 'admin', label: '管理者' }],
+      adminId: 'admin',
+      clock: () => NOW,
+    });
+    const admin = (await service.login('admin')).sessionId;
+    let seq = 0;
+    const send = async (type, payload) => {
+      const l = (await store.read()).league;
+      seq += 1;
+      return service.command('admin', admin, {
+        requestId: `campchk-${type}-${seq}`,
+        revision: l?.revision ?? 0,
+        type,
+        payload,
+      });
+    };
+    await send('create');
+    const created = (await store.read()).league;
+    await send('submit', {
+      phaseId: created.phase.id,
+      plan: { packId: created.packs[0].id },
+      ready: true,
+      baseSubmission: null,
+    });
+    const atCamp = (await store.read()).league;
+    assert.equal(atCamp.phase.kind, 'camp', '前提: キャンプが開いている');
+    const teamName = atCamp.members[0].teamName;
+    const sumOf = (league) => totals(league.game.teams[teamName].players);
+    const start = sumOf(atCamp);
+
+    // ⚠ ビューに進み具合が載ること（載らないと画面が毎回「第1クール」になる）
+    const view0 = await service.view('admin', admin);
+    assert.equal(view0.phase.camp?.rounds, 0, 'クールの進みが渡っていない');
+    assert.equal(view0.phase.camp?.total, 4, 'クール数が渡っていない');
+
+    const roster = atCamp.game.teams[teamName].players;
+    const round = (n) =>
+      send('campRound', {
+        round: n,
+        policy: { direction: 'balanced', phase: 'skill' },
+        main: Object.fromEntries(
+          roster.map((p) => [
+            p.id,
+            p.position === 'pitcher' ? 'control' : 'batting',
+          ]),
+        ),
+        sub: Object.fromEntries(roster.map((p) => [p.id, 'physique'])),
+      });
+
+    await round(1);
+    const after1 = (await store.read()).league;
+    assert.equal(after1.phase.camp.admin.rounds, 1, '1クール目が数えられていない');
+    const one = sumOf(after1);
+    assert.ok(one.meet > start.meet, '1クールで伸びていない');
+    // ⚠ **サブ練習も実行すること**。基礎体力は「体力+2〜4/クール確定」なので、
+    //    1クールで人数×2以上は必ず伸びる。メインだけ回していると伸びない
+    assert.ok(
+      one.bodyStamina - start.bodyStamina >= roster.length * 2,
+      `サブ練習（基礎体力）が効いていない: 体力の伸び ${one.bodyStamina - start.bodyStamina}（${roster.length}人）`,
+    );
+
+    // ⚠ **同じクールを2回走らせない**。押し直しや再送で成長が二重に積まれる
+    await assert.rejects(
+      () => round(1),
+      (e) => e.status === 409,
+      '同じクールを2回実行できた',
+    );
+    // ⚠ 飛ばして先のクールも実行できない
+    await assert.rejects(
+      () => round(4),
+      (e) => e.status === 409,
+      'クールを飛ばして実行できた',
+    );
+
+    await round(2);
+    const two = sumOf((await store.read()).league);
+    assert.ok(two.meet > one.meet, '2クール目が効いていない');
+
+    // ⚠ 残り2クールは締め切りで自動。合計4クールぶんで止まること
+    await send('testmode', { on: true });
+    await send('resolve');
+    const done = (await store.read()).league;
+    assert.notEqual(done.phase?.kind, 'camp', 'キャンプが終わっていない');
+    const finished = sumOf(done);
+    // 4クールぶんの伸びは、2クールぶんの伸びのおよそ2倍。8クール回っていたら
+    // 3倍を超える（実測で2クール+4クール＝6クールぶんになっていた）
+    const perTwo = two.meet - start.meet;
+    const all4 = finished.meet - start.meet;
+    assert.ok(
+      all4 > perTwo,
+      `残りのクールが回っていない: 2クール${perTwo} / 全部${all4}`,
+    );
+    assert.ok(
+      all4 < perTwo * 2.6,
+      `自分で回したぶんが数えられていない（二重に成長した）: 2クール${perTwo} / 全部${all4}`,
+    );
+
+    // ⚠ キャンプが終わったら打順が組み直されていること（空のまま開幕させない）
+    const order = done.game.teams[teamName].lineupSettings?.battingOrder || [];
+    assert.equal(order.length, 9, 'キャンプ後の打順が9人でない');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+// --- 4クール終えたら、締め切りを待たずに次へ進むこと ---------------------
+// ⚠ **印（`submissions[...].ready`）を直に立てても解決しない**。手続きを
+//    解決するのは `submitPhase` の中（最後の1人が決定した瞬間）で、印だけ
+//    立てると誰も解決しない。実測で、4クール終えてもキャンプが終わらず、
+//    日付が1月1日のまま止まっていた。
+{
+  const dir = await mkdtemp(join(tmpdir(), 'pennant-camp4-'));
+  try {
+    const store = new FileStore(join(dir, 'state.gz'));
+    const service = new LeagueService(store, {
+      members: [{ userId: 'admin', label: '管理者' }],
+      adminId: 'admin',
+      clock: () => NOW,
+    });
+    const admin = (await service.login('admin')).sessionId;
+    let seq = 0;
+    const send = async (type, payload) => {
+      const l = (await store.read()).league;
+      seq += 1;
+      return service.command('admin', admin, {
+        requestId: `camp4-${type}-${seq}`,
+        revision: l?.revision ?? 0,
+        type,
+        payload,
+      });
+    };
+    await send('create');
+    const created = (await store.read()).league;
+    await send('submit', {
+      phaseId: created.phase.id,
+      plan: { packId: created.packs[0].id },
+      ready: true,
+      baseSubmission: null,
+    });
+    const atCamp = (await store.read()).league;
+    const teamName = atCamp.members[0].teamName;
+    const roster = atCamp.game.teams[teamName].players;
+    for (let r = 1; r <= 4; r += 1)
+      await send('campRound', {
+        round: r,
+        policy: { direction: 'balanced', phase: 'skill' },
+        main: Object.fromEntries(
+          roster.map((p) => [
+            p.id,
+            p.position === 'pitcher' ? 'control' : 'batting',
+          ]),
+        ),
+        sub: Object.fromEntries(roster.map((p) => [p.id, 'physique'])),
+      });
+    const after = (await store.read()).league;
+    assert.ok(!after.phase, '4クール終えてもキャンプが終わらない');
+    assert.equal(after.status, 'running', '開幕待ちになっていない');
+    // ⚠ キャンプが終わると日付が開幕日（4/1）へ動く。動いていなければ
+    //    手続きの解決そのものが走っていない
+    assert.equal(after.season.currentDate.month, 4, '日付が開幕日へ動いていない');
+    assert.equal(after.season.currentDate.day, 1, '日付が開幕日へ動いていない');
+    // ⚠ 5クール目は受け付けない
+    await assert.rejects(
+      () =>
+        send('campRound', {
+          round: 5,
+          policy: { direction: 'balanced', phase: 'skill' },
+          main: {},
+          sub: {},
+        }),
+      (e) => e.status === 409,
+      'キャンプが終わったのに実行できた',
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 // ⚠ **割り当ての無い選手は全体の方針で埋める**（携帯・未提出の球団のため）。
 //    1人だけ割り当てて、残りが既定のまま伸びることを見る
 {
@@ -237,5 +429,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプの割り当て: OK（選手ごとに効く / 画面のメニューをサーバーが受け取れる / 他球団の選手を落とす / 割り当ての無い選手は全体の方針）',
+  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 画面のメニューをサーバーが受け取れる）',
 );

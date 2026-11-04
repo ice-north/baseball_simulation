@@ -1,5 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { TRAINING_MENUS, menuFitsPlayer } from '../season/campTraining.js';
+import {
+  TRAINING_MENUS,
+  SUB_TRAINING_MENUS,
+  menuFitsPlayer,
+} from '../season/campTraining.js';
 import {
   DIRECTIONS,
   PHASES,
@@ -8,33 +12,38 @@ import {
   resolveTraining,
 } from '../season/trainingPolicy.js';
 import { POS } from './api.js';
-import { CAMP_MENUS } from './shared.js';
+import { getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
+import {
+  CAMP_MENUS,
+  CAMP_SUB_MENUS,
+  CAMP_DIRECTIONS,
+  CAMP_PHASES,
+} from './shared.js';
+import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import { Choice } from './Choice.jsx';
-import { AbilityGrade, PlayerStatsButton, ConditionMark } from './PlayerPerformance.jsx';
 
 // ============================================================
-// キャンプの割り当て。一人用のキャンプ画面と同じ作りにする。
+// キャンプ。一人用のキャンプ画面と同じ作りにする。
 //
-// ⚠ **選手ごとにメニューを決める**。以前は球団で1つ選ぶだけで、
-//    一人用（1人ずつ割り当てる）とは別物だった。
-// ⚠ **クールごとの出し入れはできない**。一人用は4クールを1つずつ見ながら
-//    進めるが、オンラインは締め切りでまとめて処理するので、途中の結果を見て
-//    次を決めることができない。**同じ割り当てで4クール**と画面に書くこと。
-// ⚠ **一人用の画面（`CampScreen`）をそのまま持ち込まないこと**。あちらは
-//    派遣・サブ練習・大学リーグの昇降格・スタッフ退職まで抱えていて、
-//    オンラインのエンジンはそれらを動かさない。出すと「できるように見えて
-//    何も起きない」ものが並ぶ。
-// ⚠ メニューの表（`TRAINING_MENUS`）と方針の表（`trainingPolicy`）は
-//    一人用と**同じものを読む**。写すと、調整したときに片方だけ古くなる。
+//   育成方針（長所／全体／短所 × 基礎体力／技術）→ 全員に一括
+//   選手ごとに**メイン練習とサブ練習**を選ぶ
+//   「第Nクール練習を実行」→ 伸びた能力を見て、次のクールを決める（全4回）
+//
+// ⚠ **1クールずつサーバーで実行する**（`campRound` 命令）。画面で計算して
+//    まとめて送る形にはしないこと——成長の計算は保存の正本に当てるもので、
+//    画面で回すと手元の数字と保存がずれる。
+// ⚠ **同じクールを2回走らせない**。押し直しや再送で成長が二重に積まれるので、
+//    クール番号を送って、サーバーが次の1つだけを受け付ける。
+// ⚠ 一人用の画面（`CampScreen`）をそのまま持ち込まないこと。あちらは派遣・
+//    大学リーグの昇降格・スタッフ退職まで抱えていて、オンラインのエンジンは
+//    それらを動かさない。出すと「できるように見えて何も起きない」ものが並ぶ。
+// ⚠ メニューの表は一人用と**同じものを読む**（`TRAINING_MENUS` /
+//    `SUB_TRAINING_MENUS`）。写すと、調整したときに片方だけ古くなる。
+//    出すのは `CAMP_MENUS` / `CAMP_SUB_MENUS` に載っているものだけ
+//    ——`TRAINING_MENUS` にはオンラインで動かないもの（新球種習得）がある。
 // ============================================================
 
-/**
- * 投手に出すメニュー／野手に出すメニュー。
- *
- * ⚠ **サーバーが受け取れるものだけ出すこと**（`CAMP_MENUS`）。
- *    `TRAINING_MENUS` には「新球種習得」のようにオンラインのエンジンが
- *    動かさないものがあり、出すと選べるのに提出で弾かれる（実測で出ていた）。
- */
+/** 投手に出すメイン練習／野手に出すメイン練習 */
 export const menusFor = (isPitcher) =>
   Object.entries(TRAINING_MENUS).filter(
     ([key]) =>
@@ -42,7 +51,10 @@ export const menusFor = (isPitcher) =>
       menuFitsPlayer(key, { position: isPitcher ? 'pitcher' : 'catcher' }),
   );
 
-const MOOD_TONE = { good: '意欲的', mid: '納得', bad: '身が入らない' };
+export const subMenus = () =>
+  Object.entries(SUB_TRAINING_MENUS).filter(([key]) =>
+    CAMP_SUB_MENUS.includes(key),
+  );
 
 /**
  * ⚠ 受け取れないメニュー・守備位置に合わないメニューに落ちたら既定へ戻す。
@@ -55,61 +67,80 @@ export const clampMenu = (key, player) =>
     : player.position === 'pitcher'
       ? 'control'
       : 'batting';
+export const clampSub = (key) =>
+  CAMP_SUB_MENUS.includes(key) ? key : 'physique';
 
-function PlayerRow({ player, value, onChange, busy }) {
+const MOOD_TONE = { good: '意欲的', mid: '納得', bad: '身が入らない' };
+const grade = (v) => (typeof v === 'number' ? Math.round(v) : '—');
+// ⚠ 成長は**倍率**（0.70〜1.30）。四捨五入すると全員「1」になって読めない
+const ratio = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
+
+/**
+ * 変化球は「名前＋キレ」。投手の行にだけ出す。
+ * ⚠ 置き場は `pitching.arsenal`（`pitchTypes` ではない）。直球は外す
+ *    （全員が持っていて、並べても見分けがつかない）。
+ */
+function pitchTypes(player) {
+  return (player.pitching?.arsenal || [])
+    .filter((pitch) => pitch?.type && pitch.type !== 'straight')
+    .map((pitch) => `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`)
+    .join(' ');
+}
+
+function PlayerRow({ player, main, sub, onMain, onSub, busy, policy }) {
   const isPitcher = player.position === 'pitcher';
   const wish = useMemo(() => playerWish(player), [player]);
-  // ⚠ 噛み合いは**いまの割り当てから逆算する**。方針を持たせていないので、
-  //    メニューがどの方針・段階に当たるかを総当たりで探す
-  const mood = useMemo(() => {
-    for (const direction of Object.keys(DIRECTIONS))
-      for (const phase of ['physique', 'skill'])
-        if (resolveTraining(player, direction, phase).main === value)
-          return describeMood(player, direction, phase);
-    return null;
-  }, [player, value]);
+  const mood = describeMood(player, policy.direction, policy.phase);
   return (
     <tr>
       <th>
         <PlayerStatsButton player={player} panel="abilities" />
-        <small>
-          {player.age}歳·{POS[player.position]}
-        </small>
       </th>
-      <td>
-        <ConditionMark player={player} />
+      {/* ⚠ 投手の表に守備位置は出さない（全員「投」で、1列ぶん無駄になる） */}
+      {!isPitcher && <td>{POS[player.position]}</td>}
+      <td>{player.age}</td>
+      <td>{ratio(player.growthPotential)}</td>
+      <td>{grade(player.personality?.discipline)}</td>
+      <td>{grade(player.personality?.mental)}</td>
+      <td className={`online-mood is-${mood.tone}`}>
+        {MOOD_TONE[mood.tone] || mood.label}
       </td>
+      <td>
+        {player.physical?.throws === 'left' ? '左' : '右'}/
+        {player.batting?.bats === 'left'
+          ? '左'
+          : player.batting?.bats === 'switch'
+            ? '両'
+            : '右'}
+      </td>
+      <td>{isPitcher ? FORM_SHORT[player.pitching?.form] || '—' : '—'}</td>
+      <td>{grade(player.physical?.arm)}</td>
       {isPitcher ? (
         <>
-          <td>
-            <AbilityGrade value={player.pitching?.velocity} velocity />
-          </td>
-          <td>
-            <AbilityGrade value={player.pitching?.control} />
-          </td>
-          <td>
-            <AbilityGrade value={player.pitching?.stamina} stamina />
-          </td>
+          <td>{grade(player.pitching?.velocity)}</td>
+          <td>{grade(player.pitching?.control)}</td>
+          <td>{grade(player.pitching?.spinRate)}</td>
+          <td>{grade(player.pitching?.stamina)}</td>
         </>
       ) : (
         <>
-          <td>
-            <AbilityGrade value={player.batting?.meet} />
-          </td>
-          <td>
-            <AbilityGrade value={player.batting?.power} />
-          </td>
-          <td>
-            <AbilityGrade value={player.fielding?.defense} />
-          </td>
+          <td>{grade(player.batting?.meet)}</td>
+          <td>{grade(player.batting?.power)}</td>
+          <td>{grade(player.batting?.eye)}</td>
+          <td>{grade(player.batting?.bunt)}</td>
         </>
       )}
+      <td>{grade(player.physical?.speed)}</td>
+      <td>{grade(player.fielding?.defense)}</td>
+      <td>{grade(player.physical?.bodyStamina)}</td>
+      <td>{grade(player.physical?.recovery)}</td>
+      <td>{grade(player.physical?.muscle)}</td>
       <td>
         <select
-          aria-label={`${player.name}の練習`}
-          value={value}
+          aria-label={`${player.name}のメイン練習`}
+          value={main}
           disabled={busy}
-          onChange={(e) => onChange(player.id, e.target.value)}
+          onChange={(e) => onMain(player.id, e.target.value)}
         >
           {menusFor(isPitcher).map(([key, menu]) => (
             <option key={key} value={key}>
@@ -118,143 +149,308 @@ function PlayerRow({ player, value, onChange, busy }) {
           ))}
         </select>
       </td>
-      <td className="online-camp-wish">
-        {/* ⚠ 本人の希望は**正解ではない**。噛み合うとやる気が上がるだけで、
-            何を伸ばすべきかは別の判断 */}
-        <small>
-          {DIRECTIONS[wish.direction]?.name}·{PHASES[wish.phase]?.name}
-        </small>
-        {mood && (
-          <small className={`online-mood is-${mood.tone}`}>
-            {MOOD_TONE[mood.tone] || mood.label}
-          </small>
-        )}
+      <td>
+        <select
+          aria-label={`${player.name}のサブ練習`}
+          value={sub}
+          disabled={busy}
+          onChange={(e) => onSub(player.id, e.target.value)}
+        >
+          {subMenus().map(([key, menu]) => (
+            <option key={key} value={key}>
+              {menu.icon} {menu.name}
+            </option>
+          ))}
+        </select>
       </td>
+      {/* ⚠ 希望は**印だけ**にして、全文は title で出す。名前で出すと
+          「長所を伸ばす·基礎体力」で90pxを取り、右端の列が隠れる */}
+      <td
+        className="online-camp-wish"
+        title={`${DIRECTIONS[wish.direction]?.name}·${PHASES[wish.phase]?.name}`}
+      >
+        {DIRECTIONS[wish.direction]?.icon}
+        {PHASES[wish.phase]?.icon}
+      </td>
+      {/* ⚠ 変化球は**いちばん右**。23列あって1500pxの画面には収まりきらないので、
+          切れてよい列（見るだけのもの）を端に置き、メイン・サブの選択欄は必ず
+          見えるようにする。全文は title で出す。
+          ⚠ 投手の表だけ。野手の表に空の列を作らない */}
+      {isPitcher && (
+        <td className="online-camp-pitches" title={pitchTypes(player)}>
+          {pitchTypes(player)}
+        </td>
+      )}
     </tr>
   );
 }
 
-export default function CampPlanner({ view, plan, busy, onChange }) {
-  const [bulk, setBulk] = useState({ direction: 'balanced', phase: 'skill' });
+// 守備位置のまとまり。⚠ 一人用のキャンプ画面と同じ分け方にする
+const CAMP_GROUPS = [
+  { id: 'pitcher', label: '投手', has: (p) => p.position === 'pitcher' },
+  { id: 'catcher', label: '捕手', has: (p) => p.position === 'catcher' },
+  {
+    id: 'infield',
+    label: '内野手',
+    has: (p) => ['first', 'second', 'third', 'short'].includes(p.position),
+  },
+  {
+    id: 'outfield',
+    label: '外野手',
+    has: (p) => ['left', 'center', 'right'].includes(p.position),
+  },
+];
+
+export default function CampPlanner({
+  view,
+  busy,
+  run,
+  command,
+  compact = false,
+}) {
+  const [group, setGroup] = useState('pitcher');
+  const camp = view.phase?.camp;
+  const done = camp?.rounds || 0;
+  const total = camp?.total || 4;
   const roster = view.roster || [];
-  const assignments = plan.assignments || {};
-  const defaultFor = (player) =>
-    player.position === 'pitcher' ? 'control' : 'batting';
-  // ⚠ 保存済みの割り当てが守備位置に合わないとき（以前の一括設定の残り）は、
-  //    サーバーと同じく既定で見せる（サーバーは合わないものを落とす）
-  const valueOf = (player) =>
-    clampMenu(assignments[player.id] || defaultFor(player), player);
-  const setOne = (id, key) =>
-    onChange({ ...plan, assignments: { ...assignments, [id]: key } });
-  // ⚠ 一括設定は**方針から引く**（`resolveTraining`）。選手ごとに長所・短所が
-  //    違うので、同じメニューを全員に当てるより噛み合う
-  const applyBulk = (only) =>
-    onChange({
-      ...plan,
-      assignments: Object.fromEntries(
-        roster.map((p) => [
-          p.id,
-          only && (p.position === 'pitcher') !== (only === 'pitcher')
-            ? valueOf(p)
-            : // ⚠ サーバーが受け取れないメニューに落ちたら既定へ戻す。
-              //    方針から引いた結果をそのまま入れると提出で弾かれる
-              clampMenu(resolveTraining(p, bulk.direction, bulk.phase).main, p),
-        ]),
-      ),
-    });
-  const groups = [
-    ['pitcher', '投手', roster.filter((p) => p.position === 'pitcher')],
-    ['fielder', '野手', roster.filter((p) => p.position !== 'pitcher')],
-  ];
+  const [policy, setPolicy] = useState(
+    () => camp?.plan?.policy || { direction: 'balanced', phase: 'skill' },
+  );
+  const [main, setMain] = useState(() => camp?.plan?.main || {});
+  const [sub, setSub] = useState(() => camp?.plan?.sub || {});
+  const mainOf = (p) =>
+    clampMenu(
+      main[p.id] || resolveTraining(p, policy.direction, policy.phase).main,
+      p,
+    );
+  const subOf = (p) =>
+    clampSub(
+      sub[p.id] || resolveTraining(p, policy.direction, policy.phase).sub,
+    );
+  // ⚠ 方針を変えたら**割り当ても引き直す**。方針はやる気にも効くので、
+  //    方針だけ変わって練習が前のままだと噛み合いが読めない
+  const applyPolicy = (next) => {
+    setPolicy(next);
+    const nextMain = {};
+    const nextSub = {};
+    for (const p of roster) {
+      const r = resolveTraining(p, next.direction, next.phase);
+      nextMain[p.id] = clampMenu(r.main, p);
+      nextSub[p.id] = clampSub(r.sub);
+    }
+    setMain(nextMain);
+    setSub(nextSub);
+  };
+  const applyAll = (key, isPitcherOnly) => {
+    const next = { ...main };
+    for (const p of roster)
+      if (
+        isPitcherOnly === null ||
+        (p.position === 'pitcher') === isPitcherOnly
+      )
+        next[p.id] = clampMenu(key, p);
+    setMain(next);
+  };
+  const execute = () =>
+    run(() =>
+      command('campRound', {
+        round: done + 1,
+        policy,
+        main: Object.fromEntries(roster.map((p) => [p.id, mainOf(p)])),
+        sub: Object.fromEntries(roster.map((p) => [p.id, subOf(p)])),
+      }),
+    );
+  // ⚠ **守備位置で1グループずつ出す**（一人用と同じ）。24人を全部並べると
+  //    1行31pxでも画面が1300px超になり、下の実行ボタンまで何度もスクロール
+  //    することになる（実測で全部出すと1326px、1グループなら700px前後）。
+  const groups = CAMP_GROUPS.map(({ id, label, has }) => ({
+    id,
+    label,
+    list: roster.filter(has),
+  })).filter((g) => g.list.length);
+  const shownGroup = groups.find((g) => g.id === group) || groups[0];
+  const finished = done >= total;
   return (
     <div className="online-camp">
-      <p className="online-muted">
-        選手ごとに練習を割り当てます。
-        <strong>全4クールを同じ割り当てで行います</strong>
-        （締め切りでまとめて処理するので、途中の結果を見て次を決めることはできません）。
-      </p>
+      <div className="online-camp-head">
+        <h3>春季キャンプ</h3>
+        <div className="online-camp-rounds" aria-label="クールの進み">
+          {Array.from({ length: total }, (_, i) => (
+            <span
+              key={i}
+              className={i < done ? 'is-done' : i === done ? 'is-now' : ''}
+            >
+              {i + 1}
+            </span>
+          ))}
+          <small>
+            {done}/{total}
+          </small>
+        </div>
+      </div>
+      {finished ? (
+        <p className="online-muted" role="status">
+          全{total}クールが終わりました。伸びた能力で
+          <strong>スタメン設定・投手起用</strong>
+          を整えて、月曜の開幕を待ちます。
+        </p>
+      ) : (
+        <p className="online-muted">
+          メイン練習とサブ練習を選んで実行します。1クールごとに結果が反映されるので、
+          伸びた能力を見て次のクールを決められます。
+          締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。
+        </p>
+      )}
       <section className="online-camp-bulk">
-        <h3>まとめて割り当てる</h3>
         <div className="online-camp-bulk-fields">
           {/* ⚠ 選択肢が数個のものは**ボタンを並べる**（PC版の共通のルール。
               コンボボックスは開かないと何があるか分からない） */}
           <Choice
-            label="方針"
+            label="育成方針"
             options={Object.fromEntries(
-              Object.values(DIRECTIONS).map((d) => [d.key, `${d.icon} ${d.name}`]),
+              CAMP_DIRECTIONS.map((key) => [
+                key,
+                `${DIRECTIONS[key].icon} ${DIRECTIONS[key].name}`,
+              ]),
             )}
-            value={bulk.direction}
-            disabled={busy}
-            onChange={(direction) => setBulk({ ...bulk, direction })}
+            value={policy.direction}
+            disabled={busy || finished}
+            onChange={(direction) => applyPolicy({ ...policy, direction })}
           />
           <Choice
             label="段階"
             options={Object.fromEntries(
-              ['physique', 'skill'].map((key) => [
+              CAMP_PHASES.map((key) => [
                 key,
                 `${PHASES[key].icon} ${PHASES[key].name}`,
               ]),
             )}
-            value={bulk.phase}
-            disabled={busy}
-            onChange={(phase) => setBulk({ ...bulk, phase })}
+            value={policy.phase}
+            disabled={busy || finished}
+            onChange={(phase) => applyPolicy({ ...policy, phase })}
           />
-          <button disabled={busy} onClick={() => applyBulk(null)}>
-            全員に当てる
-          </button>
-          <button disabled={busy} onClick={() => applyBulk('pitcher')}>
-            投手だけ
-          </button>
-          <button disabled={busy} onClick={() => applyBulk('fielder')}>
-            野手だけ
-          </button>
+          <span className="online-camp-bulk-all">全員に一括:</span>
+          {menusFor(false)
+            .filter(([key]) => !key.startsWith('intensive_'))
+            .map(([key, menu]) => (
+              <button
+                key={key}
+                disabled={busy || finished}
+                onClick={() => applyAll(key, false)}
+              >
+                {menu.icon} {menu.name}
+              </button>
+            ))}
+          {menusFor(true)
+            .filter(
+              ([key]) => !key.startsWith('intensive_') && key !== 'fielding',
+            )
+            .map(([key, menu]) => (
+              <button
+                key={key}
+                disabled={busy || finished}
+                onClick={() => applyAll(key, true)}
+              >
+                {menu.icon} {menu.name}
+              </button>
+            ))}
         </div>
         <p className="online-muted">
-          {DIRECTIONS[bulk.direction]?.description}／{PHASES[bulk.phase]?.description}
+          {DIRECTIONS[policy.direction]?.description}／
+          {PHASES[policy.phase]?.description}
+          {/* ⚠ 希望どおりが正解ではない。噛み合うとやる気が上がるだけ */}
+          　本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。
         </p>
       </section>
-      {groups.map(([id, label, list]) =>
-        list.length ? (
-          <section key={id} className="online-camp-group">
-            <h3>
-              {label} · {list.length}人
-            </h3>
+      {/* ⚠ 携帯は表を出さない。23列は入らない。方針と実行だけで4クール回せる */}
+      {compact && !finished && (
+        <p className="online-muted">
+          選手ごとの練習はPCで選べます。ここでは育成方針だけで進みます。
+        </p>
+      )}
+      {!compact && (
+        <div
+          className="online-segments online-camp-tabs"
+          role="group"
+          aria-label="守備位置"
+        >
+          {groups.map((g) => (
+            <button
+              key={g.id}
+              aria-pressed={g.id === shownGroup?.id}
+              onClick={() => setGroup(g.id)}
+            >
+              {g.label} {g.list.length}
+            </button>
+          ))}
+        </div>
+      )}
+      {!compact && shownGroup && (
+        <section key={shownGroup.id} className="online-camp-group">
+          <div className="online-camp-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>選手</th>
-                  <th>調子</th>
-                  {id === 'pitcher' ? (
+                  <th>氏名</th>
+                  {shownGroup.id !== 'pitcher' && <th>ポジ</th>}
+                  <th>年齢</th>
+                  <th>成長</th>
+                  <th>プロ意識</th>
+                  <th>精神</th>
+                  <th>意欲</th>
+                  <th>投/打</th>
+                  <th>フォーム</th>
+                  <th>肩</th>
+                  {shownGroup.id === 'pitcher' ? (
                     <>
                       <th>球速</th>
                       <th>制球</th>
+                      <th>スピン</th>
                       <th>スタミナ</th>
                     </>
                   ) : (
                     <>
                       <th>ミート</th>
                       <th>パワー</th>
-                      <th>守備</th>
+                      <th>選球眼</th>
+                      <th>バント</th>
                     </>
                   )}
-                  <th>練習</th>
-                  <th>本人の希望</th>
+                  <th>走力</th>
+                  <th>守備</th>
+                  <th>体力</th>
+                  <th>回復</th>
+                  <th>体幹</th>
+                  <th>メイン</th>
+                  <th>サブ</th>
+                  <th title="本人が伸ばしたいと思っている方向">希望</th>
+                  {shownGroup.id === 'pitcher' && <th>変化球</th>}
                 </tr>
               </thead>
               <tbody>
-                {list.map((p) => (
+                {shownGroup.list.map((p) => (
                   <PlayerRow
                     key={p.id}
                     player={p}
-                    value={valueOf(p)}
-                    busy={busy}
-                    onChange={setOne}
+                    main={mainOf(p)}
+                    sub={subOf(p)}
+                    busy={busy || finished}
+                    policy={policy}
+                    onMain={(id2, key) => setMain({ ...main, [id2]: key })}
+                    onSub={(id2, key) => setSub({ ...sub, [id2]: key })}
                   />
                 ))}
               </tbody>
             </table>
-          </section>
-        ) : null,
+          </div>
+        </section>
+      )}
+      {!finished && (
+        <div className="online-actions online-camp-run">
+          <button className="online-primary" disabled={busy} onClick={execute}>
+            第{done + 1}クール練習を実行
+          </button>
+        </div>
       )}
     </div>
   );

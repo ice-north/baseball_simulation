@@ -1,5 +1,9 @@
 import { roleFor } from '../src/online/tactics.js';
-import { PHASE_LABELS, ONLINE_SCHEMA } from '../src/online/shared.js';
+import {
+  PHASE_LABELS,
+  ONLINE_SCHEMA,
+  CAMP_ROUNDS,
+} from '../src/online/shared.js';
 import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
 import {
   withStarters,
@@ -365,6 +369,16 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           packs: l.packs?.map(packView),
           candidates: phase.candidates?.map(playerView),
           submission: phase.submissions[userId] || null,
+          // ⚠ キャンプは1クールずつ自分で実行する。どこまで終わったかを渡す
+          //    （渡さないと、押すたびに「第1クール」のままに見える）
+          camp:
+            phase.kind === 'camp'
+              ? {
+                  rounds: phase.camp?.[userId]?.rounds || 0,
+                  total: CAMP_ROUNDS,
+                  plan: phase.camp?.[userId]?.plan || null,
+                }
+              : null,
         }
       : null,
     // ⚠ **途中参加した人の初期メンバー選択**。リーグ全体の手続きではなく、

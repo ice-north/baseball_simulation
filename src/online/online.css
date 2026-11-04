@@ -248,6 +248,108 @@
 .online-standings .online-move {
   white-space: nowrap;
 }
+/* --- キャンプ ---------------------------------------------------------- */
+.online-camp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.online-camp-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.online-camp-rounds {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+}
+.online-camp-rounds span {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: #ffffff14;
+  color: #cbd5e1;
+}
+.online-camp-rounds span.is-done {
+  background: #15803d;
+  color: #fff;
+}
+.online-camp-rounds span.is-now {
+  background: var(--accent-strong);
+  color: #04222b;
+}
+.online-camp-rounds small {
+  color: #9fb0c4;
+  font-size: 11px;
+}
+/* ⚠ 列が20以上ある。**横に送れるようにする**（折り返すと行が読めない） */
+.online-camp-scroll {
+  overflow-x: auto;
+}
+.online-camp-scroll table {
+  min-width: 1100px;
+  font-size: 12px;
+}
+/* ⚠ 行の高さ（`padding` と選択欄の大きさ）は**触らない**。PC版の共通の
+   指定が `.online-desktop .online-camp-group td` / `select` で持っており、
+   順位表・試合成績と同じ44px前後にそろえてある。ここで上書きすると、
+   この表だけ行の高さが違うことになる。
+   ⚠ 縦が長かったのは行の高さより**人数**。守備位置のタブで1グループずつ
+   出すようにして、24行→12行にした（実測で1914px→970px）。 */
+.online-camp-scroll td,
+.online-camp-scroll th {
+  font-variant-numeric: tabular-nums;
+  /* ⚠ 折り返さない。「スリクォ」が2行に割れて行の高さが倍になっていた */
+  white-space: nowrap;
+}
+.online-camp-scroll select {
+  min-width: 90px;
+  font-size: 11px;
+}
+/* ⚠ 横に送れることが見えるようにする。23列あるので、画面が1500pxだと
+   100px前後はみ出す（1584pxなら収まる）。見えない横送りは気づかれない */
+.online-camp-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+.online-camp-scroll::-webkit-scrollbar-thumb {
+  background: #ffffff33;
+  border-radius: 5px;
+}
+/* ⚠ やる気と希望は折り返さない。3行に割れると行の高さが倍になる */
+.online-camp-scroll .online-mood,
+.online-camp-wish small {
+  white-space: nowrap;
+}
+/* ⚠ 変化球は長い（4球種で40字を超える）。**ここで止めないと表が横に伸び**、
+   右端の「本人の希望」が切れる。溢れたぶんは … にして、全文は title で出す */
+.online-camp-pitches {
+  font-size: 10px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.online-camp-bulk-all {
+  font-size: 12px;
+  color: #9fb0c4;
+  margin-left: 6px;
+}
+.online-camp-run {
+  justify-content: center;
+  margin-top: 14px;
+}
+.online-camp-run button {
+  font-size: 15px;
+  padding: 12px 28px;
+}
+
 /* --- キャンプの割り当て ------------------------------------------------ */
 .online-camp-bulk {
   margin: 10px 0 14px;
@@ -277,8 +379,9 @@
 .online-camp-bulk p {
   margin: 6px 0 0;
 }
-.online-camp-group + .online-camp-group {
-  margin-top: 16px;
+/* ⚠ 守備位置のタブ。1グループずつ出すので、表の上に置く */
+.online-camp-tabs {
+  margin: 12px 0 8px;
 }
 .online-camp-group th small {
   margin-left: 5px;

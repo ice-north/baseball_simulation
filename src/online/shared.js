@@ -238,6 +238,27 @@ export const CAMP_MENUS = [
  *    月曜0時に締め切られて**月曜開幕**になるため。初期編成を日曜に置くと、
  *    キャンプの締め切りが1週間先になって開幕が遅れる。
  */
+
+/**
+ * キャンプのサブ練習。**サーバーと画面で同じ表を見る**。
+ * ⚠ 対象を選ぶもの（守備位置・球種・フォーム・打席）は入れない。
+ *    オンラインは1クールずつまとめて処理するので、対象の選び方まで
+ *    画面に載せると操作が増えるわりに決め手が無い。
+ */
+export const CAMP_SUB_MENUS = [
+  'physique',
+  'weight',
+  'stretch',
+  'defense_sub',
+];
+
+/** キャンプのクール数。一人用と同じ4回 */
+export const CAMP_ROUNDS = 4;
+
+/** 育成方針（やる気に効く）。`trainingPolicy` の `DIRECTIONS` / `PHASES` と揃える */
+export const CAMP_DIRECTIONS = ['sharpen', 'balanced', 'patch'];
+export const CAMP_PHASES = ['physique', 'skill'];
+
 export const PHASE_WEEKDAY = {
   // ⚠ 初期メンバー選択も土曜扱い（締め切り日曜0時）。続くキャンプが
   //    月曜0時に締め切られて月曜開幕になる
