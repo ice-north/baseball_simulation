@@ -3102,3 +3102,122 @@
   text-align: left;
   width: 96px;
 }
+
+/* --- 投手起用（PC。`PitchingBoard.jsx`） ----------------------------------
+   スタメン設定と同じ表（`.online-lineup-table`）。先発ローテ → 救援（役割で括る）。
+   役割は札（`.online-role-chip`）で見せ、押すと役割の一覧（`.online-role-menu`）が出る。 */
+.online-desktop .online-lineup-table .online-pitch-rolecell {
+  text-align: left;
+  width: 104px;
+}
+.online-desktop .online-role-chip {
+  min-width: 0;
+  min-height: 0;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e0f2fe;
+  background: #0e7490;
+  border: 1px solid #22d3ee66;
+  border-radius: 6px;
+}
+.online-desktop .online-role-chip.is-relief {
+  color: #e0f2fe;
+  background: transparent;
+}
+.online-desktop .online-role-chip.is-closer {
+  color: #fde68a;
+  border-color: #f59e0b99;
+}
+.online-desktop .online-role-chip.is-auto {
+  color: #cbd5e1;
+  border-color: #ffffff2e;
+  background: transparent;
+  font-weight: 600;
+}
+.online-desktop .online-role-chip:hover:enabled,
+.online-desktop .online-role-chip[aria-expanded='true'] {
+  background: #0891b2;
+  border-color: var(--accent);
+  color: #f0f9ff;
+}
+.online-pitch-next {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  color: #1f2937;
+  background: #fbbf24;
+  border-radius: 4px;
+}
+.online-desktop .online-pitch-table th.online-lineup-slot,
+.online-desktop .online-pitch-table td.online-lineup-slot {
+  width: 64px;
+}
+/* 見出しの行は、移せる投手を選んでいる間だけ押せる */
+.online-pitch-table .online-lineup-bench-head.is-target {
+  cursor: pointer;
+}
+.online-pitch-table .online-lineup-bench-head.is-target th {
+  color: var(--accent);
+}
+.online-pitch-table .online-lineup-bench-head.is-target:hover th {
+  background: var(--accent-soft);
+}
+.online-pitch-table .online-lineup-bench-head.is-drop th {
+  background: #22d3ee26;
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+/* 救援は役割が替わるところに線を引く（同じ役割の投手が続くときの区切り） */
+.online-pitch-table .online-lineup-row.is-role-start td {
+  border-top: 1px solid #ffffff33;
+}
+.online-role-menu {
+  position: fixed;
+  z-index: 60;
+  width: 420px;
+  padding: 10px 12px 12px;
+  background: var(--surface-1);
+  border: 1px solid #ffffff2e;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px #00000080;
+}
+.online-role-menu p {
+  margin: 4px 0 6px !important;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.online-role-menu p + div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.online-desktop .online-role-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  min-height: 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  text-align: left;
+  white-space: normal;
+}
+.online-role-menu button strong {
+  font-size: 13px;
+}
+.online-role-menu button small {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.online-desktop .online-role-menu button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}

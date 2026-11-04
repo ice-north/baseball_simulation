@@ -31,7 +31,11 @@ export const FIELD_POSITIONS = [
 /** 控えの括り。捕手・内野・外野（投手はスタメン設定に出さない） */
 export const FIELDER_GROUPS = [
   { id: 'catcher', label: '捕手', positions: ['catcher'] },
-  { id: 'infield', label: '内野手', positions: ['first', 'second', 'third', 'short'] },
+  {
+    id: 'infield',
+    label: '内野手',
+    positions: ['first', 'second', 'third', 'short'],
+  },
   { id: 'outfield', label: '外野手', positions: ['left', 'center', 'right'] },
 ];
 

@@ -14,6 +14,8 @@ import { getPositionFitness } from '../src/utils/physics.js';
  */
 export const FIELDER_REST_FATIGUE = 80;
 const FRESH_FATIGUE = 40;
+/** 先発はこの疲労以上だとその日の登板を飛ばす（PC版の投手起用 `pitchingEdit.js` も同じ値で色を変える） */
+export const STARTER_SKIP_FATIGUE = 40;
 const MIN_FITNESS = 60;
 
 function restTiredFielders(team) {
@@ -72,14 +74,14 @@ export function prepareDailyLineup(team, name) {
   );
   const current = pitchers.find((p) => p.id === starters[index]);
   let restore = () => {};
-  if (!current || (current.fatigue || 0) >= 40) {
+  if (!current || (current.fatigue || 0) >= STARTER_SKIP_FATIGUE) {
     // ⚠ **今の順番から先へ**探すこと（一人用の `selectStarterFromRotation` と同じ）。
     //    以前は先頭から探していたので、4番手が疲れていると1番手に戻り、
     //    5番手は飛ばされ、上位の先発ばかり短い間隔で投げていた
     let rested = -1;
     for (let i = 1; i < starters.length && rested < 0; i += 1) {
       const candidate = (index + i) % starters.length;
-      if (pitchers.some((p) => p.id === starters[candidate] && (p.fatigue || 0) < 40))
+      if (pitchers.some((p) => p.id === starters[candidate] && (p.fatigue || 0) < STARTER_SKIP_FATIGUE))
         rested = candidate;
     }
     if (rested >= 0) rotation.currentStarterIndex = rested;

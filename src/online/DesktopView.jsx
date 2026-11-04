@@ -8,8 +8,9 @@ import {
 import DesktopTactics from './DesktopTactics.jsx';
 import AbilityRanking from './AbilityRanking.jsx';
 import TeamRoster from './TeamRoster.jsx';
-import OnlineLineup from './OnlineLineup.jsx';
 import LineupBoard from './LineupBoard.jsx';
+import PitchingBoard from './PitchingBoard.jsx';
+import { useDraftMemoryStore } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import { dateTime, STATUS } from './api.js';
 import { formatGameDate } from './shared.js';
@@ -20,7 +21,9 @@ import { Page } from './Page.jsx';
 import {
   rebaseLineupSave,
   LINEUP_BOARD_KEYS,
-  ROTATION_EDITOR_KEYS,
+  PITCHING_BOARD_KEYS,
+  restoreFromFullLineup,
+  fullLineupFromBoards,
 } from './lineupBridge.js';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
@@ -36,7 +39,7 @@ import {
 //    で、ページを開くたびに見た目が変わるという指摘を受けた。
 //    日付と進行は左メニューに1回だけ置き、本文は `Page` で揃える。
 // ⚠ **同じものを2か所で編集させないこと**。打順・先発・投手の役割は
-//    移植した画面（スタメン設定・投手起用）だけで決める。方針・采配に
+//    スタメン設定・投手起用だけで決める。方針・采配に
 //    コンボボックス版の打順と投手の役割があり、同じものが2通りの操作で
 //    編集できていた（しかも名前しか出ず、判断に使える情報が無かった）。
 // ⚠ 消した入口:
@@ -74,12 +77,14 @@ const NAV = [
   },
 ];
 /**
- * ロスター管理のどの項目が、移植画面のどのタブに当たるか。
- * ⚠ スタメン設定はPC専用の画面（`LineupBoard.jsx`）に置き換えた。守備分析は
- *    その表に入れた（守備位置の入れ替え・位置ごとの候補と適性）ので項目ごと無い。
- *    移植画面を使うのは投手起用だけ。
+ * ロスター管理の編成ページ（PC専用の画面）と、それぞれが保存で受け持つ項目。
+ * ⚠ 以前は一人用の編成画面を移植して使っていた。スタメン設定（`LineupBoard.jsx`）と
+ *    投手起用（`PitchingBoard.jsx`）は、比べて決めるための1枚の表に作り直した。
+ *    守備分析はスタメン設定の表に入れた（守備位置の入れ替え・位置ごとの候補と適性）。
+ * ⚠ 2つのページは**別々に保存する**。受け持つ項目を分けてあるので、片方を保存しても
+ *    もう片方の未保存の編集は保存できる（`rebaseLineupSave`）。
  */
-const LINEUP_TABS = { rotation: 'rotation' };
+const BOARD_KEYS = { lineup: LINEUP_BOARD_KEYS, rotation: PITCHING_BOARD_KEYS };
 const TITLES = {
   today: 'ホーム',
   players: '選手成績',
@@ -251,23 +256,78 @@ export default function DesktopView(props) {
   const [renaming, setRenaming] = useState(false);
   // ⚠ 消した入口（自チーム情報）で開いていたら、ホームへ戻す
   const current = TITLES[tab] ? tab : 'today';
-  const lineupTab = LINEUP_TABS[current];
-  // ⚠ 編成の画面は**ほかのページへ移っても外さない**（未保存の編集を残す）。
-  //    隠している間は最後に開いていたタブのまま
-  const lastLineupTab = useRef('rotation');
-  if (lineupTab) lastLineupTab.current = lineupTab;
-  // ⚠ 編成の画面（一人用の約2,900行）は**初めて開くまで作らない**。開いたあとは
-  //    隠すだけで残す（未保存の編集のため）
-  const [lineupOpened, setLineupOpened] = useState(!!lineupTab);
-  if (lineupTab && !lineupOpened) setLineupOpened(true);
-  const [lineupDirty, setLineupDirty] = useState(false);
-  const onLineupDirty = useCallback((d) => setLineupDirty(d), []);
-  // スタメン設定（PC専用の画面）も同じく、初めて開くまで作らず、開いたあとは隠して残す
-  const [boardOpened, setBoardOpened] = useState(current === 'lineup');
-  if (current === 'lineup' && !boardOpened) setBoardOpened(true);
-  const [boardDirty, setBoardDirty] = useState(false);
-  const onBoardDirty = useCallback((d) => setBoardDirty(d), []);
-  const unsaved = (id) => (id === 'lineup' ? boardDirty : !!LINEUP_TABS[id] && lineupDirty);
+  // ⚠ 編成のページは**初めて開くまで作らず、開いたあとは隠して残す**
+  //    （ほかのページへ移っても、保存していない編集を残す）
+  // ⚠ スマホの全画面編成で保存していない編集があれば受け取る（`restoreFromFullLineup`）。
+  //    スマホを横にするとこの画面に切り替わる。受け取ったら両方のページを作っておき、
+  //    未保存の印をすぐに出す
+  const memory = useDraftMemoryStore();
+  const [restore] = useState(() =>
+    restoreFromFullLineup(memory?.get('lineup.full')),
+  );
+  const [opened, setOpened] = useState(() => ({
+    lineup: !!restore || current === 'lineup',
+    rotation: !!restore || current === 'rotation',
+  }));
+  if (BOARD_KEYS[current] && !opened[current])
+    setOpened({ ...opened, [current]: true });
+  const [dirty, setDirty] = useState({});
+  const unsaved = (id) => !!dirty[id];
+  // 保存していない編集を、スマホの全画面編成の形で残す（縦に戻したときに引き継ぐ）。
+  // ⚠ 保存したら消す。残すと、縦に戻したときに古い編集が開き直されて
+  //    「編成が更新されています」で保存できない
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const drafts = useRef({});
+  const syncFull = useCallback(() => {
+    if (!memory) return;
+    const full = fullLineupFromBoards(
+      viewRef.current,
+      Object.values(drafts.current).filter(Boolean),
+    );
+    if (full) memory.set('lineup.full', full);
+    else memory.delete('lineup.full');
+  }, [memory]);
+  const boardHandlers = useRef(null);
+  if (!boardHandlers.current) {
+    boardHandlers.current = Object.fromEntries(
+      Object.keys(BOARD_KEYS).map((id) => [
+        id,
+        {
+          onDirty: (d) =>
+            setDirty((x) => (x[id] === d ? x : { ...x, [id]: d })),
+          onDraft: (draft) => {
+            drafts.current[id] = draft.dirty
+              ? {
+                  keys: BOARD_KEYS[id],
+                  plan: draft.plan,
+                  baseLineup: draft.baseLineup,
+                }
+              : null;
+            syncFull();
+          },
+        },
+      ]),
+    );
+  }
+  // 最新の編成が届いたら載せ直す（保存していない編集の起点を最新にする）
+  useEffect(() => syncFull(), [view.revision, syncFull]);
+  const boardProps = (id) => ({
+    hidden: current !== id,
+    view,
+    busy,
+    restore,
+    ...boardHandlers.current[id],
+    onSave: (plan, baseLineup) =>
+      // ⚠ ほかのページ（方針・采配・もう一方の編成ページ）で保存された項目を
+      //    古い値で上書きしないよう、最新の編成に載せて送る
+      run(() =>
+        command(
+          'lineup',
+          rebaseLineupSave(plan, baseLineup, view.lineup, BOARD_KEYS[id]),
+        ),
+      ),
+  });
   return (
     <>
       <nav className="online-page-nav" aria-label="オンラインの画面">
@@ -324,9 +384,7 @@ export default function DesktopView(props) {
           </div>
         )}
       </nav>
-      {renaming && (
-        <RenameDialog {...props} close={() => setRenaming(false)} />
-      )}
+      {renaming && <RenameDialog {...props} close={() => setRenaming(false)} />}
       {current === 'today' && (
         <Page title="ホーム" sub={`SEASON ${view.year}`}>
           <LeagueBoard view={view} />
@@ -362,46 +420,10 @@ export default function DesktopView(props) {
       )}
       {/* ⚠ **手続き中でも開けること**。打順や投手起用はいつ決めてもよく、
           止める理由が無い。
-          ⚠ 投手起用は、移植画面の**中のタブ**へ直に入る。
           ⚠ **保存に失敗しても閉じない**。閉じると編集がまるごと消える。
-             ここでは成否に関わらず開いたままにしてある（画面を離れるのは
-             左メニューの操作だけ）。 */}
-      {lineupOpened && (
-        <OnlineLineup
-          embedded
-          hidden={!lineupTab}
-          title={TITLES[lineupTab ? current : 'rotation']}
-          view={view}
-          busy={busy}
-          tab={lineupTab || lastLineupTab.current}
-          onDirty={onLineupDirty}
-          onSave={(plan, baseLineup) =>
-            // ⚠ 方針・采配で保存された方針を古い値で上書きしないよう、最新の編成に載せて送る
-            run(() =>
-              command(
-                'lineup',
-                rebaseLineupSave(plan, baseLineup, view.lineup, ROTATION_EDITOR_KEYS),
-              ),
-            )
-          }
-        />
-      )}
-      {boardOpened && (
-        <LineupBoard
-          hidden={current !== 'lineup'}
-          view={view}
-          busy={busy}
-          onDirty={onBoardDirty}
-          onSave={(plan, baseLineup) =>
-            run(() =>
-              command(
-                'lineup',
-                rebaseLineupSave(plan, baseLineup, view.lineup, LINEUP_BOARD_KEYS),
-              ),
-            )
-          }
-        />
-      )}
+             画面を離れるのは左メニューの操作だけ（隠すだけで残す）。 */}
+      {opened.lineup && <LineupBoard {...boardProps('lineup')} />}
+      {opened.rotation && <PitchingBoard {...boardProps('rotation')} />}
       {current === 'tactics' && (
         <DesktopTactics key={`${view.year}:${view.teamName}`} {...props} />
       )}

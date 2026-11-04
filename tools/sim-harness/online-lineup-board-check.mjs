@@ -27,10 +27,14 @@ import { FIELDER_REST_FATIGUE } from '../../server/dailyLineup.mjs';
 import {
   rebaseLineupSave,
   LINEUP_BOARD_KEYS,
-  ROTATION_EDITOR_KEYS,
+  PITCHING_BOARD_KEYS,
 } from '../../src/online/lineupBridge.js';
 
-assert.equal(REST_FATIGUE, FIELDER_REST_FATIGUE, '休養の疲労がサーバーとずれた');
+assert.equal(
+  REST_FATIGUE,
+  FIELDER_REST_FATIGUE,
+  '休養の疲労がサーバーとずれた',
+);
 assert.equal(LOW_FITNESS, 60, '適性の下限（代役選びの下限）とずれた');
 
 // --- 名簿: 野手12人（各位置1人＋控え4人）と投手3人
@@ -113,7 +117,11 @@ for (let round = 0; round < 3; round++)
   for (const step of steps) {
     order = step(order);
     assert.equal(order.length, 8);
-    assert.deepEqual(orderProblems(order, roster), [], '操作で保存できない形になった');
+    assert.deepEqual(
+      orderProblems(order, roster),
+      [],
+      '操作で保存できない形になった',
+    );
     valid(order);
   }
 
@@ -124,19 +132,29 @@ for (let round = 0; round < 3; round++)
     moved.map((e) => e.playerId),
     [1, 8, 7, 6, 5, 4, 3, 2],
   );
-  assert.equal(moved[0].position, start[7].position, '動かしたら守備位置が変わった');
+  assert.equal(
+    moved[0].position,
+    start[7].position,
+    '動かしたら守備位置が変わった',
+  );
   assert.equal(moveOrder(start, 3, 3), start, '同じ位置なら何もしない');
 }
 // 打順の入れ替え（クリック）
 {
   const swapped = swapOrder(start, 0, 2);
-  assert.deepEqual(swapped.slice(0, 3).map((e) => e.playerId), [6, 7, 8]);
+  assert.deepEqual(
+    swapped.slice(0, 3).map((e) => e.playerId),
+    [6, 7, 8],
+  );
   assert.equal(swapped[0].position, start[2].position);
 }
 // 守備位置の入れ替え: 打順はそのまま、位置だけ交換
 {
   const swapped = swapPositions(start, 0, 1);
-  assert.deepEqual(swapped.map((e) => e.playerId), start.map((e) => e.playerId));
+  assert.deepEqual(
+    swapped.map((e) => e.playerId),
+    start.map((e) => e.playerId),
+  );
   assert.equal(swapped[0].position, start[1].position);
   assert.equal(swapped[1].position, start[0].position);
   assert.notEqual(swapped[0], start[0], '元の配列の要素を書き換えた');
@@ -152,7 +170,10 @@ for (let round = 0; round < 3; round++)
 // --- 控え: 投手と抹消中を出さない。捕手・内野・外野で括る
 {
   const bench = benchFielders(roster, start);
-  assert.deepEqual(bench.map((p) => p.id), [9, 10, 11, 12]);
+  assert.deepEqual(
+    bench.map((p) => p.id),
+    [9, 10, 11, 12],
+  );
   assert.deepEqual(
     groupBench(bench).map((g) => [g.id, g.players.map((p) => p.id)]),
     [
@@ -162,7 +183,10 @@ for (let round = 0; round < 3; round++)
     ],
   );
   // 二塁の候補は二塁の適性順（本職100 → 遊撃手の90 → …）
-  assert.deepEqual(candidatesFor(bench, 'second').map((p) => p.id), [11, 10, 9, 12]);
+  assert.deepEqual(
+    candidatesFor(bench, 'second').map((p) => p.id),
+    [11, 10, 9, 12],
+  );
   // 本職は適性の値が無くても100、無い位置は0
   assert.equal(positionFitness({ position: 'first' }, 'first'), 100);
   assert.equal(positionFitness({ position: 'first' }, 'short'), 0);
@@ -191,15 +215,23 @@ for (let round = 0; round < 3; round++)
     latest,
     LINEUP_BOARD_KEYS,
   );
-  assert.deepEqual(payload.starters, [22, 21], 'スタメンの保存で先発の順を古い値に戻した');
-  assert.deepEqual(payload.baseLineup.starters, [22, 21], '照合の起点が最新でない');
+  assert.deepEqual(
+    payload.starters,
+    [22, 21],
+    'スタメンの保存で先発の順を古い値に戻した',
+  );
+  assert.deepEqual(
+    payload.baseLineup.starters,
+    [22, 21],
+    '照合の起点が最新でない',
+  );
   assert.deepEqual(payload.battingOrder, battingOrderFromOrder(order));
   const latest2 = { ...lineup, battingOrder: battingOrderFromOrder(order) };
   const pitchers = rebaseLineupSave(
     { battingOrder: lineup.battingOrder, starters: [21], pitcherRoles: {} },
     lineup,
     latest2,
-    ROTATION_EDITOR_KEYS,
+    PITCHING_BOARD_KEYS,
   );
   assert.deepEqual(
     pitchers.battingOrder,

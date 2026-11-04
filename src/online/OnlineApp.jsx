@@ -30,6 +30,25 @@ const viewForSession = (result, current) => {
     !!(result.setupRequired || result.versionMismatch || result.writable),
   };
 };
+// PCにしか無いページを開いたままスマホの幅になったら、スマホで同じものを扱うタブを出す。
+// ⚠ 無いタブのままだと何も出ない画面になる（投手起用を開いたまま横から縦へ回したときなど）。
+//    スマホでは打順・投手起用・方針を「打順」のタブでまとめて扱う
+const MOBILE_TABS = new Set([
+  'today',
+  'games',
+  'players',
+  'news',
+  'lineup',
+  'decisions',
+]);
+const MOBILE_TAB_FOR = {
+  rotation: 'lineup',
+  tactics: 'lineup',
+  ranking: 'players',
+};
+const mobileTab = (screen) =>
+  MOBILE_TAB_FOR[screen] || (MOBILE_TABS.has(screen) ? screen : 'today');
+
 const COMMAND_MESSAGES = {
   create: 'リーグを作成しました',
   join: 'リーグに参加しました',
@@ -451,7 +470,7 @@ export default function OnlineApp() {
               >
                 {mobile ? (
                   <MobileView
-                    tab={screen === 'admin' ? 'today' : screen}
+                    tab={mobileTab(screen)}
                     setTab={setScreen}
                     view={view}
                     local={config.local}

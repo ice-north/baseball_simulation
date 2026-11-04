@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { POS } from './api.js';
-import { Page } from './Page.jsx';
+import { BoardPage, Fatigue } from './BoardParts.jsx';
+import { useBoardHistory } from './useBoardHistory.js';
 import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { overviewGroup, formatStat } from './statsView.js';
 import { teamShort } from './gameText.js';
@@ -75,8 +76,6 @@ const BATS = { left: '左', right: '右', switch: '両' };
 const batsOf = (p) => BATS[p.batting?.bats || p.physical?.bats] || '—';
 const THROWS = { left: '左投', right: '右投' };
 
-const HISTORY_LIMIT = 100;
-
 /** 次の数試合の相手と、相手の先発予定（投げる手）。左右の並べ方の手がかり */
 function NextOpponents({ view }) {
   const games = (view.nextGames || []).slice(0, 5);
@@ -90,7 +89,10 @@ function NextOpponents({ view }) {
         const info = home ? game.awayStarterInfo : game.homeStarterInfo;
         const name = info?.name || (home ? game.awayStarter : game.homeStarter);
         return (
-          <span key={game.id ?? `${game.number}:${opponent}`} className="online-lineup-next-game">
+          <span
+            key={game.id ?? `${game.number}:${opponent}`}
+            className="online-lineup-next-game"
+          >
             <small>{game.number ? `${game.number}試合目` : ''}</small>
             <strong>{teamShort(opponent)}</strong>
             {name ? (
@@ -110,26 +112,9 @@ function NextOpponents({ view }) {
   );
 }
 
-/** 疲労。休養になる値（試合の日に控えと入れ替わる）を見分けられるように */
-function Fatigue({ value }) {
-  const v = value || 0;
-  const tone = v >= REST_FATIGUE ? 'is-rest' : v >= 40 ? 'is-tired' : '';
-  return (
-    <span
-      className={`online-lineup-fatigue ${tone}`}
-      title={
-        v >= REST_FATIGUE
-          ? `疲労${v}: 試合の日は休養し、守れる控えと入れ替わります`
-          : `疲労${v}`
-      }
-    >
-      {v}
-    </span>
-  );
-}
-
 function Fitness({ value, position }) {
-  if (value === null || value === undefined) return <span className="online-muted">—</span>;
+  if (value === null || value === undefined)
+    return <span className="online-muted">—</span>;
   const low = value < LOW_FITNESS;
   return (
     <span
@@ -152,10 +137,16 @@ function PlayerCells({ player, fitness, fitnessPosition }) {
         </span>
         <ConditionMark player={player} />
       </td>
-      <td title={player.physical?.throws === 'left' ? '左投' : '右投'}>{batsOf(player)}</td>
+      <td title={player.physical?.throws === 'left' ? '左投' : '右投'}>
+        {batsOf(player)}
+      </td>
       <td>{player.age ?? '—'}</td>
       <td className="is-sep">
-        <Fatigue value={player.fatigue} />
+        <Fatigue
+          value={player.fatigue}
+          rest={REST_FATIGUE}
+          restText="試合の日は休養し、守れる控えと入れ替わります"
+        />
       </td>
       {ABILITIES.map((a, i) => (
         <td key={a.key} className={i === 0 ? 'is-sep' : ''}>
@@ -190,13 +181,20 @@ function HeaderRow({ fitnessLabel }) {
       <th className="online-lineup-person">選手</th>
       <th title="打席（左・右・両）">打</th>
       <th>年齢</th>
-      <th className="is-sep" title="80以上は試合の日に休養（守れる控えと入れ替わる）">疲労</th>
+      <th
+        className="is-sep"
+        title="80以上は試合の日に休養（守れる控えと入れ替わる）"
+      >
+        疲労
+      </th>
       {ABILITIES.map((a, i) => (
         <th key={a.key} className={i === 0 ? 'is-sep' : ''} title={a.title}>
           {a.label}
         </th>
       ))}
-      <th className="is-sep" title="その守備位置の適性（60%未満は赤）">{fitnessLabel}</th>
+      <th className="is-sep" title="その守備位置の適性（60%未満は赤）">
+        {fitnessLabel}
+      </th>
       <th title="守備力">守</th>
       <th title="肩力">肩</th>
       {STAT_COLUMNS.map((column, i) => (
@@ -212,124 +210,55 @@ function HeaderRow({ fitnessLabel }) {
   );
 }
 
-export default function LineupBoard({ view, busy, hidden, onSave, onDirty }) {
+export default function LineupBoard({
+  view,
+  busy,
+  hidden,
+  restore,
+  onSave,
+  onDirty,
+  onDraft,
+}) {
   const roster = view.roster || [];
   const byId = new Map(roster.map((p) => [p.id, p]));
 
-  // ---- 編集の状態（履歴つき）。保存済みから変わっていなければ最新の view で作り直す
-  const build = (v) => {
-    const order = orderFromLineup(v.lineup);
-    return { stack: [order], index: 0, base: order, baseLineup: v.lineup || {} };
-  };
-  const [history, setHistory] = useState(() => build(view));
-  const [builtFor, setBuiltFor] = useState(view.revision);
-  const order = history.stack[history.index];
-  const dirty = !sameOrder(order, history.base);
-  if (!dirty && builtFor !== view.revision) {
-    // ⚠ 描画中の作り直し（React の「前回の値から状態を直す」書き方）。
-    //    未保存の編集があるあいだは作り直さない（作り直すと編集が消える）
-    setBuiltFor(view.revision);
-    setHistory(build(view));
-  }
-  const [saveError, setSaveError] = useState('');
+  // ---- 編集の状態（履歴つき。`useBoardHistory`）
   const [selection, setSelection] = useState(null);
   const [drag, setDrag] = useState(null);
   const [dropAt, setDropAt] = useState(null);
-
-  useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
-  // ⚠ 未保存の編集があるうちは、閉じる・再読み込みの前に確かめる
-  useEffect(() => {
-    if (!dirty) return undefined;
-    const warn = (event) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
-
-  const commit = useCallback((next) => {
-    setHistory((h) => {
-      const current = h.stack[h.index];
-      if (next === current || sameOrder(next, current)) return h;
-      const stack = [...h.stack.slice(0, h.index + 1), next].slice(-HISTORY_LIMIT);
-      return { ...h, stack, index: stack.length - 1 };
-    });
+  const clearSelection = useCallback(() => setSelection(null), []);
+  const board = useBoardHistory({
+    view,
+    fromView: (v) => orderFromLineup(v.lineup),
+    same: sameOrder,
+    toPlan: (order) => ({ battingOrder: battingOrderFromOrder(order) }),
+    onSave,
+    onDirty,
+    onDraft,
+    restore,
+    keyActive: !hidden && !busy,
+    onEscape: clearSelection,
+  });
+  const order = board.value;
+  const commit = (next) => {
+    board.commit(next);
     setSelection(null);
-    setSaveError('');
-  }, []);
-  const canUndo = history.index > 0;
-  const canRedo = history.index < history.stack.length - 1;
-  const undo = useCallback(() => {
-    setHistory((h) => (h.index > 0 ? { ...h, index: h.index - 1 } : h));
-    setSelection(null);
-  }, []);
-  const redo = useCallback(() => {
-    setHistory((h) =>
-      h.index < h.stack.length - 1 ? { ...h, index: h.index + 1 } : h,
-    );
-    setSelection(null);
-  }, []);
-  const discard = () => {
-    setHistory(build(view));
-    setBuiltFor(view.revision);
-    setSelection(null);
-    setSaveError('');
   };
-  const save = async () => {
-    setSaveError('');
-    const result = await onSave(
-      { battingOrder: battingOrderFromOrder(order) },
-      history.baseLineup,
-    );
-    if (result && !result.ok) {
-      setSaveError(result.error || '保存できませんでした');
-      return;
-    }
-    // 保存できたら、保存した内容を新しい起点にする（元に戻すの履歴も切る）
-    setHistory({
-      stack: [order],
-      index: 0,
-      base: order,
-      baseLineup: { ...history.baseLineup, battingOrder: battingOrderFromOrder(order) },
-    });
-  };
-
-  // ---- キーボード: 元に戻す・やり直す・選択の取り消し
-  const keyActive = !hidden && !busy;
-  useEffect(() => {
-    if (!keyActive) return undefined;
-    const onKey = (e) => {
-      const tag = e.target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (e.key === 'Escape') {
-        setSelection(null);
-        return;
-      }
-      if (!(e.ctrlKey || e.metaKey)) return;
-      const key = e.key.toLowerCase();
-      if (key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      } else if ((key === 'z' && e.shiftKey) || key === 'y') {
-        e.preventDefault();
-        redo();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [keyActive, undo, redo]);
 
   // ---- 操作（クリック）
   const bench = benchFielders(roster, order);
   const selectedRow = selection?.kind === 'row' ? selection.index : null;
   const selectedPos = selection?.kind === 'pos' ? selection.index : null;
-  const selectedBench = selection?.kind === 'bench' ? byId.get(selection.playerId) : null;
-  const focusPosition = selectedRow !== null ? order[selectedRow]?.position : null;
+  const selectedBench =
+    selection?.kind === 'bench' ? byId.get(selection.playerId) : null;
+  const focusPosition =
+    selectedRow !== null ? order[selectedRow]?.position : null;
 
   const clickRow = (index) => {
-    if (selectedRow !== null && selectedRow !== index) commit(swapOrder(order, selectedRow, index));
-    else if (selectedBench) commit(replaceStarter(order, index, selectedBench.id));
+    if (selectedRow !== null && selectedRow !== index)
+      commit(swapOrder(order, selectedRow, index));
+    else if (selectedBench)
+      commit(replaceStarter(order, index, selectedBench.id));
     else if (selectedPos !== null && selectedPos !== index)
       commit(swapPositions(order, selectedPos, index));
     else setSelection(selectedRow === index ? null : { kind: 'row', index });
@@ -340,7 +269,8 @@ export default function LineupBoard({ view, busy, hidden, onSave, onDirty }) {
     else setSelection(selectedPos === index ? null : { kind: 'pos', index });
   };
   const clickBench = (playerId) => {
-    if (selectedRow !== null) commit(replaceStarter(order, selectedRow, playerId));
+    if (selectedRow !== null)
+      commit(replaceStarter(order, selectedRow, playerId));
     else
       setSelection(
         selection?.kind === 'bench' && selection.playerId === playerId
@@ -370,7 +300,11 @@ export default function LineupBoard({ view, busy, hidden, onSave, onDirty }) {
     if (target.kind === 'bench' && drag.kind !== 'row') return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    if (dropAt?.kind !== target.kind || dropAt?.index !== target.index || dropAt?.playerId !== target.playerId)
+    if (
+      dropAt?.kind !== target.kind ||
+      dropAt?.index !== target.index ||
+      dropAt?.playerId !== target.playerId
+    )
       setDropAt(target);
   };
   const dropOn = (target) => (e) => {
@@ -380,8 +314,10 @@ export default function LineupBoard({ view, busy, hidden, onSave, onDirty }) {
     if (!d) return;
     if (target.kind === 'row') {
       if (d.kind === 'row') commit(moveOrder(order, d.index, target.index));
-      else if (d.kind === 'pos') commit(swapPositions(order, d.index, target.index));
-      else if (d.kind === 'bench') commit(replaceStarter(order, target.index, d.playerId));
+      else if (d.kind === 'pos')
+        commit(swapPositions(order, d.index, target.index));
+      else if (d.kind === 'bench')
+        commit(replaceStarter(order, target.index, d.playerId));
     } else if (target.kind === 'bench' && d.kind === 'row') {
       commit(replaceStarter(order, d.index, target.playerId));
     }
@@ -390,13 +326,14 @@ export default function LineupBoard({ view, busy, hidden, onSave, onDirty }) {
   // ---- 表示
   const problems = orderProblems(order, roster);
   const nextStarter = byId.get(view.nextStarterId);
-  const help = selectedRow !== null
-    ? `${order[selectedRow] && byId.get(order[selectedRow].playerId)?.name || `${selectedRow + 1}番`}を選択中：控えを押すと交代、ほかの打順を押すと打順を入れ替えます。`
-    : selectedPos !== null
-      ? `${POS_FULL[order[selectedPos]?.position]}を選択中：ほかの選手の守備位置を押すと入れ替えます。`
-      : selectedBench
-        ? `${selectedBench.name}を選択中：交代させる打順を押してください。`
-        : '行を押して選び、もう一方を押すと入れ替わります（打順どうし＝打順、守備位置どうし＝守備、打順と控え＝交代）。ドラッグでも同じです。Escで選択を取り消します。';
+  const help =
+    selectedRow !== null
+      ? `${(order[selectedRow] && byId.get(order[selectedRow].playerId)?.name) || `${selectedRow + 1}番`}を選択中：控えを押すと交代、ほかの打順を押すと打順を入れ替えます。`
+      : selectedPos !== null
+        ? `${POS_FULL[order[selectedPos]?.position]}を選択中：ほかの選手の守備位置を押すと入れ替えます。`
+        : selectedBench
+          ? `${selectedBench.name}を選択中：交代させる打順を押してください。`
+          : '行を押して選び、もう一方を押すと入れ替わります（打順どうし＝打順、守備位置どうし＝守備、打順と控え＝交代）。ドラッグでも同じです。Escで選択を取り消します。';
 
   const benchRows = focusPosition
     ? [
@@ -412,9 +349,12 @@ export default function LineupBoard({ view, busy, hidden, onSave, onDirty }) {
     [
       'online-lineup-row',
       selectedRow === index ? 'is-selected' : '',
-      drag && dropAt?.kind === 'row' && dropAt.index === index ? `is-drop is-drop-${drag.kind}` : '',
+      drag && dropAt?.kind === 'row' && dropAt.index === index
+        ? `is-drop is-drop-${drag.kind}`
+        : '',
       drag?.kind === 'row' && drag.index === index ? 'is-dragging' : '',
-      selectedBench && positionFitness(selectedBench, order[index]?.position) >= LOW_FITNESS
+      selectedBench &&
+      positionFitness(selectedBench, order[index]?.position) >= LOW_FITNESS
         ? 'is-fit'
         : '',
     ]
@@ -422,235 +362,228 @@ export default function LineupBoard({ view, busy, hidden, onSave, onDirty }) {
       .join(' ');
 
   return (
-    <div hidden={hidden}>
-      <Page
-        title="スタメン設定"
-        sticky
-        sub={
-          saveError ? (
-            <span role="alert" className="online-error-text">
-              保存できませんでした：{saveError}（編集は残っています）
-            </span>
-          ) : problems.length ? (
-            <span role="alert" className="online-error-text">
-              {problems[0]}
-            </span>
-          ) : dirty ? (
-            '保存していない変更があります。保存するまで試合には反映されません。'
-          ) : (
-            '変更は「保存」を押すまでサーバーには送られません。'
-          )
-        }
-        actions={
-          <>
-            <button disabled={busy || !canUndo} onClick={undo} title="元に戻す（Ctrl+Z）">
-              元に戻す
-            </button>
-            <button disabled={busy || !canRedo} onClick={redo} title="やり直す（Ctrl+Shift+Z）">
-              やり直す
-            </button>
-            <button disabled={busy || !dirty} onClick={discard}>
-              変更を取り消す
-            </button>
-            <button
-              className="online-primary"
-              disabled={busy || !dirty || problems.length > 0}
-              onClick={save}
-            >
-              保存
-            </button>
-          </>
-        }
+    <BoardPage
+      title="スタメン設定"
+      board={board}
+      busy={busy}
+      problems={problems}
+      hidden={hidden}
+    >
+      {/* ⚠ 保存の応答待ちの間は触れなくする（送信中の編集が、保存後の作り直しで消える） */}
+      <section
+        className="online-card online-lineup-board"
+        inert={busy ? '' : undefined}
       >
-        {/* ⚠ 保存の応答待ちの間は触れなくする（送信中の編集が、保存後の作り直しで消える） */}
-        <section className="online-card online-lineup-board" inert={busy ? '' : undefined}>
-          <NextOpponents view={view} />
-          <p className="online-lineup-help" aria-live="polite">
-            {help}
-          </p>
-          <div className="online-lineup-scroll">
-            <table className="online-lineup-table">
-              <thead>
-                <HeaderRow fitnessLabel="適性" />
-              </thead>
-              <tbody aria-label="スタメン">
-                {order.map((entry, index) => {
-                  const player = byId.get(entry.playerId);
-                  return (
-                    <tr
-                      key={`${index}:${entry.playerId}`}
-                      className={rowClass(index)}
-                      draggable={!busy}
-                      onDragStart={startDrag({ kind: 'row', index })}
-                      onDragEnd={endDrag}
-                      onDragOver={over({ kind: 'row', index })}
-                      onDragLeave={() => setDropAt(null)}
-                      onDrop={dropOn({ kind: 'row', index })}
-                      onClick={() => clickRow(index)}
-                      data-slot={index + 1}
-                    >
-                      <td className="online-lineup-slot">
-                        <button
-                          type="button"
-                          aria-pressed={selectedRow === index}
-                          aria-label={`${index + 1}番を選ぶ`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            clickRow(index);
-                          }}
-                        >
-                          <span aria-hidden="true" className="online-lineup-grip">⠿</span>
-                          {index + 1}
-                        </button>
+        <NextOpponents view={view} />
+        <p className="online-lineup-help" aria-live="polite">
+          {help}
+        </p>
+        <div className="online-lineup-scroll">
+          <table className="online-lineup-table">
+            <thead>
+              <HeaderRow fitnessLabel="適性" />
+            </thead>
+            <tbody aria-label="スタメン">
+              {order.map((entry, index) => {
+                const player = byId.get(entry.playerId);
+                return (
+                  <tr
+                    key={`${index}:${entry.playerId}`}
+                    className={rowClass(index)}
+                    draggable={!busy}
+                    onDragStart={startDrag({ kind: 'row', index })}
+                    onDragEnd={endDrag}
+                    onDragOver={over({ kind: 'row', index })}
+                    onDragLeave={() => setDropAt(null)}
+                    onDrop={dropOn({ kind: 'row', index })}
+                    onClick={() => clickRow(index)}
+                    data-slot={index + 1}
+                  >
+                    <td className="online-lineup-slot">
+                      <button
+                        type="button"
+                        aria-pressed={selectedRow === index}
+                        aria-label={`${index + 1}番を選ぶ`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clickRow(index);
+                        }}
+                      >
+                        <span aria-hidden="true" className="online-lineup-grip">
+                          ⠿
+                        </span>
+                        {index + 1}
+                      </button>
+                    </td>
+                    <td className="online-lineup-poscell">
+                      <button
+                        type="button"
+                        className={`online-lineup-pos ${selectedPos === index ? 'is-selected' : ''}`}
+                        aria-pressed={selectedPos === index}
+                        aria-label={`${index + 1}番の守備位置（${POS[entry.position]}）を入れ替える`}
+                        draggable={!busy}
+                        onDragStart={startDrag({ kind: 'pos', index })}
+                        onDragEnd={endDrag}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clickPosition(index);
+                        }}
+                      >
+                        {POS[entry.position] || '?'}
+                      </button>
+                    </td>
+                    {player ? (
+                      <PlayerCells
+                        player={player}
+                        fitness={positionFitness(player, entry.position)}
+                        fitnessPosition={entry.position}
+                      />
+                    ) : (
+                      <td
+                        colSpan={COLUMN_COUNT - 2}
+                        className="online-lineup-missing"
+                      >
+                        名簿に居ない選手です。控えと交代してください
                       </td>
-                      <td className="online-lineup-poscell">
-                        <button
-                          type="button"
-                          className={`online-lineup-pos ${selectedPos === index ? 'is-selected' : ''}`}
-                          aria-pressed={selectedPos === index}
-                          aria-label={`${index + 1}番の守備位置（${POS[entry.position]}）を入れ替える`}
-                          draggable={!busy}
-                          onDragStart={startDrag({ kind: 'pos', index })}
-                          onDragEnd={endDrag}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            clickPosition(index);
-                          }}
+                    )}
+                  </tr>
+                );
+              })}
+              <tr className="online-lineup-row is-pitcher">
+                <td className="online-lineup-slot">
+                  <span>9</span>
+                </td>
+                <td className="online-lineup-poscell">
+                  <span className="online-lineup-pos is-fixed">投</span>
+                </td>
+                <td colSpan={COLUMN_COUNT - 2} className="online-lineup-person">
+                  {nextStarter ? `${nextStarter.name}（次の先発）` : '次の先発'}
+                  <small>
+                    投手は9番で打ちます。先発の順は「投手起用」で決めます。
+                  </small>
+                </td>
+              </tr>
+            </tbody>
+            <tbody
+              aria-label="控え野手"
+              className={`online-lineup-bench ${drag?.kind === 'row' ? 'is-target' : ''}`}
+            >
+              <tr className="online-lineup-bench-head">
+                <th colSpan={COLUMN_COUNT}>
+                  控え野手 {bench.length}人
+                  <small>
+                    {focusPosition
+                      ? '押すと交代します。適性の列はこの守備位置での値です。'
+                      : '控えは試合に出ないと伸びにくくなります（出場の多い選手は約2倍伸びる）。'}
+                  </small>
+                </th>
+              </tr>
+              {benchRows.map((group) => (
+                <React.Fragment key={group.id}>
+                  <tr className="online-lineup-group">
+                    <th colSpan={COLUMN_COUNT}>
+                      {group.label}
+                      {group.id !== 'candidates' && (
+                        <small>{group.players.length}人</small>
+                      )}
+                    </th>
+                  </tr>
+                  {group.players.map((player) => {
+                    const fitnessPosition = focusPosition || player.position;
+                    const fitness = positionFitness(player, fitnessPosition);
+                    const selected = selectedBench?.id === player.id;
+                    return (
+                      <tr
+                        key={player.id}
+                        className={[
+                          'online-lineup-row',
+                          selected ? 'is-selected' : '',
+                          focusPosition && fitness < LOW_FITNESS
+                            ? 'is-unfit'
+                            : '',
+                          drag?.kind === 'row' &&
+                          dropAt?.kind === 'bench' &&
+                          dropAt.playerId === player.id
+                            ? 'is-drop is-drop-bench'
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        draggable={!busy}
+                        onDragStart={startDrag({
+                          kind: 'bench',
+                          playerId: player.id,
+                        })}
+                        onDragEnd={endDrag}
+                        onDragOver={over({
+                          kind: 'bench',
+                          playerId: player.id,
+                        })}
+                        onDragLeave={() => setDropAt(null)}
+                        onDrop={dropOn({ kind: 'bench', playerId: player.id })}
+                        onClick={() => clickBench(player.id)}
+                        data-bench={player.id}
+                      >
+                        <td className="online-lineup-slot">
+                          <button
+                            type="button"
+                            aria-pressed={selected}
+                            aria-label={
+                              selectedRow !== null
+                                ? `${player.name}と交代する`
+                                : `${player.name}を選ぶ`
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clickBench(player.id);
+                            }}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="online-lineup-grip"
+                            >
+                              ⠿
+                            </span>
+                            {selectedRow !== null ? '交代' : ''}
+                          </button>
+                        </td>
+                        <td
+                          className="online-lineup-poscell"
+                          title="本職と、ほかに守れる位置（適性60%以上、高い順）"
                         >
-                          {POS[entry.position] || '?'}
-                        </button>
-                      </td>
-                      {player ? (
+                          <span className="online-lineup-playable">
+                            <span className="online-lineup-pos is-bench">
+                              {POS[player.position] || '?'}
+                            </span>
+                            {playablePositions(player)
+                              .filter((e) => e.position !== player.position)
+                              .slice(0, 2)
+                              .map((e) => (
+                                <span key={e.position}>{POS[e.position]}</span>
+                              ))}
+                          </span>
+                        </td>
                         <PlayerCells
                           player={player}
-                          fitness={positionFitness(player, entry.position)}
-                          fitnessPosition={entry.position}
+                          fitness={fitness}
+                          fitnessPosition={fitnessPosition}
                         />
-                      ) : (
-                        <td colSpan={COLUMN_COUNT - 2} className="online-lineup-missing">
-                          名簿に居ない選手です。控えと交代してください
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-                <tr className="online-lineup-row is-pitcher">
-                  <td className="online-lineup-slot">
-                    <span>9</span>
-                  </td>
-                  <td className="online-lineup-poscell">
-                    <span className="online-lineup-pos is-fixed">投</span>
-                  </td>
-                  <td colSpan={COLUMN_COUNT - 2} className="online-lineup-person">
-                    {nextStarter ? `${nextStarter.name}（次の先発）` : '次の先発'}
-                    <small>投手は9番で打ちます。先発の順は「投手起用」で決めます。</small>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+              {!bench.length && (
+                <tr>
+                  <td colSpan={COLUMN_COUNT} className="online-muted">
+                    控えの野手が居ません。
                   </td>
                 </tr>
-              </tbody>
-              <tbody
-                aria-label="控え野手"
-                className={`online-lineup-bench ${drag?.kind === 'row' ? 'is-target' : ''}`}
-              >
-                <tr className="online-lineup-bench-head">
-                  <th colSpan={COLUMN_COUNT}>
-                    控え野手 {bench.length}人
-                    <small>
-                      {focusPosition
-                        ? '押すと交代します。適性の列はこの守備位置での値です。'
-                        : '控えは試合に出ないと伸びにくくなります（出場の多い選手は約2倍伸びる）。'}
-                    </small>
-                  </th>
-                </tr>
-                {benchRows.map((group) => (
-                  <React.Fragment key={group.id}>
-                    <tr className="online-lineup-group">
-                      <th colSpan={COLUMN_COUNT}>
-                        {group.label}
-                        {group.id !== 'candidates' && <small>{group.players.length}人</small>}
-                      </th>
-                    </tr>
-                    {group.players.map((player) => {
-                      const fitnessPosition = focusPosition || player.position;
-                      const fitness = positionFitness(player, fitnessPosition);
-                      const selected = selectedBench?.id === player.id;
-                      return (
-                        <tr
-                          key={player.id}
-                          className={[
-                            'online-lineup-row',
-                            selected ? 'is-selected' : '',
-                            focusPosition && fitness < LOW_FITNESS ? 'is-unfit' : '',
-                            drag?.kind === 'row' && dropAt?.kind === 'bench' && dropAt.playerId === player.id
-                              ? 'is-drop is-drop-bench'
-                              : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          draggable={!busy}
-                          onDragStart={startDrag({ kind: 'bench', playerId: player.id })}
-                          onDragEnd={endDrag}
-                          onDragOver={over({ kind: 'bench', playerId: player.id })}
-                          onDragLeave={() => setDropAt(null)}
-                          onDrop={dropOn({ kind: 'bench', playerId: player.id })}
-                          onClick={() => clickBench(player.id)}
-                          data-bench={player.id}
-                        >
-                          <td className="online-lineup-slot">
-                            <button
-                              type="button"
-                              aria-pressed={selected}
-                              aria-label={
-                                selectedRow !== null
-                                  ? `${player.name}と交代する`
-                                  : `${player.name}を選ぶ`
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                clickBench(player.id);
-                              }}
-                            >
-                              <span aria-hidden="true" className="online-lineup-grip">⠿</span>
-                              {selectedRow !== null ? '交代' : ''}
-                            </button>
-                          </td>
-                          <td
-                            className="online-lineup-poscell"
-                            title="本職と、ほかに守れる位置（適性60%以上、高い順）"
-                          >
-                            <span className="online-lineup-playable">
-                              <span className="online-lineup-pos is-bench">
-                                {POS[player.position] || '?'}
-                              </span>
-                              {playablePositions(player)
-                                .filter((e) => e.position !== player.position)
-                                .slice(0, 2)
-                                .map((e) => (
-                                  <span key={e.position}>{POS[e.position]}</span>
-                                ))}
-                            </span>
-                          </td>
-                          <PlayerCells
-                            player={player}
-                            fitness={fitness}
-                            fitnessPosition={fitnessPosition}
-                          />
-                        </tr>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
-                {!bench.length && (
-                  <tr>
-                    <td colSpan={COLUMN_COUNT} className="online-muted">
-                      控えの野手が居ません。
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </Page>
-    </div>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </BoardPage>
   );
 }
