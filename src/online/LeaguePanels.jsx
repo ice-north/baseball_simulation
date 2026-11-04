@@ -11,7 +11,12 @@ import {
   teamLabel,
 } from './gameText.js';
 import { api, POS } from './api.js';
-import { formatGameDate, PHASE_LABELS, sameEditState } from './shared.js';
+import {
+  formatGameDate,
+  PHASE_LABELS,
+  sameEditState,
+  ROSTER_LIMIT,
+} from './shared.js';
 import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
@@ -677,7 +682,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
           plan={plan}
           candidates={phase.candidates}
           roster={view.roster}
-          maxCount={Math.max(0, 24 - view.roster.length)}
+          maxCount={Math.max(0, ROSTER_LIMIT - view.roster.length)}
           busy={busy}
           onChange={(next) => {
             setDirty(true);

@@ -390,9 +390,45 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           packs: rosterPacksFor(member.packSeed).map(packView),
         }
       : null,
+    // ⚠ **自分が当事者のものだけ**渡す。他人同士の交渉が見えると、
+    //    誰が誰を欲しがっているかが筒抜けになる
+    trades: (l.trades || [])
+      .filter((t) => t.from === userId || t.to === userId)
+      .map((t) => ({
+        id: t.id,
+        mine: t.from === userId,
+        fromTeam: t.fromTeam,
+        toTeam: t.toTeam,
+        // ⚠ 名前と守備位置まで渡す。idだけだと、相手の選手が画面で引けない
+        offer: tradePlayers(l, t.fromTeam, t.offer),
+        want: tradePlayers(l, t.toTeam, t.want),
+        myTurn: (t.turn === 'to' ? t.to : t.from) === userId,
+        countered: !!t.countered,
+        canCounter: t.turn === 'to' && !t.countered && t.to === userId,
+        updatedAt: t.updatedAt,
+      })),
     history: l.history,
     notices: l.notices.slice(0, 4),
   };
+}
+
+/** トレードに出ている選手を、画面に出すぶんだけ */
+function tradePlayers(league, teamName, ids) {
+  const players = league.game.teams[teamName]?.players || [];
+  return (ids || []).map((id) => {
+    const player = players.find((p) => p.id === id);
+    // ⚠ 居ない選手（別のトレードで移った）も**消さずに出す**。黙って減ると
+    //    「出したはずの選手が提案から消えた」ように見える
+    return player
+      ? {
+          id,
+          name: player.name,
+          age: player.age,
+          position: player.position,
+          gone: false,
+        }
+      : { id, name: '（移籍済み）', position: null, gone: true };
+  });
 }
 
 // 参加者向けに、確定済み名簿・今季成績・能力だけを公開する。

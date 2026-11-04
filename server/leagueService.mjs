@@ -373,6 +373,20 @@ export class LeagueService {
             teamName: command.payload?.teamName,
             playerName: command.payload?.playerName,
           });
+        } else if (command.type === 'tradeOffer') {
+          // ⚠ **選手が動くのでエンジンの中で行う**。`TEAMS_DATA` を触るものは
+          //    必ず `loadLeagueWorld` → 処理 → `captureLeagueWorld` の順で囲む
+          await this.engine((e) => {
+            e.loadLeagueWorld(l);
+            e.openTrade(l, userId, command.payload || {}, now);
+            l.game = e.captureLeagueWorld();
+          });
+        } else if (command.type === 'tradeRespond') {
+          await this.engine((e) => {
+            e.loadLeagueWorld(l);
+            e.respondTrade(l, userId, command.payload || {}, now);
+            l.game = e.captureLeagueWorld();
+          });
         } else if (command.type === 'campRound') {
           // ⚠ **キャンプは1クールずつ自分で実行する**（一人用と同じ）。
           //    伸びた能力を見てから次のクールを決められるようにするため、

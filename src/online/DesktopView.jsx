@@ -12,6 +12,7 @@ import LineupBoard from './LineupBoard.jsx';
 import PitchingBoard from './PitchingBoard.jsx';
 import { useDraftMemoryStore } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
+import TradeScreen from './TradeScreen.jsx';
 import { dateTime, STATUS } from './api.js';
 import { formatGameDate } from './shared.js';
 import { teamLabel } from './gameText.js';
@@ -72,7 +73,7 @@ const NAV = [
     label: '手続き',
     items: [
       ['decisions', '現在の手続き'],
-      ['transfer', '移籍・解雇'],
+      ['transfer', 'トレード'],
     ],
   },
 ];
@@ -94,7 +95,7 @@ const TITLES = {
   rotation: '投手起用',
   tactics: '方針・采配',
   decisions: '現在の手続き',
-  transfer: '移籍・解雇',
+  transfer: 'トレード',
   admin: 'リーグ管理',
 };
 
@@ -448,28 +449,7 @@ export default function DesktopView(props) {
             </section>
           </Page>
         ))}
-      {current === 'transfer' && (
-        <Page title="移籍・解雇">
-          <section className="online-card">
-            {/* ⚠ **まだ作っていない**。できないことを、できるように見せない */}
-            <p>この画面はまだありません。いまできるのは次の2つです。</p>
-            <ul>
-              <li>
-                <strong>解雇</strong> — 土曜の「契約更改」で、退団させる選手を選べます
-              </li>
-              <li>
-                <strong>選手の獲得</strong> — 土曜の「トライアウト」で、希望リストを出せます
-              </li>
-            </ul>
-            <p className="online-muted">
-              球団間のトレードとオークションは、これから作るところです。
-            </p>
-            <div className="online-actions">
-              <button onClick={() => setTab('decisions')}>現在の手続きへ</button>
-            </div>
-          </section>
-        </Page>
-      )}
+      {current === 'transfer' && <TradeScreen {...props} />}
       {current === 'admin' && (
         <Page title="リーグ管理">
           <Admin {...props} />

@@ -86,6 +86,12 @@ import {
   setStaffNameHistory,
 } from '../src/corporate/staffData.js';
 import { addToReleasedPool } from '../src/state/pools.js';
+import {
+  assertTradeAllowed,
+  canRespond,
+  canCounter,
+  MAX_OPEN_TRADES,
+} from '../src/online/trades.js';
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
 import { createRecorder, freezeComparison } from './recordedStats.mjs';
@@ -102,6 +108,7 @@ import {
   CAMP_DIRECTIONS,
   CAMP_PHASES,
   CAMP_ROUNDS,
+  ROSTER_LIMIT,
 } from '../src/online/shared.js';
 import {
   generatePyramidTeams,
@@ -275,6 +282,150 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
   }
 }
 
+// ============================================================
+// トレード
+// ============================================================
+
+/** その人の球団。⚠ 参加者でなければ止める（CPU球団は交渉しない） */
+function memberTeam(league, userId) {
+  const member = (league.members || []).find((m) => m.userId === userId);
+  requireOnline(member, '参加者ではありません', 403);
+  const team = TEAMS_DATA[member.teamName];
+  requireOnline(team, '球団が見つかりません', 409);
+  return { member, team };
+}
+
+/**
+ * トレードを提案する。
+ *
+ * ⚠ **相手は参加者の球団だけ**。CPU球団は返事をしないので、出せても
+ *    永久に待つことになる。
+ * ⚠ 抱えられる提案の数に上限を置く（`MAX_OPEN_TRADES`）。無制限だと
+ *    相手の画面を埋められる。
+ */
+export function openTrade(league, userId, { to, offer, want }, now) {
+  league.trades = league.trades || [];
+  const mine = memberTeam(league, userId);
+  const partner = (league.members || []).find((m) => m.teamName === to);
+  requireOnline(partner, '相手は参加者の球団だけです', 409);
+  requireOnline(partner.userId !== userId, '自分の球団とはトレードできません');
+  const theirs = TEAMS_DATA[partner.teamName];
+  requireOnline(theirs, '相手の球団が見つかりません', 409);
+  requireOnline(
+    league.trades.filter((t) => t.from === userId).length < MAX_OPEN_TRADES,
+    `出せる提案は同時に${MAX_OPEN_TRADES}件までです`,
+    409,
+  );
+  const offerIds = (offer || []).map(Number);
+  const wantIds = (want || []).map(Number);
+  assertTradeAllowed(mine.team, theirs, offerIds, wantIds);
+  const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
+  league.trades.push({
+    id,
+    from: userId,
+    fromTeam: mine.member.teamName,
+    to: partner.userId,
+    toTeam: partner.teamName,
+    offer: offerIds,
+    want: wantIds,
+    // ⚠ 手番を持っている側だけが返事をする。両方が同時に受けられると二重に成立する
+    turn: 'to',
+    countered: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return id;
+}
+
+/**
+ * トレードに返事をする。`action` は `accept` / `counter` / `reject`。
+ *
+ * ⚠ **成立のときに中身をもう一度確かめる**。提案から返事までの間に、選手が
+ *    別のトレードで移っていることがある。提案のときに見ただけだと、居ない
+ *    選手を動かして名簿が壊れる。
+ * ⚠ 逆提案は**最初の返事のときだけ**（`canCounter`）。投げ返しが続くと終わらない。
+ * ⚠ 断るのは**どちらの側からでも**できる（取り下げも兼ねる）。
+ */
+export function respondTrade(league, userId, { tradeId, action, offer, want }, now) {
+  league.trades = league.trades || [];
+  const trade = league.trades.find((t) => t.id === tradeId);
+  requireOnline(trade, 'そのトレードはもうありません', 409);
+  requireOnline(
+    trade.from === userId || trade.to === userId,
+    'このトレードの当事者ではありません',
+    403,
+  );
+  const drop = () => {
+    league.trades = league.trades.filter((t) => t.id !== tradeId);
+  };
+  if (action === 'reject') {
+    drop();
+    return { status: 'rejected' };
+  }
+  requireOnline(canRespond(trade, userId), 'いまは相手の返事待ちです', 409);
+  const fromTeam = TEAMS_DATA[trade.fromTeam];
+  const toTeam = TEAMS_DATA[trade.toTeam];
+  requireOnline(fromTeam && toTeam, '球団が見つかりません', 409);
+
+  if (action === 'counter') {
+    requireOnline(
+      canCounter(trade, userId),
+      '逆提案は1回までです。受けるか断るかを選んでください',
+      409,
+    );
+    // ⚠ 逆提案も**提案した側から見た形**で持つ（`offer` は `fromTeam` が出す）。
+    //    向きを変えると、成立のときにどちらが誰を出すのか分からなくなる
+    const offerIds = (offer || []).map(Number);
+    const wantIds = (want || []).map(Number);
+    assertTradeAllowed(fromTeam, toTeam, offerIds, wantIds);
+    trade.offer = offerIds;
+    trade.want = wantIds;
+    trade.countered = true;
+    trade.turn = 'from';
+    trade.updatedAt = now;
+    return { status: 'countered' };
+  }
+
+  requireOnline(action === 'accept', 'トレードの操作が不正です');
+  const after = assertTradeAllowed(fromTeam, toTeam, trade.offer, trade.want);
+  fromTeam.players = after.from;
+  toTeam.players = after.to;
+  // ⚠ 移った選手の経歴に残す。あとから「どの年にどこへ行ったか」を辿れるように
+  for (const [players, label] of [
+    [after.moving, trade.toTeam],
+    [after.coming, trade.fromTeam],
+  ])
+    for (const player of players)
+      player.careerHistory = [
+        ...(player.careerHistory || []),
+        { type: 'trade', year: league.season.year, label },
+      ];
+  // ⚠ **打順と投手起用を組み直す**。出した選手が打順に残ると試合が組めない
+  refreshTeamPlan(league, trade.fromTeam);
+  refreshTeamPlan(league, trade.toTeam);
+  league.notices.unshift({
+    type: 'trade',
+    year: league.season.year,
+    teams: [trade.fromTeam, trade.toTeam],
+    picks: [
+      ...after.moving.map((p) => ({
+        round: '移籍',
+        name: p.name,
+        playerId: p.id,
+        team: trade.toTeam,
+      })),
+      ...after.coming.map((p) => ({
+        round: '移籍',
+        name: p.name,
+        playerId: p.id,
+        team: trade.fromTeam,
+      })),
+    ],
+  });
+  drop();
+  return { status: 'accepted' };
+}
+
 export function openPhase(league, kind, now) {
   // ⚠ **締め切りを持たせること**。待ち続ける設計だと、1人が決めないだけで
   //    全員の週が止まる。締め切りが曜日合わせも兼ねている
@@ -354,6 +505,9 @@ export function createLeague({
     })),
     history: [],
     notices: [],
+    // ⚠ トレードの置き場。無いと `league.trades.push` で落ちる
+    trades: [],
+    tradeSeq: 0,
   };
   const season = createSeasonData(1);
   season.settings = {
@@ -494,7 +648,7 @@ export function defaultPhasePlan(league, teamName) {
         1,
       );
     }
-    return { rankedIds, count: Math.max(0, 24 - team.players.length) };
+    return { rankedIds, count: Math.max(0, ROSTER_LIMIT - team.players.length) };
   });
 }
 
@@ -576,7 +730,7 @@ function validatePhasePlan(league, teamName, plan) {
       requireOnline(
         Number.isInteger(plan.count) &&
           plan.count >= 0 &&
-          plan.count <= Math.max(0, 24 - team.players.length),
+          plan.count <= Math.max(0, ROSTER_LIMIT - team.players.length),
         '獲得人数が不正です',
       );
       requireOnline(

@@ -6,7 +6,7 @@
 //    1 = 固定4球団・2人・1日7枠）。
 // ⚠ 上げてもリーグは**作り直せない**（`create` は既存リーグがあると拒む）。
 //    `docs/online/PRODUCTION_SETUP.md` の作り直し手順で制御行を空にすること。
-export const ONLINE_SCHEMA = 5;
+export const ONLINE_SCHEMA = 6;
 export const ONLINE_ENGINE_VERSION = 'online-1';
 // 1ターン＝1時間。毎正時に1つ進む。24ターン×7日＝168ターンで1週間。
 // ⚠ **夜間も止めない**。月〜金の120ターンが試合、土曜がストーブリーグ、日曜がキャンプ。
@@ -272,6 +272,13 @@ export const CAMP_SUB_MENUS = [
   'newpitch',
   'spin_analysis',
 ];
+
+/**
+ * 1球団が抱えられる選手の上限。
+ * ⚠ **1か所に置くこと**。トライアウトの獲得人数・画面の上限・トレードの検査が
+ *    別々に 24 と書いていると、変えたときに片方だけ残る。
+ */
+export const ROSTER_LIMIT = 24;
 
 /** キャンプのクール数。一人用と同じ4回 */
 export const CAMP_ROUNDS = 4;

@@ -248,6 +248,58 @@
 .online-standings .online-move {
   white-space: nowrap;
 }
+/* --- トレード ---------------------------------------------------------- */
+.online-trade-card + .online-trade-card {
+  margin-top: 12px;
+}
+.online-trade-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.online-trade-summary b {
+  margin-right: 4px;
+  color: var(--accent);
+}
+.online-trade-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin: 10px 0;
+}
+.online-trade-column h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--accent);
+}
+.online-trade-column h3 small {
+  font-weight: 400;
+  color: #9fb0c4;
+}
+/* ⚠ 24人を並べると縦に伸びる。**中で送れるようにする**（画面ごと流さない） */
+.online-trade-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+  border-radius: 8px;
+  background: #ffffff0c;
+}
+.online-trade-pick {
+  margin: 0;
+  padding: 2px 8px;
+  gap: 6px;
+}
+.online-trade-pick small {
+  color: #9fb0c4;
+  font-size: 11px;
+}
+
 /* --- キャンプ ---------------------------------------------------------- */
 .online-camp-head {
   display: flex;
