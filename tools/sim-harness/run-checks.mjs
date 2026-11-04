@@ -50,6 +50,7 @@ const CHECKS = [
   { name: 'online-edit-conflict-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-label-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stats-view-check', group: 'quick', online: true, slow: 1 },
+  { name: 'online-lineup-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-migration-check', group: 'check', online: true, slow: 21 },
   { name: 'online-join-check', group: 'check', online: true, slow: 9 },
   { name: 'online-deadline-check', group: 'check', online: true, slow: 25 },
@@ -75,6 +76,7 @@ const SEPARATE = [
   'online-ui-check',
   'online-auth-ui-check',
   'online-edit-ui-check',
+  'online-lineup-board-ui-check', // check:online:lineup-ui（dist を開く。サーバー不要）
   'online-replay-ui-check',
   'online-mobile-gameplay-ui-check',
   'online-label-ui-check',

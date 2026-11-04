@@ -89,6 +89,11 @@ jobs:
       - name: Single-player UI
         run: npm run check:ui
 
+      # ⚠ サーバーを立てずに dist を開く（check:ui が作る）。下の PC/スマホの通し検査より
+      #    先に置く（あちらが途中で止まっても、この検査の結果は出る）
+      - name: Online PC lineup board UI
+        run: npm run check:online:lineup-ui
+
       - name: Online PC and mobile UI
         run: |
           ONLINE_DISABLE_TIMER=1 ONLINE_DATA_FILE="$RUNNER_TEMP/online-ui.json.gz" npm run dev:online > "$RUNNER_TEMP/online-api.log" 2>&1 &

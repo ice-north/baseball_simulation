@@ -2851,3 +2851,254 @@
   border: 0;
   font-weight: 700;
 }
+
+/* --- スタメン設定（PC。`LineupBoard.jsx`） --------------------------------
+   スタメン9行と控え野手を**1枚の表**に並べる（列がそろうことが目的）。
+   ⚠ 行は40pxにそろえる（選手成績の表と同じ）。行の中のボタンで行を高くしない。 */
+.online-lineup-board {
+  padding: 12px 16px 16px;
+}
+.online-lineup-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.online-lineup-next-label {
+  color: #cbd5e1;
+}
+.online-lineup-next-game {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #ffffff0c;
+}
+.online-lineup-next-game small {
+  color: #94a3b8;
+}
+.online-lineup-next-game em {
+  font-style: normal;
+  font-weight: 700;
+  margin-left: 4px;
+}
+.online-lineup-next-game em.is-left {
+  color: #fca5a5;
+}
+.online-lineup-next-game em.is-right {
+  color: #93c5fd;
+}
+.online-lineup-help {
+  margin: 0 0 8px !important;
+  min-height: 20px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-lineup-scroll {
+  overflow-x: auto;
+}
+.online-desktop .online-lineup-table {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.online-desktop .online-lineup-table th,
+.online-desktop .online-lineup-table td {
+  height: 40px;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+.online-desktop .online-lineup-table thead th {
+  height: 32px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+.online-lineup-table .is-sep {
+  border-left: 1px solid #ffffff1f;
+}
+.online-desktop .online-lineup-table .online-lineup-person {
+  text-align: left;
+  min-width: 132px;
+}
+.online-lineup-person .online-player-name {
+  font-weight: 600;
+  margin-right: 4px;
+}
+.online-lineup-person small {
+  margin-left: 10px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.online-lineup-table .is-stat {
+  text-align: right;
+}
+.online-desktop .online-lineup-table th.online-lineup-slot,
+.online-desktop .online-lineup-table td.online-lineup-slot {
+  width: 52px;
+  text-align: left;
+}
+.online-desktop .online-lineup-slot button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 44px;
+  min-height: 0;
+  height: 28px;
+  padding: 0 6px;
+  font-weight: 700;
+  border-color: transparent;
+  background: transparent;
+  cursor: grab;
+}
+.online-lineup-grip {
+  color: #64748b;
+  font-weight: 400;
+}
+.online-desktop .online-lineup-pos {
+  min-width: 0;
+  min-height: 0;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  font-weight: 700;
+  color: #e0f2fe;
+  background: #0e7490;
+  border: 1px solid #22d3ee66;
+  border-radius: 6px;
+  cursor: grab;
+}
+.online-desktop .online-lineup-pos.is-selected,
+.online-desktop .online-lineup-pos:hover:enabled {
+  background: #0891b2;
+  border-color: var(--accent);
+}
+.online-lineup-pos.is-fixed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #cbd5e1;
+  background: #ffffff14;
+  border-color: transparent;
+  cursor: default;
+}
+.online-lineup-row {
+  cursor: pointer;
+}
+.online-lineup-row:hover {
+  background: #ffffff0d;
+}
+.online-lineup-row.is-selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.online-lineup-row.is-fit {
+  box-shadow: inset 3px 0 0 #4ade80;
+}
+.online-lineup-row.is-unfit {
+  opacity: 0.55;
+}
+.online-lineup-row.is-dragging {
+  opacity: 0.4;
+}
+.online-lineup-row.is-drop {
+  background: #22d3ee26;
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+.online-lineup-row.is-pitcher {
+  cursor: default;
+  color: #cbd5e1;
+}
+.online-lineup-row.is-pitcher:hover {
+  background: transparent;
+}
+.online-lineup-missing {
+  text-align: left !important;
+  color: #fca5a5;
+}
+.online-lineup-bench-head th,
+.online-lineup-group th {
+  text-align: left !important;
+}
+.online-desktop .online-lineup-bench-head th {
+  height: 44px;
+  padding-top: 14px;
+  font-size: 14px;
+  color: #f1f5f9;
+  border-bottom: 1px solid #ffffff33;
+}
+.online-lineup-bench-head small,
+.online-lineup-group small {
+  margin-left: 10px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+.online-desktop .online-lineup-group th {
+  height: 28px;
+  font-size: 12px;
+  color: #a5f3fc;
+  background: #ffffff08;
+}
+.online-lineup-bench.is-target .online-lineup-row:not(.is-drop) {
+  background: #ffffff06;
+}
+.online-lineup-playable {
+  display: inline-flex;
+  gap: 3px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.online-lineup-playable .is-main {
+  color: #f1f5f9;
+  font-weight: 700;
+}
+.online-lineup-fatigue.is-tired {
+  color: #fb923c;
+}
+.online-lineup-fatigue.is-rest {
+  color: #f87171;
+  font-weight: 700;
+}
+.online-lineup-fitness small {
+  font-size: 10px;
+  color: #94a3b8;
+}
+.online-lineup-fitness.is-good {
+  color: #86efac;
+}
+.online-lineup-fitness.is-low {
+  color: #f87171;
+  font-weight: 700;
+}
+.online-lineup-playable {
+  align-items: center;
+}
+.online-lineup-pos.is-bench {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  margin-right: 2px;
+  font-weight: 700;
+  color: #e0f2fe;
+  background: transparent;
+  border: 1px solid #22d3ee66;
+  border-radius: 6px;
+}
+.online-desktop .online-lineup-slot button[aria-pressed='true'],
+.online-desktop .online-lineup-slot button:hover:enabled {
+  background: transparent;
+  color: var(--accent);
+}
+/* 守備のバッジは左にそろえる（控えは本職のバッジの右に、ほかに守れる位置が続く） */
+.online-desktop .online-lineup-table .online-lineup-poscell {
+  text-align: left;
+  width: 96px;
+}

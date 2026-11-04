@@ -11,7 +11,12 @@ import { TEAMS_DATA } from '../../../src/teams-data.js';
 import { rosterGroup } from '../../../src/utils/constants.js';
 import { captureWorld } from '../../../server/worldSnapshot.mjs';
 import { LeagueService } from '../../../server/leagueService.mjs';
-import { openPhase, loadLeagueWorld } from '../../../server/leagueEngine.mjs';
+import {
+  openPhase,
+  loadLeagueWorld,
+  resolvePhaseNow,
+  advanceLeagueDay,
+} from '../../../server/leagueEngine.mjs';
 
 export const AUTH_KEY = 'baseball-online-auth-v1';
 
@@ -63,6 +68,47 @@ export async function tryoutService() {
     }
     openPhase(l, 'tryout', '2026-11-10T15:00:00.000Z');
     l.game = captureWorld();
+    return { value: null };
+  });
+  return { service, store, userId: 'admin', sessionId };
+}
+
+/**
+ * シーズン中のリーグ（参加者は管理者1人）。セットを選び、キャンプを締め切って開幕し、
+ * `days` 日進めてある（今季成績・疲労・調子が入った名簿で画面を見るため）。
+ */
+export async function seasonService({ days = 6 } = {}) {
+  const dir = await mkdtemp(join(tmpdir(), 'online-season-ui-'));
+  const store = createTestStore(join(dir, 'league.json'));
+  const clock = () => '2026-10-26T15:00:00.000Z';
+  const service = new LeagueService(store, {
+    members: [{ userId: 'admin', label: '管理者' }],
+    adminId: 'admin',
+    clock,
+  });
+  const sessionId = (await service.login('admin')).sessionId;
+  await service.command('admin', sessionId, {
+    requestId: 'create-0',
+    revision: 0,
+    type: 'create',
+  });
+  const created = (await store.read()).league;
+  await service.command('admin', sessionId, {
+    requestId: 'packpick-0',
+    revision: created.revision,
+    type: 'submit',
+    payload: {
+      phaseId: created.phase.id,
+      plan: { packId: created.packs[0].id },
+      ready: true,
+      baseSubmission: null,
+    },
+  });
+  await store.transaction((bundle) => {
+    const l = bundle.league;
+    for (let i = 0; i < 5 && l.phase; i++) resolvePhaseNow(l, clock());
+    for (let d = 0; d < days; d++) advanceLeagueDay(l, `ui-day-${d}`, clock());
+    l.revision++;
     return { value: null };
   });
   return { service, store, userId: 'admin', sessionId };

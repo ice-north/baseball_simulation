@@ -114,7 +114,17 @@ export function rebaseLineupSave(plan, base, latest, ownKeys) {
   return { ...payload, baseLineup: clone(from) };
 }
 
-/** スタメン設定・投手起用（移植した画面）が受け持つ項目 */
+/** スタメン設定・投手起用（移植した画面）が受け持つ項目。スマホの全画面編成が使う */
 export const LINEUP_EDITOR_KEYS = ['battingOrder', 'starters', 'pitcherRoles'];
+/**
+ * PC版のスタメン設定（`LineupBoard.jsx`）が受け持つ項目。
+ * ⚠ PCでは打順と投手起用を**別のページで別に保存する**。投手起用（移植した画面）は
+ *    打順も持っているが、PCでは `ROTATION_EDITOR_KEYS` だけを送る。両方が打順を
+ *    受け持つと、片方を保存しただけでもう片方の未保存の編集が「編成が更新されて
+ *    います」で保存できなくなる（自分の項目が他で変わった扱いになる）。
+ */
+export const LINEUP_BOARD_KEYS = ['battingOrder'];
+/** PC版の投手起用（移植した画面）が受け持つ項目 */
+export const ROTATION_EDITOR_KEYS = ['starters', 'pitcherRoles'];
 /** 方針・采配（PC）が受け持つ項目 */
 export const TACTICS_EDITOR_KEYS = ['strategy', 'tactics'];
