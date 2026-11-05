@@ -49,7 +49,7 @@ try {
     await waitIdle(page);
   };
   // ⚠ PCの左メニューは「ホーム」「選手成績」「試合結果」「スタメン設定」「投手起用」
-  //    「守備分析」「方針・采配」「現在の手続き」「リーグ管理」。スマホのホームの
+  //    「方針・采配」「現在の手続き」「リーグ管理」（守備分析はスタメン設定の表に入れた）。スマホのホームの
   //    ボタンは「試合」「打順」「手続き」のまま
   async function login(page, player) {
     await page.goto(`${base}/online`);
@@ -271,27 +271,30 @@ try {
   await p
     .getByRole('dialog', { name: '進行時刻', exact: true })
     .waitFor({ state: 'hidden' });
-  // --- PCの編成（一人用の画面をそのまま中に入れたもの） -----------------------
-  // 先発の登板順のチップ（ドラッグで並べ替え。◀▶ はキーボード用に残してある）
-  const starterOrder = async (page) =>
-    (
-      await page
-        .locator('[data-starter-order]')
-        .getByRole('button', { name: /の登板順を下げる$/ })
-        .evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label')))
-    ).map((label) => label.replace('の登板順を下げる', ''));
-  const lowerStarter = (page, name) =>
+  // --- PCの投手起用（`PitchingBoard.jsx`。先発ローテ→救援の1枚の表） -----------
+  // 先発の登板順。1つ下げる＝その行を選んで次の行を押す（先発どうしは登板順の入れ替え）
+  const starterOrder = (page) =>
     page
-      .getByRole('button', { name: `${name}の登板順を下げる`, exact: true })
+      .locator('tbody[aria-label="先発ローテーション"] tr[data-starter] .online-player-name')
+      .allInnerTexts();
+  const lowerStarter = async (page, name) => {
+    const index = (await starterOrder(page)).indexOf(name);
+    assert.ok(index >= 0, `${name}が先発に居ない`);
+    await page.getByRole('button', { name: `先発${index + 1}番手を選ぶ`, exact: true }).click();
+    await page
+      .getByRole('button', { name: `先発${index + 2}番手と入れ替える`, exact: true })
       .click();
+  };
+  const pitchingInert = (page) =>
+    page.locator('.online-lineup-board[inert]:has(.online-pitch-table)').count();
   await click(p, '投手起用');
-  await p.locator('[data-starter-order]').first().waitFor();
+  await p.locator('tr[data-starter]').first().waitFor();
   const savedOrder = await starterOrder(p);
   assert.ok(savedOrder.length >= 2, '先発の登板順が出ていない');
   // 元に戻す／やり直す（ボタンと Ctrl+Z / Ctrl+Shift+Z）
   await lowerStarter(p, savedOrder[0]);
   const movedOrder = await starterOrder(p);
-  assert.equal(movedOrder[1], savedOrder[0], '▶で登板順が1つ下がらない');
+  assert.equal(movedOrder[1], savedOrder[0], '登板順が1つ下がらない');
   await p
     .locator('.online-page-nav')
     .getByLabel('保存していない変更')
@@ -332,21 +335,17 @@ try {
   });
   await p.getByRole('button', { name: '保存', exact: true }).click();
   await withDeadline(savingStarted, '編成保存の開始');
-  assert.equal(
-    await p.locator('.online-sp[inert]').count(),
-    1,
-    '保存の応答待ち中は編成を変更できない',
-  );
+  assert.equal(await pitchingInert(p), 1, '保存の応答待ち中は編成を変更できない');
   assert.ok(await p.getByRole('button', { name: '元に戻す', exact: true }).isDisabled());
   releaseSave();
   await waitIdle(p);
   await p.unroute('**/api/online?*');
   await p.getByText('保存しました', { exact: true }).waitFor();
-  assert.equal(await p.locator('.online-sp[inert]').count(), 0);
+  assert.equal(await pitchingInert(p), 0);
   // 数値の選手IDのまま保存できたことを、読み直した画面で確かめる
   await p.reload();
   await click(p, '投手起用');
-  await p.locator('[data-starter-order]').first().waitFor();
+  await p.locator('tr[data-starter]').first().waitFor();
   assert.deepEqual(await starterOrder(p), movedOrder, '保存した登板順が残らない');
   await p.screenshot({
     path: '/tmp/baseball-online-desktop.png',
@@ -368,7 +367,7 @@ try {
   await click(lineupTab, '保存');
   await click(p, '更新');
   await click(p, '保存');
-  assert.equal(await p.locator('.online-sp[inert]').count(), 0);
+  assert.equal(await pitchingInert(p), 0);
   await p.getByText('保存しました', { exact: true }).waitFor();
   await click(p, '方針・采配');
   assert.equal(
@@ -404,7 +403,7 @@ try {
   await m.getByRole('button', { name: '2番を上げる', exact: true }).click();
   await click(m, '編成を保存');
   assert.equal(
-    await m.locator('.online-sp, .online-page-nav').count(),
+    await m.locator('.online-lineup-board, .online-page-nav').count(),
     0,
     'スマホでPC画面をマウントしない',
   );

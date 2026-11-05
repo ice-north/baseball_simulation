@@ -10,6 +10,7 @@ import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 import { surnameOf } from '../data/playerNames.js';
+import { defenseRange, defenseGrade } from '../utils/defenseRange.js';
 
 // 投球フォームの短縮ラベル（カードの省スペース表示用）
 const throwsLabel = (player) => (player.physical?.throws === 'left' ? '左投' : '右投');
@@ -65,9 +66,6 @@ const HistoryButtons = ({ canUndo, canRedo, undo, redo }) => (
   </>
 );
 
-// 埋め込み時の外枠。⚠ 描画のたびに作り直さないよう外で定義する（作り直すと中が全部作り直しになる）
-const EmbeddedFrame = ({ children }) => <div className="lineup-embedded">{children}</div>;
-
 // ⚠ **オンライン版からも使う**（`src/online/OnlineLineup.jsx`）。
 //    この部品は `team` を**プロップで受け取り、その場で書き換える**作りなので、
 //    `TEAMS_DATA` の球団でなくても動く。オンライン側は view から組み立てた
@@ -82,12 +80,8 @@ const EmbeddedFrame = ({ children }) => <div className="lineup-embedded">{childr
 // ⚠ teamName は名前による照合にも使うので、表示名で上書きしないこと
 // `initialTab`: 開く位置。⚠ オンラインは左メニューから
 // 「スタメン設定/投手起用/守備分析」へ直に入るので外から渡す
-// `embedded`: 見出し（ロスター管理）と画面内のタブを出さない。
-//    ⚠ オンラインのPC版は左メニューに同じ3項目があり、二重になるため
-// `onHistory`: 元に戻す/やり直しの状態を外へ渡す（ボタンを外の見出しに置くとき）。
-//    `{ canUndo, canRedo, dirty, undo, redo }`。渡さないときは見出しの右にボタンを出す
-// `keyboardActive`: Ctrl+Z / Ctrl+Shift+Z / Esc を受けるか。
-//    ⚠ オンラインは別ページへ移っても隠すだけで残すので、隠れている間は false にする
+// ⚠ オンラインのPC版はこの画面を使わない（`src/online/LineupBoard.jsx`・`PitchingBoard.jsx`）。
+//    PCに埋め込むための引数（見出しを出さない・履歴を外へ渡す・キーを止める）は消した
 export const LineupSettingContent = ({
   teamName,
   onBack,
@@ -96,9 +90,6 @@ export const LineupSettingContent = ({
   canSealPitch = true,
   displayName,
   initialTab = 'lineup',
-  embedded = false,
-  onHistory,
-  keyboardActive = true,
 }) => {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -233,7 +224,8 @@ export const LineupSettingContent = ({
   //    「自動設定」「全員おまかせ」「自動: 標準」のような一括操作も1手として戻せる
   // ⚠ 上の初期化（投手枠の自動設定）より後に宣言すること。起点にその結果を含めるため
   const historyRef = useRef({ stack: [], index: -1, base: null });
-  const [historyTick, setHistoryTick] = useState(0);
+  // 履歴が動いたら描き直す（元に戻す・やり直すの押せる・押せないを更新する）
+  const [, setHistoryTick] = useState(0);
   useEffect(() => {
     const h = historyRef.current;
     const snap = snapshotRoster(team);
@@ -261,14 +253,13 @@ export const LineupSettingContent = ({
     defenseDragRef.current = null; // ドラッグの途中で Esc → 離しても入れ替えない
     setDefenseDrag(null);
   };
-  // ⚠ **外からタブが替わったとき・隠れたときも選択中を消す**。埋め込み（オンラインのPC）は
-  //    画面内のタブを出さず、左メニューから `initialTab` で替わる。消さないと、
+  // ⚠ **外からタブが替わったときも選択中を消す**（`initialTab` で替わる）。消さないと、
   //    スタメン設定で選んだ控え選手が、投手起用から戻ったあとの次のクリックで入れ替わる
-  const selectionScope = useRef({ tab, keyboardActive });
+  const selectionScope = useRef(tab);
   useEffect(() => {
     const prev = selectionScope.current;
-    selectionScope.current = { tab, keyboardActive };
-    if (prev.tab === tab && (prev.keyboardActive === keyboardActive || keyboardActive)) return;
+    selectionScope.current = tab;
+    if (prev === tab) return;
     setSelectedDefensePos(null);
     setSwapSource(null);
     setSelectedBenchPlayer(null);
@@ -276,7 +267,7 @@ export const LineupSettingContent = ({
     setTapSelectedPitcherId(null);
     defenseDragRef.current = null;
     setDefenseDrag(null);
-  }, [tab, keyboardActive]);
+  }, [tab]);
   const stepHistory = (delta) => {
     const h = historyRef.current;
     const next = h.index + delta;
@@ -292,17 +283,9 @@ export const LineupSettingContent = ({
   const historyState = historyRef.current;
   const canUndo = historyState.index > 0;
   const canRedo = historyState.index >= 0 && historyState.index < historyState.stack.length - 1;
-  const dirty = historyState.index >= 0 && historyState.stack[historyState.index] !== historyState.base;
   const keyActionsRef = useRef(null);
   keyActionsRef.current = { undo, redo, cancel: clearSelections };
-  // 履歴が動いたときだけ外へ知らせる（毎回の描画で知らせると外側が描き直し続ける）
-  const historyReportRef = useRef(null);
-  historyReportRef.current = { canUndo, canRedo, dirty, undo, redo };
   useEffect(() => {
-    onHistory?.(historyReportRef.current);
-  }, [historyTick, onHistory]);
-  useEffect(() => {
-    if (!keyboardActive) return undefined;
     const onKey = (e) => {
       const t = e.target;
       // ⚠ 文字の入力欄では効かせない（入力欄自身の元に戻すを奪わない）
@@ -322,7 +305,7 @@ export const LineupSettingContent = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [keyboardActive]);
+  }, []);
 
   const handleAddToLineup = (playerId) => {
     if (!selectedBattingOrder) {
@@ -1320,15 +1303,12 @@ export const LineupSettingContent = ({
     </th>
   );
 
-  const Frame = embedded ? EmbeddedFrame : ScreenShell;
   return (
-    <Frame>
-        {!embedded && (
-          <>
+    <ScreenShell>
             <ScreenHeader title="ロスター管理" sub={displayName || teamName}
-              right={(onBack || !onHistory) && (
+              right={(
                 <>
-                  {!onHistory && <HistoryButtons canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} />}
+                  <HistoryButtons canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} />
                   {onBack && <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">← 戻る</button>}
                 </>
               )} />
@@ -1344,8 +1324,6 @@ export const LineupSettingContent = ({
               onChange={(key) => { setTab(key); clearSelections(); }}
               className="mb-4"
             />
-          </>
-        )}
 
         {tab === 'lineup' && (
           <>
@@ -2330,31 +2308,10 @@ export const LineupSettingContent = ({
             return player.positionFitness?.[pos] ?? 50;
           };
 
-          // 適正による能力補正倍率（適正100→100%、適正0→50%）
-          const getFitnessMult = (player, pos) => {
-            const fitness = getFitness(player, pos);
-            return 0.5 + (fitness / 100) * 0.5;
-          };
-
-          // 守備範囲の計算（守備力+走力ベース × 適正補正）
-          const getDefenseRange = (player, pos) => {
-            if (!player) return 0;
-            const def = player.fielding?.defense || 50;
-            const spd = player.physical?.speed || 50;
-            const arm = player.physical?.arm || 50;
-            const mult = getFitnessMult(player, pos);
-            let raw;
-            if (['left', 'center', 'right'].includes(pos)) {
-              raw = (def * 0.3 + spd * 0.5 + arm * 0.2) / 100;
-            } else if (['second', 'short'].includes(pos)) {
-              raw = (def * 0.4 + spd * 0.3 + arm * 0.3) / 100;
-            } else if (pos === 'catcher') {
-              raw = (def * 0.5 + arm * 0.5) / 100;
-            } else {
-              raw = (def * 0.5 + spd * 0.25 + arm * 0.25) / 100;
-            }
-            return raw * mult;
-          };
+          // 守備範囲の計算（守備力+走力ベース × 適正補正）。
+          // ⚠ 計算はオンラインの守備図と共通（`src/utils/defenseRange.js`）
+          const getDefenseRange = (player, pos) =>
+            defenseRange(player, pos, getFitness(player, pos));
 
           const posLabels = {
             pitcher: '投', catcher: '捕', first: '一', second: '二',
@@ -2389,14 +2346,14 @@ export const LineupSettingContent = ({
             return '#6366f1';                     // Indigo
           };
 
+          // ランクの境目はオンラインの守備図と共通（`defenseGrade`）
+          const RANGE_GRADE_TEXT = {
+            S: 'text-pink-400', A: 'text-red-400', B: 'text-orange-400', C: 'text-yellow-400',
+            D: 'text-green-400', E: 'text-blue-400', F: 'text-slate-400',
+          };
           const getRangeGrade = (range) => {
-            if (range >= 0.90) return { label: 'S', color: 'text-pink-400' };
-            if (range >= 0.82) return { label: 'A', color: 'text-red-400' };
-            if (range >= 0.70) return { label: 'B', color: 'text-orange-400' };
-            if (range >= 0.55) return { label: 'C', color: 'text-yellow-400' };
-            if (range >= 0.42) return { label: 'D', color: 'text-green-400' };
-            if (range >= 0.30) return { label: 'E', color: 'text-blue-400' };
-            return { label: 'F', color: 'text-slate-400' };
+            const { label } = defenseGrade(range);
+            return { label, color: RANGE_GRADE_TEXT[label] };
           };
 
           // 2つの守備位置を入れ替える（片方が空きなら、いる側がそこへ移る）
@@ -2965,7 +2922,7 @@ export const LineupSettingContent = ({
         {detailPlayer === '__compare__' && compareIds.length >= 2 && (
           <CompareModal playerIds={compareIds} onClose={() => setDetailPlayer(null)} />
         )}
-    </Frame>
+    </ScreenShell>
   );
 };
 

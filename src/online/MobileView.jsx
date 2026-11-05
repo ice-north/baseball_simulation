@@ -104,8 +104,8 @@ export default function MobileView(props) {
             />
           ) : (
             <>
-              {/* ⚠ スマホからも移植した画面へ入れるようにする。横に長い画面なので
-                  既定では開かず、押したときだけ出す（PCは既定で開く） */}
+              {/* ⚠ スマホからも一人用の編成画面（`OnlineLineup.jsx`）へ入れるようにする。
+                  横に長い画面なので既定では開かず、押したときだけ出す */}
               <button
                 className="online-primary online-full-width"
                 onClick={() => setFullLineup(true)}

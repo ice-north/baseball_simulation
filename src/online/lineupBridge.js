@@ -114,7 +114,69 @@ export function rebaseLineupSave(plan, base, latest, ownKeys) {
   return { ...payload, baseLineup: clone(from) };
 }
 
-/** スタメン設定・投手起用（移植した画面）が受け持つ項目 */
+/** 打順・先発・投手の役割。方針・采配（PC）が「自分の項目ではない」と見分けるのに使う */
 export const LINEUP_EDITOR_KEYS = ['battingOrder', 'starters', 'pitcherRoles'];
+/**
+ * PC版のスタメン設定（`LineupBoard.jsx`）と投手起用（`PitchingBoard.jsx`）が受け持つ項目。
+ * ⚠ PCでは打順と投手起用を**別のページで別に保存する**。受け持つ項目を分けておかないと、
+ *    片方を保存しただけでもう片方の未保存の編集が「編成が更新されています」で
+ *    保存できなくなる（自分の項目が他で変わった扱いになる）。
+ */
+export const LINEUP_BOARD_KEYS = ['battingOrder'];
+export const PITCHING_BOARD_KEYS = ['starters', 'pitcherRoles'];
 /** 方針・采配（PC）が受け持つ項目 */
 export const TACTICS_EDITOR_KEYS = ['strategy', 'tactics'];
+
+/** 全画面の編成（スマホ）に、保存していない編集が残っているか（回転で作り直したときに開き直す判断に使う） */
+export function hasUnsavedFullLineup(editing) {
+  return (
+    !!editing && JSON.stringify(planFromTeam(editing.team)) !== editing.basePlan
+  );
+}
+
+// ------------------------------------------------------------
+// スマホとPCの間で、保存していない編成の編集を受け渡す。
+// ⚠ スマホを横にすると幅が768px以上になり、PCの画面に切り替わる（逆も）。画面ごと
+//    作り直されるので、受け渡さないと回転しただけで編集が消える。さらに、横で保存して
+//    縦に戻すと古い編集が開き直されて「編成が更新されています」で保存できなかった。
+// 入れ物は `Drafts` の `lineup.full`（スマホの全画面編成の形 `{ team, base, basePlan }`）。
+// PCはスタメン設定と投手起用が別々の編集を持つので、ここで1つの形にまとめて書き、
+// 開くときはそこから両方の編集を起こす。
+// ------------------------------------------------------------
+
+/** スマホの全画面編成の編集を、PCで開く形（編集後の編成と起点）にする。無ければ null */
+export function restoreFromFullLineup(kept) {
+  if (!hasUnsavedFullLineup(kept)) return null;
+  return {
+    lineup: { ...kept.base, ...planFromTeam(kept.team) },
+    base: clone(kept.base),
+  };
+}
+
+/**
+ * PCの編成ページ（スタメン設定・投手起用）の保存していない編集を、スマホの全画面編成の形にする。
+ * `boards` は保存していない編集だけ: `[{ keys, plan, baseLineup }]`。1つも無ければ null。
+ * ⚠ 起点は `rebaseLineupSave` と同じ決まり。自分の項目が他で変わっていなければ最新に載せ、
+ *    変わっていたらその編集の起点のまま（スマホで保存すると食い違いとして弾かれる）。
+ */
+export function fullLineupFromBoards(view, boards) {
+  if (!boards.length) return null;
+  const latest = view.lineup || {};
+  let base = latest;
+  boards.forEach(({ keys, baseLineup }) => {
+    if (!keys.every((k) => sameValue(baseLineup?.[k], latest[k])))
+      base = baseLineup;
+  });
+  const lineup = { ...base };
+  boards.forEach(({ keys, plan }) =>
+    keys.forEach((k) => (lineup[k] = plan[k])),
+  );
+  return {
+    team: teamFromView({ ...view, lineup }),
+    base: clone(base),
+    // 起点の plan は名簿を使わない（投手の行は plan で外す）。名簿の複製を省く
+    basePlan: JSON.stringify(
+      planFromTeam(teamFromView({ ...view, roster: [], lineup: base })),
+    ),
+  };
+}

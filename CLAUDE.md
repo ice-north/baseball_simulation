@@ -28,7 +28,7 @@
 - `src/App.jsx`: 手動試合、管理画面の接続。`[SECTION:]` マーカーで対象箇所を探す。
 - `src/game/autoSimulation.js`: 自動試合。共通の物理演算は `src/simulation-logic.js`、投球判断は `src/game/pitchCalling.js`。
 - `src/components/DateProgressScreen.jsx`: 日付進行とイベント。フェーズの定義は `src/season/seasonManager.js` と `src/season/dateProgression.js`。
-- `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用。オンライン版も `LineupSettingContent` をそのまま使う（`src/online/OnlineLineup.jsx`、view との変換は `src/online/lineupBridge.js`）。
+- `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用。オンラインのスマホ版も `LineupSettingContent` をそのまま使う（`src/online/OnlineLineup.jsx`、view との変換は `src/online/lineupBridge.js`）。オンラインのPC版は別の画面（`src/online/LineupBoard.jsx`・`PitchingBoard.jsx`）。
 - `src/game/saveSystem.js`: スロット、バックアップ、ロード、ファイル入出力。形式移行は `src/game/saveMigration.js`。
 - `src/corporate/worldData.js`: 並行世界の初期化。`TEAMS_DATA` とともにロード失敗時の復元対象。
 - `src/components/StartScreen.jsx` と `src/components/select/`: タイトルと導入画面。意匠はナイター中継で、本編とは別の語彙（`.glass-panel` と `.lift-card`）を使う。

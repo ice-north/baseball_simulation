@@ -98,6 +98,17 @@ export const PHASE_LABELS = {
   offseason: '年度更新',
 };
 
+// ---- 日々の編成の決まり（サーバーの `server/dailyLineup.mjs` と、PC版の編成ページの両方が使う）
+// ⚠ 画面はこの値で色を変え・説明を書く。サーバーと別に持つとずれるので、ここだけに置く。
+/** 野手はこの疲労以上だと、その日だけ控えと入れ替えて休ませる */
+export const FIELDER_REST_FATIGUE = 80;
+/** 休ませる野手の代役に選べる守備適性の下限 */
+export const SUBSTITUTE_MIN_FITNESS = 60;
+/** 休ませる野手の代役に選べる控えの疲労（これ未満の控えだけが代役になる） */
+export const SUBSTITUTE_FRESH_FATIGUE = 40;
+/** 先発はこの疲労以上だと、その日の登板を飛ばして次の先発が投げる */
+export const STARTER_SKIP_FATIGUE = 40;
+
 export function validateLineup(team, plan) {
   requireOnline(plan && typeof plan === 'object', '編成が不正です');
   requireOnline(
