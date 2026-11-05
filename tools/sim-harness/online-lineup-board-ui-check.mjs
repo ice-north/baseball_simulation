@@ -8,6 +8,7 @@
 //  - 控えに投手を出さない。スタメン8行＋投手の9番
 //  - 行を選ぶ → 控えがその守備位置の候補になる → 押すと交代（打順と守備位置を引き継ぐ）
 //  - 守備位置のバッジ同士で守備を入れ替える。ドラッグで打順を動かす・控えと交代する
+//  - 守備位置を選ぶと成績の列の場所に守備図が開く。図の位置を押しても入れ替わる
 //  - 元に戻す／やり直す（Ctrl+Z / Ctrl+Shift+Z）、未保存の印
 //  - 投手起用: 先発と救援の入れ替え（登板順と型を引き継ぐ）・役割の一覧で守護神を替える・
 //    先発どうしのドラッグ・ローテから外す。次の先発の印は、並びを変えたら先頭へ
@@ -134,7 +135,16 @@ try {
     .waitFor();
 
   // 守備位置のバッジ同士で守備を入れ替える（打順はそのまま）
+  const field = p.locator('aside[aria-label="守備図"]');
+  assert.equal(await field.count(), 0, '守備図が最初から開いている');
   await p.getByRole('button', { name: /^1番の守備位置/ }).click();
+  // 守備位置を選ぶと、成績の列の場所に守備図が開く
+  await field.waitFor();
+  assert.equal(
+    await p.locator('.online-lineup-table th.is-stat:visible').count(),
+    0,
+    '守備図を開いても成績の列が残っている（横にはみ出す）',
+  );
   await p.getByRole('button', { name: /^3番の守備位置/ }).click();
   const swapped = await slots();
   assert.equal(
@@ -146,6 +156,35 @@ try {
     swapped[0].split(':')[1],
     replaced[0].split(':')[1],
     '守備の入れ替えで打順が動いた',
+  );
+  // 守備図の位置を押しても入れ替わる（表のバッジと同じ）。重ねると入れ替え後の適性が出る
+  const onField = (slot) =>
+    field.getByRole('button', {
+      name: new RegExp(`^.. ${swapped[slot].split(':')[1]}（`),
+    });
+  await onField(0).click();
+  await onField(1).hover();
+  assert.match(
+    await p.locator('.online-lineup-field-preview').innerText(),
+    /⇄/,
+    '守備図で相手に重ねても入れ替え後の適性が出ない',
+  );
+  await onField(1).click();
+  const fieldSwapped = await slots();
+  assert.equal(
+    fieldSwapped[0],
+    `${swapped[1].split(':')[0]}:${swapped[0].split(':')[1]}`,
+    '守備図で守備位置が入れ替わらない',
+  );
+  await onField(0).click();
+  await onField(1).click();
+  assert.deepEqual(await slots(), swapped, '守備図で入れ替えを戻せない');
+  // 見出しの「守備図」で閉じる（成績の列が戻る）
+  await click('守備図');
+  assert.equal(await field.count(), 0, '守備図が閉じない');
+  assert.ok(
+    (await p.locator('.online-lineup-table th.is-stat:visible').count()) > 0,
+    '守備図を閉じても成績の列が戻らない',
   );
 
   // ドラッグ: 8番を1番へ（間は1つずつ下がる）
@@ -392,7 +431,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えに投手なし / 選んで交代・守備の入れ替え / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し）',
+    'online-lineup-board-ui-check PASS（守備分析なし / 控えに投手なし / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し）',
   );
 } finally {
   await browser.close();

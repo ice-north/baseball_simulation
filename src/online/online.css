@@ -3215,3 +3215,110 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* --- スタメン設定の守備図（`FieldDiagram.jsx`）------------------------------
+   守備位置を選ぶと開き、表の今季成績の列の場所に出す（行の高さ・位置は動かさない）。 */
+.online-lineup-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.online-lineup-toolbar .online-lineup-help {
+  flex: 1;
+  margin: 0 !important;
+}
+.online-desktop .online-lineup-field-toggle {
+  min-width: 0;
+  min-height: 0;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+}
+.online-desktop .online-lineup-field-toggle[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.online-lineup-split {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.online-lineup-split > .online-lineup-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.online-lineup-split.is-field .online-lineup-table .is-stat {
+  display: none;
+}
+.online-lineup-field {
+  flex: 0 0 340px;
+  position: sticky;
+  top: 96px;
+  padding: 8px 10px 10px;
+  border-radius: 10px;
+  background: #0f1c2b;
+  border: 1px solid #ffffff1a;
+}
+.online-lineup-field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 6px !important;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+.online-lineup-field-head strong:not(:where(.online-sp *)) {
+  color: #f1f5f9;
+}
+.online-lineup-field-head b:not(:where(.online-sp *)) {
+  font-size: 15px;
+}
+.online-lineup-field-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+.online-lineup-field-pos {
+  cursor: pointer;
+}
+.online-lineup-field-pos.is-fixed {
+  cursor: default;
+}
+.online-lineup-field-pos:focus {
+  outline: none;
+}
+.online-lineup-field-pos:focus-visible > circle:first-of-type {
+  stroke: var(--accent);
+}
+.online-lineup-field-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-height: 36px;
+  margin: 6px 0 0 !important;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-lineup-field-preview small:not(:where(.online-sp *)) {
+  margin-right: 2px;
+  color: #94a3b8;
+}
+.online-lineup-field-preview b:not(:where(.online-sp *)) {
+  color: #f1f5f9;
+}
+.online-lineup-field-preview b.is-low:not(:where(.online-sp *)) {
+  color: #f87171;
+}
+.online-lineup-field-preview b.is-good:not(:where(.online-sp *)) {
+  color: #86efac;
+}
+.online-lineup-field-swap {
+  color: #facc15;
+  font-weight: 700;
+}
