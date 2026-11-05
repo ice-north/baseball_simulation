@@ -3292,7 +3292,8 @@
 .online-lineup-field-pos:focus {
   outline: none;
 }
-.online-lineup-field-pos:focus-visible > circle:first-of-type {
+.online-lineup-field-pos:focus-visible
+  > circle:first-of-type:not(:where(.online-sp *)) {
   stroke: var(--accent);
 }
 .online-lineup-field-preview {

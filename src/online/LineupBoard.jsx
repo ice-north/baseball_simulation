@@ -21,7 +21,9 @@ import {
   positionFitness,
   playablePositions,
   orderProblems,
+  isFielder,
   REST_FATIGUE,
+  REST_TEXT,
   LOW_FITNESS,
 } from './lineupEdit.js';
 
@@ -146,7 +148,7 @@ function PlayerCells({ player, fitness, fitnessPosition }) {
         <Fatigue
           value={player.fatigue}
           rest={REST_FATIGUE}
-          restText="試合の日は休養し、守れる控えと入れ替わります"
+          restText={REST_TEXT}
         />
       </td>
       {ABILITIES.map((a, i) => (
@@ -182,10 +184,7 @@ function HeaderRow({ fitnessLabel }) {
       <th className="online-lineup-person">選手</th>
       <th title="打席（左・右・両）">打</th>
       <th>年齢</th>
-      <th
-        className="is-sep"
-        title="80以上は試合の日に休養（守れる控えと入れ替わる）"
-      >
+      <th className="is-sep" title={`${REST_FATIGUE}以上: ${REST_TEXT}`}>
         疲労
       </th>
       {ABILITIES.map((a, i) => (
@@ -193,7 +192,10 @@ function HeaderRow({ fitnessLabel }) {
           {a.label}
         </th>
       ))}
-      <th className="is-sep" title="その守備位置の適性（60%未満は赤）">
+      <th
+        className="is-sep"
+        title={`その守備位置の適性（${LOW_FITNESS}%未満は赤）`}
+      >
         {fitnessLabel}
       </th>
       <th title="守備力">守</th>
@@ -222,6 +224,11 @@ export default function LineupBoard({
 }) {
   const roster = view.roster || [];
   const byId = new Map(roster.map((p) => [p.id, p]));
+  // スタメンに入れられる野手（名簿に居て、抹消されていない野手）。⚠ 名簿には抹消中も入る
+  const fielderOf = (id) => {
+    const player = byId.get(id);
+    return isFielder(player) ? player : null;
+  };
 
   // ---- 編集の状態（履歴つき。`useBoardHistory`）
   const [selection, setSelection] = useState(null);
@@ -404,7 +411,7 @@ export default function LineupBoard({
               </thead>
               <tbody aria-label="スタメン">
                 {order.map((entry, index) => {
-                  const player = byId.get(entry.playerId);
+                  const player = fielderOf(entry.playerId);
                   return (
                     <tr
                       key={`${index}:${entry.playerId}`}
@@ -467,7 +474,11 @@ export default function LineupBoard({
                           colSpan={COLUMN_COUNT - 2}
                           className="online-lineup-missing"
                         >
-                          名簿に居ない選手です。控えと交代してください
+                          {entry.playerId == null
+                            ? '空いています。控えと交代して（ドラッグでも）埋めてください'
+                            : byId.has(entry.playerId)
+                              ? `${byId.get(entry.playerId).name}は今は起用できません。控えと交代してください`
+                              : '名簿に居ない選手です。控えと交代してください'}
                         </td>
                       )}
                     </tr>
@@ -581,7 +592,7 @@ export default function LineupBoard({
                           </td>
                           <td
                             className="online-lineup-poscell"
-                            title="本職と、ほかに守れる位置（適性60%以上、高い順）"
+                            title={`本職と、ほかに守れる位置（適性${LOW_FITNESS}%以上、高い順）`}
                           >
                             <span className="online-lineup-playable">
                               <span className="online-lineup-pos is-bench">
@@ -620,7 +631,7 @@ export default function LineupBoard({
           {fieldOpen && (
             <FieldDiagram
               order={order}
-              byId={byId}
+              playerOf={fielderOf}
               pitcher={nextStarter}
               selected={
                 selectedPos ?? (drag?.kind === 'pos' ? drag.index : null)

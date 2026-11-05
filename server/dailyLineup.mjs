@@ -4,6 +4,7 @@ import {
   FIELDER_REST_FATIGUE,
   STARTER_SKIP_FATIGUE,
   SUBSTITUTE_MIN_FITNESS,
+  SUBSTITUTE_FRESH_FATIGUE,
 } from '../src/online/shared.js';
 import { getPositionFitness } from '../src/utils/physics.js';
 
@@ -19,7 +20,7 @@ import { getPositionFitness } from '../src/utils/physics.js';
  */
 // ⚠ 値は `src/online/shared.js` に置く（PC版の編成ページも同じ値で色を変える）
 export { FIELDER_REST_FATIGUE, STARTER_SKIP_FATIGUE };
-const FRESH_FATIGUE = 40;
+const FRESH_FATIGUE = SUBSTITUTE_FRESH_FATIGUE;
 const MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
 
 function restTiredFielders(team) {

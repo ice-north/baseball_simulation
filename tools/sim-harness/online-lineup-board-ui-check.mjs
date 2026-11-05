@@ -429,6 +429,39 @@ try {
     savedRotation,
     'スタメンの保存で投手起用が古い値に戻った',
   );
+
+  // ⚠ 保存済みの先発が抹消された（名簿には居る）。役割を持たないので、行の札を
+  //    描こうとして画面ごと落ちていた。崩れた行として出し、救援との入れ替えで直せる
+  const inactiveId = await fixture.store.transaction((bundle) => {
+    const league = bundle.league;
+    const member = league.members.find((m) => m.userId === fixture.userId);
+    const team = league.game.teams[member.teamName];
+    const id = team.pitchingRotation.starters[1];
+    team.players.find((pl) => pl.id === id).isActive = false;
+    league.revision++;
+    return { value: id };
+  });
+  await p.reload();
+  await go('投手起用');
+  const inactiveRow = p.locator(`tr[data-starter="${inactiveId}"]`);
+  assert.match(
+    await inactiveRow.innerText(),
+    /今は起用できません/,
+    '抹消された先発を崩れた行として出さない',
+  );
+  await inactiveRow.getByRole('button').first().click();
+  await p
+    .locator('tr[data-reliever]')
+    .first()
+    .getByRole('button')
+    .first()
+    .click();
+  assert.equal(
+    await p.locator(`tr[data-starter="${inactiveId}"]`).count(),
+    0,
+    '抹消された先発の行を救援で埋められない',
+  );
+  await click('変更を取り消す');
   assert.deepEqual(errors, []);
   console.log(
     'online-lineup-board-ui-check PASS（守備分析なし / 控えに投手なし / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し）',

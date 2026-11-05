@@ -64,8 +64,17 @@ export function useBoardHistory({
   if (!dirty && builtFor !== view.revision) {
     // 描画中の作り直し（React の「前回の値から状態を直す」書き方）
     setBuiltFor(view.revision);
-    setHistory(build(view));
-    onEscape?.();
+    const next = build(view);
+    // ⚠ 更新番号はリーグ全体で1つ（他の球団の保存・毎時の進行でも上がる）。
+    //    このページの値が変わっていなければ、選択（役割の一覧も）と履歴を残し、
+    //    保存の起点だけ最新にする。外すと、選んでから押すまでの間に他の人が
+    //    保存しただけで選択が消え、次のクリックが「入れ替え」でなく「選ぶ」になる
+    if (same(next.base, value))
+      setHistory((h) => ({ ...h, baseLineup: next.baseLineup }));
+    else {
+      setHistory(next);
+      onEscape?.();
+    }
   }
 
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);

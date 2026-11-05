@@ -20,6 +20,7 @@ import {
   insertStarter,
   reliefGroups,
   pitchingProblems,
+  isPitcher,
   STARTER_SKIP_FATIGUE,
   RELIEF_REST_FATIGUE,
 } from './pitchingEdit.js';
@@ -245,6 +246,12 @@ export default function PitchingBoard({
   //   救援 → 「先発ローテーション」の見出し: ローテの最後へ / 先発 → 「救援」の見出し: ローテから外す
   // ⚠ 名簿に居ない先発（崩れた保存）も選べる。名前は無いので行の説明で呼ぶ
   const nameOf = (id) => byId.get(id)?.name || '名簿に居ない投手';
+  // 起用できる投手（名簿に居て、抹消されていない投手）。⚠ 名簿（byId）には抹消中も入る。
+  //    役割（state.roles）は起用できる投手にしか無いので、それ以外は崩れた行として出す
+  const pitcherOf = (id) => {
+    const player = byId.get(id);
+    return isPitcher(player) ? player : null;
+  };
   const clickRow = (id) => {
     if (selection !== null && selection !== id)
       commit(swapPitchers(state, selection, id));
@@ -253,10 +260,12 @@ export default function PitchingBoard({
   // 見出しへ移せるか: 救援 → 「先発ローテーション」（最後へ入る）/ 先発 → 「救援」（外れる）。
   // ⚠ 先発をローテの見出しへ落としても動かさない（見出しは1番手の上にあり、
   //    最後へ回すと「先頭へ」のつもりのエースが最後に投げる）
+  // ⚠ 人数の決まり（先発は1〜8人。`setRole`）で動かせないときは、見出しを落とし先に
+  //    光らせない（光ったのに何も起きない、にしない。役割の一覧も同じ決まりで選べなくする）
   const canMoveTo = (id, target) =>
     target === 'rotation'
-      ? !state.starters.includes(id)
-      : state.starters.includes(id);
+      ? !state.starters.includes(id) && state.starters.length < MAX_STARTERS
+      : state.starters.includes(id) && state.starters.length > 1;
   const moveTo = (id, target) => {
     if (!canMoveTo(id, target)) return state;
     return target === 'rotation'
@@ -302,7 +311,10 @@ export default function PitchingBoard({
   };
   const over = (target) => (e) => {
     if (drag === null) return;
-    if ((target === 'rotation' || target === 'relief') && !canMoveTo(drag, target))
+    if (
+      (target === 'rotation' || target === 'relief') &&
+      !canMoveTo(drag, target)
+    )
       return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -348,12 +360,16 @@ export default function PitchingBoard({
     .map((g) => g.role);
   const help =
     selection !== null
-    ? `${nameOf(selection)}を選択中：ほかの投手を押すと持ち場（登板順・役割）を入れ替えます。${
-        state.starters.includes(selection)
-          ? '「救援」の見出しを押すとローテから外します。'
-          : '「先発ローテーション」の見出しを押すとローテの最後に入れます。'
-      }`
-    : '役割の札を押すと役割を選び直せます。行を押して選び、ほかの投手を押すと持ち場を入れ替えます。ドラッグでも同じです（先発どうしは登板順を動かします）。';
+      ? `${nameOf(selection)}を選択中：ほかの投手を押すと持ち場（登板順・役割）を入れ替えます。${
+          state.starters.includes(selection)
+            ? canMoveTo(selection, 'relief')
+              ? '「救援」の見出しを押すとローテから外します。'
+              : '先発が1人だけなので、ローテからは外せません。'
+            : canMoveTo(selection, 'rotation')
+              ? '「先発ローテーション」の見出しを押すとローテの最後に入れます。'
+              : `先発は${MAX_STARTERS}人までです。ローテに入れるには先発の投手と入れ替えてください。`
+        }`
+      : '役割の札を押すと役割を選び直せます。行を押して選び、ほかの投手を押すと持ち場を入れ替えます。ドラッグでも同じです（先発どうしは登板順を動かします）。';
   const pickLabel = (id, name) =>
     selection !== null && selection !== id
       ? `${name}と入れ替える`
@@ -435,7 +451,7 @@ export default function PitchingBoard({
                 </th>
               </tr>
               {state.starters.map((id, index) => {
-                const player = byId.get(id);
+                const player = pitcherOf(id);
                 return (
                   <tr
                     key={id}
@@ -485,7 +501,10 @@ export default function PitchingBoard({
                         colSpan={COLUMN_COUNT - 2}
                         className="online-lineup-missing"
                       >
-                        名簿に居ない投手です。この行を選んで救援の投手を押すと入れ替わります（「救援」の見出しへ落とすと外れます）
+                        {byId.has(id)
+                          ? `${nameOf(id)}は今は起用できません。`
+                          : '名簿に居ない投手です。'}
+                        この行を選んで救援の投手を押すと入れ替わります（「救援」の見出しへ落とすと外れます）
                       </td>
                     )}
                   </tr>

@@ -21,8 +21,12 @@ import {
   orderProblems,
   REST_FATIGUE,
   LOW_FITNESS,
+  FRESH_FATIGUE,
 } from '../../src/online/lineupEdit.js';
-import { validateLineup } from '../../src/online/shared.js';
+import {
+  validateLineup,
+  SUBSTITUTE_MIN_FITNESS,
+} from '../../src/online/shared.js';
 import { FIELDER_REST_FATIGUE } from '../../server/dailyLineup.mjs';
 import {
   rebaseLineupSave,
@@ -35,7 +39,25 @@ assert.equal(
   FIELDER_REST_FATIGUE,
   '休養の疲労がサーバーとずれた',
 );
-assert.equal(LOW_FITNESS, 60, '適性の下限（代役選びの下限）とずれた');
+assert.equal(
+  LOW_FITNESS,
+  SUBSTITUTE_MIN_FITNESS,
+  '適性の下限（代役選びの下限）とずれた',
+);
+{
+  // 代役になれる控えの疲労は、サーバーの代役選びの値そのもの（画面の説明に出す）
+  const { readFile } = await import('node:fs/promises');
+  const server = await readFile(
+    new URL('../../server/dailyLineup.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    server,
+    /const FRESH_FATIGUE = SUBSTITUTE_FRESH_FATIGUE;/,
+    '代役の疲労の値がサーバーと別に書かれている',
+  );
+  assert.equal(FRESH_FATIGUE, 40);
+}
 
 // --- 名簿: 野手12人（各位置1人＋控え4人）と投手3人
 const fielder = (id, position, fitness = {}) => ({
@@ -194,6 +216,45 @@ for (let round = 0; round < 3; round++)
     playablePositions(roster.find((p) => p.id === 10)).map((e) => e.position),
     ['short', 'second', 'third'],
   );
+}
+
+// --- スマホから受け取った崩れた打順（7人・同じ位置に2人）も、8枠に整えて交代で直せる
+{
+  const seven = orderFromLineup({
+    battingOrder: lineup.battingOrder.filter((e) => e.position !== 'short'),
+  });
+  assert.equal(seven.length, 8, '7人の打順が8枠にならない');
+  const empty = seven.findIndex((e) => e.playerId == null);
+  assert.equal(
+    seven[empty].position,
+    'short',
+    '空きの枠に空いた位置が付かない',
+  );
+  assert.ok(
+    orderProblems(seven, roster).some((m) => m.includes('空いている打順')),
+    '空きの枠を見逃した',
+  );
+  assert.equal(battingOrderFromOrder(seven).length, 7, '空きの枠を送った');
+  const filled = replaceStarter(seven, empty, 10);
+  assert.deepEqual(orderProblems(filled, roster), []);
+  valid(filled);
+
+  const doubled = orderFromLineup({
+    battingOrder: lineup.battingOrder.map((e) =>
+      e.position === 'left' ? { ...e, position: 'right' } : e,
+    ),
+  });
+  assert.deepEqual(
+    [...new Set(doubled.map((e) => e.position))].sort(),
+    [...FIELD_POSITIONS].sort(),
+    '同じ位置の2人目が空いた位置へ回らない',
+  );
+  assert.deepEqual(orderProblems(doubled, roster), []);
+  valid(doubled);
+
+  // 抹消中の選手は起用できない（名簿には居る）
+  const inactive = start.map((e, i) => (i === 0 ? { ...e, playerId: 30 } : e));
+  assert.ok(orderProblems(inactive, roster).length > 0, '抹消中を見逃した');
 }
 
 // --- 崩れた保存（名簿に居ない選手）は理由を出し、交代で直せる

@@ -267,14 +267,25 @@ accepted(start);
   assert.ok(samePitching(start, pitchingFromLineup(lineup, roster)));
   // ⚠ 名簿に居ない先発（外れた投手13・居ない99）を隠さない。隠すと保存済みの崩れが
   //    画面にも保存の検査にも出ず、別のページの保存がサーバーで弾かれる
-  const stale = pitchingFromLineup({ ...lineup, starters: [1, 13, 2, 99] }, roster);
-  assert.deepEqual(stale.starters, [1, 13, 2, 99], '名簿に居ない先発を黙って外した');
+  const stale = pitchingFromLineup(
+    { ...lineup, starters: [1, 13, 2, 99] },
+    roster,
+  );
+  assert.deepEqual(
+    stale.starters,
+    [1, 13, 2, 99],
+    '名簿に居ない先発を黙って外した',
+  );
   assert.ok(pitchingProblems(stale, roster).some((m) => /名簿/.test(m)));
   // その行に救援を入れると、その登板順で先発の「おまかせ」になる
   const fixed = swapPitchers(stale, 13, 10);
   assert.deepEqual(fixed.starters, [1, 10, 2, 99]);
   assert.equal(fixed.roles[10], 'auto_s');
-  assert.deepEqual(swapPitchers(stale, 10, 13), fixed, '入れ替えが向きで変わる');
+  assert.deepEqual(
+    swapPitchers(stale, 10, 13),
+    fixed,
+    '入れ替えが向きで変わる',
+  );
   // 「救援」へ移すと外れるだけ（役割は持たない）
   const dropped = setRole(fixed, 99, 'auto_r');
   assert.deepEqual(dropped.starters, [1, 10, 2]);

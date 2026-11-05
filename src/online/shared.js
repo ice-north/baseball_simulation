@@ -104,6 +104,8 @@ export const PHASE_LABELS = {
 export const FIELDER_REST_FATIGUE = 80;
 /** 休ませる野手の代役に選べる守備適性の下限 */
 export const SUBSTITUTE_MIN_FITNESS = 60;
+/** 休ませる野手の代役に選べる控えの疲労（これ未満の控えだけが代役になる） */
+export const SUBSTITUTE_FRESH_FATIGUE = 40;
 /** 先発はこの疲労以上だと、その日の登板を飛ばして次の先発が投げる */
 export const STARTER_SKIP_FATIGUE = 40;
 

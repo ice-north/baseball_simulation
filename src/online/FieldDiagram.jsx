@@ -1,6 +1,10 @@
 import React from 'react';
 import { POS } from './api.js';
 import { positionFitness } from './lineupEdit.js';
+import {
+  defenseRange as rangeOf,
+  defenseGrade,
+} from '../utils/defenseRange.js';
 
 // ============================================================
 // スタメン設定（PC）の守備図。守備位置を入れ替えるときに、**いまの守備の並びと
@@ -8,8 +12,8 @@ import { positionFitness } from './lineupEdit.js';
 //
 // ⚠ 常には出さない。以前の守備分析は守備図が大きく場所を取っていた（2026-11-04 の指摘）。
 //    守備位置のバッジを選んだときに開き、表の成績の列の場所に出す（行の位置は動かない）。
-// ⚠ 守備範囲の計算・ランク・色は一人用の守備分析（`LineupSettingScreen.jsx` の
-//    defense タブ）と同じ。適性だけは表と同じ決まり（本職は100。`positionFitness`）。
+// ⚠ 守備範囲の計算・ランクは一人用の守備分析と共通（`src/utils/defenseRange.js`）。
+//    適性だけは表と同じ決まり（本職は100。`positionFitness`）。
 // ============================================================
 
 // ⚠ 名前（上）と適性（下）が隣の位置と重ならない間隔にしてある（表示幅340pxで12px台の字）
@@ -36,35 +40,10 @@ const POS_FULL = {
   right: '右翼',
 };
 
-/** 守備範囲（0〜1）。守備力・走力・肩を位置ごとの重みで足し、適性で割り引く */
-function defenseRange(player, pos) {
-  if (!player) return 0;
-  const def = player.fielding?.defense || 50;
-  const spd = player.physical?.speed || 50;
-  const arm = player.physical?.arm || 50;
-  const mult = 0.5 + (positionFitness(player, pos) / 100) * 0.5;
-  let raw;
-  if (['left', 'center', 'right'].includes(pos))
-    raw = (def * 0.3 + spd * 0.5 + arm * 0.2) / 100;
-  else if (['second', 'short'].includes(pos))
-    raw = (def * 0.4 + spd * 0.3 + arm * 0.3) / 100;
-  else if (pos === 'catcher') raw = (def * 0.5 + arm * 0.5) / 100;
-  else raw = (def * 0.5 + spd * 0.25 + arm * 0.25) / 100;
-  return raw * mult;
-}
-const GRADES = [
-  [0.9, 'S', '#ec4899'],
-  [0.82, 'A', '#f87171'],
-  [0.7, 'B', '#fb923c'],
-  [0.55, 'C', '#facc15'],
-  [0.42, 'D', '#4ade80'],
-  [0.3, 'E', '#60a5fa'],
-  [-Infinity, 'F', '#94a3b8'],
-];
-const gradeOf = (range) => {
-  const [, label, color] = GRADES.find(([min]) => range >= min);
-  return { label, color };
-};
+/** 守備範囲（0〜1）。適性はこの画面の決まり（本職は100）で渡す */
+const defenseRange = (player, pos) =>
+  rangeOf(player, pos, positionFitness(player, pos));
+const gradeOf = defenseGrade;
 const FITNESS_COLORS = [
   [100, '#ff1493'],
   [90, '#ec4899'],
@@ -82,6 +61,7 @@ const fitnessColor = (v) => FITNESS_COLORS.find(([min]) => v >= min)[1];
 
 /**
  * @param order      野手8人の並び（`lineupEdit.js` の形）。編集中の値をそのまま渡す
+ * @param playerOf   選手id → 起用できる選手（居なければ null。空きの枠・抹消中は null）
  * @param pitcher    次の先発（9番。動かせない）
  * @param selected   選んでいる守備位置の打順の位置（index）。無ければ null
  * @param target     入れ替えの相手の候補（マウスを乗せている・ドラッグで重ねている）
@@ -91,7 +71,7 @@ const fitnessColor = (v) => FITNESS_COLORS.find(([min]) => v >= min)[1];
  */
 export default function FieldDiagram({
   order,
-  byId,
+  playerOf,
   pitcher,
   selected,
   target,
@@ -101,11 +81,11 @@ export default function FieldDiagram({
 }) {
   const at = {};
   order.forEach((entry, index) => {
-    at[entry.position] = { player: byId.get(entry.playerId), index };
+    at[entry.position] = { player: playerOf(entry.playerId), index };
   });
   at.pitcher = { player: pitcher, index: null };
   const fielders = order
-    .map((e) => [byId.get(e.playerId), e.position])
+    .map((e) => [playerOf(e.playerId), e.position])
     .filter(([p]) => p);
   const team = fielders.length
     ? fielders.reduce((s, [p, pos]) => s + defenseRange(p, pos), 0) /
@@ -119,7 +99,7 @@ export default function FieldDiagram({
       ? [selected, target].map((i, k) => {
           const entry = order[i];
           const other = order[k === 0 ? target : selected];
-          const player = byId.get(entry?.playerId);
+          const player = playerOf(entry?.playerId);
           return {
             player,
             from: entry?.position,
@@ -320,7 +300,7 @@ export default function FieldDiagram({
               <React.Fragment key={side.from}>
                 {k > 0 && <span className="online-lineup-field-swap">⇄</span>}
                 <span>
-                  {side.player?.name || '名簿に居ない選手'}{' '}
+                  {side.player?.name || '（空き）'}{' '}
                   <small>
                     {POS[side.from]}
                     {side.before}%→{POS[side.to]}

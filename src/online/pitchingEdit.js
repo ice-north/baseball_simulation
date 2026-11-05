@@ -11,8 +11,9 @@
 //    - 守護神は1人まで
 // ⚠ オンラインでは全投手に役割が付く（無い投手は「おまかせ」）。一人用の画面に
 //    あった「未設定」の欄は、サーバーが「おまかせ」に読み替えるだけなので出さない。
-// ⚠ 保存済みの先発に名簿に居ない投手（外れた・居なくなった）が残っていることがある。
-//    隠さずにそのまま持ち、その行に救援を入れ替えて直せるようにする（役割は持たない）。
+// ⚠ 保存済みの先発に名簿に居ない投手（外れた・居なくなった）や、抹消中の投手が
+//    残っていることがある。隠さずにそのまま持ち、その行に救援を入れ替えて直せるように
+//    する（役割は持たない。役割は起用できる投手＝`isPitcher` にだけ付ける）。
 // ============================================================
 import { STARTER_ROLES, RELIEF_ROLES, roleFor } from './tactics.js';
 import { STARTER_SKIP_FATIGUE as SKIP_FATIGUE } from './shared.js';
@@ -227,7 +228,7 @@ export function pitchingProblems(state, roster) {
   if (state.starters.length > MAX_STARTERS)
     problems.push(`先発投手は${MAX_STARTERS}人までです`);
   if (state.starters.some((id) => !ids.has(id)))
-    problems.push('名簿に居ない投手が先発に入っています');
+    problems.push('名簿に居ない・起用できない投手が先発に入っています');
   if (Object.values(state.roles).filter((r) => r === 'closer').length > 1)
     problems.push('守護神は1人までです');
   return problems;

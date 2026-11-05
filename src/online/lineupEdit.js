@@ -17,7 +17,11 @@
 //    野手8人ちょうど・打順1〜8・8つの守備位置を1つずつ・投手は入れない。
 // ============================================================
 
-import { FIELDER_REST_FATIGUE, SUBSTITUTE_MIN_FITNESS } from './shared.js';
+import {
+  FIELDER_REST_FATIGUE,
+  SUBSTITUTE_MIN_FITNESS,
+  SUBSTITUTE_FRESH_FATIGUE,
+} from './shared.js';
 import { getPositionFitness } from '../utils/physics.js';
 
 export const FIELD_POSITIONS = [
@@ -49,11 +53,13 @@ export const FIELDER_GROUPS = [
  */
 export function positionFitness(player, position) {
   if (!player || !position) return 0;
-  return player.position === position ? 100 : getPositionFitness(player, position, 0);
+  return player.position === position
+    ? 100
+    : getPositionFitness(player, position, 0);
 }
 
 /** この選手が守れる位置（適性の高い順）。`min` 未満は守れないとみなす */
-export function playablePositions(player, min = 60) {
+export function playablePositions(player, min = SUBSTITUTE_MIN_FITNESS) {
   return FIELD_POSITIONS.map((position) => ({
     position,
     fitness: positionFitness(player, position),
@@ -64,19 +70,52 @@ export function playablePositions(player, min = 60) {
 
 /** 保存されている打順（view.lineup）から編集の形を作る */
 export function orderFromLineup(lineup) {
-  return [...(lineup?.battingOrder || [])]
-    .filter((e) => e && e.position !== 'pitcher')
-    .sort((a, b) => (a.battingOrder || 0) - (b.battingOrder || 0))
-    .map((e) => ({ playerId: e.playerId, position: e.position }));
+  return normalizeOrder(
+    [...(lineup?.battingOrder || [])]
+      .filter((e) => e && e.position !== 'pitcher')
+      .sort((a, b) => (a.battingOrder || 0) - (b.battingOrder || 0))
+      .map((e) => ({ playerId: e.playerId, position: e.position })),
+  );
 }
 
-/** 編集の形から、サーバーへ送る `battingOrder` を作る（打順は1〜8に振り直す） */
+/**
+ * 打順を「8つの守備位置を1つずつ持つ8枠」に整える。
+ * ⚠ スマホの全画面編成（✕で外す・守備位置を選ぶ作り）から受け取った編集は、
+ *    7人だったり同じ位置に2人だったりする。この画面の操作はどれも8枠・8位置の形を
+ *    保つので、崩れたまま受け取ると**どの操作でも直せない**（元に戻すしかない）。
+ *    - 9人目以降は外す（控えに戻る）
+ *    - 守備位置が重なる・守備位置でない選手は、守る人の居ない位置へ回す
+ *    - 足りない枠は空き（`playerId: null`）で埋める。空きは控えとの交代で埋める
+ */
+export function normalizeOrder(order) {
+  const kept = order.slice(0, 8);
+  const free = FIELD_POSITIONS.filter(
+    (pos) => !kept.some((e) => e.position === pos),
+  );
+  const used = new Set();
+  const next = kept.map((e) => {
+    if (FIELD_POSITIONS.includes(e.position) && !used.has(e.position)) {
+      used.add(e.position);
+      return e;
+    }
+    return { ...e, position: free.shift() };
+  });
+  while (next.length < 8) next.push({ playerId: null, position: free.shift() });
+  return next;
+}
+
+/**
+ * 編集の形から、サーバーへ送る `battingOrder` を作る（打順は1〜8に振り直す）。
+ * 空きの枠は送らない（空きがあるあいだは保存できない。`orderProblems`）
+ */
 export function battingOrderFromOrder(order) {
-  return order.map((e, i) => ({
-    playerId: e.playerId,
-    position: e.position,
-    battingOrder: i + 1,
-  }));
+  return order
+    .filter((e) => e.playerId != null)
+    .map((e, i) => ({
+      playerId: e.playerId,
+      position: e.position,
+      battingOrder: i + 1,
+    }));
 }
 
 export const sameOrder = (a, b) =>
@@ -151,11 +190,16 @@ export function candidatesFor(bench, position) {
 export function orderProblems(order, roster) {
   const byId = new Map((roster || []).map((p) => [p.id, p]));
   const problems = [];
+  const filled = order.filter((e) => e.playerId != null);
   if (order.length !== 8) problems.push('野手が8人そろっていません');
-  const missing = order.filter((e) => !isFielder(byId.get(e.playerId)));
+  if (filled.length < order.length)
+    problems.push('空いている打順があります。控えと交代して埋めてください');
+  const missing = filled.filter((e) => !isFielder(byId.get(e.playerId)));
   if (missing.length)
-    problems.push('名簿に居ない選手が入っています。控えと交代してください');
-  if (new Set(order.map((e) => e.playerId)).size !== order.length)
+    problems.push(
+      '名簿に居ない・起用できない選手が入っています。控えと交代してください',
+    );
+  if (new Set(filled.map((e) => e.playerId)).size !== filled.length)
     problems.push('同じ選手が2回入っています');
   const positions = new Set(order.map((e) => e.position));
   if (!FIELD_POSITIONS.every((pos) => positions.has(pos)))
@@ -167,3 +211,10 @@ export function orderProblems(order, roster) {
 export const REST_FATIGUE = FIELDER_REST_FATIGUE;
 /** 守備位置の適性がこれ未満なら注意を出す（休ませた野手の代役の下限と同じ） */
 export const LOW_FITNESS = SUBSTITUTE_MIN_FITNESS;
+/** 休ませた野手の代役になれる控えの疲労（これ未満） */
+export const FRESH_FATIGUE = SUBSTITUTE_FRESH_FATIGUE;
+/**
+ * 疲労が休ませる値以上のときの説明。⚠ 必ず休むわけではない。サーバー
+ * （`server/dailyLineup.mjs` の `restTiredFielders`）は、守れる控えが居るときだけ入れ替える
+ */
+export const REST_TEXT = `試合の日は、守れる控え（適性${LOW_FITNESS}%以上・疲労${FRESH_FATIGUE}未満）が居ればその日だけ入れ替わって休みます。居なければそのまま出ます`;
