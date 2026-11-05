@@ -18,6 +18,7 @@ import {
   MAX_OPEN_TRADES,
 } from '../../src/online/trades.js';
 import { ROSTER_LIMIT } from '../../src/online/shared.js';
+import { PACK_SIZE } from '../../src/online/rosterPack.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
 
@@ -25,12 +26,15 @@ const NOW = '2026-10-26T15:00:00.000Z';
 {
   const make = (n, position) =>
     Array.from({ length: n }, (_, i) => ({ id: `${position}${i}`, position }));
+  // ⚠ **枠ちょうどの名簿を作る**。人数を直に書くと、枠を変えたときに
+  //    「上限を超えても通している」の判定が効かなくなる
   const ok = [
-    ...make(10, 'pitcher'),
+    ...make(ROSTER_LIMIT - 10, 'pitcher'),
     ...make(2, 'catcher'),
-    ...make(6, 'short'),
-    ...make(6, 'left'),
+    ...make(4, 'short'),
+    ...make(4, 'left'),
   ];
+  assert.equal(ok.length, ROSTER_LIMIT, '前提: 枠ちょうどの名簿');
   assert.deepEqual(rosterShortfall(ok), [], '成り立つ名簿を弾いている');
   // ⚠ 投手・捕手・野手8人は**トライアウトの解決と同じ条件**。緩めると
   //    トレードで捕手のいない球団を作れてしまう
@@ -43,8 +47,11 @@ const NOW = '2026-10-26T15:00:00.000Z';
     '投手が居なくても通している',
   );
   assert.ok(
-    rosterShortfall([...make(10, 'pitcher'), ...make(2, 'catcher'), ...make(5, 'left')])
-      .length,
+    rosterShortfall([
+      ...make(10, 'pitcher'),
+      ...make(2, 'catcher'),
+      ...make(5, 'left'),
+    ]).length,
     '野手が8人を割っても通している',
   );
   assert.ok(
@@ -115,7 +122,9 @@ try {
   const teamA = started.members.find((m) => m.userId === 'a').teamName;
   const teamB = started.members.find((m) => m.userId === 'b').teamName;
   const rosterOf = (l, name) => l.game.teams[name].players;
-  assert.equal(rosterOf(started, teamA).length, ROSTER_LIMIT, '前提: 24人');
+  // ⚠ セットは24人、枠は26人。**最初は2つ空いている**
+  assert.equal(rosterOf(started, teamA).length, PACK_SIZE, '前提: セットの人数');
+  assert.ok(PACK_SIZE < ROSTER_LIMIT, '前提: 枠に空きがある');
 
   const pickA = rosterOf(started, teamA).find((p) => p.position === 'pitcher');
   const pickB = rosterOf(started, teamB).find((p) => p.position === 'pitcher');
@@ -213,7 +222,8 @@ try {
     !rosterOf(done, teamA).some((p) => p.id === pickA.id),
     '出した選手が自分の名簿に残っている',
   );
-  assert.equal(rosterOf(done, teamA).length, ROSTER_LIMIT, '人数が変わった');
+  // ⚠ 1対1なので人数は変わらない（セットの24人のまま）
+  assert.equal(rosterOf(done, teamA).length, PACK_SIZE, '人数が変わった');
   // ⚠ 打順を組み直すこと。出した選手が打順に残ると試合が組めない
   for (const name of [teamA, teamB]) {
     const order = done.game.teams[name].lineupSettings?.battingOrder || [];
@@ -284,8 +294,7 @@ try {
   );
 
   // --- 断ると消える ------------------------------------------------------
-  // ⚠ 名簿は両球団とも24人（上限）なので、**人数の揃ったトレード**にする。
-  //    1人対0人は相手が25人になって弾かれる（それが正しい動き）
+  // ⚠ 人数の揃ったトレードにする（名簿の形を保つため）。
   const beforeReject = await live();
   const a3 = rosterOf(beforeReject, teamA).find((p) => p.position === 'pitcher');
   const b3 = rosterOf(beforeReject, teamB).find((p) => p.position === 'pitcher');
@@ -347,13 +356,14 @@ try {
     /相手の名簿が成り立ちません/,
     '相手の捕手を全部もらえた',
   );
-  // ⚠ **人数が合わないと上限を超える**。24人どうしで2対1は25人になる
+  // ⚠ **人数が合わないと上限を超える**。空きの数より多くもらうと枠を割る
+  const room = ROSTER_LIMIT - rosterOf(current, teamA).length;
   await assert.rejects(
     () =>
       send('a', sa, 'tradeOffer', {
         to: teamB,
-        offer: [myPitchers[0]],
-        want: [theirPitchers[0], theirPitchers[1]],
+        offer: [],
+        want: theirPitchers.slice(0, room + 1),
       }),
     new RegExp(`${ROSTER_LIMIT}人を超えます`),
     '上限を超えるトレードが通った',
@@ -476,7 +486,7 @@ try {
     // 名簿が壊れていないこと
     for (const name of [teamA, teamB]) {
       const players = rosterOf(await live(), name);
-      assert.equal(players.length, ROSTER_LIMIT, `${name} の人数が壊れた`);
+      assert.equal(players.length, PACK_SIZE, `${name} の人数が壊れた`);
       assert.equal(
         new Set(players.map((p) => p.id)).size,
         players.length,

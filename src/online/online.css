@@ -248,6 +248,87 @@
 .online-standings .online-move {
   white-space: nowrap;
 }
+/* --- 選手の詳細（1画面） ------------------------------------------------ */
+/* ⚠ タブで分けない。札と経歴・成績・能力を一度に出す（以前は3タブ＋
+   その中の区分で、1人を見るのに何度も押していた）。 */
+.online-career {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+.online-career b {
+  color: #e2e8f0;
+}
+.online-detail-section + .online-detail-section {
+  margin-top: 12px;
+}
+.online-detail-section > h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--accent);
+}
+.online-detail-section > h3 small {
+  font-weight: 400;
+  color: #9fb0c4;
+}
+/* 成績は横一列。⚠ 折り返してよい（項目数が打者と投手で違う） */
+.online-detail-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 6px;
+}
+.online-detail-stats > div {
+  min-width: 62px;
+}
+.online-detail-stats dt {
+  font-size: 11px;
+  color: #9fb0c4;
+}
+.online-detail-stats dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* 能力は**横に並べる**。縦に積むと送らないと見えない */
+.online-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.online-detail-block {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #ffffff0c;
+}
+.online-detail-block h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-detail-block dl {
+  margin: 0;
+}
+.online-detail-block dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.online-detail-block dt {
+  color: #9fb0c4;
+}
+.online-detail-block dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- トレード ---------------------------------------------------------- */
 .online-trade-card + .online-trade-card {
   margin-top: 12px;

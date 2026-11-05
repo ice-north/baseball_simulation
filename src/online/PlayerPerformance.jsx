@@ -2,9 +2,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { POS } from './api.js';
 import { turnLabel } from './shared.js';
 import { PageNav } from './PageNav.jsx';
-import PlayerAbilities from './PlayerAbilities.jsx';
+import PlayerDetailBody, { PlayerTags } from './PlayerDetailBody.jsx';
 import { useRead } from './useRead.js';
-import { useMobile } from './useMobile.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
@@ -255,13 +254,13 @@ function Approximation({ columns, precise = false }) {
     <small className="online-stat-note">※ 出塁率・OPS・打席関連は概算</small>
   ) : null;
 }
-function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
-  const mobile = useMobile();
+function Detail({ player, close }) {
   const dialog = useRef(null);
-  const [category, setCategory] = useState(initialCategory);
-  const [groupId, setGroupId] = useState(initialGroup);
-  const [pane, setPane] = useState(initialPane);
   const [periodId, setPeriodId] = useState('current');
+  const [splits, setSplits] = useState(false);
+  const [splitCategory, setSplitCategory] = useState(
+    player.position === 'pitcher' ? 'pitching' : 'batting',
+  );
   const info = useRead(player.detailAvailable ? 'player' : null, {
     id: player.id,
   });
@@ -299,7 +298,6 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
     dialog.current.close();
     close();
   };
-  const group = statGroup(category, groupId);
   return (
     <dialog
       ref={dialog}
@@ -316,11 +314,13 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
       <header>
         <div>
           <h2 id="online-player-title">{player.name}</h2>
+          {/* ⚠ 札は**1行にまとめる**。守備位置・年齢・背番号・利き手・体格・
+              出身。調子と疲労は今季のときだけ（過去の期間では今の調子は無関係） */}
           <small>
-            {pane === 'abilities' ? '現在' : period?.label || '今季'} ·{' '}
-            {POS[player.position]} ·{' '}
-            {(pane === 'abilities' || periodId === 'current') && (
+            <PlayerTags player={player} />
+            {periodId === 'current' && (
               <>
+                {' · '}
                 <ConditionMark player={player} />
                 {CONDITION_TEXT[conditionValue(player)] || '調子未記録'} · 疲労
                 {player.fatigue ?? '—'}
@@ -332,118 +332,49 @@ function Detail({ player, initialCategory, initialGroup, initialPane, close }) {
           閉じる
         </button>
       </header>
-      <nav className="online-player-tabs" aria-label="選手情報の種類">
-        <button
-          aria-pressed={pane === 'stats'}
-          onClick={() => setPane('stats')}
+      {/* ⚠ **タブで分けない**。以前は「成績／能力・人物／場面別」の3タブ＋
+          その中でさらに区分の切り替えがあり、1人を見るのに何度も押していた。
+          見たいもの（札と経歴・成績・能力）は一度に出す。 */}
+      {info.data?.periods.length > 1 && (
+        <select
+          aria-label="成績の期間"
+          value={period?.id || 'current'}
+          onChange={(e) => setPeriodId(e.target.value)}
         >
-          成績
-        </button>
-        <button
-          aria-pressed={pane === 'abilities'}
-          onClick={() => setPane('abilities')}
-        >
-          能力・人物
-        </button>
-        <button
-          aria-pressed={pane === 'splits'}
-          onClick={() => setPane('splits')}
-        >
-          場面別
-        </button>
-      </nav>
-      {pane !== 'abilities' && (
-        <>
-          {info.data?.periods.length > 1 && (
-            <select
-              aria-label="成績の期間"
-              value={period?.id || 'current'}
-              onChange={(e) => {
-                setPeriodId(e.target.value);
-                setGroupId('basic');
-              }}
-            >
-              {info.data.periods.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          )}
-          {period && (
-            <small className="online-stat-note">
-              {period.source}
-              {period.partial ? '・記録開始後の場面集計' : ''}
-              {period.splits ? '／打撃の試合数は完了打席のある試合' : ''}
-            </small>
-          )}
-          {info.error && (
-            <div role="alert">
-              {info.error}
-              <button onClick={info.retry}>選手記録を再取得</button>
-            </div>
-          )}
-        </>
+          {info.data.periods.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
       )}
-      {pane === 'stats' ? (
-        <>
-          <div className="online-stat-tools">
-            <Category
-              value={category}
-              setValue={(next) => {
-                setCategory(next);
-                setGroupId('basic');
-              }}
-            />
-            {/* ⚠ PCはタブ、スマホはコンボボックス（幅）。
-                ⚠ 両方置いて CSS で隠すと、同じ名前の操作が2つになる（検査も読み上げも迷う） */}
-            {!mobile ? (
-              <GroupTabs
-                category={category}
-                value={group.id}
-                onChange={setGroupId}
-                historic={periodId !== 'current'}
-              />
-            ) : (
-              <GroupSelect
-                category={category}
-                value={group.id}
-                onChange={setGroupId}
-                historic={periodId !== 'current'}
-              />
-            )}
-          </div>
-          <StatLabels player={shown} category={category} />
-          <dl className="online-stat-grid">
-            {group.columns.map((column) => (
-              <div key={column.id}>
-                <dt>
-                  {column.label}
-                  {column.approximate && !shown.seasonStats?.batting?.measured
-                    ? '※'
-                    : ''}
-                </dt>
-                <dd>{formatStat(column, column.get(shown), true)}</dd>
-              </div>
-            ))}
-          </dl>
-          <Approximation
-            columns={group.columns}
-            precise={!!shown.seasonStats?.batting?.measured}
-          />
-        </>
-      ) : pane === 'splits' ? (
-        <>
-          <Category value={category} setValue={setCategory} />
-          <StatLabels player={shown} category={category} />
+      {info.error && (
+        <div role="alert">
+          {info.error}
+          <button onClick={info.retry}>選手記録を再取得</button>
+        </div>
+      )}
+      <PlayerDetailBody
+        player={player}
+        shown={shown}
+        periodLabel={period?.label || '今季'}
+      />
+      {/* ⚠ 場面別だけは**任意で開く**。打者×投手の組み合わせで行数が多く、
+          1画面には入らない。上の3つ（札と経歴・成績・能力）は常に見える */}
+      <div className="online-actions">
+        <button onClick={() => setSplits(!splits)} aria-expanded={splits}>
+          {splits ? '場面別の成績を閉じる' : '場面別の成績を見る'}
+        </button>
+      </div>
+      {splits && (
+        <section className="online-detail-section">
+          <Category value={splitCategory} setValue={setSplitCategory} />
           {info.loading ? (
             <p>記録を読み込んでいます…</p>
           ) : (
-            <SplitStats period={period} category={category} />
+            <SplitStats period={period} category={splitCategory} />
           )}
-        </>
-      ) : (
-        <PlayerAbilities player={player} />
+        </section>
       )}
     </dialog>
   );

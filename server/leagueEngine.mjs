@@ -109,6 +109,7 @@ import {
   CAMP_PHASES,
   CAMP_ROUNDS,
   ROSTER_LIMIT,
+  ONLINE_ROSTER_TARGETS,
 } from '../src/online/shared.js';
 import {
   generatePyramidTeams,
@@ -873,7 +874,8 @@ function resolveTryout(league, plans) {
     const needFielders = Math.max(8 - fielders, needCatcher ? 1 : 0);
     return { needPitcher, needCatcher, needFielders };
   };
-  const order = generateSnakeDraftOrder(names, 24);
+  // ⚠ 巡目は**枠の数**から取る。直に書くと、枠を増やしたときに取り残される
+  const order = generateSnakeDraftOrder(names, ROSTER_LIMIT);
   const picksLeftOf = Object.fromEntries(names.map((name) => [name, 0]));
   for (const pick of order) picksLeftOf[pick.team] += 1;
   for (const pick of order) {
@@ -883,7 +885,7 @@ function resolveTryout(league, plans) {
     const plan = plans[pick.team];
     const roster = [...team.players, ...acquired[pick.team]];
     const { needPitcher, needCatcher, needFielders } = shortfall(roster);
-    const slotsLeft = 24 - roster.length;
+    const slotsLeft = ROSTER_LIMIT - roster.length;
     const mustFill = (needPitcher ? 1 : 0) + needFielders;
     // ⚠ **希望人数に達しても、最低限が欠けていれば取り続ける**。
     //    以前は希望人数（0人も選べる）で打ち切っていたため、投手・捕手・野手が
@@ -900,10 +902,12 @@ function resolveTryout(league, plans) {
           ? (p) => p.position === 'catcher'
           : (p) => !isPitcher(p);
       const pool = remaining.filter(want);
-      return pool.length ? selectPlayerForAI(pool, roster) || pool[0] : null;
+      return pool.length
+        ? selectPlayerForAI(pool, roster, null, ONLINE_ROSTER_TARGETS) || pool[0]
+        : null;
     };
     let forced = null;
-    // ⚠ 残りの**指名回数**でも判定する。枠（24人）だけで見ていると、希望順位の
+    // ⚠ 残りの**指名回数**でも判定する。枠（26人）だけで見ていると、希望順位の
     //    候補が全員他球団に取られて指名を見送り続けた球団は、枠が空いたまま
     //    巡目が尽き、最低限の構成に届かずにトライアウト全体が解決できなかった。
     if (slotsLeft <= mustFill || picksLeft <= mustFill || planFull)
@@ -923,7 +927,9 @@ function resolveTryout(league, plans) {
               .filter(Boolean),
             roster,
           )
-        : selectPlayerForAI(remaining, roster);
+        : // ⚠ CPUにも**オンラインの目標構成**を渡す。既定（一人用の24人）だと
+          //    CPUだけ24人で止まり、人の球団だけ26人になる
+          selectPlayerForAI(remaining, roster, null, ONLINE_ROSTER_TARGETS);
     // 希望順位の候補が尽きても、最低限が欠けていれば必要な守備位置から補う
     if (!player && mustFill > 0) player = pickForShortfall();
     if (!player) continue;

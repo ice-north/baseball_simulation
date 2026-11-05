@@ -314,7 +314,23 @@ export const CAMP_SUB_MENUS = [
  * ⚠ **1か所に置くこと**。トライアウトの獲得人数・画面の上限・トレードの検査が
  *    別々に 24 と書いていると、変えたときに片方だけ残る。
  */
-export const ROSTER_LIMIT = 24;
+export const ROSTER_LIMIT = 26;
+
+/**
+ * オンラインの目標構成（合計26人）。
+ *
+ * ⚠ **一人用の `ROSTER_TARGETS`（24人）とは別**。一人用の名簿と試合の釣り合いは
+ *    24人で測ってあり、そこを動かすとドラフト・トライアウト・戦力外の
+ *    釣り合いが全部ずれる。オンラインだけ枠を2つ増やすので、表を分けた。
+ * ⚠ 合計は `ROSTER_LIMIT` と揃えること。ずれると、トライアウトが枠を
+ *    埋めきれない（目標に達して止まる）か、上限で弾かれる。
+ */
+export const ONLINE_ROSTER_TARGETS = {
+  pitcher: 11,
+  catcher: 2,
+  infielder: 6,
+  outfielder: 7,
+};
 
 /** キャンプのクール数。一人用と同じ4回 */
 export const CAMP_ROUNDS = 4;

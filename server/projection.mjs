@@ -93,6 +93,13 @@ const playerView = (p) => ({
     university: p.universityTeamName || p.universityName,
     previousTeam: p.previousTeam,
   },
+  // ⚠ **チームの経歴**。「どの年にどこへ行ったか」を選手情報に出す。
+  //    長くなりすぎないよう新しい順に8件まで（入団・移籍・退団が積まれる）
+  careerHistory: Array.isArray(p.careerHistory)
+    ? p.careerHistory
+        .slice(-8)
+        .map((h) => ({ type: h.type, year: h.year, label: h.label }))
+    : [],
   seasonStats: p.seasonStats,
 });
 const dateKey = (d) =>

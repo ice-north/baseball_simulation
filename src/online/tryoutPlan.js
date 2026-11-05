@@ -1,8 +1,7 @@
-import {
-  ROSTER_TARGETS,
-  rosterGroup,
-  rosterCounts,
-} from '../utils/constants.js';
+import { rosterGroup, rosterCounts } from '../utils/constants.js';
+// ⚠ 目標構成は**オンライン専用の表**（26人）。一人用の `ROSTER_TARGETS`（24人）
+//    と取り違えると、枠が2つ空いたまま埋まらない
+import { ONLINE_ROSTER_TARGETS } from './shared.js';
 // ============================================================
 // 初期編成・トライアウトの希望リストを組み立てる計算。
 //
@@ -19,7 +18,7 @@ import {
 
 // --- 希望リストを実際の指名へ変える規則 --------------------------------
 //
-// ⚠ **CPUと同じ目標構成に従うこと**（`ROSTER_TARGETS`）。以前は希望リストを
+// ⚠ **CPUと同じ目標構成に従うこと**（`ONLINE_ROSTER_TARGETS`）。以前は希望リストを
 //    順番どおりに取るだけで構成を見ておらず、候補の38%が投手なので
 //    **投手15人・野手9人**（控えゼロ）になっていた。CPUは全球団が
 //    投手10・野手14で揃っており、人の球団だけ構造的に不利だった。
@@ -31,7 +30,7 @@ export function nextFromPlan(ordered, roster) {
   const counts = rosterCounts(roster);
   const room = (player) => {
     const group = rosterGroup(player.position);
-    return counts[group] < ROSTER_TARGETS[group];
+    return counts[group] < ONLINE_ROSTER_TARGETS[group];
   };
   // ⚠ どの区分も埋まっているときは**希望の先頭に戻す**。ここで null を返すと
   //    枠が余っているのに誰も取らない回ができてしまう
@@ -258,7 +257,7 @@ export function weightedRanked(candidates, weights, roster = []) {
   const tail = [];
   for (const p of sorted) {
     const group = rosterGroup(p.position);
-    if (counts[group] < ROSTER_TARGETS[group]) {
+    if (counts[group] < ONLINE_ROSTER_TARGETS[group]) {
       counts[group] += 1;
       head.push(p.id);
     } else tail.push(p.id);
@@ -355,7 +354,7 @@ export function addToPlan(rankedIds, candidates, count, roster, id, { first = fa
   const counts = rosterCounts([...roster, ...wanted.map((x) => byId.get(x))]);
   const sameGroup = wanted.filter((x) => rosterGroup(byId.get(x).position) === group);
   const victim =
-    counts[group] >= ROSTER_TARGETS[group] && sameGroup.length
+    counts[group] >= ONLINE_ROSTER_TARGETS[group] && sameGroup.length
       ? sameGroup.at(-1)
       : wanted.length >= count
         ? wanted.at(-1)
@@ -461,5 +460,5 @@ export function planSummary(rankedIds, candidates, count, roster = []) {
     if (counts.infielder < 4) warnings.push('内野手が4人未満です');
     if (counts.outfielder < 3) warnings.push('外野手が3人未満です');
   }
-  return { counts, picked, targets: ROSTER_TARGETS, blocking, warnings };
+  return { counts, picked, targets: ONLINE_ROSTER_TARGETS, blocking, warnings };
 }

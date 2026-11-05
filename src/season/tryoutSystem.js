@@ -1823,7 +1823,17 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
  * @param {Array} currentRoster - 現在のロスター（配列形式）
  * @returns {Object} 選択された選手
  */
-export function selectPlayerForAI(candidates, currentRoster = [], teamContext = null) {
+/**
+ * @param {object} targets 目標構成。⚠ **オンラインは枠が26人で別の表を使う**
+ *    （`ONLINE_ROSTER_TARGETS`）。既定は一人用の `ROSTER_TARGETS`（24人）。
+ *    ここを既定のままにしておくと、オンラインのCPUだけ24人で止まる。
+ */
+export function selectPlayerForAI(
+  candidates,
+  currentRoster = [],
+  teamContext = null,
+  targets = ROSTER_TARGETS,
+) {
   // ロスター配列をオブジェクトから配列に変換（後方互換性のため）
   let rosterArray = currentRoster;
   if (!Array.isArray(currentRoster)) {
@@ -1840,10 +1850,10 @@ export function selectPlayerForAI(candidates, currentRoster = [], teamContext = 
 
   // 優先ポジション設定（不足しているポジション）
   let preferredPositions = [];
-  if (rosterCounts.pitcher < ROSTER_TARGETS.pitcher) preferredPositions.push('pitcher');
-  if (rosterCounts.catcher < ROSTER_TARGETS.catcher) preferredPositions.push('catcher');
-  if (rosterCounts.infielder < ROSTER_TARGETS.infielder) preferredPositions.push('first', 'second', 'third', 'short');
-  if (rosterCounts.outfielder < ROSTER_TARGETS.outfielder) preferredPositions.push('left', 'center', 'right');
+  if (rosterCounts.pitcher < targets.pitcher) preferredPositions.push('pitcher');
+  if (rosterCounts.catcher < targets.catcher) preferredPositions.push('catcher');
+  if (rosterCounts.infielder < targets.infielder) preferredPositions.push('first', 'second', 'third', 'short');
+  if (rosterCounts.outfielder < targets.outfielder) preferredPositions.push('left', 'center', 'right');
 
   // 全候補者に価値スコアを付与
   const scoredCandidates = candidates.map(player => ({
