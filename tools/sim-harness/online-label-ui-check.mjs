@@ -407,10 +407,17 @@ try {
   await p
     .getByRole('button', { name: '成績選手100の選手情報を見る', exact: true })
     .click();
-  await p
-    .getByRole('dialog', { name: '成績選手100', exact: true })
-    .getByRole('button', { name: '能力・人物', exact: true })
-    .click();
+  // ⚠ 詳細は**1画面**。以前は「成績／能力・人物／場面別」の3タブに分かれて
+  //    いた。札と経歴・成績・能力を一度に出す（`PlayerDetailBody`）
+  const other = p.getByRole('dialog', { name: '成績選手100', exact: true });
+  await other.locator('.online-career').waitFor();
+  await other.getByRole('heading', { level: 3, name: /^成績/ }).waitFor();
+  await other.getByRole('heading', { level: 3, name: '能力', exact: true }).waitFor();
+  assert.equal(
+    await other.getByRole('button', { name: '能力・人物', exact: true }).count(),
+    0,
+    '能力をタブで分けない',
+  );
   await p.keyboard.press('Escape');
   await p.getByLabel('閲覧する球団').selectOption('A');
   await p
@@ -436,9 +443,11 @@ try {
   await p
     .getByRole('button', { name: '成績選手9の選手情報を見る', exact: true })
     .click();
+  // ⚠ 投手は**球種も同じ画面に**出す（以前は「能力・人物」タブの中の
+  //    さらに別の区分だった）。成績の特徴の札は一覧の行で出す
   await p
     .getByRole('dialog', { name: '成績選手9', exact: true })
-    .getByText('制球安定', { exact: true })
+    .getByText('スライダー', { exact: true })
     .waitFor();
   await p.keyboard.press('Escape');
   await p
@@ -498,34 +507,35 @@ try {
       .click();
     const d = m.getByRole('dialog', { name: '成績選手1', exact: true });
     await d.waitFor();
-    await d.getByLabel('能力の表示項目').selectOption('physical');
+    // ⚠ 詳細は**1画面**。タブも「表示項目」の選択も無く、経歴・成績・能力を
+    //    まとめて出す（`PlayerDetailBody`）。走力は「身体」の中
+    await d.locator('.online-career').waitFor();
+    await d.getByRole('heading', { level: 3, name: /^成績/ }).waitFor();
+    await d.getByRole('heading', { level: 3, name: '能力', exact: true }).waitFor();
+    assert.equal(
+      await d.getByLabel('能力の表示項目').count(),
+      0,
+      '能力を表示項目で分けない',
+    );
     assert.equal(
       await d
         .locator('dt')
         .filter({ hasText: /^走力$/ })
+        .first()
         .locator('..')
         .locator('dd')
         .innerText(),
       '70',
     );
-    await m.screenshot({
-      path: `/tmp/baseball-online-mobile-abilities-${width}.png`,
-      fullPage: true,
-    });
-    await d.getByLabel('能力の表示項目').selectOption('arsenal');
-    await d.getByText('スライダー', { exact: true }).waitFor();
-    await d.getByRole('button', { name: '成績', exact: true }).click();
     const detailBounds = await d.boundingBox();
     assert.ok(
       Math.abs(detailBounds.width - width) <= 1,
       'スマホの詳細パネルは画面幅いっぱいに使う',
     );
-    assert.equal(await d.locator('.online-stat-label').count(), 3);
-    await d.getByText('アベレージヒッター', { exact: true }).waitFor();
-    assert.ok(
-      await d.evaluate((e) => e.scrollHeight <= e.clientHeight + 1),
-      '成績詳細は縦スクロール不要',
-    );
+    await m.screenshot({
+      path: `/tmp/baseball-online-mobile-abilities-${width}.png`,
+      fullPage: true,
+    });
     assert.ok(
       await m.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -537,7 +547,11 @@ try {
       fullPage: true,
     });
     await d.getByLabel('成績の期間').selectOption('online:1');
-    await d.getByRole('button', { name: '場面別', exact: true }).click();
+    // ⚠ 場面別だけは**畳んでおく**（打者×投手で行が多い）。開けること、
+    //    閉じて元の1画面に戻れることを見る
+    await d
+      .getByRole('button', { name: '場面別の成績を見る', exact: true })
+      .click();
     assert.deepEqual(
       await d.locator('.online-stat-grid dd').allTextContents(),
       ['20', '.500', '.500', '1.000'],
@@ -548,12 +562,18 @@ try {
       await d.locator('.online-stat-grid dd').allTextContents(),
       ['20', '.100', '.100', '.200'],
     );
-    await d.getByRole('button', { name: '成績', exact: true }).click();
+    await d
+      .getByRole('button', { name: '場面別の成績を閉じる', exact: true })
+      .click();
+    assert.equal(
+      await d.locator('.online-stat-grid').count(),
+      0,
+      '場面別を閉じたら消える',
+    );
     await d.getByLabel('成績の期間').selectOption('career');
     await d.getByText('.300', { exact: true }).waitFor();
     await d.getByLabel('成績の期間').selectOption('legacy-career');
-    await d.getByLabel('成績の表示項目').selectOption('discipline');
-    await d.getByText('2', { exact: true }).waitFor();
+    await d.getByRole('heading', { level: 3, name: '能力', exact: true }).waitFor();
     await d.getByLabel('成績の期間').selectOption('current');
     await d
       .getByRole('button', { name: '選手成績を閉じる', exact: true })
@@ -701,9 +721,23 @@ try {
     );
     await firstRow.getByRole('button').click();
     const numericDetail = m.getByRole('dialog');
+    // ⚠ 一覧はランク、**詳細は実数値**。詳細は1画面になったので、能力は
+    //    「打撃・走塁」「身体」などのかたまりに分かれて並んでいる
+    const abilityValue = (label) =>
+      numericDetail
+        .locator('.online-detail-block dt')
+        .filter({ hasText: new RegExp(`^${label}$`) })
+        .first()
+        .locator('..')
+        .locator('dd')
+        .innerText();
     assert.deepEqual(
-      await numericDetail.locator('.online-stat-grid dd').allTextContents(),
-      ['50', '50', '—', '70'],
+      [
+        await abilityValue('ミート'),
+        await abilityValue('パワー'),
+        await abilityValue('走力'),
+      ],
+      ['50', '50', '70'],
       '同じ能力でも詳細は実数値',
     );
     await m.keyboard.press('Escape');
@@ -778,14 +812,19 @@ try {
       `${width}px 防御率108.00でも列を跨がない`,
     );
     await firstRow.getByRole('button').click();
-    await m.getByRole('dialog').getByText('108.00', { exact: true }).waitFor();
+    // ⚠ 詳細に出す成績は**守備位置で決まる**（投手は投球、野手は打撃、
+    //    二刀流は両方）。投球の一覧から野手を開いても打撃の成績が出る
+    await m
+      .getByRole('dialog', { name: '成績選手1', exact: true })
+      .getByText('.450', { exact: true })
+      .waitFor();
     await m.keyboard.press('Escape');
     await m
       .getByRole('button', { name: '成績選手9の選手情報を見る', exact: true })
       .click();
     await m
       .getByRole('dialog', { name: '成績選手9', exact: true })
-      .getByText('制球安定', { exact: true })
+      .getByText('スライダー', { exact: true })
       .waitFor();
     await m.keyboard.press('Escape');
     const pager = await m

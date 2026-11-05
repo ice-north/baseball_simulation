@@ -5,12 +5,13 @@ import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 // ⚠ PCの左メニューは「現在の手続き」「選手成績」「ホーム」（3a8592d で名前が変わった）。
 //    スマホのホームのボタンは「手続き」「打順」のまま。
-// ⚠ PCのキャンプは**選手ごとに**練習を割り当てる（`CampPlanner`）。以前は球団で
-//    1つ選ぶだけだった。ここでは名簿の投手1人の「練習」の欄で、未保存案の保持を見る。
+// ⚠ PCのキャンプは**選手ごとにメイン練習とサブ練習**を割り当て、1クールずつ
+//    その場で実行する（`CampPlanner`）。以前は球団で1つ選ぶだけだった。
+//    ここでは名簿の投手1人の「メイン練習」の欄で、未保存案の保持を見る。
 //    割り当ての無い投手は「投げ込み」（`control`）になる
 const PITCHER = '検証 投手';
 const menuGroup = (page) =>
-  page.getByRole('combobox', { name: `${PITCHER}の練習`, exact: true });
+  page.getByRole('combobox', { name: `${PITCHER}のメイン練習`, exact: true });
 const chooseMenu = (page, value) => menuGroup(page).selectOption(value);
 const pressedMenu = (page) => menuGroup(page).inputValue();
 const STANDARD_MENU = 'control';
@@ -123,10 +124,14 @@ async function scene({
         await new Promise((resolve) => {
           state.release = resolve;
         });
-      state.view.phase.submission = {
-        plan: payload.plan,
-        ready: payload.ready,
-      };
+      // ⚠ キャンプの `campRound` は**提出ではない**（その場で実行する）。
+      //    提出として記録すると、本物のサーバーには起きない
+      //    「別の操作で提出が更新されました」が画面に出る
+      if (state.view.phase && payload.plan !== undefined)
+        state.view.phase.submission = {
+          plan: payload.plan,
+          ready: payload.ready,
+        };
       state.view.revision++;
       value = { ok: true, revision: state.view.revision };
     } else throw new Error(`unexpected action ${action}`);
@@ -180,17 +185,25 @@ try {
   await click(draft.page, 'ホーム');
   await click(draft.page, '現在の手続き');
   assert.equal(await pressedMenu(draft.page), 'velocity', '画面移動でも提出案を保持');
-  // ⚠ スマホは選手ごとの割り当てを持たない（全体の方針だけを出す）。
-  //    未保存の編集があることだけは同じように出す
+  // ⚠ スマホは**選手ごとの表を出さない**（23列は入らない）。育成方針と
+  //    「第Nクール練習を実行」だけを出す（`CampPlanner` の `compact`）。
+  //    出さないと、携帯だけの人は4クールとも自動になってしまう。
   await draft.page.setViewportSize({ width: 390, height: 844 });
-  await draft.page.getByText('練習方針: 標準', { exact: false }).waitFor();
   await draft.page
-    .getByText('編集中の内容（未保存）です。', { exact: false })
+    .getByText('選手ごとの練習はPCで選べます', { exact: false })
     .waitFor();
+  await draft.page
+    .getByRole('button', { name: '第1クール練習を実行', exact: true })
+    .waitFor();
+  assert.equal(
+    await draft.page.locator('.online-camp-scroll').count(),
+    0,
+    'スマホに選手ごとの表を出している',
+  );
   await draft.page.reload();
   await click(draft.page, '手続き');
   await draft.page
-    .getByText('編集中の内容（未保存）です。', { exact: false })
+    .getByRole('button', { name: '第1クール練習を実行', exact: true })
     .waitFor();
   await draft.page.setViewportSize({ width: 1280, height: 844 });
   assert.equal(
@@ -204,7 +217,7 @@ try {
   await draft.page.waitForFunction(
     ([name, value]) =>
       document.querySelector(`select[aria-label="${name}"]`)?.value === value,
-    [`${PITCHER}の練習`, STANDARD_MENU],
+    [`${PITCHER}のメイン練習`, STANDARD_MENU],
   );
   assert.equal(draft.payloads.length, 0, '復元するだけで自動送信しない');
   await draft.context.close();
@@ -286,14 +299,17 @@ try {
   await click(retry.page, '標準案を再取得');
   await menuGroup(retry.page).waitFor();
   assert.equal(await retry.page.getByRole('alert').count(), 0);
+  // ⚠ キャンプに「下書きを保存」「この内容で決定」は無い。1クールずつその場で
+  //    実行する。送っている間は**割り当ても変えられない**こと——変えられると、
+  //    送った内容と画面の内容が食い違う
   retry.hold = true;
   await retry.page
-    .getByRole('button', { name: '下書きを保存', exact: true })
+    .getByRole('button', { name: '第1クール練習を実行', exact: true })
     .click();
-  await withDeadline(retry.commandStarted, '提出保存の開始');
+  await withDeadline(retry.commandStarted, '練習の実行の開始');
   assert.ok(
     await menuGroup(retry.page).isDisabled(),
-    '提出の保存中は練習方針も変更できない',
+    '練習を送っている間は割り当ても変更できない',
   );
   retry.release();
   await retry.page.getByText('保存しました', { exact: true }).waitFor();
@@ -321,19 +337,24 @@ try {
 
   const mobile = await scene({ mobile: true });
   await click(mobile.page, '手続き');
+  // ⚠ 携帯でも**4クールを自分で回せること**。表は出せない（23列は入らない）が、
+  //    育成方針と実行だけ出す。出さないと携帯だけの人は全部自動になる
   await mobile.page
-    .getByText('練習方針: 標準（投手は制球・野手は打撃）', { exact: false })
+    .getByText('選手ごとの練習はPCで選べます', { exact: false })
     .waitFor();
-  mobile.view.phase.submission = { plan: { menu: 'velocity' }, ready: false };
-  mobile.view.revision++;
-  await click(mobile.page, '更新');
-  await mobile.page.getByText('練習方針: 球速練習', { exact: false }).waitFor();
-  await click(mobile.page, 'この内容で決定');
-  assert.equal(mobile.payloads[0].plan.menu, 'velocity');
-  assert.deepEqual(mobile.payloads[0].baseSubmission, {
-    plan: { menu: 'velocity' },
-    ready: false,
-  });
+  await mobile.page
+    .getByRole('button', { name: '⚔️ 長所を伸ばす', exact: true })
+    .click();
+  await mobile.page
+    .getByRole('button', { name: '第1クール練習を実行', exact: true })
+    .click();
+  await mobile.page.getByText('保存しました', { exact: true }).waitFor();
+  assert.equal(mobile.payloads[0].round, 1, '何クール目かを送る');
+  assert.equal(mobile.payloads[0].policy.direction, 'sharpen');
+  // ⚠ 携帯でも**選手ごとの割り当てを送る**（方針から決まる既定）。送らないと
+  //    サーバー側の既定と食い違う
+  assert.deepEqual(Object.keys(mobile.payloads[0].main), ['1']);
+  assert.deepEqual(Object.keys(mobile.payloads[0].sub), ['1']);
   await mobile.context.close();
 
   const pages = await scene();

@@ -258,11 +258,15 @@ try {
   await login(b, 2);
   await click(b, '現在の手続き');
   await click(b, 'この内容で決定');
-  // セットを配り終えるとキャンプが開く。2人とも決めると開幕する
+  // セットを配り終えるとキャンプが開く。
+  // ⚠ **キャンプには「この内容で決定」が無い**。1クールずつその場で実行する
+  //    形なので、提出して締め切りを待つものが無い（`CampPlanner`）。
+  //    4クール回し終えた人から決定済みになり、2人とも終わると開幕する。
   for (const page of [p, b]) {
     await click(page, '更新');
     await page.getByRole('heading', { name: 'キャンプ', exact: true }).waitFor();
-    await click(page, 'この内容で決定');
+    for (let round = 1; round <= 4; round += 1)
+      await click(page, `第${round}クール練習を実行`);
   }
   await click(p, '更新');
   await click(p, '進行時刻');
@@ -495,9 +499,18 @@ try {
     '実APIの対人記録と期間を閲覧',
   );
   const playerDialog = m.getByRole('dialog');
+  // ⚠ **選手の詳細はタブで分けない**。札と経歴・成績・能力を一度に出す
+  //    （`PlayerDetailBody`）。以前は「成績／能力・人物／場面別」の3タブだった
+  await playerDialog.locator('.online-career').waitFor();
+  await playerDialog.getByRole('heading', { name: '成績' }).waitFor();
+  await playerDialog.getByRole('heading', { name: '能力' }).waitFor();
+  // 場面別だけは任意で開く（行数が多く1画面に入らない）
   await playerDialog
-    .getByRole('button', { name: '場面別', exact: true })
+    .getByRole('button', { name: '場面別の成績を見る', exact: true })
     .click();
+  await playerDialog
+    .getByRole('button', { name: '場面別の成績を閉じる', exact: true })
+    .waitFor();
   await playerDialog
     .getByRole('button', { name: '選手成績を閉じる', exact: true })
     .click();

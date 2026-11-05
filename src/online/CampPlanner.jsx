@@ -21,6 +21,7 @@ import {
   CAMP_PHASES,
 } from './shared.js';
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
+import { useDraftState, phaseDraftName } from './Drafts.jsx';
 import { Choice } from './Choice.jsx';
 
 // ============================================================
@@ -221,11 +222,23 @@ export default function CampPlanner({
   const done = camp?.rounds || 0;
   const total = camp?.total || 4;
   const roster = view.roster || [];
-  const [policy, setPolicy] = useState(
+  // ⚠ **未保存の割り当ては、再読込や表示の切り替えで消さないこと**
+  //    （ほかの手続きと同じ `useDraftState`）。26人ぶん選んだあとに画面を
+  //    読み直して全部消えると、やり直す気が失せる。
+  //    実行済みのクールの指示（`camp.plan`）を初期値にする。
+  const phaseId = view.phase?.id;
+  const [policy, setPolicy] = useDraftState(
+    phaseDraftName(phaseId, 'camp.policy'),
     () => camp?.plan?.policy || { direction: 'balanced', phase: 'skill' },
   );
-  const [main, setMain] = useState(() => camp?.plan?.main || {});
-  const [sub, setSub] = useState(() => camp?.plan?.sub || {});
+  const [main, setMain] = useDraftState(
+    phaseDraftName(phaseId, 'camp.main'),
+    () => camp?.plan?.main || {},
+  );
+  const [sub, setSub] = useDraftState(
+    phaseDraftName(phaseId, 'camp.sub'),
+    () => camp?.plan?.sub || {},
+  );
   const mainOf = (p) =>
     clampMenu(
       main[p.id] || resolveTraining(p, policy.direction, policy.phase).main,
