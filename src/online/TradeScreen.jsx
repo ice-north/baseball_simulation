@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useRead } from './useRead.js';
 import { teamLabel, teamShort } from './gameText.js';
 import { POS } from './api.js';
+import { ROSTER_LIMIT } from './shared.js';
 import { Page } from './Page.jsx';
 import { Choice } from './Choice.jsx';
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
@@ -136,11 +137,14 @@ function TradeForm({
           empty={theirs.error ? '名簿を読めませんでした。' : '名簿を読んでいます…'}
         />
       </div>
-      {/* ⚠ 人数が合わないと上限（24人）を超えて断られる。先に知らせる */}
+      {/* ⚠ 人数が合わないと上限（`ROSTER_LIMIT`）を超えて断られる。先に知らせる。
+          ⚠ 数字は定数から出す。直に書くと枠を変えたときに文面だけ古くなる
+          （24人→26人のときに残っていた） */}
       {offer.length !== want.length && (
         <p className="online-muted">
           出す{offer.length}人・もらう{want.length}人。人数が違うと、どちらかの
-          名簿が24人を超えたり9人を割ったりして断られることがあります。
+          名簿が{ROSTER_LIMIT}人を超えたり、投手・捕手が居なくなったり野手が
+          8人を割ったりして断られることがあります。
         </p>
       )}
       <div className="online-actions">

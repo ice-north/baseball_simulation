@@ -297,6 +297,22 @@ function memberTeam(league, userId) {
 }
 
 /**
+ * ⚠ **初期メンバーの入れ替えを待っている球団とはトレードしない**。
+ *    途中参加した人の名簿は、次のキャンプの後に選んだセットで丸ごと
+ *    置き換わる（`applyPendingPacks`）。その前にトレードすると、受け取った
+ *    選手は置き換えで消え、出した選手だけが相手に残る（選手が1人ずつ
+ *    リーグから消えていく）。
+ */
+function assertNoPendingPack(league, teamNames) {
+  for (const name of teamNames)
+    requireOnline(
+      !hasPendingPack(league, name),
+      `${name}は開幕前に初期メンバーへ入れ替わるため、それまではトレードできません`,
+      409,
+    );
+}
+
+/**
  * トレードを提案する。
  *
  * ⚠ **相手は参加者の球団だけ**。CPU球団は返事をしないので、出せても
@@ -312,6 +328,7 @@ export function openTrade(league, userId, { to, offer, want }, now) {
   requireOnline(partner.userId !== userId, '自分の球団とはトレードできません');
   const theirs = TEAMS_DATA[partner.teamName];
   requireOnline(theirs, '相手の球団が見つかりません', 409);
+  assertNoPendingPack(league, [mine.member.teamName, partner.teamName]);
   requireOnline(
     league.trades.filter((t) => t.from === userId).length < MAX_OPEN_TRADES,
     `出せる提案は同時に${MAX_OPEN_TRADES}件までです`,
@@ -388,6 +405,7 @@ export function respondTrade(league, userId, { tradeId, action, offer, want }, n
   }
 
   requireOnline(action === 'accept', 'トレードの操作が不正です');
+  assertNoPendingPack(league, [trade.fromTeam, trade.toTeam]);
   const after = assertTradeAllowed(fromTeam, toTeam, trade.offer, trade.want);
   fromTeam.players = after.from;
   toTeam.players = after.to;
@@ -791,11 +809,52 @@ function refreshTeamPlan(league, name) {
       starters.length > 0 &&
       starters.every((id) => ids.has(id)) &&
       ensureCompleteLineup(team, false)
-    )
+    ) {
+      syncRelievers(team);
       return;
+    }
   }
   generatePitchingRotation(name);
   setRecommendedLineup(team, name);
+}
+
+/**
+ * 残した投手起用の**救援の欄**を名簿に合わせる。
+ *
+ * ⚠ 先発ローテが揃っていれば編成はそのまま残すが、救援（中継ぎ・セットアッパー・
+ *    守護神）は見ていなかった。トレード・トライアウト・退団で
+ *    - 出した救援投手が欄に残る（守護神が居ない球団になる）
+ *    - 入ってきた投手がどの欄にも入らず、**試合で1度も投げない**
+ *      （画面の投手起用には「おまかせ」の救援として出るので、気づけない）
+ *    ことになっていた。居ない投手を外し、どこにも居ない投手を中継ぎに足す。
+ *    役割（`pitcherRoles`）が無い投手は「おまかせ」として扱われる（`roleFor`）。
+ */
+function syncRelievers(team) {
+  const rotation = team.pitchingRotation;
+  if (!rotation) return;
+  const pitchers = team.players
+    .filter((p) => p.position === 'pitcher' && p.isActive !== false)
+    .map((p) => p.id);
+  const present = new Set(pitchers);
+  const starters = new Set(rotation.starters || []);
+  rotation.setupMen = (rotation.setupMen || []).filter((id) => present.has(id));
+  if (rotation.closer != null && !present.has(rotation.closer))
+    rotation.closer = null;
+  const assigned = new Set([
+    ...rotation.setupMen,
+    ...(rotation.closer != null ? [rotation.closer] : []),
+  ]);
+  const middle = (rotation.middleRelievers || []).filter(
+    (id) => present.has(id) && !starters.has(id) && !assigned.has(id),
+  );
+  for (const id of pitchers)
+    if (!starters.has(id) && !assigned.has(id) && !middle.includes(id))
+      middle.push(id);
+  rotation.middleRelievers = middle;
+  rotation.relievers = pitchers.filter((id) => !starters.has(id));
+  if (rotation.pitcherRoles)
+    for (const id of Object.keys(rotation.pitcherRoles))
+      if (!present.has(Number(id))) delete rotation.pitcherRoles[id];
 }
 
 /**
