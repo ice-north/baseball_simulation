@@ -329,56 +329,231 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* --- トレード ---------------------------------------------------------- */
+/* --- トレード（`TradeScreen.jsx`） -------------------------------------
+   守備位置ごとに自球団と相手を1枚の表（`.online-lineup-table`）に並べ、
+   右に交換案（選んだ選手・交換後の人数と構成）を置く。
+   ⚠ 要素名で当てるものには `:not(:where(.online-sp *))` を付ける（決まり）。 */
+.online-trade-heading:not(:where(.online-sp *)) {
+  margin: 18px 0 8px;
+  font-size: 15px;
+  color: #e2e8f0;
+}
 .online-trade-card + .online-trade-card {
   margin-top: 12px;
 }
-.online-trade-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 20px;
-  margin: 0 0 10px;
-  font-size: 13px;
+.online-trade-card .online-lineup-table + .online-lineup-table {
+  margin-top: 10px;
 }
-.online-trade-summary b {
-  margin-right: 4px;
-  color: var(--accent);
-}
-.online-trade-grid {
+.online-trade-work {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 14px;
-  margin: 10px 0;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+  margin-top: 10px;
 }
-.online-trade-column h3 {
+/* ⚠ 狭い画面では交換案を表の上に回す（表が押しつぶされて横に送ることになる） */
+@media (max-width: 1360px) {
+  .online-trade-work {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .online-trade-deal {
+    order: -1;
+    position: static !important;
+  }
+}
+.online-trade-board .online-choice {
+  margin-bottom: 8px;
+}
+.online-trade-table {
+  width: 100%;
+}
+.online-desktop .online-trade-table .online-trade-poscell {
+  text-align: left;
+  width: 84px;
+}
+.online-trade-pitches {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: #cbd5e1;
+  text-align: left !important;
+}
+.online-trade-empty {
+  text-align: left !important;
+  padding-left: 12px !important;
+}
+.online-lineup-row.is-static {
+  cursor: default;
+}
+.online-lineup-row.is-static:hover {
+  background: transparent;
+}
+.online-lineup-row.is-picked.is-give {
+  background: #fb923c1f;
+  box-shadow: inset 3px 0 0 #fb923c;
+}
+.online-lineup-row.is-picked.is-get {
+  background: #4ade801a;
+  box-shadow: inset 3px 0 0 #4ade80;
+}
+.online-desktop .online-lineup-slot button.online-trade-toggle:not(:where(.online-sp *)) {
+  cursor: pointer;
+  color: #64748b;
+  font-weight: 700;
+}
+.online-desktop .online-lineup-row.is-give .online-lineup-slot button.online-trade-toggle:not(:where(.online-sp *)) {
+  color: #fdba74;
+}
+.online-desktop .online-lineup-row.is-get .online-lineup-slot button.online-trade-toggle:not(:where(.online-sp *)) {
+  color: #86efac;
+}
+.online-trade-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.online-trade-chip.is-give {
+  color: #fdba74;
+  background: #fb923c22;
+}
+.online-trade-chip.is-get {
+  color: #86efac;
+  background: #4ade8022;
+}
+/* 交換案（右の欄）。⚠ 下へ送っても見えるように貼り付ける */
+.online-trade-deal {
+  position: sticky;
+  top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #0f172a66;
+  border: 1px solid #ffffff1a;
+}
+.online-trade-deal h3:not(:where(.online-sp *)) {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.online-trade-deal-side + .online-trade-deal-side {
+  margin-top: 10px;
+}
+.online-trade-deal-side h4:not(:where(.online-sp *)) {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 8px;
-  margin: 0 0 6px;
-  font-size: 13px;
-  color: var(--accent);
+  margin: 0 0 4px;
+  font-size: 12px;
 }
-.online-trade-column h3 small {
+.online-trade-deal-side.is-give h4:not(:where(.online-sp *)) {
+  color: #fdba74;
+}
+.online-trade-deal-side.is-get h4:not(:where(.online-sp *)) {
+  color: #86efac;
+}
+.online-trade-deal-side h4 small:not(:where(.online-sp *)) {
   font-weight: 400;
-  color: #9fb0c4;
+  color: #94a3b8;
 }
-/* ⚠ 24人を並べると縦に伸びる。**中で送れるようにする**（画面ごと流さない） */
-.online-trade-list {
-  max-height: 320px;
-  overflow-y: auto;
-  padding-right: 4px;
-  border-radius: 8px;
-  background: #ffffff0c;
-}
-.online-trade-pick {
+.online-trade-deal-side ul:not(:where(.online-sp *)) {
   margin: 0;
-  padding: 2px 8px;
-  gap: 6px;
+  padding: 0;
+  list-style: none;
 }
-.online-trade-pick small {
-  color: #9fb0c4;
+.online-trade-deal-side li:not(:where(.online-sp *)) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 5px 0;
+  border-top: 1px solid #ffffff12;
+  font-size: 12px;
+}
+.online-trade-deal-name small:not(:where(.online-sp *)) {
+  margin-left: 6px;
+  color: #94a3b8;
+}
+.online-trade-deal-values {
+  grid-column: 1;
+  display: flex;
+  gap: 8px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+.online-trade-deal-values span span:not(:where(.online-sp *)) {
+  margin-left: 2px;
+}
+.online-desktop .online-trade-remove:not(:where(.online-sp *)) {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 0;
+  height: 26px;
+  padding: 0 8px;
   font-size: 11px;
+}
+.online-trade-deal-side p:not(:where(.online-sp *)) {
+  margin: 0;
+  font-size: 12px;
+}
+.online-trade-deal .online-actions {
+  margin-top: 12px;
+}
+/* 交換のあとの両球団（人数・構成） */
+.online-trade-impact {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.online-trade-card .online-trade-impact {
+  max-width: 560px;
+}
+.online-trade-impact-team {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #ffffff0a;
+  font-size: 12px;
+}
+.online-trade-impact-team.is-bad {
+  box-shadow: inset 0 0 0 1px #f87171aa;
+}
+.online-trade-impact-team h4:not(:where(.online-sp *)) {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+.online-trade-impact-team h4 small:not(:where(.online-sp *)) {
+  margin-left: 6px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+.online-trade-impact-size:not(:where(.online-sp *)) {
+  margin: 0 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.online-trade-impact-size small:not(:where(.online-sp *)) {
+  color: #94a3b8;
+}
+.online-trade-impact-team ul:not(:where(.online-sp *)) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+  color: #cbd5e1;
+}
+.online-trade-impact-team li.is-up:not(:where(.online-sp *)) b {
+  color: #86efac;
+}
+.online-trade-impact-team li.is-down:not(:where(.online-sp *)) b {
+  color: #fdba74;
+}
+.online-trade-problem:not(:where(.online-sp *)) {
+  margin: 6px 0 0;
+  color: #fca5a5;
+  font-weight: 600;
 }
 
 /* --- キャンプ ---------------------------------------------------------- */
