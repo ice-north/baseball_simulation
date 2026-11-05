@@ -165,6 +165,12 @@ function createSchedule(season, teams) {
     year: season.currentDate.year,
   });
   season.standings = initializeStandings(season.settings.teamNames);
+  // ⚠ **ターン数と試合数は、日程を組んだときに書き留めること**。進行中の
+  //    シーズンは組んだ日程のまま終わるので、`SEASON_TURNS` を変えた直後に
+  //    画面が「第121ターン / 160」のような、日程に無い数を出してしまう。
+  //    書き留めておけば、古いリーグは120のまま最後まで、次の年から160になる。
+  season.settings.seasonTurns = SEASON_TURNS;
+  season.settings.gamesPerSeason = gamesPerTeam();
 }
 
 /**
@@ -516,8 +522,8 @@ export function createLeague({
     teamNames: names,
     teamsCount: PYRAMID_TEAM_COUNT,
     preset: 'pyramid',
-    // ⚠ 休養日のぶん試合数はターン数より少ない（規定打席などの基準になる）
-    gamesPerSeason: gamesPerTeam(),
+    // ⚠ 試合数とターン数は `createSchedule` が入れる（日程と同じ場所で決める）。
+    //    休養日のぶん試合数はターン数より少ない（規定打席などの基準になる）
     leagueFormat: 'single',
     playoffFormat: 'short',
     useDH: false,

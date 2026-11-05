@@ -36,7 +36,9 @@ export default function MobileView(props) {
           <section className="online-mobile-overview">
             <strong>{teamLabel(view.teamName)}</strong>
             <span>
-              {formatTurn(view.currentDate)} · {STATUS[view.status]}
+              {/* ⚠ 総数はビューの値で出す（PC版と同じ理由） */}
+              {formatTurn(view.currentDate, view.seasonTurns)} ·{' '}
+              {STATUS[view.status]}
             </span>
             <small>次の進行 {dateTime(view.nextAdvanceAt)}</small>
           </section>

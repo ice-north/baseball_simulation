@@ -9,12 +9,16 @@ import {
 import { getPositionFitness } from '../src/utils/physics.js';
 
 /**
- * 人の球団で、この疲労を超えた野手はその日だけ控えと入れ替える。
+ * この疲労を超えた野手はその日だけ控えと入れ替える。
  *
- * ⚠ **CPUの球団は毎試合、疲労を見て打順を組み直す**（`generateAILineup`）が、
- *    人の球団は保存した打順のまま毎試合出続ける。試合に出た選手はその日に
- *    疲労が回復しないので、休養日（6ターンに1回）しか下がらず、実測で
- *    遊撃手の疲労が8月に396まで積み上がり、打撃がほぼ0になっていた。
+ * ⚠ **全球団に当てること**。かつては「CPUは毎試合 `generateAILineup` が
+ *    疲労を見て組み直すから不要」として人の球団だけに当てていたが、
+ *    **オンラインではその前提が成り立たない**。サーバーは CPU 球団にも
+ *    打順を保存する（`refreshTeamPlan` → `setRecommendedLineup`）ので、
+ *    `isUserTeam`（`lineupSettings.battingOrder` があるか）が12球団すべてで
+ *    真になり、AIの組み直しは一度も走らない。実測で、CPU球団の中堅手が
+ *    60試合すべてに出続けて疲労497まで積み上がっていた。
+ *    一人用は CPU 球団に打順を保存しないので、こちらだけの話。
  * ⚠ 80 は CPU が一番重く避ける段（疲労²/1200 が5以上＝疲労約78以上）に合わせた。
  * ⚠ **保存した打順は書き換えない**。その日だけ差し替えて、試合の後に戻す。
  */
@@ -70,8 +74,7 @@ export function prepareDailyLineup(team, name) {
     409,
     'roster',
   );
-  const restoreFielders =
-    team.controlType === 'human' ? restTiredFielders(team) : () => {};
+  const restoreFielders = restTiredFielders(team);
   const index = (rotation.currentStarterIndex || 0) % starters.length;
   rotation.currentStarterIndex = index;
   const pitchers = team.players.filter(

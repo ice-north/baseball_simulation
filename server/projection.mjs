@@ -22,6 +22,7 @@ import {
 } from './recordedViews.mjs';
 import { recordForPlayer } from './recordedStats.mjs';
 import { requireOnline } from '../src/online/shared.js';
+import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
 
 /**
  * セット（24人）を**選ぶのに要る分だけ**にする。
@@ -275,6 +276,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     //    リーグの設定をビューにも載せる（打順が8枠か9枠かが変わる）
     useDH: !!l.season.settings.useDH,
     currentDate: l.season.currentDate,
+    // ⚠ **シーズンのターン数はビューに載せる**。画面が `SEASON_TURNS` を直に
+    //    読むと、進行中のリーグ（組んだ日程は120ターン）に新しい総数を
+    //    当ててしまい「第121ターン / 160」と日程に無い数が出る
+    seasonTurns: l.season.settings.seasonTurns || SEASON_TURNS,
     nextAdvanceAt: l.nextAdvanceAt,
     isAdmin: userId === adminId,
     writable: !!sessionId && bundle.sessions[userId] === sessionId,

@@ -18,6 +18,7 @@ import {
   applyPyramidMovements,
   SEASON_TURNS,
   REST_EVERY,
+  CARD_GAMES,
   gamesPerTeam,
   isRestTurn,
   pyramidSeasonSchedule,
@@ -195,6 +196,60 @@ assert.ok(
   Math.min(...homes) >= half - 4 && Math.max(...homes) <= half + 4,
   `ホーム試合数が偏っている: ${Math.min(...homes)}〜${Math.max(...homes)}（半分=${half}）`,
 );
+
+// --- 3連戦のカード -------------------------------------------------
+// ⚠ **同じ相手と `CARD_GAMES` 試合続くこと**。試合ごとに相手を変える形だと、
+//    1試合ごとに移動することになり、実際の興行と噛み合わない。
+// ⚠ **カードの中では本拠地も変わらないこと**。変わると、3連戦の真ん中だけ
+//    相手の球場という形になる。
+for (const name of Object.keys(played)) {
+  const own = schedule
+    .filter((g) => g.home === name || g.away === name)
+    .sort((a, b) => a.turn - b.turn);
+  assert.equal(own.length, gamesPerTeam(), `${name} の試合を拾えていない`);
+  const cards = [];
+  for (const g of own) {
+    const last = cards.at(-1);
+    const opponent = g.home === name ? g.away : g.home;
+    if (last && last.opponent === opponent && last.home === g.home)
+      last.games += 1;
+    else cards.push({ opponent, home: g.home, games: 1 });
+  }
+  for (const card of cards)
+    assert.equal(
+      card.games,
+      CARD_GAMES,
+      `${name} 対 ${card.opponent} のカードが${card.games}試合（${CARD_GAMES}連戦のはず）`,
+    );
+  assert.equal(
+    cards.length,
+    gamesPerTeam() / CARD_GAMES,
+    `${name} のカード数がちがう`,
+  );
+  // ⚠ **どの相手とも同じカード数**。巡の途中で切れると、相手によって
+  //    対戦数が変わる（144ターンの頃に28試合と29試合に割れていた）
+  const perOpponent = {};
+  for (const card of cards)
+    perOpponent[card.opponent] = (perOpponent[card.opponent] || 0) + 1;
+  const counts = Object.values(perOpponent);
+  assert.equal(
+    new Set(counts).size,
+    1,
+    `${name} の相手ごとのカード数が揃っていない: ${JSON.stringify(perOpponent)}`,
+  );
+  // ⚠ **本拠地はカードの半分ずつ**。カード数が奇数だと必ず偏るので、
+  //    「相手ごとのカード数が偶数」もここで押さえている
+  for (const [opponent, n] of Object.entries(perOpponent)) {
+    const homeCards = cards.filter(
+      (c) => c.opponent === opponent && c.home === name,
+    ).length;
+    assert.equal(
+      homeCards * 2,
+      n,
+      `${name} 対 ${opponent} の本拠地が半々でない（${homeCards}/${n}）`,
+    );
+  }
+}
 
 // --- 順位表からの入れ替え -----------------------------------------
 // ⚠ 順位表は**全球団を通した並び**（勝率順）。そのままでは「2部の1位」が

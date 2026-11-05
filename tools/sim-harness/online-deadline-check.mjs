@@ -18,16 +18,36 @@ import {
   seasonStartAt,
 } from '../../src/online/shared.js';
 import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
+import {
+  PROGRESSION_TIMES,
+  TURNS_PER_DAY,
+  TURN_MINUTES,
+} from '../../src/online/shared.js';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 
 // --- 日数の割り当て -------------------------------------------------
-// ⚠ 120は6球団の総当たり（1巡5節）に割り切れる。144だと最後の1巡が途中で切れ、
-//    相手によって対戦数が28と29に割れていた
-assert.equal(SEASON_TURNS, 120);
-assert.equal(SEASON_TURNS % 24, 0, '1日24ターンで割り切れる');
-assert.equal(SEASON_TURNS / 24, 5, '試合は月〜金の5日');
+// ⚠ 160は3連戦（4ターンで1カード）と6球団の総当たり（1巡5節）の両方に
+//    割り切れる。40カード＝8巡で、どの相手とも24試合・本拠地12/12に揃う
+assert.equal(SEASON_TURNS, 160);
+assert.equal(
+  SEASON_TURNS % TURNS_PER_DAY,
+  0,
+  `1日${TURNS_PER_DAY}ターンで割り切れる`,
+);
+assert.equal(SEASON_TURNS / TURNS_PER_DAY, 5, '試合は月〜金の5日');
+// ⚠ **1週間が埋まること**。月〜金が試合、土曜がストーブリーグ、日曜がキャンプ。
+//    ここが合わないと、開幕の曜日が毎シーズンずれていく
+assert.equal(TURNS_PER_DAY * 7, SEASON_TURNS + TURNS_PER_DAY * 2, '1週224ターン');
+assert.equal(
+  PROGRESSION_TIMES.length,
+  TURNS_PER_DAY,
+  '進行する時刻の数が1日のターン数と合わない',
+);
+assert.equal(PROGRESSION_TIMES[0], '00:00');
+assert.equal(PROGRESSION_TIMES[1], '00:45', `1ターン${TURN_MINUTES}分`);
+assert.equal(PROGRESSION_TIMES.at(-1), '23:15');
 
 // --- 曜日の計算 -----------------------------------------------------
 // 2026-10-30T14:00Z = 10/30 23:00 JST（金曜）
@@ -142,8 +162,8 @@ assert.equal(
 );
 assert.equal(
   seasonStartAt('2026-11-01T15:00:05.000Z'), // 月曜0時すぎ（締め切りでの自動決定）
-  '2026-11-01T16:00:00.000Z',
-  '月曜に入ってから決まったら次の正時から始める（翌週まで待たせない）',
+  '2026-11-01T15:45:00.000Z',
+  '月曜に入ってから決まったら次の枠から始める（翌週まで待たせない）',
 );
 
 // --- 実際に自動決定されるか -----------------------------------------

@@ -14,7 +14,7 @@ import { useDraftMemoryStore } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import { dateTime, STATUS } from './api.js';
-import { formatTurn } from './shared.js';
+import { formatTurn, TURN_MINUTES } from './shared.js';
 import { teamLabel } from './gameText.js';
 import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
 import { CompactRoster } from './PlayerPerformance.jsx';
@@ -139,16 +139,19 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
         <p>
           {/* ⚠ オンラインは**ターンで進む**。ゲーム内の日付は出さない
               （「4/18って何試合目？」と数え直すことになる） */}
-          <b>{formatTurn(view.currentDate)}</b>
+          {/* ⚠ 総数は**ビューの値**で出す。`SEASON_TURNS` を直に読むと、
+              進行中のリーグ（120ターンの日程）に新しい総数が当たる */}
+          <b>{formatTurn(view.currentDate, view.seasonTurns)}</b>
           <span className="online-status">{STATUS[view.status]}</span>
         </p>
         <small>
           {view.year}年目 · 次の進行 {dateTime(view.nextAdvanceAt)}
         </small>
-        {/* ⚠ 進行の刻みを変えたらここも直すこと。
-            毎正時24ターンに変えたあと「1日7回・夜間は休止」が
-            残っていた（画面だけ古い説明を出し続けていた）。 */}
-        <small>毎正時・月〜金が試合／土日は手続き</small>
+        {/* ⚠ 進行の刻みを変えたらここも直すこと。文面に数を書かず
+            `TURN_MINUTES` から作る。毎正時24ターンに変えたあと
+            「1日7回・夜間は休止」が残っていた（画面だけ古い説明を
+            出し続けていた）ので、二度と手で書かない。 */}
+        <small>{TURN_MINUTES}分ごと・月〜金が試合／土日は手続き</small>
         <div className="online-nav-clock-actions">
           <button onClick={showTimes}>進行時刻</button>
           <button disabled={busy} onClick={() => run(reload)}>

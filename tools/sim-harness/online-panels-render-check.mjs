@@ -322,20 +322,29 @@ try {
       '開幕が第1ターンでない',
     );
     assert.equal(turnOfDate({ year: 2024, month: 4, day: 18 }), 18);
+    // ⚠ 数は**そのまま書く**（`SEASON_TURNS` から導くと何も確かめない）。
+    //    ターン数を変えたらここも直す: 160ターンなら 4/1 の159日後＝9/7 が最終
     assert.equal(
-      turnOfDate({ year: 2024, month: 7, day: 29 }),
-      120,
+      turnOfDate({ year: 2024, month: 9, day: 7 }),
+      160,
       '最終ターンがちがう',
     );
     assert.equal(
-      turnOfDate({ year: 2024, month: 7, day: 30 }),
+      turnOfDate({ year: 2024, month: 9, day: 8 }),
       null,
       '範囲の外を数えている',
     );
     assert.match(formatTurn({ year: 2024, month: 1, day: 1 }), /開幕前/);
-    // ⚠ 一覧は総数（/120）を出さない。6試合並ぶと同じ数字が6回出る
+    // ⚠ 一覧は総数（/160）を出さない。6試合並ぶと同じ数字が6回出る
     assert.equal(turnLabel({ year: 2024, month: 4, day: 18 }), '第18ターン');
-    assert.equal(formatTurn({ year: 2024, month: 4, day: 18 }), '第18ターン / 120');
+    assert.equal(formatTurn({ year: 2024, month: 4, day: 18 }), '第18ターン / 160');
+    // ⚠ **総数は渡した値で出すこと**。進行中のリーグ（120ターンの日程）に
+    //    新しい総数を当てると、日程に無い「第121ターン / 160」が出る
+    assert.equal(
+      formatTurn({ year: 2024, month: 4, day: 18 }, 120),
+      '第18ターン / 120',
+    );
+    assert.equal(turnOfDate({ year: 2024, month: 9, day: 7 }, 120), null);
     assert.match(formatTurn({ year: 2024, month: 11, day: 10 }), /シーズン終了/);
 
     const resultsView = {

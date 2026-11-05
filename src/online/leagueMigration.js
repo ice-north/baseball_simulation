@@ -96,6 +96,25 @@ export const MIGRATIONS = [
       league.tradeSeq ??= 0;
     },
   },
+  {
+    from: 6,
+    to: 7,
+    note: '1ターンを45分にし、120試合・3連戦の日程にした',
+    apply(league) {
+      // ⚠ **進行中のシーズンは、組んだ日程のまま終わらせる**。保存されている
+      //    日程は 120ターン・100試合（5試合に1休）なので、新しい
+      //    `SEASON_TURNS`（160）で数えると画面のターン表記が日程と食い違う。
+      //    ここで古い値を書き留め、次の年度更新で `createSchedule` が
+      //    新しい値に入れ替える。
+      // ⚠ `gamesPerSeason` は触らない（規定打席の基準で、既に入っている）
+      const settings = league.season?.settings;
+      if (settings) settings.seasonTurns ??= 120;
+      // ⚠ 次の進行時刻は45分刻みの枠に乗っていない。入れ直さないと、
+      //    次の1回だけ最大59分ずれる（`nextProgressionAt` は「今より後の
+      //    最初の枠」なので、以降は自然に揃う）
+      league.nextAdvanceAt = null;
+    },
+  },
 ];
 
 // ⚠ **手順表と目標の版を差し替えられるようにしてある**。段がまだ0本なので、

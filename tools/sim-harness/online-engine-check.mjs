@@ -16,21 +16,21 @@ import {
   topTierTeamNames,
 } from '../../src/online/pyramidLeague.js';
 
-// 1ターン＝1時間（毎正時）。⚠ 境界は「その時刻ちょうど」を含めず、次の枠へ送る。
-// 08:00 JST ちょうど → 09:00 JST
+// 1ターン＝45分（1日32枠）。⚠ 境界は「その時刻ちょうど」を含めず、次の枠へ送る。
+// 07:30 JST ちょうど → 08:15 JST
 assert.equal(
-  nextProgressionAt('2026-10-27T23:00:00Z'),
-  '2026-10-28T00:00:00.000Z',
+  nextProgressionAt('2026-10-27T22:30:00Z'),
+  '2026-10-27T23:15:00.000Z',
 );
-// ⚠ その日の最後の枠（23:00 JST）ちょうどなら、翌日の最初の枠（00:00 JST）へ送る
+// ⚠ その日の最後の枠（23:15 JST）ちょうどなら、翌日の最初の枠（00:00 JST）へ送る
 assert.equal(
-  nextProgressionAt('2026-10-28T14:00:00Z'),
+  nextProgressionAt('2026-10-28T14:15:00Z'),
   '2026-10-28T15:00:00.000Z',
 );
 // 1秒前なら同じ日の枠に入る
 assert.equal(
-  nextProgressionAt('2026-10-28T13:59:59Z'),
-  '2026-10-28T14:00:00.000Z',
+  nextProgressionAt('2026-10-28T14:14:59Z'),
+  '2026-10-28T14:15:00.000Z',
 );
 let now = new Date('2026-10-28T00:00:00Z');
 const league = createLeague({
@@ -70,10 +70,48 @@ assert.deepEqual(
   game,
   '未完了の背景大会も含めて完全に復元する',
 );
+/**
+ * その時点の疲労と、打球の出方。
+ *
+ * ⚠ **`league.game` から読む**（進行のたびに写しが入る）。`TEAMS_DATA` を
+ *    直に見ると、`loadLeagueWorld` を呼んでいない間は古い世界を見てしまう。
+ * ⚠ **レギュラーだけを見る**。控えは出ないので疲れない。全野手の平均では、
+ *    出ずっぱりの選手が壊れていても埋もれる（実測で、平均が13でも
+ *    中堅手1人が497まで積み上がっていた）。
+ */
+function fatigueSnapshot(league) {
+  const teams = league.season.settings.teamNames.map(
+    (n) => league.game.teams[n],
+  );
+  const fielders = teams.flatMap((t) =>
+    t.players.filter((p) => p.position !== 'pitcher'),
+  );
+  const played = (p) => p.seasonStats?.batting?.games || 0;
+  const games = Math.max(0, ...fielders.map(played));
+  const regulars = fielders.filter((p) => played(p) >= games * 0.7);
+  let hr = 0;
+  let outs = 0;
+  for (const t of teams)
+    for (const p of t.players) {
+      hr += p.seasonStats?.batting?.homeruns || 0;
+      outs += p.seasonStats?.pitching?.inningsPitched || 0;
+    }
+  return {
+    games,
+    mean: regulars.length
+      ? regulars.reduce((a, p) => a + (p.fatigue || 0), 0) / regulars.length
+      : 0,
+    max: Math.max(0, ...fielders.map((p) => p.fatigue || 0)),
+    hrRate: outs ? hr / (outs / 27) : 0,
+  };
+}
+
 const startYear = league.season.year;
 const firstTopTier = topTierTeamNames(league.teams);
 let days = 0;
 let slimChecked = 0;
+let early = null;
+let late = null;
 while (league.season.year === startYear && days < 300) {
   if (league.status === 'waiting') resolve();
   else {
@@ -95,10 +133,17 @@ while (league.season.year === startYear && days < 300) {
       );
       slimChecked++;
     }
-    if (days % 40 === 0)
+    // ⚠ **序盤と終盤の2点で測る**。1点だけだと「最初から重い」のか
+    //    「積み上がっている」のか区別できない
+    if (days === 40) early = fatigueSnapshot(league);
+    if (days === 140) late = fatigueSnapshot(league);
+    if (days % 40 === 0) {
+      const s = fatigueSnapshot(league);
       console.log(
-        `online-engine: ${days}日 / ${JSON.stringify(league.season.currentDate)}`,
+        `online-engine: ${days}日 / ${JSON.stringify(league.season.currentDate)}` +
+          ` / 疲労 ${s.mean.toFixed(1)}（最大 ${s.max}） / 本塁打率 ${s.hrRate.toFixed(3)}`,
       );
+    }
   }
 }
 assert.equal(league.season.year, 2, '実試合を消化して2年目に到達する');
@@ -149,6 +194,40 @@ assert.ok(
   `1年の進行に${days}ターンかかった（シーズン後の空き日がまとまっていない）`,
 );
 assert.ok(slimChecked > 0, '試合結果の軽量化を一度も確かめていない');
+
+// --- 疲労がシーズンを通して平らか ------------------------------------
+// ⚠ **ここは通年でしか捕まらない**。`online-parity-check` は18ターン（15試合）
+//    しか回さないので、序盤の疲労38は許容の内側に入り、壊れていることが
+//    見えなかった。実測で、40ターンを過ぎたあたりから積み上がり始める。
+// ⚠ 休養の間隔（`REST_EVERY`）と、疲れた野手の入れ替え
+//    （`restTiredFielders` を全球団に当てること）の**両方**が要る。実測:
+//      5試合→1休・入れ替え無し  終盤190（最大829）本塁打率 0.58→0.28
+//      3試合→1休・入れ替え無し  終盤 66（最大877）本塁打率 0.63→0.51
+//      5試合→1休・入れ替えあり  終盤 60（最大220）本塁打率 0.60→0.42
+//      3試合→1休・入れ替えあり  終盤 15（最大 80）本塁打率 0.58→0.58
+//    この検査での実測は 序盤 12.3（最大73）→ 終盤 14.2（最大68）。
+assert.ok(early && late, '疲労を序盤と終盤で測れていない');
+assert.ok(
+  late.games > early.games + 30,
+  `序盤と終盤で試合数が離れていない（${early.games} / ${late.games}）`,
+);
+// 許容 +20: 平らなら +2 程度。上の4通りのうち壊れている3つはすべて +40 を超える
+assert.ok(
+  late.mean <= early.mean + 20,
+  `レギュラーの疲労が積み上がっている: ${early.mean.toFixed(1)} → ${late.mean.toFixed(1)}`,
+);
+// ⚠ **最大も見ること**。平均が平らでも、出ずっぱりの1人だけが壊れる
+//    （実測で、平均13のまま中堅手1人が497まで積み上がっていた）。
+//    上限は `FIELDER_REST_FATIGUE`（80）＋1試合ぶん＋死球の余裕
+assert.ok(
+  late.max <= 140,
+  `一度も休めていない野手がいる: 最大疲労 ${late.max}`,
+);
+// 疲れた打者は打てない。本塁打率は疲労にいちばん敏感な指標
+assert.ok(
+  late.hrRate >= early.hrRate * 0.85,
+  `終盤に打てなくなっている: 本塁打率 ${early.hrRate.toFixed(3)} → ${late.hrRate.toFixed(3)}`,
+);
 const recordedYear = league.records.seasons[1];
 assert.ok(recordedYear.comparison, '年度・リーグの比較値を確定して残す');
 assert.ok(
@@ -220,7 +299,11 @@ assert.equal(
   annual.seasonStats.batting.sacrificeBunts,
   '犠打の通算引継ぎ',
 );
-console.log(`online-engine-check PASS (${days}日・2年目開幕)`);
+console.log(
+  `online-engine-check PASS (${days}日・2年目開幕` +
+    ` / 疲労 ${early.mean.toFixed(1)}→${late.mean.toFixed(1)}（最大 ${late.max}）` +
+    ` / 本塁打率 ${early.hrRate.toFixed(3)}→${late.hrRate.toFixed(3)}）`,
+);
 
 console.log(
   `snapshot gzip ${(gzipSync(JSON.stringify(league)).length / 1024 / 1024).toFixed(2)} MiB`,

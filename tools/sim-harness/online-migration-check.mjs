@@ -75,6 +75,46 @@ assert.ok(
   'apply の無い段を見逃す',
 );
 
+// --- 6→7（1ターン45分・160ターン）が進行中のシーズンを壊さないか --------
+// ⚠ **進行中のシーズンは、組んだ日程のまま終わらせること**。保存されている
+//    日程は120ターン・100試合なので、新しい `SEASON_TURNS`（160）で数えると
+//    画面に「第121ターン / 160」と日程に無い数が出る。段がターン数を
+//    書き留め、`createSchedule` が次の年に入れ替える。
+{
+  const old = {
+    schema: 6,
+    engineVersion: ONLINE_ENGINE_VERSION,
+    season: { settings: { gamesPerSeason: 100 } },
+    nextAdvanceAt: '2026-11-02T03:00:00.000Z',
+  };
+  migrateLeague(old);
+  assert.equal(old.schema, ONLINE_SCHEMA);
+  assert.equal(
+    old.season.settings.seasonTurns,
+    120,
+    '進行中のシーズンのターン数を書き留めていない',
+  );
+  assert.equal(
+    old.season.settings.gamesPerSeason,
+    100,
+    '規定打席の基準（試合数）を書き換えてしまっている',
+  );
+  // ⚠ 45分刻みの枠に乗っていない時刻を残すと、次の1回だけずれる
+  assert.equal(old.nextAdvanceAt, null, '進行時刻を入れ直していない');
+  // ⚠ **何度当てても同じ結果**（途中で失敗してやり直せること）
+  const again = { ...old, schema: 6 };
+  migrateLeague(again);
+  assert.equal(again.season.settings.seasonTurns, 120);
+  // すでに値を持っている保存を上書きしない
+  const kept = {
+    schema: 6,
+    engineVersion: ONLINE_ENGINE_VERSION,
+    season: { settings: { seasonTurns: 160 } },
+  };
+  migrateLeague(kept);
+  assert.equal(kept.season.settings.seasonTurns, 160, '持っている値を上書きした');
+}
+
 // --- どの版をどう扱うか ----------------------------------------------
 const league = (overrides) => ({
   schema: ONLINE_SCHEMA,
