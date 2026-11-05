@@ -1,178 +1,663 @@
-import React, { useMemo, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useRead } from './useRead.js';
 import { teamLabel, teamShort } from './gameText.js';
 import { POS } from './api.js';
+import { ROSTER_LIMIT, ONLINE_ROSTER_TARGETS } from './shared.js';
 import { Page } from './Page.jsx';
 import { Choice } from './Choice.jsx';
-import { PlayerStatsButton } from './PlayerPerformance.jsx';
+import {
+  ConditionMark,
+  PlayerStatsButton,
+  RoleMark,
+} from './PlayerPerformance.jsx';
+import { overviewGroup, formatStat } from './statsView.js';
+import { playablePositions } from './lineupEdit.js';
+import { overallScore } from './tryoutPlan.js';
+import { rosterShortfall, rostersAfterTrade } from './trades.js';
+import {
+  rosterGroup,
+  rosterCounts,
+  getPitchTypeName,
+} from '../utils/constants.js';
+import { AbilityValue } from '../components/AbilityValue.jsx';
 
 // ============================================================
-// 球団間のトレード。
+// 球団間のトレード（PC）。**出す選手ともらう選手を、同じ物差しで比べて決める**。
 //
-// 【流れ】提案 → 相手が「受ける／逆提案／断る」。
-//   - 受ける → その場で成立し、選手が入れ替わる
-//   - 逆提案 → **提案した側に戻る**。そこで受ければ成立、断れば消える
-//   - 断る   → 消える（どちらの側からでも＝取り下げも兼ねる）
-// ⚠ **逆提案は1回だけ**。何度でも投げ返せると終わらない。
+// 【意図】トレードで知りたいのは「この交換で自分の球団は良くなるか」と
+//   「相手が受けそうか」。そのために要るのは
+//   - 選手どうしを**同じ列**で比べられること（能力・今季成績・年齢・総合）
+//   - いま誰が**スタメン・ローテ**か（出すと穴が空く）
+//   - 交換のあと両球団の**人数と構成**がどうなるか（上限・投手/捕手/野手の条件）
+//   以前は名前・年齢・守備位置のチェック一覧が2つ並ぶだけで（中で送る7行ぶん）、
+//   選手の力も、交換で名簿がどうなるかも画面から分からなかった（2026-11-06 の指摘）。
 //
-// ⚠ **相手は参加者の球団だけ**。CPU球団は返事をしないので、出せても永久に
-//    待つことになる。出さない（できないことを、できるように見せない）。
+// 【形】
+//   - 守備位置ごと（投手・捕手・内野手・外野手）に、**自球団と相手の選手を
+//     1枚の表**に並べる（スタメン設定と同じ「比べるための1枚の表」）。
+//     列がそろうので、同じ守備位置の選手を上下で見比べられる。総合の高い順。
+//   - 行を押すと交換案に入る／外れる（自球団の行＝出す、相手の行＝もらう）。
+//   - 右の「交換案」に、選んだ選手と、交換後の両球団の人数・構成を出す。
+//     名簿が成り立たない（投手・捕手が居なくなる、野手8人割れ、上限超え）なら
+//     理由を出して提案できなくする。
+//   - 届いた提案・出した提案は、中身を同じ列の表で比べ、交換後の名簿も出す。
+//
+// ⚠ 名簿が成り立つかの判定は**サーバーと同じ関数**（`trades.js` の
+//    `rosterShortfall` / `rostersAfterTrade`）を使う。画面で別の式を書くと
+//    規則が2か所になる。最終の判断はサーバー（`assertTradeAllowed`）で、
+//    断られたらその理由が出る。
+// ⚠ 「総合」は並べ替えの目安（`overallScore`。トライアウトの画面と同じ）。
+//    試合の強さはサーバーの演算で決まる。
+// ⚠ **相手は参加者の球団だけ**。CPU球団は返事をしないので画面にも出さない。
 // ⚠ 相手の名簿は**その場で取りに行く**（`useRead('team')`）。12球団ぶんを
 //    いつもビューに載せると重い。
-// ⚠ 成立するかはサーバーが決める（`assertTradeAllowed`）。画面では止めず、
-//    断られた理由をそのまま出す——画面で先に止めると、規則が2か所になる。
+// ⚠ 逆提案は1回だけ（`trades.js` の `canCounter`）。
 // ============================================================
 
-/** 選手の一行。選ぶためのチェックと、名前・年齢・守備位置 */
-function PickRow({ player, checked, disabled, onToggle }) {
-  return (
-    <label className="online-check online-trade-pick">
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={() => onToggle(player.id)}
-      />
-      <PlayerStatsButton player={player} panel="abilities" />
-      <small>
-        {player.age}歳·{POS[player.position]}
-      </small>
-    </label>
-  );
+const GROUPS = [
+  { id: 'pitcher', label: '投手', short: '投' },
+  { id: 'catcher', label: '捕手', short: '捕' },
+  { id: 'infielder', label: '内野手', short: '内' },
+  { id: 'outfielder', label: '外野手', short: '外' },
+];
+
+const pickStats = (category, ids) => {
+  const columns = overviewGroup(category).columns;
+  return ids.map((id) => columns.find((c) => c.id === id)).filter(Boolean);
+};
+
+/** 投手と野手で列を変える（比べたい能力が違う）。どちらも「能力 → 今季成績」の順 */
+const KINDS = {
+  fielder: {
+    category: 'batting',
+    abilities: [
+      { key: 'meet', label: 'ミ', title: 'ミート', get: (p) => p.batting?.meet },
+      { key: 'power', label: 'パ', title: 'パワー', get: (p) => p.batting?.power },
+      { key: 'eye', label: '眼', title: '選球眼', get: (p) => p.batting?.eye },
+      { key: 'speed', label: '走', title: '走力', get: (p) => p.physical?.speed },
+      { key: 'defense', label: '守', title: '守備', get: (p) => p.fielding?.defense },
+      { key: 'arm', label: '肩', title: '肩力', get: (p) => p.physical?.arm },
+    ],
+    stats: pickStats('batting', ['pa', 'avg', 'homeruns', 'ops']),
+    statLabel: { homeruns: '本塁打' },
+    // 交換案の欄に出す主な能力（狭いので3つ）
+    brief: ['meet', 'power', 'defense'],
+  },
+  pitcher: {
+    category: 'pitching',
+    abilities: [
+      { key: 'velocity', label: '速', title: '球速', get: (p) => p.pitching?.velocity, isVel: true },
+      { key: 'control', label: '制', title: '制球', get: (p) => p.pitching?.control },
+      { key: 'stamina', label: 'ス', title: 'スタミナ', get: (p) => p.pitching?.stamina, isSta: true },
+      { key: 'spin', label: '回', title: '回転（変化球のキレ）', get: (p) => p.pitching?.spinRate },
+    ],
+    stats: pickStats('pitching', ['games', 'outs', 'era', 'whip']),
+    statLabel: { games: '登板' },
+    brief: ['velocity', 'control', 'stamina'],
+  },
+};
+const kindOf = (player) => (player.position === 'pitcher' ? 'pitcher' : 'fielder');
+const overall = (player) => Math.round(overallScore(player));
+const byOverall = (a, b) => overallScore(b) - overallScore(a);
+
+/** 変化球は「名前＋キレ」。直球は外す（全員が持っている）。キャンプの表と同じ書き方 */
+function pitchTypes(player) {
+  return (player.pitching?.arsenal || [])
+    .filter((pitch) => pitch?.type && pitch.type !== 'straight')
+    .map((pitch) => `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`)
+    .join(' ');
 }
 
-function PlayerList({ title, players, picked, busy, onToggle, empty }) {
-  return (
-    <section className="online-trade-column">
-      <h3>
-        {title}
-        <small>{picked.length}人を選択中</small>
-      </h3>
-      {players.length ? (
-        <div className="online-trade-list">
-          {players.map((p) => (
-            <PickRow
-              key={p.id}
-              player={p}
-              checked={picked.includes(p.id)}
-              disabled={busy}
-              onToggle={onToggle}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="online-muted">{empty}</p>
-      )}
-    </section>
-  );
-}
-
-/** 提案の中身（どちらが誰を出すか）を1行で */
-function TradeSummary({ trade }) {
-  const side = (players) =>
-    players.length ? players.map((p) => p.name).join('・') : 'なし';
-  return (
-    <p className="online-trade-summary">
-      <span>
-        <b>{teamShort(trade.fromTeam)}</b> が出す: {side(trade.offer)}
-      </span>
-      <span>
-        <b>{teamShort(trade.toTeam)}</b> が出す: {side(trade.want)}
-      </span>
-    </p>
-  );
-}
-
-/** 提案を作る／逆提案を作る欄 */
-function TradeForm({
-  view,
-  partner,
-  setPartner,
-  partners,
-  busy,
-  offer,
-  want,
-  setOffer,
-  setWant,
-  onSubmit,
-  submitLabel,
-  lockPartner = false,
-}) {
-  const theirs = useRead(partner ? 'team' : null, {
+/**
+ * 相手の名簿。⚠ 選んだ相手のものだけ取りに行く。
+ * ⚠ **読み直しの間は前の名簿を出し続けること**。`useRead` は読み直すたびに
+ *    中身を空にするので、そのままだと画面の更新のたびに相手の表が
+ *    「読んでいます…」に変わり、押そうとした行が消える（実測でちらついた）。
+ */
+function usePartnerRoster(view, partner) {
+  const read = useRead(partner ? 'team' : null, {
     team: partner,
     revision: view.revision,
   });
-  const theirRoster = theirs.data?.teamName === partner ? theirs.data.roster : null;
-  const toggle = (list, setList) => (id) =>
-    setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  const last = useRef(null);
+  const fresh = read.data?.teamName === partner ? read.data.roster : null;
+  if (fresh) last.current = { partner, roster: fresh };
+  const roster =
+    fresh || (last.current?.partner === partner ? last.current.roster : null);
+  return { roster, error: roster ? '' : read.error };
+}
+
+const SIDE_TEXT = { give: '出す', get: 'もらう' };
+
+function HeaderRow({ kind }) {
+  const k = KINDS[kind];
+  return (
+    <tr>
+      <th className="online-lineup-slot" />
+      <th className="online-lineup-person">選手</th>
+      <th className="online-trade-poscell">{kind === 'pitcher' ? '投' : '守備'}</th>
+      <th>年齢</th>
+      <th className="is-sep" title="総合（並べ替えの目安。試合の強さはサーバーの演算で決まります）">
+        総合
+      </th>
+      {k.abilities.map((a, i) => (
+        <th key={a.key} className={i === 0 ? 'is-sep' : ''} title={a.title}>
+          {a.label}
+        </th>
+      ))}
+      {k.stats.map((column, i) => (
+        <th
+          key={column.id}
+          className={i === 0 ? 'is-sep is-stat' : 'is-stat'}
+          title={`今季の${column.label}`}
+        >
+          {k.statLabel[column.id] || column.label}
+        </th>
+      ))}
+      {kind === 'pitcher' && <th className="is-sep online-trade-pitches">変化球</th>}
+    </tr>
+  );
+}
+
+const columnCount = (kind) =>
+  5 + KINDS[kind].abilities.length + KINDS[kind].stats.length + (kind === 'pitcher' ? 1 : 0);
+
+/** 1人ぶんの列（自球団と相手で**同じ部品**を使う） */
+function PlayerCells({ player, kind, lineup }) {
+  const k = KINDS[kind];
   return (
     <>
-      {!lockPartner && (
-        <Choice
-          label="相手の球団"
-          options={Object.fromEntries(
-            partners.map((name) => [name, teamLabel(name)]),
-          )}
-          value={partner || ''}
-          disabled={busy}
-          onChange={setPartner}
-        />
+      <td className="online-lineup-person">
+        <span onClick={(e) => e.stopPropagation()}>
+          <PlayerStatsButton player={player} category={k.category} group="basic" />
+        </span>
+        <ConditionMark player={player} />
+        {/* ⚠ 起用の札は自球団だけ（相手の打順・ローテは公開していない） */}
+        <RoleMark player={player} lineup={lineup} />
+      </td>
+      <td className="online-trade-poscell">
+        {kind === 'pitcher' ? (
+          player.physical?.throws === 'left' ? '左' : '右'
+        ) : (
+          <span
+            className="online-lineup-playable"
+            title="本職と、ほかに守れる位置（適性の高い順）"
+          >
+            <span className="online-lineup-pos is-bench">{POS[player.position] || '?'}</span>
+            {playablePositions(player)
+              .filter((e) => e.position !== player.position)
+              .slice(0, 2)
+              .map((e) => (
+                <span key={e.position}>{POS[e.position]}</span>
+              ))}
+          </span>
+        )}
+      </td>
+      <td>{player.age ?? '—'}</td>
+      <td className="is-sep">
+        <AbilityValue value={overall(player)} placeholder="—" />
+      </td>
+      {k.abilities.map((a, i) => (
+        <td key={a.key} className={i === 0 ? 'is-sep' : ''}>
+          <AbilityValue value={a.get(player)} isVel={a.isVel} isSta={a.isSta} placeholder="—" />
+        </td>
+      ))}
+      {k.stats.map((column, i) => (
+        <td key={column.id} className={i === 0 ? 'is-sep is-stat' : 'is-stat'}>
+          {formatStat(column, column.get(player))}
+        </td>
+      ))}
+      {kind === 'pitcher' && (
+        <td className="is-sep online-trade-pitches" title={pitchTypes(player)}>
+          {pitchTypes(player) || '—'}
+        </td>
       )}
-      <div className="online-trade-grid">
-        <PlayerList
-          title={`${teamLabel(view.teamName)} が出す`}
-          players={view.roster || []}
-          picked={offer}
-          busy={busy}
-          onToggle={toggle(offer, setOffer)}
-          empty="選手が居ません。"
-        />
-        <PlayerList
-          title={`${teamLabel(partner)} が出す`}
-          players={theirRoster || []}
-          picked={want}
-          busy={busy}
-          onToggle={toggle(want, setWant)}
-          empty={theirs.error ? '名簿を読めませんでした。' : '名簿を読んでいます…'}
-        />
-      </div>
-      {/* ⚠ 人数が合わないと上限（24人）を超えて断られる。先に知らせる */}
-      {offer.length !== want.length && (
-        <p className="online-muted">
-          出す{offer.length}人・もらう{want.length}人。人数が違うと、どちらかの
-          名簿が24人を超えたり9人を割ったりして断られることがあります。
+    </>
+  );
+}
+
+/**
+ * 選手の表。`sections` ごとに見出しの行を置き、同じ列で並べる。
+ * `onToggle` があれば行を押して選ぶ（交換案に入れる／外す）。無ければ見るだけ。
+ */
+function TradeTable({ kind, sections, onToggle, busy }) {
+  const count = columnCount(kind);
+  return (
+    <table className="online-lineup-table online-trade-table" data-kind={kind}>
+      <thead>
+        <HeaderRow kind={kind} />
+      </thead>
+      {sections.map((section) => (
+        <tbody key={section.key} aria-label={section.label} data-side={section.side}>
+          <tr className="online-lineup-group">
+            <th colSpan={count}>
+              {section.title}
+              {section.note && <small>{section.note}</small>}
+            </th>
+          </tr>
+          {section.players.map((player) => {
+            const picked = section.picked?.includes(player.id);
+            const toggle = () => !busy && onToggle?.(section.side, player.id);
+            return (
+              <tr
+                key={player.id}
+                data-player={player.id}
+                className={[
+                  'online-lineup-row',
+                  onToggle ? '' : 'is-static',
+                  picked ? `is-picked is-${section.side}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={onToggle ? toggle : undefined}
+              >
+                <td className="online-lineup-slot">
+                  {onToggle ? (
+                    <button
+                      type="button"
+                      className="online-trade-toggle"
+                      aria-pressed={!!picked}
+                      aria-label={`${player.name}を${SIDE_TEXT[section.side]}選手に${picked ? 'しない' : 'する'}`}
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggle();
+                      }}
+                    >
+                      {picked ? SIDE_TEXT[section.side] : '＋'}
+                    </button>
+                  ) : (
+                    <span className={`online-trade-chip is-${section.side}`}>
+                      {SIDE_TEXT[section.side]}
+                    </span>
+                  )}
+                </td>
+                <PlayerCells player={player} kind={kind} lineup={section.lineup} />
+              </tr>
+            );
+          })}
+          {!section.players.length && (
+            <tr>
+              <td colSpan={count} className="online-muted online-trade-empty">
+                {section.empty || 'この守備位置の選手は居ません。'}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      ))}
+    </table>
+  );
+}
+
+/** 交換のあとの1球団の人数と構成。⚠ 条件はサーバーと同じ `rosterShortfall` */
+function TeamImpact({ name, own, before, after }) {
+  const was = rosterCounts(before);
+  const now = rosterCounts(after);
+  const problems = rosterShortfall(after);
+  return (
+    <div
+      className={`online-trade-impact-team ${problems.length ? 'is-bad' : ''}`}
+      data-team={name}
+    >
+      <h4>
+        {teamShort(name)}
+        <small>{own ? '自球団' : '相手'}</small>
+      </h4>
+      <p className="online-trade-impact-size">
+        {before.length === after.length ? (
+          <>{after.length}人</>
+        ) : (
+          <>
+            {before.length} → <b>{after.length}</b>人
+          </>
+        )}
+        <small> / 上限{ROSTER_LIMIT}</small>
+      </p>
+      <ul>
+        {GROUPS.map((g) => {
+          const delta = now[g.id] - was[g.id];
+          return (
+            <li
+              key={g.id}
+              className={delta > 0 ? 'is-up' : delta < 0 ? 'is-down' : ''}
+              title={`${g.label}（目安 ${ONLINE_ROSTER_TARGETS[g.id]}人）`}
+            >
+              {g.short}
+              {delta ? (
+                <>
+                  {was[g.id]}→<b>{now[g.id]}</b>
+                </>
+              ) : (
+                now[g.id]
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {problems.length > 0 && (
+        <p role="alert" className="online-trade-problem">
+          {problems.join('・')}
         </p>
       )}
-      <div className="online-actions">
-        <button
-          className="online-primary"
-          disabled={busy || !partner || offer.length + want.length === 0}
-          onClick={() => onSubmit(offer, want)}
-        >
-          {submitLabel}
-        </button>
+    </div>
+  );
+}
+
+/** 交換のあとの両球団。⚠ 相手の名簿が読めるまでは出さない（数えられない） */
+function Impact({ view, partner, theirRoster, giveIds, getIds }) {
+  if (!theirRoster) return null;
+  const myRoster = view.roster || [];
+  const after = rostersAfterTrade(myRoster, theirRoster, giveIds, getIds);
+  return (
+    <div className="online-trade-impact" aria-label="交換のあとの名簿">
+      <TeamImpact name={view.teamName} own before={myRoster} after={after.from} />
+      <TeamImpact name={partner} before={theirRoster} after={after.to} />
+    </div>
+  );
+}
+
+/** 交換で名簿が成り立たなくなるか（どちらかの球団）。⚠ サーバーと同じ判定 */
+function dealProblems(myRoster, theirRoster, giveIds, getIds) {
+  if (!theirRoster) return [];
+  const after = rostersAfterTrade(myRoster, theirRoster, giveIds, getIds);
+  return [...rosterShortfall(after.from), ...rosterShortfall(after.to)];
+}
+
+/** 交換案の欄（狭い）。選んだ選手を1行ずつ、主な能力と総合で */
+function DealList({ side, players, onRemove, busy }) {
+  return (
+    <div className={`online-trade-deal-side is-${side}`}>
+      <h4>
+        {SIDE_TEXT[side]}
+        <small>{players.length}人</small>
+      </h4>
+      {players.length ? (
+        <ul>
+          {players.map((player) => {
+            const k = KINDS[kindOf(player)];
+            return (
+              <li key={player.id}>
+                <span className="online-trade-deal-name">
+                  <b>{player.name}</b>
+                  <small>
+                    {POS[player.position]}·{player.age}歳
+                  </small>
+                </span>
+                <span className="online-trade-deal-values">
+                  <span title="総合">
+                    総<AbilityValue value={overall(player)} placeholder="—" />
+                  </span>
+                  {k.brief.map((key) => {
+                    const a = k.abilities.find((x) => x.key === key);
+                    return (
+                      <span key={key} title={a.title}>
+                        {a.label}
+                        <AbilityValue value={a.get(player)} isVel={a.isVel} isSta={a.isSta} placeholder="—" />
+                      </span>
+                    );
+                  })}
+                </span>
+                {onRemove && (
+                  <button
+                    type="button"
+                    className="online-trade-remove"
+                    aria-label={`${player.name}を外す`}
+                    disabled={busy}
+                    onClick={() => onRemove(side, player.id)}
+                  >
+                    外す
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="online-muted">
+          {side === 'give' ? '自球団の行を押して選びます' : '相手の行を押して選びます'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 提案を作る／逆提案を作る。左に守備位置ごとの表（自球団と相手）、右に交換案。
+ * `give` は自球団が出す選手、`get` は相手からもらう選手（いつも**自分から見た**向き）。
+ */
+function TradeComposer({
+  view,
+  partners,
+  lockedPartner = null,
+  initialGive = [],
+  initialGet = [],
+  submitLabel,
+  busy,
+  onSubmit,
+  onCancel,
+}) {
+  const [chosen, setChosen] = useState(lockedPartner || partners[0] || '');
+  // ⚠ 相手の一覧は参加者の出入りで変わる。選んでいた相手が居なくなったら先頭へ
+  const partner =
+    lockedPartner || (partners.includes(chosen) ? chosen : partners[0] || '');
+  const [give, setGive] = useState(initialGive);
+  const [get, setGet] = useState(initialGet);
+  const [group, setGroup] = useState(() => {
+    const first = initialGive
+      .map((id) => (view.roster || []).find((p) => p.id === id))
+      .find(Boolean);
+    return first ? rosterGroup(first.position) : 'pitcher';
+  });
+  const theirs = usePartnerRoster(view, partner);
+  const myRoster = view.roster || [];
+  const theirRoster = theirs.roster;
+  // ⚠ 名簿から居なくなった選手（別のトレードで移った）は選択から外して数える
+  const giveIds = give.filter((id) => myRoster.some((p) => p.id === id));
+  const getIds = theirRoster
+    ? get.filter((id) => theirRoster.some((p) => p.id === id))
+    : get;
+  const givePlayers = giveIds.map((id) => myRoster.find((p) => p.id === id));
+  const getPlayers = theirRoster
+    ? getIds.map((id) => theirRoster.find((p) => p.id === id))
+    : [];
+  const toggle = (side, id) => {
+    const [list, setList] = side === 'give' ? [give, setGive] : [get, setGet];
+    setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  };
+  const problems = dealProblems(myRoster, theirRoster, giveIds, getIds);
+  const empty = giveIds.length + getIds.length === 0;
+  const inGroup = (players) =>
+    players.filter((p) => rosterGroup(p.position) === group).sort(byOverall);
+  const kind = group === 'pitcher' ? 'pitcher' : 'fielder';
+  const pickedIn = (id) =>
+    [...givePlayers, ...getPlayers].filter((p) => rosterGroup(p.position) === id)
+      .length;
+  return (
+    <div className="online-trade-composer">
+      {!lockedPartner && (
+        <Choice
+          label="相手の球団"
+          options={Object.fromEntries(partners.map((name) => [name, teamLabel(name)]))}
+          value={partner}
+          disabled={busy}
+          onChange={(name) => {
+            setChosen(name);
+            setGet([]);
+          }}
+        />
+      )}
+      <div className="online-trade-work">
+        <div className="online-trade-board">
+          <Choice
+            label="守備位置"
+            options={Object.fromEntries(
+              GROUPS.map((g) => [
+                g.id,
+                pickedIn(g.id) ? `${g.label}（${pickedIn(g.id)}人選択）` : g.label,
+              ]),
+            )}
+            value={group}
+            onChange={setGroup}
+          />
+          <div className="online-lineup-scroll">
+            <TradeTable
+              kind={kind}
+              busy={busy}
+              onToggle={toggle}
+              sections={[
+                {
+                  key: 'mine',
+                  side: 'give',
+                  label: '自球団の選手',
+                  title: `${teamLabel(view.teamName)}（自球団）`,
+                  note: '押すと「出す」に入ります。総合の高い順',
+                  players: inGroup(myRoster),
+                  picked: giveIds,
+                  lineup: view.lineup,
+                },
+                {
+                  key: 'theirs',
+                  side: 'get',
+                  label: '相手の選手',
+                  title: teamLabel(partner),
+                  note: '押すと「もらう」に入ります。総合の高い順',
+                  players: theirRoster ? inGroup(theirRoster) : [],
+                  picked: getIds,
+                  empty: theirs.error
+                    ? `名簿を読めませんでした（${theirs.error}）`
+                    : theirRoster
+                      ? undefined
+                      : '名簿を読んでいます…',
+                },
+              ]}
+            />
+          </div>
+        </div>
+        <aside className="online-trade-deal" aria-label="交換案">
+          <h3>交換案</h3>
+          <DealList side="give" players={givePlayers} onRemove={toggle} busy={busy} />
+          <DealList side="get" players={getPlayers} onRemove={toggle} busy={busy} />
+          <Impact
+            view={view}
+            partner={partner}
+            theirRoster={theirRoster}
+            giveIds={giveIds}
+            getIds={getIds}
+          />
+          <div className="online-actions">
+            <button
+              className="online-primary"
+              disabled={busy || !partner || empty || problems.length > 0 || !theirRoster}
+              onClick={() =>
+                onSubmit(partner, giveIds, getIds, () => {
+                  setGive([]);
+                  setGet([]);
+                })
+              }
+            >
+              {submitLabel}
+            </button>
+            {onCancel && (
+              <button type="button" disabled={busy} onClick={onCancel}>
+                やめる
+              </button>
+            )}
+          </div>
+          {problems.length > 0 && (
+            <p className="online-muted">
+              交換のあとどちらかの名簿が成り立たないため、提案できません。
+            </p>
+          )}
+        </aside>
       </div>
+    </div>
+  );
+}
+
+/** 届いた提案・出した提案の中身。出す選手ともらう選手を同じ列の表で */
+function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, getEntries }) {
+  const myRoster = view.roster || [];
+  const found = (entries, roster) =>
+    entries.map((e) => roster?.find((p) => p.id === e.id)).filter(Boolean);
+  const give = found(giveEntries, myRoster);
+  const get = found(getEntries, theirRoster);
+  // ⚠ 居ない選手（別のトレードで移った）は**消さずに出す**。黙って減ると
+  //    「出したはずの選手が提案から消えた」ように見える
+  const gone = [...giveEntries, ...getEntries].filter((e) => e.gone);
+  const kinds = ['pitcher', 'fielder'].filter((kind) =>
+    [...give, ...get].some((p) => kindOf(p) === kind),
+  );
+  return (
+    <>
+      {!theirRoster && (
+        <p className="online-muted">
+          {theirError ? `相手の名簿を読めませんでした（${theirError}）` : '相手の名簿を読んでいます…'}
+        </p>
+      )}
+      {theirRoster && (
+        <div className="online-lineup-scroll">
+          {kinds.map((kind) => (
+            <TradeTable
+              key={kind}
+              kind={kind}
+              // ⚠ 空の側は出さない（「投手はもらいません」の行が並ぶと読みにくい）
+              sections={[
+                {
+                  key: 'give',
+                  side: 'give',
+                  label: '出す選手',
+                  title: `出す（${teamLabel(view.teamName)}）`,
+                  players: give.filter((p) => kindOf(p) === kind),
+                  lineup: view.lineup,
+                },
+                {
+                  key: 'get',
+                  side: 'get',
+                  label: 'もらう選手',
+                  title: `もらう（${teamLabel(partner)}）`,
+                  players: get.filter((p) => kindOf(p) === kind),
+                },
+              ].filter((section) => section.players.length)}
+            />
+          ))}
+        </div>
+      )}
+      {gone.length > 0 && (
+        <p role="alert">
+          {gone.map((e) => e.name).join('・')}
+          は別のトレードで移っています。受けても成立しません。
+        </p>
+      )}
+      <Impact
+        view={view}
+        partner={partner}
+        theirRoster={theirRoster}
+        giveIds={give.map((p) => p.id)}
+        getIds={get.map((p) => p.id)}
+      />
     </>
   );
 }
 
 function TradeCard({ view, trade, busy, run, command }) {
   const [countering, setCountering] = useState(false);
-  // ⚠ **自分の側／相手の側で入れ直すこと**。`trade.offer` はいつも
-  //    「提案した側（`fromTeam`）が出す選手」なので、提案を受けた側から見ると
-  //    それは**相手の選手**。そのまま入れると、自分の欄に相手の選手を
-  //    選んだ状態で送ってしまい「出す選手が名簿にいません」で断られる（実測）。
-  const myIds = (trade.mine ? trade.offer : trade.want).map((p) => p.id);
-  const theirIds = (trade.mine ? trade.want : trade.offer).map((p) => p.id);
-  const [offer, setOffer] = useState(myIds);
-  const [want, setWant] = useState(theirIds);
   const partner = trade.mine ? trade.toTeam : trade.fromTeam;
+  // ⚠ **自分から見た向きに直すこと**。`trade.offer` はいつも「提案した側
+  //    （`fromTeam`）が出す選手」なので、提案を受けた側から見ると相手の選手
+  const giveEntries = trade.mine ? trade.offer : trade.want;
+  const getEntries = trade.mine ? trade.want : trade.offer;
+  const theirs = usePartnerRoster(view, partner);
   const respond = (action, payload) =>
     run(() => command('tradeRespond', { tradeId: trade.id, action, ...payload }));
-  // ⚠ 移籍済みの選手が混ざっていたら、受けても断られる。先に知らせる
   const stale = [...trade.offer, ...trade.want].some((p) => p.gone);
+  const problems = dealProblems(
+    view.roster || [],
+    theirs.roster,
+    giveEntries.filter((e) => !e.gone).map((e) => e.id),
+    getEntries.filter((e) => !e.gone).map((e) => e.id),
+  );
   return (
-    <section className="online-card online-trade-card">
+    <section className="online-card online-trade-card" data-trade={trade.id}>
       <div className="online-card-heading">
         <h3>
           {trade.mine
@@ -184,17 +669,21 @@ function TradeCard({ view, trade, busy, run, command }) {
           {trade.countered && '（逆提案あり）'}
         </small>
       </div>
-      <TradeSummary trade={trade} />
-      {stale && (
-        <p role="alert">
-          この提案の選手は、別のトレードで移っています。受けても成立しません。
-        </p>
+      {!countering && (
+        <TradeCompare
+          view={view}
+          partner={partner}
+          theirRoster={theirs.roster}
+          theirError={theirs.error}
+          giveEntries={giveEntries}
+          getEntries={getEntries}
+        />
       )}
       {trade.myTurn && !countering && (
         <div className="online-actions">
           <button
             className="online-primary"
-            disabled={busy || stale}
+            disabled={busy || stale || problems.length > 0}
             onClick={() => respond('accept')}
           >
             この内容で成立させる
@@ -217,35 +706,28 @@ function TradeCard({ view, trade, busy, run, command }) {
             <strong>逆提案はこの1回だけ</strong>
             で、相手が受けなければこの提案は消えます。
           </p>
-          <TradeForm
+          <TradeComposer
             view={view}
-            partner={partner}
             partners={[partner]}
-            lockPartner
-            busy={busy}
-            offer={offer}
-            want={want}
-            setOffer={setOffer}
-            setWant={setWant}
+            lockedPartner={partner}
+            initialGive={giveEntries.filter((e) => !e.gone).map((e) => e.id)}
+            initialGet={getEntries.filter((e) => !e.gone).map((e) => e.id)}
             submitLabel="この内容で返す"
-            onSubmit={(o, w) =>
+            busy={busy}
+            onCancel={() => setCountering(false)}
+            onSubmit={(_, give, get) =>
               run(async () => {
                 await command('tradeRespond', {
                   tradeId: trade.id,
                   action: 'counter',
                   // ⚠ `offer` はいつも**提案した側**が出す選手。向きを変えない
-                  offer: trade.mine ? o : w,
-                  want: trade.mine ? w : o,
+                  offer: trade.mine ? give : get,
+                  want: trade.mine ? get : give,
                 });
                 setCountering(false);
               })
             }
           />
-          <div className="online-actions">
-            <button disabled={busy} onClick={() => setCountering(false)}>
-              やめる
-            </button>
-          </div>
         </>
       )}
       {!trade.myTurn && (
@@ -260,72 +742,51 @@ function TradeCard({ view, trade, busy, run, command }) {
 }
 
 export default function TradeScreen({ view, busy, run, command }) {
-  const partners = useMemo(
-    () =>
-      (view.members || [])
-        .map((m) => m.teamName)
-        .filter((name) => name !== view.teamName),
-    [view.members, view.teamName],
-  );
-  const [partner, setPartner] = useState(partners[0] || '');
-  const [offer, setOffer] = useState([]);
-  const [want, setWant] = useState([]);
+  const partners = (view.members || [])
+    .map((m) => m.teamName)
+    .filter((name) => name !== view.teamName);
   const trades = view.trades || [];
   const waiting = trades.filter((t) => t.myTurn);
   const sent = trades.filter((t) => !t.myTurn);
+  const card = (t) => (
+    <TradeCard key={t.id} view={view} trade={t} busy={busy} run={run} command={command} />
+  );
   return (
     <Page
       title="トレード"
       sub="参加者の球団と選手を交換します。相手が受ければその場で成立します。"
     >
-      {waiting.map((t) => (
-        <TradeCard
-          key={t.id}
-          view={view}
-          trade={t}
-          busy={busy}
-          run={run}
-          command={command}
-        />
-      ))}
-      {sent.map((t) => (
-        <TradeCard
-          key={t.id}
-          view={view}
-          trade={t}
-          busy={busy}
-          run={run}
-          command={command}
-        />
-      ))}
+      {waiting.length > 0 && (
+        <>
+          <h2 className="online-trade-heading">返事が必要な提案</h2>
+          {waiting.map(card)}
+        </>
+      )}
+      {sent.length > 0 && (
+        <>
+          <h2 className="online-trade-heading">相手の返事待ち</h2>
+          {sent.map(card)}
+        </>
+      )}
       <section className="online-card">
         <h2>新しく提案する</h2>
         {partners.length ? (
           <>
             <p className="online-muted">
-              相手が「受ける」を押すと、その場で選手が入れ替わります。相手が
-              逆提案を返してきたら、こんどはあなたが受けるか断るかを選びます
-              （逆提案は1回だけ）。
+              表の行を押して、出す選手（自球団）ともらう選手（相手）を選びます。
+              右の交換案に、交換のあと両球団の人数と構成がどうなるかが出ます。
+              相手が受けるとその場で選手が入れ替わり、逆提案が返ってきたら
+              こんどはあなたが受けるか断るかを選びます（逆提案は1回だけ）。
             </p>
-            <TradeForm
+            <TradeComposer
               view={view}
-              partner={partner}
-              setPartner={(name) => {
-                setPartner(name);
-                setWant([]);
-              }}
               partners={partners}
-              busy={busy}
-              offer={offer}
-              want={want}
-              setOffer={setOffer}
-              setWant={setWant}
               submitLabel="この内容で提案する"
-              onSubmit={(o, w) =>
+              busy={busy}
+              onSubmit={(to, give, get, reset) =>
                 run(async () => {
-                  await command('tradeOffer', { to: partner, offer: o, want: w });
-                  setOffer([]);
-                  setWant([]);
+                  await command('tradeOffer', { to, offer: give, want: get });
+                  reset();
                 })
               }
             />

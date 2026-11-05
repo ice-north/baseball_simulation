@@ -79,6 +79,7 @@ const SEPARATE = [
   'online-auth-ui-check',
   'online-edit-ui-check',
   'online-lineup-board-ui-check', // check:online:lineup-ui（dist を開く。サーバー不要）
+  'online-trade-ui-check', // check:online:trade-ui（dist を開く。サーバー不要）
   'online-replay-ui-check',
   'online-mobile-gameplay-ui-check',
   'online-label-ui-check',

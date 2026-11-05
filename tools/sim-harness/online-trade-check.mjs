@@ -494,6 +494,85 @@ try {
       );
     }
   }
+
+  // --- 救援投手の欄を名簿に合わせること ------------------------------------
+  // ⚠ 人の球団は先発ローテが揃っていれば編成を残す。以前は救援の欄を見て
+  //    いなかったため、**出した守護神が欄に残り、もらった投手はどの欄にも
+  //    入らず試合で1度も投げなかった**（画面には「おまかせ」の救援として出る）。
+  {
+    for (const t of (await live()).trades)
+      await send('a', sa, 'tradeRespond', { tradeId: t.id, action: 'reject' });
+    const before = await live();
+    const relief = (name) => {
+      const r = before.game.teams[name].pitchingRotation;
+      const starters = new Set(r.starters || []);
+      return rosterOf(before, name).filter(
+        (p) => p.position === 'pitcher' && !starters.has(p.id),
+      );
+    };
+    const rotA = before.game.teams[teamA].pitchingRotation;
+    // 守護神が居ればその人を出す（欄に残るかを見たいので）
+    const outgoing =
+      relief(teamA).find((p) => p.id === rotA.closer) || relief(teamA)[0];
+    const incoming = relief(teamB)[0];
+    assert.ok(outgoing && incoming, '前提: 両球団に救援投手が居る');
+    await send('a', sa, 'tradeOffer', {
+      to: teamB,
+      offer: [outgoing.id],
+      want: [incoming.id],
+    });
+    const t = (await live()).trades[0];
+    await send('b', sb, 'tradeRespond', { tradeId: t.id, action: 'accept' });
+    const after = await live();
+    for (const name of [teamA, teamB]) {
+      const r = after.game.teams[name].pitchingRotation;
+      const ids = new Set(rosterOf(after, name).map((p) => p.id));
+      const bullpen = [
+        ...(r.middleRelievers || []),
+        ...(r.setupMen || []),
+        ...(r.closer != null ? [r.closer] : []),
+      ];
+      assert.ok(
+        bullpen.every((id) => ids.has(id)),
+        `${name} の救援の欄に名簿外の投手が残っている`,
+      );
+      const starters = new Set(r.starters || []);
+      for (const p of rosterOf(after, name))
+        if (p.position === 'pitcher' && !starters.has(p.id))
+          assert.ok(
+            bullpen.includes(p.id),
+            `${name} の ${p.name} がどの救援の欄にも入っていない（試合で投げない）`,
+          );
+    }
+  }
+
+  // --- 初期メンバーへの入れ替えを待っている球団とはトレードしない -----------
+  // ⚠ 途中参加した人の名簿は次のキャンプで選んだセットに丸ごと置き換わる。
+  //    その前にトレードすると、受け取った選手は置き換えで消え、出した選手だけが
+  //    相手に残る（選手がリーグから消える）。
+  {
+    for (const t of (await live()).trades)
+      await send('a', sa, 'tradeRespond', { tradeId: t.id, action: 'reject' });
+    const sc = (await service.login('c')).sessionId;
+    await send('c', sc, 'join', {});
+    const l = await live();
+    const joiner = l.members.find((m) => m.userId === 'c');
+    assert.ok(joiner?.packSeed, '前提: 途中参加した人はセットを待っている');
+    const theirs = rosterOf(l, joiner.teamName).find(
+      (p) => p.position === 'pitcher',
+    );
+    const mine = rosterOf(l, teamA).find((p) => p.position === 'pitcher');
+    await assert.rejects(
+      () =>
+        send('a', sa, 'tradeOffer', {
+          to: joiner.teamName,
+          offer: [mine.id],
+          want: [theirs.id],
+        }),
+      /初期メンバーへ入れ替わる/,
+      'セットを待っている球団とトレードできた',
+    );
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }

@@ -393,6 +393,9 @@ export class LeagueService {
           //    締め切りを待たずにその場で反映する。
           requireOnline(l.phase?.kind === 'camp', 'キャンプ中ではありません', 409);
           const me = l.members.find((m) => m.userId === userId);
+          // ⚠ 参加していない人（管理者だけの人）は球団が無い。見ないと
+          //    `me.teamName` で落ち、理由の分からない500になる
+          requireOnline(me, '参加者ではありません', 403);
           l.phase.camp = l.phase.camp || {};
           const state = (l.phase.camp[userId] = l.phase.camp[userId] || {
             rounds: 0,

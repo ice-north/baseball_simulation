@@ -444,24 +444,37 @@ export default function LineupBoard({
                           {index + 1}
                         </button>
                       </td>
-                      <td className="online-lineup-poscell">
-                        <button
-                          type="button"
-                          className={`online-lineup-pos ${selectedPos === index ? 'is-selected' : ''}`}
-                          aria-pressed={selectedPos === index}
-                          aria-label={`${index + 1}番の守備位置（${POS[entry.position]}）を入れ替える`}
-                          draggable={!busy}
-                          onDragStart={startDrag({ kind: 'pos', index })}
-                          onDragEnd={endDrag}
-                          onMouseEnter={() => setHoverPos(index)}
-                          onMouseLeave={() => setHoverPos(null)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            clickPosition(index);
-                          }}
-                        >
-                          {POS[entry.position] || '?'}
-                        </button>
+                      <td
+                        className="online-lineup-poscell"
+                        title={`守っている位置と、ほかに守れる位置（適性${LOW_FITNESS}%以上、高い順）`}
+                      >
+                        <span className="online-lineup-playable">
+                          <button
+                            type="button"
+                            className={`online-lineup-pos ${selectedPos === index ? 'is-selected' : ''}`}
+                            aria-pressed={selectedPos === index}
+                            aria-label={`${index + 1}番の守備位置（${POS[entry.position]}）を入れ替える`}
+                            draggable={!busy}
+                            onDragStart={startDrag({ kind: 'pos', index })}
+                            onDragEnd={endDrag}
+                            onMouseEnter={() => setHoverPos(index)}
+                            onMouseLeave={() => setHoverPos(null)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clickPosition(index);
+                            }}
+                          >
+                            {POS[entry.position] || '?'}
+                          </button>
+                          {/* 控えの行と同じく、守っている位置の右にほかに守れる位置を並べる */}
+                          {player &&
+                            playablePositions(player)
+                              .filter((e) => e.position !== entry.position)
+                              .slice(0, 2)
+                              .map((e) => (
+                                <span key={e.position}>{POS[e.position]}</span>
+                              ))}
+                        </span>
                       </td>
                       {player ? (
                         <PlayerCells

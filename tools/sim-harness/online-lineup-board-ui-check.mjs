@@ -97,6 +97,28 @@ try {
     !benchIds.some((id) => pitcherIds.has(id)),
     '控え野手に投手が出ている',
   );
+  // スタメンの行にも、控えの行と同じく「ほかに守れる位置」が出る
+  const starterPlayable = await p
+    .locator(
+      'tbody[aria-label="スタメン"] tr[data-slot] .online-lineup-playable',
+    )
+    .count();
+  assert.equal(starterPlayable, 8, 'スタメンの行にほかに守れる位置の欄が無い');
+  const starterSubs = await p
+    .locator(
+      'tbody[aria-label="スタメン"] tr[data-slot] .online-lineup-playable',
+    )
+    .evaluateAll((cells) =>
+      cells.map((c) => c.querySelectorAll(':scope > span').length),
+    );
+  assert.ok(
+    starterSubs.every((n) => n <= 2),
+    `スタメンのほかに守れる位置が3つ以上出ている: ${starterSubs}`,
+  );
+  assert.ok(
+    starterSubs.some((n) => n > 0),
+    'スタメンの誰にもほかに守れる位置が出ていない',
+  );
   // 古い画面の操作が残っていない（自動設定・✕で外す・守備位置のコンボボックス・比較の印）
   const board = p.locator('.online-lineup-board');
   assert.equal(
