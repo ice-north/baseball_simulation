@@ -21,8 +21,10 @@ import { renderToString } from 'react-dom/server';
 import {
   Notices,
   Standings,
+  Results,
   formatDeadline,
 } from '../../src/online/LeaguePanels.jsx';
+import { formatTurn, turnLabel, turnOfDate } from '../../src/online/shared.js';
 import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
@@ -31,8 +33,12 @@ export {
   renderToString,
   Notices,
   Standings,
+  Results,
   DesktopTactics,
   formatDeadline,
+  formatTurn,
+  turnLabel,
+  turnOfDate,
   setTeamLabels,
   PackSelect,
 };
@@ -64,6 +70,10 @@ try {
     setTeamLabels,
     PackSelect,
     DesktopTactics,
+    Results,
+    formatTurn,
+    turnLabel,
+    turnOfDate,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -299,6 +309,56 @@ try {
     assert.doesNotMatch(html, /online-check-info/, 'PCに先発のチェック欄が残っている');
   }
 
+  // --- 進行はターンで出す（ゲーム内の日付を出さない） ---------------------
+  // ⚠ オンラインは**ターンで進む**（1ターン＝実時間1時間＝ゲーム内1日）。
+  //    ゲーム内の日付は進行の副産物でしかなく、出すと「4/18って何試合目？」と
+  //    数え直すことになる。
+  // ⚠ 実時間の締め切り（`formatDeadline`）は別もの。こちらは消さない——
+  //    次にいつ進むかが分からなくなる。
+  {
+    assert.equal(
+      turnOfDate({ year: 2024, month: 4, day: 1 }),
+      1,
+      '開幕が第1ターンでない',
+    );
+    assert.equal(turnOfDate({ year: 2024, month: 4, day: 18 }), 18);
+    assert.equal(
+      turnOfDate({ year: 2024, month: 7, day: 29 }),
+      120,
+      '最終ターンがちがう',
+    );
+    assert.equal(
+      turnOfDate({ year: 2024, month: 7, day: 30 }),
+      null,
+      '範囲の外を数えている',
+    );
+    assert.match(formatTurn({ year: 2024, month: 1, day: 1 }), /開幕前/);
+    // ⚠ 一覧は総数（/120）を出さない。6試合並ぶと同じ数字が6回出る
+    assert.equal(turnLabel({ year: 2024, month: 4, day: 18 }), '第18ターン');
+    assert.equal(formatTurn({ year: 2024, month: 4, day: 18 }), '第18ターン / 120');
+    assert.match(formatTurn({ year: 2024, month: 11, day: 10 }), /シーズン終了/);
+
+    const resultsView = {
+      teamName: '宮崎アトラス',
+      results: [
+        {
+          gameId: 1,
+          date: { year: 2024, month: 4, day: 18 },
+          home: '宮崎アトラス',
+          away: '新潟ブルズ',
+          homeScore: 3,
+          awayScore: 1,
+          decisions: null,
+        },
+      ],
+      upcoming: [],
+    };
+    const html = render(h(Results, { view: resultsView }));
+    assert.match(html, /第18ターン/, '試合結果にターンが出ていない');
+    // ⚠ ゲーム内の日付を出さない
+    assert.doesNotMatch(html, /4\/18/, '試合結果にゲーム内の日付が出ている');
+  }
+
   // --- 締め切りの表示（日本時間） ---------------------------------------
   assert.equal(formatDeadline('2026-11-07T15:00:00.000Z'), '11/8(日) 0:00');
 } finally {
@@ -306,5 +366,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ）',
 );

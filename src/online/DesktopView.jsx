@@ -14,7 +14,7 @@ import { useDraftMemoryStore } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import { dateTime, STATUS } from './api.js';
-import { formatGameDate } from './shared.js';
+import { formatTurn } from './shared.js';
 import { teamLabel } from './gameText.js';
 import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
 import { CompactRoster } from './PlayerPerformance.jsx';
@@ -137,7 +137,9 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
       </button>
       <div className="online-nav-clock">
         <p>
-          <b>{formatGameDate(view.currentDate)}</b>
+          {/* ⚠ オンラインは**ターンで進む**。ゲーム内の日付は出さない
+              （「4/18って何試合目？」と数え直すことになる） */}
+          <b>{formatTurn(view.currentDate)}</b>
           <span className="online-status">{STATUS[view.status]}</span>
         </p>
         <small>

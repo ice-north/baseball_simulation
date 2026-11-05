@@ -1,3 +1,5 @@
+// ⚠ `pyramidLeague` は `shared` を読まないので、ここから読んでも循環しない
+import { SEASON_TURNS } from './pyramidLeague.js';
 // ⚠ **保存された世界の形を変えたら上げること**。上げないと、古い形のリーグが
 //    `assertLeagueVersion` を素通りして読み込まれ、どこか遠くで落ちる。
 //    上げれば「ゲームのバージョンが対応していません」で止まるので原因が分かる。
@@ -85,8 +87,42 @@ export function nextProgressionAt(now) {
   return new Date(midnight + 86400000 + (fh * 60 + fm) * 60000).toISOString();
 }
 
-export const formatGameDate = (date) =>
-  `${date.year}/${date.month}/${date.day}`;
+/**
+ * ゲーム内の日付を**ターン**に直す。開幕（4/1）が第1ターン。
+ *
+ * ⚠ オンラインは**ターンで進む**（1ターン＝実時間1時間＝ゲーム内1日）。
+ *    ゲーム内の日付は進行の副産物でしかなく、画面に出すと
+ *    「4/18って何試合目？」と数え直すことになる。画面はターンで出す。
+ * ⚠ 休養日もターンに数える（120ターン中100試合）。「何試合目か」は
+ *    球団ごとに違うので、試合の予定では別に数える（`ownUpcomingGames`）。
+ * ⚠ 開幕前・シーズン後は範囲の外。`null` を返して、呼ぶ側で文面を変える。
+ */
+export const SEASON_START_MONTH = 4;
+export function turnOfDate(date, turns = SEASON_TURNS) {
+  if (!date?.year) return null;
+  const start = Date.UTC(date.year, SEASON_START_MONTH - 1, 1);
+  const at = Date.UTC(date.year, (date.month || 1) - 1, date.day || 1);
+  const turn = Math.floor((at - start) / 86400000) + 1;
+  return turn >= 1 && turn <= turns ? turn : null;
+}
+
+/**
+ * 一覧に出すターンの表記（「第23ターン」）。範囲の外なら「開幕前」「シーズン終了」。
+ * ⚠ 一覧では総数（/120）を繰り返さない。6試合ぶん並ぶと同じ数字が6回出る。
+ */
+export function turnLabel(date, turns = SEASON_TURNS) {
+  const turn = turnOfDate(date, turns);
+  if (turn) return `第${turn}ターン`;
+  if (!date?.year) return '';
+  return date.month < SEASON_START_MONTH ? '開幕前' : 'シーズン終了';
+}
+
+/** 見出しに出すターンの表記（「第23ターン / 120」）。総数はここだけ出す */
+export function formatTurn(date, turns = SEASON_TURNS) {
+  const turn = turnOfDate(date, turns);
+  return turn ? `${turnLabel(date, turns)} / ${turns}` : turnLabel(date, turns);
+}
+
 export const PHASE_LABELS = {
   pack_select: '初期メンバー選択',
   // ⚠ 初期編成はセット選択に置き換えた。移行の途中でしか現れないが、

@@ -12,7 +12,7 @@ import {
 } from './gameText.js';
 import { api, POS } from './api.js';
 import {
-  formatGameDate,
+  turnLabel,
   PHASE_LABELS,
   sameEditState,
   ROSTER_LIMIT,
@@ -296,7 +296,8 @@ export function Results({ view, compact = false }) {
           return (
             <article className="online-score" key={g.gameId || g.id}>
               <header>
-                <small>{formatGameDate(g.date)}</small>
+                {/* ⚠ 日付ではなくターン。オンラインはターンで進む */}
+                <small>{turnLabel(g.date)}</small>
                 {outcome && (
                   <span className={`online-outcome is-${outcome.tone}`}>
                     {outcome.mark}

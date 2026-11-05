@@ -4,7 +4,7 @@ import MobileReplay from './MobileReplay.jsx';
 import { useRead } from './useRead.js';
 import { useMobile } from './useMobile.js';
 import { PageNav } from './PageNav.jsx';
-import { formatGameDate } from './shared.js';
+import { turnLabel } from './shared.js';
 import { formatStat } from './statsView.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 const GROUPS = {
@@ -375,7 +375,7 @@ function GameRecord({ id, year, ownTeam, close }) {
           )}
           {!watch && (
             <p className="online-game-summary">
-              <small>{formatGameDate(game.date)}</small>
+              <small>{turnLabel(game.date)}</small>
               <strong>
                 <span title={teamLabel(game.away)}>{teamShort(game.away)}</span>{' '}
                 {game.awayScore} – {game.homeScore}{' '}
@@ -474,9 +474,8 @@ function History({ view, close }) {
               const outcome = ownOutcome(g, view.teamName);
               return (
                 <article key={g.gameId}>
-                  <small>
-                    {g.date.month}/{g.date.day}
-                  </small>
+                  {/* ⚠ ゲーム内の日付は出さない。オンラインはターンで進む */}
+                  <small>{turnLabel(g.date)}</small>
                   <span
                     className={`online-outcome ${outcome ? `is-${outcome.tone}` : 'is-none'}`}
                     aria-label={outcome ? `自球団の${outcome.mark}` : undefined}

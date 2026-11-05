@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { POS } from './api.js';
-import { formatGameDate } from './shared.js';
+import { turnLabel } from './shared.js';
 import { PageNav } from './PageNav.jsx';
 import PlayerAbilities from './PlayerAbilities.jsx';
 import { useRead } from './useRead.js';
@@ -69,7 +69,7 @@ export function TeamBrief({ view }) {
         <>
           {last && (
             <p>
-              前回：{last.date.month}/{last.date.day}{' '}
+              前回：{turnLabel(last.date)}{' '}
               <span className={`online-outcome is-${lastOutcome.tone}`}>
                 {lastOutcome.mark}
               </span>{' '}
@@ -83,7 +83,7 @@ export function TeamBrief({ view }) {
           <p>
             次の試合：
             {next
-              ? `${formatGameDate(next.date)} 対 ${teamShort(next.home === view.teamName ? next.away : next.home)}`
+              ? `${turnLabel(next.date)} 対 ${teamShort(next.home === view.teamName ? next.away : next.home)}`
               : '予定なし'}
           </p>
           {starter && (

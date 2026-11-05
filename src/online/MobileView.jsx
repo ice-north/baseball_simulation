@@ -11,7 +11,7 @@ import {
 import TeamRoster from './TeamRoster.jsx';
 import OnlineLineup, { hasUnsavedFullLineup } from './OnlineLineup.jsx';
 import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
-import { formatGameDate } from './shared.js';
+import { formatTurn } from './shared.js';
 import { dateTime, STATUS } from './api.js';
 import { teamLabel } from './gameText.js';
 export default function MobileView(props) {
@@ -36,7 +36,7 @@ export default function MobileView(props) {
           <section className="online-mobile-overview">
             <strong>{teamLabel(view.teamName)}</strong>
             <span>
-              {formatGameDate(view.currentDate)} · {STATUS[view.status]}
+              {formatTurn(view.currentDate)} · {STATUS[view.status]}
             </span>
             <small>次の進行 {dateTime(view.nextAdvanceAt)}</small>
           </section>
