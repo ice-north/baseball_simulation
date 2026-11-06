@@ -1,20 +1,27 @@
 package jp.icenorth.baseball.app.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,9 +30,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.bool
+import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.str
+import jp.icenorth.baseball.shared.teamLabel
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
-private enum class Tab(val label: String) { Home("ホーム"), Lineup("打順") }
+enum class Tab(val label: String, val icon: ImageVector) {
+    Home("ホーム", Icons.Filled.Home),
+    Games("試合", Icons.Filled.DateRange),
+    Players("選手", Icons.Filled.Person),
+    Plan("編成", Icons.Filled.List),
+    Procedures("手続き", Icons.Filled.Edit),
+}
 
 @Composable
 fun OnlineApp(model: AppViewModel) {
@@ -39,39 +60,86 @@ fun OnlineApp(model: AppViewModel) {
     }
     if (model.auth == null) {
         LoginScreen(model)
+        if (model.busy) BusyOverlay(model.busyLabel.ifEmpty { "ログイン中…" })
         return
     }
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = {
-            NavigationBar {
-                Tab.entries.forEach { item ->
-                    NavigationBarItem(
-                        selected = tab == item,
-                        onClick = { tab = item },
-                        icon = {
-                            Icon(
-                                if (item == Tab.Home) Icons.Filled.Home else Icons.Filled.List,
-                                contentDescription = null,
-                            )
-                        },
-                        label = { Text(item.label) },
-                    )
+    var renaming by remember { mutableStateOf(false) }
+    val raw = model.raw
+    // 自分の番の手続き・返事待ちのトレードがあれば「手続き」に印
+    val pending = raw != null && (
+        raw["pendingPack"].let { it != null && it.toString() != "null" } ||
+            (raw["phase"].let { it != null && it.toString() != "null" } && raw.at("phase", "submission", "ready").bool() != true) ||
+            raw.at("trades").list().any { it.at("myTurn").bool() == true }
+        )
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbar) },
+            bottomBar = {
+                NavigationBar {
+                    Tab.entries.forEach { item ->
+                        NavigationBarItem(
+                            selected = tab == item,
+                            onClick = { tab = item },
+                            icon = {
+                                if (item == Tab.Procedures && pending) {
+                                    BadgedBox(badge = { Badge() }) { Icon(item.icon, contentDescription = null) }
+                                } else {
+                                    Icon(item.icon, contentDescription = null)
+                                }
+                            },
+                            label = { Text(item.label) },
+                        )
+                    }
+                }
+            },
+        ) { padding ->
+            Column(Modifier.padding(padding)) {
+                when (tab) {
+                    Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures }, onRename = { renaming = true })
+                    Tab.Games -> GamesScreen(model)
+                    Tab.Players -> PlayersScreen(model)
+                    Tab.Plan -> PlanScreen(model)
+                    Tab.Procedures -> ProceduresScreen(model, onRename = { renaming = true })
                 }
             }
-        },
-    ) { padding ->
-        AnimatedContent(
-            targetState = tab,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            modifier = Modifier.padding(padding),
-            label = "tab",
-        ) { current ->
-            when (current) {
-                Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Lineup })
-                Tab.Lineup -> LineupScreen(model)
-            }
         }
+        model.openPlayer?.let { PlayerSheet(model, it) }
+        if (renaming) RenameDialog(model) { renaming = false }
+        // ⚠ 保存・提出の間は画面全体を塞ぐ（いちばん上に重ねる）
+        if (model.busy) BusyOverlay(model.busyLabel)
     }
+}
+
+/** 球団名とプレイヤー名（順位表には「球団名（あなたの名前）」と出る） */
+@Composable
+fun RenameDialog(model: AppViewModel, close: () -> Unit) {
+    val view = model.view ?: return
+    val me = model.raw?.at("members").list().firstOrNull { it.at("teamName").str() == view.teamName }
+    var teamName by remember { mutableStateOf(me?.at("displayName").str() ?: view.teamLabel(view.teamName.orEmpty())) }
+    var playerName by remember { mutableStateOf(me?.at("label").str().orEmpty()) }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("球団名・名前を変える") },
+        text = {
+            Column {
+                Muted("順位表には「球団名（あなたの名前）」と出ます。いつでも変えられます。")
+                OutlinedTextField(teamName, { teamName = it.take(24) }, label = { Text("球団名") }, singleLine = true)
+                OutlinedTextField(playerName, { playerName = it.take(24) }, label = { Text("あなたの名前") }, singleLine = true)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = teamName.isNotBlank(),
+                onClick = {
+                    model.command(
+                        "profile",
+                        buildJsonObject { put("teamName", teamName.trim()); put("playerName", playerName.trim()) },
+                        done = "名前を保存しました",
+                    ) { close() }
+                },
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = close) { Text("閉じる") } },
+    )
 }

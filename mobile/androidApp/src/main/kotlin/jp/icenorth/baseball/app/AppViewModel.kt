@@ -7,13 +7,17 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import jp.icenorth.baseball.shared.AuthSession
+import jp.icenorth.baseball.shared.EditHistory
+import jp.icenorth.baseball.shared.PlanDraft
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineApi
 import jp.icenorth.baseball.shared.OnlineException
 import jp.icenorth.baseball.shared.OnlineJson
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val store = SessionStore(app)
@@ -25,12 +29,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var view by mutableStateOf(store.viewJson?.let(::parseView))
         private set
 
+    /** ビューの生の形（型にしていない項目——名簿の細かい能力・手続き・トレードなど——を引くため） */
+    var raw by mutableStateOf(store.viewJson?.let(::parseRaw))
+        private set
+
+    /** 編成の編集（タブを移っても消えないよう、画面ではなくここに置く） */
+    var plan by mutableStateOf<EditHistory<PlanDraft>?>(null)
+
+    /** 選手の詳細を開いている選手（名簿の生の形）。どの画面からでも同じシートで開く */
+    var openPlayer by mutableStateOf<JsonObject?>(null)
+
     /** 引っ張って更新している間 */
     var refreshing by mutableStateOf(false)
         private set
 
-    /** 保存などの操作中（ボタンを押せなくする） */
+    /** 保存などの操作中（画面全体を塞いで、二重に押せなくする） */
     var busy by mutableStateOf(false)
+        private set
+
+    /** 塞いでいる間に出す文言（「保存中…」「練習中…」など） */
+    var busyLabel by mutableStateOf("")
         private set
     var error by mutableStateOf<String?>(null)
     var message by mutableStateOf<String?>(null)
@@ -87,6 +105,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.auth = null
         auth = null
         view = null
+        raw = null
+        plan = null
         if (current != null) viewModelScope.launch { runCatching { api.logout(current) } }
     }
 
@@ -108,19 +128,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 編成を保存する。成功したら最新のビューを読み直す */
-    fun saveLineup(payload: JsonObject, onSaved: () -> Unit) {
+    fun saveLineup(payload: JsonObject, onSaved: () -> Unit) =
+        command("lineup", payload, label = "編成を保存中…", done = "編成を保存しました") { onSaved() }
+
+    /**
+     * 指示を送る（保存・提出・練習・トレードなど）。送っている間は画面全体を塞ぐ。
+     * 成功したら最新のビューを読み直してから `onDone` を呼ぶ（結果は送った指示の応答）。
+     * ⚠ 失敗しても編集中の内容は消さない（呼ぶ側の状態に触らない）。
+     */
+    fun command(
+        type: String,
+        payload: JsonElement?,
+        label: String = "保存中…",
+        done: String? = null,
+        onDone: (JsonObject) -> Unit = {},
+    ) {
         val current = auth ?: return
         val revision = view?.revision ?: return
         if (busy) return
         busy = true
+        busyLabel = label
         error = null
         viewModelScope.launch {
             try {
                 val credentials = fresh(current)
-                api.command(credentials, revision, "lineup", payload)
+                val result = api.command(credentials, revision, type, payload)
                 load(credentials)
-                message = "編成を保存しました"
-                onSaved()
+                if (done != null) message = done
+                onDone(result)
             } catch (e: Exception) {
                 handle(e)
             } finally {
@@ -129,10 +164,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 読むだけの窓口（team / player / games / game / defaults）。失敗は例外のまま返す */
+    suspend fun read(action: String, params: Map<String, String?> = emptyMap()): JsonObject {
+        val current = auth ?: throw OnlineException("ログインしていません")
+        val credentials = fresh(current)
+        return api.read(credentials, action, params)
+    }
+
     private suspend fun load(credentials: AuthSession) {
-        val raw = api.viewRaw(credentials)
-        view = parseView(raw)
-        store.viewJson = raw
+        val text = api.viewRaw(credentials)
+        view = parseView(text)
+        raw = parseRaw(text)
+        store.viewJson = text
     }
 
     /** アクセストークンの期限が近ければ先に更新する（本番の Supabase は1時間で切れる） */
@@ -151,6 +194,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return next
     }
 
+    /** 画面で読み込みに失敗したとき（認証切れならログイン画面へ戻す） */
+    fun report(e: Exception) = handle(e)
+
+    fun describe(e: Exception): String = e.readable()
+
     private fun handle(e: Exception) {
         // 別の端末でログインし直した／認証が切れた → ログイン画面へ戻す
         if (e is OnlineException && (e.code == "session" || e.code == "auth" || e.status == 401)) {
@@ -167,3 +215,4 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 private fun parseView(raw: String): LeagueView? = runCatching { OnlineJson.decodeFromString<LeagueView>(raw) }.getOrNull()
+private fun parseRaw(raw: String): JsonObject? = runCatching { OnlineJson.parseToJsonElement(raw).jsonObject }.getOrNull()
