@@ -54,9 +54,6 @@ import jp.icenorth.baseball.shared.playerWish
 import jp.icenorth.baseball.shared.resolveTraining
 import jp.icenorth.baseball.shared.str
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
 
 /**
  * キャンプ（1クールずつサーバーで実行する。campRound 命令）。

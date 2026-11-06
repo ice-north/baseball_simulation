@@ -41,7 +41,6 @@ import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.ops3
 import jp.icenorth.baseball.shared.rate3
 import jp.icenorth.baseball.shared.shortLabel
-import jp.icenorth.baseball.shared.subPositions
 
 /**
  * 守備位置の色。投手・捕手・内野・外野で分け、一目で「どこを守る選手か」が分かるようにする。

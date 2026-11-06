@@ -55,9 +55,7 @@ import jp.icenorth.baseball.shared.shiftInPlan
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.weightedRanked
 import jp.icenorth.baseball.shared.weightedScore
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlin.math.roundToInt
 
 private const val PAGE = 12

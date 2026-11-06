@@ -37,7 +37,15 @@ data class PlanDraft(
     fun withStrategy(key: String, value: String) = copy(strategy = strategy + (key to value))
     fun withTactic(key: String, value: String) = copy(tactics = tactics + (key to value))
 
-    fun problem(): String? = LineupDraft(base, slots, pitching.starters).problem()
+    /**
+     * @param roster 今の名簿。渡すと、打順に名簿から外れた選手（トレード・抹消）が残っていないかも見る
+     *               （サーバーは「登録できない選手が含まれています」で断る）
+     */
+    fun problem(roster: List<Player>? = null): String? = LineupDraft(base, slots, pitching.starters).problem()
+        ?: roster?.let { list ->
+            val fielders = list.filter { !it.isPitcher && it.isActive }.map { it.id }.toSet()
+            if (slots.any { it.playerId !in fielders }) "打順に名簿から外れた選手が居ます。控えと交代してください" else null
+        }
         ?: when {
             pitching.starters.size > MAX_STARTERS -> "先発投手は${MAX_STARTERS}人までです"
             // 保存済みの先発に、名簿から外れた・抹消中の投手が残っていることがある（Web 版 pitchingProblems と同じ）

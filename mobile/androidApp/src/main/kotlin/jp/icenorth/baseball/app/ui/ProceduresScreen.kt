@@ -44,16 +44,11 @@ import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.long
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.pid
-import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
 private enum class ProcTab(val label: String) { Current("現在の手続き"), Trade("トレード") }
 
@@ -107,6 +102,7 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
                 listOf(
                     "20セットから1つ選びます。選んだ24人は次の日曜のキャンプで名簿に入り、月曜の開幕からあなたの球団になります。それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。",
                     "どのセットも投12・捕2・内外10の24人（うち二刀流2人）、格付けはA2・B10・C12、年齢は19〜24歳です。合計の力は揃えてあるので、好みで選んで構いません。",
+                    "選んだセットは1球団だけが受け取ります（重なったら球団名の順）。",
                 ),
             )
         },

@@ -76,7 +76,6 @@ import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.roleLabel
-import kotlinx.serialization.json.JsonObject
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -114,7 +113,9 @@ fun PlanScreen(model: AppViewModel) {
     LaunchedEffect(lineup, view.roster) {
         val fresh = PlanDraft.from(lineup, view.roster)
         val current = model.plan
-        if (current == null || current.present.sameEdit(PlanDraft.from(current.present.base, view.roster))) model.plan = EditHistory(fresh)
+        // ⚠ 「編集していない」は手を付けていない（元に戻す手が無い）ことでも見る。名簿だけが変わった（トレード・抹消）とき、
+        //    作り直した元の案と見比べるだけだと、抜けた選手の枠が空きに変わるぶん「未保存の変更」に見えて、最新に合わなかった
+        if (current == null || !current.canUndo || current.present.sameEdit(PlanDraft.from(current.present.base, view.roster))) model.plan = EditHistory(fresh)
     }
     val history = model.plan ?: EditHistory(PlanDraft.from(lineup, view.roster))
     val draft = history.present
@@ -152,7 +153,7 @@ fun PlanScreen(model: AppViewModel) {
             TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale) { Text("取り消す") }
             Button(
                 onClick = {
-                    val problem = draft.problem()
+                    val problem = draft.problem(view.roster)
                     if (problem != null) model.error = problem
                     else model.saveLineup(draft.toPayload()) {
                         model.view?.lineup?.let { model.plan = EditHistory(PlanDraft.from(it, model.view!!.roster)) }
@@ -245,7 +246,7 @@ private fun OrderEditor(
         }
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 72.dp), // 左下の TIPS の印に最後の行が隠れないよう
             verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -394,7 +395,7 @@ private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players
             PosBadge(slot.position)
             Text(players[slot.playerId]?.let { "${it.name}と交代する控え" } ?: "空いている${positionLabel(slot.position)}に入れる控え", style = MaterialTheme.typography.titleMedium)
         }
-                if (bench.isEmpty()) Text("控えの野手がいません", modifier = Modifier.padding(20.dp))
+        if (bench.isEmpty()) Text("控えの野手がいません", modifier = Modifier.padding(20.dp))
         bench.forEach { p ->
             FielderRow(
                 order = null,
@@ -422,7 +423,7 @@ private fun BenchSheet(draft: PlanDraft, id: Long, players: Map<Long, Player>, o
             PosBadge(me.position)
             Text("${me.name}を誰と代える？", style = MaterialTheme.typography.titleMedium)
         }
-                order.forEach { index ->
+        order.forEach { index ->
             val slot = draft.slots[index]
             val them = players[slot.playerId]
             val fit = me.fitness(slot.position)
@@ -451,7 +452,6 @@ private fun BenchSheet(draft: PlanDraft, id: Long, players: Map<Long, Player>, o
 @Composable
 private fun PitchingEditor(draft: PlanDraft, players: Map<Long, Player>, nextId: Long?, edit: Edit, onDragStart: () -> Unit, open: (Long) -> Unit, onSheet: (PlanSheet) -> Unit) {
     val haptic = LocalHapticFeedback.current
-    val state = draft.pitching
     val listState = rememberLazyListState()
     val reorder = rememberReorderableLazyListState(listState) { from, to ->
         val id = (from.key as? String)?.removePrefix("p:")?.toLongOrNull() ?: return@rememberReorderableLazyListState
@@ -497,7 +497,7 @@ private fun PitchingList(
     val relievers = RELIEF_ORDER.map { role -> role to state.roles.filter { (id, r) -> r == role && id !in state.starters }.keys.mapNotNull { players[it] } }
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 72.dp), // 左下の TIPS の印に最後の行が隠れないよう
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -633,7 +633,7 @@ private fun TacticsEditor(draft: PlanDraft, edit: Edit) {
 private val ORDER_HELP = listOf(
     "長押しでドラッグすると打順を並べ替えます。守備の札を押すと守備位置の入れ替え、名前を押すと控えと交代します。控えの行を押すと、誰と代えるかを選べます。",
     "2行目は上の切り替えで「能力」「今季成績」「守備適性」を出します。守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
-    "試合の日は、疲労${FIELDER_REST_FATIGUE}以上の野手は、その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満の控えが居れば、その日だけ入れ替わって休みます。",
+    "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満の控えが居れば、その日だけ入れ替わって休みます。",
     "疲労は41以上で黄（成長が鈍り始める）、${FIELDER_REST_FATIGUE}以上で赤です。",
 )
 

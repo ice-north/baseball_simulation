@@ -1,22 +1,13 @@
 package jp.icenorth.baseball.app.ui
 
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -26,12 +17,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -49,31 +38,18 @@ import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
-import jp.icenorth.baseball.shared.num
-import jp.icenorth.baseball.shared.obj
-import jp.icenorth.baseball.shared.rate3
-import jp.icenorth.baseball.shared.str
 import kotlinx.serialization.json.JsonObject
 import jp.icenorth.baseball.shared.GameResult
-import jp.icenorth.baseball.shared.LEAGUE_NAMES
 import jp.icenorth.baseball.shared.LeagueView
-import jp.icenorth.baseball.shared.STATUS_LABELS
-import jp.icenorth.baseball.shared.ScheduledGame
-import jp.icenorth.baseball.shared.formatTurn
 import jp.icenorth.baseball.shared.buildFrontPage
+import jp.icenorth.baseball.shared.loadOwnHistory
+import androidx.compose.runtime.SideEffect
 import jp.icenorth.baseball.shared.FrontPage
 import jp.icenorth.baseball.shared.GAME_TIPS
 import jp.icenorth.baseball.shared.LINK_GAMES
 import jp.icenorth.baseball.shared.LINK_LINEUP
 import jp.icenorth.baseball.shared.LINK_TIPS
 import androidx.compose.material3.HorizontalDivider
-import jp.icenorth.baseball.shared.teamLabel
-import jp.icenorth.baseball.shared.teamShort
-import jp.icenorth.baseball.shared.turnOfDate
-import kotlinx.coroutines.delay
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,25 +70,49 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
             return@PullToRefreshBox
         }
         val team = view.teamName
-        // 1面の主役を書くため、自球団の最新の試合の詳細を読む（終わった試合は変わらないので一度読めば使い回す）
+        // 1面の主役を書くため、自球団の最新の試合の詳細を読む（終わった試合は変わらないので一度読めば使い回す）。
+        // 連勝・連敗と対戦成績のため、今季の自球団の試合も読む（ビューには直近の数試合しか無い）
         val last = view.results.lastOrNull { it.home == team || it.away == team }
         var lastGame by remember { mutableStateOf<JsonObject?>(null) }
+        var history by remember { mutableStateOf<Pair<List<GameResult>, Boolean>?>(null) }
+        // ⚠ 読み終わるまで紙面を作り直さない（詳細の無い紙面を出してから差し替えると、見出しが一瞬で変わって見えた）
+        var ready by remember(last?.gameId) { mutableStateOf(last?.gameId == null) }
         LaunchedEffect(last?.gameId, view.year) {
-            lastGame = null
             val id = last?.gameId ?: return@LaunchedEffect
-            lastGame = runCatching { model.read("game", mapOf("id" to "$id", "year" to "${view.year ?: ""}")) }
+            val year = "${view.year ?: ""}"
+            lastGame = runCatching { model.read("game", mapOf("id" to "$id", "year" to year)) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
                 .getOrNull()
+            history = runCatching {
+                loadOwnHistory(team) { page -> model.read("games", mapOf("year" to year, "page" to "$page", "scope" to "own")) }
+            }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                .getOrNull()
+            ready = true
         }
         // TIPS は紙面のコラムに1本（ホームを開くたびに選び直す。いしだの指定「ホームを表示するたびにランダムで1つ」）
         val tip = remember { GAME_TIPS.random() }
         val alerts = pendingAlerts(view, model.raw)
-        val page = remember(view, model.raw, lastGame, tip, alerts) {
-            buildFrontPage(view, model.raw, lastGame, alerts, FrontPage.Article("コラム", tip.title, tip.body, LINK_TIPS))
+        var shown by remember { mutableStateOf<FrontPage?>(null) }
+        val built = if (ready) {
+            remember(view, model.raw, lastGame, history, tip, alerts) {
+                buildFrontPage(
+                    view, model.raw, lastGame, alerts,
+                    column = FrontPage.Article("コラム", tip.title, tip.body, LINK_TIPS),
+                    history = history?.first,
+                    historyComplete = history?.second == true,
+                )
+            }
+        } else null
+        SideEffect { if (built != null) shown = built }
+        val page = built ?: shown
+        if (page == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("紙面を刷っています…") }
+            return@PullToRefreshBox
         }
         val style = homeStyleOf(model.homeStyle)
         LazyColumn(
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 72.dp), // 左下の TIPS の印に隠れないよう
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
         ) {

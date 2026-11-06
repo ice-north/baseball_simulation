@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.LocalContentColor
@@ -126,15 +127,19 @@ fun FrontPageCard(
 @Composable
 private fun Masthead(page: FrontPage, nextAdvanceAt: String?, menu: @Composable () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("NEXT STAGE", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = 1.sp, color = Ink)
-        Text(
-            "スポーツ",
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.padding(start = 6.dp).background(Red).padding(horizontal = 5.dp, vertical = 1.dp),
-        )
-        Box(Modifier.weight(1f))
+        // ⚠ 題字は縮められるように（文字を大きくしている端末で、右のメニュー＝ログアウトや見た目の切り替えが押し出されないよう）
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text("NEXT STAGE", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = 1.sp, color = Ink, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f, fill = false))
+            Text(
+                "スポーツ",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(start = 6.dp).background(Red).padding(horizontal = 5.dp, vertical = 1.dp),
+            )
+        }
         CompositionLocalProvider(LocalContentColor provides Ink) { menu() }
     }
     // 題字の下の二重線

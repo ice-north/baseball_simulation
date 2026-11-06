@@ -9,7 +9,8 @@ import kotlin.math.round
  *
  * ⚠ 数字の表（順位表・タイトル争いの一覧・リーグ便りの全件）は試合タブに置く（いしだの指定:
  *    「数字数字したことは試合タブ、ホームはエンタメ感」）。ここでは数字は記事の文の中に少しだけ入れる。
- * ⚠ 文はビューから決まる（同じビューなら同じ紙面）。乱数で言い回しを変えると、開き直すたびに記事が変わって見える。
+ * ⚠ 文はビューから決まる（同じビューなら同じ紙面）。言い回しは試合ごとに変える（[Pen]・FrontPageCopy.kt）。
+ *    乱数で選ぶと、開き直すたびに記事が変わって見える。
  */
 data class FrontPage(
     /** 題字の下の日付（「4月23日 第25ターン」） */
@@ -53,11 +54,13 @@ private fun two(v: Double?): String = v?.let { val r = round(it * 100).toInt(); 
 /** 首位とのゲーム差（0なら「首位」） */
 private fun gamesBehind(leader: Standing, me: Standing): Double = ((leader.wins - me.wins) + (me.losses - leader.losses)) / 2.0
 
-private fun outsText(outs: Int): String = if (outs % 3 == 0) "${outs / 3}回" else "${outs / 3}回${outs % 3}/3"
-
 /**
  * @param alerts 自分の番の手続きなど（締め切りの書き方が端末の時計に依るので、画面の側で作って渡す）
  * @param column 紙面の終わりに載せるコラム（ゲームのTIPS など）
+ * @param history 自球団の今季の試合（古い順。「試合」の窓口から読んだもの）。
+ *                ⚠ ビューの results は**リーグ全体の直近14試合**しか無い（自球団は2〜3試合）ので、連勝・連敗や
+ *                相手との対戦成績はこれで数える。無ければビューの分だけで数え、対戦成績は書かない
+ * @param historyComplete [history] が今季の自球団の試合を全部含むか（対戦成績を書いてよいか）
  */
 fun buildFrontPage(
     view: LeagueView,
@@ -65,6 +68,8 @@ fun buildFrontPage(
     lastGame: JsonObject? = null,
     alerts: List<String> = emptyList(),
     column: FrontPage.Article? = null,
+    history: List<GameResult>? = null,
+    historyComplete: Boolean = false,
 ): FrontPage {
     val team = view.teamName ?: ""
     val me = view.teamShort(team)
@@ -85,9 +90,22 @@ fun buildFrontPage(
         "${leagueName}${rankIndex + 1}位" + if (rankIndex == 0) "" else "（首位と${one(gb)}差）"
     } else null
 
-    val own = view.results.filter { it.home == team || it.away == team }
+    val recent = view.results.filter { it.home == team || it.away == team }
+    // 読んだ今季の試合とビューの直近の試合を合わせる（同じ試合は1つに。古い順）
+    val own = (history.orEmpty() + recent)
+        .filter { it.homeScore != null && it.awayScore != null }
+        .distinctBy { it.gameId ?: it.hashCode().toLong() }
+        .sortedWith(compareBy<GameResult>({ it.date?.month ?: 0 }, { it.date?.day ?: 0 }, { it.gameId ?: 0L }))
+    val outcome = { r: GameResult ->
+        val h = r.home == team
+        val a = (if (h) r.homeScore else r.awayScore) ?: 0
+        val b = (if (h) r.awayScore else r.homeScore) ?: 0
+        a.compareTo(b)
+    }
     val last = own.lastOrNull()
     val articles = mutableListOf<FrontPage.Article>()
+    // 言い回しは試合（無ければ日付）で選ぶ。同じ試合なら開き直しても同じ紙面
+    val pen = Pen(last?.gameId?.toInt() ?: ((view.year ?: 0) * 10000 + (date?.month ?: 0) * 100 + (date?.day ?: 0)))
 
     var headline: String
     var kicker: String? = null
@@ -101,32 +119,17 @@ fun buildFrontPage(
         val ours = if (home) last.homeScore else last.awayScore
         val theirs = if (home) last.awayScore else last.homeScore
         val opp = view.teamShort(if (home) last.away else last.home)
-        val outcome = { r: GameResult ->
-            val h = r.home == team
-            val a = (if (h) r.homeScore else r.awayScore) ?: 0
-            val b = (if (h) r.awayScore else r.homeScore) ?: 0
-            a.compareTo(b)
-        }
         val now = outcome(last)
         val streak = own.asReversed().takeWhile { outcome(it) == now }.size
+        // 今日の前に、今日と逆の結果が続いていた数（連敗ストップ・連勝ストップ）
+        // ⚠ 止めたのは今日の試合のときだけ（2連勝目以降に「連敗ストップ」とは書かない）
+        val broken = if (now == 0 || streak != 1) 0 else own.asReversed().drop(1).takeWhile { outcome(it) == -now }.size
         tone = when { now > 0 -> FrontPage.Tone.Win; now < 0 -> FrontPage.Tone.Lose; else -> FrontPage.Tone.Draw }
-        val diff = abs(ours - theirs)
+        val situation = Situation(me, opp, home, ours, theirs, streak, broken, mine?.let { rankIndex + 1 }, GameFacts.from(lastGame, team))
         headline = when (tone) {
-            FrontPage.Tone.Win -> when {
-                theirs == 0 -> "${me}、完封勝利！"
-                diff >= 7 -> "${me}打線爆発 ${ours}点大勝"
-                diff == 1 -> "${me}、接戦を制す"
-                streak >= 3 -> "${me}止まらない${streak}連勝"
-                else -> "${me}快勝 ${opp}を下す"
-            }
-            FrontPage.Tone.Lose -> when {
-                ours == 0 -> "${me}、零封負け"
-                diff >= 7 -> "${me}投壊 ${theirs}失点の大敗"
-                diff == 1 -> "${me}あと一歩 惜敗"
-                streak >= 3 -> "${me}${streak}連敗 出口見えず"
-                else -> "${me}、${opp}に屈す"
-            }
-            else -> "${me}、${opp}と痛み分け"
+            FrontPage.Tone.Win -> winHeadline(situation, pen)
+            FrontPage.Tone.Lose -> loseHeadline(situation, pen)
+            else -> drawHeadline(situation, pen)
         }
         kicker = listOfNotNull(
             if (streak >= 2 && tone != FrontPage.Tone.Draw) "${streak}${if (tone == FrontPage.Tone.Win) "連勝" else "連敗"}" else null,
@@ -135,60 +138,73 @@ fun buildFrontPage(
         score = FrontPage.Score(view.teamShort(last.away), last.awayScore, view.teamShort(last.home), last.homeScore)
         val d = last.decisions
         // 主役（試合の詳細があれば）。無ければ自球団の勝ち投手・負け投手
-        subhead = heroLine(lastGame, team) ?: when (tone) {
+        subhead = heroSubhead(situation, tone, pen) ?: when (tone) {
             FrontPage.Tone.Win -> listOfNotNull(d?.winningPitcher?.name?.let { "勝ち投手 $it" }, d?.savePitcher?.name?.let { "S $it" }).joinToString("　").ifEmpty { null }
             FrontPage.Tone.Lose -> d?.losingPitcher?.name?.let { "負け投手 $it" }
             else -> null
         }
-        lead = buildString {
-            last.date?.let { append("${it.month}月${it.day}日、") }
-            append("${me}は${if (home) "本拠地" else "敵地"}で${opp}と対戦し、${ours}-${theirs}で")
-            append(when (tone) { FrontPage.Tone.Win -> "勝利した。"; FrontPage.Tone.Lose -> "敗れた。"; else -> "引き分けた。" })
-            if (mine != null) append("これで${mine.wins}勝${mine.losses}敗${if (mine.draws > 0) "${mine.draws}分" else ""}${placeText?.let { "、$it" } ?: ""}。")
-        }
+        val record = mine?.let { "これで${it.wins}勝${it.losses}敗${if (it.draws > 0) "${it.draws}分" else ""}${placeText?.let { p -> "、$p" } ?: ""}。" }
+        lead = gameLead(situation, last.date?.let { "${it.month}月${it.day}日" }, tone, record, pen)
     } else {
         // まだ試合が無い（初期メンバー選び・キャンプ・オフ）
-        val phase = view.phase?.kind
-        headline = when {
-            view.pendingPack != null || phase == "pack_select" -> "${me}始動 初期メンバー選びへ"
-            phase == "initial_tryout" -> "${me}、初期編成で戦力を整える"
-            phase == "offseason" -> "${me}、新シーズンへ"
-            phase == "camp" -> "${me}、春季キャンプで鍛錬"
-            phase == "contract" -> "${me}、契約更改の季節"
-            phase == "tryout" -> "${me}、トライアウトで新戦力探し"
-            date != null && date.month < SEASON_START_MONTH -> "開幕へ ${me}準備着々"
-            else -> "${me}、次の戦いへ"
-        }
-        lead = when {
-            view.pendingPack != null || phase == "pack_select" -> "新リーグの幕開け。まずは24人の顔ぶれを決めるところから始まる。"
-            phase == "camp" -> "開幕を前に、選手たちは汗を流している。誰が伸びるかは練習の選び方次第だ。"
-            else -> null
-        }
+        val (h, l) = phaseCopy(
+            view.phase?.kind,
+            view.pendingPack != null,
+            date != null && date.month < SEASON_START_MONTH,
+            me,
+            pen,
+        )
+        headline = h
+        lead = l
     }
 
-    // 次戦予告
+    // 次戦予告（相手との今季の対戦成績も）
     view.nextGames.firstOrNull { it.home == team || it.away == team }?.let { g ->
         val home = g.home == team
-        val opp = view.teamShort(if (home) g.away else g.home)
+        val oppName = if (home) g.away else g.home
+        val opp = view.teamShort(oppName)
         val ourStarter = if (home) g.homeStarterInfo else g.awayStarterInfo
         val theirStarter = if (home) g.awayStarterInfo else g.homeStarterInfo
         val pitchers = if (ourStarter?.name != null && theirStarter?.name != null) {
             "先発は${ourStarter.name}（${ourStarter.wins}勝${ourStarter.losses}敗${ourStarter.era?.let { " 防御率${two(it)}" } ?: ""}）、" +
                 "${opp}は${theirStarter.name}（${theirStarter.wins}勝${theirStarter.losses}敗）の予想。"
-        } else ""
-        articles += FrontPage.Article("次戦予告", "次は${opp}戦（${if (home) "本拠地" else "敵地"}）", pitchers.ifEmpty { "先発はまだ決まっていない。" }, LINK_LINEUP)
+        } else "先発はまだ決まっていない。"
+        // 対戦成績は今季の試合を全部読めたときだけ（一部だけで数えると「初対戦」などと誤る）
+        val versus = own.filter { it.home == oppName || it.away == oppName }
+        val h2h = when {
+            !historyComplete -> ""
+            versus.isEmpty() -> "今季初対戦。"
+            else -> {
+                val w = versus.count { outcome(it) > 0 }
+                val l = versus.count { outcome(it) < 0 }
+                "今季の${opp}戦は${w}勝${l}敗${if (versus.size - w - l > 0) "${versus.size - w - l}分" else ""}。"
+            }
+        }
+        articles += FrontPage.Article("次戦予告", nextGameTitle(opp, home, pen), pitchers + h2h, LINK_LINEUP)
     }
 
     // 順位の行方（数字は文の中に少しだけ）
-    if (table.isNotEmpty() && table.first().gamesPlayed > 0 && mine != null) {
+    // ⚠ 自球団がまだ試合をしていない・部に1球団しか無いときは書かない（「2位の-」「宮崎はnull」になる）
+    if (table.size >= 2 && table.first().gamesPlayed > 0 && mine != null && mine.gamesPlayed > 0) {
         val top = table.first()
-        val title = if (rankIndex == 0) "${me}が首位を走る" else "首位は${view.teamShort(top.team)}"
         val second = table.getOrNull(1)
-        val body = if (rankIndex == 0 && second != null) {
-            "2位の${view.teamShort(second.team)}とは${one(gamesBehind(top, second))}差。"
-        } else {
-            "${view.teamShort(top.team)}が${top.wins}勝${top.losses}敗で${leagueName}を引っ張る。${me}は${placeText}。"
-        }
+        val gap = second?.let { gamesBehind(top, it) }
+        val behind = gamesBehind(top, mine)
+        val (title, body) = standingsCopy(
+            me = me,
+            rankIndex = rankIndex,
+            size = table.size,
+            top = view.teamShort(top.team),
+            topRecord = "${top.wins}勝${top.losses}敗",
+            second = second?.let { view.teamShort(it.team) },
+            gapToSecond = gap?.let { one(it) },
+            gapToSecondValue = gap,
+            behind = one(behind),
+            behindValue = behind.takeIf { rankIndex > 0 },
+            leagueName = leagueName,
+            placeText = placeText,
+            pen = pen,
+        )
         articles += FrontPage.Article("順位の行方", title, body, LINK_GAMES)
     }
 
@@ -201,20 +217,27 @@ fun buildFrontPage(
     }.sortedBy { it.second }
     if (ownLeaders.isNotEmpty()) {
         val (b, rank, row) = ownLeaders.first()
-        val name = row.at("name").str()
+        val name = row.at("name").str().orEmpty()
+        val label = b.at("label").str().orEmpty()
         val others = ownLeaders.drop(1).take(2).joinToString("、") { (bb, r, rr) ->
             if (rr.at("name").str() == name) "${name}は${bb.at("label").str()}でも${r}位" else "${rr.at("name").str()}が${bb.at("label").str()}で${r}位"
         }
         articles += FrontPage.Article(
             "タイトル戦線",
-            "${name}、${b.at("label").str()}${if (rank == 1) "トップ" else "${rank}位"}",
-            "${b.at("label").str()}は${leaderValue(b, row)}でリーグ${rank}位につける。" + if (others.isNotEmpty()) "ほかにも、$others。" else "",
+            leaderTitle(name, label, rank, pen),
+            "${label}は${leaderValue(b, row)}でリーグ${rank}位につける。" + if (others.isNotEmpty()) "ほかにも、$others。" else "",
             LINK_GAMES,
         )
     } else {
         boards.firstOrNull { it.at("id").str() == "avg" }?.let { b ->
             b.at("rows").list().firstOrNull()?.obj()?.let { row ->
-                articles += FrontPage.Article("タイトル戦線", "首位打者争い、${row.at("name").str()}が先頭", "${view.teamShort(row.at("team").str().orEmpty())}の${row.at("name").str()}が打率${leaderValue(b, row)}でトップ。${me}の選手は上位5人に居ない。", LINK_GAMES)
+                val name = row.at("name").str().orEmpty()
+                articles += FrontPage.Article(
+                    "タイトル戦線",
+                    pen.pick(listOf("首位打者争い、${name}が先頭", "打率トップは${name}", "${name}、首位打者を走る"), 6),
+                    "${view.teamShort(row.at("team").str().orEmpty())}の${name}が打率${leaderValue(b, row)}でトップ。${me}の選手は上位5人に居ない。",
+                    LINK_GAMES,
+                )
             }
         }
     }
@@ -226,12 +249,12 @@ fun buildFrontPage(
     }
     val tired = view.roster.filter { it.isActive && (it.fatigue ?: 0) >= FIELDER_REST_FATIGUE && !it.isPitcher }.map { it.name }
     val bench = listOfNotNull(
-        hot.takeIf { it.isNotEmpty() }?.let { "絶好調は${it.take(3).joinToString("・")}。" },
-        labelled.takeIf { it.isNotEmpty() }?.let { "${it.take(2).joinToString("、")}と、持ち味が数字に表れている。" },
-        tired.takeIf { it.isNotEmpty() }?.let { "${it.take(3).joinToString("・")}は疲れがたまっており、休養が必要か。" },
+        hot.takeIf { it.isNotEmpty() }?.let { pen.pick(listOf("絶好調は${it.take(3).joinToString("・")}。", "${it.take(3).joinToString("・")}の調子がいい。"), 9) },
+        labelled.takeIf { it.isNotEmpty() }?.let { pen.pick(listOf("${it.take(2).joinToString("、")}と、持ち味が数字に表れている。", "数字の上でも${it.take(2).joinToString("、")}が光る。"), 10) },
+        tired.takeIf { it.isNotEmpty() }?.let { pen.pick(listOf("${it.take(3).joinToString("・")}は疲れがたまっており、休養が必要か。", "${it.take(3).joinToString("・")}には疲れの色が見える。"), 11) },
     )
     if (bench.isNotEmpty()) {
-        articles += FrontPage.Article("ベンチ裏", if (hot.isNotEmpty()) "${hot.first()}が絶好調" else if (tired.isNotEmpty()) "${tired.first()}に疲れ" else "${me}の話題", bench.joinToString(""), LINK_LINEUP)
+        articles += FrontPage.Article("ベンチ裏", benchTitle(hot.firstOrNull(), tired.firstOrNull(), me, pen), bench.joinToString(""), LINK_LINEUP)
     }
 
     // リーグ便りの最新1件（全件は試合タブ）
@@ -314,30 +337,32 @@ private fun leaderValue(board: JsonObject, row: JsonObject): String {
     }
 }
 
-/** 試合の詳細から、自球団の主役（本塁打・打点・安打の多い打者、または長く投げた投手）を1行で */
-private fun heroLine(game: JsonObject?, team: String): String? {
-    val players = game?.at("teams", team).list().mapNotNull { it.obj() }
-    if (players.isEmpty()) return null
-    val batter = players.maxByOrNull {
-        val b = it["batting"].obj()
-        (b?.at("homeruns").num() ?: 0.0) * 4 + (b?.at("rbis").num() ?: 0.0) * 2 + (b?.at("hits").num() ?: 0.0)
+/**
+ * 自球団の今季の試合を、新しい順に1ページ（6試合）ずつ読み、連勝・連敗が数えられる所まで集める（紙面用）。
+ * 今日と同じ結果が途切れ、その前の逆の結果も途切れたら止める（連敗ストップ・連勝ストップまで分かる）。
+ * 読みすぎないよう [maxPages] で打ち切る。
+ * @param readPage 「試合」の窓口（scope=own）の1ページを読む
+ * @return 古い順の試合と、今季の試合を全部読めたか
+ */
+suspend fun loadOwnHistory(team: String, maxPages: Int = 8, readPage: suspend (Int) -> JsonObject): Pair<List<GameResult>, Boolean> {
+    val games = mutableListOf<GameResult>() // 新しい順
+    var count = Int.MAX_VALUE
+    fun outcome(r: GameResult): Int {
+        val h = r.home == team
+        return ((if (h) r.homeScore else r.awayScore) ?: 0).compareTo((if (h) r.awayScore else r.homeScore) ?: 0)
     }
-    val b = batter?.get("batting").obj()
-    val hr = b?.at("homeruns").num()?.toInt() ?: 0
-    val rbi = b?.at("rbis").num()?.toInt() ?: 0
-    val hits = b?.at("hits").num()?.toInt() ?: 0
-    val pitcher = players.maxByOrNull { it.at("pitching", "inningsPitched").num() ?: 0.0 }
-    val outs = pitcher?.at("pitching", "inningsPitched").num()?.toInt() ?: 0
-    val er = pitcher?.at("pitching", "earnedRuns").num()?.toInt() ?: 0
-    val k = pitcher?.at("pitching", "strikeouts").num()?.toInt() ?: 0
-    // 打者が目立つ（本塁打か3打点以上か3安打以上）なら打者、そうでなければ先発
-    return if (batter != null && (hr > 0 || rbi >= 3 || hits >= 3)) {
-        "${batter.at("name").str()} " + listOfNotNull(
-            "${hits}安打".takeIf { hits > 0 },
-            "${hr}本塁打".takeIf { hr > 0 },
-            "${rbi}打点".takeIf { rbi > 0 },
-        ).joinToString("・") + "の活躍"
-    } else if (pitcher != null && outs >= 15) {
-        "${pitcher.at("name").str()} ${outsText(outs)}${er}失点${if (k >= 7) "・${k}奪三振" else ""}"
-    } else null
+    for (page in 0 until maxPages) {
+        val data = readPage(page)
+        count = data.at("count").int() ?: count
+        val rows = data["games"].list().mapNotNull { e ->
+            runCatching { OnlineJson.decodeFromJsonElement(GameResult.serializer(), e) }.getOrNull()
+        }.filter { it.homeScore != null && it.awayScore != null }
+        if (rows.isEmpty()) break
+        games += rows
+        if (games.size >= count) break
+        // 結果の変わり目が2つ見えたら、連続の数は決まっている
+        val changes = games.zipWithNext().count { (a, b) -> outcome(a) != outcome(b) }
+        if (changes >= 2) break
+    }
+    return games.asReversed().toList() to (games.size >= count)
 }

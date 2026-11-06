@@ -76,7 +76,8 @@ fun GamesScreen(model: AppViewModel) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             failure = model.describe(e)
         } finally {
-            loading = false
+            // ⚠ 取り消された読み込み（次のページの読み込みが始まった）では消さない。新しい読み込みの「読み込み中」が先に消えてしまう
+            if (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) loading = false
         }
     }
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -86,7 +87,6 @@ fun GamesScreen(model: AppViewModel) {
             listOf("results" to "試合結果", "standings" to "順位表", "leaders" to "タイトル", "news" to "リーグ便り"),
             section,
             { section = it },
-            Modifier.padding(horizontal = 0.dp),
         )
         when (section) {
             "standings" -> { StandingsBoard(view); return@Column }

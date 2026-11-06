@@ -45,7 +45,6 @@ import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.dealProblems
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.long
-import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.overallScore
 import jp.icenorth.baseball.shared.pid
@@ -55,11 +54,7 @@ import jp.icenorth.baseball.shared.rosterGroup
 import jp.icenorth.baseball.shared.rostersAfterTrade
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import kotlin.math.roundToInt
 
 /**

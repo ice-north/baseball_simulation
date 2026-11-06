@@ -219,7 +219,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val revision = view?.revision
         val cached = synchronized(readCache) { readCache[key] }
         if (cached != null && (action == "game" || (revision != null && cached.first == revision))) return cached.second
-        val value = authed { api.read(it, action, params) }
+        // ⚠ 試合の詳細の一球ごとの経過（replay）はアプリでは使わず大きいので、覚える前に落とす（40試合ぶん持つと重い）
+        val value = authed { api.read(it, action, params) }.let { if (action == "game") JsonObject(it - "replay") else it }
         synchronized(readCache) { readCache[key] = revision to value }
         return value
     }

@@ -13,6 +13,9 @@ adb install -r mobile/androidApp/build/outputs/apk/androidTest/debug/androidApp-
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
+# 「Pixel Launcher isn't responding」などのシステムの応答なしの窓を出さない（遅い CI のエミュレーターでよく出て、スクショに被さっていた）
+adb shell settings put global hide_error_dialogs 1
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
 for stage in pack camp running contract tryout; do
   [ -f "$SEED/$stage.json.gz" ] || continue
   cp "$SEED/$stage.json.gz" "/tmp/league-$stage.json.gz"
@@ -21,6 +24,7 @@ for stage in pack camp running contract tryout; do
   for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:3002/ && break; sleep 1; done
   echo "== $stage"
   adb logcat -c
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
   timeout 900 adb shell am instrument -w -e stage "$stage" -e class jp.icenorth.baseball.app.ScreenTour \
     "$APP.test/androidx.test.runner.AndroidJUnitRunner" | tee "$OUT/instrument-$stage.log"
   adb logcat -d -s ScreenTour:* > "$OUT/tour-$stage.log"
