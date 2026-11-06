@@ -20,7 +20,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val store = SessionStore(app)
@@ -75,6 +78,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** トークンの更新を1本にまとめる（同時に読み込むと同じ更新トークンで2回更新しにいくため） */
     private val refreshLock = Mutex()
 
+    // ⚠ init（起動時の読み込み）より前に置く。後ろに置くと、読み込みが走ったあとで初期値に戻される
+    /** 手元のビューの世代（サーバーが公開のたびに上げる）。起動直後は分からないので null（全部読む） */
+    private var viewGeneration: Long? = null
+
+    /**
+     * 読むだけの窓口の答えを覚えておく（同じ画面を開き直すたびに取りに行かない）。
+     * 版（view.revision）が同じ間だけ使う。版はリーグに何か書かれるたびに上がるので、試合が進めば読み直す。
+     * 試合の詳細（終わった試合のボックススコア）は変わらないので、版に関係なく使い回す。
+     */
+    private val readCache = object : LinkedHashMap<String, Pair<Int?, JsonObject>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Int?, JsonObject>>?) = size > 40
+    }
+
     init {
         if (auth != null) reload()
     }
@@ -83,6 +99,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         endpoint = value.trim()
         store.endpoint = endpoint
         api = OnlineApi(endpoint)
+        clearCaches()
     }
 
     // メールは全角を半角に、前後の空白を落とし小文字に（日本語キーボードの全角や先頭の自動大文字を吸収する）
@@ -129,6 +146,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         plan = null
         phaseDraft = null
         campDraft = null
+        clearCaches()
         if (current != null) viewModelScope.launch { runCatching { api.logout(current) } }
     }
 
@@ -188,7 +206,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 読むだけの窓口（team / player / games / game / defaults）。失敗は例外のまま返す */
     suspend fun read(action: String, params: Map<String, String?> = emptyMap()): JsonObject {
-        return authed { api.read(it, action, params) }
+        val key = action + "?" + params.filterValues { it != null }.toSortedMap().entries.joinToString("&")
+        val revision = view?.revision
+        val cached = synchronized(readCache) { readCache[key] }
+        if (cached != null && (action == "game" || (revision != null && cached.first == revision))) return cached.second
+        val value = authed { api.read(it, action, params) }
+        synchronized(readCache) { readCache[key] = revision to value }
+        return value
     }
 
     /**
@@ -205,12 +229,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private suspend fun load(credentials: AuthSession) = applyView(api.viewRaw(credentials))
+    /**
+     * ビューを読み直す。手元のビューの世代を添え、サーバーで何も変わっていなければ（試合が進んでいない・
+     * 誰も保存していない）ビューは送られてこないので、今のまま使う（アプリに戻るたびの読み直しが軽くなる）。
+     */
+    private suspend fun load(credentials: AuthSession) {
+        val since = viewGeneration.takeIf { view != null }
+        val text = api.viewRaw(credentials, since)
+        if (since != null) {
+            val head = runCatching { OnlineJson.parseToJsonElement(text).jsonObject }.getOrNull()
+            if (head?.get("unchanged")?.jsonPrimitive?.booleanOrNull == true) {
+                // 書き込めるかどうか（保守中など）だけは世代と関係なく変わるので合わせる
+                head["writable"]?.jsonPrimitive?.booleanOrNull?.let { w -> if (view?.writable != w) view = view?.copy(writable = w) }
+                return
+            }
+        }
+        applyView(text)
+    }
 
     private fun applyView(text: String) {
         view = parseView(text)
         raw = parseRaw(text)
+        // ⚠ 指示の返事に載ったビューには世代が無い（公開の前に作るため）。そのときは null にして、次は全部読む
+        viewGeneration = raw?.get("viewGeneration")?.jsonPrimitive?.longOrNull
         store.viewJson = text
+    }
+
+    private fun clearCaches() {
+        synchronized(readCache) { readCache.clear() }
+        viewGeneration = null
     }
 
     /** アクセストークンの期限が近ければ先に更新する（本番の Supabase は1時間で切れる） */

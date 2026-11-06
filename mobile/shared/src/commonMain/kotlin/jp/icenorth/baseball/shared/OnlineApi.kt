@@ -63,10 +63,15 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
         },
     )
 
-    /** 生の JSON も返す（端末に保存して、次の起動ですぐ出すため） */
-    suspend fun viewRaw(auth: AuthSession): String = text(
+    /**
+     * 生の JSON も返す（端末に保存して、次の起動ですぐ出すため）。
+     * `since` に手元のビューの世代（`viewGeneration`）を渡すと、変わっていなければサーバーは
+     * ビューを送らず `{"unchanged":true,...}` だけ返す（世代を知らない古いサーバーは無視して全部返す）。
+     */
+    suspend fun viewRaw(auth: AuthSession, since: Long? = null): String = text(
         client.get(endpoint) {
             parameter("action", "view")
+            if (since != null) parameter("since", since)
             authorize(auth)
         },
     )
