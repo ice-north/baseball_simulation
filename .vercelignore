@@ -1,0 +1,2 @@
+# Vercel に上げない（スマホアプリは本番の Web/API と関係ない）
+mobile/
