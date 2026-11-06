@@ -76,7 +76,16 @@ export class LeagueService {
     this.local = local;
     this.allowStep = allowStep || local;
   }
-  async view(userId, sessionId) {
+  async view(userId, sessionId, since = null) {
+    // ⚠ **手元のビューと同じ世代なら、ビューを送らない**（`{ unchanged: true }`）。
+    //    PCの60秒ごと・アプリに戻るたびの読み直しで、毎回ビュー（数十〜百KB）を
+    //    送っていた。世代は公開のたびに上がるので、同じなら中身も同じ。
+    //    世代を持たない保存先（ローカルの FileStore）は従来どおり毎回送る。
+    if (Number.isInteger(since) && this.store.readGeneration) {
+      const current = await this.store.readGeneration(userId, sessionId);
+      if (current.generation === since)
+        return { unchanged: true, viewGeneration: since, writable: current.writable };
+    }
     const view = this.store.readView
       ? await this.store.readView(userId, sessionId)
       : projectLeague(await this.store.read(), userId, sessionId, this.adminId);

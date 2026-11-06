@@ -75,6 +75,20 @@ export default function OnlineApp() {
   const [screen, setScreen] = useState('today');
   const locked = useRef(false);
   const viewSequence = useRef(0);
+  // 手元のビューの世代。読み直しで `since` に送り、変わっていなければ中身を受け取らない
+  const viewGeneration = useRef(null);
+  // ⚠ ビューを入れるときは必ずここを通す（世代を覚え、変わっていない返事なら今のビューを残す）
+  const acceptView = useCallback((result, current) => {
+    if (result?.unchanged) return;
+    viewGeneration.current = Number.isInteger(result?.viewGeneration)
+      ? result.viewGeneration
+      : null;
+    setView(viewForSession(result, current));
+  }, []);
+  const sinceQuery = () =>
+    Number.isInteger(viewGeneration.current)
+      ? { since: String(viewGeneration.current) }
+      : {};
   const refreshFlight = useRef(null);
   const timesDialog = useRef(null);
   const mobile = useMobile();
@@ -86,6 +100,7 @@ export default function OnlineApp() {
     viewSequence.current++;
     setAuth(value);
     setView(null);
+    viewGeneration.current = null;
     setScreen('today');
   }, []);
   const renewAuth = useCallback(async (expected) => {
@@ -147,13 +162,13 @@ export default function OnlineApp() {
     const current = authRef.current;
     if (!current) return;
     const sequence = ++viewSequence.current;
-    const result = await api('view', current);
+    const result = await api('view', current, undefined, sinceQuery());
     if (
       sameSession(authRef.current, current) &&
       sequence === viewSequence.current
     )
-      setView(viewForSession(result, current));
-  }, []);
+      acceptView(result, current);
+  }, [acceptView]);
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
@@ -165,9 +180,9 @@ export default function OnlineApp() {
         return;
       try {
         const sequence = ++viewSequence.current;
-        const result = await api('view', auth);
+        const result = await api('view', auth, undefined, sinceQuery());
         if (!cancelled && sequence === viewSequence.current)
-          setView(viewForSession(result, auth));
+          acceptView(result, auth);
       } catch (e) {
         if (!cancelled) setError(e.message);
       }
@@ -301,7 +316,7 @@ export default function OnlineApp() {
         sameSession(authRef.current, current) &&
         sequence === viewSequence.current
       )
-        setView(viewForSession(result.view, current));
+        acceptView(result.view, current);
     } else await reload();
     // ⚠ 操作ごとに文言を変える。作成や参加でも「保存しました」と出ていた
     setMessage(COMMAND_MESSAGES[type] || '保存しました');
@@ -331,6 +346,7 @@ export default function OnlineApp() {
         viewSequence.current++;
         setAuth(null);
         setView(null);
+        viewGeneration.current = null;
         setShowTimes(false);
         setScreen('today');
       }

@@ -290,5 +290,16 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
     for (const ref of Object.values(snap.parts)) assert.ok(objects.has(ref.path), '残す世代の部分はどれも残っている');
   }
   assert.equal((await supa.read()).league.game.teams[team].strategy.note, '5');
+  // 画面の読み直し: 手元と同じ世代なら中身を送らない（`since`）。公開のたびに世代が上がる
+  const viewer = new LeagueService(supa, { adminId: 'a', members: [{ userId: 'a' }] });
+  const mySession = (await supa.read()).sessions.a;
+  const whole = await viewer.view('a', mySession);
+  assert.ok(Number.isInteger(whole.viewGeneration) && whole.teamName, 'ビューに世代が載る');
+  const same = await viewer.view('a', mySession, whole.viewGeneration);
+  assert.deepEqual(same, { unchanged: true, viewGeneration: whole.viewGeneration, writable: whole.writable }, '同じ世代なら中身を送らない');
+  await supa.transaction(edit('6'));
+  const next = await viewer.view('a', mySession, whole.viewGeneration);
+  assert.equal(next.unchanged, undefined, '世代が変わったら中身を送る');
+  assert.equal(next.viewGeneration, whole.viewGeneration + 1);
 }
 console.log('online-parts-check PASS（分けて戻すと一致・軽い読みの番人・命令ごとの読み方・本番の保存の世代と部分）');

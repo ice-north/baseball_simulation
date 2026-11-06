@@ -95,7 +95,14 @@ export function createHandler(
         if (action === 'logout' && req.method === 'POST')
           value = await service.logout(userId, sessionId);
         else if (action === 'view' && req.method === 'GET')
-          value = await service.view(userId, sessionId);
+          value = await service.view(
+            userId,
+            sessionId,
+            // 手元のビューの世代（`viewGeneration`）。同じなら中身を送らない
+            /^\d+$/.test(url.searchParams.get('since') || '')
+              ? Number(url.searchParams.get('since'))
+              : null,
+          );
         else if (action === 'defaults' && req.method === 'GET')
           value = await service.defaults(userId, sessionId);
         else if (action === 'team' && req.method === 'GET')

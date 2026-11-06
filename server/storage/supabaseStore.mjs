@@ -147,7 +147,7 @@ export class SupabaseStore {
     };
     if (this.narrowSelectUnsupported || (userId && !/^[\w-]+$/.test(userId)))
       return full();
-    const columns = ['snapshot_path', 'sessions', 'meta:views->_meta'];
+    const columns = ['generation', 'snapshot_path', 'sessions', 'meta:views->_meta'];
     if (userId) columns.push(`view:views->"${userId}"`);
     let row;
     try {
@@ -261,9 +261,28 @@ export class SupabaseStore {
         isAdmin: userId === this.adminId,
         revision: row.anyRevision,
         writable,
+        viewGeneration: row.generation ?? null,
       };
     }
-    return { ...view, writable };
+    // `viewGeneration` は保存の世代（公開のたびに1つ上がる）。画面はこれを `since` で送り返し、
+    // 変わっていなければビューを受け取らずに済ませる（`readGeneration`）
+    return { ...view, writable, viewGeneration: row.generation ?? null };
+  }
+  /**
+   * 保存の世代だけを読む（ビューは読まない）。画面の定期の読み直しで「変わったか」を見るため。
+   * ⚠ 版（revision）ではなく世代を見ること。版を上げない書き込み（ログイン・形の移行）でも
+   *    ビューは変わる（書けるか・形）が、世代は公開のたびに必ず上がる。
+   */
+  async readGeneration(userId, sessionId) {
+    const row = (
+      await this.request(
+        '/rest/v1/online_control?id=eq.pennant&select=generation,sessions',
+      )
+    )[0];
+    return {
+      generation: row?.generation ?? null,
+      writable: !!sessionId && row?.sessions?.[userId] === sessionId,
+    };
   }
   async archive(row, kind, year) {
     const meta = row.views?._records;
