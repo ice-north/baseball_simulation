@@ -48,7 +48,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         api = OnlineApi(endpoint)
     }
 
-    fun login(email: String, password: String) = signIn { api.login(email.trim(), password) }
+    // メールは前後の空白を落とし小文字に（スマホのキーボードが先頭を大文字にすることがある）
+    fun login(email: String, password: String) = signIn { api.login(email.trim().lowercase(), password) }
 
     /** ローカルの開発サーバー（server/dev.mjs）用 */
     fun localLogin(user: String) = signIn { api.localLogin(user) }
@@ -58,13 +59,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         busy = true
         error = null
         viewModelScope.launch {
+            // ⚠ ログインと最初の読み込みの失敗を分けて出す。以前は読み込みの 401 でも
+            //    ログイン画面に戻り「ログインできない」ように見えて、どこで弾かれたか分からなかった
+            val next = try {
+                block()
+            } catch (e: Exception) {
+                error = "ログインできませんでした: ${e.readable()}"
+                busy = false
+                return@launch
+            }
             try {
-                val next = block()
                 store.auth = next
                 auth = next
                 load(next)
             } catch (e: Exception) {
-                error = e.readable()
+                store.auth = null
+                auth = null
+                error = "ログインは通りましたが、リーグの読み込みで失敗しました: ${e.readable()}"
             } finally {
                 busy = false
             }
