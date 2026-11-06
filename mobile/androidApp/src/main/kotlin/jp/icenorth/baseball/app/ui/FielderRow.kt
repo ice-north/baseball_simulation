@@ -287,25 +287,37 @@ private fun FittingRow(modifier: Modifier, content: @Composable () -> Unit) {
 }
 
 /**
- * 8つの守備位置の適性を、位置の色の札と数字で並べる（守っている位置は塗り）。
- * ⚠ 1行に8つは狭い端末で「100」が折り返したので、捕手・内野の5つと外野の3つの2行にする
+ * 守備の数字（守備力・肩）と、**守れる位置**の適性（いしだ指定: 30 のような守れない適性は出さず、代わりに守備と肩を）。
+ * 位置は適性60（交代で守れる線）以上だけを高い順に。守っている位置は低くても先頭に出す（赤で気づけるように）。
+ * ⚠ 1行に収まらない分（5つ目以降）は下の行へ。「100」が札の中で折り返さないよう幅は固定
  */
 @Composable
 private fun FitnessRow(player: Player, fitnessAt: String) {
+    val positions = listOf(fitnessAt).filter { it in FIELD_POSITIONS } +
+        FIELD_POSITIONS.filter { it != fitnessAt && player.fitness(it) >= SUBSTITUTE_MIN_FITNESS }.sortedByDescending { player.fitness(it) }
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        listOf(FIELD_POSITIONS.take(5), FIELD_POSITIONS.drop(5)).forEach { line ->
+        positions.chunked(4).forEachIndexed { i, line ->
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (i == 0) {
+                    GroupLabel("守")
+                    Cell("守", player.fielding?.defense)
+                    Cell("肩", player.physical?.arm)
+                    Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                } else {
+                    // 2行目は1行目の位置の並びにそろえる
+                    Box(Modifier.width(FITNESS_INDENT))
+                }
                 line.forEach { pos ->
                     val fit = player.fitness(pos)
                     Row(Modifier.width(50.dp), verticalAlignment = Alignment.CenterVertically) {
                         PosBadge(pos, filled = pos == fitnessAt, small = true)
                         Text(
-                            if (fit > 0) "$fit" else "−",
+                            "$fit",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false,
-                            color = if (fit > 0) fitnessColor(fit) else MaterialTheme.colorScheme.outline,
+                            color = fitnessColor(fit),
                             modifier = Modifier.padding(start = 3.dp),
                         )
                     }
@@ -314,6 +326,9 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
         }
     }
 }
+
+/** 守備適性の行の2行目の字下げ（「守」の札＋守備・肩の2マス＋区切り線の幅） */
+private val FITNESS_INDENT = 22.dp + 34.dp * 2 + 9.dp
 
 @Composable
 private fun FitCell(label: String, fit: Int) {
