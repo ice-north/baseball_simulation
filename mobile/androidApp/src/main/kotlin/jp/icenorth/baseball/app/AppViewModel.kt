@@ -98,7 +98,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 load(fresh(current))
             } catch (e: Exception) {
-                handle(e)
+                // ⚠ 期限の判定がずれていても、認証切れなら一度だけ更新してやり直す（すぐログアウトにしない）
+                val retried = if (e is OnlineException && e.code == "auth") runCatching { load(fresh(current, force = true)) }.isSuccess else false
+                if (!retried) handle(e)
             } finally {
                 refreshing = false
             }
@@ -134,10 +136,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** アクセストークンの期限が近ければ先に更新する（本番の Supabase は1時間で切れる） */
-    private suspend fun fresh(current: AuthSession): AuthSession {
+    private suspend fun fresh(current: AuthSession, force: Boolean = false): AuthSession {
         val expiresAt = current.expiresAt ?: return current
         val refreshToken = current.refreshToken ?: return current
-        if (expiresAt - System.currentTimeMillis() > 60_000) return current
+        if (!force && expiresAt - System.currentTimeMillis() > 60_000) return current
         val result = api.refresh(refreshToken)
         val next = current.copy(
             accessToken = result.accessToken,

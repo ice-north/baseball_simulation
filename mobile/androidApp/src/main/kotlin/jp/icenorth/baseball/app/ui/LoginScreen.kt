@@ -27,6 +27,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -67,8 +70,9 @@ fun LoginScreen(model: AppViewModel) {
                     onValueChange = { email = it },
                     label = { Text("メールアドレス") },
                     singleLine = true,
+                    // Google のパスワード マネージャーに覚えさせ、次から自動で入れられるようにする
+                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username + ContentType.EmailAddress },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, autoCorrectEnabled = false, capitalization = KeyboardCapitalization.None),
-                    modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = password,
@@ -79,7 +83,7 @@ fun LoginScreen(model: AppViewModel) {
                     trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "隠す" else "表示") } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, autoCorrectEnabled = false),
                     keyboardActions = KeyboardActions(onDone = { model.login(email, password) }),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
                 )
                 Button(
                     onClick = { model.login(email, password) },
