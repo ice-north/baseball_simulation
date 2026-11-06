@@ -57,7 +57,9 @@ fun LoginScreen(model: AppViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Spacer(Modifier.height(48.dp))
-            Text("オンライン対人リーグ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            // Web 版の見出し（OnlineApp.jsx の「NEXT STAGE オンラインペナント」）と揃える
+            Text("NEXT STAGE", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            Text("オンラインペナント", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Web 版と同じアカウントでログインします。ログインすると、ほかの端末（ブラウザなど）からは操作できなくなります。",
                 style = MaterialTheme.typography.bodyMedium,
