@@ -48,8 +48,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         api = OnlineApi(endpoint)
     }
 
-    // メールは前後の空白を落とし小文字に（スマホのキーボードが先頭を大文字にすることがある）
-    fun login(email: String, password: String) = signIn { api.login(email.trim().lowercase(), password) }
+    // メールは全角を半角に、前後の空白を落とし小文字に（日本語キーボードの全角や先頭の自動大文字を吸収する）
+    fun login(email: String, password: String) = signIn { api.login(java.text.Normalizer.normalize(email, java.text.Normalizer.Form.NFKC).trim().lowercase(), password) }
 
     /** ローカルの開発サーバー（server/dev.mjs）用 */
     fun localLogin(user: String) = signIn { api.localLogin(user) }

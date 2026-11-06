@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.app.BuildConfig
@@ -41,6 +42,7 @@ fun LoginScreen(model: AppViewModel) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var showServer by rememberSaveable { mutableStateOf(false) }
+    var showPassword by rememberSaveable { mutableStateOf(false) }
     val local = model.endpoint != BuildConfig.DEFAULT_ENDPOINT
     Surface(Modifier.fillMaxSize()) {
         Column(
@@ -73,8 +75,9 @@ fun LoginScreen(model: AppViewModel) {
                     onValueChange = { password = it },
                     label = { Text("パスワード") },
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "隠す" else "表示") } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, autoCorrectEnabled = false),
                     keyboardActions = KeyboardActions(onDone = { model.login(email, password) }),
                     modifier = Modifier.fillMaxWidth(),
                 )
