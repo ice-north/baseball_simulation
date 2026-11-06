@@ -165,6 +165,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
             model.phaseDraft = PhaseDraft(phaseId, defaults["plan"].obj() ?: JsonObject(emptyMap()), JsonNull, dirty = false)
             failure = null
         } catch (e: Exception) {
+            // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
+            if (e is kotlinx.coroutines.CancellationException) throw e
             failure = model.describe(e)
         }
     }
@@ -221,6 +223,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
                     if (defaults.at("phaseId").str() != phaseId) failure = "手続きが更新されました。最新状態を確認してください"
                     else model.phaseDraft = draft.copy(plan = defaults["plan"].obj() ?: plan, dirty = submission != null)
                 } catch (e: Exception) {
+                    // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     failure = model.describe(e)
                 }
             }

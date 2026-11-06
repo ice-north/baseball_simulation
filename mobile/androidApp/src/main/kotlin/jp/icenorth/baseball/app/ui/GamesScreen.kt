@@ -64,12 +64,18 @@ fun GamesScreen(model: AppViewModel) {
     var page by rememberSaveable { mutableStateOf(0) }
     var data by remember { mutableStateOf<JsonObject?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
     LaunchedEffect(year, scope, page, view.revision) {
+        loading = true
         try {
             data = model.read("games", mapOf("year" to "$year", "page" to "$page", "scope" to scope))
             failure = null
         } catch (e: Exception) {
+            // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
+            if (e is kotlinx.coroutines.CancellationException) throw e
             failure = model.describe(e)
+        } finally {
+            loading = false
         }
     }
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -94,7 +100,7 @@ fun GamesScreen(model: AppViewModel) {
             val pages = (count + size - 1) / size
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onClick = { page -= 1 }, enabled = page > 0) { Text("新しい") }
-                Text("${page + 1} / $pages", modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                Text(if (loading) "読み込み中…" else "${page + 1} / $pages", modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
                 OutlinedButton(onClick = { page += 1 }, enabled = page + 1 < pages) { Text("古い") }
             }
         }
@@ -141,6 +147,8 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
         try {
             game = model.read("game", mapOf("id" to id, "year" to year))
         } catch (e: Exception) {
+            // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
+            if (e is kotlinx.coroutines.CancellationException) throw e
             failure = model.describe(e)
         }
     }

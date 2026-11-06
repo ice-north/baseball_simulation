@@ -108,6 +108,8 @@ private fun partnerRoster(model: AppViewModel, partner: String?): Pair<List<Json
             roster = model.read("team", mapOf("team" to partner)).at("roster").list().mapNotNull { it.obj() }
             failure = null
         } catch (e: Exception) {
+            // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
+            if (e is kotlinx.coroutines.CancellationException) throw e
             failure = model.describe(e)
         }
     }

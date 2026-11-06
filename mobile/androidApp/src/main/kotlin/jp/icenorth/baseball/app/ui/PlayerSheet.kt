@@ -66,6 +66,8 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
         try {
             periods = model.read("player", mapOf("id" to id.toString())).at("periods").list().mapNotNull { it.obj() }
         } catch (e: Exception) {
+            // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
+            if (e is kotlinx.coroutines.CancellationException) throw e
             failure = model.describe(e)
         }
     }
