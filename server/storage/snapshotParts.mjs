@@ -44,7 +44,10 @@ export function splitBundle(bundle) {
   const order = { bundle: Object.keys(bundle) };
   const { backup, ...rest } = bundle;
   const parts = {};
-  if (backup !== undefined) parts.backup = backup;
+  // ⚠ 部分に出すのは**オブジェクト（配列を含む）だけ**。null や文字列を番人に差し替えると、
+  //    `if (bundle.backup)` のような真偽の判定が、番人に触れないまま逆の答えになる
+  if (isObject(backup)) parts.backup = backup;
+  else if (backup !== undefined) rest.backup = backup;
   const league = rest.league;
   const names = league?.season?.settings?.teamNames;
   if (!league?.game?.teams || !Array.isArray(names))
@@ -60,16 +63,22 @@ export function splitBundle(bundle) {
   order.teams = Object.keys(league.game.teams);
   const game = { ...league.game, teams: coreTeams };
   const world = { teams: otherTeams };
+  // 番人の形（配列か）。`Array.isArray` は番人を通らずに中身の形を答えるので、元と揃える
+  order.arrays = [];
   for (const key of WORLD_KEYS)
-    if (Object.hasOwn(game, key)) {
+    if (Object.hasOwn(game, key) && isObject(game[key])) {
       world[key] = game[key];
+      if (Array.isArray(game[key])) order.arrays.push(key);
       delete game[key];
     }
+  if (Array.isArray(backup)) order.arrays.push('backup');
   parts.world = world;
   const { records, ...leagueRest } = league;
   if (records !== undefined) parts.records = records;
   return { core: { ...rest, league: { ...leagueRest, game } }, order, parts };
 }
+
+const isObject = (value) => value !== null && typeof value === 'object';
 
 const ordered = (keys, source) => {
   const out = {};
@@ -114,7 +123,7 @@ export function assembleLight(core, order, parts, refs) {
   };
   const guard = (label) =>
     new Proxy(
-      {},
+      order?.arrays?.includes(label) ? [] : {},
       {
         get: () => touch(label),
         set: () => touch(label),
@@ -149,7 +158,7 @@ export function assembleLight(core, order, parts, refs) {
     });
     const game = { ...league.game, teams: teamsProxy };
     for (const key of WORLD_KEYS)
-      if (order.game?.includes(key)) game[key] = guards[key] = guard(key);
+      if (order.game?.includes(key) && !Object.hasOwn(game, key)) game[key] = guards[key] = guard(key);
     const nextLeague = { ...league, game: ordered(order.game, game) };
     if (parts.records !== undefined) nextLeague.records = parts.records;
     bundle.league = ordered(order.league, nextLeague);
@@ -165,35 +174,38 @@ export function assembleLight(core, order, parts, refs) {
     if (after.league !== original.league) return null;
     if (after.league && after.league.game !== original.game) return null;
     if (refs.backup && after.backup !== guards.backup) return null;
-    if (!refs.backup && after.backup !== undefined) return null;
-    if (after.league && !teamsProxy) {
-      // 分けていないリーグ（球団の一覧が無い形）は芯にまるごと入っている
-      const { backup, ...rest } = after;
-      return { core: rest, order: { ...order, bundle: Object.keys(after) }, records: undefined, whole: true };
-    }
-    if (after.league) {
-      const game = after.league.game;
-      if (game.teams !== teamsProxy) return null;
-      for (const key of WORLD_KEYS)
-        if (guards[key] ? game[key] !== guards[key] : Object.hasOwn(game, key)) return null;
-      // リーグの球団の入れ替え（昇降格など）は全体で分け直す
-      const names = after.league.season?.settings?.teamNames;
-      if (!Array.isArray(names) || names.length !== Object.keys(teamsTarget).length || names.some((n) => !Object.hasOwn(teamsTarget, n)))
-        return null;
-    }
-    const { backup, ...rest } = after;
-    const coreOut = { ...rest };
+    // 退避が新しくオブジェクトとして入った（退避の命令）なら、全体で分け直す
+    if (!refs.backup && isObject(after.backup)) return null;
+    // 芯に置く形（番人と、部分から戻した記録を外す）。null などの値はそのまま芯に残す
+    const coreOf = (source) => {
+      const out = { ...source };
+      if (refs.backup) delete out.backup;
+      return out;
+    };
     const nextOrder = { ...order, bundle: Object.keys(after) };
-    if (after.league) {
-      const { records, ...leagueRest } = after.league;
-      const game = { ...after.league.game, teams: teamsTarget };
-      for (const key of WORLD_KEYS) delete game[key];
-      coreOut.league = { ...leagueRest, game };
-      nextOrder.league = Object.keys(after.league);
-      nextOrder.game = Object.keys(after.league.game);
-      return { core: coreOut, order: nextOrder, records };
+    if (after.league && !teamsProxy)
+      // 分けていないリーグ（球団の一覧が無い形）は芯にまるごと入っている
+      return { core: coreOf(after), order: nextOrder, records: undefined, whole: true };
+    if (!after.league) return { core: coreOf(after), order: nextOrder, records: undefined };
+    const game = after.league.game;
+    if (game.teams !== teamsProxy) return null;
+    for (const key of WORLD_KEYS) {
+      if (guards[key] && game[key] !== guards[key]) return null;
+      // 番人の無い（元は null などだった）所へオブジェクトが入ったら、全体で分け直す
+      if (!guards[key] && isObject(game[key])) return null;
     }
-    return { core: coreOut, order: nextOrder, records: undefined };
+    // リーグの球団の入れ替え（昇降格など）は全体で分け直す
+    const names = after.league.season?.settings?.teamNames;
+    if (!Array.isArray(names) || names.length !== Object.keys(teamsTarget).length || names.some((n) => !Object.hasOwn(teamsTarget, n)))
+      return null;
+    const { records, ...leagueRest } = after.league;
+    const coreGame = { ...game, teams: teamsTarget };
+    for (const key of Object.keys(guards)) delete coreGame[key];
+    const coreOut = coreOf(after);
+    coreOut.league = { ...leagueRest, game: coreGame };
+    nextOrder.league = Object.keys(after.league);
+    nextOrder.game = Object.keys(game);
+    return { core: coreOut, order: nextOrder, records };
   };
   return { bundle: shaped, tracker, inspect };
 }

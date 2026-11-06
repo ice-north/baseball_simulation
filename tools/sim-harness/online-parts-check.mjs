@@ -77,6 +77,38 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
     assert.ok(run.tracker.touched, `${label}: 印が残る`);
     assert.equal(run.inspect(run.bundle), null, `${label}: 軽い読みのまま保存しない`);
   }
+  // 番人は元の形（配列かどうか）を名乗る。`Array.isArray` は番人を通らないので、違うと黙って分岐が変わる
+  {
+    const run = fresh();
+    for (const key of ['pools', 'world', 'released'])
+      assert.equal(Array.isArray(run.bundle.league.game[key]), Array.isArray(bundle.league.game[key]), `${key} の形`);
+    assert.equal(run.tracker.touched, null, '形を見るだけでは触れたことにならない');
+  }
+  // null などの値は部分に出さず芯に残す（番人に差し替えると真偽が逆になる）
+  {
+    const odd = structuredClone(bundle);
+    odd.league.game.released = null;
+    odd.backup = null;
+    const split = splitBundle(odd);
+    assert.equal(split.core.league.game.released, null);
+    assert.equal(split.core.backup, null);
+    assert.equal(split.parts.backup, undefined);
+    const oddRefs = Object.fromEntries(Object.keys(split.parts).map((n) => [n, {}]));
+    const run = assembleLight(JSON.parse(JSON.stringify(split.core)), split.order, { records: split.parts.records }, oddRefs);
+    assert.equal(run.bundle.league.game.released, null, 'null は null のまま見える');
+    assert.equal(run.bundle.backup, null);
+    run.bundle.league.revision += 1;
+    const out = run.inspect(run.bundle);
+    assert.ok(out, 'null の項目があっても軽い読みのまま保存できる');
+    assert.equal(out.core.league.game.released, null);
+    assert.equal(out.core.backup, null);
+    odd.league.revision += 1;
+    assert.equal(
+      JSON.stringify(assembleBundle(JSON.parse(JSON.stringify(out.core)), out.order, { ...split.parts, records: out.records })),
+      JSON.stringify(odd),
+      'null の項目も元どおりに戻る',
+    );
+  }
   // 例外を握りつぶしても印は残る
   const swallowed = fresh();
   try { swallowed.bundle.league.game.pools.x; } catch {}
