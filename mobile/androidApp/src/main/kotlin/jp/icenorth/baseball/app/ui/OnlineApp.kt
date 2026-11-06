@@ -31,6 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import jp.icenorth.baseball.shared.situationTips
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import jp.icenorth.baseball.app.AppViewModel
@@ -71,6 +74,7 @@ fun OnlineApp(model: AppViewModel) {
     }
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var renaming by remember { mutableStateOf(false) }
+    var showTips by rememberSaveable { mutableStateOf(false) }
     val raw = model.raw
     // 自分の番の手続き・返事待ちのトレードがあれば「手続き」に印
     val pending = raw != null && (
@@ -116,17 +120,28 @@ fun OnlineApp(model: AppViewModel) {
                 }
             },
         ) { padding ->
-            Column(Modifier.padding(padding).consumeWindowInsets(padding)) {
-                when (tab) {
-                    Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games })
-                    Tab.Games -> GamesScreen(model)
-                    Tab.Players -> PlayersScreen(model)
-                    Tab.Plan -> PlanScreen(model)
-                    Tab.Procedures -> ProceduresScreen(model, onRename = { renaming = true })
+            // 今のスタメン・ローテに当てはまるTIPS（保存済みの編成で見る＝実際に起きること）
+            val view = model.view
+            val situations = remember(view?.roster, view?.lineup) { situationTips(view?.roster.orEmpty(), view?.lineup) }
+            Box(Modifier.padding(padding).consumeWindowInsets(padding)) {
+                Column {
+                    when (tab) {
+                        Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
+                        Tab.Games -> GamesScreen(model)
+                        Tab.Players -> PlayersScreen(model)
+                        Tab.Plan -> PlanScreen(model)
+                        Tab.Procedures -> ProceduresScreen(model, onRename = { renaming = true })
+                    }
+                }
+                // ⚠ 枠は取らず左下の角に重ねる。ホームと編成だけ（当てはまらなければ出ない）
+                //    右下だと編成の行の「並べ替え」つまみに重なる。左下は打順の数字なので触る物が無い
+                if (tab == Tab.Home || tab == Tab.Plan) {
+                    SituationTipsBadge(situations, onOpenAll = { showTips = true }, modifier = Modifier.align(Alignment.BottomStart).padding(12.dp))
                 }
             }
         }
         model.openPlayer?.let { PlayerSheet(model, it) }
+        if (showTips) TipsScreen { showTips = false }
         if (renaming) RenameDialog(model) { renaming = false }
         // ⚠ 保存・提出の間は画面全体を塞ぐ（いちばん上に重ねる）
         if (model.busy) BusyOverlay(model.busyLabel)

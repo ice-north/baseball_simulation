@@ -57,6 +57,7 @@ import kotlinx.serialization.json.JsonObject
 import jp.icenorth.baseball.shared.GameResult
 import jp.icenorth.baseball.shared.LEAGUE_NAMES
 import jp.icenorth.baseball.shared.LeagueView
+import jp.icenorth.baseball.shared.GAME_TIPS
 import jp.icenorth.baseball.shared.STATUS_LABELS
 import jp.icenorth.baseball.shared.ScheduledGame
 import jp.icenorth.baseball.shared.formatTurn
@@ -72,8 +73,10 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: () -> Unit, onRename: () -> Unit, onOpenGames: () -> Unit = {}) {
+fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: () -> Unit, onRename: () -> Unit, onOpenGames: () -> Unit = {}, onOpenTips: () -> Unit = {}) {
     val view = model.view
+    // ⚠ ホームを開くたびに選び直す（LazyColumn の項目の中で選ぶと、スクロールで出入りするたびに変わる）
+    val tip = remember { GAME_TIPS.random() }
     PullToRefreshBox(
         isRefreshing = model.refreshing,
         onRefresh = { model.reload(pull = true) },
@@ -104,11 +107,13 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
         ) {
-            item(key = "head") { Header(view, model, onRename) }
+            item(key = "head") { Header(view, model, onRename, onOpenTips) }
             val alerts = pendingAlerts(view, model.raw)
             if (alerts.isNotEmpty()) {
                 item(key = "alerts") { AlertCard(alerts, onOpenProcedures) }
             }
+            // TIPSは題名だけの1行（押すと中身）。ホームを開くたびに変わる
+            item(key = "tip") { HomeTipCard(tip, onOpenAll = onOpenTips) }
             // ⚠ 数字の表（順位表・タイトル争い・リーグ便り）は試合タブへ移した（いしだの指定）。ホームは新聞の紙面
             item(key = "paper") { FrontPageCard(page, onOpenGames = onOpenGames, onOpenLineup = onOpenLineup) }
         }
@@ -116,7 +121,7 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
 }
 
 @Composable
-private fun Header(view: LeagueView, model: AppViewModel, onRename: () -> Unit) {
+private fun Header(view: LeagueView, model: AppViewModel, onRename: () -> Unit, onOpenTips: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -127,6 +132,7 @@ private fun Header(view: LeagueView, model: AppViewModel, onRename: () -> Unit) 
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("最新に更新") }, onClick = { menu = false; model.reload(pull = true) })
                         DropdownMenuItem(text = { Text("球団名・名前を変える") }, onClick = { menu = false; onRename() })
+                        DropdownMenuItem(text = { Text("ゲームのTIPS") }, onClick = { menu = false; onOpenTips() })
                         DropdownMenuItem(text = { Text("ログアウト") }, onClick = { menu = false; model.logout() })
                     }
                 }
