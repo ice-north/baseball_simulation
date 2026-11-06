@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +51,9 @@ import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.FIELDER_REST_FATIGUE
 import jp.icenorth.baseball.shared.FIELD_POSITIONS
+import jp.icenorth.baseball.shared.positionGroup
+import jp.icenorth.baseball.shared.candidatesFor
+import jp.icenorth.baseball.shared.FIELDER_GROUP_LABELS
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.MAX_STARTERS
 import jp.icenorth.baseball.shared.PlanDraft
@@ -72,7 +74,6 @@ import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.positionLabel
-import jp.icenorth.baseball.shared.rate3
 import jp.icenorth.baseball.shared.roleLabel
 import kotlinx.serialization.json.JsonObject
 import sh.calvin.reorderable.ReorderableItem
@@ -86,6 +87,7 @@ private typealias Edit = ((PlanDraft) -> PlanDraft) -> Unit
 private sealed interface PlanSheet {
     data class Position(val index: Int) : PlanSheet
     data class Replace(val index: Int) : PlanSheet
+    data class Bench(val id: Long) : PlanSheet
     data class Role(val id: Long) : PlanSheet
 }
 
@@ -132,6 +134,7 @@ fun PlanScreen(model: AppViewModel) {
     val onDragStart = { dragging[0] = false }
     var tab by rememberSaveable { mutableStateOf(PlanTab.Order) }
     var sheet by remember { mutableStateOf<PlanSheet?>(null) }
+    var orderView by rememberSaveable { mutableStateOf(FielderView.Ability) }
     val players = remember(view.roster) { view.roster.associateBy { it.id } }
     val rawPlayers = remember(model.raw) {
         model.raw?.at("roster").list().mapNotNull { it.obj() }
@@ -167,7 +170,7 @@ fun PlanScreen(model: AppViewModel) {
         }
         ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) })
         when (tab) {
-            PlanTab.Order -> OrderEditor(view, draft, players, dragEdit, onDragStart, open) { sheet = it }
+            PlanTab.Order -> OrderEditor(view, draft, players, dragEdit, onDragStart, open, orderView, { orderView = it }) { sheet = it }
             PlanTab.Pitching -> PitchingEditor(draft, players, model.raw?.at("nextStarterId").num()?.toLong(), dragEdit, onDragStart, open) { sheet = it }
             PlanTab.Tactics -> TacticsEditor(draft, edit)
         }
@@ -181,8 +184,13 @@ fun PlanScreen(model: AppViewModel) {
             }
         }
         is PlanSheet.Replace -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            ReplaceSheet(view, draft, s.index, players) { id ->
+            ReplaceSheet(view, draft, s.index, players, orderView) { id ->
                 edit { it.replaceBatter(s.index, id) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
+            }
+        }
+        is PlanSheet.Bench -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
+            BenchSheet(draft, s.id, players) { index ->
+                edit { it.replaceBatter(index, s.id) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
             }
         }
         is PlanSheet.Role -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
@@ -196,8 +204,25 @@ fun PlanScreen(model: AppViewModel) {
 
 // ------------------------------------------------------------------ スタメン
 
+/**
+ * スタメン。「打順を組む」「適性を見て守備を決める」「疲れた選手を休ませる」を**この1画面で**できるようにする。
+ *  - 行はスタメンも控えも同じ形（[FielderRow]）。2行目は上の切り替えで 能力／今季成績／守備適性 を選ぶ
+ *  - 守備の札は投手・捕手・内野・外野で色を分ける。札を押すと守備の入れ替え、名前を押すと交代
+ *  - 控えの行を押すと「誰と代えるか」を選べる（休ませたい選手からでも、使いたい控えからでも交代できる）
+ *  - 上の「気になる所」に、休養に入る選手と適性の低い守備を出す
+ */
 @Composable
-private fun OrderEditor(view: LeagueView, draft: PlanDraft, players: Map<Long, Player>, edit: Edit, onDragStart: () -> Unit, open: (Long) -> Unit, onSheet: (PlanSheet) -> Unit) {
+private fun OrderEditor(
+    view: LeagueView,
+    draft: PlanDraft,
+    players: Map<Long, Player>,
+    edit: Edit,
+    onDragStart: () -> Unit,
+    open: (Long) -> Unit,
+    mode: FielderView,
+    onMode: (FielderView) -> Unit,
+    onSheet: (PlanSheet) -> Unit,
+) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
     val reorder = rememberReorderableLazyListState(listState) { from, to ->
@@ -210,89 +235,124 @@ private fun OrderEditor(view: LeagueView, draft: PlanDraft, players: Map<Long, P
         }
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
-    val bench = view.roster.filter { p -> !p.isPitcher && p.isActive && draft.slots.none { it.playerId == p.id } }
-    LazyColumn(
-        state = listState,
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        item(key = "head:bat") { Caption("打順（長押しでつかんで並べ替え・守備をタップで入れ替え・名前をタップで控えと交代）") }
-        items(draft.slots, key = { "bat:${it.playerId}" }) { slot ->
-            val index = draft.slots.indexOf(slot)
-            ReorderableItem(reorder, key = "bat:${slot.playerId}") { dragging ->
-                val elevation by animateDpAsState(if (dragging) 8.dp else 0.dp, label = "lift")
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (dragging) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainer,
-                    shadowElevation = elevation,
-                    modifier = Modifier.fillMaxWidth().longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) }),
-                ) {
-                    BatterRow(index + 1, slot.position, players[slot.playerId], onPosition = { onSheet(PlanSheet.Position(index)) }, onPlayer = { onSheet(PlanSheet.Replace(index)) }, onInfo = { open(slot.playerId) })
-                }
-            }
+    val bench = benchOf(view, draft)
+    val notes = orderNotes(draft, players, bench)
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Muted("表示")
+            ChipTabs(FielderView.entries.map { it.name to it.label }, mode.name, { onMode(FielderView.valueOf(it)) }, Modifier.padding(start = 0.dp))
         }
-        item(key = "head:bench") { Caption("控えの野手（${bench.size}人）") }
-        items(bench, key = { "bench:${it.id}" }) { p ->
-            Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.clickable { open(p.id) }.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${conditionIcon(p.condition)} ${p.name}", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        Muted("本職 ${positionLabel(p.position)}")
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            if (notes.isNotEmpty()) {
+                item(key = "notes") {
+                    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                        Column(Modifier.padding(vertical = 4.dp)) {
+                            Text("気になる所", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                            notes.forEach { note ->
+                                Row(
+                                    Modifier.fillMaxWidth().clickable { onSheet(note.sheet) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    PosBadge(note.position, small = true)
+                                    Text(note.text, style = MaterialTheme.typography.bodySmall, color = note.color ?: MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                                    Text(note.action, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
                     }
-                    BattingLine(p, null)
                 }
             }
+            item(key = "head:bat") { Caption("打順（長押しで並べ替え・守備の札で入れ替え・名前で控えと交代）") }
+            items(draft.slots, key = { "bat:${it.playerId}" }) { slot ->
+                val index = draft.slots.indexOf(slot)
+                ReorderableItem(reorder, key = "bat:${slot.playerId}") { dragging ->
+                    val elevation by animateDpAsState(if (dragging) 8.dp else 0.dp, label = "lift")
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (dragging) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainer,
+                        shadowElevation = elevation,
+                        modifier = Modifier.fillMaxWidth().longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) }),
+                    ) {
+                        FielderRow(
+                            order = "${index + 1}",
+                            position = slot.position,
+                            player = players[slot.playerId],
+                            fitnessAt = slot.position,
+                            onPosition = { onSheet(PlanSheet.Position(index)) },
+                            onName = { onSheet(PlanSheet.Replace(index)) },
+                            onInfo = { open(slot.playerId) },
+                            draggable = true,
+                            mode = mode,
+                        )
+                    }
+                }
+            }
+            FIELDER_GROUP_LABELS.forEach { (group, label) ->
+                val members = bench.filter { positionGroup(it.position) == group }
+                if (members.isEmpty()) return@forEach
+                item(key = "head:bench:$group") { Caption("控え・$label（${members.size}人）　押すと誰と代えるか選べます") }
+                items(members, key = { "bench:${it.id}" }) { p ->
+                    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                        FielderRow(
+                            order = null,
+                            position = p.position,
+                            player = p,
+                            fitnessAt = p.position,
+                            onPosition = { onSheet(PlanSheet.Bench(p.id)) },
+                            onName = { onSheet(PlanSheet.Bench(p.id)) },
+                            onInfo = { open(p.id) },
+                            mode = mode,
+                        )
+                    }
+                }
+            }
+            if (bench.isEmpty()) item(key = "bench:none") { Muted("控えの野手がいません", Modifier.padding(8.dp)) }
+            item(key = "rest") {
+                Muted(
+                    "試合の日は、疲労${FIELDER_REST_FATIGUE}以上の野手は守れる控え（適性${SUBSTITUTE_MIN_FITNESS}以上）が居ればその日だけ入れ替わって休みます。" +
+                        "疲労は41以上で黄（成長が鈍り始める）、休養の線を超えると赤です。",
+                    Modifier.padding(top = 8.dp, start = 4.dp),
+                )
+            }
         }
-        item(key = "rest") {
-            Muted(
-                "試合の日は、疲労${FIELDER_REST_FATIGUE}以上の野手は守れる控え（適性${SUBSTITUTE_MIN_FITNESS}以上）が居ればその日だけ入れ替わって休みます。",
-                Modifier.padding(top = 8.dp, start = 4.dp),
+    }
+}
+
+private fun benchOf(view: LeagueView, draft: PlanDraft): List<Player> =
+    view.roster.filter { p -> !p.isPitcher && p.isActive && draft.slots.none { it.playerId == p.id } }
+
+private class OrderNote(val position: String, val text: String, val action: String, val sheet: PlanSheet, val color: androidx.compose.ui.graphics.Color? = null)
+
+/** 「気になる所」: 試合の日に休養に入る選手と、適性の低い守備（押すと直すためのシートを開く） */
+@Composable
+private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List<Player>): List<OrderNote> {
+    val notes = mutableListOf<OrderNote>()
+    draft.slots.forEachIndexed { index, slot ->
+        val p = players[slot.playerId] ?: return@forEachIndexed
+        val fatigue = p.fatigue ?: 0
+        if (fatigue >= FIELDER_REST_FATIGUE) {
+            val canRest = bench.any { it.fitness(slot.position) >= SUBSTITUTE_MIN_FITNESS }
+            notes += OrderNote(
+                slot.position,
+                if (canRest) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"
+                else "${p.name} 疲労$fatigue。${positionLabel(slot.position)}を守れる控えが居ないので休めません",
+                "交代",
+                PlanSheet.Replace(index),
+                MaterialTheme.colorScheme.error,
             )
         }
-    }
-}
-
-@Composable
-private fun BatterRow(order: Int, position: String, player: Player?, onPosition: () -> Unit, onPlayer: () -> Unit, onInfo: () -> Unit) {
-    Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("$order", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
-        AssistChip(onClick = onPosition, label = { Text(positionLabel(position), fontWeight = FontWeight.Bold) })
-        Column(Modifier.weight(1f).clickable(onClick = onPlayer).padding(start = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${conditionIcon(player?.condition)} ${player?.name ?: "?"}", fontWeight = FontWeight.SemiBold)
-                if ((player?.fatigue ?: 0) >= FIELDER_REST_FATIGUE) { Box(Modifier.width(6.dp)); Tag("休養") }
-            }
-            player?.let { BattingLine(it, position) }
-            player?.let { p ->
-                val playable = FIELD_POSITIONS.filter { it != position && p.fitness(it) >= SUBSTITUTE_MIN_FITNESS }
-                if (playable.isNotEmpty()) Muted("守れる位置 " + playable.joinToString(" ") { positionLabel(it) })
-            }
+        val fit = p.fitness(slot.position)
+        if (fit < SUBSTITUTE_MIN_FITNESS) {
+            notes += OrderNote(slot.position, "${p.name} ${positionLabel(slot.position)}の適性$fit。守備で失点しやすい", "守備", PlanSheet.Position(index), MaterialTheme.colorScheme.error)
         }
-        IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) { Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
     }
-}
-
-/** 打率・本塁打と、ミート/パワー/走力/守備をランク色の数字で */
-@Composable
-private fun BattingLine(player: Player, position: String?) {
-    val m = player.performance?.batting?.metrics
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            if (m == null || m.pa == 0) "-" else "${rate3(m.avg)} ${m.homeruns}本",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        AbilityNum("ミ", player.batting?.meet)
-        AbilityNum("パ", player.batting?.power)
-        AbilityNum("走", player.physical?.speed)
-        AbilityNum("守", player.fielding?.defense)
-        if (position != null && player.position != position) {
-            Text("適性${player.fitness(position)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-        }
-        player.fatigue?.takeIf { it > 0 }?.let { Text("疲$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    }
+    return notes
 }
 
 @Composable
@@ -300,41 +360,82 @@ private fun PositionSheet(draft: PlanDraft, index: Int, players: Map<Long, Playe
     val slot = draft.slots[index]
     val me = players[slot.playerId]
     Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
-        Text("${me?.name ?: ""}（${positionLabel(slot.position)}）と守備を入れ替える", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PosBadge(slot.position)
+            Text("${me?.name ?: ""}と守備を入れ替える", style = MaterialTheme.typography.titleMedium)
+        }
+        Muted("数字は入れ替えたあとの適性（左が${me?.name ?: ""}、右が相手）", Modifier.padding(horizontal = 20.dp))
         FIELD_POSITIONS.mapNotNull { pos -> draft.slots.indexOfFirst { it.position == pos }.takeIf { it >= 0 && it != index } }
             .forEach { other ->
                 val target = draft.slots[other]
                 val them = players[target.playerId]
-                Row(Modifier.fillMaxWidth().clickable { onSwap(other) }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(positionLabel(target.position), fontWeight = FontWeight.Bold, modifier = Modifier.width(32.dp))
-                    Text(them?.name ?: "?", modifier = Modifier.weight(1f))
-                    // 入れ替えたあとの2人の適性
-                    Muted(
-                        "→${positionLabel(target.position)} ${me?.fitness(target.position) ?: 0} / " +
-                            "→${positionLabel(slot.position)} ${them?.fitness(slot.position) ?: 0}",
-                    )
+                val mine = me?.fitness(target.position) ?: 0
+                val theirs = them?.fitness(slot.position) ?: 0
+                Row(Modifier.fillMaxWidth().clickable { onSwap(other) }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PosBadge(target.position, small = true)
+                    Text(them?.name ?: "?", modifier = Modifier.weight(1f), maxLines = 1)
+                    PosBadge(target.position, filled = false, small = true)
+                    Text("$mine", fontWeight = FontWeight.Bold, color = fitnessColor(mine), modifier = Modifier.width(28.dp))
+                    PosBadge(slot.position, filled = false, small = true)
+                    Text("$theirs", fontWeight = FontWeight.Bold, color = fitnessColor(theirs), modifier = Modifier.width(28.dp))
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
     }
 }
 
+/** スタメンの1人と交代する控えを選ぶ（その守備位置の適性が高い順、同じなら疲労の少ない順） */
 @Composable
-private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players: Map<Long, Player>, onPick: (Long) -> Unit) {
+private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players: Map<Long, Player>, mode: FielderView, onPick: (Long) -> Unit) {
     val slot = draft.slots[index]
-    val bench = view.roster
-        .filter { p -> !p.isPitcher && p.isActive && draft.slots.none { it.playerId == p.id } }
-        .sortedByDescending { it.fitness(slot.position) }
+    val bench = benchOf(view, draft).candidatesFor(slot.position)
     Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
-        Text("${players[slot.playerId]?.name ?: ""}（${positionLabel(slot.position)}）と交代する控え", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PosBadge(slot.position)
+            Text("${players[slot.playerId]?.name ?: ""}と交代する控え", style = MaterialTheme.typography.titleMedium)
+        }
+        Muted("${positionLabel(slot.position)}の適性が高い順。「適」はこの位置での適性です", Modifier.padding(horizontal = 20.dp))
         if (bench.isEmpty()) Text("控えの野手がいません", modifier = Modifier.padding(20.dp))
         bench.forEach { p ->
-            Column(Modifier.fillMaxWidth().clickable { onPick(p.id) }.padding(horizontal = 20.dp, vertical = 10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${conditionIcon(p.condition)} ${p.name}", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Muted("本職 ${positionLabel(p.position)}")
+            FielderRow(
+                order = null,
+                position = p.position,
+                player = p,
+                fitnessAt = slot.position,
+                mode = if (mode == FielderView.Fitness) FielderView.Ability else mode,
+                modifier = Modifier.fillMaxWidth().clickable { onPick(p.id) }.padding(horizontal = 10.dp),
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+    }
+}
+
+/** 控えの1人を、スタメンの誰と代えるか選ぶ（控えのその位置の適性が高い順） */
+@Composable
+private fun BenchSheet(draft: PlanDraft, id: Long, players: Map<Long, Player>, onPick: (Int) -> Unit) {
+    val me = players[id] ?: return
+    val order = draft.slots.indices.sortedWith(
+        compareByDescending<Int> { me.fitness(draft.slots[it].position) }.thenByDescending { players[draft.slots[it].playerId]?.fatigue ?: 0 },
+    )
+    Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PosBadge(me.position)
+            Text("${me.name}を誰と代える？", style = MaterialTheme.typography.titleMedium)
+        }
+        Muted("右の数字は${me.name}がその位置を守ったときの適性。打順と守備位置は引き継ぎます", Modifier.padding(horizontal = 20.dp))
+        order.forEach { index ->
+            val slot = draft.slots[index]
+            val them = players[slot.playerId]
+            val fit = me.fitness(slot.position)
+            Row(Modifier.fillMaxWidth().clickable { onPick(index) }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${index + 1}", fontWeight = FontWeight.Bold, modifier = Modifier.width(18.dp))
+                PosBadge(slot.position, small = true)
+                Text("${conditionIcon(them?.condition)} ${them?.name ?: "?"}", modifier = Modifier.weight(1f), maxLines = 1)
+                FatigueBadge(them?.fatigue)
+                Row(Modifier.width(44.dp), verticalAlignment = Alignment.Bottom) {
+                    Text("適", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("$fit", fontWeight = FontWeight.Bold, color = fitnessColor(fit))
                 }
-                BattingLine(p, slot.position)
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
@@ -471,10 +572,11 @@ private fun PitcherRow(order: String, player: Player?, role: String?, starter: B
                     AbilityNum("速", p.pitching?.velocity, velocity = true)
                     AbilityNum("制", p.pitching?.control)
                     AbilityNum("ス", p.pitching?.stamina, stamina = true)
-                    p.fatigue?.takeIf { it > 0 }?.let { Text("疲$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
         }
+        // 疲労は野手の行と同じく、名前の右端の決まった場所に（先発は飛ばす線、救援は休養の線で赤）
+        FatigueBadge(player?.fatigue, restAt = if (starter) STARTER_SKIP_FATIGUE else RELIEF_REST_FATIGUE)
         IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) { Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
     }

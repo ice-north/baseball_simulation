@@ -13,7 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
-import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.swipeDown
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -135,7 +135,7 @@ class ScreenTour {
                 tab("Plan")
                 page("plan-order", scrolls = 2)
                 step("position sheet") {
-                    repeat(3) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown() } }
+                    repeat(3) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown(startY = top + height * 0.25f, endY = bottom * 0.85f) } }
                     pause()
                     val first = model.plan?.present?.slots?.firstOrNull()
                     val label = first?.position?.let { jp.icenorth.baseball.shared.positionLabel(it) }
@@ -150,9 +150,21 @@ class ScreenTour {
                     shot("plan-replace-sheet")
                     back()
                 }
+                step("order stats") { click("今季成績"); page("plan-order-stats", scrolls = 1) }
+                step("order fitness") { click("守備適性"); page("plan-order-fitness", scrolls = 1) }
+                step("bench sheet") {
+                    click("能力")
+                    scroll(3)
+                    val starters = model.plan?.present?.slots?.map { it.playerId }.orEmpty().toSet()
+                    val bench = view.roster.filter { !it.isPitcher && it.isActive && it.id !in starters }
+                    val name = bench.firstOrNull { rule.onAllNodesWithText(it.name, substring = true).fetchSemanticsNodes().isNotEmpty() }?.name
+                    if (name != null) click(name, substring = true)
+                    shot("plan-bench-sheet")
+                    back()
+                }
                 step("pitching") { click("投手起用"); page("plan-pitching", scrolls = 2) }
                 step("role sheet") {
-                    repeat(3) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown() } }
+                    repeat(3) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown(startY = top + height * 0.25f, endY = bottom * 0.85f) } }
                     pause()
                     val starter = model.plan?.present?.pitching?.starters?.firstOrNull()
                     val name = view.roster.firstOrNull { it.id == starter }?.name
@@ -187,6 +199,4 @@ class ScreenTour {
         Log.i("ScreenTour", "done $stage: $count shots")
     }
 
-    private fun androidx.compose.ui.test.TouchInjectionScope.swipeDown() =
-        swipe(androidx.compose.ui.geometry.Offset(centerX, top + height * 0.25f), androidx.compose.ui.geometry.Offset(centerX, bottom * 0.85f), 300)
 }

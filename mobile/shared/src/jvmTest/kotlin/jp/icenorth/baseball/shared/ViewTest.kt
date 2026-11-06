@@ -63,4 +63,27 @@ class ViewTest {
         assertEquals(".200", rate3(0.2))
         assertEquals(".385", rate3(0.38461538461538464))
     }
+
+    @Test
+    fun battingMetricsGiveOpsAndLabels() {
+        val m = view.roster.first { !it.isPitcher }.performance!!.batting!!.metrics!!
+        // OPS = 出塁率 + 長打率（= 打率 + iso）
+        assertEquals(m.obp!! + m.avg!! + m.iso!!, m.ops!!, 1e-9)
+        val labelled = OnlineJson.decodeFromString<BattingPerformance>(
+            """{"metrics":{"pa":120,"avg":0.31,"obp":0.36,"iso":0.1,"homeruns":3,"stolenBases":null},"labels":[{"id":"average","text":"アベレージヒッター","tone":"good"}]}""",
+        )
+        assertEquals("アベレージヒッター", labelled.labels.single().text)
+        assertEquals(0, labelled.metrics!!.stolenBases)
+    }
+
+    @Test
+    fun benchCandidatesAndPositionGroups() {
+        val fielders = view.roster.filter { !it.isPitcher }
+        val sorted = fielders.candidatesFor("short")
+        assertTrue(sorted.zipWithNext().all { (a, b) -> a.fitness("short") >= b.fitness("short") })
+        assertEquals("infield", positionGroup("short"))
+        assertEquals("outfield", positionGroup("center"))
+        fielders.forEach { p -> assertTrue(p.subPositions().none { it == p.position || p.fitness(it) < SUBSTITUTE_MIN_FITNESS }) }
+        assertEquals(listOf(0, 1, 2), listOf(40, 41, 81).map { fatigueTone(it) })
+    }
 }

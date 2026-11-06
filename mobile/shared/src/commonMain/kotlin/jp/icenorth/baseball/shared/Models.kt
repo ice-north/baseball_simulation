@@ -139,15 +139,23 @@ data class BattingMetrics(
     val pa: Int = 0,
     val avg: Double? = null,
     val obp: Double? = null,
+    /** 長打率−打率（OPS = 出塁率 + 打率 + iso） */
+    val iso: Double? = null,
     val homeruns: Int = 0,
     val stolenBases: Int = 0,
-)
+) {
+    val ops: Double? get() = if (obp != null && avg != null && iso != null) obp + avg + iso else null
+}
+
+/** 成績の特徴（「アベレージヒッター」など。server/performanceLabels.mjs）。tone は good / bad */
+@Serializable
+data class PerformanceLabel(val id: String? = null, val text: String = "", val tone: String? = null)
 
 @Serializable
 data class PitchingMetrics(val outs: Int = 0, val era: Double? = null, val k9: Double? = null)
 
 @Serializable
-data class BattingPerformance(val metrics: BattingMetrics? = null)
+data class BattingPerformance(val metrics: BattingMetrics? = null, val labels: List<PerformanceLabel> = emptyList())
 
 @Serializable
 data class PitchingPerformance(val metrics: PitchingMetrics? = null)
