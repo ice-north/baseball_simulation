@@ -14,7 +14,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -236,5 +235,6 @@ private fun MenuPicker(label: String, selected: String, menus: List<Menu>, enabl
             }
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0f))
+    // ⚠ ここ（Box の外）に部品を足さないこと。呼ぶ側の Row に並んでしまい、横幅いっぱいの部品だと
+    //    メイン／サブのボタンの幅が0になって見えなくなる（実際に透明な区切り線でそうなっていた）
 }

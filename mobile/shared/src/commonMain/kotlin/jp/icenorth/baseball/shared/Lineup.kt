@@ -11,10 +11,40 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
-/** 打順の1枠。`order` は 1〜8 */
-data class BatterSlot(val playerId: Long, val position: String)
+/**
+ * 打順の1枠。`order` は 1〜8。
+ * 空き（選手が退団・ドラフトで抜けた枠）は負の番号（[emptySlotId]）で持つ。控えとの交代で埋める
+ */
+data class BatterSlot(val playerId: Long, val position: String) {
+    val isEmpty: Boolean get() = playerId < 0
+}
+
+/** 空き枠の番号（打順ごとに別の負の数にして、並べ替えの鍵が重ならないようにする） */
+fun emptySlotId(index: Int): Long = -1L - index
+
+/**
+ * 打順を「8つの守備位置を1つずつ持つ8枠」に整える（Web 版 normalizeOrder と同じ）。
+ * ⚠ 年度末に主力がドラフト・退団で抜けると、保存済みの打順が6人などになっている。そのままだと
+ *    抜けた守備位置の枠が画面に無く、**どの操作でも埋められない**（保存も断られ続ける）。
+ *    - 9人目以降は外す / 守備位置が重なる・守備位置でない選手は、守る人の居ない位置へ回す
+ *    - 足りない枠は空きで埋める（空きは控えとの交代で埋める）
+ *    - `known` を渡すと、そこに居ない選手（名簿から外れた）の枠も空きにする
+ */
+fun normalizeSlots(slots: List<BatterSlot>, known: Set<Long>? = null): List<BatterSlot> {
+    val kept = slots.take(8)
+    val free = FIELD_POSITIONS.filter { pos -> kept.none { it.position == pos } }.toMutableList()
+    val used = mutableSetOf<String>()
+    val next = kept.mapIndexed { i, e ->
+        val id = if (known != null && e.playerId !in known) emptySlotId(i) else e.playerId
+        if (e.position in FIELD_POSITIONS && used.add(e.position)) e.copy(playerId = id)
+        else BatterSlot(id, free.removeAt(0).also { used.add(it) })
+    }.toMutableList()
+    while (next.size < 8) next.add(BatterSlot(emptySlotId(next.size), free.removeAt(0)))
+    return next
+}
 
 val FIELD_POSITIONS = listOf("catcher", "first", "second", "third", "short", "left", "center", "right")
 
@@ -65,6 +95,7 @@ data class LineupDraft(
 
     /** サーバーの validateLineup（src/online/shared.js）と同じ前提を、送る前に確かめる */
     fun problem(): String? = when {
+        slots.any { it.isEmpty } -> "空いている打順があります。控えと交代して埋めてください"
         slots.size != 8 -> "野手8人の打順を指定してください"
         slots.map { it.playerId }.toSet().size != 8 -> "同じ選手を重複して指定できません"
         FIELD_POSITIONS.any { pos -> slots.none { it.position == pos } } -> "野手の守備位置を一度ずつ指定してください"
@@ -97,14 +128,15 @@ data class LineupDraft(
             val slots = (lineup["battingOrder"] as? JsonArray).orEmpty()
                 .map { it.jsonObject }
                 .sortedBy { it["battingOrder"]?.jsonPrimitive?.int ?: 0 }
-                .map {
+                .mapIndexed { i, it ->
                     BatterSlot(
-                        playerId = it["playerId"]!!.jsonPrimitive.long,
+                        // 選手の無い枠（null）は空き
+                        playerId = it["playerId"]?.jsonPrimitive?.longOrNull ?: emptySlotId(i),
                         position = it["position"]?.jsonPrimitive?.contentOrNull ?: "",
                     )
                 }
             val starters = (lineup["starters"] as? JsonArray).orEmpty().map { it.jsonPrimitive.long }
-            return LineupDraft(lineup, slots, starters)
+            return LineupDraft(lineup, normalizeSlots(slots), starters)
         }
     }
 }

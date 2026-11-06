@@ -86,4 +86,27 @@ class ViewTest {
         fielders.forEach { p -> assertTrue(p.subPositions().none { it == p.position || p.fitness(it) < SUBSTITUTE_MIN_FITNESS }) }
         assertEquals(listOf(0, 1, 2), listOf(40, 41, 81).map { fatigueTone(it) })
     }
+
+    @Test
+    fun missingStartersBecomeEmptySlots() {
+        // 年度末に2人抜けて6人になった打順でも、8つの守備位置の枠がそろい、空きは控えとの交代で埋められる
+        val full = PlanDraft.from(view.lineup!!, view.roster)
+        val gone = full.slots.take(2).map { it.playerId }.toSet()
+        val roster = view.roster.filter { it.id !in gone }
+        val draft = PlanDraft.from(view.lineup!!, roster)
+        assertEquals(8, draft.slots.size)
+        assertEquals(FIELD_POSITIONS.toSet(), draft.slots.map { it.position }.toSet())
+        assertEquals(2, draft.slots.count { it.isEmpty })
+        assertEquals("空いている打順があります。控えと交代して埋めてください", draft.problem())
+        val bench = roster.filter { !it.isPitcher && it.isActive && draft.slots.none { s -> s.playerId == it.id } }
+        var fixed = draft
+        draft.slots.withIndex().filter { it.value.isEmpty }.zip(bench).forEach { (slot, p) -> fixed = fixed.replaceBatter(slot.index, p.id) }
+        assertEquals(0, fixed.slots.count { it.isEmpty })
+        // 保存済みの形が6人（null の枠も含む）でも同じ
+        val six = normalizeSlots(listOf(BatterSlot(1, "catcher"), BatterSlot(2, "catcher"), BatterSlot(3, "pitcher")))
+        assertEquals(8, six.size)
+        assertEquals(FIELD_POSITIONS.toSet(), six.map { it.position }.toSet())
+        assertEquals(5, six.count { it.isEmpty })
+        assertEquals(8, six.map { it.playerId }.toSet().size)
+    }
 }

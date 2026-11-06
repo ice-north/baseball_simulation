@@ -289,6 +289,7 @@ private fun OrderEditor(
                             onInfo = { open(slot.playerId) },
                             draggable = true,
                             mode = mode,
+                            placeholder = "空き（押して控えと交代）",
                         )
                     }
                 }
@@ -334,7 +335,11 @@ private class OrderNote(val position: String, val text: String, val action: Stri
 private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List<Player>): List<OrderNote> {
     val notes = mutableListOf<OrderNote>()
     draft.slots.forEachIndexed { index, slot ->
-        val p = players[slot.playerId] ?: return@forEachIndexed
+        val p = players[slot.playerId]
+        if (p == null) {
+            notes += OrderNote(slot.position, "${positionLabel(slot.position)}が空いています（選手が抜けました）。控えと交代して埋めてください", "交代", PlanSheet.Replace(index), MaterialTheme.colorScheme.error)
+            return@forEachIndexed
+        }
         val fatigue = p.fatigue ?: 0
         if (fatigue >= FIELDER_REST_FATIGUE) {
             val canRest = bench.any { it.fitness(slot.position) >= SUBSTITUTE_MIN_FITNESS }
@@ -375,9 +380,9 @@ private fun PositionSheet(draft: PlanDraft, index: Int, players: Map<Long, Playe
                     PosBadge(target.position, small = true)
                     Text(them?.name ?: "?", modifier = Modifier.weight(1f), maxLines = 1)
                     PosBadge(target.position, filled = false, small = true)
-                    Text("$mine", fontWeight = FontWeight.Bold, color = fitnessColor(mine), modifier = Modifier.width(28.dp))
+                    Text("$mine", fontWeight = FontWeight.Bold, color = fitnessColor(mine), modifier = Modifier.width(36.dp))
                     PosBadge(slot.position, filled = false, small = true)
-                    Text("$theirs", fontWeight = FontWeight.Bold, color = fitnessColor(theirs), modifier = Modifier.width(28.dp))
+                    Text("$theirs", fontWeight = FontWeight.Bold, color = fitnessColor(theirs), modifier = Modifier.width(36.dp))
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
@@ -392,7 +397,7 @@ private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players
     Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
         Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PosBadge(slot.position)
-            Text("${players[slot.playerId]?.name ?: ""}と交代する控え", style = MaterialTheme.typography.titleMedium)
+            Text(players[slot.playerId]?.let { "${it.name}と交代する控え" } ?: "空いている${positionLabel(slot.position)}に入れる控え", style = MaterialTheme.typography.titleMedium)
         }
         Muted("${positionLabel(slot.position)}の適性が高い順。「適」はこの位置での適性です", Modifier.padding(horizontal = 20.dp))
         if (bench.isEmpty()) Text("控えの野手がいません", modifier = Modifier.padding(20.dp))
@@ -430,7 +435,7 @@ private fun BenchSheet(draft: PlanDraft, id: Long, players: Map<Long, Player>, o
             Row(Modifier.fillMaxWidth().clickable { onPick(index) }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${index + 1}", fontWeight = FontWeight.Bold, modifier = Modifier.width(18.dp))
                 PosBadge(slot.position, small = true)
-                Text("${conditionIcon(them?.condition)} ${them?.name ?: "?"}", modifier = Modifier.weight(1f), maxLines = 1)
+                Text(them?.let { "${conditionIcon(it.condition)} ${it.name}" } ?: "空き", modifier = Modifier.weight(1f), maxLines = 1)
                 FatigueBadge(them?.fatigue)
                 Row(Modifier.width(44.dp), verticalAlignment = Alignment.Bottom) {
                     Text("適", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

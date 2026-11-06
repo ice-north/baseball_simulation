@@ -86,7 +86,10 @@ data class PlanDraft(
                 val text = raw.num()?.toInt()?.toString() ?: raw.str()
                 f.key to (text?.takeIf { v -> f.options.any { it.key == v } } ?: f.default)
             }
-            return PlanDraft(lineup, order.slots, PitchingState.from(order.starters, saved, roster), strategy, tactics)
+            // 名簿に居ない・抹消中・投手の選手が打順に残っていたら、その枠は空きにして控えとの交代で埋めてもらう
+            val fielders = roster.filter { !it.isPitcher && it.isActive }.map { it.id }.toSet()
+            val slots = if (roster.isEmpty()) order.slots else normalizeSlots(order.slots, fielders)
+            return PlanDraft(lineup, slots, PitchingState.from(order.starters, saved, roster), strategy, tactics)
         }
     }
 }

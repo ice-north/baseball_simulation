@@ -240,12 +240,15 @@ fun StatTable(
                         Text(
                             "${conditionIcon(p.at("condition").int())}${p.at("name").str().orEmpty()}",
                             fontSize = 13.sp,
+                            // ⚠ 行の高さを決めて詰める。既定（本文の24sp）のままだと2行で行の高さを超え、
+                            //    下の「守備 年齢」が次の行に食い込んでいた
+                            lineHeight = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        Text(sub(p), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        Text(sub(p), fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                     }
                 }
             }

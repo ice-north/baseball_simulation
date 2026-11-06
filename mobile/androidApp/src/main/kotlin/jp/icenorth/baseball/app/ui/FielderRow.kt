@@ -158,6 +158,8 @@ fun FielderRow(
     onInfo: (() -> Unit)? = null,
     draggable: Boolean = false,
     mode: FielderView = FielderView.Ability,
+    /** 選手が居ない枠（抜けた選手の空き）に出す文言 */
+    placeholder: String = "?",
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
@@ -175,8 +177,9 @@ fun FielderRow(
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Text(
-                    "${conditionIcon(player?.condition)} ${player?.name ?: "?"}",
+                    if (player != null) "${conditionIcon(player.condition)} ${player.name}" else placeholder,
                     fontWeight = FontWeight.SemiBold,
+                    color = if (player != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false).padding(end = 3.dp),
@@ -187,7 +190,7 @@ fun FielderRow(
                     player.subPositions().filter { it != position }.take(2).forEach { PosBadge(it, filled = false, small = true) }
                 }
             }
-            FatigueBadge(player?.fatigue)
+            if (player != null) FatigueBadge(player.fatigue)
             if (onInfo != null) IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) { Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (draggable) Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
         }
@@ -247,21 +250,30 @@ private fun StatsRow(player: Player) {
     }
 }
 
-/** 8つの守備位置の適性を、位置の色の札と数字で並べる（守っている位置は塗り） */
+/**
+ * 8つの守備位置の適性を、位置の色の札と数字で並べる（守っている位置は塗り）。
+ * ⚠ 1行に8つは狭い端末で「100」が折り返したので、捕手・内野の5つと外野の3つの2行にする
+ */
 @Composable
 private fun FitnessRow(player: Player, fitnessAt: String) {
-    Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        FIELD_POSITIONS.forEach { pos ->
-            val fit = player.fitness(pos)
-            Row(Modifier.width(36.dp), verticalAlignment = Alignment.CenterVertically) {
-                PosBadge(pos, filled = pos == fitnessAt, small = true)
-                Text(
-                    if (fit > 0) "$fit" else "−",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (fit > 0) fitnessColor(fit) else MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(start = 1.dp),
-                )
+    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        listOf(FIELD_POSITIONS.take(5), FIELD_POSITIONS.drop(5)).forEach { line ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                line.forEach { pos ->
+                    val fit = player.fitness(pos)
+                    Row(Modifier.width(50.dp), verticalAlignment = Alignment.CenterVertically) {
+                        PosBadge(pos, filled = pos == fitnessAt, small = true)
+                        Text(
+                            if (fit > 0) "$fit" else "−",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            color = if (fit > 0) fitnessColor(fit) else MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(start = 3.dp),
+                        )
+                    }
+                }
             }
         }
     }
