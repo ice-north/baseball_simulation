@@ -148,7 +148,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun Exception.readable(): String = when (this) {
         is OnlineException -> message ?: "サーバー処理に失敗しました"
-        else -> "通信できませんでした。電波の良いところで、もう一度試してください"
+        // ⚠ 原因の切り分けのため、試作のうちは中身も出す（スクショで送ってもらう）
+        else -> "通信できませんでした。電波の良いところで、もう一度試してください（${this::class.simpleName}: ${message ?: ""}）"
     }
 }
 

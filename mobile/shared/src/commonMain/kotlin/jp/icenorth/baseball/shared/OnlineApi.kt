@@ -123,9 +123,10 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
         val body = response.bodyAsText()
         if (response.status.isSuccess()) return body
         val error = runCatching { OnlineJson.parseToJsonElement(body).jsonObject }.getOrNull()
+        // ⚠ JSON でない応答（Vercel の防御画面など）は、状態コードと先頭だけ出して切り分けられるようにする
         throw OnlineException(
             error?.get("error")?.jsonPrimitive?.contentOrNull
-                ?: "サーバー処理に失敗しました（${response.status.value}）。最新状態を確認してください",
+                ?: "サーバー処理に失敗しました（${response.status.value}: ${body.take(80).replace('\n', ' ')}）",
             error?.get("code")?.jsonPrimitive?.contentOrNull,
             response.status.value,
         )
