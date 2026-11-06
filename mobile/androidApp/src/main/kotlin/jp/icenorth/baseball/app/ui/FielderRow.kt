@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -306,8 +307,17 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
                 }
                 line.forEach { pos ->
                     val fit = player.fitness(pos)
-                    Row(Modifier.width(50.dp), verticalAlignment = Alignment.CenterVertically) {
-                        PosBadge(pos, filled = pos == fitnessAt, small = true)
+                    // ⚠ 札（枠）で囲まず、位置の字を位置の色で（いしだ指定: 枠だと数字と字の高さがずれて見える）。
+                    //    字と数字は下の線（ベースライン）でそろえる
+                    Row(Modifier.width(46.dp)) {
+                        Text(
+                            positionLabel(pos),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            color = lighten(positionColor(pos)),
+                            textDecoration = if (pos == fitnessAt) TextDecoration.Underline else null,
+                            modifier = Modifier.alignByBaseline(),
+                        )
                         Text(
                             "$fit",
                             fontSize = 12.sp,
@@ -315,7 +325,7 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
                             maxLines = 1,
                             softWrap = false,
                             color = fitnessColor(fit),
-                            modifier = Modifier.padding(start = 3.dp),
+                            modifier = Modifier.alignByBaseline().padding(start = 3.dp),
                         )
                     }
                 }
@@ -325,7 +335,7 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
 }
 
 /** 守備適性の行の2行目の字下げ（「守」の札＋守備・肩の2マス＋区切り線の幅） */
-private val FITNESS_INDENT = 22.dp + 34.dp * 2 + 9.dp
+private val FITNESS_INDENT = 22.dp + 34.dp * 2 + 9.dp // 位置1つは 46dp
 
 @Composable
 private fun FitCell(label: String, fit: Int) {
