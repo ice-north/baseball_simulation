@@ -138,6 +138,9 @@ fun defaultHttpClient(): HttpClient = createPlatformHttpClient {
     install(HttpTimeout) {
         requestTimeoutMillis = 290_000
         connectTimeoutMillis = 15_000
+        // ⚠ **読み取りの待ち時間も伸ばすこと**。指定しないと OkHttp の既定の 10 秒になり、
+        //    本番のログイン（Supabase の認証＋保存）が 10 秒を超えると SocketTimeoutException で落ちた
+        socketTimeoutMillis = 290_000
     }
 }
 
