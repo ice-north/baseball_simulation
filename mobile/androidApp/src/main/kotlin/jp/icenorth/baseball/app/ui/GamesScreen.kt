@@ -61,6 +61,7 @@ fun GamesScreen(model: AppViewModel) {
     val years = raw.at("seasonYears").list().mapNotNull { it.int() }.ifEmpty { listOfNotNull(view.year) }
     var year by rememberSaveable { mutableStateOf(years.lastOrNull() ?: 1) }
     var scope by rememberSaveable { mutableStateOf("own") }
+    var section by rememberSaveable { mutableStateOf("results") }
     var page by rememberSaveable { mutableStateOf(0) }
     var data by remember { mutableStateOf<JsonObject?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
@@ -79,7 +80,23 @@ fun GamesScreen(model: AppViewModel) {
         }
     }
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("試合結果", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("試合", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        // ⚠ 順位表・タイトル争い・リーグ便りはここ（ホームは新聞の紙面にしたので、数字の表はこのタブにまとめる）
+        ChipTabs(
+            listOf("results" to "試合結果", "standings" to "順位表", "leaders" to "タイトル争い", "news" to "リーグ便り"),
+            section,
+            { section = it },
+            Modifier.padding(horizontal = 0.dp),
+        )
+        when (section) {
+            "standings" -> { StandingsBoard(view); return@Column }
+            "leaders" -> {
+                val boards = raw.at("leaders").list().mapNotNull { it.obj() }.filter { it.at("rows").list().isNotEmpty() }
+                if (boards.isEmpty()) Muted("まだ記録がありません。") else LeadersBoard(view, boards)
+                return@Column
+            }
+            "news" -> { NewsBoard(view, raw); return@Column }
+        }
         ChoiceRow(listOf("own" to "自球団", "league" to "リーグ全体"), scope) { scope = it; page = 0 }
         if (years.size > 1) ChoiceRow(years.map { "$it" to "${it}年目" }, "$year") { year = it.toInt(); page = 0 }
         val games = data?.at("games").list().mapNotNull { it.obj() }

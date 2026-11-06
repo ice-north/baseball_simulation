@@ -118,7 +118,7 @@ fun OnlineApp(model: AppViewModel) {
         ) { padding ->
             Column(Modifier.padding(padding).consumeWindowInsets(padding)) {
                 when (tab) {
-                    Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures }, onRename = { renaming = true })
+                    Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games })
                     Tab.Games -> GamesScreen(model)
                     Tab.Players -> PlayersScreen(model)
                     Tab.Plan -> PlanScreen(model)

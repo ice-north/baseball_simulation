@@ -309,6 +309,9 @@ fun Tag(text: String, color: Color = MaterialTheme.colorScheme.secondary) {
         fontSize = 10.sp,
         color = color,
         fontWeight = FontWeight.Bold,
+        // 札の中で折り返さない（狭いと2行の札になって行の高さが崩れた）
+        maxLines = 1,
+        softWrap = false,
         modifier = Modifier.border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp),
     )
 }

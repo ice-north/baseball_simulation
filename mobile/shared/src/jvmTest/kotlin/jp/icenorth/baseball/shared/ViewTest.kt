@@ -109,4 +109,22 @@ class ViewTest {
         assertEquals(5, six.count { it.isEmpty })
         assertEquals(8, six.map { it.playerId }.toSet().size)
     }
+
+    @Test
+    fun frontPageReadsLikeANewspaper() {
+        val raw = OnlineJson.parseToJsonElement(raw).jsonObject
+        val page = buildFrontPage(view, raw)
+        // 開幕3日目: 最新の試合は 宮崎 2-6 那覇 の敗戦
+        assertEquals(FrontPage.Tone.Lose, page.tone)
+        assertTrue(page.headline.startsWith("宮崎"), page.headline)
+        assertNotNull(page.score)
+        assertTrue(page.lead!!.contains("那覇"), page.lead)
+        assertTrue(page.articles.any { it.kicker == "次戦予告" })
+        assertTrue(page.articles.any { it.kicker == "タイトル戦線" })
+        println(page)
+        // 試合の無い紙面（初期メンバー選び）
+        val pre = buildFrontPage(view.copy(results = emptyList(), pendingPack = kotlinx.serialization.json.JsonObject(emptyMap())), raw)
+        assertEquals(FrontPage.Tone.None, pre.tone)
+        assertTrue(pre.headline.contains("初期メンバー"), pre.headline)
+    }
 }

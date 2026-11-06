@@ -118,6 +118,9 @@ class ScreenTour {
                     back()
                 }
                 step("league games") { click("リーグ全体"); pause(2000); shot("games-league") }
+                step("standings") { click("順位表"); page("games-standings", scrolls = 1) }
+                step("leaders") { click("タイトル争い"); shot("games-leaders") }
+                step("news") { click("リーグ便り"); shot("games-news") }
 
                 tab("Players")
                 page("players-batting", scrolls = 1)
@@ -182,6 +185,8 @@ class ScreenTour {
                 page("procedures", scrolls = 5)
                 if (stage == "camp") step("camp group") { click("野手", substring = true); page("procedures-camp-fielders", scrolls = 1) }
                 if (stage == "tryout") step("tryout weights") { click("評価", substring = true); shot("procedures-tryout-weights") }
+                tab("Games")
+                step("news") { click("リーグ便り"); page("games-news", scrolls = 1) }
                 tab("Plan")
                 page("plan-order", scrolls = 0)
                 tab("Players")

@@ -6,8 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,6 +38,7 @@ import jp.icenorth.baseball.shared.fatigueTone
 import jp.icenorth.baseball.shared.positionGroup
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.rate3
+import jp.icenorth.baseball.shared.shortLabel
 import jp.icenorth.baseball.shared.subPositions
 
 /**
@@ -148,7 +148,6 @@ private fun GroupLabel(text: String) {
  * @param position 札に出す位置（スタメンは守っている位置、控えは本職）
  * @param fitnessAt 適性を測る位置（スタメンは守っている位置。交代候補は空いている位置）
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FielderRow(
     order: String?,
@@ -226,28 +225,34 @@ private fun AbilityRow(player: Player, fitnessAt: String) {
     }
 }
 
-/** 今季の成績と、成績の特徴（アベレージヒッター・盗塁B など。サーバーがリーグ平均と比べて付ける） */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * 今季の成績と、成績の特徴（アベヒ・盗塁B など。サーバーがリーグ平均と比べて付ける）。
+ * ⚠ **1行に収める**（いしだ指定: 2行にしない）。特徴は短い形（[shortLabel]）にし、入りきらない分は切る
+ */
 @Composable
 private fun StatsRow(player: Player) {
     val m = player.performance?.batting?.metrics
     val labels = player.performance?.batting?.labels.orEmpty()
-    FlowRow(
-        Modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        if (m == null || m.pa == 0) {
-            Muted("今季の打席なし")
-        } else {
-            StatText("打率", rate3(m.avg))
-            StatText("OPS", rate3(m.ops))
-            StatText("本", "${m.homeruns}")
-            StatText("盗", "${m.stolenBases}")
-            StatText("打席", "${m.pa}")
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (m == null || m.pa == 0) {
+                Muted("今季の打席なし")
+            } else {
+                StatText("打率", rate3(m.avg))
+                StatText("OPS", rate3(m.ops))
+                StatText("本", "${m.homeruns}")
+                StatText("盗", "${m.stolenBases}")
+                StatText("席", "${m.pa}")
+            }
         }
-        labels.take(3).forEach { label ->
-            Tag(label.text, if (label.tone == "bad") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+        Row(
+            Modifier.weight(1f).padding(start = 8.dp).clipToBounds(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            labels.take(3).forEach { label ->
+                Tag(shortLabel(label.text), if (label.tone == "bad") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }

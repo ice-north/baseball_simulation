@@ -71,3 +71,12 @@ fun rate3(value: Double?): String {
     val s = kotlin.math.round(value * 1000).toInt().toString().padStart(3, '0')
     return if (value >= 1.0) "1.000" else ".$s"
 }
+
+/** 成績の特徴ラベルの短い形（行に1行で収めるため。いしだ指定:「アベヒ」のように縮める） */
+private val SHORT_LABELS = mapOf(
+    "アベレージヒッター" to "アベヒ", "パワーヒッター" to "パワヒ", "長打型" to "長打", "出塁型" to "出塁",
+    "選球眼" to "選球", "固め打ち" to "固め", "粘り打ち" to "粘り", "対左投手B" to "対左B", "対左投手F" to "対左F",
+    "制球安定" to "制球", "尻上がり" to "尻上",
+)
+
+fun shortLabel(text: String): String = SHORT_LABELS[text] ?: if (text.length > 5) text.take(4) else text
