@@ -107,10 +107,10 @@ private fun WebNewsPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composab
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.White) { menu() }
             }
             Text(listOfNotNull(page.team, page.standing).joinToString("　"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.weight(1f))
-                Text("次の進行まで ", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
-                Text(countdownText(secondsUntil(nextAdvanceAt)), color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp, modifier = Modifier.padding(end = 10.dp))
+            Row {
+                Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.weight(1f).alignByBaseline())
+                Text("次の進行まで ", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                Text(countdownText(secondsUntil(nextAdvanceAt)), color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp, modifier = Modifier.alignByBaseline().padding(end = 10.dp))
             }
         }
         // 速報（自分の番の手続きなど）
@@ -200,9 +200,9 @@ private fun PlainPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composable
                     menu()
                 }
                 Text(listOfNotNull(page.standing, page.issue.ifEmpty { null }, page.status).joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("次の進行まで ", style = MaterialTheme.typography.bodyMedium)
-                    Text(countdownText(secondsUntil(nextAdvanceAt)), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                Row {
+                    Text("次の進行まで ", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.alignByBaseline())
+                    Text(countdownText(secondsUntil(nextAdvanceAt)), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.alignByBaseline())
                 }
             }
         }

@@ -113,9 +113,9 @@ fun FatigueBadge(fatigue: Int?, restAt: Int = FIELDER_REST_FATIGUE) {
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("疲", fontSize = 10.sp, color = color ?: MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("$f", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color ?: MaterialTheme.colorScheme.onSurfaceVariant)
+        Row {
+            Text("疲", fontSize = 10.sp, color = color ?: MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+            Text("$f", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color ?: MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
         }
     }
 }
@@ -182,16 +182,19 @@ fun FielderRow(
             if (draggable) Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
         }
         if (player != null) {
+            // 「適」と右の中身（能力・成績・守備適性の1行目）は、どの表示でも字のベースラインでそろえる
             Row {
                 // 守っている位置の適性は、守備の札の真下に（いしだ指定）。どの表示でも同じ場所
-                Box(Modifier.padding(start = 26.dp, top = 4.dp).width(34.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.alignByBaseline().padding(start = 26.dp, top = 4.dp).width(34.dp), contentAlignment = Alignment.Center) {
                     val fit = player.fitness(fitnessAt)
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text("適", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit))
+                    // ⚠ 以前は「適」を fontSize だけ小さくしていて、行の高さが既定の 24sp のまま下ぞろえになり、数字が右の能力より下にずれた。
+                    //    右の能力の数字（[AbilityNum]）と同じ字の型にして、ベースラインでそろえる
+                    Row {
+                        Text("適", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+                        Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit), modifier = Modifier.alignByBaseline())
                     }
                 }
-                Box(Modifier.weight(1f).padding(start = 6.dp)) {
+                Box(Modifier.weight(1f).alignByBaseline().padding(start = 6.dp)) {
                     when (mode) {
                         FielderView.Ability -> AbilityRow(player)
                         FielderView.Stats -> StatsRow(player)
@@ -305,7 +308,7 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
                     Row(Modifier.width(46.dp)) {
                         Text(
                             positionLabel(pos),
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.bodySmall, // 行の高さを能力の数字と同じに（fontSize だけだと 24sp の行になる）
                             fontWeight = FontWeight.Black,
                             color = lighten(positionColor(pos)),
                             textDecoration = if (pos == fitnessAt) TextDecoration.Underline else null,
@@ -313,7 +316,7 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
                         )
                         Text(
                             "$fit",
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false,
@@ -332,8 +335,8 @@ private val FITNESS_INDENT = 32.dp * 2 + 9.dp // 位置1つは 46dp
 
 @Composable
 private fun StatText(label: String, value: String) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+    Row {
+        Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+        Text(value, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.alignByBaseline())
     }
 }

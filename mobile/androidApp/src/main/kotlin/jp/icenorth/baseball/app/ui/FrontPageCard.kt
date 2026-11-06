@@ -145,15 +145,16 @@ private fun Masthead(page: FrontPage, nextAdvanceAt: String?, menu: @Composable 
     // 題字の下の二重線
     Box(Modifier.padding(top = 2.dp).fillMaxWidth().height(2.dp).background(Rule))
     Box(Modifier.padding(top = 2.dp).fillMaxWidth().height(1.dp).background(Rule))
-    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
-        Text(page.team, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 16.sp, color = Ink, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-        page.standing?.let { Text("　$it", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1) }
+    // 大きさの違う字は下ぞろえ（Alignment.Bottom）でなくベースラインでそろえる（下ぞろえだと小さい字が浮く）
+    Row(Modifier.padding(top = 6.dp)) {
+        Text(page.team, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 16.sp, color = Ink, maxLines = 1, modifier = Modifier.weight(1f, fill = false).alignByBaseline())
+        page.standing?.let { Text("　$it", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1, modifier = Modifier.alignByBaseline()) }
     }
-    Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.Bottom) {
-        Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), fontSize = 11.sp, color = InkSoft, modifier = Modifier.weight(1f))
+    Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+        Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), fontSize = 11.sp, color = InkSoft, modifier = Modifier.weight(1f).alignByBaseline())
         val left = secondsUntil(nextAdvanceAt)
-        Text("次の進行まで ", fontSize = 11.sp, color = InkSoft)
-        Text(countdownText(left), fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 16.sp, color = Red)
+        Text("次の進行まで ", fontSize = 11.sp, color = InkSoft, modifier = Modifier.alignByBaseline())
+        Text(countdownText(left), fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 16.sp, color = Red, modifier = Modifier.alignByBaseline())
     }
     Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(1.dp).background(Rule.copy(alpha = 0.5f)))
 }

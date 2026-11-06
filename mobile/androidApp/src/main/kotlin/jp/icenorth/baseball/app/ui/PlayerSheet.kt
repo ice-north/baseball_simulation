@@ -22,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -146,9 +145,9 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                             Muted(if (batting) "打撃" else "投球")
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 group.columns.forEach { c ->
-                                    Row(verticalAlignment = Alignment.Bottom) {
-                                        Text("${c.label} ", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(formatStat(c, c.get(period)), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(ValueWidth))
+                                    Row {
+                                        Text("${c.label} ", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+                                        Text(formatStat(c, c.get(period)), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.alignByBaseline().width(ValueWidth))
                                     }
                                 }
                             }

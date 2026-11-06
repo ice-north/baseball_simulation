@@ -125,13 +125,15 @@ fun Caption(text: String) {
 /** 能力値。⚠ 文字のランクだけにせず、数字をランクの色で出す（以前の指摘） */
 @Composable
 fun AbilityNum(label: String?, value: Int?, velocity: Boolean = false, stamina: Boolean = false) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        if (label != null) Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    // 字の見出しと数字はベースラインでそろえる（下ぞろえだと大きさの違う字の高さがずれる）
+    Row {
+        if (label != null) Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
         Text(
             value?.toString() ?: "—",
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Bold,
             color = value?.let { rankColor(abilityRank(it, velocity, stamina)) } ?: MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.alignByBaseline(),
         )
     }
 }
