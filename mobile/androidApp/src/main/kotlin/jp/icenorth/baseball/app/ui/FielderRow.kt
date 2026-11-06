@@ -143,7 +143,7 @@ private fun GroupLabel(text: String) {
 /**
  * 野手1人の行。**スタメンも控えも交代候補も同じ部品**で出す（以前の指摘: スタメンと控えで出ている情報が違う）。
  *
- *   1行目: 打順（控えは空き）・守備の札・調子と名前・ほかに守れる位置・疲労
+ *   1行目: 打順（控えは空き）・守備の札・調子と名前・疲労
  *   2行目: 上の切り替え（[FielderView]）で選んだもの
  *          能力＝打撃（ミ パ 眼 走）｜守備（適性 守 肩）を分けて / 今季成績＝打率 OPS 本 盗 と特徴ラベル /
  *          守備適性＝8つの位置の適性
@@ -188,11 +188,8 @@ fun FielderRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false).padding(end = 3.dp),
                 )
-                // 本職（守っている位置と違うときだけ）と、ほかに守れる位置（適性60以上・高い順に2つまで）
-                if (player != null) {
-                    if (player.position != position) PosBadge(player.position, small = true)
-                    player.subPositions().filter { it != position }.take(2).forEach { PosBadge(it, filled = false, small = true) }
-                }
+                // ⚠ 本職・ほかに守れる位置の小さな札はここに出さない（いしだ指定: ごちゃごちゃする）。
+                //    守れる位置は2行目の「守備適性」で、守っている位置の適性は「能力」の「適」で見る
             }
             if (player != null) FatigueBadge(player.fatigue)
             if (onInfo != null) IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) { Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant) }
