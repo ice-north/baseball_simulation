@@ -65,6 +65,7 @@ const CHECKS = [
   { name: 'online-parity-check', group: 'check', online: true, slow: 75 },
   { name: 'online-service-check', group: 'check', online: true, slow: 55 },
   { name: 'online-storage-check', group: 'check', online: true, slow: 3 },
+  { name: 'online-parts-check', group: 'check', online: true, slow: 6 },
   { name: 'online-roster-recovery-check', group: 'check', online: true, slow: 27 },
   { name: 'online-snapshot-check', group: 'check', online: true, slow: 8 },
   { name: 'online-records-check', group: 'check', online: true, slow: 52 },

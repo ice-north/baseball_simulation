@@ -13,6 +13,11 @@
 //   - transaction() は1本の列に積み、`{ unchanged }` なら書かない。
 //   - 同じパスで作り直すと前の内容が見える（再起動の再現に使う検査がある）。
 import { FileStore } from '../../../server/storage/fileStore.mjs';
+import {
+  splitBundle,
+  assembleBundle,
+  assembleLight,
+} from '../../../server/storage/snapshotParts.mjs';
 
 const memory = new Map();
 const empty = () => ({ league: null, sessions: {}, receipts: {} });
@@ -22,17 +27,71 @@ export class MemoryStore {
     this.path = path;
     this.queue = Promise.resolve();
   }
+  // 本番の保存（SupabaseStore）と同じく、芯と部分に分けて持つ。
+  // ⚠ 命令は**まず軽く読む**（世界の部分は番人）。世界に触れたら全体でやり直す。
+  //    検査のほぼ全部がここを通るので、軽い読みの取りこぼしはここで見つかる
+  //    （`SIM_HARNESS_WHOLE_STORE=1` で分けない従来の形にも戻せる）。
   async read() {
-    const text = memory.get(this.path);
-    return text === undefined ? empty() : JSON.parse(text);
+    const stored = memory.get(this.path);
+    if (stored === undefined) return empty();
+    if (typeof stored === 'string') return JSON.parse(stored);
+    const parts = Object.fromEntries(
+      Object.entries(stored.parts).map(([name, text]) => [name, JSON.parse(text)]),
+    );
+    return assembleBundle(JSON.parse(stored.core), stored.order, parts);
   }
-  transaction(fn) {
+  transaction(fn, { full = false } = {}) {
     const result = this.queue.then(async () => {
-      const value = await this.read();
-      const outcome = await fn(value);
-      if (outcome?.unchanged) return outcome.value;
-      memory.set(this.path, JSON.stringify(value));
-      return outcome?.value;
+      const whole = process.env.SIM_HARNESS_WHOLE_STORE === '1';
+      let light = !full && !whole;
+      for (;;) {
+        const stored = memory.get(this.path);
+        const split = stored !== undefined && typeof stored !== 'string';
+        let value, run;
+        if (light && split) {
+          const records =
+            stored.parts.records === undefined ? {} : { records: JSON.parse(stored.parts.records) };
+          const refs = Object.fromEntries(Object.keys(stored.parts).map((name) => [name, {}]));
+          run = assembleLight(JSON.parse(stored.core), stored.order, records, refs);
+          value = run.bundle;
+        } else value = await this.read();
+        let outcome, prepared;
+        try {
+          outcome = await fn(value);
+          if (run && !outcome?.unchanged) prepared = run.inspect(value);
+        } catch (error) {
+          if (run && (run.tracker.touched || error?.name === 'DataCloneError')) {
+            if (process.env.PARTS_DEBUG) console.log('escalate(throw)', run.tracker.touched, error.stack.split('\n').slice(0, 6).join(' | '));
+            light = false;
+            continue;
+          }
+          throw error;
+        }
+        if (run && (run.tracker.touched || (!outcome?.unchanged && !prepared))) {
+          if (process.env.PARTS_DEBUG) console.log('escalate', run.tracker.touched);
+          light = false;
+          continue;
+        }
+        if (outcome?.unchanged) return outcome.value;
+        if (whole) memory.set(this.path, JSON.stringify(value));
+        else if (prepared) {
+          const parts = { ...stored.parts };
+          if (prepared.whole || prepared.records === undefined) delete parts.records;
+          else parts.records = JSON.stringify(prepared.records);
+          memory.set(this.path, { core: JSON.stringify(prepared.core), order: prepared.order, parts });
+        } else {
+          const next = splitBundle(value);
+          memory.set(this.path, {
+            core: JSON.stringify(next.core),
+            order: next.order,
+            parts: Object.fromEntries(
+              Object.entries(next.parts).map(([name, data]) => [name, JSON.stringify(data)]),
+            ),
+          });
+        }
+        this.lastMode = run ? 'light' : 'full';
+        return outcome?.value;
+      }
     });
     this.queue = result.catch(() => {});
     return result;

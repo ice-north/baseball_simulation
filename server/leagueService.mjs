@@ -21,6 +21,22 @@ import { saveLineup } from './lineupCommand.mjs';
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone = (value) => structuredClone(value);
+// 世界（リーグ外の球団・高校生の母集団など）を必ず読む命令。保存側は最初から全体を読む。
+// ⚠ ここに無い命令も、世界に触れば保存側が全体で読み直してやり直すので正しさは崩れない。
+//    並べるのはやり直しの1回ぶん（数秒）を省くためだけ（`server/storage/snapshotParts.mjs`）
+const FULL_COMMANDS = new Set([
+  'create',
+  'reset',
+  'backup',
+  'restore',
+  'step',
+  'resolve',
+  'campRound',
+  // 提出は手続きの案を確かめるのに世界を読み込む（`submitPhase` → `loadLeagueWorld`）
+  'submit',
+  'tradeOffer',
+  'tradeRespond',
+]);
 // ⚠ **バックアップは圧縮した文字列で持つ**。リーグ（世界の写し込み）をそのまま
 //    抱えると、操作のたびに読み書きする一式が倍の大きさになり、
 //    取り込み・書き出しの時間とメモリも倍かかっていた。
@@ -541,7 +557,7 @@ export class LeagueService {
         //    （`online-service-check` で、保存の前後で索引が同じことを確かめている）
         ...(command.type === 'lineup' ? { archiveUnchanged: true } : {}),
       };
-    });
+    }, { full: FULL_COMMANDS.has(command?.type) });
   }
   engine(fn) {
     const result = engineQueue.then(async () =>
@@ -663,6 +679,6 @@ export class LeagueService {
           revision: bundle.league.revision,
         },
       };
-    });
+    }, { full: true });
   }
 }

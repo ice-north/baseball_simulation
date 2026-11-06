@@ -56,7 +56,8 @@ if (mode === 'export') {
     current.sessions = {};
     current.receipts = { ...source.receipts, ...current.receipts };
     current.backup = source.backup;
-  });
+    // 丸ごと差し替えるので、最初から全体を読む（軽い読みは世界を番人にしている）
+  }, { full: true });
   console.log(
     '復元しました。再ログインして状態を確認し、管理画面から再開してください',
   );

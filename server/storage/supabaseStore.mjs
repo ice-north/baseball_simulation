@@ -14,6 +14,20 @@ import {
 } from '../projection.mjs';
 import { buildArchiveIndex, archiveReferences } from '../archiveIndex.mjs';
 import { isCurrent } from '../../src/online/leagueMigration.js';
+import {
+  SNAPSHOT_FORMAT,
+  isSplitSnapshot,
+  splitBundle,
+  assembleBundle,
+  assembleLight,
+} from './snapshotParts.mjs';
+/** 部分の履歴（`views._parts.history`）が指すオブジェクトのパス */
+const partReferences = (history) =>
+  new Set(
+    (history || []).flatMap((refs) =>
+      Object.values(refs || {}).map((ref) => ref?.path),
+    ).filter(Boolean),
+  );
 /**
  * リーグ全体の進行情報（全員のビューで同じ値）を1つ取り出す。
  * 定期処理の判定（`isDue`）と、まだ参加していない人の版（`revision`）に使う。
@@ -152,16 +166,38 @@ export class SupabaseStore {
     return { ...row, view: row?.view ?? null, anyRevision: row?.meta?.revision };
   }
   async load(row) {
-    if (!row?.snapshot_path)
-      return { league: null, sessions: {}, receipts: {} };
+    return (await this.loadSnapshot(row)).bundle;
+  }
+  async object(path) {
     return JSON.parse(
       gunzipSync(
-        await this.request(
-          `/storage/v1/object/online-world/${row.snapshot_path}`,
-          { raw: true },
-        ),
+        await this.request(`/storage/v1/object/online-world/${path}`, {
+          raw: true,
+        }),
       ),
     );
+  }
+  /**
+   * 世代を読む。古い形（bundle をまるごと1つ）も分けた形（芯＋部分）も読める。
+   * `light` なら芯と記録だけ読み、世界の部分は番人にする（`assembleLight`）。
+   */
+  async loadSnapshot(row, { light = false } = {}) {
+    if (!row?.snapshot_path)
+      return { bundle: { league: null, sessions: {}, receipts: {} }, refs: {} };
+    const snapshot = await this.object(row.snapshot_path);
+    if (!isSplitSnapshot(snapshot)) return { bundle: snapshot, refs: {} };
+    const { core, order, parts: refs } = snapshot;
+    const names = Object.keys(refs).filter((name) => !light || name === 'records');
+    const data = Object.fromEntries(
+      await Promise.all(
+        names.map(async (name) => [name, await this.object(refs[name].path)]),
+      ),
+    );
+    if (light) {
+      const run = assembleLight(core, order, data, refs);
+      return { bundle: run.bundle, light: run, refs };
+    }
+    return { bundle: assembleBundle(core, order, data), refs };
   }
   async read() {
     const row = await this.control();
@@ -377,7 +413,14 @@ export class SupabaseStore {
         .slice(0, 2),
     };
   }
-  async transaction(fn) {
+  /**
+   * 保存一式を書き換える（リースを取って読み、命令を当て、新しい世代として公開する）。
+   *
+   * ⚠ **まず軽く読む**（芯と記録だけ。`snapshotParts.mjs`）。命令かビュー作りが世界の部分に
+   *    触ったら、読み直して全体でやり直す。世界を必ず読む処理（定期進行・トレード・キャンプなど）は
+   *    `{ full: true }` で最初から全体を読む（やり直しの1回ぶんを省くため。正しさはどちらでも同じ）。
+   */
+  async transaction(fn, { full = false } = {}) {
     const token = randomUUID();
     const row = (await this.rpc('online_claim', { p_token: token }))[0];
     requireOnline(
@@ -388,75 +431,150 @@ export class SupabaseStore {
     );
     let published = false;
     try {
-      const value = await this.load(row);
-      const outcome = await fn(value);
-      if (outcome?.unchanged) return outcome.value;
-      const path = `snapshots/${randomUUID()}.json.gz`;
-      await this.request(`/storage/v1/object/online-world/${path}`, {
-        method: 'POST',
-        raw: true,
-        body: gzipSync(JSON.stringify(value)),
-      });
-      // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
-      //    `this.members` を使うと、招待で増えた人のぶんが作られず、
-      //    その人は自分の球団を見られなくなる。
-      const viewMembers = value.league?.members?.length
-        ? value.league.members
-        : this.members;
-      const views = Object.fromEntries(
-        viewMembers.map((m) => [
-          m.userId,
-          projectLeague(
-            value,
-            m.userId,
-            value.sessions[m.userId],
-            this.adminId,
-          ),
-        ]),
-      );
-      // ⚠ 記録に関わらない命令（編成の保存）は、前の索引をそのまま使う（作り直しは全試合をなめて重い）
-      const archives =
-        outcome?.archiveUnchanged && row.views?._records
-          ? row.views._records
-          : await this.createArchive(value, row.views?._records);
-      if (archives) views._records = archives;
-      views._meta = leagueMetaOf(value.league);
-      published = await this.rpc('online_publish', {
-        p_token: token,
-        p_generation: row.generation,
-        p_path: path,
-        p_views: views,
-        p_sessions: value.sessions,
-      });
-      requireOnline(
-        published,
-        '処理の有効期限が切れたため更新しませんでした。再読込してください',
-        409,
-        'lease',
-      );
-      // current + 直前2世代を残す。削除失敗は公開済みの更新を失敗扱いにしない。
-      const keep = [row.snapshot_path, ...(row.previous_paths || [])].filter(
-        Boolean,
-      );
-      const retainedArchives = archiveReferences(archives);
-      const obsolete = [
-        ...keep.slice(2),
-        ...[...archiveReferences(row.views?._records)].filter(
-          (path) => !retainedArchives.has(path),
-        ),
-      ];
-      if (obsolete.length)
-        await this.request('/storage/v1/object/online-world', {
-          method: 'DELETE',
-          body: { prefixes: obsolete },
-        }).catch(() =>
-          console.error('online: 古いスナップショットの削除が必要です'),
+      let light = !full;
+      for (;;) {
+        const loaded = await this.loadSnapshot(row, { light });
+        const lightRun = loaded.light || null;
+        const retry = () => lightRun && lightRun.tracker.touched;
+        let outcome, views, archives, prepared;
+        try {
+          const value = loaded.bundle;
+          outcome = await fn(value);
+          if (!outcome?.unchanged) {
+            // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
+            //    `this.members` を使うと、招待で増えた人のぶんが作られず、
+            //    その人は自分の球団を見られなくなる。
+            const viewMembers = value.league?.members?.length
+              ? value.league.members
+              : this.members;
+            views = Object.fromEntries(
+              viewMembers.map((m) => [
+                m.userId,
+                projectLeague(
+                  value,
+                  m.userId,
+                  value.sessions[m.userId],
+                  this.adminId,
+                ),
+              ]),
+            );
+            // ⚠ 記録に関わらない命令（編成の保存）は、前の索引をそのまま使う（作り直しは全試合をなめて重い）
+            archives =
+              outcome?.archiveUnchanged && row.views?._records
+                ? row.views._records
+                : await this.createArchive(value, row.views?._records);
+            if (archives) views._records = archives;
+            views._meta = leagueMetaOf(value.league);
+            prepared = lightRun
+              ? lightRun.inspect(value)
+              : { bundle: value };
+          }
+        } catch (error) {
+          // ⚠ 複製（structuredClone）は番人を通らずに DataCloneError で落ちる。軽い読みなら全体でやり直す
+          if (retry() || (lightRun && error?.name === 'DataCloneError')) {
+            light = false;
+            continue;
+          }
+          throw error;
+        }
+        // 世界に触っていた（例外を握りつぶされていても印は残る）・形を差し替えていた → 全体でやり直す
+        if (retry() || (lightRun && !outcome?.unchanged && !prepared)) {
+          light = false;
+          continue;
+        }
+        if (outcome?.unchanged) return outcome.value;
+        const { path, refs } = await this.writeSnapshot(prepared, loaded.refs);
+        const partHistory = [refs, ...(row.views?._parts?.history || [])].slice(0, 3);
+        views._parts = { history: partHistory };
+        published = await this.rpc('online_publish', {
+          p_token: token,
+          p_generation: row.generation,
+          p_path: path,
+          p_views: views,
+          p_sessions: loaded.bundle.sessions,
+        });
+        requireOnline(
+          published,
+          '処理の有効期限が切れたため更新しませんでした。再読込してください',
+          409,
+          'lease',
         );
-      return outcome?.value;
+        // current + 直前2世代を残す。削除失敗は公開済みの更新を失敗扱いにしない。
+        // 部分（world・records など）は、残す3世代のどれかが指していれば残す
+        const keep = [row.snapshot_path, ...(row.previous_paths || [])].filter(
+          Boolean,
+        );
+        const retainedArchives = archiveReferences(archives);
+        const retainedParts = partReferences(partHistory);
+        const obsolete = [
+          ...keep.slice(2),
+          ...[...archiveReferences(row.views?._records)].filter(
+            (path) => !retainedArchives.has(path),
+          ),
+          ...[...partReferences(row.views?._parts?.history)].filter(
+            (path) => !retainedParts.has(path),
+          ),
+        ];
+        if (obsolete.length)
+          await this.request('/storage/v1/object/online-world', {
+            method: 'DELETE',
+            body: { prefixes: obsolete },
+          }).catch(() =>
+            console.error('online: 古いスナップショットの削除が必要です'),
+          );
+        return outcome?.value;
+      }
     } finally {
       // publishの応答喪失時にも新オブジェクトを削除しない（既に公開済みの可能性）。
       if (!published)
         await this.rpc('online_release', { p_token: token }).catch(() => {});
     }
+  }
+  /**
+   * 新しい世代を書く。部分は中身が変わったときだけ上げ直し、変わらなければ前の参照を使う。
+   * `prepared` は全体の bundle（`{ bundle }`）か、軽い読みの `inspect` の結果。
+   */
+  async writeSnapshot(prepared, previous = {}) {
+    let core, order, refs;
+    if (prepared.bundle) {
+      const split = splitBundle(prepared.bundle);
+      core = split.core;
+      order = split.order;
+      refs = {};
+      for (const [name, data] of Object.entries(split.parts))
+        refs[name] = await this.publishPart(name, data, previous[name]);
+    } else {
+      core = prepared.core;
+      order = prepared.order;
+      // 軽い読みで読んでいない部分（world・backup）は前のまま。記録は変わったときだけ上げ直す
+      refs = { ...previous };
+      if (prepared.whole || prepared.records === undefined) delete refs.records;
+      else refs.records = await this.publishPart('records', prepared.records, previous.records);
+    }
+    // ⚠ 包みの一番上に `sessions` や `league` を置かないこと。この形を知らない古いコードに
+    //    戻したとき、古いコードは包みを bundle として読み、`bundle.sessions[...]` で例外になって
+    //    **何も書かずに断る**（閲覧は保存済みのビューで続く）。`league` が見えないまま
+    //    「リーグが無い」と判断して作り直す、という事故を起こさないため
+    const path = `snapshots/${randomUUID()}.json.gz`;
+    await this.request(`/storage/v1/object/online-world/${path}`, {
+      method: 'POST',
+      raw: true,
+      body: gzipSync(
+        JSON.stringify({ snapshotFormat: SNAPSHOT_FORMAT, order, parts: refs, core }),
+      ),
+    });
+    return { path, refs };
+  }
+  async publishPart(name, data, previous) {
+    const json = JSON.stringify(data),
+      hash = createHash('sha256').update(json).digest('hex');
+    if (previous?.hash === hash) return previous;
+    const path = `parts/${name}-${randomUUID()}.json.gz`;
+    await this.request(`/storage/v1/object/online-world/${path}`, {
+      method: 'POST',
+      raw: true,
+      body: gzipSync(json),
+    });
+    return { path, hash };
   }
 }
