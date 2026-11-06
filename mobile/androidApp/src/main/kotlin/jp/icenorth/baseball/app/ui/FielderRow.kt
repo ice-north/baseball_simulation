@@ -127,20 +127,6 @@ private fun Cell(label: String, value: Int?, width: Int = 32) {
     Box(Modifier.width(width.dp)) { AbilityNum(label, value) }
 }
 
-@Composable
-private fun GroupLabel(text: String) {
-    Text(
-        text,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .padding(end = 4.dp)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(3.dp))
-            .padding(horizontal = 3.dp),
-    )
-}
-
 /**
  * 野手1人の行。**スタメンも控えも交代候補も同じ部品**で出す（以前の指摘: スタメンと控えで出ている情報が違う）。
  *
@@ -221,17 +207,15 @@ fun FielderRow(
 /** 行の2行目に出すもの。画面が狭いので全部は並べず、上の切り替えで選ぶ（選手成績の画面と同じ考え方） */
 enum class FielderView(val label: String) { Ability("能力"), Stats("今季成績"), Fitness("守備適性") }
 
-/** 打撃（ミ パ 眼 走）と守備（守 肩）を分けて並べる（適性は札の真下に別に出す） */
+/** 打撃（ミ パ 眼 走）と守備（守 肩）を区切り線で分けて並べる（「打」「守」の見出しは付けない。いしだ指定: 知っているので要らない） */
 @Composable
 private fun AbilityRow(player: Player) {
     Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        GroupLabel("打")
         Cell("ミ", player.batting?.meet)
         Cell("パ", player.batting?.power)
         Cell("眼", player.batting?.eye)
         Cell("走", player.physical?.speed)
         Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.outlineVariant))
-        GroupLabel("守")
         Cell("守", player.fielding?.defense)
         Cell("肩", player.physical?.arm)
     }
@@ -308,7 +292,6 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
         positions.chunked(3).forEachIndexed { i, line ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (i == 0) {
-                    GroupLabel("守")
                     Cell("守", player.fielding?.defense)
                     Cell("肩", player.physical?.arm)
                     Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.outlineVariant))
@@ -345,8 +328,8 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
     }
 }
 
-/** 守備適性の行の2行目の字下げ（「守」の札＋守備・肩の2マス＋区切り線の幅） */
-private val FITNESS_INDENT = 22.dp + 32.dp * 2 + 9.dp // 位置1つは 46dp
+/** 守備適性の行の2行目の字下げ（守備・肩の2マス＋区切り線の幅） */
+private val FITNESS_INDENT = 32.dp * 2 + 9.dp // 位置1つは 46dp
 
 @Composable
 private fun StatText(label: String, value: String) {
