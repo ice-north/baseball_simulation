@@ -328,6 +328,17 @@ assert.equal(
   'ログインだけで不変の詳細記録を再転送しない',
 );
 assert.equal(row.views._records.games[1].path, archived.games[1].path);
+// 記録に関わらない命令（archiveUnchanged）は索引を作り直さず、前の索引をそのまま公開する
+{
+  const before = row.views._records;
+  const uploads = objects.size;
+  await store.transaction((bundle) => {
+    bundle.league.revision++;
+    return { value: { ok: true }, archiveUnchanged: true };
+  });
+  assert.deepEqual(row.views._records, before, '索引の作り直しを省いても前の索引が残る');
+  assert.equal(objects.size, uploads, '索引を作り直さないので新しい記録を上げない（世界一式の差し替えのみ）');
+}
 const oldArchivePath = row.views._records.players.path;
 store.archiveCache.clear();
 beforeDownload = async () => {

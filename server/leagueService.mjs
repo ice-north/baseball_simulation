@@ -21,6 +21,22 @@ import { saveLineup } from './lineupCommand.mjs';
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone = (value) => structuredClone(value);
+// 世界（リーグ外の球団・高校生の母集団など）を必ず読む命令。保存側は最初から全体を読む。
+// ⚠ ここに無い命令も、世界に触れば保存側が全体で読み直してやり直すので正しさは崩れない。
+//    並べるのはやり直しの1回ぶん（数秒）を省くためだけ（`server/storage/snapshotParts.mjs`）
+const FULL_COMMANDS = new Set([
+  'create',
+  'reset',
+  'backup',
+  'restore',
+  'step',
+  'resolve',
+  'campRound',
+  // 提出は手続きの案を確かめるのに世界を読み込む（`submitPhase` → `loadLeagueWorld`）
+  'submit',
+  'tradeOffer',
+  'tradeRespond',
+]);
 // ⚠ **バックアップは圧縮した文字列で持つ**。リーグ（世界の写し込み）をそのまま
 //    抱えると、操作のたびに読み書きする一式が倍の大きさになり、
 //    取り込み・書き出しの時間とメモリも倍かかっていた。
@@ -60,7 +76,16 @@ export class LeagueService {
     this.local = local;
     this.allowStep = allowStep || local;
   }
-  async view(userId, sessionId) {
+  async view(userId, sessionId, since = null) {
+    // ⚠ **手元のビューと同じ世代なら、ビューを送らない**（`{ unchanged: true }`）。
+    //    PCの60秒ごと・アプリに戻るたびの読み直しで、毎回ビュー（数十〜百KB）を
+    //    送っていた。世代は公開のたびに上がるので、同じなら中身も同じ。
+    //    世代を持たない保存先（ローカルの FileStore）は従来どおり毎回送る。
+    if (Number.isInteger(since) && this.store.readGeneration) {
+      const current = await this.store.readGeneration(userId, sessionId);
+      if (current.generation === since)
+        return { unchanged: true, viewGeneration: since, writable: current.writable };
+    }
     const view = this.store.readView
       ? await this.store.readView(userId, sessionId)
       : projectLeague(await this.store.read(), userId, sessionId, this.adminId);
@@ -523,8 +548,25 @@ export class LeagueService {
       const keys = Object.keys(bundle.receipts);
       for (const old of keys.slice(0, Math.max(0, keys.length - 256)))
         delete bundle.receipts[old];
-      return { value };
-    });
+      // ⚠ **返事に自分の最新の画面（ビュー）を載せる**。以前は画面が保存のあとに
+      //    view を読み直しており、認証と読み込みの往復が1回余計にかかっていた。
+      //    控え（receipts）には入れないこと。リーグの保存一式が参加者の画面ぶん膨らむ。
+      //    控えから返す二重送信のときはビューが無いので、画面は従来どおり読み直す。
+      // ⚠ 作れなかったら載せないだけにする（例外を投げると、済んだ保存まで取り消される）
+      let view = null;
+      try {
+        view = projectLeague(bundle, userId, sessionId, this.adminId);
+      } catch (error) {
+        console.error('online: 返事のビューを作れませんでした:', error.message);
+      }
+      return {
+        value: view ? { ...value, view } : value,
+        // ⚠ 編成の保存は記録の索引（選手・球団・試合の記録）に関わらない。索引の作り直し
+        //    （全試合をなめる）を省くよう保存側に伝える。選手の能力や名簿を変える命令には付けないこと
+        //    （`online-service-check` で、保存の前後で索引が同じことを確かめている）
+        ...(command.type === 'lineup' ? { archiveUnchanged: true } : {}),
+      };
+    }, { full: FULL_COMMANDS.has(command?.type) });
   }
   engine(fn) {
     const result = engineQueue.then(async () =>
@@ -646,6 +688,6 @@ export class LeagueService {
           revision: bundle.league.revision,
         },
       };
-    });
+    }, { full: true });
   }
 }
