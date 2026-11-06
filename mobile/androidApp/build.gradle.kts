@@ -16,6 +16,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        // 画面の見回り（src/androidTest の ScreenTour。CI の screens ジョブ）
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // 本番のオンライン対人版（docs/online/PRODUCTION_SETUP.md の「本番」）
         buildConfigField("String", "DEFAULT_ENDPOINT", "\"https://baseball-simulation-neon.vercel.app/api/online\"")
     }
@@ -67,6 +69,14 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+    // 画面の見回り（スクショ）用
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 
     // 長押しドラッグでの並べ替え（LazyColumn 用）
     implementation("sh.calvin.reorderable:reorderable:2.5.1")

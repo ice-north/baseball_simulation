@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.Commands
@@ -99,6 +100,7 @@ fun OnlineApp(model: AppViewModel) {
                 NavigationBar {
                     Tab.entries.forEach { item ->
                         NavigationBarItem(
+                            modifier = Modifier.testTag("tab-${item.name}"),
                             selected = tab == item,
                             onClick = { tab = item },
                             icon = {

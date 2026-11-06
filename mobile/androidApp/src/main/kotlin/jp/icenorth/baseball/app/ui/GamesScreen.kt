@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,7 +115,7 @@ private fun GameRow(view: LeagueView, g: JsonObject, onOpen: () -> Unit) {
         val their = if (mine == home) `as` else hs
         if (own == null || their == null) null else if (own > their) "○" to WinColor else if (own < their) "●" to LoseColor else "△" to MaterialTheme.colorScheme.onSurfaceVariant
     } else null
-    Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().testTag("game-row").clickable(onClick = onOpen).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(dateText(g), modifier = Modifier.width(44.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         Text(result?.first ?: "", color = result?.second ?: MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, modifier = Modifier.width(20.dp))
         Column(Modifier.weight(1f)) {
