@@ -46,10 +46,11 @@ import jp.icenorth.baseball.shared.subPositions
  * ⚠ 能力のランク色（数字の文字色）と取り違えないよう、位置は**塗りの札**でだけ使う。
  */
 fun positionColor(pos: String?): Color = when (positionGroup(pos)) {
-    "pitcher" -> Color(0xFF2563EB) // 青
-    "catcher" -> Color(0xFF0F9F6E) // 緑
-    "infield" -> Color(0xFFD97706) // 橙
-    "outfield" -> Color(0xFF7C3AED) // 紫
+    // パワプロと同じ並び（いしだ指定: 投手は赤ピンク、捕手は水色、内野は黄、外野は緑）
+    "pitcher" -> Color(0xFFE11D63) // 赤ピンク
+    "catcher" -> Color(0xFF0EA5E9) // 水色
+    "infield" -> Color(0xFFEAB308) // 黄
+    "outfield" -> Color(0xFF16A34A) // 緑
     else -> Color(0xFF475569)
 }
 
@@ -69,7 +70,8 @@ fun PosBadge(pos: String?, filled: Boolean = true, small: Boolean = false, onCli
             positionLabel(pos),
             fontSize = if (small) 11.sp else 15.sp,
             fontWeight = FontWeight.Black,
-            color = if (filled) Color.White else color.copy(alpha = 1f).let { lighten(it) },
+            // 黄の札は白い字だと読めないので黒っぽい字にする
+            color = if (filled) (if (positionGroup(pos) == "infield") Color(0xFF1C1917) else Color.White) else color.copy(alpha = 1f).let { lighten(it) },
         )
     }
 }
