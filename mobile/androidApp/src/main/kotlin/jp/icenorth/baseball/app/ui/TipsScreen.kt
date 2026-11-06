@@ -83,24 +83,6 @@ private fun TipCard(tip: GameTip) {
     }
 }
 
-/** ホームのTIPS。ホームを開くたびにランダムで1件（選ぶのは HomeScreen 側）。題名だけの1行で、押すと中身を出す */
-@Composable
-fun HomeTipCard(tip: GameTip, onOpenAll: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Card(
-        onClick = { open = true },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.testTag("home-tip"),
-    ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("TIPS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-            Text(tip.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp))
-            Text("›", color = MaterialTheme.colorScheme.secondary)
-        }
-    }
-    if (open) TipsDialog(listOf(SituationTip(tip, emptyList())), "TIPS", onOpenAll) { open = false }
-}
-
 /**
  * 今のチームに当てはまるTIPSがあるときだけ出す、点滅する「i」マーク。押すとTIPSを出す。
  * ⚠ 画面の枠は取らない（角に重ねるだけ）。当てはまらなければ何も出さない。
