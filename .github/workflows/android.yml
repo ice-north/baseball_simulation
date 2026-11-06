@@ -1,0 +1,37 @@
+name: android
+
+# スマホアプリ（mobile/）の検査と APK のビルド。mobile/ を触ったときだけ動く。
+# できた APK は実行結果の「Artifacts」から落として端末に入れる。
+on:
+  push:
+    paths: ['mobile/**', '.github/workflows/android.yml']
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 共通部分の検査
+        run: ./gradlew :shared:jvmTest --console=plain
+      - name: APK をビルド
+        run: ./gradlew :androidApp:assembleDebug --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baseball-online-apk
+          path: mobile/androidApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
