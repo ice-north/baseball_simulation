@@ -286,13 +286,13 @@ private fun FittingRow(modifier: Modifier, content: @Composable () -> Unit) {
 
 /**
  * 守備の数字（守備力・肩）と、**守れる位置**の適性（いしだ指定: 30 のような守れない適性は出さず、代わりに守備と肩を）。
- * 位置は適性60（交代で守れる線）以上だけを高い順に。守っている位置は低くても先頭に出す（赤で気づけるように）。
+ * 位置は適性60（交代で守れる線）以上だけを、適性の高い順に。守っている位置は低くても出す（赤で気づけるように）。
  * ⚠ 1行に収まらない分（5つ目以降）は下の行へ。「100」が札の中で折り返さないよう幅は固定
  */
 @Composable
 private fun FitnessRow(player: Player, fitnessAt: String) {
-    val positions = listOf(fitnessAt).filter { it in FIELD_POSITIONS } +
-        FIELD_POSITIONS.filter { it != fitnessAt && player.fitness(it) >= SUBSTITUTE_MIN_FITNESS }.sortedByDescending { player.fitness(it) }
+    // 適性の高い順（いしだ指定）。守っている位置は60未満でも入れる（その順位の場所に赤で）
+    val positions = FIELD_POSITIONS.filter { it == fitnessAt || player.fitness(it) >= SUBSTITUTE_MIN_FITNESS }.sortedByDescending { player.fitness(it) }
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         positions.chunked(4).forEachIndexed { i, line ->
             Row(verticalAlignment = Alignment.CenterVertically) {
