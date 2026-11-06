@@ -69,7 +69,7 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
             NotJoined(model)
             return@PullToRefreshBox
         }
-        val team = view.teamName
+        val team = view.teamName.orEmpty() // 上で参加前（null）は返している
         // 1面の主役を書くため、自球団の最新の試合の詳細を読む（終わった試合は変わらないので一度読めば使い回す）。
         // 連勝・連敗と対戦成績のため、今季の自球団の試合も読む（ビューには直近の数試合しか無い）
         val last = view.results.lastOrNull { it.home == team || it.away == team }
