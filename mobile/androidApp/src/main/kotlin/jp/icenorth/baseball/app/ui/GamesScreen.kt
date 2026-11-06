@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
