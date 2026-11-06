@@ -127,7 +127,9 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
         // まだ試合が無い（初期メンバー選び・キャンプ・オフ）
         val phase = view.phase?.kind
         headline = when {
-            view.pendingPack != null || phase == "pack" -> "${me}始動 初期メンバー選びへ"
+            view.pendingPack != null || phase == "pack_select" -> "${me}始動 初期メンバー選びへ"
+            phase == "initial_tryout" -> "${me}、初期編成で戦力を整える"
+            phase == "offseason" -> "${me}、新シーズンへ"
             phase == "camp" -> "${me}、春季キャンプで鍛錬"
             phase == "contract" -> "${me}、契約更改の季節"
             phase == "tryout" -> "${me}、トライアウトで新戦力探し"
@@ -135,7 +137,7 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
             else -> "${me}、次の戦いへ"
         }
         lead = when {
-            view.pendingPack != null || phase == "pack" -> "新リーグの幕開け。まずは24人の顔ぶれを決めるところから始まる。"
+            view.pendingPack != null || phase == "pack_select" -> "新リーグの幕開け。まずは24人の顔ぶれを決めるところから始まる。"
             phase == "camp" -> "開幕を前に、選手たちは汗を流している。誰が伸びるかは練習の選び方次第だ。"
             else -> null
         }

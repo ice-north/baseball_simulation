@@ -83,7 +83,7 @@ fun GamesScreen(model: AppViewModel) {
         Text("試合", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         // ⚠ 順位表・タイトル争い・リーグ便りはここ（ホームは新聞の紙面にしたので、数字の表はこのタブにまとめる）
         ChipTabs(
-            listOf("results" to "試合結果", "standings" to "順位表", "leaders" to "タイトル争い", "news" to "リーグ便り"),
+            listOf("results" to "試合結果", "standings" to "順位表", "leaders" to "タイトル", "news" to "リーグ便り"),
             section,
             { section = it },
             Modifier.padding(horizontal = 0.dp),
