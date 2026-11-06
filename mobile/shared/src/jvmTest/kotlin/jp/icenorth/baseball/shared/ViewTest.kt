@@ -74,6 +74,10 @@ class ViewTest {
         )
         assertEquals("アベレージヒッター", labelled.labels.single().text)
         assertEquals(0, labelled.metrics!!.stolenBases)
+        // OPS は 1 を超える（打率の表記だと 1.000 で止まっていた）
+        assertEquals(".812", ops3(0.8124))
+        assertEquals("1.054", ops3(1.0536))
+        assertEquals("-", ops3(null))
     }
 
     @Test

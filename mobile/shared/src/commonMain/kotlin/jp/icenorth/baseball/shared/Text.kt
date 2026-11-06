@@ -72,6 +72,13 @@ fun rate3(value: Double?): String {
     return if (value >= 1.0) "1.000" else ".$s"
 }
 
+/** OPS の表記（.812 / 1.054）。打率と違って 1 を超えるので [rate3] だと 1.000 で止まる */
+fun ops3(value: Double?): String {
+    value ?: return "-"
+    val r = kotlin.math.round(value * 1000).toInt()
+    return if (r >= 1000) "${r / 1000}.${(r % 1000).toString().padStart(3, '0')}" else ".${r.toString().padStart(3, '0')}"
+}
+
 /** 成績の特徴ラベルの短い形（行に1行で収めるため。いしだ指定:「アベヒ」のように縮める） */
 private val SHORT_LABELS = mapOf(
     "アベレージヒッター" to "アベヒ", "パワーヒッター" to "パワヒ", "長打型" to "長打", "出塁型" to "出塁",

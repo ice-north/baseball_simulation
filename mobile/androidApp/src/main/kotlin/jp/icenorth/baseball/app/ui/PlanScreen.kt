@@ -67,6 +67,7 @@ import jp.icenorth.baseball.shared.STARTER_ROLES
 import jp.icenorth.baseball.shared.STARTER_SKIP_FATIGUE
 import jp.icenorth.baseball.shared.STRATEGY_FIELDS
 import jp.icenorth.baseball.shared.SUBSTITUTE_MIN_FITNESS
+import jp.icenorth.baseball.shared.SUBSTITUTE_FRESH_FATIGUE
 import jp.icenorth.baseball.shared.TACTIC_FIELDS
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.conditionIcon
@@ -316,7 +317,7 @@ private fun OrderEditor(
             if (bench.isEmpty()) item(key = "bench:none") { Muted("控えの野手がいません", Modifier.padding(8.dp)) }
             item(key = "rest") {
                 Muted(
-                    "試合の日は、疲労${FIELDER_REST_FATIGUE}以上の野手は守れる控え（適性${SUBSTITUTE_MIN_FITNESS}以上）が居ればその日だけ入れ替わって休みます。" +
+                    "試合の日は、疲労${FIELDER_REST_FATIGUE}以上の野手は守れる控え（その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満）が居ればその日だけ入れ替わって休みます。" +
                         "疲労は41以上で黄（成長が鈍り始める）、休養の線を超えると赤です。",
                     Modifier.padding(top = 8.dp, start = 4.dp),
                 )
@@ -342,7 +343,8 @@ private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List
         }
         val fatigue = p.fatigue ?: 0
         if (fatigue >= FIELDER_REST_FATIGUE) {
-            val canRest = bench.any { it.fitness(slot.position) >= SUBSTITUTE_MIN_FITNESS }
+            // サーバー（server/dailyLineup.mjs）と同じ条件: 控えはその位置の適性60以上、かつ疲労40未満
+            val canRest = bench.any { it.fitness(slot.position) >= SUBSTITUTE_MIN_FITNESS && (it.fatigue ?: 0) < SUBSTITUTE_FRESH_FATIGUE }
             notes += OrderNote(
                 slot.position,
                 if (canRest) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"

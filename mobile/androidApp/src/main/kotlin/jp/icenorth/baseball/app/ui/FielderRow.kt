@@ -23,7 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,6 +37,7 @@ import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.fatigueTone
 import jp.icenorth.baseball.shared.positionGroup
 import jp.icenorth.baseball.shared.positionLabel
+import jp.icenorth.baseball.shared.ops3
 import jp.icenorth.baseball.shared.rate3
 import jp.icenorth.baseball.shared.shortLabel
 import jp.icenorth.baseball.shared.subPositions
@@ -239,19 +240,45 @@ private fun StatsRow(player: Player) {
                 Muted("今季の打席なし")
             } else {
                 StatText("打率", rate3(m.avg))
-                StatText("OPS", rate3(m.ops))
+                StatText("OPS", ops3(m.ops))
                 StatText("本", "${m.homeruns}")
                 StatText("盗", "${m.stolenBases}")
                 StatText("席", "${m.pa}")
             }
         }
-        Row(
-            Modifier.weight(1f).padding(start = 8.dp).clipToBounds(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        FittingRow(Modifier.weight(1f).padding(start = 8.dp)) {
             labels.take(3).forEach { label ->
                 Tag(shortLabel(label.text), if (label.tone == "bad") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+/**
+ * 右寄せで、**丸ごと入る札だけ**を並べる（入りきらない札は途中で切らずに出さない）。
+ * ⚠ 普通の Row に clipToBounds だと、最後の札が半分に切れて「アベ」のように見えた
+ */
+@Composable
+private fun FittingRow(modifier: Modifier, content: @Composable () -> Unit) {
+    Layout(content, modifier) { measurables, constraints ->
+        val gap = 4.dp.roundToPx()
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val placeables = measurables.map { it.measure(loose.copy(maxWidth = androidx.compose.ui.unit.Constraints.Infinity)) }
+        val shown = mutableListOf<androidx.compose.ui.layout.Placeable>()
+        var used = 0
+        for (pl in placeables) {
+            val need = used + (if (shown.isEmpty()) 0 else gap) + pl.width
+            if (need > constraints.maxWidth) break
+            shown += pl
+            used = need
+        }
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else used
+        val height = (shown.maxOfOrNull { it.height } ?: 0).coerceAtLeast(constraints.minHeight)
+        layout(width, height) {
+            var x = width - used
+            shown.forEach { pl ->
+                pl.placeRelative(x, (height - pl.height) / 2)
+                x += pl.width + gap
             }
         }
     }

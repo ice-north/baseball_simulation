@@ -121,7 +121,7 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
             last.date?.let { append("${it.month}月${it.day}日、") }
             append("${me}は${if (home) "本拠地" else "敵地"}で${opp}と対戦し、${ours}-${theirs}で")
             append(when (tone) { FrontPage.Tone.Win -> "勝利した。"; FrontPage.Tone.Lose -> "敗れた。"; else -> "引き分けた。" })
-            if (mine != null) append("これで${mine.wins}勝${mine.losses}敗${if (mine.draws > 0) "${mine.draws}分" else ""}、${placeText ?: ""}。")
+            if (mine != null) append("これで${mine.wins}勝${mine.losses}敗${if (mine.draws > 0) "${mine.draws}分" else ""}${placeText?.let { "、$it" } ?: ""}。")
         }
     } else {
         // まだ試合が無い（初期メンバー選び・キャンプ・オフ）
@@ -197,7 +197,7 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
 
     // ベンチの話題（絶好調・成績の特徴・お疲れ）
     val hot = view.roster.filter { it.isActive && it.condition == 4 }.map { it.name }
-    val labelled = view.roster.mapNotNull { p ->
+    val labelled = view.roster.filter { it.isActive }.mapNotNull { p ->
         p.performance?.batting?.labels?.firstOrNull { it.tone == "good" }?.let { "${p.name}（${it.text}）" }
     }
     val tired = view.roster.filter { it.isActive && (it.fatigue ?: 0) >= FIELDER_REST_FATIGUE && !it.isPitcher }.map { it.name }
