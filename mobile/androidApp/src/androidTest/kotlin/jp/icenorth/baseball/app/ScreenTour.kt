@@ -197,7 +197,7 @@ class ScreenTour {
                 tab("Procedures")
                 page("procedures", scrolls = 5)
                 if (stage == "camp") step("camp group") { click("野手", substring = true); page("procedures-camp-fielders", scrolls = 1) }
-                if (stage == "tryout") step("tryout weights") { click("評価", substring = true); shot("procedures-tryout-weights") }
+                if (stage == "tryout") step("tryout weights") { click("開く"); page("procedures-tryout-weights", scrolls = 1) }
                 tab("Games")
                 step("news") { click("リーグ便り"); page("games-news", scrolls = 1) }
                 tab("Plan")

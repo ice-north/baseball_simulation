@@ -78,12 +78,21 @@ fun TradeScreen(model: AppViewModel, raw: JsonObject) {
     val others = raw.at("teamNames").list().mapNotNull { it.str() }.filter { it != view.teamName }
     val partners = others.filter { it in humans } + others.filter { it !in humans }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Muted("ほかの球団と選手を交換します。CPU球団はその場で答え、参加者の球団は相手が受けた時点で成立します。解雇は土曜の「契約更改」、獲得は土曜の「トライアウト」で行います。")
         if (waiting.isNotEmpty()) Caption("返事が必要な提案")
         waiting.forEach { TradeCard(model, view, raw, it) }
         if (sent.isNotEmpty()) Caption("相手の返事待ち")
         sent.forEach { TradeCard(model, view, raw, it) }
-        Caption("新しく提案する")
+        Row(verticalAlignment = Alignment.Bottom) {
+            Box(Modifier.weight(1f)) { Caption("新しく提案する") }
+            InfoButton(
+                "トレード",
+                listOf(
+                    "ほかの球団と選手を交換します。CPU球団はその場で答え、参加者の球団は相手が受けた時点で成立します。",
+                    "行を押すと交換案に入ります（自球団の行＝出す、相手の行＝もらう）。名前を押すと詳細。",
+                    "解雇は土曜の「契約更改」、獲得は土曜の「トライアウト」で行います。",
+                ),
+            )
+        }
         if (partners.isEmpty()) Muted("トレードの相手になる球団がありません。")
         else TradeComposer(model, view, raw, partners, humans, locked = null, initialGive = emptySet(), initialGet = emptySet(), submitLabel = "この内容で提案する") { to, give, get, reset ->
             model.command(
@@ -265,7 +274,6 @@ private fun TradeComposer(
             if (onCancel != null) OutlinedButton(onClick = onCancel) { Text("やめる") }
             else if (give.isNotEmpty() || get.isNotEmpty()) TextButton(onClick = { give = emptySet(); get = emptySet() }) { Text("選び直す") }
         }
-        Muted("行を押すと交換案に入ります（自球団の行＝出す、相手の行＝もらう）。名前を押すと詳細。")
         ChoiceRow(GROUPS, group) { group = it }
         val target = ONLINE_ROSTER_TARGETS[group]
         Caption("自球団（${view.teamLabel(view.teamName.orEmpty())}）${target?.let { " 目標$it" } ?: ""}")

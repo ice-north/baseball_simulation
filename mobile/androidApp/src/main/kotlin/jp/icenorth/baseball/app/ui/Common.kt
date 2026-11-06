@@ -18,6 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -315,3 +320,31 @@ fun Tag(text: String, color: Color = MaterialTheme.colorScheme.secondary) {
         modifier = Modifier.border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp),
     )
 }
+
+/**
+ * 説明書き・注意書きを開く「ⓘ」。**画面に常に出さず、ここに詰める**（いしだ指定: アプリは狭いので場所が大事。
+ * 操作のしかた・決まりごとの説明はここ。画面には数字と状態だけを置く）
+ */
+@Composable
+fun InfoButton(title: String, lines: List<String>, modifier: Modifier = Modifier) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    Box(
+        modifier.size(32.dp).clickable { open = true },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("ⓘ", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (open) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { open = false },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { open = false }) { Text("閉じる") } },
+            title = { Text(title) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                }
+            },
+        )
+    }
+}
+

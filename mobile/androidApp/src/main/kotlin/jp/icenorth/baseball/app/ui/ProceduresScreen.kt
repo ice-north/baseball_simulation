@@ -99,8 +99,18 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
     val packs = pending.at("packs").list().mapNotNull { it.obj() }
     val chosen = pending.at("chosen").str()
     val chosenName = packs.firstOrNull { it.at("id").str() == chosen }?.at("name").str()
-    Section("初期メンバー選択") {
-        Text("20セットから1つ選びます。選んだ24人は次の日曜のキャンプで名簿に入り、月曜の開幕からあなたの球団になります。それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。")
+    Section(
+        "初期メンバー選択",
+        trailing = {
+            InfoButton(
+                "初期メンバー選択",
+                listOf(
+                    "20セットから1つ選びます。選んだ24人は次の日曜のキャンプで名簿に入り、月曜の開幕からあなたの球団になります。それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。",
+                    "どのセットも投12・捕2・内外10の24人（うち二刀流2人）、格付けはA2・B10・C12、年齢は19〜24歳です。合計の力は揃えてあるので、好みで選んで構いません。",
+                ),
+            )
+        },
+    ) {
         Muted(if (chosenName != null) "いま選んでいるのは「$chosenName」です。キャンプまでは何度でも選び直せます。" else "まだ選んでいません。決めずにキャンプを迎えると、1つ目のセットになります。")
     }
     PackPicker(model, packs, chosen) { id ->
@@ -247,7 +257,6 @@ private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready
 private fun PackPicker(model: AppViewModel, packs: List<JsonObject>, chosen: String?, onChoose: (String) -> Unit) {
     var open by remember { mutableStateOf(chosen ?: packs.firstOrNull()?.at("id").str()) }
     Section("セットを選ぶ") {
-        Muted("どのセットも投12・捕2・内外10の24人（うち二刀流2人）、格付けはA2・B10・C12、年齢は19〜24歳です。合計の力は揃えてあるので、好みで選んで構いません。選んだセットは1球団だけが受け取ります（重なったら球団名の順）。")
         packs.forEach { pack ->
             val id = pack.at("id").str().orEmpty()
             val counts = pack["counts"].obj()
@@ -288,7 +297,7 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     val roster = raw.at("roster").list().mapNotNull { it.obj() }
     val releases = plan.at("releaseIds").list().mapNotNull { it.long() }
     Section("退団させる選手（${releases.size}人）") {
-        Muted("チェックした選手が退団します。最低9人を残してください。既に9人未満の場合は新たな退団はできません。名前を押すと詳細。")
+        Muted("チェックした選手が退団（最低9人は残す）")
         roster.forEach { p ->
             val checked = p.pid in releases
             Row(verticalAlignment = Alignment.CenterVertically) {

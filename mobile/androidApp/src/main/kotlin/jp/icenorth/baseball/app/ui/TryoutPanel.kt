@@ -88,17 +88,25 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
     val setRanked: (List<Long>) -> Unit = { ids -> setPlan(Commands.withRanked(plan, ids)) }
     val setCount: (Int) -> Unit = { n -> setPlan(Commands.withCount(plan, n.coerceIn(0, maxCount))) }
 
-    Section("獲得希望人数") {
+    Section(
+        "獲得希望人数",
+        trailing = {
+            InfoButton(
+                "トライアウト",
+                listOf(
+                    "獲得予定の上から順に取りにいきます。他球団に先を越された選手は飛ばして、控えから繰り上がります。",
+                    "名簿が偏らないよう、投${ONLINE_ROSTER_TARGETS["pitcher"]}・捕${ONLINE_ROSTER_TARGETS["catcher"]}・内${ONLINE_ROSTER_TARGETS["infielder"]}・外${ONLINE_ROSTER_TARGETS["outfielder"]}を超える区分は飛ばします（CPUの球団も同じ目標です）。",
+                    "「重視する能力」の重みから評価（0〜100）を出し、おすすめ順を作れます。「軽視〜最重視」を0.6〜1.6倍で重み付けした平均で、投手と野手は別の能力で計算します。重みはこの端末に覚えます。",
+                ),
+            )
+        },
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { setCount(planCount - 1) }, enabled = planCount > 0) { Text("−") }
             Text("${planCount}人", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             OutlinedButton(onClick = { setCount(planCount + 1) }, enabled = planCount < maxCount) { Text("＋") }
             Muted("最大${maxCount}人")
         }
-        Muted(
-            "上から順に取りにいきます。他球団に先を越された選手は飛ばして、控えから繰り上がります。名簿が偏らないよう、" +
-                "投${ONLINE_ROSTER_TARGETS["pitcher"]}・捕${ONLINE_ROSTER_TARGETS["catcher"]}・内${ONLINE_ROSTER_TARGETS["infielder"]}・外${ONLINE_ROSTER_TARGETS["outfielder"]}を超える区分は飛ばします（CPUの球団も同じ目標です）。",
-        )
         TextButton(onClick = onReset) { Text("標準案に戻す") }
     }
 
@@ -190,11 +198,7 @@ private fun WeightsSection(model: AppViewModel, candidates: List<JsonObject>, ro
     var open by rememberSaveable { mutableStateOf(false) }
     val weights = model.tryoutWeights
     Section("重視する能力（評価値の重み）", trailing = { TextButton(onClick = { open = !open }) { Text(if (open) "閉じる" else "開く") } }) {
-        if (!open) {
-            Muted("能力ごとの重みから「評価」（0〜100）を出し、おすすめ順を作れます。")
-            return@Section
-        }
-        Muted("「軽視〜最重視」を 0.6〜1.6 倍で重み付けした平均を評価にします。投手と野手は別の能力で計算します。重みはこの端末に覚えます。")
+        if (!open) return@Section
         listOf("fielder" to "野手", "pitcher" to "投手", "common" to "共通").forEach { (side, title) ->
             Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             WEIGHT_FIELDS.filter { it.group == side }.forEach { f ->

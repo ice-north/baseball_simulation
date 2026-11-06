@@ -98,18 +98,25 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
         model.campDraft = draft.copy(main = draft.main + roster.filter { it.isPitcherJson() == pitchers }.associate { it.pid to clampMenu(key, it) })
     }
 
-    Section("春季キャンプ", trailing = { Rounds(done, total) }) {
-        Muted(
-            if (finished) "全${total}クールが終わりました。伸びた能力でスタメン・投手起用を整えて、月曜の開幕を待ちます。"
-            else "メイン練習とサブ練習を選んで実行します。1クールごとに結果が反映されるので、伸びた能力を見て次のクールを決められます。",
-        )
+    Section(
+        "春季キャンプ",
+        trailing = {
+            Rounds(done, total)
+            InfoButton(
+                "春季キャンプ",
+                listOf(
+                    "メイン練習とサブ練習を選んで実行します。1クールごとに結果が反映されるので、伸びた能力を見て次のクールを決められます。全クールが終わったら、伸びた能力でスタメン・投手起用を整えて開幕を待ちます。",
+                    "本人の希望（育成方針・段階）と噛み合うほど練習が身につきます（正解とは限りません）。",
+                ),
+            )
+        },
+    ) {
         Text("育成方針", style = MaterialTheme.typography.labelLarge)
         ChoiceRow(CAMP_DIRECTIONS.map { it.key to "${it.icon} ${it.name}" }, draft.direction, enabled = !finished) { applyPolicy(it, draft.phase) }
         Text("段階", style = MaterialTheme.typography.labelLarge)
         ChoiceRow(CAMP_PHASES.map { it.key to "${it.icon} ${it.name}" }, draft.phase, enabled = !finished) { applyPolicy(draft.direction, it) }
         Muted(
-            listOfNotNull(CAMP_DIRECTIONS.firstOrNull { it.key == draft.direction }?.description, CAMP_PHASES.firstOrNull { it.key == draft.phase }?.description).joinToString("／") +
-                "　本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。",
+            listOfNotNull(CAMP_DIRECTIONS.firstOrNull { it.key == draft.direction }?.description, CAMP_PHASES.firstOrNull { it.key == draft.phase }?.description).joinToString("／"),
         )
         Text("全員に一括", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

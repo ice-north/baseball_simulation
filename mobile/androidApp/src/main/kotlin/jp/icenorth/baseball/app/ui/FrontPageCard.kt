@@ -116,14 +116,6 @@ fun FrontPageCard(
             Text("リーグ短信", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 14.sp, color = Ink, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
             page.shorts.forEach { Text("■ $it", fontSize = 13.sp, color = Ink, lineHeight = 19.sp) }
         }
-        HRule(Modifier.padding(top = 10.dp))
-        Text(
-            "順位表・タイトル争い・リーグ便りは「試合」タブへ →",
-            fontSize = 12.sp,
-            color = InkSoft,
-            textAlign = TextAlign.End,
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenGames).padding(top = 8.dp),
-        )
     }
 }
 

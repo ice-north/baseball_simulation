@@ -240,8 +240,8 @@ private fun OrderEditor(
     val notes = orderNotes(draft, players, bench)
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Muted("表示")
-            ChipTabs(FielderView.entries.map { it.name to it.label }, mode.name, { onMode(FielderView.valueOf(it)) }, Modifier.padding(start = 0.dp))
+            ChipTabs(FielderView.entries.map { it.name to it.label }, mode.name, { onMode(FielderView.valueOf(it)) }, Modifier.weight(1f))
+            InfoButton("スタメン", ORDER_HELP, Modifier.padding(end = 8.dp))
         }
         LazyColumn(
             state = listState,
@@ -269,7 +269,7 @@ private fun OrderEditor(
                     }
                 }
             }
-            item(key = "head:bat") { Caption("打順（長押しで並べ替え・守備の札で入れ替え・名前で控えと交代）") }
+            item(key = "head:bat") { Caption("打順") }
             items(draft.slots, key = { "bat:${it.playerId}" }) { slot ->
                 val index = draft.slots.indexOf(slot)
                 ReorderableItem(reorder, key = "bat:${slot.playerId}") { dragging ->
@@ -298,7 +298,7 @@ private fun OrderEditor(
             FIELDER_GROUP_LABELS.forEach { (group, label) ->
                 val members = bench.filter { positionGroup(it.position) == group }
                 if (members.isEmpty()) return@forEach
-                item(key = "head:bench:$group") { Caption("控え・$label（${members.size}人）　押すと誰と代えるか選べます") }
+                item(key = "head:bench:$group") { Caption("控え・$label（${members.size}人）") }
                 items(members, key = { "bench:${it.id}" }) { p ->
                     Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                         FielderRow(
@@ -315,13 +315,6 @@ private fun OrderEditor(
                 }
             }
             if (bench.isEmpty()) item(key = "bench:none") { Muted("控えの野手がいません", Modifier.padding(8.dp)) }
-            item(key = "rest") {
-                Muted(
-                    "試合の日は、疲労${FIELDER_REST_FATIGUE}以上の野手は守れる控え（その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満）が居ればその日だけ入れ替わって休みます。" +
-                        "疲労は41以上で黄（成長が鈍り始める）、休養の線を超えると赤です。",
-                    Modifier.padding(top = 8.dp, start = 4.dp),
-                )
-            }
         }
     }
 }
@@ -371,7 +364,7 @@ private fun PositionSheet(draft: PlanDraft, index: Int, players: Map<Long, Playe
             PosBadge(slot.position)
             Text("${me?.name ?: ""}と守備を入れ替える", style = MaterialTheme.typography.titleMedium)
         }
-        Muted("数字は入れ替えたあとの適性（左が${me?.name ?: ""}、右が相手）", Modifier.padding(horizontal = 20.dp))
+        Muted("入れ替えたあとの適性（左: ${me?.name ?: ""}・右: 相手）", Modifier.padding(horizontal = 20.dp))
         FIELD_POSITIONS.mapNotNull { pos -> draft.slots.indexOfFirst { it.position == pos }.takeIf { it >= 0 && it != index } }
             .forEach { other ->
                 val target = draft.slots[other]
@@ -401,8 +394,7 @@ private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players
             PosBadge(slot.position)
             Text(players[slot.playerId]?.let { "${it.name}と交代する控え" } ?: "空いている${positionLabel(slot.position)}に入れる控え", style = MaterialTheme.typography.titleMedium)
         }
-        Muted("${positionLabel(slot.position)}の適性が高い順。「適」はこの位置での適性です", Modifier.padding(horizontal = 20.dp))
-        if (bench.isEmpty()) Text("控えの野手がいません", modifier = Modifier.padding(20.dp))
+                if (bench.isEmpty()) Text("控えの野手がいません", modifier = Modifier.padding(20.dp))
         bench.forEach { p ->
             FielderRow(
                 order = null,
@@ -430,8 +422,7 @@ private fun BenchSheet(draft: PlanDraft, id: Long, players: Map<Long, Player>, o
             PosBadge(me.position)
             Text("${me.name}を誰と代える？", style = MaterialTheme.typography.titleMedium)
         }
-        Muted("右の数字は${me.name}がその位置を守ったときの適性。打順と守備位置は引き継ぎます", Modifier.padding(horizontal = 20.dp))
-        order.forEach { index ->
+                order.forEach { index ->
             val slot = draft.slots[index]
             val them = players[slot.playerId]
             val fit = me.fitness(slot.position)
@@ -512,7 +503,10 @@ private fun PitchingList(
     ) {
         item(key = "head:rot") {
             ReorderableItem(reorder, key = "head:rot") {
-                Caption("先発ローテーション（${state.starters.size}/${MAX_STARTERS}人・長押しで並べ替え、救援へ落とすと役割が変わる）")
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Box(Modifier.weight(1f)) { Caption("先発ローテーション（${state.starters.size}/${MAX_STARTERS}人）") }
+                    InfoButton("投手起用", pitchingHelp())
+                }
             }
         }
         items(state.starters, key = { "p:$it" }) { id ->
@@ -528,7 +522,6 @@ private fun PitchingList(
                 ReorderableItem(reorder, key = "role:$role") {
                     Row(Modifier.padding(top = 10.dp, start = 4.dp), verticalAlignment = Alignment.Bottom) {
                         Text(RELIEF_ROLES[role] ?: role, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        Muted("  ${ROLE_HINT[role].orEmpty()}")
                     }
                 }
             }
@@ -539,12 +532,6 @@ private fun PitchingList(
                     }
                 }
             }
-        }
-        item(key = "note") {
-            Muted(
-                "疲労${STARTER_SKIP_FATIGUE}以上の先発は順番を飛ばし、疲労${RELIEF_REST_FATIGUE}以上の救援は休ませます。守護神は1人まで。",
-                Modifier.padding(top = 8.dp, start = 4.dp),
-            )
         }
     }
 }
@@ -633,8 +620,7 @@ private fun TacticsEditor(draft: PlanDraft, edit: Edit) {
                 ChoiceRow(f.options.map { it.key to it.label }, draft.strategy[f.key]) { v -> edit { it.withStrategy(f.key, v) } }
             }
         }
-        Section("自動采配") {
-            Muted("試合中の作戦と継投の決め方です。AI判断のままでも試合は進みます。")
+        Section("自動采配", trailing = { InfoButton("自動采配", listOf("試合中の作戦と継投の決め方です。AI判断のままでも試合は進みます。")) }) {
             TACTIC_FIELDS.forEach { f ->
                 Text(f.label, style = MaterialTheme.typography.labelLarge)
                 ChoiceRow(f.options.map { it.key to it.label }, draft.tactics[f.key]) { v -> edit { it.withTactic(f.key, v) } }
@@ -642,3 +628,19 @@ private fun TacticsEditor(draft: PlanDraft, edit: Edit) {
         }
     }
 }
+
+/** スタメンの説明（画面には出さず ⓘ に詰める。いしだ指定） */
+private val ORDER_HELP = listOf(
+    "長押しでドラッグすると打順を並べ替えます。守備の札を押すと守備位置の入れ替え、名前を押すと控えと交代します。控えの行を押すと、誰と代えるかを選べます。",
+    "2行目は上の切り替えで「能力」「今季成績」「守備適性」を出します。守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
+    "試合の日は、疲労${FIELDER_REST_FATIGUE}以上の野手は、その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満の控えが居れば、その日だけ入れ替わって休みます。",
+    "疲労は41以上で黄（成長が鈍り始める）、${FIELDER_REST_FATIGUE}以上で赤です。",
+)
+
+/** 投手起用の説明（役割の目安も、行には出さずここに） */
+private fun pitchingHelp(): List<String> = listOf(
+    "長押しでドラッグするとローテの順番を並べ替えます。救援の役割の見出しへ落とすと持ち場が変わります。行を押すと先発の型・救援の役割を選べます。",
+    "疲労${STARTER_SKIP_FATIGUE}以上の先発は順番を飛ばし、疲労${RELIEF_REST_FATIGUE}以上の救援は休ませます。守護神は1人まで。",
+    "先発の型: " + STARTER_ORDER.joinToString("、") { "${STARTER_ROLES[it] ?: it}＝${ROLE_HINT[it].orEmpty()}" },
+    "救援の役割: " + RELIEF_ORDER.joinToString("、") { "${RELIEF_ROLES[it] ?: it}＝${ROLE_HINT[it].orEmpty()}" },
+)

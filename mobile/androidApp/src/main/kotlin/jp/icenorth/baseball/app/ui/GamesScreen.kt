@@ -217,7 +217,6 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
                         }
                     }
                 }
-                if (g["replay"].obj() != null) Muted("この試合は一球ごとの経過が記録されています（経過の再生は Web 版で見られます）。")
             }
         }
     }

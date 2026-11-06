@@ -63,7 +63,14 @@ fun PlayersScreen(model: AppViewModel) {
     var mode by rememberSaveable { mutableStateOf(PlayersMode.Season) }
     var team by rememberSaveable { mutableStateOf(view.teamName.orEmpty()) }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) }, Modifier.padding(top = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) }, Modifier.weight(1f).padding(top = 8.dp))
+            InfoButton(
+                "選手",
+                listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "自球団の表で色の付いた行は、スタメン・先発ローテの選手です。ランキングでは自球団の選手に色が付きます。"),
+                Modifier.padding(top = 8.dp, end = 8.dp),
+            )
+        }
         when (mode) {
             PlayersMode.Ranking -> AbilityRanking(model, view, raw)
             else -> TeamStats(model, view, raw, team, { team = it }, career = mode == PlayersMode.Career)
@@ -151,7 +158,7 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
             val partial = roster.any { it.at("career", "partial").bool() == true }
             Muted(
                 if (roster.isEmpty()) "このリーグでの記録がまだありません。1シーズン目が進むと出ます。"
-                else "このリーグを始めてからの合計です（${years}シーズン・今季を含む）。" + if (partial) "記録の無い試合があった年は、その分が入っていません。" else "",
+                else "通算${years}シーズン（今季を含む）" + if (partial) "。記録の無い試合の分は入っていません" else "",
                 Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
@@ -159,7 +166,6 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
             failure != null -> Muted("読み込めませんでした: $failure", Modifier.padding(16.dp))
             roster == null -> Muted("読み込み中…", Modifier.padding(16.dp))
             else -> {
-                Muted("見出しを押すと並べ替え、名前を押すと詳細。", Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 StatTable(
                     players = sorted,
                     columns = group.columns,
@@ -175,7 +181,6 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                         positionLabel(p.at("position").str()) + (p.at("age").int()?.let { " ${it}歳" } ?: "")
                     },
                 )
-                if (own && !career) Muted("色付きの行はスタメン・先発ローテの選手。", Modifier.padding(16.dp))
             }
         }
     }
@@ -213,7 +218,6 @@ private fun AbilityRanking(model: AppViewModel, view: LeagueView, raw: JsonObjec
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
-            Muted("自球団の選手は色付き。名前を押すと詳細。", Modifier.padding(vertical = 8.dp))
         }
     }
 }
