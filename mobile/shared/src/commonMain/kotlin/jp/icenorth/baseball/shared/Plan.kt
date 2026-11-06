@@ -40,6 +40,8 @@ data class PlanDraft(
     fun problem(): String? = LineupDraft(base, slots, pitching.starters).problem()
         ?: when {
             pitching.starters.size > MAX_STARTERS -> "先発投手は${MAX_STARTERS}人までです"
+            // 保存済みの先発に、名簿から外れた・抹消中の投手が残っていることがある（Web 版 pitchingProblems と同じ）
+            pitching.starters.any { it !in pitching.roles } -> "名簿に居ない・起用できない投手が先発に入っています"
             pitching.roles.values.count { it == "closer" } > 1 -> "守護神は1人までです"
             else -> null
         }

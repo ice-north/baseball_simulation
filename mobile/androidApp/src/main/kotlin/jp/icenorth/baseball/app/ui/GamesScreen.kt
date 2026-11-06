@@ -182,7 +182,7 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
                         changes.forEach { c ->
                             Column {
                                 Text(
-                                    "${c.at("inning").int()}回${if (c.at("isTop").str() == "true") "表" else "裏"} ${view.teamShort(c.at("team").str().orEmpty())}  ${c.at("out").str()} → ${c.at("in").str()}",
+                                    "${c.at("inning").int()}回${if (c.at("isTop").bool() == true) "表" else "裏"} ${view.teamShort(c.at("team").str().orEmpty())}  ${c.at("out").str()} → ${c.at("in").str()}",
                                     fontSize = 13.sp,
                                 )
                                 Muted(listOfNotNull(c.at("role").str(), c.at("reason").str()).joinToString(" · "))

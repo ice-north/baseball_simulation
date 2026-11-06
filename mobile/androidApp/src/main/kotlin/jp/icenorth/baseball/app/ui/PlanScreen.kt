@@ -116,6 +116,8 @@ fun PlanScreen(model: AppViewModel) {
     val history = model.plan ?: EditHistory(PlanDraft.from(lineup, view.roster))
     val draft = history.present
     val dirty = !draft.sameEdit(PlanDraft.from(draft.base, view.roster))
+    // 編集中にサーバーの編成が変わった（PCで保存した・手続きで名簿が変わった）。このまま保存しても edit_conflict で断られる
+    val stale = draft.base != lineup
     // ⚠ 編集は「今の編集に当てる変換」で渡す。ドラッグ中は描き直しの前に何度も呼ばれるので、
     //    描いたときの draft から作ると途中の移動が消える
     val edit: Edit = { f -> (model.plan ?: history).let { h -> model.plan = h.push(f(h.present)) } }
@@ -142,7 +144,8 @@ fun PlanScreen(model: AppViewModel) {
             TextButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo) { Text("↶ 戻す") }
             TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo) { Text("↷ 進む") }
             Text(if (dirty) "保存していない変更があります" else "保存済み", style = MaterialTheme.typography.bodySmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            TextButton(onClick = { model.plan = history.push(PlanDraft.from(draft.base, view.roster)) }, enabled = dirty) { Text("取り消す") }
+            // ⚠ 取り消すと、編集を始めたときではなく**今の保存済み**の編成に戻す（古い base に戻すと保存が断られ続ける）
+            TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale) { Text("取り消す") }
             Button(
                 onClick = {
                     val problem = draft.problem()
@@ -153,6 +156,14 @@ fun PlanScreen(model: AppViewModel) {
                 },
                 enabled = dirty,
             ) { Text("保存") }
+        }
+        if (stale) {
+            Text(
+                "別の画面で編成が更新されました。この編集は保存できないので、「取り消す」で最新の編成を読み直してから編集し直してください。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
         }
         ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) })
         when (tab) {

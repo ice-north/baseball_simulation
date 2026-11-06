@@ -16,6 +16,8 @@ import jp.icenorth.baseball.shared.OnlineException
 import jp.icenorth.baseball.shared.OnlineJson
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -70,6 +72,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var api = OnlineApi(endpoint)
     private var reloadJob: Job? = null
 
+    /** トークンの更新を1本にまとめる（同時に読み込むと同じ更新トークンで2回更新しにいくため） */
+    private val refreshLock = Mutex()
+
     init {
         if (auth != null) reload()
     }
@@ -120,6 +125,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         auth = null
         view = null
         raw = null
+        openPlayer = null
         plan = null
         phaseDraft = null
         campDraft = null
@@ -132,11 +138,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (pull) refreshing = true
         reloadJob = viewModelScope.launch {
             try {
-                load(fresh(current))
+                authed { load(it) }
             } catch (e: Exception) {
-                // ⚠ 期限の判定がずれていても、認証切れなら一度だけ更新してやり直す（すぐログアウトにしない）
-                val retried = if (e is OnlineException && e.code == "auth") runCatching { load(fresh(current, force = true)) }.isSuccess else false
-                if (!retried) handle(e)
+                handle(e)
             } finally {
                 refreshing = false
             }
@@ -167,9 +171,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         error = null
         viewModelScope.launch {
             try {
-                val credentials = fresh(current)
-                val result = api.command(credentials, revision, type, payload)
-                load(credentials)
+                val result = authed(current) { api.command(it, revision, type, payload) }
+                authed { load(it) }
                 if (done != null) message = done
                 onDone(result)
             } catch (e: Exception) {
@@ -182,9 +185,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 読むだけの窓口（team / player / games / game / defaults）。失敗は例外のまま返す */
     suspend fun read(action: String, params: Map<String, String?> = emptyMap()): JsonObject {
-        val current = auth ?: throw OnlineException("ログインしていません")
-        val credentials = fresh(current)
-        return api.read(credentials, action, params)
+        return authed { api.read(it, action, params) }
+    }
+
+    /**
+     * 認証付きで呼ぶ。期限の判定がずれていて認証切れ（auth）で断られたら、一度だけ更新してやり直す
+     * （すぐログアウトにしない）。断られた指示はサーバーで行われていないので、やり直しても二重にならない。
+     */
+    private suspend fun <T> authed(start: AuthSession? = auth, block: suspend (AuthSession) -> T): T {
+        val current = start ?: throw OnlineException("ログインしていません")
+        return try {
+            block(fresh(current))
+        } catch (e: OnlineException) {
+            if (e.code != "auth" || current.refreshToken == null) throw e
+            block(fresh(current, force = true))
+        }
     }
 
     private suspend fun load(credentials: AuthSession) {
@@ -195,7 +210,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** アクセストークンの期限が近ければ先に更新する（本番の Supabase は1時間で切れる） */
-    private suspend fun fresh(current: AuthSession, force: Boolean = false): AuthSession {
+    private suspend fun fresh(current: AuthSession, force: Boolean = false): AuthSession = refreshLock.withLock {
+        // ほかの呼び出しが待っている間に更新を済ませていたら、それを使う
+        val latest = auth
+        if (latest != null && latest.accessToken != current.accessToken) return@withLock latest
+        refreshOnce(current, force)
+    }
+
+    private suspend fun refreshOnce(current: AuthSession, force: Boolean): AuthSession {
         val expiresAt = current.expiresAt ?: return current
         val refreshToken = current.refreshToken ?: return current
         if (!force && expiresAt - System.currentTimeMillis() > 60_000) return current

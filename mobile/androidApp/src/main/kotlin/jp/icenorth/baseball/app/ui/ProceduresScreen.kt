@@ -147,7 +147,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     // 編集中の案。保存済みの提出があればそれ、無ければ標準案（defaults）から始める
     val draft = model.phaseDraft?.takeIf { it.phaseId == phaseId }
     var failure by remember(phaseId) { mutableStateOf<String?>(null) }
-    LaunchedEffect(phaseId, submission) {
+    // ⚠ 下書きを捨てた（null にした）ときも読み直すよう、draft == null も鍵に入れる
+    LaunchedEffect(phaseId, submission, draft == null) {
         val current = model.phaseDraft?.takeIf { it.phaseId == phaseId }
         if (current != null && (current.dirty || current.base == (submission ?: JsonNull))) return@LaunchedEffect
         val plan = submission?.get("plan").obj()
@@ -231,7 +232,9 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
 
 private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready: Boolean, base: JsonElement?) {
     model.command("submit", Commands.submit(phaseId, plan, ready, base), label = if (ready) "決定を送信中…" else "保存中…", done = if (ready) "決定しました" else "保存しました") {
-        model.phaseDraft = PhaseDraft(phaseId, plan, Commands.submitted(plan, ready), dirty = false)
+        // ⚠ サーバーは提出を整えて保存する（送った形と同じとは限らない）ので、読み直したビューの提出から作り直す。
+        //    送った形を base にすると、次の提出が edit_conflict で断られることがある
+        model.phaseDraft = null
     }
 }
 

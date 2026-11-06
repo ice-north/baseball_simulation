@@ -2,6 +2,7 @@ package jp.icenorth.baseball.app.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -81,10 +82,17 @@ fun OnlineApp(model: AppViewModel) {
     val joined = model.view?.teamName != null
     Box(Modifier.fillMaxSize()) {
         if (!joined) {
-            HomeScreen(model, onOpenLineup = {}, onOpenProcedures = {}, onRename = {})
+            // ⚠ 参加前もお知らせ・失敗を出す場所を置く（無いと参加の失敗が見えず、知らせも消えない）
+            Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+                Column(Modifier.padding(padding).consumeWindowInsets(padding)) {
+                    HomeScreen(model, onOpenLineup = {}, onOpenProcedures = {}, onRename = {})
+                }
+            }
             if (model.busy) BusyOverlay(model.busyLabel)
             return@Box
         }
+        // ⚠ 中身の余白（padding）は使い切った印を付ける（consumeWindowInsets）。付けないと各画面の
+        //    statusBarsPadding がもう一度ステータスバーぶん空け、上に二重の隙間ができる
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
@@ -106,7 +114,7 @@ fun OnlineApp(model: AppViewModel) {
                 }
             },
         ) { padding ->
-            Column(Modifier.padding(padding)) {
+            Column(Modifier.padding(padding).consumeWindowInsets(padding)) {
                 when (tab) {
                     Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures }, onRename = { renaming = true })
                     Tab.Games -> GamesScreen(model)
@@ -142,7 +150,7 @@ fun RenameDialog(model: AppViewModel, close: () -> Unit) {
         },
         confirmButton = {
             TextButton(
-                enabled = teamName.isNotBlank(),
+                enabled = teamName.isNotBlank() && !model.busy,
                 onClick = {
                     model.command(
                         "profile",
