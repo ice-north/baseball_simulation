@@ -523,7 +523,18 @@ export class LeagueService {
       const keys = Object.keys(bundle.receipts);
       for (const old of keys.slice(0, Math.max(0, keys.length - 256)))
         delete bundle.receipts[old];
-      return { value };
+      // ⚠ **返事に自分の最新の画面（ビュー）を載せる**。以前は画面が保存のあとに
+      //    view を読み直しており、認証と読み込みの往復が1回余計にかかっていた。
+      //    控え（receipts）には入れないこと。リーグの保存一式が参加者の画面ぶん膨らむ。
+      //    控えから返す二重送信のときはビューが無いので、画面は従来どおり読み直す。
+      // ⚠ 作れなかったら載せないだけにする（例外を投げると、済んだ保存まで取り消される）
+      let view = null;
+      try {
+        view = projectLeague(bundle, userId, sessionId, this.adminId);
+      } catch (error) {
+        console.error('online: 返事のビューを作れませんでした:', error.message);
+      }
+      return { value: view ? { ...value, view } : value };
     });
   }
   engine(fn) {

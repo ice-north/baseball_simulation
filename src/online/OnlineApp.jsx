@@ -279,8 +279,9 @@ export default function OnlineApp() {
         type,
         payload,
       });
+    let result;
     try {
-      await send(view?.revision || 0);
+      result = await send(view?.revision || 0);
     } catch (error) {
       // ⚠ **編成と手続きの提出は、版のずれだけなら最新の版で1回だけ送り直す**。
       //    版はリーグ全体で1つなので、毎正時の進行や他の参加者の操作だけで
@@ -290,9 +291,18 @@ export default function OnlineApp() {
       if (error?.code !== 'revision' || !['lineup', 'submit'].includes(type))
         throw error;
       const latest = await api('view', credentials);
-      await send(latest?.revision || 0);
+      result = await send(latest?.revision || 0);
     }
-    await reload();
+    // ⚠ 返事に最新のビューが載っていれば、それをそのまま使う（読み直しの往復を省く）。
+    //    二重送信の控えから返ったときなど、載っていなければ従来どおり読み直す
+    if (result?.view) {
+      const sequence = ++viewSequence.current;
+      if (
+        sameSession(authRef.current, current) &&
+        sequence === viewSequence.current
+      )
+        setView(viewForSession(result.view, current));
+    } else await reload();
     // ⚠ 操作ごとに文言を変える。作成や参加でも「保存しました」と出ていた
     setMessage(COMMAND_MESSAGES[type] || '保存しました');
   };

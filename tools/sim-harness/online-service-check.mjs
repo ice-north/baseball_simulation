@@ -114,7 +114,13 @@ try {
       baseLineup: (await service.view('a', nextA)).lineup,
     },
   };
-  await service.command('a', nextA, validCommand);
+  const saved = await service.command('a', nextA, validCommand);
+  // 返事に載るビューは、読み直したビューと同じ（画面は読み直しを省いてこれを使う）
+  assert.deepEqual(saved.view, await service.view('a', nextA));
+  // 二重送信（控えから返す）ではビューを載せない。控えに画面を溜めない
+  const replayed = await service.command('a', nextA, validCommand);
+  assert.equal(replayed.view, undefined);
+  assert.equal(replayed.revision, saved.revision);
   await assert.rejects(
     service.command('a', nextA, { ...validCommand, type: 'pause' }),
     (error) => error.status === 409,
