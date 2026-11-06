@@ -227,6 +227,9 @@ fun StatTable(
 ) {
     val divider = MaterialTheme.colorScheme.outlineVariant
     val hScroll = rememberScrollState()
+    // ⚠ 行の高さは文字の大きさの設定に合わせて伸ばす。dp で固定のままだと、端末の文字を大きくしている人では
+    //    名前＋「守備 年齢」の2行が行に入りきらず、はみ出した下の行（年齢）に次の行の色付きの背景が重なって切れて見えた
+    val rowHeight = RowHeight * androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)
     val colWidth: (StatColumn) -> Dp = { c -> if (c.label.length >= 4) 64.dp else 52.dp }
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.width(NameWidth)) {
@@ -234,7 +237,7 @@ fun StatTable(
             players.forEach { p ->
                 Row(
                     Modifier
-                        .height(RowHeight)
+                        .height(rowHeight)
                         .fillMaxWidth()
                         .background(if (highlight(p)) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
                         .clickable { onPlayer(p) }
@@ -268,7 +271,7 @@ fun StatTable(
             players.forEach { p ->
                 Row(
                     Modifier
-                        .height(RowHeight)
+                        .height(rowHeight)
                         .background(if (highlight(p)) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
