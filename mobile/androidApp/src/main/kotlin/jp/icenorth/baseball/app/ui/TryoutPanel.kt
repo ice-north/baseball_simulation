@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.DEFAULT_WEIGHTS
 import jp.icenorth.baseball.shared.ONLINE_ROSTER_TARGETS
 import jp.icenorth.baseball.shared.ROSTER_GROUP_LABELS
@@ -84,8 +85,8 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
     // ⚠ お知らせは出したときの希望順と組で持つ（希望順が外から変わったら出さない）
     var noticeState by remember { mutableStateOf<Pair<String, List<Long>>?>(null) }
     val notice = noticeState?.takeIf { it.second == ranked }?.first
-    val setRanked: (List<Long>) -> Unit = { ids -> setPlan(JsonObject(plan + ("rankedIds" to JsonArray(ids.map { JsonPrimitive(it) })))) }
-    val setCount: (Int) -> Unit = { n -> setPlan(JsonObject(plan + ("count" to JsonPrimitive(n.coerceIn(0, maxCount))))) }
+    val setRanked: (List<Long>) -> Unit = { ids -> setPlan(Commands.withRanked(plan, ids)) }
+    val setCount: (Int) -> Unit = { n -> setPlan(Commands.withCount(plan, n.coerceIn(0, maxCount))) }
 
     Section("獲得希望人数") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

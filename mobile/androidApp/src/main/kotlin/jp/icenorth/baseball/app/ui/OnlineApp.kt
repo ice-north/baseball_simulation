@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.list
@@ -134,7 +135,7 @@ fun RenameDialog(model: AppViewModel, close: () -> Unit) {
                 onClick = {
                     model.command(
                         "profile",
-                        buildJsonObject { put("teamName", teamName.trim()); put("playerName", playerName.trim()) },
+                        Commands.profile(teamName, playerName),
                         done = "名前を保存しました",
                     ) { close() }
                 },

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.app.CampDraft
 import jp.icenorth.baseball.shared.CAMP_DIRECTIONS
+import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.CAMP_GROUPS
 import jp.icenorth.baseball.shared.CAMP_PHASES
 import jp.icenorth.baseball.shared.CAMP_ROUNDS
@@ -76,13 +77,13 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
     val total = camp.at("total").int() ?: CAMP_ROUNDS
     val finished = done >= total
     val roster = remember(raw) { raw.at("roster").list().mapNotNull { it.obj() } }
-    val saved = camp["plan"].obj()
+    val saved = camp.at("plan").obj()
     val draft = model.campDraft?.takeIf { it.phaseId == phaseId } ?: CampDraft(
         phaseId,
         saved.at("policy", "direction").str() ?: "balanced",
         saved.at("policy", "phase").str() ?: "skill",
-        saved["main"].obj().orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.let { id to it } } }.toMap(),
-        saved["sub"].obj().orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.let { id to it } } }.toMap(),
+        saved.at("main").obj().orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.let { id to it } } }.toMap(),
+        saved.at("sub").obj().orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.let { id to it } } }.toMap(),
     )
     val mainOf = { p: JsonObject -> clampMenu(draft.main[p.pid] ?: resolveTraining(p, draft.direction, draft.phase).main, p) }
     val subOf = { p: JsonObject -> clampSub(draft.sub[p.pid] ?: resolveTraining(p, draft.direction, draft.phase).sub, p) }
@@ -123,12 +124,11 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
         if (!finished) {
             Button(
                 onClick = {
-                    val payload = buildJsonObject {
-                        put("round", done + 1)
-                        putJsonObject("policy") { put("direction", draft.direction); put("phase", draft.phase) }
-                        putJsonObject("main") { roster.forEach { put(it.pid.toString(), mainOf(it)) } }
-                        putJsonObject("sub") { roster.forEach { put(it.pid.toString(), subOf(it)) } }
-                    }
+                    val payload = Commands.campRound(
+                        done + 1, draft.direction, draft.phase,
+                        roster.associate { it.pid to mainOf(it) },
+                        roster.associate { it.pid to subOf(it) },
+                    )
                     model.command("campRound", payload, label = "第${done + 1}クールの練習中…", done = "第${done + 1}クールの練習を終えました")
                 },
                 modifier = Modifier.fillMaxWidth(),

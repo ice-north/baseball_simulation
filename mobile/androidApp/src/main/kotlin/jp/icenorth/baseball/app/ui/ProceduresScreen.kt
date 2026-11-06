@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.app.PhaseDraft
+import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.ROSTER_LIMIT
 import jp.icenorth.baseball.shared.at
@@ -103,7 +104,7 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
         Muted(if (chosenName != null) "いま選んでいるのは「$chosenName」です。キャンプまでは何度でも選び直せます。" else "まだ選んでいません。決めずにキャンプを迎えると、1つ目のセットになります。")
     }
     PackPicker(model, packs, chosen) { id ->
-        model.command("pack", buildJsonObject { put("packId", id) }, done = "初期メンバーを選びました")
+        model.command("pack", Commands.pack(id), done = "初期メンバーを選びました")
     }
 }
 
@@ -209,7 +210,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     when {
         plan["packId"] != null || phase["packs"] != null -> {
             val packs = phase.at("packs").list().mapNotNull { it.obj() }
-            PackPicker(model, packs, plan.at("packId").str()) { id -> setPlan(plan.with("packId", JsonPrimitive(id))) }
+            PackPicker(model, packs, plan.at("packId").str()) { id -> setPlan(Commands.withPack(plan, id)) }
         }
         plan["rankedIds"] != null -> TryoutPanel(model, raw, phase, plan, setPlan) {
             // 標準案に戻す（⚠ 保存済みの下書きではなく、いつも標準案を取り直す）
@@ -228,17 +229,9 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     }
 }
 
-private fun JsonObject.with(key: String, value: JsonElement): JsonObject = JsonObject(this + (key to value))
-
 private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready: Boolean, base: JsonElement?) {
-    val payload = buildJsonObject {
-        put("phaseId", phaseId)
-        put("plan", plan)
-        put("ready", ready)
-        put("baseSubmission", base ?: JsonNull)
-    }
-    model.command("submit", payload, label = if (ready) "決定を送信中…" else "保存中…", done = if (ready) "決定しました" else "保存しました") {
-        model.phaseDraft = PhaseDraft(phaseId, plan, buildJsonObject { put("plan", plan); put("ready", ready) }, dirty = false)
+    model.command("submit", Commands.submit(phaseId, plan, ready, base), label = if (ready) "決定を送信中…" else "保存中…", done = if (ready) "決定しました" else "保存しました") {
+        model.phaseDraft = PhaseDraft(phaseId, plan, Commands.submitted(plan, ready), dirty = false)
     }
 }
 
@@ -296,7 +289,7 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                     checked = checked,
                     onCheckedChange = { on ->
                         val next = if (on) releases + p.pid else releases - p.pid
-                        setPlan(plan.with("releaseIds", JsonArray(next.map { JsonPrimitive(it) })))
+                        setPlan(Commands.withReleases(plan, next))
                     },
                 )
                 Box(Modifier.weight(1f)) {

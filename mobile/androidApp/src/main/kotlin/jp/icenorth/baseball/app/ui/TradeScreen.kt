@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.ONLINE_ROSTER_TARGETS
 import jp.icenorth.baseball.shared.ROSTER_LIMIT
@@ -87,11 +88,7 @@ fun TradeScreen(model: AppViewModel, raw: JsonObject) {
         else TradeComposer(model, view, raw, partners, humans, locked = null, initialGive = emptySet(), initialGet = emptySet(), submitLabel = "この内容で提案する") { to, give, get, reset ->
             model.command(
                 "tradeOffer",
-                buildJsonObject {
-                    put("to", to)
-                    put("offer", JsonArray(give.map { JsonPrimitive(it) }))
-                    put("want", JsonArray(get.map { JsonPrimitive(it) }))
-                },
+                Commands.tradeOffer(to, give, get),
                 label = "提案を送信中…",
                 done = "提案しました",
             ) { reset() }
@@ -134,14 +131,10 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
     val problems = dealProblems(myRoster, theirs, give, get)
     var countering by rememberSaveable(trade.at("id").str()) { mutableStateOf(false) }
     val tradeId = trade.at("id").str().orEmpty()
-    val respond = { action: String, extra: JsonObject? ->
+    val respond = { action: String, counterGive: Set<Long>?, counterGet: Set<Long>? ->
         model.command(
             "tradeRespond",
-            buildJsonObject {
-                put("tradeId", tradeId)
-                put("action", action)
-                extra?.forEach { (k, v) -> put(k, v) }
-            },
+            Commands.tradeRespond(tradeId, action, mine, counterGive, counterGet),
             label = "返事を送信中…",
             done = when (action) { "accept" -> "トレードが成立しました"; "reject" -> if (mine) "提案を取り下げました" else "断りました"; else -> "逆提案を送りました" },
         ) { countering = false }
@@ -168,24 +161,18 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
         }
         if (myTurn && !countering) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { respond("accept", null) }, enabled = !stale && problems.isEmpty()) { Text("成立させる") }
+                Button(onClick = { respond("accept", null, null) }, enabled = !stale && problems.isEmpty()) { Text("成立させる") }
                 if (trade.at("canCounter").bool() == true) OutlinedButton(onClick = { countering = true }) { Text("逆提案") }
-                OutlinedButton(onClick = { respond("reject", null) }) { Text("断る") }
+                OutlinedButton(onClick = { respond("reject", null, null) }) { Text("断る") }
             }
         }
         if (myTurn && countering) {
             Muted("中身を作り替えて返します。逆提案はこの1回だけで、相手が受けなければこの提案は消えます。")
             TradeComposer(model, view, raw, listOf(partner), emptySet(), locked = partner, initialGive = give, initialGet = get, submitLabel = "この内容で返す", onCancel = { countering = false }) { _, g, w, _ ->
-                respond(
-                    "counter",
-                    buildJsonObject {
-                        put("offer", JsonArray((if (mine) g else w).map { JsonPrimitive(it) }))
-                        put("want", JsonArray((if (mine) w else g).map { JsonPrimitive(it) }))
-                    },
-                )
+                respond("counter", g.toSet(), w.toSet())
             }
         }
-        if (!myTurn) OutlinedButton(onClick = { respond("reject", null) }) { Text(if (mine) "取り下げる" else "断る") }
+        if (!myTurn) OutlinedButton(onClick = { respond("reject", null, null) }) { Text(if (mine) "取り下げる" else "断る") }
     }
 }
 
