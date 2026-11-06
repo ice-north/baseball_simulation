@@ -406,7 +406,8 @@ private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players
         bench.forEach { p ->
             FielderRow(
                 order = null,
-                position = p.position,
+                // 札は入る位置にして、その下の「適」がこの位置での適性と分かるように
+                position = slot.position,
                 player = p,
                 fitnessAt = slot.position,
                 mode = if (mode == FielderView.Fitness) FielderView.Ability else mode,

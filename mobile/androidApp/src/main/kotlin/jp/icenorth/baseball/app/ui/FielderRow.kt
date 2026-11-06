@@ -123,7 +123,7 @@ fun FatigueBadge(fatigue: Int?, restAt: Int = FIELDER_REST_FATIGUE) {
 
 /** 能力1つ（幅をそろえて、行が変わっても同じ能力が縦に並ぶように） */
 @Composable
-private fun Cell(label: String, value: Int?, width: Int = 34) {
+private fun Cell(label: String, value: Int?, width: Int = 32) {
     Box(Modifier.width(width.dp)) { AbilityNum(label, value) }
 }
 
@@ -146,7 +146,7 @@ private fun GroupLabel(text: String) {
  *
  *   1行目: 打順（控えは空き）・守備の札・調子と名前・疲労
  *   2行目: 上の切り替え（[FielderView]）で選んだもの
- *          能力＝打撃（ミ パ 眼 走）｜守備（適性 守 肩）を分けて / 今季成績＝打率 OPS 本 盗 と特徴ラベル /
+ *          能力＝打撃（ミ パ 眼 走）｜守備（守 肩）を分けて / 今季成績＝打率 OPS 本 盗 と特徴ラベル /
  *          守備適性＝8つの位置の適性
  *
  * @param position 札に出す位置（スタメンは守っている位置、控えは本職）
@@ -197,10 +197,22 @@ fun FielderRow(
             if (draggable) Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
         }
         if (player != null) {
-            when (mode) {
-                FielderView.Ability -> AbilityRow(player, fitnessAt)
-                FielderView.Stats -> StatsRow(player)
-                FielderView.Fitness -> FitnessRow(player, fitnessAt)
+            Row {
+                // 守っている位置の適性は、守備の札の真下に（いしだ指定）。どの表示でも同じ場所
+                Box(Modifier.padding(start = 26.dp, top = 4.dp).width(34.dp), contentAlignment = Alignment.Center) {
+                    val fit = player.fitness(fitnessAt)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("適", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit))
+                    }
+                }
+                Box(Modifier.weight(1f).padding(start = 6.dp)) {
+                    when (mode) {
+                        FielderView.Ability -> AbilityRow(player)
+                        FielderView.Stats -> StatsRow(player)
+                        FielderView.Fitness -> FitnessRow(player, fitnessAt)
+                    }
+                }
             }
         }
     }
@@ -209,9 +221,9 @@ fun FielderRow(
 /** 行の2行目に出すもの。画面が狭いので全部は並べず、上の切り替えで選ぶ（選手成績の画面と同じ考え方） */
 enum class FielderView(val label: String) { Ability("能力"), Stats("今季成績"), Fitness("守備適性") }
 
-/** 打撃（ミ パ 眼 走）と守備（適性 守 肩）を分けて並べる */
+/** 打撃（ミ パ 眼 走）と守備（守 肩）を分けて並べる（適性は札の真下に別に出す） */
 @Composable
-private fun AbilityRow(player: Player, fitnessAt: String) {
+private fun AbilityRow(player: Player) {
     Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         GroupLabel("打")
         Cell("ミ", player.batting?.meet)
@@ -220,7 +232,6 @@ private fun AbilityRow(player: Player, fitnessAt: String) {
         Cell("走", player.physical?.speed)
         Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.outlineVariant))
         GroupLabel("守")
-        FitCell("適", player.fitness(fitnessAt))
         Cell("守", player.fielding?.defense)
         Cell("肩", player.physical?.arm)
     }
@@ -287,14 +298,14 @@ private fun FittingRow(modifier: Modifier, content: @Composable () -> Unit) {
 /**
  * 守備の数字（守備力・肩）と、**守れる位置**の適性（いしだ指定: 30 のような守れない適性は出さず、代わりに守備と肩を）。
  * 位置は適性60（交代で守れる線）以上だけを、適性の高い順に。守っている位置は低くても出す（赤で気づけるように）。
- * ⚠ 1行に収まらない分（5つ目以降）は下の行へ。「100」が札の中で折り返さないよう幅は固定
+ * ⚠ 1行に収まらない分（4つ目以降）は下の行へ。「100」が札の中で折り返さないよう幅は固定
  */
 @Composable
 private fun FitnessRow(player: Player, fitnessAt: String) {
     // 適性の高い順（いしだ指定）。守っている位置は60未満でも入れる（その順位の場所に赤で）
     val positions = FIELD_POSITIONS.filter { it == fitnessAt || player.fitness(it) >= SUBSTITUTE_MIN_FITNESS }.sortedByDescending { player.fitness(it) }
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        positions.chunked(4).forEachIndexed { i, line ->
+        positions.chunked(3).forEachIndexed { i, line ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (i == 0) {
                     GroupLabel("守")
@@ -335,15 +346,7 @@ private fun FitnessRow(player: Player, fitnessAt: String) {
 }
 
 /** 守備適性の行の2行目の字下げ（「守」の札＋守備・肩の2マス＋区切り線の幅） */
-private val FITNESS_INDENT = 22.dp + 34.dp * 2 + 9.dp // 位置1つは 46dp
-
-@Composable
-private fun FitCell(label: String, fit: Int) {
-    Row(Modifier.width(40.dp), verticalAlignment = Alignment.Bottom) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit))
-    }
-}
+private val FITNESS_INDENT = 22.dp + 32.dp * 2 + 9.dp // 位置1つは 46dp
 
 @Composable
 private fun StatText(label: String, value: String) {
