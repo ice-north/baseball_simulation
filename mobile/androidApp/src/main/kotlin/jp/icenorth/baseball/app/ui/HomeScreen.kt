@@ -299,14 +299,24 @@ private fun Countdown(iso: String?) {
 
 @Composable
 private fun NotJoined(model: AppViewModel) {
+    val joinable = model.raw?.at("joinRequired").bool() == true
     Column(
         Modifier.fillMaxSize().statusBarsPadding().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("まだリーグに参加していません", style = MaterialTheme.typography.titleMedium)
-        Text("参加とリーグの作成は Web 版で行ってください。参加後、下に引っ張ると更新されます。", textAlign = TextAlign.Center)
-        TextButton(onClick = model::logout) { Text("ログアウト") }
+        if (joinable) {
+            Text("リーグに参加する", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "空いている球団のうち、下の階層で一番弱いものを引き継ぎます。このあと初期メンバーのセットを選び、球団名とプレイヤー名を決めます。",
+                textAlign = TextAlign.Center,
+            )
+            FilledTonalButton(onClick = { model.command("join", JsonObject(emptyMap()), label = "参加しています…", done = "リーグに参加しました") }) { Text("参加する") }
+        } else {
+            Text("リーグがまだありません", style = MaterialTheme.typography.titleMedium)
+            Text("リーグの作成は管理者が Web 版で行います。作成後、下に引っ張ると更新されます。", textAlign = TextAlign.Center)
+        }
+        TextButton(onClick = model::logout) { Text("別のアカウントでログインし直す") }
     }
 }
 

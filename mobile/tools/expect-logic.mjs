@@ -34,4 +34,12 @@ const added = addToPlan(ranked, candidates, count, have, ranked.at(-1));
 const benched = benchFromPlan(ranked, candidates, count, have, picks[0]);
 const moved = moveInPlan(ranked, candidates, count, have, picks.at(-1), 0);
 const summary = planSummary(ranked, candidates, count, have);
-console.log(JSON.stringify({ camp, wish, tryout: { ranked, picks, added, benched, moved, blocking: summary.blocking, warnings: summary.warnings } }));
+const text = JSON.stringify({ camp, wish, tryout: { ranked, picks, added, benched, moved, blocking: summary.blocking, warnings: summary.warnings } });
+// --check: 書き出し済みの期待値が今の Web 版の答えと同じか（CI で、Web 版だけ直したときに気づく）
+if (process.argv.includes('--check')) {
+  const file = new URL('../shared/src/jvmTest/resources/logic-expected.json', import.meta.url);
+  if (fs.readFileSync(file, 'utf8').trim() !== text) {
+    console.error('logic-expected.json が古い。node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json で書き出し直し、アプリの共通部も揃えること');
+    process.exit(1);
+  }
+} else console.log(text);

@@ -33,7 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.Commands
+import jp.icenorth.baseball.shared.CAMP_ROUNDS
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.int
+import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.str
@@ -69,11 +72,19 @@ fun OnlineApp(model: AppViewModel) {
     val raw = model.raw
     // 自分の番の手続き・返事待ちのトレードがあれば「手続き」に印
     val pending = raw != null && (
-        raw["pendingPack"].let { it != null && it.toString() != "null" } ||
-            (raw["phase"].let { it != null && it.toString() != "null" } && raw.at("phase", "submission", "ready").bool() != true) ||
+        raw["pendingPack"].obj() != null ||
+            (raw["phase"].obj() != null && raw.at("phase", "submission", "ready").bool() != true &&
+                (raw.at("phase", "kind").str() != "camp" || (raw.at("phase", "camp", "rounds").int() ?: 0) < (raw.at("phase", "camp", "total").int() ?: CAMP_ROUNDS))) ||
             raw.at("trades").list().any { it.at("myTurn").bool() == true }
         )
+    // 参加前（リーグが無い・まだ参加していない）はホームだけ
+    val joined = model.view?.teamName != null
     Box(Modifier.fillMaxSize()) {
+        if (!joined) {
+            HomeScreen(model, onOpenLineup = {}, onOpenProcedures = {}, onRename = {})
+            if (model.busy) BusyOverlay(model.busyLabel)
+            return@Box
+        }
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {

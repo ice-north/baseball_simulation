@@ -2,11 +2,32 @@ name: android
 
 # スマホアプリ（mobile/）の検査と APK のビルド。mobile/ を触ったときだけ動く。
 # できた APK は実行結果の「Artifacts」から落として端末に入れる。
+# ⚠ アプリの共通部は Web 版の表と計算を写している（mobile/tools/）。写し元を直したときも動かす
 on:
   push:
-    paths: ['mobile/**', '.github/workflows/android.yml']
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android.yml'
+      - 'src/season/campTraining.js'
+      - 'src/season/trainingPolicy.js'
+      - 'src/online/shared.js'
+      - 'src/online/tactics.js'
+      - 'src/online/pitchingEdit.js'
+      - 'src/online/tryoutPlan.js'
+      - 'src/online/statsView.js'
+      - 'src/utils/constants.js'
   pull_request:
-    paths: ['mobile/**', '.github/workflows/android.yml']
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android.yml'
+      - 'src/season/campTraining.js'
+      - 'src/season/trainingPolicy.js'
+      - 'src/online/shared.js'
+      - 'src/online/tactics.js'
+      - 'src/online/pitchingEdit.js'
+      - 'src/online/tryoutPlan.js'
+      - 'src/online/statsView.js'
+      - 'src/utils/constants.js'
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +47,13 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Web 版の表・計算と揃っているか
+        run: |
+          node tools/gen-tables.mjs --check
+          node tools/expect-logic.mjs --check
       - name: 共通部分の検査
         run: ./gradlew :shared:jvmTest --console=plain
       - name: APK をビルド

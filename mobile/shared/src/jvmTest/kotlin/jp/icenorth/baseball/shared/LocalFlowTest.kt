@@ -111,9 +111,12 @@ class LocalFlowTest {
         // シーズンの終わりまで進め、契約更改・トライアウト・年度更新・次のキャンプも同じ形で通す
         if (System.getenv("ONLINE_FLOW_FULL") == "1") {
             val year = raw().at("year").int()
-            var steps = 0
-            while (raw().at("status").str() == "running" && steps++ < 12) send("step", OnlineJson.parseToJsonElement("""{"turns":24}""") as JsonObject)
-            runPhases()
+            // シーズン後もストーブリーグの間は「進行中」で、土曜ごとに手続きが来る
+            var loops = 0
+            while ((raw().at("year").int() ?: 0) <= (year ?: 0) && loops++ < 40) {
+                if (raw().at("status").str() == "running") send("step", OnlineJson.parseToJsonElement("""{"turns":24}""") as JsonObject)
+                else runPhases()
+            }
             assertTrue((raw().at("year").int() ?: 0) > (year ?: 0), "次の年度に進んでいない")
         }
     }
