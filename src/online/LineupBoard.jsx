@@ -7,6 +7,7 @@ import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { overviewGroup, formatStat } from './statsView.js';
 import { teamShort } from './gameText.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
+import { getFatigueTone } from '../utils/constants.js';
 import {
   orderFromLineup,
   battingOrderFromOrder,
@@ -77,7 +78,16 @@ const POS_FULL = {
 };
 const BATS = { left: '左', right: '右', switch: '両' };
 const batsOf = (p) => BATS[p.batting?.bats || p.physical?.bats] || '—';
+// ⚠ 投げる手は `physical.throws` にある（`player.throws` はいつも undefined）
+const THROW_MARK = { left: '左', right: '右' };
+const throwsOf = (p) => THROW_MARK[p.physical?.throws] || '右';
 const THROWS = { left: '左投', right: '右投' };
+/** 名前の色の意味。⚠ **色だけに頼らない**（読み上げとマウスオーバーに出す） */
+const FATIGUE_TONE_TEXT = {
+  warn: '疲れています（このまま出し続けると成長が鈍ります）',
+  heavy: 'かなり疲れています（成長の鈍り方が最も大きく、試合では控えと入れ替わります）',
+  '': undefined,
+};
 
 /** 次の数試合の相手と、相手の先発予定（投げる手）。左右の並べ方の手がかり */
 function NextOpponents({ view }) {
@@ -134,15 +144,26 @@ function Fitness({ value, position }) {
 function PlayerCells({ player, fitness, fitnessPosition }) {
   return (
     <>
-      <td className="online-lineup-person">
+      {/* ⚠ 疲労は**名前にも色を付ける**。数字の列にも色はあるが、スタメンを
+          選ぶときに目で追っているのは名前なので、数字まで目が行かない。
+          黄＝成長が鈍り始める、赤＝鈍り方が最も大きい（`getFatigueTone`） */}
+      <td
+        className={`online-lineup-person online-fatigue-${getFatigueTone(player.fatigue) || 'none'}`}
+        title={FATIGUE_TONE_TEXT[getFatigueTone(player.fatigue)]}
+      >
         <span onClick={(e) => e.stopPropagation()}>
           <PlayerStatsButton player={player} category="batting" group="basic" />
         </span>
         <ConditionMark player={player} />
       </td>
-      <td title={player.physical?.throws === 'left' ? '左投' : '右投'}>
-        {batsOf(player)}
+      {/* ⚠ 投げる手は**打つ手の前**に、別の列で出す。以前は打の列の
+          マウスオーバーにだけ入れていて、右投左打かどうかが一覧で分からなかった。
+          ⚠ **打の列を置き換えないこと**（実際にやって表が1列ずれた）。
+             `COLUMN_COUNT` も列の数と合わせる */}
+      <td title={player.physical?.throws === 'left' ? '左投げ' : '右投げ'}>
+        {throwsOf(player)}
       </td>
+      <td title={`${batsOf(player)}打ち`}>{batsOf(player)}</td>
       <td>{player.age ?? '—'}</td>
       <td className="is-sep">
         <Fatigue
@@ -174,7 +195,9 @@ function PlayerCells({ player, fitness, fitnessPosition }) {
   );
 }
 
-const COLUMN_COUNT = 3 + 3 + ABILITIES.length + 3 + STAT_COLUMNS.length;
+// ⚠ 列を足したらここも直すこと（`colSpan` がずれると罫線が折れる）。
+//    打順・守備・選手 / 投・打・年齢・疲労 / 能力 / 適性・守・肩 / 成績
+const COLUMN_COUNT = 3 + 4 + ABILITIES.length + 3 + STAT_COLUMNS.length;
 
 function HeaderRow({ fitnessLabel }) {
   return (
@@ -182,6 +205,7 @@ function HeaderRow({ fitnessLabel }) {
       <th className="online-lineup-slot">打順</th>
       <th className="online-lineup-poscell">守備</th>
       <th className="online-lineup-person">選手</th>
+      <th title="投げる手（左・右）">投</th>
       <th title="打席（左・右・両）">打</th>
       <th>年齢</th>
       <th className="is-sep" title={`${REST_FATIGUE}以上: ${REST_TEXT}`}>

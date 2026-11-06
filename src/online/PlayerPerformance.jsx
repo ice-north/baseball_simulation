@@ -468,7 +468,19 @@ export function RoleMark({ player, lineup }) {
   );
 }
 
-export function CompactRoster({ view, desktop = false, teamSelector }) {
+/**
+ * 名簿の表（選手成績・通算成績で共通）。
+ * ⚠ `periodLabel` は見出しの脇に出す期間の名前。**合計の出し方は呼ぶ側が決める**
+ *    （通算は `careerTotals` が出した値を `seasonStats` に差し替えて渡す）。
+ */
+export function CompactRoster({
+  view,
+  desktop = false,
+  teamSelector,
+  periodLabel = '今季',
+  title = '選手成績',
+  volumeOrder = false,
+}) {
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
   const [groupId, setGroupId] = useState(desktop ? 'overview' : 'basic');
@@ -481,7 +493,10 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
   //    打撃の1ページ目が投手だけで埋まり、スタメンが3ページ目まで出てこない）。
   //    PCは全員を1枚に出すので**起用の順**（スタメン→控え→先発→救援）。
   //    能力一覧の表がこの順だったので、表を1つにしても並びは変わらない。
-  const active = sort || (desktop ? null : defaultSort(category));
+  // ⚠ `volumeOrder` は**起用の順を使えない画面**のため（通算成績）。打順や
+  //    投手の役割は「いまの起用」なので、何年ぶんの合計を並べる順にはならない
+  const active =
+    sort || (desktop && !volumeOrder ? null : defaultSort(category));
   const order = active
     ? sortedRoster(view.roster, active.column, active.direction)
     : rosterByRole(view.roster, view.lineup, category);
@@ -571,9 +586,10 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
     >
       <div className="online-roster-toolbar">
         <div>
-          {teamSelector || <h2>選手成績</h2>}
+          {teamSelector || <h2>{title}</h2>}
           <small>
-            {view.readOnly ? '今季・閲覧' : '今季'} · {view.roster.length}人
+            {view.readOnly ? `${periodLabel}・閲覧` : periodLabel} ·{' '}
+            {view.roster.length}人
           </small>
         </div>
         {desktop ? (
@@ -603,7 +619,7 @@ export function CompactRoster({ view, desktop = false, teamSelector }) {
           {active
             ? `${sortedBy}${active.direction === 'asc' ? '（小さい順）' : '（大きい順）'}`
             : '起用の順'}
-          {active && (
+          {active && !volumeOrder && (
             <button onClick={() => setSort(null)}>起用の順に戻す</button>
           )}
         </p>

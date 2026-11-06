@@ -3369,6 +3369,23 @@
   color: #f87171;
   font-weight: 700;
 }
+/* 疲労で名前に色を付ける（スタメン設定・投手起用）。
+   ⚠ **色だけに頼らないこと**。疲労の数字の列は残してあり、名前には
+      マウスオーバーの説明も付く。色は目を引くための補助。
+   ⚠ 段は `getFatigueTone`（＝摩耗の段）が決める。ここに数は書かない。 */
+/* フォームは4文字で揃っているので折り返させない */
+.online-pitch-form:not(:where(.online-sp *)) {
+  white-space: nowrap;
+  font-size: 11px;
+  color: #cbd5f5;
+}
+.online-fatigue-warn .online-player-name {
+  color: #facc15;
+}
+.online-fatigue-heavy .online-player-name {
+  color: #f87171;
+  font-weight: 700;
+}
 .online-lineup-fitness small:not(:where(.online-sp *)) {
   font-size: 10px;
   color: #94a3b8;

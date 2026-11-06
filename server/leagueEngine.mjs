@@ -90,8 +90,11 @@ import {
   assertTradeAllowed,
   canRespond,
   canCounter,
+  cpuTradeDecision,
   MAX_OPEN_TRADES,
 } from '../src/online/trades.js';
+import { draftAbilityScore } from '../src/season/yearProgressionSystem.js';
+import { deviationValue } from '../src/game/playerValue.js';
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
 import { createRecorder, freezeComparison } from './recordedStats.mjs';
@@ -319,22 +322,44 @@ function assertNoPendingPack(league, teamNames) {
 }
 
 /**
- * トレードを提案する。
+ * 選手の値段。**ドラフトと同じ物差し**（`deviationValue`）をそのまま使う。
  *
- * ⚠ **相手は参加者の球団だけ**。CPU球団は返事をしないので、出せても
- *    永久に待つことになる。
+ * ⚠ **ここで別の式を書かないこと**。かつてトレードとドラフトが別々の評価式を
+ *    持っていて、等価交換にならなかった（`src/game/playerValue.js` の冒頭）。
+ */
+export function tradeValueOf(player) {
+  if (!player) return 0;
+  const { main, sub } = draftAbilityScore(player);
+  return deviationValue(player, main, sub);
+}
+
+/**
+ * トレードを提案する。相手は**CPU球団でもよい**。
+ *
+ * ⚠ **CPU球団はその場で答える**。返事を待つ相手が居ないので、提案した瞬間に
+ *    受ける／逆提案／断るのどれかが決まる（`cpuTradeDecision`）。
+ *    以前は参加者の球団だけを相手にしていたが、1人で遊んでいる間は
+ *    トレードがまったく使えなかった。
+ * ⚠ **断ったときは記録を残さないこと**。断られた提案が一覧に残ると、
+ *    同じものを押し直せてしまう。理由をそのまま返して画面に出す。
  * ⚠ 抱えられる提案の数に上限を置く（`MAX_OPEN_TRADES`）。無制限だと
  *    相手の画面を埋められる。
  */
 export function openTrade(league, userId, { to, offer, want }, now) {
   league.trades = league.trades || [];
   const mine = memberTeam(league, userId);
+  requireOnline(
+    (league.season.settings.teamNames || []).includes(to),
+    '相手の球団が見つかりません',
+    409,
+  );
+  requireOnline(to !== mine.member.teamName, '自分の球団とはトレードできません');
+  // ⚠ 参加者が居なければCPU球団。`to`（相手のuserId）は null で持つ
   const partner = (league.members || []).find((m) => m.teamName === to);
-  requireOnline(partner, '相手は参加者の球団だけです', 409);
-  requireOnline(partner.userId !== userId, '自分の球団とはトレードできません');
-  const theirs = TEAMS_DATA[partner.teamName];
+  const theirs = TEAMS_DATA[to];
   requireOnline(theirs, '相手の球団が見つかりません', 409);
-  assertNoPendingPack(league, [mine.member.teamName, partner.teamName]);
+  // ⚠ 相手はCPU球団のこともある（`partner` は null）。球団名で確かめる
+  assertNoPendingPack(league, [mine.member.teamName, to]);
   requireOnline(
     league.trades.filter((t) => t.from === userId).length < MAX_OPEN_TRADES,
     `出せる提案は同時に${MAX_OPEN_TRADES}件までです`,
@@ -344,12 +369,12 @@ export function openTrade(league, userId, { to, offer, want }, now) {
   const wantIds = (want || []).map(Number);
   assertTradeAllowed(mine.team, theirs, offerIds, wantIds);
   const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
-  league.trades.push({
+  const trade = {
     id,
     from: userId,
     fromTeam: mine.member.teamName,
-    to: partner.userId,
-    toTeam: partner.teamName,
+    to: partner ? partner.userId : null,
+    toTeam: to,
     offer: offerIds,
     want: wantIds,
     // ⚠ 手番を持っている側だけが返事をする。両方が同時に受けられると二重に成立する
@@ -357,8 +382,40 @@ export function openTrade(league, userId, { to, offer, want }, now) {
     countered: false,
     createdAt: now,
     updatedAt: now,
+  };
+  if (partner) {
+    league.trades.push(trade);
+    return { id, status: 'offered' };
+  }
+  // --- CPU球団はその場で答える
+  const decision = cpuTradeDecision({
+    valueOf: tradeValueOf,
+    fromPlayers: mine.team.players,
+    toPlayers: theirs.players,
+    offerIds,
+    wantIds,
   });
-  return id;
+  if (decision.action === 'accept') {
+    applyTrade(league, trade);
+    return { id, status: 'accepted' };
+  }
+  if (decision.action === 'counter') {
+    // ⚠ 逆提案も**提案した側から見た形**で持つ（`offer` は `fromTeam` が出す）
+    trade.want = decision.want;
+    assertTradeAllowed(mine.team, theirs, trade.offer, trade.want);
+    trade.countered = true;
+    trade.turn = 'from';
+    trade.updatedAt = now;
+    league.trades.push(trade);
+    return { id, status: 'countered' };
+  }
+  // ⚠ 断られたら**何も残さない**。`requireOnline` で画面に理由を出す
+  requireOnline(
+    false,
+    `${to} はこの内容では応じませんでした。出す選手を足すか、もらう選手を見直してください`,
+    409,
+    'trade',
+  );
 }
 
 /**
@@ -411,6 +468,24 @@ export function respondTrade(league, userId, { tradeId, action, offer, want }, n
   }
 
   requireOnline(action === 'accept', 'トレードの操作が不正です');
+  applyTrade(league, trade);
+  drop();
+  return { status: 'accepted' };
+}
+
+/**
+ * トレードを成立させる（選手を入れ替えて、経歴とお知らせに残す）。
+ *
+ * ⚠ **人が受けたときとCPUが受けたときで同じ処理を通すこと**。2か所に書くと、
+ *    片方だけ経歴を残し忘れる・打順を組み直し忘れる、ということが起きる。
+ * ⚠ 成立の直前に**もう一度**中身を確かめる（`assertTradeAllowed` と
+ *    `assertNoPendingPack`）。提案から返事までの間に、選手が別のトレードで
+ *    移っていたり、相手が途中参加の入れ替え待ちになっていたりする。
+ */
+function applyTrade(league, trade) {
+  const fromTeam = TEAMS_DATA[trade.fromTeam];
+  const toTeam = TEAMS_DATA[trade.toTeam];
+  requireOnline(fromTeam && toTeam, '球団が見つかりません', 409);
   assertNoPendingPack(league, [trade.fromTeam, trade.toTeam]);
   const after = assertTradeAllowed(fromTeam, toTeam, trade.offer, trade.want);
   fromTeam.players = after.from;
@@ -447,8 +522,7 @@ export function respondTrade(league, userId, { tradeId, action, offer, want }, n
       })),
     ],
   });
-  drop();
-  return { status: 'accepted' };
+  return after;
 }
 
 export function openPhase(league, kind, now) {

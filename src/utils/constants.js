@@ -567,6 +567,22 @@ export const getFatigueGrowthPenalty = (fatigue) => {
   return -0.03;
 };
 
+/**
+ * 疲労の重さ → 画面で名前に付ける色の段。
+ *   ''（無色） / 'warn'（黄: 成長が鈍り始める） / 'heavy'（赤: 鈍り方が最も大きい）
+ *
+ * ⚠ **段は `getFatigueGrowthPenalty` から導くこと**。画面に 41 や 81 を直に
+ *    書くと、摩耗の段を動かしたときに色だけ古い境目のまま残る。
+ * ⚠ 色は**名前に付ける**。疲労の数字の列は既に色が付いているが、スタメンを
+ *    選ぶときに見ているのは名前なので、数字まで目が行かない。
+ */
+export const getFatigueTone = (fatigue) => {
+  const penalty = getFatigueGrowthPenalty(fatigue);
+  if (penalty <= -0.03) return 'heavy';
+  if (penalty < 0) return 'warn';
+  return '';
+};
+
 /** 疲労ペナルティを条件付きで適用する（applied=false なら何もしない） */
 export const applyFatigueGrowthPenalty = (player, applied) => {
   if (!applied) return 0;

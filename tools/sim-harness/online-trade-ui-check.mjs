@@ -150,6 +150,38 @@ try {
     `交換のあとの自球団の構成が出ていない: ${impactText}`,
   );
 
+  // --- 相手の一覧にCPU球団も出す -----------------------------------------
+  // ⚠ **1人で遊んでいる間もトレードが使えること**。以前は参加者の球団だけを
+  //    相手にしていて、CPU11球団に対して何も出せなかった。
+  // ⚠ 人の球団を**先に**並べ、CPUにはそう書く（返事が返るまでの時間が違う）
+  {
+    const picker = p
+      .locator('.online-trade-composer')
+      .last()
+      .getByRole('group', { name: '相手の球団' });
+    const names = (await picker.getByRole('button').allInnerTexts()).map((t) =>
+      t.trim(),
+    );
+    assert.equal(
+      names.length,
+      started.season.settings.teamNames.length - 1,
+      `相手に出ている球団の数がちがう: ${names.join('/')}`,
+    );
+    assert.ok(
+      names.some((n) => n.includes('（CPU）')),
+      `CPU球団が相手に出ていない: ${names.join('/')}`,
+    );
+    assert.ok(
+      !names[0].includes('（CPU）'),
+      `人の球団が先に並んでいない: ${names.join('/')}`,
+    );
+    assert.equal(
+      names.filter((n) => !n.includes('（CPU）')).length,
+      1,
+      `人の球団の数がちがう: ${names.join('/')}`,
+    );
+  }
+
   // --- 新しい提案: 1枚の表で選ぶ → 交換案 → 提案 ------------------------
   const composer = p.locator('.online-trade-composer').last();
   await composer
@@ -282,7 +314,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き）',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き）',
   );
 } finally {
   await browser.close();

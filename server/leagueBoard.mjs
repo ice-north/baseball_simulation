@@ -209,8 +209,10 @@ const ABILITY_FIELDS = [
  *    入れ替わると、見るたび違う人が1位になる。
  * ⚠ 投手の項目は投手だけ、野手の項目は野手だけで競う。混ぜると
  *    「走力ランキングが投手で埋まる」ようなことが起きる。
+ * ⚠ **ベスト10まで出す**。5人だと、12球団288人の中で「上澄みのさらに上」しか
+ *    見えず、自分の選手が入っているかどうかの判断に使えない。
  */
-export function abilityLeaders(league, labelOf = (n) => n, top = 5) {
+export function abilityLeaders(league, labelOf = (n) => n, top = 10) {
   const entries = [];
   for (const team of league.season.settings.teamNames || [])
     for (const player of league.game.teams[team]?.players || [])

@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
 import { useRead } from './useRead.js';
 import { teamLabel } from './gameText.js';
-export default function TeamRoster({ view, children }) {
+/**
+ * 球団を選んで名簿を出す枠（選手成績・通算成績で共通）。
+ *
+ * ⚠ `always` を立てると、**自球団でもサーバーから読み直す**。ビューに載せて
+ *    いない項目（通算成績など）を使う画面はこれを使う。立てないと、自球団だけ
+ *    その項目が欠けた `view` が渡り、自分の選手だけ空欄になる。
+ */
+export default function TeamRoster({ view, children, always = false }) {
   const [selected, setSelected] = useState(view.teamName);
-  const own = selected === view.teamName;
+  const own = selected === view.teamName && !always;
   const result = useRead(own ? null : 'team', {
     team: selected,
     revision: view.revision,

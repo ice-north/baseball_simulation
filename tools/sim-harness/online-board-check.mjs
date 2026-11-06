@@ -450,7 +450,8 @@ try {
     );
     const teamsSeen = new Set();
     for (const field of fields) {
-      assert.ok(field.rows.length > 0, `${field.label} が空`);
+      // ⚠ **ベスト10まで**。5人だと288人の中の上澄みしか見えない
+      assert.equal(field.rows.length, 10, `${field.label} が10人でない`);
       // ⚠ **全球団から選ぶこと**。自球団だけだと、どの行も同じ球団になる
       for (const row of field.rows) {
         const found = byId.get(row.id);
@@ -532,10 +533,58 @@ try {
     );
   }
 
+  // --- 通算成績（球団ごとの読み込みに載る）-----------------------------
+  // ⚠ **1年で終わるゲームではない**。育てた選手がこのリーグで何をしたかが
+  //    残らないと、育てた意味が見えない。
+  // ⚠ 通算は**ビューに載せない**（288人ぶんは重い）。球団ごとの読み込み
+  //    （`action=team`）に載せ、画面はそこから読む。
+  {
+    const live = (await store.read()).league;
+    const own = view.teamName;
+    const info = await service.teamInfo('admin', own);
+    const withCareer = info.roster.filter((p) => p.career);
+    assert.ok(withCareer.length > 0, '通算成績が1人も付いていない');
+    // ⚠ **今季を含めること**。シーズン中に開いて空だと、記録が無いように見える
+    const played = withCareer.filter(
+      (p) => (p.career.seasonStats?.batting?.atBats || 0) > 0,
+    );
+    assert.ok(played.length > 0, '打席に立った選手の通算が0');
+    for (const p of played) {
+      assert.ok(p.career.years >= 1, `${p.name} の年数が0`);
+      // ⚠ **率はその場で出すこと**。合計の足し算では作れない
+      const m = p.career.performance?.batting?.metrics;
+      assert.ok(m, `${p.name} の通算に率が無い`);
+      const s = p.career.seasonStats.batting;
+      assert.ok(
+        Math.abs(m.avg - s.hits / s.atBats) < 1e-9,
+        `${p.name} の通算打率が合計と合わない: ${m.avg} / ${s.hits / s.atBats}`,
+      );
+      // ⚠ 通算は今季以上（今季しか無い段階では一致する）
+      assert.ok(
+        p.career.seasonStats.batting.atBats >=
+          (p.seasonStats?.batting?.atBats || 0),
+        `${p.name} の通算が今季を下回っている`,
+      );
+    }
+    // ⚠ 記録の鍵は `onlinePlayerId`。付いていないと移籍で通算が切れる
+    for (const name of live.season.settings.teamNames)
+      for (const player of live.game.teams[name].players)
+        assert.ok(
+          player.onlinePlayerId,
+          `${player.name} に記録の鍵が付いていない（移籍で通算が切れる）`,
+        );
+    // ⚠ **他球団も読めること**（画面は球団を選んで見る）
+    const other = live.season.settings.teamNames.find((n) => n !== own);
+    const otherInfo = await service.teamInfo('admin', other);
+    assert.ok(
+      otherInfo.roster.some((p) => p.career),
+      '他球団の通算成績が読めない',
+    );
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム打率と防御率が名簿の合計と合う・能力ランキングが全球団から並ぶ）',
+  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム打率と防御率が名簿の合計と合う・能力ランキングが全球団から並ぶ・通算成績が今季を含んで積み上がる）',
 );

@@ -48,7 +48,10 @@ import { AbilityValue } from '../components/AbilityValue.jsx';
 //    断られたらその理由が出る。
 // ⚠ 「総合」は並べ替えの目安（`overallScore`。トライアウトの画面と同じ）。
 //    試合の強さはサーバーの演算で決まる。
-// ⚠ **相手は参加者の球団だけ**。CPU球団は返事をしないので画面にも出さない。
+// ⚠ **相手はCPU球団でもよい**。CPUはその場で答える（受ける／逆提案／断る）。
+//    以前は参加者の球団だけを相手にしていて、1人で遊んでいる間はトレードが
+//    まったく使えなかった。どちらが人でどちらがCPUかは札に出す（返事が返る
+//    までの時間が全く違う）。
 // ⚠ 相手の名簿は**その場で取りに行く**（`useRead('team')`）。12球団ぶんを
 //    いつもビューに載せると重い。
 // ⚠ 逆提案は1回だけ（`trades.js` の `canCounter`）。
@@ -428,6 +431,7 @@ function DealList({ side, players, onRemove, busy }) {
 function TradeComposer({
   view,
   partners,
+  humans,
   lockedPartner = null,
   initialGive = [],
   initialGet = [],
@@ -477,7 +481,14 @@ function TradeComposer({
       {!lockedPartner && (
         <Choice
           label="相手の球団"
-          options={Object.fromEntries(partners.map((name) => [name, teamLabel(name)]))}
+          /* ⚠ **どちらが人でどちらがCPUか分かるようにする**。返事が返るまでの
+             時間が全く違う（CPUはその場、人は相手が開くまで） */
+          options={Object.fromEntries(
+            partners.map((name) => [
+              name,
+              `${teamLabel(name)}${humans?.has(name) ? '' : '（CPU）'}`,
+            ]),
+          )}
           value={partner}
           disabled={busy}
           onChange={(name) => {
@@ -660,8 +671,12 @@ function TradeCard({ view, trade, busy, run, command }) {
     <section className="online-card online-trade-card" data-trade={trade.id}>
       <div className="online-card-heading">
         <h3>
+          {/* ⚠ 逆提案が返ってきたら**そう書く**。「へ提案中」のままだと、
+              自分の返事待ちなのに相手を待っているように読める */}
           {trade.mine
-            ? `${teamLabel(trade.toTeam)} へ提案中`
+            ? trade.countered
+              ? `${teamLabel(trade.toTeam)} からの逆提案`
+              : `${teamLabel(trade.toTeam)} へ提案中`
             : `${teamLabel(trade.fromTeam)} からの提案`}
         </h3>
         <small className={trade.myTurn ? 'online-own-text' : 'online-muted'}>
@@ -742,9 +757,18 @@ function TradeCard({ view, trade, busy, run, command }) {
 }
 
 export default function TradeScreen({ view, busy, run, command }) {
-  const partners = (view.members || [])
-    .map((m) => m.teamName)
-    .filter((name) => name !== view.teamName);
+  // ⚠ **全球団を相手に出す**（CPUも含む）。参加者の球団は「相手の返事待ち」に
+  //    なり、CPU球団は押した瞬間に答えが返る。
+  // ⚠ **人の球団を先に並べる**。交渉の相手として考えるのはまず人で、
+  //    CPU11球団に埋もれると探すことになる
+  const humans = new Set((view.members || []).map((m) => m.teamName));
+  const others = (view.teamNames || []).filter(
+    (name) => name !== view.teamName,
+  );
+  const partners = [
+    ...others.filter((name) => humans.has(name)),
+    ...others.filter((name) => !humans.has(name)),
+  ];
   const trades = view.trades || [];
   const waiting = trades.filter((t) => t.myTurn);
   const sent = trades.filter((t) => !t.myTurn);
@@ -754,7 +778,7 @@ export default function TradeScreen({ view, busy, run, command }) {
   return (
     <Page
       title="トレード"
-      sub="参加者の球団と選手を交換します。相手が受ければその場で成立します。"
+      sub="ほかの球団と選手を交換します。CPU球団はその場で答え、参加者の球団は相手が受けた時点で成立します。"
     >
       {waiting.length > 0 && (
         <>
@@ -777,10 +801,13 @@ export default function TradeScreen({ view, busy, run, command }) {
               右の交換案に、交換のあと両球団の人数と構成がどうなるかが出ます。
               相手が受けるとその場で選手が入れ替わり、逆提案が返ってきたら
               こんどはあなたが受けるか断るかを選びます（逆提案は1回だけ）。
+              <strong>CPU球団はその場で答えます</strong>
+              （受ける・逆提案・断るのどれか）。
             </p>
             <TradeComposer
               view={view}
               partners={partners}
+              humans={humans}
               submitLabel="この内容で提案する"
               busy={busy}
               onSubmit={(to, give, get, reset) =>
@@ -792,11 +819,7 @@ export default function TradeScreen({ view, busy, run, command }) {
             />
           </>
         ) : (
-          /* ⚠ **できないことを、できるように見せない**。CPU球団は返事をしない */
-          <p>
-            トレードの相手は、いまリーグに参加している人の球団だけです。
-            ほかの人が参加すると選べるようになります（CPU球団とは交換できません）。
-          </p>
+          <p>トレードの相手になる球団がありません。</p>
         )}
       </section>
       <section className="online-card">

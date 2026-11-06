@@ -348,6 +348,7 @@ const NOTICE_LABELS = {
   draft: 'NPBドラフト',
   tryout: 'トライアウト',
   promotion: '昇格・降格',
+  trade: 'トレード',
 };
 /** 締め切りの日時を日本時間で「11/8(日) 0:00」の形にする */
 export function formatDeadline(iso) {

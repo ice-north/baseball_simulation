@@ -88,6 +88,89 @@ export function assertTradeAllowed(fromTeam, toTeam, offerIds, wantIds) {
   return after;
 }
 
+// ============================================================
+// CPU球団の返事。
+//
+// ⚠ **乱数を使わないこと**。同じ提案には同じ答えを返す（やり直しても結果が
+//    変わらない）。`seeded` の中で呼ばれるとしても、乱数に頼ると
+//    「断られたので出し直す」を繰り返すだけで通るようになってしまう。
+// ⚠ **価値の物差しを新しく作らないこと**。`valueOf` を受け取る形にして、
+//    呼ぶ側（サーバー）が `deviationValue`（ドラフトと同じ物差し）を渡す。
+//    ここで別の式を書くと、トレードとドラフトで選手の値段が変わる。
+// ============================================================
+
+/**
+ * CPUが求める上乗せ。
+ *
+ * ⚠ **1.0 にしないこと**。釣り合っているだけの交換をCPUが受けると、
+ *    「少しだけ得な提案」を何度も通して一方的に戦力を集められる。
+ *    5%の上乗せを求めると、等価交換は逆提案に回り、明らかに得な交換だけ通る。
+ */
+export const CPU_ACCEPT_MARGIN = 1.05;
+
+/** 守備の括り。⚠ 内野を頼まれて投手を出すような逆提案をしないため */
+const tradeKind = (p) =>
+  p?.position === 'pitcher'
+    ? 'pitcher'
+    : p?.position === 'catcher'
+      ? 'catcher'
+      : 'fielder';
+
+/**
+ * CPU球団の返事を決める。`{ action: 'accept' | 'counter' | 'reject' }`。
+ *
+ * - 受ける … 受け取る価値が、出す価値の `CPU_ACCEPT_MARGIN` 倍以上
+ * - 逆提案 … 受け取る選手はそのままで、**出す選手を釣り合うものに差し替える**
+ *            （人数と守備の括りは変えない。予算に収まる中で最も価値が高い選手）
+ * - 断る   … 差し替えても釣り合わない（＝払える選手が居ない）
+ *
+ * ⚠ `offer` は**提案した側が出す選手**。CPUから見ると受け取る側。
+ * ⚠ 価値は 1 を下回らせない。負の値があると予算の計算が壊れる
+ *    （弱い選手を足すほど「安くなる」ことになってしまう）。
+ */
+export function cpuTradeDecision({
+  valueOf,
+  fromPlayers,
+  toPlayers,
+  offerIds,
+  wantIds,
+}) {
+  const value = (p) => Math.max(1, valueOf(p) || 0);
+  const pick = (players, ids) =>
+    ids.map((id) => players.find((p) => p.id === id)).filter(Boolean);
+  const total = (players) => players.reduce((a, p) => a + value(p), 0);
+  const incoming = pick(fromPlayers, offerIds);
+  const outgoing = pick(toPlayers, wantIds);
+  const gain = total(incoming);
+  const loss = total(outgoing);
+  if (gain >= loss * CPU_ACCEPT_MARGIN)
+    return { action: 'accept', gain, loss };
+  // 逆提案を組む。⚠ 並べ方を決定的にすること（同値はidで分ける）
+  const budget = gain / CPU_ACCEPT_MARGIN;
+  const pool = [...toPlayers]
+    .filter((p) => tradeKind(p) !== undefined)
+    .sort((a, b) => value(b) - value(a) || a.id - b.id);
+  const picked = [];
+  let left = budget;
+  for (const asked of outgoing) {
+    const slot = pool.find(
+      (p) =>
+        !picked.includes(p) &&
+        tradeKind(p) === tradeKind(asked) &&
+        value(p) <= left,
+    );
+    // 払える選手が居ない＝どう組んでも釣り合わない
+    if (!slot) return { action: 'reject', gain, loss };
+    picked.push(slot);
+    left -= value(slot);
+  }
+  // ⚠ 中身が同じなら逆提案にならない（受けないのだから断る）
+  if (picked.length === outgoing.length &&
+      picked.every((p, i) => p.id === outgoing[i].id))
+    return { action: 'reject', gain, loss };
+  return { action: 'counter', want: picked.map((p) => p.id), gain, loss };
+}
+
 /**
  * 返事ができるのは誰か。
  * ⚠ **手番を持っている側だけ**。両方が同時に受けられると、二重に成立する。

@@ -7,6 +7,7 @@ import {
 } from './LeaguePanels.jsx';
 import DesktopTactics from './DesktopTactics.jsx';
 import AbilityRanking from './AbilityRanking.jsx';
+import CareerStats from './CareerStats.jsx';
 import TeamRoster from './TeamRoster.jsx';
 import LineupBoard from './LineupBoard.jsx';
 import PitchingBoard from './PitchingBoard.jsx';
@@ -55,6 +56,7 @@ const NAV = [
     label: '情報',
     items: [
       ['players', '選手成績'],
+      ['careers', '通算成績'],
       ['ranking', '能力ランキング'],
       ['games', '試合結果'],
     ],
@@ -89,6 +91,7 @@ const BOARD_KEYS = { lineup: LINEUP_BOARD_KEYS, rotation: PITCHING_BOARD_KEYS };
 const TITLES = {
   today: 'ホーム',
   players: '選手成績',
+  careers: '通算成績',
   ranking: '能力ランキング',
   games: '試合結果',
   lineup: 'スタメン設定',
@@ -408,6 +411,7 @@ export default function DesktopView(props) {
           </div>
         </Page>
       )}
+      {current === 'careers' && <CareerStats view={view} />}
       {current === 'ranking' && <AbilityRanking view={view} />}
       {current === 'players' && (
         <TeamRoster view={view}>

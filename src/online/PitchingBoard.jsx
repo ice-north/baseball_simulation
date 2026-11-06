@@ -4,6 +4,7 @@ import { overviewGroup, formatStat } from './statsView.js';
 import { BoardPage, Fatigue } from './BoardParts.jsx';
 import { useBoardHistory } from './useBoardHistory.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
+import { FORM_SHORT, FORM_NAME, getFatigueTone } from '../utils/constants.js';
 import {
   MAX_STARTERS,
   STARTER_ORDER,
@@ -57,7 +58,15 @@ const STAT_COLUMNS = (() => {
   return STAT_IDS.map((id) => columns.find((c) => c.id === id)).filter(Boolean);
 })();
 const SHORT_LABEL = { games: '登板', holds: 'H', saves: 'S' };
-const COLUMN_COUNT = 3 + 3 + 3 + STAT_COLUMNS.length;
+// ⚠ 列を足したらここも直すこと（`colSpan` がずれると罫線が折れる）。
+//    順・役割・投手 / 投・フォーム・年齢・疲労 / 速・制・ス / 成績
+const COLUMN_COUNT = 3 + 4 + 3 + STAT_COLUMNS.length;
+/** 名前の色の意味。⚠ **色だけに頼らない**（読み上げとマウスオーバーに出す） */
+const FATIGUE_TONE_TEXT = {
+  warn: '疲れています（このまま投げ続けると成長が鈍ります）',
+  heavy: 'かなり疲れています（成長の鈍り方が最も大きくなります）',
+  '': undefined,
+};
 
 function HeaderRow() {
   return (
@@ -66,6 +75,9 @@ function HeaderRow() {
       <th className="online-pitch-rolecell">役割</th>
       <th className="online-lineup-person">投手</th>
       <th title="投げる手">投</th>
+      {/* ⚠ **フォームを出す**。球種の相性（`FORM_PITCH_SYNERGY`）と左右の
+          打者への効き方が変わるので、救援の並べ方を決めるのに要る */}
+      <th title="投球フォーム">フォーム</th>
       <th>年齢</th>
       <th
         className="is-sep"
@@ -94,7 +106,12 @@ function HeaderRow() {
 function PitcherCells({ player, starter }) {
   return (
     <>
-      <td className="online-lineup-person">
+      {/* ⚠ 疲労は**名前にも色を付ける**（スタメン設定と同じ `getFatigueTone`）。
+          同じ選手が画面ごとに違う見え方をしないよう、両方の表に当てる */}
+      <td
+        className={`online-lineup-person online-fatigue-${getFatigueTone(player.fatigue) || 'none'}`}
+        title={FATIGUE_TONE_TEXT[getFatigueTone(player.fatigue)]}
+      >
         <span onClick={(e) => e.stopPropagation()}>
           <PlayerStatsButton
             player={player}
@@ -105,6 +122,12 @@ function PitcherCells({ player, starter }) {
         <ConditionMark player={player} />
       </td>
       <td>{player.physical?.throws === 'left' ? '左' : '右'}</td>
+      <td
+        className="online-pitch-form"
+        title={FORM_NAME[player.pitching?.form] || undefined}
+      >
+        {FORM_SHORT[player.pitching?.form] || '—'}
+      </td>
       <td>{player.age ?? '—'}</td>
       <td className="is-sep">
         <Fatigue

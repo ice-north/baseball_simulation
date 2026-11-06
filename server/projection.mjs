@@ -13,6 +13,7 @@ import {
 } from './leagueBoard.mjs';
 import { packSummary, rosterPacksFor } from '../src/online/rosterPack.js';
 import {
+  careerTotals,
   currentPlayerStats,
   currentSeasonStats,
   playerPeriods,
@@ -469,6 +470,10 @@ export function projectTeamInfo(bundle, userId, teamName) {
       return {
         ...visible,
         ...currentPlayerStats(l, teamName, p, statistics),
+        // ⚠ **通算は球団ごとの読み込みに載せる**（`action=team`）。
+        //    全球団ぶんをビューに積むと重く、画面は1球団ずつしか出さない。
+        //    記録が1年も無ければ null（0を並べない）
+        career: careerTotals(l, teamName, p),
         publicOnly: true,
         publicSplits: recordForPlayer(l, p, teamName)?.splits || null,
         publicPartial: !!statistics.season && !statistics.season.complete,

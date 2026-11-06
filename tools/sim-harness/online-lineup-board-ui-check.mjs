@@ -484,9 +484,169 @@ try {
     '抹消された先発の行を救援で埋められない',
   );
   await click('変更を取り消す');
+
+  // ---- 列と、疲労で名前に付く色 ----------------------------------------
+  // ⚠ **投と打を別の列で出すこと**。以前は打の列のマウスオーバーにだけ
+  //    投げる手が入っていて、右投左打かどうかが一覧で分からなかった。
+  //    ⚠ 打の列を**置き換えない**こと（実際にやって表が1列ずれた）
+  // ⚠ **疲労は名前にも色を付ける**。数字の列にも色はあるが、選ぶときに
+  //    目で追っているのは名前なので、数字まで目が行かない。
+  //    黄＝成長が鈍り始める（41〜）、赤＝鈍り方が最も大きい（81〜）
+  {
+    // 疲労を仕込む。⚠ 実際の試合で81以上を作るには何十ターンもかかる
+    await fixture.store.transaction((bundle) => {
+      const team = bundle.league.game.teams[bundle.league.members[0].teamName];
+      const fielders = team.players.filter((x) => x.position !== 'pitcher');
+      fielders[0].fatigue = 0;
+      fielders[1].fatigue = 50;
+      fielders[2].fatigue = 95;
+      const pitchers = team.players.filter((x) => x.position === 'pitcher');
+      pitchers[0].fatigue = 95;
+      bundle.league.revision++;
+      return { value: null };
+    });
+    await go('スタメン設定');
+    await click('更新');
+    const headers = async () =>
+      (await p.locator('thead th:visible').allInnerTexts()).map((t) => t.trim());
+    const lineupHeaders = await headers();
+    assert.ok(
+      lineupHeaders.includes('投') && lineupHeaders.includes('打'),
+      `投と打の列が揃っていない: ${lineupHeaders.join('/')}`,
+    );
+    assert.ok(
+      lineupHeaders.indexOf('投') < lineupHeaders.indexOf('打'),
+      '投が打より後ろにある',
+    );
+    // ⚠ **見出しと本文の列数が揃っていること**。ずれると値が1列ずれて並ぶ
+    assert.deepEqual(
+      await p.evaluate(() => {
+        const t = [...document.querySelectorAll('table')].find(
+          (x) => x.offsetParent,
+        );
+        const body = [...t.querySelectorAll('tbody tr')].find(
+          (r) => r.querySelectorAll('td').length > 3,
+        );
+        return [
+          t.querySelectorAll('thead th').length,
+          body.querySelectorAll('td').length,
+        ];
+      }),
+      (() => {
+        const n = lineupHeaders.length;
+        return [n, n];
+      })(),
+      'スタメン設定の見出しと本文で列数が違う',
+    );
+    // ⚠ **見えている表から取ること**。2つのページは隠して残してあるので
+    //    （`BoardPage` の `hidden`）、`:visible` を付けないと裏の表に当たる
+    const toneOf = (name) =>
+      p
+        .locator('td.online-lineup-person:visible', { hasText: name })
+        .first()
+        .getAttribute('class');
+    const live = (await fixture.store.read()).league;
+    const own = live.game.teams[live.members[0].teamName].players;
+    const fielders = own.filter((x) => x.position !== 'pitcher');
+    assert.match(await toneOf(fielders[0].name), /online-fatigue-none/, '疲労0に色が付いている');
+    assert.match(await toneOf(fielders[1].name), /online-fatigue-warn/, '疲労50が黄色でない');
+    assert.match(await toneOf(fielders[2].name), /online-fatigue-heavy/, '疲労95が赤でない');
+    // ⚠ **色だけに頼らない**。読み上げとマウスオーバーに意味を出す
+    assert.match(
+      await p
+        .locator('td.online-lineup-person:visible', { hasText: fielders[2].name })
+        .first()
+        .getAttribute('title'),
+      /疲れ/,
+      '色の意味が文字で出ていない',
+    );
+
+    // ---- 投手起用: フォームの列と、同じ色
+    await go('投手起用');
+    const pitchHeaders = await headers();
+    assert.ok(
+      pitchHeaders.includes('フォーム'),
+      `投手起用にフォームの列が無い: ${pitchHeaders.join('/')}`,
+    );
+    const forms = (
+      await p.locator('td.online-pitch-form:visible').allInnerTexts()
+    ).map((t) => t.trim());
+    assert.ok(forms.length > 0, 'フォームの欄が1つも出ていない');
+    // ⚠ 名前（オーバー/スリクォ/サイド/アンダー）で出すこと。内部のキーを出さない
+    assert.ok(
+      forms.every((f) => ['オーバー', 'スリクォ', 'サイド', 'アンダー', '—'].includes(f)),
+      `フォームの書き方がちがう: ${[...new Set(forms)].join('/')}`,
+    );
+    assert.ok(
+      forms.some((f) => f !== '—'),
+      'フォームが全部「—」（投影に載っていない）',
+    );
+    const tiredPitcher = own.find((x) => x.position === 'pitcher' && x.fatigue === 95);
+    assert.match(
+      await toneOf(tiredPitcher.name),
+      /online-fatigue-heavy/,
+      '投手起用で疲労95が赤でない',
+    );
+  }
+  // ---- 通算成績（情報 → 通算成績）--------------------------------------
+  // ⚠ **1年で終わるゲームではない**。育てた選手がこのリーグで何をしたかが
+  //    残らないと、育てた意味が見えない。
+  // ⚠ 通算は**球団ごとの読み込み**に載る（ビューには載せない）。自球団でも
+  //    読み直さないと空欄になる（`TeamRoster` の `always`）
+  {
+    await go('通算成績');
+    const heading = p.getByRole('heading', { name: '通算成績', level: 1 });
+    await heading.waitFor();
+    // ⚠ 期間の名前は**表の脇にも出すこと**（今季の表と同じ見た目なので、
+    //    どちらを見ているのか分からなくなる）
+    assert.match(
+      await p.locator('.online-roster-toolbar small:visible').first().innerText(),
+      /通算/,
+      '表の脇に期間（通算）が出ていない',
+    );
+    // ⚠ **起用の順では並べない**（1試合の投手が先頭に来る）。出場量の多い順
+    await p.getByText('並び：打席（大きい順）', { exact: false }).waitFor();
+    const live = (await fixture.store.read()).league;
+    const own = live.members[0].teamName;
+    const info = await fixture.service.teamInfo('admin', own);
+    const top = info.roster
+      .filter((x) => x.career?.seasonStats?.batting?.plateAppearances)
+      .sort(
+        (x, y) =>
+          y.career.seasonStats.batting.plateAppearances -
+          x.career.seasonStats.batting.plateAppearances,
+      )[0];
+    assert.ok(top, '前提: 通算の打席がある選手が居ない');
+    const row = p
+      .locator('.online-roster-rows article')
+      .filter({ hasText: top.name })
+      .first();
+    await row.waitFor();
+    // ⚠ **サーバーが出した合計をそのまま出すこと**（画面で足し直さない）
+    const cells = (await row.locator('.online-roster-values > span').allInnerTexts()).map(
+      (t) => t.trim(),
+    );
+    assert.ok(
+      cells.includes(String(top.career.seasonStats.batting.plateAppearances)),
+      `通算の打席が出ていない: ${cells.join('/')}`,
+    );
+    // ⚠ 今季の表と**同じ列・同じ操作**にすること（別の表を作らない）
+    await p
+      .getByRole('button', { name: '本塁打で並べ替え', exact: true })
+      .click();
+    await p.getByText('並び：本塁打（大きい順）', { exact: false }).waitFor();
+    // ⚠ 他球団も見られること（球団を選ぶ）
+    const other = live.season.settings.teamNames.find((n) => n !== own);
+    await p.getByLabel('閲覧する球団').selectOption(other);
+    await p.getByText('通算・閲覧 · ', { exact: false }).waitFor();
+    assert.ok(
+      (await p.locator('.online-roster-rows article').count()) > 0,
+      '他球団の通算成績が出ない',
+    );
+  }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えに投手なし / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し）',
+    'online-lineup-board-ui-check PASS（守備分析なし / 控えに投手なし / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績）',
   );
 } finally {
   await browser.close();

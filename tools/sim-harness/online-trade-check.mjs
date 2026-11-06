@@ -15,8 +15,11 @@ import {
   rostersAfterTrade,
   canRespond,
   canCounter,
+  cpuTradeDecision,
+  CPU_ACCEPT_MARGIN,
   MAX_OPEN_TRADES,
 } from '../../src/online/trades.js';
+import { tradeValueOf } from '../../server/leagueEngine.mjs';
 import { ROSTER_LIMIT } from '../../src/online/shared.js';
 import { PACK_SIZE } from '../../src/online/rosterPack.js';
 
@@ -57,6 +60,56 @@ const NOW = '2026-10-26T15:00:00.000Z';
   assert.ok(
     rosterShortfall([...ok, ...make(1, 'left')]).length,
     `${ROSTER_LIMIT}人を超えても通している`,
+  );
+
+  // --- CPUの判断（規則だけ）--------------------------------------------
+  // ⚠ 値段は作り物を渡す。本物の評価式に引きずられず、3つの分岐そのものを見る
+  const price = { strong: 300, mid: 200, weak: 100 };
+  const guy = (id, position, tier) => ({ id, position, tier });
+  const valueOf = (p) => price[p.tier];
+  const decide = (fromPlayers, toPlayers, offerIds, wantIds) =>
+    cpuTradeDecision({ valueOf, fromPlayers, toPlayers, offerIds, wantIds });
+  const humanRoster = [
+    guy(1, 'pitcher', 'strong'),
+    guy(2, 'pitcher', 'weak'),
+    guy(3, 'left', 'mid'),
+    guy(4, 'pitcher', 'mid'),
+  ];
+  const cpuRoster = [
+    guy(11, 'pitcher', 'strong'),
+    guy(12, 'pitcher', 'mid'),
+    guy(13, 'pitcher', 'weak'),
+    guy(14, 'left', 'mid'),
+  ];
+  // 一方的に得（もらうだけ）→ 受ける
+  assert.equal(decide(humanRoster, cpuRoster, [1], []).action, 'accept');
+  // ⚠ **釣り合っているだけでは受けない**。等価交換を通すと、少しだけ得な
+  //    提案を繰り返して一方的に戦力を集められる
+  assert.equal(decide(humanRoster, cpuRoster, [1], [11]).action, 'counter');
+  // 上乗せがあれば受ける（strong 300 ≧ mid 200 × 1.05）
+  assert.equal(decide(humanRoster, cpuRoster, [1], [12]).action, 'accept');
+  // 釣り合わない要求 → 払える選手に差し替えて逆提案
+  {
+    // mid 200 で strong 300 を要求 → 予算 190 に収まる投手（weak 100）へ
+    const d = decide(humanRoster, cpuRoster, [4], [11]);
+    assert.equal(d.action, 'counter');
+    // ⚠ **守備の括りは変えない**（内野を頼まれて投手を出さない）
+    assert.deepEqual(d.want, [13], '予算に収まる投手へ差し替えていない');
+    // ⚠ **予算に収まる中で最も価値が高い選手**を出す（安く見せかけない）
+    const even = decide(humanRoster, cpuRoster, [1], [11]);
+    assert.deepEqual(even.want, [12], '予算に収まる上の選手を出していない');
+  }
+  // ⚠ いちばん安い選手にも届かない額なら断る（weak 100 → 予算 95）
+  assert.equal(decide(humanRoster, cpuRoster, [2], [11]).action, 'reject');
+  // タダで要求 → 断る（払える選手が居ない）
+  assert.equal(decide(humanRoster, cpuRoster, [], [11]).action, 'reject');
+  // ⚠ 括りが違うと差し替えられない。野手を頼まれたが予算に収まる野手が居ない
+  assert.equal(decide(humanRoster, cpuRoster, [2], [14]).action, 'reject');
+  // ⚠ **同じ答えを返すこと**（乱数を使っていない）
+  assert.deepEqual(
+    decide(humanRoster, cpuRoster, [4], [11]),
+    decide(humanRoster, cpuRoster, [4], [11]),
+    '同じ提案に違う答えを返した',
   );
 
   // 入れ替えの計算。⚠ 元の配列を書き換えない
@@ -129,14 +182,16 @@ try {
   const pickA = rosterOf(started, teamA).find((p) => p.position === 'pitcher');
   const pickB = rosterOf(started, teamB).find((p) => p.position === 'pitcher');
 
-  // ⚠ 相手は参加者の球団だけ（CPUは返事をしない）
-  const cpu = started.season.settings.teamNames.find(
-    (n) => n !== teamA && n !== teamB,
-  );
+  // ⚠ 居ない球団は相手にできない
   await assert.rejects(
-    () => send('a', sa, 'tradeOffer', { to: cpu, offer: [pickA.id], want: [] }),
-    /参加者の球団だけ/,
-    'CPU球団に提案できた',
+    () =>
+      send('a', sa, 'tradeOffer', {
+        to: '存在しない球団',
+        offer: [pickA.id],
+        want: [],
+      }),
+    /相手の球団が見つかりません/,
+    '居ない球団に提案できた',
   );
   // ⚠ 自分の球団とはトレードできない
   await assert.rejects(
@@ -546,6 +601,171 @@ try {
     }
   }
 
+  // --- CPU球団とのトレード（その場で答える）-----------------------------
+  // ⚠ **1人で遊んでいる間もトレードが使えること**。以前は参加者の球団だけを
+  //    相手にしていて、CPU11球団に対して何も出せなかった。
+  {
+    // ⚠ **相手は、いま誰も持っていない球団から選び直すこと**。上の節で人が
+    //    増えると、最初に見つけた球団が参加者のものになっていることがある
+    const held = new Set((await live()).members.map((m) => m.teamName));
+    const cpu = (await live()).season.settings.teamNames.find(
+      (n) => !held.has(n),
+    );
+    assert.ok(cpu, '前提: CPU球団が残っていない');
+    // ⚠ 値段は**1人1回だけ計算する**。`tradeValueOf` は重く、下の組み合わせ探しで
+    //    何百回も呼ぶことになる
+    const prices = new Map();
+    const value = (p) => {
+      if (!prices.has(p.id)) prices.set(p.id, tradeValueOf(p));
+      return prices.get(p.id);
+    };
+    const kindOf = (p) =>
+      p.position === 'pitcher'
+        ? 'pitcher'
+        : p.position === 'catcher'
+          ? 'catcher'
+          : 'fielder';
+
+    // (1) 一方的に得な提案（もらうだけ）→ その場で成立する
+    {
+      const before = await live();
+      const giveaway = [...rosterOf(before, teamA)]
+        .filter((p) => p.position === 'pitcher')
+        .sort((x, y) => value(y) - value(x))[0];
+      await send('a', sa, 'tradeOffer', {
+        to: cpu,
+        offer: [giveaway.id],
+        want: [],
+      });
+      const after = await live();
+      assert.ok(
+        rosterOf(after, cpu).some((p) => p.id === giveaway.id),
+        'CPUが受けたのに選手が動いていない',
+      );
+      assert.ok(
+        !rosterOf(after, teamA).some((p) => p.id === giveaway.id),
+        '出した選手が自分の名簿に残っている',
+      );
+      // ⚠ **その場で終わること**。待ち状態が残ると、返事をしない相手を
+      //    永久に待つことになる
+      assert.equal(
+        after.trades.filter((t) => t.toTeam === cpu).length,
+        0,
+        'CPUとのトレードが返事待ちで残っている',
+      );
+      assert.ok(
+        after.notices.some((n) => n.type === 'trade'),
+        'お知らせに残っていない',
+      );
+      // ⚠ 打順を組み直すこと（出した選手が打順に残ると試合が組めない）
+      for (const name of [teamA, cpu]) {
+        const ids = new Set(rosterOf(after, name).map((p) => p.id));
+        for (const e of after.game.teams[name].lineupSettings?.battingOrder || [])
+          assert.ok(ids.has(e.playerId), `${name} の打順に居ない選手が残った`);
+      }
+    }
+
+    // (2) タダで要求 → 断る。**記録を残さない**（押し直せてしまう）
+    {
+      const l = await live();
+      const target = [...rosterOf(l, cpu)].sort((x, y) => value(y) - value(x))[0];
+      const open = (await live()).trades.length;
+      await assert.rejects(
+        () => send('a', sa, 'tradeOffer', { to: cpu, offer: [], want: [target.id] }),
+        /応じませんでした/,
+        'CPUがタダで選手を渡した',
+      );
+      assert.equal(
+        (await live()).trades.length,
+        open,
+        '断られた提案が残っている',
+      );
+      assert.ok(
+        rosterOf(await live(), cpu).some((p) => p.id === target.id),
+        '断ったのに選手が動いた',
+      );
+    }
+
+    // (3) 釣り合わない提案 → 逆提案が返り、こちらが受けると成立する
+    {
+      const l = await live();
+      const mine = rosterOf(l, teamA);
+      const theirs = rosterOf(l, cpu);
+      // ⚠ 組み合わせは**同じ物差しで探す**。値段を決め打ちすると、評価式を
+      //    変えたときに「逆提案にならない提案」を送って検査が無意味になる
+      let pair = null;
+      for (const give of mine) {
+        for (const ask of theirs) {
+          if (kindOf(give) !== kindOf(ask)) continue;
+          if (value(give) >= value(ask) * CPU_ACCEPT_MARGIN) continue;
+          const affordable = theirs.some(
+            (p) =>
+              p.id !== ask.id &&
+              kindOf(p) === kindOf(ask) &&
+              value(p) <= value(give) / CPU_ACCEPT_MARGIN,
+          );
+          if (affordable) {
+            pair = { give, ask };
+            break;
+          }
+        }
+        if (pair) break;
+      }
+      assert.ok(pair, '前提: 逆提案になる組み合わせが見つからない');
+      await send('a', sa, 'tradeOffer', {
+        to: cpu,
+        offer: [pair.give.id],
+        want: [pair.ask.id],
+      });
+      const countered = (await live()).trades.find((t) => t.toTeam === cpu);
+      assert.ok(countered, '逆提案が残っていない');
+      assert.equal(countered.countered, true, '逆提案の印が無い');
+      // ⚠ 手番が**こちら**に戻ること。相手の返事待ちだと誰も進めない
+      assert.equal(countered.turn, 'from', '手番が戻っていない');
+      assert.notDeepEqual(
+        countered.want,
+        [pair.ask.id],
+        '頼んだ選手がそのまま返ってきた（逆提案になっていない）',
+      );
+      const chosen = theirs.find((p) => p.id === countered.want[0]);
+      assert.ok(chosen, '逆提案の選手が名簿にいない');
+      assert.equal(kindOf(chosen), kindOf(pair.ask), '守備の括りが変わった');
+      assert.ok(
+        value(chosen) <= value(pair.give) / CPU_ACCEPT_MARGIN,
+        `払える範囲を超えた選手を出した（${value(chosen)} > ${value(pair.give) / CPU_ACCEPT_MARGIN}）`,
+      );
+      // ⚠ CPUの逆提案に**こちらは逆提案で返せない**（投げ返しが続くと終わらない）
+      await assert.rejects(
+        () =>
+          send('a', sa, 'tradeRespond', {
+            tradeId: countered.id,
+            action: 'counter',
+            offer: [pair.give.id],
+            want: [pair.ask.id],
+          }),
+        /逆提案は1回/,
+        'CPUの逆提案に投げ返せた',
+      );
+      await send('a', sa, 'tradeRespond', {
+        tradeId: countered.id,
+        action: 'accept',
+      });
+      const done = await live();
+      assert.ok(
+        rosterOf(done, teamA).some((p) => p.id === chosen.id),
+        '逆提案を受けたのに選手が来ていない',
+      );
+      assert.ok(
+        rosterOf(done, cpu).some((p) => p.id === pair.give.id),
+        '逆提案を受けたのに選手を出していない',
+      );
+      assert.equal(
+        done.trades.filter((t) => t.toTeam === cpu).length,
+        0,
+        '成立したのに残っている',
+      );
+    }
+  }
   // --- 初期メンバーへの入れ替えを待っている球団とはトレードしない -----------
   // ⚠ 途中参加した人の名簿は次のキャンプで選んだセットに丸ごと置き換わる。
   //    その前にトレードすると、受け取った選手は置き換えで消え、出した選手だけが
@@ -578,5 +798,5 @@ try {
 }
 
 console.log(
-  '■ トレード: OK（提案→受ける／逆提案は1回だけ→受ける／断ると消える・手番を持つ側だけ返事できる・両球団の名簿を守る・打順を組み直す）',
+  '■ トレード: OK（提案→受ける／逆提案は1回だけ→受ける／断ると消える・手番を持つ側だけ返事できる・両球団の名簿を守る・打順を組み直す・CPU球団はその場で受ける/逆提案/断る）',
 );

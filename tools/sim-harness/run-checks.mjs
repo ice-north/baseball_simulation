@@ -61,7 +61,7 @@ const CHECKS = [
   { name: 'online-pack-check', group: 'check', online: true, slow: 12 },
   { name: 'online-board-check', group: 'check', online: true, slow: 20 },
   { name: 'online-camp-check', group: 'check', online: true, slow: 25 },
-  { name: 'online-trade-check', group: 'check', online: true, slow: 20 },
+  { name: 'online-trade-check', group: 'check', online: true, slow: 120 },
   { name: 'online-parity-check', group: 'check', online: true, slow: 75 },
   { name: 'online-service-check', group: 'check', online: true, slow: 55 },
   { name: 'online-storage-check', group: 'check', online: true, slow: 3 },
