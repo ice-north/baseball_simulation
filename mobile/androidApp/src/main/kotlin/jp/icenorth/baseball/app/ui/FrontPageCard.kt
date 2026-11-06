@@ -24,7 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
 import jp.icenorth.baseball.shared.FrontPage
+import jp.icenorth.baseball.shared.LINK_GAMES
 
 /*
  * ホームの「スポーツ新聞」。アプリのほかの画面は暗い色だが、ここだけ新聞紙の色（生成り）にして
@@ -37,15 +40,36 @@ private val InkSoft = Color(0xFF5B5548)
 private val Red = Color(0xFFC8102E)
 private val Rule = Color(0xFF2B2A27)
 
+/**
+ * @param menu 題字の右に置くメニュー（更新・名前の変更・見た目の切り替え・ログアウト）
+ * @param onLink 記事を押したとき（[FrontPage.Article.link]）
+ */
 @Composable
-fun FrontPageCard(page: FrontPage, onOpenGames: () -> Unit, onOpenLineup: () -> Unit) {
+fun FrontPageCard(
+    page: FrontPage,
+    nextAdvanceAt: String?,
+    menu: @Composable () -> Unit,
+    onLink: (String) -> Unit,
+    onOpenProcedures: () -> Unit,
+) {
+    val onOpenGames = { onLink(LINK_GAMES) }
     Column(
         Modifier
             .fillMaxWidth()
             .background(Paper, RoundedCornerShape(4.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
-        Masthead(page.issue)
+        Masthead(page, nextAdvanceAt, menu)
+        // お知らせ（自分の番の手続きなど）。紙面のいちばん上に赤枠で
+        if (page.alerts.isNotEmpty()) {
+            Column(
+                Modifier.padding(top = 10.dp).fillMaxWidth().border(2.dp, Red).clickable(onClick = onOpenProcedures).padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                Text("お知らせ", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(Red).padding(horizontal = 5.dp, vertical = 1.dp))
+                page.alerts.forEach { Text("■ $it", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Ink, modifier = Modifier.padding(top = 4.dp)) }
+                Text("手続きを開く →", fontSize = 12.sp, color = Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+            }
+        }
         // 大見出し
         page.kicker?.let {
             Text(
@@ -75,14 +99,14 @@ fun FrontPageCard(page: FrontPage, onOpenGames: () -> Unit, onOpenLineup: () -> 
         // 記事は2段に組む（最初の1本は全幅）
         if (page.articles.isNotEmpty()) {
             HRule(Modifier.padding(top = 12.dp))
-            ArticleBlock(page.articles.first(), Modifier.fillMaxWidth().padding(vertical = 10.dp), onClick = if (page.articles.first().kicker == "次戦予告") onOpenLineup else null)
+            ArticleBlock(page.articles.first(), Modifier.fillMaxWidth().padding(vertical = 10.dp), onLink)
             page.articles.drop(1).chunked(2).forEach { pair ->
                 HRule()
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 10.dp)) {
-                    ArticleBlock(pair[0], Modifier.weight(1f).padding(end = 8.dp))
+                    ArticleBlock(pair[0], Modifier.weight(1f).padding(end = 8.dp), onLink)
                     if (pair.size > 1) {
                         Box(Modifier.width(1.dp).fillMaxHeight().background(Rule.copy(alpha = 0.4f)))
-                        ArticleBlock(pair[1], Modifier.weight(1f).padding(start = 8.dp))
+                        ArticleBlock(pair[1], Modifier.weight(1f).padding(start = 8.dp), onLink)
                     }
                 }
             }
@@ -103,22 +127,38 @@ fun FrontPageCard(page: FrontPage, onOpenGames: () -> Unit, onOpenLineup: () -> 
     }
 }
 
+/**
+ * 題字。下に「球団・順位」と「日付・ターン・状態・次の進行までの残り時間」を2行で（以前は紙面の上の別のカードだった。
+ * いしだの指定でホームは紙面1枚にまとめる）
+ */
 @Composable
-private fun Masthead(issue: String) {
-    Row(verticalAlignment = Alignment.Bottom) {
+private fun Masthead(page: FrontPage, nextAdvanceAt: String?, menu: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text("NEXT STAGE", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = 1.sp, color = Ink)
         Text(
             "スポーツ",
             color = Color.White,
             fontSize = 13.sp,
             fontWeight = FontWeight.Black,
-            modifier = Modifier.padding(start = 6.dp, bottom = 3.dp).background(Red).padding(horizontal = 5.dp, vertical = 1.dp),
+            modifier = Modifier.padding(start = 6.dp).background(Red).padding(horizontal = 5.dp, vertical = 1.dp),
         )
-        Text(issue, fontSize = 11.sp, color = InkSoft, textAlign = TextAlign.End, modifier = Modifier.weight(1f).padding(bottom = 3.dp))
+        Box(Modifier.weight(1f))
+        CompositionLocalProvider(LocalContentColor provides Ink) { menu() }
     }
     // 題字の下の二重線
-    Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(2.dp).background(Rule))
+    Box(Modifier.padding(top = 2.dp).fillMaxWidth().height(2.dp).background(Rule))
     Box(Modifier.padding(top = 2.dp).fillMaxWidth().height(1.dp).background(Rule))
+    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
+        Text(page.team, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 16.sp, color = Ink, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+        page.standing?.let { Text("　$it", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1) }
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.Bottom) {
+        Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), fontSize = 11.sp, color = InkSoft, modifier = Modifier.weight(1f))
+        val left = secondsUntil(nextAdvanceAt)
+        Text("次の進行まで ", fontSize = 11.sp, color = InkSoft)
+        Text(countdownText(left), fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 16.sp, color = Red)
+    }
+    Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(1.dp).background(Rule.copy(alpha = 0.5f)))
 }
 
 @Composable
@@ -137,8 +177,9 @@ private fun ScoreLine(score: FrontPage.Score) {
 }
 
 @Composable
-private fun ArticleBlock(article: FrontPage.Article, modifier: Modifier, onClick: (() -> Unit)? = null) {
-    Column(modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)) {
+private fun ArticleBlock(article: FrontPage.Article, modifier: Modifier, onLink: (String) -> Unit) {
+    val link = article.link
+    Column(modifier.then(if (link != null) Modifier.clickable { onLink(link) } else Modifier)) {
         Text(
             article.kicker,
             color = Paper,

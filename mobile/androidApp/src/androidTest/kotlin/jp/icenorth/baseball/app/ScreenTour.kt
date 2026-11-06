@@ -104,7 +104,20 @@ class ScreenTour {
         pause(3000)
         val view = model.view!!
 
+        rule.runOnUiThread { model.changeHomeStyle("Paper") }
+        pause()
         page("home", scrolls = 3)
+        // ホームの見た目の切り替え（新聞風・ネットニュース風・通常。中身は同じ記事）
+        listOf("Web" to "home-web", "Plain" to "home-plain").forEach { (style, name) ->
+            step(name) {
+                rule.runOnUiThread { model.changeHomeStyle(style) }
+                pause(1500)
+                rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown(startY = top + height * 0.2f, endY = bottom * 0.75f) }
+                page(name, scrolls = 2)
+            }
+        }
+        rule.runOnUiThread { model.changeHomeStyle("Paper") }
+        pause()
         step("menu") { rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); shot("home-menu"); back() }
 
         when (stage) {

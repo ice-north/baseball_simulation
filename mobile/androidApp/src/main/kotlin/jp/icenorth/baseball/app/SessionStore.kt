@@ -30,6 +30,11 @@ class SessionStore(context: Context) {
         }
         set(value) = prefs.edit().putString("tryoutWeights", value?.let { OnlineJson.encodeToString(it) }).apply()
 
+    /** ホームの見た目（新聞風・ネットニュース風・通常）。端末に覚える */
+    var homeStyle: String?
+        get() = prefs.getString("homeStyle", null)
+        set(value) = prefs.edit().putString("homeStyle", value).apply()
+
     var viewJson: String?
         get() = prefs.getString("view", null)
         set(value) = prefs.edit().putString("view", value).apply()

@@ -44,7 +44,7 @@ import jp.icenorth.baseball.shared.subPositions
 
 /**
  * 守備位置の色。投手・捕手・内野・外野で分け、一目で「どこを守る選手か」が分かるようにする。
- * ⚠ 能力のランク色（数字の文字色）と取り違えないよう、位置は**塗りの札**でだけ使う。
+ * ⚠ 能力のランク色（数字の文字色）と取り違えないよう、位置の色は**札の枠と字**でだけ使う。
  */
 fun positionColor(pos: String?): Color = when (positionGroup(pos)) {
     // パワプロと同じ並び（いしだ指定: 投手は赤ピンク、捕手は水色、内野は黄、外野は緑）
@@ -55,24 +55,26 @@ fun positionColor(pos: String?): Color = when (positionGroup(pos)) {
     else -> Color(0xFF475569)
 }
 
-/** 守備位置の札。filled＝守っている位置・本職、枠だけ＝ほかに守れる位置 */
+/**
+ * 守備位置の札。**塗らずに枠と字だけ**を位置の色にする（いしだ指定: 塗りつぶしは強すぎる）。
+ * @param filled 強調（守っている位置・本職）。枠を太くし、字を太く。ほかに守れる位置は細い枠
+ */
 @Composable
 fun PosBadge(pos: String?, filled: Boolean = true, small: Boolean = false, onClick: (() -> Unit)? = null) {
-    val color = positionColor(pos)
+    val color = lighten(positionColor(pos))
     val shape = RoundedCornerShape(if (small) 4.dp else 6.dp)
     Box(
         Modifier
             .then(if (small) Modifier.size(width = 20.dp, height = 18.dp) else Modifier.size(width = 34.dp, height = 28.dp))
-            .then(if (filled) Modifier.background(color, shape) else Modifier.border(1.dp, color, shape))
+            .border(if (filled) (if (small) 1.5.dp else 2.dp) else 1.dp, if (filled) color else color.copy(alpha = 0.7f), shape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             positionLabel(pos),
             fontSize = if (small) 11.sp else 15.sp,
-            fontWeight = FontWeight.Black,
-            // 黄の札は白い字だと読めないので黒っぽい字にする
-            color = if (filled) (if (positionGroup(pos) == "infield") Color(0xFF1C1917) else Color.White) else color.copy(alpha = 1f).let { lighten(it) },
+            fontWeight = if (filled) FontWeight.Black else FontWeight.Bold,
+            color = if (filled) color else color.copy(alpha = 0.85f),
         )
     }
 }

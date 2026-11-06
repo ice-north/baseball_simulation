@@ -14,6 +14,14 @@ import kotlin.math.round
 data class FrontPage(
     /** 題字の下の日付（「4月23日 第25ターン」） */
     val issue: String,
+    /** 自球団の名前（題字の下に出す） */
+    val team: String,
+    /** 部の中の順位と勝敗（「1部 3位 10勝8敗」）。まだ試合が無ければ部だけ */
+    val standing: String?,
+    /** リーグの状態（進行中・停止中など） */
+    val status: String?,
+    /** 自分の番の手続き・返事待ちのトレードなど（紙面のいちばん上に「お知らせ」で出す。押すと手続きへ） */
+    val alerts: List<String>,
     /** 大見出し */
     val headline: String,
     /** 袖見出し（連勝・順位など） */
@@ -31,8 +39,13 @@ data class FrontPage(
 ) {
     enum class Tone { Win, Lose, Draw, None }
     data class Score(val away: String, val awayScore: Int, val home: String, val homeScore: Int)
-    data class Article(val kicker: String, val title: String, val body: String)
+    /** @param link 押したときに開く所（[LINK_LINEUP] など）。null なら押せない */
+    data class Article(val kicker: String, val title: String, val body: String, val link: String? = null)
 }
+
+const val LINK_LINEUP = "lineup"
+const val LINK_GAMES = "games"
+const val LINK_TIPS = "tips"
 
 private fun one(v: Double?): String = v?.let { (round(it * 10) / 10).toString() } ?: "-"
 private fun two(v: Double?): String = v?.let { val r = round(it * 100).toInt(); "${r / 100}.${(abs(r) % 100).toString().padStart(2, '0')}" } ?: "-"
@@ -42,7 +55,17 @@ private fun gamesBehind(leader: Standing, me: Standing): Double = ((leader.wins 
 
 private fun outsText(outs: Int): String = if (outs % 3 == 0) "${outs / 3}回" else "${outs / 3}回${outs % 3}/3"
 
-fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = null): FrontPage {
+/**
+ * @param alerts 自分の番の手続きなど（締め切りの書き方が端末の時計に依るので、画面の側で作って渡す）
+ * @param column 紙面の終わりに載せるコラム（ゲームのTIPS など）
+ */
+fun buildFrontPage(
+    view: LeagueView,
+    raw: JsonObject?,
+    lastGame: JsonObject? = null,
+    alerts: List<String> = emptyList(),
+    column: FrontPage.Article? = null,
+): FrontPage {
     val team = view.teamName ?: ""
     val me = view.teamShort(team)
     val date = view.currentDate
@@ -153,7 +176,7 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
             "先発は${ourStarter.name}（${ourStarter.wins}勝${ourStarter.losses}敗${ourStarter.era?.let { " 防御率${two(it)}" } ?: ""}）、" +
                 "${opp}は${theirStarter.name}（${theirStarter.wins}勝${theirStarter.losses}敗）の予想。"
         } else ""
-        articles += FrontPage.Article("次戦予告", "次は${opp}戦（${if (home) "本拠地" else "敵地"}）", pitchers.ifEmpty { "先発はまだ決まっていない。" })
+        articles += FrontPage.Article("次戦予告", "次は${opp}戦（${if (home) "本拠地" else "敵地"}）", pitchers.ifEmpty { "先発はまだ決まっていない。" }, LINK_LINEUP)
     }
 
     // 順位の行方（数字は文の中に少しだけ）
@@ -166,7 +189,7 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
         } else {
             "${view.teamShort(top.team)}が${top.wins}勝${top.losses}敗で${leagueName}を引っ張る。${me}は${placeText}。"
         }
-        articles += FrontPage.Article("順位の行方", title, body)
+        articles += FrontPage.Article("順位の行方", title, body, LINK_GAMES)
     }
 
     // タイトル戦線（自球団の選手が上位に居れば、その話題を優先）
@@ -186,11 +209,12 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
             "タイトル戦線",
             "${name}、${b.at("label").str()}${if (rank == 1) "トップ" else "${rank}位"}",
             "${b.at("label").str()}は${leaderValue(b, row)}でリーグ${rank}位につける。" + if (others.isNotEmpty()) "ほかにも、$others。" else "",
+            LINK_GAMES,
         )
     } else {
         boards.firstOrNull { it.at("id").str() == "avg" }?.let { b ->
             b.at("rows").list().firstOrNull()?.obj()?.let { row ->
-                articles += FrontPage.Article("タイトル戦線", "首位打者争い、${row.at("name").str()}が先頭", "${view.teamShort(row.at("team").str().orEmpty())}の${row.at("name").str()}が打率${leaderValue(b, row)}でトップ。${me}の選手は上位5人に居ない。")
+                articles += FrontPage.Article("タイトル戦線", "首位打者争い、${row.at("name").str()}が先頭", "${view.teamShort(row.at("team").str().orEmpty())}の${row.at("name").str()}が打率${leaderValue(b, row)}でトップ。${me}の選手は上位5人に居ない。", LINK_GAMES)
             }
         }
     }
@@ -207,7 +231,7 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
         tired.takeIf { it.isNotEmpty() }?.let { "${it.take(3).joinToString("・")}は疲れがたまっており、休養が必要か。" },
     )
     if (bench.isNotEmpty()) {
-        articles += FrontPage.Article("ベンチ裏", if (hot.isNotEmpty()) "${hot.first()}が絶好調" else if (tired.isNotEmpty()) "${tired.first()}に疲れ" else "${me}の話題", bench.joinToString(""))
+        articles += FrontPage.Article("ベンチ裏", if (hot.isNotEmpty()) "${hot.first()}が絶好調" else if (tired.isNotEmpty()) "${tired.first()}に疲れ" else "${me}の話題", bench.joinToString(""), LINK_LINEUP)
     }
 
     // リーグ便りの最新1件（全件は試合タブ）
@@ -221,11 +245,12 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
                     if (ours.isNotEmpty()) "${me}から${ours.size}人がプロへ" else "ドラフト会議で${items.size}人が指名",
                     if (ours.isNotEmpty()) ours.take(3).joinToString("、") { "${it.at("name").str()}（${view.teamShort(it.at("npbTeam").str().orEmpty())}）" } + "が指名を受けた。"
                     else "リーグから${items.size}人がNPBの球団へ。詳しくは試合タブのリーグ便りで。",
+                    LINK_GAMES,
                 )
             }
             "promotion" -> {
                 val up = items.filter { it.at("to").str() == "A" }.mapNotNull { it.at("teamId").str() }.map { view.teamShort(it) }
-                articles += FrontPage.Article("昇格・降格", if (up.isNotEmpty()) "${up.joinToString("・")}が1部へ" else "入れ替えが決まる", "${items.size}球団の所属が入れ替わった。")
+                articles += FrontPage.Article("昇格・降格", if (up.isNotEmpty()) "${up.joinToString("・")}が1部へ" else "入れ替えが決まる", "${items.size}球団の所属が入れ替わった。", LINK_GAMES)
             }
             "trade" -> {
                 val teams = n.at("teams").list().mapNotNull { it.str() }.map { view.teamShort(it) }
@@ -233,6 +258,7 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
                     "トレード",
                     "${teams.joinToString("と")}がトレード成立",
                     items.take(4).joinToString("、") { "${it.at("name").str()}（→${view.teamShort(it.at("team").str().orEmpty())}）" } + "が移籍する。",
+                    LINK_GAMES,
                 )
             }
             "tryout" -> {
@@ -241,6 +267,7 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
                     "トライアウト",
                     if (ours.isNotEmpty()) "${me}、トライアウトで${ours.size}人獲得" else "トライアウトで${items.size}人が新天地へ",
                     if (ours.isNotEmpty()) ours.take(4).joinToString("・") { it.at("name").str().orEmpty() } + "が加わる。" else "詳しくは試合タブのリーグ便りで。",
+                    LINK_GAMES,
                 )
             }
         }
@@ -252,7 +279,26 @@ fun buildFrontPage(view: LeagueView, raw: JsonObject?, lastGame: JsonObject? = n
             .map { "${view.teamShort(it.away)} ${it.awayScore}-${it.homeScore} ${view.teamShort(it.home)}" }
     }.orEmpty()
 
-    return FrontPage(issue, headline, kicker, subhead, lead, tone, score, articles, shorts)
+    column?.let { articles += it }
+    val standing = listOfNotNull(
+        leagueName.ifEmpty { null },
+        mine?.takeIf { it.gamesPlayed > 0 }?.let { "${rankIndex + 1}位 ${it.wins}勝${it.losses}敗${if (it.draws > 0) "${it.draws}分" else ""}" },
+    ).joinToString(" ").ifEmpty { null }
+    return FrontPage(
+        issue = issue,
+        team = view.teamLabel(team),
+        standing = standing,
+        status = view.status?.let { STATUS_LABELS[it] ?: it },
+        alerts = alerts,
+        headline = headline,
+        kicker = kicker,
+        subhead = subhead,
+        lead = lead,
+        tone = tone,
+        score = score,
+        articles = articles,
+        shorts = shorts,
+    )
 }
 
 private val LEADER_UNITS = mapOf("homeruns" to "本", "rbis" to "打点", "stolenBases" to "個", "wins" to "勝", "strikeouts" to "個", "saves" to "セーブ")

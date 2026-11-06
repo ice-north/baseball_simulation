@@ -50,6 +50,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var tryoutWeights by mutableStateOf(sanitizeWeights(store.tryoutWeights))
         private set
 
+    /** ホームの見た目（[jp.icenorth.baseball.app.ui.HomeStyle] の名前）。端末に覚える */
+    var homeStyle by mutableStateOf(store.homeStyle)
+        private set
+
+    fun changeHomeStyle(name: String) {
+        homeStyle = name
+        store.homeStyle = name
+    }
+
     fun changeWeights(next: Map<String, Int>) {
         tryoutWeights = sanitizeWeights(next)
         store.tryoutWeights = tryoutWeights

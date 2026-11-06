@@ -126,6 +126,16 @@ class ViewTest {
         assertTrue(page.articles.any { it.kicker == "次戦予告" })
         assertTrue(page.articles.any { it.kicker == "タイトル戦線" })
         println(page)
+        // 題字まわり（以前はホームの上の別カード）: 球団名・部の順位と勝敗
+        assertTrue(page.team.isNotEmpty())
+        assertTrue(page.standing!!.contains("位"), page.standing)
+        // 記事の飛び先・コラム（TIPS）・お知らせ
+        assertEquals(LINK_LINEUP, page.articles.first { it.kicker == "次戦予告" }.link)
+        val withTip = buildFrontPage(view, raw, alerts = listOf("契約更改 を決めてください"), column = FrontPage.Article("コラム", "t", "b", LINK_TIPS))
+        assertEquals("コラム", withTip.articles.last().kicker)
+        assertEquals(listOf("契約更改 を決めてください"), withTip.alerts)
+        // 試合が終わってすぐ、順位の文が「、。」にならない
+        assertTrue(!page.lead!!.contains("、。"), page.lead)
         // 試合の無い紙面（初期メンバー選び）
         val pre = buildFrontPage(view.copy(results = emptyList(), pendingPack = kotlinx.serialization.json.JsonObject(emptyMap())), raw)
         assertEquals(FrontPage.Tone.None, pre.tone)
