@@ -80,6 +80,9 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 
 private enum class PlanTab(val label: String) { Order("スタメン"), Pitching("投手起用"), Tactics("方針・采配") }
 
+/** 編集（今の編集に当てる変換）を渡す */
+private typealias Edit = ((PlanDraft) -> PlanDraft) -> Unit
+
 private sealed interface PlanSheet {
     data class Position(val index: Int) : PlanSheet
     data class Replace(val index: Int) : PlanSheet
@@ -113,7 +116,18 @@ fun PlanScreen(model: AppViewModel) {
     val history = model.plan ?: EditHistory(PlanDraft.from(lineup, view.roster))
     val draft = history.present
     val dirty = !draft.sameEdit(PlanDraft.from(draft.base, view.roster))
-    val edit: (PlanDraft) -> Unit = { model.plan = history.push(it) }
+    // ⚠ 編集は「今の編集に当てる変換」で渡す。ドラッグ中は描き直しの前に何度も呼ばれるので、
+    //    描いたときの draft から作ると途中の移動が消える
+    val edit: Edit = { f -> (model.plan ?: history).let { h -> model.plan = h.push(f(h.present)) } }
+    // ドラッグ1回ぶんの移動は1手にまとめる（元に戻す1回で、つかむ前に戻る）
+    val dragging = remember { booleanArrayOf(false) }
+    val dragEdit: Edit = { f ->
+        (model.plan ?: history).let { h ->
+            val next = f(h.present)
+            if (next != h.present) model.plan = if (dragging[0]) h.replace(next) else h.push(next).also { dragging[0] = true }
+        }
+    }
+    val onDragStart = { dragging[0] = false }
     var tab by rememberSaveable { mutableStateOf(PlanTab.Order) }
     var sheet by remember { mutableStateOf<PlanSheet?>(null) }
     val players = remember(view.roster) { view.roster.associateBy { it.id } }
@@ -142,8 +156,8 @@ fun PlanScreen(model: AppViewModel) {
         }
         ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) })
         when (tab) {
-            PlanTab.Order -> OrderEditor(view, draft, players, edit, open) { sheet = it }
-            PlanTab.Pitching -> PitchingEditor(draft, players, model.raw?.at("nextStarterId").num()?.toLong(), edit, open) { sheet = it }
+            PlanTab.Order -> OrderEditor(view, draft, players, dragEdit, onDragStart, open) { sheet = it }
+            PlanTab.Pitching -> PitchingEditor(draft, players, model.raw?.at("nextStarterId").num()?.toLong(), dragEdit, onDragStart, open) { sheet = it }
             PlanTab.Tactics -> TacticsEditor(draft, edit)
         }
     }
@@ -152,17 +166,17 @@ fun PlanScreen(model: AppViewModel) {
     when (val s = sheet) {
         is PlanSheet.Position -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
             PositionSheet(draft, s.index, players) { other ->
-                edit(draft.swapPositions(s.index, other)); haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
+                edit { it.swapPositions(s.index, other) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
             }
         }
         is PlanSheet.Replace -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
             ReplaceSheet(view, draft, s.index, players) { id ->
-                edit(draft.replaceBatter(s.index, id)); haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
+                edit { it.replaceBatter(s.index, id) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
             }
         }
         is PlanSheet.Role -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
             RoleSheet(draft, s.id, players[s.id]) { role ->
-                edit(draft.withPitching(draft.pitching.setRole(s.id, role))); sheet = null
+                edit { it.withPitching(it.pitching.setRole(s.id, role)) }; sheet = null
             }
         }
         null -> Unit
@@ -172,16 +186,17 @@ fun PlanScreen(model: AppViewModel) {
 // ------------------------------------------------------------------ スタメン
 
 @Composable
-private fun OrderEditor(view: LeagueView, draft: PlanDraft, players: Map<Long, Player>, edit: (PlanDraft) -> Unit, open: (Long) -> Unit, onSheet: (PlanSheet) -> Unit) {
+private fun OrderEditor(view: LeagueView, draft: PlanDraft, players: Map<Long, Player>, edit: Edit, onDragStart: () -> Unit, open: (Long) -> Unit, onSheet: (PlanSheet) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
     val reorder = rememberReorderableLazyListState(listState) { from, to ->
         val a = (from.key as? String)?.removePrefix("bat:")?.toLongOrNull() ?: return@rememberReorderableLazyListState
         val b = (to.key as? String)?.removePrefix("bat:")?.toLongOrNull() ?: return@rememberReorderableLazyListState
-        val i = draft.slots.indexOfFirst { it.playerId == a }
-        val j = draft.slots.indexOfFirst { it.playerId == b }
-        if (i < 0 || j < 0) return@rememberReorderableLazyListState
-        edit(draft.moveBatter(i, j))
+        edit { d ->
+            val i = d.slots.indexOfFirst { it.playerId == a }
+            val j = d.slots.indexOfFirst { it.playerId == b }
+            if (i < 0 || j < 0) d else d.moveBatter(i, j)
+        }
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
     val bench = view.roster.filter { p -> !p.isPitcher && p.isActive && draft.slots.none { it.playerId == p.id } }
@@ -200,7 +215,7 @@ private fun OrderEditor(view: LeagueView, draft: PlanDraft, players: Map<Long, P
                     shape = RoundedCornerShape(10.dp),
                     color = if (dragging) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainer,
                     shadowElevation = elevation,
-                    modifier = Modifier.fillMaxWidth().longPressDraggableHandle(onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }),
+                    modifier = Modifier.fillMaxWidth().longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) }),
                 ) {
                     BatterRow(index + 1, slot.position, players[slot.playerId], onPosition = { onSheet(PlanSheet.Position(index)) }, onPlayer = { onSheet(PlanSheet.Replace(index)) }, onInfo = { open(slot.playerId) })
                 }
@@ -323,17 +338,25 @@ private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players
  * 細かい型（ゲームメーカー・完投型など）は投手を押して選ぶ。
  */
 @Composable
-private fun PitchingEditor(draft: PlanDraft, players: Map<Long, Player>, nextId: Long?, edit: (PlanDraft) -> Unit, open: (Long) -> Unit, onSheet: (PlanSheet) -> Unit) {
+private fun PitchingEditor(draft: PlanDraft, players: Map<Long, Player>, nextId: Long?, edit: Edit, onDragStart: () -> Unit, open: (Long) -> Unit, onSheet: (PlanSheet) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val state = draft.pitching
     val listState = rememberLazyListState()
     val reorder = rememberReorderableLazyListState(listState) { from, to ->
         val id = (from.key as? String)?.removePrefix("p:")?.toLongOrNull() ?: return@rememberReorderableLazyListState
         val target = to.key as? String ?: return@rememberReorderableLazyListState
+        edit { d -> d.withPitching(dropPitcher(d.pitching, id, target)) }
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+    PitchingList(draft, players, nextId, reorder, listState, onDragStart, open, onSheet)
+}
+
+/** 投手 id を target（別の投手 p:… ／役割の見出し role:… ／ローテの見出し head:rot）へ落としたときの持ち場 */
+private fun dropPitcher(state: jp.icenorth.baseball.shared.PitchingState, id: Long, target: String): jp.icenorth.baseball.shared.PitchingState {
         val inRotation = id in state.starters
-        val next = when {
+        return when {
             target.startsWith("p:") -> {
-                val other = target.removePrefix("p:").toLongOrNull() ?: return@rememberReorderableLazyListState
+                val other = target.removePrefix("p:").toLongOrNull() ?: return state
                 val at = state.starters.indexOf(other)
                 when {
                     at >= 0 && inRotation -> state.moveStarter(state.starters.indexOf(id), at)
@@ -345,11 +368,21 @@ private fun PitchingEditor(draft: PlanDraft, players: Map<Long, Player>, nextId:
             target == "head:rot" -> if (inRotation) state.moveStarter(state.starters.indexOf(id), 0) else if (state.starters.size < MAX_STARTERS) state.setRole(id, "auto_s", 0) else state
             else -> state
         }
-        if (next != state) {
-            edit(draft.withPitching(next))
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        }
-    }
+}
+
+@Composable
+private fun PitchingList(
+    draft: PlanDraft,
+    players: Map<Long, Player>,
+    nextId: Long?,
+    reorder: sh.calvin.reorderable.ReorderableLazyListState,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onDragStart: () -> Unit,
+    open: (Long) -> Unit,
+    onSheet: (PlanSheet) -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    val state = draft.pitching
     val relievers = RELIEF_ORDER.map { role -> role to state.roles.filter { (id, r) -> r == role && id !in state.starters }.keys.mapNotNull { players[it] } }
     LazyColumn(
         state = listState,
@@ -365,7 +398,7 @@ private fun PitchingEditor(draft: PlanDraft, players: Map<Long, Player>, nextId:
         items(state.starters, key = { "p:$it" }) { id ->
             val index = state.starters.indexOf(id)
             ReorderableItem(reorder, key = "p:$id") { dragging ->
-                PitcherCard(dragging, Modifier.longPressDraggableHandle(onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) })) {
+                PitcherCard(dragging, Modifier.longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) })) {
                     PitcherRow("${index + 1}", players[id], state.roles[id], starter = true, nextId == id, onRole = { onSheet(PlanSheet.Role(id)) }, onInfo = { open(id) })
                 }
             }
@@ -381,7 +414,7 @@ private fun PitchingEditor(draft: PlanDraft, players: Map<Long, Player>, nextId:
             }
             items(list, key = { "p:${it.id}" }) { p ->
                 ReorderableItem(reorder, key = "p:${p.id}") { dragging ->
-                    PitcherCard(dragging, Modifier.longPressDraggableHandle(onDragStarted = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) })) {
+                    PitcherCard(dragging, Modifier.longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) })) {
                         PitcherRow("", p, role, starter = false, next = false, onRole = { onSheet(PlanSheet.Role(p.id)) }, onInfo = { open(p.id) })
                     }
                 }
@@ -471,19 +504,19 @@ private fun RoleOption(label: String, hint: String?, selected: Boolean, enabled:
 // ------------------------------------------------------------------ 方針・采配
 
 @Composable
-private fun TacticsEditor(draft: PlanDraft, edit: (PlanDraft) -> Unit) {
+private fun TacticsEditor(draft: PlanDraft, edit: Edit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Section("方針") {
             STRATEGY_FIELDS.forEach { f ->
                 Text(f.label, style = MaterialTheme.typography.labelLarge)
-                ChoiceRow(f.options.map { it.key to it.label }, draft.strategy[f.key]) { edit(draft.withStrategy(f.key, it)) }
+                ChoiceRow(f.options.map { it.key to it.label }, draft.strategy[f.key]) { v -> edit { it.withStrategy(f.key, v) } }
             }
         }
         Section("自動采配") {
             Muted("試合中の作戦と継投の決め方です。AI判断のままでも試合は進みます。")
             TACTIC_FIELDS.forEach { f ->
                 Text(f.label, style = MaterialTheme.typography.labelLarge)
-                ChoiceRow(f.options.map { it.key to it.label }, draft.tactics[f.key]) { edit(draft.withTactic(f.key, it)) }
+                ChoiceRow(f.options.map { it.key to it.label }, draft.tactics[f.key]) { v -> edit { it.withTactic(f.key, v) } }
             }
         }
     }

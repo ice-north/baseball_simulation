@@ -95,6 +95,8 @@ data class EditHistory<T>(val present: T, val past: List<T> = emptyList(), val f
     val canRedo get() = future.isNotEmpty()
 
     fun push(next: T): EditHistory<T> = if (next == present) this else EditHistory(next, (past + present).takeLast(100), emptyList())
+    /** 今の1手を差し替える（ドラッグ中の連続した移動を1手にまとめるため） */
+    fun replace(next: T): EditHistory<T> = if (next == present) this else copy(present = next, future = emptyList())
     fun undo(): EditHistory<T> = if (past.isEmpty()) this else EditHistory(past.last(), past.dropLast(1), listOf(present) + future)
     fun redo(): EditHistory<T> = if (future.isEmpty()) this else EditHistory(future.first(), past + present, future.drop(1))
 }
