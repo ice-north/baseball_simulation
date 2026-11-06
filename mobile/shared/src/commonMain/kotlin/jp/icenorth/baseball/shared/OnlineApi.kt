@@ -74,6 +74,24 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
     suspend fun view(auth: AuthSession): LeagueView = OnlineJson.decodeFromString(viewRaw(auth))
 
     /**
+     * 読むだけの窓口（defaults / team / player / games / game）。形は Web 版と同じ生の JSON で返す。
+     *   team   … `team`（球団名。空なら自球団）
+     *   player … `id`
+     *   games  … `year` `page` `scope`（own / league）
+     *   game   … `id` `year`
+     */
+    suspend fun read(auth: AuthSession, action: String, params: Map<String, String?> = emptyMap()): JsonObject =
+        OnlineJson.parseToJsonElement(
+            text(
+                client.get(endpoint) {
+                    parameter("action", action)
+                    params.forEach { (k, v) -> if (v != null) parameter(k, v) }
+                    authorize(auth)
+                },
+            ),
+        ).jsonObject
+
+    /**
      * 指示を送る。
      *
      * ⚠ **編成（lineup）と提出（submit）は、版のずれだけなら最新の版で1回だけ送り直す**。
