@@ -534,7 +534,13 @@ export class LeagueService {
       } catch (error) {
         console.error('online: 返事のビューを作れませんでした:', error.message);
       }
-      return { value: view ? { ...value, view } : value };
+      return {
+        value: view ? { ...value, view } : value,
+        // ⚠ 編成の保存は記録の索引（選手・球団・試合の記録）に関わらない。索引の作り直し
+        //    （全試合をなめる）を省くよう保存側に伝える。選手の能力や名簿を変える命令には付けないこと
+        //    （`online-service-check` で、保存の前後で索引が同じことを確かめている）
+        ...(command.type === 'lineup' ? { archiveUnchanged: true } : {}),
+      };
     });
   }
   engine(fn) {

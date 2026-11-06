@@ -414,7 +414,11 @@ export class SupabaseStore {
           ),
         ]),
       );
-      const archives = await this.createArchive(value, row.views?._records);
+      // ⚠ 記録に関わらない命令（編成の保存）は、前の索引をそのまま使う（作り直しは全試合をなめて重い）
+      const archives =
+        outcome?.archiveUnchanged && row.views?._records
+          ? row.views._records
+          : await this.createArchive(value, row.views?._records);
       if (archives) views._records = archives;
       views._meta = leagueMetaOf(value.league);
       published = await this.rpc('online_publish', {

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
+import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
 const dir = await mkdtemp(join(tmpdir(), 'pennant-service-'));
 try {
   const store = createTestStore(join(dir, 'state.gz'));
@@ -114,7 +115,10 @@ try {
       baseLineup: (await service.view('a', nextA)).lineup,
     },
   };
+  const archiveBefore = buildArchiveIndex(await store.read());
   const saved = await service.command('a', nextA, validCommand);
+  // 編成の保存は記録の索引を変えない（保存側は作り直しを省く: archiveUnchanged）
+  assert.deepEqual(buildArchiveIndex(await store.read()), archiveBefore);
   // 返事に載るビューは、読み直したビューと同じ（画面は読み直しを省いてこれを使う）
   assert.deepEqual(saved.view, await service.view('a', nextA));
   // 二重送信（控えから返す）ではビューを載せない。控えに画面を溜めない
