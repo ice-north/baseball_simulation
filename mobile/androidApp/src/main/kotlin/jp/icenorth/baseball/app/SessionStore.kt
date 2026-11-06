@@ -24,6 +24,12 @@ class SessionStore(context: Context) {
             if (value == null) remove("auth").remove("view") else putString("auth", OnlineJson.encodeToString(AuthSession.serializer(), value))
         }.apply()
 
+    var tryoutWeights: Map<String, Int>?
+        get() = prefs.getString("tryoutWeights", null)?.let { text ->
+            runCatching { OnlineJson.decodeFromString<Map<String, Int>>(text) }.getOrNull()
+        }
+        set(value) = prefs.edit().putString("tryoutWeights", value?.let { OnlineJson.encodeToString(it) }).apply()
+
     var viewJson: String?
         get() = prefs.getString("view", null)
         set(value) = prefs.edit().putString("view", value).apply()

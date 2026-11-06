@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import jp.icenorth.baseball.shared.AuthSession
 import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.PlanDraft
+import jp.icenorth.baseball.shared.sanitizeWeights
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineApi
 import jp.icenorth.baseball.shared.OnlineException
@@ -35,6 +36,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 編成の編集（タブを移っても消えないよう、画面ではなくここに置く） */
     var plan by mutableStateOf<EditHistory<PlanDraft>?>(null)
+
+    /** 手続きの編集中の案（タブを移っても消えないよう、ここに置く） */
+    var phaseDraft by mutableStateOf<PhaseDraft?>(null)
+    var campDraft by mutableStateOf<CampDraft?>(null)
+
+    /** トライアウトの評価値の重み（端末に覚える。サーバーには送らない） */
+    var tryoutWeights by mutableStateOf(sanitizeWeights(store.tryoutWeights))
+        private set
+
+    fun changeWeights(next: Map<String, Int>) {
+        tryoutWeights = sanitizeWeights(next)
+        store.tryoutWeights = tryoutWeights
+    }
 
     /** 選手の詳細を開いている選手（名簿の生の形）。どの画面からでも同じシートで開く */
     var openPlayer by mutableStateOf<JsonObject?>(null)
@@ -107,6 +121,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         view = null
         raw = null
         plan = null
+        phaseDraft = null
+        campDraft = null
         if (current != null) viewModelScope.launch { runCatching { api.logout(current) } }
     }
 
@@ -216,3 +232,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
 private fun parseView(raw: String): LeagueView? = runCatching { OnlineJson.decodeFromString<LeagueView>(raw) }.getOrNull()
 private fun parseRaw(raw: String): JsonObject? = runCatching { OnlineJson.parseToJsonElement(raw).jsonObject }.getOrNull()
+
+/**
+ * 手続き（初期メンバー・トライアウト・契約更改・年度更新）の編集中の案。
+ * `base` は編集を始めたときの提出（サーバーが別の操作との食い違いを見る baseSubmission）。
+ */
+data class PhaseDraft(val phaseId: String, val plan: JsonObject, val base: JsonElement?, val dirty: Boolean)
+
+/** キャンプの方針と、選手ごとのメイン・サブ練習（未実行のクールの指示） */
+data class CampDraft(val phaseId: String, val direction: String, val phase: String, val main: Map<Long, String>, val sub: Map<Long, String>)
