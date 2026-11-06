@@ -172,7 +172,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val result = authed(current) { api.command(it, revision, type, payload) }
-                authed { load(it) }
+                // ⚠ 返事に最新のビューが載っていればそのまま使う（読み直しの往復を省く）。
+                //    載っていない（古いサーバー・二重送信の控えから返った）ときは読み直す
+                val fresh = result["view"] as? JsonObject
+                if (fresh != null) applyView(fresh.toString()) else authed { load(it) }
                 if (done != null) message = done
                 onDone(result)
             } catch (e: Exception) {
@@ -202,8 +205,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private suspend fun load(credentials: AuthSession) {
-        val text = api.viewRaw(credentials)
+    private suspend fun load(credentials: AuthSession) = applyView(api.viewRaw(credentials))
+
+    private fun applyView(text: String) {
         view = parseView(text)
         raw = parseRaw(text)
         store.viewJson = text
