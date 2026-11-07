@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import jp.icenorth.baseball.shared.situationTips
+import jp.icenorth.baseball.shared.tradeNoticeKeys
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
@@ -139,7 +140,8 @@ fun OnlineApp(model: AppViewModel) {
             val view = model.view
             val situations = remember(view?.roster, view?.lineup) { situationTips(view?.roster.orEmpty(), view?.lineup) }
             // 届いた提案のうち、まだ知らせていないもの。トレードを開いたら知らせ終えたことにする
-            val onTrades = tab == Tab.Procedures && model.procTrade
+            // （新しい提案を作っている間は届いた提案の一覧が見えないので、知らせ終えたことにしない）
+            val onTrades = tab == Tab.Procedures && model.procTrade && model.tradeDraft == null
             val tradeKeys = tradeNoticeKeys(raw)
             LaunchedEffect(onTrades, tradeKeys) { if (onTrades) model.markTradesSeen(tradeKeys) }
             val notice = if (onTrades || view == null) null else tradeNoticeText(view, raw, model.seenTrades)

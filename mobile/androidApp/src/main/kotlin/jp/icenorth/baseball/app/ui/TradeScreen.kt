@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.LeagueView
+import jp.icenorth.baseball.shared.OfferOutcome
 import jp.icenorth.baseball.shared.ROSTER_LIMIT
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
@@ -63,6 +64,9 @@ import jp.icenorth.baseball.shared.rosterGroup
 import jp.icenorth.baseball.shared.rostersAfterTrade
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
+import jp.icenorth.baseball.shared.offerOutcome
+import jp.icenorth.baseball.shared.tradeIds
+import jp.icenorth.baseball.shared.unseenTrades
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.roundToInt
 
@@ -127,19 +131,9 @@ data class TradeDraft(
 
 enum class TradeStep(val label: String) { Partner("相手"), Players("選手"), Confirm("確認") }
 
-/** 届いた提案（自分の番のもの）の印。逆提案が返ってきたときも別の印にして、もう一度知らせる */
-fun tradeNoticeKeys(raw: JsonObject?): Set<String> =
-    raw?.at("trades").list().mapNotNull { it.obj() }
-        .filter { it.at("myTurn").bool() == true }
-        .mapNotNull { t -> t.at("id").str()?.let { "$it:${if (t.at("countered").bool() == true) "c" else "o"}" } }
-        .toSet()
-
-/** まだ見ていない届いた提案の知らせ文。無ければ null */
+/** まだ知らせていない届いた提案の知らせ文。無ければ null */
 fun tradeNoticeText(view: LeagueView, raw: JsonObject?, seen: Set<String>): String? {
-    val fresh = raw?.at("trades").list().mapNotNull { it.obj() }.filter { t ->
-        t.at("myTurn").bool() == true &&
-            "${t.at("id").str()}:${if (t.at("countered").bool() == true) "c" else "o"}" !in seen
-    }
+    val fresh = unseenTrades(raw, seen)
     if (fresh.isEmpty()) return null
     if (fresh.size > 1) return "トレードの提案が${fresh.size}件届いています"
     val t = fresh.single()
@@ -501,9 +495,15 @@ private fun ConfirmStep(
                 done = "逆提案を送りました",
             ) { model.tradeDraft = null }
         } else {
+            val before = tradeIds(model.raw)
             model.command("tradeOffer", Commands.tradeOffer(partner, draft.give, draft.get), label = "提案を送信中…") {
                 model.tradeDraft = null
-                model.message = offerOutcome(view, model.raw, partner, draft)
+                val name = view.teamLabel(partner)
+                model.message = when (offerOutcome(before, model.raw)) {
+                    OfferOutcome.Accepted -> "${name}が受けて、トレードが成立しました"
+                    OfferOutcome.Countered -> "${name}から逆提案が届きました。内容を見て返事をしてください"
+                    OfferOutcome.Offered -> "提案を送りました。相手の返事を待っています"
+                }
             }
         }
     }
@@ -552,20 +552,6 @@ private fun ConfirmSide(title: String, ids: Set<Long>, roster: List<JsonObject>?
         else if (roster == null) Muted("読み込み中…")
         players.forEach { p -> PlayerSummary(p, { model.openPlayer = it }) { Overall(p) } }
     }
-}
-
-/**
- * 提案を送ったあとの結果。CPU球団はその場で答えるので、名簿と提案の一覧から読み取る
- * （受けた＝選手が動いた、逆提案＝自分の番の提案が残った、断った＝サーバーが失敗で返すのでここには来ない）。
- */
-private fun offerOutcome(view: LeagueView, raw: JsonObject?, partner: String, draft: TradeDraft): String {
-    val mine = raw?.at("roster").list().mapNotNull { it.obj()?.pid }.toSet()
-    val moved = (draft.give.isNotEmpty() && draft.give.none { it in mine }) || (draft.get.isNotEmpty() && draft.get.all { it in mine })
-    if (moved) return "${view.teamLabel(partner)}が受けて、トレードが成立しました"
-    val countered = raw?.at("trades").list().mapNotNull { it.obj() }.any {
-        it.at("toTeam").str() == partner && it.at("mine").bool() == true && it.at("myTurn").bool() == true
-    }
-    return if (countered) "${view.teamLabel(partner)}から逆提案が届きました。内容を見て返事をしてください" else "提案を送りました。相手の返事を待っています"
 }
 
 @Composable
