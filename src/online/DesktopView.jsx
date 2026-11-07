@@ -14,7 +14,7 @@ import PitchingBoard from './PitchingBoard.jsx';
 import { useDraftMemoryStore } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
-import { dateTime, STATUS } from './api.js';
+import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { teamLabel } from './gameText.js';
 import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
@@ -148,7 +148,7 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
           <span className="online-status">{STATUS[view.status]}</span>
         </p>
         <small>
-          {view.year}年目 · 次の進行 {dateTime(view.nextAdvanceAt)}
+          {view.year}年目 · 次の進行 {nextAdvanceText(view)}
         </small>
         {/* ⚠ 進行の刻みを変えたらここも直すこと。文面に数を書かず
             `TURN_MINUTES` から作る。毎正時24ターンに変えたあと

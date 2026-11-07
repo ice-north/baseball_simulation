@@ -12,7 +12,7 @@ import TeamRoster from './TeamRoster.jsx';
 import OnlineLineup, { hasUnsavedFullLineup } from './OnlineLineup.jsx';
 import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatTurn } from './shared.js';
-import { dateTime, STATUS } from './api.js';
+import { nextAdvanceText, STATUS } from './api.js';
 import { teamLabel } from './gameText.js';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
@@ -40,7 +40,7 @@ export default function MobileView(props) {
               {formatTurn(view.currentDate, view.seasonTurns)} ·{' '}
               {STATUS[view.status]}
             </span>
-            <small>次の進行 {dateTime(view.nextAdvanceAt)}</small>
+            <small>次の進行 {nextAdvanceText(view)}</small>
           </section>
           <TeamBrief view={view} />
           <nav className="online-home-actions" aria-label="オンラインの画面">
