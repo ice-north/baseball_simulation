@@ -17,6 +17,8 @@ import TradeScreen from './TradeScreen.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { teamLabel } from './gameText.js';
+import { noticeCounts, pendingProcedure } from './notices.js';
+import { formatDeadline } from './LeaguePanels.jsx';
 import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
 import { CompactRoster } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
@@ -337,6 +339,9 @@ export default function DesktopView(props) {
         ),
       ),
   });
+  const notice = noticeCounts(view);
+  const counts = { decisions: notice.procedure, transfer: notice.trades };
+  const procedure = pendingProcedure(view);
   return (
     <>
       <nav className="online-page-nav" aria-label="オンラインの画面">
@@ -366,8 +371,15 @@ export default function DesktopView(props) {
                 onClick={() => setTab(id)}
               >
                 {label}
-                {id === 'decisions' && (view.phase || view.pendingPack) && (
-                  <span className="online-dot" aria-label="未完了の手続き" />
+                {/* ⚠ 印は**数で出す**（LINEの通知のように）。以前は色の●だけで、
+                    手続きとトレードの返事待ちが何件あるのか分からなかった */}
+                {counts[id] > 0 && (
+                  <span
+                    className="online-count"
+                    aria-label={id === 'decisions' ? '未完了の手続き' : '返事が必要な提案'}
+                  >
+                    {counts[id]}
+                  </span>
                 )}
                 {unsaved(id) && (
                   <span
@@ -394,6 +406,28 @@ export default function DesktopView(props) {
         )}
       </nav>
       {renaming && <RenameDialog {...props} close={() => setRenaming(false)} />}
+      {/* ⚠ **自分が決める手続きは、どのページにいても上に帯で出す**（いしだ指摘:
+          初期メンバー選び・人員整理・キャンプが左メニューの「手続き」の中にあり、
+          うっかり見逃して飛ばす危険があった）。決めるまで消さない */}
+      {procedure && current !== 'decisions' && (
+        <div className="online-procedure-banner" role="alert">
+          <div>
+            <strong>{procedure.label}を決めてください</strong>
+            <span>
+              {[
+                procedure.progress,
+                procedure.deadline && `締め切り ${formatDeadline(procedure.deadline)}`,
+                procedure.deadline && '過ぎると標準の内容で自動で進みます',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          </div>
+          <button className="online-primary" onClick={() => setTab('decisions')}>
+            {procedure.label}を開く
+          </button>
+        </div>
+      )}
       {/* ⚠ ホームは**見出しを出さない**。左メニューで「ホーム」を押した先に
           もう一度「ホーム / SEASON 1」と出ていて、場所を取るだけだった。
           年は左メニューの「○年目」に出ている */}

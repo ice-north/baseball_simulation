@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Badge
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -198,13 +199,26 @@ fun ChoiceRow(options: List<Pair<String, String>>, selected: String?, enabled: B
 
 /** 区分のタブ（成績の区分など）。横に流す */
 @Composable
-fun ChipTabs(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ChipTabs(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    counts: Map<String, Int> = emptyMap(),
+) {
     Row(
         modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         options.forEach { (key, label) ->
-            FilterChip(selected = key == selected, onClick = { onSelect(key) }, label = { Text(label) })
+            val count = counts[key] ?: 0
+            FilterChip(
+                selected = key == selected,
+                onClick = { onSelect(key) },
+                label = { Text(label) },
+                // 未完了の数（下のタブの数字と同じ数え方）
+                trailingIcon = if (count > 0) ({ Badge { Text("$count") } }) else null,
+            )
         }
     }
 }

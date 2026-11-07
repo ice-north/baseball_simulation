@@ -38,6 +38,7 @@ import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.str
 import kotlinx.serialization.json.JsonObject
 import jp.icenorth.baseball.shared.GameResult
 import jp.icenorth.baseball.shared.LeagueView
@@ -164,8 +165,10 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
 
 /** 自分の番の手続き・初期メンバー選択・返事待ちのトレード */
 private fun pendingAlerts(view: LeagueView, raw: JsonObject?): List<String> = buildList {
-    if (view.pendingPack != null) add("初期メンバーを選んでください")
-    view.phase?.let { phase ->
+    // ⚠ 初期メンバーを待っている間は、リーグの手続きはCPUが決める（`Notices.kt` と同じ決まり）
+    if (view.pendingPack != null) {
+        add(if (raw?.at("pendingPack", "chosen").str() != null) "初期メンバー: 選択済み（キャンプまで選び直せます）" else "初期メンバーを選んでください")
+    } else view.phase?.let { phase ->
         val due = formatDeadline(phase.deadline ?: view.phaseDeadline)
         val label = phase.kind?.let { PHASE_LABELS[it] } ?: phase.label ?: "手続き"
         val ready = raw?.at("phase", "submission", "ready").bool() == true

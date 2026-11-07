@@ -29,6 +29,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
@@ -43,6 +46,9 @@ import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.long
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.pid
+import jp.icenorth.baseball.shared.PendingProcedure
+import jp.icenorth.baseball.shared.pendingProcedure
+import jp.icenorth.baseball.shared.waitingTradeCount
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import kotlinx.serialization.json.JsonElement
@@ -57,14 +63,18 @@ fun ProceduresScreen(model: AppViewModel, onRename: () -> Unit) {
     val raw = model.raw ?: return
     // ⚠ どちらの側を開いているかは AppViewModel に置く（届いた提案の知らせから、トレードの側を直接開くため）
     val tab = if (model.procTrade) ProcTab.Trade else ProcTab.Current
-    val waiting = raw.at("trades").list().count { it.at("myTurn").bool() == true }
+    val counts = mapOf(
+        ProcTab.Current.name to (if (pendingProcedure(raw) != null) 1 else 0),
+        ProcTab.Trade.name to waitingTradeCount(raw),
+    )
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             ChipTabs(
-                ProcTab.entries.map { it.name to (it.label + if (it == ProcTab.Trade && waiting > 0) "（$waiting）" else "") },
+                ProcTab.entries.map { it.name to it.label },
                 tab.name,
                 { model.procTrade = it == ProcTab.Trade.name },
                 Modifier.weight(1f),
+                counts = counts,
             )
             TextButton(onClick = onRename) { Text("球団名") }
         }
@@ -111,6 +121,30 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
     }
     PackPicker(model, packs, chosen) { id ->
         model.command("pack", Commands.pack(id), done = "初期メンバーを選びました")
+    }
+}
+
+/**
+ * 自分が決める手続きの帯（「手続き」を開いていない間、どのタブでも上に出す）。閉じるボタンは置かない:
+ * 済むまで出し続ける（初期メンバー選択・人員整理・キャンプを見逃して飛ばさないように）
+ */
+@Composable
+fun ProcedureNotice(procedure: PendingProcedure, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val due = formatDeadline(procedure.deadline)
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onOpen).testTag("procedure-notice"),
+    ) {
+        Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("${procedure.label}を決めてください", fontWeight = FontWeight.Bold)
+                val detail = listOfNotNull(procedure.progress, due?.let { "締め切り $it（過ぎると標準の内容で進みます）" })
+                if (detail.isNotEmpty()) Text(detail.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+            }
+            Button(onClick = onOpen) { Text("開く") }
+        }
     }
 }
 

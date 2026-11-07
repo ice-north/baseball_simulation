@@ -1,0 +1,48 @@
+package jp.icenorth.baseball.shared
+
+import kotlinx.serialization.json.JsonObject
+
+// ============================================================
+// 「自分が何かしないといけないこと」の数え方。Web 版の `src/online/notices.js` と同じ決まり
+// （PC版の左メニューの数字・上の帯と、アプリの「手続き」の数字・上の帯が食い違わないように）。
+//
+// ⚠ 初期メンバー選択・人員整理（契約更改）・キャンプは「手続き」のタブから入るので見逃しやすい。
+//    数え方を画面ごとに書くと、片方だけ「済んだ」扱いになって帯が消える、がおきる。
+// ============================================================
+
+/** いま自分が決める手続き。[progress] はキャンプの「第2クール / 全4クール」 */
+data class PendingProcedure(val kind: String, val label: String, val deadline: String?, val progress: String?)
+
+/**
+ * いま自分が決める手続き。無ければ null。
+ * - 初期メンバー選択: まだセットを選んでいない
+ * - キャンプ: 4クールを終えていない
+ * - そのほか（契約更改・トライアウト・年度更新）: まだ決定していない
+ *
+ * ⚠ 初期メンバーを待っている球団には、リーグの手続きを出さない
+ *    （その球団の手続きはCPUが決め、サーバーも決定を待たない）。
+ */
+fun pendingProcedure(raw: JsonObject?): PendingProcedure? {
+    if (raw == null) return null
+    raw["pendingPack"].obj()?.let { pack ->
+        if (pack.at("chosen").str() != null) return null
+        return PendingProcedure("pack_select", PHASE_LABELS.getValue("pack_select"), null, null)
+    }
+    val phase = raw["phase"].obj() ?: return null
+    val kind = phase.at("kind").str().orEmpty()
+    val deadline = phase.at("deadline").str() ?: raw.at("phaseDeadline").str()
+    if (kind == "camp") {
+        val done = phase.at("camp", "rounds").int() ?: 0
+        val total = phase.at("camp", "total").int() ?: CAMP_ROUNDS
+        if (done >= total) return null
+        return PendingProcedure(kind, PHASE_LABELS.getValue("camp"), deadline, "第${done + 1}クール / 全${total}クール")
+    }
+    if (phase.at("submission", "ready").bool() == true) return null
+    return PendingProcedure(kind, PHASE_LABELS[kind] ?: phase.at("label").str() ?: "手続き", deadline, null)
+}
+
+/** 自分が返事をする番のトレードの提案の数 */
+fun waitingTradeCount(raw: JsonObject?): Int = raw?.at("trades").list().count { it.at("myTurn").bool() == true }
+
+/** 「手続き」に出す数（手続き1件＋返事待ちの提案） */
+fun noticeCount(raw: JsonObject?): Int = (if (pendingProcedure(raw) != null) 1 else 0) + waitingTradeCount(raw)
