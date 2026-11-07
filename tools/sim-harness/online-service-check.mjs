@@ -156,13 +156,31 @@ try {
   assert.equal(view.status, 'paused');
   assert.equal(view.writable, true);
   await command('a', nextA, 'resume');
+  // ⚠ **少し遅れただけで止めないこと**。1ターン＝45分なので、毎時だけ叩く
+  //    cronのままだと枠を外した回が必ず15〜30分の遅れになる。かつては
+  //    「15分以上遅れたら停止」で、1ターン進んだ次の時間に必ず止まっていた。
+  // ⚠ ただし**遅延分を自動追いつきしない**（進むのはいつも1ターンだけ）
   now = new Date(
     Date.parse((await service.view('a', nextA)).nextAdvanceAt) + 20 * 60000,
   ).toISOString();
   await service.tick();
   view = await service.view('a', nextA);
-  assert.equal(view.status, 'error');
-  assert.equal(view.currentDate.day, 1, '遅延分を自動追いつきしない');
+  assert.equal(view.status, 'running', `20分の遅れで止まった: ${view.error}`);
+  assert.equal(view.currentDate.day, 2, '遅れたときに1ターン進めていない');
+  await service.tick();
+  assert.equal(
+    (await service.view('a', nextA)).currentDate.day,
+    2,
+    '遅延分を自動追いつきしている（1回の通知で何ターンも進んだ）',
+  );
+  // ⚠ 本当に長く動いていないときだけ止めて、管理者に見てもらう
+  now = new Date(
+    Date.parse((await service.view('a', nextA)).nextAdvanceAt) + 8 * 3600000,
+  ).toISOString();
+  await service.tick();
+  view = await service.view('a', nextA);
+  assert.equal(view.status, 'error', '何時間も止まっていたのに進めた');
+  assert.equal(view.currentDate.day, 2, '止めたのに進んでいる');
   await command('a', nextA, 'resume');
   assert.ok((await service.view('a', nextA)).nextAdvanceAt > now);
   assert.ok(

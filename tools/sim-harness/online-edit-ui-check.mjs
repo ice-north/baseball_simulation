@@ -84,6 +84,7 @@ async function scene({
     defaultsFail,
     staleDefaults,
     payloads: [],
+    types: [],
     hold: false,
     release: () => {},
   };
@@ -119,6 +120,7 @@ async function scene({
     } else if (action === 'command') {
       const payload = route.request().postDataJSON().payload;
       state.payloads.push(payload);
+      state.types.push(route.request().postDataJSON().type);
       signal();
       if (state.hold)
         await new Promise((resolve) => {
@@ -334,6 +336,32 @@ try {
   await click(stale.page, '更新');
   await menuGroup(stale.page).waitFor();
   await stale.context.close();
+
+  // --- 止まったときに、その場から再開できること --------------------------
+  // ⚠ **行き止まりにしない**。定期進行が止まると「1日程進める」も押せなくなり、
+  //    なぜ進まないのかも、どこで直すのかも画面から分からなかった。
+  //    （45分ターンにしたとき、毎時のcronのままだと必ずここへ落ちていた）
+  {
+    const stopped = await scene();
+    stopped.view.testMode = true;
+    stopped.view.status = 'error';
+    stopped.view.phase = null;
+    stopped.view.error = '定期進行が長く止まっていました。状態を確認して管理者が再開してください';
+    stopped.view.revision++;
+    await click(stopped.page, '更新');
+    // 知らせの中にも、検証用の帯にも再開を出す
+    await stopped.page
+      .getByRole('alert')
+      .filter({ hasText: '長く止まって' })
+      .getByRole('button', { name: '次の時刻から再開', exact: true })
+      .waitFor();
+    await stopped.page
+      .getByRole('button', { name: '止まっています（再開）', exact: true })
+      .click();
+    await withDeadline(stopped.commandStarted, '再開の送信');
+    assert.deepEqual(stopped.types, ['resume'], '再開以外の命令を送っている');
+    await stopped.context.close();
+  }
 
   const mobile = await scene({ mobile: true });
   await click(mobile.page, '手続き');

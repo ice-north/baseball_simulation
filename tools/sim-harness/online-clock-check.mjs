@@ -53,7 +53,64 @@ try {
     '処理開始ではなく完了後の未来の枠を使う',
   );
   assert.equal(league.updatedAt, now);
-  console.log('online-clock-check PASS（決定処理が進行時刻をまたぐ境界）');
+  // --- 遅れた定期進行で止まらないこと ----------------------------------
+  // ⚠ **これが実際に起きた**。「15分以上遅れたら停止」は1ターン＝1時間の頃の値で、
+  //    45分ターンにしたとき取り残された。毎時だけ叩く古いcronのままだと、枠を
+  //    外した回が必ず15分超の遅れになり、**1ターン進んだ次の時間に必ず停止**して
+  //    いた（画面は「進みません」になり、リーグ管理で再開するしかない）。
+  // ⚠ 1回の進行で進むのはいつも1ターンなので、遅れても取り戻しの連打は起きない。
+  //    止めるのは「本当に長く動いていない」ときだけでよい。
+  {
+    const clockStore = createTestStore(join(dir, 'late.gz'));
+    let at = '2026-10-28T00:00:00.000Z';
+    const service2 = new LeagueService(clockStore, {
+      members: [{ userId: 'a' }],
+      adminId: 'a',
+      clock: () => at,
+    });
+    const setUp = (nextAdvanceAt) =>
+      clockStore.transaction((b) => {
+        b.league = {
+          schema: ONLINE_SCHEMA,
+          engineVersion: ONLINE_ENGINE_VERSION,
+          revision: 1,
+          status: 'running',
+          phase: null,
+          members: [{ userId: 'a', teamName: 'A' }],
+          nextAdvanceAt,
+          season: { year: 1, currentDate: { year: 2024, month: 4, day: 1 } },
+        };
+        return { value: null };
+      });
+    // 進行そのものは別の検査が見る。ここでは「遅れをどう扱うか」だけを見たいので
+    // エンジンは何もしない差し替えにする
+    service2.engine = async (fn) => fn({ advanceLeagueDay() {} });
+    const lateness = async (minutes) => {
+      const due = '2026-10-28T00:00:00.000Z';
+      await setUp(due);
+      at = new Date(Date.parse(due) + minutes * 60000).toISOString();
+      await service2.tick();
+      return (await clockStore.read()).league;
+    };
+    // ⚠ 1ターン（45分）ぶんを超える遅れでも**止めない**。毎時cronの揺らぎで
+    //    毎回止まっていたのがこれ
+    for (const minutes of [1, 16, 46, 120]) {
+      const l = await lateness(minutes);
+      assert.equal(
+        l.status,
+        'running',
+        `${minutes}分の遅れで止まった: ${l.error}`,
+      );
+    }
+    // ⚠ 本当に長く動いていないときは止める（管理者に見てもらう）
+    const stalled = await lateness(8 * 60);
+    assert.equal(stalled.status, 'error', '何時間も止まっていたのに進めた');
+    assert.match(stalled.error, /長く止まって/, '理由が出ていない');
+    assert.equal(stalled.nextAdvanceAt, null, '止めたのに次の時刻が残っている');
+  }
+  console.log(
+    'online-clock-check PASS（決定処理が進行時刻をまたぐ境界 / 遅れた定期進行で止まらない）',
+  );
 } finally {
   await rm(dir, { recursive: true, force: true });
 }

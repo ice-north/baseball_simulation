@@ -7,7 +7,20 @@ import {
   nextProgressionAt,
   assertLeagueVersion,
   ONLINE_SCHEMA,
+  TURN_MINUTES,
 } from '../src/online/shared.js';
+
+/**
+ * これ以上遅れていたら、定期進行を止めて管理者に見てもらう。
+ *
+ * ⚠ **ターンの長さから導くこと**。かつて 15分 と直に書いてあり、1ターンを
+ *    45分にしたときに取り残された。毎時のcronだと必ず15分超の遅れになるので、
+ *    **1ターン進んだ次の時間に必ず止まる**状態になっていた（実測）。
+ * ⚠ 少しの遅れで止めないこと。1回の進行で進むのはいつも1ターンなので、
+ *    遅れても取り戻しの連打は起きない。止めるのは「本当に長く動いていない」
+ *    ときだけでよい（8ターンぶん＝45分なら6時間）。
+ */
+const STALL_AFTER_MS = TURN_MINUTES * 8 * 60000;
 import { isCurrent, migrateLeague } from '../src/online/leagueMigration.js';
 import {
   projectLeague,
@@ -663,12 +676,21 @@ export class LeagueService {
           ? { value: { advanced: false, migrated: migrated.applied } }
           : { unchanged: true, value: { advanced: false } };
       const due = l.nextAdvanceAt;
-      // 15分以上遅れた通知を巻き戻し実行しない。停止して明示的な再開を待つ。
-      if (Date.parse(now) - Date.parse(due) > 15 * 60000) {
+      // ⚠ **遅れただけで止めないこと**。1回の進行で進むのはいつも1ターンなので、
+      //    遅れても取り戻しの連打は起きない（`advanceLeagueDay`）。
+      //    かつて「15分以上遅れたら停止」にしていたが、これは1ターン＝1時間の
+      //    頃の値で、45分ターンにしたとき**毎時のcronだと必ず15分超の遅れになり、
+      //    1ターン進んだ次の時間に必ず止まっていた**（実測）。
+      //    枠を外すのが設定の間違いか本当の障害かは、遅れの大きさで分ける:
+      //      1ターンぶんまで  … そのまま進める（毎回の揺らぎ）
+      //      数時間まで        … 進める。取りこぼした枠は捨てて次の枠から
+      //      それ以上          … 止めて管理者に見てもらう（本当の障害）
+      const late = Date.parse(now) - Date.parse(due);
+      if (late > STALL_AFTER_MS) {
         l.status = 'error';
         l.nextAdvanceAt = null;
         l.error =
-          '定期進行が遅れました。状態を確認して管理者が再開してください';
+          '定期進行が長く止まっていました。状態を確認して管理者が再開してください';
       } else {
         const working = clone(l);
         try {

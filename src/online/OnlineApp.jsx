@@ -495,9 +495,21 @@ export default function OnlineApp() {
               </p>
             )}
             {view.error && (
-              <p role="alert" className="online-alert">
-                {view.error}
-              </p>
+              <div role="alert" className="online-alert">
+                <span>{view.error}</span>
+                {/* ⚠ **行き止まりにしない**。止まったときは「1日程進める」も
+                    押せなくなるので、再開をその場に出す。リーグ管理まで
+                    辿り着けないと、進まない理由も直し方も分からない */}
+                {view.isAdmin && ['paused', 'error'].includes(view.status) && (
+                  <button
+                    className="online-primary"
+                    disabled={busy || !view.writable}
+                    onClick={() => run(() => command('resume'))}
+                  >
+                    次の時刻から再開
+                  </button>
+                )}
+              </div>
             )}
             <ActionContext.Provider value={actions}>
             <ReadContext.Provider value={readDetail}>
@@ -592,19 +604,33 @@ function TestControls({ view, allowStep, busy, run, command }) {
   if (!view || view.setupRequired || view.joinRequired) return null;
   if (!view.isAdmin || !(view.testMode || allowStep)) return null;
   const waiting = !!view.phase;
+  const stopped = ['paused', 'error'].includes(view.status);
   return (
     <div className="online-testbar">
-      <button
-        disabled={busy || (!waiting && view.status !== 'running')}
-        title={
-          waiting
-            ? '決定待ちの手続きをいま締め切ります'
-            : '1ターン（ゲーム内1日・1試合）進めます'
-        }
-        onClick={() => run(() => command(waiting ? 'resolve' : 'step'))}
-      >
-        1日程進める
-      </button>
+      {/* ⚠ 止まっているときは**再開に変える**。以前は押せないだけで、
+          なぜ進まないのかも、どこで直すのかも画面から分からなかった */}
+      {stopped ? (
+        <button
+          className="online-danger"
+          disabled={busy}
+          title={view.error || '進行が止まっています'}
+          onClick={() => run(() => command('resume'))}
+        >
+          止まっています（再開）
+        </button>
+      ) : (
+        <button
+          disabled={busy || (!waiting && view.status !== 'running')}
+          title={
+            waiting
+              ? '決定待ちの手続きをいま締め切ります'
+              : '1ターン（ゲーム内1日・1試合）進めます'
+          }
+          onClick={() => run(() => command(waiting ? 'resolve' : 'step'))}
+        >
+          1日程進める
+        </button>
+      )}
       {confirming ? (
         <>
           <button
