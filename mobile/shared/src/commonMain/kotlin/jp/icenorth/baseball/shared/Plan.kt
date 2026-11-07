@@ -43,8 +43,9 @@ data class PlanDraft(
      */
     fun problem(roster: List<Player>? = null): String? = LineupDraft(base, slots, pitching.starters).problem()
         ?: roster?.let { list ->
-            val fielders = list.filter { !it.isPitcher && it.isActive }.map { it.id }.toSet()
-            if (slots.any { it.playerId !in fielders }) "打順に名簿から外れた選手が居ます。控えと交代してください" else null
+            // ⚠ 投手も野手の枠に入れてよい（二刀流。サーバーの validateLineup と同じ）
+            val eligible = list.filter { it.isActive }.map { it.id }.toSet()
+            if (slots.any { it.playerId !in eligible }) "打順に名簿から外れた選手が居ます。控えと交代してください" else null
         }
         ?: when {
             pitching.starters.size > MAX_STARTERS -> "先発投手は${MAX_STARTERS}人までです"
@@ -94,9 +95,10 @@ data class PlanDraft(
                 val text = raw.num()?.toInt()?.toString() ?: raw.str()
                 f.key to (text?.takeIf { v -> f.options.any { it.key == v } } ?: f.default)
             }
-            // 名簿に居ない・抹消中・投手の選手が打順に残っていたら、その枠は空きにして控えとの交代で埋めてもらう
-            val fielders = roster.filter { !it.isPitcher && it.isActive }.map { it.id }.toSet()
-            val slots = if (roster.isEmpty()) order.slots else normalizeSlots(order.slots, fielders)
+            // 名簿に居ない・抹消中の選手が打順に残っていたら、その枠は空きにして控えとの交代で埋めてもらう
+            // ⚠ 投手は空きにしない（二刀流で野手の枠に入れられる）
+            val eligible = roster.filter { it.isActive }.map { it.id }.toSet()
+            val slots = if (roster.isEmpty()) order.slots else normalizeSlots(order.slots, eligible)
             return PlanDraft(lineup, slots, PitchingState.from(order.starters, saved, roster), strategy, tactics)
         }
     }

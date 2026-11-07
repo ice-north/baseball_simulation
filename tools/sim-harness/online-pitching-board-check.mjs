@@ -23,6 +23,10 @@ import {
   insertStarter,
   reliefGroups,
   pitchingProblems,
+  addToStaff,
+  removeFromStaff,
+  staffCandidates,
+  onStaff,
 } from '../../src/online/pitchingEdit.js';
 import { STARTER_ROLES, RELIEF_ROLES } from '../../src/online/tactics.js';
 import { validateLineup } from '../../src/online/shared.js';
@@ -293,6 +297,85 @@ accepted(start);
   accepted(dropped);
 }
 
+// --- 二刀流: 野手を投手起用に加える・外す。加えていない野手は入らない
+{
+  const withArm = roster.map((p) =>
+    p.position === 'pitcher' ? p : { ...p, pitching: { control: p.id } },
+  );
+  const base = pitchingFromLineup(lineup, withArm);
+  assert.equal(
+    Object.keys(base.roles).length,
+    12,
+    '加えていない野手が投手起用に入った',
+  );
+  assert.deepEqual(
+    staffCandidates(base, withArm).map((p) => p.id),
+    [38, 37, 36, 35, 34, 33, 32, 31],
+    '加える候補が投球の能力の順に並ばない',
+  );
+  const fielder = withArm.find((p) => p.id === 35);
+  const added = addToStaff(base, fielder);
+  assert.equal(
+    added.roles[35],
+    'auto_r',
+    '加えた野手が救援の「おまかせ」にならない',
+  );
+  assert.ok(
+    reliefGroups(added, withArm).some((g) =>
+      g.players.some((p) => p.id === 35),
+    ),
+    '加えた野手が救援に並ばない',
+  );
+  assert.equal(addToStaff(added, fielder), added, '同じ野手を2回加えた');
+  assert.equal(
+    addToStaff(base, withArm[0]),
+    base,
+    '投手登録の選手を「加えた」',
+  );
+  // 先発ローテに入れる・役割を変える
+  const starter = insertStarter(added, 35, 0);
+  assert.deepEqual(starter.starters, [35, 1, 2, 3, 4, 5]);
+  const savedTeam = {
+    players: withArm,
+    pitchingRotation: { starters: [], pitcherRoles: {} },
+  };
+  const saveable = (state) => {
+    const plan = { battingOrder, ...planFromPitching(state) };
+    validateLineup(savedTeam, plan);
+    validateTactics(savedTeam, plan, true);
+    assert.deepEqual(pitchingProblems(state, withArm), []);
+  };
+  saveable(added);
+  saveable(starter);
+  // 保存した形から読み直すと、加えた野手（先発・役割つき）だけが入る
+  const reread = pitchingFromLineup(
+    { ...lineup, ...planFromPitching(starter) },
+    withArm,
+  );
+  assert.ok(onStaff(reread, 35) && reread.starters[0] === 35);
+  assert.ok(!onStaff(reread, 36), '加えていない野手が読み直しで入った');
+  // 外す: ローテからも外れ、役割も消える。投手登録は外せない。最後の1人の先発も外せない
+  const removed = removeFromStaff(starter, 35, withArm);
+  assert.deepEqual(removed.starters, [1, 2, 3, 4, 5]);
+  assert.ok(!onStaff(removed, 35));
+  saveable(removed);
+  assert.equal(
+    removeFromStaff(starter, 1, withArm),
+    starter,
+    '投手登録を外した',
+  );
+  const lone = { starters: [35], roles: { ...base.roles, 35: 'auto_s' } };
+  assert.equal(removeFromStaff(lone, 35, withArm), lone, '最後の先発を外した');
+  // ⚠ サーバーは役割を送らない野手を投手として扱わない（救援の「おまかせ」で投げない）
+  const plan = { battingOrder, ...planFromPitching(removed) };
+  const { rotation } = validateTactics(savedTeam, plan, true);
+  assert.ok(
+    !rotation.relievers.includes(35) &&
+      !Object.hasOwn(rotation.pitcherRoles, '35'),
+    '外した野手がサーバーの救援に残る',
+  );
+}
+
 // --- スマホとPCの間の受け渡し（スマホを横にするとPCの画面に、縦に戻すとスマホの画面になる）
 {
   const view = { teamName: 'T', roster, lineup, nextStarterId: 1 };
@@ -394,5 +477,5 @@ accepted(start);
 }
 
 console.log(
-  'online-pitching-board-check PASS（どの操作もサーバーが受け付ける形 / 入れ替え・役割・守護神 / 先発1〜8人 / 救援の並び / 疲労の境目がサーバーと同じ / スマホとPCの受け渡し）',
+  'online-pitching-board-check PASS（どの操作もサーバーが受け付ける形 / 入れ替え・役割・守護神 / 先発1〜8人 / 救援の並び / 疲労の境目がサーバーと同じ / 野手を投手起用に加える・外す / スマホとPCの受け渡し）',
 );

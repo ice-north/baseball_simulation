@@ -43,8 +43,18 @@ export function validateTactics(team, plan, rotationChanged) {
       raw && typeof raw === 'object' && !Array.isArray(raw),
       '投手の役割が不正です',
     );
+    // ⚠ **投手陣＝投手登録の選手＋投手起用に加えた野手**（二刀流）。野手を全員
+    //    救援に入れないこと（「おまかせ」の救援として試合で投げてしまう）。
+    //    加えた野手は、先発ローテに入れたか、役割を付けた選手だけ。役割を送らない
+    //    保存（ローテだけ変えた）では、前に付けた役割を引き継ぐ
+    const known = explicit ? raw : team.pitchingRotation?.pitcherRoles || {};
     const pitchers = team.players.filter(
-      (p) => p.position === 'pitcher' && p.isActive !== false,
+      (p) =>
+        p.isActive !== false &&
+        (p.position === 'pitcher' ||
+          (p.pitching &&
+            (plan.starters.includes(p.id) ||
+              Object.hasOwn(known, String(p.id))))),
     );
     if (explicit)
       for (const [id, role] of Object.entries(raw)) {

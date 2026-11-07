@@ -14,6 +14,10 @@
 // ⚠ 保存済みの先発に名簿に居ない投手（外れた・居なくなった）や、抹消中の投手が
 //    残っていることがある。隠さずにそのまま持ち、その行に救援を入れ替えて直せるように
 //    する（役割は持たない。役割は起用できる投手＝`isPitcher` にだけ付ける）。
+// ⚠ **野手も投手で起用できる**（二刀流）。投手登録の選手はいつも全員が投手起用に
+//    入り、野手は「加えた」選手だけが入る（役割＝`roles` に居る野手）。保存では
+//    `pitcherRoles` に載った野手と先発ローテの野手だけを投手として扱う
+//    （`server/lineupTactics.mjs`）。⚠ 全員を入れると、救援の「おまかせ」で野手が投げる。
 // ============================================================
 import { STARTER_ROLES, RELIEF_ROLES, roleFor } from './tactics.js';
 import { STARTER_SKIP_FATIGUE as SKIP_FATIGUE } from './shared.js';
@@ -71,13 +75,27 @@ export const RELIEF_REST_FATIGUE = 50;
 export const isPitcher = (p) =>
   !!p && p.position === 'pitcher' && p.isActive !== false;
 
+/** 投手起用に加えられる野手（野手登録で、抹消されておらず、投球の能力がある） */
+export const isStaffableFielder = (p) =>
+  !!p && p.position !== 'pitcher' && p.isActive !== false && !!p.pitching;
+
+/** 投手起用に入っている（役割を持つ）か */
+export const onStaff = (state, id) => Object.hasOwn(state.roles, String(id));
+
 /**
  * 保存されている編成（view.lineup）と名簿から編集の形を作る。
  * ⚠ 名簿に居ない先発も外さない（外すと崩れた保存が隠れ、保存の検査にも出ない）。
  */
 export function pitchingFromLineup(lineup, roster) {
-  const pitchers = (roster || []).filter(isPitcher);
   const starters = [...new Set(lineup?.starters || [])];
+  // 野手は、先発ローテに居るか役割を保存してある選手だけ（加えた野手）
+  const pitchers = (roster || []).filter(
+    (p) =>
+      isPitcher(p) ||
+      (isStaffableFielder(p) &&
+        (starters.includes(p.id) ||
+          Object.hasOwn(lineup?.pitcherRoles || {}, String(p.id)))),
+  );
   const roles = Object.fromEntries(
     pitchers.map((p) => [
       p.id,
@@ -209,9 +227,44 @@ export function insertStarter(state, id, at) {
   return setRole(state, id, 'auto_s', at);
 }
 
+/**
+ * 野手を投手起用に加える（救援の「おまかせ」で入る。役割は札で選び直す）。
+ * ⚠ 投手登録の選手・抹消中・もう入っている選手は変えない
+ */
+export function addToStaff(state, player) {
+  if (!isStaffableFielder(player) || onStaff(state, player.id)) return state;
+  return { ...state, roles: { ...state.roles, [player.id]: 'auto_r' } };
+}
+
+/**
+ * 加えた野手を投手起用から外す（先発ローテからも外れる）。
+ * ⚠ 投手登録の選手は外せない。最後の1人の先発も外せない
+ */
+export function removeFromStaff(state, id, roster) {
+  const player = (roster || []).find((p) => p.id === id);
+  if (!player || player.position === 'pitcher') return state;
+  if (state.starters.includes(id) && state.starters.length <= 1) return state;
+  const roles = { ...state.roles };
+  delete roles[id];
+  return { starters: state.starters.filter((s) => s !== id), roles };
+}
+
+/** 投手起用に加えていない野手（加える候補。投球の能力の高い順） */
+export function staffCandidates(state, roster) {
+  const score = (p) =>
+    (p.pitching?.control || 0) +
+    (p.pitching?.stamina || 0) +
+    ((p.pitching?.velocity || 0) - 100);
+  return (roster || [])
+    .filter((p) => isStaffableFielder(p) && !onStaff(state, p.id))
+    .sort((a, b) => score(b) - score(a));
+}
+
 /** 救援を役割ごとに括る（試合で使われる場面の順） */
 export function reliefGroups(state, roster) {
-  const pitchers = (roster || []).filter(isPitcher);
+  const pitchers = (roster || []).filter(
+    (p) => p.isActive !== false && onStaff(state, p.id),
+  );
   return RELIEF_ORDER.map((role) => ({
     role,
     players: pitchers.filter(
@@ -223,7 +276,14 @@ export function reliefGroups(state, roster) {
 /** 保存できない形の理由（無ければ空）。操作では崩れないが、保存済みが崩れていることがある */
 export function pitchingProblems(state, roster) {
   const problems = [];
-  const ids = new Set((roster || []).filter(isPitcher).map((p) => p.id));
+  // ⚠ 先発に入れられるのは投手起用に居る選手（投手登録か、加えた野手）
+  const ids = new Set(
+    (roster || [])
+      .filter(
+        (p) => p.isActive !== false && !!p.pitching && onStaff(state, p.id),
+      )
+      .map((p) => p.id),
+  );
   if (!state.starters.length) problems.push('先発投手を1人以上入れてください');
   if (state.starters.length > MAX_STARTERS)
     problems.push(`先発投手は${MAX_STARTERS}人までです`);

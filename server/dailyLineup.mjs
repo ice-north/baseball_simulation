@@ -43,10 +43,14 @@ function restTiredFielders(team) {
     const player = team.players.find((p) => p.id === entry.playerId);
     if (!player || (player.fatigue || 0) < FIELDER_REST_FATIGUE) continue;
     const fit = (p) =>
-      p.position === entry.position ? 100 : getPositionFitness(p, entry.position, 0);
+      p.position === entry.position
+        ? 100
+        : getPositionFitness(p, entry.position, 0);
     const substitute = bench
       .filter((p) => fit(p) >= MIN_FITNESS)
-      .sort((a, b) => fit(b) - fit(a) || (a.fatigue || 0) - (b.fatigue || 0))[0];
+      .sort(
+        (a, b) => fit(b) - fit(a) || (a.fatigue || 0) - (b.fatigue || 0),
+      )[0];
     // 守れる控えが居なければ休ませない（守備位置に穴を開けない）
     if (!substitute) continue;
     bench.splice(bench.indexOf(substitute), 1);
@@ -64,6 +68,56 @@ function restTiredFielders(team) {
     }
   };
 }
+/**
+ * **二刀流の先発の日**。次の先発が野手の打順にも入っているとき、その日だけ
+ * 野手の枠を控えに任せる（守備位置の合う控えから）。戻す関数を返す。
+ *
+ * ⚠ `ensureCompleteLineup` に任せると、先発を野手の枠から**外したまま保存する**
+ *    （打順を作り直すため）。先発の日が来るたびに二刀流の選手がスタメンから
+ *    消えていく。ここで先にその日だけ入れ替え、試合の後に戻す。
+ * ⚠ 戻すときは選手IDで探す（`ensureCompleteLineup` が配列を作り直す）。
+ * ⚠ 控えが居なければ何もしない（`ensureCompleteLineup` が埋める）。
+ */
+export function benchTwoWayStarter(team) {
+  const order = team.lineupSettings?.battingOrder || [];
+  const starters = team.pitchingRotation?.starters || [];
+  if (!starters.length) return () => {};
+  const index =
+    (team.pitchingRotation.currentStarterIndex || 0) % starters.length;
+  const starterId = starters[index];
+  const slot = order.find(
+    (e) =>
+      e.playerId === starterId &&
+      e.position !== 'pitcher' &&
+      e.position !== 'dh' &&
+      e.battingOrder >= 1 &&
+      e.battingOrder <= 8,
+  );
+  if (!slot) return () => {};
+  const inLineup = new Set(order.map((e) => e.playerId));
+  const fit = (p) =>
+    p.position === slot.position
+      ? 100
+      : getPositionFitness(p, slot.position, 0);
+  const substitute = team.players
+    .filter(
+      (p) =>
+        p.isActive !== false &&
+        p.position !== 'pitcher' &&
+        !inLineup.has(p.id) &&
+        !starters.includes(p.id),
+    )
+    .sort((a, b) => fit(b) - fit(a) || (a.fatigue || 0) - (b.fatigue || 0))[0];
+  if (!substitute) return () => {};
+  slot.playerId = substitute.id;
+  return () => {
+    const entry = (team.lineupSettings?.battingOrder || []).find(
+      (e) => e.playerId === substitute.id && e.position !== 'pitcher',
+    );
+    if (entry) entry.playerId = starterId;
+  };
+}
+
 // 短い予約ローテでも疲労投手を固定登板させない。当日の代役だけ差し込み、予約は残す。
 export function prepareDailyLineup(team, name) {
   const rotation = team.pitchingRotation;
@@ -77,8 +131,13 @@ export function prepareDailyLineup(team, name) {
   const restoreFielders = restTiredFielders(team);
   const index = (rotation.currentStarterIndex || 0) % starters.length;
   rotation.currentStarterIndex = index;
+  // ⚠ ローテには野手も入れられる（二刀流）。先発に選べるのは、ローテに居る選手
+  //    （登録を問わない）。ローテが全員疲れていたときの代役だけは投手登録から選ぶ
+  //    投手登録の選手はいつも先発できる（投球の能力を持たない古い形でも）
+  const canStart = (p) =>
+    p.isActive !== false && (p.position === 'pitcher' || !!p.pitching);
   const pitchers = team.players.filter(
-    (p) => p.position === 'pitcher' && p.isActive !== false,
+    (p) => canStart(p) && (p.position === 'pitcher' || starters.includes(p.id)),
   );
   const current = pitchers.find((p) => p.id === starters[index]);
   let restore = () => {};
@@ -89,14 +148,20 @@ export function prepareDailyLineup(team, name) {
     let rested = -1;
     for (let i = 1; i < starters.length && rested < 0; i += 1) {
       const candidate = (index + i) % starters.length;
-      if (pitchers.some((p) => p.id === starters[candidate] && (p.fatigue || 0) < STARTER_SKIP_FATIGUE))
+      if (
+        pitchers.some(
+          (p) =>
+            p.id === starters[candidate] &&
+            (p.fatigue || 0) < STARTER_SKIP_FATIGUE,
+        )
+      )
         rested = candidate;
     }
     if (rested >= 0) rotation.currentStarterIndex = rested;
     else {
-      const substitute = [...pitchers].sort(
-        (a, b) => (a.fatigue || 0) - (b.fatigue || 0),
-      )[0];
+      const substitute = pitchers
+        .filter((p) => p.position === 'pitcher')
+        .sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0))[0];
       requireOnline(substitute, `${name}の投手が不足しています`, 409, 'roster');
       const original = [...starters];
       rotation.starters[index] = substitute.id;
@@ -105,6 +170,7 @@ export function prepareDailyLineup(team, name) {
       };
     }
   }
+  const restoreTwoWay = benchTwoWayStarter(team);
   requireOnline(
     ensureCompleteLineup(team, false),
     `${name}の編成を補完できません`,
@@ -112,6 +178,7 @@ export function prepareDailyLineup(team, name) {
     'roster',
   );
   return () => {
+    restoreTwoWay();
     restore();
     restoreFielders();
   };

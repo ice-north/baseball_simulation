@@ -212,9 +212,20 @@ export function projectLineup(team) {
     team.pitchingRotation?.setupMen?.length ||
     team.pitchingRotation?.middleRelievers?.length
       ? {
+          // ⚠ 野手は投手起用に加えた選手だけ（先発ローテか、役割を保存した野手。二刀流）。
+          //    全員を載せると、画面が全野手を投手起用に入っているものとして読む
           pitcherRoles: Object.fromEntries(
             team.players
-              .filter((p) => p.position === 'pitcher' && p.isActive !== false)
+              .filter(
+                (p) =>
+                  p.isActive !== false &&
+                  (p.position === 'pitcher' ||
+                    team.pitchingRotation.starters?.includes(p.id) ||
+                    Object.hasOwn(
+                      team.pitchingRotation.pitcherRoles || {},
+                      String(p.id),
+                    )),
+              )
               .map((p) => [
                 p.id,
                 roleFor(

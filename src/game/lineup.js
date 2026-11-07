@@ -33,9 +33,13 @@ export function ensureCompleteLineup(team, useDH = false) {
   //    1人目の選手が代わりに立ち、1試合7打席になる）。外した枠は控えで埋める。
   const rotationStarters = team.pitchingRotation?.starters || [];
   const startIndex = team.pitchingRotation?.currentStarterIndex || 0;
+  // ⚠ 先発ローテの選手は**投手登録でなくてよい**（オンラインの二刀流。野手を
+  //    ローテに入れられる）。登録で絞ると、ローテの野手を飛ばして別の投手が投げる
+  //    投手登録の選手はいつも先発できる（投球の能力を持たない古い形でも）
+  const canStart = player => player?.position === 'pitcher' || !!player?.pitching;
   const nextStarterId = useDH
     ? [...rotationStarters.slice(startIndex), ...rotationStarters.slice(0, startIndex)]
-      .find(id => active.get(id)?.position === 'pitcher')
+      .find(id => canStart(active.get(id)))
     : undefined;
   for (const entry of source) {
     const player = active.get(entry.playerId);
@@ -54,7 +58,7 @@ export function ensureCompleteLineup(team, useDH = false) {
     const rotation = team.pitchingRotation?.starters || [];
     const rotationIndex = team.pitchingRotation?.currentStarterIndex || 0;
     const rotated = [...rotation.slice(rotationIndex), ...rotation.slice(0, rotationIndex)];
-    const pitcher = rotated.map(id => active.get(id)).find(player => player?.position === 'pitcher')
+    const pitcher = rotated.map(id => active.get(id)).find(canStart)
       || source.map(entry => active.get(entry.playerId)).find(player => player?.position === 'pitcher')
       || players.find(player => player.position === 'pitcher' && player.isActive !== false);
     if (!pitcher) return false;

@@ -205,14 +205,11 @@ export function validateLineup(team, plan) {
     positions.every((pos) => plan.battingOrder.some((e) => e.position === pos)),
     '野手の守備位置を一度ずつ指定してください',
   );
+  // ⚠ **投手もスタメンの野手に入れてよい**（二刀流。いしだ指摘: 投手でも野手で
+  //    出られるように）。守備の上手い下手は適性が試合で効くだけ
   requireOnline(
     plan.battingOrder.every((e) =>
-      team.players.some(
-        (p) =>
-          p.id === e.playerId &&
-          p.position !== 'pitcher' &&
-          p.isActive !== false,
-      ),
+      team.players.some((p) => p.id === e.playerId && p.isActive !== false),
     ),
     '登録できない選手が含まれています',
   );
@@ -223,23 +220,16 @@ export function validateLineup(team, plan) {
       new Set(plan.starters).size === plan.starters.length,
     '先発投手を1〜8人指定してください',
   );
+  // ⚠ **野手も先発ローテに入れてよい**（二刀流）。投球の能力（`pitching`）は
+  //    全員が持っている。先発と野手の兼任もよい: 先発の日だけ9番・投手に回り、
+  //    空いた打順には控えが入る（`server/dailyLineup.mjs`）
   requireOnline(
     plan.starters.every((id) =>
       team.players.some(
-        (p) =>
-          p.id === id &&
-          p.position === 'pitcher' &&
-          p.pitching &&
-          p.isActive !== false,
+        (p) => p.id === id && p.pitching && p.isActive !== false,
       ),
     ),
     '先発投手の指定が不正です',
-  );
-  requireOnline(
-    !plan.starters.some((id) =>
-      plan.battingOrder.some((e) => e.playerId === id),
-    ),
-    '初版では先発投手と野手の兼任はできません',
   );
 }
 

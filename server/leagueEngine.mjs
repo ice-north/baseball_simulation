@@ -60,7 +60,7 @@ import {
 import { generatePitchingRotation } from '../src/game/lineupGenerator.js';
 import { setRecommendedLineup } from '../src/game/autoSimulation.js';
 import { ensureCompleteLineup } from '../src/game/lineup.js';
-import { prepareDailyLineup } from './dailyLineup.mjs';
+import { prepareDailyLineup, benchTwoWayStarter } from './dailyLineup.mjs';
 import { initializeAllPlayersCondition } from '../src/game/condition.js';
 import { simulateScheduledGamesOnDate } from '../src/game/daySimulation.js';
 import { hashSeed, withSeededRandom } from '../src/game/rng.js';
@@ -956,17 +956,30 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
   if (human && !force) {
     const ids = new Set(team.players.map((p) => p.id));
     const starters = team.pitchingRotation?.starters || [];
-    if (
-      starters.length > 0 &&
-      starters.every((id) => ids.has(id)) &&
-      ensureCompleteLineup(team, false)
-    ) {
+    // ⚠ 次の先発が野手の打順にも入っている（二刀流）とき、そのまま
+    //    `ensureCompleteLineup` に渡すと野手の枠から外したまま保存される。
+    //    控えに一時的に任せて確かめ、すぐ戻す（試合の日と同じ扱い）
+    const undoTwoWay =
+      starters.length > 0 && starters.every((id) => ids.has(id))
+        ? benchTwoWayStarter(team)
+        : null;
+    const complete = undoTwoWay ? ensureCompleteLineup(team, false) : false;
+    undoTwoWay?.();
+    if (complete) {
       syncRelievers(team);
       return;
     }
   }
   generatePitchingRotation(name);
+  // ⚠ **守備位置の登録を書き換えさせない**。CPUの打順作り（`generateAILineup`）は
+  //    スタメンに入れた選手の登録をその日の守備位置に書き換える（一人用の試合の
+  //    写しでの作り）。保存する名簿に当てると、二刀流の投手が「右翼手」になって
+  //    ローテに残る・一塁手が三塁手に変わる、が黙って起きていた。守備位置は
+  //    打順の側（`lineupSettings`）にあるので、登録は元に戻してよい
+  const registered = new Map(team.players.map((p) => [p.id, p.position]));
   setRecommendedLineup(team, name);
+  for (const player of team.players)
+    if (registered.has(player.id)) player.position = registered.get(player.id);
 }
 
 /**
@@ -983,8 +996,18 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
 function syncRelievers(team) {
   const rotation = team.pitchingRotation;
   if (!rotation) return;
-  const pitchers = team.players
-    .filter((p) => p.position === 'pitcher' && p.isActive !== false)
+  const active = team.players.filter((p) => p.isActive !== false);
+  // ⚠ 投手起用に加えた野手（二刀流）は欄に残す。足すのは投手登録の選手だけ
+  //    （野手を全員「おまかせ」の救援にしない）
+  const staff = new Set([
+    ...(rotation.starters || []),
+    ...(rotation.setupMen || []),
+    ...(rotation.middleRelievers || []),
+    ...(rotation.closer != null ? [rotation.closer] : []),
+    ...Object.keys(rotation.pitcherRoles || {}).map(Number),
+  ]);
+  const pitchers = active
+    .filter((p) => p.position === 'pitcher' || (p.pitching && staff.has(p.id)))
     .map((p) => p.id);
   const present = new Set(pitchers);
   const starters = new Set(rotation.starters || []);

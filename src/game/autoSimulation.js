@@ -1300,7 +1300,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const buntSkill = batter.batting?.bunt || 30;
     const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
     const batterSpeed = batter.physical?.speed || 50;
-    const isPitcherBatter = batter.position === 'pitcher' || isPitcher(batter);
+    // ⚠ 「投手が打席に立っている」は**その試合の守備位置**で見る。登録や能力
+    //    （`isPitcher` はスタミナ100以上も投手とみなす）で見ると、野手で出ている
+    //    二刀流の投手まで投手扱いになり、送りバントや代打の対象になっていた
+    const isPitcherBatter = batter.position === 'pitcher';
 
     // スクイズ: 3塁ランナー、1アウト、接戦、バント能力40以上
     if (bases[2] && outs === 1 && isCloseGame && buntSkill >= 40) {
@@ -1389,7 +1392,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     //    ⚠ 「6回以降・控えの方が少しでも打てる」だけで出すと、控えは必ず投手より打てるので
     //    好投中の先発まで6回で降ろしてしまう（実測 先発の平均投球回 5.20→4.51回、
     //    6回以上 41%→24%）。代打は「点が欲しい場面」か「先発がもう限界」のときだけ。
-    if (isPitcher(batter)) {
+    // ⚠ 打席の投手は**その試合の守備位置**で見る（上の `isPitcherBatter` と同じ理由）
+    if (batter.position === 'pitcher') {
       const stRate = (batter.currentStamina || 0) / Math.max(1, batter.pitching?.stamina || 100);
       const tired = stRate < 0.40 || (batter.gameStats?.pitching?.pitches || 0) >= 95;
       const needRuns = scoreDiff <= 0 && (isScoring || gameState.inning >= 8);

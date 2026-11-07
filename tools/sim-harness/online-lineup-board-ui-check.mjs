@@ -5,7 +5,8 @@
 //
 // 見ること:
 //  - 守備分析は左メニューに無い（スタメン設定の表に入れた）
-//  - 控えに投手を出さない。スタメン8行＋投手の9番
+//  - 控えの野手の括り（捕手・内野・外野）に投手を出さない。投手は最後の別の括り（二刀流）。
+//    スタメン8行＋投手の9番
 //  - 行を選ぶ → 控えがその守備位置の候補になる → 押すと交代（打順と守備位置を引き継ぐ）
 //  - 守備位置のバッジ同士で守備を入れ替える。ドラッグで打順を動かす・控えと交代する
 //  - 守備位置を選ぶと成績の列の場所に守備図が開く。図の位置を押しても入れ替わる
@@ -68,9 +69,7 @@ try {
       );
   const benchNames = () =>
     p
-      .locator(
-        'tbody[aria-label="控え野手"] tr[data-bench] .online-player-name',
-      )
+      .locator('tbody[aria-label="控え"] tr[data-bench] .online-player-name')
       .allInnerTexts();
   const click = (name) => p.getByRole('button', { name, exact: true }).click();
   await p
@@ -89,14 +88,35 @@ try {
       .filter((pl) => pl.position === 'pitcher')
       .map((pl) => pl.id),
   );
-  const benchIds = await p
-    .locator('tbody[aria-label="控え野手"] tr[data-bench]')
-    .evaluateAll((rows) => rows.map((r) => Number(r.dataset.bench)));
+  const benchRows = () =>
+    p.locator('tbody[aria-label="控え"] tr[data-bench]').evaluateAll((rows) =>
+      rows.map((r) => ({
+        id: Number(r.dataset.bench),
+        group: r.dataset.benchGroup,
+      })),
+    );
+  const benchIds = (await benchRows())
+    .filter((r) => r.group !== 'pitcher')
+    .map((r) => r.id);
   assert.ok(benchIds.length > 0, '控え野手が出ていない');
   assert.ok(
     !benchIds.some((id) => pitcherIds.has(id)),
-    '控え野手に投手が出ている',
+    '控え野手の括りに投手が出ている',
   );
+  // 二刀流: 投手は最後の括りに。「全員を出す」で野手の枠に入っていない投手が全員並ぶ
+  {
+    const all = p.getByRole('button', { name: /投手を全員出す/ });
+    if (await all.count()) await all.click();
+    const shown = (await benchRows()).filter((r) => r.group === 'pitcher');
+    assert.equal(
+      shown.length,
+      pitcherIds.size,
+      '控えの投手の括りに投手が全員並ばない',
+    );
+    assert.ok(shown.every((r) => pitcherIds.has(r.id)));
+    const fold = p.getByRole('button', { name: '守れる投手だけにする' });
+    if (await fold.count()) await fold.click();
+  }
   // スタメンの行にも、控えの行と同じく「ほかに守れる位置」が出る
   const starterPlayable = await p
     .locator(
@@ -220,7 +240,7 @@ try {
   // ドラッグ: 控えを6番へ（交代）
   const benchFirst = (await benchNames())[0];
   await p
-    .locator('tbody[aria-label="控え野手"] tr[data-bench]')
+    .locator('tbody[aria-label="控え"] tr[data-bench]')
     .first()
     .dragTo(p.locator('tr[data-slot="6"]'));
   const dropped = await slots();
@@ -500,7 +520,11 @@ try {
       fielders[0].fatigue = 0;
       fielders[1].fatigue = 50;
       fielders[2].fatigue = 95;
-      const pitchers = team.players.filter((x) => x.position === 'pitcher');
+      // ⚠ 抹消中の投手を選ばない（上で先発の1人を抹消してある。抹消中は崩れた行に
+      //    なって名前の欄が無く、名簿の並びによってはこの検査が落ちた）
+      const pitchers = team.players.filter(
+        (x) => x.position === 'pitcher' && x.isActive !== false,
+      );
       pitchers[0].fatigue = 95;
       bundle.league.revision++;
       return { value: null };
@@ -588,6 +612,67 @@ try {
       '投手起用で疲労95が赤でない',
     );
   }
+  // ---- 二刀流: 野手を投手起用に加える・投手を野手の枠に入れる ------------------
+  // ⚠ 加えていない野手は投手起用に出ない（畳んだ一覧から「加える」で入る）
+  {
+    await go('投手起用');
+    const staffIds = () =>
+      p
+        .locator('tr[data-starter]:visible, tr[data-reliever]:visible')
+        .evaluateAll((rows) =>
+          rows.map((r) => Number(r.dataset.starter || r.dataset.reliever)),
+        );
+    const before = await staffIds();
+    await p.getByRole('button', { name: '野手を出す' }).click();
+    const candidateRow = p.locator('tr[data-staff-candidate]:visible').first();
+    const candidateId = Number(
+      await candidateRow.getAttribute('data-staff-candidate'),
+    );
+    assert.ok(!before.includes(candidateId), '加えていない野手が投手起用に居る');
+    await candidateRow.getByRole('button', { name: /を投手起用に加える/ }).click();
+    assert.ok(
+      (await staffIds()).includes(candidateId),
+      '加えた野手が救援に並ばない',
+    );
+    assert.match(
+      await p.locator(`tr[data-reliever="${candidateId}"]`).innerText(),
+      /野手・/,
+      '加えた野手に野手の印が無い',
+    );
+    await click('変更を取り消す');
+    // スタメン設定: 控えの投手を野手の枠へ（交代）。保存できる形のまま
+    await go('スタメン設定');
+    const all = p.getByRole('button', { name: /投手を全員出す/ });
+    if (await all.count()) await all.click();
+    const pitcherRow = p
+      .locator('tbody[aria-label="控え"] tr[data-bench-group="pitcher"]:visible')
+      .first();
+    const pitcherId = await pitcherRow.getAttribute('data-bench');
+    const pitcherName = (
+      await pitcherRow.locator('.online-player-name').innerText()
+    ).trim();
+    // ⚠ 行を選ぶと控えは「交代候補」の並びに変わる（括りの印も変わる）ので、選手のidで探す
+    await click('8番を選ぶ');
+    await p
+      .locator(`tbody[aria-label="控え"] tr[data-bench="${pitcherId}"]`)
+      .getByRole('button')
+      .first()
+      .click();
+    const eighth = await p.locator('tr[data-slot="8"]:visible').innerText();
+    assert.ok(eighth.includes(pitcherName), '控えの投手が野手の枠に入らない');
+    assert.match(eighth, /投手/, '野手の枠に入れた投手に投手の印が無い');
+    // 保存できる形のまま（保存のボタンが押せる）
+    assert.ok(
+      await p
+        .locator('.online-page-actions button.online-primary:visible, button.online-primary:visible')
+        .filter({ hasText: '保存' })
+        .first()
+        .isEnabled(),
+      '投手を野手の枠に入れると保存できない',
+    );
+    await click('変更を取り消す');
+  }
+
   // ---- 通算成績（情報 → 通算成績）--------------------------------------
   // ⚠ **1年で終わるゲームではない**。育てた選手がこのリーグで何をしたかが
   //    残らないと、育てた意味が見えない。
@@ -734,7 +819,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えに投手なし / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / ホームの直近と今後をターンで横並び / 守備位置の変更）',
+    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / ホームの直近と今後をターンで横並び / 守備位置の変更）',
   );
 } finally {
   await browser.close();

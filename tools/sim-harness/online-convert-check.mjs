@@ -128,15 +128,18 @@ assert.equal(CONVERT_POSITIONS.length, 9, '守備位置が9つでない');
   assert.ok(order.length >= 8, `打順が組まれていない: ${order.length}人`);
   for (const e of order)
     assert.ok(ids.has(e.playerId), '打順に名簿外の選手が残っている');
+  // ⚠ 組み直しの打順に投手が野手で入るのは**二刀流の投手だけ**（CPUの打順作りは
+  //    先発でない日の二刀流を野手で使う）。二刀流でない投手は守らせない
   for (const e of order) {
     const p = find(e.playerId);
     if (e.position === 'pitcher' || e.position === 'dh') continue;
-    assert.notEqual(
-      p.position,
-      'pitcher',
+    assert.ok(
+      p.position !== 'pitcher' || p.isTwoWay,
       `${p.name}（投手）が${e.position}を守っている`,
     );
   }
+  // ⚠ 組み直しの投手起用は**投手登録の選手だけ**。組み直しの打順作りが二刀流の
+  //    登録を守備位置に書き換えると、ここに「野手」が残る（実測で起きた）
   for (const id of bullpen())
     assert.equal(
       find(id)?.position,

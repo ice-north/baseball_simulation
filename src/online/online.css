@@ -3685,6 +3685,16 @@ small.online-gain {
   background: transparent;
   font-weight: 600;
 }
+/* 野手を投手起用に加える札（二刀流）。役割の札と同じ大きさで、点線にして「まだ入っていない」を示す */
+.online-desktop .online-role-chip.is-add {
+  color: #cbd5e1;
+  background: transparent;
+  border-style: dashed;
+  font-weight: 600;
+}
+.online-lineup-row.is-candidate {
+  cursor: default;
+}
 .online-desktop .online-role-chip:hover:enabled,
 .online-desktop .online-role-chip[aria-expanded='true'] {
   background: #0891b2;
@@ -3783,7 +3793,8 @@ small.online-gain {
   flex: 1;
   margin: 0 !important;
 }
-.online-desktop .online-lineup-field-toggle {
+.online-desktop .online-lineup-field-toggle,
+.online-desktop .online-lineup-group-toggle {
   min-width: 0;
   min-height: 0;
   height: 28px;
@@ -3791,6 +3802,13 @@ small.online-gain {
   font-size: 12px;
   font-weight: 700;
   border-radius: 6px;
+}
+.online-desktop .online-lineup-group-toggle {
+  height: 22px;
+  margin-left: 10px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 400;
 }
 .online-desktop .online-lineup-field-toggle[aria-pressed='true'] {
   color: var(--accent);
