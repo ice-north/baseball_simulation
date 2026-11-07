@@ -345,6 +345,8 @@ export function Results({ view, compact = false }) {
  *    昇降格のお知らせが入るとリーグ便りごと画面が落ちていた。
  */
 const NOTICE_LABELS = {
+  // ⚠ **消さないこと**。オンラインではもうドラフトを行わないが、外す前の年度の
+  //    お知らせが保存に残っている。消すと、その年だけ「お知らせ」になる
   draft: 'NPBドラフト',
   tryout: 'トライアウト',
   promotion: '昇格・降格',
