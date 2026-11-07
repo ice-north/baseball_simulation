@@ -77,7 +77,9 @@ function StatRow({ player, category, groups }) {
  * ⚠ 色だけに頼らない——数字そのものを出しているので、色は補助。
  */
 function AbilityBlock({ title, rows }) {
-  const shown = rows.filter(([, value]) => value !== null && value !== undefined);
+  const shown = rows.filter(
+    ([, value]) => value !== null && value !== undefined,
+  );
   if (!shown.length) return null;
   return (
     <div className="online-detail-block">
@@ -90,7 +92,11 @@ function AbilityBlock({ title, rows }) {
               className={
                 typeof value === 'number'
                   ? getRankColor(
-                      getAbilityRank(value, label === '球速', label === 'スタミナ'),
+                      getAbilityRank(
+                        value,
+                        label === '球速',
+                        label === 'スタミナ',
+                      ),
                     )
                   : ''
               }
@@ -104,11 +110,47 @@ function AbilityBlock({ title, rows }) {
   );
 }
 
+/** その区分の成績が今季ある（野手が投げた・投手が打った） */
+const hasRecord = (player, category) =>
+  (player?.seasonStats?.[category]?.games || 0) > 0;
+
 export default function PlayerDetailBody({ player, shown, periodLabel }) {
   const isPitcher = player.position === 'pitcher';
-  // ⚠ 二刀流は**両方**出す。投手欄だけだと打撃が見えない
-  const twoWay = !!player.isTwoWay;
   const abilities = (group) => abilityRows(player, group);
+  // ⚠ **能力は投打の両方をいつも出す**（いしだ指摘: 二刀流が売りなので、投手の打撃・
+  //    野手の投球も見たい。誰でも投げる・守る起用ができる）。本職を先に置く。
+  //    成績は本職の区分と、記録がある区分だけ（無い区分は「—」が並ぶだけになる）
+  const batting = (
+    <AbilityBlock
+      key="batting"
+      title="打撃・走塁"
+      rows={abilities('batting')}
+    />
+  );
+  const pitching = [
+    <AbilityBlock key="pitching" title="投球" rows={abilities('pitching')} />,
+    <AbilityBlock key="arsenal" title="球種" rows={abilities('arsenal')} />,
+  ];
+  const showBatting =
+    !isPitcher || player.isTwoWay || hasRecord(shown, 'batting');
+  const showPitching =
+    isPitcher || player.isTwoWay || hasRecord(shown, 'pitching');
+  const battingStats = showBatting && (
+    <StatRow
+      key="batting"
+      player={shown}
+      category="batting"
+      groups={['basic', 'appearances']}
+    />
+  );
+  const pitchingStats = showPitching && (
+    <StatRow
+      key="pitching"
+      player={shown}
+      category="pitching"
+      groups={['basic', 'record']}
+    />
+  );
   return (
     <>
       <CareerLine player={player} />
@@ -117,34 +159,15 @@ export default function PlayerDetailBody({ player, shown, periodLabel }) {
         <h3>
           成績<small>{periodLabel}</small>
         </h3>
-        {(!isPitcher || twoWay) && (
-          <StatRow
-            player={shown}
-            category="batting"
-            groups={['basic', 'appearances']}
-          />
-        )}
-        {(isPitcher || twoWay) && (
-          <StatRow
-            player={shown}
-            category="pitching"
-            groups={['basic', 'record']}
-          />
-        )}
+        {isPitcher
+          ? [pitchingStats, battingStats]
+          : [battingStats, pitchingStats]}
       </section>
 
       <section className="online-detail-section">
         <h3>能力</h3>
         <div className="online-detail-grid">
-          {(!isPitcher || twoWay) && (
-            <AbilityBlock title="打撃・走塁" rows={abilities('batting')} />
-          )}
-          {(isPitcher || twoWay) && (
-            <AbilityBlock title="投球" rows={abilities('pitching')} />
-          )}
-          {(isPitcher || twoWay) && (
-            <AbilityBlock title="球種" rows={abilities('arsenal')} />
-          )}
+          {isPitcher ? [...pitching, batting] : [batting, ...pitching]}
           <AbilityBlock title="守備" rows={abilities('fielding')} />
           <AbilityBlock title="身体" rows={abilities('physical')} />
           <AbilityBlock title="精神・成長" rows={abilities('mental')} />
