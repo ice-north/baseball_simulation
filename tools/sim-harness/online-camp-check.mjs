@@ -346,6 +346,27 @@ assert.ok(
       `サブ練習（基礎体力）が効いていない: 体力の伸び ${one.bodyStamina - start.bodyStamina}（${roster.length}人）`,
     );
 
+    // ⚠ **伸びを残すこと**（いしだ指摘: 能力は伸びているのに結果がまとまって
+    //    おらず、成長が実感できない）。記録した伸びが名簿の実際の差と一致すること
+    const camp1 = after1.phase.camp.admin;
+    assert.equal(camp1.last?.round, 1, 'このクールの伸びが残っていない');
+    const recorded = (gains, key) =>
+      Object.values(gains || {}).reduce((n, g) => n + (g[key] || 0), 0);
+    assert.equal(
+      Math.round(recorded(camp1.last.gains, 'batting.meet')),
+      one.meet - start.meet,
+      '記録したミートの伸びが実際の差と合わない',
+    );
+    assert.equal(
+      Math.round(recorded(camp1.last.gains, 'physical.bodyStamina')),
+      one.bodyStamina - start.bodyStamina,
+      '記録した体力の伸び（サブ練習）が実際の差と合わない',
+    );
+    assert.deepEqual(camp1.gains, camp1.last.gains, '1クール目の通算がこのクールと違う');
+    const viewed = (await service.view('admin', admin)).phase.camp;
+    assert.deepEqual(viewed.last, camp1.last, 'このクールの伸びがビューに渡っていない');
+    assert.deepEqual(viewed.gains, camp1.gains, '通算の伸びがビューに渡っていない');
+
     // ⚠ **効かないサブ練習は入口で断ること**。野手に変化球練習を当てても
     //    何も起きず、そのクールが丸ごと無駄になる
     const outfielder = roster.find((p) => p.position !== 'pitcher');
@@ -385,6 +406,14 @@ assert.ok(
     assert.ok(
       armOf(afterThrow) > armOf(after1),
       '遠投で肩力が伸びていない',
+    );
+    // 通算は2クールぶんを足したもの
+    const camp2 = afterThrow.phase.camp.admin;
+    assert.equal(camp2.last?.round, 2, '2クール目の伸びが残っていない');
+    assert.equal(
+      Math.round(recorded(camp2.gains, 'physical.arm')),
+      armOf(afterThrow) - armOf(atCamp),
+      '通算の肩力の伸びが実際の差と合わない',
     );
 
     // ⚠ **同じクールを2回走らせない**。押し直しや再送で成長が二重に積まれる

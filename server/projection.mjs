@@ -426,6 +426,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
                   rounds: phase.camp?.[userId]?.rounds || 0,
                   total: CAMP_ROUNDS,
                   plan: phase.camp?.[userId]?.plan || null,
+                  // ⚠ 伸びた能力（このクール・通算）。画面のまとめに使う
+                  last: phase.camp?.[userId]?.last || null,
+                  gains: phase.camp?.[userId]?.gains || {},
                 }
               : null,
         }

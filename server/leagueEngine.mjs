@@ -130,6 +130,7 @@ import {
 } from '../src/online/membership.js';
 import { nextFromPlan } from '../src/online/tryoutPlan.js';
 import { generateRosterPacks, rosterPacksFor } from '../src/online/rosterPack.js';
+import { abilitySnapshot, abilityGains } from '../src/online/campGains.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_DIRECTIONS, CAMP_PHASES, CAMP_ROUNDS };
@@ -250,7 +251,12 @@ export function normalizeCampPolicy(policy) {
  */
 export function runCampRound(league, teamName, { policy, main, sub } = {}) {
   const team = TEAMS_DATA[teamName];
-  if (!team?.players?.length) return;
+  if (!team?.players?.length) return { gains: {}, events: {} };
+  // ⚠ 伸びは**練習の前後を比べて**作る（メイン・サブ・スタッフの効果をまとめて）。
+  //    練習ごとの報告を足し合わせると、サブ練習やスタッフの効果が漏れる
+  const before = new Map(
+    team.players.map((player) => [player.id, abilitySnapshot(player)]),
+  );
   const direction = policy?.direction || 'balanced';
   const phase = policy?.phase || 'skill';
   const staff = team.corporateData?.staff
@@ -272,7 +278,7 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
         : 'batting';
     moods[player.id] = moodMultiplier(player, direction, phase);
   }
-  const { updatedTeam } = executeTeamCampTraining(
+  const { updatedTeam, allReports } = executeTeamCampTraining(
     team,
     assignments,
     {},
@@ -281,16 +287,34 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
     moods,
   );
   TEAMS_DATA[teamName] = updatedTeam;
+  // 数字にならない出来事（フォーム改造・新球種・打席の変更）は文で残す
+  const events = {};
+  const note = (player, report) => {
+    for (const r of report || [])
+      if (r.isAwakening)
+        (events[player.id] ||= []).push(`${r.statName} ${r.after}`.trim());
+  };
+  for (const r of allReports || []) note(r.player, r.growthReport);
   for (const player of updatedTeam.players) {
     // ⚠ 守備位置に合うかは**入口で見ている**（`validateCampRound` と
     //    `validatePhasePlan`）。ここで倒すと、どちらの入口が漏れても気づけない
     const key = sub?.[player.id] || resolveTraining(player, direction, phase).sub;
-    if (SUB_TRAINING_MENUS[key]) executeSubTraining(player, key, {}, staff);
+    if (SUB_TRAINING_MENUS[key])
+      note(player, executeSubTraining(player, key, {}, staff)?.growthReport);
   }
   if (staff) {
     applyMotivationEffect(updatedTeam.players, staff);
     applyBatteryMentalEffect(updatedTeam.players, staff);
   }
+  const gains = {};
+  for (const player of updatedTeam.players) {
+    const diff = abilityGains(
+      before.get(player.id) || {},
+      abilitySnapshot(player),
+    );
+    if (Object.keys(diff).length) gains[player.id] = diff;
+  }
+  return { gains, events };
 }
 
 // ============================================================

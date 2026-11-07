@@ -596,6 +596,82 @@
   color: #9fb0c4;
   font-size: 11px;
 }
+/* 練習の成果（このクール／キャンプ通算）。伸びは緑、下がったものは赤 */
+.online-camp-gains {
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #15803d66;
+  background: #15803d14;
+}
+.online-camp-gains-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.online-camp-gains-head h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.online-camp-gains-head .online-segments {
+  margin: 0;
+}
+.online-camp-gain-totals {
+  margin: 8px 0 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+.online-camp-gain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 4px 16px;
+}
+.online-camp-gain-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.online-camp-gain-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 110px;
+}
+.online-camp-gain-name small {
+  color: #9fb0c4;
+}
+.online-camp-gain-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.online-gain {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+small.online-gain {
+  margin-left: 2px;
+  font-size: 10px;
+}
+.online-gain.is-up {
+  color: #4ade80;
+}
+.online-gain.is-down {
+  color: #f87171;
+}
+.online-camp-gain-event {
+  color: #fbbf24;
+  font-size: 12px;
+}
+.online-camp-gain-more {
+  margin-top: 6px;
+}
 /* ⚠ 列が20以上ある。**横に送れるようにする**（折り返すと行が読めない） */
 .online-camp-scroll {
   overflow-x: auto;
