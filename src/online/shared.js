@@ -424,16 +424,48 @@ export const LATE_PHASE_GRACE_HOURS = {
 };
 
 /**
- * フェーズの締め切り。担当曜日の**翌日0時**（JST）。
+ * 手続きが閉じる時刻＝**担当曜日の0時から何時間後か**（JST）。
+ *
+ * ⚠ **土曜の3つで土曜（32ターン）を分け合うこと**。以前はどれも「翌日0時」を
+ *    締め切りにしていたので、契約更改が締め切りまでかかると続くトライアウトは
+ *    日曜に開き、キャンプの32ターンを食っていた。実測で
+ *    **ストーブリーグ52ターン・キャンプ8ターン**になっていた（本来 32 / 32）。
+ * ⚠ 担当日の合計が24時間（32ターン）を超えないこと。超えると次の曜日の枠が
+ *    削られる。
+ * ⚠ ここを動かすと**考える時間の長さ**が変わる。非同期で遊ぶゲームなので、
+ *    短くしすぎると寝ている間に標準案で決まる。
+ */
+export const PHASE_WINDOW_HOURS = {
+  // 土曜（ストーブリーグ）= 32ターン
+  contract: 12, //  0:00〜12:00（16ターン）
+  tryout: 21, // 12:00〜21:00（12ターン）
+  offseason: 24, // 21:00〜24:00（4ターン）
+  // 日曜（キャンプ）= 32ターン
+  camp: 24,
+  // 開幕前の初期メンバー選択は1日まるごと使う
+  pack_select: 24,
+  initial_tryout: 24,
+};
+
+/**
+ * フェーズの締め切り。担当曜日の0時 ＋ `PHASE_WINDOW_HOURS`（JST）。
  * 担当が決まっていないフェーズ（初期編成）は `null`＝待ち続ける。
  * 担当の曜日を過ぎてから開いたときは `LATE_PHASE_GRACE_HOURS` だけ待つ。
  */
 export function phaseDeadlineAt(kind, now) {
   const weekday = PHASE_WEEKDAY[kind];
   if (weekday === undefined) return null;
-  let regular = nextWeekdayStart(now, (weekday + 1) % 7);
-  const grace = LATE_PHASE_GRACE_HOURS[kind];
+  const windowHours = PHASE_WINDOW_HOURS[kind] ?? 24;
   const ms = new Date(now).getTime();
+  // ⚠ **担当曜日の0時から数えること**。「翌日0時」だと、土曜の3つが全部
+  //    同じ時刻を締め切りにしてしまい、順番に開く2つ目以降が日曜へはみ出す
+  let close =
+    new Date(nextWeekdayStart(now, weekday)).getTime() -
+    7 * 86400000 +
+    windowHours * 3600000;
+  while (close <= ms) close += 7 * 86400000;
+  let regular = new Date(close).toISOString();
+  const grace = LATE_PHASE_GRACE_HOURS[kind];
   // ⚠ 初期編成は最初の手続きで、ドラフトの希望を考える時間が要る。土曜の夜に
   //    リーグを作ると締め切り（日曜0時）まで数分しかなく、全員が標準案で
   //    決まっていた。短すぎるときは翌週の日曜0時にする（全員が決めれば待たずに進む）

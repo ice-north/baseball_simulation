@@ -47,7 +47,6 @@ import {
   finalizePlayerSeason,
   cleanupPlayerReferences,
 } from '../src/season/yearProgressionSystem.js';
-import { processNPBDraft } from '../src/season/npbDraft.js';
 import { simulateKoshien } from '../src/season/koshien.js';
 import {
   simulateParallelWorldDate,
@@ -1465,6 +1464,17 @@ function advanceOneDay(league, key, now) {
         }
       }
     }
+    // その年の成績を確定する（比較値・タイトル・最終順位）。
+    //
+    // ⚠ **NPBドラフトは行わない**（オンラインだけ。一人用はそのまま）。
+    //    ドラフトは12球団から良い選手をNPBへ引き抜く処理で、育てた選手が
+    //    手元から消える。長く続ける対人リーグでは、抜かれた側に取り返す手段が
+    //    無いので外した。
+    // ⚠ **確定の処理は残すこと**。同じ日に動いていたので一緒に消しやすいが、
+    //    これが無いとタイトルも最終順位も年度の記録に残らない。
+    // ⚠ 日付はNPBのドラフト日のまま（一人用と同じ暦で動かすため）。
+    //    印の名前（`_draftDone`）も**保存の形を変えないため旧名のまま**。
+    //    いまの意味は「その年の成績を確定したか」。
     if (month === 10 && day === getNPBDraftDay(year) && !season._draftDone) {
       freezeComparison(league);
       season.frozenAwards = processSeasonEnd(season, TEAMS_DATA);
@@ -1472,18 +1482,6 @@ function advanceOneDay(league, key, now) {
         TEAMS_DATA,
         season.settings.teamNames,
       );
-      const result = processNPBDraft(TEAMS_DATA, season.year);
-      league.notices.unshift({
-        type: 'draft',
-        year: season.year,
-        picks: result.draftedPlayers.map((p) => ({
-          name: p.player.name,
-          playerId: p.player.id,
-          team: p.teamName,
-          npbTeam: p.npbTeam,
-          round: p.draftRound,
-        })),
-      });
       season._draftDone = true;
     }
     if (month === 11 && day === 9) openPhase(league, 'contract', now);

@@ -41,6 +41,21 @@ export const dateTime = (value) =>
         minute: '2-digit',
       })
     : '停止中';
+/**
+ * 「次の進行」に出す文言。
+ *
+ * ⚠ **時刻が無い理由まで書くこと**。手続き中は進行の時刻を持たない（決定で
+ *    動くため）ので、以前は停止と手続き待ちのどちらも「停止中」と出ていた。
+ *    止まっているのか自分の決定を待っているのか読めず、「再開はどこ？」と
+ *    探すことになった（実際に聞かれた）。
+ */
+export const nextAdvanceText = (view) =>
+  view?.nextAdvanceAt
+    ? dateTime(view.nextAdvanceAt)
+    : view?.phase
+      ? '手続きの決定待ち'
+      : '停止中';
+
 export async function api(action, auth, body, query = {}) {
   let response;
   try {

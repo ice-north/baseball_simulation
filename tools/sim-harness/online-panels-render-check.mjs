@@ -25,6 +25,7 @@ import {
   formatDeadline,
 } from '../../src/online/LeaguePanels.jsx';
 import { formatTurn, turnLabel, turnOfDate } from '../../src/online/shared.js';
+import { nextAdvanceText } from '../../src/online/api.js';
 import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
@@ -39,6 +40,7 @@ export {
   formatTurn,
   turnLabel,
   turnOfDate,
+  nextAdvanceText,
   setTeamLabels,
   PackSelect,
 };
@@ -74,6 +76,7 @@ try {
     formatTurn,
     turnLabel,
     turnOfDate,
+    nextAdvanceText,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -333,6 +336,31 @@ try {
       turnOfDate({ year: 2024, month: 9, day: 8 }),
       null,
       '範囲の外を数えている',
+    );
+    // ⚠ **「次の進行」は、時刻が無い理由まで書くこと**。手続き中は進行の時刻を
+    //    持たない（決定で動く）ので、止まっているのと同じ「停止中」と出ていた。
+    //    実際に「再開はどこ？」と聞かれた——止まっていないのに探すことになる
+    assert.equal(
+      nextAdvanceText({ nextAdvanceAt: null, phase: { kind: 'camp' } }),
+      '手続きの決定待ち',
+    );
+    assert.equal(
+      nextAdvanceText({ nextAdvanceAt: null, phase: null }),
+      '停止中',
+    );
+    assert.match(
+      nextAdvanceText({ nextAdvanceAt: '2026-11-08T03:45:00.000Z', phase: null }),
+      /11\/8/,
+      '時刻があるのに出していない',
+    );
+    // ⚠ 手続き中でも**時刻があるならそちらを出す**（決定後に再開した直後など）
+    assert.match(
+      nextAdvanceText({
+        nextAdvanceAt: '2026-11-08T03:45:00.000Z',
+        phase: { kind: 'camp' },
+      }),
+      /11\/8/,
+      '時刻があるのに決定待ちと出している',
     );
     assert.match(formatTurn({ year: 2024, month: 1, day: 1 }), /開幕前/);
     // ⚠ 一覧は総数（/160）を出さない。6試合並ぶと同じ数字が6回出る

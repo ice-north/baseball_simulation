@@ -3,8 +3,8 @@
 // ⚠ 主目的は「**1人が決めなくても週が進むこと**」。
 //    非同期で遊ぶゲームなので、待ち続ける設計だと誰かの都合で全員が止まる。
 // ⚠ 締め切りは曜日合わせも兼ねている。シーズンは月曜0時に始まり、
-//    120ターン（24×5日）で金曜23時に終わる。そこから
-//    土曜＝ストーブリーグ（締め切り 日曜0時）／日曜＝キャンプ（締め切り 月曜0時）。
+//    160ターン（32×5日）で金曜23時15分に終わる。そこから
+//    土曜＝ストーブリーグ（32ターンを3つで分け合う）／日曜＝キャンプ（32ターン）。
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,6 +16,7 @@ import {
   PHASE_WEEKDAY,
   ONLINE_SCHEMA,
   seasonStartAt,
+  PHASE_WINDOW_HOURS,
 } from '../../src/online/shared.js';
 import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
 import {
@@ -60,13 +61,20 @@ assert.equal(nextWeekdayStart(satMidnight, 6), '2026-11-06T15:00:00.000Z');
 assert.equal(nextWeekdayStart(satMidnight, 0), '2026-10-31T15:00:00.000Z', '翌日の日曜0時');
 
 // --- フェーズの締め切り ---------------------------------------------
-// ストーブリーグ（土曜担当）は日曜0時が締め切り
+// ストーブリーグ（土曜担当）は**土曜の中で順番に**締め切る
 for (const kind of ['contract', 'tryout', 'offseason']) {
   assert.equal(PHASE_WEEKDAY[kind], 6, `${kind} は土曜`);
+  const deadline = phaseDeadlineAt(kind, satMidnight);
+  assert.ok(
+    deadline > satMidnight && deadline <= '2026-10-31T15:00:00.000Z',
+    `${kind} の締め切りが土曜の中に無い: ${deadline}`,
+  );
   assert.equal(
-    phaseDeadlineAt(kind, satMidnight),
-    '2026-10-31T15:00:00.000Z',
-    `${kind} の締め切りは日曜0時`,
+    deadline,
+    new Date(
+      Date.parse(satMidnight) + PHASE_WINDOW_HOURS[kind] * 3600000,
+    ).toISOString(),
+    `${kind} の締め切りが持ち時間と合わない`,
   );
 }
 // キャンプ（日曜担当）は月曜0時が締め切り
@@ -134,17 +142,43 @@ assert.equal(
   '2026-11-01T09:00:00.000Z',
   '日曜14時に開いたオフシーズンは4時間で締める（日曜18時）',
 );
-// 土曜のうちに開いたものは従来どおり日曜0時
+// --- 土曜（ストーブリーグ）の32ターンを3つで分け合う ------------------
+// ⚠ 以前はどれも「翌日0時」を締め切りにしていたので、契約更改が締め切りまで
+//    かかると続くトライアウトは日曜に開き、**キャンプの32ターンを食っていた**
+//    （実測でストーブリーグ52ターン・キャンプ8ターン）。
+// ⚠ 合計が担当日の24時間（32ターン）を超えないこと
 assert.equal(
-  phaseDeadlineAt('tryout', '2026-10-31T03:00:00.000Z'),
-  '2026-10-31T15:00:00.000Z',
-  '土曜に開いたトライアウトは日曜0時',
+  PHASE_WINDOW_HOURS.offseason,
+  24,
+  '土曜の最後の手続きが日曜0時に締まらない',
 );
-// 担当の曜日より前（金曜）に開いたものも、早めに締めずに日曜0時まで待つ
+assert.ok(
+  PHASE_WINDOW_HOURS.contract < PHASE_WINDOW_HOURS.tryout &&
+    PHASE_WINDOW_HOURS.tryout < PHASE_WINDOW_HOURS.offseason,
+  '土曜の3つが順番に閉じない（同じ時刻だと2つ目以降が日曜へはみ出す）',
+);
+assert.equal(PHASE_WINDOW_HOURS.camp, 24, 'キャンプが日曜まるごとでない');
+// 土曜に開いたものは**自分の持ち時間まで**（日曜0時ではない）
+assert.equal(
+  phaseDeadlineAt('contract', '2026-10-30T16:00:00.000Z'), // 土曜1時JST
+  '2026-10-31T03:00:00.000Z',
+  '契約更改が土曜12時に締まらない',
+);
+assert.equal(
+  phaseDeadlineAt('tryout', '2026-10-31T03:00:00.000Z'), // 土曜12時JST
+  '2026-10-31T12:00:00.000Z',
+  'トライアウトが土曜21時に締まらない',
+);
+assert.equal(
+  phaseDeadlineAt('offseason', '2026-10-31T12:30:00.000Z'), // 土曜21時半JST
+  '2026-10-31T15:00:00.000Z',
+  '年度更新が日曜0時に締まらない',
+);
+// 担当の曜日より前（金曜）に開いたものも、早めに締めずに自分の枠まで待つ
 assert.equal(
   phaseDeadlineAt('contract', '2026-10-30T13:00:00.000Z'),
-  '2026-10-31T15:00:00.000Z',
-  '金曜に開いた契約更改は日曜0時',
+  '2026-10-31T03:00:00.000Z',
+  '金曜に開いた契約更改が土曜12時に締まらない',
 );
 // キャンプは遅れて開いても月曜0時（月曜0時が開幕の基準）
 assert.equal(
