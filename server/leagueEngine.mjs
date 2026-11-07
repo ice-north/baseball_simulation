@@ -289,11 +289,17 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
   );
   TEAMS_DATA[teamName] = updatedTeam;
   // 数字にならない出来事（フォーム改造・新球種・打席の変更）は文で残す
+  // ⚠ 能力の覚醒（大きく伸びた）も `isAwakening` で来る。伸びた数は `gains` に
+  //    あるので、ここは「覚醒した」ことだけ書く（「ミート 63」と今の値を並べない）
   const events = {};
   const note = (player, report) => {
     for (const r of report || [])
       if (r.isAwakening)
-        (events[player.id] ||= []).push(`${r.statName} ${r.after}`.trim());
+        (events[player.id] ||= []).push(
+          typeof r.before === 'number' && r.stat !== 'newpitch'
+            ? `${r.statName}が覚醒`
+            : `${r.statName} ${r.after}`.trim(),
+        );
   };
   for (const r of allReports || []) note(r.player, r.growthReport);
   for (const player of updatedTeam.players) {

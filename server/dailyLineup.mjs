@@ -76,7 +76,13 @@ function restTiredFielders(team) {
  *    （打順を作り直すため）。先発の日が来るたびに二刀流の選手がスタメンから
  *    消えていく。ここで先にその日だけ入れ替え、試合の後に戻す。
  * ⚠ 戻すときは選手IDで探す（`ensureCompleteLineup` が配列を作り直す）。
- * ⚠ 控えが居なければ何もしない（`ensureCompleteLineup` が埋める）。
+ * ⚠ 控えは「守れて疲れていない野手」→「野手」→「ローテの外の投手」の順に選ぶ。
+ *    誰も選べないと `ensureCompleteLineup` が先発を野手の枠から外し、空いた枠を
+ *    控えの野手で埋めようとする。野手の控えが居なければ打順が組めず、その日を
+ *    進められない（409）。投手は野手の枠に入れられるので最後の手段にする。
+ * ⚠ 戻した後、9番（投手）が同じ選手なら次の先発に替える。`ensureCompleteLineup`
+ *    は今日の先発を9番に入れるので、戻すと同じ選手が2回並ぶ（`lineupCommand`
+ *    と同じく、野手に入っていない先発で仮に埋める）。
  */
 export function benchTwoWayStarter(team) {
   const order = team.lineupSettings?.battingOrder || [];
@@ -99,22 +105,38 @@ export function benchTwoWayStarter(team) {
     p.position === slot.position
       ? 100
       : getPositionFitness(p, slot.position, 0);
-  const substitute = team.players
-    .filter(
-      (p) =>
-        p.isActive !== false &&
-        p.position !== 'pitcher' &&
-        !inLineup.has(p.id) &&
-        !starters.includes(p.id),
-    )
-    .sort((a, b) => fit(b) - fit(a) || (a.fatigue || 0) - (b.fatigue || 0))[0];
+  const byFit = (a, b) =>
+    fit(b) - fit(a) || (a.fatigue || 0) - (b.fatigue || 0);
+  const bench = team.players.filter(
+    (p) => p.isActive !== false && p.id !== starterId && !inLineup.has(p.id),
+  );
+  const fielders = bench.filter((p) => p.position !== 'pitcher');
+  const substitute =
+    fielders
+      .filter((p) => fit(p) >= MIN_FITNESS && (p.fatigue || 0) < FRESH_FATIGUE)
+      .sort(byFit)[0] ||
+    fielders.sort(byFit)[0] ||
+    bench.filter((p) => !starters.includes(p.id)).sort(byFit)[0];
   if (!substitute) return () => {};
   slot.playerId = substitute.id;
   return () => {
-    const entry = (team.lineupSettings?.battingOrder || []).find(
+    const current = team.lineupSettings?.battingOrder || [];
+    const entry = current.find(
       (e) => e.playerId === substitute.id && e.position !== 'pitcher',
     );
-    if (entry) entry.playerId = starterId;
+    if (!entry) return;
+    entry.playerId = starterId;
+    const ninth = current.find(
+      (e) => e.position === 'pitcher' && e.playerId === starterId,
+    );
+    if (!ninth) return;
+    const fielding = new Set(
+      current.filter((e) => e.position !== 'pitcher').map((e) => e.playerId),
+    );
+    const next = [...starters.slice(index), ...starters.slice(0, index)].find(
+      (id) => !fielding.has(id),
+    );
+    if (next !== undefined) ninth.playerId = next;
   };
 }
 

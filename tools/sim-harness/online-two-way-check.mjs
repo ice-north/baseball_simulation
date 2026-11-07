@@ -7,6 +7,8 @@
 //   - 先発の日だけ9番・投手に回り、空いた打順は控えが入る。試合の後は元の打順に戻る
 //   - 投手起用に加えていない野手は救援に入らない（全員が「おまかせ」で投げない）
 //   - 組み直し（CPUの打順作り）が選手の守備位置の登録を書き換えない
+//   - 戻した後に同じ選手が2回並ばない（9番は野手に入っていない先発で仮に埋める）
+//   - 控えは守れて疲れていない野手から。野手の控えが居なくても日を進められる
 import assert from 'node:assert/strict';
 import './lib/bootstrap.mjs';
 import {
@@ -18,7 +20,12 @@ import {
   captureLeagueWorld,
   advanceLeagueDay,
 } from '../../server/leagueEngine.mjs';
-import { prepareDailyLineup } from '../../server/dailyLineup.mjs';
+import {
+  prepareDailyLineup,
+  benchTwoWayStarter,
+} from '../../server/dailyLineup.mjs';
+import { ensureCompleteLineup } from '../../src/game/lineup.js';
+import { getPositionFitness } from '../../src/utils/physics.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
@@ -131,6 +138,12 @@ saveLineup(league, 'a', plan);
     twoWay,
     '先発の日のあとで二刀流の選手が右翼に戻っていない（スタメンから消えていく）',
   );
+  // ⚠ 戻すと9番（今日の先発）と右翼が同じ選手になる。9番は次の先発に替える
+  assert.equal(
+    new Set(after.map((e) => e.playerId)).size,
+    after.length,
+    '先発の日のあとで同じ選手が2回並んでいる（9番と右翼）',
+  );
   league.game = captureLeagueWorld();
 }
 
@@ -186,6 +199,85 @@ saveLineup(league, 'a', plan);
   }
 }
 
+// --- 控えの選び方と、野手の控えが居ない日 -------------------------------
+// ⚠ 組み直しの確かめ（`refreshTeamPlan`）と同じ手順: 控えに任せて
+//    `ensureCompleteLineup` で確かめ、すぐ戻す。同じ選手が2回並ばないこと
+const startTwoWay = (live) => {
+  const rot = live.pitchingRotation;
+  rot.currentStarterIndex = rot.starters.indexOf(twoWay);
+  assert.ok(rot.currentStarterIndex >= 0, '二刀流の選手がローテから消えた');
+  live.players.find((p) => p.id === twoWay).fatigue = 0;
+};
+{
+  loadLeagueWorld(league);
+  const live = TEAMS_DATA[own];
+  startTwoWay(live);
+  const undo = benchTwoWayStarter(live);
+  assert.ok(ensureCompleteLineup(live, false), '組み直しの確かめで打順が組めない');
+  undo();
+  const kept = live.lineupSettings.battingOrder;
+  assert.equal(
+    kept.find((e) => e.position === 'right')?.playerId,
+    twoWay,
+    '組み直しの確かめで二刀流の選手が右翼から外れた',
+  );
+  assert.equal(
+    new Set(kept.map((e) => e.playerId)).size,
+    kept.length,
+    '組み直しの確かめのあとで同じ選手が2回並んでいる',
+  );
+}
+{
+  // 守れる控えのうち一番合う選手が疲れていたら、次に合う疲れていない選手
+  loadLeagueWorld(league);
+  const live = TEAMS_DATA[own];
+  startTwoWay(live);
+  const inOrder = new Set(live.lineupSettings.battingOrder.map((e) => e.playerId));
+  const fit = (p) => (p.position === 'right' ? 100 : getPositionFitness(p, 'right', 0));
+  const able = live.players
+    .filter((p) => p.isActive !== false && p.position !== 'pitcher' && !inOrder.has(p.id))
+    .filter((p) => fit(p) >= 60)
+    .sort((a, b) => fit(b) - fit(a));
+  assert.ok(able.length >= 2, '右翼を守れる控えが2人居ない（検査の前提）');
+  able[0].fatigue = 90;
+  for (const p of able.slice(1)) p.fatigue = 0;
+  const restore = prepareDailyLineup(live, own);
+  const right = live.lineupSettings.battingOrder.find((e) => e.position === 'right');
+  assert.notEqual(right.playerId, able[0].id, '疲れた控えを二刀流の選手の代わりに出した');
+  assert.ok(
+    able.slice(1).some((p) => p.id === right.playerId),
+    '守れて疲れていない控えを選んでいない',
+  );
+  restore();
+}
+{
+  // 野手の控えが全員出られなくても、ローテの外の投手が右翼を埋めて日を進められる
+  loadLeagueWorld(league);
+  const live = TEAMS_DATA[own];
+  startTwoWay(live);
+  const inOrder = new Set(live.lineupSettings.battingOrder.map((e) => e.playerId));
+  for (const p of live.players)
+    if (p.position !== 'pitcher' && !inOrder.has(p.id)) p.isActive = false;
+  const restore = prepareDailyLineup(live, own);
+  const day = live.lineupSettings.battingOrder;
+  const right = live.players.find(
+    (p) => p.id === day.find((e) => e.position === 'right')?.playerId,
+  );
+  assert.ok(right && right.id !== twoWay, '野手の控えが居ない日に右翼が空いた');
+  assert.equal(right.position, 'pitcher', '右翼を埋めたのが投手でない');
+  assert.ok(
+    !live.pitchingRotation.starters.includes(right.id),
+    'ローテの投手を右翼に回した',
+  );
+  assert.equal(new Set(day.map((e) => e.playerId)).size, 9, '同じ選手が2回いる');
+  restore();
+  assert.equal(
+    live.lineupSettings.battingOrder.find((e) => e.position === 'right')?.playerId,
+    twoWay,
+    '野手の控えが居ない日のあとで二刀流の選手が右翼に戻っていない',
+  );
+}
+
 console.log(
-  '■ 二刀流の起用: OK（投手を野手で・野手を先発と救援で保存できる / 先発の日だけ9番に回って控えが埋め、試合の後に戻る / 野手の先発が投げる / 加えていない野手は救援に入らない / 登録を書き換えない）',
+  '■ 二刀流の起用: OK（投手を野手で・野手を先発と救援で保存できる / 先発の日だけ9番に回って控えが埋め、試合の後に戻る / 野手の先発が投げる / 加えていない野手は救援に入らない / 登録を書き換えない / 戻した後に同じ選手が並ばない / 控えは守れて疲れていない野手から・野手が居なければローテの外の投手）',
 );
