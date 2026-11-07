@@ -1,4 +1,4 @@
-import { generateRosterPacks } from './rosterPack.js';
+import { generateRosterPacks, LEGACY_PACK_STYLE } from './rosterPack.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -71,7 +71,10 @@ export const MIGRATIONS = [
       //    もう無いので、**手続きそのものを選択へ差し替える**。
       //    残したままだと、締め切りが来ても解決できずリーグが止まる。
       if (league.phase?.kind !== 'initial_tryout') return;
-      league.packs = generateRosterPacks((league.seed ?? 0) + 7).map((pack) => ({
+      // ⚠ この段は版1の作り方のまま固定する（段の意味を後から変えない）
+      league.packs = generateRosterPacks((league.seed ?? 0) + 7, {
+        style: LEGACY_PACK_STYLE,
+      }).map((pack) => ({
         ...pack,
         takenBy: null,
       }));
@@ -113,6 +116,20 @@ export const MIGRATIONS = [
       //    次の1回だけ最大59分ずれる（`nextProgressionAt` は「今より後の
       //    最初の枠」なので、以降は自然に揃う）
       league.nextAdvanceAt = null;
+    },
+  },
+  {
+    from: 7,
+    to: 8,
+    note: '初期メンバーのセットを型ごとに変え、キャンプの伸びを残すようにした',
+    apply(league) {
+      // ⚠ **途中参加でセットを待っている人は、配られたときの作り方のまま**。
+      //    セットは種から作り直すので、版を書き留めないと新しい作り方で
+      //    作り直され、選んだセットの中身が入れ替わる
+      for (const member of league.members || [])
+        if (member.packSeed) member.packStyle ??= LEGACY_PACK_STYLE;
+      // キャンプの伸び（`phase.camp[人].last` / `gains`）は足すだけ。
+      // 無ければ画面に出さないので、ここで作らない
     },
   },
 ];

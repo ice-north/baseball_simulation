@@ -2807,6 +2807,18 @@ small.online-gain {
   border-top: 1px solid #536b85;
   padding-top: 12px;
 }
+/* セットの型（「投手厚め・少数精鋭」）。選ぶときの一番の手がかりなので目立たせる */
+.online-pack-feature {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+.online-pack-detail h3 small {
+  margin-left: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fbbf24;
+}
 
 /* ============================================================
    PC版の共通の見た目（一人用の語彙に合わせる）

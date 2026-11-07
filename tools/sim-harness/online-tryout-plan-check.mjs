@@ -188,7 +188,11 @@ try {
     type: 'submit',
     payload: {
       phaseId: created.phase.id,
-      plan: { packId: created.packs[0].id },
+      // ⚠ 構成が「標準」のセットを選ぶ（下の戦力外は区分ごとの人数を決め打ちで
+      //    残すので、外野3人の型だと残せない）
+      plan: {
+        packId: (created.packs.find((p) => p.shape === 'standard') || created.packs[0]).id,
+      },
       ready: true,
       baseSubmission: null,
     },

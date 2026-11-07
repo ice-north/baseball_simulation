@@ -13,6 +13,7 @@
 //    配線（API・サーバー）は別のファイルで行う。
 // ============================================================
 import { requireOnline } from './shared.js';
+import { PACK_STYLE } from './rosterPack.js';
 import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
 
 /** 参加できる上限。球団数と同じ（全球団が人間でも成立する） */
@@ -196,7 +197,13 @@ export function applyJoin(league, { userId, label, teamName, now }) {
       ...(league.phase?.kind === 'pack_select'
         ? // 開幕前の手続きの最中なら、その手続きで一緒に選ぶ
           null
-        : { packSeed: (league.seed || 0) + 7 + index, pendingPackId: null }),
+        : {
+            packSeed: (league.seed || 0) + 7 + index,
+            // ⚠ **作り方の版も残す**。種から作り直すので、版が変わると
+            //    選んだあとでセットの中身が入れ替わってしまう
+            packStyle: PACK_STYLE,
+            pendingPackId: null,
+          }),
     },
   ];
   return {

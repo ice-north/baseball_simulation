@@ -111,7 +111,8 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
                 "初期メンバー選択",
                 listOf(
                     "20セットから1つ選びます。選んだ24人は次の日曜のキャンプで名簿に入り、月曜の開幕からあなたの球団になります。それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。",
-                    "どのセットも投12・捕2・内外10の24人（うち二刀流2人）、格付けはA2・B10・C12、年齢は19〜24歳です。合計の力は揃えてあるので、好みで選んで構いません。",
+                    "セットごとに構成（投手厚め・野手厚め・二刀流・捕手3人など）と格付けの配り方（少数精鋭・粒ぞろい・大黒柱など）が違います。年齢は19〜24歳です。",
+                    "格の総量（A=3・B=2・C=1点の合計）はどれも同じにしてあり、同じ枠の平均からの開きも1%前後に揃えてあるので、戦い方の好みで選んでください。",
                     "選んだセットは1球団だけが受け取ります（重なったら球団名の順）。",
                 ),
             )
@@ -296,10 +297,15 @@ private fun PackPicker(model: AppViewModel, packs: List<JsonObject>, chosen: Str
             ) {
                 Text(if (id == chosen) "●" else "○", color = if (id == chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, modifier = Modifier.width(22.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(pack.at("name").str().orEmpty(), fontWeight = if (id == open) FontWeight.Bold else FontWeight.Normal)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(pack.at("name").str().orEmpty(), fontWeight = if (id == open) FontWeight.Bold else FontWeight.Normal)
+                        // ⚠ セットの型（版2）。前から待っている人のセット（版1）には無い
+                        pack.at("feature").str()?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall) }
+                    }
                     Muted(
                         listOf("pitcher" to "投", "catcher" to "捕", "infield" to "内", "outfield" to "外")
                             .joinToString(" ") { (k, l) -> "$l${counts.at(k).int() ?: 0}" } +
+                            " · " + listOf("A", "B", "C").joinToString(" ") { "$it${pack.at("ranks", it).int() ?: 0}" } +
                             " · 平均${pack.at("averageAge").str() ?: "-"}歳 · 二刀流${pack.at("twoWay").int() ?: 0}",
                     )
                 }

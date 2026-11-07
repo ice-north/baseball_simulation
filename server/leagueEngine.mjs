@@ -129,7 +129,7 @@ import {
   assignmentOrder,
 } from '../src/online/membership.js';
 import { nextFromPlan } from '../src/online/tryoutPlan.js';
-import { generateRosterPacks, rosterPacksFor } from '../src/online/rosterPack.js';
+import { generateRosterPacks, packsForMember } from '../src/online/rosterPack.js';
 import { abilitySnapshot, abilityGains } from '../src/online/campGains.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
@@ -183,8 +183,8 @@ function createSchedule(season, teams) {
  * ⚠ セットは保存していない（種から作り直す）ので、選択が正しいかは
  *    ここで作り直して確かめるしかない。
  */
-export function packIdsFor(seed) {
-  return rosterPacksFor(seed).map((p) => p.id);
+export function packIdsFor(member) {
+  return packsForMember(member).map((p) => p.id);
 }
 
 /**
@@ -208,7 +208,7 @@ function applyPendingPacks(league) {
   for (const member of league.members || []) {
     if (!member.packSeed) continue;
     // 名簿には複製を入れる（`clone`）ので、使い回しの値を読むだけでよい
-    const packs = rosterPacksFor(member.packSeed);
+    const packs = packsForMember(member);
     const pack =
       packs.find((p) => p.id === member.pendingPackId) || packs[0];
     const team = TEAMS_DATA[member.teamName];
@@ -221,6 +221,7 @@ function applyPendingPacks(league) {
       ];
     refreshTeamPlan(league, member.teamName);
     delete member.packSeed;
+    delete member.packStyle;
     delete member.pendingPackId;
   }
 }

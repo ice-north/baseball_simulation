@@ -511,7 +511,7 @@ export class LeagueService {
             409,
           );
           const ids = new Set(
-            (await this.engine((engine) => engine.packIdsFor(me.packSeed))) || [],
+            (await this.engine((engine) => engine.packIdsFor(me))) || [],
           );
           requireOnline(
             typeof command.payload?.packId === 'string' &&

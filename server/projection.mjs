@@ -11,7 +11,7 @@ import {
   teamSeasonStats,
   abilityLeaders,
 } from './leagueBoard.mjs';
-import { packSummary, rosterPacksFor } from '../src/online/rosterPack.js';
+import { packSummary, packsForMember } from '../src/online/rosterPack.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -439,7 +439,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     pendingPack: member.packSeed
       ? {
           chosen: member.pendingPackId || null,
-          packs: rosterPacksFor(member.packSeed).map(packView),
+          packs: packsForMember(member).map(packView),
         }
       : null,
     // ⚠ **自分が当事者のものだけ**渡す。他人同士の交渉が見えると、
