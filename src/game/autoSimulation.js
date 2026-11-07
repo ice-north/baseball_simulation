@@ -3,7 +3,7 @@ import { createDecisionLog, observeDecisionLog, decisionsFromResult, recordDecis
 import { TEAMS_DATA, LEAGUE_SETTINGS, normalizeMaxExtraInnings } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate, spinAdjustedArsenal } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
-  pitchVelocityDrop, isUnreadablePitch } from '../utils/constants.js';
+  pitchVelocityDrop, isUnreadablePitch, registeredAsFielder } from '../utils/constants.js';
 import { conditionBattingMod, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness, getHandednessEffect } from '../utils/physics.js';
 import { contactFoulProbability, isDirectionalFoul } from './contactRules.js';
@@ -100,6 +100,9 @@ const addRemovedIds = (ids, gs) => {
 
 // 選手が投手かどうかを判定（positionだけでなく能力値も確認）
 export const isPitcherPlayer = (player) => {
+  // ⚠ **コンバートで野手にした選手は投手にしない**。下の「スタミナ100以上」は
+  //    当て推量なので、投手から野手へ移した選手が投げ続けてしまう
+  if (registeredAsFielder(player)) return false;
   // 明示的にpitcherと設定されている場合
   if (player.position === 'pitcher') return true;
   // 投手としての能力を持っている（スタミナ100以上は投手専用）
@@ -681,12 +684,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
   // 現在の投手を取得
   // 選手が投手かどうかを判定（ローカル版）
-  const isPitcher = (player) => {
-    if (player.position === 'pitcher') return true;
-    if (player.pitching?.stamina >= 100) return true;
-    if (player.primaryRole === 'pitcher') return true;
-    return false;
-  };
+  // ⚠ 写しを置かない（判定が食い違う）。同じモジュールの `isPitcherPlayer` を使う
+  const isPitcher = (player) => isPitcherPlayer(player);
 
   const getCurrentPitcher = (team) => {
     // currentPitcherIdで追跡（DH制で複数pitcherがbattingOrder=0を持つ問題を回避）

@@ -91,6 +91,7 @@ import {
   canRespond,
   canCounter,
   cpuTradeDecision,
+  rosterShortfall,
   MAX_OPEN_TRADES,
 } from '../src/online/trades.js';
 import { draftAbilityScore } from '../src/season/yearProgressionSystem.js';
@@ -113,6 +114,7 @@ import {
   CAMP_ROUNDS,
   ROSTER_LIMIT,
   ONLINE_ROSTER_TARGETS,
+  CONVERT_POSITIONS,
 } from '../src/online/shared.js';
 import {
   generatePyramidTeams,
@@ -525,6 +527,48 @@ function applyTrade(league, trade) {
   return after;
 }
 
+/**
+ * 選手の**登録守備位置**を変える（コンバート）。
+ *
+ * ⚠ **能力は足さない**。選手は元から `pitching` も `batting` も
+ *    `positionFitness` も持っている（セットの生成がそう作る）ので、登録を
+ *    変えるだけで成り立つ。新しい位置の適性は低いまま＝下手なのが正しい。
+ * ⚠ **名簿が成り立たなくなる変更は受け付けない**（トレードと同じ
+ *    `rosterShortfall`）。最後の捕手を外野手にすると試合が組めない。
+ * ⚠ **打順と投手起用を組み直す**。残したままだと、野手になった選手が登板順に
+ *    残り、投手になった選手が守備に就いたままになる。組み直すので、
+ *    画面には「打順と投手起用は組み直されます」と断ってから押させる。
+ */
+export function convertPosition(league, userId, { playerId, position }) {
+  const { member, team } = memberTeam(league, userId);
+  requireOnline(
+    CONVERT_POSITIONS.includes(position),
+    '守備位置の指定が不正です',
+  );
+  const player = team.players.find((p) => p.id === Number(playerId));
+  requireOnline(player, 'その選手は名簿にいません', 409);
+  requireOnline(
+    player.isActive !== false,
+    '登録を外れている選手の守備位置は変えられません',
+    409,
+  );
+  requireOnline(player.position !== position, 'すでにその守備位置です');
+  const after = team.players.map((p) =>
+    p.id === player.id ? { ...p, position } : p,
+  );
+  const problems = rosterShortfall(after);
+  requireOnline(
+    !problems.length,
+    `この変更では名簿が成り立ちません: ${problems.join('・')}`,
+  );
+  player.position = position;
+  // ⚠ **印を付けること**。投手かどうかの判定は「スタミナ100以上なら投手」という
+  //    当て推量を含むので、投手から野手へ移しても投げ続ける（`registeredAsFielder`）
+  player.primaryRole = position === 'pitcher' ? 'pitcher' : 'fielder';
+  refreshTeamPlan(league, member.teamName, { force: true });
+  return { position };
+}
+
 export function openPhase(league, kind, now) {
   // ⚠ **締め切りを持たせること**。待ち続ける設計だと、1人が決めないだけで
   //    全員の週が止まる。締め切りが曜日合わせも兼ねている
@@ -879,10 +923,13 @@ function releasePlayers(teamName, ids, year) {
  *    おすすめに戻っていた（手続き中も編成画面は開けて保存できる）。
  *    ローテの投手が名簿から消えた・打順が埋まらないときだけ作り直す。
  */
-function refreshTeamPlan(league, name) {
+function refreshTeamPlan(league, name, { force = false } = {}) {
   const team = TEAMS_DATA[name];
   const human = league.members.some((m) => m.teamName === name);
-  if (human) {
+  // ⚠ `force` は**守備位置の登録を変えたとき**に使う。残した編成はそのままだと
+  //    「野手になった選手が登板順に残る」「投手になった選手が守備に就く」まま
+  //    保たれてしまう（`ensureCompleteLineup` は登録の変更までは見ない）
+  if (human && !force) {
     const ids = new Set(team.players.map((p) => p.id));
     const starters = team.pitchingRotation?.starters || [];
     if (

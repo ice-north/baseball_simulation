@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { POS } from './api.js';
+import { POS, POS_FULL } from './api.js';
+import { turnOfDate } from './shared.js';
 import { BoardPage, Fatigue } from './BoardParts.jsx';
 import FieldDiagram from './FieldDiagram.jsx';
 import { useBoardHistory } from './useBoardHistory.js';
@@ -66,16 +67,6 @@ const ABILITIES = [
   { key: 'speed', label: '走', title: '走力', get: (p) => p.physical?.speed },
 ];
 
-const POS_FULL = {
-  catcher: '捕手',
-  first: '一塁',
-  second: '二塁',
-  third: '三塁',
-  short: '遊撃',
-  left: '左翼',
-  center: '中堅',
-  right: '右翼',
-};
 const BATS = { left: '左', right: '右', switch: '両' };
 const batsOf = (p) => BATS[p.batting?.bats || p.physical?.bats] || '—';
 // ⚠ 投げる手は `physical.throws` にある（`player.throws` はいつも undefined）
@@ -106,7 +97,13 @@ function NextOpponents({ view }) {
             key={game.id ?? `${game.number}:${opponent}`}
             className="online-lineup-next-game"
           >
-            <small>{game.number ? `${game.number}試合目` : ''}</small>
+            {/* ⚠ **ターンで出す**（「○試合目」ではない）。オンラインはターンで
+                進むので、画面によって単位が違うと「いまどこか」が読めない */}
+            <small>
+              {turnOfDate(game.date, view.seasonTurns)
+                ? `第${turnOfDate(game.date, view.seasonTurns)}ターン`
+                : ''}
+            </small>
             <strong>{teamShort(opponent)}</strong>
             {name ? (
               <span>

@@ -394,8 +394,11 @@ export default function DesktopView(props) {
         )}
       </nav>
       {renaming && <RenameDialog {...props} close={() => setRenaming(false)} />}
+      {/* ⚠ ホームは**見出しを出さない**。左メニューで「ホーム」を押した先に
+          もう一度「ホーム / SEASON 1」と出ていて、場所を取るだけだった。
+          年は左メニューの「○年目」に出ている */}
       {current === 'today' && (
-        <Page title="ホーム" sub={`SEASON ${view.year}`}>
+        <Page>
           <LeagueBoard view={view} />
         </Page>
       )}

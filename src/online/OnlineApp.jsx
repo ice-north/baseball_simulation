@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PROGRESSION_TIMES } from './shared.js';
 import './online.css';
 import { api, AUTH_KEY } from './api.js';
@@ -6,6 +6,7 @@ import { Login, JoinLeague } from './LeaguePanels.jsx';
 import DesktopView from './DesktopView.jsx';
 import MobileView from './MobileView.jsx';
 import { ReadContext } from './useRead.js';
+import { ActionContext } from './ActionContext.jsx';
 import { useMobile } from './useMobile.js';
 import { setTeamLabels } from './gameText.js';
 import { Drafts } from './Drafts.jsx';
@@ -323,6 +324,20 @@ export default function OnlineApp() {
   };
   const login = (fields) =>
     run(async () => saveAuth(await api('login', null, fields)));
+  // ⚠ 選手の詳細はどこからでも開かれるので、命令はコンテキストで渡す
+  //    （`ActionContext.jsx` の注記）。毎回作り直すと小窓が作り直されるので、
+  //    中身が変わったときだけ作り直す
+  const actions = useMemo(
+    () => ({
+      teamName: view?.teamName || null,
+      writable: !!view?.writable,
+      busy,
+      run,
+      command,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [view?.teamName, view?.writable, busy],
+  );
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(() => setMessage(''), 3500);
@@ -484,6 +499,7 @@ export default function OnlineApp() {
                 {view.error}
               </p>
             )}
+            <ActionContext.Provider value={actions}>
             <ReadContext.Provider value={readDetail}>
               {/* ⚠ **手続きの切り替わりで作り直さないこと**（鍵に手続きを入れない）。
                   以前は手続きが締め切られた瞬間に下の画面がまるごと作り直され、
@@ -527,6 +543,7 @@ export default function OnlineApp() {
                 )}
               </Drafts>
             </ReadContext.Provider>
+            </ActionContext.Provider>
           </>
         )}
         {showTimes && (

@@ -1,6 +1,6 @@
 import { humanTeamNames } from './teamControl.js';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { autoStarterRole } from '../utils/constants.js';
+import { autoStarterRole, registeredAsFielder } from '../utils/constants.js';
 
 // ポジション別の攻守バランス重み
 const POSITION_WEIGHTS = {
@@ -539,8 +539,12 @@ export const generatePitchingRotation = (teamName, given = null) => {
   // 投手判定は isPitcherPlayer と揃える。野手も pitching.stamina を持つ（40〜93程度）ため
   // 「stamina > 0」で拾うと全野手が投手集合に混入し、余った野手が敗戦処理ロールに
   // 割り当てられてしまう（大学モードのロスター再登録で顕在化していた不具合）。
+  // ⚠ **コンバートで野手にした選手は入れない**（`registeredAsFielder`）。
+  //    下の「スタミナ100以上」は当て推量なので、投手から野手へ移した選手が
+  //    登板順に残り続けてしまう
   const pitchers = team.players.filter(p =>
-    p.position === 'pitcher' || p.pitching?.stamina >= 100 || p.primaryRole === 'pitcher'
+    !registeredAsFielder(p) &&
+    (p.position === 'pitcher' || p.pitching?.stamina >= 100 || p.primaryRole === 'pitcher')
   );
 
   const starterScore = (p) =>

@@ -609,13 +609,12 @@ try {
     const live = (await fixture.store.read()).league;
     const own = live.members[0].teamName;
     const info = await fixture.service.teamInfo('admin', own);
+    // ⚠ 通算は**選手の詳細と同じ期間**から読む（同じ数字を2通り持たない）
+    const careerOf = (x) => (x.periods || []).find((y) => y.id === 'career');
+    const pa = (x) => careerOf(x)?.seasonStats?.batting?.plateAppearances || 0;
     const top = info.roster
-      .filter((x) => x.career?.seasonStats?.batting?.plateAppearances)
-      .sort(
-        (x, y) =>
-          y.career.seasonStats.batting.plateAppearances -
-          x.career.seasonStats.batting.plateAppearances,
-      )[0];
+      .filter((x) => pa(x) > 0)
+      .sort((x, y) => pa(y) - pa(x))[0];
     assert.ok(top, '前提: 通算の打席がある選手が居ない');
     const row = p
       .locator('.online-roster-rows article')
@@ -627,7 +626,7 @@ try {
       (t) => t.trim(),
     );
     assert.ok(
-      cells.includes(String(top.career.seasonStats.batting.plateAppearances)),
+      cells.includes(String(pa(top))),
       `通算の打席が出ていない: ${cells.join('/')}`,
     );
     // ⚠ 今季の表と**同じ列・同じ操作**にすること（別の表を作らない）
@@ -644,9 +643,98 @@ try {
       '他球団の通算成績が出ない',
     );
   }
+  // ---- ホーム（直近5試合 / 今後の5試合）--------------------------------
+  // ⚠ **ターンで出す**。オンラインはターンで進むので、画面のどこを見ても
+  //    同じ単位になっていないと「いまどこか」が読めない。
+  // ⚠ **休養日も出す**。抜けていると、次の試合まで何ターンあるのか
+  //    （疲労がどれだけ抜けるのか）が分からない。
+  // ⚠ **見出しを出さない**。左メニューで「ホーム」を押した先にもう一度
+  //    「ホーム / SEASON 1」と出ていて、場所を取るだけだった。
+  {
+    await go('ホーム');
+    const recent = p.locator('.online-slots').filter({ hasText: '直近5試合' });
+    const next = p.locator('.online-slots').filter({ hasText: '今後の5試合' });
+    await recent.waitFor();
+    await next.waitFor();
+    // ⚠ 編成の2ページは隠して残してあるので `:visible` で絞る
+    assert.equal(
+      await p.locator('.online-page-head:visible').count(),
+      0,
+      'ホームに見出しの帯が残っている（上に詰まらない）',
+    );
+    assert.equal(
+      await p.locator('.online-page:visible').getByText('SEASON').count(),
+      0,
+      'SEASON の表示が残っている',
+    );
+    // ⚠ **横に並べる**（縦に積むと順位表までスクロールすることになる）
+    const [a, b] = await Promise.all([recent.boundingBox(), next.boundingBox()]);
+    assert.ok(
+      Math.abs(a.y - b.y) < 20 && a.x < b.x,
+      `直近と今後が横に並んでいない: ${JSON.stringify({ a, b })}`,
+    );
+    const text = `${await recent.innerText()}\n${await next.innerText()}`;
+    assert.match(text, /第\d+ターン/, 'ターンで出していない');
+    assert.doesNotMatch(text, /試合目/, '「○試合目」が残っている');
+    // ⚠ 休養日は続きをまとめる（「第48〜52ターン」）が、1ターンぶんなら
+    //    そのまま出る。6ターン回せば必ず1回は入る（4ターンに1回が休養）
+    assert.match(text, /休養日/, '休養日が出ていない');
+    const rest = p.locator('.online-slot.is-rest');
+    assert.ok((await rest.count()) > 0, '休養日の行が無い');
+    // ⚠ **縦に詰める**。1画面（1000px）に収まること
+    const height = await p
+      .locator('.online-page:visible')
+      .evaluate((el) => el.scrollHeight);
+    assert.ok(height <= 1000, `ホームが縦に長い: ${height}px`);
+  }
+
+  // ---- 自球団の選手の詳細から守備位置を変える ---------------------------
+  // ⚠ 野手と投手のコンバートはPC版から消えていた（一人用の画面にしかなかった）。
+  //    ⚠ **他球団では出さない**（サーバーも弾く）
+  {
+    await go('選手成績');
+    const row = p.locator('.online-roster-rows article').first();
+    await row.waitFor();
+    const name = (await row.getByRole('button').first().innerText())
+      .trim()
+      .split('\n')[0];
+    await row.getByRole('button').first().click();
+    const dialog = p.getByRole('dialog');
+    const convert = dialog.locator('.online-convert');
+    await convert.waitFor();
+    await convert
+      .getByRole('button', { name: '守備位置を変える', exact: true })
+      .click();
+    // ⚠ **守備適性を添える**。どこなら守れるのかが分からないと選べない
+    const picks = convert.locator('.online-segments button');
+    assert.equal(await picks.count(), 9, '守備位置が9つ出ていない');
+    assert.match(
+      await picks.first().innerText(),
+      /%/,
+      '守備適性が添えられていない',
+    );
+    // ⚠ **何が起きるかを先に書く**（知らずに押すと「設定が消えた」と見える）
+    assert.match(
+      await convert.innerText(),
+      /打順と投手起用が組み直されます/,
+      '組み直されることを書いていない',
+    );
+    await picks.nth(0).click(); // 投手
+    await convert.getByRole('button', { name: '投手へ変える', exact: true }).click();
+    await p.waitForTimeout(300);
+    await convert.getByText('いまの登録: 投手', { exact: false }).waitFor();
+    await p.keyboard.press('Escape');
+    // ⚠ 投手起用に入ること（入らないと試合で1度も投げない）
+    await go('投手起用');
+    await p
+      .locator('td.online-lineup-person:visible')
+      .filter({ hasText: name })
+      .first()
+      .waitFor();
+  }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えに投手なし / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績）',
+    'online-lineup-board-ui-check PASS（守備分析なし / 控えに投手なし / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / ホームの直近と今後をターンで横並び / 守備位置の変更）',
   );
 } finally {
   await browser.close();

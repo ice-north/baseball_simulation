@@ -10,6 +10,21 @@ export const POS = {
   center: '中',
   right: '右',
 };
+/**
+ * 守備位置の正式名。⚠ **短縮（`POS`）と同じ場所に置くこと**。別々の場所に
+ *    置くと、片方だけ直して画面ごとに呼び方が変わる。
+ */
+export const POS_FULL = {
+  pitcher: '投手',
+  catcher: '捕手',
+  first: '一塁',
+  second: '二塁',
+  third: '三塁',
+  short: '遊撃',
+  left: '左翼',
+  center: '中堅',
+  right: '右翼',
+};
 export const STATUS = {
   running: '進行中',
   waiting: '決定待ち',

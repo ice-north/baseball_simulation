@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { POS } from './api.js';
-import { turnLabel } from './shared.js';
+import { POS, POS_FULL } from './api.js';
+import { turnLabel, CONVERT_POSITIONS } from './shared.js';
+import { useActions } from './ActionContext.jsx';
 import { PageNav } from './PageNav.jsx';
 import PlayerDetailBody, { PlayerTags } from './PlayerDetailBody.jsx';
 import { useRead } from './useRead.js';
@@ -254,6 +255,85 @@ function Approximation({ columns, precise = false }) {
     <small className="online-stat-note">※ 出塁率・OPS・打席関連は概算</small>
   ) : null;
 }
+/**
+ * 守備位置の登録を変える（コンバート）。
+ *
+ * ⚠ **自球団の選手だけに出す**。他球団の登録は変えられない（サーバーも弾く）。
+ * ⚠ **何が起きるかを先に書く**。押すと打順と投手起用が組み直されるので、
+ *    知らずに押すと「設定が消えた」と見える。
+ * ⚠ 新しい位置の適性（`positionFitness`）は**上げない**。下手なまま守るのが
+ *    コンバートで、守備適性の列にそのまま出る。
+ */
+function ConvertPosition({ player }) {
+  const actions = useActions();
+  const [open, setOpen] = useState(false);
+  const [choice, setChoice] = useState(player.position);
+  const [error, setError] = useState('');
+  // ⚠ 包まれていないところ（検査の fixture など）では出さない
+  if (!actions?.command) return null;
+  const fitness = (pos) => player.positionFitness?.[pos];
+  // ⚠ `run` は**例外を投げない**（`{ ok, error }` を返す）。`catch` で受けると
+  //    断られたことに気づかず、成功したように閉じてしまう
+  const submit = async () => {
+    const result = await actions.run(() =>
+      actions.command('convert', { playerId: player.id, position: choice }),
+    );
+    if (result?.ok) setOpen(false);
+    else setError(result?.error || '守備位置を変えられませんでした');
+  };
+  return (
+    <div className="online-convert">
+      <p>
+        いまの登録: <b>{POS_FULL[player.position] || player.position}</b>
+        <button
+          disabled={actions.busy || !actions.writable}
+          aria-expanded={open}
+          onClick={() => {
+            setChoice(player.position);
+            setError('');
+            setOpen(!open);
+          }}
+        >
+          {open ? 'やめる' : '守備位置を変える'}
+        </button>
+      </p>
+      {open && (
+        <>
+          <p className="online-muted">
+            登録を変えると<strong>打順と投手起用が組み直されます</strong>。
+            能力は変わらないので、慣れない位置の守備適性は低いままです。
+          </p>
+          <div className="online-segments" role="group" aria-label="新しい守備位置">
+            {CONVERT_POSITIONS.map((pos) => (
+              <button
+                key={pos}
+                aria-pressed={choice === pos}
+                disabled={actions.busy}
+                onClick={() => setChoice(pos)}
+              >
+                {POS_FULL[pos]}
+                {Number.isFinite(fitness(pos)) && <small>{fitness(pos)}%</small>}
+              </button>
+            ))}
+          </div>
+          {error && <p role="alert">{error}</p>}
+          <div className="online-actions">
+            <button
+              className="online-primary"
+              disabled={
+                actions.busy || !actions.writable || choice === player.position
+              }
+              onClick={submit}
+            >
+              {POS_FULL[choice]}へ変える
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Detail({ player, close }) {
   const dialog = useRef(null);
   const [periodId, setPeriodId] = useState('current');
@@ -264,20 +344,29 @@ function Detail({ player, close }) {
   const info = useRead(player.detailAvailable ? 'player' : null, {
     id: player.id,
   });
+  // ⚠ **他球団の選手にも過去の年と通算を出すこと**。以前は今季だけを組み立てて
+  //    いて、CPU球団の選手を開くと「成績が残っていない」ように見えた。
+  //    自球団は `action=player`（場面別まで）、他球団は球団ごとの読み込みに
+  //    載った `periods`（場面別は外してある）を使う。
+  const periods = info.data?.periods || player.periods || null;
+  const found = periods?.find((p) => p.id === periodId) || periods?.[0] || null;
+  // ⚠ 今季の場面別は `publicSplits` に別に載っている（期間からは外してある）。
+  //    重ねないと、他球団の選手で「場面別の成績を見る」が空になる
   const period =
-    info.data?.periods.find((p) => p.id === periodId) ||
-    info.data?.periods[0] ||
-    (player.publicOnly
-      ? {
-          id: 'current',
-          label: '今季',
-          source: player.publicSource,
-          seasonStats: player.seasonStats,
-          performance: player.performance,
-          splits: player.publicSplits,
-          partial: player.publicPartial,
-        }
-      : null);
+    found && found.id === 'current' && !found.splits && player.publicSplits
+      ? { ...found, splits: player.publicSplits }
+      : found ||
+        (player.publicOnly
+          ? {
+              id: 'current',
+              label: '今季',
+              source: player.publicSource,
+              seasonStats: player.seasonStats,
+              performance: player.performance,
+              splits: player.publicSplits,
+              partial: player.publicPartial,
+            }
+          : null);
   const shown = period
     ? {
         ...player,
@@ -332,16 +421,18 @@ function Detail({ player, close }) {
           閉じる
         </button>
       </header>
+      {/* ⚠ **自球団の選手だけ**（`detailAvailable`）。他球団の登録は変えられない */}
+      {player.detailAvailable && <ConvertPosition player={player} />}
       {/* ⚠ **タブで分けない**。以前は「成績／能力・人物／場面別」の3タブ＋
           その中でさらに区分の切り替えがあり、1人を見るのに何度も押していた。
           見たいもの（札と経歴・成績・能力）は一度に出す。 */}
-      {info.data?.periods.length > 1 && (
+      {periods?.length > 1 && (
         <select
           aria-label="成績の期間"
           value={period?.id || 'current'}
           onChange={(e) => setPeriodId(e.target.value)}
         >
-          {info.data.periods.map((p) => (
+          {periods.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
             </option>

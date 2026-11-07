@@ -5,6 +5,7 @@
 //    順位表として意味を成さない。
 // ⚠ 2部制の分け方は `standingsByLeague` が正本。ここで並べ直さない。
 import assert from 'node:assert/strict';
+import { turnOfDate } from '../../src/online/shared.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -243,15 +244,16 @@ try {
       () => ({ batting: {}, pitching: {} }),
     ),
   );
-  // --- 今後の6試合（自球団だけ） --------------------------------------
-  // ⚠ ホームに出すのは**自球団の次の6試合**。リーグ全体の一覧（`upcoming`）は
+  // --- 今後の5試合（自球団だけ） --------------------------------------
+  // ⚠ ホームに出すのは**自球団の次の5試合**。リーグ全体の一覧（`upcoming`）は
   //    試合結果の画面が使うので、そちらを絞らないこと。
+  // ⚠ 6試合だと、直近の一覧と横に並べたときに順位表より縦に伸びる
   {
     const live = (await store.read()).league;
     const own = view.teamName;
     const next = view.nextGames;
     assert.ok(Array.isArray(next), '今後の5試合が渡っていない');
-    assert.equal(next.length, 6, `試合数がちがう: ${next.length}`);
+    assert.equal(next.length, 5, `試合数がちがう: ${next.length}`);
     for (const game of next)
       assert.ok(
         game.home === own || game.away === own,
@@ -533,6 +535,45 @@ try {
     );
   }
 
+  // --- ホームの「直近5試合」 -------------------------------------------
+  // ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
+  //    するので、自球団は2〜3試合しか入らない
+  {
+    const own = view.teamName;
+    const recent = view.recentGames;
+    assert.ok(Array.isArray(recent), '直近の試合が渡っていない');
+    assert.ok(recent.length > 0, '直近の試合が空');
+    assert.ok(recent.length <= 5, `直近の試合が多すぎる: ${recent.length}`);
+    for (const g of recent) {
+      assert.ok(
+        g.home === own || g.away === own,
+        `自球団以外の試合が入っている: ${g.home} 対 ${g.away}`,
+      );
+      // ⚠ **消化済みだけ**。点数の無い試合が混ざると「0-0」と出る
+      assert.ok(
+        Number.isFinite(g.homeScore) && Number.isFinite(g.awayScore),
+        '点数の無い試合が入っている',
+      );
+    }
+    // ⚠ **古い順**で返すこと（画面が上から並べる）
+    const turns = recent.map((g) => turnOfDate(g.date, view.seasonTurns));
+    assert.deepEqual(
+      turns,
+      [...turns].sort((a, b) => a - b),
+      '直近の試合が古い順になっていない',
+    );
+    // ⚠ 通し番号の数え方は「今後の試合」と揃えること（同じ試合が左右で違う番号
+    //    になる）。直近の最後は、今後の最初より前の番号
+    const next = view.nextGames || [];
+    if (next.length)
+      assert.ok(
+        recent.at(-1).number < next[0].number,
+        `番号の数え方が左右で食い違う: ${recent.at(-1).number} / ${next[0].number}`,
+      );
+    // ⚠ ホームは**5試合**（6試合だと順位表まで縦に伸びる）
+    assert.ok(next.length <= 5, `今後の試合が多すぎる: ${next.length}`);
+  }
+
   // --- 通算成績（球団ごとの読み込みに載る）-----------------------------
   // ⚠ **1年で終わるゲームではない**。育てた選手がこのリーグで何をしたかが
   //    残らないと、育てた意味が見えない。
@@ -542,7 +583,11 @@ try {
     const live = (await store.read()).league;
     const own = view.teamName;
     const info = await service.teamInfo('admin', own);
-    const withCareer = info.roster.filter((p) => p.career);
+    const careerOf = (p) => (p.periods || []).find((x) => x.id === 'career');
+    const withCareer = info.roster.filter(careerOf).map((p) => ({
+      ...p,
+      career: careerOf(p),
+    }));
     assert.ok(withCareer.length > 0, '通算成績が1人も付いていない');
     // ⚠ **今季を含めること**。シーズン中に開いて空だと、記録が無いように見える
     const played = withCareer.filter(
@@ -576,10 +621,25 @@ try {
     // ⚠ **他球団も読めること**（画面は球団を選んで見る）
     const other = live.season.settings.teamNames.find((n) => n !== own);
     const otherInfo = await service.teamInfo('admin', other);
+    assert.ok(otherInfo.roster.some(careerOf), '他球団の通算成績が読めない');
+    // ⚠ **他球団の選手も、今季以外の期間を持つこと**。以前は今季だけで、
+    //    CPU球団の選手を開くと「成績が残っていない」ように見えた
+    const sample = otherInfo.roster.find(careerOf);
     assert.ok(
-      otherInfo.roster.some((p) => p.career),
-      '他球団の通算成績が読めない',
+      sample.periods.some((x) => x.id === 'current'),
+      '他球団の選手に今季の期間が無い',
     );
+    assert.ok(
+      sample.periods.length > 1,
+      `他球団の選手が今季しか持っていない: ${sample.periods.map((x) => x.label).join('/')}`,
+    );
+    // ⚠ 場面別は**外して**載せる（索引が重くなる）。今季のぶんは
+    //    `publicSplits` に別にあり、画面がそこへ重ねる
+    assert.ok(
+      sample.periods.every((x) => x.splits === undefined),
+      '期間に場面別が載っている（索引が重くなる）',
+    );
+    assert.ok(sample.publicSplits, '今季の場面別が載っていない');
   }
 } finally {
   await rm(dir, { recursive: true, force: true });

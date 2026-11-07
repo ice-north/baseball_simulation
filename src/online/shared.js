@@ -126,6 +126,24 @@ export function formatTurn(date, turns = SEASON_TURNS) {
   return turn ? `${turnLabel(date, turns)} / ${turns}` : turnLabel(date, turns);
 }
 
+/**
+ * 登録できる守備位置（コンバートの選択肢）。
+ * ⚠ DHは守備位置ではない（打順の枠）ので入れない。
+ * ⚠ サーバーと画面の**両方がここを読む**。別々に並べると、画面に出ているのに
+ *    サーバーが弾く位置ができる。
+ */
+export const CONVERT_POSITIONS = [
+  'pitcher',
+  'catcher',
+  'first',
+  'second',
+  'third',
+  'short',
+  'left',
+  'center',
+  'right',
+];
+
 export const PHASE_LABELS = {
   pack_select: '初期メンバー選択',
   // ⚠ 初期編成はセット選択に置き換えた。移行の途中でしか現れないが、

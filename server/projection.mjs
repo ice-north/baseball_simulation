@@ -13,7 +13,6 @@ import {
 } from './leagueBoard.mjs';
 import { packSummary, rosterPacksFor } from '../src/online/rosterPack.js';
 import {
-  careerTotals,
   currentPlayerStats,
   currentSeasonStats,
   playerPeriods,
@@ -165,6 +164,40 @@ export function ownUpcomingGames(schedule, ownTeam, size = 6) {
     });
   });
   return upcoming.slice(0, size);
+}
+
+/**
+ * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
+ *
+ * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
+ *    するので、14試合では自球団は2〜3試合しか入らない。
+ * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
+ *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
+ */
+export function ownRecentGames(schedule, ownTeam, size = 5) {
+  const own = schedule
+    .filter(
+      (g) =>
+        g.date &&
+        g.home !== 'TBD' &&
+        g.away !== 'TBD' &&
+        (g.home === ownTeam || g.away === ownTeam),
+    )
+    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const played = [];
+  own.forEach((g, i) => {
+    if (!g.result) return;
+    played.push({
+      id: g.id,
+      date: g.date,
+      number: i + 1,
+      home: g.home,
+      away: g.away,
+      homeScore: g.result.homeScore,
+      awayScore: g.result.awayScore,
+    });
+  });
+  return played.slice(-size);
 }
 
 export function projectLineup(team) {
@@ -342,10 +375,13 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     //    ⚠ ここだけ `seasonStatsOf` を渡して、先発予定に投げる手と今季成績を
     //       重ねる（`upcoming` は名前だけでよい）
     nextGames: withStarters(
-      ownUpcomingGames(l.season.schedule, member.teamName),
+      ownUpcomingGames(l.season.schedule, member.teamName, 5),
       l.game.teams,
       seasonStatsOf,
     ),
+    // ⚠ ホームの左に出す**自球団の直近5試合**。リーグ全体の `results`（14件）では
+    //    12球団ぶんが混ざって自球団が2〜3試合しか入らない
+    recentGames: ownRecentGames(l.season.schedule, member.teamName, 5),
     // ⚠ 並べ方は `upcomingGames` が正本（日付順・自球団を必ず含む）。
     //    先発予定はその上に重ねるだけにする
     upcoming: withStarters(
@@ -470,10 +506,17 @@ export function projectTeamInfo(bundle, userId, teamName) {
       return {
         ...visible,
         ...currentPlayerStats(l, teamName, p, statistics),
-        // ⚠ **通算は球団ごとの読み込みに載せる**（`action=team`）。
-        //    全球団ぶんをビューに積むと重く、画面は1球団ずつしか出さない。
-        //    記録が1年も無ければ null（0を並べない）
-        career: careerTotals(l, teamName, p),
+        // ⚠ **他球団の選手も、過去の年と通算を出すこと**。以前は今季しか
+        //    載せていなかったので、CPU球団の選手を開くと「成績が残っていない」
+        //    ように見えた（記録はサーバーに揃っている）。通算成績の一覧も
+        //    ここから読む（同じ数字を2通り持たない）。
+        // ⚠ 場面別（`splits`）は**外す**。打者×投手の組み合わせで大きく、
+        //    12球団ぶんを索引に積むと実測2.5MB（外せば0.8MB）。今季のぶんは
+        //    下の `publicSplits` に別に載せてあり、画面が今季の期間へ重ねる。
+        periods: playerPeriods(l, teamName, p, statistics).map(
+          // eslint-disable-next-line no-unused-vars
+          ({ splits, ...rest }) => rest,
+        ),
         publicOnly: true,
         publicSplits: recordForPlayer(l, p, teamName)?.splits || null,
         publicPartial: !!statistics.season && !statistics.season.complete,

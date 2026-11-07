@@ -2413,6 +2413,83 @@
 }
 
 /* --- 今後の6試合 ------------------------------------------------------ */
+/* --- ホームの「直近5試合 / 今後の5試合」 -------------------------------
+   ⚠ **横に2列**。縦に積むと、順位表を見るまでに1画面ぶんスクロールする。
+   ⚠ 1試合1行に収める。カードにすると5試合で縦400pxを超える */
+.online-home-games:not(:where(.online-sp *)) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 10px;
+  align-items: start;
+}
+.online-slots ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.online-slot {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+  border-top: 1px solid #ffffff12;
+}
+.online-slot:first-child {
+  border-top: 0;
+}
+.online-slot.is-rest {
+  color: #94a3b8;
+  font-size: 11px;
+}
+.online-slot-turn {
+  flex: none;
+  min-width: 68px;
+  color: #9fb0c4;
+  font-variant-numeric: tabular-nums;
+}
+.online-slot-side {
+  flex: none;
+  min-width: 44px;
+  font-size: 10px;
+  color: #9fb0c4;
+}
+.online-slot-score {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.online-slot-foe {
+  flex: none;
+  color: #e2e8f0;
+}
+/* 先発は**2行目**いっぱいに置く。⚠ 1行目に詰めると勝敗と防御率が切れる */
+.online-slot.is-next {
+  flex-wrap: wrap;
+}
+.online-slot-starters {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-basis: 100%;
+  min-width: 0;
+  padding-left: 68px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #9fb0c4;
+}
+.online-slot-starters em {
+  font-style: normal;
+  opacity: 0.6;
+}
+.online-slot-starters .online-starter-name,
+.online-slot-starters .online-starter-line {
+  display: inline;
+}
+.online-slot-starters .online-starter-line {
+  margin-left: 3px;
+}
+
 .online-matchups {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -3369,6 +3446,28 @@
   color: #f87171;
   font-weight: 700;
 }
+/* 守備位置の変更（選手の詳細の中）。⚠ 詳細は1画面に収めたいので、
+   開くまでは1行（いまの登録＋ボタン）だけにする */
+.online-convert:not(:where(.online-sp *)) {
+  margin: 6px 0 2px;
+  padding: 6px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+.online-convert p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+}
+.online-convert .online-segments button small {
+  margin-left: 4px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
 /* 疲労で名前に色を付ける（スタメン設定・投手起用）。
    ⚠ **色だけに頼らないこと**。疲労の数字の列は残してあり、名前には
       マウスオーバーの説明も付く。色は目を引くための補助。

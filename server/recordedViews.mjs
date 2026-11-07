@@ -172,47 +172,6 @@ function weightedSituations(entries) {
     combined.byBats = { weighted: combined.splits.batting };
   return combined;
 }
-/**
- * 記録開始後の通算成績（**今季を含む**）。
- *
- * ⚠ **一覧に出すのは数字だけ**。場面別・成績の特徴（`performanceFor`）は
- *    1人ずつ開いたときに作る。12球団288人ぶん作るとビューが重い。
- * ⚠ 記録の鍵は `onlinePlayerId`（移籍・年度更新でも引き継ぐ）なので、
- *    **球団を移った選手の通算も繋がる**。`team` は今いる球団でよい。
- * ⚠ 1年も記録が無ければ `null`。0を並べると「記録が無い」のか
- *    「打てていない」のか分からない。
- */
-export function careerTotals(league, team, player) {
-  const career = combinedRecord();
-  let years = 0;
-  let partial = false;
-  const teams = new Set();
-  for (const season of Object.values(league.records?.seasons || {})) {
-    const record = recordForPlayer(league, player, team, season.year);
-    if (!record) continue;
-    mergeRecord(career, record);
-    years += 1;
-    for (const name of record.teams || []) teams.add(name);
-    if (!completeCoverage(league, season)) partial = true;
-  }
-  if (!years) return null;
-  const stats = recordedStats(career);
-  return {
-    years,
-    partial,
-    teams: [...teams],
-    seasonStats: stats,
-    // ⚠ **比率はその場で出すこと**。打率・出塁率・防御率などは合計の足し算では
-    //    作れない（年ごとの率を平均しても正しくない）。画面の列は
-    //    `performance.metrics` を見るので、同じ形で載せる。
-    //    リーグとの比較や成績の特徴は作らない（一覧には要らず、288人ぶんは重い）
-    performance: {
-      batting: { metrics: battingMetrics(stats.batting) },
-      pitching: { metrics: pitchingMetrics(stats.pitching) },
-    },
-  };
-}
-
 export function playerPeriods(
   league,
   team,
@@ -275,6 +234,9 @@ export function playerPeriods(
       label: '対人通算',
       source: '記録開始後の対人リーグ（グランドCS除外）',
       partial: entries.some((e) => !e.complete),
+      // ⚠ **何シーズンぶんか**。通算成績の一覧がこれを出す。別に数え直すと、
+      //    期間の作り方を変えたときに片方だけずれる
+      years: entries.length,
       seasonStats: stats,
       splits: career.splits,
       performance: performanceFor(

@@ -13,23 +13,30 @@ import { Page } from './Page.jsx';
 // ⚠ **選手成績と同じ表を使う**（`CompactRoster`）。列・並べ替え・区分の
 //    切り替え・選手名を押して詳細、の操作が同じになる。別の表を作ると、
 //    片方に列を足したときにもう片方が置いていかれる。
-// ⚠ 合計はサーバーが出す（`careerTotals`）。**画面で足さないこと**——
-//    打率・防御率は率なので合計の足し算では作れず、年ごとの率を平均しても
-//    正しくない。サーバーが合計から出し直した値を受け取る。
+// ⚠ 合計はサーバーが出す（`playerPeriods` の「対人通算」）。**画面で足さない
+//    こと**——打率・防御率は率なので合計の足し算では作れず、年ごとの率を
+//    平均しても正しくない。サーバーが合計から出し直した値を受け取る。
+//    ⚠ 選手の詳細が出す期間と**同じものを読む**（同じ数字を2通り持たない）。
 // ⚠ 自球団も**サーバーから読み直す**（`TeamRoster` の `always`）。通算は
 //    ビューに載せていないので、読み直さないと自分の選手だけ空欄になる。
 // ⚠ 記録が1年も無い選手（今季の新人など）は**出さない**。0が並ぶと
 //    「記録が無い」のか「打てていない」のか分からない。
 // ============================================================
 
+/** その選手の「対人通算」の期間。⚠ 1年も記録が無ければ undefined */
+const careerOf = (player) =>
+  (player.periods || []).find((x) => x.id === 'career');
+
 /** 通算の数字を、選手成績の表が読む形（`seasonStats` / `performance`）に移す */
 const careerRoster = (roster = []) =>
   roster
-    .filter((p) => p.career)
-    .map((p) => ({
-      ...p,
-      seasonStats: p.career.seasonStats,
-      performance: p.career.performance,
+    .map((p) => ({ player: p, career: careerOf(p) }))
+    .filter(({ career }) => career)
+    .map(({ player, career }) => ({
+      ...player,
+      career,
+      seasonStats: career.seasonStats,
+      performance: career.performance,
     }));
 
 export default function CareerStats({ view }) {

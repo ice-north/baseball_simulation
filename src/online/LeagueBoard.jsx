@@ -1,12 +1,13 @@
 import React from 'react';
-import { teamLabel, teamShort } from './gameText.js';
+import { teamShort, ownOutcome } from './gameText.js';
 import { Standings } from './LeaguePanels.jsx';
+import { turnOfDate } from './shared.js';
 
 // ============================================================
 // 「ホーム」に出すリーグ全体の眺め。
 //
-//   左（広い） 1. 今後の5試合（自球団・先発予定つき）
-//              2. 個人成績ランキング（打撃部門・投手部門）
+//   上段      1. 直近5試合の結果（左）と 今後の5試合（右）
+//   左（広い） 2. 個人成績ランキング（打撃部門・投手部門）
 //   右（狭い） 3. リーグ順位（2部制・チーム打率とチーム防御率つき）
 //
 // ⚠ 順位表は**作り直さないこと**。昇格・降格の線まで入った実装が
@@ -15,6 +16,12 @@ import { Standings } from './LeaguePanels.jsx';
 // ⚠ 月間カレンダーは一度置いたが**外した**。12球団は全球団が毎試合日に試合を
 //    するので1マスに6試合並び、自分に関係のある行を探すほうが手間だった。
 //    見たいのは「次に誰とやるか」なので、自球団の5試合だけ出す。
+// ⚠ **ターンで出す**（「〇試合目」ではない）。オンラインはターンで進むので、
+//    画面のどこを見ても同じ単位になっていないと「いまどこか」が読めない。
+// ⚠ **休養日も出す**。抜けていると、次の試合までに何ターンあるのか（疲労が
+//    どれだけ抜けるのか）が分からない。続く休養日は1行にまとめる——
+//    シーズン後のプレーオフまでは何十ターンも空くので、1ターン1行にすると
+//    ホームが休養日で埋まる。
 // ============================================================
 
 /**
@@ -39,68 +46,168 @@ function Starter({ info, fallback }) {
 }
 
 /**
- * 自球団のこれからの6試合。
+ * 試合の並びに**休養日を挟む**。返すのは `{ turn, game }` か `{ turn, to }`（休養）。
+ *
+ * ⚠ ターンは `turnOfDate` が正本。画面で数え直さないこと（休養日のぶん
+ *    ゲーム内の日付と試合数がずれる）。
+ * ⚠ **続く休養日は1行にまとめる**。シーズン後はプレーオフまで何十ターンも
+ *    空くので、1ターン1行にするとホームが休養日で埋まる。
+ */
+export function withRestTurns(games, turns, fromTurn = null, toTurn = null) {
+  const byTurn = new Map();
+  for (const game of games) {
+    const turn = turnOfDate(game.date, turns);
+    if (turn) byTurn.set(turn, game);
+  }
+  const played = [...byTurn.keys()].sort((a, b) => a - b);
+  if (!played.length) return [];
+  // ⚠ 開始は呼ぶ側が決める（今後の分は「いまのターン」から＝今日が休養日なら
+  //    それも出す）。過去の分は最初の試合から。
+  const start = Math.min(played[0], fromTurn ?? played[0]);
+  const end = Math.max(played[played.length - 1], toTurn ?? 0);
+  const rows = [];
+  for (let turn = start; turn <= end; turn += 1) {
+    const game = byTurn.get(turn);
+    if (game) {
+      rows.push({ turn, game });
+      continue;
+    }
+    const last = rows[rows.length - 1];
+    if (last && !last.game) last.to = turn;
+    else rows.push({ turn, to: turn });
+  }
+  return rows;
+}
+
+/** 休養日の1行。⚠ 続きは「第48〜52ターン」とまとめる */
+function RestRow({ row }) {
+  return (
+    <li className="online-slot is-rest">
+      <span className="online-slot-turn">
+        第{row.turn}
+        {row.to > row.turn ? `〜${row.to}` : ''}
+        ターン
+      </span>
+      <span className="online-muted">休養日</span>
+    </li>
+  );
+}
+
+/**
+ * 自球団の直近5試合の結果。
+ * ⚠ 勝敗の印は `ownOutcome`（試合結果の画面と同じ）。ここで作り直さない。
+ */
+function RecentGames({ view }) {
+  // ⚠ **いまのターンの1つ前まで**出す。試合の無いターンで切ると、左右の
+  //    一覧の間にターンの抜けができて「この回は何だったのか」が分からない
+  const now = turnOfDate(view.currentDate, view.seasonTurns);
+  const rows = withRestTurns(
+    view.recentGames || [],
+    view.seasonTurns,
+    null,
+    now ? now - 1 : null,
+  );
+  return (
+    <section className="online-card online-slots">
+      <h2>直近5試合</h2>
+      {rows.length ? (
+        <ol>
+          {rows.map((row) =>
+            row.game ? (
+              <Played key={row.game.id} row={row} view={view} />
+            ) : (
+              <RestRow key={`r${row.turn}`} row={row} />
+            ),
+          )}
+        </ol>
+      ) : (
+        <p className="online-muted">まだ試合がありません。</p>
+      )}
+    </section>
+  );
+}
+
+function Played({ row, view }) {
+  const game = row.game;
+  const home = game.home === view.teamName;
+  const outcome = ownOutcome(game, view.teamName);
+  const ours = home ? game.homeScore : game.awayScore;
+  const theirs = home ? game.awayScore : game.homeScore;
+  return (
+    <li className="online-slot">
+      <span className="online-slot-turn">第{row.turn}ターン</span>
+      <span className="online-slot-side">{home ? 'ホーム' : 'ビジター'}</span>
+      {outcome && (
+        <span className={`online-outcome is-${outcome.tone}`}>
+          {outcome.mark}
+        </span>
+      )}
+      <b className="online-slot-score">
+        {ours}–{theirs}
+      </b>
+      <span className="online-slot-foe">{teamShort(home ? game.away : game.home)}</span>
+    </li>
+  );
+}
+
+/**
+ * 自球団のこれからの5試合。
  * ⚠ 「今日」で絞らないこと。休養日や手続きの日に開くと空になる。
- *    サーバーが近い順に6つ渡す（`ownUpcomingGames`）。
+ *    サーバーが近い順に渡す（`ownUpcomingGames`）。
  */
 function NextGames({ view }) {
-  const games = view.nextGames || [];
+  // ⚠ 今日が休養日なら**それも出す**（「なぜ今日は試合が無いのか」が分かる）
+  const rows = withRestTurns(
+    view.nextGames || [],
+    view.seasonTurns,
+    turnOfDate(view.currentDate, view.seasonTurns),
+  );
   return (
-    <section className="online-card">
-      <div className="online-card-heading">
-        <h2>今後の6試合</h2>
-        <small className="online-muted">{teamLabel(view.teamName)}</small>
-      </div>
-      {games.length ? (
+    <section className="online-card online-slots">
+      <h2>今後の5試合</h2>
+      {rows.length ? (
         <>
-          <div className="online-matchups">
-            {games.map((game) => {
-              const home = game.home === view.teamName;
-              const opponent = home ? game.away : game.home;
-              return (
-                <div key={game.id} className="online-matchup">
-                  <p className="online-matchup-date">
-                    {/* ⚠ 日付ではなく**何試合目か**。1ターン＝ゲーム内1日で
-                        休養日が飛ぶので、暦の日付では進み具合が読めない */}
-                    <strong>{game.number}試合目</strong>
-                    {/* ⚠ ホームかビジターかを書く。「@」だけだと、
-                        自球団が左右どちらに出るかで読み違える */}
-                    <span>{home ? 'ホーム' : 'ビジター'}</span>
-                  </p>
-                  <div className="online-matchup-teams">
-                    <div className="is-own">
-                      <strong>{teamShort(view.teamName)}</strong>
-                      <Starter
-                        info={
-                          home ? game.homeStarterInfo : game.awayStarterInfo
-                        }
-                        fallback={home ? game.homeStarter : game.awayStarter}
-                      />
-                    </div>
-                    <span className="online-matchup-vs">VS</span>
-                    <div>
-                      <strong>{teamShort(opponent)}</strong>
-                      <Starter
-                        info={
-                          home ? game.awayStarterInfo : game.homeStarterInfo
-                        }
-                        fallback={home ? game.awayStarter : game.homeStarter}
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <ol>
+            {rows.map((row) =>
+              row.game ? (
+                <Upcoming key={row.game.id} row={row} view={view} />
+              ) : (
+                <RestRow key={`r${row.turn}`} row={row} />
+              ),
+            )}
+          </ol>
           {/* ⚠ 先発は**予定**。当日の疲労で入れ替わることがある */}
-          <p className="online-muted">
-            先発は予定です。当日の疲労で変わることがあります。
-          </p>
+          <p className="online-muted">先発は予定です（当日の疲労で変わります）。</p>
         </>
       ) : (
         <p className="online-muted">予定されている試合はありません。</p>
       )}
     </section>
+  );
+}
+
+function Upcoming({ row, view }) {
+  const game = row.game;
+  const home = game.home === view.teamName;
+  return (
+    <li className="online-slot is-next">
+      <span className="online-slot-turn">第{row.turn}ターン</span>
+      <span className="online-slot-side">{home ? 'ホーム' : 'ビジター'}</span>
+      <span className="online-slot-foe">{teamShort(home ? game.away : game.home)}</span>
+      {/* ⚠ 先発は**2行目**に置く。1行に詰めると勝敗と防御率が切れて、
+          「右投げかどうか」しか読めなくなる（実測で相手の成績が消えていた） */}
+      <span className="online-slot-starters">
+        <Starter
+          info={home ? game.homeStarterInfo : game.awayStarterInfo}
+          fallback={home ? game.homeStarter : game.awayStarter}
+        />
+        <em>vs</em>
+        <Starter
+          info={home ? game.awayStarterInfo : game.homeStarterInfo}
+          fallback={home ? game.awayStarter : game.homeStarter}
+        />
+      </span>
+    </li>
   );
 }
 
@@ -172,7 +279,12 @@ export default function LeagueBoard({ view }) {
   return (
     <div className="online-board">
       <div className="online-board-main">
-        <NextGames view={view} />
+        {/* ⚠ 直近と今後を**横に並べる**。縦に積むと、順位表を見るまでに
+            1画面ぶんスクロールすることになる */}
+        <div className="online-home-games">
+          <RecentGames view={view} />
+          <NextGames view={view} />
+        </div>
         <Leaders leaders={view.leaders} ownTeam={view.teamName} />
       </div>
       <div className="online-board-side">

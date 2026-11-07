@@ -406,6 +406,14 @@ export class LeagueService {
             e.openTrade(l, userId, command.payload || {}, now);
             l.game = e.captureLeagueWorld();
           });
+        } else if (command.type === 'convert') {
+          // ⚠ **選手の登録が変わるのでエンジンの中で行う**。`TEAMS_DATA` を
+          //    触るものは `loadLeagueWorld` → 処理 → `captureLeagueWorld` の順で囲む
+          await this.engine((e) => {
+            e.loadLeagueWorld(l);
+            e.convertPosition(l, userId, command.payload || {});
+            l.game = e.captureLeagueWorld();
+          });
         } else if (command.type === 'tradeRespond') {
           await this.engine((e) => {
             e.loadLeagueWorld(l);
