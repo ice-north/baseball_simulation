@@ -64,6 +64,50 @@ assert.deepEqual(payload.missing, [
 assert.ok(!body.includes('SECRET-ANON-VALUE'), '秘密値が応答に漏れている');
 assert.ok(!body.includes('example.supabase.co'), 'URLが応答に漏れている');
 
+// 認証先の一時的な障害は、無効なトークンとは区別する。
+// 401 / auth を返すと、アプリは更新を試みたあと保存済みのログインを消す。
+{
+  const savedFetch = globalThis.fetch;
+  const savedEnv = Object.fromEntries(Object.keys(FULL).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, FULL);
+  let upstreamStatus = 500;
+  globalThis.fetch = async (url) => {
+    assert.match(String(url), /^https:\/\/example\.supabase\.co\/auth\/v1\//);
+    return new Response(JSON.stringify({ message: 'upstream-private-detail' }), { status: upstreamStatus });
+  };
+  try {
+    const request = async (action, method = 'GET', requestBody) => {
+      const result = { statusCode: 0, setHeader() {}, end(text) { this.payload = JSON.parse(text); } };
+      await handler({
+        method,
+        url: `/api/online?action=${action}`,
+        headers: { host: 'site.test', authorization: 'Bearer fixture' },
+        body: requestBody,
+      }, result);
+      return result;
+    };
+    for (const [status, expected] of [[500, 503], [503, 503], [429, 429], [401, 401]]) {
+      upstreamStatus = status;
+      for (const [action, method, requestBody] of [
+        ['view', 'GET'],
+        ['login', 'POST', { email: 'test@example.test', password: 'fixture' }],
+        ['refresh', 'POST', { refreshToken: 'fixture' }],
+      ]) {
+        const result = await request(action, method, requestBody);
+        assert.equal(result.statusCode, expected, `${action}: 認証先の${status}を区別していない`);
+        assert.equal(result.payload.code, status === 401 ? 'auth' : 'auth_service');
+        assert.ok(!JSON.stringify(result.payload).includes('upstream-private-detail'), '認証先の内部情報が漏れている');
+      }
+    }
+  } finally {
+    globalThis.fetch = savedFetch;
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 // --- 保存された世界の版 ---------------------------------------------
 // ⚠ **古い形のリーグを受け付けないこと**。保存の形を変えたのに版を上げないと、
 //    `assertLeagueVersion` を素通りして読み込まれ、遠くで落ちる。

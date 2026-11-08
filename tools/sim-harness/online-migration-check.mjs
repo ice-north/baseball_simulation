@@ -12,7 +12,13 @@ import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
-import { PACK_COUNT } from '../../src/online/rosterPack.js';
+import {
+  PACK_COUNT,
+  PACK_STYLE,
+  LEGACY_PACK_STYLE,
+  generateRosterPacks,
+  packsForMember,
+} from '../../src/online/rosterPack.js';
 import { ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 import {
   MIGRATIONS,
@@ -113,6 +119,37 @@ assert.ok(
   };
   migrateLeague(kept);
   assert.equal(kept.season.settings.seasonTurns, 160, '持っている値を上書きした');
+}
+
+// --- 7→8（セットの作り方を型ごとに変えた）が、待っている人のセットを変えないか ---
+// ⚠ 途中参加でセットを待っている人のセットは**種から作り直す**。作り方の版を
+//    書き留めないと、新しい作り方で作り直され、選んだセットの中身が入れ替わる
+{
+  const old = {
+    schema: 7,
+    engineVersion: ONLINE_ENGINE_VERSION,
+    members: [
+      { userId: 'a', packSeed: 100, pendingPackId: 'pack-2' },
+      { userId: 'b' },
+    ],
+  };
+  migrateLeague(old);
+  assert.equal(old.schema, ONLINE_SCHEMA);
+  assert.equal(old.members[0].packStyle, LEGACY_PACK_STYLE, '待っている人の版を書き留めていない');
+  assert.equal(old.members[1].packStyle, undefined, '待っていない人に版を付けた');
+  assert.deepEqual(
+    packsForMember(old.members[0]).map((p) => p.players[0].id),
+    generateRosterPacks(100, { style: LEGACY_PACK_STYLE }).map((p) => p.players[0].id),
+    '移行のあとで待っている人のセットが変わる',
+  );
+  // 何度当てても同じ。新しい版を持っている人を古い版へ戻さない
+  const fresh = {
+    schema: 7,
+    engineVersion: ONLINE_ENGINE_VERSION,
+    members: [{ userId: 'c', packSeed: 5, packStyle: PACK_STYLE }],
+  };
+  migrateLeague(fresh);
+  assert.equal(fresh.members[0].packStyle, PACK_STYLE, '持っている版を上書きした');
 }
 
 // --- どの版をどう扱うか ----------------------------------------------

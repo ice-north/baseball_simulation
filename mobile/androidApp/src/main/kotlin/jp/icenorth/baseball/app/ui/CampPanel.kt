@@ -23,6 +23,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +56,11 @@ import jp.icenorth.baseball.shared.pid
 import jp.icenorth.baseball.shared.playerWish
 import jp.icenorth.baseball.shared.resolveTraining
 import jp.icenorth.baseball.shared.str
+import jp.icenorth.baseball.shared.positionLabel
+import jp.icenorth.baseball.shared.CampGainItem
+import jp.icenorth.baseball.shared.formatGain
+import jp.icenorth.baseball.shared.campGainTotals
+import jp.icenorth.baseball.shared.campGainRows
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -139,6 +147,9 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
         }
     }
 
+    // ⚠ 伸びをまとめて見せる（能力は伸びているのに結果がまとまっておらず、成長が実感できなかった）
+    key(done) { CampGains(model, camp, roster, finished) }
+
     var group by rememberSaveable { mutableStateOf("pitcher") }
     val groups = CAMP_GROUPS.map { (id, label) -> Triple(id, label, roster.filter { campGroupOf(it.at("position").str()) == id }) }.filter { it.third.isNotEmpty() }
     val shown = groups.firstOrNull { it.first == group } ?: groups.firstOrNull()
@@ -146,11 +157,77 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
     shown?.third?.forEach { p ->
         CampPlayerCard(
             model, p, mainOf(p), subOf(p), draft.direction, draft.phase, enabled = !finished,
+            gains = camp.at("gains", p.pid.toString()).obj(),
             onMain = { key -> model.campDraft = draft.copy(main = draft.main + (p.pid to key)) },
             onSub = { key -> model.campDraft = draft.copy(sub = draft.sub + (p.pid to key)) },
         )
     }
 }
+
+private const val GAIN_ROWS = 8
+
+/** 練習の成果（このクール／キャンプ通算）。伸びた量の多い選手から */
+@Composable
+internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<JsonObject>, finished: Boolean) {
+    val last = camp.at("last").obj()
+    val total = camp.at("gains").obj()
+    if (last == null && total.isNullOrEmpty()) return
+    var showLast by rememberSaveable { mutableStateOf(!finished && last != null) }
+    var all by rememberSaveable { mutableStateOf(false) }
+    val useLast = showLast && last != null
+    val gains = if (useLast) last.at("gains").obj() else total
+    // 出来事（フォーム改造・新球種・覚醒など）は、このクールの分とキャンプ通算の分の両方をサーバーが残す
+    val rows = campGainRows(gains, roster, if (useLast) last.at("events").obj() else camp.at("events").obj())
+    val totals = campGainTotals(gains)
+    Section("練習の成果") {
+        ChoiceRow(
+            listOfNotNull(last?.let { "last" to "第${it.at("round").int() ?: 0}クール" }, "total" to "キャンプ通算"),
+            if (useLast) "last" else "total",
+        ) { showLast = it == "last" }
+        if (rows.isEmpty()) {
+            Muted("伸びた能力はありません。")
+            return@Section
+        }
+        Text(
+            "${rows.count { it.grew }}人が伸びました",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Muted("球団全体: " + totals.take(6).joinToString(" · ") { "${it.label}${formatGain(it.diff)}" })
+        (if (all) rows else rows.take(GAIN_ROWS)).forEach { row ->
+            Column(Modifier.fillMaxWidth().clickable { model.openPlayer = row.player }.padding(vertical = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(row.player.at("name").str().orEmpty(), fontWeight = FontWeight.SemiBold)
+                    Muted(positionLabel(row.player.at("position").str().orEmpty()))
+                }
+                if (row.items.isNotEmpty()) GainLine(null, row.items)
+                row.events.forEach { Text(it, color = MaterialTheme.colorScheme.tertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+        if (rows.size > GAIN_ROWS) {
+            TextButton(onClick = { all = !all }) { Text(if (all) "上位${GAIN_ROWS}人だけ" else "全員（${rows.size}人）を見る") }
+        }
+    }
+}
+
+/** 伸びの並び。伸びは緑、下がったものは赤 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GainLine(title: String?, items: List<CampGainItem>) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        title?.let { Muted(it) }
+        items.forEach { item ->
+            Text(
+                "${item.label}${formatGain(item.diff)}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (item.diff > 0) GainUp else MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+private val GainUp = androidx.compose.ui.graphics.Color(0xFF2E9E5B)
 
 @Composable
 private fun Rounds(done: Int, total: Int) {
@@ -181,6 +258,7 @@ private fun CampPlayerCard(
     direction: String,
     phase: String,
     enabled: Boolean,
+    gains: JsonObject?,
     onMain: (String) -> Unit,
     onSub: (String) -> Unit,
 ) {
@@ -210,6 +288,9 @@ private fun CampPlayerCard(
             AbilityNum("体力", p.at("physical", "bodyStamina").int())
             AbilityNum("回復", p.at("physical", "recovery").int())
         }
+        // キャンプ通算の伸び（サーバーの記録）
+        val items = campGainRows(gains?.let { JsonObject(mapOf(p.pid.toString() to it)) }, listOf(p)).firstOrNull()?.items.orEmpty()
+        if (items.isNotEmpty()) GainLine("通算", items)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MenuPicker("メイン", main, campMenusFor(pitcher), enabled, Modifier.weight(1f), onMain)
             MenuPicker("サブ", sub, campSubMenusFor(p), enabled, Modifier.weight(1f), onSub)

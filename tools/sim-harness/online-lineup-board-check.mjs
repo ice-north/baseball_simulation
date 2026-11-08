@@ -16,6 +16,8 @@ import {
   swapPositions,
   replaceStarter,
   benchFielders,
+  benchPitchers,
+  bestFieldPosition,
   groupBench,
   candidatesFor,
   orderProblems,
@@ -218,6 +220,38 @@ for (let round = 0; round < 3; round++)
   );
 }
 
+// --- 二刀流: 投手も野手の枠に入れられる（控えの投手は別に出す）
+{
+  assert.deepEqual(
+    benchPitchers(roster, start).map((p) => p.id),
+    [21, 22, 23],
+    '控えの投手が出ない',
+  );
+  const twoWay = replaceStarter(start, 0, 21);
+  assert.deepEqual(
+    orderProblems(twoWay, roster),
+    [],
+    '投手を野手の枠に入れられない',
+  );
+  valid(twoWay);
+  assert.deepEqual(
+    benchPitchers(roster, twoWay).map((p) => p.id),
+    [22, 23],
+    '野手の枠に入った投手が控えに残る',
+  );
+  // 守るなら一番合う位置（投手の本職の「投手」は出さない）
+  assert.equal(
+    bestFieldPosition({
+      position: 'pitcher',
+      positionFitness: { pitcher: 100, second: 76, short: 54 },
+    }),
+    'second',
+  );
+  // 抹消中の選手は投手でも野手でも入れない
+  const inactive = replaceStarter(start, 0, 30);
+  assert.ok(orderProblems(inactive, roster).length, '抹消中の選手を通した');
+}
+
 // --- スマホから受け取った崩れた打順（7人・同じ位置に2人）も、8枠に整えて交代で直せる
 {
   const seven = orderFromLineup({
@@ -303,5 +337,5 @@ for (let round = 0; round < 3; round++)
 }
 
 console.log(
-  'online-lineup-board-check PASS（どの操作もサーバーが受け付ける形 / 打順・守備・交代 / 控えの括りと候補の並び / 崩れた保存の直し方 / 打順と投手起用の別保存）',
+  'online-lineup-board-check PASS（どの操作もサーバーが受け付ける形 / 打順・守備・交代 / 控えの括りと候補の並び / 崩れた保存の直し方 / 投手を野手の枠に / 打順と投手起用の別保存）',
 );

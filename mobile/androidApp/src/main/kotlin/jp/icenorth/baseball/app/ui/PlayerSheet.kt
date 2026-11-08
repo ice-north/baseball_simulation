@@ -32,6 +32,7 @@ import jp.icenorth.baseball.shared.FORM_SHORT
 import jp.icenorth.baseball.shared.PITCH_TYPE_NAMES
 import jp.icenorth.baseball.shared.POSITION_LABELS
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.formatStat
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
@@ -84,44 +85,48 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                     POSITION_LABELS[p.at("position").str()]?.let { "本職 $it" },
                     "${hand(p.at("physical", "throws").str())}投${hand(p.at("batting", "bats").str())}打",
                     if (pitcher) FORM_SHORT[p.at("pitching", "form").str()] else null,
+                    if (p.at("isTwoWay").bool() == true) "二刀流" else null,
                     condition?.let { "調子 $it" },
                     p.at("fatigue").int()?.let { "疲労 $it" },
                 ).joinToString(" · "),
             )
         }
-        Text("能力", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (pitcher) {
+        // ⚠ 能力は投打の両方をいつも出す（二刀流が売り。投手を野手で、野手を投手で起用できる）。本職を先に
+        val pitchingBlock: @Composable () -> Unit = {
+            AbilityGroup("投球") {
                 AbilityNum("球速 ", p.at("pitching", "velocity").int(), velocity = true)
                 AbilityNum("制球 ", p.at("pitching", "control").int())
                 AbilityNum("スタミナ ", p.at("pitching", "stamina").int(), stamina = true)
                 AbilityNum("回転 ", p.at("pitching", "spinRate").int())
-            }
-            AbilityNum("ミート ", p.at("batting", "meet").int())
-            AbilityNum("パワー ", p.at("batting", "power").int())
-            AbilityNum("選球眼 ", p.at("batting", "eye").int())
-            AbilityNum("走力 ", p.at("physical", "speed").int())
-            AbilityNum("盗塁 ", p.at("batting", "steal").int())
-            AbilityNum("バント ", p.at("batting", "bunt").int())
-            AbilityNum("守備 ", p.at("fielding", "defense").int())
-            AbilityNum("肩 ", p.at("physical", "arm").int())
-            if (p.at("position").str() == "catcher") AbilityNum("リード ", p.at("catching", "lead").int())
-            AbilityNum("体力 ", p.at("physical", "bodyStamina").int())
-            AbilityNum("回復 ", p.at("physical", "recovery").int())
-        }
-        if (pitcher) {
-            val pitches = p.at("pitching", "arsenal").list().filter { it.at("type").str() != "straight" }
-            if (pitches.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    pitches.forEach { a -> AbilityNum("${PITCH_TYPE_NAMES[a.at("type").str()] ?: a.at("type").str()} ", a.at("level").int()) }
+                p.at("pitching", "arsenal").list().filter { it.at("type").str() != "straight" }.forEach { a ->
+                    AbilityNum("${PITCH_TYPE_NAMES[a.at("type").str()] ?: a.at("type").str()} ", a.at("level").int())
                 }
             }
+        }
+        val battingBlock: @Composable () -> Unit = {
+            AbilityGroup("打撃・守備") {
+                AbilityNum("ミート ", p.at("batting", "meet").int())
+                AbilityNum("パワー ", p.at("batting", "power").int())
+                AbilityNum("選球眼 ", p.at("batting", "eye").int())
+                AbilityNum("走力 ", p.at("physical", "speed").int())
+                AbilityNum("盗塁 ", p.at("batting", "steal").int())
+                AbilityNum("バント ", p.at("batting", "bunt").int())
+                AbilityNum("守備 ", p.at("fielding", "defense").int())
+                AbilityNum("肩 ", p.at("physical", "arm").int())
+                if (p.at("position").str() == "catcher") AbilityNum("リード ", p.at("catching", "lead").int())
+            }
+        }
+        Text("能力", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        if (pitcher) { pitchingBlock(); battingBlock() } else { battingBlock(); pitchingBlock() }
+        AbilityGroup("身体") {
+            AbilityNum("体力 ", p.at("physical", "bodyStamina").int())
+            AbilityNum("回復 ", p.at("physical", "recovery").int())
         }
         val fitness = p.at("positionFitness").obj().orEmpty()
             .mapNotNull { (pos, v) -> v.int()?.let { pos to it } }
             .filter { (pos, v) -> pos != "pitcher" && v >= 60 }
             .sortedByDescending { it.second }
-        if (!pitcher && fitness.isNotEmpty()) {
+        if (fitness.isNotEmpty()) {
             Text("守れる位置（適性）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(fitness.joinToString("  ") { (pos, v) -> "${positionLabel(pos)} $v" })
         }
@@ -161,3 +166,13 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
 }
 
 private val ValueWidth = 48.dp
+
+/** 能力の1かたまり（小さな見出しと数字の並び） */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AbilityGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Muted(title)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+    }
+}

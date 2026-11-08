@@ -169,3 +169,64 @@ assert.throws(
 console.log(
   'online-review-boundaries PASS（先発維持・入力エラーの原子性・版の検証）',
 );
+
+// 9人ちょうどでも、野手を先発に指定した日を進められる。
+// 9番の仮置き投手を交代候補から落としたり、先発兼任者を二重登録しない。
+for (const starters of [[1], [1, 9]]) {
+  const sparse = {
+    players: positions.map((position, i) => ({
+      id: i + 1, position, pitching: { stamina: 80 }, fatigue: 0,
+    })),
+    pitchingRotation: { starters: [9], currentStarterIndex: 0 },
+    lineupSettings: { battingOrder: [] },
+  };
+  sparse.players.push({ id: 9, position: 'pitcher', pitching: { stamina: 100 } });
+  const tiny = {
+    schema: ONLINE_SCHEMA, engineVersion: ONLINE_ENGINE_VERSION,
+    status: 'running', members: [{ userId: 'a', teamName: 'test' }],
+    game: { teams: { test: sparse } },
+  };
+  const plan = {
+    battingOrder: positions.map((position, i) => ({
+      playerId: i + 1, position, battingOrder: i + 1,
+    })),
+    starters,
+  };
+  saveLineup(tiny, 'a', plan);
+  const before = structuredClone(sparse.lineupSettings.battingOrder);
+  assert.equal(new Set(before.map((e) => e.playerId)).size, 9, '保存時に先発兼任者が重複');
+  const undo = prepareDailyLineup(sparse, 'test');
+  const day = sparse.lineupSettings.battingOrder;
+  assert.equal(day.find((e) => e.position === 'pitcher').playerId, 1);
+  assert.equal(day.find((e) => e.position === 'catcher').playerId, 9);
+  assert.equal(new Set(day.map((e) => e.playerId)).size, 9);
+  undo();
+  assert.deepEqual(sparse.lineupSettings.battingOrder, before, '試合後に予約した打順へ戻らない');
+  sparse.players = sparse.players.filter((p) => p.id !== 9);
+  const invalidBefore = structuredClone(sparse);
+  assert.throws(() => saveLineup(tiny, 'a', { ...plan, starters: [1] }), /9人/);
+  assert.deepEqual(sparse, invalidBefore, '人数不足の保存で編成を破壊した');
+}
+
+// 休養代役も先発を兼ねるとき、すべての差し替えを戻した後に9番を決める。
+{
+  const team = {
+    players: positions.map((position, i) => ({
+      id: i + 1, position, pitching: { stamina: 80 }, fatigue: i === 7 ? 80 : 0,
+    })),
+    lineupSettings: { battingOrder: [
+      ...positions.map((position, i) => ({ playerId: i + 1, position, battingOrder: i + 1 })),
+      { playerId: 10, position: 'pitcher', battingOrder: 9 },
+    ] },
+    pitchingRotation: { starters: [8, 10, 9], currentStarterIndex: 0 },
+  };
+  team.players.push(
+    { id: 9, position: 'right', positionFitness: { right: 100 }, pitching: { stamina: 80 }, fatigue: 0 },
+    { id: 10, position: 'pitcher', pitching: { stamina: 100 }, fatigue: 50 },
+  );
+  const saved = structuredClone(team.lineupSettings.battingOrder);
+  prepareDailyLineup(team, 'test')();
+  const restored = team.lineupSettings.battingOrder;
+  assert.deepEqual(restored.filter((e) => e.position !== 'pitcher'), saved.filter((e) => e.position !== 'pitcher'));
+  assert.equal(new Set(restored.map((e) => e.playerId)).size, 9, '休養と先発の代役を戻した後に同じ選手が重複');
+}

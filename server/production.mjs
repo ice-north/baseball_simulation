@@ -67,12 +67,18 @@ export function productionHandler() {
       },
       signal: AbortSignal.timeout(15000),
     });
-    requireOnline(
-      response.ok,
-      '認証に失敗しました。ログインし直してください',
-      401,
-      'auth',
-    );
+    if (!response.ok) {
+      // 認証サービスの障害や回数制限で、端末に保存した認証を捨てさせない。
+      // 401 / auth はクライアントが認証切れとして処理するために使う。
+      const unavailable = response.status === 429 || response.status >= 500;
+      throw new OnlineError(
+        unavailable
+          ? '認証サービスに接続できません。少し待って再試行してください'
+          : '認証に失敗しました。ログインし直してください',
+        unavailable ? (response.status === 429 ? 429 : 503) : 401,
+        unavailable ? 'auth_service' : 'auth',
+      );
+    }
     return response.json();
   };
   const tokenView = (result) => ({

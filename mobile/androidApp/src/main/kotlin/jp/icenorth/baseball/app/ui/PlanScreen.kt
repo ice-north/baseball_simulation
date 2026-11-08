@@ -76,6 +76,7 @@ import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.roleLabel
+import jp.icenorth.baseball.shared.subPositions
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -143,6 +144,7 @@ fun PlanScreen(model: AppViewModel) {
             .associateBy { it.at("id").num()?.toLong() ?: 0L }
     }
     val open: (Long) -> Unit = { id -> rawPlayers[id]?.let { model.openPlayer = it } }
+    val nextId = model.raw?.at("nextStarterId").num()?.toLong()
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -172,8 +174,8 @@ fun PlanScreen(model: AppViewModel) {
         }
         ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) })
         when (tab) {
-            PlanTab.Order -> OrderEditor(view, draft, players, dragEdit, onDragStart, open, orderView, { orderView = it }) { sheet = it }
-            PlanTab.Pitching -> PitchingEditor(draft, players, model.raw?.at("nextStarterId").num()?.toLong(), dragEdit, onDragStart, open) { sheet = it }
+            PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, onDragStart, open, orderView, { orderView = it }) { sheet = it }
+            PlanTab.Pitching -> PitchingEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open) { sheet = it }
             PlanTab.Tactics -> TacticsEditor(draft, edit)
         }
     }
@@ -196,7 +198,10 @@ fun PlanScreen(model: AppViewModel) {
             }
         }
         is PlanSheet.Role -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            RoleSheet(draft, s.id, players[s.id]) { role ->
+            RoleSheet(
+                draft, s.id, players[s.id],
+                onRemove = { edit { it.withPitching(it.pitching.removeFromStaff(s.id, view.roster)) }; sheet = null },
+            ) { role ->
                 edit { it.withPitching(it.pitching.setRole(s.id, role)) }; sheet = null
             }
         }
@@ -212,12 +217,14 @@ fun PlanScreen(model: AppViewModel) {
  *  - 守備の札は投手・捕手・内野・外野で色を分ける。札を押すと守備の入れ替え、名前を押すと交代
  *  - 控えの行を押すと「誰と代えるか」を選べる（休ませたい選手からでも、使いたい控えからでも交代できる）
  *  - 上の「気になる所」に、休養に入る選手と適性の低い守備を出す
+ *  - 投手も野手の枠に入れられる（二刀流）。控えの最後に投手を出す（守れる位置のある投手だけ。残りは畳む）
  */
 @Composable
 private fun OrderEditor(
     view: LeagueView,
     draft: PlanDraft,
     players: Map<Long, Player>,
+    nextId: Long?,
     edit: Edit,
     onDragStart: () -> Unit,
     open: (Long) -> Unit,
@@ -239,6 +246,13 @@ private fun OrderEditor(
     }
     val bench = benchOf(view, draft)
     val notes = orderNotes(draft, players, bench)
+    // ⚠ 投手は多い（10人以上）。守れる位置（適性 SUBSTITUTE_MIN_FITNESS 以上）のある投手だけを出し、残りは「全員を出す」で開く
+    var allPitchers by rememberSaveable { mutableStateOf(false) }
+    val pitcherBench = pitcherBenchOf(view, draft)
+    val shownPitchers = (if (allPitchers) pitcherBench else pitcherBench.filter { it.subPositions().isNotEmpty() })
+        .sortedByDescending { p -> p.bestFieldPosition()?.let { p.fitness(it) } ?: 0 }
+    // 次の先発が野手の枠にも入っている（二刀流の先発の日）
+    val twoWaySlot = draft.slots.firstOrNull { nextId != null && it.playerId == nextId }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             ChipTabs(FielderView.entries.map { it.name to it.label }, mode.name, { onMode(FielderView.valueOf(it)) }, Modifier.weight(1f))
@@ -270,7 +284,17 @@ private fun OrderEditor(
                     }
                 }
             }
-            item(key = "head:bat") { Caption("打順") }
+            item(key = "head:bat") {
+                Column {
+                    Caption("打順")
+                    twoWaySlot?.let { slot ->
+                        Muted(
+                            "${players[slot.playerId]?.name ?: "次の先発"}は次の先発です。先発の日は9番・投手に回り、${positionLabel(slot.position)}はその日だけ控えが守ります（試合の後は元に戻ります）",
+                            Modifier.padding(horizontal = 4.dp),
+                        )
+                    }
+                }
+            }
             items(draft.slots, key = { "bat:${it.playerId}" }) { slot ->
                 val index = draft.slots.indexOf(slot)
                 ReorderableItem(reorder, key = "bat:${slot.playerId}") { dragging ->
@@ -316,12 +340,46 @@ private fun OrderEditor(
                 }
             }
             if (bench.isEmpty()) item(key = "bench:none") { Muted("控えの野手がいません", Modifier.padding(8.dp)) }
+            if (pitcherBench.isNotEmpty()) {
+                item(key = "head:bench:pitcher") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) { Caption("控え・投手（二刀流で野手の枠に）") }
+                        if (allPitchers || shownPitchers.size < pitcherBench.size) {
+                            TextButton(onClick = { allPitchers = !allPitchers }) {
+                                Text(if (allPitchers) "守れる投手だけ" else "全員を出す（ほか${pitcherBench.size - shownPitchers.size}人）")
+                            }
+                        }
+                    }
+                }
+                items(shownPitchers, key = { "bench:${it.id}" }) { p ->
+                    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                        FielderRow(
+                            order = null,
+                            position = p.position,
+                            player = p,
+                            // ⚠ 投手の本職（投手）の適性は意味が無い。守るなら一番合う位置で
+                            fitnessAt = p.bestFieldPosition() ?: "right",
+                            onPosition = { onSheet(PlanSheet.Bench(p.id)) },
+                            onName = { onSheet(PlanSheet.Bench(p.id)) },
+                            onInfo = { open(p.id) },
+                            mode = mode,
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 private fun benchOf(view: LeagueView, draft: PlanDraft): List<Player> =
     view.roster.filter { p -> !p.isPitcher && p.isActive && draft.slots.none { it.playerId == p.id } }
+
+/** 控えの投手（野手の枠にも入れられる。二刀流。Web 版 benchPitchers と同じ） */
+private fun pitcherBenchOf(view: LeagueView, draft: PlanDraft): List<Player> =
+    view.roster.filter { p -> p.isPitcher && p.isActive && draft.slots.none { it.playerId == p.id } }
+
+/** 投手が野手の枠に入るとしたら一番合う守備位置（Web 版 bestFieldPosition と同じ） */
+private fun Player.bestFieldPosition(): String? = FIELD_POSITIONS.maxByOrNull { fitness(it) }
 
 private class OrderNote(val position: String, val text: String, val action: String, val sheet: PlanSheet, val color: androidx.compose.ui.graphics.Color? = null)
 
@@ -396,7 +454,7 @@ private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players
             Text(players[slot.playerId]?.let { "${it.name}と交代する控え" } ?: "空いている${positionLabel(slot.position)}に入れる控え", style = MaterialTheme.typography.titleMedium)
         }
         if (bench.isEmpty()) Text("控えの野手がいません", modifier = Modifier.padding(20.dp))
-        bench.forEach { p ->
+        val row: @Composable (Player) -> Unit = { p ->
             FielderRow(
                 order = null,
                 // 札は入る位置にして、その下の「適」がこの位置での適性と分かるように
@@ -407,6 +465,13 @@ private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players
                 modifier = Modifier.fillMaxWidth().clickable { onPick(p.id) }.padding(horizontal = 10.dp),
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        bench.forEach { row(it) }
+        // 投手も入れられる（二刀流）。野手の後ろに、その位置の適性の高い順
+        val pitchers = pitcherBenchOf(view, draft).candidatesFor(slot.position)
+        if (pitchers.isNotEmpty()) {
+            Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { Caption("投手（二刀流。先発の日は9番・投手に回ります）") }
+            pitchers.forEach { row(it) }
         }
     }
 }
@@ -448,9 +513,21 @@ private fun BenchSheet(draft: PlanDraft, id: Long, players: Map<Long, Player>, o
  * 先発ローテと救援の役割を1本の並びで出し、長押しでつかんで別の場所へ落とすと持ち場が変わる
  * （ローテの中＝順番、救援の見出し・救援の投手の上＝その役割、ローテへ＝先発に入る）。
  * 細かい型（ゲームメーカー・完投型など）は投手を押して選ぶ。
+ * 野手も投手で起用できる（二刀流）。最後の「野手を投手で起用する」から加え、役割のシートで外す。
  */
 @Composable
-private fun PitchingEditor(draft: PlanDraft, players: Map<Long, Player>, nextId: Long?, edit: Edit, onDragStart: () -> Unit, open: (Long) -> Unit, onSheet: (PlanSheet) -> Unit) {
+private fun PitchingEditor(
+    view: LeagueView,
+    draft: PlanDraft,
+    players: Map<Long, Player>,
+    nextId: Long?,
+    edit: Edit,
+    /** 押して1回で終わる編集（ドラッグの1手にまとめない） */
+    clickEdit: Edit,
+    onDragStart: () -> Unit,
+    open: (Long) -> Unit,
+    onSheet: (PlanSheet) -> Unit,
+) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
     val reorder = rememberReorderableLazyListState(listState) { from, to ->
@@ -459,7 +536,10 @@ private fun PitchingEditor(draft: PlanDraft, players: Map<Long, Player>, nextId:
         edit { d -> d.withPitching(dropPitcher(d.pitching, id, target)) }
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
-    PitchingList(draft, players, nextId, reorder, listState, onDragStart, open, onSheet)
+    PitchingList(view, draft, players, nextId, reorder, listState, onDragStart, open, onSheet) { p ->
+        clickEdit { it.withPitching(it.pitching.addToStaff(p)) }
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
 }
 
 /** 投手 id を target（別の投手 p:… ／役割の見出し role:… ／ローテの見出し head:rot）へ落としたときの持ち場 */
@@ -483,6 +563,7 @@ private fun dropPitcher(state: jp.icenorth.baseball.shared.PitchingState, id: Lo
 
 @Composable
 private fun PitchingList(
+    view: LeagueView,
     draft: PlanDraft,
     players: Map<Long, Player>,
     nextId: Long?,
@@ -491,9 +572,13 @@ private fun PitchingList(
     onDragStart: () -> Unit,
     open: (Long) -> Unit,
     onSheet: (PlanSheet) -> Unit,
+    onAdd: (Player) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     val state = draft.pitching
+    // 投手起用に加えていない野手（ふだんは畳む。野手は多い）
+    var fieldersOpen by rememberSaveable { mutableStateOf(false) }
+    val candidates = state.staffCandidates(view.roster)
     val relievers = RELIEF_ORDER.map { role -> role to state.roles.filter { (id, r) -> r == role && id !in state.starters }.keys.mapNotNull { players[it] } }
     LazyColumn(
         state = listState,
@@ -533,6 +618,29 @@ private fun PitchingList(
                 }
             }
         }
+        if (candidates.isNotEmpty()) {
+            item(key = "head:fielders") {
+                Column(Modifier.padding(top = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) { Caption("野手を投手で起用する（二刀流・${candidates.size}人）") }
+                        TextButton(onClick = { fieldersOpen = !fieldersOpen }) { Text(if (fieldersOpen) "畳む" else "出す") }
+                    }
+                    Muted("加えると救援の「おまかせ」で入ります。役割は押して選び直せます。加えていない野手は投げません", Modifier.padding(horizontal = 4.dp))
+                }
+            }
+            if (fieldersOpen) {
+                items(candidates, key = { "add:${it.id}" }) { p ->
+                    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f)) {
+                                PitcherRow("", p, null, starter = false, next = false, onRole = { open(p.id) }, onInfo = { open(p.id) }, draggable = false)
+                            }
+                            TextButton(onClick = { onAdd(p) }) { Text("加える") }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -548,13 +656,15 @@ private fun PitcherCard(dragging: Boolean, handle: Modifier, content: @Composabl
 }
 
 @Composable
-private fun PitcherRow(order: String, player: Player?, role: String?, starter: Boolean, next: Boolean, onRole: () -> Unit, onInfo: () -> Unit) {
+private fun PitcherRow(order: String, player: Player?, role: String?, starter: Boolean, next: Boolean, onRole: () -> Unit, onInfo: () -> Unit, draggable: Boolean = true) {
     Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (order.isNotEmpty()) Text(order, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
         Column(Modifier.weight(1f).clickable(onClick = onRole)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("${conditionIcon(player?.condition)} ${player?.name ?: "?"}", fontWeight = FontWeight.SemiBold)
-                Tag(roleLabel(role), MaterialTheme.colorScheme.primary)
+                if (role != null) Tag(roleLabel(role), MaterialTheme.colorScheme.primary)
+                // 野手登録の選手（二刀流）。本職の守備位置も出す
+                if (player != null && !player.isPitcher) Tag("野手・${positionLabel(player.position)}")
                 val fatigue = player?.fatigue ?: 0
                 if (starter && fatigue >= STARTER_SKIP_FATIGUE) Tag("飛ばす")
                 if (!starter && fatigue >= RELIEF_REST_FATIGUE) Tag("休養")
@@ -573,12 +683,12 @@ private fun PitcherRow(order: String, player: Player?, role: String?, starter: B
         // 疲労は野手の行と同じく、名前の右端の決まった場所に（先発は飛ばす線、救援は休養の線で赤）
         FatigueBadge(player?.fatigue, restAt = if (starter) STARTER_SKIP_FATIGUE else RELIEF_REST_FATIGUE)
         IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) { Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
+        if (draggable) Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
     }
 }
 
 @Composable
-private fun RoleSheet(draft: PlanDraft, id: Long, player: Player?, onPick: (String) -> Unit) {
+private fun RoleSheet(draft: PlanDraft, id: Long, player: Player?, onRemove: () -> Unit, onPick: (String) -> Unit) {
     val state = draft.pitching
     val current = state.roles[id]
     val starter = id in state.starters
@@ -593,6 +703,12 @@ private fun RoleSheet(draft: PlanDraft, id: Long, player: Player?, onPick: (Stri
         RELIEF_ORDER.forEach { role ->
             val enabled = !starter || state.starters.size > 1
             RoleOption(RELIEF_ROLES[role] ?: role, ROLE_HINT[role], role == current, enabled) { onPick(role) }
+        }
+        // 加えた野手（二刀流）は投手起用から外せる。⚠ 最後の1人の先発は外せない
+        if (player != null && !player.isPitcher) {
+            val canRemove = !starter || state.starters.size > 1
+            Caption("野手（二刀流）")
+            RoleOption("投手起用から外す", if (canRemove) "野手だけで出る" else "先発が1人なので外せません", false, canRemove, onRemove)
         }
     }
 }

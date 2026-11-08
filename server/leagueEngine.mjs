@@ -60,7 +60,7 @@ import {
 import { generatePitchingRotation } from '../src/game/lineupGenerator.js';
 import { setRecommendedLineup } from '../src/game/autoSimulation.js';
 import { ensureCompleteLineup } from '../src/game/lineup.js';
-import { prepareDailyLineup } from './dailyLineup.mjs';
+import { prepareDailyLineup, benchTwoWayStarter } from './dailyLineup.mjs';
 import { initializeAllPlayersCondition } from '../src/game/condition.js';
 import { simulateScheduledGamesOnDate } from '../src/game/daySimulation.js';
 import { hashSeed, withSeededRandom } from '../src/game/rng.js';
@@ -129,7 +129,8 @@ import {
   assignmentOrder,
 } from '../src/online/membership.js';
 import { nextFromPlan } from '../src/online/tryoutPlan.js';
-import { generateRosterPacks, rosterPacksFor } from '../src/online/rosterPack.js';
+import { generateRosterPacks, packsForMember } from '../src/online/rosterPack.js';
+import { abilitySnapshot, abilityGains, addCampGains } from '../src/online/campGains.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_DIRECTIONS, CAMP_PHASES, CAMP_ROUNDS };
@@ -182,8 +183,8 @@ function createSchedule(season, teams) {
  * ⚠ セットは保存していない（種から作り直す）ので、選択が正しいかは
  *    ここで作り直して確かめるしかない。
  */
-export function packIdsFor(seed) {
-  return rosterPacksFor(seed).map((p) => p.id);
+export function packIdsFor(member) {
+  return packsForMember(member).map((p) => p.id);
 }
 
 /**
@@ -207,7 +208,7 @@ function applyPendingPacks(league) {
   for (const member of league.members || []) {
     if (!member.packSeed) continue;
     // 名簿には複製を入れる（`clone`）ので、使い回しの値を読むだけでよい
-    const packs = rosterPacksFor(member.packSeed);
+    const packs = packsForMember(member);
     const pack =
       packs.find((p) => p.id === member.pendingPackId) || packs[0];
     const team = TEAMS_DATA[member.teamName];
@@ -220,6 +221,7 @@ function applyPendingPacks(league) {
       ];
     refreshTeamPlan(league, member.teamName);
     delete member.packSeed;
+    delete member.packStyle;
     delete member.pendingPackId;
   }
 }
@@ -250,7 +252,12 @@ export function normalizeCampPolicy(policy) {
  */
 export function runCampRound(league, teamName, { policy, main, sub } = {}) {
   const team = TEAMS_DATA[teamName];
-  if (!team?.players?.length) return;
+  if (!team?.players?.length) return { gains: {}, events: {} };
+  // ⚠ 伸びは**練習の前後を比べて**作る（メイン・サブ・スタッフの効果をまとめて）。
+  //    練習ごとの報告を足し合わせると、サブ練習やスタッフの効果が漏れる
+  const before = new Map(
+    team.players.map((player) => [player.id, abilitySnapshot(player)]),
+  );
   const direction = policy?.direction || 'balanced';
   const phase = policy?.phase || 'skill';
   const staff = team.corporateData?.staff
@@ -272,7 +279,7 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
         : 'batting';
     moods[player.id] = moodMultiplier(player, direction, phase);
   }
-  const { updatedTeam } = executeTeamCampTraining(
+  const { updatedTeam, allReports } = executeTeamCampTraining(
     team,
     assignments,
     {},
@@ -281,16 +288,54 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
     moods,
   );
   TEAMS_DATA[teamName] = updatedTeam;
+  // 数字にならない出来事（フォーム改造・新球種・打席の変更）は文で残す
+  // ⚠ 能力の覚醒（大きく伸びた）も `isAwakening` で来る。伸びた数は `gains` に
+  //    あるので、ここは「覚醒した」ことだけ書く（「ミート 63」と今の値を並べない）
+  const events = {};
+  const note = (player, report) => {
+    for (const r of report || [])
+      if (r.isAwakening)
+        (events[player.id] ||= []).push(
+          typeof r.before === 'number' && r.stat !== 'newpitch'
+            ? `${r.statName}が覚醒`
+            : `${r.statName} ${r.after}`.trim(),
+        );
+  };
+  for (const r of allReports || []) note(r.player, r.growthReport);
   for (const player of updatedTeam.players) {
     // ⚠ 守備位置に合うかは**入口で見ている**（`validateCampRound` と
     //    `validatePhasePlan`）。ここで倒すと、どちらの入口が漏れても気づけない
     const key = sub?.[player.id] || resolveTraining(player, direction, phase).sub;
-    if (SUB_TRAINING_MENUS[key]) executeSubTraining(player, key, {}, staff);
+    if (SUB_TRAINING_MENUS[key])
+      note(player, executeSubTraining(player, key, {}, staff)?.growthReport);
   }
   if (staff) {
     applyMotivationEffect(updatedTeam.players, staff);
     applyBatteryMentalEffect(updatedTeam.players, staff);
   }
+  const gains = {};
+  for (const player of updatedTeam.players) {
+    const diff = abilityGains(
+      before.get(player.id) || {},
+      abilitySnapshot(player),
+    );
+    if (Object.keys(diff).length) gains[player.id] = diff;
+  }
+  return { gains, events };
+}
+
+/** 手動実行と締切時の自動実行で、同じ記録を残す。 */
+export function recordCampRound(state, result) {
+  state.rounds = (state.rounds || 0) + 1;
+  state.last = {
+    round: state.rounds,
+    gains: result?.gains || {},
+    events: result?.events || {},
+  };
+  state.gains = addCampGains(state.gains, result?.gains);
+  state.events ||= {};
+  for (const [id, events] of Object.entries(result?.events || {}))
+    state.events[id] = [...new Set([...(state.events[id] || []), ...events])];
 }
 
 // ============================================================
@@ -931,17 +976,30 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
   if (human && !force) {
     const ids = new Set(team.players.map((p) => p.id));
     const starters = team.pitchingRotation?.starters || [];
-    if (
-      starters.length > 0 &&
-      starters.every((id) => ids.has(id)) &&
-      ensureCompleteLineup(team, false)
-    ) {
+    // ⚠ 次の先発が野手の打順にも入っている（二刀流）とき、そのまま
+    //    `ensureCompleteLineup` に渡すと野手の枠から外したまま保存される。
+    //    控えに一時的に任せて確かめ、すぐ戻す（試合の日と同じ扱い）
+    const undoTwoWay =
+      starters.length > 0 && starters.every((id) => ids.has(id))
+        ? benchTwoWayStarter(team)
+        : null;
+    const complete = undoTwoWay ? ensureCompleteLineup(team, false) : false;
+    undoTwoWay?.();
+    if (complete) {
       syncRelievers(team);
       return;
     }
   }
   generatePitchingRotation(name);
+  // ⚠ **守備位置の登録を書き換えさせない**。CPUの打順作り（`generateAILineup`）は
+  //    スタメンに入れた選手の登録をその日の守備位置に書き換える（一人用の試合の
+  //    写しでの作り）。保存する名簿に当てると、二刀流の投手が「右翼手」になって
+  //    ローテに残る・一塁手が三塁手に変わる、が黙って起きていた。守備位置は
+  //    打順の側（`lineupSettings`）にあるので、登録は元に戻してよい
+  const registered = new Map(team.players.map((p) => [p.id, p.position]));
   setRecommendedLineup(team, name);
+  for (const player of team.players)
+    if (registered.has(player.id)) player.position = registered.get(player.id);
 }
 
 /**
@@ -958,8 +1016,18 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
 function syncRelievers(team) {
   const rotation = team.pitchingRotation;
   if (!rotation) return;
-  const pitchers = team.players
-    .filter((p) => p.position === 'pitcher' && p.isActive !== false)
+  const active = team.players.filter((p) => p.isActive !== false);
+  // ⚠ 投手起用に加えた野手（二刀流）は欄に残す。足すのは投手登録の選手だけ
+  //    （野手を全員「おまかせ」の救援にしない）
+  const staff = new Set([
+    ...(rotation.starters || []),
+    ...(rotation.setupMen || []),
+    ...(rotation.middleRelievers || []),
+    ...(rotation.closer != null ? [rotation.closer] : []),
+    ...Object.keys(rotation.pitcherRoles || {}).map(Number),
+  ]);
+  const pitchers = active
+    .filter((p) => p.position === 'pitcher' || (p.pitching && staff.has(p.id)))
     .map((p) => p.id);
   const present = new Set(pitchers);
   const starters = new Set(rotation.starters || []);
@@ -1195,11 +1263,12 @@ function resolvePhase(league, now) {
     // ⚠ **自分で回したクールは数えること**。人の球団は画面で1クールずつ
     //    実行する（`runCampRound`）。締め切りで残りだけを回す。
     //    数えないと、自分で4回やった球団がもう4回やって8クールぶん成長する。
-    const done = league.phase.camp || {};
+    const done = (league.phase.camp ||= {});
     for (const [name, team] of Object.entries(TEAMS_DATA)) {
       if (!team.players?.length) continue;
       const member = league.members.find((m) => m.teamName === name);
-      const already = member ? done[member.userId]?.rounds || 0 : 0;
+      const state = member ? (done[member.userId] ||= { rounds: 0 }) : null;
+      const already = state?.rounds || 0;
       // ⚠ 自分で回したときの指示があればそれを使う（残りのクールも同じ方針で）。
       //    無ければ提出した案、それも無ければ標準
       const saved = member ? done[member.userId]?.plan : null;
@@ -1209,9 +1278,33 @@ function resolvePhase(league, now) {
         main: plan?.assignments,
         sub: plan?.subAssignments,
       };
-      for (let round = already; round < CAMP_ROUNDS; round += 1)
-        runCampRound(league, name, rest);
+      for (let round = already; round < CAMP_ROUNDS; round += 1) {
+        const result = runCampRound(league, name, rest);
+        if (state) recordCampRound(state, result);
+      }
     }
+    // 最終クールの応答では phase が消えるため、完了結果を別に残す。
+    // 初期名簿へ入れ替わる球団には、入れ替え前のCPU選手の成果を見せない。
+    // ⚠ 記録の無い人を飛ばすこと。版を上げる前に自分で4クール済ませた人は
+    //    `last` を持たず（`clone(undefined)` は例外）、名簿の無い球団は
+    //    `done` に入らない。ここで投げると締め切りが進まず、リーグが止まる
+    league.campResults = Object.fromEntries(
+      league.members
+        .filter((m) => !m.packSeed && done[m.userId])
+        .map((m) => {
+          const state = done[m.userId];
+          return [
+            m.userId,
+            {
+              year: league.season.year,
+              rounds: state.rounds || 0,
+              last: state.last ? clone(state.last) : null,
+              gains: clone(state.gains || {}),
+              events: clone(state.events || {}),
+            },
+          ];
+        }),
+    );
     // ⚠ **キャンプの練習より後に入れ替えること**。先に入れ替えると、
     //    選んだばかりの24人がキャンプで成長してしまい、セットの釣り合いが崩れる
     applyPendingPacks(league);

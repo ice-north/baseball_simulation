@@ -3,13 +3,14 @@ import { SEASON_TURNS } from './pyramidLeague.js';
 // ⚠ **保存された世界の形を変えたら上げること**。上げないと、古い形のリーグが
 //    `assertLeagueVersion` を素通りして読み込まれ、どこか遠くで落ちる。
 //    上げれば「ゲームのバージョンが対応していません」で止まるので原因が分かる。
+//    8 = 初期メンバーのセットを型ごとに変えた（途中参加の人は版を持つ）・キャンプの伸び、
 //    7 = 45分1ターン・1週224ターン（120試合・3連戦）、
 //    6 = 球団間のトレード、5 = 初期メンバー選択（4 = 検証モード、
 //    3 = 招待コード廃止、2 = 2部制12球団・招待制・毎正時24ターン、
 //    1 = 固定4球団・2人・1日7枠）。
 // ⚠ 上げてもリーグは**作り直せない**（`create` は既存リーグがあると拒む）。
 //    `docs/online/PRODUCTION_SETUP.md` の作り直し手順で制御行を空にすること。
-export const ONLINE_SCHEMA = 7;
+export const ONLINE_SCHEMA = 8;
 export const ONLINE_ENGINE_VERSION = 'online-1';
 
 // ---- ターンの長さ
@@ -204,14 +205,11 @@ export function validateLineup(team, plan) {
     positions.every((pos) => plan.battingOrder.some((e) => e.position === pos)),
     '野手の守備位置を一度ずつ指定してください',
   );
+  // ⚠ **投手もスタメンの野手に入れてよい**（二刀流。いしだ指摘: 投手でも野手で
+  //    出られるように）。守備の上手い下手は適性が試合で効くだけ
   requireOnline(
     plan.battingOrder.every((e) =>
-      team.players.some(
-        (p) =>
-          p.id === e.playerId &&
-          p.position !== 'pitcher' &&
-          p.isActive !== false,
-      ),
+      team.players.some((p) => p.id === e.playerId && p.isActive !== false),
     ),
     '登録できない選手が含まれています',
   );
@@ -222,23 +220,16 @@ export function validateLineup(team, plan) {
       new Set(plan.starters).size === plan.starters.length,
     '先発投手を1〜8人指定してください',
   );
+  // ⚠ **野手も先発ローテに入れてよい**（二刀流）。投球の能力（`pitching`）は
+  //    全員が持っている。先発と野手の兼任もよい: 先発の日だけ9番・投手に回り、
+  //    空いた打順には控えが入る（`server/dailyLineup.mjs`）
   requireOnline(
     plan.starters.every((id) =>
       team.players.some(
-        (p) =>
-          p.id === id &&
-          p.position === 'pitcher' &&
-          p.pitching &&
-          p.isActive !== false,
+        (p) => p.id === id && p.pitching && p.isActive !== false,
       ),
     ),
     '先発投手の指定が不正です',
-  );
-  requireOnline(
-    !plan.starters.some((id) =>
-      plan.battingOrder.some((e) => e.playerId === id),
-    ),
-    '初版では先発投手と野手の兼任はできません',
   );
 }
 

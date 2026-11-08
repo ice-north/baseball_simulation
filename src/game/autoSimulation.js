@@ -86,8 +86,7 @@ const closerCanEnter = (rotation, gs, teamKey, currentPitcherId, players) => {
   if (gs.removedIds?.has(id)) return false;
   if ((gs.pitcherAppearances?.[teamKey] || []).some(a => a.id === id)) return false;
   if (((rotation.reliefFatigue || {})[id] || 0) >= 50) return false;
-  const closer = players?.find(p => p.id === id);
-  return !!closer && (closer.battingOrder || 0) === 0;
+  return canEnterRelief(players, id, currentPitcherId, gs.removedIds);
 };
 
 // 試合で既に退いた選手（降板した先発を含む）を再登板の候補から外す。
@@ -110,6 +109,31 @@ export const isPitcherPlayer = (player) => {
   // primaryRoleが設定されている場合はそれを優先
   if (player.primaryRole === 'pitcher') return true;
   return false;
+};
+
+// 野手から救援に回すときの代役。退いた選手や抹消中の選手は戻さない。
+// 控え野手が尽きていれば、投手も野手の枠を埋められる。
+const reliefFieldReplacement = (players, reliever, currentPitcherId, removedIds) =>
+  (players || []).filter(p =>
+    p.isActive !== false && p.battingOrder === 0 &&
+    p.id !== reliever.id && p.id !== currentPitcherId && !removedIds?.has(p.id)
+  ).sort((a, b) =>
+    Number(isPitcherPlayer(a)) - Number(isPitcherPlayer(b)) ||
+    getPositionFitness(b, reliever.position, 0) - getPositionFitness(a, reliever.position, 0)
+  )[0];
+
+// 野手の打順（守備に就いている）に居るか。⚠ DH制では9番も野手（投手は打順0）。
+// 「9番＝投手」とみなすと、DH制で9番を打つ二刀流の選手が代役なしに登板して打順に穴が開く
+const inFieldSlot = (player) => {
+  const order = player?.battingOrder || 0;
+  return order > 0 && (LEAGUE_SETTINGS.useDH || order < 9);
+};
+
+const canEnterRelief = (players, id, currentPitcherId, removedIds) => {
+  const player = players?.find(p => p.id === id);
+  return !!player && player.isActive !== false && !removedIds?.has(id) &&
+    (!inFieldSlot(player) ||
+      !!reliefFieldReplacement(players, player, currentPitcherId, removedIds));
 };
 
 // AI監督がスタメンを自動生成する機能（エクスポート）
@@ -1300,7 +1324,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const buntSkill = batter.batting?.bunt || 30;
     const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
     const batterSpeed = batter.physical?.speed || 50;
-    const isPitcherBatter = batter.position === 'pitcher' || isPitcher(batter);
+    // ⚠ 「投手が打席に立っている」は**その試合の守備位置**で見る。登録や能力
+    //    （`isPitcher` はスタミナ100以上も投手とみなす）で見ると、野手で出ている
+    //    二刀流の投手まで投手扱いになり、送りバントや代打の対象になっていた
+    const isPitcherBatter = batter.position === 'pitcher';
 
     // スクイズ: 3塁ランナー、1アウト、接戦、バント能力40以上
     if (bases[2] && outs === 1 && isCloseGame && buntSkill >= 40) {
@@ -1337,7 +1364,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   const considerPinchHitter = (offenseTeam, batter) => {
     if (offenseTeam.onlineTactics?.pinchHit === 'never' || gameState.inning < (offenseTeam.onlineTactics?.pinchHitFrom || 0)) return batter;
     const benchFielders = offenseTeam.players.filter(p =>
-      p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
+      p.isActive !== false && p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
     );
     if (benchFielders.length === 0) return batter;
     const offenseKey = offenseTeam === gameState.homeTeam ? 'home' : 'away';
@@ -1355,6 +1382,23 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const phData = offenseTeam.players.find(p => p.id === pinchHitter.id);
       if (batterData && phData) {
         const forPitcher = batterData.id === gameState.currentPitcherId[offenseKey];
+        if (forPitcher) {
+          // ⚠ 代打を出すのは**次の守備で実際に選ばれる投手が居るとき**だけ。継投の選び方と
+          //    同じ範囲で見る: 救援の欄（登録を問わない）で疲労50未満の人か、打順に居ない
+          //    投手（緊急の登板）。ローテの野手は救援に選ばれないので数えない。数えると
+          //    代打の後に誰も上がれず、退いた投手が投げ続け、代打が9番に残っていた
+          const removed = new Set([...gameState.removedIds, batterData.id, phData.id]);
+          const rotation = offenseTeam.pitchingRotation || {};
+          const reliefFatigue = rotation.reliefFatigue || {};
+          const bullpen = new Set([
+            ...(rotation.middleRelievers || []), ...(rotation.setupMen || []), rotation.closer,
+          ].filter(Boolean));
+          if (!offenseTeam.players.some(p =>
+            ((isPitcher(p) && (p.battingOrder || 0) === 0) ||
+              (bullpen.has(p.id) && (reliefFatigue[p.id] || 0) < 50)) &&
+            canEnterRelief(offenseTeam.players, p.id, batterData.id, removed)
+          )) return batter;
+        }
         phData.battingOrder = batterData.battingOrder;
         if (forPitcher) {
           // 投手の打順に入った代打は、次の守備で継投の投手と入れ替わる（守備には就かない）
@@ -1389,7 +1433,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     //    ⚠ 「6回以降・控えの方が少しでも打てる」だけで出すと、控えは必ず投手より打てるので
     //    好投中の先発まで6回で降ろしてしまう（実測 先発の平均投球回 5.20→4.51回、
     //    6回以上 41%→24%）。代打は「点が欲しい場面」か「先発がもう限界」のときだけ。
-    if (isPitcher(batter)) {
+    // ⚠ 打席の投手は**その試合の守備位置**で見る（上の `isPitcherBatter` と同じ理由）
+    if (batter.position === 'pitcher') {
       const stRate = (batter.currentStamina || 0) / Math.max(1, batter.pitching?.stamina || 100);
       const tired = stRate < 0.40 || (batter.gameStats?.pitching?.pitches || 0) >= 95;
       const needRuns = scoreDiff <= 0 && (isScoring || gameState.inning >= 8);
@@ -1440,7 +1485,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       : gameState.score.away - gameState.score.home;
 
     const benchFielders = defenseTeam.players.filter(p =>
-      p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
+      p.isActive !== false && p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
     );
     if (benchFielders.length === 0) return;
 
@@ -1653,11 +1698,13 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     // 「50未満」か「今日まだ投げていない中で最も疲労の少ない投手」なら通す
     // 相対ゲートにして、ブルペンが枯れても必ずロール別の選択が働くようにする。
     const bullpenIds = [...(rotation.middleRelievers || []), ...(rotation.setupMen || []),
-      rotation.closer].filter(Boolean).filter(id => !alreadyPitchedIds.has(id));
+      rotation.closer].filter(Boolean).filter(id => !alreadyPitchedIds.has(id) &&
+        canEnterRelief(defenseTeam.players, id, currentPitcher.id, gs.removedIds));
     const freshest = bullpenIds.length
       ? Math.min(...bullpenIds.map(id => fatigue[id] || 0)) : 0;
     const fatigueGate = Math.max(50, freshest + 1);
-    const isAvailableMid = (id) => !alreadyPitchedIds.has(id) && (fatigue[id] || 0) < fatigueGate;
+    const isAvailableMid = (id) => !alreadyPitchedIds.has(id) && (fatigue[id] || 0) < fatigueGate &&
+      canEnterRelief(defenseTeam.players, id, currentPitcher.id, gs.removedIds);
 
     // 左打者対策: ワンポイント左投手を優先選択
     if (situation === 'lefty') {
@@ -1735,6 +1782,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         .filter(p =>
           isPitcher(p) &&
           p.battingOrder === 0 &&
+          p.isActive !== false &&
           !alreadyPitchedIds.has(p.id) &&
           !starterIds.has(p.id) &&
           (p.currentStamina || 80) > 40
@@ -1752,7 +1800,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     if (!reliever) {
       const starterIdsSet = new Set(rotation.starters || []);
       const nonStarterPitchers = defenseTeam.players
-        .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id) && !starterIdsSet.has(p.id))
+        .filter(p => isPitcher(p) && p.isActive !== false && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id) && !starterIdsSet.has(p.id))
         // currentStamina は登板のたびにリセットされるため、スタミナ順だと常に同じ投手が
         // 選ばれてしまう。reliefFatigue の少ない順を主キーにする（守護神は最後）
         .sort(closerLast(fatigue, rotation.closer, (a, b) => (b.currentStamina || 0) - (a.currentStamina || 0)));
@@ -1762,7 +1810,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       } else {
         // 本当に誰もいない場合のみ先発投手を緊急起用
         const starterPitchers = defenseTeam.players
-          .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id))
+          .filter(p => isPitcher(p) && p.isActive !== false && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id))
           .sort((a, b) => ((fatigue[a.id] || 0) - (fatigue[b.id] || 0)) || ((b.currentStamina || 0) - (a.currentStamina || 0)));
         if (starterPitchers.length > 0) {
           reliever = starterPitchers[0];
@@ -1800,7 +1848,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const relieverData = defenseTeam.players.find(p => p.id === reliever.id);
       const relieverOldOrder = relieverData.battingOrder;
       const relieverOldPos = relieverData.position;
-      const isTwoWaySwap = relieverOldOrder > 0 && relieverOldOrder < 9;
+      const isTwoWaySwap = inFieldSlot(relieverData);
+      const replacement = isTwoWaySwap
+        ? reliefFieldReplacement(defenseTeam.players, relieverData, currentPitcher.id, gs.removedIds)
+        : null;
 
       const pitcherSlot = useDH ? 0 : (pitcherData.battingOrder || 9);
       pitcherData.battingOrder = 0;
@@ -1812,17 +1863,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
       // 二刀流リリーフ: 空いた野手スロットをベンチから補充
-      if (isTwoWaySwap && relieverOldPos) {
-        const benchFielders = defenseTeam.players.filter(p =>
-          p.battingOrder === 0 && !isPitcher(p) && p.id !== relieverData.id
-        );
-        if (benchFielders.length > 0) {
-          benchFielders.sort((a, b) =>
-            (b.positionFitness?.[relieverOldPos] || 0) - (a.positionFitness?.[relieverOldPos] || 0)
-          );
-          benchFielders[0].battingOrder = relieverOldOrder;
-          benchFielders[0].position = relieverOldPos;
-        }
+      if (replacement && relieverOldPos) {
+        replacement.battingOrder = relieverOldOrder;
+        replacement.position = relieverOldPos;
       }
 
       reliefTrack.currentRelieverId = reliever.id;
@@ -2698,7 +2741,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             // 現在の投手も除外対象に追加
             alreadyPitchedIds.add(pitcher.id);
             // 選手が起用可能かチェック（未登板 & 疲労OK & 現在の投手でない）
-            const isAvailable = (id) => !alreadyPitchedIds.has(id) && (fatigue[id] || 0) < 50;
+            const isAvailable = (id) => !alreadyPitchedIds.has(id) && (fatigue[id] || 0) < 50 &&
+              canEnterRelief(team.players, id, pitcher.id, gameState.removedIds);
 
             // セーブ場面: クローザー最優先（既にマウンドにいる場合は交代不要）
             if (situation === 'save' && rotation?.closer) {
@@ -2856,7 +2900,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               const relieverData = team.players.find(p => p.id === reliever.id);
               const relieverOldOrder2 = relieverData.battingOrder;
               const relieverOldPos2 = relieverData.position;
-              const isTwoWaySwap2 = relieverOldOrder2 > 0 && relieverOldOrder2 < 9;
+              const isTwoWaySwap2 = inFieldSlot(relieverData);
+              const replacement = isTwoWaySwap2
+                ? reliefFieldReplacement(team.players, relieverData, pitcher.id, gameState.removedIds)
+                : null;
 
               // 投手に代打が出ていたら、継投の投手はその代打の打順に入り、代打は退く
               const ph = gameState.pitcherPinchHit[teamKey];
@@ -2874,17 +2921,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               relieverData.position = 'pitcher';
               relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
-              if (isTwoWaySwap2 && relieverOldPos2) {
-                const benchFielders2 = team.players.filter(p =>
-                  p.battingOrder === 0 && !isPitcher(p) && p.id !== relieverData.id
-                );
-                if (benchFielders2.length > 0) {
-                  benchFielders2.sort((a, b) =>
-                    (b.positionFitness?.[relieverOldPos2] || 0) - (a.positionFitness?.[relieverOldPos2] || 0)
-                  );
-                  benchFielders2[0].battingOrder = relieverOldOrder2;
-                  benchFielders2[0].position = relieverOldPos2;
-                }
+              if (replacement && relieverOldPos2) {
+                replacement.battingOrder = relieverOldOrder2;
+                replacement.position = relieverOldPos2;
               }
 
               reliefTrack.currentRelieverId = reliever.id;

@@ -39,6 +39,8 @@ android {
         buildConfig = true
     }
 
+    testOptions.unitTests.isIncludeAndroidResources = true
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -55,9 +57,14 @@ kotlin {
 
 dependencies {
     implementation(project(":shared"))
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("io.ktor:ktor-client-mock:3.3.3")
 
     val composeBom = platform("androidx.compose:compose-bom:2025.08.00")
     implementation(composeBom)
+    testImplementation(composeBom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")

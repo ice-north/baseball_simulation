@@ -21,48 +21,94 @@ import {
   generateRosterPacks,
   packSummary,
   packScore,
+  packPlayerScore,
+  packSlotType,
+  packsForMember,
   PACK_COUNT,
   PACK_SIZE,
   PACK_RANKS,
   PACK_MAX_AGE,
+  PACK_SHAPES,
+  PACK_RANK_PATTERNS,
+  PACK_RANK_SHIFT_V2,
+  PACK_STYLE,
+  LEGACY_PACK_STYLE,
 } from '../../src/online/rosterPack.js';
 
 // --- セットそのもの ---------------------------------------------------
+// ⚠ 版2（いまの作り方）は**セットごとに構成と格の内訳が違う**（いしだ指摘:
+//    固定だと悩みどころが無い）。そのぶん「どれを選んでも損にならない」は
+//    型の決まり（格の点の合計・名簿が成り立つ人数）と、同じ枠の平均からの
+//    上振れの合計で見る。
 const packs = generateRosterPacks(20261103);
 assert.equal(packs.length, PACK_COUNT, 'セット数がちがう');
+const rankPoints = (ranks) => (ranks.A || 0) * 3 + (ranks.B || 0) * 2 + (ranks.C || 0);
+for (const shape of PACK_SHAPES) {
+  const total = ['pitcher', 'catcher', 'infield', 'outfield', 'twoWayPitcher', 'twoWayFielder']
+    .reduce((n, k) => n + shape[k], 0);
+  assert.equal(total, PACK_SIZE, `構成の型 ${shape.id} の人数が${PACK_SIZE}人でない`);
+  // ⚠ 名簿が成り立つ最低限（ローテと中継ぎ・スタメン8人＋控え）
+  assert.ok(shape.pitcher + shape.twoWayPitcher >= 10, `${shape.id} の投手が少なすぎる`);
+  assert.ok(shape.catcher >= 2, `${shape.id} の捕手が少なすぎる`);
+  // ⚠ どの守備のまとまりにも控えが1人は居ること（居ないとレギュラーが疲れても休めない。
+  //    外野3人の型で、通年の検査の中堅手が疲労471まで積み上がった）
+  assert.ok(shape.infield >= 5, `${shape.id} に内野の控えが居ない`);
+  assert.ok(shape.outfield >= 4, `${shape.id} に外野の控えが居ない`);
+}
+for (const pattern of PACK_RANK_PATTERNS) {
+  const n = Object.values(pattern.ranks).reduce((a, b) => a + b, 0);
+  assert.equal(n, PACK_SIZE, `格の型 ${pattern.id} の人数がちがう`);
+  // ⚠ **点の合計が全部同じ**（段差が等間隔なので、力の総量が同じになる）
+  assert.equal(rankPoints(pattern.ranks), rankPoints(PACK_RANK_PATTERNS[0].ranks), `格の型 ${pattern.id} の点の合計がちがう`);
+}
 assert.equal(
-  Object.values(PACK_RANKS).reduce((a, b) => a + b, 0),
-  PACK_SIZE,
-  '格の内訳の合計が人数と合っていない',
+  PACK_RANK_SHIFT_V2.A - PACK_RANK_SHIFT_V2.B,
+  PACK_RANK_SHIFT_V2.B - PACK_RANK_SHIFT_V2.C,
+  '格の段差が等間隔でない（型によって得をする）',
 );
+// ⚠ 本当にばらけていること（全部同じ型だと固定と変わらない）
+for (const seed of [20261103, 777, 42]) {
+  const list = generateRosterPacks(seed);
+  assert.ok(new Set(list.map((p) => p.shape)).size >= 4, `シード${seed} で構成の型が偏っている`);
+  assert.ok(new Set(list.map((p) => p.pattern)).size >= 4, `シード${seed} で格の型が偏っている`);
+  assert.ok(new Set(list.map((p) => p.feature)).size >= 12, `シード${seed} で同じ型のセットが多すぎる`);
+}
 
 for (const pack of packs) {
   const summary = packSummary(pack);
+  const shape = PACK_SHAPES.find((s) => s.id === pack.shape);
+  const pattern = PACK_RANK_PATTERNS.find((s) => s.id === pack.pattern);
+  assert.ok(shape && pattern, `${pack.id} の型が読めない`);
+  assert.equal(summary.feature, pack.feature, `${pack.id} の特徴が要約に載っていない`);
   assert.equal(pack.players.length, PACK_SIZE, `${pack.id} の人数がちがう`);
-  // ⚠ 格の内訳は**全セットで同じ**。ここが揃わないと「当たり」ができる
-  assert.deepEqual(summary.ranks, PACK_RANKS, `${pack.id} の格の内訳がちがう`);
-  assert.equal(summary.twoWay, 2, `${pack.id} の二刀流が2人でない`);
-  // 投手と捕手の人数は固定（名簿が成り立つ最低限）
-  assert.equal(summary.counts.pitcher, 12, `${pack.id} の投手数がちがう`);
-  assert.equal(summary.counts.catcher, 2, `${pack.id} の捕手数がちがう`);
-  // ⚠ 野手が足りないと打順が組めない（スタメン8人＋控え）
-  const fielders = PACK_SIZE - summary.counts.pitcher;
-  assert.equal(fielders, 12, `${pack.id} の野手数がちがう: ${fielders}`);
+  // 格の内訳は型どおり（0人の格は数えない）
+  const ranks = Object.fromEntries(Object.entries(pattern.ranks).filter(([, n]) => n > 0));
+  assert.deepEqual(summary.ranks, ranks, `${pack.id} の格の内訳が型とちがう`);
+  assert.equal(summary.twoWay, shape.twoWayPitcher + shape.twoWayFielder, `${pack.id} の二刀流の人数がちがう`);
+  assert.equal(summary.counts.pitcher, shape.pitcher + shape.twoWayPitcher, `${pack.id} の投手数がちがう`);
+  assert.equal(summary.counts.catcher, shape.catcher, `${pack.id} の捕手数がちがう`);
+  // ⚠ **8つの守備位置がそろい、内野の控えは遊撃手か三塁手**。以前は枠の種類に守備位置を
+  //    含めておらず、内野のBが全員一塁手・三塁手が居ない、という形で配られていた
+  //    （控えが守れず、通年の検査でレギュラーの疲労が470を超えた）
+  {
+    const fielders = pack.players.filter((p) => p.position !== 'pitcher' && !p.isTwoWay);
+    const count = (pos) => fielders.filter((p) => p.position === pos).length;
+    for (const pos of ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'])
+      assert.ok(count(pos) >= 1, `${pack.id} に${pos}が居ない`);
+    assert.equal(count('first'), 1, `${pack.id} の一塁手の控えは遊撃・三塁を守れない`);
+    assert.equal(count('second'), 1, `${pack.id} の二塁手の控えは三塁・一塁を守れない`);
+    assert.equal(
+      count('short') + count('third') - 2,
+      shape.infield - 4,
+      `${pack.id} の内野の控えが遊撃手・三塁手でない`,
+    );
+  }
   for (const p of pack.players) {
     assert.ok(p.age >= 19 && p.age <= PACK_MAX_AGE, `${p.name} の年齢が範囲外: ${p.age}`);
     assert.ok(p.name && p.id, '名前かidが空');
+    // ⚠ 作るときの印を選手に残さない（名簿に入ると保存に残る）
+    assert.equal(p.packGroup, undefined, `${p.name} に作るときの印が残っている`);
   }
-  // ⚠ **格が守備位置に偏らないこと**。枠の順に配ると、Aの2人がどちらも
-  //    投手になって「野手にAが1人も居ない」セットができる（実測で起きた）
-  const aPlayers = pack.players.filter((p) => p.rank === 'A');
-  assert.ok(
-    aPlayers.some((p) => p.position === 'pitcher'),
-    `${pack.id} のAに投手が居ない`,
-  );
-  assert.ok(
-    aPlayers.some((p) => p.position !== 'pitcher'),
-    `${pack.id} のAに野手が居ない`,
-  );
   // ⚠ セットの中で選手が重複しない
   assert.equal(
     new Set(pack.players.map((p) => p.id)).size,
@@ -71,18 +117,60 @@ for (const pack of packs) {
   );
 }
 
-// ⚠ **セット同士の合計が揃っていること**（この検査の本丸）。
-//    以前は枠ごとに蛇行で配っていて、開きが7.2%残った。
-//    走っている合計を見て配る形に直して1%台になった。
+// ⚠ **セット同士の釣り合い**（この検査の本丸）。構成が違うセットは合計の点では
+//    比べられない（投手と野手で物差しが違う）ので、「同じ枠（守備のまとまり×格）の
+//    平均よりどれだけ上か」の合計を比べる。実測で開きは1%前後。
 for (const seed of [20261103, 777, 42, 1]) {
-  const scores = generateRosterPacks(seed).map((p) => packScore(p.players));
-  const min = Math.min(...scores);
-  const max = Math.max(...scores);
-  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-  const spread = (max - min) / avg;
+  const list = generateRosterPacks(seed);
+  const byType = {};
+  for (const p of list.flatMap((x) => x.players))
+    (byType[packSlotType(p)] ||= []).push(packPlayerScore(p));
+  const mean = Object.fromEntries(
+    Object.entries(byType).map(([k, v]) => [k, v.reduce((a, b) => a + b, 0) / v.length]),
+  );
+  const lift = list.map((x) =>
+    x.players.reduce((n, p) => n + packPlayerScore(p) - mean[packSlotType(p)], 0),
+  );
+  const expected =
+    list.reduce((n, x) => n + x.players.reduce((m, p) => m + mean[packSlotType(p)], 0), 0) /
+    list.length;
+  const spread = (Math.max(...lift) - Math.min(...lift)) / expected;
   assert.ok(
-    spread <= 0.04,
+    spread <= 0.03,
     `シード${seed} でセットの開きが大きい: ${(spread * 100).toFixed(1)}%`,
+  );
+}
+
+// ⚠ **版1（途中参加で前から待っている人）は前の作り方のまま**。種から作り直すので、
+//    作り方が変わると選んだセットの中身が入れ替わる
+{
+  const legacy = generateRosterPacks(20261103, { style: LEGACY_PACK_STYLE });
+  assert.equal(legacy.length, PACK_COUNT);
+  for (const pack of legacy) {
+    const summary = packSummary(pack);
+    assert.deepEqual(summary.ranks, PACK_RANKS, `版1 ${pack.id} の格の内訳がちがう`);
+    assert.equal(summary.counts.pitcher, 12, `版1 ${pack.id} の投手数がちがう`);
+    assert.equal(summary.twoWay, 2, `版1 ${pack.id} の二刀流が2人でない`);
+    assert.equal(summary.feature, null, '版1のセットに特徴が付いている');
+  }
+  const scores = legacy.map((p) => packScore(p.players));
+  const spread = (Math.max(...scores) - Math.min(...scores)) / (scores.reduce((a, b) => a + b, 0) / scores.length);
+  assert.ok(spread <= 0.04, `版1のセットの開きが大きい: ${(spread * 100).toFixed(1)}%`);
+  assert.notDeepEqual(
+    legacy.map((p) => p.players[0].name),
+    packs.map((p) => p.players[0].name),
+    '版1と版2が同じセットになっている',
+  );
+  // 待っている人のセットは版で作り分ける
+  assert.deepEqual(
+    packsForMember({ packSeed: 20261103 }).map((p) => p.players[0].id),
+    legacy.map((p) => p.players[0].id),
+    '版の無い人に版1のセットを作っていない',
+  );
+  assert.deepEqual(
+    packsForMember({ packSeed: 20261103, packStyle: PACK_STYLE }).map((p) => p.players[0].id),
+    packs.map((p) => p.players[0].id),
+    '版2の人に版2のセットを作っていない',
   );
 }
 
@@ -98,19 +186,24 @@ for (const seed of [20261103, 777, 42, 1, 999]) {
   const mean = (list) => list.reduce((a, b) => a + b, 0) / list.length;
   const control = (list) => mean(list.map((p) => p.pitching.control));
   const overall = control(pitchers);
-  // 実測: 正しい段差で48.3〜49.5 / 表を流用すると41.6〜43.1
+  // 実測（版2、12の種）: 46.4〜50.4 / 表を流用すると41〜43
   assert.ok(
-    overall >= 46 && overall <= 54,
-    `シード${seed} 投手の制球の水準がずれている: ${overall.toFixed(1)}（46〜54を想定）`,
+    overall >= 45.5 && overall <= 54,
+    `シード${seed} 投手の制球の水準がずれている: ${overall.toFixed(1)}（45.5〜54を想定）`,
   );
-  // 実測: 正しい段差でBは50.1〜52.2 / 流用すると43.4〜46.5
+  // 実測（版2、12の種）: Bは47.9〜53.8 / 流用すると43.4〜46.5
   const bControl = control(pitchers.filter((p) => p.rank === 'B'));
   assert.ok(
-    bControl >= 48,
+    bControl >= 47,
     `シード${seed} Bランク投手が弱すぎる（制球 ${bControl.toFixed(1)}）`,
   );
-  // 格の順序（AがBより上、BがCより上）
-  const byRank = ['A', 'B', 'C'].map((r) => control(pitchers.filter((p) => p.rank === r)));
+  // 格の順序（AがBより上、BがCより上）。⚠ **総合で比べる**（制球1つだと、Aの投手が
+  //    10人ほどしか居ない種で入れ替わる。60の種で測って5つ）。二刀流の投手は打撃も
+  //    数えるので外す
+  const pure = pitchers.filter((p) => !p.isTwoWay);
+  const byRank = ['A', 'B', 'C'].map((r) =>
+    mean(pure.filter((p) => p.rank === r).map(packPlayerScore)),
+  );
   assert.ok(
     byRank[0] > byRank[1] && byRank[1] > byRank[2],
     `シード${seed} 格の順に強くなっていない: ${byRank.map((v) => v.toFixed(1)).join(' / ')}`,
@@ -129,9 +222,13 @@ assert.notDeepEqual(
   'シードを変えても同じ結果になった',
 );
 
-// ⚠ 全セットを通して選手が重複しない（20×24＝480人）
+// ⚠ 全セットを通して選手が重複しない（20×24＝480人）。idも種×1000の幅に収まる
 const everyId = packs.flatMap((p) => p.players.map((x) => x.id));
 assert.equal(new Set(everyId).size, everyId.length, 'セットをまたいで同じ選手がいる');
+assert.ok(
+  everyId.every((id) => id > 20261103 * 1000 && id < 20261103 * 1000 + 1000),
+  '選手のidが種の幅からはみ出している（別の人のセットとidが重なる）',
+);
 
 // --- 手続きとして通るか -----------------------------------------------
 const dir = await mkdtemp(join(tmpdir(), 'pennant-pack-'));
@@ -228,20 +325,28 @@ try {
   const allNames = names.flatMap((n) => after.game.teams[n].players.map((p) => p.name));
   assert.equal(new Set(allNames).size, allNames.length, '同じ名前の選手がいる');
 
-  // 構成と格が全球団で揃っている
+  // 名簿がセットの24人そのもの（型は球団ごとに違ってよい）
+  // ⚠ 投手の人数は**二刀流を除いて**数える。開幕前の打順作り（CPUの
+  //    `generateAILineup`）は、守れる二刀流の投手を外野に回すことがある
+  //    （実測: 投手→右翼）。二刀流でない投手は動かさない
+  const opening = new Map(opened.packs.map((p) => [p.players[0].id, p]));
   for (const name of names) {
     const players = after.game.teams[name].players;
-    const ranks = players.reduce((c, p) => ((c[p.rank] = (c[p.rank] || 0) + 1), c), {});
-    assert.deepEqual(ranks, PACK_RANKS, `${name} の格の内訳がちがう`);
-    assert.equal(
-      players.filter((p) => p.position === 'pitcher').length,
-      12,
-      `${name} の投手数がちがう`,
+    const pack = players.map((p) => opening.get(p.id)).find(Boolean);
+    assert.ok(pack, `${name} の名簿がどのセットか分からない`);
+    assert.deepEqual(
+      players.map((p) => p.id).sort((a, b) => a - b),
+      pack.players.map((p) => p.id).sort((a, b) => a - b),
+      `${name} の名簿がセットの24人とちがう`,
     );
+    const ranks = players.reduce((c, p) => ((c[p.rank] = (c[p.rank] || 0) + 1), c), {});
+    assert.deepEqual(ranks, packSummary(pack).ranks, `${name} の格の内訳がセットとちがう`);
+    const purePitchers = (list) =>
+      list.filter((p) => p.position === 'pitcher' && !p.isTwoWay).length;
     assert.equal(
-      players.filter((p) => p.isTwoWay).length,
-      2,
-      `${name} の二刀流がちがう`,
+      purePitchers(players),
+      purePitchers(pack.players),
+      `${name} の投手（二刀流を除く）の数がセットとちがう`,
     );
   }
 
@@ -308,6 +413,8 @@ try {
     assert.ok(me, '参加できていない');
     // ⚠ **種を持つこと**。セット（20×24人）は保存せず、種から作り直す
     assert.ok(Number.isFinite(me.packSeed), '個別の種が配られていない');
+    // ⚠ 作り方の版も残す（種から作り直すので、版が変わると中身が入れ替わる）
+    assert.equal(me.packStyle, PACK_STYLE, '途中参加の人にセットの版が残っていない');
     assert.equal(me.pendingPackId, null, '選ぶ前なのに選択が入っている');
     const myTeam = me.teamName;
     const inherited = joined.game.teams[myTeam].players.map((p) => p.id);
@@ -415,5 +522,5 @@ try {
 }
 
 console.log(
-  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 格と構成が揃う / 合計の開きが4%以内 / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
+  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 構成と格の型がばらけ、型の決まりを守る / 同じ枠の平均からの開きが3%以内 / 版1は前の作り方のまま / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
 );

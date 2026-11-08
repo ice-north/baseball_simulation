@@ -460,12 +460,13 @@ export class LeagueService {
             409,
           );
           const plan = engine.validateCampRound(l, me.teamName, command.payload);
+          let result = null;
           await this.engine((e) => {
             e.loadLeagueWorld(l);
-            e.runCampRound(l, me.teamName, plan);
+            result = e.runCampRound(l, me.teamName, plan);
             l.game = e.captureLeagueWorld();
           });
-          state.rounds += 1;
+          engine.recordCampRound(state, result);
           state.plan = plan;
           // ⚠ 4クール終わったら**提出する**。全員が終われば締め切りを待たずに
           //    次へ進む（手続きの仕組みをそのまま使う）。
@@ -501,7 +502,7 @@ export class LeagueService {
             409,
           );
           const ids = new Set(
-            (await this.engine((engine) => engine.packIdsFor(me.packSeed))) || [],
+            (await this.engine((engine) => engine.packIdsFor(me))) || [],
           );
           requireOnline(
             typeof command.payload?.packId === 'string' &&

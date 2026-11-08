@@ -187,13 +187,26 @@ export default function PackSelect({ packs, plan, busy, onChange, view, run, com
   const shown = packs.find((p) => p.id === open) || packs[0];
   return (
     <div className="online-packs">
-      <p className="online-muted">
-        20セットから1つ選びます。どのセットも
-        <strong>投12・捕2・内外10</strong>の24人（うち二刀流2人）で、格付けは
-        <strong>A2・B10・C12</strong>、年齢は19〜24歳です。
-        合計の力は揃えてあるので（開きは1%前後）、好みで選んで構いません。
-        選んだセットは1球団だけが受け取ります（重なったら球団名の順）。
-      </p>
+      {/* ⚠ セットは**型ごとに構成と格の内訳が違う**（版2）。前から待っている人の
+          セット（版1）は全部同じ構成なので、特徴が無ければ前の説明を出す */}
+      {packs.some((p) => p.feature) ? (
+        <p className="online-muted">
+          20セットから1つ選びます。セットごとに<strong>構成</strong>
+          （投手厚め・野手厚め・二刀流・捕手3人など）と<strong>格付けの配り方</strong>
+          （少数精鋭・粒ぞろい・大黒柱など）が違います。年齢は19〜24歳です。
+          格の総量（A=3・B=2・C=1点の合計）はどれも同じにしてあり、
+          同じ枠の平均からの開きも1%前後に揃えてあるので、戦い方の好みで選んでください。
+          選んだセットは1球団だけが受け取ります（重なったら球団名の順）。
+        </p>
+      ) : (
+        <p className="online-muted">
+          20セットから1つ選びます。どのセットも
+          <strong>投12・捕2・内外10</strong>の24人（うち二刀流2人）で、格付けは
+          <strong>A2・B10・C12</strong>、年齢は19〜24歳です。
+          合計の力は揃えてあるので（開きは1%前後）、好みで選んで構いません。
+          選んだセットは1球団だけが受け取ります（重なったら球団名の順）。
+        </p>
+      )}
       <div className="online-pack-list">
         {packs.map((pack) => (
           <button
@@ -205,11 +218,17 @@ export default function PackSelect({ packs, plan, busy, onChange, view, run, com
             onClick={() => setOpen(pack.id)}
           >
             <strong>{pack.name}</strong>
+            {pack.feature && (
+              <span className="online-pack-feature">{pack.feature}</span>
+            )}
             <small>
               {GROUPS.map(([key, label]) => `${label}${pack.counts[key]}`).join(' ')}
             </small>
             <small>
-              平均{pack.averageAge}歳 · 二刀流{pack.twoWay}
+              {['A', 'B', 'C']
+                .map((rank) => `${rank}${pack.ranks?.[rank] || 0}`)
+                .join(' ')}{' '}
+              · 平均{pack.averageAge}歳 · 二刀流{pack.twoWay}
             </small>
             {plan?.packId === pack.id && <span className="online-pack-chosen">選択中</span>}
           </button>
@@ -218,7 +237,10 @@ export default function PackSelect({ packs, plan, busy, onChange, view, run, com
       {shown && (
         <section className="online-pack-detail">
           <div className="online-card-heading">
-            <h3>{shown.name}</h3>
+            <h3>
+              {shown.name}
+              {shown.feature && <small>{shown.feature}</small>}
+            </h3>
             <button
               className="online-primary"
               disabled={busy || plan?.packId === shown.id}

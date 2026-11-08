@@ -26,10 +26,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
@@ -44,6 +46,9 @@ import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.long
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.pid
+import jp.icenorth.baseball.shared.PendingProcedure
+import jp.icenorth.baseball.shared.pendingProcedure
+import jp.icenorth.baseball.shared.waitingTradeCount
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import kotlinx.serialization.json.JsonElement
@@ -56,15 +61,20 @@ private enum class ProcTab(val label: String) { Current("現在の手続き"), T
 @Composable
 fun ProceduresScreen(model: AppViewModel, onRename: () -> Unit) {
     val raw = model.raw ?: return
-    var tab by rememberSaveable { mutableStateOf(ProcTab.Current) }
-    val waiting = raw.at("trades").list().count { it.at("myTurn").bool() == true }
+    // ⚠ どちらの側を開いているかは AppViewModel に置く（届いた提案の知らせから、トレードの側を直接開くため）
+    val tab = if (model.procTrade) ProcTab.Trade else ProcTab.Current
+    val counts = mapOf(
+        ProcTab.Current.name to (if (pendingProcedure(raw) != null) 1 else 0),
+        ProcTab.Trade.name to waitingTradeCount(raw),
+    )
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             ChipTabs(
-                ProcTab.entries.map { it.name to (it.label + if (it == ProcTab.Trade && waiting > 0) "（$waiting）" else "") },
+                ProcTab.entries.map { it.name to it.label },
                 tab.name,
-                { tab = ProcTab.valueOf(it) },
+                { model.procTrade = it == ProcTab.Trade.name },
                 Modifier.weight(1f),
+                counts = counts,
             )
             TextButton(onClick = onRename) { Text("球団名") }
         }
@@ -83,7 +93,13 @@ private fun CurrentProcedure(model: AppViewModel, raw: JsonObject) {
         when {
             pending != null -> PendingPack(model, raw, pending)
             phase != null -> PhasePanel(model, raw, phase)
-            else -> Section("手続き") { Text("現在、決定待ちの手続きはありません。") }
+            else -> {
+                Section("手続き") { Text("現在、決定待ちの手続きはありません。") }
+                raw["lastCamp"].obj()?.let { camp ->
+                    Caption("${camp.at("year").int() ?: ""}年目のキャンプ結果")
+                    CampGains(model, camp, raw.at("roster").list().mapNotNull { it.obj() }, finished = true)
+                }
+            }
         }
     }
 }
@@ -99,9 +115,19 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
         trailing = {
             InfoButton(
                 "初期メンバー選択",
+                // ⚠ セットの型（版2）が無ければ、前から待っている人のセット（版1・全部同じ構成）。
+                //    Web 版（PackSelect）と同じく説明を分ける
                 listOf(
                     "20セットから1つ選びます。選んだ24人は次の日曜のキャンプで名簿に入り、月曜の開幕からあなたの球団になります。それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。",
-                    "どのセットも投12・捕2・内外10の24人（うち二刀流2人）、格付けはA2・B10・C12、年齢は19〜24歳です。合計の力は揃えてあるので、好みで選んで構いません。",
+                ) + (
+                    if (packs.any { it.at("feature").str() != null }) listOf(
+                        "セットごとに構成（投手厚め・野手厚め・二刀流・捕手3人など）と格付けの配り方（少数精鋭・粒ぞろい・大黒柱など）が違います。年齢は19〜24歳です。",
+                        "格の総量（A=3・B=2・C=1点の合計）はどれも同じにしてあり、同じ枠の平均からの開きも1%前後に揃えてあるので、戦い方の好みで選んでください。",
+                    ) else listOf(
+                        "どのセットも投12・捕2・内外10の24人（うち二刀流2人）で、格付けはA2・B10・C12、年齢は19〜24歳です。",
+                        "合計の力は揃えてあるので（開きは1%前後）、好みで選んで構いません。",
+                    )
+                ) + listOf(
                     "選んだセットは1球団だけが受け取ります（重なったら球団名の順）。",
                 ),
             )
@@ -111,6 +137,30 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
     }
     PackPicker(model, packs, chosen) { id ->
         model.command("pack", Commands.pack(id), done = "初期メンバーを選びました")
+    }
+}
+
+/**
+ * 自分が決める手続きの帯（「手続き」を開いていない間、どのタブでも上に出す）。閉じるボタンは置かない:
+ * 済むまで出し続ける（初期メンバー選択・人員整理・キャンプを見逃して飛ばさないように）
+ */
+@Composable
+fun ProcedureNotice(procedure: PendingProcedure, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val due = formatDeadline(procedure.deadline)
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onOpen).testTag("procedure-notice"),
+    ) {
+        Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("${procedure.label}を決めてください", fontWeight = FontWeight.Bold)
+                val detail = listOfNotNull(procedure.progress, due?.let { "締め切り $it（過ぎると標準の内容で進みます）" })
+                if (detail.isNotEmpty()) Text(detail.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+            }
+            Button(onClick = onOpen) { Text("開く") }
+        }
     }
 }
 
@@ -262,10 +312,15 @@ private fun PackPicker(model: AppViewModel, packs: List<JsonObject>, chosen: Str
             ) {
                 Text(if (id == chosen) "●" else "○", color = if (id == chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, modifier = Modifier.width(22.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(pack.at("name").str().orEmpty(), fontWeight = if (id == open) FontWeight.Bold else FontWeight.Normal)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(pack.at("name").str().orEmpty(), fontWeight = if (id == open) FontWeight.Bold else FontWeight.Normal)
+                        // ⚠ セットの型（版2）。前から待っている人のセット（版1）には無い
+                        pack.at("feature").str()?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall) }
+                    }
                     Muted(
                         listOf("pitcher" to "投", "catcher" to "捕", "infield" to "内", "outfield" to "外")
                             .joinToString(" ") { (k, l) -> "$l${counts.at(k).int() ?: 0}" } +
+                            " · " + listOf("A", "B", "C").joinToString(" ") { "$it${pack.at("ranks", it).int() ?: 0}" } +
                             " · 平均${pack.at("averageAge").str() ?: "-"}歳 · 二刀流${pack.at("twoWay").int() ?: 0}",
                     )
                 }

@@ -23,6 +23,7 @@ import {
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import { useDraftState, phaseDraftName } from './Drafts.jsx';
 import { Choice } from './Choice.jsx';
+import { campGainRows, campGainTotals, formatGain } from './campGains.js';
 
 // ============================================================
 // キャンプ。一人用のキャンプ画面と同じ作りにする。
@@ -81,6 +82,23 @@ export const clampSub = (key, player) =>
 
 const MOOD_TONE = { good: '意欲的', mid: '納得', bad: '身が入らない' };
 const grade = (v) => (typeof v === 'number' ? Math.round(v) : '—');
+
+/**
+ * 能力の値と、キャンプ通算の伸び（「52+3」）。
+ * ⚠ 伸びは**サーバーの記録**（`camp.gains`）。画面で前の値と比べない
+ */
+function Stat({ value, diff }) {
+  return (
+    <>
+      {grade(value)}
+      {diff ? (
+        <small className={`online-gain ${diff > 0 ? 'is-up' : 'is-down'}`}>
+          {formatGain(diff)}
+        </small>
+      ) : null}
+    </>
+  );
+}
 // ⚠ 成長は**倍率**（0.70〜1.30）。四捨五入すると全員「1」になって読めない
 const ratio = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
 
@@ -96,7 +114,17 @@ function pitchTypes(player) {
     .join(' ');
 }
 
-function PlayerRow({ player, main, sub, onMain, onSub, busy, policy }) {
+function PlayerRow({
+  player,
+  main,
+  sub,
+  onMain,
+  onSub,
+  busy,
+  policy,
+  gains = {},
+}) {
+  const g = (key) => gains[key];
   const isPitcher = player.position === 'pitcher';
   const wish = useMemo(() => playerWish(player), [player]);
   const mood = describeMood(player, policy.direction, policy.phase);
@@ -123,27 +151,70 @@ function PlayerRow({ player, main, sub, onMain, onSub, busy, policy }) {
             : '右'}
       </td>
       <td>{isPitcher ? FORM_SHORT[player.pitching?.form] || '—' : '—'}</td>
-      <td>{grade(player.physical?.arm)}</td>
+      <td>
+        <Stat value={player.physical?.arm} diff={g('physical.arm')} />
+      </td>
       {isPitcher ? (
         <>
-          <td>{grade(player.pitching?.velocity)}</td>
-          <td>{grade(player.pitching?.control)}</td>
-          <td>{grade(player.pitching?.spinRate)}</td>
-          <td>{grade(player.pitching?.stamina)}</td>
+          <td>
+            <Stat
+              value={player.pitching?.velocity}
+              diff={g('pitching.velocity')}
+            />
+          </td>
+          <td>
+            <Stat
+              value={player.pitching?.control}
+              diff={g('pitching.control')}
+            />
+          </td>
+          <td>
+            <Stat
+              value={player.pitching?.spinRate}
+              diff={g('pitching.spinRate')}
+            />
+          </td>
+          <td>
+            <Stat
+              value={player.pitching?.stamina}
+              diff={g('pitching.stamina')}
+            />
+          </td>
         </>
       ) : (
         <>
-          <td>{grade(player.batting?.meet)}</td>
-          <td>{grade(player.batting?.power)}</td>
-          <td>{grade(player.batting?.eye)}</td>
-          <td>{grade(player.batting?.bunt)}</td>
+          <td>
+            <Stat value={player.batting?.meet} diff={g('batting.meet')} />
+          </td>
+          <td>
+            <Stat value={player.batting?.power} diff={g('batting.power')} />
+          </td>
+          <td>
+            <Stat value={player.batting?.eye} diff={g('batting.eye')} />
+          </td>
+          <td>
+            <Stat value={player.batting?.bunt} diff={g('batting.bunt')} />
+          </td>
         </>
       )}
-      <td>{grade(player.physical?.speed)}</td>
-      <td>{grade(player.fielding?.defense)}</td>
-      <td>{grade(player.physical?.bodyStamina)}</td>
-      <td>{grade(player.physical?.recovery)}</td>
-      <td>{grade(player.physical?.muscle)}</td>
+      <td>
+        <Stat value={player.physical?.speed} diff={g('physical.speed')} />
+      </td>
+      <td>
+        <Stat value={player.fielding?.defense} diff={g('fielding.defense')} />
+      </td>
+      <td>
+        <Stat
+          value={player.physical?.bodyStamina}
+          diff={g('physical.bodyStamina')}
+        />
+      </td>
+      <td>
+        <Stat value={player.physical?.recovery} diff={g('physical.recovery')} />
+      </td>
+      <td>
+        <Stat value={player.physical?.muscle} diff={g('physical.muscle')} />
+      </td>
       <td>
         <select
           aria-label={`${player.name}のメイン練習`}
@@ -191,6 +262,107 @@ function PlayerRow({ player, main, sub, onMain, onSub, busy, policy }) {
         </td>
       )}
     </tr>
+  );
+}
+
+const GAIN_ROWS = 8;
+
+/** 練習の成果（このクール／キャンプ通算）。伸びた量の多い選手から */
+function CampGainsSummary({ camp, roster, finished }) {
+  const last = camp?.last;
+  const [scope, setScope] = useState(finished || !last ? 'total' : 'last');
+  const [all, setAll] = useState(false);
+  if (!last && !Object.keys(camp?.gains || {}).length) return null;
+  const useLast = scope === 'last' && last;
+  const gains = useLast ? last.gains || {} : camp?.gains || {};
+  const rows = campGainRows(
+    gains,
+    roster,
+    useLast ? last.events || {} : camp?.events || {},
+  );
+  const totals = campGainTotals(gains);
+  const grown = rows.filter((r) => r.items.some((i) => i.diff > 0)).length;
+  const shown = all ? rows : rows.slice(0, GAIN_ROWS);
+  return (
+    <section className="online-camp-gains" aria-label="練習の成果">
+      <div className="online-camp-gains-head">
+        <h4>練習の成果</h4>
+        <div className="online-segments" role="group" aria-label="範囲">
+          {last && (
+            <button aria-pressed={!!useLast} onClick={() => setScope('last')}>
+              第{last.round}クール
+            </button>
+          )}
+          <button aria-pressed={!useLast} onClick={() => setScope('total')}>
+            キャンプ通算
+          </button>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <p className="online-muted">伸びた能力はありません。</p>
+      ) : (
+        <>
+          <p className="online-camp-gain-totals">
+            <strong>{grown}人</strong>が伸びました。球団全体:{' '}
+            {totals
+              .slice(0, 6)
+              .map((t) => `${t.label}${formatGain(t.diff)}`)
+              .join(' · ')}
+          </p>
+          <ul className="online-camp-gain-list">
+            {shown.map(({ player, items, events }) => (
+              <li key={player.id}>
+                <span className="online-camp-gain-name">
+                  <PlayerStatsButton player={player} panel="abilities" />
+                  <small>{POS[player.position]}</small>
+                </span>
+                <span className="online-camp-gain-items">
+                  {items.map((i) => (
+                    <span
+                      key={i.key}
+                      className={`online-gain ${i.diff > 0 ? 'is-up' : 'is-down'}`}
+                    >
+                      {i.label}
+                      {formatGain(i.diff)}
+                    </span>
+                  ))}
+                  {events.map((text, index) => (
+                    <strong
+                      key={`${index}:${text}`}
+                      className="online-camp-gain-event"
+                    >
+                      {text}
+                    </strong>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {rows.length > GAIN_ROWS && (
+            <button
+              className="online-camp-gain-more"
+              onClick={() => setAll(!all)}
+            >
+              {all
+                ? `上位${GAIN_ROWS}人だけ`
+                : `全員（${rows.length}人）を見る`}
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** 最終クールや締め切りで手続きが閉じた後も、保存した成果を確認できる。 */
+export function CompletedCamp({ view }) {
+  const camp = view.lastCamp;
+  if (!camp) return null;
+  return (
+    <section className="online-card">
+      <h2>{camp.year}年目のキャンプ結果</h2>
+      <CampGainsSummary camp={camp} roster={view.roster || []} finished />
+    </section>
   );
 }
 
@@ -323,6 +495,14 @@ export default function CampPlanner({
           締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。
         </p>
       )}
+      {/* ⚠ **伸びをまとめて見せる**（いしだ指摘: 能力は伸びているのに結果が
+          まとまっておらず、成長が実感できない）。表の数字の横にも通算の伸びを出す */}
+      <CampGainsSummary
+        key={done}
+        camp={camp}
+        roster={roster}
+        finished={finished}
+      />
       <section className="online-camp-bulk">
         <div className="online-camp-bulk-fields">
           {/* ⚠ 選択肢が数個のものは**ボタンを並べる**（PC版の共通のルール。
@@ -458,6 +638,7 @@ export default function CampPlanner({
                     sub={subOf(p)}
                     busy={busy || finished}
                     policy={policy}
+                    gains={camp?.gains?.[p.id]}
                     onMain={(id2, key) => setMain({ ...main, [id2]: key })}
                     onSub={(id2, key) => setSub({ ...sub, [id2]: key })}
                   />

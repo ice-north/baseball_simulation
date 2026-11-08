@@ -16,9 +16,10 @@ import {
   createLeague,
   submitPhase,
   loadLeagueWorld,
+  recordCampRound,
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
-import { CAMP_MENUS, CAMP_SUB_MENUS } from '../../src/online/shared.js';
+import { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_ROUNDS } from '../../src/online/shared.js';
 import {
   TRAINING_MENUS,
   SUB_TRAINING_MENUS,
@@ -29,6 +30,22 @@ import {
   resolveTraining,
   playerWish,
 } from '../../src/season/trainingPolicy.js';
+import { abilitySnapshot, abilityGains, campGainLabel } from '../../src/online/campGains.js';
+
+// ノック・守備補強とスタッフ指導で伸びる能力も、成果から落とさない。
+{
+  const before = abilitySnapshot({ positionFitness: { short: 70 }, personality: { mental: 40 } });
+  const after = abilitySnapshot({ positionFitness: { short: 78 }, personality: { mental: 41 } });
+  assert.deepEqual(abilityGains(before, after), { 'personality.mental': 1, 'positionFitness.short': 8 });
+  assert.equal(campGainLabel('positionFitness.short'), '遊撃適性');
+  assert.equal(campGainLabel('personality.mental'), '精神');
+  const state = { rounds: 0 };
+  recordCampRound(state, { gains: { 1: { 'batting.meet': 2 } }, events: { 1: ['ミートが覚醒'] } });
+  recordCampRound(state, { gains: { 1: { 'batting.meet': 1 } }, events: {} });
+  assert.equal(state.rounds, 2);
+  assert.deepEqual(state.gains, { 1: { 'batting.meet': 3 } });
+  assert.deepEqual(state.events, { 1: ['ミートが覚醒'] }, '後のクールで覚醒の記録が消えた');
+}
 
 const NOW = '2026-10-26T15:00:00.000Z';
 const quiet = (fn) => {
@@ -346,6 +363,27 @@ assert.ok(
       `サブ練習（基礎体力）が効いていない: 体力の伸び ${one.bodyStamina - start.bodyStamina}（${roster.length}人）`,
     );
 
+    // ⚠ **伸びを残すこと**（いしだ指摘: 能力は伸びているのに結果がまとまって
+    //    おらず、成長が実感できない）。記録した伸びが名簿の実際の差と一致すること
+    const camp1 = after1.phase.camp.admin;
+    assert.equal(camp1.last?.round, 1, 'このクールの伸びが残っていない');
+    const recorded = (gains, key) =>
+      Object.values(gains || {}).reduce((n, g) => n + (g[key] || 0), 0);
+    assert.equal(
+      Math.round(recorded(camp1.last.gains, 'batting.meet')),
+      one.meet - start.meet,
+      '記録したミートの伸びが実際の差と合わない',
+    );
+    assert.equal(
+      Math.round(recorded(camp1.last.gains, 'physical.bodyStamina')),
+      one.bodyStamina - start.bodyStamina,
+      '記録した体力の伸び（サブ練習）が実際の差と合わない',
+    );
+    assert.deepEqual(camp1.gains, camp1.last.gains, '1クール目の通算がこのクールと違う');
+    const viewed = (await service.view('admin', admin)).phase.camp;
+    assert.deepEqual(viewed.last, camp1.last, 'このクールの伸びがビューに渡っていない');
+    assert.deepEqual(viewed.gains, camp1.gains, '通算の伸びがビューに渡っていない');
+
     // ⚠ **効かないサブ練習は入口で断ること**。野手に変化球練習を当てても
     //    何も起きず、そのクールが丸ごと無駄になる
     const outfielder = roster.find((p) => p.position !== 'pitcher');
@@ -386,6 +424,14 @@ assert.ok(
       armOf(afterThrow) > armOf(after1),
       '遠投で肩力が伸びていない',
     );
+    // 通算は2クールぶんを足したもの
+    const camp2 = afterThrow.phase.camp.admin;
+    assert.equal(camp2.last?.round, 2, '2クール目の伸びが残っていない');
+    assert.equal(
+      Math.round(recorded(camp2.gains, 'physical.arm')),
+      armOf(afterThrow) - armOf(atCamp),
+      '通算の肩力の伸びが実際の差と合わない',
+    );
 
     // ⚠ **同じクールを2回走らせない**。押し直しや再送で成長が二重に積まれる
     await assert.rejects(
@@ -410,6 +456,15 @@ assert.ok(
     const done = (await store.read()).league;
     assert.notEqual(done.phase?.kind, 'camp', 'キャンプが終わっていない');
     const finished = sumOf(done);
+    const completed = done.campResults.admin;
+    assert.equal(completed.rounds, 4, '締切で回したクールの成果を数えていない');
+    assert.equal(completed.last.round, 4, '締切実行の最終クール成果が残っていない');
+    assert.equal(
+      Math.round(recorded(completed.gains, 'batting.meet')),
+      finished.meet - start.meet,
+      '自動実行を含むキャンプ成果が実際の成長と合わない',
+    );
+    assert.deepEqual((await service.view('admin', admin)).lastCamp, completed, '完了後の成果がビューから消えた');
     // ⚠ ここまで**自分で3クール**回した。締め切りで回るのは残り1クールだけ。
     //    数えていないと、さらに4クール回って合計7クールぶん伸びる。
     //    3クールぶんの伸びを基準に、4クールぶん（約1.33倍）の範囲に収まること。
@@ -484,6 +539,10 @@ assert.ok(
     const after = (await store.read()).league;
     assert.ok(!after.phase, '4クール終えてもキャンプが終わらない');
     assert.equal(after.status, 'running', '開幕待ちになっていない');
+    assert.equal(after.campResults.admin.last.round, 4, '手動最終クールの成果が消えた');
+    const finalView = await service.view('admin', admin);
+    assert.deepEqual(finalView.lastCamp, after.campResults.admin);
+    assert.ok(Object.keys(finalView.lastCamp.gains).length > 0, '完了後の通算成果が空');
     // ⚠ キャンプが終わると日付が開幕日（4/1）へ動く。動いていなければ
     //    手続きの解決そのものが走っていない
     assert.equal(after.season.currentDate.month, 4, '日付が開幕日へ動いていない');
@@ -500,6 +559,57 @@ assert.ok(
       (e) => e.status === 409,
       'キャンプが終わったのに実行できた',
     );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+// --- 版を上げる前に4クール済ませていた人が居ても、締め切りで止まらないこと ----
+// ⚠ 前の版のキャンプの記録は `rounds` と `plan` だけ（`last`・`gains` が無い）。
+//    完了結果を作るときに `clone(state.last)`（＝ `JSON.parse(undefined)`）で投げ、
+//    締め切りの解決が毎回失敗してリーグが止まっていた
+{
+  const dir = await mkdtemp(join(tmpdir(), 'pennant-camp-legacy-'));
+  try {
+    const store = new FileStore(join(dir, 'state.gz'));
+    const service = new LeagueService(store, {
+      members: [{ userId: 'admin', label: '管理者' }],
+      adminId: 'admin',
+      clock: () => NOW,
+    });
+    const admin = (await service.login('admin')).sessionId;
+    let seq = 0;
+    const send = async (type, payload) => {
+      const l = (await store.read()).league;
+      seq += 1;
+      return service.command('admin', admin, {
+        requestId: `camp-legacy-${type}-${seq}`,
+        revision: l?.revision ?? 0,
+        type,
+        payload,
+      });
+    };
+    await send('create');
+    const created = (await store.read()).league;
+    await send('submit', {
+      phaseId: created.phase.id,
+      plan: { packId: created.packs[0].id },
+      ready: true,
+      baseSubmission: null,
+    });
+    assert.equal((await store.read()).league.phase?.kind, 'camp', 'キャンプに入っていない');
+    await store.transaction((b) => {
+      b.league.phase.camp = {
+        admin: { rounds: CAMP_ROUNDS, plan: { policy: { direction: 'balanced', phase: 'skill' } } },
+      };
+    });
+    await send('testmode', { on: true });
+    await send('resolve');
+    const after = (await store.read()).league;
+    assert.notEqual(after.phase?.kind, 'camp', '前の版の記録が残っているとキャンプが終わらない');
+    assert.equal(after.campResults.admin.rounds, CAMP_ROUNDS);
+    assert.equal(after.campResults.admin.last, null, '無い記録を作り出している');
+    assert.equal((await service.view('admin', admin)).lastCamp.year, after.campResults.admin.year);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -536,5 +646,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 画面のメニューをサーバーが受け取れる）',
+  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる）',
 );

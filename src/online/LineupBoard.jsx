@@ -23,7 +23,9 @@ import {
   positionFitness,
   playablePositions,
   orderProblems,
-  isFielder,
+  canPlayField,
+  benchPitchers,
+  bestFieldPosition,
   REST_FATIGUE,
   REST_TEXT,
   LOW_FITNESS,
@@ -44,7 +46,8 @@ import {
 //    - ✕でスタメンから外す → 交代（控えと入れ替え）だけ。7人の状態を経由しない
 //    - 守備図が場所を取る → 置かない（守備位置は表の列）
 //    - 控えだけ謎のチェックボックス（比較）→ 同じ表に並ぶので比較は要らない
-//    - 控えの先頭に投手 → 投手は出さない（投手起用で扱う）。捕手・内野・外野で括る
+//    - 控えの先頭に投手 → 野手を捕手・内野・外野で括り、投手は最後に別の括りで出す
+//      （二刀流で野手の枠に入れられる。守れる位置のある投手だけ出し、残りは畳む）
 //    - スタメンと控えで書き方が違う → 同じ表・同じ列
 //    - 数字がはみ出す → 表の列に入れる
 // ⚠ 守備分析のページはこの表に入れた（守備位置の入れ替え・位置ごとの候補と適性）。
@@ -76,7 +79,8 @@ const THROWS = { left: '左投', right: '右投' };
 /** 名前の色の意味。⚠ **色だけに頼らない**（読み上げとマウスオーバーに出す） */
 const FATIGUE_TONE_TEXT = {
   warn: '疲れています（このまま出し続けると成長が鈍ります）',
-  heavy: 'かなり疲れています（成長の鈍り方が最も大きく、試合では控えと入れ替わります）',
+  heavy:
+    'かなり疲れています（成長の鈍り方が最も大きく、試合では控えと入れ替わります）',
   '': undefined,
 };
 
@@ -152,6 +156,15 @@ function PlayerCells({ player, fitness, fitnessPosition }) {
           <PlayerStatsButton player={player} category="batting" group="basic" />
         </span>
         <ConditionMark player={player} />
+        {/* 投手登録の選手が野手の枠に居る・控えに居る（二刀流） */}
+        {player.position === 'pitcher' && (
+          <small
+            className="online-role-mark"
+            title="投手登録の選手です。野手の枠に入れると、先発の日は9番・投手に回ります"
+          >
+            投手
+          </small>
+        )}
       </td>
       {/* ⚠ 投げる手は**打つ手の前**に、別の列で出す。以前は打の列の
           マウスオーバーにだけ入れていて、右投左打かどうかが一覧で分からなかった。
@@ -245,10 +258,11 @@ export default function LineupBoard({
 }) {
   const roster = view.roster || [];
   const byId = new Map(roster.map((p) => [p.id, p]));
-  // スタメンに入れられる野手（名簿に居て、抹消されていない野手）。⚠ 名簿には抹消中も入る
+  // スタメンに入れられる選手（名簿に居て、抹消されていない選手。投手も入れられる）。
+  // ⚠ 名簿には抹消中も入る
   const fielderOf = (id) => {
     const player = byId.get(id);
-    return isFielder(player) ? player : null;
+    return canPlayField(player) ? player : null;
   };
 
   // ---- 編集の状態（履歴つき。`useBoardHistory`）
@@ -258,6 +272,8 @@ export default function LineupBoard({
   // 守備図。守備位置を選ぶと開き、表の成績の列の場所に出す（閉じるまで開いたまま）
   const [fieldOpen, setFieldOpen] = useState(false);
   const [hoverPos, setHoverPos] = useState(null);
+  // 控えの投手を全員出すか（ふだんは守れる位置のある投手だけ）
+  const [allPitchers, setAllPitchers] = useState(false);
   const clearSelection = useCallback(() => setSelection(null), []);
   const board = useBoardHistory({
     view,
@@ -279,6 +295,7 @@ export default function LineupBoard({
 
   // ---- 操作（クリック）
   const bench = benchFielders(roster, order);
+  const pitcherBench = benchPitchers(roster, order);
   const selectedRow = selection?.kind === 'row' ? selection.index : null;
   const selectedPos = selection?.kind === 'pos' ? selection.index : null;
   const selectedBench =
@@ -370,15 +387,40 @@ export default function LineupBoard({
           ? `${selectedBench.name}を選択中：交代させる打順を押してください。`
           : '行を押して選び、もう一方を押すと入れ替わります（打順どうし＝打順、守備位置どうし＝守備、打順と控え＝交代）。ドラッグでも同じです。Escで選択を取り消します。';
 
+  // ⚠ 投手は多い（10人以上）。守れる位置（適性 LOW_FITNESS 以上）のある投手だけを出し、
+  //    残りは「全員を出す」で開く。候補の並びでは、その位置を守れる投手だけを混ぜる
+  const shownPitchers = (
+    allPitchers
+      ? pitcherBench
+      : pitcherBench.filter((p) =>
+          focusPosition
+            ? positionFitness(p, focusPosition) >= LOW_FITNESS
+            : playablePositions(p).length > 0,
+        )
+  ).sort(
+    (a, b) =>
+      positionFitness(b, bestFieldPosition(b)) -
+      positionFitness(a, bestFieldPosition(a)),
+  );
+  const hiddenPitchers = pitcherBench.length - shownPitchers.length;
   const benchRows = focusPosition
     ? [
         {
           id: 'candidates',
           label: `${POS_FULL[focusPosition]}の交代候補（${POS_FULL[focusPosition]}の適性が高い順）`,
-          players: candidatesFor(bench, focusPosition),
+          players: candidatesFor([...bench, ...shownPitchers], focusPosition),
         },
       ]
-    : groupBench(bench);
+    : [
+        ...groupBench(bench),
+        ...(pitcherBench.length
+          ? [{ id: 'pitcher', label: '投手', players: shownPitchers }]
+          : []),
+      ];
+  // 次の先発が野手の枠にも入っている（二刀流の先発の日）
+  const twoWaySlot = order.find(
+    (e) => e.playerId != null && e.playerId === view.nextStarterId,
+  );
 
   const rowClass = (index) =>
     [
@@ -533,18 +575,22 @@ export default function LineupBoard({
                       ? `${nextStarter.name}（次の先発）`
                       : '次の先発'}
                     <small>
-                      投手は9番で打ちます。先発の順は「投手起用」で決めます。
+                      {twoWaySlot
+                        ? `${nextStarter?.name || '次の先発'}は${POS_FULL[twoWaySlot.position]}にも入っています。先発の日は9番・投手に回り、${POS_FULL[twoWaySlot.position]}はその日だけ控えが守ります（試合の後は元に戻ります）。`
+                        : '投手は9番で打ちます。先発の順は「投手起用」で決めます。'}
                     </small>
                   </td>
                 </tr>
               </tbody>
               <tbody
-                aria-label="控え野手"
+                aria-label="控え"
                 className={`online-lineup-bench ${drag?.kind === 'row' ? 'is-target' : ''}`}
               >
                 <tr className="online-lineup-bench-head">
                   <th colSpan={COLUMN_COUNT}>
-                    控え野手 {bench.length}人
+                    控え 野手{bench.length}人
+                    {pitcherBench.length > 0 &&
+                      `・投手${pitcherBench.length}人`}
                     <small>
                       {focusPosition
                         ? '押すと交代します。適性の列はこの守備位置での値です。'
@@ -557,13 +603,41 @@ export default function LineupBoard({
                     <tr className="online-lineup-group">
                       <th colSpan={COLUMN_COUNT}>
                         {group.label}
-                        {group.id !== 'candidates' && (
-                          <small>{group.players.length}人</small>
+                        {group.id !== 'candidates' &&
+                          group.id !== 'pitcher' && (
+                            <small>{group.players.length}人</small>
+                          )}
+                        {group.id === 'pitcher' && (
+                          <small>
+                            二刀流：投手も野手の枠に入れられます。先発の日は9番・投手に回り、その日だけ控えが守ります。
+                          </small>
                         )}
+                        {(group.id === 'pitcher' ||
+                          group.id === 'candidates') &&
+                          (allPitchers || hiddenPitchers > 0) && (
+                            <button
+                              type="button"
+                              className="online-lineup-group-toggle"
+                              aria-pressed={allPitchers}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAllPitchers(!allPitchers);
+                              }}
+                            >
+                              {allPitchers
+                                ? '守れる投手だけにする'
+                                : `投手を全員出す（ほか${hiddenPitchers}人）`}
+                            </button>
+                          )}
                       </th>
                     </tr>
                     {group.players.map((player) => {
-                      const fitnessPosition = focusPosition || player.position;
+                      // ⚠ 投手の本職（投手）の適性は出しても意味が無い。守るなら一番合う位置で
+                      const fitnessPosition =
+                        focusPosition ||
+                        (player.position === 'pitcher'
+                          ? bestFieldPosition(player)
+                          : player.position);
                       const fitness = positionFitness(player, fitnessPosition);
                       const selected = selectedBench?.id === player.id;
                       return (
@@ -600,6 +674,7 @@ export default function LineupBoard({
                           })}
                           onClick={() => clickBench(player.id)}
                           data-bench={player.id}
+                          data-bench-group={group.id}
                         >
                           <td className="online-lineup-slot">
                             <button
@@ -652,10 +727,10 @@ export default function LineupBoard({
                     })}
                   </React.Fragment>
                 ))}
-                {!bench.length && (
+                {!bench.length && !pitcherBench.length && (
                   <tr>
                     <td colSpan={COLUMN_COUNT} className="online-muted">
-                      控えの野手が居ません。
+                      控えが居ません。
                     </td>
                   </tr>
                 )}

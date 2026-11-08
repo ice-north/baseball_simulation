@@ -14,6 +14,8 @@ import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatTurn } from './shared.js';
 import { nextAdvanceText, STATUS } from './api.js';
 import { teamLabel } from './gameText.js';
+import { noticeCounts, pendingProcedure } from './notices.js';
+import { CompletedCamp } from './CampPlanner.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
     props;
@@ -29,8 +31,22 @@ export default function MobileView(props) {
     ['lineup', '打順'],
     ['decisions', '手続き'],
   ];
+  const counts = noticeCounts(view);
+  const procedure = pendingProcedure(view);
   return (
     <>
+      {/* ⚠ 自分が決める手続きは、どの画面にいても上に帯で出す（PC版と同じ。見逃し防止） */}
+      {procedure && tab !== 'decisions' && (
+        <div className="online-procedure-banner" role="alert">
+          <div>
+            <strong>{procedure.label}を決めてください</strong>
+            {procedure.progress && <span>{procedure.progress}</span>}
+          </div>
+          <button className="online-primary" onClick={() => setTab('decisions')}>
+            開く
+          </button>
+        </div>
+      )}
       {tab === 'today' && (
         <>
           <section className="online-mobile-overview">
@@ -49,8 +65,11 @@ export default function MobileView(props) {
               .map(([id, label]) => (
                 <button key={id} aria-label={label} onClick={() => setTab(id)}>
                   {label}
-                  {id === 'decisions' && (view.phase || view.pendingPack) && (
-                    <span className="online-dot" aria-label="未完了の手続き" />
+                  {/* ⚠ 印は数で出す（PC版の左メニューと同じ数え方。`notices.js`） */}
+                  {id === 'decisions' && counts.procedure > 0 && (
+                    <span className="online-count" aria-label="未完了の手続き">
+                      {counts.procedure}
+                    </span>
                   )}
                 </button>
               ))}
@@ -138,10 +157,13 @@ export default function MobileView(props) {
         (view.phase ? (
           <PhasePanel key={view.phase.id} {...props} mobile />
         ) : (
-          <section className="online-card">
-            <h2>手続き</h2>
-            <p>現在、決定待ちの手続きはありません。</p>
-          </section>
+          <>
+            <section className="online-card">
+              <h2>手続き</h2>
+              <p>現在、決定待ちの手続きはありません。</p>
+            </section>
+            <CompletedCamp key={view.lastCamp?.year} view={view} />
+          </>
         ))}
       <nav className="online-mobile-controls" aria-label="画面操作">
         <button

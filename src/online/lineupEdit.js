@@ -14,7 +14,11 @@
 //    ここでは保存できない形を作る操作を持たない。
 //
 // ⚠ 保存の形はサーバーの `validateLineup`（`src/online/shared.js`）が正本。
-//    野手8人ちょうど・打順1〜8・8つの守備位置を1つずつ・投手は入れない。
+//    8人ちょうど・打順1〜8・8つの守備位置を1つずつ。9番の投手の枠は入れない。
+// ⚠ **投手も野手の枠に入れられる**（二刀流）。守備位置の登録（`player.position`）は
+//    そのままで、打順の枠が守る位置を持つ。その投手が先発の日だけ、サーバーが9番・投手に
+//    回して野手の枠を控えで埋め、試合の後に戻す（`server/dailyLineup.mjs` の
+//    `benchTwoWayStarter`）。
 // ============================================================
 
 import {
@@ -35,7 +39,7 @@ export const FIELD_POSITIONS = [
   'right',
 ];
 
-/** 控えの括り。捕手・内野・外野（投手はスタメン設定に出さない） */
+/** 控えの括り。捕手・内野・外野（投手は `benchPitchers` で別に出す） */
 export const FIELDER_GROUPS = [
   { id: 'catcher', label: '捕手', positions: ['catcher'] },
   {
@@ -155,15 +159,36 @@ export function replaceStarter(order, index, playerId) {
   return order.map((e, i) => (i === index ? { ...e, playerId } : e));
 }
 
-/** 名簿のうちスタメンに入れられる野手（投手と抹消中を除く） */
+/** 名簿のうち野手登録の選手（投手と抹消中を除く）。控えの括りに使う */
 export const isFielder = (player) =>
   !!player && player.position !== 'pitcher' && player.isActive !== false;
+
+/**
+ * スタメン（野手の枠）に入れられる選手。⚠ 投手も入れられる（二刀流）。抹消中は除く。
+ * サーバーの `validateLineup` と同じ決まり。
+ */
+export const canPlayField = (player) => !!player && player.isActive !== false;
 
 /** 控えの野手。スタメンに入っている選手を除く */
 export function benchFielders(roster, order) {
   const used = new Set(order.map((e) => e.playerId));
   return (roster || []).filter((p) => isFielder(p) && !used.has(p.id));
 }
+
+/**
+ * 控えの投手（野手の枠にも入れられる。二刀流）。⚠ 投手は多いので、画面では
+ * 守れる位置（適性が `LOW_FITNESS` 以上）のある投手だけを先に出し、残りは畳んでおく
+ */
+export function benchPitchers(roster, order) {
+  const used = new Set(order.map((e) => e.playerId));
+  return (roster || []).filter(
+    (p) => canPlayField(p) && p.position === 'pitcher' && !used.has(p.id),
+  );
+}
+
+/** 投手が野手の枠に入るとしたら一番合う守備位置（無ければ null） */
+export const bestFieldPosition = (player) =>
+  playablePositions(player, 0)[0]?.position ?? null;
 
 /** 控えを括りごとに分ける（本職の守備位置で） */
 export function groupBench(bench) {
@@ -183,7 +208,7 @@ export function candidatesFor(bench, position) {
 }
 
 /**
- * 保存できない形の理由（無ければ空）。サーバーの `validateLineup` の野手の部分と同じ。
+ * 保存できない形の理由（無ければ空）。サーバーの `validateLineup` の打順の部分と同じ。
  * ⚠ 編集の操作では崩れないが、**保存済みの打順が既に崩れている**ことがある
  *    （選手が移籍・解雇で名簿から居なくなった、など）。そのときは交代で埋めてもらう。
  */
@@ -191,10 +216,10 @@ export function orderProblems(order, roster) {
   const byId = new Map((roster || []).map((p) => [p.id, p]));
   const problems = [];
   const filled = order.filter((e) => e.playerId != null);
-  if (order.length !== 8) problems.push('野手が8人そろっていません');
+  if (order.length !== 8) problems.push('野手の枠が8人そろっていません');
   if (filled.length < order.length)
     problems.push('空いている打順があります。控えと交代して埋めてください');
-  const missing = filled.filter((e) => !isFielder(byId.get(e.playerId)));
+  const missing = filled.filter((e) => !canPlayField(byId.get(e.playerId)));
   if (missing.length)
     problems.push(
       '名簿に居ない・起用できない選手が入っています。控えと交代してください',

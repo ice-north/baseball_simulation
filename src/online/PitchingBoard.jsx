@@ -5,6 +5,7 @@ import { BoardPage, Fatigue } from './BoardParts.jsx';
 import { useBoardHistory } from './useBoardHistory.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
 import { FORM_SHORT, FORM_NAME, getFatigueTone } from '../utils/constants.js';
+import { POS_FULL } from './api.js';
 import {
   MAX_STARTERS,
   STARTER_ORDER,
@@ -21,7 +22,10 @@ import {
   insertStarter,
   reliefGroups,
   pitchingProblems,
-  isPitcher,
+  onStaff,
+  addToStaff,
+  removeFromStaff,
+  staffCandidates,
   STARTER_SKIP_FATIGUE,
   RELIEF_REST_FATIGUE,
 } from './pitchingEdit.js';
@@ -41,6 +45,8 @@ import {
 //    オンラインでは使えない「野手をコンバート」の欄）。ここでは置かない。
 // ⚠ 保存するのは先発の順と役割だけ（`lineupBridge.js` の `PITCHING_BOARD_KEYS`）。
 //    打順はスタメン設定で別に保存する。
+// ⚠ 野手も投手で起用できる（二刀流）。表の最後の「野手を投手で起用する」から加え、
+//    役割の札から外す。加えていない野手は投げない（`pitchingEdit.js`）。
 // ============================================================
 
 const STAT_IDS = [
@@ -120,6 +126,14 @@ function PitcherCells({ player, starter }) {
           />
         </span>
         <ConditionMark player={player} />
+        {player.position !== 'pitcher' && (
+          <small
+            className="online-role-mark"
+            title="野手登録の選手です（二刀流）。役割の札から投手起用を外せます"
+          >
+            野手・{POS_FULL[player.position] || ''}
+          </small>
+        )}
       </td>
       <td>{player.physical?.throws === 'left' ? '左' : '右'}</td>
       <td
@@ -160,7 +174,7 @@ function PitcherCells({ player, starter }) {
 }
 
 /** 役割の選び直し。先発の型と救援の役割を並べて出す（押した札の下に出る） */
-function RoleMenu({ menu, state, close, choose }) {
+function RoleMenu({ menu, state, close, choose, remove }) {
   const ref = useRef(null);
   useEffect(() => {
     // ⚠ 開いた札を押したときは閉じない（札の側で閉じる。ここで閉じると、続く
@@ -221,6 +235,26 @@ function RoleMenu({ menu, state, close, choose }) {
       <div>{STARTER_ORDER.map(option)}</div>
       <p>救援</p>
       <div>{RELIEF_ORDER.map(option)}</div>
+      {menu.fielder && (
+        <>
+          <p>野手（二刀流）</p>
+          <div>
+            <button
+              type="button"
+              disabled={starter && state.starters.length <= 1}
+              title={
+                starter && state.starters.length <= 1
+                  ? '先発が1人も居なくなります'
+                  : '投手起用から外します。試合では投げません'
+              }
+              onClick={remove}
+            >
+              <strong>投手起用から外す</strong>
+              <small>野手だけで出る</small>
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -240,6 +274,8 @@ export default function PitchingBoard({
   const [menu, setMenu] = useState(null);
   const [drag, setDrag] = useState(null);
   const [dropAt, setDropAt] = useState(null);
+  // 「野手を投手で起用する」の一覧を開いているか（ふだんは畳む。野手は多い）
+  const [fieldersOpen, setFieldersOpen] = useState(false);
   const clearSelection = useCallback(() => {
     setSelection(null);
     setMenu(null);
@@ -269,12 +305,9 @@ export default function PitchingBoard({
   //   救援 → 「先発ローテーション」の見出し: ローテの最後へ / 先発 → 「救援」の見出し: ローテから外す
   // ⚠ 名簿に居ない先発（崩れた保存）も選べる。名前は無いので行の説明で呼ぶ
   const nameOf = (id) => byId.get(id)?.name || '名簿に居ない投手';
-  // 起用できる投手（名簿に居て、抹消されていない投手）。⚠ 名簿（byId）には抹消中も入る。
-  //    役割（state.roles）は起用できる投手にしか無いので、それ以外は崩れた行として出す
-  const pitcherOf = (id) => {
-    const player = byId.get(id);
-    return isPitcher(player) ? player : null;
-  };
+  // 起用できる投手（名簿に居て、抹消されていない投手と、加えた野手）。⚠ 名簿（byId）には
+  //    抹消中も入る。役割（state.roles）は起用できる選手にしか無いので、それ以外は崩れた行として出す
+  const pitcherOf = (id) => (onStaff(state, id) && byId.get(id)) || null;
   const clickRow = (id) => {
     if (selection !== null && selection !== id)
       commit(swapPitchers(state, selection, id));
@@ -309,7 +342,11 @@ export default function PitchingBoard({
         : {
             id: player.id,
             name: player.name,
-            top: Math.min(rect.bottom + 4, window.innerHeight - 330),
+            fielder: player.position !== 'pitcher',
+            top: Math.min(
+              rect.bottom + 4,
+              window.innerHeight - (player.position !== 'pitcher' ? 400 : 330),
+            ),
             left: Math.max(
               8,
               Math.min(rect.left, window.innerWidth - width - 8),
@@ -381,6 +418,8 @@ export default function PitchingBoard({
   const vacant = groups
     .filter((g) => !g.players.length && g.role !== 'auto_r')
     .map((g) => g.role);
+  // 投手起用に加えていない野手（加える候補）
+  const candidates = staffCandidates(state, roster);
   const help =
     selection !== null
       ? `${nameOf(selection)}を選択中：ほかの投手を押すと持ち場（登板順・役割）を入れ替えます。${
@@ -592,6 +631,47 @@ export default function PitchingBoard({
                 </tr>
               ))}
             </tbody>
+            {candidates.length > 0 && (
+              <tbody aria-label="野手を投手で起用する">
+                <tr className="online-lineup-bench-head">
+                  <th colSpan={COLUMN_COUNT}>
+                    野手を投手で起用する（二刀流） {candidates.length}人
+                    <small>
+                      加えると救援の「おまかせ」で入ります。役割の札で先発や救援の役割に変えられます。加えていない野手は投げません。
+                    </small>
+                    <button
+                      type="button"
+                      className="online-lineup-group-toggle"
+                      aria-expanded={fieldersOpen}
+                      onClick={() => setFieldersOpen(!fieldersOpen)}
+                    >
+                      {fieldersOpen ? '畳む' : '野手を出す'}
+                    </button>
+                  </th>
+                </tr>
+                {fieldersOpen &&
+                  candidates.map((player) => (
+                    <tr
+                      key={player.id}
+                      className="online-lineup-row is-candidate"
+                      data-staff-candidate={player.id}
+                    >
+                      <td className="online-lineup-slot" />
+                      <td className="online-pitch-rolecell">
+                        <button
+                          type="button"
+                          className="online-role-chip is-add"
+                          aria-label={`${player.name}を投手起用に加える`}
+                          onClick={() => commit(addToStaff(state, player))}
+                        >
+                          加える
+                        </button>
+                      </td>
+                      <PitcherCells player={player} starter={false} />
+                    </tr>
+                  ))}
+              </tbody>
+            )}
           </table>
         </div>
       </section>
@@ -601,6 +681,7 @@ export default function PitchingBoard({
           state={state}
           close={closeMenu}
           choose={(role) => commit(setRole(state, menu.id, role))}
+          remove={() => commit(removeFromStaff(state, menu.id, roster))}
         />
       )}
     </BoardPage>

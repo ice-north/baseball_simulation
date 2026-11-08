@@ -35,6 +35,16 @@ class SessionStore(context: Context) {
         get() = prefs.getString("homeStyle", null)
         set(value) = prefs.edit().putString("homeStyle", value).apply()
 
+    /** 状況に応じたTIPSを最後に読んだときに出ていたTIPSの id（読んだら点滅を止めるため） */
+    var seenSituationTips: Set<String>
+        get() = prefs.getStringSet("seenSituationTips", null)?.toSet().orEmpty()
+        set(value) = prefs.edit().putStringSet("seenSituationTips", value).apply()
+
+    /** 知らせ終えた届いたトレードの提案（[jp.icenorth.baseball.app.ui.tradeNoticeKeys]） */
+    var seenTrades: Set<String>
+        get() = prefs.getStringSet("seenTrades", null)?.toSet().orEmpty()
+        set(value) = prefs.edit().putStringSet("seenTrades", value).apply()
+
     var viewJson: String?
         get() = prefs.getString("view", null)
         set(value) = prefs.edit().putString("view", value).apply()

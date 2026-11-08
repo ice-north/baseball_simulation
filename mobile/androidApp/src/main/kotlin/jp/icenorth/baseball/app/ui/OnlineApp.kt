@@ -31,18 +31,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import jp.icenorth.baseball.shared.situationTips
+import jp.icenorth.baseball.shared.tradeNoticeKeys
+import jp.icenorth.baseball.shared.noticeCount
+import jp.icenorth.baseball.shared.pendingProcedure
+import jp.icenorth.baseball.shared.waitingTradeCount
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.Commands
-import jp.icenorth.baseball.shared.CAMP_ROUNDS
 import jp.icenorth.baseball.shared.at
-import jp.icenorth.baseball.shared.int
-import jp.icenorth.baseball.shared.obj
-import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
@@ -76,13 +83,20 @@ fun OnlineApp(model: AppViewModel) {
     var renaming by remember { mutableStateOf(false) }
     var showTips by rememberSaveable { mutableStateOf(false) }
     val raw = model.raw
-    // 自分の番の手続き・返事待ちのトレードがあれば「手続き」に印
-    val pending = raw != null && (
-        raw["pendingPack"].obj() != null ||
-            (raw["phase"].obj() != null && raw.at("phase", "submission", "ready").bool() != true &&
-                (raw.at("phase", "kind").str() != "camp" || (raw.at("phase", "camp", "rounds").int() ?: 0) < (raw.at("phase", "camp", "total").int() ?: CAMP_ROUNDS))) ||
-            raw.at("trades").list().any { it.at("myTurn").bool() == true }
-        )
+    // 画面を開いている間は、ときどき読み直す（届いたトレードの提案や進行に気づけるように）。
+    // アプリに戻ってきたときもすぐ読む。裏に回っている間は読まない
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                model.reload(quiet = true)
+                delay(AUTO_RELOAD_MS)
+            }
+        }
+    }
+    // 自分の番の手続き・返事待ちのトレードの数を「手続き」に出す（Web 版の左メニューと同じ数え方。`Notices.kt`）
+    val procedure = pendingProcedure(raw)
+    val count = noticeCount(raw)
     // 参加前（リーグが無い・まだ参加していない）はホームだけ
     val joined = model.view?.teamName != null
     Box(Modifier.fillMaxSize()) {
@@ -108,8 +122,8 @@ fun OnlineApp(model: AppViewModel) {
                             selected = tab == item,
                             onClick = { tab = item },
                             icon = {
-                                if (item == Tab.Procedures && pending) {
-                                    BadgedBox(badge = { Badge() }) { Icon(item.icon, contentDescription = null) }
+                                if (item == Tab.Procedures && count > 0) {
+                                    BadgedBox(badge = { Badge { Text("$count") } }) { Icon(item.icon, contentDescription = "未完了${count}件") }
                                 } else {
                                     Icon(item.icon, contentDescription = null)
                                 }
@@ -123,20 +137,61 @@ fun OnlineApp(model: AppViewModel) {
             // 今のスタメン・ローテに当てはまるTIPS（保存済みの編成で見る＝実際に起きること）
             val view = model.view
             val situations = remember(view?.roster, view?.lineup) { situationTips(view?.roster.orEmpty(), view?.lineup) }
+            // 届いた提案のうち、まだ知らせていないもの。トレードを開いたら知らせ終えたことにする
+            // （新しい提案を作っている間は届いた提案の一覧が見えないので、知らせ終えたことにしない）
+            val onTrades = tab == Tab.Procedures && model.procTrade && model.tradeDraft == null
+            val tradeKeys = tradeNoticeKeys(raw)
+            LaunchedEffect(onTrades, tradeKeys) { if (onTrades) model.markTradesSeen(tradeKeys) }
+            val notice = if (onTrades || view == null) null else tradeNoticeText(view, raw, model.seenTrades)
+            // ⚠ 自分が決める手続きは、その画面を開いていない間ずっと上に帯で出す（閉じられない。済んだら消える）。
+            //    初期メンバー選択・人員整理・キャンプは「手続き」のタブの中なので、うっかり飛ばしやすかった
+            val onProcedure = tab == Tab.Procedures && !model.procTrade
             Box(Modifier.padding(padding).consumeWindowInsets(padding)) {
                 Column {
+                    // ⚠ 帯は重ねず上に並べる（重ねると、ホームの右上のメニューのような画面の上の操作を塞ぐ）。
+                    //    帯がステータスバーぶん空けたら、下の画面には空けさせない（二重の隙間になる）
+                    val showProcedure = procedure != null && !onProcedure
+                    notice?.let { text ->
+                        TradeNotice(
+                            text,
+                            onOpen = {
+                                tab = Tab.Procedures
+                                model.procTrade = true
+                                // 作りかけの案は捨てずに脇へ置く（一覧の「作りかけの提案を続ける」で戻す）
+                                model.tradeDraft?.let { model.parkedTradeDraft = it }
+                                model.tradeDraft = null
+                            },
+                            onDismiss = { model.markTradesSeen(tradeKeys) },
+                            modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
+                    if (showProcedure) {
+                        ProcedureNotice(
+                            procedure!!,
+                            onOpen = { tab = Tab.Procedures; model.procTrade = false },
+                            modifier = (if (notice == null) Modifier.statusBarsPadding() else Modifier).padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
+                    Column(if (showProcedure || notice != null) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier) {
                     when (tab) {
-                        Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
+                        Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
                         Tab.Games -> GamesScreen(model)
                         Tab.Players -> PlayersScreen(model)
                         Tab.Plan -> PlanScreen(model)
                         Tab.Procedures -> ProceduresScreen(model, onRename = { renaming = true })
                     }
+                    }
                 }
                 // ⚠ 枠は取らず左下の角に重ねる。ホームと編成だけ（当てはまらなければ出ない）
                 //    右下だと編成の行の「並べ替え」つまみに重なる。左下は打順の数字なので触る物が無い
                 if (tab == Tab.Home || tab == Tab.Plan) {
-                    SituationTipsBadge(situations, onOpenAll = { showTips = true }, modifier = Modifier.align(Alignment.BottomStart).padding(12.dp))
+                    SituationTipsBadge(
+                        situations,
+                        seen = model.seenSituationTips,
+                        onRead = model::markSituationTipsSeen,
+                        onOpenAll = { showTips = true },
+                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+                    )
                 }
             }
         }
@@ -180,3 +235,10 @@ fun RenameDialog(model: AppViewModel, close: () -> Unit) {
         dismissButton = { TextButton(onClick = close) { Text("閉じる") } },
     )
 }
+
+/** 画面を開いている間に読み直す間隔（届いた提案に気づくため。変わっていなければサーバーは「変わりなし」だけ返す） */
+private const val AUTO_RELOAD_MS = 60_000L
+
+/** 自分の番の手続きは無く、届いた提案だけがある（ホームのお知らせから、トレードの側を直接開く） */
+private fun tradesOnly(raw: kotlinx.serialization.json.JsonObject?): Boolean =
+    pendingProcedure(raw) == null && waitingTradeCount(raw) > 0
