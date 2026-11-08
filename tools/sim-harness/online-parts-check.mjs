@@ -9,6 +9,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { SupabaseStore } from '../../server/storage/supabaseStore.mjs';
+import { sessionIdsOf } from '../../server/sessions.mjs';
 import {
   splitBundle,
   assembleBundle,
@@ -165,8 +166,15 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
   };
   await send('a', 'lineup', swapped);
   assert.equal(store.lastMode, 'light', '編成の保存は世界を読まない');
-  await send('a', 'profile', { displayName: '分割検査', label: 'A' });
+  // ⚠ 送る項目は `applyProfile` が読む `teamName` / `playerName`。以前は
+  //    `displayName` / `label` を送っていて何も変わらず、検査が空振りしていた
+  await send('a', 'profile', { teamName: '分割検査', playerName: 'A' });
   assert.equal(store.lastMode, 'light', '名前の変更は世界を読まない');
+  {
+    const renamed = (await store.read()).league.members.find((m) => m.userId === 'a');
+    assert.equal(renamed.displayName, '分割検査', '前提: 名前の変更が届いている');
+    assert.equal(renamed.label, 'A', '前提: 呼び名の変更が届いている');
+  }
   const after = await store.read();
   const { parts: beforeParts } = splitBundle(before);
   const { parts: afterParts } = splitBundle(after);
@@ -307,9 +315,12 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
   assert.equal((await supa.read()).league.game.teams[team].strategy.note, '5');
   // 画面の読み直し: 手元と同じ世代なら中身を送らない（`since`）。公開のたびに世代が上がる
   const viewer = new LeagueService(supa, { adminId: 'a', members: [{ userId: 'a' }] });
-  const mySession = (await supa.read()).sessions.a;
+  // ⚠ 端末の記録は種類ごとの形（`{ web: id }`）。そのまま渡すと操作できない
+  //    端末扱いになり（writable が常に false）、下の比較が空振りしていた
+  const mySession = sessionIdsOf((await supa.read()).sessions.a)[0];
   const whole = await viewer.view('a', mySession);
   assert.ok(Number.isInteger(whole.viewGeneration) && whole.teamName, 'ビューに世代が載る');
+  assert.equal(whole.writable, true, '前提: ログインした端末で読んでいる');
   const same = await viewer.view('a', mySession, whole.viewGeneration);
   assert.deepEqual(same, { unchanged: true, viewGeneration: whole.viewGeneration, writable: whole.writable }, '同じ世代なら中身を送らない');
   await supa.transaction(edit('6'));
