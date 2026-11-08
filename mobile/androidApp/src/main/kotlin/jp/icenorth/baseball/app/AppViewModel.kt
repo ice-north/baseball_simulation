@@ -113,8 +113,31 @@ class AppViewModel internal constructor(app: Application, private val createApi:
     /** 塞いでいる間に出す文言（「保存中…」「練習中…」など） */
     var busyLabel by mutableStateOf("")
         private set
-    var error by mutableStateOf<String?>(null)
-    var message by mutableStateOf<String?>(null)
+
+    /**
+     * 失敗とお知らせ（画面下に出す）。⚠ 出すたびに通し番号（[errorSerial]・[messageSerial]）を上げる。
+     * 画面は番号を鍵に出すので、同じ文言が続いても（同じ保存を続けて2回など）2回目を落とさない。
+     * 以前は文言そのものを鍵にしていて、出している間に同じ文言が来ると変化が無いので出なかった
+     */
+    private var errorText by mutableStateOf<String?>(null)
+    var errorSerial by mutableStateOf(0L)
+        private set
+    var error: String?
+        get() = errorText
+        set(value) {
+            errorText = value
+            if (value != null) errorSerial += 1
+        }
+
+    private var messageText by mutableStateOf<String?>(null)
+    var messageSerial by mutableStateOf(0L)
+        private set
+    var message: String?
+        get() = messageText
+        set(value) {
+            messageText = value
+            if (value != null) messageSerial += 1
+        }
 
     private var api = createApi(endpoint)
     private var reloadJob: Job? = null

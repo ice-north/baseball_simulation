@@ -145,6 +145,23 @@ class AppViewModelTest {
         assertEquals(2, views)
     }
 
+    @Test fun theSameNoticeTwiceIsAnnouncedTwice() {
+        create { "{}" }
+        // 画面は通し番号を鍵に出す。同じ文言が続いても番号は上がる（2回目を落とさない）
+        model.message = "保存しました"
+        val first = model.messageSerial
+        model.message = "保存しました"
+        assertEquals(first + 1, model.messageSerial)
+        // 消しただけでは上がらない（出し直さない）
+        model.message = null
+        assertEquals(first + 1, model.messageSerial)
+        model.error = "失敗"
+        val failed = model.errorSerial
+        model.error = "失敗"
+        assertEquals(failed + 1, model.errorSerial)
+        assertEquals("失敗", model.error)
+    }
+
     @Test fun refreshThatStartedBeforeLogoutCannotRestoreTheSession() {
         val refreshStarted = CompletableDeferred<Unit>()
         val releaseRefresh = CompletableDeferred<Unit>()
