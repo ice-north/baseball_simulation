@@ -759,7 +759,11 @@ export function captureLeagueWorld() {
  *    信じると、知らないメニューで練習が飛ぶ。
  */
 export function validateCampRound(league, teamName, payload) {
-  const team = TEAMS_DATA[teamName];
+  // ⚠ **保存された世界（`league.game`）を見ること。`TEAMS_DATA` を見ない**。
+  //    呼ぶ側は `loadLeagueWorld` の前に検査するので、メモリ上の世界は
+  //    空（起動したての関数）か、前に読んだ古い世界のまま。実際にアプリで
+  //    キャンプの1クール目が「球団が見つかりません」で止まった。
+  const team = league.game?.teams?.[teamName];
   requireOnline(team, '球団が見つかりません', 409);
   const byId = new Map(team.players.map((p) => [p.id, p]));
   // ⚠ **守備位置に合うかも見る**。合わないものは `runCampRound` が既定へ

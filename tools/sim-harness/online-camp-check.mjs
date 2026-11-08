@@ -19,6 +19,7 @@ import {
   recordCampRound,
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
+import { TEAMS_DATA } from '../../src/teams-data.js';
 import { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_ROUNDS } from '../../src/online/shared.js';
 import {
   TRAINING_MENUS,
@@ -351,6 +352,12 @@ assert.ok(
         sub: Object.fromEntries(roster.map((p) => [p.id, 'physique'])),
       });
 
+    // ⚠ **起動したての関数でも通ること**（いしだ報告: キャンプで「球団が
+    //    見つかりません」）。入口の検査がメモリ上の世界（`TEAMS_DATA`）を
+    //    見ていて、別の命令で世界を読んだ後でないと空だった。本番の Vercel は
+    //    呼び出しごとに新しい関数のことがあり、最初のクールで止まった。
+    //    メモリ上の世界を空にしてから送る
+    for (const name of Object.keys(TEAMS_DATA)) delete TEAMS_DATA[name];
     await round(1);
     const after1 = (await store.read()).league;
     assert.equal(after1.phase.camp.admin.rounds, 1, '1クール目が数えられていない');
