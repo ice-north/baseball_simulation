@@ -56,6 +56,8 @@ jobs:
           node tools/expect-logic.mjs --check
       - name: 共通部分の検査
         run: ./gradlew :shared:jvmTest --console=plain
+      - name: アプリの通信・画面の回帰検査
+        run: ./gradlew :androidApp:testDebugUnitTest --console=plain
       - name: APK をビルド
         run: ./gradlew :androidApp:assembleDebug --console=plain
       - uses: actions/upload-artifact@v4

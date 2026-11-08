@@ -66,4 +66,15 @@ class TwoWayTest {
         val lone = PitchingState(listOf(f.id), starter.roles)
         assertEquals(lone, lone.removeFromStaff(f.id, roster))
     }
+
+    @Test
+    fun validatesStartersAgainstTheCurrentRosterWhileEditing() {
+        val draft = PlanDraft.from(view.lineup!!, roster)
+        val starter = draft.pitching.starters.first()
+        assertNull(draft.problem(roster))
+        // 編集を始めたあとでも、自動更新で知った移籍・抹消を保存前に検査する。
+        assertTrue(draft.problem(roster.filter { it.id != starter }) != null)
+        assertTrue(draft.problem(roster.map { if (it.id == starter) it.copy(isActive = false) else it }) != null)
+        assertTrue(draft.problem(roster.map { if (it.id == starter) it.copy(pitching = null) else it }) != null)
+    }
 }

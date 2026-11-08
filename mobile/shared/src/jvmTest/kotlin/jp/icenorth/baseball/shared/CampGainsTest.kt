@@ -33,6 +33,14 @@ class CampGainsTest {
     }
 
     @Test
+    fun labelsPositionPracticeAndMentalGrowth() {
+        val gains = obj("""{"101":{"positionFitness.first":3,"positionFitness.center":2,"personality.mental":1}}""")
+        val row = campGainRows(gains, roster).single()
+        assertEquals(listOf("一塁適性", "中堅適性", "精神"), row.items.map { it.label })
+        assertEquals(listOf("一塁適性", "中堅適性", "精神"), campGainTotals(gains).map { it.label })
+    }
+
+    @Test
     fun totalsAddUpPerAbility() {
         val totals = campGainTotals(obj("""{"101":{"batting.meet":2},"103":{"batting.meet":1,"physical.arm":1}}"""))
         assertEquals(listOf("ミート" to 3.0, "肩力" to 1.0), totals.map { it.label to it.diff })

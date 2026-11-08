@@ -16,6 +16,7 @@ import jp.icenorth.baseball.shared.OnlineApi
 import jp.icenorth.baseball.shared.OnlineException
 import jp.icenorth.baseball.shared.OnlineJson
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -26,7 +27,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-class AppViewModel(app: Application) : AndroidViewModel(app) {
+class AppViewModel internal constructor(app: Application, private val createApi: (String) -> OnlineApi) : AndroidViewModel(app) {
+    constructor(app: Application) : this(app, { OnlineApi(it) })
+
     private val store = SessionStore(app)
 
     var endpoint by mutableStateOf(store.endpoint ?: BuildConfig.DEFAULT_ENDPOINT)
@@ -106,8 +109,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var error by mutableStateOf<String?>(null)
     var message by mutableStateOf<String?>(null)
 
-    private var api = OnlineApi(endpoint)
+    private var api = createApi(endpoint)
     private var reloadJob: Job? = null
+    private var operationJob: Job? = null
+    private var sessionEpoch = 0L
+
+    // 指示を送る前から進行中だった読込で、保存後のビューを巻き戻さない。
+    private var viewRequestEpoch = 0L
 
     /** トークンの更新を1本にまとめる（同時に読み込むと同じ更新トークンで2回更新しにいくため） */
     private val refreshLock = Mutex()
@@ -130,28 +138,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun changeEndpoint(value: String) {
-        endpoint = value.trim()
+        val next = value.trim()
+        if (next == endpoint) return
+        logout()
+        endpoint = next
         store.endpoint = endpoint
-        api = OnlineApi(endpoint)
-        clearCaches()
+        api = createApi(endpoint)
     }
 
     // メールは全角を半角に、前後の空白を落とし小文字に（日本語キーボードの全角や先頭の自動大文字を吸収する）
-    fun login(email: String, password: String) = signIn { api.login(java.text.Normalizer.normalize(email, java.text.Normalizer.Form.NFKC).trim().lowercase(), password) }
+    fun login(email: String, password: String) = signIn { it.login(java.text.Normalizer.normalize(email, java.text.Normalizer.Form.NFKC).trim().lowercase(), password) }
 
     /** ローカルの開発サーバー（server/dev.mjs）用 */
-    fun localLogin(user: String) = signIn { api.localLogin(user) }
+    fun localLogin(user: String) = signIn { it.localLogin(user) }
 
-    private fun signIn(block: suspend () -> AuthSession) {
+    private fun signIn(block: suspend (OnlineApi) -> AuthSession) {
         if (busy) return
+        val epoch = sessionEpoch
+        val readEpoch = viewRequestEpoch
+        val client = api
         busy = true
         error = null
-        viewModelScope.launch {
+        operationJob = viewModelScope.launch {
             // ⚠ ログインと最初の読み込みの失敗を分けて出す。以前は読み込みの 401 でも
             //    ログイン画面に戻り「ログインできない」ように見えて、どこで弾かれたか分からなかった
             val next = try {
-                block()
+                block(client).also { requireSession(epoch) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (epoch != sessionEpoch) return@launch
                 error = "ログインできませんでした: ${e.readable()}"
                 busy = false
                 return@launch
@@ -159,19 +175,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 store.auth = next
                 auth = next
-                load(next)
+                load(next, epoch, readEpoch)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (epoch != sessionEpoch) return@launch
                 store.auth = null
                 auth = null
                 error = "ログインは通りましたが、リーグの読み込みで失敗しました: ${e.readable()}"
             } finally {
-                busy = false
+                if (epoch == sessionEpoch) busy = false
             }
         }
     }
 
     fun logout() {
         val current = auth
+        val client = api
+        sessionEpoch += 1
+        reloadJob?.cancel()
+        reloadJob = null
+        operationJob?.cancel()
+        operationJob = null
+        busy = false
+        refreshing = false
         store.auth = null
         auth = null
         view = null
@@ -182,8 +209,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         campDraft = null
         tradeDraft = null
         procTrade = false
+        message = null
+        error = null
         clearCaches()
-        if (current != null) viewModelScope.launch { runCatching { api.logout(current) } }
+        if (current != null) viewModelScope.launch { runCatching { client.logout(current) } }
     }
 
     /**
@@ -192,15 +221,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun reload(pull: Boolean = false, quiet: Boolean = false) {
         val current = auth ?: return
-        if (reloadJob?.isActive == true || (quiet && busy)) return
+        val epoch = sessionEpoch
+        val readEpoch = viewRequestEpoch
+        if (reloadJob?.isActive == true || busy) return
         if (pull) refreshing = true
         reloadJob = viewModelScope.launch {
             try {
-                authed { load(it) }
+                authed(current, epoch) { load(it, epoch, readEpoch) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (!quiet || e.isAuthFailure()) handle(e)
+                if (epoch == sessionEpoch && (!quiet || e.isAuthFailure())) handle(e)
             } finally {
-                refreshing = false
+                if (epoch == sessionEpoch) refreshing = false
             }
         }
     }
@@ -222,36 +255,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         onDone: (JsonObject) -> Unit = {},
     ) {
         val current = auth ?: return
+        val epoch = sessionEpoch
         val revision = view?.revision ?: return
         if (busy) return
+        val readEpoch = ++viewRequestEpoch
         busy = true
         busyLabel = label
         error = null
-        viewModelScope.launch {
+        refreshing = false
+        operationJob = viewModelScope.launch {
             try {
-                val result = authed(current) { api.command(it, revision, type, payload) }
+                val result = authed(current, epoch) { api.command(it, revision, type, payload) }
                 // ⚠ 返事に最新のビューが載っていればそのまま使う（読み直しの往復を省く）。
                 //    載っていない（古いサーバー・二重送信の控えから返った）ときは読み直す
                 val fresh = result["view"] as? JsonObject
-                if (fresh != null) applyView(fresh.toString()) else authed { load(it) }
+                if (fresh != null) applyView(fresh.toString()) else authed(epoch = epoch) { load(it, epoch, readEpoch) }
                 if (done != null) message = done
                 onDone(result)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                handle(e)
+                if (epoch == sessionEpoch) handle(e)
             } finally {
-                busy = false
+                if (epoch == sessionEpoch) busy = false
             }
         }
     }
 
     /** 読むだけの窓口（team / player / games / game / defaults）。失敗は例外のまま返す */
     suspend fun read(action: String, params: Map<String, String?> = emptyMap()): JsonObject {
+        val epoch = sessionEpoch
         val key = action + "?" + params.filterValues { it != null }.toSortedMap().entries.joinToString("&")
         val revision = view?.revision
         val cached = synchronized(readCache) { readCache[key] }
         if (cached != null && (action == "game" || (revision != null && cached.first == revision))) return cached.second
         // ⚠ 試合の詳細の一球ごとの経過（replay）はアプリでは使わず大きいので、覚える前に落とす（40試合ぶん持つと重い）
-        val value = authed { api.read(it, action, params) }.let { if (action == "game") JsonObject(it - "replay") else it }
+        val value = authed(epoch = epoch) { api.read(it, action, params) }.let { if (action == "game") JsonObject(it - "replay") else it }
         synchronized(readCache) { readCache[key] = revision to value }
         return value
     }
@@ -260,13 +299,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * 認証付きで呼ぶ。期限の判定がずれていて認証切れ（auth）で断られたら、一度だけ更新してやり直す
      * （すぐログアウトにしない）。断られた指示はサーバーで行われていないので、やり直しても二重にならない。
      */
-    private suspend fun <T> authed(start: AuthSession? = auth, block: suspend (AuthSession) -> T): T {
+    private suspend fun <T> authed(start: AuthSession? = auth, epoch: Long = sessionEpoch, block: suspend (AuthSession) -> T): T {
+        requireSession(epoch)
         val current = start ?: throw OnlineException("ログインしていません")
         return try {
-            block(fresh(current))
+            val credentials = fresh(current, epoch)
+            requireSession(epoch)
+            block(credentials).also { requireSession(epoch) }
         } catch (e: OnlineException) {
+            requireSession(epoch)
             if (e.code != "auth" || current.refreshToken == null) throw e
-            block(fresh(current, force = true))
+            val credentials = fresh(current, epoch, force = true)
+            requireSession(epoch)
+            block(credentials).also { requireSession(epoch) }
         }
     }
 
@@ -274,9 +319,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * ビューを読み直す。手元のビューの世代を添え、サーバーで何も変わっていなければ（試合が進んでいない・
      * 誰も保存していない）ビューは送られてこないので、今のまま使う（アプリに戻るたびの読み直しが軽くなる）。
      */
-    private suspend fun load(credentials: AuthSession) {
+    private suspend fun load(credentials: AuthSession, epoch: Long, readEpoch: Long) {
+        requireSession(epoch)
+        if (readEpoch != viewRequestEpoch) return
         val since = viewGeneration.takeIf { view != null }
         val text = api.viewRaw(credentials, since)
+        requireSession(epoch)
+        if (readEpoch != viewRequestEpoch) return
         if (since != null) {
             val head = runCatching { OnlineJson.parseToJsonElement(text).jsonObject }.getOrNull()
             if (head?.get("unchanged")?.jsonPrimitive?.booleanOrNull == true) {
@@ -302,18 +351,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** アクセストークンの期限が近ければ先に更新する（本番の Supabase は1時間で切れる） */
-    private suspend fun fresh(current: AuthSession, force: Boolean = false): AuthSession = refreshLock.withLock {
+    private suspend fun fresh(current: AuthSession, epoch: Long, force: Boolean = false): AuthSession = refreshLock.withLock {
+        requireSession(epoch)
         // ほかの呼び出しが待っている間に更新を済ませていたら、それを使う
         val latest = auth
         if (latest != null && latest.accessToken != current.accessToken) return@withLock latest
-        refreshOnce(current, force)
+        refreshOnce(current, epoch, force)
     }
 
-    private suspend fun refreshOnce(current: AuthSession, force: Boolean): AuthSession {
+    private suspend fun refreshOnce(current: AuthSession, epoch: Long, force: Boolean): AuthSession {
         val expiresAt = current.expiresAt ?: return current
         val refreshToken = current.refreshToken ?: return current
         if (!force && expiresAt - System.currentTimeMillis() > 60_000) return current
         val result = api.refresh(refreshToken)
+        requireSession(epoch)
         val next = current.copy(
             accessToken = result.accessToken,
             refreshToken = result.refreshToken ?: refreshToken,
@@ -322,6 +373,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.auth = next
         auth = next
         return next
+    }
+
+    private fun requireSession(epoch: Long) {
+        if (epoch != sessionEpoch) throw CancellationException("セッションが変わりました")
     }
 
     /** 画面で読み込みに失敗したとき（認証切れならログイン画面へ戻す） */

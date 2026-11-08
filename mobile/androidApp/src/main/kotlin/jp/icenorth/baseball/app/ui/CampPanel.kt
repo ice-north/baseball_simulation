@@ -168,7 +168,7 @@ private const val GAIN_ROWS = 8
 
 /** 練習の成果（このクール／キャンプ通算）。伸びた量の多い選手から */
 @Composable
-private fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<JsonObject>, finished: Boolean) {
+internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<JsonObject>, finished: Boolean) {
     val last = camp.at("last").obj()
     val total = camp.at("gains").obj()
     if (last == null && total.isNullOrEmpty()) return

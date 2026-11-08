@@ -93,7 +93,13 @@ private fun CurrentProcedure(model: AppViewModel, raw: JsonObject) {
         when {
             pending != null -> PendingPack(model, raw, pending)
             phase != null -> PhasePanel(model, raw, phase)
-            else -> Section("手続き") { Text("現在、決定待ちの手続きはありません。") }
+            else -> {
+                Section("手続き") { Text("現在、決定待ちの手続きはありません。") }
+                raw["lastCamp"].obj()?.let { camp ->
+                    Caption("${camp.at("year").int() ?: ""}年目のキャンプ結果")
+                    CampGains(model, camp, raw.at("roster").list().mapNotNull { it.obj() }, finished = true)
+                }
+            }
         }
     }
 }

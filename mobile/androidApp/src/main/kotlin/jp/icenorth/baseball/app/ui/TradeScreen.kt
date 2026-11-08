@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -150,7 +151,7 @@ fun TradeNotice(text: String, onOpen: () -> Unit, onDismiss: () -> Unit, modifie
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         shape = RoundedCornerShape(12.dp),
         shadowElevation = 6.dp,
-        modifier = modifier.fillMaxWidth().clickable(onClick = onOpen),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onOpen).testTag("trade-notice"),
     ) {
         Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Notifications, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -171,9 +172,9 @@ private fun tradePartners(view: LeagueView, raw: JsonObject): Pair<List<String>,
 /** 相手の名簿（その場で読む。12球団ぶんをいつもビューに載せると重い） */
 @Composable
 private fun partnerRoster(model: AppViewModel, partner: String?): Pair<List<JsonObject>?, String?> {
-    var roster by remember(partner) { mutableStateOf<List<JsonObject>?>(null) }
-    var failure by remember(partner) { mutableStateOf<String?>(null) }
     val revision = model.view?.revision
+    var roster by remember(partner, revision) { mutableStateOf<List<JsonObject>?>(null) }
+    var failure by remember(partner, revision) { mutableStateOf<String?>(null) }
     LaunchedEffect(partner, revision) {
         if (partner == null) return@LaunchedEffect
         try {
@@ -211,7 +212,8 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
     val problems = dealProblems(myRoster, theirs, give, get)
     val tradeId = trade.at("id").str().orEmpty()
     // 確かめている返事（accept / reject）。押してすぐには送らない
-    var asking by remember(tradeId) { mutableStateOf<String?>(null) }
+    // 逆提案などで内容が変わったら、古い内容に対して開いた確認を閉じる。
+    var asking by remember(trade) { mutableStateOf<String?>(null) }
     val respond = { action: String ->
         model.command(
             "tradeRespond",
@@ -267,7 +269,12 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = { asking = null; respond(action) }) { Text(verb) } },
+            confirmButton = {
+                TextButton(
+                    onClick = { asking = null; respond(action) },
+                    enabled = !accept || (!stale && myTurn && problems.isEmpty() && theirs != null && theirError == null),
+                ) { Text(verb) }
+            },
             dismissButton = { TextButton(onClick = { asking = null }) { Text("やめる") } },
         )
     }

@@ -151,14 +151,22 @@ fun OnlineApp(model: AppViewModel) {
                     // ⚠ 帯は重ねず上に並べる（重ねると、ホームの右上のメニューのような画面の上の操作を塞ぐ）。
                     //    帯がステータスバーぶん空けたら、下の画面には空けさせない（二重の隙間になる）
                     val showProcedure = procedure != null && !onProcedure
+                    notice?.let { text ->
+                        TradeNotice(
+                            text,
+                            onOpen = { tab = Tab.Procedures; model.procTrade = true; model.tradeDraft = null },
+                            onDismiss = { model.markTradesSeen(tradeKeys) },
+                            modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
                     if (showProcedure) {
                         ProcedureNotice(
                             procedure!!,
                             onOpen = { tab = Tab.Procedures; model.procTrade = false },
-                            modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = (if (notice == null) Modifier.statusBarsPadding() else Modifier).padding(horizontal = 8.dp, vertical = 4.dp),
                         )
                     }
-                    Column(if (showProcedure) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier) {
+                    Column(if (showProcedure || notice != null) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier) {
                     when (tab) {
                         Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
                         Tab.Games -> GamesScreen(model)
@@ -177,15 +185,6 @@ fun OnlineApp(model: AppViewModel) {
                         onRead = model::markSituationTipsSeen,
                         onOpenAll = { showTips = true },
                         modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
-                    )
-                }
-                // ⚠ 届いた提案は、どのタブにいても上に帯で知らせる（「手続き」の小さな印だけでは気づきにくかった）
-                notice?.let { text ->
-                    TradeNotice(
-                        text,
-                        onOpen = { tab = Tab.Procedures; model.procTrade = true; model.tradeDraft = null },
-                        onDismiss = { model.markTradesSeen(tradeKeys) },
-                        modifier = Modifier.align(Alignment.TopCenter).padding(8.dp),
                     )
                 }
             }

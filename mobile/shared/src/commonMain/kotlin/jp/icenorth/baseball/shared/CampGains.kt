@@ -15,12 +15,18 @@ private val GAIN_LABELS = mapOf(
     "pitching.velocity" to "球速", "pitching.control" to "制球", "pitching.stamina" to "スタミナ", "pitching.spinRate" to "回転",
     "physical.speed" to "走力", "physical.arm" to "肩力", "physical.bodyStamina" to "体力",
     "physical.recovery" to "回復", "physical.muscle" to "体幹", "physical.dexterity" to "器用さ",
-    "fielding.defense" to "守備", "catching.lead" to "リード",
+    "fielding.defense" to "守備", "catching.lead" to "リード", "personality.mental" to "精神",
 )
 
-/** 項目の画面の名前。変化球は `pitch.<球種>` */
+private val FITNESS_LABELS = mapOf(
+    "pitcher" to "投手", "catcher" to "捕手", "first" to "一塁", "second" to "二塁", "third" to "三塁",
+    "short" to "遊撃", "left" to "左翼", "center" to "中堅", "right" to "右翼",
+)
+
+/** 項目の画面の名前。変化球は `pitch.<球種>`、守備適性は `positionFitness.<守備位置>` */
 fun campGainLabel(key: String): String =
     if (key.startsWith("pitch.")) PITCH_TYPE_NAMES[key.removePrefix("pitch.")] ?: key.removePrefix("pitch.")
+    else if (key.startsWith("positionFitness.")) (FITNESS_LABELS[key.removePrefix("positionFitness.")] ?: key.removePrefix("positionFitness.")) + "適性"
     else GAIN_LABELS[key] ?: key
 
 data class CampGainItem(val key: String, val label: String, val diff: Double)
