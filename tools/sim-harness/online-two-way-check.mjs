@@ -26,6 +26,7 @@ import {
 } from '../../server/dailyLineup.mjs';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
 import { getPositionFitness } from '../../src/utils/physics.js';
+import { autoSimulateGame } from '../../src/game/autoSimulation.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
@@ -255,7 +256,8 @@ const startTwoWay = (live) => {
   loadLeagueWorld(league);
   const live = TEAMS_DATA[own];
   startTwoWay(live);
-  const inOrder = new Set(live.lineupSettings.battingOrder.map((e) => e.playerId));
+  const inOrder = new Set(live.lineupSettings.battingOrder
+    .filter((e) => e.position !== 'pitcher').map((e) => e.playerId));
   for (const p of live.players)
     if (p.position !== 'pitcher' && !inOrder.has(p.id)) p.isActive = false;
   const restore = prepareDailyLineup(live, own);
@@ -281,3 +283,48 @@ const startTwoWay = (live) => {
 console.log(
   '■ 二刀流の起用: OK（投手を野手で・野手を先発と救援で保存できる / 先発の日だけ9番に回って控えが埋め、試合の後に戻る / 野手の先発が投げる / 加えていない野手は救援に入らない / 登録を書き換えない / 戻した後に同じ選手が並ばない / 控えは守れて疲れていない野手から・野手が居なければローテの外の投手）',
 );
+
+// 救援へ回る野手の代役がいなければ続投する。抹消中の控えは戻さない。
+for (const benchKind of ['inactive', 'fielder', 'pitcher']) {
+  loadLeagueWorld(league);
+  const live = TEAMS_DATA[own];
+  const order = live.lineupSettings.battingOrder;
+  const starterId = order.find((e) => e.position === 'pitcher').playerId;
+  const fielderId = order.find((e) => e.position === 'catcher').playerId;
+  const activeIds = new Set(order.map((e) => e.playerId));
+  const extra = live.players.find((p) =>
+    !activeIds.has(p.id) && (benchKind === 'pitcher' ? p.position === 'pitcher' : p.position !== 'pitcher'),
+  );
+  assert.ok(extra, '検査用の控えがいない');
+  live.players = live.players.filter((p) => activeIds.has(p.id) || p.id === extra.id);
+  for (const p of live.players) {
+    p.isActive = p.id !== extra.id || benchKind !== 'inactive';
+    p.fatigue = 0;
+  }
+  live.players.find((p) => p.id === starterId).pitching.stamina = 10;
+  live.pitchingRotation = {
+    starters: [starterId], currentStarterIndex: 0, middleRelievers: [fielderId],
+    setupMen: [], closer: null, relievers: [fielderId], reliefFatigue: {},
+    pitcherRoles: { [starterId]: 'opener', [fielderId]: 'long' },
+  };
+  let frames = 0;
+  const away = league.season.settings.teamNames.find((n) => n !== own);
+  const result = quiet(() => autoSimulateGame(own, away, false, 123, {
+    plateAppearance() {},
+    replay(frame) {
+      if (frame.kind !== 'matchup') return;
+      frames += 1;
+      const lineup = frame.lineups[own];
+      assert.equal(lineup.length, 9, `${benchKind}: 救援登板で守備・打順が8人になった`);
+      assert.equal(new Set(lineup.map((p) => p.id)).size, 9);
+      assert.equal(new Set(lineup.map((p) => p.order)).size, 9);
+      if (frame.top) assert.equal(new Set(lineup.map((p) => p.position)).size, 9, '守備位置が重複');
+      if (benchKind === 'inactive')
+        assert.ok(!lineup.some((p) => p.id === extra.id), '抹消中の控えが試合に出た');
+    },
+  }));
+  assert.ok(frames > 0, '試合を観測していない');
+  const appearances = result.pitcherAppearances.home.map((p) => p.id);
+  assert.equal(appearances.includes(fielderId), benchKind !== 'inactive', '野手救援の可否が代役の有無と合わない');
+}
+console.log('■ 二刀流の救援: OK（代役の有無を確認 / 抹消選手を使わない / 守備と打順を9人に保つ）');

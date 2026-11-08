@@ -11,6 +11,7 @@
 // ⚠ 12球団×24人＝288人を毎回なめる。1回の投影で**1度だけ**呼ぶこと
 //    （参加者ごとに呼ぶと人数ぶん重くなる）。
 // ============================================================
+import { observedSeason, completeCoverage } from './recordedStats.mjs';
 
 /**
  * これから行う試合に**先発予定を重ねる**。
@@ -119,7 +120,11 @@ export function leagueLeaders(league, statsOf, labelOf = (n) => n, top = 5) {
           const games = played[entry.team] || 0;
           const enough =
             category.side === 'batting'
-              ? (stats.atBats || 0) + (stats.walks || 0) >= games * PLATE_PER_GAME
+              ? (Number.isFinite(stats.plateAppearances)
+                  ? stats.plateAppearances
+                  : (stats.atBats || 0) + (stats.walks || 0) +
+                    (stats.hitByPitch || 0) + (stats.sacrificeBunts || 0) +
+                    (stats.sacrificeFlies || 0)) >= games * PLATE_PER_GAME
               : (stats.inningsPitched || 0) / 3 >= games * INNINGS_PER_GAME;
           if (!enough) return null;
         }
@@ -148,8 +153,10 @@ export function leagueLeaders(league, statsOf, labelOf = (n) => n, top = 5) {
 /**
  * 球団ごとのチーム打率・チーム防御率。順位表に添える。
  *
- * ⚠ **選手の成績から足し上げること**。順位表（`season.standings`）は勝敗しか
- *    持っていない。別に数えた値を置くと、選手成績と合わない数字が出る。
+ * 記録が完備していれば、当季のボックススコアを出場当時の球団ごとに足す。
+ * 移籍した選手の個人成績には前の球団の分も含むため、今の名簿の合計では
+ * トレードしただけで過去のチーム打率・防御率まで移ってしまう。
+ * 未記録・部分記録のリーグは、欠けた試合を0にせず従来の名簿合計を使う。
  * ⚠ `inningsPitched` は**アウト数**（`leagueLeaders` の防御率と同じ式を使う）。
  *    イニング数だと思って9を掛けると3倍の防御率になる。
  * ⚠ 打席・投球回が0の球団は `null`。0除算を画面に出さない（開幕前は全球団）。
@@ -157,19 +164,34 @@ export function leagueLeaders(league, statsOf, labelOf = (n) => n, top = 5) {
  *    （投影で2回数え直さない）。
  */
 export function teamSeasonStats(league, statsOf) {
+  const names = league.season.settings.teamNames || [];
+  const season = observedSeason(league);
+  const games = season ? Object.values(season.games || {}) : [];
+  const recorded = completeCoverage(league, season) && games.every((game) =>
+    Array.isArray(game.teams?.[game.home]) && Array.isArray(game.teams?.[game.away]),
+  );
+  const totals = Object.fromEntries(
+    names.map((name) => [name, { hits: 0, atBats: 0, earnedRuns: 0, outs: 0 }]),
+  );
+  const add = (total, stats) => {
+    total.hits += stats?.batting?.hits || 0;
+    total.atBats += stats?.batting?.atBats || 0;
+    total.earnedRuns += stats?.pitching?.earnedRuns || 0;
+    total.outs += stats?.pitching?.inningsPitched || 0;
+  };
+  if (recorded) {
+    for (const game of games)
+      for (const name of [game.home, game.away])
+        if (Object.hasOwn(totals, name))
+          for (const stats of game.teams[name]) add(totals[name], stats);
+  } else {
+    for (const name of names)
+      for (const player of league.game.teams[name]?.players || [])
+        add(totals[name], statsOf(name, player));
+  }
   const out = {};
-  for (const name of league.season.settings.teamNames || []) {
-    let hits = 0;
-    let atBats = 0;
-    let earnedRuns = 0;
-    let outs = 0;
-    for (const player of league.game.teams[name]?.players || []) {
-      const stats = statsOf(name, player);
-      hits += stats?.batting?.hits || 0;
-      atBats += stats?.batting?.atBats || 0;
-      earnedRuns += stats?.pitching?.earnedRuns || 0;
-      outs += stats?.pitching?.inningsPitched || 0;
-    }
+  for (const name of names) {
+    const { hits, atBats, earnedRuns, outs } = totals[name];
     out[name] = {
       average: atBats > 0 ? hits / atBats : null,
       era: outs > 0 ? (earnedRuns * 27) / outs : null,

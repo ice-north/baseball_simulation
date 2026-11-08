@@ -25,13 +25,19 @@ export function teamFromView(view) {
   //    以前は常に先頭を入れていて、画面の打順に次の試合で投げない投手が出ていた。
   const nextIndex = Math.max(0, starters.indexOf(view.nextStarterId));
   // ⚠ 次の先発が野手の枠にも入っている（二刀流）ときは、同じ選手を2回並べない。
-  //    サーバーの保存（`server/lineupCommand.mjs`）と同じく、野手に入っていない先発で埋める
+  //    サーバーの保存（`server/lineupCommand.mjs`）と同じく、野手に入っていない投手で埋める。
+  //    先発が全員兼任なら、控えの投手を使う（同じ選手を9番にも追加しない）。
   const fielding = new Set(battingOrder.map((e) => e.playerId));
+  const available = (player) =>
+    player &&
+    player.isActive !== false &&
+    !fielding.has(player.id) &&
+    (player.position === 'pitcher' || player.pitching);
   const pitcherId =
     [...starters.slice(nextIndex), ...starters.slice(0, nextIndex)].find(
-      (id) => !fielding.has(id),
-    ) ?? starters[nextIndex];
-  if (pitcherId && byId.has(pitcherId)) {
+      (id) => available(byId.get(id)),
+    ) ?? roster.find(available)?.id;
+  if (pitcherId !== undefined) {
     battingOrder.push({
       playerId: pitcherId,
       position: 'pitcher',

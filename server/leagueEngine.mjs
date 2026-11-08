@@ -130,7 +130,7 @@ import {
 } from '../src/online/membership.js';
 import { nextFromPlan } from '../src/online/tryoutPlan.js';
 import { generateRosterPacks, packsForMember } from '../src/online/rosterPack.js';
-import { abilitySnapshot, abilityGains } from '../src/online/campGains.js';
+import { abilitySnapshot, abilityGains, addCampGains } from '../src/online/campGains.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_DIRECTIONS, CAMP_PHASES, CAMP_ROUNDS };
@@ -322,6 +322,20 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
     if (Object.keys(diff).length) gains[player.id] = diff;
   }
   return { gains, events };
+}
+
+/** 手動実行と締切時の自動実行で、同じ記録を残す。 */
+export function recordCampRound(state, result) {
+  state.rounds = (state.rounds || 0) + 1;
+  state.last = {
+    round: state.rounds,
+    gains: result?.gains || {},
+    events: result?.events || {},
+  };
+  state.gains = addCampGains(state.gains, result?.gains);
+  state.events ||= {};
+  for (const [id, events] of Object.entries(result?.events || {}))
+    state.events[id] = [...new Set([...(state.events[id] || []), ...events])];
 }
 
 // ============================================================
@@ -1249,11 +1263,12 @@ function resolvePhase(league, now) {
     // ⚠ **自分で回したクールは数えること**。人の球団は画面で1クールずつ
     //    実行する（`runCampRound`）。締め切りで残りだけを回す。
     //    数えないと、自分で4回やった球団がもう4回やって8クールぶん成長する。
-    const done = league.phase.camp || {};
+    const done = (league.phase.camp ||= {});
     for (const [name, team] of Object.entries(TEAMS_DATA)) {
       if (!team.players?.length) continue;
       const member = league.members.find((m) => m.teamName === name);
-      const already = member ? done[member.userId]?.rounds || 0 : 0;
+      const state = member ? (done[member.userId] ||= { rounds: 0 }) : null;
+      const already = state?.rounds || 0;
       // ⚠ 自分で回したときの指示があればそれを使う（残りのクールも同じ方針で）。
       //    無ければ提出した案、それも無ければ標準
       const saved = member ? done[member.userId]?.plan : null;
@@ -1263,9 +1278,25 @@ function resolvePhase(league, now) {
         main: plan?.assignments,
         sub: plan?.subAssignments,
       };
-      for (let round = already; round < CAMP_ROUNDS; round += 1)
-        runCampRound(league, name, rest);
+      for (let round = already; round < CAMP_ROUNDS; round += 1) {
+        const result = runCampRound(league, name, rest);
+        if (state) recordCampRound(state, result);
+      }
     }
+    // 最終クールの応答では phase が消えるため、完了結果を別に残す。
+    // 初期名簿へ入れ替わる球団には、入れ替え前のCPU選手の成果を見せない。
+    league.campResults = Object.fromEntries(
+      league.members.filter((m) => !m.packSeed).map((m) => {
+        const state = done[m.userId];
+        return [m.userId, {
+          year: league.season.year,
+          rounds: state.rounds,
+          last: clone(state.last),
+          gains: clone(state.gains || {}),
+          events: clone(state.events || {}),
+        }];
+      }),
+    );
     // ⚠ **キャンプの練習より後に入れ替えること**。先に入れ替えると、
     //    選んだばかりの24人がキャンプで成長してしまい、セットの釣り合いが崩れる
     applyPendingPacks(league);

@@ -316,6 +316,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     error: l.error,
     teamName: member.teamName,
     year: l.season.year,
+    lastCamp: l.campResults?.[userId] || null,
     teamNames: l.season.settings.teamNames,
     // ⚠ 一人用の編成画面が `LEAGUE_SETTINGS.useDH` を見るので、
     //    リーグの設定をビューにも載せる（打順が8枠か9枠かが変わる）
@@ -366,8 +367,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     standings: l.season.standings,
     // ⚠ 各項目のベスト5。12球団×24人をなめるので**1回の投影で1度だけ**作る
     leaders: leagueLeaders(l, seasonStatsOf, labelOf),
-    // ⚠ 順位表に添えるチーム打率・チーム防御率。**同じ引き当て**を渡して
-    //    選手成績と揃える（別に数えると画面の中で数字が食い違う）
+    // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。
     teamStats: teamSeasonStats(l, seasonStatsOf),
     // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
     //    持っていないので、並べ替えはここで済ませて渡す
@@ -440,6 +440,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
                   // ⚠ 伸びた能力（このクール・通算）。画面のまとめに使う
                   last: phase.camp?.[userId]?.last || null,
                   gains: phase.camp?.[userId]?.gains || {},
+                  events: phase.camp?.[userId]?.events || {},
                 }
               : null,
         }

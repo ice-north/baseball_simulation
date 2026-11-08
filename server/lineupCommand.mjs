@@ -41,6 +41,24 @@ export function saveLineup(league, userId, plan) {
       (id, index) => id !== plan.starters[index],
     );
   const tactical = validateTactics(team, plan, rotationChanged);
+  const index = rotationChanged
+    ? 0
+    : (team.pitchingRotation.currentStarterIndex || 0) % plan.starters.length;
+  // 9番（投手）は次の先発。⚠ 次の先発が野手の打順にも入っている（二刀流）ときは、
+  //    同じ選手を2回並べない。9番は試合の日に組み直す（`prepareDailyLineup`）ので、
+  //    ここは野手に入っていない先発で仮に埋めておく
+  const fielding = new Set(plan.battingOrder.map((e) => e.playerId));
+  const ninth =
+    [...plan.starters.slice(index), ...plan.starters.slice(0, index)].find(
+      (id) => !fielding.has(id),
+    ) ??
+    team.players.find(
+      (p) =>
+        p.isActive !== false &&
+        !fielding.has(p.id) &&
+        (p.position === 'pitcher' || p.pitching),
+    )?.id;
+  requireOnline(ninth !== undefined, '投手を含む9人の選手が必要です');
   team.lineupSettings = {
     battingOrder: plan.battingOrder.map(
       ({ playerId, battingOrder, position }) => ({
@@ -52,17 +70,6 @@ export function saveLineup(league, userId, plan) {
     benchPlayers: [],
     substitutionRules: { pinchHitter: [], pinchRunner: [] },
   };
-  const index = rotationChanged
-    ? 0
-    : (team.pitchingRotation.currentStarterIndex || 0) % plan.starters.length;
-  // 9番（投手）は次の先発。⚠ 次の先発が野手の打順にも入っている（二刀流）ときは、
-  //    同じ選手を2回並べない。9番は試合の日に組み直す（`prepareDailyLineup`）ので、
-  //    ここは野手に入っていない先発で仮に埋めておく
-  const fielding = new Set(plan.battingOrder.map((e) => e.playerId));
-  const ninth =
-    [...plan.starters.slice(index), ...plan.starters.slice(0, index)].find(
-      (id) => !fielding.has(id),
-    ) ?? plan.starters[index];
   team.lineupSettings.battingOrder.push({
     playerId: ninth,
     battingOrder: 9,

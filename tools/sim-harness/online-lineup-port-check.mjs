@@ -162,6 +162,25 @@ try {
     assert.equal(t.pitchingRotation.currentStarterIndex, 1, '次の先発の位置が合っていない');
   }
 
+  // 先発が1人で、その選手が野手も兼ねる。9番には控えの投手を仮に置き、
+  // 編成画面で同じ選手が2回並んで野手枠が消えるのを防ぐ。
+  {
+    const fielding = view.lineup.battingOrder.map((e) => ({ ...e }));
+    const twoWay = view.lineup.starters[0];
+    fielding[0].playerId = twoWay;
+    const onlyStarter = {
+      ...view,
+      nextStarterId: twoWay,
+      lineup: { ...view.lineup, battingOrder: fielding, starters: [twoWay] },
+    };
+    const t = teamFromView(onlyStarter);
+    const entries = t.lineupSettings.battingOrder;
+    assert.equal(entries.length, 9, '先発1人の二刀流で9枠を復元できない');
+    assert.equal(new Set(entries.map((e) => e.playerId)).size, 9, '二刀流の先発が2回並んでいる');
+    assert.deepEqual(planFromTeam(t).battingOrder, fielding.sort((a, b) => a.battingOrder - b.battingOrder), '9番の補完で野手枠を変更した');
+    assert.equal(planFromTeam(t).starters[0], twoWay, '9番の補完で先発を変更した');
+  }
+
   // --- PCの2つの編集画面が同じ編成を保存しても、互いの編集を消さないか -----
   // ⚠ PCでは「スタメン設定・投手起用」と「方針・采配」が**同じ編成の塊**を別々に
   //    編集する。保存には編集を始めたときの塊（`baseLineup`）を添え、サーバーの今と

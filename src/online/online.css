@@ -627,7 +627,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 4px 16px;
 }
 .online-camp-gain-list li {
@@ -648,6 +648,7 @@
 }
 .online-camp-gain-items {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   gap: 2px 8px;
 }

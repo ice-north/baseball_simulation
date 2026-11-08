@@ -16,6 +16,7 @@ import {
   createLeague,
   submitPhase,
   loadLeagueWorld,
+  recordCampRound,
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { CAMP_MENUS, CAMP_SUB_MENUS } from '../../src/online/shared.js';
@@ -29,6 +30,22 @@ import {
   resolveTraining,
   playerWish,
 } from '../../src/season/trainingPolicy.js';
+import { abilitySnapshot, abilityGains, campGainLabel } from '../../src/online/campGains.js';
+
+// ノック・守備補強とスタッフ指導で伸びる能力も、成果から落とさない。
+{
+  const before = abilitySnapshot({ positionFitness: { short: 70 }, personality: { mental: 40 } });
+  const after = abilitySnapshot({ positionFitness: { short: 78 }, personality: { mental: 41 } });
+  assert.deepEqual(abilityGains(before, after), { 'personality.mental': 1, 'positionFitness.short': 8 });
+  assert.equal(campGainLabel('positionFitness.short'), '遊撃適性');
+  assert.equal(campGainLabel('personality.mental'), '精神');
+  const state = { rounds: 0 };
+  recordCampRound(state, { gains: { 1: { 'batting.meet': 2 } }, events: { 1: ['ミートが覚醒'] } });
+  recordCampRound(state, { gains: { 1: { 'batting.meet': 1 } }, events: {} });
+  assert.equal(state.rounds, 2);
+  assert.deepEqual(state.gains, { 1: { 'batting.meet': 3 } });
+  assert.deepEqual(state.events, { 1: ['ミートが覚醒'] }, '後のクールで覚醒の記録が消えた');
+}
 
 const NOW = '2026-10-26T15:00:00.000Z';
 const quiet = (fn) => {
@@ -439,6 +456,15 @@ assert.ok(
     const done = (await store.read()).league;
     assert.notEqual(done.phase?.kind, 'camp', 'キャンプが終わっていない');
     const finished = sumOf(done);
+    const completed = done.campResults.admin;
+    assert.equal(completed.rounds, 4, '締切で回したクールの成果を数えていない');
+    assert.equal(completed.last.round, 4, '締切実行の最終クール成果が残っていない');
+    assert.equal(
+      Math.round(recorded(completed.gains, 'batting.meet')),
+      finished.meet - start.meet,
+      '自動実行を含むキャンプ成果が実際の成長と合わない',
+    );
+    assert.deepEqual((await service.view('admin', admin)).lastCamp, completed, '完了後の成果がビューから消えた');
     // ⚠ ここまで**自分で3クール**回した。締め切りで回るのは残り1クールだけ。
     //    数えていないと、さらに4クール回って合計7クールぶん伸びる。
     //    3クールぶんの伸びを基準に、4クールぶん（約1.33倍）の範囲に収まること。
@@ -513,6 +539,10 @@ assert.ok(
     const after = (await store.read()).league;
     assert.ok(!after.phase, '4クール終えてもキャンプが終わらない');
     assert.equal(after.status, 'running', '開幕待ちになっていない');
+    assert.equal(after.campResults.admin.last.round, 4, '手動最終クールの成果が消えた');
+    const finalView = await service.view('admin', admin);
+    assert.deepEqual(finalView.lastCamp, after.campResults.admin);
+    assert.ok(Object.keys(finalView.lastCamp.gains).length > 0, '完了後の通算成果が空');
     // ⚠ キャンプが終わると日付が開幕日（4/1）へ動く。動いていなければ
     //    手続きの解決そのものが走っていない
     assert.equal(after.season.currentDate.month, 4, '日付が開幕日へ動いていない');

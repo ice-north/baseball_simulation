@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
-import { leagueLeaders, withStarters } from '../../server/leagueBoard.mjs';
+import { leagueLeaders, withStarters, teamSeasonStats } from '../../server/leagueBoard.mjs';
 import { ownUpcomingGames } from '../../server/projection.mjs';
 import {
   PYRAMID_LEAGUES,
@@ -191,8 +191,31 @@ try {
     const player = league.game.teams[row.team].players.find((p) => p.name === row.name);
     const b = player.seasonStats.batting;
     assert.ok(
-      (b.atBats || 0) + (b.walks || 0) >= played[row.team] * 3.1,
+      (b.atBats || 0) + (b.walks || 0) + (b.hitByPitch || 0) +
+        (b.sacrificeBunts || 0) + (b.sacrificeFlies || 0) >= played[row.team] * 3.1,
       `規定未満が打率の上位に入っている: ${row.name}`,
+    );
+  }
+
+  // 死球・犠打・犠飛も打席に含む。計測済みならその打席数を優先する。
+  {
+    const player = (id, batting) => ({ id, name: `規定${id}`, seasonStats: { batting } });
+    const base = { atBats: 25, hits: 10, walks: 0 };
+    const players = [
+      player(1, { ...base, plateAppearances: 31 }),
+      player(2, { ...base, hitByPitch: 4, sacrificeBunts: 2 }),
+      player(3, { ...base, hitByPitch: 3, sacrificeFlies: 3 }),
+      player(4, { ...base, hitByPitch: 4, sacrificeBunts: 1 }),
+    ];
+    const fixture = {
+      season: { settings: { teamNames: ['甲'] }, standings: [{ team: '甲', gamesPlayed: 10 }] },
+      game: { teams: { 甲: { players } } },
+    };
+    assert.deepEqual(
+      leagueLeaders(fixture, (_name, p) => p.seasonStats)
+        .find((category) => category.id === 'avg').rows.map((row) => row.name).sort(),
+      ['規定1', '規定2', '規定3'],
+      '規定31打席に到達した打者を外す・30打席の打者を含める',
     );
   }
 
@@ -491,6 +514,47 @@ try {
 
   // --- 順位表に添えるチーム打率・チーム防御率 --------------------------
   {
+    const a = { batting: { hits: 6, atBats: 20 }, pitching: { earnedRuns: 2, inningsPitched: 27 } };
+    const b = { batting: { hits: 2, atBats: 10 }, pitching: { earnedRuns: 4, inningsPitched: 27 } };
+    const fixture = {
+      season: { year: 1, settings: { teamNames: ['甲', '乙'] }, results: [{ gameId: 1 }] },
+      game: { teams: {
+        甲: { players: [{ id: 1, seasonStats: structuredClone(a) }] },
+        乙: { players: [{ id: 2, seasonStats: structuredClone(b) }] },
+      } },
+      records: { seasons: { 1: { year: 1, complete: true, games: {
+        1: { home: '甲', away: '乙', teams: { 甲: [a], 乙: [b] } },
+      } } } },
+    };
+    const statsOf = (_name, p) => p.seasonStats;
+    const expected = { 甲: { average: 0.3, era: 2 }, 乙: { average: 0.2, era: 4 } };
+    assert.deepEqual(teamSeasonStats(fixture, statsOf), expected);
+    [fixture.game.teams.甲.players, fixture.game.teams.乙.players] =
+      [fixture.game.teams.乙.players, fixture.game.teams.甲.players];
+    assert.deepEqual(teamSeasonStats(fixture, statsOf), expected, '移籍だけで過去の球団成績が移った');
+    fixture.game.teams.甲.players = [];
+    assert.deepEqual(teamSeasonStats(fixture, statsOf), expected, '退団した選手の球団での実績が消えた');
+
+    // 記録の無い試合を0に置き換えない。旧リーグ・部分記録は名簿の既存成績へ戻す。
+    fixture.game.teams.甲.players = [{ id: 2, seasonStats: structuredClone(b) }];
+    const fallback = { 甲: { average: 0.2, era: 4 }, 乙: { average: 0.3, era: 2 } };
+    const partial = structuredClone(fixture);
+    partial.records.seasons[1].complete = false;
+    assert.deepEqual(teamSeasonStats(partial, statsOf), fallback, '部分記録を全試合の成績として出した');
+    const missing = structuredClone(fixture);
+    missing.season.results.push({ gameId: 2 });
+    assert.deepEqual(teamSeasonStats(missing, statsOf), fallback, '欠けた試合を0にした');
+    const legacy = structuredClone(fixture);
+    delete legacy.records;
+    assert.deepEqual(teamSeasonStats(legacy, statsOf), fallback, '未計測リーグの既存成績を失った');
+    const empty = structuredClone(fixture);
+    empty.season.results = [];
+    empty.records.seasons[1].games = {};
+    assert.deepEqual(teamSeasonStats(empty, statsOf), {
+      甲: { average: null, era: null }, 乙: { average: null, era: null },
+    }, '開幕前の0打席・0投球回を打率0・防御率0にした');
+  }
+  {
     const live = (await store.read()).league;
     const stats = view.teamStats;
     assert.ok(stats, 'チーム成績が渡っていない');
@@ -646,5 +710,5 @@ try {
 }
 
 console.log(
-  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・規定未満を混ぜない・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム打率と防御率が名簿の合計と合う・能力ランキングが全球団から並ぶ・通算成績が今季を含んで積み上がる）',
+  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・死球や犠打飛を含め規定打席を判定・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム成績は移籍退団でも出場球団に残る・部分記録は既存集計を使う・能力ランキングが全球団から並ぶ・通算成績が今季を含んで積み上がる）',
 );

@@ -27,6 +27,22 @@ export { FIELDER_REST_FATIGUE, STARTER_SKIP_FATIGUE };
 const FRESH_FATIGUE = SUBSTITUTE_FRESH_FATIGUE;
 const MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
 
+function restorePitcherSlot(team) {
+  const order = team.lineupSettings?.battingOrder || [];
+  const ninth = order.find((e) => e.position === 'pitcher');
+  if (!ninth) return;
+  const fielding = new Set(order.filter((e) => e.position !== 'pitcher').map((e) => e.playerId));
+  const starters = team.pitchingRotation?.starters || [];
+  const index = (team.pitchingRotation?.currentStarterIndex || 0) % (starters.length || 1);
+  const available = (p) => p && p.isActive !== false && !fielding.has(p.id) &&
+    (p.position === 'pitcher' || p.pitching);
+  if (available(team.players.find((p) => p.id === ninth.playerId))) return;
+  const next = [...starters.slice(index), ...starters.slice(0, index)]
+    .map((id) => team.players.find((p) => p.id === id)).find(available) ||
+    team.players.find(available);
+  if (next) ninth.playerId = next.id;
+}
+
 function restTiredFielders(team) {
   const order = team.lineupSettings?.battingOrder || [];
   const inLineup = new Set(order.map((e) => e.playerId));
@@ -76,7 +92,8 @@ function restTiredFielders(team) {
  *    （打順を作り直すため）。先発の日が来るたびに二刀流の選手がスタメンから
  *    消えていく。ここで先にその日だけ入れ替え、試合の後に戻す。
  * ⚠ 戻すときは選手IDで探す（`ensureCompleteLineup` が配列を作り直す）。
- * ⚠ 控えは「守れて疲れていない野手」→「野手」→「ローテの外の投手」の順に選ぶ。
+ * ⚠ 控えは「守れて疲れていない野手」→「野手」→「ローテの外の投手」→
+ *    「ほかの控え投手」の順に選ぶ。
  *    誰も選べないと `ensureCompleteLineup` が先発を野手の枠から外し、空いた枠を
  *    控えの野手で埋めようとする。野手の控えが居なければ打順が組めず、その日を
  *    進められない（409）。投手は野手の枠に入れられるので最後の手段にする。
@@ -100,7 +117,10 @@ export function benchTwoWayStarter(team) {
       e.battingOrder <= 8,
   );
   if (!slot) return () => {};
-  const inLineup = new Set(order.map((e) => e.playerId));
+  // 9番は保存用の仮置きで、今日投げる選手とは限らない。
+  const inLineup = new Set(
+    order.filter((e) => e.position !== 'pitcher').map((e) => e.playerId),
+  );
   const fit = (p) =>
     p.position === slot.position
       ? 100
@@ -116,7 +136,8 @@ export function benchTwoWayStarter(team) {
       .filter((p) => fit(p) >= MIN_FITNESS && (p.fatigue || 0) < FRESH_FATIGUE)
       .sort(byFit)[0] ||
     fielders.sort(byFit)[0] ||
-    bench.filter((p) => !starters.includes(p.id)).sort(byFit)[0];
+    bench.filter((p) => !starters.includes(p.id)).sort(byFit)[0] ||
+    bench.sort(byFit)[0];
   if (!substitute) return () => {};
   slot.playerId = substitute.id;
   return () => {
@@ -126,17 +147,7 @@ export function benchTwoWayStarter(team) {
     );
     if (!entry) return;
     entry.playerId = starterId;
-    const ninth = current.find(
-      (e) => e.position === 'pitcher' && e.playerId === starterId,
-    );
-    if (!ninth) return;
-    const fielding = new Set(
-      current.filter((e) => e.position !== 'pitcher').map((e) => e.playerId),
-    );
-    const next = [...starters.slice(index), ...starters.slice(0, index)].find(
-      (id) => !fielding.has(id),
-    );
-    if (next !== undefined) ninth.playerId = next;
+    restorePitcherSlot(team);
   };
 }
 
@@ -203,5 +214,7 @@ export function prepareDailyLineup(team, name) {
     restoreTwoWay();
     restore();
     restoreFielders();
+    // 休養と先発の代役が重なった場合も、最終的な野手8人と重複させない。
+    restorePitcherSlot(team);
   };
 }

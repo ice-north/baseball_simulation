@@ -275,8 +275,11 @@ function CampGainsSummary({ camp, roster, finished }) {
   if (!last && !Object.keys(camp?.gains || {}).length) return null;
   const useLast = scope === 'last' && last;
   const gains = useLast ? last.gains || {} : camp?.gains || {};
-  // ⚠ 出来事（フォーム改造・新球種など）はクールごとにしか残していない
-  const rows = campGainRows(gains, roster, useLast ? last.events || {} : {});
+  const rows = campGainRows(
+    gains,
+    roster,
+    useLast ? last.events || {} : camp?.events || {},
+  );
   const totals = campGainTotals(gains);
   const grown = rows.filter((r) => r.items.some((i) => i.diff > 0)).length;
   const shown = all ? rows : rows.slice(0, GAIN_ROWS);
@@ -323,8 +326,11 @@ function CampGainsSummary({ camp, roster, finished }) {
                       {formatGain(i.diff)}
                     </span>
                   ))}
-                  {events.map((text) => (
-                    <strong key={text} className="online-camp-gain-event">
+                  {events.map((text, index) => (
+                    <strong
+                      key={`${index}:${text}`}
+                      className="online-camp-gain-event"
+                    >
                       {text}
                     </strong>
                   ))}
@@ -344,6 +350,18 @@ function CampGainsSummary({ camp, roster, finished }) {
           )}
         </>
       )}
+    </section>
+  );
+}
+
+/** 最終クールや締め切りで手続きが閉じた後も、保存した成果を確認できる。 */
+export function CompletedCamp({ view }) {
+  const camp = view.lastCamp;
+  if (!camp) return null;
+  return (
+    <section className="online-card">
+      <h2>{camp.year}年目のキャンプ結果</h2>
+      <CampGainsSummary camp={camp} roster={view.roster || []} finished />
     </section>
   );
 }

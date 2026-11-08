@@ -22,7 +22,6 @@ import {
  */
 const STALL_AFTER_MS = TURN_MINUTES * 8 * 60000;
 import { isCurrent, migrateLeague } from '../src/online/leagueMigration.js';
-import { addCampGains } from '../src/online/campGains.js';
 import {
   projectLeague,
   projectLineup,
@@ -467,16 +466,8 @@ export class LeagueService {
             result = e.runCampRound(l, me.teamName, plan);
             l.game = e.captureLeagueWorld();
           });
-          state.rounds += 1;
+          engine.recordCampRound(state, result);
           state.plan = plan;
-          // ⚠ **伸びを残す**（このクールと通算）。画面で前後を比べる形にすると、
-          //    読み直しや別の端末で前の値が無く、伸びが見えない
-          state.last = {
-            round: state.rounds,
-            gains: result?.gains || {},
-            events: result?.events || {},
-          };
-          state.gains = addCampGains(state.gains, result?.gains);
           // ⚠ 4クール終わったら**提出する**。全員が終われば締め切りを待たずに
           //    次へ進む（手続きの仕組みをそのまま使う）。
           // ⚠ **印（`submissions[...].ready`）を直に立てないこと**。手続きを

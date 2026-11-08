@@ -28,6 +28,7 @@ import { formatTurn, turnLabel, turnOfDate } from '../../src/online/shared.js';
 import { nextAdvanceText } from '../../src/online/api.js';
 import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
+import { CompletedCamp } from '../../src/online/CampPlanner.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
 export {
   React,
@@ -43,6 +44,7 @@ export {
   nextAdvanceText,
   setTeamLabels,
   PackSelect,
+  CompletedCamp,
 };
 `;
 const result = await build({
@@ -71,6 +73,7 @@ try {
     formatDeadline,
     setTeamLabels,
     PackSelect,
+    CompletedCamp,
     DesktopTactics,
     Results,
     formatTurn,
@@ -81,6 +84,23 @@ try {
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
   const render = (element) => renderToString(element).replaceAll('<!-- -->', '');
+
+  const completed = render(h(CompletedCamp, { view: {
+    phase: null,
+    roster: [{ id: 1, name: '練習した選手', position: 'short' }],
+    lastCamp: {
+      year: 2,
+      rounds: 4,
+      gains: { 1: { 'positionFitness.short': 8, 'personality.mental': 1 } },
+      events: { 1: ['新球種を習得'] },
+      last: { round: 4, gains: { 1: { 'personality.mental': 1 } }, events: {} },
+    },
+  } }));
+  assert.match(completed, /2年目のキャンプ結果/, '手続き終了後の成果を表示できない');
+  assert.match(completed, /遊撃適性\+8/, '通算の守備適性が成果に出ない');
+  assert.match(completed, /精神\+1/, '通算の精神が成果に出ない');
+  assert.match(completed, /新球種を習得/, '通算の出来事が成果に出ない');
+  assert.equal(render(h(CompletedCamp, { view: { roster: [] } })), '', '記録の無い過去キャンプを表示した');
 
   setTeamLabels({
     宮崎アトラス: { label: '湘南サンズ', short: '湘南サ' },

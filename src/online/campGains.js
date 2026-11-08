@@ -1,4 +1,5 @@
 import { getPitchTypeName } from '../utils/constants.js';
+import { POS_FULL } from './api.js';
 
 // ============================================================
 // キャンプで伸びた能力の記録（いしだ指摘: 能力値は伸びているのに結果が
@@ -31,6 +32,7 @@ export const CAMP_GAIN_FIELDS = [
   ['physical', 'dexterity', '器用さ'],
   ['fielding', 'defense', '守備'],
   ['catching', 'lead', 'リード'],
+  ['personality', 'mental', '精神'],
 ];
 
 const LABELS = Object.fromEntries(
@@ -40,6 +42,8 @@ const LABELS = Object.fromEntries(
 /** 項目の画面の名前。変化球は `pitch.<球種>` */
 export function campGainLabel(key) {
   if (key.startsWith('pitch.')) return getPitchTypeName(key.slice(6));
+  if (key.startsWith('positionFitness.'))
+    return `${POS_FULL[key.slice(16)] || key.slice(16)}適性`;
   return LABELS[key] || key;
 }
 
@@ -54,6 +58,9 @@ export function abilitySnapshot(player) {
   for (const pitch of player?.pitching?.arsenal || [])
     if (pitch?.type && typeof pitch.level === 'number')
       out[`pitch.${pitch.type}`] = pitch.level;
+  for (const [position, value] of Object.entries(player?.positionFitness || {}))
+    if (typeof value === 'number' && Number.isFinite(value))
+      out[`positionFitness.${position}`] = value;
   return out;
 }
 

@@ -15,6 +15,7 @@ import { formatTurn } from './shared.js';
 import { nextAdvanceText, STATUS } from './api.js';
 import { teamLabel } from './gameText.js';
 import { noticeCounts, pendingProcedure } from './notices.js';
+import { CompletedCamp } from './CampPlanner.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
     props;
@@ -156,10 +157,13 @@ export default function MobileView(props) {
         (view.phase ? (
           <PhasePanel key={view.phase.id} {...props} mobile />
         ) : (
-          <section className="online-card">
-            <h2>手続き</h2>
-            <p>現在、決定待ちの手続きはありません。</p>
-          </section>
+          <>
+            <section className="online-card">
+              <h2>手続き</h2>
+              <p>現在、決定待ちの手続きはありません。</p>
+            </section>
+            <CompletedCamp key={view.lastCamp?.year} view={view} />
+          </>
         ))}
       <nav className="online-mobile-controls" aria-label="画面操作">
         <button

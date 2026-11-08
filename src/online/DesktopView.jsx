@@ -14,6 +14,7 @@ import PitchingBoard from './PitchingBoard.jsx';
 import { useDraftMemoryStore } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
+import { CompletedCamp } from './CampPlanner.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { teamLabel } from './gameText.js';
@@ -493,6 +494,7 @@ export default function DesktopView(props) {
                 現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。
               </p>
             </section>
+            <CompletedCamp key={view.lastCamp?.year} view={view} />
           </Page>
         ))}
       {current === 'transfer' && <TradeScreen {...props} />}
