@@ -59,6 +59,20 @@ export default function MobileView(props) {
           <button onClick={() => setTab('decisions')}>確かめる</button>
         </div>
       )}
+      {/* ⚠ **返事が必要なトレードの提案もホームで知らせる**（PC版の左メニューの数と
+          同じ数え方。`notices.js`）。スマホWebにトレードの画面は無いので、
+          どこで返事をするかを添える。知らせないと提案に気づかないまま期限が来る */}
+      {counts.trades > 0 && tab === 'today' && (
+        <div
+          className="online-procedure-banner is-waiting"
+          role="status"
+        >
+          <div>
+            <strong>返事が必要なトレードの提案が{counts.trades}件あります</strong>
+            <span>PCかアプリで返事してください</span>
+          </div>
+        </div>
+      )}
       {tab === 'today' && (
         <>
           <section className="online-mobile-overview">
