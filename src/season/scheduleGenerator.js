@@ -197,7 +197,7 @@ export const getValidTwoLeagueGameCounts = (teamsCount, maxGames = 150) => {
   const results = [];
   for (const total of [...totals].sort((a, b) => a - b)) {
     const { intraPerPair, interPerPair } = balanceLeagueGames(total, intraOpp, interOpp);
-    if (countMergedDays(intraPerPair, interPerPair) <= MAX_CALENDAR_DAYS) {
+    if (countMergedDays(intraPerPair, interPerPair) <= MAX_CALENDAR_DAYS && fitsInRegularSeason(teamsCount, total, 'two')) {
       results.push({ value: total, intra: intraPerPair, inter: interPerPair });
     }
   }
@@ -218,7 +218,19 @@ export const getValidTwoLeagueGameCounts = (teamsCount, maxGames = 150) => {
  * @returns {Array} スケジュール配列
  */
 export const generateFullSeasonSchedule = (config) => {
-  const { teams, gamesPerSeason = 60, startDate, endDate, leagueFormat = 'single', leagueNames } = config;
+  const { schedule, leftover } = buildSeasonSchedule(config);
+  if (leftover.length > 0) {
+    // 4/1〜10/9 のどの日を使っても、同じ球団を同じ日に2回出さずには入りきらない設定。
+    // プレーオフ（10/10〜）を動かさないため、入らない試合は組まない。
+    // 規定画面はこの設定を選ばせない（fitsInRegularSeason）。ここに来るのは古い保存の設定だけ。
+    console.warn(`[日程] ${config.teams.length}球団${config.gamesPerSeason}試合はレギュラーシーズンの期間に入りきらず、${leftover.length}試合を組めませんでした`);
+  }
+  return schedule;
+};
+
+// 日程を組み、入りきらなかった試合（leftover）も返す
+const buildSeasonSchedule = (config) => {
+  const { teams, gamesPerSeason = 60, startDate, leagueFormat = 'single' } = config;
   const teamsCount = teams.length;
   let allMatchups = [];
 
@@ -458,12 +470,6 @@ export const generateFullSeasonSchedule = (config) => {
     neededDays = Math.min(maxGameDays, selectedDays.length + Math.max(1, Math.ceil(leftover.length / Math.max(1, gamesPerDay))));
   }
 
-  if (leftover.length > 0) {
-    // 4/1〜10/9 のどの日を使っても、同じ球団を同じ日に2回出さずには入りきらない設定。
-    // プレーオフ（10/10〜）を動かさないため、入らない試合は組まない。
-    console.warn(`[日程] ${teamsCount}球団${gamesPerSeason}試合はレギュラーシーズンの期間に入りきらず、${leftover.length}試合を組めませんでした`);
-  }
-
   // スケジュールを配置
   const schedule = placed.map(({ day, matchup }, i) => ({
     id: i + 1,
@@ -473,7 +479,42 @@ export const generateFullSeasonSchedule = (config) => {
     result: null, phase: SEASON_PHASES.REGULAR_SEASON
   }));
 
-  return schedule;
+  return { schedule, leftover };
+};
+
+/**
+ * その設定の試合がレギュラーシーズン（4/1〜10/9）に入りきるか。
+ * 同じ球団を同じ日に2回出さないので、1日に組める試合は「球団数÷2」まで。
+ * 1リーグ3球団なら1日1試合で、130試合以上は物理的に入らない。
+ * 規定画面の試合数の選択肢はこれで絞る。
+ */
+const fitsCache = new Map();
+export const fitsInRegularSeason = (teamsCount, gamesPerSeason, leagueFormat = 'single') => {
+  const format = leagueFormat === 'two' && teamsCount >= 4 ? 'two' : 'single';
+  const key = `${format}|${teamsCount}|${gamesPerSeason}`;
+  if (!fitsCache.has(key)) {
+    const teams = Array.from({ length: teamsCount }, (_, i) => `T${i}`);
+    const { leftover } = buildSeasonSchedule({
+      teams, gamesPerSeason,
+      startDate: { year: 2025, month: 4, day: 1 },
+      leagueFormat: format,
+    });
+    fitsCache.set(key, leftover.length === 0);
+  }
+  return fitsCache.get(key);
+};
+
+/**
+ * 1リーグ制で選べる試合数（対戦相手数の倍数で、レギュラーシーズンに入りきるもの）
+ * @returns {Array<number>}
+ */
+export const getValidSingleLeagueGameCounts = (teamsCount, maxGames = 150) => {
+  const d = Math.max(1, teamsCount - 1);
+  const results = [];
+  for (let i = 1; d * i <= maxGames; i++) {
+    if (fitsInRegularSeason(teamsCount, d * i, 'single')) results.push(d * i);
+  }
+  return results;
 };
 
 /**

@@ -16,7 +16,7 @@ import { getTransferCandidates, transferManagerTo } from '../../src/game/manager
 import { generateExpansionRoster, generateTryoutCandidates, updateReleasedPoolAfterTryout } from '../../src/season/tryoutSystem.js';
 import { releasedPlayersPool } from '../../src/teams-data.js';
 import { executeTeamCampTraining } from '../../src/season/campTraining.js';
-import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts } from '../../src/season/scheduleGenerator.js';
+import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason } from '../../src/season/scheduleGenerator.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -126,6 +126,19 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   } finally {
     console.warn = warn;
   }
+  // 規定画面の選択肢には、期間に入りきる試合数だけを出す（入らない分は組まれないため）
+  for (let count = 2; count <= 12; count++) {
+    for (const games of getValidSingleLeagueGameCounts(count, 150)) {
+      assert.ok(fitsInRegularSeason(count, games, 'single'), `1リーグ${count}球団${games}試合が選べるのに期間に入りきらない`);
+    }
+    if (count >= 4) {
+      for (const { value } of getValidTwoLeagueGameCounts(count, 150)) {
+        assert.ok(fitsInRegularSeason(count, value, 'two'), `2リーグ${count}球団${value}試合が選べるのに期間に入りきらない`);
+      }
+    }
+  }
+  assert.ok(!getValidSingleLeagueGameCounts(3, 150).includes(130), '1リーグ3球団130試合（1日1試合で192日に入らない）が選べる');
+  assert.ok(getValidSingleLeagueGameCounts(3, 150).includes(128), '1リーグ3球団128試合は入りきるのに選べない');
 }
 
 // --- 戦力外の選手は、翌日のトライアウトで年を取らない ---
@@ -151,4 +164,4 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   releasedPlayersPool.length = 0;
 }
 
-console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合 / 戦力外の選手を二重に加齢しない）');
+console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / 戦力外の選手を二重に加齢しない）');
