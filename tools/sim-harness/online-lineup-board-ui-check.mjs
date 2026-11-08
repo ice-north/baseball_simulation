@@ -261,6 +261,25 @@ try {
 
   // ページを移っても編集が残る
   await go('選手成績');
+  // ⚠ 列の多い区分（主要成績）でも「選手名」の見出しは左寄せ（下の選手名とそろえる）
+  {
+    const roster = p.locator('.online-compact-roster[data-wide="true"]').first();
+    await roster.waitFor();
+    const head = roster.locator('.online-roster-columns > button').first();
+    const name = roster.locator('.online-roster-rows article').first();
+    const [headX, nameX] = await Promise.all([
+      head.evaluate((b) => {
+        const r = document.createRange();
+        r.selectNodeContents(b);
+        return r.getBoundingClientRect().left;
+      }),
+      name.evaluate((a) => a.getBoundingClientRect().left),
+    ]);
+    assert.ok(
+      Math.abs(headX - nameX) <= 12,
+      `主要成績の「選手名」の見出しが左に寄っていない（見出し${Math.round(headX)}・選手名${Math.round(nameX)}）`,
+    );
+  }
   await go('スタメン設定');
   assert.deepEqual(await slots(), dropped, 'ページ移動で編集が消えた');
 
@@ -819,7 +838,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / ホームの直近と今後をターンで横並び / 守備位置の変更）',
+    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び / 守備位置の変更）',
   );
 } finally {
   await browser.close();

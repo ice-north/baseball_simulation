@@ -2348,6 +2348,9 @@ small.online-gain {
 .online-desktop .online-compact-roster[data-wide='true'] .online-roster-person { max-width: 25%; }
 .online-desktop .online-compact-roster[data-wide='true'] .online-roster-columns > button { width: 25%; }
 .online-desktop .online-compact-roster[data-wide='true'] .online-roster-columns button { font-size: 11px; padding-left: 2px; padding-right: 2px; }
+/* ⚠ 列の多い区分（主要成績など）でも「選手名」の見出しは左寄せ。幅25%を取ると
+   ボタンの文字が中央に寄り、下の選手名とずれていた。上の行より後に置くこと（左の余白を0に戻す） */
+.online-desktop .online-compact-roster[data-wide='true'] .online-roster-columns > button:not(:where(.online-sp *)) { text-align: left; padding-left: 0; }
 
 .online-replay-dialog > header { position: sticky; top: 0; z-index: 6; background: var(--surface-2); }
 .online-replay-dialog > .online-replay-launch { position: sticky; top: 56px; z-index: 5; background: var(--surface-2); }
