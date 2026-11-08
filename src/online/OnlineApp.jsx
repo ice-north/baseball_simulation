@@ -64,6 +64,9 @@ const COMMAND_MESSAGES = {
   reset: 'すべて消しました。リーグを作り直してください',
 };
 
+// 版のずれ（`code: 'revision'`）だけなら最新の版で1回だけ送り直す命令（`command` の注記）
+const RETRY_ON_REVISION = new Set(['lineup', 'submit', 'campRound']);
+
 export default function OnlineApp() {
   const [auth, setAuth] = useState(readAuth);
   const [config, setConfig] = useState(null);
@@ -311,7 +314,10 @@ export default function OnlineApp() {
       //    「他の操作で更新されました」になり、編成を保存し直す羽目になっていた。
       //    どちらも自分の保存済みの内容（`baseLineup` / `baseSubmission`）で
       //    本当の食い違いを別に確かめているので、送り直しても上書き事故は起きない。
-      if (error?.code !== 'revision' || !['lineup', 'submit'].includes(type))
+      //    キャンプのクール（`campRound`）も同じ。サーバーがクール番号を照合して
+      //    次の1つだけを受け付けるので、送り直しても同じクールは2回走らない。
+      //    ⚠ トレードの申し込み・返事は足さない（送り直すと二重の申し込みになりうる）
+      if (error?.code !== 'revision' || !RETRY_ON_REVISION.has(type))
         throw error;
       const latest = await api('view', credentials);
       result = await send(latest?.revision || 0);
