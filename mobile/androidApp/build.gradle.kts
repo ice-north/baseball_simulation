@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 
 plugins {
     id("com.android.application")
@@ -18,7 +20,7 @@ val appCommit: List<String> = runCatching {
 }.getOrDefault(emptyList())
 val appCommitSha = appCommit.getOrNull(0)?.takeIf { it.length == 40 }.orEmpty()
 val appCommitTime = appCommit.getOrNull(1)?.toLongOrNull()?.let {
-    java.time.format.DateTimeFormatter.ISO_INSTANT.format(java.time.Instant.ofEpochSecond(it))
+    DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochSecond(it))
 }.orEmpty()
 val appBranch = (System.getenv("GITHUB_HEAD_REF")?.takeIf { it.isNotEmpty() } ?: System.getenv("GITHUB_REF_NAME")).orEmpty()
 
