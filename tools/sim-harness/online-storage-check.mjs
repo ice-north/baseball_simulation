@@ -319,6 +319,8 @@ await assert.rejects(
 );
 const archived = row.views._records;
 assert.ok(Number.isInteger(row.views._meta?.revision) && 'status' in row.views._meta, '保存にリーグ全体の進行情報（_meta）が無い');
+// 直せる版かどうかも載せる（`isDue` が直せない版で起こさないため）
+assert.equal(typeof row.views._meta.migratable, 'boolean', '_meta に直せるかの印が無い');
 await store.transaction((bundle) => {
   bundle.sessions.a = 'archive-session';
 });
@@ -515,6 +517,25 @@ assert.equal(
   assert.equal(await store.isDue('2026-06-01T00:00:00.000Z'), true, '管理者が不参加だと定期処理が動かない');
   assert.equal(await store.isDue('2025-06-01T00:00:00.000Z'), false);
   assert.ok(controlSelects.every((sel) => sel !== '*'), '定期処理の判定で全員のビューを読んでいる');
+  // ⚠ **直せない版のリーグで起こさない**。新しすぎる版・計算方法の違う版は
+  //    定期処理でも直せないのに、毎回ロックと全体の読み込みをして失敗し、
+  //    その間の参加者の操作を「処理中」で弾いていた（進行時刻が来ていても同じ）
+  const liveMeta = row.views._meta;
+  const dueWith = async (meta) => {
+    row = { ...row, views: { ...row.views, _meta: { ...liveMeta, ...meta } } };
+    return store.isDue('2025-06-01T00:00:00.000Z');
+  };
+  assert.equal(await dueWith({ schema: ONLINE_SCHEMA + 1, migratable: false }), false, '新しすぎる版で毎回起こしている');
+  assert.equal(
+    await dueWith({ schema: ONLINE_SCHEMA - 1, migratable: false, nextAdvanceAt: '2025-01-01T00:00:00.000Z' }),
+    false,
+    '計算方法の違う版で毎回起こしている',
+  );
+  assert.equal(await dueWith({ schema: ONLINE_SCHEMA - 1, migratable: true }), true, '直せる版を起こしていない');
+  // `migratable` を持たない以前の `_meta` は版の範囲で判定する
+  assert.equal(await dueWith({ schema: ONLINE_SCHEMA - 1 }), true, '以前の _meta で直せる版を起こしていない');
+  assert.equal(await dueWith({ schema: ONLINE_SCHEMA + 1 }), false, '以前の _meta で新しすぎる版を起こしている');
+  row = { ...row, views: { ...row.views, _meta: liveMeta } };
   // 絞り込みが通らない環境では全列を読んで動く
   rejectNarrowSelect = true;
   const fallbackStore = new SupabaseStore({ url: 'https://fixture.test', serviceKey: 'test-only', members: [], adminId: 'a', fetchImpl });
