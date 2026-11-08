@@ -17,6 +17,42 @@ export function rosterShortage(players = [], useDH = false) {
   return missing;
 }
 
+// 先発ローテに入れられる選手。投手登録か、投球の能力を持つ選手（オンラインの二刀流で野手もローテに入れられる）。
+// 投手登録の選手はいつも先発できる（投球の能力を持たない古い形でも）
+const canStartPlayer = player => player?.position === 'pitcher' || !!player?.pitching;
+
+/**
+ * 次に投げる先発の id。ローテの今の順番から、抹消中でなく先発できる最初の選手。
+ * ⚠ `ensureCompleteLineup` が9番に入れる選手と**同じ決め方**にすること。二刀流の先発の日の
+ *    入れ替え（`server/dailyLineup.mjs` の `benchTwoWayStarter`）がこれで先発を見る。
+ *    ずれると、先発を野手の枠から外したまま打順を保存してしまう
+ */
+export function nextRotationStarterId(team) {
+  const byId = new Map((team?.players || []).map(p => [p.id, p]));
+  const starters = team?.pitchingRotation?.starters || [];
+  const index = team?.pitchingRotation?.currentStarterIndex || 0;
+  return [...starters.slice(index), ...starters.slice(0, index)].find(id => {
+    const player = byId.get(id);
+    return !!player && player.isActive !== false && canStartPlayer(player);
+  });
+}
+
+/**
+ * 保存する打順の9番（投手）に**仮に**置く選手の id（9番は試合の日に組み直す）。
+ * 次の先発から、野手の枠に入っていない人。居なければ、野手の枠に入っていない投手登録の選手。
+ * ⚠ 二刀流で次の先発が野手の枠にも居るとき、同じ選手を9番に重ねない。
+ * ⚠ 控えを「投球の能力を持つ」で広く拾わないこと。野手もみな投球の能力を持つので、
+ *    控えの野手が投手として9番に並んでしまう。
+ * サーバーの保存（`lineupCommand`）・試合の後の戻し（`dailyLineup`）・スマホの編成（`lineupBridge`）で使う。
+ */
+export function placeholderPitcherId(players = [], starters = [], index = 0, fielding = new Set()) {
+  const byId = new Map(players.map(p => [p.id, p]));
+  const free = p => !!p && p.isActive !== false && !fielding.has(p.id);
+  return [...starters.slice(index), ...starters.slice(0, index)]
+    .map(id => byId.get(id)).find(p => free(p) && canStartPlayer(p))?.id
+    ?? players.find(p => free(p) && p.position === 'pitcher')?.id;
+}
+
 // 日付進行前に打順・守備位置・先発投手を揃える。既存の有効な指定を優先する。
 export function ensureCompleteLineup(team, useDH = false) {
   if (!team) return true;
@@ -35,8 +71,7 @@ export function ensureCompleteLineup(team, useDH = false) {
   const startIndex = team.pitchingRotation?.currentStarterIndex || 0;
   // ⚠ 先発ローテの選手は**投手登録でなくてよい**（オンラインの二刀流。野手を
   //    ローテに入れられる）。登録で絞ると、ローテの野手を飛ばして別の投手が投げる
-  //    投手登録の選手はいつも先発できる（投球の能力を持たない古い形でも）
-  const canStart = player => player?.position === 'pitcher' || !!player?.pitching;
+  const canStart = canStartPlayer;
   const nextStarterId = useDH
     ? [...rotationStarters.slice(startIndex), ...rotationStarters.slice(0, startIndex)]
       .find(id => canStart(active.get(id)))
@@ -55,10 +90,8 @@ export function ensureCompleteLineup(team, useDH = false) {
   }
 
   if (!useDH) {
-    const rotation = team.pitchingRotation?.starters || [];
-    const rotationIndex = team.pitchingRotation?.currentStarterIndex || 0;
-    const rotated = [...rotation.slice(rotationIndex), ...rotation.slice(0, rotationIndex)];
-    const pitcher = rotated.map(id => active.get(id)).find(canStart)
+    // ⚠ 先発は `nextRotationStarterId`（二刀流の先発の日の入れ替えと同じ決め方）
+    const pitcher = active.get(nextRotationStarterId(team))
       || source.map(entry => active.get(entry.playerId)).find(player => player?.position === 'pitcher')
       || players.find(player => player.position === 'pitcher' && player.isActive !== false);
     if (!pitcher) return false;

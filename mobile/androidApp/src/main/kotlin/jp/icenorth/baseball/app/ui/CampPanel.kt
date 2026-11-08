@@ -176,8 +176,8 @@ internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<Json
     var all by rememberSaveable { mutableStateOf(false) }
     val useLast = showLast && last != null
     val gains = if (useLast) last.at("gains").obj() else total
-    // ⚠ 出来事（フォーム改造・新球種など）はクールごとにしか残していない
-    val rows = campGainRows(gains, roster, if (useLast) last.at("events").obj() else null)
+    // 出来事（フォーム改造・新球種・覚醒など）は、このクールの分とキャンプ通算の分の両方をサーバーが残す
+    val rows = campGainRows(gains, roster, if (useLast) last.at("events").obj() else camp.at("events").obj())
     val totals = campGainTotals(gains)
     Section("練習の成果") {
         ChoiceRow(

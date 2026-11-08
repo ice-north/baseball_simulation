@@ -51,6 +51,13 @@ class AppViewModel internal constructor(app: Application, private val createApi:
     var campDraft by mutableStateOf<CampDraft?>(null)
     var tradeDraft by mutableStateOf<TradeDraft?>(null)
 
+    /**
+     * 届いた提案の知らせから一覧を開いたときに、脇へ置いた作りかけの案。
+     * ⚠ 知らせを押しただけで作りかけの案を捨てないこと（選んだ選手が黙って消えていた）。
+     *    一覧の「作りかけの提案を続ける」で戻す
+     */
+    var parkedTradeDraft by mutableStateOf<TradeDraft?>(null)
+
     /** 手続きタブでトレードの側を開いているか（届いた提案の知らせから直接開くため、ここに置く） */
     var procTrade by mutableStateOf(false)
 
@@ -208,6 +215,7 @@ class AppViewModel internal constructor(app: Application, private val createApi:
         phaseDraft = null
         campDraft = null
         tradeDraft = null
+        parkedTradeDraft = null
         procTrade = false
         message = null
         error = null

@@ -122,10 +122,17 @@ const reliefFieldReplacement = (players, reliever, currentPitcherId, removedIds)
     getPositionFitness(b, reliever.position, 0) - getPositionFitness(a, reliever.position, 0)
   )[0];
 
+// 野手の打順（守備に就いている）に居るか。⚠ DH制では9番も野手（投手は打順0）。
+// 「9番＝投手」とみなすと、DH制で9番を打つ二刀流の選手が代役なしに登板して打順に穴が開く
+const inFieldSlot = (player) => {
+  const order = player?.battingOrder || 0;
+  return order > 0 && (LEAGUE_SETTINGS.useDH || order < 9);
+};
+
 const canEnterRelief = (players, id, currentPitcherId, removedIds) => {
   const player = players?.find(p => p.id === id);
   return !!player && player.isActive !== false && !removedIds?.has(id) &&
-    (!(player.battingOrder > 0 && player.battingOrder < 9) ||
+    (!inFieldSlot(player) ||
       !!reliefFieldReplacement(players, player, currentPitcherId, removedIds));
 };
 
@@ -1376,14 +1383,19 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (batterData && phData) {
         const forPitcher = batterData.id === gameState.currentPitcherId[offenseKey];
         if (forPitcher) {
+          // ⚠ 代打を出すのは**次の守備で実際に選ばれる投手が居るとき**だけ。継投の選び方と
+          //    同じ範囲で見る: 救援の欄（登録を問わない）で疲労50未満の人か、打順に居ない
+          //    投手（緊急の登板）。ローテの野手は救援に選ばれないので数えない。数えると
+          //    代打の後に誰も上がれず、退いた投手が投げ続け、代打が9番に残っていた
           const removed = new Set([...gameState.removedIds, batterData.id, phData.id]);
           const rotation = offenseTeam.pitchingRotation || {};
-          const staff = new Set([
-            ...(rotation.starters || []), ...(rotation.middleRelievers || []),
-            ...(rotation.setupMen || []), rotation.closer,
-          ]);
+          const reliefFatigue = rotation.reliefFatigue || {};
+          const bullpen = new Set([
+            ...(rotation.middleRelievers || []), ...(rotation.setupMen || []), rotation.closer,
+          ].filter(Boolean));
           if (!offenseTeam.players.some(p =>
-            (isPitcher(p) || staff.has(p.id)) &&
+            ((isPitcher(p) && (p.battingOrder || 0) === 0) ||
+              (bullpen.has(p.id) && (reliefFatigue[p.id] || 0) < 50)) &&
             canEnterRelief(offenseTeam.players, p.id, batterData.id, removed)
           )) return batter;
         }
@@ -1836,7 +1848,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const relieverData = defenseTeam.players.find(p => p.id === reliever.id);
       const relieverOldOrder = relieverData.battingOrder;
       const relieverOldPos = relieverData.position;
-      const isTwoWaySwap = relieverOldOrder > 0 && relieverOldOrder < 9;
+      const isTwoWaySwap = inFieldSlot(relieverData);
       const replacement = isTwoWaySwap
         ? reliefFieldReplacement(defenseTeam.players, relieverData, currentPitcher.id, gs.removedIds)
         : null;
@@ -2888,7 +2900,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               const relieverData = team.players.find(p => p.id === reliever.id);
               const relieverOldOrder2 = relieverData.battingOrder;
               const relieverOldPos2 = relieverData.position;
-              const isTwoWaySwap2 = relieverOldOrder2 > 0 && relieverOldOrder2 < 9;
+              const isTwoWaySwap2 = inFieldSlot(relieverData);
               const replacement = isTwoWaySwap2
                 ? reliefFieldReplacement(team.players, relieverData, pitcher.id, gameState.removedIds)
                 : null;

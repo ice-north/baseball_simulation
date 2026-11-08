@@ -1,4 +1,8 @@
-import { ensureCompleteLineup } from '../src/game/lineup.js';
+import {
+  ensureCompleteLineup,
+  nextRotationStarterId,
+  placeholderPitcherId,
+} from '../src/game/lineup.js';
 import {
   requireOnline,
   FIELDER_REST_FATIGUE,
@@ -27,20 +31,31 @@ export { FIELDER_REST_FATIGUE, STARTER_SKIP_FATIGUE };
 const FRESH_FATIGUE = SUBSTITUTE_FRESH_FATIGUE;
 const MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
 
+/**
+ * 保存する打順の9番（投手の仮置き）を、野手の枠と重ならない投手に直す。
+ * 今の9番が野手の枠に居ない投手（登録かローテ）ならそのまま。
+ * ⚠ 決め方は `placeholderPitcherId`（保存・スマホの編成と同じ）
+ */
 function restorePitcherSlot(team) {
   const order = team.lineupSettings?.battingOrder || [];
   const ninth = order.find((e) => e.position === 'pitcher');
   if (!ninth) return;
-  const fielding = new Set(order.filter((e) => e.position !== 'pitcher').map((e) => e.playerId));
+  const fielding = new Set(
+    order.filter((e) => e.position !== 'pitcher').map((e) => e.playerId),
+  );
   const starters = team.pitchingRotation?.starters || [];
-  const index = (team.pitchingRotation?.currentStarterIndex || 0) % (starters.length || 1);
-  const available = (p) => p && p.isActive !== false && !fielding.has(p.id) &&
-    (p.position === 'pitcher' || p.pitching);
-  if (available(team.players.find((p) => p.id === ninth.playerId))) return;
-  const next = [...starters.slice(index), ...starters.slice(0, index)]
-    .map((id) => team.players.find((p) => p.id === id)).find(available) ||
-    team.players.find(available);
-  if (next) ninth.playerId = next.id;
+  const current = team.players.find((p) => p.id === ninth.playerId);
+  if (
+    current &&
+    current.isActive !== false &&
+    !fielding.has(current.id) &&
+    (current.position === 'pitcher' || starters.includes(current.id))
+  )
+    return;
+  const index =
+    (team.pitchingRotation?.currentStarterIndex || 0) % (starters.length || 1);
+  const next = placeholderPitcherId(team.players, starters, index, fielding);
+  if (next !== undefined) ninth.playerId = next;
 }
 
 function restTiredFielders(team) {
@@ -105,9 +120,11 @@ export function benchTwoWayStarter(team) {
   const order = team.lineupSettings?.battingOrder || [];
   const starters = team.pitchingRotation?.starters || [];
   if (!starters.length) return () => {};
-  const index =
-    (team.pitchingRotation.currentStarterIndex || 0) % starters.length;
-  const starterId = starters[index];
+  // ⚠ 先発は `ensureCompleteLineup` と同じ決め方（`nextRotationStarterId`）。
+  //    `starters[index]` だと、その選手が抹消中のとき別の選手を見てしまい、
+  //    実際に9番へ回る二刀流の選手が野手の枠から外れたまま保存される
+  const starterId = nextRotationStarterId(team);
+  if (starterId === undefined) return () => {};
   const slot = order.find(
     (e) =>
       e.playerId === starterId &&

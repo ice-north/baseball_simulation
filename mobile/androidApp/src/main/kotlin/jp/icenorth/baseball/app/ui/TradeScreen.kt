@@ -96,8 +96,14 @@ fun TradeScreen(model: AppViewModel, raw: JsonObject) {
             Caption("返事が必要な提案（${waiting.size}件）")
             waiting.forEach { TradeCard(model, view, raw, it) }
         }
+        model.parkedTradeDraft?.let { parked ->
+            OutlinedButton(
+                onClick = { model.tradeDraft = parked; model.parkedTradeDraft = null },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (parked.counterOf != null) "作りかけの逆提案を続ける" else "作りかけの提案を続ける") }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { model.tradeDraft = TradeDraft() }, enabled = partners.isNotEmpty(), modifier = Modifier.weight(1f)) {
+            Button(onClick = { model.parkedTradeDraft = null; model.tradeDraft = TradeDraft() }, enabled = partners.isNotEmpty(), modifier = Modifier.weight(1f)) {
                 Text("＋ 新しくトレードを考える")
             }
             InfoButton(
@@ -173,8 +179,11 @@ private fun tradePartners(view: LeagueView, raw: JsonObject): Pair<List<String>,
 @Composable
 private fun partnerRoster(model: AppViewModel, partner: String?): Pair<List<JsonObject>?, String?> {
     val revision = model.view?.revision
-    var roster by remember(partner, revision) { mutableStateOf<List<JsonObject>?>(null) }
-    var failure by remember(partner, revision) { mutableStateOf<String?>(null) }
+    // ⚠ 版が変わっても**読み直す間は前の名簿を出したまま**にする（相手を変えたときだけ空にする）。
+    //    版はほかの参加者の保存や試合の進行でも変わる。空にすると、選んでいる途中や確認の段で
+    //    「読み込み中…」に戻り、送るボタンが押せなくなる。最終の判断はサーバーがする
+    var roster by remember(partner) { mutableStateOf<List<JsonObject>?>(null) }
+    var failure by remember(partner) { mutableStateOf<String?>(null) }
     LaunchedEffect(partner, revision) {
         if (partner == null) return@LaunchedEffect
         try {

@@ -11,13 +11,14 @@
 //    `validateLineup` も野手8人ちょうど）。DH を入れるなら3箇所を揃えて直す。
 // ============================================================
 
+import { placeholderPitcherId } from '../game/lineup.js';
+
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 /** view から一人用の画面が期待する `team` 形を組み立てる（複製） */
 export function teamFromView(view) {
   const roster = clone(view.roster || []);
   const lineup = view.lineup || {};
-  const byId = new Map(roster.map((p) => [p.id, p]));
   // 打順は view のぶん（野手8人）＋ 投手の枠を復元する
   const battingOrder = clone(lineup.battingOrder || []);
   const starters = clone(lineup.starters || []);
@@ -25,18 +26,10 @@ export function teamFromView(view) {
   //    以前は常に先頭を入れていて、画面の打順に次の試合で投げない投手が出ていた。
   const nextIndex = Math.max(0, starters.indexOf(view.nextStarterId));
   // ⚠ 次の先発が野手の枠にも入っている（二刀流）ときは、同じ選手を2回並べない。
-  //    サーバーの保存（`server/lineupCommand.mjs`）と同じく、野手に入っていない投手で埋める。
-  //    先発が全員兼任なら、控えの投手を使う（同じ選手を9番にも追加しない）。
+  //    サーバーの保存（`server/lineupCommand.mjs`）と同じ決め方（`placeholderPitcherId`）。
+  //    先発が全員兼任なら、野手の枠に居ない投手登録の選手を使う（同じ選手を9番にも追加しない）。
   const fielding = new Set(battingOrder.map((e) => e.playerId));
-  const available = (player) =>
-    player &&
-    player.isActive !== false &&
-    !fielding.has(player.id) &&
-    (player.position === 'pitcher' || player.pitching);
-  const pitcherId =
-    [...starters.slice(nextIndex), ...starters.slice(0, nextIndex)].find(
-      (id) => available(byId.get(id)),
-    ) ?? roster.find(available)?.id;
+  const pitcherId = placeholderPitcherId(roster, starters, nextIndex, fielding);
   if (pitcherId !== undefined) {
     battingOrder.push({
       playerId: pitcherId,

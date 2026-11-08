@@ -1,4 +1,4 @@
-import { PHASE_LABELS } from './shared.js';
+import { PHASE_LABELS, CAMP_ROUNDS } from './shared.js';
 
 // ============================================================
 // 「自分が何かしないといけないこと」の数え方。PC版の左メニューの数字・上の帯、
@@ -22,13 +22,18 @@ export function pendingProcedure(view) {
   if (!view) return null;
   if (view.pendingPack) {
     if (view.pendingPack.chosen) return null;
-    return { kind: 'pack_select', label: PHASE_LABELS.pack_select, deadline: null, progress: null };
+    return {
+      kind: 'pack_select',
+      label: PHASE_LABELS.pack_select,
+      deadline: null,
+      progress: null,
+    };
   }
   const phase = view.phase;
   if (!phase) return null;
   if (phase.kind === 'camp') {
     const done = phase.camp?.rounds || 0;
-    const total = phase.camp?.total || 4;
+    const total = phase.camp?.total || CAMP_ROUNDS;
     if (done >= total) return null;
     return {
       kind: 'camp',

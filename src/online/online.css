@@ -610,7 +610,7 @@
   gap: 12px;
   flex-wrap: wrap;
 }
-.online-camp-gains-head h4 {
+.online-camp-gains-head h4:not(:where(.online-sp *)) {
   margin: 0;
   font-size: 14px;
 }
@@ -630,7 +630,7 @@
   grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 4px 16px;
 }
-.online-camp-gain-list li {
+.online-camp-gain-list li:not(:where(.online-sp *)) {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -643,7 +643,7 @@
   gap: 4px;
   min-width: 110px;
 }
-.online-camp-gain-name small {
+.online-camp-gain-name small:not(:where(.online-sp *)) {
   color: #9fb0c4;
 }
 .online-camp-gain-items {
@@ -656,7 +656,7 @@
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
-small.online-gain {
+small.online-gain:not(:where(.online-sp *)) {
   margin-left: 2px;
   font-size: 10px;
 }
@@ -2817,7 +2817,7 @@ small.online-gain {
   font-weight: 700;
   color: #fbbf24;
 }
-.online-pack-detail h3 small {
+.online-pack-detail h3 small:not(:where(.online-sp *)) {
   margin-left: 10px;
   font-size: 13px;
   font-weight: 700;
@@ -3079,17 +3079,17 @@ small.online-gain {
   background: rgba(245, 158, 11, 0.14);
   color: #fde68a;
 }
-.online-procedure-banner > div {
+.online-procedure-banner > div:not(:where(.online-sp *)) {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.online-procedure-banner strong {
+.online-procedure-banner strong:not(:where(.online-sp *)) {
   font-size: 15px;
   color: #fff7ed;
 }
-.online-procedure-banner span {
+.online-procedure-banner span:not(:where(.online-sp *)) {
   font-size: 12px;
 }
 /* 検証用の注記は本文ではなく見出しの帯に置く（どのページでも同じ場所） */

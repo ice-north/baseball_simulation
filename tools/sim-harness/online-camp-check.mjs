@@ -19,7 +19,7 @@ import {
   recordCampRound,
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
-import { CAMP_MENUS, CAMP_SUB_MENUS } from '../../src/online/shared.js';
+import { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_ROUNDS } from '../../src/online/shared.js';
 import {
   TRAINING_MENUS,
   SUB_TRAINING_MENUS,
@@ -564,6 +564,57 @@ assert.ok(
   }
 }
 
+// --- 版を上げる前に4クール済ませていた人が居ても、締め切りで止まらないこと ----
+// ⚠ 前の版のキャンプの記録は `rounds` と `plan` だけ（`last`・`gains` が無い）。
+//    完了結果を作るときに `clone(state.last)`（＝ `JSON.parse(undefined)`）で投げ、
+//    締め切りの解決が毎回失敗してリーグが止まっていた
+{
+  const dir = await mkdtemp(join(tmpdir(), 'pennant-camp-legacy-'));
+  try {
+    const store = new FileStore(join(dir, 'state.gz'));
+    const service = new LeagueService(store, {
+      members: [{ userId: 'admin', label: '管理者' }],
+      adminId: 'admin',
+      clock: () => NOW,
+    });
+    const admin = (await service.login('admin')).sessionId;
+    let seq = 0;
+    const send = async (type, payload) => {
+      const l = (await store.read()).league;
+      seq += 1;
+      return service.command('admin', admin, {
+        requestId: `camp-legacy-${type}-${seq}`,
+        revision: l?.revision ?? 0,
+        type,
+        payload,
+      });
+    };
+    await send('create');
+    const created = (await store.read()).league;
+    await send('submit', {
+      phaseId: created.phase.id,
+      plan: { packId: created.packs[0].id },
+      ready: true,
+      baseSubmission: null,
+    });
+    assert.equal((await store.read()).league.phase?.kind, 'camp', 'キャンプに入っていない');
+    await store.transaction((b) => {
+      b.league.phase.camp = {
+        admin: { rounds: CAMP_ROUNDS, plan: { policy: { direction: 'balanced', phase: 'skill' } } },
+      };
+    });
+    await send('testmode', { on: true });
+    await send('resolve');
+    const after = (await store.read()).league;
+    assert.notEqual(after.phase?.kind, 'camp', '前の版の記録が残っているとキャンプが終わらない');
+    assert.equal(after.campResults.admin.rounds, CAMP_ROUNDS);
+    assert.equal(after.campResults.admin.last, null, '無い記録を作り出している');
+    assert.equal((await service.view('admin', admin)).lastCamp.year, after.campResults.admin.year);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 // ⚠ **割り当ての無い選手は全体の方針で埋める**（携帯・未提出の球団のため）。
 //    1人だけ割り当てて、残りが既定のまま伸びることを見る
 {
@@ -595,5 +646,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 画面のメニューをサーバーが受け取れる）',
+  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる）',
 );

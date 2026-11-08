@@ -154,7 +154,13 @@ fun OnlineApp(model: AppViewModel) {
                     notice?.let { text ->
                         TradeNotice(
                             text,
-                            onOpen = { tab = Tab.Procedures; model.procTrade = true; model.tradeDraft = null },
+                            onOpen = {
+                                tab = Tab.Procedures
+                                model.procTrade = true
+                                // 作りかけの案は捨てずに脇へ置く（一覧の「作りかけの提案を続ける」で戻す）
+                                model.tradeDraft?.let { model.parkedTradeDraft = it }
+                                model.tradeDraft = null
+                            },
                             onDismiss = { model.markTradesSeen(tradeKeys) },
                             modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
                         )

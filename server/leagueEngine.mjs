@@ -1285,17 +1285,25 @@ function resolvePhase(league, now) {
     }
     // 最終クールの応答では phase が消えるため、完了結果を別に残す。
     // 初期名簿へ入れ替わる球団には、入れ替え前のCPU選手の成果を見せない。
+    // ⚠ 記録の無い人を飛ばすこと。版を上げる前に自分で4クール済ませた人は
+    //    `last` を持たず（`clone(undefined)` は例外）、名簿の無い球団は
+    //    `done` に入らない。ここで投げると締め切りが進まず、リーグが止まる
     league.campResults = Object.fromEntries(
-      league.members.filter((m) => !m.packSeed).map((m) => {
-        const state = done[m.userId];
-        return [m.userId, {
-          year: league.season.year,
-          rounds: state.rounds,
-          last: clone(state.last),
-          gains: clone(state.gains || {}),
-          events: clone(state.events || {}),
-        }];
-      }),
+      league.members
+        .filter((m) => !m.packSeed && done[m.userId])
+        .map((m) => {
+          const state = done[m.userId];
+          return [
+            m.userId,
+            {
+              year: league.season.year,
+              rounds: state.rounds || 0,
+              last: state.last ? clone(state.last) : null,
+              gains: clone(state.gains || {}),
+              events: clone(state.events || {}),
+            },
+          ];
+        }),
     );
     // ⚠ **キャンプの練習より後に入れ替えること**。先に入れ替えると、
     //    選んだばかりの24人がキャンプで成長してしまい、セットの釣り合いが崩れる

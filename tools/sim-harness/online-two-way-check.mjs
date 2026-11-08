@@ -9,6 +9,8 @@
 //   - 組み直し（CPUの打順作り）が選手の守備位置の登録を書き換えない
 //   - 戻した後に同じ選手が2回並ばない（9番は野手に入っていない先発で仮に埋める）
 //   - 控えは守れて疲れていない野手から。野手の控えが居なくても日を進められる
+//   - 今の順番の先発が抹消中でも、実際に投げる二刀流の選手を野手の枠から外さない
+//   - 9番の仮置きに控えの野手を「投手」として入れない
 import assert from 'node:assert/strict';
 import './lib/bootstrap.mjs';
 import {
@@ -24,7 +26,10 @@ import {
   prepareDailyLineup,
   benchTwoWayStarter,
 } from '../../server/dailyLineup.mjs';
-import { ensureCompleteLineup } from '../../src/game/lineup.js';
+import {
+  ensureCompleteLineup,
+  placeholderPitcherId,
+} from '../../src/game/lineup.js';
 import { getPositionFitness } from '../../src/utils/physics.js';
 import { autoSimulateGame } from '../../src/game/autoSimulation.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
@@ -280,8 +285,41 @@ const startTwoWay = (live) => {
   );
 }
 
+{
+  // 今の順番の先発が抹消中（組み直しは順番を詰めない）。`ensureCompleteLineup` は
+  // 次の起用できる先発（二刀流の選手）を9番に入れる。入れ替えも同じ選手を見ること
+  loadLeagueWorld(league);
+  const live = TEAMS_DATA[own];
+  const rot = live.pitchingRotation;
+  const at = rot.starters.indexOf(twoWay);
+  const before = (at - 1 + rot.starters.length) % rot.starters.length;
+  rot.currentStarterIndex = before;
+  live.players.find((p) => p.id === rot.starters[before]).isActive = false;
+  const undo = benchTwoWayStarter(live);
+  assert.ok(ensureCompleteLineup(live, false), '組み直しの確かめで打順が組めない');
+  undo();
+  const kept = live.lineupSettings.battingOrder;
+  assert.equal(
+    kept.find((e) => e.position === 'right')?.playerId,
+    twoWay,
+    '前の先発が抹消中のとき、二刀流の選手が右翼から外れたまま残った',
+  );
+  assert.equal(new Set(kept.map((e) => e.playerId)).size, kept.length, '同じ選手が2回並んでいる');
+}
+{
+  // 9番の仮置き: 先発がみな野手の枠に居るとき、控えの野手（投球の能力はある）でなく投手登録の選手
+  const players = [
+    { id: 1, position: 'right', pitching: { stamina: 60 } },
+    { id: 2, position: 'left', pitching: { stamina: 40 } },
+    { id: 3, position: 'pitcher', pitching: { stamina: 80 } },
+  ];
+  assert.equal(placeholderPitcherId(players, [1], 0, new Set([1])), 3, '控えの野手を9番の投手に置いた');
+  assert.equal(placeholderPitcherId(players, [2, 1], 1, new Set([1])), 2, 'ローテの次の先発を飛ばした');
+  assert.equal(placeholderPitcherId(players.slice(0, 2), [1], 0, new Set([1])), undefined);
+}
+
 console.log(
-  '■ 二刀流の起用: OK（投手を野手で・野手を先発と救援で保存できる / 先発の日だけ9番に回って控えが埋め、試合の後に戻る / 野手の先発が投げる / 加えていない野手は救援に入らない / 登録を書き換えない / 戻した後に同じ選手が並ばない / 控えは守れて疲れていない野手から・野手が居なければローテの外の投手）',
+  '■ 二刀流の起用: OK（投手を野手で・野手を先発と救援で保存できる / 先発の日だけ9番に回って控えが埋め、試合の後に戻る / 野手の先発が投げる / 加えていない野手は救援に入らない / 登録を書き換えない / 戻した後に同じ選手が並ばない / 控えは守れて疲れていない野手から・野手が居なければローテの外の投手 / 前の先発が抹消中でも外さない / 9番に控えの野手を置かない）',
 );
 
 // 救援へ回る野手の代役がいなければ続投する。抹消中の控えは戻さない。
