@@ -285,16 +285,42 @@ class AppViewModel internal constructor(app: Application, private val createApi:
         refreshing = false
         operationJob = viewModelScope.launch {
             try {
-                val result = authed(current, epoch) { api.command(it, revision, type, payload) }
+                val result = try {
+                    authed(current, epoch) { api.command(it, revision, type, payload) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (epoch == sessionEpoch) handle(e)
+                    return@launch
+                }
                 // ⚠ 返事に最新のビューが載っていればそのまま使う（読み直しの往復を省く）。
                 //    載っていない（古いサーバー・二重送信の控えから返った）ときは読み直す
                 val fresh = result["view"] as? JsonObject
-                if (fresh != null) applyView(fresh.toString()) else authed(epoch = epoch) { load(it, epoch, readEpoch) }
+                if (fresh != null) {
+                    applyView(fresh.toString())
+                } else {
+                    // ⚠ ここで失敗しても**指示はサーバーで済んでいる**。以前は指示の失敗と同じに扱い、
+                    //    成功の知らせも onDone も出さなかった（保存できていないように見えて押し直す）。
+                    //    読み直しの失敗だけを伝え、成功の知らせと onDone はそのまま出す
+                    try {
+                        authed(epoch = epoch) { load(it, epoch, readEpoch) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (epoch != sessionEpoch) return@launch
+                        if (e.isAuthFailure()) {
+                            handle(e)
+                            return@launch
+                        }
+                        error = "送信は済みましたが、最新の状態を読み込めませんでした。引っ張って更新してください（${e.readable()}）"
+                    }
+                }
                 if (done != null) message = done
                 onDone(result)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // 返事を受けたあとの処理（呼ぶ側の onDone など）の失敗。落とさずに出す
                 if (epoch == sessionEpoch) handle(e)
             } finally {
                 if (epoch == sessionEpoch) busy = false

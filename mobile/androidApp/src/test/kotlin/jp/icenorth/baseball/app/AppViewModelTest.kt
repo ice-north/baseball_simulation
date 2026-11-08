@@ -122,6 +122,29 @@ class AppViewModelTest {
         assertEquals(2, model.view?.revision)
     }
 
+    @Test fun commandThatSucceededIsReportedEvenIfTheReloadAfterItFails() {
+        var views = 0
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> if (++views == 1) VIEW_1 else throw java.io.IOException("電波が無い")
+                // 返事にビューが載っていない（読み直しが要る）
+                "command" -> """{"ok":true}"""
+                else -> "{}"
+            }
+        }
+        login()
+        var done: JsonObject? = null
+        model.command("rename", JsonObject(emptyMap()), done = "名前を変えました") { done = it }
+        until { !model.busy }
+        // 指示はサーバーで済んでいるので、成功の知らせと onDone は出す。読み直しの失敗は別に伝える
+        assertNotNull("指示の成功が呼ぶ側に伝わらない", done)
+        assertEquals("名前を変えました", model.message)
+        assertTrue("読み直しの失敗が伝わらない: ${model.error}", model.error.orEmpty().contains("最新の状態を読み込めませんでした"))
+        assertNotNull(model.auth)
+        assertEquals(2, views)
+    }
+
     @Test fun refreshThatStartedBeforeLogoutCannotRestoreTheSession() {
         val refreshStarted = CompletableDeferred<Unit>()
         val releaseRefresh = CompletableDeferred<Unit>()
