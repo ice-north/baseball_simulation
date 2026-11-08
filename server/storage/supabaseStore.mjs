@@ -292,16 +292,21 @@ export class SupabaseStore {
    * 保存の世代だけを読む（ビューは読まない）。画面の定期の読み直しで「変わったか」を見るため。
    * ⚠ 版（revision）ではなく世代を見ること。版を上げない書き込み（ログイン・形の移行）でも
    *    ビューは変わる（書けるか・形）が、世代は公開のたびに必ず上がる。
+   * ⚠ 保存の版（`_meta.schema`）も返す。サーバーを更新して版が上がっても
+   *    世代は変わらないので、世代だけで「変わっていない」と答えると、
+   *    開いていた画面が版の門番（`versionMismatch`）を通らない。
    */
   async readGeneration(userId, sessionId) {
     const row = (
       await this.request(
-        '/rest/v1/online_control?id=eq.pennant&select=generation,sessions',
+        '/rest/v1/online_control?id=eq.pennant&select=generation,sessions,meta:views->_meta',
       )
     )[0];
     return {
       generation: row?.generation ?? null,
       writable: isLiveSession(row?.sessions, userId, sessionId),
+      // 絞り込みを通さない環境（全列が返る）でも読めるように、元の列も見る
+      schema: (row?.meta ?? row?.views?._meta)?.schema ?? null,
     };
   }
   async archive(row, kind, year) {

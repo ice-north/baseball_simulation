@@ -99,7 +99,10 @@ export class LeagueService {
     //    世代を持たない保存先（ローカルの FileStore）は従来どおり毎回送る。
     if (Number.isInteger(since) && this.store.readGeneration) {
       const current = await this.store.readGeneration(userId, sessionId);
-      if (current.generation === since)
+      // ⚠ 保存の版が今のサーバーと違うときは近道しない（下の版の門番を通す）。
+      //    更新でサーバーの版が上がっても世代は変わらず、開いていた画面に
+      //    古いビューが残ったまま操作だけ弾かれていた
+      if (current.generation === since && current.schema === ONLINE_SCHEMA)
         return { unchanged: true, viewGeneration: since, writable: current.writable };
     }
     const view = this.store.readView

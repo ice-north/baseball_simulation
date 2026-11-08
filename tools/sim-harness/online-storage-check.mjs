@@ -3,6 +3,7 @@ import { gzipSync } from 'node:zlib';
 import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
 import { SupabaseStore } from '../../server/storage/supabaseStore.mjs';
 import { createHandler } from '../../server/http.mjs';
+import { LeagueService } from '../../server/leagueService.mjs';
 import { Readable } from 'node:stream';
 import { ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 let row = {
@@ -536,6 +537,27 @@ assert.equal(
   assert.equal(await dueWith({ schema: ONLINE_SCHEMA - 1 }), true, '以前の _meta で直せる版を起こしていない');
   assert.equal(await dueWith({ schema: ONLINE_SCHEMA + 1 }), false, '以前の _meta で新しすぎる版を起こしている');
   row = { ...row, views: { ...row.views, _meta: liveMeta } };
+  // ⚠ 世代の近道（`since`）でも版の門番を飛ばさない。保存の形が古いまま
+  //    （更新でサーバーの版が上がった直後）でも世代は変わらないので、
+  //    世代だけ比べると開いていた画面に古いビューが残り、操作だけ弾かれていた
+  {
+    const viewer = new LeagueService(store, { adminId: 'a', members: [] });
+    const fresh = await viewer.view('m0', 's0');
+    assert.ok(Number.isInteger(fresh.viewGeneration), '前提: ビューに世代が載る');
+    assert.equal((await viewer.view('m0', 's0', fresh.viewGeneration)).unchanged, true, '同じ世代なら送らない');
+    row = {
+      ...row,
+      views: {
+        ...row.views,
+        m0: { ...row.views.m0, schema: ONLINE_SCHEMA - 1 },
+        _meta: { ...liveMeta, schema: ONLINE_SCHEMA - 1 },
+      },
+    };
+    const stale = await viewer.view('m0', 's0', fresh.viewGeneration);
+    assert.equal(stale.unchanged, undefined, '保存の版が古いのに「変わっていない」と返す');
+    assert.equal(stale.versionMismatch, true, '世代の近道で版の門番を飛ばしている');
+    row = { ...row, views: { ...row.views, m0: others.m0, _meta: liveMeta } };
+  }
   // 絞り込みが通らない環境では全列を読んで動く
   rejectNarrowSelect = true;
   const fallbackStore = new SupabaseStore({ url: 'https://fixture.test', serviceKey: 'test-only', members: [], adminId: 'a', fetchImpl });
