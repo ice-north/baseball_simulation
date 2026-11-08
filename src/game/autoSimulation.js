@@ -23,6 +23,7 @@ import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
          buntThrowOutChance, squeezeHomeThrowChance } from './bunting.js';
 import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
 import { withSeededRandom } from './rng.js';
+import { nextRotationStarterId } from './lineup.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
 const PITCHER_REST_FATIGUE_THRESHOLD = 40;
@@ -500,11 +501,16 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const rotation = teamData.pitchingRotation;
     const userSelected = rotation?._userSelectedStarter;
 
-    // ユーザー指定 or カスタムラインナップ: currentStarterIndexをそのまま使う（疲労チェックなし）
+    // ユーザー指定 or カスタムラインナップ: ローテの今の順番から先発する（疲労チェックなし）
+    // ⚠ 先発は `nextRotationStarterId`（`ensureCompleteLineup` が DH制で打順から外す選手・
+    //    非DH制で9番に入れる選手と**同じ決め方**）。以前は今の番の選手だけを見て、
+    //    抹消中なら下の疲労チェック付きの選び方に落ちていた。すると次の番が疲れているとき
+    //    別の選手が投げ、DH制では打順から外した選手は投げず、打順に残した二刀流の選手が
+    //    投げて打順から抜け、8人で戦っていた。
     if ((userSelected || teamData.lineupSettings?.battingOrder?.length > 0) && rotation?.starters?.length > 0) {
-      const index = rotation.currentStarterIndex || 0;
-      const starterId = rotation.starters[index];
-      const starter = teamData.players.find(p => p.id === starterId && p.isActive !== false);
+      const starterId = nextRotationStarterId(teamData);
+      const starter = starterId === undefined ? null : teamData.players.find(p => p.id === starterId);
+      const index = starter ? rotation.starters.indexOf(starter.id) : -1;
       // _userSelectedStarter は非アクティブ時でも必ずクリア（無効指名が永続しないよう）
       const teamsRot = TEAMS_DATA[teamName]?.pitchingRotation;
       if (teamsRot) delete teamsRot._userSelectedStarter;

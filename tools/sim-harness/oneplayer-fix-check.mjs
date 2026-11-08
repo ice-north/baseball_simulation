@@ -16,6 +16,9 @@ import { getTransferCandidates, transferManagerTo } from '../../src/game/manager
 import { generateExpansionRoster, generateTryoutCandidates, updateReleasedPoolAfterTryout } from '../../src/season/tryoutSystem.js';
 import { releasedPlayersPool } from '../../src/teams-data.js';
 import { executeTeamCampTraining } from '../../src/season/campTraining.js';
+import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
+import { ensureCompleteLineup } from '../../src/game/lineup.js';
+import { autoSimulateGame, setRecommendedLineup } from '../../src/game/autoSimulation.js';
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason } from '../../src/season/scheduleGenerator.js';
 
 const quiet = (fn) => {
@@ -141,6 +144,42 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.ok(getValidSingleLeagueGameCounts(3, 150).includes(128), '1リーグ3球団128試合は入りきるのに選べない');
 }
 
+// --- DH制で、打順から外した先発と試合で投げる先発が同じ ---
+// ⚠ 以前の試合側は、ローテの今の番の選手が抹消中だと疲労を見て別の選手を選んでいた。
+//    打順を揃える側（`ensureCompleteLineup`）は「抹消中を飛ばした次の番」を外すので、
+//    次の番が疲れていると、外した選手は投げずに打順に残した二刀流の選手が投げ、
+//    その選手が打順から抜けて8人で戦っていた。
+{
+  const { seasonData } = quiet(() => bootstrapWorld());
+  const savedDH = LEAGUE_SETTINGS.useDH;
+  LEAGUE_SETTINGS.useDH = true;
+  try {
+    const [user, opp] = seasonData.settings.teamNames;
+    const team = TEAMS_DATA[user];
+    quiet(() => setRecommendedLineup(team, user));
+    team.pitchingRotation.currentStarterIndex = 0;
+    const [s0, s1, s2] = team.pitchingRotation.starters.map(id => team.players.find(p => p.id === id));
+    s0.isActive = false; // 今の番は抹消中
+    s1.fatigue = 60;     // 次の番は疲れている
+    // s1・s2 を二刀流として打順に入れる
+    team.lineupSettings.battingOrder = [
+      ...team.lineupSettings.battingOrder.filter(e => e.battingOrder <= 7 && e.position !== 'pitcher'),
+      { playerId: s1.id, battingOrder: 8, position: 'dh' },
+      { playerId: s2.id, battingOrder: 9, position: 'right' },
+    ];
+    assert.equal(quiet(() => ensureCompleteLineup(team, true)), true);
+    assert.ok(!team.lineupSettings.battingOrder.some(e => e.playerId === s1.id), '前提: 次の先発（s1）を打順から外す');
+    const result = quiet(() => autoSimulateGame(user, opp, false, 1));
+    const side = result.homeTeam.name === user ? result.homeTeam : result.awayTeam;
+    const batters = side.players.filter(p => p.gameStats?.batting && (p.battingOrder > 0));
+    assert.equal(batters.length, 9, `DH制で打順が${batters.length}人になった（先発の決め方が打順と食い違う）`);
+    const starter = side.players.find(p => p.position === 'pitcher' && p.battingOrder === 0 && p.id === s1.id);
+    assert.ok(starter, '打順から外した選手（s1）が先発していない');
+  } finally {
+    LEAGUE_SETTINGS.useDH = savedDH;
+  }
+}
+
 // --- 戦力外の選手は、翌日のトライアウトで年を取らない ---
 // ⚠ プールの選手は年度替わりに加齢する。以前はトライアウトの候補にする時にも
 //    「滞在年数＋1」歳を足して能力も落としていたため、11/9 に解雇された25歳が
@@ -164,4 +203,4 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   releasedPlayersPool.length = 0;
 }
 
-console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / 戦力外の選手を二重に加齢しない）');
+console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');
