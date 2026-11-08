@@ -54,6 +54,7 @@ const GameFlowScreens = ({
       onContinue={async (slotIndex) => {
         const result = await loadGame(slotIndex);
         if (!result?.success) alert(result?.error || 'ロードに失敗しました');
+        return result;
       }}
       onEdit={async (slotIndex) => {
         const result = await loadGame(slotIndex);
