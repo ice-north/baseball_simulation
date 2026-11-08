@@ -172,13 +172,31 @@ assert.ok(
 // ⚠ 開幕前は**初期メンバー選択**（`pack_select`）。初期編成（360人の希望
 //    リスト）から置き換えた。ここは `check` の束に入っていない別枠の検査なので、
 //    フェーズを変えたときに取り残された（`check:online:season` を回すこと）。
+// ⚠ **年度更新（offseason）は手続きとして待たない**（いしだ指摘: 決めることが
+//    無いのに「決定」を押させていた）。11/30 に開いたその場で済み、続けて
+//    キャンプが開く
 assert.deepEqual(seen, [
   'pack_select',
   'camp',
   'contract',
   'tryout',
-  'offseason',
 ]);
+assert.equal(league.phase?.kind, 'camp', '年度更新の直後にキャンプが開く');
+// 年度更新の伸び・衰えが参加者ごとに残る（画面の「オフの成長」）
+{
+  const result = league.offseasonResults?.[league.members[0].userId];
+  assert.ok(result, '年度更新の結果が残っていない');
+  assert.equal(result.year, startYear);
+  assert.ok(
+    Object.keys(result.gains).length > 0,
+    '年度更新で誰も能力が変わっていない（記録の取り方を確認）',
+  );
+  const ids = new Set(league.game.teams[league.members[0].teamName].players.map((p) => String(p.id)));
+  assert.ok(
+    Object.keys(result.gains).every((id) => ids.has(String(id))),
+    '伸びの記録が名簿の選手を指していない',
+  );
+}
 // ⚠ **定数から導くこと**。75 が直に書かれており、1シーズン144ターンへ
 //    変えたときに取り残された。試合数を変えるたびに直すのでは忘れる。
 // ⚠ ターン数ではなく**試合数**と比べる。休養日（6ターンに1回）を入れたので

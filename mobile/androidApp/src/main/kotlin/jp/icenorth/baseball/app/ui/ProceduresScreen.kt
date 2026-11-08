@@ -40,6 +40,9 @@ import jp.icenorth.baseball.app.PhaseDraft
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.ROSTER_LIMIT
+import jp.icenorth.baseball.shared.ONLINE_ROSTER_TARGETS
+import jp.icenorth.baseball.shared.rosterCounts
+import jp.icenorth.baseball.shared.seasonLine
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.int
@@ -93,15 +96,22 @@ private fun CurrentProcedure(model: AppViewModel, raw: JsonObject, onHome: () ->
     val pending = raw["pendingPack"].obj()
     val phase = raw["phase"].obj()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // ⚠ いまの段階とやることを先頭に出す（いしだ指摘: シーズン後の流れが分からない）。
+        //    途中参加の初期メンバー選択の間は出さない（その画面に説明がある）
+        if (pending == null) SeasonFlowCard(raw)
         when {
             pending != null -> PendingPack(model, raw, pending, onHome)
             phase != null -> PhasePanel(model, raw, phase)
             else -> {
-                Section("手続き") { Text("現在、決定待ちの手続きはありません。") }
+                // ⚠ 「無い」だけで終わらせない。合間なら次に何が開くかを書く
+                val head = stageHeadText(raw)
+                val inSeason = raw.at("stage", "key").str() == "season"
+                Section("手続き") { Text(if (head != null && !inSeason) "いま決めることはありません。$head。" else "現在、決定待ちの手続きはありません。") }
                 raw["lastCamp"].obj()?.let { camp ->
                     Caption("${camp.at("year").int() ?: ""}年目のキャンプ結果")
                     CampGains(model, camp, raw.at("roster").list().mapNotNull { it.obj() }, finished = true)
                 }
+                OffseasonGrowthCard(model, raw)
             }
         }
     }
@@ -253,6 +263,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
         }
     }
     if (kind == "camp") {
+        // 年度更新はキャンプの直前に済む。方針を決める前に見られるようにする
+        OffseasonGrowthCard(model, raw)
         CampPanel(model, raw, phase)
         return
     }
@@ -343,7 +355,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
             }
         }
         plan["releaseIds"] != null -> ReleasePanel(model, raw, plan, setPlan)
-        kind == "offseason" -> Section { Text("最終順位を保存し、次年度のキャンプへ進みます。") }
+        kind == "offseason" -> Section { Text("最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。") }
     }
 }
 
@@ -399,15 +411,26 @@ private fun PackPicker(model: AppViewModel, packs: List<JsonObject>, chosen: Str
     }
 }
 
-/** 契約更改。チェックした選手が退団する（最低9人は残す） */
+/**
+ * 契約更改。チェックした選手が退団する（最低9人は残す）。
+ * ⚠ Web 版の `ContractPlanner` と同じ材料を出す（いしだ指摘: 切る判断ができているか分からない）:
+ *    退団後の区分ごとの人数・トライアウトで獲れる人数・今季の成績・標準案の理由（サーバーの `phase.releaseAdvice`）
+ */
 @Composable
 private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject, setPlan: (JsonObject) -> Unit) {
     val roster = raw.at("roster").list().mapNotNull { it.obj() }
     val releases = plan.at("releaseIds").list().mapNotNull { it.long() }
+    val advice = raw.at("phase", "releaseAdvice").obj()
+    val remaining = roster.filter { it.pid !in releases }
+    val counts = rosterCounts(remaining)
     Section("退団させる選手（${releases.size}人）") {
-        Muted("チェックした選手が退団（最低9人は残す）")
+        Text("残り ${remaining.size}人 · " + listOf("pitcher" to "投", "catcher" to "捕", "infielder" to "内", "outfielder" to "外")
+            .joinToString(" ") { (k, l) -> "$l${counts[k] ?: 0}/${ONLINE_ROSTER_TARGETS[k] ?: 0}" }, fontWeight = FontWeight.Bold)
+        Muted("続くトライアウトで最大 ${(ROSTER_LIMIT - remaining.size).coerceAtLeast(0)}人を獲れます（上限${ROSTER_LIMIT}人）。")
+        Muted("チェックした選手が退団（最低9人は残す）。標準案は「30歳以上」と「能力の低さ」で選び、毎年少なくとも3人を出します。このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。")
         roster.forEach { p ->
             val checked = p.pid in releases
+            val reasons = advice?.get(p.pid.toString()).list().mapNotNull { it.str() }.takeIf { advice?.containsKey(p.pid.toString()) == true }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
                     checked = checked,
@@ -416,8 +439,14 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                         setPlan(Commands.withReleases(plan, next))
                     },
                 )
-                Box(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f)) {
                     PlayerSummary(p, { model.openPlayer = it }) { if (checked) Tag("退団予定") }
+                    Muted(seasonLine(p))
+                    if (reasons != null) Text(
+                        "標準案で退団: " + (reasons.joinToString("・").ifEmpty { "枠を空けるため" }),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
                 }
             }
         }

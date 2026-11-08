@@ -25,7 +25,8 @@ import {
   statisticsContext,
 } from './recordedViews.mjs';
 import { recordForPlayer } from './recordedStats.mjs';
-import { requireOnline } from '../src/online/shared.js';
+import { requireOnline, seasonStage } from '../src/online/shared.js';
+import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
 
 /**
@@ -344,6 +345,19 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     teamName: member.teamName,
     year: l.season.year,
     lastCamp: l.campResults?.[userId] || null,
+    // 年度更新の伸び・衰えと引退（`offseasonChanges`）。次の年度更新まで残る
+    lastOffseason: l.offseasonResults?.[userId] || null,
+    // いまの段階（1年の流れの帯）。`seasonStage` の説明を参照
+    stage: seasonStage({
+      phaseKind: phase?.kind,
+      regularLeft: l.season.schedule.some(
+        (g) => g.phase === 'regular_season' && !g.result,
+      ),
+      regularPlayed: l.season.schedule.some(
+        (g) => g.phase === 'regular_season' && g.result,
+      ),
+      date: l.season.currentDate,
+    }),
     teamNames: l.season.settings.teamNames,
     // ⚠ 一人用の編成画面が `LEAGUE_SETTINGS.useDH` を見るので、
     //    リーグの設定をビューにも載せる（打順が8枠か9枠かが変わる）
@@ -455,6 +469,18 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           deadline: phase.deadline || null,
           packs: l.packs?.map(packView),
           candidates: phase.candidates?.map(playerView),
+          // ⚠ 契約更改: 標準案（決めなかったときの案）で誰が・なぜ退団になるか。
+          //    PC・スマホ・アプリが同じ理由を出すよう、サーバーで1回だけ作る
+          //    （選び方そのもの `getAIReleaseCandidates` / `releaseScore` から）
+          releaseAdvice:
+            phase.kind === 'contract'
+              ? Object.fromEntries(
+                  getAIReleaseCandidates(team.players).map((id) => [
+                    id,
+                    releaseScore(team.players.find((p) => p.id === id)).reasons,
+                  ]),
+                )
+              : undefined,
           submission: phase.submissions[userId] || null,
           // ⚠ キャンプは1クールずつ自分で実行する。どこまで終わったかを渡す
           //    （渡さないと、押すたびに「第1クール」のままに見える）

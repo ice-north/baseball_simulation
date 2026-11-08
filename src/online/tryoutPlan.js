@@ -462,3 +462,23 @@ export function planSummary(rankedIds, candidates, count, roster = []) {
   }
   return { counts, picked, targets: ONLINE_ROSTER_TARGETS, blocking, warnings };
 }
+
+/**
+ * 候補が**いまの名簿の同じ区分（投・捕・内・外）で何番手にあたるか**。
+ * 同じ重みの評価値（`weightedScore`）で比べる。1なら区分でいちばん上。
+ *
+ * ⚠ いしだ指摘: トライアウトの候補が自分のチームに合っているか分からない。
+ *    評価値だけでは「うちに入ったら使えるのか」が読めなかった。
+ * ⚠ 名簿の数え方は目標構成（`ONLINE_ROSTER_TARGETS`）と同じ `rosterGroup`。
+ */
+export function teamFitRank(candidate, roster, weights) {
+  if (!candidate) return null;
+  const group = rosterGroup(candidate.position);
+  const score = weightedScore(candidate, weights);
+  const same = (roster || []).filter((p) => rosterGroup(p.position) === group);
+  return {
+    group,
+    rank: 1 + same.filter((p) => weightedScore(p, weights) > score).length,
+    of: same.length,
+  };
+}

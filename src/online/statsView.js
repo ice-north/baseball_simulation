@@ -452,3 +452,20 @@ export function overviewGroup(category) {
     columns: ids.map((id) => columns.find((c) => c.id === id)).filter(Boolean),
   };
 }
+
+/**
+ * 今季の成績の1行（契約更改・トライアウトの選手行に添える）。
+ * ⚠ いしだ指摘: 契約更改で誰を切るか、能力だけでは判断できない。
+ *    出ていない選手は「出場なし」と書く（「—」だけだと読めない）。
+ */
+export function seasonLine(player) {
+  if (player?.position === 'pitcher') {
+    const games = player.seasonStats?.pitching?.games || 0;
+    if (!games) return '今季 登板なし';
+    return `今季 ${games}登板 ${formatStat(outs, outs.get(player))}回 防御率${formatStat(era, era.get(player))}`;
+  }
+  const games = player?.seasonStats?.batting?.games || 0;
+  if (!games) return '今季 出場なし';
+  const hr = player.seasonStats?.batting?.homeruns || 0;
+  return `今季 ${games}試合 打率${formatStat(avg, avg.get(player))} ${hr}本`;
+}

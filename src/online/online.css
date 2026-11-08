@@ -3966,3 +3966,134 @@ small.online-gain:not(:where(.online-sp *)) {
   font-weight: 400;
   color: #9fb0c4;
 }
+
+/* --- 1年の流れの帯（SeasonFlow） ---------------------------------------
+   いまの段階を光らせる。済んだ段階は緑、次に開く段階は点線。
+   ⚠ スマホでは7つが横に入らないので、横にスクロールさせる（折り返すと
+      流れの順番が読めなくなる） */
+.online-season-flow {
+  margin: 0 0 16px;
+}
+.online-season-steps {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.online-season-steps li {
+  flex: 1 0 auto;
+  min-width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #ffffff0d;
+  color: #94a3b8;
+  border: 1px solid transparent;
+  position: relative;
+}
+.online-season-steps li b {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.online-season-steps li small {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.online-season-steps li[data-state='done'] {
+  background: #15803d33;
+  color: #bbf7d0;
+}
+.online-season-steps li[data-state='now'] {
+  background: var(--accent-strong, #22d3ee);
+  color: #04222b;
+}
+.online-season-steps li[data-state='next'] {
+  border: 1px dashed var(--accent-strong, #22d3ee);
+  color: #e2e8f0;
+}
+.online-season-flow .online-season-now {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 10px 0 0;
+}
+.online-season-flow .online-season-now strong {
+  font-size: 15px;
+}
+.online-season-flow .online-season-now span {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+.online-season-flow.is-compact .online-season-steps li {
+  min-width: 60px;
+  padding: 4px 6px;
+}
+.online-season-flow.is-compact .online-season-steps li small {
+  display: none;
+}
+
+/* トライアウト候補: いまの名簿で何番手か（上位2番手までは目立たせる） */
+.online-tryout-fit {
+  display: inline-block;
+  margin: 0 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: #ffffff14;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+.online-tryout-fit[data-top] {
+  background: #15803d55;
+  color: #dcfce7;
+  font-weight: 700;
+}
+
+/* 契約更改: 退団後の人数・標準案の理由・今季の成績 */
+.online-contract-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0 0 8px;
+}
+.online-contract-summary > span {
+  display: inline-flex;
+  gap: 10px;
+}
+.online-contract-summary [data-short] {
+  color: #fca5a5;
+  font-weight: 700;
+}
+.online-contract-summary small {
+  flex-basis: 100%;
+  color: #9fb0c4;
+}
+.online-contract-season {
+  display: block;
+  color: #9fb0c4;
+}
+.online-contract-reason {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fde68a;
+  white-space: nowrap;
+}
+
+/* キャンプ: 方針ごとの伸びの目安 */
+.online-camp-guide {
+  margin: 6px 0 0;
+}
+.online-camp-guide > p:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+}

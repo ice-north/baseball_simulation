@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import SeasonFlow from './SeasonFlow.jsx';
+import OffseasonGrowth from './OffseasonGrowth.jsx';
 import MobileTactics from './MobileTactics.jsx';
 import { roleFor } from './tactics.js';
 import { useDraftState, phaseDraftName } from './Drafts.jsx';
@@ -20,10 +22,11 @@ import {
 import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
-import TryoutPlanner, { PlayerLine } from './TryoutPlanner.jsx';
+import TryoutPlanner from './TryoutPlanner.jsx';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting } from './notices.js';
 import CampPlanner from './CampPlanner.jsx';
+import ContractPlanner from './ContractPlanner.jsx';
 import {
   PYRAMID_LEAGUES,
   PROMOTION_PLACES,
@@ -774,46 +777,27 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         />
       )}
       {plan.releaseIds && (
-        <>
-          <p>
-            チェックした選手が退団します。最低9人を残してください。既に9人未満の場合は新たな退団はできません。
-          </p>
-          {/* ⚠ 名前だけでなく能力も並べる（トライアウトの候補と同じ1行）。
-              名前を押すと詳しい成績と能力を開く */}
-          <ul className="online-tryout-list online-release-list">
-            {view.roster.map((p) => (
-              <li key={p.id} data-wanted={plan.releaseIds.includes(p.id) || undefined}>
-                <input
-                  type="checkbox"
-                  aria-label={`${p.name}（${p.age}歳 / ${POS[p.position]}）を退団させる`}
-                  checked={plan.releaseIds.includes(p.id)}
-                  onChange={(e) => {
-                    setDirty(true);
-                    setPlan({
-                      releaseIds: e.target.checked
-                        ? [...plan.releaseIds, p.id]
-                        : plan.releaseIds.filter((id) => id !== p.id),
-                    });
-                  }}
-                />
-                <span className="online-tryout-person">
-                  <PlayerLine player={p} />
-                </span>
-                {plan.releaseIds.includes(p.id) && (
-                  <span className="online-tryout-mark">退団予定</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
+        <ContractPlanner
+          roster={view.roster}
+          plan={plan}
+          advice={phase.releaseAdvice || {}}
+          onChange={(next) => {
+            setDirty(true);
+            setPlan(next);
+          }}
+        />
       )}
       {/* ⚠ キャンプは**1クールずつその場で実行する**（一人用と同じ）。
           提出して締め切りを待つ形ではないので、決定のボタンは出さない */}
+      {/* 年度更新はキャンプの直前に済む。キャンプの方針を決める前に見られるようにする */}
+      {phase.kind === 'camp' && (
+        <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+      )}
       {phase.kind === 'camp' && (
         <CampPlanner view={view} busy={busy} run={run} command={command} />
       )}
       {phase.kind === 'offseason' && (
-        <p>最終順位を保存し、次年度のキャンプへ進みます。</p>
+        <p>最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。</p>
       )}
     </>
   );
@@ -855,6 +839,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         }
       >
         <fieldset className="online-form-fields online-phase" disabled={busy}>
+          <SeasonFlow view={view} />
           <section className="online-card online-phase-rules">
             <p>{rulesText}</p>
             {readyList}
@@ -878,6 +863,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
 
   return (
     <section className="online-card online-decision">
+      <SeasonFlow view={view} compact />
       <fieldset className="online-form-fields" disabled={busy}>
         <h2>{PHASE_LABELS[phase.kind]}</h2>
         {/* ⚠ 2人固定だった頃の「両者」という書き方を残さない。
@@ -890,6 +876,9 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         {/* ⚠ **キャンプは携帯でも回せるようにする**。表は23列あって携帯には
             入らないが、1クールずつ実行するのは携帯からでもできる必要がある
             （携帯だけの人は、出せないと4クールとも自動になる） */}
+        {phase.kind === 'camp' && (
+          <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+        )}
         {phase.kind === 'camp' && (
           <CampPlanner
             view={view}

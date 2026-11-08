@@ -192,3 +192,22 @@ fun sortRoster(players: List<JsonObject>, column: StatColumn?, ascending: Boolea
         }
     }.map { it.value }
 }
+
+/** 今季の成績の1行（契約更改・トライアウトの選手行に添える）。Web 版の `seasonLine` と同じ文 */
+fun seasonLine(player: JsonObject): String {
+    if (player.at("position").str() == "pitcher") {
+        val games = player.at("seasonStats", "pitching", "games").num()?.toInt() ?: 0
+        if (games == 0) return "今季 登板なし"
+        val outs = player.at("seasonStats", "pitching", "inningsPitched").num().known()?.toInt()
+        val era = player.at("performance", "pitching", "metrics", "era").num().known()
+        val innings = outs?.let { "${it / 3}.${it % 3}" } ?: "—"
+        val eraText = era?.let { fixed(it, 2) } ?: "—"
+        return "今季 ${games}登板 ${innings}回 防御率$eraText"
+    }
+    val games = player.at("seasonStats", "batting", "games").num()?.toInt() ?: 0
+    if (games == 0) return "今季 出場なし"
+    val avg = player.at("performance", "batting", "metrics", "avg").num().known()
+    val hr = player.at("seasonStats", "batting", "homeruns").num()?.toInt() ?: 0
+    val avgText = avg?.let { fixed(it, 3).let { t -> if (t.startsWith("0.")) t.substring(1) else t } } ?: "—"
+    return "今季 ${games}試合 打率$avgText ${hr}本"
+}

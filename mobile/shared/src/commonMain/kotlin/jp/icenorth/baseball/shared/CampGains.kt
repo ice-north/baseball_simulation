@@ -66,3 +66,20 @@ fun formatGain(diff: Double): String {
     val text = if (diff == diff.roundToInt().toDouble()) diff.roundToInt().toString() else ((diff * 10).roundToInt() / 10.0).toString()
     return if (diff > 0) "+$text" else text
 }
+
+/**
+ * その選手の役に立つ項目だけ残す（年度更新の伸びを見せるとき）。Web 版の `relevantGains` と同じ。
+ * ⚠ 年度更新は投手の打撃・野手の投球まで動かすので、並べると肝心の能力が埋もれる。消すのは表示だけ
+ */
+fun relevantGains(player: JsonObject?, changes: JsonObject?): JsonObject {
+    val pitcher = player?.at("position").str() == "pitcher"
+    return JsonObject(changes.orEmpty().filterKeys { key ->
+        if (pitcher) !key.startsWith("batting.") else !key.startsWith("pitching.") && !key.startsWith("pitch.")
+    })
+}
+
+/** 年度更新の伸び（`view.lastOffseason.gains`）を、選手ごとに表示する項目だけにしたもの */
+fun offseasonGains(result: JsonObject?, roster: List<JsonObject>): JsonObject {
+    val byId = roster.associateBy { it.at("id").num()?.toLong()?.toString() ?: it.at("id").str().orEmpty() }
+    return JsonObject(result?.at("gains").obj().orEmpty().mapValues { (id, changes) -> relevantGains(byId[id], changes.obj()) })
+}

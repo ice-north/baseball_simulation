@@ -93,6 +93,14 @@ for (const [k, v] of Object.entries(ints)) {
   if (!Number.isInteger(v)) throw new Error(`${k} が読めない`);
   out(`const val ${k}: Int = ${v}`);
 }
+// 1年の流れの帯（`SEASON_STEPS`）と、キャンプの方針ごとの伸びの目安（`CAMP_POLICY_GUIDE`）
+out('data class SeasonStep(val key: String, val label: String, val time: String, val todo: String)');
+out('val SEASON_STEPS: List<SeasonStep> = listOf(');
+for (const s of shared.SEASON_STEPS) out(`    SeasonStep(${q(s.key)}, ${q(s.label)}, ${q(s.when)}, ${q(s.todo)}),`);
+out(')');
+out('val CAMP_POLICY_GUIDE: Map<String, Pair<String, String>> = mapOf(');
+for (const [k, v] of Object.entries(shared.CAMP_POLICY_GUIDE)) out(`    ${q(k)} to (${q(v.fielder)} to ${q(v.pitcher)}),`);
+out(')');
 out(`val ONLINE_ROSTER_TARGETS: Map<String, Int> = mapOf(${Object.entries(shared.ONLINE_ROSTER_TARGETS).map(([k, v]) => `${q(k)} to ${v}`).join(', ')})`);
 const text = lines.join('\n') + '\n';
 const file = path.join(root, 'mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/Tables.kt');

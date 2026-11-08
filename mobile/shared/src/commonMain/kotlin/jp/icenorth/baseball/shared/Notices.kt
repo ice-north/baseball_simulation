@@ -68,3 +68,32 @@ fun packWaiting(raw: JsonObject?): PackWaiting? {
         estimated = pending.at("joinsInCamp").bool() != true,
     )
 }
+
+/** いまの段階（1年の流れの帯）。[open] が false ならその段階の手前で待っている。Web 版の `stageLines` と同じ決まり */
+data class StageInfo(val index: Int, val step: SeasonStep, val open: Boolean)
+
+/**
+ * サーバーが決めた段階（`view.stage`）。初期メンバー選択の間と、知らない段階なら null。
+ * ⚠ 画面で日付から推し量らないこと（PC・スマホと食い違う）
+ */
+fun stageInfo(raw: JsonObject?): StageInfo? {
+    val stage = raw?.get("stage").obj() ?: return null
+    val key = stage.at("key").str() ?: return null
+    val index = SEASON_STEPS.indexOfFirst { it.key == key }
+    if (index < 0) return null
+    return StageInfo(index, SEASON_STEPS[index], stage.at("open").bool() != false)
+}
+
+/**
+ * 帯の1行目。[next] は次の進行の日時、[deadline] は手続きの締め切り（画面で書式を整えたもの）。
+ * ⚠ 文は Web 版の `stageLines` と同じにする
+ */
+fun stageHead(info: StageInfo, next: String?, deadline: String?): String {
+    val label = info.step.label
+    return when {
+        info.open -> if (deadline != null) "いまは$label（締め切り $deadline）" else "いまは$label"
+        info.step.key == "opening" -> if (next != null) "$next に開幕します" else "まもなく開幕します"
+        next != null -> "次の進行（$next）で$label" + if (info.step.key == "year_end") "が行われ、キャンプが開きます" else "が開きます"
+        else -> "まもなく${label}が始まります"
+    }
+}

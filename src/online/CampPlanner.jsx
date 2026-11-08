@@ -19,6 +19,7 @@ import {
   CAMP_SUB_MENUS,
   CAMP_DIRECTIONS,
   CAMP_PHASES,
+  CAMP_POLICY_GUIDE,
 } from './shared.js';
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import { useDraftState, phaseDraftName } from './Drafts.jsx';
@@ -354,6 +355,34 @@ function CampGainsSummary({ camp, roster, finished }) {
   );
 }
 
+/** 方針ごとの4クールの伸びの目安と、希望と噛み合う人数 */
+function CampPolicyGuide({ policy, roster }) {
+  const guide = CAMP_POLICY_GUIDE[`${policy.direction}:${policy.phase}`];
+  if (!guide) return null;
+  const moods = roster.map(
+    (p) => describeMood(p, policy.direction, policy.phase).tone,
+  );
+  const count = (tone) => moods.filter((t) => t === tone).length;
+  const standard = policy.direction === 'balanced' && policy.phase === 'skill';
+  return (
+    <div className="online-camp-guide">
+      <p>
+        <strong>4クールでの伸びの目安（1人あたり）</strong>
+        <span>野手: {guide.fielder}</span>
+        <span>投手: {guide.pitcher}</span>
+      </p>
+      <p className="online-muted">
+        {standard
+          ? 'いまは標準（おまかせと同じ「全体を伸ばす×技術」）です。試合に効きやすいミート・制球が伸びます。'
+          : '標準（おまかせ）は「全体を伸ばす×技術」で、ミート・制球が伸びます。'}
+        基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。
+        希望と噛み合う選手: 意欲的 {count('good')}人・納得 {count('mid')}人・身が入らない {count('bad')}人。
+        締め切りまでに回さなかったクールは、最後に指示した方針で自動で行われます。
+      </p>
+    </div>
+  );
+}
+
 /** 最終クールや締め切りで手続きが閉じた後も、保存した成果を確認できる。 */
 export function CompletedCamp({ view }) {
   const camp = view.lastCamp;
@@ -563,6 +592,9 @@ export default function CampPlanner({
           {/* ⚠ 希望どおりが正解ではない。噛み合うとやる気が上がるだけ */}
           　本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。
         </p>
+        {/* ⚠ いしだ指摘: どれくらい伸びるのか・おまかせでいいのかが分からない。
+            実測の目安と、希望と噛み合う人数を出す（`CAMP_POLICY_GUIDE`） */}
+        <CampPolicyGuide policy={policy} roster={roster} />
       </section>
       {/* ⚠ 携帯は表を出さない。23列は入らない。方針と実行だけで4クール回せる */}
       {compact && !finished && (

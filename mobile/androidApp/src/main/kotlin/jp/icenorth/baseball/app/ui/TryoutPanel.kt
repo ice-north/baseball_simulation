@@ -28,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.TeamFit
+import jp.icenorth.baseball.shared.teamFitRank
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.DEFAULT_WEIGHTS
 import jp.icenorth.baseball.shared.ONLINE_ROSTER_TARGETS
@@ -123,7 +125,14 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
         summary.picked.forEachIndexed { i, p ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${i + 1}", fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
-                Box(Modifier.weight(1f)) { PlayerSummary(p, { model.openPlayer = it }) { Score(scores[p.pid]) } }
+                Box(Modifier.weight(1f)) {
+                    PlayerSummary(p, { model.openPlayer = it }) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Score(scores[p.pid])
+                            Fit(teamFitRank(p, roster, weights))
+                        }
+                    }
+                }
                 IconButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, -1)) }, enabled = i > 0, modifier = Modifier.size(36.dp)) { Text("↑") }
                 IconButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, 1)) }, enabled = i < wanted.size - 1, modifier = Modifier.size(36.dp)) { Text("↓") }
                 IconButton(onClick = { setRanked(benchFromPlan(ranked, candidates, count, roster, p.pid)) }, modifier = Modifier.size(36.dp)) { Text("×") }
@@ -153,6 +162,7 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                     PlayerSummary(p, { model.openPlayer = it }) {
                         Column(horizontalAlignment = Alignment.End) {
                             Score(scores[p.pid])
+                            Fit(teamFitRank(p, roster, weights))
                             if (at >= 0) Tag("指名中 ${at + 1}位", MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -182,6 +192,20 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
             }
         }
     }
+}
+
+/**
+ * いまの名簿の同じ区分で何番手にあたるか（Web 版のトライアウト画面と同じ）。
+ * ⚠ いしだ指摘: 候補が自分のチームに合っているか分からない
+ */
+@Composable
+private fun Fit(fit: TeamFit) {
+    Text(
+        "うちの${ROSTER_GROUP_LABELS[fit.group]}で${fit.rank}番手",
+        style = MaterialTheme.typography.labelSmall,
+        color = if (fit.rank <= 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = if (fit.rank <= 2) FontWeight.Bold else FontWeight.Normal,
+    )
 }
 
 @Composable

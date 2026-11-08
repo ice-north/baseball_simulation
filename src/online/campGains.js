@@ -134,3 +134,20 @@ export function campGainTotals(gains = {}) {
 /** 「+2」「-1」「+0.5」 */
 export const formatGain = (diff) =>
   `${diff > 0 ? '+' : ''}${Number.isInteger(diff) ? diff : diff.toFixed(1)}`;
+
+/**
+ * その選手の役に立つ項目だけ残す（年度更新の伸びを見せるとき）。
+ * ⚠ 年度更新は投手の打撃・野手の投球まで動かす（実測で、投手の伸びの半分が
+ *    ミート・バントだった）。並べると肝心の制球やスタミナが埋もれる。
+ *    二刀流で使っている選手もいるので、**消すのは表示だけ**（記録は全部残す）。
+ */
+export function relevantGains(player, changes = {}) {
+  const pitcher = player?.position === 'pitcher';
+  return Object.fromEntries(
+    Object.entries(changes).filter(([key]) =>
+      pitcher
+        ? !key.startsWith('batting.')
+        : !key.startsWith('pitching.') && !key.startsWith('pitch.'),
+    ),
+  );
+}

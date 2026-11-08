@@ -15,6 +15,8 @@ import { useDraftMemoryStore } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import { CompletedCamp } from './CampPlanner.jsx';
+import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
+import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { teamLabel } from './gameText.js';
@@ -156,7 +158,12 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
               （「4/18って何試合目？」と数え直すことになる） */}
           {/* ⚠ 総数は**ビューの値**で出す。`SEASON_TURNS` を直に読むと、
               進行中のリーグ（120ターンの日程）に新しい総数が当たる */}
-          <b>{formatTurn(view.currentDate, view.seasonTurns)}</b>
+          {/* ⚠ シーズン後は「シーズン終了」のままにしない。いまの段階を出す */}
+          <b>
+            {view.stage && !['season', 'pack_select'].includes(view.stage.key)
+              ? `オフ · ${stageLines(view)?.step.label || ''}${view.stage.open ? '' : '待ち'}`
+              : formatTurn(view.currentDate, view.seasonTurns)}
+          </b>
           <span className="online-status">{STATUS[view.status]}</span>
         </p>
         <small>
@@ -458,6 +465,9 @@ export default function DesktopView(props) {
           年は左メニューの「○年目」に出ている */}
       {current === 'today' && (
         <Page>
+          {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。
+              シーズン後から開幕までは、いまの段階とやることを先頭に出す */}
+          {view.stage?.key !== 'season' && <SeasonFlow view={view} />}
           <LeagueBoard view={view} />
         </Page>
       )}
@@ -513,12 +523,17 @@ export default function DesktopView(props) {
           <PhasePanel key={view.phase.id} {...props} />
         ) : (
           <Page title="現在の手続き">
+            <SeasonFlow view={view} />
+            {/* ⚠ 「無い」だけで終わらせない。合間なら次に何が開くかを帯が書く */}
             <section className="online-card">
               <p>
-                現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。
+                {stageLines(view)?.head && view.stage?.key !== 'season'
+                  ? `いま決めることはありません。${stageLines(view).head}。`
+                  : '現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。'}
               </p>
             </section>
             <CompletedCamp key={view.lastCamp?.year} view={view} />
+            <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
           </Page>
         ))}
       {current === 'transfer' && <TradeScreen {...props} />}

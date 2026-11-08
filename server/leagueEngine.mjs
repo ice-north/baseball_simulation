@@ -1237,6 +1237,55 @@ function resolveTryout(league, plans) {
   for (const name of names) refreshTeamPlan(league, name);
 }
 
+/**
+ * 参加者の球団の、選手ごとの能力の写し（年度更新の前後を比べるため）。
+ * ⚠ 途中参加でセットを待っている球団は取らない（名簿がキャンプで入れ替わる）
+ */
+function snapshotMemberTeams(league) {
+  const out = {};
+  for (const member of league.members || []) {
+    if (member.packSeed) continue;
+    const team = TEAMS_DATA[member.teamName];
+    if (!team?.players) continue;
+    out[member.userId] = team.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      age: p.age,
+      position: p.position,
+      abilities: abilitySnapshot(p),
+    }));
+  }
+  return out;
+}
+
+/**
+ * 年度更新の結果（参加者ごと）。伸び・衰えは `campResults` と同じ形の `gains`、
+ * 名簿から居なくなった選手（引退）は `departed` に名前で残す。
+ * ⚠ 画面はこれだけを読む。差を画面で作ると、別の端末で見たときに前が無い
+ */
+function offseasonChanges(league, before, year) {
+  const out = {};
+  for (const [userId, players] of Object.entries(before)) {
+    const member = league.members.find((m) => m.userId === userId);
+    const team = member && TEAMS_DATA[member.teamName];
+    if (!team?.players) continue;
+    const now = new Map(team.players.map((p) => [p.id, p]));
+    const gains = {};
+    const departed = [];
+    for (const old of players) {
+      const player = now.get(old.id);
+      if (!player) {
+        departed.push({ id: old.id, name: old.name, age: old.age, position: old.position });
+        continue;
+      }
+      const diff = abilityGains(old.abilities, abilitySnapshot(player));
+      if (Object.keys(diff).length) gains[old.id] = diff;
+    }
+    out[userId] = { year, gains, departed };
+  }
+  return out;
+}
+
 function resolvePhase(league, now) {
   const kind = league.phase.kind;
   // ⚠ 途中参加でセットを待っている人は提出しないことがある（`submitPhase`）。
@@ -1322,6 +1371,10 @@ function resolvePhase(league, now) {
     generateBackgroundTournaments(league.season.currentDate);
   }
   if (kind === 'offseason') {
+    // ⚠ **年度更新の伸び・衰えを残す**（いしだ指摘: 成長がいつ・どれだけ
+    //    起きたか分からない）。能力が変わるのはキャンプとここだけで、
+    //    ここは画面に何も出ていなかった。キャンプと同じく前後の差で作る
+    const offseasonBefore = snapshotMemberTeams(league);
     freezeComparison(league);
     league.history.push({
       year: league.season.year,
@@ -1360,6 +1413,11 @@ function resolvePhase(league, now) {
     const humans = new Set(humanTeamNames(TEAMS_DATA));
     for (const name of Object.keys(TEAMS_DATA))
       if (!humans.has(name)) generatePitchingRotation(name);
+    league.offseasonResults = offseasonChanges(
+      league,
+      offseasonBefore,
+      league.history.at(-1)?.year,
+    );
   }
   league.phase = null;
   delete league.season.pendingPhaseEvent;
@@ -1579,7 +1637,16 @@ function advanceOneDay(league, key, now) {
     }
     if (month === 11 && day === 9) openPhase(league, 'contract', now);
     else if (month === 11 && day === 10) openPhase(league, 'tryout', now);
-    else if (month === 11 && day === 30) openPhase(league, 'offseason', now);
+    // ⚠ **年度更新は決めることが無いので、開いたその場で済ませる**
+    //    （いしだ指摘: 押す意味の無い「決定」が「何をすればいいか分からない」を
+    //    生んでいた）。以前は土曜21時〜24時の4時間を手続きとして待っていた。
+    //    済ませると続けてキャンプが開く（`resolvePhase`）ので、キャンプが長くなる。
+    // ⚠ 手続きとして開いてから解決する（`resolvePhase` の流れを1本に保つ）。
+    //    古い保存で年度更新が開いたままのリーグは、従来どおり決定か締め切りで進む
+    else if (month === 11 && day === 30) {
+      openPhase(league, 'offseason', now);
+      resolvePhase(league, now);
+    }
   });
 }
 
