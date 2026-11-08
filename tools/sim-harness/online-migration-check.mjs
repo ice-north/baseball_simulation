@@ -470,6 +470,33 @@ try {
   const restoredNew = (await store.read()).league;
   assert.ok(!restoredNew.backupMark, 'バックアップ後の変更が残っている（復元されていない）');
   assert.equal(restoredNew.schema, ONLINE_SCHEMA);
+
+  // 8) 進行中のリーグを移行しても、定期進行が止まらない
+  // ⚠ 6→7 の段は次の進行時刻を消す（45分の枠に乗せ直すため）。進行中のまま
+  //    空にすると、定期処理は「進行時刻なし」で移行だけ保存し、保存側の
+  //    `isDue` も起こさなくなって**二度と進まなかった**
+  let clockNow = '2026-11-02T03:05:00.000Z';
+  const ticking = new LeagueService(store, {
+    members: [{ userId: 'admin', label: '管理者' }],
+    adminId: 'admin',
+    clock: () => clockNow,
+  });
+  await store.transaction((bundle) => {
+    bundle.league.schema = 6;
+    bundle.league.status = 'running';
+    bundle.league.phase = null;
+    bundle.league.nextAdvanceAt = '2026-11-02T03:00:00.000Z';
+    return { value: null };
+  });
+  await ticking.tick();
+  const afterMigrate = (await store.read()).league;
+  assert.equal(afterMigrate.schema, ONLINE_SCHEMA, '定期処理で直っていない');
+  assert.ok(afterMigrate.nextAdvanceAt, '移行で次の進行時刻が消えたまま（定期進行が止まる）');
+  const revBefore = afterMigrate.revision;
+  clockNow = new Date(Date.parse(afterMigrate.nextAdvanceAt) + 60000).toISOString();
+  const second = await ticking.tick();
+  assert.equal(second.advanced, true, `移行後の定期処理で進まない: ${JSON.stringify(second)}`);
+  assert.ok((await store.read()).league.revision > revBefore, '移行後の定期処理で進んでいない');
 } finally {
   await rm(dir, { recursive: true, force: true });
 }

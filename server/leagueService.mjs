@@ -201,6 +201,13 @@ export class LeagueService {
     const result = migrateLeague(working, { now: this.clock() });
     bundle.league = working;
     bundle.league.updatedAt = this.clock();
+    // ⚠ **移行で消した次の進行時刻は、ここで入れ直す**（6→7 の段が消す）。
+    //    進行中のリーグで空のままだと、定期処理は「進行時刻なし」で何もせず、
+    //    保存側の `isDue` も起こさなくなり、**二度と進まない**。
+    //    命令の側も「進行中になったとき」しか入れないので、tick と命令の
+    //    両方が通るここで直す
+    if (bundle.league.status === 'running' && !bundle.league.nextAdvanceAt)
+      bundle.league.nextAdvanceAt = nextProgressionAt(this.clock());
     return result;
   }
   /**
