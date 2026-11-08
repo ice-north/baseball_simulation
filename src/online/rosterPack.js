@@ -13,7 +13,7 @@ import { createSeededRandom } from '../game/rng.js';
 //    順位も成績も食い違う。
 // ============================================================
 
-/** 1セットの構成。⚠ 合計24人（名簿の上限）。足し引きするならここだけ直す */
+/** 1セットの構成。⚠ 合計24人（名簿の上限 `ROSTER_LIMIT`＝26 より2人少ない）。足し引きするならここだけ直す */
 export const PACK_COMPOSITION = [
   { group: 'pitcher', positions: ['pitcher'], count: 11 },
   { group: 'catcher', positions: ['catcher'], count: 2 },
