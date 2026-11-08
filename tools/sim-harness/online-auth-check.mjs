@@ -5,6 +5,7 @@ import {
   persistRefresh,
   clearAuth,
 } from '../../src/online/authState.js';
+import { cachedAuthenticate, AUTH_CACHE_MS } from '../../server/authCache.mjs';
 const entries = new Map();
 const storage = {
   getItem: (key) => entries.get(key) ?? null,
@@ -53,6 +54,40 @@ assert.deepEqual(
 );
 storage.setItem(AUTH_KEY, '{}');
 assert.equal(readAuth(storage), null);
+
+// --- サーバーの認証の覚え（server/authCache.mjs） ---------------------
+{
+  const jwt = (exp) =>
+    `Bearer x.${Buffer.from(JSON.stringify({ exp })).toString('base64url')}.y`;
+  let clock = 1_000_000_000_000;
+  const calls = [];
+  const authenticate = cachedAuthenticate(
+    async (header) => {
+      calls.push(header);
+      if (header.includes('bad')) throw Object.assign(new Error('認証に失敗'), { status: 401 });
+      return 'user-a';
+    },
+    { now: () => clock },
+  );
+  const long = jwt(clock / 1000 + 3600);
+  assert.equal(await authenticate(long), 'user-a');
+  assert.equal(await authenticate(long), 'user-a');
+  assert.equal(calls.length, 1, '同じトークンを毎回 Supabase に聞いている');
+  clock += AUTH_CACHE_MS + 1;
+  await authenticate(long);
+  assert.equal(calls.length, 2, '覚える時間を過ぎても聞き直さない');
+  // 期限が覚える時間より先に来るトークンは、期限で聞き直す
+  const short = jwt(clock / 1000 + 30);
+  await authenticate(short);
+  clock += 31_000;
+  await authenticate(short);
+  assert.equal(calls.length, 4, 'トークンの期限を過ぎても覚えたままにしている');
+  // 失敗は覚えない
+  await assert.rejects(() => authenticate('Bearer bad'));
+  await assert.rejects(() => authenticate('Bearer bad'));
+  assert.equal(calls.length, 6, '失敗した照会を覚えている');
+}
+
 console.log(
-  'online-auth-check PASS（旧タブ・ログアウト・遅延更新・不正保存値）',
+  'online-auth-check PASS（旧タブ・ログアウト・遅延更新・不正保存値・サーバーの認証の覚え）',
 );

@@ -182,13 +182,15 @@ export class SupabaseStore {
    * 世代を読む。古い形（bundle をまるごと1つ）も分けた形（芯＋部分）も読める。
    * `light` なら芯と記録だけ読み、世界の部分は番人にする（`assembleLight`）。
    */
-  async loadSnapshot(row, { light = false } = {}) {
+  async loadSnapshot(row, { light = false, records = true } = {}) {
     if (!row?.snapshot_path)
       return { bundle: { league: null, sessions: {}, receipts: {} }, refs: {} };
     const snapshot = await this.object(row.snapshot_path);
     if (!isSplitSnapshot(snapshot)) return { bundle: snapshot, refs: {} };
     const { core, order, parts: refs } = snapshot;
-    const names = Object.keys(refs).filter((name) => !light || name === 'records');
+    const names = Object.keys(refs).filter(
+      (name) => !light || (records && name === 'records'),
+    );
     const data = Object.fromEntries(
       await Promise.all(
         names.map(async (name) => [name, await this.object(refs[name].path)]),
@@ -215,6 +217,19 @@ export class SupabaseStore {
       // 読取り中に旧世代が整理された場合だけ、最新の一式を一度再取得する。
       return this.load(current);
     }
+  }
+  /**
+   * 読むだけの処理（手続きの標準案）向けに、芯だけを読む。世界・記録・退避は読まずに番人にする
+   * （触ると `NeedsFullWorld`）。触ったかは `touched()` でも分かる（例外を握りつぶされても印は残る）。
+   * ⚠ 以前は標準案のために世界まるごと（展開して数十MB）を読んでおり、手続きの画面を開くたびに数秒待った
+   */
+  async readLight() {
+    const row = await this.controlFor(null);
+    const loaded = await this.loadSnapshot(row, { light: true, records: false });
+    return {
+      bundle: loaded.bundle,
+      touched: () => loaded.light?.tracker.touched ?? null,
+    };
   }
   async isDue(now) {
     // ⚠ リーグ全体の進行情報（`views._meta`）で判定する。以前は管理者のビューを
@@ -305,12 +320,50 @@ export class SupabaseStore {
       ),
     );
     this.archiveCache.set(descriptor.path, value);
-    while (this.archiveCache.size > 3)
+    // 選手・球団・今季の試合に、前の年度を見に行ったぶんを足しても入る数
+    while (this.archiveCache.size > 6)
       this.archiveCache.delete(this.archiveCache.keys().next().value);
     return value;
   }
+  /**
+   * 記録の読み出し（選手・球団・試合）に要る列だけを読む。
+   * ⚠ `select=*`（`control()`）だと全参加者のビュー（1人あたり数十〜百KB）を毎回取っていた。
+   *    選手を1人押すだけで参加人数ぶんを運んでいた。要るのは記録の索引（`views._records`）と、
+   *    自分の球団名・年度だけ。
+   * ⚠ 自分のビューが無い（参加していない）・球団名の無い形のときは、全列を読んで従来どおり判断する
+   */
+  async recordRow(userId) {
+    if (this.narrowSelectUnsupported || !/^[\w-]+$/.test(userId || ''))
+      return this.control();
+    const columns = [
+      'snapshot_path',
+      'records:views->_records',
+      `teamName:views->"${userId}"->teamName`,
+      `year:views->"${userId}"->year`,
+    ];
+    let row;
+    try {
+      row = (
+        await this.request(
+          `/rest/v1/online_control?id=eq.pennant&select=${encodeURIComponent(columns.join(','))}`,
+        )
+      )[0];
+    } catch (error) {
+      if (error.storageStatus !== 400) throw error;
+      this.narrowSelectUnsupported = true;
+      return this.control();
+    }
+    if (!row || row.teamName == null) return this.control();
+    return {
+      snapshot_path: row.snapshot_path,
+      views: {
+        ...(row.records ? { _records: row.records } : {}),
+        [userId]: { teamName: row.teamName, year: row.year },
+      },
+    };
+  }
   async readRecord(userId, kind, query, project) {
-    let row = await this.control();
+    let row = await this.recordRow(userId);
     for (let attempt = 0; attempt < 2; attempt++) {
       requireOnline(row.views?.[userId], '参加者ではありません', 403);
       const year = Number(query.year || row.views[userId].year);
@@ -356,7 +409,7 @@ export class SupabaseStore {
         );
       } catch (error) {
         if (error.storageStatus !== 404 || attempt === 1) throw error;
-        row = await this.control();
+        row = await this.recordRow(userId);
       }
     }
   }
@@ -520,6 +573,11 @@ export class SupabaseStore {
           409,
           'lease',
         );
+        // ⚠ 命令の返事に載せた自分のビューに、いま公開した世代を押す（公開は世代を必ず1つ上げる。
+        //    `online_publish`）。押さないと、端末は次の読み直しで同じビューをまるごと取り直していた
+        const replied = outcome?.value?.view;
+        if (replied && typeof replied === 'object' && !Array.isArray(replied))
+          replied.viewGeneration = row.generation + 1;
         // current + 直前2世代を残す。削除失敗は公開済みの更新を失敗扱いにしない。
         // 部分（world・records など）は、残す3世代のどれかが指していれば残す
         const keep = [row.snapshot_path, ...(row.previous_paths || [])].filter(

@@ -1,5 +1,5 @@
 import { projectPlayerInfo, projectTeamInfo } from './projection.mjs';
-import { storedGame, statisticsContext } from './recordedViews.mjs';
+import { storedGame, statisticsContext, slimGame } from './recordedViews.mjs';
 export function buildArchiveIndex(bundle, retainedYears = []) {
   const league = bundle.league;
   if (!league) return null;
@@ -32,8 +32,9 @@ export function buildArchiveIndex(bundle, retainedYears = []) {
     );
     if (year === league.season.year)
       for (const game of league.season.results) ids.add(String(game.gameId));
+    // 勝敗投手は id と名前だけ（`slimGame`。索引が試合の数×約4KB 軽くなる）
     games[year] = Object.fromEntries(
-      [...ids].map((id) => [id, storedGame(league, id, year)]),
+      [...ids].map((id) => [id, slimGame(storedGame(league, id, year))]),
     );
   }
   return { players, teams, games };

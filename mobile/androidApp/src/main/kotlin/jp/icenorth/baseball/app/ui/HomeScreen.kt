@@ -45,6 +45,9 @@ import jp.icenorth.baseball.shared.GameResult
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.buildFrontPage
 import jp.icenorth.baseball.shared.loadOwnHistory
+import jp.icenorth.baseball.shared.OWN_HISTORY_PAGE
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import androidx.compose.runtime.SideEffect
 import jp.icenorth.baseball.shared.FrontPage
 import jp.icenorth.baseball.shared.GAME_TIPS
@@ -82,14 +85,25 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         LaunchedEffect(last?.gameId, view.year) {
             val id = last?.gameId ?: return@LaunchedEffect
             val year = "${view.year ?: ""}"
-            lastGame = runCatching { model.read("game", mapOf("id" to "$id", "year" to year)) }
-                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
-                .getOrNull()
-            history = runCatching {
-                loadOwnHistory(team) { page -> model.read("games", mapOf("year" to year, "page" to "$page", "scope" to "own")) }
+            // ⚠ 2つは同時に読む（順に読むと待ち時間が足し算になる）
+            coroutineScope {
+                val game = async {
+                    runCatching { model.read("game", mapOf("id" to "$id", "year" to year)) }
+                        .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                        .getOrNull()
+                }
+                val games = async {
+                    runCatching {
+                        loadOwnHistory(team) { page ->
+                            model.read("games", mapOf("year" to year, "page" to "$page", "scope" to "own", "size" to "$OWN_HISTORY_PAGE"))
+                        }
+                    }
+                        .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                        .getOrNull()
+                }
+                lastGame = game.await()
+                history = games.await()
             }
-                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
-                .getOrNull()
             ready = true
         }
         // TIPS は紙面のコラムに1本（ホームを開くたびに選び直す。いしだの指定「ホームを表示するたびにランダムで1つ」）

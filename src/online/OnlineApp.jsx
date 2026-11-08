@@ -6,6 +6,14 @@ import { Login, JoinLeague } from './LeaguePanels.jsx';
 import DesktopView from './DesktopView.jsx';
 import MobileView from './MobileView.jsx';
 import { ReadContext } from './useRead.js';
+import { createReadCache } from './readCache.js';
+import {
+  readSavedView,
+  saveView,
+  forgetView,
+  readSavedConfig,
+  saveConfig,
+} from './savedView.js';
 import { ActionContext } from './ActionContext.jsx';
 import { useMobile } from './useMobile.js';
 import { setTeamLabels } from './gameText.js';
@@ -66,8 +74,13 @@ const COMMAND_MESSAGES = {
 
 export default function OnlineApp() {
   const [auth, setAuth] = useState(readAuth);
-  const [config, setConfig] = useState(null);
-  const [view, setView] = useState(null);
+  // ⚠ 開いた直後は、前回の設定とビューをすぐ出す（`savedView.js`）。最新は裏で読み直して差し替える
+  const [config, setConfig] = useState(readSavedConfig);
+  const [view, setView] = useState(() => {
+    const current = readAuth();
+    const saved = readSavedView(current);
+    return saved ? viewForSession(saved, current) : null;
+  });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showTimes, setShowTimes] = useState(false);
@@ -77,7 +90,10 @@ export default function OnlineApp() {
   const locked = useRef(false);
   const viewSequence = useRef(0);
   // 手元のビューの世代。読み直しで `since` に送り、変わっていなければ中身を受け取らない
-  const viewGeneration = useRef(null);
+  // （前回のビューを出したときは、その世代から始める）
+  const viewGeneration = useRef(
+    Number.isInteger(view?.viewGeneration) ? view.viewGeneration : null,
+  );
   // ⚠ ビューを入れるときは必ずここを通す（世代を覚え、変わっていない返事なら今のビューを残す）
   const acceptView = useCallback((result, current) => {
     if (result?.unchanged) return;
@@ -85,11 +101,17 @@ export default function OnlineApp() {
       ? result.viewGeneration
       : null;
     setView(viewForSession(result, current));
+    saveView(current, result);
   }, []);
   const sinceQuery = () =>
     Number.isInteger(viewGeneration.current)
       ? { since: String(viewGeneration.current) }
       : {};
+  // ⚠ 読むだけの窓口（選手・球団・試合一覧・試合・標準案）の答えを覚えておく（`readCache.js`）。
+  //    同じ画面を開き直すたびに取りに行っていた。版（revision）が同じ間はサーバーの答えも同じ
+  const readCache = useRef(createReadCache());
+  const viewRevision = useRef(null);
+  viewRevision.current = view?.revision ?? null;
   const refreshFlight = useRef(null);
   const timesDialog = useRef(null);
   const mobile = useMobile();
@@ -102,6 +124,8 @@ export default function OnlineApp() {
     setAuth(value);
     setView(null);
     viewGeneration.current = null;
+    readCache.current.clear();
+    forgetView();
     setScreen('today');
   }, []);
   const renewAuth = useCallback(async (expected) => {
@@ -150,7 +174,10 @@ export default function OnlineApp() {
     let cancelled = false;
     api('config')
       .then((value) => {
-        if (!cancelled) setConfig(value);
+        if (!cancelled) {
+          setConfig(value);
+          saveConfig(value);
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(e.message);
@@ -225,7 +252,7 @@ export default function OnlineApp() {
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [auth, renewAuth]);
-  const readDetail = useCallback(
+  const fetchDetail = useCallback(
     async (action, query) => {
       const expected = authRef.current;
       const check = () => {
@@ -249,6 +276,16 @@ export default function OnlineApp() {
     },
     [renewAuth],
   );
+  // ⚠ 画面には覚えを通した窓口を渡す。`peek` は覚えているときだけ答えを返す（読み込み中を出さずに描くため）
+  const readDetail = useMemo(() => {
+    const read = (action, query = {}) =>
+      readCache.current.get(action, query, viewRevision.current, () =>
+        fetchDetail(action, query),
+      );
+    read.peek = (action, query = {}) =>
+      readCache.current.peek(action, query, viewRevision.current);
+    return read;
+  }, [fetchDetail]);
   // 結果を `{ ok, error }` で返す。⚠ 失敗しても例外は外へ出さない（文言は上の帯に出す）。
   //    呼ぶ側が成否で振る舞いを変えたいとき（全画面の編成を閉じるか）に使う
   const run = async (fn) => {
@@ -362,6 +399,8 @@ export default function OnlineApp() {
         setAuth(null);
         setView(null);
         viewGeneration.current = null;
+        readCache.current.clear();
+        forgetView();
         setShowTimes(false);
         setScreen('today');
       }

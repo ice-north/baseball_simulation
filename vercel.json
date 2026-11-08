@@ -1,6 +1,7 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "regions": ["hnd1"],
   "functions": { "api/online.mjs": { "maxDuration": 300, "includeFiles": "{server,src}/**" } },
   "rewrites": [{ "source": "/online", "destination": "/index.html" }]
 }

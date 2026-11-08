@@ -515,8 +515,11 @@ try {
     .getByRole('button', { name: '選手成績を閉じる', exact: true })
     .click();
   // 同じoriginでも一人用の保存キーへ書き込まない。
-  assert.deepEqual(await m.evaluate(() => Object.keys(localStorage)), [
+  // オンラインが残すのはログイン・接続の設定・前回のビュー（開いた直後にすぐ出すため。`savedView.js`）だけ
+  assert.deepEqual((await m.evaluate(() => Object.keys(localStorage))).sort(), [
     'baseball-online-auth-v1',
+    'baseball-online-config-v1',
+    'baseball-online-view-v1',
   ]);
   for (const width of [320, 375, 430, 767]) {
     await m.setViewportSize({ width, height: 844 });

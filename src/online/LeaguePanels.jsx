@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import MobileTactics from './MobileTactics.jsx';
 import { roleFor } from './tactics.js';
 import { useDraftState, phaseDraftName } from './Drafts.jsx';
@@ -23,6 +23,7 @@ import { Page } from './Page.jsx';
 import TryoutPlanner, { PlayerLine } from './TryoutPlanner.jsx';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting } from './notices.js';
+import { ReadContext } from './useRead.js';
 import CampPlanner from './CampPlanner.jsx';
 import {
   PYRAMID_LEAGUES,
@@ -600,10 +601,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     structuredClone(phase.submission || null),
   );
   const [error, setError] = useState('');
+  // 標準案は覚えを通して読む（`readCache.js`。版が同じ間は取りに行かない）。
+  // ⚠ 覚えた答えを編集で書き換えないよう、受け取った案は写してから使う
+  const read = useContext(ReadContext);
+  const loadDefaults = async () =>
+    structuredClone(await (read ? read('defaults', {}) : api('defaults', auth)));
   useEffect(() => {
     let cancelled = false;
     if (!phase.submission)
-      api('defaults', auth)
+      loadDefaults()
         .then((d) => {
           if (!cancelled) {
             if (d.phaseId !== phase.id) {
@@ -656,7 +662,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
       try {
         let next = phase.submission?.plan;
         if (!next) {
-          const defaults = await api('defaults', auth);
+          const defaults = await loadDefaults();
           if (defaults.phaseId !== phase.id)
             throw new Error(
               '手続きが更新されました。最新状態を確認してください',
@@ -679,7 +685,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     run(async () => {
       setError('');
       try {
-        const defaults = await api('defaults', auth);
+        const defaults = await loadDefaults();
         if (defaults.phaseId !== phase.id)
           throw new Error('手続きが更新されました。最新状態を確認してください');
         setPlan(structuredClone(defaults.plan));
