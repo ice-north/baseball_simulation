@@ -118,6 +118,9 @@ class AppViewModel internal constructor(app: Application, private val createApi:
 
     private var api = createApi(endpoint)
     private var reloadJob: Job? = null
+
+    /** 読み直しの通し番号。「引っ張って更新」の印を下ろしてよいのは、いちばん新しい読み直しだけ */
+    private var reloadSerial = 0L
     private var operationJob: Job? = null
     private var sessionEpoch = 0L
 
@@ -231,17 +234,26 @@ class AppViewModel internal constructor(app: Application, private val createApi:
         val current = auth ?: return
         val epoch = sessionEpoch
         val readEpoch = viewRequestEpoch
-        if (reloadJob?.isActive == true || busy) return
+        if (busy) return
+        // ⚠ 読み直しの通信中（画面を開いている間の静かな読み直しなど）でも、引っ張って更新したときは
+        //    無反応にしない（以前は先に return していて、印も出ず読み直しもしなかった）。走っている読み直しが
+        //    終わるのを待ってから、もう一度読む。取り消さないのは、トークンの更新の途中で捨てると
+        //    入れ替わった更新トークンを受け取りそこね、次の更新で締め出されるため
+        val previous = reloadJob?.takeIf { it.isActive }
+        if (previous != null && !pull) return
         if (pull) refreshing = true
+        val serial = ++reloadSerial
         reloadJob = viewModelScope.launch {
             try {
+                previous?.join()
                 authed(current, epoch) { load(it, epoch, readEpoch) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (epoch == sessionEpoch && (!quiet || e.isAuthFailure())) handle(e)
             } finally {
-                if (epoch == sessionEpoch) refreshing = false
+                // 前の読み直しが終わっても、待っている新しい読み直しの印は下ろさない
+                if (epoch == sessionEpoch && serial == reloadSerial) refreshing = false
             }
         }
     }

@@ -91,6 +91,37 @@ class AppViewModelTest {
         assertTrue(SessionStore(app).viewJson.orEmpty().contains("\"revision\":2"))
     }
 
+    @Test fun pullToRefreshWhileAQuietReloadIsRunningReadsAgain() {
+        val quietStarted = CompletableDeferred<Unit>()
+        val releaseQuiet = CompletableDeferred<Unit>()
+        var views = 0
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> when (++views) {
+                    1 -> VIEW_1
+                    2 -> {
+                        quietStarted.complete(Unit)
+                        releaseQuiet.await()
+                        VIEW_1
+                    }
+                    else -> VIEW_2
+                }
+                else -> "{}"
+            }
+        }
+        login()
+        model.reload(quiet = true)
+        until { quietStarted.isCompleted }
+        // 静かな読み直しの通信中に引っ張って更新しても、無反応にならない
+        model.reload(pull = true)
+        assertTrue("引っ張って更新の印が出ない", model.refreshing)
+        releaseQuiet.complete(Unit)
+        until { !model.refreshing }
+        assertEquals("静かな読み直しのあとに読み直していない", 3, views)
+        assertEquals(2, model.view?.revision)
+    }
+
     @Test fun refreshThatStartedBeforeLogoutCannotRestoreTheSession() {
         val refreshStarted = CompletableDeferred<Unit>()
         val releaseRefresh = CompletableDeferred<Unit>()
