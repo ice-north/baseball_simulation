@@ -77,7 +77,12 @@ fun appVersionArticle(build: AppBuild, latest: LatestApp?): Pair<FrontPage.Artic
     }
 }
 
-/** main で最後に mobile/ を変えたコミットを読む。読めなければ null */
+/** main で最後に mobile/ を変えたコミットを読む。読めなければ null（通信の道具はここで作って閉じる） */
+suspend fun fetchLatestApp(): LatestApp? {
+    val client = defaultHttpClient()
+    return try { fetchLatestApp(client) } finally { client.close() }
+}
+
 suspend fun fetchLatestApp(client: HttpClient): LatestApp? = runCatching {
     val response = client.get("https://api.github.com/repos/$APP_REPOSITORY/commits") {
         parameter("sha", "main")

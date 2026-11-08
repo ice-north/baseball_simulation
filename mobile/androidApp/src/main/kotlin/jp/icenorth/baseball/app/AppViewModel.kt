@@ -11,7 +11,6 @@ import jp.icenorth.baseball.shared.AuthSession
 import jp.icenorth.baseball.shared.AppBuild
 import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.LatestApp
-import jp.icenorth.baseball.shared.defaultHttpClient
 import jp.icenorth.baseball.shared.fetchLatestApp
 import jp.icenorth.baseball.shared.PlanDraft
 import jp.icenorth.baseball.shared.sanitizeWeights
@@ -39,7 +38,7 @@ class AppViewModel internal constructor(
     private val fetchLatest: suspend () -> LatestApp? = { null },
     private val createApi: (String) -> OnlineApi,
 ) : AndroidViewModel(app) {
-    constructor(app: Application) : this(app, { defaultHttpClient().use { fetchLatestApp(it) } }, { OnlineApi(it) })
+    constructor(app: Application) : this(app, { fetchLatestApp() }, { OnlineApi(it) })
 
     private val store = SessionStore(app)
 
