@@ -50,6 +50,8 @@ const FULL_COMMANDS = new Set([
   'submit',
   'tradeOffer',
   'tradeRespond',
+  // 守備位置の変更も世界を読み込む（`convertPosition` の前の `loadLeagueWorld`）
+  'convert',
 ]);
 // ⚠ **バックアップは圧縮した文字列で持つ**。リーグ（世界の写し込み）をそのまま
 //    抱えると、操作のたびに読み書きする一式が倍の大きさになり、

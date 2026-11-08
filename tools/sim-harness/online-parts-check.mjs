@@ -176,6 +176,21 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
     swapped.battingOrder.map((e) => e.playerId),
     '軽い読みで保存した編成が読み直しで残る',
   );
+  // ⚠ 守備位置の変更は世界を読む（`loadLeagueWorld`）。全体の印が無いと、
+  //    軽く読んで番人に触り、毎回2回読んでいた
+  {
+    const league = (await store.read()).league;
+    const me = league.members.find((m) => m.userId === 'a');
+    const outfielder = league.game.teams[me.teamName].players.find(
+      (p) => p.isActive !== false && ['left', 'center', 'right'].includes(p.position),
+    );
+    await send('a', 'convert', {
+      playerId: outfielder.id,
+      position: outfielder.position === 'left' ? 'right' : 'left',
+    });
+    assert.equal(store.lastMode, 'full', '守備位置の変更は世界を読む');
+    assert.equal(store.lastAttempts, 1, '守備位置の変更を軽く読んでから全体で読み直している');
+  }
   // 世界に触る処理を、全体の印なしで渡しても正しく済む（やり直し）
   const hsBefore = after.league.game.pools.highSchool.players.length;
   await store.transaction((b) => {
