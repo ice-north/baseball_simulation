@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
@@ -48,6 +49,8 @@ import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.pid
 import jp.icenorth.baseball.shared.PendingProcedure
 import jp.icenorth.baseball.shared.pendingProcedure
+import jp.icenorth.baseball.shared.PackWaiting
+import jp.icenorth.baseball.shared.packWaiting
 import jp.icenorth.baseball.shared.waitingTradeCount
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
@@ -59,7 +62,7 @@ private enum class ProcTab(val label: String) { Current("現在の手続き"), T
 
 /** 手続きタブ: 初期メンバー選択・キャンプ・契約更改・トライアウト・年度更新と、トレード */
 @Composable
-fun ProceduresScreen(model: AppViewModel, onRename: () -> Unit) {
+fun ProceduresScreen(model: AppViewModel, onRename: () -> Unit, onHome: () -> Unit = {}) {
     val raw = model.raw ?: return
     // ⚠ どちらの側を開いているかは AppViewModel に置く（届いた提案の知らせから、トレードの側を直接開くため）
     val tab = if (model.procTrade) ProcTab.Trade else ProcTab.Current
@@ -79,19 +82,19 @@ fun ProceduresScreen(model: AppViewModel, onRename: () -> Unit) {
             TextButton(onClick = onRename) { Text("球団名") }
         }
         when (tab) {
-            ProcTab.Current -> CurrentProcedure(model, raw)
+            ProcTab.Current -> CurrentProcedure(model, raw, onHome)
             ProcTab.Trade -> TradeScreen(model, raw)
         }
     }
 }
 
 @Composable
-private fun CurrentProcedure(model: AppViewModel, raw: JsonObject) {
+private fun CurrentProcedure(model: AppViewModel, raw: JsonObject, onHome: () -> Unit) {
     val pending = raw["pendingPack"].obj()
     val phase = raw["phase"].obj()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when {
-            pending != null -> PendingPack(model, raw, pending)
+            pending != null -> PendingPack(model, raw, pending, onHome)
             phase != null -> PhasePanel(model, raw, phase)
             else -> {
                 Section("手続き") { Text("現在、決定待ちの手続きはありません。") }
@@ -104,12 +107,30 @@ private fun CurrentProcedure(model: AppViewModel, raw: JsonObject) {
     }
 }
 
+/** 「11/9(月) 0:00 の開幕から」。キャンプの前なら見込みなので「（予定）」を付ける（Web 版の packStartText と同じ） */
+fun packStartText(joinsAt: String?, estimated: Boolean): String {
+    val due = formatDeadline(joinsAt) ?: return "次のキャンプが終わった後の開幕から"
+    return "$due の開幕から" + if (estimated) "（予定）" else ""
+}
+
 /** 途中参加の初期メンバー選択。選んだ時点で保存する（pack 命令。締め切りは無い） */
 @Composable
-private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObject) {
+private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObject, onHome: () -> Unit) {
     val packs = pending.at("packs").list().mapNotNull { it.obj() }
     val chosen = pending.at("chosen").str()
     val chosenName = packs.firstOrNull { it.at("id").str() == chosen }?.at("name").str()
+    val waiting = packWaiting(raw)
+    // 選び終えた後に「セットを選び直す」を押したか
+    var choosing by rememberSaveable { mutableStateOf(false) }
+    // ⚠ **選び終えたら「参加の準備ができました」に切り替える**（Web 版と同じ）。以前は選んだ後も
+    //    セットの一覧がそのまま残り、済んだのか・いつ自分の球団になるのか分からなかった（いしだ指摘）
+    if (waiting != null && !choosing) {
+        PackReady(model, raw, waiting, onHome) { choosing = true }
+        return
+    }
+    if (waiting != null) {
+        OutlinedButton(onClick = { choosing = false }) { Text("選び直さずに戻る") }
+    }
     Section(
         "初期メンバー選択",
         trailing = {
@@ -118,7 +139,9 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
                 // ⚠ セットの型（版2）が無ければ、前から待っている人のセット（版1・全部同じ構成）。
                 //    Web 版（PackSelect）と同じく説明を分ける
                 listOf(
-                    "20セットから1つ選びます。選んだ24人は次の日曜のキャンプで名簿に入り、月曜の開幕からあなたの球団になります。それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。",
+                    "20セットから1つ選びます。選んだ24人はキャンプが終わった時点で名簿に入り、" +
+                        packStartText(pending.at("joinsAt").str(), pending.at("joinsInCamp").bool() != true) +
+                        "あなたの球団になります。それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。",
                 ) + (
                     if (packs.any { it.at("feature").str() != null }) listOf(
                         "セットごとに構成（投手厚め・野手厚め・二刀流・捕手3人など）と格付けの配り方（少数精鋭・粒ぞろい・大黒柱など）が違います。年齢は19〜24歳です。",
@@ -136,7 +159,41 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
         Muted(if (chosenName != null) "いま選んでいるのは「$chosenName」です。キャンプまでは何度でも選び直せます。" else "まだ選んでいません。決めずにキャンプを迎えると、1つ目のセットになります。")
     }
     PackPicker(model, packs, chosen) { id ->
-        model.command("pack", Commands.pack(id), done = "初期メンバーを選びました")
+        model.command("pack", Commands.pack(id), done = "初期メンバーを選びました") { choosing = false }
+    }
+}
+
+/** 初期メンバーを選び終えた後。選んだセットと、自分の球団になる日を出す */
+@Composable
+private fun PackReady(model: AppViewModel, raw: JsonObject, waiting: PackWaiting, onHome: () -> Unit, onChoose: () -> Unit) {
+    val team = model.view?.teamLabel(raw.at("teamName").str().orEmpty())
+    Section(
+        "参加の準備ができました",
+        trailing = {
+            InfoButton(
+                "参加の準備ができました",
+                listOf(
+                    "選んだ24人は、キャンプが終わった時点で名簿に入ります。",
+                    "それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。トレードもそれまではできません。",
+                    "セットはキャンプが終わるまで選び直せます。球団名は上の「球団名」で変えられます。",
+                ),
+            )
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("pack-ready")) {
+            Muted("初期メンバー")
+            Text("「${waiting.packName}」" + (waiting.feature?.let { "  $it" } ?: ""), fontWeight = FontWeight.Bold)
+            Muted("あなたの球団になる日")
+            Text(packStartText(waiting.joinsAt, waiting.estimated), fontWeight = FontWeight.Bold)
+            if (!team.isNullOrBlank()) {
+                Muted("球団名")
+                Text(team, fontWeight = FontWeight.Bold)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+                Button(onClick = onHome) { Text("ホームへ") }
+                OutlinedButton(onClick = onChoose) { Text("セットを選び直す") }
+            }
+        }
     }
 }
 

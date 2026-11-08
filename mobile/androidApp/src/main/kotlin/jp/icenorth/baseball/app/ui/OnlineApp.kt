@@ -178,7 +178,7 @@ fun OnlineApp(model: AppViewModel) {
                         Tab.Games -> GamesScreen(model)
                         Tab.Players -> PlayersScreen(model)
                         Tab.Plan -> PlanScreen(model)
-                        Tab.Procedures -> ProceduresScreen(model, onRename = { renaming = true })
+                        Tab.Procedures -> ProceduresScreen(model, onRename = { renaming = true }, onHome = { tab = Tab.Home })
                     }
                     }
                 }

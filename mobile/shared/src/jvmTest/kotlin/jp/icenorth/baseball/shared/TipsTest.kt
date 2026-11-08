@@ -19,6 +19,16 @@ class TipsTest {
             assertTrue(it.title.isNotBlank() && it.body.isNotBlank())
         }
         assertEquals(GAME_TIPS.size, GAME_TIPS.map { it.title }.toSet().size, "同じ題名がある")
+        // 能力の効き方はコラムにも載せる（いしだ指摘 2026-11-08）
+        assertTrue(GAME_TIPS.count { it.category == "能力" } >= 5, "能力の TIPS が少ない")
+    }
+
+    @Test
+    fun abilityHelpCoversTheDetailedAbilities() {
+        // 体幹など、細かい能力に説明があること（文は Web 版と同じ。照らし合わせは online-ability-help-check）
+        listOf("体力", "回復", "精神力", "体幹", "器用さ", "プロ意識", "成長係数", "出どころ", "打者型", "守備適性").forEach {
+            assertTrue(ABILITY_HELP[it]?.isNotBlank() == true, "説明が無い: $it")
+        }
     }
 
     private fun lineup(order: List<Pair<Long, String>>, starters: List<Long>) = buildJsonObject {

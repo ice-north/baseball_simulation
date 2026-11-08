@@ -77,7 +77,8 @@ export function createHandler(
           );
           auth = { userId: body.user, accessToken: `local:${body.user}` };
         } else auth = await signIn(body);
-        value = { ...auth, ...(await service.login(auth.userId)) };
+        // ⚠ 端末の種類（アプリは 'app'）。ブラウザ1台とアプリ1台まで同時に操作できる
+        value = { ...auth, ...(await service.login(auth.userId, body?.client)) };
       } else if (action === 'refresh' && req.method === 'POST' && !local)
         value = await refresh(body);
       else {

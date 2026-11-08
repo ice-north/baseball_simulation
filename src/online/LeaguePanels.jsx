@@ -21,7 +21,8 @@ import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
 import TryoutPlanner, { PlayerLine } from './TryoutPlanner.jsx';
-import PackSelect from './PackSelect.jsx';
+import PackSelect, { TeamIdentity } from './PackSelect.jsx';
+import { packWaiting } from './notices.js';
 import CampPlanner from './CampPlanner.jsx';
 import {
   PYRAMID_LEAGUES,
@@ -467,9 +468,73 @@ export function Notices({ view, compact = false }) {
  * ⚠ 名簿に入るのは**次のキャンプ**。それまで球団はCPUが動かす。
  *    画面にそう書くこと——書かないと「選んだのに選手が変わらない」と見える。
  */
-export function PendingPackPanel({ view, busy, run, command, mobile }) {
+/**
+ * 途中参加した人の球団が、選んだセットで始まる日時の文。
+ * 「11/9(月) 0:00 の開幕から」。キャンプの前なら見込みなので「（予定）」を付ける。
+ */
+export function packStartText(waiting) {
+  if (!waiting?.joinsAt) return '次のキャンプが終わった後の開幕から';
+  return `${formatDeadline(waiting.joinsAt)} の開幕から${waiting.estimated ? '（予定）' : ''}`;
+}
+
+export function PendingPackPanel({ view, busy, run, command, mobile, setTab }) {
+  // 選び終えた後に「セットを選び直す」を押したか
+  const [choosing, setChoosing] = useState(false);
   const pending = view.pendingPack;
   if (!pending) return null;
+  const waiting = packWaiting(view);
+  // ⚠ **選び終えたら「参加の準備ができました」に切り替える**。以前は選んだ後も
+  //    セットの一覧がそのまま残り、変わるのは上の一文と「保存しました」だけだった。
+  //    いしだが実際に「決めた後も画面がそのまま」と止まったと思った。
+  //    選び直しはキャンプまでできるので、一覧は「セットを選び直す」で開く
+  if (waiting && !choosing) {
+    const body = (
+      <>
+        <dl className="online-join-ready">
+          <div>
+            <dt>初期メンバー</dt>
+            <dd>
+              「{waiting.packName}」
+              {waiting.feature && <small>{waiting.feature}</small>}
+            </dd>
+          </div>
+          <div>
+            <dt>あなたの球団になる日</dt>
+            <dd>{packStartText(waiting)}</dd>
+          </div>
+        </dl>
+        {/* ⚠ 日本語の文は JSX の中で改行しない（改行が空白になって「それまでは 引き継いだ」と出る） */}
+        <p className="online-muted">
+          {'選んだ24人は、キャンプが終わった時点で名簿に入ります。' +
+            'それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。' +
+            'トレードもそれまではできません。セットはキャンプが終わるまで選び直せます。'}
+        </p>
+        <TeamIdentity view={view} busy={busy} run={run} command={command} />
+        <div className="online-actions">
+          {setTab && (
+            <button className="online-primary" onClick={() => setTab('today')}>
+              ホームへ
+            </button>
+          )}
+          <button disabled={busy} onClick={() => setChoosing(true)}>
+            セットを選び直す
+          </button>
+        </div>
+      </>
+    );
+    if (!mobile)
+      return (
+        <Page title="初期メンバー選択" sub="参加の準備ができました。">
+          <section className="online-card online-decision">{body}</section>
+        </Page>
+      );
+    return (
+      <section className="online-card online-decision">
+        <h2>参加の準備ができました</h2>
+        {body}
+      </section>
+    );
+  }
   const chosen = pending.packs.find((p) => p.id === pending.chosen);
   const status = chosen
     ? `いま選んでいるのは「${chosen.name}」です。キャンプまでは何度でも選び直せます。`
@@ -478,12 +543,20 @@ export function PendingPackPanel({ view, busy, run, command, mobile }) {
     <>
       {/* ⚠ PCは「20セットから1つ選びます」をセットの一覧の説明に任せる（2回出さない） */}
       <p>
-        {mobile && '20セットから1つ選びます。'}選んだ24人は
-        <strong>次の日曜のキャンプで名簿に入り</strong>、月曜の開幕から
-        あなたの球団になります。それまでは引き継いだ選手でCPUが戦い、
-        ストーブリーグとキャンプの手続きもCPUが決めます。
+        {mobile && '20セットから1つ選びます。'}
+        {'選んだ24人は'}
+        <strong>キャンプが終わった時点で名簿に入り</strong>
+        {`、${packStartText({ joinsAt: pending.joinsAt, estimated: !pending.joinsInCamp })}あなたの球団になります。` +
+          'それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。'}
       </p>
       {mobile && <p className="online-muted">{status}</p>}
+      {waiting && (
+        <div className="online-actions">
+          <button disabled={busy} onClick={() => setChoosing(false)}>
+            選び直さずに戻る
+          </button>
+        </div>
+      )}
       <PackSelect
         packs={pending.packs}
         plan={{ packId: pending.chosen }}
@@ -491,7 +564,12 @@ export function PendingPackPanel({ view, busy, run, command, mobile }) {
         view={view}
         run={run}
         command={command}
-        onChange={(next) => run(() => command('pack', { packId: next.packId }))}
+        onChange={(next) =>
+          run(async () => {
+            await command('pack', { packId: next.packId });
+            setChoosing(false);
+          })
+        }
       />
     </>
   );

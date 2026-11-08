@@ -61,3 +61,25 @@ export function noticeCounts(view) {
   const trades = waitingTradeCount(view);
   return { procedure, trades, total: procedure + trades };
 }
+
+/**
+ * 途中参加で初期メンバーを選び終え、自分の球団になるのを待っている間の知らせ。
+ * 無ければ null。`joinsAt` はその球団で始まる時刻（キャンプの締め切り＝開幕）。
+ *
+ * ⚠ 選んだ時点で手続きの帯（`pendingProcedure`）は消える。代わりにこれを出して、
+ *    「いつ自分の球団になるか」を見せ続ける（いしだ指摘: セットと名前を決めた後も
+ *    画面がそのままで、済んだのか・次に何が起きるのか分からなかった）。
+ *    アプリの `Notices.kt` の `packWaiting` と同じ決まり。
+ */
+export function packWaiting(view) {
+  const pending = view?.pendingPack;
+  if (!pending?.chosen) return null;
+  const pack = pending.packs?.find((p) => p.id === pending.chosen);
+  return {
+    packName: pack?.name || '選んだセット',
+    feature: pack?.feature || null,
+    joinsAt: pending.joinsAt || null,
+    // キャンプの最中なら締め切りは決まっている。でなければ見込み
+    estimated: !pending.joinsInCamp,
+  };
+}

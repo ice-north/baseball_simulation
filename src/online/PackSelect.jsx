@@ -27,7 +27,7 @@ import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
  *    他の参加者の操作でビューは何度も差し替わる。保存済みの値を取り込むのは
  *    「まだ触っていないとき」だけにする。
  */
-function TeamIdentity({ view, busy, run, command }) {
+export function TeamIdentity({ view, busy, run, command }) {
   const me = view.members?.find((m) => m.teamName === view.teamName);
   const savedTeam = me?.displayName || view.teamName || '';
   const savedPlayer = me?.label || '';

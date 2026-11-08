@@ -1,3 +1,4 @@
+import { isLiveSession, withLogin, withLogout } from './sessions.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { applyJoin, applyProfile } from '../src/online/membership.js';
 import { isDeepStrictEqual } from 'node:util';
@@ -139,14 +140,18 @@ export class LeagueService {
     return userId === this.adminId || this.memberIds(bundle).includes(userId);
   }
 
-  async login(userId) {
+  /**
+   * @param client 端末の種類。アプリは 'app'、それ以外（PC・スマホのブラウザ）は 'web'。
+   *   ブラウザ1台とアプリ1台まで同時に操作できる（`server/sessions.mjs`）
+   */
+  async login(userId, client = 'web') {
     return this.store.transaction((bundle) => {
       // ⚠ **参加者でなくてもログインは通すこと**。招待された人は
       //    ログインしてからコードを入れるので、ここで締め出すと参加できない
       //    （鶏と卵になる）。公開サインアップは無いので、ここに来られるのは
       //    管理者が作ったアカウントだけ。できることは `command` 側で絞る。
       const sessionId = randomUUID();
-      bundle.sessions[userId] = sessionId;
+      bundle.sessions[userId] = withLogin(bundle.sessions[userId], client, sessionId);
       return { value: { sessionId } };
     });
   }
@@ -173,9 +178,12 @@ export class LeagueService {
       // ⚠ **参加者でなくてもログアウトは通す**。ログインは非参加者にも通すので
       //    （参加画面へ進むため）、ここで弾くと参加画面の「ログアウト」が
       //    403になって抜けられなかった。消すのは自分のセッションだけ
-      if (!sessionId || bundle.sessions[userId] !== sessionId)
+      if (!isLiveSession(bundle.sessions, userId, sessionId))
         return { unchanged: true, value: { ok: true } };
-      delete bundle.sessions[userId];
+      // ⚠ 外すのはこの端末だけ（同時に使っているもう1台は残す）
+      const rest = withLogout(bundle.sessions[userId], sessionId);
+      if (rest) bundle.sessions[userId] = rest;
+      else delete bundle.sessions[userId];
       return { value: { ok: true } };
     });
   }
@@ -210,8 +218,8 @@ export class LeagueService {
     );
     return this.store.transaction(async (bundle) => {
       requireOnline(
-        bundle.sessions[userId] && bundle.sessions[userId] === sessionId,
-        '別の端末でログインしました。この端末からの操作はできません',
+        isLiveSession(bundle.sessions, userId, sessionId),
+        '別の端末でログインしました（ブラウザ・アプリはそれぞれ1台まで）。この端末からの操作はできません',
         409,
         'session',
       );
@@ -607,7 +615,7 @@ export class LeagueService {
       409,
     );
     requireOnline(
-      bundle.sessions[userId] === sessionId,
+      isLiveSession(bundle.sessions, userId, sessionId),
       'ログインし直してください',
       409,
       'session',

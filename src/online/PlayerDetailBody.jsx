@@ -1,5 +1,5 @@
-import React from 'react';
-import { abilityRows } from './playerInfo.js';
+import React, { useState } from 'react';
+import { abilityRows, ABILITY_HELP } from './playerInfo.js';
 import { statGroup, formatStat } from './statsView.js';
 import { POS } from './api.js';
 import { getZoneProfile, zoneHeatmap } from '../game/batterZone.js';
@@ -76,18 +76,44 @@ function StatRow({ player, category, groups }) {
  *    球速とスタミナは0〜100ではないので、名前で見分けて別の物差しを使う。
  * ⚠ 色だけに頼らない——数字そのものを出しているので、色は補助。
  */
-function AbilityBlock({ title, rows }) {
+function AbilityBlock({ title, note, rows, help }) {
+  // 説明を開いている項目（押すと出す。もう一度押すと閉じる）。
+  // ⚠ 触れると出る（title）だけにしないこと。スマホのブラウザでは触れても出ない
+  const [open, setOpen] = useState(null);
   const shown = rows.filter(
     ([, value]) => value !== null && value !== undefined,
   );
   if (!shown.length) return null;
+  const toggle = (label) => setOpen((now) => (now === label ? null : label));
   return (
     <div className="online-detail-block">
-      <h4>{title}</h4>
+      <h4 title={help || undefined}>
+        {title}
+        {note && <small>{note}</small>}
+      </h4>
       <dl>
         {shown.map(([label, value], i) => (
           <div key={`${label}:${i}`}>
-            <dt>{label}</dt>
+            <dt
+              className={ABILITY_HELP[label] ? 'has-help' : undefined}
+              title={ABILITY_HELP[label] || undefined}
+              role={ABILITY_HELP[label] ? 'button' : undefined}
+              tabIndex={ABILITY_HELP[label] ? 0 : undefined}
+              aria-expanded={ABILITY_HELP[label] ? open === label : undefined}
+              onClick={ABILITY_HELP[label] ? () => toggle(label) : undefined}
+              onKeyDown={
+                ABILITY_HELP[label]
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggle(label);
+                      }
+                    }
+                  : undefined
+              }
+            >
+              {label}
+            </dt>
             <dd
               className={
                 typeof value === 'number'
@@ -106,6 +132,11 @@ function AbilityBlock({ title, rows }) {
           </div>
         ))}
       </dl>
+      {open && ABILITY_HELP[open] && (
+        <p className="online-ability-help" role="note">
+          <b>{open}</b> {ABILITY_HELP[open]}
+        </p>
+      )}
     </div>
   );
 }
@@ -165,13 +196,26 @@ export default function PlayerDetailBody({ player, shown, periodLabel }) {
       </section>
 
       <section className="online-detail-section">
-        <h3>能力</h3>
+        <h3>
+          能力<small>項目名を押すと、何にどう効くかが出ます</small>
+        </h3>
+        {/* ⚠ **効き方で分けて並べる**（いしだ指摘 2026-11-08: 体幹などの細かい値が
+            何に効いているのか分からなかった）。試合に効くもの → 疲れと勝負強さ →
+            成長にだけ効くもの。並べ方は `ABILITY_GROUPS`、説明は `ABILITY_HELP` */}
         <div className="online-detail-grid">
           {isPitcher ? [...pitching, batting] : [batting, ...pitching]}
           <AbilityBlock title="守備" rows={abilities('fielding')} />
-          <AbilityBlock title="身体" rows={abilities('physical')} />
-          <AbilityBlock title="精神・成長" rows={abilities('mental')} />
-          <AbilityBlock title="守備適性" rows={abilities('positions')} />
+          <AbilityBlock
+            title="守備適性"
+            rows={abilities('positions')}
+            help={ABILITY_HELP.守備適性}
+          />
+          <AbilityBlock title="体力・精神" rows={abilities('body')} />
+          <AbilityBlock
+            title="成長の素質"
+            note="試合には効かない"
+            rows={abilities('growth')}
+          />
           {/* ⚠ 打撃コースは**図で出す**。数字の列にすると25個並んで読めない。
               打者型（引っ張り・広角など）は「打撃・走塁」に入っている */}
           {player.batting && (

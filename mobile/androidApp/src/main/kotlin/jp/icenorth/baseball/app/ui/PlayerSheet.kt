@@ -1,6 +1,11 @@
 package jp.icenorth.baseball.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import jp.icenorth.baseball.shared.ABILITY_HELP
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -92,12 +97,15 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
             )
         }
         // ⚠ 能力は投打の両方をいつも出す（二刀流が売り。投手を野手で、野手を投手で起用できる）。本職を先に
+        // ⚠ **効き方で分けて並べ、項目を押すと何にどう効くかを出す**（いしだ指摘 2026-11-08: 体幹などが
+        //    何に効いているのか分からず、アプリでは見えもしなかった）。Web 版の並べ方・説明と同じ
         val pitchingBlock: @Composable () -> Unit = {
             AbilityGroup("投球") {
-                AbilityNum("球速 ", p.at("pitching", "velocity").int(), velocity = true)
-                AbilityNum("制球 ", p.at("pitching", "control").int())
-                AbilityNum("スタミナ ", p.at("pitching", "stamina").int(), stamina = true)
-                AbilityNum("回転 ", p.at("pitching", "spinRate").int())
+                Item("球速", p.at("pitching", "velocity").int(), velocity = true)
+                Item("制球", p.at("pitching", "control").int())
+                Item("スタミナ", p.at("pitching", "stamina").int(), stamina = true)
+                Item("回転", p.at("pitching", "spinRate").int())
+                Item("出どころ", p.at("deception").int())
                 p.at("pitching", "arsenal").list().filter { it.at("type").str() != "straight" }.forEach { a ->
                     AbilityNum("${PITCH_TYPE_NAMES[a.at("type").str()] ?: a.at("type").str()} ", a.at("level").int())
                 }
@@ -105,29 +113,40 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
         }
         val battingBlock: @Composable () -> Unit = {
             AbilityGroup("打撃・守備") {
-                AbilityNum("ミート ", p.at("batting", "meet").int())
-                AbilityNum("パワー ", p.at("batting", "power").int())
-                AbilityNum("選球眼 ", p.at("batting", "eye").int())
-                AbilityNum("走力 ", p.at("physical", "speed").int())
-                AbilityNum("盗塁 ", p.at("batting", "steal").int())
-                AbilityNum("バント ", p.at("batting", "bunt").int())
-                AbilityNum("守備 ", p.at("fielding", "defense").int())
-                AbilityNum("肩 ", p.at("physical", "arm").int())
-                if (p.at("position").str() == "catcher") AbilityNum("リード ", p.at("catching", "lead").int())
+                Item("ミート", p.at("batting", "meet").int())
+                Item("パワー", p.at("batting", "power").int())
+                Item("選球眼", p.at("batting", "eye").int())
+                Item("走力", p.at("physical", "speed").int())
+                Item("盗塁", p.at("batting", "steal").int(), help = "盗塁技術")
+                Item("バント", p.at("batting", "bunt").int())
+                Item("守備", p.at("fielding", "defense").int())
+                Item("肩", p.at("physical", "arm").int(), help = "肩力")
+                if (p.at("position").str() == "catcher") Item("リード", p.at("catching", "lead").int(), help = "捕手リード")
+                p.at("batterType").str()?.let { TextItem("打者型", it) }
             }
         }
         Text("能力", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         if (pitcher) { pitchingBlock(); battingBlock() } else { battingBlock(); pitchingBlock() }
-        AbilityGroup("身体") {
-            AbilityNum("体力 ", p.at("physical", "bodyStamina").int())
-            AbilityNum("回復 ", p.at("physical", "recovery").int())
+        AbilityGroup("体力・精神") {
+            Item("体力", p.at("physical", "bodyStamina").int())
+            Item("回復", p.at("physical", "recovery").int())
+            Item("精神力", p.at("personality", "mental").int())
+        }
+        AbilityGroup("成長の素質（試合には効かない）") {
+            Item("体幹", p.at("physical", "muscle").int())
+            Item("器用さ", p.at("physical", "dexterity").int())
+            Item("プロ意識", p.at("personality", "discipline").int())
+            growthFactor(p)?.let { TextItem("成長係数", it) }
         }
         val fitness = p.at("positionFitness").obj().orEmpty()
             .mapNotNull { (pos, v) -> v.int()?.let { pos to it } }
             .filter { (pos, v) -> pos != "pitcher" && v >= 60 }
             .sortedByDescending { it.second }
         if (fitness.isNotEmpty()) {
-            Text("守れる位置（適性）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("守れる位置（適性）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                ABILITY_HELP["守備適性"]?.let { InfoButton("守備適性", listOf(it)) }
+            }
             Text(fitness.joinToString("  ") { (pos, v) -> "${positionLabel(pos)} $v" })
         }
         val history = p.at("careerHistory").list().mapNotNull { it.at("label").str() }
@@ -167,12 +186,57 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
 
 private val ValueWidth = 48.dp
 
-/** 能力の1かたまり（小さな見出しと数字の並び） */
+/** [AbilityGroup] の中の項目。押した項目の説明を、かたまりの下に出す */
+private class AbilityScope(val open: String?, val toggle: (String) -> Unit)
+
+/**
+ * 能力の1かたまり（小さな見出しと数字の並び）。項目を押すと、何にどう効くか（[ABILITY_HELP]）を
+ * 下に出す。もう一度押すと閉じる。
+ * ⚠ 説明は押したときだけ出す（いつも出しておくと画面が長くなる。アプリの「添え書きを常に出さない」決まり）
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AbilityGroup(title: String, content: @Composable () -> Unit) {
+private fun AbilityGroup(title: String, content: @Composable AbilityScope.() -> Unit) {
+    var open by remember { mutableStateOf<String?>(null) }
+    val scope = AbilityScope(open) { key -> open = if (open == key) null else key }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Muted(title)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { scope.content() }
+        open?.let { key ->
+            ABILITY_HELP[key]?.let { text ->
+                Text(
+                    "$key  $text",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp).testTag("ability-help"),
+                )
+            }
+        }
     }
+}
+
+/** 数字の項目。[help] は説明の見出し（Web 版の名前。アプリの短い表示名と違うときだけ渡す） */
+@Composable
+private fun AbilityScope.Item(label: String, value: Int?, help: String = label, velocity: Boolean = false, stamina: Boolean = false) {
+    val known = ABILITY_HELP[help] != null
+    Box(Modifier.clickable(enabled = known) { toggle(help) }) {
+        AbilityNum("$label ", value, velocity, stamina)
+    }
+}
+
+/** 文字の項目（打者型・成長係数） */
+@Composable
+private fun AbilityScope.TextItem(label: String, text: String, help: String = label) {
+    Row(Modifier.clickable(enabled = ABILITY_HELP[help] != null) { toggle(help) }) {
+        Text("$label ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+        Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, modifier = Modifier.alignByBaseline())
+    }
+}
+
+/** 成長係数（Web 版と同じく 0.3〜1.8 に収め、小数2桁） */
+private fun growthFactor(p: JsonObject): String? {
+    val base = p.at("growthPotential").num() ?: return null
+    val value = (base + (p.at("growthModifier").num() ?: 0.0)).coerceIn(0.3, 1.8)
+    val hundredths = kotlin.math.round(value * 100).toInt()
+    return "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
 }

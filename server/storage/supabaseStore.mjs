@@ -1,3 +1,4 @@
+import { isLiveSession, sessionIdsOf } from '../sessions.mjs';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { randomUUID, createHash } from 'node:crypto';
 import {
@@ -241,7 +242,7 @@ export class SupabaseStore {
   }
   async readView(userId, sessionId) {
     const row = await this.controlFor(userId);
-    const writable = !!sessionId && row.sessions?.[userId] === sessionId;
+    const writable = isLiveSession(row.sessions, userId, sessionId);
     const view = row.view;
     if (!view) {
       if (!row.snapshot_path)
@@ -281,7 +282,7 @@ export class SupabaseStore {
     )[0];
     return {
       generation: row?.generation ?? null,
-      writable: !!sessionId && row?.sessions?.[userId] === sessionId,
+      writable: isLiveSession(row?.sessions, userId, sessionId),
     };
   }
   async archive(row, kind, year) {
@@ -472,7 +473,8 @@ export class SupabaseStore {
                 projectLeague(
                   value,
                   m.userId,
-                  value.sessions[m.userId],
+                  // 書けるかは読むときに端末ごとに決め直す（`readView`）。ここは目安
+                  sessionIdsOf(value.sessions[m.userId])[0],
                   this.adminId,
                 ),
               ]),

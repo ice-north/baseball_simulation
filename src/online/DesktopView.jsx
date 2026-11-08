@@ -18,8 +18,8 @@ import { CompletedCamp } from './CampPlanner.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { teamLabel } from './gameText.js';
-import { noticeCounts, pendingProcedure } from './notices.js';
-import { formatDeadline } from './LeaguePanels.jsx';
+import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
+import { formatDeadline, packStartText } from './LeaguePanels.jsx';
 import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
 import { CompactRoster } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
@@ -130,6 +130,7 @@ function ownStanding(view) {
  */
 function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
   const own = ownStanding(view);
+  const waiting = packWaiting(view);
   return (
     <div className="online-nav-context">
       <strong>{teamLabel(view.teamName)}</strong>
@@ -138,6 +139,14 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
           ? `${own.league ? `${own.league} ` : ''}${own.rank}位 · ${own.row.wins}勝${own.row.losses}敗${own.row.draws ? `${own.row.draws}分` : ''}`
           : `独立リーグ · ${view.year}年目`}
       </small>
+      {/* 途中参加でセットを選び終えた人は、いつ自分の球団になるかを出し続ける */}
+      {waiting && (
+        <small className="online-nav-waiting">
+          開幕待ち
+          {waiting.joinsAt &&
+            ` · ${formatDeadline(waiting.joinsAt)}から${waiting.estimated ? '（予定）' : ''}`}
+        </small>
+      )}
       <button className="online-nav-link" onClick={onRename}>
         名前を変える
       </button>
@@ -343,6 +352,7 @@ export default function DesktopView(props) {
   const notice = noticeCounts(view);
   const counts = { decisions: notice.procedure, transfer: notice.trades };
   const procedure = pendingProcedure(view);
+  const waiting = packWaiting(view);
   return (
     <>
       <nav className="online-page-nav" aria-label="オンラインの画面">
@@ -427,6 +437,20 @@ export default function DesktopView(props) {
           <button className="online-primary" onClick={() => setTab('decisions')}>
             {procedure.label}を開く
           </button>
+        </div>
+      )}
+      {/* 途中参加でセットを選び終えたら、手続きの帯の代わりにホームで
+          「いつ自分の球団になるか」を出す（選んだだけでは画面が何も変わらず、
+          済んだのか分からなかった） */}
+      {waiting && current === 'today' && (
+        <div className="online-procedure-banner is-waiting" role="status">
+          <div>
+            <strong>開幕待ち: 「{waiting.packName}」の24人で始まります</strong>
+            <span>
+              {packStartText(waiting)}あなたの球団になります。それまでは引き継いだ選手でCPUが戦います。
+            </span>
+          </div>
+          <button onClick={() => setTab('decisions')}>確かめる</button>
         </div>
       )}
       {/* ⚠ ホームは**見出しを出さない**。左メニューで「ホーム」を押した先に

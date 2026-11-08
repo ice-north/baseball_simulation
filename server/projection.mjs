@@ -1,8 +1,12 @@
+import { isLiveSession } from './sessions.mjs';
 import { roleFor } from '../src/online/tactics.js';
+import { getDeception } from '../src/game/deception.js';
+import { getBatterType, BATTER_TYPE_LABEL } from '../src/game/batterType.js';
 import {
   PHASE_LABELS,
   ONLINE_SCHEMA,
   CAMP_ROUNDS,
+  phaseDeadlineAt,
 } from '../src/online/shared.js';
 import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
 import {
@@ -61,6 +65,10 @@ const playerView = (p) => ({
   position: p.position,
   number: p.number,
   fatigue: p.fatigue || 0,
+  // ⚠ 名前とidや能力から決まる値は、アプリ用にここで求めて渡す（Web は手元で求める）。
+  //    アプリに同じ式を書き写すと、片方だけ直したときに表示が食い違う
+  deception: p.pitching ? getDeception(p) : undefined,
+  batterType: p.batting ? BATTER_TYPE_LABEL[getBatterType(p)] : undefined,
   batting: p.batting,
   pitching: p.pitching,
   fielding: p.fielding,
@@ -246,6 +254,25 @@ export function projectLineup(team) {
     ...(team.onlineTactics ? { tactics: team.onlineTactics } : {}),
   };
 }
+/**
+ * 途中参加した人の球団が、選んだセットで始まる時刻（＝キャンプの締め切り。月曜0時の開幕）。
+ * 名簿の入れ替えはキャンプの終わり（`applyPendingPacks`）なので、キャンプの最中なら
+ * その締め切り、まだなら次のキャンプの締め切りの見込み。分からなければ null。
+ *
+ * ⚠ 画面に「次の日曜」と書くだけだと、日曜のキャンプ中に参加した人には
+ *    今日なのか来週なのか分からなかった（いしだ指摘: 決めた後に何が起きるか
+ *    分からず、画面が止まって見えた）。日時で出すためにここで決める。
+ */
+function packJoinsAt(l) {
+  if (l.phase?.kind === 'camp') return l.phase.deadline || null;
+  const base = l.phase?.deadline || l.nextAdvanceAt;
+  if (!base) return null;
+  try {
+    return phaseDeadlineAt('camp', base);
+  } catch {
+    return null;
+  }
+}
 const pendingPackAuto = (phase, member) =>
   !!phase && !!member.packSeed && phase.kind !== 'pack_select';
 export function projectLeague(bundle, userId, sessionId, adminId) {
@@ -261,7 +288,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       isAdmin: userId === adminId,
       canMigrate: info.state === 'migratable',
       reason: info.reason || null,
-      writable: !!sessionId && bundle.sessions[userId] === sessionId,
+      writable: isLiveSession(bundle.sessions, userId, sessionId),
     };
   }
   const member = l.members.find((m) => m.userId === userId);
@@ -273,7 +300,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       joinRequired: true,
       isAdmin: userId === adminId,
       revision: l.revision,
-      writable: !!sessionId && bundle.sessions[userId] === sessionId,
+      writable: isLiveSession(bundle.sessions, userId, sessionId),
     };
   const team = l.game.teams[member.teamName];
   const statistics = statisticsContext(l);
@@ -328,7 +355,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     seasonTurns: l.season.settings.seasonTurns || SEASON_TURNS,
     nextAdvanceAt: l.nextAdvanceAt,
     isAdmin: userId === adminId,
-    writable: !!sessionId && bundle.sessions[userId] === sessionId,
+    writable: isLiveSession(bundle.sessions, userId, sessionId),
     hasBackup: !!bundle.backup,
     // ⚠ 締め切りはビューに載せる。定期進行の判定（`isDue`）がこれを見て、
     //    フェーズ中（status が running でない）でも起動する必要がある
@@ -452,6 +479,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       ? {
           chosen: member.pendingPackId || null,
           packs: packsForMember(member).map(packView),
+          joinsAt: packJoinsAt(l),
+          // キャンプの最中か（締め切りが決まっている）。でなければ joinsAt は見込み
+          joinsInCamp: l.phase?.kind === 'camp',
         }
       : null,
     // ⚠ **自分が当事者のものだけ**渡す。他人同士の交渉が見えると、

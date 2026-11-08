@@ -328,6 +328,25 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+/* 能力の説明: 項目名を押すと下に出す（スマホのブラウザは触れても title が出ないため） */
+.online-detail-block dt.has-help:not(:where(.online-sp *)) {
+  cursor: pointer;
+  text-decoration: underline dotted rgba(159, 176, 196, 0.6);
+  text-underline-offset: 3px;
+}
+.online-detail-block dt.has-help[aria-expanded='true']:not(:where(.online-sp *)) {
+  color: #e2e8f0;
+}
+.online-ability-help {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #cbd5e1;
+}
+.online-ability-help b:not(:where(.online-sp *)) {
+  margin-right: 4px;
+  color: #f1f5f9;
+}
 
 /* --- トレード（`TradeScreen.jsx`） -------------------------------------
    守備位置ごとに自球団と相手を1枚の表（`.online-lineup-table`）に並べ、
@@ -3899,4 +3918,51 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-lineup-field-swap {
   color: #facc15;
   font-weight: 700;
+}
+/* 途中参加でセットを選び終えた後の「開幕待ち」。手続きの帯と同じ形で、急ぎではない色にする */
+.online-procedure-banner.is-waiting {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  color: #bae6fd;
+}
+.online-procedure-banner.is-waiting strong:not(:where(.online-sp *)) {
+  color: #f0f9ff;
+}
+.online-nav-waiting {
+  color: #7dd3fc;
+}
+/* 参加の準備ができました: 選んだセットと、自分の球団になる日 */
+.online-join-ready {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.online-join-ready > div:not(:where(.online-sp *)) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: baseline;
+}
+.online-join-ready dt:not(:where(.online-sp *)) {
+  min-width: 10em;
+  color: #9fb0c4;
+  font-size: 13px;
+}
+.online-join-ready dd:not(:where(.online-sp *)) {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.online-join-ready dd small:not(:where(.online-sp *)) {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #9fb0c4;
+}
+/* 能力のかたまりの見出しの補足（「試合には効かない」） */
+.online-detail-block h4 small:not(:where(.online-sp *)) {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: #9fb0c4;
 }

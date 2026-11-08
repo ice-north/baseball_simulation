@@ -7,6 +7,7 @@ import {
   PhasePanel,
   PendingPackPanel,
   LineupPanel,
+  packStartText,
 } from './LeaguePanels.jsx';
 import TeamRoster from './TeamRoster.jsx';
 import OnlineLineup, { hasUnsavedFullLineup } from './OnlineLineup.jsx';
@@ -14,7 +15,7 @@ import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatTurn } from './shared.js';
 import { nextAdvanceText, STATUS } from './api.js';
 import { teamLabel } from './gameText.js';
-import { noticeCounts, pendingProcedure } from './notices.js';
+import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { CompletedCamp } from './CampPlanner.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
@@ -33,6 +34,7 @@ export default function MobileView(props) {
   ];
   const counts = noticeCounts(view);
   const procedure = pendingProcedure(view);
+  const waiting = packWaiting(view);
   return (
     <>
       {/* ⚠ 自分が決める手続きは、どの画面にいても上に帯で出す（PC版と同じ。見逃し防止） */}
@@ -45,6 +47,16 @@ export default function MobileView(props) {
           <button className="online-primary" onClick={() => setTab('decisions')}>
             開く
           </button>
+        </div>
+      )}
+      {/* 途中参加でセットを選び終えたら、いつ自分の球団になるかをホームに出す（PC版と同じ） */}
+      {waiting && tab === 'today' && (
+        <div className="online-procedure-banner is-waiting" role="status">
+          <div>
+            <strong>開幕待ち: 「{waiting.packName}」で始まります</strong>
+            <span>{packStartText(waiting)}あなたの球団になります</span>
+          </div>
+          <button onClick={() => setTab('decisions')}>確かめる</button>
         </div>
       )}
       {tab === 'today' && (

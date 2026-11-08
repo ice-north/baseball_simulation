@@ -140,19 +140,22 @@ assert.equal(
   70,
   '走力は身体能力を参照',
 );
+// 走力は「打撃・走塁」に出す（身体の欄は効き方で分けたので無い）。値は身体能力を参照
 assert.equal(
-  abilityRows(
-    {
-      physical: { speed: 70 },
-      pitching: { velocity: 140, stamina: 120 },
-      batting: { meet: 0 },
-    },
-    'physical',
-  )[0][1],
+  Object.fromEntries(
+    abilityRows(
+      {
+        physical: { speed: 70 },
+        pitching: { velocity: 140, stamina: 120 },
+        batting: { meet: 0, speed: 20 },
+      },
+      'batting',
+    ),
+  )['走力'],
   70,
 );
 assert.equal(abilityRows({ batting: { meet: 0 } }, 'batting')[0][1], 0);
-assert.equal(abilityRows({}, 'physical')[0][1], null);
+assert.equal(abilityRows({}, 'body')[0][1], null);
 const outs = statGroup('pitching', 'basic').columns.find(
   (c) => c.id === 'outs',
 );

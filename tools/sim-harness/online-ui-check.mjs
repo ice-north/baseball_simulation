@@ -430,7 +430,7 @@ try {
   );
   await click(p, '更新');
   await p
-    .getByText('別の端末でログインしたため閲覧のみです。', { exact: false })
+    .getByText('別のブラウザでログインしたため閲覧のみです', { exact: false })
     .waitFor();
   await m.getByRole('button', { name: 'ホーム', exact: true }).click();
   await m.screenshot({
