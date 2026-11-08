@@ -824,8 +824,32 @@ try {
       '組み直されることを書いていない',
     );
     await picks.nth(0).click(); // 投手
+    // ⚠ **詳細を開いている間に定期の読み直しで版が上がっても、最新の版で送ること**。
+    //    選手の詳細へ渡す命令（`actions`）は作り直しを減らすため使い回していて、
+    //    作った時点の古い版を送り「他の操作で更新されました」になっていた。
+    //    定期の読み直しは忙しさ（`busy`）を変えないので、命令は作り直されない
+    {
+      const before = await fixture.store.transaction((bundle) => {
+        bundle.league.revision++;
+        return { value: bundle.league.revision };
+      });
+      const polled = p.waitForResponse(
+        (r) => r.url().includes('action=view'),
+      );
+      await p.evaluate(() =>
+        document.dispatchEvent(new Event('visibilitychange')),
+      );
+      await polled;
+      await p.waitForTimeout(200);
+      assert.ok(before > 0);
+    }
     await convert.getByRole('button', { name: '投手へ変える', exact: true }).click();
     await p.waitForTimeout(300);
+    assert.doesNotMatch(
+      await convert.innerText(),
+      /他の操作で更新されました/,
+      '定期の読み直しの後に守備位置を変えると古い版を送っている',
+    );
     await convert.getByText('いまの登録: 投手', { exact: false }).waitFor();
     await p.keyboard.press('Escape');
     // ⚠ 投手起用に入ること（入らないと試合で1度も投げない）
@@ -838,7 +862,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び / 守備位置の変更）',
+    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び / 守備位置の変更（定期の読み直しで版が上がった後も））',
   );
 } finally {
   await browser.close();

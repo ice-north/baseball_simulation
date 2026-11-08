@@ -78,13 +78,20 @@ export default function OnlineApp() {
   const viewSequence = useRef(0);
   // 手元のビューの世代。読み直しで `since` に送り、変わっていなければ中身を受け取らない
   const viewGeneration = useRef(null);
+  // ⚠ **版は描画時の `view` ではなくここから読む**。命令は使い回される
+  //    （選手の詳細へ渡す `actions`）ので、閉じ込めた `view` は定期の読み直しの
+  //    後も古いまま残り、古い版を送って「他の操作で更新されました」になっていた
+  const viewRef = useRef(view);
+  viewRef.current = view;
   // ⚠ ビューを入れるときは必ずここを通す（世代を覚え、変わっていない返事なら今のビューを残す）
   const acceptView = useCallback((result, current) => {
     if (result?.unchanged) return;
     viewGeneration.current = Number.isInteger(result?.viewGeneration)
       ? result.viewGeneration
       : null;
-    setView(viewForSession(result, current));
+    const next = viewForSession(result, current);
+    viewRef.current = next;
+    setView(next);
   }, []);
   const sinceQuery = () =>
     Number.isInteger(viewGeneration.current)
@@ -297,7 +304,7 @@ export default function OnlineApp() {
       });
     let result;
     try {
-      result = await send(view?.revision || 0);
+      result = await send(viewRef.current?.revision || 0);
     } catch (error) {
       // ⚠ **編成と手続きの提出は、版のずれだけなら最新の版で1回だけ送り直す**。
       //    版はリーグ全体で1つなので、毎正時の進行や他の参加者の操作だけで
@@ -327,15 +334,18 @@ export default function OnlineApp() {
   // ⚠ 選手の詳細はどこからでも開かれるので、命令はコンテキストで渡す
   //    （`ActionContext.jsx` の注記）。毎回作り直すと小窓が作り直されるので、
   //    中身が変わったときだけ作り直す
+  //    ⚠ `run` と `command` は**最新のものを呼ぶ包み**を渡す。作った時点の関数を
+  //    渡すと、その描画の `view` などを閉じ込めたまま使われる
+  const latest = useRef(null);
+  latest.current = { run, command };
   const actions = useMemo(
     () => ({
       teamName: view?.teamName || null,
       writable: !!view?.writable,
       busy,
-      run,
-      command,
+      run: (fn) => latest.current.run(fn),
+      command: (type, payload) => latest.current.command(type, payload),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [view?.teamName, view?.writable, busy],
   );
   useEffect(() => {
