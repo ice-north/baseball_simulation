@@ -38,9 +38,11 @@ import jp.icenorth.baseball.shared.PITCH_TYPE_NAMES
 import jp.icenorth.baseball.shared.POSITION_LABELS
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
+import jp.icenorth.baseball.shared.detailReadable
 import jp.icenorth.baseball.shared.formatStat
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.localPeriods
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.overviewGroup
@@ -64,10 +66,14 @@ private fun hand(v: String?) = when (v) { "left" -> "左"; "switch" -> "両"; el
 @Composable
 private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
     val id = p.at("id").num()?.toLong()
-    var periods by remember(id) { mutableStateOf<List<JsonObject>?>(null) }
-    var failure by remember(id) { mutableStateOf<String?>(null) }
-    LaunchedEffect(id) {
-        if (id == null) return@LaunchedEffect
+    // ⚠ action=player は自球団の選手しか返さない（他球団・トレード相手・トライアウト候補は 404）。
+    //    それ以外は球団の読み込みに載った期間を使う（Web 版 PlayerPerformance.jsx の Detail と同じ分け方）
+    val ownRoster = model.raw?.at("roster").list().mapNotNull { it.obj() }
+    val readable = remember(p, ownRoster) { detailReadable(p, ownRoster) }
+    var periods by remember(id, readable) { mutableStateOf(if (readable) null else localPeriods(p)) }
+    var failure by remember(id, readable) { mutableStateOf<String?>(null) }
+    LaunchedEffect(id, readable) {
+        if (id == null || !readable) return@LaunchedEffect
         try {
             periods = model.read("player", mapOf("id" to id.toString())).at("periods").list().mapNotNull { it.obj() }
         } catch (e: Exception) {
@@ -156,6 +162,7 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
         when {
             failure != null -> Muted("成績を読めませんでした: $failure")
             periods == null -> Muted("読み込み中…")
+            periods!!.isEmpty() -> Muted("成績の記録がありません。")
             else -> periods!!.forEach { period ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(period.at("label").str().orEmpty(), fontWeight = FontWeight.SemiBold)

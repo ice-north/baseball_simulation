@@ -55,4 +55,30 @@ class PlayerPeriodsTest {
         val old = obj("""{"id":103,"name":"鈴木","career":{"years":1,"seasonStats":{"batting":{"hits":9}}}}""")
         assertEquals(emptyList(), careerRoster(listOf(old)))
     }
+
+    @Test
+    fun onlyOwnPlayersReadTheDetailWindow() {
+        // サーバーの action=player は自球団しか返さない（他球団・トレード相手・候補は 404）
+        val own = obj("""{"id":201,"name":"自軍","detailAvailable":true}""")
+        assertEquals(true, detailReadable(own))
+        assertEquals(false, detailReadable(veteran), "他球団の名簿（publicOnly）は読まない")
+        assertEquals(false, detailReadable(obj("""{"id":"t-9","name":"候補"}""")), "トライアウト候補は読まない")
+        // 自球団の名簿から写した形（印が落ちている）でも、ビューの名簿に居れば読む
+        val copied = obj("""{"id":201,"name":"自軍"}""")
+        assertEquals(true, detailReadable(copied, listOf(own)))
+        assertEquals(false, detailReadable(copied, listOf(obj("""{"id":201,"name":"自軍"}"""))), "印の無い名簿では読まない")
+    }
+
+    @Test
+    fun otherPlayersUseThePeriodsTheTeamReadCarried() {
+        assertEquals(listOf("current", "career", "legacy-career"), localPeriods(veteran).map { it.at("id").str() })
+        // 期間が無ければ名簿の今季の数字だけ
+        val listed = obj("""{"id":301,"name":"高橋","seasonStats":{"batting":{"hits":7}},"performance":{"batting":{}},"publicSource":"既存の今季記録"}""")
+        val only = localPeriods(listed).single()
+        assertEquals("今季", only.at("label").str())
+        assertEquals(7, only.at("seasonStats", "batting", "hits").int())
+        assertEquals("既存の今季記録", only.at("source").str())
+        // 数字が何も無い（トライアウト候補など）
+        assertEquals(emptyList(), localPeriods(obj("""{"id":"t-9","name":"候補"}""")))
+    }
 }
