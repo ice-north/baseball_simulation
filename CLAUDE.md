@@ -1,5 +1,7 @@
 # 野球シミュレーター開発ガイド
 
+総合監査を頼まれたら [docs/review-routine.md](docs/review-routine.md) の手順に従い、記録は `docs/audit/` に残す。
+
 過去の設計判断・実測記録は [詳細アーカイブ](docs/archive/CLAUDE-full.md) に保存している。数値や行番号は履歴として扱い、変更時は現在のコードとハーネスで確かめる。
 
 ## 起動と検証
