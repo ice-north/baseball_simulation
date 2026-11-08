@@ -17,6 +17,8 @@ import { nextAdvanceText, STATUS } from './api.js';
 import { teamLabel } from './gameText.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { CompletedCamp } from './CampPlanner.jsx';
+import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
+import OffseasonGrowth from './OffseasonGrowth.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
     props;
@@ -65,11 +67,15 @@ export default function MobileView(props) {
             <strong>{teamLabel(view.teamName)}</strong>
             <span>
               {/* ⚠ 総数はビューの値で出す（PC版と同じ理由） */}
-              {formatTurn(view.currentDate, view.seasonTurns)} ·{' '}
+              {view.stage && !['season', 'pack_select'].includes(view.stage.key)
+                ? `オフ · ${stageLines(view)?.step.label || ''}${view.stage.open ? '' : '待ち'}`
+                : formatTurn(view.currentDate, view.seasonTurns)}{' '}
+              ·{' '}
               {STATUS[view.status]}
             </span>
             <small>次の進行 {nextAdvanceText(view)}</small>
           </section>
+          {view.stage?.key !== 'season' && <SeasonFlow view={view} compact />}
           <TeamBrief view={view} />
           <nav className="online-home-actions" aria-label="オンラインの画面">
             {tabs
@@ -172,9 +178,15 @@ export default function MobileView(props) {
           <>
             <section className="online-card">
               <h2>手続き</h2>
-              <p>現在、決定待ちの手続きはありません。</p>
+              <p>
+                {view.stage?.key !== 'season' && stageLines(view)
+                  ? `いま決めることはありません。${stageLines(view).head}。`
+                  : '現在、決定待ちの手続きはありません。'}
+              </p>
             </section>
+            <SeasonFlow view={view} compact />
             <CompletedCamp key={view.lastCamp?.year} view={view} />
+            <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
           </>
         ))}
       <nav className="online-mobile-controls" aria-label="画面操作">

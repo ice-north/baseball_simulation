@@ -187,6 +187,9 @@ private fun pendingAlerts(view: LeagueView, raw: JsonObject?): List<String> = bu
             },
         )
     }
+    // ⚠ シーズン後の手続きの合間・開幕待ちも知らせる（いしだ指摘: いまの段階と次に何が来るのかが分からない）
+    if (view.pendingPack == null && view.phase == null && raw?.at("stage", "key").str().let { it != null && it != "season" })
+        stageHeadText(raw)?.let { add("オフ: $it") }
     val waiting = raw?.at("trades").list().count { it.at("myTurn").bool() == true }
     if (waiting > 0) add("トレードの提案に返事が必要です（${waiting}件）")
 }

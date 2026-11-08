@@ -271,3 +271,13 @@ fun dealProblems(mine: List<JsonObject>, theirs: List<JsonObject>?, give: Set<Lo
 }
 
 const val MAX_OPEN_TRADES = 5
+
+/** 候補がいまの名簿の同じ区分で何番手にあたるか（Web 版の `teamFitRank` と同じ） */
+data class TeamFit(val group: String, val rank: Int, val of: Int)
+
+fun teamFitRank(candidate: JsonObject, roster: List<JsonObject>, weights: Map<String, Int>): TeamFit {
+    val group = rosterGroup(candidate.at("position").str())
+    val score = weightedScore(candidate, weights)
+    val same = roster.filter { rosterGroup(it.at("position").str()) == group }
+    return TeamFit(group, 1 + same.count { weightedScore(it, weights) > score }, same.size)
+}

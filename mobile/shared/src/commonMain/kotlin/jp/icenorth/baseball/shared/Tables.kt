@@ -75,4 +75,22 @@ const val SUBSTITUTE_MIN_FITNESS: Int = 60
 const val SUBSTITUTE_FRESH_FATIGUE: Int = 40
 const val ROSTER_LIMIT: Int = 26
 const val CAMP_ROUNDS: Int = 4
+data class SeasonStep(val key: String, val label: String, val time: String, val todo: String)
+val SEASON_STEPS: List<SeasonStep> = listOf(
+    SeasonStep("season", "シーズン", "月〜金", "試合は自動で進みます。スタメン設定・投手起用を整えておきます。"),
+    SeasonStep("postseason", "プレーオフ", "土曜の未明", "1部の上位でプレーオフを行い、今季の成績とタイトルを確定します（自動）。終わると契約更改が開きます。"),
+    SeasonStep("contract", "契約更改", "土 0:00〜12:00", "来季に残さない選手を選んで「この内容で決定」を押します。決めなければ標準案で進みます。"),
+    SeasonStep("tryout", "トライアウト", "土 12:00〜21:00", "空いた枠に獲りたい選手の希望リストを作って決定します。決めなければ標準案で進みます。"),
+    SeasonStep("year_end", "年度更新", "自動", "加齢による伸び・衰え、引退、昇格・降格、新しい日程が入ります（決めることはありません）。結果は「オフの成長」で見られます。"),
+    SeasonStep("camp", "キャンプ", "日曜", "育成方針と練習を決めて、4クールを1クールずつ実行します。終わらなかったぶんは締め切りで自動で行われます。"),
+    SeasonStep("opening", "開幕", "月 0:00", "キャンプで伸びた能力を見て、スタメン設定・投手起用を整えて開幕を待ちます。"),
+)
+val CAMP_POLICY_GUIDE: Map<String, Pair<String, String>> = mapOf(
+    "balanced:skill" to ("ミート+5 パワー+1 回復+1 肩力+1" to "制球+5 スタミナ+4 回復+1 球速+1"),
+    "balanced:physique" to ("体力+12 体幹+8 走力+4 盗塁+2" to "体力+12 スタミナ+10 体幹+8 球速+4 肩力+4"),
+    "sharpen:skill" to ("ミート+2 選球眼+2（いちばん高い能力に集中）" to "制球+4 守備+2"),
+    "sharpen:physique" to ("体幹+8 走力+3 肩力+2 パワー+2" to "体幹+8 肩力+4 守備+3 球速+2"),
+    "patch:skill" to ("ミート+3 守備+2 バント+1（いちばん低い能力を底上げ）" to "守備+4 制球+2 スタミナ+2"),
+    "patch:physique" to ("体力+12 体幹+8 走力+3 盗塁+2" to "体力+12 スタミナ+10 体幹+8 球速+2 肩力+2"),
+)
 val ONLINE_ROSTER_TARGETS: Map<String, Int> = mapOf("pitcher" to 11, "catcher" to 2, "infielder" to 6, "outfielder" to 7)

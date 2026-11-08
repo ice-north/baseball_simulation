@@ -21,6 +21,7 @@ import {
   sanitizeWeights,
   weightedScore,
   weightedRanked,
+  teamFitRank,
 } from './tryoutPlan.js';
 
 // ============================================================
@@ -74,11 +75,20 @@ function storeWeights(weights) {
 export function PlayerLine({ player, score }) {
   return <Line player={player} score={score} />;
 }
-function Line({ player, score }) {
+function Line({ player, score, fit }) {
   if (!player) return null;
   return (
     <>
       <PlayerStatsButton player={player} panel="abilities" />
+      {fit && (
+        <span
+          className="online-tryout-fit"
+          data-top={fit.rank <= 2 || undefined}
+          title={`いまの名簿の${GROUP_LABELS[fit.group]}${fit.of}人と、同じ重みの評価値で比べた順位`}
+        >
+          うちの{GROUP_LABELS[fit.group]}で{fit.rank}番手
+        </span>
+      )}
       <small>
         {score !== undefined && (
           <b className="online-tryout-score" title="重視する能力から出した評価値（0〜100）">
@@ -127,6 +137,7 @@ export default function TryoutPlanner({
     [candidates, weights],
   );
   const scoreOf = (p) => scores.get(p.id) ?? 0;
+  const fitOf = (p) => teamFitRank(p, roster, weights);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const [showBench, setShowBench] = useState(false);
@@ -363,7 +374,7 @@ export default function TryoutPlanner({
                 <span className="online-drag-handle" aria-hidden="true">⠿</span>
                 <span className="online-tryout-rank">{i + 1}</span>
                 <span className="online-tryout-person">
-                  <Line player={byId.get(id)} score={scores.get(id)} />
+                  <Line player={byId.get(id)} score={scores.get(id)} fit={fitOf(byId.get(id))} />
                 </span>
                 {/* ⚠ 希望リストの隣ではなく**獲得予定の隣**と入れ替える。
                     間に飛ばされた選手が挟まっていると、希望リストの中で
@@ -408,7 +419,7 @@ export default function TryoutPlanner({
               {bench.slice(0, 40).map((id) => (
                 <li key={id}>
                   <span className="online-tryout-person">
-                    <Line player={byId.get(id)} score={scores.get(id)} />
+                    <Line player={byId.get(id)} score={scores.get(id)} fit={fitOf(byId.get(id))} />
                   </span>
                   <button
                     type="button"
@@ -479,7 +490,7 @@ export default function TryoutPlanner({
             {shown.map((p) => (
               <li key={p.id} data-wanted={wantedSet.has(p.id) || undefined}>
                 <span className="online-tryout-person">
-                  <Line player={p} score={scores.get(p.id)} />
+                  <Line player={p} score={scores.get(p.id)} fit={fitOf(p)} />
                 </span>
                 {wantedSet.has(p.id) ? (
                   <span className="online-tryout-mark">

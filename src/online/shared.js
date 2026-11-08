@@ -156,6 +156,88 @@ export const PHASE_LABELS = {
   offseason: '年度更新',
 };
 
+// ============================================================
+// 1年の流れ（いまどの段階か）
+//
+// ⚠ いしだ指摘: シーズンが終わってから次が始まるまでの流れ・いまの段階・
+//    何をすればいいかが分からない。左上は「シーズン終了」のままで、
+//    手続きの合間は「決定待ちの手続きはありません」としか出ていなかった。
+//    1年を7段階に並べ、**サーバーが段階を決めて**ビューに載せる（`stage`）。
+//    画面（PC・スマホ・アプリ）はこの表で帯を描く。
+// ⚠ アプリ（`mobile/.../Tables.kt` の `SEASON_STEPS`）と同じ文にすること。
+// ⚠ 時刻の文は `PHASE_WINDOW_HOURS` と揃える（土曜の0〜12時・12〜21時）。
+// ============================================================
+export const SEASON_STEPS = [
+  {
+    key: 'season',
+    label: 'シーズン',
+    when: '月〜金',
+    todo: '試合は自動で進みます。スタメン設定・投手起用を整えておきます。',
+  },
+  {
+    key: 'postseason',
+    label: 'プレーオフ',
+    when: '土曜の未明',
+    todo: '1部の上位でプレーオフを行い、今季の成績とタイトルを確定します（自動）。終わると契約更改が開きます。',
+  },
+  {
+    key: 'contract',
+    label: '契約更改',
+    when: '土 0:00〜12:00',
+    todo: '来季に残さない選手を選んで「この内容で決定」を押します。決めなければ標準案で進みます。',
+  },
+  {
+    key: 'tryout',
+    label: 'トライアウト',
+    when: '土 12:00〜21:00',
+    todo: '空いた枠に獲りたい選手の希望リストを作って決定します。決めなければ標準案で進みます。',
+  },
+  {
+    key: 'year_end',
+    label: '年度更新',
+    when: '自動',
+    todo: '加齢による伸び・衰え、引退、昇格・降格、新しい日程が入ります（決めることはありません）。結果は「オフの成長」で見られます。',
+  },
+  {
+    key: 'camp',
+    label: 'キャンプ',
+    when: '日曜',
+    todo: '育成方針と練習を決めて、4クールを1クールずつ実行します。終わらなかったぶんは締め切りで自動で行われます。',
+  },
+  {
+    key: 'opening',
+    label: '開幕',
+    when: '月 0:00',
+    todo: 'キャンプで伸びた能力を見て、スタメン設定・投手起用を整えて開幕を待ちます。',
+  },
+];
+
+/**
+ * いまの段階。`{ key, open }`。`open` が false なら**その段階の手前で待っている**
+ * （例: 契約更改が済み、次の進行でトライアウトが開く）。
+ *
+ * ⚠ 手続きの合間を「何もない」にしないこと。契約更改→トライアウト、
+ *    トライアウト→キャンプの間は次の進行（最大45分）まで手続きが無く、
+ *    画面が止まって見えていた。
+ * ⚠ 日付の境は `leagueEngine` の `openPhase` の呼び出し（11/9 契約更改・
+ *    11/10 トライアウト・11/30 年度更新）と揃える。
+ * @param {{ phaseKind?: string, regularLeft: boolean, regularPlayed: boolean, date: {month:number, day:number} }} s
+ */
+export function seasonStage({ phaseKind, regularLeft, regularPlayed, date }) {
+  if (phaseKind === 'pack_select' || phaseKind === 'initial_tryout')
+    return { key: 'pack_select', open: true };
+  if (phaseKind === 'offseason') return { key: 'year_end', open: true };
+  if (phaseKind) return { key: phaseKind, open: true };
+  if (regularLeft)
+    return regularPlayed
+      ? { key: 'season', open: true }
+      : { key: 'opening', open: false };
+  const md = (date?.month || 0) * 100 + (date?.day || 0);
+  if (md < 1109) return { key: 'postseason', open: true };
+  if (md < 1110) return { key: 'tryout', open: false };
+  return { key: 'year_end', open: false };
+}
+
 // ---- 日々の編成の決まり（サーバーの `server/dailyLineup.mjs` と、PC版の編成ページの両方が使う）
 // ⚠ 画面はこの値で色を変え・説明を書く。サーバーと別に持つとずれるので、ここだけに置く。
 /** 野手はこの疲労以上だと、その日だけ控えと入れ替えて休ませる */
@@ -346,6 +428,42 @@ export const ONLINE_ROSTER_TARGETS = {
 
 /** キャンプのクール数。一人用と同じ4回 */
 export const CAMP_ROUNDS = 4;
+
+/**
+ * 育成方針ごとの「4クールでの伸びの目安」（1人あたりの平均。画面に出す）。
+ *
+ * ⚠ いしだ指摘: キャンプでどれくらい上がるのか、おまかせ（標準＝全体を伸ばす×技術）で
+ *    いいのかが分からない。**実測の数字**を置く（`tools/sim-harness/camp-policy-probe.mjs`、
+ *    初期セット26人×8回、2026-11-08）。練習の式を変えたら測り直して書き直すこと。
+ * ⚠ 体力・体幹は数字が大きく出るが、試合への効き方は打撃・制球より緩い
+ *    （`ABILITY_HELP` の説明どおり）。合計の大きさで方針を選ばせないこと。
+ */
+export const CAMP_POLICY_GUIDE = {
+  'balanced:skill': {
+    fielder: 'ミート+5 パワー+1 回復+1 肩力+1',
+    pitcher: '制球+5 スタミナ+4 回復+1 球速+1',
+  },
+  'balanced:physique': {
+    fielder: '体力+12 体幹+8 走力+4 盗塁+2',
+    pitcher: '体力+12 スタミナ+10 体幹+8 球速+4 肩力+4',
+  },
+  'sharpen:skill': {
+    fielder: 'ミート+2 選球眼+2（いちばん高い能力に集中）',
+    pitcher: '制球+4 守備+2',
+  },
+  'sharpen:physique': {
+    fielder: '体幹+8 走力+3 肩力+2 パワー+2',
+    pitcher: '体幹+8 肩力+4 守備+3 球速+2',
+  },
+  'patch:skill': {
+    fielder: 'ミート+3 守備+2 バント+1（いちばん低い能力を底上げ）',
+    pitcher: '守備+4 制球+2 スタミナ+2',
+  },
+  'patch:physique': {
+    fielder: '体力+12 体幹+8 走力+3 盗塁+2',
+    pitcher: '体力+12 スタミナ+10 体幹+8 球速+2 肩力+2',
+  },
+};
 
 /** 育成方針（やる気に効く）。`trainingPolicy` の `DIRECTIONS` / `PHASES` と揃える */
 export const CAMP_DIRECTIONS = ['sharpen', 'balanced', 'patch'];

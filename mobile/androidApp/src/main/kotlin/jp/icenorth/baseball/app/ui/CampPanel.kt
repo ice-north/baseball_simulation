@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.app.CampDraft
 import jp.icenorth.baseball.shared.CAMP_DIRECTIONS
+import jp.icenorth.baseball.shared.CAMP_POLICY_GUIDE
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.CAMP_GROUPS
 import jp.icenorth.baseball.shared.CAMP_PHASES
@@ -123,6 +124,19 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
         Muted(
             listOfNotNull(CAMP_DIRECTIONS.firstOrNull { it.key == draft.direction }?.description, CAMP_PHASES.firstOrNull { it.key == draft.phase }?.description).joinToString("／"),
         )
+        // ⚠ いしだ指摘: どれくらい伸びるのか・おまかせでいいのかが分からない。Web 版と同じ実測の目安（`CAMP_POLICY_GUIDE`）
+        CAMP_POLICY_GUIDE["${draft.direction}:${draft.phase}"]?.let { (fielder, pitcher) ->
+            Text("4クールでの伸びの目安（1人あたり）", style = MaterialTheme.typography.labelLarge)
+            Muted("野手: $fielder")
+            Muted("投手: $pitcher")
+            val moods = roster.map { describeMood(it, draft.direction, draft.phase).tone }
+            Muted(
+                (if (draft.direction == "balanced" && draft.phase == "skill") "いまは標準（おまかせと同じ「全体を伸ばす×技術」）です。試合に効きやすいミート・制球が伸びます。"
+                else "標準（おまかせ）は「全体を伸ばす×技術」で、ミート・制球が伸びます。") +
+                    "基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。" +
+                    "希望と噛み合う選手: 意欲的 ${moods.count { it == MoodTone.Good }}人・納得 ${moods.count { it == MoodTone.Mid }}人・身が入らない ${moods.count { it == MoodTone.Bad }}人。",
+            )
+        }
         Text("全員に一括", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             campMenusFor(false).filter { !it.key.startsWith("intensive_") }.forEach { m ->
@@ -213,7 +227,7 @@ internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<Json
 /** 伸びの並び。伸びは緑、下がったものは赤 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun GainLine(title: String?, items: List<CampGainItem>) {
+internal fun GainLine(title: String?, items: List<CampGainItem>) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         title?.let { Muted(it) }
         items.forEach { item ->
