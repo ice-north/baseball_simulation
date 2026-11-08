@@ -44,4 +44,18 @@ class NoticesTest {
         assertEquals(3, noticeCount(raw))
         assertEquals(0, noticeCount(view("""{}""")))
     }
+
+    @Test
+    fun packWaitingShowsWhenTheTeamStarts() {
+        // 選ぶ前は出さない（手続きの帯のほう）
+        assertNull(packWaiting(view("""{"pendingPack":{"packs":[],"chosen":null}}""")))
+        assertNull(packWaiting(view("""{"phase":{"kind":"camp"}}""")))
+        // キャンプの前は見込み
+        val before = packWaiting(view("""{"pendingPack":{"packs":[{"id":"pack-3","name":"セット3","feature":"投手厚め・少数精鋭"}],"chosen":"pack-3","joinsAt":"2026-11-08T15:00:00.000Z","joinsInCamp":false}}"""))
+        assertEquals(PackWaiting("セット3", "投手厚め・少数精鋭", "2026-11-08T15:00:00.000Z", estimated = true), before)
+        // キャンプの最中は締め切りが決まっている
+        val inCamp = packWaiting(view("""{"pendingPack":{"packs":[{"id":"pack-3","name":"セット3"}],"chosen":"pack-3","joinsAt":"2026-11-08T15:00:00.000Z","joinsInCamp":true}}"""))
+        assertEquals(false, inCamp?.estimated)
+        assertNull(inCamp?.feature)
+    }
 }

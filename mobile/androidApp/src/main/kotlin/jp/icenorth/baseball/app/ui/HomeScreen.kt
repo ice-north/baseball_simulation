@@ -32,6 +32,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.mutableStateOf
+import jp.icenorth.baseball.shared.packWaiting
 import jp.icenorth.baseball.shared.CAMP_ROUNDS
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.at
@@ -167,7 +168,12 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
 private fun pendingAlerts(view: LeagueView, raw: JsonObject?): List<String> = buildList {
     // ⚠ 初期メンバーを待っている間は、リーグの手続きはCPUが決める（`Notices.kt` と同じ決まり）
     if (view.pendingPack != null) {
-        add(if (raw?.at("pendingPack", "chosen").str() != null) "初期メンバー: 選択済み（キャンプまで選び直せます）" else "初期メンバーを選んでください")
+        // ⚠ 選び終えたら「いつ自分の球団になるか」を出す（Web 版のホームの「開幕待ち」と同じ）
+        val waiting = packWaiting(raw)
+        add(
+            if (waiting != null) "開幕待ち: 「${waiting.packName}」で、${packStartText(waiting.joinsAt, waiting.estimated)}あなたの球団になります"
+            else "初期メンバーを選んでください",
+        )
     } else view.phase?.let { phase ->
         val due = formatDeadline(phase.deadline ?: view.phaseDeadline)
         val label = phase.kind?.let { PHASE_LABELS[it] } ?: phase.label ?: "手続き"

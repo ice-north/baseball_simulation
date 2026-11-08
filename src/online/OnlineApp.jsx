@@ -491,7 +491,9 @@ export default function OnlineApp() {
                 全ページの本文の上に同じ帯（約170px）があった */}
             {!view.writable && (
               <p role="alert" className="online-alert">
-                別の端末でログインしたため閲覧のみです。操作するにはログインし直してください。
+                {/* ⚠ 同時に操作できるのはブラウザ1台とアプリ1台（`server/sessions.mjs`）。
+                    PCとスマホのブラウザは同じ「ブラウザ」に数える */}
+                別のブラウザでログインしたため閲覧のみです（ブラウザとアプリはそれぞれ1台まで同時に使えます）。操作するにはログインし直してください。
               </p>
             )}
             {view.error && (

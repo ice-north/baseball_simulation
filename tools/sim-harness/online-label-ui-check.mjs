@@ -412,7 +412,7 @@ try {
   const other = p.getByRole('dialog', { name: '成績選手100', exact: true });
   await other.locator('.online-career').waitFor();
   await other.getByRole('heading', { level: 3, name: /^成績/ }).waitFor();
-  await other.getByRole('heading', { level: 3, name: '能力', exact: true }).waitFor();
+  await other.getByRole('heading', { level: 3, name: /^能力/ }).waitFor();
   assert.equal(
     await other.getByRole('button', { name: '能力・人物', exact: true }).count(),
     0,
@@ -511,7 +511,7 @@ try {
     //    まとめて出す（`PlayerDetailBody`）。走力は「身体」の中
     await d.locator('.online-career').waitFor();
     await d.getByRole('heading', { level: 3, name: /^成績/ }).waitFor();
-    await d.getByRole('heading', { level: 3, name: '能力', exact: true }).waitFor();
+    await d.getByRole('heading', { level: 3, name: /^能力/ }).waitFor();
     assert.equal(
       await d.getByLabel('能力の表示項目').count(),
       0,
@@ -573,7 +573,7 @@ try {
     await d.getByLabel('成績の期間').selectOption('career');
     await d.getByText('.300', { exact: true }).waitFor();
     await d.getByLabel('成績の期間').selectOption('legacy-career');
-    await d.getByRole('heading', { level: 3, name: '能力', exact: true }).waitFor();
+    await d.getByRole('heading', { level: 3, name: /^能力/ }).waitFor();
     await d.getByLabel('成績の期間').selectOption('current');
     await d
       .getByRole('button', { name: '選手成績を閉じる', exact: true })

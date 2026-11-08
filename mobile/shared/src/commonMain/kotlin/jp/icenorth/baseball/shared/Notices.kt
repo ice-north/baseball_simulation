@@ -46,3 +46,25 @@ fun waitingTradeCount(raw: JsonObject?): Int = raw?.at("trades").list().count { 
 
 /** 「手続き」に出す数（手続き1件＋返事待ちの提案） */
 fun noticeCount(raw: JsonObject?): Int = (if (pendingProcedure(raw) != null) 1 else 0) + waitingTradeCount(raw)
+
+/** 途中参加で初期メンバーを選び終え、自分の球団になるのを待っている間。[estimated] は日時が見込みか */
+data class PackWaiting(val packName: String, val feature: String?, val joinsAt: String?, val estimated: Boolean)
+
+/**
+ * 途中参加で初期メンバーを選び終えた後の知らせ。無ければ null。Web 版の `packWaiting` と同じ決まり。
+ *
+ * ⚠ 選んだ時点で手続きの帯（[pendingProcedure]）は消える。代わりにこれで「いつ自分の球団になるか」を出し続ける
+ *    （いしだ指摘: セットと名前を決めた後も画面がそのままで、済んだのか分からなかった）。
+ */
+fun packWaiting(raw: JsonObject?): PackWaiting? {
+    val pending = raw?.get("pendingPack").obj() ?: return null
+    val chosen = pending.at("chosen").str() ?: return null
+    val pack = pending.at("packs").list().mapNotNull { it.obj() }.firstOrNull { it.at("id").str() == chosen }
+    return PackWaiting(
+        packName = pack?.at("name").str() ?: "選んだセット",
+        feature = pack?.at("feature").str(),
+        joinsAt = pending.at("joinsAt").str(),
+        // キャンプの最中なら締め切りは決まっている。でなければ見込み
+        estimated = pending.at("joinsInCamp").bool() != true,
+    )
+}

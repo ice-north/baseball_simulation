@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
+import { sessionIdsOf } from '../../server/sessions.mjs';
 const dir = await mkdtemp(join(tmpdir(), 'pennant-service-'));
 try {
   const store = createTestStore(join(dir, 'state.gz'));
@@ -51,11 +52,31 @@ try {
     '古い端末のログアウトで現在の端末を失効させない',
   );
   const newStore = createTestStore(join(dir, 'state.gz'));
-  assert.equal(
-    (await newStore.read()).sessions.a,
-    nextA,
+  assert.deepEqual(
+    sessionIdsOf((await newStore.read()).sessions.a),
+    [nextA],
     '再起動でも端末権限を保持する',
   );
+  // ⚠ **ブラウザ1台とアプリ1台は同時に操作できる**（いしだ決定 2026-11-08: PCとアプリの両方で
+  //    ログインすると片方が閲覧のみになって不便だった）。同じ種類の別の端末が来たら、前の1台だけ外す
+  const appA = (await service.login('a', 'app')).sessionId;
+  assert.equal((await service.view('a', nextA)).writable, true, 'アプリでログインしたらブラウザが外れた');
+  assert.equal((await service.view('a', appA)).writable, true, 'アプリから操作できない');
+  const appA2 = (await service.login('a', 'app')).sessionId;
+  assert.equal((await service.view('a', appA)).writable, false, '別のアプリでログインしても前のアプリが残る');
+  assert.equal((await service.view('a', nextA)).writable, true, 'アプリの交代でブラウザが外れた');
+  await service.logout('a', appA2);
+  assert.equal((await service.view('a', appA2)).writable, false, 'ログアウトしたアプリが操作できる');
+  assert.equal((await service.view('a', nextA)).writable, true, 'アプリのログアウトでブラウザが外れた');
+  // 前の形（1アカウントに文字列1つ）も読める。次のログインで、どちらの端末か分からない記録は捨てる
+  await store.transaction((bundle) => {
+    bundle.sessions.c = 'legacy-c';
+    return { value: null };
+  });
+  assert.equal((await service.view('c', 'legacy-c')).writable, true, '前の形のログインが読めない');
+  const appC = (await service.login('c', 'app')).sessionId;
+  assert.equal((await service.view('c', appC)).writable, true);
+  assert.equal((await service.view('c', 'legacy-c')).writable, false, '前の形の記録が残っている');
   for (let phase = 0; phase < 2; phase++) {
     for (const [user, session] of [
       ['a', nextA],
@@ -195,7 +216,7 @@ try {
     (error) => error.code === 'session',
   );
   console.log(
-    'online-service-check PASS（永続化・競合・再送・端末交代・秘密提出・停止復元・重複Cron）',
+    'online-service-check PASS（永続化・競合・再送・端末交代・ブラウザとアプリの同時ログイン・秘密提出・停止復元・重複Cron）',
   );
 } finally {
   await rm(dir, { recursive: true, force: true });

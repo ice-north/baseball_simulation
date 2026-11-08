@@ -49,6 +49,7 @@ const CHECKS = [
   { name: 'online-clock-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-edit-conflict-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-label-check', group: 'quick', online: true, slow: 1 },
+  { name: 'online-ability-help-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stats-view-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-lineup-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-pitching-board-check', group: 'quick', online: true, slow: 1 },
@@ -86,6 +87,7 @@ const SEPARATE = [
   'online-replay-ui-check',
   'online-mobile-gameplay-ui-check',
   'online-label-ui-check',
+  'online-join-ui-check', // check:online:join-ui（dist を開く。サーバー不要）
   'singleplayer-ui-check', // check:ui
 ];
 

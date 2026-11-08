@@ -44,7 +44,9 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
     suspend fun login(email: String, password: String): AuthSession = decode(
         client.post(endpoint) {
             parameter("action", "login")
-            jsonBody(buildJsonObject { put("email", email); put("password", password) })
+            // ⚠ 端末の種類を送る。ブラウザ1台とアプリ1台まで同時に操作できる（server/sessions.mjs）。
+            //    送らないとブラウザ扱いになり、PCでログインし直すとアプリが外れる
+            jsonBody(buildJsonObject { put("email", email); put("password", password); put("client", "app") })
         },
     )
 
@@ -52,7 +54,7 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
     suspend fun localLogin(user: String): AuthSession = decode(
         client.post(endpoint) {
             parameter("action", "login")
-            jsonBody(buildJsonObject { put("user", user) })
+            jsonBody(buildJsonObject { put("user", user); put("client", "app") })
         },
     )
 

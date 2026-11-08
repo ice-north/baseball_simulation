@@ -17,6 +17,9 @@ import {
   loadLeagueWorld,
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
+import { packWaiting, pendingProcedure } from '../../src/online/notices.js';
+import { projectLeague } from '../../server/projection.mjs';
+import { jstWeekday } from '../../src/online/shared.js';
 import {
   generateRosterPacks,
   packSummary,
@@ -466,6 +469,40 @@ try {
       inherited,
       'キャンプ前なのに名簿が入れ替わった',
     );
+    // ⚠ 選び終えたら「いつ自分の球団になるか」を出す（いしだ指摘: 決めた後も画面がそのままで、
+    //    済んだのか分からなかった）。キャンプの最中ならその締め切り、まだなら見込み
+    //    （次のキャンプの締め切り＝月曜0時）
+    const pickedView = await service.view('late1', joiner);
+    const ready = packWaiting(pickedView);
+    assert.ok(ready, '選び終えたのに「開幕待ち」にならない');
+    assert.equal(ready.packName, wanted.name, '開幕待ちのセットの名前がちがう');
+    assert.equal(pendingProcedure(pickedView), null, '選び終えたのに手続きの帯が残っている');
+    if (picked.phase?.kind === 'camp') {
+      assert.equal(ready.joinsAt, picked.phase.deadline, 'キャンプ中なのに締め切りで始まると出ない');
+      assert.equal(ready.estimated, false, 'キャンプ中なのに日時が見込みのまま');
+    } else {
+      assert.ok(ready.estimated, 'キャンプの前なのに日時が見込みになっていない');
+      assert.ok(
+        ready.joinsAt && Date.parse(ready.joinsAt) > Date.parse(now),
+        `自分の球団になる日時が無い・過去: ${ready.joinsAt}`,
+      );
+      assert.equal(jstWeekday(ready.joinsAt), 1, `開幕の見込みが月曜ではない: ${ready.joinsAt}`);
+    }
+    // キャンプの前（シーズン中）なら、次のキャンプの締め切り（月曜0時）を見込みで出す
+    {
+      const inSeason = structuredClone(picked);
+      inSeason.phase = null;
+      inSeason.nextAdvanceAt = '2026-11-04T01:45:00.000Z'; // 水曜 10:45（JST）
+      const seasonView = projectLeague(
+        { league: inSeason, sessions: {}, receipts: {} },
+        'late1',
+        null,
+        'admin',
+      );
+      const est = packWaiting(seasonView);
+      assert.equal(est?.estimated, true, 'シーズン中なのに日時が見込みになっていない');
+      assert.equal(est.joinsAt, '2026-11-08T15:00:00.000Z', `次のキャンプの締め切り（11/9 月 0時）にならない: ${est.joinsAt}`);
+    }
 
     // キャンプで入れ替わる
     await store.transaction((bundle) => {
@@ -482,6 +519,10 @@ try {
       (m) => m.teamName === myTeam,
     );
     assert.ok(waiting.ready && waiting.cpu, 'セットを待っている人がCPU決定として出ていない');
+    // キャンプの最中は、その締め切りで自分の球団になる（見込みではない）
+    const inCamp = packWaiting(await service.view('late1', joiner));
+    assert.equal(inCamp?.joinsAt, camp.phase.deadline, 'キャンプ中なのに締め切りで始まると出ない');
+    assert.equal(inCamp.estimated, false, 'キャンプ中なのに日時が見込みのまま');
     for (const m of camp.members.filter((x) => x.userId !== 'late1'))
       await service.command(m.userId, m.userId === 'admin' ? admin : guest, {
         requestId: `packchk-camp-${m.userId}`,

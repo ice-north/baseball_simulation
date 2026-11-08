@@ -23,6 +23,7 @@ import jp.icenorth.baseball.app.ui.TradeDraft
 import jp.icenorth.baseball.app.ui.TradeStep
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.str
 import org.junit.Rule
 import org.junit.Test
@@ -153,11 +154,15 @@ class ScreenTour {
                 page("players-batting", scrolls = 1)
                 step("pitching stats") { click("投球"); page("players-pitching", scrolls = 1) }
                 step("player sheet") {
-                    val name = view.roster.first { !it.isPitcher }.name
-                    click(name, substring = true)
+                    // ⚠ 名前の文字を押して開くと、撮れていなかった（同じ名前の別の表示に当たる）。モデルから直接開く
+                    val first = model.raw?.at("roster").list().mapNotNull { it.obj() }.first { it.at("position").str() != "pitcher" }
+                    rule.runOnUiThread { model.openPlayer = first }
                     pause(2500)
                     page("player-sheet", scrolls = 2)
-                    back()
+                    // 能力を押すと、何にどう効くかが出る（いしだ指摘 2026-11-08）
+                    step("ability help") { click("体幹", substring = true); shot("player-sheet-help") }
+                    rule.runOnUiThread { model.openPlayer = null }
+                    pause()
                 }
                 step("career") { click("通算成績"); pause(2500); page("players-career", scrolls = 1) }
                 step("ranking") { click("能力ランキング"); pause(2500); page("players-ranking", scrolls = 1) }
