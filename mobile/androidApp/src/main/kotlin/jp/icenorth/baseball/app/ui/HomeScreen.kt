@@ -44,6 +44,10 @@ import kotlinx.serialization.json.JsonObject
 import jp.icenorth.baseball.shared.GameResult
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.buildFrontPage
+import jp.icenorth.baseball.shared.appVersionArticle
+import jp.icenorth.baseball.shared.APP_DOWNLOAD_URL
+import jp.icenorth.baseball.shared.LINK_APP_UPDATE
+import androidx.compose.ui.platform.LocalUriHandler
 import jp.icenorth.baseball.shared.loadOwnHistory
 import androidx.compose.runtime.SideEffect
 import jp.icenorth.baseball.shared.FrontPage
@@ -95,14 +99,17 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         // TIPS は紙面のコラムに1本（ホームを開くたびに選び直す。いしだの指定「ホームを表示するたびにランダムで1つ」）
         val tip = remember { GAME_TIPS.random() }
         val alerts = pendingAlerts(view, model.raw)
+        // 入っているアプリが最新か（いしだの指定: 紙面の記事で知らせる）
+        val app = remember(model.latestApp) { appVersionArticle(model.appBuild, model.latestApp) }
         var shown by remember { mutableStateOf<FrontPage?>(null) }
         val built = if (ready) {
-            remember(view, model.raw, lastGame, history, tip, alerts) {
+            remember(view, model.raw, lastGame, history, tip, alerts, app) {
                 buildFrontPage(
                     view, model.raw, lastGame, alerts,
                     column = FrontPage.Article("コラム", tip.title, tip.body, LINK_TIPS),
                     history = history?.first,
                     historyComplete = history?.second == true,
+                    app = app,
                 )
             }
         } else null
@@ -113,6 +120,7 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
             return@PullToRefreshBox
         }
         val style = homeStyleOf(model.homeStyle)
+        val uriHandler = LocalUriHandler.current
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 72.dp), // 左下の TIPS の印に隠れないよう
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -131,6 +139,7 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
                             LINK_LINEUP -> onOpenLineup()
                             LINK_GAMES -> onOpenGames()
                             LINK_TIPS -> onOpenTips()
+                            LINK_APP_UPDATE -> runCatching { uriHandler.openUri(APP_DOWNLOAD_URL) }
                         }
                     },
                     onOpenProcedures = onOpenProcedures,

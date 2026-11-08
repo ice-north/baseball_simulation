@@ -8,7 +8,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import jp.icenorth.baseball.app.ui.TradeDraft
 import jp.icenorth.baseball.shared.AuthSession
+import jp.icenorth.baseball.shared.AppBuild
 import jp.icenorth.baseball.shared.EditHistory
+import jp.icenorth.baseball.shared.LatestApp
+import jp.icenorth.baseball.shared.defaultHttpClient
+import jp.icenorth.baseball.shared.fetchLatestApp
 import jp.icenorth.baseball.shared.PlanDraft
 import jp.icenorth.baseball.shared.sanitizeWeights
 import jp.icenorth.baseball.shared.LeagueView
@@ -27,8 +31,15 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-class AppViewModel internal constructor(app: Application, private val createApi: (String) -> OnlineApi) : AndroidViewModel(app) {
-    constructor(app: Application) : this(app, { OnlineApi(it) })
+/**
+ * @param fetchLatest main の最新のアプリを読む（[fetchLatestApp]）。検査では外へ読みに行かないよう既定は null を返す
+ */
+class AppViewModel internal constructor(
+    app: Application,
+    private val fetchLatest: suspend () -> LatestApp? = { null },
+    private val createApi: (String) -> OnlineApi,
+) : AndroidViewModel(app) {
+    constructor(app: Application) : this(app, { defaultHttpClient().use { fetchLatestApp(it) } }, { OnlineApi(it) })
 
     private val store = SessionStore(app)
 
@@ -140,7 +151,32 @@ class AppViewModel internal constructor(app: Application, private val createApi:
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Int?, JsonObject>>?) = size > 40
     }
 
+    /** 入っているアプリの版（作ったときに build.gradle.kts が入れる） */
+    val appBuild = AppBuild(BuildConfig.APP_COMMIT, BuildConfig.APP_COMMIT_TIME, BuildConfig.APP_BRANCH)
+
+    /** main の最新のアプリ（ホームの紙面の「アプリ」の記事）。まだ読めていない・読めなかったら null */
+    var latestApp by mutableStateOf<LatestApp?>(null)
+        private set
+    private var latestAppCheckedAt = 0L
+    private var latestAppJob: Job? = null
+
+    /**
+     * main の最新のアプリを読む。⚠ GitHub の認証なしの API は1時間に60回までなので、30分に1回まで
+     * （起動時と、引っ張って更新したとき）。手元で作った版（コミットが分からない）は読まない
+     */
+    private fun checkLatestApp() {
+        if (appBuild.commit.isEmpty() || latestAppJob?.isActive == true) return
+        val now = System.currentTimeMillis()
+        if (latestAppCheckedAt != 0L && now - latestAppCheckedAt < 30 * 60_000L) return
+        latestAppCheckedAt = now
+        latestAppJob = viewModelScope.launch {
+            // 読めなかったときは前の答えを残す（電波の悪い所で記事が消えたり出たりしないように）
+            fetchLatest()?.let { latestApp = it } ?: run { latestAppCheckedAt = 0L }
+        }
+    }
+
     init {
+        checkLatestApp()
         if (auth != null) reload()
     }
 
@@ -232,7 +268,10 @@ class AppViewModel internal constructor(app: Application, private val createApi:
         val epoch = sessionEpoch
         val readEpoch = viewRequestEpoch
         if (reloadJob?.isActive == true || busy) return
-        if (pull) refreshing = true
+        if (pull) {
+            refreshing = true
+            checkLatestApp()
+        }
         reloadJob = viewModelScope.launch {
             try {
                 authed(current, epoch) { load(it, epoch, readEpoch) }

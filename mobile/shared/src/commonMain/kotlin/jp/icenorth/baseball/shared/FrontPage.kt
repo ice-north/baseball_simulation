@@ -61,6 +61,7 @@ private fun gamesBehind(leader: Standing, me: Standing): Double = ((leader.wins 
  *                ⚠ ビューの results は**リーグ全体の直近14試合**しか無い（自球団は2〜3試合）ので、連勝・連敗や
  *                相手との対戦成績はこれで数える。無ければビューの分だけで数え、対戦成績は書かない
  * @param historyComplete [history] が今季の自球団の試合を全部含むか（対戦成績を書いてよいか）
+ * @param app 入っているアプリが最新かの記事と、いちばん上に置くか（[appVersionArticle]）
  */
 fun buildFrontPage(
     view: LeagueView,
@@ -70,6 +71,7 @@ fun buildFrontPage(
     column: FrontPage.Article? = null,
     history: List<GameResult>? = null,
     historyComplete: Boolean = false,
+    app: Pair<FrontPage.Article, Boolean>? = null,
 ): FrontPage {
     val team = view.teamName ?: ""
     val me = view.teamShort(team)
@@ -303,6 +305,8 @@ fun buildFrontPage(
     }.orEmpty()
 
     column?.let { articles += it }
+    // アプリの版: 古いときは記事のいちばん上（全幅の1本目）、最新・試作版は紙面の終わり
+    app?.let { (article, top) -> if (top) articles.add(0, article) else articles += article }
     val standing = listOfNotNull(
         leagueName.ifEmpty { null },
         mine?.takeIf { it.gamesPlayed > 0 }?.let { "${rankIndex + 1}位 ${it.wins}勝${it.losses}敗${if (it.draws > 0) "${it.draws}分" else ""}" },

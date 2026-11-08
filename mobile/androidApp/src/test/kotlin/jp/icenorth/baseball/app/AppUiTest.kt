@@ -14,7 +14,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import jp.icenorth.baseball.app.ui.BaseballTheme
 import jp.icenorth.baseball.app.ui.OnlineApp
+import jp.icenorth.baseball.shared.LatestApp
 import jp.icenorth.baseball.shared.OnlineApi
+import org.junit.Assume.assumeTrue
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -39,7 +41,7 @@ class AppUiTest {
         if (::client.isInitialized) client.close()
     }
 
-    private fun open(extra: String) {
+    private fun open(extra: String, latest: LatestApp? = null) {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("online", 0).edit().clear().commit()
         client = HttpClient(MockEngine { request ->
@@ -49,7 +51,7 @@ class AppUiTest {
             respond(text, headers = headersOf(HttpHeaders.ContentType, "application/json"))
         })
         rule.runOnIdle {
-            model = AppViewModel(app) { OnlineApi(it, client) }
+            model = AppViewModel(app, { latest }) { OnlineApi(it, client) }
             model.localLogin("player1")
         }
         rule.waitUntil(10_000) {
@@ -74,5 +76,18 @@ class AppUiTest {
         rule.onNodeWithText("1年目のキャンプ結果").assertIsDisplayed()
         rule.onNodeWithText("練習の成果").assertIsDisplayed()
         rule.onNodeWithText("1人が伸びました").assertIsDisplayed()
+    }
+
+    @Test fun homePaperTellsWhenANewerAppIsOut() {
+        // 版の分からない所（git の無い手元）で作ったときは確かめない
+        assumeTrue(BuildConfig.APP_COMMIT.isNotEmpty())
+        open(""""roster":[]""", LatestApp("0".repeat(40), "2099-01-01T00:00:00Z"))
+        rule.onNodeWithText("新しいアプリが出ています").assertExists()
+    }
+
+    @Test fun homePaperSaysTheAppIsLatest() {
+        assumeTrue(BuildConfig.APP_COMMIT.isNotEmpty())
+        open(""""roster":[]""", LatestApp(BuildConfig.APP_COMMIT, BuildConfig.APP_COMMIT_TIME))
+        rule.onNodeWithText("このアプリは最新版").assertExists()
     }
 }
