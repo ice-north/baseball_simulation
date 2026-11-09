@@ -93,8 +93,9 @@ private fun categoryColor(kicker: String): Color = when (kicker) {
     "ひと言" -> Color(0xFF14B8A6)
     "プロ注目" -> Color(0xFFEAB308)
     "1部戦線", "2部戦線" -> Color(0xFF3B82F6)
-    "連勝・連敗", "監督たちの戦い" -> Color(0xFFF97316)
-    "ドラフト", "トライアウト", "トレード", "昇格・降格" -> Color(0xFF06B6D4)
+    "連勝・連敗", "オーナーたちの戦い" -> Color(0xFFF97316)
+    "ドラフト", "トライアウト", "トレード", "昇格・降格", "人事" -> Color(0xFF06B6D4)
+    "新体制", "ベンチの空気" -> Color(0xFFA855F7)
     else -> Color(0xFF94A3B8)
 }
 

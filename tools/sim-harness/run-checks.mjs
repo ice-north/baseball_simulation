@@ -76,6 +76,8 @@ const CHECKS = [
   { name: 'online-records-check', group: 'check', online: true, slow: 52 },
   // 年代記（節目・引退・裏の大会・マジック・球団史）。1年を通して進める
   { name: 'online-chronicle-check', group: 'check', online: true, slow: 130 },
+  // 指導者（監督・コーチ）。種・任せ方・人事・40年の入れ替わり・1年を通して翌年のキャンプまで
+  { name: 'online-coach-check', group: 'check', online: true, slow: 200 },
   { name: 'progression-check', group: 'full', slow: 38 },
 ];
 
@@ -92,6 +94,7 @@ const SEPARATE = [
   'online-mobile-gameplay-ui-check',
   'online-label-ui-check',
   'online-join-ui-check', // check:online:join-ui（dist を開く。サーバー不要）
+  'online-staff-ui-check', // check:online:staff-ui（dist を開く。サーバー不要）
   'singleplayer-ui-check', // check:ui
 ];
 

@@ -316,12 +316,38 @@ function surelyAbove(a, b) {
 }
 
 /**
- * マジック（目安）: 追う球団が残りを全部勝っても届かなくなるまでに要る「自分の勝ち＋相手の負け」の数。
- * ⚠ 引き分けは数えない（勝率は勝ち÷(勝ち＋負け)）ので目安。決まったかどうかは
- *    `surelyAbove`（勝率で厳密に）で決める
+ * マジック: 追う球団が残りを全部勝っても届かなくなるまでに要る「自分の勝ち＋相手の負け」の数。
+ * 決まったかどうかと同じ物差し（`surelyAbove`、勝率で厳密に）で数える。届かなければ Infinity。
+ * ⚠ 以前は勝ち数だけで数えていた（追う球団の最大の勝ち数＋1 − 自分の勝ち数）。消化試合数が
+ *    違うと勝率と食い違い、「マジック0なのに決まっていない」が出ていた（`online-chronicle-check`）
  */
 function magicAgainst(lead, chaser) {
-  return Math.max(0, chaser.wins + chaser.left - lead.wins + 1);
+  if (surelyAbove(lead, chaser)) return 0;
+  let best = Infinity;
+  for (let x = 0; x <= lead.left && x < best; x++)
+    for (let y = 0; y <= chaser.left && x + y < best; y++) {
+      // 自分が x 勝（残りは全敗）、相手が y 敗（残りは全勝）したあとで、もう抜かれないか
+      const a = { wins: lead.wins + x, losses: lead.losses + lead.left - x, left: 0 };
+      const b = { wins: chaser.wins + chaser.left - y, losses: chaser.losses + y, left: 0 };
+      if (surelyAbove(a, b)) {
+        best = x + y;
+        break;
+      }
+    }
+  return best;
+}
+/** いちばん手ごわい相手（マジックがいちばん大きい）と、そのマジック。⚠ 1球団1回だけ数える */
+function toughest(lead, chasers) {
+  let rival = null;
+  let magic = -1;
+  for (const chaser of chasers) {
+    const m = magicAgainst(lead, chaser);
+    if (m > magic) {
+      rival = chaser;
+      magic = m;
+    }
+  }
+  return { rival, magic };
 }
 
 /**
@@ -347,8 +373,9 @@ export function leagueRaces(league, left = remainingGames(league.season.schedule
       const lead = rows[i];
       const chasers = rows.slice(places);
       const clinched = chasers.every((c) => surelyAbove(lead, c));
-      const rival = [...chasers].sort((a, b) => magicAgainst(lead, b) - magicAgainst(lead, a))[0];
-      const magic = clinched ? 0 : magicAgainst(lead, rival);
+      const tough = toughest(lead, chasers);
+      const rival = tough.rival;
+      const magic = clinched ? 0 : tough.magic;
       // ⚠ 届かない数（残り試合より多い）は出さない。開幕直後に「マジック118」と書かない
       if (clinched || magic <= lead.left)
         races.push({ league: def.id, leagueName: def.name, kind: topKind, team: lead.team, magic, clinched, rival: clinched ? null : rival.team, left: lead.left });
@@ -359,8 +386,9 @@ export function leagueRaces(league, left = remainingGames(league.season.schedule
       const safe = rows[rows.length - n - 1];
       const danger = rows.slice(rows.length - n);
       const stay = danger.every((d) => surelyAbove(safe, d));
-      const rival = [...danger].sort((a, b) => magicAgainst(safe, b) - magicAgainst(safe, a))[0];
-      const magic = stay ? 0 : magicAgainst(safe, rival);
+      const tough = toughest(safe, danger);
+      const rival = tough.rival;
+      const magic = stay ? 0 : tough.magic;
       if (stay || magic <= safe.left)
         races.push({ league: def.id, leagueName: def.name, kind: 'survive', team: safe.team, magic, clinched: stay, rival: stay ? null : rival.team, left: safe.left });
       for (const d of danger) {

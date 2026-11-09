@@ -71,6 +71,19 @@ object Commands {
         }
     }
 
+    /** 任せ方を1つの分野だけ変える（area: lineup / pitching / tactics / tryout / release / camp、mode: self / advice / delegate） */
+    fun staffMode(area: String, mode: String): JsonObject = buildJsonObject {
+        putJsonObject("modes") { put(area, mode) }
+    }
+
+    /** 指導者の人事（キャンプの間だけ）。action: release / hire / swap */
+    fun staff(action: String, role: String, other: String? = null, coachId: String? = null): JsonObject = buildJsonObject {
+        put("action", action)
+        put("role", role)
+        if (other != null) put("other", other)
+        if (coachId != null) put("coachId", coachId)
+    }
+
     fun withReleases(plan: JsonObject, ids: Collection<Long>) = JsonObject(plan + ("releaseIds" to ids(ids)))
     fun withRanked(plan: JsonObject, ids: List<Long>) = JsonObject(plan + ("rankedIds" to ids(ids)))
     fun withCount(plan: JsonObject, count: Int) = JsonObject(plan + ("count" to JsonPrimitive(count)))

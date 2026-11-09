@@ -328,7 +328,8 @@ export class LeagueService {
           '参加者ではありません',
           403,
         );
-        if (['submit', 'lineup', 'step', 'resume'].includes(command.type))
+        // ⚠ 指導者の命令（任せ方・人事）も版を見る。移行前のリーグには指導者がいない
+        if (['submit', 'lineup', 'step', 'resume', 'staffModes', 'staff'].includes(command.type))
           assertLeagueVersion(l);
         if (['submit', 'lineup'].includes(command.type))
           requireOnline(
@@ -431,6 +432,15 @@ export class LeagueService {
             teamName: command.payload?.teamName,
             playerName: command.payload?.playerName,
           });
+        } else if (command.type === 'staffModes') {
+          // 分野ごとの任せ方（自分で / 意見を聞く / 任せる）。⚠ スタメン・投手起用を
+          //    任せたときだけ世界を読んで編成を作り直す（`updateStaffModes`）
+          await this.engine((e) =>
+            e.updateStaffModes(l, userId, command.payload?.modes),
+          );
+        } else if (command.type === 'staff') {
+          // 指導者の解任・市場から呼ぶ・役職の入れ替え（キャンプの間だけ）
+          await this.engine((e) => e.updateStaff(l, userId, command.payload || {}));
         } else if (command.type === 'tradeOffer') {
           // ⚠ **選手が動くのでエンジンの中で行う**。`TEAMS_DATA` を触るものは
           //    必ず `loadLeagueWorld` → 処理 → `captureLeagueWorld` の順で囲む
@@ -480,6 +490,9 @@ export class LeagueService {
             409,
           );
           const plan = engine.validateCampRound(l, me.teamName, command.payload);
+          // ⚠ キャンプを指導者に任せていたのに自分で回したら、キャンプは「意見を聞く」に戻す
+          //    （任せたままだと、締め切りで残りのクールが指導者の方針に変わる）
+          engine.takeBackCamp(l, me);
           let result = null;
           await this.engine((e) => {
             e.loadLeagueWorld(l);
@@ -607,7 +620,9 @@ export class LeagueService {
         // ⚠ 編成の保存は記録の索引（選手・球団・試合の記録）に関わらない。索引の作り直し
         //    （全試合をなめる）を省くよう保存側に伝える。選手の能力や名簿を変える命令には付けないこと
         //    （`online-service-check` で、保存の前後で索引が同じことを確かめている）
-        ...(command.type === 'lineup' ? { archiveUnchanged: true } : {}),
+        // ⚠ 任せ方（`staffModes`）も同じ。任せた編成を作り直しても、索引の選手・球団は変わらない
+        //    （`online-coach-check` で確かめている）。人事（`staff`）は球団の指導者の欄が変わるので作り直す
+        ...(['lineup', 'staffModes'].includes(command.type) ? { archiveUnchanged: true } : {}),
       };
     }, { full: FULL_COMMANDS.has(command?.type) });
   }

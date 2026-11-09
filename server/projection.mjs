@@ -38,6 +38,8 @@ import { recordForPlayer } from './recordedStats.mjs';
 import { requireOnline, seasonStage } from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
+import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
+import { releaseBiasFor } from './coachEngine.mjs';
 
 /**
  * セット（24人）を**選ぶのに要る分だけ**にする。
@@ -520,15 +522,21 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           // ⚠ 契約更改: 標準案（決めなかったときの案）で誰が・なぜ退団になるか。
           //    PC・スマホ・アプリが同じ理由を出すよう、サーバーで1回だけ作る
           //    （選び方そのもの `getAIReleaseCandidates` / `releaseScore` から）
+          // ⚠ 指導者の考え（監督の若手好き）を、標準案と同じく当てる（`releaseBiasFor`）
           releaseAdvice:
             phase.kind === 'contract'
               ? Object.fromEntries(
-                  getAIReleaseCandidates(team.players).map((id) => [
+                  getAIReleaseCandidates(
+                    team.players,
+                    releaseBiasFor(l, member.teamName),
+                  ).map((id) => [
                     id,
                     releaseScore(team.players.find((p) => p.id === id)).reasons,
                   ]),
                 )
               : undefined,
+          // 標準案を出した人（「山田監督の案」）と、任せているか。手続きの画面の見出しに出す
+          planBy: phasePlanBy(l, member.teamName, phase.kind),
           submission: phase.submissions[userId] || null,
           // ⚠ キャンプは1クールずつ自分で実行する。どこまで終わったかを渡す
           //    （渡さないと、押すたびに「第1クール」のままに見える）
@@ -577,6 +585,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       })),
     history: l.history,
     notices: l.notices.slice(0, 4),
+    // 指導者（監督・投手コーチ・野手コーチ）と任せ方・采配の内訳（`coachView.mjs`）
+    staff: ownStaffView(l, member, team, labelOf),
+    // リーグ全球団の指導者の顔ぶれと、最近の人事
+    leagueStaff: leagueStaffView(l, labelOf),
   };
 }
 
@@ -617,10 +629,14 @@ export function projectTeamInfo(bundle, userId, teamName) {
   const activeKeys = new Set(
     l.game.teams[teamName].players.map((p) => p.onlinePlayerId).filter(Boolean),
   );
+  const labelOf = (name) =>
+    (l.teams || []).find((t) => t.name === name)?.displayName || name;
   return {
     teamName,
     readOnly: true,
     year: l.season.year,
+    // 指導者（カード・CPU球団なら采配の内訳）。⚠ 人の球団の采配は出さない（`teamStaffView`）
+    staff: teamStaffView(l, teamName, l.game.teams[teamName], labelOf),
     // 球団史（年表）・歴代記録・引退・節目。記録からさかのぼって作る
     chronicle: teamChronicle(l, teamName, activeKeys),
     roster: l.game.teams[teamName].players.map((p) => {

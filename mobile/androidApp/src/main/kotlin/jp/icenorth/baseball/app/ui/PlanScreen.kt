@@ -80,7 +80,7 @@ import jp.icenorth.baseball.shared.subPositions
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
-private enum class PlanTab(val label: String) { Order("スタメン"), Pitching("投手起用"), Tactics("方針・采配") }
+private enum class PlanTab(val label: String) { Order("スタメン"), Pitching("投手起用"), Tactics("方針・采配"), Staff("指導者") }
 
 /** 編集（今の編集に当てる変換）を渡す */
 private typealias Edit = ((PlanDraft) -> PlanDraft) -> Unit
@@ -176,7 +176,9 @@ fun PlanScreen(model: AppViewModel) {
         when (tab) {
             PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, onDragStart, open, orderView, { orderView = it }) { sheet = it }
             PlanTab.Pitching -> PitchingEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open) { sheet = it }
-            PlanTab.Tactics -> TacticsEditor(draft, edit)
+            PlanTab.Tactics -> TacticsEditor(view, draft, edit)
+            // 監督・コーチと任せ方（PC の「指導者」ページと同じ中身）
+            PlanTab.Staff -> StaffPanel(model, view)
         }
     }
 
@@ -728,18 +730,23 @@ private fun RoleOption(label: String, hint: String?, selected: Boolean, enabled:
 // ------------------------------------------------------------------ 方針・采配
 
 @Composable
-private fun TacticsEditor(draft: PlanDraft, edit: Edit) {
+private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 指導者に任せているときは、ここで変えると「意見を聞く」に戻ることを先に知らせる（PC と同じ）
+        if (view.staff?.mode("tactics")?.effective == "delegate")
+            Muted("試合中の采配は指導者に任せています（「→」の内容で動きます）。ここで変えて保存すると、任せ方は「意見を聞く」に戻ります。")
         Section("方針") {
             STRATEGY_FIELDS.forEach { f ->
                 Text(f.label, style = MaterialTheme.typography.labelLarge)
                 ChoiceRow(f.options.map { it.key to it.label }, draft.strategy[f.key]) { v -> edit { it.withStrategy(f.key, v) } }
+                StaffActual(view, "strategy", f.key)
             }
         }
-        Section("自動采配", trailing = { InfoButton("自動采配", listOf("試合中の作戦と継投の決め方です。AI判断のままでも試合は進みます。")) }) {
+        Section("自動采配", trailing = { InfoButton("自動采配", listOf("試合中の作戦と継投の決め方です。AI判断のままでも試合は進みます。", "「→」は指導者が「AI判断」に入れている中身と、決めた人です（保存した設定に対して）。")) }) {
             TACTIC_FIELDS.forEach { f ->
                 Text(f.label, style = MaterialTheme.typography.labelLarge)
                 ChoiceRow(f.options.map { it.key to it.label }, draft.tactics[f.key]) { v -> edit { it.withTactic(f.key, v) } }
+                StaffActual(view, "tactics", f.key)
             }
         }
     }

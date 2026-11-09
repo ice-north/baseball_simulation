@@ -20,6 +20,7 @@ import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { CompletedCamp } from './CampPlanner.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
+import { StaffBody } from './StaffPage.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
     props;
@@ -114,6 +115,8 @@ export default function MobileView(props) {
             >
               選手成績
             </button>
+            {/* 監督・コーチと任せ方（PCの「指導者」ページと同じ中身） */}
+            <button onClick={() => setTab('staff')}>指導者</button>
           </nav>
           <Standings view={view} />
           <button className="online-news-link" onClick={() => setTab('news')}>
@@ -133,6 +136,7 @@ export default function MobileView(props) {
           )}
         </TeamRoster>
       )}
+      {tab === 'staff' && <StaffBody {...props} mobile />}
       {tab === 'news' && (
         <>
           <LeagueTopics view={view} />

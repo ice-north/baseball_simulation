@@ -727,6 +727,18 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     : mobile
       ? '全員が決定すると進みます。'
       : '全員が決定した時点で処理します。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。';
+  // 標準案を出した指導者（「山田監督の案です」）と、キャンプでの指導者の入れ替え。
+  // ⚠ 文はサーバーが作る（`projection.mjs` の `phasePlanBy`）
+  const staffNote = (phase.planBy || (phase.kind === 'camp' && view.staff)) && (
+    <>
+      {phase.planBy && <p className="online-staff-note">{phase.planBy.text}</p>}
+      {phase.kind === 'camp' && view.staff && (
+        <p className="online-muted">
+          指導者の留任・解任・市場から呼ぶのは「指導者」の画面で決められます（キャンプの間だけ）。
+        </p>
+      )}
+    </>
+  );
   const readyList = (
     <ul className="online-ready">
       {view.members.map((m) => (
@@ -862,6 +874,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
           <SeasonFlow view={view} />
           <section className="online-card online-phase-rules">
             <p>{rulesText}</p>
+            {staffNote}
             {readyList}
             {alerts}
           </section>
@@ -891,6 +904,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         {/* ⚠ 「決定後も出し直せる」のは**ほかに検討中の人がいる間だけ**。
             最後の1人が決定した瞬間に処理されるので、無条件には書かない */}
         <p>{rulesText}</p>
+        {staffNote}
         {readyList}
         {alerts}
         {/* ⚠ **キャンプは携帯でも回せるようにする**。表は23列あって携帯には

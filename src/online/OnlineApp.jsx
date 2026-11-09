@@ -49,6 +49,8 @@ const MOBILE_TABS = new Set([
   'news',
   'lineup',
   'decisions',
+  // 指導者（PCの「指導者」ページと同じ中身。ホームの入口から開く）
+  'staff',
 ]);
 const MOBILE_TAB_FOR = {
   rotation: 'lineup',
@@ -69,6 +71,8 @@ const COMMAND_MESSAGES = {
   step: 'ターンを進めました',
   testmode: '検証モードを切り替えました',
   resolve: '手続きを締め切りました',
+  staffModes: '任せ方を変えました',
+  staff: '指導者を入れ替えました',
   reset: 'すべて消しました。リーグを作り直してください',
 };
 

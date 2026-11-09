@@ -7,6 +7,7 @@ import {
   PendingPackPanel,
 } from './LeaguePanels.jsx';
 import DesktopTactics from './DesktopTactics.jsx';
+import StaffPage from './StaffPage.jsx';
 import AbilityRanking from './AbilityRanking.jsx';
 import CareerStats from './CareerStats.jsx';
 import TeamRoster from './TeamRoster.jsx';
@@ -75,6 +76,8 @@ const NAV = [
       ['lineup', 'スタメン設定'],
       ['rotation', '投手起用'],
       ['tactics', '方針・采配'],
+      // 監督・コーチと任せ方（いしだ依頼 2026-11-09）
+      ['staff', '指導者'],
     ],
   },
   {
@@ -105,6 +108,7 @@ const TITLES = {
   lineup: 'スタメン設定',
   rotation: '投手起用',
   tactics: '方針・采配',
+  staff: '指導者',
   decisions: '現在の手続き',
   transfer: 'トレード',
   admin: 'リーグ管理',
@@ -513,6 +517,7 @@ export default function DesktopView(props) {
       {current === 'tactics' && (
         <DesktopTactics key={`${view.year}:${view.teamName}`} {...props} />
       )}
+      {current === 'staff' && <StaffPage {...props} />}
       {/* ⚠ **途中参加の初期メンバー選択を先に出す**。リーグ全体の手続きより、
           自分の名簿が決まっていないことのほうが先に片付く
           ⚠ セットを待っている間の手続き（ストーブリーグ・キャンプ）は出さない。

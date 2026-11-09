@@ -1,4 +1,5 @@
 import { generateRosterPacks, LEGACY_PACK_STYLE } from './rosterPack.js';
+import { createCoaches } from './coaches.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -142,6 +143,18 @@ export const MIGRATIONS = [
       // ⚠ 過去の年度の記録（`history[]`）には部分け（`leagues`）と昇降格（`moves`）が無い。
       //    作れない（昇降格の通知は20件で切れる）ので、無いまま。球団史はその年の部と順位を空欄にする
       league.chronicle ??= { milestones: [], retired: [], world: [] };
+    },
+  },
+  {
+    from: 9,
+    to: 10,
+    note: '指導者（監督・投手コーチ・野手コーチ）と、人の球団の任せ方を足した',
+    apply(league) {
+      // ⚠ 顔ぶれはリーグの種から作る（何度当てても同じ人たち）。席は全球団3人で始める。
+      //    通算はこの版から先のぶんだけ残る（過去の年に誰が監督だったかは作らない）
+      if (!league.coaches?.people) league.coaches = createCoaches(league);
+      // 人の任せ方（`member.staffModes`）は**作らない**。無ければ既定の「意見を聞く」
+      //  （`coaches.js` の `staffModesOf`）。保存に書くのは人が変えたときだけ
     },
   },
 ];

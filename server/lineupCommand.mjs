@@ -1,10 +1,33 @@
 import { validateTactics } from './lineupTactics.mjs';
 import { placeholderPitcherId } from '../src/game/lineup.js';
+import { staffModesOf } from '../src/online/coaches.js';
+import { TACTIC_DEFAULTS, STRATEGY_DEFAULTS } from '../src/online/tactics.js';
+import { projectLineup } from './projection.mjs';
 import {
   requireOnline,
   validateLineup,
   assertLeagueVersion,
 } from '../src/online/shared.js';
+
+/**
+ * 任せ方の分野ごとの「中身」（見比べるための文字列）。保存の前後で比べて、
+ * 人が自分で変えた分野だけを知る。
+ * ⚠ 形の違い（項目が無い／既定値が書いてある、救援の欄と役割の書き方）では変わったことにしない。
+ *    画面と同じ形（`projectLineup`）と、既定値を埋めた采配で比べる
+ */
+function staffAreasOf(team) {
+  const view = projectLineup(team);
+  return {
+    order: JSON.stringify(
+      view.battingOrder.map(({ playerId, battingOrder, position }) => [playerId, battingOrder, position]),
+    ),
+    rotation: JSON.stringify([view.starters, view.pitcherRoles || null]),
+    tactics: JSON.stringify([
+      { ...TACTIC_DEFAULTS, ...(team.onlineTactics || {}) },
+      { ...STRATEGY_DEFAULTS, ...(team.strategy || {}) },
+    ]),
+  };
+}
 
 export function saveLineup(league, userId, plan) {
   assertLeagueVersion(league);
@@ -21,6 +44,8 @@ export function saveLineup(league, userId, plan) {
   requireOnline(member, '参加者ではありません', 403);
   const team = league.game.teams[member.teamName];
   validateLineup(team, plan);
+  // 指導者に任せていた分野を見比べるための、保存前の写し（`staffAreasOf`）
+  const before = staffAreasOf(team);
   let strategy = team.strategy;
   if (plan.strategy) {
     const allowed = {
@@ -79,4 +104,15 @@ export function saveLineup(league, userId, plan) {
   if (tactical.tactics) team.onlineTactics = tactical.tactics;
   if (tactical.rotation)
     Object.assign(team.pitchingRotation, tactical.rotation);
+  // ⚠ **任せていた分野を自分で変えたら、その分野は「意見を聞く」に戻す**（仕様書は「自分で」。
+  //    采配は1項目だけ変えても残りの「AI判断」が標準に戻ってしまうので、指導者の考えは残す）。
+  //    変えていない分野は任せたまま（采配だけ直した保存で、打順まで自分持ちにならないように）
+  const modes = staffModesOf(member);
+  const after = staffAreasOf(team);
+  const changed = (key) => before[key] !== after[key];
+  const flips = {};
+  if (modes.lineup === 'delegate' && changed('order')) flips.lineup = 'advice';
+  if (modes.pitching === 'delegate' && changed('rotation')) flips.pitching = 'advice';
+  if (modes.tactics === 'delegate' && changed('tactics')) flips.tactics = 'advice';
+  if (Object.keys(flips).length) member.staffModes = { ...modes, ...flips };
 }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import MobilePanel from './MobilePanel.jsx';
 import { PageNav } from './PageNav.jsx';
 import { PlayerStatsButton, ConditionMark } from './PlayerPerformance.jsx';
+import { StaffActual as Actual, TacticsDelegateNote } from './StaffPage.jsx';
 import {
   STARTER_ROLES,
   STRATEGY_FIELDS,
@@ -86,6 +87,7 @@ export default function MobileTactics({
           {error}
         </p>
       )}
+      <TacticsDelegateNote view={view} />
       <fieldset disabled={busy} className="online-mobile-tactic-fields">
         {group === 'basic' &&
           Object.entries(STRATEGY_FIELDS).map(([key, [label, options]]) => (
@@ -110,6 +112,7 @@ export default function MobileTactics({
                   </option>
                 ))}
               </select>
+              <Actual view={view} field="strategy" name={key} />
             </label>
           ))}
         {(FIELDS[group] || []).map((key) => {
@@ -139,6 +142,7 @@ export default function MobileTactics({
                   </option>
                 ))}
               </select>
+              <Actual view={view} field="tactics" name={key} />
             </label>
           );
         })}

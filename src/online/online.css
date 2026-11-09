@@ -3825,3 +3825,148 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-chronicle-table td:last-child {
   text-align: left;
 }
+
+/* ============================================================
+   指導者（監督・コーチ）のページ（`StaffPage.jsx`）。PC とスマホで共用
+   ============================================================ */
+.online-staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.online-staff-card {
+  border: 1px solid #4f6984;
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--surface-1);
+  min-width: 0;
+}
+.online-staff-card.is-empty {
+  border-style: dashed;
+  opacity: 0.85;
+}
+.online-staff-card header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.online-staff-card header strong {
+  font-size: 18px;
+}
+.online-staff-card header small {
+  color: #9fb0c4;
+}
+.online-staff-color {
+  font-weight: 650;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+.online-staff-facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+}
+.online-staff-facts div {
+  display: grid;
+  grid-template-columns: 5em 1fr;
+  gap: 6px;
+}
+.online-staff-facts dt {
+  color: #9fb0c4;
+}
+.online-staff-facts dd {
+  margin: 0;
+}
+.online-staff-more {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.online-staff-more summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.online-staff-scales,
+.online-staff-history,
+.online-staff-tactics,
+.online-staff-events {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: grid;
+  gap: 4px;
+}
+.online-staff-scale {
+  display: grid;
+  grid-template-columns: 7em 1fr 6em;
+  align-items: center;
+  gap: 6px;
+}
+.online-staff-scale-ends {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.online-staff-scale-ends small {
+  color: #9fb0c4;
+  white-space: nowrap;
+}
+.online-staff-scale-bar {
+  display: inline-flex;
+  gap: 3px;
+}
+.online-staff-scale-bar i {
+  width: 12px;
+  height: 8px;
+  border-radius: 2px;
+  background: #4f6984;
+}
+.online-staff-scale-bar i.is-on {
+  background: var(--accent);
+}
+.online-staff-scale-bar i.is-off {
+  opacity: 0.3;
+}
+.online-staff-actions {
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.online-staff-tactics li.is-coached {
+  font-weight: 600;
+}
+.online-staff-table small {
+  display: block;
+  color: #9fb0c4;
+  font-size: 11px;
+}
+.online-staff-note {
+  border-left: 3px solid var(--accent);
+  padding: 6px 10px;
+  background: rgba(103, 232, 249, 0.08);
+  border-radius: 4px;
+  margin: 8px 0;
+}
+.online-staff-choice {
+  display: flex;
+  flex-direction: column;
+}
+.online-staff-actual {
+  display: block;
+  color: var(--accent);
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.online-choice-label small {
+  display: block;
+  color: #9fb0c4;
+  font-size: 11px;
+  font-weight: 400;
+}
+/* 任せ方は6つの分野を並べる（PC は3列、狭ければ1列） */
+.online-choices.online-staff-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px 18px;
+}

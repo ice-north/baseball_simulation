@@ -9,6 +9,7 @@ import {
 } from './lineupBridge.js';
 import { Page } from './Page.jsx';
 import { Choice } from './Choice.jsx';
+import { StaffActual as Actual, TacticsDelegateNote } from './StaffPage.jsx';
 
 // ============================================================
 // PC版「方針・采配」。**基本方針と自動采配だけ**を決めるページ。
@@ -117,20 +118,23 @@ export default function DesktopTactics({ view, busy, run, command }) {
         </>
       }
     >
+      <TacticsDelegateNote view={view} />
       <div className="online-board is-even">
         <section className="online-card online-board-main">
           <h2>基本方針</h2>
           <p className="online-muted">試合全体の攻め方・守り方です。</p>
           <div className="online-choices">
             {Object.entries(STRATEGY_FIELDS).map(([key, [label, values]]) => (
-              <Choice
-                key={key}
-                label={label}
-                options={values}
-                value={draft.strategy?.[key] || Object.keys(values)[0]}
-                disabled={busy}
-                onChange={(value) => setStrategy(key, value)}
-              />
+              <div key={key} className="online-staff-choice">
+                <Choice
+                  label={label}
+                  options={values}
+                  value={draft.strategy?.[key] || Object.keys(values)[0]}
+                  disabled={busy}
+                  onChange={(value) => setStrategy(key, value)}
+                />
+                <Actual view={view} field="strategy" name={key} />
+              </div>
             ))}
           </div>
         </section>
@@ -141,14 +145,16 @@ export default function DesktopTactics({ view, busy, run, command }) {
           </p>
           <div className="online-choices">
             {Object.entries(TACTIC_FIELDS).map(([key, [label, options]]) => (
-              <Choice
-                key={key}
-                label={label}
-                options={options}
-                value={draft.tactics?.[key] ?? TACTIC_DEFAULTS[key]}
-                disabled={busy}
-                onChange={(value) => setTactic(key, value)}
-              />
+              <div key={key} className="online-staff-choice">
+                <Choice
+                  label={label}
+                  options={options}
+                  value={draft.tactics?.[key] ?? TACTIC_DEFAULTS[key]}
+                  disabled={busy}
+                  onChange={(value) => setTactic(key, value)}
+                />
+                <Actual view={view} field="tactics" name={key} />
+              </div>
             ))}
           </div>
         </section>

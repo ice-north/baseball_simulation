@@ -85,6 +85,10 @@ export const TACTIC_FIELDS = {
     },
   ],
 };
+/** 方針の既定（各項目の最初の値）。保存に項目が無いときと同じ */
+export const STRATEGY_DEFAULTS = Object.fromEntries(
+  Object.entries(STRATEGY_FIELDS).map(([key, [, options]]) => [key, Object.keys(options)[0]]),
+);
 export const TACTIC_DEFAULTS = Object.fromEntries(
   Object.entries(TACTIC_FIELDS).map(([key, [, options]]) => [
     key,

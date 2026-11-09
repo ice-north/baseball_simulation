@@ -30,6 +30,7 @@
     "check:online:lineup-ui": "node tools/sim-harness/online-lineup-board-ui-check.mjs",
     "check:online:trade-ui": "node tools/sim-harness/online-trade-ui-check.mjs",
     "check:online:join-ui": "node tools/sim-harness/online-join-ui-check.mjs",
+    "check:online:staff-ui": "node tools/sim-harness/online-staff-ui-check.mjs",
     "check:online:replay-ui": "node tools/sim-harness/online-replay-ui-check.mjs",
     "check:online:mobile-gameplay-ui": "node tools/sim-harness/online-mobile-gameplay-ui-check.mjs",
     "check:online:label-ui": "node tools/sim-harness/online-label-ui-check.mjs",
