@@ -146,11 +146,37 @@ class AppViewModel internal constructor(
     /** 塞いでいる間に出す文言（「保存中…」「練習中…」など） */
     var busyLabel by mutableStateOf("")
         private set
-    var error by mutableStateOf<String?>(null)
-    var message by mutableStateOf<String?>(null)
+
+    /**
+     * 失敗とお知らせ（画面下に出す）。⚠ 出すたびに通し番号（[errorSerial]・[messageSerial]）を上げる。
+     * 画面は番号を鍵に出すので、同じ文言が続いても（同じ保存を続けて2回など）2回目を落とさない。
+     * 以前は文言そのものを鍵にしていて、出している間に同じ文言が来ると変化が無いので出なかった
+     */
+    private var errorText by mutableStateOf<String?>(null)
+    var errorSerial by mutableStateOf(0L)
+        private set
+    var error: String?
+        get() = errorText
+        set(value) {
+            errorText = value
+            if (value != null) errorSerial += 1
+        }
+
+    private var messageText by mutableStateOf<String?>(null)
+    var messageSerial by mutableStateOf(0L)
+        private set
+    var message: String?
+        get() = messageText
+        set(value) {
+            messageText = value
+            if (value != null) messageSerial += 1
+        }
 
     private var api = createApi(endpoint)
     private var reloadJob: Job? = null
+
+    /** 読み直しの通し番号。「引っ張って更新」の印を下ろしてよいのは、いちばん新しい読み直しだけ */
+    private var reloadSerial = 0L
     private var operationJob: Job? = null
     private var sessionEpoch = 0L
 
@@ -293,20 +319,29 @@ class AppViewModel internal constructor(
         val current = auth ?: return
         val epoch = sessionEpoch
         val readEpoch = viewRequestEpoch
-        if (reloadJob?.isActive == true || busy) return
+        if (busy) return
+        // ⚠ 読み直しの通信中（画面を開いている間の静かな読み直しなど）でも、引っ張って更新したときは
+        //    無反応にしない（以前は先に return していて、印も出ず読み直しもしなかった）。走っている読み直しが
+        //    終わるのを待ってから、もう一度読む。取り消さないのは、トークンの更新の途中で捨てると
+        //    入れ替わった更新トークンを受け取りそこね、次の更新で締め出されるため
+        val previous = reloadJob?.takeIf { it.isActive }
+        if (previous != null && !pull) return
         if (pull) {
             refreshing = true
             checkLatestApp()
         }
+        val serial = ++reloadSerial
         reloadJob = viewModelScope.launch {
             try {
+                previous?.join()
                 authed(current, epoch) { load(it, epoch, readEpoch) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (epoch == sessionEpoch && (!quiet || e.isAuthFailure())) handle(e)
             } finally {
-                if (epoch == sessionEpoch) refreshing = false
+                // 前の読み直しが終わっても、待っている新しい読み直しの印は下ろさない
+                if (epoch == sessionEpoch && serial == reloadSerial) refreshing = false
             }
         }
     }
@@ -338,16 +373,42 @@ class AppViewModel internal constructor(
         refreshing = false
         operationJob = viewModelScope.launch {
             try {
-                val result = authed(current, epoch) { api.command(it, revision, type, payload) }
+                val result = try {
+                    authed(current, epoch) { api.command(it, revision, type, payload) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (epoch == sessionEpoch) handle(e)
+                    return@launch
+                }
                 // ⚠ 返事に最新のビューが載っていればそのまま使う（読み直しの往復を省く）。
                 //    載っていない（古いサーバー・二重送信の控えから返った）ときは読み直す
                 val fresh = result["view"] as? JsonObject
-                if (fresh != null) applyView(fresh.toString()) else authed(epoch = epoch) { load(it, epoch, readEpoch) }
+                if (fresh != null) {
+                    applyView(fresh.toString())
+                } else {
+                    // ⚠ ここで失敗しても**指示はサーバーで済んでいる**。以前は指示の失敗と同じに扱い、
+                    //    成功の知らせも onDone も出さなかった（保存できていないように見えて押し直す）。
+                    //    読み直しの失敗だけを伝え、成功の知らせと onDone はそのまま出す
+                    try {
+                        authed(epoch = epoch) { load(it, epoch, readEpoch) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (epoch != sessionEpoch) return@launch
+                        if (e.isAuthFailure()) {
+                            handle(e)
+                            return@launch
+                        }
+                        error = "送信は済みましたが、最新の状態を読み込めませんでした。引っ張って更新してください（${e.readable()}）"
+                    }
+                }
                 if (done != null) message = done
                 onDone(result)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // 返事を受けたあとの処理（呼ぶ側の onDone など）の失敗。落とさずに出す
                 if (epoch == sessionEpoch) handle(e)
             } finally {
                 if (epoch == sessionEpoch) busy = false

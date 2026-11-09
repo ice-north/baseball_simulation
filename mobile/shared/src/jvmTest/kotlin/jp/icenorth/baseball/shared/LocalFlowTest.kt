@@ -59,9 +59,13 @@ class LocalFlowTest {
                         val packs = phase.at("packs").list().mapNotNull { it.obj() }
                         plan = Commands.withPack(plan, packs.last().at("id").str()!!)
                     }
-                    // 下書き → 決定（baseSubmission は下書きの提出）
+                    // 下書き → 決定（baseSubmission は読み直したビューの下書きの提出）
+                    // ⚠ 送った形を base にしない。サーバーは提出を整えて保存するので、画面（ProceduresScreen の submit）と
+                    //    同じく読み直したビューの phase.submission を使う
                     send("submit", Commands.submit(phaseId, plan, false, null))
-                    send("submit", Commands.submit(phaseId, plan, true, Commands.submitted(plan, false)))
+                    val saved = raw().at("phase", "submission")
+                    assertNotNull(saved, "下書きの提出がビューに無い")
+                    send("submit", Commands.submit(phaseId, plan, true, saved))
                     assertEquals(true, raw().at("phase", "submission", "ready").bool() ?: true)
                 }
                 if (raw()["phase"].obj()?.at("id").str() == phaseId) send("resolve")

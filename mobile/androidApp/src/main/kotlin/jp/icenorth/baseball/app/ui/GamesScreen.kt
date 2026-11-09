@@ -52,17 +52,19 @@ fun GamesScreen(model: AppViewModel) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var open by rememberSaveable { mutableStateOf<String?>(null) }
+    // ⚠ 一覧の選択（年度・自球団/リーグ・区分・ページ）は詳細を開く分岐より**前に**置く。後ろに置くと、
+    //    詳細を開いている間は構成から外れて捨てられ、戻ると初期値（1ページ目など）に戻っていた
+    val years = raw.at("seasonYears").list().mapNotNull { it.int() }.ifEmpty { listOfNotNull(view.year) }
+    var year by rememberSaveable { mutableStateOf(years.lastOrNull() ?: 1) }
+    var scope by rememberSaveable { mutableStateOf("own") }
+    var section by rememberSaveable { mutableStateOf("results") }
+    var page by rememberSaveable { mutableStateOf(0) }
     val current = open
     if (current != null) {
         BackHandler { open = null }
         GameDetail(model, view, current.substringBefore(':'), current.substringAfter(':')) { open = null }
         return
     }
-    val years = raw.at("seasonYears").list().mapNotNull { it.int() }.ifEmpty { listOfNotNull(view.year) }
-    var year by rememberSaveable { mutableStateOf(years.lastOrNull() ?: 1) }
-    var scope by rememberSaveable { mutableStateOf("own") }
-    var section by rememberSaveable { mutableStateOf("results") }
-    var page by rememberSaveable { mutableStateOf(0) }
     var data by remember { mutableStateOf<JsonObject?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }

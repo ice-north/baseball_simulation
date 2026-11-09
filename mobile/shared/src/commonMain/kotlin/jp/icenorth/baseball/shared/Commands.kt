@@ -24,12 +24,6 @@ object Commands {
         put("baseSubmission", base ?: JsonNull)
     }
 
-    /** 提出したあとの「保存済みの提出」（次の提出の baseSubmission） */
-    fun submitted(plan: JsonObject, ready: Boolean): JsonObject = buildJsonObject {
-        put("plan", plan)
-        put("ready", ready)
-    }
-
     /** キャンプの1クール。⚠ round は「次のクール」（実行済み＋1）。同じクールは2回走らない */
     fun campRound(
         round: Int,

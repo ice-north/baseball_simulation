@@ -41,13 +41,17 @@ private fun itemsOf(changes: JsonObject?): List<CampGainItem> =
 
 /** 選手ごとの伸び（伸びた量の多い選手から）。名簿に居ない選手は落とす */
 fun campGainRows(gains: JsonObject?, roster: List<JsonObject>, events: JsonObject? = null): List<CampGainRow> {
-    val byId = roster.associateBy { it.at("id").num()?.toLong()?.toString() ?: it.at("id").str().orEmpty() }
+    val byId = roster.associateBy(::gainId)
     val ids = gains.orEmpty().keys + events.orEmpty().keys
     return ids.mapNotNull { id ->
         val player = byId[id] ?: return@mapNotNull null
         CampGainRow(player, itemsOf(gains?.get(id).obj()), events?.get(id).list().mapNotNull { it.str() })
-    }.sortedWith(compareByDescending<CampGainRow> { it.sum }.thenBy { it.player.at("id").num() ?: 0.0 })
+    }.sortedWith(compareByDescending<CampGainRow> { it.sum }.thenBy { gainId(it.player) })
+    // ⚠ 伸びが同じなら id を**文字列で**比べる（Web 版 campGains.js の localeCompare と同じ。"10" が "9" より前）。
+    //    数で比べると Web 版と並びが変わる
 }
+
+private fun gainId(player: JsonObject): String = player.at("id").num()?.toLong()?.toString() ?: player.at("id").str().orEmpty()
 
 /** 球団全体で、項目ごとの伸びの合計（多い順） */
 fun campGainTotals(gains: JsonObject?): List<CampGainItem> {

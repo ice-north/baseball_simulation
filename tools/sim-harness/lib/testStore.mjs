@@ -56,7 +56,10 @@ export class MemoryStore {
     const result = this.queue.then(async () => {
       const whole = process.env.SIM_HARNESS_WHOLE_STORE === '1';
       let light = !full && !whole;
+      // 何回読んだか（世界に触れて全体でやり直すと2）。全体の印の付け忘れを見る
+      let attempts = 0;
       for (;;) {
+        attempts++;
         const stored = memory.get(this.path);
         const split = stored !== undefined && typeof stored !== 'string';
         let value, run;
@@ -102,6 +105,7 @@ export class MemoryStore {
           });
         }
         this.lastMode = run ? 'light' : 'full';
+        this.lastAttempts = attempts;
         return outcome?.value;
       }
     });

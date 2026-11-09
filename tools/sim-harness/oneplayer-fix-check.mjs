@@ -16,7 +16,10 @@ import { getTransferCandidates, transferManagerTo } from '../../src/game/manager
 import { generateExpansionRoster, generateTryoutCandidates, updateReleasedPoolAfterTryout } from '../../src/season/tryoutSystem.js';
 import { releasedPlayersPool } from '../../src/teams-data.js';
 import { executeTeamCampTraining } from '../../src/season/campTraining.js';
-import { generateFullSeasonSchedule } from '../../src/season/scheduleGenerator.js';
+import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
+import { ensureCompleteLineup } from '../../src/game/lineup.js';
+import { autoSimulateGame, setRecommendedLineup } from '../../src/game/autoSimulation.js';
+import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason } from '../../src/season/scheduleGenerator.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -86,6 +89,97 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   }
 }
 
+// --- 同じ日に同じ球団が2回出ない（規定画面で選べる全ての組み合わせ） ---
+// ⚠ 以前は日が足りない設定（1リーグ3球団130試合以上、2リーグ5球団114試合以上、
+//    2リーグ9球団143試合以上など）で1日に複数ラウンドをまとめて置き、同じ球団が
+//    同じ日に2試合組まれていた。日程画面は自チームの試合を1つしか拾わないので、
+//    2試合目は采配できないまま自動で消化されていた。
+{
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    for (let count = 2; count <= 12; count++) {
+      const d = Math.max(1, count - 1);
+      const single = [];
+      for (let i = 1; d * i <= 150; i++) single.push(d * i);
+      const lists = [['single', single]];
+      if (count >= 4) lists.push(['two', getValidTwoLeagueGameCounts(count, 150).map(o => o.value)]);
+      const teams = Array.from({ length: count }, (_, i) => `T${i}`);
+      for (const [format, counts] of lists) {
+        for (const games of counts) {
+          const schedule = generateFullSeasonSchedule({
+            teams, gamesPerSeason: games,
+            startDate: { year: 2025, month: 4, day: 1 }, endDate: { year: 2025, month: 10, day: 9 },
+            leagueFormat: format,
+          });
+          const seen = new Set();
+          for (const g of schedule) {
+            const label = `${format === 'two' ? '2リーグ' : '1リーグ'}${count}球団${games}試合`;
+            assert.ok(!(g.date.month < 4 || g.date.month > 10 || (g.date.month === 10 && g.date.day > 9)),
+              `${label}: シーズン期間の外に試合がある（${g.date.month}/${g.date.day}）`);
+            for (const t of [g.home, g.away]) {
+              const key = `${t}|${g.date.month}/${g.date.day}`;
+              assert.ok(!seen.has(key), `${label}: ${t} が ${g.date.month}/${g.date.day} に2試合組まれている`);
+              seen.add(key);
+            }
+          }
+        }
+      }
+    }
+  } finally {
+    console.warn = warn;
+  }
+  // 規定画面の選択肢には、期間に入りきる試合数だけを出す（入らない分は組まれないため）
+  for (let count = 2; count <= 12; count++) {
+    for (const games of getValidSingleLeagueGameCounts(count, 150)) {
+      assert.ok(fitsInRegularSeason(count, games, 'single'), `1リーグ${count}球団${games}試合が選べるのに期間に入りきらない`);
+    }
+    if (count >= 4) {
+      for (const { value } of getValidTwoLeagueGameCounts(count, 150)) {
+        assert.ok(fitsInRegularSeason(count, value, 'two'), `2リーグ${count}球団${value}試合が選べるのに期間に入りきらない`);
+      }
+    }
+  }
+  assert.ok(!getValidSingleLeagueGameCounts(3, 150).includes(130), '1リーグ3球団130試合（1日1試合で192日に入らない）が選べる');
+  assert.ok(getValidSingleLeagueGameCounts(3, 150).includes(128), '1リーグ3球団128試合は入りきるのに選べない');
+}
+
+// --- DH制で、打順から外した先発と試合で投げる先発が同じ ---
+// ⚠ 以前の試合側は、ローテの今の番の選手が抹消中だと疲労を見て別の選手を選んでいた。
+//    打順を揃える側（`ensureCompleteLineup`）は「抹消中を飛ばした次の番」を外すので、
+//    次の番が疲れていると、外した選手は投げずに打順に残した二刀流の選手が投げ、
+//    その選手が打順から抜けて8人で戦っていた。
+{
+  const { seasonData } = quiet(() => bootstrapWorld());
+  const savedDH = LEAGUE_SETTINGS.useDH;
+  LEAGUE_SETTINGS.useDH = true;
+  try {
+    const [user, opp] = seasonData.settings.teamNames;
+    const team = TEAMS_DATA[user];
+    quiet(() => setRecommendedLineup(team, user));
+    team.pitchingRotation.currentStarterIndex = 0;
+    const [s0, s1, s2] = team.pitchingRotation.starters.map(id => team.players.find(p => p.id === id));
+    s0.isActive = false; // 今の番は抹消中
+    s1.fatigue = 60;     // 次の番は疲れている
+    // s1・s2 を二刀流として打順に入れる
+    team.lineupSettings.battingOrder = [
+      ...team.lineupSettings.battingOrder.filter(e => e.battingOrder <= 7 && e.position !== 'pitcher'),
+      { playerId: s1.id, battingOrder: 8, position: 'dh' },
+      { playerId: s2.id, battingOrder: 9, position: 'right' },
+    ];
+    assert.equal(quiet(() => ensureCompleteLineup(team, true)), true);
+    assert.ok(!team.lineupSettings.battingOrder.some(e => e.playerId === s1.id), '前提: 次の先発（s1）を打順から外す');
+    const result = quiet(() => autoSimulateGame(user, opp, false, 1));
+    const side = result.homeTeam.name === user ? result.homeTeam : result.awayTeam;
+    const batters = side.players.filter(p => p.gameStats?.batting && (p.battingOrder > 0));
+    assert.equal(batters.length, 9, `DH制で打順が${batters.length}人になった（先発の決め方が打順と食い違う）`);
+    const starter = side.players.find(p => p.position === 'pitcher' && p.battingOrder === 0 && p.id === s1.id);
+    assert.ok(starter, '打順から外した選手（s1）が先発していない');
+  } finally {
+    LEAGUE_SETTINGS.useDH = savedDH;
+  }
+}
+
 // --- 戦力外の選手は、翌日のトライアウトで年を取らない ---
 // ⚠ プールの選手は年度替わりに加齢する。以前はトライアウトの候補にする時にも
 //    「滞在年数＋1」歳を足して能力も落としていたため、11/9 に解雇された25歳が
@@ -109,4 +203,4 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   releasedPlayersPool.length = 0;
 }
 
-console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 戦力外の選手を二重に加齢しない）');
+console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');

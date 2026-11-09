@@ -214,9 +214,15 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
     if (!window.confirm(`緊急バックアップをスロット${slotIndex + 1}へ復元してプレイします。よろしいですか？`)) return;
     const r = await promoteEmergencyToSlot(slotIndex);
     if (r.success) {
-      clearEmergencySave();
-      setEmergencyInfo(null);
-      onContinue(slotIndex);
+      // ⚠ **ロードできてから緊急保存を消す**（SaveLoadScreen と同じ）。以前は先に消していたため、
+      //    ロードに失敗すると緊急保存も失われ、やり直す手段が無くなった
+      const loaded = await onContinue(slotIndex);
+      if (loaded?.success) {
+        clearEmergencySave();
+        setEmergencyInfo(null);
+      }
+    } else {
+      alert(r.error || '復元に失敗しました');
     }
   };
 

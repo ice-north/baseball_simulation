@@ -100,6 +100,32 @@ const browser = await chromium.launch({
 });
 const errors = [];
 try {
+  // --- スマホWeb: 返事が必要な提案をホームの帯で知らせる -----------------
+  // ⚠ スマホWebにトレードの画面は無い。知らせないと提案に気づかない
+  //    （PC版の左メニューの数・アプリと同じ数え方。`notices.js`）
+  {
+    const phone = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+    });
+    await routeToService(phone, { service, userId: 'a', sessionId: sa });
+    await phone.route(`${base}/online`, (route) =>
+      route.fulfill({ contentType: 'text/html', body: html }),
+    );
+    const m = await phone.newPage();
+    m.on('pageerror', (e) => errors.push(e.message));
+    await m.goto(`${base}/online`);
+    const banner = m
+      .getByRole('status')
+      .filter({ hasText: '返事が必要なトレードの提案が1件あります' });
+    await banner.waitFor();
+    assert.match(
+      await banner.innerText(),
+      /PCかアプリで返事してください/,
+      'どこで返事をするかを書いていない',
+    );
+    await phone.close();
+  }
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1100 },
   });
@@ -314,7 +340,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き）',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / スマホWebのホームで返事が必要な提案を知らせる）',
   );
 } finally {
   await browser.close();

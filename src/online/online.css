@@ -128,14 +128,6 @@
   box-shadow: 0 3px 9px #10203912;
   min-width: 0;
 }
-.online-season {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  margin: 16px 0 10px;
-}
-.online-season p,
 .online-eyebrow {
   font-size: 12px;
   font-weight: 650;
@@ -143,29 +135,6 @@
 }
 .online-card .online-eyebrow {
   color: var(--accent);
-}
-.online-season h1 {
-  margin-bottom: 0;
-}
-.online-season small {
-  font-size: 12px;
-  font-weight: 500;
-  display: inline-block;
-  padding: 3px 9px;
-  margin-left: 8px;
-  border-radius: 16px;
-  color: #e5ecf6;
-  background: var(--surface-1);
-  vertical-align: middle;
-}
-.online-next {
-  text-align: right;
-  font-size: 11px;
-}
-.online-next strong {
-  display: inline-block;
-  margin: 0 12px;
-  font-size: 17px;
 }
 .online-muted {
   font-size: 13px;
@@ -201,20 +170,6 @@
   border-radius: 8px;
   z-index: 30;
   box-shadow: 0 3px 12px #0003;
-}
-.online-dashboard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-.online-form-width {
-  max-width: 740px;
-}
-/* 希望リストと候補を左右に並べる画面だけ広げる。1100px を下回ると
-   `.online-tryout-grid` が1列に折り返すので、それより広く取る */
-.online-wide-width {
-  max-width: 1180px;
 }
 .online table:not(:where(.online-sp *)) {
   width: 100%;
@@ -1225,18 +1180,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-spaced {
   margin-top: 24px !important;
 }
-.online-clock-info {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  color: var(--ink-sub);
-  font-size: 12px;
-}
-.online-clock-info button {
-  min-height: 32px;
-  padding: 3px 10px;
-  font-size: 12px;
-}
 .online-pager {
   display: flex;
   align-items: center;
@@ -1318,36 +1261,8 @@ small.online-gain:not(:where(.online-sp *)) {
     border-radius: 10px;
     margin-bottom: 12px;
   }
-  .online-season {
-    align-items: center;
-    margin: 8px 0 4px;
-    gap: 8px;
-  }
   .online h1:not(:where(.online-sp *)) {
     font-size: 23px;
-  }
-  .online-season h1 small {
-    font-size: 10px;
-    padding: 2px 6px;
-    margin-left: 5px;
-  }
-  .online-season p {
-    font-size: 10px;
-    margin-bottom: 3px;
-  }
-  .online-next strong {
-    display: block;
-    margin: 1px 0 3px;
-    font-size: 14px;
-  }
-  .online-next {
-    flex-shrink: 0;
-    font-size: 10px;
-  }
-  .online-next button {
-    min-height: 32px;
-    padding: 3px 12px;
-    font-size: 12px;
   }
   .online table:not(:where(.online-sp *)) {
     font-size: 12px;
@@ -1391,32 +1306,10 @@ small.online-gain:not(:where(.online-sp *)) {
   .online-alert button {
     margin: 6px 0 0;
   }
-  .online-clock-info {
-    margin-bottom: 12px;
-    font-size: 11px;
-  }
-  .online-clock-info button {
-    min-height: 32px;
-  }
-  .online-next-action {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 12px;
-    margin: 10px 0;
-    border-radius: 8px;
-    background: var(--surface-1);
-    color: #fff;
-    font-size: 13px;
-  }
   .online-news-link {
     display: block;
     width: 100%;
     text-align: left;
-  }
-  .online-back {
-    margin-bottom: 10px;
   }
   .online-success {
     top: 70px;
@@ -1646,10 +1539,6 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 12px;
   line-height: 1.4;
 }
-.online-mobile:has(.online-compact-roster) .online-season,
-.online-mobile:has(.online-compact-roster) .online-clock-info {
-  display: none;
-}
 
 /* スマホの対人画面は一枚の面。常設する操作は戻る・ホームだけ。 */
 .online-mobile.online-compact-shell {
@@ -1795,62 +1684,7 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-roster-name small {
   flex-shrink: 0;
 }
-.online-lineup-picker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.online-lineup-picker select {
-  min-width: 0;
-  flex: 1;
-}
-.online-lineup-picker .online-player-name {
-  flex-shrink: 0;
-}
-.online-player-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.online-player-tabs button {
-  min-width: 80px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-.online-player-tabs button[aria-pressed='true'] {
-  color: var(--accent);
-  border-bottom: 2px solid var(--accent);
-}
-.online-ability-select {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-}
-.online-ability-select select {
-  width: auto;
-  min-width: 140px;
-  padding: 4px 8px;
-}
-.online-player-abilities .online-stat-grid dd {
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-.online-player-abilities .online-profile-grid {
-  grid-template-columns: 1fr 1fr;
-}
-.online-player-abilities .online-profile-grid dd {
-  font-size: 14px;
-}
-.online-batter-type {
-  margin: 12px 0 4px !important;
-  font-size: 14px;
-}
-.online-player-abilities > small,
-.online-zone-legend,
-.online-player-abilities li {
+.online-zone-legend {
   font-size: 12px;
 }
 .online-zone-grid {
@@ -2106,9 +1940,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-mobile .online-stat-grid dd {
   font-size: 18px;
 }
-.online-mobile .online-profile-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
 .online-mobile .online-stat-grid dt {
   font-size: 11px;
 }
@@ -2187,15 +2018,6 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 10px;
   color: #cbd5e1;
   margin-top: 8px;
-}
-
-.online-check-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.online-check-info .online-check {
-  flex: 1;
 }
 
 /* 試合カード：日付・自球団の勝敗・成績ボタンを1行、責任投手は区切り付きの1行。 */
@@ -2458,18 +2280,6 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #94a3b8;
 }
 
-/* 検証モード。⚠ 遊び始めたらOFFに戻す想定なので、常設の操作と見た目を分ける。 */
-.online-testmode {
-  margin-top: 16px;
-  padding: 10px 12px;
-  border: 1px dashed #7c8ca0;
-  border-radius: 8px;
-}
-.online-testmode .online-muted {
-  font-size: 12px;
-  margin: 4px 0 8px;
-}
-
 /* スマホから移植した編成画面へ入る導線。 */
 .online-full-width {
   width: 100%;
@@ -2598,45 +2408,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-slot-starters .online-starter-line {
   margin-left: 3px;
 }
-
-.online-matchups {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.online-matchup {
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #ffffff0c;
-}
-.online-matchup-date {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 4px;
-  font-size: 11px;
-  color: #9fb0c4;
-}
-.online-matchup-date strong {
-  font-size: 12px;
-  color: #e2e8f0;
-  font-variant-numeric: tabular-nums;
-}
-.online-matchup-teams {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-.online-matchup-teams div {
-  min-width: 0;
-  text-align: center;
-}
-/* ⚠ 自球団は黄色。左右どちらが自分かを一目で分けるため */
-.online-matchup-teams .is-own strong {
-  color: #fde68a;
-}
 .online-starter-name b {
   margin-left: 4px;
   padding: 0 3px;
@@ -2653,22 +2424,6 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-starter-line span {
   margin-left: 5px;
-}
-.online-matchup strong {
-  display: block;
-  font-size: 14px;
-}
-.online-matchup small {
-  display: block;
-  font-size: 11px;
-  color: #9fb0c4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.online-matchup-vs {
-  font-size: 11px;
-  color: #9fb0c4;
 }
 
 /* --- 個人成績ランキング ------------------------------------------------ */
@@ -2688,14 +2443,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-leader-box h4 {
   margin: 0 0 3px;
   font-size: 12px;
-}
-.online-division + .online-division {
-  margin-top: 16px;
-}
-.online-division h3 {
-  margin: 0 0 6px;
-  font-size: 14px;
-  color: var(--accent);
 }
 .online-owner {
   margin-left: 4px;
@@ -2762,20 +2509,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-leader-value {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
-}
-.online-profile-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 16px;
-  margin: 0;
-}
-.online-profile-facts dt {
-  font-size: 11px;
-  color: #9fb0c4;
-}
-.online-profile-facts dd {
-  margin: 0;
-  font-weight: 700;
 }
 @media (max-width: 1100px) {
   .online-board {
@@ -2909,7 +2642,6 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 8px;
   margin-top: 12px;
 }
-.online-desktop .online-label,
 .online-desktop label:not(:where(.online-sp *)) {
   margin: 10px 0;
   font-size: 13px;
@@ -3298,13 +3030,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-desktop .online-decision > :last-child {
   margin-bottom: 0;
 }
-.online-desktop .online-decision .online-check-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  border-bottom: 1px solid #ffffff1a;
-}
 .online-desktop .online-decision .online-check {
   flex: 1;
   margin: 0;
@@ -3373,32 +3098,6 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: flex-start;
   flex-wrap: wrap;
   justify-content: flex-start;
-}
-/* 成績・能力・場面別の切り替えも、ほかの切り替えと同じ形（TabBar）にする */
-.online-desktop .online-player-tabs {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  margin-bottom: 12px;
-  border-radius: 12px;
-  background: rgba(17, 24, 39, 0.55);
-  border: 1px solid rgba(55, 65, 81, 0.5);
-}
-.online-desktop .online-player-tabs button {
-  min-width: 0;
-  min-height: 28px;
-  padding: 3px 14px;
-  border: 0;
-  border-radius: 8px;
-  color: #d1d5db;
-  font-weight: 600;
-}
-.online-desktop .online-player-tabs button[aria-pressed='true'] {
-  background: #0e3f4c;
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent-strong);
-  border: 0;
-  font-weight: 700;
 }
 
 /* --- スタメン設定（PC。`LineupBoard.jsx`） --------------------------------

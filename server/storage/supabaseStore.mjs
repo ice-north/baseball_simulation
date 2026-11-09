@@ -14,7 +14,11 @@ import {
   projectTeamInfo,
 } from '../projection.mjs';
 import { buildArchiveIndex, archiveReferences } from '../archiveIndex.mjs';
-import { isCurrent } from '../../src/online/leagueMigration.js';
+import {
+  isCurrent,
+  migrationState,
+  OLDEST_MIGRATABLE,
+} from '../../src/online/leagueMigration.js';
 import {
   SNAPSHOT_FORMAT,
   isSplitSnapshot,
@@ -58,6 +62,10 @@ function leagueMetaOf(league) {
   return {
     // 古い形のリーグは自分の版を載せる（`isDue` が移行のために起こす）
     schema: isCurrent(league) ? ONLINE_SCHEMA : (league.schema ?? null),
+    // ⚠ 古い形でも**直せるときだけ** `isDue` が起こす。新しすぎる版・計算方法の
+    //    違うリーグは定期処理でも直せないので、起こすと毎回ロックと全体の
+    //    読み込みをして失敗し、その間の参加者の操作が弾かれる
+    migratable: migrationState(league).state === 'migratable',
     revision: league.revision,
     status: league.status,
     nextAdvanceAt: league.nextAdvanceAt ?? null,
@@ -243,7 +251,18 @@ export class SupabaseStore {
     // ⚠ **古い形のまま放置しない**。更新で保存の形が変わったとき、
     //    進行時刻だけ見ていると誰も触らない限り直らない。次の正時に
     //    定期処理が入って移行できるよう、ここでも起こす
-    if (row.snapshot_path && view && view.schema !== ONLINE_SCHEMA) return true;
+    // ⚠ **直せない版では起こさない**（新しすぎる・計算方法が違う）。起こしても
+    //    移行に失敗して何もしないのに、毎回ロックを取って全体を読み、その間の
+    //    参加者の操作を「処理中」で弾いていた。進行時刻が来ていても同じ
+    //    （定期処理は移行に失敗した時点で止まる）なので、ここで答えを決める。
+    //    `migratable` の無い古い `_meta` は版の範囲で判定する
+    if (row.snapshot_path && view && view.schema !== ONLINE_SCHEMA)
+      return !!(
+        view.migratable ??
+        (Number.isInteger(view.schema) &&
+          view.schema >= OLDEST_MIGRATABLE &&
+          view.schema < ONLINE_SCHEMA)
+      );
     // ⚠ 自動決定に失敗して止まっている間（status: error）は起こさない。
     //    定期処理はその状態では何もしない（管理者の再開を待つ）のに、毎回
     //    ロックを取って保存一式を読み、その間の参加者の操作を「処理中」で弾いていた
@@ -288,16 +307,21 @@ export class SupabaseStore {
    * 保存の世代だけを読む（ビューは読まない）。画面の定期の読み直しで「変わったか」を見るため。
    * ⚠ 版（revision）ではなく世代を見ること。版を上げない書き込み（ログイン・形の移行）でも
    *    ビューは変わる（書けるか・形）が、世代は公開のたびに必ず上がる。
+   * ⚠ 保存の版（`_meta.schema`）も返す。サーバーを更新して版が上がっても
+   *    世代は変わらないので、世代だけで「変わっていない」と答えると、
+   *    開いていた画面が版の門番（`versionMismatch`）を通らない。
    */
   async readGeneration(userId, sessionId) {
     const row = (
       await this.request(
-        '/rest/v1/online_control?id=eq.pennant&select=generation,sessions',
+        '/rest/v1/online_control?id=eq.pennant&select=generation,sessions,meta:views->_meta',
       )
     )[0];
     return {
       generation: row?.generation ?? null,
       writable: isLiveSession(row?.sessions, userId, sessionId),
+      // 絞り込みを通さない環境（全列が返る）でも読めるように、元の列も見る
+      schema: (row?.meta ?? row?.views?._meta)?.schema ?? null,
     };
   }
   async archive(row, kind, year) {
