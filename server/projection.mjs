@@ -1,3 +1,11 @@
+import {
+  withPace,
+  leagueRaces,
+  chronicleView,
+  teamChronicle,
+  koshienNoteOf,
+  remainingGames,
+} from './chronicle.mjs';
 import { isLiveSession } from './sessions.mjs';
 import { roleFor } from '../src/online/tactics.js';
 import { getDeception } from '../src/game/deception.js';
@@ -358,6 +366,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     return seasonStatsCache.get(player.id);
   };
   const phase = l.phase;
+  // 球団ごとのレギュラーシーズンの残り試合（ペースとマジックで共用。日程を2回なめない）
+  const left = remainingGames(l.season.schedule);
   return {
     // ⚠ **このビューを作ったコードの版**。`LeagueService.view` がここを見て、
     //    古い形のリーグを表示させない。ビューは保存済みのものがそのまま
@@ -435,7 +445,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // 球団ごとの今の連勝・連敗（全国紙の「○○、5連勝」）。引き分けは続きを切る
     teamStreaks: teamStreaks(l.season.schedule),
     // ⚠ 各項目のベスト5。12球団×24人をなめるので**1回の投影で1度だけ**作る
-    leaders: leagueLeaders(l, seasonStatsOf, labelOf),
+    // ⚠ 数える項目の上位には「このままなら年間○」（`pace`）を添える
+    leaders: withPace(leagueLeaders(l, seasonStatsOf, labelOf), l, left),
+    // 優勝・昇格・残留のマジックと決定（部ごと）。手続きの時期も決着は残す
+    races: leagueRaces(l, left),
+    // 節目の記録・引退・裏の大会（リーグ全体の最近のもの）
+    chronicle: chronicleView(l),
     // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。
     teamStats: teamSeasonStats(l, seasonStatsOf),
     // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
@@ -496,7 +511,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           // ⚠ 締め切りの有無で画面の文面が変わる
           deadline: phase.deadline || null,
           packs: l.packs?.map(packView),
-          candidates: phase.candidates?.map(playerView),
+          // ⚠ 甲子園で名を上げた人には、その年の成績を添える（`koshien`）
+          candidates: phase.candidates?.map((c) => {
+            const view = playerView(c);
+            const note = koshienNoteOf(l, c.id);
+            return note ? { ...view, koshien: note } : view;
+          }),
           // ⚠ 契約更改: 標準案（決めなかったときの案）で誰が・なぜ退団になるか。
           //    PC・スマホ・アプリが同じ理由を出すよう、サーバーで1回だけ作る
           //    （選び方そのもの `getAIReleaseCandidates` / `releaseScore` から）
@@ -594,10 +614,15 @@ export function projectTeamInfo(bundle, userId, teamName) {
     404,
   );
   const statistics = statisticsContext(l);
+  const activeKeys = new Set(
+    l.game.teams[teamName].players.map((p) => p.onlinePlayerId).filter(Boolean),
+  );
   return {
     teamName,
     readOnly: true,
     year: l.season.year,
+    // 球団史（年表）・歴代記録・引退・節目。記録からさかのぼって作る
+    chronicle: teamChronicle(l, teamName, activeKeys),
     roster: l.game.teams[teamName].players.map((p) => {
       const visible = playerView(p);
       delete visible.growthPotential;

@@ -163,6 +163,7 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                         Column(horizontalAlignment = Alignment.End) {
                             Score(scores[p.pid])
                             Fit(teamFitRank(p, roster, weights))
+                            Koshien(p)
                             if (at >= 0) Tag("指名中 ${at + 1}位", MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -206,6 +207,13 @@ private fun Fit(fit: TeamFit) {
         color = if (fit.rank <= 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         fontWeight = if (fit.rank <= 2) FontWeight.Bold else FontWeight.Normal,
     )
+}
+
+/** 甲子園で名を上げた人（「2025年夏の甲子園 ○○高のエース（ベスト4）」。サーバーが付ける） */
+@Composable
+private fun Koshien(p: JsonObject) {
+    val note = p.at("koshien").str() ?: return
+    Text(note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
 }
 
 @Composable

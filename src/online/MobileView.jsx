@@ -1,3 +1,4 @@
+import { LeagueTopics } from './Chronicle.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { useDraftMemoryPeek } from './Drafts.jsx';
 import {
@@ -120,6 +121,7 @@ export default function MobileView(props) {
       )}
       {tab === 'news' && (
         <>
+          <LeagueTopics view={view} />
           <Notices view={view} compact />
         </>
       )}

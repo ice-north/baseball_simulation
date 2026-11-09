@@ -201,6 +201,29 @@ fun buildFrontPage(
         else l
     }
 
+    // 記録達成（自球団の選手が、最新の試合の日に届いた節目）
+    if (!offPhase) {
+        val ours = milestonesOn(view, last?.date).filter { it.team == team }
+        ours.firstOrNull()?.let { m ->
+            articles += FrontPage.Article(
+                "記録達成",
+                pen.pick(listOf("${m.name}、${m.label}", "${m.name}が${m.label}に到達", "祝 ${m.name} ${m.label}"), 16),
+                milestoneBody(ours, null),
+                LINK_GAMES,
+            )
+        }
+    }
+    // 引退（年度更新のあと。自球団から退いた人）
+    if (offPhase) {
+        val gone = view.chronicle.retired.filter { it.team == team }
+        if (gone.isNotEmpty())
+            articles += FrontPage.Article(
+                "現役引退",
+                if (gone.size == 1) "${gone[0].name}、現役引退" else "${gone[0].name}ら${gone.size}人が現役引退",
+                retiredBody(gone, null) + "長い間、お疲れさまでした。",
+                LINK_GAMES,
+            )
+    }
     // 次戦予告（相手との今季の対戦成績も）
     view.nextGames.firstOrNull { it.home == team || it.away == team }?.let { g ->
         val home = g.home == team
@@ -228,7 +251,21 @@ fun buildFrontPage(
         val homecoming = oldBoys.firstOrNull()?.let { p ->
             pen.pick(listOf("${p.name}にとっては古巣との対戦になる。", "古巣${opp}を相手に、${p.name}の${if (p.isPitcher) "快投" else "一打"}に期待がかかる。"), 13)
         }.orEmpty()
-        articles += FrontPage.Article("次戦予告", nextGameTitle(opp, home, pen), pitchers + h2h + homecoming, LINK_LINEUP)
+        // 天王山（同じ部でゲーム差1.5以内の、首位争い・降格争いの直接対決）
+        val theirs = table.firstOrNull { it.team == oppName }
+        val showdown = if (!offPhase && mine != null && theirs != null && mine.gamesPlayed > 0) {
+            val gap = abs(gamesBehind(mine, theirs))
+            val oppRank = table.indexOf(theirs)
+            when {
+                gap > 1.5 -> null
+                minOf(rankIndex, oppRank) == 0 -> "首位攻防"
+                league == "A" && minOf(rankIndex, oppRank) >= table.size - 2 -> "残留争い"
+                else -> null
+            }?.let { kind -> kind to gap }
+        } else null
+        val nextTitle = showdown?.let { (kind, _) -> pen.pick(listOf("天王山 ${opp}との${kind}", "${kind}の直接対決 ${opp}戦", "負けられない${opp}戦"), 17) } ?: nextGameTitle(opp, home, pen)
+        val showdownLine = showdown?.let { (kind, gap) -> if (gap == 0.0) "ゲーム差なしで並ぶ${opp}との${kind}。" else "ゲーム差${gb(gap)}の${opp}との${kind}。" }.orEmpty()
+        articles += FrontPage.Article("次戦予告", nextTitle, showdownLine + pitchers + h2h + homecoming, LINK_LINEUP)
         // 警戒選手（地元紙らしく、相手の中心選手を名指しで）
         opponent?.let { warningArticle(opp, it, theirStarter, pen) }?.let { articles += it }
     }
@@ -258,6 +295,21 @@ fun buildFrontPage(
         )
         articles += FrontPage.Article("順位の行方", title, body, LINK_GAMES)
     }
+    // マジック（自球団のもの。無ければ、自球団が追う相手のもの）
+    run {
+        val own = view.races.firstOrNull { it.team == team }
+        val chased = view.races.firstOrNull { it.rival == team && !it.clinched }
+        val race = own ?: chased ?: return@run
+        val t = raceText(race, view::teamShort) ?: return@run
+        val title = if (own != null) t.head else "${view.teamShort(race.team)}にマジック${race.magic} ${me}が止めるか"
+        articles += FrontPage.Article(if (race.clinched) "決定" else "マジック", title, t.body, LINK_GAMES)
+    }
+    // 独立リーグ日本一決定戦に自球団が出たとき
+    recentWorld(view).firstOrNull { it.kind == "grand" && it.ours == team }?.let { w ->
+        worldText(w, view::teamShort)?.let { t ->
+            articles += FrontPage.Article("日本一決定戦", if (w.champion == team) "${me}、独立リーグ日本一" else "${me}は${w.oursResult ?: "出場"}", t.body, LINK_GAMES)
+        }
+    }
 
     // タイトル戦線（自球団の選手が上位に居れば、その話題を優先）
     val boards = raw?.at("leaders").list().mapNotNull { it.obj() }
@@ -276,7 +328,7 @@ fun buildFrontPage(
         articles += FrontPage.Article(
             "タイトル戦線",
             leaderTitle(name, label, rank, pen),
-            "${label}は${leaderValue(b, row)}でリーグ${rank}位につける。" + if (others.isNotEmpty()) "ほかにも、$others。" else "",
+            "${label}は${leaderValue(b, row)}でリーグ${rank}位につける。" + paceLine(b, row) + if (others.isNotEmpty()) "ほかにも、$others。" else "",
             LINK_GAMES,
         )
     } else {
@@ -408,6 +460,14 @@ fun buildFrontPage(
 }
 
 private val LEADER_UNITS = mapOf("homeruns" to "本", "rbis" to "打点", "stolenBases" to "個", "wins" to "勝", "strikeouts" to "個", "saves" to "セーブ")
+
+/** 「このままなら年間○本のペース。」（数える項目だけ。サーバーが `pace` を付ける） */
+internal fun paceLine(board: JsonObject, row: JsonObject): String {
+    val pace = row.at("pace").int() ?: return ""
+    val v = row.at("value").num()?.toInt() ?: return ""
+    if (pace <= v) return ""
+    return "このままなら年間${pace}${LEADER_UNITS[board.at("id").str()] ?: ""}のペース。"
+}
 
 /** タイトルの値を文の中で読める形に（.531 / 2.15 / 12本 / 8個） */
 private fun leaderValue(board: JsonObject, row: JsonObject): String {

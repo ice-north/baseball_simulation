@@ -157,8 +157,10 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         else buildString {
             append("首位は${T}（${top.wins}勝${top.losses}敗）。")
             append(if (g2 == 0.0) "${S}がゲーム差なしで並ぶ。" else "2位の${S}が${gap(g2)}差で追う。")
-            if (league == "A") append("最下位の${view.teamShort(last.team)}は2部降格の危機にある。")
-            else append("優勝すれば1部へ昇格する。")
+            if (league == "A") {
+                // ⚠ 降格が決まったら「危機」とは書かない（下のマジックの文が「降格が決定」と書く）
+                if (view.races.none { it.kind == "relegated" && it.team == last.team }) append("最下位の${view.teamShort(last.team)}は2部降格の危機にある。")
+            } else append("優勝すれば1部へ昇格する。")
         }
         val title = when {
             ended -> "${name}、${T}が首位で終える"
@@ -167,7 +169,16 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
             league == "B" -> pen.pick(listOf("昇格争い ${T}が先頭", "1部昇格へ ${T}が一歩リード"), 30 + league.hashCode())
             else -> pen.pick(listOf("${name}首位は${T}", "${T}が${name}首位 ${S}追う"), 30 + league.hashCode())
         }
-        articles += FrontPage.Article("${name}戦線", title, body, LINK_GAMES)
+        // マジックと決定（この部のもの）
+        val races = view.races.filter { it.league == league }.mapNotNull { raceText(it, view::teamShort) }
+        // ⚠ 見出しにするのは上の決着（1位・昇格）だけ。残留・降格の決定は本文に回す
+        val decided = view.races.firstOrNull { it.league == league && it.clinched && it.kind in setOf("first", "promotion") }?.let { raceText(it, view::teamShort) }
+        articles += FrontPage.Article(
+            "${name}戦線",
+            decided?.head ?: title,
+            body + races.joinToString("") { "${it.head}。" },
+            LINK_GAMES,
+        )
     }
     // 連勝・連敗（1面に出した球団以外）
     val headTeams = story?.g?.let { setOf(it.home, it.away) }.orEmpty()
@@ -193,6 +204,33 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         }
         articles += FrontPage.Article("監督たちの戦い", "${humans.size}人の監督、それぞれの現在地", lines.joinToString("、") + "。", LINK_GAMES)
     }
+    // 記録（最新の試合の日に届いた節目。リーグ全体）
+    if (view.phase?.kind !in OFF_PHASES) {
+        val day = view.results.lastOrNull()?.date
+        val hits = milestonesOn(view, day)
+        hits.firstOrNull()?.let { m ->
+            articles += FrontPage.Article(
+                "記録",
+                if (hits.size == 1) "${view.teamShort(m.team)}・${m.name}、${m.label}" else "${m.name}が${m.label} 節目の記録が${hits.size}つ",
+                milestoneBody(hits, view::teamShort),
+                LINK_GAMES,
+            )
+        }
+    }
+    // 引退（年度更新のあと。リーグ全体の大物から）
+    if (view.phase?.kind in OFF_PHASES && view.chronicle.retired.isNotEmpty()) {
+        val gone = view.chronicle.retired
+        articles += FrontPage.Article(
+            "引退",
+            "${view.teamShort(gone[0].team)}・${gone[0].name}がユニフォームを脱ぐ",
+            retiredBody(gone, view::teamShort),
+            LINK_GAMES,
+        )
+    }
+    // 球界の外から（甲子園・独立リーグ日本一決定戦。その日から30日）
+    recentWorld(view).forEach { w ->
+        worldText(w, view::teamShort)?.let { t -> articles += FrontPage.Article(if (w.kind == "koshien") "甲子園" else "日本一決定戦", t.head, t.body, LINK_GAMES) }
+    }
     // タイトル戦線（打率・本塁打・勝利の先頭）
     val boards = raw?.at("leaders").list().mapNotNull { it.obj() }
     val leadersLine = listOf("avg" to "打率", "homeruns" to "本塁打", "wins" to "勝利").mapNotNull { (id, label) ->
@@ -207,7 +245,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         articles += FrontPage.Article(
             "タイトル戦線",
             first?.let { "本塁打王争い ${it.at("name").str()}が先頭" } ?: "タイトル争い、序盤の主役は",
-            leadersLine.joinToString("、") + "でトップに立つ。",
+            leadersLine.joinToString("、") + "でトップに立つ。" + (first?.let { r -> boards.firstOrNull { it.at("id").str() == "homeruns" }?.let { paceLine(it, r) } }?.let { p -> if (p.isEmpty()) "" else "本塁打の${first.at("name").str()}は$p" } ?: ""),
             LINK_GAMES,
         )
     }

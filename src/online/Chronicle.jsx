@@ -1,0 +1,208 @@
+import React from 'react';
+import TeamRoster from './TeamRoster.jsx';
+import { Page } from './Page.jsx';
+import { teamLabel, teamShort } from './gameText.js';
+import { raceText, milestoneText, worldText } from './chronicleText.js';
+
+// ============================================================
+// 球団史・記録（PC）。年表・歴代記録・引退した人・節目、リーグの話題。
+//
+// ⚠ いしだ依頼（2026-11-09）「リアリティを出す」の、試合の数字を変えない部分。
+//    数字はサーバーが作る（`server/chronicle.mjs`）。画面は並べるだけ。
+// ⚠ 文はアプリ（`mobile/.../Chronicle.kt`）と同じにすること（`chronicleText.js`）。
+// ⚠ 自球団もサーバーから読み直す（`TeamRoster` の `always`）。球団史はビューに載せていない。
+// ============================================================
+
+function Seasons({ seasons }) {
+  if (!seasons?.length)
+    return <p>まだ終わったシーズンがありません。1年目を終えると、ここに年ごとの成績が並びます。</p>;
+  return (
+    <table className="online-standings online-chronicle-table">
+      <thead>
+        <tr>
+          <th>年</th>
+          <th>所属</th>
+          <th>順位</th>
+          <th>成績</th>
+          <th>できごと</th>
+        </tr>
+      </thead>
+      <tbody>
+        {seasons.map((s) => (
+          <tr key={s.year}>
+            <th>{s.year}年</th>
+            <td>{s.league || '—'}</td>
+            <td>{s.rank ? `${s.rank}位` : '—'}</td>
+            <td>
+              {s.wins != null ? `${s.wins}勝${s.losses}敗${s.draws ? `${s.draws}分` : ''}` : '—'}
+            </td>
+            <td>
+              {[s.champion && 'プレーオフ優勝', s.move, ...(s.titles || [])].filter(Boolean).join('・') || ''}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function Records({ records }) {
+  if (!records?.length) return <p>記録がまだありません。</p>;
+  return (
+    <div className="online-leaders">
+      {records.map((r) => (
+        <div key={r.stat} className="online-leader-box">
+          <h4>{r.label}</h4>
+          <p className="online-chronicle-sub">シーズン最多</p>
+          <ol>
+            {r.season.map((x, i) => (
+              <li key={`s:${i}`} className={x.active ? 'online-own-text' : ''}>
+                <span className="online-leader-rank" data-rank={i + 1}>{i + 1}</span>
+                <span className="online-leader-name">
+                  {x.name}
+                  <small>{x.year}年{x.current ? '（今季）' : ''}</small>
+                </span>
+                <span className="online-leader-value">{x.value}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="online-chronicle-sub">球団通算</p>
+          <ol>
+            {r.career.map((x, i) => (
+              <li key={`c:${i}`} className={x.active ? 'online-own-text' : ''}>
+                <span className="online-leader-rank" data-rank={i + 1}>{i + 1}</span>
+                <span className="online-leader-name">
+                  {x.name}
+                  {x.active && <small>現役</small>}
+                </span>
+                <span className="online-leader-value">{x.value}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Retired({ list }) {
+  if (!list?.length) return <p>この球団から引退した選手はまだいません。</p>;
+  return (
+    <div className="online-news-list">
+      {list.map((r, i) => (
+        <article key={i}>
+          <b>
+            {r.year}年 {r.name}（{r.age}歳）{r.hallOfFame ? ' 殿堂入り' : ''}
+          </b>
+          <span>
+            {[r.seasons ? `在籍${r.seasons}年` : null, r.line, r.secondCareer && `→ ${r.secondCareer}`]
+              .filter(Boolean)
+              .join('　')}
+          </span>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function Milestones({ list, showTeam = false }) {
+  if (!list?.length) return <p>まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。</p>;
+  return (
+    <div className="online-news-list">
+      {list.map((m, i) => (
+        <article key={i}>
+          <b>
+            {m.month}月{m.day}日 {m.name}
+            {showTeam && <small>（{teamShort(m.team)}）</small>}
+          </b>
+          <span>{milestoneText(m)}</span>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+/** リーグの話題（マジック・節目・裏の大会）。ホームの横に置く */
+export function LeagueTopics({ view }) {
+  const races = (view.races || []).map((r) => raceText(r, teamShort)).filter(Boolean);
+  // ⚠ 年をまたいでも残す（PCは「話題」の一覧なので、紙面のように日付で切らない）。年を見出しに添える
+  const world = (view.chronicle?.world || []).map((w) => worldText(w, teamShort));
+  const milestones = view.chronicle?.milestones || [];
+  if (!races.length && !world.some(Boolean) && !milestones.length) return null;
+  return (
+    <section className="online-card">
+      <h2>リーグの話題</h2>
+      {races.length > 0 && (
+        <div className="online-news-list">
+          {races.map((t, i) => (
+            <article key={`r:${i}`}>
+              <b>{t.head}</b>
+              <span>{t.body}</span>
+            </article>
+          ))}
+        </div>
+      )}
+      {milestones.length > 0 && (
+        <>
+          <h3>最近の節目</h3>
+          <Milestones list={milestones.slice(0, 5)} showTeam />
+        </>
+      )}
+      {world.some(Boolean) && (
+        <>
+          <h3>球界の外から</h3>
+          <div className="online-news-list">
+            {world.map((t, i) => t && (
+              <article key={`w:${i}`}>
+                <b>
+                  {view.chronicle.world[i].year}年 {t.head}
+                </b>
+                <span>{t.body}</span>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+export default function Chronicle({ view }) {
+  return (
+    <TeamRoster view={view} always>
+      {(shown, selector) => {
+        const c = shown.chronicle || {};
+        return (
+          <Page
+            title="球団史・記録"
+            sub={`${teamLabel(shown.teamName)}の年ごとの成績と、このリーグでの歴代記録。記録はリーグを始めてからのものです。`}
+            actions={<div className="online-team-selector">{selector}</div>}
+          >
+            <section className="online-card">
+              <h2>年表</h2>
+              <Seasons seasons={c.seasons} />
+            </section>
+            <section className="online-card">
+              <h2>歴代記録</h2>
+              <Records records={c.records} />
+            </section>
+            <div className="online-board">
+              <div className="online-board-main">
+                <section className="online-card">
+                  <h2>節目の記録</h2>
+                  <Milestones list={c.milestones} />
+                </section>
+              </div>
+              <div className="online-board-side">
+                <section className="online-card">
+                  <h2>引退した選手</h2>
+                  <Retired list={c.retired} />
+                </section>
+              </div>
+            </div>
+          </Page>
+        );
+      }}
+    </TeamRoster>
+  );
+}

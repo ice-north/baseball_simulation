@@ -1,6 +1,13 @@
 import './engine-bootstrap.mjs';
 import { schedulePlayoffReplay, PLAYOFF_REPLAY } from './playoffReplay.mjs';
 import {
+  recordMilestones,
+  recordKoshien,
+  recordGrandChampionship,
+  recordRetirements,
+  annotateHistory,
+} from './chronicle.mjs';
+import {
   TEAMS_DATA,
   LEAGUE_SETTINGS,
   initializeTeamsForCount,
@@ -1440,8 +1447,22 @@ function resolvePhase(league, now) {
       awards: clone(league.season.frozenAwards || {}),
       playoffChampion: getPlayoffChampion(league.season.schedule, PLAYOFF_REPLAY),
     });
+    // その年の部分け（昇降格の前）。球団史の「1部2位」に使う
+    annotateHistory(league.history.at(-1), league.teams, null);
+    // 引退した人の記録の鍵（年度更新で名簿から消えるので、先に引いておく）
+    const retireKeys = new Map();
+    for (const name of league.season.settings.teamNames)
+      for (const p of TEAMS_DATA[name]?.players || [])
+        if (p.onlinePlayerId) retireKeys.set(`${name}:${p.name}`, p.onlinePlayerId);
+    const retireYear = league.season.year;
+    const retireTeams = [...league.season.settings.teamNames];
     const result = advanceToNextYear(league.season, TEAMS_DATA, {
       playedTeamNames: league.season.settings.teamNames,
+    });
+    recordRetirements(league, result.retirements, {
+      year: retireYear,
+      teamNames: retireTeams,
+      keys: retireKeys,
     });
     for (const key of Object.keys(TEAMS_DATA)) delete TEAMS_DATA[key];
     Object.assign(TEAMS_DATA, result.updatedTeams);
@@ -1457,6 +1478,7 @@ function resolvePhase(league, now) {
       league.teams,
       league.history.at(-1)?.standings || [],
     );
+    annotateHistory(league.history.at(-1), league.teams, movements);
     if (movements.length)
       league.notices.unshift({
         type: 'promotion',
@@ -1609,19 +1631,21 @@ function advanceOneDay(league, key, now) {
     const restoreRotations = league.season.settings.teamNames
       .filter((name) => playingTeams.has(name))
       .map((name) => prepareDailyLineup(TEAMS_DATA[name], name));
-    let season;
+    let season, played;
     try {
-      season = simulateScheduledGamesOnDate(
+      ({ data: season, results: played } = simulateScheduledGamesOnDate(
         league.season,
         // ⚠ 観戦記録は既定で残さない（容量）。`ONLINE_RECORD_REPLAY=1` で有効
         createRecorder(league, TEAMS_DATA, {
           replay: process.env.ONLINE_RECORD_REPLAY === '1',
         }),
         PLAYOFF_REPLAY,
-      ).data;
+      ));
     } finally {
       for (const restore of restoreRotations) restore();
     }
+    // 節目の記録（通算100安打など）。記録（`league.records`）は試合の中で書かれている
+    recordMilestones(league, played || [], oldDate);
     slimStoredResults(season);
     season = progressDate(season, 1);
     simulateParallelWorldDate(oldDate);
@@ -1651,7 +1675,7 @@ function advanceOneDay(league, key, now) {
     const { month, day, year } = season.currentDate;
     generateBackgroundTournaments(season.currentDate);
     if (month === 8 && day >= 15 && !season._koshienDone) {
-      simulateKoshien(season.year);
+      recordKoshien(league, simulateKoshien(season.year), season.currentDate);
       season._koshienDone = true;
     }
     if (month === 10 && day >= 21 && !season.grandChampionship?.generated) {
@@ -1666,6 +1690,7 @@ function advanceOneDay(league, key, now) {
         );
         if (gc) {
           autoPlayGrandChampionship(gc);
+          recordGrandChampionship(league, gc, champion, season.currentDate);
           if (league.records?.seasons?.[season.year])
             league.records.seasons[season.year].grandChampionshipExcluded =
               true;

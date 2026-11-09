@@ -39,6 +39,10 @@ data class LeagueView(
     val lineup: JsonObject? = null,
     val phase: Phase? = null,
     val pendingPack: JsonObject? = null,
+    /** 優勝・昇格・残留のマジックと決定（server/chronicle.mjs leagueRaces）。古いサーバーには無い */
+    val races: List<Race> = emptyList(),
+    /** 節目の記録・引退・裏の大会（server/chronicle.mjs chronicleView）。古いサーバーには無い */
+    val chronicle: ChronicleView = ChronicleView(),
 )
 
 @Serializable

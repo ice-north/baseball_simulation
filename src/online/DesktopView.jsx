@@ -1,3 +1,4 @@
+import Chronicle from './Chronicle.jsx';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Results,
@@ -62,6 +63,7 @@ const NAV = [
     items: [
       ['players', '選手成績'],
       ['careers', '通算成績'],
+      ['chronicle', '球団史・記録'],
       ['ranking', '能力ランキング'],
       ['games', '試合結果'],
     ],
@@ -484,6 +486,7 @@ export default function DesktopView(props) {
         </Page>
       )}
       {current === 'careers' && <CareerStats view={view} />}
+      {current === 'chronicle' && <Chronicle view={view} />}
       {current === 'ranking' && <AbilityRanking view={view} />}
       {current === 'players' && (
         <TeamRoster view={view}>

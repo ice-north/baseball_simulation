@@ -4107,3 +4107,22 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 2px 14px;
   margin: 0;
 }
+
+/* --- 年代記（球団史・マジック・ペース） --------------------------------- */
+.online-move.is-race {
+  color: #f2d27a;
+}
+.online-leader-pace {
+  display: block;
+  font-size: 10px;
+  color: #9fb0c4;
+  text-align: right;
+}
+.online-chronicle-sub {
+  margin: 6px 0 2px;
+  font-size: 11px;
+  color: #9fb0c4;
+}
+.online-chronicle-table td:last-child {
+  text-align: left;
+}
