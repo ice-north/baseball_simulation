@@ -27,8 +27,10 @@ const pickColumns = (source, select) =>
   Object.fromEntries(
     select.split(',').map((item) => {
       const [alias, expr] = item.includes(':') ? item.split(':') : [item, item];
-      const [column, key] = expr.split('->');
-      const value = key === undefined ? source[column] : source[column]?.[key.replace(/^"|"$/g, '')];
+      // `列->"キー"->キー` のように何段でもたどる
+      const [column, ...keys] = expr.split('->');
+      let value = source[column];
+      for (const key of keys) value = value?.[key.replace(/^"|"$/g, '')];
       return [alias, value ?? null];
     }),
   );
@@ -254,9 +256,15 @@ await store.transaction((bundle) => {
   };
 });
 downloads.length = 0;
+controlSelects.length = 0;
 assert.equal((await store.readPlayerInfo('a', 1)).name, '参照選手1');
 assert.equal((await store.readGames('a', {})).count, 1);
 assert.equal((await store.readGameInfo('a', 1, 1)).homeScore, 1);
+// ⚠ 記録の読み出しで全員のビュー（select=*）を運ばない。要るのは索引と自分の球団名・年度だけ
+assert.ok(
+  controlSelects.length > 0 && controlSelects.every((sel) => sel !== '*'),
+  `記録の読み出しで全員のビューを読んでいる: ${controlSelects.join(' / ')}`,
+);
 assert.ok(
   downloads.length > 0 &&
     downloads.every((path) => path.startsWith('archives/')),
@@ -338,6 +346,19 @@ assert.equal(row.views._records.games[1].path, archived.games[1].path);
   });
   assert.deepEqual(row.views._records, before, '索引の作り直しを省いても前の索引が残る');
   assert.equal(objects.size, uploads, '索引を作り直さないので新しい記録を上げない（世界一式の差し替えのみ）');
+}
+// 命令の返事に載せたビューには、公開した世代が押される（端末は次の読み直しでビューを取り直さずに済む）
+{
+  const replied = await store.transaction((bundle) => {
+    bundle.league.revision++;
+    return { value: { ok: true, view: { teamName: 'A' } }, archiveUnchanged: true };
+  });
+  assert.equal(replied.view.viewGeneration, row.generation, '返事のビューに公開した世代が無い');
+  const plain = await store.transaction((bundle) => {
+    bundle.league.revision++;
+    return { value: { ok: true }, archiveUnchanged: true };
+  });
+  assert.deepEqual(plain, { ok: true }, 'ビューの無い返事に世代を足している');
 }
 const oldArchivePath = row.views._records.players.path;
 store.archiveCache.clear();

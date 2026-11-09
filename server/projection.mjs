@@ -22,6 +22,8 @@ import {
   playerPeriods,
   storedGame,
   gameSummary,
+  decisionRefs,
+  slimGame,
   statisticsContext,
 } from './recordedViews.mjs';
 import { recordForPlayer } from './recordedStats.mjs';
@@ -420,7 +422,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       away: g.away,
       homeScore: g.result.homeScore,
       awayScore: g.result.awayScore,
-      decisions: g.result.decisions,
+      decisions: decisionRefs(g.result.decisions),
     })),
     // ⚠ ホームに出す**自球団の次の6試合**。リーグ全体の一覧（`upcoming`）とは
     //    別物。試合結果の画面はリーグ全体を使うので、そちらを絞らないこと。
@@ -623,21 +625,32 @@ export function projectPlayerInfo(bundle, userId, id, context) {
     ),
   };
 }
+/** 試合一覧の1ページの数（画面の既定） */
+const GAMES_PAGE = 6;
+/**
+ * 1回で返せる数の上限。⚠ アプリのホームは連勝・対戦成績のために自球団の今季の試合を読むが、
+ *    6試合ずつ最大8回に分けて順に読んでおり、紙面が出るまで待たされた。1シーズン（自球団）が入る数にする
+ */
+const GAMES_PAGE_MAX = 200;
 export function projectGames(
   bundle,
   userId,
-  { year, page = 0, scope = 'own' } = {},
+  { year, page = 0, scope = 'own', size = GAMES_PAGE } = {},
 ) {
   const l = bundle.league,
     member = l?.members.find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
   year = Number(year || l.season.year);
   page = Number(page);
+  size = Number(size);
   requireOnline(
     Number.isSafeInteger(year) &&
       year > 0 &&
       Number.isSafeInteger(page) &&
       page >= 0 &&
+      Number.isSafeInteger(size) &&
+      size >= 1 &&
+      size <= GAMES_PAGE_MAX &&
       ['own', 'league'].includes(scope),
     '試合一覧の指定が不正です',
   );
@@ -664,8 +677,8 @@ export function projectGames(
     year,
     page,
     count: all.length,
-    size: 6,
-    games: all.slice(page * 6, page * 6 + 6),
+    size,
+    games: all.slice(page * size, page * size + size),
   };
 }
 export function projectGameInfo(bundle, userId, id, year) {
@@ -683,7 +696,7 @@ export function projectGameInfo(bundle, userId, id, year) {
   requireOnline(Number.isSafeInteger(year) && year > 0, '年度の指定が不正です');
   const game = storedGame(l, id, year);
   requireOnline(game, '試合記録が見つかりません', 404);
-  const result = structuredClone(game);
+  const result = structuredClone(slimGame(game));
   if (result.replay?.appliedPlans) {
     const ownTeam = l.members.find((m) => m.userId === userId).teamName;
     result.replay.appliedPlan = result.replay.appliedPlans[ownTeam] || null;

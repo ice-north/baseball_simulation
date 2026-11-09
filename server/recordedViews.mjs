@@ -307,6 +307,26 @@ export function playerPeriods(
   }
   return clone(periods);
 }
+/**
+ * 勝ち・負け・セーブ・ホールドの投手を、id と名前だけにする。
+ * ⚠ 試合の記録には投手の選手まるごと（能力・成績・経歴まで）が入っており、試合1つで約4KBあった。
+ *    画面が使うのは名前だけなので、渡すとき（一覧・詳細・索引）に削る。記録そのものは変えない
+ */
+const pitcherRef = (p) =>
+  p && typeof p === 'object' ? { id: p.id ?? null, name: p.name ?? null } : p;
+export function decisionRefs(decisions) {
+  if (!decisions || typeof decisions !== 'object') return decisions;
+  return Object.fromEntries(
+    Object.entries(decisions).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? value.map(pitcherRef) : pitcherRef(value),
+    ]),
+  );
+}
+/** 画面へ渡す試合（勝敗投手を削る）。記録の本体は変えずに写しを返す */
+export function slimGame(game) {
+  return game?.decisions ? { ...game, decisions: decisionRefs(game.decisions) } : game;
+}
 export function gameSummary(game) {
   return {
     gameId: game.gameId,
@@ -315,7 +335,7 @@ export function gameSummary(game) {
     away: game.away,
     homeScore: game.homeScore ?? game.result?.homeScore,
     awayScore: game.awayScore ?? game.result?.awayScore,
-    decisions: game.decisions || game.result?.decisions,
+    decisions: decisionRefs(game.decisions || game.result?.decisions),
   };
 }
 export function storedGame(league, id, year) {

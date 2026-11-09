@@ -138,8 +138,12 @@ class AppViewModel internal constructor(
     private val refreshLock = Mutex()
 
     // ⚠ init（起動時の読み込み）より前に置く。後ろに置くと、読み込みが走ったあとで初期値に戻される
-    /** 手元のビューの世代（サーバーが公開のたびに上げる）。起動直後は分からないので null（全部読む） */
-    private var viewGeneration: Long? = null
+    /**
+     * 手元のビューの世代（サーバーが公開のたびに上げる）。null なら次は全部読む。
+     * ⚠ 起動直後も、端末に残したビューの世代から始める（残したビューの中に入っている）。以前は起動のたびに
+     *    null から始めて、何も変わっていなくてもビューをまるごと取り直していた
+     */
+    private var viewGeneration: Long? = raw?.get("viewGeneration")?.jsonPrimitive?.longOrNull
 
     /**
      * 読むだけの窓口の答えを覚えておく（同じ画面を開き直すたびに取りに行かない）。
@@ -386,7 +390,8 @@ class AppViewModel internal constructor(
     private fun applyView(text: String) {
         view = parseView(text)
         raw = parseRaw(text)
-        // ⚠ 指示の返事に載ったビューには世代が無い（公開の前に作るため）。そのときは null にして、次は全部読む
+        // 指示の返事に載ったビューにも、公開した世代が入っている（サーバーが押す）。
+        // 古いサーバーの返事には無いので、そのときは null にして次は全部読む
         viewGeneration = raw?.get("viewGeneration")?.jsonPrimitive?.longOrNull
         store.viewJson = text
     }
