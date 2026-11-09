@@ -34,7 +34,7 @@ console.log('場面できた');
 const server = spawn('node', ['server/dev.mjs'], { env: { ...process.env, ONLINE_DATA_FILE: file, ONLINE_DISABLE_TIMER: '1' }, stdio: 'inherit' });
 const vite = spawn('npx', ['vite', '--port', '3000', '--strictPort'], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 6000));
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
   await page.goto('http://localhost:3000/online');

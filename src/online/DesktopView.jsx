@@ -99,6 +99,7 @@ const TITLES = {
   today: 'ホーム',
   players: '選手成績',
   careers: '通算成績',
+  chronicle: '球団史・記録',
   ranking: '能力ランキング',
   games: '試合結果',
   lineup: 'スタメン設定',
