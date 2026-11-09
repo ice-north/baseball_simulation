@@ -140,6 +140,10 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
   for (let phase = 0; phase < 2; phase++)
     for (const user of ['a', 'b']) {
       const defaults = await service.defaults(user, sessions[user]);
+      // ⚠ 標準案は芯だけで作れる（世界・記録を読まない）。全体を読んで作ったものと同じ
+      assert.equal(store.lastReadMode, 'light', '標準案のために世界まるごとを読んでいる');
+      const wholeService = new LeagueService({ read: () => store.read() }, { local: true, adminId: 'a', members: [] });
+      assert.deepEqual(defaults, await wholeService.defaults(user, sessions[user]), '芯だけで作った標準案が全体のときと違う');
       await send(user, 'submit', {
         phaseId: defaults.phaseId,
         plan: defaults.plan,

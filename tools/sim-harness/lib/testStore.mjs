@@ -40,6 +40,18 @@ export class MemoryStore {
     );
     return assembleBundle(JSON.parse(stored.core), stored.order, parts);
   }
+  // 本番（SupabaseStore.readLight）と同じく、読むだけの処理に芯だけを渡す（世界・記録は番人）
+  async readLight() {
+    const stored = memory.get(this.path);
+    if (stored === undefined || typeof stored === 'string' || process.env.SIM_HARNESS_WHOLE_STORE === '1') {
+      this.lastReadMode = 'full';
+      return { bundle: await this.read(), touched: () => null };
+    }
+    const refs = Object.fromEntries(Object.keys(stored.parts).map((name) => [name, {}]));
+    const run = assembleLight(JSON.parse(stored.core), stored.order, {}, refs);
+    this.lastReadMode = 'light';
+    return { bundle: run.bundle, touched: () => run.tracker.touched };
+  }
   transaction(fn, { full = false } = {}) {
     const result = this.queue.then(async () => {
       const whole = process.env.SIM_HARNESS_WHOLE_STORE === '1';

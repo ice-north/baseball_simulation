@@ -607,8 +607,22 @@ export class LeagueService {
     return result;
   }
   async defaults(userId, sessionId) {
+    // ⚠ **まず芯だけで作る**（`readLight`。世界・記録は読まない）。標準案はリーグの球団と手続きの
+    //    候補しか見ないので、たいていはそれで足りる。世界に触れたら全体を読んでやり直す
+    //    （以前は毎回世界まるごとを読み、手続きの画面を開くたびに数秒待った）
+    if (this.store.readLight) {
+      const light = await this.store.readLight();
+      try {
+        const result = await this.defaultsFrom(light.bundle, userId, sessionId);
+        if (!light.touched()) return result;
+      } catch (error) {
+        if (!light.touched()) throw error;
+      }
+    }
+    return this.defaultsFrom(await this.store.read(), userId, sessionId);
+  }
+  async defaultsFrom(bundle, userId, sessionId) {
     // 候補一覧に対する純粋な提案。エンジンの共有世界には書き込まない。
-    const bundle = await this.store.read();
     const member = bundle.league?.members.find((m) => m.userId === userId);
     requireOnline(
       member && bundle.league.phase,

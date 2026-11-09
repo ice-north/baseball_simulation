@@ -1,6 +1,7 @@
 import { SupabaseStore } from './storage/supabaseStore.mjs';
 import { LeagueService } from './leagueService.mjs';
 import { createHandler } from './http.mjs';
+import { cachedAuthenticate } from './authCache.mjs';
 import { requireOnline, OnlineError } from '../src/online/shared.js';
 
 /**
@@ -90,14 +91,15 @@ export function productionHandler() {
   handler = createHandler(service, {
     cronSecret,
     allowStep: service.allowStep,
-    authenticate: async (header) => {
+    // ⚠ 同じトークンの照会はしばらく覚えて使い回す（読み込みのたびの往復を省く。`authCache.mjs`）
+    authenticate: cachedAuthenticate(async (header) => {
       requireOnline(
         /^Bearer [^ ]+$/.test(header || ''),
         'ログインしてください',
         401,
       );
       return (await auth('user', { headers: { Authorization: header } })).id;
-    },
+    }),
     signIn: async (body) => {
       requireOnline(
         typeof body?.email === 'string' && typeof body?.password === 'string',
