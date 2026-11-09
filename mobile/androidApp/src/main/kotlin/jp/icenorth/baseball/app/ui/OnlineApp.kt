@@ -68,10 +68,11 @@ enum class Tab(val label: String, val icon: ImageVector) {
 fun OnlineApp(model: AppViewModel) {
     val snackbar = remember { SnackbarHostState() }
     // 失敗とお知らせは画面下に出す（ログイン画面では画面内に出す）
-    LaunchedEffect(model.message) {
+    // ⚠ 鍵は文言ではなく通し番号（同じ文言が続いても2回目を出す）
+    LaunchedEffect(model.messageSerial) {
         model.message?.let { snackbar.showSnackbar(it); model.message = null }
     }
-    LaunchedEffect(model.error, model.auth) {
+    LaunchedEffect(model.errorSerial, model.auth) {
         if (model.auth != null) model.error?.let { snackbar.showSnackbar(it); model.error = null }
     }
     if (model.auth == null) {

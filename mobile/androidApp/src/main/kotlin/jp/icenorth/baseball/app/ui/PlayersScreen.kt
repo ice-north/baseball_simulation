@@ -36,6 +36,7 @@ import jp.icenorth.baseball.shared.BATTING_GROUPS
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.PITCHING_GROUPS
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.careerRoster
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.defaultSortColumn
 import jp.icenorth.baseball.shared.int
@@ -49,7 +50,6 @@ import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
 
 private enum class PlayersMode(val label: String) { Season("選手成績"), Career("通算成績"), Ranking("能力ランキング") }
 
@@ -119,16 +119,8 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     }
     val source: List<JsonObject>? = if (needsRead) loaded else raw.at("roster").list().mapNotNull { it.obj() }
     // 通算は通算の数字を表が読む形に移す（Web 版 careerRoster と同じ）。記録の無い選手は出さない
-    val roster = source?.let { list ->
-        if (!career) list else list.mapNotNull { p ->
-            val c = p["career"].obj() ?: return@mapNotNull null
-            buildJsonObject {
-                p.forEach { (k, v) -> put(k, v) }
-                c["seasonStats"]?.let { put("seasonStats", it) }
-                c["performance"]?.let { put("performance", it) }
-            }
-        }
-    }
+    // ⚠ 通算はサーバーの期間の一覧（`periods` の id=career）から読む（careerRoster。以前の `career` の項目はもう無い）
+    val roster = source?.let { list -> if (!career) list else careerRoster(list) }
     var batting by rememberSaveable { mutableStateOf(true) }
     var groupId by rememberSaveable(batting) { mutableStateOf("overview") }
     var sortId by rememberSaveable(batting, career) { mutableStateOf<String?>(null) }

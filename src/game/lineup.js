@@ -67,15 +67,10 @@ export function ensureCompleteLineup(team, useDH = false) {
   //    打順を外す（`selectStarterFromRotation`）ので、打順に入れたままだと
   //    その枠と守備位置が空き、8人で戦うことになっていた（空いた打席は
   //    1人目の選手が代わりに立ち、1試合7打席になる）。外した枠は控えで埋める。
-  const rotationStarters = team.pitchingRotation?.starters || [];
-  const startIndex = team.pitchingRotation?.currentStarterIndex || 0;
   // ⚠ 先発ローテの選手は**投手登録でなくてよい**（オンラインの二刀流。野手を
   //    ローテに入れられる）。登録で絞ると、ローテの野手を飛ばして別の投手が投げる
-  const canStart = canStartPlayer;
-  const nextStarterId = useDH
-    ? [...rotationStarters.slice(startIndex), ...rotationStarters.slice(0, startIndex)]
-      .find(id => canStart(active.get(id)))
-    : undefined;
+  // ⚠ 試合側（`selectStarterFromRotation`）も同じ `nextRotationStarterId` で先発を決める
+  const nextStarterId = useDH ? nextRotationStarterId(team) : undefined;
   for (const entry of source) {
     const player = active.get(entry.playerId);
     const order = entry.battingOrder;

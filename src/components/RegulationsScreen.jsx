@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations } from '../season/regulationSettings.js';
-import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
+import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 
 const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
@@ -34,6 +34,11 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
     let adjustedGames = newD * roundsPerOpponent;
     if (adjustedGames < newD) adjustedGames = newD;
     if (adjustedGames > 150) adjustedGames = Math.floor(150 / newD) * newD;
+    // レギュラーシーズンに入りきらない試合数は選べない（1リーグ3球団の130試合以上など）
+    const fitting = getValidSingleLeagueGameCounts(newCount, 150);
+    if (fitting.length > 0 && !fitting.includes(adjustedGames)) {
+      adjustedGames = fitting.filter(v => v <= adjustedGames).pop() ?? fitting[0];
+    }
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -151,8 +156,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
                   ));
                 }
                 const d = Math.max(1, tc - 1);
-                const options = [];
-                for (let i = 1; d * i <= 150; i++) options.push(d * i);
+                const options = getValidSingleLeagueGameCounts(tc, 150);
                 return options.map(v => (
                   <option key={v} value={v}>{v}試合（各{v / d}戦）</option>
                 ));

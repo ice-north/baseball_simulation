@@ -272,8 +272,11 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     // 編集中の案。保存済みの提出があればそれ、無ければ標準案（defaults）から始める
     val draft = model.phaseDraft?.takeIf { it.phaseId == phaseId }
     var failure by remember(phaseId) { mutableStateOf<String?>(null) }
+    // 「読み直す」を押した回数。⚠ 標準案の読み込みに失敗したあとは、ほかの鍵（手続き・提出・下書きの有無）が
+    //    変わらないことが多いので、これを鍵に入れないと読み直さず「標準案を準備しています…」のまま止まる
+    var attempt by remember(phaseId) { mutableStateOf(0) }
     // ⚠ 下書きを捨てた（null にした）ときも読み直すよう、draft == null も鍵に入れる
-    LaunchedEffect(phaseId, submission, draft == null) {
+    LaunchedEffect(phaseId, submission, draft == null, attempt) {
         val current = model.phaseDraft?.takeIf { it.phaseId == phaseId }
         if (current != null && (current.dirty || current.base == (submission ?: JsonNull))) return@LaunchedEffect
         val plan = submission?.get("plan").obj()
@@ -298,7 +301,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     if (failure != null) {
         Section {
             Text("読み込めませんでした: $failure", color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = { model.phaseDraft = null; failure = null; model.reload(pull = true) }) { Text("読み直す") }
+            OutlinedButton(onClick = { model.phaseDraft = null; failure = null; attempt += 1; model.reload(pull = true) }) { Text("読み直す") }
         }
         return
     }

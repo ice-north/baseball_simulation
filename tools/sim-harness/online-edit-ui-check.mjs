@@ -85,6 +85,8 @@ async function scene({
     staleDefaults,
     payloads: [],
     types: [],
+    rejected: [],
+    checkRevision: false,
     hold: false,
     release: () => {},
   };
@@ -119,6 +121,24 @@ async function scene({
       };
     } else if (action === 'command') {
       const payload = route.request().postDataJSON().payload;
+      // 本物のサーバーと同じく版を照合する（`checkRevision` のときだけ）
+      if (
+        state.checkRevision &&
+        route.request().postDataJSON().revision !== state.view.revision
+      ) {
+        state.rejected.push({
+          type: route.request().postDataJSON().type,
+          round: payload?.round,
+        });
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: '他の操作で更新されました。最新状態を読み直してください',
+            code: 'revision',
+          }),
+        });
+      }
       state.payloads.push(payload);
       state.types.push(route.request().postDataJSON().type);
       signal();
@@ -316,6 +336,35 @@ try {
   retry.release();
   await retry.page.getByText('保存しました', { exact: true }).waitFor();
   assert.equal(await retry.page.locator('.online-edit-notice').count(), 0);
+  // ⚠ **キャンプのクールも、版のずれだけなら最新の版で1回だけ送り直す**。
+  //    版はリーグ全体で1つなので、毎正時の進行や他の参加者の操作だけで
+  //    「他の操作で更新されました」になっていた。サーバーはクール番号を照合して
+  //    同じクールを2回走らせないので、送り直しても二重には積まれない
+  retry.hold = false;
+  retry.checkRevision = true;
+  retry.view.revision += 5; // 画面の知らない進行
+  const sentBefore = retry.payloads.length;
+  await retry.page
+    .getByRole('button', { name: '第1クール練習を実行', exact: true })
+    .click();
+  await retry.page
+    .getByText('処理中です。画面を閉じずにお待ちください…', { exact: true })
+    .waitFor({ state: 'hidden' });
+  assert.equal(
+    await retry.page.getByRole('alert').count(),
+    0,
+    '版のずれだけでキャンプのクールが断られた',
+  );
+  assert.deepEqual(
+    retry.rejected,
+    [{ type: 'campRound', round: 1 }],
+    '古い版で1回断られていない',
+  );
+  assert.deepEqual(
+    retry.payloads.slice(sentBefore).map((x) => x.round),
+    [1],
+    '送り直しで同じクール番号を送っていない',
+  );
   await retry.context.close();
 
   const stale = await scene({ staleDefaults: true });
@@ -453,7 +502,7 @@ try {
   await news.context.close();
   assert.deepEqual(errors, []);
   console.log(
-    'online-edit-ui-check PASS（配布HTML・標準案の再取得/世代検証・送信中入力・スマホ確認・一覧縮小 / APIはfixture）',
+    'online-edit-ui-check PASS（配布HTML・標準案の再取得/世代検証・送信中入力・スマホ確認・一覧縮小・キャンプのクールの版ずれの送り直し / APIはfixture）',
   );
 } finally {
   await browser.close();

@@ -26,6 +26,14 @@ class CampGainsTest {
     }
 
     @Test
+    fun tiesAreOrderedByIdAsTextLikeTheWeb() {
+        // Web 版は同点を String(id).localeCompare で並べる（"10" が "9" より前）
+        val players = listOf(obj("""{"id":9,"name":"九"}"""), obj("""{"id":10,"name":"十"}"""), obj("""{"id":100,"name":"百"}"""))
+        val gains = obj("""{"9":{"batting.meet":1},"10":{"batting.power":1},"100":{"batting.eye":1}}""")
+        assertEquals(listOf("十", "百", "九"), campGainRows(gains, players).map { it.player.at("name").str() })
+    }
+
+    @Test
     fun playersWithOnlyAnEventAreListed() {
         val rows = campGainRows(obj("{}"), roster, obj("""{"103":["フォーム改造成功 サイド"]}"""))
         assertEquals(listOf("鈴木"), rows.map { it.player.at("name").str() })

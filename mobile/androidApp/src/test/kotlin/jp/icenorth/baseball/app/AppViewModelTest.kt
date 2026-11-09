@@ -91,6 +91,77 @@ class AppViewModelTest {
         assertTrue(SessionStore(app).viewJson.orEmpty().contains("\"revision\":2"))
     }
 
+    @Test fun pullToRefreshWhileAQuietReloadIsRunningReadsAgain() {
+        val quietStarted = CompletableDeferred<Unit>()
+        val releaseQuiet = CompletableDeferred<Unit>()
+        var views = 0
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> when (++views) {
+                    1 -> VIEW_1
+                    2 -> {
+                        quietStarted.complete(Unit)
+                        releaseQuiet.await()
+                        VIEW_1
+                    }
+                    else -> VIEW_2
+                }
+                else -> "{}"
+            }
+        }
+        login()
+        model.reload(quiet = true)
+        until { quietStarted.isCompleted }
+        // 静かな読み直しの通信中に引っ張って更新しても、無反応にならない
+        model.reload(pull = true)
+        assertTrue("引っ張って更新の印が出ない", model.refreshing)
+        releaseQuiet.complete(Unit)
+        until { !model.refreshing }
+        assertEquals("静かな読み直しのあとに読み直していない", 3, views)
+        assertEquals(2, model.view?.revision)
+    }
+
+    @Test fun commandThatSucceededIsReportedEvenIfTheReloadAfterItFails() {
+        var views = 0
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> if (++views == 1) VIEW_1 else throw java.io.IOException("電波が無い")
+                // 返事にビューが載っていない（読み直しが要る）
+                "command" -> """{"ok":true}"""
+                else -> "{}"
+            }
+        }
+        login()
+        var done: JsonObject? = null
+        model.command("rename", JsonObject(emptyMap()), done = "名前を変えました") { done = it }
+        until { !model.busy }
+        // 指示はサーバーで済んでいるので、成功の知らせと onDone は出す。読み直しの失敗は別に伝える
+        assertNotNull("指示の成功が呼ぶ側に伝わらない", done)
+        assertEquals("名前を変えました", model.message)
+        assertTrue("読み直しの失敗が伝わらない: ${model.error}", model.error.orEmpty().contains("最新の状態を読み込めませんでした"))
+        assertNotNull(model.auth)
+        assertEquals(2, views)
+    }
+
+    @Test fun theSameNoticeTwiceIsAnnouncedTwice() {
+        create { "{}" }
+        // 画面は通し番号を鍵に出す。同じ文言が続いても番号は上がる（2回目を落とさない）
+        model.message = "保存しました"
+        val first = model.messageSerial
+        model.message = "保存しました"
+        assertEquals(first + 1, model.messageSerial)
+        // 消しただけでは上がらない（出し直さない）
+        model.message = null
+        assertEquals(first + 1, model.messageSerial)
+        model.error = "失敗"
+        val failed = model.errorSerial
+        model.error = "失敗"
+        assertEquals(failed + 1, model.errorSerial)
+        assertEquals("失敗", model.error)
+    }
+
     @Test fun refreshThatStartedBeforeLogoutCannotRestoreTheSession() {
         val refreshStarted = CompletableDeferred<Unit>()
         val releaseRefresh = CompletableDeferred<Unit>()
