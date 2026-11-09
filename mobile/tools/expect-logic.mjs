@@ -1,7 +1,7 @@
 // アプリの共通部（Kotlin）に写した計算が Web 版と同じ答えを出すかの検査用に、期待値を書き出す。
 //   node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json
 import fs from 'node:fs';
-import { resolveTraining, playerWish, describeMood } from '../../src/season/trainingPolicy.js';
+import { resolveTraining, playerWish, describeMood, recommendedPolicy } from '../../src/season/trainingPolicy.js';
 import { menuFitsPlayer, subMenuFitsPlayer } from '../../src/season/campTraining.js';
 import { CAMP_MENUS, CAMP_SUB_MENUS } from '../../src/online/shared.js';
 
@@ -24,6 +24,7 @@ for (const direction of ['sharpen', 'balanced', 'patch'])
       camp[`${direction}:${phase}:${p.id}`] = [clampMenu(r.main, p), clampSub(r.sub, p), describeMood(p, direction, phase).tone];
     }
 const wish = Object.fromEntries(roster.map((p) => [p.id, playerWish(p)]));
+const recommended = Object.fromEntries(roster.map((p) => [p.id, recommendedPolicy(p)]));
 // トライアウト: 名簿の後ろ12人を候補、残りを名簿として扱う
 const candidates = roster.slice(12);
 const have = roster.slice(0, 12);
@@ -34,7 +35,7 @@ const added = addToPlan(ranked, candidates, count, have, ranked.at(-1));
 const benched = benchFromPlan(ranked, candidates, count, have, picks[0]);
 const moved = moveInPlan(ranked, candidates, count, have, picks.at(-1), 0);
 const summary = planSummary(ranked, candidates, count, have);
-const text = JSON.stringify({ camp, wish, tryout: { ranked, picks, added, benched, moved, blocking: summary.blocking, warnings: summary.warnings } });
+const text = JSON.stringify({ camp, wish, recommended, tryout: { ranked, picks, added, benched, moved, blocking: summary.blocking, warnings: summary.warnings } });
 // --check: 書き出し済みの期待値が今の Web 版の答えと同じか（CI で、Web 版だけ直したときに気づく）
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/logic-expected.json', import.meta.url);

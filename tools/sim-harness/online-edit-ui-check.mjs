@@ -370,6 +370,18 @@ try {
   await mobile.page
     .getByText('選手ごとの練習はPCで選べます', { exact: false })
     .waitFor();
+  // ⚠ 既定の決め方は**おすすめ**（方針は選手ごと）。全員同じ方針にすると
+  //    育成方針・段階が出る
+  assert.equal(
+    await mobile.page
+      .getByRole('button', { name: '⚔️ 長所を伸ばす', exact: true })
+      .count(),
+    0,
+    'おすすめなのに全員の育成方針が出ている',
+  );
+  await mobile.page
+    .getByRole('button', { name: '全員同じ方針', exact: true })
+    .click();
   await mobile.page
     .getByRole('button', { name: '⚔️ 長所を伸ばす', exact: true })
     .click();
@@ -379,6 +391,7 @@ try {
   await mobile.page.getByText('保存しました', { exact: true }).waitFor();
   assert.equal(mobile.payloads[0].round, 1, '何クール目かを送る');
   assert.equal(mobile.payloads[0].policy.direction, 'sharpen');
+  assert.equal(mobile.payloads[0].policy.mode, 'team');
   // ⚠ 携帯でも**選手ごとの割り当てを送る**（方針から決まる既定）。送らないと
   //    サーバー側の既定と食い違う
   assert.deepEqual(Object.keys(mobile.payloads[0].main), ['1']);
