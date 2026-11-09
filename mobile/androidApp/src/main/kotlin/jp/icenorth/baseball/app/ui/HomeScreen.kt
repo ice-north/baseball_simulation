@@ -44,6 +44,15 @@ import kotlinx.serialization.json.JsonObject
 import jp.icenorth.baseball.shared.GameResult
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.buildFrontPage
+import jp.icenorth.baseball.shared.buildNationalPage
+import jp.icenorth.baseball.shared.BackIssue
+import jp.icenorth.baseball.shared.backIssueKey
+import jp.icenorth.baseball.shared.Player
+import jp.icenorth.baseball.shared.OnlineJson
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.items
 import jp.icenorth.baseball.shared.appVersionArticle
 import jp.icenorth.baseball.shared.APP_DOWNLOAD_URL
 import jp.icenorth.baseball.shared.LINK_APP_UPDATE
@@ -84,6 +93,18 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         val last = view.results.lastOrNull { it.home == team || it.away == team }
         var lastGame by remember { mutableStateOf<JsonObject?>(null) }
         var history by remember { mutableStateOf<Pair<List<GameResult>, Boolean>?>(null) }
+        // 次の相手の名簿（地元紙の「警戒警報」）。読めなければ記事を出さないだけ
+        val next = view.nextGames.firstOrNull { it.home == team || it.away == team }
+        val oppName = next?.let { if (it.home == team) it.away else it.home }
+        var opponent by remember(oppName) { mutableStateOf<List<Player>?>(null) }
+        LaunchedEffect(oppName, view.revision) {
+            val name = oppName ?: return@LaunchedEffect
+            opponent = runCatching {
+                model.read("team", mapOf("team" to name)).at("roster").list().mapNotNull { e ->
+                    runCatching { OnlineJson.decodeFromJsonElement(Player.serializer(), e) }.getOrNull()
+                }
+            }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }.getOrNull()
+        }
         // ⚠ 読み終わるまで紙面を作り直さない（詳細の無い紙面を出してから差し替えると、見出しが一瞬で変わって見えた）
         var ready by remember(last?.gameId) { mutableStateOf(last?.gameId == null) }
         LaunchedEffect(last?.gameId, view.year) {
@@ -117,22 +138,33 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         val app = remember(model.latestApp) { appVersionArticle(model.appBuild, model.latestApp) }
         var shown by remember { mutableStateOf<FrontPage?>(null) }
         val built = if (ready) {
-            remember(view, model.raw, lastGame, history, tip, alerts, app) {
+            remember(view, model.raw, lastGame, history, tip, alerts, app, opponent) {
                 buildFrontPage(
                     view, model.raw, lastGame, alerts,
                     column = FrontPage.Article("コラム", tip.title, tip.body, LINK_TIPS),
                     history = history?.first,
                     historyComplete = history?.second == true,
                     app = app,
+                    opponent = opponent,
                 )
             }
         } else null
         SideEffect { if (built != null) shown = built }
-        val page = built ?: shown
-        if (page == null) {
+        val localPage = built ?: shown
+        if (localPage == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("紙面を刷っています…") }
             return@PullToRefreshBox
         }
+        // 全国紙（リーグ全体を中立に）。題字の下の行は地元紙と同じ
+        val national = remember(localPage, view, model.raw) { buildNationalPage(view, model.raw, localPage) }
+        val paper = FrontPage.Paper.entries.firstOrNull { it.name == model.homePaper } ?: FrontPage.Paper.Local
+        val page = if (paper == FrontPage.Paper.National) national else localPage
+        // バックナンバー（その日の両紙の見出しを端末に残す）
+        LaunchedEffect(localPage.headline, national.headline) {
+            backIssueKey(view)?.let { key -> model.recordBackIssue(BackIssue(key, localPage.issue, localPage.headline, national.headline)) }
+        }
+        var showBack by remember { mutableStateOf(false) }
+        if (showBack) BackNumberDialog(model.backIssues, localPage.title) { showBack = false }
         val style = homeStyleOf(model.homeStyle)
         val uriHandler = LocalUriHandler.current
         LazyColumn(
@@ -142,12 +174,15 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         ) {
             // ⚠ ホームは記事1枚にまとめる（いしだの指定）。球団名・順位・進行の残り時間・手続きの知らせも紙面の中に置く。
             //    数字の表（順位表・タイトル争い・リーグ便り）は試合タブ
+            item(key = "paper") {
+                PaperTabs(paper, localPage.title) { model.changeHomePaper(it.name) }
+            }
             item(key = "page") {
                 HomePage(
                     style = style,
                     page = page,
                     nextAdvanceAt = view.nextAdvanceAt,
-                    menu = { HomeMenu(model, style, onRename, onOpenTips) },
+                    menu = { HomeMenu(model, style, onRename, onOpenTips, onOpenBack = { showBack = true }) },
                     onLink = { link ->
                         when (link) {
                             LINK_LINEUP -> onOpenLineup()
@@ -163,9 +198,45 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
     }
 }
 
+/** 地元紙と全国紙の切り替え（紙面の上に小さく。どの見た目でも同じ） */
+@Composable
+private fun PaperTabs(paper: FrontPage.Paper, localTitle: String, onChange: (FrontPage.Paper) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FrontPage.Paper.entries.forEach { p ->
+            FilterChip(
+                selected = p == paper,
+                onClick = { onChange(p) },
+                label = { Text(if (p == FrontPage.Paper.Local) "地元紙　$localTitle" else "全国紙　NEXT STAGE") },
+            )
+        }
+    }
+}
+
+/** 紙面のバックナンバー（新しい日から。両紙の1面の見出し） */
+@Composable
+private fun BackNumberDialog(issues: List<BackIssue>, localTitle: String, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { TextButton(onClick = onClose) { Text("閉じる") } },
+        title = { Text("紙面のバックナンバー") },
+        text = {
+            if (issues.isEmpty()) Text("まだありません。ホームを開くたびに、その日の1面の見出しを残します。")
+            else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(issues.asReversed(), key = { it.key }) { b ->
+                    Column {
+                        Text("${b.key / 10000}年目 ${b.issue}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("$localTitle：${b.local}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text("NEXT STAGE：${b.national}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+    )
+}
+
 /** 紙面の右上のメニュー（更新・名前の変更・TIPS・ホームの見た目・ログアウト） */
 @Composable
-private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit) {
+private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, onOpenBack: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "メニュー") }
@@ -173,6 +244,7 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
             DropdownMenuItem(text = { Text("最新に更新") }, onClick = { open = false; model.reload(pull = true) })
             DropdownMenuItem(text = { Text("球団名・名前を変える") }, onClick = { open = false; onRename() })
             DropdownMenuItem(text = { Text("ゲームのTIPS") }, onClick = { open = false; onOpenTips() })
+            DropdownMenuItem(text = { Text("紙面のバックナンバー") }, onClick = { open = false; onOpenBack() })
             HorizontalDivider()
             Text("ホームの見た目", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             HomeStyle.entries.forEach { s ->

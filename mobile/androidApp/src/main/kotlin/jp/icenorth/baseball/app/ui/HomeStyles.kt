@@ -89,6 +89,11 @@ private fun categoryColor(kicker: String): Color = when (kicker) {
     "順位の行方" -> Color(0xFF3B82F6)
     "タイトル戦線" -> Color(0xFFF59E0B)
     "ベンチ裏" -> Color(0xFFA855F7)
+    "警戒警報" -> Color(0xFFEF4444)
+    "ひと言" -> Color(0xFF14B8A6)
+    "プロ注目" -> Color(0xFFEAB308)
+    "1部戦線", "2部戦線" -> Color(0xFF3B82F6)
+    "連勝・連敗", "監督たちの戦い" -> Color(0xFFF97316)
     "ドラフト", "トライアウト", "トレード", "昇格・降格" -> Color(0xFF06B6D4)
     else -> Color(0xFF94A3B8)
 }
@@ -102,8 +107,8 @@ private fun WebNewsPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composab
         // 上の帯（サイト名・球団・残り時間）
         Column(Modifier.fillMaxWidth().background(WebAccent, RoundedCornerShape(10.dp)).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("NEXT STAGE", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                Text(" ニュース", color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(page.title, color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Text(if (page.paper == FrontPage.Paper.Local) " 地元ニュース" else " ニュース", color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.White) { menu() }
             }
             Text(listOfNotNull(page.team, page.standing).joinToString("　"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -143,6 +148,7 @@ private fun WebNewsPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composab
                 Text(page.headline, fontWeight = FontWeight.Black, fontSize = 21.sp, lineHeight = 27.sp)
                 page.subhead?.let { Text(it, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 page.lead?.let { Text(it, fontSize = 13.sp, lineHeight = 20.sp) }
+                if (page.box.isNotEmpty()) Text(page.box.joinToString("　") { (k, v) -> "$k $v" }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         // 見出しの一覧
@@ -224,6 +230,7 @@ private fun PlainPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composable
                 Text(page.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 page.subhead?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 page.lead?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                if (page.box.isNotEmpty()) Text(page.box.joinToString("　") { (k, v) -> "$k $v" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         page.articles.forEach { a ->

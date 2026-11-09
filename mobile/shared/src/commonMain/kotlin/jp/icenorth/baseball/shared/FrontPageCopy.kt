@@ -34,7 +34,41 @@ internal class GameFacts(
     /** 自球団で投げた投手（投げた順ではなくアウトの多い順） */
     val ourPitchers: List<PitcherLine>,
     val batters: List<BatterLine>,
+    /** 回ごとの得点（自球団 / 相手）。記録に無い古い試合は null */
+    val ourInnings: List<Int>? = null,
+    val theirInnings: List<Int>? = null,
+    /** 自球団が後攻か（回ごとの点差を正しい順で数えるため） */
+    val ourHome: Boolean = false,
+    val walkOff: Boolean = false,
+    /** 決勝打（勝った側が最後に勝ち越した打点）。自球団が勝った日だけ入れる */
+    val winningHit: WinningHit? = null,
+    /** 相手の決勝打（自球団が負けた日だけ） */
+    val theirWinningHit: WinningHit? = null,
 ) {
+    /** 半回ごとの、自球団から見た点差（表→裏の順）。記録が無ければ空 */
+    val diffs: List<Int>
+        get() {
+            val ours = ourInnings ?: return emptyList()
+            val theirs = theirInnings ?: return emptyList()
+            val (away, home) = if (ourHome) theirs to ours else ours to theirs
+            var a = 0
+            var h = 0
+            val out = mutableListOf<Int>()
+            for (i in 0 until maxOf(away.size, home.size)) {
+                away.getOrNull(i)?.let { a += it; out += if (ourHome) h - a else a - h }
+                home.getOrNull(i)?.let { h += it; out += if (ourHome) h - a else a - h }
+            }
+            return out
+        }
+    /** 一度でもリードされた（勝った日なら逆転勝ち） */
+    val trailed: Boolean get() = diffs.any { it < 0 }
+    /** 一度でもリードした（負けた日なら逆転負け） */
+    val led: Boolean get() = diffs.any { it > 0 }
+    /** 最大で何点差をひっくり返したか（勝った日） */
+    val maxDeficit: Int get() = -(diffs.minOrNull() ?: 0).coerceAtMost(0)
+    /** 先に点を取ったのは自球団か（0-0 なら null） */
+    val scoredFirst: Boolean? get() = diffs.firstOrNull { it != 0 }?.let { it > 0 }
+
     /** 1人で最後まで投げた */
     val complete: Boolean get() = ourPitchers.size == 1 && ourPitchers[0].outs >= 24
     val ace: PitcherLine? get() = ourPitchers.firstOrNull()
@@ -47,6 +81,10 @@ internal class GameFacts(
             val ours = teams[team].list().mapNotNull { it.obj() }
             if (ours.isEmpty()) return null
             val theirs = teams.keys.firstOrNull { it != team }?.let { teams[it].list().mapNotNull { p -> p.obj() } }
+            val ourHome = game.at("home").str() == team
+            val hit = game.at("winningHit").obj()?.let { h ->
+                h.at("name").str()?.let { WinningHit(h.at("team").str().orEmpty(), it, h.at("inning").int() ?: 0, h.at("homerun").bool() == true, h.at("hit").bool() == true, h.at("rbis").int() ?: 1) }
+            }
             fun List<JsonObject>.sum(group: String, key: String) = sumOf { it.at(group, key).num()?.toInt() ?: 0 }
             return GameFacts(
                 ourHits = ours.sum("batting", "hits"),
@@ -70,15 +108,37 @@ internal class GameFacts(
                         p.at("batting", "hits").num()?.toInt() ?: 0,
                         p.at("batting", "homeruns").num()?.toInt() ?: 0,
                         p.at("batting", "rbis").num()?.toInt() ?: 0,
+                        p.at("id").long(),
                     )
                 },
+                ourInnings = innings(game!!, ourHome).first,
+                theirInnings = innings(game!!, ourHome).second,
+                ourHome = ourHome,
+                walkOff = game.at("walkOff").bool() == true,
+                winningHit = hit?.takeIf { it.team == team },
+                theirWinningHit = hit?.takeIf { it.team != team },
             )
         }
     }
 }
 
+/** 試合の回ごとの得点（自球団, 相手）。記録に無ければ null */
+private fun innings(game: JsonObject, ourHome: Boolean): Pair<List<Int>?, List<Int>?> {
+    val ls = game.at("lineScore").obj() ?: return null to null
+    val home = ls.at("home").list().mapNotNull { it.int() }
+    val away = ls.at("away").list().mapNotNull { it.int() }
+    if (home.isEmpty() && away.isEmpty()) return null to null
+    return if (ourHome) home to away else away to home
+}
+
+/** 決勝打。[hit] は安打か（犠飛・押し出しは false）。[homerun] なら安打でもある */
+internal data class WinningHit(val team: String, val name: String, val inning: Int, val homerun: Boolean, val hit: Boolean, val rbis: Int) {
+    /** 「本塁打」「適時打」「犠飛など」を文で言い分ける */
+    val what: String get() = when { homerun -> "本塁打"; hit -> "適時打"; else -> "勝ち越しの打点" }
+}
+
 internal data class PitcherLine(val name: String, val outs: Int, val runs: Int, val strikeouts: Int)
-internal data class BatterLine(val name: String, val hits: Int, val hr: Int, val rbi: Int)
+internal data class BatterLine(val name: String, val hits: Int, val hr: Int, val rbi: Int, val id: Long? = null)
 
 /** 1試合の場面（見出しを選ぶ材料） */
 internal class Situation(
@@ -119,6 +179,13 @@ internal fun winHeadline(s: Situation, pen: Pen): String {
             "${me}投手陣 無安打リレーの快挙",
             "${opp}打線を無安打に ${me}完璧リレー",
         )
+        f?.walkOff == true -> f.winningHit.let { h ->
+            when {
+                h?.homerun == true -> listOf("${h.name}サヨナラ弾！ ${me}劇勝", "劇的 ${h.name}がサヨナラ本塁打", "${h.name}、サヨナラアーチで${opp}を沈める")
+                h?.hit == true -> listOf("${h.name}、サヨナラ打 ${me}劇的勝利", "${h.name}が決めた ${me}サヨナラ勝ち", "劇的 ${h.name}のサヨナラ打")
+                else -> listOf("${me}サヨナラ勝ち ${opp}を振り切る", "劇的 ${me}がサヨナラ勝ち", "${me}、${opp}にサヨナラ勝ち")
+            }
+        }
         s.theirs == 0 && f?.complete == true -> listOf(
             "${ace}完封 ${me}が${opp}を零封",
             "${ace}、圧巻の完封劇",
@@ -137,6 +204,17 @@ internal fun winHeadline(s: Situation, pen: Pen): String {
             "${me}ようやく白星 連敗ストップ",
             "待望の勝利 ${me}が連敗脱出",
             "${me}、${opp}を下し連敗に終止符",
+        )
+        f != null && f.trailed && f.maxDeficit >= 3 -> listOf(
+            "${me}、${f.maxDeficit}点差をひっくり返す",
+            "${me}大逆転勝ち ${f.maxDeficit}点差を跳ね返す",
+            "${me}執念の大逆転 ${opp}を下す",
+        )
+        f != null && f.trailed && s.diff <= 3 -> listOf(
+            "${me}逆転勝ち ${opp}を下す",
+            "${me}、逆転で${opp}を破る",
+            "${me}粘って逆転勝利",
+            "${me}、終盤に${opp}を逆転".takeIf { (f.winningHit?.inning ?: 0) >= 7 } ?: "${me}が逆転で白星",
         )
         s.ours >= 10 || s.diff >= 7 -> listOf(
             "${me}打線爆発 ${s.ours}点大勝",
@@ -233,6 +311,10 @@ internal fun loseHeadline(s: Situation, pen: Pen): String {
             "${me}、${opp}投手陣を打てず",
             "${me}ゼロ行進 ${opp}に零封",
         )
+        f?.walkOff == true -> f.theirWinningHit.let { h ->
+            if (h != null) listOf("${me}、${h.name}にサヨナラ${if (h.homerun) "弾" else "打"}浴びる", "${me}痛恨のサヨナラ負け", "${me}、${opp}にサヨナラ負け")
+            else listOf("${me}、サヨナラ負け", "${me}痛恨のサヨナラ負け", "${opp}にサヨナラ許す ${me}")
+        }
         s.brokenStreak >= 3 -> listOf(
             "${me}、連勝${s.brokenStreak}でストップ",
             "${me}の連勝止まる ${opp}に敗れる",
@@ -244,6 +326,11 @@ internal fun loseHeadline(s: Situation, pen: Pen): String {
             "${me}投手陣火だるま ${s.theirs}失点",
             "${me}、${opp}打線を止められず",
             "${me}大敗 ${s.ours}-${s.theirs}",
+        )
+        f != null && f.led && s.diff <= 3 -> listOf(
+            "${me}逆転負け ${opp}に屈す",
+            "${me}、リード守れず逆転負け",
+            "${me}痛い逆転負け",
         )
         (f?.ourErrors ?: 0) >= 2 -> listOf(
             "${me}守乱で自滅",
@@ -363,6 +450,18 @@ internal fun gameLead(s: Situation, dateText: String?, tone: FrontPage.Tone, rec
         else -> "${on}${s.me}は${s.place}で${s.opp}と対戦し、${score}で引き分けた。"
     }
     val f = s.facts
+    // 決勝打（勝った日）・相手の決勝打（負けた日）。サヨナラは大見出しで言っているので回だけ
+    val decisive = when {
+        f == null -> null
+        tone == FrontPage.Tone.Win && f.winningHit != null -> f.winningHit.let { h ->
+            if (f.walkOff) "${h.inning}回裏、${h.name}の${h.what}で試合を決めた。"
+            else pen.pick(listOf("${h.inning}回に${h.name}の${h.what}で勝ち越した。", "決勝点は${h.inning}回、${h.name}の${h.what}。"), 12)
+        }
+        tone == FrontPage.Tone.Lose && f.theirWinningHit != null -> f.theirWinningHit.let { h ->
+            pen.pick(listOf("${h.inning}回に${h.name}の${h.what}で勝ち越された。", "${h.inning}回、${h.name}に決勝の${h.what}を許した。"), 12)
+        }
+        else -> null
+    }
     val color = if (f == null) null else when {
         tone == FrontPage.Tone.Win && f.ourHits >= 10 -> pen.pick(listOf("打線は${f.ourHits}安打と振れていた。", "${f.ourHits}安打を放った打線が試合を決めた。"), 4)
         tone == FrontPage.Tone.Win && f.ourPitchers.size >= 3 -> pen.pick(listOf("投手陣は${f.ourPitchers.size}人の継投でつないだ。", "${f.ourPitchers.size}投手の継投が実った。"), 4)
@@ -372,7 +471,7 @@ internal fun gameLead(s: Situation, dateText: String?, tone: FrontPage.Tone, rec
         f.ourSteals >= 2 -> "足を使った攻め（${f.ourSteals}盗塁）も見せた。"
         else -> null
     }
-    return listOfNotNull(first, record, color).joinToString("")
+    return listOfNotNull(first, decisive, record, color).joinToString("")
 }
 
 /** 試合の無い時期の大見出しとリード（時期ごとに何通りか） */

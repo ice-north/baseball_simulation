@@ -613,6 +613,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
   // 試合状態の初期化
   let gameState = {
+    // 回ごとの得点（表＝away、裏＝home）。サヨナラの回は決まった時点までの得点
+    lineScore: { away: [], home: [] },
     inning: 1,
     isTopInning: true,
     outs: 0,
@@ -1954,6 +1956,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       batterId: batter.id, batterName: batter.name, pitcherId: pitcher.id, pitcherName: pitcher.name,
       offense: offenseTeam.name, defense: defenseTeam.name,
       inning: gameState.inning, pinchHit: batter.id !== scheduledBatterId,
+      scoreBefore: { ...gameState.score },
       throws: pitcher.physical?.throws || 'right',
       starter: pitcher.id === (defenseTeam === gameState.homeTeam ? homeStarter?.id : awayStarter?.id),
       pitches: 0, twoStrikes: false, fouls: 0, result: null,
@@ -2417,7 +2420,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
       // 盗塁死や暴投サヨナラ、球数上限の未完了打席は対戦打席へ加えない。
       const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts > 0;
-      observer.plateAppearance({ ...observed, delta, completed, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs) });
+      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs) });
     }
 
     // 先発投手のダメージポイント積算（先発のみに適用）
@@ -2453,6 +2456,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
     const inningLabel = `${gameState.inning}回${gameState.isTopInning ? '表' : '裏'}`;
     const offenseTeam = gameState.isTopInning ? gameState.awayTeam.name : gameState.homeTeam.name;
+    // 回ごとの得点（紙面の「逆転」「先制」に使う）。⚠ 乱数は引かない（記録するだけ）
+    const offenseKey = gameState.isTopInning ? 'away' : 'home';
+    const runsBeforeInning = gameState.score[offenseKey];
 
     // イニング開始時の失点を記録（イニング失点計算用）
     // 守備チーム = 攻撃チームの反対
@@ -2487,6 +2493,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       gameState.bases = [false, false, false];
     }
 
+    gameState.lineScore[offenseKey].push(gameState.score[offenseKey] - runsBeforeInning);
     // イニング終了処理
     if (gameState.isTopInning) {
       gameState.isTopInning = false;
@@ -3196,6 +3203,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     pitcherChanges: gameState.pitcherChanges,
     decisionLog: gameState.decisionLog,
     decisions,
+    lineScore: gameState.lineScore,
+    walkOff: !!gameState.walkOff,
     pitcherAppearances: gameState.pitcherAppearances
   };
 };

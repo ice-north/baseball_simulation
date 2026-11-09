@@ -71,6 +71,18 @@ fun FrontPageCard(
                 Text("手続きを開く →", fontSize = 12.sp, color = Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             }
         }
+        // 号外（ノーヒットノーラン・2桁連勝など）
+        if (page.extra) {
+            Text(
+                "号　外",
+                color = Color.White,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Black,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp).fillMaxWidth().background(Red).padding(vertical = 2.dp),
+            )
+        }
         // 大見出し
         page.kicker?.let {
             Text(
@@ -90,12 +102,24 @@ fun FrontPageCard(
             color = if (page.tone == FrontPage.Tone.Win) Red else Ink,
             modifier = Modifier.padding(top = 6.dp).clickable(onClick = onOpenGames),
         )
-        page.score?.let { ScoreLine(it) }
+        // 回ごとの得点があればスコアボード、無ければ得点だけ
+        page.lineScore?.let { LineScoreBoard(it) } ?: page.score?.let { ScoreLine(it) }
         page.subhead?.let {
             Text(it, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink, modifier = Modifier.padding(top = 6.dp))
         }
         page.lead?.let {
             Text("　$it", fontFamily = FontFamily.Serif, fontSize = 14.sp, lineHeight = 22.sp, color = Ink, modifier = Modifier.padding(top = 8.dp))
+        }
+        // 勝敗投手・本塁打の欄（新聞の小さな定型欄）
+        if (page.box.isNotEmpty()) {
+            Column(Modifier.padding(top = 6.dp)) {
+                page.box.forEach { (mark, text) ->
+                    Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(mark, color = Paper, fontSize = 10.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, modifier = Modifier.width(18.dp).background(Ink).padding(vertical = 1.dp))
+                        Text(text, fontSize = 12.sp, color = Ink, modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+            }
         }
         // 記事は2段に組む（最初の1本は全幅）
         if (page.articles.isNotEmpty()) {
@@ -129,9 +153,9 @@ private fun Masthead(page: FrontPage, nextAdvanceAt: String?, menu: @Composable 
     Row(verticalAlignment = Alignment.CenterVertically) {
         // ⚠ 題字は縮められるように（文字を大きくしている端末で、右のメニュー＝ログアウトや見た目の切り替えが押し出されないよう）
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Text("NEXT STAGE", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = 1.sp, color = Ink, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f, fill = false))
+            Text(page.title, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = 1.sp, color = Ink, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f, fill = false))
             Text(
-                "スポーツ",
+                page.badge,
                 color = Color.White,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Black,
@@ -171,6 +195,35 @@ private fun ScoreLine(score: FrontPage.Score) {
         Text("－", fontSize = 15.sp, color = InkSoft)
         Text("${score.homeScore}", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 26.sp, color = Ink)
         Text(score.home, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
+    }
+}
+
+/** スコアボード（回ごとの得点。サヨナラの回には x を付ける） */
+@Composable
+private fun LineScoreBoard(ls: FrontPage.LineScore) {
+    val innings = maxOf(9, ls.awayRuns.size, ls.homeRuns.size)
+    val cell = Modifier.width(17.dp)
+    Column(Modifier.padding(top = 8.dp).border(1.dp, Rule).padding(horizontal = 6.dp, vertical = 4.dp)) {
+        @Composable
+        fun line(name: String, runs: List<String>, total: String, bold: Boolean) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.width(44.dp))
+                runs.forEach { Text(it, fontSize = 12.sp, color = if (bold) Ink else InkSoft, textAlign = TextAlign.Center, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, modifier = cell) }
+                Text(total, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 15.sp, color = Ink, textAlign = TextAlign.End, modifier = Modifier.width(26.dp))
+            }
+        }
+        line("", (1..innings).map { "$it" }, "計", false)
+        line(ls.away, (0 until innings).map { ls.awayRuns.getOrNull(it)?.toString() ?: "" }, "${ls.awayRuns.sum()}", true)
+        // 後攻: 9回以降でやらなかった裏は x（勝っていて攻撃が無い）、サヨナラの回は「1x」
+        val home = (0 until innings).map { i ->
+            when {
+                i < ls.homeRuns.size && i == ls.homeRuns.size - 1 && ls.walkOff -> "${ls.homeRuns[i]}x"
+                i < ls.homeRuns.size -> "${ls.homeRuns[i]}"
+                i < ls.awayRuns.size -> "x"
+                else -> ""
+            }
+        }
+        line(ls.home, home, "${ls.homeRuns.sum()}", true)
     }
 }
 

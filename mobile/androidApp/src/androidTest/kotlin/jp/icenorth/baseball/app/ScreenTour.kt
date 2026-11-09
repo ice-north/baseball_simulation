@@ -118,9 +118,19 @@ class ScreenTour {
         pause(3000)
         val view = model.view!!
 
-        rule.runOnUiThread { model.changeHomeStyle("Paper") }
+        rule.runOnUiThread { model.changeHomeStyle("Paper"); model.changeHomePaper("Local") }
         pause()
         page("home", scrolls = 3)
+        // 全国紙（リーグ全体の紙面）
+        step("home-national") {
+            rule.runOnUiThread { model.changeHomePaper("National") }
+            pause(1500)
+            toTop()
+            page("home-national", scrolls = 2)
+            rule.runOnUiThread { model.changeHomePaper("Local") }
+            pause()
+            toTop()
+        }
         // ホームの見た目の切り替え（新聞風・ネットニュース風・通常。中身は同じ記事）
         listOf("Web" to "home-web", "Plain" to "home-plain").forEach { (style, name) ->
             step(name) {
@@ -134,6 +144,7 @@ class ScreenTour {
         pause()
         // ⚠ 下まで撮ったままだと題字のメニューが画面の外で押せず、続く「戻る」でアプリが閉じて以降が撮れなかった
         step("menu") { toTop(); rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); shot("home-menu"); back() }
+        step("back-issues") { toTop(); rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); pause(); click("紙面のバックナンバー"); shot("home-back-issues"); back() }
 
         when (stage) {
             "running" -> {

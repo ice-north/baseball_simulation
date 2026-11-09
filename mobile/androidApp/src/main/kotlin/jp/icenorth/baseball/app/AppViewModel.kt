@@ -94,6 +94,28 @@ class AppViewModel internal constructor(
         store.homeStyle = name
     }
 
+    /** ホームで開く新聞（地元紙・全国紙）。端末に覚える */
+    var homePaper by mutableStateOf(store.homePaper)
+        private set
+
+    fun changeHomePaper(name: String) {
+        homePaper = name
+        store.homePaper = name
+    }
+
+    /** 紙面のバックナンバー（古い順）。端末に覚える */
+    var backIssues by mutableStateOf(
+        store.backIssues?.let { runCatching { OnlineJson.decodeFromString<List<jp.icenorth.baseball.shared.BackIssue>>(it) }.getOrNull() }.orEmpty(),
+    )
+        private set
+
+    fun recordBackIssue(item: jp.icenorth.baseball.shared.BackIssue) {
+        if (backIssues.any { it == item }) return
+        val next = jp.icenorth.baseball.shared.addBackIssue(backIssues, item)
+        backIssues = next
+        store.backIssues = OnlineJson.encodeToString(next)
+    }
+
     /** 状況に応じたTIPSを最後に読んだときのTIPSの id。端末に覚える（[jp.icenorth.baseball.shared.hasUnreadTips]） */
     var seenSituationTips by mutableStateOf(store.seenSituationTips)
         private set

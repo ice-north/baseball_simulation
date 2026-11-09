@@ -185,6 +185,30 @@ export function ownUpcomingGames(schedule, ownTeam, size = 6) {
  * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
  *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
  */
+/**
+ * 球団ごとの今の連続（`{ 球団: { kind: 'W'|'L'|'D', count } }`）。今季の公式日程の終わった試合から数える。
+ * ⚠ 日程は日付順とは限らないので並べ直す（`ownRecentGames` と同じ並べ方）
+ */
+export function teamStreaks(schedule) {
+  const played = (schedule || [])
+    .filter((g) => g.date && g.result && g.home !== 'TBD' && g.away !== 'TBD')
+    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const streaks = {};
+  for (const g of played) {
+    const { homeScore: h, awayScore: a } = g.result;
+    for (const [team, mine, theirs] of [
+      [g.home, h, a],
+      [g.away, a, h],
+    ]) {
+      const kind = mine > theirs ? 'W' : mine < theirs ? 'L' : 'D';
+      const now = streaks[team];
+      streaks[team] =
+        now?.kind === kind ? { kind, count: now.count + 1 } : { kind, count: 1 };
+    }
+  }
+  return streaks;
+}
+
 export function ownRecentGames(schedule, ownTeam, size = 5) {
   const own = schedule
     .filter(
@@ -408,6 +432,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
         : {}),
     })),
     standings: l.season.standings,
+    // 球団ごとの今の連勝・連敗（全国紙の「○○、5連勝」）。引き分けは続きを切る
+    teamStreaks: teamStreaks(l.season.schedule),
     // ⚠ 各項目のベスト5。12球団×24人をなめるので**1回の投影で1度だけ**作る
     leaders: leagueLeaders(l, seasonStatsOf, labelOf),
     // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。

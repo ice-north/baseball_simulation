@@ -72,6 +72,7 @@ export function currentPlayerStats(
   const stats = season?.complete
     ? recordedStats(record) || emptyStats()
     : player.seasonStats;
+  const recent = recentForm(record);
   return {
     seasonStats: stats,
     performance: performanceFor(
@@ -79,6 +80,28 @@ export function currentPlayerStats(
       baseline,
       situationalCandidates(record, comparison),
     ),
+    ...(recent ? { recent } : {}),
+  };
+}
+/** 紙面の「最近好調」で見る試合数 */
+export const RECENT_GAMES = 5;
+/**
+ * 打者の最近の調子（紙面の「最近好調」「連続試合安打」）。今季の記録の試合から数える。
+ * - `games` / `atBats` / `hits` … 打数のあった直近 RECENT_GAMES 試合の合計
+ * - `hitStreak` … 連続試合安打（打数0の試合＝四球だけ等は数えず、途切れもしない）
+ * ⚠ 記録（`record.games`）は試合を終えた順に積まれている。打数が1つも無ければ null
+ */
+export function recentForm(record) {
+  const games = (record?.games || []).filter((g) => g.atBats > 0);
+  if (!games.length) return null;
+  const last = games.slice(-RECENT_GAMES);
+  let hitStreak = 0;
+  for (let i = games.length - 1; i >= 0 && games[i].hits > 0; i--) hitStreak++;
+  return {
+    games: last.length,
+    atBats: last.reduce((sum, g) => sum + g.atBats, 0),
+    hits: last.reduce((sum, g) => sum + g.hits, 0),
+    hitStreak,
   };
 }
 const combinedRecord = () => ({
