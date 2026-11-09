@@ -19,6 +19,7 @@ import {
   recordCampRound,
   validateCampRound,
   runCampRound,
+  campFallbackPlan,
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { TEAMS_DATA } from '../../src/teams-data.js';
@@ -253,6 +254,12 @@ function campWith(build) {
       players: { [target.id]: { direction: 'patch', phase: 'physique' } },
     }),
   );
+  // 締め切り: 何もしなかった人はおすすめ（画面の既定と同じ）、CPU球団は全員同じ
+  assert.equal(campFallbackPlan({ userId: 'a' }, { menu: 'standard', assignments: {} }).policy.mode, 'recommended');
+  assert.equal(campFallbackPlan(null, undefined).policy, undefined);
+  const submitted = { policy: { mode: 'team', direction: 'patch', phase: 'skill' }, players: { 1: { direction: 'sharpen', phase: 'skill' } } };
+  assert.deepEqual(campFallbackPlan({ userId: 'a' }, submitted).policy, submitted.policy, '提出した決め方が消えた');
+  assert.deepEqual(campFallbackPlan({ userId: 'a' }, submitted).players, submitted.players, '提出した上書きが消えた');
   for (const p of roster)
     assert.equal(
       moods[p.id],

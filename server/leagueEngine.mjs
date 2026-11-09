@@ -248,6 +248,22 @@ export function normalizeCampPolicy(policy) {
 }
 
 /**
+ * 自分で回していない球団に締め切りで当てるキャンプの指示（提出した案、無ければ既定）。
+ * ⚠ **何も実行・提出しなかった人は「おすすめ」**（画面の既定と同じ）。
+ *    既定を全員同じ方針のままにすると、画面ではおすすめと出ているのに
+ *    締め切りで「全体を伸ばす×技術」が回り、希望の違う選手の身が入らない。
+ *    CPU球団（`member` なし）はこれまでどおり（決め方なし＝全員同じ方針）
+ */
+export function campFallbackPlan(member, plan) {
+  return {
+    policy: plan?.policy || (member ? { mode: 'recommended' } : undefined),
+    players: plan?.players,
+    main: plan?.assignments,
+    sub: plan?.subAssignments,
+  };
+}
+
+/**
  * 選手ごとの方針の上書き（{ [id]: { direction, phase } }）。
  * ⚠ 自分の名簿の選手だけ・受け取れる方針だけ。
  */
@@ -1368,12 +1384,7 @@ function resolvePhase(league, now) {
       //    無ければ提出した案、それも無ければ標準
       const saved = member ? done[member.userId]?.plan : null;
       const plan = plans[name];
-      const rest = saved || {
-        policy: plan?.policy,
-        players: plan?.players,
-        main: plan?.assignments,
-        sub: plan?.subAssignments,
-      };
+      const rest = saved || campFallbackPlan(member, plan);
       for (let round = already; round < CAMP_ROUNDS; round += 1) {
         const result = runCampRound(league, name, rest);
         if (state) recordCampRound(state, result);
