@@ -31,9 +31,21 @@ object Commands {
     }
 
     /** キャンプの1クール。⚠ round は「次のクール」（実行済み＋1）。同じクールは2回走らない */
-    fun campRound(round: Int, direction: String, phase: String, main: Map<Long, String>, sub: Map<Long, String>): JsonObject = buildJsonObject {
+    fun campRound(
+        round: Int,
+        mode: String,
+        direction: String,
+        phase: String,
+        players: Map<Long, Wish>,
+        main: Map<Long, String>,
+        sub: Map<Long, String>,
+    ): JsonObject = buildJsonObject {
         put("round", round)
-        putJsonObject("policy") { put("direction", direction); put("phase", phase) }
+        putJsonObject("policy") { put("mode", mode); put("direction", direction); put("phase", phase) }
+        // 選手ごとの方針の上書き（「合わせる」）
+        putJsonObject("players") {
+            players.forEach { (id, w) -> putJsonObject(id.toString()) { put("direction", w.direction); put("phase", w.phase) } }
+        }
         putJsonObject("main") { main.forEach { (id, key) -> put(id.toString(), key) } }
         putJsonObject("sub") { sub.forEach { (id, key) -> put(id.toString(), key) } }
     }

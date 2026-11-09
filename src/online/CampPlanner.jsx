@@ -11,6 +11,7 @@ import {
   playerWish,
   describeMood,
   resolveTraining,
+  playerPolicy,
 } from '../season/trainingPolicy.js';
 import { POS } from './api.js';
 import { getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
@@ -82,6 +83,25 @@ export const clampSub = (key, player) =>
     : 'physique';
 
 const MOOD_TONE = { good: '意欲的', mid: '納得', bad: '身が入らない' };
+
+// 方針の決め方。⚠ 既定は**おすすめ**（球団で1つの方針だと、希望の違う選手が
+//    必ず「身が入らない」で残る。いしだ指摘: 一括指定が有効に見えない）
+export const CAMP_MODE_LABELS = {
+  recommended: 'おすすめ',
+  wish: '全員を希望どおり',
+  team: '全員同じ方針',
+};
+const CAMP_MODE_NOTES = {
+  recommended:
+    '本人の希望どおりにします。ただし技術が平凡な選手が「短所を埋める」を望むときは「長所を伸ばす」に変えます（段階は希望のままなので「納得」）。',
+  wish: '全員を本人の希望どおりにします（全員「意欲的」）。希望どおりが正解とは限りません。',
+  team: '全員に同じ方針を当てます。希望と違う選手は身が入りにくくなります。',
+};
+export const DEFAULT_CAMP_POLICY = {
+  mode: 'recommended',
+  direction: 'balanced',
+  phase: 'skill',
+};
 const grade = (v) => (typeof v === 'number' ? Math.round(v) : '—');
 
 /**
@@ -123,12 +143,16 @@ function PlayerRow({
   onSub,
   busy,
   policy,
+  onFitWish,
   gains = {},
 }) {
   const g = (key) => gains[key];
   const isPitcher = player.position === 'pitcher';
   const wish = useMemo(() => playerWish(player), [player]);
+  // ⚠ `policy` は**この選手に当てる方針**（`playerPolicy` の結果）
   const mood = describeMood(player, policy.direction, policy.phase);
+  const fits =
+    wish.direction === policy.direction && wish.phase === policy.phase;
   return (
     <tr>
       <th>
@@ -142,6 +166,17 @@ function PlayerRow({
       <td>{grade(player.personality?.mental)}</td>
       <td className={`online-mood is-${mood.tone}`}>
         {MOOD_TONE[mood.tone] || mood.label}
+        {/* ⚠ この選手だけ希望に合わせる（1人ずつ方針を変えられる） */}
+        {!fits && (
+          <button
+            className="online-camp-wish-fit"
+            disabled={busy}
+            title="この選手だけ本人の希望に合わせる"
+            onClick={() => onFitWish(player)}
+          >
+            合わせる
+          </button>
+        )}
       </td>
       <td>
         {player.physical?.throws === 'left' ? '左' : '右'}/
@@ -356,27 +391,36 @@ function CampGainsSummary({ camp, roster, finished }) {
 }
 
 /** 方針ごとの4クールの伸びの目安と、希望と噛み合う人数 */
-function CampPolicyGuide({ policy, roster }) {
-  const guide = CAMP_POLICY_GUIDE[`${policy.direction}:${policy.phase}`];
-  if (!guide) return null;
-  const moods = roster.map(
-    (p) => describeMood(p, policy.direction, policy.phase).tone,
-  );
+function CampPolicyGuide({ policy, roster, policyOf }) {
+  // ⚠ 伸びの目安は「全員同じ方針」のときだけ（選手ごとに方針が違うと1つに決まらない）
+  const guide =
+    policy.mode === 'team'
+      ? CAMP_POLICY_GUIDE[`${policy.direction}:${policy.phase}`]
+      : null;
+  const moods = roster.map((p) => {
+    const own = policyOf(p);
+    return describeMood(p, own.direction, own.phase).tone;
+  });
   const count = (tone) => moods.filter((t) => t === tone).length;
   const standard = policy.direction === 'balanced' && policy.phase === 'skill';
   return (
     <div className="online-camp-guide">
-      <p>
-        <strong>4クールでの伸びの目安（1人あたり）</strong>
-        <span>野手: {guide.fielder}</span>
-        <span>投手: {guide.pitcher}</span>
-      </p>
+      {guide && (
+        <p>
+          <strong>4クールでの伸びの目安（1人あたり）</strong>
+          <span>野手: {guide.fielder}</span>
+          <span>投手: {guide.pitcher}</span>
+        </p>
+      )}
       <p className="online-muted">
-        {standard
-          ? 'いまは標準（おまかせと同じ「全体を伸ばす×技術」）です。試合に効きやすいミート・制球が伸びます。'
-          : '標準（おまかせ）は「全体を伸ばす×技術」で、ミート・制球が伸びます。'}
-        基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。
-        希望と噛み合う選手: 意欲的 {count('good')}人・納得 {count('mid')}人・身が入らない {count('bad')}人。
+        {guide &&
+          (standard
+            ? 'いまは「全体を伸ばす×技術」です。試合に効きやすいミート・制球が伸びます。'
+            : '「全体を伸ばす×技術」なら、ミート・制球が伸びます。')}
+        {guide &&
+          '基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。'}
+        希望と噛み合う選手: 意欲的 {count('good')}人・納得 {count('mid')}
+        人・身が入らない {count('bad')}人。
         締め切りまでに回さなかったクールは、最後に指示した方針で自動で行われます。
       </p>
     </div>
@@ -430,8 +474,14 @@ export default function CampPlanner({
   const phaseId = view.phase?.id;
   const [policy, setPolicy] = useDraftState(
     phaseDraftName(phaseId, 'camp.policy'),
-    () => camp?.plan?.policy || { direction: 'balanced', phase: 'skill' },
+    () => camp?.plan?.policy || DEFAULT_CAMP_POLICY,
   );
+  // 選手ごとの方針の上書き（「合わせる」で1人ずつ希望へ）
+  const [overrides, setOverrides] = useDraftState(
+    phaseDraftName(phaseId, 'camp.players'),
+    () => camp?.plan?.players || {},
+  );
+  const policyOf = (p) => playerPolicy(p, policy, overrides);
   const [main, setMain] = useDraftState(
     phaseDraftName(phaseId, 'camp.main'),
     () => camp?.plan?.main || {},
@@ -440,29 +490,36 @@ export default function CampPlanner({
     phaseDraftName(phaseId, 'camp.sub'),
     () => camp?.plan?.sub || {},
   );
-  const mainOf = (p) =>
-    clampMenu(
-      main[p.id] || resolveTraining(p, policy.direction, policy.phase).main,
-      p,
-    );
-  const subOf = (p) =>
-    clampSub(
-      sub[p.id] || resolveTraining(p, policy.direction, policy.phase).sub,
-      p,
-    );
+  const trainingOf = (p) => {
+    const own = policyOf(p);
+    return resolveTraining(p, own.direction, own.phase);
+  };
+  const mainOf = (p) => clampMenu(main[p.id] || trainingOf(p).main, p);
+  const subOf = (p) => clampSub(sub[p.id] || trainingOf(p).sub, p);
   // ⚠ 方針を変えたら**割り当ても引き直す**。方針はやる気にも効くので、
   //    方針だけ変わって練習が前のままだと噛み合いが読めない
+  //    ⚠ 1人ずつの上書きも消す（決め方を選び直したら、全員その決め方に従う）
   const applyPolicy = (next) => {
     setPolicy(next);
+    setOverrides({});
     const nextMain = {};
     const nextSub = {};
     for (const p of roster) {
-      const r = resolveTraining(p, next.direction, next.phase);
+      const own = playerPolicy(p, next, {});
+      const r = resolveTraining(p, own.direction, own.phase);
       nextMain[p.id] = clampMenu(r.main, p);
       nextSub[p.id] = clampSub(r.sub, p);
     }
     setMain(nextMain);
     setSub(nextSub);
+  };
+  // この選手だけ本人の希望に合わせる（練習もその方針で引き直す）
+  const fitWish = (p) => {
+    const wish = playerWish(p);
+    setOverrides({ ...overrides, [p.id]: wish });
+    const r = resolveTraining(p, wish.direction, wish.phase);
+    setMain({ ...main, [p.id]: clampMenu(r.main, p) });
+    setSub({ ...sub, [p.id]: clampSub(r.sub, p) });
   };
   const applyAll = (key, isPitcherOnly) => {
     const next = { ...main };
@@ -479,6 +536,7 @@ export default function CampPlanner({
       command('campRound', {
         round: done + 1,
         policy,
+        players: overrides,
         main: Object.fromEntries(roster.map((p) => [p.id, mainOf(p)])),
         sub: Object.fromEntries(roster.map((p) => [p.id, subOf(p)])),
       }),
@@ -537,29 +595,40 @@ export default function CampPlanner({
           {/* ⚠ 選択肢が数個のものは**ボタンを並べる**（PC版の共通のルール。
               コンボボックスは開かないと何があるか分からない） */}
           <Choice
-            label="育成方針"
-            options={Object.fromEntries(
-              CAMP_DIRECTIONS.map((key) => [
-                key,
-                `${DIRECTIONS[key].icon} ${DIRECTIONS[key].name}`,
-              ]),
-            )}
-            value={policy.direction}
+            label="決め方"
+            options={CAMP_MODE_LABELS}
+            value={policy.mode || 'team'}
             disabled={busy || finished}
-            onChange={(direction) => applyPolicy({ ...policy, direction })}
+            onChange={(mode) => applyPolicy({ ...policy, mode })}
           />
-          <Choice
-            label="段階"
-            options={Object.fromEntries(
-              CAMP_PHASES.map((key) => [
-                key,
-                `${PHASES[key].icon} ${PHASES[key].name}`,
-              ]),
-            )}
-            value={policy.phase}
-            disabled={busy || finished}
-            onChange={(phase) => applyPolicy({ ...policy, phase })}
-          />
+          {(policy.mode || 'team') === 'team' && (
+            <>
+              <Choice
+                label="育成方針"
+                options={Object.fromEntries(
+                  CAMP_DIRECTIONS.map((key) => [
+                    key,
+                    `${DIRECTIONS[key].icon} ${DIRECTIONS[key].name}`,
+                  ]),
+                )}
+                value={policy.direction}
+                disabled={busy || finished}
+                onChange={(direction) => applyPolicy({ ...policy, direction })}
+              />
+              <Choice
+                label="段階"
+                options={Object.fromEntries(
+                  CAMP_PHASES.map((key) => [
+                    key,
+                    `${PHASES[key].icon} ${PHASES[key].name}`,
+                  ]),
+                )}
+                value={policy.phase}
+                disabled={busy || finished}
+                onChange={(phase) => applyPolicy({ ...policy, phase })}
+              />
+            </>
+          )}
           <span className="online-camp-bulk-all">全員に一括:</span>
           {menusFor(false)
             .filter(([key]) => !key.startsWith('intensive_'))
@@ -587,14 +656,21 @@ export default function CampPlanner({
             ))}
         </div>
         <p className="online-muted">
-          {DIRECTIONS[policy.direction]?.description}／
-          {PHASES[policy.phase]?.description}
+          {(policy.mode || 'team') === 'team' ? (
+            <>
+              {DIRECTIONS[policy.direction]?.description}／
+              {PHASES[policy.phase]?.description}
+            </>
+          ) : (
+            CAMP_MODE_NOTES[policy.mode]
+          )}
           {/* ⚠ 希望どおりが正解ではない。噛み合うとやる気が上がるだけ */}
-          　本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。
+          {'　'}本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。
+          意欲の欄の「合わせる」で、1人ずつ希望に合わせられます。
         </p>
         {/* ⚠ いしだ指摘: どれくらい伸びるのか・おまかせでいいのかが分からない。
             実測の目安と、希望と噛み合う人数を出す（`CAMP_POLICY_GUIDE`） */}
-        <CampPolicyGuide policy={policy} roster={roster} />
+        <CampPolicyGuide policy={policy} roster={roster} policyOf={policyOf} />
       </section>
       {/* ⚠ 携帯は表を出さない。23列は入らない。方針と実行だけで4クール回せる */}
       {compact && !finished && (
@@ -669,7 +745,8 @@ export default function CampPlanner({
                     main={mainOf(p)}
                     sub={subOf(p)}
                     busy={busy || finished}
-                    policy={policy}
+                    policy={policyOf(p)}
+                    onFitWish={fitWish}
                     gains={camp?.gains?.[p.id]}
                     onMain={(id2, key) => setMain({ ...main, [id2]: key })}
                     onSub={(id2, key) => setSub({ ...sub, [id2]: key })}

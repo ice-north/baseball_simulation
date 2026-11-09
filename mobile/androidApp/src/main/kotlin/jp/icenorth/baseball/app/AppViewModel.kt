@@ -10,6 +10,7 @@ import jp.icenorth.baseball.app.ui.TradeDraft
 import jp.icenorth.baseball.shared.AuthSession
 import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.PlanDraft
+import jp.icenorth.baseball.shared.Wish
 import jp.icenorth.baseball.shared.sanitizeWeights
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineApi
@@ -417,4 +418,14 @@ private fun parseRaw(raw: String): JsonObject? = runCatching { OnlineJson.parseT
 data class PhaseDraft(val phaseId: String, val plan: JsonObject, val base: JsonElement?, val dirty: Boolean)
 
 /** キャンプの方針と、選手ごとのメイン・サブ練習（未実行のクールの指示） */
-data class CampDraft(val phaseId: String, val direction: String, val phase: String, val main: Map<Long, String>, val sub: Map<Long, String>)
+data class CampDraft(
+    val phaseId: String,
+    val direction: String,
+    val phase: String,
+    val main: Map<Long, String>,
+    val sub: Map<Long, String>,
+    /** 決め方（recommended / wish / team）。⚠ 既定はおすすめ */
+    val mode: String = "recommended",
+    /** 選手ごとの方針の上書き（「合わせる」） */
+    val players: Map<Long, Wish> = emptyMap(),
+)

@@ -29,6 +29,9 @@ class LogicTest {
             val w = playerWish(p)
             assertEquals(expected.at("wish", "${p.pid}", "direction").str(), w.direction)
             assertEquals(expected.at("wish", "${p.pid}", "phase").str(), w.phase)
+            val r = recommendedPolicy(p)
+            assertEquals(expected.at("recommended", "${p.pid}", "direction").str(), r.direction)
+            assertEquals(expected.at("recommended", "${p.pid}", "phase").str(), r.phase)
         }
     }
 
