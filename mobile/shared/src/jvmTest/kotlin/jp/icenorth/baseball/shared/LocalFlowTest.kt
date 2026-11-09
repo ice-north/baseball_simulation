@@ -43,7 +43,7 @@ class LocalFlowTest {
                     for (round in done + 1..total) {
                         val main = roster.associate { it.pid to clampMenu(resolveTraining(it, "sharpen", "skill").main, it) }
                         val sub = roster.associate { it.pid to clampSub(resolveTraining(it, "sharpen", "skill").sub, it) }
-                        send("campRound", Commands.campRound(round, "sharpen", "skill", main, sub))
+                        send("campRound", Commands.campRound(round, "team", "sharpen", "skill", emptyMap(), main, sub))
                     }
                     assertEquals(total, raw().at("phase", "camp", "rounds").int() ?: total)
                 } else {

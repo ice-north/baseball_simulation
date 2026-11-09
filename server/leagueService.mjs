@@ -494,6 +494,7 @@ export class LeagueService {
                     assignments: plan.main,
                     subAssignments: plan.sub,
                     policy: plan.policy,
+                    players: plan.players,
                   },
                   ready: true,
                 },

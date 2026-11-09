@@ -78,7 +78,12 @@ import {
   subMenuFitsPlayer,
   SUB_TRAINING_MENUS,
 } from '../src/season/campTraining.js';
-import { moodMultiplier, resolveTraining } from '../src/season/trainingPolicy.js';
+import {
+  moodMultiplier,
+  resolveTraining,
+  playerPolicy,
+  CAMP_POLICY_MODES,
+} from '../src/season/trainingPolicy.js';
 import {
   getTeamStaffBonus,
   setStaffIdCounter,
@@ -236,7 +241,46 @@ export function normalizeCampPolicy(policy) {
     ? policy.direction
     : 'balanced';
   const phase = CAMP_PHASES.includes(policy?.phase) ? policy.phase : 'skill';
-  return { direction, phase };
+  // ⚠ 決め方（おすすめ・希望どおり・全員同じ）。**無ければ全員同じ**として
+  //    扱う（前の版の画面・保存した指示・CPU球団はこれまでどおり）
+  const mode = CAMP_POLICY_MODES.includes(policy?.mode) ? policy.mode : 'team';
+  return { mode, direction, phase };
+}
+
+/**
+ * 自分で回していない球団に締め切りで当てるキャンプの指示（提出した案、無ければ既定）。
+ * ⚠ **何も実行・提出しなかった人は「おすすめ」**（画面の既定と同じ）。
+ *    既定を全員同じ方針のままにすると、画面ではおすすめと出ているのに
+ *    締め切りで「全体を伸ばす×技術」が回り、希望の違う選手の身が入らない。
+ *    CPU球団（`member` なし）はこれまでどおり（決め方なし＝全員同じ方針）
+ */
+export function campFallbackPlan(member, plan) {
+  return {
+    policy: plan?.policy || (member ? { mode: 'recommended' } : undefined),
+    players: plan?.players,
+    main: plan?.assignments,
+    sub: plan?.subAssignments,
+  };
+}
+
+/**
+ * 選手ごとの方針の上書き（{ [id]: { direction, phase } }）。
+ * ⚠ 自分の名簿の選手だけ・受け取れる方針だけ。
+ */
+function campPlayerPolicies(roster, source) {
+  const ids = new Set(roster.map((p) => p.id));
+  const out = {};
+  for (const [id, own] of Object.entries(source || {})) {
+    const playerId = Number(id);
+    if (!ids.has(playerId)) continue;
+    requireOnline(
+      CAMP_DIRECTIONS.includes(own?.direction) &&
+        CAMP_PHASES.includes(own?.phase),
+      '育成方針が不正です',
+    );
+    out[playerId] = { direction: own.direction, phase: own.phase };
+  }
+  return out;
 }
 
 /**
@@ -250,7 +294,11 @@ export function normalizeCampPolicy(policy) {
  * ⚠ サブ練習が無い選手は `physique`（基礎体力）。一人用の既定と同じ。
  * ⚠ 世界（`TEAMS_DATA`）を直に書き換える。呼ぶ側が `captureWorld()` すること。
  */
-export function runCampRound(league, teamName, { policy, main, sub } = {}) {
+export function runCampRound(
+  league,
+  teamName,
+  { policy, players: overrides, main, sub } = {},
+) {
   const team = TEAMS_DATA[teamName];
   if (!team?.players?.length) return { gains: {}, events: {} };
   // ⚠ 伸びは**練習の前後を比べて**作る（メイン・サブ・スタッフの効果をまとめて）。
@@ -258,8 +306,6 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
   const before = new Map(
     team.players.map((player) => [player.id, abilitySnapshot(player)]),
   );
-  const direction = policy?.direction || 'balanced';
-  const phase = policy?.phase || 'skill';
   const staff = team.corporateData?.staff
     ? getTeamStaffBonus(team.corporateData.staff)
     : null;
@@ -267,10 +313,16 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
   const awakening = 1.5;
   const assignments = {};
   const moods = {};
+  // ⚠ 方針は**練習の前に1回だけ**決める。練習で能力が変わると本人の希望も
+  //    変わりうるので、サブ練習の既定を後で引き直すとメインと食い違う
+  const policies = new Map();
   for (const player of team.players) {
     // ⚠ **守備位置に合わないメニューは標準へ倒す**（投手に打撃練習など）。
     //    倒さないと、伸びるのはその選手が使わない能力だけになる。
     //    画面の選択肢（`CampPlanner` の `menusFor`）と同じ規則。
+    // ⚠ **方針は選手ごと**（`playerPolicy`）。やる気もその選手の方針で見る
+    const { direction, phase } = playerPolicy(player, policy, overrides);
+    policies.set(player.id, { direction, phase });
     const wanted = main?.[player.id] || resolveTraining(player, direction, phase).main;
     assignments[player.id] = menuFitsPlayer(wanted, player)
       ? wanted
@@ -305,7 +357,10 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
   for (const player of updatedTeam.players) {
     // ⚠ 守備位置に合うかは**入口で見ている**（`validateCampRound` と
     //    `validatePhasePlan`）。ここで倒すと、どちらの入口が漏れても気づけない
-    const key = sub?.[player.id] || resolveTraining(player, direction, phase).sub;
+    const own =
+      policies.get(player.id) || playerPolicy(player, policy, overrides);
+    const key =
+      sub?.[player.id] || resolveTraining(player, own.direction, own.phase).sub;
     if (SUB_TRAINING_MENUS[key])
       note(player, executeSubTraining(player, key, {}, staff)?.growthReport);
   }
@@ -321,7 +376,8 @@ export function runCampRound(league, teamName, { policy, main, sub } = {}) {
     );
     if (Object.keys(diff).length) gains[player.id] = diff;
   }
-  return { gains, events };
+  // `moods`: 選手ごとのやる気の倍率（検査で、方針が選手ごとに効いたかを見る）
+  return { gains, events, moods };
 }
 
 /** 手動実行と締切時の自動実行で、同じ記録を残す。 */
@@ -759,7 +815,11 @@ export function captureLeagueWorld() {
  *    信じると、知らないメニューで練習が飛ぶ。
  */
 export function validateCampRound(league, teamName, payload) {
-  const team = TEAMS_DATA[teamName];
+  // ⚠ **保存された世界（`league.game`）を見ること。`TEAMS_DATA` を見ない**。
+  //    呼ぶ側は `loadLeagueWorld` の前に検査するので、メモリ上の世界は
+  //    空（起動したての関数）か、前に読んだ古い世界のまま。実際にアプリで
+  //    キャンプの1クール目が「球団が見つかりません」で止まった。
+  const team = league.game?.teams?.[teamName];
   requireOnline(team, '球団が見つかりません', 409);
   const byId = new Map(team.players.map((p) => [p.id, p]));
   // ⚠ **守備位置に合うかも見る**。合わないものは `runCampRound` が既定へ
@@ -777,6 +837,7 @@ export function validateCampRound(league, teamName, payload) {
   };
   return {
     policy: normalizeCampPolicy(payload?.policy),
+    players: campPlayerPolicies(team.players, payload?.players),
     main: pick(payload?.main, CAMP_MENUS, menuFitsPlayer, '練習メニューが不正です'),
     sub: pick(payload?.sub, CAMP_SUB_MENUS, subMenuFitsPlayer, 'サブ練習が不正です'),
   };
@@ -900,6 +961,7 @@ function validatePhasePlan(league, teamName, plan) {
         subAssignments,
         // ⚠ 方針は**やる気**に効く（噛み合うと伸びやすい）。無ければ標準
         policy: normalizeCampPolicy(plan.policy),
+        players: campPlayerPolicies(team.players, plan.players),
       };
     }
     case 'pack_select': {
@@ -1322,11 +1384,7 @@ function resolvePhase(league, now) {
       //    無ければ提出した案、それも無ければ標準
       const saved = member ? done[member.userId]?.plan : null;
       const plan = plans[name];
-      const rest = saved || {
-        policy: plan?.policy,
-        main: plan?.assignments,
-        sub: plan?.subAssignments,
-      };
+      const rest = saved || campFallbackPlan(member, plan);
       for (let round = already; round < CAMP_ROUNDS; round += 1) {
         const result = runCampRound(league, name, rest);
         if (state) recordCampRound(state, result);

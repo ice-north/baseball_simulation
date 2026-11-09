@@ -229,3 +229,41 @@ export function describeMood(player, direction, phase) {
     ? { label: '不本意だが従う', tone: 'mid' }
     : { label: '身が入らない', tone: 'bad' };
 }
+
+// ============================================================
+// 選手ごとの方針（オンライン版のキャンプ）
+//
+// ⚠ 方針が球団で1つだと、どれを選んでも希望の違う選手が「身が入らない」で
+//   残る（いしだ指摘: 一括指定が有効に見えない）。決め方を3つにする。
+//   ・recommended（おすすめ）: 本人の希望どおり。ただし平凡な選手が
+//     「短所を埋める」を望むときは「長所を伸ばす」へ変える（上の「選手の
+//     希望」の説明どおり、ここは希望がむしろ間違い）。段階は希望のままなので
+//     その選手も「納得」で、身が入らない選手は出ない
+//   ・wish（全員を希望どおり）: 全員「意欲的」
+//   ・team（全員同じ方針）: これまでどおり
+//   選手ごとの上書き（`overrides`）はどの決め方よりも先に効く。
+// ============================================================
+export const CAMP_POLICY_MODES = ['recommended', 'wish', 'team'];
+
+/** 「平凡」の線。技術の長所がこれ未満なら、短所埋めより長所で勝負させる */
+export const PLAIN_SKILL_LINE = 55;
+
+/** おすすめの方針（本人の希望を基に、平凡な選手の短所埋めだけ長所へ） */
+export function recommendedPolicy(player) {
+  const wish = playerWish(player);
+  if (wish.direction === 'patch' && poleStats(player, 'skill').bestValue < PLAIN_SKILL_LINE)
+    return { direction: 'sharpen', phase: wish.phase };
+  return wish;
+}
+
+/**
+ * その選手に当てる方針。`policy` は { mode, direction, phase }（mode が無ければ team）、
+ * `overrides` は { [選手id]: { direction, phase } }。
+ */
+export function playerPolicy(player, policy, overrides) {
+  const own = overrides?.[player?.id];
+  if (own?.direction && own?.phase) return { direction: own.direction, phase: own.phase };
+  if (policy?.mode === 'wish') return playerWish(player);
+  if (policy?.mode === 'recommended') return recommendedPolicy(player);
+  return { direction: policy?.direction || 'balanced', phase: policy?.phase || 'skill' };
+}
