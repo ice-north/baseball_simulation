@@ -33,6 +33,7 @@
 - アプリは `?action=login / refresh / view / defaults / team / player / games / game / command` を使う。ビューの項目名を変えるとアプリが壊れる。
 - 編成の保存（`command` の `lineup`）は、ビューの `lineup` を**丸ごと**送り返し、`baseLineup` に編集前の塊を添える。アプリが知らない項目もそのまま返すので、編成に項目を足すのは構わない。
 - `shared/src/jvmTest/resources/view-running.json` は開発サーバーの実際のビュー。ビューの形を変えたら、これを取り直して `ViewTest` が通ることを確かめる。
+- `shared/src/jvmTest/resources/staff-view.json` は指導者（監督・コーチ）の入ったビュー（2年目のキャンプ）。指導者の形（`server/coachView.mjs`）を変えたら `WRITE_APP_FIXTURE=1 node tools/sim-harness/online-coach-check.mjs` で取り直し、`StaffTest` が通ることを確かめる。
 
 ## ビルド
 

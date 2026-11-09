@@ -192,17 +192,17 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         val title = hot.firstOrNull()?.let { "${view.teamShort(it.key)}${it.value.count}連勝 勢いに乗る" } ?: cold.first().let { "${view.teamShort(it.key)}、${it.value.count}連敗で苦境" }
         articles += FrontPage.Article("連勝・連敗", title, body, LINK_GAMES)
     }
-    // 監督たちの戦い（人が持つ球団が2つ以上のとき）
+    // オーナーたちの戦い（人が持つ球団が2つ以上のとき。人はオーナーで、ベンチの監督は指導者）
     val humans = view.teamOwners.keys.filter { it in view.teamLeagues }
     if (humans.size >= 2) {
         val lines = humans.mapNotNull { t ->
             val league = view.teamLeagues[t] ?: return@mapNotNull null
             val table = view.table(league)
             val rank = table.indexOfFirst { it.team == t }
-            val who = view.teamOwners[t]?.ifBlank { null }?.let { "${it}監督の" } ?: ""
+            val who = view.teamOwners[t]?.ifBlank { null }?.let { "${it}オーナーの" } ?: ""
             "${who}${view.teamShort(t)}は${LEAGUE_NAMES[league]}${rank + 1}位" + (table.getOrNull(rank)?.takeIf { it.gamesPlayed > 0 }?.let { "（${it.wins}勝${it.losses}敗）" } ?: "")
         }
-        articles += FrontPage.Article("監督たちの戦い", "${humans.size}人の監督、それぞれの現在地", lines.joinToString("、") + "。", LINK_GAMES)
+        articles += FrontPage.Article("オーナーたちの戦い", "${humans.size}人のオーナー、それぞれの現在地", lines.joinToString("、") + "。", LINK_GAMES)
     }
     // 記録（最新の試合の日に届いた節目。リーグ全体）
     if (view.phase?.kind !in OFF_PHASES) {
@@ -217,6 +217,8 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
             )
         }
     }
+    // 指導者（オフはリーグの人事。シーズン中は監督の通算勝利の節目）
+    articles += staffNationalArticles(view, view.phase?.kind in OFF_PHASES, today.mapNotNull { it.winner() }.toSet())
     // 引退（年度更新のあと。リーグ全体の大物から）
     if (view.phase?.kind in OFF_PHASES && view.chronicle.retired.isNotEmpty()) {
         val gone = view.chronicle.retired

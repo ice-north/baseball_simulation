@@ -378,8 +378,8 @@ fun buildFrontPage(
     }
     // 試合後のひと言（監督と主役の談話。決まり文句から選ぶ）
     sit?.let { situation ->
-        val manager = view.members.firstOrNull { it.teamName == team }?.label?.takeIf { it.isNotBlank() && !it.startsWith("プレイヤー") }
-        commentArticle(manager, tone, situation, pen)?.let { articles += it }
+        val (speaker, temper) = commentSpeaker(view)
+        commentArticle(speaker, tone, situation, pen, temper)?.let { articles += it }
     }
     // プロ注目（飾り。NPBのスカウトが見に来ている、という話だけで、選手は抜かれない）
     scoutArticle(view.roster, me, view.year, date, pen)?.let { articles += it }
@@ -428,6 +428,9 @@ fun buildFrontPage(
         view.results.filter { it.date == d && it.home != team && it.away != team && it.homeScore != null && it.awayScore != null }
             .map { shortLine(view, it, latest = view.results.none { r -> (r.date?.month ?: 0) * 100 + (r.date?.day ?: 0) > d.month * 100 + d.day }) }
     }.orEmpty()
+
+    // 指導者（オフは自球団の人事と新体制。シーズン中はときどきベンチの空気）
+    articles += staffLocalArticles(view, me, offPhase, pen)
 
     column?.let { articles += it }
     // アプリの版: 古いときは記事のいちばん上（全幅の1本目）、最新・試作版は紙面の終わり

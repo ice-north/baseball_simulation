@@ -1,0 +1,335 @@
+// 指導者（監督・投手コーチ・野手コーチ）の検査。
+//   node tools/sim-harness/online-coach-check.mjs
+//   WRITE_APP_FIXTURE=1 node tools/sim-harness/online-coach-check.mjs   # アプリの検査用のビューも書き出す
+//
+// 1. 同じ種なら同じ顔ぶれ（作り直し・保存の移行でも同じ）
+// 2. 人の球団で全部「自分で」なら、指導者は何も触らない（指導者を入れる前と同じ判断）
+// 3. 任せ方の切り替え・任せた分野を自分で変えたら「意見を聞く」に戻る・空いた席は「自分で」
+// 4. 人事（キャンプの間だけ・解任・市場から呼ぶ・役職の入れ替え）
+// 5. 年度更新を何十年も回して、CPU球団に監督がいない／同じ人が2つの席にいる、が起きない
+// 6. 実際に1年回して翌年のキャンプまで（通算が残る・画面の形）
+import assert from 'node:assert/strict';
+import { writeFileSync } from 'node:fs';
+import {
+  createLeague,
+  defaultPhasePlan,
+  submitPhase,
+  advanceLeagueDay,
+  updateStaffModes,
+  updateStaff,
+  saveLineup,
+} from '../../server/leagueEngine.mjs';
+import {
+  staffOf,
+  tryoutContextFor,
+  releaseBiasFor,
+  campPlanFor,
+  applyStaffTactics,
+  teamTacticsFor,
+  coachOffseason,
+  fillVacancies,
+  effectiveStaffModes,
+} from '../../server/coachEngine.mjs';
+import { createCoaches, STAFF_AREA_KEYS, COACH_ROLES } from '../../src/online/coaches.js';
+import { migrateLeague } from '../../src/online/leagueMigration.js';
+import { projectLeague, projectLineup, projectTeamInfo } from '../../server/projection.mjs';
+import { hashSeed, withSeededRandom } from '../../src/game/rng.js';
+import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
+
+const clone = (x) => JSON.parse(JSON.stringify(x));
+let now = new Date('2026-10-28T00:00:00Z');
+const iso = () => now.toISOString();
+const members = [{ userId: 'a' }, { userId: 'b' }];
+
+// ------------------------------------------------------------------ 1. 種
+const league = createLeague({ members, now: iso() });
+const again = createLeague({ members, now: iso() });
+assert.deepEqual(league.coaches, again.coaches, '同じ種で顔ぶれが変わった');
+assert.deepEqual(createCoaches(clone(league)), league.coaches, '作り直すと顔ぶれが変わる');
+{
+  // 保存の移行（版9 → 10）で配る人も同じ
+  const old = clone(league);
+  delete old.coaches;
+  old.schema = 9;
+  migrateLeague(old);
+  assert.deepEqual(old.coaches, league.coaches, '移行で配った顔ぶれが新しいリーグと違う');
+  // 2回当てても同じ（`??=` の書き方）
+  const twice = clone(old);
+  twice.schema = 9;
+  migrateLeague(twice);
+  assert.deepEqual(twice.coaches, league.coaches, '移行を2回当てると変わる');
+}
+const other = createLeague({ seed: 7, members, now: iso() });
+assert.notDeepEqual(other.coaches.people, league.coaches.people, '種を変えても同じ顔ぶれ');
+
+const names = league.season.settings.teamNames;
+const human = league.members[0];
+const humanTeam = human.teamName;
+const cpuTeam = names.find((n) => !league.members.some((m) => m.teamName === n));
+
+/** 席の整合（同じ人が2席にいない・席の人の職が席と合う・CPUに監督がいる） */
+function assertSeats(l, where) {
+  const c = l.coaches;
+  const seen = new Map();
+  for (const [team, seats] of Object.entries(c.teams))
+    for (const role of COACH_ROLES) {
+      const id = seats[role];
+      if (!id) continue;
+      assert.ok(!seen.has(id), `${where}: ${id} が ${seen.get(id)} と ${team}:${role} の2席にいる`);
+      seen.set(id, `${team}:${role}`);
+      const coach = c.people[id];
+      assert.ok(coach, `${where}: ${team}:${role} の ${id} が名簿にいない`);
+      assert.equal(coach.status, 'active', `${where}: 席にいる ${coach.name} が ${coach.status}`);
+      assert.deepEqual([coach.job?.team, coach.job?.role], [team, role], `${where}: ${coach.name} の職が席と違う`);
+    }
+  for (const coach of Object.values(c.people)) {
+    if (coach.status === 'active')
+      assert.ok(seen.has(coach.id), `${where}: ${coach.name} は active なのに席が無い`);
+    else assert.equal(coach.job, null, `${where}: ${coach.name} は ${coach.status} なのに職がある`);
+  }
+}
+for (const name of names) {
+  const s = staffOf(league, name);
+  assert.ok(s.manager && s.pitching && s.batting, `${name} の席が埋まっていない`);
+}
+assertSeats(league, '作成直後');
+assert.equal(Object.values(league.coaches.people).filter((p) => p.status === 'free').length, 8, '市場が8人でない');
+for (const coach of Object.values(league.coaches.people)) {
+  // 代打・守備固めは遅らせる向きしか無い（-2〜0）
+  assert.ok(coach.views.bench <= 0, `${coach.name} の代打・守備固めが ${coach.views.bench}`);
+  for (const v of Object.values(coach.views)) assert.ok(Number.isInteger(v) && v >= -2 && v <= 2);
+}
+console.log(
+  `指導者 ${Object.keys(league.coaches.people).length}人 / 例: ${names
+    .slice(0, 3)
+    .map((n) => `${n}=${staffOf(league, n).manager.name}`)
+    .join('、')}`,
+);
+
+// ------------------------------------------------------------------ 2. 全部「自分で」
+{
+  const l = clone(league);
+  const me = l.members[0];
+  me.staffModes = Object.fromEntries(STAFF_AREA_KEYS.map((k) => [k, 'self']));
+  assert.equal(tryoutContextFor(l, humanTeam), null, '自分でなのにトライアウトの考えが入る');
+  assert.equal(releaseBiasFor(l, humanTeam), null, '自分でなのに退団の偏りが入る');
+  assert.equal(campPlanFor(l, humanTeam, l.game.teams[humanTeam].players, () => ({})), null, '自分でなのにキャンプの案が入る');
+  const team = clone(l.game.teams[humanTeam]);
+  team.onlineTactics = { sacrificeBunt: 'auto', hook: 'auto' };
+  const before = clone(team);
+  const restore = applyStaffTactics(l, humanTeam, team);
+  assert.deepEqual(team, before, '自分でなのに試合の采配が変わる');
+  restore();
+  assert.deepEqual(team, before);
+  // 指導者そのものが無いリーグ（入れる前）とも、手続きの標準案が同じ
+  const bare = clone(l);
+  delete bare.coaches;
+  assert.equal(tryoutContextFor(bare, humanTeam), null);
+  // CPUはいつも指導者が決める
+  assert.ok(tryoutContextFor(l, cpuTeam), 'CPUにトライアウトの考えが無い');
+  assert.ok(releaseBiasFor(l, cpuTeam), 'CPUに退団の偏りが無い');
+}
+
+// ------------------------------------------------------------------ 3. 任せ方
+function resolve(l) {
+  const phase = l.phase;
+  for (const member of l.members)
+    submitPhase(
+      l,
+      member.userId,
+      { phaseId: phase.id, plan: defaultPhasePlan(l, member.teamName), ready: true },
+      iso(),
+    );
+}
+// 名簿が配られたあと（初期メンバーを選んでキャンプに入ったところ）
+const inCamp = clone(league);
+while (inCamp.phase && inCamp.phase.kind !== 'camp') resolve(inCamp);
+assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
+{
+  const l = clone(league);
+  const team = l.game.teams[humanTeam];
+  // 意見を聞く（既定）: AI判断の項目だけ指導者、決めた項目と方針は保存のまま
+  team.onlineTactics = { sacrificeBunt: 'never', squeeze: 'auto' };
+  team.strategy = { batting: 'aggressive' };
+  const advice = teamTacticsFor(l, humanTeam, team);
+  assert.equal(advice.tactics.sacrificeBunt, 'never', '意見を聞くなのに決めた項目が変わった');
+  assert.equal(advice.strategy.batting, 'aggressive', '意見を聞くなのに方針が変わった');
+  assert.ok(advice.lines.find((x) => x.key === 'squeeze').by, 'AI判断の項目に決めた人が無い');
+  assert.equal(advice.lines.find((x) => x.key === 'sacrificeBunt').by, null);
+  // 試合の日だけ当てて、保存は書き換えない
+  const saved = clone(team);
+  const restore = applyStaffTactics(l, humanTeam, team);
+  restore();
+  assert.deepEqual(team, saved, '試合の後に保存した采配が戻らない');
+}
+{
+  // 任せる: 方針まで指導者
+  const l = clone(inCamp);
+  // ⚠ 任せ方の命令は記録の索引を作り直さない（`leagueService` の archiveUnchanged）。
+  //    編成を指導者のものに作り直しても、索引（選手・球団の記録）が変わらないこと
+  const index = () => JSON.stringify(buildArchiveIndex({ league: l, sessions: {} }));
+  const indexBefore = index();
+  updateStaffModes(l, human.userId, { tactics: 'delegate', lineup: 'delegate', pitching: 'delegate' });
+  assert.equal(index(), indexBefore, '任せ方を変えると記録の索引が変わる');
+  const modes = effectiveStaffModes(l, l.members[0]);
+  assert.deepEqual([modes.tactics, modes.lineup, modes.pitching], ['delegate', 'delegate', 'delegate']);
+  const team = l.game.teams[humanTeam];
+  const delegated = teamTacticsFor(l, humanTeam, team);
+  assert.ok(delegated.lines.filter((x) => x.field === 'strategy' && x.by).length >= 3, '任せたのに方針を指導者が決めていない');
+  // 任せた分野を自分で変えたら「意見を聞く」に戻る（変えていない分野は任せたまま）
+  const lineup = projectLineup(team);
+  const plan = clone(lineup);
+  const [x, y] = plan.battingOrder;
+  [x.battingOrder, y.battingOrder] = [y.battingOrder, x.battingOrder];
+  saveLineup(l, human.userId, { ...plan, baseLineup: lineup });
+  const after = effectiveStaffModes(l, l.members[0]);
+  assert.equal(after.lineup, 'advice', '任せた打順を変えても任せたまま');
+  assert.equal(after.pitching, 'delegate', '投手起用は変えていないのに戻った');
+  assert.equal(after.tactics, 'delegate', '采配は変えていないのに戻った');
+  // 空いた席の分野は「自分で」
+  l.coaches.teams[humanTeam].batting = null;
+  const coach = staffOf(league, humanTeam).batting;
+  l.coaches.people[coach.id].status = 'free';
+  l.coaches.people[coach.id].job = null;
+  assert.equal(effectiveStaffModes(l, l.members[0]).lineup, 'self', '野手コーチがいないのに打順を任せられる');
+  const view = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  assert.ok(view.staff.modes.find((m) => m.key === 'lineup').locked, '空いた席の分野が選べるまま');
+}
+
+// ------------------------------------------------------------------ 4. 人事（キャンプの間だけ）
+{
+  assert.throws(
+    () => updateStaff(clone(league), human.userId, { action: 'release', role: 'manager' }),
+    /キャンプの間だけ/,
+    'キャンプ以外で指導者を替えられる',
+  );
+  const l = clone(inCamp);
+  const before = staffOf(l, humanTeam);
+  updateStaff(l, human.userId, { action: 'release', role: 'manager' });
+  assert.equal(staffOf(l, humanTeam).manager, null, '解任しても席が空かない');
+  assert.equal(l.coaches.people[before.manager.id].status, 'free', '解任した人が市場にいない');
+  // 投手コーチを監督に上げる
+  updateStaff(l, human.userId, { action: 'swap', role: 'manager', other: 'pitching' });
+  assert.equal(staffOf(l, humanTeam).manager.id, before.pitching.id, '入れ替えで監督にならない');
+  assert.equal(staffOf(l, humanTeam).pitching, null);
+  // 市場から投手コーチを呼ぶ
+  const pick = Object.values(l.coaches.people).find((p) => p.status === 'free' && p.id !== before.manager.id);
+  updateStaff(l, human.userId, { action: 'hire', role: 'pitching', coachId: pick.id });
+  assert.equal(staffOf(l, humanTeam).pitching.id, pick.id, '市場から呼べない');
+  assert.throws(() => updateStaff(l, human.userId, { action: 'hire', role: 'pitching', coachId: before.manager.id }), /先にその席の人を解任/);
+  // 人の球団は監督なしでもよい
+  updateStaff(l, human.userId, { action: 'release', role: 'manager' });
+  assertSeats(l, '人事のあと');
+  // 画面: 市場とカード
+  const view = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  assert.ok(view.staff.canEditSeats && view.staff.market.length > 0, 'キャンプなのに市場が出ない');
+  assert.equal(view.staff.seats[0].coach, null);
+  // キャンプの終わりにCPUは空席を埋める（人の球団は埋めない）
+  const cpuSeats = l.coaches.teams[cpuTeam];
+  const gone = l.coaches.people[cpuSeats.manager];
+  gone.status = 'free';
+  gone.job = null;
+  cpuSeats.manager = null;
+  resolve(l);
+  assert.ok(staffOf(l, cpuTeam).manager, 'CPU球団の監督の席が埋まらない');
+  assert.equal(staffOf(l, humanTeam).manager, null, '人の球団の空席を勝手に埋めた');
+  assertSeats(l, 'キャンプの終わり');
+}
+
+// ------------------------------------------------------------------ 5. 年度更新を何十年も
+{
+  const l = clone(league);
+  const counts = {};
+  withSeededRandom(hashSeed('coach-check:years'), () => {
+    for (let i = 0; i < 40; i++) {
+      const year = l.season.year;
+      const order = [...names].sort(() => Math.random() - 0.5);
+      l.history.push({
+        year,
+        standings: order.map((team, k) => ({ team, wins: 70 - k * 3, losses: 50 + k * 3, draws: 0 })),
+        leagues: Object.fromEntries(l.teams.map((t) => [t.name, t.league])),
+        playoffChampion: order[0],
+        moves: [],
+      });
+      const retirees = Array.from({ length: 4 }, (_, k) => ({
+        team: order[k],
+        name: `引退 選手${year}-${k}`,
+        age: 34 + k,
+        position: ['pitcher', 'catcher', 'short', 'center'][k],
+        seasons: 8,
+        secondCareer: k % 2 ? { role: 'coach', title: 'コーチ' } : { role: k ? 'scout' : 'manager', title: '監督' },
+        player: null,
+      }));
+      l.season.year = year + 1;
+      const events = coachOffseason(l, { rows: {}, retirees });
+      for (const e of events) counts[e.kind] = (counts[e.kind] || 0) + 1;
+      assertSeats(l, `${year}年の年度更新`);
+      const free = Object.values(l.coaches.people).filter((p) => p.status === 'free').length;
+      assert.ok(free >= 8 && free <= 18, `${year}年: 市場が${free}人`);
+      for (const e of fillVacancies(l)) counts[e.kind] = (counts[e.kind] || 0) + 1;
+      assertSeats(l, `${year + 1}年のキャンプ`);
+      for (const name of names)
+        if (!l.members.some((m) => m.teamName === name))
+          assert.ok(staffOf(l, name).manager, `${year + 1}年: CPU球団 ${name} に監督がいない`);
+    }
+  });
+  const people = Object.values(l.coaches.people);
+  console.log(
+    `40年: 人数 ${people.length}（引退で記録のある人 ${people.filter((p) => p.status === 'retired').length}） / 出来事 ${JSON.stringify(counts)}`,
+  );
+  assert.ok(people.length < 400, `名簿が膨らみすぎ（${people.length}人）`);
+  for (const kind of ['retire', 'fire', 'hire', 'turn']) assert.ok(counts[kind] > 0, `40年で ${kind} が1度も無い`);
+  assert.ok(people.some((p) => p.origin?.kind === 'player' && p.status === 'active'), '引退選手が1人も指導者にならない');
+  const career = people.flatMap((p) => p.career || []);
+  assert.ok(career.length > 40 * names.length, '通算の行が足りない');
+  assert.ok(l.coaches.events.length <= 40, '出来事が40件を超えて残る');
+}
+
+// ------------------------------------------------------------------ 6. 実際に1年
+{
+  const l = clone(league);
+  const startYear = l.season.year;
+  let days = 0;
+  while (days < 600) {
+    if (l.status === 'waiting') {
+      // ⚠ 年度更新は日付の進行の中で済み、続けてキャンプが開く（`advanceOneDay`）。
+      //    締め切る前に止める（締め切るとキャンプが終わって開幕する）
+      if (l.season.year > startYear && l.phase?.kind === 'camp') break;
+      resolve(l);
+      continue;
+    }
+    now = new Date(now.getTime() + 4 * 3600000);
+    advanceLeagueDay(l, `coach:${days}`, iso());
+    days++;
+  }
+  assert.equal(l.phase?.kind, 'camp', '翌年のキャンプまで進まない');
+  assert.ok(l.season.year > startYear);
+  assertSeats(l, '1年後');
+  const rows = Object.values(l.coaches.people).flatMap((p) => p.career || []);
+  const managerRows = rows.filter((r) => r.role === 'manager' && r.year === startYear);
+  assert.equal(managerRows.length, names.length, '監督の通算の行が球団の数と違う');
+  assert.ok(managerRows.every((r) => r.wins + r.losses > 50), '監督の行の勝敗が入っていない');
+  const pitchRow = rows.find((r) => r.role === 'pitching' && r.year === startYear);
+  assert.ok(pitchRow?.era > 0 && pitchRow.strikeouts > 0, '投手コーチの行に防御率・奪三振が無い');
+  const view = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  assert.ok(view.staff?.seats?.length === 3 && view.leagueStaff?.teams?.length === names.length);
+  assert.ok(view.staff.seats.some((s) => s.coach?.history?.length), '履歴が画面に出ない');
+  assert.ok(view.staff.tactics.every((t) => t.text), '采配の内訳の文が無い');
+  const info = projectTeamInfo({ league: l, sessions: {} }, human.userId, cpuTeam);
+  assert.ok(info.staff?.tactics?.length, 'CPU球団の采配が見られない');
+  const otherHuman = projectTeamInfo({ league: l, sessions: {} }, human.userId, l.members[1].teamName);
+  assert.equal(otherHuman.staff.tactics, null, '人の球団の采配が他の人に見える');
+  console.log(
+    `1年後（${days}日）: 出来事 ${l.coaches.events.length}件 / ${view.leagueStaff.events
+      .slice(0, 3)
+      .map((e) => e.text)
+      .join(' / ')}`,
+  );
+  console.log(`例: ${view.staff.seats[0].coach?.career} / ${view.staff.tactics.find((t) => t.by)?.text}`);
+  if (process.env.WRITE_APP_FIXTURE) {
+    const path = new URL('../../mobile/shared/src/jvmTest/resources/staff-view.json', import.meta.url);
+    writeFileSync(path, `${JSON.stringify(view)}\n`);
+    console.log(`アプリの検査用のビューを書き出した: ${path.pathname}`);
+  }
+}
+console.log('online-coach-check PASS');

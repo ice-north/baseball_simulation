@@ -43,6 +43,10 @@ data class LeagueView(
     val races: List<Race> = emptyList(),
     /** 節目の記録・引退・裏の大会（server/chronicle.mjs chronicleView）。古いサーバーには無い */
     val chronicle: ChronicleView = ChronicleView(),
+    /** 自分の球団の指導者と任せ方（server/coachView.mjs ownStaffView）。古いサーバーには無い */
+    val staff: StaffView? = null,
+    /** リーグ全球団の指導者と最近の人事（server/coachView.mjs leagueStaffView）。古いサーバーには無い */
+    val leagueStaff: LeagueStaff? = null,
 )
 
 @Serializable
@@ -116,6 +120,8 @@ data class Phase(
     val kind: String? = null,
     val label: String? = null,
     val deadline: String? = null,
+    /** 標準案を出した指導者（「山田監督の案です」）。任せ方が「自分で」なら無い */
+    val planBy: PlanBy? = null,
 )
 
 @Serializable

@@ -133,7 +133,7 @@ internal fun warningArticle(opp: String, roster: List<Player>, starter: StarterI
 }
 
 /** 試合後のひと言（監督と主役）。決まり文句から場面で選ぶ */
-internal fun commentArticle(manager: String?, tone: FrontPage.Tone, s: Situation, pen: Pen): FrontPage.Article? {
+internal fun commentArticle(manager: String?, tone: FrontPage.Tone, s: Situation, pen: Pen, temper: Int = 0): FrontPage.Article? {
     val boss = manager?.let { "${it}監督" } ?: "監督"
     val f = s.facts
     val quote = when (tone) {
@@ -147,6 +147,9 @@ internal fun commentArticle(manager: String?, tone: FrontPage.Tone, s: Situation
             else -> listOf("投打がかみ合った", "いい形で勝てた", "次もこの形で戦いたい")
         }
         FrontPage.Tone.Lose -> when {
+            // 監督の気質（短気は大敗で厳しく、我慢強い人は連敗・大敗でも選手をかばう）
+            temper >= 1 && s.diff >= 3 -> listOf(if (s.ours <= 1) "打つ方がこれでは勝てない" else "投手陣は猛省しないといけない", "こんな試合をしていては駄目だ", "全員が反省すべき内容だった")
+            temper <= -1 && (s.diff >= 3 || s.streak >= 3) -> listOf("こういう日もある。選手を信じる", "焦る必要はない。やってきたことを続ける", "下を向く必要はない")
             f?.walkOff == true -> listOf("あと一歩だった。切り替える", "悔しいが、明日がある", "最後に踏ん張れなかった")
             s.ours == 0 -> listOf("相手投手が良かった。次は打つ", "1点が遠かった", "打線のてこ入れも考える")
             s.diff >= 5 -> listOf("完敗。すぐに立て直す", "今日は相手が上だった", "投手陣の踏ん張りが足りなかった")

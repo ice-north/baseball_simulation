@@ -1904,6 +1904,14 @@ export function selectPlayerForAI(
     });
   }
 
+  // 球団の好み（オンラインの指導者: 速球派・長打などへの小さな加点。`src/online/coaches.js`）。
+  // ⚠ 乱数は引かない（引くと、好みの無い球団まで選ぶ選手が変わる）
+  if (typeof teamContext?.bonus === 'function') {
+    scoredCandidates.forEach(candidate => {
+      candidate.valueScore += teamContext.bonus(candidate) || 0;
+    });
+  }
+
   // ランダム要素を加えて各チームの個性を出す（±8pt。CPUが好素材を取り逃しにくくし、
   // ユーザーの人力ドラフトとの戦力差を縮める）
   scoredCandidates.forEach(candidate => {

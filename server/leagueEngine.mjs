@@ -143,6 +143,21 @@ import {
 import { nextFromPlan } from '../src/online/tryoutPlan.js';
 import { generateRosterPacks, packsForMember } from '../src/online/rosterPack.js';
 import { abilitySnapshot, abilityGains, addCampGains } from '../src/online/campGains.js';
+import {
+  ensureCoaches,
+  applyStaffTactics,
+  tryoutContextFor,
+  releaseBiasFor,
+  tradeFactorFor,
+  campPlanFor,
+  coachSeasonRows,
+  coachOffseason,
+  fillVacancies,
+  setStaffModes,
+  staffCommand,
+  effectiveStaffModes,
+} from './coachEngine.mjs';
+import { PHASE_STAFF_AREA } from '../src/online/coaches.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_DIRECTIONS, CAMP_PHASES, CAMP_ROUNDS };
@@ -497,8 +512,10 @@ export function openTrade(league, userId, { to, offer, want }, now) {
     return { id, status: 'offered' };
   }
   // --- CPU球団はその場で答える
+  // ⚠ CPU球団の監督の見る目（育成なら若手を高く、勝負なら主力の年齢を高く）
+  const factor = tradeFactorFor(league, to);
   const decision = cpuTradeDecision({
-    valueOf: tradeValueOf,
+    valueOf: (player) => tradeValueOf(player) * factor(player),
     fromPlayers: mine.team.players,
     toPlayers: theirs.players,
     offerIds,
@@ -803,6 +820,8 @@ export function createLeague({
     openPhase(league, 'pack_select', now);
   });
   league.game = captureWorld();
+  // 指導者（監督・コーチ）。⚠ 世界とは別の保存（`league.coaches`）。種から決まる
+  ensureCoaches(league);
   return league;
 }
 
@@ -881,21 +900,37 @@ export function defaultPhasePlan(league, teamName) {
     return { packId: free[index]?.id || league.packs?.[0]?.id || null };
   }
   if (kind === 'contract')
-    return { releaseIds: getAIReleaseCandidates(team.players) };
-  // ⚠ 既定は全体の方針だけ。選手ごとの割り当ては画面で決める
-  if (kind === 'camp') return { menu: 'standard', assignments: {} };
+    return {
+      // ⚠ 監督の考え（若手好きならベテランを早めに出す）。人の球団で「自分で」なら従来どおり
+      releaseIds: getAIReleaseCandidates(
+        team.players,
+        releaseBiasFor(league, teamName),
+      ),
+    };
+  if (kind === 'camp') {
+    // ⚠ 人の球団で「意見を聞く」「任せる」なら、コーチの方針（投手は投手コーチ、
+    //    野手は野手コーチ）を選手ごとに。「自分で」・席が空いていれば従来の既定
+    const coached = campPlanFor(league, teamName, team.players, (player) =>
+      playerPolicy(player, { mode: 'recommended' }),
+    );
+    if (coached) return { menu: 'standard', assignments: {}, ...coached };
+    // ⚠ 既定は全体の方針だけ。選手ごとの割り当ては画面で決める
+    return { menu: 'standard', assignments: {} };
+  }
   if (kind === 'offseason') return {};
   // ⚠ **途中参加でセットを待っている球団は、トライアウトで取らない**。
   //    名簿は次のキャンプでセットに丸ごと入れ替わるので、取った選手は
   //    どこにも残らず消える（プールからは抜けているので世界から居なくなる）
   if (kind === 'tryout' && hasPendingPack(league, teamName))
     return { rankedIds: [], count: 0 };
+  // ⚠ 監督の考え（育成か勝負か・好む選手）。人の球団で「自分で」なら null（従来どおり）
+  const context = tryoutContextFor(league, teamName);
   return seeded(league, `default:${league.phase.id}:${teamName}`, () => {
     const pool = clone(league.phase.candidates);
     const roster = clone(team.players);
     const rankedIds = [];
     while (pool.length) {
-      const player = selectPlayerForAI(pool, roster) || pool[0];
+      const player = selectPlayerForAI(pool, roster, context) || pool[0];
       rankedIds.push(player.id);
       roster.push(player);
       pool.splice(
@@ -1038,11 +1073,26 @@ function releasePlayers(teamName, ids, year) {
  */
 function refreshTeamPlan(league, name, { force = false } = {}) {
   const team = TEAMS_DATA[name];
-  const human = league.members.some((m) => m.teamName === name);
+  const member = league.members.find((m) => m.teamName === name);
+  const human = !!member;
+  // ⚠ 人の球団でも、スタメン・投手起用を**指導者に任せた**分野はCPUと同じく作り直す
+  //    （任せていない分野は、成り立つ限り人の編成を残す）
+  const modes = human ? effectiveStaffModes(league, member) : null;
+  const ownLineup = human && modes.lineup !== 'delegate';
+  const ownPitching = human && modes.pitching !== 'delegate';
+  if (human && !force && ownLineup !== ownPitching) {
+    if (!ownPitching) generatePitchingRotation(name);
+    if (!ownLineup) {
+      const registered = new Map(team.players.map((p) => [p.id, p.position]));
+      setRecommendedLineup(team, name);
+      for (const player of team.players)
+        if (registered.has(player.id)) player.position = registered.get(player.id);
+    }
+  }
   // ⚠ `force` は**守備位置の登録を変えたとき**に使う。残した編成はそのままだと
   //    「野手になった選手が登板順に残る」「投手になった選手が守備に就く」まま
   //    保たれてしまう（`ensureCompleteLineup` は登録の変更までは見ない）
-  if (human && !force) {
+  if (human && !force && (ownLineup || ownPitching)) {
     const ids = new Set(team.players.map((p) => p.id));
     const starters = team.pitchingRotation?.starters || [];
     // ⚠ 次の先発が野手の打順にも入っている（二刀流）とき、そのまま
@@ -1251,7 +1301,13 @@ function resolveTryout(league, plans) {
           )
         : // ⚠ CPUにも**オンラインの目標構成**を渡す。既定（一人用の24人）だと
           //    CPUだけ24人で止まり、人の球団だけ26人になる
-          selectPlayerForAI(remaining, roster, null, ONLINE_ROSTER_TARGETS);
+          // ⚠ 監督の考え（育成か勝負か・好む選手）を渡す（`coachEngine.tryoutContextFor`）
+          selectPlayerForAI(
+            remaining,
+            roster,
+            tryoutContextFor(league, pick.team),
+            ONLINE_ROSTER_TARGETS,
+          );
     // 希望順位の候補が尽きても、最低限が欠けていれば必要な守備位置から補う
     if (!player && mustFill > 0) player = pickForShortfall();
     if (!player) continue;
@@ -1359,10 +1415,15 @@ function resolvePhase(league, now) {
   const kind = league.phase.kind;
   // ⚠ 途中参加でセットを待っている人は提出しないことがある（`submitPhase`）。
   //    その球団はCPUが動かしているので、標準案で決める
+  // ⚠ **指導者に任せた手続きは、提出があっても指導者の案で決める**（提出は「確認した」の印だけ）。
+  //    自分で決めたいときは画面で任せ方を「意見を聞く」に戻してから出す
+  const area = PHASE_STAFF_AREA[kind];
   const plans = Object.fromEntries(
     league.members.map((m) => [
       m.teamName,
-      league.phase.submissions[m.userId]?.plan ||
+      (area && effectiveStaffModes(league, m)[area] === 'delegate'
+        ? null
+        : league.phase.submissions[m.userId]?.plan) ||
         defaultPhasePlan(league, m.teamName),
     ]),
   );
@@ -1373,7 +1434,10 @@ function resolvePhase(league, now) {
       releasePlayers(
         name,
         plans[name]?.releaseIds ||
-          getAIReleaseCandidates(TEAMS_DATA[name].players),
+          getAIReleaseCandidates(
+            TEAMS_DATA[name].players,
+            releaseBiasFor(league, name),
+          ),
         league.season.year,
       );
   }
@@ -1382,6 +1446,10 @@ function resolvePhase(league, now) {
     //    実行する（`runCampRound`）。締め切りで残りだけを回す。
     //    数えないと、自分で4回やった球団がもう4回やって8クールぶん成長する。
     const done = (league.phase.camp ||= {});
+    // ⚠ **CPU球団の空いた席はキャンプの終わりに埋める**（人の球団がキャンプの間に
+    //    市場から先に選べるように）。練習より前に埋めて、新しいコーチの方針で練習する
+    if (league.coaches) fillVacancies(league);
+    const leagueTeams = new Set(league.season.settings.teamNames);
     for (const [name, team] of Object.entries(TEAMS_DATA)) {
       if (!team.players?.length) continue;
       const member = league.members.find((m) => m.teamName === name);
@@ -1390,7 +1458,14 @@ function resolvePhase(league, now) {
       // ⚠ 自分で回したときの指示があればそれを使う（残りのクールも同じ方針で）。
       //    無ければ提出した案、それも無ければ標準
       const saved = member ? done[member.userId]?.plan : null;
-      const plan = plans[name];
+      // ⚠ CPU球団（このリーグの）はコーチの方針。世界のほかの球団は従来どおり
+      const plan =
+        plans[name] ||
+        (!member && leagueTeams.has(name)
+          ? campPlanFor(league, name, team.players, (player) =>
+              playerPolicy(player, { mode: 'recommended' }),
+            )
+          : undefined);
       const rest = saved || campFallbackPlan(member, plan);
       for (let round = already; round < CAMP_ROUNDS; round += 1) {
         const result = runCampRound(league, name, rest);
@@ -1456,10 +1531,22 @@ function resolvePhase(league, now) {
         if (p.onlinePlayerId) retireKeys.set(`${name}:${p.name}`, p.onlinePlayerId);
     const retireYear = league.season.year;
     const retireTeams = [...league.season.settings.teamNames];
+    // 指導者の通算に残す、終わった年の球団の成績（日程が残っている今のうちに）
+    const coachRows = league.coaches ? coachSeasonRows(league) : {};
+    // 引退した選手の現役時代の姿（指導者になる人の考え方を寄せる）
+    const retireLooks = new Map();
+    for (const name of retireTeams)
+      for (const p of TEAMS_DATA[name]?.players || [])
+        retireLooks.set(`${name}:${p.name}`, {
+          position: p.position,
+          pitching: p.pitching ? { velocity: p.pitching.velocity, control: p.pitching.control, stamina: p.pitching.stamina } : null,
+          batting: p.batting ? { meet: p.batting.meet, power: p.batting.power, eye: p.batting.eye, bunt: p.batting.bunt } : null,
+          physical: p.physical ? { speed: p.physical.speed } : null,
+        });
     const result = advanceToNextYear(league.season, TEAMS_DATA, {
       playedTeamNames: league.season.settings.teamNames,
     });
-    recordRetirements(league, result.retirements, {
+    const retiredList = recordRetirements(league, result.retirements, {
       year: retireYear,
       teamNames: retireTeams,
       keys: retireKeys,
@@ -1479,6 +1566,30 @@ function resolvePhase(league, now) {
       league.history.at(-1)?.standings || [],
     );
     annotateHistory(league.history.at(-1), league.teams, movements);
+    // 指導者の年度更新（成績を残す・勇退・CPU監督の進退・引退選手が指導者へ）。
+    // ⚠ 昇降格を当てたあと（降格した球団の監督の進退に使う）
+    if (league.coaches) {
+      const ours = new Set(retireTeams);
+      const lines = new Map((retiredList || []).map((r) => [`${r.team}:${r.name}`, r]));
+      const retirees = (result.retirements || [])
+        .filter((r) => ours.has(r.team))
+        .map((r) => ({
+          ...r,
+          seasons: lines.get(`${r.team}:${r.name}`)?.seasons || 0,
+          line: lines.get(`${r.team}:${r.name}`)?.line || null,
+          player: retireLooks.get(`${r.team}:${r.name}`) || null,
+        }));
+      coachOffseason(league, { rows: coachRows, retirees });
+      // 指導者の道へ進んだ人は、引退の記録の「引退後」もそれに合わせる
+      const turned = new Set(
+        retirees
+          .filter((r) => ['manager', 'coach'].includes(r.secondCareer?.role))
+          .map((r) => `${r.team}:${r.name}`),
+      );
+      for (const entry of league.chronicle?.retired || [])
+        if (entry.year === retireYear && turned.has(`${entry.team}:${entry.name}`))
+          entry.secondCareer = '指導者の道へ';
+    }
     if (movements.length)
       league.notices.unshift({
         type: 'promotion',
@@ -1490,7 +1601,13 @@ function resolvePhase(league, now) {
     //    （通年検査が年度更新で踏んだ）。
     createSchedule(league.season, league.teams);
     // 一人用と同じく年度末にCPUローテを再構築。人間の編成は有効な範囲で保持する。
-    const humans = new Set(humanTeamNames(TEAMS_DATA));
+    // ⚠ 投手起用を指導者に任せた人の球団も作り直す（CPUと同じ）
+    const humans = new Set(
+      humanTeamNames(TEAMS_DATA).filter((name) => {
+        const member = league.members.find((m) => m.teamName === name);
+        return !member || effectiveStaffModes(league, member).pitching !== 'delegate';
+      }),
+    );
     for (const name of Object.keys(TEAMS_DATA))
       if (!humans.has(name)) generatePitchingRotation(name);
     league.offseasonResults = offseasonChanges(
@@ -1547,6 +1664,38 @@ export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
 }
 
 export { saveLineup } from './lineupCommand.mjs';
+
+/**
+ * 人の球団の任せ方を変える（`staffModes` 命令）。
+ * ⚠ スタメン・投手起用を**いま任せた**ときは、その場で指導者の編成に作り直す
+ *    （次の手続きや年度更新まで人の編成のまま、にならないように）。世界を読むのはそのときだけ
+ */
+export function updateStaffModes(league, userId, modes) {
+  const member = league.members.find((m) => m.userId === userId);
+  requireOnline(member, '参加者ではありません', 403);
+  const before = effectiveStaffModes(league, member);
+  setStaffModes(league, userId, modes);
+  const after = effectiveStaffModes(league, member);
+  const rebuild = ['lineup', 'pitching'].some(
+    (area) => after[area] === 'delegate' && before[area] !== 'delegate',
+  );
+  if (!rebuild) return;
+  loadLeagueWorld(league);
+  refreshTeamPlan(league, member.teamName);
+  league.game = captureWorld();
+}
+
+/** キャンプを任せていた人が自分で1クール回したとき、キャンプを「意見を聞く」に戻す */
+export function takeBackCamp(league, member) {
+  const modes = { ...(member.staffModes || {}) };
+  if (modes.camp !== 'delegate') return;
+  setStaffModes(league, member.userId, { camp: 'advice' });
+}
+
+/** 人の球団の人事（`staff` 命令。キャンプの間だけ） */
+export function updateStaff(league, userId, payload) {
+  return staffCommand(league, userId, payload);
+}
 
 /**
  * 保存する試合結果から、両球団の丸ごとの写し（`homeTeam` / `awayTeam`）を外す。
@@ -1631,6 +1780,10 @@ function advanceOneDay(league, key, now) {
     const restoreRotations = league.season.settings.teamNames
       .filter((name) => playingTeams.has(name))
       .map((name) => prepareDailyLineup(TEAMS_DATA[name], name));
+    // その日の采配（指導者の考え方）。⚠ 保存した設定は書き換えず、試合の後に戻す
+    for (const name of league.season.settings.teamNames)
+      if (playingTeams.has(name))
+        restoreRotations.push(applyStaffTactics(league, name, TEAMS_DATA[name]));
     let season, played;
     try {
       ({ data: season, results: played } = simulateScheduledGamesOnDate(
