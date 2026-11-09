@@ -28,13 +28,21 @@ data class LeagueView(
     val teamLabels: Map<String, TeamLabel> = emptyMap(),
     val teamLeagues: Map<String, String> = emptyMap(),
     val members: List<Member> = emptyList(),
+    /** 人が持っている球団 → その人の呼び名（球団名と同じときは空。CPUの球団は載らない） */
+    val teamOwners: Map<String, String> = emptyMap(),
     val standings: List<Standing> = emptyList(),
+    /** 球団ごとの今の連勝・連敗（server/projection.mjs teamStreaks）。古いサーバーには無い */
+    val teamStreaks: Map<String, TeamStreak> = emptyMap(),
     val results: List<GameResult> = emptyList(),
     val nextGames: List<ScheduledGame> = emptyList(),
     val roster: List<Player> = emptyList(),
     val lineup: JsonObject? = null,
     val phase: Phase? = null,
     val pendingPack: JsonObject? = null,
+    /** 優勝・昇格・残留のマジックと決定（server/chronicle.mjs leagueRaces）。古いサーバーには無い */
+    val races: List<Race> = emptyList(),
+    /** 節目の記録・引退・裏の大会（server/chronicle.mjs chronicleView）。古いサーバーには無い */
+    val chronicle: ChronicleView = ChronicleView(),
 )
 
 @Serializable
@@ -181,6 +189,14 @@ data class Player(
     val physical: Physical? = null,
     val positionFitness: Map<String, Int> = emptyMap(),
     val performance: Performance? = null,
+    /** 伸びしろ（自球団の選手だけ。他球団の名簿には無い） */
+    val growthPotential: Double? = null,
+    val origin: Origin? = null,
+    /** 経歴（古い順。入団・移籍・退団。サーバーは新しい8件まで） */
+    val careerHistory: List<CareerEntry> = emptyList(),
+    val seasonStats: SeasonStats? = null,
+    /** 打者の最近の調子（server/recordedViews.mjs recentForm）。打数が無い・古いサーバーでは null */
+    val recent: RecentForm? = null,
 ) {
     /** 守備位置の適性。本職は100（Web 版 lineupEdit.js の positionFitness と同じ決まり） */
     fun fitness(pos: String): Int = if (position == pos) 100 else positionFitness[pos] ?: 0
@@ -204,3 +220,28 @@ data class RefreshResult(
     val expiresAt: Long? = null,
     val userId: String? = null,
 )
+
+/** 連勝・連敗（kind は W / L / D） */
+@Serializable
+data class TeamStreak(val kind: String = "", val count: Int = 0)
+
+@Serializable
+data class Origin(val highSchool: String? = null, val university: String? = null, val previousTeam: String? = null)
+
+/** 経歴の1件（type: highschool / university / independent など。label は学校や球団の名前） */
+@Serializable
+data class CareerEntry(val type: String? = null, val year: Int? = null, val label: String? = null)
+
+/** 今季の通しの数（紙面の「8号」「5勝2敗」に使う分だけ） */
+@Serializable
+data class SeasonStats(val batting: SeasonBatting? = null, val pitching: SeasonPitching? = null)
+
+@Serializable
+data class SeasonBatting(val games: Int = 0, val atBats: Int = 0, val hits: Int = 0, val homeruns: Int = 0, val rbis: Int = 0)
+
+@Serializable
+data class SeasonPitching(val games: Int = 0, val wins: Int = 0, val losses: Int = 0, val saves: Int = 0, val holds: Int = 0)
+
+/** 直近の試合の打撃（[games] 試合で [atBats] 打数 [hits] 安打）と連続試合安打 */
+@Serializable
+data class RecentForm(val games: Int = 0, val atBats: Int = 0, val hits: Int = 0, val hitStreak: Int = 0)

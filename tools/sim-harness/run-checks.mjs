@@ -50,6 +50,7 @@ const CHECKS = [
   { name: 'online-edit-conflict-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-label-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-ability-help-check', group: 'quick', online: true, slow: 1 },
+  { name: 'online-read-cache-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stats-view-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-lineup-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-pitching-board-check', group: 'quick', online: true, slow: 1 },
@@ -73,6 +74,8 @@ const CHECKS = [
   { name: 'online-roster-recovery-check', group: 'check', online: true, slow: 27 },
   { name: 'online-snapshot-check', group: 'check', online: true, slow: 8 },
   { name: 'online-records-check', group: 'check', online: true, slow: 52 },
+  // 年代記（節目・引退・裏の大会・マジック・球団史）。1年を通して進める
+  { name: 'online-chronicle-check', group: 'check', online: true, slow: 130 },
   { name: 'progression-check', group: 'full', slow: 38 },
 ];
 

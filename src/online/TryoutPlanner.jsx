@@ -89,6 +89,8 @@ function Line({ player, score, fit }) {
           うちの{GROUP_LABELS[fit.group]}で{fit.rank}番手
         </span>
       )}
+      {/* 甲子園で名を上げた人（サーバーが付ける。`koshienNoteOf`） */}
+      {player.koshien && <span className="online-tryout-fit">{player.koshien}</span>}
       <small>
         {score !== undefined && (
           <b className="online-tryout-score" title="重視する能力から出した評価値（0〜100）">

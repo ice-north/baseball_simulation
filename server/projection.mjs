@@ -1,3 +1,11 @@
+import {
+  withPace,
+  leagueRaces,
+  chronicleView,
+  teamChronicle,
+  koshienNoteOf,
+  remainingGames,
+} from './chronicle.mjs';
 import { isLiveSession } from './sessions.mjs';
 import { roleFor } from '../src/online/tactics.js';
 import { getDeception } from '../src/game/deception.js';
@@ -22,6 +30,8 @@ import {
   playerPeriods,
   storedGame,
   gameSummary,
+  decisionRefs,
+  slimGame,
   statisticsContext,
 } from './recordedViews.mjs';
 import { recordForPlayer } from './recordedStats.mjs';
@@ -183,6 +193,30 @@ export function ownUpcomingGames(schedule, ownTeam, size = 6) {
  * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
  *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
  */
+/**
+ * 球団ごとの今の連続（`{ 球団: { kind: 'W'|'L'|'D', count } }`）。今季の公式日程の終わった試合から数える。
+ * ⚠ 日程は日付順とは限らないので並べ直す（`ownRecentGames` と同じ並べ方）
+ */
+export function teamStreaks(schedule) {
+  const played = (schedule || [])
+    .filter((g) => g.date && g.result && g.home !== 'TBD' && g.away !== 'TBD')
+    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const streaks = {};
+  for (const g of played) {
+    const { homeScore: h, awayScore: a } = g.result;
+    for (const [team, mine, theirs] of [
+      [g.home, h, a],
+      [g.away, a, h],
+    ]) {
+      const kind = mine > theirs ? 'W' : mine < theirs ? 'L' : 'D';
+      const now = streaks[team];
+      streaks[team] =
+        now?.kind === kind ? { kind, count: now.count + 1 } : { kind, count: 1 };
+    }
+  }
+  return streaks;
+}
+
 export function ownRecentGames(schedule, ownTeam, size = 5) {
   const own = schedule
     .filter(
@@ -332,6 +366,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     return seasonStatsCache.get(player.id);
   };
   const phase = l.phase;
+  // 球団ごとのレギュラーシーズンの残り試合（ペースとマジックで共用。日程を2回なめない）
+  const left = remainingGames(l.season.schedule);
   return {
     // ⚠ **このビューを作ったコードの版**。`LeagueService.view` がここを見て、
     //    古い形のリーグを表示させない。ビューは保存済みのものがそのまま
@@ -406,8 +442,15 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
         : {}),
     })),
     standings: l.season.standings,
+    // 球団ごとの今の連勝・連敗（全国紙の「○○、5連勝」）。引き分けは続きを切る
+    teamStreaks: teamStreaks(l.season.schedule),
     // ⚠ 各項目のベスト5。12球団×24人をなめるので**1回の投影で1度だけ**作る
-    leaders: leagueLeaders(l, seasonStatsOf, labelOf),
+    // ⚠ 数える項目の上位には「このままなら年間○」（`pace`）を添える
+    leaders: withPace(leagueLeaders(l, seasonStatsOf, labelOf), l, left),
+    // 優勝・昇格・残留のマジックと決定（部ごと）。手続きの時期も決着は残す
+    races: leagueRaces(l, left),
+    // 節目の記録・引退・裏の大会（リーグ全体の最近のもの）
+    chronicle: chronicleView(l),
     // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。
     teamStats: teamSeasonStats(l, seasonStatsOf),
     // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
@@ -420,7 +463,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       away: g.away,
       homeScore: g.result.homeScore,
       awayScore: g.result.awayScore,
-      decisions: g.result.decisions,
+      decisions: decisionRefs(g.result.decisions),
     })),
     // ⚠ ホームに出す**自球団の次の6試合**。リーグ全体の一覧（`upcoming`）とは
     //    別物。試合結果の画面はリーグ全体を使うので、そちらを絞らないこと。
@@ -468,7 +511,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           // ⚠ 締め切りの有無で画面の文面が変わる
           deadline: phase.deadline || null,
           packs: l.packs?.map(packView),
-          candidates: phase.candidates?.map(playerView),
+          // ⚠ 甲子園で名を上げた人には、その年の成績を添える（`koshien`）
+          candidates: phase.candidates?.map((c) => {
+            const view = playerView(c);
+            const note = koshienNoteOf(l, c.id);
+            return note ? { ...view, koshien: note } : view;
+          }),
           // ⚠ 契約更改: 標準案（決めなかったときの案）で誰が・なぜ退団になるか。
           //    PC・スマホ・アプリが同じ理由を出すよう、サーバーで1回だけ作る
           //    （選び方そのもの `getAIReleaseCandidates` / `releaseScore` から）
@@ -566,10 +614,15 @@ export function projectTeamInfo(bundle, userId, teamName) {
     404,
   );
   const statistics = statisticsContext(l);
+  const activeKeys = new Set(
+    l.game.teams[teamName].players.map((p) => p.onlinePlayerId).filter(Boolean),
+  );
   return {
     teamName,
     readOnly: true,
     year: l.season.year,
+    // 球団史（年表）・歴代記録・引退・節目。記録からさかのぼって作る
+    chronicle: teamChronicle(l, teamName, activeKeys),
     roster: l.game.teams[teamName].players.map((p) => {
       const visible = playerView(p);
       delete visible.growthPotential;
@@ -623,21 +676,32 @@ export function projectPlayerInfo(bundle, userId, id, context) {
     ),
   };
 }
+/** 試合一覧の1ページの数（画面の既定） */
+const GAMES_PAGE = 6;
+/**
+ * 1回で返せる数の上限。⚠ アプリのホームは連勝・対戦成績のために自球団の今季の試合を読むが、
+ *    6試合ずつ最大8回に分けて順に読んでおり、紙面が出るまで待たされた。1シーズン（自球団）が入る数にする
+ */
+const GAMES_PAGE_MAX = 200;
 export function projectGames(
   bundle,
   userId,
-  { year, page = 0, scope = 'own' } = {},
+  { year, page = 0, scope = 'own', size = GAMES_PAGE } = {},
 ) {
   const l = bundle.league,
     member = l?.members.find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
   year = Number(year || l.season.year);
   page = Number(page);
+  size = Number(size);
   requireOnline(
     Number.isSafeInteger(year) &&
       year > 0 &&
       Number.isSafeInteger(page) &&
       page >= 0 &&
+      Number.isSafeInteger(size) &&
+      size >= 1 &&
+      size <= GAMES_PAGE_MAX &&
       ['own', 'league'].includes(scope),
     '試合一覧の指定が不正です',
   );
@@ -664,8 +728,8 @@ export function projectGames(
     year,
     page,
     count: all.length,
-    size: 6,
-    games: all.slice(page * 6, page * 6 + 6),
+    size,
+    games: all.slice(page * size, page * size + size),
   };
 }
 export function projectGameInfo(bundle, userId, id, year) {
@@ -683,7 +747,7 @@ export function projectGameInfo(bundle, userId, id, year) {
   requireOnline(Number.isSafeInteger(year) && year > 0, '年度の指定が不正です');
   const game = storedGame(l, id, year);
   requireOnline(game, '試合記録が見つかりません', 404);
-  const result = structuredClone(game);
+  const result = structuredClone(slimGame(game));
   if (result.replay?.appliedPlans) {
     const ownTeam = l.members.find((m) => m.userId === userId).teamName;
     result.replay.appliedPlan = result.replay.appliedPlans[ownTeam] || null;

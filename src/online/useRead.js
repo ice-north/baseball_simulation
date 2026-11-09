@@ -1,17 +1,31 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 export const ReadContext = createContext(null);
+/**
+ * 読むだけの窓口を読む。⚠ 覚えている答え（`readCache.js`。版が同じ間）があれば、
+ * 「読み込み中」を挟まずにすぐ出す（開き直すたびに待たされていた）。
+ */
 export function useRead(action, query) {
   const read = useContext(ReadContext);
   const [attempt, setAttempt] = useState(0);
-  const [result, setResult] = useState({
-    data: null,
-    error: '',
-    loading: !!action,
+  const [result, setResult] = useState(() => {
+    const hit = action ? read?.peek?.(action, query) : undefined;
+    return hit !== undefined
+      ? { data: hit, error: '', loading: false }
+      : { data: null, error: '', loading: !!action };
   });
   const key = JSON.stringify(query);
   useEffect(() => {
     if (!action) return;
     let cancelled = false;
+    const hit = read?.peek?.(action, JSON.parse(key));
+    if (hit !== undefined) {
+      setResult((old) =>
+        old.data === hit && !old.loading && !old.error
+          ? old
+          : { data: hit, error: '', loading: false },
+      );
+      return;
+    }
     setResult({ data: null, error: '', loading: true });
     Promise.resolve()
       .then(() => {

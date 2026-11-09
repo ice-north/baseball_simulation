@@ -1,3 +1,4 @@
+import { LeagueTopics } from './Chronicle.jsx';
 import React from 'react';
 import { teamShort, ownOutcome } from './gameText.js';
 import { Standings } from './LeaguePanels.jsx';
@@ -261,6 +262,10 @@ function Leaders({ leaders, ownTeam }) {
                           {/* ⚠ 先頭の0を省くのは**率の項目だけ**（打率 .525）。
                               防御率に掛けると 0.34 が .34 になって桁を読み違える */}
                           {formatLeaderValue(category, row.value)}
+                          {/* 「このままなら年間○」。1位だけ（並べると数字が多すぎる） */}
+                          {i === 0 && row.pace > row.value && (
+                            <small className="online-leader-pace">ペース{row.pace}</small>
+                          )}
                         </span>
                       </li>
                     ))}
@@ -289,6 +294,7 @@ export default function LeagueBoard({ view }) {
       </div>
       <div className="online-board-side">
         <Standings view={view} />
+        <LeagueTopics view={view} />
       </div>
     </div>
   );

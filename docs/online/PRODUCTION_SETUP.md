@@ -31,10 +31,18 @@
 | Vercel プロジェクト | `baseball-simulation` | Vercel ダッシュボード |
 | プラン | Hobby（無料） | Vercel 左上 |
 | Production ブランチ | `main` | Vercel → Settings → Git |
+| 関数のリージョン | `hnd1`（東京）。`vercel.json` の `regions` で決める | Vercel → Settings → Functions。応答ヘッダー `x-vercel-id` の2つ目 |
 | API キーの形式 | **Legacy**（`eyJ…`） | Project Settings → API Keys |
 
 ⚠ **Supabase のリージョンは後から変更できない。** 間違えたら作り直すしかない。
 空のうちなら作り直しは3分で済む。データが入ってからだと退避と復元の手間がかかる。
+
+⚠ **関数（`/api/online`）は Supabase と同じ東京で動かす。** Vercel は何も指定しないと
+新しいプロジェクトの関数をワシントン D.C.（`iad1`）で動かす。そのままだと Supabase（東京）との
+1往復ごとに太平洋を渡り（約150ミリ秒）、1回の読み込みで認証・行・保存物と数往復するので、
+どの画面も待たされる。`vercel.json` の `"regions": ["hnd1"]` で東京に置いている（Hobby は1か所まで）。
+効いているかは、ブラウザの開発者ツールで `/api/online` の応答ヘッダー `x-vercel-id` を見る
+（`hnd1::hnd1::…` のように、`::` で区切った2つ目が関数の場所。`iad1` ならワシントンで動いている）。
 
 ## 参加者と球団
 

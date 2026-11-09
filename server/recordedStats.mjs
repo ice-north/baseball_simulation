@@ -263,6 +263,10 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
           ? observer.replayRecord
           : null,
         pitcherChanges: clone(result.pitcherChanges || []),
+        // 紙面の「逆転」「サヨナラ」「決勝打」に使う（数百バイト）。古い試合には無い
+        lineScore: result.lineScore ? clone(result.lineScore) : null,
+        walkOff: !!result.walkOff,
+        winningHit: winningHitOf(observer.events, result),
       };
       for (const team of [result.homeTeam, result.awayTeam]) {
         box.teams[team.name] = [];
@@ -349,6 +353,42 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
       delete season.archiveToken;
     },
   };
+}
+/**
+ * 決勝打: 勝った側が**最後に勝ち越した打席**（そのあと一度も追いつかれていない）。
+ * 打点が付いた打席だけ（暴投・失策での勝ち越しは入れない）。`hit` は安打だったか
+ * （犠飛・押し出しは安打でない）。引き分けは null。
+ * ⚠ 打席の前後の得点（`scoreBefore` / `scoreAfter`）が無い古い記録では null。
+ */
+export function winningHitOf(events, result) {
+  if (!result?.winner) return null;
+  const side = result.winner === result.homeTeam?.name ? 'home' : 'away';
+  const other = side === 'home' ? 'away' : 'home';
+  let hit = null,
+    last = 0; // 前の打席が終わったときの点差（勝った側から見て）
+  for (const e of events || []) {
+    if (e.runnerOnly || !e.scoreBefore || !e.scoreAfter) continue;
+    const before = e.scoreBefore[side] - e.scoreBefore[other];
+    const after = e.scoreAfter[side] - e.scoreAfter[other];
+    // 打席の外（暴投・盗塁など）でリードが動いたら、それまでの決勝打の候補は消える
+    if ((last > 0) !== (before > 0)) hit = null;
+    last = after;
+    if (before > 0 && after <= 0) hit = null; // 追いつかれた・逆転された
+    if (before <= 0 && after > 0)
+      hit =
+        e.offense === result.winner && (e.delta?.rbis || 0) > 0
+          ? {
+              team: e.offense,
+              id: e.batterId,
+              name: e.batterName,
+              inning: e.inning,
+              homerun: (e.delta?.homeruns || 0) > 0,
+              hit: (e.delta?.hits || 0) > 0,
+              rbis: e.delta.rbis,
+            }
+          : null;
+  }
+  return hit;
 }
 export function recordedStats(record) {
   if (!record) return null;

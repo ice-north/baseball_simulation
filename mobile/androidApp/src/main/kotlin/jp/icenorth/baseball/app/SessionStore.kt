@@ -45,6 +45,16 @@ class SessionStore(context: Context) {
         get() = prefs.getStringSet("seenTrades", null)?.toSet().orEmpty()
         set(value) = prefs.edit().putStringSet("seenTrades", value).apply()
 
+    /** ホームで開く新聞（地元紙・全国紙。[jp.icenorth.baseball.shared.FrontPage.Paper] の名前） */
+    var homePaper: String?
+        get() = prefs.getString("homePaper", null)
+        set(value) = prefs.edit().putString("homePaper", value).apply()
+
+    /** 紙面のバックナンバー（JSON。[jp.icenorth.baseball.shared.BackIssue] の並び） */
+    var backIssues: String?
+        get() = prefs.getString("backIssues", null)
+        set(value) = prefs.edit().putString("backIssues", value).apply()
+
     var viewJson: String?
         get() = prefs.getString("view", null)
         set(value) = prefs.edit().putString("view", value).apply()

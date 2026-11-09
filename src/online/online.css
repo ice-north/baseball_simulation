@@ -766,6 +766,16 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-mood.is-bad {
   color: #fca5a5;
 }
+/* この選手だけ希望に合わせる。⚠ やる気の欄に置く（右端の希望の欄だと
+   表の横スクロールで隠れる）。行の高さを増やさない小ささにする */
+.online-camp-scroll .online-mood .online-camp-wish-fit {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  min-height: 0;
+  border-radius: 6px;
+}
 
 /* --- 球団名とプレイヤー名（セット選択の下） --------------------------- */
 .online-identity {
@@ -3795,4 +3805,23 @@ small.online-gain:not(:where(.online-sp *)) {
   flex-wrap: wrap;
   gap: 2px 14px;
   margin: 0;
+}
+
+/* --- 年代記（球団史・マジック・ペース） --------------------------------- */
+.online-move.is-race {
+  color: #f2d27a;
+}
+.online-leader-pace {
+  display: block;
+  font-size: 10px;
+  color: #9fb0c4;
+  text-align: right;
+}
+.online-chronicle-sub {
+  margin: 6px 0 2px;
+  font-size: 11px;
+  color: #9fb0c4;
+}
+.online-chronicle-table td:last-child {
+  text-align: left;
 }

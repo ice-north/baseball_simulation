@@ -42,6 +42,10 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+        with:
+          # ⚠ 履歴を全部取る。アプリに「最後に mobile/ を変えたコミット」を入れ、ホームの紙面で最新かを確かめるため
+          #    （androidApp/build.gradle.kts の APP_COMMIT・shared の AppUpdate.kt）。浅いと HEAD のコミットになる
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -60,6 +64,13 @@ jobs:
         run: ./gradlew :androidApp:testDebugUnitTest --console=plain
       - name: APK をビルド
         run: ./gradlew :androidApp:assembleDebug --console=plain
+      - name: アプリの版が入ったか
+        run: |
+          want=$(git log -1 --format=%H -- .)
+          [ ${#want} = 40 ] || { echo "mobile/ の最後のコミットが分からない"; exit 1; }
+          file=$(find androidApp/build/generated -name BuildConfig.java | head -1)
+          grep -q "APP_COMMIT = \"$want\"" "$file" || { echo "APP_COMMIT が $want になっていない"; grep APP_ "$file"; exit 1; }
+          grep APP_ "$file"
       - uses: actions/upload-artifact@v4
         with:
           name: baseball-online-apk

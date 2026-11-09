@@ -113,6 +113,7 @@ export function assembleBundle(core, order, parts) {
 
 /**
  * 軽い読み: 芯と records だけで bundle を作り、world・backup は番人に差し替える。
+ * `parts` に records が無く `refs` にはあるとき（読むだけの処理）は、records も番人にする。
  * 返す `inspect(bundle)` は、命令のあとで「軽い読みのまま保存できるか」と、保存する芯を返す。
  */
 export function assembleLight(core, order, parts, refs) {
@@ -161,6 +162,8 @@ export function assembleLight(core, order, parts, refs) {
       if (order.game?.includes(key) && !Object.hasOwn(game, key)) game[key] = guards[key] = guard(key);
     const nextLeague = { ...league, game: ordered(order.game, game) };
     if (parts.records !== undefined) nextLeague.records = parts.records;
+    // 記録も読まなかった（読むだけの処理。`SupabaseStore.readLight`）なら、記録も番人にする
+    else if (refs.records) nextLeague.records = guard('records');
     bundle.league = ordered(order.league, nextLeague);
   }
   const shaped = ordered(order?.bundle, bundle);

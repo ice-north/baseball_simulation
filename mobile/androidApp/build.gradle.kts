@@ -1,10 +1,28 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 
 plugins {
     id("com.android.application")
     kotlin("android")
     kotlin("plugin.compose")
 }
+
+// 入っているアプリが最新かを確かめるための「版」（shared の AppUpdate.kt）。
+// 最後に mobile/ を変えたコミットとその時刻（UTC）。git の無い所で作ったときは空（紙面に記事を出さない）
+// ⚠ CI は履歴を全部取ること（android.yml の fetch-depth: 0）。浅いと HEAD が最後のコミットに見える
+val appCommit: List<String> = runCatching {
+    providers.exec {
+        commandLine("git", "log", "-1", "--format=%H %ct", "--", ".")
+        workingDir = rootDir
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().split(" ")
+}.getOrDefault(emptyList())
+val appCommitSha = appCommit.getOrNull(0)?.takeIf { it.length == 40 }.orEmpty()
+val appCommitTime = appCommit.getOrNull(1)?.toLongOrNull()?.let {
+    DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochSecond(it))
+}.orEmpty()
+val appBranch = (System.getenv("GITHUB_HEAD_REF")?.takeIf { it.isNotEmpty() } ?: System.getenv("GITHUB_REF_NAME")).orEmpty()
 
 android {
     namespace = "jp.icenorth.baseball.app"
@@ -18,6 +36,9 @@ android {
         versionName = "0.1.0"
         // 画面の見回り（src/androidTest の ScreenTour。CI の screens ジョブ）
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "APP_COMMIT", "\"$appCommitSha\"")
+        buildConfigField("String", "APP_COMMIT_TIME", "\"$appCommitTime\"")
+        buildConfigField("String", "APP_BRANCH", "\"$appBranch\"")
         // 本番のオンライン対人版（docs/online/PRODUCTION_SETUP.md の「本番」）
         buildConfigField("String", "DEFAULT_ENDPOINT", "\"https://baseball-simulation-neon.vercel.app/api/online\"")
     }

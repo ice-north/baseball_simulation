@@ -17,6 +17,9 @@ import {
   submitPhase,
   loadLeagueWorld,
   recordCampRound,
+  validateCampRound,
+  runCampRound,
+  campFallbackPlan,
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { TEAMS_DATA } from '../../src/teams-data.js';
@@ -30,6 +33,12 @@ import {
   DIRECTIONS,
   resolveTraining,
   playerWish,
+  playerPolicy,
+  recommendedPolicy,
+  describeMood,
+  moodMultiplier,
+  PLAIN_SKILL_LINE,
+  poleStats,
 } from '../../src/season/trainingPolicy.js';
 import { abilitySnapshot, abilityGains, campGainLabel } from '../../src/online/campGains.js';
 
@@ -194,6 +203,69 @@ function campWith(build) {
         );
       }
   }
+}
+
+// --- 選手ごとの方針（おすすめ・全員を希望どおり・上書き） ----------------
+// ⚠ いしだ指摘: 方針が球団で1つだと、希望の違う選手が必ず「身が入らない」で
+//    残り、一括指定が有効に見えない。決め方を選べ、1人ずつ合わせられること
+{
+  const league = leagueAtCamp();
+  const roster = ownRoster(league);
+  const teamName = league.members[0].teamName;
+  const toneOf = (p, own) => describeMood(p, own.direction, own.phase).tone;
+  for (const p of roster) {
+    // 全員を希望どおり → 全員「意欲的」
+    assert.equal(toneOf(p, playerPolicy(p, { mode: 'wish' })), 'good');
+    // おすすめ → 身が入らない選手は出ない。変えるのは平凡な選手の短所埋めだけ
+    const rec = recommendedPolicy(p);
+    assert.notEqual(toneOf(p, rec), 'bad', `おすすめで身が入らない: ${p.name}`);
+    const wish = playerWish(p);
+    if (wish.direction === 'patch' && poleStats(p, 'skill').bestValue < PLAIN_SKILL_LINE)
+      assert.deepEqual(rec, { direction: 'sharpen', phase: wish.phase });
+    else assert.deepEqual(rec, wish);
+    // 上書きはどの決め方よりも先に効く
+    const own = { direction: 'patch', phase: 'physique' };
+    assert.deepEqual(playerPolicy(p, { mode: 'wish' }, { [p.id]: own }), own);
+  }
+  // 決め方が無い（前の版の画面・保存した指示）なら全員同じ方針
+  assert.deepEqual(playerPolicy(roster[0], { direction: 'patch', phase: 'skill' }), {
+    direction: 'patch',
+    phase: 'skill',
+  });
+  // 入口: 決め方と上書きを受け取る。受け取れない方針は弾く
+  const target = roster[0];
+  const plan = validateCampRound(league, teamName, {
+    policy: { mode: 'wish' },
+    players: { [target.id]: { direction: 'patch', phase: 'physique' }, 999999: { direction: 'patch', phase: 'skill' } },
+  });
+  assert.equal(plan.policy.mode, 'wish');
+  assert.deepEqual(plan.players, { [target.id]: { direction: 'patch', phase: 'physique' } }, '他球団の選手の上書きが残った');
+  assert.equal(validateCampRound(league, teamName, { policy: { mode: 'nope' } }).policy.mode, 'team');
+  assert.throws(
+    () => validateCampRound(league, teamName, { players: { [target.id]: { direction: 'x', phase: 'skill' } } }),
+    /育成方針が不正/,
+  );
+  // 実行: やる気は**選手ごとの方針**で決まる（全員を希望どおりなら全員 1.15 倍、
+  //    上書きした1人だけその方針の倍率）
+  loadLeagueWorld(league);
+  const { moods } = quiet(() =>
+    runCampRound(league, teamName, {
+      policy: { mode: 'wish' },
+      players: { [target.id]: { direction: 'patch', phase: 'physique' } },
+    }),
+  );
+  // 締め切り: 何もしなかった人はおすすめ（画面の既定と同じ）、CPU球団は全員同じ
+  assert.equal(campFallbackPlan({ userId: 'a' }, { menu: 'standard', assignments: {} }).policy.mode, 'recommended');
+  assert.equal(campFallbackPlan(null, undefined).policy, undefined);
+  const submitted = { policy: { mode: 'team', direction: 'patch', phase: 'skill' }, players: { 1: { direction: 'sharpen', phase: 'skill' } } };
+  assert.deepEqual(campFallbackPlan({ userId: 'a' }, submitted).policy, submitted.policy, '提出した決め方が消えた');
+  assert.deepEqual(campFallbackPlan({ userId: 'a' }, submitted).players, submitted.players, '提出した上書きが消えた');
+  for (const p of roster)
+    assert.equal(
+      moods[p.id],
+      p.id === target.id ? moodMultiplier(p, 'patch', 'physique') : 1.15,
+      `やる気が選手ごとの方針になっていない: ${p.name}`,
+    );
 }
 
 // --- 提出の検証 ---------------------------------------------------------

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import SeasonFlow from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import MobileTactics from './MobileTactics.jsx';
@@ -25,6 +25,7 @@ import { Page } from './Page.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting } from './notices.js';
+import { ReadContext } from './useRead.js';
 import CampPlanner from './CampPlanner.jsx';
 import ContractPlanner from './ContractPlanner.jsx';
 import {
@@ -132,6 +133,15 @@ export function Login({ local, login, busy }) {
  *    2部の首位が表の1位に見えて「優勝争い」と取り違える（実測で起きた）。
  *    `teamLeagues` が無い古いビューでは従来どおり1つの表で出す。
  */
+/** 順位表の印（「M3」「昇格決定」など）。マジックはサーバーが数える（`leagueRaces`） */
+function raceTag(races, team) {
+  const r = (races || []).find((x) => x.team === team);
+  if (!r) return null;
+  const done = { first: '1位決定', promotion: '昇格決定', survive: '残留決定', relegated: '降格決定' };
+  const magic = { first: '1位', promotion: '昇格', survive: '残留' };
+  return r.clinched ? done[r.kind] : `${magic[r.kind]}M${r.magic}`;
+}
+
 export function Standings({ view }) {
   const leagues = view.teamLeagues
     ? PYRAMID_LEAGUES.map((league) => ({
@@ -194,6 +204,11 @@ export function Standings({ view }) {
                     {down ? (
                       <small className="online-move">降格圏</small>
                     ) : null}
+                    {raceTag(view.races, s.team) && (
+                      <small className="online-move is-race">
+                        {raceTag(view.races, s.team)}
+                      </small>
+                    )}
                   </th>
                   <td>{s.wins}</td>
                   <td>{s.losses}</td>
@@ -603,10 +618,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     structuredClone(phase.submission || null),
   );
   const [error, setError] = useState('');
+  // 標準案は覚えを通して読む（`readCache.js`。版が同じ間は取りに行かない）。
+  // ⚠ 覚えた答えを編集で書き換えないよう、受け取った案は写してから使う
+  const read = useContext(ReadContext);
+  const loadDefaults = async () =>
+    structuredClone(await (read ? read('defaults', {}) : api('defaults', auth)));
   useEffect(() => {
     let cancelled = false;
     if (!phase.submission)
-      api('defaults', auth)
+      loadDefaults()
         .then((d) => {
           if (!cancelled) {
             if (d.phaseId !== phase.id) {
@@ -659,7 +679,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
       try {
         let next = phase.submission?.plan;
         if (!next) {
-          const defaults = await api('defaults', auth);
+          const defaults = await loadDefaults();
           if (defaults.phaseId !== phase.id)
             throw new Error(
               '手続きが更新されました。最新状態を確認してください',
@@ -682,7 +702,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     run(async () => {
       setError('');
       try {
-        const defaults = await api('defaults', auth);
+        const defaults = await loadDefaults();
         if (defaults.phaseId !== phase.id)
           throw new Error('手続きが更新されました。最新状態を確認してください');
         setPlan(structuredClone(defaults.plan));

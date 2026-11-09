@@ -72,6 +72,7 @@ export function currentPlayerStats(
   const stats = season?.complete
     ? recordedStats(record) || emptyStats()
     : player.seasonStats;
+  const recent = recentForm(record);
   return {
     seasonStats: stats,
     performance: performanceFor(
@@ -79,6 +80,28 @@ export function currentPlayerStats(
       baseline,
       situationalCandidates(record, comparison),
     ),
+    ...(recent ? { recent } : {}),
+  };
+}
+/** 紙面の「最近好調」で見る試合数 */
+export const RECENT_GAMES = 5;
+/**
+ * 打者の最近の調子（紙面の「最近好調」「連続試合安打」）。今季の記録の試合から数える。
+ * - `games` / `atBats` / `hits` … 打数のあった直近 RECENT_GAMES 試合の合計
+ * - `hitStreak` … 連続試合安打（打数0の試合＝四球だけ等は数えず、途切れもしない）
+ * ⚠ 記録（`record.games`）は試合を終えた順に積まれている。打数が1つも無ければ null
+ */
+export function recentForm(record) {
+  const games = (record?.games || []).filter((g) => g.atBats > 0);
+  if (!games.length) return null;
+  const last = games.slice(-RECENT_GAMES);
+  let hitStreak = 0;
+  for (let i = games.length - 1; i >= 0 && games[i].hits > 0; i--) hitStreak++;
+  return {
+    games: last.length,
+    atBats: last.reduce((sum, g) => sum + g.atBats, 0),
+    hits: last.reduce((sum, g) => sum + g.hits, 0),
+    hitStreak,
   };
 }
 const combinedRecord = () => ({
@@ -307,6 +330,26 @@ export function playerPeriods(
   }
   return clone(periods);
 }
+/**
+ * 勝ち・負け・セーブ・ホールドの投手を、id と名前だけにする。
+ * ⚠ 試合の記録には投手の選手まるごと（能力・成績・経歴まで）が入っており、試合1つで約4KBあった。
+ *    画面が使うのは名前だけなので、渡すとき（一覧・詳細・索引）に削る。記録そのものは変えない
+ */
+const pitcherRef = (p) =>
+  p && typeof p === 'object' ? { id: p.id ?? null, name: p.name ?? null } : p;
+export function decisionRefs(decisions) {
+  if (!decisions || typeof decisions !== 'object') return decisions;
+  return Object.fromEntries(
+    Object.entries(decisions).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? value.map(pitcherRef) : pitcherRef(value),
+    ]),
+  );
+}
+/** 画面へ渡す試合（勝敗投手を削る）。記録の本体は変えずに写しを返す */
+export function slimGame(game) {
+  return game?.decisions ? { ...game, decisions: decisionRefs(game.decisions) } : game;
+}
 export function gameSummary(game) {
   return {
     gameId: game.gameId,
@@ -315,7 +358,7 @@ export function gameSummary(game) {
     away: game.away,
     homeScore: game.homeScore ?? game.result?.homeScore,
     awayScore: game.awayScore ?? game.result?.awayScore,
-    decisions: game.decisions || game.result?.decisions,
+    decisions: decisionRefs(game.decisions || game.result?.decisions),
   };
 }
 export function storedGame(league, id, year) {

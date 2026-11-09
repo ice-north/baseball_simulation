@@ -106,6 +106,27 @@ fun playerWish(player: JsonObject): Wish {
     return Wish(direction, phase)
 }
 
+/** 「平凡」の線（PLAIN_SKILL_LINE）。技術の長所がこれ未満なら短所埋めより長所で勝負させる */
+const val PLAIN_SKILL_LINE = 55.0
+
+/** おすすめの方針（recommendedPolicy）。希望どおり、ただし平凡な選手の短所埋めだけ長所へ */
+fun recommendedPolicy(player: JsonObject): Wish {
+    val wish = playerWish(player)
+    if (wish.direction == "patch" && poleStats(player, "skill").bestValue < PLAIN_SKILL_LINE) return Wish("sharpen", wish.phase)
+    return wish
+}
+
+/**
+ * その選手に当てる方針（playerPolicy）。mode は recommended / wish / team、
+ * overrides は選手ごとの上書き（「合わせる」）で、どの決め方よりも先に効く。
+ */
+fun playerPolicy(player: JsonObject, mode: String, direction: String, phase: String, overrides: Map<Long, Wish>): Wish =
+    overrides[player.pid] ?: when (mode) {
+        "wish" -> playerWish(player)
+        "recommended" -> recommendedPolicy(player)
+        else -> Wish(direction, phase)
+    }
+
 enum class MoodTone { Good, Mid, Bad }
 data class Mood(val label: String, val tone: MoodTone)
 

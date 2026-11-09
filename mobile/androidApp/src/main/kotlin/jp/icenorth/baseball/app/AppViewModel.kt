@@ -8,8 +8,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import jp.icenorth.baseball.app.ui.TradeDraft
 import jp.icenorth.baseball.shared.AuthSession
+import jp.icenorth.baseball.shared.AppBuild
 import jp.icenorth.baseball.shared.EditHistory
+import jp.icenorth.baseball.shared.LatestApp
+import jp.icenorth.baseball.shared.fetchLatestApp
 import jp.icenorth.baseball.shared.PlanDraft
+import jp.icenorth.baseball.shared.Wish
 import jp.icenorth.baseball.shared.sanitizeWeights
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineApi
@@ -27,8 +31,15 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-class AppViewModel internal constructor(app: Application, private val createApi: (String) -> OnlineApi) : AndroidViewModel(app) {
-    constructor(app: Application) : this(app, { OnlineApi(it) })
+/**
+ * @param fetchLatest main の最新のアプリを読む（[fetchLatestApp]）。検査では外へ読みに行かないよう既定は null を返す
+ */
+class AppViewModel internal constructor(
+    app: Application,
+    private val fetchLatest: suspend () -> LatestApp? = { null },
+    private val createApi: (String) -> OnlineApi,
+) : AndroidViewModel(app) {
+    constructor(app: Application) : this(app, { fetchLatestApp() }, { OnlineApi(it) })
 
     private val store = SessionStore(app)
 
@@ -82,6 +93,28 @@ class AppViewModel internal constructor(app: Application, private val createApi:
     fun changeHomeStyle(name: String) {
         homeStyle = name
         store.homeStyle = name
+    }
+
+    /** ホームで開く新聞（地元紙・全国紙）。端末に覚える */
+    var homePaper by mutableStateOf(store.homePaper)
+        private set
+
+    fun changeHomePaper(name: String) {
+        homePaper = name
+        store.homePaper = name
+    }
+
+    /** 紙面のバックナンバー（古い順）。端末に覚える */
+    var backIssues by mutableStateOf(
+        store.backIssues?.let { runCatching { OnlineJson.decodeFromString<List<jp.icenorth.baseball.shared.BackIssue>>(it) }.getOrNull() }.orEmpty(),
+    )
+        private set
+
+    fun recordBackIssue(item: jp.icenorth.baseball.shared.BackIssue) {
+        if (backIssues.any { it == item }) return
+        val next = jp.icenorth.baseball.shared.addBackIssue(backIssues, item)
+        backIssues = next
+        store.backIssues = OnlineJson.encodeToString(next)
     }
 
     /** 状況に応じたTIPSを最後に読んだときのTIPSの id。端末に覚える（[jp.icenorth.baseball.shared.hasUnreadTips]） */
@@ -154,8 +187,12 @@ class AppViewModel internal constructor(app: Application, private val createApi:
     private val refreshLock = Mutex()
 
     // ⚠ init（起動時の読み込み）より前に置く。後ろに置くと、読み込みが走ったあとで初期値に戻される
-    /** 手元のビューの世代（サーバーが公開のたびに上げる）。起動直後は分からないので null（全部読む） */
-    private var viewGeneration: Long? = null
+    /**
+     * 手元のビューの世代（サーバーが公開のたびに上げる）。null なら次は全部読む。
+     * ⚠ 起動直後も、端末に残したビューの世代から始める（残したビューの中に入っている）。以前は起動のたびに
+     *    null から始めて、何も変わっていなくてもビューをまるごと取り直していた
+     */
+    private var viewGeneration: Long? = raw?.get("viewGeneration")?.jsonPrimitive?.longOrNull
 
     /**
      * 読むだけの窓口の答えを覚えておく（同じ画面を開き直すたびに取りに行かない）。
@@ -166,7 +203,32 @@ class AppViewModel internal constructor(app: Application, private val createApi:
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Int?, JsonObject>>?) = size > 40
     }
 
+    /** 入っているアプリの版（作ったときに build.gradle.kts が入れる） */
+    val appBuild = AppBuild(BuildConfig.APP_COMMIT, BuildConfig.APP_COMMIT_TIME, BuildConfig.APP_BRANCH)
+
+    /** main の最新のアプリ（ホームの紙面の「アプリ」の記事）。まだ読めていない・読めなかったら null */
+    var latestApp by mutableStateOf<LatestApp?>(null)
+        private set
+    private var latestAppCheckedAt = 0L
+    private var latestAppJob: Job? = null
+
+    /**
+     * main の最新のアプリを読む。⚠ GitHub の認証なしの API は1時間に60回までなので、30分に1回まで
+     * （起動時と、引っ張って更新したとき）。手元で作った版（コミットが分からない）は読まない
+     */
+    private fun checkLatestApp() {
+        if (appBuild.commit.isEmpty() || latestAppJob?.isActive == true) return
+        val now = System.currentTimeMillis()
+        if (latestAppCheckedAt != 0L && now - latestAppCheckedAt < 30 * 60_000L) return
+        latestAppCheckedAt = now
+        latestAppJob = viewModelScope.launch {
+            // 読めなかったときは前の答えを残す（電波の悪い所で記事が消えたり出たりしないように）
+            fetchLatest()?.let { latestApp = it } ?: run { latestAppCheckedAt = 0L }
+        }
+    }
+
     init {
+        checkLatestApp()
         if (auth != null) reload()
     }
 
@@ -264,7 +326,10 @@ class AppViewModel internal constructor(app: Application, private val createApi:
         //    入れ替わった更新トークンを受け取りそこね、次の更新で締め出されるため
         val previous = reloadJob?.takeIf { it.isActive }
         if (previous != null && !pull) return
-        if (pull) refreshing = true
+        if (pull) {
+            refreshing = true
+            checkLatestApp()
+        }
         val serial = ++reloadSerial
         reloadJob = viewModelScope.launch {
             try {
@@ -409,7 +474,8 @@ class AppViewModel internal constructor(app: Application, private val createApi:
     private fun applyView(text: String) {
         view = parseView(text)
         raw = parseRaw(text)
-        // ⚠ 指示の返事に載ったビューには世代が無い（公開の前に作るため）。そのときは null にして、次は全部読む
+        // 指示の返事に載ったビューにも、公開した世代が入っている（サーバーが押す）。
+        // 古いサーバーの返事には無いので、そのときは null にして次は全部読む
         viewGeneration = raw?.get("viewGeneration")?.jsonPrimitive?.longOrNull
         store.viewJson = text
     }
@@ -478,4 +544,14 @@ private fun parseRaw(raw: String): JsonObject? = runCatching { OnlineJson.parseT
 data class PhaseDraft(val phaseId: String, val plan: JsonObject, val base: JsonElement?, val dirty: Boolean)
 
 /** キャンプの方針と、選手ごとのメイン・サブ練習（未実行のクールの指示） */
-data class CampDraft(val phaseId: String, val direction: String, val phase: String, val main: Map<Long, String>, val sub: Map<Long, String>)
+data class CampDraft(
+    val phaseId: String,
+    val direction: String,
+    val phase: String,
+    val main: Map<Long, String>,
+    val sub: Map<Long, String>,
+    /** 決め方（recommended / wish / team）。⚠ 既定はおすすめ */
+    val mode: String = "recommended",
+    /** 選手ごとの方針の上書き（「合わせる」） */
+    val players: Map<Long, Wish> = emptyMap(),
+)
