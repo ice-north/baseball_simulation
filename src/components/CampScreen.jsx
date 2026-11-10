@@ -705,7 +705,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-ink">{campTitle} - {userTeamName}</h1>
             {dispatchedPlayers.length > 0 && (
-              <span className="text-orange-900 text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
+              <span className="text-ink-accent text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -724,13 +724,14 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           <br />選手が伸びるのは練習だけではありません。<b className="text-cyan-200">シーズン中に試合へ出た量も同じくらい効きます</b>——1年フル出場した若手は、出番の無かった選手の2倍以上成長します。体力を鍛えると疲労に強く選手寿命が延びます。Year2以降は有望株を<b className="text-cyan-200">派遣</b>に出して大きく伸ばすこともできます。
         </TutorialHint>
 
-        {/* ランク変動通知 */}
+        {/* ランク変動通知。⚠ ここから下のお知らせの枠は地色の上に置くので不透明（bg-surface-2）にし、
+            良し悪しの色は枠が持つ（半透明の bg-green-900/30 だと紙が透けて、中の文字が消えていた） */}
         {currentRound === 1 && seasonData?.rankChanges?.length > 0 && (() => {
           const userChange = seasonData.rankChanges.find(c => c.team === userTeamName);
           if (!userChange) return null;
           const isUp = 'DCBAS'.indexOf(userChange.to) > 'DCBAS'.indexOf(userChange.from);
           return (
-            <div className={`mb-2 p-3 rounded-xl border text-center ${isUp ? 'bg-green-900/30 border-green-500/40' : 'bg-red-900/30 border-red-500/40'}`}>
+            <div className={`mb-2 p-3 rounded-xl border text-center bg-surface-2 ${isUp ? 'border-green-500/60' : 'border-red-500/60'}`}>
               <span className={`font-black text-lg ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                 {isUp ? '↑' : '↓'} ランク{isUp ? '昇格' : '降格'}: {userChange.from} → {userChange.to}
               </span>
@@ -747,7 +748,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           if (!userPromo) return null;
           const isPromoted = userPromo.promoted.team === userTeamName;
           return (
-            <div className={`mb-2 p-3 rounded-xl border text-center ${isPromoted ? 'bg-green-900/30 border-green-500/40' : 'bg-red-900/30 border-red-500/40'}`}>
+            <div className={`mb-2 p-3 rounded-xl border text-center bg-surface-2 ${isPromoted ? 'border-green-500/60' : 'border-red-500/60'}`}>
               <span className={`font-black text-lg ${isPromoted ? 'text-green-400' : 'text-red-400'}`}>
                 {isPromoted ? '↑' : '↓'} {isPromoted ? '昇格' : '降格'}: {isPromoted ? userPromo.promoted.from : userPromo.relegated.from} → {isPromoted ? userPromo.promoted.to : userPromo.relegated.to}
               </span>
@@ -758,7 +759,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
         {/* スタッフ退職通知 */}
         {currentRound === 1 && seasonData?.staffRetirements?.length > 0 && (
-          <div className="mb-2 p-3 rounded-xl border bg-gray-800/80 border-gray-600/40">
+          <div className="mb-2 p-3 rounded-xl border bg-surface-2 border-gray-600/40">
             <div className="text-sm font-bold text-gray-300 mb-1">スタッフ退職のお知らせ</div>
             <div className="space-y-0.5">
               {seasonData.staffRetirements.map((s, idx) => {
@@ -778,7 +779,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
         {/* 赤字ペナルティ通知 */}
         {currentRound === 1 && seasonData?.deficitPenalties?.length > 0 && (
-          <div className="mb-2 p-3 rounded-xl border bg-red-900/30 border-red-500/40">
+          <div className="mb-2 p-3 rounded-xl border bg-surface-2 border-red-500/60">
             <div className="text-sm font-bold text-red-400 mb-1">⚠️ 予算超過ペナルティ</div>
             <div className="space-y-0.5">
               {seasonData.deficitPenalties.map((p, idx) => (

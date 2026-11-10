@@ -317,7 +317,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         <h1 className="text-xl font-bold text-ink mb-3">契約更改完了</h1>
         {totalRetirements + retireCount > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-yellow-900 mb-2">
+            <h2 className="text-sm font-bold text-ink mb-2">
               引退選手 ({totalRetirements + retireCount}名)
             </h2>
             <div className="grid grid-cols-2 gap-1">
@@ -340,8 +340,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         )}
         {(releaseCount > 0 || totalAiReleases > 0) && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-red-900 mb-2">解雇 ({releaseCount + totalAiReleases}名)</h2>
-            <p className="text-xs text-gray-300 mb-1">
+            <h2 className="text-sm font-bold text-ink-warn mb-2">解雇 ({releaseCount + totalAiReleases}名)</h2>
+            <p className="text-xs text-ink-sub mb-1">
               自チーム: {releaseCount}名 / 他チーム: {totalAiReleases}名
             </p>
           </div>
@@ -349,7 +349,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         {/* スタッフ転向 */}
         {Object.keys(staffConversions).filter(pid => staffConversions[pid] && staffPreviews[pid]).length > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-cyan-900 mb-2">スタッフ転向</h2>
+            <h2 className="text-sm font-bold text-ink mb-2">スタッフ転向</h2>
             <div className="grid grid-cols-2 gap-1">
               {Object.entries(staffConversions).filter(([, v]) => v).map(([pid]) => {
                 const preview = staffPreviews[pid];
@@ -606,7 +606,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
       {/* 予算超過警告 */}
       {!isClub && budgetBalance < 0 && (
-        <div className="mb-2 p-2 bg-red-900/30 border border-red-700 rounded">
+        <div className="mb-2 p-2 bg-surface-2 border border-red-700 rounded">
           <p className="text-red-400 text-xs font-bold mb-1">
             ⚠️ 予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です
           </p>
@@ -621,7 +621,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
       {/* 入替未完了警告 */}
       {replaceStaffFor !== null && (
-        <div className="mb-2 p-2 bg-orange-900/30 border border-orange-700 rounded">
+        <div className="mb-2 p-2 bg-surface-2 border border-orange-700 rounded">
           <p className="text-orange-400 text-xs font-bold">
             ⚠ スタッフ入替の選択が完了していません。入替先を選ぶか、転向を取消してから確定してください。
           </p>
@@ -639,7 +639,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         >
           {!isClub && budgetBalance < 0 ? '赤字のまま確定' : '契約更改を確定'}
         </button>
-        <div className="text-xs text-gray-300 space-x-3">
+        {/* 人数の内訳は色で区別するのでカードに載せる（地色の上では意味色が消える。index.css の文字色の決まり） */}
+        <div className="text-xs text-gray-300 space-x-3 bg-surface-2 rounded-lg px-3 py-1.5">
           <span className="text-green-400">契約{contractCount}名</span>
           {releaseCount > 0 && <span className="text-red-400">解雇{releaseCount}名</span>}
           {retireCount > 0 && <span className="text-yellow-400">引退{retireCount}名</span>}

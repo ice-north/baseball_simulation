@@ -202,7 +202,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         <h1 className="text-xl font-bold text-ink mb-2">交渉結果</h1>
         <p className="text-sm text-ink-sub mb-5">
           {negotiationResults.length}名に打診 → {successes.length}名が入団承諾
-          {totalAcquired > 0 && <span className="text-green-900 font-bold ml-2">(累計{totalAcquired}名獲得)</span>}
+          {totalAcquired > 0 && <span className="text-ink-accent font-bold ml-2">(累計{totalAcquired}名獲得)</span>}
         </p>
 
         <div className="space-y-3 mb-6">
@@ -304,7 +304,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         <h1 className="text-xl font-bold text-ink mb-4">スカウト入団完了</h1>
         {totalAcquired > 0 ? (
           <div className="mb-5">
-            <p className="text-green-900 font-bold text-base mb-3">今シーズンは{totalAcquired}名を獲得しました</p>
+            <p className="text-ink-accent font-bold text-base mb-3">今シーズンは{totalAcquired}名を獲得しました</p>
             <div className="space-y-2">
               {allResults.filter(r => r.success).map(({ player: p }, i) => (
                 <div key={i} className="flex items-center gap-3 text-sm bg-surface-2 border border-green-700 rounded-lg p-3">
@@ -322,7 +322,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
 
         {totalAiRecruited > 0 && (
           <div className="mb-5">
-            <h2 className="text-base font-bold text-blue-900 mb-3">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
+            <h2 className="text-base font-bold text-ink mb-3">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
             {/* 1列で並べると160チーム超で縦4000px近くなり、横は左400pxしか使わない。
                 多段にして1〜2画面に収める（情報は減らさない） */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1">
@@ -337,7 +337,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
 
         <p className="text-sm text-ink-sub mb-4">
           現在のロスター: {teamData?.players?.length || 0}名
-          {totalAcquired > 0 && <span className="text-green-900 font-bold ml-2">(入団した選手はキャンプから合流します)</span>}
+          {totalAcquired > 0 && <span className="text-ink-accent font-bold ml-2">(入団した選手はキャンプから合流します)</span>}
         </p>
         <button onClick={onComplete}
           className="btn-primary px-8 py-2.5 rounded-lg text-base"
@@ -353,11 +353,11 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       <div className="max-w-7xl mx-auto">
       <h1 className="text-xl font-bold text-ink mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
       <div className="flex items-center gap-5 text-sm text-ink-sub mb-3">
-        <span>注目度: <span className={reputation >= 50 ? 'text-yellow-900 font-bold' : 'text-ink'}>{reputation}</span></span>
+        <span>注目度: <span className={reputation >= 50 ? 'text-ink-accent font-bold' : 'text-ink'}>{reputation}</span></span>
         <span>ランク: <span className="text-ink font-bold">{rank}</span></span>
         <span>ロスター: {teamData?.players?.length || 0}名</span>
-        <span>選択中: <span className="text-green-900 font-bold">{selectedIds.length}名</span></span>
-        {totalAcquired > 0 && <span className="text-green-900 font-bold">獲得済: {totalAcquired}名</span>}
+        <span>選択中: <span className="text-ink-accent font-bold">{selectedIds.length}名</span></span>
+        {totalAcquired > 0 && <span className="text-ink-accent font-bold">獲得済: {totalAcquired}名</span>}
       </div>
 
       {scouts.length > 0 && (

@@ -2941,10 +2941,11 @@ if (newOuts === 3) {
               <div className="p-1" data-fit-height={gameOver ? undefined : true}>
           {/* 管理画面へボタン（采配モード中は非表示） */}
           <div className="max-w-[1800px] mx-auto flex justify-between items-center">
-            {/* ⚠ この行は地色（明るい灰色）の上に直に載る。黄色の字をそのまま置くと地に溶け、
-                上端に詰まって切れて見えた。カードと同じ紺の札に載せる */}
+            {/* ⚠ この行は地色（明るい灰色）の上に直に載る見出し。文字色は index.css の「文字色の決まり」の
+                地色の列（見出し text-ink・強調 text-ink-accent）。黄色の字のままだと地に溶けていた。
+                上下に少し余白を取る（行の高さが字ぎりぎりで上の端に詰まって見えた） */}
             {managedGameInfo && (
-              <span className="inline-block bg-surface-2 rounded-md px-2 py-0.5 mb-1 text-yellow-400 text-sm font-bold">
+              <span className="inline-block py-0.5 mb-1 text-ink text-sm font-bold">
                 {formatDate(seasonData?.currentDate)} - 采配モード
                 {(() => {
                   const fmt = seasonData?.settings?.leagueFormat;
@@ -2955,10 +2956,10 @@ if (newOuts === 3) {
                   const h = homeTeam?.name, a = awayTeam?.name;
                   if (!h || !a) return null;
                   const isInter = l1.has(h) !== l1.has(a);
-                  if (isInter) return <span className="ml-2 text-green-400">[ 交流戦 ]</span>;
+                  if (isInter) return <span className="ml-2 text-ink-accent">[ 交流戦 ]</span>;
                   const leagueNames = seasonData?.settings?.leagueNames;
                   const lName = l1.has(h) ? (leagueNames?.[0] || 'リーグ1') : (leagueNames?.[1] || 'リーグ2');
-                  return <span className="ml-2 text-blue-400">[ {lName} ]</span>;
+                  return <span className="ml-2 text-ink-accent">[ {lName} ]</span>;
                 })()}
               </span>
             )}
@@ -2966,7 +2967,7 @@ if (newOuts === 3) {
               {!managedGameInfo && (
                 <button
                   onClick={() => setScreenMode('management')}
-                  className="bg-gray-700/80 hover:bg-gray-600 text-gray-300 hover:text-white px-5 py-2.5 rounded-xl transition-all border border-gray-600/50 hover:border-gray-500 flex items-center gap-2 active:scale-95"
+                  className="btn-secondary px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 active:scale-95"
                 >
                   <span>⚙️</span>
                   <span className="font-medium">管理画面へ</span>

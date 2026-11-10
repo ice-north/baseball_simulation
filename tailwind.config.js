@@ -39,11 +39,17 @@ export default {
         //    ⚠ 色を増やしているのではない。ランク色・意味色の語彙は変わっていない。
         //    実測（カード #324d6c 上）: purple 4.92 / blue 4.77 / red 4.62 /
         //    pink 4.83 / orange 5.12 — いずれも AA(4.5) を確保。
-        // ⚠ **明るい地色の上に直に載る文字だけ**が使うトークン。
-        //    カードの上の文字は従来どおり gray-100〜400（明るい側）のまま。
-        //    2つの文脈が同居するので、どちらに載るかを見て選ぶこと。
-        ink:     'var(--ink)',
-        'ink-sub': 'var(--ink-sub)',
+        // ⚠ **明るい地色の上に直に載る文字だけ**が使うトークン（text-ink / text-ink-sub /
+        //    text-ink-accent / text-ink-warn）。カードの上の文字は従来どおり gray-100〜400
+        //    （明るい側）のまま。2つの文脈が同居するので、どちらに載るかを見て選ぶこと。
+        //    どの役（本文・補足・見出し・強調・警告）にどれを使うかは src/index.css の
+        //    「文字色の決まり」の表が正本。
+        ink: {
+          DEFAULT: 'var(--ink)',
+          sub: 'var(--ink-sub)',
+          accent: 'var(--ink-accent)',
+          warn: 'var(--ink-warn)',
+        },
         purple: { 400: '#d8b4fe' },
         // ⚠ 好不調の5段（`condition.js` の `CONDITION_COLORS`）の一番冷たい段が
         //    ここを使う。素の indigo-400(#818cf8) はカード上で AA を割る。
