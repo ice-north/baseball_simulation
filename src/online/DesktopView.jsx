@@ -434,7 +434,13 @@ export default function DesktopView(props) {
                 .join(' · ')}
             </span>
           </div>
-          <button className="online-primary" onClick={() => setTab('decisions')}>
+          {/* ⚠ **キャンプはホームへ直に飛ぶ**。PCのキャンプはホームに出していて、
+              「現在の手続き」は「ホームへ」の案内だけ。以前はそこへ飛ばしていたので、
+              2回押さないとキャンプに着かなかった */}
+          <button
+            className="online-primary"
+            onClick={() => setTab(campHere ? 'today' : 'decisions')}
+          >
             {procedure.label}を開く
           </button>
         </div>

@@ -233,7 +233,18 @@ try {
   await chooseMenu(draft.page, 'velocity');
   // ⚠ ページを移って戻る（キャンプはホームなので、移る先は別のページ）
   await click(draft.page, '選手成績');
-  await click(draft.page, 'ホーム');
+  // ⚠ ほかのページの帯の「キャンプを開く」は**ホームへ直に飛ぶ**（u1 低28）。以前は
+  //    「現在の手続き」（「ホームへ」の案内だけ）へ飛び、2回押さないと着かなかった
+  await click(draft.page, 'キャンプを開く');
+  await menuGroup(draft.page)
+    .or(draft.page.getByRole('button', { name: 'ホームへ', exact: true }))
+    .first()
+    .waitFor();
+  assert.equal(
+    await menuGroup(draft.page).count(),
+    1,
+    '帯の「キャンプを開く」でホームのキャンプへ行かない',
+  );
   assert.equal(await pressedMenu(draft.page), 'velocity', '画面移動でも提出案を保持');
   // ⚠ スマホは**選手ごとの表を出さない**（23列は入らない）。育成方針と
   //    「第Nクール練習を実行」だけを出す（`CampPlanner` の `compact`）。
