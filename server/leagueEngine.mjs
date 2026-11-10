@@ -1795,7 +1795,12 @@ export function takeBackCamp(league, member) {
   setStaffModes(league, member.userId, { camp: 'advice' });
 }
 
-/** 人の球団の人事（`staff` 命令。キャンプの間だけ） */
+/**
+ * 人の球団の人事（`staff` 命令。キャンプの間だけ）。
+ * ⚠ **人事ではキャンプを進めない**。指導者が3人とも居ない球団は「自分で」になって待たれ、
+ *    1人呼ぶと任せた形に戻って待たれなくなる。ここで進めると、続けてほかの席に呼ぶ前に
+ *    キャンプ（人事ができる期間）が終わってしまう。ほかの人の決定・任せ方の変更・締め切りで進む
+ */
 export function updateStaff(league, userId, payload) {
   return staffCommand(league, userId, payload);
 }

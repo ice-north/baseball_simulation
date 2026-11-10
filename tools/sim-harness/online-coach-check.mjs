@@ -749,6 +749,11 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
     assert.equal(waitsFor(l, l.members[0]), true, '指導者がいないのにキャンプを任せたまま');
     decide(l, b.userId);
     assert.equal(l.phase?.kind, 'camp', '自分で決める人がいるのにキャンプが終わった');
+    // ⚠ 呼んで任せた形に戻っても、その場ではキャンプを終えない（続けてほかの席にも呼べるように）
+    const pick = Object.values(l.coaches.people).find((p) => p.status === 'free');
+    updateStaff(l, a.userId, { action: 'hire', role: 'pitching', coachId: pick.id });
+    assert.equal(waitsFor(l, l.members[0]), false);
+    assert.equal(l.phase?.kind, 'camp', '指導者を1人呼んだその場でキャンプが終わった');
   }
 }
 console.log('online-coach-check PASS');
