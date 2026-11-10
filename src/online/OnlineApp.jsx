@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PROGRESSION_TIMES, RETRY_ON_REVISION as RETRY_TYPES } from './shared.js';
+import { PROGRESSION_TIMES, CAMP_ROUNDS, RETRY_ON_REVISION as RETRY_TYPES } from './shared.js';
 import './online.css';
 import { api, AUTH_KEY } from './api.js';
 import { Login, JoinLeague } from './LeaguePanels.jsx';
@@ -60,6 +60,10 @@ const MOBILE_TAB_FOR = {
 const mobileTab = (screen) =>
   MOBILE_TAB_FOR[screen] || (MOBILE_TABS.has(screen) ? screen : 'today');
 
+// 操作が済んだときの文。文か、`(送った中身, 送る前のビュー) => 文` で書く。
+// ⚠ **命令を足したらここにも足すこと**。無いと「保存しました」だけになり、決定したのか
+//    下書きなのか、トレードが成立したのか申し込んだだけなのかが分からなかった
+// ⚠ 画面の側で文を決めたいとき（トレードの相手の答えなど）は `command` の `message` で渡す
 const COMMAND_MESSAGES = {
   create: 'リーグを作成しました',
   join: 'リーグに参加しました',
@@ -74,6 +78,28 @@ const COMMAND_MESSAGES = {
   staffModes: '任せ方を変えました',
   staff: '指導者を入れ替えました',
   reset: 'すべて消しました。リーグを作り直してください',
+  // 手続きの提出。決定・下書き・決定の取り消しで文を変える
+  submit: (payload, before) =>
+    payload?.ready
+      ? '決定しました'
+      : before?.phase?.submission?.ready
+        ? '決定を取り消しました（下書きとして残っています）'
+        : '下書きを保存しました',
+  campRound: (payload) =>
+    Number(payload?.round) >= CAMP_ROUNDS
+      ? `第${payload.round}クールの練習を実行しました。キャンプの練習はこれで終わりです`
+      : `第${payload?.round}クールの練習を実行しました`,
+  lineup: '編成を保存しました',
+  profile: '名前を保存しました',
+  convert: '守備位置を変えました（打順と投手起用は組み直しました）',
+  pack: '初期メンバーのセットを選びました',
+  tradeOffer: 'トレードを提案しました',
+  tradeRespond: (payload) =>
+    payload?.action === 'accept'
+      ? 'トレードが成立しました'
+      : payload?.action === 'counter'
+        ? '逆提案を返しました'
+        : '提案を断りました',
 };
 
 // 版のずれ（`code: 'revision'`）だけなら最新の版で1回だけ送り直す命令（`command` の注記）。
@@ -339,8 +365,11 @@ export default function OnlineApp() {
       setBusy(false);
     }
   };
-  const command = async (type, payload) => {
+  // 済んだら画面に出した文を返す。`message` は文か `(送ったあとのビュー, 送る前のビュー) => 文`
+  //    （画面の側で結果を言い分けたいとき。返したものが空なら `COMMAND_MESSAGES` の文）
+  const command = async (type, payload, { message } = {}) => {
     const current = authRef.current;
+    const before = viewRef.current;
     const checkSession = (credentials) => {
       if (!sameSession(readAuth(), credentials))
         throw new Error(
@@ -388,7 +417,13 @@ export default function OnlineApp() {
         acceptView(result.view, current);
     } else await reload();
     // ⚠ 操作ごとに文言を変える。作成や参加でも「保存しました」と出ていた
-    setMessage(COMMAND_MESSAGES[type] || '保存しました');
+    const known = COMMAND_MESSAGES[type];
+    const text =
+      (typeof message === 'function' ? message(viewRef.current, before) : message) ||
+      (typeof known === 'function' ? known(payload, before) : known) ||
+      '保存しました';
+    setMessage(text);
+    return text;
   };
   const login = (fields) =>
     run(async () => saveAuth(await api('login', null, fields)));
@@ -405,7 +440,7 @@ export default function OnlineApp() {
       writable: !!view?.writable,
       busy,
       run: (fn) => latest.current.run(fn),
-      command: (type, payload) => latest.current.command(type, payload),
+      command: (...args) => latest.current.command(...args),
     }),
     [view?.teamName, view?.writable, busy],
   );

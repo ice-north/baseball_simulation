@@ -109,7 +109,7 @@ try {
     '方針・采配に開かないと選べない選択肢を置かない',
   );
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByText('保存しました', { exact: true }).waitFor();
+  await page.getByText('方針・采配を保存しました', { exact: true }).waitFor();
   assert.equal(commands, 1);
   const ownTeam = league.members[0].teamName;
   assert.equal(league.game.teams[ownTeam].onlineTactics.sacrificeBunt, 'never');

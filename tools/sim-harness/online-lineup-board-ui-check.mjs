@@ -430,7 +430,7 @@ try {
     .locator('.online-page:visible')
     .getByRole('button', { name: '保存', exact: true })
     .click();
-  await p.getByText('保存しました', { exact: true }).first().waitFor();
+  await p.getByText('編成を保存しました', { exact: true }).first().waitFor();
   await nav
     .getByRole('button', { name: '投手起用', exact: true })
     .getByLabel('保存していない変更')

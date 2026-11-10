@@ -510,7 +510,7 @@ try {
   releaseSave();
   await waitIdle(p);
   await p.unroute('**/api/online?*');
-  await p.getByText('保存しました', { exact: true }).waitFor();
+  await p.getByText('編成を保存しました', { exact: true }).waitFor();
   assert.equal(await pitchingInert(p), 0);
   // 数値の選手IDのまま保存できたことを、読み直した画面で確かめる
   await p.reload();
@@ -538,7 +538,7 @@ try {
   await click(p, '更新');
   await click(p, '保存');
   assert.equal(await pitchingInert(p), 0);
-  await p.getByText('保存しました', { exact: true }).waitFor();
+  await p.getByText('編成を保存しました', { exact: true }).waitFor();
   await click(p, '方針・采配');
   assert.equal(
     (

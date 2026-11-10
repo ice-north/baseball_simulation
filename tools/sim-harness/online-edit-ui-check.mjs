@@ -352,7 +352,8 @@ try {
     '練習を送っている間は割り当ても変更できない',
   );
   retry.release();
-  await retry.page.getByText('保存しました', { exact: true }).waitFor();
+  // ⚠ 済んだときの文は操作ごと（以前はどの操作も「保存しました」）
+  await retry.page.getByText('第1クールの練習を実行しました', { exact: true }).waitFor();
   assert.equal(await retry.page.locator('.online-edit-notice').count(), 0);
   // ⚠ **キャンプのクールも、版のずれだけなら最新の版で1回だけ送り直す**。
   //    版はリーグ全体で1つなので、毎正時の進行や他の参加者の操作だけで
@@ -464,7 +465,7 @@ try {
   await mobile.page
     .getByRole('button', { name: '第1クール練習を実行', exact: true })
     .click();
-  await mobile.page.getByText('保存しました', { exact: true }).waitFor();
+  await mobile.page.getByText('第1クールの練習を実行しました', { exact: true }).waitFor();
   assert.equal(mobile.payloads[0].round, 1, '何クール目かを送る');
   assert.equal(mobile.payloads[0].policy.direction, 'sharpen');
   assert.equal(mobile.payloads[0].policy.mode, 'team');

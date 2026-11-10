@@ -418,10 +418,24 @@ try {
 
   // --- 締め切りの表示（日本時間） ---------------------------------------
   assert.equal(formatDeadline('2026-11-07T15:00:00.000Z'), '11/8(日) 0:00');
+
+  // --- 操作が済んだときの文（`OnlineApp.jsx` の `COMMAND_MESSAGES`） ------------
+  // ⚠ **サーバーが受ける命令ごとに文があること**。無いと「保存しました」だけになり、
+  //    決定したのか下書きなのか、トレードが成立したのか申し込んだだけなのか分からなかった。
+  //    文の表は画面の部品の中にあるので、字面で押さえる
+  {
+    const service = await readFile(join(here, '..', '..', 'server', 'leagueService.mjs'), 'utf8');
+    const app = await readFile(join(here, '..', '..', 'src', 'online', 'OnlineApp.jsx'), 'utf8');
+    const types = [...new Set([...service.matchAll(/command\.type === '([a-zA-Z]+)'/g)].map((m) => m[1]))];
+    const table = app.slice(app.indexOf('const COMMAND_MESSAGES = {'), app.indexOf('\n};', app.indexOf('const COMMAND_MESSAGES = {')));
+    assert.ok(types.length > 10 && table, '命令の一覧か文の表が見つからない');
+    const missing = types.filter((type) => !new RegExp(`^  ${type}:`, 'm').test(table));
+    assert.deepEqual(missing, [], `済んだときの文が無い命令がある（「保存しました」だけになる）: ${missing.join(', ')}`);
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある）',
 );
