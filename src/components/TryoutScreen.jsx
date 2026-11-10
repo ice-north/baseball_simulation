@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import TutorialHint from './TutorialHint.jsx';
+import ConfirmBar from './ConfirmBar.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, removeDraftedFromClubTeams, generateScoutComment } from '../season/tryoutSystem.js';
 import { removeDraftedFromGraduatePools } from '../season/universityPool.js';
@@ -40,6 +41,8 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
   // TEAMS_DATA に書かないので、state を指名の直前に戻せばそのまま取り消せる。
   // 取り消すと、その後のほかの球団の指名もやり直しになる
   const [undoSnap, setUndoSnap] = useState(null);
+  // 「指名終了」を押したあとの確認の帯を出しているか（指名の帯と同じ形で決める）
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const candidatesGeneratedRef = useRef(!!resumed);
   // 途中で保存している最中か。⚠ 保存のあいだはほかの球団の指名を止める
   //    （保存は圧縮を待つ間に中身を読むので、そのあいだに指名が進むと書き終える前の状態と混ざる）
@@ -250,8 +253,8 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
       alert(`試合に必要な選手が足りません（あと${missing.join('・')}）。指名を続けてください。`);
       return;
     }
-    if (!window.confirm('自チームの指名をここで終えます（他球団の指名は最後まで続きます）。よろしいですか？')) return;
-    setUserDone(true);
+    setPendingPick(null);
+    setConfirmEnd(true);
   };
 
   const finalizeDraft = (skipCheck = false) => {
@@ -405,7 +408,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
   const showPickBar = isUserTurn && !!pendingPick && tryoutCandidates.some(c => c.id === pendingPick.id);
 
   return (
-    <div className={`p-4 ${showPickBar ? 'pb-28' : ''}`}>
+    <div className="p-4">
       <div className="max-w-7xl mx-auto">
         {/* ⚠ 地色（明るい紙）の上の見出しは text-ink。カード（rounded-xl）は不透明な bg-surface-2 */}
         <h1 className="text-xl font-bold text-ink mb-1">トライアウト</h1>
@@ -457,7 +460,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
           {!draftComplete && isUserTurn && (userRoster.length > 0 || !isInitialTryout) && (
             <button
               onClick={endUserPicks}
-              className="btn-danger mt-4 px-5 py-2 rounded-lg font-semibold transition text-sm"
+              className="btn-secondary mt-4 px-5 py-2 rounded-lg font-semibold transition text-sm"
             >
               指名終了
             </button>
@@ -852,8 +855,10 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                     {needs.map(n => (
                       <div
                         key={n.cat}
-                        onClick={() => isUserTurn && handleSelectPlayer(n.player)}
+                        // ⚠ ここも選ぶだけ（以前はここだけ押した瞬間に指名が決まっていた）
+                        onClick={() => { if (!isUserTurn) return; setConfirmEnd(false); setPendingPick(n.player); }}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition hover:scale-[1.02] ${
+                          pendingPick?.id === n.player.id ? 'outline outline-2 outline-cyan-400 ' : ''}${
                           n.urgency === 'critical'
                             ? 'bg-red-900/30 border-red-700/50 hover:bg-red-900/50'
                             : 'bg-blue-900/20 border-blue-700/40 hover:bg-blue-900/40'
@@ -938,7 +943,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                         className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition ${
                           pendingPick?.id === player.id ? 'bg-cyan-900/70 outline outline-2 -outline-offset-2 outline-cyan-400'
                             : player.isReleasedCandidate ? 'bg-amber-950/30' : ''}`}
-                        onClick={() => isUserTurn && setPendingPick(pendingPick?.id === player.id ? null : player)}
+                        onClick={() => { if (!isUserTurn) return; setConfirmEnd(false); setPendingPick(pendingPick?.id === player.id ? null : player); }}
                       >
                         <td className="px-1 py-1 text-white font-bold whitespace-nowrap">
                           <button
@@ -1038,24 +1043,28 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
         )}
       </div>
 
-      {/* 選んだ候補を決める帯。画面の下に固定して、表をどこまでスクロールしていても押せるようにする */}
+      {/* 選んだ候補を決める帯（ConfirmBar）。画面の下に固定して、表をどこまでスクロールしていても押せる */}
       {showPickBar && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[min(40rem,calc(100vw-2rem))] bg-surface-2 border border-cyan-500 rounded-xl shadow-2xl px-4 py-3 flex items-center gap-3">
-          <div className="min-w-0 flex-1 text-sm">
-            <div className="text-white font-bold truncate">{pendingPick.name} を指名しますか？</div>
-            <div className="text-gray-300 text-xs truncate">
-              {POSITION_NAMES[pendingPick.position] || pendingPick.position}・{pendingPick.age}歳・{getAffiliation(pendingPick)}
-            </div>
-          </div>
-          <button onClick={() => handleSelectPlayer(pendingPick)} disabled={saving}
-            className="btn-primary px-5 py-2 rounded-lg text-sm whitespace-nowrap">
-            指名する
-          </button>
-          <button onClick={() => setPendingPick(null)}
-            className="btn-secondary px-3 py-2 rounded-lg text-sm whitespace-nowrap">
-            やめる
-          </button>
-        </div>
+        <ConfirmBar
+          title={`${pendingPick.name} を指名しますか？`}
+          detail={`${POSITION_NAMES[pendingPick.position] || pendingPick.position}・${pendingPick.age}歳・${getAffiliation(pendingPick)}`}
+          confirmLabel="指名する"
+          disabled={saving}
+          onConfirm={() => handleSelectPlayer(pendingPick)}
+          onCancel={() => setPendingPick(null)}
+        />
+      )}
+      {isUserTurn && !draftComplete && confirmEnd && !showPickBar && (
+        <ConfirmBar
+          title="自チームの指名をここで終えますか？"
+          detail={`獲得${userRoster.length}人で終えます。ほかの球団の指名は最後まで続きます`}
+          note="終えると取り消せません。このトライアウトでは、もう指名できません。"
+          confirmLabel="指名を終える"
+          confirmClass="btn-warn"
+          disabled={saving}
+          onConfirm={() => { setConfirmEnd(false); setUserDone(true); }}
+          onCancel={() => setConfirmEnd(false)}
+        />
       )}
 
       {detailCandidate && (() => {
