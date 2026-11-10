@@ -158,8 +158,8 @@ import {
   setStaffModes,
   staffCommand,
   effectiveStaffModes,
+  phaseDelegated,
 } from './coachEngine.mjs';
-import { PHASE_STAFF_AREA } from '../src/online/coaches.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_DIRECTIONS, CAMP_PHASES, CAMP_ROUNDS };
@@ -1484,12 +1484,12 @@ function resolvePhase(league, now) {
   // ⚠ 途中参加でセットを待っている人は提出しないことがある（`submitPhase`）。
   //    その球団はCPUが動かしているので、標準案で決める
   // ⚠ **指導者に任せた手続きは、提出があっても指導者の案で決める**（提出は「確認した」の印だけ）。
-  //    自分で決めたいときは画面で任せ方を「意見を聞く」に戻してから出す
-  const area = PHASE_STAFF_AREA[kind];
+  //    自分で決めたいときは画面で任せ方を「意見を聞く」に戻してから出す。
+  //    だからその人の決定は待たない（`waitsFor`）
   const plans = Object.fromEntries(
     league.members.map((m) => [
       m.teamName,
-      (area && effectiveStaffModes(league, m)[area] === 'delegate'
+      (phaseDelegated(league, m)
         ? null
         : league.phase.submissions[m.userId]?.plan) ||
         defaultPhasePlan(league, m.teamName),
@@ -1707,10 +1707,35 @@ function resolvePhase(league, now) {
  *    出さないので決定する手段が無く、ストーブリーグとキャンプが毎回
  *    締め切りまで止まっていた（ほかの全員が決めても進まない）。
  *    自分で出した案があればそれを使い、無ければ標準案で決める（`resolvePhase`）。
+ * ⚠ **手続きを指導者に任せた人も待たない**（トライアウト・契約更改の退団・キャンプ。
+ *    `phaseDelegated`）。任せた手続きは提出があっても指導者の案で決めるので、待つ意味が無い。
+ *    以前は待っていたので、ほかの全員が決めても締め切りまで進まず、「決定」の無いキャンプは
+ *    任せた人がいると必ず締め切り待ちになっていた（総合監査 2026-11-10 の判断7）。
+ *    キャンプの残りのクールは締め切りのときと同じく指導者の方針で回る（`resolvePhase`）
  */
 export function waitsFor(league, member) {
   if (league.phase?.submissions?.[member.userId]?.ready) return false;
+  if (phaseDelegated(league, member)) return false;
   return !(member.packSeed && league.phase?.kind !== 'pack_select');
+}
+
+/** 手続きがまだ誰かの決定を待っているか（待機中の手続きが無ければ false） */
+function anyoneWaited(league) {
+  return (
+    league.status === 'waiting' &&
+    !!league.phase &&
+    league.members.some((m) => waitsFor(league, m))
+  );
+}
+
+/**
+ * 待つ人が居なくなった手続きを、その場で解決する。世界は読み込んであること。
+ * ⚠ **乱数は締め切りのときと同じ種**（`phase:${id}`）。どの経路で進んでも結果が同じになる
+ */
+function resolveSettledPhase(league, now) {
+  if (league.status !== 'waiting' || !league.phase || anyoneWaited(league)) return false;
+  seeded(league, `phase:${league.phase.id}`, () => resolvePhase(league, now));
+  return true;
 }
 
 export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
@@ -1728,19 +1753,21 @@ export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
     plan: normalized,
     ready: ready === true,
   };
-  if (league.members.every((m) => waitsFor(league, m) === false))
-    seeded(league, `phase:${phaseId}`, () => resolvePhase(league, now));
+  // ⚠ 決定（「この内容で決定」・キャンプの最後のクール）のたびに見る。待つ人が居なければ進む
+  resolveSettledPhase(league, now);
   league.game = captureWorld();
 }
 
 export { saveLineup } from './lineupCommand.mjs';
 
 /**
- * 人の球団の任せ方を変える（`staffModes` 命令）。
+ * 人の球団の任せ方を変える（`staffModes` 命令）。手続きを進めたら true を返す。
  * ⚠ スタメン・投手起用を**いま任せた**ときは、その場で指導者の編成に作り直す
  *    （次の手続きや年度更新まで人の編成のまま、にならないように）。世界を読むのはそのときだけ
+ * ⚠ **手続きを待っていた最後の1人が任せたら、その場で手続きを進める**（`waitsFor`）。
+ *    締め切りまで待たせない
  */
-export function updateStaffModes(league, userId, modes) {
+export function updateStaffModes(league, userId, modes, now) {
   const member = league.members.find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
   const before = effectiveStaffModes(league, member);
@@ -1749,10 +1776,13 @@ export function updateStaffModes(league, userId, modes) {
   const rebuild = ['lineup', 'pitching'].some(
     (area) => after[area] === 'delegate' && before[area] !== 'delegate',
   );
-  if (!rebuild) return;
+  const settle = league.status === 'waiting' && !!league.phase && !anyoneWaited(league);
+  if (!rebuild && !settle) return false;
   loadLeagueWorld(league);
-  refreshTeamPlan(league, member.teamName);
+  if (rebuild) refreshTeamPlan(league, member.teamName);
+  if (settle) resolveSettledPhase(league, now);
   league.game = captureWorld();
+  return settle;
 }
 
 /** キャンプを任せていた人が自分で1クール回したとき、キャンプを「意見を聞く」に戻す */

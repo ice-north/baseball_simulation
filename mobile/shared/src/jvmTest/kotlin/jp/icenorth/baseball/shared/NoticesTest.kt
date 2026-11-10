@@ -38,6 +38,14 @@ class NoticesTest {
     }
 
     @Test
+    fun delegatedProceduresAreNotOurs() {
+        // ⚠ 指導者に任せた手続きはサーバーが決定を待たない（Web 版と同じ。`leagueEngine` の `waitsFor`）
+        assertNull(pendingProcedure(view("""{"phase":{"kind":"tryout","delegated":true}}""")))
+        assertNull(pendingProcedure(view("""{"phase":{"kind":"camp","delegated":true,"camp":{"rounds":0,"total":4}}}""")))
+        assertEquals("tryout", pendingProcedure(view("""{"phase":{"kind":"tryout","delegated":false}}"""))?.kind)
+    }
+
+    @Test
     fun countAddsWaitingTrades() {
         val raw = view("""{"phase":{"kind":"tryout"},"trades":[{"id":"a","myTurn":true},{"id":"b","myTurn":false},{"id":"c","myTurn":true}]}""")
         assertEquals(2, waitingTradeCount(raw))

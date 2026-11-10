@@ -26,7 +26,8 @@ import {
 } from '../../src/online/shared.js';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
-import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
+import { defaultPhasePlan, CAMP_ROUNDS } from '../../server/leagueEngine.mjs';
+import { pendingProcedure } from '../../src/online/notices.js';
 
 // --- 日数の割り当て -------------------------------------------------
 // ⚠ 160は3連戦（4ターンで1カード）と6球団の総当たり（1巡5節）の両方に
@@ -405,6 +406,106 @@ try {
   await rm(dir, { recursive: true, force: true });
 }
 
+// ⚠ **キャンプを指導者に任せた人は待たない**（総合監査 2026-11-10 の判断7）。キャンプには
+//    「決定」が無いので、以前は任せた人がいると、ほかの全員が4クール終えても締め切りまで
+//    止まっていた。命令を通して、待つ人が居なくなる2つの経路を見る:
+//    ほかの人が最後のクールを回したとき（`campRound`）／最後の1人が任せたとき（`staffModes`）
+{
+  const dir3 = await mkdtemp(join(tmpdir(), 'pennant-deadline3-'));
+  try {
+    const clock3 = '2026-10-26T15:00:00.000Z';
+    // 記録の索引を作り直すか（保存側への知らせ）を見るため、命令の結果を控える
+    let outcome = null;
+    let store3 = null;
+    let service3 = null;
+    const sessions = {};
+    let seq = 0;
+    const send = async (userId, type, payload) => {
+      const current = (await store3.read()).league;
+      seq += 1;
+      return service3.command(userId, sessions[userId], {
+        requestId: `deleg-${type}-${seq}`,
+        revision: current?.revision ?? 0,
+        type,
+        payload,
+      });
+    };
+    // 2人のリーグを作り、初期メンバーを選んでキャンプに入ったところ
+    const fresh = async () => {
+      store3 = createTestStore(join(dir3, `state-${seq}.gz`));
+      const transaction = store3.transaction.bind(store3);
+      store3.transaction = (fn, options) =>
+        transaction(async (bundle) => (outcome = await fn(bundle)), options);
+      service3 = new LeagueService(store3, {
+        members: [{ userId: 'admin', label: '管理者' }],
+        adminId: 'admin',
+        clock: () => clock3,
+      });
+      for (const userId of ['admin', 'guest'])
+        sessions[userId] = (await service3.login(userId)).sessionId;
+      await send('admin', 'create');
+      await send('guest', 'join', { teamName: 'テスト球団' });
+      for (const userId of ['admin', 'guest']) {
+        const current = (await store3.read()).league;
+        const member = current.members.find((m) => m.userId === userId);
+        await send(userId, 'submit', {
+          phaseId: current.phase.id,
+          plan: defaultPhasePlan(current, member.teamName),
+          ready: true,
+          baseSubmission: null,
+        });
+      }
+      const camp = (await store3.read()).league;
+      assert.equal(camp.phase?.kind, 'camp', '前提: キャンプが開いている');
+      return camp;
+    };
+    const rounds = async (userId) => {
+      for (let round = 1; round <= CAMP_ROUNDS; round += 1)
+        await send(userId, 'campRound', {
+          round,
+          policy: { direction: 'balanced', phase: 'skill' },
+        });
+    };
+    {
+      // ほかの人が最後のクールを回した時点で進む。任せた人の4クールは指導者が回す
+      await fresh();
+      await send('admin', 'staffModes', { modes: { camp: 'delegate' } });
+      const adminView = await service3.view('admin', sessions.admin);
+      assert.equal(adminView.phase.delegated, true, 'キャンプを任せた印がビューに無い');
+      assert.equal(pendingProcedure(adminView), null, '任せたキャンプに「決めてください」が出る');
+      const guestView = await service3.view('guest', sessions.guest);
+      assert.ok(pendingProcedure(guestView), '自分で回す人に手続きの知らせが無い');
+      const shown = guestView.members.find((m) => m.teamName === adminView.teamName);
+      assert.ok(shown.delegated && shown.ready, '任せた球団が一覧で「検討中」のまま');
+      await rounds('guest');
+      const done = (await store3.read()).league;
+      assert.ok(!done.phase, 'キャンプを任せた人を待って、締め切りまで進まない');
+      assert.equal(done.status, 'running', 'ほかの全員が4クール終えても開幕しない');
+      assert.equal(done.campResults.admin?.rounds, CAMP_ROUNDS, '任せた球団のクールが回っていない');
+      assert.equal(done.campResults.guest?.rounds, CAMP_ROUNDS);
+      assert.equal(jstWeekday(done.nextAdvanceAt), 1, '早く終わっても開幕は月曜');
+    }
+    {
+      // 最後の1人が任せた時点で進む。⚠ 選手の能力が動くので、記録の索引は作り直す
+      await fresh();
+      await rounds('guest');
+      const waiting = (await store3.read()).league;
+      assert.equal(waiting.phase?.kind, 'camp', '前提: 任せていない人を待つ');
+      await send('admin', 'staffModes', { modes: { tactics: 'delegate' } });
+      assert.equal((await store3.read()).league.phase?.kind, 'camp', 'キャンプと関係の無い任せ方でキャンプが終わった');
+      assert.equal(outcome?.archiveUnchanged, true, '前提: 任せ方だけの変更は索引を作り直さない');
+      await send('admin', 'staffModes', { modes: { camp: 'delegate' } });
+      const done = (await store3.read()).league;
+      assert.ok(!done.phase, 'キャンプを任せても、締め切りまで進まない');
+      assert.equal(done.status, 'running');
+      assert.equal(done.campResults.admin?.rounds, CAMP_ROUNDS, '任せた球団のクールが回っていない');
+      assert.ok(!outcome?.archiveUnchanged, '任せ方の変更で手続きが進んだのに、記録の索引を作り直さない');
+    }
+  } finally {
+    await rm(dir3, { recursive: true, force: true });
+  }
+}
+
 console.log(
-  `■ 締め切りと自動決定: OK（${SEASON_TURNS}ターン / 初期メンバー選択にも締め切り / 誰も提出しなくても月曜に開幕 / 全員提出なら締め切り前でも開幕・それでも開幕は月曜 / 下書きのセットは締め切りでも使う / キャンプ中に保存した打順が開幕後も残る）`,
+  `■ 締め切りと自動決定: OK（${SEASON_TURNS}ターン / 初期メンバー選択にも締め切り / 誰も提出しなくても月曜に開幕 / 全員提出なら締め切り前でも開幕・それでも開幕は月曜 / キャンプを任せた人は待たない / 下書きのセットは締め切りでも使う / キャンプ中に保存した打順が開幕後も残る）`,
 );

@@ -14,6 +14,7 @@
 // 9. 総合監査（2026-11-10）で直したもの: キャンプの指導者の案を画面に出す・空いた席はおすすめ・
 //    トライアウトは終わったばかりの年の勝率・同じキャンプで外した監督の呼び戻しは解任に数えない・
 //    版11からの移行で型が考え方と逆を向かない
+// 10. 任せた手続き（トライアウト・退団・キャンプ）は、その人の決定を待たない（総合監査 2026-11-10 の判断7）
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import {
@@ -24,6 +25,11 @@ import {
   updateStaffModes,
   updateStaff,
   saveLineup,
+  waitsFor,
+  openPhase,
+  loadLeagueWorld,
+  captureLeagueWorld,
+  autoResolvePhase,
 } from '../../server/leagueEngine.mjs';
 import {
   staffOf,
@@ -37,6 +43,7 @@ import {
   effectiveStaffModes,
   conflictOf,
   RIFT_CONFLICT,
+  setStaffModes,
 } from '../../server/coachEngine.mjs';
 import { cpuTeams } from '../../src/online/membership.js';
 import {
@@ -653,5 +660,78 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
   const calm = coach({}, { hitter: 'speed', pitcher: 'control' });
   upgradeCoach(calm, 1);
   assert.deepEqual([calm.vision.attack, calm.vision.defense], ['speed', 'fielding'], '考え方が標準なら好みどおり');
+}
+// ------------------------------------------------------------------ 10. 任せた手続きは待たない（判断7）
+// ⚠ 任せた手続きは提出があっても指導者の案で決まる（`resolvePhase`）。以前は `waitsFor` が
+//    その人も待っていたので、ほかの全員が決めても締め切りまで進まなかった
+//    （キャンプには「決定」が無いので、任せた人がいると必ず締め切り待ち）。
+//    クールを回して終える経路は `online-deadline-check`（命令を通す）で見る
+{
+  const running = clone(inCamp);
+  resolve(running);
+  assert.equal(running.phase, null, '前提: キャンプが終わって開幕している');
+  const [a, b] = running.members;
+  const open = (kind, modes = {}) => {
+    const l = clone(running);
+    for (const m of l.members) m.staffModes = { ...(m.staffModes || {}), ...(modes[m.userId] || {}) };
+    loadLeagueWorld(l);
+    openPhase(l, kind, iso());
+    l.game = captureLeagueWorld();
+    return l;
+  };
+  const decide = (l, userId) => {
+    const m = l.members.find((x) => x.userId === userId);
+    submitPhase(l, userId, { phaseId: l.phase.id, plan: defaultPhasePlan(l, m.teamName), ready: true }, iso());
+  };
+  const rosterIds = (l, team) => l.game.teams[team].players.map((p) => p.id).sort((x, y) => x - y);
+  {
+    // 契約更改: 退団を任せた人は待たない。ほかの人が決めた時点で進み、任せた球団は指導者の案で退団
+    const l = open('contract', { [a.userId]: { release: 'delegate' } });
+    assert.equal(waitsFor(l, l.members[0]), false, '退団を任せた人を契約更改で待つ');
+    assert.equal(waitsFor(l, l.members[1]), true, '自分で決める人を待たない');
+    const viewA = projectLeague({ league: l, sessions: {} }, a.userId, null, null);
+    assert.equal(viewA.phase.delegated, true, '任せた手続きの印がビューに無い');
+    const shownA = viewA.members.find((m) => m.teamName === a.teamName);
+    assert.ok(shownA.delegated && shownA.ready, '任せた球団が一覧で「検討中」のまま');
+    const viewB = projectLeague({ league: l, sessions: {} }, b.userId, null, null);
+    assert.equal(viewB.phase.delegated, false);
+    assert.ok(!viewB.members.find((m) => m.teamName === b.teamName).ready);
+    const atDeadline = clone(l);
+    decide(l, b.userId);
+    assert.equal(l.phase, null, '退団を任せた人を待って、契約更改が締め切りまで進まない');
+    assert.equal(l.status, 'running');
+    // 締め切りで決まったときと同じ結果（任せた人の分は指導者の案）
+    autoResolvePhase(atDeadline, atDeadline.phase.deadline);
+    assert.equal(atDeadline.phase, null);
+    assert.deepEqual(rosterIds(l, a.teamName), rosterIds(atDeadline, a.teamName), '早く進んだ契約更改が締め切りのときと違う');
+    assert.deepEqual(rosterIds(l, b.teamName), rosterIds(atDeadline, b.teamName));
+  }
+  {
+    // トライアウト: 決めていない人がトライアウトを「任せる」にした時点で進む（`updateStaffModes`）
+    const l = open('tryout');
+    decide(l, b.userId);
+    assert.equal(l.phase?.kind, 'tryout', '前提: 決めていない人を待つ');
+    const atDeadline = clone(l);
+    updateStaffModes(l, a.userId, { tryout: 'delegate' }, iso());
+    assert.equal(l.phase, null, 'トライアウトを任せても、締め切りまで進まない');
+    setStaffModes(atDeadline, a.userId, { tryout: 'delegate' });
+    autoResolvePhase(atDeadline, atDeadline.phase.deadline);
+    assert.deepEqual(rosterIds(l, a.teamName), rosterIds(atDeadline, a.teamName), '早く進んだトライアウトが締め切りのときと違う');
+    assert.deepEqual(rosterIds(l, b.teamName), rosterIds(atDeadline, b.teamName));
+    // 手続きの無いときに任せ方を変えても何も起きない
+    updateStaffModes(l, a.userId, { tryout: 'advice' }, iso());
+    assert.equal(l.status, 'running');
+  }
+  {
+    // キャンプ: 任せた人は待たない。席が3人とも空くと「自分で」になり、待つ
+    const l = clone(inCamp);
+    updateStaffModes(l, a.userId, { camp: 'delegate' }, iso());
+    assert.equal(l.phase?.kind, 'camp', '前提: b はまだ終えていない');
+    assert.equal(waitsFor(l, l.members[0]), false, 'キャンプを任せた人を待つ');
+    for (const role of COACH_ROLES) updateStaff(l, a.userId, { action: 'release', role });
+    assert.equal(waitsFor(l, l.members[0]), true, '指導者がいないのにキャンプを任せたまま');
+    decide(l, b.userId);
+    assert.equal(l.phase?.kind, 'camp', '自分で決める人がいるのにキャンプが終わった');
+  }
 }
 console.log('online-coach-check PASS');

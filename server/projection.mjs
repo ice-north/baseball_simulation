@@ -39,7 +39,7 @@ import { requireOnline, seasonStage } from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
-import { releaseBiasFor, campPlanFor } from './coachEngine.mjs';
+import { releaseBiasFor, campPlanFor, phaseDelegated } from './coachEngine.mjs';
 
 /**
  * セット（24人）を**選ぶのに要る分だけ**にする。
@@ -436,12 +436,17 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       teamName: m.teamName,
       // ⚠ 自チーム情報の画面が「いまの球団名」を出すのに使う
       displayName: m.displayName || teamLabels[m.teamName]?.label || m.teamName,
-      ready: !!phase?.submissions[m.userId]?.ready || pendingPackAuto(phase, m),
+      ready:
+        !!phase?.submissions[m.userId]?.ready ||
+        pendingPackAuto(phase, m) ||
+        phaseDelegated(l, m),
       // ⚠ 途中参加でセットを待っている人の球団は、キャンプまでCPUが決める
       //    （手続きはこの人の決定を待たない。`leagueEngine` の `waitsFor`）
       ...(pendingPackAuto(phase, m) && !phase?.submissions[m.userId]?.ready
         ? { cpu: true }
         : {}),
+      // ⚠ 手続きを指導者に任せた球団も待たない（`waitsFor`）。一覧に「指導者に任せています」と出す
+      ...(phaseDelegated(l, m) ? { delegated: true } : {}),
     })),
     standings: l.season.standings,
     // 球団ごとの今の連勝・連敗（全国紙の「○○、5連勝」）。引き分けは続きを切る
@@ -537,6 +542,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
               : undefined,
           // 標準案を出した人（「山田監督の案」）と、任せているか。手続きの画面の見出しに出す
           planBy: phasePlanBy(l, member.teamName, phase.kind),
+          // ⚠ この手続きを指導者に任せているか。任せた手続きはこの人の決定を待たない
+          //    （`leagueEngine` の `waitsFor`）ので、「決めてください」の知らせを出さない（`notices.js`）。
+          //    `planBy` は案を出す人が居ないと null になるので、これとは別に渡す
+          delegated: phaseDelegated(l, member),
           submission: phase.submissions[userId] || null,
           // ⚠ キャンプは1クールずつ自分で実行する。どこまで終わったかを渡す
           //    （渡さないと、押すたびに「第1クール」のままに見える）

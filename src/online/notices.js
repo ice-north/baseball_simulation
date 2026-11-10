@@ -17,6 +17,8 @@ import { PHASE_LABELS, CAMP_ROUNDS } from './shared.js';
  *
  * ⚠ 初期メンバーを待っている球団には、リーグの手続きを出さない
  *    （その球団の手続きはCPUが決め、サーバーも決定を待たない）。
+ * ⚠ 指導者に任せた手続き（`phase.delegated`）も出さない。サーバーはその人の決定を待たず、
+ *    指導者の案で決める（`leagueEngine` の `waitsFor`）。
  */
 export function pendingProcedure(view) {
   if (!view) return null;
@@ -31,6 +33,7 @@ export function pendingProcedure(view) {
   }
   const phase = view.phase;
   if (!phase) return null;
+  if (phase.delegated) return null;
   if (phase.kind === 'camp') {
     const done = phase.camp?.rounds || 0;
     const total = phase.camp?.total || CAMP_ROUNDS;

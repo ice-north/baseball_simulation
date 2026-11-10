@@ -32,6 +32,7 @@ import {
   STAFF_MODES,
   STAFF_AREAS,
   STAFF_AREA_KEYS,
+  PHASE_STAFF_AREA,
   tryoutContext,
   releaseBias,
   tradeFactor,
@@ -183,6 +184,16 @@ export function effectiveStaffModes(league, member) {
   if (!league.coaches) return Object.fromEntries(STAFF_AREA_KEYS.map((k) => [k, 'self']));
   for (const area of STAFF_AREA_KEYS) if (seatEmpty(league, member.teamName, area)) modes[area] = 'self';
   return modes;
+}
+
+/**
+ * いまの手続き（トライアウト・契約更改の退団・キャンプ）を、その人が指導者に任せているか。
+ * ⚠ **任せた手続きはその人の決定を待たない**（`leagueEngine` の `waitsFor`）。提出があっても
+ *    指導者の案で決めるので（`resolvePhase`）、待つ意味が無い。画面の「指導者に任せています」もこれ
+ */
+export function phaseDelegated(league, member) {
+  const area = PHASE_STAFF_AREA[league.phase?.kind];
+  return !!area && !!member && effectiveStaffModes(league, member)[area] === 'delegate';
 }
 
 /**
