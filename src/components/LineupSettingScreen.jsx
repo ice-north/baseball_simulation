@@ -1354,9 +1354,15 @@ export const LineupSettingContent = ({
             <b className="text-cyan-200">試合に出た選手ほど伸びます。</b>1年フル出場した若手は、ほとんど出番の無かった選手の<b className="text-cyan-200">2倍以上</b>成長します（実測: 300打席で能力合計 +12.7 に対し、0打席では +5.8）。
             いま勝つために主力を並べるか、数年後のために若手を我慢して使うか——<b className="text-cyan-200">スタメンを決めることは育成方針を決めること</b>でもあります。
           </TutorialHint>
+          {/* ⚠ md 以上（PC）は「打順 7/12 ＋ 右の列に守備配置と控えを縦に積む（5/12）」。
+              以前は 4/4/4 の3列で、1280幅だと打順のカードが331pxしか無く、9行中8行で名前の行が
+              折り返し、体・疲のバーと打率が右端で切れていた（行の中身は約480px要る）。比だけ変えると
+              守備配置の図が250px前後に縮んで字が12pxを割るので、図と控えを縦に積んで打順に幅を回す。
+              md 未満は従来どおり3列のまま（右の列の入れ物は display: contents で消える）。
+              ⚠ md 未満はオンラインのスマホ版（OnlineLineup.jsx）からも使われている */}
           <div className="grid grid-cols-12 gap-4">
-            {/* 左側: スタメン (4/12) */}
-            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden">
+            {/* 左側: スタメン (4/12、PC は 7/12) */}
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 md:col-span-7 md:self-start overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-700/50">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="font-semibold text-white text-sm whitespace-nowrap">スタメン設定</h2>
@@ -1613,6 +1619,8 @@ export const LineupSettingContent = ({
               </div>
             </div>
 
+            {/* 右の列（PC）: 守備配置の上に控えを積む。md 未満は contents で3列に戻る */}
+            <div className="contents md:col-span-5 md:flex md:flex-col md:gap-4 md:min-w-0">
             {/* 中央: ミニダイアモンド */}
             <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden p-3">
               <h2 className="font-semibold text-white text-sm mb-2 text-center">守備配置</h2>
@@ -1621,7 +1629,8 @@ export const LineupSettingContent = ({
                   （UIデザイン原則1）を割る。**文字だけ大きくすると円(r=16)と座標が
                   固定なので名前が重なる**ので、表示幅を 260 → 300 に広げて
                   倍率 1.154 を稼ぎ、そのうえで 10.4（= 12 / 1.154）にしてある。
-                  列も col-span-3 → 4 に広げた（3のままだと 1280 幅で 220px しか無い）。 */}
+                  列も col-span-3 → 4 に広げた（3のままだと 1280 幅で 220px しか無い）。
+                  PC は右の列（5/12。1280幅で約420px）の上に置くので、300px を確保できる。 */}
               <svg viewBox="0 0 260 240" className="w-full max-w-[300px] mx-auto">
                 <defs>
                   <linearGradient id="miniField" x1="0" y1="0" x2="0" y2="1">
@@ -1817,6 +1826,7 @@ export const LineupSettingContent = ({
                   </tbody>
                 </table>
               </div>
+            </div>
             </div>
           </div>
           </>

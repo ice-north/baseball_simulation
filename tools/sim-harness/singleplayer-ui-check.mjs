@@ -129,6 +129,15 @@ try {
   await ui.click('ベンチ登録'); // 大学は試合のオーダーと並ぶ外側のタブ。以前は枠が半透明で紙が透けていた
   await groundContrast('ロスター管理のベンチ登録');
   await ui.click('試合のオーダー');
+  await ui.click('スタメン設定');
+  // 1280×720 で打順のカードが窮屈でないこと（以前は 4/4/4 の3列で幅331px、体・疲のバーと打率が
+  // 右端で139px切れ、名前の行が折り返していた）
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.waitForTimeout(400);
+  const fit = await ui.lineupCardFit();
+  assert.ok(fit && fit.rows >= 5 && fit.overflow <= 1 && fit.wrapped === 0,
+    `1280×720 のスタメン設定で打順のカードが窮屈: ${JSON.stringify(fit)}`);
+  await page.setViewportSize({ width: 1400, height: 900 });
   await ui.click('投手起用');
   await groundContrast('ロスター管理の投手起用');
   await page.locator('nav').getByRole('button', { name: /資料室/ }).click();

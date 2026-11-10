@@ -182,6 +182,28 @@ export function driver(page) {
         return out;
       });
     },
+    // スタメン設定の打順のカードの窮屈さ。行の中の要素が行の右端からはみ出す量（px）と、
+    // 名前の行（1行目）が折り返している行の数を返す
+    async lineupCardFit() {
+      return page.evaluate(() => {
+        const h = [...document.querySelectorAll('h2')].find((e) => e.textContent.trim() === 'スタメン設定');
+        const card = h?.closest('.rounded-xl');
+        if (!card) return null;
+        const rows = [...card.querySelectorAll('[draggable="true"]')];
+        let overflow = 0, wrapped = 0;
+        for (const r of rows) {
+          const right = r.getBoundingClientRect().right;
+          for (const el of r.querySelectorAll('*')) {
+            const b = el.getBoundingClientRect();
+            if (b.width) overflow = Math.max(overflow, b.right - right);
+          }
+          const kids = [...(r.querySelector('.flex-wrap')?.children || [])].map((c) => c.getBoundingClientRect()).filter((b) => b.width);
+          const firstBottom = Math.min(...kids.map((b) => b.bottom));
+          if (kids.some((b) => b.top >= firstBottom - 1)) wrapped++;
+        }
+        return { width: Math.round(card.getBoundingClientRect().width), rows: rows.length, overflow: Math.round(overflow), wrapped };
+      });
+    },
     // タイトルの「つづきから」でスロット1を開く
     async continueSlot1() {
       await page.goto(`${BASE}/?dev=1`);
