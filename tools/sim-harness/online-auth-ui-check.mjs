@@ -438,6 +438,48 @@ try {
     }),
   });
 
+  // --- 最初の読み込みに失敗: 英語の文を出さない・「読み込んでいます」のまま残さない ----
+  // --- 定期の読み直しに成功したら、その失敗の帯を消す -------------------------------
+  {
+    let healthy = false;
+    const { context, page } = await plainPage({
+      respond: () =>
+        healthy
+          ? okView()
+          : {
+              status: 503,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: 'Service Unavailable', code: 'server' }),
+            },
+    });
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(`${base}/online`);
+    const alert = page.getByRole('alert').filter({ hasText: 'サーバーに一時的につながりません' });
+    await alert.waitFor();
+    assert.equal(
+      await page.getByText('Service Unavailable').count(),
+      0,
+      'サーバーの英語の文をそのまま出している',
+    );
+    await page.getByText('リーグを読み込めませんでした', { exact: false }).waitFor();
+    assert.equal(
+      await page.getByText('リーグを読み込んでいます…', { exact: true }).count(),
+      0,
+      '読み込めなかったのに「読み込んでいます」のまま',
+    );
+    healthy = true;
+    // 定期の読み直し（画面に戻ったとき）で直る
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.getByRole('button', { name: 'リーグ管理', exact: true }).waitFor();
+    await alert.waitFor({ state: 'detached' });
+    assert.equal(
+      await page.getByRole('alert').count(),
+      0,
+      '読み直せたのに失敗の帯が残っている',
+    );
+    await context.close();
+  }
+
   // --- 残したビューで画面が落ちたら、そのビューを忘れる（再読込でまた落ちない） ---------
   {
     const broken = JSON.parse(okView().body);
@@ -454,7 +496,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-auth-ui-check PASS（配布HTML・ログアウト中の遅延更新・別タブログイン・期限切れ復帰・別タブのログアウト後にビューを書き戻さない・落ちたビューを忘れる / Authはfixture）',
+    'online-auth-ui-check PASS（配布HTML・ログアウト中の遅延更新・別タブログイン・期限切れ復帰・別タブのログアウト後にビューを書き戻さない・英語の失敗文と読み込み失敗の表示・読み直せたら帯を消す・落ちたビューを忘れる / Authはfixture）',
   );
 } finally {
   await browser.close();

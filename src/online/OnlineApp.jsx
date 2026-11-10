@@ -212,6 +212,10 @@ export default function OnlineApp() {
     )
       acceptView(result, current);
   }, [acceptView]);
+  // 定期の読み直しが出した失敗の文言。⚠ **次に読み直せたら、その文言だけ消す**。
+  //    以前は読み直しに成功しても赤い帯が残り、直ったのに「つながらない」と出続けた。
+  //    操作の失敗（保存できなかった等）の文言は、読み直しでは消さない
+  const pollError = useRef('');
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
@@ -224,10 +228,18 @@ export default function OnlineApp() {
       try {
         const sequence = ++viewSequence.current;
         const result = await api('view', auth, undefined, sinceQuery());
-        if (!cancelled && sequence === viewSequence.current)
-          acceptView(result, auth);
+        if (cancelled) return;
+        if (sequence === viewSequence.current) acceptView(result, auth);
+        const failed = pollError.current;
+        if (failed) {
+          pollError.current = '';
+          setError((shown) => (shown === failed ? '' : shown));
+        }
       } catch (e) {
-        if (!cancelled) setError(e.message);
+        if (!cancelled) {
+          pollError.current = e.message;
+          setError(e.message);
+        }
       }
     };
     if (!auth) return;
@@ -309,6 +321,7 @@ export default function OnlineApp() {
     viewSequence.current++;
     setBusy(true);
     setError('');
+    pollError.current = '';
     setMessage('');
     try {
       await fn();
@@ -492,7 +505,13 @@ export default function OnlineApp() {
         ) : !auth ? (
           <Login local={config.local} login={login} busy={busy} />
         ) : !view ? (
-          <p>リーグを読み込んでいます…</p>
+          /* ⚠ 読めなかったときに「読み込んでいます…」のまま残さない（上の帯に理由。
+             定期の読み直し・画面に戻ったときにも読み直す） */
+          <p>
+            {error
+              ? 'リーグを読み込めませんでした。上の「最新状態を確認」を押すか、しばらく待つと自動で読み直します。'
+              : 'リーグを読み込んでいます…'}
+          </p>
         ) : view.joinRequired ? (
           <JoinLeague
             busy={busy || !view.writable}
