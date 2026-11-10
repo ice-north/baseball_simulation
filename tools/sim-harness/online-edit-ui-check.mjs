@@ -673,6 +673,21 @@ try {
     0,
     'キャンプで「標準案を準備しています」が出ている',
   );
+  // ⚠ スマホの「保存しました」は**浮かせる**（本文を押し下げない・左を切らない）。
+  //    重なりの順を上げる指定で `position: relative` に上書きされ、本文の流れに入っていた
+  const toast = await mobile.page.locator('.online-success').evaluate((node) => {
+    const r = node.getBoundingClientRect();
+    return {
+      position: getComputedStyle(node).position,
+      left: Math.round(r.left),
+      right: Math.round(r.right),
+      width: innerWidth,
+    };
+  });
+  assert.ok(
+    toast.position === 'fixed' && toast.left >= 0 && toast.right <= toast.width,
+    `スマホの「保存しました」が浮いていない・はみ出す: ${JSON.stringify(toast)}`,
+  );
   assert.equal(mobile.payloads[0].round, 1, '何クール目かを送る');
   assert.equal(mobile.payloads[0].policy.direction, 'sharpen');
   assert.equal(mobile.payloads[0].policy.mode, 'team');

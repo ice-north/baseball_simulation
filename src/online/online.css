@@ -2614,11 +2614,16 @@ small.online-gain:not(:where(.online-sp *)) {
 
 /* 保存や失敗の文言は、全画面の編成より前に出す。
    ⚠ 裏に隠れると、保存に失敗したことに気づけない。
-   ⚠ PCでは `.online-success` を浮かせ直している（末尾「PC版の共通の見た目」） */
+   ⚠ `.online-success` は**浮かせたまま**（`position: fixed`。このファイルの先頭）。
+      ここで `relative` にしていて、スマホでは本文の流れに入って押し下げ、
+      `top`/`right` のずらしで左が12px切れていた。重なりの順だけ上げる
+   ⚠ PCでは `.online-success` を右下に浮かせ直している（末尾「PC版の共通の見た目」） */
 .online-success,
 .online-alert {
-  position: relative;
   z-index: 60;
+}
+.online-alert {
+  position: relative;
 }
 
 /* 初期メンバーの選択。20セットを並べ、選んだセットの24人を下に出す。 */
