@@ -162,9 +162,19 @@ fun LeadersBoard(view: LeagueView, boards: List<JsonObject>) {
                     },
                     fontWeight = FontWeight.Bold,
                 )
+                // 「このままなら年間○」。1位だけ（並べると数字が多すぎる。Web 版 LeagueBoard の Leaders と同じ）
+                leaderPace(i, row)?.let { Text("  ペース$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
+}
+
+/** 1位の年間ペース（今の数より多いときだけ）。サーバーの `pace`（数える項目だけに付く） */
+internal fun leaderPace(index: Int, row: JsonObject): Int? {
+    if (index != 0) return null
+    val pace = row.at("pace").num() ?: return null
+    val value = row.at("value").num() ?: return null
+    return pace.toInt().takeIf { pace > value }
 }
 
 private val NOTICE_LABELS = mapOf("draft" to "NPBドラフト", "tryout" to "トライアウト", "promotion" to "昇格・降格", "trade" to "トレード")

@@ -1,9 +1,12 @@
 package jp.icenorth.baseball.app
 
+import jp.icenorth.baseball.app.ui.leaderPace
 import jp.icenorth.baseball.app.ui.moveMark
 import jp.icenorth.baseball.app.ui.standingGroups
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.Standing
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -27,6 +30,15 @@ class LeagueBoardsTest {
         // 1部は最下位が降格圏、2部は首位が昇格圏
         assertEquals(listOf(null, null, "降格圏"), groups[0].rows.indices.map { groups[0].moveMark(it) })
         assertEquals(listOf("昇格圏", null), groups[1].rows.indices.map { groups[1].moveMark(it) })
+    }
+
+    @Test fun onlyTheLeaderShowsAPaceAboveTheCurrentCount() {
+        fun row(json: String) = Json.parseToJsonElement(json).jsonObject
+        assertEquals(41, leaderPace(0, row("""{"value":12,"pace":41}""")))
+        // 2位以下・ペースの無い項目（率）・シーズンの終わり（今の数と同じ）は出さない
+        assertEquals(null, leaderPace(1, row("""{"value":11,"pace":38}""")))
+        assertEquals(null, leaderPace(0, row("""{"value":0.352}""")))
+        assertEquals(null, leaderPace(0, row("""{"value":40,"pace":40}""")))
     }
 
     @Test fun oldViewWithoutLeaguesHasNoMarks() {
