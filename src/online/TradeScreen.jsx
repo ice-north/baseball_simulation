@@ -472,8 +472,11 @@ function dealProblems(myRoster, theirRoster, giveIds, getIds) {
   return [...rosterShortfall(after.from), ...rosterShortfall(after.to)];
 }
 
-/** 交換案の欄（狭い）。選んだ選手を1行ずつ、主な能力と総合で */
-function DealList({ side, players, onRemove, busy }) {
+/**
+ * 交換案の欄（狭い）。選んだ選手を1行ずつ、主な能力と総合で。
+ * `detail` のときは名前を押すと能力と成績を開く（スマホの返事。表が無いので、ここで確かめる）
+ */
+function DealList({ side, players, onRemove, busy, detail = false, emptyText }) {
   return (
     <div className={`online-trade-deal-side is-${side}`}>
       <h4>
@@ -487,7 +490,11 @@ function DealList({ side, players, onRemove, busy }) {
             return (
               <li key={player.id}>
                 <span className="online-trade-deal-name">
-                  <b>{player.name}</b>
+                  {detail ? (
+                    <PlayerStatsButton player={player} panel="abilities" />
+                  ) : (
+                    <b>{player.name}</b>
+                  )}
                   <small>
                     {POS[player.position]}·{player.age}歳
                   </small>
@@ -523,7 +530,8 @@ function DealList({ side, players, onRemove, busy }) {
         </ul>
       ) : (
         <p className="online-muted">
-          {side === 'give' ? '自球団の行を押して選びます' : '相手の行を押して選びます'}
+          {emptyText ||
+            (side === 'give' ? '自球団の行を押して選びます' : '相手の行を押して選びます')}
         </p>
       )}
     </div>
@@ -728,16 +736,63 @@ function TradeComposer({
   );
 }
 
-/** 届いた提案・出した提案の中身。出す選手ともらう選手を同じ列の表で */
-function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, getEntries }) {
-  const myRoster = view.roster || [];
+/** 提案の中身（id と名前）を、名簿の選手（能力・成績つき）に引き当てる */
+function dealPlayers(view, theirRoster, giveEntries, getEntries) {
   const found = (entries, roster) =>
     entries.map((e) => roster?.find((p) => p.id === e.id)).filter(Boolean);
-  const give = found(giveEntries, myRoster);
-  const get = found(getEntries, theirRoster);
-  // ⚠ 居ない選手（別のトレードで移った）は**消さずに出す**。黙って減ると
-  //    「出したはずの選手が提案から消えた」ように見える
-  const gone = [...giveEntries, ...getEntries].filter((e) => e.gone);
+  return {
+    give: found(giveEntries, view.roster || []),
+    get: found(getEntries, theirRoster),
+    // ⚠ 居ない選手（別のトレードで移った）は**消さずに出す**。黙って減ると
+    //    「出したはずの選手が提案から消えた」ように見える
+    gone: [...giveEntries, ...getEntries].filter((e) => e.gone),
+  };
+}
+
+/** 別のトレードで移った選手の知らせ（PC・スマホ） */
+function GoneNote({ gone }) {
+  if (!gone.length) return null;
+  return (
+    <p role="alert">
+      {gone.map((e) => e.name).join('・')}
+      は別のトレードで移っています。受けても成立しません。
+    </p>
+  );
+}
+
+/**
+ * スマホの返事で見せる提案の中身。PCの表（10列ほど）は幅に入らないので、
+ * 交換案の欄と同じ形（`DealList`）で出す・もらう選手を縦に並べ、交換のあとの名簿を添える
+ */
+function MobileDeal({ view, partner, theirRoster, theirError, giveEntries, getEntries }) {
+  const { give, get, gone } = dealPlayers(view, theirRoster, giveEntries, getEntries);
+  return (
+    <>
+      <div className="online-trade-deal online-trade-mobile-deal">
+        <DealList side="give" players={give} detail emptyText="出す選手はいません" />
+        {theirRoster ? (
+          <DealList side="get" players={get} detail emptyText="もらう選手はいません" />
+        ) : (
+          <p className="online-muted">
+            {theirError ? `相手の名簿を読めませんでした（${theirError}）` : '相手の名簿を読んでいます…'}
+          </p>
+        )}
+      </div>
+      <GoneNote gone={gone} />
+      <Impact
+        view={view}
+        partner={partner}
+        theirRoster={theirRoster}
+        giveIds={give.map((p) => p.id)}
+        getIds={get.map((p) => p.id)}
+      />
+    </>
+  );
+}
+
+/** 届いた提案・出した提案の中身。出す選手ともらう選手を同じ列の表で */
+function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, getEntries }) {
+  const { give, get, gone } = dealPlayers(view, theirRoster, giveEntries, getEntries);
   const kinds = ['pitcher', 'fielder'].filter((kind) =>
     [...give, ...get].some((p) => kindOf(p) === kind),
   );
@@ -776,12 +831,7 @@ function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, get
           ))}
         </div>
       )}
-      {gone.length > 0 && (
-        <p role="alert">
-          {gone.map((e) => e.name).join('・')}
-          は別のトレードで移っています。受けても成立しません。
-        </p>
-      )}
+      <GoneNote gone={gone} />
       <Impact
         view={view}
         partner={partner}
@@ -793,7 +843,7 @@ function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, get
   );
 }
 
-function TradeCard({ view, trade, busy, run, command, onResult }) {
+function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }) {
   const [countering, setCountering] = useState(false);
   // 「この内容で成立させる」の確認を開いているか
   const [accepting, setAccepting] = useState(false);
@@ -850,16 +900,26 @@ function TradeCard({ view, trade, busy, run, command, onResult }) {
           {trade.countered && '（逆提案あり）'}
         </small>
       </div>
-      {!countering && (
-        <TradeCompare
-          view={view}
-          partner={partner}
-          theirRoster={theirs.roster}
-          theirError={theirs.error}
-          giveEntries={giveEntries}
-          getEntries={getEntries}
-        />
-      )}
+      {!countering &&
+        (mobile ? (
+          <MobileDeal
+            view={view}
+            partner={partner}
+            theirRoster={theirs.roster}
+            theirError={theirs.error}
+            giveEntries={giveEntries}
+            getEntries={getEntries}
+          />
+        ) : (
+          <TradeCompare
+            view={view}
+            partner={partner}
+            theirRoster={theirs.roster}
+            theirError={theirs.error}
+            giveEntries={giveEntries}
+            getEntries={getEntries}
+          />
+        ))}
       {trade.myTurn && !countering && accepting && !(stale || problems.length > 0) && (
         <DealConfirm
           give={giveEntries}
@@ -882,8 +942,9 @@ function TradeCard({ view, trade, busy, run, command, onResult }) {
           >
             この内容で成立させる
           </button>
-          {/* ⚠ 逆提案は1回だけ。2回目の返事では出さない */}
-          {trade.canCounter && (
+          {/* ⚠ 逆提案は1回だけ。2回目の返事では出さない。
+              スマホWebは受ける・断るだけ（逆提案の表は幅に入らない。PCかアプリで） */}
+          {trade.canCounter && !mobile && (
             <button disabled={busy} onClick={() => setCountering(true)}>
               逆提案する
             </button>
@@ -931,6 +992,44 @@ function TradeCard({ view, trade, busy, run, command, onResult }) {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * スマホWebのトレードの返事（届いた提案を受ける・断る。オーナーの判断1・案B ②）。
+ * ⚠ 以前はホームに「PCかアプリで返事してください」と出すだけで、スマホWebだけの人は
+ *    提案に答えられず、期限まで放っておくしかなかった。
+ * ⚠ 返事はPCと同じ部品（`TradeCard`）・同じ命令（`tradeRespond`）・同じ確認（`DealConfirm`）。
+ *    新しい提案と逆提案はPCかアプリのまま（選ぶ表が幅に入らない）
+ */
+export function MobileTradeReplies({ view, busy, run, command }) {
+  const waiting = (view.trades || []).filter((t) => t.myTurn);
+  // 返事の結果（成立・断るとカードごと消えるので、上に残す。PCと同じ）
+  const [answered, setAnswered] = useState(null);
+  return (
+    <>
+      <section className="online-card">
+        <h2>トレードの返事</h2>
+        <p className="online-muted">
+          届いた提案を受けるか断るかを選びます。選手の名前を押すと、能力と今季の成績を見られます。
+          新しい提案と逆提案はPCかアプリでできます。
+        </p>
+        <TradeResult result={answered} />
+        {!waiting.length && <p>返事が必要な提案はありません。</p>}
+      </section>
+      {waiting.map((t) => (
+        <TradeCard
+          key={t.id}
+          view={view}
+          trade={t}
+          busy={busy}
+          run={run}
+          command={command}
+          onResult={setAnswered}
+          mobile
+        />
+      ))}
+    </>
   );
 }
 

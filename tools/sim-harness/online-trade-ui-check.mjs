@@ -30,6 +30,7 @@ import {
 import { tradeFactorFor } from '../../server/coachEngine.mjs';
 import { CPU_ACCEPT_MARGIN } from '../../src/online/trades.js';
 import { rosterCounts } from '../../src/utils/constants.js';
+import { shortLastLines } from './lib/textWrap.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -109,8 +110,8 @@ const browser = await chromium.launch({
 const errors = [];
 try {
   // --- スマホWeb: 返事が必要な提案をホームの帯で知らせる -----------------
-  // ⚠ スマホWebにトレードの画面は無い。知らせないと提案に気づかない
-  //    （PC版の左メニューの数・アプリと同じ数え方。`notices.js`）
+  // ⚠ 知らせないと提案に気づかない（PC版の左メニューの数・アプリと同じ数え方。`notices.js`）。
+  //    返事（受ける・断る）は帯から開く画面でする（このファイルの最後の段）
   {
     const phone = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -127,10 +128,12 @@ try {
       .getByRole('status')
       .filter({ hasText: '返事が必要なトレードの提案が1件あります' });
     await banner.waitFor();
-    assert.match(
-      await banner.innerText(),
-      /PCかアプリで返事してください/,
-      'どこで返事をするかを書いていない',
+    // ⚠ 以前は「PCかアプリで返事してください」と書くだけで、スマホWebでは返事ができなかった
+    //    （判断1・案B ②）。帯から返事の画面へ行ける
+    assert.equal(
+      await banner.getByRole('button', { name: '返事する', exact: true }).count(),
+      1,
+      'ホームの帯から返事の画面へ行けない',
     );
     await phone.close();
   }
@@ -471,9 +474,115 @@ try {
       'CPU球団が受けたのに選手が入れ替わっていない',
     );
   }
+  // --- スマホWeb: 届いた提案に受ける・断るで返事する（判断1・案B ②） ---------------
+  // ⚠ 以前はホームの帯で「PCかアプリで返事してください」と知らせるだけで、スマホWebだけの人は
+  //    答えられなかった。PCと同じ部品・同じ命令（`tradeRespond`）・同じ確認（`DealConfirm`）。
+  //    新しい提案と逆提案はPCかアプリのまま（スマホWebには出さない）
+  {
+    const l = await live();
+    const ofGroup = (name, positions) =>
+      rosterOf(l, name).filter((p) => positions.includes(p.position));
+    const outfield = ['left', 'center', 'right'];
+    // b → a を2件: 外野手どうし（受ける）と、内野手どうし（断る）
+    const keepOut = ofGroup(teamA, outfield)[0];
+    const takeOut = ofGroup(teamB, outfield)[0];
+    const keepIn = ofGroup(teamA, infield).at(-1);
+    const takeIn = ofGroup(teamB, infield).at(-1);
+    await send('b', sb, 'tradeOffer', { to: teamA, offer: [takeOut.id], want: [keepOut.id] });
+    await send('b', sb, 'tradeOffer', { to: teamA, offer: [takeIn.id], want: [keepIn.id] });
+    const phone = await browser.newContext({
+      viewport: { width: 320, height: 760 },
+      isMobile: true,
+    });
+    await routeToService(phone, { service, userId: 'a', sessionId: sa });
+    await phone.route(`${base}/online`, (route) =>
+      route.fulfill({ contentType: 'text/html', body: html }),
+    );
+    const m = await phone.newPage();
+    m.on('pageerror', (e) => errors.push(e.message));
+    await m.goto(`${base}/online`);
+    const banner = m
+      .getByRole('status')
+      .filter({ hasText: '返事が必要なトレードの提案が2件あります' });
+    await banner.waitFor();
+    assert.deepEqual(
+      await shortLastLines(m, '.online-procedure-banner'),
+      [],
+      '320px でトレードの帯の文字が1字だけ次の行に落ちる',
+    );
+    await banner.getByRole('button', { name: '返事する', exact: true }).click();
+    const cards = m.locator('.online-trade-card');
+    const outCard = cards.filter({ hasText: takeOut.name });
+    const inCard = cards.filter({ hasText: takeIn.name });
+    await outCard.locator('.online-trade-impact').waitFor();
+    await inCard.locator('.online-trade-impact').waitFor();
+    // 出す選手ともらう選手（名前を押すと能力と成績を開ける）
+    assert.deepEqual(
+      [
+        await outCard.locator('.online-trade-deal-side.is-give .online-trade-deal-name button').allInnerTexts(),
+        await outCard.locator('.online-trade-deal-side.is-get .online-trade-deal-name button').allInnerTexts(),
+      ],
+      [[keepOut.name], [takeOut.name]],
+      'スマホの返事で、出す選手ともらう選手が出ていない',
+    );
+    // 逆提案はスマホWebに出さない（PCかアプリ）
+    assert.equal(
+      await m.getByRole('button', { name: '逆提案する', exact: true }).count(),
+      0,
+      'スマホWebに逆提案が出ている',
+    );
+    // 320px で横に送らない・はみ出さない・1字だけ次の行に落ちない
+    const fit = await m.evaluate(() => {
+      const out = [];
+      if (document.documentElement.scrollWidth > innerWidth + 1) out.push('横スクロール');
+      for (const n of document.querySelectorAll('main *')) {
+        if (!n.checkVisibility()) continue;
+        const r = n.getBoundingClientRect();
+        if (r.width && r.right > innerWidth + 1) out.push(`はみ出し ${n.className}`);
+      }
+      for (const n of document.querySelectorAll('.online-trade-card .online-actions button')) {
+        if (n.getBoundingClientRect().height < 40) out.push(`低いボタン ${n.innerText}`);
+      }
+      return [...new Set(out)].slice(0, 8);
+    });
+    assert.deepEqual(fit, [], '320px でトレードの返事が幅に収まらない');
+    assert.deepEqual(await shortLastLines(m, 'main'), [], '320px でトレードの返事の文字が1字だけ次の行に落ちる');
+    // 受ける: 確認を1段挟む（PCと同じ言葉）→ 成立
+    await outCard.getByRole('button', { name: 'この内容で成立させる', exact: true }).click();
+    const confirm = outCard.getByRole('group', { name: 'トレードの確認' });
+    await confirm.waitFor();
+    assert.match(await confirm.innerText(), /取り消せません/, 'スマホの確認に取り消せないことが無い');
+    assert.ok(
+      (await live()).trades.some((t) => t.offer[0] === takeOut.id),
+      '確認の前に成立させている',
+    );
+    await confirm.getByRole('button', { name: '成立させる', exact: true }).click();
+    await m
+      .locator('.online-trade-result')
+      .filter({ hasText: 'トレードが成立しました' })
+      .waitFor();
+    const afterAccept = await live();
+    assert.ok(
+      rosterOf(afterAccept, teamA).some((p) => p.id === takeOut.id) &&
+        !rosterOf(afterAccept, teamA).some((p) => p.id === keepOut.id),
+      'スマホで受けたのに選手が入れ替わっていない',
+    );
+    // 断る
+    await inCard.getByRole('button', { name: '断る', exact: true }).click();
+    await m
+      .locator('.online-trade-result')
+      .filter({ hasText: 'からの提案を断りました' })
+      .waitFor();
+    assert.ok(
+      !(await live()).trades.some((t) => t.offer[0] === takeIn.id),
+      'スマホで断った提案が残っている',
+    );
+    await m.getByText('返事が必要な提案はありません。', { exact: true }).waitFor();
+    await phone.close();
+  }
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / スマホWebのホームで返事が必要な提案を知らせる）',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける（確認つき）・断る）',
   );
 } finally {
   await browser.close();

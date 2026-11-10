@@ -51,6 +51,8 @@ const MOBILE_TABS = new Set([
   'decisions',
   // 指導者（PCの「指導者」ページと同じ中身。ホームの入口から開く）
   'staff',
+  // トレード（スマホは届いた提案への返事だけ。ホームの帯から開く）
+  'transfer',
 ]);
 const MOBILE_TAB_FOR = {
   rotation: 'lineup',

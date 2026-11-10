@@ -21,6 +21,7 @@ import { CompletedCamp } from './CampPlanner.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { StaffBody } from './StaffPage.jsx';
+import { MobileTradeReplies } from './TradeScreen.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
     props;
@@ -64,8 +65,9 @@ export default function MobileView(props) {
         </div>
       )}
       {/* ⚠ **返事が必要なトレードの提案もホームで知らせる**（PC版の左メニューの数と
-          同じ数え方。`notices.js`）。スマホWebにトレードの画面は無いので、
-          どこで返事をするかを添える。知らせないと提案に気づかないまま期限が来る */}
+          同じ数え方。`notices.js`）。知らせないと提案に気づかないまま期限が来る。
+          帯から返事の画面（受ける・断る）へ行ける。以前は「PCかアプリで返事してください」
+          と書くだけで、スマホWebでは返事ができなかった */}
       {counts.trades > 0 && tab === 'today' && (
         <div
           className="online-procedure-banner is-waiting"
@@ -73,8 +75,11 @@ export default function MobileView(props) {
         >
           <div>
             <strong>返事が必要なトレードの提案が{counts.trades}件あります</strong>
-            <span>PCかアプリで返事してください</span>
+            <span>受けるか断るかを選びます</span>
           </div>
+          <button className="online-primary" onClick={() => setTab('transfer')}>
+            返事する
+          </button>
         </div>
       )}
       {tab === 'today' && (
@@ -140,6 +145,8 @@ export default function MobileView(props) {
         </TeamRoster>
       )}
       {tab === 'staff' && <StaffBody {...props} mobile />}
+      {/* トレードの返事（受ける・断る）。⚠ 名前はPCのトレードのページと同じ（回しても同じ画面へ） */}
+      {tab === 'transfer' && <MobileTradeReplies {...props} />}
       {tab === 'news' && (
         <>
           <LeagueTopics view={view} />
