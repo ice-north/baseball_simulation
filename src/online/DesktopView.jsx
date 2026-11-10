@@ -463,10 +463,16 @@ export default function DesktopView(props) {
       {current === 'today' && (
         <Page>
           {campHere ? (
-            // ⚠ **手続きが変わったら作り直す**（`PhasePanel` と同じ `key`）。
-            //    付けないと、年が替わって新しいキャンプが開いても前の年の
-            //    未保存の割り当てが画面に残る
-            <CampPlanner key={view.phase.id} {...props} />
+            /* ⚠ **カードに入れること**。`.online` の地色（`--surface-0`）は
+               明るいグレーで、本文は `.online-card`（濃い面＋明るい文字）に
+               載せる前提。地のまま出すと、表も `.online-camp-bulk` の薄い
+               白被せもグレーに溶けて読みにくい（いしだ指摘）。
+               ⚠ **手続きが変わったら作り直す**（`PhasePanel` と同じ `key`）。
+               付けないと、年が替わって新しいキャンプが開いても前の年の
+               未保存の割り当てが画面に残る */
+            <section className="online-card online-camp-card">
+              <CampPlanner key={view.phase.id} {...props} />
+            </section>
           ) : (
             <>
               {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。

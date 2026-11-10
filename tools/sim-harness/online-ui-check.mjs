@@ -111,6 +111,28 @@ try {
       !/\d+部\s*\d+位/.test(nav),
       `左上に順位が残っている: ${nav}`,
     );
+    // ⚠ **地色の上に裸で置かない**（いしだ指摘: 背景がグレーで見にくい）。
+    //    `.online` の地（`--surface-0`）は明るいグレーで、本文は濃いカードに
+    //    載せる前提。裸で出すと、表も `.online-camp-bulk` の薄い白被せも
+    //    グレーに溶ける。キャンプの後ろに塗られている色が、地の色と違うこと
+    const surface = await page.evaluate(() => {
+      const paint = (node) => {
+        for (let el = node; el; el = el.parentElement) {
+          const bg = getComputedStyle(el).backgroundColor;
+          if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+        }
+        return null;
+      };
+      return {
+        後ろ: paint(document.querySelector('.online-camp')),
+        地: getComputedStyle(document.querySelector('.online')).backgroundColor,
+      };
+    });
+    assert.notEqual(
+      surface.後ろ,
+      surface.地,
+      `キャンプが地色の上に裸で置かれている（表が溶ける）: ${surface.地}`,
+    );
     const fit = await overflow(page);
     assert.ok(
       !fit.縦 && !fit.横,
@@ -126,6 +148,19 @@ try {
         }),
       'キャンプの表が横に溢れている',
     );
+    // ⚠ **決め方を変えても収まること**。「全員同じ方針」は設定が3つに増え、
+    //    伸びの目安も出るので、ここだけ縦が伸びる（実測で1050pxになっていた）
+    const mode = (name) =>
+      page.getByRole('group', { name: '決め方' }).getByRole('button', { name });
+    for (const name of ['全員を希望どおり', '全員同じ方針']) {
+      await mode(name).click();
+      const each = await overflow(page);
+      assert.ok(
+        !each.縦 && !each.横,
+        `決め方「${name}」で1画面に収まっていない: ${JSON.stringify(each)}`,
+      );
+    }
+    await mode('おすすめ').click();
     // --- 対象を選べること -------------------------------------------------
     const row = page.locator('.online-camp tbody tr').first();
     const subOf = (r) => r.locator('select[aria-label$="のサブ練習"]');

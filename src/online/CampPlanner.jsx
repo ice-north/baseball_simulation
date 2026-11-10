@@ -425,8 +425,12 @@ function CampGainsSummary({ camp, roster, finished }) {
   );
 }
 
-/** 方針ごとの4クールの伸びの目安と、希望と噛み合う人数 */
-function CampPolicyGuide({ policy, roster, policyOf }) {
+/**
+ * 決め方の説明・4クールの伸びの目安・希望と噛み合う人数。
+ * ⚠ **全部まとめて1行**（折り返しは禁じない）。キャンプはホームに出して
+ *    1画面に収めるので、段落を分けると人数の多い球団で実行ボタンが出る。
+ */
+function CampPolicyGuide({ policy, roster, policyOf, note, hint }) {
   // ⚠ 伸びの目安は「全員同じ方針」のときだけ（選手ごとに方針が違うと1つに決まらない）
   const guide =
     policy.mode === 'team'
@@ -438,34 +442,32 @@ function CampPolicyGuide({ policy, roster, policyOf }) {
   });
   const count = (tone) => moods.filter((t) => t === tone).length;
   const standard = policy.direction === 'balanced' && policy.phase === 'skill';
+  // ⚠ 読めなくはしない。長い説明は title に入れて、マウスを載せれば読める
+  const title = [
+    note,
+    hint,
+    standard
+      ? 'いまは「全体を伸ばす×技術」です。試合に効きやすいミート・制球が伸びます。'
+      : '「全体を伸ばす×技術」なら、ミート・制球が伸びます。',
+    '基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。',
+    '締め切りまでに回さなかったクールは、最後に指示した方針で自動で行われます。',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
-    <div className="online-camp-guide">
+    <p className="online-muted online-camp-note online-camp-guide" title={title}>
+      {note && <span className="online-camp-guide-note">{note}</span>}
       {guide && (
-        <p>
-          <strong>4クールでの伸びの目安（1人あたり）</strong>
-          <span>野手: {guide.fielder}</span>
-          <span>投手: {guide.pitcher}</span>
-        </p>
+        <>
+          <span>野手 {guide.fielder}</span>
+          <span>投手 {guide.pitcher}</span>
+        </>
       )}
-      {/* ⚠ **1行に収めること**。キャンプはホームに出すので、説明が4行あると
-          表の下の実行ボタンが画面から出る（実測で約60px）。
-          ⚠ 消すのではなく**マウスオーバーへ逃がす**。何が伸びるかの説明は
-          方針を選ぶときの判断材料なので、読めなくしない。
-          画面に残すのは数（人数）——これは選び直しの引き金になる */}
-      <p
-        className="online-muted online-camp-note"
-        title={[
-          standard
-            ? 'いまは「全体を伸ばす×技術」です。試合に効きやすいミート・制球が伸びます。'
-            : '「全体を伸ばす×技術」なら、ミート・制球が伸びます。',
-          '基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。',
-          '締め切りまでに回さなかったクールは、最後に指示した方針で自動で行われます。',
-        ].join('')}
-      >
-        希望と噛み合う選手: 意欲的 {count('good')}人・納得 {count('mid')}
-        人・身が入らない {count('bad')}人。
-      </p>
-    </div>
+      <span>
+        噛み合い: 意欲的 {count('good')}人・納得 {count('mid')}人・身が入らない{' '}
+        {count('bad')}人
+      </span>
+    </p>
   );
 }
 
@@ -742,28 +744,24 @@ export default function CampPlanner({
               </button>
             ))}
         </div>
-        {/* ⚠ **1行に収めること**。キャンプはホームに出すので、ここが2行あると
-            表の下の実行ボタンが画面から出る。
-            ⚠ 消すのではなく**マウスオーバーへ逃がす**（希望どおりが正解では
-            ないこと・1人ずつ合わせられることは、方針を選ぶときの判断材料） */}
-        <p
-          className="online-muted online-camp-note"
-          title={`本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。${
+        {/* ⚠ いしだ指摘: どれくらい伸びるのか・おまかせでいいのかが分からない。
+            実測の目安と、希望と噛み合う人数を出す（`CAMP_POLICY_GUIDE`）。
+            ⚠ **決め方の説明と目安と人数で1行**。別々の段落にすると、
+            「全員同じ方針」のときだけ4行になって実行ボタンが画面から出た
+            （実測 1050px）。長い説明は title へ逃がす */}
+        <CampPolicyGuide
+          policy={policy}
+          roster={roster}
+          policyOf={policyOf}
+          note={
+            (policy.mode || 'team') === 'team'
+              ? `${DIRECTIONS[policy.direction]?.description}／${PHASES[policy.phase]?.description}`
+              : CAMP_MODE_NOTES[policy.mode]
+          }
+          hint={`本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。${
             compact ? '' : '意欲の欄の「合わせる」で、1人ずつ希望に合わせられます。'
           }`}
-        >
-          {(policy.mode || 'team') === 'team' ? (
-            <>
-              {DIRECTIONS[policy.direction]?.description}／
-              {PHASES[policy.phase]?.description}
-            </>
-          ) : (
-            CAMP_MODE_NOTES[policy.mode]
-          )}
-        </p>
-        {/* ⚠ いしだ指摘: どれくらい伸びるのか・おまかせでいいのかが分からない。
-            実測の目安と、希望と噛み合う人数を出す（`CAMP_POLICY_GUIDE`） */}
-        <CampPolicyGuide policy={policy} roster={roster} policyOf={policyOf} />
+        />
       </section>
       {/* ⚠ 携帯は表を出さない。23列は入らない。方針と実行だけで4クール回せる */}
       {compact && !finished && (

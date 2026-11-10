@@ -660,10 +660,9 @@ small.online-gain:not(:where(.online-sp *)) {
   min-width: 1100px;
   font-size: 12px;
 }
-/* ⚠ 行の高さ（`padding` と選択欄の大きさ）は**触らない**。PC版の共通の
-   指定が `.online-desktop .online-camp-group td` / `select` で持っており、
-   順位表・試合成績と同じ44px前後にそろえてある。ここで上書きすると、
-   この表だけ行の高さが違うことになる。
+/* ⚠ 行の高さ（`padding` と選択欄の大きさ）は**ここでは触らない**。PC版の
+   指定が `.online-desktop .online-camp-group td` / `select` にあり、そちらに
+   詰める理由を書いてある。2か所に書くと片方だけ変わる。
    ⚠ 縦が長かったのは行の高さより**人数**。守備位置のタブで1グループずつ
    出すようにして、24行→12行にした（実測で1914px→970px）。 */
 .online-camp-scroll td,
@@ -704,14 +703,17 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #9fb0c4;
   margin-left: 6px;
 }
-.online-camp-run {
+/* ⚠ `.online-desktop .online-actions`（margin-top 12px）に詳細度で負けるので、
+   こちらも `.online-desktop` を付けて書く（4pxのつもりが12pxになっていた） */
+.online-camp-run,
+.online-desktop .online-camp-run {
   justify-content: center;
   margin-top: 4px;
 }
 .online-desktop .online-camp-run button {
   font-size: 14px;
   min-height: 0;
-  height: 36px;
+  height: 32px;
   padding: 0 28px;
 }
 
@@ -735,8 +737,22 @@ small.online-gain:not(:where(.online-sp *)) {
    決まりで、ほかのページと同じ48pxを空けると12人目の行と実行ボタンが出る。
    ほかのページの余白は変えない（`:has` でこの画面だけに当てる） */
 .online-desktop main:has(.online-camp) {
-  padding-top: 12px;
-  padding-bottom: 8px;
+  padding-top: 10px;
+  padding-bottom: 0;
+}
+/* ホームに出すキャンプのカード。
+   ⚠ **カードの余白だけ詰める**（ほかのカードの 22px は変えない）。地色のまま
+      出すとグレーに溶けるのでカードは外せず、既定の余白だと 12人目の行が
+      1画面から出る（上下22px＋枠2px＋下marginの20pxで44px取られる）。 */
+.online-camp-card:not(:where(.online-sp *)) {
+  --online-card-pad: 4px 14px;
+  --online-card-gap: 0;
+}
+/* ⚠ カードの中では `.online-desktop .online-card h3`（margin 14px/8px）が
+   `.online-camp-head h3`（margin 0）に詳細度で勝つ。見出しの行が 24px→43px に
+   なり、12人目の行が1画面から出た。ここで勝たせ直す（実測 1012px→993px） */
+.online-desktop .online-card .online-camp-head h3 {
+  margin: 0;
 }
 /* ⚠ ホームに出すので**説明は1行**（折り返しは禁じない。詰めるのは余白だけ） */
 .online-camp-note:not(:where(.online-sp *)) {
@@ -754,6 +770,14 @@ small.online-gain:not(:where(.online-sp *)) {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 6px;
+}
+/* ⚠ キャンプの決め方は**見出しをボタンの左に置く**（既定は上）。上に積むと
+   1つの設定で51pxになり、「全員同じ方針」は設定が3つに増えるので、その
+   モードだけ実行ボタンが1画面から出ていた（実測 方針の欄 141px→95px） */
+.online-camp-bulk-fields .online-choice:not(:where(.online-sp *)) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .online-camp-bulk-fields label {
   display: flex;
@@ -2990,10 +3014,14 @@ small.online-gain:not(:where(.online-sp *)) {
   min-height: 0;
 }
 /* キャンプの割り当て表。⚠ 行の中のコンボボックスで行を高くしない
-   （既定の高さのままだと、この表だけ行が56pxになった） */
+   （既定の高さのままだと、この表だけ行が56pxになった）
+   ⚠ **ここだけ順位表より1行ぶん詰める**（45px→41px）。キャンプはホームに
+      出して1画面に収めるのが決まりで、人数は名簿しだいで増える（投手が
+      13人になるリーグがある）。1行4pxで12人ぶん48px浮く。
+      これは**選んで操作する表**で、順位表・試合成績のような読む表ではない。 */
 .online-desktop .online-camp-group td {
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 .online-desktop .online-camp-group select {
   width: auto;
@@ -3834,14 +3862,22 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 
 /* キャンプ: 方針ごとの伸びの目安 */
-.online-camp-guide {
-  margin: 6px 0 0;
-}
-.online-camp-guide > p:first-child {
+/* 決め方の説明・伸びの目安・噛み合いの人数を**1行**に並べる。
+   ⚠ 折り返しは禁じない（狭い窓では2行になる）。詰めるのは余白だけ */
+.online-camp-guide:not(:where(.online-sp *)) {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 14px;
-  margin: 0;
+  align-items: baseline;
+  gap: 0 12px;
+  margin: 2px 0 0;
+  font-size: 11px;
+}
+/* 決め方の説明は長い。1行に収まらないときは … で止めて、全文は title で出す */
+.online-camp-guide-note:not(:where(.online-sp *)) {
+  max-width: 46%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* --- 年代記（球団史・マジック・ペース） --------------------------------- */
