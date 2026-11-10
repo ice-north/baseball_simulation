@@ -56,6 +56,7 @@ import jp.icenorth.baseball.shared.seasonRecordLine
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.teamShort
 import jp.icenorth.baseball.shared.backIssueKey
+import jp.icenorth.baseball.shared.backIssuesOf
 import jp.icenorth.baseball.shared.Player
 import jp.icenorth.baseball.shared.OnlineJson
 import androidx.compose.material3.FilterChip
@@ -168,12 +169,12 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         val national = remember(localPage, view, model.raw) { buildNationalPage(view, model.raw, localPage) }
         val paper = FrontPage.Paper.entries.firstOrNull { it.name == model.homePaper } ?: FrontPage.Paper.Local
         val page = if (paper == FrontPage.Paper.National) national else localPage
-        // バックナンバー（その日の両紙の見出しを端末に残す）
+        // バックナンバー（その日の両紙の見出しを端末に残す）。球団ごとに分ける（別のアカウントの見出しを混ぜない）
         LaunchedEffect(localPage.headline, national.headline) {
-            backIssueKey(view)?.let { key -> model.recordBackIssue(BackIssue(key, localPage.issue, localPage.headline, national.headline)) }
+            backIssueKey(view)?.let { key -> model.recordBackIssue(BackIssue(key, localPage.issue, localPage.headline, national.headline, team)) }
         }
         var showBack by remember { mutableStateOf(false) }
-        if (showBack) BackNumberDialog(model.backIssues, localPage.title) { showBack = false }
+        if (showBack) BackNumberDialog(backIssuesOf(model.backIssues, team), localPage.title) { showBack = false }
         var showChronicle by remember { mutableStateOf(false) }
         if (showChronicle) ChronicleDialog(model, team, view.teamShort(team)) { showChronicle = false }
         val style = homeStyleOf(model.homeStyle)
