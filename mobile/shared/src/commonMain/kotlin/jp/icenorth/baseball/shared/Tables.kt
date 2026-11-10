@@ -96,3 +96,10 @@ val CAMP_POLICY_GUIDE: Map<String, Pair<String, String>> = mapOf(
 )
 val ONLINE_ROSTER_TARGETS: Map<String, Int> = mapOf("pitcher" to 11, "catcher" to 2, "infielder" to 6, "outfielder" to 7)
 val RETRY_ON_REVISION: Set<String> = setOf("lineup", "submit", "campRound")
+data class PyramidLeague(val id: String, val name: String, val promotes: Boolean, val relegates: Boolean)
+val PYRAMID_LEAGUES: List<PyramidLeague> = listOf(
+    PyramidLeague("A", "1部", false, true),
+    PyramidLeague("B", "2部", true, false),
+)
+const val PROMOTION_PLACES: Int = 1
+const val RELEGATION_FROM_BOTTOM: Int = 1

@@ -17,6 +17,7 @@ const tactics = await import(at('src/online/tactics.js'));
 const shared = await import(at('src/online/shared.js'));
 const pitching = await import(at('src/online/pitchingEdit.js'));
 const constants = await import(at('src/utils/constants.js'));
+const pyramid = await import(at('src/online/pyramidLeague.js'));
 
 // ⚠ Kotlin の文字列では `$` が式の始まりになるので逃がす
 const q = (s) => JSON.stringify(String(s)).replaceAll('$', '\\$');
@@ -105,6 +106,15 @@ out(`val ONLINE_ROSTER_TARGETS: Map<String, Int> = mapOf(${Object.entries(shared
 // 版のずれだけなら送り直す命令（OnlineApi.kt の command）。⚠ Web 版と同じ一覧を使う（アプリだけ campRound が抜けていた）
 if (!Array.isArray(shared.RETRY_ON_REVISION)) throw new Error('RETRY_ON_REVISION が読めない');
 out(`val RETRY_ON_REVISION: Set<String> = setOf(${shared.RETRY_ON_REVISION.map(q).join(', ')})`);
+// 順位表の昇格圏・降格圏（Web 版 LeaguePanels.jsx の Standings と同じ決まり。上から PROMOTION_PLACES 位まで・下から RELEGATION_FROM_BOTTOM 位まで）
+out('data class PyramidLeague(val id: String, val name: String, val promotes: Boolean, val relegates: Boolean)');
+out('val PYRAMID_LEAGUES: List<PyramidLeague> = listOf(');
+for (const l of pyramid.PYRAMID_LEAGUES) out(`    PyramidLeague(${q(l.id)}, ${q(l.name)}, ${l.up.length > 0}, ${l.down.length > 0}),`);
+out(')');
+for (const [k, v] of Object.entries({ PROMOTION_PLACES: pyramid.PROMOTION_PLACES[0], RELEGATION_FROM_BOTTOM: pyramid.RELEGATION_FROM_BOTTOM[0] })) {
+  if (!Number.isInteger(v)) throw new Error(`${k} が読めない`);
+  out(`const val ${k}: Int = ${v}`);
+}
 const text = lines.join('\n') + '\n';
 const file = path.join(root, 'mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/Tables.kt');
 if (process.argv.includes('--check')) {

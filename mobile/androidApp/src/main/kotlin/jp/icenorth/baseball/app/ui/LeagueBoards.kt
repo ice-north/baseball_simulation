@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.mutableStateOf
 import jp.icenorth.baseball.shared.at
@@ -31,6 +32,10 @@ import jp.icenorth.baseball.shared.str
 import kotlinx.serialization.json.JsonObject
 import jp.icenorth.baseball.shared.LEAGUE_NAMES
 import jp.icenorth.baseball.shared.LeagueView
+import jp.icenorth.baseball.shared.PROMOTION_PLACES
+import jp.icenorth.baseball.shared.PYRAMID_LEAGUES
+import jp.icenorth.baseball.shared.RELEGATION_FROM_BOTTOM
+import jp.icenorth.baseball.shared.Standing
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 
@@ -38,21 +43,58 @@ import jp.icenorth.baseball.shared.teamShort
 
 // 試合タブの「順位表・タイトル争い・リーグ便り」（以前はホームにあった。ホームは新聞の紙面にした）
 
+/** 順位表の1つの表（2部制なら部ごと）。`promotes` / `relegates` はその部に昇格・降格があるか */
+internal data class StandingGroup(val title: String, val rows: List<Standing>, val promotes: Boolean, val relegates: Boolean)
+
+/**
+ * 順位表を部ごとに分けて並べる（Web 版 LeaguePanels.jsx の Standings と同じ決まり）。
+ * ⚠ 並びは `compareLeagueStanding`（勝率 → 勝ち数 → 球団名）。サーバーの順位表は全球団を通した並びで、
+ *    同率の並びが決まっていない
+ */
+internal fun standingGroups(view: LeagueView): List<StandingGroup> {
+    val order = compareByDescending<Standing> { it.winRate }.thenByDescending { it.wins }.thenBy { it.team }
+    // teamLeagues が無い古いビューは1つの表（昇格・降格の印は出さない）
+    if (view.teamLeagues.isEmpty()) return listOf(StandingGroup("順位", view.standings.sortedWith(order), promotes = false, relegates = false))
+    val known = PYRAMID_LEAGUES.map { league ->
+        StandingGroup(
+            "${league.name} 順位",
+            view.standings.filter { view.teamLeagues[it.team] == league.id }.sortedWith(order),
+            league.promotes,
+            league.relegates,
+        )
+    }
+    // 表に無い部（古い保存など）も落とさない
+    val others = view.standings.filter { s -> PYRAMID_LEAGUES.none { it.id == view.teamLeagues[s.team] } }
+        .groupBy { view.teamLeagues[it.team].orEmpty() }.toSortedMap()
+        .map { (id, rows) -> StandingGroup("${LEAGUE_NAMES[id] ?: id} 順位", rows.sortedWith(order), promotes = false, relegates = false) }
+    return (known + others).filter { it.rows.isNotEmpty() }
+}
+
+/** 昇格圏・降格圏の印（上から [PROMOTION_PLACES] 位まで・下から [RELEGATION_FROM_BOTTOM] 位まで） */
+internal fun StandingGroup.moveMark(index: Int): String? = when {
+    promotes && index < PROMOTION_PLACES -> "昇格圏"
+    relegates && index >= rows.size - RELEGATION_FROM_BOTTOM -> "降格圏"
+    else -> null
+}
+
 @Composable
 fun StandingsBoard(view: LeagueView) {
-    // 2部制なら部ごとに分ける（teamLeagues が無い古いビューは1つの表）
-    val groups = if (view.teamLeagues.isEmpty()) {
-        listOf("順位" to view.standings)
-    } else {
-        view.standings.groupBy { view.teamLeagues[it.team] ?: "" }.toSortedMap()
-            .map { (id, rows) -> "${LEAGUE_NAMES[id] ?: id} 順位" to rows }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { groups.forEach { (title, rows) ->
-        Section(title) {
-            val top = rows.firstOrNull()
-            rows.forEachIndexed { i, row ->
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { standingGroups(view).forEach { group ->
+        Section(group.title) {
+            // 見出しの1行（数字が何か分かるように）
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val head = MaterialTheme.typography.labelSmall
+                val ink = MaterialTheme.colorScheme.onSurfaceVariant
+                Text("順", style = head, color = ink, modifier = Modifier.width(24.dp))
+                Text("球団", style = head, color = ink, modifier = Modifier.weight(1f))
+                Text("勝-敗-分", style = head, color = ink, modifier = Modifier.width(80.dp), textAlign = TextAlign.End)
+                Text("差", style = head, color = ink, modifier = Modifier.width(44.dp), textAlign = TextAlign.End)
+            }
+            val top = group.rows.firstOrNull()
+            group.rows.forEachIndexed { i, row ->
                 val own = row.team == view.teamName
                 val gap = top?.let { ((it.wins - it.losses) - (row.wins - row.losses)) / 2.0 } ?: 0.0
+                val mark = group.moveMark(i)
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -64,14 +106,36 @@ fun StandingsBoard(view: LeagueView) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("${i + 1}", modifier = Modifier.width(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(view.teamShort(row.team), fontWeight = if (own) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                view.teamShort(row.team),
+                                fontWeight = if (own) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            mark?.let { Tag(it, if (it == "昇格圏") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
+                        }
+                        // ⚠ 人が持っている球団だけ、名前を括弧で添える（CPUに付けると誰かが持っているように見える）。
+                        //    呼び名が球団名と同じときはサーバーが空で返す（Web 版と同じく「プレイヤー」）
+                        if (view.teamOwners.containsKey(row.team)) {
+                            Text(
+                                "（${view.teamOwners[row.team].orEmpty().ifEmpty { "プレイヤー" }}）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                     Text("${row.wins}-${row.losses}-${row.draws}", modifier = Modifier.width(80.dp), textAlign = TextAlign.End)
                     Text(if (i == 0 || gap == 0.0) "-" else "%.1f".format(gap), modifier = Modifier.width(44.dp), textAlign = TextAlign.End)
                 }
             }
         }
     }
-}
+    }
 }
 
 /** タイトル争い（リーグの上位） */
