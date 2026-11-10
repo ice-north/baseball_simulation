@@ -4065,13 +4065,29 @@ small.online-gain:not(:where(.online-sp *)) {
   display: grid;
   gap: 4px;
 }
+/* 考え方・性格の1行。⚠ **目盛りと両端の言葉は下の段に置く**。1段に
+   「見出し 7em・目盛り・言い表し 6em」と並べていて、カード（PC 1440 で約310px）に
+   入らず、両端の言葉（「打たせて取る」など）が言い表しの欄に重なり、見出しも
+   「代打・守備固／め」と1文字だけ折り返していた。上の段は見出しと言い表し */
 .online-staff-scale {
   display: grid;
-  grid-template-columns: 7em 1fr 6em;
-  align-items: center;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'label text'
+    'ends ends';
+  align-items: baseline;
+  gap: 0 8px;
+  padding: 3px 0;
+}
+.online-staff-scale-label {
+  grid-area: label;
+}
+.online-staff-scale > b {
+  grid-area: text;
+  text-align: right;
 }
 .online-staff-scale-ends {
+  grid-area: ends;
   display: flex;
   align-items: center;
   gap: 6px;

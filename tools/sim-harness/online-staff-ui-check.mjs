@@ -58,6 +58,40 @@ async function campService() {
   return { service, store, userId: 'admin', sessionId };
 }
 
+/**
+ * 考え方・性格の行（`Scale`）の文字が重ならず、行からはみ出さないこと。
+ * ⚠ 1段に「見出し・目盛り・言い表し」を並べていて、目盛りの両端の言葉が
+ *    言い表しの欄に重なっていた（PC 1440 でも）
+ */
+async function scaleProblems(p) {
+  await p.evaluate(() =>
+    document.querySelectorAll('details.online-staff-more').forEach((d) => {
+      d.open = true;
+    }),
+  );
+  return p.evaluate(() => {
+    const out = [];
+    for (const li of document.querySelectorAll('.online-staff-scale')) {
+      const box = li.getBoundingClientRect();
+      const parts = [
+        ...li.querySelectorAll(
+          '.online-staff-scale-label, .online-staff-scale-ends small, .online-staff-scale-bar, :scope > b',
+        ),
+      ].map((n) => n.getBoundingClientRect());
+      const text = li.innerText.replace(/\n/g, '/');
+      if (parts.some((r) => r.right > box.right + 1 || r.left < box.left - 1)) out.push(`はみ出し ${text}`);
+      for (let i = 0; i < parts.length; i++)
+        for (let j = i + 1; j < parts.length; j++) {
+          const a = parts[i];
+          const b = parts[j];
+          if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1)
+            out.push(`重なり ${text}`);
+        }
+    }
+    return [...new Set(out)];
+  });
+}
+
 const browser = await chromium.launch({
   ...(process.env.PLAYWRIGHT_CHROME_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL } : {}),
   headless: true,
@@ -100,6 +134,7 @@ try {
   const cards = p.locator('.online-staff-grid').first().locator('.online-staff-card');
   await cards.first().waitFor();
   assert.equal(await cards.count(), 3, '首脳陣のカードが3枚でない');
+  assert.deepEqual(await scaleProblems(p), [], '考え方・性格の行の文字が重なる（PC）');
   for (const role of ['監督', '投手コーチ', '野手コーチ'])
     assert.ok((await cards.allInnerTexts()).some((t) => t.includes(role)), `${role}のカードが無い`);
   assert.ok(await p.getByRole('heading', { name: '市場（呼べる指導者）' }).isVisible(), 'キャンプなのに市場が出ない');
@@ -213,6 +248,7 @@ try {
   await p.getByRole('button', { name: '指導者', exact: true }).first().click();
   await p.locator('.online-staff-card').first().waitFor();
   assert.ok((await p.locator('.online-staff-card').count()) >= 3, 'スマホで指導者のカードが出ない');
+  assert.deepEqual(await scaleProblems(p), [], '考え方・性格の行の文字が重なる（スマホ）');
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   assert.ok(overflow <= 1, `スマホで横にはみ出す（${overflow}px）`);
   await p.screenshot({ path: '/tmp/baseball-online-staff-mobile.png', fullPage: true });
