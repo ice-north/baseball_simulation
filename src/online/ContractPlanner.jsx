@@ -37,7 +37,7 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
         : plan.releaseIds.filter((x) => x !== id),
     });
   return (
-    <div className="online-contract">
+    <div>
       <p className="online-contract-summary">
         <strong>
           退団予定 {released.size}人 → 残り {remaining.length}人
