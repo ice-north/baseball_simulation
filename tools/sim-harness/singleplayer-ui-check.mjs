@@ -138,6 +138,10 @@ try {
   assert.ok(fit && fit.rows >= 5 && fit.overflow <= 1 && fit.wrapped === 0,
     `1280×720 のスタメン設定で打順のカードが窮屈: ${JSON.stringify(fit)}`);
   await page.setViewportSize({ width: 1400, height: 900 });
+  await ui.click('守備分析');
+  // 行の地の上のランク色が読めること（以前は gray-700 の行に pink-500 の「100%」が 1.8:1）
+  const weak = await ui.cardTextContrast('守備力サマリー');
+  assert.deepEqual(weak, [], `守備分析のサマリーで読めない文字がある\n${weak.join('\n')}`);
   await ui.click('投手起用');
   await groundContrast('ロスター管理の投手起用');
   await page.locator('nav').getByRole('button', { name: /資料室/ }).click();

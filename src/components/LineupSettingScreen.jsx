@@ -2515,19 +2515,23 @@ export const LineupSettingContent = ({
             })
             .filter(Boolean) : [];
 
-          // 適正に基づくグラデーション色（10刻み）
+          // 適正に基づくグラデーション色（10刻み）。text は図の上の「適正N%」の字の色。
+          // ⚠ 字は main（濃い原色）にしないこと。芝（#1f5c33）の上で deep pink が 2.2:1、
+          //    赤・橙でも 2.9:1 で読めなかった。同じ色相の淡い段（Tailwind の *-100〜300）にして
+          //    芝の上で 4.7〜6.8:1（AA 4.5 を確保。字の影も付く）。*-300 でも pink・red・blue・indigo は
+          //    4.0〜4.4 で足りないので、その4つは *-200（100% だけ pink-100）。バーと円の色は main のまま
           const getFitnessGradient = (fitness) => {
-            if (fitness >= 100) return { main: '#ff1493', glow: 'rgba(255,20,147,0.6)', bg: 'rgba(255,20,147,0.12)' };
-            if (fitness >= 90) return { main: '#ec4899', glow: 'rgba(236,72,153,0.55)', bg: 'rgba(236,72,153,0.11)' };
-            if (fitness >= 80) return { main: '#f87171', glow: 'rgba(248,113,113,0.5)', bg: 'rgba(248,113,113,0.10)' };
-            if (fitness >= 70) return { main: '#f97316', glow: 'rgba(249,115,22,0.45)', bg: 'rgba(249,115,22,0.09)' };
-            if (fitness >= 60) return { main: '#fbbf24', glow: 'rgba(251,191,36,0.4)', bg: 'rgba(251,191,36,0.08)' };
-            if (fitness >= 50) return { main: '#eab308', glow: 'rgba(234,179,8,0.38)', bg: 'rgba(234,179,8,0.07)' };
-            if (fitness >= 40) return { main: '#84cc16', glow: 'rgba(132,204,22,0.35)', bg: 'rgba(132,204,22,0.07)' };
-            if (fitness >= 30) return { main: '#22c55e', glow: 'rgba(34,197,94,0.32)', bg: 'rgba(34,197,94,0.06)' };
-            if (fitness >= 20) return { main: '#06b6d4', glow: 'rgba(6,182,212,0.3)', bg: 'rgba(6,182,212,0.06)' };
-            if (fitness >= 10) return { main: '#3b82f6', glow: 'rgba(59,130,246,0.28)', bg: 'rgba(59,130,246,0.05)' };
-            return { main: '#6366f1', glow: 'rgba(99,102,241,0.25)', bg: 'rgba(99,102,241,0.04)' };
+            if (fitness >= 100) return { main: '#ff1493', text: '#fce7f3', glow: 'rgba(255,20,147,0.6)', bg: 'rgba(255,20,147,0.12)' };
+            if (fitness >= 90) return { main: '#ec4899', text: '#fbcfe8', glow: 'rgba(236,72,153,0.55)', bg: 'rgba(236,72,153,0.11)' };
+            if (fitness >= 80) return { main: '#f87171', text: '#fecaca', glow: 'rgba(248,113,113,0.5)', bg: 'rgba(248,113,113,0.10)' };
+            if (fitness >= 70) return { main: '#f97316', text: '#fdba74', glow: 'rgba(249,115,22,0.45)', bg: 'rgba(249,115,22,0.09)' };
+            if (fitness >= 60) return { main: '#fbbf24', text: '#fcd34d', glow: 'rgba(251,191,36,0.4)', bg: 'rgba(251,191,36,0.08)' };
+            if (fitness >= 50) return { main: '#eab308', text: '#fde047', glow: 'rgba(234,179,8,0.38)', bg: 'rgba(234,179,8,0.07)' };
+            if (fitness >= 40) return { main: '#84cc16', text: '#bef264', glow: 'rgba(132,204,22,0.35)', bg: 'rgba(132,204,22,0.07)' };
+            if (fitness >= 30) return { main: '#22c55e', text: '#86efac', glow: 'rgba(34,197,94,0.32)', bg: 'rgba(34,197,94,0.06)' };
+            if (fitness >= 20) return { main: '#06b6d4', text: '#67e8f9', glow: 'rgba(6,182,212,0.3)', bg: 'rgba(6,182,212,0.06)' };
+            if (fitness >= 10) return { main: '#3b82f6', text: '#bfdbfe', glow: 'rgba(59,130,246,0.28)', bg: 'rgba(59,130,246,0.05)' };
+            return { main: '#6366f1', text: '#c7d2fe', glow: 'rgba(99,102,241,0.25)', bg: 'rgba(99,102,241,0.04)' };
           };
 
           const getRangeGradient = (range) => {
@@ -2750,7 +2754,7 @@ export const LineupSettingContent = ({
                                 calcMode="spline" keySplines="0.25 0.46 0.45 0.94" />
                             </rect>
                             <text x={coord.x} y={coord.y + markerSize + 25} textAnchor="middle"
-                              fill={grad.main} fontSize="10" fontWeight="bold" filter="url(#textShadow)">
+                              fill={grad.text} fontSize="10" fontWeight="bold" filter="url(#textShadow)">
                               適正{fitness}%
                             </text>
 
@@ -2798,7 +2802,9 @@ export const LineupSettingContent = ({
                     const range = getDefenseRange(player, pos);
                     const grade = getRangeGrade(range);
                     const fitness = player ? getFitness(player, pos) : 0;
-                    const fitColor = fitness >= 100 ? 'text-pink-500' : fitness >= 90 ? 'text-pink-400' : fitness >= 80 ? 'text-red-400' : fitness >= 70 ? 'text-orange-400' : fitness >= 60 ? 'text-amber-400' : fitness >= 50 ? 'text-yellow-400' : fitness >= 40 ? 'text-lime-400' : fitness >= 30 ? 'text-green-400' : fitness >= 20 ? 'text-cyan-400' : fitness >= 10 ? 'text-blue-400' : 'text-indigo-400';
+                    // ⚠ 100 も pink-400（素の pink-500 は行の地の上で 1.8:1 で読めなかった）。ランク色の段は
+                    //    能力の S（getRankColor）と同じ pink-400 に揃える
+                    const fitColor = fitness >= 90 ? 'text-pink-400' : fitness >= 80 ? 'text-red-400' : fitness >= 70 ? 'text-orange-400' : fitness >= 60 ? 'text-amber-400' : fitness >= 50 ? 'text-yellow-400' : fitness >= 40 ? 'text-lime-400' : fitness >= 30 ? 'text-green-400' : fitness >= 20 ? 'text-cyan-400' : fitness >= 10 ? 'text-blue-400' : 'text-indigo-400';
                     const isSelected = selectedDefensePos === pos || defenseDrag?.from === pos;
                     const isDropTarget = defenseDrag?.over === pos;
                     const isPitcherPos = pos === 'pitcher';
@@ -2808,7 +2814,10 @@ export const LineupSettingContent = ({
                         onClick={() => !isPitcherPos && handleDefenseClick(pos)}
                         onPointerDown={(e) => !isPitcherPos && startDefenseDrag(pos, e, { allowTouch: false })}
                         title={isPitcherPos ? undefined : 'ドラッグで守備位置を入れ替え'}
-                        className={`rounded p-2 transition select-none ${isSelected ? 'bg-yellow-900 ring-1 ring-yellow-400' : isDropTarget ? 'bg-blue-900/60 ring-1 ring-blue-400' : 'bg-gray-700 hover:bg-gray-600'} ${isPitcherPos ? 'cursor-default opacity-60' : player ? 'cursor-grab' : 'cursor-pointer'}`}>
+                        // ⚠ 行の地は受け皿（bg-surface-1）。カードより明るい gray-700 にすると、載っている
+                        //    ランク色（pink/red/blue-400 など）が 3.4〜3.6:1 まで落ちていた（index.css の文字色の決まり）。
+                        //    hover は地を明るくせず枠で示す
+                        className={`rounded p-2 transition select-none ${isSelected ? 'bg-yellow-900 ring-1 ring-yellow-400' : isDropTarget ? 'bg-blue-900/60 ring-1 ring-blue-400' : 'bg-surface-1 hover:ring-1 hover:ring-gray-500'} ${isPitcherPos ? 'cursor-default opacity-60' : player ? 'cursor-grab' : 'cursor-pointer'}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             {!isPitcherPos && player && <span className="text-gray-400 text-xs leading-none" aria-hidden="true">⠿</span>}
@@ -2856,7 +2865,7 @@ export const LineupSettingContent = ({
                           return (
                             <div key={player.id} data-defpos={entry.position}
                               onClick={() => handleDefenseClick(entry.position)}
-                              className="bg-gray-700 hover:bg-gray-600 rounded px-2 py-1.5 cursor-pointer text-sm">
+                              className="bg-surface-2 hover:ring-1 hover:ring-gray-500 rounded px-2 py-1.5 cursor-pointer text-sm">
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-white font-bold truncate">{posLabels[entry.position]} {player.name}</span>
                                 <span className={`text-xs font-bold tabular-nums ${total >= 0 ? 'text-green-400' : 'text-red-400'}`}>

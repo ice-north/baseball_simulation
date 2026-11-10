@@ -182,6 +182,59 @@ export function driver(page) {
         return out;
       });
     },
+    // 見出し（h2）が heading のカードの中で、読めない文字（4.5 未満。太字の大きい字は 3 未満）を返す。
+    // 地色の上だけでなく、カードの中の行の地（gray-700 など）の上のランク色も見る。
+    // 文字の下の色は、最初の不透明な面まで半透明の層を重ねて求める。
+    // カードの text-gray-400（4.11）は「意図的に読ませない段」（index.css の文字色の決まり）なので数えない
+    async cardTextContrast(heading) {
+      return page.evaluate((heading) => {
+        const parse = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+        const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+        const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+        const h = [...document.querySelectorAll('h2')].find((e) => e.textContent.trim() === heading);
+        const card = h?.parentElement;
+        if (!card) return [`見出し「${heading}」のカードが無い`];
+        const bgOf = (el) => {
+          const layers = [];
+          let base = parse(getComputedStyle(document.body).backgroundColor).slice(0, 3);
+          for (let e = el; e; e = e.parentElement) {
+            const m = parse(getComputedStyle(e).backgroundColor);
+            const a = m.length === 4 ? m[3] : 1;
+            if (a === 0) continue;
+            if (a >= 1) { base = m.slice(0, 3); break; }
+            layers.push([m[0], m[1], m[2], a]);
+          }
+          let c = base;
+          for (let i = layers.length - 1; i >= 0; i--) {
+            const [r, g, b, a] = layers[i];
+            c = [r * a + c[0] * (1 - a), g * a + c[1] * (1 - a), b * a + c[2] * (1 - a)];
+          }
+          return c;
+        };
+        const out = [];
+        const w = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+        const seen = new Set();
+        while (w.nextNode()) {
+          const el = w.currentNode.parentElement;
+          if (!el || seen.has(el) || el instanceof SVGElement) continue;
+          seen.add(el);
+          if (!/[\p{L}\p{N}]/u.test(w.currentNode.textContent)) continue;
+          if (el.closest('[aria-hidden="true"], button:disabled')) continue;
+          let op = 1;
+          for (let e = el; e; e = e.parentElement) op *= Number(getComputedStyle(e).opacity);
+          if (op < 0.95) continue;
+          const cs = getComputedStyle(el);
+          const fg = parse(cs.color).slice(0, 3);
+          if (fg.join() === '167,179,200') continue; // gray-400
+          const size = parseFloat(cs.fontSize);
+          const large = size >= 24 || (size >= 18.66 && Number(cs.fontWeight) >= 700);
+          const cr = ratio(fg, bgOf(el));
+          if (cr < (large ? 3 : 4.5)) out.push(`${cr.toFixed(2)}:1 「${w.currentNode.textContent.trim().slice(0, 20)}」 ${el.tagName.toLowerCase()}.${String(el.className).slice(0, 60)}`);
+        }
+        return out;
+      }, heading);
+    },
     // スタメン設定の打順のカードの窮屈さ。行の中の要素が行の右端からはみ出す量（px）と、
     // 名前の行（1行目）が折り返している行の数を返す
     async lineupCardFit() {
