@@ -2504,10 +2504,9 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-slot-starters {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 3px;
   flex-basis: 100%;
   min-width: 0;
-  padding-left: 68px;
   overflow: hidden;
   white-space: nowrap;
   font-size: 10px;
@@ -2521,11 +2520,20 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-slot-starters .online-starter-line {
   display: inline;
 }
+/* ⚠ 先発の名前は 10.5px にする。`small` の既定（親の 10px よりさらに小さい）
+   のままだと約8px で読めなかった。⚠ 11px にすると PC 1280px で2人目の
+   防御率が切れる（実測で 375px 要るところ 295px）。左の字下げ（68px）を
+   やめ、すき間を 3px に詰めて、1280〜1440px で切れないことを確かめた */
+.online-slot-starters .online-starter-name,
+.online-slot-starters > small:not([class]) {
+  font-size: 10.5px;
+  color: #cbd5e1;
+}
 .online-slot-starters .online-starter-line {
   margin-left: 3px;
 }
 .online-starter-name b {
-  margin-left: 4px;
+  margin-left: 3px;
   padding: 0 3px;
   border-radius: 3px;
   background: #ffffff1f;
@@ -2539,7 +2547,7 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #9fb0c4;
 }
 .online-starter-line span {
-  margin-left: 5px;
+  margin-left: 3px;
 }
 
 /* --- 個人成績ランキング ------------------------------------------------ */
