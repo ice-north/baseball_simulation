@@ -20,6 +20,7 @@ import { chromium } from 'playwright';
 import { routeToService } from './lib/serviceRoute.mjs';
 import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
+import { shortLastLines } from './lib/textWrap.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 
 const html = await readFile(new URL('../../dist/index.html', import.meta.url), 'utf8');
@@ -135,6 +136,13 @@ try {
   await cards.first().waitFor();
   assert.equal(await cards.count(), 3, '首脳陣のカードが3枚でない');
   assert.deepEqual(await scaleProblems(p), [], '考え方・性格の行の文字が重なる（PC）');
+  // ⚠ カードの表の値・好む選手・左メニューの時刻は区切りで折る。字の途中で折って
+  //    「…先発で押す・中／間」「手続きの決定待／ち」と1文字だけ次の行に落ちていた
+  assert.deepEqual(
+    await shortLastLines(p, '.online-staff-facts dd, .online-staff-prefs, .online-nav-clock small'),
+    [],
+    '1文字だけ次の行に落ちる文がある（PC）',
+  );
   for (const role of ['監督', '投手コーチ', '野手コーチ'])
     assert.ok((await cards.allInnerTexts()).some((t) => t.includes(role)), `${role}のカードが無い`);
   assert.ok(await p.getByRole('heading', { name: '市場（呼べる指導者）' }).isVisible(), 'キャンプなのに市場が出ない');

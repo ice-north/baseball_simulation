@@ -15,6 +15,7 @@ import {
 } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { TACTIC_DEFAULTS } from '../../src/online/tactics.js';
+import { shortLastLines } from './lib/textWrap.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -148,6 +149,14 @@ try {
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`${base}/online`);
+    // ⚠ 順位表の見出しは折り返さない。自球団の行（持ち主の名前と昇格圏の印）が
+    //    長いと、360px で「打率」が「打／率」の2行に割れた
+    await page.locator('.online-standings').first().waitFor();
+    assert.deepEqual(
+      await shortLastLines(page, '.online-standings thead th'),
+      [],
+      `${width}px 順位表の見出しが1文字ずつに割れる`,
+    );
     await page.getByRole('button', { name: '打順', exact: true }).click();
     await page.getByRole('button', { name: '采配', exact: true }).click();
     let panel = page.getByRole('dialog', { name: '方針・采配', exact: true });

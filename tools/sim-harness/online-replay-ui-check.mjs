@@ -15,6 +15,7 @@ import {
 } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { STRATEGY_FIELDS } from '../../src/online/tactics.js';
+import { shortLastLines } from './lib/textWrap.mjs';
 const league = structuredClone(recordedFixture);
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -131,6 +132,35 @@ try {
     'PCは主要12項目を一覧表示',
   );
   await page.getByRole('button', { name: '試合結果', exact: true }).click();
+  // ⚠ 長い球団名は2行に均して折る。「鹿児島ファルコン／ズ」と1文字だけ
+  //    次の行に落ちていた（1280px・1440px とも）。記録の試合は1つだけなので、
+  //    最初のカードの両球団の名前をリーグの全球団の名前に差し替えて見る
+  const nameCells = page.locator('.online-score > div').first().locator('> span');
+  await nameCells.first().waitFor();
+  const shownNames = await nameCells.allInnerTexts();
+  const setNames = (name) =>
+    nameCells.evaluateAll((list, name) => {
+      for (const span of list) span.firstChild.data = name;
+    }, name);
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const broken = [];
+    for (const { name } of league.teams) {
+      await setNames(name);
+      broken.push(...(await shortLastLines(page, '.online-score div span')));
+    }
+    assert.deepEqual(
+      [...new Set(broken)],
+      [],
+      `試合結果の球団名が1文字だけ次の行に落ちる（${width}px）`,
+    );
+  }
+  await nameCells.evaluateAll((list, names) => {
+    list.forEach((span, i) => {
+      span.firstChild.data = names[i];
+    });
+  }, shownNames);
+  await page.setViewportSize({ width: 1440, height: 1000 });
   // ⚠ **試合結果のカードから開いても崩れない**。小窓をカード（`.online-score`）の
   //    中に描いていて、カードの3列の grid が観戦リプレイの中まで当たり、左右の
   //    メンバー表が 16px に潰れていた

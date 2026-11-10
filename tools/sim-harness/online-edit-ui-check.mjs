@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 import { TURN_MINUTES } from '../../src/online/shared.js';
+import { shortLastLines } from './lib/textWrap.mjs';
 // ⚠ PCの左メニューは「現在の手続き」「選手成績」「ホーム」（3a8592d で名前が変わった）。
 //    スマホのホームのボタンは「手続き」「打順」のまま。
 // ⚠ **PCのキャンプは「ホーム」に出す**（いしだ要望。「現在の手続き」の中に
@@ -659,6 +660,9 @@ try {
   }
 
   const mobile = await scene({ mobile: true });
+  // 締め切りを出す（見出しの横に並び、360px で見出しを押し縮めていた）
+  mobile.view.phase.deadline = '2026-11-02T15:00:00.000Z';
+  await mobile.page.reload();
   await click(mobile.page, '手続き');
   // ⚠ 携帯でも**4クールを自分で回せること**。表は出せない（23列は入らない）が、
   //    育成方針と実行だけ出す。出さないと携帯だけの人は全部自動になる
@@ -698,6 +702,14 @@ try {
     return out;
   });
   assert.deepEqual(campFit, [], 'スマホのキャンプの決め方が幅に収まらない');
+  // ⚠ 見出し「春季キャンプ」は縮めない。360px で「春季キャン／プ」と割れた
+  await mobile.page.setViewportSize({ width: 360, height: 844 });
+  assert.deepEqual(
+    await shortLastLines(mobile.page, '.online-camp-head h3'),
+    [],
+    '360px でキャンプの見出しが1文字だけ次の行に落ちる',
+  );
+  await mobile.page.setViewportSize({ width: 390, height: 844 });
   await mobile.page
     .getByRole('button', { name: '第1クール練習を実行', exact: true })
     .click();
