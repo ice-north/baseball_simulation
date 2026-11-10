@@ -515,15 +515,19 @@ export default function CampPlanner({
   //    （ほかの手続きと同じ `useDraftState`）。26人ぶん選んだあとに画面を
   //    読み直して全部消えると、やり直す気が失せる。
   //    実行済みのクールの指示（`camp.plan`）を初期値にする。
+  //    ⚠ まだ回していなければ指導者の案（`camp.suggested`。「意見を聞く」「任せる」のとき）。
+  //    締め切りで回さなかったクールに当たるのはこの案なので、画面もここから始める
+  //    （以前は「おすすめ」から始まり、見たことのない案で締め切りに回っていた）
   const phaseId = view.phase?.id;
+  const start = camp?.plan || camp?.suggested || null;
   const [policy, setPolicy] = useDraftState(
     phaseDraftName(phaseId, 'camp.policy'),
-    () => camp?.plan?.policy || DEFAULT_CAMP_POLICY,
+    () => start?.policy || DEFAULT_CAMP_POLICY,
   );
-  // 選手ごとの方針の上書き（「合わせる」で1人ずつ希望へ）
+  // 選手ごとの方針の上書き（「合わせる」で1人ずつ希望へ。指導者の案も選手ごと）
   const [overrides, setOverrides] = useDraftState(
     phaseDraftName(phaseId, 'camp.players'),
-    () => camp?.plan?.players || {},
+    () => start?.players || {},
   );
   const policyOf = (p) => playerPolicy(p, policy, overrides);
   const [main, setMain] = useDraftState(

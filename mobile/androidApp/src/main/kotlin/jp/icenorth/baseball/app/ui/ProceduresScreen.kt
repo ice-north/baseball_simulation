@@ -253,6 +253,10 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     val members = raw.at("members").list().mapNotNull { it.obj() }
     Section(PHASE_LABELS[kind] ?: phase.at("label").str() ?: "手続き") {
         Text(rulesText(kind, phase.at("deadline").str() ?: view.phaseDeadline), style = MaterialTheme.typography.bodyMedium)
+        // 標準案を出した指導者と、任せているか（Web の PhasePanel と同じ文。文はサーバーが作る）。
+        // ⚠ 任せていると提出しても指導者の案で決まるので、出さないと組み立てが無駄になる。
+        //    キャンプのぶんは CampPanel が出す（Web と同じ分け方）
+        if (kind != "camp") phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
         members.forEach { m ->
             val ready = m.at("ready").bool() == true
             Row(verticalAlignment = Alignment.CenterVertically) {

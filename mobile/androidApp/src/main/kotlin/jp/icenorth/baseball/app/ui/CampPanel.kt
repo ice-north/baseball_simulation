@@ -85,7 +85,9 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
     val total = camp.at("total").int() ?: CAMP_ROUNDS
     val finished = done >= total
     val roster = remember(raw) { raw.at("roster").list().mapNotNull { it.obj() } }
-    val saved = camp.at("plan").obj()
+    // 実行済みのクールの指示。まだ回していなければ指導者の案（「意見を聞く」「任せる」のとき）。
+    // ⚠ 締め切りで回さなかったクールに当たるのは指導者の案なので、画面もここから始める（Web と同じ）
+    val saved = camp.at("plan").obj() ?: camp.at("suggested").obj()
     val draft = model.campDraft?.takeIf { it.phaseId == phaseId } ?: CampDraft(
         phaseId,
         saved.at("policy", "direction").str() ?: "balanced",
@@ -142,6 +144,8 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
             )
         },
     ) {
+        // 誰の案か・任せているか（Web の CampPlanner と同じ文。文はサーバーが作る）
+        if (!finished) phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
         // ⚠ 決め方（Web 版 CAMP_MODE_LABELS と同じ）。既定はおすすめ。球団で1つの方針だと、
         //    希望の違う選手が必ず「身が入らない」で残る（いしだ指摘: 一括指定が有効に見えない）
         Text("決め方", style = MaterialTheme.typography.labelLarge)

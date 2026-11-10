@@ -39,7 +39,7 @@ import { requireOnline, seasonStage } from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
-import { releaseBiasFor } from './coachEngine.mjs';
+import { releaseBiasFor, campPlanFor } from './coachEngine.mjs';
 
 /**
  * セット（24人）を**選ぶのに要る分だけ**にする。
@@ -546,6 +546,13 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
                   rounds: phase.camp?.[userId]?.rounds || 0,
                   total: CAMP_ROUNDS,
                   plan: phase.camp?.[userId]?.plan || null,
+                  // ⚠ **指導者の案（「意見を聞く」「任せる」のとき）**。まだクールを回して
+                  //    いなければ、画面の下書きをこの案から始める。締め切りで回さなかった
+                  //    クールに当たるのもこの案（`defaultPhasePlan` の camp）なので、
+                  //    出さないと「おすすめ」を見ていたのに見たことのない案で回る
+                  suggested: phase.camp?.[userId]?.plan
+                    ? null
+                    : campPlanFor(l, member.teamName, team.players),
                   // ⚠ 伸びた能力（このクール・通算）。画面のまとめに使う
                   last: phase.camp?.[userId]?.last || null,
                   gains: phase.camp?.[userId]?.gains || {},

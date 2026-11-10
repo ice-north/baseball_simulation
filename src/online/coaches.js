@@ -637,7 +637,10 @@ export function growthPolicy(coach, player) {
 
 /**
  * キャンプの方針（選手ごとの上書き）。投手は投手コーチ、野手は野手コーチの育成観。
- * コーチが居なければ監督（人の球団は `strictSeats` で「自分で」）。誰も居なければ null（標準のまま）。
+ * コーチが居なければ監督。誰も居なければ null（標準のまま）。
+ * ⚠ **人の球団（`strictSeats`）は監督で埋めない**。コーチの居ない側の選手は上書きせず、
+ *    全体の方針を「おすすめ」（「自分で」の既定と同じ）にして、その選手はおすすめで練習する。
+ *    CPU球団はこれまでどおり（全員同じ「全体×技術」の上に上書き）
  */
 export function campPlan(staff, roster, { strictSeats = false } = {}) {
   const pick = (role) =>
@@ -650,7 +653,11 @@ export function campPlan(staff, roster, { strictSeats = false } = {}) {
     any = true;
     players[player.id] = growthPolicy(coach, player);
   }
-  return any ? { policy: { mode: 'team', direction: 'balanced', phase: 'skill' }, players } : null;
+  if (!any) return null;
+  return {
+    policy: strictSeats ? { mode: 'recommended' } : { mode: 'team', direction: 'balanced', phase: 'skill' },
+    players,
+  };
 }
 
 // ------------------------------------------------------------

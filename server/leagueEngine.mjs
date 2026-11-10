@@ -961,7 +961,13 @@ export function defaultPhasePlan(league, teamName) {
     const coached = campPlanFor(league, teamName, team.players);
     if (coached) return { menu: 'standard', assignments: {}, ...coached };
     // ⚠ 既定は全体の方針だけ。選手ごとの割り当ては画面で決める
-    return { menu: 'standard', assignments: {} };
+    // ⚠ **人の球団は「おすすめ」を書いておく**（画面の既定と同じ）。方針の無い案は
+    //    締め切りの自動実行（`autoResolvePhase` → `submitPhase`）の正規化で
+    //    「全員同じ（全体×技術）」に埋まり、`campFallbackPlan` のおすすめに届かなかった
+    const human = league.members.some((m) => m.teamName === teamName);
+    return human
+      ? { menu: 'standard', assignments: {}, policy: { mode: 'recommended' } }
+      : { menu: 'standard', assignments: {} };
   }
   if (kind === 'offseason') return {};
   // ⚠ **途中参加でセットを待っている球団は、トライアウトで取らない**。

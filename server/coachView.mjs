@@ -396,7 +396,11 @@ export function ownStaffView(league, member, team, labelOf) {
 
 /**
  * 手続きの標準案を出した指導者（`phase.planBy`）。任せ方が「自分で」（または席が空き）なら null。
- * トライアウト・退団は監督、キャンプは投手コーチ・野手コーチ（居なければ監督）。
+ * トライアウト・退団は監督、キャンプは投手コーチ・野手コーチ。
+ * ⚠ **キャンプは監督の名前を出さない**。人の球団のキャンプは、コーチの居ない側を監督で
+ *    埋めず「おすすめ」で練習する（`coaches.js` の `campPlan` の `strictSeats`）。
+ *    コーチが2人とも居なければ案は無い（null）
+ * ⚠ キャンプは「決定」ではなく1クールずつ実行する。文もそれに合わせる
  */
 export function phasePlanBy(league, teamName, kind) {
   const area = PHASE_STAFF_AREA[kind];
@@ -411,17 +415,19 @@ export function phasePlanBy(league, teamName, kind) {
           staff.batting ? `${shortName(staff.batting)}野手コーチ` : null,
         ].filter(Boolean)
       : [];
-  if (!names.length && staff.manager) names.push(`${shortName(staff.manager)}監督`);
+  if (!names.length && staff.manager && area !== 'camp')
+    names.push(`${shortName(staff.manager)}監督`);
   if (!names.length) return null;
   const by = names.join('・');
-  return {
-    mode,
-    by,
-    text:
-      mode === 'delegate'
+  const text =
+    area === 'camp'
+      ? mode === 'delegate'
+        ? `${by}に任せています（自分でクールを回すと、任せ方は「意見を聞く」に戻ります）`
+        : `${by}の案です。変えてから練習を実行できます（回さなかったクールはこの案で）`
+      : mode === 'delegate'
         ? `${by}に任せています（提出しても指導者の案で決まります。自分で決めるときは任せ方を「意見を聞く」に）`
-        : `${by}の案です。変えてから決定できます`,
-  };
+        : `${by}の案です。変えてから決定できます`;
+  return { mode, by, text };
 }
 
 /**
