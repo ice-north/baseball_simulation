@@ -813,6 +813,13 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
             })()}
 
             <div className="bg-surface-2 rounded-xl border border-gray-700/50 mb-5">
+              {/* 1文字の見出しの凡例。title だけでは指で触る端末や、気づかない人には伝わらない */}
+              <div className="px-2 py-1.5 text-xs text-gray-300 border-b border-gray-700/50 flex flex-wrap gap-x-4 gap-y-0.5">
+                <span><b className="text-gray-100">野</b> 野手としての総合</span>
+                <span><b className="text-gray-100">投</b> 投手としての総合</span>
+                <span><b className="text-gray-100">精</b> 精神（成長を左右するが正確には分からない）</span>
+                <span className="text-gray-400">見出しを押すと並べ替え</span>
+              </div>
               <table className="w-full text-xs text-left">
                 <thead className="bg-surface-2 text-gray-300 text-xs sticky top-0 border-b border-gray-700/50">
                   <tr>
@@ -910,6 +917,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getMentalGrade(player))}`}>{getMentalGrade(player)}</td>
                         <td className="px-1 py-1 text-xs whitespace-nowrap">
                           {(() => {
+                            // ⚠ 野手にも球種のデータはあるが、投げない選手に出すと投手に見える。
+                            //    投手と二刀流だけに出す
+                            if (player.position !== 'pitcher' && !player.isTwoWay) return <span className="text-gray-400">-</span>;
                             const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
                             if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
                             return arsenal.map((a, i) => {
