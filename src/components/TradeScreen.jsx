@@ -7,6 +7,7 @@ import { deviationValue } from '../game/playerValue.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { reservePlayerIds } from '../state/playerIds.js';
+import ConfirmBar from './ConfirmBar.jsx';
 
 // チームが所属する独立リーグIDを返す（無ければ null）。
 // マーカー(independentLeagueId/corporateData)が欠落していても、WORLD_DATAの
@@ -88,6 +89,10 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
   const [tradeResult, setTradeResult] = useState(null);
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [tradeTab, setTradeTab] = useState('propose');
+  // 成立させる前の帯。{ type: 'propose' } 申し込む / { type: 'accept', proposal } 受ける。
+  // ⚠ 以前は「トレード提案」「承諾する」を1回押すだけで、相手が受ければその場で成立し
+  //    取り消せなかった（選手の入れ替えは名簿・打順まで書き換えるので戻せない）
+  const [pendingTrade, setPendingTrade] = useState(null);
 
   const myTeam = TEAMS_DATA[userTeamName];
 
@@ -527,7 +532,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
       {tradeTab === 'inbox' && (
         <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden mb-5">
           <div className="px-4 py-3 border-b border-gray-700/50">
-            <h2 className="font-semibold text-sm text-yellow-400">AIチームからの受信提案</h2>
+            <h2 className="font-semibold text-sm text-yellow-400">ほかの球団からの提案</h2>
             <p className="text-xs text-gray-400 mt-0.5">相手チームが欲しがっている選手と引き換えに提案が来ています</p>
           </div>
           {aiProposals.length === 0 ? (
@@ -566,7 +571,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => acceptAIProposal(proposal)}
+                      onClick={() => setPendingTrade({ type: 'accept', proposal })}
                       className="btn-primary px-4 py-1.5 rounded-lg text-sm font-semibold transition"
                     >
                       承諾する
@@ -633,7 +638,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
           </div>
           <div className="text-center mt-5">
             <button
-              onClick={executeTrade}
+              onClick={() => canTrade() && setPendingTrade({ type: 'propose' })}
               disabled={!canTrade()}
               className={`px-6 py-2.5 rounded-lg font-semibold text-sm transition ${
                 'btn-primary'
@@ -642,11 +647,37 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
               トレード提案
             </button>
             <p className="text-xs text-gray-400 mt-2">
-              相手チームがトレードを受け入れるかはAIが判断します
+              相手の球団が受けるかどうかは、出す選手ともらう選手の評価の差と年齢で決まります
             </p>
           </div>
         </div>
       )}
+
+      {tradeTab === 'propose' && pendingTrade?.type === 'propose' && canTrade() && (
+        <ConfirmBar
+          title={`${selectedTargetTeam}にトレードを申し込みますか？`}
+          detail={`出す: ${selectedMyPlayer.name}（${POSITION_NAMES[selectedMyPlayer.position]}・${selectedMyPlayer.age}歳）　もらう: ${selectedTargetPlayer.name}（${POSITION_NAMES[selectedTargetPlayer.position]}・${selectedTargetPlayer.age}歳）`}
+          note="相手が受けると、その場で成立します。成立したトレードは取り消せません。"
+          confirmLabel="申し込む"
+          confirmClass="btn-warn"
+          onConfirm={() => { setPendingTrade(null); executeTrade(); }}
+          onCancel={() => setPendingTrade(null)}
+        />
+      )}
+      {tradeTab === 'inbox' && pendingTrade?.type === 'accept' && (() => {
+        const { proposal } = pendingTrade;
+        return (
+          <ConfirmBar
+            title={`${proposal.fromTeam}のトレードの提案を受けますか？`}
+            detail={`出す: ${proposal.wantedPlayer.name}（${POSITION_NAMES[proposal.wantedPlayer.position]}・${proposal.wantedPlayer.age}歳）　もらう: ${proposal.offeredPlayer.name}（${POSITION_NAMES[proposal.offeredPlayer.position]}・${proposal.offeredPlayer.age}歳）`}
+            note="受けるとその場で成立します。成立したトレードは取り消せません。"
+            confirmLabel="受ける"
+            confirmClass="btn-warn"
+            onConfirm={() => { setPendingTrade(null); acceptAIProposal(proposal); }}
+            onCancel={() => setPendingTrade(null)}
+          />
+        );
+      })()}
     </div>
   );
 };
