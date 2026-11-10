@@ -142,7 +142,7 @@ try {
     await page.goto(`${base}/online`);
     await page.getByRole('button', { name: '打順', exact: true }).click();
     await page.getByRole('button', { name: '采配', exact: true }).click();
-    let panel = page.getByRole('dialog', { name: '事前采配', exact: true });
+    let panel = page.getByRole('dialog', { name: '方針・采配', exact: true });
     await panel.waitFor();
     for (const group of ['basic', 'bunt', 'subs', 'pitcher', 'roles']) {
       await panel.getByLabel('見る設定').selectOption(group);
@@ -212,7 +212,7 @@ try {
     await page.reload();
     await page.getByRole('button', { name: '打順', exact: true }).click();
     await page.getByRole('button', { name: '采配', exact: true }).click();
-    panel = page.getByRole('dialog', { name: '事前采配', exact: true });
+    panel = page.getByRole('dialog', { name: '方針・采配', exact: true });
     await panel.getByLabel('見る設定').selectOption('bunt');
     assert.equal(
       await panel.getByLabel('送りバント', { exact: true }).inputValue(),
@@ -221,7 +221,7 @@ try {
     );
     assert.equal(attempts, 0, '閲覧や変更だけでは自動送信しない');
     await panel
-      .getByRole('button', { name: '編成を保存', exact: true })
+      .getByRole('button', { name: '保存', exact: true })
       .click();
     await panel.getByRole('alert').waitFor();
     assert.equal(
@@ -234,7 +234,7 @@ try {
       '保存失敗をパネル内に表示',
     );
     await panel
-      .getByRole('button', { name: '編成を保存', exact: true })
+      .getByRole('button', { name: '保存', exact: true })
       .click();
     await panel.getByText('保存済みの設定', { exact: true }).waitFor();
     assert.equal(commands, 1);

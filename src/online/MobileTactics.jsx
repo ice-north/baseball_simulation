@@ -42,9 +42,12 @@ export default function MobileTactics({
         y = plan.starters.indexOf(b.id);
       return (x < 0 ? 99 : x) - (y < 0 ? 99 : y);
     });
+  // ⚠ **呼び名はPC・アプリと同じ「方針・采配」**。以前は「事前采配」で、同じ設定なのに
+  //    端末で名前が違った。保存の押しボタンも「編成を保存」ではなくPCと同じ「保存」
+  //    （打順の下書きも同じなので、ここで保存すると打順の変更も一緒に保存する。下の文がそう書く）
   return (
     <MobilePanel
-      title="事前采配"
+      title="方針・采配"
       close={close}
       footer={
         <>
@@ -62,7 +65,7 @@ export default function MobileTactics({
               disabled={busy || !dirty}
               onClick={save}
             >
-              編成を保存
+              保存
             </button>
           </div>
         </>
