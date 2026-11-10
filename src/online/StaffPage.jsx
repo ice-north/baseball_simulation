@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import TeamRoster from './TeamRoster.jsx';
 import { Page } from './Page.jsx';
 import { teamLabel } from './gameText.js';
 import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS } from './coaches.js';
+import { useDraftState, STAFF_MODES_DRAFT } from './Drafts.jsx';
 
 // ============================================================
 // 指導者（監督・投手コーチ・野手コーチ）。PC のページとスマホの画面で共用。
@@ -72,10 +73,6 @@ export function CoachCard({ coach, roleLabel, actions = null, compact = false })
             <dd>{coach.delegation}</dd>
           </div>
         )}
-        <div>
-          <dt>得意</dt>
-          <dd>{coach.specialtyLabel}</dd>
-        </div>
         {coach.prefs && (
           <div>
             <dt>好み</dt>
@@ -157,7 +154,55 @@ function SeatActions({ role, seats, busy, act }) {
   );
 }
 
+/**
+ * 任せ方の下書き（変えた分野だけ）から、送る分を取り出す。席が空いた分野（`locked`）と、
+ * いまの値と同じものは送らない。アプリの `staffModeChanges`（Staff.kt）と同じ決め方
+ */
+export function staffModeChanges(modes, draft) {
+  return Object.fromEntries(
+    (modes || [])
+      .filter((a) => !a.locked && draft?.[a.key] && draft[a.key] !== a.effective)
+      .map((a) => [a.key, draft[a.key]]),
+  );
+}
+
+/**
+ * 任せ方。⚠ **まとめて変えて「任せ方を保存」で1回だけ送る**（いしだ指摘 2026-11-10:
+ *    1つ押すたびに保存と読み込みが走るのは微妙）。下書きは変えた分野だけを持つ
+ *    （`STAFF_MODES_DRAFT`。閉じる前の確認にも効く）。席が空いた分野は「自分で」に固定
+ */
 function Modes({ staff, busy, run, command }) {
+  const [draft, setDraft] = useDraftState(STAFF_MODES_DRAFT, {});
+  const [error, setError] = useState('');
+  const changes = staffModeChanges(staff.modes, draft);
+  const count = Object.keys(changes).length;
+  // 席が空いた・他の端末で同じ値にした、で送る分が無くなった下書きは捨てる
+  //  （残すと、閉じる前の確認が変更の無いまま出る）
+  useEffect(() => {
+    if (!count && Object.keys(draft || {}).length) setDraft({});
+  }, [count, draft, setDraft]);
+  const pick = (area, value) => {
+    const next = { ...draft };
+    if (value === area.effective) delete next[area.key];
+    else next[area.key] = value;
+    setDraft(next);
+    setError('');
+  };
+  const save = () =>
+    run(async () => {
+      setError('');
+      try {
+        await command('staffModes', { modes: changes });
+        setDraft({});
+      } catch (e) {
+        setError(e.message);
+        throw e;
+      }
+    });
+  const discard = () => {
+    setDraft({});
+    setError('');
+  };
   return (
     <section className="online-card">
       <h2>任せ方</h2>
@@ -165,32 +210,50 @@ function Modes({ staff, busy, run, command }) {
         分野ごとに選びます。「意見を聞く」は決めるのはあなたで、指導者の案が標準案になります（采配の「AI判断」は指導者の考えで動きます）。「任せる」は指導者が決めます。全部「自分で」なら指導者を入れる前と同じです。
       </p>
       <div className="online-choices online-staff-modes">
-        {staff.modes.map((area) => (
-          <div key={area.key} className="online-choice">
-            <span className="online-choice-label">
-              {area.label}
-              <small>{area.ownerLabel}</small>
-            </span>
-            <div className="online-segments" role="group" aria-label={area.label}>
-              {staff.modeOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={area.effective === option.value}
-                  disabled={busy || (area.locked && option.value !== 'self')}
-                  onClick={() =>
-                    run(() =>
-                      command('staffModes', { modes: { [area.key]: option.value } }),
-                    )
-                  }
-                >
-                  {option.label}
-                </button>
-              ))}
+        {staff.modes.map((area) => {
+          const shown = area.locked ? area.effective : draft?.[area.key] || area.effective;
+          return (
+            <div
+              key={area.key}
+              className={`online-choice${changes[area.key] ? ' is-changed' : ''}`}
+            >
+              <span className="online-choice-label">
+                {area.label}
+                {changes[area.key] && <em className="online-staff-unsaved">未保存</em>}
+                <small>{area.ownerLabel}</small>
+              </span>
+              <div className="online-segments" role="group" aria-label={area.label}>
+                {staff.modeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={shown === option.value}
+                    disabled={busy || (area.locked && option.value !== 'self')}
+                    onClick={() => pick(area, option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {area.note && <small className="online-muted">{area.note}</small>}
             </div>
-            {area.note && <small className="online-muted">{area.note}</small>}
-          </div>
-        ))}
+          );
+        })}
+      </div>
+      <div className="online-actions online-staff-save">
+        <span className={error ? 'online-error-text' : 'online-muted'} role={error ? 'alert' : undefined}>
+          {error
+            ? `保存できませんでした：${error}（変更は残っています）`
+            : count
+              ? `保存していない変更があります（${count}件）`
+              : '保存済み'}
+        </span>
+        <button disabled={busy || !count} onClick={discard}>
+          変更を取り消す
+        </button>
+        <button className="online-primary" disabled={busy || !count} onClick={save}>
+          任せ方を保存
+        </button>
       </div>
     </section>
   );

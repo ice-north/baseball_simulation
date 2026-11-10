@@ -62,6 +62,9 @@ class AppViewModel internal constructor(
     var campDraft by mutableStateOf<CampDraft?>(null)
     var tradeDraft by mutableStateOf<TradeDraft?>(null)
 
+    /** 指導者の任せ方の下書き（変えた分野だけ。「任せ方を保存」でまとめて送る） */
+    var staffModesDraft by mutableStateOf<Map<String, String>>(emptyMap())
+
     /**
      * 届いた提案の知らせから一覧を開いたときに、脇へ置いた作りかけの案。
      * ⚠ 知らせを押しただけで作りかけの案を捨てないこと（選んだ選手が黙って消えていた）。
@@ -303,6 +306,7 @@ class AppViewModel internal constructor(
         phaseDraft = null
         campDraft = null
         tradeDraft = null
+        staffModesDraft = emptyMap()
         parkedTradeDraft = null
         procTrade = false
         message = null

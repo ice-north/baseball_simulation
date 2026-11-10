@@ -67,12 +67,8 @@ export const CAMP_PREFS = {
 };
 export const CAMP_PHASE_PREFS = { skill: '技術', physique: '基礎体力' };
 
-/** 得意分野（どの考え方がはっきりしているか） */
-export const SPECIALTY_LABELS = {
-  manager: '采配',
-  pitching: '投手',
-  batting: '野手',
-};
+// 得意分野（`specialty`: manager / pitching / batting）は、どの考え方がはっきりしているか。
+// ⚠ 画面には出さない（最初の3人は席と同じものに決め打ちで、出しても意味が無い）
 
 /**
  * 人の球団が分野ごとに選ぶ任せ方。

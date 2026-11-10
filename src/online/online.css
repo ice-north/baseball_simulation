@@ -3970,3 +3970,28 @@ small.online-gain:not(:where(.online-sp *)) {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px 18px;
 }
+/* 任せ方は「任せ方を保存」でまとめて送る。保存していない分野に印 */
+.online-staff-modes .online-choice.is-changed .online-choice-label {
+  color: var(--accent);
+}
+.online-staff-unsaved {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 400;
+  margin-left: 6px;
+}
+.online-actions.online-staff-save {
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.online-actions.online-staff-save > span {
+  margin-right: auto;
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  /* スマホは「保存していない変更があります」を1行に、ボタンをその下に並べる */
+  .online-actions.online-staff-save > span {
+    flex-basis: 100%;
+  }
+}

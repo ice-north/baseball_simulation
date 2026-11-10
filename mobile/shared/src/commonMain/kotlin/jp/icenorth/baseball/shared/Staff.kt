@@ -43,7 +43,6 @@ data class CoachCard(
     val team: String? = null,
     val since: Int? = null,
     val specialty: String? = null,
-    val specialtyLabel: String = "",
     val origin: String = "",
     val fromPlayer: Boolean = false,
     val legend: Boolean = false,
@@ -86,6 +85,13 @@ data class StaffArea(
     val locked: Boolean = false,
     val note: String? = null,
 )
+
+/**
+ * 任せ方の下書き（変えた分野だけ）から、送る分を取り出す。席が空いた分野（locked）と、
+ * いまの値と同じものは送らない。⚠ PC の `staffModeChanges`（src/online/StaffPage.jsx）と同じ決め方
+ */
+fun staffModeChanges(modes: List<StaffArea>, draft: Map<String, String>): Map<String, String> =
+    modes.mapNotNull { area -> draft[area.key]?.takeIf { !area.locked && it != area.effective }?.let { area.key to it } }.toMap()
 
 /** 采配の1行（「送りバント: AI判断 → 積極的（山田監督）」）。by が無ければ指導者は決めていない */
 @Serializable

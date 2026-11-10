@@ -10,7 +10,6 @@ import {
   STAFF_AREAS,
   STAFF_AREA_KEYS,
   STAFF_MODES,
-  SPECIALTY_LABELS,
   PITCHER_PREFS,
   HITTER_PREFS,
   CAMP_PREFS,
@@ -163,8 +162,9 @@ export function coachCard(league, coach, labelOf, { full = true } = {}) {
     roleLabel: job ? ROLE_LABELS[job.role] : '浪人中',
     team: job?.team || null,
     since: job?.since ?? null,
+    // ⚠ 「得意」は画面に出さない（いしだ指摘 2026-11-10: 最初の3人は席と同じものが得意に
+    //    決め打ちなので、出しても意味が無い）。中では考え方の濃さと空席埋めに効く
     specialty: coach.specialty,
-    specialtyLabel: `${SPECIALTY_LABELS[coach.specialty] || ''}が得意`,
     origin: originText(coach),
     fromPlayer: coach.origin?.kind === 'player',
     legend: !!coach.origin?.legend,

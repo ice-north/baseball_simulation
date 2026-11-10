@@ -40,6 +40,18 @@ class StaffTest {
     }
 
     @Test
+    fun modeChangesAreSentTogether() {
+        // 任せ方は下書きにためて「任せ方を保存」で1回だけ送る。いまの値と同じもの・知らない分野・席が空いた分野は送らない
+        val modes = assertNotNull(view.staff).modes.map { it.copy(effective = "advice", locked = false) }
+        val draft = mapOf("camp" to "self", "pitching" to "delegate", "lineup" to "advice", "nope" to "self")
+        val changes = staffModeChanges(modes, draft)
+        assertEquals(mapOf("pitching" to "delegate", "camp" to "self"), changes)
+        val locked = modes.map { if (it.key == "pitching") it.copy(effective = "self", locked = true) else it }
+        assertEquals(mapOf("camp" to "self"), staffModeChanges(locked, draft))
+        assertEquals("""{"modes":{"pitching":"delegate","camp":"self"}}""", Commands.staffModes(changes).toString())
+    }
+
+    @Test
     fun speakerIsTheManager() {
         val (speaker, _) = commentSpeaker(view)
         assertEquals(view.staff!!.manager!!.shortName, speaker)

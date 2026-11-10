@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -47,6 +48,7 @@ import jp.icenorth.baseball.shared.StaffSeat
 import jp.icenorth.baseball.shared.StaffView
 import jp.icenorth.baseball.shared.TacticLine
 import jp.icenorth.baseball.shared.TeamStaffView
+import jp.icenorth.baseball.shared.staffModeChanges
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonNull
@@ -147,12 +149,35 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
     }
     Section("任せ方") {
         Muted("「意見を聞く」は決めるのはあなたで、指導者の案が標準案になります（采配の「AI判断」は指導者の考えで動きます）。「任せる」は指導者が決めます。全部「自分で」なら指導者を入れる前と同じです。")
+        // ⚠ まとめて変えて「任せ方を保存」で1回だけ送る（いしだ指摘 2026-11-10: 1つ押すたびに保存が走るのは微妙）。
+        //    下書きは画面ではなく model に置く（編成の別のタブへ移っても消えない）
+        val draft = model.staffModesDraft
+        val changes = staffModeChanges(staff.modes, draft)
         staff.modes.forEach { area ->
-            Text("${area.label}（${area.ownerLabel}）", style = MaterialTheme.typography.labelLarge)
-            ChoiceRow(staff.modeOptions.map { it.value to it.label }, area.effective, enabled = canWrite && !area.locked) { mode ->
-                if (mode != area.effective) model.command("staffModes", Commands.staffMode(area.key, mode), done = "任せ方を変えました")
+            val shown = if (area.locked) area.effective else draft[area.key] ?: area.effective
+            Text(
+                "${area.label}（${area.ownerLabel}）" + if (area.key in changes) " 未保存" else "",
+                style = MaterialTheme.typography.labelLarge,
+                color = if (area.key in changes) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
+            )
+            ChoiceRow(staff.modeOptions.map { it.value to it.label }, shown, enabled = canWrite && !area.locked) { mode ->
+                val current = model.staffModesDraft
+                model.staffModesDraft = if (mode == area.effective) current - area.key else current + (area.key to mode)
             }
             area.note?.let { Muted(it) }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (changes.isEmpty()) "保存済み" else "保存していない変更があります（${changes.size}件）",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (changes.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { model.staffModesDraft = emptyMap() }, enabled = changes.isNotEmpty() && !model.busy) { Text("取り消す") }
+            Button(
+                onClick = { model.command("staffModes", Commands.staffModes(changes), done = "任せ方を変えました") { model.staffModesDraft = emptyMap() } },
+                enabled = canWrite && changes.isNotEmpty(),
+            ) { Text("任せ方を保存") }
         }
     }
     TacticsLines(staff.tactics)
@@ -222,7 +247,6 @@ private fun CoachBlock(roleLabel: String, coach: CoachCard?) {
         Text(coach.color, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
         Fact("性格", coach.personality)
         coach.delegation?.let { Fact("任せ方", it) }
-        Fact("得意", coach.specialtyLabel)
         if (coach.prefs.isNotBlank()) Fact("好み", coach.prefs)
         Fact("通算", coach.career)
         coach.mentor?.let { Fact("恩師", it) }
