@@ -493,7 +493,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                     className="btn-secondary px-3 py-1.5 rounded-lg text-xs whitespace-nowrap">
                     スロット{i + 1}に保存
                     <span className="ml-1 font-normal opacity-80">
-                      {info ? `（いま ${info.year}年目 ${info.date?.month}/${info.date?.day}）` : '（空き）'}
+                      {info ? `（${info.year}年目 ${info.date?.month}/${info.date?.day} の保存を上書き）` : '（空き）'}
                     </span>
                   </button>
                 );
