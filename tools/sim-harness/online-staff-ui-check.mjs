@@ -131,6 +131,12 @@ try {
     growthPaint.card.startsWith('rgb(') && growthPaint.card !== growthPaint.ground,
     `オフの成長がカードの地色に載っていない: ${JSON.stringify(growthPaint)}`,
   );
+  // ⚠ キャンプの表は 1440px で横に送らずに右端まで見える。選択欄が 150px で、
+  //    投手の表が 11px はみ出して右端の列が切れていた
+  const campOverflow = await p
+    .locator('.online-camp-scroll')
+    .evaluate((n) => n.scrollWidth - n.clientWidth);
+  assert.ok(campOverflow <= 1, `1440px でキャンプの表が横にはみ出す（${campOverflow}px）`);
   await go('指導者');
   const cards = p.locator('.online-staff-grid').first().locator('.online-staff-card');
   await cards.first().waitFor();

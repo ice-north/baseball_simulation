@@ -859,8 +859,11 @@ small.online-gain:not(:where(.online-sp *)) {
   font-weight: 400;
   color: #9fb0c4;
 }
+/* ⚠ 選択欄は 140px。150px では投手の表（意欲の欄に「身が入らない」と
+   「合わせる」が並ぶ）が 1440px でも 11px はみ出し、右端の列が切れた。
+   いちばん長い練習の名前でも 122px なので、140px で字は切れない */
 .online-camp-group select {
-  min-width: 150px;
+  min-width: 140px;
 }
 /* ⚠ `.online td` の中央寄せより強く当てる（クラスだけだと負けて中央に寄っていた） */
 .online td.online-camp-wish {
