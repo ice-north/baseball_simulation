@@ -556,6 +556,14 @@ assert.equal(
   assert.equal(await dueWith({ schema: ONLINE_SCHEMA - 1, migratable: true }), true, '直せる版を起こしていない');
   // `migratable` を持たない以前の `_meta` は版の範囲で判定する
   assert.equal(await dueWith({ schema: ONLINE_SCHEMA - 1 }), true, '以前の _meta で直せる版を起こしていない');
+  // ⚠ 版が同じで計算方法だけ違うリーグも起こさない（直せない。前のサーバーが書いた `_meta` は
+  //    版がいまと同じなので、版だけでは区別できなかった）
+  assert.equal(
+    await dueWith({ schema: ONLINE_SCHEMA, engineVersion: 'older-engine', nextAdvanceAt: '2025-01-01T00:00:00.000Z' }),
+    false,
+    '計算方法だけ違う版で毎回起こしている',
+  );
+  assert.equal(await dueWith({ schema: ONLINE_SCHEMA, engineVersion: ONLINE_ENGINE_VERSION, nextAdvanceAt: '2025-01-01T00:00:00.000Z' }), true, '同じ計算方法の進行時刻で起こしていない');
   assert.equal(await dueWith({ schema: ONLINE_SCHEMA + 1 }), false, '以前の _meta で新しすぎる版を起こしている');
   row = { ...row, views: { ...row.views, _meta: liveMeta } };
   // ⚠ 世代の近道（`since`）でも版の門番を飛ばさない。保存の形が古いまま

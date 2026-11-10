@@ -5,6 +5,7 @@ import {
   requireOnline,
   OnlineError,
   ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
 } from '../../src/online/shared.js';
 import {
   projectLeague,
@@ -66,6 +67,9 @@ function leagueMetaOf(league) {
     //    違うリーグは定期処理でも直せないので、起こすと毎回ロックと全体の
     //    読み込みをして失敗し、その間の参加者の操作が弾かれる
     migratable: migrationState(league).state === 'migratable',
+    // 試合の計算方法。版（schema）が同じでも計算方法が違えば直せない（作り直すしかない）。
+    // 版だけ見ると区別できず、定期処理が毎回起きて失敗していた（`isDue`）
+    engineVersion: league.engineVersion ?? null,
     revision: league.revision,
     status: league.status,
     nextAdvanceAt: league.nextAdvanceAt ?? null,
@@ -266,6 +270,11 @@ export class SupabaseStore {
     //    参加者の操作を「処理中」で弾いていた。進行時刻が来ていても同じ
     //    （定期処理は移行に失敗した時点で止まる）なので、ここで答えを決める。
     //    `migratable` の無い古い `_meta` は版の範囲で判定する
+    // ⚠ 版が同じでも**計算方法が違えば**直せない。サーバーの計算方法だけ上がった直後は、
+    //    前のサーバーが書いた `_meta` の版がいまの版と同じなので、版だけでは区別できない
+    //    （`engineVersion` の無い古い `_meta` は従来どおり）
+    if (row.snapshot_path && view?.engineVersion != null && view.engineVersion !== ONLINE_ENGINE_VERSION)
+      return false;
     if (row.snapshot_path && view && view.schema !== ONLINE_SCHEMA)
       return !!(
         view.migratable ??
