@@ -653,7 +653,7 @@ function Admin({ view, busy, run, command, allowStep }) {
         </label>
         <p className="online-muted">
           時間を待たずに試すための設定です。遊び始めたら外してください。
-          1ターン＝実時間1時間＝ゲーム内1日（＝1試合）です。
+          1ターン＝実時間{TURN_MINUTES}分＝ゲーム内1日です（試合の日は1試合）。
         </p>
         {(view.testMode || allowStep) && (
           <div className="online-actions">
@@ -664,9 +664,10 @@ function Admin({ view, busy, run, command, allowStep }) {
             )}
             {view.status === 'running' && (
               <>
-                {/* ⚠ **1ターン＝実時間1時間＝ゲーム内1日**。「1日進める」と書くと
+                {/* ⚠ **1ターン＝実時間 `TURN_MINUTES` 分＝ゲーム内1日**。「1日進める」と書くと
                     どちらの1日か分からない（24ターンでゲーム内は24日進む）。
-                    ターン数とゲーム内の日数を両方書く */}
+                    ターン数とゲーム内の日数を両方書く。⚠ 説明の文に刻みの分数を手で書かない
+                    （1時間ごとだった頃の「実時間1時間」が45分に変えたあとも残っていた） */}
                 <button disabled={busy} onClick={() => run(() => command('step'))}>
                   1ターン進める（ゲーム内1日）
                 </button>

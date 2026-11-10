@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PROGRESSION_TIMES, CAMP_ROUNDS, RETRY_ON_REVISION as RETRY_TYPES } from './shared.js';
+import { PROGRESSION_TIMES, CAMP_ROUNDS, TURN_MINUTES, RETRY_ON_REVISION as RETRY_TYPES } from './shared.js';
 import './online.css';
 import { api, AUTH_KEY } from './api.js';
 import { Login, JoinLeague } from './LeaguePanels.jsx';
@@ -394,7 +394,7 @@ export default function OnlineApp() {
       result = await send(viewRef.current?.revision || 0);
     } catch (error) {
       // ⚠ **編成と手続きの提出は、版のずれだけなら最新の版で1回だけ送り直す**。
-      //    版はリーグ全体で1つなので、毎正時の進行や他の参加者の操作だけで
+      //    版はリーグ全体で1つなので、定時の進行や他の参加者の操作だけで
       //    「他の操作で更新されました」になり、編成を保存し直す羽目になっていた。
       //    どちらも自分の保存済みの内容（`baseLineup` / `baseSubmission`）で
       //    本当の食い違いを別に確かめているので、送り直しても上書き事故は起きない。
@@ -574,8 +574,10 @@ export default function OnlineApp() {
                 >
                   更新を取り込む
                 </button>
+                {/* ⚠ 自動処理（定期の進行）は**5分ごと**に回る（`supabase/cron.example.sql`）。
+                    以前は「次の正時」と書いており、毎正時に進めていた頃の説明が残っていた */}
                 <p className="online-muted online-spaced">
-                  次の正時の自動処理でも取り込まれます。取り込めない形式だった場合は、押すと理由が表示されます。
+                  数分以内に自動でも取り込まれます。取り込めない形式だった場合は、押すと理由が表示されます。
                 </p>
               </>
             ) : (
@@ -684,8 +686,11 @@ export default function OnlineApp() {
             <section className="online-card">
               <h2>進行時刻（日本時間）</h2>
               <p>{PROGRESSION_TIMES.join(' / ')}</p>
+              {/* ⚠ 「1日進みます」だけだと、実時間の1日かゲーム内の1日か分からない。
+                  刻み（`TURN_MINUTES`）も手で書かない */}
               <p>
-                各時刻に1日進みます。決定待ち・停止中の分は後からまとめて進めません。
+                {TURN_MINUTES}分ごとに1ターン（ゲーム内の1日）進みます。月〜金は試合、土日は手続きです。
+                決定待ち・停止中の分は後からまとめて進めません。
               </p>
               <button autoFocus onClick={() => timesDialog.current.close()}>
                 閉じる

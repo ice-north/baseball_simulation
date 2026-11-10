@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
+import { TURN_MINUTES } from '../../src/online/shared.js';
 // ⚠ PCの左メニューは「現在の手続き」「選手成績」「ホーム」（3a8592d で名前が変わった）。
 //    スマホのホームのボタンは「手続き」「打順」のまま。
 // ⚠ **PCのキャンプは「ホーム」に出す**（いしだ要望。「現在の手続き」の中に
@@ -461,6 +462,23 @@ try {
     await due.page.getByRole('button', { name: 'この内容で決定', exact: true }).waitFor();
     assert.ok((await times()) <= 1, `スマホの手続きに締め切りが${await times()}回出ている`);
     await due.context.close();
+  }
+
+  // --- 進行時刻の説明は刻みから作る（u1 低19） -----------------------------
+  // ⚠ 以前は「各時刻に1日進みます」で、実時間の1日かゲーム内の1日か分からなかった。
+  //    検証モードの説明も「実時間1時間」のまま（いまは45分）だった
+  {
+    const clock = await scene();
+    await click(clock.page, '進行時刻');
+    const dialog = clock.page.getByRole('dialog', { name: '進行時刻', exact: true });
+    await dialog.waitFor();
+    assert.ok(
+      (await dialog.innerText()).includes(`${TURN_MINUTES}分ごとに1ターン（ゲーム内の1日）進みます`),
+      `進行時刻の説明が刻みと合っていない: ${await dialog.innerText()}`,
+    );
+    await dialog.getByRole('button', { name: '閉じる', exact: true }).click();
+    await dialog.waitFor({ state: 'detached' });
+    await clock.context.close();
   }
 
   // --- 止まったときに、その場から再開できること --------------------------
