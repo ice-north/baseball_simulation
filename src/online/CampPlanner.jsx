@@ -167,6 +167,17 @@ function PlayerRow({
           </button>
         )}
       </td>
+      {/* ⚠ 希望は**意欲の隣**に置く。意欲は「希望と方針が噛み合うか」なので、
+          並べないと見比べられない（右端に置いていて、1440px でも半分切れていた）。
+          印だけにして全文は title と表の下の凡例で出す。名前で出すと
+          「長所を伸ばす·基礎体力」で90pxを取り、右端の列が隠れる */}
+      <td
+        className="online-camp-wish"
+        title={`${DIRECTIONS[wish.direction]?.name}·${PHASES[wish.phase]?.name}`}
+      >
+        {DIRECTIONS[wish.direction]?.icon}
+        {PHASES[wish.phase]?.icon}
+      </td>
       <td>{isPitcher ? FORM_SHORT[player.pitching?.form] || '—' : '—'}</td>
       <td>
         <Stat value={player.physical?.arm} diff={g('physical.arm')} />
@@ -278,15 +289,6 @@ function PlayerRow({
             ))}
           </select>
         )}
-      </td>
-      {/* ⚠ 希望は**印だけ**にして、全文は title で出す。名前で出すと
-          「長所を伸ばす·基礎体力」で90pxを取り、右端の列が隠れる */}
-      <td
-        className="online-camp-wish"
-        title={`${DIRECTIONS[wish.direction]?.name}·${PHASES[wish.phase]?.name}`}
-      >
-        {DIRECTIONS[wish.direction]?.icon}
-        {PHASES[wish.phase]?.icon}
       </td>
     </tr>
   );
@@ -761,6 +763,7 @@ export default function CampPlanner({
                       （やる気は「本人の希望と方針が噛み合うか」＝意欲の列）。
                       3つとも選手の詳細（名前を押す）で見られる。 */}
                   <th>意欲</th>
+                  <th title="本人が伸ばしたいと思っている方向">希望</th>
                   <th>フォーム</th>
                   <th>肩</th>
                   {shownGroup.id === 'pitcher' ? (
@@ -785,7 +788,6 @@ export default function CampPlanner({
                   <th>体幹</th>
                   <th>メイン</th>
                   <th>サブ</th>
-                  <th title="本人が伸ばしたいと思っている方向">希望</th>
                   {/* ⚠ **変化球の列も外した**。持っている球種は「新球種習得」の
                       対象の選択肢から外れ、「変化球練習」の選択肢にはそのまま
                       並ぶので、ここで見せなくても取り違えない */}
@@ -817,6 +819,22 @@ export default function CampPlanner({
               </tbody>
             </table>
           </div>
+          {/* ⚠ 希望の印と成長の数字の**読み方を表の下に1行で**出す。印だけ・
+              倍率だけでは何のことか分からなかった（title はPCでもまず開かれない）。
+              ⚠ 1行に収める。キャンプはホームに出すので1画面（1440×1000）に収める */}
+          <p className="online-camp-legend">
+            <span>
+              希望の印：
+              {Object.values(DIRECTIONS)
+                .map((d) => `${d.icon}${d.name}`)
+                .join(' ')}
+              {' ／ '}
+              {Object.values(PHASES)
+                .map((d) => `${d.icon}${d.name}`)
+                .join(' ')}
+            </span>
+            <span>成長：伸びやすさ（1.00 が並み。高いほど同じ練習でよく伸びる）</span>
+          </p>
         </section>
       )}
       {!finished && (

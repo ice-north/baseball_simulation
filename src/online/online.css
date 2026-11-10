@@ -874,6 +874,15 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 11px;
   color: #9fb0c4;
 }
+/* 表の下の凡例（希望の印・成長の数字の読み方）。⚠ 1行に収める */
+.online-camp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #9fb0c4;
+}
 /* ⚠ やる気は**色だけに頼らない**（文字でも出す）。色覚に依らず読めるように */
 .online-mood.is-good {
   color: #86efac;
