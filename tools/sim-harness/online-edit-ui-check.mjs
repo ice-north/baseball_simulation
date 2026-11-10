@@ -440,6 +440,29 @@ try {
   await staleRun().waitFor();
   await stale.context.close();
 
+  // --- 締め切りの日時を1画面に何度も並べない（u1 低31） ---------------------
+  // ⚠ 以前は手続きのページに「見出しの下」「1年の流れの帯」「決まりの文」と3回出ていた。
+  //    決まりの文には日時を書かない
+  {
+    const due = await scene({
+      phase: { ...contractPhase(), deadline: '2026-11-07T15:00:00.000Z' },
+    });
+    due.view.stage = { key: 'contract', open: true };
+    due.view.revision++;
+    await click(due.page, '更新');
+    await click(due.page, '現在の手続き');
+    await due.page.getByRole('button', { name: 'この内容で決定', exact: true }).waitFor();
+    const times = async () =>
+      (await due.page.locator('main').innerText()).split('11/8(日) 0:00').length - 1;
+    assert.ok((await times()) <= 2, `PCの手続きのページに締め切りが${await times()}回出ている`);
+    // 幅を変えても開いている画面（手続き）はそのまま
+    await due.page.setViewportSize({ width: 390, height: 844 });
+    await due.page.locator('.online-mobile-controls').waitFor();
+    await due.page.getByRole('button', { name: 'この内容で決定', exact: true }).waitFor();
+    assert.ok((await times()) <= 1, `スマホの手続きに締め切りが${await times()}回出ている`);
+    await due.context.close();
+  }
+
   // --- 止まったときに、その場から再開できること --------------------------
   // ⚠ **行き止まりにしない**。定期進行が止まると「1日程進める」も押せなくなり、
   //    なぜ進まないのかも、どこで直すのかも画面から分からなかった。
