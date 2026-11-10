@@ -611,7 +611,9 @@
   margin: 0;
   font-size: 14px;
 }
-.online-camp-gains-head .online-segments {
+/* ⚠ `.online` を前に付けて強くする。PC の `.online-desktop .online-segments`
+   （下余白 12px・同じ強さで後ろにある）に負けて、見出しの行だけ 12px 高かった */
+.online .online-camp-gains-head .online-segments {
   margin: 0;
 }
 .online-camp-gain-totals {
@@ -747,15 +749,20 @@ small.online-gain:not(:where(.online-sp *)) {
 
 /* --- キャンプの割り当て ------------------------------------------------ */
 /* ⚠ **詰めること**。キャンプはホームに出すので、方針の欄・タブ・実行ボタンと
-   12人の表が1画面（1000px）に収まる必要がある。実測の内訳は
-   ヘッダー85 / 見出し24 / 説明17 / 方針100 / タブ28 / 表536 / 実行40。 */
+   12人の表が1画面（1000px）に収まる必要がある。実測の内訳（1440×1000・
+   投手11人の表・2026-11-10）は ヘッダー85 / 見出し24 / 説明29 / 方針71 /
+   タブ32 / 表509 / 凡例17 / 実行32 で、カードの下端が 853px。 */
 .online-camp-bulk {
   margin: 4px 0 4px;
   padding: 6px 10px;
   border-radius: 8px;
   background: #ffffff0c;
 }
-.online-desktop .online-camp-bulk button {
+/* ⚠ 決め方のボタン（`Choice` の `.online-segments` の中）にも当てる。
+   `.online-desktop .online-segments button` と同じ強さで後ろにあるそちらが勝ち、
+   28px のままだった */
+.online-desktop .online-camp-bulk button,
+.online-desktop .online-camp-bulk .online-segments button {
   min-height: 0;
   height: 26px;
   padding: 0 8px;
@@ -840,19 +847,21 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-camp-bulk p {
   margin: 6px 0 0;
 }
-/* ⚠ 守備位置のタブ。1グループずつ出すので、表の上に置く */
-.online-camp-tabs {
-  margin: 2px 0 0;
+/* ⚠ 守備位置のタブ。1グループずつ出すので、表の上に置く。
+   ⚠ 要素は `.online-segments.online-camp-tabs`（1つの要素に2つ）。2つを重ねて
+   当てる。以前は `.online-camp-tabs .online-segments`（子孫）と、同じ強さで
+   後ろにある `.online-desktop .online-segments` に負ける指定で、どれも効いて
+   いなかった（タブの帯は 38px・下余白 12px のままだった） */
+.online-desktop .online-segments.online-camp-tabs {
+  margin: 2px 0 6px;
+  padding: 2px;
+  gap: 2px;
 }
-.online-desktop .online-camp-tabs button {
+.online-desktop .online-segments.online-camp-tabs button {
   min-height: 0;
   height: 26px;
   padding: 0 12px;
   font-size: 12px;
-}
-.online-desktop .online-camp-tabs .online-segments {
-  padding: 2px;
-  gap: 2px;
 }
 .online-camp-group th small {
   margin-left: 5px;
