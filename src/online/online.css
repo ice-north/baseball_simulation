@@ -998,6 +998,12 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 24px;
   color: #fff;
 }
+/* 日程の対戦の印（得点の代わり）。⚠ 大きな白い「×」は負け・中止に読めた */
+.online-score .online-score-vs {
+  font-size: 13px;
+  font-style: normal;
+  color: #9fb0c4;
+}
 .online label:not(:where(.online-sp *)) {
   display: block;
   margin: 14px 0;

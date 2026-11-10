@@ -330,9 +330,13 @@ export function Results({ view, compact = false }) {
               </header>
               <div>
                 <span title={teamLabel(g.away)}>{name(g.away)}</span>
-                <strong>
-                  {mode === 'results' ? `${g.awayScore} – ${g.homeScore}` : '×'}
-                </strong>
+                {/* ⚠ 日程の対戦は「vs」を小さく薄く出す。以前の大きな白い「×」は、
+                    野球の表では負け・中止の印に読めた */}
+                {mode === 'results' ? (
+                  <strong>{`${g.awayScore} – ${g.homeScore}`}</strong>
+                ) : (
+                  <em className="online-score-vs">vs</em>
+                )}
                 <span title={teamLabel(g.home)}>{name(g.home)}</span>
               </div>
               {decisions && (
