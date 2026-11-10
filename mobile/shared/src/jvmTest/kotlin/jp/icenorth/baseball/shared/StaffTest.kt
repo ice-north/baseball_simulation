@@ -31,12 +31,31 @@ class StaffTest {
         assertTrue(staff.tactics.filter { it.by != null }.all { it.resolvedLabel != null })
         val manager = assertNotNull(staff.manager)
         assertEquals(7, manager.views.size)
-        assertEquals(4, manager.traits.size)
+        // 性格は気質・こだわり・任せ方の3つ
+        assertEquals(listOf("temper", "stubborn", "trust"), manager.traits.map { it.key })
+        // カードの表はビジョン・育成観・性格。見出しと売り込みの文もサーバーの文のまま
+        assertTrue(manager.headline.contains("、") && manager.color.endsWith("の野球"))
+        assertTrue(manager.vision.startsWith("攻め ") && manager.vision.contains("看板"))
+        assertTrue(manager.growth.isNotBlank() && manager.pitch.isNotBlank() && manager.prefs.isNotBlank())
+        // コーチは受け持ちの側に印が付く
+        assertTrue(staff.seats.filter { it.role != "manager" }.mapNotNull { it.coach }.all { it.vision.contains("受け持ち") })
         assertTrue(manager.history.isNotEmpty(), "1年目の通算が履歴に無い")
         assertNotNull(manager.delegation)
         // リーグ全球団と、キャンプの標準案を出した人
         assertEquals(12, view.leagueStaff?.teams?.size)
         assertNotNull(view.phase?.planBy)
+    }
+
+    @Test
+    fun modeChangesAreSentTogether() {
+        // 任せ方は下書きにためて「任せ方を保存」で1回だけ送る。いまの値と同じもの・知らない分野・席が空いた分野は送らない
+        val modes = assertNotNull(view.staff).modes.map { it.copy(effective = "advice", locked = false) }
+        val draft = mapOf("camp" to "self", "pitching" to "delegate", "lineup" to "advice", "nope" to "self")
+        val changes = staffModeChanges(modes, draft)
+        assertEquals(mapOf("pitching" to "delegate", "camp" to "self"), changes)
+        val locked = modes.map { if (it.key == "pitching") it.copy(effective = "self", locked = true) else it }
+        assertEquals(mapOf("camp" to "self"), staffModeChanges(locked, draft))
+        assertEquals("""{"modes":{"pitching":"delegate","camp":"self"}}""", Commands.staffModes(changes).toString())
     }
 
     @Test

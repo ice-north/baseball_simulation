@@ -51,8 +51,8 @@ export const releaseScore = (p) => {
  * これによりAIチームが選手を保持し続けてユーザーがトライアウトを独占するのを防ぐ。
  *
  * @param {object|null} bias 球団の偏り（オンラインの指導者 `releaseBias`）。
- *   `youth`（-2〜2）: 監督が若手好きなほど年齢の点を重く（ベテランを早めに出す）、
- *   ベテラン好きなほど軽くする。無ければ従来どおり。
+ *   `youth`（-2〜2。指導者からは時間軸で 育成 1・中間 0・勝負 -1）: 大きいほど年齢の点を重く
+ *   （ベテランを早めに出す）、小さいほど軽くする。無ければ従来どおり。
  */
 export const getAIReleaseCandidates = (players, bias = null) => {
   if (!players || players.length <= AI_MIN_ROSTER) return [];

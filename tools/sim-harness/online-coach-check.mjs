@@ -8,6 +8,9 @@
 // 4. 人事（キャンプの間だけ・解任・市場から呼ぶ・役職の入れ替え）
 // 5. 年度更新を何十年も回して、CPU球団に監督がいない／同じ人が2つの席にいる、が起きない
 // 6. 実際に1年回して翌年のキャンプまで（通算が残る・画面の形）
+// 7. ビジョン（攻めの型 × 守りの型 × 時間軸）から考え方・好み・キャンプの方針が筋どおりに決まる。
+//    トレードの見る目は ±10% に収まる（監督は人の采配の肩代わりで、強さを足さない）
+// 8. 説明だけの飾り: 語り口・軸の選手・再登板で丸くなる・称号
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import {
@@ -29,8 +32,31 @@ import {
   coachOffseason,
   fillVacancies,
   effectiveStaffModes,
+  conflictOf,
+  RIFT_CONFLICT,
 } from '../../server/coachEngine.mjs';
-import { createCoaches, STAFF_AREA_KEYS, COACH_ROLES } from '../../src/online/coaches.js';
+import { cpuTeams } from '../../src/online/membership.js';
+import {
+  createCoaches,
+  STAFF_AREA_KEYS,
+  COACH_ROLES,
+  ATTACK_TYPES,
+  DEFENSE_TYPES,
+  HORIZONS,
+  PERSONALITY_KEYS,
+  growthPolicy,
+  tradeFactor,
+  TRADE_FACTOR_LIMIT,
+  visionOf,
+  VOICES,
+  keyPlayers,
+  mellowOnReturn,
+  assignCoach,
+  pitchText,
+  preferenceText,
+  tryoutContext,
+} from '../../src/online/coaches.js';
+import { coachCard, coachTitles } from '../../server/coachView.mjs';
 import { migrateLeague } from '../../src/online/leagueMigration.js';
 import { projectLeague, projectLineup, projectTeamInfo } from '../../server/projection.mjs';
 import { hashSeed, withSeededRandom } from '../../src/game/rng.js';
@@ -58,6 +84,32 @@ assert.deepEqual(createCoaches(clone(league)), league.coaches, '作り直すと�
   twice.schema = 9;
   migrateLeague(twice);
   assert.deepEqual(twice.coaches, league.coaches, '移行を2回当てると変わる');
+}
+{
+  // 版11 → 12: PR #22 の形（ビジョンが無い）の指導者に項目を足す。考え方は変えない
+  const old = clone(league);
+  old.schema = 11;
+  for (const p of Object.values(old.coaches.people)) {
+    delete p.vision;
+    delete p.growth;
+    delete p.voice;
+    p.personality = { temper: p.personality.temper, youth: 1, trust: p.personality.trust, boldness: -1 };
+    p.prefs = { hitter: 'speed', pitcher: 'control', camp: 'fit', campPhase: 'skill' };
+  }
+  const views = Object.fromEntries(Object.values(old.coaches.people).map((p) => [p.id, { ...p.views }]));
+  migrateLeague(old);
+  const again = clone(old);
+  for (const p of Object.values(old.coaches.people)) {
+    assert.deepEqual(p.views, views[p.id], '移行で考え方が変わった（采配が変わる）');
+    assert.equal(p.vision.attack, 'speed', '好みの「俊足」が攻めの型にならない');
+    assert.ok(DEFENSE_TYPES[p.vision.defense] && HORIZONS[p.vision.horizon] && VOICES[p.voice]);
+    assert.deepEqual(p.growth, { who: 'sharp', line: 70 }, '「選手に合わせる」が育成観にならない');
+    assert.equal(p.personality.stubborn, 0);
+    if (p.specialty === 'pitching') assert.equal(p.vision.flagship, 'defense');
+  }
+  again.schema = 11;
+  migrateLeague(again);
+  assert.deepEqual(again.coaches, old.coaches, '移行を2回当てると変わる');
 }
 const other = createLeague({ seed: 7, members, now: iso() });
 assert.notDeepEqual(other.coaches.people, league.coaches.people, '種を変えても同じ顔ぶれ');
@@ -98,6 +150,27 @@ for (const coach of Object.values(league.coaches.people)) {
   // 代打・守備固めは遅らせる向きしか無い（-2〜0）
   assert.ok(coach.views.bench <= 0, `${coach.name} の代打・守備固めが ${coach.views.bench}`);
   for (const v of Object.values(coach.views)) assert.ok(Number.isInteger(v) && v >= -2 && v <= 2);
+  // ビジョンは攻め・守り・看板・時間軸の4つ。性格は気質・こだわり・任せ方の3つ
+  const v = coach.vision;
+  assert.ok(Object.hasOwn(ATTACK_TYPES, v?.attack) && Object.hasOwn(DEFENSE_TYPES, v?.defense), `${coach.name} の型が不正`);
+  assert.ok(['attack', 'defense'].includes(v.flagship) && Object.hasOwn(HORIZONS, v.horizon), `${coach.name} の看板・時間軸が不正`);
+  assert.deepEqual(Object.keys(coach.personality), PERSONALITY_KEYS, `${coach.name} の性格の軸が違う`);
+  assert.ok(['all', 'sharp', 'none'].includes(coach.growth?.who), `${coach.name} の育成観が不正`);
+  // 時間軸と「編成」の向きが食い違わない（育成なのに勝負重視、を作らない）
+  if (v.horizon === 'develop') assert.ok(coach.views.build < 0, `${coach.name} は育成なのに編成 ${coach.views.build}`);
+  if (v.horizon === 'win') assert.ok(coach.views.build > 0, `${coach.name} は勝負なのに編成 ${coach.views.build}`);
+}
+{
+  // 型が考え方に出る（看板の側。揺らぎがあるので平均で見る）
+  const people = Object.values(league.coaches.people);
+  const mean = (list, key) => list.reduce((n, p) => n + p.views[key], 0) / Math.max(1, list.length);
+  const flag = (side, type) => people.filter((p) => p.vision.flagship === side && p.vision[side] === type);
+  assert.ok(mean(flag('attack', 'speed'), 'running') >= 1, '機動力が看板なのに走塁が積極でない');
+  assert.ok(mean(flag('attack', 'power'), 'smallBall') <= -1, '長打が看板なのに小技が多い');
+  assert.ok(mean(flag('attack', 'contact'), 'hitting') <= -1, 'つなぐが看板なのに打撃が慎重でない');
+  assert.ok(mean(flag('defense', 'rotation'), 'bullpen') <= -1, '先発で押すが看板なのに継投が早い');
+  assert.ok(mean(flag('defense', 'bullpen'), 'bullpen') >= 1, '継投でつなぐが看板なのに継投が遅い');
+  assert.ok(mean(flag('defense', 'fielding'), 'pitching') <= -1, '打たせて守るが看板なのに三振狙い');
 }
 console.log(
   `指導者 ${Object.keys(league.coaches.people).length}人 / 例: ${names
@@ -113,7 +186,7 @@ console.log(
   me.staffModes = Object.fromEntries(STAFF_AREA_KEYS.map((k) => [k, 'self']));
   assert.equal(tryoutContextFor(l, humanTeam), null, '自分でなのにトライアウトの考えが入る');
   assert.equal(releaseBiasFor(l, humanTeam), null, '自分でなのに退団の偏りが入る');
-  assert.equal(campPlanFor(l, humanTeam, l.game.teams[humanTeam].players, () => ({})), null, '自分でなのにキャンプの案が入る');
+  assert.equal(campPlanFor(l, humanTeam, l.game.teams[humanTeam].players), null, '自分でなのにキャンプの案が入る');
   const team = clone(l.game.teams[humanTeam]);
   team.onlineTactics = { sacrificeBunt: 'auto', hook: 'auto' };
   const before = clone(team);
@@ -283,6 +356,17 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
   const career = people.flatMap((p) => p.career || []);
   assert.ok(career.length > 40 * names.length, '通算の行が足りない');
   assert.ok(l.coaches.events.length <= 40, '出来事が40件を超えて残る');
+  // CPU球団は監督と考えの合うコーチを好む（考えが割れて毎年辞める入れ替わりを減らす）
+  const riftShare = (lg) => {
+    const pairs = cpuTeams(lg).flatMap((t) => {
+      const st = staffOf(lg, t.name);
+      return ['pitching', 'batting'].filter((r) => st.manager && st[r]).map((r) => conflictOf(st.manager, st[r], r));
+    });
+    return pairs.filter((x) => x >= RIFT_CONFLICT).length / Math.max(1, pairs.length);
+  };
+  const [first, last] = [riftShare(league), riftShare(l)];
+  console.log(`考えが割れている組（CPU球団）: 最初 ${Math.round(first * 100)}% → 40年後 ${Math.round(last * 100)}%`);
+  assert.ok(last <= 0.3, `40年後に考えが割れている組が多すぎる（${Math.round(last * 100)}%）`);
 }
 
 // ------------------------------------------------------------------ 6. 実際に1年
@@ -309,6 +393,10 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
   const managerRows = rows.filter((r) => r.role === 'manager' && r.year === startYear);
   assert.equal(managerRows.length, names.length, '監督の通算の行が球団の数と違う');
   assert.ok(managerRows.every((r) => r.wins + r.losses > 50), '監督の行の勝敗が入っていない');
+  // 部で1位だった成績の印（称号に使う）。部ごとに得点1位の球団の監督がいる
+  const leagueIds = new Set(managerRows.map((r) => r.league));
+  for (const id of leagueIds)
+    assert.ok(managerRows.some((r) => r.league === id && r.leads?.includes('runs')), `${id}部の得点1位の印が無い`);
   const pitchRow = rows.find((r) => r.role === 'pitching' && r.year === startYear);
   assert.ok(pitchRow?.era > 0 && pitchRow.strikeouts > 0, '投手コーチの行に防御率・奪三振が無い');
   const view = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
@@ -331,5 +419,153 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
     writeFileSync(path, `${JSON.stringify(view)}\n`);
     console.log(`アプリの検査用のビューを書き出した: ${path.pathname}`);
   }
+}
+// ------------------------------------------------------------------ 7. ビジョンから決まる方針・見る目
+{
+  const hitter = (meet, power, extra = {}) => ({
+    id: 'h',
+    position: 'second',
+    age: 26,
+    batting: { meet, power, eye: 50, steal: 50, ...extra },
+    physical: { speed: 50, arm: 50, bodyStamina: 50 },
+    fielding: { defense: 50 },
+  });
+  const spiky = hitter(78, 40); // 技術の長所78・短所40（尖った選手）
+  const flat = hitter(55, 55, { eye: 55, steal: 55 }); // 開きの無い選手
+  const coach = (who, line, { horizon = 'win', stubborn = 0 } = {}) => ({
+    vision: { attack: 'speed', defense: 'bullpen', flagship: 'attack', horizon },
+    growth: { who, line },
+    personality: { temper: 0, stubborn, trust: 0 },
+  });
+  const dir = (c, p) => growthPolicy(c, p).direction;
+  // 徹底して尖らせる: 誰でもずっと長所
+  assert.deepEqual([dir(coach('all', null), spiky), dir(coach('all', null), flat)], ['sharpen', 'sharpen']);
+  // 一定まで尖らせて整える: 長所が線に届いたら短所へ
+  assert.deepEqual([dir(coach('all', 70), spiky), dir(coach('all', 80), spiky), dir(coach('all', 70), flat)], ['patch', 'sharpen', 'sharpen']);
+  // 選手の形に合わせる: 尖った選手だけ線まで長所、ほかは全体
+  assert.deepEqual([dir(coach('sharp', 80), spiky), dir(coach('sharp', 70), spiky), dir(coach('sharp', 80), flat)], ['sharpen', 'balanced', 'balanced']);
+  // 穴のない選手に: 開きが大きければ短所、無ければ全体
+  assert.deepEqual([dir(coach('none', null), spiky), dir(coach('none', null), flat)], ['patch', 'balanced']);
+  // 段階は時間軸から（育成の若手は基礎体力、勝負は技術）。柔軟な人は本人の希望に合わせる
+  const young = { ...spiky, age: 18 };
+  assert.equal(growthPolicy(coach('all', null, { horizon: 'develop' }), young).phase, 'physique');
+  assert.equal(growthPolicy(coach('all', null, { horizon: 'win' }), young).phase, 'skill');
+  assert.equal(growthPolicy(coach('all', null, { horizon: 'win', stubborn: -2 }), young).phase, 'physique', '柔軟な人が希望に合わせない');
+
+  // 好む選手は1つの並びから読む: 打たせて守るの「守備の良い野手」は、文・トライアウト・
+  // トレードの見る目・軸の選手で同じに効く（ほかの守りの型には効かない）
+  {
+    const fielding = { vision: { attack: 'contact', defense: 'fielding', flagship: 'defense', horizon: 'middle' } };
+    const rotation = { vision: { ...fielding.vision, defense: 'rotation' } };
+    const catcher = (id, defense) => ({ id, name: id, position: 'catcher', age: 25, batting: { meet: 50, power: 50 }, physical: { speed: 50 }, fielding: { defense } });
+    const [good, poor] = [catcher('good', 80), catcher('poor', 50)];
+    assert.ok(preferenceText(fielding).includes('守備の良い野手') && !preferenceText(rotation).includes('守備の良い野手'));
+    assert.ok(tradeFactor({ manager: fielding }, good) > tradeFactor({ manager: fielding }, poor), 'トレードで守備の良い野手を好まない');
+    assert.equal(tradeFactor({ manager: rotation }, good), tradeFactor({ manager: rotation }, poor));
+    assert.ok(tryoutContext({ manager: fielding }).bonus(good) > tryoutContext({ manager: fielding }).bonus(poor), 'トライアウトで守備の良い野手を好まない');
+    assert.equal(tryoutContext({ manager: rotation }).bonus(good), tryoutContext({ manager: rotation }).bonus(poor));
+    assert.equal(keyPlayers(fielding, [poor, good]).find((p) => p.position !== 'pitcher')?.id, 'good', '軸の選手で守備の良い野手を選ばない');
+    // 野手コーチは受け持ち（攻め）の好みだけ。打たせて守るの野手コーチでも守備は見ない
+    const bat = { manager: rotation, batting: fielding };
+    assert.equal(tryoutContext(bat).bonus(good), tryoutContext(bat).bonus(poor), '野手コーチが守りの好みで野手を選ぶ');
+  }
+
+  // 実際の名簿で: キャンプの案は全員ぶん、トレードの見る目は ±10% に収まる
+  const l = clone(inCamp);
+  const all = names.flatMap((n) => l.game.teams[n]?.players || []);
+  assert.ok(all.length > 200, '名簿が配られていない');
+  let lo = 1;
+  let hi = 1;
+  for (const n of names) {
+    const st = staffOf(l, n);
+    for (const p of all) {
+      const f = tradeFactor(st, p);
+      lo = Math.min(lo, f);
+      hi = Math.max(hi, f);
+    }
+  }
+  assert.ok(lo >= 1 - TRADE_FACTOR_LIMIT - 1e-9 && hi <= 1 + TRADE_FACTOR_LIMIT + 1e-9, `トレードの見る目が ${lo}〜${hi}`);
+  const plan = campPlanFor(l, cpuTeam, l.game.teams[cpuTeam].players);
+  assert.equal(Object.keys(plan.players).length, l.game.teams[cpuTeam].players.length, 'キャンプの案が全員ぶん無い');
+  const dirs = {};
+  for (const { name: n } of cpuTeams(l))
+    for (const v of Object.values(campPlanFor(l, n, l.game.teams[n].players).players))
+      dirs[`${v.direction}/${v.phase}`] = (dirs[`${v.direction}/${v.phase}`] || 0) + 1;
+  assert.ok(Object.keys(dirs).length >= 4, `キャンプの方針が偏りすぎ ${JSON.stringify(dirs)}`);
+  // カードの表: ビジョン・育成観・性格。見出しと売り込みの文。コーチは受け持ちの側に印
+  const view = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  for (const seat of view.staff.seats) {
+    const card = seat.coach;
+    assert.ok(card.headline && card.vision && card.growth && card.pitch && card.prefs, `${seat.role} のカードの文が欠けている`);
+    if (seat.role !== 'manager') assert.ok(card.vision.includes('受け持ち'), `${seat.role} に受け持ちの印が無い`);
+  }
+  assert.ok(view.leagueStaff.teams.every((t) => !t.manager || t.manager.color.endsWith('の野球')));
+  const sample = coachCard(l, staffOf(l, cpuTeam).manager, (x) => x);
+  console.log(
+    `ビジョン例: ${sample.headline}（${sample.vision}） / ${sample.growth} / 「${sample.pitch}」 / 見る目 ${lo.toFixed(3)}〜${hi.toFixed(3)} / キャンプ ${JSON.stringify(dirs)}`,
+  );
+}
+// ------------------------------------------------------------------ 8. 説明だけの飾り
+{
+  const l = clone(inCamp);
+  const people = Object.values(l.coaches.people);
+  assert.ok(people.every((p) => VOICES[p.voice]), '語り口の無い人がいる');
+  assert.ok(new Set(people.map((p) => p.voice)).size === Object.keys(VOICES).length, '語り口が偏りすぎ');
+  // 軸の選手: 監督の席だけ3人（看板の側から2人）。人の球団のは他の人に見せない
+  const view = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  const [mgrSeat, ...coachSeats] = view.staff.seats;
+  assert.equal(mgrSeat.coach.keyPlayers?.split('・').length, 3, `軸の選手が3人でない: ${mgrSeat.coach.keyPlayers}`);
+  assert.ok(coachSeats.every((s) => s.coach.keyPlayers == null), 'コーチのカードに軸の選手が出る');
+  const roster = l.game.teams[humanTeam].players;
+  const manager = staffOf(l, humanTeam).manager;
+  const keys = keyPlayers(manager, roster);
+  const pitchers = keys.filter((p) => p.position === 'pitcher').length;
+  assert.equal(pitchers, visionOf(manager).flagship === 'defense' ? 2 : 1, '看板の側から2人選んでいない');
+  assert.ok(projectTeamInfo({ league: l, sessions: {} }, human.userId, cpuTeam).staff.seats[0].coach.keyPlayers, 'CPU球団の軸の選手が出ない');
+  assert.equal(
+    projectTeamInfo({ league: l, sessions: {} }, human.userId, l.members[1].teamName).staff.seats[0].coach.keyPlayers ?? null,
+    null,
+    '人の球団の軸の選手が他の人に見える',
+  );
+  // 再登板で丸くなる: 解任1回につき1度だけ、こだわりが1段やわらぐ
+  const fired = { personality: { temper: 0, stubborn: 1, trust: 0 }, fired: 1 };
+  assert.equal(mellowOnReturn(fired, 5), true);
+  assert.deepEqual([fired.personality.stubborn, fired.mellowedAt], [0, 5]);
+  assert.equal(mellowOnReturn(fired, 6), false, '1度の解任で2度丸くなった');
+  // 人の解任: 前の年から居た監督なら解任に数える。その年に就けた人を外すのは取り消し（数えない）
+  const year = l.season.year;
+  const served = l.coaches.people[manager.id];
+  served.job.since = year - 1;
+  updateStaff(l, human.userId, { action: 'release', role: 'manager' });
+  assert.equal(served.fired, 1, '解任の印が付かない');
+  const trial = Object.values(l.coaches.people).find((p) => p.status === 'free' && p.id !== served.id);
+  updateStaff(l, human.userId, { action: 'hire', role: 'manager', coachId: trial.id });
+  updateStaff(l, human.userId, { action: 'release', role: 'manager' });
+  assert.equal(trial.fired ?? 0, 0, 'その年に就けた監督を外して解任に数えた');
+  // 市場にいる間は反省を語る。CPU球団が監督に呼ぶと丸くなり、反省を語るのはその年だけ
+  assert.ok(pitchText(served).startsWith('前は'), '解任された人が市場で反省を語らない');
+  const stubborn = served.personality.stubborn;
+  const seats = l.coaches.teams[cpuTeam];
+  const old = l.coaches.people[seats.manager];
+  old.status = 'free';
+  old.job = null;
+  assignCoach(l.coaches, cpuTeam, 'manager', served, year);
+  assert.equal(served.personality.stubborn, Math.max(-2, stubborn - 1), '監督に戻っても丸くならない');
+  assert.ok(pitchText(served, { year }).startsWith('前は'), '戻った年の売り込みに反省が無い');
+  assert.ok(!pitchText(served, { year: year + 1 }).startsWith('前は'), '反省を何年も語り続ける');
+  // 称号: 年度更新で付けた部の1位の印（`leads`）を数える。解任2度で苦労人
+  const row = (y, extra) => ({ year: y, team: 'T', role: 'manager', league: 'A', wins: 70, losses: 50, ...extra });
+  const a = { career: [row(1, { rank: 1, leads: ['stolenBases'] }), row(2, { rank: 1, champion: true })], fired: 2 };
+  assert.deepEqual(coachTitles(a), ['優勝請負人', '苦労人']);
+  a.career[1].leads = ['stolenBases'];
+  assert.ok(coachTitles({ ...a, fired: 0 }).includes('走る野球の人'), '盗塁1位2度で称号が付かない');
+  const b = { career: [row(1, { team: 'U', rank: 5 }), row(2, { team: 'U', rank: 2 })] };
+  assert.deepEqual(coachTitles(b), ['再建屋'], '4位以下から2位にした人が再建屋にならない');
+  const relegated = { career: [row(1, { rank: 6, move: 'down' }), row(2, { league: 'B', rank: 2 })] };
+  assert.deepEqual(coachTitles(relegated), [], '降格した先の2位で再建屋になった');
+  const once = { career: [row(1, { rank: 1, champion: true })] };
+  assert.deepEqual(coachTitles(once), [], '1部優勝とプレーオフ優勝の同じ年を2度に数えた');
+  assert.deepEqual(coachTitles({ career: [] }), []);
+  console.log(`飾り: 軸の選手 ${mgrSeat.coach.keyPlayers} / 語り口 ${JSON.stringify(people.reduce((m, p) => ((m[p.voice] = (m[p.voice] || 0) + 1), m), {}))}`);
 }
 console.log('online-coach-check PASS');

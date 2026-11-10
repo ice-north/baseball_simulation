@@ -10,6 +10,8 @@ import React, {
 
 const Context = createContext(null);
 const prefix = 'baseball-online-draft:';
+/** 指導者の任せ方の下書き（変えた分野だけ `{ area: mode }`。`StaffPage.jsx` の `Modes`） */
+export const STAFF_MODES_DRAFT = 'staff.modes';
 export function Drafts({ scope, phaseId = null, children }) {
   // 閉じる前の確認は、いま開いている手続きの下書きだけを見る（終わった手続きの印で警告しない）
   const phaseRef = useRef(phaseId);
@@ -52,7 +54,9 @@ export function Drafts({ scope, phaseId = null, children }) {
       /* メモリ内には残す。 */
     }
     const warn = (event) => {
-      if (!cache.values['lineup.dirty'] && !cache.values[phaseDraftName(phaseRef.current, 'dirty')]) return;
+      const staffModes = Object.keys(cache.values[STAFF_MODES_DRAFT] || {}).length > 0;
+      if (!cache.values['lineup.dirty'] && !cache.values[phaseDraftName(phaseRef.current, 'dirty')] && !staffModes)
+        return;
       event.preventDefault();
       event.returnValue = '';
     };

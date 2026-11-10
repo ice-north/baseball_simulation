@@ -949,7 +949,7 @@ export function defaultPhasePlan(league, teamName) {
   }
   if (kind === 'contract')
     return {
-      // ⚠ 監督の考え（若手好きならベテランを早めに出す）。人の球団で「自分で」なら従来どおり
+      // ⚠ 監督の時間軸（育成ならベテランを早めに出す）。人の球団で「自分で」なら従来どおり
       releaseIds: getAIReleaseCandidates(
         team.players,
         releaseBiasFor(league, teamName),
@@ -958,9 +958,7 @@ export function defaultPhasePlan(league, teamName) {
   if (kind === 'camp') {
     // ⚠ 人の球団で「意見を聞く」「任せる」なら、コーチの方針（投手は投手コーチ、
     //    野手は野手コーチ）を選手ごとに。「自分で」・席が空いていれば従来の既定
-    const coached = campPlanFor(league, teamName, team.players, (player) =>
-      playerPolicy(player, { mode: 'recommended' }),
-    );
+    const coached = campPlanFor(league, teamName, team.players);
     if (coached) return { menu: 'standard', assignments: {}, ...coached };
     // ⚠ 既定は全体の方針だけ。選手ごとの割り当ては画面で決める
     return { menu: 'standard', assignments: {} };
@@ -1510,9 +1508,7 @@ function resolvePhase(league, now) {
       const plan =
         plans[name] ||
         (!member && leagueTeams.has(name)
-          ? campPlanFor(league, name, team.players, (player) =>
-              playerPolicy(player, { mode: 'recommended' }),
-            )
+          ? campPlanFor(league, name, team.players)
           : undefined);
       const rest = saved || campFallbackPlan(member, plan);
       for (let round = already; round < CAMP_ROUNDS; round += 1) {

@@ -5,7 +5,7 @@
 //
 // 見ること（リーグはセットを選んだ直後＝キャンプの間）:
 //  - PC の左メニュー「指導者」: 3人のカード・任せ方・采配の内訳・市場・各球団の指導者
-//  - 任せ方を「任せる」にすると保存され、ボタンの押された印が移る
+//  - 任せ方は押しただけでは送らず、「任せ方を保存」でまとめて1回だけ送る
 //  - 野手コーチを解任すると空席になり、スタメンと打順の任せ方は「自分で」しか選べない
 //  - 市場から呼ぶと席が埋まる
 //  - 方針・采配の項目の下に「→ 中身（決めた人）」が出る
@@ -75,14 +75,29 @@ try {
   assert.ok(await p.getByRole('heading', { name: '試合中の采配（実際の動き）' }).isVisible(), '采配の内訳が無い');
   await p.screenshot({ path: '/tmp/baseball-online-staff-pc.png', fullPage: true });
 
-  // 任せ方: 投手起用を「任せる」に
+  // 任せ方: 投手起用を「任せる」、キャンプを「自分で」に。⚠ 押しただけでは送らず、
+  //   「任せ方を保存」で1回だけ送る（いしだ指摘 2026-11-10: 1つ押すたびに保存が走るのは微妙）
   const area = (label) => p.locator('.online-choice', { has: p.locator('.online-choice-label', { hasText: label }) });
   const pressed = (label) => area(label).locator('button[aria-pressed="true"]').innerText();
+  const modesCard = p.locator('section.online-card', { has: p.getByRole('heading', { name: '任せ方', exact: true }) });
+  const saveModes = modesCard.getByRole('button', { name: '任せ方を保存', exact: true });
   assert.equal(await pressed('投手起用'), '意見を聞く', '既定の任せ方が「意見を聞く」でない');
+  assert.ok(await saveModes.isDisabled(), '変えていないのに任せ方を保存できる');
+  const sentBefore = commands.length;
   await area('投手起用').getByRole('button', { name: '任せる', exact: true }).click();
+  await area('キャンプ').getByRole('button', { name: '自分で', exact: true }).click();
+  assert.equal(await pressed('投手起用'), '任せる', '押した任せ方が画面に出ない');
+  assert.equal(commands.length, sentBefore, '保存を押す前に任せ方を送っている');
+  assert.ok(await modesCard.getByText('保存していない変更があります（2件）').isVisible(), '未保存の件数が出ない');
+  // 戻して押し直すと、その分野は変更なしに戻る
+  await area('キャンプ').getByRole('button', { name: '意見を聞く', exact: true }).click();
+  await area('キャンプ').getByRole('button', { name: '自分で', exact: true }).click();
+  await saveModes.click();
   await p.getByText('任せ方を変えました', { exact: false }).waitFor();
-  assert.equal(await pressed('投手起用'), '任せる', '任せ方が変わらない');
-  assert.deepEqual(commands.at(-1).payload, { modes: { pitching: 'delegate' } });
+  assert.equal(commands.length, sentBefore + 1, '任せ方の保存が1回でない');
+  assert.deepEqual(commands.at(-1).payload, { modes: { pitching: 'delegate', camp: 'self' } });
+  assert.equal(await pressed('投手起用'), '任せる', '保存した任せ方が出ない');
+  assert.ok(await modesCard.getByText('保存済み', { exact: true }).isVisible(), '保存したのに未保存のまま');
 
   // 野手コーチを解任 → 空席・スタメンと打順は「自分で」だけ
   // ⚠ 席は 監督・投手コーチ・野手コーチ の順（どのカードにも「野手コーチと入れ替える」がある）

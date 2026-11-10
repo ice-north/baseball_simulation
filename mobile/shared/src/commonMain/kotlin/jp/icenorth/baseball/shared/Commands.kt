@@ -71,9 +71,12 @@ object Commands {
         }
     }
 
-    /** 任せ方を1つの分野だけ変える（area: lineup / pitching / tactics / tryout / release / camp、mode: self / advice / delegate） */
-    fun staffMode(area: String, mode: String): JsonObject = buildJsonObject {
-        putJsonObject("modes") { put(area, mode) }
+    /**
+     * 任せ方を変える（area: lineup / pitching / tactics / tryout / release / camp、mode: self / advice / delegate）。
+     * ⚠ 変えた分野をまとめて1回で送る（`staffModeChanges`。1つ押すたびに保存しない）
+     */
+    fun staffModes(modes: Map<String, String>): JsonObject = buildJsonObject {
+        putJsonObject("modes") { modes.forEach { (area, mode) -> put(area, mode) } }
     }
 
     /** 指導者の人事（キャンプの間だけ）。action: release / hire / swap */

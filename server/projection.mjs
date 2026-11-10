@@ -522,7 +522,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           // ⚠ 契約更改: 標準案（決めなかったときの案）で誰が・なぜ退団になるか。
           //    PC・スマホ・アプリが同じ理由を出すよう、サーバーで1回だけ作る
           //    （選び方そのもの `getAIReleaseCandidates` / `releaseScore` から）
-          // ⚠ 指導者の考え（監督の若手好き）を、標準案と同じく当てる（`releaseBiasFor`）
+          // ⚠ 指導者の考え（監督の時間軸）を、標準案と同じく当てる（`releaseBiasFor`）
           releaseAdvice:
             phase.kind === 'contract'
               ? Object.fromEntries(

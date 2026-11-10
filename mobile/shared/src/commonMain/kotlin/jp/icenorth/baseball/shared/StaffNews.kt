@@ -108,7 +108,7 @@ internal fun staffNationalArticles(view: LeagueView, offPhase: Boolean, winners:
             out += FrontPage.Article(
                 "記録",
                 "${view.teamShort(t.team)}・${m.shortName}監督、通算${m.totalWins}勝",
-                "${view.teamShort(t.team)}の${m.name}監督が、監督として通算${m.totalWins}勝に到達した。${m.color}の野球で白星を積み重ねてきた。",
+                "${view.teamShort(t.team)}の${m.name}監督が、監督として通算${m.totalWins}勝に到達した。${m.color}で白星を積み重ねてきた。",
                 LINK_GAMES,
             )
         }

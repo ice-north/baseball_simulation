@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import TeamRoster from './TeamRoster.jsx';
 import { Page } from './Page.jsx';
 import { teamLabel } from './gameText.js';
 import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS } from './coaches.js';
+import { useDraftState, STAFF_MODES_DRAFT } from './Drafts.jsx';
 
 // ============================================================
 // 指導者（監督・投手コーチ・野手コーチ）。PC のページとスマホの画面で共用。
@@ -11,8 +12,9 @@ import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS } from './coaches.js';
 //    https://claude.ai/artifact/HN144s1P83tcUtWbSdH7yU
 // ⚠ 文はサーバーが作る（`server/coachView.mjs`）。アプリ（`mobile/.../Staff*.kt`）と
 //    同じ文を出すため、画面で言い換えないこと。
-// ⚠ 能力を上げる効果は無い。考え方と性格だけ（采配の「AI判断」・トライアウト・退団・
-//    キャンプの案・トレードの返事に効く）。
+// ⚠ 監督は人の采配の肩代わり。能力を上げる効果は無い（いしだ指定「監督バフはナシ」）。
+//    ビジョン（攻めの型 × 守りの型 × 時間軸）と育成観・性格で、采配の「AI判断」・
+//    トライアウト・退団・キャンプの案・トレードの返事が変わるだけ。
 // ============================================================
 
 /** 考え方・性格の1行（「継投: 早め」）。目盛りは -2〜2 の5段 */
@@ -38,7 +40,18 @@ function Scale({ item }) {
   );
 }
 
-export function CoachCard({ coach, roleLabel, actions = null, compact = false }) {
+/** カードの表の1行（値が無ければ出さない。アプリの `Fact` と同じ） */
+function Fact({ label, value }) {
+  if (!value) return null;
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+export function CoachCard({ coach, roleLabel, actions = null }) {
   if (!coach)
     return (
       <article className="online-staff-card is-empty">
@@ -59,49 +72,30 @@ export function CoachCard({ coach, roleLabel, actions = null, compact = false })
           {coach.age}歳 · {coach.origin}
           {coach.legend ? ' · 名選手' : ''}
         </small>
+        {coach.titles?.length ? (
+          <span className="online-staff-titles">
+            {coach.titles.map((t) => (
+              <b key={t}>{t}</b>
+            ))}
+          </span>
+        ) : null}
       </header>
-      <p className="online-staff-color">{coach.color}</p>
+      <p className="online-staff-color">{coach.headline}</p>
+      {coach.pitch && <p className="online-staff-pitch">「{coach.pitch}」</p>}
       <dl className="online-staff-facts">
-        <div>
-          <dt>性格</dt>
-          <dd>{coach.personality}</dd>
-        </div>
-        {coach.delegation && (
-          <div>
-            <dt>任せ方</dt>
-            <dd>{coach.delegation}</dd>
-          </div>
-        )}
-        <div>
-          <dt>得意</dt>
-          <dd>{coach.specialtyLabel}</dd>
-        </div>
-        {coach.prefs && (
-          <div>
-            <dt>好み</dt>
-            <dd>{coach.prefs}</dd>
-          </div>
-        )}
-        <div>
-          <dt>通算</dt>
-          <dd>{coach.career}</dd>
-        </div>
-        {coach.mentor && (
-          <div>
-            <dt>恩師</dt>
-            <dd>{coach.mentor}</dd>
-          </div>
-        )}
-        {coach.playerLine && (
-          <div>
-            <dt>現役時代</dt>
-            <dd>{coach.playerLine}</dd>
-          </div>
-        )}
+        <Fact label="ビジョン" value={coach.vision} />
+        <Fact label="育成観" value={coach.growth} />
+        <Fact label="性格" value={coach.personality} />
+        <Fact label="任せ方" value={coach.delegation} />
+        <Fact label="軸の選手" value={coach.keyPlayers} />
+        <Fact label="通算" value={coach.career} />
+        <Fact label="恩師" value={coach.mentor} />
+        <Fact label="現役時代" value={coach.playerLine} />
       </dl>
-      {!compact && coach.views && (
+      {coach.views && (
         <details className="online-staff-more">
-          <summary>考え方・性格・履歴</summary>
+          <summary>考え方・性格・好む選手・履歴</summary>
+          {coach.prefs && <p className="online-staff-prefs">好む選手: {coach.prefs}</p>}
           <ul className="online-staff-scales">
             {coach.views.map((item) => (
               <Scale key={item.key} item={item} />
@@ -157,7 +151,55 @@ function SeatActions({ role, seats, busy, act }) {
   );
 }
 
+/**
+ * 任せ方の下書き（変えた分野だけ）から、送る分を取り出す。席が空いた分野（`locked`）と、
+ * いまの値と同じものは送らない。アプリの `staffModeChanges`（Staff.kt）と同じ決め方
+ */
+export function staffModeChanges(modes, draft) {
+  return Object.fromEntries(
+    (modes || [])
+      .filter((a) => !a.locked && draft?.[a.key] && draft[a.key] !== a.effective)
+      .map((a) => [a.key, draft[a.key]]),
+  );
+}
+
+/**
+ * 任せ方。⚠ **まとめて変えて「任せ方を保存」で1回だけ送る**（いしだ指摘 2026-11-10:
+ *    1つ押すたびに保存と読み込みが走るのは微妙）。下書きは変えた分野だけを持つ
+ *    （`STAFF_MODES_DRAFT`。閉じる前の確認にも効く）。席が空いた分野は「自分で」に固定
+ */
 function Modes({ staff, busy, run, command }) {
+  const [draft, setDraft] = useDraftState(STAFF_MODES_DRAFT, {});
+  const [error, setError] = useState('');
+  const changes = staffModeChanges(staff.modes, draft);
+  const count = Object.keys(changes).length;
+  // 席が空いた・他の端末で同じ値にした、で送る分が無くなった下書きは捨てる
+  //  （残すと、閉じる前の確認が変更の無いまま出る）
+  useEffect(() => {
+    if (!count && Object.keys(draft || {}).length) setDraft({});
+  }, [count, draft, setDraft]);
+  const pick = (area, value) => {
+    const next = { ...draft };
+    if (value === area.effective) delete next[area.key];
+    else next[area.key] = value;
+    setDraft(next);
+    setError('');
+  };
+  const save = () =>
+    run(async () => {
+      setError('');
+      try {
+        await command('staffModes', { modes: changes });
+        setDraft({});
+      } catch (e) {
+        setError(e.message);
+        throw e;
+      }
+    });
+  const discard = () => {
+    setDraft({});
+    setError('');
+  };
   return (
     <section className="online-card">
       <h2>任せ方</h2>
@@ -165,32 +207,50 @@ function Modes({ staff, busy, run, command }) {
         分野ごとに選びます。「意見を聞く」は決めるのはあなたで、指導者の案が標準案になります（采配の「AI判断」は指導者の考えで動きます）。「任せる」は指導者が決めます。全部「自分で」なら指導者を入れる前と同じです。
       </p>
       <div className="online-choices online-staff-modes">
-        {staff.modes.map((area) => (
-          <div key={area.key} className="online-choice">
-            <span className="online-choice-label">
-              {area.label}
-              <small>{area.ownerLabel}</small>
-            </span>
-            <div className="online-segments" role="group" aria-label={area.label}>
-              {staff.modeOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={area.effective === option.value}
-                  disabled={busy || (area.locked && option.value !== 'self')}
-                  onClick={() =>
-                    run(() =>
-                      command('staffModes', { modes: { [area.key]: option.value } }),
-                    )
-                  }
-                >
-                  {option.label}
-                </button>
-              ))}
+        {staff.modes.map((area) => {
+          const shown = area.locked ? area.effective : draft?.[area.key] || area.effective;
+          return (
+            <div
+              key={area.key}
+              className={`online-choice${changes[area.key] ? ' is-changed' : ''}`}
+            >
+              <span className="online-choice-label">
+                {area.label}
+                {changes[area.key] && <em className="online-staff-unsaved">未保存</em>}
+                <small>{area.ownerLabel}</small>
+              </span>
+              <div className="online-segments" role="group" aria-label={area.label}>
+                {staff.modeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={shown === option.value}
+                    disabled={busy || (area.locked && option.value !== 'self')}
+                    onClick={() => pick(area, option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {area.note && <small className="online-muted">{area.note}</small>}
             </div>
-            {area.note && <small className="online-muted">{area.note}</small>}
-          </div>
-        ))}
+          );
+        })}
+      </div>
+      <div className="online-actions online-staff-save">
+        <span className={error ? 'online-error-text' : 'online-muted'} role={error ? 'alert' : undefined}>
+          {error
+            ? `保存できませんでした：${error}（変更は残っています）`
+            : count
+              ? `保存していない変更があります（${count}件）`
+              : '保存済み'}
+        </span>
+        <button disabled={busy || !count} onClick={discard}>
+          変更を取り消す
+        </button>
+        <button className="online-primary" disabled={busy || !count} onClick={save}>
+          任せ方を保存
+        </button>
       </div>
     </section>
   );

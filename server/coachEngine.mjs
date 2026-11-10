@@ -65,10 +65,14 @@ const TARGET_RANK = {
 const seededIn = (league, tag, fn) =>
   withSeededRandom(hashSeed(`${league.seed}:coaches:${tag}`), fn);
 
-/** 監督とコーチの考えの食い違いが、辞任につながる大きさ */
-export const RESIGN_CONFLICT = 2.5;
+/**
+ * 監督とコーチの考えの食い違いが、辞任につながる大きさ。
+ * ⚠ 考え方はビジョンから決まるので、受け持ちの型が違うと差がはっきり出る。
+ *    最初の顔ぶれ（種300通り）で、辞任の線を越える組は約3%、話題の線は約12%に合わせてある
+ */
+export const RESIGN_CONFLICT = 3.5;
 /** 食い違いが紙面の話題になる大きさ（辞任ほどではない） */
-export const RIFT_CONFLICT = 1.5;
+export const RIFT_CONFLICT = 2.5;
 export const CONFLICT_AREAS = { pitching: '継投・投球', batting: '打撃・走塁' };
 
 /**
@@ -82,6 +86,11 @@ export function conflictOf(manager, coach, role) {
     if (def.domain === role)
       gap += Math.abs((manager.views?.[key] || 0) - (coach.views?.[key] || 0));
   return gap * (1 - delegationOf(manager));
+}
+
+/** 監督を解任した印（再び監督になるとき丸くなる `mellowOnReturn`。称号「苦労人」） */
+function markFired(coach) {
+  coach.fired = (coach.fired || 0) + 1;
 }
 
 /** 席から外して市場へ（`status: 'free'`）。⚠ 引退させるときは呼んだあと status を変える */
@@ -244,15 +253,13 @@ export function tradeFactorFor(league, teamName) {
 
 /**
  * キャンプの指示（`runCampRound` に渡す形）。人の球団で「自分で」なら null。
- * `recommended`: 選手ごとのおすすめ（`playerPolicy(player, { mode: 'recommended' })`）
+ * 選手ごとの方針はコーチの育成観と時間軸から（`coaches.js` の `growthPolicy`）。
  */
-export function campPlanFor(league, teamName, roster, recommended) {
+export function campPlanFor(league, teamName, roster) {
   if (!league.coaches) return null;
   const member = memberOf(league, teamName);
   if (member && effectiveStaffModes(league, member).camp === 'self') return null;
-  return campPlan(staffOf(league, teamName), roster, recommended, {
-    strictSeats: !!member,
-  });
+  return campPlan(staffOf(league, teamName), roster, { strictSeats: !!member });
 }
 
 /** 人の任せ方を保存する */
@@ -304,6 +311,8 @@ export function staffCommand(league, userId, payload) {
   if (action === 'release') {
     const coach = c.people[seats[role]];
     requireOnline(coach, 'その席は空いています', 409);
+    // ⚠ その年に就けた人を外すのは取り消し（解任に数えない）
+    if (role === 'manager' && coach.job.since < year) markFired(coach);
     unassign(c, coach, year);
     logEvent(c, { year, kind: 'release', team, role, coachId: coach.id, name: coach.name });
     return { status: 'released' };
@@ -321,14 +330,14 @@ export function staffCommand(league, userId, payload) {
     const a = seats[role];
     const b = seats[other];
     requireOnline(a || b, '入れ替える人がいません', 409);
-    seats[role] = b;
-    seats[other] = a;
+    seats[role] = null;
+    seats[other] = null;
+    // 席に就け直す（在任は今年から。監督になる人は `assign` の中で丸くなる）
     for (const [id, r] of [[a, other], [b, role]])
       if (id) {
         const coach = c.people[id];
-        coach.job = { ...coach.job, role: r, since: year, misses: 0 };
-        if (r === 'manager')
-          logEvent(c, hireEvent(c, { year, kind: 'promote', team, role: r, coach }));
+        assign(c, team, r, coach, year);
+        if (r === 'manager') logEvent(c, hireEvent(c, { year, kind: 'promote', team, role: r, coach }));
       }
     return { status: 'swapped' };
   }
@@ -398,6 +407,22 @@ export function coachSeasonRows(league) {
   return out;
 }
 
+/** 部で1位を数える成績（称号に使う。盗塁・本塁打・得点は多いほど、防御率は低いほど） */
+const LEAD_STATS = { stolenBases: 1, homeruns: 1, runs: 1, era: -1 };
+
+/** 部ごとの1位の数字。⚠ 指導者の席が空いていた球団も比べる（全球団の成績 `rows` から） */
+function leadersOf(entry, rows) {
+  const best = {};
+  for (const [team, row] of Object.entries(rows)) {
+    const leagueId = entry?.leagues?.[team];
+    if (!leagueId) continue;
+    const b = (best[leagueId] ||= {});
+    for (const [stat, sign] of Object.entries(LEAD_STATS))
+      if (row[stat] != null && (b[stat] == null || (row[stat] - b[stat]) * sign > 0)) b[stat] = row[stat];
+  }
+  return best;
+}
+
 /** 部の中の順位（1始まり）と部の段（0=1部） */
 function placeOf(entry, teamName) {
   const leagueId = entry?.leagues?.[teamName];
@@ -434,12 +459,17 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
   const managers = Object.fromEntries(
     Object.entries(c.teams).map(([team, seats]) => [team, seats.manager]),
   );
+  const leaders = leadersOf(entry, rows);
   seededIn(league, `offseason:${year}`, () => {
-    // 1) 成績を残す
+    // 1) 成績を残す（部で1位だった成績は `leads` に。称号に使う）
     for (const [team, seats] of Object.entries(c.teams)) {
       const place = placeOf(entry, team);
       const row = entry?.standings?.find((s) => s.team === team);
       const move = (entry?.moves || []).find((m) => m.teamId === team);
+      const stats = rows[team] || {};
+      const leads = Object.keys(LEAD_STATS).filter(
+        (stat) => stats[stat] != null && stats[stat] === leaders[place?.leagueId]?.[stat],
+      );
       for (const role of COACH_ROLES) {
         const coach = c.people[seats[role]];
         if (!coach) continue;
@@ -461,7 +491,8 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
                 ? 'up'
                 : 'down'
               : null,
-            ...(rows[team] || {}),
+            ...stats,
+            ...(leads.length ? { leads } : {}),
           },
         ];
       }
@@ -496,6 +527,7 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
           manager.job.misses = ok ? 0 : (manager.job.misses || 0) + (worst ? 2 : 1);
           // ⚠ 就任1年目では解任しない（その年が就任の年なら見送る）
           if (manager.job.since < year && manager.job.misses >= front.patience) {
+            markFired(manager);
             unassign(c, manager, nextYear);
             events.push({
               year: nextYear,
@@ -576,7 +608,7 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
  *
  * - 監督が空席なら、半分の確率で自分の球団のコーチを上げる（内部昇格）。でなければ市場から
  * - コーチが空席なら市場から（まれに空席のまま1年過ごす球団もある）
- * - 市場から選ぶときは、得意分野が合う人・古巣の人を好む
+ * - 市場から選ぶときは、得意分野が合う人・監督と考えの合うコーチ・古巣の人を好む
  * ⚠ 弱い球団（前年の順位が低い）から先に選ぶ
  */
 export function fillVacancies(league) {
@@ -602,6 +634,9 @@ export function fillVacancies(league) {
             p,
             score:
               (p.specialty === role ? 3 : role === 'manager' ? 1 : 0) +
+              // 監督と考えの合うコーチを好む（考えが割れて1年で辞める入れ替わりを減らす。
+              // 辞任・紙面の話題と同じ物差し `conflictOf`）
+              -0.5 * (role === 'manager' ? 0 : conflictOf(c.people[seats.manager], p, role)) +
               (p.origin?.team === team ? 2 : 0) +
               (p.origin?.legend && role === 'manager' ? 2 : 0) -
               (p.age >= 68 ? 2 : 0) +

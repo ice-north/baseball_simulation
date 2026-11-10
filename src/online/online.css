@@ -23,21 +23,26 @@
 .online *:not(:where(.online-sp *))::after {
   box-sizing: border-box;
 }
-.online h1:not(:where(.online-sp *)),
-.online h2:not(:where(.online-sp *)),
-.online h3:not(:where(.online-sp *)),
-.online p:not(:where(.online-sp *)) {
+/* ⚠ 見出し・段落の土台は**詳細度を 0,0,1 に落とす**（`:where(.online)`）。
+   `.online p`（0,1,1）のままだと、`.online-career { margin: 0 0 10px }` のような
+   クラス1つの指定（0,1,0）がすべて負け、書いた余白が効かずに 0 0 12px になる
+   （`!important` で勝たせていた所もある）。土台は「何も書かなければこう」の役なので、
+   クラスで書いた指定には必ず負けるようにする */
+:where(.online) h1:not(:where(.online-sp *)),
+:where(.online) h2:not(:where(.online-sp *)),
+:where(.online) h3:not(:where(.online-sp *)),
+:where(.online) p:not(:where(.online-sp *)) {
   margin: 0 0 12px;
 }
-.online h1:not(:where(.online-sp *)) {
+:where(.online) h1:not(:where(.online-sp *)) {
   font-size: var(--online-h1, 28px);
   font-weight: 750;
 }
-.online h2:not(:where(.online-sp *)) {
+:where(.online) h2:not(:where(.online-sp *)) {
   font-size: var(--online-h2, 19px);
   font-weight: 700;
 }
-.online h3:not(:where(.online-sp *)) {
+:where(.online) h3:not(:where(.online-sp *)) {
   margin-top: 18px;
   font-weight: 700;
 }
@@ -754,10 +759,16 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-desktop .online-card .online-camp-head h3 {
   margin: 0;
 }
-/* ⚠ ホームに出すので**説明は1行**（折り返しは禁じない。詰めるのは余白だけ） */
+/* ⚠ ホームに出すので**説明は1行**（折り返しは禁じない。詰めるのは余白だけ）。
+   指導者の案内（`.online-staff-note`、このファイルの後ろで margin 8px 0）と重ねて
+   使うので、重ねたときも余白はこちらが勝つよう2クラスで書く（文字の大きさは
+   1クラスのまま。スマホの `.online-decision p` の 12px を上書きしない） */
 .online-camp-note:not(:where(.online-sp *)) {
   margin: 2px 0;
   font-size: 11px;
+}
+.online-staff-note.online-camp-note:not(:where(.online-sp *)) {
+  margin: 2px 0;
 }
 .online-camp-bulk h3,
 .online-camp-group h3 {
@@ -3930,10 +3941,37 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-staff-card header small {
   color: #9fb0c4;
 }
-.online-staff-color {
+/* ⚠ カードの中の p は `.online-staff-card` を付けて当てる（`.online p` の余白 0,1,1 より強くするため） */
+.online-staff-card .online-staff-color {
   font-weight: 650;
   color: var(--accent);
   margin: 0 0 8px;
+}
+/* 称号（通算の記録から。最大2つ） */
+.online-staff-titles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.online-staff-titles b {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 1px 7px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+}
+/* 売り込みの文（本人の言葉）。⚠ カードは暗い地色なので明るい補足色（`--ink-sub` は明るい地色用） */
+.online-staff-card .online-staff-pitch {
+  margin: -2px 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #d0d9e5;
+}
+.online-staff-card .online-staff-prefs {
+  margin: 4px 0 8px;
+  font-size: 13px;
 }
 .online-staff-facts {
   display: grid;
@@ -4042,4 +4080,29 @@ small.online-gain:not(:where(.online-sp *)) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px 18px;
+}
+/* 任せ方は「任せ方を保存」でまとめて送る。保存していない分野に印 */
+.online-staff-modes .online-choice.is-changed .online-choice-label {
+  color: var(--accent);
+}
+.online-staff-unsaved {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 400;
+  margin-left: 6px;
+}
+.online-actions.online-staff-save {
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.online-actions.online-staff-save > span {
+  margin-right: auto;
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  /* スマホは「保存していない変更があります」を1行に、ボタンをその下に並べる */
+  .online-actions.online-staff-save > span {
+    flex-basis: 100%;
+  }
 }

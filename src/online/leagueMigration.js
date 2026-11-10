@@ -1,5 +1,5 @@
 import { generateRosterPacks, LEGACY_PACK_STYLE } from './rosterPack.js';
-import { createCoaches } from './coaches.js';
+import { createCoaches, upgradeCoach } from './coaches.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -168,6 +168,18 @@ export const MIGRATIONS = [
       //    増えると、古い保存でだけ落ちる
       for (const state of Object.values(league.phase?.camp || {}))
         if (state?.plan) state.plan.subTarget ||= {};
+    },
+  },
+  {
+    from: 11,
+    to: 12,
+    note: '指導者にビジョン（攻めの型・守りの型・時間軸）・育成観・語り口を足した',
+    apply(league) {
+      // ⚠ **足すだけ**。考え方（`views`）は変えないので、采配はこれまでと同じ。
+      //    ビジョンは今の考え方・好み・得意分野から読み取る（`upgradeCoach`）。
+      //    称号の「部で1位」の印（通算の行の `leads`）は、この版から先の年だけに付く
+      for (const coach of Object.values(league.coaches?.people || {}))
+        upgradeCoach(coach, league.seed);
     },
   },
 ];
