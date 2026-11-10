@@ -367,8 +367,9 @@ fun Tag(text: String, color: Color = MaterialTheme.colorScheme.secondary) {
 @Composable
 fun InfoButton(title: String, lines: List<String>, modifier: Modifier = Modifier) {
     var open by rememberSaveable { mutableStateOf(false) }
+    // ⚠ 押せる大きさは 48dp（以前は 32dp で、見出しの横の小さな印を押しそこねた）
     Box(
-        modifier.size(32.dp).clickable { open = true },
+        modifier.size(48.dp).clickable { open = true },
         contentAlignment = Alignment.Center,
     ) {
         Text("ⓘ", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

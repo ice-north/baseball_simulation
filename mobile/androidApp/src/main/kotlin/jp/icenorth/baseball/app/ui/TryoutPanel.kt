@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -133,9 +131,13 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                         }
                     }
                 }
-                IconButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, -1)) }, enabled = i > 0, modifier = Modifier.size(36.dp)) { Text("↑") }
-                IconButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, 1)) }, enabled = i < wanted.size - 1, modifier = Modifier.size(36.dp)) { Text("↓") }
-                IconButton(onClick = { setRanked(benchFromPlan(ranked, candidates, count, roster, p.pid)) }, modifier = Modifier.size(36.dp)) { Text("×") }
+            }
+            // ⚠ 並べ替え・外すは下の行に、押せる大きさ（48dp）で置く。以前は名前の横に 36dp の「↑↓×」を
+            //    詰めて並べていて、押し間違えやすく、名前と能力の欄も狭くなっていた
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, -1)) }, enabled = i > 0) { Text("↑ 上へ") }
+                TextButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, 1)) }, enabled = i < wanted.size - 1) { Text("↓ 下へ") }
+                TextButton(onClick = { setRanked(benchFromPlan(ranked, candidates, count, roster, p.pid)) }) { Text("外す") }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
@@ -168,6 +170,8 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                         }
                     }
                 }
+                // ⚠ 操作の欄は幅を決めておく（以前は「＋予定」「最優先」「なし」で幅が変わり、右の評価の列がずれた）
+                Box(Modifier.width(ActionWidth), contentAlignment = Alignment.CenterEnd) {
                 if (at < 0) {
                     TextButton(onClick = {
                         if (count <= 0) {
@@ -181,6 +185,7 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                     }) { Text("＋予定") }
                 } else if (at > 0) {
                     TextButton(onClick = { setRanked(addToPlan(ranked, candidates, count, roster, p.pid, first = true)) }) { Text("最優先") }
+                }
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -253,3 +258,5 @@ private fun WeightsSection(model: AppViewModel, candidates: List<JsonObject>, ro
     }
 }
 
+/** 候補の行の操作（「＋予定」「最優先」）の欄の幅 */
+private val ActionWidth = 84.dp
