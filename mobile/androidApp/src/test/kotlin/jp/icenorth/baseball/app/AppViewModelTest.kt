@@ -6,6 +6,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import jp.icenorth.baseball.shared.OnlineApi
 import kotlinx.coroutines.CancellationException
@@ -48,10 +49,11 @@ class AppViewModelTest {
         clients.forEach { it.close() }
     }
 
-    private fun create(handler: suspend (String) -> String) {
+    private fun create(status: (String) -> HttpStatusCode = { HttpStatusCode.OK }, handler: suspend (String) -> String) {
         model = AppViewModel(app) { endpoint ->
             val client = HttpClient(MockEngine { request ->
-                respond(handler(request.url.parameters["action"].orEmpty()), headers = headersOf(HttpHeaders.ContentType, "application/json"))
+                val action = request.url.parameters["action"].orEmpty()
+                respond(handler(action), status(action), headers = headersOf(HttpHeaders.ContentType, "application/json"))
             })
             clients.add(client)
             OnlineApi(endpoint, client)
@@ -143,6 +145,29 @@ class AppViewModelTest {
         assertTrue("読み直しの失敗が伝わらない: ${model.error}", model.error.orEmpty().contains("最新の状態を読み込めませんでした"))
         assertNotNull(model.auth)
         assertEquals(2, views)
+    }
+
+    @Test fun refusedCommandReadsTheLatestViewLikeThePc() {
+        var views = 0
+        create(status = { if (it == "command") HttpStatusCode.Conflict else HttpStatusCode.OK }) { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> if (++views == 1) VIEW_1 else VIEW_2
+                // 送り直さない命令（トレード）が断られた
+                "command" -> """{"error":"相手の名簿が変わりました","code":"trade_stale"}"""
+                else -> "{}"
+            }
+        }
+        login()
+        var done = false
+        model.command("trade", JsonObject(emptyMap())) { done = true }
+        until { !model.busy }
+        assertFalse("断られたのに onDone を呼んだ", done)
+        assertEquals("相手の名簿が変わりました", model.error)
+        // ⚠ 断られたら最新を読み直す（以前は古いビューのまま残り、同じ画面で押し直すことになった）
+        assertEquals(2, views)
+        assertEquals(2, model.view?.revision)
+        assertNotNull(model.auth)
     }
 
     @Test fun theSameNoticeTwiceIsAnnouncedTwice() {

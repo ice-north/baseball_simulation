@@ -382,7 +382,21 @@ class AppViewModel internal constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    if (epoch == sessionEpoch) handle(e)
+                    if (epoch != sessionEpoch) return@launch
+                    handle(e)
+                    // ⚠ サーバーに断られたら最新を読み直す（PC の run と同じ）。断られる多くは手続きが進んだ・
+                    //    名簿が変わったなど手元のビューが古いときで、読み直さないと同じ古い画面のまま押し直すことになる。
+                    //    通信の失敗（電波が無い・時間切れ）では読まない（読み直しも同じく待たされるだけ）。
+                    //    読み直しの失敗は出さない（断られた理由の知らせを上書きしない）
+                    if (e is OnlineException && !e.isAuthFailure()) {
+                        try {
+                            authed(current, epoch) { load(it, epoch, readEpoch) }
+                        } catch (c: CancellationException) {
+                            throw c
+                        } catch (ignored: Exception) {
+                            // 断られた理由の知らせを残す
+                        }
+                    }
                     return@launch
                 }
                 // ⚠ 返事に最新のビューが載っていればそのまま使う（読み直しの往復を省く）。
