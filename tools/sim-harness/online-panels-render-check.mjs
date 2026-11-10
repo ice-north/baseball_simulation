@@ -31,8 +31,10 @@ import PackSelect from '../../src/online/PackSelect.jsx';
 import { CompletedCamp } from '../../src/online/CampPlanner.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
 import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
+import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 export {
   TryoutPlanner,
+  LeagueTopics,
   React,
   renderToString,
   Notices,
@@ -83,6 +85,7 @@ try {
     turnOfDate,
     nextAdvanceText,
     TryoutPlanner,
+    LeagueTopics,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -100,6 +103,22 @@ try {
     },
   } }));
   assert.match(completed, /2年目のキャンプ結果/, '手続き終了後の成果を表示できない');
+
+  // ⚠ 球団史・リーグの話題の年は「N年目」。「2年」だと西暦や在籍年数に読める。
+  //    節目は月日だけでなく年も出す（何年目の話か分からなかった）
+  const topics = render(
+    h(LeagueTopics, {
+      view: {
+        races: [],
+        chronicle: {
+          milestones: [{ year: 2, month: 5, day: 3, name: '節目の選手', team: 'x', kind: 'career', label: '通算100安打' }],
+          world: [{ year: 2, kind: 'koshien', champion: '優勝校', runnerUp: '準優勝校' }],
+        },
+      },
+    }),
+  );
+  assert.match(topics, /2年目 5月3日 節目の選手/, '節目に年が出ない');
+  assert.match(topics, /2年目 夏の甲子園/, '裏の大会の年が「N年目」でない');
   assert.match(completed, /遊撃適性\+8/, '通算の守備適性が成果に出ない');
   assert.match(completed, /精神\+1/, '通算の精神が成果に出ない');
   assert.match(completed, /新球種を習得/, '通算の出来事が成果に出ない');
