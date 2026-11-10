@@ -106,6 +106,24 @@ class FrontPageTest {
         assertTrue(front.body.startsWith("首位は${view.teamShort("新潟ブルズ")}（"), front.body)
     }
 
+    /** サヨナラ負けの見出しは、決めた一打が本塁打なら「弾」、安打なら「打」。押し出し・犠飛では「サヨナラ打」と書かない */
+    @Test
+    fun walkOffLossNamesTheKindOfHit() {
+        fun headlines(homerun: Boolean, hit: Boolean): Set<String> {
+            val facts = GameFacts(
+                5, 8, 0, 0, 0, emptyList(), emptyList(), walkOff = true,
+                theirWinningHit = WinningHit("那覇", "比嘉", 9, homerun, hit, 1),
+            )
+            return (1..60).map { loseHeadline(Situation("宮崎", "那覇", false, 2, 3, 1, 0, 3, facts), Pen(it)) }.toSet()
+        }
+        val walk = headlines(homerun = false, hit = false)
+        assertTrue(walk.none { "サヨナラ打" in it || "サヨナラ弾" in it }, walk.toString())
+        val single = headlines(homerun = false, hit = true)
+        assertTrue(single.any { "比嘉にサヨナラ打" in it } && single.none { "サヨナラ弾" in it }, single.toString())
+        val homer = headlines(homerun = true, hit = true)
+        assertTrue(homer.any { "比嘉にサヨナラ弾" in it } && homer.none { "サヨナラ打" in it }, homer.toString())
+    }
+
     /** 回ごとの得点から逆転・先制が分かる */
     @Test
     fun readsTheFlowOfTheGame() {
