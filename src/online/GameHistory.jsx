@@ -146,14 +146,19 @@ function RequestState({ result }) {
     </div>
   ) : null;
 }
+// スマホで1ページに出す人数。⚠ PC はページを分けない（下記）
+const COMPACT_PAGE_SIZE = 6;
 function BoxScore({ game, ownTeam }) {
-  const [pageSize, setPageSize] = useState(() =>
-    window.matchMedia('(min-width: 768px)').matches ? 12 : 6,
+  // ⚠ **PC はページを分けず全員を出す**（小窓の中を縦に送る）。以前は12人で区切っていて、
+  //    1試合に出た打者は13〜16人いるので毎回2ページ目ができ、ページ送りは表の下
+  //    （1280×800 では小窓の外）にあって、残りの数人が見えないままになっていた
+  const [wide, setWide] = useState(
+    () => window.matchMedia('(min-width: 768px)').matches,
   );
   useEffect(() => {
     const media = window.matchMedia('(min-width: 768px)');
     const update = () => {
-      setPageSize(media.matches ? 12 : 6);
+      setWide(media.matches);
       setPage(0);
       setGroup(media.matches ? 'overview' : 'basic');
     };
@@ -175,7 +180,7 @@ function BoxScore({ game, ownTeam }) {
     ).values(),
   ];
   const group =
-    pageSize === 12 && groupId === 'overview'
+    wide && groupId === 'overview'
       ? ['overview', '主要成績一覧', overviewColumns]
       : GROUPS[category].find(([id]) => id === groupId) || GROUPS[category][0];
   const rows = [...(game.teams?.[team] || [])].filter((p) =>
@@ -218,7 +223,7 @@ function BoxScore({ game, ownTeam }) {
             </button>
           ))}
         </div>
-        {pageSize === 12 ? (
+        {wide ? (
           // ⚠ PCは**並んだタブ**（選手成績の表と同じ）。打撃・投球を選び、その区分を並べる
           <div
             className="online-group-tabs"
@@ -304,7 +309,10 @@ function BoxScore({ game, ownTeam }) {
           </tr>
         </thead>
         <tbody>
-          {rows.slice(page * pageSize, page * pageSize + pageSize).map((p) => (
+          {(wide
+            ? rows
+            : rows.slice(page * COMPACT_PAGE_SIZE, (page + 1) * COMPACT_PAGE_SIZE)
+          ).map((p) => (
             <tr key={p.key || p.id}>
               <th title={p.name}>{p.name}</th>
               {group[2].map(([key, , format = 'count']) => (
@@ -315,12 +323,14 @@ function BoxScore({ game, ownTeam }) {
         </tbody>
       </table>
       {!rows.length && <p>この区分の出場記録はありません。</p>}
-      <PageNav
-        page={page}
-        count={rows.length}
-        size={pageSize}
-        setPage={setPage}
-      />
+      {!wide && (
+        <PageNav
+          page={page}
+          count={rows.length}
+          size={COMPACT_PAGE_SIZE}
+          setPage={setPage}
+        />
+      )}
       {game.legacy && (
         <small className="online-stat-note">
           記録を取り始める前の試合です。残っていない項目は「—」です。
@@ -329,12 +339,18 @@ function BoxScore({ game, ownTeam }) {
     </>
   );
 }
-export function GameRecordButton({ game, year, ownTeam, children }) {
+export function GameRecordButton({
+  game,
+  year,
+  ownTeam,
+  children,
+  className = 'online-record-button',
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
-        className="online-record-button"
+        className={className}
         onClick={() => setOpen(true)}
         aria-label={`${teamLabel(game.home)}対${teamLabel(game.away)}の試合成績`}
       >

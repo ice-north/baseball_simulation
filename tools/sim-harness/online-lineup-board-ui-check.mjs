@@ -790,6 +790,15 @@ try {
       .locator('.online-page:visible')
       .evaluate((el) => el.scrollHeight);
     assert.ok(height <= 1000, `ホームが縦に長い: ${height}px`);
+    // ⚠ 直近の試合は**スコアを押すと**試合成績の小窓が開く。以前は押せず、
+    //    「試合結果」を開き直して同じ試合を探していた
+    await recent.locator('.online-slot-record').first().click();
+    const box = p.getByRole('dialog', { name: '試合成績', exact: true });
+    await box.locator('tbody tr').first().waitFor();
+    await box
+      .getByRole('button', { name: '試合成績を閉じる', exact: true })
+      .click();
+    await box.waitFor({ state: 'detached' });
   }
 
   // ---- 自球団の選手の詳細から守備位置を変える ---------------------------

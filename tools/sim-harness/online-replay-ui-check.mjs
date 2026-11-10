@@ -171,6 +171,13 @@ try {
     .click();
   const cardBox = page.getByRole('dialog', { name: '試合成績', exact: true });
   await cardBox.locator('tbody tr').first().waitFor();
+  // ⚠ PCは**ページを分けない**。12人で区切っていた頃は、出場した13人目以降が
+  //    小窓の下のページ送りの先にあり、1280×800 では送りのボタンが見えなかった
+  assert.equal(
+    await cardBox.locator('.online-pager').count(),
+    0,
+    'PCの試合成績がページに分かれている',
+  );
   // ⚠ PCの試合の小窓は**選手の詳細の 760px に押し込まない**。試合成績は1240px、
   //    観戦リプレイは画面の97%（1440pxなら1396px）
   assert.ok(

@@ -2546,6 +2546,24 @@ small.online-gain:not(:where(.online-sp *)) {
   flex: none;
   color: #e2e8f0;
 }
+/* 直近の試合のスコア（押すと試合の個人成績）。選手名と同じ「下線＝押せる」。
+   ⚠ 共通のボタンの高さ（44px）・枠・地色を外す。行の高さを変えない */
+.online .online-slot-record {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 0;
+  padding: 0 4px;
+  margin: 0 -4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
 /* 先発は**2行目**いっぱいに置く。⚠ 1行目に詰めると勝敗と防御率が切れる */
 .online-slot.is-next {
   flex-wrap: wrap;
