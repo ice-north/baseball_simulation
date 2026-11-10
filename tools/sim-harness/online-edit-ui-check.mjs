@@ -245,6 +245,20 @@ try {
     1,
     '帯の「キャンプを開く」でホームのキャンプへ行かない',
   );
+  // 左メニューの数も、キャンプの間はホームに付ける（「現在の手続き」は案内だけ）
+  assert.equal(
+    await draft.page.locator('.online-nav-home .online-count').innerText(),
+    '1',
+    'キャンプの間、ホームに手続きの数が出ていない',
+  );
+  assert.equal(
+    await draft.page
+      .getByRole('button', { name: '現在の手続き', exact: true })
+      .locator('.online-count')
+      .count(),
+    0,
+    'キャンプの間も「現在の手続き」に数が出ている（押しても案内だけ）',
+  );
   assert.equal(await pressedMenu(draft.page), 'velocity', '画面移動でも提出案を保持');
   // ⚠ スマホは**選手ごとの表を出さない**（23列は入らない）。育成方針と
   //    「第Nクール練習を実行」だけを出す（`CampPlanner` の `compact`）。

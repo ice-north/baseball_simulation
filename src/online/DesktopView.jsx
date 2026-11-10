@@ -346,7 +346,14 @@ export default function DesktopView(props) {
       ),
   });
   const notice = noticeCounts(view);
-  const counts = { decisions: notice.procedure, transfer: notice.trades };
+  // ⚠ **キャンプの間は手続きの数をホームに付ける**。PCのキャンプはホームで行い、
+  //    「現在の手続き」は「ホームへ」の案内だけ。以前は「現在の手続き①」と出して、
+  //    押すと案内だけのページが開いた（もう一度押さないとキャンプに着かない）
+  const counts = {
+    today: campHere ? notice.procedure : 0,
+    decisions: campHere ? 0 : notice.procedure,
+    transfer: notice.trades,
+  };
   const procedure = pendingProcedure(view);
   const waiting = packWaiting(view);
   return (
@@ -362,10 +369,16 @@ export default function DesktopView(props) {
         />
         <button
           className="online-nav-home"
+          aria-label="ホーム"
           aria-current={current === 'today' ? 'page' : undefined}
           onClick={() => setTab('today')}
         >
           ホーム
+          {counts.today > 0 && (
+            <span className="online-count" aria-label="未完了の手続き">
+              {counts.today}
+            </span>
+          )}
         </button>
         {NAV.map((group) => (
           <div key={group.id} className="online-nav-group">
