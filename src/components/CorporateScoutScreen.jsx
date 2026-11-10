@@ -14,6 +14,7 @@ import {
   getScoutRecommendation,
   pickRandomDestination,
 } from '../corporate/scoutingSystem.js';
+import ConfirmBar from './ConfirmBar.jsx';
 
 const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -30,6 +31,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedScoutId, setSelectedScoutId] = useState(null);
   const [modalPlayer, setModalPlayer] = useState(null);
+  // 今年のスカウトを終える前の帯（'skip' 獲得なしで終える / 'finish' 交渉を終える）。
+  // ⚠ 以前はどちらも1回押すだけで終わり、その年はもう交渉できなかった
+  const [pendingEnd, setPendingEnd] = useState(null);
 
   const staff = teamData?.corporateData?.staff || [];
   const scouts = staff.filter(s =>
@@ -272,10 +276,21 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
               className="btn-primary px-6 py-2.5 rounded-lg text-sm"
             >追加交渉する (残り{remaining}名)</button>
           )}
-          <button onClick={handleFinalize}
+          <button onClick={() => (remaining > 0 ? setPendingEnd('finish') : handleFinalize())}
             className="btn-primary px-6 py-2.5 rounded-lg text-sm"
           >交渉を終了する</button>
         </div>
+        {pendingEnd === 'finish' && (
+          <ConfirmBar
+            title="今年のスカウトの交渉を終えますか？"
+            detail={`獲得${totalAcquired}名・まだ交渉できる候補${remaining}名`}
+            note="終えると取り消せません。今年はもう交渉できません。"
+            confirmLabel="交渉を終える"
+            confirmClass="btn-warn"
+            onConfirm={() => { setPendingEnd(null); handleFinalize(); }}
+            onCancel={() => setPendingEnd(null)}
+          />
+        )}
       </div>
       </div>
     );
@@ -503,10 +518,21 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
             'btn-primary'
           }`}
         >交渉開始 ({selectedIds.length}名)</button>
-        <button onClick={handleSkip}
-          className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm"
+        <button onClick={() => setPendingEnd('skip')}
+          className="btn-secondary px-4 py-2.5 rounded-lg text-sm"
         >獲得なしで進む</button>
       </div>
+      {pendingEnd === 'skip' && (
+        <ConfirmBar
+          title={totalAcquired > 0 ? '今年のスカウトを、ここで終えますか？' : '今年のスカウトを、獲得なしで終えますか？'}
+          detail={`${totalAcquired > 0 ? `獲得${totalAcquired}名・` : ''}候補${candidates.length}名と交渉せずに終えます`}
+          note="終えると取り消せません。今年はもう交渉できません。"
+          confirmLabel="終える"
+          confirmClass="btn-warn"
+          onConfirm={() => { setPendingEnd(null); handleSkip(); }}
+          onCancel={() => setPendingEnd(null)}
+        />
+      )}
       {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
     </div>
     </div>
