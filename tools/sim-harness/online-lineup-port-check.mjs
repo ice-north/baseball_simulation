@@ -267,8 +267,9 @@ try {
   }
 
   // --- スマホの打順（2タップの表 `TapLineup.jsx`）------------------------
-  // ⚠ 押し方はPCのスタメン設定のクリックと同じ（名前どうし＝打順、守備位置の札から＝守備、
-  //    名前と控え＝交代）。どの操作の後も**そのまま保存できる形**（`validateLineup` を通る）こと。
+  // ⚠ 1回目に押したもので「何を入れ替えるか」が決まる（名前＝打順、守備位置の札＝守備、
+  //    控え＝交代）。2回目は相手の行のどこを押してもよい（名前でも札でも同じ）。
+  //    どの操作の後も**そのまま保存できる形**（`validateLineup` を通る）こと。
   // ⚠ 保存は方針・采配の下書きとまとめて送る（`rebaseLineupParts`）。それぞれ自分の項目
   //    だけを最新に載せるので、PCや別の端末で保存したほかの項目を古い値に戻さない
   {
@@ -311,23 +312,31 @@ try {
     // 守備位置の札 → 札: 守備位置を入れ替える
     order = pressSeq({ kind: 'pos', index: 4 }, { kind: 'pos', index: 5 });
     assert.equal(order[4].position, before[5].position, '札どうしで守備位置が入れ替わっていない');
-    // 同じものをもう一度押すと選ぶのをやめる。それ以外の組み合わせは押したものを選び直す（PCと同じ）
+    // 2回目は相手の行のどこを押してもよい: 名前を選んで札を押しても打順の入れ替え
+    order = pressSeq({ kind: 'row', index: 5 }, { kind: 'pos', index: 6 });
+    assert.equal(order[5].playerId, before[6].playerId, '名前の次に札を押して打順が入れ替わらない');
+    // 札を選んで控え／控えを選んで札: 交代
+    const spare = () => benchFielders(start.roster, order)[0];
+    let reserve2 = spare();
+    order = pressSeq({ kind: 'pos', index: 7 }, { kind: 'bench', playerId: reserve2.id });
+    assert.equal(order[7].playerId, reserve2.id, '札の次に控えを押して交代しない');
+    reserve2 = spare();
+    order = pressSeq({ kind: 'bench', playerId: reserve2.id }, { kind: 'pos', index: 2 });
+    assert.equal(order[2].playerId, reserve2.id, '控えの次に札を押して交代しない');
+    // 同じものをもう一度押すと選ぶのをやめる。同じ行の札と名前の押し替え・控えどうしは選び直す
     assert.equal(tapLineup(order, { kind: 'row', index: 1 }, { kind: 'row', index: 1 }).selection, null);
     assert.deepEqual(
       tapLineup(order, { kind: 'row', index: 1 }, { kind: 'pos', index: 1 }).selection,
       { kind: 'pos', index: 1 },
     );
-    const reselect = tapLineup(order, { kind: 'row', index: 1 }, { kind: 'pos', index: 4 });
-    assert.deepEqual(reselect.selection, { kind: 'pos', index: 4 }, '名前の次に札を押して選び直さない');
-    assert.equal(reselect.order, order, '名前の次に札を押して入れ替わった');
+    const [benchA, benchB] = benchFielders(start.roster, order);
     assert.deepEqual(
-      tapLineup(order, { kind: 'pos', index: 1 }, { kind: 'bench', playerId: benchFielders(start.roster, order)[0].id }).selection,
-      { kind: 'bench', playerId: benchFielders(start.roster, order)[0].id },
-      '札の次に控えを押して選び直さない',
+      tapLineup(order, { kind: 'bench', playerId: benchA.id }, { kind: 'bench', playerId: benchB.id }).selection,
+      { kind: 'bench', playerId: benchB.id },
     );
     // 元に戻すは1手ずつ
-    assert.equal(draft.stack.length, 5);
-    assert.deepEqual(tapValue(undoTap(draft)), draft.stack[3]);
+    assert.equal(draft.stack.length, 8);
+    assert.deepEqual(tapValue(undoTap(draft)), draft.stack[6]);
     // PCの画面へ渡す形（`lineup.full`）から始めても同じ編集になる。打順だけなら全画面の編成は開かない
     const kept = fullLineupFromBoards(start, [
       { keys: LINEUP_BOARD_KEYS, plan: tapPlan(draft), baseLineup: draft.baseLineup },

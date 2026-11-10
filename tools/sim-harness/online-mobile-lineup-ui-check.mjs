@@ -160,6 +160,14 @@ try {
   assert.equal(await selected(), 0, '「やめる」で選ぶのをやめない');
   assert.deepEqual(await slots(), swapped, '選び直しで打順が変わった');
 
+  // ---- 2回目は相手の行のどこでもよい: 名前 → 相手の札でも打順の入れ替え -------
+  await tapName(1);
+  await tapPos(3);
+  assert.deepEqual(await slots(), saved, '名前→相手の守備位置の札で打順が入れ替わらない');
+  await tapName(3);
+  await tapName(1);
+  assert.deepEqual(await slots(), swapped);
+
   // ---- 守備位置の札 → 相手: 守備位置の入れ替え（打順はそのまま）-----------
   await tapPos(1);
   assert.match(await status(), /の守備（.+）を選択中/);
@@ -318,7 +326,7 @@ try {
     for (const shot of shots)
       await copyFile(shot, `${process.env.MOBILE_LINEUP_SHOTS}/${shot.split('/').pop()}`);
   console.log(
-    'online-mobile-lineup-ui-check PASS（320px・667×375・打順/守備/交代の2タップ・選び直し・守れない位置の注意・DHなしの9番・元に戻す・取り消す・タブ移動/再読み込み/PCの幅で保持・保存して読み直し）',
+    'online-mobile-lineup-ui-check PASS（320px・667×375・打順/守備/交代の2タップ・2回目は相手の行のどこでも・選び直し・守れない位置の注意・DHなしの9番・元に戻す・取り消す・タブ移動/再読み込み/PCの幅で保持・保存して読み直し）',
   );
 } finally {
   await browser.close();

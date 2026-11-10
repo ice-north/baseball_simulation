@@ -49,10 +49,11 @@ import {
 // 【意図】スマホで打順を組むときに比べたいのは「誰を・何番に・どこを守らせるか」。
 //   以前は↑↓で1つずつ動かすカードと、横に長い一人用の画面（全画面）の2通りで、
 //   縦向きでは守備と控えが触れず、横向きでは表が縮んで読めなかった。
-//   ここでは先発9人と控えを1列に並べ、1回目に選び、2回目に押した相手と入れ替える
-//   （PCのスタメン設定のクリックと同じ。中身は `tapLineup.js`）。
-//   - 名前 → ほかの名前: 打順の入れ替え。守備位置の札 → ほかの札・名前: 守備位置の入れ替え
-//   - 名前 ⇔ 控え: 交代（控えがその打順・守備位置に入る）
+//   ここでは先発9人と控えを1列に並べ、1回目に押したもので「何を入れ替えるか」、
+//   2回目に押した相手で「誰と」を決める（中身は `tapLineup.js`）。2回目は相手の行の
+//   どこを押してもよい（名前でも札でも同じ。指の大きさで押し分けなくて済むように）。
+//   - 名前 → ほかの打順: 打順の入れ替え。守備位置の札 → ほかの打順: 守備位置の入れ替え
+//   - スタメン ⇔ 控え: 交代（控えがその打順・守備位置に入る）
 // ⚠ 決まりは**PCのスタメン設定（`LineupBoard.jsx`）と同じ**: 入れ替えの関数・守れない位置の
 //    判定（適性 `LOW_FITNESS` 未満は赤）・投手は9番で固定（DHなし）・二刀流の投手は控えの最後。
 //    行の作り（2行目を 能力／今季成績／守備適性 で切り替える・気になる所）はアプリの編成と同じ。
@@ -396,7 +397,7 @@ export default function TapLineup({
       : selectedPos !== null
         ? [
             `${nameAt(order, selectedPos)}の守備（${POS_FULL[order[selectedPos]?.position]}）を選択中`,
-            '相手の守備位置の札か名前を押すと入れ替えます',
+            '相手を押すと守備位置を入れ替えます',
           ]
         : selectedBench
           ? [`控えの${selectedBench.name}を選択中`, '交代させる打順を押してください']
@@ -494,7 +495,9 @@ export default function TapLineup({
                       ? `${index + 1}番の守備位置（${POS_FULL[slot.position]}）を選ぶのをやめる`
                       : selectedPos !== null
                         ? `${name}と守備位置を入れ替える`
-                        : `${index + 1}番の守備位置（${POS_FULL[slot.position]}）を選ぶ`
+                        : selectedRow !== null || selectedBench
+                          ? starterLabel(index, name)
+                          : `${index + 1}番の守備位置（${POS_FULL[slot.position]}）を選ぶ`
                   }
                   onClick={(e) => {
                     e.stopPropagation();
@@ -623,8 +626,8 @@ export default function TapLineup({
                         aria-label={
                           selected
                             ? `${player.name}を選ぶのをやめる`
-                            : selectedRow !== null
-                              ? `${nameAt(order, selectedRow)}に代えて${player.name}を入れる`
+                            : selectedRow !== null || selectedPos !== null
+                              ? `${nameAt(order, selectedRow ?? selectedPos)}に代えて${player.name}を入れる`
                               : `控えの${player.name}を選ぶ`
                         }
                       >

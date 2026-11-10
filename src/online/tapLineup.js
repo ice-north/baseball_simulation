@@ -3,11 +3,12 @@
 // 画面(JSX)と分けてあるのは、ハーネス（node）から直に検査するため
 // （`tools/sim-harness/online-lineup-port-check.mjs`）。
 //
-// 【操作】1回目に選び、2回目に相手を押すと入れ替わる（PCのスタメン設定のクリックと同じ）。
-//   - 名前（行）→ ほかの行: 打順を入れ替える（守備位置は選手に付いたまま）
-//   - 守備位置の札 → ほかの札・行: 守備位置を入れ替える（打順はそのまま）
-//   - 名前（行）→ 控え／控え → 名前（行）: 交代（控えがその打順・守備位置にそのまま入る）
-//   - 同じものをもう一度: 選ぶのをやめる。それ以外の組み合わせは押したものを選び直す
+// 【操作】1回目に押したもので「何を入れ替えるか」が決まり、2回目に相手を押す。
+//   - 選手の行 → ほかのスタメン: 打順を入れ替える（守備位置は選手に付いたまま）
+//   - 守備位置の札 → ほかのスタメン: 守備位置を入れ替える（打順はそのまま）
+//   - スタメン → 控え／控え → スタメン: 交代（控えがその打順・守備位置にそのまま入る）
+//   - 同じものをもう一度: 選ぶのをやめる。同じ行の札と名前を押し替えたら選ぶものを替える。
+//     控え → 別の控え: 選び直し
 // ⚠ 入れ替えの中身は**PCのスタメン設定と同じ関数**（`lineupEdit.js`）。どの操作も
 //    「8人が8つの守備位置を1つずつ守る」形を崩さない（保存できない形を経由しない）。
 // ⚠ 投手は9番で固定（DHなし。サーバーの `validateLineup` は野手8人ちょうど）。ここでは扱わない。
@@ -165,36 +166,34 @@ export function restoreFromTapDraft(saved) {
  * 返す `done` は入れ替えたときだけ（何をしたかの知らせに使う）。
  */
 export function tapLineup(order, selection, target) {
-  const same = (kind, key) =>
-    selection?.kind === kind && selection[key] === target[key];
+  if (!selection) return { order, selection: target };
   if (target.kind === 'bench') {
-    if (selection?.kind === 'row')
-      return replaced(order, selection.index, target.playerId);
-    return { order, selection: same('bench', 'playerId') ? null : target };
+    if (selection.kind === 'bench')
+      return {
+        order,
+        selection: selection.playerId === target.playerId ? null : target,
+      };
+    return replaced(order, selection.index, target.playerId);
   }
-  if (target.kind === 'pos') {
-    if (selection?.kind === 'pos' && !same('pos', 'index'))
-      return positions(order, selection.index, target.index);
-    return { order, selection: same('pos', 'index') ? null : target };
-  }
-  if (selection?.kind === 'row' && !same('row', 'index'))
-    return {
-      order: swapOrder(order, selection.index, target.index),
-      selection: null,
-      done: { kind: 'order', a: selection.index, b: target.index },
-    };
-  if (selection?.kind === 'bench')
+  if (selection.kind === 'bench')
     return replaced(order, target.index, selection.playerId);
-  if (selection?.kind === 'pos' && !same('pos', 'index'))
-    return positions(order, selection.index, target.index);
-  return { order, selection: same('row', 'index') ? null : target };
+  if (selection.index === target.index)
+    return {
+      order,
+      selection: selection.kind === target.kind ? null : target,
+    };
+  if (selection.kind === 'pos')
+    return {
+      order: swapPositions(order, selection.index, target.index),
+      selection: null,
+      done: { kind: 'positions', a: selection.index, b: target.index },
+    };
+  return {
+    order: swapOrder(order, selection.index, target.index),
+    selection: null,
+    done: { kind: 'order', a: selection.index, b: target.index },
+  };
 }
-
-const positions = (order, a, b) => ({
-  order: swapPositions(order, a, b),
-  selection: null,
-  done: { kind: 'positions', a, b },
-});
 
 function replaced(order, index, playerId) {
   const next = replaceStarter(order, index, playerId);
