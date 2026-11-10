@@ -54,9 +54,9 @@ listOf(
     ChoiceField("squeeze", "スクイズ", false, listOf(Choice("auto", "AI判断"), Choice("avoid", "控えめ"), Choice("aggressive", "積極的"), Choice("never", "しない")), "auto"),
     ChoiceField("safetyBunt", "セーフティバント", false, listOf(Choice("auto", "AI判断"), Choice("avoid", "控えめ"), Choice("aggressive", "積極的"), Choice("never", "しない")), "auto"),
     ChoiceField("pinchHit", "代打", false, listOf(Choice("auto", "AI判断"), Choice("never", "使わない")), "auto"),
-    ChoiceField("pinchHitFrom", "代打を使い始める回", true, listOf(Choice("0", "既存AIの判断"), Choice("5", "5回以降"), Choice("6", "6回以降"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
+    ChoiceField("pinchHitFrom", "代打を使い始める回", true, listOf(Choice("0", "AI判断"), Choice("5", "5回以降"), Choice("6", "6回以降"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
     ChoiceField("defensiveSub", "守備固め", false, listOf(Choice("auto", "AI判断"), Choice("never", "使わない")), "auto"),
-    ChoiceField("defenseFrom", "守備固めを使い始める回", true, listOf(Choice("0", "既存AIの判断"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
+    ChoiceField("defenseFrom", "守備固めを使い始める回", true, listOf(Choice("0", "AI判断"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
     ChoiceField("hook", "先発の不調時の交代", false, listOf(Choice("auto", "標準"), Choice("early", "早めに交代"), Choice("patient", "長めに任せる")), "auto"),
     ChoiceField("starterLimit", "先発の球数上限", true, listOf(Choice("0", "役割・スタミナで判断"), Choice("60", "最大60球"), Choice("80", "最大80球"), Choice("100", "最大100球"), Choice("120", "最大120球")), "0"),
 )

@@ -57,7 +57,7 @@ export const TACTIC_FIELDS = {
   pinchHitFrom: [
     '代打を使い始める回',
     {
-      0: '既存AIの判断',
+      0: 'AI判断',
       5: '5回以降',
       6: '6回以降',
       7: '7回以降',
@@ -68,7 +68,7 @@ export const TACTIC_FIELDS = {
   defensiveSub: ['守備固め', { auto: 'AI判断', never: '使わない' }],
   defenseFrom: [
     '守備固めを使い始める回',
-    { 0: '既存AIの判断', 7: '7回以降', 8: '8回以降', 9: '9回以降' },
+    { 0: 'AI判断', 7: '7回以降', 8: '8回以降', 9: '9回以降' },
   ],
   hook: [
     '先発の不調時の交代',
