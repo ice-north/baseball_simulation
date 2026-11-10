@@ -1154,6 +1154,26 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     return { wins, losses, draws, results, winRate };
   }, [calendarCells, userTeamName]);
 
+  // カレンダーのマスに出すチームの名前。略称を、その月に出るチームの中で区別できる最短（2文字から）に縮める。
+  // ⚠ マスは幅およそ100pxで、大学の略称（「早稲田大」「慶應義大」の4文字）を2つとスコアを並べると
+  //   「早稲田大11-0東京」のように右が切れていた。正式な略称は「本日の対戦」と順位表に出る
+  const calendarLabel = useMemo(() => {
+    const abbr = new Map();
+    calendarCells.forEach(c => c.games?.forEach(g => {
+      for (const n of [g.home, g.away]) if (n && !abbr.has(n)) abbr.set(n, getTeamAbbreviation(n));
+    }));
+    const out = new Map();
+    for (const [name, a] of abbr) {
+      let label = a;
+      for (let k = 2; k < a.length; k++) {
+        const p = a.slice(0, k);
+        if (![...abbr].some(([other, b]) => other !== name && b.slice(0, k) === p)) { label = p; break; }
+      }
+      out.set(name, label);
+    }
+    return out;
+  }, [calendarCells]);
+
   const totalGames = seasonData?.settings?.gamesPerSeason || 60;
   const standings = seasonData.standings || [];
 
@@ -1910,15 +1930,16 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                         {cell.games.length > 0 ? (
                           <div className="space-y-0">
                             {cell.games.map((game, gIdx) => {
-                              const awayShort = getTeamAbbreviation(game.away);
-                              const homeShort = getTeamAbbreviation(game.home);
+                              const awayShort = calendarLabel.get(game.away) || getTeamAbbreviation(game.away);
+                              const homeShort = calendarLabel.get(game.home) || getTeamAbbreviation(game.home);
+                              const fullTitle = `${getTeamAbbreviation(game.away)} - ${getTeamAbbreviation(game.home)}`;
                               const isUserInGame = game.home === userTeamName || game.away === userTeamName;
                               const leagueColor = !isTwoLeague ? '' :
                                 (league1Teams.includes(game.home) && league1Teams.includes(game.away)) ? 'border-l border-blue-500/50 pl-0.5' :
                                 (league2Teams.includes(game.home) && league2Teams.includes(game.away)) ? 'border-l border-orange-500/50 pl-0.5' :
                                 'border-l border-green-500/50 pl-0.5';
                               if (showAsScheduled || !game.result) {
-                                return <div key={gIdx} className={`text-xs leading-tight text-center font-medium whitespace-nowrap overflow-hidden ${isUserInGame ? 'text-yellow-300' : 'text-white'} ${leagueColor}`}>{awayShort}-{homeShort}</div>;
+                                return <div key={gIdx} title={fullTitle} className={`text-xs leading-tight text-center font-medium whitespace-nowrap overflow-hidden ${isUserInGame ? 'text-yellow-300' : 'text-white'} ${leagueColor}`}>{awayShort}-{homeShort}</div>;
                               }
                               if (game.result?.cancelled) return null;
                               const awayWin = game.result.awayScore > game.result.homeScore;
@@ -1945,7 +1966,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                                 seriesInfo = `${homeWins}-${awayWins}`;
                               }
                               return (
-                                <div key={gIdx} className={`leading-tight text-center ${leagueColor}`}>
+                                <div key={gIdx} title={fullTitle} className={`leading-tight text-center ${leagueColor}`}>
                                   <div className="text-xs whitespace-nowrap overflow-hidden">
                                     <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-300'}>{awayShort}</span>
                                     <span className="text-white mx-px font-mono text-xs">{game.result.awayScore}-{game.result.homeScore}</span>
