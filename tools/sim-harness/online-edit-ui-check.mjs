@@ -75,6 +75,7 @@ async function scene({
   defaultsFail = false,
   staleDefaults = false,
   phase = null,
+  defaultPlan = null,
 } = {}) {
   const context = await browser.newContext({
     viewport: { width: mobile ? 390 : 1280, height: 844 },
@@ -133,9 +134,10 @@ async function scene({
         phaseId: state.staleDefaults ? '0:other' : state.view.phase.id,
         revision: state.view.revision,
         plan:
-          state.view.phase.kind === 'contract'
+          defaultPlan ||
+          (state.view.phase.kind === 'contract'
             ? { releaseIds: [] }
-            : { menu: 'standard' },
+            : { menu: 'standard' }),
       };
     } else if (action === 'command') {
       const payload = route.request().postDataJSON().payload;
@@ -487,6 +489,112 @@ try {
     await due.page.getByRole('button', { name: 'この内容で決定', exact: true }).waitFor();
     assert.ok((await times()) <= 1, `スマホの手続きに締め切りが${await times()}回出ている`);
     await due.context.close();
+  }
+
+  // --- スマホの手続き: 決める中身を見せ、決定の前に確認を1段挟む（u1 高4） ---
+  // ⚠ 以前は「退団予定 1人」の1行だけで、誰を出すのかを見ないまま1回押すと決定した
+  {
+    const decide = await scene({
+      mobile: true,
+      phase: contractPhase(),
+      defaultPlan: { releaseIds: [1] },
+    });
+    await click(decide.page, '手続き');
+    const contents = decide.page.locator('.online-phase-contents');
+    await contents.waitFor();
+    const listed = await contents.innerText();
+    assert.match(listed, /退団させる選手 1人/, `退団させる人数が出ない: ${listed}`);
+    assert.ok(listed.includes(PITCHER), `退団させる選手の名前が出ない: ${listed}`);
+    const decideButton = decide.page.getByRole('button', { name: 'この内容で決定', exact: true });
+    const confirm = decide.page.getByRole('group', { name: '決定の確認', exact: true });
+    await decideButton.click();
+    await confirm.waitFor();
+    assert.match(await confirm.innerText(), /取り消せません/, '確認に取り消せないことが書かれていない');
+    assert.equal(decide.payloads.length, 0, '確認の前に決定を送っている');
+    // 「戻る」なら送らずに閉じる
+    await confirm.getByRole('button', { name: '戻る', exact: true }).click();
+    await confirm.waitFor({ state: 'detached' });
+    assert.equal(decide.payloads.length, 0, '「戻る」で決定を送っている');
+    // 確認の帯が出ても、中身の最後が帯に隠れない（下までスクロールして見える）
+    await decideButton.click();
+    await confirm.waitFor();
+    await decide.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const lastRow = await contents.locator('li').last().boundingBox();
+    const bar = await confirm.boundingBox();
+    assert.ok(
+      lastRow.y + lastRow.height <= bar.y,
+      `確認の帯が中身の最後を隠す（${lastRow.y + lastRow.height} > ${bar.y}）`,
+    );
+    await confirm.getByRole('button', { name: '決定する', exact: true }).click();
+    await decide.page.getByText('決定しました', { exact: true }).waitFor();
+    assert.deepEqual(decide.payloads.at(-1).plan, { releaseIds: [1] });
+    assert.equal(decide.payloads.at(-1).ready, true);
+    await decide.context.close();
+
+    // トライアウト: 実際に取る顔ぶれ（希望順の上から、目標を超える区分は飛ばす）
+    const candidate = (id, name, position) => ({
+      id,
+      name,
+      age: 22,
+      position,
+      pitching: {},
+      batting: {},
+      fielding: {},
+    });
+    const tryout = await scene({
+      mobile: true,
+      phase: {
+        id: '1:tryout',
+        kind: 'tryout',
+        label: 'トライアウト',
+        submission: null,
+        candidates: [
+          candidate(101, '候補一郎', 'catcher'),
+          candidate(102, '候補二郎', 'short'),
+          candidate(103, '候補三郎', 'left'),
+        ],
+      },
+      defaultPlan: { count: 2, rankedIds: [101, 102, 103] },
+    });
+    await click(tryout.page, '手続き');
+    await tryout.page.locator('.online-phase-contents li').nth(1).waitFor();
+    const picks = await tryout.page.locator('.online-phase-contents').innerText();
+    assert.match(picks, /獲得予定 2人/, `獲得予定の人数が出ない: ${picks}`);
+    assert.ok(
+      picks.includes('候補一郎') && picks.includes('候補二郎') && !picks.includes('候補三郎'),
+      `獲得予定の顔ぶれが違う: ${picks}`,
+    );
+    await tryout.context.close();
+
+    // 初期メンバー: どんなセットか（特徴と構成）
+    const pack = await scene({
+      mobile: true,
+      phase: {
+        id: '1:pack_select',
+        kind: 'pack_select',
+        label: '初期メンバー選択',
+        submission: null,
+        packs: [
+          {
+            id: 'p1',
+            name: '検証セット',
+            feature: '投手厚め',
+            counts: { pitcher: 13, catcher: 2, infield: 5, outfield: 4 },
+            ranks: { A: 2, B: 10, C: 12 },
+            averageAge: 21.5,
+            twoWay: 2,
+            players: [],
+          },
+        ],
+      },
+      defaultPlan: { packId: 'p1' },
+    });
+    await click(pack.page, '手続き');
+    await pack.page.locator('.online-phase-contents').waitFor();
+    const chosen = await pack.page.locator('.online-phase-contents').innerText();
+    assert.match(chosen, /初期メンバー「検証セット」/, `選んだセットが出ない: ${chosen}`);
+    assert.match(chosen, /投手厚め · 投13 捕2 内5 外4/, `セットの中身が出ない: ${chosen}`);
+    await pack.context.close();
   }
 
   // --- 進行時刻の説明は刻みから作る（u1 低19） -----------------------------

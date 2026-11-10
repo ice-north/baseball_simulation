@@ -4170,3 +4170,52 @@ small.online-gain:not(:where(.online-sp *)) {
   background: #5b3028;
   color: #ffded2;
 }
+
+/* スマホの手続き（`PhasePanel` の `mobile`）: 決める中身と、決定の前の確認（u1 高4）。
+   ⚠ 以前は「退団予定 3人」の1行だけで、誰を出すのかを見ないまま決定できた。
+   ⚠ 確認は下に固定した操作の帯（`.online-decision .online-actions`）の中に1行足す。
+      帯が高くなるぶん、本文の下の余白も広げる（中身の最後が帯に隠れないように） */
+.online-phase-contents {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid #63778f;
+  border-radius: 8px;
+}
+.online-phase-contents > p:not(:where(.online-sp *)) {
+  margin: 0;
+}
+.online-phase-contents > p small {
+  display: block;
+  margin-top: 2px;
+  color: #cbd5e1;
+}
+.online-phase-contents ul {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.online-phase-contents li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.online-phase-contents li small {
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+.online-decision .online-actions.online-phase-confirm {
+  border-top-color: #fbbf24;
+}
+.online-decision .online-phase-confirm > p:not(:where(.online-sp *)) {
+  flex: 1 0 100%;
+  margin: 0;
+  color: #fde68a;
+  font-size: 12px;
+}
+.online:has(.online-phase-confirm) main:not(:where(.online-sp *)),
+.online-compact-shell:has(.online-phase-confirm) main {
+  padding-bottom: calc(190px + env(safe-area-inset-bottom));
+}

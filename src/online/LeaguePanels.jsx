@@ -23,6 +23,7 @@ import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
+import { plannedPicks } from './tryoutPlan.js';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting } from './notices.js';
 import { ReadContext } from './useRead.js';
@@ -606,6 +607,72 @@ export function PendingPackPanel({ view, busy, run, command, mobile, setTab }) {
   );
 }
 
+/** セットの構成の書き方（`PackSelect` のカードと同じ） */
+const PACK_GROUPS = [
+  ['pitcher', '投'],
+  ['catcher', '捕'],
+  ['infield', '内'],
+  ['outfield', '外'],
+];
+/**
+ * スマホの手続きで「この内容」を見せる（見るだけ。変えるのはPC）。
+ * ⚠ 以前は「初期メンバー: セット3」「退団予定 3人」「5人を獲得する希望リスト（119候補）」の
+ *    1行だけで、どんなセットか・誰を出すのか・誰を取るのかを見ないまま「この内容で決定」を
+ *    押せた（u1 高4）。選手の名前は押すと能力が見られる（`PlayerStatsButton`）
+ * ⚠ トライアウトは希望順の上からではなく**実際に取る顔ぶれ**（`plannedPicks`。PCの
+ *    「獲得予定」とサーバーと同じ決め方）
+ */
+function MobilePlanContents({ phase, plan, view }) {
+  let head;
+  let note = '';
+  let players = [];
+  if (plan.packId !== undefined) {
+    const pack = phase.packs?.find((p) => p.id === plan.packId);
+    head = pack ? `初期メンバー「${pack.name}」` : '初期メンバー: 未選択';
+    if (pack)
+      note = [
+        pack.feature,
+        PACK_GROUPS.map(([key, label]) => `${label}${pack.counts?.[key] ?? 0}`).join(' '),
+        pack.averageAge !== undefined && `平均${pack.averageAge}歳`,
+        pack.twoWay !== undefined && `二刀流${pack.twoWay}`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+  } else if (plan.rankedIds) {
+    players = plannedPicks(
+      plan.rankedIds,
+      phase.candidates || [],
+      Math.min(plan.count, plan.rankedIds.length),
+      view.roster,
+    );
+    head = `獲得予定 ${players.length}人`;
+    note = `希望リスト${plan.rankedIds.length}人から。他球団と重なったら控えから繰り上がります。`;
+  } else if (plan.releaseIds) {
+    const byId = new Map(view.roster.map((p) => [p.id, p]));
+    players = plan.releaseIds.map((id) => byId.get(id)).filter(Boolean);
+    head = `退団させる選手 ${plan.releaseIds.length}人`;
+    if (!plan.releaseIds.length) note = '全員と来季も契約します。';
+  } else return <p>シーズンを締めて次年度へ進みます。</p>;
+  return (
+    <div className="online-phase-contents">
+      <p>
+        <strong>{head}</strong>
+        {note && <small>{note}</small>}
+      </p>
+      {players.length > 0 && (
+        <ul>
+          {players.map((p) => (
+            <li key={p.id}>
+              <PlayerStatsButton player={p} panel="abilities" />
+              <small>{`${POS[p.position] || ''} · ${p.age}歳`}</small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const phase = view.phase;
   const [plan, setPlan] = useDraftState(
@@ -618,6 +685,8 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     structuredClone(phase.submission || null),
   );
   const [error, setError] = useState('');
+  // スマホの「この内容で決定」の確認を開いているか（下の `mobile` の枝）
+  const [confirming, setConfirming] = useState(false);
   // 標準案は覚えを通して読む（`readCache.js`。版が同じ間は取りに行かない）。
   // ⚠ 覚えた答えを編集で書き換えないよう、受け取った案は写してから使う
   const read = useContext(ReadContext);
@@ -920,37 +989,64 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         )}
         {plan && phase.kind !== 'camp' && (
           <>
+            <MobilePlanContents phase={phase} plan={plan} view={view} />
             <p>
-              {plan.packId !== undefined
-                  ? `初期メンバー: ${phase.packs?.find((x) => x.id === plan.packId)?.name || '未選択'}`
-                  : plan.rankedIds
-                  ? `${plan.count}人を獲得する希望リスト（${plan.rankedIds.length}候補）`
-                  : plan.releaseIds
-                    ? `退団予定 ${plan.releaseIds.length}人`
-                    : 'シーズンを締めて次年度へ進みます。'}
-              <br />
               {dirty
                 ? '編集中の内容（未保存）です。'
                 : phase.submission
-                  ? '保存済みの内容を確認します。'
-                  : '標準案を使用します。'}{' '}
-              詳細はPCで調整できます。
+                  ? '保存済みの内容です。'
+                  : '標準案です。'}{' '}
+              変えるときはPCで調整できます。
             </p>
             {staleNote}
-            <div className="online-actions">
-              <button
-                className="online-primary"
-                disabled={busy}
-                onClick={() => submit(true)}
+            {/* ⚠ **決定の前に確認を1段挟む**（年度更新は決めることが無いので挟まない）。
+                全員がそろった時点で処理され、そのあとは取り消せない。確認の文は下に固定した
+                帯の中に出す（上の中身を見ながら決められるように） */}
+            {confirming ? (
+              <div
+                className="online-actions online-phase-confirm"
+                role="group"
+                aria-label="決定の確認"
               >
-                この内容で決定
-              </button>
-              {phase.submission?.ready && (
-                <button disabled={busy} onClick={() => submit(false)}>
-                  決定を取り消す
+                <p>
+                  {view.members.every(
+                    (m) => m.teamName === view.teamName || m.ready || m.cpu,
+                  )
+                    ? 'ほかの球団は決定済みです。決定するとすぐに処理され、取り消せません。'
+                    : '全員が決定した時点で処理され、そのあとは取り消せません。'}
+                </p>
+                <button
+                  className="online-primary"
+                  disabled={busy}
+                  onClick={() => {
+                    setConfirming(false);
+                    submit(true);
+                  }}
+                >
+                  決定する
                 </button>
-              )}
-            </div>
+                <button disabled={busy} onClick={() => setConfirming(false)}>
+                  戻る
+                </button>
+              </div>
+            ) : (
+              <div className="online-actions">
+                <button
+                  className="online-primary"
+                  disabled={busy}
+                  onClick={() =>
+                    phase.kind === 'offseason' ? submit(true) : setConfirming(true)
+                  }
+                >
+                  この内容で決定
+                </button>
+                {phase.submission?.ready && (
+                  <button disabled={busy} onClick={() => submit(false)}>
+                    決定を取り消す
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
         {needsPlan && !plan && !error && <p>標準案を準備しています…</p>}
