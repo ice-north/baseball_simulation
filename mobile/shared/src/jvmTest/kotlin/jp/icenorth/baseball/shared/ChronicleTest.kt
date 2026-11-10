@@ -61,6 +61,19 @@ class ChronicleTest {
         assertTrue(nationalOff.articles.first { it.kicker == "引退" }.body.contains("の打撃コーチとして"), "引退後の役職の書き方")
     }
 
+    /** 決着の記事は11月の手続きの間も残るので、時期によらない文にする（「プレーオフに臨む」と書かない） */
+    @Test
+    fun decidedRaceReadsTheSameAfterTheSeason() {
+        val team = late.teamName!!
+        val decided = Race(league = late.teamLeagues[team], leagueName = "1部", kind = "first", team = team, clinched = true)
+        val contract = late.copy(phase = Phase(kind = "contract"), races = listOf(decided))
+        val article = buildFrontPage(contract, lateRaw).articles.first { it.kicker == "決定" }
+        assertEquals("レギュラーシーズン1位の座を手にした。", article.body)
+        // 決定の文はどれも先の予定（プレーオフ・開幕）を言わない
+        for (kind in listOf("first", "promotion", "survive", "relegated"))
+            assertTrue("臨む" !in raceText(decided.copy(kind = kind), { it })!!.body, kind)
+    }
+
     @Test
     fun raceWording() {
         val short = { n: String -> n.take(2) }

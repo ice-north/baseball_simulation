@@ -117,14 +117,18 @@ data class TeamRecord(val stat: String = "", val label: String = "", val season:
 
 data class ChronicleText(val head: String, val body: String)
 
-/** 優勝・昇格・残留のマジックと決定。[short] は球団の短い名前 */
+/**
+ * 優勝・昇格・残留のマジックと決定。[short] は球団の短い名前
+ * ⚠ 決定の文は時期によらない形にする。決着はシーズンを終えたあと（11月の契約更改・トライアウト）も
+ *    紙面に残るので、「プレーオフに臨む」のような先の話を書くと、プレーオフが済んだあとに読めてしまう
+ */
 fun raceText(r: Race, short: (String) -> String): ChronicleText? {
     if (r.team.isEmpty()) return null
     val t = short(r.team)
     val rival = r.rival?.let(short)
     val tail = if (rival != null) "${t}の勝ちと${rival}の負けを合わせて${r.magic}で決まる（残り${r.left}試合）。" else ""
     return when (r.kind) {
-        "first" -> if (r.clinched) ChronicleText("${t}、${r.leagueName}1位が決定", "レギュラーシーズン1位でプレーオフに臨む。")
+        "first" -> if (r.clinched) ChronicleText("${t}、${r.leagueName}1位が決定", "レギュラーシーズン1位の座を手にした。")
         else ChronicleText("${t}、${r.leagueName}1位へマジック${r.magic}", tail)
         "promotion" -> if (r.clinched) ChronicleText("${t}、${r.leagueName}優勝で昇格が決定", "来季は1部で戦う。")
         else ChronicleText("${t}、昇格へマジック${r.magic}", tail)
