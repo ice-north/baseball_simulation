@@ -118,7 +118,7 @@ class ViewTest {
     fun frontPageReadsLikeANewspaper() {
         val raw = OnlineJson.parseToJsonElement(raw).jsonObject
         val page = buildFrontPage(view, raw)
-        // 開幕3日目: 最新の試合は 宮崎 5-8 那覇 の敗戦
+        // 開幕3日目: 最新の試合は 宮崎 1-16 那覇 の敗戦
         assertEquals(FrontPage.Tone.Lose, page.tone)
         assertTrue(page.headline.contains("宮崎"), page.headline)
         assertNotNull(page.score)
