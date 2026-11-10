@@ -70,7 +70,6 @@ const ManagementScreen = ({
   deleteSave,
   refreshSaveSlots,
   setupManagedGame,
-  advanceDayRef,
   setScreenMode,
   setGameFlowState,
   handleProgressDate,
@@ -215,7 +214,6 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     onSetupManagedGame={setupManagedGame}
-    onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
     onForceEvent={(eventType) => {
       if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement' || eventType === 'university_scout')) {
         const update = {};

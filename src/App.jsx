@@ -469,7 +469,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         : normalizeMaxExtraInnings(seasonData?.settings?.maxExtraInnings ?? 12);
       // 勝敗・セーブ・ホールドの判定用（登板順とリードの移り変わり。自動シミュと同じ帳簿）
       const decisionLogRef = useRef(createDecisionLog());
-      const advanceDayRef = useRef(null);
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -2948,7 +2947,6 @@ if (newOuts === 3) {
             managementView={managementView}
             setScreenMode={setScreenMode}
             setManagementView={setManagementView}
-            advanceDayRef={advanceDayRef}
           />}
 
           <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'ml-56' : ''}>
@@ -4362,7 +4360,6 @@ if (newOuts === 3) {
                 deleteSave={deleteSave}
                 refreshSaveSlots={refreshSaveSlots}
                 setupManagedGame={setupManagedGame}
-                advanceDayRef={advanceDayRef}
                 setScreenMode={setScreenMode}
                 setGameFlowState={setGameFlowState}
                 handleProgressDate={handleProgressDate}

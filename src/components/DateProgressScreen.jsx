@@ -83,7 +83,7 @@ const PHASE_EVENT_INFO = {
   offseason: { label: 'オフシーズン', desc: 'シーズンが終了しました。表彰・引退・進路決定を行います。' },
 };
 
-const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
+const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
@@ -841,10 +841,6 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       isTournament: true,
     });
   };
-
-  useEffect(() => {
-    if (onRegisterAdvance) onRegisterAdvance(() => handleProgressDate(1));
-  });
 
   // マウント時: 独立リーグスケジュールが古い年度のものであればリセット（セーブロード後の取りこぼし対策）
   useEffect(() => {
@@ -1748,7 +1744,8 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
           押せると分かる手がかりが無く、「一番よく押す操作に押す場所が無い」状態だったため。
           帯は復活させず、**カレンダーの見出し行**（月送りの ◀▶ の隣）に置いてある
           ＝縦は1pxも増えない。この帯は実測66px使っていた。
-          再クリックの経路も残してある（覚えた人の手を止めないため）。 */}
+          ⚠ サイドバーの再クリックで1日進む経路は**外した**。開いている項目を押し直すと
+          黙って日が進み、間の試合も取り消せなかったため。 */}
       {/* ⚠ **「昨日の結果」パネルはここにあったが、日程進行が縦に長くなりすぎたため撤去した**。
           押した手応えを返すのが役目だったので、消したことで
           「押しても何が起きたか画面に返らない」が部分的に戻っている。

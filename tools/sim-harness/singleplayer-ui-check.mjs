@@ -65,6 +65,10 @@ try {
   await ui.saveToSlot1();
   await ui.continueSlot1();
   assert.deepEqual(await ui.date(), after30, '読み直したら日付が変わった');
+  // 開いている項目を押し直しても何も起きない（以前は「日程進行」だけ黙って1日進んでいた）
+  await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
+  await page.waitForTimeout(800);
+  assert.deepEqual(await ui.date(), after30, '開いている「日程進行」を押し直したら日付が進んだ');
 
   step('次の区切り（夏季合宿）まで');
   await ui.advance('phase');
