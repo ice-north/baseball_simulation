@@ -519,7 +519,9 @@ export const Sidebar = ({
   setScreenMode,
   setManagementView,
 }) => (
-  <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-700/50">
+  // ⚠ 高さは h-screen ではなく top-0 bottom-0 で決めること。自動倍率（#root の zoom）が掛かると
+  //   100vh も一緒に縮み、サイドバーが画面の下まで届かず灰色の帯が出ていた（1280×720 で約90px）
+  <div className="w-56 bg-gray-900/95 backdrop-blur text-white fixed left-0 top-0 bottom-0 flex flex-col border-r border-gray-700/50">
     <div className="px-4 py-4 border-b border-gray-700/50 bg-gray-800/30">
       <h2 className={`text-lg font-black tracking-tight ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
       <div className="text-xs text-gray-300 mt-1 flex items-center gap-1.5">
