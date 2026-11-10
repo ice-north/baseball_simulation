@@ -625,51 +625,48 @@ try {
     await tryout.context.close();
 
     // 初期メンバー: どんなセットか（特徴と構成）
-    const pack = await scene({
-      mobile: true,
-      phase: {
-        id: '1:pack_select',
-        kind: 'pack_select',
-        label: '初期メンバー選択',
-        submission: null,
-        packs: [
-          {
-            id: 'p1',
-            name: '検証セット',
-            feature: '投手厚め',
-            counts: { pitcher: 13, catcher: 2, infield: 5, outfield: 4 },
-            ranks: { A: 2, B: 10, C: 12 },
-            averageAge: 21.5,
-            twoWay: 2,
-            players: [],
-          },
-          {
-            id: 'p2',
-            name: '検証セット2',
-            feature: '野手厚め・粒ぞろい',
-            counts: { pitcher: 10, catcher: 2, infield: 7, outfield: 5 },
-            ranks: { A: 0, B: 14, C: 10 },
-            averageAge: 21.8,
-            twoWay: 1,
-            players: [
-              {
-                id: 201,
-                name: '検証 二塁手',
-                rank: 'B',
-                age: 22,
-                position: 'second',
-                isTwoWay: true,
-                batting: { meet: 55, power: 40 },
-                physical: { speed: 60 },
-                fielding: { defense: 55 },
-                pitching: { velocity: 130, control: 30 },
-              },
-            ],
-          },
-        ],
-      },
-      defaultPlan: { packId: 'p1' },
+    const packPhase = () => ({
+      id: '1:pack_select',
+      kind: 'pack_select',
+      label: '初期メンバー選択',
+      submission: null,
+      packs: [
+        {
+          id: 'p1',
+          name: '検証セット',
+          feature: '投手厚め',
+          counts: { pitcher: 13, catcher: 2, infield: 5, outfield: 4 },
+          ranks: { A: 2, B: 10, C: 12 },
+          averageAge: 21.5,
+          twoWay: 2,
+          players: [],
+        },
+        {
+          id: 'p2',
+          name: '検証セット2',
+          feature: '野手厚め・粒ぞろい',
+          counts: { pitcher: 10, catcher: 2, infield: 7, outfield: 5 },
+          ranks: { A: 0, B: 14, C: 10 },
+          averageAge: 21.8,
+          twoWay: 1,
+          players: [
+            {
+              id: 201,
+              name: '検証 二塁手',
+              rank: 'B',
+              age: 22,
+              position: 'second',
+              isTwoWay: true,
+              batting: { meet: 55, power: 40 },
+              physical: { speed: 60 },
+              fielding: { defense: 55 },
+              pitching: { velocity: 130, control: 30 },
+            },
+          ],
+        },
+      ],
     });
+    const pack = await scene({ mobile: true, phase: packPhase(), defaultPlan: { packId: 'p1' } });
     await click(pack.page, '手続き');
     await pack.page.locator('.online-phase-contents').waitFor();
     const chosen = await pack.page.locator('.online-phase-contents').innerText();
@@ -704,6 +701,23 @@ try {
     assert.deepEqual(pack.payloads.at(-1).plan, { packId: 'p2' }, 'スマホで選び直したセットが送られない');
     assert.equal(pack.payloads.at(-1).ready, true);
     await pack.context.close();
+
+    // ⚠ **決めずに下書きとして残せる**（PC・アプリと同じ「下書きを保存」）。決定しか無いと、
+    //    決めかねて離れた編集は締め切りで標準案に戻る
+    const draftPack = await scene({ mobile: true, phase: packPhase(), defaultPlan: { packId: 'p1' } });
+    await click(draftPack.page, '手続き');
+    await draftPack.page.getByRole('button', { name: 'セットを見比べて選ぶ', exact: true }).click();
+    await draftPack.page.locator('.online-pack-card').filter({ hasText: '検証セット2' }).click();
+    await draftPack.page.getByRole('button', { name: 'このセットにする', exact: true }).click();
+    await draftPack.page.getByRole('button', { name: '下書きを保存', exact: true }).click();
+    await draftPack.page.getByText('下書きを保存しました', { exact: true }).waitFor();
+    assert.deepEqual(
+      [draftPack.payloads.at(-1).plan, draftPack.payloads.at(-1).ready],
+      [{ packId: 'p2' }, false],
+      '「下書きを保存」で選び直したセットが下書きとして送られない',
+    );
+    await draftPack.page.locator('.online-phase-status').filter({ hasText: '保存済みの内容です。' }).waitFor();
+    await draftPack.context.close();
   }
 
   // --- 進行時刻の説明は刻みから作る（u1 低19） -----------------------------

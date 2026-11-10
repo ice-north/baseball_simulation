@@ -1086,9 +1086,11 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                 >
                   この内容で決定
                 </button>
-                {phase.submission?.ready && (
+                {/* ⚠ **PC・アプリと同じ2つ目のボタン**（決定前は「下書きを保存」）。編集できるのに
+                    保存の手段が決定しか無いと、決めかねたまま離れた編集は締め切りで標準案に戻る */}
+                {(phase.submission?.ready || mobileEditLabel) && (
                   <button disabled={busy} onClick={() => submit(false)}>
-                    決定を取り消す
+                    {phase.submission?.ready ? '決定を取り消す' : '下書きを保存'}
                   </button>
                 )}
               </div>
