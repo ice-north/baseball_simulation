@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations, thinTwoLeagueGameCounts } from '../season/regulationSettings.js';
-import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
+import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPerSeason } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 import { normalizeMaxExtraInnings } from '../teams-data.js';
 import { getModeCapabilities } from '../game/modeCapabilities.js';
@@ -29,10 +29,24 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
     : { name: '', color: 'bg-gray-100', description: '' };
   // ⚠ 大学・社会人の設定には延長とプレーオフの項目が無い（作るときに入れていない）。
   //   試合は無いとき12回で打ち切るので、欄と「現在の設定」も12回を出す（以前は空欄・「延長: 回」）
-  const [tempSettings, setTempSettings] = React.useState(() => ({
-    ...seasonData.settings,
-    maxExtraInnings: seasonData.settings?.maxExtraInnings ?? 12,
-  }));
+  // ⚠ **独立リーグ・箱庭の試合数は、いまのリーグの形で選べる値に合わせて始める**（`fitGamesPerSeason`）。
+  //    古い保存は選べない値を持つことがあり（2リーグの奇数球団など）、以前は選択欄が別の値
+  //    （並びの先頭）を見せていた。確定すると、この値で翌年の日程を組む（翌年の日程も同じ直し方）
+  const [tempSettings, setTempSettings] = React.useState(() => {
+    const settings = seasonData.settings || {};
+    const games = getModeCapabilities(settings).independent && settings.gamesPerSeason > 0
+      ? fitGamesPerSeason({
+          teamsCount: settings.teamsCount || 4,
+          leagueFormat: settings.leagueFormat,
+          games: settings.gamesPerSeason,
+        })
+      : settings.gamesPerSeason;
+    return {
+      ...settings,
+      gamesPerSeason: games,
+      maxExtraInnings: settings.maxExtraInnings ?? 12,
+    };
+  });
   // プレーオフは独立リーグ（と箱庭）だけ。大学・社会人では形式の欄を出さない（以前は「PO:」が空だった）
   const { leaguePlayoffs, independent } = getModeCapabilities(seasonData.settings);
   // ⚠ 大学・社会人のリーグの形（チーム数・形式・試合数・チーム名）は、実在のリーグと世界の球団に
@@ -54,19 +68,14 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を新しい(チーム数-1)の倍数に自動調整
-    const oldGames = tempSettings.gamesPerSeason || 60;
-    const oldD = Math.max(1, (tempSettings.teamsCount || 4) - 1);
-    const newD = Math.max(1, newCount - 1);
-    const roundsPerOpponent = Math.max(1, Math.round(oldGames / oldD));
-    let adjustedGames = newD * roundsPerOpponent;
-    if (adjustedGames < newD) adjustedGames = newD;
-    if (adjustedGames > 150) adjustedGames = Math.floor(150 / newD) * newD;
-    // レギュラーシーズンに入りきらない試合数は選べない（1リーグ3球団の130試合以上など）
-    const fitting = getValidSingleLeagueGameCounts(newCount, 150);
-    if (fitting.length > 0 && !fitting.includes(adjustedGames)) {
-      adjustedGames = fitting.filter(v => v <= adjustedGames).pop() ?? fitting[0];
-    }
+    // 試合数を選べる値に自動調整（新規の規定画面・翌年の日程と同じ `fitGamesPerSeason`）。
+    // ⚠ 以前は2リーグでも1リーグの決め方（チーム数-1の倍数）で直し、選べない値になることがあった
+    const adjustedGames = fitGamesPerSeason({
+      teamsCount: newCount,
+      leagueFormat: tempSettings.leagueFormat,
+      games: tempSettings.gamesPerSeason || 60,
+      previousTeamsCount: tempSettings.teamsCount || 4,
+    });
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -128,13 +137,20 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
           </SettingRow>
           <SettingRow label="チーム数">
             <select value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value))} disabled={!canModifyStructure} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-24">
-              {[2, 4, 6, 8, 10, 12].map(n => <option key={n} value={n}>{n}チーム</option>)}
+              {/* ⚠ 奇数の球団数（新規の規定画面では選べる）はいまの値として残す。無いと選択欄が「2チーム」を見せた */}
+              {[...new Set([2, 4, 6, 8, 10, 12, tempSettings.teamsCount].filter(Number.isInteger))].sort((a, b) => a - b)
+                .map(n => <option key={n} value={n}>{n}チーム</option>)}
             </select>
           </SettingRow>
           <SettingRow label="リーグ形式">
             <select
               value={tempSettings.leagueFormat || 'single'}
-              onChange={(e) => setTempSettings({ ...tempSettings, leagueFormat: e.target.value })}
+              onChange={(e) => setTempSettings({
+                ...tempSettings,
+                leagueFormat: e.target.value,
+                // ⚠ 形式を変えたら試合数も選べる値に合わせる（以前はそのままで、選択欄が別の値を見せた）
+                gamesPerSeason: fitGamesPerSeason({ teamsCount: tempSettings.teamsCount || 4, leagueFormat: e.target.value, games: tempSettings.gamesPerSeason || 60 }),
+              })}
               disabled={!canModifyStructure}
               className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm"
             >

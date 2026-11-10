@@ -260,6 +260,7 @@ export const generateFullSeasonSchedule = (config) => {
   if (leagueFormat === 'two' && teams.length >= 4 && !twoLeagueGamePlan(teams.length, gamesPerSeason)) {
     // ⚠ どの球団も同じ数に組めない値（規定画面では選べない。古い保存の設定だけ）。
     //   以前は近似で組み、球団ごとに試合数がばらついた。いちばん近い選べる値で組む
+    //   （規定画面と翌年の日程は、設定の値もこれに直す: `fitGamesPerSeason`）
     const fitted = fitGamesPerSeason({ teamsCount: teams.length, leagueFormat, games: gamesPerSeason });
     if (fitted !== gamesPerSeason && twoLeagueGamePlan(teams.length, fitted)) {
       console.warn(`[日程] 2リーグ${teams.length}球団で${gamesPerSeason}試合はどの球団も同じ数に組めないため、${fitted}試合で組みます`);
@@ -566,6 +567,7 @@ export const getValidSingleLeagueGameCounts = (teamsCount, maxGames = 150) => {
 
 /**
  * 年間試合数を、いまのリーグの形（球団数・1リーグ/2リーグ）で選べる値に合わせる。
+ * 規定画面の選択肢・球団数や形式を変えたときの自動調整・翌年の日程は、すべてここで決める。
  * - すでに選べる値ならそのまま
  * - 1リーグ: 球団数を変えたときは対戦相手ごとの対戦数を保つ。対戦相手数の倍数に丸め、
  *   期間に入りきらなければ入る中でいちばん多い値

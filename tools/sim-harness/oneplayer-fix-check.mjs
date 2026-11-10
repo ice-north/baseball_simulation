@@ -182,9 +182,33 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   }
 }
 
-// --- 古い保存の選べない試合数（2リーグの奇数球団など）は、近い選べる値で日程を組む ---
-// ⚠ 規定画面では選べない値。以前は近似で組み、5球団・141試合で球団ごとに142〜160試合にばらついた
+// --- 規定画面と翌年の日程の試合数は1か所（`fitGamesPerSeason`）で、選べる値に合わせる ---
+// ⚠ 以前は規定画面ごとに決め方を書いており、オフの規定画面は2リーグでも1リーグの決め方
+//    （対戦相手数の倍数）で直していた。古い保存が選べない値を持つと、選択欄は別の値を見せ、
+//    日程は球団ごとにばらついた
 {
+  for (let count = 4; count <= 12; count++) {
+    const values = getValidTwoLeagueGameCounts(count, 150).map(o => o.value);
+    for (const games of [3, 54, 60, 75, 116, 141, 150]) {
+      const fitted = fitGamesPerSeason({ teamsCount: count, leagueFormat: 'two', games });
+      assert.ok(values.includes(fitted), `2リーグ${count}球団${games}試合を選べない値 ${fitted} に直した`);
+      if (values.includes(games)) assert.equal(fitted, games, '選べる値を変えた');
+      // 球団数を変えたときも2リーグの値に合わせる（以前のオフの規定画面は1リーグの決め方）
+      const changed = fitGamesPerSeason({ teamsCount: count, leagueFormat: 'two', games, previousTeamsCount: count === 12 ? 6 : count + 1 });
+      assert.ok(values.includes(changed), `2リーグで${count}球団に変えたときに選べない値 ${changed} になった`);
+    }
+  }
+  for (let count = 2; count <= 12; count++) {
+    const values = getValidSingleLeagueGameCounts(count, 150);
+    for (const games of [3, 60, 75, 141, 150]) {
+      const fitted = fitGamesPerSeason({ teamsCount: count, leagueFormat: 'single', games });
+      assert.ok(values.includes(fitted), `1リーグ${count}球団${games}試合を選べない値 ${fitted} に直した`);
+      if (values.includes(games)) assert.equal(fitted, games, '選べる値を変えた');
+    }
+  }
+  // 1リーグで球団数を変えたら、対戦相手ごとの対戦数を保つ（4球団60試合=各20戦 → 6球団100試合）
+  assert.equal(fitGamesPerSeason({ teamsCount: 6, leagueFormat: 'single', games: 60, previousTeamsCount: 4 }), 100);
+  // 古い保存の選べない値: 日程は近い選べる値で組み、どの球団も同じ数（以前は142〜160にばらついた）
   const warn = console.warn;
   const warned = [];
   console.warn = (message) => warned.push(message);
@@ -198,6 +222,30 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   } finally {
     console.warn = warn;
   }
+  // 翌年の日程: 設定の値も直す（規定打席などの基準と表示が日程と合う）
+  const { seasonData } = quiet(() => bootstrapWorld({ userTeamNames: ['高知', '徳島', '愛媛', '香川', '松山'] }));
+  const names = seasonData.settings.teamNames;
+  assert.equal(names.length, 5, '前提: 5球団');
+  let next = { ...seasonData, year: 2, settings: { ...seasonData.settings, teamNames: names, teamsCount: 5, leagueFormat: 'two', gamesPerSeason: 141 } };
+  const warnBefore = console.warn;
+  console.warn = () => {};
+  try {
+    quiet(() => applyNextSeasonRegulations({
+      confirmedSettings: next.settings,
+      seasonData: next,
+      setSeasonData: (update) => { next = typeof update === 'function' ? update(next) : update; },
+      generatePitchingRotation: () => {},
+      setManagementView: () => {},
+      nextView: 'camp',
+      notify: () => {},
+    }));
+  } finally {
+    console.warn = warnBefore;
+  }
+  const expected = fitGamesPerSeason({ teamsCount: 5, leagueFormat: 'two', games: 141 });
+  assert.equal(next.settings.gamesPerSeason, expected, '翌年の設定の試合数が日程と違う');
+  for (const t of names)
+    assert.equal(next.schedule.filter(g => g.home === t || g.away === t).length, expected, `翌年の日程で ${t} の試合数が設定と違う`);
 }
 
 // --- DH制の推奨スタメンは DH の枠を「dh」で保存し、日付進行の補完で守備がずれない ---

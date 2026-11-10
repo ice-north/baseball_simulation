@@ -1,6 +1,6 @@
 import { TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
-import { generateFullSeasonSchedule } from './scheduleGenerator.js';
+import { generateFullSeasonSchedule, fitGamesPerSeason } from './scheduleGenerator.js';
 import { generateExpansionRoster } from './tryoutSystem.js';
 import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 
@@ -71,16 +71,24 @@ export function applyNextSeasonRegulations({
   }
 
   const teams = configuredTeams.length > 0 ? configuredTeams : Object.keys(TEAMS_DATA);
+  const leagueFormat = settings.leagueFormat || 'single';
+  // ⚠ **試合数は選べる値に合わせ、設定にも書き戻す**（規定画面と同じ `fitGamesPerSeason`）。
+  //    古い保存は選べない値を持つことがあり（2リーグの奇数球団など）、以前は日程だけが
+  //    別の数（球団ごとにばらばら）になって、規定画面・規定打席の基準と食い違った
+  const gamesPerSeason = fitGamesPerSeason({ teamsCount: teams.length, leagueFormat, games: settings.gamesPerSeason || 60 });
   const schedule = generateFullSeasonSchedule({
     teams,
-    gamesPerSeason: settings.gamesPerSeason || 60,
+    gamesPerSeason,
     startDate: { year: calendarYear, month: 3, day: 1 },
     endDate: { year: calendarYear, month: 9, day: 30 },
-    leagueFormat: settings.leagueFormat || 'single',
+    leagueFormat,
     leagueNames: settings.leagueNames
   });
   setSeasonData(prev => ({
     ...prev,
+    ...(prev.settings?.gamesPerSeason === gamesPerSeason
+      ? {}
+      : { settings: { ...(prev.settings || settings), gamesPerSeason } }),
     currentDate: { year: calendarYear, month: 1, day: 1 },
     schedule,
     standings: teams.map(t => ({

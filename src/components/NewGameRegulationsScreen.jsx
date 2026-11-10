@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScreenShell } from './GameUIComponents.jsx';
 import TutorialHint from './TutorialHint.jsx';
 import { REGULATION_PRESETS, getPlayoffFormatDescription, thinTwoLeagueGameCounts } from '../season/regulationSettings.js';
-import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
+import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPerSeason } from '../season/scheduleGenerator.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { normalizeMaxExtraInnings } from '../teams-data.js';
 
@@ -54,33 +54,13 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, s
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を自動調整
-    const oldGames = tempSettings.gamesPerSeason || 60;
-    const isTwoLeague = tempSettings.leagueFormat === 'two' && newCount >= 4;
-    let adjustedGames;
-    if (isTwoLeague) {
-      const validCounts = getValidTwoLeagueGameCounts(newCount, 150);
-      if (validCounts.length > 0) {
-        const closest = validCounts.reduce((best, o) =>
-          Math.abs(o.value - oldGames) < Math.abs(best.value - oldGames) ? o : best
-        );
-        adjustedGames = closest.value;
-      } else {
-        adjustedGames = oldGames;
-      }
-    } else {
-      const newD = Math.max(1, newCount - 1);
-      const oldD = Math.max(1, (tempSettings.teamsCount || 4) - 1);
-      const roundsPerOpponent = Math.max(1, Math.round(oldGames / oldD));
-      adjustedGames = newD * roundsPerOpponent;
-      if (adjustedGames < newD) adjustedGames = newD;
-      if (adjustedGames > 150) adjustedGames = Math.floor(150 / newD) * newD;
-      // レギュラーシーズンに入りきらない試合数は選べない（1リーグ3球団の130試合以上など）
-      const fitting = getValidSingleLeagueGameCounts(newCount, 150);
-      if (fitting.length > 0 && !fitting.includes(adjustedGames)) {
-        adjustedGames = fitting.filter(v => v <= adjustedGames).pop() ?? fitting[0];
-      }
-    }
+    // 試合数を選べる値に自動調整（オフの規定画面・翌年の日程と同じ `fitGamesPerSeason`）
+    const adjustedGames = fitGamesPerSeason({
+      teamsCount: newCount,
+      leagueFormat: tempSettings.leagueFormat,
+      games: tempSettings.gamesPerSeason || 60,
+      previousTeamsCount: tempSettings.teamsCount || 4,
+    });
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -253,28 +233,11 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, s
               <label className="font-medium">リーグ形式</label>
               <select value={tempSettings.leagueFormat || 'single'} onChange={(e) => {
                 const newFormat = e.target.value;
-                const tc = tempSettings.teamsCount || 4;
-                const currentGames = tempSettings.gamesPerSeason || 60;
-                let adjustedGames = currentGames;
-                if (newFormat === 'two' && tc >= 4) {
-                  const validCounts = getValidTwoLeagueGameCounts(tc, 150);
-                  if (validCounts.length > 0 && !validCounts.some(o => o.value === currentGames)) {
-                    const closest = validCounts.reduce((best, o) =>
-                      Math.abs(o.value - currentGames) < Math.abs(best.value - currentGames) ? o : best
-                    );
-                    adjustedGames = closest.value;
-                  }
-                } else {
-                  const d = Math.max(1, tc - 1);
-                  if (currentGames % d !== 0) {
-                    adjustedGames = Math.max(d, Math.round(currentGames / d) * d);
-                    if (adjustedGames > 150) adjustedGames = Math.floor(150 / d) * d;
-                  }
-                  const fitting = getValidSingleLeagueGameCounts(tc, 150);
-                  if (fitting.length > 0 && !fitting.includes(adjustedGames)) {
-                    adjustedGames = fitting.filter(v => v <= adjustedGames).pop() ?? fitting[0];
-                  }
-                }
+                const adjustedGames = fitGamesPerSeason({
+                  teamsCount: tempSettings.teamsCount || 4,
+                  leagueFormat: newFormat,
+                  games: tempSettings.gamesPerSeason || 60,
+                });
                 setTempSettings({...tempSettings, leagueFormat: newFormat, gamesPerSeason: adjustedGames});
               }} className="bg-gray-700 rounded px-3 py-2 w-full">
                 <option value="single">1リーグ制</option>
