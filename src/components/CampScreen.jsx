@@ -545,10 +545,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
     if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
     // 変化球はレベルで色付け（0-100スケールなのでgetAbilityColorをそのまま使用）
+    // ⚠ 球種どうしの間の空白は span の外に置くこと（折り返せる位置にする）。中にあると
+    //   5球種の投手で列が1行に伸び、1440 幅でも右端の「サブ」の選択が切れていた
     return arsenal.map((a, i) => (
-      <span key={i} className={getAbilityColor(a.level || 0)}>
-        {i > 0 ? ' ' : ''}{getPitchTypeName(a.type)}{a.level}
-      </span>
+      <React.Fragment key={i}>
+        {i > 0 ? ' ' : ''}
+        <span className={`${getAbilityColor(a.level || 0)} whitespace-nowrap`}>{getPitchTypeName(a.type)}{a.level}</span>
+      </React.Fragment>
     ));
   };
 
@@ -1072,7 +1075,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.muscle??50} label="体幹" /></td>
-                        {isPitchTab && <td className="py-1 px-2 text-xs font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>}
+                        {isPitchTab && <td className="py-1 px-2 text-xs font-mono min-w-[10rem] max-w-[16rem]">{getArsenalDisplay(player)}</td>}
                         <td className="py-1 px-2 text-xs font-mono text-gray-300 whitespace-nowrap">
                           {(() => {
                             const prev = player.previousSeasonStats;
