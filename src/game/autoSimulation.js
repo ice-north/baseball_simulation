@@ -138,7 +138,8 @@ const canEnterRelief = (players, id, currentPitcherId, removedIds) => {
 };
 
 // AI監督がスタメンを自動生成する機能（エクスポート）
-// 毎試合呼ばれ、ローテーション・疲労を考慮して合理的なラインナップを組む
+// 毎試合呼ばれ、ローテーション・疲労を考慮して合理的なラインナップを組む。
+// 返り値は今日の先発投手（`teamData.players` の中の人。選べなければ undefined）
 export const generateAILineup = (teamData, teamName) => {
   const players = teamData.players || [];
   if (players.length === 0) {
@@ -338,6 +339,8 @@ export const generateAILineup = (teamData, teamName) => {
     }
   });
 
+  // 今日の先発（DH制では打順に入らないので、呼ぶ側はこれで先発を知る。`gameSetup.js`）
+  return starter;
 };
 
 // ユーザーチームに推奨スタメンを設定

@@ -21,6 +21,7 @@ import { ensureCompleteLineup } from '../../src/game/lineup.js';
 import { autoSimulateGame, setRecommendedLineup } from '../../src/game/autoSimulation.js';
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason } from '../../src/season/scheduleGenerator.js';
 import { applyNextSeasonRegulations } from '../../src/season/nextSeasonRegulations.js';
+import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -181,6 +182,37 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   }
 }
 
+// --- DH制の采配試合で、相手（AI）の先発は試合前に予告した先発 ---
+// ⚠ 采配試合の準備（gameSetup）は、AIチームの先発を generateAILineup がローテから選んだ後、
+//    DH制のときだけ「名簿で最初の投手」を選び直していた。予告の先発と違う人（抑えなど）が
+//    マウンドに立ち、ローテだけ1つ進んでいた
+{
+  const { seasonData } = quiet(() => bootstrapWorld());
+  const savedDH = LEAGUE_SETTINGS.useDH;
+  LEAGUE_SETTINGS.useDH = true;
+  try {
+    const [user, opp] = seasonData.settings.teamNames;
+    const team = TEAMS_DATA[opp];
+    delete team.lineupSettings;
+    const firstPitcher = team.players.find(p => p.position === 'pitcher');
+    const rotation = team.pitchingRotation;
+    const index = rotation.starters.findIndex(id => id !== firstPitcher.id);
+    assert.ok(index >= 0, '前提: 名簿で最初の投手と別の先発がローテにいる');
+    rotation.currentStarterIndex = index;
+    const expected = rotation.starters[index];
+    for (const p of team.players) p.fatigue = 0;
+    let away = null;
+    const ctx = new Proxy({ managedGameInfoRef: { current: null } }, {
+      get: (target, key) => key in target ? target[key] : key === 'setAwayTeam' ? (t) => { away = t; } : () => {},
+    });
+    quiet(() => executeSetupManagedGame(ctx, { gameId: 1, home: user, away: opp, otherGames: [] }));
+    const starter = away?.players.find(p => p._isStartingPitcher);
+    assert.equal(starter?.id, expected, `DH制の相手の先発が予告と違う（名簿で最初の投手 ${firstPitcher.name} を選び直している）`);
+  } finally {
+    LEAGUE_SETTINGS.useDH = savedDH;
+  }
+}
+
 // --- 戦力外の選手は、翌日のトライアウトで年を取らない ---
 // ⚠ プールの選手は年度替わりに加齢する。以前はトライアウトの候補にする時にも
 //    「滞在年数＋1」歳を足して能力も落としていたため、11/9 に解雇された25歳が
@@ -243,4 +275,4 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   );
 }
 
-console.log('■ 一人用の進行の再発防止: OK（1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');
+console.log('■ 一人用の進行の再発防止: OK（DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');

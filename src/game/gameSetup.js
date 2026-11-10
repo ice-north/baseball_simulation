@@ -48,6 +48,8 @@ export function executeSetupManagedGame(ctx, gameInfo) {
     const players = JSON.parse(JSON.stringify(teamData.players));
     const settings = teamData.lineupSettings;
     const isUserTeam = settings?.battingOrder?.length > 0;
+    // AIチームの今日の先発（generateAILineup がローテと疲労から選んだ人）
+    let aiStarterId = null;
 
     if (isUserTeam) {
       players.forEach(p => { p.battingOrder = 0; });
@@ -65,7 +67,7 @@ export function executeSetupManagedGame(ctx, gameInfo) {
       });
     } else {
       const tempTeamData = { ...teamData, players };
-      generateAILineup(tempTeamData, teamName);
+      aiStarterId = generateAILineup(tempTeamData, teamName)?.id ?? null;
     }
 
     // ユーザーチームのみローテーションから先発を設定
@@ -157,8 +159,10 @@ export function executeSetupManagedGame(ctx, gameInfo) {
         const index = rotation.currentStarterIndex || 0;
         starterPitcherId = rotation.starters[index];
       } else {
-        const pitcher = players.find(p => p.position === 'pitcher');
-        starterPitcherId = pitcher?.id;
+        // ⚠ AIチームは generateAILineup が選んだ先発を使う。以前は名簿で最初の投手を
+        //    選び直しており、試合前の「相手先発」と違う人（抑えなど）がマウンドに立ち、
+        //    ローテだけ1つ進んでいた
+        starterPitcherId = aiStarterId ?? players.find(p => p.position === 'pitcher')?.id;
       }
       players.forEach(p => {
         p._isStartingPitcher = (p.id === starterPitcherId && p.position === 'pitcher');
