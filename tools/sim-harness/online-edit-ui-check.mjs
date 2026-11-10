@@ -680,6 +680,29 @@ try {
       picks.includes('候補一郎') && picks.includes('候補二郎') && !picks.includes('候補三郎'),
       `獲得予定の顔ぶれが違う: ${picks}`,
     );
+    // ⚠ **スマホでも獲得の希望を入れ替えて決められる**（判断1・案B ④）。PCと同じ
+    //    `TryoutPlanner`。指ではドラッグできないので ↑↓ と「控えへ」で動かす
+    await tryout.page.getByRole('button', { name: '獲得の希望を変える', exact: true }).click();
+    await tryout.page.getByRole('button', { name: '候補二郎の希望順位を上げる', exact: true }).click();
+    await tryout.page.getByRole('button', { name: '候補一郎を控えへ回す', exact: true }).click();
+    const wantedNames = () =>
+      tryout.page.locator('.online-tryout-wanted > ol > li .online-player-name').allInnerTexts();
+    assert.deepEqual(await wantedNames(), ['候補二郎', '候補三郎'], 'スマホで希望順を入れ替えられない');
+    await fitsPhone(tryout.page, 'トライアウトの獲得の希望');
+    await tryout.page.getByRole('button', { name: 'この内容で決定', exact: true }).click();
+    await tryout.page.getByRole('group', { name: '決定の確認', exact: true }).waitFor();
+    const planned = await tryout.page.locator('.online-phase-contents').innerText();
+    assert.ok(
+      planned.includes('候補二郎') && planned.includes('候補三郎') && !planned.includes('候補一郎'),
+      `確認で入れ替えた獲得予定が出ない: ${planned}`,
+    );
+    await tryout.page.getByRole('button', { name: '決定する', exact: true }).click();
+    await tryout.page.getByText('決定しました', { exact: true }).waitFor();
+    assert.deepEqual(
+      tryout.payloads.at(-1).plan,
+      { count: 2, rankedIds: [102, 103, 101] },
+      'スマホで入れ替えた希望順が送られない（控えへ回した人も末尾に残す）',
+    );
     await tryout.context.close();
 
     // 初期メンバー: どんなセットか（特徴と構成）

@@ -4491,3 +4491,58 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-mobile .online-phase-editor .online-tryout-list button {
   min-height: 44px;
 }
+/* トライアウト: 獲得の希望（`TryoutPlanner`）。⚠ PCの1行（順位・名前・↑↓・控えへ）のままだと
+   320px で名前の欄が100px ほどに削られ、「うちの内野手で3番手」の札がボタンに重なり、
+   ↑↓ は28px幅で押しにくかった。スマホは1人を2段にする（上: 順位と名前、下: ボタンを等分）。
+   ⚠ ドラッグでの並べ替えは指では動かない（HTMLのドラッグはタッチに無い）ので取っ手を隠し、↑↓で動かす。
+   ⚠ 一覧の中だけ動く枠（PCの `max-height`）は二重の送りになるので、スマホはページごと送る */
+.online-mobile .online-tryout .online-tryout-list {
+  max-height: none;
+  overflow: visible;
+}
+.online-mobile .online-tryout .online-tryout-list li {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.online-mobile .online-tryout .online-tryout-person {
+  flex: 1 1 calc(100% - 40px);
+}
+.online-mobile .online-tryout .online-tryout-list li > button {
+  flex: 1 1 0;
+  min-width: 44px;
+}
+.online-mobile .online-tryout .online-tryout-mark {
+  margin-left: auto;
+}
+.online-mobile .online-tryout .online-drag-handle {
+  display: none;
+}
+.online-mobile .online-tryout .online-tryout-grid > section {
+  padding: 10px 8px;
+}
+/* 守備位置の5つの切り替えは等分（横に並べたままだと 320px で「外野」が外へ出た） */
+.online-mobile .online-tryout .online-segments {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.online-mobile .online-tryout .online-segments button {
+  min-width: 0;
+  padding: 8px 2px;
+}
+/* 獲得希望人数と「標準案に戻す」を1段に */
+.online-mobile .online .online-tryout-head label,
+.online-mobile .online-tryout-head label {
+  margin: 0;
+}
+.online-mobile .online-tryout-head {
+  gap: 10px;
+  margin-bottom: 8px;
+}
+/* 目標の構成（「投11・捕2・内6・外7」）と獲得後の内訳は語の途中で割らない（390px で「・／内」と割れた） */
+.online-mobile .online-tryout > .online-muted strong {
+  white-space: nowrap;
+}
+.online-mobile .online-tryout .online-tryout-grid h3 small {
+  word-break: keep-all;
+}
