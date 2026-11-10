@@ -9,12 +9,24 @@
 //    （古いリーグでも読める）。過去にさかのぼって作れるのは記録（`league.records`）
 //    から数える球団史・歴代記録だけで、節目と引退はこの版から先のぶん。
 // ============================================================
-import { PYRAMID_LEAGUES, standingsByLeague, PROMOTION_PLACES, RELEGATION_FROM_BOTTOM } from '../src/online/pyramidLeague.js';
+import {
+  PYRAMID_LEAGUES,
+  standingsByLeague,
+  compareLeagueStanding,
+  PROMOTION_PLACES,
+  RELEGATION_FROM_BOTTOM,
+} from '../src/online/pyramidLeague.js';
 import { SEASON_PHASES } from '../src/season/seasonManager.js';
 import { KOSHIEN_STAGE_LABEL } from '../src/season/koshien.js';
 import { SEASON_START_MONTH } from '../src/online/shared.js';
 
-const KEEP_MILESTONES = 40;
+// ⚠ 節目は**球団ごとに**最新20件（12球団で最大240件・数十KB）。以前はリーグ全体で最新40件で、
+//    1年目だけで129件できるため約1か月で消え、「球団史・記録」の節目が各球団に数件しか残らなかった
+const KEEP_MILESTONES_PER_TEAM = 20;
+const keepMilestones = (list) => {
+  const count = {};
+  return list.filter((m) => (count[m.team] = (count[m.team] || 0) + 1) <= KEEP_MILESTONES_PER_TEAM);
+};
 const KEEP_RETIRED = 60;
 const KEEP_WORLD = 12;
 
@@ -142,7 +154,7 @@ export function recordMilestones(league, games, date) {
   if (!found.length) return found;
   const stamp = { year, month: date.month, day: date.day };
   const c = chronicleOf(league);
-  c.milestones = [...found.map((m) => ({ ...stamp, ...m })), ...c.milestones].slice(0, KEEP_MILESTONES);
+  c.milestones = keepMilestones([...found.map((m) => ({ ...stamp, ...m })), ...c.milestones]);
   return found;
 }
 
@@ -214,7 +226,8 @@ export function koshienNoteOf(league, playerId) {
   for (const w of league.chronicle?.world || []) {
     if (w.kind !== 'koshien') continue;
     const n = w.notable?.find((x) => x.playerId === playerId);
-    if (n) return `${w.year}年夏の甲子園 ${n.school}の${n.role}（${n.stageLabel}）`;
+    // ⚠ 年は「N年目」（リーグの年は 1, 2, …。「1年夏」だと高校1年の夏と読める）
+    if (n) return `${w.year}年目の夏の甲子園 ${n.school}の${n.role}（${n.stageLabel}）`;
   }
   return null;
 }
@@ -336,6 +349,28 @@ function magicAgainst(lead, chaser) {
     }
   return best;
 }
+/** レギュラーシーズンの残りの直接対決の数（`"球団A|球団B"`。名前の順に並べた鍵） */
+function remainingPairs(schedule) {
+  const out = {};
+  for (const g of schedule || []) {
+    if (g.phase !== SEASON_PHASES.REGULAR_SEASON || g.result) continue;
+    const key = [g.home, g.away].sort().join('|');
+    out[key] = (out[key] || 0) + 1;
+  }
+  return out;
+}
+
+/**
+ * `chaser` が自力で `lead` の上に立てるか（直接対決を含めて残りを全部勝てば、`lead` が
+ * ほかを全部勝っても上に居る）。`lead` から見ると、これが偽になった相手には自力で決められる。
+ */
+function canPassAlone(chaser, lead, pairs) {
+  const h2h = pairs[[chaser.team, lead.team].sort().join('|')] || 0;
+  const c = { wins: chaser.wins + chaser.left, losses: chaser.losses, left: 0 };
+  const l = { wins: lead.wins + lead.left - h2h, losses: lead.losses + h2h, left: 0 };
+  return surelyAbove(c, l);
+}
+
 /** いちばん手ごわい相手（マジックがいちばん大きい）と、そのマジック。⚠ 1球団1回だけ数える */
 function toughest(lead, chasers) {
   let rival = null;
@@ -363,6 +398,11 @@ export function leagueRaces(league, left = remainingGames(league.season.schedule
   const byName = Object.fromEntries(standings.map((s) => [s.team, s]));
   // ⚠ `standingsByLeague` は**球団名**を順位の順に返す（行ではない）
   const groups = standingsByLeague(league.teams || [], standings);
+  const pairs = remainingPairs(league.season.schedule);
+  // ⚠ **マジックは「点灯」してから出す**（追う球団がどれも自力で抜けなくなってから）。
+  //    以前は「残り試合以下」で絞っていたが、単独首位なら必ず成り立つので、
+  //    開幕2日目から「マジック118」が順位表・話題・両紙に出続けていた
+  const lit = (lead, chasers) => chasers.every((c) => !canPassAlone(c, lead, pairs));
   for (const def of PYRAMID_LEAGUES) {
     const rows = (groups[def.id] || []).map((team) => ({ team, wins: byName[team]?.wins || 0, losses: byName[team]?.losses || 0, left: left[team] || 0 }));
     if (rows.length < 2) continue;
@@ -376,8 +416,7 @@ export function leagueRaces(league, left = remainingGames(league.season.schedule
       const tough = toughest(lead, chasers);
       const rival = tough.rival;
       const magic = clinched ? 0 : tough.magic;
-      // ⚠ 届かない数（残り試合より多い）は出さない。開幕直後に「マジック118」と書かない
-      if (clinched || magic <= lead.left)
+      if (clinched || (magic <= lead.left && lit(lead, chasers)))
         races.push({ league: def.id, leagueName: def.name, kind: topKind, team: lead.team, magic, clinched, rival: clinched ? null : rival.team, left: lead.left });
     }
     // 下位（降格）: 降格圏のすぐ上の球団の残留マジックと、降格の決定
@@ -389,7 +428,7 @@ export function leagueRaces(league, left = remainingGames(league.season.schedule
       const tough = toughest(safe, danger);
       const rival = tough.rival;
       const magic = stay ? 0 : tough.magic;
-      if (stay || magic <= safe.left)
+      if (stay || (magic <= safe.left && lit(safe, danger)))
         races.push({ league: def.id, leagueName: def.name, kind: 'survive', team: safe.team, magic, clinched: stay, rival: stay ? null : rival.team, left: safe.left });
       for (const d of danger) {
         const above = rows.slice(0, rows.length - n);
@@ -398,7 +437,8 @@ export function leagueRaces(league, left = remainingGames(league.season.schedule
       }
     }
   }
-  // ⚠ シーズンが終わって決着がついたあとも出す（紙面・順位表の「決定」）。手続きの時期は呼ぶ側が止める
+  // ⚠ シーズンが終わって決着がついたあとも出す（紙面・順位表の「決定」）。オフの手続きの間も
+  //    決着だけは残る（`projection.mjs`）。文は時期によらない形にしてある（`chronicleText.js`）
   return anyLeft ? races : races.filter((r) => r.clinched);
 }
 
@@ -451,7 +491,12 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
     const leagueId = h.leagues?.[teamName] || null;
     let rank = null;
     if (row && leagueId) {
-      const table = h.standings.filter((s) => h.leagues[s.team] === leagueId);
+      // ⚠ 順位は昇降格と同じ並べ方（勝率 → 勝利数 → 球団名、`compareLeagueStanding`）。
+      //    保存の並びのままだと、同率で終わった年に「5位・降格」のように食い違う
+      const table = h.standings
+        .filter((s) => h.leagues[s.team] === leagueId)
+        .map((s) => ({ ...s, winRate: s.winRate ?? (s.wins + s.losses > 0 ? s.wins / (s.wins + s.losses) : 0) }))
+        .sort(compareLeagueStanding);
       rank = table.findIndex((s) => s.team === teamName) + 1;
     }
     const move = (h.moves || []).find((m) => m.teamId === teamName);
@@ -517,7 +562,7 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
     seasons,
     records,
     retired: (c.retired || []).filter((r) => r.team === teamName).slice(0, 20),
-    milestones: (c.milestones || []).filter((m) => m.team === teamName).slice(0, 20),
+    milestones: (c.milestones || []).filter((m) => m.team === teamName).slice(0, KEEP_MILESTONES_PER_TEAM),
   };
 }
 

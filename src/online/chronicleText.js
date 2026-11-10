@@ -1,4 +1,5 @@
 // 年代記の文（PC・スマホ）。⚠ アプリ（`mobile/.../Chronicle.kt`）と同じ文にすること。
+// ⚠ 決着の文はオフの手続きの間も出るので、時期によらない形にする（「プレーオフに臨む」と書かない）
 // 数字はサーバー（`server/chronicle.mjs`）が作る。ここは文にするだけ。
 
 /** 優勝・昇格・残留のマジックと決定。`short`: 球団の短い名前 */
@@ -12,7 +13,7 @@ export function raceText(r, short = (n) => n) {
   switch (r.kind) {
     case 'first':
       return r.clinched
-        ? { head: `${t}、${r.leagueName}1位が決定`, body: 'レギュラーシーズン1位でプレーオフに臨む。' }
+        ? { head: `${t}、${r.leagueName}1位が決定`, body: 'レギュラーシーズン1位の座を手にした。' }
         : { head: `${t}、${r.leagueName}1位へマジック${r.magic}`, body: tail };
     case 'promotion':
       return r.clinched
