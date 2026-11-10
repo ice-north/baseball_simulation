@@ -69,6 +69,18 @@ private fun two(v: Double?): String = v?.let { val r = round(it * 100).toInt(); 
 /** 手続きの時期（試合が無く、1面は時期の話にする） */
 internal val OFF_PHASES = setOf("pack_select", "initial_tryout", "camp", "contract", "tryout", "offseason")
 
+/**
+ * 部の中の並べ方（勝率→勝利数→球団名）。Web の `compareLeagueStanding`（src/online/pyramidLeague.js）と同じ。
+ * ⚠ ビューの順位表（standings）は全球団を通した勝率→勝利数の並びで、同率のときの順が決まっていない。
+ *    昇降格・マジック（サーバー）と PC の順位表はこの並べ方なので、紙面の順位もこれで数える
+ */
+val LEAGUE_STANDING_ORDER: Comparator<Standing> =
+    compareByDescending<Standing> { it.winRate }.thenByDescending { it.wins }.thenBy { it.team }
+
+/** 部の順位表（1位から）。[league] が null（部の無い古いビュー）なら全球団 */
+fun LeagueView.leagueTable(league: String?): List<Standing> =
+    standings.filter { league == null || teamLeagues[it.team] == league }.sortedWith(LEAGUE_STANDING_ORDER)
+
 /** ゲーム差の書き方（「4」「2.5」。「4.0差」とは書かない） */
 private fun gb(v: Double): String = if (v % 1.0 == 0.0) "${v.toInt()}" else one(v)
 
@@ -106,7 +118,7 @@ fun buildFrontPage(
 
     // 自球団の順位（部の中）
     val league = view.teamLeagues[team]
-    val table = view.standings.filter { league == null || view.teamLeagues[it.team] == league }
+    val table = view.leagueTable(league)
     val rankIndex = table.indexOfFirst { it.team == team }
     val mine = table.getOrNull(rankIndex)
     val leagueName = league?.let { LEAGUE_NAMES[it] } ?: ""

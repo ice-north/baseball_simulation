@@ -84,6 +84,28 @@ class FrontPageTest {
         assertEquals(bare.headline, page.headline)
     }
 
+    /** 同率（勝率も勝利数も同じ）の部の順位は球団名の順。PC の順位表・昇降格（compareLeagueStanding）と同じ */
+    @Test
+    fun tiesAreOrderedLikeThePc() {
+        val me = view.teamName!!
+        val rival = "秋田フェニックス"
+        val mine = view.standings.first { it.team == me }
+        // 秋田を宮崎と同じ成績にする。ビューの並び（全球団を通したもの）では秋田が先のまま
+        val tied = view.copy(standings = view.standings.map { if (it.team == rival) mine.copy(team = rival) else it })
+        assertTrue(tied.standings.indexOfFirst { it.team == rival } < tied.standings.indexOfFirst { it.team == me })
+        assertTrue(me < rival) // 「宮」(U+5BAE) は「秋」(U+79CB) より前
+        val table = tied.leagueTable(tied.teamLeagues[me])
+        assertEquals(listOf(me, rival), table.map { it.team }.filter { it == me || it == rival })
+        val rank = table.indexOfFirst { it.team == me } + 1
+        val local = buildFrontPage(tied, raw)
+        assertTrue(local.standing!!.contains("${rank}位"), local.standing)
+        // 全国紙の戦線: 首位が並んだら名前の順で先の球団を首位と書く（ビューの並びでは福島が先）
+        val top = view.standings.first { it.team == "福島ノヴァ" }
+        val topTied = view.copy(standings = view.standings.map { if (it.team == "新潟ブルズ") top.copy(team = "新潟ブルズ") else it })
+        val front = buildNationalPage(topTied, raw, buildFrontPage(topTied, raw)).articles.first { it.kicker == "2部戦線" }
+        assertTrue(front.body.startsWith("首位は${view.teamShort("新潟ブルズ")}（"), front.body)
+    }
+
     /** 回ごとの得点から逆転・先制が分かる */
     @Test
     fun readsTheFlowOfTheGame() {
