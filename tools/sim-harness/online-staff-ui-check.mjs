@@ -9,6 +9,7 @@
 //  - 野手コーチを解任すると空席になり、スタメンと打順の任せ方は「自分で」しか選べない
 //  - 市場から呼ぶと席が埋まる
 //  - 方針・采配の項目の下に「→ 中身（決めた人）」が出る
+//  - 任せ方・方針・采配を変えたまま別のページへ移ると、左メニューに未保存の印が出る
 //  - 他球団を選ぶと、その球団の指導者（CPU球団なら采配の内訳も）が出る
 //  - スマホ（390px）のホームの「指導者」から同じ中身が開く
 // 画面の写しは /tmp/baseball-online-staff-*.png
@@ -63,6 +64,14 @@ try {
   await p.goto(`${base}/online`);
   const nav = p.locator('.online-page-nav');
   const go = (label) => nav.getByRole('button', { name: label, exact: true }).click();
+  // 左メニューの未保存の印（u1 中11）。⚠ 以前はスタメン設定・投手起用にしか出ず、
+  //   任せ方・方針・采配は変えたまま移っても何も出なかった
+  const unsavedMark = (label) =>
+    nav.getByRole('button', { name: label, exact: true }).getByLabel('保存していない変更');
+  const goHome = async () => {
+    await go('ホーム');
+    await nav.locator('.online-nav-home[aria-current="page"]').waitFor();
+  };
   await nav.getByRole('button', { name: '指導者', exact: true }).waitFor();
   await go('指導者');
   const cards = p.locator('.online-staff-grid').first().locator('.online-staff-card');
@@ -89,6 +98,12 @@ try {
   assert.equal(await pressed('投手起用'), '任せる', '押した任せ方が画面に出ない');
   assert.equal(commands.length, sentBefore, '保存を押す前に任せ方を送っている');
   assert.ok(await modesCard.getByText('保存していない変更があります（2件）').isVisible(), '未保存の件数が出ない');
+  // 変えたまま別のページへ移ると、左メニューの「指導者」に印。戻ると下書きはそのまま
+  await goHome();
+  assert.equal(await unsavedMark('指導者').count(), 1, '任せ方を変えたまま移っても左メニューに印が出ない');
+  assert.equal(await unsavedMark('方針・采配').count(), 0, '変えていない方針・采配に印が出る');
+  await go('指導者');
+  await modesCard.getByText('保存していない変更があります（2件）').waitFor();
   // 戻して押し直すと、その分野は変更なしに戻る
   await area('キャンプ').getByRole('button', { name: '意見を聞く', exact: true }).click();
   await area('キャンプ').getByRole('button', { name: '自分で', exact: true }).click();
@@ -98,6 +113,10 @@ try {
   assert.deepEqual(commands.at(-1).payload, { modes: { pitching: 'delegate', camp: 'self' } });
   assert.equal(await pressed('投手起用'), '任せる', '保存した任せ方が出ない');
   assert.ok(await modesCard.getByText('保存済み', { exact: true }).isVisible(), '保存したのに未保存のまま');
+  await goHome();
+  assert.equal(await unsavedMark('指導者').count(), 0, '任せ方を保存したのに印が残る');
+  await go('指導者');
+  await cards.first().waitFor();
 
   // 野手コーチを解任 → 空席・スタメンと打順は「自分で」だけ
   // ⚠ 席は 監督・投手コーチ・野手コーチ の順（どのカードにも「野手コーチと入れ替える」がある）
@@ -131,6 +150,21 @@ try {
   await go('方針・采配');
   await p.locator('.online-staff-actual').first().waitFor();
   assert.ok((await p.locator('.online-staff-actual').count()) > 0, '方針・采配に指導者の中身が出ない');
+  // 方針・采配を変えたまま移ると、左メニューの「方針・采配」に印。取り消すと消える
+  await p
+    .locator('.online-staff-choice')
+    .first()
+    .locator('button[aria-pressed="false"]')
+    .first()
+    .click();
+  await goHome();
+  assert.equal(await unsavedMark('方針・采配').count(), 1, '方針・采配を変えたまま移っても左メニューに印が出ない');
+  await go('方針・采配');
+  await p.getByRole('button', { name: '変更を取り消す', exact: true }).click();
+  await goHome();
+  assert.equal(await unsavedMark('方針・采配').count(), 0, '取り消したのに方針・采配の印が残る');
+  await go('方針・采配');
+  await p.locator('.online-staff-actual').first().waitFor();
   await p.screenshot({ path: '/tmp/baseball-online-staff-tactics.png', fullPage: true });
 
   // スマホ: ホームの「指導者」から

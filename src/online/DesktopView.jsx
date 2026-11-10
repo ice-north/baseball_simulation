@@ -7,13 +7,17 @@ import {
   PendingPackPanel,
 } from './LeaguePanels.jsx';
 import DesktopTactics from './DesktopTactics.jsx';
-import StaffPage from './StaffPage.jsx';
+import StaffPage, { staffModeChanges } from './StaffPage.jsx';
 import AbilityRanking from './AbilityRanking.jsx';
 import CareerStats from './CareerStats.jsx';
 import TeamRoster from './TeamRoster.jsx';
 import LineupBoard from './LineupBoard.jsx';
 import PitchingBoard from './PitchingBoard.jsx';
-import { useDraftMemoryStore } from './Drafts.jsx';
+import {
+  useDraftMemoryStore,
+  useDraftState,
+  STAFF_MODES_DRAFT,
+} from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
@@ -117,6 +121,33 @@ const TITLES = {
  * 左メニューの上の「いまの状況」。⚠ **ここ1か所だけに出す**
  * （以前は全ページの本文の上に同じ帯があった）。
  */
+/**
+ * 方針・采配と指導者（任せ方）の未保存の印。
+ * ⚠ この2つはページの中で下書き（`Drafts` の `lineup.dirty`・`STAFF_MODES_DRAFT`）に
+ *    持っていて、スタメン設定・投手起用のように DesktopView へ知らせが来ない。以前は
+ *    変えたまま別のページへ移っても、左メニューに何も出なかった。
+ * ⚠ 下書きの値はほかの部品が変えても描き直されないので、**ページを移るたびに作り直して
+ *    読む**（呼ぶ側で `key` にいまのページを入れる）。開いているページには出さない
+ *    （開いたまま保存しても消えないため。開いている間はページの見出しが知らせる）
+ */
+const DRAFT_PAGES = new Set(['tactics', 'staff']);
+function DraftUnsavedDot({ id, view }) {
+  const [lineupDirty] = useDraftState('lineup.dirty', false);
+  const [modes] = useDraftState(STAFF_MODES_DRAFT, {});
+  const on =
+    id === 'tactics'
+      ? !!lineupDirty
+      : Object.keys(staffModeChanges(view.staff?.modes, modes)).length > 0;
+  return on ? <UnsavedDot /> : null;
+}
+const UnsavedDot = () => (
+  <span
+    className="online-dot is-unsaved"
+    aria-label="保存していない変更"
+    title="保存していない変更があります"
+  />
+);
+
 function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
   const waiting = packWaiting(view);
   return (
@@ -401,12 +432,9 @@ export default function DesktopView(props) {
                     {counts[id]}
                   </span>
                 )}
-                {unsaved(id) && (
-                  <span
-                    className="online-dot is-unsaved"
-                    aria-label="保存していない変更"
-                    title="保存していない変更があります"
-                  />
+                {unsaved(id) && <UnsavedDot />}
+                {DRAFT_PAGES.has(id) && id !== current && (
+                  <DraftUnsavedDot key={current} id={id} view={view} />
                 )}
               </button>
             ))}
