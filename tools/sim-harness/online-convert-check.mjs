@@ -138,14 +138,26 @@ assert.equal(CONVERT_POSITIONS.length, 9, '守備位置が9つでない');
       `${p.name}（投手）が${e.position}を守っている`,
     );
   }
-  // ⚠ 組み直しの投手起用は**投手登録の選手だけ**。組み直しの打順作りが二刀流の
-  //    登録を守備位置に書き換えると、ここに「野手」が残る（実測で起きた）
-  for (const id of bullpen())
-    assert.equal(
-      find(id)?.position,
-      'pitcher',
-      '投手起用の欄に野手が入っている',
+  // ⚠ 組み直しの投手起用に**ただの野手**が入らないこと。
+  // ⚠ **二刀流の野手は入ってよい**（`lineupGenerator` は「スタミナ100以上」でも
+  //    投手として拾う。セットには二刀流の野手が居る）。
+  //    捕まえたいのは「二刀流の**投手**の登録を、組み直しの打順作りが守備位置へ
+  //    書き換えて、そのまま登板順に残る」こと（実測で起きた）。本職は
+  //    `primaryRole` に残るので、そこで見分ける
+  for (const id of bullpen()) {
+    const p = find(id);
+    assert.ok(p, '投手起用に名簿外の選手が入っている');
+    if (p.position === 'pitcher') continue;
+    assert.ok(
+      p.isTwoWay,
+      `投手起用の欄に野手が入っている: ${p.name}（${p.position}）`,
     );
+    assert.notEqual(
+      p.primaryRole,
+      'pitcher',
+      `二刀流の投手（${p.name}）の登録が${p.position}に書き換わっている`,
+    );
+  }
 }
 
 // --- 受け付けない変更 --------------------------------------------------

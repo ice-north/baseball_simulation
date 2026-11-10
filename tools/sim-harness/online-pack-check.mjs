@@ -31,6 +31,8 @@ import {
   PACK_SIZE,
   PACK_RANKS,
   PACK_MAX_AGE,
+  PACK_AGE_WEIGHTS,
+  YOUNG_PACK_STYLE,
   PACK_SHAPES,
   PACK_RANK_PATTERNS,
   PACK_RANK_SHIFT_V2,
@@ -107,7 +109,10 @@ for (const pack of packs) {
     );
   }
   for (const p of pack.players) {
-    assert.ok(p.age >= 19 && p.age <= PACK_MAX_AGE, `${p.name} の年齢が範囲外: ${p.age}`);
+    assert.ok(
+      p.age >= 19 && p.age <= PACK_AGE_WEIGHTS.at(-1).age,
+      `${p.name} の年齢が範囲外: ${p.age}`,
+    );
     assert.ok(p.name && p.id, '名前かidが空');
     // ⚠ 作るときの印を選手に残さない（名簿に入ると保存に残る）
     assert.equal(p.packGroup, undefined, `${p.name} に作るときの印が残っている`);
@@ -144,8 +149,39 @@ for (const seed of [20261103, 777, 42, 1]) {
   );
 }
 
-// ⚠ **版1（途中参加で前から待っている人）は前の作り方のまま**。種から作り直すので、
-//    作り方が変わると選んだセットの中身が入れ替わる
+// --- 初期セットの年齢の幅 ------------------------------------------------
+// ⚠ **衰える年齢の選手を最初から混ぜること**（いしだ指摘: 2〜3年目から
+//    能力がインフレする）。19〜24歳だけだと開幕時点で全員が伸び盛りで、
+//    リーグ全体が毎年上がるだけになる。
+// ⚠ 版2（19〜24歳）の作り方は**残す**。途中参加で待っている人のセットは
+//    種から作り直すので、作り方が変わると選んだセットの中身が入れ替わる。
+{
+  const ages = packs.flatMap((p) => p.players.map((x) => x.age));
+  const mean = ages.reduce((a, b) => a + b, 0) / ages.length;
+  assert.ok(
+    Math.max(...ages) >= 30,
+    `衰える年齢（30歳以上）の選手が1人も居ない: 最高 ${Math.max(...ages)}歳`,
+  );
+  assert.ok(
+    ages.filter((a) => a >= 27).length / ages.length >= 0.1,
+    `27歳以上が少なすぎる: ${((ages.filter((a) => a >= 27).length / ages.length) * 100).toFixed(1)}%`,
+  );
+  // ⚠ **伸び盛りを薄くしすぎない**。若い選手が育つのがこの遊びの軸
+  assert.ok(
+    ages.filter((a) => a <= 23).length / ages.length >= 0.4,
+    `23歳以下が少なすぎる: ${((ages.filter((a) => a <= 23).length / ages.length) * 100).toFixed(1)}%`,
+  );
+  assert.ok(mean >= 22.5 && mean <= 25, `平均年齢が範囲外: ${mean.toFixed(1)}`);
+  // 版2は19〜24歳のまま
+  const young = generateRosterPacks(20261103, { style: YOUNG_PACK_STYLE });
+  for (const pack of young)
+    for (const p of pack.players)
+      assert.ok(
+        p.age >= 19 && p.age <= PACK_MAX_AGE,
+        `版2の${p.name} の年齢が範囲外: ${p.age}`,
+      );
+}
+
 {
   const legacy = generateRosterPacks(20261103, { style: LEGACY_PACK_STYLE });
   assert.equal(legacy.length, PACK_COUNT);
@@ -162,8 +198,14 @@ for (const seed of [20261103, 777, 42, 1]) {
   assert.notDeepEqual(
     legacy.map((p) => p.players[0].name),
     packs.map((p) => p.players[0].name),
-    '版1と版2が同じセットになっている',
+    '版1と版3が同じセットになっている',
   );
+  for (const pack of legacy)
+    for (const p of pack.players)
+      assert.ok(
+        p.age >= 19 && p.age <= PACK_MAX_AGE,
+        `版1の${p.name} の年齢が範囲外: ${p.age}`,
+      );
   // 待っている人のセットは版で作り分ける
   assert.deepEqual(
     packsForMember({ packSeed: 20261103 }).map((p) => p.players[0].id),
@@ -183,6 +225,7 @@ for (const seed of [20261103, 777, 42, 1]) {
 //    段差の中心をBに置いて、水準そのものを数字で押さえる。
 //    ⚠ 「AがCより上」だけでは**足りない**。流用してもその順序は保たれるので、
 //       この検査は通ってしまう（実測でmutationを見逃した）。水準を見ること。
+const rankPool = { A: [], B: [], C: [] };
 for (const seed of [20261103, 777, 42, 1, 999]) {
   const all = generateRosterPacks(seed).flatMap((p) => p.players);
   const pitchers = all.filter((p) => p.position === 'pitcher');
@@ -200,21 +243,29 @@ for (const seed of [20261103, 777, 42, 1, 999]) {
     bControl >= 47,
     `シード${seed} Bランク投手が弱すぎる（制球 ${bControl.toFixed(1)}）`,
   );
-  // 格の順序（AがBより上、BがCより上）。⚠ **総合で比べる**（制球1つだと、Aの投手が
-  //    10人ほどしか居ない種で入れ替わる。60の種で測って5つ）。二刀流の投手は打撃も
-  //    数えるので外す
+  // 格の順序は**種をまとめて**見る（下）。二刀流の投手は打撃も数えるので外す
   const pure = pitchers.filter((p) => !p.isTwoWay);
-  const byRank = ['A', 'B', 'C'].map((r) =>
-    mean(pure.filter((p) => p.rank === r).map(packPlayerScore)),
-  );
-  assert.ok(
-    byRank[0] > byRank[1] && byRank[1] > byRank[2],
-    `シード${seed} 格の順に強くなっていない: ${byRank.map((v) => v.toFixed(1)).join(' / ')}`,
-  );
+  for (const r of ['A', 'B', 'C'])
+    rankPool[r].push(...pure.filter((p) => p.rank === r).map(packPlayerScore));
   // ⚠ 野手も見る（投手だけ見ると野手側の段差漏れに気づけない）
   const fielders = all.filter((p) => p.position !== 'pitcher');
   const meetB = mean(fielders.filter((p) => p.rank === 'B').map((p) => p.batting.meet));
   assert.ok(meetB >= 43, `シード${seed} Bランク野手が弱すぎる（ミート ${meetB.toFixed(1)}）`);
+}
+// 格の順序（AがBより上、BがCより上）。
+// ⚠ **5つの種をまとめて見る**。Aは1セットに2人しか居らず（種ごとに11〜22人）、
+//    19〜32歳の幅では年齢ぶんの差（`generateAbilities` の `ageBonus` は最大10）が
+//    格の段差（A=+10・B=0）と同じ大きさになる。種ごとに見ると、A が少ない種で
+//    平均が B と入れ替わる（実測: 種777 で A197.6 対 B199.1）。
+// ⚠ 順序だけでは**足りない**（上の水準の検査と組で見る）。格の表を流用しても
+//    順序は保たれるので、水準（制球45.5〜54・B投手47以上）がmutationを捕まえる。
+{
+  const mean = (list) => list.reduce((a, b) => a + b, 0) / list.length;
+  const byRank = ['A', 'B', 'C'].map((r) => mean(rankPool[r]));
+  assert.ok(
+    byRank[0] > byRank[1] && byRank[1] > byRank[2],
+    `格の順に強くなっていない: ${byRank.map((v) => v.toFixed(1)).join(' / ')}（人数 ${['A', 'B', 'C'].map((r) => rankPool[r].length).join('/')}）`,
+  );
 }
 
 // ⚠ 同じシードなら同じ結果（サーバーと再現で違う世界にならない）
@@ -563,5 +614,5 @@ try {
 }
 
 console.log(
-  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 構成と格の型がばらけ、型の決まりを守る / 同じ枠の平均からの開きが3%以内 / 版1は前の作り方のまま / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
+  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 構成と格の型がばらけ、型の決まりを守る / 同じ枠の平均からの開きが3%以内 / 19〜32歳（衰える年齢も混ざる）/ 版1・版2は前の作り方のまま / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
 );

@@ -268,7 +268,11 @@ export function createCandidatePlayer(options) {
   else pitchingForm = 'submarine';
 
   const name = generateRandomPlayerName();
-  const ageWeights = [
+  // トライアウトの候補は19〜25歳。
+  // ⚠ **年齢の配り方は呼ぶ側が差し替えられる**（`options.ageWeights`）。
+  //    初期セットは19〜32歳の幅を使う（`rosterPack.js` の `PACK_AGE_WEIGHTS`）。
+  //    衰える年齢の選手が1人も居ないと、リーグ全体が毎年伸びるだけになる
+  const ageWeights = options.ageWeights || [
     { age: 19, weight: 20 },
     { age: 20, weight: 10 },
     { age: 21, weight: 10 },
@@ -277,7 +281,7 @@ export function createCandidatePlayer(options) {
     { age: 24, weight: 10 },
     { age: 25, weight: 5 },
   ];
-  // ⚠ 年齢の上限も呼ぶ側が絞れる（初期セットは19〜24歳）
+  // ⚠ 年齢の上限も呼ぶ側が絞れる
   const allowed = ageWeights.filter((w) => w.age <= (options.maxAge ?? 25));
   const totalWeight = allowed.reduce((sum, w) => sum + w.weight, 0);
   const roll = Math.random() * totalWeight;

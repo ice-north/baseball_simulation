@@ -35,7 +35,10 @@ import {
   SUB_TRAINING_MENUS,
   subMenuFitsPlayer,
   executeSubTraining,
+  executeCampTraining,
+  TALENT_STAT_MULTIPLIERS,
 } from '../../src/season/campTraining.js';
+import { createSeededRandom } from '../../src/game/rng.js';
 import {
   DIRECTIONS,
   resolveTraining,
@@ -205,6 +208,114 @@ function campWith(build) {
   for (const key of ['physique', 'weight', 'stretch', 'defense_sub', 'long_throw', 'eye'])
     for (const player of [pitcher, catcher, fielder])
       assert.ok(offered(player).includes(key), `${player.position} に ${key} が出ていない`);
+}
+
+// --- 1クールの伸びの大きさ ---------------------------------------------
+// ⚠ **「どの練習でも必ず+1」に戻さないこと**（いしだ指摘: 2〜3年目から能力が
+//    インフレする）。以前は主対象に「最低+1」の保証があり、才能係数も
+//    メニューの係数も高能力の減衰も、すべてそこに押し流されていた。
+//    実測（オンライン12球団・1年）で 走力+2.3・制球+2.5 に対しミート+1.0、
+//    5年でリーグ平均の制球が 49.8→65.7 まで上がっていた。
+// ⚠ ここは**期待値**で見る（1クールの伸びは0か1で、確率的に丸めている）。
+//    乱数を種で固定して、同じ数が出ることを前提にする。
+{
+  const TRIALS = 600;
+  const real = Math.random;
+  /** その練習をこの選手に1クール当てたときの、能力ごとの平均の伸び */
+  const perRound = (menu, build) => {
+    Math.random = createSeededRandom(20261110);
+    const sums = {};
+    try {
+      for (let i = 0; i < TRIALS; i += 1) {
+        const before = build();
+        const after = executeCampTraining(before, menu, null, null, 0, 1.0).player;
+        for (const [key, path] of [
+          ['meet', 'batting.meet'],
+          ['speed', 'physical.speed'],
+          ['arm', 'physical.arm'],
+          ['defense', 'fielding.defense'],
+          ['control', 'pitching.control'],
+        ]) {
+          const get = (p) => path.split('.').reduce((o, k) => o?.[k], p) ?? 0;
+          sums[key] = (sums[key] || 0) + (get(after) - get(before));
+        }
+      }
+    } finally {
+      Math.random = real;
+    }
+    return Object.fromEntries(
+      Object.entries(sums).map(([k, v]) => [k, v / TRIALS]),
+    );
+  };
+  const fielder = (over = {}) => () => ({
+    id: 1, name: '検査野手', age: 21, position: 'left', experience: 100,
+    growthPotential: 1.0,
+    personality: { discipline: 50, mental: 50 },
+    batting: { meet: 45, power: 40, eye: 45, bunt: 30, steal: 30, bats: 'right' },
+    physical: { speed: 45, arm: 45, bodyStamina: 50, recovery: 50, muscle: 50, dexterity: 50 },
+    fielding: { defense: 45 },
+    ...over,
+  });
+  const pitcher = (over = {}) => () => ({
+    id: 2, name: '検査投手', age: 21, position: 'pitcher', experience: 100,
+    growthPotential: 1.0,
+    personality: { discipline: 50, mental: 50 },
+    batting: { meet: 20, power: 20, eye: 20, bunt: 20, steal: 20, bats: 'right' },
+    physical: { speed: 40, arm: 50, bodyStamina: 50, recovery: 50, muscle: 50, dexterity: 50 },
+    fielding: { defense: 40 },
+    pitching: { velocity: 135, control: 45, stamina: 100, spinRate: 50, form: 'threeQuarter', arsenal: [{ id: 1, type: 'straight', level: 50 }] },
+    ...over,
+  });
+
+  const bat = perRound('batting', fielder());
+  const run = perRound('baserunning', fielder());
+  const knock = perRound('fielding', fielder());
+  const pitch = perRound('control', pitcher());
+
+  // ⚠ **1クールで必ず+1にならないこと**。保証が戻ると、ここが1.0に貼り付く
+  for (const [name, value] of [
+    ['打撃練習のミート', bat.meet],
+    ['走塁練習の走力', run.speed],
+    ['投げ込みの制球', pitch.control],
+  ])
+    assert.ok(
+      value < 0.98,
+      `${name}が毎クール必ず伸びている（最低+1の保証が戻っている）: ${value.toFixed(2)}`,
+    );
+
+  // ⚠ **才能依存（足・肩）は、技術（ミート・守備）より伸びにくいこと**
+  assert.ok(
+    run.speed < bat.meet * 0.7,
+    `走力が伸びやすすぎる: 走塁練習${run.speed.toFixed(2)} / 打撃練習のミート${bat.meet.toFixed(2)}`,
+  );
+  assert.ok(
+    knock.arm < knock.defense,
+    `肩力が守備より伸びている: 肩${knock.arm.toFixed(2)} / 守備${knock.defense.toFixed(2)}`,
+  );
+  assert.ok(
+    TALENT_STAT_MULTIPLIERS.speed < 1 && TALENT_STAT_MULTIPLIERS.arm < 1,
+    '才能依存の係数が1以上になっている',
+  );
+
+  // ⚠ **投手の制球だけが積み上がらないこと**。投手は選べるメニューが少なく、
+  //    制球が毎クール選ばれる。1クールの伸びがミートより速いと年々開く
+  assert.ok(
+    pitch.control < bat.meet * 1.5,
+    `制球が打撃より伸びやすい: 制球${pitch.control.toFixed(2)} / ミート${bat.meet.toFixed(2)}`,
+  );
+
+  // ⚠ **伸び切った能力は鈍ること**（高能力の減衰）。しきい値は技術系65
+  const high = perRound('batting', fielder({ batting: { meet: 85, power: 40, eye: 45, bunt: 30, steal: 30, bats: 'right' } }));
+  assert.ok(
+    high.meet < bat.meet * 0.5,
+    `高い能力が鈍っていない: ミート85で${high.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
+  );
+  // ⚠ しきい値より下では**これまでどおり伸びる**こと（打撃を巻き添えにしない）
+  const mid = perRound('batting', fielder({ batting: { meet: 60, power: 40, eye: 45, bunt: 30, steal: 30, bats: 'right' } }));
+  assert.ok(
+    mid.meet > bat.meet * 0.8,
+    `しきい値の下なのに鈍っている: ミート60で${mid.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
+  );
 }
 
 // --- サブ練習の対象が効くか --------------------------------------------
@@ -892,5 +1003,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く）',
+  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る）',
 );

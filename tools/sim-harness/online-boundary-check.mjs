@@ -6,7 +6,13 @@ import {
 } from '../../src/season/seasonManager.js';
 import { schedulePlayoffReplay, PLAYOFF_REPLAY } from '../../server/playoffReplay.mjs';
 import { prepareDailyLineup } from '../../server/dailyLineup.mjs';
-import { validateLineup, ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
+import {
+  validateLineup,
+  ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
+  FIELDER_REST_FATIGUE,
+  FIELDER_FORCE_REST_FATIGUE,
+} from '../../src/online/shared.js';
 const schedule = generatePlayoffSchedule(['A', 'B'], 'short', 2024);
 schedule[0].result = { homeScore: 1, awayScore: 0 };
 schedule[1].result = { homeScore: 1, awayScore: 0 }; // ホームが入れ替わるので1勝1敗
@@ -123,6 +129,67 @@ console.log(
 );
 
 // 打順だけの変更で、翌日の先発が先頭へ巻き戻らないこと。
+// --- 代役の居ない守備位置のレギュラーを、壊れるまで出し続けないこと ---------
+// ⚠ 「守れる控えが居なければ休ませない」だけだと、その守備位置に代役の居ない
+//    レギュラーが**一度も休めない**。実測（オンライン12球団・140日）で二塁手が
+//    疲労193まで積み上がった。控えの二塁適性は最高53で、下限（60）に届かない。
+//    疲労193の打者は1年打てないので、**1日の守備の穴より明らかに悪い**。
+{
+  const make = (fatigue) => {
+    const t = {
+      players: positions.map((position, i) => ({
+        id: i + 1,
+        position,
+        fatigue: position === 'second' ? fatigue : 0,
+        positionFitness: {},
+      })),
+      pitchingRotation: { starters: [99], currentStarterIndex: 0 },
+      lineupSettings: {
+        battingOrder: positions.map((position, i) => ({
+          playerId: i + 1,
+          position,
+          battingOrder: i + 1,
+        })),
+      },
+    };
+    t.players.push({ id: 99, position: 'pitcher', fatigue: 0 });
+    // 控えは1人だけ。二塁は守れない（適性30 < 下限60）
+    t.players.push({
+      id: 50,
+      position: 'catcher',
+      fatigue: 0,
+      positionFitness: { second: 30 },
+    });
+    return t;
+  };
+  const playing = (t) =>
+    t.lineupSettings.battingOrder.find((e) => e.position === 'second').playerId;
+  const second = positions.indexOf('second') + 1;
+
+  // 休養の目安（80）では、守れる控えが居ないので下げない（守備の穴を開けない）
+  const normal = make(FIELDER_REST_FATIGUE + 5);
+  prepareDailyLineup(normal, 'test');
+  assert.equal(
+    playing(normal),
+    second,
+    '守れる控えが居ないのに、ふつうの疲労で守備の穴を開けている',
+  );
+
+  // 壊れる水準（120）を超えたら、適性を問わず下げる
+  const broken = make(FIELDER_FORCE_REST_FATIGUE + 5);
+  prepareDailyLineup(broken, 'test');
+  assert.notEqual(
+    playing(broken),
+    second,
+    `疲労${FIELDER_FORCE_REST_FATIGUE + 5}でも下げていない（一度も休めないレギュラーができる）`,
+  );
+
+  // ⚠ 戻すこと（その日だけの入れ替え）
+  const restore = make(FIELDER_FORCE_REST_FATIGUE + 5);
+  prepareDailyLineup(restore, 'test')();
+  assert.equal(playing(restore), second, '無理に下げたあと打順を戻していない');
+}
+
 const { saveLineup } = await import('../../server/lineupCommand.mjs');
 for (const p of team.players.filter((p) => p.position === 'pitcher'))
   p.pitching = {};

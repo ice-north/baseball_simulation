@@ -6,6 +6,8 @@
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor, dexterityMult, dexterityShift } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
+// ⚠ **確率的丸め**。年次成長（`growthSystem`）と同じものを使う（二重に書かない）
+import { stochasticRound } from './growthSystem.js';
 
 /**
  * 覚えられる変化球（直球は除く）。
@@ -63,6 +65,23 @@ const CATEGORY_TO_STAFF_ABILITY = {
  * 練習メニュー定義
  * 各練習メニューは特定の能力値を成長させる
  */
+/**
+ * 才能依存の能力は、練習だけでは伸びにくい。
+ *
+ * ⚠ **係数と最低保証の両方に効かせること**。以前は伸び幅にだけ掛けていたが、
+ *    主対象には「1クール最低+1」の保証があり、掛け算の結果が0に丸まっても
+ *    必ず+1入っていた。走塁練習を4クール当てれば走力は必ず+4で、
+ *    才能係数0.6は**一度も効いていなかった**（実測: 走力は1年+2.3で、
+ *    打撃系の中で最大）。保証のほうもこの率で引くこと。
+ * ⚠ 体力・スタミナ・体幹（やれば伸びるもの）はここに入れない。
+ */
+export const TALENT_STAT_MULTIPLIERS = {
+  arm: 0.3,       // 肩力: 生まれ持った体格に依存
+  speed: 0.4,     // 走力: 先天的な筋繊維に依存
+  power: 0.8,     // パワー: 体幹トレーニングで伸びる余地あり
+  velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
+};
+
 export const TRAINING_MENUS = {
   batting: {
     name: '打撃練習',
@@ -98,7 +117,15 @@ export const TRAINING_MENUS = {
     icon: '🎯',
     description: '制球力を強化し、スタミナも向上（投手向け）',
     targets: ['control', 'stamina'],
-    growthMultipliers: { stamina: 0.5 },
+    // ⚠ 制球は**1.0ではなく0.45**。投手は選べるメニューが少なく（投げ込み・
+    //    球速練習・新球種）、制球が毎クール選ばれ続ける。野手がミート・走塁・
+    //    ノックに散るぶん、制球だけが積み上がっていた
+    //    （実測: 1年で制球+2.5 対 ミート+1.05、5年でリーグ平均が
+    //    制球 49.8→65.7 対 ミート 45.9→51.9）。
+    // ⚠ **ミートと同じ速さになるところまで下げる**。0.7では 制球1.1 対
+    //    ミート0.6 でまだ倍近く、投手有利が年々開いていた
+    // ⚠ スタミナは据え置き（やれば伸びるもの）
+    growthMultipliers: { control: 0.45, stamina: 0.5 },
     category: 'pitching'
   },
   velocity: {
@@ -1131,12 +1158,6 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     }
 
     // 才能依存の能力は練習だけでは伸びにくい（グローバル補正）
-    const TALENT_STAT_MULTIPLIERS = {
-      arm: 0.5,       // 肩力: 生まれ持った体格に依存
-      speed: 0.6,     // 走力: 先天的な筋繊維に依存
-      power: 0.8,     // パワー: 体幹トレーニングで伸びる余地あり
-      velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
-    };
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
 
     // 体幹/器用さによる成長方向の補正（0.5〜1.5倍）
@@ -1163,7 +1184,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // という反転が**既存の減衰カーブだけで**成立する（新しい係数を作らない）。
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
+      baseGrowth = stochasticRound((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
         * talentMult * aptitudeFactor * physiqueMult * disciplineMult
         * campPotMult * coachingMult * moodMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
       isAwakening = false;
@@ -1174,7 +1195,13 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
       const physFitMult = isPhysical ? fitnessMult : 1.0;
       const battCoachMult = targetStat === 'control' ? batteryMult : 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * moodMult * physFitMult * battCoachMult * stopAgeGate);
+      // ⚠ **`Math.round` ではなく確率的丸め**。1クールの伸びは係数を全部
+      //    掛けると 0.3〜0.9 にしかならず、`Math.round` では 0.5 を境に
+      //    「必ず+1」か「必ず0」に潰れていた。才能係数（走力0.4・肩0.3）も
+      //    メニューの係数（制球0.7）も、0.5をまたがない限り**一度も効かない**。
+      //    端数の確率で切り上げれば期待値がそのまま残り、係数が素直に効く
+      //    （年次成長の `growthSystem` が同じ理由で先に入れている）
+      baseGrowth = stochasticRound((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * moodMult * physFitMult * battCoachMult * stopAgeGate);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値 × プロ意識の相乗効果）
       // discipline < 30: 努力しない選手は飛躍しない（係数0）
@@ -1210,37 +1237,45 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         formAdjustedGrowth = Math.round(formAdjustedGrowth * getVelocityCatchupMult(armVal, currentValue));
       }
 
-      // 高能力値の成長減衰（覚醒分は減衰しない）
-      let adjustedBaseGrowth = formAdjustedGrowth;
+      // 高能力値の成長減衰（覚醒分は減衰しない）。
+      // ⚠ **減衰率は最低保証にも使う**（下の `guaranteeRate`）。伸び幅だけ
+      //    減衰させても、主対象には「最低+1」があるので、能力が上限近くでも
+      //    毎クール+1入り続けた。伸び切った能力が止まらない元
+      let dampFactor = 1.0;
       if (targetStat === 'velocity') {
         // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）
-        if (currentValue >= 155) {
-          const overAmount = currentValue - 155;
-          const dampFactor = Math.max(0.1, 1.0 - overAmount * 0.2);
-          adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
-        }
+        if (currentValue >= 155)
+          dampFactor = Math.max(0.1, 1.0 - (currentValue - 155) * 0.2);
       } else if (isPhysical) {
         // フィジカル系(speed/arm/stamina/bodyStamina/recovery): 能力値80以上で成長減衰（超過1ごとに3%減衰）
-        if (currentValue >= 80) {
-          const overAmount = currentValue - 80;
-          const dampFactor = Math.max(0.1, 1.0 - overAmount * 0.03);
-          adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
-        }
+        // ⚠ しきい値は据え置き。体力・スタミナは「やれば伸びる」もので、
+        //    足・肩は `TALENT_STAT_MULTIPLIERS` の側で抑える
+        if (currentValue >= 80)
+          dampFactor = Math.max(0.1, 1.0 - (currentValue - 80) * 0.03);
       } else {
-        // 技術系(meet/power/eye/control/defense/steal): 能力値75以上で成長減衰
+        // 技術系(meet/power/eye/control/defense/steal): 能力値**65**以上で成長減衰
         // 超過1ごとに4%減衰、下限15%
-        if (currentValue >= 75) {
-          const overAmount = currentValue - 75;
-          const dampFactor = Math.max(0.15, 1.0 - overAmount * 0.04);
-          adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
-        }
+        // ⚠ 以前は75。制球が47→66（5年）まで素通りで伸び、打撃（45〜52）だけが
+        //    置いていかれて、年を追うごとに打てない試合になっていた。
+        //    65にすると、伸び切った能力（＝いまは制球）だけが鈍り、
+        //    打撃はしきい値のずっと下なので**これまでどおり伸びる**
+        if (currentValue >= 65)
+          dampFactor = Math.max(0.15, 1.0 - (currentValue - 65) * 0.04);
       }
+      const adjustedBaseGrowth =
+        dampFactor < 1.0
+          ? Math.max(0, Math.round(baseGrowth * dampFactor))
+          : formAdjustedGrowth;
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
-      // 主対象能力（targets[0]）は最低+1を保証（投手が打撃練習、野手が球速練習でも必ず効果が出る）
-      if (targetIdx === 0 && totalGrowth < 1 && !menu.intensive) totalGrowth = 1;
+      // ⚠ **主対象の「最低+1」は置かない**。確率的丸めにする前は
+      //    「掛け算の結果が0に丸まっても+1」で埋めていたが、そのせいで
+      //    1クールの伸びが**どの能力も常に+1**になり、才能係数もメニューの
+      //    係数も減衰も、すべてここに押し流されていた（実測: 走力・制球が
+      //    打撃系の2〜3倍の速さで伸び続けた）。端数を確率で拾うので、
+      //    期待値は保たれる＝練習が構造的に無駄になることはない。
+      // ⚠ スタミナ・体力だけは最低+1を残す（やれば伸びるもの。いしだ方針）
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
-      if (targetStat === 'defense' && totalGrowth < 1) totalGrowth = 1;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : 100;
       const newValue = Math.min(maxValue, currentValue + totalGrowth);
