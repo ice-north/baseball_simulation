@@ -223,14 +223,23 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                   const isReleased = userReleased.includes(player.id);
                   const batting = player.seasonStats?.batting || {};
                   const pitching = player.seasonStats?.pitching || {};
-                  const games = isPitcher ? (pitching.games || 0) : (batting.games || 0);
+                  // ⚠ 野手登録で投げた選手（二刀流）は投手成績も出す。以前は位置だけで
+                  //    打撃か投手かを決めていたので、投手としてだけ出た二刀流の選手は
+                  //    打撃の「-」しか見えなかった
+                  const pitchedAsFielder = !isPitcher && ((pitching.inningsPitched || 0) > 0 || (pitching.games || 0) > 0);
+                  const showPitching = isPitcher || pitchedAsFielder || !!player.isTwoWay;
+                  const games = isPitcher ? (pitching.games || 0)
+                    : pitchedAsFielder ? Math.max(batting.games || 0, pitching.games || 0)
+                    : (batting.games || 0);
                   const avg = batting.atBats > 0 ? (batting.hits / batting.atBats).toFixed(3) : '-';
                   const era = pitching.inningsPitched > 0
                     ? ((pitching.earnedRuns || 0) / (pitching.inningsPitched / 3) * 9).toFixed(2)
                     : '-';
-                  const statsStr = isPitcher
-                    ? `${pitching.wins || 0}勝${pitching.losses || 0}敗 ERA${era}`
-                    : `${avg} ${batting.homeruns || 0}HR ${batting.rbis || 0}打点`;
+                  const pitchStr = `${pitching.wins || 0}勝${pitching.losses || 0}敗 ERA${era}`;
+                  const batStr = `${avg} ${batting.homeruns || 0}HR ${batting.rbis || 0}打点`;
+                  const statsStr = isPitcher ? pitchStr
+                    : pitchedAsFielder ? ((batting.atBats || 0) > 0 ? `${batStr} / ${pitchStr}` : pitchStr)
+                    : batStr;
 
                   return (
                     <tr
@@ -273,10 +282,10 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                       <td className="py-1 px-1 text-xs text-center"><AbilityValue value={player.pitching?.velocity || 0} isVel /></td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
                       <td className="py-1 px-1 text-xs text-center"><AbilityValue value={player.pitching?.stamina || 0} isSta /></td>
-                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.spinRate ?? 0)}`}>{isPitcher ? (player.pitching?.spinRate ?? '-') : '-'}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.spinRate ?? 0)}`}>{showPitching ? (player.pitching?.spinRate ?? '-') : '-'}</td>
                       <td className="py-1 px-1 text-xs text-center whitespace-nowrap">
                         {(() => {
-                          if (!isPitcher) return <span className="text-gray-400">-</span>;
+                          if (!showPitching) return <span className="text-gray-400">-</span>;
                           const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
                           if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
                           return arsenal.map((a, i) => (
@@ -285,7 +294,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                         })()}
                       </td>
                       <td className={`py-1 px-1 text-xs text-center font-bold ${getRankColor(getAbilityRank(fielderOverall(player)))}`}>{isPitcher ? '-' : fielderOverall(player)}</td>
-                      <td className={`py-1 px-1 text-xs text-center font-bold ${getRankColor(getAbilityRank(pitcherOverall(player)))}`}>{isPitcher ? pitcherOverall(player) : '-'}</td>
+                      <td className={`py-1 px-1 text-xs text-center font-bold ${getRankColor(getAbilityRank(pitcherOverall(player)))}`}>{showPitching ? pitcherOverall(player) : '-'}</td>
                       <td className="py-1 px-1 text-xs text-center text-gray-300">{games}</td>
                       <td className="py-1 px-1 text-xs text-gray-300 whitespace-nowrap">{statsStr}</td>
                     </tr>
