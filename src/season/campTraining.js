@@ -291,7 +291,7 @@ export const SUB_TRAINING_MENUS = {
   newpitch: {
     name: '新球種習得',
     icon: '✨',
-    description: '新球種習得に挑戦（成功率12%・器用さとフォーム適性で上昇、ランダム球種）',
+    description: '新球種習得に挑戦（成功率12%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）',
     targets: ['newpitch'],
   },
   spin_analysis: {

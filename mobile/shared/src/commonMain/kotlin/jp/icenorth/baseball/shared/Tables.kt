@@ -28,7 +28,7 @@ val CAMP_SUB_MENUS: List<Menu> = listOf(
     Menu("eye", "選球眼練習", "👁️", "選球眼を強化（+0〜2）", only = null),
     Menu("clead_study", "Cリード学習", "🧠", "キャッチャーリード向上（リード+1~3）", only = "catcher"),
     Menu("breaking", "変化球練習", "🌀", "変化球レベルを強化（1球種を選んで集中練習も可）", only = "pitcher"),
-    Menu("newpitch", "新球種習得", "✨", "新球種習得に挑戦（成功率12%・器用さとフォーム適性で上昇、ランダム球種）", only = "pitcher"),
+    Menu("newpitch", "新球種習得", "✨", "新球種習得に挑戦（成功率12%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）", only = "pitcher"),
     Menu("spin_analysis", "スピン解析", "🎥", "高速カメラで回転を分析・スピン+1〜3（器用さ係数）、変化球Lv向上、制球微増（投手のみ）", only = "pitcher"),
     Menu("subposition", "サブポジ練習", "🔀", "指定ポジションの守備練習（適正大幅UP・器用さで伸びが変わる）", only = null),
 )

@@ -214,7 +214,7 @@ private fun Fit(fit: TeamFit) {
     )
 }
 
-/** 甲子園で名を上げた人（「2025年夏の甲子園 ○○高のエース（ベスト4）」。サーバーが付ける） */
+/** 甲子園で名を上げた人（「2年目の夏の甲子園 ○○高のエース（ベスト4）」。サーバーが付ける。`koshienNoteOf`） */
 @Composable
 private fun Koshien(p: JsonObject) {
     val note = p.at("koshien").str() ?: return

@@ -160,7 +160,7 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
     }
 }
 
-/** 試合の進行（毎正時）や重い保存は数十秒かかることがある。Web 版は 290 秒まで待つ */
+/** 試合の進行（45分ごと）や重い保存は数十秒かかることがある。Web 版は 290 秒まで待つ */
 fun defaultHttpClient(): HttpClient = createPlatformHttpClient {
     install(HttpTimeout) {
         requestTimeoutMillis = 290_000

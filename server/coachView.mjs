@@ -232,7 +232,7 @@ export function coachCard(league, coach, labelOf, { full = true, roster = null }
 /**
  * 采配の1行の文。
  * - 指導者が変えた: 「送りバント: AI判断 → 積極的（山田監督）」
- * - 指導者も標準のまま: 「代打を使い始める回: 既存AIの判断（山田監督も標準）」
+ * - 指導者も標準のまま: 「代打を使い始める回: AI判断（山田監督も標準）」
  * - 指導者が決めない（人が決めた・任せていない）: 「送りバント: しない」
  */
 function tacticText({ setting, ...line }) {

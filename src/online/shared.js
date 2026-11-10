@@ -418,7 +418,8 @@ export const CAMP_SUB_TARGETS = {
  *
  * ⚠ 対象を選ぶものは `CAMP_SUB_TARGETS` に載せ、画面が対象の欄を出す。
  *    載せずに入れると、中で勝手に選ばれる。
- * ⚠ 変化球練習は対象を選ばない（持っている変化球へ自動で振り分け）。
+ * ⚠ 変化球練習は対象を選べる（磨きたい持ち球。`CAMP_SUB_TARGETS` の ownPitch）。選ばなければ
+ *    持っている変化球へ自動で振り分ける。
  */
 export const CAMP_SUB_MENUS = [
   'physique',
@@ -465,7 +466,7 @@ export const CAMP_ROUNDS = 4;
  * 版のずれ（`code: 'revision'`）だけなら、最新の版で1回だけ送り直す命令。
  *
  * ⚠ **PC・スマホ（`OnlineApp.jsx`）とアプリ（`OnlineApi.kt`、`gen-tables.mjs` で写す）が
- *    ここを読む**。別々に書いていたので、アプリだけ `campRound` が抜けて、毎正時の進行や
+ *    ここを読む**。別々に書いていたので、アプリだけ `campRound` が抜けて、45分ごとの進行や
  *    他の参加者の操作のあとにクールを実行すると「他の操作で更新されました」で止まっていた。
  * ⚠ 足してよいのは、版とは別に本当の食い違いを確かめている命令だけ。編成と提出は
  *    `baseLineup` / `baseSubmission`、キャンプはクール番号（同じクールは2回走らない）。
