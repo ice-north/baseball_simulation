@@ -149,6 +149,22 @@ try {
         }),
       'キャンプの表が横に溢れている',
     );
+    // ⚠ 表のセルから開いた選手の詳細が、セルの「折り返さない」を受け継がないこと。
+    //    小窓をセルの中に描いていて、説明がはみ出していた（`dialogPortal.js`）
+    await page.locator('.online-camp tbody th button').first().click();
+    const detail = page.getByRole('dialog');
+    await detail.waitFor();
+    assert.deepEqual(
+      await detail.evaluate((node) => ({
+        inCell: !!node.closest('td, th'),
+        wrap: getComputedStyle(node).whiteSpace,
+      })),
+      { inCell: false, wrap: 'normal' },
+      'キャンプの表から開いた選手の詳細がセルの指定を受け継いでいる',
+    );
+    await detail
+      .getByRole('button', { name: '選手成績を閉じる', exact: true })
+      .click();
     // ⚠ **決め方を変えても収まること**。「全員同じ方針」は設定が3つに増え、
     //    伸びの目安も出るので、ここだけ縦が伸びる（実測で1050pxになっていた）
     const mode = (name) =>

@@ -53,13 +53,21 @@ try {
       action = url.searchParams.get('action');
     let data;
     if (action === 'config') data = { local: true };
-    else if (action === 'view')
+    else if (action === 'view') {
       data = projectLeague(
         { league, sessions: { a: 'fixture' } },
         'a',
         'fixture',
         'a',
       );
+      // ⚠ この fixture は記録（`records`）だけで、今季の結果（`season.results`）が空。
+      //    試合結果のカードから小窓を開く検査のため、記録の試合をカードにも並べる
+      if (!data.results.length)
+        data.results = projectGames({ league }, 'a', {
+          year: data.year,
+          scope: 'league',
+        }).games;
+    }
     else if (action === 'game')
       data = projectGameInfo(
         { league },
@@ -123,6 +131,36 @@ try {
     'PCは主要12項目を一覧表示',
   );
   await page.getByRole('button', { name: '試合結果', exact: true }).click();
+  // ⚠ **試合結果のカードから開いても崩れない**。小窓をカード（`.online-score`）の
+  //    中に描いていて、カードの3列の grid が観戦リプレイの中まで当たり、左右の
+  //    メンバー表が 16px に潰れていた
+  await page
+    .locator('.online-score')
+    .getByRole('button', { name: /の試合成績$/ })
+    .first()
+    .click();
+  const cardBox = page.getByRole('dialog', { name: '試合成績', exact: true });
+  await cardBox
+    .getByRole('button', { name: '観戦リプレイ', exact: true })
+    .click();
+  await cardBox
+    .getByRole('region', { name: '観戦リプレイ', exact: true })
+    .waitFor();
+  assert.equal(
+    await cardBox.evaluate((node) => !!node.closest('.online-score')),
+    false,
+    '試合の小窓はカードの外（`.online` の直下）に描く',
+  );
+  const teamWidths = await cardBox
+    .locator('.online-replay-team')
+    .evaluateAll((list) => list.map((n) => n.getBoundingClientRect().width));
+  assert.ok(
+    teamWidths.length === 2 && teamWidths.every((w) => w > 150),
+    `カードから開いた観戦リプレイの左右のメンバー表が潰れない: ${teamWidths}`,
+  );
+  await cardBox
+    .getByRole('button', { name: '試合成績を閉じる', exact: true })
+    .click();
   await page
     .getByRole('button', { name: '過去の試合・個人成績', exact: true })
     .click();

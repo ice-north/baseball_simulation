@@ -5,6 +5,7 @@ import { useActions } from './ActionContext.jsx';
 import { PageNav } from './PageNav.jsx';
 import PlayerDetailBody, { PlayerTags } from './PlayerDetailBody.jsx';
 import { useRead } from './useRead.js';
+import { inOnlineRoot } from './dialogPortal.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
@@ -387,7 +388,9 @@ function Detail({ player, close }) {
     dialog.current.close();
     close();
   };
-  return (
+  // ⚠ 表のセル（キャンプの表など）の中から開くので、`.online` の直下へ出す
+  //    （`dialogPortal.js`）。セルの `white-space: nowrap` が説明まで当たっていた
+  return inOnlineRoot(
     <dialog
       ref={dialog}
       className="online-player-dialog"
@@ -467,7 +470,7 @@ function Detail({ player, close }) {
           )}
         </section>
       )}
-    </dialog>
+    </dialog>,
   );
 }
 export function PlayerStatsButton({

@@ -89,13 +89,21 @@ try {
         action = url.searchParams.get('action');
       let data;
       if (action === 'config') data = { local: true };
-      else if (action === 'view')
+      else if (action === 'view') {
         data = projectLeague(
           { league, sessions: { a: 'fixture' } },
           'a',
           'fixture',
           'a',
         );
+        // ⚠ この fixture は記録（`records`）だけで、今季の結果（`season.results`）が空。
+        //    試合のカードから小窓を開く検査のため、記録の試合をカードにも並べる
+        if (!data.results.length)
+          data.results = projectGames({ league }, 'a', {
+            year: data.year,
+            scope: 'league',
+          }).games;
+      }
       else if (action === 'game')
         data = projectGameInfo(
           { league },
@@ -280,6 +288,38 @@ try {
       .click();
     await page.getByRole('button', { name: 'ホーム', exact: true }).click();
     await page.getByRole('button', { name: '試合', exact: true }).click();
+    // ⚠ **試合のカードから開いた試合経過も1列に並ぶ**。小窓をカード（`.online-score`）の
+    //    中に描いていて、カードの3列の grid がプレーの一覧まで当たり、ボタンが
+    //    3列に散っていた
+    await page
+      .locator('.online-score')
+      .getByRole('button', { name: /の試合成績$/ })
+      .first()
+      .click();
+    const cardBox = page.getByRole('dialog', { name: '試合成績', exact: true });
+    await cardBox.getByRole('button', { name: '試合経過', exact: true }).click();
+    const cardProgress = cardBox.getByRole('region', {
+      name: '試合経過',
+      exact: true,
+    });
+    await cardProgress.waitFor();
+    const playRows = await cardProgress
+      .getByRole('listitem')
+      .getByRole('button')
+      .evaluateAll((list) =>
+        list.map((n) => {
+          const r = n.getBoundingClientRect();
+          const box = n.closest('.online-mobile-play-list').getBoundingClientRect();
+          return [Math.round(r.left - box.left), Math.round(box.width - r.width)];
+        }),
+      );
+    assert.ok(
+      playRows.length > 1 && playRows.every(([x, rest]) => x === 0 && rest <= 2),
+      `${width}px 試合のカードから開いた試合経過も1列: ${JSON.stringify(playRows)}`,
+    );
+    await cardBox
+      .getByRole('button', { name: '試合成績を閉じる', exact: true })
+      .click();
     await page
       .getByRole('button', { name: '過去の試合・個人成績', exact: true })
       .click();

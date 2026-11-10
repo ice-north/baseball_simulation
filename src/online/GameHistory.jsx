@@ -7,6 +7,7 @@ import { PageNav } from './PageNav.jsx';
 import { turnLabel } from './shared.js';
 import { formatStat } from './statsView.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
+import { inOnlineRoot } from './dialogPortal.js';
 const GROUPS = {
   batting: [
     [
@@ -108,7 +109,9 @@ function Panel({ title, close, children, wide = false, mobileReplay = false }) {
     ref.current.close();
     close();
   };
-  return (
+  // ⚠ 試合結果のカード（`.online-score`）の中から開くので、`.online` の直下へ出す
+  //    （`dialogPortal.js`）。カードの grid が観戦リプレイの中まで当たっていた
+  return inOnlineRoot(
     <dialog
       ref={ref}
       className={`online-player-dialog online-game-dialog ${wide ? 'online-replay-dialog' : ''} ${mobileReplay ? 'online-mobile-replay-dialog' : ''}`}
@@ -130,7 +133,7 @@ function Panel({ title, close, children, wide = false, mobileReplay = false }) {
         )}
       </header>
       {children}
-    </dialog>
+    </dialog>,
   );
 }
 function RequestState({ result }) {

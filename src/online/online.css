@@ -138,14 +138,20 @@
   font-weight: 650;
   color: var(--ink-sub);
 }
-.online-card .online-eyebrow {
+.online-card .online-eyebrow,
+.online-player-dialog .online-eyebrow {
   color: var(--accent);
 }
 .online-muted {
   font-size: 13px;
   color: var(--ink-sub);
 }
-.online-card .online-muted {
+/* ⚠ 小窓（`.online-player-dialog`）もカードと同じ濃い面なので、明るい色にする。
+   地色用の `--ink-sub` のままだと濃い面に濃い文字で読めない（名前を変える小窓の説明）。
+   選手の詳細・試合の小窓は `.online` の直下に出す（`dialogPortal.js`）ので、
+   カードの中で開いていたときに当たっていた指定をここで当て直す */
+.online-card .online-muted,
+.online-player-dialog .online-muted {
   color: #d0d9e5;
 }
 .online-dev {
@@ -2020,7 +2026,9 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 12px;
 }
 .online-mobile.online-compact-shell .online-card td,
-.online-mobile.online-compact-shell .online-card th {
+.online-mobile.online-compact-shell .online-card th,
+.online-mobile.online-compact-shell .online-player-dialog td,
+.online-mobile.online-compact-shell .online-player-dialog th {
   padding: 7px 4px;
 }
 
@@ -2703,10 +2711,12 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-desktop main:not(:where(.online-sp *)) {
   padding: 20px 24px 48px;
 }
-.online-desktop .online-card h2 {
+.online-desktop .online-card h2,
+.online-desktop .online-player-dialog h2 {
   margin-bottom: 10px;
 }
-.online-desktop .online-card h3 {
+.online-desktop .online-card h3,
+.online-desktop .online-player-dialog h3 {
   font-size: 14px;
   margin: 14px 0 8px;
 }
