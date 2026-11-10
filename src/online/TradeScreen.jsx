@@ -847,6 +847,8 @@ function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }
   const [countering, setCountering] = useState(false);
   // 「この内容で成立させる」の確認を開いているか
   const [accepting, setAccepting] = useState(false);
+  // 「断る」の確認を開いているか（スマホだけ。下の注）
+  const [rejecting, setRejecting] = useState(false);
   const partner = trade.mine ? trade.toTeam : trade.fromTeam;
   // ⚠ **自分から見た向きに直すこと**。`trade.offer` はいつも「提案した側
   //    （`fromTeam`）が出す選手」なので、提案を受けた側から見ると相手の選手
@@ -873,6 +875,7 @@ function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }
       );
     });
     setAccepting(false);
+    setRejecting(false);
     onResult?.(outcome.ok ? { ok: true, text } : { ok: false, text: outcome.error });
     return outcome;
   };
@@ -933,7 +936,23 @@ function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }
           onBack={() => setAccepting(false)}
         />
       )}
-      {trade.myTurn && !countering && !(accepting && !(stale || problems.length > 0)) && (
+      {/* ⚠ **スマホでは「断る」にも確認を挟む**（アプリと同じ）。指の届く所に「成立させる」と
+          並んでいて押し違えやすく、断った提案は消えて戻せない。PCはそのまま（表の下で押し違えにくい） */}
+      {mobile && rejecting && (
+        <div className="online-trade-confirm" role="group" aria-label="断る前の確認">
+          <p className="online-trade-confirm-head">提案を断りますか？</p>
+          <p>この提案は消えます。</p>
+          <div className="online-actions">
+            <button disabled={busy} onClick={() => respond('reject')}>
+              断る
+            </button>
+            <button type="button" disabled={busy} onClick={() => setRejecting(false)}>
+              戻る
+            </button>
+          </div>
+        </div>
+      )}
+      {trade.myTurn && !countering && !rejecting && !(accepting && !(stale || problems.length > 0)) && (
         <div className="online-actions">
           <button
             className="online-primary"
@@ -949,7 +968,10 @@ function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }
               逆提案する
             </button>
           )}
-          <button disabled={busy} onClick={() => respond('reject')}>
+          <button
+            disabled={busy}
+            onClick={() => (mobile ? setRejecting(true) : respond('reject'))}
+          >
             断る
           </button>
         </div>

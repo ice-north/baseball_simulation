@@ -567,8 +567,18 @@ try {
         !rosterOf(afterAccept, teamA).some((p) => p.id === keepOut.id),
       'スマホで受けたのに選手が入れ替わっていない',
     );
-    // 断る
+    // 断る: スマホでは確認を挟む（押し違えやすく、断った提案は戻せない。アプリと同じ）
     await inCard.getByRole('button', { name: '断る', exact: true }).click();
+    const rejectConfirm = inCard.getByRole('group', { name: '断る前の確認' });
+    await rejectConfirm.waitFor();
+    assert.ok(
+      (await live()).trades.some((t) => t.offer[0] === takeIn.id),
+      '確認の前に断っている',
+    );
+    await rejectConfirm.getByRole('button', { name: '戻る', exact: true }).click();
+    await rejectConfirm.waitFor({ state: 'detached' });
+    await inCard.getByRole('button', { name: '断る', exact: true }).click();
+    await rejectConfirm.getByRole('button', { name: '断る', exact: true }).click();
     await m
       .locator('.online-trade-result')
       .filter({ hasText: 'からの提案を断りました' })
@@ -582,7 +592,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける（確認つき）・断る）',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき））',
   );
 } finally {
   await browser.close();
