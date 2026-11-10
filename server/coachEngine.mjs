@@ -21,7 +21,6 @@
 import { hashSeed, withSeededRandom } from '../src/game/rng.js';
 import {
   COACH_ROLES,
-  ROLE_LABELS,
   createCoaches,
   MARKET_MIN,
   newCoach,
@@ -676,4 +675,3 @@ export function fillVacancies(league) {
   return events;
 }
 
-export { ROLE_LABELS };
