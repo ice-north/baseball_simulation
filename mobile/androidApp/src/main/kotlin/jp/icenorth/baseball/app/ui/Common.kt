@@ -63,7 +63,10 @@ private val DeadlineFormat = DateTimeFormatter.ofPattern("M/d(E) H:mm", Locale.J
 
 /** 締め切りなどの日時（日本時間） */
 fun formatDeadline(iso: String?): String? =
-    iso?.let { runCatching { DeadlineFormat.format(Instant.parse(it).atZone(Tokyo)) }.getOrNull() }
+    iso?.let { runCatching { formatDateTime(Instant.parse(it).toEpochMilli()) }.getOrNull() }
+
+/** 日時（日本時間。「11/12(木) 0:00」）。締め切りと同じ書き方 */
+fun formatDateTime(epochMillis: Long): String = DeadlineFormat.format(Instant.ofEpochMilli(epochMillis).atZone(Tokyo))
 
 /**
  * 保存・提出などの間、画面全体を塞ぐ。

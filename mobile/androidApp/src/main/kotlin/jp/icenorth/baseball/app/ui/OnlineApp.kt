@@ -24,6 +24,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -175,7 +176,10 @@ fun OnlineApp(model: AppViewModel) {
                     }
                     Column(if (showProcedure || notice != null) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier) {
                     when (tab) {
-                        Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
+                        // ⚠ 手続き中は「次の進行まで」を「停止中」ではなく「手続きの決定待ち」にする（Web 版 nextAdvanceText と同じ）
+                        Tab.Home -> CompositionLocalProvider(LocalAwaitingDecision provides (view?.phase != null)) {
+                            HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
+                        }
                         Tab.Games -> GamesScreen(model)
                         Tab.Players -> PlayersScreen(model)
                         Tab.Plan -> PlanScreen(model)

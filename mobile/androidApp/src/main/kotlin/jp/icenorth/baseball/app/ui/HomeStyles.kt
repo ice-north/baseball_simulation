@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,7 +61,7 @@ fun HomePage(
     }
 }
 
-/** 次の進行（毎正時）までの残り秒。1秒ごとに数え直す。止まっていれば null */
+/** 次の進行までの残り秒。1秒ごとに数え直す。止まっている・手続き中なら null */
 @Composable
 fun secondsUntil(iso: String?): Long? {
     val at = remember(iso) { iso?.let { runCatching { Instant.parse(it) }.getOrNull() } } ?: return null
@@ -74,9 +75,27 @@ fun secondsUntil(iso: String?): Long? {
     return ((at.toEpochMilli() - now) / 1000).coerceAtLeast(0)
 }
 
-fun countdownText(left: Long?): String = when (left) {
-    null -> "停止中"
-    0L -> "進行中…"
+/**
+ * 手続きの決定を待っているか（`view.phase` がある）。⚠ 「次の進行まで」は残り秒しか受け取らないので、
+ * 手続き中かどうかは画面の上（[OnlineApp]）から渡す。
+ */
+val LocalAwaitingDecision = staticCompositionLocalOf { false }
+
+/** 「次の進行まで」に出す文（Web 版 api.js の nextAdvanceText と同じ決まり） */
+@Composable
+fun countdownText(left: Long?): String = countdownText(left, LocalAwaitingDecision.current, System.currentTimeMillis())
+
+/**
+ * ⚠ **時刻が無い理由まで書く**。手続き中は進行の時刻を持たない（決定で動く）ので、以前は手続き中も
+ *    「停止中」と出て、止まっているのか自分の決定を待っているのか読めなかった。
+ * ⚠ 60分を超えたら残りではなく**日時**で出す。キャンプのあとの開幕までなどは「5432:10」のような
+ *    数千分の数え下げになって読めなかった。
+ */
+fun countdownText(left: Long?, awaitingDecision: Boolean, now: Long): String = when {
+    left == null -> if (awaitingDecision) "手続きの決定待ち" else "停止中"
+    left == 0L -> "進行中…"
+    // 残り秒は切り捨てなので、分に丸めて元の時刻に戻す（0:00 ちょうどが 23:59 に見えない）
+    left > 60 * 60 -> formatDateTime((now + left * 1000 + 30_000) / 60_000 * 60_000)
     else -> "%d:%02d".format(left / 60, left % 60)
 }
 
