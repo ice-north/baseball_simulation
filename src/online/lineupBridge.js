@@ -8,10 +8,12 @@
 // ⚠ 読み書きの形は**サーバーの `projectLineup` / `validateLineup` が正本**。
 //    どちらかを変えたら、ここも検査も一緒に直すこと。
 // ⚠ オンラインは DH 無し固定（`leagueEngine` の `useDH: false`、
-//    `validateLineup` も野手8人ちょうど）。DH を入れるなら3箇所を揃えて直す。
+//    `validateLineup` も野手8人ちょうど）。DH を入れるなら3箇所を揃えて直す
+//    （画面の9番・投手の行も: PCの `LineupBoard.jsx`、スマホの `TapLineup.jsx`）。
 // ============================================================
 
 import { placeholderPitcherId } from '../game/lineup.js';
+import { sameEditState } from './shared.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -119,6 +121,28 @@ export function rebaseLineupSave(plan, base, latest, ownKeys) {
   return { ...payload, baseLineup: clone(from) };
 }
 
+/**
+ * 編集が2つに分かれている画面の保存（スマホの「打順」: 2タップの打順と方針・采配の下書き）。
+ * `parts` は `[{ keys, plan, base }]`（それぞれの受け持ち項目・編集・編集を始めたときの起点）。
+ * 起点の決め方は `rebaseLineupSave` と同じ。どれも自分の項目が他で変わっていなければ
+ * 最新に載せ、変わっていたらその編集の起点のまま送って弾かせる（本当の食い違い）。
+ */
+export function rebaseLineupParts(parts, latest) {
+  const conflicted = parts.find(
+    ({ keys, base }) =>
+      !latest || !keys.every((k) => sameValue(base?.[k], latest[k])),
+  );
+  const from = conflicted ? conflicted.base || {} : latest;
+  const payload = clone(from || {});
+  parts.forEach(({ keys, plan }) =>
+    keys.forEach((k) => {
+      if (plan[k] === undefined) delete payload[k];
+      else payload[k] = plan[k];
+    }),
+  );
+  return { ...payload, baseLineup: clone(from || {}) };
+}
+
 /** 打順・先発・投手の役割。方針・采配（PC）が「自分の項目ではない」と見分けるのに使う */
 export const LINEUP_EDITOR_KEYS = ['battingOrder', 'starters', 'pitcherRoles'];
 /**
@@ -136,6 +160,21 @@ export const TACTICS_EDITOR_KEYS = ['strategy', 'tactics'];
 export function hasUnsavedFullLineup(editing) {
   return (
     !!editing && JSON.stringify(planFromTeam(editing.team)) !== editing.basePlan
+  );
+}
+
+/**
+ * 保存していない編集が**打順のほか**（先発・投手の役割・方針）にも及んでいるか。
+ * ⚠ スマホの打順・守備は2タップの表（`TapLineup.jsx`）で編集し、全画面の編成は
+ *    投手起用のために開く。PCから受け取った編集が打順だけなら表が引き取り、
+ *    ほかにも及んでいれば全画面の編成を開いたまま始める（表では投手起用を持てない）
+ */
+export function fullLineupTouchesPitching(editing) {
+  if (!hasUnsavedFullLineup(editing)) return false;
+  const now = planFromTeam(editing.team);
+  const before = JSON.parse(editing.basePlan);
+  return Object.keys({ ...now, ...before }).some(
+    (k) => k !== 'battingOrder' && !sameEditState(now[k], before[k]),
   );
 }
 

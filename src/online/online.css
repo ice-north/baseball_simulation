@@ -4547,3 +4547,382 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-mobile .online-tryout .online-tryout-grid h3 small {
   word-break: keep-all;
 }
+
+/* === スマホの編成（2タップ） ================================================
+   `TapLineup.jsx`（スマホの「打順」）。先発9人と控えを縦1列に並べ、1回目に押したもので
+   「何を入れ替えるか」（名前＝打順、守備位置の札＝守備）、2回目に押した相手で「誰と」を決める。
+   ⚠ 320〜767px で横にはみ出さないこと・数字を1字ずつ折り返さないこと。2行目の項目は
+      丸ごと次の行へ送り（`white-space: nowrap` の塊）、名前は1行で切る。
+   ⚠ 押す的は44px（守備位置の札・名前の行）。行のどこを押しても行を押したことになる。
+   ⚠ ボタンは `.online button`（0,1,1）に負けないよう `.online` を前に付けて書く。
+      押した後に `:hover` が残る端末で色が変わらないよう、hover も書き直す。
+   ⚠ 保存の帯は本文の下に `sticky` で貼り付ける（下の「← ⌂ ☰」の上）。`fixed` と違い、
+      いちばん下まで送ると本文の後ろに収まるので、最後の行が帯に隠れない */
+.online-tap {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.online-tap-help:not(:where(.online-sp *)) {
+  margin: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-tap-notes {
+  padding: 6px 10px;
+  border: 1px solid #b4530999;
+  border-radius: 10px;
+  background: #78350f40;
+  font-size: 12px;
+}
+.online-tap-notes strong {
+  display: block;
+  color: #fde68a;
+}
+.online-tap-notes ul {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.online-tap-notes li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-wrap: balance;
+}
+.online .online-tap-modes {
+  margin: 0;
+  gap: 6px;
+}
+.online .online-tap-modes button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 4px;
+  font-size: 13px;
+}
+.online-tap-fields {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.online-tap-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* 1行目: 打順・守備位置の札・名前・疲労。2行目: 適性（札の下）・能力／成績／守備適性 */
+.online-tap-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px 44px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'order pos name fatigue'
+    'order line2 line2 line2';
+  align-items: center;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border: 1px solid #4f6984;
+  border-radius: 10px;
+  background: #ffffff0a;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.online-tap-order {
+  grid-area: order;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+}
+.online-tap-pos {
+  grid-area: pos;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #22d3ee66;
+  border-radius: 8px;
+  background: #0e7490;
+  color: #e0f2fe;
+  font-size: 16px;
+  font-weight: 800;
+}
+.online button.online-tap-pos,
+.online button.online-tap-pos:hover:enabled {
+  min-height: 44px;
+  padding: 0;
+  border-color: #22d3ee66;
+  background: #0e7490;
+  color: #e0f2fe;
+}
+.online button.online-tap-pos.is-selected,
+.online button.online-tap-pos.is-selected:hover:enabled {
+  border-color: #ecfeff;
+  background: var(--accent);
+  color: #06232b;
+  box-shadow: 0 0 0 3px #22d3ee66;
+}
+.online-tap-pos.is-bench {
+  border-color: #64748b;
+  background: transparent;
+  color: #cbd5e1;
+}
+.online-tap-pos.is-fixed {
+  border-color: transparent;
+  background: #ffffff14;
+  color: #cbd5e1;
+}
+.online-tap-pos.is-note {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.online-tap-fit {
+  flex: 0 0 44px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+.online-tap-fit small {
+  margin-right: 1px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 400;
+}
+.online-tap-fit.is-low {
+  color: #f87171;
+}
+.online-tap-fit.is-good {
+  color: #86efac;
+}
+.online .online-tap-main,
+.online .online-tap-main:hover:enabled {
+  grid-area: name;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  white-space: normal;
+}
+.online-tap-row.is-pitcher .online-tap-main {
+  grid-area: name;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+}
+.online-tap-line1 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-weight: 600;
+}
+.online-tap-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-tap-line1.online-fatigue-warn .online-tap-name {
+  color: #facc15;
+}
+.online-tap-line1.online-fatigue-heavy .online-tap-name {
+  color: #f87171;
+  font-weight: 700;
+}
+.online-tap-fatigue {
+  grid-area: fatigue;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #cbd5e1;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.online-tap-fatigue.is-tired {
+  background: #facc1526;
+  color: #fde68a;
+}
+.online-tap-fatigue.is-rest {
+  background: #f8717133;
+  color: #fecaca;
+  font-weight: 700;
+}
+.online-tap-line2 {
+  grid-area: line2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 5px;
+  min-width: 0;
+  font-size: 12px;
+}
+.online-tap-cell {
+  white-space: nowrap;
+}
+.online-tap-cell small {
+  margin-right: 2px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+.online-tap-cell.is-low {
+  color: #f87171;
+}
+.online-tap-sep {
+  align-self: center;
+  width: 1px;
+  height: 12px;
+  background: #64748b;
+}
+.online-tap-missing {
+  color: #fca5a5;
+}
+/* 選んでいる行は、枠・地の色・右上の「選択中」の札の3つで示す（色だけに頼らない） */
+.online-tap-row.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.online-tap-row.is-picking {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+.online-tap-row.is-fit {
+  box-shadow: inset 4px 0 0 #4ade80;
+}
+.online-tap-row.is-unfit {
+  opacity: 0.6;
+}
+.online-tap-row.is-pitcher {
+  border-style: dashed;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: default;
+}
+.online-tap-row.is-pitcher .online-tap-line2 {
+  display: block;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.online-tap-picked {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #06232b;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+}
+.online-tap-bench {
+  display: grid;
+  gap: 6px;
+}
+.online .online-tap-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+.online .online-tap-group button {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.online-tap-bar {
+  position: sticky;
+  /* ⚠ 0 のままでよい。貼り付く位置は本文（`main`）の下の余白の内側で、余白は下の
+     「← ⌂ ☰」（`.online-mobile-controls`）の高さぶん取ってある */
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  gap: 6px;
+  margin: 0 -12px;
+  padding: 8px 12px;
+  border-top: 1px solid #63778f;
+  background: var(--surface-1);
+}
+.online-tap-warning:not(:where(.online-sp *)) {
+  margin: 0;
+  color: #fecaca;
+  font-size: 12px;
+}
+.online-tap-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.online-tap-status > p:not(:where(.online-sp *)) {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+.online-tap-status strong {
+  display: block;
+  color: #67e8f9;
+}
+.online-tap-status small {
+  display: block;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.online-tap-status-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+.online .online-tap-status-actions button,
+.online .online-tap-status-actions button.online-player-name {
+  padding: 6px 10px;
+  border: 1px solid var(--online-btn-border, #5b7188);
+  background: var(--online-btn-bg, var(--surface-1));
+  font-size: 12px;
+  text-decoration: none;
+}
+.online-tap-actions {
+  display: flex;
+  gap: 6px;
+}
+.online .online-tap-actions button {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+}
+/* 横向き（幅に余裕がある）なら、知らせと操作を1段に並べて帯を低くする */
+@media (min-width: 560px) {
+  .online-tap-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .online-tap-warning:not(:where(.online-sp *)) {
+    grid-column: 1 / -1;
+  }
+}
+/* 帯は本文の後ろに収まるので、固定の操作の帯（旧カード）のための下の余白は要らない */
+.online.online-compact-shell:has(.online-tap-bar) main {
+  padding-bottom: calc(48px + env(safe-area-inset-bottom));
+}

@@ -93,6 +93,7 @@ const SEPARATE = [
   'online-trade-ui-check', // check:online:trade-ui（dist を開く。サーバー不要）
   'online-replay-ui-check',
   'online-mobile-gameplay-ui-check',
+  'online-mobile-lineup-ui-check', // check:online:mobile-lineup-ui（dist を開く。サーバー不要）
   'online-label-ui-check',
   'online-join-ui-check', // check:online:join-ui（dist を開く。サーバー不要）
   'online-staff-ui-check', // check:online:staff-ui（dist を開く。サーバー不要）

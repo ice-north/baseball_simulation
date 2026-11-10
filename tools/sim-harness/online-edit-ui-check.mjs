@@ -391,20 +391,22 @@ try {
     battingOrder: i + 1,
   }));
   await click(lineupDraft.page, '更新');
-  // ⚠ 打順の未保存案を残すのは**スマホの「打順」カード**。PCのスタメン設定は
-  //    一人用の画面で、未保存の編集はページを移っても残す（隠すだけ）が、
-  //    再読み込みまでは持ち越さない（online-ui-check で見る）
+  // ⚠ 打順の未保存案を再読み込みまで残すのは**スマホの「打順」**（2タップの表。
+  //    `TapLineup.jsx` の下書き `lineup.order`）。PCのスタメン設定は、未保存の編集を
+  //    ページを移っても残す（隠すだけ）が、再読み込みまでは持ち越さない（online-ui-check で見る）
   await lineupDraft.page.setViewportSize({ width: 390, height: 844 });
-  const leadoff = async () =>
-    (
-      await lineupDraft.page
-        .locator('.online-lineup')
-        .first()
-        .getByRole('button', { name: /の選手情報を見る$/ })
-        .getAttribute('aria-label')
-    ).replace('の選手情報を見る', '');
+  const leadoff = () =>
+    lineupDraft.page
+      .locator('ol[aria-label="スタメン"] > li[data-slot="1"] .online-tap-name')
+      .innerText();
+  const tapName = (slot) =>
+    lineupDraft.page
+      .locator(`ol[aria-label="スタメン"] > li[data-slot="${slot}"] button.online-tap-main`)
+      .click();
   await click(lineupDraft.page, '打順');
-  await click(lineupDraft.page, '2番を上げる');
+  // 2番を選んで1番を押す（打順の入れ替え）
+  await tapName(2);
+  await tapName(1);
   await click(lineupDraft.page, 'ホーム');
   await click(lineupDraft.page, '打順');
   assert.equal(await leadoff(), '打者2', '画面移動でも打順の編集を保持');
@@ -420,7 +422,7 @@ try {
     '打者2',
     '編成もホーム移動・表示切替・再読込を通して保持',
   );
-  await click(lineupDraft.page, '編集を戻す');
+  await click(lineupDraft.page, '変更を取り消す');
   assert.equal(await leadoff(), '打者1');
   await lineupDraft.context.close();
 

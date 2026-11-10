@@ -1,6 +1,10 @@
 import { LeagueTopics } from './Chronicle.jsx';
 import React, { useEffect, useRef, useState } from 'react';
-import { useDraftMemoryPeek } from './Drafts.jsx';
+import {
+  useDraftMemoryPeek,
+  useDraftState,
+  LINEUP_ORDER_DRAFT,
+} from './Drafts.jsx';
 import {
   Standings,
   Results,
@@ -11,7 +15,8 @@ import {
   packStartText,
 } from './LeaguePanels.jsx';
 import TeamRoster from './TeamRoster.jsx';
-import OnlineLineup, { hasUnsavedFullLineup } from './OnlineLineup.jsx';
+import OnlineLineup from './OnlineLineup.jsx';
+import { fullLineupTouchesPitching } from './lineupBridge.js';
 import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatTurn } from './shared.js';
 import { nextAdvanceText, STATUS } from './api.js';
@@ -28,9 +33,15 @@ export default function MobileView(props) {
   const [playersFrom, setPlayersFrom] = useState('today');
   const [menuOpen, setMenuOpen] = useState(false);
   // ⚠ 全画面の編成に保存していない編集が残っていれば開いたまま始める。
-  //    スマホを回すとPC用の画面と入れ替わって作り直され、以前は編集が消えていた
-  const unsavedFull = hasUnsavedFullLineup(useDraftMemoryPeek('lineup.full'));
+  //    スマホを回すとPC用の画面と入れ替わって作り直され、以前は編集が消えていた。
+  //    ⚠ 打順だけの編集なら開かない（「打順」の2タップの表が引き取る。`TapLineup.jsx`）
+  const unsavedFull = fullLineupTouchesPitching(
+    useDraftMemoryPeek('lineup.full'),
+  );
   const [fullLineup, setFullLineup] = useState(unsavedFull);
+  // 全画面の編成で保存したら、2タップの表の下書きを捨てる（打順の編集も一緒に保存したので。
+  // 残すと、保存した後に古い打順の編集が戻ってくる）
+  const [, setOrderDraft] = useDraftState(LINEUP_ORDER_DRAFT, null);
   const tabs = [
     ['today', '今日'],
     ['games', '試合'],
@@ -167,7 +178,10 @@ export default function MobileView(props) {
                 const result = await props.run(() =>
                   props.command('lineup', { ...plan, baseLineup }),
                 );
-                if (result?.ok) setFullLineup(false);
+                if (result?.ok) {
+                  setOrderDraft(null);
+                  setFullLineup(false);
+                }
                 return result;
               }}
             />

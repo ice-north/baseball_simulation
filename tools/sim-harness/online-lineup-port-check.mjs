@@ -22,9 +22,25 @@ import {
   teamFromView,
   planFromTeam,
   rebaseLineupSave,
+  rebaseLineupParts,
+  fullLineupFromBoards,
+  fullLineupTouchesPitching,
   LINEUP_EDITOR_KEYS,
+  LINEUP_BOARD_KEYS,
   TACTICS_EDITOR_KEYS,
 } from '../../src/online/lineupBridge.js';
+import {
+  buildTapDraft,
+  startTapDraft,
+  commitTap,
+  undoTap,
+  tapValue,
+  tapDirty,
+  tapPlan,
+  tapLineup,
+  restoreFromTapDraft,
+} from '../../src/online/tapLineup.js';
+import { benchFielders } from '../../src/online/lineupEdit.js';
 import { generateOptimalLineup } from '../../src/game/lineupGenerator.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 
@@ -250,6 +266,136 @@ try {
     assert.deepEqual(dropped.baseLineup, afterLineup, '起点が最新の塊になっていない');
   }
 
+  // --- スマホの打順（2タップの表 `TapLineup.jsx`）------------------------
+  // ⚠ 押し方はPCのスタメン設定のクリックと同じ（名前どうし＝打順、守備位置の札から＝守備、
+  //    名前と控え＝交代）。どの操作の後も**そのまま保存できる形**（`validateLineup` を通る）こと。
+  // ⚠ 保存は方針・采配の下書きとまとめて送る（`rebaseLineupParts`）。それぞれ自分の項目
+  //    だけを最新に載せるので、PCや別の端末で保存したほかの項目を古い値に戻さない
+  {
+    const latestRevision = async () => (await store.read()).league.revision;
+    const start = await service.view('admin', sessionId);
+    let draft = buildTapDraft(start);
+    const pressSeq = (...targets) => {
+      let selection = null;
+      let order = tapValue(draft);
+      for (const target of targets) {
+        const result = tapLineup(order, selection, target);
+        ({ order, selection } = result);
+      }
+      assert.equal(selection, null, '2回押したのに選んだまま');
+      draft = commitTap(draft, order);
+      assert.doesNotThrow(
+        () =>
+          validateLineup(league.game.teams[teamName], {
+            ...start.lineup,
+            ...tapPlan(draft),
+          }),
+        '2タップの入れ替えの後に保存できない形になった',
+      );
+      return order;
+    };
+    const before = tapValue(draft);
+    // 名前 → 名前: 打順を入れ替える（守備位置は選手に付いたまま）
+    let order = pressSeq({ kind: 'row', index: 0 }, { kind: 'row', index: 2 });
+    assert.deepEqual(order[0], before[2]);
+    assert.deepEqual(order[2], before[0]);
+    // 守備位置の札 → 名前: 守備位置を入れ替える（打順はそのまま）
+    order = pressSeq({ kind: 'pos', index: 0 }, { kind: 'row', index: 1 });
+    assert.equal(order[0].playerId, before[2].playerId, '守備の入れ替えで打順が動いた');
+    assert.equal(order[0].position, before[1].position, '守備位置が入れ替わっていない');
+    // 名前 → 控え: 交代（打順と守備位置を引き継ぐ）
+    const reserve = benchFielders(start.roster, order)[0];
+    order = pressSeq({ kind: 'row', index: 3 }, { kind: 'bench', playerId: reserve.id });
+    assert.equal(order[3].playerId, reserve.id, '控えと交代していない');
+    assert.equal(order[3].position, before[3].position, '交代で守備位置が変わった');
+    // 守備位置の札 → 札: 守備位置を入れ替える
+    order = pressSeq({ kind: 'pos', index: 4 }, { kind: 'pos', index: 5 });
+    assert.equal(order[4].position, before[5].position, '札どうしで守備位置が入れ替わっていない');
+    // 同じものをもう一度押すと選ぶのをやめる。それ以外の組み合わせは押したものを選び直す（PCと同じ）
+    assert.equal(tapLineup(order, { kind: 'row', index: 1 }, { kind: 'row', index: 1 }).selection, null);
+    assert.deepEqual(
+      tapLineup(order, { kind: 'row', index: 1 }, { kind: 'pos', index: 1 }).selection,
+      { kind: 'pos', index: 1 },
+    );
+    const reselect = tapLineup(order, { kind: 'row', index: 1 }, { kind: 'pos', index: 4 });
+    assert.deepEqual(reselect.selection, { kind: 'pos', index: 4 }, '名前の次に札を押して選び直さない');
+    assert.equal(reselect.order, order, '名前の次に札を押して入れ替わった');
+    assert.deepEqual(
+      tapLineup(order, { kind: 'pos', index: 1 }, { kind: 'bench', playerId: benchFielders(start.roster, order)[0].id }).selection,
+      { kind: 'bench', playerId: benchFielders(start.roster, order)[0].id },
+      '札の次に控えを押して選び直さない',
+    );
+    // 元に戻すは1手ずつ
+    assert.equal(draft.stack.length, 5);
+    assert.deepEqual(tapValue(undoTap(draft)), draft.stack[3]);
+    // PCの画面へ渡す形（`lineup.full`）から始めても同じ編集になる。打順だけなら全画面の編成は開かない
+    const kept = fullLineupFromBoards(start, [
+      { keys: LINEUP_BOARD_KEYS, plan: tapPlan(draft), baseLineup: draft.baseLineup },
+    ]);
+    assert.equal(fullLineupTouchesPitching(kept), false, '打順だけの編集で全画面の編成を開く');
+    assert.deepEqual(tapValue(startTapDraft(start, null, kept)), order, '受け取った編集が違う');
+    assert.deepEqual(
+      startTapDraft(start, { ...draft, dirty: true }, kept),
+      draft,
+      '同じ編集なら下書き（元に戻すの履歴つき）のまま使わない',
+    );
+    assert.deepEqual(restoreFromTapDraft(draft).lineup.battingOrder, tapPlan(draft).battingOrder);
+    const pitching = fullLineupFromBoards(start, [
+      {
+        keys: ['starters'],
+        plan: { starters: [...start.lineup.starters].reverse() },
+        baseLineup: start.lineup,
+      },
+    ]);
+    assert.equal(fullLineupTouchesPitching(pitching), true, '投手起用の編集を表が引き取ってしまう');
+    // ① 方針・采配を別の画面で保存したあとでも、打順の保存は弾かれず、方針も残る
+    const tacticsBase = start.lineup;
+    await run(
+      'lineup',
+      await latestRevision(),
+      rebaseLineupSave(
+        { strategy: { ...tacticsBase.strategy, batting: 'aggressive' }, tactics: tacticsBase.tactics },
+        tacticsBase,
+        tacticsBase,
+        TACTICS_EDITOR_KEYS,
+      ),
+    );
+    const afterTactics = (await service.view('admin', sessionId)).lineup;
+    assert.ok(tapDirty(draft));
+    await run(
+      'lineup',
+      await latestRevision(),
+      rebaseLineupParts(
+        [{ keys: LINEUP_BOARD_KEYS, plan: tapPlan(draft), base: draft.baseLineup }],
+        afterTactics,
+      ),
+    );
+    const saved = (await service.view('admin', sessionId)).lineup;
+    assert.deepEqual(
+      saved.battingOrder.map((e) => [e.playerId, e.position]),
+      order.map((e) => [e.playerId, e.position]),
+      'スマホの打順が保存されていない',
+    );
+    assert.equal(saved.strategy.batting, 'aggressive', '打順の保存で方針を古い値に戻した');
+    // ② 打順と方針をまとめて送る。打順が他で変わっていたら本当の食い違いとして弾く
+    const stale = commitTap(buildTapDraft(start), [...before].reverse());
+    await assert.rejects(
+      run(
+        'lineup',
+        await latestRevision(),
+        rebaseLineupParts(
+          [
+            { keys: LINEUP_BOARD_KEYS, plan: tapPlan(stale), base: stale.baseLineup },
+            { keys: TACTICS_EDITOR_KEYS, plan: saved, base: saved },
+          ],
+          saved,
+        ),
+      ),
+      /編成がほかの画面で更新されています/,
+      '打順が他で変わっていたのに上書きできてしまう',
+    );
+  }
+
   // --- TEAMS_DATA を引かずに自動編成できるか -------------------------
   // ⚠ オンラインの球団は `TEAMS_DATA` に居ない。`generateOptimalLineup` が
   //    名前で引く作りのままだと、「自動」を押しても**黙って何も起きない**
@@ -273,5 +419,5 @@ try {
 }
 
 console.log(
-  '■ 編成画面の移植: OK（投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / TEAMS_DATA 無しで自動編成）',
+  '■ 編成画面の移植: OK（投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / スマホの2タップの入れ替えが保存できる形のまま・方針と別々に保存しても消さない / TEAMS_DATA 無しで自動編成）',
 );

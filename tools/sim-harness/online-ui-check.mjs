@@ -587,8 +587,12 @@ try {
   await lineupTab.close();
   await login(m, 1);
   await m.getByRole('button', { name: '打順', exact: true }).click();
-  await m.getByRole('button', { name: '2番を上げる', exact: true }).click();
-  await click(m, '編成を保存');
+  // スマホの打順は2回のタップで入れ替える表（`TapLineup.jsx`）。2番を選んで1番を押す
+  const mobileSlot = (n) =>
+    m.locator(`ol[aria-label="スタメン"] > li[data-slot="${n}"] button.online-tap-main`);
+  await mobileSlot(2).click();
+  await mobileSlot(1).click();
+  await click(m, '保存');
   assert.equal(
     await m.locator('.online-lineup-board, .online-page-nav').count(),
     0,
@@ -605,7 +609,7 @@ try {
     fullPage: true,
   });
   const saveBox = await m
-    .getByRole('button', { name: '編成を保存', exact: true })
+    .getByRole('button', { name: '保存', exact: true })
     .boundingBox();
   assert.ok(
     saveBox.y >= 0 && saveBox.y + saveBox.height <= 844 - 48,

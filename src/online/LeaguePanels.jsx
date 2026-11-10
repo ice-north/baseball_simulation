@@ -2,6 +2,12 @@ import React, { useContext, useEffect, useState } from 'react';
 import SeasonFlow from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import MobileTactics from './MobileTactics.jsx';
+import TapLineup, { useTapLineup } from './TapLineup.jsx';
+import {
+  rebaseLineupParts,
+  LINEUP_BOARD_KEYS,
+  TACTICS_EDITOR_KEYS,
+} from './lineupBridge.js';
 import { roleFor } from './tactics.js';
 import { useDraftState, phaseDraftName } from './Drafts.jsx';
 import GameHistory, { GameRecordButton } from './GameHistory.jsx';
@@ -19,7 +25,7 @@ import {
   sameEditState,
   ROSTER_LIMIT,
 } from './shared.js';
-import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
+import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
@@ -1110,11 +1116,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   );
 }
 /**
- * スマホ版の「打順」カード（打順の入れ替え＋采配の入口）。
+ * スマホ版の「打順」カード（打順・守備・控えの2タップの表＋采配の入口）。
  *
  * ⚠ **スマホ専用**。PCの打順・先発・投手の役割はスタメン設定・投手起用（PC専用の表）、
  *    方針と自動采配は `DesktopTactics` で決める。以前はPCもここを使っていて、
  *    同じものがコンボボックス版と一人用の画面の移植の2通りで編集できていた。
+ * ⚠ 打順の編集は2タップの表（`TapLineup.jsx`）、方針・采配は下書き（`lineup.plan`。
+ *    PCの「方針・采配」と同じ入れ物）。保存は**まとめて1回**送る（どちらの「保存」でも
+ *    両方を送る）。それぞれ自分の項目だけを最新の編成に載せる（`rebaseLineupParts`）ので、
+ *    PCや別の端末で保存されたほかの項目を古い値に戻さない。
  */
 export function LineupPanel({
   view,
@@ -1131,19 +1141,37 @@ export function LineupPanel({
   const [baseLineup, setBaseLineup] = useDraftState('lineup.base', () =>
     structuredClone(view.lineup),
   );
+  const tap = useTapLineup(view);
   const [showTactics, setShowTactics] = useState(false);
-  const [tacticsError, setTacticsError] = useState('');
+  const [saveError, setSaveError] = useState('');
   const save = () =>
     run(async () => {
-      setTacticsError('');
+      setSaveError('');
       try {
-        await command('lineup', { ...plan, baseLineup });
+        const parts = [];
+        if (tap.dirty)
+          parts.push({
+            keys: LINEUP_BOARD_KEYS,
+            plan: tap.plan,
+            base: tap.baseLineup,
+          });
+        if (dirty)
+          parts.push({ keys: TACTICS_EDITOR_KEYS, plan, base: baseLineup });
+        await command('lineup', rebaseLineupParts(parts, view.lineup));
         setDirty(false);
+        if (tap.dirty) tap.markSaved();
       } catch (error) {
-        setTacticsError(error.message);
+        setSaveError(error.message);
         throw error;
       }
     });
+  const discard = () => {
+    tap.discard();
+    setPlan(structuredClone(view.lineup));
+    setBaseLineup(structuredClone(view.lineup));
+    setDirty(false);
+    setSaveError('');
+  };
   useEffect(() => {
     if (!dirty) {
       setPlan(structuredClone(view.lineup));
@@ -1168,16 +1196,6 @@ export function LineupPanel({
     setPlan(next);
     setDirty(true);
   };
-  const move = (i, delta) => {
-    const entries = [...plan.battingOrder].sort(
-      (a, b) => a.battingOrder - b.battingOrder,
-    );
-    [entries[i], entries[i + delta]] = [entries[i + delta], entries[i]];
-    change({
-      ...plan,
-      battingOrder: entries.map((e, j) => ({ ...e, battingOrder: j + 1 })),
-    });
-  };
   return (
     <section className="online-card online-lineup-card" hidden={hidden}>
       <div className="online-card-heading">
@@ -1195,67 +1213,24 @@ export function LineupPanel({
           </button>
         )}
       </div>
-      <fieldset className="online-form-fields" disabled={busy}>
-        {[...plan.battingOrder]
-          .sort((a, b) => a.battingOrder - b.battingOrder)
-          .map((entry, i) => (
-            <div className="online-lineup" key={entry.battingOrder}>
-              <b>{entry.battingOrder}</b>
-              <span>{POS[entry.position]}</span>
-              <span>
-                <ConditionMark
-                  player={view.roster.find((p) => p.id === entry.playerId) || {}}
-                />
-                <PlayerStatsButton
-                  player={view.roster.find((p) => p.id === entry.playerId)}
-                  panel="abilities"
-                />
-              </span>
-              <button
-                aria-label={`${entry.battingOrder}番を上げる`}
-                disabled={busy || i === 0}
-                onClick={() => move(i, -1)}
-              >
-                ↑
-              </button>
-              <button
-                aria-label={`${entry.battingOrder}番を下げる`}
-                disabled={busy || i === 7}
-                onClick={() => move(i, 1)}
-              >
-                ↓
-              </button>
-            </div>
-          ))}
-
-        <div className="online-actions">
-          <button
-            className="online-primary"
-            disabled={busy || !dirty}
-            onClick={save}
-          >
-            編成を保存
-          </button>
-          <button
-            disabled={busy || !dirty}
-            onClick={() => {
-              setPlan(structuredClone(view.lineup));
-              setDirty(false);
-            }}
-          >
-            編集を戻す
-          </button>
-        </div>
-      </fieldset>
+      <TapLineup
+        view={view}
+        tap={tap}
+        busy={busy}
+        otherDirty={dirty}
+        saveError={saveError}
+        onSave={save}
+        onDiscard={discard}
+      />
       {showTactics && (
         <MobileTactics
           view={view}
           plan={plan}
           change={change}
           busy={busy}
-          dirty={dirty}
+          dirty={dirty || tap.dirty}
           save={save}
-          error={tacticsError}
+          error={saveError}
           close={() => setShowTactics(false)}
         />
       )}

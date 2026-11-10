@@ -17,6 +17,7 @@ import {
   useDraftMemoryStore,
   useDraftState,
   STAFF_MODES_DRAFT,
+  LINEUP_ORDER_DRAFT,
 } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
@@ -38,6 +39,7 @@ import {
   restoreFromFullLineup,
   fullLineupFromBoards,
 } from './lineupBridge.js';
+import { restoreFromTapDraft } from './tapLineup.js';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -304,9 +306,16 @@ export default function DesktopView(props) {
   //    スマホを横にするとこの画面に切り替わる。受け取ったら両方のページを作っておき、
   //    未保存の印をすぐに出す
   const memory = useDraftMemoryStore();
-  const [restore] = useState(() =>
-    restoreFromFullLineup(memory?.get('lineup.full')),
+  // ⚠ スマホの「打順」（2タップの表）の下書きは**PCが引き取って消す**。残すと、PCで保存・
+  //    取り消したあとスマホに戻したときに古い編集が戻ってくる。受け取りはふだん `lineup.full`
+  //    から（表が写している）。再読み込みのあとで `lineup.full` が空なら下書きから受け取る
+  const [orderDraft, setOrderDraft] = useDraftState(LINEUP_ORDER_DRAFT, null);
+  const [restore] = useState(
+    () =>
+      restoreFromFullLineup(memory?.get('lineup.full')) ||
+      restoreFromTapDraft(orderDraft),
   );
+  useEffect(() => setOrderDraft(null), [setOrderDraft]);
   const [opened, setOpened] = useState(() => ({
     lineup: !!restore || current === 'lineup',
     rotation: !!restore || current === 'rotation',
