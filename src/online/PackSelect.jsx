@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
+import { useMobile } from './useMobile.js';
 
 // ============================================================
 // 初期メンバーの選択。20セットから1つ選ぶ。
@@ -108,7 +109,23 @@ const GROUPS = [
   ['outfield', '外'],
 ];
 
+/**
+ * 名簿の表の列の見出し（PC・スマホ）。
+ * ⚠ スマホ（320px〜）では1字にする（トレードの表と同じ書き方。押さえると title で全部）。
+ *    「ミート」のままだと10列が幅に入らず、見出しが「ミ／ー／ト」と1字ずつ縦に割れていた
+ */
+const COLUMNS = [
+  ['位置', '位'],
+  ['ミート', 'ミ'],
+  ['パワー', 'パ'],
+  ['走力', '走'],
+  ['守備', '守'],
+  ['球速', '速'],
+  ['制球', '制'],
+];
+
 function Roster({ pack }) {
+  const mobile = useMobile();
   const [side, setSide] = useState('all');
   const list = pack.players.filter((p) =>
     side === 'all'
@@ -136,13 +153,11 @@ function Roster({ pack }) {
             <th>選手</th>
             <th>格</th>
             <th>齢</th>
-            <th>位置</th>
-            <th>ミート</th>
-            <th>パワー</th>
-            <th>走力</th>
-            <th>守備</th>
-            <th>球速</th>
-            <th>制球</th>
+            {COLUMNS.map(([long, short]) => (
+              <th key={long} title={long}>
+                {mobile ? short : long}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -185,6 +200,14 @@ function Roster({ pack }) {
 export default function PackSelect({ packs, plan, busy, onChange, view, run, command }) {
   const [open, setOpen] = useState(() => plan?.packId || packs[0]?.id);
   const shown = packs.find((p) => p.id === open) || packs[0];
+  const mobile = useMobile();
+  const detail = useRef(null);
+  // ⚠ **スマホではカードを押したら中身へ送る**。中身は20枚のカード（2列で10段）の下にあり、
+  //    押しても画面の外で切り替わるだけで、何が起きたのか分からなかった
+  const [jump, setJump] = useState(0);
+  useEffect(() => {
+    if (jump) detail.current?.scrollIntoView({ block: 'start' });
+  }, [jump]);
   return (
     <div className="online-packs">
       {/* ⚠ セットは**型ごとに構成と格の内訳が違う**（版2）。前から待っている人の
@@ -215,7 +238,10 @@ export default function PackSelect({ packs, plan, busy, onChange, view, run, com
             aria-pressed={plan?.packId === pack.id}
             aria-current={pack.id === open ? 'true' : undefined}
             disabled={busy}
-            onClick={() => setOpen(pack.id)}
+            onClick={() => {
+              setOpen(pack.id);
+              if (mobile) setJump((n) => n + 1);
+            }}
           >
             <strong>{pack.name}</strong>
             {pack.feature && (
@@ -235,7 +261,7 @@ export default function PackSelect({ packs, plan, busy, onChange, view, run, com
         ))}
       </div>
       {shown && (
-        <section className="online-pack-detail">
+        <section className="online-pack-detail" ref={detail}>
           <div className="online-card-heading">
             <h3>
               {shown.name}

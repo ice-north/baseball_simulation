@@ -4418,3 +4418,46 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-compact-shell:has(.online-phase-confirm) main {
   padding-bottom: calc(190px + env(safe-area-inset-bottom));
 }
+
+/* ============================================================
+   スマホの手続きの編集（`PhasePanel` の `mobile`。オーナーの判断1・案B）
+   ------------------------------------------------------------
+   ⚠ 以前は「変えるときはPCで」と書くだけで、スマホでは標準案のまま決めるしかなかった。
+      PCの部品（`PackSelect`・`ContractPlanner`・`TryoutPlanner`）をそのまま開き、
+      ここでは狭い幅（320px〜）に収める指定だけを足す。
+   ⚠ スマホの本体は `.online-mobile`（`.online-sp` ではない）。`.online button` などの
+      要素名の指定が効くので、打ち消すときは詳細度を揃える
+   ============================================================ */
+.online-mobile .online-phase-edit-toggle {
+  display: block;
+  width: 100%;
+  margin: 4px 0 8px;
+}
+.online-mobile .online-phase-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+/* 初期メンバー: セットのカードは2列（150px の列だと 320px で1列になり、20枚が縦に長く続く） */
+.online-mobile .online-phase-editor .online-pack-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.online-mobile .online-pack-card {
+  min-width: 0;
+  white-space: normal;
+}
+/* 初期メンバー: 選んだセットの見出しと「このセットにする」。⚠ 横に並べると 320px でボタンが
+   40px 幅に潰れて「選択／中」と割れた。スマホではボタンを見出しの下に幅いっぱいで置く */
+.online-mobile .online-pack-detail .online-card-heading {
+  flex-wrap: wrap;
+}
+.online-mobile .online-pack-detail .online-card-heading h3 {
+  margin: 0;
+}
+.online-mobile .online-pack-detail .online-card-heading button {
+  flex: 1 0 100%;
+  font-size: 14px;
+  padding: 8px 14px;
+}

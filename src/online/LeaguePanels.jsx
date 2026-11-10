@@ -616,7 +616,7 @@ const PACK_GROUPS = [
   ['outfield', '外'],
 ];
 /**
- * スマホの手続きで「この内容」を見せる（見るだけ。変えるのはPC）。
+ * スマホの手続きで「この内容」を見せる（変えるのは下のボタンで開く編集。`PhasePanel`）。
  * ⚠ 以前は「初期メンバー: セット3」「退団予定 3人」「5人を獲得する希望リスト（119候補）」の
  *    1行だけで、どんなセットか・誰を出すのか・誰を取るのかを見ないまま「この内容で決定」を
  *    押せた（u1 高4）。選手の名前は押すと能力が見られる（`PlayerStatsButton`）
@@ -688,6 +688,8 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const [error, setError] = useState('');
   // スマホの「この内容で決定」の確認を開いているか（下の `mobile` の枝）
   const [confirming, setConfirming] = useState(false);
+  // スマホでPCと同じ編集を開いているか（下の `mobile` の枝）
+  const [editing, setEditing] = useState(false);
   // 標準案は覚えを通して読む（`readCache.js`。版が同じ間は取りに行かない）。
   // ⚠ 覚えた答えを編集で書き換えないよう、受け取った案は写してから使う
   const read = useContext(ReadContext);
@@ -900,6 +902,9 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     </>
   );
 
+  // スマホで編集を開くボタンの名前。編集できる手続きだけ（年度更新は決めることが無い）
+  const mobileEditLabel = !plan ? null : phase.packs ? 'セットを見比べて選ぶ' : null;
+
   if (!mobile) {
     // ⚠ PCは**ほかの編集ページと同じ形**: 見出しの右に操作、本文にカード。
     //    以前は決定・下書きの保存が一番下（長い一覧の後ろ）にあり、
@@ -990,14 +995,51 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         )}
         {plan && phase.kind !== 'camp' && (
           <>
-            <MobilePlanContents phase={phase} plan={plan} view={view} />
-            <p>
+            {/* ⚠ **中身はスマホでも変えられる**（PCと同じ部品・同じ `submit`）。以前は
+                「変えるときはPCで」と書くだけで、スマホだけの人は標準案のまま決めるしかなかった。
+                ふだんは決める中身（`MobilePlanContents`）を見せ、ボタンで編集に切り替える。
+                編集の間は中身を隠す（編集の画面に同じ顔ぶれが出ている） */}
+            {editing ? (
+              <div className="online-phase-editor">
+                <button
+                  type="button"
+                  className="online-phase-edit-toggle"
+                  aria-expanded="true"
+                  onClick={() => setEditing(false)}
+                >
+                  編集を閉じる
+                </button>
+                {editor}
+              </div>
+            ) : (
+              <>
+                <MobilePlanContents phase={phase} plan={plan} view={view} />
+                {mobileEditLabel && (
+                  <button
+                    type="button"
+                    className="online-phase-edit-toggle"
+                    aria-expanded="false"
+                    onClick={() => {
+                      setConfirming(false);
+                      setEditing(true);
+                    }}
+                  >
+                    {mobileEditLabel}
+                  </button>
+                )}
+              </>
+            )}
+            <p className="online-phase-status">
               {dirty
                 ? '編集中の内容（未保存）です。'
                 : phase.submission
                   ? '保存済みの内容です。'
-                  : '標準案です。'}{' '}
-              変えるときはPCで調整できます。
+                  : '標準案です。'}
+              {dirty && (
+                <button type="button" onClick={resetSubmission}>
+                  変更を取り消す
+                </button>
+              )}
             </p>
             {staleNote}
             {/* ⚠ **決定の前に確認を1段挟む**（年度更新は決めることが無いので挟まない）。
@@ -1035,9 +1077,12 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
                 <button
                   className="online-primary"
                   disabled={busy}
-                  onClick={() =>
-                    phase.kind === 'offseason' ? submit(true) : setConfirming(true)
-                  }
+                  onClick={() => {
+                    if (phase.kind === 'offseason') return submit(true);
+                    // ⚠ 確かめるときは**編集を閉じて中身を見せる**（何を決めるのかを見て押す）
+                    setEditing(false);
+                    setConfirming(true);
+                  }}
                 >
                   この内容で決定
                 </button>

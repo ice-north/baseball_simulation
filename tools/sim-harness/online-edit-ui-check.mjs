@@ -211,6 +211,45 @@ async function click(page, text) {
     .getByText('処理中です。画面を閉じずにお待ちください…', { exact: true })
     .waitFor({ state: 'hidden' });
 }
+/**
+ * スマホの手続きの編集が 320〜390px に収まること（判断1・案B）。
+ * 横スクロールが出ない・はみ出さない・文字が1字だけ次の行に落ちない・ボタンが指で押せる高さ。
+ * ⚠ 一覧の中の小さな枠（`max-height` で中だけ動く）も「はみ出し」に数える（横に動く枠は作らない）
+ */
+async function fitsPhone(page, what) {
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const problems = await page.evaluate(() => {
+      const out = [];
+      const page = document.documentElement.scrollWidth;
+      if (page > innerWidth + 1) out.push(`横スクロール ${page}px`);
+      for (const n of document.querySelectorAll('.online-decision *')) {
+        if (!n.checkVisibility()) continue;
+        const r = n.getBoundingClientRect();
+        if (r.width && (r.right > innerWidth + 1 || r.left < -1))
+          out.push(`はみ出し ${n.tagName}.${n.className} ${(n.innerText || '').slice(0, 20)}`);
+        if (n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).overflowX !== 'visible')
+          out.push(`中で横に動く ${n.tagName}.${n.className}`);
+      }
+      for (const n of document.querySelectorAll(
+        '.online-phase-editor button, .online-phase-editor input, .online-phase-editor select, .online-decision .online-actions button',
+      )) {
+        if (!n.checkVisibility() || n.type === 'range') continue;
+        const r = n.getBoundingClientRect();
+        if (r.height < 40 || r.width < 36)
+          out.push(`指で押しにくい ${n.innerText || n.getAttribute('aria-label') || n.type} ${Math.round(r.width)}×${Math.round(r.height)}`);
+      }
+      return [...new Set(out)].slice(0, 12);
+    });
+    assert.deepEqual(problems, [], `${width}px で${what}が幅に収まらない`);
+    assert.deepEqual(
+      await shortLastLines(page, '.online-decision'),
+      [],
+      `${width}px で${what}の文字が1字だけ次の行に落ちる`,
+    );
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+}
 try {
   const oversized = await scene();
   await click(oversized.page, 'ホーム');
@@ -604,6 +643,29 @@ try {
             twoWay: 2,
             players: [],
           },
+          {
+            id: 'p2',
+            name: '検証セット2',
+            feature: '野手厚め・粒ぞろい',
+            counts: { pitcher: 10, catcher: 2, infield: 7, outfield: 5 },
+            ranks: { A: 0, B: 14, C: 10 },
+            averageAge: 21.8,
+            twoWay: 1,
+            players: [
+              {
+                id: 201,
+                name: '検証 二塁手',
+                rank: 'B',
+                age: 22,
+                position: 'second',
+                isTwoWay: true,
+                batting: { meet: 55, power: 40 },
+                physical: { speed: 60 },
+                fielding: { defense: 55 },
+                pitching: { velocity: 130, control: 30 },
+              },
+            ],
+          },
         ],
       },
       defaultPlan: { packId: 'p1' },
@@ -613,6 +675,34 @@ try {
     const chosen = await pack.page.locator('.online-phase-contents').innerText();
     assert.match(chosen, /初期メンバー「検証セット」/, `選んだセットが出ない: ${chosen}`);
     assert.match(chosen, /投手厚め · 投13 捕2 内5 外4/, `セットの中身が出ない: ${chosen}`);
+    // ⚠ **スマホでもセットを選び直して決められる**（判断1・案B）。以前は「変えるときはPCで」と
+    //    書くだけで、スマホだけの人は標準案のセットのまま決めるしかなかった
+    await pack.page.getByRole('button', { name: 'セットを見比べて選ぶ', exact: true }).click();
+    await pack.page.locator('.online-pack-card').filter({ hasText: '検証セット2' }).click();
+    await pack.page.getByRole('button', { name: 'このセットにする', exact: true }).click();
+    await pack.page.getByRole('button', { name: '選択中', exact: true }).waitFor();
+    assert.match(
+      await pack.page.locator('.online-phase-status').innerText(),
+      /編集中の内容（未保存）です。/,
+      '選び直しても編集中と出ない',
+    );
+    // 名前の欄もセットの下に出る（PCと同じ手順: セット → 名前 → 決定）
+    await pack.page.getByRole('button', { name: 'この名前にする', exact: true }).waitFor();
+    await fitsPhone(pack.page, '初期メンバーの選択');
+    // 決める前の確認では、選び直したセットを見せる（編集は閉じる）
+    await pack.page.getByRole('button', { name: 'この内容で決定', exact: true }).click();
+    const packConfirm = pack.page.getByRole('group', { name: '決定の確認', exact: true });
+    await packConfirm.waitFor();
+    assert.match(
+      await pack.page.locator('.online-phase-contents').innerText(),
+      /初期メンバー「検証セット2」/,
+      '確認で選び直したセットが出ない',
+    );
+    assert.equal(pack.payloads.length, 0, '確認の前に決定を送っている');
+    await packConfirm.getByRole('button', { name: '決定する', exact: true }).click();
+    await pack.page.getByText('決定しました', { exact: true }).waitFor();
+    assert.deepEqual(pack.payloads.at(-1).plan, { packId: 'p2' }, 'スマホで選び直したセットが送られない');
+    assert.equal(pack.payloads.at(-1).ready, true);
     await pack.context.close();
   }
 
