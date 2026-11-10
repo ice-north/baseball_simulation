@@ -7,6 +7,7 @@ import { buildPlayerStory, fameLabel } from './playerStory.js';
 import AbilityHistoryChart from './AbilityHistoryChart.jsx';
 import PotentialBadge from './PotentialBadge.jsx';
 import { useEscapeToClose } from './useEscapeToClose.js';
+import { TEAMS_DATA } from '../teams-data.js';
 import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
 import { getDeception, describeDeception } from '../game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from '../game/batterType.js';
@@ -89,6 +90,17 @@ const renderArsenal = (arsenal) => {
   ));
 };
 
+// いま大学に在学中か。⚠ 在学中の選手に「出身: 法政大学」と出ていた（卒業した人の言い方）。
+//   大学のチームの名簿に居る、または学年を持っていて大学の後の経歴（入団・社会人など）が無いなら在学中
+const AFTER_UNIVERSITY = new Set(['corporate', 'independent', 'club', 'club_join', 'draft', 'released']);
+const isEnrolledStudent = (player) => {
+  const uniName = player.universityTeamName || player.universityName;
+  if (!uniName) return false;
+  if (TEAMS_DATA[uniName]?.players?.some(p => p.id === player.id)) return true;
+  if (!player.universityYear || player.draftInfo || player.previousTeam) return false;
+  return !(player.careerHistory || []).some(h => AFTER_UNIVERSITY.has(h.type));
+};
+
 export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }) {
   const [detailTab, setDetailTab] = useState('ability');
   useEscapeToClose(onClose, !!player);
@@ -157,7 +169,7 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
           <div>投: <span className="text-white">{player.physical?.throws === 'left' ? '左' : '右'}</span></div>
           <div>打: <span className="text-white">{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</span></div>
           {(player.universityTeamName || player.universityName) && (
-            <div className="col-span-2">出身: <span className="text-blue-300">{player.universityTeamName || player.universityName}</span></div>
+            <div className="col-span-2">{isEnrolledStudent(player) ? '所属' : '出身'}: <span className="text-blue-300">{player.universityTeamName || player.universityName}</span></div>
           )}
         </div>
 
