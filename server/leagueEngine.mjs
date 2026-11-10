@@ -337,6 +337,7 @@ export function runCampRound(
 ) {
   const team = TEAMS_DATA[teamName];
   if (!team?.players?.length) return { gains: {}, events: {} };
+  const humanTeam = (league.members || []).some((m) => m.teamName === teamName);
   // ⚠ 伸びは**練習の前後を比べて**作る（メイン・サブ・スタッフの効果をまとめて）。
   //    練習ごとの報告を足し合わせると、サブ練習やスタッフの効果が漏れる
   const before = new Map(
@@ -399,7 +400,8 @@ export function runCampRound(
       sub?.[player.id] || resolveTraining(player, own.direction, own.phase).sub;
     // ⚠ **選んだ対象を渡すこと**（覚えたい球種・磨きたい球種・守備位置）。
     //    渡さないと中で抽選され、画面で選んだのに違うものを覚える
-    if (SUB_TRAINING_MENUS[key])
+    if (SUB_TRAINING_MENUS[key]) {
+      const position = player.position;
       note(
         player,
         executeSubTraining(
@@ -409,6 +411,12 @@ export function runCampRound(
           staff,
         )?.growthReport,
       );
+      // ⚠ **人の球団の守備位置は「守備位置を変える」（convert）が正本**。サブポジ練習の
+      //    後の適性への合わせ（`syncPositionToFitness`）で黙って元に戻さない
+      //    （一塁手を捕手に変えても1クールで一塁に戻り、捕手が0人になることもあった）。
+      //    CPU球団は一人用と同じく適性に合わせる
+      if (humanTeam) player.position = position;
+    }
   }
   if (staff) {
     applyMotivationEffect(updatedTeam.players, staff);
@@ -900,11 +908,19 @@ export function validateCampRound(league, teamName, payload) {
     if (!player || !value) continue;
     const kind = CAMP_SUB_TARGETS[sub[playerId]];
     requireOnline(kind, '対象を選べない練習に対象が付いています');
+    // ⚠ **磨きたい球種（ownPitch）はその選手の持ち球で照らす**。新球種の表
+    //    （`CAMP_PITCH_TYPES`、覚えられる8種）で照らしていたので、スプリット・
+    //    ツーシーム・パームを持つ投手に「変化球練習」で選ぶと、そのクールが実行できなかった
+    const owned = (player.pitching?.arsenal || [])
+      .map((pitch) => pitch?.type)
+      .filter((type) => type && type !== 'straight');
     requireOnline(
       kind === 'position'
         ? CONVERT_POSITIONS.includes(value) && value !== 'pitcher'
-        : CAMP_PITCH_TYPES.includes(value),
-      '練習の対象が不正です',
+        : kind === 'ownPitch'
+          ? owned.includes(value)
+          : CAMP_PITCH_TYPES.includes(value),
+      `練習の対象が不正です（${player.name}）`,
     );
     subTarget[playerId] = value;
   }

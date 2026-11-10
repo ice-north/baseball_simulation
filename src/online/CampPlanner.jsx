@@ -100,13 +100,11 @@ export function subTargetChoices(key, player) {
     return CAMP_PITCH_TYPES.filter((type) => !owned.includes(type)).map(
       (type) => [type, getPitchTypeName(type)],
     );
+  // ⚠ 極めた球種（100）は外す（選んでも伸びず、黙って分配に戻る。一人用と同じ）
   if (kind === 'ownPitch')
-    return owned.map((type) => [
-      type,
-      `${getPitchTypeName(type)}${
-        (player.pitching?.arsenal || []).find((x) => x.type === type)?.level ?? ''
-      }`,
-    ]);
+    return (player.pitching?.arsenal || [])
+      .filter((pitch) => owned.includes(pitch.type) && (pitch.level ?? 0) < 100)
+      .map((pitch) => [pitch.type, `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`]);
   if (kind === 'position')
     return CONVERT_POSITIONS.filter(
       (pos) => pos !== 'pitcher' && pos !== player.position,
