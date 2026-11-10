@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -611,15 +613,25 @@ private fun PitchingList(
         relievers.forEach { (role, list) ->
             item(key = "role:$role") {
                 ReorderableItem(reorder, key = "role:$role") {
+                    // ⚠ 0人の役割も見出しは残す（ここへ落とすとその役割になる）。人数を添え、0人は薄くする
+                    //    （以前は0人の見出しも同じ濃さで並び、誰かいるように見えた）
+                    val empty = list.isEmpty()
                     Row(Modifier.padding(top = 10.dp, start = 4.dp), verticalAlignment = Alignment.Bottom) {
-                        Text(RELIEF_ROLES[role] ?: role, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            RELIEF_ROLES[role] ?: role,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (empty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(if (empty) "  なし" else "  ${list.size}人", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             items(list, key = { "p:${it.id}" }) { p ->
                 ReorderableItem(reorder, key = "p:${p.id}") { dragging ->
                     PitcherCard(dragging, Modifier.longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) })) {
-                        PitcherRow("", p, role, starter = false, next = false, onRole = { onSheet(PlanSheet.Role(p.id)) }, onInfo = { open(p.id) })
+                        // ⚠ 救援は役割の札を出さない（すぐ上の見出しと同じ印が二重に並んでいた）
+                        PitcherRow("", p, null, starter = false, next = false, onRole = { onSheet(PlanSheet.Role(p.id)) }, onInfo = { open(p.id) })
                     }
                 }
             }
@@ -661,20 +673,24 @@ private fun PitcherCard(dragging: Boolean, handle: Modifier, content: @Composabl
     ) { content() }
 }
 
+/** @param role 札に出す役割（先発の型）。救援は見出しに出ているので null */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PitcherRow(order: String, player: Player?, role: String?, starter: Boolean, next: Boolean, onRole: () -> Unit, onInfo: () -> Unit, draggable: Boolean = true) {
     Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (order.isNotEmpty()) Text(order, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
         Column(Modifier.weight(1f).clickable(onClick = onRole)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("${conditionIcon(player?.condition)} ${player?.name ?: "?"}", fontWeight = FontWeight.SemiBold)
-                if (role != null) Tag(roleLabel(role), MaterialTheme.colorScheme.primary)
+            // ⚠ 札は折り返す（名前が長い・札が3つ並ぶと、1行に収まらず右の札が切れていた）
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("${conditionIcon(player?.condition)} ${player?.name ?: "?"}", fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.CenterVertically))
+                val tag = Modifier.align(Alignment.CenterVertically)
+                if (role != null) Box(tag) { Tag(roleLabel(role), MaterialTheme.colorScheme.primary) }
                 // 野手登録の選手（二刀流）。本職の守備位置も出す
-                if (player != null && !player.isPitcher) Tag("野手・${positionLabel(player.position)}")
+                if (player != null && !player.isPitcher) Box(tag) { Tag("野手・${positionLabel(player.position)}") }
                 val fatigue = player?.fatigue ?: 0
-                if (starter && fatigue >= STARTER_SKIP_FATIGUE) Tag("飛ばす")
-                if (!starter && fatigue >= RELIEF_REST_FATIGUE) Tag("休養")
-                if (next) Tag("次の先発")
+                if (starter && fatigue >= STARTER_SKIP_FATIGUE) Box(tag) { Tag("飛ばす") }
+                if (!starter && fatigue >= RELIEF_REST_FATIGUE) Box(tag) { Tag("休養") }
+                if (next) Box(tag) { Tag("次の先発") }
             }
             player?.let { p ->
                 val m = p.performance?.pitching?.metrics
