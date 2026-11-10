@@ -122,8 +122,20 @@ try {
   // ⚠ 席は 監督・投手コーチ・野手コーチ の順（どのカードにも「野手コーチと入れ替える」がある）
   const battingCard = cards.nth(2);
   assert.equal(await battingCard.locator('.online-eyebrow').innerText(), '野手コーチ');
+  // ⚠ 解任と市場から呼ぶは確認を1段挟む（押した瞬間には送らない）。済んだ知らせは操作ごとの文
+  const sentBeforeRelease = commands.length;
   await battingCard.getByRole('button', { name: '解任する', exact: true }).click();
-  await p.getByText('指導者を入れ替えました', { exact: false }).waitFor();
+  const releaseAsk = battingCard.getByRole('group', { name: '指導者の操作の確認' });
+  await releaseAsk.waitFor();
+  assert.match(await releaseAsk.innerText(), /野手コーチを解任しますか[\s\S]*ほかの球団に呼ばれることがあります/);
+  assert.equal(commands.length, sentBeforeRelease, '確認の前に解任が送られた');
+  await releaseAsk.getByRole('button', { name: '戻る', exact: true }).click();
+  assert.equal(await releaseAsk.count(), 0, '戻るで確認が閉じない');
+  assert.equal(commands.length, sentBeforeRelease, '戻るで解任が送られた');
+  await battingCard.getByRole('button', { name: '解任する', exact: true }).click();
+  await releaseAsk.getByRole('button', { name: '解任する', exact: true }).click();
+  await p.getByText('野手コーチを解任しました', { exact: false }).waitFor();
+  assert.equal(commands.length, sentBeforeRelease + 1, '解任が1回でない');
   await cards.filter({ hasText: '空席' }).first().waitFor();
   assert.equal(await pressed('スタメンと打順'), '自分で', '野手コーチがいないのに任せ方が自分でにならない');
   assert.ok(
@@ -133,7 +145,12 @@ try {
   // 市場から野手コーチに呼ぶ
   const market = p.locator('section', { has: p.getByRole('heading', { name: '市場（呼べる指導者）' }) });
   await market.getByRole('button', { name: '野手コーチに呼ぶ', exact: true }).first().click();
-  await p.getByText('指導者を入れ替えました', { exact: false }).waitFor();
+  const hireAsk = market.getByRole('group', { name: '指導者の操作の確認' });
+  await hireAsk.waitFor();
+  assert.match(await hireAsk.innerText(), /を野手コーチに呼びますか/);
+  assert.equal(commands.length, sentBeforeRelease + 1, '確認の前に呼ぶが送られた');
+  await hireAsk.getByRole('button', { name: '呼ぶ', exact: true }).click();
+  await p.getByText('を野手コーチに呼びました', { exact: false }).waitFor();
   await p.waitForFunction(() => !document.querySelector('.online-staff-card.is-empty'));
   assert.equal(await pressed('スタメンと打順'), '意見を聞く', '呼んだあとも自分でのまま');
   await p.screenshot({ path: '/tmp/baseball-online-staff-pc-after.png', fullPage: true });

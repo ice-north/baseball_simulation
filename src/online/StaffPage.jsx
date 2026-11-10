@@ -124,13 +124,67 @@ export function CoachCard({ coach, roleLabel, actions = null }) {
   );
 }
 
+/**
+ * 解任・市場から呼ぶの前の確認（アプリの `StaffAsk` と同じ文）。
+ * ⚠ 解任した人は市場に出てほかの球団に呼ばれることがあるので、押した瞬間には送らない。
+ *    入れ替えは席の中で動くだけなので確認しない（アプリと同じ）。
+ *    見た目はトレードの確認（`.online-trade-confirm`）と同じ「取り消せない操作の前の確認」の枠
+ */
+function StaffConfirm({ ask, busy, act, onBack }) {
+  const roleLabel = ROLE_LABELS[ask.role] || '';
+  const release = ask.action === 'release';
+  return (
+    <div className="online-trade-confirm" role="group" aria-label="指導者の操作の確認">
+      <p className="online-trade-confirm-head">
+        {release
+          ? `${ask.name}${roleLabel}を解任しますか`
+          : `${ask.name}を${roleLabel}に呼びますか`}
+      </p>
+      <p>
+        {release
+          ? '市場に出るので、ほかの球団に呼ばれることがあります（このキャンプの間なら、市場に残っていれば呼び戻せます）。'
+          : `空いている${roleLabel}の席に就きます。`}
+      </p>
+      <div className="online-actions">
+        <button
+          className="online-primary"
+          disabled={busy}
+          onClick={async () => {
+            const result = await act(ask);
+            if (result?.ok) onBack();
+          }}
+        >
+          {release ? '解任する' : '呼ぶ'}
+        </button>
+        <button disabled={busy} onClick={onBack}>
+          戻る
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 指導者の操作が済んだときの知らせ（アプリの `staffDoneText` と同じ文） */
+export function staffDoneText({ action, role, other, name }) {
+  const label = ROLE_LABELS[role] || '';
+  if (action === 'release') return `${name || ''}${label}を解任しました`;
+  if (action === 'hire') return `${name || ''}を${label}に呼びました`;
+  if (action === 'swap') return `${label}と${ROLE_LABELS[other] || ''}を入れ替えました`;
+  return '指導者を入れ替えました';
+}
+
 /** 席の操作（キャンプの間だけ）: 解任・役職の入れ替え */
-function SeatActions({ role, seats, busy, act }) {
+function SeatActions({ role, seats, busy, act, ask, setAsk }) {
   const coach = seats.find((s) => s.role === role)?.coach;
+  if (ask?.action === 'release' && ask.role === role)
+    return <StaffConfirm ask={ask} busy={busy} act={act} onBack={() => setAsk(null)} />;
   return (
     <div className="online-actions online-staff-actions">
       {coach && (
-        <button disabled={busy} onClick={() => act({ action: 'release', role })}>
+        <button
+          disabled={busy}
+          onClick={() => setAsk({ action: 'release', role, name: coach.name })}
+        >
           解任する
         </button>
       )}
@@ -276,7 +330,7 @@ export function TacticsLines({ lines, title = '試合中の采配（実際の動
   );
 }
 
-function Market({ staff, busy, act }) {
+function Market({ staff, busy, act, ask, setAsk }) {
   const empty = staff.seats.filter((s) => !s.coach).map((s) => s.role);
   return (
     <section className="online-card">
@@ -292,17 +346,23 @@ function Market({ staff, busy, act }) {
               coach={coach}
               roleLabel={coach.fromPlayer ? '引退したばかり' : '浪人中'}
               actions={
-                <div className="online-actions online-staff-actions">
-                  {ROLE_ORDER.map((role) => (
-                    <button
-                      key={role}
-                      disabled={busy || !empty.includes(role)}
-                      onClick={() => act({ action: 'hire', role, coachId: coach.id })}
-                    >
-                      {ROLE_LABELS[role]}に呼ぶ
-                    </button>
-                  ))}
-                </div>
+                ask?.action === 'hire' && ask.coachId === coach.id ? (
+                  <StaffConfirm ask={ask} busy={busy} act={act} onBack={() => setAsk(null)} />
+                ) : (
+                  <div className="online-actions online-staff-actions">
+                    {ROLE_ORDER.map((role) => (
+                      <button
+                        key={role}
+                        disabled={busy || !empty.includes(role)}
+                        onClick={() =>
+                          setAsk({ action: 'hire', role, coachId: coach.id, name: coach.name })
+                        }
+                      >
+                        {ROLE_LABELS[role]}に呼ぶ
+                      </button>
+                    ))}
+                  </div>
+                )
               }
             />
           ))}
@@ -371,7 +431,10 @@ function LeagueStaff({ leagueStaff }) {
 /** 自分の球団の指導者（席・任せ方・采配の内訳・市場） */
 function OwnStaff({ view, busy, run, command }) {
   const staff = view.staff;
-  const act = (payload) => run(() => command('staff', payload));
+  // 確かめている操作（解任・市場から呼ぶ。1つだけ）。`name` は知らせの文に使うだけで送らない
+  const [ask, setAsk] = useState(null);
+  const act = ({ name, ...payload }) =>
+    run(() => command('staff', payload, { message: staffDoneText({ ...payload, name }) }));
   return (
     <>
       <section className="online-card">
@@ -389,7 +452,14 @@ function OwnStaff({ view, busy, run, command }) {
               roleLabel={seat.roleLabel}
               actions={
                 staff.canEditSeats ? (
-                  <SeatActions role={seat.role} seats={staff.seats} busy={busy} act={act} />
+                  <SeatActions
+                    role={seat.role}
+                    seats={staff.seats}
+                    busy={busy}
+                    act={act}
+                    ask={ask}
+                    setAsk={setAsk}
+                  />
                 ) : null
               }
             />
@@ -398,7 +468,9 @@ function OwnStaff({ view, busy, run, command }) {
       </section>
       <Modes staff={staff} busy={busy} run={run} command={command} />
       <TacticsLines lines={staff.tactics} />
-      {staff.canEditSeats && <Market staff={staff} busy={busy} act={act} />}
+      {staff.canEditSeats && (
+        <Market staff={staff} busy={busy} act={act} ask={ask} setAsk={setAsk} />
+      )}
       <Events events={staff.events} title="うちの球団の人事" />
     </>
   );
