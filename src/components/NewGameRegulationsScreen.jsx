@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ScreenShell } from './GameUIComponents.jsx';
 import TutorialHint from './TutorialHint.jsx';
-import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regulationSettings.js';
+import { REGULATION_PRESETS, getPlayoffFormatDescription, thinTwoLeagueGameCounts } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { normalizeMaxExtraInnings } from '../teams-data.js';
@@ -293,7 +293,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, s
                     const tc = tempSettings.teamsCount || 4;
                     const isTwoLeague = tempSettings.leagueFormat === 'two' && tc >= 4;
                     if (isTwoLeague) {
-                      const validCounts = getValidTwoLeagueGameCounts(tc, 150);
+                      const validCounts = thinTwoLeagueGameCounts(getValidTwoLeagueGameCounts(tc, 150), tempSettings.gamesPerSeason);
                       return validCounts.map(opt => (
                         <option key={opt.value} value={opt.value}>
                           {opt.value}試合（リーグ内各{opt.intra}戦・交流各{opt.inter}戦）

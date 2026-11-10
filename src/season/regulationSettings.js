@@ -85,6 +85,25 @@ export const canModifyRegulations = (phase) => {
 };
 
 /**
+ * 2リーグ制の年間試合数の選択肢を、選びやすい数に間引く（画面の表示用）。
+ * 5試合ごとの幅から1つ（その幅でいちばん少ない値）と、いま選んでいる値を残す。
+ * ⚠ 2リーグ制はリーグ内・交流戦の組み合わせでほぼ全ての整数が組めるので、
+ *   そのまま並べると12球団で130個の選択肢になっていた（間引いた値も組めることに変わりはない）
+ * @param {Array<{value:number}>} options - getValidTwoLeagueGameCounts の結果
+ * @param {number} current - いま選んでいる試合数
+ */
+export const thinTwoLeagueGameCounts = (options, current) => {
+  const seen = new Set();
+  return options.filter(o => {
+    const bucket = Math.floor(o.value / 5);
+    if (o.value === current) { seen.add(bucket); return true; }
+    if (seen.has(bucket)) return false;
+    seen.add(bucket);
+    return true;
+  });
+};
+
+/**
  * プレーオフ形式の説明を取得
  * @param {string} format - 形式
  * @returns {string} 説明文
