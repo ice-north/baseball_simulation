@@ -9,6 +9,15 @@ class OnlineBoundary extends React.Component {
   static getDerivedStateFromError() {
     return { failed: true };
   }
+  // ⚠ **残したビュー（`savedView.js`）を忘れてから再読込させる**。開いた直後は残したビューを
+  //    そのまま描くので、そのビューで落ちたのなら、再読込してもまた同じビューで落ちる
+  //    （閉じて開き直しても同じ）。忘れればサーバーから読み直したビューで描く。
+  //    一人用の入口に読み込ませないよう、ここで読む（オンラインの画面がもう読んでいるので即座に済む）
+  componentDidCatch() {
+    import('./online/savedView.js')
+      .then(({ forgetView }) => forgetView())
+      .catch(() => {});
+  }
   render() {
     return this.state.failed ? (
       <div role="alert" style={{ padding: 24 }}>

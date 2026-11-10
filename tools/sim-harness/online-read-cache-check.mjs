@@ -2,7 +2,8 @@
 //   - 読むだけの窓口の覚え（src/online/readCache.js）: 版が同じ間だけ使う・終わった試合は版に関係なく使う・
 //     同時の読み込みを1本にまとめる・失敗は覚えない・捨てたあとに返った古い答えを覚えない・古いものから捨てる
 //   - 前回のビューを残す（src/online/savedView.js）: 同じ人・同じ端末のログインのときだけ出す・
-//     参加前の画面は残さない・容量不足でも落ちない
+//     参加前の画面は残さない・容量不足でも落ちない・端末のログインが別の人（ログアウト済み）なら書かない・
+//     版（schema）の違うビューは出さない
 //   - サーバーの試合一覧（projectGames）: 1回に返す数（size）・勝敗投手は id と名前だけ
 import assert from 'node:assert/strict';
 import { createReadCache } from '../../src/online/readCache.js';
@@ -14,6 +15,8 @@ import {
   saveConfig,
   VIEW_KEY,
 } from '../../src/online/savedView.js';
+import { AUTH_KEY } from '../../src/online/api.js';
+import { ONLINE_SCHEMA } from '../../src/online/shared.js';
 import { projectGames } from '../../server/projection.mjs';
 import { decisionRefs, gameSummary } from '../../server/recordedViews.mjs';
 
@@ -83,7 +86,9 @@ import { decisionRefs, gameSummary } from '../../server/recordedViews.mjs';
     removeItem: (k) => entries.delete(k),
   };
   const me = { userId: 'a', sessionId: 's1', accessToken: 't' };
-  const view = { teamName: 'A', revision: 3, viewGeneration: 12 };
+  // ⚠ 残すのは端末でいまログインしている人のビューだけ（ログインは同じ入れ物の AUTH_KEY）
+  entries.set(AUTH_KEY, JSON.stringify(me));
+  const view = { schema: ONLINE_SCHEMA, teamName: 'A', revision: 3, viewGeneration: 12 };
   saveView(me, view, storage);
   assert.deepEqual(readSavedView(me, storage), view, '残したビューが読めない');
   assert.equal(readSavedView({ ...me, sessionId: 's2' }, storage), null, '別の端末のログインで前のビューを出している');
@@ -96,6 +101,26 @@ import { decisionRefs, gameSummary } from '../../server/recordedViews.mjs';
   assert.equal(readSavedView(me, storage), null, 'ログアウトしても残っている');
   entries.set(VIEW_KEY, '{壊れた');
   assert.equal(readSavedView(me, storage), null);
+  // ⚠ **別のタブでログアウトしたあと、古いタブの読み直しが前の人のビューを書き戻さない**。
+  //    以前は書き戻していて、ログアウトしたのに前の人の名簿・成績が端末に残った
+  forgetView(storage);
+  entries.delete(AUTH_KEY);
+  saveView(me, view, storage);
+  assert.equal(entries.has(VIEW_KEY), false, 'ログアウトしたあとに前の人のビューを書き戻している');
+  // 別の人がログインし直した端末に、前の人のタブが書き込まない（今の人の残したビューも消さない）
+  const other = { userId: 'b', sessionId: 's9', accessToken: 'u' };
+  entries.set(AUTH_KEY, JSON.stringify(other));
+  saveView(other, { ...view, teamName: 'B' }, storage);
+  saveView(me, view, storage);
+  assert.equal(readSavedView(other, storage)?.teamName, 'B', '別の人のタブが今の人の残したビューを上書きした');
+  saveView(me, { joinRequired: true }, storage);
+  assert.equal(readSavedView(other, storage)?.teamName, 'B', '別の人のタブが今の人の残したビューを消した');
+  // ⚠ **版の違うビューは出さない**（ゲームを更新した直後に、前の形のビューを描いて落ちないように）
+  entries.set(AUTH_KEY, JSON.stringify(me));
+  saveView(me, { ...view, schema: ONLINE_SCHEMA - 1 }, storage);
+  assert.equal(readSavedView(me, storage), null, '版の違うビューを出している');
+  saveView(me, { ...view, schema: undefined }, storage);
+  assert.equal(readSavedView(me, storage), null, '版の無いビューを出している');
   const full = { ...storage, setItem: () => { throw new Error('QuotaExceededError'); } };
   assert.doesNotThrow(() => saveView(me, view, full), '容量不足で落ちる');
   saveConfig({ local: false, allowStep: true }, storage);
