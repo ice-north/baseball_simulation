@@ -161,7 +161,7 @@
 .online-dev {
   color: var(--ink-sub);
   font-size: 11px;
-  margin-bottom: 5px !important;
+  margin-bottom: 5px;
 }
 .online-alert {
   background: #5b3028;
@@ -348,6 +348,8 @@
   .online-trade-work {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* ⚠ `!important` は外さない。後ろの `.online-trade-deal`（同じ強さ）の
+     sticky に負け、表の上に回した交換案が張り付いたままになる */
   .online-trade-deal {
     order: -1;
     position: static !important;
@@ -363,6 +365,9 @@
   text-align: left;
   width: 84px;
 }
+/* ⚠ 次の2つの `!important` は外さない。`.online td`（0,1,1）の中央寄せと
+   `.online-desktop .online-lineup-table td`（0,2,1）の padding に負ける
+   （ほかの `!important` を外したとき、前後の比べでここだけ変わった） */
 .online-trade-pitches {
   max-width: 150px;
   overflow: hidden;
@@ -1321,7 +1326,7 @@ small.online-gain:not(:where(.online-sp *)) {
   vertical-align: middle;
 }
 .online-spaced {
-  margin-top: 24px !important;
+  margin-top: 24px;
 }
 .online-pager {
   display: flex;
@@ -1998,7 +2003,7 @@ small.online-gain:not(:where(.online-sp *)) {
   flex: 0 0 104px;
   min-width: 0;
   padding: 4px;
-  font-size: 12px !important;
+  font-size: 12px;
 }
 .online-stat-tools {
   display: flex;
@@ -2380,7 +2385,7 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-mobile-tactic-fields:empty { display: none; }
 .online-mobile-tactic-fields label { display: grid; gap: 3px; font-size: 13px; margin: 0; }
 .online-mobile-panel select { font-size: 16px; }
-.online-mobile-tactic-note { font-size: 12px; margin: 0 !important; color: #cbd5e1; }
+.online-mobile-tactic-note { font-size: 12px; margin: 0; color: #cbd5e1; }
 .online-mobile-role-list { flex: 1; min-height: 0; }
 .online-mobile-role-list article { min-height: 58px; padding: 6px 0; border-bottom: 1px solid #ffffff24; }
 .online-mobile-role-list article > div { display: flex; align-items: center; gap: 8px; }
@@ -2834,11 +2839,11 @@ small.online-gain:not(:where(.online-sp *)) {
   margin: 0 0 16px;
 }
 .online-page-head h1 {
-  margin: 0 !important;
+  margin: 0;
   color: var(--ink);
 }
 .online-page-head p {
-  margin: 4px 0 0 !important;
+  margin: 4px 0 0;
   font-size: 12px;
   color: var(--ink-sub);
 }
@@ -2946,7 +2951,7 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  margin: 0 0 4px !important;
+  margin: 0 0 4px;
 }
 .online-nav-clock b {
   font-size: 14px;
@@ -3037,7 +3042,7 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 /* 検証用の注記は本文ではなく見出しの帯に置く（どのページでも同じ場所） */
 .online-desktop .online-header .online-dev {
-  margin: 0 !important;
+  margin: 0;
   color: #cbd5e1;
 }
 /* 保存しました: 右下に浮かせる（本文を押し下げない） */
@@ -3099,7 +3104,7 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   gap: 8px;
   min-height: 28px;
-  margin: 0 0 4px !important;
+  margin: 0 0 4px;
   font-size: 12px;
   color: #cbd5e1;
 }
@@ -3202,7 +3207,7 @@ small.online-gain:not(:where(.online-sp *)) {
 
 /* --- 手続き -------------------------------------------------------------- */
 .online-phase-rules p {
-  margin: 0 0 8px !important;
+  margin: 0 0 8px;
   font-size: 13px;
 }
 .online-phase-rules .online-ready {
@@ -3329,7 +3334,7 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #93c5fd;
 }
 .online-lineup-help {
-  margin: 0 0 8px !important;
+  margin: 0 0 8px;
   min-height: 20px;
   font-size: 12px;
   color: #cbd5e1;
@@ -3453,13 +3458,14 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-lineup-row.is-pitcher:hover {
   background: transparent;
 }
+/* ⚠ `!important` は外さない。`.online td`（0,1,1）の中央寄せに負ける */
 .online-lineup-missing {
   text-align: left !important;
   color: #fca5a5;
 }
 .online-lineup-bench-head th:not(:where(.online-sp *)),
 .online-lineup-group th:not(:where(.online-sp *)) {
-  text-align: left !important;
+  text-align: left;
 }
 .online-desktop .online-lineup-bench-head th:not(:where(.online-sp *)) {
   height: 44px;
@@ -3667,7 +3673,7 @@ small.online-gain:not(:where(.online-sp *)) {
   box-shadow: 0 12px 32px #00000080;
 }
 .online-role-menu p:not(:where(.online-sp *)) {
-  margin: 4px 0 6px !important;
+  margin: 4px 0 6px;
   font-size: 11px;
   color: #94a3b8;
 }
@@ -3712,7 +3718,7 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-lineup-toolbar .online-lineup-help {
   flex: 1;
-  margin: 0 !important;
+  margin: 0;
 }
 .online-desktop .online-lineup-field-toggle,
 .online-desktop .online-lineup-group-toggle {
@@ -3761,7 +3767,7 @@ small.online-gain:not(:where(.online-sp *)) {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin: 0 0 6px !important;
+  margin: 0 0 6px;
   font-size: 13px;
   color: #cbd5e1;
 }
@@ -3796,7 +3802,7 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: baseline;
   gap: 4px 8px;
   min-height: 36px;
-  margin: 6px 0 0 !important;
+  margin: 6px 0 0;
   font-size: 12px;
   color: #cbd5e1;
 }
