@@ -33,7 +33,7 @@ val CAMP_SUB_MENUS: List<Menu> = listOf(
     Menu("subposition", "サブポジ練習", "🔀", "指定ポジションの守備練習（適正大幅UP・器用さで伸びが変わる）", only = null),
 )
 val CAMP_DIRECTIONS: List<Menu> = listOf(
-    Menu("sharpen", "長所を伸ばす", "⚔️", "最も強い能力に絞って magnify する。他は伸びない"),
+    Menu("sharpen", "長所を伸ばす", "⚔️", "最も強い能力に絞って伸ばす。他は伸びない"),
     Menu("balanced", "全体を伸ばす", "⚖️", "満遍なく。突出はしないが穴も出来ない"),
     Menu("patch", "短所を埋める", "🧱", "最も弱い能力を底上げする。伸びしろが大きく効率は良い"),
 )
