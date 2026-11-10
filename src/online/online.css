@@ -1409,7 +1409,8 @@ small.online-gain:not(:where(.online-sp *)) {
     border-radius: 10px;
     margin-bottom: 12px;
   }
-  .online h1:not(:where(.online-sp *)) {
+  /* 土台（`:where(.online) h1`）と同じ 0,0,1 で書く。クラスで書いた見出しの指定に負けるように */
+  :where(.online) h1:not(:where(.online-sp *)) {
     font-size: 23px;
   }
   .online table:not(:where(.online-sp *)) {
@@ -4069,7 +4070,9 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-staff-card header small {
   color: #9fb0c4;
 }
-/* ⚠ カードの中の p は `.online-staff-card` を付けて当てる（`.online p` の余白 0,1,1 より強くするため） */
+/* カードの中の p は `.online-staff-card` を付けて当てる（ほかの指定と同じ形）。
+   以前は `.online p`（0,1,1）の余白に勝つためだったが、土台を 0,0,1 に落としたので
+   いまは1クラスでも勝つ */
 .online-staff-card .online-staff-color {
   font-weight: 650;
   color: var(--accent);
