@@ -57,12 +57,10 @@ import { executeSetupManagedGame, executeHandleManagedGameEnd } from './game/gam
 import { executeAutoSubstitutePitcher, executeAutoSubstitutePinchHitter, executeAutoDefensiveSubstitution, executeAutoStealingDecision, executeAutoOptimizePitcherUsage } from './game/aiManager.js';
 
 // Season progress imports
-import { handleProgressDate as progressDateHandler, handleProgressToNextPhase as progressToNextPhaseHandler } from './game/seasonProgress.js';
 
 // Season management imports
-import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
+import { createSeasonData, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
 import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
-import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
 import { generateTryoutCandidates, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
@@ -103,8 +101,9 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
       const [screenMode, setScreenMode] = useState('start'); // 'start', 'game', 'management'
       const [gameFlowState, setGameFlowState] = useState('title'); // 'title', 'newgame_regulations', 'newgame_tryout', 'newgame_camp', 'sandbox_regulations', 'sandbox_setup', 'season'
       const [gameMode, setGameMode] = useState('normal'); // 'normal', 'sandbox'
-      const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save', 'regulations'
-      const [scheduleTab, setScheduleTab] = useState('league'); // 'league', 'batting', 'pitching'
+      // ⚠ 初期値は日程進行。以前は 'schedule'（どこからも開けない日程表）で、ゲームを始める・
+      //    ロードするときに必ず上書きされるので出ることは無かった。日程表は 2026-11-10 に除いた
+      const [managementView, setManagementView] = useState('dateprogress'); // 'dateprogress', 'roster', 'stats', 'save', 'regulations' ほか
 
       // リーグ構成設定（拡張可能な設計）
       const [leagueConfig, setLeagueConfig] = useState({
@@ -431,13 +430,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         if (result) await refreshSaveSlots();
         return result;
       };
-
-      // 後方互換性のため、既存の変数名でもアクセス可能にする
-      const seasonYear = seasonData?.year || 1;
-      const currentDate = seasonData?.currentDate || { year: 2024, month: 3, day: 1 };
-      const currentPhase = seasonData?.phase || SEASON_PHASES.REGULAR_SEASON;
-      const leagueStandings = seasonData?.standings || [];
-      const springStandings = seasonData?.springStandings || null;
 
       // 変化球の効果設定（外部ファイルから読み込み）
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
@@ -2896,11 +2888,6 @@ if (newOuts === 3) {
         setManagedGameInfo, setScreenMode, setManagementView
       });
 
-  // 日程進行ハンドラー（seasonProgress.jsからインポート済み、stateバインド用ラッパー）
-  const seasonProgressCtx = { seasonData, setSeasonData, setSelectedMonth, selectedMonth, userTeamName, setScreenMode, setManagementView };
-      // [SECTION: SEASON_PROGRESS] → seasonProgress.js に抽出済み（ラッパーのみ）
-  const handleProgressDate = (days) => progressDateHandler(days, seasonProgressCtx);
-  const handleProgressToNextPhase = () => progressToNextPhaseHandler(seasonProgressCtx);
 
 
 // 管理画面のルーター（ManagementScreen.jsxからインポート済み）
@@ -4354,15 +4341,7 @@ if (newOuts === 3) {
                 resumeViewRef={resumeViewRef}
                 seasonData={seasonData}
                 setSeasonData={setSeasonData}
-                selectedMonth={selectedMonth}
                 setSelectedMonth={setSelectedMonth}
-                scheduleTab={scheduleTab}
-                setScheduleTab={setScheduleTab}
-                seasonYear={seasonYear}
-                currentDate={currentDate}
-                currentPhase={currentPhase}
-                leagueStandings={leagueStandings}
-                springStandings={springStandings}
                 userTeamName={userTeamName}
                 allTeams={allTeams}
                 gameMode={gameMode}
@@ -4383,8 +4362,6 @@ if (newOuts === 3) {
                 setupManagedGame={setupManagedGame}
                 setScreenMode={setScreenMode}
                 setGameFlowState={setGameFlowState}
-                handleProgressDate={handleProgressDate}
-                handleProgressToNextPhase={handleProgressToNextPhase}
               />
             )}
           </div>

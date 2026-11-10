@@ -459,7 +459,7 @@ export function executeHandleManagedGameEnd(ctx) {
   }
 
   // ⚠ 同じ日の他の試合はここで消化しない。日付送りと一緒に日程進行の
-  //    `executeSkipDay`（`simulateGamesOnDate`）が消化する（下記 `_resumeDayAfterManagedGame`）。
+  //    `executeSkipDay`（`simulateScheduledGamesOnDate`）が消化する（下記 `_resumeDayAfterManagedGame`）。
   //    以前はここに**勝敗・セーブ・ホールドの判定をもう1本**持っていた（表の二重化）
 
   // 大学トーナメントの結果処理（全日本大学野球選手権 / 明治神宮大会）

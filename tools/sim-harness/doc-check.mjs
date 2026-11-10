@@ -76,6 +76,11 @@ const REMOVED_ON_PURPOSE = {
   progressToNextGame: '日付を次の試合日に差し替えるだけで、間の日の試合・イベント・疲労回復/コンディション更新が抜けていた。1日進行の繰り返しに置き換えて除去（歴史の記録）',
   handleProgressToNextGame: '同上の呼び出し元。ScheduleScreen の未使用プロップごと除去（歴史の記録）',
   advanceDayRef:   'サイドバーの「日程進行」の再クリックで1日進める経路。黙って日が進むので除去（歴史の記録）',
+  ScheduleScreen:  'どこからも開けない日程表（管理画面の初期値でしか出なかった）。2026-11-10 に除去（歴史の記録）',
+  seasonProgress:  '日程表からしか呼ばれない日程進行ハンドラー（本物は DateProgressScreen）。同上',
+  progressToNextPhase: '次のフェーズの初日へ日付を差し替えて残り試合をまとめて消化する経路。progressToNextGame と同じ型で除去（歴史の記録）',
+  calendarUI:      '日程表のカレンダー。同上',
+  simulateGamesOnDate: '`seasonProgress.js` にあった1日分の試合の消化。いまの本体は daySimulation.js の simulateScheduledGamesOnDate（歴史の記録）',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');
@@ -119,8 +124,10 @@ r.assert('参照するファイルパスが実在', missingPaths.length === 0,
 // ⚠ 行番号を文書に書かせないための仕組み。マーカーが消えたら検知する
 const appjsx = fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8');
 const markers = [...appjsx.matchAll(/\/\/ \[SECTION: ([A-Z_]+)\]/g)].map(m => m[1]);
+// ⚠ SEASON_PROGRESS は外した（2026-11-10。日程表からしか呼ばれないラッパーだったので
+//    `seasonProgress.js` ごと除いた。日程進行の本体は DateProgressScreen）
 const wantSections = ['APP_STATE', 'GAME_HANDLERS', 'THROW_PITCH', 'GAME_CONTROLS',
-                      'GAME_SETUP', 'SEASON_PROGRESS', 'RENDER'];
+                      'GAME_SETUP', 'RENDER'];
 const lostMarkers = wantSections.filter(x => !markers.includes(x));
 r.assert('App.jsxのSECTIONマーカー', lostMarkers.length === 0,
   `${markers.length}個検出${lostMarkers.length ? ' / 欠落: ' + lostMarkers.join(', ') : ''}`);

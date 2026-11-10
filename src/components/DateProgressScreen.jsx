@@ -668,7 +668,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   // ⚠ **印（フラグ）だけでは二重実行を止められない**。印を落とすのは `executeSkipDay` の中の
   //    `setSeasonData` 経由なので、同じコミットで2回走ると**どちらも印が立ったまま**通る。
   //    `isSimulating` も `setState` なので同じ理由で間に合わない（旧実装はこれだけだった）。
-  //    `executeSkipDay` は先頭で `simulateGamesOnDate` を呼ぶので、2回通ると
+  //    `executeSkipDay` は先頭で `simulateScheduledGamesOnDate` を呼ぶので、2回通ると
   //    **その日の他の試合が二重に計算され、順位表の試合数がずれる**。
   //    ⚠ 「開発時の React が effect を2回実行するだけ」で済ませないこと——
   //    `aiManager` の `setTeam(prev => …)` で交代ログと登板疲労が二重になったのと同じ型で、
@@ -692,7 +692,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   //    `progressDate` の日数ループ（`recoverAllPitcherFatigue` と
   //    `updateAllPlayersCondition`）まで丸ごと抜ける。イベントは日付の完全一致でしか
   //    発火しないから、飛ばした日の分は後から戻ってこない。
-  //    （`dateProgression.js` の `progressToNextGame` と `seasonProgress.js` の
+  //    （`dateProgression.js` の `progressToNextGame` と、いまは無い `seasonProgress.js` の
   //    `handleProgressToNextGame` は、この理由で死んだまま残っていたので除去した。
   //    復活させず、1日進行をそのまま繰り返すこと。）
   const nextUserGame = useMemo(() => {
@@ -975,7 +975,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   //    ⚠ データを作る `useMemo` も併せて消してある——描画されない state を残さない。
 
   // ⚠ **「昨日の結果」は撤去済み**（日程進行が縦に長くなりすぎたため）。
-  //    `simulateGamesOnDate` の戻り値が一度も描画されていなかったのを直した機能で、
+  //    `simulateScheduledGamesOnDate` の戻り値が一度も描画されていなかったのを直した機能で、
   //    データは `seasonData.results`（リーグ戦）＋ 各ブラケットの日付走査
   //    （トーナメント。社会人はリーグ戦を持たないのでこちらが本体）で作っていた。
   //    ⚠ **宣言だけ残さないこと**——描画されない state はこの作品が繰り返し踏んだ defect。

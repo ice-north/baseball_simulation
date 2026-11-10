@@ -705,7 +705,7 @@ HMR が拾わず**古いCSSを配り続ける**。実際にこれで2回、
 - **数字揃え**: 桁を揃えたい表・スタッツには `.tnum`（`font-variant-numeric: tabular-nums`）または Tailwind の `tabular-nums`
   - **セルに1つずつ付けるのではなく `<table>` 自身に付ける**。継承するので全セルに効くうえ、
     列を足すたびに付け忘れる事故が起きない。日本語の選手名は数字を含まないので影響しない
-  - 適用済み: 順位表・成績ランキング（`ScheduleScreen`）/ 個人成績（`PlayerStatsScreen`）/
+  - 適用済み: 個人成績（`PlayerStatsScreen`）/
     能力ランキング（`AbilityRankingScreen`）/ チーム運営（`CorporateManagementScreen`）/
     日程進行（`DateProgressScreen`）
   - **1個ずつのカード（「プロ輩出数 12名」等）には要らない**。縦に比較する列でないと意味がない
@@ -777,9 +777,12 @@ HMR が拾わず**古いCSSを配り続ける**。実際にこれで2回、
 `handleProgressToNextGame`）という**日付を次の試合日に差し替えるだけ**の実装が、
 どこからも呼ばれないまま残っていた（`ScheduleScreen` は受け取るだけで使っておらず、
 日程画面のジャンプ送りはイベント取りこぼし防止で撤去済みだった）。
+2026-11-10 の監査で、どこからも開けない日程表（`ScheduleScreen`）ごと、同じ型の
+`progressToNextPhase`（次のフェーズの初日へ差し替えて残り試合をまとめて消化）と、
+それしか使っていなかった `seasonProgress.js`・`calendarUI.js` も除いた。
 これを再利用すると、間の日の
 
-- 試合（`simulateGamesOnDate` は到着日に1回しか走らない）
+- 試合（`simulateScheduledGamesOnDate` は到着日に1回しか走らない）
 - 背景の大会・日次処理・イベント判定（**イベントは日付の完全一致でしか発火しない**）
 - `progressDate` の日数ループ＝`recoverAllPitcherFatigue` と `updateAllPlayersCondition`
 
@@ -1374,9 +1377,7 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
 - `src/game/baseState.js` (~125行) - 塁の状態の共通関数（采配モードの走者の識別・`makeRunner`）
 - `src/game/bunting.js` (~69行) - バントの解決モデル（両エンジン共有。フェア率・質・送球アウト・スクイズ）
 - `src/game/saveSystem.js` (~800行) - セーブ/ロード/ファイル書き出し・読み込み
-- `src/game/seasonProgress.js` (~420行) - 日程進行ハンドラー
 - `src/simulation-logic.js` (~1090行) - 物理演算（打球・投球）
-- `src/components/ScheduleScreen.jsx` (~750行) - 日程/順位表/成績ランキング
 - `src/components/LineupSettingScreen.jsx` (~2980行) - スタメン/投手起用/守備分析の3タブ（元に戻す/やり直す付き）
 - `src/components/DateProgressScreen.jsx` (~3760行) - 日程進行画面
   （`dateProgress/` に切り出し済み: `Newspaper.jsx` 440行 / `PreGameModal.jsx` 530行 /
@@ -1418,14 +1419,13 @@ App.jsxは大きいファイルなので、作業に関連するセクション�
 | THROW_PITCH | throwPitch（投球シミュレーション本体、最大セクション） |
 | GAME_CONTROLS | → `gameControls.js` に抽出済み（ラッパーのみ） |
 | GAME_SETUP | → `gameSetup.js` に抽出済み（ラッパーのみ） |
-| SEASON_PROGRESS | → `seasonProgress.js` に抽出済み（ラッパーのみ） |
 | RENDER | メインreturn（試合画面UI・管理シェル） |
 
 ### 編集作業ガイド
 - **試合ロジック修正**: `src/App.jsx` THROW_PITCH (L611-2030) + `src/game/aiManager.js`
 - **画面遷移修正**: `ManagementScreen.jsx` + `GameFlowScreens.jsx`
 - **UI修正**: `src/App.jsx` RENDER (L2131-END) + `GameUIComponents.jsx`
-- **日程進行修正**: `src/game/seasonProgress.js`
+- **日程進行修正**: `src/components/DateProgressScreen.jsx`（`handleProgressDate`）+ `src/season/dateProgression.js`
 - **選手交代修正**: `src/App.jsx` GAME_HANDLERS (L341-595)
 - **試合セットアップ**: `src/game/gameSetup.js`
 - **監督AI修正**: `src/game/aiManager.js`

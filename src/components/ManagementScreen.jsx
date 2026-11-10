@@ -10,7 +10,6 @@ import { processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../s
 import { processNPBDraft } from '../season/npbDraft.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 
-import ScheduleScreen from './ScheduleScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
 import ContractScreen from './ContractScreen.jsx';
 import DraftResultScreen from './DraftResultScreen.jsx';
@@ -44,14 +43,7 @@ const ManagementScreen = ({
   resumeViewRef,
   seasonData,
   setSeasonData,
-  selectedMonth,
   setSelectedMonth,
-  scheduleTab,
-  setScheduleTab,
-  seasonYear,
-  currentDate,
-  currentPhase,
-  leagueStandings,
   userTeamName,
   allTeams,
   gameMode,
@@ -71,27 +63,9 @@ const ManagementScreen = ({
   refreshSaveSlots,
   setupManagedGame,
   setScreenMode,
-  setGameFlowState,
-  handleProgressDate,
-  handleProgressToNextPhase
+  setGameFlowState
 }) => {
   const draftedIds = seasonData?.draftedPlayerIds || [];
-  if (managementView === 'schedule') return <ScheduleScreen
-    seasonData={seasonData}
-    selectedMonth={selectedMonth}
-    setSelectedMonth={setSelectedMonth}
-    scheduleTab={scheduleTab}
-    setScheduleTab={setScheduleTab}
-    seasonYear={seasonYear}
-    currentDate={currentDate}
-    currentPhase={currentPhase}
-    leagueStandings={leagueStandings}
-    userTeamName={userTeamName}
-    onProgressDate={handleProgressDate}
-    onProgressToNextPhase={handleProgressToNextPhase}
-    onStartGame={() => setScreenMode('game')}
-    onGoToDateProgress={() => setManagementView('dateprogress')}
-  />;
   if (managementView === 'tryout') return <TryoutScreen
     seasonData={seasonData}
     allTeams={allTeams}
