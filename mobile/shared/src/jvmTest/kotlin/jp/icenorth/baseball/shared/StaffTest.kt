@@ -31,7 +31,14 @@ class StaffTest {
         assertTrue(staff.tactics.filter { it.by != null }.all { it.resolvedLabel != null })
         val manager = assertNotNull(staff.manager)
         assertEquals(7, manager.views.size)
-        assertEquals(4, manager.traits.size)
+        // 性格は気質・こだわり・任せ方の3つ
+        assertEquals(listOf("temper", "stubborn", "trust"), manager.traits.map { it.key })
+        // カードの表はビジョン・育成観・性格。見出しと売り込みの文もサーバーの文のまま
+        assertTrue(manager.headline.contains("、") && manager.color.endsWith("の野球"))
+        assertTrue(manager.vision.startsWith("攻め ") && manager.vision.contains("看板"))
+        assertTrue(manager.growth.isNotBlank() && manager.pitch.isNotBlank() && manager.prefs.isNotBlank())
+        // コーチは受け持ちの側に印が付く
+        assertTrue(staff.seats.filter { it.role != "manager" }.mapNotNull { it.coach }.all { it.vision.contains("受け持ち") })
         assertTrue(manager.history.isNotEmpty(), "1年目の通算が履歴に無い")
         assertNotNull(manager.delegation)
         // リーグ全球団と、キャンプの標準案を出した人

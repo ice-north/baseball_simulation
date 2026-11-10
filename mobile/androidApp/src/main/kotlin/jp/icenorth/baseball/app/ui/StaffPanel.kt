@@ -227,6 +227,7 @@ private fun OtherStaff(staff: TeamStaffView) {
 }
 
 /** 指導者1人。詳しい考え方・性格・履歴は押して開く */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CoachBlock(roleLabel: String, coach: CoachCard?) {
     if (coach == null) {
@@ -244,19 +245,25 @@ private fun CoachBlock(roleLabel: String, coach: CoachCard?) {
             Text(coach.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("  ${coach.age}歳 · ${coach.origin}${if (coach.legend) " · 名選手" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(coach.color, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+        // 称号（通算の記録から。最大2つ）
+        if (coach.titles.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) { coach.titles.forEach { Tag(it, MaterialTheme.colorScheme.tertiary) } }
+        Text(coach.headline.ifBlank { coach.color }, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+        if (coach.pitch.isNotBlank()) Muted("「${coach.pitch}」")
+        if (coach.vision.isNotBlank()) Fact("ビジョン", coach.vision)
+        if (coach.growth.isNotBlank()) Fact("育成観", coach.growth)
         Fact("性格", coach.personality)
         coach.delegation?.let { Fact("任せ方", it) }
-        if (coach.prefs.isNotBlank()) Fact("好み", coach.prefs)
+        coach.keyPlayers?.let { Fact("軸の選手", it) }
         Fact("通算", coach.career)
         coach.mentor?.let { Fact("恩師", it) }
         coach.playerLine?.let { Fact("現役時代", it) }
         if (open) {
+            if (coach.prefs.isNotBlank()) Fact("好む選手", coach.prefs)
             coach.views.forEach { ScaleRow(it) }
             coach.traits.forEach { ScaleRow(it) }
             if (coach.history.isEmpty()) Muted("指導者としての履歴はまだありません。")
             coach.history.forEach { h -> Text("${h.year}年 ${h.teamLabel.orEmpty()} ${h.roleLabel.orEmpty()} ${h.text}", style = MaterialTheme.typography.bodySmall) }
-        } else Muted("押すと考え方・性格・履歴")
+        } else Muted("押すと考え方・性格・好む選手・履歴")
     }
 }
 

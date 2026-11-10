@@ -3857,10 +3857,37 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-staff-card header small {
   color: #9fb0c4;
 }
-.online-staff-color {
+/* ⚠ カードの中の p は `.online-staff-card` を付けて当てる（`.online p` の余白 0,1,1 より強くするため） */
+.online-staff-card .online-staff-color {
   font-weight: 650;
   color: var(--accent);
   margin: 0 0 8px;
+}
+/* 称号（通算の記録から。最大2つ） */
+.online-staff-titles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.online-staff-titles b {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 1px 7px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+}
+/* 売り込みの文（本人の言葉）。⚠ カードは暗い地色なので明るい補足色（`--ink-sub` は明るい地色用） */
+.online-staff-card .online-staff-pitch {
+  margin: -2px 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #d0d9e5;
+}
+.online-staff-card .online-staff-prefs {
+  margin: 4px 0 8px;
+  font-size: 13px;
 }
 .online-staff-facts {
   display: grid;

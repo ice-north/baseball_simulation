@@ -10,11 +10,13 @@ import {
   STAFF_AREAS,
   STAFF_AREA_KEYS,
   STAFF_MODES,
-  PITCHER_PREFS,
-  HITTER_PREFS,
-  CAMP_PREFS,
-  CAMP_PHASE_PREFS,
   coachColor,
+  visionHeadline,
+  visionText,
+  growthLabel,
+  preferenceText,
+  pitchText,
+  keyPlayers,
   personalityText,
   viewScale,
   personalityScale,
@@ -23,6 +25,7 @@ import {
   staffModesOf,
   shortName,
   PHASE_STAFF_AREA,
+  roleTypeLabel,
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import {
@@ -40,6 +43,8 @@ import {
 
 const tierOf = (leagueId) =>
   PYRAMID_LEAGUES.find((l) => l.id === leagueId)?.tier ?? null;
+/** 1部で1位の年（通算の「1部優勝」と称号で同じ物差し） */
+const isPennant = (r) => r.rank === 1 && tierOf(r.league) === 0;
 
 /** 任せ度の言葉（監督だけ）。ワンマン 0%〜任せる 100% */
 export function delegationText(coach) {
@@ -47,20 +52,6 @@ export function delegationText(coach) {
   if (w === 0) return 'ワンマン（任せ度0%）';
   if (w === 1) return 'コーチに任せる（任せ度100%）';
   return `任せ度${Math.round(w * 100)}%`;
-}
-
-/** 好む選手・キャンプの考えの一言 */
-function prefsText(coach) {
-  const p = coach.prefs || {};
-  const parts = [];
-  if (p.pitcher) parts.push(`投手は${PITCHER_PREFS[p.pitcher]}`);
-  if (p.hitter) parts.push(`野手は${HITTER_PREFS[p.hitter]}`);
-  const camp = CAMP_PREFS[p.camp];
-  if (camp)
-    parts.push(
-      `キャンプは${camp}${p.camp === 'fit' ? '' : `（${CAMP_PHASE_PREFS[p.campPhase] || '技術'}）`}`,
-    );
-  return parts.join('・');
 }
 
 const pct = (w, l) => (w + l > 0 ? (w / (w + l)).toFixed(3).replace(/^0/, '') : '-');
@@ -79,7 +70,7 @@ export function careerSummary(coach) {
         wins: sum(managed, 'wins'),
         losses: sum(managed, 'losses'),
         draws: sum(managed, 'draws'),
-        pennants: managed.filter((r) => r.rank === 1 && tierOf(r.league) === 0).length,
+        pennants: managed.filter(isPennant).length,
         champions: managed.filter((r) => r.champion).length,
         promotions: managed.filter((r) => r.move === 'up').length,
         relegations: managed.filter((r) => r.move === 'down').length,
@@ -107,6 +98,43 @@ export function careerSummary(coach) {
     battingYears: coachYears('batting'),
     text: lines.length ? lines.join(' / ') : '指導者としての記録はまだ無い',
   };
+}
+
+/**
+ * 称号（通算の記録から自動で付ける。カードを見た瞬間に人物が分かるように。最大2つ）。
+ * 部で1位だった成績は年度更新で行に印を付けてある（`leads`。`coachEngine.mjs` の `LEAD_STATS`）。
+ * ⚠ 説明だけで、効果は無い。レビューの「あとで足せる案」（いしだ「重くなければ入れて」2026-11-10）。
+ * `summary` は `careerSummary(coach)`（カードで作ったものを使い回す）。
+ */
+export function coachTitles(coach, summary = careerSummary(coach)) {
+  const rows = coach?.career || [];
+  const leads = (role, stat) => rows.filter((r) => r.role === role && r.leads?.includes(stat)).length;
+  const managed = rows.filter((r) => r.role === 'manager');
+  const m = summary.manager;
+  // 再建屋: 同じ球団で、部の4位以下から、のちに同じ部で2位以内か上の部まで引き上げた
+  // （⚠ 降格した先の部で2位は数えない）
+  const level = (r) => tierOf(r.league) ?? 9;
+  const rebuilt = managed.some(
+    (r, i) =>
+      r.rank >= 4 &&
+      managed
+        .slice(i + 1)
+        .some((later) => later.team === r.team && (level(later) < level(r) || (level(later) === level(r) && later.rank <= 2))),
+  );
+  return [
+    // 1部優勝かプレーオフ優勝の年が2度（同じ年の両方は1度に数える）
+    managed.filter((r) => r.champion || isPennant(r)).length >= 2 && '優勝請負人',
+    rebuilt && '再建屋',
+    m && m.years >= 8 && m.wins / Math.max(1, m.wins + m.losses) >= 0.55 && '名将',
+    leads('manager', 'stolenBases') >= 2 && '走る野球の人',
+    leads('manager', 'homeruns') >= 2 && '大砲野球の人',
+    leads('manager', 'era') >= 2 && '投手王国の主',
+    leads('pitching', 'era') >= 2 && '投手陣の名伯楽',
+    leads('batting', 'runs') >= 2 && '打線の名伯楽',
+    (coach?.fired || 0) >= 2 && '苦労人',
+  ]
+    .filter(Boolean)
+    .slice(0, 2);
 }
 
 /** 年ごとの履歴の1行（新しい順）。役職ごとに見る数字を変える */
@@ -150,8 +178,9 @@ function historyRows(coach, labelOf) {
 /**
  * 指導者カード（画面の1人ぶん）。`full` なら考え方の目盛り・履歴まで。
  */
-export function coachCard(league, coach, labelOf, { full = true } = {}) {
+export function coachCard(league, coach, labelOf, { full = true, roster = null } = {}) {
   if (!coach) return null;
+  const summary = careerSummary(coach);
   const job = coach.job;
   const mentor = coach.mentor ? league.coaches?.people?.[coach.mentor] : null;
   const card = {
@@ -163,23 +192,36 @@ export function coachCard(league, coach, labelOf, { full = true } = {}) {
     team: job?.team || null,
     since: job?.since ?? null,
     // ⚠ 「得意」は画面に出さない（いしだ指摘 2026-11-10: 最初の3人は席と同じものが得意に
-    //    決め打ちなので、出しても意味が無い）。中では考え方の濃さと空席埋めに効く
+    //    決め打ちなので、出しても意味が無い）。中では看板の決まりやすさと空席埋めに効く
     specialty: coach.specialty,
     origin: originText(coach),
     fromPlayer: coach.origin?.kind === 'player',
     legend: !!coach.origin?.legend,
+    // 紙面の言葉（「機動力と継投の野球」）
     color: coachColor(coach),
+    // カードの表の3行: ビジョン・育成観・性格（いしだ案のビジョン。考え方の目盛りは「詳しく」へ）
+    headline: visionHeadline(coach),
+    vision: visionText(coach, job?.role),
+    growth: growthLabel(coach),
     personality: personalityText(coach),
+    titles: coachTitles(coach, summary),
     // ⚠ 任せ度は監督の席にいる人だけ意味がある（コーチの間は使わない）
     delegation: job?.role === 'manager' ? delegationText(coach) : null,
-    career: careerSummary(coach).text,
+    career: summary.text,
   };
   if (!full) return card;
   return {
     ...card,
+    // 売り込みの文（本人の言葉）。市場で選ぶときの判断材料
+    pitch: pitchText(coach, { year: league.season?.year ?? null }),
+    // 軸にする選手（監督の席の人だけ。効果は無く説明だけ）
+    keyPlayers:
+      job?.role === 'manager' && roster?.length
+        ? keyPlayers(coach, roster).map((p) => p.name).join('・')
+        : null,
     views: viewScale(coach),
     traits: personalityScale(coach),
-    prefs: prefsText(coach),
+    prefs: preferenceText(coach),
     playerLine: coach.origin?.line || null,
     mentor: mentor ? mentor.name : null,
     history: historyRows(coach, labelOf).slice(0, 12),
@@ -279,13 +321,16 @@ export function coachEventsView(league, labelOf, { limit = 12, team = null } = {
     }));
 }
 
-/** 球団の3つの席（カードつき） */
-function seatsView(league, teamName, labelOf, options) {
+/**
+ * 球団の3つの席（カードつき）。`roster` を渡せば監督のカードに軸の選手を出す
+ * （自分の球団とCPU球団だけ。人の球団の編成は他の人に見せない）
+ */
+function seatsView(league, teamName, labelOf, { roster = null } = {}) {
   const staff = staffOf(league, teamName);
   return COACH_ROLES.map((role) => ({
     role,
     roleLabel: ROLE_LABELS[role],
-    coach: coachCard(league, staff[role], labelOf, options),
+    coach: coachCard(league, staff[role], labelOf, { roster }),
   }));
 }
 
@@ -311,7 +356,7 @@ export function ownStaffView(league, member, team, labelOf) {
   const staff = staffOf(league, member.teamName);
   const camp = league.phase?.kind === 'camp';
   return {
-    seats: seatsView(league, member.teamName, labelOf),
+    seats: seatsView(league, member.teamName, labelOf, { roster: team?.players }),
     modeOptions: Object.entries(STAFF_MODES).map(([value, label]) => ({ value, label })),
     modes: STAFF_AREA_KEYS.map((key) => {
       const owner = STAFF_AREAS[key].owner;
@@ -379,11 +424,15 @@ export function phasePlanBy(league, teamName, kind) {
   };
 }
 
-const brief = (coach) => ({
+/**
+ * 一覧の1人ぶん。`color` は監督なら「機動力と継投の野球」、コーチなら受け持ちの型
+ * （投手コーチは守りの型、野手コーチは攻めの型。コーチの間はその側だけが効く）
+ */
+const brief = (coach, role = 'manager') => ({
   name: coach.name,
   // 紙面の呼び名（「山田監督」）
   shortName: shortName(coach),
-  color: coachColor(coach),
+  color: roleTypeLabel(coach, role) || coachColor(coach),
 });
 
 /** リーグ全球団の指導者の一覧（順位表の横や「指導者」ページの他球団の欄。軽い形） */
@@ -407,8 +456,8 @@ export function leagueStaffView(league, labelOf) {
               isNew: staff.manager.job?.since === league.season.year,
             }
           : null,
-        pitching: staff.pitching ? brief(staff.pitching) : null,
-        batting: staff.batting ? brief(staff.batting) : null,
+        pitching: staff.pitching ? brief(staff.pitching, 'pitching') : null,
+        batting: staff.batting ? brief(staff.batting, 'batting') : null,
       };
     }),
     events: coachEventsView(league, labelOf, { limit: 12 }),
@@ -424,7 +473,7 @@ export function teamStaffView(league, teamName, team, labelOf) {
   if (!league.coaches) return null;
   const human = (league.members || []).some((m) => m.teamName === teamName);
   return {
-    seats: seatsView(league, teamName, labelOf),
+    seats: seatsView(league, teamName, labelOf, { roster: human ? null : team?.players }),
     front: human ? null : frontView(league, teamName),
     tactics: human ? null : tacticsLines(league, teamName, team),
     events: coachEventsView(league, labelOf, { limit: 6, team: teamName }),

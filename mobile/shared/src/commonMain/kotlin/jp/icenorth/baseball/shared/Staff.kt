@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
  * `ownStaffView`（ビューの staff）・`leagueStaffView`（leagueStaff）・`teamStaffView`（team の窓口の staff）。
  *
  * ⚠ 文はサーバーが作る（PC/アプリ同文）。アプリで言い換えないこと。
- * ⚠ 能力を上げる効果は無い。考え方と性格で、采配の「AI判断」・トライアウト・退団・キャンプの案・
- *    トレードの返事が変わるだけ。
+ * ⚠ 監督は人の采配の肩代わり。能力を上げる効果は無い（監督バフはナシ）。ビジョン（攻めの型 × 守りの型 ×
+ *    時間軸）と育成観・性格で、采配の「AI判断」・トライアウト・退団・キャンプの案・トレードの返事が変わるだけ。
  */
 
 /** 考え方・性格の1行（-2〜2。代打・守備固めは -2〜0 の片側） */
@@ -46,12 +46,24 @@ data class CoachCard(
     val origin: String = "",
     val fromPlayer: Boolean = false,
     val legend: Boolean = false,
-    /** 「機動力野球・継投は早め」 */
+    /** 紙面の言葉（「機動力と継投の野球」） */
     val color: String = "",
+    /** ビジョンの見出し（「足でかき回し、継投で逃げ切る」） */
+    val headline: String = "",
+    /** 「攻め 機動力（看板）・守り 継投でつなぐ・育成」 */
+    val vision: String = "",
+    /** 育成観（「一定まで尖らせて整える（長所70まで）」） */
+    val growth: String = "",
     val personality: String = "",
+    /** 称号（通算の記録から。最大2つ。「優勝請負人」） */
+    val titles: List<String> = emptyList(),
     /** 監督の席の人だけ（「任せ度50%」） */
     val delegation: String? = null,
     val career: String = "",
+    /** 売り込みの文（本人の言葉） */
+    val pitch: String = "",
+    /** 軸の選手（監督の席の人だけ。自分の球団とCPU球団。「田中・佐藤・鈴木」） */
+    val keyPlayers: String? = null,
     val views: List<StaffScale> = emptyList(),
     val traits: List<StaffScale> = emptyList(),
     val prefs: String = "",
@@ -62,7 +74,7 @@ data class CoachCard(
     /** 呼び名（姓だけ。「山田監督」） */
     val shortName: String get() = name.substringBefore(' ').ifBlank { name }
 
-    /** 性格の値（気質 temper: -2 我慢強い 〜 2 短気 など） */
+    /** 性格の値（気質 temper: -2 我慢強い 〜 2 短気、こだわり stubborn、任せ方 trust） */
     fun trait(key: String): Int = traits.firstOrNull { it.key == key }?.value ?: 0
 }
 

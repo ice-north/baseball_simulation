@@ -12,8 +12,9 @@ import { useDraftState, STAFF_MODES_DRAFT } from './Drafts.jsx';
 //    https://claude.ai/artifact/HN144s1P83tcUtWbSdH7yU
 // ⚠ 文はサーバーが作る（`server/coachView.mjs`）。アプリ（`mobile/.../Staff*.kt`）と
 //    同じ文を出すため、画面で言い換えないこと。
-// ⚠ 能力を上げる効果は無い。考え方と性格だけ（采配の「AI判断」・トライアウト・退団・
-//    キャンプの案・トレードの返事に効く）。
+// ⚠ 監督は人の采配の肩代わり。能力を上げる効果は無い（いしだ指定「監督バフはナシ」）。
+//    ビジョン（攻めの型 × 守りの型 × 時間軸）と育成観・性格で、采配の「AI判断」・
+//    トライアウト・退団・キャンプの案・トレードの返事が変わるだけ。
 // ============================================================
 
 /** 考え方・性格の1行（「継投: 早め」）。目盛りは -2〜2 の5段 */
@@ -39,7 +40,18 @@ function Scale({ item }) {
   );
 }
 
-export function CoachCard({ coach, roleLabel, actions = null, compact = false }) {
+/** カードの表の1行（値が無ければ出さない。アプリの `Fact` と同じ） */
+function Fact({ label, value }) {
+  if (!value) return null;
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+export function CoachCard({ coach, roleLabel, actions = null }) {
   if (!coach)
     return (
       <article className="online-staff-card is-empty">
@@ -60,45 +72,30 @@ export function CoachCard({ coach, roleLabel, actions = null, compact = false })
           {coach.age}歳 · {coach.origin}
           {coach.legend ? ' · 名選手' : ''}
         </small>
+        {coach.titles?.length ? (
+          <span className="online-staff-titles">
+            {coach.titles.map((t) => (
+              <b key={t}>{t}</b>
+            ))}
+          </span>
+        ) : null}
       </header>
-      <p className="online-staff-color">{coach.color}</p>
+      <p className="online-staff-color">{coach.headline}</p>
+      {coach.pitch && <p className="online-staff-pitch">「{coach.pitch}」</p>}
       <dl className="online-staff-facts">
-        <div>
-          <dt>性格</dt>
-          <dd>{coach.personality}</dd>
-        </div>
-        {coach.delegation && (
-          <div>
-            <dt>任せ方</dt>
-            <dd>{coach.delegation}</dd>
-          </div>
-        )}
-        {coach.prefs && (
-          <div>
-            <dt>好み</dt>
-            <dd>{coach.prefs}</dd>
-          </div>
-        )}
-        <div>
-          <dt>通算</dt>
-          <dd>{coach.career}</dd>
-        </div>
-        {coach.mentor && (
-          <div>
-            <dt>恩師</dt>
-            <dd>{coach.mentor}</dd>
-          </div>
-        )}
-        {coach.playerLine && (
-          <div>
-            <dt>現役時代</dt>
-            <dd>{coach.playerLine}</dd>
-          </div>
-        )}
+        <Fact label="ビジョン" value={coach.vision} />
+        <Fact label="育成観" value={coach.growth} />
+        <Fact label="性格" value={coach.personality} />
+        <Fact label="任せ方" value={coach.delegation} />
+        <Fact label="軸の選手" value={coach.keyPlayers} />
+        <Fact label="通算" value={coach.career} />
+        <Fact label="恩師" value={coach.mentor} />
+        <Fact label="現役時代" value={coach.playerLine} />
       </dl>
-      {!compact && coach.views && (
+      {coach.views && (
         <details className="online-staff-more">
-          <summary>考え方・性格・履歴</summary>
+          <summary>考え方・性格・好む選手・履歴</summary>
+          {coach.prefs && <p className="online-staff-prefs">好む選手: {coach.prefs}</p>}
           <ul className="online-staff-scales">
             {coach.views.map((item) => (
               <Scale key={item.key} item={item} />
