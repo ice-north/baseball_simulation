@@ -230,4 +230,17 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   }
 }
 
-console.log('■ 一人用の進行の再発防止: OK（翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');
+// --- 1球団以下の設定で日程づくりが終わらない（タブが固まる） ---
+// ⚠ 規定画面の球団数に「1」を打った瞬間、試合数の選択肢を作る計算が対戦相手0で
+//    Infinity 回の巡回に入り、タブが固まっていた。入りきるかの判定は false、選択肢は空、日程は空
+{
+  assert.equal(fitsInRegularSeason(1, 60, 'single'), false);
+  assert.deepEqual(getValidSingleLeagueGameCounts(1), []);
+  assert.deepEqual(getValidSingleLeagueGameCounts(0), []);
+  assert.deepEqual(
+    quiet(() => generateFullSeasonSchedule({ teams: ['T0'], gamesPerSeason: 60, startDate: { year: 2025, month: 4, day: 1 } })),
+    [],
+  );
+}
+
+console.log('■ 一人用の進行の再発防止: OK（1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');

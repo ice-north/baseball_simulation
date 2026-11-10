@@ -232,6 +232,9 @@ export const generateFullSeasonSchedule = (config) => {
 const buildSeasonSchedule = (config) => {
   const { teams, gamesPerSeason = 60, startDate, leagueFormat = 'single' } = config;
   const teamsCount = teams.length;
+  // ⚠ 1球団以下では試合が組めない。対戦相手が0で「相手ごとの試合数」が Infinity になり、
+  //    下の巡回が終わらずタブが固まっていた（規定画面の球団数に「1」を打った瞬間に起きた）
+  if (teamsCount < 2) return { schedule: [], leftover: [] };
   let allMatchups = [];
 
   // 2リーグ制の場合
@@ -490,6 +493,7 @@ const buildSeasonSchedule = (config) => {
  */
 const fitsCache = new Map();
 export const fitsInRegularSeason = (teamsCount, gamesPerSeason, leagueFormat = 'single') => {
+  if (!(teamsCount >= 2)) return false;
   const format = leagueFormat === 'two' && teamsCount >= 4 ? 'two' : 'single';
   const key = `${format}|${teamsCount}|${gamesPerSeason}`;
   if (!fitsCache.has(key)) {
@@ -509,6 +513,7 @@ export const fitsInRegularSeason = (teamsCount, gamesPerSeason, leagueFormat = '
  * @returns {Array<number>}
  */
 export const getValidSingleLeagueGameCounts = (teamsCount, maxGames = 150) => {
+  if (!(teamsCount >= 2)) return [];
   const d = Math.max(1, teamsCount - 1);
   const results = [];
   for (let i = 1; d * i <= maxGames; i++) {

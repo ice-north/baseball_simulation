@@ -227,7 +227,11 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
             </div>
             {!selectedLeague && <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">チーム数</label>
-              <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value) || 4)} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums" />
+              {/* ⚠ 選択にする（数の入力欄だと、「10」「12」を打つ途中の「1」や、範囲外の「20」がそのまま入った。
+                  1球団では日程が組めず、20球団は上限を超える） */}
+              <select value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(Number(e.target.value))} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums">
+                {Array.from({ length: 11 }, (_, i) => i + 2).map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>}
             {!selectedLeague && <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">リーグ形式</label>
