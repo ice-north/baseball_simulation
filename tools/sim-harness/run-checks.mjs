@@ -98,6 +98,7 @@ const SEPARATE = [
   'online-join-ui-check', // check:online:join-ui（dist を開く。サーバー不要）
   'online-staff-ui-check', // check:online:staff-ui（dist を開く。サーバー不要）
   'singleplayer-ui-check', // check:ui
+  'singleplayer-yearend-ui-check', // check:ui:yearend（4モードで1年目のオフから2年目の開幕まで）
 ];
 
 const LEVEL = { quick: 0, check: 1, full: 2 };

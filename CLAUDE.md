@@ -19,7 +19,7 @@
 | 触った場所 | 回す検査 |
 |---|---|
 | `src/game/autoSimulation.js`・`src/simulation-logic.js`・投球判断 | `check:season` |
-| ドラフト・成長・年次進行（`src/season/`） | `check:draft`・`check:progression` |
+| ドラフト・成長・年次進行（`src/season/`） | `check:draft`・`check:progression`・`check:ui:yearend` |
 | 日程画面・大会・フェーズ（`DateProgressScreen.jsx`・`dateProgression.js`） | `check:bracket`・`check:ui` |
 | セーブ（`src/game/saveSystem.js`・`saveMigration.js`） | `check:quick`・`check:ui` |
 | オンライン（`server/`・`src/online/`） | `check:online`・`check:online:season` |

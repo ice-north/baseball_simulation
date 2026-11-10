@@ -21,6 +21,7 @@ npm run check:full         # check ＋ progression（約2分）
 npm run check:online       # オンライン版の検査だけ
 npm run check:online:season  # オンラインの通年検査（約2分。CIでは別ジョブ）
 npm run check:ui           # 一人用の通し検査（ビルド→ブラウザで開幕からドラフト会議まで。約2分）
+npm run check:ui:yearend   # 一人用の年度更新（独立・箱庭・企業・クラブで1年目のオフから2年目の開幕まで。4コアで約2分半）
 npm run check:season       # 個別（ほかの check:* も同じ）
 node tools/sim-harness/run-checks.mjs season-check online-parity-check  # 名前で選ぶ
 node tools/sim-harness/run-checks.mjs check --serial   # 1本ずつ（出力を順に追う）
@@ -60,6 +61,15 @@ node tools/sim-harness/progression-check.mjs 8    # 年数
   ブラウザ保存領域を `tools/scenes/` に書き出す（git には入れない）。
   `npm run scene -- before-draft` でその場面からブラウザを開ける。年末の画面を
   確かめるのに、毎回最初から進めなくてよい。セーブの形を変えたら作り直す。
+
+### 一人用の年度更新の通し検査（singleplayer-yearend-ui-check.mjs）
+
+独立リーグ・箱庭・社会人（企業・クラブ）を新しく始め、ドラフト会議・契約更改（退団処理）・
+トライアウト（スカウト入団・入部希望者）・オフシーズン・翌年のレギュレーションを画面で通して、
+2年目の開幕（2025/4/1）に着き日程が進むことを確かめる。「ボタンを押しても次の画面へ移らない」
+型の止まり方（2f9ee22）を捕まえるためのもの。4モードを別々のタブで同時に進める
+（`--serial` で1モードずつ、`club sandbox` のようにモードを選べる）。重いので `check` の束には
+入れていない。年次進行・オフの画面・`ManagementScreen.jsx` の遷移を触ったら回す。
 
 ## 何を検証するか
 
