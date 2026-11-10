@@ -33,6 +33,8 @@ object Commands {
         players: Map<Long, Wish>,
         main: Map<Long, String>,
         sub: Map<Long, String>,
+        /** サブ練習の対象（新球種・磨く球種・守る位置）。⚠ campTargetsToSend で、いまのサブ練習に合うものだけにして渡す */
+        subTarget: Map<Long, String> = emptyMap(),
     ): JsonObject = buildJsonObject {
         put("round", round)
         putJsonObject("policy") { put("mode", mode); put("direction", direction); put("phase", phase) }
@@ -42,7 +44,18 @@ object Commands {
         }
         putJsonObject("main") { main.forEach { (id, key) -> put(id.toString(), key) } }
         putJsonObject("sub") { sub.forEach { (id, key) -> put(id.toString(), key) } }
+        putJsonObject("subTarget") { subTarget.forEach { (id, key) -> put(id.toString(), key) } }
     }
+
+    /**
+     * 送る練習の対象。**いまのサブ練習で選べるものだけ**（Web 版 CampPlanner.jsx の execute と同じ）。
+     * ⚠ 練習を変えたあとに前の対象が残っていると、サーバーが「対象を選べない練習に対象が付いています」と断る。
+     */
+    fun campTargetsToSend(roster: List<JsonObject>, subOf: (JsonObject) -> String, target: Map<Long, String>): Map<Long, String> =
+        roster.mapNotNull { p ->
+            val value = target[p.pid]?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            if (campSubTargetChoices(subOf(p), p).any { it.key == value }) p.pid to value else null
+        }.toMap()
 
     fun pack(packId: String): JsonObject = buildJsonObject { put("packId", packId) }
 
@@ -92,3 +105,29 @@ object Commands {
     fun withCount(plan: JsonObject, count: Int) = JsonObject(plan + ("count" to JsonPrimitive(count)))
     fun withPack(plan: JsonObject, packId: String) = JsonObject(plan + ("packId" to JsonPrimitive(packId)))
 }
+
+/**
+ * サブ練習の「対象」の選択肢。対象を取らない練習は空。Web 版 CampPlanner.jsx の subTargetChoices と同じ決まり。
+ * ⚠ 新球種は**まだ持っていない球種**、変化球練習は**持っている球種**（取り違えると1クール捨てる）。
+ * ⚠ 極めた球種（100）は外す（選んでも伸びず、黙って分配に戻る）。
+ * ⚠ サブポジはいまの守備位置を除き、適性を添える（どこなら現実的か分からない）。
+ */
+fun campSubTargetChoices(subKey: String?, player: JsonObject): List<Choice> {
+    val arsenal = player.at("pitching", "arsenal").list().mapNotNull { it.obj() }
+    val owned = arsenal.mapNotNull { it.at("type").str() }.filter { it != "straight" }
+    val name = { type: String -> PITCH_TYPE_NAMES[type] ?: type }
+    return when (CAMP_SUB_TARGETS[subKey]) {
+        "pitch" -> CAMP_PITCH_TYPES.filter { it !in owned }.map { Choice(it, name(it)) }
+        "ownPitch" -> arsenal.filter { (it.at("type").str() ?: "") in owned && (it.at("level").num() ?: 0.0) < 100 }
+            .map { pitch ->
+                val type = pitch.at("type").str().orEmpty()
+                Choice(type, name(type) + (pitch.at("level").num()?.let(::plainNumber) ?: ""))
+            }
+        "position" -> CONVERT_POSITIONS.filter { it != "pitcher" && it != player.at("position").str() }
+            .map { pos -> Choice(pos, (POSITION_NAMES[pos] ?: pos) + (player.at("positionFitness", pos).num()?.let { " ${plainNumber(it)}%" } ?: "")) }
+        else -> emptyList()
+    }
+}
+
+/** 整数なら小数点を付けずに出す（JS の `${n}` と同じ見え方） */
+private fun plainNumber(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()

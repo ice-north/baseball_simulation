@@ -605,4 +605,6 @@ data class CampDraft(
     val mode: String = "recommended",
     /** 選手ごとの方針の上書き（「合わせる」） */
     val players: Map<Long, Wish> = emptyMap(),
+    /** サブ練習の対象（新球種・磨く球種・守る位置）。無ければ「おまかせ」 */
+    val subTarget: Map<Long, String> = emptyMap(),
 )

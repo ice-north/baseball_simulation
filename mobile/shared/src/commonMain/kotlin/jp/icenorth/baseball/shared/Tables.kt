@@ -103,3 +103,7 @@ val PYRAMID_LEAGUES: List<PyramidLeague> = listOf(
 )
 const val PROMOTION_PLACES: Int = 1
 const val RELEGATION_FROM_BOTTOM: Int = 1
+val CAMP_SUB_TARGETS: Map<String, String> = mapOf("newpitch" to "pitch", "breaking" to "ownPitch", "subposition" to "position")
+val CAMP_PITCH_TYPES: List<String> = listOf("slider", "curve", "fork", "changeup", "sinker", "cutter", "knuckle", "shoot")
+val CONVERT_POSITIONS: List<String> = listOf("pitcher", "catcher", "first", "second", "third", "short", "left", "center", "right")
+val POSITION_NAMES: Map<String, String> = mapOf("pitcher" to "投手", "catcher" to "捕手", "first" to "一塁", "second" to "二塁", "third" to "三塁", "short" to "遊撃", "left" to "左翼", "center" to "中堅", "right" to "右翼")

@@ -46,6 +46,8 @@ import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.campGroupOf
 import jp.icenorth.baseball.shared.campMenusFor
 import jp.icenorth.baseball.shared.campSubMenusFor
+import jp.icenorth.baseball.shared.campSubTargetChoices
+import jp.icenorth.baseball.shared.Choice
 import jp.icenorth.baseball.shared.clampMenu
 import jp.icenorth.baseball.shared.clampSub
 import jp.icenorth.baseball.shared.describeMood
@@ -92,8 +94,8 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
         phaseId,
         saved.at("policy", "direction").str() ?: "balanced",
         saved.at("policy", "phase").str() ?: "skill",
-        saved.at("main").obj().orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.let { id to it } } }.toMap(),
-        saved.at("sub").obj().orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.let { id to it } } }.toMap(),
+        saved.at("main").obj().idMap(),
+        saved.at("sub").obj().idMap(),
         // ⚠ 実行済みの指示に決め方が無ければ「全員同じ」（前の版）。何も無ければおすすめ
         mode = saved.at("policy", "mode").str() ?: if (saved == null) "recommended" else "team",
         players = saved.at("players").obj().orEmpty().mapNotNull { (k, v) ->
@@ -101,6 +103,7 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
             val ph = v.obj().at("phase").str()
             if (d != null && ph != null) k.toLongOrNull()?.let { it to Wish(d, ph) } else null
         }.toMap(),
+        subTarget = saved.at("subTarget").obj().idMap(),
     )
     val policyOf = { p: JsonObject -> playerPolicy(p, draft.mode, draft.direction, draft.phase, draft.players) }
     val trainingOf = { p: JsonObject -> policyOf(p).let { resolveTraining(p, it.direction, it.phase) } }
@@ -115,6 +118,8 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
             roster.associate { it.pid to clampMenu(training(it).main, it) },
             roster.associate { it.pid to clampSub(training(it).sub, it) },
             mode = mode,
+            // 対象は残す（送るときに、いまのサブ練習に合うものだけにする。Web と同じ）
+            subTarget = draft.subTarget,
         )
     }
     // この選手だけ本人の希望に合わせる（練習もその方針で引き直す）
@@ -129,6 +134,16 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
     }
     val applyAll = { key: String, pitchers: Boolean ->
         model.campDraft = draft.copy(main = draft.main + roster.filter { it.isPitcherJson() == pitchers }.associate { it.pid to clampMenu(key, it) })
+    }
+    val execute = {
+        val payload = Commands.campRound(
+            done + 1, draft.mode, draft.direction, draft.phase, draft.players,
+            roster.associate { it.pid to mainOf(it) },
+            roster.associate { it.pid to subOf(it) },
+            // ⚠ いまのサブ練習に合う対象だけ送る（アプリは対象を送っておらず、新球種は抽選・サブポジ練習は外れていた）
+            Commands.campTargetsToSend(roster, subOf, draft.subTarget),
+        )
+        model.command("campRound", payload, label = "第${done + 1}クールの練習中…", done = "第${done + 1}クールの練習を終えました")
     }
 
     Section(
@@ -188,17 +203,7 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
             }
         }
         if (!finished) {
-            Button(
-                onClick = {
-                    val payload = Commands.campRound(
-                        done + 1, draft.mode, draft.direction, draft.phase, draft.players,
-                        roster.associate { it.pid to mainOf(it) },
-                        roster.associate { it.pid to subOf(it) },
-                    )
-                    model.command("campRound", payload, label = "第${done + 1}クールの練習中…", done = "第${done + 1}クールの練習を終えました")
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("第${done + 1}クール練習を実行") }
+            Button(onClick = execute, modifier = Modifier.fillMaxWidth()) { Text("第${done + 1}クール練習を実行") }
         }
     }
 
@@ -214,11 +219,17 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
             model, p, mainOf(p), subOf(p), policyOf(p), enabled = !finished,
             onFitWish = { fitWish(p) },
             gains = camp.at("gains", p.pid.toString()).obj(),
+            target = draft.subTarget[p.pid],
             onMain = { key -> model.campDraft = draft.copy(main = draft.main + (p.pid to key)) },
-            onSub = { key -> model.campDraft = draft.copy(sub = draft.sub + (p.pid to key)) },
+            // ⚠ 練習を変えたら対象は捨てる（別の練習の対象が残る）
+            onSub = { key -> model.campDraft = draft.copy(sub = draft.sub + (p.pid to key), subTarget = draft.subTarget - p.pid) },
+            onTarget = { key -> model.campDraft = draft.copy(subTarget = if (key == null) draft.subTarget - p.pid else draft.subTarget + (p.pid to key)) },
         )
     }
 }
+
+private fun JsonObject?.idMap(): Map<Long, String> =
+    orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.takeIf { it.isNotEmpty() }?.let { id to it } } }.toMap()
 
 private const val GAIN_ROWS = 8
 
@@ -322,8 +333,10 @@ private fun CampPlayerCard(
     enabled: Boolean,
     onFitWish: () -> Unit,
     gains: JsonObject?,
+    target: String?,
     onMain: (String) -> Unit,
     onSub: (String) -> Unit,
+    onTarget: (String?) -> Unit,
 ) {
     val pitcher = p.isPitcherJson()
     // ⚠ `policy` は**この選手に当てる方針**（playerPolicy の結果）
@@ -364,6 +377,30 @@ private fun CampPlayerCard(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MenuPicker("メイン", main, campMenusFor(pitcher), enabled, Modifier.weight(1f), onMain)
             MenuPicker("サブ", sub, campSubMenusFor(p), enabled, Modifier.weight(1f), onSub)
+        }
+        // 対象を取る練習（新球種習得・変化球練習・サブポジ練習）だけ、何を練習するかを選ぶ。⚠「おまかせ」を残す（従来どおり中で選ぶ）
+        val choices = campSubTargetChoices(sub, p)
+        if (choices.isNotEmpty()) TargetPicker(target, choices, enabled, onTarget)
+    }
+}
+
+/** サブ練習の対象（Web 版 CampPlanner の対象の欄と同じ選択肢） */
+@Composable
+private fun TargetPicker(selected: String?, choices: List<Choice>, enabled: Boolean, onPick: (String?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val current = choices.firstOrNull { it.key == selected }
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { open = true }, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+            Text("対象: ${current?.label ?: "おまかせ"}", fontSize = 12.sp, maxLines = 1)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("おまかせ", fontWeight = if (current == null) FontWeight.Bold else FontWeight.Normal) }, onClick = { open = false; onPick(null) })
+            choices.forEach { c ->
+                DropdownMenuItem(
+                    text = { Text(c.label, fontWeight = if (c.key == current?.key) FontWeight.Bold else FontWeight.Normal) },
+                    onClick = { open = false; onPick(c.key) },
+                )
+            }
         }
     }
 }

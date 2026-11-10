@@ -18,6 +18,7 @@ const shared = await import(at('src/online/shared.js'));
 const pitching = await import(at('src/online/pitchingEdit.js'));
 const constants = await import(at('src/utils/constants.js'));
 const pyramid = await import(at('src/online/pyramidLeague.js'));
+const api = await import(at('src/online/api.js'));
 
 // ⚠ Kotlin の文字列では `$` が式の始まりになるので逃がす
 const q = (s) => JSON.stringify(String(s)).replaceAll('$', '\\$');
@@ -115,6 +116,16 @@ for (const [k, v] of Object.entries({ PROMOTION_PLACES: pyramid.PROMOTION_PLACES
   if (!Number.isInteger(v)) throw new Error(`${k} が読めない`);
   out(`const val ${k}: Int = ${v}`);
 }
+// キャンプのサブ練習で選べる対象（Web 版 CampPlanner.jsx の subTargetChoices と同じ材料）。
+// ⚠ アプリは対象を送っていなかった（新球種は中で抽選、サブポジ練習は置き場が無いとして外れていた）
+const list = (name, values) => {
+  if (!Array.isArray(values) || values.length === 0) throw new Error(`${name} が読めない`);
+  out(`val ${name}: List<String> = listOf(${values.map(q).join(', ')})`);
+};
+map('CAMP_SUB_TARGETS', shared.CAMP_SUB_TARGETS);
+list('CAMP_PITCH_TYPES', shared.CAMP_PITCH_TYPES);
+list('CONVERT_POSITIONS', shared.CONVERT_POSITIONS);
+map('POSITION_NAMES', api.POS_FULL);
 const text = lines.join('\n') + '\n';
 const file = path.join(root, 'mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/Tables.kt');
 if (process.argv.includes('--check')) {
