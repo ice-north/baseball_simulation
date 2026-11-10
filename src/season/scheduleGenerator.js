@@ -51,37 +51,33 @@ export const generateRoundRobin = (teams) => {
  * 各ラウンド内はチーム重複なし（同日開催可能）
  * @param {Array} league1 - リーグ1のチーム配列
  * @param {Array} league2 - リーグ2のチーム配列
- * @param {number} intraPerPair - 同一リーグ内の各ペア対戦数
+ * @param {number} intraPerPair - 同一リーグ内の各ペア対戦数（前のリーグ）
  * @param {number} interPerPair - 異リーグ間の各ペア対戦数
+ * @param {number} [intraPerPairB] - 後のリーグの同一リーグ内の各ペア対戦数（省略すると前と同じ）。
+ *   球団数が奇数のときはリーグの大きさが違うので、リーグごとに変えて全球団の試合数を揃える（`twoLeagueGamePlan`）
  * @returns {Array<Array>} ラウンド配列 [[{home, away, isInterLeague}, ...], ...]
  */
-export const generateTwoLeagueMatchups = (league1, league2, intraPerPair, interPerPair) => {
+export const generateTwoLeagueMatchups = (league1, league2, intraPerPair, interPerPair, intraPerPairB = intraPerPair) => {
   const rounds = [];
 
-  // リーグ内対戦: ラウンドロビンのラウンド構造を維持
-  const l1RR = generateRoundRobin(league1);
-  const l2RR = generateRoundRobin(league2);
-
-  for (let rep = 0; rep < intraPerPair; rep++) {
-    const maxRounds = Math.max(l1RR.length, l2RR.length);
-    for (let r = 0; r < maxRounds; r++) {
-      const round = [];
-      if (r < l1RR.length) {
-        l1RR[r].forEach(g => {
-          round.push(rep % 2 === 0
-            ? { home: g.home, away: g.away, isInterLeague: false }
-            : { home: g.away, away: g.home, isInterLeague: false });
-        });
+  // リーグ内対戦: ラウンドロビンのラウンド構造を維持。リーグごとにラウンドを並べ、同じ番目どうしを
+  // 同じラウンドに重ねる（2つのリーグの球団は重ならない）。
+  // ⚠ 両リーグが同じ大きさ・同じ回数なら、以前の「回ごとに両リーグの同じラウンドを重ねる」と同じ並び
+  const intraRounds = (rr, reps) => {
+    const list = [];
+    for (let rep = 0; rep < reps; rep++) {
+      for (const games of rr) {
+        list.push(games.map(g => rep % 2 === 0
+          ? { home: g.home, away: g.away, isInterLeague: false }
+          : { home: g.away, away: g.home, isInterLeague: false }));
       }
-      if (r < l2RR.length) {
-        l2RR[r].forEach(g => {
-          round.push(rep % 2 === 0
-            ? { home: g.home, away: g.away, isInterLeague: false }
-            : { home: g.away, away: g.home, isInterLeague: false });
-        });
-      }
-      rounds.push(round);
     }
+    return list;
+  };
+  const l1Rounds = intraRounds(generateRoundRobin(league1), intraPerPair);
+  const l2Rounds = intraRounds(generateRoundRobin(league2), intraPerPairB);
+  for (let r = 0; r < Math.max(l1Rounds.length, l2Rounds.length); r++) {
+    rounds.push([...(l1Rounds[r] || []), ...(l2Rounds[r] || [])]);
   }
 
   // リーグ間対戦: ラテン方格方式で最適ラウンド分け
@@ -115,6 +111,19 @@ export const generateTwoLeagueMatchups = (league1, league2, intraPerPair, interP
  * @returns {{intraPerPair: number, interPerPair: number}}
  */
 export const balanceLeagueGames = (gamesPerSeason, intraOpponents, interOpponents) => {
+  const exact = exactLeagueSplit(gamesPerSeason, intraOpponents, interOpponents);
+  if (exact) return exact;
+  // 整数解が見つからない場合のフォールバック（近似）
+  const idealIntraPerPair = (gamesPerSeason * 0.7) / intraOpponents;
+  const intraPerPair = Math.max(1, Math.round(idealIntraPerPair));
+  const remaining = gamesPerSeason - intraPerPair * intraOpponents;
+  const interPerPair = Math.max(1, Math.round(remaining / interOpponents));
+  return { intraPerPair, interPerPair };
+};
+
+// a × intraOpponents + b × interOpponents = gamesPerSeason の整数解 (a, b ≥ 1) のうち、
+// リーグ内が7割に近いもの（同じ近さなら a の小さい方）。無ければ null
+const exactLeagueSplit = (gamesPerSeason, intraOpponents, interOpponents) => {
   // 理想配分: リーグ内70%、リーグ間30%
   const idealIntraPerPair = (gamesPerSeason * 0.7) / intraOpponents;
 
@@ -131,39 +140,78 @@ export const balanceLeagueGames = (gamesPerSeason, intraOpponents, interOpponent
       best = { intraPerPair: a, interPerPair: b, error };
     }
   }
-
-  // 整数解が見つからない場合のフォールバック（近似）
-  if (!best) {
-    const intraPerPair = Math.max(1, Math.round(idealIntraPerPair));
-    const remaining = gamesPerSeason - intraPerPair * intraOpponents;
-    const interPerPair = Math.max(1, Math.round(remaining / interOpponents));
-    return { intraPerPair, interPerPair };
-  }
-  return { intraPerPair: best.intraPerPair, interPerPair: best.interPerPair };
+  return best && { intraPerPair: best.intraPerPair, interPerPair: best.interPerPair };
 };
 
 /**
- * 2リーグ制で有効な試合数の選択肢を生成
- * a * intraOpponents + b * interOpponents = total の整数解が存在する値のみ
+ * 2リーグ制の各リーグの球団数 [前, 後]。前のリーグが小さい側（球団数が奇数なら1つ違い）。
+ * ⚠ 日程・選べる試合数・規定画面のチーム名の欄・リーグ優勝の取り出し（`parallelWorldManager`）は
+ *   どれも同じ分け方（`Math.floor(球団数 / 2)` で前後に分ける）
+ */
+export const twoLeagueSizes = (teamsCount) => {
+  const first = Math.floor(teamsCount / 2);
+  return [first, teamsCount - first];
+};
+
+/**
+ * 2リーグ制で、**どの球団もちょうど gamesPerSeason 試合**になる組み方。組めなければ null。
+ * - intraA / intraB: 前・後のリーグの、リーグ内の1カードあたりの対戦数（リーグごとに変えてよい）
+ * - inter: 交流戦の1カードあたりの対戦数（交流戦は両リーグの球団の組なので、両リーグで同じ）
+ *
+ * 前のリーグの球団: intraA ×（前の球団数−1）＋ inter ×（後の球団数）
+ * 後のリーグの球団: intraB ×（後の球団数−1）＋ inter ×（前の球団数）
+ *
+ * ⚠ **日程（`buildSeasonSchedule`）と選べる試合数（`getValidTwoLeagueGameCounts`）はこれだけで決める**。
+ *   以前は日程が「両リーグが同じ大きさ」のときしか揃えず、球団数が奇数だと選んだ数とずれた
+ *   （5球団・141試合で142〜160試合）。奇数のときに選べるのは、5球団は偶数・7球団は6の倍数・
+ *   9球団は4の倍数・11球団は10の倍数（式から決まる）。
+ * ⚠ 同じ大きさのときは以前の配分（`balanceLeagueGames` の整数解）のまま。日程を変えない
+ */
+export const twoLeagueGamePlan = (teamsCount, gamesPerSeason) => {
+  const games = gamesPerSeason;
+  const [sizeA, sizeB] = twoLeagueSizes(teamsCount);
+  if (sizeA < 2 || !Number.isInteger(games) || games < 1) return null;
+  if (sizeA === sizeB) {
+    const exact = exactLeagueSplit(games, sizeA - 1, sizeB);
+    return exact && { intraA: exact.intraPerPair, intraB: exact.intraPerPair, inter: exact.interPerPair };
+  }
+  // 大きさが違う（奇数）: 交流戦の数 inter を決めると、両リーグのリーグ内の数が決まる。
+  // どちらのリーグもリーグ内が7割に近い組を選ぶ（同じ近さなら交流戦の少ない方）
+  let best = null;
+  for (let inter = 1; inter * sizeA < games; inter++) {
+    const restA = games - inter * sizeB;
+    const restB = games - inter * sizeA;
+    if (restA < sizeA - 1) break;
+    if (restA % (sizeA - 1) !== 0 || restB % (sizeB - 1) !== 0) continue;
+    const error = Math.abs(restA / games - 0.7) + Math.abs(restB / games - 0.7);
+    if (!best || error < best.error - 1e-9) {
+      best = { intraA: restA / (sizeA - 1), intraB: restB / (sizeB - 1), inter, error };
+    }
+  }
+  return best && { intraA: best.intraA, intraB: best.intraB, inter: best.inter };
+};
+
+/**
+ * 2リーグ制で選べる試合数（どの球団もちょうどその数になり、レギュラーシーズンに入りきるもの）
+ * ⚠ 組み方は日程と同じ `twoLeagueGamePlan`。ここで別の式を立てると、選べるのに揃わない値が出る
  * @param {number} teamsCount - 総チーム数
  * @param {number} maxGames - 最大試合数
- * @returns {Array<{value: number, intra: number, inter: number}>}
+ * @returns {Array<{value: number, intra: number, inter: number, intraB: number}>}
+ *   intra は前のリーグ（球団数が奇数なら小さい側）、intraB は後のリーグのリーグ内の各カードの対戦数
  */
 export const getValidTwoLeagueGameCounts = (teamsCount, maxGames = 150) => {
-  const halfTeams = Math.floor(teamsCount / 2);
-  if (halfTeams < 2) return [];
-  const intraOpp = halfTeams - 1;
-  const interOpp = halfTeams;
+  const [sizeA, sizeB] = twoLeagueSizes(teamsCount);
+  if (sizeA < 2) return [];
 
   // 4-9月（月曜休み）のカレンダー上限: 約156日
   const MAX_CALENDAR_DAYS = 156;
 
   // ダミーチーム名でマージ後ラウンド数を計算
-  const dummyL1 = Array.from({length: halfTeams}, (_, i) => 'L1_' + i);
-  const dummyL2 = Array.from({length: halfTeams}, (_, i) => 'L2_' + i);
+  const dummyL1 = Array.from({length: sizeA}, (_, i) => 'L1_' + i);
+  const dummyL2 = Array.from({length: sizeB}, (_, i) => 'L2_' + i);
 
-  const countMergedDays = (a, b) => {
-    const rounds = generateTwoLeagueMatchups(dummyL1, dummyL2, a, b);
+  const countMergedDays = ({ intraA, intraB, inter }) => {
+    const rounds = generateTwoLeagueMatchups(dummyL1, dummyL2, intraA, inter, intraB);
     const used = new Array(rounds.length).fill(false);
     let days = 0;
     for (let i = 0; i < rounds.length; i++) {
@@ -183,22 +231,12 @@ export const getValidTwoLeagueGameCounts = (teamsCount, maxGames = 150) => {
     return days;
   };
 
-  // 有効な合計値を列挙し、balanceLeagueGamesと同じ(a,b)で日数チェック
-  const totals = new Set();
-  for (let a = 1; ; a++) {
-    for (let b = 1; ; b++) {
-      const total = a * intraOpp + b * interOpp;
-      if (total > maxGames) break;
-      if (total >= intraOpp + interOpp) totals.add(total);
-    }
-    if (a * intraOpp >= maxGames) break;
-  }
-
   const results = [];
-  for (const total of [...totals].sort((a, b) => a - b)) {
-    const { intraPerPair, interPerPair } = balanceLeagueGames(total, intraOpp, interOpp);
-    if (countMergedDays(intraPerPair, interPerPair) <= MAX_CALENDAR_DAYS && fitsInRegularSeason(teamsCount, total, 'two')) {
-      results.push({ value: total, intra: intraPerPair, inter: interPerPair });
+  for (let total = 1; total <= maxGames; total++) {
+    const plan = twoLeagueGamePlan(teamsCount, total);
+    if (!plan) continue;
+    if (countMergedDays(plan) <= MAX_CALENDAR_DAYS && fitsInRegularSeason(teamsCount, total, 'two')) {
+      results.push({ value: total, intra: plan.intraA, inter: plan.inter, intraB: plan.intraB });
     }
   }
   return results;
@@ -218,6 +256,16 @@ export const getValidTwoLeagueGameCounts = (teamsCount, maxGames = 150) => {
  * @returns {Array} スケジュール配列
  */
 export const generateFullSeasonSchedule = (config) => {
+  const { teams = [], gamesPerSeason = 60, leagueFormat = 'single' } = config;
+  if (leagueFormat === 'two' && teams.length >= 4 && !twoLeagueGamePlan(teams.length, gamesPerSeason)) {
+    // ⚠ どの球団も同じ数に組めない値（規定画面では選べない。古い保存の設定だけ）。
+    //   以前は近似で組み、球団ごとに試合数がばらついた。いちばん近い選べる値で組む
+    const fitted = fitGamesPerSeason({ teamsCount: teams.length, leagueFormat, games: gamesPerSeason });
+    if (fitted !== gamesPerSeason && twoLeagueGamePlan(teams.length, fitted)) {
+      console.warn(`[日程] 2リーグ${teams.length}球団で${gamesPerSeason}試合はどの球団も同じ数に組めないため、${fitted}試合で組みます`);
+      return generateFullSeasonSchedule({ ...config, gamesPerSeason: fitted });
+    }
+  }
   const { schedule, leftover } = buildSeasonSchedule(config);
   if (leftover.length > 0) {
     // 4/1〜10/9 のどの日を使っても、同じ球団を同じ日に2回出さずには入りきらない設定。
@@ -239,26 +287,18 @@ const buildSeasonSchedule = (config) => {
 
   // 2リーグ制の場合
   if (leagueFormat === 'two' && teamsCount >= 4) {
-    const halfTeams = Math.floor(teamsCount / 2);
-    const league1 = teams.slice(0, halfTeams);
-    const league2 = teams.slice(halfTeams);
-
-    // 非対称なリーグ構成（奇数チーム等）には完全な配分を保証できないため、
-    // 両リーグのサイズが等しい場合のみ整数解ベースの配分を行う
-    if (league1.length === league2.length && league1.length >= 2) {
-      const intraOpponents = league1.length - 1;
-      const interOpponents = league2.length;
-      const { intraPerPair, interPerPair } = balanceLeagueGames(gamesPerSeason, intraOpponents, interOpponents);
-      allMatchups = generateTwoLeagueMatchups(league1, league2, intraPerPair, interPerPair);
+    const [sizeA, sizeB] = twoLeagueSizes(teamsCount);
+    const league1 = teams.slice(0, sizeA);
+    const league2 = teams.slice(sizeA);
+    // ⚠ どの球団もちょうど gamesPerSeason 試合（`twoLeagueGamePlan`）。組めない値は
+    //   `generateFullSeasonSchedule` が近い選べる値に直してから来る（`fitsInRegularSeason` は組めない値を断る）。
+    //   ここで組めないときだけ、以前の近似（リーグ内は同じ数）で組む
+    const plan = twoLeagueGamePlan(teamsCount, gamesPerSeason);
+    if (plan) {
+      allMatchups = generateTwoLeagueMatchups(league1, league2, plan.intraA, plan.inter, plan.intraB);
     } else {
-      // 非対称リーグのフォールバック（従来の近似ロジック）
-      const intraOppA = Math.max(1, league1.length - 1);
-      const intraOppB = Math.max(1, league2.length - 1);
-      const idealIntraPerPair = Math.max(1, Math.round((gamesPerSeason * 0.7) / Math.max(intraOppA, intraOppB)));
-      const intraTotalA = idealIntraPerPair * intraOppA;
-      const remainingA = Math.max(0, gamesPerSeason - intraTotalA);
-      const interPerPair = Math.max(1, Math.round(remainingA / league2.length));
-      allMatchups = generateTwoLeagueMatchups(league1, league2, idealIntraPerPair, interPerPair);
+      const { intraPerPair, interPerPair } = balanceLeagueGames(gamesPerSeason, Math.max(sizeA, sizeB) - 1, sizeB);
+      allMatchups = generateTwoLeagueMatchups(league1, league2, intraPerPair, interPerPair);
     }
   } else {
     // 1リーグ制（従来のロジック）
@@ -495,6 +535,8 @@ const fitsCache = new Map();
 export const fitsInRegularSeason = (teamsCount, gamesPerSeason, leagueFormat = 'single') => {
   if (!(teamsCount >= 2)) return false;
   const format = leagueFormat === 'two' && teamsCount >= 4 ? 'two' : 'single';
+  // 2リーグでどの球団も同じ数に組めない値は選ばせない（`twoLeagueGamePlan`）
+  if (format === 'two' && !twoLeagueGamePlan(teamsCount, gamesPerSeason)) return false;
   const key = `${format}|${teamsCount}|${gamesPerSeason}`;
   if (!fitsCache.has(key)) {
     const teams = Array.from({ length: teamsCount }, (_, i) => `T${i}`);
@@ -520,6 +562,39 @@ export const getValidSingleLeagueGameCounts = (teamsCount, maxGames = 150) => {
     if (fitsInRegularSeason(teamsCount, d * i, 'single')) results.push(d * i);
   }
   return results;
+};
+
+/**
+ * 年間試合数を、いまのリーグの形（球団数・1リーグ/2リーグ）で選べる値に合わせる。
+ * - すでに選べる値ならそのまま
+ * - 1リーグ: 球団数を変えたときは対戦相手ごとの対戦数を保つ。対戦相手数の倍数に丸め、
+ *   期間に入りきらなければ入る中でいちばん多い値
+ * - 2リーグ: いちばん近い選べる値（同じ近さなら少ない方）
+ * ⚠ 古い保存が選べない値を持つときもこれで直す（表示と日程を食い違わせない）
+ * @param {{teamsCount:number, leagueFormat?:string, games:number, previousTeamsCount?:number, maxGames?:number}} p
+ * @returns {number}
+ */
+export const fitGamesPerSeason = ({ teamsCount, leagueFormat = 'single', games, previousTeamsCount = teamsCount, maxGames = 150 }) => {
+  const two = leagueFormat === 'two' && teamsCount >= 4;
+  const options = two
+    ? getValidTwoLeagueGameCounts(teamsCount, maxGames).map(o => o.value)
+    : getValidSingleLeagueGameCounts(teamsCount, maxGames);
+  if (options.length === 0) return games;
+  if (two) {
+    if (options.includes(games)) return games;
+    return options.reduce((best, v) => (Math.abs(v - games) < Math.abs(best - games) ? v : best));
+  }
+  const d = Math.max(1, teamsCount - 1);
+  let target = games;
+  if (previousTeamsCount !== teamsCount) {
+    const oldD = Math.max(1, previousTeamsCount - 1);
+    target = d * Math.max(1, Math.round(games / oldD));
+  } else if (games % d !== 0) {
+    target = Math.max(d, Math.round(games / d) * d);
+  }
+  if (target > maxGames) target = Math.floor(maxGames / d) * d;
+  if (options.includes(target)) return target;
+  return options.filter(v => v <= target).pop() ?? options[0];
 };
 
 /**

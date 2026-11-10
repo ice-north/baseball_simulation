@@ -19,7 +19,7 @@ import { executeTeamCampTraining } from '../../src/season/campTraining.js';
 import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
 import { autoSimulateGame, setRecommendedLineup } from '../../src/game/autoSimulation.js';
-import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason } from '../../src/season/scheduleGenerator.js';
+import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason, fitGamesPerSeason, twoLeagueSizes } from '../../src/season/scheduleGenerator.js';
 import { applyNextSeasonRegulations } from '../../src/season/nextSeasonRegulations.js';
 import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
 import { leagueMagic } from '../../src/season/magicNumber.js';
@@ -98,6 +98,10 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
 //    2リーグ9球団143試合以上など）で1日に複数ラウンドをまとめて置き、同じ球団が
 //    同じ日に2試合組まれていた。日程画面は自チームの試合を1つしか拾わないので、
 //    2試合目は采配できないまま自動で消化されていた。
+// ⚠ **選べる値なら、どの球団もちょうどその数**（2リーグの奇数球団を含む）。以前は2リーグで
+//    球団数が奇数だと、選んだ数と球団ごとの試合数がずれた（5球団・141試合で142〜160、
+//    9球団・150試合で148〜160、7球団・116試合で118〜129、5球団・3試合で4。総合監査 2026-11-10 の判断9）。
+//    リーグ内・交流戦の数も選択肢の表示（`intra`・`intraB`・`inter`）どおり
 {
   const warn = console.warn;
   console.warn = () => {};
@@ -117,8 +121,32 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
             leagueFormat: format,
           });
           const seen = new Set();
+          const label = `${format === 'two' ? '2リーグ' : '1リーグ'}${count}球団${games}試合`;
+          if (format === 'two' || fitsInRegularSeason(count, games, 'single')) {
+            const played = Object.fromEntries(teams.map(t => [t, { all: 0, inter: 0 }]));
+            const [sizeA] = twoLeagueSizes(count);
+            const leagueOf = (t) => (teams.indexOf(t) < sizeA ? 'A' : 'B');
+            for (const g of schedule) {
+              const inter = format === 'two' && leagueOf(g.home) !== leagueOf(g.away);
+              for (const t of [g.home, g.away]) {
+                played[t].all++;
+                if (inter) played[t].inter++;
+              }
+            }
+            for (const t of teams)
+              assert.equal(played[t].all, games, `${label}: ${t} の試合数が ${played[t].all}`);
+            if (format === 'two') {
+              const opt = getValidTwoLeagueGameCounts(count, 150).find(o => o.value === games);
+              const [a, b] = twoLeagueSizes(count);
+              for (const t of teams) {
+                const ownLeague = leagueOf(t) === 'A' ? a : b;
+                const intra = leagueOf(t) === 'A' ? opt.intra : opt.intraB;
+                assert.equal(played[t].inter, opt.inter * (count - ownLeague), `${label}: ${t} の交流戦が選択肢の表示と違う`);
+                assert.equal(played[t].all - played[t].inter, intra * (ownLeague - 1), `${label}: ${t} のリーグ内の試合が選択肢の表示と違う`);
+              }
+            }
+          }
           for (const g of schedule) {
-            const label = `${format === 'two' ? '2リーグ' : '1リーグ'}${count}球団${games}試合`;
             assert.ok(!(g.date.month < 4 || g.date.month > 10 || (g.date.month === 10 && g.date.day > 9)),
               `${label}: シーズン期間の外に試合がある（${g.date.month}/${g.date.day}）`);
             for (const t of [g.home, g.away]) {
@@ -146,6 +174,30 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   }
   assert.ok(!getValidSingleLeagueGameCounts(3, 150).includes(130), '1リーグ3球団130試合（1日1試合で192日に入らない）が選べる');
   assert.ok(getValidSingleLeagueGameCounts(3, 150).includes(128), '1リーグ3球団128試合は入りきるのに選べない');
+  // 奇数球団の2リーグは、式から決まる値だけ選べる（5球団は偶数・7球団は6の倍数・9球団は4の倍数・11球団は10の倍数）
+  for (const [count, step] of [[5, 2], [7, 6], [9, 4], [11, 10]]) {
+    const values = getValidTwoLeagueGameCounts(count, 150).map(o => o.value);
+    assert.ok(values.length > 5, `2リーグ${count}球団の選択肢が少なすぎる（${values.length}）`);
+    assert.ok(values.every(v => v % step === 0), `2リーグ${count}球団で、全球団を同じ数にできない値が選べる`);
+  }
+}
+
+// --- 古い保存の選べない試合数（2リーグの奇数球団など）は、近い選べる値で日程を組む ---
+// ⚠ 規定画面では選べない値。以前は近似で組み、5球団・141試合で球団ごとに142〜160試合にばらついた
+{
+  const warn = console.warn;
+  const warned = [];
+  console.warn = (message) => warned.push(message);
+  try {
+    const teams = Array.from({ length: 5 }, (_, i) => `T${i}`);
+    const fitted = fitGamesPerSeason({ teamsCount: 5, leagueFormat: 'two', games: 141 });
+    const schedule = generateFullSeasonSchedule({ teams, gamesPerSeason: 141, startDate: { year: 2025, month: 4, day: 1 }, leagueFormat: 'two' });
+    for (const t of teams)
+      assert.equal(schedule.filter(g => g.home === t || g.away === t).length, fitted, `古い保存の5球団141試合で ${t} の試合数が揃わない`);
+    assert.ok(warned.some(m => String(m).includes(`${fitted}試合で組みます`)), '選べない値を組み直したことを警告していない');
+  } finally {
+    console.warn = warn;
+  }
 }
 
 // --- DH制の推奨スタメンは DH の枠を「dh」で保存し、日付進行の補完で守備がずれない ---
