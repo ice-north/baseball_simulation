@@ -61,7 +61,8 @@ fun LoginScreen(model: AppViewModel) {
             Text("NEXT STAGE", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
             Text("オンラインペナント", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Web 版と同じアカウントでログインします。ログインすると、ほかの端末（ブラウザなど）からは操作できなくなります。",
+                // ⚠ 同時に操作できるのはブラウザ1台とアプリ1台（server/sessions.mjs）。外れるのは同じ種類の前の端末だけ
+                "Web 版と同じアカウントでログインします。ブラウザとアプリはそれぞれ1台まで同時に使えます（別のスマホでこのアプリにログインすると、前のスマホは操作できなくなります）。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
