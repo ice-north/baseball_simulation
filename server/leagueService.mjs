@@ -673,7 +673,7 @@ export class LeagueService {
     if (this.store.isDue && !(await this.store.isDue(this.clock())))
       return { advanced: false };
     return this.store.transaction(async (bundle) => {
-      // ⚠ **定期処理でも移行する**。誰も操作しなくても、次の正時に自然に直る。
+      // ⚠ **定期処理でも移行する**。誰も操作しなくても、5分以内（cron の刻み）に自然に直る。
       //    直せない形（作り直すしかない版）なら止めるだけにして、
       //    定期処理そのものを例外で落とさない
       let migrated = { applied: [], changed: false };
