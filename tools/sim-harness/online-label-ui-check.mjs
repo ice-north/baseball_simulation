@@ -399,6 +399,19 @@ async function scene(width, height = 844, scale = 1, holdDetail = false) {
 }
 try {
   const { page: p, context } = await scene(1440, 1000);
+  // ⚠ 名前を変える小窓は 440px（選手の詳細の 760px に押し込まない）。説明は
+  //    濃い面の上で読める明るい色（地色用の濃い文字だと読めなかった）
+  await p.getByRole('button', { name: '名前を変える', exact: true }).click();
+  const rename = p.getByRole('dialog', { name: '球団名・名前を変える' });
+  await rename.waitFor();
+  const renameLook = await rename.evaluate((node) => ({
+    width: Math.round(node.getBoundingClientRect().width),
+    note: getComputedStyle(node.querySelector('.online-muted')).color,
+  }));
+  assert.ok(renameLook.width <= 460, `名前を変える小窓が広い: ${renameLook.width}`);
+  assert.equal(renameLook.note, 'rgb(208, 217, 229)', '名前を変える小窓の説明が読めない色');
+  await rename.getByRole('button', { name: '閉じる', exact: true }).click();
+  await rename.waitFor({ state: 'hidden' });
   await p.getByRole('button', { name: '選手成績', exact: true }).click();
   await p.getByLabel('閲覧する球団').selectOption('B');
   await p

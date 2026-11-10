@@ -3173,8 +3173,11 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 
 /* --- 選手の詳細（ダイアログ） ------------------------------------------- */
-/* ⚠ 区分のタブが入るので、PCは広げる（430px だと3〜4段に折り返していた） */
-.online-desktop .online-player-dialog {
+/* ⚠ 区分のタブが入るので、PCは広げる（430px だと3〜4段に折り返していた）
+   ⚠ **選手の詳細だけに当てる**。試合の小窓（`.online-game-dialog`。観戦リプレイは
+      1740px・試合成績は1240px）と名前を変える小窓（440px）は自分の幅を持つが、
+      クラス1つの指定なので、絞らないとこちら（0,2,0）に負けて 760px に押し込まれる */
+.online-desktop .online-player-dialog:not(.online-game-dialog, .online-rename-dialog) {
   width: min(760px, calc(100% - 48px));
 }
 .online-desktop .online-player-dialog .online-stat-grid {

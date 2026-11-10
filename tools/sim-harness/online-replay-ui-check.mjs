@@ -140,12 +140,23 @@ try {
     .first()
     .click();
   const cardBox = page.getByRole('dialog', { name: '試合成績', exact: true });
+  await cardBox.locator('tbody tr').first().waitFor();
+  // ⚠ PCの試合の小窓は**選手の詳細の 760px に押し込まない**。試合成績は1240px、
+  //    観戦リプレイは画面の97%（1440pxなら1396px）
+  assert.ok(
+    (await cardBox.boundingBox()).width >= 1200,
+    `PCの試合成績の小窓が狭い: ${(await cardBox.boundingBox()).width}`,
+  );
   await cardBox
     .getByRole('button', { name: '観戦リプレイ', exact: true })
     .click();
   await cardBox
     .getByRole('region', { name: '観戦リプレイ', exact: true })
     .waitFor();
+  assert.ok(
+    (await cardBox.boundingBox()).width >= 1380,
+    `PCの観戦リプレイの小窓が狭い: ${(await cardBox.boundingBox()).width}`,
+  );
   assert.equal(
     await cardBox.evaluate((node) => !!node.closest('.online-score')),
     false,
