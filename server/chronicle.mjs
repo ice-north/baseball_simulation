@@ -69,6 +69,13 @@ const chronicleOf = (league) =>
 
 const num = (v) => (Number.isFinite(v) ? v : 0);
 
+/** 打撃・投球の数の項目を足し込む（`into` は `{ batting: {}, pitching: {} }`。`stats` は同じ形） */
+function addStats(into, stats) {
+  for (const side of ['batting', 'pitching'])
+    for (const [k, v] of Object.entries(stats?.[side] || {}))
+      if (typeof v === 'number') into[side][k] = (into[side][k] || 0) + v;
+}
+
 /**
  * 過去の年（今季より前）の通算。記録の鍵ごと。
  * ⚠ 年の中では変わらないので、リーグ×年で覚えておく（試合のある日ごとに
@@ -84,9 +91,7 @@ function pastTotals(league, year) {
     if (Number(season.year) >= year) continue;
     for (const [key, rec] of Object.entries(season.players || {})) {
       const t = out.get(key) || { batting: {}, pitching: {} };
-      for (const side of ['batting', 'pitching'])
-        for (const [k, v] of Object.entries(rec.stats?.[side] || {}))
-          if (typeof v === 'number') t[side][k] = (t[side][k] || 0) + v;
+      addStats(t, rec.stats);
       out.set(key, t);
     }
   }
@@ -244,9 +249,7 @@ function careerOf(league, key) {
     if (!rec) continue;
     total.seasons += 1;
     for (const t of rec.teams || []) if (!total.teams.includes(t)) total.teams.push(t);
-    for (const side of ['batting', 'pitching'])
-      for (const [k, v] of Object.entries(rec.stats?.[side] || {}))
-        if (typeof v === 'number') total[side][k] = (total[side][k] || 0) + v;
+    addStats(total, rec.stats);
   }
   return total;
 }
@@ -532,10 +535,7 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
       for (const box of Object.values(season.games || {}))
         for (const row of box?.teams?.[teamName] || []) {
           const t = moved.get(row.key);
-          if (!t) continue;
-          for (const side of ['batting', 'pitching'])
-            for (const [k, v] of Object.entries(row[side] || {}))
-              if (typeof v === 'number') t[side][k] = (t[side][k] || 0) + v;
+          if (t) addStats(t, row);
         }
     for (const rec of Object.values(season.players || {})) {
       if (!rec.teams?.includes(teamName)) continue;

@@ -188,14 +188,6 @@ export function ownUpcomingGames(schedule, ownTeam, size = 6) {
 }
 
 /**
- * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
- *
- * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
- *    するので、14試合では自球団は2〜3試合しか入らない。
- * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
- *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
- */
-/**
  * 球団ごとの今の連続（`{ 球団: { kind: 'W'|'L'|'D', count } }`）。今季の公式日程の終わった試合から数える。
  * ⚠ 日程は日付順とは限らないので並べ直す（`ownRecentGames` と同じ並べ方）
  */
@@ -219,6 +211,14 @@ export function teamStreaks(schedule) {
   return streaks;
 }
 
+/**
+ * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
+ *
+ * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
+ *    するので、14試合では自球団は2〜3試合しか入らない。
+ * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
+ *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
+ */
 export function ownRecentGames(schedule, ownTeam, size = 5) {
   const own = schedule
     .filter(

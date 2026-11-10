@@ -26,6 +26,7 @@ import {
   shortName,
   PHASE_STAFF_AREA,
   roleTypeLabel,
+  isAuto,
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import {
@@ -234,7 +235,6 @@ export function coachCard(league, coach, labelOf, { full = true, roster = null }
  * - 指導者も標準のまま: 「代打を使い始める回: 既存AIの判断（山田監督も標準）」
  * - 指導者が決めない（人が決めた・任せていない）: 「送りバント: しない」
  */
-const isStandardValue = (v) => v == null || v === 'auto' || v === 0 || v === '0';
 function tacticText({ setting, ...line }) {
   const settingLabel = line.settingLabel;
   if (!line.by) return { ...line, text: `${line.label}: ${settingLabel}` };
@@ -242,7 +242,7 @@ function tacticText({ setting, ...line }) {
   return {
     ...line,
     resolvedLabel: resolved,
-    text: line.isStandard && isStandardValue(setting)
+    text: line.isStandard && isAuto(line.key, setting)
       ? `${line.label}: ${settingLabel}（${line.by}も標準）`
       : resolved === settingLabel
         ? `${line.label}: ${resolved}（${line.by}）`
@@ -264,7 +264,7 @@ export function tacticsLines(league, teamName, team) {
       setting: line.setting,
       settingLabel: line.settingLabel,
       valueLabel: line.valueLabel,
-      isStandard: isStandardValue(line.value),
+      isStandard: isAuto(line.key, line.value),
       by: line.by,
     }),
   );

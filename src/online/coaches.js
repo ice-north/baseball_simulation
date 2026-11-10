@@ -55,14 +55,14 @@ export const VIEWS = {
   hitting: { label: '打撃', low: '慎重', high: '積極', domain: 'batting' },
   running: { label: '走塁', low: '慎重', high: '積極', domain: 'batting' },
 };
-export const VIEW_KEYS = Object.keys(VIEWS);
+const VIEW_KEYS = Object.keys(VIEWS);
 
 /**
  * 性格。値は -2〜2 の整数。「どうやるか」を受け持つ（何を目指すかはビジョン）。
  * ⚠ 前の「起用（若手好き）」は時間軸（育成⇔勝負）に、「戦い方（攻め/守り）」と
  *    「選手との接し方」は「こだわり」にまとめた（二重に持つと筋の通らない人が出る）。
  */
-export const PERSONALITY = {
+const PERSONALITY = {
   temper: { label: '気質', low: '我慢強い', high: '短気' },
   stubborn: { label: 'こだわり', low: '柔軟', high: '頑固' },
   trust: { label: '任せ方', low: 'ワンマン', high: '任せる' },
@@ -254,7 +254,7 @@ export const STAFF_MODES = {
   advice: '意見を聞く',
   delegate: '任せる',
 };
-export const DEFAULT_STAFF_MODE = 'advice';
+const DEFAULT_STAFF_MODE = 'advice';
 
 /**
  * 分野。`owner` はその分野の判断を受け持つ役職（試合中の采配は項目ごとに違うので null）。
@@ -291,7 +291,7 @@ export function staffModesOf(member) {
  * ⚠ 代打を使うか（`pinchHit`）・守備固めを使うか（`defensiveSub`）は指導者が
  *    触らない（「使わない」は極端で、人が選ぶもの）。
  */
-export const TACTIC_OWNERS = {
+const TACTIC_OWNERS = {
   sacrificeBunt: ['manager', 'smallBall'],
   squeeze: ['manager', 'smallBall'],
   safetyBunt: ['manager', 'smallBall'],
@@ -304,14 +304,18 @@ export const TACTIC_OWNERS = {
  * 方針（`STRATEGY_FIELDS`）の受け持ち。
  * ⚠ 守備方針（前進守備・シフト）は1試合ずっと効く極端な設定なので触らない。
  */
-export const STRATEGY_OWNERS = {
+const STRATEGY_OWNERS = {
   batting: ['batting', 'hitting'],
   pitching: ['pitching', 'pitching'],
   baseRunning: ['batting', 'running'],
 };
 
-/** 「AI判断」とみなす値（この値のときだけ、意見を聞くで指導者の考えが入る） */
-const isAuto = (key, value) =>
+/**
+ * 「AI判断」とみなす値（この値のときだけ、意見を聞くで指導者の考えが入る）。
+ * ⚠ 画面の文（`coachView.mjs` の「…も標準」）も同じ判定を使う。2つに分けると、
+ *    数の項目（代打・守備固めの回、先発の球数）の 0 の扱いがずれる
+ */
+export const isAuto = (key, value) =>
   value === undefined ||
   value === null ||
   value === 'auto' ||
@@ -947,7 +951,7 @@ export function leanFromPlayer(player) {
  *
  * ⚠ 乱数を引く順を変えると、同じ種でも顔ぶれが変わる（作り直しの再現は検査で見る）。
  */
-export function generateCoach({
+function generateCoach({
   id,
   age,
   position,
