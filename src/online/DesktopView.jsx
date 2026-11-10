@@ -511,9 +511,16 @@ export default function DesktopView(props) {
                ⚠ **手続きが変わったら作り直す**（`PhasePanel` と同じ `key`）。
                付けないと、年が替わって新しいキャンプが開いても前の年の
                未保存の割り当てが画面に残る */
-            <section className="online-card online-camp-card">
-              <CampPlanner key={view.phase.id} {...props} />
-            </section>
+            <>
+              <section className="online-card online-camp-card">
+                <CampPlanner key={view.phase.id} {...props} />
+              </section>
+              {/* ⚠ **年度更新の伸びはキャンプの下に出す**。キャンプの直前に済んでいて、
+                  方針を決める前に見るもの。以前は「現在の手続き」に置いていたが、
+                  キャンプ中はそこに案内しか無く、開く人がいなかった。
+                  キャンプの1画面（実行ボタンまで）は崩さないよう、下に置く */}
+              <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+            </>
           ) : (
             <>
               {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。
@@ -587,11 +594,6 @@ export default function DesktopView(props) {
               </button>
             </div>
           </section>
-          {/* ⚠ **年度更新の伸びはここに残す**。キャンプの直前に済んでいて、
-              キャンプの方針を決める前に見るもの（以前は `PhasePanel` の中で
-              キャンプの上に出していた）。ホームはキャンプだけで1画面なので、
-              落とさないようこちらへ移す */}
-          <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
         </Page>
       )}
       {current === 'decisions' &&

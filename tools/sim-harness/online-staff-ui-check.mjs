@@ -46,6 +46,15 @@ async function campService() {
   });
   const league = (await store.read()).league;
   assert.equal(league.phase?.kind, 'camp', 'セットを選んでもキャンプに入らない');
+  // 年度更新の伸び（2年目からのキャンプと同じ。ホームのキャンプの下に出す）
+  await store.transaction((bundle) => {
+    const l = bundle.league;
+    const id = l.game.teams[l.members[0].teamName].players[0].id;
+    l.offseasonResults = {
+      admin: { year: 1, gains: { [id]: { 'physical.speed': 3 } }, departed: [] },
+    };
+    return { value: null };
+  });
   return { service, store, userId: 'admin', sessionId };
 }
 
@@ -73,6 +82,20 @@ try {
     await nav.locator('.online-nav-home[aria-current="page"]').waitFor();
   };
   await nav.getByRole('button', { name: '指導者', exact: true }).waitFor();
+  // ⚠ 年度更新の伸び（オフの成長）は**キャンプ中のホーム**に、カードの地色で出す。
+  //    以前は「現在の手続き」（キャンプ中は案内だけ）の奥にあり、薄い緑の箱の地色が
+  //    カードの地色を消して、明るいグレーの地に明るい文字が載っていた
+  const growth = p.getByRole('region', { name: 'オフの成長' });
+  await growth.waitFor();
+  assert.ok(await p.locator('.online-camp').isVisible(), 'オフの成長はキャンプと同じホームに出す');
+  const growthPaint = await growth.evaluate((node) => ({
+    card: getComputedStyle(node).backgroundColor,
+    ground: getComputedStyle(node.closest('.online')).backgroundColor,
+  }));
+  assert.ok(
+    growthPaint.card.startsWith('rgb(') && growthPaint.card !== growthPaint.ground,
+    `オフの成長がカードの地色に載っていない: ${JSON.stringify(growthPaint)}`,
+  );
   await go('指導者');
   const cards = p.locator('.online-staff-grid').first().locator('.online-staff-card');
   await cards.first().waitFor();

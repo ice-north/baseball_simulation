@@ -759,6 +759,11 @@ small.online-gain:not(:where(.online-sp *)) {
   --online-card-pad: 4px 14px;
   --online-card-gap: 0;
 }
+/* キャンプの下に置くカード（オフの成長）。キャンプのカードは下の余白を0にして
+   いるので、ここで間を空ける（1画面に収めるのはキャンプのカードまで） */
+.online-camp-card + .online-card {
+  margin-top: 12px;
+}
 /* ⚠ カードの中では `.online-desktop .online-card h3`（margin 14px/8px）が
    `.online-camp-head h3`（margin 0）に詳細度で勝つ。見出しの行が 24px→43px に
    なり、12人目の行が1画面から出た。ここで勝たせ直す（実測 1012px→993px） */

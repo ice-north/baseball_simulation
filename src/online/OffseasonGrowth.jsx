@@ -37,10 +37,11 @@ export default function OffseasonGrowth({ view }) {
   const shown = all ? rows : rows.slice(0, ROWS);
   const departed = result.departed || [];
   return (
-    <section className="online-card online-camp-gains" aria-label="オフの成長">
-      <div className="online-camp-gains-head">
-        <h4>{result.year}年目オフの成長（年度更新）</h4>
-      </div>
+    // ⚠ **カードの地色に載せる**（キャンプの結果 `CompletedCamp` と同じ形）。以前は
+    //    `.online-camp-gains`（カードの中に置く薄い緑の箱）を重ねていて、その地色が
+    //    カードの地色を消し、PCの明るいグレーの地に明るい文字が載って読めなかった
+    <section className="online-card" aria-label="オフの成長">
+      <h2>{result.year}年目オフの成長（年度更新）</h2>
       <p className="online-muted">
         能力が変わるのはキャンプと年度更新だけです（シーズン中は変わりません）。
         年度更新では、年齢と今季の出場に応じて伸びたり衰えたりします。
