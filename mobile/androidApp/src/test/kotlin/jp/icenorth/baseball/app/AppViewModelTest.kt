@@ -185,6 +185,26 @@ class AppViewModelTest {
         assertTrue(schedule.due(40 * 60_000L))
     }
 
+    @Test fun networkFailureDoesNotShowTheExceptionClassName() {
+        var views = 0
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> if (++views == 1) VIEW_1 else throw java.net.SocketTimeoutException("timeout")
+                else -> "{}"
+            }
+        }
+        login()
+        model.reload(pull = true)
+        until { !model.refreshing }
+        val text = model.error.orEmpty()
+        assertTrue(text, text.startsWith("通信できませんでした"))
+        assertTrue(text, text.contains("時間切れ"))
+        // ⚠ 内部の言葉（例外のクラス名・英語の文）を出さない
+        assertFalse(text, text.contains("Exception") || text.contains("timeout"))
+        assertEquals(null, networkCause(IllegalStateException("x")))
+    }
+
     @Test fun theSameNoticeTwiceIsAnnouncedTwice() {
         create { "{}" }
         // 画面は通し番号を鍵に出す。同じ文言が続いても番号は上がる（2回目を落とさない）

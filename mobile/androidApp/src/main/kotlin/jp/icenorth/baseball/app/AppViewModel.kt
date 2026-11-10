@@ -547,8 +547,21 @@ class AppViewModel internal constructor(
 
     private fun Exception.readable(): String = when (this) {
         is OnlineException -> message ?: "サーバー処理に失敗しました"
-        // ⚠ 原因の切り分けのため、試作のうちは中身も出す（スクショで送ってもらう）
-        else -> "通信できませんでした。電波の良いところで、もう一度試してください（${this::class.simpleName}: ${message ?: ""}）"
+        // ⚠ 原因の切り分けのため、分かる原因は添える（スクショで送ってもらう）。
+        //    以前は例外のクラス名と英語の文（SocketTimeoutException: timeout など）をそのまま出していた
+        else -> "通信できませんでした。電波の良いところで、もう一度試してください" + (networkCause(this)?.let { "（$it）" } ?: "")
+    }
+}
+
+/** 通信の失敗の原因（画面に添える短い言葉）。包まれた例外の中も見る。分からなければ null */
+internal fun networkCause(e: Throwable): String? = generateSequence(e) { it.cause }.take(5).firstNotNullOfOrNull { c ->
+    when {
+        c is java.net.UnknownHostException -> "接続先が見つかりません"
+        c is java.net.ConnectException -> "接続できません"
+        c is javax.net.ssl.SSLException -> "安全な接続ができません"
+        // OkHttp（SocketTimeoutException）と Ktor（HttpRequestTimeoutException など）の時間切れ
+        c is java.net.SocketTimeoutException || c::class.simpleName.orEmpty().contains("Timeout") -> "時間切れ"
+        else -> null
     }
 }
 
