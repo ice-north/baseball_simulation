@@ -615,6 +615,39 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
   }
 };
 
+/**
+ * ロードしたあとに開く画面（`App.jsx` の `applyLoadedGame` が使う）。
+ *
+ * オフシーズン画面で保存したならそこへ戻す（12/1等の日付が日程画面に出るのを防ぐ）。
+ *
+ * ⚠ **`phase` で判定してはいけない**。`getCurrentPhase` は独立・社会人モードで
+ * **10/21〜11/29 の「イベントの谷間」も `off_season` を返す**（プレーオフ後、
+ * ドラフト前後、契約更改の前後…）。そのため 11/5 のセーブをロードすると
+ * 契約更改(11/9)・トライアウト/スカウト入団(11/10)・年度末決算(11/30)を
+ * まるごと飛ばして翌年へ進んでしまっていた（実測: 社会人・独立で再現。
+ * 大学モードは `universityMode` 分岐が 11/29 まで REGULAR_SEASON なので無事だった）。
+ * 保存時にどの画面を開いていたかは `managementView` に入っているのでそれを使う。
+ * @returns {{ screenMode: string, gameFlowState: string, managementView: string }}
+ */
+export function resumeTargetOf(saveData) {
+  const savedView = saveData?.managementView;
+  const d = saveData?.seasonData?.currentDate;
+  // managementView を持たない旧セーブ向けの保険。12月以降だけオフシーズン扱い
+  const deepOffseason = (d?.month ?? 0) >= 12 || (d?.month === 11 && (d?.day ?? 0) >= 30);
+  // ⚠ **年度替わりの手続きの画面も、保存したところへ戻す**。「2年目へ進む」で
+  //    日付が1月1日に替わった瞬間にオートセーブが走り、その時の画面は
+  //    規定の見直し・キャンプ（社会人・大学）・背番号のどれか。以前は全部
+  //    日程画面に戻していたため、ロードすると規定・キャンプを飛ばし、
+  //    独立リーグでは日程が空のまま（日程は規定の確定で作る）試合が無くなった。
+  const RESUMABLE_VIEWS = ['regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'camp', 'jersey'];
+  const managementView = RESUMABLE_VIEWS.includes(savedView)
+    ? savedView
+    : (savedView === 'offseason' || (!savedView && deepOffseason))
+      ? 'offseason'
+      : 'dateprogress';
+  return { screenMode: 'management', gameFlowState: 'season', managementView };
+}
+
 // セーブデータを削除（async版）
 export const deleteSaveSlot = async (slotIndex) => {
   try {
