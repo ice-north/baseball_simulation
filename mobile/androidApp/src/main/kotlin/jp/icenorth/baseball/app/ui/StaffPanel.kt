@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -132,8 +133,28 @@ private fun TeamPicker(view: LeagueView, team: String, onPick: (String) -> Unit)
 @Composable
 private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
     val canWrite = view.writable && !model.busy
-    val act: (String, String, String?, String?) -> Unit = { action, role, other, coachId ->
-        model.command("staff", Commands.staff(action, role, other, coachId), done = "指導者を入れ替えました")
+    // ⚠ 済んだ知らせは操作ごとに書く（以前は解任・呼ぶ・入れ替えのどれも「指導者を入れ替えました」だった）
+    val act: (String, String, String?, CoachCard?) -> Unit = { action, role, other, coach ->
+        model.command("staff", Commands.staff(action, role, other, coach?.id), done = staffDoneText(action, role, other, coach?.name))
+    }
+    // ⚠ 解任と市場から呼ぶのは確かめてから（押し間違えると、解任した人はほかの球団に呼ばれることがある）
+    var ask by remember { mutableStateOf<StaffAsk?>(null) }
+    ask?.let { a ->
+        AlertDialog(
+            onDismissRequest = { ask = null },
+            title = { Text(a.title) },
+            text = { Text(a.text) },
+            confirmButton = {
+                TextButton(onClick = {
+                    ask = null
+                    when (a) {
+                        is StaffAsk.Release -> act("release", a.seat.role, null, a.seat.coach)
+                        is StaffAsk.Hire -> act("hire", a.role, null, a.coach)
+                    }
+                }) { Text(a.confirm) }
+            },
+            dismissButton = { TextButton(onClick = { ask = null }) { Text("やめる") } },
+        )
     }
     Section("首脳陣", trailing = {
         InfoButton("指導者", listOf(
@@ -145,7 +166,7 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
         if (staff.canEditSeats) Muted("キャンプの間は、解任・役職の入れ替え・市場から呼ぶことができます。")
         staff.seats.forEach { seat ->
             CoachBlock(seat.roleLabel, seat.coach)
-            if (staff.canEditSeats) SeatActions(seat, staff.seats, canWrite, act)
+            if (staff.canEditSeats) SeatActions(seat, staff.seats, canWrite, onRelease = { ask = StaffAsk.Release(seat) }) { other -> act("swap", seat.role, other, null) }
             HorizontalDivider()
         }
     }
@@ -192,7 +213,7 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
                 CoachBlock(if (coach.fromPlayer) "引退したばかり" else "浪人中", coach)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     ROLES.forEach { role ->
-                        TextButton(onClick = { act("hire", role, null, coach.id) }, enabled = canWrite && role in empty) { Text("${STAFF_ROLE_LABELS[role]}に呼ぶ") }
+                        TextButton(onClick = { ask = StaffAsk.Hire(coach, role) }, enabled = canWrite && role in empty) { Text("${STAFF_ROLE_LABELS[role]}に呼ぶ") }
                     }
                 }
                 HorizontalDivider()
@@ -204,14 +225,44 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SeatActions(seat: StaffSeat, seats: List<StaffSeat>, enabled: Boolean, act: (String, String, String?, String?) -> Unit) {
+private fun SeatActions(seat: StaffSeat, seats: List<StaffSeat>, enabled: Boolean, onRelease: () -> Unit, onSwap: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (seat.coach != null) TextButton(onClick = { act("release", seat.role, null, null) }, enabled = enabled) { Text("解任する") }
+        if (seat.coach != null) TextButton(onClick = onRelease, enabled = enabled) { Text("解任する") }
         ROLES.filter { it != seat.role }.forEach { other ->
             val otherCoach = seats.firstOrNull { it.role == other }?.coach
             if (seat.coach != null || otherCoach != null)
-                TextButton(onClick = { act("swap", seat.role, other, null) }, enabled = enabled) { Text("${STAFF_ROLE_LABELS[other]}と入れ替える") }
+                TextButton(onClick = { onSwap(other) }, enabled = enabled) { Text("${STAFF_ROLE_LABELS[other]}と入れ替える") }
         }
+    }
+}
+
+/** 確かめてから行う指導者の操作 */
+private sealed interface StaffAsk {
+    val title: String
+    val text: String
+    val confirm: String
+
+    data class Release(val seat: StaffSeat) : StaffAsk {
+        override val title get() = "${seat.coach?.name.orEmpty()}${seat.roleLabel}を解任しますか"
+        override val text get() = "市場に出るので、ほかの球団に呼ばれることがあります（このキャンプの間なら、市場に残っていれば呼び戻せます）。"
+        override val confirm get() = "解任する"
+    }
+
+    data class Hire(val coach: CoachCard, val role: String) : StaffAsk {
+        override val title get() = "${coach.name}を${STAFF_ROLE_LABELS[role].orEmpty()}に呼びますか"
+        override val text get() = "空いている${STAFF_ROLE_LABELS[role].orEmpty()}の席に就きます。"
+        override val confirm get() = "呼ぶ"
+    }
+}
+
+/** 指導者の操作が済んだときの知らせ */
+internal fun staffDoneText(action: String, role: String, other: String?, name: String?): String {
+    val label = STAFF_ROLE_LABELS[role].orEmpty()
+    return when (action) {
+        "release" -> "${name.orEmpty()}${label}を解任しました"
+        "hire" -> "${name.orEmpty()}を${label}に呼びました"
+        "swap" -> "${label}と${STAFF_ROLE_LABELS[other].orEmpty()}を入れ替えました"
+        else -> "指導者を入れ替えました"
     }
 }
 
@@ -277,24 +328,31 @@ private fun Fact(label: String, value: String) {
     }
 }
 
-/** 考え方の目盛り（-2〜2 の5段。片側だけのものは右半分を薄く） */
+/**
+ * 考え方の目盛り（-2〜2 の5段。片側だけのものは右半分を薄く）。
+ * ⚠ 2行に分ける（1行に項目名・両端の言葉・目盛り・いまの言葉を並べると、スマホの幅では詰まって切れていた）
+ */
 @Composable
 private fun ScaleRow(item: StaffScale) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 1.dp)) {
-        Text(item.label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(88.dp))
-        Text(item.low, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            (-2..2).forEach { v ->
-                val color = when {
-                    v == item.value -> MaterialTheme.colorScheme.primary
-                    item.oneSided && v > 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-                Box(Modifier.size(width = 10.dp, height = 7.dp).clip(RoundedCornerShape(2.dp)).background(color))
-            }
+    Column(Modifier.padding(vertical = 2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(item.label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(88.dp))
+            Text(item.text, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
         }
-        Text(item.high, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("  ${item.text}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 88.dp)) {
+            Text(item.low, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                (-2..2).forEach { v ->
+                    val color = when {
+                        v == item.value -> MaterialTheme.colorScheme.primary
+                        item.oneSided && v > 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                    Box(Modifier.size(width = 10.dp, height = 7.dp).clip(RoundedCornerShape(2.dp)).background(color))
+                }
+            }
+            Text(item.high, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
