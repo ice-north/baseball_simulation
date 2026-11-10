@@ -55,6 +55,7 @@ import jp.icenorth.baseball.shared.pendingProcedure
 import jp.icenorth.baseball.shared.PackWaiting
 import jp.icenorth.baseball.shared.packWaiting
 import jp.icenorth.baseball.shared.waitingTradeCount
+import jp.icenorth.baseball.shared.stageInfo
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import kotlinx.serialization.json.JsonElement
@@ -231,18 +232,27 @@ fun ProcedureNotice(procedure: PendingProcedure, onOpen: () -> Unit, modifier: M
     }
 }
 
-/** 締め切りの説明（Web 版の rulesText と同じ決まり） */
-private fun rulesText(kind: String?, deadline: String?): String {
+/**
+ * 手続きの決まり（Web 版の rulesText のスマホの文と同じ）。
+ * ⚠ 以前は PC 向けの長い文をそのまま出していた。長い文は見出しの ⓘ（[rulesDetail]）へ回す。
+ * ⚠ 締め切りの日時は上の「1年の流れ」の帯（いまは○○（締め切り …））に出ているので繰り返さない。
+ *    帯に締め切りが出ないとき（[showDate]）だけ日時を書く
+ */
+internal fun rulesText(kind: String?, deadline: String?, showDate: Boolean): String {
     val due = formatDeadline(deadline)
-    return if (kind == "camp") {
-        if (due != null) "締め切りは $due。全員が4クール終えた時点で次へ進みます。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。"
-        else "全員が4クール終えると次へ進みます。"
-    } else if (due != null) {
-        "締め切りは $due。全員が決定した時点で処理します。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。"
-    } else {
-        "全員が決定した時点で処理します。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。"
+    val shown = due?.takeIf { showDate }
+    return when {
+        kind == "camp" && due == null -> "全員が4クール終えると次へ進みます。"
+        kind == "camp" -> (shown?.let { "締め切りは $it。" } ?: "") + "全員が4クール終えた時点で次へ進みます。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。"
+        due == null -> "全員が決定すると進みます。"
+        else -> (shown?.let { "締め切り $it。" } ?: "") + "全員が決定するか、締め切りで進みます。"
     }
 }
+
+/** 手続きの決まりの詳しい文（Web 版の PC の rulesText と同じ。日時は除く） */
+private fun rulesDetail(deadline: String?): String =
+    if (formatDeadline(deadline) != null) "全員が決定した時点で処理します。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。"
+    else "全員が決定した時点で処理します。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。"
 
 @Composable
 private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
@@ -251,8 +261,13 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     val kind = phase.at("kind").str()
     val submission = phase["submission"].obj()
     val members = raw.at("members").list().mapNotNull { it.obj() }
-    Section(PHASE_LABELS[kind] ?: phase.at("label").str() ?: "手続き") {
-        Text(rulesText(kind, phase.at("deadline").str() ?: view.phaseDeadline), style = MaterialTheme.typography.bodyMedium)
+    val title = PHASE_LABELS[kind] ?: phase.at("label").str() ?: "手続き"
+    val deadline = phase.at("deadline").str() ?: view.phaseDeadline
+    Section(
+        title,
+        trailing = { if (kind != "camp") InfoButton(title, listOf(rulesDetail(deadline))) },
+    ) {
+        Text(rulesText(kind, deadline, showDate = stageInfo(raw)?.open != true), style = MaterialTheme.typography.bodyMedium)
         // 標準案を出した指導者と、任せているか（Web の PhasePanel と同じ文。文はサーバーが作る）。
         // ⚠ 任せていると提出しても指導者の案で決まるので、出さないと組み立てが無駄になる。
         //    キャンプのぶんは CampPanel が出す（Web と同じ分け方）
