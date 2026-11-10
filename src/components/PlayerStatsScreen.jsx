@@ -106,17 +106,18 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.batting : getCombinedCareer(p, 'batting');
       const avg = stats.atBats > 0 ? (stats.hits / stats.atBats) : 0;
-      const pa = stats.atBats + (stats.walks || 0) + (stats.hitByPitch || 0);
+      const pa = plateAppearances(stats);
       const obp = pa > 0 ? ((stats.hits + (stats.walks || 0) + (stats.hitByPitch || 0)) / pa) : 0;
       const singles = stats.hits - (stats.doubles || 0) - (stats.triples || 0) - stats.homeruns;
       const slg = stats.atBats > 0 ? ((singles + (stats.doubles || 0) * 2 + (stats.triples || 0) * 3 + stats.homeruns * 4) / stats.atBats) : 0;
       const ops = obp + slg;
       const fieldingPct = (stats.fieldingChances || 0) > 0 ? ((stats.fieldingChances - (stats.errors || 0)) / stats.fieldingChances) : 0;
-      return { ...p, stats, avg, obp, slg, ops, fieldingPct };
+      return { ...p, stats, pa, avg, obp, slg, ops, fieldingPct };
     })
     .sort((a, b) => {
       let valA, valB;
-      if (battingSortKey === 'avg') { valA = a.avg; valB = b.avg; }
+      if (battingSortKey === 'pa') { valA = a.pa; valB = b.pa; }
+      else if (battingSortKey === 'avg') { valA = a.avg; valB = b.avg; }
       else if (battingSortKey === 'ops') { valA = a.ops; valB = b.ops; }
       else if (battingSortKey === 'obp') { valA = a.obp; valB = b.obp; }
       else if (battingSortKey === 'fieldingPct') { valA = a.fieldingPct; valB = b.fieldingPct; }
@@ -383,7 +384,10 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                   <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">選手</th>
                   <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">チーム</th>
                   <SortableHeader label="試" sortKey="games" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
-                  <SortableHeader label="打席" sortKey="atBats" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  {/* ⚠ 「打席」に打数を出していた。規定打席は打席（打数＋四球＋死球）で数えるので、
+                      打席と打数を別の列にして、規定に届いたかを表から読めるようにする */}
+                  <SortableHeader label="打席" sortKey="pa" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="打数" sortKey="atBats" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="安打" sortKey="hits" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="HR" sortKey="homeruns" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="打点" sortKey="rbis" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
@@ -411,6 +415,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                       </td>
                       <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.games}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.pa}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.atBats}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.hits}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.homeruns}</td>
