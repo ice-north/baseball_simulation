@@ -23,6 +23,7 @@ import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingle
 import { applyNextSeasonRegulations } from '../../src/season/nextSeasonRegulations.js';
 import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
 import { leagueMagic } from '../../src/season/magicNumber.js';
+import { departedEntry, withDeparted, rosterIndex, departedSince, withDepartedPlayers } from '../../src/season/departedStats.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -288,4 +289,39 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(leagueMagic([row('A', 25, 2), row('B', 15, 12)], 30, {}).decided, true, '優勝が決まっていない扱いになった');
 }
 
-console.log('■ 一人用の進行の再発防止: OK（DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す）');
+// --- 戦力外・指名・退団で名簿を離れた選手も、その年の選手成績に残る ---
+// ⚠ 選手成績の画面は名簿から集計するので、11/9 の戦力外で抜けた選手がその年の成績ごと
+//    ランキングから消えていた。外れる前に写した成績を足して並べる
+{
+  const stats = (atBats, hits) => ({ batting: { games: 10, atBats, hits, doubles: 0, triples: 0, homeruns: 0, walks: 0 }, pitching: { inningsPitched: 0 } });
+  const star = { id: 'p1', name: '主砲', position: 'first', seasonStats: stats(400, 140) };
+  const bench = { id: 'p2', name: '控え', position: 'left', seasonStats: stats(0, 0) };
+  const stay = { id: 'p3', name: '残る人', position: 'second', seasonStats: stats(300, 80) };
+  const teams = { A: { name: 'A球団', players: [star, bench, stay] } };
+  const before = rosterIndex(teams);
+  teams.A.players = [stay]; // 戦力外で2人を外す
+  const departed = departedSince(before, teams);
+  assert.deepEqual(departed.map((p) => p.id), ['p1'], '成績の無い選手まで写した／外れた選手を写していない');
+  assert.equal(departedEntry(bench, 'A', 'A球団'), null);
+  let season = withDeparted({ year: 3 }, departed);
+  // 同じ選手を2回写しても1人（先に外れた球団で残す）
+  season = withDeparted(season, [departedEntry({ ...star, seasonStats: stats(1, 1) }, 'B', 'B球団')]);
+  assert.equal(season.departedSeasonStats.players.length, 1);
+  assert.equal(season.departedSeasonStats.players[0].teamKey, 'A');
+  // トライアウトで拾われて成績0で名簿にいる本人は、写したほうで出す
+  const live = [
+    { ...stay, teamKey: 'A', teamName: 'A球団' },
+    { ...star, seasonStats: stats(0, 0), teamKey: 'B', teamName: 'B球団' },
+  ];
+  const rows = withDepartedPlayers(live, season);
+  assert.equal(rows.length, 2, '拾われた選手が二重に並んだ');
+  const shown = rows.find((p) => p.id === 'p1');
+  assert.equal(shown.seasonStats.batting.hits, 140, '外れた選手のその年の成績が出ない');
+  assert.equal(shown.teamKey, 'A');
+  assert.equal(shown.departed, true);
+  // 年が替わったら古い年の写しは使わない
+  assert.equal(withDepartedPlayers(live, { ...season, year: 4 }), live);
+  assert.equal(withDeparted({ ...season, year: 4 }, [departedEntry(stay, 'A', 'A球団')]).departedSeasonStats.players.length, 1);
+}
+
+console.log('■ 一人用の進行の再発防止: OK（DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');

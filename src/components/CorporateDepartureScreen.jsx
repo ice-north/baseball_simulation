@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import { rosterIndex, departedSince } from '../season/departedStats.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
@@ -14,6 +15,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const [{ retirements, aiReleases }] = useState(() => processCorporateRetirements(TEAMS_DATA, userTeamName));
   const [playerDecisions, setPlayerDecisions] = useState({});
   const [confirmed, setConfirmed] = useState(false);
+  // 確定で名簿から外れた選手の、その年の成績の写し（次へ進むときに seasonData へ渡す）
+  const departedRef = useRef([]);
   const [sortKey, setSortKey] = useState('salary');
   const [sortAsc, setSortAsc] = useState(false);
   const [sponsorOffers, setSponsorOffers] = useState(() => withSeededRandom(
@@ -178,7 +181,11 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       ...userRetireIds,
     ];
 
+    // ⚠ 名簿から外す前後で比べて、外れた選手のその年の成績を写しておく
+    //    （選手成績の画面が年度末まで出す。`departedStats.js`）
+    const rosterBefore = rosterIndex(TEAMS_DATA);
     executeDepartures(TEAMS_DATA, allRetiredIds, allReleases, currentYear);
+    departedRef.current = departedSince(rosterBefore, TEAMS_DATA);
 
     // 赤字判定は11/30の年度末決算で行う（退団・入団・スタッフ・スポンサー確定後）
 
@@ -367,7 +374,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           )}
         </div>
         <button
-          onClick={onComplete}
+          onClick={() => onComplete?.(departedRef.current)}
           className="btn-primary mt-4 px-6 py-2 rounded"
         >
           {isClub ? '入部希望者の受付へ進む' : 'スカウト入団へ進む'}

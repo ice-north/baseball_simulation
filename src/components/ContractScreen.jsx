@@ -1,5 +1,6 @@
 import { getAIReleaseCandidates } from '../game/contractRules.js';
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
+import { departedEntry } from '../season/departedStats.js';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
 import { POSITION_NAMES, getAbilityColor, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
@@ -43,6 +44,8 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     return aiReleases;
   });
   const [confirmed, setConfirmed] = useState(false);
+  // 確定で名簿から外した選手の、その年の成績の写し（次へ進むときに seasonData へ渡す）
+  const departedRef = useRef([]);
   const [sortKey, setSortKey] = useState(null);
   const [sortAsc, setSortAsc] = useState(false);
   const [showReview, setShowReview] = useState(false);
@@ -139,6 +142,9 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
       if (td && playerIds.length > 0) {
         // 解雇される選手を解雇プールに追加（若年〜中堅のみ再トライアウト可能）
         const releasedPlayerObjs = td.players.filter(p => playerIds.includes(p.id));
+        // ⚠ 名簿から外す前に、その年の成績を写しておく（選手成績の画面が年度末まで出す。
+        //    `departedStats.js`）。引退扱いでプールに入らない人も写す
+        departedRef.current.push(...releasedPlayerObjs.map(p => departedEntry(p, teamName, td.name)));
         releasedPlayerObjs.forEach(p => {
           const age = p.age || 20;
           // 33歳以上は引退扱い（プールに入れない）
@@ -367,7 +373,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           )}
           <p className="text-gray-300 mb-6">次はトライアウトで新選手を獲得できます。</p>
           <button
-            onClick={() => { if (onComplete) onComplete(); }}
+            onClick={() => { if (onComplete) onComplete(departedRef.current); }}
             className="btn-primary px-8 py-3 rounded-lg text-lg"
           >
             トライアウトへ進む

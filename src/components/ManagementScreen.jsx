@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations, releasedPlayersPool } from '../teams-data.js';
 import { SEASON_PHASES } from '../season/seasonManager.js';
 import { applyNextSeasonRegulations } from '../season/nextSeasonRegulations.js';
+import { withDeparted, rosterIndex, departedSince } from '../season/departedStats.js';
 import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
@@ -79,8 +80,9 @@ const ManagementScreen = ({
   if (managementView === 'contract') return <ContractScreen
     seasonData={seasonData}
     allTeams={allTeams}
-    onComplete={() => {
-      const newData = progressDate(seasonData, 1);
+    onComplete={(departed) => {
+      // ⚠ 戦力外で外した選手のその年の成績を残す（選手成績の画面が年度末まで出す）
+      const newData = progressDate(withDeparted(seasonData, departed), 1);
       setSeasonData({ ...newData, phase: 'tryout' });
       setManagementView('tryout');
     }}
@@ -88,8 +90,8 @@ const ManagementScreen = ({
   if (managementView === 'corporate_departure') return <CorporateDepartureScreen
     seasonData={seasonData}
     allTeams={allTeams}
-    onComplete={() => {
-      const newData = progressDate(seasonData, 1);
+    onComplete={(departed) => {
+      const newData = progressDate(withDeparted(seasonData, departed), 1);
       setSeasonData({ ...newData, phase: 'tryout' });
       setManagementView(seasonData?.settings?.clubMode ? 'club_recruit' : 'corporate_scout');
     }}
@@ -210,8 +212,12 @@ const ManagementScreen = ({
         const preUpdate = {};
         if (!seasonData.frozenAwards) preUpdate.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
-        if (Object.keys(preUpdate).length > 0) setSeasonData(prev => ({ ...prev, ...preUpdate }));
+        // ⚠ 指名で名簿から抜ける社会人・独立・大学の選手の、その年の成績を写しておく
+        //    （選手成績の画面が年度末まで出す。`departedStats.js`）
+        const rosterBefore = rosterIndex(TEAMS_DATA);
         const results = processNPBDraft(TEAMS_DATA, seasonData.year);
+        const departed = departedSince(rosterBefore, TEAMS_DATA);
+        setSeasonData(prev => withDeparted({ ...prev, ...preUpdate }, departed));
         setDraftResults(results);
         // 大学モード: ドラフト指名された大学チーム選手をseasonDataに記録
         if (seasonData.settings?.universityMode && results.draftedPlayers.length > 0) {

@@ -4,6 +4,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { formatInnings } from '../utils/physics.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import { qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances } from '../season/seasonManager.js';
+import { withDepartedPlayers } from '../season/departedStats.js';
 
 const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
   const [statsTab, setStatsTab] = useState('season');
@@ -67,7 +68,12 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     return true;
   };
 
-  const allPlayers = getAllPlayerStats().filter(inScope);
+  // ⚠ シーズンの表には、その年に名簿を離れた選手（戦力外・指名・退団）も足す。名簿から集計する
+  //    だけだと、年度の終わりを待たずにその年の成績ごと消えていた（`departedStats.js`）
+  const allPlayers = (statsTab === 'season'
+    ? withDepartedPlayers(getAllPlayerStats(), seasonData)
+    : getAllPlayerStats()
+  ).filter(inScope);
 
   const handleBattingSort = (key) => {
     if (battingSortKey === key) {
@@ -415,7 +421,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                           <span className="ml-1 text-xs bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}</td>
+                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}{player.departed && <span className="ml-1 text-xs text-gray-400">（退団）</span>}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.games}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.pa}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.atBats}</td>
@@ -489,7 +495,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                           <span className="ml-1 text-xs bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}</td>
+                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}{player.departed && <span className="ml-1 text-xs text-gray-400">（退団）</span>}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.games}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.wins}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.losses}</td>
