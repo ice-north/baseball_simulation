@@ -11,6 +11,9 @@
 // 7. ビジョン（攻めの型 × 守りの型 × 時間軸）から考え方・好み・キャンプの方針が筋どおりに決まる。
 //    トレードの見る目は ±10% に収まる（監督は人の采配の肩代わりで、強さを足さない）
 // 8. 説明だけの飾り: 語り口・軸の選手・再登板で丸くなる・称号
+// 9. 総合監査（2026-11-10）で直したもの: キャンプの指導者の案を画面に出す・空いた席はおすすめ・
+//    トライアウトは終わったばかりの年の勝率・同じキャンプで外した監督の呼び戻しは解任に数えない・
+//    版11からの移行で型が考え方と逆を向かない
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import {
@@ -55,6 +58,7 @@ import {
   pitchText,
   preferenceText,
   tryoutContext,
+  upgradeCoach,
 } from '../../src/online/coaches.js';
 import { coachCard, coachTitles } from '../../server/coachView.mjs';
 import { migrateLeague } from '../../src/online/leagueMigration.js';
@@ -101,7 +105,10 @@ assert.deepEqual(createCoaches(clone(league)), league.coaches, '作り直すと�
   const again = clone(old);
   for (const p of Object.values(old.coaches.people)) {
     assert.deepEqual(p.views, views[p.id], '移行で考え方が変わった（采配が変わる）');
-    assert.equal(p.vision.attack, 'speed', '好みの「俊足」が攻めの型にならない');
+    // ⚠ 走塁が「慎重」の人は、好みが「俊足」でも足の型にしない（カードの文と采配が逆を向く。
+    //    総合監査 2026-11-10）。それ以外は好みどおり
+    if (p.views.running <= -1) assert.notEqual(p.vision.attack, 'speed', '走塁が慎重なのに足の型');
+    else assert.equal(p.vision.attack, 'speed', '好みの「俊足」が攻めの型にならない');
     assert.ok(DEFENSE_TYPES[p.vision.defense] && HORIZONS[p.vision.horizon] && VOICES[p.voice]);
     assert.deepEqual(p.growth, { who: 'sharp', line: 70 }, '「選手に合わせる」が育成観にならない');
     assert.equal(p.personality.stubborn, 0);
@@ -567,5 +574,84 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
   assert.deepEqual(coachTitles(once), [], '1部優勝とプレーオフ優勝の同じ年を2度に数えた');
   assert.deepEqual(coachTitles({ career: [] }), []);
   console.log(`飾り: 軸の選手 ${mgrSeat.coach.keyPlayers} / 語り口 ${JSON.stringify(people.reduce((m, p) => ((m[p.voice] = (m[p.voice] || 0) + 1), m), {}))}`);
+}
+// ------------------------------------------------------------------ 9. 総合監査（2026-11-10）
+{
+  // キャンプの指導者の案: まだ回していなければビューに載せる（画面の下書きはここから始める）。
+  // 締め切りで回さなかったクールに当たる標準案と同じもの
+  const l = clone(inCamp);
+  const view = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  const suggested = view.phase.camp.suggested;
+  assert.ok(suggested?.players && Object.keys(suggested.players).length > 0, 'キャンプの指導者の案がビューに無い');
+  const plan = defaultPhasePlan(l, humanTeam);
+  assert.deepEqual(suggested.policy, plan.policy, 'ビューの案と標準案の方針が違う');
+  assert.deepEqual(suggested.players, plan.players, 'ビューの案と標準案の選手ごとの方針が違う');
+  assert.match(view.phase.planBy.text, /練習を実行/, 'キャンプの案の文が「決定」のまま');
+  // 人の球団で野手コーチが空くと、野手は上書きせずおすすめ（全員同じ「全体×技術」にしない）
+  const batting = staffOf(l, humanTeam).batting;
+  l.coaches.teams[humanTeam].batting = null;
+  Object.assign(l.coaches.people[batting.id], { status: 'free', job: null });
+  const half = campPlanFor(l, humanTeam, l.game.teams[humanTeam].players);
+  assert.equal(half.policy.mode, 'recommended', '人の球団の空いた側がおすすめにならない');
+  const fielders = l.game.teams[humanTeam].players.filter((p) => p.position !== 'pitcher');
+  assert.ok(fielders.every((p) => !half.players[p.id]), '野手コーチがいないのに野手を上書きした');
+  // コーチが2人とも居なければ案は無い（監督の名前を出さない）
+  const pitching = staffOf(l, humanTeam).pitching;
+  l.coaches.teams[humanTeam].pitching = null;
+  Object.assign(l.coaches.people[pitching.id], { status: 'free', job: null });
+  assert.equal(campPlanFor(l, humanTeam, l.game.teams[humanTeam].players), null, 'コーチがいないのに案がある');
+  const empty = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  assert.equal(empty.phase.planBy, null, 'コーチがいないキャンプに監督の案と出す');
+  assert.equal(empty.phase.camp.suggested, null);
+  // 案が無いときの標準案はおすすめ。提出の正規化を通っても「全員同じ」に変わらない
+  // （締め切りの自動実行は標準案を submitPhase に通す）
+  const fallback = defaultPhasePlan(l, humanTeam);
+  submitPhase(l, human.userId, { phaseId: l.phase.id, plan: fallback, ready: false }, iso());
+  assert.equal(l.phase.submissions[human.userId].plan.policy.mode, 'recommended', '何もしなかった人のキャンプがおすすめにならない');
+}
+{
+  // トライアウトの「前年の勝率」は終わったばかりの年（年度更新はトライアウトの後）
+  const l = clone(inCamp);
+  const row = (wins, losses) => ({ team: humanTeam, wins, losses });
+  l.history = [{ year: l.season.year - 1, standings: [row(90, 30)] }];
+  l.season.standings = l.season.standings.map((s) => (s.team === humanTeam ? { ...s, wins: 30, losses: 90 } : s));
+  const got = tryoutContextFor(l, humanTeam);
+  const want = tryoutContext(staffOf(l, humanTeam), { lastWinRate: 0.25 });
+  assert.equal(got.winRate, want.winRate, 'トライアウトが1年前の勝率で選ぶ');
+  // 今季の試合が無ければ前年の記録
+  l.season.standings = l.season.standings.map((s) => ({ ...s, wins: 0, losses: 0 }));
+  assert.equal(tryoutContextFor(l, humanTeam).winRate, tryoutContext(staffOf(l, humanTeam), { lastWinRate: 0.75 }).winRate);
+}
+{
+  // 同じキャンプで外した監督を同じ席に呼び戻すのは取り消し（解任に数えない・反省で丸くならない）
+  const l = clone(inCamp);
+  const year = l.season.year;
+  const manager = l.coaches.people[staffOf(l, humanTeam).manager.id];
+  manager.job.since = year - 1;
+  manager.career = [...(manager.career || []), { year: year - 1, team: humanTeam, role: 'manager' }];
+  const stubborn = manager.personality.stubborn;
+  updateStaff(l, human.userId, { action: 'release', role: 'manager' });
+  assert.equal(manager.fired, 1);
+  updateStaff(l, human.userId, { action: 'hire', role: 'manager', coachId: manager.id });
+  assert.equal(manager.fired, 0, '呼び戻した監督が解任1回のまま');
+  assert.equal(manager.personality.stubborn, stubborn, '呼び戻しただけで丸くなった');
+  assert.notEqual(manager.mellowedAt, year);
+  assert.equal(manager.job.since, year - 1, '呼び戻した監督の在任が1年目に戻った');
+  // 呼び戻した後にもう一度外せば、前の年から居た人として数える
+  updateStaff(l, human.userId, { action: 'release', role: 'manager' });
+  assert.equal(manager.fired, 1, '呼び戻した後に外しても解任に数えない');
+}
+{
+  // 版11 → 12: ビジョンは考え方を先に見る（好みが考え方と逆を向いても、文と采配を揃える）
+  const coach = (views, prefs) => ({ id: 'x', views, prefs, personality: {}, specialty: 'batting' });
+  const aggressive = coach({ hitting: 1 }, { hitter: 'contact' });
+  upgradeCoach(aggressive, 1);
+  assert.equal(aggressive.vision.attack, 'power', '打撃「積極」の人が「つなぐ」になった');
+  const strikeout = coach({ pitching: 1 }, { pitcher: 'control' });
+  upgradeCoach(strikeout, 1);
+  assert.notEqual(strikeout.vision.defense, 'fielding', '投球「三振狙い」の人が「打たせて守る」になった');
+  const calm = coach({}, { hitter: 'speed', pitcher: 'control' });
+  upgradeCoach(calm, 1);
+  assert.deepEqual([calm.vision.attack, calm.vision.defense], ['speed', 'fielding'], '考え方が標準なら好みどおり');
 }
 console.log('online-coach-check PASS');

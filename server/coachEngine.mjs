@@ -92,6 +92,27 @@ function markFired(coach) {
   coach.fired = (coach.fired || 0) + 1;
 }
 
+/**
+ * このキャンプでこの球団の監督の席から外した人を、同じ席に呼び戻すところか。
+ * 前からの監督を外したとき（解任に数えたとき）だけ真。今年就けた人を外したのは
+ * もともと数えていない（取り消し）。出来事は新しい順（`logEvent`）
+ */
+function undoesFiring(c, coach, team, year) {
+  const mine = (c.events || []).filter((e) => e.coachId === coach.id && e.year === year);
+  const last = mine[0];
+  if (last?.kind !== 'release' || last.team !== team || last.role !== 'manager') return false;
+  // 今年この球団で就いた（呼んだ・昇格した）記録があれば、外したのは取り消しで数えていない
+  return !mine.some((e) => e.team === team && (e.kind === 'hire' || e.kind === 'promote'));
+}
+
+/** 呼び戻した監督の在任の始まり（通算の行で、去年までこの席に続けて居た最初の年） */
+function tenureStart(coach, team, role, year) {
+  let since = year;
+  const rows = coach.career || [];
+  while (rows.some((r) => r.year === since - 1 && r.team === team && r.role === role)) since -= 1;
+  return since;
+}
+
 /** 席から外して市場へ（`status: 'free'`）。⚠ 引退させるときは呼んだあと status を変える */
 function unassign(c, coach, year) {
   if (!coach?.job) return;
@@ -217,12 +238,20 @@ export function applyStaffTactics(league, teamName, team) {
   };
 }
 
-/** 前年（終わった年）の勝率。無ければ今季の途中、それも無ければ .500 */
+/**
+ * 終わったばかりの年の勝率。無ければ前年の記録、それも無ければ .500。
+ * ⚠ **今季の順位表を先に読む**。トライアウト（11/10）は年度更新（11/30）より前で、
+ *    その時点の `history.at(-1)` は1年前の年。先に読むと、今季最下位の球団が
+ *    前年の好成績で「勝負」の選び方をしてしまう。年度更新の後（今季の試合が0）は前年の記録
+ */
 function lastWinRate(league, teamName) {
-  const row =
-    league.history?.at(-1)?.standings?.find((s) => s.team === teamName) ||
-    league.season?.standings?.find((s) => s.team === teamName);
-  return row && row.wins + row.losses > 0 ? row.wins / (row.wins + row.losses) : 0.5;
+  const rate = (row) =>
+    row && row.wins + row.losses > 0 ? row.wins / (row.wins + row.losses) : null;
+  return (
+    rate(league.season?.standings?.find((s) => s.team === teamName)) ??
+    rate(league.history?.at(-1)?.standings?.find((s) => s.team === teamName)) ??
+    0.5
+  );
 }
 
 /**
@@ -320,7 +349,13 @@ export function staffCommand(league, userId, payload) {
     requireOnline(!seats[role], '先にその席の人を解任してください', 409);
     const coach = c.people[coachId];
     requireOnline(coach && coach.status === 'free', 'その人はもう市場にいません', 409);
+    // ⚠ **同じキャンプで外した監督を同じ席に呼び戻すのは取り消し**。解任を数え直さないと
+    //    「解任1回」と「反省して丸くなる」が両方付き、繰り返すと称号「苦労人」まで付く
+    const undo = role === 'manager' && undoesFiring(c, coach, team, year);
+    if (undo) coach.fired = Math.max(0, (coach.fired || 0) - 1);
     assign(c, team, role, coach, year);
+    // 在任も外す前の続きに戻す（「在任N年」が1年目に戻らない）
+    if (undo) coach.job.since = tenureStart(coach, team, role, year);
     logEvent(c, hireEvent(c, { year, team, role, coach }));
     return { status: 'hired' };
   }

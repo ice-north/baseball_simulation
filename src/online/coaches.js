@@ -1031,13 +1031,22 @@ export function upgradeCoach(coach, seed) {
   const v = coach.views || {};
   const p = coach.prefs || {};
   const old = coach.personality || {};
-  const attack = Object.hasOwn(ATTACK_TYPES, p.hitter)
-    ? p.hitter
-    : v.running >= 1 ? 'speed' : v.hitting >= 1 ? 'power' : 'contact';
+  // ⚠ **好み（prefs）を先に。ただし考え方（views）と逆を向く好みは使わない**。
+  //    考え方は変えない（采配はそのまま）ので、逆を向く好みで型を決めると「つなぐ」の
+  //    見出しで打撃「積極」、「打たせて守る」で投球「三振狙い」のように、カードの文と采配が食い違う
+  const against = {
+    speed: v.running <= -1,
+    power: v.hitting <= -1,
+    contact: v.hitting >= 1,
+  };
+  const attack =
+    Object.hasOwn(ATTACK_TYPES, p.hitter) && !against[p.hitter]
+      ? p.hitter
+      : v.running >= 1 ? 'speed' : v.hitting >= 1 ? 'power' : 'contact';
   const defense =
     v.bullpen >= 1 ? 'bullpen'
       : v.bullpen <= -1 ? 'rotation'
-        : v.pitching <= -1 || p.pitcher === 'control' ? 'fielding'
+        : v.pitching <= -1 || (p.pitcher === 'control' && !(v.pitching >= 1)) ? 'fielding'
           : p.pitcher === 'velocity' ? 'bullpen' : 'rotation';
   // 看板は得意分野から（采配が得意な人は、前の「戦い方」が守りなら守り）
   const flagship =

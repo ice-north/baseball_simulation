@@ -1592,6 +1592,8 @@ function resolvePhase(league, now) {
           pitching: p.pitching ? { velocity: p.pitching.velocity, control: p.pitching.control, stamina: p.pitching.stamina } : null,
           batting: p.batting ? { meet: p.batting.meet, power: p.batting.power, eye: p.batting.eye, bunt: p.batting.bunt } : null,
           physical: p.physical ? { speed: p.physical.speed } : null,
+          // ⚠ 守備の名手は「打たせて守る」に寄せる（`coaches.js` の `leanFromPlayer`）
+          fielding: p.fielding ? { defense: p.fielding.defense } : null,
         });
     const result = advanceToNextYear(league.season, TEAMS_DATA, {
       playedTeamNames: league.season.settings.teamNames,
@@ -1631,6 +1633,8 @@ function resolvePhase(league, now) {
         }));
       coachOffseason(league, { rows: coachRows, retirees });
       // 指導者の道へ進んだ人は、引退の記録の「引退後」もそれに合わせる
+      // ⚠ **肩書きの形（「〇〇の打撃コーチ」と同じ名詞）で書く**。アプリは
+      //    「今後は${secondCareer}として球界に残る。」と組むので、「指導者の道へ」だと文が崩れる
       const turned = new Set(
         retirees
           .filter((r) => ['manager', 'coach'].includes(r.secondCareer?.role))
@@ -1638,7 +1642,7 @@ function resolvePhase(league, now) {
       );
       for (const entry of league.chronicle?.retired || [])
         if (entry.year === retireYear && turned.has(`${entry.team}:${entry.name}`))
-          entry.secondCareer = '指導者の道へ';
+          entry.secondCareer = '指導者';
     }
     if (movements.length)
       league.notices.unshift({
