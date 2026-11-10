@@ -4439,8 +4439,9 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   gap: 6px 10px;
 }
-/* 初期メンバー: セットのカードは2列（150px の列だと 320px で1列になり、20枚が縦に長く続く） */
-.online-mobile .online-phase-editor .online-pack-list {
+/* 初期メンバー: セットのカードは2列（150px の列だと 320px で1列になり、20枚が縦に長く続く）。
+   途中参加のセット選び（`PendingPackPanel`）も同じ部品なので同じ形にする */
+.online-mobile .online-pack-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
