@@ -1084,7 +1084,7 @@ const DraftTitleOverlay = ({ onComplete }) => {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center pl-56 cursor-pointer transition-opacity duration-[600ms] ${fading ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center md:pl-56 cursor-pointer transition-opacity duration-[600ms] ${fading ? 'opacity-0' : 'opacity-100'}`}
       style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
       onClick={() => setFading(true)}
     >

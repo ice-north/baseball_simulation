@@ -259,6 +259,10 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           root.style.zoom = '1'; // 一旦等倍で自然サイズを測る
           const de = document.documentElement;
           const vw = de.clientWidth, vh = de.clientHeight;
+          // ⚠ 幅が md（768px）未満では縮めない。PC 向けの横幅の画面を 390px に収めようとして
+          //   いつも下限の0.7になり、文字が小さくなるうえ、収まりきらずに横へはみ出し、
+          //   縦では下に地色の帯が残っていた。狭い画面は等倍のまま横に送って読む
+          if (vw < 768) return;
           let z = root.scrollWidth > vw ? vw / root.scrollWidth : 1;
           if (root.querySelector('[data-fit-height]') && root.scrollHeight > vh) {
             z = Math.min(z, vh / root.scrollHeight);
@@ -2960,7 +2964,7 @@ if (newOuts === 3) {
             setManagementView={setManagementView}
           />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'ml-56' : ''}>
+          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'md:ml-56 pt-12 md:pt-0' : ''}>
             {screenMode === 'game' ? (
               /* data-fit-height: 縦も1画面に収める対象。自動フィットが高さを見る印
                  （縦に読み進める管理画面には付けないこと）

@@ -509,6 +509,8 @@ export const SidebarButton = ({ view, icon, label, screenMode, managementView, s
 };
 
 // --- Sidebar コンポーネント ---
+// ⚠ 幅が md（768px）未満では畳んで、左上の「メニュー」で開く。以前は幅224pxのまま固定で、
+//   390px のスマホでは本文が166pxしか残らなかった。本文側の余白も md 以上だけ（App.jsx の md:ml-56）
 export const Sidebar = ({
   gameMode,
   userTeamName,
@@ -517,11 +519,21 @@ export const Sidebar = ({
   screenMode,
   managementView,
   setScreenMode,
-  setManagementView,
-}) => (
-  // ⚠ 高さは h-screen ではなく top-0 bottom-0 で決めること。自動倍率（#root の zoom）が掛かると
-  //   100vh も一緒に縮み、サイドバーが画面の下まで届かず灰色の帯が出ていた（1280×720 で約90px）
-  <div className="w-56 bg-gray-900/95 backdrop-blur text-white fixed left-0 top-0 bottom-0 flex flex-col border-r border-gray-700/50">
+  setManagementView: setView,
+}) => {
+  const [open, setOpen] = React.useState(false);
+  // 項目を選んだら畳む（狭い画面で開いたまま本文を覆わないように）
+  const setManagementView = (v) => { setOpen(false); setView(v); };
+  return (
+  <>
+  <button type="button" onClick={() => setOpen(true)} aria-label="メニューを開く"
+    className="md:hidden fixed top-2 left-2 z-40 bg-gray-900/95 text-white text-sm font-bold px-3 py-2 rounded-lg border border-gray-700/60 shadow-lg">
+    ☰ メニュー
+  </button>
+  {open && <div className="md:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setOpen(false)} aria-hidden="true" />}
+  {/* ⚠ 高さは h-screen ではなく top-0 bottom-0 で決めること。自動倍率（#root の zoom）が掛かると
+      100vh も一緒に縮み、サイドバーが画面の下まで届かず灰色の帯が出ていた（1280×720 で約90px） */}
+  <div className={`w-56 bg-gray-900/95 backdrop-blur text-white fixed left-0 top-0 bottom-0 flex-col border-r border-gray-700/50 z-50 md:z-auto md:flex ${open ? 'flex' : 'hidden'}`}>
     <div className="px-4 py-4 border-b border-gray-700/50 bg-gray-800/30">
       <h2 className={`text-lg font-black tracking-tight ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
       <div className="text-xs text-gray-300 mt-1 flex items-center gap-1.5">
@@ -555,8 +567,11 @@ export const Sidebar = ({
       <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
     </nav>
+    <button type="button" onClick={() => setOpen(false)} className="md:hidden m-2 btn-secondary px-3 py-2 rounded-lg text-sm">✕ 閉じる</button>
   </div>
-);
+  </>
+  );
+};
 
 // 背番号の表示。⚠ 無いときに `player.id` を出さないこと（内部の番号が「#999850554」と
 //    背番号のように見えていた）。0番は正しい背番号なので `||` ではなく null で判定する
