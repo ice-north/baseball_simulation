@@ -102,6 +102,17 @@ export const DEFAULT_CAMP_POLICY = {
   direction: 'balanced',
   phase: 'skill',
 };
+/**
+ * 方向と段階が欠けた方針に既定を敷く。
+ * ⚠ 指導者の案・締め切りの標準案の方針は `{ mode: 'recommended' }` だけで、方向と段階を
+ *    持たない。そこから「全員同じ方針」に切り替えると、説明が「undefined／undefined」になり、
+ *    育成方針・段階のボタンがどれも選ばれていない状態になっていた（アプリは既定を敷いている）
+ */
+export const withPolicyDefaults = (policy) => ({
+  ...policy,
+  direction: policy?.direction || DEFAULT_CAMP_POLICY.direction,
+  phase: policy?.phase || DEFAULT_CAMP_POLICY.phase,
+});
 const grade = (v) => (typeof v === 'number' ? Math.round(v) : '—');
 
 /**
@@ -399,7 +410,12 @@ function CampPolicyGuide({ policy, roster, policyOf, note, hint }) {
     return describeMood(p, own.direction, own.phase).tone;
   });
   const count = (tone) => moods.filter((t) => t === tone).length;
-  const standard = policy.direction === 'balanced' && policy.phase === 'skill';
+  // ⚠ 「全員同じ方針」のときだけ。選手ごとの決め方にも既定の方向・段階が敷かれているので、
+  //    決め方を見ないと「いまは『全体を伸ばす×技術』です」と誤って出る
+  const standard =
+    (policy.mode || 'team') === 'team' &&
+    policy.direction === 'balanced' &&
+    policy.phase === 'skill';
   // ⚠ 読めなくはしない。長い説明は title に入れて、マウスを載せれば読める
   const title = [
     note,
@@ -478,10 +494,11 @@ export default function CampPlanner({
   //    （以前は「おすすめ」から始まり、見たことのない案で締め切りに回っていた）
   const phaseId = view.phase?.id;
   const start = camp?.plan || camp?.suggested || null;
-  const [policy, setPolicy] = useDraftState(
+  const [savedPolicy, setPolicy] = useDraftState(
     phaseDraftName(phaseId, 'camp.policy'),
     () => start?.policy || DEFAULT_CAMP_POLICY,
   );
+  const policy = withPolicyDefaults(savedPolicy);
   // 選手ごとの方針の上書き（「合わせる」で1人ずつ希望へ。指導者の案も選手ごと）
   const [overrides, setOverrides] = useDraftState(
     phaseDraftName(phaseId, 'camp.players'),
@@ -509,7 +526,8 @@ export default function CampPlanner({
   // ⚠ 方針を変えたら**割り当ても引き直す**。方針はやる気にも効くので、
   //    方針だけ変わって練習が前のままだと噛み合いが読めない
   //    ⚠ 1人ずつの上書きも消す（決め方を選び直したら、全員その決め方に従う）
-  const applyPolicy = (next) => {
+  const applyPolicy = (picked) => {
+    const next = withPolicyDefaults(picked);
     setPolicy(next);
     setOverrides({});
     const nextMain = {};

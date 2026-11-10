@@ -28,7 +28,7 @@ import { formatTurn, turnLabel, turnOfDate } from '../../src/online/shared.js';
 import { nextAdvanceText } from '../../src/online/api.js';
 import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
-import { CompletedCamp } from '../../src/online/CampPlanner.jsx';
+import CampPlanner, { CompletedCamp } from '../../src/online/CampPlanner.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
 import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
@@ -49,6 +49,7 @@ export {
   setTeamLabels,
   PackSelect,
   CompletedCamp,
+  CampPlanner,
 };
 `;
 const result = await build({
@@ -78,6 +79,7 @@ try {
     setTeamLabels,
     PackSelect,
     CompletedCamp,
+    CampPlanner,
     DesktopTactics,
     Results,
     formatTurn,
@@ -103,6 +105,35 @@ try {
     },
   } }));
   assert.match(completed, /2年目のキャンプ結果/, '手続き終了後の成果を表示できない');
+
+  // ⚠ 指導者の案・締め切りの標準案の方針は `{ mode: 'recommended' }` だけで、方向と段階を
+  //    持たない。そこから「全員同じ方針」に切り替えた状態（方向・段階の無い mode: 'team'）で、
+  //    説明が「undefined／undefined」になり、方針のボタンがどれも選ばれていなかった
+  const campPlanner = render(h(CampPlanner, {
+    view: {
+      phase: { id: 'camp-check', kind: 'camp', camp: { rounds: 0, total: 4, plan: { policy: { mode: 'team' } } } },
+      roster: [
+        { id: 1, name: '野手の選手', position: 'short' },
+        { id: 2, name: '投手の選手', position: 'pitcher' },
+      ],
+    },
+    busy: false,
+    run: () => {},
+    command: () => {},
+  }));
+  assert.doesNotMatch(campPlanner, /undefined/, 'キャンプの方針の説明に undefined が出る');
+  assert.match(campPlanner, /aria-pressed="true"[^>]*>[^<]*全体を伸ばす/, '方向の無い方針で育成方針のボタンがどれも選ばれていない');
+  // 「おすすめ」（選手ごと）のときに「いまは『全体を伸ばす×技術』です」と出さない
+  const recommendedCamp = render(h(CampPlanner, {
+    view: {
+      phase: { id: 'camp-check-rec', kind: 'camp', camp: { rounds: 0, total: 4, suggested: { policy: { mode: 'recommended' } } } },
+      roster: [{ id: 1, name: '野手の選手', position: 'short' }],
+    },
+    busy: false,
+    run: () => {},
+    command: () => {},
+  }));
+  assert.doesNotMatch(recommendedCamp, /いまは「全体を伸ばす×技術」です/, '選手ごとの決め方なのに全員同じ方針の説明が出る');
 
   // ⚠ 球団史・リーグの話題の年は「N年目」。「2年」だと西暦や在籍年数に読める。
   //    節目は月日だけでなく年も出す（何年目の話か分からなかった）
