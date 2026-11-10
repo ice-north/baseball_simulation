@@ -8,6 +8,7 @@ import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES,
 import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
 import { getTeamStaffBonus, STAFF_GRADES } from '../corporate/staffData.js';
 import { hashSeed, withSeededRandom } from '../game/rng.js';
+import ConfirmBar from './ConfirmBar.jsx';
 
 const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -27,6 +28,9 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const [staffPreviews, setStaffPreviews] = useState({});
   const [replaceStaffFor, setReplaceStaffFor] = useState(null);
   const [staffReplacements, setStaffReplacements] = useState({});
+  // 確定の前の帯。⚠ 以前は「契約更改を確定」を1回押すだけで、解雇・引退・スタッフ転向が
+  //    確定して取り消せなかった（赤字のままでも同じ）
+  const [reviewing, setReviewing] = useState(false);
 
   const teamData = TEAMS_DATA[userTeamName];
   const cd = teamData?.corporateData;
@@ -627,7 +631,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       {/* 操作ボタン */}
       <div className="flex items-center gap-4">
         <button
-          onClick={handleConfirm}
+          onClick={() => setReviewing(true)}
           disabled={replaceStaffFor !== null}
           className={`px-5 py-2 rounded font-bold text-sm ${
             !isClub && budgetBalance < 0 ? 'btn-danger' : 'btn-primary'
@@ -645,6 +649,29 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           <span className="text-gray-400">→ 来季{contractCount}名</span>
         </div>
       </div>
+
+      {reviewing && replaceStaffFor === null && (() => {
+        const deficit = !isClub && budgetBalance < 0;
+        const conversions = Object.values(staffConversions).filter(Boolean).length;
+        return (
+          <ConfirmBar
+            title={deficit ? '赤字のまま、契約更改を確定しますか？' : '契約更改を確定しますか？'}
+            detail={[
+              `契約${contractCount}名`,
+              releaseCount > 0 && `解雇${releaseCount}名`,
+              retireCount > 0 && `引退${retireCount}名`,
+              conversions > 0 && `スタッフ転向${conversions}名`,
+            ].filter(Boolean).join('・') + ` → 来季${contractCount}名`}
+            note={deficit
+              ? `確定すると取り消せません。このままだと年度末（11/30）の決算で${Math.abs(budgetBalance).toLocaleString()}万円の赤字になり、注目度の低下などのペナルティが出ます。`
+              : '確定すると取り消せません。'}
+            confirmLabel={releaseCount > 0 ? '解雇して確定する' : '確定する'}
+            confirmClass={releaseCount > 0 || deficit ? 'btn-danger' : 'btn-warn'}
+            onConfirm={() => { setReviewing(false); handleConfirm(); }}
+            onCancel={() => setReviewing(false)}
+          />
+        );
+      })()}
     </div>
     </div>
   );
