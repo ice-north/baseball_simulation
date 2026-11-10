@@ -515,6 +515,11 @@ try {
       width === 360 ? 3 : 1,
     );
     await m.getByRole('button', { name: '打順', exact: true }).click();
+    // ⚠ スマホの打順は2タップの表（`TapLineup.jsx`）。名前を押すと**選ぶ**だけで、
+    //    選手情報は選んでいる間に下の帯の「選手情報」から開く
+    await m
+      .getByRole('button', { name: '1番 成績選手1を選ぶ', exact: true })
+      .click();
     await m
       .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
       .click();
@@ -591,7 +596,12 @@ try {
     await d
       .getByRole('button', { name: '選手成績を閉じる', exact: true })
       .click();
-    await m.getByRole('button', { name: '2番を上げる', exact: true }).click();
+    // 選んだままの1番を2番と入れ替える（以前の「2番を上げる」と同じ並びになる）
+    // （守備位置の札も同じ名前で同じ動き。名前の側を押す）
+    await m
+      .locator('[data-slot="2"] .online-tap-main')
+      .getByText('成績選手2', { exact: true })
+      .click();
     await m.getByRole('button', { name: 'メニュー', exact: true }).click();
     const menu = m.getByRole('dialog', { name: 'メニュー', exact: true });
     await menu.waitFor();
@@ -883,9 +893,7 @@ try {
     await m.getByRole('heading', { name: '打順', exact: true }).waitFor();
     assert.equal(
       await m
-        .locator('.online-lineup')
-        .first()
-        .getByRole('button', { name: '成績選手2の選手情報を見る', exact: true })
+        .getByRole('button', { name: '1番 成績選手2を選ぶ', exact: true })
         .count(),
       1,
       '選手成績を見て戻っても編集中の打順を維持する',
