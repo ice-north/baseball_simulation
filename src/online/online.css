@@ -1,12 +1,16 @@
 /* 既存PC版のsurface/accentを共用。カード上と地色上の文字色を分ける。
-   ⚠ **要素名で当てる指定（`.online button` など）には `:not(:where(.online-sp *))` を付ける**。
-      PCの編成ページは一人用の画面（Tailwind）を `.online-sp` の中にそのまま入れている。
-      `.online button`（詳細度 0,1,1）は Tailwind の `.bg-gray-700`（0,1,0）より強く、
-      当たると一人用の小さなボタンが全部44pxの同じ色に潰れる。`:where()` は詳細度0なので、
-      付けても今までの指定との強さの関係は変わらない。新しく要素名の指定を足すときも付けること。
+   ⚠ **一人用の画面（Tailwind）を `.online` の中に持ち込むときは `.online-sp` で包み、
+      その画面に当たる要素名の指定（`.online button` など）に `:not(:where(.online-sp *))`
+      を付けてから入れる**。`.online button`（詳細度 0,1,1）は Tailwind の
+      `.bg-gray-700`（0,1,0）より強く、当たると一人用の小さなボタンが全部同じ高さ・
+      同じ色に潰れる。`:where()` は詳細度0なので、付けても今までの指定との強さの
+      関係は変わらない。いま `.online` の中に包んだ一人用の画面は無い（PC版の編成は
+      `LineupBoard.jsx` に置き換えた）ので、付いていない指定も多い。包まずに出すなら
+      ポータルで `.online` の**外**へ出す（スマホ版の全画面）。CLAUDE.md の
+      「変更時の不変条件」と同じ決まり。
    ⚠ ボタン・入力欄の大きさと色は**変数で持つ**（`--online-control-h` など）。
-      PCは一人用と同じ語彙（高さ32px・`btn-secondary` の色）にするため、末尾の
-      「PC版の共通の見た目」で変数だけ差し替える。個別の指定（詳細度の高いもの）は
+      PCは一人用と同じ語彙（高さ32px・`btn-secondary` の色）にするため、
+      「PC版の共通の見た目」の節で変数だけ差し替える。個別の指定（詳細度の高いもの）は
       そのまま効く。 */
 .online {
   min-height: 100dvh;
@@ -2693,7 +2697,7 @@ small.online-gain:not(:where(.online-sp *)) {
    ⚠ `.online-success` は**浮かせたまま**（`position: fixed`。このファイルの先頭）。
       ここで `relative` にしていて、スマホでは本文の流れに入って押し下げ、
       `top`/`right` のずらしで左が12px切れていた。重なりの順だけ上げる
-   ⚠ PCでは `.online-success` を右下に浮かせ直している（末尾「PC版の共通の見た目」） */
+   ⚠ PCでは `.online-success` を右下に浮かせ直している（「PC版の共通の見た目」の節） */
 .online-success,
 .online-alert {
   z-index: 60;
