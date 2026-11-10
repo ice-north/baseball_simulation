@@ -212,21 +212,21 @@ class AppViewModel internal constructor(
     /** main の最新のアプリ（ホームの紙面の「アプリ」の記事）。まだ読めていない・読めなかったら null */
     var latestApp by mutableStateOf<LatestApp?>(null)
         private set
-    private var latestAppCheckedAt = 0L
+    private val latestAppSchedule = CheckSchedule(interval = 30 * 60_000L, retry = 5 * 60_000L)
     private var latestAppJob: Job? = null
 
     /**
      * main の最新のアプリを読む。⚠ GitHub の認証なしの API は1時間に60回までなので、30分に1回まで
-     * （起動時と、引っ張って更新したとき）。手元で作った版（コミットが分からない）は読まない
+     * （起動時と、引っ張って更新したとき）。読めなかったら5分あけて読み直す。手元で作った版（コミットが分からない）は読まない
      */
     private fun checkLatestApp() {
         if (appBuild.commit.isEmpty() || latestAppJob?.isActive == true) return
         val now = System.currentTimeMillis()
-        if (latestAppCheckedAt != 0L && now - latestAppCheckedAt < 30 * 60_000L) return
-        latestAppCheckedAt = now
+        if (!latestAppSchedule.due(now)) return
+        latestAppSchedule.started(now)
         latestAppJob = viewModelScope.launch {
             // 読めなかったときは前の答えを残す（電波の悪い所で記事が消えたり出たりしないように）
-            fetchLatest()?.let { latestApp = it } ?: run { latestAppCheckedAt = 0L }
+            fetchLatest()?.let { latestApp = it } ?: latestAppSchedule.failed(System.currentTimeMillis())
         }
     }
 
@@ -554,6 +554,26 @@ class AppViewModel internal constructor(
 
 private fun parseView(raw: String): LeagueView? = runCatching { OnlineJson.decodeFromString<LeagueView>(raw) }.getOrNull()
 private fun parseRaw(raw: String): JsonObject? = runCatching { OnlineJson.parseToJsonElement(raw).jsonObject }.getOrNull()
+
+/**
+ * 間をあけて読みに行くものの予定（main の最新のアプリなど）。
+ * ⚠ 読めなかったときも間をあける（[retry]）。以前は失敗で「まだ読んでいない」に戻していたので、
+ *    電波の悪い所や GitHub の回数の上限に当たったあとは、引っ張って更新するたびに読みに行っていた
+ *    （上限に当たると1時間ずっと失敗し、その間も読み続ける）
+ */
+internal class CheckSchedule(private val interval: Long, private val retry: Long) {
+    private var nextAt = 0L
+
+    fun due(now: Long): Boolean = now >= nextAt
+
+    fun started(now: Long) {
+        nextAt = now + interval
+    }
+
+    fun failed(now: Long) {
+        nextAt = now + retry
+    }
+}
 
 /**
  * 手続き（初期メンバー・トライアウト・契約更改・年度更新）の編集中の案。

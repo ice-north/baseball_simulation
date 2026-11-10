@@ -170,6 +170,21 @@ class AppViewModelTest {
         assertNotNull(model.auth)
     }
 
+    @Test fun latestAppIsNotReadAgainOnEveryPullAfterAFailure() {
+        val schedule = CheckSchedule(interval = 30 * 60_000L, retry = 5 * 60_000L)
+        assertTrue(schedule.due(0))
+        schedule.started(0)
+        // 読めなかった（電波・GitHub の回数の上限）。以前はすぐ「まだ読んでいない」に戻り、引っ張るたびに読みに行った
+        schedule.failed(1_000)
+        assertFalse(schedule.due(2_000))
+        assertFalse(schedule.due(1_000 + 5 * 60_000L - 1))
+        assertTrue(schedule.due(1_000 + 5 * 60_000L))
+        // 読めたら30分あける
+        schedule.started(10 * 60_000L)
+        assertFalse(schedule.due(39 * 60_000L))
+        assertTrue(schedule.due(40 * 60_000L))
+    }
+
     @Test fun theSameNoticeTwiceIsAnnouncedTwice() {
         create { "{}" }
         // 画面は通し番号を鍵に出す。同じ文言が続いても番号は上がる（2回目を落とさない）
