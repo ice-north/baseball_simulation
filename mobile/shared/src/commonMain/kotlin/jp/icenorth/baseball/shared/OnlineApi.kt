@@ -101,10 +101,12 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
     /**
      * 指示を送る。
      *
-     * ⚠ **編成（lineup）と提出（submit）は、版のずれだけなら最新の版で1回だけ送り直す**。
-     *    版はリーグ全体で1つなので、毎正時の進行や他の参加者の操作だけで「他の操作で更新されました」に
-     *    なる。どちらも `baseLineup` / `baseSubmission` で本当の食い違いを別に確かめているので、
-     *    送り直しても上書き事故は起きない（Web 版 OnlineApp.jsx の command と同じ決まり）。
+     * ⚠ **[RETRY_ON_REVISION] の命令（編成・提出・キャンプのクール）は、版のずれだけなら最新の版で1回だけ送り直す**。
+     *    版はリーグ全体で1つなので、定期の進行や他の参加者の操作だけで「他の操作で更新されました」に
+     *    なる。編成と提出は `baseLineup` / `baseSubmission`、キャンプはクール番号で本当の食い違いを別に
+     *    確かめているので、送り直しても上書き・二重の実行は起きない。
+     * ⚠ 一覧は Web 版の `shared.js` から写す（`gen-tables.mjs`）。ここに手で並べていたので、
+     *    アプリだけキャンプのクールが抜けていた。
      */
     @OptIn(ExperimentalUuidApi::class)
     suspend fun command(auth: AuthSession, revision: Int, type: String, payload: JsonElement? = null): JsonObject {
@@ -122,7 +124,7 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
         return try {
             send(revision)
         } catch (e: OnlineException) {
-            if (e.code != "revision" || type !in setOf("lineup", "submit")) throw e
+            if (e.code != "revision" || type !in RETRY_ON_REVISION) throw e
             send(view(auth).revision)
         }
     }

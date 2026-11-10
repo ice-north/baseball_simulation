@@ -95,3 +95,4 @@ val CAMP_POLICY_GUIDE: Map<String, Pair<String, String>> = mapOf(
     "patch:physique" to ("体力+12 体幹+8 走力+3 盗塁+2" to "体力+12 スタミナ+10 体幹+8 球速+2 肩力+2"),
 )
 val ONLINE_ROSTER_TARGETS: Map<String, Int> = mapOf("pitcher" to 11, "catcher" to 2, "infielder" to 6, "outfielder" to 7)
+val RETRY_ON_REVISION: Set<String> = setOf("lineup", "submit", "campRound")

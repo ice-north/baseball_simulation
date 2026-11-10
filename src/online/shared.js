@@ -462,6 +462,18 @@ export const ONLINE_ROSTER_TARGETS = {
 export const CAMP_ROUNDS = 4;
 
 /**
+ * 版のずれ（`code: 'revision'`）だけなら、最新の版で1回だけ送り直す命令。
+ *
+ * ⚠ **PC・スマホ（`OnlineApp.jsx`）とアプリ（`OnlineApi.kt`、`gen-tables.mjs` で写す）が
+ *    ここを読む**。別々に書いていたので、アプリだけ `campRound` が抜けて、毎正時の進行や
+ *    他の参加者の操作のあとにクールを実行すると「他の操作で更新されました」で止まっていた。
+ * ⚠ 足してよいのは、版とは別に本当の食い違いを確かめている命令だけ。編成と提出は
+ *    `baseLineup` / `baseSubmission`、キャンプはクール番号（同じクールは2回走らない）。
+ *    トレードの申し込み・返事は足さない（送り直すと二重の申し込みになりうる）。
+ */
+export const RETRY_ON_REVISION = ['lineup', 'submit', 'campRound'];
+
+/**
  * 育成方針ごとの「4クールでの伸びの目安」（1人あたりの平均。画面に出す）。
  *
  * ⚠ いしだ指摘: キャンプでどれくらい上がるのか、おまかせ（標準＝全体を伸ばす×技術）で

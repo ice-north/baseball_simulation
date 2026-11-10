@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PROGRESSION_TIMES } from './shared.js';
+import { PROGRESSION_TIMES, RETRY_ON_REVISION as RETRY_TYPES } from './shared.js';
 import './online.css';
 import { api, AUTH_KEY } from './api.js';
 import { Login, JoinLeague } from './LeaguePanels.jsx';
@@ -76,8 +76,9 @@ const COMMAND_MESSAGES = {
   reset: 'すべて消しました。リーグを作り直してください',
 };
 
-// 版のずれ（`code: 'revision'`）だけなら最新の版で1回だけ送り直す命令（`command` の注記）
-const RETRY_ON_REVISION = new Set(['lineup', 'submit', 'campRound']);
+// 版のずれ（`code: 'revision'`）だけなら最新の版で1回だけ送り直す命令（`command` の注記）。
+// ⚠ 一覧は `shared.js` に1つだけ置く（アプリも同じ一覧を写して使う）
+const RETRY_ON_REVISION = new Set(RETRY_TYPES);
 
 export default function OnlineApp() {
   const [auth, setAuth] = useState(readAuth);

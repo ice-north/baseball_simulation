@@ -102,6 +102,9 @@ out('val CAMP_POLICY_GUIDE: Map<String, Pair<String, String>> = mapOf(');
 for (const [k, v] of Object.entries(shared.CAMP_POLICY_GUIDE)) out(`    ${q(k)} to (${q(v.fielder)} to ${q(v.pitcher)}),`);
 out(')');
 out(`val ONLINE_ROSTER_TARGETS: Map<String, Int> = mapOf(${Object.entries(shared.ONLINE_ROSTER_TARGETS).map(([k, v]) => `${q(k)} to ${v}`).join(', ')})`);
+// 版のずれだけなら送り直す命令（OnlineApi.kt の command）。⚠ Web 版と同じ一覧を使う（アプリだけ campRound が抜けていた）
+if (!Array.isArray(shared.RETRY_ON_REVISION)) throw new Error('RETRY_ON_REVISION が読めない');
+out(`val RETRY_ON_REVISION: Set<String> = setOf(${shared.RETRY_ON_REVISION.map(q).join(', ')})`);
 const text = lines.join('\n') + '\n';
 const file = path.join(root, 'mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/Tables.kt');
 if (process.argv.includes('--check')) {
