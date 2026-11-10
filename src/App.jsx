@@ -442,6 +442,17 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const [inning, setInning] = useState(1);
       const [score, setScore] = useState({ home: 0, away: 0 });
       const [gameOver, setGameOver] = useState(false);  // 試合終了フラグ
+      // 試合終了の欄。終わったら画面に入るまで送る。
+      // ⚠ 欄は試合画面の下に足されるので、1280×720 では「結果確定・翌日へ」が画面の下に隠れていた
+      const gameEndPanelRef = useRef(null);
+      useEffect(() => {
+        if (!gameOver) return undefined;
+        // 自動フィットの倍率が変わったあと（次の描画のあと）に送る
+        const id = requestAnimationFrame(() => requestAnimationFrame(() => {
+          gameEndPanelRef.current?.scrollIntoView({ block: 'nearest' });
+        }));
+        return () => cancelAnimationFrame(id);
+      }, [gameOver]);
       const [gameStarted, setGameStarted] = useState(false);  // 試合開始フラグ
       const [selectedBatterAway, setSelectedBatterAway] = useState(null);  // 打順変更用（アウェイ）
       const [selectedBatterHome, setSelectedBatterHome] = useState(null);  // 打順変更用（ホーム）
@@ -2952,8 +2963,10 @@ if (newOuts === 3) {
           <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
               /* data-fit-height: 縦も1画面に収める対象。自動フィットが高さを見る印
-                 （縦に読み進める管理画面には付けないこと） */
-              <div className="p-1" data-fit-height>
+                 （縦に読み進める管理画面には付けないこと）
+                 ⚠ 試合終了のあとは外す。結果の欄が下に足されて縦が伸び、倍率が下限の0.7まで
+                 下がってスコアも表も小さくなっていた。外して等倍に戻し、結果の欄まで送る */
+              <div className="p-1" data-fit-height={gameOver ? undefined : true}>
           {/* 管理画面へボタン（采配モード中は非表示） */}
           <div className="max-w-[1800px] mx-auto flex justify-between items-center">
             {managedGameInfo && (
@@ -3934,7 +3947,7 @@ if (newOuts === 3) {
                 const scrollText = scrollParts.join('　　');
 
                 return (
-                <div className="bg-surface-1 rounded-lg p-4 text-white">
+                <div ref={gameEndPanelRef} className="bg-surface-1 rounded-lg p-4 text-white">
                   <h3 className="text-2xl font-bold mb-3 text-center text-yellow-400">🏆 試合終了</h3>
                   <div className="flex justify-center items-center gap-8 text-xl font-bold mb-4">
                     <div className="text-red-400">
