@@ -5,6 +5,9 @@ import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 // ⚠ PCの左メニューは「現在の手続き」「選手成績」「ホーム」（3a8592d で名前が変わった）。
 //    スマホのホームのボタンは「手続き」「打順」のまま。
+// ⚠ **PCのキャンプは「ホーム」に出す**（いしだ要望。「現在の手続き」の中に
+//    畳むと、開いていることに気づかないまま締め切りで自動になっていた）。
+//    スマホは「手続き」のまま（`MobileView` は変えていない）。
 // ⚠ PCのキャンプは**選手ごとにメイン練習とサブ練習**を割り当て、1クールずつ
 //    その場で実行する（`CampPlanner`）。以前は球団で1つ選ぶだけだった。
 //    ここでは名簿の投手1人の「メイン練習」の欄で、未保存案の保持を見る。
@@ -183,7 +186,7 @@ async function click(page, text) {
 }
 try {
   const oversized = await scene();
-  await click(oversized.page, '現在の手続き');
+  await click(oversized.page, 'ホーム');
   await menuGroup(oversized.page).waitFor();
   await oversized.page.evaluate(() =>
     sessionStorage.setItem(
@@ -202,15 +205,18 @@ try {
 
   const draft = await scene();
   draft.page.on('dialog', (dialog) => dialog.accept());
-  await click(draft.page, '現在の手続き');
-  await chooseMenu(draft.page, 'velocity');
   await click(draft.page, 'ホーム');
-  await click(draft.page, '現在の手続き');
+  await chooseMenu(draft.page, 'velocity');
+  // ⚠ ページを移って戻る（キャンプはホームなので、移る先は別のページ）
+  await click(draft.page, '選手成績');
+  await click(draft.page, 'ホーム');
   assert.equal(await pressedMenu(draft.page), 'velocity', '画面移動でも提出案を保持');
   // ⚠ スマホは**選手ごとの表を出さない**（23列は入らない）。育成方針と
   //    「第Nクール練習を実行」だけを出す（`CampPlanner` の `compact`）。
   //    出さないと、携帯だけの人は4クールとも自動になってしまう。
   await draft.page.setViewportSize({ width: 390, height: 844 });
+  // ⚠ スマホのキャンプは「手続き」のまま（ホームへ移したのはPCだけ）
+  await click(draft.page, '手続き');
   await draft.page
     .getByText('選手ごとの練習はPCで選べます', { exact: false })
     .waitFor();
@@ -228,6 +234,7 @@ try {
     .getByRole('button', { name: '第1クール練習を実行', exact: true })
     .waitFor();
   await draft.page.setViewportSize({ width: 1280, height: 844 });
+  await click(draft.page, 'ホーム');
   assert.equal(
     await pressedMenu(draft.page),
     'velocity',
@@ -304,7 +311,12 @@ try {
   await lineupDraft.context.close();
 
   const retry = await scene({ defaultsFail: true });
-  await click(retry.page, '現在の手続き');
+  // ⚠ **標準案の読み込みはスマホのキャンプに残っている**。PCのキャンプは
+  //    ホームに出していて `PhasePanel` を通らないので、標準案を取りに行かない
+  //    （`CampPlanner` は `view.phase.camp.plan` を見る）。失敗したときの
+  //    知らせと取り直しは、残っているスマホの側で見る
+  await retry.page.setViewportSize({ width: 390, height: 844 });
+  await click(retry.page, '手続き');
   await retry.page
     .getByRole('button', { name: '標準案を再取得', exact: true })
     .waitFor();
@@ -319,8 +331,14 @@ try {
     .waitFor();
   retry.defaultsFail = false;
   await click(retry.page, '標準案を再取得');
-  await menuGroup(retry.page).waitFor();
+  await retry.page
+    .getByRole('button', { name: '第1クール練習を実行', exact: true })
+    .waitFor();
   assert.equal(await retry.page.getByRole('alert').count(), 0);
+  // ここからはPCの割り当ての欄で見る
+  await retry.page.setViewportSize({ width: 1280, height: 844 });
+  await click(retry.page, 'ホーム');
+  await menuGroup(retry.page).waitFor();
   // ⚠ キャンプに「下書きを保存」「この内容で決定」は無い。1クールずつその場で
   //    実行する。送っている間は**割り当ても変えられない**こと——変えられると、
   //    送った内容と画面の内容が食い違う
@@ -367,23 +385,32 @@ try {
   );
   await retry.context.close();
 
+  // ⚠ ここもスマホの側で見る（PCのキャンプは標準案を取りに行かない）
   const stale = await scene({ staleDefaults: true });
-  await click(stale.page, '現在の手続き');
+  await stale.page.setViewportSize({ width: 390, height: 844 });
+  await click(stale.page, '手続き');
   await stale.page
     .getByText('手続きが更新されました。最新状態を確認してください', {
       exact: true,
     })
     .waitFor();
-  assert.equal(
-    await menuGroup(stale.page).count(),
-    0,
-    '別の手続きの標準案を表示しない',
-  );
+  const staleRun = () =>
+    stale.page.getByRole('button', { name: '第1クール練習を実行', exact: true });
+  // ⚠ **別の手続きの標準案は使わない**。黙って当てると、前の手続きの内容で
+  //    決定してしまう。取り直せる口を出すこと
+  await stale.page
+    .getByRole('button', { name: '標準案を再取得', exact: true })
+    .waitFor();
   stale.staleDefaults = false;
   stale.view.phase.id = '2:camp';
   stale.view.revision++;
   await click(stale.page, '更新');
-  await menuGroup(stale.page).waitFor();
+  await stale.page
+    .getByText('手続きが更新されました。最新状態を確認してください', {
+      exact: true,
+    })
+    .waitFor({ state: 'hidden' });
+  await staleRun().waitFor();
   await stale.context.close();
 
   // --- 止まったときに、その場から再開できること --------------------------

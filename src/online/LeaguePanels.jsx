@@ -729,15 +729,11 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
       : '全員が決定した時点で処理します。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。';
   // 標準案を出した指導者（「山田監督の案です」）と、キャンプでの指導者の入れ替え。
   // ⚠ 文はサーバーが作る（`projection.mjs` の `phasePlanBy`）
-  const staffNote = (phase.planBy || (phase.kind === 'camp' && view.staff)) && (
-    <>
-      {phase.planBy && <p className="online-staff-note">{phase.planBy.text}</p>}
-      {phase.kind === 'camp' && view.staff && (
-        <p className="online-muted">
-          指導者の留任・解任・市場から呼ぶのは「指導者」の画面で決められます（キャンプの間だけ）。
-        </p>
-      )}
-    </>
+  // ⚠ **キャンプのぶんは出さない**。キャンプはPCではホームに出していて
+  //    ここを通らないので、`CampPlanner` が自分で出す（スマホもそれを通る）。
+  //    ここでも出すと、スマホだけ同じ文が2回並ぶ
+  const staffNote = phase.kind !== 'camp' && phase.planBy && (
+    <p className="online-staff-note">{phase.planBy.text}</p>
   );
   const readyList = (
     <ul className="online-ready">

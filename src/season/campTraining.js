@@ -7,6 +7,23 @@ import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedVa
 import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 
+/**
+ * 覚えられる変化球（直球は除く）。
+ * ⚠ **ここが正本**。オンラインの画面は `CAMP_PITCH_TYPES`（`src/online/shared.js`）
+ *    から読むが、中身はこの表を再輸出しているだけ。二重に書かないこと——
+ *    片方に球種を足すと「選べるのに覚えられない」か「覚えられるのに選べない」になる。
+ */
+export const PITCH_TYPES = [
+  'slider',
+  'curve',
+  'fork',
+  'changeup',
+  'sinker',
+  'cutter',
+  'knuckle',
+  'shoot',
+];
+
 // 集中練習が1点に集約する倍率。通常メニューは3〜4能力に分散するので、
 // ここが 1.0 だと「集中しても総量は同じ・他能力に減点だけ付く」＝常に損になる。
 // 分散先の数（3〜4）より小さくしてあるのは、集中には減点という別の代償があるため。
@@ -616,16 +633,22 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
     case 'newpitch': {
       // 新球種習得（サブ練習版 - 成功率低め、フォーム適性で確率UP）
       if (player.position === 'pitcher' && player.pitching) {
-        const allPitchTypes = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'cutter', 'knuckle', 'shoot'];
         const currentArsenal = (player.pitching.arsenal || []).map(a => a.type);
-        const available = allPitchTypes.filter(t => !currentArsenal.includes(t));
+        const available = PITCH_TYPES.filter(t => !currentArsenal.includes(t));
         // フォーム適性のある球種を優先的に選ぶ（50%の確率で適性球種を選択）
         const playerForm = player.pitching?.form;
         const affinityTypes = available.filter(t => getFormPitchAffinity(playerForm, t));
         const useAffinity = affinityTypes.length > 0 && Math.random() < 0.5;
         const candidates = useAffinity ? affinityTypes : available;
         if (available.length > 0) {
-          const newType = candidates[Math.floor(Math.random() * candidates.length)];
+          // ⚠ **狙う球種を指定できる**（`options.targetPitch`）。指定が無ければ
+          //    従来どおり適性寄りの抽選。指定しても**成功率は上がらない**——
+          //    フォーム適性と器用さで決まるので、適性の無い球種は難しいまま。
+          const wanted = available.includes(options.targetPitch)
+            ? options.targetPitch
+            : null;
+          const newType =
+            wanted || candidates[Math.floor(Math.random() * candidates.length)];
           const formAff = getFormPitchAffinity(playerForm, newType);
           const baseRate = 0.12;
           // ⚠ フォーム適性を足した**後**に器用さを掛ける。先に掛けると

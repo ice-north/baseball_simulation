@@ -126,6 +126,8 @@ import {
   ROSTER_LIMIT,
   ONLINE_ROSTER_TARGETS,
   CONVERT_POSITIONS,
+  CAMP_SUB_TARGETS,
+  CAMP_PITCH_TYPES,
 } from '../src/online/shared.js';
 import {
   generatePyramidTeams,
@@ -306,6 +308,18 @@ function campPlayerPolicies(roster, source) {
 }
 
 /**
+ * サブ練習の「対象」を `executeSubTraining` が読む形にする。
+ * ⚠ 対象を取らないメニューには何も渡さない（知らない鍵を増やさない）。
+ */
+function campTargetOptions(key, value) {
+  if (!value) return {};
+  const kind = CAMP_SUB_TARGETS[key];
+  if (kind === 'pitch' || kind === 'ownPitch') return { targetPitch: value };
+  if (kind === 'position') return { targetPosition: value };
+  return {};
+}
+
+/**
  * キャンプを**1クールだけ**走らせる。
  *
  * ⚠ 人の球団は画面で1クールずつ実行し、伸びた能力を見てから次を決める
@@ -319,7 +333,7 @@ function campPlayerPolicies(roster, source) {
 export function runCampRound(
   league,
   teamName,
-  { policy, players: overrides, main, sub } = {},
+  { policy, players: overrides, main, sub, subTarget } = {},
 ) {
   const team = TEAMS_DATA[teamName];
   if (!team?.players?.length) return { gains: {}, events: {} };
@@ -383,8 +397,18 @@ export function runCampRound(
       policies.get(player.id) || playerPolicy(player, policy, overrides);
     const key =
       sub?.[player.id] || resolveTraining(player, own.direction, own.phase).sub;
+    // ⚠ **選んだ対象を渡すこと**（覚えたい球種・磨きたい球種・守備位置）。
+    //    渡さないと中で抽選され、画面で選んだのに違うものを覚える
     if (SUB_TRAINING_MENUS[key])
-      note(player, executeSubTraining(player, key, {}, staff)?.growthReport);
+      note(
+        player,
+        executeSubTraining(
+          player,
+          key,
+          campTargetOptions(key, subTarget?.[player.id]),
+          staff,
+        )?.growthReport,
+      );
   }
   if (staff) {
     applyMotivationEffect(updatedTeam.players, staff);
@@ -861,11 +885,35 @@ export function validateCampRound(league, teamName, payload) {
     }
     return out;
   };
+  const sub = pick(
+    payload?.sub,
+    CAMP_SUB_MENUS,
+    subMenuFitsPlayer,
+    'サブ練習が不正です',
+  );
+  // ⚠ **対象を取るメニューにだけ付ける**。別の練習に対象が付いていたら、
+  //    画面とサーバーの食い違いなので断る（黙って捨てると原因が分からない）
+  const subTarget = {};
+  for (const [id, value] of Object.entries(payload?.subTarget || {})) {
+    const playerId = Number(id);
+    const player = byId.get(playerId);
+    if (!player || !value) continue;
+    const kind = CAMP_SUB_TARGETS[sub[playerId]];
+    requireOnline(kind, '対象を選べない練習に対象が付いています');
+    requireOnline(
+      kind === 'position'
+        ? CONVERT_POSITIONS.includes(value) && value !== 'pitcher'
+        : CAMP_PITCH_TYPES.includes(value),
+      '練習の対象が不正です',
+    );
+    subTarget[playerId] = value;
+  }
   return {
     policy: normalizeCampPolicy(payload?.policy),
     players: campPlayerPolicies(team.players, payload?.players),
     main: pick(payload?.main, CAMP_MENUS, menuFitsPlayer, '練習メニューが不正です'),
-    sub: pick(payload?.sub, CAMP_SUB_MENUS, subMenuFitsPlayer, 'サブ練習が不正です'),
+    sub,
+    subTarget,
   };
 }
 

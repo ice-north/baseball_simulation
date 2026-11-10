@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 import { tryoutService, routeToService } from './lib/serviceRoute.mjs';
+import { TURNS_PER_DAY } from '../../src/online/shared.js';
 const base = process.env.ONLINE_TEST_URL || 'http://localhost:3000';
 assert.ok(
   ['localhost', '127.0.0.1'].includes(new URL(base).hostname),
@@ -55,6 +56,145 @@ try {
     await page.goto(`${base}/online`);
     await page.getByText('ローカル検証モード', { exact: false }).waitFor();
     await click(page, `プレイヤー${player}で入る`);
+  }
+  /**
+   * ページ全体がはみ出していないか（縦横のスクロールバー）。
+   * ⚠ **どこが高いかも返す**。「収まっていない」だけだと、落ちたときに
+   *    もう一度ブラウザを開いて測り直すことになる
+   */
+  const overflow = (page) =>
+    page.evaluate(() => {
+      const d = document.documentElement;
+      const parts = {};
+      // ⚠ 隠れているページにも同じ名前の要素がある。**いま出ている帯と
+      //    キャンプの中だけ**を測る（`querySelector` は最初の1つを拾う）
+      const camp = document.querySelector('.online-camp');
+      const add = (name, el) => {
+        if (el) parts[name] = Math.round(el.getBoundingClientRect().height);
+      };
+      add('ヘッダー', document.querySelector('header'));
+      add('手続きの帯', document.querySelector('.online-procedure-banner'));
+      for (const sel of [
+        '.online-camp-head',
+        '.online-camp-bulk',
+        '.online-camp-tabs',
+        '.online-camp-group',
+        '.online-camp-run',
+      ])
+        add(sel, camp?.querySelector(sel));
+      return {
+        縦: d.scrollHeight > d.clientHeight,
+        横: d.scrollWidth > d.clientWidth,
+        高さ: `${d.scrollHeight}/${d.clientHeight}`,
+        内訳: parts,
+      };
+    });
+  /**
+   * キャンプの画面の見た目（いしだ要望）。
+   * ⚠ **1画面に収めること**。4クールぶん同じ表を見るので、毎回スクロールして
+   *    「実行」を探すことになる。収まらなくなったらここで止める。
+   * ⚠ **対象を選べること**。欄が出ないと新球種もサブポジも中で抽選される。
+   */
+  async function campLooks(page) {
+    // ⚠ **先に画面の大きさを入れ直す**。ここまでの検査で別の大きさに変えて
+    //    いることがあり、そのまま測ると「収まっている」が無条件に通る
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole('heading', { name: '春季キャンプ', exact: true }).waitFor();
+    // ⚠ 左上は**日程の速さ**を出す（いしだ要望）。順位は順位表で見るので、
+    //    「○部○位○勝○敗」はここから外した
+    const nav = await page.locator('.online-nav-context').innerText();
+    assert.ok(
+      nav.includes('1週間で1シーズン') && nav.includes(`${TURNS_PER_DAY * 7}ターン`),
+      `左上に日程の速さが出ていない: ${nav}`,
+    );
+    assert.ok(
+      !/\d+部\s*\d+位/.test(nav),
+      `左上に順位が残っている: ${nav}`,
+    );
+    // ⚠ **地色の上に裸で置かない**（いしだ指摘: 背景がグレーで見にくい）。
+    //    `.online` の地（`--surface-0`）は明るいグレーで、本文は濃いカードに
+    //    載せる前提。裸で出すと、表も `.online-camp-bulk` の薄い白被せも
+    //    グレーに溶ける。キャンプの後ろに塗られている色が、地の色と違うこと
+    const surface = await page.evaluate(() => {
+      const paint = (node) => {
+        for (let el = node; el; el = el.parentElement) {
+          const bg = getComputedStyle(el).backgroundColor;
+          if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+        }
+        return null;
+      };
+      return {
+        後ろ: paint(document.querySelector('.online-camp')),
+        地: getComputedStyle(document.querySelector('.online')).backgroundColor,
+      };
+    });
+    assert.notEqual(
+      surface.後ろ,
+      surface.地,
+      `キャンプが地色の上に裸で置かれている（表が溶ける）: ${surface.地}`,
+    );
+    const fit = await overflow(page);
+    assert.ok(
+      !fit.縦 && !fit.横,
+      `キャンプが1画面に収まっていない: ${JSON.stringify(fit)}`,
+    );
+    // ⚠ 表そのものが横に溢れていないこと（画面は収まっていても列が切れる）
+    assert.ok(
+      await page
+        .locator('.online-camp table')
+        .evaluate((el) => {
+          const box = el.closest('div') || el.parentElement;
+          return box.scrollWidth <= box.clientWidth + 1;
+        }),
+      'キャンプの表が横に溢れている',
+    );
+    // ⚠ **決め方を変えても収まること**。「全員同じ方針」は設定が3つに増え、
+    //    伸びの目安も出るので、ここだけ縦が伸びる（実測で1050pxになっていた）
+    const mode = (name) =>
+      page.getByRole('group', { name: '決め方' }).getByRole('button', { name });
+    for (const name of ['全員を希望どおり', '全員同じ方針']) {
+      await mode(name).click();
+      const each = await overflow(page);
+      assert.ok(
+        !each.縦 && !each.横,
+        `決め方「${name}」で1画面に収まっていない: ${JSON.stringify(each)}`,
+      );
+    }
+    await mode('おすすめ').click();
+    // --- 対象を選べること -------------------------------------------------
+    const row = page.locator('.online-camp tbody tr').first();
+    const subOf = (r) => r.locator('select[aria-label$="のサブ練習"]');
+    const targetOf = (r) => r.locator('select[aria-label$="の練習の対象"]');
+    // 野手: サブポジ練習が選べて、守備位置を指定できる
+    const tab = (name) =>
+      page.getByRole('group', { name: '守備位置' }).getByRole('button', { name });
+    // ⚠ 左メニューに「投手起用」があるので、タブは**守備位置の群に絞って**押す
+    await tab(/^内野手/).click();
+    const options = async (sel) =>
+      (await sel.locator('option').allInnerTexts()).map((t) => t.trim());
+    assert.ok(
+      (await options(subOf(row))).some((t) => t.includes('サブポジ')),
+      '野手のサブ練習にサブポジ練習が無い',
+    );
+    assert.equal(await targetOf(row).count(), 0, '対象を取らない練習に欄が出ている');
+    await subOf(row).selectOption('subposition');
+    const positions = await options(targetOf(row));
+    assert.equal(positions[0], 'おまかせ', 'おまかせが先頭に無い');
+    assert.ok(positions.length >= 4, `守備位置の選択肢が少なすぎる: ${positions}`);
+    // 投手: 新球種の対象が、まだ持っていない球種で出る
+    await tab(/^投手/).click();
+    await subOf(row).selectOption('newpitch');
+    const pitches = await options(targetOf(row));
+    assert.equal(pitches[0], 'おまかせ', '新球種のおまかせが先頭に無い');
+    assert.ok(pitches.length >= 3, `覚えられる球種が少なすぎる: ${pitches}`);
+    // ⚠ **対象の欄を出しても溢れないこと**（横に並べているため）
+    const after = await overflow(page);
+    assert.ok(
+      !after.縦 && !after.横,
+      `対象を出すとはみ出す: ${JSON.stringify(after)}`,
+    );
+    await subOf(row).selectOption('physique');
+    assert.equal(await targetOf(row).count(), 0, 'サブ練習を変えても対象が残っている');
   }
   // --- 年末のトライアウト（希望リスト） -------------------------------------
   // ⚠ 開幕前の手続きは初期メンバーセットの選択になり（d37ef49）、希望リストは
@@ -262,9 +402,35 @@ try {
   // ⚠ **キャンプには「この内容で決定」が無い**。1クールずつその場で実行する
   //    形なので、提出して締め切りを待つものが無い（`CampPlanner`）。
   //    4クール回し終えた人から決定済みになり、2人とも終わると開幕する。
+  // ⚠ **キャンプはホームに出す**（いしだ要望）。4クール回すのがその週の遊び
+  //    そのもので、「現在の手続き」の中に畳むと開いていることに気づかないまま
+  //    締め切りで自動になっていた。手続きのページは案内だけ出す。
   for (const page of [p, b]) {
     await click(page, '更新');
-    await page.getByRole('heading', { name: 'キャンプ', exact: true }).waitFor();
+    await click(page, '現在の手続き');
+    await page
+      .getByText('いまはキャンプです', { exact: false })
+      .waitFor({ timeout: 20000 })
+      .catch(() => {
+        throw new Error(
+          'キャンプがホームに移っていない（現在の手続きに案内が出ない）',
+        );
+      });
+    assert.equal(
+      await page.locator('.online-camp').count(),
+      0,
+      'キャンプが現在の手続きに残っている',
+    );
+    await click(page, 'ホームへ');
+    await page.getByRole('heading', { name: '春季キャンプ', exact: true }).waitFor();
+    assert.equal(
+      await page
+        .locator('.online-nav-home[aria-current="page"]')
+        .count(),
+      1,
+      'キャンプを開いているのにホームが選ばれていない',
+    );
+    if (page === p) await campLooks(page);
     for (let round = 1; round <= 4; round += 1)
       await click(page, `第${round}クール練習を実行`);
   }
@@ -560,7 +726,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    'online-ui-check PASS（PC2人・別スマホ・トライアウト希望リスト・セット選択の下書き競合・編成の元に戻す/保存中ロック/別画面との同時編集・端末交代・実試合結果・320〜767px / Chrome実操作）',
+    'online-ui-check PASS（PC2人・別スマホ・トライアウト希望リスト・セット選択の下書き競合・キャンプがホームで1画面に収まる/対象を選べる・編成の元に戻す/保存中ロック/別画面との同時編集・端末交代・実試合結果・320〜767px / Chrome実操作）',
   );
 } finally {
   await browser.close();

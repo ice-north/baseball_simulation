@@ -157,6 +157,19 @@ export const MIGRATIONS = [
       //  （`coaches.js` の `staffModesOf`）。保存に書くのは人が変えたときだけ
     },
   },
+  {
+    from: 10,
+    to: 11,
+    note: 'キャンプのサブ練習に対象（球種・守備位置）を足した',
+    apply(league) {
+      // ⚠ **足すだけの変更**。対象を持たない古い指示は、これまでどおり中で
+      //    選ばれる（`executeSubTraining` の既定）。書き直すものは無い。
+      // ⚠ 置き場だけ作っておく。無いまま `plan.subTarget[id]` を読む側が
+      //    増えると、古い保存でだけ落ちる
+      for (const state of Object.values(league.phase?.camp || {}))
+        if (state?.plan) state.plan.subTarget ||= {};
+    },
+  },
 ];
 
 // ⚠ **手順表と目標の版を差し替えられるようにしてある**。段が0本だった頃に、

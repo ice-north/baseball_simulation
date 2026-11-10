@@ -13,7 +13,7 @@ import {
   resolveTraining,
   playerPolicy,
 } from '../season/trainingPolicy.js';
-import { POS } from './api.js';
+import { POS, POS_FULL } from './api.js';
 import { getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 import {
   CAMP_MENUS,
@@ -21,11 +21,15 @@ import {
   CAMP_DIRECTIONS,
   CAMP_PHASES,
   CAMP_POLICY_GUIDE,
+  CAMP_SUB_TARGETS,
+  CAMP_PITCH_TYPES,
+  CONVERT_POSITIONS,
 } from './shared.js';
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import { useDraftState, phaseDraftName } from './Drafts.jsx';
 import { Choice } from './Choice.jsx';
 import { campGainRows, campGainTotals, formatGain } from './campGains.js';
+import { formatDeadline } from './LeaguePanels.jsx';
 
 // ============================================================
 // キャンプ。一人用のキャンプ画面と同じ作りにする。
@@ -77,6 +81,46 @@ export const clampMenu = (key, player) =>
     : player.position === 'pitcher'
       ? 'control'
       : 'batting';
+/**
+ * サブ練習の「対象」の選択肢（`[値, 見せ方]` の並び）。
+ *
+ * ⚠ **選べるのに選ばせない、をやめる**。`executeSubTraining` は球種も守備位置も
+ *    受け取れるのに、オンラインは何も渡していなかった（新球種は中で抽選、
+ *    サブポジ練習は「置き場が無い」としてメニューごと外れていた）。
+ * ⚠ 新球種は**まだ持っていない球種**、変化球練習は**持っている球種**。取り違えると
+ *    選んでも1クール捨てることになる。
+ * ⚠ サブポジはいまの守備位置を除き、適性を添える（どこなら現実的か分からない）。
+ */
+export function subTargetChoices(key, player) {
+  const kind = CAMP_SUB_TARGETS[key];
+  const owned = (player.pitching?.arsenal || [])
+    .filter((pitch) => pitch?.type && pitch.type !== 'straight')
+    .map((pitch) => pitch.type);
+  if (kind === 'pitch')
+    return CAMP_PITCH_TYPES.filter((type) => !owned.includes(type)).map(
+      (type) => [type, getPitchTypeName(type)],
+    );
+  if (kind === 'ownPitch')
+    return owned.map((type) => [
+      type,
+      `${getPitchTypeName(type)}${
+        (player.pitching?.arsenal || []).find((x) => x.type === type)?.level ?? ''
+      }`,
+    ]);
+  if (kind === 'position')
+    return CONVERT_POSITIONS.filter(
+      (pos) => pos !== 'pitcher' && pos !== player.position,
+    ).map((pos) => [
+      pos,
+      `${POS_FULL[pos]}${
+        Number.isFinite(player.positionFitness?.[pos])
+          ? ` ${player.positionFitness[pos]}%`
+          : ''
+      }`,
+    ]);
+  return [];
+}
+
 export const clampSub = (key, player) =>
   CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player)
     ? key
@@ -123,30 +167,21 @@ function Stat({ value, diff }) {
 // ⚠ 成長は**倍率**（0.70〜1.30）。四捨五入すると全員「1」になって読めない
 const ratio = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
 
-/**
- * 変化球は「名前＋キレ」。投手の行にだけ出す。
- * ⚠ 置き場は `pitching.arsenal`（`pitchTypes` ではない）。直球は外す
- *    （全員が持っていて、並べても見分けがつかない）。
- */
-function pitchTypes(player) {
-  return (player.pitching?.arsenal || [])
-    .filter((pitch) => pitch?.type && pitch.type !== 'straight')
-    .map((pitch) => `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`)
-    .join(' ');
-}
-
 function PlayerRow({
   player,
   main,
   sub,
+  target,
   onMain,
   onSub,
+  onTarget,
   busy,
   policy,
   onFitWish,
   gains = {},
 }) {
   const g = (key) => gains[key];
+  const choices = subTargetChoices(sub, player);
   const isPitcher = player.position === 'pitcher';
   const wish = useMemo(() => playerWish(player), [player]);
   // ⚠ `policy` は**この選手に当てる方針**（`playerPolicy` の結果）
@@ -162,8 +197,6 @@ function PlayerRow({
       {!isPitcher && <td>{POS[player.position]}</td>}
       <td>{player.age}</td>
       <td>{ratio(player.growthPotential)}</td>
-      <td>{grade(player.personality?.discipline)}</td>
-      <td>{grade(player.personality?.mental)}</td>
       <td className={`online-mood is-${mood.tone}`}>
         {MOOD_TONE[mood.tone] || mood.label}
         {/* ⚠ この選手だけ希望に合わせる（1人ずつ方針を変えられる） */}
@@ -177,14 +210,6 @@ function PlayerRow({
             合わせる
           </button>
         )}
-      </td>
-      <td>
-        {player.physical?.throws === 'left' ? '左' : '右'}/
-        {player.batting?.bats === 'left'
-          ? '左'
-          : player.batting?.bats === 'switch'
-            ? '両'
-            : '右'}
       </td>
       <td>{isPitcher ? FORM_SHORT[player.pitching?.form] || '—' : '—'}</td>
       <td>
@@ -278,6 +303,25 @@ function PlayerRow({
             </option>
           ))}
         </select>
+        {/* ⚠ 対象を取る練習だけ**同じ欄の中に横に**出す。列を足すと23列が24列に
+            なって横に溢れ、下に積むと行の高さが倍になる。
+            ⚠ 「おまかせ」を残す（従来どおり中で選ぶ） */}
+        {choices.length > 0 && (
+          <select
+            className="online-camp-target"
+            aria-label={`${player.name}の練習の対象`}
+            value={target || ''}
+            disabled={busy}
+            onChange={(e) => onTarget(player.id, e.target.value)}
+          >
+            <option value="">おまかせ</option>
+            {choices.map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        )}
       </td>
       {/* ⚠ 希望は**印だけ**にして、全文は title で出す。名前で出すと
           「長所を伸ばす·基礎体力」で90pxを取り、右端の列が隠れる */}
@@ -288,15 +332,6 @@ function PlayerRow({
         {DIRECTIONS[wish.direction]?.icon}
         {PHASES[wish.phase]?.icon}
       </td>
-      {/* ⚠ 変化球は**いちばん右**。23列あって1500pxの画面には収まりきらないので、
-          切れてよい列（見るだけのもの）を端に置き、メイン・サブの選択欄は必ず
-          見えるようにする。全文は title で出す。
-          ⚠ 投手の表だけ。野手の表に空の列を作らない */}
-      {isPitcher && (
-        <td className="online-camp-pitches" title={pitchTypes(player)}>
-          {pitchTypes(player)}
-        </td>
-      )}
     </tr>
   );
 }
@@ -390,8 +425,12 @@ function CampGainsSummary({ camp, roster, finished }) {
   );
 }
 
-/** 方針ごとの4クールの伸びの目安と、希望と噛み合う人数 */
-function CampPolicyGuide({ policy, roster, policyOf }) {
+/**
+ * 決め方の説明・4クールの伸びの目安・希望と噛み合う人数。
+ * ⚠ **全部まとめて1行**（折り返しは禁じない）。キャンプはホームに出して
+ *    1画面に収めるので、段落を分けると人数の多い球団で実行ボタンが出る。
+ */
+function CampPolicyGuide({ policy, roster, policyOf, note, hint }) {
   // ⚠ 伸びの目安は「全員同じ方針」のときだけ（選手ごとに方針が違うと1つに決まらない）
   const guide =
     policy.mode === 'team'
@@ -403,27 +442,32 @@ function CampPolicyGuide({ policy, roster, policyOf }) {
   });
   const count = (tone) => moods.filter((t) => t === tone).length;
   const standard = policy.direction === 'balanced' && policy.phase === 'skill';
+  // ⚠ 読めなくはしない。長い説明は title に入れて、マウスを載せれば読める
+  const title = [
+    note,
+    hint,
+    standard
+      ? 'いまは「全体を伸ばす×技術」です。試合に効きやすいミート・制球が伸びます。'
+      : '「全体を伸ばす×技術」なら、ミート・制球が伸びます。',
+    '基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。',
+    '締め切りまでに回さなかったクールは、最後に指示した方針で自動で行われます。',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
-    <div className="online-camp-guide">
+    <p className="online-muted online-camp-note online-camp-guide" title={title}>
+      {note && <span className="online-camp-guide-note">{note}</span>}
       {guide && (
-        <p>
-          <strong>4クールでの伸びの目安（1人あたり）</strong>
-          <span>野手: {guide.fielder}</span>
-          <span>投手: {guide.pitcher}</span>
-        </p>
+        <>
+          <span>野手 {guide.fielder}</span>
+          <span>投手 {guide.pitcher}</span>
+        </>
       )}
-      <p className="online-muted">
-        {guide &&
-          (standard
-            ? 'いまは「全体を伸ばす×技術」です。試合に効きやすいミート・制球が伸びます。'
-            : '「全体を伸ばす×技術」なら、ミート・制球が伸びます。')}
-        {guide &&
-          '基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。'}
-        希望と噛み合う選手: 意欲的 {count('good')}人・納得 {count('mid')}
-        人・身が入らない {count('bad')}人。
-        締め切りまでに回さなかったクールは、最後に指示した方針で自動で行われます。
-      </p>
-    </div>
+      <span>
+        噛み合い: 意欲的 {count('good')}人・納得 {count('mid')}人・身が入らない{' '}
+        {count('bad')}人
+      </span>
+    </p>
   );
 }
 
@@ -490,6 +534,10 @@ export default function CampPlanner({
     phaseDraftName(phaseId, 'camp.sub'),
     () => camp?.plan?.sub || {},
   );
+  const [subTarget, setSubTarget] = useDraftState(
+    phaseDraftName(phaseId, 'camp.target'),
+    () => camp?.plan?.subTarget || {},
+  );
   const trainingOf = (p) => {
     const own = policyOf(p);
     return resolveTraining(p, own.direction, own.phase);
@@ -539,6 +587,16 @@ export default function CampPlanner({
         players: overrides,
         main: Object.fromEntries(roster.map((p) => [p.id, mainOf(p)])),
         sub: Object.fromEntries(roster.map((p) => [p.id, subOf(p)])),
+        // ⚠ **いまのサブ練習に合う対象だけ送る**。練習を変えたあとに前の対象が
+        //    残っていると、サーバーが「対象を選べない練習に対象が付いている」と断る
+        subTarget: Object.fromEntries(
+          roster
+            .map((p) => [p.id, subTarget[p.id], subTargetChoices(subOf(p), p)])
+            .filter(([, value, choices]) =>
+              choices.some(([key]) => key === value),
+            )
+            .map(([id, value]) => [id, value]),
+        ),
       }),
     );
   // ⚠ **守備位置で1グループずつ出す**（一人用と同じ）。24人を全部並べると
@@ -555,7 +613,26 @@ export default function CampPlanner({
     <div className="online-camp">
       <div className="online-camp-head">
         <h3>春季キャンプ</h3>
-        <div className="online-camp-rounds" aria-label="クールの進み">
+        {/* ⚠ **締め切りをここに出す**。キャンプをホームへ移したので、上の
+            手続きの帯（`online-procedure-banner`）はホームでは出さない。
+            帯が持っていた締め切りの案内を落とさないよう、見出しの横に置く。
+            ⚠ 行を増やさない（1画面に収めるため）。説明は title で出す */}
+        {!finished && view.phase?.deadline && (
+          <small
+            className="online-camp-deadline"
+            title="締め切りまでに終わらなかったクールは、最後に指示した内容で自動で実行します"
+          >
+            締め切り {formatDeadline(view.phase.deadline)}
+          </small>
+        )}
+        {/* ⚠ 説明の段落は**title へ畳んだ**。1行17pxと余白12pxで、12人目の
+            行が1画面からはみ出していた（実測 1044px）。進み具合の丸と
+            「第Nクール練習を実行」で、やることは画面から読める */}
+        <div
+          className="online-camp-rounds"
+          aria-label="クールの進み"
+          title="1クールずつ実行し、伸びた能力を見て次のクールを決めます"
+        >
           {Array.from({ length: total }, (_, i) => (
             <span
               key={i}
@@ -569,17 +646,29 @@ export default function CampPlanner({
           </small>
         </div>
       </div>
-      {finished ? (
+      {finished && (
         <p className="online-muted" role="status">
           全{total}クールが終わりました。伸びた能力で
           <strong>スタメン設定・投手起用</strong>
           を整えて、月曜の開幕を待ちます。
         </p>
-      ) : (
-        <p className="online-muted">
-          メイン練習とサブ練習を選んで実行します。1クールごとに結果が反映されるので、
-          伸びた能力を見て次のクールを決められます。
-          締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。
+      )}
+      {/* ⚠ **誰の案かは必ず出す**。「任せています」のときは、ここで何を選んでも
+          指導者の案で決まるので、出さないと選び続けて無駄になる。
+          ⚠ ここに置くのは、キャンプをホームへ出して `PhasePanel` を通らなく
+          なったため（`PhasePanel` はキャンプのぶんを出さない）。スマホは
+          `PhasePanel` 経由だが、同じこの部品を通るので両方に出る。
+          ⚠ 1行に収める（指導者の入れ替えの案内は title へ） */}
+      {!finished && view.phase?.planBy && (
+        <p
+          className="online-staff-note online-camp-note"
+          title={
+            view.staff
+              ? '指導者の留任・解任・市場から呼ぶのは「指導者」の画面で決められます（キャンプの間だけ）'
+              : undefined
+          }
+        >
+          {view.phase.planBy.text}
         </p>
       )}
       {/* ⚠ **伸びをまとめて見せる**（いしだ指摘: 能力は伸びているのに結果が
@@ -655,22 +744,24 @@ export default function CampPlanner({
               </button>
             ))}
         </div>
-        <p className="online-muted">
-          {(policy.mode || 'team') === 'team' ? (
-            <>
-              {DIRECTIONS[policy.direction]?.description}／
-              {PHASES[policy.phase]?.description}
-            </>
-          ) : (
-            CAMP_MODE_NOTES[policy.mode]
-          )}
-          {/* ⚠ 希望どおりが正解ではない。噛み合うとやる気が上がるだけ */}
-          {'　'}本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。
-          {!compact && '意欲の欄の「合わせる」で、1人ずつ希望に合わせられます。'}
-        </p>
         {/* ⚠ いしだ指摘: どれくらい伸びるのか・おまかせでいいのかが分からない。
-            実測の目安と、希望と噛み合う人数を出す（`CAMP_POLICY_GUIDE`） */}
-        <CampPolicyGuide policy={policy} roster={roster} policyOf={policyOf} />
+            実測の目安と、希望と噛み合う人数を出す（`CAMP_POLICY_GUIDE`）。
+            ⚠ **決め方の説明と目安と人数で1行**。別々の段落にすると、
+            「全員同じ方針」のときだけ4行になって実行ボタンが画面から出た
+            （実測 1050px）。長い説明は title へ逃がす */}
+        <CampPolicyGuide
+          policy={policy}
+          roster={roster}
+          policyOf={policyOf}
+          note={
+            (policy.mode || 'team') === 'team'
+              ? `${DIRECTIONS[policy.direction]?.description}／${PHASES[policy.phase]?.description}`
+              : CAMP_MODE_NOTES[policy.mode]
+          }
+          hint={`本人の希望と噛み合うほど練習が身につきます（正解とは限りません）。${
+            compact ? '' : '意欲の欄の「合わせる」で、1人ずつ希望に合わせられます。'
+          }`}
+        />
       </section>
       {/* ⚠ 携帯は表を出さない。23列は入らない。方針と実行だけで4クール回せる */}
       {compact && !finished && (
@@ -705,10 +796,11 @@ export default function CampPlanner({
                   {shownGroup.id !== 'pitcher' && <th>ポジ</th>}
                   <th>年齢</th>
                   <th>成長</th>
-                  <th>プロ意識</th>
-                  <th>精神</th>
+                  {/* ⚠ **プロ意識・精神・投打の列は外した**。キャンプはホームに
+                      出すので1画面に収める必要があり、練習を選ぶ判断には使わない
+                      （やる気は「本人の希望と方針が噛み合うか」＝意欲の列）。
+                      3つとも選手の詳細（名前を押す）で見られる。 */}
                   <th>意欲</th>
-                  <th>投/打</th>
                   <th>フォーム</th>
                   <th>肩</th>
                   {shownGroup.id === 'pitcher' ? (
@@ -734,7 +826,9 @@ export default function CampPlanner({
                   <th>メイン</th>
                   <th>サブ</th>
                   <th title="本人が伸ばしたいと思っている方向">希望</th>
-                  {shownGroup.id === 'pitcher' && <th>変化球</th>}
+                  {/* ⚠ **変化球の列も外した**。持っている球種は「新球種習得」の
+                      対象の選択肢から外れ、「変化球練習」の選択肢にはそのまま
+                      並ぶので、ここで見せなくても取り違えない */}
                 </tr>
               </thead>
               <tbody>
@@ -748,8 +842,16 @@ export default function CampPlanner({
                     policy={policyOf(p)}
                     onFitWish={fitWish}
                     gains={camp?.gains?.[p.id]}
+                    target={subTarget[p.id]}
                     onMain={(id2, key) => setMain({ ...main, [id2]: key })}
-                    onSub={(id2, key) => setSub({ ...sub, [id2]: key })}
+                    onSub={(id2, key) => {
+                      setSub({ ...sub, [id2]: key });
+                      // ⚠ 練習を変えたら**対象は捨てる**（別の練習の対象が残る）
+                      setSubTarget({ ...subTarget, [id2]: '' });
+                    }}
+                    onTarget={(id2, key) =>
+                      setSubTarget({ ...subTarget, [id2]: key })
+                    }
                   />
                 ))}
               </tbody>
