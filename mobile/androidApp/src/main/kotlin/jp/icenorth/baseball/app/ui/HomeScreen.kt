@@ -320,6 +320,17 @@ private fun ChronicleHeading(text: String) {
 @Composable
 private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit) {
     var open by remember { mutableStateOf(false) }
+    // ⚠ ログアウトは確かめてから（メニューの一番下で押し間違えやすく、戻るにはメールとパスワードを入れ直す）
+    var askLogout by remember { mutableStateOf(false) }
+    if (askLogout) {
+        AlertDialog(
+            onDismissRequest = { askLogout = false },
+            title = { Text("ログアウトしますか") },
+            text = { Text("もう一度使うときは、メールアドレスとパスワードでログインし直します。") },
+            confirmButton = { TextButton(onClick = { askLogout = false; model.logout() }) { Text("ログアウト") } },
+            dismissButton = { TextButton(onClick = { askLogout = false }) { Text("やめる") } },
+        )
+    }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "メニュー") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -337,7 +348,7 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
                 )
             }
             HorizontalDivider()
-            DropdownMenuItem(text = { Text("ログアウト") }, onClick = { open = false; model.logout() })
+            DropdownMenuItem(text = { Text("ログアウト") }, onClick = { open = false; askLogout = true })
         }
     }
 }
