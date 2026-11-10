@@ -558,6 +558,11 @@ export const Sidebar = ({
 //    背番号のように見えていた）。0番は正しい背番号なので `||` ではなく null で判定する
 const jerseyLabel = (p) => (p?.number != null && p.number !== '' ? `#${p.number}` : '-');
 
+// 打線の上での守備位置。⚠ **DH の打者は `position` に本来の守備位置を持ったまま**
+//    `_isDH` の印で表す（gameSetup.js / lineupGenerator.js）。`position` をそのまま出すと
+//    「二」が2人並び、DH がどこにもいない表になっていた
+const lineupPos = (p) => (p._isDH ? 'dh' : p.position);
+
 // ============================================================
 // 試合画面 左右カラムの投手欄（試合中=投手成績 / 試合前=予告先発）
 //
@@ -785,6 +790,7 @@ export const TeamMemberPanel = ({
               .map(player => {
                 const isPitcher = player.position === 'pitcher';
                 const posNames = POSITION_NAMES;
+                const shownPos = lineupPos(player);
                 const throwHand = player.physical.throws === 'right' ? '右' : '左';
                 const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                 const isSubSelected = selectedSubstitute === player.id;
@@ -817,10 +823,10 @@ export const TeamMemberPanel = ({
                         className={`w-6 text-center rounded text-sm py-0.5 font-bold transition ${
                           isPositionSelected
                             ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                            : getPositionColor(player.position) + ' hover:opacity-80'
+                            : getPositionColor(shownPos) + ' hover:opacity-80'
                         }`}
                       >
-                        {posNames[player.position]}
+                        {posNames[shownPos]}
                       </button>
                       <span className="font-medium text-base truncate flex-1">
                         {player.name}
@@ -884,6 +890,7 @@ export const TeamMemberPanel = ({
             const isCurrentBatter = gameStarted && isBatting && player.battingOrder === team.currentBatterOrder;
             const isPitcher = player.position === 'pitcher';
             const posNames = POSITION_NAMES;
+            const shownPos = lineupPos(player);
             const getPosColor = (pos) => getPositionColorHighlighted(pos, isCurrentBatter);
 
           const throwHand = player.physical.throws === 'right' ? '右' : '左';
@@ -923,13 +930,13 @@ export const TeamMemberPanel = ({
                     className={`w-6 shrink-0 text-center rounded text-xs py-0.5 font-semibold transition ${
                       isPositionSelected
                         ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                        : getPosColor(player.position) + ' hover:opacity-80'
+                        : getPosColor(shownPos) + ' hover:opacity-80'
                     }`}
                   >
-                    {posNames[player.position]}
+                    {posNames[shownPos]}
                   </button>
                 ) : (
-                  <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(player.position)}`}>{posNames[player.position]}</span>
+                  <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(shownPos)}`}>{posNames[shownPos]}</span>
                 )}
                 <span className="font-bold truncate">{player.name}</span>
                 <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>

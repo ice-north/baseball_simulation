@@ -705,6 +705,11 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               const tempPosition = player1.position;
               player1.position = player2.position;
               player2.position = tempPosition;
+              // ⚠ DH は守備位置ではなく `_isDH` の印で持つ（position は本来の守備位置のまま）。
+              //    印も入れ替えないと、DH と野手を入れ替えても表の上で何も変わらない
+              const p1DH = !!player1._isDH;
+              if (player2._isDH) player1._isDH = true; else delete player1._isDH;
+              if (p1DH) player2._isDH = true; else delete player2._isDH;
             }
 
             return { ...prev, players };
@@ -915,7 +920,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       // 現在の捕手を取得（守備チームから）
       const getCurrentCatcher = () => {
         const team = getDefenseTeam();
-        return team.players.find(p => p.isStarter && p.position === 'catcher') || team.players[7];
+        return team.players.find(p => p.isStarter && p.position === 'catcher' && !p._isDH) || team.players[7];
       };
 
       // ※ formatInnings, getAbilityColor, getAbilityTextColor, getBestFitPosition は
@@ -2099,7 +2104,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           const dt = getDefenseTeam();
           const infPos = ['first', 'second', 'third', 'short'];
           const infVals = infPos.map(pos => {
-            const pl = dt.players.find(p => p.position === pos && p.battingOrder >= 1);
+            const pl = dt.players.find(p => p.position === pos && p.battingOrder >= 1 && !p._isDH);
             return pl?.fielding?.defense ?? 50;
           });
           const adv = resolveGroundOutAdvance({
@@ -2639,7 +2644,7 @@ if (newOuts === 3) {
           const quality = rollBuntQuality(buntSkill, meet);
 
           const fieldOf = (pos) => defenseTeam.players
-            .find(p => p.position === pos && p.battingOrder >= 1)?.fielding?.defense;
+            .find(p => p.position === pos && p.battingOrder >= 1 && !p._isDH)?.fielding?.defense;
           const avgFieldDef = buntFieldDefense(
             fieldOf('pitcher'), fieldOf('first'), fieldOf('third'),
             currentCatcher?.fielding?.defense);
