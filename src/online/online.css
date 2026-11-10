@@ -1273,16 +1273,6 @@ small.online-gain:not(:where(.online-sp *)) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.online-lineup {
-  display: grid;
-  grid-template-columns: 20px 20px minmax(0, 1fr) 44px 44px;
-  gap: 8px;
-  align-items: center;
-  margin: 6px 0;
-}
-.online-lineup button {
-  padding: 6px;
-}
 .online-working {
   position: fixed;
   bottom: 80px;
@@ -1425,11 +1415,6 @@ small.online-gain:not(:where(.online-sp *)) {
   .online-rank {
     margin-right: 6px;
   }
-  .online-lineup {
-    grid-template-columns: 16px 16px minmax(0, 1fr) 44px 44px;
-    gap: 5px;
-    margin: 3px 0;
-  }
   .online-lineup-card .online-muted {
     margin-bottom: 6px;
     font-size: 12px;
@@ -1467,7 +1452,6 @@ small.online-gain:not(:where(.online-sp *)) {
     right: 12px;
     font-size: 12px;
   }
-  .online-lineup-card .online-actions,
   .online-decision .online-actions {
     position: fixed;
     bottom: 65px;
@@ -1479,7 +1463,6 @@ small.online-gain:not(:where(.online-sp *)) {
     margin: 0;
     border-top: 1px solid #63778f;
   }
-  .online-lineup-card .online-actions button,
   .online-decision .online-actions button {
     flex: 1;
   }
@@ -1686,10 +1669,6 @@ small.online-gain:not(:where(.online-sp *)) {
   margin-left: 10px;
   color: #cbd5e1;
 }
-.online-mobile .online-lineup .online-player-name {
-  font-size: 12px;
-  line-height: 1.4;
-}
 
 /* スマホの対人画面は一枚の面。常設する操作は戻る・ホームだけ。 */
 .online-mobile.online-compact-shell {
@@ -1761,7 +1740,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-compact-shell:has(.online-decision) main {
   padding-bottom: calc(112px + env(safe-area-inset-bottom));
 }
-.online-compact-shell .online-lineup-card .online-actions,
 .online-compact-shell .online-decision .online-actions {
   bottom: calc(48px + env(safe-area-inset-bottom));
   padding-bottom: 10px;
