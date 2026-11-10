@@ -132,9 +132,15 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
             sub = draft.sub + (p.pid to clampSub(t.sub, p)),
         )
     }
-    val applyAll = { key: String, pitchers: Boolean ->
-        model.campDraft = draft.copy(main = draft.main + roster.filter { it.isPitcherJson() == pitchers }.associate { it.pid to clampMenu(key, it) })
+    // ⚠ 一括は1人ずつ選んだ練習も上書きするので、直後は元に戻せるようにする（確かめずに全員が変わっていた）
+    var bulk by remember(phaseId) { mutableStateOf<Bulk?>(null) }
+    val applyAll = { menu: Menu, pitchers: Boolean ->
+        val next = draft.copy(main = draft.main + roster.filter { it.isPitcherJson() == pitchers }.associate { it.pid to clampMenu(menu.key, it) })
+        bulk = Bulk("${if (pitchers) "投手" else "野手"}全員を「${menu.icon}${menu.name}」にしました", before = draft, after = next)
+        model.campDraft = next
     }
+    // 一括のあとに別の変更をしたら、戻す先が分からなくなるので出さない
+    val undo = bulk?.takeIf { it.after == model.campDraft }
     val execute = {
         val payload = Commands.campRound(
             done + 1, draft.mode, draft.direction, draft.phase, draft.players,
@@ -196,13 +202,26 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
         Text("全員に一括", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             campMenusFor(false).filter { !it.key.startsWith("intensive_") }.forEach { m ->
-                OutlinedButton(onClick = { applyAll(m.key, false) }, enabled = !finished) { Text("野手 ${m.icon}${m.name}", fontSize = 12.sp) }
+                OutlinedButton(onClick = { applyAll(m, false) }, enabled = !finished) { Text("野手 ${m.icon}${m.name}", fontSize = 12.sp) }
             }
             campMenusFor(true).filter { !it.key.startsWith("intensive_") && it.key != "fielding" }.forEach { m ->
-                OutlinedButton(onClick = { applyAll(m.key, true) }, enabled = !finished) { Text("投手 ${m.icon}${m.name}", fontSize = 12.sp) }
+                OutlinedButton(onClick = { applyAll(m, true) }, enabled = !finished) { Text("投手 ${m.icon}${m.name}", fontSize = 12.sp) }
             }
         }
-        if (!finished) {
+        undo?.let { b ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Muted(b.text, Modifier.weight(1f))
+                TextButton(onClick = { model.campDraft = b.before; bulk = null }) { Text("元に戻す") }
+            }
+        }
+        if (finished) {
+            // ⚠ 終わったことを知らせる（Web 版 CampPlanner と同じ文。以前は実行ボタンが消えるだけだった）
+            Text(
+                "全${total}クールが終わりました。伸びた能力でスタメン・投手起用を整えて、月曜の開幕を待ちます。",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        } else {
             Button(onClick = execute, modifier = Modifier.fillMaxWidth()) { Text("第${done + 1}クール練習を実行") }
         }
     }
@@ -214,6 +233,11 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
     val groups = CAMP_GROUPS.map { (id, label) -> Triple(id, label, roster.filter { campGroupOf(it.at("position").str()) == id }) }.filter { it.third.isNotEmpty() }
     val shown = groups.firstOrNull { it.first == group } ?: groups.firstOrNull()
     ChipTabs(groups.map { (id, label, list) -> id to "$label ${list.size}" }, shown?.first.orEmpty(), { group = it })
+    // 希望の印の読み方（カードには印だけ出す）
+    Muted(
+        "希望の印: " + (CAMP_DIRECTIONS + CAMP_PHASES).joinToString(" ") { "${it.icon}${it.name}" },
+        Modifier.padding(horizontal = 16.dp),
+    )
     shown?.third?.forEach { p ->
         CampPlayerCard(
             model, p, mainOf(p), subOf(p), policyOf(p), enabled = !finished,
@@ -226,7 +250,14 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
             onTarget = { key -> model.campDraft = draft.copy(subTarget = if (key == null) draft.subTarget - p.pid else draft.subTarget + (p.pid to key)) },
         )
     }
+    // ⚠ 下にも実行ボタンを置く（選手のカードを見て決めたあと、上まで戻らないと実行できなかった）
+    if (!finished && shown != null) {
+        Button(onClick = execute, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) { Text("第${done + 1}クール練習を実行") }
+    }
 }
+
+/** 一括で当てる前後の案（直後だけ「元に戻す」を出す） */
+private data class Bulk(val text: String, val before: CampDraft, val after: CampDraft)
 
 private fun JsonObject?.idMap(): Map<Long, String> =
     orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.takeIf { it.isNotEmpty() }?.let { id to it } } }.toMap()
