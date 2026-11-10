@@ -148,6 +148,56 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.ok(getValidSingleLeagueGameCounts(3, 150).includes(128), '1リーグ3球団128試合は入りきるのに選べない');
 }
 
+// --- DH制の推奨スタメンは DH の枠を「dh」で保存し、日付進行の補完で守備がずれない ---
+// ⚠ 推奨スタメン（`setRecommendedLineup`）が DH の選手を本来の守備位置で保存していて、
+//    同じ守備位置が2人になっていた。日付進行の補完（`ensureCompleteLineup`）は重なった人を
+//    空いた位置へ**前から順に**回していたので、左翼手が捕手・本来の捕手が一塁…と連鎖して
+//    全員の守備がずれていた（独立リーグの開幕で見つかった）。
+{
+  const { seasonData } = quiet(() => bootstrapWorld());
+  const savedDH = LEAGUE_SETTINGS.useDH;
+  LEAGUE_SETTINGS.useDH = true;
+  try {
+    const [user] = seasonData.settings.teamNames;
+    const team = TEAMS_DATA[user];
+    quiet(() => setRecommendedLineup(team, user));
+    const saved = team.lineupSettings.battingOrder.map(e => ({ ...e }));
+    assert.equal(saved.filter(e => e.position === 'dh').length, 1,
+      `推奨スタメンに DH の枠が無い: ${saved.map(e => e.position).join(',')}`);
+    assert.equal(new Set(saved.map(e => e.position)).size, 9, '推奨スタメンで守備位置が重なる');
+    // 保存した打順は補完を通っても守備が変わらない
+    assert.equal(quiet(() => ensureCompleteLineup(team, true)), true);
+    const after = new Map(team.lineupSettings.battingOrder.map(e => [e.playerId, e.position]));
+    for (const e of saved) assert.equal(after.get(e.playerId), e.position, '補完で守備位置が変わった');
+
+    // 以前の形（DH の選手が本来の守備位置のまま）で保存された打順も、捕手などは動かさず
+    // 重なった1人だけを DH に回す
+    const dh = saved.find(e => e.position === 'dh');
+    const dhPlayer = team.players.find(p => p.id === dh.playerId);
+    // 見つかったときと同じく、DH の選手の本来の位置を左翼にする
+    const native = 'left';
+    dhPlayer.position = native;
+    // DH の選手を打順の先頭に置き、本来その位置を守る人より前で重ならせる
+    team.lineupSettings.battingOrder = [
+      { ...dh, position: native },
+      ...saved.filter(e => e.playerId !== dh.playerId),
+    ];
+    assert.equal(quiet(() => ensureCompleteLineup(team, true)), true);
+    const fixed = team.lineupSettings.battingOrder;
+    assert.equal(new Set(fixed.map(e => e.position)).size, 9, '補完の後も守備位置が重なる');
+    const moved = fixed.filter(e => {
+      const before = saved.find(x => x.playerId === e.playerId).position;
+      return before !== e.position;
+    });
+    // 動いてよいのは重なった2人（DH の選手と、その位置の本来の選手）のどちらか1人が DH へ入れ替わるだけ
+    assert.ok(moved.length <= 2 && moved.every(e => e.playerId === dh.playerId || saved.find(x => x.playerId === e.playerId).position === native),
+      `重なっていない選手の守備まで動いた: ${moved.map(e => `${e.playerId}:${saved.find(x => x.playerId === e.playerId).position}→${e.position}`).join(', ')}`);
+    assert.equal(fixed.find(e => e.position === 'catcher')?.playerId, saved.find(e => e.position === 'catcher').playerId, '捕手が入れ替わった');
+  } finally {
+    LEAGUE_SETTINGS.useDH = savedDH;
+  }
+}
+
 // --- DH制で、打順から外した先発と試合で投げる先発が同じ ---
 // ⚠ 以前の試合側は、ローテの今の番の選手が抹消中だと疲労を見て別の選手を選んでいた。
 //    打順を揃える側（`ensureCompleteLineup`）は「抹消中を飛ばした次の番」を外すので、

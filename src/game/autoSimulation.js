@@ -365,10 +365,14 @@ export const setRecommendedLineup = (teamData, teamName) => {
   }
 
   const starters = players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9);
+  // ⚠ DH は守備位置ではなく `_isDH` の印で持つ（position は本来の守備位置のまま）。
+  //    打順の保存には「dh」で書くこと。本来の位置で書くと同じ守備位置が2人になり、
+  //    日付進行の補完（`ensureCompleteLineup`）が重なった人を空いた位置へ順に回して、
+  //    左翼手が捕手・捕手が一塁…と守備が連鎖してずれていた（独立リーグの開幕で見つかった）
   teamData.lineupSettings.battingOrder = starters.map(p => ({
     playerId: p.id,
     battingOrder: p.battingOrder,
-    position: p.position
+    position: p._isDH ? 'dh' : p.position
   }));
 
 };
