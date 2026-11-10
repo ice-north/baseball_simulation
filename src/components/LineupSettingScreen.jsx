@@ -57,6 +57,9 @@ const restoreRoster = (team, json) => {
 };
 
 // 外から元に戻すボタンを置かないとき（一人用・スマホのオンライン）に見出しの右へ出すボタン
+// 埋め込むとき（`embedded`）の枠。外側の ScreenShell の中に入るので余白を足さない
+const EmbeddedShell = ({ children }) => <div>{children}</div>;
+
 const HistoryButtons = ({ canUndo, canRedo, undo, redo }) => (
   <>
     <button type="button" onClick={undo} disabled={!canUndo} title="元に戻す（Ctrl+Z）"
@@ -82,6 +85,9 @@ const HistoryButtons = ({ canUndo, canRedo, undo, redo }) => (
 // 「スタメン設定/投手起用/守備分析」へ直に入るので外から渡す
 // ⚠ オンラインのPC版はこの画面を使わない（`src/online/LineupBoard.jsx`・`PitchingBoard.jsx`）。
 //    PCに埋め込むための引数（見出しを出さない・履歴を外へ渡す・キーを止める）は消した
+// `embedded`: 一人用の大学のロスター管理（RosterScreen）のタブの中に置くとき。外側が枠と見出しを
+//   持つので、ここでは枠（ScreenShell）と見出しを出さず、元に戻す・やり直すだけを右に置く。
+//   ⚠ 以前は外と中に「ロスター管理」の見出しが2つ並び、枠の余白も二重で控えの表の右が切れていた
 export const LineupSettingContent = ({
   teamName,
   onBack,
@@ -90,6 +96,7 @@ export const LineupSettingContent = ({
   canSealPitch = true,
   displayName,
   initialTab = 'lineup',
+  embedded = false,
 }) => {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -1303,8 +1310,14 @@ export const LineupSettingContent = ({
     </th>
   );
 
+  const Shell = embedded ? EmbeddedShell : ScreenShell;
   return (
-    <ScreenShell>
+    <Shell>
+            {embedded ? (
+              <div className="flex justify-end mb-2">
+                <HistoryButtons canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} />
+              </div>
+            ) : (
             <ScreenHeader title="ロスター管理" sub={displayName || teamName}
               right={(
                 <>
@@ -1312,6 +1325,7 @@ export const LineupSettingContent = ({
                   {onBack && <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">← 戻る</button>}
                 </>
               )} />
+            )}
 
             {/* タブナビゲーション */}
             <TabBar
@@ -2926,14 +2940,14 @@ export const LineupSettingContent = ({
         {detailPlayer === '__compare__' && compareIds.length >= 2 && (
           <CompareModal playerIds={compareIds} onClose={() => setDetailPlayer(null)} />
         )}
-    </ScreenShell>
+    </Shell>
   );
 };
 
-const LineupSettingScreen = ({ teamName, onBack }) => {
+const LineupSettingScreen = ({ teamName, onBack, embedded = false }) => {
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
-  return <LineupSettingContent teamName={teamName} onBack={onBack} team={team} />;
+  return <LineupSettingContent teamName={teamName} onBack={onBack} team={team} embedded={embedded} />;
 };
 
 export default LineupSettingScreen;

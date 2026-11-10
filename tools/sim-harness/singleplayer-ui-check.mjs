@@ -86,7 +86,7 @@ try {
   await ui.click('選手成績');
   await groundContrast('選手成績');
   await ui.click('ロスター管理');
-  await ui.click('スタメン設定');
+  await ui.click('試合のオーダー'); // 大学はベンチ登録と並ぶ外側のタブ
   await ui.click('投手起用');
   await groundContrast('ロスター管理の投手起用');
   await ui.click('日程進行');

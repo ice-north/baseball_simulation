@@ -296,13 +296,15 @@ const RosterScreen = ({ seasonData, gameMode }) => {
             activeTab === 'lineup' ? 'seg-on' : 'seg'
           }`}
         >
-          ⚾ スタメン設定
+          ⚾ 試合のオーダー
         </button>
       </div>
 
       {/* スタメン設定タブ */}
+      {/* ⚠ 中の画面は見出しと枠を持つので embedded で外す（見出しが2つ・余白が二重になっていた）。
+          タブの名前も中の「スタメン設定」と同じだったので「試合のオーダー」にした（中にスタメン・投手起用・守備分析） */}
       {activeTab === 'lineup' && (
-        <LineupSettingScreen teamName={userTeamName} onBack={null} />
+        <LineupSettingScreen teamName={userTeamName} onBack={null} embedded />
       )}
 
       {/* ベンチ登録タブ */}
