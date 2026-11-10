@@ -3,6 +3,7 @@ package jp.icenorth.baseball.app.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
@@ -194,6 +196,7 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
                         )
                         Text(view.teamShort(home), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     }
+                    LineScoreTable(view, g)
                     val d = g.at("decisions")
                     Muted(
                         listOfNotNull(
@@ -227,7 +230,52 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
     }
 }
 
-private data class Col(val label: String, val get: (JsonObject) -> String)
+/**
+ * 回ごとの得点の欄（先攻・後攻）。9回に満たなくても9回まで枠を取る。
+ * 後攻は、やらなかった裏を「x」、サヨナラの回を「1x」にする（紙面のスコアボードと同じ書き方）
+ */
+internal fun lineScoreCells(away: List<Int>, home: List<Int>, walkOff: Boolean): Pair<List<String>, List<String>> {
+    val innings = maxOf(9, away.size, home.size)
+    val top = (0 until innings).map { away.getOrNull(it)?.toString() ?: "" }
+    val bottom = (0 until innings).map { i ->
+        when {
+            i < home.size && i == home.size - 1 && walkOff -> "${home[i]}x"
+            i < home.size -> "${home[i]}"
+            i < away.size -> "x"
+            else -> ""
+        }
+    }
+    return top to bottom
+}
+
+/** スコアボード。⚠ 試合の詳細に無く、何回に点が入ったか分からなかった。古い試合（記録に無い）は出さない */
+@Composable
+private fun LineScoreTable(view: LeagueView, g: JsonObject) {
+    val ls = g.at("lineScore").obj() ?: return
+    val away = ls.at("away").list().mapNotNull { it.int() }
+    val home = ls.at("home").list().mapNotNull { it.int() }
+    if (away.isEmpty()) return
+    val (top, bottom) = lineScoreCells(away, home, g.at("walkOff").bool() == true)
+    val cell = Modifier.width(20.dp)
+    @Composable
+    fun line(name: String, cells: List<String>, total: String, head: Boolean) {
+        val color = if (head) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.width(48.dp))
+            cells.forEach { Text(it, fontSize = if (head) 11.sp else 13.sp, color = color, textAlign = TextAlign.Center, modifier = cell) }
+            Text(total, fontSize = if (head) 11.sp else 14.sp, fontWeight = FontWeight.Bold, color = color, textAlign = TextAlign.End, modifier = Modifier.width(28.dp))
+        }
+    }
+    // 延長で幅が足りないときは横に送る
+    Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        line("", top.indices.map { "${it + 1}" }, "計", head = true)
+        line(view.teamShort(g.at("away").str().orEmpty()), top, "${away.sum()}", head = false)
+        line(view.teamShort(g.at("home").str().orEmpty()), bottom, "${home.sum()}", head = false)
+    }
+}
+
+/** @param width 列の幅。⚠ 34dp で揃えていたら、投手の表（7列）で名前の欄が狭くなり名前が切れた */
+private data class Col(val label: String, val width: Dp = 28.dp, val get: (JsonObject) -> String)
 
 private fun n(v: Double?) = v?.toInt()?.toString() ?: "-"
 
@@ -247,7 +295,7 @@ private val PITCHER_COLS = listOf(
     Col("自責") { n(it.at("pitching", "earnedRuns").num()) },
     Col("四球") { n(it.at("pitching", "walks").num()) },
     Col("三振") { n(it.at("pitching", "strikeouts").num()) },
-    Col("球数") { n(it.at("pitching", "pitches").num()) },
+    Col("球数", 32.dp) { n(it.at("pitching", "pitches").num()) },
 )
 
 @Composable
@@ -270,12 +318,12 @@ private fun Table(rows: List<JsonObject>, cols: List<Col>, name: (JsonObject) ->
     Column {
         Row {
             Text("", modifier = Modifier.weight(1f))
-            cols.forEach { Text(it.label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(34.dp), textAlign = TextAlign.End) }
+            cols.forEach { Text(it.label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(it.width), textAlign = TextAlign.End) }
         }
         rows.forEach { p ->
             Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(name(p), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                cols.forEach { Text(it.get(p), fontSize = 13.sp, modifier = Modifier.width(34.dp), textAlign = TextAlign.End) }
+                cols.forEach { Text(it.get(p), fontSize = 13.sp, modifier = Modifier.width(it.width), textAlign = TextAlign.End) }
             }
         }
     }
