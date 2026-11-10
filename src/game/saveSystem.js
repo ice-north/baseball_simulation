@@ -175,6 +175,11 @@ export const saveEmergency = async (gameState) => {
   }
 };
 
+// 保存の中の自分のチーム名（スロット一覧・緊急バックアップの表示用）
+const saveTeamName = (data) => data.seasonData?.settings?.teamNames?.[0]
+  || (data.leagueConfig?.leagues || []).flatMap(l => l.teams || [])[0]
+  || null;
+
 // 緊急保存の有無・メタ情報
 export const getEmergencyInfo = async () => {
   try {
@@ -182,7 +187,13 @@ export const getEmergencyInfo = async () => {
     if (!raw) return null;
     const data = await decompressDataAsync(raw);
     if (!data) return null;
-    return { timestamp: data.timestamp || null, year: data.seasonData?.year ?? null, gameMode: data.gameMode || null };
+    return {
+      timestamp: data.timestamp || null,
+      year: data.seasonData?.year ?? null,
+      date: data.seasonData?.currentDate || null,
+      teamName: saveTeamName(data),
+      gameMode: data.gameMode || null,
+    };
   } catch { return null; }
 };
 
@@ -267,9 +278,7 @@ export const readSaveSlots = async () => {
         year: data.seasonData?.year || 1,
         date: data.seasonData?.currentDate || { month: 4, day: 1 },
         phase: data.seasonData?.phase || 'regular_season',
-        teamName: data.seasonData?.settings?.teamNames?.[0]
-          || (data.leagueConfig?.leagues || []).flatMap(l => l.teams || [])[0]
-          || null,
+        teamName: saveTeamName(data),
         version: data.version || 'unknown'
       });
     } catch { results.push(null); }

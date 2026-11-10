@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
+import EmergencyBackupNotice from './EmergencyBackupNotice.jsx';
 import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getBackupInfo, restoreBackup, getAutosaveInfo, exportSaveSlotToFile, importSaveFileToSlot } from '../game/saveSystem.js';
 
 // セーブ＆ロード画面（3スロット対応）
@@ -84,8 +85,8 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
   };
 
   // 緊急バックアップを指定スロットへ復元してロード
+  // 確認は EmergencyBackupNotice が出す（上書きするスロットの中身つき）
   const handleRestoreEmergency = async (slotIndex) => {
-    if (!window.confirm(`緊急バックアップをスロット${slotIndex + 1}へ復元してプレイします。${saveSlots[slotIndex] ? '（上書き前のデータは「1つ前のセーブに戻す」で戻せます）' : ''}よろしいですか？`)) return;
     const r = await promoteEmergencyToSlot(slotIndex);
     if (r.success) {
       // ⚠ **ロードできてから緊急保存を消す**。以前は先に消していたため、
@@ -184,26 +185,13 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
 
       {/* 緊急バックアップ復旧バナー（前回クラッシュ時に自動保存されたデータ） */}
       {emergencyInfo && (
-        <div className="mb-6 p-4 rounded-lg border-2 border-amber-500/60 bg-amber-900/20">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-amber-300 font-bold">🛟 緊急バックアップが見つかりました</span>
-          </div>
-          <p className="text-sm text-gray-300 mb-3">
-            前回アプリが予期せず終了した際の進行データです（{emergencyInfo.year ? `${emergencyInfo.year}年目・` : ''}{emergencyInfo.gameMode || ''}／{formatTimestamp(emergencyInfo.timestamp)}）。復元先のスロットを選んでください。
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            {[0, 1, 2].map(i => (
-              <button key={i} onClick={() => handleRestoreEmergency(i)}
-                className="btn-warn px-3 py-1.5 rounded text-sm">
-                スロット{i + 1}へ復元
-              </button>
-            ))}
-            <button onClick={() => { clearEmergencySave(); setEmergencyInfo(null); }}
-              className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm">
-              破棄
-            </button>
-          </div>
-        </div>
+        <EmergencyBackupNotice
+          info={emergencyInfo}
+          saveSlots={saveSlots}
+          onRestore={handleRestoreEmergency}
+          onDiscard={() => { clearEmergencySave(); setEmergencyInfo(null); }}
+          className="mb-6 bg-surface-2"
+        />
       )}
 
       {/* 現在の進行状況 */}

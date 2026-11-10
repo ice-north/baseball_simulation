@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getAutosaveInfo, isAutosaveEnabled, setAutosaveEnabled } from '../game/saveSystem.js';
 import { isTutorialEnabled, setTutorialEnabled, resetTutorialProgress } from '../game/tutorial.js';
 import { getUiScale, cycleUiScale, UI_SCALE_LABEL } from '../game/uiSettings.js';
+import EmergencyBackupNotice from './EmergencyBackupNotice.jsx';
 
 /**
  * タイトル画面の球場パレット。
@@ -210,8 +211,8 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
     return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
+  // 確認は EmergencyBackupNotice が出す（上書きするスロットの中身つき）
   const handleRestoreEmergency = async (slotIndex) => {
-    if (!window.confirm(`緊急バックアップをスロット${slotIndex + 1}へ復元してプレイします。よろしいですか？`)) return;
     const r = await promoteEmergencyToSlot(slotIndex);
     if (r.success) {
       // ⚠ **ロードできてから緊急保存を消す**（SaveLoadScreen と同じ）。以前は先に消していたため、
@@ -338,21 +339,13 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
         {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
         {emergencyInfo && !showSlotSelect && !showEditSlotSelect && (
-          <div className="w-full max-w-sm mb-4 p-3 rounded-xl border border-amber-600/60 bg-amber-900/20 text-left">
-            <div className="text-amber-300 font-bold text-sm mb-1">緊急バックアップが見つかりました</div>
-            <p className="text-xs text-gray-300 mb-2">
-              前回アプリが予期せず終了した際の進行データ（{emergencyInfo.year ? `${emergencyInfo.year}年目・` : ''}{emergencyInfo.gameMode || ''}）です。復元先を選んでください。
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {[0, 1, 2].map(i => (
-                <button key={i} onClick={() => handleRestoreEmergency(i)} className="btn-warn px-3 py-1.5 rounded text-xs">
-                  スロット{i + 1}へ復元
-                </button>
-              ))}
-              <button onClick={() => { clearEmergencySave(); setEmergencyInfo(null); }}
-                className="btn-secondary px-3 py-1.5 rounded text-xs">破棄</button>
-            </div>
-          </div>
+          <EmergencyBackupNotice
+            info={emergencyInfo}
+            saveSlots={saveSlots}
+            onRestore={handleRestoreEmergency}
+            onDiscard={() => { clearEmergencySave(); setEmergencyInfo(null); }}
+            className="w-full max-w-sm mb-4 bg-amber-900/20"
+          />
         )}
 
         {/* メニュー */}
