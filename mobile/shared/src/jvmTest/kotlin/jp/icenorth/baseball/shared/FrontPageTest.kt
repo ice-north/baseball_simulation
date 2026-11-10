@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 
 /**
  * 紙面（地元紙・全国紙）を、開発サーバーで6月まで進めたリーグの実際の窓口の答えで作って確かめる
- * （resources/front/ … mobile/tools/seed-league.mjs の running から8ターン×6進めたもの）。
+ * （resources/front/ … mobile/tools/view-fixture.mjs で開発サーバーと同じ設定のリーグを6月12日まで進めたもの）。
  * 作った紙面は build/front-pages.txt に書き出す（文面を目で確かめる用）
  */
 class FrontPageTest {

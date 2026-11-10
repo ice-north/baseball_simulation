@@ -10,7 +10,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** ローカルの開発サーバーで開幕3日目まで進めたときの実際のビュー（view-running.json）で確かめる */
+/** ローカルの開発サーバーで開幕3日目まで進めたときの実際のビュー（view-running.json。mobile/tools/view-fixture.mjs で作る）で確かめる */
 class ViewTest {
     private val raw = javaClass.getResource("/view-running.json")!!.readText()
     private val view = OnlineJson.decodeFromString<LeagueView>(raw)
