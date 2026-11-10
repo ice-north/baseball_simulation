@@ -258,6 +258,8 @@ fun StatTable(
     onPlayer: (JsonObject) -> Unit,
     highlight: (JsonObject) -> Boolean = { false },
     sub: (JsonObject) -> String = { positionLabel(it.at("position").str()) },
+    /** 1人もいないときの文（なぜいないのかは呼ぶ側が知っている） */
+    empty: String = "該当する選手がいません",
 ) {
     val divider = MaterialTheme.colorScheme.outlineVariant
     val hScroll = rememberScrollState()
@@ -325,7 +327,7 @@ fun StatTable(
             }
         }
     }
-    if (players.isEmpty()) Muted("該当する選手がいません", Modifier.padding(12.dp))
+    if (players.isEmpty()) Muted(empty, Modifier.padding(12.dp))
     Box(Modifier.fillMaxWidth().height(1.dp).border(1.dp, divider))
 }
 

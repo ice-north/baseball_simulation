@@ -171,6 +171,13 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                     sub = { p ->
                         positionLabel(p.at("position").str()) + (p.at("age").int()?.let { " ${it}歳" } ?: "")
                     },
+                    // ⚠ なぜいないのかを書く（以前は名簿が空の開幕前も「該当する選手がいません」だけだった）
+                    empty = when {
+                        career -> "通算の記録のある${if (batting) "野手" else "投手"}がいません。"
+                        roster.isEmpty() && own -> "まだ選手がいません。初期メンバー選択が済むと、ここに並びます。"
+                        roster.isEmpty() -> "まだ選手がいません。"
+                        else -> "${if (batting) "野手" else "投手"}がいません。"
+                    },
                 )
             }
         }
