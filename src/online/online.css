@@ -3913,13 +3913,15 @@ small.online-gain:not(:where(.online-sp *)) {
   display: block;
   color: #9fb0c4;
 }
+/* 標準案で退団になる理由。名前・能力・成績の下の段（`ContractPlanner.jsx`） */
 .online-contract-reason {
+  display: inline-block;
+  margin-top: 2px;
   font-size: 11px;
   padding: 0 6px;
   border-radius: 4px;
   background: rgba(245, 158, 11, 0.16);
   color: #fde68a;
-  white-space: nowrap;
 }
 
 /* キャンプ: 方針ごとの伸びの目安 */

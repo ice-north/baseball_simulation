@@ -75,18 +75,21 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
                 checked={released.has(p.id)}
                 onChange={(e) => toggle(p.id, e.target.checked)}
               />
+              {/* ⚠ 標準案の理由は**名前の下の段**に置く（横に並べない）。2列の一覧で
+                  横に置くと、狭い画面（1024px）では名前の欄が90px前後に削られ、
+                  能力と成績が4〜5行に折り返していた */}
               <span className="online-tryout-person">
                 <PlayerLine player={p} />
                 <small className="online-contract-season">{seasonLine(p)}</small>
+                {reasons && (
+                  <span
+                    className="online-contract-reason"
+                    title="標準案（決めなかったときに使われる案）でこの選手が退団になる理由"
+                  >
+                    標準案で退団: {reasons.length ? reasons.join('・') : '枠を空けるため'}
+                  </span>
+                )}
               </span>
-              {reasons && (
-                <span
-                  className="online-contract-reason"
-                  title="標準案（決めなかったときに使われる案）でこの選手が退団になる理由"
-                >
-                  標準案で退団: {reasons.length ? reasons.join('・') : '枠を空けるため'}
-                </span>
-              )}
               {released.has(p.id) && (
                 <span className="online-tryout-mark">退団予定</span>
               )}
