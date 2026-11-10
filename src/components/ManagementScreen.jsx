@@ -288,20 +288,25 @@ const ManagementScreen = ({
     userTeamName={userTeamName}
     onSave={async (slotIndex) => { await saveGame(slotIndex); }}
     saveSlots={saveSlots}
-    onStartNextSeason={() => {
+    // ⚠ 年度更新（advanceToNextYear）の直後に、同じ操作の中から呼ばれる。この画面が持つ
+    //    `seasonData` はまだ前の年なので、翌年のデータは引数で受け取る（大学の卒業レポートを
+    //    挟むときは描き直した後に呼ばれるので引数なし）。以前はクラブの2年目の開幕が
+    //    前の年の 2024/4/1 になり、地域トーナメントのシードも前の年のものを使っていた
+    onStartNextSeason={(nextSeasonData) => {
+      const next = nextSeasonData || seasonData;
       if (gameMode === 'sandbox') {
         setManagementView('sandbox_next_regulations');
       } else if (gameMode === 'university' || gameMode === 'corporate') {
-        if (seasonData?.settings?.clubMode) {
+        if (next?.settings?.clubMode) {
           // クラブチームはキャンプなし → 直接シーズンへ
           initializeAllPlayersCondition();
           ensureAllTeamsReady({
       userTeamName, generatePitchingRotation, setRecommendedLineup, generateAILineup,
       preserveUserLineup: true,
     });
-          snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
-          const calYear = 2024 + (seasonData?.year || 1) - 1;
-          const rtSeeds = seasonData?.tournamentSeeds || null;
+          snapshotAbilityHistory(TEAMS_DATA, next.year);
+          const calYear = 2024 + (next?.year || 1) - 1;
+          const rtSeeds = next?.tournamentSeeds || null;
           const rt = generateRegionalTournament({ userTeamName, calendarYear: calYear, seeds: rtSeeds });
           setSeasonData(prev => ({
             ...prev,

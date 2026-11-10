@@ -199,7 +199,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         setProcessing(false);
         return;
       }
-      if (onStartNextSeason) onStartNextSeason();
+      // ⚠ 翌年のデータを渡す（`setSeasonData` はまだ反映されていない。ManagementScreen 参照）
+      if (onStartNextSeason) onStartNextSeason(result.newSeasonData);
     } catch (error) {
       console.error('年度進行エラー:', error);
       alert('年度進行中にエラーが発生しました');
