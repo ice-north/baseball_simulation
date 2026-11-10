@@ -59,9 +59,17 @@ export function driver(page) {
     await btn(name).first().click();
     await page.waitForTimeout(250);
   };
+  // ⚠ 大会の組み合わせを作っている間（「都市対抗予選を開催中...」）は、日程画面ごと読み込み
+  //    画面に替わって早送りの枠が消える。枠が無いのを終わりと読むと早送りの途中で抜けてしまう
+  //    （社会人の5月で起きた）ので、読み込み画面の間は待ち続ける。
+  //    枠が消えて読み込み画面でもないときは、ほかの画面（大学の夏季合宿など）へ移って止まった
   const devIdle = () =>
     page.waitForFunction(
-      () => !document.querySelector('[data-testid=dev-advance]')?.textContent.includes('残り'),
+      () => {
+        const panel = document.querySelector('[data-testid=dev-advance]');
+        if (panel) return !panel.textContent.includes('残り');
+        return !document.body.innerText.includes('予選を開催中');
+      },
       null,
       { timeout: 10 * 60 * 1000 },
     );
