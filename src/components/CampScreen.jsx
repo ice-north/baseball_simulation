@@ -1562,12 +1562,14 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <div className="flex items-center justify-between mb-2">
                 <h1 className="text-xl font-bold text-ink">{campTitle}成長レポート - {userTeamName}</h1>
               </div>
-              <div className="flex gap-4 text-xs mb-1 ml-1">
-                <span className="text-green-400">■ キャンプ成長</span>
-                <span className="text-cyan-400">■ 自然成長()</span>
-                <span className="text-red-400">■ 衰退</span>
-              </div>
+              {/* ⚠ 凡例はカードの中に置く。意味色（green/cyan/red-400）は暗いカード用で、
+                  地色（明るい紙）の上に直に置くと 1.3〜1.6:1 で読めなかった */}
               <div className="bg-surface-2 rounded-lg overflow-hidden overflow-x-auto mb-3">
+                <div className="flex gap-4 text-xs px-2 py-1.5 border-b border-gray-700/50">
+                  <span className="text-green-400">■ 伸びた量</span>
+                  <span className="text-cyan-400">( ) うち年齢による変化</span>
+                  <span className="text-red-400">■ 下がった量</span>
+                </div>
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-700/80 text-gray-300 text-xs">

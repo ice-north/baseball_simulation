@@ -205,9 +205,10 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
 
   return (
     <ScreenShell width="mid">
-        <h1 className="text-xl font-bold text-white mb-2">⚙️ レギュレーション設定</h1>
+        {/* ⚠ 見出しと注記は地色（明るい紙）の上なので text-ink / text-ink-sub */}
+        <h1 className="text-xl font-bold text-ink mb-2">⚙️ レギュレーション設定</h1>
         {selectedLeague && (
-          <p className="text-gray-300 text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
+          <p className="text-ink-sub text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
         )}
 
         <TutorialHint id="regulations-intro" title="リーグのルールを決める">
@@ -453,7 +454,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
 
         <div className="flex items-center justify-center gap-6">
           {onBack && (
-            <button onClick={onBack} className="text-gray-300 hover:text-white text-sm transition">
+            <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm transition">
               ← 戻る
             </button>
           )}

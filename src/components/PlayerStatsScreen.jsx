@@ -266,7 +266,9 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           （ヘッダー右はタブで埋まっているため、表の上に1行だけ足す）。 */}
       {statsTab !== 'growth' && (
         <div className="flex items-center flex-wrap gap-1.5 mb-2 px-1">
-          <span className="text-xs text-gray-400 mr-0.5">範囲</span>
+          {/* ⚠ この行は地色（明るい紙）の上に直に載る。補足の文字は text-ink-sub
+              （text-gray-400/500 は紙の上で 1.0:1 前後になり、見えなかった） */}
+          <span className="text-xs text-ink-sub mr-0.5">範囲</span>
           {SCOPES.map(([key, label]) => (
             <button
               key={key}
@@ -288,11 +290,11 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
             規定到達者のみ
           </button>
           {applyQualified ? (
-            <span className="text-xs text-gray-400 tabular-nums ml-1">
+            <span className="text-xs text-ink-sub tabular-nums ml-1">
               規定打席 {qualifiedAB} / 規定投球回 {(qualifiedOuts / 3).toFixed(1)}
             </span>
           ) : canFilterQualified ? null : (
-            <span className="text-xs text-gray-500 ml-1">通算では規定を使いません</span>
+            <span className="text-xs text-ink-sub ml-1">通算では規定を使いません</span>
           )}
         </div>
       )}

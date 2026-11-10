@@ -292,7 +292,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               <h1 className="text-xl font-bold text-ink">セレクション (一般入部試験)</h1>
               <p className="text-ink-sub text-xs mt-0.5">
                 {userTeamName} ({rank}ランク) — 入部枠: 残り{selectionSlots - selectionPicked.length}/{selectionSlots}名
-                {selectionPicked.length > 0 && <span className="text-green-900 ml-2">選出済{selectionPicked.length}名</span>}
+                {selectionPicked.length > 0 && <span className="text-green-950 ml-2">選出済{selectionPicked.length}名</span>}
               </p>
             </div>
             <button onClick={handleSelectionFinalize}
@@ -449,8 +449,8 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               <h1 className="text-xl font-bold text-ink">スポーツ推薦スカウト</h1>
               <p className="text-ink-sub text-xs mt-0.5">
                 {userTeamName} ({rank}ランク) — 推薦枠: {remainingSlots}/{maxSlots}名
-                {recruited.length > 0 && <span className="text-green-900 ml-2">確保済{recruited.length}名</span>}
-                <span className="text-cyan-900 ml-2">接近中: {approachingCount}/{maxApproaches}名</span>
+                {recruited.length > 0 && <span className="text-green-950 ml-2">確保済{recruited.length}名</span>}
+                <span className="text-cyan-950 ml-2">接近中: {approachingCount}/{maxApproaches}名</span>
               </p>
             </div>
           </div>

@@ -2033,17 +2033,18 @@ const ManualScreen = ({ onBack }) => {
 
   return (
     <ScreenShell width="mid" className="text-white">
-        {/* ヘッダー */}
+        {/* ヘッダー。⚠ 見出しは地色（明るい紙）の上なので text-ink / text-ink-sub。
+            白・gray-300 のままだと 2.2:1 / 1.3:1 でほとんど見えなかった */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-white">MANUAL</h1>
-            <span className="text-gray-300 text-sm">～ゲーム辞典～</span>
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-xl font-bold text-ink">マニュアル</h1>
+            <span className="text-ink-sub text-sm">ゲーム辞典</span>
           </div>
           <button
             onClick={onBack}
-            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition"
+            className="btn-secondary px-4 py-2 rounded-lg transition"
           >
-            戻る
+            ← 戻る
           </button>
         </div>
 
@@ -2068,7 +2069,9 @@ const ManualScreen = ({ onBack }) => {
 
           {/* コンテンツ */}
           <div className="flex-1 min-w-0">
-            <div className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50">
+            {/* ⚠ 本文のカードは不透明（bg-surface-2）にする。半透明（gray-800/60）だと
+                明るい地色が透けて灰色になり、本文の gray-300/400 が 2.5:1 前後まで落ちていた */}
+            <div className="bg-surface-2 rounded-xl p-4 border border-gray-700/50">
               <h2 className="text-lg font-bold mb-4 text-blue-300 border-b border-gray-700 pb-2">
                 {CATEGORIES.find(c => c.id === selectedCategory)?.label}
               </h2>

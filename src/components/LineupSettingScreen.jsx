@@ -1893,7 +1893,7 @@ export const LineupSettingContent = ({
             ];
             return (
               <>
-                <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700/50 mb-1">
+                <div className="flex items-center gap-3 px-3 py-1.5 bg-surface-1 rounded-lg border border-gray-700/50 mb-1">
                   {items.map((s, i) => (
                     <React.Fragment key={s.label}>
                       <div className="flex items-center gap-1">
@@ -1917,7 +1917,7 @@ export const LineupSettingContent = ({
                       <span key={i} className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         w.level === 'error' ? 'bg-red-900/40 text-red-400 border border-red-700/40' :
                         w.level === 'warn' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700/30' :
-                        'bg-gray-800/60 text-gray-300 border border-gray-700/30'
+                        'bg-surface-1 text-gray-300 border border-gray-700/30'
                       }`}>
                         {w.level === 'error' ? '!' : w.level === 'warn' ? '!' : 'i'} {w.msg}
                       </span>
@@ -1947,7 +1947,7 @@ export const LineupSettingContent = ({
               { icon: '🧹', role: '敗戦処理', desc: '大差で登板しスタミナ温存。球数上限50球', color: 'text-gray-300' },
             ];
             return (
-              <details className="mb-2 bg-gray-800/40 rounded-lg border border-gray-700/30" open={open} onToggle={e => setOpen(e.target.open)}>
+              <details className="mb-2 bg-surface-1 rounded-lg border border-gray-700/30" open={open} onToggle={e => setOpen(e.target.open)}>
                 <summary className="px-3 py-1.5 text-xs text-gray-300 cursor-pointer hover:text-gray-300 list-none flex items-center gap-1">
                   <span className="text-xs">{open ? '▼' : '▶'}</span> ロール解説
                 </summary>
@@ -2062,8 +2062,8 @@ export const LineupSettingContent = ({
                 onDrop={onDrop}
                 onClick={() => { if (canTapAssign) handleDropToRole(tapSelectedPitcherId, roleKey); }}
                 className={`rounded-lg border transition-colors ${wide ? 'col-span-2' : ''} ${
-                  canTapAssign ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer hover:border-blue-400/50'
-                               : 'border-gray-700/60 bg-gray-800/40'}`}
+                  canTapAssign ? 'border-blue-500/30 bg-surface-1 cursor-pointer hover:border-blue-400/50'
+                               : 'border-gray-700/60 bg-surface-1'}`}
               >
                 <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/40">
                   <span className="text-sm leading-none">{ROLE_ICON[roleKey]}</span>
@@ -2085,8 +2085,11 @@ export const LineupSettingContent = ({
               <TutorialHint id="rotation-dnd" title="投手の役割を決める">
                 投手カードを<b className="text-cyan-200">ドラッグ＆ドロップ</b>で「先発・守護神・セットアッパー・中継ぎ」等の役割枠へ配置します。先発は5〜6人、守護神・セットアッパーは各1人が目安（不足は警告表示）。「自動」で能力に応じて一括割り当ても可能です。
               </TutorialHint>
-              {/* 自動設定バー: 能力に応じてロールを一括割り当て / 全員おまかせ */}
-              <div className="flex items-center gap-2 mb-2 bg-gray-800/40 rounded-lg border border-gray-700/30 px-3 py-2">
+              {/* 自動設定バー: 能力に応じてロールを一括割り当て / 全員おまかせ。
+                  ⚠ このタブの枠（自動設定・登板順・役割の枠・控え）は**不透明の bg-surface-1** にする。
+                  半透明の gray-800/40 は明るい地色が透けて灰色になり、中の補足文が 1.7〜2.4:1 で
+                  読めなかった。投手カード（surface-2）より一段暗い「受け皿」に見せる */}
+              <div className="flex items-center gap-2 mb-2 bg-surface-1 rounded-lg border border-gray-700/30 px-3 py-2">
                 <span className="text-xs text-gray-300 shrink-0">投手起用</span>
                 <button
                   onClick={() => {
@@ -2128,7 +2131,7 @@ export const LineupSettingContent = ({
                   ⚠ 以前はここだけ ◀▶ の1つずつ入れ替えだった（ほかはドラッグなのに）。
                      ◀▶ はキーボードで操作するとき用に小さく残す */}
               {starterPitchers.length > 0 && (
-                <div className="mb-2 bg-gray-800/40 rounded-lg border border-gray-700/40 px-2 py-1.5">
+                <div className="mb-2 bg-surface-1 rounded-lg border border-gray-700/40 px-2 py-1.5">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-blue-300 text-xs font-bold">先発 登板順</span>
                     <span className="text-xs text-gray-300">ドラッグで並べ替え（1番手から順に登板）</span>
@@ -2191,10 +2194,11 @@ export const LineupSettingContent = ({
               <div className="grid grid-cols-2 gap-2 mb-2 items-start">
                 {/* 先発（左） */}
                 <div>
+                  {/* ⚠ この見出しの行は地色（明るい紙）の上に直に載る。text-ink / text-ink-sub */}
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-blue-400 text-sm">⚾</span>
-                    <h2 className="text-sm font-bold text-blue-300">先発</h2>
-                    <span className="text-xs text-gray-300">枠へドラッグ</span>
+                    <span className="text-sm">⚾</span>
+                    <h2 className="text-sm font-bold text-ink">先発</h2>
+                    <span className="text-xs text-ink-sub">枠へドラッグ</span>
                   </div>
                   <div className="space-y-1.5">
                     <RoleSlot roleKey="complete" hint="スタミナ限界まで" />
@@ -2209,9 +2213,9 @@ export const LineupSettingContent = ({
                 {/* リリーフ（右） */}
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-green-400 text-sm">🔄</span>
-                    <h2 className="text-sm font-bold text-green-300">リリーフ</h2>
-                    <span className="text-xs text-gray-300">上ほど後ろのイニング</span>
+                    <span className="text-sm">🔄</span>
+                    <h2 className="text-sm font-bold text-ink">リリーフ</h2>
+                    <span className="text-xs text-ink-sub">上ほど後ろのイニング</span>
                   </div>
                   <div className="space-y-1.5">
                     <RoleSlot roleKey="closer" hint="9回リード" />
@@ -2239,8 +2243,8 @@ export const LineupSettingContent = ({
                 }}
                 onClick={() => { if (tapSelectedPitcherId != null) handleDropToRole(tapSelectedPitcherId, 'none'); }}
                 className={`rounded-lg border mb-2 transition-colors ${
-                  tapSelectedPitcherId != null ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer'
-                    : 'border-gray-700/60 bg-gray-800/40'}`}
+                  tapSelectedPitcherId != null ? 'border-blue-500/30 bg-surface-1 cursor-pointer'
+                    : 'border-gray-700/60 bg-surface-1'}`}
               >
                 <div className="flex items-center gap-1.5 px-2 py-1 border-b border-gray-700/40">
                   <span className="text-gray-300 text-sm">📋</span>
@@ -2258,7 +2262,7 @@ export const LineupSettingContent = ({
               </div>
 
               {/* 野手コンバート（折りたたみ）: 役割枠にドラッグで投手化 */}
-              <details className="rounded-lg border border-gray-700/60 bg-gray-800/40">
+              <details className="rounded-lg border border-gray-700/60 bg-surface-1">
                 <summary className="flex items-center gap-1.5 px-2 py-1 cursor-pointer list-none hover:bg-gray-700/20">
                   <span className="text-cyan-400 text-sm">🔀</span>
                   <h2 className="text-xs font-bold text-cyan-300">野手をコンバート</h2>

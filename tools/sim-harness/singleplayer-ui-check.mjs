@@ -15,7 +15,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { driver, launchBrowser, root, startPreview } from './lib/singleplayer.mjs';
+import { BASE, driver, launchBrowser, root, startPreview } from './lib/singleplayer.mjs';
 
 const writeScenes = process.argv.includes('--scenes');
 const sceneDir = join(root, 'tools', 'scenes');
@@ -43,14 +43,26 @@ const scene = async (name, note) => {
   console.log(`  場面 ${name}: ${note}`);
 };
 const step = (label) => console.log(`- ${label}`);
+// 地色（明るい紙）の上に直に載る文字が読めること。text-gray-400 や半透明の枠のままだと
+// 紙の上で 1〜2:1 になって消える（選手成績の「範囲」・投手起用の補足文・マニュアルの本文で起きていた）
+const groundContrast = async (where) => {
+  const bad = await ui.groundTextContrast();
+  assert.deepEqual(bad, [], `${where}: 地色の上で読めない文字がある（4.5:1 未満）\n${bad.join('\n')}`);
+};
 const started = Date.now();
 
 try {
+  step('タイトルからマニュアルを開く');
+  await page.goto(`${BASE}/?dev=1`);
+  await ui.click('マニュアル');
+  await groundContrast('マニュアル');
+
   step('新しく始めて開幕まで');
   await ui.newUniversityGame();
   const opening = await ui.date();
   assert.ok(opening, '日付が画面に出ていない');
   await shot('opening');
+  await groundContrast('日程進行');
   await scene('season-start', '大学1年目の開幕日');
 
   step('30日早送り');
@@ -69,6 +81,15 @@ try {
   await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
   await page.waitForTimeout(800);
   assert.deepEqual(await ui.date(), after30, '開いている「日程進行」を押し直したら日付が進んだ');
+
+  step('選手成績と投手起用の画面');
+  await ui.click('選手成績');
+  await groundContrast('選手成績');
+  await ui.click('ロスター管理');
+  await ui.click('スタメン設定');
+  await ui.click('投手起用');
+  await groundContrast('ロスター管理の投手起用');
+  await ui.click('日程進行');
 
   step('次の区切り（夏季合宿）まで');
   await ui.advance('phase');
