@@ -815,15 +815,8 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
           }}
         />
       )}
-      {/* ⚠ キャンプは**1クールずつその場で実行する**（一人用と同じ）。
-          提出して締め切りを待つ形ではないので、決定のボタンは出さない */}
-      {/* 年度更新はキャンプの直前に済む。キャンプの方針を決める前に見られるようにする */}
-      {phase.kind === 'camp' && (
-        <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
-      )}
-      {phase.kind === 'camp' && (
-        <CampPlanner view={view} busy={busy} run={run} command={command} />
-      )}
+      {/* ⚠ キャンプはここに書かない。PCはホーム（`DesktopView` の `campHere`）に出していて
+          この `editor`（PC専用）を通らない。スマホは下の `mobile` の枝で出す */}
       {phase.kind === 'offseason' && (
         <p>最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。</p>
       )}
@@ -844,9 +837,9 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
           (dirty ? ' · 保存していない変更があります' : phase.submission?.ready ? ' · あなたは決定済みです' : '')
         }
         actions={
-          /* ⚠ **キャンプには決定の操作を出さない**。1クールずつその場で実行する
-             形なので、提出して締め切りを待つものが無い。出すと「決定したのに
-             クールが残っている」状態が作れてしまう */
+          /* ⚠ **キャンプには決定の操作を出さない**（PCのキャンプはホームで、ここへは来ない。
+             来ても出さない）。1クールずつその場で実行する形なので、提出して締め切りを
+             待つものが無い。出すと「決定したのにクールが残っている」状態が作れてしまう */
           plan && phase.kind !== 'camp' && (
             <>
               <button disabled={busy || !dirty} onClick={resetSubmission}>
