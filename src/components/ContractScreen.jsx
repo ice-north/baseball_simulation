@@ -170,23 +170,26 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
   return (
     <div className="p-4">
-      <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
-      <p className="text-gray-300 text-xs mb-1">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
-      <AbilityLegend className="mb-2" />
-      {aiReleasedCount > 0 && (
-        <p className="text-yellow-400 text-xs mb-2">AIチームは{aiReleasedCount}人の選手を自動解雇します。</p>
-      )}
+      {/* ⚠ 見出しは地色（明るい紙）の上なので text-ink。**表と凡例はカードに載せること**。
+          以前は表がそのまま地色の上にあり、白や薄い灰色の文字・ランク色がほとんど読めなかった */}
+      <h1 className="text-xl font-bold text-ink mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
+      <p className="text-ink-sub text-xs mb-3">自チームの選手を解雇できます。行を押すと解雇/契約が切り替わります。</p>
 
       {!confirmed ? (
         <>
-          <div className="flex items-center gap-3 mb-2">
+          <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-3 mb-3">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mb-2">
             <span className="text-white font-bold">{userTeamName}</span>
             <span className="text-gray-300 text-sm">
               現在 {players.length}人 / 解雇予定 {userReleased.length}人 → 残り {players.length - userReleased.length}人
             </span>
+            <AbilityLegend className="ml-auto" />
           </div>
+          {aiReleasedCount > 0 && (
+            <p className="text-yellow-400 text-xs mb-2">ほかのチームは{aiReleasedCount}人の選手を解雇します。</p>
+          )}
 
-          <div className="mb-3 overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-surface-2">
                 <tr className="border-b border-gray-600 text-xs text-gray-300">
@@ -291,6 +294,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
               </tbody>
             </table>
           </div>
+          </div>
 
           <div className="flex gap-3">
             <button
@@ -347,10 +351,10 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           )}
         </>
       ) : (
-        <div className="text-center py-10">
+        <div className="text-center py-10 bg-surface-2 rounded-xl border border-gray-700/50 max-w-3xl mx-auto">
           <p className="text-xl text-green-400 font-bold mb-4">契約更改が完了しました</p>
           {totalReleased > 0 && (
-            <p className="text-gray-300 mb-4">{totalReleased}人の選手を解雇しました。(AI: {aiReleasedCount}人, 自チーム: {userReleased.length}人)</p>
+            <p className="text-gray-300 mb-4">{totalReleased}人の選手を解雇しました。（ほかのチーム {aiReleasedCount}人・自チーム {userReleased.length}人）</p>
           )}
           <p className="text-gray-300 mb-6">次はトライアウトで新選手を獲得できます。</p>
           <button
