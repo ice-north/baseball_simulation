@@ -11,6 +11,9 @@
 //  - 提案すると、サーバーに「出す＝自球団の選手・もらう＝相手の選手」の向きで届く
 //  - 逆提案は、元の中身を選んだ状態で開き、**提案した側から見た向き**で送られる
 //  - 読み直しても相手の表が消えない（読み直すたびに「読んでいます…」にしない）
+//  - 成立につながる操作（提案・逆提案）は**確認を1段挟む**（出す・もらう選手、取り消せないこと、
+//    片側が空なら注意）。CPU球団の答え（断った・受けた）を**文で**出す（u1 高3。以前は押した
+//    瞬間に成立し、出たのは「保存しました」だけだった）
 import assert from 'node:assert/strict';
 import { readFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -22,7 +25,10 @@ import { LeagueService } from '../../server/leagueService.mjs';
 import {
   resolvePhaseNow,
   advanceLeagueDay,
+  tradeValueOf,
 } from '../../server/leagueEngine.mjs';
+import { tradeFactorFor } from '../../server/coachEngine.mjs';
+import { CPU_ACCEPT_MARGIN } from '../../src/online/trades.js';
 import { rosterCounts } from '../../src/utils/constants.js';
 
 const html = await readFile(
@@ -80,6 +86,8 @@ const started = await live();
 const teamA = started.members.find((m) => m.userId === 'a').teamName;
 const teamB = started.members.find((m) => m.userId === 'b').teamName;
 const rosterOf = (l, name) => l.game.teams[name].players;
+// 画面に出る球団名（名前を付けていれば表示名）
+const labelOf = (l, name) => l.teams.find((t) => t.name === name)?.displayName || name;
 const infield = ['first', 'second', 'third', 'short'];
 // b から a へ: a の投手1人 ⇔ b の内野手1人
 const wantedPitcher = rosterOf(started, teamA).find((p) => p.position === 'pitcher');
@@ -282,10 +290,31 @@ try {
       .last()
       .click();
   assert.ok(await submit.isEnabled(), '捕手を外しても提案できない');
+  // ⚠ **押してもすぐには送らない**。出す・もらう選手と、成立したら取り消せないことを見せる
   await submit.click();
+  const confirm = deal.getByRole('group', { name: 'トレードの確認' });
+  await confirm.waitFor();
+  const confirmText = await confirm.innerText();
+  assert.ok(
+    confirmText.includes(byId(teamA, myPitcherId).name) &&
+      confirmText.includes(byId(teamB, theirId).name),
+    `確認に出す・もらう選手の名前が無い: ${confirmText}`,
+  );
+  assert.match(confirmText, /取り消せません/, '確認に「取り消せない」ことが書かれていない');
+  assert.equal(
+    (await live()).trades.filter((t) => t.from === 'a').length,
+    0,
+    '確認の前に提案を送っている',
+  );
+  await confirm.getByRole('button', { name: '提案を送る', exact: true }).click();
   await p.waitForFunction(
     () => !document.querySelector('.online-trade-deal-side.is-give li'),
   );
+  // 参加者の球団へは「申し込んだ・相手の返事待ち」と出す（成立とは書かない）
+  await deal
+    .locator('.online-trade-result')
+    .filter({ hasText: `${labelOf(started, teamB)}へ提案しました` })
+    .waitFor();
   const sent = (await live()).trades.find((t) => t.from === 'a');
   assert.ok(sent, '提案がサーバーに届いていない');
   assert.deepEqual(
@@ -320,6 +349,10 @@ try {
   const otherId = Number(await other.getAttribute('data-player'));
   await other.click();
   await counterDeal.getByRole('button', { name: 'この内容で返す' }).click();
+  await counterDeal
+    .getByRole('group', { name: 'トレードの確認' })
+    .getByRole('button', { name: '逆提案を送る', exact: true })
+    .click();
   // ⚠ 向きを取り違えると、サーバーが「出す選手が名簿にいません」で断り、
   //    逆提案の欄が閉じない
   await incoming
@@ -332,15 +365,89 @@ try {
     });
   const countered = (await live()).trades.find((t) => t.from === 'b');
   assert.ok(countered?.countered, '逆提案がサーバーに届いていない');
+  await p
+    .locator('.online-trade-result')
+    .filter({ hasText: `${labelOf(started, teamB)}へ逆提案を返しました` })
+    .waitFor();
   // ⚠ `offer` はいつも**提案した側（b）**が出す選手
   assert.deepEqual(
     [countered.offer, countered.want],
     [[offeredInfielder.id], [otherId]],
     '逆提案の向きが違う（offer は提案した側が出す選手）',
   );
+
+  // --- CPU球団へ: 片側が空なら注意・断られたら理由・受けたら成立の文 ------------
+  {
+    const l = await live();
+    const humansNow = new Set(l.members.map((m) => m.teamName));
+    const cpuTeam = l.season.settings.teamNames.find((name) => !humansNow.has(name));
+    await composer
+      .getByRole('group', { name: '相手の球団' })
+      .getByRole('button', { name: `${labelOf(l, cpuTeam)}（CPU）`, exact: true })
+      .click();
+    await choose('投手');
+    const getRows = composer.locator('tbody[data-side="get"] tr[data-player]');
+    await getRows.first().waitFor();
+    // もらうだけ（出す選手なし）→ 確認で注意 → CPUは断る（理由を交換案の下に出す）
+    await getRows.first().click();
+    await submit.click();
+    const cpuConfirm = deal.getByRole('group', { name: 'トレードの確認' });
+    await cpuConfirm.waitFor();
+    const askOnly = await cpuConfirm.innerText();
+    assert.match(askOnly, /出す選手がいません/, '片側が空なのに注意が出ない');
+    assert.match(askOnly, /CPU球団はその場で答えます/, 'CPU球団がその場で答えることを書いていない');
+    await cpuConfirm.getByRole('button', { name: '提案を送る', exact: true }).click();
+    await deal
+      .locator('.online-trade-result.is-bad')
+      .filter({ hasText: '応じませんでした' })
+      .waitFor();
+    assert.equal(
+      (await live()).trades.filter((t) => t.toTeam === cpuTeam).length,
+      0,
+      '断られた提案が残っている',
+    );
+    await getRows.first().click(); // 選び直す（外す）
+    // ⚠ 受ける組み合わせ: CPUの値踏み（`cpuTradeDecision`）で、出す投手の値打ちが
+    //    もらう投手の値打ちの CPU_ACCEPT_MARGIN 倍以上になる2人を選ぶ
+    const factor = tradeFactorFor(l, cpuTeam);
+    const price = (p) => Math.max(1, tradeValueOf(p) * factor(p));
+    const pitchersOf = (name) =>
+      rosterOf(l, name).filter((p) => p.position === 'pitcher');
+    const best = pitchersOf(teamA).sort((a, b) => price(b) - price(a))[0];
+    const worst = pitchersOf(cpuTeam).sort((a, b) => price(a) - price(b))[0];
+    assert.ok(
+      price(best) >= price(worst) * CPU_ACCEPT_MARGIN,
+      '検査の前提: 受ける組み合わせが作れない',
+    );
+    await composer.locator(`tbody[data-side="give"] tr[data-player="${best.id}"]`).click();
+    await composer.locator(`tbody[data-side="get"] tr[data-player="${worst.id}"]`).click();
+    await submit.click();
+    await cpuConfirm.waitFor();
+    assert.doesNotMatch(
+      await cpuConfirm.innerText(),
+      /選手がいません/,
+      '両側に選手がいるのに片側が空の注意が出る',
+    );
+    await cpuConfirm.getByRole('button', { name: '提案を送る', exact: true }).click();
+    const accepted = deal
+      .locator('.online-trade-result')
+      .filter({ hasText: `${labelOf(l, cpuTeam)}が受けました。トレードが成立しました` });
+    await accepted.waitFor();
+    const acceptedText = await accepted.innerText();
+    assert.ok(
+      acceptedText.includes(best.name) && acceptedText.includes(worst.name),
+      `成立の文に出した・来た選手の名前が無い: ${acceptedText}`,
+    );
+    const after = await live();
+    assert.ok(
+      rosterOf(after, teamA).some((p) => p.id === worst.id) &&
+        !rosterOf(after, teamA).some((p) => p.id === best.id),
+      'CPU球団が受けたのに選手が入れ替わっていない',
+    );
+  }
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / スマホWebのホームで返事が必要な提案を知らせる）',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / スマホWebのホームで返事が必要な提案を知らせる）',
   );
 } finally {
   await browser.close();

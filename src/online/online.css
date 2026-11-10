@@ -4106,3 +4106,67 @@ small.online-gain:not(:where(.online-sp *)) {
     flex-basis: 100%;
   }
 }
+
+/* --- 取り消せない操作の前の確認と、その結果（2026-11-10 総合監査 u1 高3・高4） -------------
+   ⚠ トレードの成立につながる操作（`TradeScreen` の `DealConfirm`）は、出す・もらう選手と
+      「取り消せない」ことを見せてから送る。結果（相手の答え・断られた理由）は次の操作まで残す
+      （右下の「保存しました」の帯はすぐ消える）。 */
+.online-trade-confirm {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fbbf2499;
+  border-radius: 8px;
+  background: #fbbf2414;
+  font-size: 12px;
+}
+.online-trade-confirm p:not(:where(.online-sp *)) {
+  margin: 6px 0 0;
+}
+.online-trade-confirm .online-trade-confirm-head:not(:where(.online-sp *)) {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+.online-trade-confirm dl:not(:where(.online-sp *)) {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.online-trade-confirm dl div:not(:where(.online-sp *)) {
+  display: grid;
+  grid-template-columns: 3.5em minmax(0, 1fr);
+  gap: 6px;
+}
+.online-trade-confirm dt:not(:where(.online-sp *)) {
+  font-weight: 700;
+}
+.online-trade-confirm .is-give dt:not(:where(.online-sp *)) {
+  color: #fdba74;
+}
+.online-trade-confirm .is-get dt:not(:where(.online-sp *)) {
+  color: #86efac;
+}
+.online-trade-confirm dd:not(:where(.online-sp *)) {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.online-trade-confirm .online-trade-warn:not(:where(.online-sp *)) {
+  color: #fbbf24;
+}
+.online-trade-confirm .online-actions {
+  margin-top: 10px;
+}
+.online-trade-result:not(:where(.online-sp *)) {
+  margin: 10px 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #6aa08d;
+  background: #1f453a;
+  color: #c7f2dc;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.online-trade-result.is-bad:not(:where(.online-sp *)) {
+  border-color: #b67863;
+  background: #5b3028;
+  color: #ffded2;
+}
