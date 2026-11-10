@@ -26,6 +26,7 @@ import {
   splitBundle,
   assembleBundle,
   assembleLight,
+  runWithLightRead,
 } from './snapshotParts.mjs';
 /** 部分の履歴（`views._parts.history`）が指すオブジェクトのパス */
 const partReferences = (history) =>
@@ -520,6 +521,46 @@ export class SupabaseStore {
    *    触ったら、読み直して全体でやり直す。世界を必ず読む処理（定期進行・トレード・キャンプなど）は
    *    `{ full: true }` で最初から全体を読む（やり直しの1回ぶんを省くため。正しさはどちらでも同じ）。
    */
+  /**
+   * 命令を1回走らせ、変更があれば公開するビュー・記録の索引・保存する形を作る（`transaction` の1回ぶん）。
+   * `loaded.run` があれば軽い読み（保存する形は `run.inspect`。null なら全体で読み直す）
+   */
+  async attemptCommand(fn, loaded, row) {
+    let views, archives, prepared;
+    const value = loaded.bundle;
+    const outcome = await fn(value);
+    if (!outcome?.unchanged) {
+      // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
+      //    `this.members` を使うと、招待で増えた人のぶんが作られず、
+      //    その人は自分の球団を見られなくなる。
+      const viewMembers = value.league?.members?.length
+        ? value.league.members
+        : this.members;
+      views = Object.fromEntries(
+        viewMembers.map((m) => [
+          m.userId,
+          projectLeague(
+            value,
+            m.userId,
+            // 書けるかは読むときに端末ごとに決め直す（`readView`）。ここは目安
+            sessionIdsOf(value.sessions[m.userId])[0],
+            this.adminId,
+          ),
+        ]),
+      );
+      // ⚠ 記録に関わらない命令（編成の保存）は、前の索引をそのまま使う（作り直しは全試合をなめて重い）
+      archives =
+        outcome?.archiveUnchanged && row.views?._records
+          ? row.views._records
+          : await this.createArchive(value, row.views?._records);
+      if (archives) views._records = archives;
+      views._meta = leagueMetaOf(value.league);
+      prepared = loaded.run
+        ? loaded.run.inspect(value)
+        : { bundle: value };
+    }
+    return { outcome, views, archives, prepared };
+  }
   async transaction(fn, { full = false } = {}) {
     const token = randomUUID();
     const row = (await this.rpc('online_claim', { p_token: token }))[0];
@@ -531,105 +572,61 @@ export class SupabaseStore {
     );
     let published = false;
     try {
-      let light = !full;
-      for (;;) {
-        const loaded = await this.loadSnapshot(row, { light });
-        const lightRun = loaded.light || null;
-        const retry = () => lightRun && lightRun.tracker.touched;
-        let outcome, views, archives, prepared;
-        try {
-          const value = loaded.bundle;
-          outcome = await fn(value);
-          if (!outcome?.unchanged) {
-            // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
-            //    `this.members` を使うと、招待で増えた人のぶんが作られず、
-            //    その人は自分の球団を見られなくなる。
-            const viewMembers = value.league?.members?.length
-              ? value.league.members
-              : this.members;
-            views = Object.fromEntries(
-              viewMembers.map((m) => [
-                m.userId,
-                projectLeague(
-                  value,
-                  m.userId,
-                  // 書けるかは読むときに端末ごとに決め直す（`readView`）。ここは目安
-                  sessionIdsOf(value.sessions[m.userId])[0],
-                  this.adminId,
-                ),
-              ]),
-            );
-            // ⚠ 記録に関わらない命令（編成の保存）は、前の索引をそのまま使う（作り直しは全試合をなめて重い）
-            archives =
-              outcome?.archiveUnchanged && row.views?._records
-                ? row.views._records
-                : await this.createArchive(value, row.views?._records);
-            if (archives) views._records = archives;
-            views._meta = leagueMetaOf(value.league);
-            prepared = lightRun
-              ? lightRun.inspect(value)
-              : { bundle: value };
-          }
-        } catch (error) {
-          // ⚠ 複製（structuredClone）は番人を通らずに DataCloneError で落ちる。軽い読みなら全体でやり直す
-          if (retry() || (lightRun && error?.name === 'DataCloneError')) {
-            light = false;
-            continue;
-          }
-          throw error;
-        }
-        // 世界に触っていた（例外を握りつぶされていても印は残る）・形を差し替えていた → 全体でやり直す
-        if (retry() || (lightRun && !outcome?.unchanged && !prepared)) {
-          light = false;
-          continue;
-        }
-        if (outcome?.unchanged) return outcome.value;
-        const { path, refs } = await this.writeSnapshot(prepared, loaded.refs);
-        const partHistory = [refs, ...(row.views?._parts?.history || [])].slice(0, 3);
-        views._parts = { history: partHistory };
-        published = await this.rpc('online_publish', {
-          p_token: token,
-          p_generation: row.generation,
-          p_path: path,
-          p_views: views,
-          p_sessions: loaded.bundle.sessions,
-        });
-        requireOnline(
-          published,
-          '処理の有効期限が切れたため更新しませんでした。再読込してください',
-          409,
-          'lease',
+      // ⚠ まず軽い読み、だめなら全体で読み直す判定は `runWithLightRead`（検査用の保存と共通）
+      const { loaded, outcome, views, archives, prepared } = await runWithLightRead({
+        full,
+        load: async (light) => {
+          const loaded = await this.loadSnapshot(row, { light });
+          return { ...loaded, run: loaded.light || null };
+        },
+        attempt: (loaded) => this.attemptCommand(fn, loaded, row),
+      });
+      if (outcome?.unchanged) return outcome.value;
+      const { path, refs } = await this.writeSnapshot(prepared, loaded.refs);
+      const partHistory = [refs, ...(row.views?._parts?.history || [])].slice(0, 3);
+      views._parts = { history: partHistory };
+      published = await this.rpc('online_publish', {
+        p_token: token,
+        p_generation: row.generation,
+        p_path: path,
+        p_views: views,
+        p_sessions: loaded.bundle.sessions,
+      });
+      requireOnline(
+        published,
+        '処理の有効期限が切れたため更新しませんでした。再読込してください',
+        409,
+        'lease',
+      );
+      // ⚠ 命令の返事に載せた自分のビューに、いま公開した世代を押す（公開は世代を必ず1つ上げる。
+      //    `online_publish`）。押さないと、端末は次の読み直しで同じビューをまるごと取り直していた
+      const replied = outcome?.value?.view;
+      if (replied && typeof replied === 'object' && !Array.isArray(replied))
+        replied.viewGeneration = row.generation + 1;
+      // current + 直前2世代を残す。削除失敗は公開済みの更新を失敗扱いにしない。
+      // 部分（world・records など）は、残す3世代のどれかが指していれば残す
+      const keep = [row.snapshot_path, ...(row.previous_paths || [])].filter(
+        Boolean,
+      );
+      const retainedArchives = archiveReferences(archives);
+      const retainedParts = partReferences(partHistory);
+      const obsolete = [
+        ...keep.slice(2),
+        ...[...archiveReferences(row.views?._records)].filter(
+          (path) => !retainedArchives.has(path),
+        ),
+        ...[...partReferences(row.views?._parts?.history)].filter(
+          (path) => !retainedParts.has(path),
+        ),
+      ];
+      if (obsolete.length)
+        await this.request('/storage/v1/object/online-world', {
+          method: 'DELETE',
+          body: { prefixes: obsolete },
+        }).catch(() =>
+          console.error('online: 古いスナップショットの削除が必要です'),
         );
-        // ⚠ 命令の返事に載せた自分のビューに、いま公開した世代を押す（公開は世代を必ず1つ上げる。
-        //    `online_publish`）。押さないと、端末は次の読み直しで同じビューをまるごと取り直していた
-        const replied = outcome?.value?.view;
-        if (replied && typeof replied === 'object' && !Array.isArray(replied))
-          replied.viewGeneration = row.generation + 1;
-        // current + 直前2世代を残す。削除失敗は公開済みの更新を失敗扱いにしない。
-        // 部分（world・records など）は、残す3世代のどれかが指していれば残す
-        const keep = [row.snapshot_path, ...(row.previous_paths || [])].filter(
-          Boolean,
-        );
-        const retainedArchives = archiveReferences(archives);
-        const retainedParts = partReferences(partHistory);
-        const obsolete = [
-          ...keep.slice(2),
-          ...[...archiveReferences(row.views?._records)].filter(
-            (path) => !retainedArchives.has(path),
-          ),
-          ...[...partReferences(row.views?._parts?.history)].filter(
-            (path) => !retainedParts.has(path),
-          ),
-        ];
-        if (obsolete.length)
-          await this.request('/storage/v1/object/online-world', {
-            method: 'DELETE',
-            body: { prefixes: obsolete },
-          }).catch(() =>
-            console.error('online: 古いスナップショットの削除が必要です'),
-          );
-        return outcome?.value;
-      }
+      return outcome?.value;
     } finally {
       // publishの応答喪失時にも新オブジェクトを削除しない（既に公開済みの可能性）。
       if (!published)

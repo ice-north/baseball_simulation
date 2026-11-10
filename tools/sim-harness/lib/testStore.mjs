@@ -17,6 +17,7 @@ import {
   splitBundle,
   assembleBundle,
   assembleLight,
+  runWithLightRead,
 } from '../../../server/storage/snapshotParts.mjs';
 
 const memory = new Map();
@@ -55,62 +56,55 @@ export class MemoryStore {
     this.lastReadMode = 'light';
     return { bundle: run.bundle, touched: () => run.tracker.touched };
   }
+  // ⚠ 「まず軽い読み、だめなら全体で読み直す」判定は本番と同じ関数（`runWithLightRead`）を使う。
+  //    書き写すと、片方だけ直したときに検査が本番の取りこぼしを捕まえられない
   transaction(fn, { full = false } = {}) {
     const result = this.queue.then(async () => {
       const whole = process.env.SIM_HARNESS_WHOLE_STORE === '1';
-      let light = !full && !whole;
-      // 何回読んだか（世界に触れて全体でやり直すと2）。全体の印の付け忘れを見る
-      let attempts = 0;
-      for (;;) {
-        attempts++;
-        const stored = memory.get(this.path);
-        const split = stored !== undefined && typeof stored !== 'string';
-        let value, run;
-        if (light && split) {
+      const debug = process.env.PARTS_DEBUG
+        ? (touched, error) =>
+            console.log(error ? 'escalate(throw)' : 'escalate', touched, error?.stack?.split('\n').slice(0, 6).join(' | ') ?? '')
+        : undefined;
+      const { outcome, prepared, loaded, attempts } = await runWithLightRead({
+        full: full || whole,
+        onEscalate: debug,
+        load: async (light) => {
+          const stored = memory.get(this.path);
+          const split = stored !== undefined && typeof stored !== 'string';
+          if (!(light && split)) return { stored, value: await this.read(), run: null };
           const records =
             stored.parts.records === undefined ? {} : { records: JSON.parse(stored.parts.records) };
           const refs = Object.fromEntries(Object.keys(stored.parts).map((name) => [name, {}]));
-          run = assembleLight(JSON.parse(stored.core), stored.order, records, refs);
-          value = run.bundle;
-        } else value = await this.read();
-        let outcome, prepared;
-        try {
-          outcome = await fn(value);
-          if (run && !outcome?.unchanged) prepared = run.inspect(value);
-        } catch (error) {
-          if (run && (run.tracker.touched || error?.name === 'DataCloneError')) {
-            if (process.env.PARTS_DEBUG) console.log('escalate(throw)', run.tracker.touched, error.stack.split('\n').slice(0, 6).join(' | '));
-            light = false;
-            continue;
-          }
-          throw error;
-        }
-        if (run && (run.tracker.touched || (!outcome?.unchanged && !prepared))) {
-          if (process.env.PARTS_DEBUG) console.log('escalate', run.tracker.touched);
-          light = false;
-          continue;
-        }
-        if (outcome?.unchanged) return outcome.value;
-        if (whole) memory.set(this.path, JSON.stringify(value));
-        else if (prepared) {
-          const parts = { ...stored.parts };
-          if (prepared.whole || prepared.records === undefined) delete parts.records;
-          else parts.records = JSON.stringify(prepared.records);
-          memory.set(this.path, { core: JSON.stringify(prepared.core), order: prepared.order, parts });
-        } else {
-          const next = splitBundle(value);
-          memory.set(this.path, {
-            core: JSON.stringify(next.core),
-            order: next.order,
-            parts: Object.fromEntries(
-              Object.entries(next.parts).map(([name, data]) => [name, JSON.stringify(data)]),
-            ),
-          });
-        }
-        this.lastMode = run ? 'light' : 'full';
-        this.lastAttempts = attempts;
-        return outcome?.value;
+          const run = assembleLight(JSON.parse(stored.core), stored.order, records, refs);
+          return { stored, value: run.bundle, run };
+        },
+        attempt: async ({ value, run }) => {
+          const outcome = await fn(value);
+          return { outcome, prepared: run && !outcome?.unchanged ? run.inspect(value) : undefined };
+        },
+      });
+      if (outcome?.unchanged) return outcome.value;
+      const { stored, value, run } = loaded;
+      if (whole) memory.set(this.path, JSON.stringify(value));
+      else if (prepared) {
+        const parts = { ...stored.parts };
+        if (prepared.whole || prepared.records === undefined) delete parts.records;
+        else parts.records = JSON.stringify(prepared.records);
+        memory.set(this.path, { core: JSON.stringify(prepared.core), order: prepared.order, parts });
+      } else {
+        const next = splitBundle(value);
+        memory.set(this.path, {
+          core: JSON.stringify(next.core),
+          order: next.order,
+          parts: Object.fromEntries(
+            Object.entries(next.parts).map(([name, data]) => [name, JSON.stringify(data)]),
+          ),
+        });
       }
+      this.lastMode = run ? 'light' : 'full';
+      // 何回読んだか（世界に触れて全体でやり直すと2）。全体の印の付け忘れを見る
+      this.lastAttempts = attempts;
+      return outcome?.value;
     });
     this.queue = result.catch(() => {});
     return result;
