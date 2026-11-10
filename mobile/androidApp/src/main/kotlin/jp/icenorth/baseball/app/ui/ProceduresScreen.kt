@@ -365,7 +365,16 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     when {
         plan["packId"] != null || phase["packs"] != null -> {
             val packs = phase.at("packs").list().mapNotNull { it.obj() }
-            PackPicker(model, packs, plan.at("packId").str()) { id -> setPlan(Commands.withPack(plan, id)) }
+            // ⚠ 選んだらその場で保存する（途中参加の初期メンバー選択と同じく、押せば保存される）。
+            //    以前は手続きのタブでは未保存の編集になるだけで、「選択中」と出ても保存されず、
+            //    そのまま離れると締め切りで標準案のセットになった。決定済みなら決定のまま出し直す
+            PackPicker(model, packs, plan.at("packId").str()) { id ->
+                val name = packs.firstOrNull { it.at("id").str() == id }?.at("name").str().orEmpty()
+                submit(
+                    model, phaseId, Commands.withPack(plan, id), ready, draft.base,
+                    done = if (ready) "「$name」に選び直しました（決定済み）" else "「$name」を下書きに保存しました。決めたら「この内容で決定」を押してください",
+                )
+            }
         }
         plan["rankedIds"] != null -> TryoutPanel(model, raw, phase, plan, setPlan) {
             // 標準案に戻す（⚠ 保存済みの下書きではなく、いつも標準案を取り直す）
@@ -389,8 +398,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     if (plan["packId"] != null || phase["packs"] != null || plan["rankedIds"] != null || plan["releaseIds"] != null) decision()
 }
 
-private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready: Boolean, base: JsonElement?) {
-    model.command("submit", Commands.submit(phaseId, plan, ready, base), label = if (ready) "決定を送信中…" else "保存中…", done = if (ready) "決定しました" else "保存しました") {
+private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready: Boolean, base: JsonElement?, done: String? = null) {
+    model.command("submit", Commands.submit(phaseId, plan, ready, base), label = if (ready) "決定を送信中…" else "保存中…", done = done ?: if (ready) "決定しました" else "保存しました") {
         // ⚠ サーバーは提出を整えて保存する（送った形と同じとは限らない）ので、読み直したビューの提出から作り直す。
         //    送った形を base にすると、次の提出が edit_conflict で断られることがある
         model.phaseDraft = null

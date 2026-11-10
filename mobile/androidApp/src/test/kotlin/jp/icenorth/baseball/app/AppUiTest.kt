@@ -10,6 +10,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import io.ktor.http.content.TextContent
+import java.util.Collections
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -48,6 +51,7 @@ class AppUiTest {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("online", 0).edit().clear().commit()
         client = HttpClient(MockEngine { request ->
+            if (request.url.parameters["action"] == "command") commands += (request.body as TextContent).text
             val text = if (request.url.parameters["action"] == "login")
                 """{"userId":"a","accessToken":"token","sessionId":"session"}"""
             else """{"revision":1,"teamName":"team","writable":true,$extra}"""
@@ -68,6 +72,8 @@ class AppUiTest {
     }
 
     private var back: OnBackPressedDispatcher? = null
+    /** 送った指示（本文） */
+    private val commands: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
     @Test fun tradeAndProcedureNoticesBothRemainVisibleWithoutOverlap() {
         open(""""pendingPack":{"chosen":null,"packs":[]},"trades":[{"id":"t1","myTurn":true,"mine":false,"fromTeam":"other"}]""")
@@ -93,6 +99,23 @@ class AppUiTest {
         // ⚠ 以前は戻るでどのタブからでもアプリが閉じた
         rule.runOnIdle { back!!.onBackPressed() }
         rule.onNodeWithTag("tab-Home").assertIsSelected()
+    }
+
+    @Test fun choosingAPackInTheProcedureIsSavedRightAway() {
+        val packs = """[{"id":"p1","name":"セットA","counts":{},"ranks":{},"players":[]},{"id":"p2","name":"セットB","counts":{},"ranks":{},"players":[]}]"""
+        open(""""roster":[],"phase":{"id":"ph1","kind":"pack_select","packs":$packs,"submission":{"plan":{"packId":"p1"},"ready":false}}""")
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.onNodeWithText("セットB").performScrollTo().performClick()
+        rule.onNodeWithText("このセットにする").performScrollTo().performClick()
+        rule.waitUntil(10_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            commands.isNotEmpty()
+        }
+        // ⚠ 以前は未保存の編集になるだけで、「選択中」と出ても保存されなかった（途中参加の選択は押せば保存される）
+        val sent = commands.single()
+        assertTrue(sent, sent.contains("\"type\":\"submit\""))
+        assertTrue(sent, sent.contains("\"packId\":\"p2\""))
+        assertTrue(sent, sent.contains("\"ready\":false"))
     }
 
     @Test fun homePaperTellsWhenANewerAppIsOut() {
