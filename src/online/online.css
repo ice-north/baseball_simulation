@@ -2651,9 +2651,15 @@ small.online-gain:not(:where(.online-sp *)) {
   padding: 8px 10px;
   position: relative;
 }
+/* ⚠ ボタンの中なので `.online button` の `white-space: nowrap` を受け継ぐ。
+   「A3 B8 C13 · 平均20.9歳 · 二刀流3」が1行に入らず、カードの右へはみ出して
+   隣のカードに重なっていた。区切りの空白で折り返す（語の途中では割らない） */
 .online-pack-card small {
   font-size: 11px;
   color: #cbd5e1;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .online-pack-card[aria-current='true'] {
   border-color: var(--accent);

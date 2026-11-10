@@ -44,6 +44,15 @@ try {
 
   // --- セットを選ぶ → 準備完了 ---------------------------------------
   const cards = page.locator('.online-pack-card');
+  await cards.first().waitFor();
+  // ⚠ カードの文字はカードの中に収める（ボタンの「折り返さない」を受け継いで、
+  //    3行目が右へはみ出し、隣のカードに重なっていた）
+  const spilled = await cards.evaluateAll((list) =>
+    list
+      .filter((card) => card.scrollWidth > card.clientWidth + 1)
+      .map((card) => card.querySelector('strong')?.innerText),
+  );
+  assert.deepEqual(spilled, [], `セットのカードから文字がはみ出す: ${spilled}`);
   await cards.nth(2).click();
   const packName = (await cards.nth(2).locator('strong').innerText()).trim();
   await page.getByRole('button', { name: 'このセットにする', exact: true }).click();
