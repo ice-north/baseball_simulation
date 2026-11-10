@@ -85,7 +85,8 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
     }
     val pitcher = p.at("position").str() == "pitcher"
     Column(
-        Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
+        // 画面の見回り（ScreenTour）はこの印の上でスクロールする（シートは別の窓なので、画面の根を送っても動かない）
+        Modifier.testTag("player-sheet").verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column {

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipeDown
@@ -76,11 +77,19 @@ class ScreenTour {
         pause()
     }
 
-    private fun scroll(times: Int = 1) {
+    /** @param tag 送る所。シート（別の窓）は画面の根を送っても動かないので、その中の印で送る */
+    private fun scroll(times: Int = 1, tag: String? = null) {
         repeat(times) {
-            rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeUp(startY = bottom * 0.75f, endY = top + height * 0.2f) }
+            val node = if (tag != null) rule.onAllNodesWithTag(tag).onFirst() else rule.onAllNodes(isRoot()).onFirst()
+            node.performTouchInput { swipeUp(startY = bottom * 0.75f, endY = top + height * 0.2f) }
             pause(500)
         }
+    }
+
+    /** 小分けの切り替え（ChipTabs）を鍵で押す。⚠ 文字で押すと同じ字を含むボタンに当たる（「野手」→一括の「野手 打撃練習」） */
+    private fun chip(key: String) {
+        rule.onAllNodesWithTag("chip-$key").onFirst().performScrollTo().performClick()
+        pause()
     }
 
     /** いちばん上まで戻す（長いホームを下まで撮ったあと、上のメニューに触れるように） */
@@ -97,10 +106,10 @@ class ScreenTour {
     }
 
     /** 上から順に撮り、数回スクロールして下も撮る */
-    private fun page(name: String, scrolls: Int = 2) {
+    private fun page(name: String, scrolls: Int = 2, tag: String? = null) {
         shot(name)
         repeat(scrolls) { i ->
-            step("$name scroll") { scroll(); shot("$name-${i + 2}") }
+            step("$name scroll") { scroll(tag = tag); shot("$name-${i + 2}") }
         }
     }
 
@@ -169,7 +178,8 @@ class ScreenTour {
                     val first = model.raw?.at("roster").list().mapNotNull { it.obj() }.first { it.at("position").str() != "pitcher" }
                     rule.runOnUiThread { model.openPlayer = first }
                     pause(2500)
-                    page("player-sheet", scrolls = 2)
+                    // ⚠ 以前は画面の根を送っていて、シートが動かず同じ絵が3枚撮れていた
+                    page("player-sheet", scrolls = 2, tag = "player-sheet")
                     // 能力を押すと、何にどう効くかが出る（いしだ指摘 2026-11-08）
                     step("ability help") { click("体幹", substring = true); shot("player-sheet-help") }
                     rule.runOnUiThread { model.openPlayer = null }
@@ -219,6 +229,8 @@ class ScreenTour {
                     back()
                 }
                 step("tactics") { click("方針・采配"); page("plan-tactics", scrolls = 2) }
+                // 指導者（首脳陣・任せ方・采配の実際の動き）。以前は撮っていなかった
+                step("staff") { chip("Staff"); pause(2000); page("plan-staff", scrolls = 3) }
 
                 tab("Procedures")
                 page("procedures", scrolls = 4)
@@ -245,7 +257,8 @@ class ScreenTour {
             else -> {
                 tab("Procedures")
                 page("procedures", scrolls = 5)
-                if (stage == "camp") step("camp group") { click("野手", substring = true); page("procedures-camp-fielders", scrolls = 1) }
+                // ⚠ 以前は「野手」の文字で押していて、一括の「野手 打撃練習」に当たり、野手のカードが撮れていなかった
+                if (stage == "camp") step("camp group") { chip("infield"); page("procedures-camp-fielders", scrolls = 1) }
                 if (stage == "tryout") step("tryout weights") { click("開く"); page("procedures-tryout-weights", scrolls = 1) }
                 tab("Games")
                 step("news") { click("リーグ便り"); page("games-news", scrolls = 1) }

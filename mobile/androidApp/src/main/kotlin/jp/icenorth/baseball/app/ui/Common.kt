@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -234,6 +235,8 @@ fun ChipTabs(
                 selected = key == selected,
                 onClick = { onSelect(key) },
                 label = { Text(label) },
+                // 画面の見回り（ScreenTour）が文字ではなく鍵で押す（「野手」の文字は一括のボタンにも当たる）
+                modifier = Modifier.testTag("chip-$key"),
                 // 未完了の数（下のタブの数字と同じ数え方）
                 trailingIcon = if (count > 0) ({ Badge { Text("$count") } }) else null,
             )
