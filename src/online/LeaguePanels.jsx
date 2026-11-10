@@ -903,7 +903,13 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   );
 
   // スマホで編集を開くボタンの名前。編集できる手続きだけ（年度更新は決めることが無い）
-  const mobileEditLabel = !plan ? null : phase.packs ? 'セットを見比べて選ぶ' : null;
+  const mobileEditLabel = !plan
+    ? null
+    : phase.packs
+      ? 'セットを見比べて選ぶ'
+      : plan.releaseIds
+        ? '退団させる選手を変える'
+        : null;
 
   if (!mobile) {
     // ⚠ PCは**ほかの編集ページと同じ形**: 見出しの右に操作、本文にカード。

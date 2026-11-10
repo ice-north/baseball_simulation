@@ -77,6 +77,7 @@ async function scene({
   staleDefaults = false,
   phase = null,
   defaultPlan = null,
+  roster = null,
 } = {}) {
   const context = await browser.newContext({
     viewport: { width: mobile ? 390 : 1280, height: 844 },
@@ -94,6 +95,7 @@ async function scene({
   );
   const view = initial();
   if (phase) view.phase = phase;
+  if (roster) view.roster = roster;
   const state = {
     view,
     defaultsRequests: 0,
@@ -224,7 +226,8 @@ async function fitsPhone(page, what) {
       const page = document.documentElement.scrollWidth;
       if (page > innerWidth + 1) out.push(`横スクロール ${page}px`);
       for (const n of document.querySelectorAll('.online-decision *')) {
-        if (!n.checkVisibility()) continue;
+        // 1年の流れの帯は、手続きの段を横に送って見る作り（`SeasonFlow`。ここの対象外）
+        if (!n.checkVisibility() || n.closest('.online-season-flow')) continue;
         const r = n.getBoundingClientRect();
         if (r.width && (r.right > innerWidth + 1 || r.left < -1))
           out.push(`はみ出し ${n.tagName}.${n.className} ${(n.innerText || '').slice(0, 20)}`);
@@ -235,7 +238,9 @@ async function fitsPhone(page, what) {
         '.online-phase-editor button, .online-phase-editor input, .online-phase-editor select, .online-decision .online-actions button',
       )) {
         if (!n.checkVisibility() || n.type === 'range') continue;
-        const r = n.getBoundingClientRect();
+        // チェックは押せる枠（label）の大きさで見る
+        const target = n.type === 'checkbox' && n.closest('label') ? n.closest('label') : n;
+        const r = target.getBoundingClientRect();
         if (r.height < 40 || r.width < 36)
           out.push(`指で押しにくい ${n.innerText || n.getAttribute('aria-label') || n.type} ${Math.round(r.width)}×${Math.round(r.height)}`);
       }
@@ -588,6 +593,59 @@ try {
     assert.deepEqual(decide.payloads.at(-1).plan, { releaseIds: [1] });
     assert.equal(decide.payloads.at(-1).ready, true);
     await decide.context.close();
+
+    // ⚠ **スマホでも退団させる選手を選び直して決められる**（判断1・案B ③）。以前は標準案の
+    //    退団（監督の案）のまま決めるしかなかった。PCと同じ `ContractPlanner`・同じ `submit`
+    const fielder = (id, name, position, age) => ({
+      id,
+      name,
+      age,
+      position,
+      condition: 2,
+      batting: { meet: 40, power: 35, eye: 30 },
+      physical: { speed: 50, arm: 50 },
+      fielding: { defense: 45 },
+      pitching: {},
+    });
+    const release = await scene({
+      mobile: true,
+      phase: contractPhase(),
+      defaultPlan: { releaseIds: [1] },
+      roster: [
+        ...initial().roster,
+        fielder(2, '検証 外野手', 'left', 31),
+        fielder(3, '検証 捕手', 'catcher', 23),
+      ],
+    });
+    await click(release.page, '手続き');
+    await release.page.getByRole('button', { name: '退団させる選手を変える', exact: true }).click();
+    const releaseBox = (name) =>
+      release.page.getByRole('checkbox', { name: new RegExp(`^${name}（.*）を退団させる$`) });
+    await releaseBox(PITCHER).uncheck();
+    await releaseBox('検証 外野手').check();
+    await fitsPhone(release.page, '契約更改の退団選び');
+    // 「変更を取り消す」で標準案に戻る
+    await release.page.getByRole('button', { name: '変更を取り消す', exact: true }).click();
+    await release.page.locator('.online-phase-status').filter({ hasText: '標準案です。' }).waitFor();
+    assert.ok(await releaseBox(PITCHER).isChecked(), '「変更を取り消す」で標準案の退団に戻らない');
+    assert.ok(!(await releaseBox('検証 外野手').isChecked()), '「変更を取り消す」で選んだ退団が残る');
+    await releaseBox(PITCHER).uncheck();
+    await releaseBox('検証 外野手').check();
+    await release.page.getByRole('button', { name: 'この内容で決定', exact: true }).click();
+    await release.page.getByRole('group', { name: '決定の確認', exact: true }).waitFor();
+    const releasing = await release.page.locator('.online-phase-contents').innerText();
+    assert.ok(
+      releasing.includes('検証 外野手') && !releasing.includes(PITCHER),
+      `確認で選び直した退団が出ない: ${releasing}`,
+    );
+    await release.page.getByRole('button', { name: '決定する', exact: true }).click();
+    await release.page.getByText('決定しました', { exact: true }).waitFor();
+    assert.deepEqual(
+      release.payloads.at(-1),
+      { phaseId: '1:contract', plan: { releaseIds: [2] }, ready: true, baseSubmission: null },
+      'スマホで選び直した退団が送られない',
+    );
+    await release.context.close();
 
     // トライアウト: 実際に取る顔ぶれ（希望順の上から、目標を超える区分は飛ばす）
     const candidate = (id, name, position) => ({

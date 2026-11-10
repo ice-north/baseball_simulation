@@ -4461,3 +4461,33 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 14px;
   padding: 8px 14px;
 }
+/* 契約更改: 退団の選択。⚠ PCの2列のままだと 320px で1人ぶんが120px ほどになり、
+   能力の行が「制／球」と語の途中で割れていた。スマホは1列にし、チェックは枠ごと 44px で押せるように */
+.online .online-release-check {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+.online-mobile .online-phase-editor .online-release-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+.online-mobile .online-release-check {
+  width: 44px;
+  min-height: 44px;
+  align-self: stretch;
+}
+.online-mobile .online-release-check input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+}
+/* 選手の1行（契約更改・トライアウト共通の `PlayerLine`）。能力の並びは空白でだけ折り返す
+   （「球速D 制球B」を「制／球」と割らない）。名前などのボタンは指で押せる高さに */
+.online-mobile .online-phase-editor .online-tryout-person small {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.online-mobile .online-phase-editor .online-tryout-list button {
+  min-height: 44px;
+}
