@@ -150,7 +150,9 @@ fun AbilityLine(p: JsonObject) {
             AbilityNum("速", p.at("pitching", "velocity").int(), velocity = true)
             AbilityNum("制", p.at("pitching", "control").int())
             AbilityNum("ス", p.at("pitching", "stamina").int(), stamina = true)
-            AbilityNum("回", p.at("pitching", "spinRate").int())
+            // ⚠「回」だけだとキャンプのカードの「回復」と紛らわしいので「回転」。
+            //    初期メンバーのパックなど回転を持たない一覧では出さない（「回—」と並んでいた）
+            p.at("pitching", "spinRate").int()?.let { AbilityNum("回転", it) }
         } else {
             AbilityNum("ミ", p.at("batting", "meet").int())
             AbilityNum("パ", p.at("batting", "power").int())
