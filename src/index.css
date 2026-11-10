@@ -99,7 +99,9 @@ body {
   .btn-danger { background-color: #dc2626; color: #fff; font-weight: 700; }
   .btn-danger:hover:not(:disabled) { background-color: #ef4444; }
 
-  .btn-warn { background-color: #d97706; color: #fff; font-weight: 700; }
+  /* ⚠ 文字は濃い色（.btn-primary と同じ考え方）。白だと #d97706 の上で 3.19:1、明るくなる
+     hover では 2.15:1 で読みにくかった（一人用の見回り）。濃い文字なら 5.8:1 以上 */
+  .btn-warn { background-color: #d97706; color: #1c1207; font-weight: 700; }
   .btn-warn:hover:not(:disabled) { background-color: #f59e0b; }
 
   .btn-primary:disabled, .btn-secondary:disabled,
