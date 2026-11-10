@@ -60,9 +60,15 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         .filter(Boolean);
       return starters;
     }
+    // AIチーム: 打順は前の試合のもの（試合の直前に組み直す）。投手の枠だけ今日の先発（予告）に替える。
+    // ⚠ 替えないと、9番に前の試合の先発、「相手先発投手」に今日の先発が出て食い違っていた
+    const rotationStarter = getStartingPitcher(teamName);
     return team.players
       .filter(p => p.battingOrder > 0 && p.battingOrder <= 9 && p.isActive !== false)
-      .sort((a, b) => a.battingOrder - b.battingOrder);
+      .sort((a, b) => a.battingOrder - b.battingOrder)
+      .map(p => (p.position === 'pitcher' && rotationStarter && p.id !== rotationStarter.id
+        ? { ...rotationStarter, battingOrder: p.battingOrder }
+        : p));
   };
 
   const userStarters = getStarters(userTeam, userTeamName);
@@ -481,7 +487,9 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
 
             {/* 相手スタメン */}
             <div className="bg-surface-1 rounded-lg p-2.5">
-              <h3 className="text-xs font-bold text-gray-300 mb-1">相手スタメン</h3>
+              <h3 className="text-xs font-bold text-gray-300 mb-1">
+                相手スタメン{opponentTeam?.lineupSettings?.battingOrder?.length ? '' : '（予想。試合の直前に組み直します）'}
+              </h3>
               <div className="space-y-0.5">
                 {opponentStarters.length > 0
                   ? opponentStarters.map((p, i) => renderPlayerRow(p, i))
