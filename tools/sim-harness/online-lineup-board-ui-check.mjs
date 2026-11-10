@@ -799,6 +799,18 @@ try {
       .getByRole('button', { name: '試合成績を閉じる', exact: true })
       .click();
     await box.waitFor({ state: 'detached' });
+    // ⚠ **1280×800 でも左メニューの最後の項目が画面に入る**。以前は 863px あり、
+    //    一番下（「リーグ管理」）がメニューをスクロールしないと見えなかった
+    await p.setViewportSize({ width: 1280, height: 800 });
+    const lastNav = await p
+      .locator('.online-page-nav button:visible')
+      .last()
+      .boundingBox();
+    assert.ok(
+      lastNav.y + lastNav.height <= 800,
+      `1280×800 で左メニューの最後の項目が画面の外: ${JSON.stringify(lastNav)}`,
+    );
+    await p.setViewportSize({ width: 1440, height: 1000 });
   }
 
   // ---- 自球団の選手の詳細から守備位置を変える ---------------------------
