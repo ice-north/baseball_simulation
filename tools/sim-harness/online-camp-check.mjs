@@ -23,11 +23,18 @@ import {
 } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { TEAMS_DATA } from '../../src/teams-data.js';
-import { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_ROUNDS } from '../../src/online/shared.js';
+import {
+  CAMP_MENUS,
+  CAMP_SUB_MENUS,
+  CAMP_SUB_TARGETS,
+  CAMP_PITCH_TYPES,
+  CAMP_ROUNDS,
+} from '../../src/online/shared.js';
 import {
   TRAINING_MENUS,
   SUB_TRAINING_MENUS,
   subMenuFitsPlayer,
+  executeSubTraining,
 } from '../../src/season/campTraining.js';
 import {
   DIRECTIONS,
@@ -155,8 +162,9 @@ function campWith(build) {
 // ⚠ **効かないサブ練習を出さないこと**。変化球練習・新球種習得・スピン解析は
 //    投手にしか効かず、Cリード学習は捕手だけ。出すと、選べるのにそのクールが
 //    丸ごと無駄になる（`executeSubTraining` が何もせずに返る）。
-// ⚠ **対象を選ぶもの（サブポジ練習・フォーム改造・打席変更）は出さない**。
-//    選手ごとに「何に」を指定する置き場が提出の形に無い。
+// ⚠ **フォーム改造・打席変更はまだ出さない**（対象の種類が増える）。
+//    サブポジ練習は `CAMP_SUB_TARGETS` に載せて対象を選べるようにしたので出す。
+//    これが欠けていた間、**野手のサブ練習は体づくり系だけ**だった。
 {
   const offered = (player) =>
     Object.keys(SUB_TRAINING_MENUS).filter(
@@ -165,13 +173,26 @@ function campWith(build) {
   const pitcher = { position: 'pitcher' };
   const catcher = { position: 'catcher' };
   const fielder = { position: 'left' };
-  for (const key of ['subposition', 'form_change', 'switch_hit'])
+  for (const key of ['form_change', 'switch_hit'])
     assert.ok(
       !CAMP_SUB_MENUS.includes(key),
-      `対象を選ぶサブ練習を出している: ${key}`,
+      `対象の種類が無いサブ練習を出している: ${key}`,
     );
   for (const key of CAMP_SUB_MENUS)
     assert.ok(SUB_TRAINING_MENUS[key], `知らないサブ練習がある: ${key}`);
+  // ⚠ **野手に守備の伸ばし方を出すこと**。サブポジ練習が抜けると、野手の
+  //    サブ練習が体づくり系（基礎体力・ウエイト・ストレッチ）だけになる
+  for (const player of [catcher, fielder])
+    assert.ok(
+      offered(player).includes('subposition'),
+      `${player.position} にサブポジ練習が出ていない`,
+    );
+  // ⚠ 対象を選べるものは**全部** `SUB_TRAINING_MENUS` にあり、かつ画面に出ること。
+  //    載せただけで `CAMP_SUB_MENUS` に入れ忘れると、対象の欄が誰にも出ない
+  for (const key of Object.keys(CAMP_SUB_TARGETS)) {
+    assert.ok(SUB_TRAINING_MENUS[key], `対象の表に知らない練習がある: ${key}`);
+    assert.ok(CAMP_SUB_MENUS.includes(key), `対象を選べるのに出していない: ${key}`);
+  }
   // 投手だけのもの
   for (const key of ['breaking', 'newpitch', 'spin_analysis']) {
     assert.ok(offered(pitcher).includes(key), `投手に ${key} が出ていない`);
@@ -184,6 +205,152 @@ function campWith(build) {
   for (const key of ['physique', 'weight', 'stretch', 'defense_sub', 'long_throw', 'eye'])
     for (const player of [pitcher, catcher, fielder])
       assert.ok(offered(player).includes(key), `${player.position} に ${key} が出ていない`);
+}
+
+// --- サブ練習の対象が効くか --------------------------------------------
+// ⚠ **「選べるのに効かない」をここで止める**。画面に対象の欄を足しても、
+//    `runCampRound` が `executeSubTraining` へ渡さなければ中で抽選され、
+//    「スライダーを選んだのにシュートを覚えた」になる。見た目では気づけない。
+{
+  // 新球種: 乱数を固定して**必ず成功**させ、覚えた球種が指定どおりか見る。
+  // ⚠ 指定が無いときに何を引くかを先に測り、**それとは違う球種**を指定する。
+  //    同じものを指定すると、渡っていなくても通ってしまう
+  const makePitcher = () => ({
+    id: 1,
+    name: '検査投手',
+    position: 'pitcher',
+    physical: { dexterity: 50 },
+    pitching: { form: 'overhand', arsenal: [{ type: 'straight', level: 50 }] },
+  });
+  const fixedRandom = (fn) => {
+    const real = Math.random;
+    Math.random = () => 0;
+    try {
+      return fn();
+    } finally {
+      Math.random = real;
+    }
+  };
+  const learned = (player) =>
+    (player.pitching.arsenal || []).map((a) => a.type).filter((t) => t !== 'straight');
+  const auto = makePitcher();
+  fixedRandom(() => executeSubTraining(auto, 'newpitch', {}, null));
+  assert.equal(learned(auto).length, 1, '前提: 乱数を固定すると必ず習得する');
+  const other = CAMP_PITCH_TYPES.find((t) => t !== learned(auto)[0]);
+  const aimed = makePitcher();
+  fixedRandom(() => executeSubTraining(aimed, 'newpitch', { targetPitch: other }, null));
+  assert.deepEqual(
+    learned(aimed),
+    [other],
+    `選んだ球種を覚えていない（おまかせ: ${learned(auto)[0]}）`,
+  );
+
+  // 変化球練習: 持っている球種のうち**指定した1つだけ**が伸びること
+  const two = {
+    id: 2,
+    name: '検査投手2',
+    position: 'pitcher',
+    age: 22,
+    physical: { dexterity: 50 },
+    pitching: {
+      form: 'overhand',
+      arsenal: [
+        { type: 'straight', level: 50 },
+        { type: 'slider', level: 40 },
+        { type: 'curve', level: 40 },
+      ],
+    },
+  };
+  executeSubTraining(two, 'breaking', { targetPitch: 'curve' }, null);
+  const levelOf = (t) => two.pitching.arsenal.find((a) => a.type === t).level;
+  assert.equal(levelOf('slider'), 40, '指定していない球種が伸びた');
+  assert.ok(levelOf('curve') > 40, '指定した球種が伸びていない');
+
+  // サブポジ練習: 指定した守備位置**だけ**の適性が上がること。
+  // ⚠ **「おまかせ」が何を引くかを固定してから測る**。全部同じ適性だと自動でも
+  //    1/7 で当たってしまい、対象が渡っていなくても通る。遊撃を一段高くすると
+  //    自動は必ず遊撃を選ぶ（高いものを100へ寄せる規則）ので、二塁が伸びたら
+  //    それは指定が効いた証拠になる
+  const fielder = {
+    id: 3,
+    name: '検査野手',
+    position: 'left',
+    physical: { dexterity: 50 },
+    positionFitness: { catcher: 30, first: 30, second: 30, third: 30, short: 90, left: 100, center: 30, right: 30 },
+  };
+  executeSubTraining(fielder, 'subposition', { targetPosition: 'second' }, null);
+  assert.ok(fielder.positionFitness.second > 30, '指定した守備位置が伸びていない');
+  assert.equal(fielder.positionFitness.short, 90, 'おまかせの引き先（遊撃）が伸びた');
+  for (const pos of ['catcher', 'first', 'third', 'center', 'right'])
+    assert.equal(fielder.positionFitness[pos], 30, `指定していない守備位置が伸びた: ${pos}`);
+}
+
+// --- 対象がサーバーを通って練習まで届くか -------------------------------
+{
+  const league = leagueAtCamp();
+  const teamName = league.members[0].teamName;
+  const roster = ownRoster(league);
+  const fielder = roster.find(
+    (p) => p.position !== 'pitcher' && p.position !== 'second' && p.position !== 'short',
+  );
+  const aim = 'second';
+  const decoy = 'short';
+  const plan = validateCampRound(league, teamName, {
+    policy: { direction: 'balanced', phase: 'skill' },
+    main: { [fielder.id]: 'batting' },
+    sub: { [fielder.id]: 'subposition' },
+    subTarget: { [fielder.id]: aim },
+  });
+  assert.ok(plan.subTarget, '入口が対象を返していない');
+  assert.equal(plan.subTarget[fielder.id], aim, '入口で対象が落ちている');
+  loadLeagueWorld(league);
+  const livePlayer = () => TEAMS_DATA[teamName].players.find((p) => p.id === fielder.id);
+  // ⚠ **「おまかせ」の引き先を固定してから測る**（単体の検査と同じ理由）。
+  //    遊撃だけ一段高くすると、対象が渡っていなければ必ず遊撃が伸びる
+  livePlayer().positionFitness = {
+    catcher: 30, first: 30, second: 30, third: 30, short: 90, left: 30, center: 30, right: 30,
+    [fielder.position]: 100,
+  };
+  const fitnessOf = () => ({ ...livePlayer().positionFitness });
+  const before = fitnessOf();
+  quiet(() => runCampRound(league, teamName, plan));
+  const after = fitnessOf();
+  assert.ok(
+    (after[aim] || 0) > (before[aim] || 0),
+    `選んだ守備位置（${aim}）が伸びていない: ${before[aim]} → ${after[aim]}`,
+  );
+  // ⚠ **おまかせの引き先が伸びていないこと**。渡っていなければ中で抽選されるので、
+  //    「どれかが伸びた」だけでは対象が効いている証明にならない
+  assert.equal(after[decoy], before[decoy], 'おまかせの引き先（遊撃）が伸びた');
+
+  // ⚠ **食い違う対象は断る**。黙って捨てると、画面で選んだのに効かない
+  const reject = (payload, re, message) =>
+    assert.throws(() => validateCampRound(league, teamName, payload), re, message);
+  reject(
+    {
+      sub: { [fielder.id]: 'physique' },
+      subTarget: { [fielder.id]: 'second' },
+    },
+    /対象を選べない練習/,
+    '対象を取らない練習に対象を付けられた',
+  );
+  reject(
+    {
+      sub: { [fielder.id]: 'subposition' },
+      subTarget: { [fielder.id]: 'pitcher' },
+    },
+    /練習の対象が不正/,
+    'サブポジ練習で投手を選べた',
+  );
+  const pitcher = roster.find((p) => p.position === 'pitcher');
+  reject(
+    {
+      sub: { [pitcher.id]: 'newpitch' },
+      subTarget: { [pitcher.id]: 'second' },
+    },
+    /練習の対象が不正/,
+    '新球種に守備位置を選べた',
+  );
 }
 
 // --- まとめて割り当て（方針 → メニュー）がサーバーを通るか --------------
@@ -725,5 +892,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる）',
+  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く）',
 );

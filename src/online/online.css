@@ -540,6 +540,11 @@
   margin: 0;
   font-size: 15px;
 }
+/* 見出しの横の締め切り（手続きの帯をホームで出さないぶんの受け皿） */
+.online-camp-deadline {
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+}
 .online-camp-rounds {
   display: flex;
   align-items: center;
@@ -667,6 +672,15 @@ small.online-gain:not(:where(.online-sp *)) {
   /* ⚠ 折り返さない。「スリクォ」が2行に割れて行の高さが倍になっていた */
   white-space: nowrap;
 }
+/* キャンプのサブ練習の「対象」。
+   ⚠ サブ練習の欄の**中に横に並べる**（列を足すと横に溢れ、下に積むと
+      行が倍の高さになって12人が1画面に入らない） */
+.online-camp-target:not(:where(.online-sp *)) {
+  margin-left: 3px;
+  min-width: 0;
+  width: 84px;
+  font-size: 10px;
+}
 .online-camp-scroll select {
   min-width: 90px;
   font-size: 11px;
@@ -685,16 +699,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-camp-wish small {
   white-space: nowrap;
 }
-/* ⚠ 変化球は長い（4球種で40字を超える）。**ここで止めないと表が横に伸び**、
-   右端の「本人の希望」が切れる。溢れたぶんは … にして、全文は title で出す */
-.online-camp-pitches {
-  font-size: 10px;
-  color: #cbd5e1;
-  white-space: nowrap;
-  max-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .online-camp-bulk-all {
   font-size: 12px;
   color: #9fb0c4;
@@ -702,19 +706,42 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-camp-run {
   justify-content: center;
-  margin-top: 14px;
+  margin-top: 4px;
 }
-.online-camp-run button {
-  font-size: 15px;
-  padding: 12px 28px;
+.online-desktop .online-camp-run button {
+  font-size: 14px;
+  min-height: 0;
+  height: 36px;
+  padding: 0 28px;
 }
 
 /* --- キャンプの割り当て ------------------------------------------------ */
+/* ⚠ **詰めること**。キャンプはホームに出すので、方針の欄・タブ・実行ボタンと
+   12人の表が1画面（1000px）に収まる必要がある。実測の内訳は
+   ヘッダー85 / 見出し24 / 説明17 / 方針100 / タブ28 / 表536 / 実行40。 */
 .online-camp-bulk {
-  margin: 10px 0 14px;
-  padding: 10px 12px;
+  margin: 4px 0 4px;
+  padding: 6px 10px;
   border-radius: 8px;
   background: #ffffff0c;
+}
+.online-desktop .online-camp-bulk button {
+  min-height: 0;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+/* ⚠ **キャンプのときだけ本文の下余白を詰める**。この画面は1画面に収めるのが
+   決まりで、ほかのページと同じ48pxを空けると12人目の行と実行ボタンが出る。
+   ほかのページの余白は変えない（`:has` でこの画面だけに当てる） */
+.online-desktop main:has(.online-camp) {
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+/* ⚠ ホームに出すので**説明は1行**（折り返しは禁じない。詰めるのは余白だけ） */
+.online-camp-note:not(:where(.online-sp *)) {
+  margin: 2px 0;
+  font-size: 11px;
 }
 .online-camp-bulk h3,
 .online-camp-group h3 {
@@ -725,8 +752,8 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-camp-bulk-fields {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px;
+  align-items: center;
+  gap: 4px 6px;
 }
 .online-camp-bulk-fields label {
   display: flex;
@@ -740,7 +767,17 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 /* ⚠ 守備位置のタブ。1グループずつ出すので、表の上に置く */
 .online-camp-tabs {
-  margin: 12px 0 8px;
+  margin: 2px 0 0;
+}
+.online-desktop .online-camp-tabs button {
+  min-height: 0;
+  height: 26px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.online-desktop .online-camp-tabs .online-segments {
+  padding: 2px;
+  gap: 2px;
 }
 .online-camp-group th small {
   margin-left: 5px;

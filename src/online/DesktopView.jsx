@@ -16,15 +16,14 @@ import PitchingBoard from './PitchingBoard.jsx';
 import { useDraftMemoryStore } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
-import { CompletedCamp } from './CampPlanner.jsx';
+import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
-import { formatTurn, TURN_MINUTES } from './shared.js';
+import { formatTurn, TURN_MINUTES, TURNS_PER_DAY } from './shared.js';
 import { teamLabel } from './gameText.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { formatDeadline, packStartText } from './LeaguePanels.jsx';
-import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
 import { CompactRoster } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import {
@@ -115,39 +114,18 @@ const TITLES = {
 };
 
 /**
- * 自球団の部・順位・勝敗。
- * ⚠ 順位表（`Standings`）と**同じ並べ方**（`compareLeagueStanding`）で数えること。
- *    サーバーの並びのままだと、同率のとき（開幕前の0勝0敗など）左メニューの
- *    順位と表の順位が食い違っていた
- */
-function ownStanding(view) {
-  const leagueId = view.teamLeagues?.[view.teamName];
-  const league = PYRAMID_LEAGUES.find((l) => l.id === leagueId);
-  const rows = (view.standings || []).filter(
-    (s) => !view.teamLeagues || view.teamLeagues[s.team] === leagueId,
-  );
-  if (view.teamLeagues) rows.sort(compareLeagueStanding);
-  const index = rows.findIndex((s) => s.team === view.teamName);
-  return index < 0
-    ? null
-    : { league: league?.name, rank: index + 1, row: rows[index] };
-}
-
-/**
  * 左メニューの上の「いまの状況」。⚠ **ここ1か所だけに出す**
  * （以前は全ページの本文の上に同じ帯があった）。
  */
 function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
-  const own = ownStanding(view);
   const waiting = packWaiting(view);
   return (
     <div className="online-nav-context">
       <strong>{teamLabel(view.teamName)}</strong>
-      <small>
-        {own
-          ? `${own.league ? `${own.league} ` : ''}${own.rank}位 · ${own.row.wins}勝${own.row.losses}敗${own.row.draws ? `${own.row.draws}分` : ''}`
-          : `独立リーグ · ${view.year}年目`}
-      </small>
+      {/* ⚠ 順位と勝敗は**出さない**（ホームの順位表に自球団を黄色で出している）。
+          代わりに、この遊び方の骨格——1週間で1シーズン——をここに書く。
+          ⚠ 数は書かずに定数から作る（刻みを変えたときに取り残される） */}
+      <small>1週間で1シーズン · {TURNS_PER_DAY * 7}ターン</small>
       {/* 途中参加でセットを選び終えた人は、いつ自分の球団になるかを出し続ける */}
       {waiting && (
         <small className="online-nav-waiting">
@@ -291,6 +269,10 @@ export default function DesktopView(props) {
   const [renaming, setRenaming] = useState(false);
   // ⚠ 消した入口（自チーム情報）で開いていたら、ホームへ戻す
   const current = TITLES[tab] ? tab : 'today';
+  // キャンプをホームに出しているか（理由は下の `current === 'today'` の注）。
+  // ⚠ 途中参加の初期メンバー選択（`pendingPack`）が先。その人のキャンプは
+  //    CPUが決めるので、ホームへ出しても決めるものが無い
+  const campHere = view.phase?.kind === 'camp' && !view.pendingPack;
   // ⚠ 編成のページは**初めて開くまで作らず、開いたあとは隠して残す**
   //    （ほかのページへ移っても、保存していない編集を残す）
   // ⚠ スマホの全画面編成で保存していない編集があれば受け取る（`restoreFromFullLineup`）。
@@ -434,7 +416,11 @@ export default function DesktopView(props) {
       {/* ⚠ **自分が決める手続きは、どのページにいても上に帯で出す**（いしだ指摘:
           初期メンバー選び・人員整理・キャンプが左メニューの「手続き」の中にあり、
           うっかり見逃して飛ばす危険があった）。決めるまで消さない */}
-      {procedure && current !== 'decisions' && (
+      {/* ⚠ **キャンプを開いているホームでは出さない**。帯のすぐ下に同じ
+          キャンプの画面が出ていて、案内が二重になるうえ、85pxを取って
+          12人の表が1画面に収まらなくなる（実測 1044px→959px）。
+          締め切りは `CampPlanner` の見出しの横に出す */}
+      {procedure && current !== 'decisions' && !(campHere && current === 'today') && (
         <div className="online-procedure-banner" role="alert">
           <div>
             <strong>{procedure.label}を決めてください</strong>
@@ -470,12 +456,25 @@ export default function DesktopView(props) {
       {/* ⚠ ホームは**見出しを出さない**。左メニューで「ホーム」を押した先に
           もう一度「ホーム / SEASON 1」と出ていて、場所を取るだけだった。
           年は左メニューの「○年目」に出ている */}
+      {/* ⚠ **キャンプはホームに出す**。4クールを回すのがその週の遊びそのもので、
+          「現在の手続き」の中に畳むと、開いていることに気づかないまま
+          締め切りで自動になっていた。ほかの手続き（契約更改・トライアウト・
+          年度更新）は決めて待つものなので、これまでどおり手続きのページ。 */}
       {current === 'today' && (
         <Page>
-          {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。
-              シーズン後から開幕までは、いまの段階とやることを先頭に出す */}
-          {view.stage?.key !== 'season' && <SeasonFlow view={view} />}
-          <LeagueBoard view={view} />
+          {campHere ? (
+            // ⚠ **手続きが変わったら作り直す**（`PhasePanel` と同じ `key`）。
+            //    付けないと、年が替わって新しいキャンプが開いても前の年の
+            //    未保存の割り当てが画面に残る
+            <CampPlanner key={view.phase.id} {...props} />
+          ) : (
+            <>
+              {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。
+                  シーズン後から開幕までは、いまの段階とやることを先頭に出す */}
+              {view.stage?.key !== 'season' && <SeasonFlow view={view} />}
+              <LeagueBoard view={view} />
+            </>
+          )}
         </Page>
       )}
       {current === 'games' && (
@@ -526,8 +525,31 @@ export default function DesktopView(props) {
       {current === 'decisions' && view.pendingPack && (
         <PendingPackPanel {...props} />
       )}
+      {/* ⚠ キャンプはホームへ移したので、ここからは**案内だけ**出す。
+          何も出さないと「手続きがあるはずなのに空」に見える */}
+      {current === 'decisions' && !view.pendingPack && campHere && (
+        <Page title="現在の手続き">
+          <section className="online-card">
+            <p>
+              いまはキャンプです。<strong>ホーム</strong>で1クールずつ練習を
+              実行してください。
+            </p>
+            <div className="online-actions">
+              <button className="online-primary" onClick={() => setTab('today')}>
+                ホームへ
+              </button>
+            </div>
+          </section>
+          {/* ⚠ **年度更新の伸びはここに残す**。キャンプの直前に済んでいて、
+              キャンプの方針を決める前に見るもの（以前は `PhasePanel` の中で
+              キャンプの上に出していた）。ホームはキャンプだけで1画面なので、
+              落とさないようこちらへ移す */}
+          <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+        </Page>
+      )}
       {current === 'decisions' &&
         !view.pendingPack &&
+        !campHere &&
         (view.phase ? (
           <PhasePanel key={view.phase.id} {...props} />
         ) : (
