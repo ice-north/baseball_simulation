@@ -325,10 +325,12 @@
    守備位置ごとに自球団と相手を1枚の表（`.online-lineup-table`）に並べ、
    右に交換案（選んだ選手・交換後の人数と構成）を置く。
    ⚠ 要素名で当てるものには `:not(:where(.online-sp *))` を付ける（決まり）。 */
+/* ⚠ この見出しは**地色の上**（カードの外）にあるので、地色用の濃い文字にする。
+   カード用の明るい文字（#e2e8f0）のままで、明るい地色との差が 1.77:1 しかなかった */
 .online-trade-heading:not(:where(.online-sp *)) {
   margin: 18px 0 8px;
   font-size: 15px;
-  color: #e2e8f0;
+  color: var(--ink);
 }
 .online-trade-card + .online-trade-card {
   margin-top: 12px;
