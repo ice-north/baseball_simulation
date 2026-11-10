@@ -9,7 +9,7 @@ import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 import { packTryoutDraft, unpackTryoutDraft } from '../season/tryoutDraftState.js';
 
-const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
+const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations, onSave, saveSlots }) => {
   const tryoutYear = isInitialTryout ? 1 : (seasonData?.year || 1);
   // 途中で保存したトライアウトの続き（無ければ null で、候補を作るところから始める）。
   // ⚠ 最初の描画で1回だけ読む。続きを持っていても別の年・別の種類のものは使わない
@@ -41,6 +41,10 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
   // 取り消すと、その後のほかの球団の指名もやり直しになる
   const [undoSnap, setUndoSnap] = useState(null);
   const candidatesGeneratedRef = useRef(!!resumed);
+  // 途中で保存している最中か。⚠ 保存のあいだはほかの球団の指名を止める
+  //    （保存は圧縮を待つ間に中身を読むので、そのあいだに指名が進むと書き終える前の状態と混ざる）
+  const [saving, setSaving] = useState(false);
+  const [saveNote, setSaveNote] = useState(null);
 
   // 途中の状態を seasonData に写す（保存・オートセーブ・緊急保存がそのまま持っていく）。
   // ⚠ 取り消しで state を巻き戻したときも、ここで巻き戻した状態が写る（保存と食い違わない）。
@@ -132,7 +136,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
 
   // 直前の自分の指名を取り消す（その後のほかの球団の指名も巻き戻る）
   const undoLastPick = () => {
-    if (!undoSnap || draftComplete || draftFinalizedRef.current) return;
+    if (!undoSnap || saving || draftComplete || draftFinalizedRef.current) return;
     setTryoutCandidates(undoSnap.tryoutCandidates);
     setUserRoster(undoSnap.userRoster);
     setTeamRosters(undoSnap.teamRosters);
@@ -143,6 +147,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
   };
 
   useEffect(() => {
+    if (saving) return;
     if (currentPick >= draftOrder.length || tryoutCandidates.length === 0) return;
     const currentTeam = draftOrder[currentPick].team;
     if (currentTeam === 'ユーザー' && userDone) {
@@ -201,7 +206,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
       }, 500);
       return () => clearTimeout(t);
     }
-  }, [currentPick, draftOrder, tryoutCandidates, teamRosters, userDone]);
+  }, [currentPick, draftOrder, tryoutCandidates, teamRosters, userDone, saving]);
 
   // 試合に出られる最低限の構成か（投手1・捕手1・野手8、DH制なら野手9）。
   // ⚠ 人数だけで見ないこと。9人でも捕手がいない・野手が足りないと、
@@ -218,6 +223,25 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
     if (catchers < 1) missing.push('捕手1人');
     if (fielders < needFielders) missing.push(`野手${needFielders - fielders}人`);
     return missing;
+  };
+
+  // 途中で保存する（ロードするとこの続きから指名できる。途中の状態は seasonData.tryoutDraft）。
+  // ⚠ 名簿へ書き終えたあとは保存しない（書き終えた名簿と「途中」の写しが食い違う）
+  const saveMidway = async (slotIndex) => {
+    if (!onSave || saving || draftFinalizedRef.current) return;
+    if (saveSlots?.[slotIndex] && !window.confirm(`スロット${slotIndex + 1}を上書きします。よろしいですか？（上書き前のデータは「1つ前のセーブに戻す」で戻せます）`)) return;
+    setSaving(true);
+    setSaveNote(null);
+    try {
+      const result = await onSave(slotIndex);
+      setSaveNote(result?.success
+        ? { ok: true, text: `スロット${slotIndex + 1}に保存しました。ロードするとこの続きから指名できます` }
+        : { ok: false, text: result?.error || '保存できませんでした' });
+    } catch (e) {
+      setSaveNote({ ok: false, text: `保存できませんでした: ${e.message}` });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const endUserPicks = () => {
@@ -452,6 +476,28 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                 >
                   トライアウト終了 →
                 </button>
+              )}
+            </div>
+          )}
+          {/* 途中で保存。⚠ この画面ではサイドバー（セーブ＆ロード）を出さないので、ここが唯一の入口 */}
+          {onSave && !draftComplete && (
+            <div className="mt-4 pt-3 border-t border-gray-700/50 flex flex-wrap items-center gap-2" data-testid="tryout-save">
+              <span className="text-xs text-gray-300 mr-1">途中で保存:</span>
+              {[0, 1, 2].map(i => {
+                const info = saveSlots?.[i];
+                return (
+                  <button key={i} onClick={() => saveMidway(i)} disabled={saving}
+                    className="btn-secondary px-3 py-1.5 rounded-lg text-xs whitespace-nowrap">
+                    スロット{i + 1}に保存
+                    <span className="ml-1 font-normal opacity-80">
+                      {info ? `（いま ${info.year}年目 ${info.date?.month}/${info.date?.day}）` : '（空き）'}
+                    </span>
+                  </button>
+                );
+              })}
+              {saving && <span className="text-xs text-gray-300">保存中…（そのあいだ指名は止まります）</span>}
+              {!saving && saveNote && (
+                <span className={`text-xs font-bold ${saveNote.ok ? 'text-green-400' : 'text-red-400'}`}>{saveNote.text}</span>
               )}
             </div>
           )}
@@ -1001,7 +1047,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
               {POSITION_NAMES[pendingPick.position] || pendingPick.position}・{pendingPick.age}歳・{getAffiliation(pendingPick)}
             </div>
           </div>
-          <button onClick={() => handleSelectPlayer(pendingPick)}
+          <button onClick={() => handleSelectPlayer(pendingPick)} disabled={saving}
             className="btn-primary px-5 py-2 rounded-lg text-sm whitespace-nowrap">
             指名する
           </button>

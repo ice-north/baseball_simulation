@@ -85,6 +85,24 @@ export function driver(page) {
       await click('確定してシーズン開始');
       await page.getByTestId('dev-advance').waitFor();
     },
+    // 独立リーグ（四国・徳島）で新しく始めて、初回のトライアウトで自分の番を待つ
+    async newIndependentTryout() {
+      await page.goto(`${BASE}/?dev=1`);
+      for (const t of ['はじめから', '独立リーグ', '四国アイランドリーグplus', '徳島インディゴソックス']) await click(t);
+      await this.waitTryoutTurn();
+    },
+    // トライアウトで自分の番が来るまで待つ
+    async waitTryoutTurn() {
+      await dismissHint();
+      await page.getByText('あなたの指名順です').waitFor({ timeout: 120000 });
+    },
+    // トライアウトの「現在のピック」と「獲得選手数」
+    async tryoutState() {
+      const text = await page.locator('body').innerText();
+      const pick = text.match(/現在のピック\s*(\d+)\s*\/\s*(\d+)/);
+      const got = text.match(/獲得選手数\s*(\d+)\s*人/);
+      return { pick: pick ? Number(pick[1]) : null, of: pick ? Number(pick[2]) : null, got: got ? Number(got[1]) : null };
+    },
     // キャンプ・合宿: 各クールの練習を実行して終える
     async runCamp() {
       for (let i = 0; i < 12; i++) {

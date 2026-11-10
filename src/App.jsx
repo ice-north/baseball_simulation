@@ -2883,6 +2883,7 @@ if (newOuts === 3) {
           userTeamName={userTeamName}
           hasSaveData={hasSaveData}
           saveSlots={saveSlots}
+          saveGame={saveGame}
           loadGame={loadGame}
           loadAutosave={loadAutosave}
           initializeNewGame={initializeNewGame}

@@ -39,6 +39,7 @@ const GameFlowScreens = ({
   userTeamName,
   hasSaveData,
   saveSlots,
+  saveGame,
   loadGame,
   loadAutosave,
   initializeNewGame,
@@ -461,6 +462,8 @@ const GameFlowScreens = ({
       allTeams={allTeams}
       isInitialTryout={true}
       initializeAllPitchingRotations={initializeAllPitchingRotations}
+      onSave={saveGame}
+      saveSlots={saveSlots}
       onComplete={() => {
         // 途中の状態の写し（tryoutDraft）は終えたら外す（`tryoutDraftState.js`）
         setSeasonData(prev => withoutTryoutDraft(prev));

@@ -73,6 +73,8 @@ const ManagementScreen = ({
     setSeasonData={setSeasonData}
     allTeams={allTeams}
     initializeAllPitchingRotations={initializeAllPitchingRotations}
+    onSave={saveGame}
+    saveSlots={saveSlots}
     onComplete={() => {
       // 途中の状態の写し（tryoutDraft）は終えたら外す（`tryoutDraftState.js`）
       const newData = { ...withoutTryoutDraft(seasonData), currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };

@@ -1,5 +1,7 @@
 // 一人用の通し検査（ブラウザ）。`npm run check:ui`（ビルドしてから実行）。
 //
+//   独立リーグで新しく始める → 初回のトライアウト（選ぶ→指名する・取り消す）→ 途中で保存して
+//   読み直し、続きから指名する
 //   大学野球で新しく始める → 春のキャンプ → 開幕 → 30日早送り → 保存して読み直す
 //   → 次の区切り（夏季合宿）→ 合宿 → 秋季リーグ → 次の区切り（ドラフト前のフェーズ移行）
 //   → ドラフト会議の画面が出る
@@ -56,6 +58,44 @@ try {
   await page.goto(`${BASE}/?dev=1`);
   await ui.click('マニュアル');
   await groundContrast('マニュアル');
+
+  step('独立リーグを新しく始めて、初回のトライアウトで指名する');
+  await ui.newIndependentTryout();
+  const first = await ui.tryoutState();
+  assert.equal(first.got, 0, 'トライアウトの初めから獲得選手がいる');
+  // 行を押しただけでは決まらない（選ぶ→「指名する」の2段）
+  await page.locator('tbody tr').first().click();
+  await page.getByText('を指名しますか？').waitFor();
+  assert.equal((await ui.tryoutState()).got, 0, '行を押しただけで指名が決まった');
+  await ui.click(/^指名する$/);
+  assert.equal((await ui.tryoutState()).got, 1, '「指名する」で指名が決まらない');
+  // 直前の1人は取り消せる（選んだ状態に戻る）
+  await ui.click(/直前の指名.*を取り消す/);
+  assert.equal((await ui.tryoutState()).got, 0, '直前の指名を取り消せない');
+  await ui.click(/^指名する$/);
+  await ui.waitTryoutTurn();
+  await page.locator('tbody tr').first().click();
+  await ui.click(/^指名する$/);
+  await ui.waitTryoutTurn();
+  const beforeSave = await ui.tryoutState();
+  assert.equal(beforeSave.got, 2);
+
+  step('トライアウトの途中で保存して、タイトルから読み直す');
+  await page.getByTestId('tryout-save').getByRole('button', { name: /スロット1に保存/ }).click();
+  await page.getByText('スロット1に保存しました').waitFor({ timeout: 120000 });
+  await page.goto(`${BASE}/?dev=1`);
+  await ui.click('つづきから');
+  // ⚠ スロットの一覧が出たときだけ選ぶ（「スロット1 1年目 1/1 …」の行）。名前を緩くすると、
+  //    読み直したトライアウトの「スロット1に保存」を押してしまう
+  const slot1 = page.getByRole('button', { name: /^スロット\s*1\s+\d+年目/ });
+  if (await slot1.count()) await slot1.first().click();
+  await page.getByText('あなたの指名順です').waitFor({ timeout: 120000 });
+  assert.equal(await page.getByText('に保存しました').count(), 0, '前提: 読み直したあとに保存し直していない');
+  assert.deepEqual(await ui.tryoutState(), beforeSave, '読み直したらトライアウトの途中の状態が変わった（最初からになった）');
+  await page.locator('tbody tr').first().click();
+  await ui.click(/^指名する$/);
+  assert.equal((await ui.tryoutState()).got, beforeSave.got + 1, '読み直したトライアウトの続きで指名できない');
+  await shot('tryout-resumed');
 
   step('新しく始めて開幕まで');
   await ui.newUniversityGame();
@@ -116,7 +156,7 @@ try {
   await shot('draft');
 
   assert.deepEqual(errors, [], `画面でエラーが出た:\n${errors.join('\n')}`);
-  console.log(`singleplayer-ui-check PASS（${((Date.now() - started) / 1000).toFixed(0)}秒・開幕→30日→保存と読み直し→夏季合宿→秋季リーグ→ドラフト会議）`);
+  console.log(`singleplayer-ui-check PASS（${((Date.now() - started) / 1000).toFixed(0)}秒・初回のトライアウトの途中で保存と読み直し→開幕→30日→保存と読み直し→夏季合宿→秋季リーグ→ドラフト会議）`);
   await context.tracing.stop();
 } catch (error) {
   await shot('failure').catch(() => {});
