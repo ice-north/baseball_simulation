@@ -937,10 +937,15 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
   const calendarCells = useMemo(() => {
     const cells = [];
+    // ⚠ プレーオフの期間（10/10〜10/20）は日付で決まるが、シリーズが早く決着すると残りの日に試合は無い。
+    //    以前は優勝が決まった後の日まで「プレーオフ」と出し続けていた（中止になった第3戦の日は自チームの試合日の色のまま）。
+    //    決着後は試合のあった日だけに出す
+    const playoffDecided = !isCorporate && !isUniversity && !!getPlayoffChampion(seasonData.schedule);
     for (let i = 0; i < firstDay; i++) cells.push({ day: null, games: [], eventLabel: null, tournamentEvents: [] });
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = { year, month: selectedMonth, day };
-      const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
+      // 決着したシリーズの残りの試合（中止扱い）は、その日に試合が無いものとして数える
+      const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj).filter(g => !g.result?.cancelled);
       const isToday = seasonData.currentDate.year === year && seasonData.currentDate.month === selectedMonth && seasonData.currentDate.day === day;
       const phaseOpts = isUniversity ? { universityMode: true } : undefined;
       const phase = getCurrentPhase(selectedMonth, day, phaseOpts, year);
@@ -949,7 +954,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       else if (isUniversity && selectedMonth === 11 && day === 29) eventLabel = 'セレクション';
       else if (isUniversity && selectedMonth === 8 && day >= 20 && day <= 31) eventLabel = '夏合宿';
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
-      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'プレーオフ';
+      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate && !(playoffDecided && gamesOnDay.length === 0)) eventLabel = 'プレーオフ';
       else if (!isCorporate && !isUniversity && selectedMonth === 10 && day === 21) eventLabel = 'グランドCS';
       else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
       else if (phase === SEASON_PHASES.CONTRACT) eventLabel = isCorporate ? '退団' : '契約更改';
