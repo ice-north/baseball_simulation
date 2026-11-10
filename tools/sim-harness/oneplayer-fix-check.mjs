@@ -20,6 +20,7 @@ import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
 import { autoSimulateGame, setRecommendedLineup } from '../../src/game/autoSimulation.js';
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason } from '../../src/season/scheduleGenerator.js';
+import { applyNextSeasonRegulations } from '../../src/season/nextSeasonRegulations.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -203,4 +204,30 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   releasedPlayersPool.length = 0;
 }
 
-console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');
+// --- 翌年のレギュレーションを確定したら、次の画面（キャンプ・箱庭の準備）へ移る ---
+// ⚠ 画面の2か所のコピペを関数にまとめたとき（d2a147b）、最後の `setManagementView(nextView)` が
+//    抜けていた。「確定 → キャンプへ進む」を押しても画面が変わらず、再読み込みしても同じ画面から
+//    始まるので、独立リーグ・箱庭は2年目に進めなかった
+{
+  const { seasonData } = quiet(() => bootstrapWorld());
+  for (const nextView of ['camp', 'sandbox_setup']) {
+    let view = null;
+    let next = { ...seasonData, year: 2 };
+    const notes = [];
+    applyNextSeasonRegulations({
+      confirmedSettings: seasonData.settings,
+      seasonData: next,
+      setSeasonData: (update) => { next = typeof update === 'function' ? update(next) : update; },
+      generatePitchingRotation: () => {},
+      setManagementView: (v) => { view = v; },
+      nextView,
+      notify: (message) => notes.push(message),
+    });
+    assert.equal(view, nextView, `翌年のレギュレーションを確定しても ${nextView} へ移らない`);
+    assert.deepEqual(next.currentDate, { year: 2025, month: 1, day: 1 }, '翌年の日付になっていない');
+    assert.ok(next.schedule?.length > 0, '翌年の日程ができていない');
+    assert.deepEqual(notes, [], '球団が変わらないのに知らせが出た');
+  }
+}
+
+console.log('■ 一人用の進行の再発防止: OK（翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');
