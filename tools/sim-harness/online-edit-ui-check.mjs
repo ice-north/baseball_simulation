@@ -187,6 +187,15 @@ async function scene({
   return state;
 }
 async function click(page, text) {
+  // ⚠ スマホではこの3つがメニューの中にある。開いた直後（まだ描かれていない）に数えると
+  //    どちらも0で、メニューを開かずに探して待ち切れなかった（混んでいるときに落ちた）。
+  //    ボタンかメニューのどちらかが出るまで待ってから決める
+  if (['更新', 'ログアウト', '進行時刻'].includes(text))
+    await page
+      .getByRole('button', { name: text, exact: true })
+      .or(page.getByRole('button', { name: 'メニュー', exact: true }))
+      .first()
+      .waitFor();
   if (
     ['更新', 'ログアウト', '進行時刻'].includes(text) &&
     !(await page.getByRole('button', { name: text, exact: true }).count()) &&
