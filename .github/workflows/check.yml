@@ -57,6 +57,47 @@ jobs:
       - name: Online actual daily season (year 1 to year 2)
         run: npm run check:online:season
 
+  # 一人用の年度更新の通し検査（独立・箱庭・企業・クラブで1年目のオフから2年目の開幕まで。
+  # 4モードを同時に進めて、4コアで約2分半）。ui ジョブに足すとそのぶん延びるので、別のジョブで並べる
+  ui-yearend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browser
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install browser
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install browser dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Single-player year-end UI
+        run: npm run check:ui:yearend
+
+      - name: Upload UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-yearend
+          path: |
+            /tmp/baseball-single-yearend-*.png
+            /tmp/baseball-single-yearend-*-failure.zip
+          if-no-files-found: ignore
+
   # 画面検査（オンラインの PC・スマホと、一人用の通し）
   ui:
     # Playwright 1.58.x が対応するOSへ固定し、latestの更新による導入失敗を防ぐ。
