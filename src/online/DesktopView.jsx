@@ -101,26 +101,13 @@ const NAV = [
  *    もう片方の未保存の編集は保存できる（`rebaseLineupSave`）。
  */
 const BOARD_KEYS = { lineup: LINEUP_BOARD_KEYS, rotation: PITCHING_BOARD_KEYS };
+// ページの見出し。⚠ 左メニューの名前（`NAV`）から作る（2か所に書くと片方だけ変わる）
 const TITLES = {
   today: 'ホーム',
-  players: '選手成績',
-  careers: '通算成績',
-  chronicle: '球団史・記録',
-  ranking: '能力ランキング',
-  games: '試合結果',
-  lineup: 'スタメン設定',
-  rotation: '投手起用',
-  tactics: '方針・采配',
-  staff: '指導者',
-  decisions: '現在の手続き',
-  transfer: 'トレード',
+  ...Object.fromEntries(NAV.flatMap((group) => group.items)),
   admin: 'リーグ管理',
 };
 
-/**
- * 左メニューの上の「いまの状況」。⚠ **ここ1か所だけに出す**
- * （以前は全ページの本文の上に同じ帯があった）。
- */
 /**
  * 方針・采配と指導者（任せ方）の未保存の印。
  * ⚠ この2つはページの中で下書き（`Drafts` の `lineup.dirty`・`STAFF_MODES_DRAFT`）に
@@ -148,6 +135,10 @@ const UnsavedDot = () => (
   />
 );
 
+/**
+ * 左メニューの上の「いまの状況」。⚠ **ここ1か所だけに出す**
+ * （以前は全ページの本文の上に同じ帯があった）。
+ */
 function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
   const waiting = packWaiting(view);
   return (

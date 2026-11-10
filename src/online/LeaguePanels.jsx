@@ -128,12 +128,6 @@ export function Login({ local, login, busy }) {
     </section>
   );
 }
-/**
- * 順位表。部ごとに分け、昇格・降格の線を引く。
- * ⚠ **`view.standings` は全球団を通した並び**。1部と2部を混ぜたまま出すと、
- *    2部の首位が表の1位に見えて「優勝争い」と取り違える（実測で起きた）。
- *    `teamLeagues` が無い古いビューでは従来どおり1つの表で出す。
- */
 /** 順位表の印（「M3」「昇格決定」など）。マジックはサーバーが数える（`leagueRaces`） */
 function raceTag(races, team) {
   const r = (races || []).find((x) => x.team === team);
@@ -142,6 +136,12 @@ function raceTag(races, team) {
   const magic = { first: '1位', promotion: '昇格', survive: '残留' };
   return r.clinched ? done[r.kind] : `${magic[r.kind]}M${r.magic}`;
 }
+/**
+ * 順位表。部ごとに分け、昇格・降格の線を引く。
+ * ⚠ **`view.standings` は全球団を通した並び**。1部と2部を混ぜたまま出すと、
+ *    2部の首位が表の1位に見えて「優勝争い」と取り違える（実測で起きた）。
+ *    `teamLeagues` が無い古いビューでは従来どおり1つの表で出す。
+ */
 
 export function Standings({ view }) {
   const leagues = view.teamLeagues
@@ -178,6 +178,7 @@ export function Standings({ view }) {
                 league &&
                 league.down.length &&
                 i >= rows.length - RELEGATION_FROM_BOTTOM[0];
+              const race = raceTag(view.races, s.team);
               return (
                 <tr
                   key={s.team}
@@ -205,11 +206,7 @@ export function Standings({ view }) {
                     {down ? (
                       <small className="online-move">降格圏</small>
                     ) : null}
-                    {raceTag(view.races, s.team) && (
-                      <small className="online-move is-race">
-                        {raceTag(view.races, s.team)}
-                      </small>
-                    )}
+                    {race && <small className="online-move is-race">{race}</small>}
                   </th>
                   <td>{s.wins}</td>
                   <td>{s.losses}</td>
