@@ -26,6 +26,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   //    （以前は「指名終了」でドラフト全体を締めていたため、全球団が9〜10人・
   //    捕手0人のまま開幕し、自チームは打順が組めず1日も進められなかった）。
   const [userDone, setUserDone] = useState(false);
+  // 行を押したら「選んだ」だけにして、「指名する」で決める（2段）。
+  // ⚠ 以前は行を押した瞬間に指名が確定し、取り消せなかった。表は行ごと押せる作りなので
+  //    詳細を見ようとした・スクロールしようとしただけで指名が決まっていた
+  const [pendingPick, setPendingPick] = useState(null);
+  // 直前の自分の指名を取り消すための写し（1人ぶんだけ）。指名の結果は finalizeDraft まで
+  // TEAMS_DATA に書かないので、state を指名の直前に戻せばそのまま取り消せる。
+  // 取り消すと、その後のほかの球団の指名もやり直しになる
+  const [undoSnap, setUndoSnap] = useState(null);
   const candidatesGeneratedRef = useRef(false);
 
   const getPositionName = (position) => POSITION_NAMES_FULL[position] || position;
@@ -85,6 +93,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     if (currentTeam === 'ユーザー') {
       const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
       const actualTeamName = teamsArray[0];
+      setUndoSnap({ player, currentPick, tryoutCandidates, userRoster, teamRosters, draftHistory });
+      setPendingPick(null);
       setDraftHistory(prev => [...prev, {
         pick: currentPick + 1,
         round: draftOrder[currentPick].round,
@@ -99,6 +109,18 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       setTryoutCandidates(tryoutCandidates.filter(c => c.id !== player.id));
       setCurrentPick(currentPick + 1);
     }
+  };
+
+  // 直前の自分の指名を取り消す（その後のほかの球団の指名も巻き戻る）
+  const undoLastPick = () => {
+    if (!undoSnap || draftComplete || draftFinalizedRef.current) return;
+    setTryoutCandidates(undoSnap.tryoutCandidates);
+    setUserRoster(undoSnap.userRoster);
+    setTeamRosters(undoSnap.teamRosters);
+    setDraftHistory(undoSnap.draftHistory);
+    setCurrentPick(undoSnap.currentPick);
+    setPendingPick(undoSnap.player);
+    setUndoSnap(null);
   };
 
   useEffect(() => {
@@ -119,7 +141,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       return () => clearTimeout(t);
     }
     if (currentTeam !== 'ユーザー') {
-      setTimeout(() => {
+      // ⚠ タイマーは必ず片付けること。取り消しで state を巻き戻したときに、
+      //    古い番号のまま走る指名が残ると同じ順番が2度進む
+      const t = setTimeout(() => {
         const existingCount = TEAMS_DATA[currentTeam]?.players?.length || 0;
         const draftedCount = (teamRosters[currentTeam] || []).length;
         if (existingCount + draftedCount >= 24) {
@@ -156,6 +180,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           setCurrentPick(currentPick + 1);
         }
       }, 500);
+      return () => clearTimeout(t);
     }
   }, [currentPick, draftOrder, tryoutCandidates, teamRosters, userDone]);
 
@@ -334,8 +359,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     return names[0] || 'あなたのチーム';
   };
 
+  const showPickBar = isUserTurn && !!pendingPick && tryoutCandidates.some(c => c.id === pendingPick.id);
+
   return (
-    <div className="p-4">
+    <div className={`p-4 ${showPickBar ? 'pb-28' : ''}`}>
       <div className="max-w-7xl mx-auto">
         {/* ⚠ 地色（明るい紙）の上の見出しは text-ink。カード（rounded-xl）は不透明な bg-surface-2 */}
         <h1 className="text-xl font-bold text-ink mb-1">トライアウト</h1>
@@ -362,8 +389,17 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           </div>
           {isUserTurn && (
             <div className="mt-4 text-green-400 font-semibold text-sm">
-              あなたの指名順です。選手を選択してください。
+              あなたの指名順です。候補の行を押して選び、「指名する」で決めてください。
             </div>
+          )}
+          {!draftComplete && !userDone && undoSnap && (
+            <button
+              onClick={undoLastPick}
+              className="btn-secondary mt-3 mr-2 px-4 py-1.5 rounded-lg text-sm"
+              title="ほかの球団がその後に指名した分も、やり直しになります"
+            >
+              ↩ 直前の指名（{undoSnap.player.name}）を取り消す
+            </button>
           )}
           {!isUserTurn && currentTeam && (
             <div className="mt-4 text-yellow-400 text-sm">
@@ -825,8 +861,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     return (
                       <tr
                         key={`${player.id}-${idx}`}
-                        className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition ${player.isReleasedCandidate ? 'bg-amber-950/30' : ''}`}
-                        onClick={() => isUserTurn && handleSelectPlayer(player)}
+                        className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition ${
+                          pendingPick?.id === player.id ? 'bg-cyan-900/70 outline outline-2 -outline-offset-2 outline-cyan-400'
+                            : player.isReleasedCandidate ? 'bg-amber-950/30' : ''}`}
+                        onClick={() => isUserTurn && setPendingPick(pendingPick?.id === player.id ? null : player)}
                       >
                         <td className="px-1 py-1 text-white font-bold whitespace-nowrap">
                           <button
@@ -922,6 +960,26 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           </div>
         )}
       </div>
+
+      {/* 選んだ候補を決める帯。画面の下に固定して、表をどこまでスクロールしていても押せるようにする */}
+      {showPickBar && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[min(40rem,calc(100vw-2rem))] bg-surface-2 border border-cyan-500 rounded-xl shadow-2xl px-4 py-3 flex items-center gap-3">
+          <div className="min-w-0 flex-1 text-sm">
+            <div className="text-white font-bold truncate">{pendingPick.name} を指名しますか？</div>
+            <div className="text-gray-300 text-xs truncate">
+              {POSITION_NAMES[pendingPick.position] || pendingPick.position}・{pendingPick.age}歳・{getAffiliation(pendingPick)}
+            </div>
+          </div>
+          <button onClick={() => handleSelectPlayer(pendingPick)}
+            className="btn-primary px-5 py-2 rounded-lg text-sm whitespace-nowrap">
+            指名する
+          </button>
+          <button onClick={() => setPendingPick(null)}
+            className="btn-secondary px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+            やめる
+          </button>
+        </div>
+      )}
 
       {detailCandidate && (() => {
         const p = detailCandidate;
