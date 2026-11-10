@@ -10,6 +10,16 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
   const [emergencyInfo, setEmergencyInfo] = useState(null);
   const [backupInfos, setBackupInfos] = useState([null, null, null]);
   const [autosaveInfo, setAutosaveInfo] = useState(null);
+  // セーブ・ロードの最中は、ほかのボタンを押せないようにする。
+  // ⚠ 以前は保存中もロード・削除・別スロットへの保存を押せ、書き込みが重なった。
+  //    表示（disabled）は描画を待つので、同じ瞬間の2回押しは ref で止める
+  const busyRef = React.useRef(false);
+  const busy = saveStatus?.type === 'saving' || saveStatus?.type === 'loading';
+  const runExclusive = async (fn) => {
+    if (busyRef.current) return undefined;
+    busyRef.current = true;
+    try { return await fn(); } finally { busyRef.current = false; }
+  };
 
   // 緊急バックアップ・各スロットの世代バックアップ・オートセーブの有無を取得
   useEffect(() => {
@@ -25,18 +35,19 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
   }, [saveSlots]);
 
   const handleLoadAutosave = async () => {
-    if (!onLoadAutosave) return;
+    if (!onLoadAutosave || busyRef.current) return;
     if (!window.confirm('オートセーブをロードします。現在の進行データは失われます。よろしいですか？')) return;
     setSaveStatus({ type: 'loading' });
-    const result = await onLoadAutosave();
+    const result = await runExclusive(() => onLoadAutosave());
     setSaveStatus(result?.success ? { type: 'loaded' } : { type: 'error', message: result?.error || 'ロードに失敗しました' });
     setTimeout(() => setSaveStatus(null), 4000);
   };
 
   const handleSave = async (slotIndex) => {
+    if (busyRef.current) return;
     setSaveProgress(0);
     setSaveStatus({ type: 'saving' });
-    const result = await onSave(slotIndex, (pct) => setSaveProgress(pct));
+    const result = await runExclusive(() => onSave(slotIndex, (pct) => setSaveProgress(pct)));
     if (result?.success) {
       setSaveStatus({ type: 'saved' });
     } else {
@@ -46,9 +57,10 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
   };
 
   const handleLoad = async (slotIndex, skipConfirm = false) => {
+    if (busyRef.current) return undefined;
     if (skipConfirm || window.confirm('現在の進行データは失われます。ロードしますか？')) {
       setSaveStatus({ type: 'loading' });
-      const result = await onLoad(slotIndex);
+      const result = await runExclusive(() => onLoad(slotIndex));
       if (result?.success) {
         setSaveStatus({ type: 'loaded' });
       } else {
@@ -115,6 +127,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
   };
 
   const handleDelete = async (slotIndex) => {
+    if (busyRef.current) return;
     if (window.confirm('セーブデータを削除しますか？この操作は取り消せません。')) {
       const success = await onDelete(slotIndex);
       setSaveStatus(success ? { type: 'deleted' } : { type: 'error', message: '削除に失敗しました' });
@@ -218,7 +231,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                 {autosaveInfo.year ? `${autosaveInfo.year}年目` : ''}{autosaveInfo.date ? ` | ${autosaveInfo.date.month}月${autosaveInfo.date.day}日` : ''} | 保存日時: {formatTimestamp(autosaveInfo.timestamp)}
               </div>
             </div>
-            <button onClick={handleLoadAutosave} disabled={!onLoadAutosave}
+            <button onClick={handleLoadAutosave} disabled={!onLoadAutosave || busy}
               className="btn-primary px-4 py-2 rounded text-sm disabled: disabled:">
               オートセーブをロード
             </button>
@@ -251,7 +264,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                 <div className="flex gap-3">
                   <button
                     onClick={() => handleSave(idx)}
-                    disabled={!seasonData}
+                    disabled={!seasonData || busy}
                     className={`flex-1 px-4 py-2 rounded font-bold transition ${
                       'btn-primary'
                     }`}
@@ -260,7 +273,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                   </button>
                   <button
                     onClick={() => handleLoad(idx)}
-                    disabled={!info}
+                    disabled={!info || busy}
                     className={`flex-1 px-4 py-2 rounded font-bold transition ${
                       'btn-primary'
                     }`}
@@ -269,7 +282,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                   </button>
                   <button
                     onClick={() => handleDelete(idx)}
-                    disabled={!info}
+                    disabled={!info || busy}
                     className={`px-4 py-2 rounded font-bold transition ${
                       'btn-primary'
                     }`}
@@ -279,19 +292,19 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                 </div>
                 {/* 1世代前のバックアップ（上書き前の自動保存）から復元 */}
                 {backupInfos[idx] && (
-                  <button onClick={() => handleRestoreBackup(idx)}
-                    className="mt-2 text-xs text-amber-300 hover:text-amber-200 hover:underline">
+                  <button onClick={() => handleRestoreBackup(idx)} disabled={busy}
+                    className="mt-2 text-xs text-amber-300 hover:text-amber-200 hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed">
                     ↩ 1つ前のセーブに戻す（{formatTimestamp(backupInfos[idx].timestamp)} 時点）
                   </button>
                 )}
                 {/* ファイルへの書き出し／読み込み。ブラウザの外へ持ち出せる唯一の経路 */}
                 <div className="mt-2 flex gap-3 text-xs">
-                  <button onClick={() => handleExport(idx)} disabled={!info}
+                  <button onClick={() => handleExport(idx)} disabled={!info || busy}
                     className="text-gray-300 hover:text-white hover:underline disabled:text-gray-500 disabled:no-underline disabled:cursor-not-allowed">
                     ⬇ ファイルに書き出す
                   </button>
-                  <button onClick={() => handleImport(idx)}
-                    className="text-gray-300 hover:text-white hover:underline">
+                  <button onClick={() => handleImport(idx)} disabled={busy}
+                    className="text-gray-300 hover:text-white hover:underline disabled:text-gray-500 disabled:no-underline disabled:cursor-not-allowed">
                     ⬆ ファイルから読み込む
                   </button>
                 </div>
