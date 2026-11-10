@@ -175,16 +175,21 @@ private fun tradePartners(view: LeagueView, raw: JsonObject): Pair<List<String>,
     return (others.filter { it in humans } + others.filter { it !in humans }) to humans
 }
 
+/** 相手の名簿の読み込み（名簿・失敗の文・読み直す） */
+private data class PartnerRoster(val roster: List<JsonObject>?, val error: String?, val retry: () -> Unit)
+
 /** 相手の名簿（その場で読む。12球団ぶんをいつもビューに載せると重い） */
 @Composable
-private fun partnerRoster(model: AppViewModel, partner: String?): Pair<List<JsonObject>?, String?> {
+private fun partnerRoster(model: AppViewModel, partner: String?): PartnerRoster {
     val revision = model.view?.revision
     // ⚠ 版が変わっても**読み直す間は前の名簿を出したまま**にする（相手を変えたときだけ空にする）。
     //    版はほかの参加者の保存や試合の進行でも変わる。空にすると、選んでいる途中や確認の段で
     //    「読み込み中…」に戻り、送るボタンが押せなくなる。最終の判断はサーバーがする
     var roster by remember(partner) { mutableStateOf<List<JsonObject>?>(null) }
     var failure by remember(partner) { mutableStateOf<String?>(null) }
-    LaunchedEffect(partner, revision) {
+    // 「読み直す」を押した回数（増えると読み直す。⚠ 読み込みに失敗しても押し直せるように。ほかの画面と同じ）
+    var attempt by remember(partner) { mutableStateOf(0) }
+    LaunchedEffect(partner, revision, attempt) {
         if (partner == null) return@LaunchedEffect
         try {
             roster = model.read("team", mapOf("team" to partner)).at("roster").list().mapNotNull { it.obj() }
@@ -195,7 +200,7 @@ private fun partnerRoster(model: AppViewModel, partner: String?): Pair<List<Json
             failure = model.describe(e)
         }
     }
-    return roster to failure
+    return PartnerRoster(roster, failure) { attempt++ }
 }
 
 private fun namesOf(ids: Set<Long>, vararg rosters: List<JsonObject>?): String {
@@ -213,7 +218,7 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
     // ⚠ 自分から見た向きに直す（offer はいつも提案した側が出す選手）
     val giveEntries = (if (mine) trade.at("offer") else trade.at("want")).list().mapNotNull { it.obj() }
     val getEntries = (if (mine) trade.at("want") else trade.at("offer")).list().mapNotNull { it.obj() }
-    val (theirs, theirError) = partnerRoster(model, partner)
+    val (theirs, theirError, retryTheirs) = partnerRoster(model, partner)
     val myRoster = raw.at("roster").list().mapNotNull { it.obj() }
     val stale = (giveEntries + getEntries).any { it.at("gone").bool() == true }
     val give = giveEntries.filter { it.at("gone").bool() != true }.map { it.pid }.toSet()
@@ -245,7 +250,7 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
         )
         DealSide("出す（自球団）", giveEntries, myRoster, model)
         DealSide("もらう（${view.teamLabel(partner)}）", getEntries, theirs.orEmpty(), model)
-        theirError?.let { Muted("相手の名簿を読めませんでした: $it") }
+        theirError?.let { LoadFailed(it, retryTheirs, title = "相手の名簿を読めませんでした") }
         if (theirs != null) AfterCounts(view, partner, myRoster, theirs, give, get)
         if (stale) Text("移籍済みの選手が含まれているため、成立できません。", color = MaterialTheme.colorScheme.error)
         problems.forEach { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -337,7 +342,7 @@ private fun TradeBuilder(model: AppViewModel, view: LeagueView, raw: JsonObject,
         }
     }
     BackHandler(onBack = back)
-    val (theirs, theirError) = partnerRoster(model, draft.partner)
+    val (theirs, theirError, retryTheirs) = partnerRoster(model, draft.partner)
     val myRoster = raw.at("roster").list().mapNotNull { it.obj() }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -357,9 +362,9 @@ private fun TradeBuilder(model: AppViewModel, view: LeagueView, raw: JsonObject,
                 set(draft.copy(partner = picked, get = if (picked == draft.partner) draft.get else emptySet(), step = TradeStep.Players))
             }
         } else if (draft.step == TradeStep.Players) {
-            PlayersStep(model, view, raw, draft, partner, myRoster, theirs, theirError, body, set)
+            PlayersStep(model, view, raw, draft, partner, myRoster, theirs, theirError, retryTheirs, body, set)
         } else {
-            ConfirmStep(model, view, draft, partner, myRoster, theirs, theirError, body, set)
+            ConfirmStep(model, view, draft, partner, myRoster, theirs, theirError, retryTheirs, body, set)
         }
     }
 }
@@ -414,6 +419,7 @@ private fun PlayersStep(
     myRoster: List<JsonObject>,
     theirs: List<JsonObject>?,
     theirError: String?,
+    retryTheirs: () -> Unit,
     modifier: Modifier,
     set: (TradeDraft) -> Unit,
 ) {
@@ -444,7 +450,7 @@ private fun PlayersStep(
         )
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
             when {
-                !giving && theirError != null -> item { Muted("相手の名簿を読めませんでした: $theirError") }
+                !giving && theirError != null -> item { LoadFailed(theirError, retryTheirs, title = "相手の名簿を読めませんでした") }
                 roster == null -> item { Muted("読み込み中…") }
                 else -> items(
                     roster.filter { rosterGroup(it.at("position").str()) == group }.sortedByDescending { overallScore(it) },
@@ -496,6 +502,7 @@ private fun ConfirmStep(
     myRoster: List<JsonObject>,
     theirs: List<JsonObject>?,
     theirError: String?,
+    retryTheirs: () -> Unit,
     modifier: Modifier,
     set: (TradeDraft) -> Unit,
 ) {
@@ -530,7 +537,7 @@ private fun ConfirmStep(
         ) {
             ConfirmSide("出す（自球団）", draft.give, myRoster, model)
             ConfirmSide("もらう（${view.teamLabel(partner)}）", draft.get, theirs, model)
-            theirError?.let { Muted("相手の名簿を読めませんでした: $it") }
+            theirError?.let { LoadFailed(it, retryTheirs, title = "相手の名簿を読めませんでした") }
             if (theirs != null) Section("交換後の名簿") { AfterCounts(view, partner, myRoster, theirs, draft.give, draft.get) }
             problems.forEach { Text(it, color = MaterialTheme.colorScheme.error) }
         }
