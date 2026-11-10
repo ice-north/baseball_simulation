@@ -305,7 +305,8 @@ private fun CoachBlock(roleLabel: String, coach: CoachCard?) {
         if (coach.vision.isNotBlank()) Fact("ビジョン", coach.vision)
         if (coach.growth.isNotBlank()) Fact("育成観", coach.growth)
         Fact("性格", coach.personality)
-        coach.delegation?.let { Fact("任せ方", it) }
+        // 監督がコーチの考えをどれだけ使うか。下の「任せ方」（自分がコーチに任せる分野）と別の話。ラベルの幅（64dp）に収まる5文字（Web と同じ名前）
+        coach.delegation?.let { Fact("コーチ任せ", it) }
         coach.keyPlayers?.let { Fact("軸の選手", it) }
         Fact("通算", coach.career)
         coach.mentor?.let { Fact("恩師", it) }

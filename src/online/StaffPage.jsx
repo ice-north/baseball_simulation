@@ -86,7 +86,9 @@ export function CoachCard({ coach, roleLabel, actions = null }) {
         <Fact label="ビジョン" value={coach.vision} />
         <Fact label="育成観" value={coach.growth} />
         <Fact label="性格" value={coach.personality} />
-        <Fact label="任せ方" value={coach.delegation} />
+        {/* ⚠ 監督がコーチの考えをどれだけ使うか（サーバーの「任せ度25%」）。下の「任せ方」
+            （自分がコーチに任せる分野）と別の話なので、同じ「任せ方」の名前にしない */}
+        <Fact label="コーチ任せ" value={coach.delegation} />
         <Fact label="軸の選手" value={coach.keyPlayers} />
         <Fact label="通算" value={coach.career} />
         <Fact label="恩師" value={coach.mentor} />
@@ -552,7 +554,7 @@ export default function StaffPage(props) {
       {(shown, selector, body) => (
         <Page
           title="指導者"
-          sub="監督・投手コーチ・野手コーチの考え方と性格で、采配やトライアウトの案が変わります（能力は上がりません）。"
+          sub="監督・投手コーチ・野手コーチの考え方と性格で、采配やトライアウトの案が変わります（能力は上がりません）。監督の「任せ度」は、投手・野手の判断でコーチの考えをどれだけ使うかです（ワンマン 0%〜任せる 100%）。"
           actions={<div className="online-team-selector">{selector}</div>}
         >
           {body}
