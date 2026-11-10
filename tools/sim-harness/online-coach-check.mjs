@@ -727,6 +727,17 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
     assert.equal(l.status, 'running');
   }
   {
+    // ⚠ 全員が任せていても、開いた直後には進めない（候補を見る・任せ方を戻す間を残す）。
+    //    関係の無い分野の任せ方を変えても進まない。誰かが「決定」を押すか、締め切りで進む
+    const both = { [a.userId]: { tryout: 'delegate' }, [b.userId]: { tryout: 'delegate' } };
+    const l = open('tryout', both);
+    assert.equal(l.phase?.kind, 'tryout', '全員が任せたトライアウトが、開いた直後に終わった');
+    updateStaffModes(l, a.userId, { tactics: 'delegate' }, iso());
+    assert.equal(l.phase?.kind, 'tryout', '関係の無い任せ方の変更でトライアウトが終わった');
+    decide(l, a.userId);
+    assert.equal(l.phase, null, '全員が任せたトライアウトで「決定」を押しても進まない');
+  }
+  {
     // キャンプ: 任せた人は待たない。席が3人とも空くと「自分で」になり、待つ
     const l = clone(inCamp);
     updateStaffModes(l, a.userId, { camp: 'delegate' }, iso());

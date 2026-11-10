@@ -1753,7 +1753,8 @@ export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
     plan: normalized,
     ready: ready === true,
   };
-  // ⚠ 決定（「この内容で決定」・キャンプの最後のクール）のたびに見る。待つ人が居なければ進む
+  // ⚠ 決定（「この内容で決定」・キャンプの最後のクール）のたびに見る。待つ人が居なければ進む。
+  //    ⚠ 全員が任せていても、開いただけでは進まない（`openPhase` は見ない）。誰かが決定するか締め切りで進む
   resolveSettledPhase(league, now);
   league.game = captureWorld();
 }
@@ -1765,18 +1766,20 @@ export { saveLineup } from './lineupCommand.mjs';
  * ⚠ スタメン・投手起用を**いま任せた**ときは、その場で指導者の編成に作り直す
  *    （次の手続きや年度更新まで人の編成のまま、にならないように）。世界を読むのはそのときだけ
  * ⚠ **手続きを待っていた最後の1人が任せたら、その場で手続きを進める**（`waitsFor`）。
- *    締め切りまで待たせない
+ *    締め切りまで待たせない。もともと誰も待っていない手続き（全員が任せている）は、
+ *    任せ方を変えただけでは進めない（`submitPhase` の説明を参照）
  */
 export function updateStaffModes(league, userId, modes, now) {
   const member = league.members.find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
+  const waited = anyoneWaited(league);
   const before = effectiveStaffModes(league, member);
   setStaffModes(league, userId, modes);
   const after = effectiveStaffModes(league, member);
   const rebuild = ['lineup', 'pitching'].some(
     (area) => after[area] === 'delegate' && before[area] !== 'delegate',
   );
-  const settle = league.status === 'waiting' && !!league.phase && !anyoneWaited(league);
+  const settle = waited && !anyoneWaited(league);
   if (!rebuild && !settle) return false;
   loadLeagueWorld(league);
   if (rebuild) refreshTeamPlan(league, member.teamName);
