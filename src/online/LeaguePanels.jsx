@@ -623,9 +623,13 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const read = useContext(ReadContext);
   const loadDefaults = async () =>
     structuredClone(await (read ? read('defaults', {}) : api('defaults', auth)));
+  // ⚠ **キャンプでは標準案を取りに行かない**。キャンプは1クールずつその場で実行する形で、
+  //    提出する案が無い（`CampPlanner` は `view.phase.camp` を見る）。以前はスマホで手続きを
+  //    開くたびに、使わない標準案を取りに行っていた（世界を読むので重い）
+  const needsPlan = phase.kind !== 'camp';
   useEffect(() => {
     let cancelled = false;
-    if (!phase.submission)
+    if (needsPlan && !phase.submission)
       loadDefaults()
         .then((d) => {
           if (!cancelled) {
@@ -644,7 +648,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     return () => {
       cancelled = true;
     };
-  }, [auth, phase.id, phase.submission]);
+  }, [auth, phase.id, phase.submission, needsPlan]);
   const submissionChanged = !sameEditState(
     baseSubmission,
     phase.submission || null,
@@ -946,7 +950,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
             </div>
           </>
         )}
-        {!plan && !error && <p>標準案を準備しています…</p>}
+        {needsPlan && !plan && !error && <p>標準案を準備しています…</p>}
       </fieldset>
     </section>
   );

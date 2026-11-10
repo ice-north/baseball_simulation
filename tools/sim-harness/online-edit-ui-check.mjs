@@ -62,10 +62,18 @@ const initial = () => ({
   lineup: { battingOrder: [], starters: [], strategy: {} },
   phase: { id: '1:camp', kind: 'camp', label: 'キャンプ', submission: null },
 });
+// 契約更改（提出して決める手続き）。⚠ 標準案の読み込みはここで見る（キャンプは取りに行かない）
+const contractPhase = () => ({
+  id: '1:contract',
+  kind: 'contract',
+  label: '契約更改',
+  submission: null,
+});
 async function scene({
   mobile = false,
   defaultsFail = false,
   staleDefaults = false,
+  phase = null,
 } = {}) {
   const context = await browser.newContext({
     viewport: { width: mobile ? 390 : 1280, height: 844 },
@@ -82,8 +90,10 @@ async function scene({
     ),
   );
   const view = initial();
+  if (phase) view.phase = phase;
   const state = {
     view,
+    defaultsRequests: 0,
     defaultsFail,
     staleDefaults,
     payloads: [],
@@ -105,6 +115,7 @@ async function scene({
     if (action === 'config') value = { local: true };
     else if (action === 'view') value = state.view;
     else if (action === 'defaults') {
+      state.defaultsRequests++;
       if (state.defaultsFail === 'html')
         return route.fulfill({
           status: 503,
@@ -118,9 +129,12 @@ async function scene({
           body: JSON.stringify({ error: '標準案の一時的な読込み失敗' }),
         });
       value = {
-        phaseId: state.staleDefaults ? '2:camp' : state.view.phase.id,
+        phaseId: state.staleDefaults ? '0:other' : state.view.phase.id,
         revision: state.view.revision,
-        plan: { menu: 'standard' },
+        plan:
+          state.view.phase.kind === 'contract'
+            ? { releaseIds: [] }
+            : { menu: 'standard' },
       };
     } else if (action === 'command') {
       const payload = route.request().postDataJSON().payload;
@@ -310,11 +324,10 @@ try {
   assert.equal(await leadoff(), '打者1');
   await lineupDraft.context.close();
 
-  const retry = await scene({ defaultsFail: true });
-  // ⚠ **標準案の読み込みはスマホのキャンプに残っている**。PCのキャンプは
-  //    ホームに出していて `PhasePanel` を通らないので、標準案を取りに行かない
-  //    （`CampPlanner` は `view.phase.camp.plan` を見る）。失敗したときの
-  //    知らせと取り直しは、残っているスマホの側で見る
+  const retry = await scene({ defaultsFail: true, phase: contractPhase() });
+  // ⚠ **標準案を取りに行くのは、提出して決める手続き（契約更改など）だけ**。キャンプは
+  //    PC・スマホとも取りに行かない（1クールずつその場で実行する。`CampPlanner` は
+  //    `view.phase.camp` を見る）。失敗したときの知らせと取り直しは契約更改で見る
   await retry.page.setViewportSize({ width: 390, height: 844 });
   await click(retry.page, '手続き');
   await retry.page
@@ -332,11 +345,15 @@ try {
   retry.defaultsFail = false;
   await click(retry.page, '標準案を再取得');
   await retry.page
-    .getByRole('button', { name: '第1クール練習を実行', exact: true })
+    .getByRole('button', { name: 'この内容で決定', exact: true })
     .waitFor();
   assert.equal(await retry.page.getByRole('alert').count(), 0);
-  // ここからはPCの割り当ての欄で見る
+  // ここからはキャンプを、PCの割り当ての欄で見る
+  retry.view.phase = initial().phase;
+  retry.view.revision++;
+  await click(retry.page, '更新');
   await retry.page.setViewportSize({ width: 1280, height: 844 });
+  await retry.page.locator('.online-page-nav').waitFor();
   await click(retry.page, 'ホーム');
   await menuGroup(retry.page).waitFor();
   // ⚠ キャンプに「下書きを保存」「この内容で決定」は無い。1クールずつその場で
@@ -386,8 +403,8 @@ try {
   );
   await retry.context.close();
 
-  // ⚠ ここもスマホの側で見る（PCのキャンプは標準案を取りに行かない）
-  const stale = await scene({ staleDefaults: true });
+  // ⚠ ここも契約更改で見る（キャンプは標準案を取りに行かない）
+  const stale = await scene({ staleDefaults: true, phase: contractPhase() });
   await stale.page.setViewportSize({ width: 390, height: 844 });
   await click(stale.page, '手続き');
   await stale.page
@@ -396,14 +413,14 @@ try {
     })
     .waitFor();
   const staleRun = () =>
-    stale.page.getByRole('button', { name: '第1クール練習を実行', exact: true });
+    stale.page.getByRole('button', { name: 'この内容で決定', exact: true });
   // ⚠ **別の手続きの標準案は使わない**。黙って当てると、前の手続きの内容で
   //    決定してしまう。取り直せる口を出すこと
   await stale.page
     .getByRole('button', { name: '標準案を再取得', exact: true })
     .waitFor();
   stale.staleDefaults = false;
-  stale.view.phase.id = '2:camp';
+  stale.view.phase.id = '2:contract';
   stale.view.revision++;
   await click(stale.page, '更新');
   await stale.page
@@ -466,6 +483,13 @@ try {
     .getByRole('button', { name: '第1クール練習を実行', exact: true })
     .click();
   await mobile.page.getByText('第1クールの練習を実行しました', { exact: true }).waitFor();
+  // ⚠ **キャンプでは標準案を取りに行かない**（提出する案が無い。世界を読むので重い）
+  assert.equal(mobile.defaultsRequests, 0, 'スマホのキャンプで使わない標準案を取りに行っている');
+  assert.equal(
+    await mobile.page.getByText('標準案を準備しています…', { exact: true }).count(),
+    0,
+    'キャンプで「標準案を準備しています」が出ている',
+  );
   assert.equal(mobile.payloads[0].round, 1, '何クール目かを送る');
   assert.equal(mobile.payloads[0].policy.direction, 'sharpen');
   assert.equal(mobile.payloads[0].policy.mode, 'team');
