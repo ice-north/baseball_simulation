@@ -6,6 +6,7 @@ import { formatInnings } from '../utils/physics.js';
 import { buildPlayerStory, fameLabel } from './playerStory.js';
 import AbilityHistoryChart from './AbilityHistoryChart.jsx';
 import PotentialBadge from './PotentialBadge.jsx';
+import { useEscapeToClose } from './useEscapeToClose.js';
 import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
 import { getDeception, describeDeception } from '../game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from '../game/batterType.js';
@@ -90,6 +91,7 @@ const renderArsenal = (arsenal) => {
 
 export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }) {
   const [detailTab, setDetailTab] = useState('ability');
+  useEscapeToClose(onClose, !!player);
 
   if (!player) return null;
 

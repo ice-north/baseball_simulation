@@ -6,6 +6,7 @@ import { POSITION_NAMES, getAbilityColor, FORM_SHORT } from '../../utils/constan
 import { getPitchTypeName } from '../../season/yearProgressionSystem.js';
 import { AbilityRadar, teamRadarAxes } from '../AbilityRadar.jsx';
 import { overallRating } from '../AbilityValue.jsx';
+import { useEscapeToClose } from '../useEscapeToClose.js';
 
 // 行の列幅は1箇所で決める。⚠ **表を二重に作らないこと**——ここを直せば
 // スタメン・控え・先発投手選択・相手控え投手の4種の行が同時に揃う。
@@ -24,6 +25,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
   const [selectedBench, setSelectedBench] = useState(null);
   const [, setTick] = useState(0);
   const [benchFilter, setBenchFilter] = useState('fielder');
+  useEscapeToClose(() => setShowGameChoiceModal(false));
 
   const isTournament = !!tournamentInfo;
   let opponentName, isHome;

@@ -76,6 +76,7 @@ import ManagementScreen from './components/ManagementScreen.jsx';
 import GameFlowScreens from './components/GameFlowScreens.jsx';
 import { Sidebar, RenderBases, AccordionSection, TeamPitcherPanel, TeamMemberPanel } from './components/GameUIComponents.jsx';
 import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
+import { useEscapeToClose } from './components/useEscapeToClose.js';
 
     // ========================================================================
     // App.jsx セクション構成 (行番号はおおよその目安)
@@ -469,6 +470,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const [autoManagerMode, setAutoManagerMode] = useState(true);  // 監督AI自動采配モード
       const [showSubModal, setShowSubModal] = useState(false);  // 選手交代モーダル
       const [subModalSelected, setSubModalSelected] = useState(null);  // モーダル内選択中選手ID
+      useEscapeToClose(() => { setShowSubModal(false); setSubModalSelected(null); }, showSubModal);
       const isSubstituting = React.useRef(false);  // 交代処理中フラグ（二重実行防止）
       // 采配モード（日程進行から起動した試合）
       const [managedGameInfo, setManagedGameInfo] = useState(null);  // { gameId, home, away, otherGames }
@@ -3778,7 +3780,7 @@ if (newOuts === 3) {
                     <div className="bg-surface-1 rounded-xl p-4 max-w-lg w-full mx-4 border border-gray-600 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white font-bold text-lg">選手交代</h3>
-                        <button onClick={() => { setShowSubModal(false); setSubModalSelected(null); }} className="text-gray-300 hover:text-white text-xl">&times;</button>
+                        <button onClick={() => { setShowSubModal(false); setSubModalSelected(null); }} aria-label="閉じる" className="text-gray-300 hover:text-white text-xl">✕</button>
                       </div>
                       <p className="text-xs text-gray-300 mb-3">フィールド選手を選んでからベンチ選手を選ぶと交代します</p>
 
