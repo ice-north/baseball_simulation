@@ -187,9 +187,6 @@ fun worldText(w: WorldNews, short: (String) -> String): ChronicleText? = when (w
     else -> null
 }
 
-/** 年の中の通し日（月×100＋日）。年をまたぐ比べは年で分ける */
-private fun dayOf(year: Int, month: Int, day: Int): Int = year * 10000 + month * 100 + day
-
 /**
  * 裏の大会のうち、いま紙面に載せるもの（同じ年で、その日から120日以内）。
  * ⚠ 甲子園（8月）と日本一決定戦（10月）はシーズン後の試合の無い時期にあり、その間は
@@ -211,7 +208,7 @@ internal fun recentWorld(view: LeagueView): List<WorldNews> {
 internal fun milestonesOn(view: LeagueView, date: GameDate?): List<Milestone> {
     val d = date ?: return emptyList()
     val year = view.year ?: return emptyList()
-    return view.chronicle.milestones.filter { dayOf(it.year, it.month, it.day) == dayOf(year, d.month, d.day) }
+    return view.chronicle.milestones.filter { dayKey(it.year, it.month, it.day) == dayKey(year, d.month, d.day) }
 }
 
 /** 節目の記事の本文（「田中が通算100安打（このリーグで）、鈴木がシーズン20本塁打に到達した。」） */

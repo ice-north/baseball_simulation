@@ -17,7 +17,7 @@ data class BackIssue(val key: Int, val issue: String, val local: String, val nat
 
 const val BACK_ISSUES_MAX = 120
 
-fun backIssueKey(view: LeagueView): Int? = view.currentDate?.let { (view.year ?: 0) * 10000 + it.month * 100 + it.day }
+fun backIssueKey(view: LeagueView): Int? = view.currentDate?.let { dayKey(view.year ?: 0, it.month, it.day) }
 
 /** その球団のバックナンバー（古い順） */
 fun backIssuesOf(list: List<BackIssue>, team: String): List<BackIssue> = list.filter { it.team.isNotEmpty() && it.team == team }

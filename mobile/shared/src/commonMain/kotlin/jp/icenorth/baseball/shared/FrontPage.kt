@@ -81,11 +81,16 @@ val LEAGUE_STANDING_ORDER: Comparator<Standing> =
 fun LeagueView.leagueTable(league: String?): List<Standing> =
     standings.filter { league == null || teamLeagues[it.team] == league }.sortedWith(LEAGUE_STANDING_ORDER)
 
-/** ゲーム差の書き方（「4」「2.5」。「4.0差」とは書かない） */
-private fun gb(v: Double): String = if (v % 1.0 == 0.0) "${v.toInt()}" else one(v)
+/** ゲーム差の書き方（「4」「2.5」。「4.0差」とは書かない）。地元紙・全国紙で共通 */
+internal fun gb(v: Double): String = if (v % 1.0 == 0.0) "${v.toInt()}" else one(v)
 
-/** 首位とのゲーム差（0なら「首位」） */
-private fun gamesBehind(leader: Standing, me: Standing): Double = ((leader.wins - me.wins) + (me.losses - leader.losses)) / 2.0
+/** [leader] と [me] のゲーム差（0なら並んでいる）。地元紙・全国紙で共通 */
+internal fun gamesBehind(leader: Standing, me: Standing): Double = ((leader.wins - me.wins) + (me.losses - leader.losses)) / 2.0
+
+/** 日付の通し番号（年×10000＋月×100＋日）。並べる・同じ日を見分けるのに使う（年をまたいでも大小が日付の順） */
+internal fun dayKey(year: Int, month: Int, day: Int): Int = year * 10000 + month * 100 + day
+
+internal fun GameDate.dayKey(): Int = dayKey(year, month, day)
 
 /**
  * @param alerts 自分の番の手続きなど（締め切りの書き方が端末の時計に依るので、画面の側で作って渡す）
@@ -142,7 +147,7 @@ fun buildFrontPage(
     val last = own.lastOrNull()
     val articles = mutableListOf<FrontPage.Article>()
     // 言い回しは試合（無ければ日付）で選ぶ。同じ試合なら開き直しても同じ紙面
-    val pen = Pen(last?.gameId?.toInt() ?: ((view.year ?: 0) * 10000 + (date?.month ?: 0) * 100 + (date?.day ?: 0)))
+    val pen = Pen(last?.gameId?.toInt() ?: dayKey(view.year ?: 0, date?.month ?: 0, date?.day ?: 0))
 
     var headline: String
     var kicker: String? = null
@@ -440,7 +445,7 @@ fun buildFrontPage(
     // リーグ短信: 自球団の最新の試合と同じ日のほかの試合
     val shorts = last?.takeIf { !offPhase }?.date?.let { d ->
         view.results.filter { it.date == d && it.home != team && it.away != team && it.homeScore != null && it.awayScore != null }
-            .map { shortLine(view, it, latest = view.results.none { r -> (r.date?.month ?: 0) * 100 + (r.date?.day ?: 0) > d.month * 100 + d.day }) }
+            .map { shortLine(view, it, latest = view.results.none { r -> (r.date?.dayKey() ?: 0) > d.dayKey() }) }
     }.orEmpty()
 
     // 指導者（オフは自球団の人事と新体制。シーズン中はときどきベンチの空気）
