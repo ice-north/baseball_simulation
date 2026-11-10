@@ -24,7 +24,8 @@ import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
-import { formatTurn, TURN_MINUTES, TURNS_PER_DAY } from './shared.js';
+import { formatTurn, TURN_MINUTES } from './shared.js';
+import { SEASON_TURNS } from './pyramidLeague.js';
 import { teamLabel } from './gameText.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { formatDeadline, packStartText } from './LeaguePanels.jsx';
@@ -146,8 +147,10 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
       <strong>{teamLabel(view.teamName)}</strong>
       {/* ⚠ 順位と勝敗は**出さない**（ホームの順位表に自球団を黄色で出している）。
           代わりに、この遊び方の骨格——1週間で1シーズン——をここに書く。
-          ⚠ 数は書かずに定数から作る（刻みを変えたときに取り残される） */}
-      <small>1週間で1シーズン · {TURNS_PER_DAY * 7}ターン</small>
+          ⚠ 数は書かずに定数から作る（刻みを変えたときに取り残される）。
+          ⚠ 出すのは**試合のターン数**（ホームの「第N/160ターン」と同じ数）。以前は1週の
+          ターン（224＝土日の手続きを含む）を出していて、ほかの画面の160と合わなかった */}
+      <small>1週間で1シーズン · 試合{SEASON_TURNS}ターン</small>
       {/* 途中参加でセットを選び終えた人は、いつ自分の球団になるかを出し続ける */}
       {waiting && (
         <small className="online-nav-waiting">

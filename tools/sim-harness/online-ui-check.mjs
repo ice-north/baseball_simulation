@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 import { tryoutService, routeToService } from './lib/serviceRoute.mjs';
-import { TURNS_PER_DAY } from '../../src/online/shared.js';
+import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
 const base = process.env.ONLINE_TEST_URL || 'http://localhost:3000';
 assert.ok(
   ['localhost', '127.0.0.1'].includes(new URL(base).hostname),
@@ -104,7 +104,8 @@ try {
     //    「○部○位○勝○敗」はここから外した
     const nav = await page.locator('.online-nav-context').innerText();
     assert.ok(
-      nav.includes('1週間で1シーズン') && nav.includes(`${TURNS_PER_DAY * 7}ターン`),
+      // ⚠ 数はホームの「第N/160ターン」と同じ試合のターン数（1週の224ではない）
+      nav.includes('1週間で1シーズン') && nav.includes(`試合${SEASON_TURNS}ターン`),
       `左上に日程の速さが出ていない: ${nav}`,
     );
     assert.ok(

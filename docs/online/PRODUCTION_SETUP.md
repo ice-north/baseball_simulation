@@ -69,7 +69,7 @@ SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 ONLINE_ADMIN            ← 管理者のUUID。参加者はここに書かない
 ONLINE_CRON_SECRET
-ONLINE_ALLOW_STEP       ← 任意。検証用の「1時間進める」を出す（1 で有効）
+ONLINE_ALLOW_STEP       ← 任意。検証用の「1ターン進める」を出す（1 で有効）
 ```
 
 ⚠ **`ONLINE_MEMBER_1` / `ONLINE_MEMBER_2` は廃止した。** 参加者はリーグのデータ側で
