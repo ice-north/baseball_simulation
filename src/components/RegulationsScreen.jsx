@@ -34,7 +34,11 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
     maxExtraInnings: seasonData.settings?.maxExtraInnings ?? 12,
   }));
   // プレーオフは独立リーグ（と箱庭）だけ。大学・社会人では形式の欄を出さない（以前は「PO:」が空だった）
-  const { leaguePlayoffs } = getModeCapabilities(seasonData.settings);
+  const { leaguePlayoffs, independent } = getModeCapabilities(seasonData.settings);
+  // ⚠ 大学・社会人のリーグの形（チーム数・形式・試合数・チーム名）は、実在のリーグと世界の球団に
+  //    合わせて決まっている。ここで変えると設定の球団名だけが「チームA」などに替わり、世界の球団と
+  //    食い違う（以前はオフと年度更新で変えられた）。DH と延長だけ変えられるようにする
+  const canModifyStructure = canModify && independent;
 
   // 半角→全角変換（略称用）
   const toFullWidth = (str) => str.replace(/[A-Za-z0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
@@ -113,12 +117,17 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
 
       <div className="bg-surface-2 rounded-lg p-4 mb-3">
         <h2 className="text-sm font-bold mb-2 text-white">詳細設定</h2>
+        {canModify && !independent && (
+          <p className="text-xs text-gray-300 mb-2">
+            チーム数・リーグ形式・試合数・チーム名は、実在のリーグに合わせて決まっているので変えられません。DH制と延長は変えられます。
+          </p>
+        )}
         <div className="space-y-0">
           <SettingRow label="DH制（指名打者）">
             <input type="checkbox" checked={tempSettings.useDH} onChange={(e) => setTempSettings({ ...tempSettings, useDH: e.target.checked })} disabled={!canModify} className="w-5 h-5 rounded" />
           </SettingRow>
           <SettingRow label="チーム数">
-            <select value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value))} disabled={!canModify} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-24">
+            <select value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value))} disabled={!canModifyStructure} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-24">
               {[2, 4, 6, 8, 10, 12].map(n => <option key={n} value={n}>{n}チーム</option>)}
             </select>
           </SettingRow>
@@ -126,7 +135,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
             <select
               value={tempSettings.leagueFormat || 'single'}
               onChange={(e) => setTempSettings({ ...tempSettings, leagueFormat: e.target.value })}
-              disabled={!canModify}
+              disabled={!canModifyStructure}
               className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm"
             >
               <option value="single">1リーグ制</option>
@@ -140,14 +149,14 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
                   type="text"
                   value={tempSettings.leagueNames?.[0] || 'リーグ1'}
                   onChange={(e) => setTempSettings({ ...tempSettings, leagueNames: [e.target.value, tempSettings.leagueNames?.[1] || 'リーグ2'] })}
-                  disabled={!canModify} maxLength={15}
+                  disabled={!canModifyStructure} maxLength={15}
                   className="bg-gray-700 text-white px-2 py-1.5 rounded text-sm w-28"
                 />
                 <input
                   type="text"
                   value={tempSettings.leagueNames?.[1] || 'リーグ2'}
                   onChange={(e) => setTempSettings({ ...tempSettings, leagueNames: [tempSettings.leagueNames?.[0] || 'リーグ1', e.target.value] })}
-                  disabled={!canModify} maxLength={15}
+                  disabled={!canModifyStructure} maxLength={15}
                   className="bg-gray-700 text-white px-2 py-1.5 rounded text-sm w-28"
                 />
               </div>
@@ -157,7 +166,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
             <select
               value={tempSettings.gamesPerSeason}
               onChange={(e) => setTempSettings({ ...tempSettings, gamesPerSeason: parseInt(e.target.value) })}
-              disabled={!canModify}
+              disabled={!canModifyStructure}
               className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm"
             >
               {(() => {
@@ -213,8 +222,8 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
         )}
       </div>
 
-      {/* チーム名設定 */}
-      {canModify && (
+      {/* チーム名設定（大学・社会人は実在の球団なので出さない） */}
+      {canModifyStructure && (
         <div className="bg-surface-2 rounded-lg p-4 mb-3">
           <h2 className="text-sm font-bold mb-2 text-white">チーム名設定</h2>
           {tempSettings.leagueFormat === 'two' ? (
