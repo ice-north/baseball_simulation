@@ -3,6 +3,22 @@ import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
+import { normalizeMaxExtraInnings } from '../teams-data.js';
+
+// ⚠ 部品の中で定義しないこと。描画のたびに別の部品として作り直され、中の入力欄が
+//   1文字打つごとに消えて作り直される（以前は延長の欄に2桁を打てなかった）
+const SettingRow = ({ label, children }) => (
+  <div className="flex items-center justify-between py-2 border-b border-gray-700/50">
+    <label className="text-gray-300 text-sm font-medium">{label}</label>
+    {children}
+  </div>
+);
+
+// 延長最大回数を試合で使える値（9〜30回）にする。打っている途中の空欄は標準の12回へ
+const fixExtra = (settings) => ({
+  ...settings,
+  maxExtraInnings: normalizeMaxExtraInnings(settings.maxExtraInnings === '' ? undefined : settings.maxExtraInnings),
+});
 
 const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
   const currentPhase = seasonData.phase || 'off_season';
@@ -63,21 +79,16 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
   };
 
   const handleSaveSettings = () => {
-    const validation = validateRegulations(tempSettings);
+    const settings = fixExtra(tempSettings);
+    const validation = validateRegulations(settings);
     if (!validation.valid) {
       alert('設定エラー:\n' + validation.errors.join('\n'));
       return;
     }
-    setSeasonData({ ...seasonData, settings: tempSettings });
+    setTempSettings(settings);
+    setSeasonData({ ...seasonData, settings });
     alert('レギュレーション設定を保存しました');
   };
-
-  const SettingRow = ({ label, children }) => (
-    <div className="flex items-center justify-between py-2 border-b border-gray-700/50">
-      <label className="text-gray-300 text-sm font-medium">{label}</label>
-      {children}
-    </div>
-  );
 
   return (
     <ScreenShell width="form">
@@ -172,7 +183,13 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
           </SettingRow>
           <div className="text-xs text-gray-400 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
           <SettingRow label="延長最大回数">
-            <input type="number" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({ ...tempSettings, maxExtraInnings: parseInt(e.target.value) })} disabled={!canModify} min="0" max="30" className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-20" />
+            <div className="flex items-center gap-2">
+              <input type="number" value={tempSettings.maxExtraInnings}
+                onChange={(e) => { const raw = e.target.value; setTempSettings(t => ({ ...t, maxExtraInnings: raw === '' ? '' : Math.floor(Number(raw)) })); }}
+                onBlur={() => setTempSettings(fixExtra)}
+                disabled={!canModify} min="9" max="30" className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-20" />
+              <span className="text-xs text-gray-400">回まで（9〜30）</span>
+            </div>
           </SettingRow>
         </div>
         <div className="mt-3">
@@ -290,13 +307,14 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
         <div className="mt-4 text-center">
           <button
             onClick={() => {
-              const validation = validateRegulations(tempSettings);
+              const settings = fixExtra(tempSettings);
+              const validation = validateRegulations(settings);
               if (!validation.valid) {
                 alert('設定エラー:\n' + validation.errors.join('\n'));
                 return;
               }
-              setSeasonData(prev => ({ ...prev, settings: tempSettings }));
-              onConfirm(tempSettings);
+              setSeasonData(prev => ({ ...prev, settings }));
+              onConfirm(settings);
             }}
             className="btn-primary px-8 py-3 rounded-lg text-base transition shadow"
           >

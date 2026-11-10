@@ -4,6 +4,7 @@ import TutorialHint from './TutorialHint.jsx';
 import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { normalizeMaxExtraInnings } from '../teams-data.js';
 
 // submitLabel: 決定ボタンの文言。次に進む画面に合わせて呼ぶ側が渡す
 //   （箱庭はトライアウトではなくチーム設定へ進む）
@@ -201,8 +202,20 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, s
     setTempSettings({ ...tempSettings, teamAbbreviations: newAbbrs });
   };
 
+  // 延長最大回数: 打っている途中は空欄も持てるようにし（以前は parseInt で NaN になり警告が出た）、
+  // 欄を離れたときと決定のときに試合で使える範囲（9〜30回）へ丸める。
+  // ⚠ 以前は「3」や空欄のまま決められ、試合では黙って9回・12回に読み替えられていた
+  const handleExtraInningsChange = (e) => {
+    const raw = e.target.value;
+    setTempSettings(t => ({ ...t, maxExtraInnings: raw === '' ? '' : Math.floor(Number(raw)) }));
+  };
+  const fixExtraInnings = () => {
+    setTempSettings(t => ({ ...t, maxExtraInnings: normalizeMaxExtraInnings(t.maxExtraInnings === '' ? undefined : t.maxExtraInnings) }));
+  };
+
   const handleStart = () => {
-    onComplete({ ...tempSettings, preset: selectedLeague });
+    const maxExtraInnings = normalizeMaxExtraInnings(tempSettings.maxExtraInnings === '' ? undefined : tempSettings.maxExtraInnings);
+    onComplete({ ...tempSettings, maxExtraInnings, preset: selectedLeague });
   };
 
   return (
@@ -307,7 +320,10 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, s
             </div>
             <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">延長最大回数</label>
-              <input type="number" min="9" max="20" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({...tempSettings, maxExtraInnings: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums" />
+              <div className="flex items-center gap-2">
+                <input type="number" min="9" max="30" value={tempSettings.maxExtraInnings} onChange={handleExtraInningsChange} onBlur={fixExtraInnings} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums" />
+                <span className="text-sm text-gray-300">回まで（9〜30）</span>
+              </div>
             </div>
           </div>
         </div>

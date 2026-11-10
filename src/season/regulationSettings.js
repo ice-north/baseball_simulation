@@ -49,8 +49,10 @@ export const validateRegulations = (regulations) => {
   }
 
   // 延長回数の検証
-  if (regulations.maxExtraInnings < 0 || regulations.maxExtraInnings > 30) {
-    errors.push('延長最大回数は0〜30の間で設定してください');
+  // 試合は9回未満を扱えない（normalizeMaxExtraInnings が9回へ丸める）ので、規定でも9〜30回にする
+  const ex = Number(regulations.maxExtraInnings);
+  if (!Number.isFinite(ex) || ex < 9 || ex > 30) {
+    errors.push('延長最大回数は9〜30回の間で設定してください');
   }
 
   // ロスター検証（roster未設定の場合はデフォルト値を適用）
