@@ -1380,7 +1380,7 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
 - `src/components/DateProgressScreen.jsx` (~3760行) - 日程進行画面
   （`dateProgress/` に切り出し済み: `Newspaper.jsx` 440行 / `PreGameModal.jsx` 530行 /
    `Modals.jsx` 125行 / `bracketRenderer.jsx` 190行）
-- `src/components/ManagementScreen.jsx` (~590行) - 管理画面ルーター
+- `src/components/ManagementScreen.jsx` (~490行) - 管理画面ルーター（翌年のレギュレーション確定は `src/season/nextSeasonRegulations.js`）
 - `src/components/GameFlowScreens.jsx` (~530行) - ゲームフロー画面群
 - `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
 - `src/components/GameUIComponents.jsx` (~1030行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel・TeamMemberPanel・BenchList
