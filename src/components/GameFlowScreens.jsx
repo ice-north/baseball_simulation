@@ -494,6 +494,8 @@ const GameFlowScreens = ({
   // SANDBOX: レギュレーション設定
   if (gameFlowState === 'sandbox_regulations') {
     return <NewGameRegulationsScreen
+      submitLabel="設定完了 - チーム設定へ"
+      onBack={() => setGameFlowState('title')}
       onComplete={(regulations) => {
         // ⚠ 箱庭は背景の世界を持たないが、前のゲームの WORLD_DATA・プールは消すこと
         //    （以前は何も戻さず、前のゲームの大会・監督履歴・高校生が残っていた）

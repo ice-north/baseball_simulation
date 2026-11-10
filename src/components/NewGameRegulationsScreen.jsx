@@ -5,7 +5,9 @@ import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regul
 import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 
-const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null }) => {
+// submitLabel: 決定ボタンの文言。次に進む画面に合わせて呼ぶ側が渡す
+//   （箱庭はトライアウトではなくチーム設定へ進む）
+const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, submitLabel = '設定完了 - トライアウトへ' }) => {
   const initialPreset = selectedLeague ? REGULATION_PRESETS[selectedLeague] : null;
   const initialRegs = initialPreset?.regulations || {};
   const initialCount = initialRegs.teamsCount || 4;
@@ -459,7 +461,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
             </button>
           )}
           <button onClick={handleStart} className="btn-primary px-12 py-4 rounded-lg text-xl transition">
-            設定完了 - トライアウトへ
+            {submitLabel}
           </button>
         </div>
     </ScreenShell>
