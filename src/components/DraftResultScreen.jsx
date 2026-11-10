@@ -845,7 +845,7 @@ const DraftPlayerModal = ({ entry, onClose }) => {
   );
 };
 
-const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, onContinue }) => {
+const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, userTeamName, onContinue }) => {
   const [summaryGrid] = useState(() => buildGridOrder(npbStandings));
   const [selectedEntry, setSelectedEntry] = useState(null);
   const teamPicks = useMemo(() => {
@@ -856,6 +856,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
   }, [draftedPlayers]);
 
   const missHistory = useMemo(() => getLotteryMissHistory(firstRoundData), [firstRoundData]);
+  const myCount = draftedPlayers.filter(p => p.teamName === userTeamName).length;
 
   const sortRound = sortRoundLabel;
 
@@ -864,6 +865,12 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
       <div className="text-center mb-5">
         <div className="text-green-300/60 text-xs tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">全球団指名一覧</h1>
+        {/* ⚠ 自チームから指名された選手は一覧の中で目立たせる（以前は他と同じ灰色の小さな字で、探さないと見つからなかった） */}
+        {myCount > 0 && (
+          <div className="mt-2 inline-block bg-yellow-300 text-gray-900 text-sm font-bold px-3 py-1 rounded-full">
+            {userTeamName}から {myCount}人 が指名されました（黄色の行）
+          </div>
+        )}
       </div>
       <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
         {summaryGrid.map(team => {
@@ -880,6 +887,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
               <div className="divide-y divide-gray-200">
                 {sorted.map((entry, idx) => {
                   const isFirst = entry.draftRound === 'ドラフト1位';
+                  const isMine = entry.teamName === userTeamName;
                   const displayLabel = entry.draftRound.replace('ドラフト', '');
                   return (
                     <div key={idx}>
@@ -893,7 +901,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                           ))}
                         </div>
                       )}
-                      <div className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                      <div className={`px-3 py-2 cursor-pointer transition-colors ${isMine ? 'bg-yellow-200 hover:bg-yellow-100 border-l-4 border-yellow-500' : 'hover:bg-gray-50'}`}
                            onClick={() => setSelectedEntry(entry)}>
                         <div className="flex items-baseline gap-1.5 whitespace-nowrap overflow-hidden">
                           <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
@@ -903,7 +911,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                           <span className="text-gray-900 font-bold text-sm shrink-0">{entry.name}</span>
                           <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
                           <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
-                          <span className="text-gray-500 text-xs truncate">{entry.teamName}</span>
+                          <span className={`text-xs truncate ${isMine ? 'text-gray-900 font-bold' : 'text-gray-500'}`}>{entry.teamName}</span>
                         </div>
                       </div>
                     </div>
@@ -1133,7 +1141,7 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftByS
         <DraftConferenceScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} npbStandings={npbStandings} onComplete={() => setPhase('teamSummary')} />
       )}
       {phase === 'teamSummary' && hasDrafted && (
-        <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} npbStandings={npbStandings} onContinue={() => setPhase('summary')} />
+        <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} npbStandings={npbStandings} userTeamName={userTeamName} onContinue={() => setPhase('summary')} />
       )}
       {phase === 'summary' && (
         <DraftSummaryScreen draftedPlayers={draftedPlayers} nearMissPlayers={nearMissPlayers} proBonus={proBonus}
