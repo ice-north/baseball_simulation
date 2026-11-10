@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
-import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations, thinTwoLeagueGameCounts } from '../season/regulationSettings.js';
+import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations, thinTwoLeagueGameCounts, twoLeagueGameCountLabel } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPerSeason } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 import { normalizeMaxExtraInnings } from '../teams-data.js';
@@ -195,7 +195,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
                   }
                   return validCounts.map(opt => (
                     <option key={opt.value} value={opt.value}>
-                      {opt.value}試合（リーグ内各{opt.intra}戦・交流各{opt.inter}戦）
+                      {twoLeagueGameCountLabel(opt, tc)}
                     </option>
                   ));
                 }

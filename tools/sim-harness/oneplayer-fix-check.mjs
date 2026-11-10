@@ -21,6 +21,7 @@ import { ensureCompleteLineup } from '../../src/game/lineup.js';
 import { autoSimulateGame, setRecommendedLineup } from '../../src/game/autoSimulation.js';
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason, fitGamesPerSeason, twoLeagueSizes } from '../../src/season/scheduleGenerator.js';
 import { applyNextSeasonRegulations } from '../../src/season/nextSeasonRegulations.js';
+import { twoLeagueGameCountLabel, twoLeagueSplitLabel } from '../../src/season/regulationSettings.js';
 import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
 import { leagueMagic } from '../../src/season/magicNumber.js';
 import { departedEntry, withDeparted, rosterIndex, departedSince, withDepartedPlayers } from '../../src/season/departedStats.js';
@@ -180,6 +181,13 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
     assert.ok(values.length > 5, `2リーグ${count}球団の選択肢が少なすぎる（${values.length}）`);
     assert.ok(values.every(v => v % step === 0), `2リーグ${count}球団で、全球団を同じ数にできない値が選べる`);
   }
+  // 選択肢の文は、奇数球団なら両リーグのリーグ内の数を書く（片方だけだと、もう片方のリーグには違う数になる）
+  const option40 = getValidTwoLeagueGameCounts(5, 150).find(o => o.value === 40);
+  assert.equal(twoLeagueGameCountLabel(option40, 5), '40試合（2チームのリーグ内各28戦・3チームのリーグ内各16戦・交流各4戦）');
+  assert.equal(twoLeagueSplitLabel(5), '2チーム・3チーム');
+  const option60 = getValidTwoLeagueGameCounts(8, 150).find(o => o.value === 60);
+  assert.equal(twoLeagueGameCountLabel(option60, 8), `60試合（リーグ内各${option60.intra}戦・交流各${option60.inter}戦）`);
+  assert.equal(twoLeagueSplitLabel(8), '4チーム×2');
 }
 
 // --- 規定画面と翌年の日程の試合数は1か所（`fitGamesPerSeason`）で、選べる値に合わせる ---

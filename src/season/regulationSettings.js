@@ -4,6 +4,7 @@
 // ============================================================
 
 import { SEASON_PHASES } from './seasonManager.js';
+import { twoLeagueSizes } from './scheduleGenerator.js';
 
 /**
  * デフォルトレギュレーション設定
@@ -101,6 +102,29 @@ export const thinTwoLeagueGameCounts = (options, current) => {
     seen.add(bucket);
     return true;
   });
+};
+
+/**
+ * 2リーグ制の年間試合数の選択肢の文。例「140試合（リーグ内各20戦・交流各6戦）」。
+ * ⚠ 球団数が奇数のときはリーグの大きさが違い、全球団の試合数を揃えるためにリーグ内の対戦数も
+ *   リーグごとに違う（`twoLeagueGamePlan`）。片方だけ書くともう片方のリーグには嘘になるので、
+ *   両方をチーム数で書き分ける（画面の語は「チーム」）。例「40試合（2チームのリーグ内各28戦・3チームのリーグ内各16戦・交流各4戦）」
+ * @param {{value:number, intra:number, intraB?:number, inter:number}} option - getValidTwoLeagueGameCounts の1つ
+ * @param {number} teamsCount - 総チーム数
+ */
+export const twoLeagueGameCountLabel = (option, teamsCount) => {
+  const [sizeA, sizeB] = twoLeagueSizes(teamsCount);
+  const intraB = option.intraB ?? option.intra;
+  if (sizeA === sizeB && intraB === option.intra) {
+    return `${option.value}試合（リーグ内各${option.intra}戦・交流各${option.inter}戦）`;
+  }
+  return `${option.value}試合（${sizeA}チームのリーグ内各${option.intra}戦・${sizeB}チームのリーグ内各${intraB}戦・交流各${option.inter}戦）`;
+};
+
+/** 2リーグ制の分け方の文。例「6チーム×2」、奇数なら「4チーム・5チーム」 */
+export const twoLeagueSplitLabel = (teamsCount) => {
+  const [sizeA, sizeB] = twoLeagueSizes(teamsCount);
+  return sizeA === sizeB ? `${sizeA}チーム×2` : `${sizeA}チーム・${sizeB}チーム`;
 };
 
 /**

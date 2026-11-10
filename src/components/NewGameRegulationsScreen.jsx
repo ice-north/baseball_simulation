@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ScreenShell } from './GameUIComponents.jsx';
 import TutorialHint from './TutorialHint.jsx';
-import { REGULATION_PRESETS, getPlayoffFormatDescription, thinTwoLeagueGameCounts } from '../season/regulationSettings.js';
+import { REGULATION_PRESETS, getPlayoffFormatDescription, thinTwoLeagueGameCounts, twoLeagueGameCountLabel, twoLeagueSplitLabel } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPerSeason } from '../season/scheduleGenerator.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { normalizeMaxExtraInnings } from '../teams-data.js';
@@ -241,7 +241,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, s
                 setTempSettings({...tempSettings, leagueFormat: newFormat, gamesPerSeason: adjustedGames});
               }} className="bg-gray-700 rounded px-3 py-2 w-full">
                 <option value="single">1リーグ制</option>
-                <option value="two" disabled={tempSettings.teamsCount < 4}>2リーグ制（{Math.floor(tempSettings.teamsCount / 2)}チーム×2）</option>
+                <option value="two" disabled={tempSettings.teamsCount < 4}>2リーグ制（{twoLeagueSplitLabel(tempSettings.teamsCount)}）</option>
               </select>
             </div>}
             <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
@@ -259,7 +259,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, s
                       const validCounts = thinTwoLeagueGameCounts(getValidTwoLeagueGameCounts(tc, 150), tempSettings.gamesPerSeason);
                       return validCounts.map(opt => (
                         <option key={opt.value} value={opt.value}>
-                          {opt.value}試合（リーグ内各{opt.intra}戦・交流各{opt.inter}戦）
+                          {twoLeagueGameCountLabel(opt, tc)}
                         </option>
                       ));
                     } else {
