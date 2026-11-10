@@ -158,7 +158,7 @@ try {
       `${width}px 順位表の見出しが1文字ずつに割れる`,
     );
     await page.getByRole('button', { name: '打順', exact: true }).click();
-    await page.getByRole('button', { name: '采配', exact: true }).click();
+    await page.getByRole('button', { name: '方針・采配', exact: true }).click();
     let panel = page.getByRole('dialog', { name: '方針・采配', exact: true });
     await panel.waitFor();
     for (const group of ['basic', 'bunt', 'subs', 'pitcher', 'roles']) {
@@ -228,7 +228,7 @@ try {
     }
     await page.reload();
     await page.getByRole('button', { name: '打順', exact: true }).click();
-    await page.getByRole('button', { name: '采配', exact: true }).click();
+    await page.getByRole('button', { name: '方針・采配', exact: true }).click();
     panel = page.getByRole('dialog', { name: '方針・采配', exact: true });
     await panel.getByLabel('見る設定').selectOption('bunt');
     assert.equal(

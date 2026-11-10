@@ -1131,7 +1131,7 @@ export function LineupPanel({
           <h2>打順</h2>
           <p className="online-muted">次の試合から反映</p>
         </div>
-        <button onClick={() => setShowTactics(true)}>采配</button>
+        <button onClick={() => setShowTactics(true)}>方針・采配</button>
         {onShowRoster && (
           <button
             onClick={onShowRoster}
