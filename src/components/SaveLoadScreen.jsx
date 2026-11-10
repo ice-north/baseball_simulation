@@ -128,7 +128,15 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
 
   const handleDelete = async (slotIndex) => {
     if (busyRef.current) return;
-    if (window.confirm('セーブデータを削除しますか？この操作は取り消せません。')) {
+    // ⚠ 削除しても「1つ前のセーブ」（上書きする前の自動の控え）は残る。以前は「取り消せません」とだけ
+    //   出して、削除のあとも「1つ前のセーブに戻す」が残り、言っていることと画面が合わなかった
+    const info = saveSlots[slotIndex];
+    const backup = backupInfos[slotIndex];
+    const what = info ? `（${info.year}年目 ${info.date?.month}月${info.date?.day}日${info.teamName ? ` ${info.teamName}` : ''}）` : '';
+    const msg = `スロット${slotIndex + 1}のセーブ${what}を削除します。削除したセーブは戻せません。`
+      + (backup ? `\nその前のセーブ（${formatTimestamp(backup.timestamp)} 時点）は残り、「1つ前のセーブに戻す」で呼び出せます。` : '')
+      + '\nよろしいですか？';
+    if (window.confirm(msg)) {
       const success = await onDelete(slotIndex);
       setSaveStatus(success ? { type: 'deleted' } : { type: 'error', message: '削除に失敗しました' });
       setTimeout(() => setSaveStatus(null), 4000);
