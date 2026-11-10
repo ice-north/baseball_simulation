@@ -291,6 +291,24 @@ try {
     'velocity',
     '再読込・表示切替後も未保存案を復元',
   );
+  // ⚠ 1280px では表が横に送れる。**氏名の列は左に留める**（右端の練習・希望の
+  //    列を見ているとき、誰の行か分からなくなっていた）
+  const nameStays = await draft.page
+    .locator('.online-camp-scroll')
+    .evaluate((box) => {
+      box.scrollLeft = box.scrollWidth;
+      const left = box.getBoundingClientRect().left;
+      const name = box.querySelector('tbody th').getBoundingClientRect();
+      return {
+        scrolled: box.scrollLeft > 0,
+        visible: name.left >= left - 1 && name.right > left + 40,
+      };
+    });
+  assert.deepEqual(
+    nameStays,
+    { scrolled: true, visible: true },
+    '1280px でキャンプの表を右へ送ると氏名が隠れる',
+  );
   draft.view.phase.id = '2:camp';
   draft.view.revision++;
   await click(draft.page, '更新');

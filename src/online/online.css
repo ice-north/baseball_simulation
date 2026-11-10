@@ -682,6 +682,16 @@ small.online-gain:not(:where(.online-sp *)) {
   /* ⚠ 折り返さない。「スリクォ」が2行に割れて行の高さが倍になっていた */
   white-space: nowrap;
 }
+/* ⚠ **氏名の列は左に留める**。1584px より狭い画面では表が横に送れるので、
+   右端の練習・希望の列を見ていると誰の行か分からなくなっていた（1280px で実測）。
+   地色はキャンプのカードと同じにして、送った列を下に隠す */
+.online-camp-scroll tbody th,
+.online-camp-scroll thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface-2);
+}
 /* キャンプのサブ練習の「対象」。
    ⚠ サブ練習の欄の**中に横に並べる**（列を足すと横に溢れ、下に積むと
       行が倍の高さになって12人が1画面に入らない） */
