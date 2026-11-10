@@ -7,6 +7,7 @@ import { POSITION_NAMES, getAbilityColor, getAbilityRank, getRankColor, getPosit
 import { finalizePlayerSeason, getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import { AbilityLegend } from './GameUIComponents.jsx';
+import ConfirmBar from './ConfirmBar.jsx';
 
 // AI自動解雇のロスター調整パラメータ
 // 野手/投手の総合力（スカウト画面と同じ算出式）
@@ -48,7 +49,10 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
   const departedRef = useRef([]);
   const [sortKey, setSortKey] = useState(null);
   const [sortAsc, setSortAsc] = useState(false);
-  const [showReview, setShowReview] = useState(false);
+  // 確定の前の帯（'release' = 選んだとおりに確定 / 'keep' = 解雇せずに確定 / null = 出さない）。
+  // ⚠ 以前は解雇が0人のときと「解雇せずに確定」は1回押すだけで確定し、取り消せなかった
+  //    （解雇を選ぶ前に押すと、その年は誰も解雇できない）。どちらも帯で決める形に揃える
+  const [review, setReview] = useState(null);
 
   const teamData = TEAMS_DATA[userTeamName];
   const players = teamData?.players || [];
@@ -313,56 +317,56 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
           <div className="flex gap-3">
             <button
-              onClick={() => userReleased.length > 0 ? setShowReview(true) : handleConfirm(releasedPlayers)}
+              onClick={() => setReview('release')}
               className="btn-primary px-5 py-1.5 rounded text-sm"
             >
               契約更改を確定する
             </button>
             <button
-              onClick={() => {
-                const withoutUser = { ...releasedPlayers, [userTeamName]: [] };
-                setReleasedPlayers(withoutUser);
-                handleConfirm(withoutUser);
-              }}
+              onClick={() => setReview('keep')}
               className="btn-secondary px-4 py-1.5 rounded text-sm"
             >
               解雇せずに確定
             </button>
           </div>
 
-          {showReview && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowReview(false)}>
-              <div className="bg-surface-2 rounded-xl border border-gray-600 max-w-lg w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-white font-bold text-lg mb-3">契約更改の確認</h3>
-                <div className="bg-gray-900/60 rounded-lg p-3 mb-3 max-h-48 overflow-y-auto">
-                  <div className="text-gray-300 text-xs mb-2">解雇予定選手 ({userReleased.length}人)</div>
-                  {players.filter(p => userReleased.includes(p.id)).map(p => (
-                    <div key={p.id} className="flex items-center justify-between text-sm py-1 border-b border-gray-700/50 last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-300 text-xs">{POSITION_NAMES[p.position]}</span>
-                        <span className="text-white font-bold">{p.name}</span>
-                        <span className="text-gray-400 text-xs">{p.age}歳</span>
-                      </div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${(p.age || 20) >= 33 ? 'bg-gray-700 text-gray-300' : 'bg-blue-900/50 text-blue-300'}`}>
-                        {(p.age || 20) >= 33 ? '引退' : 'リリースプール'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="text-gray-300 text-xs mb-4 space-y-1">
-                  <div>残りロスター: <span className="text-white font-bold">{players.length - userReleased.length}人</span></div>
-                  <div className="text-yellow-400/80">この操作は取り消せません。33歳以上の選手は引退、33歳未満はリリースプールに移動します。</div>
-                </div>
-                <div className="flex gap-3 justify-end">
-                  <button onClick={() => setShowReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
-                    戻る
-                  </button>
-                  <button onClick={() => { setShowReview(false); handleConfirm(releasedPlayers); }} className="btn-danger px-5 py-1.5 rounded text-sm transition">
-                    解雇を確定する
-                  </button>
-                </div>
+          {review === 'release' && userReleased.length > 0 && (
+            <ConfirmBar
+              title={`${userReleased.length}人を解雇して、契約更改を確定しますか？`}
+              detail={`残る選手 ${players.length - userReleased.length}人`}
+              note="確定すると取り消せません。33歳以上の選手は引退し、33歳未満は自由契約になります。"
+              confirmLabel="解雇して確定する"
+              confirmClass="btn-danger"
+              onConfirm={() => { setReview(null); handleConfirm(releasedPlayers); }}
+              onCancel={() => setReview(null)}
+            >
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                {players.filter(p => userReleased.includes(p.id)).map(p => (
+                  <span key={p.id} className="whitespace-nowrap">
+                    <span className="text-white font-bold">{p.name}</span>
+                    <span className="ml-1">{POSITION_NAMES[p.position]}・{p.age}歳・{(p.age || 20) >= 33 ? '引退' : '自由契約'}</span>
+                  </span>
+                ))}
               </div>
-            </div>
+            </ConfirmBar>
+          )}
+          {(review === 'keep' || (review === 'release' && userReleased.length === 0)) && (
+            <ConfirmBar
+              title="解雇せずに、契約更改を確定しますか？"
+              detail={review === 'keep' && userReleased.length > 0
+                ? `解雇に選んだ${userReleased.length}人も含めて、全員（${players.length}人）と契約します`
+                : `全員（${players.length}人）と契約します`}
+              note="確定すると取り消せません。今年はもう解雇できません。"
+              confirmLabel="確定する"
+              confirmClass="btn-warn"
+              onConfirm={() => {
+                setReview(null);
+                const withoutUser = { ...releasedPlayers, [userTeamName]: [] };
+                setReleasedPlayers(withoutUser);
+                handleConfirm(withoutUser);
+              }}
+              onCancel={() => setReview(null)}
+            />
           )}
         </>
       ) : (
