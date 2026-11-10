@@ -88,22 +88,23 @@ class FrontPageTest {
     @Test
     fun tiesAreOrderedLikeThePc() {
         val me = view.teamName!!
-        val rival = "秋田フェニックス"
+        val league = view.teamLeagues[me]
         val mine = view.standings.first { it.team == me }
-        // 秋田を宮崎と同じ成績にする。ビューの並び（全球団を通したもの）では秋田が先のまま
-        val tied = view.copy(standings = view.standings.map { if (it.team == rival) mine.copy(team = rival) else it })
-        assertTrue(tied.standings.indexOfFirst { it.team == rival } < tied.standings.indexOfFirst { it.team == me })
-        assertTrue(me < rival) // 「宮」(U+5BAE) は「秋」(U+79CB) より前
-        val table = tied.leagueTable(tied.teamLeagues[me])
-        assertEquals(listOf(me, rival), table.map { it.team }.filter { it == me || it == rival })
+        // 同じ部の別の球団を自球団と同じ成績にし、ビュー（全球団を通した並び）では名前の後の方を先に置く
+        val rival = view.standings.first { it.team != me && view.teamLeagues[it.team] == league }.team
+        val (first, second) = listOf(me, rival).sorted()
+        val tied = view.copy(standings = listOf(mine.copy(team = second), mine.copy(team = first)) + view.standings.filter { it.team != me && it.team != rival })
+        val table = tied.leagueTable(league)
+        assertEquals(listOf(first, second), table.map { it.team }.filter { it == me || it == rival })
         val rank = table.indexOfFirst { it.team == me } + 1
         val local = buildFrontPage(tied, raw)
         assertTrue(local.standing!!.contains("${rank}位"), local.standing)
-        // 全国紙の戦線: 首位が並んだら名前の順で先の球団を首位と書く（ビューの並びでは福島が先）
-        val top = view.standings.first { it.team == "福島ノヴァ" }
-        val topTied = view.copy(standings = view.standings.map { if (it.team == "新潟ブルズ") top.copy(team = "新潟ブルズ") else it })
-        val front = buildNationalPage(topTied, raw, buildFrontPage(topTied, raw)).articles.first { it.kicker == "2部戦線" }
-        assertTrue(front.body.startsWith("首位は${view.teamShort("新潟ブルズ")}（"), front.body)
+        // 全国紙の戦線: 首位が並んだら名前の順で先の球団を首位と書く
+        val (a, b) = view.standings.filter { view.teamLeagues[it.team] == league }.map { it.team }.take(2).sorted()
+        val best = Standing(a, wins = 99, losses = 1, winRate = 0.99, gamesPlayed = 100)
+        val topTied = view.copy(standings = listOf(best.copy(team = b), best) + view.standings.filter { it.team != a && it.team != b })
+        val front = buildNationalPage(topTied, raw, buildFrontPage(topTied, raw)).articles.first { it.kicker == "${LEAGUE_NAMES[league]}戦線" }
+        assertTrue(front.body.startsWith("首位は${view.teamShort(a)}（"), front.body)
     }
 
     /** サヨナラ負けの見出しは、決めた一打が本塁打なら「弾」、安打なら「打」。押し出し・犠飛では「サヨナラ打」と書かない */
