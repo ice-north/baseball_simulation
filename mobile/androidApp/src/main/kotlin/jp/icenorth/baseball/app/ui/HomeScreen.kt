@@ -361,7 +361,8 @@ private fun pendingAlerts(view: LeagueView, raw: JsonObject?): List<String> = bu
             when {
                 campDone -> "$label: 全クール終了（ほかの球団を待っています）"
                 ready -> "$label: 決定済み（変更もできます）"
-                else -> "$label を決めてください" + (due?.let { "（締め切り $it）" } ?: "")
+                // ⚠ 名前と「を」の間に空白を入れない（「契約更改 を決めてください」と出ていた。上の帯と同じ書き方）
+                else -> "${label}を決めてください" + (due?.let { "（締め切り $it）" } ?: "")
             },
         )
     }
