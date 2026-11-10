@@ -367,7 +367,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       <SelTh label="体幹" sortK="muscle" title="体幹でソート" />
                       <SelTh label="プロ" sortK="professionalism" title="プロ意識でソート" />
                       <SelTh label="成長" sortK="growthPotential" title="成長力でソート" />
-                      <th className="py-1 px-1 text-gray-400">操作</th>
+                      <th className="py-1 px-1 text-gray-400 sticky right-0 bg-surface-2 border-l border-gray-700/50">操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -406,7 +406,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.muscle)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.professionalism)}</td>
                           <td className={`py-1.5 px-1 text-center font-bold ${gpColor(p.growthPotential)}`}>{gpLabel(p.growthPotential)}</td>
-                          <td className="py-1.5 px-1">
+                          <td className="py-1.5 px-1 whitespace-nowrap sticky right-0 bg-surface-2 border-l border-gray-700/50">
                             {isPicked ? (
                               <button onClick={() => handleSelectionPick(p)}
                                 className="btn-primary px-2 py-0.5 rounded text-xs transition">
@@ -549,7 +549,10 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     <SortHeader k="gaugeRate" label="速度" />
                     <SortHeader k="gauge" label="ゲージ" />
                     <SortHeader k="rivalMax" label="競合" />
-                    <th className="py-1 px-1 text-gray-400">操作</th>
+                    {/* ⚠ 操作の列は右端に**貼り付ける**（sticky）。列が多く 1280〜1440 では表が
+                        横に流れて、操作のボタンと競合の列が右の見えないところへ出ていた。
+                        ボタンの文字も折り返さないこと（1文字ずつ縦に並んでいた） */}
+                    <th className="py-1 px-1 text-gray-400 sticky right-0 bg-surface-2 border-l border-gray-700/50">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -582,7 +585,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           </span>
                         </td>
                         <td className="py-1.5 px-1 text-gray-300 whitespace-nowrap">{p._scoutSource}</td>
-                        <td className="py-1.5 px-1 text-center">{revealLabel(p._revealLevel || 0)}</td>
+                        <td className="py-1.5 px-1 text-center whitespace-nowrap">{revealLabel(p._revealLevel || 0)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina, false, true)}</td>
@@ -656,7 +659,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             <span className="text-gray-400 text-xs">—</span>
                           )}
                         </td>
-                        <td className="py-1.5 px-1">
+                        <td className="py-1.5 px-1 whitespace-nowrap sticky right-0 bg-surface-2 border-l border-gray-700/50">
                           {(p._npbDrafted || p._reservedBy) ? (
                             <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-surface-2 text-gray-400">
                               交渉不可
