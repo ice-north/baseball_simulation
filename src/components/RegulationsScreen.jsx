@@ -202,11 +202,15 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
             </div>
           </SettingRow>
         </div>
-        <div className="mt-3">
-          <button onClick={handleSaveSettings} disabled={!canModify} className={`w-full py-2 rounded-lg font-bold text-sm transition ${'btn-primary'}`}>
-            設定を保存
-          </button>
-        </div>
+        {/* 年度更新（onConfirm あり）では下の「確定 → キャンプへ進む」が保存も兼ねるので出さない。
+            ⚠ 以前は両方が並び、どちらを押せば決まるのか分からなかった */}
+        {!onConfirm && (
+          <div className="mt-3">
+            <button onClick={handleSaveSettings} disabled={!canModify} className="w-full py-2 rounded-lg font-bold text-sm transition btn-primary">
+              設定を保存
+            </button>
+          </div>
+        )}
       </div>
 
       {/* チーム名設定 */}
