@@ -4,6 +4,7 @@ import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { generateTeamCalendar } from '../season/calendarUI.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
+import { leagueMagic, remainingHeadToHead } from '../season/magicNumber.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
@@ -568,6 +569,7 @@ const ScheduleScreen = ({
       {/* タブコンテンツ */}
       {scheduleTab === 'league' && (() => {
         const totalGames = seasonData?.settings?.gamesPerSeason || 60;
+        const headToHeadLeft = remainingHeadToHead(seasonData?.schedule);
 
         const renderStandingsTable = (teams, title, titleColor) => {
           const sorted = [...teams].sort((a, b) => {
@@ -578,11 +580,7 @@ const ScheduleScreen = ({
           const lLeader = sorted[0];
           const lLeaderWins = lLeader?.wins || 0;
           const lLeaderLosses = lLeader?.losses || 0;
-          const lIsChampion = lLeader && sorted.length > 1 && (() => {
-            const second = sorted[1];
-            const secondRemaining = totalGames - (second.wins + second.losses + (second.draws || 0));
-            return lLeaderWins > second.wins + secondRemaining;
-          })();
+          const { decided: lIsChampion, magic: lMagic } = leagueMagic(sorted, totalGames, headToHeadLeft);
 
           return (
             <div className="bg-surface-2 rounded-lg p-6">
@@ -619,13 +617,7 @@ const ScheduleScreen = ({
                     const maxWins = team.wins + remaining;
                     const isEliminated = index > 0 && maxWins < lLeaderWins && !lIsChampion;
                     let magic = '';
-                    if (index === 0 && sorted.length > 1) {
-                      const second = sorted[1];
-                      const secondMaxWins = second.wins + (totalGames - (second.wins + second.losses + (second.draws || 0)));
-                      const magicNum = secondMaxWins - lLeaderWins + 1;
-                      if (magicNum > 0 && !lIsChampion) magic = `M${magicNum}`;
-                      else if (lIsChampion) magic = '-';
-                    }
+                    if (index === 0) magic = lIsChampion ? '-' : lMagic ? `M${lMagic}` : '';
                     const rowBg = index === 0 && lIsChampion ? 'bg-yellow-900/30'
                       : isEliminated ? 'bg-gray-900/40'
                       : index === 0 ? 'bg-blue-900/15'

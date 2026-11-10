@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
+import { leagueMagic, remainingHeadToHead } from '../season/magicNumber.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth, getPlayoffChampion, advanceDate, compareDates } from '../season/seasonManager.js';
 import { RANK_COLORS } from '../utils/constants.js';
 import { getScheduleByDate, getNextGame } from '../season/scheduleGenerator.js';
@@ -1187,6 +1188,8 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
   const totalGames = seasonData?.settings?.gamesPerSeason || 60;
   const standings = seasonData.standings || [];
+  // 順位表の「M」用。残りの直接対決の数（日程が変わった時だけ数え直す）
+  const headToHeadLeft = useMemo(() => remainingHeadToHead(seasonData?.schedule), [seasonData?.schedule]);
 
   const leagueFormat = seasonData?.settings?.leagueFormat || 'single';
   const isTwoLeague = leagueFormat === 'two';
@@ -2603,11 +2606,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
               const lLeader = leagueStandings[0];
               const lLeaderWins = lLeader?.wins || 0;
               const lLeaderLosses = lLeader?.losses || 0;
-              const isLChampionDecided = lLeader && leagueStandings.length > 1 && (() => {
-                const second = leagueStandings[1];
-                const secondRemaining = totalGames - ((second.wins || 0) + (second.losses || 0) + (second.draws || 0));
-                return lLeaderWins > (second.wins || 0) + secondRemaining;
-              })();
+              const { decided: isLChampionDecided, magic: lMagic } = leagueMagic(leagueStandings, totalGames, headToHeadLeft);
 
               return (
                 <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
@@ -2653,13 +2652,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                         if (index === 0) gb = isLChampionDecided ? '優勝' : '-';
                         else { const d = ((lLeaderWins - (team.wins || 0)) - (lLeaderLosses - (team.losses || 0))) / 2; gb = d === 0 ? '-' : d.toFixed(1); }
                         let mg = '';
-                        if (index === 0 && leagueStandings.length > 1) {
-                          const sec = leagueStandings[1];
-                          const secMax = (sec.wins || 0) + (totalGames - ((sec.wins || 0) + (sec.losses || 0) + (sec.draws || 0)));
-                          const mn = secMax - lLeaderWins + 1;
-                          if (mn > 0 && !isLChampionDecided) mg = `M${mn}`;
-                          else if (isLChampionDecided) mg = '-';
-                        }
+                        if (index === 0) mg = isLChampionDecided ? '-' : lMagic ? `M${lMagic}` : '';
                         return (
                           <tr key={team.team} className={`border-b border-gray-700/30 transition-colors hover:bg-gray-700/20 ${isUser ? 'bg-blue-900/30 hover:bg-blue-900/40' : ''} ${index === 0 && isLChampionDecided ? 'bg-yellow-900/15' : ''}`}>
                             <td className="py-1.5 px-0.5 text-center">

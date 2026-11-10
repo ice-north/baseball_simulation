@@ -22,6 +22,7 @@ import { autoSimulateGame, setRecommendedLineup } from '../../src/game/autoSimul
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason } from '../../src/season/scheduleGenerator.js';
 import { applyNextSeasonRegulations } from '../../src/season/nextSeasonRegulations.js';
 import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
+import { leagueMagic } from '../../src/season/magicNumber.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -275,4 +276,16 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   );
 }
 
-console.log('■ 一人用の進行の再発防止: OK（DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');
+// --- 順位表の「M」は点灯してから出す ---
+// ⚠ 以前は2位の最大の勝ち数から数えたまま出していたので、開幕前（0試合）から「M31」が出ていた。
+{
+  const row = (team, wins, losses) => ({ team, wins, losses, draws: 0 });
+  assert.equal(leagueMagic([row('A', 0, 0), row('B', 0, 0)], 30, { 'A|B': 10 }).magic, null, '0試合でマジックが出た');
+  assert.equal(leagueMagic([row('A', 12, 3), row('B', 8, 7)], 30, { 'A|B': 5 }).magic, null, '追う球団が自力で抜ける間にマジックが出た');
+  // A 18-7（残り5）、B 15-10（残り5・最大20）、直接対決は残り2: A がほかを全部勝てば21 > 20 で点灯、M3
+  assert.equal(leagueMagic([row('A', 18, 7), row('B', 15, 10)], 30, { 'A|B': 2 }).magic, 3, '点灯した時のマジックの数が違う');
+  assert.equal(leagueMagic([row('A', 18, 7), row('B', 15, 10)], 30, { 'A|B': 3 }).magic, null, '直接対決で抜かれうるのにマジックが出た');
+  assert.equal(leagueMagic([row('A', 25, 2), row('B', 15, 12)], 30, {}).decided, true, '優勝が決まっていない扱いになった');
+}
+
+console.log('■ 一人用の進行の再発防止: OK（DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す）');
