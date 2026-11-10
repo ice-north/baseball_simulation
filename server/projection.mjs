@@ -669,7 +669,7 @@ export function projectTeamInfo(bundle, userId, teamName) {
         publicPartial: !!statistics.season && !statistics.season.complete,
         publicSource: statistics.season?.complete
           ? '対人リーグ（プレーオフ込み・グランドCS除外）'
-          : '既存の今季記録（場面別は記録開始後）',
+          : '今季の成績（記録を取り始める前を含む。場面別は取り始めた後だけ）',
       };
     }),
   };

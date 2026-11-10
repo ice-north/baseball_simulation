@@ -213,7 +213,7 @@ export function playerPeriods(
       year: league.season.year,
       source: currentSeason?.complete
         ? '対人リーグ（プレーオフ込み・グランドCS除外）'
-        : '既存の今季記録（グランドCS込み）',
+        : '今季の成績（記録を取り始める前を含む・グランドCS込み）',
       ...current,
       splits: currentRecord?.splits || null,
       partial: !!currentSeason && !currentSeason.complete,
@@ -284,9 +284,9 @@ export function playerPeriods(
     const stats = { batting: h.batting || {}, pitching: h.pitching || {} };
     periods.push({
       id: `legacy:${h.year}`,
-      label: `${h.year}年・既存`,
+      label: `${h.year}年（参考）`,
       year: h.year,
-      source: '既存記録（グランドCS込み・リーグ比較値なし）',
+      source: '記録を取り始める前の成績（グランドCS込み・リーグ平均との比較なし）',
       seasonStats: stats,
       splits: null,
       performance: performanceFor({ seasonStats: stats }, null),
@@ -321,8 +321,8 @@ export function playerPeriods(
       }
     periods.push({
       id: 'legacy-career',
-      label: '既存通算',
-      source: '既存記録・今季込み（リーグ混在・比較値なし）',
+      label: '通算（参考）',
+      source: '記録を取り始める前を含む通算（今季込み・部の区別なし・リーグ平均との比較なし）',
       seasonStats: stats,
       splits: null,
       performance: performanceFor({ seasonStats: stats }, null),

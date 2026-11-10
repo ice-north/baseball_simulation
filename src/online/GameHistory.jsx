@@ -320,7 +320,7 @@ function BoxScore({ game, ownTeam }) {
       />
       {game.legacy && (
         <small className="online-stat-note">
-          既存試合の保存値です。未記録の項目は「—」です。
+          記録を取り始める前の試合です。残っていない項目は「—」です。
         </small>
       )}
     </>
