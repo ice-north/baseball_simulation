@@ -104,8 +104,9 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     // 自球団の今季は手元のビューで出す。他球団と通算はその場で読みに行く（全球団ぶんをビューに載せない）
     var loaded by remember(team, career) { mutableStateOf<List<JsonObject>?>(null) }
     var failure by remember(team, career) { mutableStateOf<String?>(null) }
+    var attempt by remember(team, career) { mutableStateOf(0) }
     val needsRead = career || !own
-    LaunchedEffect(team, career, view.revision) {
+    LaunchedEffect(team, career, view.revision, attempt) {
         if (!needsRead) return@LaunchedEffect
         try {
             val result = model.read("team", mapOf("team" to team))
@@ -153,7 +154,7 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
             )
         }
         when {
-            failure != null -> Muted("読み込めませんでした: $failure", Modifier.padding(16.dp))
+            failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 }, modifier = Modifier.padding(16.dp))
             roster == null -> Muted("読み込み中…", Modifier.padding(16.dp))
             else -> {
                 StatTable(

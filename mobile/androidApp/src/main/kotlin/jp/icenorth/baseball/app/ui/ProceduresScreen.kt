@@ -321,8 +321,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     }
     if (failure != null) {
         Section {
-            Text("読み込めませんでした: $failure", color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = { model.phaseDraft = null; failure = null; attempt += 1; model.reload(pull = true) }) { Text("読み直す") }
+            LoadFailed(failure.orEmpty(), onRetry = { model.phaseDraft = null; failure = null; attempt += 1; model.reload(pull = true) })
         }
         return
     }

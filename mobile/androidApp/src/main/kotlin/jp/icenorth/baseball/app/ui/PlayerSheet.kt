@@ -72,7 +72,8 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
     val readable = remember(p, ownRoster) { detailReadable(p, ownRoster) }
     var periods by remember(id, readable) { mutableStateOf(if (readable) null else localPeriods(p)) }
     var failure by remember(id, readable) { mutableStateOf<String?>(null) }
-    LaunchedEffect(id, readable) {
+    var attempt by remember(id, readable) { mutableStateOf(0) }
+    LaunchedEffect(id, readable, attempt) {
         if (id == null || !readable) return@LaunchedEffect
         try {
             periods = model.read("player", mapOf("id" to id.toString())).at("periods").list().mapNotNull { it.obj() }
@@ -160,7 +161,7 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
 
         Text("成績", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         when {
-            failure != null -> Muted("成績を読めませんでした: $failure")
+            failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 }, title = "成績を読めませんでした")
             periods == null -> Muted("読み込み中…")
             periods!!.isEmpty() -> Muted("成績の記録がありません。")
             else -> periods!!.forEach { period ->

@@ -74,7 +74,8 @@ fun StaffPanel(model: AppViewModel, view: LeagueView) {
     var other by remember(team) { mutableStateOf<TeamStaffView?>(null) }
     var loaded by remember(team) { mutableStateOf(false) }
     var failure by remember(team) { mutableStateOf<String?>(null) }
-    LaunchedEffect(team, view.revision) {
+    var attempt by remember(team) { mutableStateOf(0) }
+    LaunchedEffect(team, view.revision, attempt) {
         if (isOwn) return@LaunchedEffect
         try {
             val result = model.read("team", mapOf("team" to team))
@@ -92,7 +93,7 @@ fun StaffPanel(model: AppViewModel, view: LeagueView) {
         TeamPicker(view, team) { team = it }
         if (isOwn) OwnStaff(model, view, own)
         else when {
-            failure != null -> Muted("読み込めませんでした: $failure")
+            failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 })
             !loaded -> Muted("読み込んでいます…")
             else -> other?.let { OtherStaff(it) } ?: Muted("指導者の情報がありません")
         }

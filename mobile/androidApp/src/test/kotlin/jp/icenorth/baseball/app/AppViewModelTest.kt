@@ -8,6 +8,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import jp.icenorth.baseball.shared.AuthSession
 import jp.icenorth.baseball.shared.OnlineApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -203,6 +204,25 @@ class AppViewModelTest {
         // ⚠ 内部の言葉（例外のクラス名・英語の文）を出さない
         assertFalse(text, text.contains("Exception") || text.contains("timeout"))
         assertEquals(null, networkCause(IllegalStateException("x")))
+    }
+
+    @Test fun homeIsToldWhyTheFirstViewCouldNotBeRead() {
+        // ログインしたまま開き直した（覚えているビューは無い）
+        SessionStore(app).auth = AuthSession("a", "token", "session")
+        var views = 0
+        create { action ->
+            when (action) {
+                "view" -> if (++views == 1) throw java.net.ConnectException("Connection refused") else VIEW_1
+                else -> "{}"
+            }
+        }
+        // ⚠ 以前はホームが「読み込み中…」のまま止まった
+        until { model.loadFailure != null }
+        assertNull(model.view)
+        assertTrue(model.loadFailure.orEmpty(), model.loadFailure.orEmpty().contains("接続できません"))
+        model.reload(pull = true)
+        until { model.view?.revision == 1 && !model.refreshing }
+        assertNull(model.loadFailure)
     }
 
     @Test fun theSameNoticeTwiceIsAnnouncedTwice() {

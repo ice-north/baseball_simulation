@@ -142,6 +142,13 @@ class AppViewModel internal constructor(
     var refreshing by mutableStateOf(false)
         private set
 
+    /**
+     * まだビューが1つも無いときに、読み込みに失敗した理由（ホームに「読み直す」と出す）。読めたら null。
+     * ⚠ 以前はホームが「読み込み中…」のまま止まり、引っ張って更新もできなかった（中身がスクロールしないため）
+     */
+    var loadFailure by mutableStateOf<String?>(null)
+        private set
+
     /** 保存などの操作中（画面全体を塞いで、二重に押せなくする） */
     var busy by mutableStateOf(false)
         private set
@@ -300,6 +307,7 @@ class AppViewModel internal constructor(
         store.auth = null
         auth = null
         view = null
+        loadFailure = null
         raw = null
         openPlayer = null
         plan = null
@@ -342,6 +350,8 @@ class AppViewModel internal constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // ⚠ 静かな読み直しの失敗も、ビューが無い間はホームに出す（知らせは出さないが、読み込み中のまま止めない）
+                if (epoch == sessionEpoch && view == null) loadFailure = e.readable()
                 if (epoch == sessionEpoch && (!quiet || e.isAuthFailure())) handle(e)
             } finally {
                 // 前の読み直しが終わっても、待っている新しい読み直しの印は下ろさない
@@ -491,6 +501,7 @@ class AppViewModel internal constructor(
 
     private fun applyView(text: String) {
         view = parseView(text)
+        loadFailure = null
         raw = parseRaw(text)
         // 指示の返事に載ったビューにも、公開した世代が入っている（サーバーが押す）。
         // 古いサーバーの返事には無いので、そのときは null にして次は全部読む

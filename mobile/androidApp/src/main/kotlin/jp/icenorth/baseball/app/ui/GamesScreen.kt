@@ -68,7 +68,9 @@ fun GamesScreen(model: AppViewModel) {
     var data by remember { mutableStateOf<JsonObject?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
-    LaunchedEffect(year, scope, page, view.revision) {
+    // 「読み直す」を押した回数（鍵に入れて読み直す）
+    var attempt by remember { mutableStateOf(0) }
+    LaunchedEffect(year, scope, page, view.revision, attempt) {
         loading = true
         try {
             data = model.read("games", mapOf("year" to "$year", "page" to "$page", "scope" to scope))
@@ -105,7 +107,7 @@ fun GamesScreen(model: AppViewModel) {
         val count = data?.at("count").int() ?: 0
         val size = data?.at("size").int() ?: 6
         when {
-            failure != null -> Muted("読み込めませんでした: $failure")
+            failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 })
             data == null -> Muted("読み込み中…")
             games.isEmpty() -> Muted("まだ試合がありません。")
             else -> Section {
@@ -162,7 +164,8 @@ private fun GameRow(view: LeagueView, g: JsonObject, onOpen: () -> Unit) {
 private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: String, onBack: () -> Unit) {
     var game by remember(id) { mutableStateOf<JsonObject?>(null) }
     var failure by remember(id) { mutableStateOf<String?>(null) }
-    LaunchedEffect(id) {
+    var attempt by remember(id) { mutableStateOf(0) }
+    LaunchedEffect(id, attempt) {
         try {
             game = model.read("game", mapOf("id" to id, "year" to year))
         } catch (e: Exception) {
@@ -175,7 +178,7 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
         TextButton(onClick = onBack) { Text("‹ 試合結果へ戻る") }
         val g = game
         when {
-            failure != null -> Muted("読み込めませんでした: $failure")
+            failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 })
             g == null -> Muted("読み込み中…")
             else -> {
                 val home = g.at("home").str().orEmpty()

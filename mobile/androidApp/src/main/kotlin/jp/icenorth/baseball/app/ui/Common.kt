@@ -30,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Badge
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -139,6 +140,18 @@ fun AbilityNum(label: String?, value: Int?, velocity: Boolean = false, stamina: 
             color = value?.let { rankColor(abilityRank(it, velocity, stamina)) } ?: MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.alignByBaseline(),
         )
+    }
+}
+
+/**
+ * 読み込みに失敗したときの知らせと「読み直す」（試合・選手・成績・指導者・ホームで同じ形）。
+ * ⚠ 以前は画面ごとに「読み込めませんでした: …」だけを出していて、読み直すには画面を離れて戻るしかなかった
+ */
+@Composable
+fun LoadFailed(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier, title: String = "読み込めませんでした") {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("$title: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onClick = onRetry) { Text("読み直す") }
     }
 }
 

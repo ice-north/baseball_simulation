@@ -90,7 +90,11 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         modifier = Modifier.fillMaxSize(),
     ) {
         if (view == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("読み込み中…") }
+            // ⚠ 読めなかったら理由と「読み直す」を出す（以前は「読み込み中…」のまま止まった）
+            val failure = model.loadFailure
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                if (failure != null) LoadFailed(failure, onRetry = { model.reload(pull = true) }) else Text("読み込み中…")
+            }
             return@PullToRefreshBox
         }
         if (view.setupRequired || view.teamName == null) {
