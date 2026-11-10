@@ -25,6 +25,7 @@ import CampScreen from './CampScreen.jsx';
 import SandboxSetupScreen from './SandboxSetupScreen.jsx';
 import UniversityTeamSelectScreen from './UniversitySelectScreen.jsx';
 import { ModeSelectScreen, CorporateTeamSelectScreen, CorporateNameEditScreen } from './CorporateSelectScreen.jsx';
+import { withoutTryoutDraft } from '../season/tryoutDraftState.js';
 
 // ゲームフロースタート画面群
 const GameFlowScreens = ({
@@ -456,10 +457,13 @@ const GameFlowScreens = ({
   if (gameFlowState === 'newgame_tryout') {
     return <TryoutScreen
       seasonData={seasonData}
+      setSeasonData={setSeasonData}
       allTeams={allTeams}
       isInitialTryout={true}
       initializeAllPitchingRotations={initializeAllPitchingRotations}
       onComplete={() => {
+        // 途中の状態の写し（tryoutDraft）は終えたら外す（`tryoutDraftState.js`）
+        setSeasonData(prev => withoutTryoutDraft(prev));
         setGameFlowState('newgame_camp');
       }}
     />;

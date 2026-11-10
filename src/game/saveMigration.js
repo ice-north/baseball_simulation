@@ -9,7 +9,9 @@
 // ============================================================
 
 // 現行スキーマのバージョン。破壊的変更のたびに上げ、MIGRATIONSにステップを追加する。
-export const CURRENT_SAVE_VERSION = '2.15.0';
+// 2.16.0: トライアウトの途中の状態（seasonData.tryoutDraft）を足した。項目を足しただけで
+//         古い保存を書き換える段は無い（持たない保存はトライアウトを最初からやり直す）。
+export const CURRENT_SAVE_VERSION = '2.16.0';
 
 // "a.b.c" を比較。a<b→-1, a>b→1, 等しい→0。数値でない部分は0扱い。
 export function compareVersions(a, b) {
@@ -23,6 +25,7 @@ export function compareVersions(a, b) {
 }
 
 import { createSeededRandom, hashSeed } from './rng.js';
+import { tryoutDraftPlayers } from '../season/tryoutDraftState.js';
 
 // 1選手に必須フィールドの既定値をバックフィルする（破壊しない・欠損のみ補う）。
 export function normalizePlayer(p) {
@@ -132,6 +135,9 @@ function normalizeSaveData(data) {
   if (Array.isArray(data.releasedPlayersPool)) {
     data.releasedPlayersPool.forEach(normalizePlayer);
   }
+  // ⚠ トライアウトの途中の候補・指名した選手も補う。指名が終わると名簿（teamsData）に入る
+  //    ので、ここで補わないと欠けた項目のまま名簿に入る
+  tryoutDraftPlayers(data.seasonData?.tryoutDraft).forEach(normalizePlayer);
   return data;
 }
 

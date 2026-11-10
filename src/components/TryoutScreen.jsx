@@ -7,25 +7,31 @@ import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex, getMentalGrade, mentalScore } from '../utils/constants.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
+import { packTryoutDraft, unpackTryoutDraft } from '../season/tryoutDraftState.js';
 
-const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
-  const [tryoutCandidates, setTryoutCandidates] = useState([]);
-  const [draftOrder, setDraftOrder] = useState([]);
-  const [currentPick, setCurrentPick] = useState(0);
-  const [userRoster, setUserRoster] = useState([]);
-  const [teamRosters, setTeamRosters] = useState({});
+const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
+  const tryoutYear = isInitialTryout ? 1 : (seasonData?.year || 1);
+  // 途中で保存したトライアウトの続き（無ければ null で、候補を作るところから始める）。
+  // ⚠ 最初の描画で1回だけ読む。続きを持っていても別の年・別の種類のものは使わない
+  const [resumed] = useState(() => unpackTryoutDraft(seasonData?.tryoutDraft, { year: tryoutYear, initial: isInitialTryout }));
+  const [tryoutCandidates, setTryoutCandidates] = useState(() => resumed?.candidates || []);
+  const [draftOrder, setDraftOrder] = useState(() => resumed?.draftOrder || []);
+  const [currentPick, setCurrentPick] = useState(() => resumed?.currentPick || 0);
+  const [userRoster, setUserRoster] = useState(() => resumed?.userRoster || []);
+  const [teamRosters, setTeamRosters] = useState(() => resumed?.teamRosters || {});
   const [positionTab, setPositionTab] = useState('all');
-  const [draftComplete, setDraftComplete] = useState(false);
+  const [draftComplete, setDraftComplete] = useState(() => !!resumed?.complete);
   const [viewTab, setViewTab] = useState('draft');
   const [detailCandidate, setDetailCandidate] = useState(null);
   const [sortKey, setSortKey] = useState('overall');
   const [sortDir, setSortDir] = useState('desc');
-  const [draftHistory, setDraftHistory] = useState([]);
-  const draftFinalizedRef = useRef(false);
+  const [draftHistory, setDraftHistory] = useState(() => resumed?.draftHistory || []);
+  // 名簿へ書き終えたか。続きが「書き終えた」なら、もう一度書かない（同じ選手が2人になる）
+  const draftFinalizedRef = useRef(!!resumed?.complete);
   // 自チームの指名を打ち切ったか。⚠ 打ち切っても**他球団の指名は最後まで続ける**
   //    （以前は「指名終了」でドラフト全体を締めていたため、全球団が9〜10人・
   //    捕手0人のまま開幕し、自チームは打順が組めず1日も進められなかった）。
-  const [userDone, setUserDone] = useState(false);
+  const [userDone, setUserDone] = useState(() => !!resumed?.userDone);
   // 行を押したら「選んだ」だけにして、「指名する」で決める（2段）。
   // ⚠ 以前は行を押した瞬間に指名が確定し、取り消せなかった。表は行ごと押せる作りなので
   //    詳細を見ようとした・スクロールしようとしただけで指名が決まっていた
@@ -34,7 +40,20 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   // TEAMS_DATA に書かないので、state を指名の直前に戻せばそのまま取り消せる。
   // 取り消すと、その後のほかの球団の指名もやり直しになる
   const [undoSnap, setUndoSnap] = useState(null);
-  const candidatesGeneratedRef = useRef(false);
+  const candidatesGeneratedRef = useRef(!!resumed);
+
+  // 途中の状態を seasonData に写す（保存・オートセーブ・緊急保存がそのまま持っていく）。
+  // ⚠ 取り消しで state を巻き戻したときも、ここで巻き戻した状態が写る（保存と食い違わない）。
+  //    終えたら呼ぶ側（ManagementScreen・GameFlowScreens）が `withoutTryoutDraft` で外す
+  useEffect(() => {
+    if (!setSeasonData || draftOrder.length === 0) return;
+    const draft = packTryoutDraft({
+      year: tryoutYear, initial: isInitialTryout,
+      candidates: tryoutCandidates, draftOrder, currentPick, draftHistory,
+      teamRosters, userRoster, userDone, complete: draftComplete,
+    });
+    setSeasonData(prev => (prev ? { ...prev, tryoutDraft: draft } : prev));
+  }, [setSeasonData, tryoutYear, isInitialTryout, tryoutCandidates, draftOrder, currentPick, draftHistory, teamRosters, userRoster, userDone, draftComplete]);
 
   const getPositionName = (position) => POSITION_NAMES_FULL[position] || position;
 
@@ -50,7 +69,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     if (candidatesGeneratedRef.current || tryoutCandidates.length > 0) return;
     candidatesGeneratedRef.current = true;
 
-    const year = isInitialTryout ? 1 : (seasonData?.year || 1);
+    const year = tryoutYear;
     const teamCount = seasonData?.settings?.teamsCount || Object.keys(allTeams).length || 4;
     const preset = seasonData?.settings?.preset;
     const leagueDef = preset ? INDEPENDENT_LEAGUES[preset] : null;
@@ -82,7 +101,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     const rounds = isInitialTryout ? 24 : Math.min(24, Math.floor(candidates.length / teamNames.length));
     const order = generateSnakeDraftOrder(teamNames, rounds);
     setDraftOrder(order);
-  }, [seasonData, allTeams, tryoutCandidates.length, isInitialTryout]);
+  }, [seasonData, allTeams, tryoutCandidates.length, isInitialTryout, tryoutYear]);
 
   const handleSelectPlayer = (player) => {
     if (currentPick >= draftOrder.length) {
@@ -424,7 +443,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               <div className="text-green-400 font-semibold mb-3">
                 ドラフト完了 - 各チームの選手がロスターに追加されました
               </div>
-              {!isInitialTryout && onComplete && (
+              {/* 初回は書き終えると自動で次へ進む。書き終えたところで保存したもの（緊急保存）を
+                  ロードしたときだけ、自動では進まないのでボタンを出す */}
+              {(!isInitialTryout || resumed?.complete) && onComplete && (
                 <button
                   onClick={() => onComplete()}
                   className="btn-primary px-5 py-2 rounded-lg font-semibold transition text-sm"

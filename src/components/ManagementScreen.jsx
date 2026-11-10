@@ -10,6 +10,7 @@ import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup
 import { processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 import { processNPBDraft } from '../season/npbDraft.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
+import { withoutTryoutDraft } from '../season/tryoutDraftState.js';
 
 import TryoutScreen from './TryoutScreen.jsx';
 import ContractScreen from './ContractScreen.jsx';
@@ -69,10 +70,12 @@ const ManagementScreen = ({
   const draftedIds = seasonData?.draftedPlayerIds || [];
   if (managementView === 'tryout') return <TryoutScreen
     seasonData={seasonData}
+    setSeasonData={setSeasonData}
     allTeams={allTeams}
     initializeAllPitchingRotations={initializeAllPitchingRotations}
     onComplete={() => {
-      const newData = { ...seasonData, currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
+      // 途中の状態の写し（tryoutDraft）は終えたら外す（`tryoutDraftState.js`）
+      const newData = { ...withoutTryoutDraft(seasonData), currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
       setSeasonData(newData);
       setManagementView('dateprogress');
     }}

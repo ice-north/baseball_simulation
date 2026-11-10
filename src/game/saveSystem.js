@@ -630,6 +630,14 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
  * @returns {{ screenMode: string, gameFlowState: string, managementView: string }}
  */
 export function resumeTargetOf(saveData) {
+  // ⚠ **トライアウトの途中で保存したものは、トライアウトの続きへ戻す**（途中の指名は
+  //    `seasonData.tryoutDraft`。`tryoutDraftState.js`）。以前は日程画面へ戻していたため、
+  //    毎年のもの（11/10）はトライアウトの日が過ぎた扱いになってその年のトライアウトが
+  //    飛び、初回（新しく始めた直後）は選手のいない名簿のまま本編が始まっていた。
+  //    続きを持たない古い保存は、トライアウトを最初からやり直す。
+  if (saveData?.gameFlowState === 'newgame_tryout') {
+    return { screenMode: 'start', gameFlowState: 'newgame_tryout', managementView: 'dateprogress' };
+  }
   const savedView = saveData?.managementView;
   const d = saveData?.seasonData?.currentDate;
   // managementView を持たない旧セーブ向けの保険。12月以降だけオフシーズン扱い
@@ -639,7 +647,7 @@ export function resumeTargetOf(saveData) {
   //    規定の見直し・キャンプ（社会人・大学）・背番号のどれか。以前は全部
   //    日程画面に戻していたため、ロードすると規定・キャンプを飛ばし、
   //    独立リーグでは日程が空のまま（日程は規定の確定で作る）試合が無くなった。
-  const RESUMABLE_VIEWS = ['regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'camp', 'jersey'];
+  const RESUMABLE_VIEWS = ['regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'camp', 'jersey', 'tryout'];
   const managementView = RESUMABLE_VIEWS.includes(savedView)
     ? savedView
     : (savedView === 'offseason' || (!savedView && deepOffseason))
