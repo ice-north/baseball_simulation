@@ -172,6 +172,7 @@ export default function MobileView(props) {
             <OnlineLineup
               view={view}
               busy={props.busy}
+              tab="rotation"
               onClose={() => setFullLineup(false)}
               onSave={async (plan, baseLineup) => {
                 // ⚠ **失敗したら閉じない**（PCと同じ）。閉じると編集がまるごと消える
@@ -188,12 +189,14 @@ export default function MobileView(props) {
           ) : (
             <>
               {/* ⚠ スマホからも一人用の編成画面（`OnlineLineup.jsx`）へ入れるようにする。
-                  横に長い画面なので既定では開かず、押したときだけ出す */}
+                  横に長い画面なので既定では開かず、押したときだけ出す。
+                  ⚠ 打順・守備・控えは下の2タップの表で決めるので、ここは**投手起用の入口**
+                  （開くと投手起用のタブから始まる）。打順のタブも中にはある */}
               <button
                 className="online-primary online-full-width"
                 onClick={() => setFullLineup(true)}
               >
-                打順・守備・投手起用を開く（横向き推奨）
+                投手起用を開く（横向き推奨）
               </button>
               <LineupPanel
                 key={`${view.year}:${view.teamName}`}

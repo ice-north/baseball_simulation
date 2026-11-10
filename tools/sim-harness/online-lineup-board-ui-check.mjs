@@ -467,7 +467,7 @@ try {
   });
   // ⚠ 保存したら、スマホの幅にしても古い編集を開き直さない（開き直すと保存で食い違う）
   await p.setViewportSize({ width: 600, height: 900 });
-  await p.getByRole('button', { name: /打順・守備・投手起用を開く/ }).waitFor();
+  await p.getByRole('button', { name: /投手起用を開く/ }).waitFor();
   assert.equal(
     await p.locator('.online-lineup-portal').count(),
     0,

@@ -307,6 +307,19 @@ try {
   await p.screenshot({ path: '/tmp/baseball-online-mobile-lineup-320.png' });
   shots.push('/tmp/baseball-online-mobile-lineup-320.png');
 
+  // ---- 全画面の編成は投手起用の入口: 投手起用のタブから始まる -------------------
+  await click('投手起用を開く（横向き推奨）');
+  const portal = p.locator('.online-lineup-portal');
+  await portal.waitFor();
+  assert.match(
+    await portal.getByRole('button', { name: /投手起用/ }).first().getAttribute('class'),
+    /\bseg-on\b/,
+    '「投手起用を開く」で投手起用のタブから始まらない',
+  );
+  await portal.getByRole('button', { name: '方針・采配の設定へ（保存しない）' }).click();
+  await portal.waitFor({ state: 'detached' });
+  assert.deepEqual(await slots(), edited, '全画面の編成を開いて閉じたら打順が変わった');
+
   // ---- 横向き（667×375。767px以下なのでスマホの表のまま）----------------
   await p.setViewportSize({ width: 667, height: 375 });
   await layout('667×375');
@@ -326,7 +339,7 @@ try {
     for (const shot of shots)
       await copyFile(shot, `${process.env.MOBILE_LINEUP_SHOTS}/${shot.split('/').pop()}`);
   console.log(
-    'online-mobile-lineup-ui-check PASS（320px・667×375・打順/守備/交代の2タップ・2回目は相手の行のどこでも・選び直し・守れない位置の注意・DHなしの9番・元に戻す・取り消す・タブ移動/再読み込み/PCの幅で保持・保存して読み直し）',
+    'online-mobile-lineup-ui-check PASS（320px・667×375・打順/守備/交代の2タップ・2回目は相手の行のどこでも・選び直し・守れない位置の注意・DHなしの9番・元に戻す・取り消す・タブ移動/再読み込み/PCの幅で保持・保存して読み直し・投手起用の入口）',
   );
 } finally {
   await browser.close();
