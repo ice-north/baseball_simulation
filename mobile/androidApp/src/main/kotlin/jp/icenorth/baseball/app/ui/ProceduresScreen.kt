@@ -275,7 +275,9 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
         members.forEach { m ->
             val ready = m.at("ready").bool() == true
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (ready) "✓" else "…", color = if (ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(20.dp))
+                // ⚠ 決定前は印を出さない（以前は「…」で、何の印か分からなかった）。右の「検討中」で分かる。
+                //    「未提出」とは書かない（下書きを保存した球団もここに入る。Web 版も「検討中」）
+                Text(if (ready) "✓" else "", color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(20.dp))
                 Text(view.teamLabel(m.at("teamName").str().orEmpty()), modifier = Modifier.weight(1f))
                 Muted(if (m.at("cpu").bool() == true) "CPUが決定（初期メンバー待ち）" else if (ready) "決定済み" else "検討中")
             }
