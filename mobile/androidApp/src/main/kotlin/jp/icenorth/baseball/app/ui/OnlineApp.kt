@@ -1,5 +1,6 @@
 package jp.icenorth.baseball.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -101,6 +102,9 @@ fun OnlineApp(model: AppViewModel) {
     val count = noticeCount(raw)
     // 参加前（リーグが無い・まだ参加していない）はホームだけ
     val joined = model.view?.teamName != null
+    // ⚠ 戻るはまずホームへ（以前はどのタブからでもアプリが閉じた）。ホームでは従来どおり閉じる。
+    //    画面の中の戻る（試合の詳細・トレードなど）は後から登録されるので、そちらが先に効く
+    BackHandler(enabled = joined && tab != Tab.Home) { tab = Tab.Home }
     Box(Modifier.fillMaxSize()) {
         if (!joined) {
             // ⚠ 参加前もお知らせ・失敗を出す場所を置く（無いと参加の失敗が見えず、知らせも消えない）

@@ -2,7 +2,10 @@ package jp.icenorth.baseball.app
 
 import android.app.Application
 import android.os.Looper
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -58,8 +61,13 @@ class AppUiTest {
             shadowOf(Looper.getMainLooper()).idle()
             model.view != null && !model.busy
         }
-        rule.setContent { BaseballTheme { OnlineApp(model) } }
+        rule.setContent {
+            back = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+            BaseballTheme { OnlineApp(model) }
+        }
     }
+
+    private var back: OnBackPressedDispatcher? = null
 
     @Test fun tradeAndProcedureNoticesBothRemainVisibleWithoutOverlap() {
         open(""""pendingPack":{"chosen":null,"packs":[]},"trades":[{"id":"t1","myTurn":true,"mine":false,"fromTeam":"other"}]""")
@@ -76,6 +84,15 @@ class AppUiTest {
         rule.onNodeWithText("1年目のキャンプ結果").assertIsDisplayed()
         rule.onNodeWithText("練習の成果").assertIsDisplayed()
         rule.onNodeWithText("1人が伸びました").assertIsDisplayed()
+    }
+
+    @Test fun backGoesToHomeInsteadOfClosingTheApp() {
+        open(""""roster":[]""")
+        rule.onNodeWithTag("tab-Games").performClick()
+        rule.onNodeWithTag("tab-Games").assertIsSelected()
+        // ⚠ 以前は戻るでどのタブからでもアプリが閉じた
+        rule.runOnIdle { back!!.onBackPressed() }
+        rule.onNodeWithTag("tab-Home").assertIsSelected()
     }
 
     @Test fun homePaperTellsWhenANewerAppIsOut() {
