@@ -23,21 +23,26 @@
 .online *:not(:where(.online-sp *))::after {
   box-sizing: border-box;
 }
-.online h1:not(:where(.online-sp *)),
-.online h2:not(:where(.online-sp *)),
-.online h3:not(:where(.online-sp *)),
-.online p:not(:where(.online-sp *)) {
+/* ⚠ 見出し・段落の土台は**詳細度を 0,0,1 に落とす**（`:where(.online)`）。
+   `.online p`（0,1,1）のままだと、`.online-career { margin: 0 0 10px }` のような
+   クラス1つの指定（0,1,0）がすべて負け、書いた余白が効かずに 0 0 12px になる
+   （`!important` で勝たせていた所もある）。土台は「何も書かなければこう」の役なので、
+   クラスで書いた指定には必ず負けるようにする */
+:where(.online) h1:not(:where(.online-sp *)),
+:where(.online) h2:not(:where(.online-sp *)),
+:where(.online) h3:not(:where(.online-sp *)),
+:where(.online) p:not(:where(.online-sp *)) {
   margin: 0 0 12px;
 }
-.online h1:not(:where(.online-sp *)) {
+:where(.online) h1:not(:where(.online-sp *)) {
   font-size: var(--online-h1, 28px);
   font-weight: 750;
 }
-.online h2:not(:where(.online-sp *)) {
+:where(.online) h2:not(:where(.online-sp *)) {
   font-size: var(--online-h2, 19px);
   font-weight: 700;
 }
-.online h3:not(:where(.online-sp *)) {
+:where(.online) h3:not(:where(.online-sp *)) {
   margin-top: 18px;
   font-weight: 700;
 }
@@ -754,10 +759,16 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-desktop .online-card .online-camp-head h3 {
   margin: 0;
 }
-/* ⚠ ホームに出すので**説明は1行**（折り返しは禁じない。詰めるのは余白だけ） */
+/* ⚠ ホームに出すので**説明は1行**（折り返しは禁じない。詰めるのは余白だけ）。
+   指導者の案内（`.online-staff-note`、このファイルの後ろで margin 8px 0）と重ねて
+   使うので、重ねたときも余白はこちらが勝つよう2クラスで書く（文字の大きさは
+   1クラスのまま。スマホの `.online-decision p` の 12px を上書きしない） */
 .online-camp-note:not(:where(.online-sp *)) {
   margin: 2px 0;
   font-size: 11px;
+}
+.online-staff-note.online-camp-note:not(:where(.online-sp *)) {
+  margin: 2px 0;
 }
 .online-camp-bulk h3,
 .online-camp-group h3 {

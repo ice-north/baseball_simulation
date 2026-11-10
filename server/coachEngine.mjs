@@ -408,7 +408,7 @@ export function coachSeasonRows(league) {
 }
 
 /** 部で1位を数える成績（称号に使う。盗塁・本塁打・得点は多いほど、防御率は低いほど） */
-export const LEAD_STATS = { stolenBases: 1, homeruns: 1, runs: 1, era: -1 };
+const LEAD_STATS = { stolenBases: 1, homeruns: 1, runs: 1, era: -1 };
 
 /** 部ごとの1位の数字。⚠ 指導者の席が空いていた球団も比べる（全球団の成績 `rows` から） */
 function leadersOf(entry, rows) {

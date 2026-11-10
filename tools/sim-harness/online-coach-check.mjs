@@ -53,6 +53,8 @@ import {
   mellowOnReturn,
   assignCoach,
   pitchText,
+  preferenceText,
+  tryoutContext,
 } from '../../src/online/coaches.js';
 import { coachCard, coachTitles } from '../../server/coachView.mjs';
 import { migrateLeague } from '../../src/online/leagueMigration.js';
@@ -449,6 +451,24 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
   assert.equal(growthPolicy(coach('all', null, { horizon: 'develop' }), young).phase, 'physique');
   assert.equal(growthPolicy(coach('all', null, { horizon: 'win' }), young).phase, 'skill');
   assert.equal(growthPolicy(coach('all', null, { horizon: 'win', stubborn: -2 }), young).phase, 'physique', '柔軟な人が希望に合わせない');
+
+  // 好む選手は1つの並びから読む: 打たせて守るの「守備の良い野手」は、文・トライアウト・
+  // トレードの見る目・軸の選手で同じに効く（ほかの守りの型には効かない）
+  {
+    const fielding = { vision: { attack: 'contact', defense: 'fielding', flagship: 'defense', horizon: 'middle' } };
+    const rotation = { vision: { ...fielding.vision, defense: 'rotation' } };
+    const catcher = (id, defense) => ({ id, name: id, position: 'catcher', age: 25, batting: { meet: 50, power: 50 }, physical: { speed: 50 }, fielding: { defense } });
+    const [good, poor] = [catcher('good', 80), catcher('poor', 50)];
+    assert.ok(preferenceText(fielding).includes('守備の良い野手') && !preferenceText(rotation).includes('守備の良い野手'));
+    assert.ok(tradeFactor({ manager: fielding }, good) > tradeFactor({ manager: fielding }, poor), 'トレードで守備の良い野手を好まない');
+    assert.equal(tradeFactor({ manager: rotation }, good), tradeFactor({ manager: rotation }, poor));
+    assert.ok(tryoutContext({ manager: fielding }).bonus(good) > tryoutContext({ manager: fielding }).bonus(poor), 'トライアウトで守備の良い野手を好まない');
+    assert.equal(tryoutContext({ manager: rotation }).bonus(good), tryoutContext({ manager: rotation }).bonus(poor));
+    assert.equal(keyPlayers(fielding, [poor, good]).find((p) => p.position !== 'pitcher')?.id, 'good', '軸の選手で守備の良い野手を選ばない');
+    // 野手コーチは受け持ち（攻め）の好みだけ。打たせて守るの野手コーチでも守備は見ない
+    const bat = { manager: rotation, batting: fielding };
+    assert.equal(tryoutContext(bat).bonus(good), tryoutContext(bat).bonus(poor), '野手コーチが守りの好みで野手を選ぶ');
+  }
 
   // 実際の名簿で: キャンプの案は全員ぶん、トレードの見る目は ±10% に収まる
   const l = clone(inCamp);

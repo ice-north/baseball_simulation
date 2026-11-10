@@ -84,7 +84,9 @@ export const VOICES = { talkative: '多弁', quiet: '寡黙', logical: '理論�
 //    野手コーチは攻め）、監督に上がると両方が効く。
 // 型ごとに1か所にまとめる:
 //   - `noun` は紙面の「〇〇と〇〇の野球」、`phrase` / `joint` は「足でかき回し、継投で逃げ切る」
-//   - `pref` は好む選手（トライアウトの加点・トレードの見る目・軸の選手。`prefBonus` のキー）
+//   - `pref` は好む選手（トライアウトの加点・トレードの見る目・軸の選手。`prefBonus` のキー）。
+//     攻めの型は野手、守りの型は投手の好み。`hitterPref` は守りの型が野手にも求めるもの
+//     （打たせて守るは守備の良い野手。`prefsOf` で控えめに混ぜる）
 //   - `views` は考え方の向き（`viewsFromVision`。看板の側は1倍、もう一方は `SUB_SIDE` 倍）。
 //     機動力は小技と走塁、長打は強攻と積極打撃、つなぐは慎重な打撃と小技。先発で押すは先発に
 //     長く任せて三振を狙い、継投でつなぐは早めの継投、打たせて守るは打たせて取る
@@ -136,6 +138,7 @@ export const DEFENSE_TYPES = {
   fielding: {
     label: '打たせて守る', noun: '守り', phrase: '守備で1点を守る', joint: '守備で1点を守り',
     pref: 'control',
+    hitterPref: 'defense',
     views: { pitching: -1.6, smallBall: 0.4, bench: 0.6 },
     pitch: '打たせて取って、守りで1点を守る。',
     quiet: '守り勝つ。',
@@ -150,7 +153,7 @@ export const HORIZONS = {
   win: { label: '勝負', phrase: '今年勝ちに行く' },
 };
 /** コーチの受け持ちの側（投手コーチは守りの型、野手コーチは攻めの型。コーチの間はその側だけが効く） */
-export const ROLE_SIDE = { pitching: 'defense', batting: 'attack' };
+const ROLE_SIDE = { pitching: 'defense', batting: 'attack' };
 /** 看板でない側の効き（看板の側は 1） */
 const SUB_SIDE = 0.6;
 const DEFAULT_VISION = { attack: 'contact', defense: 'rotation', flagship: 'attack', horizon: 'middle' };
@@ -190,36 +193,50 @@ const horizonYouth = (coach) => {
  *   - `line` … どこまで伸ばしたらバランスに戻すか（長所の線 65・70・80。null は線なし）
  * 画面には4つの名前で出す（`growthLabel`）。
  */
-export const GROWTH_STYLES = {
+const GROWTH_STYLES = {
   extreme: '徹底して尖らせる',
   staged: '一定まで尖らせて整える',
   shape: '選手の形に合わせる',
   complete: '穴のない選手に',
 };
-export const GROWTH_LINES = [65, 70, 80];
-export function growthOf(coach) {
+const GROWTH_LINES = [65, 70, 80];
+function growthOf(coach) {
   const g = coach?.growth || {};
   const who = ['all', 'sharp', 'none'].includes(g.who) ? g.who : 'sharp';
   const line = who !== 'none' && GROWTH_LINES.includes(Number(g.line)) ? Number(g.line) : null;
   return { who, line };
 }
-export function growthStyleOf(coach) {
+function growthStyleOf(coach) {
   const { who, line } = growthOf(coach);
   return who === 'none' ? 'complete' : who === 'sharp' ? 'shape' : line == null ? 'extreme' : 'staged';
 }
 
 /**
- * 好む選手（トライアウトの小さな加点・トレードの見る目）。ビジョンから決まる。
- * 野手は攻めの型、投手は守りの型。「打たせて守る」は守備の良い野手も好む。
+ * 好む選手。ビジョンから決まる、重みつきの並び（`{ hitter: [...], pitcher: [...] }`）。
+ * 1つずつ `{ pref, side, weight }`: 野手は攻めの型（重み1）、投手は守りの型（重み1）。
+ * 守りの型が野手にも求めるもの（`hitterPref`。打たせて守るは守備の良い野手）は控えめ（0.4）。
+ * ⚠ トライアウト・トレードの見る目・軸の選手・カードの文は、どれもこの並びから読む
+ *    （`fitOf` と `preferenceText`）。1か所だけ別の読み方をすると、文と振る舞いがずれる。
  */
-export const PITCHER_PREFS = { stamina: 'スタミナのある先発', velocity: '球の速い投手', control: '制球の良い投手' };
-export const HITTER_PREFS = { speed: '俊足', power: '長打', contact: '巧打', defense: '守備の良い野手' };
-export function prefsOf(coach) {
+const PREF_LABELS = {
+  stamina: 'スタミナのある先発',
+  velocity: '球の速い投手',
+  control: '制球の良い投手',
+  speed: '俊足',
+  power: '長打',
+  contact: '巧打',
+  defense: '守備の良い野手',
+};
+const SIDE_PREF_WEIGHT = 0.4;
+function prefsOf(coach) {
   const v = visionOf(coach);
+  const defense = DEFENSE_TYPES[v.defense];
   return {
-    hitter: ATTACK_TYPES[v.attack].pref,
-    pitcher: DEFENSE_TYPES[v.defense].pref,
-    fielder: v.defense === 'fielding' ? 'defense' : null,
+    hitter: [
+      { pref: ATTACK_TYPES[v.attack].pref, side: 'attack', weight: 1 },
+      ...(defense.hitterPref ? [{ pref: defense.hitterPref, side: 'defense', weight: SIDE_PREF_WEIGHT }] : []),
+    ],
+    pitcher: [{ pref: defense.pref, side: 'defense', weight: 1 }],
   };
 }
 
@@ -485,6 +502,7 @@ export function staffTactics({
 
 /** 好みの加点の上限（1つあたり ±12点。候補の点数の揺らぎ±8と同じくらい） */
 const PREF_CAP = 12;
+const groupOf = (player) => (player.position === 'pitcher' ? 'pitcher' : 'hitter');
 const prefBonus = (pref, p) => {
   const capped = (v) => Math.max(-PREF_CAP, Math.min(PREF_CAP, v));
   switch (pref) {
@@ -508,14 +526,29 @@ const prefBonus = (pref, p) => {
 };
 
 /**
+ * その人の目で見た、選手の型への合い方（加点。`prefsOf` の並びを重みで足す）。
+ * 監督（`role` なし）は看板の側を強く、もう一方を控えめに見る（`sideWeight`）。
+ * コーチ（`role` に席）は受け持ちの側の好みだけで見る（投手コーチは守り、野手コーチは攻め）。
+ */
+function fitOf(coach, player, role = null) {
+  const only = ROLE_SIDE[role];
+  let score = 0;
+  for (const { pref, side, weight } of prefsOf(coach)[groupOf(player)]) {
+    if (only && side !== only) continue;
+    score += prefBonus(pref, player) * weight * (only ? 1 : sideWeight(coach, side));
+  }
+  return score;
+}
+
+/**
  * トライアウトの選び方に渡す球団の事情（`selectPlayerForAI` の `teamContext`）。
  *
  * - `winRate` … 若手を取るか即戦力を取るか。監督の「編成」（時間軸から決まる）と
  *   前年の勝率で決まる（もとからある「勝率で寄せる」仕組みをそのまま使う）
  * - `bonus` … 型に合う選手への小さな加点（1つ最大±12点。候補の点数の揺らぎ±8と同じくらい）
  *
- * 投手の好みは投手コーチ（守りの型）、野手の好みは野手コーチ（攻めの型）。監督の任せ度で
- * 監督の好みと混ぜる。監督の好みは看板の側が強い。
+ * 投手は投手コーチ、野手は野手コーチの目（受け持ちの側の好み）を、監督の任せ度で監督の目と
+ * 混ぜる（`fitOf`）。監督の目は看板の側が強い。
  * 監督が居なければ null（人の球団で監督が空席＝自分で）。
  */
 export function tryoutContext(staff, { lastWinRate = 0.5 } = {}) {
@@ -523,24 +556,13 @@ export function tryoutContext(staff, { lastWinRate = 0.5 } = {}) {
   if (!manager) return null;
   const w = delegationOf(manager);
   const build = viewOf(manager, 'build');
-  const mine = prefsOf(manager);
-  const pitchPrefs = [
-    [mine.pitcher, (staff.pitching ? 1 - w : 1) * sideWeight(manager, 'defense')],
-    [staff.pitching && prefsOf(staff.pitching).pitcher, staff.pitching ? w : 0],
-  ];
-  const hitPrefs = [
-    [mine.hitter, (staff.batting ? 1 - w : 1) * sideWeight(manager, 'attack')],
-    [staff.batting && prefsOf(staff.batting).hitter, staff.batting ? w : 0],
-    // 「打たせて守る」監督は守備の良い野手も（控えめに）
-    [mine.fielder, 0.4 * sideWeight(manager, 'defense')],
-  ];
   const youth = horizonYouth(manager);
   return {
     winRate: Math.max(0, Math.min(1, 0.5 + 0.12 * build + 0.5 * ((lastWinRate ?? 0.5) - 0.5))),
     bonus: (p) => {
-      const prefs = p.position === 'pitcher' ? pitchPrefs : hitPrefs;
-      let score = 0;
-      for (const [pref, weight] of prefs) if (pref && weight) score += prefBonus(pref, p) * weight;
+      const role = p.position === 'pitcher' ? 'pitching' : 'batting';
+      const coach = staff[role];
+      let score = coach ? (1 - w) * fitOf(manager, p) + w * fitOf(coach, p, role) : fitOf(manager, p);
       // 育成は若手、勝負はベテラン（20歳以下と27歳以上に±2点ずつ）
       const age = p.age || 22;
       if (age <= 20) score += youth * 2;
@@ -574,8 +596,7 @@ export function tradeFactor(staff, player) {
   let f = 1;
   if (age <= 23) f += -0.025 * build + 0.01 * youth;
   else if (age >= 27) f += 0.025 * build - 0.01 * youth;
-  const prefs = prefsOf(manager);
-  f += (prefBonus(player.position === 'pitcher' ? prefs.pitcher : prefs.hitter, player) / PREF_CAP) * 0.03;
+  f += 0.03 * Math.max(-1, Math.min(1, fitOf(manager, player) / PREF_CAP));
   return Math.max(1 - TRADE_FACTOR_LIMIT, Math.min(1 + TRADE_FACTOR_LIMIT, f));
 }
 
@@ -681,13 +702,11 @@ export function growthLabel(coach) {
   return `${GROWTH_STYLES[growthStyleOf(coach)]}${line != null ? `（長所${line}まで）` : ''}`;
 }
 
-/** 好む選手の一言（「野手は俊足、投手は球の速い投手」） */
+/** 好む選手の一言（「野手は俊足と守備の良い野手、投手は制球の良い投手」） */
 export function preferenceText(coach) {
-  const p = prefsOf(coach);
-  return [
-    `野手は${HITTER_PREFS[p.hitter]}${p.fielder ? `と${HITTER_PREFS[p.fielder]}` : ''}`,
-    `投手は${PITCHER_PREFS[p.pitcher]}`,
-  ].join('、');
+  const prefs = prefsOf(coach);
+  const say = (list) => list.map((x) => PREF_LABELS[x.pref]).join('と');
+  return `野手は${say(prefs.hitter)}、投手は${say(prefs.pitcher)}`;
 }
 
 const HORIZON_PITCH = {
@@ -737,12 +756,11 @@ const KEY_POOL = { hitter: 9, pitcher: 6 };
  * 野手1人。主力（力の上位 `KEY_POOL`）のうち、型に合う順に（同じなら力の順）。
  */
 export function keyPlayers(coach, roster = []) {
-  const prefs = prefsOf(coach);
   const byId = (a, b) => String(a.id).localeCompare(String(b.id));
   const pick = (group, n) =>
     roster
-      .filter((p) => (p.position === 'pitcher') === (group === 'pitcher'))
-      .map((p) => ({ p, power: overallScore(p), fit: prefBonus(prefs[group], p) }))
+      .filter((p) => groupOf(p) === group)
+      .map((p) => ({ p, power: overallScore(p), fit: fitOf(coach, p) }))
       .sort((a, b) => b.power - a.power || byId(a.p, b.p))
       .slice(0, KEY_POOL[group])
       .sort((a, b) => b.fit - a.fit || b.power - a.power || byId(a.p, b.p))
@@ -868,7 +886,7 @@ const intPersonality = () => clampInt(noise(0.85));
 const HORIZON_BUILD = { develop: -1.8, middle: 0, win: 1.8 };
 
 /** ビジョンと性格から7つの考え方の向き（小数）を作る（型の `views`）。揺らぎは生成で足す */
-export function viewsFromVision(vision, personality = {}) {
+function viewsFromVision(vision, personality = {}) {
   const v = visionOf({ vision });
   const out = Object.fromEntries(VIEW_KEYS.map((k) => [k, 0]));
   const add = (table, weight) => {
