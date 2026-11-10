@@ -32,6 +32,9 @@ export class MemoryStore {
   //    検査のほぼ全部がここを通るので、軽い読みの取りこぼしはここで見つかる
   //    （`SIM_HARNESS_WHOLE_STORE=1` で分けない従来の形にも戻せる）。
   async read() {
+    // ⚠ 全体を読んだら印も「全体」に戻す。戻さないと、前の軽い読みの印が残ったまま
+    //    後から全体を読んでも「軽い読みのまま」に見え、online-parts-check が見逃す
+    this.lastReadMode = 'full';
     const stored = memory.get(this.path);
     if (stored === undefined) return empty();
     if (typeof stored === 'string') return JSON.parse(stored);

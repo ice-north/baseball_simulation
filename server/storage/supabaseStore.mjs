@@ -137,9 +137,30 @@ export class SupabaseStore {
     )[0];
   }
   /**
+   * 管理行を列を絞って読む（`columns` は PostgREST の `select` の項目）。
+   * 絞り込みが通らない環境（PostgREST が式を受け付けず 400 を返す）では印を立てて
+   * `null` を返すので、呼ぶ側は全列（`control()`）で読み直す。印が立った後は問い合わせない。
+   * ⚠ 絞った読み出しはここを通す。1か所だけ予備の経路が無いと、その環境では
+   *    その操作だけが毎回失敗する（以前は `readGeneration` に無く、定期の読み直しが 400 で落ちていた）
+   */
+  async selectControl(columns) {
+    if (this.narrowSelectUnsupported) return null;
+    try {
+      return (
+        await this.request(
+          `/rest/v1/online_control?id=eq.pennant&select=${encodeURIComponent(columns.join(','))}`,
+        )
+      )[0];
+    } catch (error) {
+      if (error.storageStatus !== 400) throw error;
+      this.narrowSelectUnsupported = true;
+      return null;
+    }
+  }
+  /**
    * 閲覧と定期処理の判定に要る列だけを読む。
    * ⚠ `select=*` だと全参加者のビュー（1人あたり数十〜数百KB）を毎回取り、
-   *    画面の30秒ごとの更新のたびに参加人数ぶんの転送が発生していた。
+   *    画面の60秒ごとの更新のたびに参加人数ぶんの転送が発生していた。
    *    ここでは自分のビューと、リーグ全体の進行情報（`views._meta`）だけを取る。
    * ⚠ 絞り込みが通らない環境（古い保存で `_meta` が無い、PostgREST が式を
    *    受け付けない）では、従来どおり全列を読む。
@@ -154,22 +175,11 @@ export class SupabaseStore {
         anyRevision: memberRevision(row?.views),
       };
     };
-    if (this.narrowSelectUnsupported || (userId && !/^[\w-]+$/.test(userId)))
-      return full();
+    if (userId && !/^[\w-]+$/.test(userId)) return full();
     const columns = ['generation', 'snapshot_path', 'sessions', 'meta:views->_meta'];
     if (userId) columns.push(`view:views->"${userId}"`);
-    let row;
-    try {
-      row = (
-        await this.request(
-          `/rest/v1/online_control?id=eq.pennant&select=${encodeURIComponent(columns.join(','))}`,
-        )
-      )[0];
-    } catch (error) {
-      if (error.storageStatus !== 400) throw error;
-      this.narrowSelectUnsupported = true;
-      return full();
-    }
+    const row = await this.selectControl(columns);
+    if (row === null) return full();
     // `_meta` は次の保存から付く。無いうちは全列を読んで補う
     if (row?.snapshot_path && !row.meta) return full();
     return { ...row, view: row?.view ?? null, anyRevision: row?.meta?.revision };
@@ -312,11 +322,8 @@ export class SupabaseStore {
    *    開いていた画面が版の門番（`versionMismatch`）を通らない。
    */
   async readGeneration(userId, sessionId) {
-    const row = (
-      await this.request(
-        '/rest/v1/online_control?id=eq.pennant&select=generation,sessions,meta:views->_meta',
-      )
-    )[0];
+    const narrow = await this.selectControl(['generation', 'sessions', 'meta:views->_meta']);
+    const row = narrow === null ? await this.control() : narrow;
     return {
       generation: row?.generation ?? null,
       writable: isLiveSession(row?.sessions, userId, sessionId),
@@ -357,26 +364,13 @@ export class SupabaseStore {
    * ⚠ 自分のビューが無い（参加していない）・球団名の無い形のときは、全列を読んで従来どおり判断する
    */
   async recordRow(userId) {
-    if (this.narrowSelectUnsupported || !/^[\w-]+$/.test(userId || ''))
-      return this.control();
-    const columns = [
+    if (!/^[\w-]+$/.test(userId || '')) return this.control();
+    const row = await this.selectControl([
       'snapshot_path',
       'records:views->_records',
       `teamName:views->"${userId}"->teamName`,
       `year:views->"${userId}"->year`,
-    ];
-    let row;
-    try {
-      row = (
-        await this.request(
-          `/rest/v1/online_control?id=eq.pennant&select=${encodeURIComponent(columns.join(','))}`,
-        )
-      )[0];
-    } catch (error) {
-      if (error.storageStatus !== 400) throw error;
-      this.narrowSelectUnsupported = true;
-      return this.control();
-    }
+    ]);
     if (!row || row.teamName == null) return this.control();
     return {
       snapshot_path: row.snapshot_path,

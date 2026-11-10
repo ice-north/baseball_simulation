@@ -513,7 +513,7 @@ assert.equal(
 }
 
 // ⚠ 閲覧と定期処理の判定は、自分のビューとリーグ全体の進行情報（`_meta`）だけを読む。
-//    以前は `select=*` で全参加者のビューを毎回取り、30秒ごとの更新のたびに
+//    以前は `select=*` で全参加者のビューを毎回取り、60秒ごとの更新のたびに
 //    参加人数ぶんの転送が発生していた
 {
   const others = Object.fromEntries(
@@ -584,6 +584,18 @@ assert.equal(
   const fallbackStore = new SupabaseStore({ url: 'https://fixture.test', serviceKey: 'test-only', members: [], adminId: 'a', fetchImpl });
   assert.equal((await fallbackStore.readView('m1', 'x')).teamName, 'T1');
   assert.equal(await fallbackStore.isDue('2026-06-01T00:00:00.000Z'), true);
+  // ⚠ 世代だけの読み出し（定期の読み直し）にも予備の経路がある。以前はここだけ 400 で落ち、
+  //    その環境では画面の読み直しが毎回失敗していた
+  {
+    const fresh = new SupabaseStore({ url: 'https://fixture.test', serviceKey: 'test-only', members: [], adminId: 'a', fetchImpl });
+    const current = await fresh.readGeneration('m0', 's0');
+    assert.equal(current.generation, row.generation, '絞り込みが通らない環境で世代を読めない');
+    assert.equal(current.schema, ONLINE_SCHEMA);
+    assert.equal(current.writable, true);
+    const viewer = new LeagueService(fresh, { adminId: 'a', members: [] });
+    const first = await viewer.view('m0', 's0');
+    assert.equal((await viewer.view('m0', 's0', first.viewGeneration)).unchanged, true, '絞り込みが通らない環境で世代の近道が動かない');
+  }
   rejectNarrowSelect = false;
 }
 
