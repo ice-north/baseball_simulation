@@ -10,8 +10,6 @@ import {
 import { teamLabel } from './gameText.js';
 import { useDraftMemory } from './Drafts.jsx';
 
-export { hasUnsavedFullLineup };
-
 // ============================================================
 // スマホ版の詳しい編成画面。**一人用の編成画面をそのまま使う**。
 //
