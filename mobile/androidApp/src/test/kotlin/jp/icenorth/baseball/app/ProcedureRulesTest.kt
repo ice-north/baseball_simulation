@@ -17,9 +17,9 @@ class ProcedureRulesTest {
 
     @Test fun campKeepsWhatHappensToUnfinishedRounds() {
         assertEquals(
-            "全員が4クール終えた時点で次へ進みます。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。",
+            "全員が4クール終えた時点で次へ進みます（指導者に任せた球団は待ちません）。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。",
             rulesText("camp", deadline, showDate = false),
         )
-        assertEquals("全員が4クール終えると次へ進みます。", rulesText("camp", null, showDate = false))
+        assertEquals("全員が4クール終えると次へ進みます（指導者に任せた球団は待ちません）。", rulesText("camp", null, showDate = false))
     }
 }

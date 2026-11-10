@@ -54,6 +54,19 @@ export function pendingProcedure(view) {
   };
 }
 
+/**
+ * 手続きの一覧に出す、球団ごとの様子。PC・スマホで同じ言葉（アプリは `ProceduresScreen.kt`）。
+ * ⚠ 指導者に任せた球団（`delegated`）は待たないので「検討中」と出さない（`leagueEngine` の `waitsFor`）
+ */
+export const phaseStatusLabel = (member) =>
+  member.cpu
+    ? 'CPUが決定（初期メンバー待ち）'
+    : member.delegated
+      ? '指導者に任せています'
+      : member.ready
+        ? '決定済み'
+        : '検討中';
+
 /** 自分が返事をする番のトレードの提案の数 */
 export const waitingTradeCount = (view) =>
   (view?.trades || []).filter((t) => t.myTurn).length;

@@ -260,7 +260,7 @@ function Modes({ staff, busy, run, command }) {
     <section className="online-card">
       <h2>任せ方</h2>
       <p className="online-muted">
-        分野ごとに選びます。「意見を聞く」は決めるのはあなたで、指導者の案が標準案になります（采配の「AI判断」は指導者の考えで動きます）。「任せる」は指導者が決めます。全部「自分で」なら指導者を入れる前と同じです。
+        分野ごとに選びます。「意見を聞く」は決めるのはあなたで、指導者の案が標準案になります（采配の「AI判断」は指導者の考えで動きます）。「任せる」は指導者が決めます（トライアウト・退団・キャンプは、あなたの決定を待たずに進みます）。全部「自分で」なら指導者を入れる前と同じです。
       </p>
       <div className="online-choices online-staff-modes">
         {staff.modes.map((area) => {

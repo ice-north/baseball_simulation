@@ -242,8 +242,8 @@ internal fun rulesText(kind: String?, deadline: String?, showDate: Boolean): Str
     val due = formatDeadline(deadline)
     val shown = due?.takeIf { showDate }
     return when {
-        kind == "camp" && due == null -> "全員が4クール終えると次へ進みます。"
-        kind == "camp" -> (shown?.let { "締め切りは $it。" } ?: "") + "全員が4クール終えた時点で次へ進みます。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。"
+        kind == "camp" && due == null -> "全員が4クール終えると次へ進みます（指導者に任せた球団は待ちません）。"
+        kind == "camp" -> (shown?.let { "締め切りは $it。" } ?: "") + "全員が4クール終えた時点で次へ進みます（指導者に任せた球団は待ちません）。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。"
         due == null -> "全員が決定すると進みます。"
         else -> (shown?.let { "締め切り $it。" } ?: "") + "全員が決定するか、締め切りで進みます。"
     }
@@ -251,8 +251,8 @@ internal fun rulesText(kind: String?, deadline: String?, showDate: Boolean): Str
 
 /** 手続きの決まりの詳しい文（Web 版の PC の rulesText と同じ。日時は除く） */
 private fun rulesDetail(deadline: String?): String =
-    if (formatDeadline(deadline) != null) "全員が決定した時点で処理します。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。"
-    else "全員が決定した時点で処理します。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。"
+    if (formatDeadline(deadline) != null) "全員が決定した時点で処理します（指導者に任せた球団は待ちません）。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。"
+    else "全員が決定した時点で処理します（指導者に任せた球団は待ちません）。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。"
 
 @Composable
 private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
@@ -269,7 +269,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     ) {
         Text(rulesText(kind, deadline, showDate = stageInfo(raw)?.open != true), style = MaterialTheme.typography.bodyMedium)
         // 標準案を出した指導者と、任せているか（Web の PhasePanel と同じ文。文はサーバーが作る）。
-        // ⚠ 任せていると提出しても指導者の案で決まるので、出さないと組み立てが無駄になる。
+        // ⚠ 任せていると提出しても指導者の案で決まり、サーバーも決定を待たないので、出さないと組み立てが無駄になる。
         //    キャンプのぶんは CampPanel が出す（Web と同じ分け方）
         if (kind != "camp") phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
         members.forEach { m ->
@@ -279,7 +279,15 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
                 //    「未提出」とは書かない（下書きを保存した球団もここに入る。Web 版も「検討中」）
                 Text(if (ready) "✓" else "", color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(20.dp))
                 Text(view.teamLabel(m.at("teamName").str().orEmpty()), modifier = Modifier.weight(1f))
-                Muted(if (m.at("cpu").bool() == true) "CPUが決定（初期メンバー待ち）" else if (ready) "決定済み" else "検討中")
+                // ⚠ 指導者に任せた球団は待たない（Web 版の `phaseStatusLabel` と同じ言葉）
+                Muted(
+                    when {
+                        m.at("cpu").bool() == true -> "CPUが決定（初期メンバー待ち）"
+                        m.at("delegated").bool() == true -> "指導者に任せています"
+                        ready -> "決定済み"
+                        else -> "検討中"
+                    },
+                )
             }
         }
     }

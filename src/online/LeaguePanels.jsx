@@ -25,7 +25,7 @@ import { Page } from './Page.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
 import { plannedPicks } from './tryoutPlan.js';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
-import { packWaiting } from './notices.js';
+import { packWaiting, phaseStatusLabel } from './notices.js';
 import { ReadContext } from './useRead.js';
 import CampPlanner from './CampPlanner.jsx';
 import ContractPlanner from './ContractPlanner.jsx';
@@ -797,15 +797,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const rulesText =
     phase.kind === 'camp'
       ? phase.deadline
-        ? '全員が4クール終えた時点で次へ進みます。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。'
-        : '全員が4クール終えると次へ進みます。'
+        ? '全員が4クール終えた時点で次へ進みます（指導者に任せた球団は待ちません）。締め切りまでに終わらなかったぶんは、最後に指示した内容で自動で行われます。'
+        : '全員が4クール終えると次へ進みます（指導者に任せた球団は待ちません）。'
       : phase.deadline
     ? mobile
       ? '全員が決定するか、締め切りで進みます。'
-      : '全員が決定した時点で処理します。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。'
+      : '全員が決定した時点で処理します（指導者に任せた球団は待ちません）。締め切りを過ぎると、未決定の球団は保存した下書き（無ければ標準案）で進みます。ほかに検討中の球団がいる間は、決定後も出し直せます。'
     : mobile
       ? '全員が決定すると進みます。'
-      : '全員が決定した時点で処理します。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。';
+      : '全員が決定した時点で処理します（指導者に任せた球団は待ちません）。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。';
   // 標準案を出した指導者（「山田監督の案です」）と、キャンプでの指導者の入れ替え。
   // ⚠ 文はサーバーが作る（`projection.mjs` の `phasePlanBy`）
   // ⚠ **キャンプのぶんは出さない**。キャンプはPCではホームに出していて
@@ -819,8 +819,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
       {view.members.map((m) => (
         <li key={m.teamName} data-ready={m.ready || undefined}>
           {/* ⚠ 参加者が付けた球団名を出す。`label` は作成時の呼び名のまま */}
-          {teamLabel(m.teamName)} ·{' '}
-          {m.cpu ? 'CPUが決定（初期メンバー待ち）' : m.ready ? '決定済み' : '検討中'}
+          {teamLabel(m.teamName)} · {phaseStatusLabel(m)}
         </li>
       ))}
     </ul>

@@ -268,7 +268,10 @@ export const STAFF_AREAS = {
   camp: { label: 'キャンプ', owner: null },
 };
 export const STAFF_AREA_KEYS = Object.keys(STAFF_AREAS);
-/** 手続きと、それを受け持つ任せ方の分野（トライアウト・契約更改の退団・キャンプ） */
+/**
+ * 手続きと、それを受け持つ任せ方の分野（トライアウト・契約更改の退団・キャンプ）。
+ * ⚠ 「任せる」にした手続きは、その人の決定を待たない（`leagueEngine` の `waitsFor`）
+ */
 export const PHASE_STAFF_AREA = { tryout: 'tryout', contract: 'release', camp: 'camp' };
 
 /** 人の球団の任せ方（無ければ既定）。⚠ 保存は `member.staffModes`（無い人もいる） */

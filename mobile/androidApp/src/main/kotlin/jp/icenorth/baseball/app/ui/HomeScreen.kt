@@ -368,8 +368,11 @@ private fun pendingAlerts(view: LeagueView, raw: JsonObject?): List<String> = bu
         val label = phase.kind?.let { PHASE_LABELS[it] } ?: phase.label ?: "手続き"
         val ready = raw?.at("phase", "submission", "ready").bool() == true
         val campDone = phase.kind == "camp" && (raw?.at("phase", "camp", "rounds").int() ?: 0) >= (raw?.at("phase", "camp", "total").int() ?: CAMP_ROUNDS)
+        // ⚠ 指導者に任せた手続きはサーバーが決定を待たない（`Notices.kt` の pendingProcedure と同じ決まり）
+        val delegated = raw?.at("phase", "delegated").bool() == true
         add(
             when {
+                delegated -> "$label: 指導者に任せています"
                 campDone -> "$label: 全クール終了（ほかの球団を待っています）"
                 ready -> "$label: 決定済み（変更もできます）"
                 // ⚠ 名前と「を」の間に空白を入れない（「契約更改 を決めてください」と出ていた。上の帯と同じ書き方）

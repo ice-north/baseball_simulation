@@ -8,6 +8,7 @@ import { useRead } from './useRead.js';
 import { inOnlineRoot } from './dialogPortal.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
+import { phaseStatusLabel } from './notices.js';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import {
   STAT_GROUPS,
@@ -62,7 +63,7 @@ export function TeamBrief({ view }) {
               (member) =>
                 // ⚠ 球団の表示名で出す。`member.label`（「プレイヤー1」）だと
                 //    他の画面の球団名と混ざってどの球団か分からない
-                `${teamLabel(member.teamName)} ${member.ready ? '決定済み' : '検討中'}`,
+                `${teamLabel(member.teamName)} ${phaseStatusLabel(member)}`,
             )
             .join('／')}
         </p>

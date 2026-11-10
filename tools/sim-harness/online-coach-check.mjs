@@ -72,6 +72,7 @@ import { migrateLeague } from '../../src/online/leagueMigration.js';
 import { projectLeague, projectLineup, projectTeamInfo } from '../../server/projection.mjs';
 import { hashSeed, withSeededRandom } from '../../src/game/rng.js';
 import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
+import { phaseStatusLabel } from '../../src/online/notices.js';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 let now = new Date('2026-10-28T00:00:00Z');
@@ -693,6 +694,9 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
     assert.equal(viewA.phase.delegated, true, '任せた手続きの印がビューに無い');
     const shownA = viewA.members.find((m) => m.teamName === a.teamName);
     assert.ok(shownA.delegated && shownA.ready, '任せた球団が一覧で「検討中」のまま');
+    assert.equal(phaseStatusLabel(shownA), '指導者に任せています');
+    // 文も「待たない」に合わせる（以前は「提出しても指導者の案で決まります」だけで、待つかが分からなかった）
+    assert.match(viewA.phase.planBy.text, /決定は待たずに/, '任せた手続きの文が新しい動きと食い違う');
     const viewB = projectLeague({ league: l, sessions: {} }, b.userId, null, null);
     assert.equal(viewB.phase.delegated, false);
     assert.ok(!viewB.members.find((m) => m.teamName === b.teamName).ready);
@@ -728,6 +732,8 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
     updateStaffModes(l, a.userId, { camp: 'delegate' }, iso());
     assert.equal(l.phase?.kind, 'camp', '前提: b はまだ終えていない');
     assert.equal(waitsFor(l, l.members[0]), false, 'キャンプを任せた人を待つ');
+    const viewA = projectLeague({ league: l, sessions: {} }, a.userId, null, null);
+    assert.match(viewA.phase.planBy.text, /ほかの球団が4クール終えるとキャンプが終わり/, '任せたキャンプの文が新しい動きと食い違う');
     for (const role of COACH_ROLES) updateStaff(l, a.userId, { action: 'release', role });
     assert.equal(waitsFor(l, l.members[0]), true, '指導者がいないのにキャンプを任せたまま');
     decide(l, b.userId);

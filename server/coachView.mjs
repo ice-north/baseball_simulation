@@ -401,6 +401,8 @@ export function ownStaffView(league, member, team, labelOf) {
  *    埋めず「おすすめ」で練習する（`coaches.js` の `campPlan` の `strictSeats`）。
  *    コーチが2人とも居なければ案は無い（null）
  * ⚠ キャンプは「決定」ではなく1クールずつ実行する。文もそれに合わせる
+ * ⚠ 任せた手続きはその人の決定を待たない（`leagueEngine` の `waitsFor`）。「任せる」の文はそれを書く。
+ *    キャンプは人事ができる期間でもあるので、ほかの球団が終えると終わることも書く
  */
 export function phasePlanBy(league, teamName, kind) {
   const area = PHASE_STAFF_AREA[kind];
@@ -422,10 +424,10 @@ export function phasePlanBy(league, teamName, kind) {
   const text =
     area === 'camp'
       ? mode === 'delegate'
-        ? `${by}に任せています（自分でクールを回すと、任せ方は「意見を聞く」に戻ります）`
+        ? `${by}に任せています。あなたを待たずに、ほかの球団が4クール終えるとキャンプが終わり、残りのクールは指導者の方針で回ります（指導者の入れ替えはそれまでに。自分でクールを回すと、任せ方は「意見を聞く」に戻ります）`
         : `${by}の案です。変えてから練習を実行できます（回さなかったクールはこの案で）`
       : mode === 'delegate'
-        ? `${by}に任せています（提出しても指導者の案で決まります。自分で決めるときは任せ方を「意見を聞く」に）`
+        ? `${by}に任せています。あなたの決定は待たずに、指導者の案で決まります（自分で決めるときは任せ方を「意見を聞く」に）`
         : `${by}の案です。変えてから決定できます`;
   return { mode, by, text };
 }
