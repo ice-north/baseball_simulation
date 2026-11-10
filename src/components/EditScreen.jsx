@@ -163,7 +163,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
               >
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-bold text-white">{player.name}</span>
-                  <span className="text-xs text-gray-300">#{player.number || player.id}</span>
+                  <span className="text-xs text-gray-300">{player.number != null && player.number !== '' ? `#${player.number}` : '-'}</span>
                 </div>
                 <div className="text-sm text-gray-300">
                   <div>ポジション: {POSITION_NAMES[player.position] || player.position}</div>

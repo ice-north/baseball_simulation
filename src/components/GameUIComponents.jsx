@@ -554,6 +554,10 @@ export const Sidebar = ({
   </div>
 );
 
+// 背番号の表示。⚠ 無いときに `player.id` を出さないこと（内部の番号が「#999850554」と
+//    背番号のように見えていた）。0番は正しい背番号なので `||` ではなく null で判定する
+const jerseyLabel = (p) => (p?.number != null && p.number !== '' ? `#${p.number}` : '-');
+
 // ============================================================
 // 試合画面 左右カラムの投手欄（試合中=投手成績 / 試合前=予告先発）
 //
@@ -637,7 +641,7 @@ export const TeamPitcherPanel = ({ team, gameStarted }) => (
               <div className="text-base text-white mb-2 font-bold flex items-center gap-2">
                 <span>⚾</span>
                 <span>{pitcher.name}</span>
-                <span className="text-sm text-gray-300">#{pitcher.number || pitcher.id}</span>
+                <span className="text-sm text-gray-300">{jerseyLabel(pitcher)}</span>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
@@ -822,7 +826,7 @@ export const TeamMemberPanel = ({
                         {player.name}
                         <span className={`ml-0.5 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                       </span>
-                      <span className="text-xs text-gray-400 font-mono font-bold">#{player.number || player.id}</span>
+                      <span className="text-xs text-gray-400 font-mono font-bold">{jerseyLabel(player)}</span>
 <span className="text-sm text-gray-300 font-semibold">{throwHand}{batHand}</span>
                       {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
                       {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
