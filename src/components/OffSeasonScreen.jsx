@@ -441,7 +441,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
             <p className="text-yellow-300 text-base font-semibold">
               {seasonSummary.champion.wins}勝 {seasonSummary.champion.losses}敗
               {seasonSummary.champion.draws > 0 ? ` ${seasonSummary.champion.draws}分` : ''}
-              　勝率 {(seasonSummary.champion.winRate || 0).toFixed(3)}
+              {'　'}勝率 {(seasonSummary.champion.winRate || 0).toFixed(3)}
             </p>
           </div>
         )}
