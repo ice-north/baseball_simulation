@@ -119,8 +119,11 @@ export default function MobileView(props) {
             <button onClick={() => setTab('staff')}>指導者</button>
           </nav>
           <Standings view={view} />
+          {/* ⚠ **行った先の見出しの名前で書く**（「リーグの話題」と「リーグ便り」）。以前は
+              「リーグ便り・過去のシーズン →」で、開くと先頭は「リーグの話題」、1年目は
+              過去のシーズンも無かった（過去の最終順位は「リーグ便り」の中で選ぶ） */}
           <button className="online-news-link" onClick={() => setTab('news')}>
-            リーグ便り・過去のシーズン →
+            リーグの話題・リーグ便り →
           </button>
         </>
       )}

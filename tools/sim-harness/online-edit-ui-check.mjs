@@ -615,7 +615,9 @@ try {
     })),
   }));
   await click(news.page, '更新');
-  await click(news.page, 'リーグ便り・過去のシーズン →');
+  // ⚠ 入口の名前は、行った先の見出しの名前（u1 低30）
+  await click(news.page, 'リーグの話題・リーグ便り →');
+  await news.page.getByRole('heading', { name: 'リーグ便り', exact: true }).waitFor();
   await news.page.getByLabel('見るお知らせ').selectOption('notice:3');
   await click(news.page, '次のページ');
   await click(news.page, '次のページ');

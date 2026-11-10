@@ -711,7 +711,7 @@ try {
   await m.setViewportSize({ width: 390, height: 844 });
   await click(m, 'ホーム');
   await m
-    .getByRole('button', { name: 'リーグ便り・過去のシーズン →', exact: true })
+    .getByRole('button', { name: 'リーグの話題・リーグ便り →', exact: true })
     .click();
   assert.ok((await m.locator('.online-news-list article').count()) <= 8);
   assert.ok(
