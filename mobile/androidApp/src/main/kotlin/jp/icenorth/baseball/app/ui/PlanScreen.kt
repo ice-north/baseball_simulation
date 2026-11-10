@@ -147,32 +147,36 @@ fun PlanScreen(model: AppViewModel) {
     val nextId = model.raw?.at("nextStarterId").num()?.toLong()
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo) { Text("↶ 戻す") }
-            TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo) { Text("↷ 進む") }
-            Text(if (dirty) "保存していない変更があります" else "保存済み", style = MaterialTheme.typography.bodySmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            // ⚠ 取り消すと、編集を始めたときではなく**今の保存済み**の編成に戻す（古い base に戻すと保存が断られ続ける）
-            TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale) { Text("取り消す") }
-            Button(
-                onClick = {
-                    val problem = draft.problem(view.roster)
-                    if (problem != null) model.error = problem
-                    else model.saveLineup(draft.toPayload()) {
-                        model.view?.lineup?.let { model.plan = EditHistory(PlanDraft.from(it, model.view!!.roster)) }
-                    }
-                },
-                enabled = dirty,
-            ) { Text("保存") }
+        // ⚠ 指導者の面では編成の保存の帯を出さない（任せ方は面の中の「任せ方を保存」で送る。
+        //    帯の「保存」と並ぶと、どちらで任せ方が保存されるのか分からなかった）
+        if (tab != PlanTab.Staff) {
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo) { Text("↶ 戻す") }
+                TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo) { Text("↷ 進む") }
+                Text(if (dirty) "保存していない変更があります" else "保存済み", style = MaterialTheme.typography.bodySmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                // ⚠ 取り消すと、編集を始めたときではなく**今の保存済み**の編成に戻す（古い base に戻すと保存が断られ続ける）
+                TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale) { Text("取り消す") }
+                Button(
+                    onClick = {
+                        val problem = draft.problem(view.roster)
+                        if (problem != null) model.error = problem
+                        else model.saveLineup(draft.toPayload()) {
+                            model.view?.lineup?.let { model.plan = EditHistory(PlanDraft.from(it, model.view!!.roster)) }
+                        }
+                    },
+                    enabled = dirty,
+                ) { Text("保存") }
+            }
+            if (stale) {
+                Text(
+                    "別の画面で編成が更新されました。この編集は保存できないので、「取り消す」で最新の編成を読み直してから編集し直してください。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
         }
-        if (stale) {
-            Text(
-                "別の画面で編成が更新されました。この編集は保存できないので、「取り消す」で最新の編成を読み直してから編集し直してください。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-        }
-        ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) })
+        ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.padding(top = if (tab == PlanTab.Staff) 8.dp else 0.dp))
         when (tab) {
             PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, onDragStart, open, orderView, { orderView = it }) { sheet = it }
             PlanTab.Pitching -> PitchingEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open) { sheet = it }
