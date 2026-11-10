@@ -30,12 +30,8 @@ import {
   CAMP_PITCH_TYPES,
   CAMP_ROUNDS,
 } from '../../src/online/shared.js';
-import {
-  TRAINING_MENUS,
-  SUB_TRAINING_MENUS,
-  subMenuFitsPlayer,
-  executeSubTraining,
-} from '../../src/season/campTraining.js';
+import { SUB_TRAINING_MENUS, executeSubTraining } from '../../src/season/campTraining.js';
+import { menusFor, subMenusFor } from '../../src/online/campMenus.js';
 import {
   DIRECTIONS,
   resolveTraining,
@@ -135,16 +131,9 @@ function campWith(build) {
 
 // --- 画面が出すメニューを、サーバーが受け取れるか ----------------------
 {
-  // ⚠ 画面側の絞り込みと**同じ条件**をここでも見る。画面は `CAMP_MENUS` で
-  //    絞っているので、絞りを外したときにここで落ちる
-  const offered = (isPitcher) =>
-    Object.entries(TRAINING_MENUS)
-      .filter(
-        ([key, menu]) =>
-          CAMP_MENUS.includes(key) &&
-          (isPitcher ? menu.category !== 'batting' : menu.category !== 'pitching'),
-      )
-      .map(([key]) => key);
+  // ⚠ 画面が出すメニューそのもの（`campMenus.js` の `menusFor`）を見る。以前は
+  //    画面の絞り込みを写して持っていて、写しは画面と別の条件（区分）になっていた
+  const offered = (isPitcher) => menusFor(isPitcher).map(([key]) => key);
   for (const isPitcher of [true, false]) {
     const list = offered(isPitcher);
     assert.ok(list.length >= 4, `${isPitcher ? '投手' : '野手'}のメニューが少なすぎる`);
@@ -166,10 +155,8 @@ function campWith(build) {
 //    サブポジ練習は `CAMP_SUB_TARGETS` に載せて対象を選べるようにしたので出す。
 //    これが欠けていた間、**野手のサブ練習は体づくり系だけ**だった。
 {
-  const offered = (player) =>
-    Object.keys(SUB_TRAINING_MENUS).filter(
-      (key) => CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player),
-    );
+  // 画面が出すサブ練習そのもの（`campMenus.js` の `subMenusFor`）
+  const offered = (player) => subMenusFor(player).map(([key]) => key);
   const pitcher = { position: 'pitcher' };
   const catcher = { position: 'catcher' };
   const fielder = { position: 'left' };

@@ -2,14 +2,8 @@
 //   node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json
 import fs from 'node:fs';
 import { resolveTraining, playerWish, describeMood, recommendedPolicy } from '../../src/season/trainingPolicy.js';
-import { menuFitsPlayer, subMenuFitsPlayer } from '../../src/season/campTraining.js';
-import { CAMP_MENUS, CAMP_SUB_MENUS } from '../../src/online/shared.js';
-
-// CampPlanner.jsx の clampMenu / clampSub と同じ（JSX は node から読めないので写す）
-const clampMenu = (key, player) =>
-  CAMP_MENUS.includes(key) && menuFitsPlayer(key, player) ? key : player.position === 'pitcher' ? 'control' : 'batting';
-const clampSub = (key, player) =>
-  CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player) ? key : 'physique';
+// 画面（CampPlanner.jsx）と同じ判定を読む（以前は JSX から読めないので写していた）
+import { clampMenu, clampSub } from '../../src/online/campMenus.js';
 import {
   plannedPicks, weightedRanked, DEFAULT_WEIGHTS, addToPlan, benchFromPlan, moveInPlan, planSummary,
 } from '../../src/online/tryoutPlan.js';

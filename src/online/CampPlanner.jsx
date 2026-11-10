@@ -1,10 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  TRAINING_MENUS,
-  SUB_TRAINING_MENUS,
-  menuFitsPlayer,
-  subMenuFitsPlayer,
-} from '../season/campTraining.js';
+import { menusFor, subMenusFor, clampMenu, clampSub } from './campMenus.js';
 import {
   DIRECTIONS,
   PHASES,
@@ -16,8 +11,6 @@ import {
 import { POS, POS_FULL } from './api.js';
 import { getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 import {
-  CAMP_MENUS,
-  CAMP_SUB_MENUS,
   CAMP_DIRECTIONS,
   CAMP_PHASES,
   CAMP_POLICY_GUIDE,
@@ -48,39 +41,9 @@ import { formatDeadline } from './LeaguePanels.jsx';
 //    それらを動かさない。出すと「できるように見えて何も起きない」ものが並ぶ。
 // ⚠ メニューの表は一人用と**同じものを読む**（`TRAINING_MENUS` /
 //    `SUB_TRAINING_MENUS`）。写すと、調整したときに片方だけ古くなる。
-//    出すのは `CAMP_MENUS` / `CAMP_SUB_MENUS` に載っているものだけ
-//    ——`TRAINING_MENUS` にはオンラインで動かないもの（新球種習得）がある。
+//    出すメニューの絞り込みと既定へ戻す判定は `campMenus.js`（node の道具と共用）。
 // ============================================================
 
-/** 投手に出すメイン練習／野手に出すメイン練習 */
-export const menusFor = (isPitcher) =>
-  Object.entries(TRAINING_MENUS).filter(
-    ([key]) =>
-      CAMP_MENUS.includes(key) &&
-      menuFitsPlayer(key, { position: isPitcher ? 'pitcher' : 'catcher' }),
-  );
-
-/**
- * その選手に出すサブ練習。
- * ⚠ **効かないものを出さない**。変化球練習・新球種習得・スピン解析は投手だけ、
- *    Cリード学習は捕手だけ。出すと、選べるのにそのクールが丸ごと無駄になる。
- */
-export const subMenusFor = (player) =>
-  Object.entries(SUB_TRAINING_MENUS).filter(
-    ([key]) => CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player),
-  );
-
-/**
- * ⚠ 受け取れないメニュー・守備位置に合わないメニューに落ちたら既定へ戻す。
- *    方針から引いた結果は、野手に投球系が出ることがある（選択肢に無いので
- *    一覧には「打撃練習」と出るのに、サーバーは球速練習で処理していた）
- */
-export const clampMenu = (key, player) =>
-  CAMP_MENUS.includes(key) && menuFitsPlayer(key, player)
-    ? key
-    : player.position === 'pitcher'
-      ? 'control'
-      : 'batting';
 /**
  * サブ練習の「対象」の選択肢（`[値, 見せ方]` の並び）。
  *
@@ -118,11 +81,6 @@ export function subTargetChoices(key, player) {
     ]);
   return [];
 }
-
-export const clampSub = (key, player) =>
-  CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player)
-    ? key
-    : 'physique';
 
 const MOOD_TONE = { good: '意欲的', mid: '納得', bad: '身が入らない' };
 
