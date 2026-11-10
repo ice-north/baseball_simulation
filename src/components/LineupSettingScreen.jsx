@@ -1158,7 +1158,7 @@ export const LineupSettingContent = ({
 
     const StatCell = ({ value, isVelocity, className = '' }) => {
       const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);
-      return <td className={`py-1.5 px-1 text-xs text-center font-semibold ${getRankColor(rank)} ${className}`}>{value}</td>;
+      return <td className={`py-1.5 px-0.5 text-xs text-center font-semibold ${getRankColor(rank)} ${className}`}>{value}</td>;
     };
 
     const handleRowClick = () => {
@@ -1211,7 +1211,10 @@ export const LineupSettingContent = ({
           <input type="checkbox" checked={isComparing} onChange={() => toggleCompare(player.id)}
             className="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0 cursor-pointer" />
         </td>
-        <td className="py-1.5 pl-1 pr-1 text-sm text-white font-semibold whitespace-nowrap">
+        {/* ⚠ 名前と守備は折り返してよい（名前は姓名の間・守備は位置ごと）。1行に固定していると
+            1280〜1440 の幅で控えの表が枠に収まらず、右の列（疲労・成績）が切れていた。
+            表は幅に余裕があれば1行のまま、足りないときだけ折り返す */}
+        <td className="py-1.5 pl-1 pr-1 text-sm text-white font-semibold break-keep leading-tight">
           <button onClick={(e) => { e.stopPropagation(); setDetailPlayer(player); }}
             className="hover:text-blue-300 hover:underline transition text-left">
             {player.name}
@@ -1219,10 +1222,10 @@ export const LineupSettingContent = ({
           <span className={`ml-1 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
             {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
           </span>
-          {isInLineup && <span className="ml-1 text-xs text-blue-400 bg-blue-900/30 px-1 py-0.5 rounded">出場中</span>}
+          {isInLineup && <span className="ml-1 text-xs text-blue-400 bg-blue-900/30 px-1 py-0.5 rounded whitespace-nowrap">出場中</span>}
         </td>
         <td className="py-1.5 px-1 text-xs text-gray-300 text-center">{player.age}</td>
-        <td className="py-1.5 px-1 text-xs whitespace-nowrap">
+        <td className="py-1.5 px-1 text-xs leading-tight">
           {canConvertPosition ? <button
             onClick={(e) => { e.stopPropagation(); setPosConvertPlayer(player); }}
             className={`${isPitcher ? 'text-indigo-300 font-medium' : 'text-gray-300'} hover:underline hover:brightness-125`}
@@ -1237,7 +1240,7 @@ export const LineupSettingContent = ({
             if (subs.length === 0) return null;
             return subs.map((s, i) => <span key={i} className={`${s.color} ml-0.5 text-xs`}>{s.label}</span>);
           })()}
-          {roleLabel && <span className="ml-1 text-xs text-yellow-400 bg-yellow-900/30 px-1 py-0.5 rounded">{roleLabel}</span>}
+          {roleLabel && <span className="ml-1 text-xs text-yellow-400 whitespace-nowrap">{roleLabel}</span>}
         </td>
         {/* コンパクト: 主要能力のみ */}
         {benchCompact ? (<>
@@ -1253,16 +1256,18 @@ export const LineupSettingContent = ({
               return <span className={`font-semibold ${color}`}>{f}</span>;
             })()}
           </td>
-          <td className="py-1.5 px-2 text-xs text-center whitespace-nowrap border-l border-gray-700/40">
+          {/* 簡易表示の成績は2段に積む。⚠ 1行（「2勝1敗 防2.37」）だと列が約90px要り、
+              1280〜1440 の幅で控えの表の右（疲労・成績）がカードの外へ切れていた */}
+          <td className="py-1 px-1.5 text-xs text-center leading-tight border-l border-gray-700/40">
             {isPitcher ? (() => {
               const ps2 = player.seasonStats?.pitching;
               if (!ps2 || !ps2.games) return <span className="text-gray-400">-</span>;
               const era2 = ps2.inningsPitched > 0 ? ((ps2.earnedRuns || 0) / (ps2.inningsPitched / 3) * 9).toFixed(2) : '-';
-              return <span className="text-gray-300">{ps2.wins||0}勝{ps2.losses||0}敗 <span className="text-orange-300">防{era2}</span></span>;
+              return <><span className="block whitespace-nowrap text-gray-300">{ps2.wins||0}勝{ps2.losses||0}敗</span><span className="block whitespace-nowrap text-orange-300">防{era2}</span></>;
             })() : (() => {
               const bs2 = player.seasonStats?.batting;
               if (!bs2 || !bs2.atBats) return <span className="text-gray-400">-</span>;
-              return <><span className="text-blue-300 font-semibold">{(bs2.hits / bs2.atBats).toFixed(3)}</span><span className="text-gray-300 ml-1">{bs2.homeruns||0}本</span></>;
+              return <><span className="block whitespace-nowrap text-blue-300 font-semibold">{(bs2.hits / bs2.atBats).toFixed(3)}</span><span className="block whitespace-nowrap text-gray-300">{bs2.homeruns||0}本</span></>;
             })()}
           </td>
         </>) : (<>
@@ -1301,10 +1306,11 @@ export const LineupSettingContent = ({
     );
   };
 
-  const SortHeader = ({ label, sortKey, className = '' }) => (
+  const SortHeader = ({ label, sortKey, className = '', title }) => (
     <th
       className={`py-1 px-1 cursor-pointer hover:text-white transition select-none ${className}`}
       onClick={() => handleBenchSort(sortKey)}
+      title={title}
     >
       {label}{benchSortKey === sortKey ? (benchSortAsc ? '↑' : '↓') : ''}
     </th>
@@ -1770,7 +1776,7 @@ export const LineupSettingContent = ({
                         <SortHeader label="足" sortKey="speed" className="text-center" />
                         <SortHeader label="肩" sortKey="arm" className="text-center" />
                         <SortHeader label="守" sortKey="defense" className="text-center" />
-                        <SortHeader label="疲労" sortKey="fatigue" className="text-center border-l border-gray-700/40" />
+                        <SortHeader label="疲" title="疲労" sortKey="fatigue" className="text-center border-l border-gray-700/40" />
                         <th className="py-1 px-1 text-center text-gray-400 border-l border-gray-700/40">成績</th>
                       </tr>
                     </>) : (<>
