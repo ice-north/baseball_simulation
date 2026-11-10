@@ -1782,8 +1782,11 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                     <span className="text-white">{selectedMonth}月</span>
                   </span>
                 )}
+                {/* ⚠ 見ている月の戦績。今月を見ている間は見出しが日付になるので、頭に「今月」を付ける
+                    （以前は無く、通算の成績に読めた）。他の月は見出しの「N月」がそのまま印になる */}
                 {monthlyStats && (
-                  <span className="text-sm font-bold ml-1">
+                  <span className="text-sm font-bold ml-1 whitespace-nowrap">
+                    {selectedMonth === seasonData.currentDate.month && <span className="text-gray-300 font-normal text-xs mr-1">今月</span>}
                     <span className="text-green-400">{monthlyStats.wins}勝</span>
                     <span className="text-red-400 ml-1">{monthlyStats.losses}敗</span>
                     {monthlyStats.draws > 0 && <span className="text-gray-300 ml-1">{monthlyStats.draws}分</span>}
