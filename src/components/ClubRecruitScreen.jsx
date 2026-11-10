@@ -4,6 +4,7 @@ import { removeFromReleasedPoolById } from '../state/pools.js';
 import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
+import ConfirmBar from './ConfirmBar.jsx';
 
 const ClubRecruitScreen = ({ seasonData, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -13,6 +14,8 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
 
   const [accepted, setAccepted] = useState({});
   const [confirmed, setConfirmed] = useState(false);
+  // 確定の前の帯。⚠ 以前は1回押すだけで確定し、受け入れなかった人は今年はもう取れなかった
+  const [reviewing, setReviewing] = useState(false);
 
   const candidates = useMemo(() => {
     const pool = [...releasedPlayersPool];
@@ -177,12 +180,25 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
 
       <div className="mt-4 flex items-center gap-4">
         <button
-          onClick={handleConfirm}
+          onClick={() => setReviewing(true)}
           className="btn-primary px-6 py-2 rounded"
         >
           {acceptedCount > 0 ? `${acceptedCount}名を受け入れて確定` : '入部なしで確定'}
         </button>
       </div>
+      {reviewing && (
+        <ConfirmBar
+          title={acceptedCount > 0 ? `${acceptedCount}名の入部を受け入れて確定しますか？` : '入部なしで確定しますか？'}
+          detail={acceptedCount > 0
+            ? candidates.filter(c => accepted[c.player.id]).map(c => c.player.name).join('・')
+            : `入部希望の${candidates.length}名を、だれも受け入れません`}
+          note="確定すると取り消せません。今年はもう入部を受け入れられません。"
+          confirmLabel="確定する"
+          confirmClass="btn-warn"
+          onConfirm={() => { setReviewing(false); handleConfirm(); }}
+          onCancel={() => setReviewing(false)}
+        />
+      )}
     </div>
     </div>
   );
