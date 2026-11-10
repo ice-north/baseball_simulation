@@ -30,7 +30,9 @@ import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
 import { CompletedCamp } from '../../src/online/CampPlanner.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
+import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 export {
+  TryoutPlanner,
   React,
   renderToString,
   Notices,
@@ -80,6 +82,7 @@ try {
     turnLabel,
     turnOfDate,
     nextAdvanceText,
+    TryoutPlanner,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -101,6 +104,53 @@ try {
   assert.match(completed, /精神\+1/, '通算の精神が成果に出ない');
   assert.match(completed, /新球種を習得/, '通算の出来事が成果に出ない');
   assert.equal(render(h(CompletedCamp, { view: { roster: [] } })), '', '記録の無い過去キャンプを表示した');
+
+  // --- トライアウトの注意は文を句点で区切る（u1 低20） ----------------------
+  // ⚠ 以前は行頭の全角空白で区切っていて、JSX がそれを落とすので
+  //    「…4人未満ですこの位置は…」と文がつながって出ていた
+  {
+    const person = (id, position) => ({
+      id,
+      name: `選手${id}`,
+      age: 20,
+      position,
+      batting: {},
+      fielding: {},
+      pitching: {},
+    });
+    const tryout = (roster, candidates, rankedIds) =>
+      render(
+        h(TryoutPlanner, {
+          plan: { count: rankedIds.length, rankedIds },
+          candidates,
+          roster,
+          maxCount: 5,
+          busy: false,
+          onChange: () => {},
+          onReset: () => {},
+        }),
+      );
+    // 野手9・投手1・捕手は候補から1人 → 決定はできるが、投・内・外が少ない（注意）
+    const roster = [
+      person(1, 'pitcher'),
+      ...['first', 'second', 'third', 'short', 'left', 'center', 'right', 'first'].map(
+        (pos, i) => person(10 + i, pos),
+      ),
+    ];
+    const warned = tryout(roster, [person(100, 'catcher')], [100]);
+    assert.match(
+      warned,
+      /投手が5人未満です。内野手が4人未満です。外野手が3人未満です。人数が足りない位置は自動で埋められます。/,
+      'トライアウトの注意の文が句点で区切られていない',
+    );
+    // 名簿が空 → 決定できない（理由と、どうすればよいか）
+    const blocked = tryout([], [person(100, 'catcher')], [100]);
+    assert.match(
+      blocked,
+      /このままでは決定できません: [^<]*（8人以上必要）[^<]*。獲得希望人数を増やすか/,
+      '決定できない理由と次の文が句点で区切られていない',
+    );
+  }
 
   setTeamLabels({
     宮崎アトラス: { label: '湘南サンズ', short: '湘南サ' },
@@ -437,5 +487,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る）',
 );

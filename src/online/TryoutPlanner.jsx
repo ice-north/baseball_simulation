@@ -324,16 +324,17 @@ export default function TryoutPlanner({
           {/* ⚠ 成り立たない編成は、提出した瞬間ではなく**ここ**で知らせる。
               手続きは全員ぶんまとめて処理されるので、1球団が成り立たないと
               全員が先へ進めない */}
+          {/* ⚠ **文の区切りは句点で、1つの文字列にして書く**。以前は行頭の全角空白で
+              区切っていたが、JSX は行頭の空白（全角も）を落とすので
+              「…4人未満ですこの位置は…」と文がつながって出ていた */}
           {blocking.length > 0 && (
             <p role="alert" className="online-tryout-block">
-              このままでは決定できません: {blocking.join(' / ')}
-              　獲得希望人数を増やすか、希望順位を入れ替えてください。
+              {`このままでは決定できません: ${blocking.join(' / ')}。獲得希望人数を増やすか、希望順位を入れ替えてください。`}
             </p>
           )}
           {warnings.length > 0 && (
             <p role="alert" className="online-tryout-warn">
-              {warnings.join(' / ')}
-              　この位置は人数が足りないと自動で埋められます。
+              {`${warnings.join('。')}。人数が足りない位置は自動で埋められます。`}
             </p>
           )}
           {notice && (
