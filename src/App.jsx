@@ -2969,8 +2969,10 @@ if (newOuts === 3) {
               <div className="p-1" data-fit-height={gameOver ? undefined : true}>
           {/* 管理画面へボタン（采配モード中は非表示） */}
           <div className="max-w-[1800px] mx-auto flex justify-between items-center">
+            {/* ⚠ この行は地色（明るい灰色）の上に直に載る。黄色の字をそのまま置くと地に溶け、
+                上端に詰まって切れて見えた。カードと同じ紺の札に載せる */}
             {managedGameInfo && (
-              <span className="text-yellow-400 text-sm font-bold">
+              <span className="inline-block bg-surface-2 rounded-md px-2 py-0.5 mb-1 text-yellow-400 text-sm font-bold">
                 {formatDate(seasonData?.currentDate)} - 采配モード
                 {(() => {
                   const fmt = seasonData?.settings?.leagueFormat;
