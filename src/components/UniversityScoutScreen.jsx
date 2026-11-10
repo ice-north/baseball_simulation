@@ -19,6 +19,7 @@ import {
 import { addToWatchList, removeFromWatchList } from '../game/watchList.js';
 import { highSchoolPool } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import ConfirmBar from './ConfirmBar.jsx';
 
 const TOTAL_NEW_MEMBERS = { S: 15, A: 13, B: 11, C: 9, D: 7 };
 
@@ -46,6 +47,14 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const [selSortKey, setSelSortKey] = useState(null);
   const [selSortAsc, setSelSortAsc] = useState(false);
   const [modalPlayer, setModalPlayer] = useState(null);
+  // 取り消せない操作は、押したら帯を出して決める（選ぶ→確定の2段）。
+  //   { type: 'recruit', id, force } 推薦で確保 / { type: 'close' } 推薦を締め切る /
+  //   { type: 'finish' } セレクションの合格者を確定
+  // ⚠ 以前はどれも1回押すだけで決まり、取り消せなかった
+  const [pending, setPending] = useState(null);
+  // 直前の推薦の確保を取り消すための写し（1人ぶんだけ。この画面を開いている間だけ）。
+  // 確保は候補・確保済みの並びと高校生の「進学先」の印を変えるだけなので、写しに戻せば取り消せる
+  const [undoRecruit, setUndoRecruit] = useState(null);
 
   useEffect(() => {
     if (candidates.length === 0 && highSchoolPool.players?.length > 0 && !scoutData.initialized) {
@@ -137,6 +146,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     const eligible = c?._gaugeComplete || (force && gauge >= 80);
     if (!c || !eligible || c._reservedBy || remainingSlots <= 0) return;
     const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
+    setUndoRecruit({ player: c, index: candidates.indexOf(c), orig, reservedBefore: orig?._universityReserved });
     if (orig) orig._universityReserved = userTeamName;
     const newCandidates = candidates.filter(p => p.id !== id);
     const newRecruited = [...recruited, c];
@@ -148,10 +158,30 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     }
   };
 
+  // 直前の推薦の確保を取り消す（その選手を候補の元の位置へ戻し、印を確保する前に戻す）。
+  // 並びを丸ごと写しに戻すと、確保のあとにした調査・注目が消えるので、その1人だけ戻す
+  const undoLastRecruit = () => {
+    if (!undoRecruit || phase !== 'scout') return;
+    const { player, index, orig, reservedBefore } = undoRecruit;
+    if (!recruited.includes(player)) { setUndoRecruit(null); return; }
+    if (orig) orig._universityReserved = reservedBefore;
+    const newCandidates = [...candidates];
+    newCandidates.splice(Math.max(0, Math.min(index, newCandidates.length)), 0, player);
+    const newRecruited = recruited.filter(p => p !== player);
+    setCandidates(newCandidates);
+    setRecruited(newRecruited);
+    if (WORLD_DATA._universityScout) {
+      WORLD_DATA._universityScout.candidates = newCandidates;
+      WORLD_DATA._universityScout.recruited = newRecruited;
+    }
+    setUndoRecruit(null);
+  };
+
   const totalSlots = TOTAL_NEW_MEMBERS[rank] || 9;
   const selectionSlots = Math.max(0, totalSlots - recruited.length);
 
   const handleFinalize = () => {
+    setUndoRecruit(null);
     WORLD_DATA._universityScout = { ...WORLD_DATA._universityScout, finalized: true };
     const selCandidates = generateSelectionCandidates(rank, reputation, Math.max(15, selectionSlots * 3));
     setSelectionCandidates(selCandidates);
@@ -295,7 +325,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                 {selectionPicked.length > 0 && <span className="text-green-950 ml-2">選出済{selectionPicked.length}名</span>}
               </p>
             </div>
-            <button onClick={handleSelectionFinalize}
+            <button onClick={() => setPending({ type: 'finish' })}
               className="btn-primary px-4 py-2 rounded-lg text-sm transition">
               確定してオフシーズンへ
             </button>
@@ -334,7 +364,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
           {selectionCandidates.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-ink-sub text-lg mb-4">セレクション参加者がいません</p>
-              <button onClick={handleSelectionFinalize}
+              <button onClick={() => setPending({ type: 'finish' })}
                 className="btn-primary px-6 py-2 rounded-xl">
                 オフシーズンへ
               </button>
@@ -429,6 +459,17 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               </div>
             </div>
           )}
+          {pending?.type === 'finish' && (
+            <ConfirmBar
+              title="セレクションの合格者を確定して、オフシーズンへ進みますか？"
+              detail={`推薦${recruited.length}名・セレクション合格${selectionPicked.length}名（セレクションの枠${selectionSlots}名）`}
+              note={`確定すると取り消せません。${selectionPicked.length < selectionSlots ? `セレクションの枠があと${selectionSlots - selectionPicked.length}名あります。` : ''}`}
+              confirmLabel="確定する"
+              confirmClass="btn-warn"
+              onConfirm={() => { setPending(null); handleSelectionFinalize(); }}
+              onCancel={() => setPending(null)}
+            />
+          )}
         </div>
       </div>
     );
@@ -459,9 +500,9 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               調査: 5日 / 注目: +ゲージ速度
             </div>
             {onComplete && (
-              <button onClick={handleFinalize}
+              <button onClick={() => setPending({ type: 'close' })}
                 className="btn-primary px-4 py-2 rounded-lg text-sm transition">
-                推薦確定 → セレクションへ
+                推薦を締め切る → セレクションへ
               </button>
             )}
           </div>
@@ -482,7 +523,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
         {gaugeCompleteCount > 0 && (
           <div className="bg-green-950 border border-green-700 rounded-xl p-2 mb-3 flex items-center justify-between">
             <span className="text-green-300 text-xs font-bold">
-              ゲージが満タンになった選手が{gaugeCompleteCount}名います！「推薦確定」ボタンを押して確定してください
+              ゲージが満タンになった選手が{gaugeCompleteCount}名います！「推薦で確保」を押して確保してください
             </span>
             <button onClick={() => setGaugeCompleteCount(0)}
               className="text-green-500 hover:text-green-300 text-xs px-2">
@@ -493,7 +534,15 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
 
         {recruited.length > 0 && (
           <div className="bg-green-950 border border-green-800 rounded-xl p-2 mb-3">
-            <div className="text-xs text-green-400 font-bold mb-1">確保済み選手</div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="text-xs text-green-400 font-bold">確保済み選手</div>
+              {undoRecruit && (
+                <button onClick={undoLastRecruit}
+                  className="btn-secondary ml-auto px-2.5 py-0.5 rounded text-xs">
+                  ↩ 直前の推薦（{undoRecruit.player.name}）を取り消す
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
               {recruited.map((p, i) => (
                 <div key={i} className="bg-green-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
@@ -512,7 +561,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               {highSchoolPool.players?.length > 0 ? 'スカウト候補が見つかりませんでした' : '高校生プールがまだ生成されていません (4月以降)'}
             </p>
             {onComplete && (
-              <button onClick={handleFinalize} className="btn-primary px-6 py-2 rounded-xl">
+              <button onClick={() => setPending({ type: 'close' })} className="btn-primary px-6 py-2 rounded-xl">
                 オフシーズンへ
               </button>
             )}
@@ -666,18 +715,18 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             </span>
                           ) : p._gaugeComplete ? (
                             <button
-                              onClick={() => handleConfirmRecruit(p.id)}
+                              onClick={() => setPending({ type: 'recruit', id: p.id, force: false })}
                               disabled={remainingSlots <= 0}
                               className={`px-2 py-0.5 rounded text-xs font-black transition animate-pulse ${
                                 'btn-primary'
                               }`}>
-                              {remainingSlots > 0 ? '✓ 推薦確定!' : '枠なし'}
+                              {remainingSlots > 0 ? '✓ 推薦で確保' : '枠なし'}
                             </button>
                           ) : (onComplete && !p._npbDrafted && !p._reservedBy && (p._approachGauge || 0) >= 80 && remainingSlots > 0) ? (
                             <button
-                              onClick={() => handleConfirmRecruit(p.id, true)}
+                              onClick={() => setPending({ type: 'recruit', id: p.id, force: true })}
                               className="btn-warn px-2 py-0.5 rounded text-xs font-black transition shadow-lg">
-                              推薦確定(80%+)
+                              推薦で確保(80%+)
                             </button>
                           ) : (
                           <div className="flex gap-1">
@@ -729,6 +778,31 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               ← 戻る
             </button>
           </div>
+        )}
+        {pending?.type === 'recruit' && (() => {
+          const c = candidates.find(p => p.id === pending.id);
+          if (!c) return null;
+          return (
+            <ConfirmBar
+              title={`${c.name} を推薦で確保しますか？`}
+              detail={`${POSITION_NAMES[c.position] || c.position}・${c.age}歳・${c.highSchool?.name || c._scoutSource || '高校'}・推薦枠 残り${remainingSlots}名`}
+              note={pending.force ? 'ゲージは満タンではありませんが、80%以上なので確保できます。' : undefined}
+              confirmLabel="確保する"
+              onConfirm={() => { setPending(null); handleConfirmRecruit(c.id, pending.force); }}
+              onCancel={() => setPending(null)}
+            />
+          );
+        })()}
+        {pending?.type === 'close' && (
+          <ConfirmBar
+            title="推薦をここで締め切って、セレクションへ進みますか？"
+            detail={`推薦で確保 ${recruited.length}名・セレクションの枠 ${selectionSlots}名`}
+            note="締め切ると取り消せません。推薦の交渉には戻れません。"
+            confirmLabel="締め切る"
+            confirmClass="btn-warn"
+            onConfirm={() => { setPending(null); handleFinalize(); }}
+            onCancel={() => setPending(null)}
+          />
         )}
       </div>
       {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
