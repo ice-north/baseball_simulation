@@ -342,22 +342,25 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     val plan = draft.plan
     val ready = submission?.at("ready").bool() == true
 
-    // 決定・下書きの操作（PC版と同じく見出しのすぐ下に1か所）
-    Section {
-        Muted(
-            when {
-                draft.dirty -> "編集中の内容（未保存）です。"
-                ready -> "あなたは決定済みです。ほかに検討中の球団がいる間は出し直せます。"
-                submission != null -> "下書きを保存済みです。"
-                else -> "標準案を表示しています。"
-            },
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { submit(model, phaseId, plan, true, draft.base) }) { Text("この内容で決定") }
-            OutlinedButton(onClick = { submit(model, phaseId, plan, false, draft.base) }) { Text(if (ready) "決定を取り消す" else "下書きを保存") }
+    // 決定・下書きの操作（PC版と同じく見出しのすぐ下）
+    val decision: @Composable () -> Unit = {
+        Section {
+            Muted(
+                when {
+                    draft.dirty -> "編集中の内容（未保存）です。"
+                    ready -> "あなたは決定済みです。ほかに検討中の球団がいる間は出し直せます。"
+                    submission != null -> "下書きを保存済みです。"
+                    else -> "標準案を表示しています。"
+                },
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { submit(model, phaseId, plan, true, draft.base) }) { Text("この内容で決定") }
+                OutlinedButton(onClick = { submit(model, phaseId, plan, false, draft.base) }) { Text(if (ready) "決定を取り消す" else "下書きを保存") }
+            }
+            if (draft.dirty) TextButton(onClick = { model.phaseDraft = null }) { Text("変更を取り消す") }
         }
-        if (draft.dirty) TextButton(onClick = { model.phaseDraft = null }) { Text("変更を取り消す") }
     }
+    decision()
 
     when {
         plan["packId"] != null || phase["packs"] != null -> {
@@ -381,6 +384,9 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
         plan["releaseIds"] != null -> ReleasePanel(model, raw, plan, setPlan)
         kind == "offseason" -> Section { Text("最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。") }
     }
+    // ⚠ 長い一覧（セット・希望リスト・退団）の下にも同じ操作を置く。以前は上にしか無く、
+    //    一覧を見て決めたあと上まで戻らないと決定できなかった
+    if (plan["packId"] != null || phase["packs"] != null || plan["rankedIds"] != null || plan["releaseIds"] != null) decision()
 }
 
 private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready: Boolean, base: JsonElement?) {
