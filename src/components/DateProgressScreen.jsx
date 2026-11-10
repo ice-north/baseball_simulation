@@ -94,6 +94,14 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   const [activeTournamentTab, setActiveTournamentTab] = useState(null);
   const [isGeneratingTournament, setIsGeneratingTournament] = useState(false);
   const [koshienNotice, setKoshienNotice] = useState(null);   // 夏の甲子園の結果ダイアログ
+  // 「試合スキップ」した自分の試合（id）。結果を画面の上に少しの間出す。
+  // ⚠ 以前は何も出ず、日付だけが進んで、勝ったのか負けたのかはカレンダーの小さな ○● を探すしかなかった
+  const [skipNoticeGameId, setSkipNoticeGameId] = useState(null);
+  useEffect(() => {
+    if (!skipNoticeGameId) return undefined;
+    const t = setTimeout(() => setSkipNoticeGameId(null), 8000);
+    return () => clearTimeout(t);
+  }, [skipNoticeGameId]);
   const [watchTick, setWatchTick] = useState(0);              // 注目リスト更新の再描画トリガー
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
   const [scoutReportNotifications, setScoutReportNotifications] = useState([]);
@@ -781,6 +789,9 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     if (isSimulating) return;
     setShowGameChoiceModal(false);
     if (choice === 'skip') {
+      const userGame = getScheduleByDate(seasonData.schedule, seasonData.currentDate)
+        .find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
+      setSkipNoticeGameId(userGame?.id ?? null);
       executeSkipDay(1);
     } else if (choice === 'manage') {
       // 采配モードへ移行
@@ -3570,6 +3581,23 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       {showNewspaper && newspaperData && (
         <NewspaperModal data={newspaperData} seasonData={seasonData} onClose={() => setShowNewspaper(false)} />
       )}
+
+      {/* スキップした試合の結果（8秒で消える） */}
+      {(() => {
+        const g = skipNoticeGameId != null ? (seasonData.schedule || []).find(x => x.id === skipNoticeGameId) : null;
+        if (!g?.result || g.result.cancelled) return null;
+        const mine = g.home === userTeamName ? g.result.homeScore : g.result.awayScore;
+        const theirs = g.home === userTeamName ? g.result.awayScore : g.result.homeScore;
+        const verdict = mine > theirs ? { label: '○ 勝ち', cls: 'text-green-400' } : mine < theirs ? { label: '● 負け', cls: 'text-red-400' } : { label: '△ 引き分け', cls: 'text-gray-200' };
+        return (
+          <div role="status" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-surface-2 border border-gray-600 rounded-xl shadow-2xl px-4 py-2.5 flex items-center gap-3 text-white whitespace-nowrap">
+            <span className="text-xs text-gray-300">試合結果{g.date ? ` ${g.date.month}/${g.date.day}` : ''}</span>
+            <span className="font-bold tabular-nums">{g.away} {g.result.awayScore} - {g.result.homeScore} {g.home}</span>
+            <span className={`font-bold ${verdict.cls}`}>{verdict.label}</span>
+            <button type="button" onClick={() => setSkipNoticeGameId(null)} aria-label="閉じる" className="text-gray-300 hover:text-white px-1">✕</button>
+          </div>
+        );
+      })()}
 
       {/* 試合選択モーダル */}
       {showGameChoiceModal && <PreGameModal
