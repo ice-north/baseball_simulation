@@ -662,6 +662,24 @@ try {
   await mobile.page
     .getByRole('button', { name: '⚔️ 長所を伸ばす', exact: true })
     .click();
+  // ⚠ スマホのキャンプの決め方は**画面の幅に収める**。PCと同じく見出しの横に
+  //    ボタンを並べていて、見出しが縦に割れ（決／め／方）、ボタンが右へはみ出していた。
+  //    決め方の説明も … で止めず全文を出す（title はタッチで読めない）
+  const campFit = await mobile.page.evaluate(() => {
+    const out = [];
+    for (const n of document.querySelectorAll(
+      '.online-camp-bulk .online-choice-label, .online-camp-bulk button',
+    )) {
+      const r = n.getBoundingClientRect();
+      if (r.right > innerWidth + 1) out.push(`はみ出し ${n.innerText}`);
+      if (n.matches('.online-choice-label') && r.height > parseFloat(getComputedStyle(n).lineHeight) * 1.5)
+        out.push(`見出しが割れる ${n.innerText}`);
+    }
+    const note = document.querySelector('.online-camp-guide-note');
+    if (note && note.scrollWidth > note.clientWidth + 1) out.push('決め方の説明が切れる');
+    return out;
+  });
+  assert.deepEqual(campFit, [], 'スマホのキャンプの決め方が幅に収まらない');
   await mobile.page
     .getByRole('button', { name: '第1クール練習を実行', exact: true })
     .click();

@@ -801,6 +801,18 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   gap: 6px;
 }
+/* ⚠ スマホは**見出しを上に置き、ボタンは折り返す**。PCと同じく横に並べると、
+   見出しが1文字の幅に潰れて縦に割れ（決／め／方）、ボタンの列は右へはみ出して
+   「全員同じ方針」「短所を埋める」が切れていた */
+.online-mobile .online-camp-bulk-fields .online-choice:not(:where(.online-sp *)) {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+.online-mobile .online-camp-bulk-fields .online-segments {
+  flex-wrap: wrap;
+  margin: 0;
+}
 .online-camp-bulk-fields label {
   display: flex;
   flex-direction: column;
@@ -3927,6 +3939,13 @@ small.online-gain:not(:where(.online-sp *)) {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+/* ⚠ スマホは**全文を出す**。title はタッチでは読めず、… の先が読めなかった
+   （1画面に収める決まりはPCのホームだけ） */
+.online-mobile .online-camp-guide-note:not(:where(.online-sp *)) {
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
 }
 
 /* --- 年代記（球団史・マジック・ペース） --------------------------------- */
