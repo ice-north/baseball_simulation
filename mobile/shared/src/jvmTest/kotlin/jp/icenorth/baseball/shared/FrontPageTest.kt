@@ -1,11 +1,14 @@
 package jp.icenorth.baseball.shared
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -67,6 +70,18 @@ class FrontPageTest {
             val text = dump(p)
             assertTrue("null" !in text, text)
         }
+    }
+
+    /** 読み終わる前の別の試合の詳細では、見出しもスコアボードも勝敗投手・本塁打の欄も作らない */
+    @Test
+    fun ignoresDetailOfAnotherGame() {
+        val stale = JsonObject(game + ("gameId" to JsonPrimitive(-1L)))
+        val page = buildFrontPage(view, raw, stale, history = history.first, historyComplete = history.second, opponent = opponent)
+        val bare = buildFrontPage(view, raw, null, history = history.first, historyComplete = history.second, opponent = opponent)
+        assertNotEquals(bare.box, local().box) // 詳細があれば欄の中身が変わる（他球団の投手に球団名）
+        assertNull(page.lineScore)
+        assertEquals(bare.box, page.box)
+        assertEquals(bare.headline, page.headline)
     }
 
     /** 回ごとの得点から逆転・先制が分かる */

@@ -158,8 +158,10 @@ fun buildFrontPage(
         // ⚠ 止めたのは今日の試合のときだけ（2連勝目以降に「連敗ストップ」とは書かない）
         val broken = if (now == 0 || streak != 1) 0 else own.asReversed().drop(1).takeWhile { outcome(it) == -now }.size
         tone = when { now > 0 -> FrontPage.Tone.Win; now < 0 -> FrontPage.Tone.Lose; else -> FrontPage.Tone.Draw }
-        // ⚠ 詳細は**その試合のもの**のときだけ使う（読み終わる前の古い詳細で別の試合の見出しを書かない）
-        facts = GameFacts.from(lastGame?.takeIf { it.at("gameId").long() == null || it.at("gameId").long() == last.gameId }, team)
+        // ⚠ 詳細は**その試合のもの**のときだけ使う（読み終わる前の古い詳細で別の試合の見出しを書かない）。
+        //    見出しだけでなく、スコアボードと勝敗投手・本塁打の欄も同じ（別の試合の回ごとの得点・本塁打を出さない）
+        val detail = lastGame?.takeIf { it.at("gameId").long() == null || it.at("gameId").long() == last.gameId }
+        facts = GameFacts.from(detail, team)
         val situation = Situation(me, opp, home, ours, theirs, streak, broken, mine?.let { rankIndex + 1 }, facts)
         sit = situation
         headline = when (tone) {
@@ -183,8 +185,8 @@ fun buildFrontPage(
         lead = gameLead(situation, last.date?.let { "${it.month}月${it.day}日" }, tone, record, pen)
         // ⚠ 号外は滅多に無いことだけ（ノーヒットノーラン・2桁連勝）
         extra = tone == FrontPage.Tone.Win && ((facts?.theirHits == 0 && theirs == 0) || streak >= 10)
-        lineScore = lastGame?.let { lineScoreOf(it, view) }
-        box = boxLines(view, lastGame, team, last.decisions)
+        lineScore = detail?.let { lineScoreOf(it, view) }
+        box = boxLines(view, detail, team, last.decisions)
     } else {
         // まだ試合が無い（初期メンバー選び・キャンプ・オフ）
         val (h, l) = phaseCopy(
