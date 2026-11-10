@@ -465,8 +465,9 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     Section("退団させる選手（${releases.size}人）") {
         Text("残り ${remaining.size}人 · " + listOf("pitcher" to "投", "catcher" to "捕", "infielder" to "内", "outfielder" to "外")
             .joinToString(" ") { (k, l) -> "$l${counts[k] ?: 0}/${ONLINE_ROSTER_TARGETS[k] ?: 0}" }, fontWeight = FontWeight.Bold)
-        Muted("続くトライアウトで最大 ${(ROSTER_LIMIT - remaining.size).coerceAtLeast(0)}人を獲れます（上限${ROSTER_LIMIT}人）。")
-        Muted("チェックした選手が退団（最低9人は残す）。標準案は「30歳以上」と「能力の低さ」で選び、毎年少なくとも3人を出します。このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。")
+        // ⚠ Web 版 ContractPlanner と同じ文。足りない区分がどう埋まるかの一文が抜けていた
+        Muted("続くトライアウトで最大 ${(ROSTER_LIMIT - remaining.size).coerceAtLeast(0)}人を獲れます（上限${ROSTER_LIMIT}人）。目標に足りない区分はトライアウトで優先して埋まります。")
+        Muted("チェックした選手が退団します。最低9人を残してください。標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため毎年少なくとも3人を出します。このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。")
         roster.forEach { p ->
             val checked = p.pid in releases
             val reasons = advice?.get(p.pid.toString()).list().mapNotNull { it.str() }.takeIf { advice?.containsKey(p.pid.toString()) == true }
