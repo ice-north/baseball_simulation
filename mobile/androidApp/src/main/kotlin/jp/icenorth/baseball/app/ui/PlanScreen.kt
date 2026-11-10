@@ -262,7 +262,7 @@ private fun OrderEditor(
         }
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 72.dp), // 左下の TIPS の印に最後の行が隠れないよう
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = TipsBadgeRoom), // 左下の TIPS の印に最後の行が隠れないよう
             verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -584,7 +584,7 @@ private fun PitchingList(
     val relievers = RELIEF_ORDER.map { role -> role to state.roles.filter { (id, r) -> r == role && id !in state.starters }.keys.mapNotNull { players[it] } }
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 72.dp), // 左下の TIPS の印に最後の行が隠れないよう
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = TipsBadgeRoom), // 左下の TIPS の印に最後の行が隠れないよう
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -731,7 +731,8 @@ private fun RoleOption(label: String, hint: String?, selected: Boolean, enabled:
 
 @Composable
 private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    // ⚠ 下は空けておく（左下の TIPS の印に、最後の項目の「しない」などのボタンが隠れていた）
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = TipsBadgeRoom), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // 指導者に任せているときは、ここで変えると「意見を聞く」に戻ることを先に知らせる（PC と同じ）
         if (view.staff?.mode("tactics")?.effective == "delegate")
             Muted("試合中の采配は指導者に任せています（「→」の内容で動きます）。ここで変えて保存すると、任せ方は「意見を聞く」に戻ります。")

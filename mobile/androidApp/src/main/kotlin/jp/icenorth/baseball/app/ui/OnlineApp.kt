@@ -241,6 +241,12 @@ fun RenameDialog(model: AppViewModel, close: () -> Unit) {
     )
 }
 
+/**
+ * 左下の TIPS の印（ホームと編成に重ねる）に隠れないよう、スクロールする画面の下に空ける高さ。
+ * ⚠ 編成の面を足したら、その面の下にもこれを空けること（方針・采配と指導者の最後の行が隠れていた）
+ */
+val TipsBadgeRoom = 72.dp
+
 /** 画面を開いている間に読み直す間隔（届いた提案に気づくため。変わっていなければサーバーは「変わりなし」だけ返す） */
 private const val AUTO_RELOAD_MS = 60_000L
 
