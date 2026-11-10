@@ -4,6 +4,7 @@ import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations 
 import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 import { normalizeMaxExtraInnings } from '../teams-data.js';
+import { getModeCapabilities } from '../game/modeCapabilities.js';
 
 // ⚠ 部品の中で定義しないこと。描画のたびに別の部品として作り直され、中の入力欄が
 //   1文字打つごとに消えて作り直される（以前は延長の欄に2桁を打てなかった）
@@ -26,7 +27,14 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
   const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
     ? PHASE_INFO[currentPhase]
     : { name: '', color: 'bg-gray-100', description: '' };
-  const [tempSettings, setTempSettings] = React.useState(seasonData.settings);
+  // ⚠ 大学・社会人の設定には延長とプレーオフの項目が無い（作るときに入れていない）。
+  //   試合は無いとき12回で打ち切るので、欄と「現在の設定」も12回を出す（以前は空欄・「延長: 回」）
+  const [tempSettings, setTempSettings] = React.useState(() => ({
+    ...seasonData.settings,
+    maxExtraInnings: seasonData.settings?.maxExtraInnings ?? 12,
+  }));
+  // プレーオフは独立リーグ（と箱庭）だけ。大学・社会人では形式の欄を出さない（以前は「PO:」が空だった）
+  const { leaguePlayoffs } = getModeCapabilities(seasonData.settings);
 
   // 半角→全角変換（略称用）
   const toFullWidth = (str) => str.replace(/[A-Za-z0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
@@ -174,6 +182,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
               })()}
             </select>
           </SettingRow>
+          {leaguePlayoffs && (<>
           <SettingRow label="プレーオフ形式">
             <select value={tempSettings.playoffFormat} onChange={(e) => setTempSettings({ ...tempSettings, playoffFormat: e.target.value })} disabled={!canModify} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm">
               <option value="short">3回戦制（2勝先取）</option>
@@ -182,6 +191,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
             </select>
           </SettingRow>
           <div className="text-xs text-gray-400 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
+          </>)}
           <SettingRow label="延長最大回数">
             <div className="flex items-center gap-2">
               <input type="number" value={tempSettings.maxExtraInnings}
@@ -296,10 +306,11 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-300">
           <div>DH制: <span className="text-white">{seasonData.settings.useDH ? '有効' : '無効'}</span></div>
           <div>チーム数: <span className="text-white">{seasonData.settings.teamsCount}チーム</span></div>
-          <div>形式: <span className="text-white">{seasonData.settings.leagueFormat === 'two' ? '2リーグ' : '1リーグ'}</span></div>
-          <div>試合数: <span className="text-white">{seasonData.settings.gamesPerSeason}試合</span></div>
-          <div className="col-span-2">PO: <span className="text-white">{getPlayoffFormatDescription(seasonData.settings.playoffFormat, seasonData.settings.leagueFormat)}</span></div>
-          <div>延長: <span className="text-white">{seasonData.settings.maxExtraInnings}回</span></div>
+          <div>形式: <span className="text-white">{{ two: '2リーグ', tournament: '大会' }[seasonData.settings.leagueFormat] || '1リーグ'}</span></div>
+          {/* 社会人は大会だけで、リーグの試合数（0）を持たない */}
+          {seasonData.settings.gamesPerSeason > 0 && <div>試合数: <span className="text-white">{seasonData.settings.gamesPerSeason}試合</span></div>}
+          {leaguePlayoffs && <div className="col-span-2">PO: <span className="text-white">{getPlayoffFormatDescription(seasonData.settings.playoffFormat, seasonData.settings.leagueFormat)}</span></div>}
+          <div>延長: <span className="text-white">{normalizeMaxExtraInnings(seasonData.settings.maxExtraInnings ?? 12)}回まで</span></div>
         </div>
       </div>
 
