@@ -31,6 +31,7 @@ import jp.icenorth.baseball.shared.rate3
 import jp.icenorth.baseball.shared.str
 import kotlinx.serialization.json.JsonObject
 import jp.icenorth.baseball.shared.LEAGUE_NAMES
+import jp.icenorth.baseball.shared.LEAGUE_STANDING_ORDER
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.PROMOTION_PLACES
 import jp.icenorth.baseball.shared.PYRAMID_LEAGUES
@@ -52,7 +53,8 @@ internal data class StandingGroup(val title: String, val rows: List<Standing>, v
  *    同率の並びが決まっていない
  */
 internal fun standingGroups(view: LeagueView): List<StandingGroup> {
-    val order = compareByDescending<Standing> { it.winRate }.thenByDescending { it.wins }.thenBy { it.team }
+    // 並べ方は紙面・PC・昇降格と同じ1つ（勝率→勝利数→球団名。shared の LEAGUE_STANDING_ORDER）
+    val order = LEAGUE_STANDING_ORDER
     // teamLeagues が無い古いビューは1つの表（昇格・降格の印は出さない）
     if (view.teamLeagues.isEmpty()) return listOf(StandingGroup("順位", view.standings.sortedWith(order), promotes = false, relegates = false))
     val known = PYRAMID_LEAGUES.map { league ->

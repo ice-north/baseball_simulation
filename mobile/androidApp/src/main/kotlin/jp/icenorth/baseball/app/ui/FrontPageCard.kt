@@ -201,7 +201,8 @@ private fun ScoreLine(score: FrontPage.Score) {
 /** スコアボード（回ごとの得点。サヨナラの回には x を付ける） */
 @Composable
 private fun LineScoreBoard(ls: FrontPage.LineScore) {
-    val innings = maxOf(9, ls.awayRuns.size, ls.homeRuns.size)
+    // 枠の数と「x」「1x」の書き方は試合の詳細のスコアボードと同じ（GamesScreen.kt の lineScoreCells）
+    val (top, bottom) = lineScoreCells(ls.awayRuns, ls.homeRuns, ls.walkOff)
     val cell = Modifier.width(17.dp)
     Column(Modifier.padding(top = 8.dp).border(1.dp, Rule).padding(horizontal = 6.dp, vertical = 4.dp)) {
         @Composable
@@ -212,18 +213,9 @@ private fun LineScoreBoard(ls: FrontPage.LineScore) {
                 Text(total, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 15.sp, color = Ink, textAlign = TextAlign.End, modifier = Modifier.width(26.dp))
             }
         }
-        line("", (1..innings).map { "$it" }, "計", false)
-        line(ls.away, (0 until innings).map { ls.awayRuns.getOrNull(it)?.toString() ?: "" }, "${ls.awayRuns.sum()}", true)
-        // 後攻: 9回以降でやらなかった裏は x（勝っていて攻撃が無い）、サヨナラの回は「1x」
-        val home = (0 until innings).map { i ->
-            when {
-                i < ls.homeRuns.size && i == ls.homeRuns.size - 1 && ls.walkOff -> "${ls.homeRuns[i]}x"
-                i < ls.homeRuns.size -> "${ls.homeRuns[i]}"
-                i < ls.awayRuns.size -> "x"
-                else -> ""
-            }
-        }
-        line(ls.home, home, "${ls.homeRuns.sum()}", true)
+        line("", top.indices.map { "${it + 1}" }, "計", false)
+        line(ls.away, top, "${ls.awayRuns.sum()}", true)
+        line(ls.home, bottom, "${ls.homeRuns.sum()}", true)
     }
 }
 
