@@ -83,6 +83,32 @@ assert.deepEqual(createCoaches(clone(league)), league.coaches, '作り直すと�
   migrateLeague(twice);
   assert.deepEqual(twice.coaches, league.coaches, '移行を2回当てると変わる');
 }
+{
+  // 版11 → 12: PR #22 の形（ビジョンが無い）の指導者に項目を足す。考え方は変えない
+  const old = clone(league);
+  old.schema = 11;
+  for (const p of Object.values(old.coaches.people)) {
+    delete p.vision;
+    delete p.growth;
+    delete p.voice;
+    p.personality = { temper: p.personality.temper, youth: 1, trust: p.personality.trust, boldness: -1 };
+    p.prefs = { hitter: 'speed', pitcher: 'control', camp: 'fit', campPhase: 'skill' };
+  }
+  const views = Object.fromEntries(Object.values(old.coaches.people).map((p) => [p.id, { ...p.views }]));
+  migrateLeague(old);
+  const again = clone(old);
+  for (const p of Object.values(old.coaches.people)) {
+    assert.deepEqual(p.views, views[p.id], '移行で考え方が変わった（采配が変わる）');
+    assert.equal(p.vision.attack, 'speed', '好みの「俊足」が攻めの型にならない');
+    assert.ok(DEFENSE_TYPES[p.vision.defense] && HORIZONS[p.vision.horizon] && VOICES[p.voice]);
+    assert.deepEqual(p.growth, { who: 'sharp', line: 70 }, '「選手に合わせる」が育成観にならない');
+    assert.equal(p.personality.stubborn, 0);
+    if (p.specialty === 'pitching') assert.equal(p.vision.flagship, 'defense');
+  }
+  again.schema = 11;
+  migrateLeague(again);
+  assert.deepEqual(again.coaches, old.coaches, '移行を2回当てると変わる');
+}
 const other = createLeague({ seed: 7, members, now: iso() });
 assert.notDeepEqual(other.coaches.people, league.coaches.people, '種を変えても同じ顔ぶれ');
 

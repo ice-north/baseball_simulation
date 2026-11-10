@@ -303,6 +303,15 @@ const isAuto = (key, value) =>
 
 /** 混ぜた考え方（小数）をどちらに倒すか。⚠ ±0.75 までは「標準」 */
 const LEAN = 0.75;
+/**
+ * 1試合ずっと効く方針（打撃・投球）を倒す線。⚠ 強い考えのときだけ動かす。
+ * ビジョンから決めた考え方を ±0.75 で当てたら、「積極打撃」（パワー+8・慎重は-5 と片寄った効き）の
+ * 球団が増え、リーグ全体の本塁打が一人用の約1.6倍になった（online-parity-check、
+ * 種4通りで 0.69 対 一人用0.39）。1.25 にすると 0.51 で、PR #22 の頃（0.45）と同じ幅に戻る。
+ * 方針まで動かすのは考えの強い人（長打が看板の人など）だけ。型の色はおもに試合中の采配
+ * （小技・継投・代打の回）と走塁で出る
+ */
+const STRATEGY_LEAN = 1.25;
 const lean = (v) => (v <= -LEAN ? -1 : v >= LEAN ? 1 : 0);
 
 /** 考え方 → 設定の値 */
@@ -325,9 +334,9 @@ function optionFor(key, v) {
       //    効くのはスタミナの多い先発だけ）
       return v >= 1.25 ? 100 : 0;
     case 'batting':
-      return side < 0 ? 'patient' : side > 0 ? 'aggressive' : 'balanced';
+      return v <= -STRATEGY_LEAN ? 'patient' : v >= STRATEGY_LEAN ? 'aggressive' : 'balanced';
     case 'pitching':
-      return side < 0 ? 'contact' : side > 0 ? 'strikeout' : 'balanced';
+      return v <= -STRATEGY_LEAN ? 'contact' : v >= STRATEGY_LEAN ? 'strikeout' : 'balanced';
     case 'baseRunning':
       return side < 0 ? 'conservative' : side > 0 ? 'aggressive' : 'normal';
     default:
@@ -980,6 +989,49 @@ export function generateCoach({
     job: null,
     career: [],
   };
+}
+
+const VOICE_KEYS = Object.keys(VOICES);
+
+/**
+ * ビジョンを持たない古い形の指導者（版10・11。PR #22 で入った形）に、いまの形の項目を足す
+ * （保存の移行 11 → 12 から呼ぶ）。返り値は足したか（2回目は何もしない）。
+ *
+ * ⚠ **足すだけ**。考え方（`views`）は変えないので、采配はこれまでと同じ。
+ *    ビジョンは今の考え方・好み・得意分野から読み取る。古い項目（`prefs`・性格の
+ *    `youth` / `boldness`）は残る（もう読まない）。語り口は種から決める（何度当てても同じ）。
+ */
+export function upgradeCoach(coach, seed) {
+  if (!coach || coach.vision) return false;
+  const v = coach.views || {};
+  const p = coach.prefs || {};
+  const old = coach.personality || {};
+  const attack = Object.hasOwn(ATTACK_TYPES, p.hitter)
+    ? p.hitter
+    : v.running >= 1 ? 'speed' : v.hitting >= 1 ? 'power' : 'contact';
+  const defense =
+    v.bullpen >= 1 ? 'bullpen'
+      : v.bullpen <= -1 ? 'rotation'
+        : v.pitching <= -1 || p.pitcher === 'control' ? 'fielding'
+          : p.pitcher === 'velocity' ? 'bullpen' : 'rotation';
+  // 看板は得意分野から（采配が得意な人は、前の「戦い方」が守りなら守り）
+  const flagship =
+    coach.specialty === 'pitching' || (coach.specialty !== 'batting' && clampInt(old.boldness) <= -1)
+      ? 'defense'
+      : 'attack';
+  // 時間軸は編成の考え方から（標準なら前の「起用」の若手好きで）
+  const lean = clampInt(v.build) || -clampInt(old.youth);
+  const horizon = lean <= -1 ? 'develop' : lean >= 1 ? 'win' : 'middle';
+  coach.vision = { attack, defense, flagship, horizon };
+  // 育成観は前の「キャンプの考え」から（長所を伸ばす → 徹底して尖らせる、選手に合わせる →
+  // 選手の形に合わせる、全体・短所 → 穴のない選手に）
+  coach.growth =
+    p.camp === 'sharpen' ? { who: 'all', line: null }
+      : p.camp === 'fit' ? { who: 'sharp', line: 70 }
+        : { who: 'none', line: null };
+  coach.voice = VOICE_KEYS[hashSeed(`${seed}:voice:${coach.id}`) % VOICE_KEYS.length];
+  coach.personality = { ...old, stubborn: clampInt(old.stubborn) };
+  return true;
 }
 
 // ------------------------------------------------------------
