@@ -353,7 +353,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
             </div>
             <div>
               <div className="text-xs text-gray-300 mb-1">指名チーム</div>
-              <div className="text-2xl font-bold">{currentTeam || '終了'}</div>
+              <div className="text-2xl font-bold truncate" title={currentTeam ? teamLabel(currentTeam) : undefined}>{currentTeam ? teamLabel(currentTeam) : '終了'}</div>
             </div>
             <div>
               <div className="text-xs text-gray-300 mb-1">獲得選手数</div>
@@ -674,7 +674,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                   return (
                     <div key={teamName} className="bg-gray-700 rounded-lg p-4">
                       <h3 className="text-white font-bold mb-2 flex items-center justify-between">
-                        <span>{teamName === 'ユーザー' ? 'あなたのチーム' : teamName}</span>
+                        <span>{teamLabel(teamName)}</span>
                         <span className="text-sm text-gray-300">{roster.length}人</span>
                       </h3>
                       <div className="space-y-1 max-h-48 overflow-y-auto">
