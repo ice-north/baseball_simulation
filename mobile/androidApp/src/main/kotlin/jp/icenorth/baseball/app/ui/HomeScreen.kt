@@ -47,7 +47,12 @@ import jp.icenorth.baseball.shared.buildFrontPage
 import jp.icenorth.baseball.shared.buildNationalPage
 import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
-import jp.icenorth.baseball.shared.milestoneText
+import jp.icenorth.baseball.shared.TEAM_RECORD_ROWS
+import jp.icenorth.baseball.shared.careerRecordLine
+import jp.icenorth.baseball.shared.historyLine
+import jp.icenorth.baseball.shared.milestoneLine
+import jp.icenorth.baseball.shared.retiredHead
+import jp.icenorth.baseball.shared.seasonRecordLine
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.teamShort
 import jp.icenorth.baseball.shared.backIssueKey
@@ -268,27 +273,30 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                     item { ChronicleHeading("年表") }
                     if (c.seasons.isEmpty()) item { Text("まだ終わったシーズンがありません。1年目を終えると、ここに年ごとの成績が並びます。", style = MaterialTheme.typography.bodySmall) }
                     items(c.seasons, key = { "s${it.year}" }) { s ->
-                        Text("${s.year}年　${s.line}", style = MaterialTheme.typography.bodyMedium)
+                        Text(s.historyLine(), style = MaterialTheme.typography.bodyMedium)
                     }
                     item { ChronicleHeading("歴代記録") }
                     if (c.records.isEmpty()) item { Text("記録がまだありません。", style = MaterialTheme.typography.bodySmall) }
+                    // シーズン最多・球団通算とも上位3人（PC と同じ。以前は1位だけだった）
                     items(c.records, key = { "r${it.stat}" }) { r ->
                         Column {
                             Text(r.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            r.season.firstOrNull()?.let { x -> Text("シーズン最多　${x.value}　${x.name}（${x.year}年${if (x.current) "・今季" else ""}）", style = MaterialTheme.typography.bodySmall) }
-                            r.career.firstOrNull()?.let { x -> Text("球団通算　${x.value}　${x.name}${if (x.active) "（現役）" else ""}", style = MaterialTheme.typography.bodySmall) }
+                            if (r.season.isNotEmpty()) Text("シーズン最多", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            r.season.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> Text(seasonRecordLine(i + 1, x), style = MaterialTheme.typography.bodySmall) }
+                            if (r.career.isNotEmpty()) Text("球団通算", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            r.career.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> Text(careerRecordLine(i + 1, x), style = MaterialTheme.typography.bodySmall) }
                         }
                     }
                     item { ChronicleHeading("節目の記録") }
                     if (c.milestones.isEmpty()) item { Text("まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。", style = MaterialTheme.typography.bodySmall) }
                     items(c.milestones.withIndex().toList(), key = { "m${it.index}" }) { (_, m) ->
-                        Text("${m.year}年${m.month}月${m.day}日　${m.name}　${milestoneText(m)}", style = MaterialTheme.typography.bodySmall)
+                        Text(milestoneLine(m), style = MaterialTheme.typography.bodySmall)
                     }
                     item { ChronicleHeading("引退した選手") }
                     if (c.retired.isEmpty()) item { Text("この球団から引退した選手はまだいません。", style = MaterialTheme.typography.bodySmall) }
                     items(c.retired.withIndex().toList(), key = { "x${it.index}" }) { (_, r) ->
                         Column {
-                            Text("${r.year}年　${r.name}（${r.age ?: "-"}歳）${if (r.hallOfFame) "　殿堂入り" else ""}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(retiredHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Text(listOfNotNull(r.seasons.takeIf { it > 0 }?.let { "在籍${it}年" }, r.line, r.secondCareer?.let { "→ $it" }).joinToString("　"), style = MaterialTheme.typography.bodySmall)
                         }
                     }
