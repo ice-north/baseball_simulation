@@ -608,6 +608,21 @@ try {
         .evaluate((e) => e === document.activeElement),
       'メニューを閉じて下部ボタンにフォーカスが戻る',
     );
+    // ⚠ 進行時刻の小窓は**カードの地色で出す**。スマホは本文のカードを一枚の面に
+    //    溶かす指定（背景なし）が小窓のカードにも当たり、暗い幕の上に文字だけが浮いていた
+    await m.getByRole('button', { name: 'メニュー', exact: true }).click();
+    await menu.getByRole('button', { name: '進行時刻', exact: true }).click();
+    const times = m.getByRole('dialog', { name: '進行時刻', exact: true });
+    await times.waitFor();
+    assert.match(
+      await times
+        .locator('.online-card')
+        .evaluate((node) => getComputedStyle(node).backgroundColor),
+      /^rgb\(/,
+      `${width}px 進行時刻の小窓のカードに地色が無い`,
+    );
+    await m.keyboard.press('Escape');
+    await times.waitFor({ state: 'hidden' });
     await m
       .getByRole('button', { name: '投手・控えを含む選手成績 →', exact: true })
       .click();

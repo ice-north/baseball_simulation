@@ -1651,6 +1651,15 @@ small.online-gain:not(:where(.online-sp *)) {
   padding: 8px 12px;
   margin: 0;
 }
+/* ⚠ 小窓（進行時刻など `.online-overlay`）の中のカードは**地色を戻す**。上の指定は
+   本文のカードを一枚の面に溶かすためのもので、小窓に当たると暗い幕の上に
+   文字とボタンだけが浮いていた */
+.online-mobile.online-compact-shell .online-overlay .online-card {
+  background: var(--surface-2);
+  border: 1px solid #4f6984;
+  border-radius: 10px;
+  padding: 16px 12px;
+}
 .online-mobile-overview {
   display: flex;
   flex-wrap: wrap;
