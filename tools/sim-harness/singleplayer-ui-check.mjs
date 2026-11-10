@@ -122,13 +122,18 @@ try {
   await page.waitForTimeout(800);
   assert.deepEqual(await ui.date(), after30, '開いている「日程進行」を押し直したら日付が進んだ');
 
-  step('選手成績と投手起用の画面');
+  step('選手成績・ロスター管理・資料室の画面');
   await ui.click('選手成績');
   await groundContrast('選手成績');
   await ui.click('ロスター管理');
-  await ui.click('試合のオーダー'); // 大学はベンチ登録と並ぶ外側のタブ
+  await ui.click('ベンチ登録'); // 大学は試合のオーダーと並ぶ外側のタブ。以前は枠が半透明で紙が透けていた
+  await groundContrast('ロスター管理のベンチ登録');
+  await ui.click('試合のオーダー');
   await ui.click('投手起用');
   await groundContrast('ロスター管理の投手起用');
+  await page.locator('nav').getByRole('button', { name: /資料室/ }).click();
+  await ui.click('注目選手');
+  await groundContrast('資料室の注目選手');
   await ui.click('日程進行');
 
   step('次の区切り（夏季合宿）まで');

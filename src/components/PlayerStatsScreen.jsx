@@ -182,7 +182,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
   ];
 
   const Sparkline = ({ history, statKey, color, width = 80, height = 28 }) => {
-    if (!history || history.length < 2) return <span className="text-gray-700 text-xs">-</span>;
+    if (!history || history.length < 2) return <span className="text-gray-400 text-xs">-</span>;
     const vals = history.map(h => h[statKey] || 0);
     const min = Math.max(0, Math.min(...vals) - 5);
     const max = Math.min(100, Math.max(...vals) + 5);
@@ -306,7 +306,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       )}
 
       {statsTab === 'growth' && (
-        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden">
+        <div className="bg-surface-2 rounded-xl border border-gray-700/50 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700/50">
             <h2 className="text-sm font-semibold text-white">自チーム選手 能力成長履歴</h2>
             <p className="text-xs text-gray-400 mt-0.5">キャンプ完了時にスナップショットを記録。2年目以降から表示されます。</p>
@@ -363,7 +363,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-gray-700 text-xs">2年目以降</span>
+                            <span className="text-gray-400 text-xs">2年目以降</span>
                           )}
                         </td>
                       </tr>

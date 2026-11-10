@@ -42,11 +42,15 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
     const q = qualifiers[selectedRegion];
     return (
       <ScreenShell width="mid">
-          <h1 className="text-xl font-bold text-white mb-1">{q.regionName} 地区予選</h1>
-          <p className="text-gray-300 text-sm mb-4">{q.teamDefs.length}チーム → {q.slots}枠</p>
+          {/* ⚠ この画面だけ地色（明るい紙）の上（一覧と本戦は暗いグラデの地）。見出しは地色の列の色、
+              トーナメント表は暗い地を前提にした色なのでカードに載せる（index.css の「文字色の決まり」） */}
+          <h1 className="text-xl font-bold text-ink mb-1">{q.regionName} 地区予選</h1>
+          <p className="text-ink-sub text-sm mb-4">{q.teamDefs.length}チーム → {q.slots}枠</p>
 
-          <BracketView bracket={q.mainBracket} title="勝者側トーナメント" />
-          {q.losersBracket && <BracketView bracket={q.losersBracket} title="敗者復活トーナメント" />}
+          <div className="bg-surface-2 rounded-lg p-3">
+            <BracketView bracket={q.mainBracket} title="勝者側トーナメント" />
+            {q.losersBracket && <BracketView bracket={q.losersBracket} title="敗者復活トーナメント" />}
+          </div>
 
           <div className="bg-surface-2 rounded-lg p-3 mt-4">
             <h3 className="text-green-400 font-bold text-sm mb-1">代表チーム</h3>
@@ -62,7 +66,7 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
             })}
           </div>
 
-          <button onClick={() => setSelectedRegion(null)} className="mt-4 text-gray-300 hover:text-white text-sm">
+          <button onClick={() => setSelectedRegion(null)} className="btn-secondary mt-4 px-4 py-2 rounded-lg text-sm">
             ← 全地区一覧に戻る
           </button>
       </ScreenShell>

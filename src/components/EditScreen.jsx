@@ -86,7 +86,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
   return (
     <ScreenShell>
       <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-xl font-bold text-white">エディット画面（開発用）</h1>
+        <h1 className="text-xl font-bold text-ink">エディット画面（開発用）</h1>
         {/* ⚠ 以前は保存も戻るボタンも無く、編集は再読み込みで消えるだけだった */}
         <div className="flex gap-2">
           {onOpenSave && (

@@ -214,7 +214,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             placeholder="選手名・所属で検索..."
             className="bg-surface-2 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 w-64 focus:outline-none focus:border-blue-500"
           />
-          {nameQuery && <button onClick={() => setNameQuery('')} className="text-gray-400 hover:text-white text-sm">✕</button>}
+          {nameQuery && <button onClick={() => setNameQuery('')} className="text-ink-sub hover:text-ink text-sm" aria-label="検索の文字を消す">✕</button>}
           {/* ⚠ この行は**地色の上に直に載る**（カードの外）ので暗い文字にすること */}
           <span className="text-ink-sub text-xs ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
         </div>

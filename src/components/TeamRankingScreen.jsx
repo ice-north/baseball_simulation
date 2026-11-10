@@ -335,10 +335,11 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       <ScreenShell className="text-white">
         <ScreenHeader title="チームランキング"
           right={onBack && <button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded text-sm">← 戻る</button>} />
-        <div className="text-gray-300 text-center py-16">
+        {/* ⚠ 地色（明るい紙）の上に直に載る（index.css の「文字色の決まり」の地色の列） */}
+        <div className="text-ink text-center py-16">
           <div className="text-5xl mb-4">📊</div>
           <p className="text-lg mb-2">ランキングデータがまだありません</p>
-          <p className="text-sm text-gray-400">オフシーズン終了後にランキングが確定します</p>
+          <p className="text-sm text-ink-sub">オフシーズン終了後にランキングが確定します</p>
         </div>
       </ScreenShell>
     );

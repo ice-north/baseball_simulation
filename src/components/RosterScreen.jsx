@@ -337,7 +337,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
           {/* 2パネル */}
           <div className="grid grid-cols-2 gap-4">
             {/* 登録選手 */}
-            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/40">
+            <div className="bg-surface-2 rounded-lg p-3 border border-gray-700/40">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-white">
                   登録選手
@@ -371,7 +371,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
             </div>
 
             {/* ベンチ外 */}
-            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/40">
+            <div className="bg-surface-2 rounded-lg p-3 border border-gray-700/40">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-white">
                   ベンチ外

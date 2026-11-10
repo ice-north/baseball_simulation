@@ -501,7 +501,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                               <span className="text-white font-bold text-xs">{team.short}</span>
                               <span className="text-gray-400 text-xs ml-auto">{picks.length}名</span>
                             </div>
-                            <div className="bg-gray-800/90 p-2" style={{ minHeight: '60px' }}>
+                            <div className="bg-surface-2 p-2" style={{ minHeight: '60px' }}>
                               {picks.length === 0 ? (
                                 <div className="flex items-center justify-center h-full text-gray-400 text-sm min-h-[40px]">
                                   指名なし
@@ -1195,7 +1195,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             <div className="space-y-5">
               {/* 歴代シーズン記録（各タイトルの最高値） */}
               <div>
-                <h2 className="text-sm font-bold text-amber-300 mb-2">歴代シーズン記録</h2>
+                <h2 className="text-sm font-bold text-ink mb-2">歴代シーズン記録</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {TITLE_DEFS.map(def => {
                     const b = almanac.bestSeason[def.key];
@@ -1217,7 +1217,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
 
               {/* 通算タイトル数ランキング */}
               <div>
-                <h2 className="text-sm font-bold text-amber-300 mb-2">通算タイトル数</h2>
+                <h2 className="text-sm font-bold text-ink mb-2">通算タイトル数</h2>
                 {almanac.titleRanking.length === 0 ? (
                   <div className="bg-surface-2 rounded-lg p-4 text-center text-gray-400 text-sm">記録なし</div>
                 ) : (
@@ -1262,7 +1262,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               {/* 球団別リーグ優勝回数 */}
               {almanac.champRanking.length > 0 && (
                 <div>
-                  <h2 className="text-sm font-bold text-amber-300 mb-2">球団別リーグ優勝回数</h2>
+                  <h2 className="text-sm font-bold text-ink mb-2">球団別リーグ優勝回数</h2>
                   <div className="flex flex-wrap gap-2">
                     {almanac.champRanking.map(c => (
                       <div key={c.team} className="bg-surface-2 border border-gray-700/60 rounded-lg px-3 py-1.5 flex items-center gap-2">
@@ -1279,7 +1279,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               {/* 引退者のセカンドキャリア（監督・コーチ・スカウト） */}
               {almanac.secondCareers.length > 0 && (
                 <div>
-                  <h2 className="text-sm font-bold text-amber-300 mb-2">セカンドキャリア（引退後の指導者）</h2>
+                  <h2 className="text-sm font-bold text-ink mb-2">セカンドキャリア（引退後の指導者）</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {almanac.secondCareers.map((sc, i) => {
                       const meta = SECOND_CAREER_META[sc.role] || SECOND_CAREER_META.coach;
@@ -1298,7 +1298,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
 
               {/* 歴代タイトルホルダー（年度別） */}
               <div>
-                <h2 className="text-sm font-bold text-amber-300 mb-2">歴代タイトルホルダー</h2>
+                <h2 className="text-sm font-bold text-ink mb-2">歴代タイトルホルダー</h2>
                 <div className="bg-surface-2 rounded-lg overflow-x-auto">
                   <table className="w-full text-xs whitespace-nowrap">
                     <thead>
@@ -1346,17 +1346,17 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           return (
             <div>
               {rows.length === 0 ? (
-                <div className="text-center py-12 text-gray-300 text-sm">
+                <div className="text-center py-12 text-ink-sub text-sm">
                   注目している選手はいません。<br />
-                  <span className="text-gray-300">甲子園の結果やスカウト画面の ☆ から登録すると、進路先まで追えます。</span>
+                  <span>甲子園の結果やスカウト画面の ☆ から登録すると、進路先まで追えます。</span>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="text-sm text-gray-300">
-                    注目中 <span className="text-cyan-300 font-bold tabular-nums">{rows.length}</span> 名
-                    <span className="text-gray-300 ml-2">（高校・大学・社会人・独立・プロを横断して現在地を追跡します）</span>
+                  <div className="text-sm text-ink-sub">
+                    注目中 <span className="text-ink-accent font-bold tabular-nums">{rows.length}</span> 名
+                    <span className="ml-2">（高校・大学・社会人・独立・プロを横断して現在地を追跡します）</span>
                   </div>
-                  <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-x-auto">
+                  <div className="bg-surface-2 rounded-lg border border-gray-700/50 overflow-x-auto">
                     <table className="w-full text-xs whitespace-nowrap">
                       <thead>
                         <tr className="text-gray-300 border-b border-gray-700/50">
@@ -1402,21 +1402,21 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         {activeTab === 'alumni' && (
           <div>
             {alumniTotal === 0 ? (
-              <div className="text-center py-12 text-gray-300 text-sm">
+              <div className="text-center py-12 text-ink-sub text-sm">
                 まだプロへ送り出した選手はいません。<br />
-                <span className="text-gray-300">ドラフトで指名された所属選手がここに記録されます。</span>
+                <span>ドラフトで指名された所属選手がここに記録されます。</span>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="text-sm text-gray-300">
-                  プロへ送り出した教え子 <span className="text-cyan-300 font-bold tabular-nums">{alumniTotal}</span> 名
-                  <span className="text-gray-300 ml-2">（指名時の能力を保存。サンドボックスモードで再登場させられます）</span>
-                  <div className="text-xs text-gray-300 mt-1">
-                    プロでの成績は毎年オフに更新されます。<b className="text-amber-200">操作はできません</b>——送り出した後の姿を見届ける階層です。
+                <div className="text-sm text-ink-sub">
+                  プロへ送り出した教え子 <span className="text-ink-accent font-bold tabular-nums">{alumniTotal}</span> 名
+                  <span className="ml-2">（指名時の能力を保存。サンドボックスモードで再登場させられます）</span>
+                  <div className="text-xs mt-1">
+                    プロでの成績は毎年オフに更新されます。<b className="text-ink">操作はできません</b>——送り出した後の姿を見届ける階層です。
                   </div>
                 </div>
                 {alumniByYear.map(({ year, players }) => (
-                  <div key={year} className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-hidden">
+                  <div key={year} className="bg-surface-2 rounded-lg border border-gray-700/50 overflow-hidden">
                     <div className="px-3 py-2 bg-gray-900/60 border-b border-gray-700/50 flex items-center gap-2">
                       <span className="text-cyan-300 font-bold text-sm">{year}年目ドラフト</span>
                       <span className="text-xs text-gray-300">{players.length}名</span>

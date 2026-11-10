@@ -46,15 +46,17 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
   return (
     <div className="p-4">
       <div className="max-w-lg mx-auto">
-        <h1 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-          <span className="text-yellow-400">💰</span> 年度末決算（11月30日）
+        {/* ⚠ 見出しと説明は地色（明るい紙）の上、表はカード（bg-surface-2）の上。
+            文字色は index.css の「文字色の決まり」の表から、どちらに載るかで選ぶ */}
+        <h1 className="text-xl font-bold text-ink mb-3 flex items-center gap-2">
+          <span>💰</span> 年度末決算（11月30日）
         </h1>
-        <p className="text-xs text-gray-300 mb-4">
+        <p className="text-xs text-ink-sub mb-4">
           退団・入団・スタッフ整理・スポンサー契約を踏まえた最終決算です。
         </p>
 
         {/* 収入の部 */}
-        <div className="bg-gray-800/80 rounded-xl p-3 mb-3 border border-gray-700/50">
+        <div className="bg-surface-2 rounded-xl p-3 mb-3 border border-gray-700/50">
           <h2 className="text-sm font-bold text-green-400 mb-2">収入の部</h2>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between">
@@ -93,7 +95,7 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
         </div>
 
         {/* 支出の部 */}
-        <div className="bg-gray-800/80 rounded-xl p-3 mb-3 border border-gray-700/50">
+        <div className="bg-surface-2 rounded-xl p-3 mb-3 border border-gray-700/50">
           <h2 className="text-sm font-bold text-red-400 mb-2">支出の部</h2>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between">
@@ -112,7 +114,7 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
         </div>
 
         {/* 収支 */}
-        <div className={`rounded-xl p-3 mb-4 border ${isDeficit ? 'bg-red-900/30 border-red-700/50' : 'bg-green-900/30 border-green-700/50'}`}>
+        <div className={`rounded-xl p-3 mb-4 border bg-surface-2 ${isDeficit ? 'border-red-500/70' : 'border-green-500/70'}`}>
           <div className="flex justify-between items-center">
             <span className="text-sm font-bold text-white">収支</span>
             <span className={`text-lg font-bold ${isDeficit ? 'text-red-400' : 'text-green-400'}`}>

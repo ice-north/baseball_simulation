@@ -1757,8 +1757,8 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       <div className="p-3 min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">⚾</div>
-          <div className="text-white text-xl font-bold mb-2">都市対抗予選を開催中...</div>
-          <div className="text-gray-300 text-sm">全12地区の予選トーナメントをシミュレーション中</div>
+          <div className="text-ink text-xl font-bold mb-2">都市対抗予選を開催中...</div>
+          <div className="text-ink-sub text-sm">全12地区の予選トーナメントをシミュレーション中</div>
           <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '70%'}}></div>
           </div>

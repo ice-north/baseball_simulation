@@ -393,7 +393,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
     players, teamName, selectedPlayer, onSelect, title, titleColor,
     header, emptyMessage, keyPrefix,
   }) => (
-    <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden flex flex-col">
+    <div className="bg-surface-2 rounded-xl border border-gray-700/50 overflow-hidden flex flex-col">
       {header || (
         <div className="px-4 py-3 border-b border-gray-700/50 flex items-center gap-2">
           <h2 className={`font-semibold text-sm ${titleColor}`}>{title}</h2>
@@ -486,10 +486,12 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
   return (
     <div className="mx-auto p-4 max-w-7xl">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-white">トレード</h1>
+        {/* ⚠ 見出しは地色（明るい紙）の上なので text-ink。文字を載せる枠は不透明（bg-surface-2）にする。
+            半透明（gray-800/60〜80）だと紙が透けて、中の文字が読めなかった（index.css の「文字色の決まり」） */}
+        <h1 className="text-xl font-bold text-ink">トレード</h1>
         {onBack && (
-          <button onClick={onBack} className="px-3 py-1.5 bg-gray-700/80 text-gray-300 rounded-lg hover:bg-gray-600 transition text-sm">
-            戻る
+          <button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded-lg transition text-sm">
+            ← 戻る
           </button>
         )}
       </div>
@@ -520,17 +522,17 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
       </div>
 
       {tradeResult && (
-        <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-semibold border ${
+        <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-semibold border bg-surface-2 ${
           tradeResult.success
-            ? 'bg-green-900/40 text-green-300 border-green-700/50'
-            : 'bg-red-900/40 text-red-300 border-red-700/50'
+            ? 'text-green-300 border-green-500/70'
+            : 'text-red-300 border-red-500/70'
         }`}>
           {tradeResult.message}
         </div>
       )}
 
       {tradeTab === 'inbox' && (
-        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden mb-5">
+        <div className="bg-surface-2 rounded-xl border border-gray-700/50 overflow-hidden mb-5">
           <div className="px-4 py-3 border-b border-gray-700/50">
             <h2 className="font-semibold text-sm text-yellow-400">ほかの球団からの提案</h2>
             <p className="text-xs text-gray-400 mt-0.5">相手チームが欲しがっている選手と引き換えに提案が来ています</p>
@@ -629,7 +631,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
 
       {tradeTab === 'propose' && (
         /* トレード内容 */
-        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5">
+        <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-5">
           <h3 className="font-semibold text-white text-sm mb-4">トレード内容</h3>
           <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
             {renderPlayerCard(selectedMyPlayer, '放出', 'text-blue-400', 'bg-blue-950/40', userTeamName)}

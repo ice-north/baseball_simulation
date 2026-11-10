@@ -39,7 +39,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
     return (
       <ScreenShell>
         <ScreenHeader title="チーム運営" />
-        <p className="text-gray-300">社会人モードでのみ利用可能です。</p>
+        <p className="text-ink-sub">社会人モードでのみ利用可能です。</p>
       </ScreenShell>
     );
   }
