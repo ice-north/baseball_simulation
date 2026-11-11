@@ -204,8 +204,9 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
  *    球団名が2回出ていた（参加時の呼び名の既定が球団名だったため）。
  * ⚠ 内部名（`teamName`）は変わらない。記録の選手キーまで貫いているので、
  *    見せる名前だけ差し替える。
+ * ⚠ スマホも下の「☰」の「名前を変える」からこれを開く（`MobileView.jsx`。再監査 B5）
  */
-function RenameDialog({ view, busy, run, command, close }) {
+export function RenameDialog({ view, busy, run, command, close }) {
   const dialog = useRef(null);
   const me = (view.members || []).find((m) => m.teamName === view.teamName);
   const [teamName, setTeamName] = useState(

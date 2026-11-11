@@ -27,11 +27,14 @@ import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { StaffBody } from './StaffPage.jsx';
 import { MobileTradeReplies } from './TradeScreen.jsx';
+import { RenameDialog } from './DesktopView.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
     props;
   const [playersFrom, setPlayersFrom] = useState('today');
   const [menuOpen, setMenuOpen] = useState(false);
+  // 球団名・名前を変える小窓（PCの左メニューの「名前を変える」と同じ部品）
+  const [renaming, setRenaming] = useState(false);
   // ⚠ 全画面の編成に保存していない編集が残っていれば開いたまま始める。
   //    スマホを回すとPC用の画面と入れ替わって作り直され、以前は編集が消えていた。
   //    ⚠ 打順だけの編集なら開かない（「打順」の2タップの表が引き取る。`TapLineup.jsx`）
@@ -263,13 +266,15 @@ export default function MobileView(props) {
           reloadView={reloadView}
           showTimes={showTimes}
           logout={logout}
+          rename={() => setRenaming(true)}
         />
       )}
+      {renaming && <RenameDialog {...props} close={() => setRenaming(false)} />}
     </>
   );
 }
 
-function MobileMenu({ close, loading, local, reloadView, showTimes, logout }) {
+function MobileMenu({ close, loading, local, reloadView, showTimes, logout, rename }) {
   const dialog = useRef(null);
   useEffect(() => {
     const node = dialog.current;
@@ -309,6 +314,9 @@ function MobileMenu({ close, loading, local, reloadView, showTimes, logout }) {
           更新
         </button>
         <button onClick={() => act(showTimes)}>進行時刻</button>
+        {/* ⚠ **スマホにも名前を変える入口を置く**（再監査 B5）。以前はPCの左メニューにしか無く、
+            初期メンバーの選択で名前の欄を開かずに決定すると、スマホだけの人は名前を変えられなかった */}
+        <button onClick={() => act(rename)}>名前を変える</button>
         <a href="/">一人用</a>
         <button disabled={loading} onClick={() => act(logout)}>
           ログアウト

@@ -759,6 +759,23 @@ try {
     const chosen = await pack.page.locator('.online-phase-contents').innerText();
     assert.match(chosen, /初期メンバー「検証セット」/, `選んだセットが出ない: ${chosen}`);
     assert.match(chosen, /投手厚め · 投13 捕2 内5 外4/, `セットの中身が出ない: ${chosen}`);
+    // ⚠ **名前の欄はセットの一覧（編集）を開かなくても出る**（再監査 B5）。以前は編集の中に
+    //    しか無く、標準のセットのまま決定すると名前を一度も見ずに終わっていた
+    await pack.page
+      .getByRole('button', { name: 'この名前にする', exact: true })
+      .waitFor({ timeout: 3000 })
+      .catch(() => {
+        throw new Error('スマホの初期メンバー選択で、編集を開かないと名前の欄が出ない');
+      });
+    await fitsPhone(pack.page, '初期メンバーの選択（名前の欄）');
+    // あとから変える入口も下の「☰」にある（PCの左メニューの「名前を変える」と同じ小窓）
+    await pack.page.getByRole('button', { name: 'メニュー', exact: true }).click();
+    await pack.page.getByRole('button', { name: '名前を変える', exact: true }).click();
+    const renameDialog = pack.page.getByRole('dialog', { name: '球団名・名前を変える' });
+    await renameDialog.waitFor();
+    await fitsPhone(pack.page, '名前を変える小窓');
+    await renameDialog.getByRole('button', { name: '閉じる', exact: true }).click();
+    await renameDialog.waitFor({ state: 'detached' });
     // ⚠ **スマホでもセットを選び直して決められる**（判断1・案B）。以前は「変えるときはPCで」と
     //    書くだけで、スマホだけの人は標準案のセットのまま決めるしかなかった
     await pack.page.getByRole('button', { name: 'セットを見比べて選ぶ', exact: true }).click();
@@ -770,8 +787,9 @@ try {
       /編集中の内容（未保存）です。/,
       '選び直しても編集中と出ない',
     );
-    // 名前の欄もセットの下に出る（PCと同じ手順: セット → 名前 → 決定）
+    // 名前の欄もセットの下に出る（PCと同じ手順: セット → 名前 → 決定）。編集の外の欄と2つ並ばない
     await pack.page.getByRole('button', { name: 'この名前にする', exact: true }).waitFor();
+    assert.equal(await pack.page.locator('.online-identity').count(), 1, '名前の欄が2つ並ぶ');
     await fitsPhone(pack.page, '初期メンバーの選択');
     // 決める前の確認では、選び直したセットを見せる（編集は閉じる）
     await pack.page.getByRole('button', { name: 'この内容で決定', exact: true }).click();

@@ -46,7 +46,7 @@ export function TeamIdentity({ view, busy, run, command }) {
     <section className="online-identity">
       <h3>球団名とプレイヤー名</h3>
       <p className="online-muted">
-        順位表や試合結果に出る名前です。あとから（PCでは左メニューの「名前を変える」で）変えられます。
+        順位表や試合結果に出る名前です。あとから「名前を変える」（PCは左メニュー、スマホは下の「☰」）で変えられます。
       </p>
       <div className="online-identity-fields">
         <label>

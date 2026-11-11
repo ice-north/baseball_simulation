@@ -1116,6 +1116,13 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
                     {mobileEditLabel}
                   </button>
                 )}
+                {/* ⚠ **初期メンバー選択では名前の欄を編集の外にも出す**（再監査 B5）。始める手順は
+                    「セットを選ぶ → 球団名とプレイヤー名 → 決定」だが、欄はセットの一覧（編集）の
+                    中にしか無く、標準のセットのまま決定すると名前を一度も見ずに終わっていた。
+                    編集を開いている間は一覧の下（`PackSelect`）に出るので、ここでは出さない */}
+                {phase.packs && (
+                  <TeamIdentity view={view} busy={busy} run={run} command={command} />
+                )}
               </>
             )}
             <p className="online-phase-status">
