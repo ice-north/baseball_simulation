@@ -19,10 +19,16 @@
 import assert from 'node:assert/strict';
 import { readFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
 import { chromium } from 'playwright';
 import { routeToService, tryoutService } from './lib/serviceRoute.mjs';
 import { plannedPicks } from '../../src/online/tryoutPlan.js';
-import { loadLeagueWorld, openPhase, captureLeagueWorld } from '../../server/leagueEngine.mjs';
+import {
+  loadLeagueWorld,
+  openPhase,
+  captureLeagueWorld,
+  defaultPhasePlan,
+} from '../../server/leagueEngine.mjs';
 import { withSeededRandom, hashSeed } from '../../src/game/rng.js';
 import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
@@ -279,16 +285,37 @@ try {
     const fx = await tryoutService();
     // ⚠ 候補の作り直しを種で決める（`openPhase` の候補は乱数）。種が無いと、監督の案と
     //    「自分で」の標準案がたまたま同じ顔ぶれになる回があり、B2 の食い違いが見えない
+    // ⚠ **種は1つに決め打ちしない**。候補の作り方や AI の選び方が変わると、決め打ちの種で
+    //    2つの案が同じ顔ぶれになり、前提の確かめで落ちた（main の取り込みで起きた）。
+    //    種を順に試し、監督の案と「自分で」の案が違う顔ぶれになる最初の種で開く
     await fx.store.transaction((bundle) => {
-      const l = bundle.league;
-      loadLeagueWorld(l);
-      withSeededRandom(hashSeed('staff-ui-tryout'), () =>
-        openPhase(l, 'tryout', '2026-11-10T15:00:00.000Z'),
-      );
-      l.game = captureLeagueWorld();
-      l.revision += 1;
-      return { value: null };
-    });
+      const before = structuredClone(bundle.league);
+      const picksBy = (l, mode) => {
+        const member = l.members[0];
+        const saved = member.staffModes;
+        member.staffModes = mode ? { ...(saved || {}), tryout: mode } : saved;
+        const plan = defaultPhasePlan(l, member.teamName);
+        member.staffModes = saved;
+        const count = Math.min(plan.count, plan.rankedIds.length);
+        const roster = l.game.teams[member.teamName].players;
+        return plannedPicks(plan.rankedIds, l.phase.candidates, count, roster).map((x) => x.name);
+      };
+      for (let i = 0; i < 30; i += 1) {
+        const l = structuredClone(before);
+        loadLeagueWorld(l);
+        withSeededRandom(hashSeed(`staff-ui-tryout:${i}`), () =>
+          openPhase(l, 'tryout', '2026-11-10T15:00:00.000Z'),
+        );
+        l.game = captureLeagueWorld();
+        const byCoach = picksBy(l, null);
+        if (byCoach.length === 0 || isDeepStrictEqual(byCoach, picksBy(l, 'self'))) continue;
+        l.revision += 1;
+        bundle.league = l;
+        return { value: null };
+      }
+      throw new Error('前提: 監督の案と「自分で」の案が違う顔ぶれになる種が見つからない');
+      // ⚠ リーグを丸ごと差し替えるので全体で読む（軽い読みの見張りは差し替えを追えない）
+    }, { full: true });
     // ⚠ PCの左上のいまの段階は区切りで折る。「オフ · トライア／ウト」と語の途中で
     //    割れていた（再監査 F18。右の「決定待ち」の札で幅が減る）
     {
