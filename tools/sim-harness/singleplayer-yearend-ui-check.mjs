@@ -182,13 +182,15 @@ const currentPick = (page) => page.evaluate(() => {
   const m = document.body.innerText.match(/現在のピック\s*(\d+)/);
   return m ? Number(m[1]) : null;
 });
-// 1人指名する。`choose` で候補を選び、「指名する」で決め（おすすめ候補で直接決まる作りでも
-// 動くように、出ていれば押す）、ピックの番号が進むまで待つ
+// 1人指名する。`choose` で候補を選び、確認の帯の「指名する」で決め、ピックの番号が進むまで待つ。
+// ⚠ 「指名する」は必ず押す（出ていなければ落とす）。以前は「出ていれば押す」で、指名が
+//    確認なしの1段に戻ってもこの検査は通ってしまっていた
 async function pick(page, choose) {
   const before = await currentPick(page);
   await choose();
   const confirm = page.getByRole('button', { name: /^指名する$/ });
-  if (await confirm.count()) await confirm.click();
+  await confirm.waitFor({ timeout: 5000 });
+  await confirm.click();
   await page.waitForFunction((n) => {
     const m = document.body.innerText.match(/現在のピック\s*(\d+)/);
     return !m || Number(m[1]) !== n;
@@ -383,9 +385,20 @@ async function runClub(page, t) {
   await step('退団処理: そのまま確定 → 入部希望者を1人受け入れる');
   await t.confirm(/^契約更改を確定$/, /^(解雇して確定する|確定する)$/, '入部希望者の受付へ進む', '退団処理の完了');
   await go('入部希望者の受付へ進む', /入部なしで確定|受け入れて確定/, '入部希望者');
+  // ⚠ どちらの道を通ったかを残す。以前は「見送り」の札が無ければ黙って押さず、
+  //    「入部なしで確定」でも同じく通っていた（受け入れの経路を通ったかが分からない）
   const applicant = page.getByText('見送り', { exact: true });
-  if (await applicant.count()) await applicant.first().click();
-  await t.confirm(/入部なしで確定|受け入れて確定/, /^確定する$/, 'オフシーズンへ進む', '入部受付の完了');
+  const applicants = await applicant.count();
+  if (applicants) {
+    await applicant.first().click();
+    await button(/^1名を受け入れて確定$/).waitFor({ timeout: 5000 });
+    await step(`入部希望者 ${applicants}人のうち1人を受け入れる`);
+  } else {
+    assert.ok(await page.getByText('今年は入部希望者がいませんでした。').count(),
+      '入部希望者の札（見送り）も「いませんでした」も無い。画面の文言が変わった？');
+    await step('入部希望者は0人（入部なしで確定）');
+  }
+  await t.confirm(applicants ? /^1名を受け入れて確定$/ : /^入部なしで確定$/, /^確定する$/, 'オフシーズンへ進む', '入部受付の完了');
   await go('オフシーズンへ進む', page.getByTestId('dev-advance'), '日程画面');
 
   await t.proceedTo(/オフシーズン/);
