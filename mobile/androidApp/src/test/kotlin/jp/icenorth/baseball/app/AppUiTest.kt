@@ -4,9 +4,11 @@ import android.app.Application
 import android.os.Looper
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -47,14 +49,16 @@ class AppUiTest {
         if (::client.isInitialized) client.close()
     }
 
-    private fun open(extra: String, latest: LatestApp? = null) {
+    /** @param answer ビューのほかの窓口の答え（action ごと）。null ならビューと同じものを返す */
+    private fun open(extra: String, latest: LatestApp? = null, answer: (String) -> String? = { null }) {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("online", 0).edit().clear().commit()
         client = HttpClient(MockEngine { request ->
-            if (request.url.parameters["action"] == "command") commands += (request.body as TextContent).text
-            val text = if (request.url.parameters["action"] == "login")
+            val action = request.url.parameters["action"].orEmpty()
+            if (action == "command") commands += (request.body as TextContent).text
+            val text = if (action == "login")
                 """{"userId":"a","accessToken":"token","sessionId":"session"}"""
-            else """{"revision":1,"teamName":"team","writable":true,$extra}"""
+            else answer(action) ?: """{"revision":1,"teamName":"team","writable":true,$extra}"""
             respond(text, headers = headersOf(HttpHeaders.ContentType, "application/json"))
         })
         rule.runOnIdle {
@@ -118,6 +122,24 @@ class AppUiTest {
         assertTrue(sent, sent.contains("\"type\":\"submit\""))
         assertTrue(sent, sent.contains("\"packId\":\"p2\""))
         assertTrue(sent, sent.contains("\"ready\":false"))
+    }
+
+    @Test fun savingTheTryoutKeepsTheCandidateList() {
+        val candidates = """[{"id":11,"name":"候補一","position":"pitcher"},{"id":12,"name":"候補二","position":"first"}]"""
+        open(""""roster":[],"phase":{"id":"ph1","kind":"tryout","candidates":$candidates,"submission":{"plan":{"rankedIds":[11,12],"count":1},"ready":false}}""")
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        // 候補の側に切り替える（切り替えの字と、候補の見出しの2つに「候補 2人」が出る）
+        rule.onNodeWithText("候補 2人").performScrollTo().performClick()
+        rule.onAllNodesWithText("候補 2人").assertCountEquals(2)
+        rule.onNodeWithText("下書きを保存").performClick()
+        rule.waitUntil(10_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            commands.isNotEmpty() && !model.busy
+        }
+        rule.waitForIdle()
+        // ⚠ 以前は保存のたびに案を捨てて面を作り直し、候補の絞り込みや件数ごと「獲得予定」の側に戻っていた
+        rule.onAllNodesWithText("候補 2人").assertCountEquals(2)
+        assertTrue(model.phaseDraft?.dirty == false)
     }
 
     @Test fun homePaperTellsWhenANewerAppIsOut() {

@@ -648,6 +648,19 @@ internal class CheckSchedule(private val interval: Long, private val retry: Long
  */
 data class PhaseDraft(val phaseId: String, val plan: JsonObject, val base: JsonElement?, val dirty: Boolean)
 
+/**
+ * ビューの提出（`phase.submission`）から、保存済みの案を作る。手続きが変わった・提出が無ければ null。
+ * ⚠ 保存・決定のあとは案を null にせず、読み直したビューからこれで作り直す。null の間は手続きの面が
+ *    「標準案を準備しています…」に替わり、中の一覧（トライアウトの候補の絞り込み・件数、契約更改の並び、
+ *    初期メンバーの構成の絞り込み）の状態が捨てられ、スクロールも先頭に戻っていた
+ */
+internal fun savedPhaseDraft(raw: JsonObject?, phaseId: String): PhaseDraft? {
+    val phase = raw?.get("phase").obj()?.takeIf { it.at("id").str() == phaseId } ?: return null
+    val submission = phase["submission"].obj() ?: return null
+    val plan = submission["plan"].obj() ?: return null
+    return PhaseDraft(phaseId, plan, submission, dirty = false)
+}
+
 /** キャンプの方針と、選手ごとのメイン・サブ練習（未実行のクールの指示） */
 data class CampDraft(
     val phaseId: String,

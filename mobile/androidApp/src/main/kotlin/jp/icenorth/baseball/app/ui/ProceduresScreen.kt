@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.app.PhaseDraft
+import jp.icenorth.baseball.app.savedPhaseDraft
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.ROSTER_LIMIT
@@ -383,7 +384,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
             if (changedElsewhere) {
                 Section {
                     Text("別の操作で提出が更新されました。現在の入力を破棄して保存済みの内容を読み直せます。", color = MaterialTheme.colorScheme.secondary)
-                    OutlinedButton(onClick = { model.phaseDraft = null }) { Text("最新の提出を読み直す") }
+                    OutlinedButton(onClick = { model.phaseDraft = savedPhaseDraft(raw, phaseId) }) { Text("最新の提出を読み直す") }
                 }
             }
             when {
@@ -436,7 +437,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
             dirty = draft.dirty,
             onDecide = { submit(model, phaseId, plan, true, draft.base) },
             onSave = { submit(model, phaseId, plan, false, draft.base) },
-            onDiscard = { model.phaseDraft = null },
+            // 保存済みの提出に戻す（無ければ null にして標準案を読み直す）
+            onDiscard = { model.phaseDraft = savedPhaseDraft(raw, phaseId) },
         )
     }
 }
@@ -471,7 +473,9 @@ private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready
     model.command("submit", Commands.submit(phaseId, plan, ready, base), label = if (ready) "決定を送信中…" else "保存中…", done = done ?: if (ready) "決定しました" else "保存しました") {
         // ⚠ サーバーは提出を整えて保存する（送った形と同じとは限らない）ので、読み直したビューの提出から作り直す。
         //    送った形を base にすると、次の提出が edit_conflict で断られることがある
-        model.phaseDraft = null
+        // ⚠ null にしてはいけない（[savedPhaseDraft]）。null の間は面が「標準案を準備しています…」に替わり、
+        //    トライアウトの候補の絞り込み・契約更改の並び・初期メンバーの構成の絞り込みとスクロールが初期に戻っていた
+        model.phaseDraft = savedPhaseDraft(model.raw, phaseId)
     }
 }
 
