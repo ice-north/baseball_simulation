@@ -260,6 +260,18 @@ async function runIndependent(page, t) {
   await ui.click(/^提案する$/);
   await page.waitForTimeout(300);
   assert.equal(await tradeBar.count(), 0, 'タブを替えて戻ったら、押していないトレードの帯が残っている');
+  // 申し込んだ結果（成立・拒否）は、押したボタンの近くの見える所に出る。
+  // 以前は画面の上にしか出ず、1280×720 では表の下の「申し込む」を押すと見えなかった
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await t.go(/^トレード提案$/, tradeBar, 'トレードの確認の帯');
+  await tradeBar.getByRole('button', { name: /^申し込む$/ }).click();
+  const tradeNote = page.getByText(/^(トレード成立！|相手チームが拒否しました)/);
+  await tradeNote.waitFor();
+  await page.waitForTimeout(300);
+  const noteBox = await tradeNote.boundingBox();
+  assert.ok(noteBox && noteBox.y >= 0 && noteBox.y + noteBox.height <= 720,
+    `1280×720 でトレードを申し込んだ結果「${await tradeNote.innerText()}」が画面の外にある（y=${Math.round(noteBox?.y)}〜${Math.round((noteBox?.y || 0) + (noteBox?.height || 0))}）`);
+  await page.setViewportSize({ width: 1400, height: 900 });
   await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
   await page.getByTestId('dev-advance').waitFor();
 

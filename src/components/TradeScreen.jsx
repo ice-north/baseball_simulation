@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityRank, getRankColor } from '../utils/constants.js';
@@ -97,10 +97,26 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
   // ⚠ 以前は落とさず、相手チームを替えると帯が隠れるだけで、新しい相手の選手を選ぶと
   //    「トレード提案」を押していないのに新しい相手への帯が出た（受信提案の「承諾する」も、
   //    「断る」やタブの切り替えのあと受信提案へ戻ると帯が残っていた）
-  const selectMyPlayer = (p) => { setPendingTrade(null); setSelectedMyPlayer(p); };
-  const selectTargetPlayer = (p) => { setPendingTrade(null); setSelectedTargetPlayer(p); };
-  const changeTargetTeam = (team) => { setPendingTrade(null); setSelectedTargetTeam(team); setSelectedTargetPlayer(null); };
+  // 選び直したら前の結果の知らせも消す（別の組み合わせの結果に見える）
+  const selectMyPlayer = (p) => { setPendingTrade(null); setTradeResult(null); setSelectedMyPlayer(p); };
+  const selectTargetPlayer = (p) => { setPendingTrade(null); setTradeResult(null); setSelectedTargetPlayer(p); };
+  const changeTargetTeam = (team) => { setPendingTrade(null); setTradeResult(null); setSelectedTargetTeam(team); setSelectedTargetPlayer(null); };
   const changeTab = (tab) => { setPendingTrade(null); setTradeTab(tab); };
+  // 結果の知らせは押したボタンの近くに出して、画面の外なら見える所まで送る。
+  // ⚠ 以前は画面の上（タブの下）にしか出ず、1280×720 で表の下の「申し込む」を押すと、
+  //    成立したのか断られたのかが見えなかった（知らせは y=132〜178、ボタンは y=831）
+  const resultRef = useRef(null);
+  useEffect(() => {
+    if (tradeResult) resultRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [tradeResult]);
+  const resultNote = (where) => tradeResult?.where === where && (
+    <div ref={resultRef} role="status" data-testid="trade-result"
+      className={`px-4 py-3 rounded-xl text-sm font-semibold border bg-surface-2 ${
+        tradeResult.success ? 'text-green-300 border-green-500/70' : 'text-red-300 border-red-500/70'
+      }`}>
+      {tradeResult.message}
+    </div>
+  );
 
   const myTeam = TEAMS_DATA[userTeamName];
 
@@ -254,7 +270,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
     if (myIdx === -1) myIdx = myTeamData.players.findIndex(p => p.id === proposal.wantedPlayer.id);
     let theirIdx = targetTeam.players.indexOf(proposal.offeredPlayer);
     if (theirIdx === -1) theirIdx = targetTeam.players.findIndex(p => p.id === proposal.offeredPlayer.id);
-    if (myIdx === -1 || theirIdx === -1) { setTradeResult({ success: false, message: '選手が見つかりません' }); return; }
+    if (myIdx === -1 || theirIdx === -1) { setTradeResult({ success: false, message: '選手が見つかりません', where: 'inbox' }); return; }
 
     proposal.wantedPlayer.battingOrder = 0;
     proposal.offeredPlayer.battingOrder = 0;
@@ -265,8 +281,8 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
     givePlayerToTeam(myTeamData, proposal.offeredPlayer);
     givePlayerToTeam(targetTeam, proposal.wantedPlayer);
 
-    setTradeResult({ success: true, message: `トレード成立！ ${proposal.wantedPlayer.name} ⇄ ${proposal.offeredPlayer.name}（${proposal.fromTeam}）` });
-    setTradeTab('propose');
+    // 受けた所（受信提案）に残って、その枠の上に結果を出す
+    setTradeResult({ success: true, message: `トレード成立！ ${proposal.wantedPlayer.name} ⇄ ${proposal.offeredPlayer.name}（${proposal.fromTeam}）`, where: 'inbox' });
     setUpdateTrigger(prev => prev + 1);
   };
 
@@ -296,7 +312,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
       if (targetIdx === -1) targetIdx = targetTeam.players.findIndex(p => p.id === selectedTargetPlayer.id);
 
       if (myIdx === -1 || targetIdx === -1) {
-        setTradeResult({ success: false, message: '選手が見つかりません' });
+        setTradeResult({ success: false, message: '選手が見つかりません', where: 'propose' });
         return;
       }
 
@@ -312,12 +328,13 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
 
       setTradeResult({
         success: true,
-        message: `トレード成立！ ${selectedMyPlayer.name} ⇄ ${selectedTargetPlayer.name}`
+        message: `トレード成立！ ${selectedMyPlayer.name} ⇄ ${selectedTargetPlayer.name}`,
+        where: 'propose',
       });
       setSelectedMyPlayer(null);
       setSelectedTargetPlayer(null);
     } else {
-      setTradeResult({ success: false, message: result.reason });
+      setTradeResult({ success: false, message: result.reason, where: 'propose' });
     }
     setUpdateTrigger(prev => prev + 1);
   };
@@ -529,16 +546,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
         </button>
       </div>
 
-      {tradeResult && (
-        <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-semibold border bg-surface-2 ${
-          tradeResult.success
-            ? 'text-green-300 border-green-500/70'
-            : 'text-red-300 border-red-500/70'
-        }`}>
-          {tradeResult.message}
-        </div>
-      )}
-
+      {tradeTab === 'inbox' && tradeResult?.where === 'inbox' && <div className="mb-4">{resultNote('inbox')}</div>}
       {tradeTab === 'inbox' && (
         <div className="bg-surface-2 rounded-xl border border-gray-700/50 overflow-hidden mb-5">
           <div className="px-4 py-3 border-b border-gray-700/50">
@@ -659,6 +667,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
             <p className="text-xs text-gray-400 mt-2">
               相手の球団が受けるかどうかは、出す選手ともらう選手の評価の差と年齢で決まります
             </p>
+            {tradeResult?.where === 'propose' && <div className="mt-3 text-left">{resultNote('propose')}</div>}
           </div>
         </div>
       )}
