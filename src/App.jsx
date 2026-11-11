@@ -295,6 +295,16 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
       // 実測は rAF で束ねてあるので1フレーム1回。
       React.useEffect(() => { refitRef.current?.(); });
 
+      // 画面を切り替えたら一番上から見せる（描く前に戻すので、前の位置が一瞬も見えない）。
+      // ⚠ 以前は一人用に scrollTo が無く、前の画面の縦のスクロール位置のまま次の画面を開いていた
+      //    （采配試合の「結果確定・翌日へ」→ 日程画面が176px下、選手検索を下まで送って
+      //    ロスター管理 → 450px下、契約更改も見出しが隠れて開いた）。
+      // ⚠ 画面の名前（screenMode・gameFlowState・managementView）が変わったときだけ戻す。
+      //    同じ画面の中の再描画（日を進める・タブを替える・試合終了の欄へ送る）では動かさない
+      React.useLayoutEffect(() => {
+        window.scrollTo(0, 0);
+      }, [screenMode, gameFlowState, managementView]);
+
       // クラッシュ時の緊急保存用に、現在のゲーム状態を返すスナップショットを登録
       React.useEffect(() => {
         setGameSnapshotProvider(() => ({
