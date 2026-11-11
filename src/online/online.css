@@ -759,11 +759,15 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 /* ⚠ 変化球は長い（4球種で40字を超える）。**ここで止めないと表が横に伸び**、
    右端が切れる。溢れたぶんは … にして、全文は title で出す */
+/* 持ち球。⚠ **幅で切らない**（いしだ指摘: 文字が切れている）。5球種でも
+   入るよう上限を広く取り、足りない画面でだけ … で止めて全文は title で出す。
+   表は余った幅を意欲の列に配っているので、ここを広げても横には溢れない
+   （実測 1440px で 変化球110px・意欲148→143px・表1138px のまま） */
 .online-camp-pitches {
   font-size: 10px;
   color: #cbd5e1;
   white-space: nowrap;
-  max-width: 72px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -819,7 +823,7 @@ small.online-gain:not(:where(.online-sp *)) {
       出すとグレーに溶けるのでカードは外せず、既定の余白だと 12人目の行が
       1画面から出る（上下22px＋枠2px＋下marginの20pxで44px取られる）。 */
 .online-camp-card:not(:where(.online-sp *)) {
-  --online-card-pad: 4px 14px;
+  --online-card-pad: 4px 8px;
   --online-card-gap: 0;
 }
 /* キャンプの下に置くカード（オフの成長）。キャンプのカードは下の余白を0にして
@@ -1539,6 +1543,14 @@ small.online-gain:not(:where(.online-sp *)) {
   max-width: 1240px;
   margin-left: 224px;
   margin-right: auto;
+}
+/* ⚠ **キャンプだけ上限を上げる**（いしだ要望: 横幅を拡げて字が切れないように）。
+   19列の表はこの作品でいちばん横に長く、1240pxだと持ち球の列が切れる。
+   広い画面では右が余っていたので、そのぶんを使う。左右の余白も詰める */
+.online-desktop main:has(.online-camp):not(:where(.online-sp *)) {
+  max-width: 1560px;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 .online-desktop .online-page-nav {
   position: fixed;

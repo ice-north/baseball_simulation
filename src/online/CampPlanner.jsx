@@ -142,21 +142,26 @@ function Stat({ value, diff }) {
 const ratio = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
 
 /**
- * 変化球の短い表記。⚠ 表の1列（54px）に3〜4球種を並べるため、2文字に畳む。
- *    全文（名前＋キレ）は `title` で出す。
+ * 変化球の短い表記。表の1列に3〜5球種を並べるため、**頭の3文字**に畳む。
+ *
+ * ⚠ **2文字は読めない**（いしだ指摘）。「カブ」「パム」「フォ」は、カーブ・
+ *    パーム・フォークのことだと分からない。3文字なら名前の頭がそのまま残る
+ *    （カーブ・パーム・スライ・チェン）。
+ * ⚠ 畳まないものは畳まない（カーブ・パームは元から3文字）。
+ * ⚠ 全文（名前＋キレ）は `title` で出す。
  */
 const PITCH_SHORT = {
-  slider: 'スラ',
-  curve: 'カブ',
-  fork: 'フォ',
-  changeup: 'チェ',
-  sinker: 'シン',
-  shoot: 'シュ',
-  cutter: 'カッ',
-  twoSeam: 'ツー',
-  splitter: 'スプ',
-  palm: 'パム',
-  knuckle: 'ナッ',
+  slider: 'スライ',
+  curve: 'カーブ',
+  fork: 'フォー',
+  changeup: 'チェン',
+  sinker: 'シンカ',
+  shoot: 'シュー',
+  cutter: 'カッタ',
+  twoSeam: 'ツーシ',
+  splitter: 'スプリ',
+  palm: 'パーム',
+  knuckle: 'ナック',
 };
 
 /** 直球を除いた持ち球。⚠ 置き場は `pitching.arsenal` */
