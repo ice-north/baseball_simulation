@@ -5,7 +5,7 @@
 //   大学野球で新しく始める → 春のキャンプ → 開幕 → 30日早送り → 保存して読み直す
 //   → 下まで送って7日進めても位置はそのまま・画面を替えたら一番上から
 //   → 次の区切り（夏季合宿）→ 合宿 → 秋季リーグ → 次の区切り（ドラフト前のフェーズ移行）
-//   → ドラフト会議の画面が出る
+//   → ドラフト会議の画面が出る → 結果詳細
 //
 // 画面が真っ白になる・ボタンが反応しない・ページの例外、を遊ぶ前に捕まえるのが目的。
 // 成績の数字の妥当性は season-check などのハーネスが見るので、ここでは見ない。
@@ -214,8 +214,18 @@ try {
   await page.getByText('プロ野球ドラフト会議').first().waitFor({ timeout: 60000 });
   await shot('draft');
 
+  step('ドラフト会議の結果詳細');
+  // 発表を飛ばして結果詳細へ。地色の上の見出しと枠が読めること（以前は白い見出しと半透明の枠のままで、
+  // 「NPB Draft」1.27:1・「ドラフト結果」2.18:1・内訳の人数 3.5〜3.8:1 だった。どのモードでも毎年通る）
+  await ui.click('スキップ');
+  await ui.click('結果詳細へ');
+  await page.getByRole('heading', { name: 'ドラフト結果', exact: true }).waitFor();
+  await page.waitForTimeout(1500); // 指名カードが出てくる動き（行ごとに少しずつ遅れる）が終わるまで
+  await groundContrast('ドラフトの結果詳細');
+  await shot('draft-detail');
+
   assert.deepEqual(errors, [], `画面でエラーが出た:\n${errors.join('\n')}`);
-  console.log(`singleplayer-ui-check PASS（${((Date.now() - started) / 1000).toFixed(0)}秒・初回のトライアウトの途中で保存と読み直し→開幕→30日→保存と読み直し→画面の切り替えでスクロールが一番上→夏季合宿→秋季リーグ→ドラフト会議）`);
+  console.log(`singleplayer-ui-check PASS（${((Date.now() - started) / 1000).toFixed(0)}秒・初回のトライアウトの途中で保存と読み直し→開幕→30日→保存と読み直し→画面の切り替えでスクロールが一番上→夏季合宿→秋季リーグ→ドラフト会議→結果詳細）`);
   await context.tracing.stop();
 } catch (error) {
   await shot('failure').catch(() => {});
