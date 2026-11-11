@@ -92,7 +92,20 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
     }
   };
 
+  // 帯（雇う・解雇する）は、市場を作り直す・閉じる・タブを替えるときに落とす。
+  // ⚠ 帯はタブの外に出しているので、残すとほかのタブの上に前の人の帯が出て、市場にもう
+  //    いない人を「雇用する」で雇えた（7f11ae8 で中央の窓を帯にしたときの抜け）
+  const clearBars = () => { setConfirmHire(null); setConfirmFire(null); };
+  const changeTab = (id) => { clearBars(); setTab(id); };
+  const refreshMarket = () => { clearBars(); setMarketStaff(generateStaffMarket(15, teamRank)); };
+  const closeMarket = () => { clearBars(); setMarketStaff(null); };
+
   const handleHire = (newStaff) => {
+    // 市場にいない人は雇わない（帯が残っていても）
+    if (!marketStaff?.some(s => s.id === newStaff.id)) {
+      setConfirmHire(null);
+      return;
+    }
     if (!canHireGrade(teamRank, newStaff.grade)) {
       setConfirmHire(null);
       return;
@@ -131,7 +144,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
         {tabs.map(t => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => changeTab(t.id)}
             /* ⚠ このタブ列は**地色の上に直に載る**。背景を持たない `text-gray-300` の
                ままだと明るい紙の上で 1.23:1 で消える。選択色も緑ではなくアクセント
                （`.seg` / `.seg-on` の共有語彙）に揃える */
@@ -261,13 +274,13 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <h2 className="text-sm font-bold text-gray-300">スタッフ市場</h2>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setMarketStaff(generateStaffMarket(15, teamRank))}
+                    onClick={refreshMarket}
                     className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs"
                   >
                     更新
                   </button>
                   <button
-                    onClick={() => setMarketStaff(null)}
+                    onClick={closeMarket}
                     className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs"
                   >
                     閉じる

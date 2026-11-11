@@ -76,6 +76,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   };
 
   const handleNegotiate = () => {
+    // ⚠ 終える帯はここ（とフェーズを替える所）で落とす。残すと、結果から「追加交渉する」で
+    //    戻ったときに、押していない「獲得なしで終えますか？」の帯がまた出た
+    setPendingEnd(null);
     const results = [];
     const removedIds = new Set();
     selectedIds.forEach(id => {
@@ -109,6 +112,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   };
 
   const handleContinue = () => {
+    setPendingEnd(null);
     if (candidates.length > 0) {
       setPhase('scout');
       setNegotiationResults([]);

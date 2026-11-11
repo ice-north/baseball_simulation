@@ -240,6 +240,29 @@ async function runIndependent(page, t) {
   await t.campToOpening();
   await step(`1年目の開幕 ${fmt(await ui.date())}`);
 
+  await step('トレード: 帯を出したまま相手チームを替えて選び直しても、帯は出ない');
+  await page.locator('nav').getByRole('button', { name: /トレード/ }).click();
+  const teamSelect = page.locator('select').first();
+  await teamSelect.selectOption({ index: 1 });
+  const tables = page.locator('table');
+  await tables.nth(0).locator('tbody tr').nth(5).click();
+  await tables.nth(1).locator('tbody tr').nth(3).click();
+  const tradeBar = page.getByTestId('confirm-bar');
+  await t.go(/^トレード提案$/, tradeBar, 'トレードの確認の帯');
+  // 以前は相手を替えると帯が隠れるだけで、新しい相手の選手を選ぶと「トレード提案」を押して
+  // いないのに新しい相手への帯が出た
+  await teamSelect.selectOption({ index: 2 });
+  await tables.nth(1).locator('tbody tr').nth(2).click();
+  await page.waitForTimeout(300);
+  assert.equal(await tradeBar.count(), 0, '相手チームを替えて選び直したら、「トレード提案」を押していないのに帯が出た');
+  await t.go(/^トレード提案$/, tradeBar, 'トレードの確認の帯');
+  await ui.click(/^受信提案/);
+  await ui.click(/^提案する$/);
+  await page.waitForTimeout(300);
+  assert.equal(await tradeBar.count(), 0, 'タブを替えて戻ったら、押していないトレードの帯が残っている');
+  await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
+  await page.getByTestId('dev-advance').waitFor();
+
   await t.proceedTo(/ドラフト/);
   await t.finishDraft();
 
@@ -382,11 +405,31 @@ async function newCorporateGame(page, t, team) {
 }
 
 async function runCorporate(page, t) {
-  const { ui, go, step } = t;
+  const { ui, go, step, shown } = t;
   await step('社会人: 四国の企業チーム（JR四国）で新しく始める');
   await newCorporateGame(page, t, 'JR四国');
   await t.campToOpening();
   await step(`1年目の開幕 ${fmt(await ui.date())}`);
+
+  await step('チーム運営: 雇う帯を出したまま市場を更新・タブを替えると帯が消える → スカウトを大学へ出す');
+  await page.locator('nav').getByRole('button', { name: /チーム運営/ }).click();
+  await ui.click('スタッフ市場を見る');
+  const bar = page.getByTestId('confirm-bar');
+  const hire = page.getByRole('button', { name: /^雇用$/ });
+  await hire.first().click();
+  await bar.waitFor();
+  // 以前は帯がタブの外に残り、市場を作り直しても前の人の帯のままで、市場にいない人を雇えた
+  await ui.click(/^更新$/);
+  assert.equal(await bar.count(), 0, 'スタッフ市場を「更新」しても、前の人を雇う帯が残っている');
+  await hire.first().click();
+  await bar.waitFor();
+  await ui.click(/^予算$/);
+  assert.equal(await bar.count(), 0, 'タブを替えても、雇う帯が残っている');
+  // スカウトを大学へ巡回に出しておく（オフのスカウト入団に候補が出る）
+  await ui.click(/^スカウト状況$/);
+  await page.getByRole('button', { name: '大学', exact: true }).first().click();
+  await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
+  await page.getByTestId('dev-advance').waitFor();
 
   await t.proceedTo(/ドラフト/);
   await t.finishDraft();
@@ -396,7 +439,22 @@ async function runCorporate(page, t) {
   // 年俸が予算を超えていると「赤字のまま確定」になる（その年の成績しだい）
   await t.confirm(/^(契約更改を確定|赤字のまま確定)$/, /^(解雇して確定する|確定する)$/, 'スカウト入団へ進む', '退団処理の完了');
   await go('スカウト入団へ進む', /獲得なしで進む|交渉開始/, 'スカウト交渉');
-  await t.confirm('獲得なしで進む', /^終える$/, /^完了$/, 'スカウト入団の完了');
+  // 「獲得なしで進む」の帯を出したまま候補と交渉し、結果から「追加交渉する」で戻っても、
+  // 押していない「獲得なしで終えますか？」の帯は戻らない（以前は戻った）
+  const candidates = page.locator('tbody tr');
+  assert.ok(await candidates.count() >= 2, `前提: 春から大学へスカウトを出したのに、スカウト入団の候補が${await candidates.count()}人`);
+  await go('獲得なしで進む', bar, '獲得なしで終える確認の帯');
+  await candidates.first().click();
+  await ui.click(/^交渉開始/);
+  await page.getByRole('heading', { name: '交渉結果' }).waitFor();
+  if (await shown(/^追加交渉する/)) {
+    await ui.click(/^追加交渉する/);
+    await page.waitForTimeout(300);
+    assert.equal(await bar.count(), 0, '交渉の結果から「追加交渉する」で戻ったら、押していない「獲得なしで終えますか？」の帯が出た');
+    await t.confirm('獲得なしで進む', /^終える$/, /^完了$/, 'スカウト入団の完了');
+  } else {
+    await go(/^交渉を終了する$/, /^完了$/, 'スカウト入団の完了');
+  }
   await go(/^完了$/, page.getByTestId('dev-advance'), '日程画面');
 
   await t.proceedTo(/予算決算/);

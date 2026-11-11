@@ -93,6 +93,14 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
   // ⚠ 以前は「トレード提案」「承諾する」を1回押すだけで、相手が受ければその場で成立し
   //    取り消せなかった（選手の入れ替えは名簿・打順まで書き換えるので戻せない）
   const [pendingTrade, setPendingTrade] = useState(null);
+  // 帯は、出す選手・もらう選手・相手チーム・タブを替えたら落とす。
+  // ⚠ 以前は落とさず、相手チームを替えると帯が隠れるだけで、新しい相手の選手を選ぶと
+  //    「トレード提案」を押していないのに新しい相手への帯が出た（受信提案の「承諾する」も、
+  //    「断る」やタブの切り替えのあと受信提案へ戻ると帯が残っていた）
+  const selectMyPlayer = (p) => { setPendingTrade(null); setSelectedMyPlayer(p); };
+  const selectTargetPlayer = (p) => { setPendingTrade(null); setSelectedTargetPlayer(p); };
+  const changeTargetTeam = (team) => { setPendingTrade(null); setSelectedTargetTeam(team); setSelectedTargetPlayer(null); };
+  const changeTab = (tab) => { setPendingTrade(null); setTradeTab(tab); };
 
   const myTeam = TEAMS_DATA[userTeamName];
 
@@ -499,7 +507,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
       {/* タブ切り替え */}
       <div className="flex gap-1.5 mb-5 bg-gray-800/60 rounded-xl p-1.5 border border-gray-700/50 w-fit">
         <button
-          onClick={() => setTradeTab('propose')}
+          onClick={() => changeTab('propose')}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
             tradeTab === 'propose' ? 'seg-on' : 'seg'
           }`}
@@ -507,7 +515,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
           提案する
         </button>
         <button
-          onClick={() => setTradeTab('inbox')}
+          onClick={() => changeTab('inbox')}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
             tradeTab === 'inbox' ? 'seg-on' : 'seg'
           }`}
@@ -579,7 +587,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
                       承諾する
                     </button>
                     <button
-                      onClick={() => setTradeTab('propose')}
+                      onClick={() => changeTab('propose')}
                       className="px-4 py-1.5 bg-gray-700/80 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition"
                     >
                       断る
@@ -597,7 +605,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
           players={myTeam.players || []}
           teamName={userTeamName}
           selectedPlayer={selectedMyPlayer}
-          onSelect={setSelectedMyPlayer}
+          onSelect={selectMyPlayer}
           title={`${userTeamName}（自チーム）`}
           titleColor="text-blue-400"
         />
@@ -606,7 +614,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
           players={TEAMS_DATA[selectedTargetTeam]?.players || []}
           teamName={selectedTargetTeam}
           selectedPlayer={selectedTargetPlayer}
-          onSelect={setSelectedTargetPlayer}
+          onSelect={selectTargetPlayer}
           keyPrefix="target"
           emptyMessage={selectedTargetTeam && TEAMS_DATA[selectedTargetTeam] ? null : 'チームを選択してください'}
           header={
@@ -614,7 +622,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
               <h2 className="font-semibold text-sm text-red-400">相手チーム</h2>
               <select
                 value={selectedTargetTeam}
-                onChange={(e) => { setSelectedTargetTeam(e.target.value); setSelectedTargetPlayer(null); }}
+                onChange={(e) => changeTargetTeam(e.target.value)}
                 className="bg-gray-700/80 border border-gray-600/50 text-white text-sm px-2.5 py-1 rounded-lg"
               >
                 <option value="">-- 選択 --</option>
