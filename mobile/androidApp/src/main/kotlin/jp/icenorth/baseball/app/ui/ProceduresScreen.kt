@@ -71,9 +71,12 @@ import kotlinx.serialization.json.JsonObject
 
 private enum class ProcTab(val label: String) { Current("現在の手続き"), Trade("トレード") }
 
-/** 手続きタブ: 初期メンバー選択・キャンプ・契約更改・トライアウト・年度更新と、トレード */
+/**
+ * 手続きタブ: 初期メンバー選択・キャンプ・契約更改・トライアウト・年度更新と、トレード。
+ * @param onOpenStaff 編成の「指導者」の面を開く（指導者に任せた手続きから、任せ方を変えに行く）
+ */
 @Composable
-fun ProceduresScreen(model: AppViewModel, onHome: () -> Unit = {}) {
+fun ProceduresScreen(model: AppViewModel, onHome: () -> Unit = {}, onOpenStaff: () -> Unit = {}) {
     val raw = model.raw ?: return
     // ⚠ どちらの側を開いているかは AppViewModel に置く（届いた提案の知らせから、トレードの側を直接開くため）
     val tab = if (model.procTrade) ProcTab.Trade else ProcTab.Current
@@ -91,7 +94,7 @@ fun ProceduresScreen(model: AppViewModel, onHome: () -> Unit = {}) {
             counts = counts,
         )
         when (tab) {
-            ProcTab.Current -> CurrentProcedure(model, raw, onHome)
+            ProcTab.Current -> CurrentProcedure(model, raw, onHome, onOpenStaff)
             ProcTab.Trade -> TradeScreen(model, raw)
         }
     }
@@ -104,13 +107,13 @@ internal fun ProcScroll(modifier: Modifier = Modifier, state: ScrollState = reme
 }
 
 @Composable
-private fun CurrentProcedure(model: AppViewModel, raw: JsonObject, onHome: () -> Unit) {
+private fun CurrentProcedure(model: AppViewModel, raw: JsonObject, onHome: () -> Unit, onOpenStaff: () -> Unit) {
     val pending = raw["pendingPack"].obj()
     val phase = raw["phase"].obj()
     // ⚠ 決める手続きは、決定・実行の帯を画面の下に固定する（[PhasePanel] が自分で面を組む）。
     //    以前は一覧の上と一番下にしか無く、途中で決めるには端まで送る必要があった
     if (pending == null && phase != null) {
-        PhasePanel(model, raw, phase)
+        PhasePanel(model, raw, phase, onOpenStaff)
         return
     }
     val scroll = rememberScrollState()
@@ -279,7 +282,7 @@ private fun rulesDetail(deadline: String?): String =
     else "全員が決定した時点で処理します（指導者に任せた球団は待ちません）。この手続きに締め切りはありません。ほかに検討中の球団がいる間は、決定後も出し直せます。"
 
 @Composable
-private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
+private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, onOpenStaff: () -> Unit) {
     val view = model.view ?: return
     val phaseId = phase.at("id").str().orEmpty()
     val kind = phase.at("kind").str()
@@ -328,6 +331,11 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
         return
     }
 
+    // ⚠ **指導者に任せた手続き（トライアウト・契約更改）は、指導者の案を読むだけで見せる**。サーバーは任せた手続きを
+    //    提出があっても指導者の案で決める（server/leagueEngine.mjs の resolvePhase）。以前は編集・「この内容で決定」が
+    //    そのまま出て「決定しました」「決定済み」と出るのに、案は使われなかった（Web の PhasePanel と同じ直し）。
+    //    キャンプは CampPanel が受け持つ（自分でクールを回すと任せ方は「意見を聞く」に戻る）ので、ここでは扱わない
+    val delegated = phase.at("delegated").bool() == true
     // 編集中の案。保存済みの提出があればそれ、無ければ標準案（defaults）から始める
     val draft = model.phaseDraft?.takeIf { it.phaseId == phaseId }
     var failure by remember(phaseId) { mutableStateOf<String?>(null) }
@@ -336,8 +344,27 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     var attempt by remember(phaseId) { mutableStateOf(0) }
     // 初期メンバーのセットの中身（24人）を開いているセット。開いている間は下の決定の帯を出さない
     var packOpen by rememberSaveable(phaseId) { mutableStateOf<String?>(null) }
+    // 任せているときに見せる指導者の案（標準案。defaultPhasePlan は任せた人の球団に指導者の考えを当てる）。
+    // ⚠ 下書き（model.phaseDraft）とは別に持つ。任せる前に編集していた下書きは、「意見を聞く」に戻したら続きから使える
+    var coachPlan by remember(phaseId) { mutableStateOf<JsonObject?>(null) }
+    LaunchedEffect(phaseId, delegated, attempt, view.revision) {
+        if (!delegated) return@LaunchedEffect
+        try {
+            val defaults = model.read("defaults")
+            if (defaults.at("phaseId").str() != phaseId) {
+                failure = "手続きが更新されました。最新状態を確認してください"
+                return@LaunchedEffect
+            }
+            coachPlan = defaults["plan"].obj() ?: JsonObject(emptyMap())
+            failure = null
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            failure = model.describe(e)
+        }
+    }
     // ⚠ 下書きを捨てた（null にした）ときも読み直すよう、draft == null も鍵に入れる
-    LaunchedEffect(phaseId, submission, draft == null, attempt) {
+    LaunchedEffect(phaseId, submission, draft == null, attempt, delegated) {
+        if (delegated) return@LaunchedEffect
         val current = model.phaseDraft?.takeIf { it.phaseId == phaseId }
         if (current != null && (current.dirty || current.base == (submission ?: JsonNull))) return@LaunchedEffect
         val plan = submission?.get("plan").obj()
@@ -361,23 +388,28 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     }
     val scroll = rememberScrollState()
     val failed = failure
-    if (failed != null || draft == null) {
+    // 見せる案（任せていれば指導者の案、でなければ編集中の案）
+    val shown = if (delegated) coachPlan else draft?.plan
+    if (failed != null || shown == null) {
         ProcScroll(Modifier.fillMaxSize(), scroll) {
             header()
             if (failed != null) {
                 Section {
-                    LoadFailed(failed, onRetry = { model.phaseDraft = null; failure = null; attempt += 1; model.reload(pull = true) })
+                    // ⚠ 任せているときは下書きを捨てない（「意見を聞く」に戻したときの続き）
+                    LoadFailed(failed, onRetry = { if (!delegated) model.phaseDraft = null; failure = null; attempt += 1; model.reload(pull = true) })
                 }
             } else {
-                Muted("標準案を準備しています…")
+                Muted(if (delegated) "指導者の案を準備しています…" else "標準案を準備しています…")
             }
         }
         return
     }
-    val changedElsewhere = draft.dirty && draft.base != (submission ?: JsonNull)
+    // 編集できる案（任せていれば null。読むだけ）
+    val editing = if (delegated) null else draft
+    val changedElsewhere = editing != null && editing.dirty && editing.base != (submission ?: JsonNull)
     val scope = rememberCoroutineScope()
-    val setPlan: (JsonObject) -> Unit = { model.phaseDraft = draft.copy(plan = it, dirty = true) }
-    val plan = draft.plan
+    val setPlan: (JsonObject) -> Unit = { next -> if (editing != null) model.phaseDraft = editing.copy(plan = next, dirty = true) }
+    val plan = shown
     val ready = submission?.at("ready").bool() == true
     val packs = phase.at("packs").list().mapNotNull { it.obj() }
     val isPack = plan["packId"] != null || phase["packs"] != null
@@ -398,19 +430,20 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
                     //    そのまま離れると締め切りで標準案のセットになった。決定済みなら決定のまま出し直す
                     PackPicker(model, packs, plan.at("packId").str(), scroll, packOpen, { packOpen = it }) { id ->
                         val name = packs.firstOrNull { it.at("id").str() == id }?.at("name").str().orEmpty()
-                        submit(
-                            model, phaseId, Commands.withPack(plan, id), ready, draft.base,
+                        // 初期メンバー選択は任せられない（任せ方の分野が無い）。念のため読むだけのときは送らない
+                        if (editing != null) submit(
+                            model, phaseId, Commands.withPack(plan, id), ready, editing.base,
                             done = if (ready) "「$name」に選び直しました（決定済み）" else "「$name」を下書きに保存しました。決めたら「この内容で決定」を押してください",
                         )
                     }
                 }
-                plan["rankedIds"] != null -> TryoutPanel(model, raw, phase, plan, setPlan) {
+                plan["rankedIds"] != null -> TryoutPanel(model, raw, phase, plan, setPlan, editable = editing != null) {
                     // 標準案に戻す（⚠ 保存済みの下書きではなく、いつも標準案を取り直す）
-                    scope.launch {
+                    if (editing != null) scope.launch {
                         try {
                             val defaults = model.read("defaults")
                             if (defaults.at("phaseId").str() != phaseId) failure = "手続きが更新されました。最新状態を確認してください"
-                            else model.phaseDraft = draft.copy(plan = defaults["plan"].obj() ?: plan, dirty = submission != null)
+                            else model.phaseDraft = editing.copy(plan = defaults["plan"].obj() ?: plan, dirty = submission != null)
                         } catch (e: Exception) {
                             // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
                             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -418,35 +451,56 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
                         }
                     }
                 }
-                plan["releaseIds"] != null -> ReleasePanel(model, raw, plan, setPlan)
+                plan["releaseIds"] != null -> ReleasePanel(model, raw, plan, setPlan, editable = editing != null)
                 kind == "offseason" -> Section { Text("最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。") }
             }
         }
         // ⚠ セットの中身を開いている間は帯を出さない。帯は選んでいるセット（A）を指したまま「この内容で決定」を出すので、
         //    別のセット（B）の24人を見ながら押すと A で決まっていた。中身の面には「このセットにする」と「一覧へ戻る」がある
         val viewingPack = isPack && packs.any { it.at("id").str() == packOpen }
-        // ⚠ 決定・下書きの操作は画面の下に固定する（以前は一覧の上と一番下の2か所で、途中からは押せなかった）
-        if (!viewingPack) DecisionBar(
-            status = when {
-                draft.dirty -> "編集中（未保存）"
-                ready -> "決定済み。ほかに検討中の球団がいる間は出し直せます"
-                submission != null -> "下書きを保存済み"
-                // ⚠ 「標準案を表示しています」は何のことか分かりにくかった
-                else -> "まだ変えていません（標準案のまま）"
-            },
-            summary = when {
-                isPack -> packs.firstOrNull { it.at("id").str() == plan.at("packId").str() }?.at("name").str()?.let { "選んでいるセット: $it" }
-                plan["rankedIds"] != null -> "獲得希望 ${plan.at("count").int() ?: 0}人"
-                plan["releaseIds"] != null -> releaseSummary(raw, plan)
-                else -> null
-            },
-            ready = ready,
-            dirty = draft.dirty,
-            onDecide = { submit(model, phaseId, plan, true, draft.base) },
-            onSave = { submit(model, phaseId, plan, false, draft.base) },
-            // 保存済みの提出に戻す（無ければ null にして標準案を読み直す）
-            onDiscard = { model.phaseDraft = savedPhaseDraft(raw, phaseId) },
-        )
+        val summary = when {
+            isPack -> packs.firstOrNull { it.at("id").str() == plan.at("packId").str() }?.at("name").str()?.let { "選んでいるセット: $it" }
+            plan["rankedIds"] != null -> "獲得希望 ${plan.at("count").int() ?: 0}人"
+            plan["releaseIds"] != null -> releaseSummary(raw, plan)
+            else -> null
+        }
+        when {
+            viewingPack -> Unit
+            // 任せている: 決定・下書き・取り消しは出さず、自分で決めるときの入口（指導者の面）を置く
+            editing == null -> DelegatedBar(summary, onOpenStaff)
+            // ⚠ 決定・下書きの操作は画面の下に固定する（以前は一覧の上と一番下の2か所で、途中からは押せなかった）
+            else -> DecisionBar(
+                status = when {
+                    editing.dirty -> "編集中（未保存）"
+                    ready -> "決定済み。ほかに検討中の球団がいる間は出し直せます"
+                    submission != null -> "下書きを保存済み"
+                    // ⚠ 「標準案を表示しています」は何のことか分かりにくかった
+                    else -> "まだ変えていません（標準案のまま）"
+                },
+                summary = summary,
+                ready = ready,
+                dirty = editing.dirty,
+                onDecide = { submit(model, phaseId, plan, true, editing.base) },
+                onSave = { submit(model, phaseId, plan, false, editing.base) },
+                // 保存済みの提出に戻す（無ければ null にして標準案を読み直す）
+                onDiscard = { model.phaseDraft = savedPhaseDraft(raw, phaseId) },
+            )
+        }
+    }
+}
+
+/** 指導者に任せた手続きの文（Web の PhasePanel と同じ文） */
+internal const val DELEGATED_PHASE_TEXT = "指導者に任せています。この手続きは指導者の案で決まります。自分で決めるなら「指導者」で任せ方を「意見を聞く」にしてください。"
+
+/** 指導者に任せた手続きの帯（決定・下書きの帯の代わり）。上の行は指導者の案の要約 */
+@Composable
+private fun DelegatedBar(summary: String?, onOpenStaff: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth().testTag("delegated-bar")) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            summary?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            Muted(DELEGATED_PHASE_TEXT)
+            OutlinedButton(onClick = onOpenStaff, modifier = Modifier.fillMaxWidth()) { Text("指導者の画面へ", maxLines = 1) }
+        }
     }
 }
 
@@ -579,9 +633,10 @@ private fun PackPicker(
  * 契約更改。チェックした選手が退団する（最低9人は残す）。
  * ⚠ Web 版の `ContractPlanner` と同じ材料を出す（いしだ指摘: 切る判断ができているか分からない）:
  *    退団後の区分ごとの人数・トライアウトで獲れる人数・今季の成績・標準案の理由（サーバーの `phase.releaseAdvice`）
+ * @param editable false なら読むだけ（指導者に任せた手続き。チェックを押せない）
  */
 @Composable
-private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject, setPlan: (JsonObject) -> Unit) {
+private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject, setPlan: (JsonObject) -> Unit, editable: Boolean = true) {
     val roster = raw.at("roster").list().mapNotNull { it.obj() }
     val releases = plan.at("releaseIds").list().mapNotNull { it.long() }
     val advice = raw.at("phase", "releaseAdvice").obj()
@@ -618,6 +673,7 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                         val next = if (on) releases + p.pid else releases - p.pid
                         setPlan(Commands.withReleases(plan, next))
                     },
+                    enabled = editable,
                 )
                 Column(Modifier.weight(1f)) {
                     PlayerSummary(p, { model.openPlayer = it }) { if (checked) Tag("退団予定") }

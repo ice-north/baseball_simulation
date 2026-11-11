@@ -188,6 +188,25 @@ class AppUiTest {
         rule.runOnIdle { assertTrue("fielderRest" in model.seenSituationTips) }
     }
 
+    @Test fun delegatedProcedureShowsTheCoachPlanWithoutDecisions() {
+        val roster = """[{"id":1,"name":"出す人","position":"first"},{"id":2,"name":"残す人","position":"second"}]"""
+        open(
+            """"roster":$roster,"lineup":{"battingOrder":[]},"phase":{"id":"ph1","kind":"contract","delegated":true,"submission":{"plan":{"releaseIds":[]},"ready":true}}""",
+            answer = { action -> if (action == "defaults") """{"phaseId":"ph1","plan":{"releaseIds":[1]}}""" else null },
+        )
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        // ⚠ 任せた手続きはサーバーが指導者の案で決める。以前は編集・決定がそのまま出て「決定済み」と出るのに、案は使われなかった
+        rule.onNodeWithTag("delegated-bar").assertExists()
+        rule.onNodeWithTag("decision-bar").assertDoesNotExist()
+        rule.onNodeWithText("この内容で決定").assertDoesNotExist()
+        rule.onNodeWithText("下書きを保存").assertDoesNotExist()
+        // 見せるのは指導者の案（標準案）。自分の提出（退団なし）ではない
+        rule.onNodeWithText("退団させる選手（1人）").assertExists()
+        rule.onNodeWithText("指導者の画面へ").performClick()
+        rule.onNodeWithTag("tab-Plan").assertIsSelected()
+        rule.onNodeWithTag("chip-Staff").assertIsSelected()
+    }
+
     @Test fun homePaperTellsWhenANewerAppIsOut() {
         // 版の分からない所（git の無い手元）で作ったときは確かめない
         assumeTrue(BuildConfig.APP_COMMIT.isNotEmpty())

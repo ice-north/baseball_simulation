@@ -83,6 +83,12 @@ class AppViewModel internal constructor(
     /** 手続きタブでトレードの側を開いているか（届いた提案の知らせから直接開くため、ここに置く） */
     var procTrade by mutableStateOf(false)
 
+    /**
+     * 次に編成タブを開いたときに出す面（PlanTab の名前。「Staff」なら指導者）。編成タブが開いたら null に戻す。
+     * 指導者に任せた手続きの「指導者の画面へ」から、任せ方を変えに行くため
+     */
+    var planFaceRequest by mutableStateOf<String?>(null)
+
     /** 知らせ終えた届いた提案の印。端末に覚える（開き直すたびに知らせない） */
     var seenTrades by mutableStateOf(store.seenTrades)
         private set
@@ -384,6 +390,7 @@ class AppViewModel internal constructor(
         staffModesDraft = emptyMap()
         parkedTradeDraft = null
         procTrade = false
+        planFaceRequest = null
         message = null
         error = null
         clearCaches()

@@ -121,6 +121,8 @@ fun OnlineApp(model: AppViewModel) {
             model.playersTeam = null
             fromStandings = false
         }
+        // 編成の面の合図は、編成タブで使われなかったら（編成がまだ無い間など）捨てる
+        if (tab != Tab.Plan) model.planFaceRequest = null
     }
     Box(Modifier.fillMaxSize()) {
         if (!joined) {
@@ -210,7 +212,9 @@ fun OnlineApp(model: AppViewModel) {
                         }
                         Tab.Players -> Refreshable(model) { PlayersScreen(model) }
                         Tab.Plan -> PlanScreen(model)
-                        Tab.Procedures -> Refreshable(model) { ProceduresScreen(model, onHome = { tab = Tab.Home }) }
+                        Tab.Procedures -> Refreshable(model) {
+                            ProceduresScreen(model, onHome = { tab = Tab.Home }, onOpenStaff = { model.planFaceRequest = "Staff"; tab = Tab.Plan })
+                        }
                     }
                     }
                 }

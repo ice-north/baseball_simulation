@@ -67,9 +67,19 @@ private const val PAGE = 12
  * - 下: 候補（区分・並べ替え・名前で絞り、＋で獲得予定へ、★で最優先）
  * ⚠ 操作は「獲得予定」を基準にする（希望順の位置で動かすと、目標構成で飛ばされる選手が
  *    挟まったときに押した選手が入らない・消える）。誰も消さず、外すのは末尾送り。
+ * @param editable false なら読むだけ（指導者に任せた手続き）。人数・並べ替え・獲得予定に入れる操作と
+ *    「重視する能力」を出さない。候補の絞り込み・並べ替え（見るだけの操作）は残す
  */
 @Composable
-fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: JsonObject, setPlan: (JsonObject) -> Unit, onReset: () -> Unit) {
+fun TryoutPanel(
+    model: AppViewModel,
+    raw: JsonObject,
+    phase: JsonObject,
+    plan: JsonObject,
+    setPlan: (JsonObject) -> Unit,
+    editable: Boolean = true,
+    onReset: () -> Unit,
+) {
     val candidates = remember(phase) { phase.at("candidates").list().mapNotNull { it.obj() } }
     val roster = remember(raw) { raw.at("roster").list().mapNotNull { it.obj() } }
     val ranked = plan.at("rankedIds").list().mapNotNull { it.long() }
@@ -105,15 +115,15 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
         },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { setCount(planCount - 1) }, enabled = planCount > 0) { Text("−") }
+            if (editable) OutlinedButton(onClick = { setCount(planCount - 1) }, enabled = planCount > 0) { Text("−") }
             Text("${planCount}人", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = { setCount(planCount + 1) }, enabled = planCount < maxCount) { Text("＋") }
+            if (editable) OutlinedButton(onClick = { setCount(planCount + 1) }, enabled = planCount < maxCount) { Text("＋") }
             Muted("最大${maxCount}人")
         }
-        TextButton(onClick = onReset) { Text("標準案に戻す") }
+        if (editable) TextButton(onClick = onReset) { Text("標準案に戻す") }
     }
 
-    if (side == "plan") WeightsSection(model, candidates, roster) { next ->
+    if (side == "plan" && editable) WeightsSection(model, candidates, roster) { next ->
         setRanked(next)
         noticeState = "評価の高い順に、投・捕・内・外の目標人数を守っておすすめ順を作り直しました。" to next
     }
@@ -139,7 +149,7 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
             }
             // ⚠ 並べ替え・外すは下の行に、押せる大きさ（48dp）で置く。以前は名前の横に 36dp の「↑↓×」を
             //    詰めて並べていて、押し間違えやすく、名前と能力の欄も狭くなっていた
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            if (editable) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, -1)) }, enabled = i > 0) { Text("↑ 上へ") }
                 TextButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, 1)) }, enabled = i < wanted.size - 1) { Text("↓ 下へ") }
                 TextButton(onClick = { setRanked(benchFromPlan(ranked, candidates, count, roster, p.pid)) }) { Text("外す") }
@@ -178,7 +188,7 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                     }
                 }
                 // ⚠ 操作の欄は幅を決めておく（以前は「＋予定」「最優先」「なし」で幅が変わり、右の評価の列がずれた）
-                Box(Modifier.width(ActionWidth), contentAlignment = Alignment.CenterEnd) {
+                if (editable) Box(Modifier.width(ActionWidth), contentAlignment = Alignment.CenterEnd) {
                 if (at < 0) {
                     TextButton(onClick = {
                         if (count <= 0) {

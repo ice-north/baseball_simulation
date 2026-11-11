@@ -137,7 +137,12 @@ fun PlanScreen(model: AppViewModel) {
         }
     }
     val onDragStart = { dragging[0] = false }
-    var tab by rememberSaveable { mutableStateOf(PlanTab.Order) }
+    // 手続きの「指導者の画面へ」から来たら、その面（指導者）から開く。合図は一度使ったら下ろす
+    var tab by rememberSaveable { mutableStateOf(PlanTab.entries.firstOrNull { it.name == model.planFaceRequest } ?: PlanTab.Order) }
+    LaunchedEffect(model.planFaceRequest) {
+        PlanTab.entries.firstOrNull { it.name == model.planFaceRequest }?.let { tab = it }
+        model.planFaceRequest = null
+    }
     var sheet by remember { mutableStateOf<PlanSheet?>(null) }
     var orderView by rememberSaveable { mutableStateOf(FielderView.Ability) }
     val players = remember(view.roster) { view.roster.associateBy { it.id } }
