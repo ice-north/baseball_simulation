@@ -29,10 +29,12 @@ fun careerOf(player: JsonObject): JsonObject? = periodsOf(player).firstOrNull { 
 fun careerRoster(roster: List<JsonObject>): List<JsonObject> = roster.mapNotNull { p ->
     val career = careerOf(p) ?: return@mapNotNull null
     buildJsonObject {
-        p.forEach { (k, v) -> put(k, v) }
+        // ⚠ 今季の捕手の成績（catcherStats）は通算の表に残さない。通算の期間にあればそれを使う
+        p.forEach { (k, v) -> if (k != "catcherStats") put(k, v) }
         put("career", career)
         career["seasonStats"]?.let { put("seasonStats", it) }
         career["performance"]?.let { put("performance", it) }
+        career["catcherStats"]?.let { put("catcherStats", it) }
     }
 }
 

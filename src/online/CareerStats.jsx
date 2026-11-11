@@ -37,6 +37,8 @@ const careerRoster = (roster = []) =>
       career,
       seasonStats: career.seasonStats,
       performance: career.performance,
+      // ⚠ 今季の捕手の成績を通算の表に残さない（通算の期間に無ければ出さない）
+      catcherStats: career.catcherStats,
     }));
 
 export default function CareerStats({ view }) {

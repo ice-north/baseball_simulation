@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import {
+  catchRates,
+  BATTERY_MIN_OUTS,
+  BATTERY_NOTE,
+} from '../../src/online/recordStats.js';
 import {
   STAT_GROUPS,
   statGroup,
   formatStat,
   sortedRoster,
   conditionValue,
+  isCatchingGroup,
 } from '../../src/online/statsView.js';
 import { performanceFor } from '../../server/performanceLabels.mjs';
 import { createSeasonStats } from '../../src/players.js';
@@ -171,6 +178,56 @@ assert.equal(
   true,
   'OPSの概算を明示',
 );
+// --- 捕手の成績（catcherStats）と、アプリとの同文 -------------------------
+{
+  const catcher = {
+    ...player(9),
+    position: 'catcher',
+    catcherStats: catchRates({
+      outs: 270,
+      pa: 380,
+      atBats: 340,
+      hits: 85,
+      homeruns: 8,
+      walks: 30,
+      hitByPitch: 3,
+      strikeouts: 70,
+      runs: 40,
+      earnedRuns: 36,
+      calls: 1500,
+      reads: 300,
+      starts: 10,
+    }),
+  };
+  assert.equal(value('batting', 'catching', 'catcherEra', catcher), 3.6);
+  assert.equal(value('batting', 'catching', 'readRate', catcher), 0.2);
+  assert.equal(value('batting', 'catching', 'caughtOuts', catcher), 270);
+  assert.equal(value('batting', 'catchingAllowed', 'catcherK9', catcher), 7);
+  assert.equal(value('batting', 'catching', 'catcherEra'), null, '受けていなければ空');
+  assert.equal(catchRates({ outs: 0 }), null, '守った回が無ければ率を出さない');
+  assert.ok(isCatchingGroup('catching') && !isCatchingGroup('basic'));
+  // アプリ（Stats.kt / Battery.kt）と列・文言を揃える
+  const kt = (f) =>
+    readFileSync(
+      new URL(`../../mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/${f}`, import.meta.url),
+      'utf8',
+    );
+  const stats = kt('Stats.kt');
+  for (const id of ['catching', 'catchingAllowed'])
+    for (const c of statGroup('batting', id).columns)
+      assert.ok(
+        stats.includes(`"${c.id}", "${c.label}"`) ||
+          stats.includes(`"${c.label}")`),
+        `アプリの捕手の列 ${c.id} ${c.label}`,
+      );
+  const battery = kt('Battery.kt');
+  const minOuts = Number(battery.match(/BATTERY_MIN_OUTS: Int = (\d+)/)[1]);
+  assert.equal(minOuts, BATTERY_MIN_OUTS, 'アプリと「少ない組」の境目を揃える');
+  const note = battery
+    .match(/BATTERY_NOTE: String = "(.*)"/)[1]
+    .replace('${BATTERY_MIN_OUTS / 3}', String(minOuts / 3));
+  assert.equal(note, BATTERY_NOTE, 'アプリと注記を同文に');
+}
 console.log(
-  'online-stats-view-check PASS（既存項目の閲覧・OPS/WHIP等・欠損/0/∞・全名簿ソート・安定順序・状態と投球回）',
+  'online-stats-view-check PASS（既存項目の閲覧・OPS/WHIP等・欠損/0/∞・全名簿ソート・安定順序・状態と投球回・捕手の成績とアプリの同文）',
 );

@@ -8,6 +8,7 @@ import { useRead } from './useRead.js';
 import { inOnlineRoot } from './dialogPortal.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
+import BatteryStats from './BatteryStats.jsx';
 import { phaseStatusLabel } from './notices.js';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import {
@@ -20,6 +21,7 @@ import {
   CONDITION_TEXT,
   conditionValue,
   statRank,
+  isCatchingGroup,
 } from './statsView.js';
 import { CONDITION_ICONS } from '../game/condition.js';
 
@@ -204,7 +206,10 @@ function GroupTabs({
   // ⚠ 過去の期間には調子・能力が残っていない（`GroupSelect` と同じ絞り方）
   const groups = STAT_GROUPS[category].filter(
     (group) =>
-      !historic || !['state', 'abilities', 'defense'].includes(group.id),
+      !historic ||
+      !['state', 'abilities', 'defense', 'catching', 'catchingAllowed'].includes(
+        group.id,
+      ),
   );
   const state = new Set(['state', 'abilities', 'defense']);
   const tab = (id, label) => (
@@ -242,7 +247,14 @@ function GroupSelect({
       {STAT_GROUPS[category]
         .filter(
           (group) =>
-            !historic || !['state', 'abilities', 'defense'].includes(group.id),
+            !historic ||
+            ![
+              'state',
+              'abilities',
+              'defense',
+              'catching',
+              'catchingAllowed',
+            ].includes(group.id),
         )
         .map((group) => (
           <option key={group.id} value={group.id}>
@@ -340,6 +352,7 @@ function Detail({ player, close }) {
   const dialog = useRef(null);
   const [periodId, setPeriodId] = useState('current');
   const [splits, setSplits] = useState(false);
+  const [battery, setBattery] = useState(false);
   const [splitCategory, setSplitCategory] = useState(
     player.position === 'pitcher' ? 'pitching' : 'batting',
   );
@@ -460,6 +473,17 @@ function Detail({ player, close }) {
         <button onClick={() => setSplits(!splits)} aria-expanded={splits}>
           {splits ? '場面別の成績を閉じる' : '場面別の成績を見る'}
         </button>
+        {/* 投手×捕手の組み合わせ。⚠ 自球団の選手だけ（`action=player` の期間に載る。
+            球団ごとの索引には大きいので載せていない） */}
+        {period?.battery && (
+          <button onClick={() => setBattery(!battery)} aria-expanded={battery}>
+            {battery
+              ? 'バッテリーの成績を閉じる'
+              : period.battery.caught
+                ? '受けた投手ごとの成績を見る'
+                : '組んだ捕手ごとの成績を見る'}
+          </button>
+        )}
       </div>
       {splits && (
         <section className="online-detail-section">
@@ -469,6 +493,11 @@ function Detail({ player, close }) {
           ) : (
             <SplitStats period={period} category={splitCategory} />
           )}
+        </section>
+      )}
+      {battery && period?.battery && (
+        <section className="online-detail-section online-battery">
+          <BatteryStats battery={period.battery} />
         </section>
       )}
     </dialog>,
@@ -590,11 +619,29 @@ export function CompactRoster({
   //    能力一覧の表がこの順だったので、表を1つにしても並びは変わらない。
   // ⚠ `volumeOrder` は**起用の順を使えない画面**のため（通算成績）。打順や
   //    投手の役割は「いまの起用」なので、何年ぶんの合計を並べる順にはならない
-  const active =
+  // ⚠ 捕手の区分は**受けた選手と捕手だけ**を、守った回の多い順に出す。
+  //    全員を並べると「—」の行ばかりで、正捕手と控えの差が見えない
+  const catching = isCatchingGroup(group.id);
+  const roster = catching
+    ? view.roster.filter((p) => p.catcherStats || p.position === 'catcher')
+    : view.roster;
+  const chosen =
     sort || (desktop && !volumeOrder ? null : defaultSort(category));
+  // PCは区分を変えても並びを残すが、打撃の列（打率など）で並べたまま捕手の区分へ
+  // 来ても意味が無いので、捕手の区分では捕手の列か名前のときだけ従う
+  const catchingColumns = STAT_GROUPS.batting
+    .filter((g) => isCatchingGroup(g.id))
+    .flatMap((g) => g.columns);
+  const active =
+    catching &&
+    (!chosen ||
+      (chosen.column !== 'name' &&
+        !catchingColumns.some((c) => c.id === chosen.column.id)))
+      ? { column: catchingColumns[0], direction: 'desc' }
+      : chosen;
   const order = active
-    ? sortedRoster(view.roster, active.column, active.direction)
-    : rosterByRole(view.roster, view.lineup, category);
+    ? sortedRoster(roster, active.column, active.direction)
+    : rosterByRole(roster, view.lineup, category);
   const chooseCategory = (next) => {
     setCategory(next);
     setGroupId(desktop ? 'overview' : 'basic');
@@ -784,14 +831,20 @@ export function CompactRoster({
           </article>
         ))}
       </div>
-      <Approximation
-        columns={group.columns}
-        precise={view.roster.every((p) => p.seasonStats?.batting?.measured)}
-      />
+      {catching ? (
+        <small className="online-stat-note">
+          ※ マスクをかぶった時の投手成績（記録を取り始めた後の試合だけ）。読まれ率は、打者に狙い球を当てられた球の割合で、低いほどリードが効いています
+        </small>
+      ) : (
+        <Approximation
+          columns={group.columns}
+          precise={view.roster.every((p) => p.seasonStats?.batting?.measured)}
+        />
+      )}
       {!desktop && (
         <PageNav
           page={page}
-          count={view.roster.length}
+          count={order.length}
           size={size}
           setPage={setPage}
         />

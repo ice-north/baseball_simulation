@@ -137,9 +137,18 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     val groups = listOf(overviewGroup(batting)) + if (batting) BATTING_GROUPS else PITCHING_GROUPS
     val group = groups.firstOrNull { it.id == groupId } ?: groups.first()
     val allColumns = groups.flatMap { it.columns }
-    val sortColumn = sortId?.let { id -> allColumns.firstOrNull { it.id == id } } ?: defaultSortColumn(batting)
+    // 捕手の区分は受けた選手と捕手だけを、守った回の多い順に出す（Web 版 CompactRoster と同じ）
+    val catching = group.id == "catching" || group.id == "catchingAllowed"
+    val catchingColumns = BATTING_GROUPS.filter { it.id == "catching" || it.id == "catchingAllowed" }.flatMap { it.columns }
+    val chosenColumn = sortId?.let { id -> allColumns.firstOrNull { it.id == id } }
+    val sortColumn = when {
+        catching && (chosenColumn == null || catchingColumns.none { it.id == chosenColumn.id }) -> catchingColumns.first()
+        else -> chosenColumn ?: defaultSortColumn(batting)
+    }
+    val sortAscending = if (catching && sortColumn.id != chosenColumn?.id) false else if (sortId == null) false else ascending
     val players = roster.orEmpty().filter { (it.at("position").str() == "pitcher") != batting && it.at("isActive").bool() != false }
-    val sorted = sortRoster(players, sortColumn, if (sortId == null) false else ascending)
+        .filter { !catching || it.at("catcherStats").obj() != null || it.at("position").str() == "catcher" }
+    val sorted = sortRoster(players, sortColumn, sortAscending)
     val lineupIds = remember(view.lineup) {
         view.lineup?.at("battingOrder").list().mapNotNull { it.at("playerId").num()?.toLong() }.toSet() +
             view.lineup?.at("starters").list().mapNotNull { it.num()?.toLong() }
@@ -168,9 +177,9 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                     players = sorted,
                     columns = group.columns,
                     sortId = sortColumn.id,
-                    ascending = if (sortId == null) false else ascending,
+                    ascending = sortAscending,
                     onSort = { c ->
-                        if (c.id == sortColumn.id && sortId != null) ascending = !ascending
+                        if (c.id == sortColumn.id && sortId == c.id) ascending = !ascending
                         else { sortId = c.id; ascending = c.ascending }
                     },
                     onPlayer = { model.openPlayer = it },
@@ -180,12 +189,19 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                     },
                     // ⚠ なぜいないのかを書く（以前は名簿が空の開幕前も「該当する選手がいません」だけだった）
                     empty = when {
+                        catching -> "捕手の記録がまだありません。"
                         career -> "通算の記録のある${if (batting) "野手" else "投手"}がいません。"
                         roster.isEmpty() && own -> "まだ選手がいません。初期メンバー選択が済むと、ここに並びます。"
                         roster.isEmpty() -> "まだ選手がいません。"
                         else -> "${if (batting) "野手" else "投手"}がいません。"
                     },
                 )
+                if (catching) {
+                    Muted(
+                        "※ マスクをかぶった時の投手成績（記録を取り始めた後の試合だけ）。読まれ率は、打者に狙い球を当てられた球の割合で、低いほどリードが効いています",
+                        Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
             }
         }
     }

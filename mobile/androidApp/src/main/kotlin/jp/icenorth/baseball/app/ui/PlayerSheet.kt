@@ -36,7 +36,15 @@ import jp.icenorth.baseball.shared.CONDITION_TEXT
 import jp.icenorth.baseball.shared.FORM_SHORT
 import jp.icenorth.baseball.shared.PITCH_TYPE_NAMES
 import jp.icenorth.baseball.shared.POSITION_LABELS
+import jp.icenorth.baseball.shared.BATTERY_NOTE
+import jp.icenorth.baseball.shared.Battery
+import jp.icenorth.baseball.shared.BatteryLine
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.batteryDecimal
+import jp.icenorth.baseball.shared.batteryInnings
+import jp.icenorth.baseball.shared.batteryOf
+import jp.icenorth.baseball.shared.batteryPercent
+import jp.icenorth.baseball.shared.batteryRate
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.detailReadable
 import jp.icenorth.baseball.shared.formatStat
@@ -212,6 +220,7 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                             }
                         }
                     }
+                    batteryOf(period)?.let { BatterySection(it) }
                     period.at("source").str()?.let { Muted(it) }
                 }
             }
@@ -220,6 +229,72 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
 }
 
 private val ValueWidth = 48.dp
+
+/**
+ * 投手×捕手の組み合わせ（自球団の選手だけ。Web 版 BatteryStats.jsx と同じ中身）。
+ * ⚠ 押したときだけ開く（行が多く、シートが長くなる）
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BatterySection(b: Battery) {
+    var open by remember(b) { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 4.dp).testTag("battery-toggle"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (b.caught != null) "受けた投手ごとの成績" else "組んだ捕手ごとの成績",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(if (open) "閉じる ▴" else "開く ▾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    b.caught?.let { c ->
+        Muted("捕手として（マスクをかぶった時の投手成績）")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            listOf(
+                "守備回" to batteryInnings(c.outs),
+                "先発マスク" to "${c.starts}",
+                "捕手防御率" to batteryDecimal(c.era),
+                "読まれ率" to batteryPercent(c.readRate),
+                "K/9" to batteryDecimal(c.k9),
+                "BB/9" to batteryDecimal(c.bb9),
+                "被打率" to batteryRate(c.avg),
+            ).forEach { (label, value) ->
+                Row {
+                    Text("$label ", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+                    Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.alignByBaseline())
+                }
+            }
+        }
+    }
+    if (!open) return
+    if (b.caught != null && b.pitchers.isNotEmpty()) BatteryTable("受けた投手", b.pitchers)
+    if (b.catchers.isNotEmpty()) BatteryTable("捕手", b.catchers)
+    Muted(BATTERY_NOTE)
+}
+
+@Composable
+private fun BatteryTable(who: String, rows: List<BatteryLine>) {
+    val header = listOf("回", "防御率", "K/9", "BB/9", "被打率", "読まれ率")
+    Column(Modifier.testTag("battery-table")) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+            Text(who, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(2.2f))
+            header.forEach { Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f)) }
+        }
+        rows.forEach { r ->
+            val color = if (r.few) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(r.name + if (r.few) "（少）" else "", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = color, modifier = Modifier.weight(2.2f), maxLines = 1)
+                listOf(
+                    batteryInnings(r.outs), batteryDecimal(r.era), batteryDecimal(r.k9),
+                    batteryDecimal(r.bb9), batteryRate(r.avg), batteryPercent(r.readRate),
+                ).forEach { Text(it, fontSize = 12.sp, color = color, modifier = Modifier.weight(1f), maxLines = 1) }
+            }
+        }
+    }
+}
 
 /** [AbilityGroup] の中の項目。押した項目の説明を、かたまりの下に出す */
 private class AbilityScope(val open: String?, val toggle: (String) -> Unit)

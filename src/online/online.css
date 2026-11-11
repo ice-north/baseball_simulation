@@ -4986,3 +4986,30 @@ small.online-gain:not(:where(.online-sp *)) {
 .online.online-compact-shell:has(.online-tap-bar) main {
   padding-bottom: calc(48px + env(safe-area-inset-bottom));
 }
+
+/* 投手×捕手の組み合わせ（BatteryStats.jsx）。回数が少ない組は薄く出す */
+.online-battery h3 {
+  margin: 10px 0 6px;
+  font-size: 13px;
+  color: var(--accent);
+}
+.online-battery h3 small {
+  font-weight: 400;
+  color: #9fb0c4;
+}
+.online-battery-table {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.online-battery-table tbody th {
+  text-align: left;
+  white-space: nowrap;
+}
+.online-battery-table tbody th small {
+  margin-left: 2px;
+  color: #9fb0c4;
+}
+.online-battery-table tr[data-few] td,
+.online-battery-table tr[data-few] th {
+  opacity: 0.55;
+}

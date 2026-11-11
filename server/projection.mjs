@@ -673,9 +673,11 @@ export function projectTeamInfo(bundle, userId, teamName) {
         // ⚠ 場面別（`splits`）は**外す**。打者×投手の組み合わせで大きく、
         //    12球団ぶんを索引に積むと実測2.5MB（外せば0.8MB）。今季のぶんは
         //    下の `publicSplits` に別に載せてあり、画面が今季の期間へ重ねる。
-        periods: playerPeriods(l, teamName, p, statistics).map(
+        periods: playerPeriods(l, teamName, p, statistics, {
+          battery: false,
+        }).map(
           // eslint-disable-next-line no-unused-vars
-          ({ splits, ...rest }) => rest,
+          ({ splits, battery, ...rest }) => rest,
         ),
         publicOnly: true,
         publicSplits: recordForPlayer(l, p, teamName)?.splits || null,

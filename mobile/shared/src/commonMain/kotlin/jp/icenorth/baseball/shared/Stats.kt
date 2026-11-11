@@ -56,6 +56,9 @@ private val kbb = StatColumn("kbb", "K/BB", StatFormat.Decimal, get = {
     when { k == null || w == null -> null; w > 0 -> k / w; k > 0 -> Double.POSITIVE_INFINITY; else -> null }
 })
 
+// 捕手の成績（マスクをかぶった時の投手成績。サーバーの `catcherStats`）。Web 版 statsView.js の caught と同じ
+private fun caught(key: String): (JsonObject) -> Double? = { it.at("catcherStats", key).num().known() }
+
 private fun status(batting: Boolean) = StatGroup(
     "state", "調子・疲労",
     listOf(
@@ -99,6 +102,24 @@ val BATTING_GROUPS: List<StatGroup> = listOf(
                 if (c != null && e != null && c > 0 && e <= c) (c - e) / c else null
             }),
             b("games", "試合"),
+        ),
+    ),
+    StatGroup(
+        "catching", "捕手",
+        listOf(
+            StatColumn("caughtOuts", "守備回", StatFormat.Innings, get = caught("outs")),
+            StatColumn("catcherEra", "防御率", StatFormat.Decimal, ascending = true, get = caught("era")),
+            StatColumn("readRate", "読まれ率", StatFormat.Percent, ascending = true, get = caught("readRate")),
+            StatColumn("catcherStarts", "先発", get = caught("starts")),
+        ),
+    ),
+    StatGroup(
+        "catchingAllowed", "捕手・被打撃",
+        listOf(
+            StatColumn("catcherK9", "K/9", StatFormat.Decimal, get = caught("k9")),
+            StatColumn("catcherBb9", "BB/9", StatFormat.Decimal, ascending = true, get = caught("bb9")),
+            StatColumn("catcherAvg", "被打率", StatFormat.Rate, ascending = true, get = caught("avg")),
+            ability("catching", "lead", "リード"),
         ),
     ),
     status(true),

@@ -3,6 +3,7 @@ import {
   PA_KEYS,
   BATTING_KEYS,
   PITCHING_KEYS,
+  CATCH_KEYS,
   zeroLine,
   addCounts,
 } from '../src/online/recordStats.js';
@@ -64,6 +65,17 @@ export function recordForPlayer(
 }
 const splitAdd = (splits, key, line) =>
   addCounts((splits[key] ||= zeroLine()), line);
+/**
+ * 捕手の記録に1打席（または走者だけのアウト）を足す。
+ * ⚠ 捕手の側にだけ持つ。投手から見た「捕手別」は `batteryFor` が引き直す。
+ */
+function catchAdd(record, pitcherKey, line) {
+  const c = (record.catching ||= { all: zeroLine(CATCH_KEYS), pitchers: {} });
+  addCounts(c.all, line, CATCH_KEYS);
+  const { starts, ...rest } = line;
+  void starts;
+  addCounts((c.pitchers[pitcherKey] ||= zeroLine(CATCH_KEYS.filter((k) => k !== 'starts'))), rest, CATCH_KEYS);
+}
 import { createReplay } from './replayRecord.mjs';
 
 /**
@@ -132,10 +144,20 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
           });
         return local.get(record.key);
       };
+      // 先発マスク: その球団の最初の打席で受けた捕手
+      const masked = new Set();
+      const caught = (e, pitcherKey, line) => {
+        if (e.catcherId === null || e.catcherId === undefined) return;
+        const catcher = get(e.defense, e.catcherId);
+        const first = !masked.has(e.defense);
+        masked.add(e.defense);
+        catchAdd(catcher.record, pitcherKey, first ? { ...line, starts: 1 } : line);
+      };
       for (const e of observer.events) {
         if (e.runnerOnly) {
           const pitcher = get(e.defense, e.pitcherId),
             line = { outs: e.outs };
+          caught(e, pitcher.record.key, line);
           splitAdd(pitcher.record.splits.pitching, 'all', line);
           splitAdd(
             pitcher.record.splits.pitching,
@@ -187,8 +209,15 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
               late: zeroLine(),
             },
           );
+        const battery = {
+          runs: e.runs,
+          earnedRuns: e.earnedRuns,
+          calls: e.calls,
+          reads: e.reads,
+        };
         if (!e.completed) {
           splitAdd(batter.record.splits.batting, 'all', extra);
+          caught(e, pitcher.record.key, battery);
           continue;
         }
         const line = addCounts(zeroLine(), e.delta);
@@ -206,6 +235,7 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
         line.doublePlays = e.result?.type === 'double_play' ? 1 : 0;
         addCounts(batter.batting, line);
         addCounts(pitcher.pitching, line);
+        caught(e, pitcher.record.key, { ...line, ...battery });
         for (const [record, category] of [
           [batter.record, 'batting'],
           [pitcher.record, 'pitching'],

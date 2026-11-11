@@ -782,8 +782,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     return defense;
   };
 
+  // 直前の1球で打者が狙い球を当てたか（対人の記録だけが読む。試合の判定には使わない）
+  let lastGuessRight = false;
   // 一球シミュレーション（自己完結型）
   const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, sequence, offenseStrategy, defenseStrategy) => {
+    lastGuessRight = false;
     // 前球（打席内の配球メモリ。詳細は pitchSequence.js）
     const lastPitch = lastCall(sequence);
     // この場面で捕手が求める結果（併殺狙い / 三振狙い / 通常。pitchSituation.js）
@@ -937,7 +940,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       balls: count.balls, strikes: count.strikes,
       isBreaking, col: loc.col, sequence, batterEye: batter.eye,
       // ナックルは読み合いが成立しない（誰にもどこへ来るか分からない）
-      guessRight: !isUnreadablePitch(selectedPitch.type) && Math.random() < guessSuccessRate({
+      // ⚠ 代入は記録（捕手の「狙い球を外した率」）のためだけ。乱数を引く順番は変えない
+      guessRight: (lastGuessRight = !isUnreadablePitch(selectedPitch.type) && Math.random() < guessSuccessRate({
         catcherLead: catcherPlayer?.catching?.lead ?? 50,
         // **何球種持っているかではなく、どれだけ幅があるか**（arsenal.js）。
         // 似た球（スライダー＋カット等）は同じ引き出しとして数えない
@@ -946,7 +950,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         fooled: fooledLevel(sequence),
         // 出どころが見えなければ球種も判断できない（deception.js）
         deception: deceptionAxis(getDeception(pitcherPlayer)),
-      }),
+      })),
     });
     const guessLevel = Math.max(-2, Math.min(2, aiGuess.level + (locationRead ? 1 : 0)));
     pushCall(sequence, {
@@ -1977,6 +1981,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       before: { ...batter.gameStats.batting },
       pitcherOuts: pitcher.gameStats.pitching.outs,
       batterId: batter.id, batterName: batter.name, pitcherId: pitcher.id, pitcherName: pitcher.name,
+      // 捕手の成績（マスクをかぶった時の投手成績）のため。失点・自責点はこの打席で増えたぶん
+      catcherId: catcher?.id ?? null,
+      runsBefore: pitcher.gameStats.pitching.runsAllowed || 0,
+      earnedBefore: pitcher.gameStats.pitching.earnedRuns || 0,
+      calls: 0, reads: 0,
       offense: offenseTeam.name, defense: defenseTeam.name,
       inning: gameState.inning, pinchHit: batter.id !== scheduledBatterId,
       scoreBefore: { ...gameState.score },
@@ -2183,6 +2192,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, sequence, offenseStrategy, defenseStrategy);
       if (observed) {
         observed.pitches++;
+        observed.calls++;
+        if (lastGuessRight) observed.reads++;
         observed.result = result;
         if (result.type === 'foul') {
           observed.fouls++;
@@ -2443,7 +2454,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
       // 盗塁死や暴投サヨナラ、球数上限の未完了打席は対戦打席へ加えない。
       const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts > 0;
-      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs) });
+      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs),
+        runs: (pitcher.gameStats.pitching.runsAllowed || 0) - observed.runsBefore,
+        earnedRuns: (pitcher.gameStats.pitching.earnedRuns || 0) - observed.earnedBefore });
     }
 
     // 先発投手のダメージポイント積算（先発のみに適用）

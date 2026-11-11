@@ -205,6 +205,36 @@ for (const r of Object.values(season.players)) {
       r.stats.batting.plateAppearances,
     );
 }
+// --- 捕手の成績（マスクをかぶった時の投手成績） -------------------------
+// 捕手の行の合計は、その球団の投手の合計と一致する（打席・アウト・失点・自責点）
+{
+  const box = season.games[game.id];
+  for (const teamName of [home, away]) {
+    // ⚠ 名簿の球団で引く（ボックスの選手で引かない）。代打で捕手が退くと、
+    //    控えの捕手が守備に就かないまま1イニング受けることがあり（`getCurrentCatcher`
+    //    の後ろの探し方）、その捕手は出場していないのでボックスに載らない
+    const catchers = Object.values(season.players).filter(
+      (r) => r.catching && r.teams.includes(teamName),
+    );
+    assert.ok(catchers.length >= 1, '捕手の記録を残す');
+    const sum = (f) => catchers.reduce((n, r) => n + (r.catching.all[f] || 0), 0);
+    const pitchers = box.teams[teamName].filter((p) => p.pitching.games);
+    const psum = (f) => pitchers.reduce((n, p) => n + (p.pitching[f] || 0), 0);
+    assert.equal(sum('outs'), psum('inningsPitched'), '捕手の守った回＝投球回');
+    assert.equal(sum('earnedRuns'), psum('earnedRuns'), '捕手の自責点＝投手の自責点');
+    assert.equal(sum('runs'), psum('runsAllowed'), '捕手の失点＝投手の失点');
+    assert.equal(sum('pa'), psum('battersFaced'), '捕手の対戦打者＝投手の対戦打者');
+    assert.equal(sum('starts'), 1, '先発マスクは1試合に1人');
+    assert.ok(sum('calls') > 0 && sum('reads') < sum('calls'), '配球した球数と読まれた球数');
+    for (const r of catchers) {
+      const byPitcher = Object.values(r.catching.pitchers).reduce(
+        (n, line) => n + line.outs,
+        0,
+      );
+      assert.equal(byPitcher, r.catching.all.outs, '投手別の合計＝捕手の全体');
+    }
+  }
+}
 assert.throws(() => recorder.finish(game, result, observer), /重複/);
 freezeComparison(league);
 const frozen = JSON.stringify(comparisonForSeason(season));
@@ -688,6 +718,36 @@ const own = league.game.teams[home].players.find((p) =>
 );
 const info = projectPlayerInfo({ league }, 'a', own.id);
 assert.ok(info.periods.some((p) => p.id === 'career'));
+// 投手×捕手の組み合わせ: 自球団の捕手と投手の詳細に載る（球団の索引には載せない）
+{
+  const ownTeam = league.game.teams[home].players;
+  const keyOf = (p) => p.onlinePlayerId;
+  const catcher = ownTeam.find((p) => season.players[keyOf(p)]?.catching);
+  const catcherInfo = projectPlayerInfo({ league }, 'a', catcher.id);
+  const cur = catcherInfo.periods.find((p) => p.id === 'current');
+  assert.ok(cur.battery?.caught?.outs > 0, '捕手の詳細に受けた全体');
+  assert.ok(cur.battery.pitchers.length > 0, '捕手の詳細に投手別');
+  assert.ok(
+    cur.battery.pitchers.every((row) => row.name && typeof row.few === 'boolean'),
+  );
+  const pitcherKey = cur.battery.pitchers[0].key;
+  const pitcher = ownTeam.find((p) => keyOf(p) === pitcherKey);
+  const pitcherInfo = projectPlayerInfo({ league }, 'a', pitcher.id);
+  const pcur = pitcherInfo.periods.find((p) => p.id === 'current');
+  assert.equal(pcur.battery.caught, null, '投手は受けていない');
+  assert.equal(
+    pcur.battery.catchers.find((row) => row.key === keyOf(catcher)).outs,
+    cur.battery.pitchers[0].outs,
+    '投手から見た捕手別＝捕手から見た投手別',
+  );
+  const teamInfo = projectTeamInfo({ league }, 'a', home);
+  const row = teamInfo.roster.find((p) => p.id === catcher.id);
+  assert.ok(row.catcherStats?.outs > 0, '名簿に捕手の今季の成績');
+  assert.ok(
+    teamInfo.roster.every((p) => p.periods.every((q) => !('battery' in q))),
+    '球団の索引には組み合わせを載せない',
+  );
+}
 assert.equal(projectGameInfo({ league }, 'a', 1, 1).gameId, 1);
 // ⚠ リプレイを保存しない方針にしたので、試合APIも観戦記録を返さない。
 //    ここは元々「相手の事前設定を公開しない」ことを見ていた箇所で、
