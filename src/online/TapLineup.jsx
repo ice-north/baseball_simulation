@@ -39,6 +39,7 @@ import {
   commitTap,
   undoTap,
   savedTap,
+  savedTapDraft,
   tapLineup,
   lineupNotes,
 } from './tapLineup.js';
@@ -159,6 +160,13 @@ export function useTapLineup(view) {
     },
     markSaved() {
       setDraft((d) => savedTap(d, view, tapPlan(d).battingOrder));
+      // ⚠ **下書きと受け渡しの入れ物にも直に書く**。保存の応答を待つ間に下の「⌂」などで
+      //    別のタブへ移るとこの部品は外れていて、上の `setDraft` は届かない。下書き
+      //    （`lineup.order`）が「未保存・古い起点」のまま残り、「打順」に戻ると
+      //    「別の画面で打順が保存されました」と出て保存も断られていた（再監査 B1）。
+      //    `useDraftState` の書き込みは部品の外の入れ物へ同期で入るので、外れていても効く
+      setSaved((s) => savedTapDraft(s, view));
+      memory?.delete('lineup.full');
       setSelection(null);
       setNotice('');
     },

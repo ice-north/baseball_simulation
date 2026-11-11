@@ -335,12 +335,56 @@ try {
   shots.push('/tmp/baseball-online-mobile-lineup-667x375.png');
   await click('やめる');
 
+  // ---- 保存の応答を待つ間に別のタブへ移っても、戻ると「保存済み」（再監査 B1）----------
+  // ⚠ 以前は保存できたのに、表が外れていたので保存済みの印が届かず、「打順」に戻ると
+  //    「保存していない変更があります」「別の画面で打順が保存されました」が出て、
+  //    もう一度保存すると断られた（409）。応答を止めて、その間に「⌂」を押す
+  await p.setViewportSize({ width: 320, height: 640 });
+  await tapName(1);
+  await tapName(2);
+  const savedSwap = await slots();
+  assert.notDeepEqual(savedSwap, edited, '前提: 打順を入れ替えた');
+  const command = fixture.service.command.bind(fixture.service);
+  let release = null;
+  const held = new Promise((resolve) => (release = resolve));
+  fixture.service.command = async (...args) => {
+    await held;
+    return command(...args);
+  };
+  await click('保存');
+  await p.locator('.online-tap-actions button.online-primary:disabled').waitFor();
+  assert.ok(
+    await p.getByRole('button', { name: '投手起用を開く（横向き推奨）' }).isDisabled(),
+    '保存の応答を待つ間に「投手起用を開く」が押せる（古い起点の編集が全画面へ渡る）',
+  );
+  await click('ホーム');
+  release();
+  await p.getByText('編成を保存しました', { exact: true }).first().waitFor();
+  fixture.service.command = command;
+  await openLineup();
+  assert.deepEqual(await slots(), savedSwap, '保存の途中でタブを移ると、保存した打順で開かない');
+  assert.match(
+    await status(),
+    /保存済み/,
+    '保存の途中でタブを移ると、戻ったときに保存した編集が「未保存」のまま残る',
+  );
+  assert.equal(
+    await p.locator('.online-tap-warning').count(),
+    0,
+    '保存の途中でタブを移ると、戻ったときに「別の画面で打順が保存されました」が出る',
+  );
+  assert.deepEqual(
+    (await serverView()).lineup.battingOrder.map((e) => names.get(e.playerId)),
+    savedSwap.map((s) => s.split(':')[1]),
+    '前提: サーバーに保存されている',
+  );
+
   assert.deepEqual(errors, []);
   if (process.env.MOBILE_LINEUP_SHOTS)
     for (const shot of shots)
       await copyFile(shot, `${process.env.MOBILE_LINEUP_SHOTS}/${shot.split('/').pop()}`);
   console.log(
-    'online-mobile-lineup-ui-check PASS（320px・667×375・打順/守備/交代の2タップ・2回目は相手の行のどこでも・選び直し・守れない位置の注意・DHなしの9番・元に戻す・取り消す・タブ移動/再読み込み/PCの幅で保持・保存して読み直し・投手起用の入口）',
+    'online-mobile-lineup-ui-check PASS（320px・667×375・打順/守備/交代の2タップ・2回目は相手の行のどこでも・選び直し・守れない位置の注意・DHなしの9番・元に戻す・取り消す・タブ移動/再読み込み/PCの幅で保持・保存して読み直し・投手起用の入口・保存の途中でタブを移っても保存済み）',
   );
 } catch (error) {
   await failureShots(browser, 'online-mobile-lineup-ui');

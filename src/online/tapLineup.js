@@ -142,6 +142,18 @@ export function savedTap(draft, view, battingOrder) {
   };
 }
 
+/**
+ * 保存できたときの下書き（`Drafts` の `lineup.order`。`dirty` を添えた形）。
+ * ⚠ **部品が外れていても書けるように、入れ物ではなく下書きから作る**（`useTapLineup` の
+ *    `markSaved`）。保存の応答を待つ間に別のタブへ移ると表が外れ、入れ物を書き換えても届かず、
+ *    戻ったときに保存したはずの編集が「未保存」で古い起点のまま開いていた（再監査 B1）。
+ *    下書きが使えない形（PCが引き取って消した等）なら null（次に開くとき最新の view から作る）
+ */
+export function savedTapDraft(saved, view) {
+  if (!validDraft(saved)) return null;
+  return { ...savedTap(saved, view, tapPlan(saved).battingOrder), dirty: false };
+}
+
 /** 保存で送る打順（PCのスタメン設定と同じ形。1〜8番） */
 export const tapPlan = (draft) => ({
   battingOrder: battingOrderFromOrder(tapValue(draft)),

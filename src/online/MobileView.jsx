@@ -192,8 +192,11 @@ export default function MobileView(props) {
                   横に長い画面なので既定では開かず、押したときだけ出す。
                   ⚠ 打順・守備・控えは下の2タップの表で決めるので、ここは**投手起用の入口**
                   （開くと投手起用のタブから始まる）。打順のタブも中にはある */}
+              {/* ⚠ **保存の応答を待つ間は開かない**。開くと「打順」の表が外れ、保存する前の
+                  起点の編集が全画面へ渡る（そこで保存すると「編成が更新されています」で断られる） */}
               <button
                 className="online-primary online-full-width"
+                disabled={props.busy}
                 onClick={() => setFullLineup(true)}
               >
                 投手起用を開く（横向き推奨）
