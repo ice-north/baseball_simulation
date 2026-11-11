@@ -88,6 +88,14 @@ try {
   assert.ok(await page.getByRole('button', { name: /^指名終了$/ }).isDisabled(), '編成が足りないのに「指名終了」が押せる');
   assert.match(await page.getByTestId('tryout-end-blocked').innerText(), /があと\d+人必要/,
     '「指名終了」を押せない理由が出ていない');
+  // 1280×720 で候補の表の1行目が、スクロールしなくても見える（以前は上の枠が縦に長く、
+  // 1人指名すると表の見出しが画面の下端より下に出ていた）
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const firstRow = await page.locator('tbody tr').first().boundingBox();
+  assert.ok(firstRow && firstRow.y + firstRow.height <= 720,
+    `1280×720 のトライアウトで候補の表の1行目が画面の外にある（下端 ${firstRow && Math.round(firstRow.y + firstRow.height)}px）`);
+  await page.setViewportSize({ width: 1400, height: 900 });
 
   step('トライアウトの途中で保存して、タイトルから読み直す');
   await page.getByTestId('tryout-save').getByRole('button', { name: /スロット1に保存/ }).click();

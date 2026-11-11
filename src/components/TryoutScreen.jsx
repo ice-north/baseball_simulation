@@ -441,70 +441,102 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
       <div className="max-w-7xl mx-auto">
         {/* ⚠ 地色（明るい紙）の上の見出しは text-ink。カード（rounded-xl）は不透明な bg-surface-2 */}
         <h1 className="text-xl font-bold text-ink mb-1">トライアウト</h1>
-        <p className="text-ink-sub text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>
+        <p className="text-ink-sub text-sm mb-3">ドラフト形式で選手を指名してロスターを編成してください</p>
 
         <TutorialHint id="tryout-intro" title="選手を指名してチームを作る">
           自分の番になったら候補から1人ずつ指名します。<b className="text-cyan-200">投手・捕手・内野・外野をバランス良く</b>集めましょう（不足があれば警告が出ます）。若くて<b className="text-cyan-200">将来性（伸びしろ）</b>の高い選手を獲ると、育成で化ける可能性があります。候補の ⓘ で詳細能力を確認できます。
         </TutorialHint>
 
-        <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-5 mb-5">
-          <div className="grid grid-cols-3 gap-4 text-white">
+        {/* ⚠ 1280×720 で候補の表が画面の外から始まらないよう、上の枠は縦を詰める
+            （以前は1人指名すると表の見出しが y=705 まで下がっていた）。途中で保存はピックの数字の右、
+            取り消し・指名終了は「あなたの指名順です」の行に並べ、現在の編成は1行にまとめる */}
+        <div className="bg-surface-2 rounded-xl border border-gray-700/50 px-5 py-4 mb-4">
+          <div className="flex flex-wrap items-start gap-x-10 gap-y-3 text-white">
             <div>
-              <div className="text-xs text-gray-300 mb-1">現在のピック</div>
+              <div className="text-xs text-gray-300 mb-0.5">現在のピック</div>
               <div className="text-2xl font-bold">{currentPick + 1} / {draftOrder.length}</div>
             </div>
-            <div>
-              <div className="text-xs text-gray-300 mb-1">指名チーム</div>
+            <div className="min-w-0 max-w-[22rem]">
+              <div className="text-xs text-gray-300 mb-0.5">指名チーム</div>
               <div className="text-2xl font-bold truncate" title={currentTeam ? teamLabel(currentTeam) : undefined}>{currentTeam ? teamLabel(currentTeam) : '終了'}</div>
             </div>
             <div>
-              <div className="text-xs text-gray-300 mb-1">獲得選手数</div>
+              <div className="text-xs text-gray-300 mb-0.5">獲得選手数</div>
               <div className="text-2xl font-bold">{userRoster.length} 人</div>
             </div>
+            {/* 途中で保存。⚠ この画面ではサイドバー（セーブ＆ロード）を出さないので、ここが唯一の入口 */}
+            {onSave && !draftComplete && (
+              <div className="ml-auto max-w-full" data-testid="tryout-save">
+                <div className="text-xs text-gray-300 mb-1">途中で保存（ロードするとこの続きから指名できます）</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[0, 1, 2].map(i => {
+                    const info = saveSlots?.[i];
+                    return (
+                      <button key={i} onClick={() => saveMidway(i)} disabled={saving}
+                        title={info ? `スロット${i + 1}（${info.year}年目 ${info.date?.month}/${info.date?.day} の保存）を上書きします` : `スロット${i + 1}（空き）に保存します`}
+                        className="btn-secondary px-2.5 py-1 rounded-lg text-xs whitespace-nowrap">
+                        スロット{i + 1}に保存
+                        <span className="ml-1 font-normal opacity-80">
+                          {info ? `（${info.year}年目 ${info.date?.month}/${info.date?.day}）` : '（空き）'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {saving && <div className="mt-1 text-xs text-gray-300">保存中…（そのあいだ指名は止まります）</div>}
+                {!saving && saveNote && (
+                  <div className={`mt-1 text-xs font-bold ${saveNote.ok ? 'text-green-400' : 'text-red-400'}`}>{saveNote.text}</div>
+                )}
+              </div>
+            )}
           </div>
-          {isUserTurn && (
-            <div className="mt-4 text-green-400 font-semibold text-sm">
-              あなたの指名順です。候補の行を押して選び、「指名する」で決めてください。
-            </div>
-          )}
-          {!draftComplete && !userDone && undoSnap && (
-            <button
-              onClick={undoLastPick}
-              className="btn-secondary mt-3 mr-2 px-4 py-1.5 rounded-lg text-sm"
-              title="ほかの球団がその後に指名した分も、やり直しになります"
-            >
-              ↩ 直前の指名（{undoSnap.player.name}）を取り消す
-            </button>
-          )}
-          {!isUserTurn && currentTeam && (
-            <div className="mt-4 text-yellow-400 text-sm">
-              {teamLabel(currentTeam)} が選択中...
-            </div>
-          )}
-          {!draftComplete && userDone && (
-            <div className="mt-4 text-gray-300 text-sm">
-              自チームの指名は終えました。他球団の指名が終わるまでお待ちください。
-            </div>
-          )}
-          {!draftComplete && isUserTurn && (userRoster.length > 0 || !isInitialTryout) && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                onClick={endUserPicks}
-                disabled={endBlocked}
-                className="btn-secondary px-5 py-2 rounded-lg font-semibold transition text-sm"
-              >
-                指名終了
-              </button>
-              {/* 足りないあいだは押せない。理由は「編成不足」の帯と同じ言い方で横に出す */}
-              {endBlocked && (
-                <span className="text-xs text-yellow-400" data-testid="tryout-end-blocked">
-                  試合に出る最低限がそろうまで終えられません（{endShortage.join(' / ')}）
-                </span>
+          {(currentTeam || (!draftComplete && (userDone || undoSnap))) && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              {isUserTurn && (
+                <div className="text-green-400 font-semibold text-sm">
+                  あなたの指名順です。候補の行を押して選び、「指名する」で決めてください。
+                </div>
+              )}
+              {!isUserTurn && currentTeam && (
+                <div className="text-yellow-400 text-sm">
+                  {teamLabel(currentTeam)} が選択中...
+                </div>
+              )}
+              {!draftComplete && userDone && (
+                <div className="text-gray-300 text-sm">
+                  自チームの指名は終えました。他球団の指名が終わるまでお待ちください。
+                </div>
+              )}
+              {!draftComplete && !userDone && undoSnap && (
+                <button
+                  onClick={undoLastPick}
+                  className="btn-secondary px-4 py-1.5 rounded-lg text-sm"
+                  title="ほかの球団がその後に指名した分も、やり直しになります"
+                >
+                  ↩ 直前の指名（{undoSnap.player.name}）を取り消す
+                </button>
+              )}
+              {!draftComplete && isUserTurn && (userRoster.length > 0 || !isInitialTryout) && (
+                <>
+                  <button
+                    onClick={endUserPicks}
+                    disabled={endBlocked}
+                    className="btn-secondary px-5 py-1.5 rounded-lg font-semibold transition text-sm"
+                  >
+                    指名終了
+                  </button>
+                  {/* 足りないあいだは押せない。理由は「編成不足」の帯と同じ言い方で横に出す */}
+                  {endBlocked && (
+                    <span className="text-xs text-yellow-400" data-testid="tryout-end-blocked">
+                      試合に出る最低限がそろうまで終えられません（{endShortage.join(' / ')}）
+                    </span>
+                  )}
+                </>
               )}
             </div>
           )}
           {draftComplete && (
-            <div className="mt-4">
+            <div className="mt-3">
               <div className="text-green-400 font-semibold mb-3">
                 ドラフト完了 - 各チームの選手がロスターに追加されました
               </div>
@@ -520,31 +552,9 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
               )}
             </div>
           )}
-          {/* 途中で保存。⚠ この画面ではサイドバー（セーブ＆ロード）を出さないので、ここが唯一の入口 */}
-          {onSave && !draftComplete && (
-            <div className="mt-4 pt-3 border-t border-gray-700/50 flex flex-wrap items-center gap-2" data-testid="tryout-save">
-              <span className="text-xs text-gray-300 mr-1">途中で保存:</span>
-              {[0, 1, 2].map(i => {
-                const info = saveSlots?.[i];
-                return (
-                  <button key={i} onClick={() => saveMidway(i)} disabled={saving}
-                    className="btn-secondary px-3 py-1.5 rounded-lg text-xs whitespace-nowrap">
-                    スロット{i + 1}に保存
-                    <span className="ml-1 font-normal opacity-80">
-                      {info ? `（${info.year}年目 ${info.date?.month}/${info.date?.day} の保存を上書き）` : '（空き）'}
-                    </span>
-                  </button>
-                );
-              })}
-              {saving && <span className="text-xs text-gray-300">保存中…（そのあいだ指名は止まります）</span>}
-              {!saving && saveNote && (
-                <span className={`text-xs font-bold ${saveNote.ok ? 'text-green-400' : 'text-red-400'}`}>{saveNote.text}</span>
-              )}
-            </div>
-          )}
         </div>
 
-        <div className="flex gap-1.5 mb-4 bg-surface-2 rounded-xl p-1.5 border border-gray-700/50">
+        <div className="flex gap-1.5 mb-3 bg-surface-2 rounded-xl p-1 border border-gray-700/50">
           {[
             { key: 'draft', label: 'ドラフト' },
             { key: 'roster', label: '現有戦力' },
@@ -554,7 +564,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
             <button
               key={key}
               onClick={() => setViewTab(key)}
-              className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
+              className={`flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
                 viewTab === key ? 'seg-on' : 'seg'
               }`}
             >
@@ -563,62 +573,45 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
           ))}
         </div>
 
-        {/* 現在の編成（現有＋指名）。⚠ 指名する前から出す（名簿が足りているか、まず分かるように） */}
-        {viewTab === 'draft' && (
-          <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-4 mb-4" data-testid="tryout-composition">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-white font-bold">
-                現在の編成 ({composition.existing + composition.picked}/24人)
-                {composition.existing > 0 && <span className="text-gray-300 text-xs font-normal ml-1">（現有{composition.existing}＋指名{composition.picked}）</span>}
-              </h3>
-            </div>
-            {(() => {
-              // 編成不足の判定は「現有戦力＋今回指名した選手」の合計で行う
-              const positionCounts = composition.counts;
-              const getStatusIcon = (current, min, ideal) => {
-                if (current >= ideal) return '✅';
-                if (current >= min) return '🟡';
-                return '🔴';
-              };
-              const shortages = [];
-              if (positionCounts.pitcher < 5) shortages.push(`投手があと${5 - positionCounts.pitcher}人必要`);
-              if (positionCounts.catcher < 1) shortages.push('捕手が不足');
-              if (positionCounts.infielder < 4) shortages.push(`内野手があと${4 - positionCounts.infielder}人必要`);
-              if (positionCounts.outfielder < 3) shortages.push(`外野手があと${3 - positionCounts.outfielder}人必要`);
-              return (
-                <>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="bg-gray-700 rounded p-2 text-center">
-                      <div className="text-sm text-gray-300">投手</div>
-                      <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.pitcher, 5, 10)} {positionCounts.pitcher}/10</div>
-                    </div>
-                    <div className="bg-gray-700 rounded p-2 text-center">
-                      <div className="text-sm text-gray-300">捕手</div>
-                      <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.catcher, 1, 2)} {positionCounts.catcher}/2</div>
-                    </div>
-                    <div className="bg-gray-700 rounded p-2 text-center">
-                      <div className="text-sm text-gray-300">内野手</div>
-                      <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.infielder, 4, 6)} {positionCounts.infielder}/6</div>
-                    </div>
-                    <div className="bg-gray-700 rounded p-2 text-center">
-                      <div className="text-sm text-gray-300">外野手</div>
-                      <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.outfielder, 3, 6)} {positionCounts.outfielder}/6</div>
-                    </div>
+        {/* 現在の編成（現有＋指名）。⚠ 指名する前から出す（名簿が足りているか、まず分かるように）。1行にまとめる */}
+        {viewTab === 'draft' && (() => {
+          const { counts, existing, picked } = composition;
+          const total = existing + picked;
+          const getStatusIcon = (current, min, ideal) => {
+            if (current >= ideal) return '✅';
+            if (current >= min) return '🟡';
+            return '🔴';
+          };
+          const shortages = [];
+          if (counts.pitcher < 5) shortages.push(`投手があと${5 - counts.pitcher}人必要`);
+          if (counts.catcher < 1) shortages.push('捕手が不足');
+          if (counts.infielder < 4) shortages.push(`内野手があと${4 - counts.infielder}人必要`);
+          if (counts.outfielder < 3) shortages.push(`外野手があと${3 - counts.outfielder}人必要`);
+          return (
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 px-4 py-2.5 mb-3" data-testid="tryout-composition">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                <h3 className="text-white font-bold">
+                  現在の編成 ({total}/24人)
+                  {existing > 0 && <span className="text-gray-300 text-xs font-normal ml-1">（現有{existing}＋指名{picked}）</span>}
+                </h3>
+                {[['投手', counts.pitcher, 5, 10], ['捕手', counts.catcher, 1, 2], ['内野手', counts.infielder, 4, 6], ['外野手', counts.outfielder, 3, 6]].map(([label, n, min, ideal]) => (
+                  <span key={label} className="text-gray-300 whitespace-nowrap">
+                    {label} <span className="text-white font-bold">{getStatusIcon(n, min, ideal)} {n}/{ideal}</span>
+                  </span>
+                ))}
+              </div>
+              {shortages.length > 0 && (
+                <div className="mt-1.5 flex items-start gap-2 text-xs">
+                  <span className="text-red-400 font-bold shrink-0">!</span>
+                  <div className="text-red-400">
+                    <span className="font-bold">編成不足: </span>
+                    {shortages.join(' / ')}
                   </div>
-                  {shortages.length > 0 && (
-                    <div className="mt-2 bg-red-900/40 border border-red-700/50 rounded-lg px-3 py-2 flex items-start gap-2">
-                      <span className="text-red-400 text-sm font-bold shrink-0">!</span>
-                      <div className="text-red-300 text-xs">
-                        <span className="font-bold">編成不足: </span>
-                        {shortages.join(' / ')}
-                      </div>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {viewTab === 'roster' && (
           <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-5 mb-5">
@@ -826,7 +819,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
 
         {viewTab === 'draft' && (
           <>
-            <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
               <div className="flex gap-1 bg-surface-2 rounded-xl p-1 border border-gray-700/50">
                 {[
                   { key: 'all', label: '全選手' },
@@ -871,8 +864,8 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
               });
               if (needs.length === 0) return null;
               return (
-                <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-3 mb-3">
-                  <div className="text-xs text-gray-300 font-bold mb-2">おすすめ候補</div>
+                <div className="bg-surface-2 rounded-xl border border-gray-700/50 px-3 py-2 mb-3 flex items-center gap-3">
+                  <div className="text-xs text-gray-300 font-bold shrink-0">おすすめ候補</div>
                   <div className="flex gap-2 flex-wrap">
                     {needs.map(n => (
                       <div
