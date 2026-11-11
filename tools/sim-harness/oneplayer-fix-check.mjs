@@ -20,7 +20,7 @@ import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
 import { autoSimulateGame, generateAILineup, setRecommendedLineup } from '../../src/game/autoSimulation.js';
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason, fitGamesPerSeason, twoLeagueSizes } from '../../src/season/scheduleGenerator.js';
-import { applyNextSeasonRegulations, repairLeagueConfig } from '../../src/season/nextSeasonRegulations.js';
+import { applyNextSeasonRegulations, repairLeagueConfig, validateLeagueTeamNames } from '../../src/season/nextSeasonRegulations.js';
 import { twoLeagueGameCountLabel, twoLeagueSplitLabel } from '../../src/season/regulationSettings.js';
 import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
 import { leagueMagic } from '../../src/season/magicNumber.js';
@@ -529,6 +529,99 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(repairLeagueConfig(same, { teamNames: six }, 'normal'), same, '揃っているのに作り直した');
 }
 
+// --- 翌年のレギュレーションで球団名を変えたら改名（選手・ローテ・打順をそのまま引き継ぐ） ---
+// ⚠ 以前は「設定にあって TEAMS_DATA に無い名前＝新規参入」「前年にあって設定に無い名前＝解散」と
+//    名前だけで決めていた。自チーム（#1）の名前を変えると、自チームが解散して選手は全員
+//    トライアウトのプールへ移り、新しい名前で24人の別の名簿が作られ、`Object.keys(TEAMS_DATA)[0]`
+//    （多くの画面が自チームとして読む）は2番目の球団に替わっていた。規定画面の行（#1, #2…）は
+//    球団そのもので、同じ行の名前の変更は改名にする。解散・新規参入は球団数の増減だけで起こす
+{
+  const { seasonData } = quiet(() => bootstrapWorld());
+  const names = seasonData.settings.teamNames;
+  const [user, second, cpu, fourth] = names;
+  const userTeam = TEAMS_DATA[user];
+  const cpuTeam = TEAMS_DATA[cpu];
+  quiet(() => setRecommendedLineup(userTeam, user));
+  const lineupBefore = JSON.stringify(userTeam.lineupSettings);
+  const rotationBefore = JSON.stringify(userTeam.pitchingRotation);
+  const idsBefore = userTeam.players.map(p => p.id).join(',');
+  const keysBefore = Object.keys(TEAMS_DATA);
+  const { WORLD_DATA } = await import('../../src/corporate/worldData.js');
+  WORLD_DATA._teamRanking = names.map((name, i) => ({ position: i + 1, name, rank: 'D', score: 900 }));
+  const poolBefore = releasedPlayersPool.length;
+  const renamed = ['改名ズ', second, '新愛媛', fourth];
+  let league = { format: 'single', teamsPerLeague: 4, leagues: [{ name: '四国', teams: [...names] }] };
+  let next = { ...seasonData, year: 2 };
+  let view = null;
+  const notes = [];
+  const apply = (teamNames, extra = {}) => quiet(() => applyNextSeasonRegulations({
+    confirmedSettings: { ...seasonData.settings, teamsCount: teamNames.length, teamNames, ...extra },
+    seasonData: next,
+    // 画面と同じく、いまのリーグの球団（allTeams）を前年の球団として渡す
+    currentTeams: league.leagues[0].teams,
+    setSeasonData: (update) => { next = typeof update === 'function' ? update(next) : update; },
+    setLeagueConfig: (update) => { league = typeof update === 'function' ? update(league) : update; },
+    generatePitchingRotation: () => {},
+    setManagementView: (v) => { view = v; },
+    nextView: 'camp',
+    notify: (message) => notes.push(message),
+  }));
+  apply(renamed, { teamAbbreviations: ['改名', '徳島', '新愛', '香川'] });
+  assert.equal(view, 'camp');
+  assert.equal(TEAMS_DATA['改名ズ'], userTeam, '自チームの名前を変えると、自チームが解散して別の名簿になる');
+  assert.equal(TEAMS_DATA['新愛媛'], cpuTeam, 'CPU 球団の名前を変えると、解散して別の名簿になる');
+  assert.ok(!TEAMS_DATA[user] && !TEAMS_DATA[cpu], '旧名の球団が残っている');
+  assert.equal(userTeam.players.map(p => p.id).join(','), idsBefore, '改名で選手が替わった');
+  assert.equal(JSON.stringify(userTeam.lineupSettings), lineupBefore, '改名で打順の保存が消えた');
+  assert.equal(JSON.stringify(userTeam.pitchingRotation), rotationBefore, '改名でローテが替わった');
+  assert.equal(userTeam.name, '改名ズ');
+  assert.equal(userTeam.abbreviation, '改名', '略称の変更が球団に入らない');
+  assert.equal(cpuTeam.abbreviation, '新愛');
+  assert.deepEqual(Object.keys(TEAMS_DATA), keysBefore.map(k => ({ [user]: '改名ズ', [cpu]: '新愛媛' }[k] || k)),
+    '改名で TEAMS_DATA の並びが変わった（先頭は自チーム）');
+  assert.equal(Object.keys(TEAMS_DATA)[0], '改名ズ', '自チームが TEAMS_DATA の先頭でない');
+  assert.deepEqual(league.leagues[0].teams, renamed, 'leagueConfig が新しい名前にならない（userTeamName は allTeams[0]）');
+  assert.equal(releasedPlayersPool.length, poolBefore, '改名で選手がプールへ移った');
+  assert.ok(next.schedule.every(g => renamed.includes(g.home) && renamed.includes(g.away)), '日程に旧名が残る');
+  assert.deepEqual(next.standings.map(s => s.team), renamed);
+  assert.deepEqual(WORLD_DATA._teamRanking.map(e => e.name), renamed, 'チームランキングの名前が旧名のまま');
+  assert.deepEqual(notes, [], `改名だけなのに解散・新規参入の知らせが出た: ${notes.join(' / ')}`);
+
+  // 使えない名前（空・重なり・別のリーグや大会の球団と同じ）は確定させず、何も変えない
+  const outside = Object.keys(TEAMS_DATA).find(n => !renamed.includes(n));
+  assert.ok(outside, '前提: 並行世界の球団がある');
+  for (const bad of [['', second, '新愛媛', fourth], ['改名ズ', '改名ズ', '新愛媛', fourth], ['改名ズ', outside, '新愛媛', fourth]]) {
+    const keys = Object.keys(TEAMS_DATA).join('\n');
+    view = null;
+    notes.length = 0;
+    league = { format: 'single', teamsPerLeague: 4, leagues: [{ name: '四国', teams: [...renamed] }] };
+    const ok = apply(bad);
+    assert.equal(ok, false, `使えない名前（${bad.join('・')}）で確定した`);
+    assert.equal(view, null, '使えない名前で次の画面へ移った');
+    assert.equal(Object.keys(TEAMS_DATA).join('\n'), keys, '使えない名前で TEAMS_DATA が変わった');
+    assert.ok(notes.length === 1 && notes[0].includes('設定エラー'), '使えない名前の理由を知らせない');
+    assert.deepEqual(validateLeagueTeamNames(bad, renamed).length, 1);
+  }
+  assert.deepEqual(validateLeagueTeamNames(renamed, renamed), []);
+  // 名前の入れ替え（#2 と #3）は行ごとの改名。名簿は行に付いたまま
+  const secondTeam = TEAMS_DATA[second];
+  league = { format: 'single', teamsPerLeague: 4, leagues: [{ name: '四国', teams: [...renamed] }] };
+  apply(['改名ズ', '新愛媛', second, fourth]);
+  assert.equal(TEAMS_DATA['新愛媛'], secondTeam, '#2 の名簿が #2 の行に付いていない');
+  assert.equal(TEAMS_DATA[second], cpuTeam, '#3 の名簿が #3 の行に付いていない');
+  // 球団を減らすと外れた行の球団が解散し、選手は前所属を持ってプールへ
+  const leaving = TEAMS_DATA[fourth].players.length;
+  league = { format: 'single', teamsPerLeague: 4, leagues: [{ name: '四国', teams: ['改名ズ', '新愛媛', second, fourth] }] };
+  notes.length = 0;
+  apply(['改名ズ', '新愛媛', second]);
+  assert.ok(!TEAMS_DATA[fourth], '減らした行の球団が解散しない');
+  assert.equal(TEAMS_DATA['改名ズ'], userTeam, '球団を減らしたら自チームが替わった');
+  const moved = releasedPlayersPool.filter(p => p.previousTeam === fourth);
+  assert.equal(moved.length, leaving, `解散した球団の選手の前所属（previousTeam）が入らない（${moved.length}/${leaving}）`);
+  assert.ok(notes.some(n => n.includes(`${fourth}が解散`)), '解散の知らせが出ない');
+  releasedPlayersPool.length = 0;
+}
+
 // --- 1球団以下の設定で日程づくりが終わらない（タブが固まる） ---
 // ⚠ 規定画面の球団数に「1」を打った瞬間、試合数の選択肢を作る計算が対戦相手0で
 //    Infinity 回の巡回に入り、タブが固まっていた。入りきるかの判定は false、選択肢は空、日程は空
@@ -589,4 +682,4 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(withDeparted({ ...season, year: 4 }, [departedEntry(stay, 'A', 'A球団')]).departedSeasonStats.players.length, 1);
 }
 
-console.log('■ 一人用の進行の再発防止: OK（翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');
+console.log('■ 一人用の進行の再発防止: OK（翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');

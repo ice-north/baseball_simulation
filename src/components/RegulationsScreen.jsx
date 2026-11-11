@@ -5,6 +5,7 @@ import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPe
 import { PHASE_INFO } from '../season/seasonManager.js';
 import { normalizeMaxExtraInnings } from '../teams-data.js';
 import { getModeCapabilities } from '../game/modeCapabilities.js';
+import { validateLeagueTeamNames } from '../season/nextSeasonRegulations.js';
 
 // ⚠ 部品の中で定義しないこと。描画のたびに別の部品として作り直され、中の入力欄が
 //   1文字打つごとに消えて作り直される（以前は延長の欄に2桁を打てなかった）
@@ -22,7 +23,8 @@ const fixExtra = (settings) => ({
 });
 
 // confirmLabel: 年度更新の決定ボタンの名前。行き先で変える（箱庭はキャンプが無くチーム設定へ進む）
-const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel = '確定 → キャンプへ進む' }) => {
+// currentTeams: いまのリーグの球団（`allTeams`）。年度更新で、行ごとの改名・解散・新規参入を決める元
+const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel = '確定 → キャンプへ進む', currentTeams }) => {
   const currentPhase = seasonData.phase || 'off_season';
   const canModify = onConfirm ? true : canModifyRegulations(currentPhase);
   const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
@@ -350,8 +352,15 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel
             onClick={() => {
               const settings = fixExtra(tempSettings);
               const validation = validateRegulations(settings);
-              if (!validation.valid) {
-                alert('設定エラー:\n' + validation.errors.join('\n'));
+              // 球団名（空・重なり・リーグの外の球団と同じ名前）も確定の前に確かめる（`validateLeagueTeamNames`）
+              const errors = [
+                ...validation.errors,
+                ...(canModifyStructure
+                  ? validateLeagueTeamNames(settings.teamNames || [], currentTeams || seasonData.settings?.teamNames || [])
+                  : []),
+              ];
+              if (errors.length > 0) {
+                alert('設定エラー:\n' + errors.join('\n'));
                 return;
               }
               setSeasonData(prev => ({ ...prev, settings }));

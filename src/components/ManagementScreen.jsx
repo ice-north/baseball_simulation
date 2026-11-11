@@ -333,10 +333,11 @@ const ManagementScreen = ({
   if (managementView === 'sandbox_next_regulations') return <RegulationsScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
+    currentTeams={allTeams}
     confirmLabel="確定 → チーム設定へ進む"
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
-        confirmedSettings, seasonData, setSeasonData, setLeagueConfig, generatePitchingRotation,
+        confirmedSettings, seasonData, currentTeams: allTeams, setSeasonData, setLeagueConfig, generatePitchingRotation,
         setManagementView, nextView: 'sandbox_setup',
       });
     }}
@@ -368,9 +369,10 @@ const ManagementScreen = ({
   if (managementView === 'regulations_next') return <RegulationsScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
+    currentTeams={allTeams}
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
-        confirmedSettings, seasonData, setSeasonData, setLeagueConfig, generatePitchingRotation,
+        confirmedSettings, seasonData, currentTeams: allTeams, setSeasonData, setLeagueConfig, generatePitchingRotation,
         setManagementView, nextView: 'camp',
       });
     }}
