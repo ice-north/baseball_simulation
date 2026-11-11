@@ -146,13 +146,8 @@ class AppViewModel internal constructor(
     /** 選手タブで見ている球団（null は自球団）。順位表の球団を押すと、ここに入れて選手タブへ移る */
     var playersTeam by mutableStateOf<String?>(null)
 
-    /** 順位表から選手タブへ飛んだ回数（選手タブが「選手成績」の表に切り替える合図） */
-    var playersJump by mutableStateOf(0)
-        private set
-
     fun showTeamPlayers(team: String) {
         playersTeam = team
-        playersJump += 1
     }
 
     /**

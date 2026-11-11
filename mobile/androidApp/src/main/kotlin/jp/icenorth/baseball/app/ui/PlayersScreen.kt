@@ -59,14 +59,10 @@ fun PlayersScreen(model: AppViewModel) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var mode by rememberSaveable { mutableStateOf(PlayersMode.Season) }
-    // 見ている球団はモデルに置く（試合タブの順位表から「この球団の選手成績」へ飛べるように）
+    // 見ている球団はモデルに置く（試合タブの順位表から「この球団の選手成績」へ飛べるように）。
+    // ⚠ 飛んできたときに「選手成績」の表を出すための合図は要らない。タブを移ると この画面は構成から外れ、
+    //    mode は毎回「選手成績」から始まる（以前の合図 seenJump は、入った時点で合図と同じ値になり働いていなかった）
     val team = model.playersTeam ?: view.teamName.orEmpty()
-    // 順位表から飛んできたら、能力ランキングを開いていても球団の表に切り替える（同じ合図では一度だけ）
-    var seenJump by rememberSaveable { mutableStateOf(model.playersJump) }
-    if (seenJump != model.playersJump) {
-        seenJump = model.playersJump
-        if (mode == PlayersMode.Ranking) mode = PlayersMode.Season
-    }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) }, Modifier.weight(1f).padding(top = 8.dp))
