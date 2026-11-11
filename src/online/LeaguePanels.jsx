@@ -696,6 +696,8 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
   const [confirming, setConfirming] = useState(false);
   // スマホでPCと同じ編集を開いているか（下の `mobile` の枝）
   const [editing, setEditing] = useState(false);
+  // 初期メンバー選択で、いま中身を見ているセット（`PackSelect` の `onShow`）
+  const [viewedPack, setViewedPack] = useState(null);
   // 標準案は覚えを通して読む（`readCache.js`。版が同じ間は取りに行かない）。
   // ⚠ 覚えた答えを編集で書き換えないよう、受け取った案は写してから使う
   const read = useContext(ReadContext);
@@ -890,6 +892,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
           view={view}
           run={run}
           command={command}
+          onShow={setViewedPack}
           onChange={(next) => {
             setDirty(true);
             setPlan(next);
@@ -928,6 +931,13 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
       )}
     </>
   );
+
+  // 初期メンバー選択で、選択中と違うセットを見ているときの添え書き（下の `mobile` の帯）
+  const chosenPack =
+    editing && phase.packs && plan?.packId && viewedPack && viewedPack !== plan.packId
+      ? phase.packs.find((p) => p.id === plan.packId)
+      : null;
+  const chosenNote = chosenPack ? `決定するのは選択中の「${chosenPack.name}」です` : null;
 
   // スマホで編集を開くボタンの名前。編集できる手続きだけ（年度更新は決めることが無い）
   const mobileEditLabel = !plan
@@ -1170,6 +1180,10 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
               </div>
             ) : (
               <div className="online-actions">
+                {/* ⚠ **別のセットを見ている間は、決定するのが選択中のセットだと添える**（画面の
+                    見回り F13）。セットの中身を見ながら下の「この内容で決定」を押すと、見ている
+                    セットではなく選択中のセットで確認に進むので、押す前に分かるようにする */}
+                {chosenNote && <p className="online-phase-chosen">{chosenNote}</p>}
                 <button
                   className="online-primary"
                   disabled={busy}

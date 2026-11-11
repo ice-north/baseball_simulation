@@ -779,9 +779,19 @@ try {
     // ⚠ **スマホでもセットを選び直して決められる**（判断1・案B）。以前は「変えるときはPCで」と
     //    書くだけで、スマホだけの人は標準案のセットのまま決めるしかなかった
     await pack.page.getByRole('button', { name: 'セットを見比べて選ぶ', exact: true }).click();
+    const chosenNote = pack.page.locator('.online-actions .online-phase-chosen');
+    assert.equal(await chosenNote.count(), 0, '選択中のセットを見ているのに添え書きが出る');
     await pack.page.locator('.online-pack-card').filter({ hasText: '検証セット2' }).click();
+    // ⚠ **別のセットを見ている間は、下の帯に決定するのは選択中のセットだと添える**（画面の見回り F13）。
+    //    以前は見ているセットと関係なく「この内容で決定」だけで、確認に出るのは選択中のセットだった
+    await chosenNote.waitFor({ timeout: 3000 }).catch(() => {
+      throw new Error('別のセットを見ている間、下の帯に「決定するのは選択中の…」が出ない');
+    });
+    assert.equal(await chosenNote.innerText(), '決定するのは選択中の「検証セット」です');
+    await fitsPhone(pack.page, '初期メンバーの選択（選択中の添え書き）');
     await pack.page.getByRole('button', { name: 'このセットにする', exact: true }).click();
     await pack.page.getByRole('button', { name: '選択中', exact: true }).waitFor();
+    assert.equal(await chosenNote.count(), 0, '見ているセットを選んだのに添え書きが残る');
     assert.match(
       await pack.page.locator('.online-phase-status').innerText(),
       /編集中の内容（未保存）です。/,

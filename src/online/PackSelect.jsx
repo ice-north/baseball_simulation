@@ -197,9 +197,14 @@ function Roster({ pack }) {
   );
 }
 
-export default function PackSelect({ packs, plan, busy, onChange, view, run, command }) {
+export default function PackSelect({ packs, plan, busy, onChange, view, run, command, onShow }) {
   const [open, setOpen] = useState(() => plan?.packId || packs[0]?.id);
   const shown = packs.find((p) => p.id === open) || packs[0];
+  // いま中身を見ているセットを知らせる（スマホの下の帯に「決定するのは選択中の…」と添えるため。
+  // `LeaguePanels.jsx` の `PhasePanel`）
+  useEffect(() => {
+    onShow?.(shown?.id ?? null);
+  }, [shown?.id, onShow]);
   const mobile = useMobile();
   const detail = useRef(null);
   // ⚠ **スマホではカードを押したら中身へ送る**。中身は20枚のカード（2列で10段）の下にあり、

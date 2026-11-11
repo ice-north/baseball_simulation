@@ -4408,8 +4408,15 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #fde68a;
   font-size: 12px;
 }
-.online:has(.online-phase-confirm) main:not(:where(.online-sp *)),
-.online-compact-shell:has(.online-phase-confirm) main {
+/* 初期メンバー選択で別のセットを見ているときの添え書き（帯の上の1行。確認の文と同じ置き方） */
+.online-decision .online-actions > p.online-phase-chosen:not(:where(.online-sp *)) {
+  flex: 1 0 100%;
+  margin: 0;
+  color: #fde68a;
+  font-size: 12px;
+}
+.online:has(.online-phase-confirm, .online-phase-chosen) main:not(:where(.online-sp *)),
+.online-compact-shell:has(.online-phase-confirm, .online-phase-chosen) main {
   padding-bottom: calc(190px + env(safe-area-inset-bottom));
 }
 
