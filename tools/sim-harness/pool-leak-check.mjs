@@ -50,7 +50,10 @@ const enrolled = picks.filter(p => (TEAMS_DATA[userUni].players || []).some(q =>
 const all = [];
 for (const [tn, t] of Object.entries(TEAMS_DATA)) for (const p of (t.players || [])) all.push({ p, where: tn });
 for (const p of (highSchoolPool.players || [])) all.push({ p, where: '高校生プール' });
-const inv = (x) => [x.physical?.dexterity, (x.growthPotential ?? 0).toFixed(2), x.throws, x.bats].join('/');
+// ⚠ 不変量は**作った時の乱数そのもの**で比べる。以前は成長率を小数2桁に丸め、左右は
+//    置き場の違う `x.throws`（正しくは `physical.throws`）を読んでいて、実際は器用さと丸めた
+//    成長率だけだった。同名の別人がたまたま一致し、時々「複製の疑い」で落ちた
+const inv = (x) => [x.physical?.dexterity, String(x.growthPotential ?? 0), x.physical?.throws, x.physical?.build, x.bats].join('/');
 const byName = new Map();
 for (const e of all) {
   if (!byName.has(e.p.name)) byName.set(e.p.name, []);
