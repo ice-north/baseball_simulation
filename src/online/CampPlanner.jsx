@@ -324,8 +324,9 @@ function CampTableScroll({ children }) {
         `${sub.getBoundingClientRect().width}px`,
       );
     measure();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(measure);
+    // ⚠ `window.` を付けて読む（`scope-check` は素の名前を未定義の識別子として落とす）
+    if (!window.ResizeObserver) return undefined;
+    const observer = new window.ResizeObserver(measure);
     observer.observe(sub);
     return () => observer.disconnect();
   }, []);
