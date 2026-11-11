@@ -7,6 +7,8 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import io.ktor.http.content.TextContent
 import java.util.Collections
+import kotlinx.coroutines.CompletableDeferred
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -53,13 +56,24 @@ class AppUiTest {
         if (::client.isInitialized) client.close()
     }
 
-    /** @param answer ビューのほかの窓口の答え（action ごと）。null ならビューと同じものを返す */
-    private fun open(extra: String, latest: LatestApp? = null, answer: (String) -> String? = { null }) {
+    /**
+     * @param answer ビューのほかの窓口の答え（action ごと）。null ならビューと同じものを返す
+     * @param gate 他球団の名簿（action "team"）の答えを、これが済むまで待たせる
+     * @param restoration 端末を回したとき（画面の作り直し）を試すときに渡す
+     */
+    private fun open(
+        extra: String,
+        latest: LatestApp? = null,
+        gate: CompletableDeferred<Unit>? = null,
+        restoration: StateRestorationTester? = null,
+        answer: (String) -> String? = { null },
+    ) {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("online", 0).edit().clear().commit()
         client = HttpClient(MockEngine { request ->
             val action = request.url.parameters["action"].orEmpty()
             if (action == "command") commands += (request.body as TextContent).text
+            if (action == "team") gate?.await()
             val text = if (action == "login")
                 """{"userId":"a","accessToken":"token","sessionId":"session"}"""
             else answer(action) ?: """{"revision":1,"teamName":"team","writable":true,$extra}"""
@@ -73,10 +87,11 @@ class AppUiTest {
             shadowOf(Looper.getMainLooper()).idle()
             model.view != null && !model.busy
         }
-        rule.setContent {
+        val content: @Composable () -> Unit = {
             back = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
             BaseballTheme { OnlineApp(model) }
         }
+        if (restoration != null) restoration.setContent(content) else rule.setContent(content)
     }
 
     private var back: OnBackPressedDispatcher? = null
@@ -173,6 +188,27 @@ class AppUiTest {
         rule.onNodeWithTag("tab-Games").assertIsSelected()
         rule.onNodeWithTag("chip-standings").assertIsSelected()
         rule.runOnIdle { assertNull(model.playersTeam) }
+    }
+
+    @Test fun turningTheDeviceWhileLoadingAnotherTeamsPlayerStillOpensIt() {
+        val gate = CompletableDeferred<Unit>()
+        val restoration = StateRestorationTester(rule)
+        open(
+            """"roster":[],"standings":[{"team":"team","wins":2},{"team":"rival","wins":1}]""",
+            gate = gate,
+            restoration = restoration,
+        ) { action -> if (action == "team") """{"revision":1,"teamName":"rival","roster":[{"id":7,"name":"相手の投手","position":"pitcher"}]}""" else null }
+        rule.runOnIdle { model.openPlayerOf("rival", 7, "相手の投手") }
+        rule.runOnIdle { assertEquals("相手の投手", model.openingPlayer) }
+        // 読み込みの途中で端末を回す（画面を作り直す）。タブは替わっていない
+        restoration.emulateSavedInstanceStateRestore()
+        gate.complete(Unit)
+        // ⚠ 以前は作り直しで「タブを移った」ときと同じく読み込みをやめ、押し直すまで開かなかった
+        rule.waitUntil(10_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            model.openPlayer != null
+        }
+        rule.runOnIdle { assertNull(model.openingPlayer) }
     }
 
     @Test fun situationTipsCanBeReadAgainFromTheMenu() {

@@ -114,9 +114,16 @@ fun OnlineApp(model: AppViewModel) {
     BackHandler(enabled = joined && tab != Tab.Home) { tab = if (tab == Tab.Players && fromStandings) Tab.Games else Tab.Home }
     // ⚠ 選手タブを離れたら、見ている球団を自球団に戻す（以前は順位表から開いた他球団のまま残り、
     //    次に選手タブを開いても他球団の表だった）
+    // 前に開いていたタブ。⚠ 端末を回すと画面を作り直して下の LaunchedEffect がもう一度走るので、
+    //    **タブが本当に替わったとき**だけを見分けるのに使う
+    var lastTab by rememberSaveable { mutableStateOf(tab) }
     LaunchedEffect(tab) {
-        // ⚠ 他球団の選手を読んでいる間にタブを移ったら、読み終わっても開かない（以前は移った先でシートが開いた）
-        model.dropOpeningPlayer()
+        // ⚠ 他球団の選手を読んでいる間にタブを移ったら、読み終わっても開かない（以前は移った先でシートが開いた）。
+        //    ⚠ 回しただけ（同じタブ）ではやめない。以前は読み込み中に端末を回すと開かなかった
+        if (tab != lastTab) {
+            model.dropOpeningPlayer()
+            lastTab = tab
+        }
         if (tab != Tab.Players) {
             model.playersTeam = null
             fromStandings = false
