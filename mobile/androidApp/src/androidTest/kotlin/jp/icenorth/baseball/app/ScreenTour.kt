@@ -166,7 +166,8 @@ class ScreenTour {
                     page("game-detail", scrolls = 2)
                     back()
                 }
-                step("league games") { click("リーグ全体"); pause(2000); shot("games-league") }
+                // ⚠ 詳細から戻ると一覧は開く前の位置のまま（先頭には戻らない）。上の切り替えは画面の外なので先に上まで戻す
+                step("league games") { toTop(); click("リーグ全体"); pause(2000); shot("games-league") }
                 step("standings") { click("順位表"); page("games-standings", scrolls = 1) }
                 step("leaders") { click("タイトル"); shot("games-leaders") }
                 step("news") { click("リーグ便り"); shot("games-news") }
