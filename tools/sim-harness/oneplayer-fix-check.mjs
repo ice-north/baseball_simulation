@@ -20,7 +20,7 @@ import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
 import { autoSimulateGame, generateAILineup, setRecommendedLineup } from '../../src/game/autoSimulation.js';
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason, fitGamesPerSeason, twoLeagueSizes } from '../../src/season/scheduleGenerator.js';
-import { applyNextSeasonRegulations } from '../../src/season/nextSeasonRegulations.js';
+import { applyNextSeasonRegulations, repairLeagueConfig } from '../../src/season/nextSeasonRegulations.js';
 import { twoLeagueGameCountLabel, twoLeagueSplitLabel } from '../../src/season/regulationSettings.js';
 import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
 import { leagueMagic } from '../../src/season/magicNumber.js';
@@ -481,6 +481,54 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   }
 }
 
+// --- 翌年のレギュレーションで球団数を変えたら、リーグの球団（leagueConfig）も揃える ---
+// ⚠ 以前は日程と順位表だけ作り直し、leagueConfig（App の allTeams・userTeamName の元）は
+//    新しく始めた時・ロード・監督移籍でしか書き換えなかった。増やした球団はキャンプ・
+//    トライアウト・選手成績・箱庭のチーム設定に出ず、減らすと解散した球団が残って、
+//    箱庭のチーム設定は「選手が16人足りません」で開幕できなかった。保存にも古いまま入る
+{
+  const run = (from, to) => {
+    const { seasonData } = quiet(() => bootstrapWorld({ userTeamNames: from }));
+    const config = { format: 'single', teamsPerLeague: from.length, leagues: [{ name: '四国', teams: [...from] }] };
+    let league = config;
+    let next = { ...seasonData, year: 2 };
+    quiet(() => applyNextSeasonRegulations({
+      confirmedSettings: { ...seasonData.settings, teamsCount: to.length, teamNames: to },
+      seasonData: next,
+      setSeasonData: (update) => { next = typeof update === 'function' ? update(next) : update; },
+      setLeagueConfig: (update) => { league = typeof update === 'function' ? update(league) : update; },
+      generatePitchingRotation: () => {},
+      setManagementView: () => {},
+      nextView: 'camp',
+      notify: () => {},
+    }));
+    return { league, next };
+  };
+  const four = ['高知', '徳島', '愛媛', '香川'];
+  const six = [...four, 'チームE', 'チームF'];
+  const grown = run(four, six);
+  assert.deepEqual(grown.league.leagues.flatMap(l => l.teams), six, '球団を増やしても leagueConfig に新しい球団が入らない');
+  assert.equal(grown.league.leagues[0].name, '四国', 'リーグの名前が変わった');
+  assert.equal(grown.league.teamsPerLeague, 6);
+  const shrunk = run(six, four);
+  assert.deepEqual(shrunk.league.leagues.flatMap(l => l.teams), four, '球団を減らしても leagueConfig に解散した球団が残る');
+  for (const name of shrunk.league.leagues.flatMap(l => l.teams)) assert.ok(TEAMS_DATA[name], `leagueConfig の ${name} が TEAMS_DATA に無い`);
+
+  // ロード: 以前の保存（leagueConfig が古いまま）は、設定の球団に合わせて直す。
+  //   設定に TEAMS_DATA に無い名前があるとき（どちらが正しいか分からない）と、
+  //   社会人・大学（leagueConfig の形が違う）は触らない
+  quiet(() => bootstrapWorld({ userTeamNames: six }));
+  const stale = { format: 'single', teamsPerLeague: 4, leagues: [{ name: 'リーグ', teams: [...four] }] };
+  const repaired = repairLeagueConfig(stale, { teamNames: six }, 'normal');
+  assert.deepEqual(repaired.leagues.flatMap(l => l.teams), six, 'ロードで古い leagueConfig を直さない');
+  assert.equal(repaired.leagues[0].name, 'リーグ');
+  assert.equal(repairLeagueConfig(stale, { teamNames: six }, 'sandbox').leagues[0].teams.length, 6, '箱庭のロードで直さない');
+  assert.equal(repairLeagueConfig(stale, { teamNames: [...six, '無い球団'] }, 'normal'), stale, '設定に無い球団があるのに書き換えた');
+  assert.equal(repairLeagueConfig(stale, { teamNames: six }, 'corporate'), stale, '社会人の leagueConfig を書き換えた');
+  const same = { ...stale, leagues: [{ name: 'リーグ', teams: [...six] }] };
+  assert.equal(repairLeagueConfig(same, { teamNames: six }, 'normal'), same, '揃っているのに作り直した');
+}
+
 // --- 1球団以下の設定で日程づくりが終わらない（タブが固まる） ---
 // ⚠ 規定画面の球団数に「1」を打った瞬間、試合数の選択肢を作る計算が対戦相手0で
 //    Infinity 回の巡回に入り、タブが固まっていた。入りきるかの判定は false、選択肢は空、日程は空
@@ -541,4 +589,4 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(withDeparted({ ...season, year: 4 }, [departedEntry(stay, 'A', 'A球団')]).departedSeasonStats.players.length, 1);
 }
 
-console.log('■ 一人用の進行の再発防止: OK（控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');
+console.log('■ 一人用の進行の再発防止: OK（翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');

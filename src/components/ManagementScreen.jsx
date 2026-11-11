@@ -336,7 +336,7 @@ const ManagementScreen = ({
     confirmLabel="確定 → チーム設定へ進む"
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
-        confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
+        confirmedSettings, seasonData, setSeasonData, setLeagueConfig, generatePitchingRotation,
         setManagementView, nextView: 'sandbox_setup',
       });
     }}
@@ -370,7 +370,7 @@ const ManagementScreen = ({
     setSeasonData={setSeasonData}
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
-        confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
+        confirmedSettings, seasonData, setSeasonData, setLeagueConfig, generatePitchingRotation,
         setManagementView, nextView: 'camp',
       });
     }}

@@ -66,6 +66,7 @@ import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffPro
 import { generateTryoutCandidates, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
 import { processNPBDraft } from './season/npbDraft.js';
+import { repairLeagueConfig } from './season/nextSeasonRegulations.js';
 import { initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged, recoverMissingParallelTeams } from './corporate/corporateInit.js';
 import { WORLD_DATA } from './corporate/worldData.js';
 
@@ -310,7 +311,10 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         if (!result.success) return result;
         const saveData = result.data;
         if (saveData.seasonData) setSeasonData(saveData.seasonData);
-        if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
+        // 球団数を変えた年より後の古い保存は leagueConfig が古いまま入っているので、設定の球団に合わせる
+        if (saveData.leagueConfig) {
+          setLeagueConfig(repairLeagueConfig(saveData.leagueConfig, saveData.seasonData?.settings, saveData.gameMode || 'normal'));
+        }
         if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
         // ⚠ 持っていない保存でも**空に戻す**。残すと、直前に遊んでいた別の保存の
         //    殿堂入り・球団の年度成績がそのまま引き継がれて、次の保存に混ざる

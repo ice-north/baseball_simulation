@@ -14,8 +14,43 @@ import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 //    「呼び出し側は ManagementScreen の2箇所。片方だけ直さないこと」という
 //    ⚠ を置いて運用で回避していたが、関数にすれば⚠ごと要らなくなる。
 // ============================================================
+// ============================================================
+// リーグの球団の並び（App の `leagueConfig`。`allTeams`・`userTeamName = allTeams[0]` の元）
+//
+// ⚠ **球団の顔ぶれを変えたら leagueConfig も同じ操作で揃えること**。以前は年度更新で
+//    日程と順位表だけ作り直し、leagueConfig は新しく始めた時・ロード・監督移籍でしか
+//    書き換えなかった。増やした球団はキャンプ・トライアウト・選手成績・箱庭のチーム設定に
+//    出ず、減らすと解散した球団が残って、箱庭のチーム設定は「選手が16人足りません」で
+//    開幕できなかった。保存にも古いまま入っていた
+// ============================================================
+// リーグの名前（新しく始めた時は「リーグ」、監督移籍の後は所属リーグの名前）はそのまま残す
+export const leagueConfigWithTeams = (prev, teams, format) => ({
+  ...(prev || {}),
+  format: format || prev?.format || 'single',
+  teamsPerLeague: teams.length,
+  leagues: [{ name: prev?.leagues?.[0]?.name || 'リーグ', teams: [...teams] }],
+});
+
+const sameTeams = (a = [], b = []) => a.length === b.length && a.every((name, i) => name === b[i]);
+
+/**
+ * ロードした保存の leagueConfig を、設定の球団（`settings.teamNames`）に合わせる。
+ * 上の不具合で、球団数を変えた年より後の保存は leagueConfig が古いまま入っている。
+ * 独立リーグ・箱庭だけ（社会人は自チームだけ、大学は部の入れ替えで別に決まる）。
+ * 設定に TEAMS_DATA に無い名前があるときは、どちらが正しいか分からないので触らない。
+ * 揃っていればそのまま返す。
+ */
+export function repairLeagueConfig(leagueConfig, settings, gameMode) {
+  if (gameMode !== 'normal' && gameMode !== 'sandbox') return leagueConfig;
+  const names = settings?.teamNames;
+  if (!Array.isArray(names) || names.length === 0 || !names.every(name => TEAMS_DATA[name])) return leagueConfig;
+  const current = (leagueConfig?.leagues || []).flatMap(league => league.teams || []);
+  if (sameTeams(current, names)) return leagueConfig;
+  return leagueConfigWithTeams(leagueConfig, names, settings.leagueFormat);
+}
+
 export function applyNextSeasonRegulations({
-  confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
+  confirmedSettings, seasonData, setSeasonData, setLeagueConfig, generatePitchingRotation,
   setManagementView, nextView, notify = (message) => globalThis.alert?.(message),
 }) {
   const settings = confirmedSettings || seasonData.settings || {};
@@ -95,6 +130,10 @@ export function applyNextSeasonRegulations({
       team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
     }))
   }));
+  // 日程と同じ球団にする（上の `leagueConfigWithTeams` の説明を参照）
+  if (configuredTeams.length > 0) {
+    setLeagueConfig?.(prev => leagueConfigWithTeams(prev, configuredTeams, leagueFormat));
+  }
   const alerts = [];
   if (newTeamNames.length > 0) {
     alerts.push(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
