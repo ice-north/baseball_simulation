@@ -3025,10 +3025,10 @@ if (newOuts === 3) {
                   <p className="text-sm text-blue-400 mb-1">👆 選手パネルクリック → スタメン⇔ベンチ交代</p>
                   <p className="text-sm text-purple-400 mb-4">🔄 守備位置クリック → 守備交換</p>
 
-                  {/* 監督AI設定 */}
+                  {/* おまかせ采配の設定（⚠ 「AI」は作る側の言葉なので画面に出さない） */}
                   <div className="mb-6 p-3 bg-surface-2 rounded-lg">
                     <div className="flex items-center justify-center gap-3">
-                      <span className="text-sm font-semibold">🤖 監督AI</span>
+                      <span className="text-sm font-semibold">🤖 おまかせ采配</span>
                       <button
                         onClick={() => setAutoManagerMode(!autoManagerMode)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
@@ -3042,7 +3042,7 @@ if (newOuts === 3) {
                         />
                       </button>
                       <span className={`text-xs ${autoManagerMode ? 'text-green-400' : 'text-gray-300'}`}>
-                        {autoManagerMode ? 'ON (自動采配)' : 'OFF (手動采配)'}
+                        {autoManagerMode ? 'ON（ベンチに任せる）' : 'OFF（自分で采配）'}
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 mt-2 text-center">
@@ -3526,7 +3526,7 @@ if (newOuts === 3) {
                 <TutorialHint id="ingame-tactics" title="試合の采配">
                   <b className="text-cyan-200">攻撃中</b>は打撃方針・狙い球（球種／コース）・盗塁・エンドラン・バント、
                   <b className="text-amber-200">守備中</b>は配球（球種／狙い）・敬遠を指示できます。
-                  いま操作できる側だけが表示されます。おまかせにすれば監督AIと捕手AIが自動で判断します。
+                  いま操作できる側だけが表示されます。「おまかせ」にすれば、打者と捕手がその場で判断します。
                 </TutorialHint>
                 {(() => {
                   const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
@@ -3548,7 +3548,7 @@ if (newOuts === 3) {
                             <button key={v} onClick={() => setBattingApproach(v)} disabled={gameOver}
                               title={v === 'take' ? '見送りを増やして球数を稼ぐ。振るときも当てにいく'
                                 : v === 'aggressive' ? '早いカウントから積極的に打ちにいく。フルスイングが増える'
-                                : '監督AIに任せる（得意コースはフルスイング／追い込まれたら当てにいく）'}
+                                : '打者に任せる（得意コースはフルスイング／追い込まれたら当てにいく）'}
                               className={pick(battingApproach === v, 'bg-cyan-600')}>{label}</button>
                           ))}
                           <span className="text-xs text-gray-400">｜</span>
@@ -3568,7 +3568,7 @@ if (newOuts === 3) {
                         <div className={row}>
                           <span className={tag('text-cyan-300')}>狙い球</span>
                           <button onClick={() => setBatGuessType('auto')} disabled={gameOver}
-                            title="球種は張らない（読み合いはAIに任せる）"
+                            title="球種は張らない（読み合いは打者に任せる）"
                             className={pick(batGuessType === 'auto', 'bg-cyan-700')}>おまかせ</button>
                           {['straight', 'breaking'].map(v => (
                             <button key={v} onClick={() => setBatGuessType(v)} disabled={gameOver}
@@ -3658,11 +3658,11 @@ if (newOuts === 3) {
                   </button>
                   <span className="w-px h-7 bg-gray-700 mx-1" />
                   <button onClick={() => setAutoManagerMode(!autoManagerMode)}
-                    title="監督AIに采配を任せる"
+                    title="采配をベンチに任せる（代打・継投・作戦を自動で決める）"
                     className={`px-3 py-1.5 rounded text-sm font-semibold transition ${
                       autoManagerMode ? 'seg-on' : 'seg'
                     }`}>
-                    🤖 {autoManagerMode ? 'AI ON' : 'AI OFF'}
+                    🤖 {autoManagerMode ? 'おまかせ ON' : 'おまかせ OFF'}
                   </button>
                   {managedGameInfo && !gameOver && (
                     <button
