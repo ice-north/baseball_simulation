@@ -15,13 +15,15 @@
 `run-checks.mjs` が **CPU の数だけ同時に**走らせ、最後に所要時間の一覧と落ちた検査の出力を出す。
 
 ```bash
-npm run check:quick        # 普段の作業向け: lint＋軽い検査（約12秒）
-npm run check              # コミット前・CI: 全部（4コアで約100秒。1本ずつだと約7分）
-npm run check:full         # check ＋ progression（約2分）
+npm run check:quick        # 普段の作業向け: lint＋軽い検査（約30秒）
+npm run check              # コミット前・CI: 全部（4コアで約6分。いちばん長い online-coach-check が約4分）
+npm run check:full         # check ＋ progression（4コアで約6〜7分）
 npm run check:online       # オンライン版の検査だけ
 npm run check:online:season  # オンラインの通年検査（約2分。CIでは別ジョブ）
 npm run check:ui           # 一人用の通し検査（ビルド→ブラウザで開幕からドラフト会議まで。約2分）
 npm run check:ui:yearend   # 一人用の年度更新（独立・箱庭・企業・クラブで1年目のオフから2年目の開幕まで。4コアで約2分半）
+npm run check:online:dist-ui  # オンラインの画面検査10本（ビルド→dist を開く。サーバー不要。1本ずつで約4分）
+npm run check:online:ui    # オンラインの PC/スマホの通し（先に開発サーバー2つ: ONLINE_DISABLE_TIMER=1 npm run dev:online と npm run dev。立て方は .github/workflows/check.yml の ui ジョブと同じ）
 npm run check:season       # 個別（ほかの check:* も同じ）
 node tools/sim-harness/run-checks.mjs season-check online-parity-check  # 名前で選ぶ
 node tools/sim-harness/run-checks.mjs check --serial   # 1本ずつ（出力を順に追う）
@@ -186,23 +188,29 @@ highschool / university（＝プール）**以外**、つまり社会人・独�
 
 ## 構成
 
+ファイル名で役目が分かるようにしている。
+
+- `*-check.mjs`: 合否のある検査。`run-checks.mjs` の `CHECKS`（まとめて回す）か `DIST_UI`
+  （オンラインの画面検査。dist を開く）か `SEPARATE`（別の手順で回す）のどれかに必ず載せる
+  （載っていないと `run-checks.mjs` が止まる）。
+  - `online-*-check.mjs` はオンライン版、`*-ui-check.mjs` はブラウザで画面を動かす検査。
+- `*-probe.mjs`: 合否の無い測定（効き方・分布を見るため。手で回す）。
+- `run-checks.mjs`: 検査をまとめて同時に走らせる入口。`open-scene.mjs`: 書き出した場面から続きを遊ぶ。
+
 ```
-tools/sim-harness/
-  season-check.mjs        シーズン統計検証（エントリ）
-  draft-check.mjs         ドラフト比率検証（エントリ）
-  progression-check.mjs   多年次プログレッション検証（エントリ）
-  spin-probe.mjs          回転数の効き方プローブ（合否なし・測定のみ）
-  peak-age-probe.mjs      完成年齢プローブ（断面と縦断を並べる）
-  npb-career-probe.mjs    教え子のプロキャリア（npbAlumni の母集団）
-  npb-rookie-probe.mjs    指名クラス全体の影のNPB（1年目・下積みの長さ）
-  dexterity-probe.mjs     器用さの効き（フォーム改造・球種習得・打席変更・サブポジ）
-  lib/
-    bootstrap.mjs         window/alert/localStorage のNodeスタブ（最初にimport必須）
-    report.mjs            PASS/FAIL整形・帯チェック
-    league.mjs            Nチーム構築 + 日次回復付きシーズン実行
-    stats.mjs             成績集計 + 不変条件チェック
-    draftworld.mjs        ドラフト用合成ワールド構築 + 実物processNPBDraft呼び出し
-    world.mjs             フルワールド構築 + 実物の年次進行シーケンス
+tools/sim-harness/lib/
+  bootstrap.mjs         window/alert/localStorage のNodeスタブ（最初にimport必須）
+  report.mjs            PASS/FAIL整形・帯チェック
+  league.mjs            Nチーム構築 + 日次回復付きシーズン実行
+  stats.mjs             成績集計 + 不変条件チェック
+  draftworld.mjs        ドラフト用合成ワールド構築 + 実物processNPBDraft呼び出し
+  world.mjs             フルワールド構築 + 実物の年次進行シーケンス
+  singleplayer.mjs      一人用の画面を Playwright で動かす道具（dist を vite preview で配る）
+  serviceRoute.mjs      画面の通信を検査の中の LeagueService へつなぐ（サーバーを立てずに実画面で操作）
+  testStore.mjs         オンラインの検査用の保存先（既定はメモリ、SIM_HARNESS_FILE_STORE=1 で本物）
+  textWrap.mjs          折り返した文の最後の行が1字だけになる所を探す（画面の検査用）
+  deadline.mjs          通信を保留する fixture でも有限時間で落とす
+  chronicle-shots.mjs   年代記の画面を目で確かめるためのスクショ（検査ではない）
 ```
 
 ## 限界と今後

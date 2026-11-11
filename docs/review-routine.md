@@ -5,7 +5,7 @@
 ## 0. 準備
 
 - 確認のコマンド（`package.json`・`CLAUDE.md`・`mobile/README.md`・`.github/workflows/`）:
-  - Web: `npm run build`、`npm run check`（lint を含む）、`npm run check:progression`、`npm run check:online:season`（約10分）
+  - Web: `npm run build`、`npm run check`（lint を含む）、`npm run check:progression`、`npm run check:online:season`（約2〜3分）
   - 画面: `npm run check:ui`、`check:online:ui` ほか `check:online:*-ui`（Playwright。手元の Chromium が版と合わないときは `PW_CHROMIUM` で指定）
   - アプリ: `mobile/` で `node tools/gen-tables.mjs --check`・`node tools/expect-logic.mjs --check`・`./gradlew -PsharedOnly :shared:jvmTest`（SDK があれば `:androidApp:testDebugUnitTest`）
 - 型検査は無い（JavaScript）。Kotlin はビルドが型検査を兼ねる。

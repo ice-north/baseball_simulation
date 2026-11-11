@@ -9,8 +9,8 @@
 - `npm run dev`: 開発サーバー。保存領域のオリジンを固定するため `vite.config.js` の `strictPort` を維持する。
 - `npm run build`: 配布用の単一HTMLを生成する。
 - `npm run lint -- --quiet`: React Hooks の呼出順を検査する。
-- `npm run check:quick`（約12秒）: 普段の作業で回す。lint と軽い検査。
-- `npm run check`（約100秒）: コミット前に回す。全検査を CPU の数だけ並列に走らせる。`check:full` は複数年進行も足す。
+- `npm run check:quick`（約30秒）: 普段の作業で回す。lint と軽い検査。
+- `npm run check`（4コアで約6分。いちばん長い online-coach-check が約4分）: コミット前に回す。全検査を CPU の数だけ並列に走らせる。`check:full` は複数年進行も足す。
 - `npm run check:ui`（約2分）: 一人用の通し検査。ビルドしてブラウザで開幕からドラフト会議まで進める。
 - 一人用の画面確認は、日程画面の開発用の早送り（`npm run dev`、またはビルドに `?dev=1`）と、`npm run scenes` で作る場面（`npm run scene -- <名前>`）を使う。詳細は `tools/sim-harness/README.md`。
 
@@ -23,6 +23,7 @@
 | 日程画面・大会・フェーズ（`DateProgressScreen.jsx`・`dateProgression.js`） | `check:bracket`・`check:ui` |
 | セーブ（`src/game/saveSystem.js`・`saveMigration.js`） | `check:quick`・`check:ui` |
 | オンライン（`server/`・`src/online/`） | `check:online`・`check:online:season` |
+| オンラインの画面（`src/online/*.jsx`・`online.css`） | `check:online:dist-ui`・`check:online:ui` |
 | 画面の部品全般 | `check:quick`・`check:ui` |
 
 ## 実装の入口
