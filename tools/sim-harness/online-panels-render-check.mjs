@@ -29,7 +29,7 @@ import { formatTurn, turnLabel, turnOfDate } from '../../src/online/shared.js';
 import { nextAdvanceText } from '../../src/online/api.js';
 import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
-import CampPlanner, { CompletedCamp } from '../../src/online/CampPlanner.jsx';
+import CampPlanner, { CompletedCamp, subTargetChoices } from '../../src/online/CampPlanner.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
 import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
@@ -51,6 +51,7 @@ export {
   PackSelect,
   CompletedCamp,
   CampPlanner,
+  subTargetChoices,
 };
 `;
 const result = await build({
@@ -81,6 +82,7 @@ try {
     PackSelect,
     CompletedCamp,
     CampPlanner,
+    subTargetChoices,
     DesktopTactics,
     Results,
     formatTurn,
@@ -244,6 +246,100 @@ try {
       /このままでは決定できません: [^<]*（8人以上必要）[^<]*。獲得希望人数を増やすか/,
       '決定できない理由と次の文が句点で区切られていない',
     );
+  }
+
+  // --- 新球種の対象に「おすすめ」の印が付く ------------------------------
+  // ⚠ **覚えやすさは球種の名前から分からない**（いしだ指摘: おすすめ球種が
+  //    表示されない）。フォーム適性（`FORM_PITCH_AFFINITY`）と緩急の補完
+  //    （`secondAffinity`）で成功率が変わるので、一人用のキャンプ画面と
+  //    同じ印を添える（★フォーム適性 / ◆緩急適性）。
+  {
+    // アンダースローはシンカーに適性がある（`FORM_PITCH_AFFINITY.submarine`）
+    const player = {
+      id: 1,
+      name: '検査投手',
+      position: 'pitcher',
+      pitching: {
+        form: 'submarine',
+        secondAffinity: 'curve',
+        arsenal: [{ type: 'straight', level: 50 }],
+      },
+    };
+    const labels = Object.fromEntries(subTargetChoices('newpitch', player));
+    assert.ok(labels.sinker?.includes('★'), `フォーム適性の印が無い: ${labels.sinker}`);
+    assert.ok(labels.curve?.includes('◆'), `緩急適性の印が無い: ${labels.curve}`);
+    assert.ok(
+      !labels.cutter?.includes('★') && !labels.cutter?.includes('◆'),
+      `適性の無い球種に印が付いている: ${labels.cutter}`,
+    );
+    // ⚠ 持っている球種は新球種の対象に出さない（選んでも1クール捨てる）
+    const owned = {
+      ...player,
+      pitching: {
+        ...player.pitching,
+        arsenal: [
+          { type: 'straight', level: 50 },
+          { type: 'sinker', level: 40 },
+        ],
+      },
+    };
+    assert.ok(
+      !subTargetChoices('newpitch', owned).some(([k]) => k === 'sinker'),
+      '持っている球種を新球種の対象に出している',
+    );
+  }
+
+  // --- ホームの「リーグの話題」は件数に上限がある ----------------------
+  // ⚠ ホームは1画面（1000px）に収める決まりで、右の列は順位表とこのカードだけ。
+  //    ここが件数ぶん伸びると順位表ごと画面から出る
+  //    （実測: 話題1件で898px、3件で1046px）。続きは「球団史・記録」で読める。
+  // ⚠ ブラウザの検査（`online-lineup-board-ui-check` の「ホームが縦に長い」）でも
+  //    捕まえるが、そちらは落ちても原因が分からない。ここで件数を直に見る
+  {
+    const many = (n, make) => Array.from({ length: n }, (_, i) => make(i));
+    const topics = render(
+      h(LeagueTopics, {
+        view: {
+          teamName: '宮崎アトラス',
+          races: many(6, (i) => ({
+            kind: 'first',
+            team: '宮崎アトラス',
+            rival: '新潟ブルズ',
+            leagueName: '1部',
+            magic: 10 + i,
+            left: 5,
+          })),
+          chronicle: {
+            milestones: many(6, (i) => ({
+              year: 2,
+              team: '宮崎アトラス',
+              name: `選手${i}`,
+              kind: 'homerun',
+              value: 100 + i,
+            })),
+            world: many(6, (i) => ({
+              year: 2,
+              kind: 'koshien',
+              champion: `高校${i}`,
+              championPref: '東京',
+              runnerUp: '準優勝校',
+            })),
+          },
+        },
+      }),
+    );
+    const articles = (topics.match(/<article/g) || []).length;
+    assert.ok(
+      articles > 0,
+      'リーグの話題が1件も出ていない（上限で全部落としている）',
+    );
+    // ⚠ 3つの区分（マジック・節目・球界の外）に6件ずつ＝18件渡している。
+    //    上限が効いていれば区分ごとに2件まで＝6件に収まる
+    assert.ok(
+      articles <= 6,
+      `リーグの話題の件数に上限が無い: ${articles}件（18件渡した）`,
+    );
+    assert.match(topics, /球団史・記録/, '続きの案内が出ていない');
   }
 
   setTeamLabels({
@@ -617,5 +713,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く）',
 );

@@ -50,8 +50,37 @@ export const PACK_RANK_SHIFT = { A: 10, B: 0, C: -8 };
 
 export const PACK_SIZE = PACK_COMPOSITION.reduce((n, g) => n + g.count, 0);
 export const PACK_COUNT = 20;
-/** ⚠ 19〜24歳。独立リーグを目指す若い選手という設定 */
+/** ⚠ 19〜24歳。独立リーグを目指す若い選手という設定（版1・版2のセット） */
 export const PACK_MAX_AGE = 24;
+
+/**
+ * 初期セットの年齢の配り方（版3から）。**19〜32歳**。
+ *
+ * ⚠ **衰える年齢の選手を最初から混ぜる**（いしだ指摘）。19〜24歳だけだと、
+ *    開幕時点で全員が伸び盛りで、しかも同時に伸びる。リーグ全体が毎年
+ *    上がるだけになり、2〜3年目から能力がインフレして見える
+ *    （実測: 制球の平均が1年目49.8→5年目65.7）。
+ * ⚠ 伸び盛り（19〜24）を厚いままにして、26歳以上は尾を引く形にする。
+ *    上限32歳は「キャンプの成長が止まる年齢（`_stopAge` は最大32）」に合わせた。
+ * ⚠ 能力そのものは25歳以上で頭打ち（`generateAbilities` の `ageBonus` が
+ *    24歳で上限10に達する）。つまり**歳を取っても強くはならず、衰えだけ早い**。
+ */
+export const PACK_AGE_WEIGHTS = [
+  { age: 19, weight: 12 },
+  { age: 20, weight: 8 },
+  { age: 21, weight: 8 },
+  { age: 22, weight: 14 },
+  { age: 23, weight: 12 },
+  { age: 24, weight: 10 },
+  { age: 25, weight: 8 },
+  { age: 26, weight: 7 },
+  { age: 27, weight: 6 },
+  { age: 28, weight: 5 },
+  { age: 29, weight: 4 },
+  { age: 30, weight: 3 },
+  { age: 31, weight: 2 },
+  { age: 32, weight: 1 },
+];
 
 /**
  * 選手の「総合」。セット同士の釣り合いを測るためだけに使う。
@@ -161,8 +190,15 @@ function generateFixedPacks(seed, count) {
 // 組み合わせで、どれを取っても損にならないように揃える。
 // ------------------------------------------------------------
 
-/** いま新しく作るセットの版。⚠ 作り方を変えたら上げ、古い版の作り方は残す */
-export const PACK_STYLE = 2;
+/**
+ * いま新しく作るセットの版。⚠ 作り方を変えたら上げ、古い版の作り方は残す。
+ *   3 = 年齢を19〜32歳に広げた（`PACK_AGE_WEIGHTS`）
+ *   2 = 構成の型（投手厚め／粒ぞろい…）を入れた
+ *   1 = 固定構成
+ */
+export const PACK_STYLE = 3;
+/** 年齢を19〜24歳で配っていた版（途中参加で待っている人のセットを作り直すため残す） */
+export const YOUNG_PACK_STYLE = 2;
 /** `packStyle` が無い（版1のときに配られた）種の版 */
 export const LEGACY_PACK_STYLE = 1;
 
@@ -315,7 +351,7 @@ export const packSlotType = (player) =>
  *    構成が違うセット同士は合計の点では比べられない（投手と野手で物差しが
  *    違う）ので、「同じ枠の平均よりどれだけ上か」で揃える。
  */
-function generateStyledPacks(seed, count) {
+function generateStyledPacks(seed, count, ageWeights) {
   const styles = pickStyles(count);
   const slots = styles.map(({ shape, pattern }) => {
     // ⚠ **8つの守備位置をどのセットにも1人ずつ置く**。まとまりの中で守備位置を
@@ -364,7 +400,11 @@ function generateStyledPacks(seed, count) {
         position,
         rank,
         levelShift: PACK_RANK_SHIFT_V2[rank],
-        maxAge: PACK_MAX_AGE,
+        // ⚠ 版2は19〜24歳のまま。版を上げたら古い作り方は変えない
+        //    （途中参加で待っている人のセットは種から作り直すため）
+        ...(ageWeights
+          ? { ageWeights, maxAge: ageWeights.at(-1).age }
+          : { maxAge: PACK_MAX_AGE }),
         isTwoWay: twoWay,
       });
       return { player, score: packPlayerScore(player) };
@@ -429,9 +469,12 @@ export function generateRosterPacks(
   const previous = Math.random;
   Math.random = createSeededRandom(seed);
   try {
-    return style === LEGACY_PACK_STYLE
-      ? generateFixedPacks(seed, count)
-      : generateStyledPacks(seed, count);
+    if (style === LEGACY_PACK_STYLE) return generateFixedPacks(seed, count);
+    return generateStyledPacks(
+      seed,
+      count,
+      style === YOUNG_PACK_STYLE ? null : PACK_AGE_WEIGHTS,
+    );
   } finally {
     Math.random = previous;
   }

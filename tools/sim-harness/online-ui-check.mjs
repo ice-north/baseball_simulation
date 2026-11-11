@@ -199,8 +199,27 @@ try {
     const positions = await options(targetOf(row));
     assert.equal(positions[0], 'おまかせ', 'おまかせが先頭に無い');
     assert.ok(positions.length >= 4, `守備位置の選択肢が少なすぎる: ${positions}`);
+    // ⚠ **いま持っている変化球を出すこと**（いしだ指摘）。どの球を磨くか・
+    //    何を覚えさせるかは、持ち球を見ないと決められない。投手の表だけ
+    const headsOf = () =>
+      page.locator('.online-camp-group thead th').allInnerTexts();
+    assert.ok(
+      !(await headsOf()).includes('変化球'),
+      '野手の表に変化球の列を出している',
+    );
     // 投手: 新球種の対象が、まだ持っていない球種で出る
     await tab(/^投手/).click();
+    assert.ok(
+      (await headsOf()).includes('変化球'),
+      '投手の表に変化球の列が無い（いま持っている球種が分からない）',
+    );
+    const pitchCells = await page
+      .locator('.online-camp-group tbody td.online-camp-pitches')
+      .allInnerTexts();
+    assert.ok(
+      pitchCells.some((t) => t.trim()),
+      '変化球の列が空（持ち球が出ていない）',
+    );
     await subOf(row).selectOption('newpitch');
     const pitches = await options(targetOf(row));
     assert.equal(pitches[0], 'おまかせ', '新球種のおまかせが先頭に無い');

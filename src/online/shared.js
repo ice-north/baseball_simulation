@@ -250,6 +250,17 @@ export const FIELDER_REST_FATIGUE = 80;
 export const SUBSTITUTE_MIN_FITNESS = 60;
 /** 休ませる野手の代役に選べる控えの疲労（これ未満の控えだけが代役になる） */
 export const SUBSTITUTE_FRESH_FATIGUE = 40;
+/**
+ * これを超えたら、**守備適性を問わず**その日は下げる。
+ *
+ * ⚠ 「守れる控えが居なければ休ませない」だけだと、その守備位置に代役の居ない
+ *    レギュラーが**一度も休めないまま**シーズンを終える。実測で二塁手が疲労193
+ *    （控えの二塁適性が最高53で、下限60に届かなかった）。疲労193の打者は
+ *    1年打てないので、**1日の守備の穴より明らかに悪い**。
+ * ⚠ 下限（`SUBSTITUTE_MIN_FITNESS`）は残す。ここは最後の逃げ道で、
+ *    普段は適性のある控えが入る
+ */
+export const FIELDER_FORCE_REST_FATIGUE = 120;
 /** 先発はこの疲労以上だと、その日の登板を飛ばして次の先発が投げる */
 export const STARTER_SKIP_FATIGUE = 40;
 

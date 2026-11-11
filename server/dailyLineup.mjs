@@ -9,6 +9,7 @@ import {
   STARTER_SKIP_FATIGUE,
   SUBSTITUTE_MIN_FITNESS,
   SUBSTITUTE_FRESH_FATIGUE,
+  FIELDER_FORCE_REST_FATIGUE,
 } from '../src/online/shared.js';
 import { getPositionFitness } from '../src/utils/physics.js';
 
@@ -29,6 +30,7 @@ import { getPositionFitness } from '../src/utils/physics.js';
 // ⚠ 値は `src/online/shared.js` に置く（PC版の編成ページも同じ値で色を変える）
 export { FIELDER_REST_FATIGUE, STARTER_SKIP_FATIGUE };
 const FRESH_FATIGUE = SUBSTITUTE_FRESH_FATIGUE;
+const FORCE_REST_FATIGUE = FIELDER_FORCE_REST_FATIGUE;
 const MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
 
 /**
@@ -68,6 +70,14 @@ function restTiredFielders(team) {
       !inLineup.has(p.id) &&
       (p.fatigue || 0) < FRESH_FATIGUE,
   );
+  // 疲れ切ったレギュラーを無理にでも下げるときの、最後の控え（疲労は問わない）
+  const spare = team.players.filter(
+    (p) =>
+      p.isActive !== false &&
+      p.position !== 'pitcher' &&
+      !inLineup.has(p.id) &&
+      (p.fatigue || 0) >= FRESH_FATIGUE,
+  );
   const swaps = [];
   for (const entry of order) {
     if (entry.position === 'pitcher' || entry.position === 'dh') continue;
@@ -77,11 +87,17 @@ function restTiredFielders(team) {
       p.position === entry.position
         ? 100
         : getPositionFitness(p, entry.position, 0);
-    const substitute = bench
-      .filter((p) => fit(p) >= MIN_FITNESS)
-      .sort(
-        (a, b) => fit(b) - fit(a) || (a.fatigue || 0) - (b.fatigue || 0),
-      )[0];
+    const pick = (list) =>
+      list.sort((a, b) => fit(b) - fit(a) || (a.fatigue || 0) - (b.fatigue || 0))[0];
+    let substitute = pick(bench.filter((p) => fit(p) >= MIN_FITNESS));
+    // ⚠ **壊れるくらいなら穴を開ける**。守備適性の下限に届く控えが居ないと、
+    //    その守備位置のレギュラーは一度も休めずシーズンを終える（実測で
+    //    二塁手が疲労193。控えの二塁適性は最高53で、下限60に届かなかった）。
+    //    疲労193の打者は1年打てないので、1日の守備の穴より明らかに悪い。
+    //    ⚠ 疲れ切った控えは代役にならないが、**ここでは居るものから選ぶ**
+    //      （誰も出せないほうが悪い）
+    if (!substitute && (player.fatigue || 0) >= FORCE_REST_FATIGUE)
+      substitute = pick([...bench, ...spare]);
     // 守れる控えが居なければ休ませない（守備位置に穴を開けない）
     if (!substitute) continue;
     bench.splice(bench.indexOf(substitute), 1);
