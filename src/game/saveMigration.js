@@ -125,8 +125,39 @@ export function pruneGhostAlumni(data) {
   return removed;
 }
 
+/**
+ * 大学の保存で、設定の球団（settings.teamNames）の先頭を自チームに戻す。
+ *
+ * ⚠ 部制のリーグで入れ替え戦があると、以前は自分の部の球団を部の並び（静的データの順）の
+ *    まま settings.teamNames にしていた。先頭を自チームとして読む所（保存の一覧の名前・年度更新で
+ *    ローテーションを残す自チーム・監督移籍のいまのチーム）が、2年目から別の大学になる。
+ *    生成側は直した（`processPromotionRelegation`）が、**既にある保存には残る**。
+ * ⚠ 自チームは世界の記録（worldData.universityLeague.userTeam）で決める。何度呼んでも同じ
+ *    結果になる（揃っていれば何もしない）ので、版を上げずに毎回のロードで確かめる。
+ * @returns {boolean} 並べ直したか
+ */
+export function putUniversityUserTeamFirst(data) {
+  if (data?.gameMode !== 'university') return false;
+  const settings = data.seasonData?.settings;
+  const league = data.worldData?.universityLeague;
+  const user = league?.userTeam;
+  const names = settings?.teamNames;
+  if (!user || !Array.isArray(names) || names[0] === user || !names.includes(user)) return false;
+  const order = [user, ...names.filter(n => n !== user)];
+  const abbrs = settings.teamAbbreviations;
+  if (Array.isArray(abbrs) && abbrs.length === names.length) {
+    settings.teamAbbreviations = order.map(n => abbrs[names.indexOf(n)]);
+  }
+  settings.teamNames = order;
+  if (Array.isArray(league.leagueTeams) && league.leagueTeams.includes(user)) {
+    league.leagueTeams = [user, ...league.leagueTeams.filter(n => n !== user)];
+  }
+  return true;
+}
+
 // セーブ全体の選手を正規化（teamsData ＋ releasedPlayersPool）。
 function normalizeSaveData(data) {
+  if (putUniversityUserTeamFirst(data)) console.log('[Save] 大学の設定の球団の先頭を自チームに戻した');
   if (data.teamsData && typeof data.teamsData === 'object') {
     Object.values(data.teamsData).forEach(team => {
       if (Array.isArray(team?.players)) team.players.forEach(normalizePlayer);

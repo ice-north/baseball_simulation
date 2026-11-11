@@ -27,6 +27,9 @@ import { leagueMagic } from '../../src/season/magicNumber.js';
 import { seasonChampion } from '../../src/season/seasonManager.js';
 import { departedEntry, withDeparted, rosterIndex, departedSince, withDepartedPlayers } from '../../src/season/departedStats.js';
 import { ensureUserIndependentLeagueTagged } from '../../src/corporate/corporateInit.js';
+import { UNIVERSITY_TEAMS } from '../../src/university/universityTeamsData.js';
+import { initializeUniversityGame } from '../../src/university/universityInit.js';
+import { processSpringPromotionRelegation, processUniversityPromotionRelegation } from '../../src/university/universityLeagueManager.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -528,7 +531,7 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
 
   // ロード: 以前の保存（leagueConfig が古いまま）は、設定の球団に合わせて直す。
   //   設定に TEAMS_DATA に無い名前があるとき（どちらが正しいか分からない）と、
-  //   社会人・大学（leagueConfig の形が違う）は触らない
+  //   社会人（leagueConfig は自チームだけ）は触らない。大学は下の「部の入れ替え」で見る
   quiet(() => bootstrapWorld({ userTeamNames: six }));
   const stale = { format: 'single', teamsPerLeague: 4, leagues: [{ name: 'リーグ', teams: [...four] }] };
   const repaired = repairLeagueConfig(stale, { teamNames: six }, 'normal');
@@ -769,4 +772,45 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   releasedPlayersPool.length = 0;
 }
 
-console.log('■ 一人用の進行の再発防止: OK（オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る / FA枠は解雇された選手から引く）');
+// --- 大学の部の入れ替えのあとも、自分の部の球団の先頭は自チーム ---
+// ⚠ 年度更新は `WORLD_DATA.universityLeague.leagueTeams` を設定の球団（settings.teamNames）にし、
+//    先頭を自チームとして読む所がある（保存の一覧の名前・年度更新でローテーションを残す自チーム・
+//    監督移籍のいまのチーム）。以前は入れ替え戦のたびに部の並び（静的データの順）へ戻していたので、
+//    部の先頭でない大学を選ぶと2年目からそれらが部の先頭の大学になった。leagueConfig も始めた
+//    ときのままで、入れ替わる前の部の球団が残っていた
+// ⚠ ここは世界を大学で作り直すので、ほかの場面より後に置く
+{
+  const { WORLD_DATA } = await import('../../src/corporate/worldData.js');
+  const sapporo = UNIVERSITY_TEAMS.filter(t => t.region === 'sapporo');
+  const team = sapporo[2]; // 1部の3番目（部の先頭ではない）
+  const result = quiet(() => initializeUniversityGame(team));
+  assert.equal(result.allTeamNames[0], team.name, '前提: 始めたときは自チームが先頭');
+  const league = WORLD_DATA.universityLeagues.sapporo;
+  assert.notEqual(league.divTeams[1][0], team.name, '前提: 部の並びでは自チームが先頭でない');
+  const finish = (seasonKey) => {
+    league[seasonKey].done = true;
+    for (const d of [1, 2]) {
+      league[seasonKey][`standings${d}`] = league.divTeams[d].map((t, i) => ({
+        team: t, wins: 10 - i, losses: i, draws: 0, winRate: (10 - i) / 10, gamesPlayed: 10,
+      }));
+    }
+  };
+  finish('spring');
+  quiet(() => processSpringPromotionRelegation());
+  assert.equal(WORLD_DATA.universityLeague.leagueTeams[0], team.name,
+    `春の入れ替え戦のあと、自分の部の先頭が ${WORLD_DATA.universityLeague.leagueTeams[0]}（自チームでない）`);
+  finish('fall');
+  quiet(() => processUniversityPromotionRelegation());
+  const leagueTeams = WORLD_DATA.universityLeague.leagueTeams;
+  assert.equal(leagueTeams[0], team.name, '秋の入れ替え戦のあと、自分の部の先頭が自チームでない');
+  assert.deepEqual([...leagueTeams].sort(), [...league.divTeams[WORLD_DATA.universityLeague.userDivision]].sort(),
+    '自分の部の球団が部の入れ替えの結果と違う');
+
+  // leagueConfig も年度更新の設定の球団に合わせる（App の allTeams・userTeamName の元）
+  const start = { format: 'single', teamsPerLeague: 6, leagues: [{ name: '札幌学生野球リーグ 1部', teams: [...result.allTeamNames] }] };
+  const synced = repairLeagueConfig(start, { teamNames: leagueTeams, leagueFormat: 'single' }, 'university');
+  assert.deepEqual(synced.leagues[0].teams, leagueTeams, '部の入れ替えのあと leagueConfig が入れ替わる前の部のまま');
+  assert.equal(synced.leagues[0].teams[0], team.name, 'leagueConfig の先頭が自チームでない');
+}
+
+console.log('■ 一人用の進行の再発防止: OK（オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る / FA枠は解雇された選手から引く / 大学の部の入れ替えのあとも先頭は自チーム）');

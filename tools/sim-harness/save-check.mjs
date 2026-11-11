@@ -318,4 +318,30 @@ assert.equal(getPlayerIdCounter(), 90001, 'ロード失敗後に採番位置を�
   assert.equal(seasonData.tryoutDraft.pick, 2, '外すときに元の seasonData を変えた');
 }
 
+// ⚠ 大学の保存で、設定の球団（settings.teamNames）の先頭が自チームでないものは、ロードで並べ直す。
+//    以前は部の入れ替え戦のたびに部の並びへ戻していて、2年目から保存の一覧の名前などが部の先頭の
+//    大学になった（生成側は直したが、既にある保存には残る）
+{
+  const { migrateSaveData, putUniversityUserTeamFirst } = await import('../../src/game/saveMigration.js');
+  const stale = () => ({
+    version: '2.17.0',
+    gameMode: 'university',
+    seasonData: { year: 2, settings: { teamNames: ['札幌大学', '北海学園大学', '北海道文教大学'], teamAbbreviations: ['札大', '学園', '文教'] } },
+    worldData: { universityLeague: { userTeam: '北海道文教大学', leagueTeams: ['札幌大学', '北海学園大学', '北海道文教大学'] } },
+    teamsData: {},
+  });
+  const quiet = console.log;
+  console.log = () => {};
+  let data;
+  try { data = migrateSaveData(stale()).data; } finally { console.log = quiet; }
+  assert.deepEqual(data.seasonData.settings.teamNames, ['北海道文教大学', '札幌大学', '北海学園大学'], 'ロードで大学の自チームを先頭に戻さない');
+  assert.deepEqual(data.seasonData.settings.teamAbbreviations, ['文教', '札大', '学園'], '略称が球団と食い違った');
+  assert.equal(data.worldData.universityLeague.leagueTeams[0], '北海道文教大学');
+  // 揃っている保存・大学でない保存は触らない（何度呼んでも同じ）
+  assert.equal(putUniversityUserTeamFirst(data), false, '揃っているのに並べ直した');
+  const independent = { ...stale(), gameMode: 'normal' };
+  assert.equal(putUniversityUserTeamFirst(independent), false, '大学でない保存を並べ直した');
+  assert.equal(independent.seasonData.settings.teamNames[0], '札幌大学');
+}
+
 console.log('save-check PASS');

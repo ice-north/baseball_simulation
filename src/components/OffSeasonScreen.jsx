@@ -5,6 +5,7 @@ import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
 import { getPlayoffChampion, isYearAdvanced, seasonChampion } from '../season/seasonManager.js';
 import { generatePitchingRotation } from '../game/lineupGenerator.js';
+import { repairLeagueConfig } from '../season/nextSeasonRegulations.js';
 import { getTransferCandidates, transferManagerTo, CATEGORY_LABEL, getTeamCategory } from '../game/managerTransfer.js';
 
 const RANK_TEXT = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
@@ -186,6 +187,11 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         : advanceToNextYear(seasonData, allTeams);
       if (historyEntry) onRecordTeamHistory(historyEntry);
       setSeasonData(result.newSeasonData);
+      // 大学は部の入れ替えで自分の部の球団が替わる（年度更新が settings.teamNames を作り直す）。
+      // leagueConfig（App の allTeams・userTeamName の元）も同じ球団にする
+      if (gameMode === 'university') {
+        setLeagueConfig?.(prev => repairLeagueConfig(prev, result.newSeasonData.settings, 'university'));
+      }
       Object.keys(result.updatedTeams).forEach(teamName => {
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];
       });

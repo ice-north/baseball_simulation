@@ -37,12 +37,15 @@ const sameTeams = (a = [], b = []) => a.length === b.length && a.every((name, i)
 /**
  * ロードした保存の leagueConfig を、設定の球団（`settings.teamNames`）に合わせる。
  * 上の不具合で、球団数を変えた年より後の保存は leagueConfig が古いまま入っている。
- * 独立リーグ・箱庭だけ（社会人は自チームだけ、大学は部の入れ替えで別に決まる）。
+ * 独立リーグ・箱庭・大学（社会人は自チームだけなので触らない）。大学は部の入れ替えで
+ * 自分の部の球団が替わり、年度更新が settings.teamNames を作り直すので、そのあとにも呼ぶ
+ * （OffSeasonScreen）。以前は leagueConfig を始めたときのまま持ち、2年目以降も
+ * 入れ替わる前の部の球団が App の allTeams に残っていた。
  * 設定に TEAMS_DATA に無い名前があるときは、どちらが正しいか分からないので触らない。
  * 揃っていればそのまま返す。
  */
 export function repairLeagueConfig(leagueConfig, settings, gameMode) {
-  if (gameMode !== 'normal' && gameMode !== 'sandbox') return leagueConfig;
+  if (gameMode !== 'normal' && gameMode !== 'sandbox' && gameMode !== 'university') return leagueConfig;
   const names = settings?.teamNames;
   if (!Array.isArray(names) || names.length === 0 || !names.every(name => TEAMS_DATA[name])) return leagueConfig;
   const current = (leagueConfig?.leagues || []).flatMap(league => league.teams || []);
