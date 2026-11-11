@@ -272,8 +272,6 @@ fun dealProblems(mine: List<JsonObject>, theirs: List<JsonObject>?, give: Set<Lo
     return rosterShortfall(after.mine) + rosterShortfall(after.theirs)
 }
 
-const val MAX_OPEN_TRADES = 5
-
 /** 候補がいまの名簿の同じ区分で何番手にあたるか（Web 版の `teamFitRank` と同じ） */
 data class TeamFit(val group: String, val rank: Int, val of: Int)
 
