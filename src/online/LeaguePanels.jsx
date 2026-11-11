@@ -841,9 +841,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
   // ⚠ **キャンプのぶんは出さない**。キャンプはPCではホームに出していて
   //    ここを通らないので、`CampPlanner` が自分で出す（スマホもそれを通る）。
   //    ここでも出すと、スマホだけ同じ文が2回並ぶ
-  const staffNote = phase.kind !== 'camp' && phase.planBy && (
-    <p className="online-staff-note">{phase.planBy.text}</p>
-  );
+  // ⚠ **出すのは、出ている案が指導者の案のままの間だけ**（変えていない・保存も決定も
+  //    していない）。自分で入れ替えて決定したあとも「照屋監督の案です。変えてから決定
+  //    できます」が残り、決定した中身が指導者の案に読めた（再監査 F18）
+  const staffNote = phase.kind !== 'camp' &&
+    phase.planBy &&
+    !dirty &&
+    !phase.submission && (
+      <p className="online-staff-note">{phase.planBy.text}</p>
+    );
   const readyList = (
     <ul className="online-ready">
       {view.members.map((m) => (

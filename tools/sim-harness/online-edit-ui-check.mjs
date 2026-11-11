@@ -641,9 +641,13 @@ try {
       fielding: { defense: 45 },
       pitching: {},
     });
+    const coachNote = '照屋監督の案です。変えてから決定できます';
     const release = await scene({
       mobile: true,
-      phase: contractPhase(),
+      phase: {
+        ...contractPhase(),
+        planBy: { mode: 'advise', by: '照屋監督', text: coachNote },
+      },
       defaultPlan: { releaseIds: [1] },
       roster: [
         ...initial().roster,
@@ -652,6 +656,11 @@ try {
       ],
     });
     await click(release.page, '手続き');
+    // ⚠ 「○○監督の案です」は、出ている案が指導者の案のままの間だけ出す。自分で入れ替えて
+    //    決定したあとも残り、決定した中身が指導者の案に読めた（再監査 F18）
+    const coachNoteShown = () =>
+      release.page.locator('.online-staff-note').filter({ hasText: coachNote }).count();
+    await release.page.locator('.online-staff-note').filter({ hasText: coachNote }).waitFor();
     await release.page.getByRole('button', { name: '退団させる選手を変える', exact: true }).click();
     const releaseBox = (name) =>
       release.page.getByRole('checkbox', { name: new RegExp(`^${name}（.*）を退団させる$`) });
@@ -665,6 +674,7 @@ try {
     assert.ok(!(await releaseBox('検証 外野手').isChecked()), '「変更を取り消す」で選んだ退団が残る');
     await releaseBox(PITCHER).uncheck();
     await releaseBox('検証 外野手').check();
+    assert.equal(await coachNoteShown(), 0, '退団を選び直したのに「監督の案です」が出ている');
     await release.page.getByRole('button', { name: 'この内容で決定', exact: true }).click();
     await release.page.getByRole('group', { name: '決定の確認', exact: true }).waitFor();
     const releasing = await release.page.locator('.online-phase-contents').innerText();
@@ -679,6 +689,7 @@ try {
       { phaseId: '1:contract', plan: { releaseIds: [2] }, ready: true, baseSubmission: null },
       'スマホで選び直した退団が送られない',
     );
+    assert.equal(await coachNoteShown(), 0, '自分で選び直して決定したあとも「監督の案です」が出ている');
     await release.context.close();
 
     // トライアウト: 実際に取る顔ぶれ（希望順の上から、目標を超える区分は飛ばす）
