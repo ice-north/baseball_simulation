@@ -14,7 +14,8 @@
 // 9. 総合監査（2026-11-10）で直したもの: キャンプの指導者の案を画面に出す・空いた席はおすすめ・
 //    トライアウトは終わったばかりの年の勝率・同じキャンプで外した監督の呼び戻しは解任に数えない・
 //    版11からの移行で型が考え方と逆を向かない
-// 10. 任せた手続き（トライアウト・退団・キャンプ）は、その人の決定を待たない（総合監査 2026-11-10 の判断7）
+// 10. 任せた手続き（トライアウト・退団・キャンプ）は、その人の決定を待たない（総合監査 2026-11-10 の判断7）。
+//     下書きの保存では進めない・キャンプを任せ直したら残りは指導者の方針（再監査 A1・A3）
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import {
@@ -30,6 +31,11 @@ import {
   loadLeagueWorld,
   captureLeagueWorld,
   autoResolvePhase,
+  validateCampRound,
+  runCampRound,
+  recordCampRound,
+  takeBackCamp,
+  CAMP_ROUNDS,
 } from '../../server/leagueEngine.mjs';
 import {
   staffOf,
@@ -763,6 +769,56 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
     updateStaff(l, a.userId, { action: 'hire', role: 'pitching', coachId: pick.id });
     assert.equal(waitsFor(l, l.members[0]), false);
     assert.equal(l.phase?.kind, 'camp', '指導者を1人呼んだその場でキャンプが終わった');
+  }
+  {
+    // ⚠ 自分で1クール回したあと（任せ方は「意見を聞く」に戻る）にキャンプを任せ直したら、
+    //    残りのクールは**指導者の方針**で回る（画面の文どおり）。以前は最後に自分で実行した
+    //    指示で回っていた（再監査 A3）。「意見を聞く」のままなら、最後の指示で回る
+    const l = clone(inCamp);
+    const me = l.members.find((m) => m.userId === a.userId);
+    const plan = validateCampRound(l, a.teamName, {
+      round: 1,
+      policy: { mode: 'team', direction: 'weakness', phase: 'physical' },
+    });
+    const state = ((l.phase.camp ||= {})[a.userId] = { rounds: 0 });
+    loadLeagueWorld(l);
+    recordCampRound(state, runCampRound(l, a.teamName, plan));
+    l.game = captureLeagueWorld();
+    state.plan = plan;
+    takeBackCamp(l, me);
+    assert.equal(effectiveStaffModes(l, me).camp, 'advice', '前提: 自分で回すと「意見を聞く」に戻る');
+    decide(l, b.userId);
+    assert.equal(l.phase?.kind, 'camp', '前提: a を待っている');
+    // 比べる相手: 自分で回した指示を持たない（指導者の方針で残りを回す）
+    const coachOnly = clone(l);
+    delete coachOnly.phase.camp[a.userId].plan;
+    const abilities = (x) =>
+      JSON.stringify(
+        x.game.teams[a.teamName].players.map((p) => [p.id, p.batting, p.pitching, p.physical, p.fielding]),
+      );
+    // 任せ直す → 最後の1人なのでその場で進む
+    const redelegated = clone(l);
+    updateStaffModes(redelegated, a.userId, { camp: 'delegate' }, iso());
+    updateStaffModes(coachOnly, a.userId, { camp: 'delegate' }, iso());
+    assert.equal(redelegated.phase, null, '前提: 最後の1人が任せるとキャンプが終わる');
+    assert.equal(redelegated.campResults[a.userId].rounds, CAMP_ROUNDS);
+    assert.equal(
+      abilities(redelegated),
+      abilities(coachOnly),
+      'キャンプを任せ直したのに、残りのクールが最後に自分で実行した指示で回った',
+    );
+    // 「意見を聞く」のまま締め切り → 最後の指示で回る（指示を持たないときと結果が違う）
+    const advice = clone(l);
+    const adviceCoach = clone(l);
+    delete adviceCoach.phase.camp[a.userId].plan;
+    autoResolvePhase(advice, advice.phase.deadline);
+    autoResolvePhase(adviceCoach, adviceCoach.phase.deadline);
+    assert.equal(advice.phase, null);
+    assert.notEqual(
+      abilities(advice),
+      abilities(adviceCoach),
+      '「意見を聞く」のまま締め切りを迎えたのに、残りのクールが最後に自分で実行した指示で回らない',
+    );
   }
 }
 console.log('online-coach-check PASS');

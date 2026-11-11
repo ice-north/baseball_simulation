@@ -1525,7 +1525,13 @@ function resolvePhase(league, now) {
       const already = state?.rounds || 0;
       // ⚠ 自分で回したときの指示があればそれを使う（残りのクールも同じ方針で）。
       //    無ければ提出した案、それも無ければ標準
-      const saved = member ? done[member.userId]?.plan : null;
+      // ⚠ **いまキャンプを任せている人は、自分で回したときの指示を使わない**（指導者の方針で回す）。
+      //    自分で回すと任せ方は「意見を聞く」に戻る（`takeBackCamp`）ので、ここで任せているのは
+      //    回したあとに任せ直した人。画面の文（`coachView.mjs` の `phasePlanBy`「残りのクールは
+      //    指導者の方針で回ります」）と、ほかの任せた手続き（提出があっても指導者の案）に揃える。
+      //    以前は任せ直しても、最後に自分で実行した指示で残りが回っていた（再監査 A3）
+      const saved =
+        member && !phaseDelegated(league, member) ? done[member.userId]?.plan : null;
       // ⚠ CPU球団（このリーグの）はコーチの方針。世界のほかの球団は従来どおり
       const plan =
         plans[name] ||
