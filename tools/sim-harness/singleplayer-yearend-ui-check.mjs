@@ -61,6 +61,22 @@ function tools(page, context, log) {
       throw new Error(`「${String(name).replace(/^\/\^?|\$?\/$/g, '')}」を押しても${what}に移らない`);
     });
   };
+  // 取り消せない操作は、押すと下に確認の帯（`ConfirmBar`）が出て、帯のボタンで決める。
+  // 帯が出ることを待ち、帯の中のボタン（`label`）を押して次の画面を待つ
+  const confirm = async (name, label, next, what, timeout = 30000) => {
+    const bar = page.getByTestId('confirm-bar');
+    await go(name, bar, `${what}の確認の帯`);
+    await bar.getByRole('button', { name: label }).click();
+    await go2(next, what, timeout);
+  };
+  const go2 = async (next, what, timeout) => {
+    const target = typeof next === 'string' || next instanceof RegExp
+      ? page.getByRole('button', { name: next }).or(page.getByText(next)).first()
+      : next;
+    await target.waitFor({ timeout }).catch(() => {
+      throw new Error(`確認の帯で決めても${what}に移らない`);
+    });
+  };
   // 区切りごとに操作の記録（trace）を捨てて取り直す。1年分を全部ためると数十MBになり、
   // 落ちたときに要るのは最後の区切りからの操作だけなので
   const step = async (label) => {
@@ -144,7 +160,7 @@ function tools(page, context, log) {
       await step(`7日進めて ${fmt(after)}`);
     }
   };
-  return { ui, go, step, button, shown, proceedTo, finishDraft, campToOpening, jerseyToOpening,
+  return { ui, go, confirm, step, button, shown, proceedTo, finishDraft, campToOpening, jerseyToOpening,
     offseasonToNextYear, confirmNextRegulations, checkSecondYear };
 }
 
@@ -219,8 +235,7 @@ async function runIndependent(page, t) {
   // 投手を1人（捕手や野手を外すと、トライアウトで足りない守備位置を埋めるまで指名を終えられない）
   const pitcherRow = page.locator('tbody tr').filter({ has: page.locator('td:nth-child(5)', { hasText: /^投$/ }) });
   await ((await pitcherRow.count()) ? pitcherRow.last() : page.locator('tbody tr').first()).click();
-  await go(/^契約更改を確定する$/, /解雇を確定する|トライアウトへ進む/, '解雇の確認');
-  if (await t.shown('解雇を確定する')) await go('解雇を確定する', 'トライアウトへ進む', '契約更改の完了');
+  await t.confirm(/^契約更改を確定する$/, /^(解雇して確定する|確定する)$/, 'トライアウトへ進む', '契約更改の完了');
   await go('トライアウトへ進む', /指名終了|ドラフト完了/, 'トライアウト', 60000);
 
   await step('トライアウト: 捕手と足りない守備位置を指名して指名を終える');
@@ -230,7 +245,8 @@ async function runIndependent(page, t) {
   let tab = '捕手';
   while (await waitUserTurn(page)) {
     if (!tab) {
-      await ui.click(/^指名終了$/);
+      await page.getByRole('button', { name: /^指名終了$/ }).click();
+      await page.getByTestId('confirm-bar').getByRole('button', { name: '指名を終える', exact: true }).click();
       break;
     }
     await pickFromTab(page, tab);
@@ -302,9 +318,9 @@ async function runCorporate(page, t) {
   await t.proceedTo(/退団/);
   await step('退団処理: そのまま確定 → スカウト入団は獲得なし');
   // 年俸が予算を超えていると「赤字のまま確定」になる（その年の成績しだい）
-  await go(/^(契約更改を確定|赤字のまま確定)$/, 'スカウト入団へ進む', '退団処理の完了');
+  await t.confirm(/^(契約更改を確定|赤字のまま確定)$/, /^(解雇して確定する|確定する)$/, 'スカウト入団へ進む', '退団処理の完了');
   await go('スカウト入団へ進む', /獲得なしで進む|交渉開始/, 'スカウト交渉');
-  await go('獲得なしで進む', /^完了$/, 'スカウト入団の完了');
+  await t.confirm('獲得なしで進む', /^終える$/, /^完了$/, 'スカウト入団の完了');
   await go(/^完了$/, page.getByTestId('dev-advance'), '日程画面');
 
   await t.proceedTo(/予算決算/);
@@ -326,11 +342,11 @@ async function runClub(page, t) {
 
   await t.proceedTo(/退団/);
   await step('退団処理: そのまま確定 → 入部希望者を1人受け入れる');
-  await go(/^契約更改を確定$/, '入部希望者の受付へ進む', '退団処理の完了');
+  await t.confirm(/^契約更改を確定$/, /^(解雇して確定する|確定する)$/, '入部希望者の受付へ進む', '退団処理の完了');
   await go('入部希望者の受付へ進む', /入部なしで確定|受け入れて確定/, '入部希望者');
   const applicant = page.getByText('見送り', { exact: true });
   if (await applicant.count()) await applicant.first().click();
-  await go(/入部なしで確定|受け入れて確定/, 'オフシーズンへ進む', '入部受付の完了');
+  await t.confirm(/入部なしで確定|受け入れて確定/, /^確定する$/, 'オフシーズンへ進む', '入部受付の完了');
   await go('オフシーズンへ進む', page.getByTestId('dev-advance'), '日程画面');
 
   await t.proceedTo(/オフシーズン/);
@@ -352,7 +368,7 @@ async function runMode(browser, key) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(`console.error: ${m.text()}`); });
-  // 確認（指名終了など）は「はい」で進める。alert は出ること自体を落とす
+  // ブラウザの確認（confirm）が残っていれば「はい」で進める。alert は出ること自体を落とす
   page.on('dialog', async (d) => {
     if (d.type() === 'alert') errors.push(`alert: ${d.message()}`);
     await d.accept();
