@@ -69,11 +69,28 @@ private fun two(v: Double?): String = v?.let { val r = round(it * 100).toInt(); 
 /** 手続きの時期（試合が無く、1面は時期の話にする） */
 internal val OFF_PHASES = setOf("pack_select", "initial_tryout", "camp", "contract", "tryout", "offseason")
 
-/** ゲーム差の書き方（「4」「2.5」。「4.0差」とは書かない） */
-private fun gb(v: Double): String = if (v % 1.0 == 0.0) "${v.toInt()}" else one(v)
+/**
+ * 部の中の並べ方（勝率→勝利数→球団名）。Web の `compareLeagueStanding`（src/online/pyramidLeague.js）と同じ。
+ * ⚠ ビューの順位表（standings）は全球団を通した勝率→勝利数の並びで、同率のときの順が決まっていない。
+ *    昇降格・マジック（サーバー）と PC の順位表はこの並べ方なので、紙面の順位もこれで数える
+ */
+val LEAGUE_STANDING_ORDER: Comparator<Standing> =
+    compareByDescending<Standing> { it.winRate }.thenByDescending { it.wins }.thenBy { it.team }
 
-/** 首位とのゲーム差（0なら「首位」） */
-private fun gamesBehind(leader: Standing, me: Standing): Double = ((leader.wins - me.wins) + (me.losses - leader.losses)) / 2.0
+/** 部の順位表（1位から）。[league] が null（部の無い古いビュー）なら全球団 */
+fun LeagueView.leagueTable(league: String?): List<Standing> =
+    standings.filter { league == null || teamLeagues[it.team] == league }.sortedWith(LEAGUE_STANDING_ORDER)
+
+/** ゲーム差の書き方（「4」「2.5」。「4.0差」とは書かない）。地元紙・全国紙で共通 */
+internal fun gb(v: Double): String = if (v % 1.0 == 0.0) "${v.toInt()}" else one(v)
+
+/** [leader] と [me] のゲーム差（0なら並んでいる）。地元紙・全国紙で共通 */
+internal fun gamesBehind(leader: Standing, me: Standing): Double = ((leader.wins - me.wins) + (me.losses - leader.losses)) / 2.0
+
+/** 日付の通し番号（年×10000＋月×100＋日）。並べる・同じ日を見分けるのに使う（年をまたいでも大小が日付の順） */
+internal fun dayKey(year: Int, month: Int, day: Int): Int = year * 10000 + month * 100 + day
+
+internal fun GameDate.dayKey(): Int = dayKey(year, month, day)
 
 /**
  * @param alerts 自分の番の手続きなど（締め切りの書き方が端末の時計に依るので、画面の側で作って渡す）
@@ -106,7 +123,7 @@ fun buildFrontPage(
 
     // 自球団の順位（部の中）
     val league = view.teamLeagues[team]
-    val table = view.standings.filter { league == null || view.teamLeagues[it.team] == league }
+    val table = view.leagueTable(league)
     val rankIndex = table.indexOfFirst { it.team == team }
     val mine = table.getOrNull(rankIndex)
     val leagueName = league?.let { LEAGUE_NAMES[it] } ?: ""
@@ -130,7 +147,7 @@ fun buildFrontPage(
     val last = own.lastOrNull()
     val articles = mutableListOf<FrontPage.Article>()
     // 言い回しは試合（無ければ日付）で選ぶ。同じ試合なら開き直しても同じ紙面
-    val pen = Pen(last?.gameId?.toInt() ?: ((view.year ?: 0) * 10000 + (date?.month ?: 0) * 100 + (date?.day ?: 0)))
+    val pen = Pen(last?.gameId?.toInt() ?: dayKey(view.year ?: 0, date?.month ?: 0, date?.day ?: 0))
 
     var headline: String
     var kicker: String? = null
@@ -158,8 +175,10 @@ fun buildFrontPage(
         // ⚠ 止めたのは今日の試合のときだけ（2連勝目以降に「連敗ストップ」とは書かない）
         val broken = if (now == 0 || streak != 1) 0 else own.asReversed().drop(1).takeWhile { outcome(it) == -now }.size
         tone = when { now > 0 -> FrontPage.Tone.Win; now < 0 -> FrontPage.Tone.Lose; else -> FrontPage.Tone.Draw }
-        // ⚠ 詳細は**その試合のもの**のときだけ使う（読み終わる前の古い詳細で別の試合の見出しを書かない）
-        facts = GameFacts.from(lastGame?.takeIf { it.at("gameId").long() == null || it.at("gameId").long() == last.gameId }, team)
+        // ⚠ 詳細は**その試合のもの**のときだけ使う（読み終わる前の古い詳細で別の試合の見出しを書かない）。
+        //    見出しだけでなく、スコアボードと勝敗投手・本塁打の欄も同じ（別の試合の回ごとの得点・本塁打を出さない）
+        val detail = lastGame?.takeIf { it.at("gameId").long() == null || it.at("gameId").long() == last.gameId }
+        facts = GameFacts.from(detail, team)
         val situation = Situation(me, opp, home, ours, theirs, streak, broken, mine?.let { rankIndex + 1 }, facts)
         sit = situation
         headline = when (tone) {
@@ -183,8 +202,8 @@ fun buildFrontPage(
         lead = gameLead(situation, last.date?.let { "${it.month}月${it.day}日" }, tone, record, pen)
         // ⚠ 号外は滅多に無いことだけ（ノーヒットノーラン・2桁連勝）
         extra = tone == FrontPage.Tone.Win && ((facts?.theirHits == 0 && theirs == 0) || streak >= 10)
-        lineScore = lastGame?.let { lineScoreOf(it, view) }
-        box = boxLines(view, lastGame, team, last.decisions)
+        lineScore = detail?.let { lineScoreOf(it, view) }
+        box = boxLines(view, detail, team, last.decisions)
     } else {
         // まだ試合が無い（初期メンバー選び・キャンプ・オフ）
         val (h, l) = phaseCopy(
@@ -426,7 +445,7 @@ fun buildFrontPage(
     // リーグ短信: 自球団の最新の試合と同じ日のほかの試合
     val shorts = last?.takeIf { !offPhase }?.date?.let { d ->
         view.results.filter { it.date == d && it.home != team && it.away != team && it.homeScore != null && it.awayScore != null }
-            .map { shortLine(view, it, latest = view.results.none { r -> (r.date?.month ?: 0) * 100 + (r.date?.day ?: 0) > d.month * 100 + d.day }) }
+            .map { shortLine(view, it, latest = view.results.none { r -> (r.date?.dayKey() ?: 0) > d.dayKey() }) }
     }.orEmpty()
 
     // 指導者（オフは自球団の人事と新体制。シーズン中はときどきベンチの空気）

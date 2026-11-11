@@ -74,6 +74,7 @@ export default function DesktopTactics({ view, busy, run, command }) {
         await command(
           'lineup',
           rebaseLineupSave(draft, base, view.lineup, ownKeys),
+          { message: '方針・采配を保存しました' },
         );
         setDirty(false);
       } catch (e) {

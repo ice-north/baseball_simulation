@@ -15,6 +15,9 @@ on:
       - 'src/online/pitchingEdit.js'
       - 'src/online/tryoutPlan.js'
       - 'src/online/statsView.js'
+      - 'src/online/pyramidLeague.js'
+      - 'src/online/api.js'
+      - 'src/online/campMenus.js'
       - 'src/utils/constants.js'
   pull_request:
     paths:
@@ -27,6 +30,9 @@ on:
       - 'src/online/pitchingEdit.js'
       - 'src/online/tryoutPlan.js'
       - 'src/online/statsView.js'
+      - 'src/online/pyramidLeague.js'
+      - 'src/online/api.js'
+      - 'src/online/campMenus.js'
       - 'src/utils/constants.js'
   workflow_dispatch:
 

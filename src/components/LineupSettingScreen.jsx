@@ -57,6 +57,9 @@ const restoreRoster = (team, json) => {
 };
 
 // 外から元に戻すボタンを置かないとき（一人用・スマホのオンライン）に見出しの右へ出すボタン
+// 埋め込むとき（`embedded`）の枠。外側の ScreenShell の中に入るので余白を足さない
+const EmbeddedShell = ({ children }) => <div>{children}</div>;
+
 const HistoryButtons = ({ canUndo, canRedo, undo, redo }) => (
   <>
     <button type="button" onClick={undo} disabled={!canUndo} title="元に戻す（Ctrl+Z）"
@@ -82,6 +85,9 @@ const HistoryButtons = ({ canUndo, canRedo, undo, redo }) => (
 // 「スタメン設定/投手起用/守備分析」へ直に入るので外から渡す
 // ⚠ オンラインのPC版はこの画面を使わない（`src/online/LineupBoard.jsx`・`PitchingBoard.jsx`）。
 //    PCに埋め込むための引数（見出しを出さない・履歴を外へ渡す・キーを止める）は消した
+// `embedded`: 一人用の大学のロスター管理（RosterScreen）のタブの中に置くとき。外側が枠と見出しを
+//   持つので、ここでは枠（ScreenShell）と見出しを出さず、元に戻す・やり直すだけを右に置く。
+//   ⚠ 以前は外と中に「ロスター管理」の見出しが2つ並び、枠の余白も二重で控えの表の右が切れていた
 export const LineupSettingContent = ({
   teamName,
   onBack,
@@ -90,6 +96,7 @@ export const LineupSettingContent = ({
   canSealPitch = true,
   displayName,
   initialTab = 'lineup',
+  embedded = false,
 }) => {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -1151,7 +1158,7 @@ export const LineupSettingContent = ({
 
     const StatCell = ({ value, isVelocity, className = '' }) => {
       const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);
-      return <td className={`py-1.5 px-1 text-xs text-center font-semibold ${getRankColor(rank)} ${className}`}>{value}</td>;
+      return <td className={`py-1.5 px-0.5 text-xs text-center font-semibold ${getRankColor(rank)} ${className}`}>{value}</td>;
     };
 
     const handleRowClick = () => {
@@ -1204,7 +1211,10 @@ export const LineupSettingContent = ({
           <input type="checkbox" checked={isComparing} onChange={() => toggleCompare(player.id)}
             className="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-purple-500 focus:ring-0 cursor-pointer" />
         </td>
-        <td className="py-1.5 pl-1 pr-1 text-sm text-white font-semibold whitespace-nowrap">
+        {/* ⚠ 名前と守備は折り返してよい（名前は姓名の間・守備は位置ごと）。1行に固定していると
+            1280〜1440 の幅で控えの表が枠に収まらず、右の列（疲労・成績）が切れていた。
+            表は幅に余裕があれば1行のまま、足りないときだけ折り返す */}
+        <td className="py-1.5 pl-1 pr-1 text-sm text-white font-semibold break-keep leading-tight">
           <button onClick={(e) => { e.stopPropagation(); setDetailPlayer(player); }}
             className="hover:text-blue-300 hover:underline transition text-left">
             {player.name}
@@ -1212,10 +1222,10 @@ export const LineupSettingContent = ({
           <span className={`ml-1 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
             {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
           </span>
-          {isInLineup && <span className="ml-1 text-xs text-blue-400 bg-blue-900/30 px-1 py-0.5 rounded">出場中</span>}
+          {isInLineup && <span className="ml-1 text-xs text-blue-400 bg-blue-900/30 px-1 py-0.5 rounded whitespace-nowrap">出場中</span>}
         </td>
         <td className="py-1.5 px-1 text-xs text-gray-300 text-center">{player.age}</td>
-        <td className="py-1.5 px-1 text-xs whitespace-nowrap">
+        <td className="py-1.5 px-1 text-xs leading-tight">
           {canConvertPosition ? <button
             onClick={(e) => { e.stopPropagation(); setPosConvertPlayer(player); }}
             className={`${isPitcher ? 'text-indigo-300 font-medium' : 'text-gray-300'} hover:underline hover:brightness-125`}
@@ -1230,7 +1240,7 @@ export const LineupSettingContent = ({
             if (subs.length === 0) return null;
             return subs.map((s, i) => <span key={i} className={`${s.color} ml-0.5 text-xs`}>{s.label}</span>);
           })()}
-          {roleLabel && <span className="ml-1 text-xs text-yellow-400 bg-yellow-900/30 px-1 py-0.5 rounded">{roleLabel}</span>}
+          {roleLabel && <span className="ml-1 text-xs text-yellow-400 whitespace-nowrap">{roleLabel}</span>}
         </td>
         {/* コンパクト: 主要能力のみ */}
         {benchCompact ? (<>
@@ -1246,16 +1256,18 @@ export const LineupSettingContent = ({
               return <span className={`font-semibold ${color}`}>{f}</span>;
             })()}
           </td>
-          <td className="py-1.5 px-2 text-xs text-center whitespace-nowrap border-l border-gray-700/40">
+          {/* 簡易表示の成績は2段に積む。⚠ 1行（「2勝1敗 防2.37」）だと列が約90px要り、
+              1280〜1440 の幅で控えの表の右（疲労・成績）がカードの外へ切れていた */}
+          <td className="py-1 px-1.5 text-xs text-center leading-tight border-l border-gray-700/40">
             {isPitcher ? (() => {
               const ps2 = player.seasonStats?.pitching;
               if (!ps2 || !ps2.games) return <span className="text-gray-400">-</span>;
               const era2 = ps2.inningsPitched > 0 ? ((ps2.earnedRuns || 0) / (ps2.inningsPitched / 3) * 9).toFixed(2) : '-';
-              return <span className="text-gray-300">{ps2.wins||0}勝{ps2.losses||0}敗 <span className="text-orange-300">防{era2}</span></span>;
+              return <><span className="block whitespace-nowrap text-gray-300">{ps2.wins||0}勝{ps2.losses||0}敗</span><span className="block whitespace-nowrap text-orange-300">防{era2}</span></>;
             })() : (() => {
               const bs2 = player.seasonStats?.batting;
               if (!bs2 || !bs2.atBats) return <span className="text-gray-400">-</span>;
-              return <><span className="text-blue-300 font-semibold">{(bs2.hits / bs2.atBats).toFixed(3)}</span><span className="text-gray-300 ml-1">{bs2.homeruns||0}本</span></>;
+              return <><span className="block whitespace-nowrap text-blue-300 font-semibold">{(bs2.hits / bs2.atBats).toFixed(3)}</span><span className="block whitespace-nowrap text-gray-300">{bs2.homeruns||0}本</span></>;
             })()}
           </td>
         </>) : (<>
@@ -1294,17 +1306,24 @@ export const LineupSettingContent = ({
     );
   };
 
-  const SortHeader = ({ label, sortKey, className = '' }) => (
+  const SortHeader = ({ label, sortKey, className = '', title }) => (
     <th
       className={`py-1 px-1 cursor-pointer hover:text-white transition select-none ${className}`}
       onClick={() => handleBenchSort(sortKey)}
+      title={title}
     >
       {label}{benchSortKey === sortKey ? (benchSortAsc ? '↑' : '↓') : ''}
     </th>
   );
 
+  const Shell = embedded ? EmbeddedShell : ScreenShell;
   return (
-    <ScreenShell>
+    <Shell>
+            {embedded ? (
+              <div className="flex justify-end mb-2">
+                <HistoryButtons canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} />
+              </div>
+            ) : (
             <ScreenHeader title="ロスター管理" sub={displayName || teamName}
               right={(
                 <>
@@ -1312,6 +1331,7 @@ export const LineupSettingContent = ({
                   {onBack && <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium">← 戻る</button>}
                 </>
               )} />
+            )}
 
             {/* タブナビゲーション */}
             <TabBar
@@ -1334,9 +1354,18 @@ export const LineupSettingContent = ({
             <b className="text-cyan-200">試合に出た選手ほど伸びます。</b>1年フル出場した若手は、ほとんど出番の無かった選手の<b className="text-cyan-200">2倍以上</b>成長します（実測: 300打席で能力合計 +12.7 に対し、0打席では +5.8）。
             いま勝つために主力を並べるか、数年後のために若手を我慢して使うか——<b className="text-cyan-200">スタメンを決めることは育成方針を決めること</b>でもあります。
           </TutorialHint>
+          {/* ⚠ 1152px 以上（PC）は「打順 7/12 ＋ 右の列に守備配置と控えを縦に積む（5/12）」。
+              以前は 4/4/4 の3列で、1280幅だと打順のカードが331pxしか無く、9行中8行で名前の行が
+              折り返し、体・疲のバーと打率が右端で切れていた（行の中身は約480px要る）。比だけ変えると
+              守備配置の図が250px前後に縮んで字が12pxを割るので、図と控えを縦に積んで打順に幅を回す。
+              ⚠ md〜1151px は打順を全幅にして、守備配置と控えをその下に積む。7/12 のままだと
+              1024幅で打順のカードが441pxしか無く、打点が右端で切れ、控えの名前が2〜3行に折り返した
+              （1100幅で486px。名前の長さで足りなくなるので、境目は少し余裕を見て 1152px）。
+              md 未満は従来どおり3列のまま（右の列の入れ物は display: contents で消える）。
+              ⚠ md 未満はオンラインのスマホ版（OnlineLineup.jsx）からも使われている */}
           <div className="grid grid-cols-12 gap-4">
-            {/* 左側: スタメン (4/12) */}
-            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden">
+            {/* 左側: スタメン (4/12、md〜1151px は全幅、1152px 以上は 7/12) */}
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 md:col-span-12 min-[1152px]:col-span-7 md:self-start overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-700/50">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="font-semibold text-white text-sm whitespace-nowrap">スタメン設定</h2>
@@ -1593,6 +1622,8 @@ export const LineupSettingContent = ({
               </div>
             </div>
 
+            {/* 右の列（PC）: 守備配置の上に控えを積む。md〜1151px は打順の下に全幅で積む。md 未満は contents で3列に戻る */}
+            <div className="contents md:col-span-12 min-[1152px]:col-span-5 md:flex md:flex-col md:gap-4 md:min-w-0">
             {/* 中央: ミニダイアモンド */}
             <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden p-3">
               <h2 className="font-semibold text-white text-sm mb-2 text-center">守備配置</h2>
@@ -1601,7 +1632,8 @@ export const LineupSettingContent = ({
                   （UIデザイン原則1）を割る。**文字だけ大きくすると円(r=16)と座標が
                   固定なので名前が重なる**ので、表示幅を 260 → 300 に広げて
                   倍率 1.154 を稼ぎ、そのうえで 10.4（= 12 / 1.154）にしてある。
-                  列も col-span-3 → 4 に広げた（3のままだと 1280 幅で 220px しか無い）。 */}
+                  列も col-span-3 → 4 に広げた（3のままだと 1280 幅で 220px しか無い）。
+                  PC は右の列（5/12。1280幅で約420px）の上に置くので、300px を確保できる。 */}
               <svg viewBox="0 0 260 240" className="w-full max-w-[300px] mx-auto">
                 <defs>
                   <linearGradient id="miniField" x1="0" y1="0" x2="0" y2="1">
@@ -1756,7 +1788,7 @@ export const LineupSettingContent = ({
                         <SortHeader label="足" sortKey="speed" className="text-center" />
                         <SortHeader label="肩" sortKey="arm" className="text-center" />
                         <SortHeader label="守" sortKey="defense" className="text-center" />
-                        <SortHeader label="疲労" sortKey="fatigue" className="text-center border-l border-gray-700/40" />
+                        <SortHeader label="疲" title="疲労" sortKey="fatigue" className="text-center border-l border-gray-700/40" />
                         <th className="py-1 px-1 text-center text-gray-400 border-l border-gray-700/40">成績</th>
                       </tr>
                     </>) : (<>
@@ -1797,6 +1829,7 @@ export const LineupSettingContent = ({
                   </tbody>
                 </table>
               </div>
+            </div>
             </div>
           </div>
           </>
@@ -1893,7 +1926,7 @@ export const LineupSettingContent = ({
             ];
             return (
               <>
-                <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700/50 mb-1">
+                <div className="flex items-center gap-3 px-3 py-1.5 bg-surface-1 rounded-lg border border-gray-700/50 mb-1">
                   {items.map((s, i) => (
                     <React.Fragment key={s.label}>
                       <div className="flex items-center gap-1">
@@ -1917,7 +1950,7 @@ export const LineupSettingContent = ({
                       <span key={i} className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         w.level === 'error' ? 'bg-red-900/40 text-red-400 border border-red-700/40' :
                         w.level === 'warn' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700/30' :
-                        'bg-gray-800/60 text-gray-300 border border-gray-700/30'
+                        'bg-surface-1 text-gray-300 border border-gray-700/30'
                       }`}>
                         {w.level === 'error' ? '!' : w.level === 'warn' ? '!' : 'i'} {w.msg}
                       </span>
@@ -1947,7 +1980,7 @@ export const LineupSettingContent = ({
               { icon: '🧹', role: '敗戦処理', desc: '大差で登板しスタミナ温存。球数上限50球', color: 'text-gray-300' },
             ];
             return (
-              <details className="mb-2 bg-gray-800/40 rounded-lg border border-gray-700/30" open={open} onToggle={e => setOpen(e.target.open)}>
+              <details className="mb-2 bg-surface-1 rounded-lg border border-gray-700/30" open={open} onToggle={e => setOpen(e.target.open)}>
                 <summary className="px-3 py-1.5 text-xs text-gray-300 cursor-pointer hover:text-gray-300 list-none flex items-center gap-1">
                   <span className="text-xs">{open ? '▼' : '▶'}</span> ロール解説
                 </summary>
@@ -2062,8 +2095,8 @@ export const LineupSettingContent = ({
                 onDrop={onDrop}
                 onClick={() => { if (canTapAssign) handleDropToRole(tapSelectedPitcherId, roleKey); }}
                 className={`rounded-lg border transition-colors ${wide ? 'col-span-2' : ''} ${
-                  canTapAssign ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer hover:border-blue-400/50'
-                               : 'border-gray-700/60 bg-gray-800/40'}`}
+                  canTapAssign ? 'border-blue-500/30 bg-surface-1 cursor-pointer hover:border-blue-400/50'
+                               : 'border-gray-700/60 bg-surface-1'}`}
               >
                 <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/40">
                   <span className="text-sm leading-none">{ROLE_ICON[roleKey]}</span>
@@ -2085,8 +2118,11 @@ export const LineupSettingContent = ({
               <TutorialHint id="rotation-dnd" title="投手の役割を決める">
                 投手カードを<b className="text-cyan-200">ドラッグ＆ドロップ</b>で「先発・守護神・セットアッパー・中継ぎ」等の役割枠へ配置します。先発は5〜6人、守護神・セットアッパーは各1人が目安（不足は警告表示）。「自動」で能力に応じて一括割り当ても可能です。
               </TutorialHint>
-              {/* 自動設定バー: 能力に応じてロールを一括割り当て / 全員おまかせ */}
-              <div className="flex items-center gap-2 mb-2 bg-gray-800/40 rounded-lg border border-gray-700/30 px-3 py-2">
+              {/* 自動設定バー: 能力に応じてロールを一括割り当て / 全員おまかせ。
+                  ⚠ このタブの枠（自動設定・登板順・役割の枠・控え）は**不透明の bg-surface-1** にする。
+                  半透明の gray-800/40 は明るい地色が透けて灰色になり、中の補足文が 1.7〜2.4:1 で
+                  読めなかった。投手カード（surface-2）より一段暗い「受け皿」に見せる */}
+              <div className="flex items-center gap-2 mb-2 bg-surface-1 rounded-lg border border-gray-700/30 px-3 py-2">
                 <span className="text-xs text-gray-300 shrink-0">投手起用</span>
                 <button
                   onClick={() => {
@@ -2114,11 +2150,11 @@ export const LineupSettingContent = ({
                     setUpdateTrigger(prev => prev + 1);
                   }}
                   className="btn-secondary text-xs px-3 py-1 rounded font-medium transition"
-                  title="全投手をおまかせにします（AIが登板場面を自動判断）"
+                  title="全投手をおまかせにします（登板の場面は試合の流れで決まります）"
                 >
                   全員おまかせ
                 </button>
-                <span className="text-xs text-gray-400 hidden sm:inline">自動設定=能力で最適配置 / おまかせ=AIが場面判断</span>
+                <span className="text-xs text-gray-400 hidden sm:inline">自動設定=能力で役割を決める / おまかせ=試合の場面で決める</span>
               </div>
 
               <BullpenFlowCompact />
@@ -2128,7 +2164,7 @@ export const LineupSettingContent = ({
                   ⚠ 以前はここだけ ◀▶ の1つずつ入れ替えだった（ほかはドラッグなのに）。
                      ◀▶ はキーボードで操作するとき用に小さく残す */}
               {starterPitchers.length > 0 && (
-                <div className="mb-2 bg-gray-800/40 rounded-lg border border-gray-700/40 px-2 py-1.5">
+                <div className="mb-2 bg-surface-1 rounded-lg border border-gray-700/40 px-2 py-1.5">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-blue-300 text-xs font-bold">先発 登板順</span>
                     <span className="text-xs text-gray-300">ドラッグで並べ替え（1番手から順に登板）</span>
@@ -2191,10 +2227,11 @@ export const LineupSettingContent = ({
               <div className="grid grid-cols-2 gap-2 mb-2 items-start">
                 {/* 先発（左） */}
                 <div>
+                  {/* ⚠ この見出しの行は地色（明るい紙）の上に直に載る。text-ink / text-ink-sub */}
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-blue-400 text-sm">⚾</span>
-                    <h2 className="text-sm font-bold text-blue-300">先発</h2>
-                    <span className="text-xs text-gray-300">枠へドラッグ</span>
+                    <span className="text-sm">⚾</span>
+                    <h2 className="text-sm font-bold text-ink">先発</h2>
+                    <span className="text-xs text-ink-sub">枠へドラッグ</span>
                   </div>
                   <div className="space-y-1.5">
                     <RoleSlot roleKey="complete" hint="スタミナ限界まで" />
@@ -2202,16 +2239,16 @@ export const LineupSettingContent = ({
                     <RoleSlot roleKey="quality" hint="5-6回で交代" />
                     <RoleSlot roleKey="short" hint="3-4回で継投" />
                     <RoleSlot roleKey="opener" hint="初回〜2回で継投" />
-                    <RoleSlot roleKey="auto_s" hint="AIが判断" />
+                    <RoleSlot roleKey="auto_s" hint="場面で判断" />
                   </div>
                 </div>
 
                 {/* リリーフ（右） */}
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-green-400 text-sm">🔄</span>
-                    <h2 className="text-sm font-bold text-green-300">リリーフ</h2>
-                    <span className="text-xs text-gray-300">上ほど後ろのイニング</span>
+                    <span className="text-sm">🔄</span>
+                    <h2 className="text-sm font-bold text-ink">リリーフ</h2>
+                    <span className="text-xs text-ink-sub">上ほど後ろのイニング</span>
                   </div>
                   <div className="space-y-1.5">
                     <RoleSlot roleKey="closer" hint="9回リード" />
@@ -2221,7 +2258,7 @@ export const LineupSettingContent = ({
                     <RoleSlot roleKey="onepoint" hint="左打者対策" />
                     <RoleSlot roleKey="behind" hint="ビハインド時" />
                     <RoleSlot roleKey="mopup" hint="大差の敗戦処理" />
-                    <RoleSlot roleKey="auto_r" hint="AIが判断" />
+                    <RoleSlot roleKey="auto_r" hint="場面で判断" />
                   </div>
                 </div>
               </div>
@@ -2239,8 +2276,8 @@ export const LineupSettingContent = ({
                 }}
                 onClick={() => { if (tapSelectedPitcherId != null) handleDropToRole(tapSelectedPitcherId, 'none'); }}
                 className={`rounded-lg border mb-2 transition-colors ${
-                  tapSelectedPitcherId != null ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer'
-                    : 'border-gray-700/60 bg-gray-800/40'}`}
+                  tapSelectedPitcherId != null ? 'border-blue-500/30 bg-surface-1 cursor-pointer'
+                    : 'border-gray-700/60 bg-surface-1'}`}
               >
                 <div className="flex items-center gap-1.5 px-2 py-1 border-b border-gray-700/40">
                   <span className="text-gray-300 text-sm">📋</span>
@@ -2258,7 +2295,7 @@ export const LineupSettingContent = ({
               </div>
 
               {/* 野手コンバート（折りたたみ）: 役割枠にドラッグで投手化 */}
-              <details className="rounded-lg border border-gray-700/60 bg-gray-800/40">
+              <details className="rounded-lg border border-gray-700/60 bg-surface-1">
                 <summary className="flex items-center gap-1.5 px-2 py-1 cursor-pointer list-none hover:bg-gray-700/20">
                   <span className="text-cyan-400 text-sm">🔀</span>
                   <h2 className="text-xs font-bold text-cyan-300">野手をコンバート</h2>
@@ -2481,19 +2518,23 @@ export const LineupSettingContent = ({
             })
             .filter(Boolean) : [];
 
-          // 適正に基づくグラデーション色（10刻み）
+          // 適正に基づくグラデーション色（10刻み）。text は図の上の「適正N%」の字の色。
+          // ⚠ 字は main（濃い原色）にしないこと。芝（#1f5c33）の上で deep pink が 2.2:1、
+          //    赤・橙でも 2.9:1 で読めなかった。同じ色相の淡い段（Tailwind の *-100〜300）にして
+          //    芝の上で 4.7〜6.8:1（AA 4.5 を確保。字の影も付く）。*-300 でも pink・red・blue・indigo は
+          //    4.0〜4.4 で足りないので、その4つは *-200（100% だけ pink-100）。バーと円の色は main のまま
           const getFitnessGradient = (fitness) => {
-            if (fitness >= 100) return { main: '#ff1493', glow: 'rgba(255,20,147,0.6)', bg: 'rgba(255,20,147,0.12)' };
-            if (fitness >= 90) return { main: '#ec4899', glow: 'rgba(236,72,153,0.55)', bg: 'rgba(236,72,153,0.11)' };
-            if (fitness >= 80) return { main: '#f87171', glow: 'rgba(248,113,113,0.5)', bg: 'rgba(248,113,113,0.10)' };
-            if (fitness >= 70) return { main: '#f97316', glow: 'rgba(249,115,22,0.45)', bg: 'rgba(249,115,22,0.09)' };
-            if (fitness >= 60) return { main: '#fbbf24', glow: 'rgba(251,191,36,0.4)', bg: 'rgba(251,191,36,0.08)' };
-            if (fitness >= 50) return { main: '#eab308', glow: 'rgba(234,179,8,0.38)', bg: 'rgba(234,179,8,0.07)' };
-            if (fitness >= 40) return { main: '#84cc16', glow: 'rgba(132,204,22,0.35)', bg: 'rgba(132,204,22,0.07)' };
-            if (fitness >= 30) return { main: '#22c55e', glow: 'rgba(34,197,94,0.32)', bg: 'rgba(34,197,94,0.06)' };
-            if (fitness >= 20) return { main: '#06b6d4', glow: 'rgba(6,182,212,0.3)', bg: 'rgba(6,182,212,0.06)' };
-            if (fitness >= 10) return { main: '#3b82f6', glow: 'rgba(59,130,246,0.28)', bg: 'rgba(59,130,246,0.05)' };
-            return { main: '#6366f1', glow: 'rgba(99,102,241,0.25)', bg: 'rgba(99,102,241,0.04)' };
+            if (fitness >= 100) return { main: '#ff1493', text: '#fce7f3', glow: 'rgba(255,20,147,0.6)', bg: 'rgba(255,20,147,0.12)' };
+            if (fitness >= 90) return { main: '#ec4899', text: '#fbcfe8', glow: 'rgba(236,72,153,0.55)', bg: 'rgba(236,72,153,0.11)' };
+            if (fitness >= 80) return { main: '#f87171', text: '#fecaca', glow: 'rgba(248,113,113,0.5)', bg: 'rgba(248,113,113,0.10)' };
+            if (fitness >= 70) return { main: '#f97316', text: '#fdba74', glow: 'rgba(249,115,22,0.45)', bg: 'rgba(249,115,22,0.09)' };
+            if (fitness >= 60) return { main: '#fbbf24', text: '#fcd34d', glow: 'rgba(251,191,36,0.4)', bg: 'rgba(251,191,36,0.08)' };
+            if (fitness >= 50) return { main: '#eab308', text: '#fde047', glow: 'rgba(234,179,8,0.38)', bg: 'rgba(234,179,8,0.07)' };
+            if (fitness >= 40) return { main: '#84cc16', text: '#bef264', glow: 'rgba(132,204,22,0.35)', bg: 'rgba(132,204,22,0.07)' };
+            if (fitness >= 30) return { main: '#22c55e', text: '#86efac', glow: 'rgba(34,197,94,0.32)', bg: 'rgba(34,197,94,0.06)' };
+            if (fitness >= 20) return { main: '#06b6d4', text: '#67e8f9', glow: 'rgba(6,182,212,0.3)', bg: 'rgba(6,182,212,0.06)' };
+            if (fitness >= 10) return { main: '#3b82f6', text: '#bfdbfe', glow: 'rgba(59,130,246,0.28)', bg: 'rgba(59,130,246,0.05)' };
+            return { main: '#6366f1', text: '#c7d2fe', glow: 'rgba(99,102,241,0.25)', bg: 'rgba(99,102,241,0.04)' };
           };
 
           const getRangeGradient = (range) => {
@@ -2716,7 +2757,7 @@ export const LineupSettingContent = ({
                                 calcMode="spline" keySplines="0.25 0.46 0.45 0.94" />
                             </rect>
                             <text x={coord.x} y={coord.y + markerSize + 25} textAnchor="middle"
-                              fill={grad.main} fontSize="10" fontWeight="bold" filter="url(#textShadow)">
+                              fill={grad.text} fontSize="10" fontWeight="bold" filter="url(#textShadow)">
                               適正{fitness}%
                             </text>
 
@@ -2764,7 +2805,9 @@ export const LineupSettingContent = ({
                     const range = getDefenseRange(player, pos);
                     const grade = getRangeGrade(range);
                     const fitness = player ? getFitness(player, pos) : 0;
-                    const fitColor = fitness >= 100 ? 'text-pink-500' : fitness >= 90 ? 'text-pink-400' : fitness >= 80 ? 'text-red-400' : fitness >= 70 ? 'text-orange-400' : fitness >= 60 ? 'text-amber-400' : fitness >= 50 ? 'text-yellow-400' : fitness >= 40 ? 'text-lime-400' : fitness >= 30 ? 'text-green-400' : fitness >= 20 ? 'text-cyan-400' : fitness >= 10 ? 'text-blue-400' : 'text-indigo-400';
+                    // ⚠ 100 も pink-400（素の pink-500 は行の地の上で 1.8:1 で読めなかった）。ランク色の段は
+                    //    能力の S（getRankColor）と同じ pink-400 に揃える
+                    const fitColor = fitness >= 90 ? 'text-pink-400' : fitness >= 80 ? 'text-red-400' : fitness >= 70 ? 'text-orange-400' : fitness >= 60 ? 'text-amber-400' : fitness >= 50 ? 'text-yellow-400' : fitness >= 40 ? 'text-lime-400' : fitness >= 30 ? 'text-green-400' : fitness >= 20 ? 'text-cyan-400' : fitness >= 10 ? 'text-blue-400' : 'text-indigo-400';
                     const isSelected = selectedDefensePos === pos || defenseDrag?.from === pos;
                     const isDropTarget = defenseDrag?.over === pos;
                     const isPitcherPos = pos === 'pitcher';
@@ -2774,7 +2817,10 @@ export const LineupSettingContent = ({
                         onClick={() => !isPitcherPos && handleDefenseClick(pos)}
                         onPointerDown={(e) => !isPitcherPos && startDefenseDrag(pos, e, { allowTouch: false })}
                         title={isPitcherPos ? undefined : 'ドラッグで守備位置を入れ替え'}
-                        className={`rounded p-2 transition select-none ${isSelected ? 'bg-yellow-900 ring-1 ring-yellow-400' : isDropTarget ? 'bg-blue-900/60 ring-1 ring-blue-400' : 'bg-gray-700 hover:bg-gray-600'} ${isPitcherPos ? 'cursor-default opacity-60' : player ? 'cursor-grab' : 'cursor-pointer'}`}>
+                        // ⚠ 行の地は受け皿（bg-surface-1）。カードより明るい gray-700 にすると、載っている
+                        //    ランク色（pink/red/blue-400 など）が 3.4〜3.6:1 まで落ちていた（index.css の文字色の決まり）。
+                        //    hover は地を明るくせず枠で示す
+                        className={`rounded p-2 transition select-none ${isSelected ? 'bg-yellow-900 ring-1 ring-yellow-400' : isDropTarget ? 'bg-blue-900/60 ring-1 ring-blue-400' : 'bg-surface-1 hover:ring-1 hover:ring-gray-500'} ${isPitcherPos ? 'cursor-default opacity-60' : player ? 'cursor-grab' : 'cursor-pointer'}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             {!isPitcherPos && player && <span className="text-gray-400 text-xs leading-none" aria-hidden="true">⠿</span>}
@@ -2822,7 +2868,7 @@ export const LineupSettingContent = ({
                           return (
                             <div key={player.id} data-defpos={entry.position}
                               onClick={() => handleDefenseClick(entry.position)}
-                              className="bg-gray-700 hover:bg-gray-600 rounded px-2 py-1.5 cursor-pointer text-sm">
+                              className="bg-surface-2 hover:ring-1 hover:ring-gray-500 rounded px-2 py-1.5 cursor-pointer text-sm">
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-white font-bold truncate">{posLabels[entry.position]} {player.name}</span>
                                 <span className={`text-xs font-bold tabular-nums ${total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -2922,14 +2968,14 @@ export const LineupSettingContent = ({
         {detailPlayer === '__compare__' && compareIds.length >= 2 && (
           <CompareModal playerIds={compareIds} onClose={() => setDetailPlayer(null)} />
         )}
-    </ScreenShell>
+    </Shell>
   );
 };
 
-const LineupSettingScreen = ({ teamName, onBack }) => {
+const LineupSettingScreen = ({ teamName, onBack, embedded = false }) => {
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
-  return <LineupSettingContent teamName={teamName} onBack={onBack} team={team} />;
+  return <LineupSettingContent teamName={teamName} onBack={onBack} team={team} embedded={embedded} />;
 };
 
 export default LineupSettingScreen;

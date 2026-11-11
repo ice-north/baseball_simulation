@@ -361,6 +361,9 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
   ⚠ **地色だけが明るい**。カードとサイドバーは暗いまま——「紙の上に暗い島が浮く」形
 - ⚠ **文字は2つの文脈を持つ**（下記「明るい地色の上に直に載るもの」）。
   カードの上＝`text-gray-100〜400`（明るい） / **地色の上＝`text-ink` / `text-ink-sub`（暗い）**
+- **文字色の決まり（本文・補足・見出し・強調・警告 × 地色／カード）の正本は `src/index.css` の表**。
+  地色の上に置けるのは `text-ink` / `text-ink-sub` / `text-ink-accent` / `text-ink-warn` の4色だけで、
+  意味色で区別したいものと、暗い地を前提にした半透明の枠はカード（`bg-surface-2`）に載せる
 - ⚠ **3段は必ず単調（0 < 1 < 2）に保つこと**。「地色が暗すぎる」を直すときに
   surface-0 だけ持ち上げると**サイドバー(1)を追い越して深度が反転する**
 
@@ -705,7 +708,7 @@ HMR が拾わず**古いCSSを配り続ける**。実際にこれで2回、
 - **数字揃え**: 桁を揃えたい表・スタッツには `.tnum`（`font-variant-numeric: tabular-nums`）または Tailwind の `tabular-nums`
   - **セルに1つずつ付けるのではなく `<table>` 自身に付ける**。継承するので全セルに効くうえ、
     列を足すたびに付け忘れる事故が起きない。日本語の選手名は数字を含まないので影響しない
-  - 適用済み: 順位表・成績ランキング（`ScheduleScreen`）/ 個人成績（`PlayerStatsScreen`）/
+  - 適用済み: 個人成績（`PlayerStatsScreen`）/
     能力ランキング（`AbilityRankingScreen`）/ チーム運営（`CorporateManagementScreen`）/
     日程進行（`DateProgressScreen`）
   - **1個ずつのカード（「プロ輩出数 12名」等）には要らない**。縦に比較する列でないと意味がない
@@ -768,17 +771,21 @@ HMR が拾わず**古いCSSを配り続ける**。実際にこれで2回、
   同じ行に `▶` が2つ並ぶと、どちらが日を進めるのか読めなかった。
 - ⚠ **アクセントが2つになる点は承知の上**。カレンダーの「今日」は輪郭だけの現在地、
   `.btn-primary` は塗りの「次に押すもの」で役目が違う。実機で並べて確認してある。
-- サイドバー再クリック（`onActiveClick` → `advanceDayRef`）の経路は**残してある**。
-  覚えた人の手を止めないため。
+- サイドバー再クリック（`onActiveClick` → `advanceDayRef`）の経路は、当初は覚えた人の手を止めないため
+  残していたが、**2026-11 に外した**。見た目はほかの項目と同じなので、開き直したつもりで押すと
+  黙って1日進み、間の試合も取り消せなかった。日を進めるのはカレンダー見出しの「1日進める」だけ。
 
 ##### ⚠ 「次の試合まで」は**1日進行の繰り返し**で作ること（日付を飛ばしてはいけない）
 `dateProgression.js` に `progressToNextGame`（＋ `seasonProgress.js` の
 `handleProgressToNextGame`）という**日付を次の試合日に差し替えるだけ**の実装が、
 どこからも呼ばれないまま残っていた（`ScheduleScreen` は受け取るだけで使っておらず、
 日程画面のジャンプ送りはイベント取りこぼし防止で撤去済みだった）。
+2026-11-10 の監査で、どこからも開けない日程表（`ScheduleScreen`）ごと、同じ型の
+`progressToNextPhase`（次のフェーズの初日へ差し替えて残り試合をまとめて消化）と、
+それしか使っていなかった `seasonProgress.js`・`calendarUI.js` も除いた。
 これを再利用すると、間の日の
 
-- 試合（`simulateGamesOnDate` は到着日に1回しか走らない）
+- 試合（`simulateScheduledGamesOnDate` は到着日に1回しか走らない）
 - 背景の大会・日次処理・イベント判定（**イベントは日付の完全一致でしか発火しない**）
 - `progressDate` の日数ループ＝`recoverAllPitcherFatigue` と `updateAllPlayersCondition`
 
@@ -1373,14 +1380,12 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
 - `src/game/baseState.js` (~125行) - 塁の状態の共通関数（采配モードの走者の識別・`makeRunner`）
 - `src/game/bunting.js` (~69行) - バントの解決モデル（両エンジン共有。フェア率・質・送球アウト・スクイズ）
 - `src/game/saveSystem.js` (~800行) - セーブ/ロード/ファイル書き出し・読み込み
-- `src/game/seasonProgress.js` (~420行) - 日程進行ハンドラー
 - `src/simulation-logic.js` (~1090行) - 物理演算（打球・投球）
-- `src/components/ScheduleScreen.jsx` (~750行) - 日程/順位表/成績ランキング
 - `src/components/LineupSettingScreen.jsx` (~2980行) - スタメン/投手起用/守備分析の3タブ（元に戻す/やり直す付き）
 - `src/components/DateProgressScreen.jsx` (~3760行) - 日程進行画面
   （`dateProgress/` に切り出し済み: `Newspaper.jsx` 440行 / `PreGameModal.jsx` 530行 /
    `Modals.jsx` 125行 / `bracketRenderer.jsx` 190行）
-- `src/components/ManagementScreen.jsx` (~590行) - 管理画面ルーター
+- `src/components/ManagementScreen.jsx` (~490行) - 管理画面ルーター（翌年のレギュレーション確定は `src/season/nextSeasonRegulations.js`）
 - `src/components/GameFlowScreens.jsx` (~530行) - ゲームフロー画面群
 - `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
 - `src/components/GameUIComponents.jsx` (~1030行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel・TeamMemberPanel・BenchList
@@ -1417,14 +1422,13 @@ App.jsxは大きいファイルなので、作業に関連するセクション�
 | THROW_PITCH | throwPitch（投球シミュレーション本体、最大セクション） |
 | GAME_CONTROLS | → `gameControls.js` に抽出済み（ラッパーのみ） |
 | GAME_SETUP | → `gameSetup.js` に抽出済み（ラッパーのみ） |
-| SEASON_PROGRESS | → `seasonProgress.js` に抽出済み（ラッパーのみ） |
 | RENDER | メインreturn（試合画面UI・管理シェル） |
 
 ### 編集作業ガイド
 - **試合ロジック修正**: `src/App.jsx` THROW_PITCH (L611-2030) + `src/game/aiManager.js`
 - **画面遷移修正**: `ManagementScreen.jsx` + `GameFlowScreens.jsx`
 - **UI修正**: `src/App.jsx` RENDER (L2131-END) + `GameUIComponents.jsx`
-- **日程進行修正**: `src/game/seasonProgress.js`
+- **日程進行修正**: `src/components/DateProgressScreen.jsx`（`handleProgressDate`）+ `src/season/dateProgression.js`
 - **選手交代修正**: `src/App.jsx` GAME_HANDLERS (L341-595)
 - **試合セットアップ**: `src/game/gameSetup.js`
 - **監督AI修正**: `src/game/aiManager.js`

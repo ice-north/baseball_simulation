@@ -4,6 +4,9 @@ import {
   zeroLine,
   addCounts,
   PA_KEYS,
+  CATCH_KEYS,
+  catchRates,
+  BATTERY_MIN_OUTS,
 } from '../src/online/recordStats.js';
 import {
   battingMetrics,
@@ -73,7 +76,10 @@ export function currentPlayerStats(
     ? recordedStats(record) || emptyStats()
     : player.seasonStats;
   const recent = recentForm(record);
+  const catcherStats = catchRates(record?.catching?.all);
   return {
+    // 捕手の成績（今季・マスクをかぶった時の投手成績）。受けていなければ出さない
+    ...(catcherStats ? { catcherStats } : {}),
     seasonStats: stats,
     performance: performanceFor(
       { ...player, seasonStats: stats },
@@ -103,6 +109,68 @@ export function recentForm(record) {
     hits: last.reduce((sum, g) => sum + g.hits, 0),
     hitStreak,
   };
+}
+/**
+ * 投手×捕手の組み合わせ（選手の詳細）。`seasons` は合算する年度の記録の並び。
+ * - `caught` … 捕手として受けた全体（捕手でなければ null）
+ * - `pitchers` … 捕手として受けた投手ごと / `catchers` … 投手として組んだ捕手ごと
+ * 各行は `catchRates` の率に `key`・`name`・`few`（回数が少ない）を足したもの。
+ * ⚠ 投手から見た捕手別は、捕手の記録を投手のキーで引き直す（記録は捕手の側にだけある）。
+ */
+export function batteryFor(seasons, key) {
+  const caught = zeroLine(CATCH_KEYS),
+    pitchers = {},
+    catchers = {},
+    names = {};
+  let asCatcher = false;
+  const add = (map, k, line) =>
+    addCounts((map[k] ||= zeroLine(CATCH_KEYS)), line, CATCH_KEYS);
+  for (const season of seasons) {
+    if (!season?.players) continue;
+    const own = season.players[key];
+    if (own?.catching) {
+      asCatcher = true;
+      addCounts(caught, own.catching.all, CATCH_KEYS);
+      for (const [p, line] of Object.entries(own.catching.pitchers)) {
+        add(pitchers, p, line);
+        names[p] ||= season.players[p]?.name;
+      }
+    }
+    for (const [c, r] of Object.entries(season.players)) {
+      const line = r.catching?.pitchers?.[key];
+      if (!line) continue;
+      add(catchers, c, line);
+      names[c] ||= r.name;
+    }
+  }
+  const rows = (map) =>
+    Object.entries(map)
+      .map(([k, line]) => ({
+        key: k,
+        name: names[k] || '（不明）',
+        ...catchRates(line),
+        few: line.outs < BATTERY_MIN_OUTS,
+      }))
+      .filter((row) => row.outs > 0)
+      .sort((a, b) => b.outs - a.outs);
+  const result = {
+    caught: asCatcher ? catchRates(caught) : null,
+    pitchers: rows(pitchers),
+    catchers: rows(catchers),
+  };
+  return result.caught || result.catchers.length ? result : null;
+}
+/** 期間の捕手の成績（通算の表が `catcherStats` として読む）。受けていなければ空 */
+function caughtLine(records) {
+  const all = zeroLine(CATCH_KEYS);
+  let any = false;
+  for (const r of records)
+    if (r?.catching) {
+      any = true;
+      addCounts(all, r.catching.all, CATCH_KEYS);
+    }
+  const rates = any ? catchRates(all) : null;
+  return rates ? { catcherStats: rates } : {};
 }
 const combinedRecord = () => ({
   stats: emptyStats(),
@@ -200,7 +268,12 @@ export function playerPeriods(
   team,
   player,
   context = statisticsContext(league),
+  { battery: withBattery = true } = {},
 ) {
+  // ⚠ 投手×捕手（`battery`）は年度の全選手をなめて作るので、要らないところ
+  //    （球団ごとの索引。どうせ外す）では作らない
+  const battery = (seasons, key) =>
+    withBattery ? batteryFor(seasons, key) : null;
   // ⚠ 文脈（全試合をなめて作る）は**1回だけ**作る。以前は1人ごとに2回作っていて、
   //    保存のたびの記録の索引（参加者×24人）で何百回もなめていた
   const current = currentPlayerStats(league, team, player, context);
@@ -213,9 +286,12 @@ export function playerPeriods(
       year: league.season.year,
       source: currentSeason?.complete
         ? '対人リーグ（プレーオフ込み・グランドCS除外）'
-        : '既存の今季記録（グランドCS込み）',
+        : '今季の成績（記録を取り始める前を含む・グランドCS込み）',
       ...current,
       splits: currentRecord?.splits || null,
+      battery: currentRecord
+        ? battery([observedSeason(league)], currentRecord.key)
+        : null,
       partial: !!currentSeason && !currentSeason.complete,
     },
   ];
@@ -240,7 +316,9 @@ export function playerPeriods(
       source: '対人リーグ（プレーオフ込み・グランドCS除外）',
       partial: !season.complete,
       seasonStats: stats,
+      ...caughtLine([record]),
       splits: record.splits,
+      battery: battery([season], record.key),
       performance: performanceFor(
         { seasonStats: stats },
         basicComparison(comparison),
@@ -261,7 +339,12 @@ export function playerPeriods(
       //    期間の作り方を変えたときに片方だけずれる
       years: entries.length,
       seasonStats: stats,
+      ...caughtLine(entries.map((e) => e.record)),
       splits: career.splits,
+      battery: battery(
+        Object.values(league.records?.seasons || {}),
+        entries[0].record.key,
+      ),
       performance: performanceFor(
         { seasonStats: stats },
         careerComparison(entries),
@@ -284,9 +367,9 @@ export function playerPeriods(
     const stats = { batting: h.batting || {}, pitching: h.pitching || {} };
     periods.push({
       id: `legacy:${h.year}`,
-      label: `${h.year}年・既存`,
+      label: `${h.year}年（参考）`,
       year: h.year,
-      source: '既存記録（グランドCS込み・リーグ比較値なし）',
+      source: '記録を取り始める前の成績（グランドCS込み・リーグ平均との比較なし）',
       seasonStats: stats,
       splits: null,
       performance: performanceFor({ seasonStats: stats }, null),
@@ -321,8 +404,8 @@ export function playerPeriods(
       }
     periods.push({
       id: 'legacy-career',
-      label: '既存通算',
-      source: '既存記録・今季込み（リーグ混在・比較値なし）',
+      label: '通算（参考）',
+      source: '記録を取り始める前を含む通算（今季込み・部の区別なし・リーグ平均との比較なし）',
       seasonStats: stats,
       splits: null,
       performance: performanceFor({ seasonStats: stats }, null),

@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { ScreenShell } from './GameUIComponents.jsx';
 import TutorialHint from './TutorialHint.jsx';
-import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regulationSettings.js';
-import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
+import { REGULATION_PRESETS, getPlayoffFormatDescription, thinTwoLeagueGameCounts, twoLeagueGameCountLabel, twoLeagueSplitLabel } from '../season/regulationSettings.js';
+import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPerSeason } from '../season/scheduleGenerator.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { normalizeMaxExtraInnings } from '../teams-data.js';
 
-const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null }) => {
+// submitLabel: 決定ボタンの文言。次に進む画面に合わせて呼ぶ側が渡す
+//   （箱庭はトライアウトではなくチーム設定へ進む）
+const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null, submitLabel = '設定完了 - トライアウトへ' }) => {
   const initialPreset = selectedLeague ? REGULATION_PRESETS[selectedLeague] : null;
   const initialRegs = initialPreset?.regulations || {};
   const initialCount = initialRegs.teamsCount || 4;
@@ -51,33 +54,13 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を自動調整
-    const oldGames = tempSettings.gamesPerSeason || 60;
-    const isTwoLeague = tempSettings.leagueFormat === 'two' && newCount >= 4;
-    let adjustedGames;
-    if (isTwoLeague) {
-      const validCounts = getValidTwoLeagueGameCounts(newCount, 150);
-      if (validCounts.length > 0) {
-        const closest = validCounts.reduce((best, o) =>
-          Math.abs(o.value - oldGames) < Math.abs(best.value - oldGames) ? o : best
-        );
-        adjustedGames = closest.value;
-      } else {
-        adjustedGames = oldGames;
-      }
-    } else {
-      const newD = Math.max(1, newCount - 1);
-      const oldD = Math.max(1, (tempSettings.teamsCount || 4) - 1);
-      const roundsPerOpponent = Math.max(1, Math.round(oldGames / oldD));
-      adjustedGames = newD * roundsPerOpponent;
-      if (adjustedGames < newD) adjustedGames = newD;
-      if (adjustedGames > 150) adjustedGames = Math.floor(150 / newD) * newD;
-      // レギュラーシーズンに入りきらない試合数は選べない（1リーグ3球団の130試合以上など）
-      const fitting = getValidSingleLeagueGameCounts(newCount, 150);
-      if (fitting.length > 0 && !fitting.includes(adjustedGames)) {
-        adjustedGames = fitting.filter(v => v <= adjustedGames).pop() ?? fitting[0];
-      }
-    }
+    // 試合数を選べる値に自動調整（オフの規定画面・翌年の日程と同じ `fitGamesPerSeason`）
+    const adjustedGames = fitGamesPerSeason({
+      teamsCount: newCount,
+      leagueFormat: tempSettings.leagueFormat,
+      games: tempSettings.gamesPerSeason || 60,
+      previousTeamsCount: tempSettings.teamsCount || 4,
+    });
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -199,15 +182,28 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
     setTempSettings({ ...tempSettings, teamAbbreviations: newAbbrs });
   };
 
+  // 延長最大回数: 打っている途中は空欄も持てるようにし（以前は parseInt で NaN になり警告が出た）、
+  // 欄を離れたときと決定のときに試合で使える範囲（9〜30回）へ丸める。
+  // ⚠ 以前は「3」や空欄のまま決められ、試合では黙って9回・12回に読み替えられていた
+  const handleExtraInningsChange = (e) => {
+    const raw = e.target.value;
+    setTempSettings(t => ({ ...t, maxExtraInnings: raw === '' ? '' : Math.floor(Number(raw)) }));
+  };
+  const fixExtraInnings = () => {
+    setTempSettings(t => ({ ...t, maxExtraInnings: normalizeMaxExtraInnings(t.maxExtraInnings === '' ? undefined : t.maxExtraInnings) }));
+  };
+
   const handleStart = () => {
-    onComplete({ ...tempSettings, preset: selectedLeague });
+    const maxExtraInnings = normalizeMaxExtraInnings(tempSettings.maxExtraInnings === '' ? undefined : tempSettings.maxExtraInnings);
+    onComplete({ ...tempSettings, maxExtraInnings, preset: selectedLeague });
   };
 
   return (
     <ScreenShell width="mid">
-        <h1 className="text-xl font-bold text-white mb-2">⚙️ レギュレーション設定</h1>
+        {/* ⚠ 見出しと注記は地色（明るい紙）の上なので text-ink / text-ink-sub */}
+        <h1 className="text-xl font-bold text-ink mb-2">⚙️ レギュレーション設定</h1>
         {selectedLeague && (
-          <p className="text-gray-300 text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
+          <p className="text-ink-sub text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
         )}
 
         <TutorialHint id="regulations-intro" title="リーグのルールを決める">
@@ -227,38 +223,25 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
             </div>
             {!selectedLeague && <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">チーム数</label>
-              <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value) || 4)} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums" />
+              {/* ⚠ 選択にする（数の入力欄だと、「10」「12」を打つ途中の「1」や、範囲外の「20」がそのまま入った。
+                  1球団では日程が組めず、20球団は上限を超える） */}
+              <select value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(Number(e.target.value))} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums">
+                {Array.from({ length: 11 }, (_, i) => i + 2).map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>}
             {!selectedLeague && <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">リーグ形式</label>
               <select value={tempSettings.leagueFormat || 'single'} onChange={(e) => {
                 const newFormat = e.target.value;
-                const tc = tempSettings.teamsCount || 4;
-                const currentGames = tempSettings.gamesPerSeason || 60;
-                let adjustedGames = currentGames;
-                if (newFormat === 'two' && tc >= 4) {
-                  const validCounts = getValidTwoLeagueGameCounts(tc, 150);
-                  if (validCounts.length > 0 && !validCounts.some(o => o.value === currentGames)) {
-                    const closest = validCounts.reduce((best, o) =>
-                      Math.abs(o.value - currentGames) < Math.abs(best.value - currentGames) ? o : best
-                    );
-                    adjustedGames = closest.value;
-                  }
-                } else {
-                  const d = Math.max(1, tc - 1);
-                  if (currentGames % d !== 0) {
-                    adjustedGames = Math.max(d, Math.round(currentGames / d) * d);
-                    if (adjustedGames > 150) adjustedGames = Math.floor(150 / d) * d;
-                  }
-                  const fitting = getValidSingleLeagueGameCounts(tc, 150);
-                  if (fitting.length > 0 && !fitting.includes(adjustedGames)) {
-                    adjustedGames = fitting.filter(v => v <= adjustedGames).pop() ?? fitting[0];
-                  }
-                }
+                const adjustedGames = fitGamesPerSeason({
+                  teamsCount: tempSettings.teamsCount || 4,
+                  leagueFormat: newFormat,
+                  games: tempSettings.gamesPerSeason || 60,
+                });
                 setTempSettings({...tempSettings, leagueFormat: newFormat, gamesPerSeason: adjustedGames});
               }} className="bg-gray-700 rounded px-3 py-2 w-full">
                 <option value="single">1リーグ制</option>
-                <option value="two" disabled={tempSettings.teamsCount < 4}>2リーグ制（{Math.floor(tempSettings.teamsCount / 2)}チーム×2）</option>
+                <option value="two" disabled={tempSettings.teamsCount < 4}>2リーグ制（{twoLeagueSplitLabel(tempSettings.teamsCount)}）</option>
               </select>
             </div>}
             <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
@@ -273,10 +256,10 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
                     const tc = tempSettings.teamsCount || 4;
                     const isTwoLeague = tempSettings.leagueFormat === 'two' && tc >= 4;
                     if (isTwoLeague) {
-                      const validCounts = getValidTwoLeagueGameCounts(tc, 150);
+                      const validCounts = thinTwoLeagueGameCounts(getValidTwoLeagueGameCounts(tc, 150), tempSettings.gamesPerSeason);
                       return validCounts.map(opt => (
                         <option key={opt.value} value={opt.value}>
-                          {opt.value}試合（リーグ内各{opt.intra}戦・交流各{opt.inter}戦）
+                          {twoLeagueGameCountLabel(opt, tc)}
                         </option>
                       ));
                     } else {
@@ -300,7 +283,10 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
             </div>
             <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">延長最大回数</label>
-              <input type="number" min="9" max="20" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({...tempSettings, maxExtraInnings: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums" />
+              <div className="flex items-center gap-2">
+                <input type="number" min="9" max="30" value={tempSettings.maxExtraInnings} onChange={handleExtraInningsChange} onBlur={fixExtraInnings} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums" />
+                <span className="text-sm text-gray-300">回まで（9〜30）</span>
+              </div>
             </div>
           </div>
         </div>
@@ -449,12 +435,12 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
 
         <div className="flex items-center justify-center gap-6">
           {onBack && (
-            <button onClick={onBack} className="text-gray-300 hover:text-white text-sm transition">
+            <button onClick={onBack} className="btn-secondary px-4 py-2 rounded-lg text-sm transition">
               ← 戻る
             </button>
           )}
           <button onClick={handleStart} className="btn-primary px-12 py-4 rounded-lg text-xl transition">
-            設定完了 - トライアウトへ
+            {submitLabel}
           </button>
         </div>
     </ScreenShell>

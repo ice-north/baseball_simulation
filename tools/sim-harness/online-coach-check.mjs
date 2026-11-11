@@ -11,6 +11,11 @@
 // 7. ビジョン（攻めの型 × 守りの型 × 時間軸）から考え方・好み・キャンプの方針が筋どおりに決まる。
 //    トレードの見る目は ±10% に収まる（監督は人の采配の肩代わりで、強さを足さない）
 // 8. 説明だけの飾り: 語り口・軸の選手・再登板で丸くなる・称号
+// 9. 総合監査（2026-11-10）で直したもの: キャンプの指導者の案を画面に出す・空いた席はおすすめ・
+//    トライアウトは終わったばかりの年の勝率・同じキャンプで外した監督の呼び戻しは解任に数えない・
+//    版11からの移行で型が考え方と逆を向かない
+// 10. 任せた手続き（トライアウト・退団・キャンプ）は、その人の決定を待たない（総合監査 2026-11-10 の判断7）。
+//     下書きの保存では進めない・キャンプを任せ直したら残りは指導者の方針（再監査 A1・A3）
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import {
@@ -21,6 +26,16 @@ import {
   updateStaffModes,
   updateStaff,
   saveLineup,
+  waitsFor,
+  openPhase,
+  loadLeagueWorld,
+  captureLeagueWorld,
+  autoResolvePhase,
+  validateCampRound,
+  runCampRound,
+  recordCampRound,
+  takeBackCamp,
+  CAMP_ROUNDS,
 } from '../../server/leagueEngine.mjs';
 import {
   staffOf,
@@ -34,6 +49,7 @@ import {
   effectiveStaffModes,
   conflictOf,
   RIFT_CONFLICT,
+  setStaffModes,
 } from '../../server/coachEngine.mjs';
 import { cpuTeams } from '../../src/online/membership.js';
 import {
@@ -55,12 +71,14 @@ import {
   pitchText,
   preferenceText,
   tryoutContext,
+  upgradeCoach,
 } from '../../src/online/coaches.js';
 import { coachCard, coachTitles } from '../../server/coachView.mjs';
 import { migrateLeague } from '../../src/online/leagueMigration.js';
 import { projectLeague, projectLineup, projectTeamInfo } from '../../server/projection.mjs';
 import { hashSeed, withSeededRandom } from '../../src/game/rng.js';
 import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
+import { phaseStatusLabel } from '../../src/online/notices.js';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 let now = new Date('2026-10-28T00:00:00Z');
@@ -101,7 +119,10 @@ assert.deepEqual(createCoaches(clone(league)), league.coaches, '作り直すと�
   const again = clone(old);
   for (const p of Object.values(old.coaches.people)) {
     assert.deepEqual(p.views, views[p.id], '移行で考え方が変わった（采配が変わる）');
-    assert.equal(p.vision.attack, 'speed', '好みの「俊足」が攻めの型にならない');
+    // ⚠ 走塁が「慎重」の人は、好みが「俊足」でも足の型にしない（カードの文と采配が逆を向く。
+    //    総合監査 2026-11-10）。それ以外は好みどおり
+    if (p.views.running <= -1) assert.notEqual(p.vision.attack, 'speed', '走塁が慎重なのに足の型');
+    else assert.equal(p.vision.attack, 'speed', '好みの「俊足」が攻めの型にならない');
     assert.ok(DEFENSE_TYPES[p.vision.defense] && HORIZONS[p.vision.horizon] && VOICES[p.voice]);
     assert.deepEqual(p.growth, { who: 'sharp', line: 70 }, '「選手に合わせる」が育成観にならない');
     assert.equal(p.personality.stubborn, 0);
@@ -567,5 +588,237 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
   assert.deepEqual(coachTitles(once), [], '1部優勝とプレーオフ優勝の同じ年を2度に数えた');
   assert.deepEqual(coachTitles({ career: [] }), []);
   console.log(`飾り: 軸の選手 ${mgrSeat.coach.keyPlayers} / 語り口 ${JSON.stringify(people.reduce((m, p) => ((m[p.voice] = (m[p.voice] || 0) + 1), m), {}))}`);
+}
+// ------------------------------------------------------------------ 9. 総合監査（2026-11-10）
+{
+  // キャンプの指導者の案: まだ回していなければビューに載せる（画面の下書きはここから始める）。
+  // 締め切りで回さなかったクールに当たる標準案と同じもの
+  const l = clone(inCamp);
+  const view = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  const suggested = view.phase.camp.suggested;
+  assert.ok(suggested?.players && Object.keys(suggested.players).length > 0, 'キャンプの指導者の案がビューに無い');
+  const plan = defaultPhasePlan(l, humanTeam);
+  assert.deepEqual(suggested.policy, plan.policy, 'ビューの案と標準案の方針が違う');
+  assert.deepEqual(suggested.players, plan.players, 'ビューの案と標準案の選手ごとの方針が違う');
+  assert.match(view.phase.planBy.text, /練習を実行/, 'キャンプの案の文が「決定」のまま');
+  // 人の球団で野手コーチが空くと、野手は上書きせずおすすめ（全員同じ「全体×技術」にしない）
+  const batting = staffOf(l, humanTeam).batting;
+  l.coaches.teams[humanTeam].batting = null;
+  Object.assign(l.coaches.people[batting.id], { status: 'free', job: null });
+  const half = campPlanFor(l, humanTeam, l.game.teams[humanTeam].players);
+  assert.equal(half.policy.mode, 'recommended', '人の球団の空いた側がおすすめにならない');
+  const fielders = l.game.teams[humanTeam].players.filter((p) => p.position !== 'pitcher');
+  assert.ok(fielders.every((p) => !half.players[p.id]), '野手コーチがいないのに野手を上書きした');
+  // コーチが2人とも居なければ案は無い（監督の名前を出さない）
+  const pitching = staffOf(l, humanTeam).pitching;
+  l.coaches.teams[humanTeam].pitching = null;
+  Object.assign(l.coaches.people[pitching.id], { status: 'free', job: null });
+  assert.equal(campPlanFor(l, humanTeam, l.game.teams[humanTeam].players), null, 'コーチがいないのに案がある');
+  const empty = projectLeague({ league: l, sessions: {} }, human.userId, null, null);
+  assert.equal(empty.phase.planBy, null, 'コーチがいないキャンプに監督の案と出す');
+  assert.equal(empty.phase.camp.suggested, null);
+  // 案が無いときの標準案はおすすめ。提出の正規化を通っても「全員同じ」に変わらない
+  // （締め切りの自動実行は標準案を submitPhase に通す）
+  const fallback = defaultPhasePlan(l, humanTeam);
+  submitPhase(l, human.userId, { phaseId: l.phase.id, plan: fallback, ready: false }, iso());
+  assert.equal(l.phase.submissions[human.userId].plan.policy.mode, 'recommended', '何もしなかった人のキャンプがおすすめにならない');
+}
+{
+  // トライアウトの「前年の勝率」は終わったばかりの年（年度更新はトライアウトの後）
+  const l = clone(inCamp);
+  const row = (wins, losses) => ({ team: humanTeam, wins, losses });
+  l.history = [{ year: l.season.year - 1, standings: [row(90, 30)] }];
+  l.season.standings = l.season.standings.map((s) => (s.team === humanTeam ? { ...s, wins: 30, losses: 90 } : s));
+  const got = tryoutContextFor(l, humanTeam);
+  const want = tryoutContext(staffOf(l, humanTeam), { lastWinRate: 0.25 });
+  assert.equal(got.winRate, want.winRate, 'トライアウトが1年前の勝率で選ぶ');
+  // 今季の試合が無ければ前年の記録
+  l.season.standings = l.season.standings.map((s) => ({ ...s, wins: 0, losses: 0 }));
+  assert.equal(tryoutContextFor(l, humanTeam).winRate, tryoutContext(staffOf(l, humanTeam), { lastWinRate: 0.75 }).winRate);
+}
+{
+  // 同じキャンプで外した監督を同じ席に呼び戻すのは取り消し（解任に数えない・反省で丸くならない）
+  const l = clone(inCamp);
+  const year = l.season.year;
+  const manager = l.coaches.people[staffOf(l, humanTeam).manager.id];
+  manager.job.since = year - 1;
+  manager.career = [...(manager.career || []), { year: year - 1, team: humanTeam, role: 'manager' }];
+  const stubborn = manager.personality.stubborn;
+  updateStaff(l, human.userId, { action: 'release', role: 'manager' });
+  assert.equal(manager.fired, 1);
+  updateStaff(l, human.userId, { action: 'hire', role: 'manager', coachId: manager.id });
+  assert.equal(manager.fired, 0, '呼び戻した監督が解任1回のまま');
+  assert.equal(manager.personality.stubborn, stubborn, '呼び戻しただけで丸くなった');
+  assert.notEqual(manager.mellowedAt, year);
+  assert.equal(manager.job.since, year - 1, '呼び戻した監督の在任が1年目に戻った');
+  // 呼び戻した後にもう一度外せば、前の年から居た人として数える
+  updateStaff(l, human.userId, { action: 'release', role: 'manager' });
+  assert.equal(manager.fired, 1, '呼び戻した後に外しても解任に数えない');
+}
+{
+  // 版11 → 12: ビジョンは考え方を先に見る（好みが考え方と逆を向いても、文と采配を揃える）
+  const coach = (views, prefs) => ({ id: 'x', views, prefs, personality: {}, specialty: 'batting' });
+  const aggressive = coach({ hitting: 1 }, { hitter: 'contact' });
+  upgradeCoach(aggressive, 1);
+  assert.equal(aggressive.vision.attack, 'power', '打撃「積極」の人が「つなぐ」になった');
+  const strikeout = coach({ pitching: 1 }, { pitcher: 'control' });
+  upgradeCoach(strikeout, 1);
+  assert.notEqual(strikeout.vision.defense, 'fielding', '投球「三振狙い」の人が「打たせて守る」になった');
+  const calm = coach({}, { hitter: 'speed', pitcher: 'control' });
+  upgradeCoach(calm, 1);
+  assert.deepEqual([calm.vision.attack, calm.vision.defense], ['speed', 'fielding'], '考え方が標準なら好みどおり');
+}
+// ------------------------------------------------------------------ 10. 任せた手続きは待たない（判断7）
+// ⚠ 任せた手続きは提出があっても指導者の案で決まる（`resolvePhase`）。以前は `waitsFor` が
+//    その人も待っていたので、ほかの全員が決めても締め切りまで進まなかった
+//    （キャンプには「決定」が無いので、任せた人がいると必ず締め切り待ち）。
+//    クールを回して終える経路は `online-deadline-check`（命令を通す）で見る
+{
+  const running = clone(inCamp);
+  resolve(running);
+  assert.equal(running.phase, null, '前提: キャンプが終わって開幕している');
+  const [a, b] = running.members;
+  const open = (kind, modes = {}) => {
+    const l = clone(running);
+    for (const m of l.members) m.staffModes = { ...(m.staffModes || {}), ...(modes[m.userId] || {}) };
+    loadLeagueWorld(l);
+    openPhase(l, kind, iso());
+    l.game = captureLeagueWorld();
+    return l;
+  };
+  const decide = (l, userId) => {
+    const m = l.members.find((x) => x.userId === userId);
+    submitPhase(l, userId, { phaseId: l.phase.id, plan: defaultPhasePlan(l, m.teamName), ready: true }, iso());
+  };
+  const rosterIds = (l, team) => l.game.teams[team].players.map((p) => p.id).sort((x, y) => x - y);
+  {
+    // 契約更改: 退団を任せた人は待たない。ほかの人が決めた時点で進み、任せた球団は指導者の案で退団
+    const l = open('contract', { [a.userId]: { release: 'delegate' } });
+    assert.equal(waitsFor(l, l.members[0]), false, '退団を任せた人を契約更改で待つ');
+    assert.equal(waitsFor(l, l.members[1]), true, '自分で決める人を待たない');
+    const viewA = projectLeague({ league: l, sessions: {} }, a.userId, null, null);
+    assert.equal(viewA.phase.delegated, true, '任せた手続きの印がビューに無い');
+    const shownA = viewA.members.find((m) => m.teamName === a.teamName);
+    assert.ok(shownA.delegated && shownA.ready, '任せた球団が一覧で「検討中」のまま');
+    assert.equal(phaseStatusLabel(shownA), '指導者に任せています');
+    // 文も「待たない」に合わせる（以前は「提出しても指導者の案で決まります」だけで、待つかが分からなかった）
+    assert.match(viewA.phase.planBy.text, /決定は待たずに/, '任せた手続きの文が新しい動きと食い違う');
+    const viewB = projectLeague({ league: l, sessions: {} }, b.userId, null, null);
+    assert.equal(viewB.phase.delegated, false);
+    assert.ok(!viewB.members.find((m) => m.teamName === b.teamName).ready);
+    const atDeadline = clone(l);
+    decide(l, b.userId);
+    assert.equal(l.phase, null, '退団を任せた人を待って、契約更改が締め切りまで進まない');
+    assert.equal(l.status, 'running');
+    // 締め切りで決まったときと同じ結果（任せた人の分は指導者の案）
+    autoResolvePhase(atDeadline, atDeadline.phase.deadline);
+    assert.equal(atDeadline.phase, null);
+    assert.deepEqual(rosterIds(l, a.teamName), rosterIds(atDeadline, a.teamName), '早く進んだ契約更改が締め切りのときと違う');
+    assert.deepEqual(rosterIds(l, b.teamName), rosterIds(atDeadline, b.teamName));
+  }
+  {
+    // トライアウト: 決めていない人がトライアウトを「任せる」にした時点で進む（`updateStaffModes`）
+    const l = open('tryout');
+    decide(l, b.userId);
+    assert.equal(l.phase?.kind, 'tryout', '前提: 決めていない人を待つ');
+    const atDeadline = clone(l);
+    updateStaffModes(l, a.userId, { tryout: 'delegate' }, iso());
+    assert.equal(l.phase, null, 'トライアウトを任せても、締め切りまで進まない');
+    setStaffModes(atDeadline, a.userId, { tryout: 'delegate' });
+    autoResolvePhase(atDeadline, atDeadline.phase.deadline);
+    assert.deepEqual(rosterIds(l, a.teamName), rosterIds(atDeadline, a.teamName), '早く進んだトライアウトが締め切りのときと違う');
+    assert.deepEqual(rosterIds(l, b.teamName), rosterIds(atDeadline, b.teamName));
+    // 手続きの無いときに任せ方を変えても何も起きない
+    updateStaffModes(l, a.userId, { tryout: 'advice' }, iso());
+    assert.equal(l.status, 'running');
+  }
+  {
+    // ⚠ 全員が任せていても、開いた直後には進めない（候補を見る・任せ方を戻す間を残す）。
+    //    関係の無い分野の任せ方を変えても進まない。誰かが「決定」を押すか、締め切りで進む
+    const both = { [a.userId]: { tryout: 'delegate' }, [b.userId]: { tryout: 'delegate' } };
+    const l = open('tryout', both);
+    assert.equal(l.phase?.kind, 'tryout', '全員が任せたトライアウトが、開いた直後に終わった');
+    updateStaffModes(l, a.userId, { tactics: 'delegate' }, iso());
+    assert.equal(l.phase?.kind, 'tryout', '関係の無い任せ方の変更でトライアウトが終わった');
+    // ⚠ 「下書きを保存」（ready: false）では進めない。以前は ready を見ておらず、
+    //    下書きを保存したその場でトライアウトが処理されていた（再監査 A1）
+    submitPhase(l, a.userId, { phaseId: l.phase.id, plan: defaultPhasePlan(l, a.teamName), ready: false }, iso());
+    assert.equal(l.phase?.kind, 'tryout', '全員が任せたトライアウトが「下書きを保存」で終わった');
+    assert.equal(l.status, 'waiting');
+    decide(l, a.userId);
+    assert.equal(l.phase, null, '全員が任せたトライアウトで「決定」を押しても進まない');
+    // 契約更改も同じ（「決定を取り消す」も ready: false）
+    const c = open('contract', { [a.userId]: { release: 'delegate' }, [b.userId]: { release: 'delegate' } });
+    submitPhase(c, b.userId, { phaseId: c.phase.id, plan: defaultPhasePlan(c, b.teamName), ready: false }, iso());
+    assert.equal(c.phase?.kind, 'contract', '全員が任せた契約更改が「下書きを保存」で終わった');
+  }
+  {
+    // キャンプ: 任せた人は待たない。席が3人とも空くと「自分で」になり、待つ
+    const l = clone(inCamp);
+    updateStaffModes(l, a.userId, { camp: 'delegate' }, iso());
+    assert.equal(l.phase?.kind, 'camp', '前提: b はまだ終えていない');
+    assert.equal(waitsFor(l, l.members[0]), false, 'キャンプを任せた人を待つ');
+    const viewA = projectLeague({ league: l, sessions: {} }, a.userId, null, null);
+    assert.match(viewA.phase.planBy.text, /ほかの球団が4クール終えるとキャンプが終わり/, '任せたキャンプの文が新しい動きと食い違う');
+    for (const role of COACH_ROLES) updateStaff(l, a.userId, { action: 'release', role });
+    assert.equal(waitsFor(l, l.members[0]), true, '指導者がいないのにキャンプを任せたまま');
+    decide(l, b.userId);
+    assert.equal(l.phase?.kind, 'camp', '自分で決める人がいるのにキャンプが終わった');
+    // ⚠ 呼んで任せた形に戻っても、その場ではキャンプを終えない（続けてほかの席にも呼べるように）
+    const pick = Object.values(l.coaches.people).find((p) => p.status === 'free');
+    updateStaff(l, a.userId, { action: 'hire', role: 'pitching', coachId: pick.id });
+    assert.equal(waitsFor(l, l.members[0]), false);
+    assert.equal(l.phase?.kind, 'camp', '指導者を1人呼んだその場でキャンプが終わった');
+  }
+  {
+    // ⚠ 自分で1クール回したあと（任せ方は「意見を聞く」に戻る）にキャンプを任せ直したら、
+    //    残りのクールは**指導者の方針**で回る（画面の文どおり）。以前は最後に自分で実行した
+    //    指示で回っていた（再監査 A3）。「意見を聞く」のままなら、最後の指示で回る
+    const l = clone(inCamp);
+    const me = l.members.find((m) => m.userId === a.userId);
+    const plan = validateCampRound(l, a.teamName, {
+      round: 1,
+      policy: { mode: 'team', direction: 'weakness', phase: 'physical' },
+    });
+    const state = ((l.phase.camp ||= {})[a.userId] = { rounds: 0 });
+    loadLeagueWorld(l);
+    recordCampRound(state, runCampRound(l, a.teamName, plan));
+    l.game = captureLeagueWorld();
+    state.plan = plan;
+    takeBackCamp(l, me);
+    assert.equal(effectiveStaffModes(l, me).camp, 'advice', '前提: 自分で回すと「意見を聞く」に戻る');
+    decide(l, b.userId);
+    assert.equal(l.phase?.kind, 'camp', '前提: a を待っている');
+    // 比べる相手: 自分で回した指示を持たない（指導者の方針で残りを回す）
+    const coachOnly = clone(l);
+    delete coachOnly.phase.camp[a.userId].plan;
+    const abilities = (x) =>
+      JSON.stringify(
+        x.game.teams[a.teamName].players.map((p) => [p.id, p.batting, p.pitching, p.physical, p.fielding]),
+      );
+    // 任せ直す → 最後の1人なのでその場で進む
+    const redelegated = clone(l);
+    updateStaffModes(redelegated, a.userId, { camp: 'delegate' }, iso());
+    updateStaffModes(coachOnly, a.userId, { camp: 'delegate' }, iso());
+    assert.equal(redelegated.phase, null, '前提: 最後の1人が任せるとキャンプが終わる');
+    assert.equal(redelegated.campResults[a.userId].rounds, CAMP_ROUNDS);
+    assert.equal(
+      abilities(redelegated),
+      abilities(coachOnly),
+      'キャンプを任せ直したのに、残りのクールが最後に自分で実行した指示で回った',
+    );
+    // 「意見を聞く」のまま締め切り → 最後の指示で回る（指示を持たないときと結果が違う）
+    const advice = clone(l);
+    const adviceCoach = clone(l);
+    delete adviceCoach.phase.camp[a.userId].plan;
+    autoResolvePhase(advice, advice.phase.deadline);
+    autoResolvePhase(adviceCoach, adviceCoach.phase.deadline);
+    assert.equal(advice.phase, null);
+    assert.notEqual(
+      abilities(advice),
+      abilities(adviceCoach),
+      '「意見を聞く」のまま締め切りを迎えたのに、残りのクールが最後に自分で実行した指示で回らない',
+    );
+  }
 }
 console.log('online-coach-check PASS');

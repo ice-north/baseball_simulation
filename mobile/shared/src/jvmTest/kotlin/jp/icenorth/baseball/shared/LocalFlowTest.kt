@@ -42,8 +42,16 @@ class LocalFlowTest {
                     val total = phase.at("camp", "total").int() ?: CAMP_ROUNDS
                     for (round in done + 1..total) {
                         val main = roster.associate { it.pid to clampMenu(resolveTraining(it, "sharpen", "skill").main, it) }
-                        val sub = roster.associate { it.pid to clampSub(resolveTraining(it, "sharpen", "skill").sub, it) }
-                        send("campRound", Commands.campRound(round, "team", "sharpen", "skill", emptyMap(), main, sub))
+                        val picked = mapOf(
+                            roster.first { !it.isPitcherJson() } to "subposition",
+                            roster.first { it.isPitcherJson() } to "newpitch",
+                        )
+                        val sub = roster.associate { it.pid to (picked[it] ?: clampSub(resolveTraining(it, "sharpen", "skill").sub, it)) }
+                        // 練習の対象も送る（サブポジ練習の守備位置・覚えたい球種）。サーバーが受け取れる形であること
+                        val target = picked.mapNotNull { (p, key) -> campSubTargetChoices(key, p).firstOrNull()?.let { p.pid to it.key } }.toMap()
+                        val subTarget = Commands.campTargetsToSend(roster, { sub.getValue(it.pid) }, target)
+                        assertEquals(picked.size, subTarget.size)
+                        send("campRound", Commands.campRound(round, "team", "sharpen", "skill", emptyMap(), main, sub, subTarget))
                     }
                     assertEquals(total, raw().at("phase", "camp", "rounds").int() ?: total)
                 } else {

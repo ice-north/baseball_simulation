@@ -256,4 +256,92 @@ assert.equal(getPlayerIdCounter(), 90001, 'ロード失敗後に採番位置を�
   assert.ok(universityPool[2026][0].player.careerStats?.batting, '大学プールの成績欄がロードで戻らない');
 }
 
+// ⚠ トライアウトの途中で保存したものは、ロードでその続きから再開する（途中の指名は
+//    seasonData.tryoutDraft）。以前は途中の指名を保存に入れず、ロードすると日程画面の11/10に
+//    戻ってトライアウトの日が過ぎた扱いになり、その年のトライアウトが丸ごと飛んでいた
+{
+  const { saveGameToSlot, resumeTargetOf } = await import('../../src/game/saveSystem.js');
+  const at = (month, day) => ({ year: 2026, month, day });
+  // 戻す画面: 毎年のトライアウト（11/10）はトライアウトの画面、初回は新しく始める流れのトライアウト
+  assert.equal(resumeTargetOf({ managementView: 'tryout', seasonData: { currentDate: at(11, 10) } }).managementView, 'tryout',
+    'トライアウトの途中で保存したものが日程画面へ戻る（その年のトライアウトが飛ぶ）');
+  assert.deepEqual(
+    resumeTargetOf({ screenMode: 'start', gameFlowState: 'newgame_tryout', managementView: 'dateprogress', seasonData: { currentDate: at(1, 1) } }),
+    { screenMode: 'start', gameFlowState: 'newgame_tryout', managementView: 'dateprogress' },
+    '初回のトライアウトの途中で保存したものが本編へ進んでしまう');
+  // ほかの画面は従来どおり
+  assert.deepEqual(resumeTargetOf({ managementView: 'save', seasonData: { currentDate: at(11, 5) } }),
+    { screenMode: 'management', gameFlowState: 'season', managementView: 'dateprogress' });
+  assert.equal(resumeTargetOf({ managementView: 'offseason', seasonData: {} }).managementView, 'offseason');
+  assert.equal(resumeTargetOf({ seasonData: { currentDate: at(12, 3) } }).managementView, 'offseason');
+  assert.equal(resumeTargetOf({ managementView: 'jersey', seasonData: {} }).managementView, 'jersey');
+
+  const { packTryoutDraft, unpackTryoutDraft, withoutTryoutDraft } = await import('../../src/season/tryoutDraftState.js');
+  const candidate = (id, position) => ({ id, name: `候補${id}`, position });
+  const [a, b, c, d] = [candidate(9001, 'pitcher'), candidate(9002, 'catcher'), candidate(9003, 'short'), candidate(9004, 'left')];
+  const live = {
+    year: 3, initial: false,
+    candidates: [c, d],
+    draftOrder: [{ team: 'ユーザー', round: 1 }, { team: 'B球団', round: 1 }, { team: 'B球団', round: 2 }, { team: 'ユーザー', round: 2 }],
+    currentPick: 2,
+    draftHistory: [{ pick: 1, round: 1, team: '自球団', player: a }, { pick: 2, round: 1, team: 'B球団', player: b }],
+    teamRosters: { 'ユーザー': [a], 'B球団': [b] }, userRoster: [a], userDone: false, complete: false,
+  };
+  const seasonData = { year: 3, currentDate: at(11, 10), phase: 'tryout', tryoutDraft: packTryoutDraft(live) };
+  const before = JSON.stringify(seasonData);
+  const saved = await saveGameToSlot(1, { seasonData, managementView: 'tryout', screenMode: 'management', gameFlowState: 'season', gameMode: 'normal' });
+  assert.equal(saved.success, true, saved.error);
+  assert.equal(JSON.stringify(seasonData), before, '保存する前に途中のトライアウトの状態を変更した');
+  const quiet = console.error;
+  console.error = () => {};
+  let r;
+  try { r = await loadGameFromSlot(1); } finally { console.error = quiet; }
+  assert.equal(r.success, true, r.error);
+  assert.equal(resumeTargetOf(r.data).managementView, 'tryout');
+  const back = unpackTryoutDraft(r.data.seasonData.tryoutDraft, { year: 3, initial: false });
+  assert.ok(back, '途中のトライアウトがロードで戻らない');
+  assert.equal(back.currentPick, 2, 'どこまで指名したかが戻らない');
+  assert.deepEqual(back.candidates.map(p => p.id), [9003, 9004], '残りの候補が戻らない');
+  assert.deepEqual(back.teamRosters['B球団'].map(p => p.id), [9002], 'ほかの球団の指名が戻らない');
+  assert.deepEqual(back.userRoster.map(p => p.id), [9001], '自チームの指名が戻らない');
+  assert.equal(back.userRoster[0], back.draftHistory[0].player, '名簿と指名結果が別の選手になった');
+  assert.equal(back.teamRosters['ユーザー'][0], back.userRoster[0]);
+  assert.ok(back.candidates[0].batting?.meet != null && back.draftHistory[0].player.pitching?.velocity != null,
+    'トライアウトの選手の欠けた項目がロードで補われない（指名後にそのまま名簿へ入る）');
+  // 別の年・初回かどうかが違う続き、壊れた続きは使わない（最初から始める）
+  assert.equal(unpackTryoutDraft(r.data.seasonData.tryoutDraft, { year: 4, initial: false }), null);
+  assert.equal(unpackTryoutDraft(r.data.seasonData.tryoutDraft, { year: 3, initial: true }), null);
+  assert.equal(unpackTryoutDraft({ ...r.data.seasonData.tryoutDraft, userRoster: [123456] }, { year: 3, initial: false }), null);
+  assert.equal(unpackTryoutDraft(undefined, { year: 3, initial: false }), null, '続きを持たない古い保存は最初から');
+  // 終えたら外す
+  assert.equal('tryoutDraft' in withoutTryoutDraft(seasonData), false);
+  assert.equal(seasonData.tryoutDraft.pick, 2, '外すときに元の seasonData を変えた');
+}
+
+// ⚠ 大学の保存で、設定の球団（settings.teamNames）の先頭が自チームでないものは、ロードで並べ直す。
+//    以前は部の入れ替え戦のたびに部の並びへ戻していて、2年目から保存の一覧の名前などが部の先頭の
+//    大学になった（生成側は直したが、既にある保存には残る）
+{
+  const { migrateSaveData, putUniversityUserTeamFirst } = await import('../../src/game/saveMigration.js');
+  const stale = () => ({
+    version: '2.17.0',
+    gameMode: 'university',
+    seasonData: { year: 2, settings: { teamNames: ['札幌大学', '北海学園大学', '北海道文教大学'], teamAbbreviations: ['札大', '学園', '文教'] } },
+    worldData: { universityLeague: { userTeam: '北海道文教大学', leagueTeams: ['札幌大学', '北海学園大学', '北海道文教大学'] } },
+    teamsData: {},
+  });
+  const quiet = console.log;
+  console.log = () => {};
+  let data;
+  try { data = migrateSaveData(stale()).data; } finally { console.log = quiet; }
+  assert.deepEqual(data.seasonData.settings.teamNames, ['北海道文教大学', '札幌大学', '北海学園大学'], 'ロードで大学の自チームを先頭に戻さない');
+  assert.deepEqual(data.seasonData.settings.teamAbbreviations, ['文教', '札大', '学園'], '略称が球団と食い違った');
+  assert.equal(data.worldData.universityLeague.leagueTeams[0], '北海道文教大学');
+  // 揃っている保存・大学でない保存は触らない（何度呼んでも同じ）
+  assert.equal(putUniversityUserTeamFirst(data), false, '揃っているのに並べ直した');
+  const independent = { ...stale(), gameMode: 'normal' };
+  assert.equal(putUniversityUserTeamFirst(independent), false, '大学でない保存を並べ直した');
+  assert.equal(independent.seasonData.settings.teamNames[0], '札幌大学');
+}
+
 console.log('save-check PASS');

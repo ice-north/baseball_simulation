@@ -3,8 +3,7 @@
 // 日付を進めてフェーズを遷移
 // ============================================================
 
-import { advanceDate, getCurrentPhase, getNPBDraftDay, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
-import { generateFullSeasonSchedule } from './scheduleGenerator.js';
+import { advanceDate, getCurrentPhase, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 import { updateAllPlayersCondition } from '../game/condition.js';
 import { getModeCapabilities } from '../game/modeCapabilities.js';
@@ -41,79 +40,10 @@ export const progressDate = (seasonData, days = 1) => {
 //    「次の試合まで」は `DateProgressScreen` 側で**1日進行を繰り返す**形に作り直した。
 //    呼び出し元（`handleProgressToNextGame` → `ScheduleScreen` の未使用プロップ）も
 //    まとめて除去済み。復活させないこと。
-
-/**
- * 次のフェーズまで進行
- * @param {Object} seasonData - シーズンデータ
- * @returns {Object} 更新されたシーズンデータ
- */
-export const progressToNextPhase = (seasonData) => {
-  const currentMonth = seasonData.currentDate.month;
-  let targetDate;
-
-  // 現在のフェーズから次のフェーズの開始日を計算
-  switch (seasonData.phase) {
-    case SEASON_PHASES.SPRING_CAMP:
-      // キャンプ → レギュラーシーズン（4月1日）
-      targetDate = { year: seasonData.currentDate.year, month: 4, day: 1 };
-      break;
-
-    case SEASON_PHASES.REGULAR_SEASON:
-      if (seasonData.settings?.universityMode) {
-        // 大学モード: レギュラーシーズン → ドラフト（10月第4木曜日）
-        targetDate = { year: seasonData.currentDate.year, month: 10, day: getNPBDraftDay(seasonData.currentDate.year) };
-      } else {
-        // レギュラーシーズン → プレーオフ（10月10日）
-        targetDate = { year: seasonData.currentDate.year, month: 10, day: 10 };
-      }
-      break;
-
-    case SEASON_PHASES.PLAYOFFS:
-      // プレーオフ → ドラフト（10月第4木曜日）
-      targetDate = { year: seasonData.currentDate.year, month: 10, day: getNPBDraftDay(seasonData.currentDate.year) };
-      break;
-
-    case SEASON_PHASES.DRAFT:
-      if (seasonData.settings?.universityMode) {
-        // 大学モード: ドラフト → オフシーズン（11月15日）
-        targetDate = { year: seasonData.currentDate.year, month: 11, day: 15 };
-      } else {
-        // ドラフト → 契約更改（11月9日）
-        targetDate = { year: seasonData.currentDate.year, month: 11, day: 9 };
-      }
-      break;
-
-    case SEASON_PHASES.CONTRACT:
-      // 契約更改 → トライアウト（11月10日）
-      targetDate = { year: seasonData.currentDate.year, month: 11, day: 10 };
-      break;
-
-    case SEASON_PHASES.TRYOUT:
-      // トライアウト → オフシーズン（11月30日）
-      targetDate = { year: seasonData.currentDate.year, month: 11, day: 30 };
-      break;
-
-    case SEASON_PHASES.OFF_SEASON:
-      // オフシーズン → 次年度のキャンプ（1月1日）
-      targetDate = { year: seasonData.currentDate.year + 1, month: 1, day: 1 };
-      break;
-
-    default:
-      // デフォルトは1日進める
-      targetDate = advanceDate(seasonData.currentDate, 1);
-  }
-
-  const phaseOpts2 = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts2, targetDate.year);
-
-  return {
-    ...seasonData,
-    currentDate: targetDate,
-    phase: newPhase,
-    year: targetDate.month === 1 && targetDate.day === 1 ? seasonData.year + 1 : seasonData.year
-  };
-};
-
+// ⚠ **`progressToNextPhase`（次のフェーズの開始日まで一気に進める）も同じ理由で除去した**
+//    （2026-11-10 総合監査）。日付を次のフェーズの初日に差し替えるだけで、呼び出し元の
+//    `handleProgressToNextPhase` が残り試合をまとめて消化していた。どちらも、どこからも
+//    開けない日程表（`ScheduleScreen`）からしか呼ばれておらず、画面ごと除いた。
 
 /**
  * 試合結果を記録

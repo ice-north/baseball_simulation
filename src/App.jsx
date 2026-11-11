@@ -47,7 +47,7 @@ import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, conditionBattingMod, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
-import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, autoSave, isAutosaveEnabled, AUTOSAVE_KEY } from './game/saveSystem.js';
+import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, autoSave, isAutosaveEnabled, AUTOSAVE_KEY, resumeTargetOf } from './game/saveSystem.js';
 
 // Game controls imports
 import { executeResetGame, executeMultiPitch, executeStartSimMode } from './game/gameControls.js';
@@ -57,17 +57,16 @@ import { executeSetupManagedGame, executeHandleManagedGameEnd } from './game/gam
 import { executeAutoSubstitutePitcher, executeAutoSubstitutePinchHitter, executeAutoDefensiveSubstitution, executeAutoStealingDecision, executeAutoOptimizePitcherUsage } from './game/aiManager.js';
 
 // Season progress imports
-import { handleProgressDate as progressDateHandler, handleProgressToNextPhase as progressToNextPhaseHandler } from './game/seasonProgress.js';
 
 // Season management imports
-import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
+import { createSeasonData, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
 import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
-import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
 import { generateTryoutCandidates, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
 import { processNPBDraft } from './season/npbDraft.js';
+import { repairLeagueConfig } from './season/nextSeasonRegulations.js';
 import { initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged, recoverMissingParallelTeams } from './corporate/corporateInit.js';
 import { WORLD_DATA } from './corporate/worldData.js';
 
@@ -76,6 +75,7 @@ import ManagementScreen from './components/ManagementScreen.jsx';
 import GameFlowScreens from './components/GameFlowScreens.jsx';
 import { Sidebar, RenderBases, AccordionSection, TeamPitcherPanel, TeamMemberPanel } from './components/GameUIComponents.jsx';
 import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
+import { useEscapeToClose } from './components/useEscapeToClose.js';
 
     // ========================================================================
     // App.jsx セクション構成 (行番号はおおよその目安)
@@ -102,8 +102,9 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const [screenMode, setScreenMode] = useState('start'); // 'start', 'game', 'management'
       const [gameFlowState, setGameFlowState] = useState('title'); // 'title', 'newgame_regulations', 'newgame_tryout', 'newgame_camp', 'sandbox_regulations', 'sandbox_setup', 'season'
       const [gameMode, setGameMode] = useState('normal'); // 'normal', 'sandbox'
-      const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save', 'regulations'
-      const [scheduleTab, setScheduleTab] = useState('league'); // 'league', 'batting', 'pitching'
+      // ⚠ 初期値は日程進行。以前は 'schedule'（どこからも開けない日程表）で、ゲームを始める・
+      //    ロードするときに必ず上書きされるので出ることは無かった。日程表は 2026-11-10 に除いた
+      const [managementView, setManagementView] = useState('dateprogress'); // 'dateprogress', 'roster', 'stats', 'save', 'regulations' ほか
 
       // リーグ構成設定（拡張可能な設計）
       const [leagueConfig, setLeagueConfig] = useState({
@@ -259,6 +260,10 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           root.style.zoom = '1'; // 一旦等倍で自然サイズを測る
           const de = document.documentElement;
           const vw = de.clientWidth, vh = de.clientHeight;
+          // ⚠ 幅が md（768px）未満では縮めない。PC 向けの横幅の画面を 390px に収めようとして
+          //   いつも下限の0.7になり、文字が小さくなるうえ、収まりきらずに横へはみ出し、
+          //   縦では下に地色の帯が残っていた。狭い画面は等倍のまま横に送って読む
+          if (vw < 768) return;
           let z = root.scrollWidth > vw ? vw / root.scrollWidth : 1;
           if (root.querySelector('[data-fit-height]') && root.scrollHeight > vh) {
             z = Math.min(z, vh / root.scrollHeight);
@@ -290,6 +295,16 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       // 実測は rAF で束ねてあるので1フレーム1回。
       React.useEffect(() => { refitRef.current?.(); });
 
+      // 画面を切り替えたら一番上から見せる（描く前に戻すので、前の位置が一瞬も見えない）。
+      // ⚠ 以前は一人用に scrollTo が無く、前の画面の縦のスクロール位置のまま次の画面を開いていた
+      //    （采配試合の「結果確定・翌日へ」→ 日程画面が176px下、選手検索を下まで送って
+      //    ロスター管理 → 450px下、契約更改も見出しが隠れて開いた）。
+      // ⚠ 画面の名前（screenMode・gameFlowState・managementView）が変わったときだけ戻す。
+      //    同じ画面の中の再描画（日を進める・タブを替える・試合終了の欄へ送る）では動かさない
+      React.useLayoutEffect(() => {
+        window.scrollTo(0, 0);
+      }, [screenMode, gameFlowState, managementView]);
+
       // クラッシュ時の緊急保存用に、現在のゲーム状態を返すスナップショットを登録
       React.useEffect(() => {
         setGameSnapshotProvider(() => ({
@@ -306,7 +321,10 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         if (!result.success) return result;
         const saveData = result.data;
         if (saveData.seasonData) setSeasonData(saveData.seasonData);
-        if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
+        // 球団数を変えた年より後の古い保存は leagueConfig が古いまま入っているので、設定の球団に合わせる
+        if (saveData.leagueConfig) {
+          setLeagueConfig(repairLeagueConfig(saveData.leagueConfig, saveData.seasonData?.settings, saveData.gameMode || 'normal'));
+        }
         if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
         // ⚠ 持っていない保存でも**空に戻す**。残すと、直前に遊んでいた別の保存の
         //    殿堂入り・球団の年度成績がそのまま引き継がれて、次の保存に混ざる
@@ -337,37 +355,15 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
 
         initializeAllPlayersCondition();
 
-        setScreenMode('management');
-        // オフシーズン画面で保存したならそこへ戻す（12/1等の日付が日程画面に出るのを防ぐ）。
-        //
-        // ⚠ **`phase` で判定してはいけない**。`getCurrentPhase` は独立・社会人モードで
-        // **10/21〜11/29 の「イベントの谷間」も `off_season` を返す**（プレーオフ後、
-        // ドラフト前後、契約更改の前後…）。そのため 11/5 のセーブをロードすると
-        // 契約更改(11/9)・トライアウト/スカウト入団(11/10)・年度末決算(11/30)を
-        // まるごと飛ばして翌年へ進んでしまっていた（実測: 社会人・独立で再現。
-        // 大学モードは `universityMode` 分岐が 11/29 まで REGULAR_SEASON なので無事だった）。
-        // 保存時にどの画面を開いていたかは `managementView` に入っているのでそれを使う。
-        const savedView = saveData.managementView;
-        const d = saveData.seasonData?.currentDate;
-        // managementView を持たない旧セーブ向けの保険。12月以降だけオフシーズン扱い
-        const deepOffseason = (d?.month ?? 0) >= 12 || (d?.month === 11 && (d?.day ?? 0) >= 30);
-        // ⚠ **年度替わりの手続きの画面も、保存したところへ戻す**。「2年目へ進む」で
-        //    日付が1月1日に替わった瞬間にオートセーブが走り、その時の画面は
-        //    規定の見直し・キャンプ（社会人・大学）・背番号のどれか。以前は全部
-        //    日程画面に戻していたため、ロードすると規定・キャンプを飛ばし、
-        //    独立リーグでは日程が空のまま（日程は規定の確定で作る）試合が無くなった。
-        const RESUMABLE_VIEWS = ['regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'camp', 'jersey'];
-        const resumeView = RESUMABLE_VIEWS.includes(savedView)
-          ? savedView
-          : (savedView === 'offseason' || (!savedView && deepOffseason))
-            ? 'offseason'
-            : 'dateprogress';
+        // 戻す画面は保存したときの画面で決める（`resumeTargetOf` の説明を参照）
+        const target = resumeTargetOf(saveData);
+        setScreenMode(target.screenMode);
         // ⚠ データ編集（タイトルの「編集」）から「ゲームに戻る」ときも、ここで決めた
         //    画面へ戻すこと。ロードの直後に 'edit' で上書きするので、覚えておかないと
         //    日程画面へ戻り、規定の確定（独立リーグはここで日程を作る）を飛ばしていた
-        resumeViewRef.current = resumeView;
-        setManagementView(resumeView);
-        setGameFlowState('season');
+        resumeViewRef.current = target.managementView;
+        setManagementView(target.managementView);
+        setGameFlowState(target.gameFlowState);
         return result;
       };
 
@@ -427,13 +423,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         return result;
       };
 
-      // 後方互換性のため、既存の変数名でもアクセス可能にする
-      const seasonYear = seasonData?.year || 1;
-      const currentDate = seasonData?.currentDate || { year: 2024, month: 3, day: 1 };
-      const currentPhase = seasonData?.phase || SEASON_PHASES.REGULAR_SEASON;
-      const leagueStandings = seasonData?.standings || [];
-      const springStandings = seasonData?.springStandings || null;
-
       // 変化球の効果設定（外部ファイルから読み込み）
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
 
@@ -442,6 +431,17 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const [inning, setInning] = useState(1);
       const [score, setScore] = useState({ home: 0, away: 0 });
       const [gameOver, setGameOver] = useState(false);  // 試合終了フラグ
+      // 試合終了の欄。終わったら画面に入るまで送る。
+      // ⚠ 欄は試合画面の下に足されるので、1280×720 では「結果確定・翌日へ」が画面の下に隠れていた
+      const gameEndPanelRef = useRef(null);
+      useEffect(() => {
+        if (!gameOver) return undefined;
+        // 自動フィットの倍率が変わったあと（次の描画のあと）に送る
+        const id = requestAnimationFrame(() => requestAnimationFrame(() => {
+          gameEndPanelRef.current?.scrollIntoView({ block: 'nearest' });
+        }));
+        return () => cancelAnimationFrame(id);
+      }, [gameOver]);
       const [gameStarted, setGameStarted] = useState(false);  // 試合開始フラグ
       const [selectedBatterAway, setSelectedBatterAway] = useState(null);  // 打順変更用（アウェイ）
       const [selectedBatterHome, setSelectedBatterHome] = useState(null);  // 打順変更用（ホーム）
@@ -454,6 +454,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       const [autoManagerMode, setAutoManagerMode] = useState(true);  // 監督AI自動采配モード
       const [showSubModal, setShowSubModal] = useState(false);  // 選手交代モーダル
       const [subModalSelected, setSubModalSelected] = useState(null);  // モーダル内選択中選手ID
+      useEscapeToClose(() => { setShowSubModal(false); setSubModalSelected(null); }, showSubModal);
       const isSubstituting = React.useRef(false);  // 交代処理中フラグ（二重実行防止）
       // 采配モード（日程進行から起動した試合）
       const [managedGameInfo, setManagedGameInfo] = useState(null);  // { gameId, home, away, otherGames }
@@ -469,7 +470,6 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
         : normalizeMaxExtraInnings(seasonData?.settings?.maxExtraInnings ?? 12);
       // 勝敗・セーブ・ホールドの判定用（登板順とリードの移り変わり。自動シミュと同じ帳簿）
       const decisionLogRef = useRef(createDecisionLog());
-      const advanceDayRef = useRef(null);
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -705,6 +705,11 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
               const tempPosition = player1.position;
               player1.position = player2.position;
               player2.position = tempPosition;
+              // ⚠ DH は守備位置ではなく `_isDH` の印で持つ（position は本来の守備位置のまま）。
+              //    印も入れ替えないと、DH と野手を入れ替えても表の上で何も変わらない
+              const p1DH = !!player1._isDH;
+              if (player2._isDH) player1._isDH = true; else delete player1._isDH;
+              if (p1DH) player2._isDH = true; else delete player2._isDH;
             }
 
             return { ...prev, players };
@@ -915,7 +920,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
       // 現在の捕手を取得（守備チームから）
       const getCurrentCatcher = () => {
         const team = getDefenseTeam();
-        return team.players.find(p => p.isStarter && p.position === 'catcher') || team.players[7];
+        return team.players.find(p => p.isStarter && p.position === 'catcher' && !p._isDH) || team.players[7];
       };
 
       // ※ formatInnings, getAbilityColor, getAbilityTextColor, getBestFitPosition は
@@ -2099,7 +2104,7 @@ import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
           const dt = getDefenseTeam();
           const infPos = ['first', 'second', 'third', 'short'];
           const infVals = infPos.map(pos => {
-            const pl = dt.players.find(p => p.position === pos && p.battingOrder >= 1);
+            const pl = dt.players.find(p => p.position === pos && p.battingOrder >= 1 && !p._isDH);
             return pl?.fielding?.defense ?? 50;
           });
           const adv = resolveGroundOutAdvance({
@@ -2639,7 +2644,7 @@ if (newOuts === 3) {
           const quality = rollBuntQuality(buntSkill, meet);
 
           const fieldOf = (pos) => defenseTeam.players
-            .find(p => p.position === pos && p.battingOrder >= 1)?.fielding?.defense;
+            .find(p => p.position === pos && p.battingOrder >= 1 && !p._isDH)?.fielding?.defense;
           const avgFieldDef = buntFieldDefense(
             fieldOf('pitcher'), fieldOf('first'), fieldOf('third'),
             currentCatcher?.fielding?.defense);
@@ -2875,11 +2880,6 @@ if (newOuts === 3) {
         setManagedGameInfo, setScreenMode, setManagementView
       });
 
-  // 日程進行ハンドラー（seasonProgress.jsからインポート済み、stateバインド用ラッパー）
-  const seasonProgressCtx = { seasonData, setSeasonData, setSelectedMonth, selectedMonth, userTeamName, setScreenMode, setManagementView };
-      // [SECTION: SEASON_PROGRESS] → seasonProgress.js に抽出済み（ラッパーのみ）
-  const handleProgressDate = (days) => progressDateHandler(days, seasonProgressCtx);
-  const handleProgressToNextPhase = () => progressToNextPhaseHandler(seasonProgressCtx);
 
 
 // 管理画面のルーター（ManagementScreen.jsxからインポート済み）
@@ -2897,6 +2897,7 @@ if (newOuts === 3) {
           userTeamName={userTeamName}
           hasSaveData={hasSaveData}
           saveSlots={saveSlots}
+          saveGame={saveGame}
           loadGame={loadGame}
           loadAutosave={loadAutosave}
           initializeNewGame={initializeNewGame}
@@ -2928,9 +2929,11 @@ if (newOuts === 3) {
       // [SECTION: RENDER] メインreturn（試合画面UI・管理シェル）
       return (
         <div className="min-h-screen bg-surface-0">
-          {/* オートセーブ完了トースト */}
+          {/* オートセーブ完了トースト。
+              ⚠ 右**上**に出す。下は取り消せない操作の確認の帯（`ConfirmBar`、下端の中央）の
+                 置き場で、狭い幅では帯のボタンの上に重なっていた */}
           {autoSaveFlash && (
-            <div className="fixed bottom-3 right-3 z-[60] bg-gray-900/95 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none">
+            <div className="fixed top-3 right-3 z-[60] bg-gray-900/95 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none">
               💾 オートセーブしました
             </div>
           )}
@@ -2943,18 +2946,22 @@ if (newOuts === 3) {
             managementView={managementView}
             setScreenMode={setScreenMode}
             setManagementView={setManagementView}
-            advanceDayRef={advanceDayRef}
           />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'ml-56' : ''}>
+          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'md:ml-56 pt-12 md:pt-0' : ''}>
             {screenMode === 'game' ? (
               /* data-fit-height: 縦も1画面に収める対象。自動フィットが高さを見る印
-                 （縦に読み進める管理画面には付けないこと） */
-              <div className="p-1" data-fit-height>
+                 （縦に読み進める管理画面には付けないこと）
+                 ⚠ 試合終了のあとは外す。結果の欄が下に足されて縦が伸び、倍率が下限の0.7まで
+                 下がってスコアも表も小さくなっていた。外して等倍に戻し、結果の欄まで送る */
+              <div className="p-1" data-fit-height={gameOver ? undefined : true}>
           {/* 管理画面へボタン（采配モード中は非表示） */}
           <div className="max-w-[1800px] mx-auto flex justify-between items-center">
+            {/* ⚠ この行は地色（明るい灰色）の上に直に載る見出し。文字色は index.css の「文字色の決まり」の
+                地色の列（見出し text-ink・強調 text-ink-accent）。黄色の字のままだと地に溶けていた。
+                上下に少し余白を取る（行の高さが字ぎりぎりで上の端に詰まって見えた） */}
             {managedGameInfo && (
-              <span className="text-yellow-400 text-sm font-bold">
+              <span className="inline-block py-0.5 mb-1 text-ink text-sm font-bold">
                 {formatDate(seasonData?.currentDate)} - 采配モード
                 {(() => {
                   const fmt = seasonData?.settings?.leagueFormat;
@@ -2965,10 +2972,10 @@ if (newOuts === 3) {
                   const h = homeTeam?.name, a = awayTeam?.name;
                   if (!h || !a) return null;
                   const isInter = l1.has(h) !== l1.has(a);
-                  if (isInter) return <span className="ml-2 text-green-400">[ 交流戦 ]</span>;
+                  if (isInter) return <span className="ml-2 text-ink-accent">[ 交流戦 ]</span>;
                   const leagueNames = seasonData?.settings?.leagueNames;
                   const lName = l1.has(h) ? (leagueNames?.[0] || 'リーグ1') : (leagueNames?.[1] || 'リーグ2');
-                  return <span className="ml-2 text-blue-400">[ {lName} ]</span>;
+                  return <span className="ml-2 text-ink-accent">[ {lName} ]</span>;
                 })()}
               </span>
             )}
@@ -2976,7 +2983,7 @@ if (newOuts === 3) {
               {!managedGameInfo && (
                 <button
                   onClick={() => setScreenMode('management')}
-                  className="bg-gray-700/80 hover:bg-gray-600 text-gray-300 hover:text-white px-5 py-2.5 rounded-xl transition-all border border-gray-600/50 hover:border-gray-500 flex items-center gap-2 active:scale-95"
+                  className="btn-secondary px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 active:scale-95"
                 >
                   <span>⚙️</span>
                   <span className="font-medium">管理画面へ</span>
@@ -3020,10 +3027,10 @@ if (newOuts === 3) {
                   <p className="text-sm text-blue-400 mb-1">👆 選手パネルクリック → スタメン⇔ベンチ交代</p>
                   <p className="text-sm text-purple-400 mb-4">🔄 守備位置クリック → 守備交換</p>
 
-                  {/* 監督AI設定 */}
+                  {/* おまかせ采配の設定（⚠ 「AI」は作る側の言葉なので画面に出さない） */}
                   <div className="mb-6 p-3 bg-surface-2 rounded-lg">
                     <div className="flex items-center justify-center gap-3">
-                      <span className="text-sm font-semibold">🤖 監督AI</span>
+                      <span className="text-sm font-semibold">🤖 おまかせ采配</span>
                       <button
                         onClick={() => setAutoManagerMode(!autoManagerMode)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
@@ -3037,7 +3044,7 @@ if (newOuts === 3) {
                         />
                       </button>
                       <span className={`text-xs ${autoManagerMode ? 'text-green-400' : 'text-gray-300'}`}>
-                        {autoManagerMode ? 'ON (自動采配)' : 'OFF (手動采配)'}
+                        {autoManagerMode ? 'ON（ベンチに任せる）' : 'OFF（自分で采配）'}
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 mt-2 text-center">
@@ -3115,9 +3122,10 @@ if (newOuts === 3) {
                       </tr>
                     </thead>
                     <tbody>
-                      {/* アウェイチーム */}
+                      {/* アウェイチーム。球団名は略称（欄は2割しか無く、正式名は「高知ファイティン…」と切れていた。
+                          正式名は左右の打順の見出しに出ている） */}
                       <tr className="border-b border-gray-800">
-                        <td className={`py-0.5 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
+                        <td className={`py-0.5 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}} title={awayTeam.name}>{getTeamAbbreviation(awayTeam.name)}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => (
@@ -3139,7 +3147,7 @@ if (newOuts === 3) {
                       </tr>
                       {/* ホームチーム */}
                       <tr>
-                        <td className={`py-0.5 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
+                        <td className={`py-0.5 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}} title={homeTeam.name}>{getTeamAbbreviation(homeTeam.name)}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => {
@@ -3520,7 +3528,7 @@ if (newOuts === 3) {
                 <TutorialHint id="ingame-tactics" title="試合の采配">
                   <b className="text-cyan-200">攻撃中</b>は打撃方針・狙い球（球種／コース）・盗塁・エンドラン・バント、
                   <b className="text-amber-200">守備中</b>は配球（球種／狙い）・敬遠を指示できます。
-                  いま操作できる側だけが表示されます。おまかせにすれば監督AIと捕手AIが自動で判断します。
+                  いま操作できる側だけが表示されます。「おまかせ」にすれば、打者と捕手がその場で判断します。
                 </TutorialHint>
                 {(() => {
                   const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
@@ -3542,7 +3550,7 @@ if (newOuts === 3) {
                             <button key={v} onClick={() => setBattingApproach(v)} disabled={gameOver}
                               title={v === 'take' ? '見送りを増やして球数を稼ぐ。振るときも当てにいく'
                                 : v === 'aggressive' ? '早いカウントから積極的に打ちにいく。フルスイングが増える'
-                                : '監督AIに任せる（得意コースはフルスイング／追い込まれたら当てにいく）'}
+                                : '打者に任せる（得意コースはフルスイング／追い込まれたら当てにいく）'}
                               className={pick(battingApproach === v, 'bg-cyan-600')}>{label}</button>
                           ))}
                           <span className="text-xs text-gray-400">｜</span>
@@ -3562,7 +3570,7 @@ if (newOuts === 3) {
                         <div className={row}>
                           <span className={tag('text-cyan-300')}>狙い球</span>
                           <button onClick={() => setBatGuessType('auto')} disabled={gameOver}
-                            title="球種は張らない（読み合いはAIに任せる）"
+                            title="球種は張らない（読み合いは打者に任せる）"
                             className={pick(batGuessType === 'auto', 'bg-cyan-700')}>おまかせ</button>
                           {['straight', 'breaking'].map(v => (
                             <button key={v} onClick={() => setBatGuessType(v)} disabled={gameOver}
@@ -3652,11 +3660,11 @@ if (newOuts === 3) {
                   </button>
                   <span className="w-px h-7 bg-gray-700 mx-1" />
                   <button onClick={() => setAutoManagerMode(!autoManagerMode)}
-                    title="監督AIに采配を任せる"
+                    title="采配をベンチに任せる（代打・継投・作戦を自動で決める）"
                     className={`px-3 py-1.5 rounded text-sm font-semibold transition ${
                       autoManagerMode ? 'seg-on' : 'seg'
                     }`}>
-                    🤖 {autoManagerMode ? 'AI ON' : 'AI OFF'}
+                    🤖 {autoManagerMode ? 'おまかせ ON' : 'おまかせ OFF'}
                   </button>
                   {managedGameInfo && !gameOver && (
                     <button
@@ -3751,12 +3759,14 @@ if (newOuts === 3) {
                   }
                 };
 
+                // ⚠ 親が `space-y-2` なので、そのままだと幕にも上の余白（8px）が付き、画面の上端に
+                //   暗くならない帯が残っていた。`!mt-0` で打ち消す（`.space-y-2 > * ~ *` は詳細度が高い）
                 return (
-                  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => { setShowSubModal(false); setSubModalSelected(null); }}>
+                  <div className="fixed inset-0 !mt-0 bg-black/70 flex items-center justify-center z-50" onClick={() => { setShowSubModal(false); setSubModalSelected(null); }}>
                     <div className="bg-surface-1 rounded-xl p-4 max-w-lg w-full mx-4 border border-gray-600 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white font-bold text-lg">選手交代</h3>
-                        <button onClick={() => { setShowSubModal(false); setSubModalSelected(null); }} className="text-gray-300 hover:text-white text-xl">&times;</button>
+                        <button onClick={() => { setShowSubModal(false); setSubModalSelected(null); }} aria-label="閉じる" className="text-gray-300 hover:text-white text-xl">✕</button>
                       </div>
                       <p className="text-xs text-gray-300 mb-3">フィールド選手を選んでからベンチ選手を選ぶと交代します</p>
 
@@ -3931,7 +3941,7 @@ if (newOuts === 3) {
                 const scrollText = scrollParts.join('　　');
 
                 return (
-                <div className="bg-surface-1 rounded-lg p-4 text-white">
+                <div ref={gameEndPanelRef} className="bg-surface-1 rounded-lg p-4 text-white">
                   <h3 className="text-2xl font-bold mb-3 text-center text-yellow-400">🏆 試合終了</h3>
                   <div className="flex justify-center items-center gap-8 text-xl font-bold mb-4">
                     <div className="text-red-400">
@@ -4330,15 +4340,7 @@ if (newOuts === 3) {
                 resumeViewRef={resumeViewRef}
                 seasonData={seasonData}
                 setSeasonData={setSeasonData}
-                selectedMonth={selectedMonth}
                 setSelectedMonth={setSelectedMonth}
-                scheduleTab={scheduleTab}
-                setScheduleTab={setScheduleTab}
-                seasonYear={seasonYear}
-                currentDate={currentDate}
-                currentPhase={currentPhase}
-                leagueStandings={leagueStandings}
-                springStandings={springStandings}
                 userTeamName={userTeamName}
                 allTeams={allTeams}
                 gameMode={gameMode}
@@ -4357,11 +4359,8 @@ if (newOuts === 3) {
                 deleteSave={deleteSave}
                 refreshSaveSlots={refreshSaveSlots}
                 setupManagedGame={setupManagedGame}
-                advanceDayRef={advanceDayRef}
                 setScreenMode={setScreenMode}
                 setGameFlowState={setGameFlowState}
-                handleProgressDate={handleProgressDate}
-                handleProgressToNextPhase={handleProgressToNextPhase}
               />
             )}
           </div>

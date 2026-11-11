@@ -138,7 +138,8 @@ const canEnterRelief = (players, id, currentPitcherId, removedIds) => {
 };
 
 // AI監督がスタメンを自動生成する機能（エクスポート）
-// 毎試合呼ばれ、ローテーション・疲労を考慮して合理的なラインナップを組む
+// 毎試合呼ばれ、ローテーション・疲労を考慮して合理的なラインナップを組む。
+// 返り値は今日の先発投手（`teamData.players` の中の人。選べなければ undefined）
 export const generateAILineup = (teamData, teamName) => {
   const players = teamData.players || [];
   if (players.length === 0) {
@@ -147,7 +148,10 @@ export const generateAILineup = (teamData, teamName) => {
 
 
   // 全員の打順をリセット
-  players.forEach(p => { p.battingOrder = 0; });
+  // ⚠ **DH の印（`_isDH`）も一緒に外す**。下で印を付け直すのは打順に入る人だけなので、
+  //    前の打順の DH が控えに回ると印が残り、守備固めで入ると印付きのまま守備位置を受け取って
+  //    「DH が2人・その守備位置が空」になっていた（守備の検索は `!p._isDH` で探す）
+  players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
   // 先発投手を先に決定（二刀流選手のフィールド配置に影響するため）
   const rotation = teamData.pitchingRotation;
@@ -338,6 +342,8 @@ export const generateAILineup = (teamData, teamName) => {
     }
   });
 
+  // 今日の先発（DH制では打順に入らないので、呼ぶ側はこれで先発を知る。`gameSetup.js`）
+  return starter;
 };
 
 // ユーザーチームに推奨スタメンを設定
@@ -362,10 +368,14 @@ export const setRecommendedLineup = (teamData, teamName) => {
   }
 
   const starters = players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9);
+  // ⚠ DH は守備位置ではなく `_isDH` の印で持つ（position は本来の守備位置のまま）。
+  //    打順の保存には「dh」で書くこと。本来の位置で書くと同じ守備位置が2人になり、
+  //    日付進行の補完（`ensureCompleteLineup`）が重なった人を空いた位置へ順に回して、
+  //    左翼手が捕手・捕手が一塁…と守備が連鎖してずれていた（独立リーグの開幕で見つかった）
   teamData.lineupSettings.battingOrder = starters.map(p => ({
     playerId: p.id,
     battingOrder: p.battingOrder,
-    position: p.position
+    position: p._isDH ? 'dh' : p.position
   }));
 
 };
@@ -472,8 +482,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     }
 
 
-    // まず全員の打順を0にリセット
-    teamData.players.forEach(p => { p.battingOrder = 0; });
+    // まず全員の打順を0にリセット（DH の印も外す。`generateAILineup` の説明を参照）
+    teamData.players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
     // lineupSettingsから打順と守備位置を適用（DHは打順のみ、ポジション変更しない）
     settings.battingOrder.forEach(entry => {
@@ -772,8 +782,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     return defense;
   };
 
+  // 直前の1球で打者が狙い球を当てたか（対人の記録だけが読む。試合の判定には使わない）
+  let lastGuessRight = false;
   // 一球シミュレーション（自己完結型）
   const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, sequence, offenseStrategy, defenseStrategy) => {
+    lastGuessRight = false;
     // 前球（打席内の配球メモリ。詳細は pitchSequence.js）
     const lastPitch = lastCall(sequence);
     // この場面で捕手が求める結果（併殺狙い / 三振狙い / 通常。pitchSituation.js）
@@ -927,7 +940,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       balls: count.balls, strikes: count.strikes,
       isBreaking, col: loc.col, sequence, batterEye: batter.eye,
       // ナックルは読み合いが成立しない（誰にもどこへ来るか分からない）
-      guessRight: !isUnreadablePitch(selectedPitch.type) && Math.random() < guessSuccessRate({
+      // ⚠ 代入は記録（捕手の「狙い球を外した率」）のためだけ。乱数を引く順番は変えない
+      guessRight: (lastGuessRight = !isUnreadablePitch(selectedPitch.type) && Math.random() < guessSuccessRate({
         catcherLead: catcherPlayer?.catching?.lead ?? 50,
         // **何球種持っているかではなく、どれだけ幅があるか**（arsenal.js）。
         // 似た球（スライダー＋カット等）は同じ引き出しとして数えない
@@ -936,7 +950,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         fooled: fooledLevel(sequence),
         // 出どころが見えなければ球種も判断できない（deception.js）
         deception: deceptionAxis(getDeception(pitcherPlayer)),
-      }),
+      })),
     });
     const guessLevel = Math.max(-2, Math.min(2, aiGuess.level + (locationRead ? 1 : 0)));
     pushCall(sequence, {
@@ -1510,6 +1524,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             if (replacement) {
               replacement.battingOrder = starter.battingOrder;
               replacement.position = starter.position;
+              // 守備に就く（DH の印が残っていると守備の検索に掛からず、その位置が空になる）
+              delete replacement._isDH;
               starter.battingOrder = 0;
               gameState.removedIds.add(starter.id);
             }
@@ -1544,6 +1560,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
           leastUsed.battingOrder = weakest.battingOrder;
           leastUsed.position = weakest.position;
+          delete leastUsed._isDH;
           weakest.battingOrder = 0;
           gameState.removedIds.add(weakest.id);
         }
@@ -1856,6 +1873,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const relieverData = defenseTeam.players.find(p => p.id === reliever.id);
       const relieverOldOrder = relieverData.battingOrder;
       const relieverOldPos = relieverData.position;
+      const relieverWasDH = !!relieverData._isDH;
       const isTwoWaySwap = inFieldSlot(relieverData);
       const replacement = isTwoWaySwap
         ? reliefFieldReplacement(defenseTeam.players, relieverData, currentPitcher.id, gs.removedIds)
@@ -1868,12 +1886,15 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
       relieverData.battingOrder = pitcherSlot;
       relieverData.position = 'pitcher';
+      delete relieverData._isDH;
       relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
       // 二刀流リリーフ: 空いた野手スロットをベンチから補充
+      // ⚠ DH の枠なら代わりも DH（守備には就かない）。印を写さないと本来の野手と守備位置が重なる
       if (replacement && relieverOldPos) {
         replacement.battingOrder = relieverOldOrder;
         replacement.position = relieverOldPos;
+        if (relieverWasDH) replacement._isDH = true; else delete replacement._isDH;
       }
 
       reliefTrack.currentRelieverId = reliever.id;
@@ -1960,6 +1981,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       before: { ...batter.gameStats.batting },
       pitcherOuts: pitcher.gameStats.pitching.outs,
       batterId: batter.id, batterName: batter.name, pitcherId: pitcher.id, pitcherName: pitcher.name,
+      // 捕手の成績（マスクをかぶった時の投手成績）のため。失点・自責点はこの打席で増えたぶん
+      catcherId: catcher?.id ?? null,
+      runsBefore: pitcher.gameStats.pitching.runsAllowed || 0,
+      earnedBefore: pitcher.gameStats.pitching.earnedRuns || 0,
+      calls: 0, reads: 0,
       offense: offenseTeam.name, defense: defenseTeam.name,
       inning: gameState.inning, pinchHit: batter.id !== scheduledBatterId,
       scoreBefore: { ...gameState.score },
@@ -2166,6 +2192,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, sequence, offenseStrategy, defenseStrategy);
       if (observed) {
         observed.pitches++;
+        observed.calls++;
+        if (lastGuessRight) observed.reads++;
         observed.result = result;
         if (result.type === 'foul') {
           observed.fouls++;
@@ -2426,7 +2454,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
       // 盗塁死や暴投サヨナラ、球数上限の未完了打席は対戦打席へ加えない。
       const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts > 0;
-      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs) });
+      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs),
+        runs: (pitcher.gameStats.pitching.runsAllowed || 0) - observed.runsBefore,
+        earnedRuns: (pitcher.gameStats.pitching.earnedRuns || 0) - observed.earnedBefore });
     }
 
     // 先発投手のダメージポイント積算（先発のみに適用）
@@ -2913,6 +2943,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               const relieverData = team.players.find(p => p.id === reliever.id);
               const relieverOldOrder2 = relieverData.battingOrder;
               const relieverOldPos2 = relieverData.position;
+              const relieverWasDH2 = !!relieverData._isDH;
               const isTwoWaySwap2 = inFieldSlot(relieverData);
               const replacement = isTwoWaySwap2
                 ? reliefFieldReplacement(team.players, relieverData, pitcher.id, gameState.removedIds)
@@ -2932,11 +2963,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
               relieverData.battingOrder = pitcherSlot;
               relieverData.position = 'pitcher';
+              delete relieverData._isDH;
               relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
+              // DH の枠なら代わりも DH（上の継投と同じ）
               if (replacement && relieverOldPos2) {
                 replacement.battingOrder = relieverOldOrder2;
                 replacement.position = relieverOldPos2;
+                if (relieverWasDH2) replacement._isDH = true; else delete replacement._isDH;
               }
 
               reliefTrack.currentRelieverId = reliever.id;

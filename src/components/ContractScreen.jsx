@@ -1,11 +1,13 @@
 import { getAIReleaseCandidates } from '../game/contractRules.js';
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
+import { departedEntry } from '../season/departedStats.js';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
 import { POSITION_NAMES, getAbilityColor, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
 import { finalizePlayerSeason, getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import { AbilityLegend } from './GameUIComponents.jsx';
+import ConfirmBar from './ConfirmBar.jsx';
 
 // AI自動解雇のロスター調整パラメータ
 // 野手/投手の総合力（スカウト画面と同じ算出式）
@@ -43,9 +45,14 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     return aiReleases;
   });
   const [confirmed, setConfirmed] = useState(false);
+  // 確定で名簿から外した選手の、その年の成績の写し（次へ進むときに seasonData へ渡す）
+  const departedRef = useRef([]);
   const [sortKey, setSortKey] = useState(null);
   const [sortAsc, setSortAsc] = useState(false);
-  const [showReview, setShowReview] = useState(false);
+  // 確定の前の帯（'release' = 選んだとおりに確定 / 'keep' = 解雇せずに確定 / null = 出さない）。
+  // ⚠ 以前は解雇が0人のときと「解雇せずに確定」は1回押すだけで確定し、取り消せなかった
+  //    （解雇を選ぶ前に押すと、その年は誰も解雇できない）。どちらも帯で決める形に揃える
+  const [review, setReview] = useState(null);
 
   const teamData = TEAMS_DATA[userTeamName];
   const players = teamData?.players || [];
@@ -139,6 +146,9 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
       if (td && playerIds.length > 0) {
         // 解雇される選手を解雇プールに追加（若年〜中堅のみ再トライアウト可能）
         const releasedPlayerObjs = td.players.filter(p => playerIds.includes(p.id));
+        // ⚠ 名簿から外す前に、その年の成績を写しておく（選手成績の画面が年度末まで出す。
+        //    `departedStats.js`）。引退扱いでプールに入らない人も写す
+        departedRef.current.push(...releasedPlayerObjs.map(p => departedEntry(p, teamName, td.name)));
         releasedPlayerObjs.forEach(p => {
           const age = p.age || 20;
           // 33歳以上は引退扱い（プールに入れない）
@@ -170,23 +180,26 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
   return (
     <div className="p-4">
-      <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
-      <p className="text-gray-300 text-xs mb-1">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
-      <AbilityLegend className="mb-2" />
-      {aiReleasedCount > 0 && (
-        <p className="text-yellow-400 text-xs mb-2">AIチームは{aiReleasedCount}人の選手を自動解雇します。</p>
-      )}
+      {/* ⚠ 見出しは地色（明るい紙）の上なので text-ink。**表と凡例はカードに載せること**。
+          以前は表がそのまま地色の上にあり、白や薄い灰色の文字・ランク色がほとんど読めなかった */}
+      <h1 className="text-xl font-bold text-ink mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
+      <p className="text-ink-sub text-xs mb-3">自チームの選手を解雇できます。行を押すと解雇/契約が切り替わります。</p>
 
       {!confirmed ? (
         <>
-          <div className="flex items-center gap-3 mb-2">
+          <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-3 mb-3">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mb-2">
             <span className="text-white font-bold">{userTeamName}</span>
             <span className="text-gray-300 text-sm">
               現在 {players.length}人 / 解雇予定 {userReleased.length}人 → 残り {players.length - userReleased.length}人
             </span>
+            <AbilityLegend className="ml-auto" />
           </div>
+          {aiReleasedCount > 0 && (
+            <p className="text-yellow-400 text-xs mb-2">ほかのチームは{aiReleasedCount}人の選手を解雇します。</p>
+          )}
 
-          <div className="mb-3 overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-surface-2">
                 <tr className="border-b border-gray-600 text-xs text-gray-300">
@@ -220,14 +233,23 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                   const isReleased = userReleased.includes(player.id);
                   const batting = player.seasonStats?.batting || {};
                   const pitching = player.seasonStats?.pitching || {};
-                  const games = isPitcher ? (pitching.games || 0) : (batting.games || 0);
+                  // ⚠ 野手登録で投げた選手（二刀流）は投手成績も出す。以前は位置だけで
+                  //    打撃か投手かを決めていたので、投手としてだけ出た二刀流の選手は
+                  //    打撃の「-」しか見えなかった
+                  const pitchedAsFielder = !isPitcher && ((pitching.inningsPitched || 0) > 0 || (pitching.games || 0) > 0);
+                  const showPitching = isPitcher || pitchedAsFielder || !!player.isTwoWay;
+                  const games = isPitcher ? (pitching.games || 0)
+                    : pitchedAsFielder ? Math.max(batting.games || 0, pitching.games || 0)
+                    : (batting.games || 0);
                   const avg = batting.atBats > 0 ? (batting.hits / batting.atBats).toFixed(3) : '-';
                   const era = pitching.inningsPitched > 0
                     ? ((pitching.earnedRuns || 0) / (pitching.inningsPitched / 3) * 9).toFixed(2)
                     : '-';
-                  const statsStr = isPitcher
-                    ? `${pitching.wins || 0}勝${pitching.losses || 0}敗 ERA${era}`
-                    : `${avg} ${batting.homeruns || 0}HR ${batting.rbis || 0}打点`;
+                  const pitchStr = `${pitching.wins || 0}勝${pitching.losses || 0}敗 ERA${era}`;
+                  const batStr = `${avg} ${batting.homeruns || 0}HR ${batting.rbis || 0}打点`;
+                  const statsStr = isPitcher ? pitchStr
+                    : pitchedAsFielder ? ((batting.atBats || 0) > 0 ? `${batStr} / ${pitchStr}` : pitchStr)
+                    : batStr;
 
                   return (
                     <tr
@@ -270,10 +292,10 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                       <td className="py-1 px-1 text-xs text-center"><AbilityValue value={player.pitching?.velocity || 0} isVel /></td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
                       <td className="py-1 px-1 text-xs text-center"><AbilityValue value={player.pitching?.stamina || 0} isSta /></td>
-                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.spinRate ?? 0)}`}>{isPitcher ? (player.pitching?.spinRate ?? '-') : '-'}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.spinRate ?? 0)}`}>{showPitching ? (player.pitching?.spinRate ?? '-') : '-'}</td>
                       <td className="py-1 px-1 text-xs text-center whitespace-nowrap">
                         {(() => {
-                          if (!isPitcher) return <span className="text-gray-400">-</span>;
+                          if (!showPitching) return <span className="text-gray-400">-</span>;
                           const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
                           if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
                           return arsenal.map((a, i) => (
@@ -282,7 +304,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                         })()}
                       </td>
                       <td className={`py-1 px-1 text-xs text-center font-bold ${getRankColor(getAbilityRank(fielderOverall(player)))}`}>{isPitcher ? '-' : fielderOverall(player)}</td>
-                      <td className={`py-1 px-1 text-xs text-center font-bold ${getRankColor(getAbilityRank(pitcherOverall(player)))}`}>{isPitcher ? pitcherOverall(player) : '-'}</td>
+                      <td className={`py-1 px-1 text-xs text-center font-bold ${getRankColor(getAbilityRank(pitcherOverall(player)))}`}>{showPitching ? pitcherOverall(player) : '-'}</td>
                       <td className="py-1 px-1 text-xs text-center text-gray-300">{games}</td>
                       <td className="py-1 px-1 text-xs text-gray-300 whitespace-nowrap">{statsStr}</td>
                     </tr>
@@ -291,70 +313,71 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
               </tbody>
             </table>
           </div>
+          </div>
 
           <div className="flex gap-3">
             <button
-              onClick={() => userReleased.length > 0 ? setShowReview(true) : handleConfirm(releasedPlayers)}
+              onClick={() => setReview('release')}
               className="btn-primary px-5 py-1.5 rounded text-sm"
             >
               契約更改を確定する
             </button>
             <button
-              onClick={() => {
-                const withoutUser = { ...releasedPlayers, [userTeamName]: [] };
-                setReleasedPlayers(withoutUser);
-                handleConfirm(withoutUser);
-              }}
+              onClick={() => setReview('keep')}
               className="btn-secondary px-4 py-1.5 rounded text-sm"
             >
               解雇せずに確定
             </button>
           </div>
 
-          {showReview && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowReview(false)}>
-              <div className="bg-surface-2 rounded-xl border border-gray-600 max-w-lg w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-white font-bold text-lg mb-3">契約更改の確認</h3>
-                <div className="bg-gray-900/60 rounded-lg p-3 mb-3 max-h-48 overflow-y-auto">
-                  <div className="text-gray-300 text-xs mb-2">解雇予定選手 ({userReleased.length}人)</div>
-                  {players.filter(p => userReleased.includes(p.id)).map(p => (
-                    <div key={p.id} className="flex items-center justify-between text-sm py-1 border-b border-gray-700/50 last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-300 text-xs">{POSITION_NAMES[p.position]}</span>
-                        <span className="text-white font-bold">{p.name}</span>
-                        <span className="text-gray-400 text-xs">{p.age}歳</span>
-                      </div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${(p.age || 20) >= 33 ? 'bg-gray-700 text-gray-300' : 'bg-blue-900/50 text-blue-300'}`}>
-                        {(p.age || 20) >= 33 ? '引退' : 'リリースプール'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="text-gray-300 text-xs mb-4 space-y-1">
-                  <div>残りロスター: <span className="text-white font-bold">{players.length - userReleased.length}人</span></div>
-                  <div className="text-yellow-400/80">この操作は取り消せません。33歳以上の選手は引退、33歳未満はリリースプールに移動します。</div>
-                </div>
-                <div className="flex gap-3 justify-end">
-                  <button onClick={() => setShowReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
-                    戻る
-                  </button>
-                  <button onClick={() => { setShowReview(false); handleConfirm(releasedPlayers); }} className="btn-danger px-5 py-1.5 rounded text-sm transition">
-                    解雇を確定する
-                  </button>
-                </div>
+          {review === 'release' && userReleased.length > 0 && (
+            <ConfirmBar
+              title={`${userReleased.length}人を解雇して、契約更改を確定しますか？`}
+              detail={`残る選手 ${players.length - userReleased.length}人`}
+              note="確定すると取り消せません。33歳以上の選手は引退し、33歳未満は自由契約になります。"
+              confirmLabel="解雇して確定する"
+              confirmClass="btn-danger"
+              onConfirm={() => { setReview(null); handleConfirm(releasedPlayers); }}
+              onCancel={() => setReview(null)}
+            >
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                {players.filter(p => userReleased.includes(p.id)).map(p => (
+                  <span key={p.id} className="whitespace-nowrap">
+                    <span className="text-white font-bold">{p.name}</span>
+                    <span className="ml-1">{POSITION_NAMES[p.position]}・{p.age}歳・{(p.age || 20) >= 33 ? '引退' : '自由契約'}</span>
+                  </span>
+                ))}
               </div>
-            </div>
+            </ConfirmBar>
+          )}
+          {(review === 'keep' || (review === 'release' && userReleased.length === 0)) && (
+            <ConfirmBar
+              title="解雇せずに、契約更改を確定しますか？"
+              detail={review === 'keep' && userReleased.length > 0
+                ? `解雇に選んだ${userReleased.length}人も含めて、全員（${players.length}人）と契約します`
+                : `全員（${players.length}人）と契約します`}
+              note="確定すると取り消せません。今年はもう解雇できません。"
+              confirmLabel="確定する"
+              confirmClass="btn-warn"
+              onConfirm={() => {
+                setReview(null);
+                const withoutUser = { ...releasedPlayers, [userTeamName]: [] };
+                setReleasedPlayers(withoutUser);
+                handleConfirm(withoutUser);
+              }}
+              onCancel={() => setReview(null)}
+            />
           )}
         </>
       ) : (
-        <div className="text-center py-10">
+        <div className="text-center py-10 bg-surface-2 rounded-xl border border-gray-700/50 max-w-3xl mx-auto">
           <p className="text-xl text-green-400 font-bold mb-4">契約更改が完了しました</p>
           {totalReleased > 0 && (
-            <p className="text-gray-300 mb-4">{totalReleased}人の選手を解雇しました。(AI: {aiReleasedCount}人, 自チーム: {userReleased.length}人)</p>
+            <p className="text-gray-300 mb-4">{totalReleased}人の選手を解雇しました。（ほかのチーム {aiReleasedCount}人・自チーム {userReleased.length}人）</p>
           )}
           <p className="text-gray-300 mb-6">次はトライアウトで新選手を獲得できます。</p>
           <button
-            onClick={() => { if (onComplete) onComplete(); }}
+            onClick={() => { if (onComplete) onComplete(departedRef.current); }}
             className="btn-primary px-8 py-3 rounded-lg text-lg"
           >
             トライアウトへ進む

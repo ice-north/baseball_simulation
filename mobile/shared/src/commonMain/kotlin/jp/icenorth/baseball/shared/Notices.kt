@@ -21,6 +21,8 @@ data class PendingProcedure(val kind: String, val label: String, val deadline: S
  *
  * ⚠ 初期メンバーを待っている球団には、リーグの手続きを出さない
  *    （その球団の手続きはCPUが決め、サーバーも決定を待たない）。
+ * ⚠ 指導者に任せた手続き（`phase.delegated`）も出さない。サーバーはその人の決定を待たず、
+ *    指導者の案で決める（`leagueEngine` の `waitsFor`）。
  */
 fun pendingProcedure(raw: JsonObject?): PendingProcedure? {
     if (raw == null) return null
@@ -29,6 +31,7 @@ fun pendingProcedure(raw: JsonObject?): PendingProcedure? {
         return PendingProcedure("pack_select", PHASE_LABELS.getValue("pack_select"), null, null)
     }
     val phase = raw["phase"].obj() ?: return null
+    if (phase.at("delegated").bool() == true) return null
     val kind = phase.at("kind").str().orEmpty()
     val deadline = phase.at("deadline").str() ?: raw.at("phaseDeadline").str()
     if (kind == "camp") {

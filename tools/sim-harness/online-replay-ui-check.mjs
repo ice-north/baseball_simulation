@@ -15,6 +15,9 @@ import {
 } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { STRATEGY_FIELDS } from '../../src/online/tactics.js';
+import { shortLastLines, midWordBreaks } from './lib/textWrap.mjs';
+import { setTeamLabels, teamNameParts } from '../../src/online/gameText.js';
+import { failureShots } from './lib/failureShots.mjs';
 const league = structuredClone(recordedFixture);
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -53,13 +56,21 @@ try {
       action = url.searchParams.get('action');
     let data;
     if (action === 'config') data = { local: true };
-    else if (action === 'view')
+    else if (action === 'view') {
       data = projectLeague(
         { league, sessions: { a: 'fixture' } },
         'a',
         'fixture',
         'a',
       );
+      // ⚠ この fixture は記録（`records`）だけで、今季の結果（`season.results`）が空。
+      //    試合結果のカードから小窓を開く検査のため、記録の試合をカードにも並べる
+      if (!data.results.length)
+        data.results = projectGames({ league }, 'a', {
+          year: data.year,
+          scope: 'league',
+        }).games;
+    }
     else if (action === 'game')
       data = projectGameInfo(
         { league },
@@ -109,7 +120,7 @@ try {
     '方針・采配に開かないと選べない選択肢を置かない',
   );
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByText('保存しました', { exact: true }).waitFor();
+  await page.getByText('方針・采配を保存しました', { exact: true }).waitFor();
   assert.equal(commands, 1);
   const ownTeam = league.members[0].teamName;
   assert.equal(league.game.teams[ownTeam].onlineTactics.sacrificeBunt, 'never');
@@ -123,6 +134,112 @@ try {
     'PCは主要12項目を一覧表示',
   );
   await page.getByRole('button', { name: '試合結果', exact: true }).click();
+  // ⚠ 長い球団名は2行に均して折る。「鹿児島ファルコン／ズ」と1文字だけ
+  //    次の行に落ちていた（1280px・1440px とも）。記録の試合は1つだけなので、
+  //    最初のカードの両球団の名前をリーグの全球団の名前に差し替えて見る
+  // ⚠ 折るのは**都市と愛称の間**。均すだけだと「姫路シー／ホース」と愛称の途中で
+  //    割れていた（再監査 F18）。画面と同じく `teamNameParts` で塊に分けて差し替える
+  const nameCells = page.locator('.online-score > div').first().locator('> span');
+  await nameCells.first().waitFor();
+  assert.equal(
+    await nameCells.first().locator('.online-team-part').count(),
+    2,
+    'PCの試合結果の球団名が都市と愛称の塊に分かれていない',
+  );
+  const shownNames = await nameCells.evaluateAll((list) =>
+    list.map((span) => span.innerHTML),
+  );
+  setTeamLabels(
+    projectLeague({ league, sessions: { a: 'fixture' } }, 'a', 'fixture', 'a')
+      .teamLabels,
+  );
+  const setNames = (name) =>
+    nameCells.evaluateAll((list, parts) => {
+      for (const span of list)
+        span.replaceChildren(
+          ...parts.map((part) => {
+            const node = document.createElement('span');
+            node.className = 'online-team-part';
+            node.textContent = part;
+            return node;
+          }),
+        );
+    }, teamNameParts(name));
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const broken = [];
+    const split = [];
+    for (const { name } of league.teams) {
+      assert.ok(teamNameParts(name).length === 2, `前提: 既定の球団名が都市と愛称に分かれない: ${name}`);
+      await setNames(name);
+      broken.push(...(await shortLastLines(page, '.online-score div span')));
+      split.push(...(await midWordBreaks(page, '.online-score > div > span')));
+    }
+    assert.deepEqual(
+      [...new Set(broken)],
+      [],
+      `試合結果の球団名が1文字だけ次の行に落ちる（${width}px）`,
+    );
+    assert.deepEqual(
+      [...new Set(split)],
+      [],
+      `試合結果の球団名が都市と愛称の間でなく、語の途中で折れる（${width}px）`,
+    );
+  }
+  await nameCells.evaluateAll((list, names) => {
+    list.forEach((span, i) => {
+      span.innerHTML = names[i];
+    });
+  }, shownNames);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  // ⚠ **試合結果のカードから開いても崩れない**。小窓をカード（`.online-score`）の
+  //    中に描いていて、カードの3列の grid が観戦リプレイの中まで当たり、左右の
+  //    メンバー表が 16px に潰れていた
+  await page
+    .locator('.online-score')
+    .getByRole('button', { name: /の試合成績$/ })
+    .first()
+    .click();
+  const cardBox = page.getByRole('dialog', { name: '試合成績', exact: true });
+  await cardBox.locator('tbody tr').first().waitFor();
+  // ⚠ PCは**ページを分けない**。12人で区切っていた頃は、出場した13人目以降が
+  //    小窓の下のページ送りの先にあり、1280×800 では送りのボタンが見えなかった
+  assert.equal(
+    await cardBox.locator('.online-pager').count(),
+    0,
+    'PCの試合成績がページに分かれている',
+  );
+  // ⚠ PCの試合の小窓は**選手の詳細の 760px に押し込まない**。試合成績は1240px、
+  //    観戦リプレイは画面の97%（1440pxなら1396px）
+  assert.ok(
+    (await cardBox.boundingBox()).width >= 1200,
+    `PCの試合成績の小窓が狭い: ${(await cardBox.boundingBox()).width}`,
+  );
+  await cardBox
+    .getByRole('button', { name: '観戦リプレイ', exact: true })
+    .click();
+  await cardBox
+    .getByRole('region', { name: '観戦リプレイ', exact: true })
+    .waitFor();
+  assert.ok(
+    (await cardBox.boundingBox()).width >= 1380,
+    `PCの観戦リプレイの小窓が狭い: ${(await cardBox.boundingBox()).width}`,
+  );
+  assert.equal(
+    await cardBox.evaluate((node) => !!node.closest('.online-score')),
+    false,
+    '試合の小窓はカードの外（`.online` の直下）に描く',
+  );
+  const teamWidths = await cardBox
+    .locator('.online-replay-team')
+    .evaluateAll((list) => list.map((n) => n.getBoundingClientRect().width));
+  assert.ok(
+    teamWidths.length === 2 && teamWidths.every((w) => w > 150),
+    `カードから開いた観戦リプレイの左右のメンバー表が潰れない: ${teamWidths}`,
+  );
+  await cardBox
+    .getByRole('button', { name: '試合成績を閉じる', exact: true })
+    .click();
   await page
     .getByRole('button', { name: '過去の試合・個人成績', exact: true })
     .click();
@@ -221,6 +338,9 @@ try {
   console.log(
     'online-replay-ui-check PASS（実記録・PC主要12項目・采配保存・球場/投球コース・再生/停止/シーク・最終得点・閲覧非破壊 / 通信はfixture）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-replay-ui');
+  throw error;
 } finally {
   await browser.close();
 }

@@ -98,10 +98,10 @@ export function nextProgressionAt(now) {
 /**
  * ゲーム内の日付を**ターン**に直す。開幕（4/1）が第1ターン。
  *
- * ⚠ オンラインは**ターンで進む**（1ターン＝実時間1時間＝ゲーム内1日）。
+ * ⚠ オンラインは**ターンで進む**（1ターン＝実時間45分＝ゲーム内1日）。
  *    ゲーム内の日付は進行の副産物でしかなく、画面に出すと
  *    「4/18って何試合目？」と数え直すことになる。画面はターンで出す。
- * ⚠ 休養日もターンに数える（120ターン中100試合）。「何試合目か」は
+ * ⚠ 休養日もターンに数える（160ターン中120試合）。「何試合目か」は
  *    球団ごとに違うので、試合の予定では別に数える（`ownUpcomingGames`）。
  * ⚠ 開幕前・シーズン後は範囲の外。`null` を返して、呼ぶ側で文面を変える。
  */
@@ -116,7 +116,7 @@ export function turnOfDate(date, turns = SEASON_TURNS) {
 
 /**
  * 一覧に出すターンの表記（「第23ターン」）。範囲の外なら「開幕前」「シーズン終了」。
- * ⚠ 一覧では総数（/120）を繰り返さない。6試合ぶん並ぶと同じ数字が6回出る。
+ * ⚠ 一覧では総数（/160）を繰り返さない。6試合ぶん並ぶと同じ数字が6回出る。
  */
 export function turnLabel(date, turns = SEASON_TURNS) {
   const turn = turnOfDate(date, turns);
@@ -125,7 +125,7 @@ export function turnLabel(date, turns = SEASON_TURNS) {
   return date.month < SEASON_START_MONTH ? '開幕前' : 'シーズン終了';
 }
 
-/** 見出しに出すターンの表記（「第23ターン / 120」）。総数はここだけ出す */
+/** 見出しに出すターンの表記（「第23ターン / 160」）。総数はここだけ出す */
 export function formatTurn(date, turns = SEASON_TURNS) {
   const turn = turnOfDate(date, turns);
   return turn ? `${turnLabel(date, turns)} / ${turns}` : turnLabel(date, turns);
@@ -351,7 +351,7 @@ export function sameEditState(a, b) {
 //    締め切りを過ぎたら未提出の人に既定案を当てて先へ進める。
 //
 // 曜日の割り当ては締め切りの置き方で決まる。シーズンは月曜0時に始まり、
-// 120ターン（24×5日）で**金曜23時に終わる**。そこから、
+// 160ターン（32×5日）で**金曜23時15分に終わる**。そこから、
 //
 //   土曜  ストーブリーグ（契約更改・トライアウト・オフシーズン）→ 締め切り 日曜0時
 //   日曜  キャンプ・編成                                       → 締め切り 月曜0時
@@ -429,7 +429,8 @@ export const CAMP_SUB_TARGETS = {
  *
  * ⚠ 対象を選ぶものは `CAMP_SUB_TARGETS` に載せ、画面が対象の欄を出す。
  *    載せずに入れると、中で勝手に選ばれる。
- * ⚠ 変化球練習は対象を選ばない（持っている変化球へ自動で振り分け）。
+ * ⚠ 変化球練習は対象を選べる（磨きたい持ち球。`CAMP_SUB_TARGETS` の ownPitch）。選ばなければ
+ *    持っている変化球へ自動で振り分ける。
  */
 export const CAMP_SUB_MENUS = [
   'physique',
@@ -471,6 +472,18 @@ export const ONLINE_ROSTER_TARGETS = {
 
 /** キャンプのクール数。一人用と同じ4回 */
 export const CAMP_ROUNDS = 4;
+
+/**
+ * 版のずれ（`code: 'revision'`）だけなら、最新の版で1回だけ送り直す命令。
+ *
+ * ⚠ **PC・スマホ（`OnlineApp.jsx`）とアプリ（`OnlineApi.kt`、`gen-tables.mjs` で写す）が
+ *    ここを読む**。別々に書いていたので、アプリだけ `campRound` が抜けて、45分ごとの進行や
+ *    他の参加者の操作のあとにクールを実行すると「他の操作で更新されました」で止まっていた。
+ * ⚠ 足してよいのは、版とは別に本当の食い違いを確かめている命令だけ。編成と提出は
+ *    `baseLineup` / `baseSubmission`、キャンプはクール番号（同じクールは2回走らない）。
+ *    トレードの申し込み・返事は足さない（送り直すと二重の申し込みになりうる）。
+ */
+export const RETRY_ON_REVISION = ['lineup', 'submit', 'campRound'];
 
 /**
  * 育成方針ごとの「4クールでの伸びの目安」（1人あたりの平均。画面に出す）。
@@ -634,10 +647,10 @@ export function phaseDeadlineAt(kind, now) {
  * キャンプが終わったあと、新シーズンの最初の試合を進める時刻。
  *
  * ⚠ **開幕は月曜0時に揃える**。以前はキャンプが決まった次の正時に始めていたため、
- *    全員が早く決めると火曜に開幕して、120ターン後の終わりも
+ *    全員が早く決めると火曜に開幕して、シーズン（160ターン）の終わりも
  *    土曜にずれ込んでいた（ストーブリーグの土曜とぶつかる）。
  * ⚠ 月曜に入ってから決まった（締め切りの月曜0時の自動決定を含む）ときは、
- *    次の週まで待たせず次の正時から始める。
+ *    次の週まで待たせず次の刻み（45分ごと）から始める。
  */
 export function seasonStartAt(now) {
   return jstWeekday(now) === 1

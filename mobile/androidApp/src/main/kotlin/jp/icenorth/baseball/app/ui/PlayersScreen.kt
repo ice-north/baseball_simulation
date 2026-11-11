@@ -51,7 +51,7 @@ import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
 
-private enum class PlayersMode(val label: String) { Season("選手成績"), Career("通算成績"), Ranking("能力ランキング") }
+private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), Ranking("能力順") }
 
 /** 選手タブ: 選手成績・通算成績（球団を切り替えて同じ表）と、リーグ全体の能力ランキング */
 @Composable
@@ -59,19 +59,27 @@ fun PlayersScreen(model: AppViewModel) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var mode by rememberSaveable { mutableStateOf(PlayersMode.Season) }
-    var team by rememberSaveable { mutableStateOf(view.teamName.orEmpty()) }
+    // 見ている球団はモデルに置く（試合タブの順位表から「この球団の選手成績」へ飛べるように）。
+    // ⚠ 飛んできたときに「選手成績」の表を出すための合図は要らない。タブを移ると この画面は構成から外れ、
+    //    mode は毎回「選手成績」から始まる（以前の合図 seenJump は、入った時点で合図と同じ値になり働いていなかった）
+    val team = model.playersTeam ?: view.teamName.orEmpty()
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) }, Modifier.weight(1f).padding(top = 8.dp))
+        // ⚠ 絞り込みは2段にまとめる（以前は 表の種類／球団・打撃投球／項目 の3段で、表が画面の半ばから始まった）。
+        //    1段目に表の種類と球団、2段目（TeamStats の中）に打撃・投球と項目
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
+            Box(Modifier.weight(1f)) {
+                if (mode != PlayersMode.Ranking) TeamPicker(view, raw, team) { model.playersTeam = it }
+            }
             InfoButton(
                 "選手",
                 listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "自球団の表で色の付いた行は、スタメン・先発ローテの選手です。ランキングでは自球団の選手に色が付きます。"),
-                Modifier.padding(top = 8.dp, end = 8.dp),
+                Modifier.padding(end = 8.dp),
             )
         }
         when (mode) {
             PlayersMode.Ranking -> AbilityRanking(model, view, raw)
-            else -> TeamStats(model, view, raw, team, { team = it }, career = mode == PlayersMode.Career)
+            else -> TeamStats(model, view, raw, team, career = mode == PlayersMode.Career)
         }
     }
 }
@@ -99,13 +107,14 @@ private fun TeamPicker(view: LeagueView, raw: JsonObject, team: String, onPick: 
 }
 
 @Composable
-private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String, onTeam: (String) -> Unit, career: Boolean) {
+private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String, career: Boolean) {
     val own = team == view.teamName
     // 自球団の今季は手元のビューで出す。他球団と通算はその場で読みに行く（全球団ぶんをビューに載せない）
     var loaded by remember(team, career) { mutableStateOf<List<JsonObject>?>(null) }
     var failure by remember(team, career) { mutableStateOf<String?>(null) }
+    var attempt by remember(team, career) { mutableStateOf(0) }
     val needsRead = career || !own
-    LaunchedEffect(team, career, view.revision) {
+    LaunchedEffect(team, career, view.revision, attempt) {
         if (!needsRead) return@LaunchedEffect
         try {
             val result = model.read("team", mapOf("team" to team))
@@ -128,21 +137,29 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     val groups = listOf(overviewGroup(batting)) + if (batting) BATTING_GROUPS else PITCHING_GROUPS
     val group = groups.firstOrNull { it.id == groupId } ?: groups.first()
     val allColumns = groups.flatMap { it.columns }
-    val sortColumn = sortId?.let { id -> allColumns.firstOrNull { it.id == id } } ?: defaultSortColumn(batting)
+    // 捕手の区分は受けた選手と捕手だけを、守った回の多い順に出す（Web 版 CompactRoster と同じ）
+    val catching = group.id == "catching" || group.id == "catchingAllowed"
+    val catchingColumns = BATTING_GROUPS.filter { it.id == "catching" || it.id == "catchingAllowed" }.flatMap { it.columns }
+    val chosenColumn = sortId?.let { id -> allColumns.firstOrNull { it.id == id } }
+    val sortColumn = when {
+        catching && (chosenColumn == null || catchingColumns.none { it.id == chosenColumn.id }) -> catchingColumns.first()
+        else -> chosenColumn ?: defaultSortColumn(batting)
+    }
+    val sortAscending = if (catching && sortColumn.id != chosenColumn?.id) false else if (sortId == null) false else ascending
     val players = roster.orEmpty().filter { (it.at("position").str() == "pitcher") != batting && it.at("isActive").bool() != false }
-    val sorted = sortRoster(players, sortColumn, if (sortId == null) false else ascending)
+        .filter { !catching || it.at("catcherStats").obj() != null || it.at("position").str() == "catcher" }
+    val sorted = sortRoster(players, sortColumn, sortAscending)
     val lineupIds = remember(view.lineup) {
         view.lineup?.at("battingOrder").list().mapNotNull { it.at("playerId").num()?.toLong() }.toSet() +
             view.lineup?.at("starters").list().mapNotNull { it.num()?.toLong() }
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TeamPicker(view, raw, team, onTeam)
-            Box(Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             ChoiceRow(listOf("bat" to "打撃", "pit" to "投球"), if (batting) "bat" else "pit") { batting = it == "bat" }
+            // 項目は残りの幅で横に送る
+            ChipTabs(groups.map { it.id to it.label }, group.id, { groupId = it }, Modifier.weight(1f))
         }
-        ChipTabs(groups.map { it.id to it.label }, group.id, { groupId = it })
         if (career && roster != null) {
             val years = roster.maxOfOrNull { it.at("career", "years").int() ?: 0 } ?: 0
             val partial = roster.any { it.at("career", "partial").bool() == true }
@@ -153,16 +170,16 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
             )
         }
         when {
-            failure != null -> Muted("読み込めませんでした: $failure", Modifier.padding(16.dp))
+            failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 }, modifier = Modifier.padding(16.dp))
             roster == null -> Muted("読み込み中…", Modifier.padding(16.dp))
             else -> {
                 StatTable(
                     players = sorted,
                     columns = group.columns,
                     sortId = sortColumn.id,
-                    ascending = if (sortId == null) false else ascending,
+                    ascending = sortAscending,
                     onSort = { c ->
-                        if (c.id == sortColumn.id && sortId != null) ascending = !ascending
+                        if (c.id == sortColumn.id && sortId == c.id) ascending = !ascending
                         else { sortId = c.id; ascending = c.ascending }
                     },
                     onPlayer = { model.openPlayer = it },
@@ -170,7 +187,21 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                     sub = { p ->
                         positionLabel(p.at("position").str()) + (p.at("age").int()?.let { " ${it}歳" } ?: "")
                     },
+                    // ⚠ なぜいないのかを書く（以前は名簿が空の開幕前も「該当する選手がいません」だけだった）
+                    empty = when {
+                        catching -> "捕手の記録がまだありません。"
+                        career -> "通算の記録のある${if (batting) "野手" else "投手"}がいません。"
+                        roster.isEmpty() && own -> "まだ選手がいません。初期メンバー選択が済むと、ここに並びます。"
+                        roster.isEmpty() -> "まだ選手がいません。"
+                        else -> "${if (batting) "野手" else "投手"}がいません。"
+                    },
                 )
+                if (catching) {
+                    Muted(
+                        "※ マスクをかぶった時の投手成績（記録を取り始めた後の試合だけ）。読まれ率は、打者に狙い球を当てられた球の割合で、低いほどリードが効いています",
+                        Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
             }
         }
     }
@@ -188,10 +219,15 @@ private fun AbilityRanking(model: AppViewModel, view: LeagueView, raw: JsonObjec
     val board = boards.firstOrNull { it.at("id").str() == selected } ?: boards.first()
     val velocity = board.at("velocity").bool() == true
     val stamina = board.at("stamina").bool() == true
+    // 自球団の選手だけに絞る（順位はリーグ全体の中の順位のまま）
+    var ownOnly by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         ChipTabs(boards.map { it.at("id").str().orEmpty() to it.at("label").str().orEmpty() }, board.at("id").str().orEmpty(), { selected = it })
+        Box(Modifier.padding(horizontal = 16.dp)) { ChoiceRow(listOf("all" to "リーグ全体", "own" to "自球団だけ"), if (ownOnly) "own" else "all") { ownOnly = it == "own" } }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-            board.at("rows").list().mapNotNull { it.obj() }.forEachIndexed { i, row ->
+            val ranked = board.at("rows").list().mapNotNull { it.obj() }.withIndex().filter { !ownOnly || it.value.at("team").str() == view.teamName }
+            if (ranked.isEmpty()) Muted("この項目の上位に、自球団の選手はいません。", Modifier.padding(vertical = 12.dp))
+            ranked.forEach { (i, row) ->
                 val mine = row.at("team").str() == view.teamName
                 Row(
                     Modifier.fillMaxWidth().clickable { model.openPlayer = row }.padding(vertical = 10.dp),

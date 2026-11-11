@@ -1,11 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import {
-  TRAINING_MENUS,
-  SUB_TRAINING_MENUS,
-  menuFitsPlayer,
-  subMenuFitsPlayer,
-  FORM_PITCH_AFFINITY,
-} from '../season/campTraining.js';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { menusFor, subMenusFor, clampMenu, clampSub } from './campMenus.js';
+import { FORM_PITCH_AFFINITY } from '../season/campTraining.js';
 import {
   DIRECTIONS,
   PHASES,
@@ -17,8 +12,6 @@ import {
 import { POS, POS_FULL } from './api.js';
 import { getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
 import {
-  CAMP_MENUS,
-  CAMP_SUB_MENUS,
   CAMP_DIRECTIONS,
   CAMP_PHASES,
   CAMP_POLICY_GUIDE,
@@ -49,39 +42,9 @@ import { formatDeadline } from './LeaguePanels.jsx';
 //    それらを動かさない。出すと「できるように見えて何も起きない」ものが並ぶ。
 // ⚠ メニューの表は一人用と**同じものを読む**（`TRAINING_MENUS` /
 //    `SUB_TRAINING_MENUS`）。写すと、調整したときに片方だけ古くなる。
-//    出すのは `CAMP_MENUS` / `CAMP_SUB_MENUS` に載っているものだけ
-//    ——`TRAINING_MENUS` にはオンラインで動かないもの（新球種習得）がある。
+//    出すメニューの絞り込みと既定へ戻す判定は `campMenus.js`（node の道具と共用）。
 // ============================================================
 
-/** 投手に出すメイン練習／野手に出すメイン練習 */
-export const menusFor = (isPitcher) =>
-  Object.entries(TRAINING_MENUS).filter(
-    ([key]) =>
-      CAMP_MENUS.includes(key) &&
-      menuFitsPlayer(key, { position: isPitcher ? 'pitcher' : 'catcher' }),
-  );
-
-/**
- * その選手に出すサブ練習。
- * ⚠ **効かないものを出さない**。変化球練習・新球種習得・スピン解析は投手だけ、
- *    Cリード学習は捕手だけ。出すと、選べるのにそのクールが丸ごと無駄になる。
- */
-export const subMenusFor = (player) =>
-  Object.entries(SUB_TRAINING_MENUS).filter(
-    ([key]) => CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player),
-  );
-
-/**
- * ⚠ 受け取れないメニュー・守備位置に合わないメニューに落ちたら既定へ戻す。
- *    方針から引いた結果は、野手に投球系が出ることがある（選択肢に無いので
- *    一覧には「打撃練習」と出るのに、サーバーは球速練習で処理していた）
- */
-export const clampMenu = (key, player) =>
-  CAMP_MENUS.includes(key) && menuFitsPlayer(key, player)
-    ? key
-    : player.position === 'pitcher'
-      ? 'control'
-      : 'batting';
 /**
  * サブ練習の「対象」の選択肢（`[値, 見せ方]` の並び）。
  *
@@ -107,13 +70,11 @@ export function subTargetChoices(key, player) {
       const tag = form && second ? ' ★◆' : form ? ' ★' : second ? ' ◆' : '';
       return [type, `${getPitchTypeName(type)}${tag}`];
     });
+  // ⚠ 極めた球種（100）は外す（選んでも伸びず、黙って分配に戻る。一人用と同じ）
   if (kind === 'ownPitch')
-    return owned.map((type) => [
-      type,
-      `${getPitchTypeName(type)}${
-        (player.pitching?.arsenal || []).find((x) => x.type === type)?.level ?? ''
-      }`,
-    ]);
+    return (player.pitching?.arsenal || [])
+      .filter((pitch) => owned.includes(pitch.type) && (pitch.level ?? 0) < 100)
+      .map((pitch) => [pitch.type, `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`]);
   if (kind === 'position')
     return CONVERT_POSITIONS.filter(
       (pos) => pos !== 'pitcher' && pos !== player.position,
@@ -127,11 +88,6 @@ export function subTargetChoices(key, player) {
     ]);
   return [];
 }
-
-export const clampSub = (key, player) =>
-  CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player)
-    ? key
-    : 'physique';
 
 const MOOD_TONE = { good: '意欲的', mid: '納得', bad: '身が入らない' };
 
@@ -153,6 +109,17 @@ export const DEFAULT_CAMP_POLICY = {
   direction: 'balanced',
   phase: 'skill',
 };
+/**
+ * 方向と段階が欠けた方針に既定を敷く。
+ * ⚠ 指導者の案・締め切りの標準案の方針は `{ mode: 'recommended' }` だけで、方向と段階を
+ *    持たない。そこから「全員同じ方針」に切り替えると、説明が「undefined／undefined」になり、
+ *    育成方針・段階のボタンがどれも選ばれていない状態になっていた（アプリは既定を敷いている）
+ */
+export const withPolicyDefaults = (policy) => ({
+  ...policy,
+  direction: policy?.direction || DEFAULT_CAMP_POLICY.direction,
+  phase: policy?.phase || DEFAULT_CAMP_POLICY.phase,
+});
 const grade = (v) => (typeof v === 'number' ? Math.round(v) : '—');
 
 /**
@@ -254,6 +221,17 @@ function PlayerRow({
           </button>
         )}
       </td>
+      {/* ⚠ 希望は**意欲の隣**に置く。意欲は「希望と方針が噛み合うか」なので、
+          並べないと見比べられない（右端に置いていて、1440px でも半分切れていた）。
+          印だけにして全文は title と表の下の凡例で出す。名前で出すと
+          「長所を伸ばす·基礎体力」で90pxを取り、右端の列が隠れる */}
+      <td
+        className="online-camp-wish"
+        title={`${DIRECTIONS[wish.direction]?.name}·${PHASES[wish.phase]?.name}`}
+      >
+        {DIRECTIONS[wish.direction]?.icon}
+        {PHASES[wish.phase]?.icon}
+      </td>
       <td>{isPitcher ? FORM_SHORT[player.pitching?.form] || '—' : '—'}</td>
       <td>
         <Stat value={player.physical?.arm} diff={g('physical.arm')} />
@@ -319,7 +297,16 @@ function PlayerRow({
       <td>
         <Stat value={player.physical?.muscle} diff={g('physical.muscle')} />
       </td>
-      <td>
+      {/* ⚠ 持ち球は**練習を選ぶ2列のすぐ左**。メイン・サブは右に留める（下の
+          `CampTableScroll`）ので、その右に列を足すと留めた列の下に隠れる。
+          長いので溢れたぶんは … にして、全文は title で出す。
+          ⚠ 投手の行だけ（野手の表に空の列を作らない） */}
+      {isPitcher && (
+        <td className="online-camp-pitches" title={pitchTypesFull(player)}>
+          {pitchTypesShort(player)}
+        </td>
+      )}
+      <td className="online-camp-main">
         <select
           aria-label={`${player.name}のメイン練習`}
           value={main}
@@ -333,7 +320,7 @@ function PlayerRow({
           ))}
         </select>
       </td>
-      <td>
+      <td className="online-camp-sub">
         <select
           aria-label={`${player.name}のサブ練習`}
           value={sub}
@@ -366,23 +353,39 @@ function PlayerRow({
           </select>
         )}
       </td>
-      {/* ⚠ 希望は**印だけ**にして、全文は title で出す。名前で出すと
-          「長所を伸ばす·基礎体力」で90pxを取り、右端の列が隠れる */}
-      <td
-        className="online-camp-wish"
-        title={`${DIRECTIONS[wish.direction]?.name}·${PHASES[wish.phase]?.name}`}
-      >
-        {DIRECTIONS[wish.direction]?.icon}
-        {PHASES[wish.phase]?.icon}
-      </td>
-      {/* ⚠ **いちばん右**。長いので溢れたぶんは … にして、全文は title で出す。
-          ⚠ 投手の行だけ（野手の表に空の列を作らない） */}
-      {isPitcher && (
-        <td className="online-camp-pitches" title={pitchTypesFull(player)}>
-          {pitchTypesShort(player)}
-        </td>
-      )}
     </tr>
+  );
+}
+
+/**
+ * キャンプの表の横送りの枠。
+ * ⚠ **練習を選ぶ2列（メイン・サブ）は右に留める**（`online.css` の `.online-camp-main` /
+ *    `.online-camp-sub`）。1440px より狭いと表が横に送れ、1280px ではサブの列が枠の外に
+ *    あった（再監査 F11）。メインを留める位置はサブの列の幅で、サブは対象の欄が出ると
+ *    広がるので、画面で測って `--online-camp-sub-width` に入れる（測る前はメインは留めない）
+ */
+function CampTableScroll({ children }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const box = ref.current;
+    const sub = box?.querySelector('thead .online-camp-sub');
+    if (!sub) return undefined;
+    const measure = () =>
+      box.style.setProperty(
+        '--online-camp-sub-width',
+        `${sub.getBoundingClientRect().width}px`,
+      );
+    measure();
+    // ⚠ `window.` を付けて読む（`scope-check` は素の名前を未定義の識別子として落とす）
+    if (!window.ResizeObserver) return undefined;
+    const observer = new window.ResizeObserver(measure);
+    observer.observe(sub);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="online-camp-scroll">
+      {children}
+    </div>
   );
 }
 
@@ -491,7 +494,12 @@ function CampPolicyGuide({ policy, roster, policyOf, note, hint }) {
     return describeMood(p, own.direction, own.phase).tone;
   });
   const count = (tone) => moods.filter((t) => t === tone).length;
-  const standard = policy.direction === 'balanced' && policy.phase === 'skill';
+  // ⚠ 「全員同じ方針」のときだけ。選手ごとの決め方にも既定の方向・段階が敷かれているので、
+  //    決め方を見ないと「いまは『全体を伸ばす×技術』です」と誤って出る
+  const standard =
+    (policy.mode || 'team') === 'team' &&
+    policy.direction === 'balanced' &&
+    policy.phase === 'skill';
   // ⚠ 読めなくはしない。長い説明は title に入れて、マウスを載せれば読める
   const title = [
     note,
@@ -565,15 +573,20 @@ export default function CampPlanner({
   //    （ほかの手続きと同じ `useDraftState`）。26人ぶん選んだあとに画面を
   //    読み直して全部消えると、やり直す気が失せる。
   //    実行済みのクールの指示（`camp.plan`）を初期値にする。
+  //    ⚠ まだ回していなければ指導者の案（`camp.suggested`。「意見を聞く」「任せる」のとき）。
+  //    締め切りで回さなかったクールに当たるのはこの案なので、画面もここから始める
+  //    （以前は「おすすめ」から始まり、見たことのない案で締め切りに回っていた）
   const phaseId = view.phase?.id;
-  const [policy, setPolicy] = useDraftState(
+  const start = camp?.plan || camp?.suggested || null;
+  const [savedPolicy, setPolicy] = useDraftState(
     phaseDraftName(phaseId, 'camp.policy'),
-    () => camp?.plan?.policy || DEFAULT_CAMP_POLICY,
+    () => start?.policy || DEFAULT_CAMP_POLICY,
   );
-  // 選手ごとの方針の上書き（「合わせる」で1人ずつ希望へ）
+  const policy = withPolicyDefaults(savedPolicy);
+  // 選手ごとの方針の上書き（「合わせる」で1人ずつ希望へ。指導者の案も選手ごと）
   const [overrides, setOverrides] = useDraftState(
     phaseDraftName(phaseId, 'camp.players'),
-    () => camp?.plan?.players || {},
+    () => start?.players || {},
   );
   const policyOf = (p) => playerPolicy(p, policy, overrides);
   const [main, setMain] = useDraftState(
@@ -597,7 +610,8 @@ export default function CampPlanner({
   // ⚠ 方針を変えたら**割り当ても引き直す**。方針はやる気にも効くので、
   //    方針だけ変わって練習が前のままだと噛み合いが読めない
   //    ⚠ 1人ずつの上書きも消す（決め方を選び直したら、全員その決め方に従う）
-  const applyPolicy = (next) => {
+  const applyPolicy = (picked) => {
+    const next = withPolicyDefaults(picked);
     setPolicy(next);
     setOverrides({});
     const nextMain = {};
@@ -838,7 +852,7 @@ export default function CampPlanner({
       )}
       {!compact && shownGroup && (
         <section key={shownGroup.id} className="online-camp-group">
-          <div className="online-camp-scroll">
+          <CampTableScroll>
             <table>
               <thead>
                 <tr>
@@ -851,6 +865,7 @@ export default function CampPlanner({
                       （やる気は「本人の希望と方針が噛み合うか」＝意欲の列）。
                       3つとも選手の詳細（名前を押す）で見られる。 */}
                   <th>意欲</th>
+                  <th title="本人が伸ばしたいと思っている方向">希望</th>
                   <th>フォーム</th>
                   <th>肩</th>
                   {shownGroup.id === 'pitcher' ? (
@@ -873,14 +888,13 @@ export default function CampPlanner({
                   <th>体力</th>
                   <th>回復</th>
                   <th>体幹</th>
-                  <th>メイン</th>
-                  <th>サブ</th>
-                  <th title="本人が伸ばしたいと思っている方向">希望</th>
                   {/* ⚠ **いま持っている変化球を出す**（いしだ指摘: 現在の球種が
                       見えない）。1画面に収めるために一度外したが、どの球を
                       磨くか・何を覚えさせるかはこれを見ないと決められない。
                       ⚠ 投手の表だけ（野手の表に空の列を作らない） */}
                   {shownGroup.id === 'pitcher' && <th>変化球</th>}
+                  <th className="online-camp-main">メイン</th>
+                  <th className="online-camp-sub">サブ</th>
                 </tr>
               </thead>
               <tbody>
@@ -908,7 +922,23 @@ export default function CampPlanner({
                 ))}
               </tbody>
             </table>
-          </div>
+          </CampTableScroll>
+          {/* ⚠ 希望の印と成長の数字の**読み方を表の下に1行で**出す。印だけ・
+              倍率だけでは何のことか分からなかった（title はPCでもまず開かれない）。
+              ⚠ 1行に収める。キャンプはホームに出すので1画面（1440×1000）に収める */}
+          <p className="online-camp-legend">
+            <span>
+              希望の印：
+              {Object.values(DIRECTIONS)
+                .map((d) => `${d.icon}${d.name}`)
+                .join(' ')}
+              {' ／ '}
+              {Object.values(PHASES)
+                .map((d) => `${d.icon}${d.name}`)
+                .join(' ')}
+            </span>
+            <span>成長：伸びやすさ（1.00 が並み。高いほど同じ練習でよく伸びる）</span>
+          </p>
         </section>
       )}
       {!finished && (

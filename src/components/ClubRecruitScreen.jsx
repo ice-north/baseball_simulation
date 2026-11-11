@@ -4,6 +4,7 @@ import { removeFromReleasedPoolById } from '../state/pools.js';
 import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
+import ConfirmBar from './ConfirmBar.jsx';
 
 const ClubRecruitScreen = ({ seasonData, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -13,6 +14,8 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
 
   const [accepted, setAccepted] = useState({});
   const [confirmed, setConfirmed] = useState(false);
+  // 確定の前の帯。⚠ 以前は1回押すだけで確定し、受け入れなかった人は今年はもう取れなかった
+  const [reviewing, setReviewing] = useState(false);
 
   const candidates = useMemo(() => {
     const pool = [...releasedPlayersPool];
@@ -66,7 +69,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
       <div className="p-4">
         {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
         <div className="max-w-7xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-3">入部受付完了</h1>
+        <h1 className="text-xl font-bold text-ink mb-3">入部受付完了</h1>
         <div className="mb-4 bg-surface-2 rounded p-3">
           <div className="text-xs text-gray-300">
             新規入部: <span className="text-green-400 font-bold">{acceptedCount}名</span>
@@ -77,7 +80,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
         </div>
         {acceptedCount > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-green-400 mb-2">入部選手</h2>
+            <h2 className="text-sm font-bold text-ink mb-2">入部選手</h2>
             <div className="grid grid-cols-2 gap-1">
               {candidates.filter(c => accepted[c.player.id]).map(c => (
                 <div key={c.player.id} className="text-xs text-gray-300 bg-surface-2 p-1.5 rounded">
@@ -104,15 +107,16 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
     <div className="p-4">
       {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
       <div className="max-w-7xl mx-auto">
-      <h1 className="text-xl font-bold text-white mb-1">入部希望者</h1>
-      <p className="text-gray-300 text-xs mb-4">
+      {/* ⚠ 見出し・説明・人数の行は地色（明るい紙）の上。index.css の「文字色の決まり」の地色の列 */}
+      <h1 className="text-xl font-bold text-ink mb-1">入部希望者</h1>
+      <p className="text-ink-sub text-xs mb-4">
         プロや企業チームに入れなかった選手たちが入部を希望しています。受け入れる選手を選んでください。
       </p>
 
-      <div className="mb-3 flex items-center gap-3 text-xs text-gray-300">
-        <span>現在のロスター: <span className="text-white font-bold">{currentRoster}名</span></span>
-        <span>入部希望: <span className="text-green-400 font-bold">{candidates.length}名</span></span>
-        <span>受入予定: <span className="text-blue-400 font-bold">{acceptedCount}名</span></span>
+      <div className="mb-3 flex items-center gap-3 text-xs text-ink-sub">
+        <span>現在のロスター: <span className="text-ink font-bold">{currentRoster}名</span></span>
+        <span>入部希望: <span className="text-ink font-bold">{candidates.length}名</span></span>
+        <span>受入予定: <span className="text-ink-accent font-bold">{acceptedCount}名</span></span>
       </div>
 
       {candidates.length === 0 ? (
@@ -128,7 +132,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
               <div
                 key={player.id}
                 className={`border rounded-lg p-3 transition cursor-pointer ${
-                  isAccepted ? 'bg-green-900/30 border-green-600' : 'bg-surface-2 border-gray-700 hover:border-gray-500'
+                  isAccepted ? 'bg-green-900 border-green-500' : 'bg-surface-2 border-gray-700 hover:border-gray-500'
                 }`}
                 onClick={() => setAccepted(prev => ({ ...prev, [player.id]: !prev[player.id] }))}
               >
@@ -177,12 +181,25 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
 
       <div className="mt-4 flex items-center gap-4">
         <button
-          onClick={handleConfirm}
+          onClick={() => setReviewing(true)}
           className="btn-primary px-6 py-2 rounded"
         >
           {acceptedCount > 0 ? `${acceptedCount}名を受け入れて確定` : '入部なしで確定'}
         </button>
       </div>
+      {reviewing && (
+        <ConfirmBar
+          title={acceptedCount > 0 ? `${acceptedCount}名の入部を受け入れて確定しますか？` : '入部なしで確定しますか？'}
+          detail={acceptedCount > 0
+            ? candidates.filter(c => accepted[c.player.id]).map(c => c.player.name).join('・')
+            : `入部希望の${candidates.length}名を、だれも受け入れません`}
+          note="確定すると取り消せません。今年はもう入部を受け入れられません。"
+          confirmLabel="確定する"
+          confirmClass="btn-warn"
+          onConfirm={() => { setReviewing(false); handleConfirm(); }}
+          onCancel={() => setReviewing(false)}
+        />
+      )}
     </div>
     </div>
   );

@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
-import { rosterGroup } from '../utils/constants.js';
+import { rosterGroup, rosterCounts } from '../utils/constants.js';
 import {
   POSITION_GROUPS,
   SORT_KEYS,
@@ -160,12 +160,14 @@ export default function TryoutPlanner({
   //    （投手10・捕手2・内野6・外野6）を超える区分を飛ばすので、
   //    同じ規則で「実際に取る顔ぶれ」を出す。ここを希望順の先頭にすると、
   //    画面に並んでいる顔ぶれと実際に取る顔ぶれが食い違う
-  const { counts, picked, targets, blocking, warnings } = planSummary(
+  const { picked, targets, blocking, warnings } = planSummary(
     plan.rankedIds,
     candidates,
     count,
     roster,
   );
+  // 獲得したあとの名簿の内訳（目標と比べるのはこちら。下の見出しの注）
+  const after = rosterCounts([...(roster || []), ...picked]);
   const wanted = picked.map((p) => p.id);
   const wantedSet = useMemo(() => new Set(wanted), [wanted.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
   const bench = plan.rankedIds.filter((id) => !wantedSet.has(id));
@@ -312,28 +314,30 @@ export default function TryoutPlanner({
       <div className="online-tryout-grid">
         <section className="online-tryout-wanted">
           <h3>
-            獲得予定 {wanted.length}人
+            獲得予定 {wanted.length}人{' '}
             {/* ⚠ 目標も並べて出す。超えたぶんは飛ばされるので、
-                数字だけだと「希望したのに入らない」理由が分からない */}
+                数字だけだと「希望したのに入らない」理由が分からない
+                ⚠ **分子は獲得したあとの名簿の人数**（いまの名簿＋獲得予定）。目標は名簿
+                全体の人数で、飛ばすかどうかもそれで決まる。以前は分子が獲得予定だけで、
+                「投2/11」が「あと9人取れる」に読めた（実際は名簿に投手が9人いて満杯） */}
             <small>
-              　投{counts.pitcher}/{targets.pitcher} 捕{counts.catcher}/
-              {targets.catcher} 内{counts.infielder}/{targets.infielder} 外
-              {counts.outfielder}/{targets.outfielder}
+              {`獲得後の名簿 投${after.pitcher}/${targets.pitcher} 捕${after.catcher}/${targets.catcher} 内${after.infielder}/${targets.infielder} 外${after.outfielder}/${targets.outfielder}`}
             </small>
           </h3>
           {/* ⚠ 成り立たない編成は、提出した瞬間ではなく**ここ**で知らせる。
               手続きは全員ぶんまとめて処理されるので、1球団が成り立たないと
               全員が先へ進めない */}
+          {/* ⚠ **文の区切りは句点で、1つの文字列にして書く**。以前は行頭の全角空白で
+              区切っていたが、JSX は行頭の空白（全角も）を落とすので
+              「…4人未満ですこの位置は…」と文がつながって出ていた */}
           {blocking.length > 0 && (
             <p role="alert" className="online-tryout-block">
-              このままでは決定できません: {blocking.join(' / ')}
-              　獲得希望人数を増やすか、希望順位を入れ替えてください。
+              {`このままでは決定できません: ${blocking.join(' / ')}。獲得希望人数を増やすか、希望順位を入れ替えてください。`}
             </p>
           )}
           {warnings.length > 0 && (
             <p role="alert" className="online-tryout-warn">
-              {warnings.join(' / ')}
-              　この位置は人数が足りないと自動で埋められます。
+              {`${warnings.join('。')}。人数が足りない位置は自動で埋められます。`}
             </p>
           )}
           {notice && (

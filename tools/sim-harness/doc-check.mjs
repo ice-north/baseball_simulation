@@ -1,5 +1,5 @@
 // ============================================================
-// CLAUDE.md の腐り検査
+// CLAUDE.md（と docs/online）の腐り検査
 //
 // この作品の開発は「文書に書いた“こうなっているはず”と実測がずれた瞬間に
 // 不具合が見つかる」という形で回っている。だから**腐った文書は、無い文書より悪い**
@@ -75,6 +75,12 @@ const REMOVED_ON_PURPOSE = {
   errorRunnersOnBaseRef: '采配モードの自責点のイニング単位の近似。走者ごとの印（makeRunner の onError）に置き換えて除去（歴史の記録）',
   progressToNextGame: '日付を次の試合日に差し替えるだけで、間の日の試合・イベント・疲労回復/コンディション更新が抜けていた。1日進行の繰り返しに置き換えて除去（歴史の記録）',
   handleProgressToNextGame: '同上の呼び出し元。ScheduleScreen の未使用プロップごと除去（歴史の記録）',
+  advanceDayRef:   'サイドバーの「日程進行」の再クリックで1日進める経路。黙って日が進むので除去（歴史の記録）',
+  ScheduleScreen:  'どこからも開けない日程表（管理画面の初期値でしか出なかった）。2026-11-10 に除去（歴史の記録）',
+  seasonProgress:  '日程表からしか呼ばれない日程進行ハンドラー（本物は DateProgressScreen）。同上',
+  progressToNextPhase: '次のフェーズの初日へ日付を差し替えて残り試合をまとめて消化する経路。progressToNextGame と同じ型で除去（歴史の記録）',
+  calendarUI:      '日程表のカレンダー。同上',
+  simulateGamesOnDate: '`seasonProgress.js` にあった1日分の試合の消化。いまの本体は daySimulation.js の simulateScheduledGamesOnDate（歴史の記録）',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');
@@ -118,8 +124,10 @@ r.assert('参照するファイルパスが実在', missingPaths.length === 0,
 // ⚠ 行番号を文書に書かせないための仕組み。マーカーが消えたら検知する
 const appjsx = fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8');
 const markers = [...appjsx.matchAll(/\/\/ \[SECTION: ([A-Z_]+)\]/g)].map(m => m[1]);
+// ⚠ SEASON_PROGRESS は外した（2026-11-10。日程表からしか呼ばれないラッパーだったので
+//    `seasonProgress.js` ごと除いた。日程進行の本体は DateProgressScreen）
 const wantSections = ['APP_STATE', 'GAME_HANDLERS', 'THROW_PITCH', 'GAME_CONTROLS',
-                      'GAME_SETUP', 'SEASON_PROGRESS', 'RENDER'];
+                      'GAME_SETUP', 'RENDER'];
 const lostMarkers = wantSections.filter(x => !markers.includes(x));
 r.assert('App.jsxのSECTIONマーカー', lostMarkers.length === 0,
   `${markers.length}個検出${lostMarkers.length ? ' / 欠落: ' + lostMarkers.join(', ') : ''}`);
@@ -128,6 +136,55 @@ r.assert('App.jsxのSECTIONマーカー', lostMarkers.length === 0,
 const hasLineTable = /\[SECTION: [A-Z_]+\]\s*L\d+/.test(appjsx) || /\| *L\d+-\d+ *\|/.test(md);
 r.assert('セクション行番号を書いていない', !hasLineTable,
   hasLineTable ? '行番号の表が復活している（grepで引く方式に戻すこと）' : 'grepで引く方式を維持');
+
+// --- 5) オンラインの文書（docs/online）の識別子とパス ------------------
+// ⚠ 範囲でいちばん書き換えるのに、以前はこの検査の外だった（関数名・ファイル名が消えても
+//    気づけなかった）。行数の申告は見ない。REVIEW* は当時の記録なので照合しない。
+//    オンラインはサーバー・アプリ・Supabase・Vercel の名前も書くので、それらの中身も照合に入れる。
+const ONLINE_NOT_CODE = {
+  ONLINE_MEMBER_2: '廃止した環境変数（文書に「廃止した」と書いてある）。ONLINE_MEMBER_1 は membership.js の注記にある',
+  VITE_: 'Vite の環境変数の接頭辞（`VITE_` で始まる名前の総称）',
+  service_role: 'Supabase の鍵の種類（ダッシュボードの名前）',
+  pg_net: 'Supabase の拡張の名前（ダッシュボードで有効にする）',
+  pg_cron: '同上',
+  iad1: 'Vercel の既定の関数の場所（ワシントン）。vercel.json では hnd1（東京）に替えている',
+};
+const onlineDocsDir = path.join(ROOT, 'docs/online');
+const onlineDocs = fs.readdirSync(onlineDocsDir).filter(f => f.endsWith('.md') && !/REVIEW/.test(f));
+const walkAll = (dir) => !fs.existsSync(dir) ? [] : fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+  const p = path.join(dir, e.name);
+  if (e.isDirectory()) return ['node_modules', 'build', '.gradle'].includes(e.name) ? [] : walkAll(p);
+  return /\.(js|jsx|mjs|css|kt|kts|json|sql|yml)$/.test(e.name) ? [p] : [];
+});
+const onlineBlob = blob + rootCfg + ['server', 'mobile', 'api', 'supabase', 'scripts', '.github']
+  .flatMap(d => walkAll(path.join(ROOT, d)))
+  .map(f => fs.readFileSync(f, 'utf8')).join('\n');
+const onlineMissing = [];
+let onlineCount = 0;
+for (const doc of onlineDocs) {
+  const text = fs.readFileSync(path.join(onlineDocsDir, doc), 'utf8');
+  for (const raw of new Set([...text.matchAll(/`([^`\n]{3,80})`/g)].map(m => m[1].replace(/\(\)$/, '').trim()))) {
+    const file = raw.split(/[ :#]/)[0];
+    if (/^(src|server|mobile|tools|docs|api|supabase|scripts)\//.test(file)) {
+      onlineCount++;
+      if (!fs.existsSync(path.join(ROOT, file))) onlineMissing.push(`${doc}: ${file}`);
+      continue;
+    }
+    if (/\.md$/.test(file)) {
+      onlineCount++;
+      if (!fs.existsSync(path.join(onlineDocsDir, file)) && !fs.existsSync(path.join(ROOT, file)))
+        onlineMissing.push(`${doc}: ${file}`);
+      continue;
+    }
+    if (!idRe.test(raw) || SKIP.test(raw)) continue;
+    const head = raw.split('.')[0];
+    if (head.length < 4 || ONLINE_NOT_CODE[raw] || ONLINE_NOT_CODE[head]) continue;
+    onlineCount++;
+    if (!onlineBlob.includes(head)) onlineMissing.push(`${doc}: ${raw}`);
+  }
+}
+r.assert('docs/online の識別子とパスが実在', onlineMissing.length === 0,
+  `${onlineCount}件を照合${onlineMissing.length ? ' / 未解決: ' + onlineMissing.join(', ') : ''}`);
 
 r.print();
 process.exit(r.passed ? 0 : 1);

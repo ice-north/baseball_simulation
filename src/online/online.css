@@ -1,12 +1,16 @@
 /* 既存PC版のsurface/accentを共用。カード上と地色上の文字色を分ける。
-   ⚠ **要素名で当てる指定（`.online button` など）には `:not(:where(.online-sp *))` を付ける**。
-      PCの編成ページは一人用の画面（Tailwind）を `.online-sp` の中にそのまま入れている。
-      `.online button`（詳細度 0,1,1）は Tailwind の `.bg-gray-700`（0,1,0）より強く、
-      当たると一人用の小さなボタンが全部44pxの同じ色に潰れる。`:where()` は詳細度0なので、
-      付けても今までの指定との強さの関係は変わらない。新しく要素名の指定を足すときも付けること。
+   ⚠ **一人用の画面（Tailwind）を `.online` の中に持ち込むときは `.online-sp` で包み、
+      その画面に当たる要素名の指定（`.online button` など）に `:not(:where(.online-sp *))`
+      を付けてから入れる**。`.online button`（詳細度 0,1,1）は Tailwind の
+      `.bg-gray-700`（0,1,0）より強く、当たると一人用の小さなボタンが全部同じ高さ・
+      同じ色に潰れる。`:where()` は詳細度0なので、付けても今までの指定との強さの
+      関係は変わらない。いま `.online` の中に包んだ一人用の画面は無い（PC版の編成は
+      `LineupBoard.jsx` に置き換えた）ので、付いていない指定も多い。包まずに出すなら
+      ポータルで `.online` の**外**へ出す（スマホ版の全画面）。CLAUDE.md の
+      「変更時の不変条件」と同じ決まり。
    ⚠ ボタン・入力欄の大きさと色は**変数で持つ**（`--online-control-h` など）。
-      PCは一人用と同じ語彙（高さ32px・`btn-secondary` の色）にするため、末尾の
-      「PC版の共通の見た目」で変数だけ差し替える。個別の指定（詳細度の高いもの）は
+      PCは一人用と同じ語彙（高さ32px・`btn-secondary` の色）にするため、
+      「PC版の共通の見た目」の節で変数だけ差し替える。個別の指定（詳細度の高いもの）は
       そのまま効く。 */
 .online {
   min-height: 100dvh;
@@ -138,20 +142,26 @@
   font-weight: 650;
   color: var(--ink-sub);
 }
-.online-card .online-eyebrow {
+.online-card .online-eyebrow,
+.online-player-dialog .online-eyebrow {
   color: var(--accent);
 }
 .online-muted {
   font-size: 13px;
   color: var(--ink-sub);
 }
-.online-card .online-muted {
+/* ⚠ 小窓（`.online-player-dialog`）もカードと同じ濃い面なので、明るい色にする。
+   地色用の `--ink-sub` のままだと濃い面に濃い文字で読めない（名前を変える小窓の説明）。
+   選手の詳細・試合の小窓は `.online` の直下に出す（`dialogPortal.js`）ので、
+   カードの中で開いていたときに当たっていた指定をここで当て直す */
+.online-card .online-muted,
+.online-player-dialog .online-muted {
   color: #d0d9e5;
 }
 .online-dev {
   color: var(--ink-sub);
   font-size: 11px;
-  margin-bottom: 5px !important;
+  margin-bottom: 5px;
 }
 .online-alert {
   background: #5b3028;
@@ -204,6 +214,9 @@
 .online-standings th:first-child {
   padding-right: 6px;
 }
+/* ⚠ 見出しも折り返さない。スマホ 360px で自球団の行が長いと「打率」が
+   「打／率」の2行に割れた */
+.online-standings thead th,
 .online-standings .online-owner,
 .online-standings .online-move {
   white-space: nowrap;
@@ -312,10 +325,12 @@
    守備位置ごとに自球団と相手を1枚の表（`.online-lineup-table`）に並べ、
    右に交換案（選んだ選手・交換後の人数と構成）を置く。
    ⚠ 要素名で当てるものには `:not(:where(.online-sp *))` を付ける（決まり）。 */
+/* ⚠ この見出しは**地色の上**（カードの外）にあるので、地色用の濃い文字にする。
+   カード用の明るい文字（#e2e8f0）のままで、明るい地色との差が 1.77:1 しかなかった */
 .online-trade-heading:not(:where(.online-sp *)) {
   margin: 18px 0 8px;
   font-size: 15px;
-  color: #e2e8f0;
+  color: var(--ink);
 }
 .online-trade-card + .online-trade-card {
   margin-top: 12px;
@@ -335,6 +350,8 @@
   .online-trade-work {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* ⚠ `!important` は外さない。後ろの `.online-trade-deal`（同じ強さ）の
+     sticky に負け、表の上に回した交換案が張り付いたままになる */
   .online-trade-deal {
     order: -1;
     position: static !important;
@@ -350,6 +367,9 @@
   text-align: left;
   width: 84px;
 }
+/* ⚠ 次の2つの `!important` は外さない。`.online td`（0,1,1）の中央寄せと
+   `.online-desktop .online-lineup-table td`（0,2,1）の padding に負ける
+   （ほかの `!important` を外したとき、前後の比べでここだけ変わった） */
 .online-trade-pitches {
   max-width: 150px;
   overflow: hidden;
@@ -541,9 +561,13 @@
   align-items: center;
   gap: 12px;
 }
+/* ⚠ 見出しは縮めない。スマホ 360px で「春季キャン／プ」と1文字だけ
+   次の行に落ちた（縮むのは横の締め切りに任せる） */
 .online-camp-head h3 {
+  flex: none;
   margin: 0;
   font-size: 15px;
+  white-space: nowrap;
 }
 /* 見出しの横の締め切り（手続きの帯をホームで出さないぶんの受け皿） */
 .online-camp-deadline {
@@ -598,7 +622,9 @@
   margin: 0;
   font-size: 14px;
 }
-.online-camp-gains-head .online-segments {
+/* ⚠ `.online` を前に付けて強くする。PC の `.online-desktop .online-segments`
+   （下余白 12px・同じ強さで後ろにある）に負けて、見出しの行だけ 12px 高かった */
+.online .online-camp-gains-head .online-segments {
   margin: 0;
 }
 .online-camp-gain-totals {
@@ -676,6 +702,34 @@ small.online-gain:not(:where(.online-sp *)) {
   /* ⚠ 折り返さない。「スリクォ」が2行に割れて行の高さが倍になっていた */
   white-space: nowrap;
 }
+/* ⚠ **氏名の列は左に留める**。1584px より狭い画面では表が横に送れるので、
+   右端の練習・希望の列を見ていると誰の行か分からなくなっていた（1280px で実測）。
+   地色はキャンプのカードと同じにして、送った列を下に隠す */
+.online-camp-scroll tbody th,
+.online-camp-scroll thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface-2);
+}
+/* ⚠ **練習を選ぶ2列（メイン・サブ）は右に留める**（氏名の列を左に留めるのと同じ）。
+   1440px より狭いと表が横に送れ、1280px では中身 1129px・枠 978px でサブの列が
+   丸ごと枠の外にあった（再監査 F11）。読むだけの能力の列を、氏名と練習の間で送る。
+   メインを留める位置はサブの列の幅（`CampTableScroll` が測って入れる。測る前は
+   `right` が無効になり、メインは留まらないだけ）。収まる幅では留める位置まで来ないので
+   何も変わらない */
+.online-camp-scroll .online-camp-main,
+.online-camp-scroll .online-camp-sub {
+  position: sticky;
+  z-index: 1;
+  background: var(--surface-2);
+}
+.online-camp-scroll .online-camp-sub {
+  right: 0;
+}
+.online-camp-scroll .online-camp-main {
+  right: var(--online-camp-sub-width);
+}
 /* キャンプのサブ練習の「対象」。
    ⚠ サブ練習の欄の**中に横に並べる**（列を足すと横に溢れ、下に積むと
       行が倍の高さになって12人が1画面に入らない） */
@@ -734,15 +788,20 @@ small.online-gain:not(:where(.online-sp *)) {
 
 /* --- キャンプの割り当て ------------------------------------------------ */
 /* ⚠ **詰めること**。キャンプはホームに出すので、方針の欄・タブ・実行ボタンと
-   12人の表が1画面（1000px）に収まる必要がある。実測の内訳は
-   ヘッダー85 / 見出し24 / 説明17 / 方針100 / タブ28 / 表536 / 実行40。 */
+   12人の表が1画面（1000px）に収まる必要がある。実測の内訳（1440×1000・
+   投手11人の表・2026-11-10）は ヘッダー85 / 見出し24 / 説明29 / 方針71 /
+   タブ32 / 表509 / 凡例17 / 実行32 で、カードの下端が 853px。 */
 .online-camp-bulk {
   margin: 4px 0 4px;
   padding: 6px 10px;
   border-radius: 8px;
   background: #ffffff0c;
 }
-.online-desktop .online-camp-bulk button {
+/* ⚠ 決め方のボタン（`Choice` の `.online-segments` の中）にも当てる。
+   `.online-desktop .online-segments button` と同じ強さで後ろにあるそちらが勝ち、
+   28px のままだった */
+.online-desktop .online-camp-bulk button,
+.online-desktop .online-camp-bulk .online-segments button {
   min-height: 0;
   height: 26px;
   padding: 0 8px;
@@ -762,6 +821,11 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-camp-card:not(:where(.online-sp *)) {
   --online-card-pad: 4px 14px;
   --online-card-gap: 0;
+}
+/* キャンプの下に置くカード（オフの成長）。キャンプのカードは下の余白を0にして
+   いるので、ここで間を空ける（1画面に収めるのはキャンプのカードまで） */
+.online-camp-card + .online-card {
+  margin-top: 12px;
 }
 /* ⚠ カードの中では `.online-desktop .online-card h3`（margin 14px/8px）が
    `.online-camp-head h3`（margin 0）に詳細度で勝つ。見出しの行が 24px→43px に
@@ -800,6 +864,18 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   gap: 6px;
 }
+/* ⚠ スマホは**見出しを上に置き、ボタンは折り返す**。PCと同じく横に並べると、
+   見出しが1文字の幅に潰れて縦に割れ（決／め／方）、ボタンの列は右へはみ出して
+   「全員同じ方針」「短所を埋める」が切れていた */
+.online-mobile .online-camp-bulk-fields .online-choice:not(:where(.online-sp *)) {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+.online-mobile .online-camp-bulk-fields .online-segments {
+  flex-wrap: wrap;
+  margin: 0;
+}
 .online-camp-bulk-fields label {
   display: flex;
   flex-direction: column;
@@ -810,28 +886,33 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-camp-bulk p {
   margin: 6px 0 0;
 }
-/* ⚠ 守備位置のタブ。1グループずつ出すので、表の上に置く */
-.online-camp-tabs {
-  margin: 2px 0 0;
+/* ⚠ 守備位置のタブ。1グループずつ出すので、表の上に置く。
+   ⚠ 要素は `.online-segments.online-camp-tabs`（1つの要素に2つ）。2つを重ねて
+   当てる。以前は `.online-camp-tabs .online-segments`（子孫）と、同じ強さで
+   後ろにある `.online-desktop .online-segments` に負ける指定で、どれも効いて
+   いなかった（タブの帯は 38px・下余白 12px のままだった） */
+.online-desktop .online-segments.online-camp-tabs {
+  margin: 2px 0 6px;
+  padding: 2px;
+  gap: 2px;
 }
-.online-desktop .online-camp-tabs button {
+.online-desktop .online-segments.online-camp-tabs button {
   min-height: 0;
   height: 26px;
   padding: 0 12px;
   font-size: 12px;
-}
-.online-desktop .online-camp-tabs .online-segments {
-  padding: 2px;
-  gap: 2px;
 }
 .online-camp-group th small {
   margin-left: 5px;
   font-weight: 400;
   color: #9fb0c4;
 }
-/* ⚠ **幅を詰める**。19列＋対象の欄で、1440pxの画面では表が横に溢れる
-   （実測 1253px 対 枠1138px）。メニュー名は「🔀サブポジ練習」が最長で、
-   118pxあれば切れない */
+/* ⚠ **幅を詰める**。投手の表は持ち球の列（`.online-camp-pitches`）も並ぶので、
+   1440pxの画面でも横に溢れる（150px では意欲の欄の「身が入らない」「合わせる」と
+   合わせて右端の列が切れた）。メニュー名は「🔀サブポジ練習」が最長で、選択欄は
+   中身の幅までは縮まないので、104px にしても字は切れない。
+   1440px より狭い画面では、メイン・サブの2列を右に留めて横に送る（下の
+   `.online-camp-main` / `.online-camp-sub`） */
 .online-camp-group select {
   min-width: 104px;
 }
@@ -841,6 +922,15 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-camp-wish small {
   display: block;
+  font-size: 11px;
+  color: #9fb0c4;
+}
+/* 表の下の凡例（希望の印・成長の数字の読み方）。⚠ 1行に収める */
+.online-camp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  margin: 6px 0 0;
   font-size: 11px;
   color: #9fb0c4;
 }
@@ -964,12 +1054,18 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   gap: 10px;
 }
-.online-score div span:last-child {
+.online-score div > span:last-child {
   text-align: right;
 }
 .online-score strong {
   font-size: 24px;
   color: #fff;
+}
+/* 日程の対戦の印（得点の代わり）。⚠ 大きな白い「×」は負け・中止に読めた */
+.online-score .online-score-vs {
+  font-size: 13px;
+  font-style: normal;
+  color: #9fb0c4;
 }
 .online label:not(:where(.online-sp *)) {
   display: block;
@@ -1208,16 +1304,6 @@ small.online-gain:not(:where(.online-sp *)) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.online-lineup {
-  display: grid;
-  grid-template-columns: 20px 20px minmax(0, 1fr) 44px 44px;
-  gap: 8px;
-  align-items: center;
-  margin: 6px 0;
-}
-.online-lineup button {
-  padding: 6px;
-}
 .online-working {
   position: fixed;
   bottom: 80px;
@@ -1263,7 +1349,7 @@ small.online-gain:not(:where(.online-sp *)) {
   vertical-align: middle;
 }
 .online-spaced {
-  margin-top: 24px !important;
+  margin-top: 24px;
 }
 .online-pager {
   display: flex;
@@ -1357,7 +1443,8 @@ small.online-gain:not(:where(.online-sp *)) {
     border-radius: 10px;
     margin-bottom: 12px;
   }
-  .online h1:not(:where(.online-sp *)) {
+  /* 土台（`:where(.online) h1`）と同じ 0,0,1 で書く。クラスで書いた見出しの指定に負けるように */
+  :where(.online) h1:not(:where(.online-sp *)) {
     font-size: 23px;
   }
   .online table:not(:where(.online-sp *)) {
@@ -1369,11 +1456,6 @@ small.online-gain:not(:where(.online-sp *)) {
   }
   .online-rank {
     margin-right: 6px;
-  }
-  .online-lineup {
-    grid-template-columns: 16px 16px minmax(0, 1fr) 44px 44px;
-    gap: 5px;
-    margin: 3px 0;
   }
   .online-lineup-card .online-muted {
     margin-bottom: 6px;
@@ -1412,7 +1494,6 @@ small.online-gain:not(:where(.online-sp *)) {
     right: 12px;
     font-size: 12px;
   }
-  .online-lineup-card .online-actions,
   .online-decision .online-actions {
     position: fixed;
     bottom: 65px;
@@ -1424,7 +1505,6 @@ small.online-gain:not(:where(.online-sp *)) {
     margin: 0;
     border-top: 1px solid #63778f;
   }
-  .online-lineup-card .online-actions button,
   .online-decision .online-actions button {
     flex: 1;
   }
@@ -1631,10 +1711,6 @@ small.online-gain:not(:where(.online-sp *)) {
   margin-left: 10px;
   color: #cbd5e1;
 }
-.online-mobile .online-lineup .online-player-name {
-  font-size: 12px;
-  line-height: 1.4;
-}
 
 /* スマホの対人画面は一枚の面。常設する操作は戻る・ホームだけ。 */
 .online-mobile.online-compact-shell {
@@ -1663,6 +1739,15 @@ small.online-gain:not(:where(.online-sp *)) {
   box-shadow: none;
   padding: 8px 12px;
   margin: 0;
+}
+/* ⚠ 小窓（進行時刻など `.online-overlay`）の中のカードは**地色を戻す**。上の指定は
+   本文のカードを一枚の面に溶かすためのもので、小窓に当たると暗い幕の上に
+   文字とボタンだけが浮いていた */
+.online-mobile.online-compact-shell .online-overlay .online-card {
+  background: var(--surface-2);
+  border: 1px solid #4f6984;
+  border-radius: 10px;
+  padding: 16px 12px;
 }
 .online-mobile-overview {
   display: flex;
@@ -1697,7 +1782,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-compact-shell:has(.online-decision) main {
   padding-bottom: calc(112px + env(safe-area-inset-bottom));
 }
-.online-compact-shell .online-lineup-card .online-actions,
 .online-compact-shell .online-decision .online-actions {
   bottom: calc(48px + env(safe-area-inset-bottom));
   padding-bottom: 10px;
@@ -1942,7 +2026,7 @@ small.online-gain:not(:where(.online-sp *)) {
   flex: 0 0 104px;
   min-width: 0;
   padding: 4px;
-  font-size: 12px !important;
+  font-size: 12px;
 }
 .online-stat-tools {
   display: flex;
@@ -2044,7 +2128,9 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 12px;
 }
 .online-mobile.online-compact-shell .online-card td,
-.online-mobile.online-compact-shell .online-card th {
+.online-mobile.online-compact-shell .online-card th,
+.online-mobile.online-compact-shell .online-player-dialog td,
+.online-mobile.online-compact-shell .online-player-dialog th {
   padding: 7px 4px;
 }
 
@@ -2123,9 +2209,20 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 8px;
   min-height: 36px;
 }
+/* ⚠ 長い球団名は2行に**均して**折る。PC の試合結果で「鹿児島ファルコン／ズ」
+   と1文字だけ次の行に落ちていた */
 .online-score div span {
   min-width: 0;
   overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+/* ⚠ PCの正式名は**都市と愛称の間で**折る（`teamNameParts`）。均すだけだと
+   「姫路シー／ホース」「那覇ハリ／ケーンズ」と愛称の途中で割れていた（再監査 F18）。
+   都市・愛称をそれぞれ1つの塊にし、折れるのは塊の間だけにする。愛称だけで欄より
+   長いときは、塊の中で均して折る（1文字だけ落とさない） */
+.online-score div .online-team-part {
+  display: inline-block;
+  max-width: 100%;
 }
 .online-score .online-score-decisions {
   display: block;
@@ -2319,7 +2416,7 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-mobile-tactic-fields:empty { display: none; }
 .online-mobile-tactic-fields label { display: grid; gap: 3px; font-size: 13px; margin: 0; }
 .online-mobile-panel select { font-size: 16px; }
-.online-mobile-tactic-note { font-size: 12px; margin: 0 !important; color: #cbd5e1; }
+.online-mobile-tactic-note { font-size: 12px; margin: 0; color: #cbd5e1; }
 .online-mobile-role-list { flex: 1; min-height: 0; }
 .online-mobile-role-list article { min-height: 58px; padding: 6px 0; border-bottom: 1px solid #ffffff24; }
 .online-mobile-role-list article > div { display: flex; align-items: center; gap: 8px; }
@@ -2483,6 +2580,24 @@ small.online-gain:not(:where(.online-sp *)) {
   flex: none;
   color: #e2e8f0;
 }
+/* 直近の試合のスコア（押すと試合の個人成績）。選手名と同じ「下線＝押せる」。
+   ⚠ 共通のボタンの高さ（44px）・枠・地色を外す。行の高さを変えない */
+.online .online-slot-record {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 0;
+  padding: 0 4px;
+  margin: 0 -4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
 /* 先発は**2行目**いっぱいに置く。⚠ 1行目に詰めると勝敗と防御率が切れる */
 .online-slot.is-next {
   flex-wrap: wrap;
@@ -2490,10 +2605,9 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-slot-starters {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 3px;
   flex-basis: 100%;
   min-width: 0;
-  padding-left: 68px;
   overflow: hidden;
   white-space: nowrap;
   font-size: 10px;
@@ -2507,11 +2621,20 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-slot-starters .online-starter-line {
   display: inline;
 }
+/* ⚠ 先発の名前は 10.5px にする。`small` の既定（親の 10px よりさらに小さい）
+   のままだと約8px で読めなかった。⚠ 11px にすると PC 1280px で2人目の
+   防御率が切れる（実測で 375px 要るところ 295px）。左の字下げ（68px）を
+   やめ、すき間を 3px に詰めて、1280〜1440px で切れないことを確かめた */
+.online-slot-starters .online-starter-name,
+.online-slot-starters > small:not([class]) {
+  font-size: 10.5px;
+  color: #cbd5e1;
+}
 .online-slot-starters .online-starter-line {
   margin-left: 3px;
 }
 .online-starter-name b {
-  margin-left: 4px;
+  margin-left: 3px;
   padding: 0 3px;
   border-radius: 3px;
   background: #ffffff1f;
@@ -2525,7 +2648,7 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #9fb0c4;
 }
 .online-starter-line span {
-  margin-left: 5px;
+  margin-left: 3px;
 }
 
 /* --- 個人成績ランキング ------------------------------------------------ */
@@ -2631,11 +2754,16 @@ small.online-gain:not(:where(.online-sp *)) {
 
 /* 保存や失敗の文言は、全画面の編成より前に出す。
    ⚠ 裏に隠れると、保存に失敗したことに気づけない。
-   ⚠ PCでは `.online-success` を浮かせ直している（末尾「PC版の共通の見た目」） */
+   ⚠ `.online-success` は**浮かせたまま**（`position: fixed`。このファイルの先頭）。
+      ここで `relative` にしていて、スマホでは本文の流れに入って押し下げ、
+      `top`/`right` のずらしで左が12px切れていた。重なりの順だけ上げる
+   ⚠ PCでは `.online-success` を右下に浮かせ直している（「PC版の共通の見た目」の節） */
 .online-success,
 .online-alert {
-  position: relative;
   z-index: 60;
+}
+.online-alert {
+  position: relative;
 }
 
 /* 初期メンバーの選択。20セットを並べ、選んだセットの24人を下に出す。 */
@@ -2654,9 +2782,15 @@ small.online-gain:not(:where(.online-sp *)) {
   padding: 8px 10px;
   position: relative;
 }
+/* ⚠ ボタンの中なので `.online button` の `white-space: nowrap` を受け継ぐ。
+   「A3 B8 C13 · 平均20.9歳 · 二刀流3」が1行に入らず、カードの右へはみ出して
+   隣のカードに重なっていた。区切りの空白で折り返す（語の途中では割らない） */
 .online-pack-card small {
   font-size: 11px;
   color: #cbd5e1;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .online-pack-card[aria-current='true'] {
   border-color: var(--accent);
@@ -2733,10 +2867,12 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-desktop main:not(:where(.online-sp *)) {
   padding: 20px 24px 48px;
 }
-.online-desktop .online-card h2 {
+.online-desktop .online-card h2,
+.online-desktop .online-player-dialog h2 {
   margin-bottom: 10px;
 }
-.online-desktop .online-card h3 {
+.online-desktop .online-card h3,
+.online-desktop .online-player-dialog h3 {
   font-size: 14px;
   margin: 14px 0 8px;
 }
@@ -2758,11 +2894,11 @@ small.online-gain:not(:where(.online-sp *)) {
   margin: 0 0 16px;
 }
 .online-page-head h1 {
-  margin: 0 !important;
+  margin: 0;
   color: var(--ink);
 }
 .online-page-head p {
-  margin: 4px 0 0 !important;
+  margin: 4px 0 0;
   font-size: 12px;
   color: var(--ink-sub);
 }
@@ -2870,17 +3006,25 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  margin: 0 0 4px !important;
+  margin: 0 0 4px;
 }
+/* ⚠ いまの段階（「オフ · トライアウト」）も**区切りで折る**。字の途中で折って
+   「オフ · トライア／ウト」と割れていた（再監査 F18。右の「決定待ち」の札で幅が減る） */
 .online-nav-clock b {
   font-size: 14px;
   color: #fff;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
+/* ⚠ 2行とも**区切り（空白・「・」「／」）で折る**。字の途中で折ると、
+   手続きのある日は毎回「手続きの決定待／ち」と1文字だけ次の行に落ちた */
 .online-nav-clock small {
   display: block;
   font-size: 11px;
   line-height: 1.5;
   color: #cbd5e1;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .online-status {
   flex-shrink: 0;
@@ -2907,6 +3051,31 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-desktop .online-page-nav button .online-dot {
   margin-left: 6px;
   vertical-align: middle;
+}
+/* ⚠ **背の低い画面では左メニューを詰める**。1280×800 の画面だと中身が 863px あり、
+   一番下の「リーグ管理」が画面の外に出ていた（メニューをスクロールしないと見えず、
+   スクロールできることにも気づけない）。行の高さと区切りの余白だけを詰め、文字は変えない */
+@media (max-height: 900px) {
+  .online-desktop .online-page-nav {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .online-desktop .online-page-nav button {
+    min-height: 28px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+  .online-desktop .online-nav-group,
+  .online-desktop .online-nav-home {
+    margin-bottom: 8px;
+  }
+  .online-desktop .online-nav-context {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+  }
+  .online-nav-clock {
+    margin-top: 10px;
+  }
 }
 /* 保存していない編集がある印（スタメン設定・投手起用・守備分析） */
 .online-dot.is-unsaved {
@@ -2957,7 +3126,7 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 /* 検証用の注記は本文ではなく見出しの帯に置く（どのページでも同じ場所） */
 .online-desktop .online-header .online-dev {
-  margin: 0 !important;
+  margin: 0;
   color: #cbd5e1;
 }
 /* 保存しました: 右下に浮かせる（本文を押し下げない） */
@@ -3019,7 +3188,7 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   gap: 8px;
   min-height: 28px;
-  margin: 0 0 4px !important;
+  margin: 0 0 4px;
   font-size: 12px;
   color: #cbd5e1;
 }
@@ -3093,6 +3262,15 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-desktop .online-score-list > .online-empty {
   grid-column: 1 / -1;
 }
+/* ⚠ 球団名の欄に**いちばん長い愛称（7字）が1行で入る幅**を取る。1280px ではカードが
+   280px、名前の欄が 91px で、14px の字では「ストライカーズ」（98px）が「ストラ／イカーズ」と
+   割れた（再監査 F18）。間を 10px→6px、名前を 13px にして 95px に 91px を入れる */
+.online-desktop .online-score-list > .online-score > div {
+  gap: 6px;
+}
+.online-desktop .online-score-list > .online-score > div > span {
+  font-size: 13px;
+}
 
 /* 左右が同じ重さのページ（方針・采配、リーグ管理）は半分ずつ。
    ⚠ 1100px を下回ったら縦に積むのはホームと同じ（`.online-board`） */
@@ -3122,7 +3300,7 @@ small.online-gain:not(:where(.online-sp *)) {
 
 /* --- 手続き -------------------------------------------------------------- */
 .online-phase-rules p {
-  margin: 0 0 8px !important;
+  margin: 0 0 8px;
   font-size: 13px;
 }
 .online-phase-rules .online-ready {
@@ -3193,8 +3371,11 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 
 /* --- 選手の詳細（ダイアログ） ------------------------------------------- */
-/* ⚠ 区分のタブが入るので、PCは広げる（430px だと3〜4段に折り返していた） */
-.online-desktop .online-player-dialog {
+/* ⚠ 区分のタブが入るので、PCは広げる（430px だと3〜4段に折り返していた）
+   ⚠ **選手の詳細だけに当てる**。試合の小窓（`.online-game-dialog`。観戦リプレイは
+      1740px・試合成績は1240px）と名前を変える小窓（440px）は自分の幅を持つが、
+      クラス1つの指定なので、絞らないとこちら（0,2,0）に負けて 760px に押し込まれる */
+.online-desktop .online-player-dialog:not(.online-game-dialog, .online-rename-dialog) {
   width: min(760px, calc(100% - 48px));
 }
 .online-desktop .online-player-dialog .online-stat-grid {
@@ -3246,7 +3427,7 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #93c5fd;
 }
 .online-lineup-help {
-  margin: 0 0 8px !important;
+  margin: 0 0 8px;
   min-height: 20px;
   font-size: 12px;
   color: #cbd5e1;
@@ -3370,13 +3551,14 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-lineup-row.is-pitcher:hover {
   background: transparent;
 }
+/* ⚠ `!important` は外さない。`.online td`（0,1,1）の中央寄せに負ける */
 .online-lineup-missing {
   text-align: left !important;
   color: #fca5a5;
 }
 .online-lineup-bench-head th:not(:where(.online-sp *)),
 .online-lineup-group th:not(:where(.online-sp *)) {
-  text-align: left !important;
+  text-align: left;
 }
 .online-desktop .online-lineup-bench-head th:not(:where(.online-sp *)) {
   height: 44px;
@@ -3584,7 +3766,7 @@ small.online-gain:not(:where(.online-sp *)) {
   box-shadow: 0 12px 32px #00000080;
 }
 .online-role-menu p:not(:where(.online-sp *)) {
-  margin: 4px 0 6px !important;
+  margin: 4px 0 6px;
   font-size: 11px;
   color: #94a3b8;
 }
@@ -3629,7 +3811,7 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-lineup-toolbar .online-lineup-help {
   flex: 1;
-  margin: 0 !important;
+  margin: 0;
 }
 .online-desktop .online-lineup-field-toggle,
 .online-desktop .online-lineup-group-toggle {
@@ -3678,7 +3860,7 @@ small.online-gain:not(:where(.online-sp *)) {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin: 0 0 6px !important;
+  margin: 0 0 6px;
   font-size: 13px;
   color: #cbd5e1;
 }
@@ -3713,7 +3895,7 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: baseline;
   gap: 4px 8px;
   min-height: 36px;
-  margin: 6px 0 0 !important;
+  margin: 6px 0 0;
   font-size: 12px;
   color: #cbd5e1;
 }
@@ -3893,13 +4075,15 @@ small.online-gain:not(:where(.online-sp *)) {
   display: block;
   color: #9fb0c4;
 }
+/* 標準案で退団になる理由。名前・能力・成績の下の段（`ContractPlanner.jsx`） */
 .online-contract-reason {
+  display: inline-block;
+  margin-top: 2px;
   font-size: 11px;
   padding: 0 6px;
   border-radius: 4px;
   background: rgba(245, 158, 11, 0.16);
   color: #fde68a;
-  white-space: nowrap;
 }
 
 /* キャンプ: 方針ごとの伸びの目安 */
@@ -3913,13 +4097,10 @@ small.online-gain:not(:where(.online-sp *)) {
   margin: 2px 0 0;
   font-size: 11px;
 }
-/* 決め方の説明は長い。1行に収まらないときは … で止めて、全文は title で出す */
-.online-camp-guide-note:not(:where(.online-sp *)) {
-  max-width: 46%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
+/* ⚠ 決め方の説明は**PCでも全文を出す**（… で止めない）。以前は1行に収めるため幅の
+   46% で止めて全文を title に入れていて、「…『短所を埋める』を望むとき…」と肝心の
+   ところで切れていた（再監査 F18。スマホは af00aee で先に全文にした）。長いときは
+   噛み合いの人数が次の行へ回る（実測: 1440px は1行のまま、1280px は 16px 高くなる） */
 
 /* --- 年代記（球団史・マジック・ペース） --------------------------------- */
 .online-move.is-race {
@@ -3971,7 +4152,9 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-staff-card header small {
   color: #9fb0c4;
 }
-/* ⚠ カードの中の p は `.online-staff-card` を付けて当てる（`.online p` の余白 0,1,1 より強くするため） */
+/* カードの中の p は `.online-staff-card` を付けて当てる（ほかの指定と同じ形）。
+   以前は `.online p`（0,1,1）の余白に勝つためだったが、土台を 0,0,1 に落としたので
+   いまは1クラスでも勝つ */
 .online-staff-card .online-staff-color {
   font-weight: 650;
   color: var(--accent);
@@ -3999,9 +4182,14 @@ small.online-gain:not(:where(.online-sp *)) {
   line-height: 1.6;
   color: #d0d9e5;
 }
+/* ⚠ 好む選手・表の値は**区切り（空白・読点・「・」）で折る**。字の途中で
+   折ると「…先発で押す・中／間」「…ある先／発」と1〜2文字だけ次の行に
+   落ちた。区切りの無い長い値は `overflow-wrap` でどこでも折れる */
 .online-staff-card .online-staff-prefs {
   margin: 4px 0 8px;
   font-size: 13px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .online-staff-facts {
   display: grid;
@@ -4019,6 +4207,8 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-staff-facts dd {
   margin: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .online-staff-more {
   margin-top: 10px;
@@ -4038,13 +4228,29 @@ small.online-gain:not(:where(.online-sp *)) {
   display: grid;
   gap: 4px;
 }
+/* 考え方・性格の1行。⚠ **目盛りと両端の言葉は下の段に置く**。1段に
+   「見出し 7em・目盛り・言い表し 6em」と並べていて、カード（PC 1440 で約310px）に
+   入らず、両端の言葉（「打たせて取る」など）が言い表しの欄に重なり、見出しも
+   「代打・守備固／め」と1文字だけ折り返していた。上の段は見出しと言い表し */
 .online-staff-scale {
   display: grid;
-  grid-template-columns: 7em 1fr 6em;
-  align-items: center;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'label text'
+    'ends ends';
+  align-items: baseline;
+  gap: 0 8px;
+  padding: 3px 0;
+}
+.online-staff-scale-label {
+  grid-area: label;
+}
+.online-staff-scale > b {
+  grid-area: text;
+  text-align: right;
 }
 .online-staff-scale-ends {
+  grid-area: ends;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4135,4 +4341,675 @@ small.online-gain:not(:where(.online-sp *)) {
   .online-actions.online-staff-save > span {
     flex-basis: 100%;
   }
+}
+
+/* --- 取り消せない操作の前の確認と、その結果（2026-11-10 総合監査 u1 高3・高4） -------------
+   ⚠ トレードの成立につながる操作（`TradeScreen` の `DealConfirm`）は、出す・もらう選手と
+      「取り消せない」ことを見せてから送る。結果（相手の答え・断られた理由）は次の操作まで残す
+      （右下の「保存しました」の帯はすぐ消える）。 */
+.online-trade-confirm {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fbbf2499;
+  border-radius: 8px;
+  background: #fbbf2414;
+  font-size: 12px;
+}
+.online-trade-confirm p:not(:where(.online-sp *)) {
+  margin: 6px 0 0;
+}
+.online-trade-confirm .online-trade-confirm-head:not(:where(.online-sp *)) {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+.online-trade-confirm dl:not(:where(.online-sp *)) {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.online-trade-confirm dl div:not(:where(.online-sp *)) {
+  display: grid;
+  grid-template-columns: 3.5em minmax(0, 1fr);
+  gap: 6px;
+}
+.online-trade-confirm dt:not(:where(.online-sp *)) {
+  font-weight: 700;
+}
+.online-trade-confirm .is-give dt:not(:where(.online-sp *)) {
+  color: #fdba74;
+}
+.online-trade-confirm .is-get dt:not(:where(.online-sp *)) {
+  color: #86efac;
+}
+.online-trade-confirm dd:not(:where(.online-sp *)) {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.online-trade-confirm .online-trade-warn:not(:where(.online-sp *)) {
+  color: #fbbf24;
+}
+.online-trade-confirm .online-actions {
+  margin-top: 10px;
+}
+.online-trade-result:not(:where(.online-sp *)) {
+  margin: 10px 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #6aa08d;
+  background: #1f453a;
+  color: #c7f2dc;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.online-trade-result.is-bad:not(:where(.online-sp *)) {
+  border-color: #b67863;
+  background: #5b3028;
+  color: #ffded2;
+}
+
+/* スマホの手続き（`PhasePanel` の `mobile`）: 決める中身と、決定の前の確認（u1 高4）。
+   ⚠ 以前は「退団予定 3人」の1行だけで、誰を出すのかを見ないまま決定できた。
+   ⚠ 確認は下に固定した操作の帯（`.online-decision .online-actions`）の中に1行足す。
+      帯が高くなるぶん、本文の下の余白も広げる（中身の最後が帯に隠れないように） */
+.online-phase-contents {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid #63778f;
+  border-radius: 8px;
+}
+.online-phase-contents > p:not(:where(.online-sp *)) {
+  margin: 0;
+}
+.online-phase-contents > p small {
+  display: block;
+  margin-top: 2px;
+  color: #cbd5e1;
+}
+.online-phase-contents ul {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.online-phase-contents li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.online-phase-contents li small {
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+/* 指導者に任せた手続き（`PhasePanel` の `delegated`）: 案は読むだけ。自分で決めるときの入口を添える */
+.online-phase-delegated {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  background: rgba(103, 232, 249, 0.08);
+}
+.online-phase-delegated > p:not(:where(.online-sp *)) {
+  flex: 1 1 240px;
+  margin: 0;
+}
+.online-decision .online-actions.online-phase-confirm {
+  border-top-color: #fbbf24;
+}
+.online-decision .online-phase-confirm > p:not(:where(.online-sp *)) {
+  flex: 1 0 100%;
+  margin: 0;
+  color: #fde68a;
+  font-size: 12px;
+}
+/* 初期メンバー選択で別のセットを見ているときの添え書き（帯の上の1行。確認の文と同じ置き方） */
+.online-decision .online-actions > p.online-phase-chosen:not(:where(.online-sp *)) {
+  flex: 1 0 100%;
+  margin: 0;
+  color: #fde68a;
+  font-size: 12px;
+}
+.online:has(.online-phase-confirm, .online-phase-chosen) main:not(:where(.online-sp *)),
+.online-compact-shell:has(.online-phase-confirm, .online-phase-chosen) main {
+  padding-bottom: calc(190px + env(safe-area-inset-bottom));
+}
+
+/* ============================================================
+   スマホの手続きの編集（`PhasePanel` の `mobile`。オーナーの判断1・案B）
+   ------------------------------------------------------------
+   ⚠ 以前は「変えるときはPCで」と書くだけで、スマホでは標準案のまま決めるしかなかった。
+      PCの部品（`PackSelect`・`ContractPlanner`・`TryoutPlanner`）をそのまま開き、
+      ここでは狭い幅（320px〜）に収める指定だけを足す。
+   ⚠ スマホの本体は `.online-mobile`（`.online-sp` ではない）。`.online button` などの
+      要素名の指定が効くので、打ち消すときは詳細度を揃える
+   ============================================================ */
+.online-mobile .online-phase-edit-toggle {
+  display: block;
+  width: 100%;
+  margin: 4px 0 8px;
+}
+.online-mobile .online-phase-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+/* 初期メンバー: セットのカードは2列（150px の列だと 320px で1列になり、20枚が縦に長く続く）。
+   途中参加のセット選び（`PendingPackPanel`）も同じ部品なので同じ形にする */
+.online-mobile .online-pack-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.online-mobile .online-pack-card {
+  min-width: 0;
+  white-space: normal;
+}
+/* 初期メンバー: 選んだセットの見出しと「このセットにする」。⚠ 横に並べると 320px でボタンが
+   40px 幅に潰れて「選択／中」と割れた。スマホではボタンを見出しの下に幅いっぱいで置く */
+.online-mobile .online-pack-detail .online-card-heading {
+  flex-wrap: wrap;
+}
+.online-mobile .online-pack-detail .online-card-heading h3 {
+  margin: 0;
+}
+.online-mobile .online-pack-detail .online-card-heading button {
+  flex: 1 0 100%;
+  font-size: 14px;
+  padding: 8px 14px;
+}
+/* 契約更改: 退団の選択。⚠ PCの2列のままだと 320px で1人ぶんが120px ほどになり、
+   能力の行が「制／球」と語の途中で割れていた。スマホは1列にし、チェックは枠ごと 44px で押せるように */
+.online .online-release-check {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+.online-mobile .online-phase-editor .online-release-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+.online-mobile .online-release-check {
+  width: 44px;
+  min-height: 44px;
+  align-self: stretch;
+}
+.online-mobile .online-release-check input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+}
+/* 選手の1行（契約更改・トライアウト共通の `PlayerLine`）。能力の並びは空白でだけ折り返す
+   （「球速D 制球B」を「制／球」と割らない）。名前などのボタンは指で押せる高さに */
+.online-mobile .online-phase-editor .online-tryout-person small {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.online-mobile .online-phase-editor .online-tryout-list button {
+  min-height: 44px;
+}
+/* トライアウト: 獲得の希望（`TryoutPlanner`）。⚠ PCの1行（順位・名前・↑↓・控えへ）のままだと
+   320px で名前の欄が100px ほどに削られ、「うちの内野手で3番手」の札がボタンに重なり、
+   ↑↓ は28px幅で押しにくかった。スマホは1人を2段にする（上: 順位と名前、下: ボタンを等分）。
+   ⚠ ドラッグでの並べ替えは指では動かない（HTMLのドラッグはタッチに無い）ので取っ手を隠し、↑↓で動かす。
+   ⚠ 一覧の中だけ動く枠（PCの `max-height`）は二重の送りになるので、スマホはページごと送る */
+.online-mobile .online-tryout .online-tryout-list {
+  max-height: none;
+  overflow: visible;
+}
+.online-mobile .online-tryout .online-tryout-list li {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.online-mobile .online-tryout .online-tryout-person {
+  flex: 1 1 calc(100% - 40px);
+}
+.online-mobile .online-tryout .online-tryout-list li > button {
+  flex: 1 1 0;
+  min-width: 44px;
+}
+.online-mobile .online-tryout .online-tryout-mark {
+  margin-left: auto;
+}
+.online-mobile .online-tryout .online-drag-handle {
+  display: none;
+}
+.online-mobile .online-tryout .online-tryout-grid > section {
+  padding: 10px 8px;
+}
+/* 守備位置の5つの切り替えは等分（横に並べたままだと 320px で「外野」が外へ出た） */
+.online-mobile .online-tryout .online-segments {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.online-mobile .online-tryout .online-segments button {
+  min-width: 0;
+  padding: 8px 2px;
+}
+/* 獲得希望人数と「標準案に戻す」を1段に */
+.online-mobile .online .online-tryout-head label,
+.online-mobile .online-tryout-head label {
+  margin: 0;
+}
+.online-mobile .online-tryout-head {
+  gap: 10px;
+  margin-bottom: 8px;
+}
+/* 目標の構成（「投11・捕2・内6・外7」）と獲得後の内訳は語の途中で割らない（390px で「・／内」と割れた） */
+.online-mobile .online-tryout > .online-muted strong {
+  white-space: nowrap;
+}
+.online-mobile .online-tryout .online-tryout-grid h3 small {
+  word-break: keep-all;
+}
+
+/* === スマホの編成（2タップ） ================================================
+   `TapLineup.jsx`（スマホの「打順」）。先発9人と控えを縦1列に並べ、1回目に押したもので
+   「何を入れ替えるか」（名前＝打順、守備位置の札＝守備）、2回目に押した相手で「誰と」を決める。
+   ⚠ 320〜767px で横にはみ出さないこと・数字を1字ずつ折り返さないこと。2行目の項目は
+      丸ごと次の行へ送り（`white-space: nowrap` の塊）、名前は1行で切る。
+   ⚠ 押す的は44px（守備位置の札・名前の行）。行のどこを押しても行を押したことになる。
+   ⚠ ボタンは `.online button`（0,1,1）に負けないよう `.online` を前に付けて書く。
+      押した後に `:hover` が残る端末で色が変わらないよう、hover も書き直す。
+   ⚠ 保存の帯は本文の下に `sticky` で貼り付ける（下の「← ⌂ ☰」の上）。`fixed` と違い、
+      いちばん下まで送ると本文の後ろに収まるので、最後の行が帯に隠れない */
+.online-tap {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.online-tap-help:not(:where(.online-sp *)) {
+  margin: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-tap-notes {
+  padding: 6px 10px;
+  border: 1px solid #b4530999;
+  border-radius: 10px;
+  background: #78350f40;
+  font-size: 12px;
+}
+.online-tap-notes strong {
+  display: block;
+  color: #fde68a;
+}
+.online-tap-notes ul {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.online-tap-notes li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-wrap: balance;
+}
+.online .online-tap-modes {
+  margin: 0;
+  gap: 6px;
+}
+.online .online-tap-modes button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 4px;
+  font-size: 13px;
+}
+.online-tap-fields {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.online-tap-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* 1行目: 打順・守備位置の札・名前・疲労。2行目: 適性（札の下）・能力／成績／守備適性 */
+.online-tap-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px 44px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'order pos name fatigue'
+    'order line2 line2 line2';
+  align-items: center;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border: 1px solid #4f6984;
+  border-radius: 10px;
+  background: #ffffff0a;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.online-tap-order {
+  grid-area: order;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+}
+.online-tap-pos {
+  grid-area: pos;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #22d3ee66;
+  border-radius: 8px;
+  background: #0e7490;
+  color: #e0f2fe;
+  font-size: 16px;
+  font-weight: 800;
+}
+.online button.online-tap-pos,
+.online button.online-tap-pos:hover:enabled {
+  min-height: 44px;
+  padding: 0;
+  border-color: #22d3ee66;
+  background: #0e7490;
+  color: #e0f2fe;
+}
+.online button.online-tap-pos.is-selected,
+.online button.online-tap-pos.is-selected:hover:enabled {
+  border-color: #ecfeff;
+  background: var(--accent);
+  color: #06232b;
+  box-shadow: 0 0 0 3px #22d3ee66;
+}
+.online-tap-pos.is-bench {
+  border-color: #64748b;
+  background: transparent;
+  color: #cbd5e1;
+}
+.online-tap-pos.is-fixed {
+  border-color: transparent;
+  background: #ffffff14;
+  color: #cbd5e1;
+}
+.online-tap-pos.is-note {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.online-tap-fit {
+  flex: 0 0 44px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+.online-tap-fit small {
+  margin-right: 1px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 400;
+}
+.online-tap-fit.is-low {
+  color: #f87171;
+}
+.online-tap-fit.is-good {
+  color: #86efac;
+}
+.online .online-tap-main,
+.online .online-tap-main:hover:enabled {
+  grid-area: name;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  white-space: normal;
+}
+.online-tap-row.is-pitcher .online-tap-main {
+  grid-area: name;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+}
+.online-tap-line1 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-weight: 600;
+}
+.online-tap-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-tap-line1.online-fatigue-warn .online-tap-name {
+  color: #facc15;
+}
+.online-tap-line1.online-fatigue-heavy .online-tap-name {
+  color: #f87171;
+  font-weight: 700;
+}
+.online-tap-fatigue {
+  grid-area: fatigue;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #cbd5e1;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.online-tap-fatigue.is-tired {
+  background: #facc1526;
+  color: #fde68a;
+}
+.online-tap-fatigue.is-rest {
+  background: #f8717133;
+  color: #fecaca;
+  font-weight: 700;
+}
+.online-tap-line2 {
+  grid-area: line2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 5px;
+  min-width: 0;
+  font-size: 12px;
+}
+.online-tap-cell {
+  white-space: nowrap;
+}
+.online-tap-cell small {
+  margin-right: 2px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+.online-tap-cell.is-low {
+  color: #f87171;
+}
+.online-tap-sep {
+  align-self: center;
+  width: 1px;
+  height: 12px;
+  background: #64748b;
+}
+.online-tap-missing {
+  color: #fca5a5;
+}
+/* 選んでいる行は、枠・地の色・右上の「選択中」の札の3つで示す（色だけに頼らない） */
+.online-tap-row.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.online-tap-row.is-picking {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+.online-tap-row.is-fit {
+  box-shadow: inset 4px 0 0 #4ade80;
+}
+.online-tap-row.is-unfit {
+  opacity: 0.6;
+}
+.online-tap-row.is-pitcher {
+  border-style: dashed;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: default;
+}
+.online-tap-row.is-pitcher .online-tap-line2 {
+  display: block;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.online-tap-picked {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #06232b;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+}
+.online-tap-bench {
+  display: grid;
+  gap: 6px;
+}
+.online .online-tap-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+.online .online-tap-group button {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.online-tap-bar {
+  position: sticky;
+  /* ⚠ 0 のままでよい。貼り付く位置は本文（`main`）の下の余白の内側で、余白は下の
+     「← ⌂ ☰」（`.online-mobile-controls`）の高さぶん取ってある */
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  gap: 6px;
+  margin: 0 -12px;
+  padding: 8px 12px;
+  border-top: 1px solid #63778f;
+  background: var(--surface-1);
+}
+.online-tap-warning:not(:where(.online-sp *)) {
+  margin: 0;
+  color: #fecaca;
+  font-size: 12px;
+}
+.online-tap-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.online-tap-status > p:not(:where(.online-sp *)) {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+.online-tap-status strong {
+  display: block;
+  color: #67e8f9;
+}
+.online-tap-status small {
+  display: block;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.online-tap-status-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+.online .online-tap-status-actions button,
+.online .online-tap-status-actions button.online-player-name {
+  padding: 6px 10px;
+  border: 1px solid var(--online-btn-border, #5b7188);
+  background: var(--online-btn-bg, var(--surface-1));
+  font-size: 12px;
+  text-decoration: none;
+}
+.online-tap-actions {
+  display: flex;
+  gap: 6px;
+}
+.online .online-tap-actions button {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+}
+/* 横向き（幅に余裕がある）なら、知らせと操作を1段に並べて帯を低くする */
+@media (min-width: 560px) {
+  .online-tap-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .online-tap-warning:not(:where(.online-sp *)) {
+    grid-column: 1 / -1;
+  }
+}
+/* 帯は本文の後ろに収まるので、固定の操作の帯（旧カード）のための下の余白は要らない */
+.online.online-compact-shell:has(.online-tap-bar) main {
+  padding-bottom: calc(48px + env(safe-area-inset-bottom));
+}
+
+/* 投手×捕手の組み合わせ（BatteryStats.jsx）。回数が少ない組は薄く出す */
+.online-battery h3 {
+  margin: 10px 0 6px;
+  font-size: 13px;
+  color: var(--accent);
+}
+.online-battery h3 small {
+  font-weight: 400;
+  color: #9fb0c4;
+}
+.online-battery-table {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.online-battery-table tbody th {
+  text-align: left;
+  white-space: nowrap;
+}
+.online-battery-table tbody th small {
+  margin-left: 2px;
+  color: #9fb0c4;
+}
+.online-battery-table tr[data-few] td,
+.online-battery-table tr[data-few] th {
+  opacity: 0.55;
 }

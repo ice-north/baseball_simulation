@@ -12,6 +12,12 @@ const Context = createContext(null);
 const prefix = 'baseball-online-draft:';
 /** 指導者の任せ方の下書き（変えた分野だけ `{ area: mode }`。`StaffPage.jsx` の `Modes`） */
 export const STAFF_MODES_DRAFT = 'staff.modes';
+/**
+ * スマホの打順（2タップの表 `TapLineup.jsx`）の編集。中身は `tapLineup.js` の入れ物に
+ * `dirty`（保存していない編集があるか）を添えたもの。⚠ PCの画面に切り替わったら
+ * PCが引き取って消す（`DesktopView.jsx`。残すとPCで保存・取り消した後に古い編集が戻る）
+ */
+export const LINEUP_ORDER_DRAFT = 'lineup.order';
 export function Drafts({ scope, phaseId = null, children }) {
   // 閉じる前の確認は、いま開いている手続きの下書きだけを見る（終わった手続きの印で警告しない）
   const phaseRef = useRef(phaseId);
@@ -55,7 +61,7 @@ export function Drafts({ scope, phaseId = null, children }) {
     }
     const warn = (event) => {
       const staffModes = Object.keys(cache.values[STAFF_MODES_DRAFT] || {}).length > 0;
-      if (!cache.values['lineup.dirty'] && !cache.values[phaseDraftName(phaseRef.current, 'dirty')] && !staffModes)
+      if (!cache.values['lineup.dirty'] && !cache.values[LINEUP_ORDER_DRAFT]?.dirty && !cache.values[phaseDraftName(phaseRef.current, 'dirty')] && !staffModes)
         return;
       event.preventDefault();
       event.returnValue = '';

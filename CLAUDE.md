@@ -9,8 +9,8 @@
 - `npm run dev`: 開発サーバー。保存領域のオリジンを固定するため `vite.config.js` の `strictPort` を維持する。
 - `npm run build`: 配布用の単一HTMLを生成する。
 - `npm run lint -- --quiet`: React Hooks の呼出順を検査する。
-- `npm run check:quick`（約12秒）: 普段の作業で回す。lint と軽い検査。
-- `npm run check`（約100秒）: コミット前に回す。全検査を CPU の数だけ並列に走らせる。`check:full` は複数年進行も足す。
+- `npm run check:quick`（約30秒）: 普段の作業で回す。lint と軽い検査。
+- `npm run check`（4コアで約6分。いちばん長い online-coach-check が約4分）: コミット前に回す。全検査を CPU の数だけ並列に走らせる。`check:full` は複数年進行も足す。
 - `npm run check:ui`（約2分）: 一人用の通し検査。ビルドしてブラウザで開幕からドラフト会議まで進める。
 - 一人用の画面確認は、日程画面の開発用の早送り（`npm run dev`、またはビルドに `?dev=1`）と、`npm run scenes` で作る場面（`npm run scene -- <名前>`）を使う。詳細は `tools/sim-harness/README.md`。
 
@@ -19,10 +19,11 @@
 | 触った場所 | 回す検査 |
 |---|---|
 | `src/game/autoSimulation.js`・`src/simulation-logic.js`・投球判断 | `check:season` |
-| ドラフト・成長・年次進行（`src/season/`） | `check:draft`・`check:progression` |
+| ドラフト・成長・年次進行（`src/season/`） | `check:draft`・`check:progression`・`check:ui:yearend` |
 | 日程画面・大会・フェーズ（`DateProgressScreen.jsx`・`dateProgression.js`） | `check:bracket`・`check:ui` |
 | セーブ（`src/game/saveSystem.js`・`saveMigration.js`） | `check:quick`・`check:ui` |
 | オンライン（`server/`・`src/online/`） | `check:online`・`check:online:season` |
+| オンラインの画面（`src/online/*.jsx`・`online.css`） | `check:online:dist-ui`・`check:online:ui` |
 | 画面の部品全般 | `check:quick`・`check:ui` |
 
 ## 実装の入口
@@ -30,7 +31,7 @@
 - `src/App.jsx`: 手動試合、管理画面の接続。`[SECTION:]` マーカーで対象箇所を探す。
 - `src/game/autoSimulation.js`: 自動試合。共通の物理演算は `src/simulation-logic.js`、投球判断は `src/game/pitchCalling.js`。
 - `src/components/DateProgressScreen.jsx`: 日付進行とイベント。フェーズの定義は `src/season/seasonManager.js` と `src/season/dateProgression.js`。
-- `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用。オンラインのスマホ版も `LineupSettingContent` をそのまま使う（`src/online/OnlineLineup.jsx`、view との変換は `src/online/lineupBridge.js`）。オンラインのPC版は別の画面（`src/online/LineupBoard.jsx`・`PitchingBoard.jsx`）。
+- `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用（一人用）。オンラインのスマホ版の打順・守備・控えは2回のタップで入れ替える縦の表（`src/online/TapLineup.jsx`、中身は `src/online/tapLineup.js`）、投手起用は「投手起用を開く」から `LineupSettingContent` を全画面で使う（`src/online/OnlineLineup.jsx`、view との変換は `src/online/lineupBridge.js`）。オンラインのPC版は別の画面（`src/online/LineupBoard.jsx`・`PitchingBoard.jsx`）。
 - `src/game/saveSystem.js`: スロット、バックアップ、ロード、ファイル入出力。形式移行は `src/game/saveMigration.js`。
 - `src/corporate/worldData.js`: 並行世界の初期化。`TEAMS_DATA` とともにロード失敗時の復元対象。
 - `src/components/StartScreen.jsx` と `src/components/select/`: タイトルと導入画面。意匠はナイター中継で、本編とは別の語彙（`.glass-panel` と `.lift-card`）を使う。
@@ -46,4 +47,5 @@
 - 一人用の画面をオンラインへ持ち込むときは、`team` をプロップで受け取る形に直してから渡し、`TEAMS_DATA` を名前で引く関数には `team` も渡す。引けないと `console.error` を出して戻るだけなので、画面は操作できたまま何も起きない。
 - 持ち込んだ画面は `.online` の中に置くなら `.online-sp` で包む（PC版。ほかのページと同じ枠に入れるため）。`online.css` は `.online button` のように要素名で当てており、詳細度が Tailwind の単一クラスより強いので、そのまま入れるとボタンが全部同じ高さ・同じ色に潰れる。いま `.online` の中に包んだ一人用の画面は無い（PC版の編成は `LineupBoard.jsx` に置き換えた）ので、`online.css` の要素名の指定の多くは `:not(:where(.online-sp *))` を付けていない。持ち込むときは、その画面に当たる要素名の指定に `:not(:where(.online-sp *))` を付けてから入れる。包まずに出すならポータルで `.online` の**外**へ出す（スマホ版の全画面）。
 - オンラインの保存の形を変えたら `ONLINE_SCHEMA` を上げ、**同じコミットで** `src/online/leagueMigration.js` の `MIGRATIONS` に1段足す。オンラインは保存が1つしかないので、段が無いと全員の成績を消して作り直すしか選べない。移行できるのは項目を足す変更だけなので、形は足す方向で設計する。
+- 一人用の文字色は、地色（明るい紙）の上かカードの上かを見て `src/index.css` の「文字色の決まり」の表から選ぶ。地色の上は `text-ink` 系の4色だけで、半透明の枠を置かない。
 - 既存の数値調整は `npm run check:season` で集計を確認する。

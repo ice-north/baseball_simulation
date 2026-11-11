@@ -14,6 +14,7 @@ import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
 import { ABILITY_HELP } from '../../src/online/playerInfo.js';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -44,6 +45,15 @@ try {
 
   // --- セットを選ぶ → 準備完了 ---------------------------------------
   const cards = page.locator('.online-pack-card');
+  await cards.first().waitFor();
+  // ⚠ カードの文字はカードの中に収める（ボタンの「折り返さない」を受け継いで、
+  //    3行目が右へはみ出し、隣のカードに重なっていた）
+  const spilled = await cards.evaluateAll((list) =>
+    list
+      .filter((card) => card.scrollWidth > card.clientWidth + 1)
+      .map((card) => card.querySelector('strong')?.innerText),
+  );
+  assert.deepEqual(spilled, [], `セットのカードから文字がはみ出す: ${spilled}`);
   await cards.nth(2).click();
   const packName = (await cards.nth(2).locator('strong').innerText()).trim();
   await page.getByRole('button', { name: 'このセットにする', exact: true }).click();
@@ -95,7 +105,7 @@ try {
     /開幕待ち/,
     '左上に開幕待ちが出ない',
   );
-  await page.screenshot({ path: '/tmp/online-join-home.png' });
+  await page.screenshot({ path: '/tmp/baseball-online-join-home.png' });
 
   // --- 選手の詳細で能力の説明 -------------------------------------
   await page.getByRole('button', { name: '選手成績', exact: true }).click();
@@ -119,12 +129,15 @@ try {
   );
   await detail.locator('dt.has-help', { hasText: '体幹' }).click();
   assert.equal(await help.count(), 0, 'もう一度押しても説明が閉じない');
-  await page.screenshot({ path: '/tmp/online-join-detail.png' });
+  await page.screenshot({ path: '/tmp/baseball-online-join-detail.png' });
 
   assert.deepEqual(errors, [], `画面のエラー: ${errors.join(' / ')}`);
   console.log(
     '■ 途中参加の画面: OK（選ぶと準備完了・日時 / 選び直し / ホームの開幕待ち / 能力の説明）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-join-ui');
+  throw error;
 } finally {
   await browser.close();
 }

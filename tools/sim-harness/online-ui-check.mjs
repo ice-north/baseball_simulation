@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 import { tryoutService, routeToService } from './lib/serviceRoute.mjs';
-import { TURNS_PER_DAY } from '../../src/online/shared.js';
+import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
+import { failureShots } from './lib/failureShots.mjs';
 const base = process.env.ONLINE_TEST_URL || 'http://localhost:3000';
 assert.ok(
   ['localhost', '127.0.0.1'].includes(new URL(base).hostname),
@@ -104,7 +105,8 @@ try {
     //    「○部○位○勝○敗」はここから外した
     const nav = await page.locator('.online-nav-context').innerText();
     assert.ok(
-      nav.includes('1週間で1シーズン') && nav.includes(`${TURNS_PER_DAY * 7}ターン`),
+      // ⚠ 数はホームの「第N/160ターン」と同じ試合のターン数（1週の224ではない）
+      nav.includes('1週間で1シーズン') && nav.includes(`試合${SEASON_TURNS}ターン`),
       `左上に日程の速さが出ていない: ${nav}`,
     );
     assert.ok(
@@ -148,6 +150,22 @@ try {
         }),
       'キャンプの表が横に溢れている',
     );
+    // ⚠ 表のセルから開いた選手の詳細が、セルの「折り返さない」を受け継がないこと。
+    //    小窓をセルの中に描いていて、説明がはみ出していた（`dialogPortal.js`）
+    await page.locator('.online-camp tbody th button').first().click();
+    const detail = page.getByRole('dialog');
+    await detail.waitFor();
+    assert.deepEqual(
+      await detail.evaluate((node) => ({
+        inCell: !!node.closest('td, th'),
+        wrap: getComputedStyle(node).whiteSpace,
+      })),
+      { inCell: false, wrap: 'normal' },
+      'キャンプの表から開いた選手の詳細がセルの指定を受け継いでいる',
+    );
+    await detail
+      .getByRole('button', { name: '選手成績を閉じる', exact: true })
+      .click();
     // ⚠ **決め方を変えても収まること**。「全員同じ方針」は設定が3つに増え、
     //    伸びの目安も出るので、ここだけ縦が伸びる（実測で1050pxになっていた）
     const mode = (name) =>
@@ -529,7 +547,7 @@ try {
   releaseSave();
   await waitIdle(p);
   await p.unroute('**/api/online?*');
-  await p.getByText('保存しました', { exact: true }).waitFor();
+  await p.getByText('編成を保存しました', { exact: true }).waitFor();
   assert.equal(await pitchingInert(p), 0);
   // 数値の選手IDのまま保存できたことを、読み直した画面で確かめる
   await p.reload();
@@ -557,7 +575,7 @@ try {
   await click(p, '更新');
   await click(p, '保存');
   assert.equal(await pitchingInert(p), 0);
-  await p.getByText('保存しました', { exact: true }).waitFor();
+  await p.getByText('編成を保存しました', { exact: true }).waitFor();
   await click(p, '方針・采配');
   assert.equal(
     (
@@ -589,8 +607,12 @@ try {
   await lineupTab.close();
   await login(m, 1);
   await m.getByRole('button', { name: '打順', exact: true }).click();
-  await m.getByRole('button', { name: '2番を上げる', exact: true }).click();
-  await click(m, '編成を保存');
+  // スマホの打順は2回のタップで入れ替える表（`TapLineup.jsx`）。2番を選んで1番を押す
+  const mobileSlot = (n) =>
+    m.locator(`ol[aria-label="スタメン"] > li[data-slot="${n}"] button.online-tap-main`);
+  await mobileSlot(2).click();
+  await mobileSlot(1).click();
+  await click(m, '保存');
   assert.equal(
     await m.locator('.online-lineup-board, .online-page-nav').count(),
     0,
@@ -607,7 +629,7 @@ try {
     fullPage: true,
   });
   const saveBox = await m
-    .getByRole('button', { name: '編成を保存', exact: true })
+    .getByRole('button', { name: '保存', exact: true })
     .boundingBox();
   assert.ok(
     saveBox.y >= 0 && saveBox.y + saveBox.height <= 844 - 48,
@@ -730,7 +752,7 @@ try {
   await m.setViewportSize({ width: 390, height: 844 });
   await click(m, 'ホーム');
   await m
-    .getByRole('button', { name: 'リーグ便り・過去のシーズン →', exact: true })
+    .getByRole('button', { name: 'リーグの話題・リーグ便り →', exact: true })
     .click();
   assert.ok((await m.locator('.online-news-list article').count()) <= 8);
   assert.ok(
@@ -747,6 +769,9 @@ try {
   console.log(
     'online-ui-check PASS（PC2人・別スマホ・トライアウト希望リスト・セット選択の下書き競合・キャンプがホームで1画面に収まる/対象を選べる・編成の元に戻す/保存中ロック/別画面との同時編集・端末交代・実試合結果・320〜767px / Chrome実操作）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-ui');
+  throw error;
 } finally {
   await browser.close();
 }

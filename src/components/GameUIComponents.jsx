@@ -481,14 +481,17 @@ const isNavBlocked = (managementView, seasonData) => {
   return false;
 };
 
-export const SidebarButton = ({ view, icon, label, onActiveClick, screenMode, managementView, seasonData, setScreenMode, setManagementView }) => {
+// ⚠ **開いている項目をもう一度押しても何もしない**。以前は「日程進行」だけ、開いたまま
+//    押すと黙って1日進んでいた（`onActiveClick`）。見た目はほかの項目と同じなので押した人は
+//    画面を開き直したつもりで、間の試合も取り消せない。日を進めるのはカレンダーの見出しの
+//    「1日進める」だけにする
+export const SidebarButton = ({ view, icon, label, screenMode, managementView, seasonData, setScreenMode, setManagementView }) => {
   const isActive = screenMode === 'management' && managementView === view;
   const isBlocked = screenMode === 'management' && isNavBlocked(managementView, seasonData) && !isActive;
   return (
     <button
       onClick={() => {
         if (isBlocked) return;
-        if (isActive && onActiveClick) { onActiveClick(); return; }
         setScreenMode('management'); setManagementView(view);
       }}
       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2.5 ${
@@ -506,6 +509,8 @@ export const SidebarButton = ({ view, icon, label, onActiveClick, screenMode, ma
 };
 
 // --- Sidebar コンポーネント ---
+// ⚠ 幅が md（768px）未満では畳んで、左上の「メニュー」で開く。以前は幅224pxのまま固定で、
+//   390px のスマホでは本文が166pxしか残らなかった。本文側の余白も md 以上だけ（App.jsx の md:ml-56）
 export const Sidebar = ({
   gameMode,
   userTeamName,
@@ -514,10 +519,21 @@ export const Sidebar = ({
   screenMode,
   managementView,
   setScreenMode,
-  setManagementView,
-  advanceDayRef
-}) => (
-  <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-700/50">
+  setManagementView: setView,
+}) => {
+  const [open, setOpen] = React.useState(false);
+  // 項目を選んだら畳む（狭い画面で開いたまま本文を覆わないように）
+  const setManagementView = (v) => { setOpen(false); setView(v); };
+  return (
+  <>
+  <button type="button" onClick={() => setOpen(true)} aria-label="メニューを開く"
+    className="md:hidden fixed top-2 left-2 z-40 bg-gray-900/95 text-white text-sm font-bold px-3 py-2 rounded-lg border border-gray-700/60 shadow-lg">
+    ☰ メニュー
+  </button>
+  {open && <div className="md:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setOpen(false)} aria-hidden="true" />}
+  {/* ⚠ 高さは h-screen ではなく top-0 bottom-0 で決めること。自動倍率（#root の zoom）が掛かると
+      100vh も一緒に縮み、サイドバーが画面の下まで届かず灰色の帯が出ていた（1280×720 で約90px） */}
+  <div className={`w-56 bg-gray-900/95 backdrop-blur text-white fixed left-0 top-0 bottom-0 flex-col border-r border-gray-700/50 z-50 md:z-auto md:flex ${open ? 'flex' : 'hidden'}`}>
     <div className="px-4 py-4 border-b border-gray-700/50 bg-gray-800/30">
       <h2 className={`text-lg font-black tracking-tight ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
       <div className="text-xs text-gray-300 mt-1 flex items-center gap-1.5">
@@ -531,7 +547,7 @@ export const Sidebar = ({
 
     <nav className="flex-1 min-h-0 overflow-y-auto px-2 py-3 space-y-0.5">
       <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">進行</div>
-      <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="dateprogress" icon="📅" label="日程進行" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="ranking" icon="📰" label="能力ランキング" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
@@ -551,8 +567,20 @@ export const Sidebar = ({
       <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
     </nav>
+    <button type="button" onClick={() => setOpen(false)} className="md:hidden m-2 btn-secondary px-3 py-2 rounded-lg text-sm">✕ 閉じる</button>
   </div>
-);
+  </>
+  );
+};
+
+// 背番号の表示。⚠ 無いときに `player.id` を出さないこと（内部の番号が「#999850554」と
+//    背番号のように見えていた）。0番は正しい背番号なので `||` ではなく null で判定する
+const jerseyLabel = (p) => (p?.number != null && p.number !== '' ? `#${p.number}` : '-');
+
+// 打線の上での守備位置。⚠ **DH の打者は `position` に本来の守備位置を持ったまま**
+//    `_isDH` の印で表す（gameSetup.js / lineupGenerator.js）。`position` をそのまま出すと
+//    「二」が2人並び、DH がどこにもいない表になっていた
+const lineupPos = (p) => (p._isDH ? 'dh' : p.position);
 
 // ============================================================
 // 試合画面 左右カラムの投手欄（試合中=投手成績 / 試合前=予告先発）
@@ -637,7 +665,7 @@ export const TeamPitcherPanel = ({ team, gameStarted }) => (
               <div className="text-base text-white mb-2 font-bold flex items-center gap-2">
                 <span>⚾</span>
                 <span>{pitcher.name}</span>
-                <span className="text-sm text-gray-300">#{pitcher.number || pitcher.id}</span>
+                <span className="text-sm text-gray-300">{jerseyLabel(pitcher)}</span>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
@@ -781,6 +809,7 @@ export const TeamMemberPanel = ({
               .map(player => {
                 const isPitcher = player.position === 'pitcher';
                 const posNames = POSITION_NAMES;
+                const shownPos = lineupPos(player);
                 const throwHand = player.physical.throws === 'right' ? '右' : '左';
                 const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                 const isSubSelected = selectedSubstitute === player.id;
@@ -813,16 +842,16 @@ export const TeamMemberPanel = ({
                         className={`w-6 text-center rounded text-sm py-0.5 font-bold transition ${
                           isPositionSelected
                             ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                            : getPositionColor(player.position) + ' hover:opacity-80'
+                            : getPositionColor(shownPos) + ' hover:opacity-80'
                         }`}
                       >
-                        {posNames[player.position]}
+                        {posNames[shownPos]}
                       </button>
                       <span className="font-medium text-base truncate flex-1">
                         {player.name}
                         <span className={`ml-0.5 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                       </span>
-                      <span className="text-xs text-gray-400 font-mono font-bold">#{player.number || player.id}</span>
+                      <span className="text-xs text-gray-400 font-mono font-bold">{jerseyLabel(player)}</span>
 <span className="text-sm text-gray-300 font-semibold">{throwHand}{batHand}</span>
                       {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
                       {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
@@ -880,6 +909,7 @@ export const TeamMemberPanel = ({
             const isCurrentBatter = gameStarted && isBatting && player.battingOrder === team.currentBatterOrder;
             const isPitcher = player.position === 'pitcher';
             const posNames = POSITION_NAMES;
+            const shownPos = lineupPos(player);
             const getPosColor = (pos) => getPositionColorHighlighted(pos, isCurrentBatter);
 
           const throwHand = player.physical.throws === 'right' ? '右' : '左';
@@ -919,13 +949,13 @@ export const TeamMemberPanel = ({
                     className={`w-6 shrink-0 text-center rounded text-xs py-0.5 font-semibold transition ${
                       isPositionSelected
                         ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                        : getPosColor(player.position) + ' hover:opacity-80'
+                        : getPosColor(shownPos) + ' hover:opacity-80'
                     }`}
                   >
-                    {posNames[player.position]}
+                    {posNames[shownPos]}
                   </button>
                 ) : (
-                  <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(player.position)}`}>{posNames[player.position]}</span>
+                  <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(shownPos)}`}>{posNames[shownPos]}</span>
                 )}
                 <span className="font-bold truncate">{player.name}</span>
                 <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>

@@ -4,6 +4,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { formatInnings } from '../utils/physics.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import { qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances } from '../season/seasonManager.js';
+import { withDepartedPlayers } from '../season/departedStats.js';
 
 const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
   const [statsTab, setStatsTab] = useState('season');
@@ -67,7 +68,12 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     return true;
   };
 
-  const allPlayers = getAllPlayerStats().filter(inScope);
+  // ⚠ シーズンの表には、その年に名簿を離れた選手（戦力外・指名・退団）も足す。名簿から集計する
+  //    だけだと、年度の終わりを待たずにその年の成績ごと消えていた（`departedStats.js`）
+  const allPlayers = (statsTab === 'season'
+    ? withDepartedPlayers(getAllPlayerStats(), seasonData)
+    : getAllPlayerStats()
+  ).filter(inScope);
 
   const handleBattingSort = (key) => {
     if (battingSortKey === key) {
@@ -106,17 +112,18 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.batting : getCombinedCareer(p, 'batting');
       const avg = stats.atBats > 0 ? (stats.hits / stats.atBats) : 0;
-      const pa = stats.atBats + (stats.walks || 0) + (stats.hitByPitch || 0);
+      const pa = plateAppearances(stats);
       const obp = pa > 0 ? ((stats.hits + (stats.walks || 0) + (stats.hitByPitch || 0)) / pa) : 0;
       const singles = stats.hits - (stats.doubles || 0) - (stats.triples || 0) - stats.homeruns;
       const slg = stats.atBats > 0 ? ((singles + (stats.doubles || 0) * 2 + (stats.triples || 0) * 3 + stats.homeruns * 4) / stats.atBats) : 0;
       const ops = obp + slg;
       const fieldingPct = (stats.fieldingChances || 0) > 0 ? ((stats.fieldingChances - (stats.errors || 0)) / stats.fieldingChances) : 0;
-      return { ...p, stats, avg, obp, slg, ops, fieldingPct };
+      return { ...p, stats, pa, avg, obp, slg, ops, fieldingPct };
     })
     .sort((a, b) => {
       let valA, valB;
-      if (battingSortKey === 'avg') { valA = a.avg; valB = b.avg; }
+      if (battingSortKey === 'pa') { valA = a.pa; valB = b.pa; }
+      else if (battingSortKey === 'avg') { valA = a.avg; valB = b.avg; }
       else if (battingSortKey === 'ops') { valA = a.ops; valB = b.ops; }
       else if (battingSortKey === 'obp') { valA = a.obp; valB = b.obp; }
       else if (battingSortKey === 'fieldingPct') { valA = a.fieldingPct; valB = b.fieldingPct; }
@@ -175,7 +182,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
   ];
 
   const Sparkline = ({ history, statKey, color, width = 80, height = 28 }) => {
-    if (!history || history.length < 2) return <span className="text-gray-700 text-xs">-</span>;
+    if (!history || history.length < 2) return <span className="text-gray-400 text-xs">-</span>;
     const vals = history.map(h => h[statKey] || 0);
     const min = Math.max(0, Math.min(...vals) - 5);
     const max = Math.min(100, Math.max(...vals) + 5);
@@ -265,7 +272,9 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           （ヘッダー右はタブで埋まっているため、表の上に1行だけ足す）。 */}
       {statsTab !== 'growth' && (
         <div className="flex items-center flex-wrap gap-1.5 mb-2 px-1">
-          <span className="text-xs text-gray-400 mr-0.5">範囲</span>
+          {/* ⚠ この行は地色（明るい紙）の上に直に載る。補足の文字は text-ink-sub
+              （text-gray-400/500 は紙の上で 1.0:1 前後になり、見えなかった） */}
+          <span className="text-xs text-ink-sub mr-0.5">範囲</span>
           {SCOPES.map(([key, label]) => (
             <button
               key={key}
@@ -287,17 +296,17 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
             規定到達者のみ
           </button>
           {applyQualified ? (
-            <span className="text-xs text-gray-400 tabular-nums ml-1">
+            <span className="text-xs text-ink-sub tabular-nums ml-1">
               規定打席 {qualifiedAB} / 規定投球回 {(qualifiedOuts / 3).toFixed(1)}
             </span>
           ) : canFilterQualified ? null : (
-            <span className="text-xs text-gray-500 ml-1">通算では規定を使いません</span>
+            <span className="text-xs text-ink-sub ml-1">通算では規定を使いません</span>
           )}
         </div>
       )}
 
       {statsTab === 'growth' && (
-        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden">
+        <div className="bg-surface-2 rounded-xl border border-gray-700/50 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700/50">
             <h2 className="text-sm font-semibold text-white">自チーム選手 能力成長履歴</h2>
             <p className="text-xs text-gray-400 mt-0.5">キャンプ完了時にスナップショットを記録。2年目以降から表示されます。</p>
@@ -354,7 +363,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-gray-700 text-xs">2年目以降</span>
+                            <span className="text-gray-400 text-xs">2年目以降</span>
                           )}
                         </td>
                       </tr>
@@ -383,7 +392,10 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                   <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">選手</th>
                   <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">チーム</th>
                   <SortableHeader label="試" sortKey="games" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
-                  <SortableHeader label="打席" sortKey="atBats" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  {/* ⚠ 「打席」に打数を出していた。規定打席は打席（打数＋四球＋死球）で数えるので、
+                      打席と打数を別の列にして、規定に届いたかを表から読めるようにする */}
+                  <SortableHeader label="打席" sortKey="pa" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="打数" sortKey="atBats" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="安打" sortKey="hits" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="HR" sortKey="homeruns" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="打点" sortKey="rbis" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
@@ -409,8 +421,9 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                           <span className="ml-1 text-xs bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}</td>
+                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}{player.departed && <span className="ml-1 text-xs text-gray-400">（退団）</span>}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.games}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.pa}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.atBats}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.hits}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.homeruns}</td>
@@ -482,7 +495,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                           <span className="ml-1 text-xs bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}</td>
+                      <td className="py-1.5 px-1.5 text-gray-300">{player.teamName}{player.departed && <span className="ml-1 text-xs text-gray-400">（退団）</span>}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.games}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.wins}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.stats.losses}</td>

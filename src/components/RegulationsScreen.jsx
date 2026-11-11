@@ -1,16 +1,93 @@
 import React from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
-import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations } from '../season/regulationSettings.js';
-import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts } from '../season/scheduleGenerator.js';
+import ConfirmBar from './ConfirmBar.jsx';
+import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations, thinTwoLeagueGameCounts, twoLeagueGameCountLabel } from '../season/regulationSettings.js';
+import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPerSeason } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
+import { normalizeMaxExtraInnings } from '../teams-data.js';
+import { getModeCapabilities } from '../game/modeCapabilities.js';
+import { validateLeagueTeamNames, planLeagueChanges } from '../season/nextSeasonRegulations.js';
+import { TEAMS_DATA } from '../teams-data.js';
 
-const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
+// ⚠ 部品の中で定義しないこと。描画のたびに別の部品として作り直され、中の入力欄が
+//   1文字打つごとに消えて作り直される（以前は延長の欄に2桁を打てなかった）
+const SettingRow = ({ label, children }) => (
+  <div className="flex items-center justify-between py-2 border-b border-gray-700/50">
+    <label className="text-gray-300 text-sm font-medium">{label}</label>
+    {children}
+  </div>
+);
+
+// 延長最大回数を試合で使える値（9〜30回）にする。打っている途中の空欄は標準の12回へ
+const fixExtra = (settings) => ({
+  ...settings,
+  maxExtraInnings: normalizeMaxExtraInnings(settings.maxExtraInnings === '' ? undefined : settings.maxExtraInnings),
+});
+
+// confirmLabel: 年度更新の決定ボタンの名前。行き先で変える（箱庭はキャンプが無くチーム設定へ進む）
+// currentTeams: いまのリーグの球団（`allTeams`）。年度更新で、行ごとの改名・解散・新規参入を決める元
+const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel = '確定 → キャンプへ進む', currentTeams }) => {
   const currentPhase = seasonData.phase || 'off_season';
   const canModify = onConfirm ? true : canModifyRegulations(currentPhase);
   const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
     ? PHASE_INFO[currentPhase]
     : { name: '', color: 'bg-gray-100', description: '' };
-  const [tempSettings, setTempSettings] = React.useState(seasonData.settings);
+  // ⚠ 大学・社会人の設定には延長とプレーオフの項目が無い（作るときに入れていない）。
+  //   試合は無いとき12回で打ち切るので、欄と「現在の設定」も12回を出す（以前は空欄・「延長: 回」）
+  // ⚠ **独立リーグ・箱庭の試合数は、いまのリーグの形で選べる値に合わせて始める**（`fitGamesPerSeason`）。
+  //    古い保存は選べない値を持つことがあり（2リーグの奇数球団など）、以前は選択欄が別の値
+  //    （並びの先頭）を見せていた。確定すると、この値で翌年の日程を組む（翌年の日程も同じ直し方）
+  const [tempSettings, setTempSettings] = React.useState(() => {
+    const settings = seasonData.settings || {};
+    const games = getModeCapabilities(settings).independent && settings.gamesPerSeason > 0
+      ? fitGamesPerSeason({
+          teamsCount: settings.teamsCount || 4,
+          leagueFormat: settings.leagueFormat,
+          games: settings.gamesPerSeason,
+        })
+      : settings.gamesPerSeason;
+    return {
+      ...settings,
+      gamesPerSeason: games,
+      maxExtraInnings: settings.maxExtraInnings ?? 12,
+    };
+  });
+  // プレーオフは独立リーグ（と箱庭）だけ。大学・社会人では形式の欄を出さない（以前は「PO:」が空だった）
+  const { leaguePlayoffs, independent } = getModeCapabilities(seasonData.settings);
+  // ⚠ 大学・社会人のリーグの形（チーム数・形式・試合数・チーム名）は、実在のリーグと世界の球団に
+  //    合わせて決まっている。ここで変えると設定の球団名だけが「チームA」などに替わり、世界の球団と
+  //    食い違う（以前はオフと年度更新で変えられた）。DH と延長だけ変えられるようにする
+  // ⚠ **独立リーグ・箱庭でも、球団の顔ぶれと日程の形は年度更新（`onConfirm`）でだけ変える**。
+  //    オフの「設定を保存」で球団名・球団数を先に保存すると、年度更新までのあいだ
+  //    設定の球団（`settings.teamNames`）が TEAMS_DATA と食い違い、年度更新の処理が自リーグの
+  //    球団を並行世界の球団として扱っていた（作り物の成績を足す・選手を去らせる・戦力外にする）。
+  //    自チームの名前を変えると、自チームのローテを作り直してもいた。翌年の日程は年度更新で作るので、
+  //    ここで変える意味も無い
+  const canModifyStructure = canModify && independent && !!onConfirm;
+
+  // 確定すると変わる球団（改名・解散・新規参入）。何も変わらないときは null
+  const leaguePlan = (() => {
+    if (!onConfirm || !canModifyStructure) return null;
+    const plan = planLeagueChanges(currentTeams || seasonData.settings?.teamNames || [], tempSettings.teamNames || []);
+    return plan.renames.length + plan.dissolved.length + plan.added.length > 0 ? plan : null;
+  })();
+  // 球団の顔ぶれが変わるときに出す確認の帯（`ConfirmBar`）を開いているか
+  const [reviewing, setReviewing] = React.useState(false);
+  // 年度更新の確定の前に、規定と球団名（空・重なり・リーグの外の球団と同じ名前）を確かめる
+  const checkBeforeConfirm = () => {
+    const settings = fixExtra(tempSettings);
+    const errors = [
+      ...validateRegulations(settings).errors,
+      ...(canModifyStructure
+        ? validateLeagueTeamNames(settings.teamNames || [], currentTeams || seasonData.settings?.teamNames || [])
+        : []),
+    ];
+    return { settings, errors };
+  };
+  const commit = (settings) => {
+    setSeasonData(prev => ({ ...prev, settings }));
+    onConfirm(settings);
+  };
 
   // 半角→全角変換（略称用）
   const toFullWidth = (str) => str.replace(/[A-Za-z0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
@@ -26,19 +103,14 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を新しい(チーム数-1)の倍数に自動調整
-    const oldGames = tempSettings.gamesPerSeason || 60;
-    const oldD = Math.max(1, (tempSettings.teamsCount || 4) - 1);
-    const newD = Math.max(1, newCount - 1);
-    const roundsPerOpponent = Math.max(1, Math.round(oldGames / oldD));
-    let adjustedGames = newD * roundsPerOpponent;
-    if (adjustedGames < newD) adjustedGames = newD;
-    if (adjustedGames > 150) adjustedGames = Math.floor(150 / newD) * newD;
-    // レギュラーシーズンに入りきらない試合数は選べない（1リーグ3球団の130試合以上など）
-    const fitting = getValidSingleLeagueGameCounts(newCount, 150);
-    if (fitting.length > 0 && !fitting.includes(adjustedGames)) {
-      adjustedGames = fitting.filter(v => v <= adjustedGames).pop() ?? fitting[0];
-    }
+    // 試合数を選べる値に自動調整（新規の規定画面・翌年の日程と同じ `fitGamesPerSeason`）。
+    // ⚠ 以前は2リーグでも1リーグの決め方（チーム数-1の倍数）で直し、選べない値になることがあった
+    const adjustedGames = fitGamesPerSeason({
+      teamsCount: newCount,
+      leagueFormat: tempSettings.leagueFormat,
+      games: tempSettings.gamesPerSeason || 60,
+      previousTeamsCount: tempSettings.teamsCount || 4,
+    });
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -63,21 +135,16 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
   };
 
   const handleSaveSettings = () => {
-    const validation = validateRegulations(tempSettings);
+    const settings = fixExtra(tempSettings);
+    const validation = validateRegulations(settings);
     if (!validation.valid) {
       alert('設定エラー:\n' + validation.errors.join('\n'));
       return;
     }
-    setSeasonData({ ...seasonData, settings: tempSettings });
+    setTempSettings(settings);
+    setSeasonData({ ...seasonData, settings });
     alert('レギュレーション設定を保存しました');
   };
-
-  const SettingRow = ({ label, children }) => (
-    <div className="flex items-center justify-between py-2 border-b border-gray-700/50">
-      <label className="text-gray-300 text-sm font-medium">{label}</label>
-      {children}
-    </div>
-  );
 
   return (
     <ScreenShell width="form">
@@ -94,20 +161,37 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
 
       <div className="bg-surface-2 rounded-lg p-4 mb-3">
         <h2 className="text-sm font-bold mb-2 text-white">詳細設定</h2>
+        {canModify && !independent && (
+          <p className="text-xs text-gray-300 mb-2">
+            チーム数・リーグ形式・試合数・チーム名は、実在のリーグに合わせて決まっているので変えられません。DH制と延長は変えられます。
+          </p>
+        )}
+        {canModify && independent && !onConfirm && (
+          <p className="text-xs text-gray-300 mb-2">
+            チーム数・リーグ形式・試合数・チーム名は、年度更新の「翌年のレギュレーション」で変えられます（翌年の日程はそこで作ります）。ここではDH制・プレーオフ・延長を変えられます。
+          </p>
+        )}
         <div className="space-y-0">
           <SettingRow label="DH制（指名打者）">
             <input type="checkbox" checked={tempSettings.useDH} onChange={(e) => setTempSettings({ ...tempSettings, useDH: e.target.checked })} disabled={!canModify} className="w-5 h-5 rounded" />
           </SettingRow>
           <SettingRow label="チーム数">
-            <select value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value))} disabled={!canModify} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-24">
-              {[2, 4, 6, 8, 10, 12].map(n => <option key={n} value={n}>{n}チーム</option>)}
+            <select value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value))} disabled={!canModifyStructure} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-24">
+              {/* ⚠ 奇数の球団数（新規の規定画面では選べる）はいまの値として残す。無いと選択欄が「2チーム」を見せた */}
+              {[...new Set([2, 4, 6, 8, 10, 12, tempSettings.teamsCount].filter(Number.isInteger))].sort((a, b) => a - b)
+                .map(n => <option key={n} value={n}>{n}チーム</option>)}
             </select>
           </SettingRow>
           <SettingRow label="リーグ形式">
             <select
               value={tempSettings.leagueFormat || 'single'}
-              onChange={(e) => setTempSettings({ ...tempSettings, leagueFormat: e.target.value })}
-              disabled={!canModify}
+              onChange={(e) => setTempSettings({
+                ...tempSettings,
+                leagueFormat: e.target.value,
+                // ⚠ 形式を変えたら試合数も選べる値に合わせる（以前はそのままで、選択欄が別の値を見せた）
+                gamesPerSeason: fitGamesPerSeason({ teamsCount: tempSettings.teamsCount || 4, leagueFormat: e.target.value, games: tempSettings.gamesPerSeason || 60 }),
+              })}
+              disabled={!canModifyStructure}
               className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm"
             >
               <option value="single">1リーグ制</option>
@@ -121,14 +205,14 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
                   type="text"
                   value={tempSettings.leagueNames?.[0] || 'リーグ1'}
                   onChange={(e) => setTempSettings({ ...tempSettings, leagueNames: [e.target.value, tempSettings.leagueNames?.[1] || 'リーグ2'] })}
-                  disabled={!canModify} maxLength={15}
+                  disabled={!canModifyStructure} maxLength={15}
                   className="bg-gray-700 text-white px-2 py-1.5 rounded text-sm w-28"
                 />
                 <input
                   type="text"
                   value={tempSettings.leagueNames?.[1] || 'リーグ2'}
                   onChange={(e) => setTempSettings({ ...tempSettings, leagueNames: [tempSettings.leagueNames?.[0] || 'リーグ1', e.target.value] })}
-                  disabled={!canModify} maxLength={15}
+                  disabled={!canModifyStructure} maxLength={15}
                   className="bg-gray-700 text-white px-2 py-1.5 rounded text-sm w-28"
                 />
               </div>
@@ -138,20 +222,20 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
             <select
               value={tempSettings.gamesPerSeason}
               onChange={(e) => setTempSettings({ ...tempSettings, gamesPerSeason: parseInt(e.target.value) })}
-              disabled={!canModify}
+              disabled={!canModifyStructure}
               className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm"
             >
               {(() => {
                 const tc = tempSettings.teamsCount || 4;
                 const isTwoLeague = tempSettings.leagueFormat === 'two' && tc >= 4;
                 if (isTwoLeague) {
-                  const validCounts = getValidTwoLeagueGameCounts(tc, 150);
+                  const validCounts = thinTwoLeagueGameCounts(getValidTwoLeagueGameCounts(tc, 150), tempSettings.gamesPerSeason);
                   if (validCounts.length === 0) {
                     return <option value={tempSettings.gamesPerSeason}>{tempSettings.gamesPerSeason}試合</option>;
                   }
                   return validCounts.map(opt => (
                     <option key={opt.value} value={opt.value}>
-                      {opt.value}試合（リーグ内各{opt.intra}戦・交流各{opt.inter}戦）
+                      {twoLeagueGameCountLabel(opt, tc)}
                     </option>
                   ));
                 }
@@ -163,6 +247,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
               })()}
             </select>
           </SettingRow>
+          {leaguePlayoffs && (<>
           <SettingRow label="プレーオフ形式">
             <select value={tempSettings.playoffFormat} onChange={(e) => setTempSettings({ ...tempSettings, playoffFormat: e.target.value })} disabled={!canModify} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm">
               <option value="short">3回戦制（2勝先取）</option>
@@ -171,19 +256,30 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
             </select>
           </SettingRow>
           <div className="text-xs text-gray-400 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
+          </>)}
           <SettingRow label="延長最大回数">
-            <input type="number" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({ ...tempSettings, maxExtraInnings: parseInt(e.target.value) })} disabled={!canModify} min="0" max="30" className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-20" />
+            <div className="flex items-center gap-2">
+              <input type="number" value={tempSettings.maxExtraInnings}
+                onChange={(e) => { const raw = e.target.value; setTempSettings(t => ({ ...t, maxExtraInnings: raw === '' ? '' : Math.floor(Number(raw)) })); }}
+                onBlur={() => setTempSettings(fixExtra)}
+                disabled={!canModify} min="9" max="30" className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-20" />
+              <span className="text-xs text-gray-400">回まで（9〜30）</span>
+            </div>
           </SettingRow>
         </div>
-        <div className="mt-3">
-          <button onClick={handleSaveSettings} disabled={!canModify} className={`w-full py-2 rounded-lg font-bold text-sm transition ${'btn-primary'}`}>
-            設定を保存
-          </button>
-        </div>
+        {/* 年度更新（onConfirm あり）では下の決定ボタン（`confirmLabel`）が保存も兼ねるので出さない。
+            ⚠ 以前は両方が並び、どちらを押せば決まるのか分からなかった */}
+        {!onConfirm && (
+          <div className="mt-3">
+            <button onClick={handleSaveSettings} disabled={!canModify} className="w-full py-2 rounded-lg font-bold text-sm transition btn-primary">
+              設定を保存
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* チーム名設定 */}
-      {canModify && (
+      {/* チーム名設定（大学・社会人は実在の球団なので出さない） */}
+      {canModifyStructure && (
         <div className="bg-surface-2 rounded-lg p-4 mb-3">
           <h2 className="text-sm font-bold mb-2 text-white">チーム名設定</h2>
           {tempSettings.leagueFormat === 'two' ? (
@@ -279,30 +375,81 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-300">
           <div>DH制: <span className="text-white">{seasonData.settings.useDH ? '有効' : '無効'}</span></div>
           <div>チーム数: <span className="text-white">{seasonData.settings.teamsCount}チーム</span></div>
-          <div>形式: <span className="text-white">{seasonData.settings.leagueFormat === 'two' ? '2リーグ' : '1リーグ'}</span></div>
-          <div>試合数: <span className="text-white">{seasonData.settings.gamesPerSeason}試合</span></div>
-          <div className="col-span-2">PO: <span className="text-white">{getPlayoffFormatDescription(seasonData.settings.playoffFormat, seasonData.settings.leagueFormat)}</span></div>
-          <div>延長: <span className="text-white">{seasonData.settings.maxExtraInnings}回</span></div>
+          <div>形式: <span className="text-white">{{ two: '2リーグ', tournament: '大会' }[seasonData.settings.leagueFormat] || '1リーグ'}</span></div>
+          {/* 社会人は大会だけで、リーグの試合数（0）を持たない */}
+          {seasonData.settings.gamesPerSeason > 0 && <div>試合数: <span className="text-white">{seasonData.settings.gamesPerSeason}試合</span></div>}
+          {leaguePlayoffs && <div className="col-span-2">PO: <span className="text-white">{getPlayoffFormatDescription(seasonData.settings.playoffFormat, seasonData.settings.leagueFormat)}</span></div>}
+          <div>延長: <span className="text-white">{normalizeMaxExtraInnings(seasonData.settings.maxExtraInnings ?? 12)}回まで</span></div>
         </div>
       </div>
+
+      {/* 確定すると変わる球団（改名・解散・新規参入）を先に見せる。解散は取り消せない。
+          ⚠ 以前は確定した後の alert で初めて分かった。並びは確定と同じ `planLeagueChanges` で決める */}
+      {leaguePlan && (
+        <div className="bg-surface-2 rounded-lg p-4 mt-3" data-testid="league-changes">
+          <h2 className="text-sm font-bold mb-2 text-white">確定すると</h2>
+          <ul className="space-y-1 text-sm text-gray-100">
+            {leaguePlan.renames.map(r => (
+              <li key={`r-${r.from}`}>改名: {r.from} → {r.to || '（空欄）'}（選手・成績はそのまま）</li>
+            ))}
+            {leaguePlan.dissolved.map(name => (
+              <li key={`d-${name}`} className="text-red-400 font-bold">
+                解散: {name}（所属{TEAMS_DATA[name]?.players?.length ?? 0}人はトライアウトのプールへ。取り消せません）
+              </li>
+            ))}
+            {leaguePlan.added.map((name, i) => (
+              <li key={`a-${i}`}>新規参入: {name || '（空欄）'}（24人を自動で編成）</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {onConfirm && (
         <div className="mt-4 text-center">
           <button
             onClick={() => {
-              const validation = validateRegulations(tempSettings);
-              if (!validation.valid) {
-                alert('設定エラー:\n' + validation.errors.join('\n'));
+              const { settings, errors } = checkBeforeConfirm();
+              if (errors.length > 0) {
+                alert('設定エラー:\n' + errors.join('\n'));
                 return;
               }
-              setSeasonData(prev => ({ ...prev, settings: tempSettings }));
-              onConfirm(tempSettings);
+              // 球団の顔ぶれが変わるとき（改名・解散・新規参入）は取り消せないので、帯で決める。
+              // 変わらないときは規定を決めて進むだけなので、そのまま進む
+              if (leaguePlan) setReviewing(true);
+              else commit(settings);
             }}
             className="btn-primary px-8 py-3 rounded-lg text-base transition shadow"
           >
-            確定 → キャンプへ進む
+            {confirmLabel}
           </button>
         </div>
+      )}
+
+      {onConfirm && reviewing && leaguePlan && (
+        <ConfirmBar
+          title="球団の顔ぶれを変えて、翌年の規定を確定しますか？"
+          detail={[
+            leaguePlan.renames.length > 0 && `改名${leaguePlan.renames.length}`,
+            leaguePlan.dissolved.length > 0 && `解散${leaguePlan.dissolved.length}`,
+            leaguePlan.added.length > 0 && `新規参入${leaguePlan.added.length}`,
+          ].filter(Boolean).join('・')}
+          note={leaguePlan.dissolved.length > 0
+            ? '確定すると取り消せません。解散した球団の選手はトライアウトのプールへ移ります。'
+            : '確定すると取り消せません。'}
+          confirmLabel="確定する"
+          confirmClass={leaguePlan.dissolved.length > 0 ? 'btn-danger' : 'btn-warn'}
+          onConfirm={() => {
+            // 帯を出したあとに名前を直していても、いまの入力で確かめ直してから決める
+            const { settings, errors } = checkBeforeConfirm();
+            setReviewing(false);
+            if (errors.length > 0) {
+              alert('設定エラー:\n' + errors.join('\n'));
+              return;
+            }
+            commit(settings);
+          }}
+          onCancel={() => setReviewing(false)}
+        />
       )}
     </ScreenShell>
   );

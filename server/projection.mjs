@@ -39,7 +39,7 @@ import { requireOnline, seasonStage } from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
-import { releaseBiasFor } from './coachEngine.mjs';
+import { releaseBiasFor, campPlanFor, phaseDelegated } from './coachEngine.mjs';
 
 /**
  * セット（24人）を**選ぶのに要る分だけ**にする。
@@ -188,14 +188,6 @@ export function ownUpcomingGames(schedule, ownTeam, size = 6) {
 }
 
 /**
- * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
- *
- * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
- *    するので、14試合では自球団は2〜3試合しか入らない。
- * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
- *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
- */
-/**
  * 球団ごとの今の連続（`{ 球団: { kind: 'W'|'L'|'D', count } }`）。今季の公式日程の終わった試合から数える。
  * ⚠ 日程は日付順とは限らないので並べ直す（`ownRecentGames` と同じ並べ方）
  */
@@ -219,6 +211,14 @@ export function teamStreaks(schedule) {
   return streaks;
 }
 
+/**
+ * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
+ *
+ * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
+ *    するので、14試合では自球団は2〜3試合しか入らない。
+ * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
+ *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
+ */
 export function ownRecentGames(schedule, ownTeam, size = 5) {
   const own = schedule
     .filter(
@@ -344,14 +344,18 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   // ⚠ **表示名は内部名と別に持つ**。参加した人が付けた球団名を画面に出すため。
   //    内部名（`teamName` / 順位表 / 日程）は記録の選手キーまで貫いているので
   //    変えられない。表示のときだけこの表で引く。
+  // ⚠ 略称は**名前を付け替えたときだけ**表示名の頭3文字にする。参加すると表示名は
+  //    既定の名前（内部名と同じ）でも必ず入るので、`displayName` の有無で分けると
+  //    名前を付けずに入った球団まで「新潟ブ」のようになっていた（再監査 F16）
   const teamLabels = Object.fromEntries(
     (l.teams || []).map((t) => [
       t.name,
       {
         label: t.displayName || t.name,
-        short: t.displayName
-          ? [...t.displayName].slice(0, 3).join('')
-          : t.abbreviation || t.name,
+        short:
+          t.displayName && t.displayName !== t.name
+            ? [...t.displayName].slice(0, 3).join('')
+            : t.abbreviation || t.name,
       },
     ]),
   );
@@ -436,17 +440,22 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       teamName: m.teamName,
       // ⚠ 自チーム情報の画面が「いまの球団名」を出すのに使う
       displayName: m.displayName || teamLabels[m.teamName]?.label || m.teamName,
-      ready: !!phase?.submissions[m.userId]?.ready || pendingPackAuto(phase, m),
+      ready:
+        !!phase?.submissions[m.userId]?.ready ||
+        pendingPackAuto(phase, m) ||
+        phaseDelegated(l, m),
       // ⚠ 途中参加でセットを待っている人の球団は、キャンプまでCPUが決める
       //    （手続きはこの人の決定を待たない。`leagueEngine` の `waitsFor`）
       ...(pendingPackAuto(phase, m) && !phase?.submissions[m.userId]?.ready
         ? { cpu: true }
         : {}),
+      // ⚠ 手続きを指導者に任せた球団も待たない（`waitsFor`）。一覧に「指導者に任せています」と出す
+      ...(phaseDelegated(l, m) ? { delegated: true } : {}),
     })),
     standings: l.season.standings,
     // 球団ごとの今の連勝・連敗（全国紙の「○○、5連勝」）。引き分けは続きを切る
     teamStreaks: teamStreaks(l.season.schedule),
-    // ⚠ 各項目のベスト5。12球団×24人をなめるので**1回の投影で1度だけ**作る
+    // ⚠ 各項目の上位10人（Web は5人まで出す）。12球団×24人をなめるので**1回の投影で1度だけ**作る
     // ⚠ 数える項目の上位には「このままなら年間○」（`pace`）を添える
     leaders: withPace(leagueLeaders(l, seasonStatsOf, labelOf), l, left),
     // 優勝・昇格・残留のマジックと決定（部ごと）。手続きの時期も決着は残す
@@ -537,6 +546,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
               : undefined,
           // 標準案を出した人（「山田監督の案」）と、任せているか。手続きの画面の見出しに出す
           planBy: phasePlanBy(l, member.teamName, phase.kind),
+          // ⚠ この手続きを指導者に任せているか。任せた手続きはこの人の決定を待たない
+          //    （`leagueEngine` の `waitsFor`）ので、「決めてください」の知らせを出さない（`notices.js`）。
+          //    `planBy` は案を出す人が居ないと null になるので、これとは別に渡す
+          delegated: phaseDelegated(l, member),
           submission: phase.submissions[userId] || null,
           // ⚠ キャンプは1クールずつ自分で実行する。どこまで終わったかを渡す
           //    （渡さないと、押すたびに「第1クール」のままに見える）
@@ -546,6 +559,13 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
                   rounds: phase.camp?.[userId]?.rounds || 0,
                   total: CAMP_ROUNDS,
                   plan: phase.camp?.[userId]?.plan || null,
+                  // ⚠ **指導者の案（「意見を聞く」「任せる」のとき）**。まだクールを回して
+                  //    いなければ、画面の下書きをこの案から始める。締め切りで回さなかった
+                  //    クールに当たるのもこの案（`defaultPhasePlan` の camp）なので、
+                  //    出さないと「おすすめ」を見ていたのに見たことのない案で回る
+                  suggested: phase.camp?.[userId]?.plan
+                    ? null
+                    : campPlanFor(l, member.teamName, team.players),
                   // ⚠ 伸びた能力（このクール・通算）。画面のまとめに使う
                   last: phase.camp?.[userId]?.last || null,
                   gains: phase.camp?.[userId]?.gains || {},
@@ -653,16 +673,18 @@ export function projectTeamInfo(bundle, userId, teamName) {
         // ⚠ 場面別（`splits`）は**外す**。打者×投手の組み合わせで大きく、
         //    12球団ぶんを索引に積むと実測2.5MB（外せば0.8MB）。今季のぶんは
         //    下の `publicSplits` に別に載せてあり、画面が今季の期間へ重ねる。
-        periods: playerPeriods(l, teamName, p, statistics).map(
+        periods: playerPeriods(l, teamName, p, statistics, {
+          battery: false,
+        }).map(
           // eslint-disable-next-line no-unused-vars
-          ({ splits, ...rest }) => rest,
+          ({ splits, battery, ...rest }) => rest,
         ),
         publicOnly: true,
         publicSplits: recordForPlayer(l, p, teamName)?.splits || null,
         publicPartial: !!statistics.season && !statistics.season.complete,
         publicSource: statistics.season?.complete
           ? '対人リーグ（プレーオフ込み・グランドCS除外）'
-          : '既存の今季記録（場面別は記録開始後）',
+          : '今季の成績（記録を取り始める前を含む。場面別は取り始めた後だけ）',
       };
     }),
   };

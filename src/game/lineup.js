@@ -102,15 +102,29 @@ export function ensureCompleteLineup(team, useDH = false) {
     return false;
   }
 
+  // ⚠ **2回に分けて直す**。1回目で重ならない正しい守備位置を先に押さえ、2回目で
+  //    重なった・使えない位置の人だけを空いた位置へ回す。1回で前から順に直すと、
+  //    重なった人が空いている「捕手」を取り、後ろにいる本来の捕手が一塁へ、一塁手が
+  //    二塁へ…と連鎖して全員の守備がずれていた。
+  //    回す先は、DH制で DH が空いていれば DH（誰も本来でない守備に就かない）、
+  //    無ければその選手の適性がいちばん高い空いた位置
   const usedPositions = new Set();
+  const misplaced = [];
   for (const entry of lineup) {
     if (entry.position === 'pitcher') continue;
-    if (!FIELD_POSITIONS.includes(entry.position) && !(useDH && entry.position === 'dh')
-      || usedPositions.has(entry.position)) {
-      entry.position = FIELD_POSITIONS.find(position => !usedPositions.has(position)) || (useDH ? 'dh' : null);
-    }
-    if (!entry.position) return false;
-    usedPositions.add(entry.position);
+    const valid = FIELD_POSITIONS.includes(entry.position) || (useDH && entry.position === 'dh');
+    if (valid && !usedPositions.has(entry.position)) usedPositions.add(entry.position);
+    else misplaced.push(entry);
+  }
+  for (const entry of misplaced) {
+    const fitness = active.get(entry.playerId)?.positionFitness || {};
+    const open = FIELD_POSITIONS.filter(position => !usedPositions.has(position));
+    const position = useDH && !usedPositions.has('dh')
+      ? 'dh'
+      : open.reduce((best, p) => ((fitness[p] || 0) > (fitness[best] || 0) ? p : best), open[0]);
+    if (!position) return false;
+    entry.position = position;
+    usedPositions.add(position);
   }
 
   for (let order = 1; order <= (useDH ? 9 : 8); order++) {

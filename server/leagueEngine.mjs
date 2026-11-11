@@ -158,8 +158,8 @@ import {
   setStaffModes,
   staffCommand,
   effectiveStaffModes,
+  phaseDelegated,
 } from './coachEngine.mjs';
-import { PHASE_STAFF_AREA } from '../src/online/coaches.js';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
 export { CAMP_MENUS, CAMP_SUB_MENUS, CAMP_DIRECTIONS, CAMP_PHASES, CAMP_ROUNDS };
@@ -337,6 +337,7 @@ export function runCampRound(
 ) {
   const team = TEAMS_DATA[teamName];
   if (!team?.players?.length) return { gains: {}, events: {} };
+  const humanTeam = (league.members || []).some((m) => m.teamName === teamName);
   // ⚠ 伸びは**練習の前後を比べて**作る（メイン・サブ・スタッフの効果をまとめて）。
   //    練習ごとの報告を足し合わせると、サブ練習やスタッフの効果が漏れる
   const before = new Map(
@@ -399,7 +400,8 @@ export function runCampRound(
       sub?.[player.id] || resolveTraining(player, own.direction, own.phase).sub;
     // ⚠ **選んだ対象を渡すこと**（覚えたい球種・磨きたい球種・守備位置）。
     //    渡さないと中で抽選され、画面で選んだのに違うものを覚える
-    if (SUB_TRAINING_MENUS[key])
+    if (SUB_TRAINING_MENUS[key]) {
+      const position = player.position;
       note(
         player,
         executeSubTraining(
@@ -409,6 +411,12 @@ export function runCampRound(
           staff,
         )?.growthReport,
       );
+      // ⚠ **人の球団の守備位置は「守備位置を変える」（convert）が正本**。サブポジ練習の
+      //    後の適性への合わせ（`syncPositionToFitness`）で黙って元に戻さない
+      //    （一塁手を捕手に変えても1クールで一塁に戻り、捕手が0人になることもあった）。
+      //    CPU球団は一人用と同じく適性に合わせる
+      if (humanTeam) player.position = position;
+    }
   }
   if (staff) {
     applyMotivationEffect(updatedTeam.players, staff);
@@ -492,6 +500,8 @@ export function tradeValueOf(player) {
  *    同じものを押し直せてしまう。理由をそのまま返して画面に出す。
  * ⚠ 抱えられる提案の数に上限を置く（`MAX_OPEN_TRADES`）。無制限だと
  *    相手の画面を埋められる。
+ * ⚠ **提案に期限は無い**。消えるのは返事（受ける・断る）と、提案した側の取り下げ（`reject`）だけで、
+ *    年度更新でも残る。画面の注記に「期限」と書かないこと（再監査 A4）。
  */
 export function openTrade(league, userId, { to, offer, want }, now) {
   league.trades = league.trades || [];
@@ -900,11 +910,19 @@ export function validateCampRound(league, teamName, payload) {
     if (!player || !value) continue;
     const kind = CAMP_SUB_TARGETS[sub[playerId]];
     requireOnline(kind, '対象を選べない練習に対象が付いています');
+    // ⚠ **磨きたい球種（ownPitch）はその選手の持ち球で照らす**。新球種の表
+    //    （`CAMP_PITCH_TYPES`、覚えられる8種）で照らしていたので、スプリット・
+    //    ツーシーム・パームを持つ投手に「変化球練習」で選ぶと、そのクールが実行できなかった
+    const owned = (player.pitching?.arsenal || [])
+      .map((pitch) => pitch?.type)
+      .filter((type) => type && type !== 'straight');
     requireOnline(
       kind === 'position'
         ? CONVERT_POSITIONS.includes(value) && value !== 'pitcher'
-        : CAMP_PITCH_TYPES.includes(value),
-      '練習の対象が不正です',
+        : kind === 'ownPitch'
+          ? owned.includes(value)
+          : CAMP_PITCH_TYPES.includes(value),
+      `練習の対象が不正です（${player.name}）`,
     );
     subTarget[playerId] = value;
   }
@@ -961,7 +979,13 @@ export function defaultPhasePlan(league, teamName) {
     const coached = campPlanFor(league, teamName, team.players);
     if (coached) return { menu: 'standard', assignments: {}, ...coached };
     // ⚠ 既定は全体の方針だけ。選手ごとの割り当ては画面で決める
-    return { menu: 'standard', assignments: {} };
+    // ⚠ **人の球団は「おすすめ」を書いておく**（画面の既定と同じ）。方針の無い案は
+    //    締め切りの自動実行（`autoResolvePhase` → `submitPhase`）の正規化で
+    //    「全員同じ（全体×技術）」に埋まり、`campFallbackPlan` のおすすめに届かなかった
+    const human = league.members.some((m) => m.teamName === teamName);
+    return human
+      ? { menu: 'standard', assignments: {}, policy: { mode: 'recommended' } }
+      : { menu: 'standard', assignments: {} };
   }
   if (kind === 'offseason') return {};
   // ⚠ **途中参加でセットを待っている球団は、トライアウトで取らない**。
@@ -1462,12 +1486,12 @@ function resolvePhase(league, now) {
   // ⚠ 途中参加でセットを待っている人は提出しないことがある（`submitPhase`）。
   //    その球団はCPUが動かしているので、標準案で決める
   // ⚠ **指導者に任せた手続きは、提出があっても指導者の案で決める**（提出は「確認した」の印だけ）。
-  //    自分で決めたいときは画面で任せ方を「意見を聞く」に戻してから出す
-  const area = PHASE_STAFF_AREA[kind];
+  //    自分で決めたいときは画面で任せ方を「意見を聞く」に戻してから出す。
+  //    だからその人の決定は待たない（`waitsFor`）
   const plans = Object.fromEntries(
     league.members.map((m) => [
       m.teamName,
-      (area && effectiveStaffModes(league, m)[area] === 'delegate'
+      (phaseDelegated(league, m)
         ? null
         : league.phase.submissions[m.userId]?.plan) ||
         defaultPhasePlan(league, m.teamName),
@@ -1503,7 +1527,13 @@ function resolvePhase(league, now) {
       const already = state?.rounds || 0;
       // ⚠ 自分で回したときの指示があればそれを使う（残りのクールも同じ方針で）。
       //    無ければ提出した案、それも無ければ標準
-      const saved = member ? done[member.userId]?.plan : null;
+      // ⚠ **いまキャンプを任せている人は、自分で回したときの指示を使わない**（指導者の方針で回す）。
+      //    自分で回すと任せ方は「意見を聞く」に戻る（`takeBackCamp`）ので、ここで任せているのは
+      //    回したあとに任せ直した人。画面の文（`coachView.mjs` の `phasePlanBy`「残りのクールは
+      //    指導者の方針で回ります」）と、ほかの任せた手続き（提出があっても指導者の案）に揃える。
+      //    以前は任せ直しても、最後に自分で実行した指示で残りが回っていた（再監査 A3）
+      const saved =
+        member && !phaseDelegated(league, member) ? done[member.userId]?.plan : null;
       // ⚠ CPU球団（このリーグの）はコーチの方針。世界のほかの球団は従来どおり
       const plan =
         plans[name] ||
@@ -1586,6 +1616,8 @@ function resolvePhase(league, now) {
           pitching: p.pitching ? { velocity: p.pitching.velocity, control: p.pitching.control, stamina: p.pitching.stamina } : null,
           batting: p.batting ? { meet: p.batting.meet, power: p.batting.power, eye: p.batting.eye, bunt: p.batting.bunt } : null,
           physical: p.physical ? { speed: p.physical.speed } : null,
+          // ⚠ 守備の名手は「打たせて守る」に寄せる（`coaches.js` の `leanFromPlayer`）
+          fielding: p.fielding ? { defense: p.fielding.defense } : null,
         });
     const result = advanceToNextYear(league.season, TEAMS_DATA, {
       playedTeamNames: league.season.settings.teamNames,
@@ -1625,6 +1657,8 @@ function resolvePhase(league, now) {
         }));
       coachOffseason(league, { rows: coachRows, retirees });
       // 指導者の道へ進んだ人は、引退の記録の「引退後」もそれに合わせる
+      // ⚠ **肩書きの形（「〇〇の打撃コーチ」と同じ名詞）で書く**。アプリは
+      //    「今後は${secondCareer}として球界に残る。」と組むので、「指導者の道へ」だと文が崩れる
       const turned = new Set(
         retirees
           .filter((r) => ['manager', 'coach'].includes(r.secondCareer?.role))
@@ -1632,7 +1666,7 @@ function resolvePhase(league, now) {
       );
       for (const entry of league.chronicle?.retired || [])
         if (entry.year === retireYear && turned.has(`${entry.team}:${entry.name}`))
-          entry.secondCareer = '指導者の道へ';
+          entry.secondCareer = '指導者';
     }
     if (movements.length)
       league.notices.unshift({
@@ -1681,10 +1715,35 @@ function resolvePhase(league, now) {
  *    出さないので決定する手段が無く、ストーブリーグとキャンプが毎回
  *    締め切りまで止まっていた（ほかの全員が決めても進まない）。
  *    自分で出した案があればそれを使い、無ければ標準案で決める（`resolvePhase`）。
+ * ⚠ **手続きを指導者に任せた人も待たない**（トライアウト・契約更改の退団・キャンプ。
+ *    `phaseDelegated`）。任せた手続きは提出があっても指導者の案で決めるので、待つ意味が無い。
+ *    以前は待っていたので、ほかの全員が決めても締め切りまで進まず、「決定」の無いキャンプは
+ *    任せた人がいると必ず締め切り待ちになっていた（総合監査 2026-11-10 の判断7）。
+ *    キャンプの残りのクールは締め切りのときと同じく指導者の方針で回る（`resolvePhase`）
  */
 export function waitsFor(league, member) {
   if (league.phase?.submissions?.[member.userId]?.ready) return false;
+  if (phaseDelegated(league, member)) return false;
   return !(member.packSeed && league.phase?.kind !== 'pack_select');
+}
+
+/** 手続きがまだ誰かの決定を待っているか（待機中の手続きが無ければ false） */
+function anyoneWaited(league) {
+  return (
+    league.status === 'waiting' &&
+    !!league.phase &&
+    league.members.some((m) => waitsFor(league, m))
+  );
+}
+
+/**
+ * 待つ人が居なくなった手続きを、その場で解決する。世界は読み込んであること。
+ * ⚠ **乱数は締め切りのときと同じ種**（`phase:${id}`）。どの経路で進んでも結果が同じになる
+ */
+function resolveSettledPhase(league, now) {
+  if (league.status !== 'waiting' || !league.phase || anyoneWaited(league)) return false;
+  seeded(league, `phase:${league.phase.id}`, () => resolvePhase(league, now));
+  return true;
 }
 
 export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
@@ -1702,31 +1761,43 @@ export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
     plan: normalized,
     ready: ready === true,
   };
-  if (league.members.every((m) => waitsFor(league, m) === false))
-    seeded(league, `phase:${phaseId}`, () => resolvePhase(league, now));
+  // ⚠ 決定（「この内容で決定」・キャンプの最後のクール）のたびに見る。待つ人が居なければ進む。
+  //    ⚠ 全員が任せていても、開いただけでは進まない（`openPhase` は見ない）。誰かが決定するか締め切りで進む
+  // ⚠ **下書きの保存・決定の取り消し（`ready: false`）では進めない**。以前は ready を見ておらず、
+  //    全員が任せた手続き（1人リーグで任せたときも）では、任せた人が「下書きを保存」を押した
+  //    その場でトライアウト・契約更改が処理され、知らせは「下書きを保存しました」だった。
+  //    締め切りの自動決定（`autoResolvePhase`）は ready: true で出すので、ここで止まらない
+  if (ready === true) resolveSettledPhase(league, now);
   league.game = captureWorld();
 }
 
 export { saveLineup } from './lineupCommand.mjs';
 
 /**
- * 人の球団の任せ方を変える（`staffModes` 命令）。
+ * 人の球団の任せ方を変える（`staffModes` 命令）。手続きを進めたら true を返す。
  * ⚠ スタメン・投手起用を**いま任せた**ときは、その場で指導者の編成に作り直す
  *    （次の手続きや年度更新まで人の編成のまま、にならないように）。世界を読むのはそのときだけ
+ * ⚠ **手続きを待っていた最後の1人が任せたら、その場で手続きを進める**（`waitsFor`）。
+ *    締め切りまで待たせない。もともと誰も待っていない手続き（全員が任せている）は、
+ *    任せ方を変えただけでは進めない（`submitPhase` の説明を参照）
  */
-export function updateStaffModes(league, userId, modes) {
+export function updateStaffModes(league, userId, modes, now) {
   const member = league.members.find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
+  const waited = anyoneWaited(league);
   const before = effectiveStaffModes(league, member);
   setStaffModes(league, userId, modes);
   const after = effectiveStaffModes(league, member);
   const rebuild = ['lineup', 'pitching'].some(
     (area) => after[area] === 'delegate' && before[area] !== 'delegate',
   );
-  if (!rebuild) return;
+  const settle = waited && !anyoneWaited(league);
+  if (!rebuild && !settle) return false;
   loadLeagueWorld(league);
-  refreshTeamPlan(league, member.teamName);
+  if (rebuild) refreshTeamPlan(league, member.teamName);
+  if (settle) resolveSettledPhase(league, now);
   league.game = captureWorld();
+  return settle;
 }
 
 /** キャンプを任せていた人が自分で1クール回したとき、キャンプを「意見を聞く」に戻す */
@@ -1736,7 +1807,12 @@ export function takeBackCamp(league, member) {
   setStaffModes(league, member.userId, { camp: 'advice' });
 }
 
-/** 人の球団の人事（`staff` 命令。キャンプの間だけ） */
+/**
+ * 人の球団の人事（`staff` 命令。キャンプの間だけ）。
+ * ⚠ **人事ではキャンプを進めない**。指導者が3人とも居ない球団は「自分で」になって待たれ、
+ *    1人呼ぶと任せた形に戻って待たれなくなる。ここで進めると、続けてほかの席に呼ぶ前に
+ *    キャンプ（人事ができる期間）が終わってしまう。ほかの人の決定・任せ方の変更・締め切りで進む
+ */
 export function updateStaff(league, userId, payload) {
   return staffCommand(league, userId, payload);
 }

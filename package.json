@@ -33,8 +33,11 @@
     "check:online:staff-ui": "node tools/sim-harness/online-staff-ui-check.mjs",
     "check:online:replay-ui": "node tools/sim-harness/online-replay-ui-check.mjs",
     "check:online:mobile-gameplay-ui": "node tools/sim-harness/online-mobile-gameplay-ui-check.mjs",
+    "check:online:mobile-lineup-ui": "node tools/sim-harness/online-mobile-lineup-ui-check.mjs",
     "check:online:label-ui": "node tools/sim-harness/online-label-ui-check.mjs",
+    "check:online:dist-ui": "vite build && node tools/sim-harness/run-checks.mjs online-ui",
     "check:ui": "vite build && node tools/sim-harness/singleplayer-ui-check.mjs",
+    "check:ui:yearend": "vite build && node tools/sim-harness/singleplayer-yearend-ui-check.mjs",
     "scenes": "vite build && node tools/sim-harness/singleplayer-ui-check.mjs --scenes",
     "scene": "node tools/sim-harness/open-scene.mjs"
   },

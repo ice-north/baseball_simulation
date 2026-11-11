@@ -12,6 +12,7 @@ import jp.icenorth.baseball.shared.AppBuild
 import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.LatestApp
 import jp.icenorth.baseball.shared.fetchLatestApp
+import jp.icenorth.baseball.shared.findRosterPlayer
 import jp.icenorth.baseball.shared.PlanDraft
 import jp.icenorth.baseball.shared.Wish
 import jp.icenorth.baseball.shared.sanitizeWeights
@@ -19,6 +20,10 @@ import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineApi
 import jp.icenorth.baseball.shared.OnlineException
 import jp.icenorth.baseball.shared.OnlineJson
+import jp.icenorth.baseball.shared.str
+import jp.icenorth.baseball.shared.obj
+import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.at
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -60,6 +65,9 @@ class AppViewModel internal constructor(
     /** 手続きの編集中の案（タブを移っても消えないよう、ここに置く） */
     var phaseDraft by mutableStateOf<PhaseDraft?>(null)
     var campDraft by mutableStateOf<CampDraft?>(null)
+
+    /** キャンプの一括の直前の案（直後だけ「元に戻す」を出す。端末を回しても消えないよう、ここに置く） */
+    var campBulk by mutableStateOf<CampBulk?>(null)
     var tradeDraft by mutableStateOf<TradeDraft?>(null)
 
     /** 指導者の任せ方の下書き（変えた分野だけ。「任せ方を保存」でまとめて送る） */
@@ -74,6 +82,12 @@ class AppViewModel internal constructor(
 
     /** 手続きタブでトレードの側を開いているか（届いた提案の知らせから直接開くため、ここに置く） */
     var procTrade by mutableStateOf(false)
+
+    /**
+     * 次に編成タブを開いたときに出す面（PlanTab の名前。「Staff」なら指導者）。編成タブが開いたら null に戻す。
+     * 指導者に任せた手続きの「指導者の画面へ」から、任せ方を変えに行くため
+     */
+    var planFaceRequest by mutableStateOf<String?>(null)
 
     /** 知らせ終えた届いた提案の印。端末に覚える（開き直すたびに知らせない） */
     var seenTrades by mutableStateOf(store.seenTrades)
@@ -138,8 +152,70 @@ class AppViewModel internal constructor(
     /** 選手の詳細を開いている選手（名簿の生の形）。どの画面からでも同じシートで開く */
     var openPlayer by mutableStateOf<JsonObject?>(null)
 
+    /** 選手タブで見ている球団（null は自球団）。順位表の球団を押すと、ここに入れて選手タブへ移る */
+    var playersTeam by mutableStateOf<String?>(null)
+
+    fun showTeamPlayers(team: String) {
+        playersTeam = team
+    }
+
+    /**
+     * 他球団の名簿を読んでいる間の、開こうとしている選手の名前（画面の下に「読み込んでいます…」を出す）。
+     * ⚠ 以前は印が無く、押しても何も起きないように見えた
+     */
+    var openingPlayer by mutableStateOf<String?>(null)
+        private set
+
+    /** 選手の詳細を開く操作の通し番号。新しく押した・やめた（[dropOpeningPlayer]）ら、前の読み込みの結果は使わない */
+    private var openPlayerSerial = 0L
+
+    /**
+     * 球団と id（無ければ名前）から選手の詳細を開く。試合の成績表やタイトル争いの行には能力が載っていないので、
+     * 自球団は手元の名簿から、他球団は球団の読み込み（版ごとに覚えている）から探す。
+     * いまの名簿にいない選手（退団・移籍した）は、そのことを知らせる（id があれば名前では探し直さない。[findRosterPlayer]）
+     */
+    fun openPlayerOf(team: String, id: Long?, name: String?) {
+        val epoch = sessionEpoch
+        val serial = ++openPlayerSerial
+        val own = team == view?.teamName
+        openingPlayer = if (own) null else name ?: "選手"
+        viewModelScope.launch {
+            try {
+                val source = if (own) raw else read("team", mapOf("team" to team))
+                val found = findRosterPlayer(source.at("roster").list().mapNotNull { it.obj() }, id, name)
+                if (epoch != sessionEpoch || serial != openPlayerSerial) return@launch
+                if (found != null) openPlayer = found else message = "${name ?: "この選手"}は、いまこの球団の名簿にいません"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // やめた操作の失敗は出さない（認証切れだけはログイン画面へ戻す）
+                if (epoch == sessionEpoch && (serial == openPlayerSerial || e.isAuthFailure())) handle(e)
+            } finally {
+                if (serial == openPlayerSerial) openingPlayer = null
+            }
+        }
+    }
+
+    /**
+     * 選手の詳細を開きに行っているのをやめる（読み終わっても開かない）。下のタブを移ったとき。
+     * ⚠ 読み込みそのものは取り消さない（トークンの更新の途中で捨てると締め出される。[reload] と同じ理由）。
+     *    以前は読み終わる前にタブを移ると、移った先でシートが開いた
+     */
+    fun dropOpeningPlayer() {
+        if (openingPlayer == null) return
+        openPlayerSerial += 1
+        openingPlayer = null
+    }
+
     /** 引っ張って更新している間 */
     var refreshing by mutableStateOf(false)
+        private set
+
+    /**
+     * まだビューが1つも無いときに、読み込みに失敗した理由（ホームに「読み直す」と出す）。読めたら null。
+     * ⚠ 以前はホームが「読み込み中…」のまま止まり、引っ張って更新もできなかった（中身がスクロールしないため）
+     */
+    var loadFailure by mutableStateOf<String?>(null)
         private set
 
     /** 保存などの操作中（画面全体を塞いで、二重に押せなくする） */
@@ -212,21 +288,21 @@ class AppViewModel internal constructor(
     /** main の最新のアプリ（ホームの紙面の「アプリ」の記事）。まだ読めていない・読めなかったら null */
     var latestApp by mutableStateOf<LatestApp?>(null)
         private set
-    private var latestAppCheckedAt = 0L
+    private val latestAppSchedule = CheckSchedule(interval = 30 * 60_000L, retry = 5 * 60_000L)
     private var latestAppJob: Job? = null
 
     /**
      * main の最新のアプリを読む。⚠ GitHub の認証なしの API は1時間に60回までなので、30分に1回まで
-     * （起動時と、引っ張って更新したとき）。手元で作った版（コミットが分からない）は読まない
+     * （起動時と、引っ張って更新したとき）。読めなかったら5分あけて読み直す。手元で作った版（コミットが分からない）は読まない
      */
     private fun checkLatestApp() {
         if (appBuild.commit.isEmpty() || latestAppJob?.isActive == true) return
         val now = System.currentTimeMillis()
-        if (latestAppCheckedAt != 0L && now - latestAppCheckedAt < 30 * 60_000L) return
-        latestAppCheckedAt = now
+        if (!latestAppSchedule.due(now)) return
+        latestAppSchedule.started(now)
         latestAppJob = viewModelScope.launch {
             // 読めなかったときは前の答えを残す（電波の悪い所で記事が消えたり出たりしないように）
-            fetchLatest()?.let { latestApp = it } ?: run { latestAppCheckedAt = 0L }
+            fetchLatest()?.let { latestApp = it } ?: latestAppSchedule.failed(System.currentTimeMillis())
         }
     }
 
@@ -300,15 +376,21 @@ class AppViewModel internal constructor(
         store.auth = null
         auth = null
         view = null
+        loadFailure = null
         raw = null
         openPlayer = null
+        openPlayerSerial += 1
+        openingPlayer = null
+        playersTeam = null
         plan = null
         phaseDraft = null
         campDraft = null
+        campBulk = null
         tradeDraft = null
         staffModesDraft = emptyMap()
         parkedTradeDraft = null
         procTrade = false
+        planFaceRequest = null
         message = null
         error = null
         clearCaches()
@@ -342,6 +424,8 @@ class AppViewModel internal constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // ⚠ 静かな読み直しの失敗も、ビューが無い間はホームに出す（知らせは出さないが、読み込み中のまま止めない）
+                if (epoch == sessionEpoch && view == null) loadFailure = e.readable()
                 if (epoch == sessionEpoch && (!quiet || e.isAuthFailure())) handle(e)
             } finally {
                 // 前の読み直しが終わっても、待っている新しい読み直しの印は下ろさない
@@ -382,7 +466,21 @@ class AppViewModel internal constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    if (epoch == sessionEpoch) handle(e)
+                    if (epoch != sessionEpoch) return@launch
+                    handle(e)
+                    // ⚠ サーバーに断られたら最新を読み直す（PC の run と同じ）。断られる多くは手続きが進んだ・
+                    //    名簿が変わったなど手元のビューが古いときで、読み直さないと同じ古い画面のまま押し直すことになる。
+                    //    通信の失敗（電波が無い・時間切れ）では読まない（読み直しも同じく待たされるだけ）。
+                    //    読み直しの失敗は出さない（断られた理由の知らせを上書きしない）
+                    if (e is OnlineException && !e.isAuthFailure()) {
+                        try {
+                            authed(current, epoch) { load(it, epoch, readEpoch) }
+                        } catch (c: CancellationException) {
+                            throw c
+                        } catch (ignored: Exception) {
+                            // 断られた理由の知らせを残す
+                        }
+                    }
                     return@launch
                 }
                 // ⚠ 返事に最新のビューが載っていればそのまま使う（読み直しの往復を省く）。
@@ -477,6 +575,7 @@ class AppViewModel internal constructor(
 
     private fun applyView(text: String) {
         view = parseView(text)
+        loadFailure = null
         raw = parseRaw(text)
         // 指示の返事に載ったビューにも、公開した世代が入っている（サーバーが押す）。
         // 古いサーバーの返事には無いので、そのときは null にして次は全部読む
@@ -533,8 +632,21 @@ class AppViewModel internal constructor(
 
     private fun Exception.readable(): String = when (this) {
         is OnlineException -> message ?: "サーバー処理に失敗しました"
-        // ⚠ 原因の切り分けのため、試作のうちは中身も出す（スクショで送ってもらう）
-        else -> "通信できませんでした。電波の良いところで、もう一度試してください（${this::class.simpleName}: ${message ?: ""}）"
+        // ⚠ 原因の切り分けのため、分かる原因は添える（スクショで送ってもらう）。
+        //    以前は例外のクラス名と英語の文（SocketTimeoutException: timeout など）をそのまま出していた
+        else -> "通信できませんでした。電波の良いところで、もう一度試してください" + (networkCause(this)?.let { "（$it）" } ?: "")
+    }
+}
+
+/** 通信の失敗の原因（画面に添える短い言葉）。包まれた例外の中も見る。分からなければ null */
+internal fun networkCause(e: Throwable): String? = generateSequence(e) { it.cause }.take(5).firstNotNullOfOrNull { c ->
+    when {
+        c is java.net.UnknownHostException -> "接続先が見つかりません"
+        c is java.net.ConnectException -> "接続できません"
+        c is javax.net.ssl.SSLException -> "安全な接続ができません"
+        // OkHttp（SocketTimeoutException）と Ktor（HttpRequestTimeoutException など）の時間切れ
+        c is java.net.SocketTimeoutException || c::class.simpleName.orEmpty().contains("Timeout") -> "時間切れ"
+        else -> null
     }
 }
 
@@ -542,10 +654,46 @@ private fun parseView(raw: String): LeagueView? = runCatching { OnlineJson.decod
 private fun parseRaw(raw: String): JsonObject? = runCatching { OnlineJson.parseToJsonElement(raw).jsonObject }.getOrNull()
 
 /**
+ * 間をあけて読みに行くものの予定（main の最新のアプリなど）。
+ * ⚠ 読めなかったときも間をあける（[retry]）。以前は失敗で「まだ読んでいない」に戻していたので、
+ *    電波の悪い所や GitHub の回数の上限に当たったあとは、引っ張って更新するたびに読みに行っていた
+ *    （上限に当たると1時間ずっと失敗し、その間も読み続ける）
+ */
+internal class CheckSchedule(private val interval: Long, private val retry: Long) {
+    private var nextAt = 0L
+
+    fun due(now: Long): Boolean = now >= nextAt
+
+    fun started(now: Long) {
+        nextAt = now + interval
+    }
+
+    fun failed(now: Long) {
+        nextAt = now + retry
+    }
+}
+
+/**
  * 手続き（初期メンバー・トライアウト・契約更改・年度更新）の編集中の案。
  * `base` は編集を始めたときの提出（サーバーが別の操作との食い違いを見る baseSubmission）。
  */
 data class PhaseDraft(val phaseId: String, val plan: JsonObject, val base: JsonElement?, val dirty: Boolean)
+
+/**
+ * ビューの提出（`phase.submission`）から、保存済みの案を作る。手続きが変わった・提出が無ければ null。
+ * ⚠ 保存・決定のあとは案を null にせず、読み直したビューからこれで作り直す。null の間は手続きの面が
+ *    「標準案を準備しています…」に替わり、中の一覧（トライアウトの候補の絞り込み・件数、契約更改の並び、
+ *    初期メンバーの構成の絞り込み）の状態が捨てられ、スクロールも先頭に戻っていた
+ */
+internal fun savedPhaseDraft(raw: JsonObject?, phaseId: String): PhaseDraft? {
+    val phase = raw?.get("phase").obj()?.takeIf { it.at("id").str() == phaseId } ?: return null
+    val submission = phase["submission"].obj() ?: return null
+    val plan = submission["plan"].obj() ?: return null
+    return PhaseDraft(phaseId, plan, submission, dirty = false)
+}
+
+/** キャンプの一括で当てる前後の案 */
+data class CampBulk(val text: String, val before: CampDraft, val after: CampDraft)
 
 /** キャンプの方針と、選手ごとのメイン・サブ練習（未実行のクールの指示） */
 data class CampDraft(
@@ -558,4 +706,6 @@ data class CampDraft(
     val mode: String = "recommended",
     /** 選手ごとの方針の上書き（「合わせる」） */
     val players: Map<Long, Wish> = emptyMap(),
+    /** サブ練習の対象（新球種・磨く球種・守る位置）。無ければ「おまかせ」 */
+    val subTarget: Map<Long, String> = emptyMap(),
 )

@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # ビルド＋ npm run check（lint・一人用・オンラインの検査を並列で。約2分）
+  # ビルド＋ npm run check（lint・一人用・オンラインの検査を並列で。約6分）
   check:
     runs-on: ubuntu-24.04
     steps:
@@ -30,6 +30,13 @@ jobs:
         run: npm run build
       - name: Simulation checks
         run: npm run check
+      # アプリの共通部（mobile/shared）は Web の表と計算を写している。写し元だけを変えた push でも
+      # ずれに気づけるよう、Node だけで動く照合はここでも毎回回す（android.yml は paths で絞っている）
+      - name: App tables match web
+        if: ${{ !cancelled() }}
+        run: |
+          node mobile/tools/gen-tables.mjs --check
+          node mobile/tools/expect-logic.mjs --check
 
   # progression-check（多年次の人口保存・年齢ピラミッド・ポジション均衡）
   progression:
@@ -44,7 +51,7 @@ jobs:
       - name: Progression check
         run: npm run check:progression
 
-  # オンラインの通年検査（1年目の開幕から2年目まで実際の日次で進める。約10分）
+  # オンラインの通年検査（1年目の開幕から2年目まで実際の日次で進める。約2〜3分）
   online-season:
     runs-on: ubuntu-24.04
     steps:
@@ -56,6 +63,47 @@ jobs:
       - run: npm ci
       - name: Online actual daily season (year 1 to year 2)
         run: npm run check:online:season
+
+  # 一人用の年度更新の通し検査（独立・箱庭・企業・クラブで1年目のオフから2年目の開幕まで。
+  # 4モードを同時に進めて、4コアで約2分半）。ui ジョブに足すとそのぶん延びるので、別のジョブで並べる
+  ui-yearend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browser
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install browser
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install browser dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Single-player year-end UI
+        run: npm run check:ui:yearend
+
+      - name: Upload UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-yearend
+          path: |
+            /tmp/baseball-single-yearend-*.png
+            /tmp/baseball-single-yearend-*-failure.zip
+          if-no-files-found: ignore
 
   # 画面検査（オンラインの PC・スマホと、一人用の通し）
   ui:
@@ -89,25 +137,25 @@ jobs:
       - name: Single-player UI
         run: npm run check:ui
 
-      # ⚠ サーバーを立てずに dist を開く（check:ui が作る）。下の PC/スマホの通し検査より
-      #    先に置く（あちらが途中で止まっても、この検査の結果は出る）
-      - name: Online PC lineup board UI
-        run: npm run check:online:lineup-ui
+      # ⚠ サーバーを立てずに dist を開く画面検査（check:ui が作った dist を使う）。一覧は
+      #    run-checks.mjs の DIST_UI。1本落ちても残りは回り、最後に落ちたものをまとめて出す。
+      #    下のサーバーが要る通し検査とは手順を分ける（片方が止まっても、もう片方の結果は出る）
+      - name: Online UI (dist only)
+        if: ${{ !cancelled() }}
+        run: node tools/sim-harness/run-checks.mjs online-ui
 
-      - name: Online PC and mobile UI
+      - name: Online PC and mobile UI (dev servers)
+        if: ${{ !cancelled() }}
         run: |
           ONLINE_DISABLE_TIMER=1 ONLINE_DATA_FILE="$RUNNER_TEMP/online-ui.json.gz" npm run dev:online > "$RUNNER_TEMP/online-api.log" 2>&1 &
           npm run dev -- --host 127.0.0.1 > "$RUNNER_TEMP/online-vite.log" 2>&1 &
+          up=
           for attempt in $(seq 1 30); do
-            if curl --fail --silent 'http://127.0.0.1:3000/api/online?action=config'; then break; fi
+            if curl --fail --silent 'http://127.0.0.1:3000/api/online?action=config' > /dev/null; then up=1; break; fi
             sleep 1
           done
+          if [ -z "$up" ]; then echo "::error::開発サーバーが30秒で立ち上がらない（ログは成果物の online-*.log）"; exit 1; fi
           ONLINE_TEST_URL=http://127.0.0.1:3000 npm run check:online:ui
-          npm run check:online:auth-ui
-          npm run check:online:edit-ui
-          npm run check:online:label-ui
-          npm run check:online:replay-ui
-          npm run check:online:mobile-gameplay-ui
 
       - name: Upload UI evidence
         if: always()

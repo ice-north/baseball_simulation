@@ -86,7 +86,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
   return (
     <ScreenShell>
       <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-xl font-bold text-white">エディット画面（開発用）</h1>
+        <h1 className="text-xl font-bold text-ink">エディット画面（開発用）</h1>
         {/* ⚠ 以前は保存も戻るボタンも無く、編集は再読み込みで消えるだけだった */}
         <div className="flex gap-2">
           {onOpenSave && (
@@ -132,11 +132,11 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
             onClick={() => {
               generateOptimalLineup(editingTeam);
               generatePitchingRotation(editingTeam);
-              alert(`${editingTeam}のAIオーダー編成と投手ローテーションを設定しました！`);
+              alert(`${editingTeam}のオーダーと投手ローテーションを自動で組みました`);
             }}
             className="btn-secondary px-4 py-2 rounded transition"
           >
-            🤖 AIオーダー編成
+            オーダーを自動で組む
           </button>
           <button
             onClick={() => generateAllTeamsLineup()}
@@ -163,7 +163,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
               >
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-bold text-white">{player.name}</span>
-                  <span className="text-xs text-gray-300">#{player.number || player.id}</span>
+                  <span className="text-xs text-gray-300">{player.number != null && player.number !== '' ? `#${player.number}` : '-'}</span>
                 </div>
                 <div className="text-sm text-gray-300">
                   <div>ポジション: {POSITION_NAMES[player.position] || player.position}</div>

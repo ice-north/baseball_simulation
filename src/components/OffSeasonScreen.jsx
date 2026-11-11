@@ -3,8 +3,9 @@ import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
-import { getPlayoffChampion } from '../season/seasonManager.js';
+import { getPlayoffChampion, isYearAdvanced, seasonChampion } from '../season/seasonManager.js';
 import { generatePitchingRotation } from '../game/lineupGenerator.js';
+import { repairLeagueConfig } from '../season/nextSeasonRegulations.js';
 import { getTransferCandidates, transferManagerTo, CATEGORY_LABEL, getTeamCategory } from '../game/managerTransfer.js';
 
 const RANK_TEXT = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
@@ -13,7 +14,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   const [processing, setProcessing] = useState(false);
   const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
   const [saveStatus, setSaveStatus] = useState(null);
-  const [graduationReport, setGraduationReport] = useState(null);
+  // ⚠ 年度更新が済んだ後の保存から開いたとき（大学の卒業・入部レポートの途中のオートセーブ・
+  //    緊急保存）は、年度更新をもう一度走らせない。大学はレポートの続きから出す（`isYearAdvanced`）
+  const yearAdvanced = isYearAdvanced(seasonData);
+  const [graduationReport, setGraduationReport] = useState(() => (
+    yearAdvanced && gameMode === 'university' && seasonData?.universityGraduationReport
+      ? { npbDrafted: [], ...seasonData.universityGraduationReport }
+      : null
+  ));
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferCat, setTransferCat] = useState(null);
   const [transferSearch, setTransferSearch] = useState('');
@@ -58,7 +66,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     if (!standings || standings.length === 0) return null;
 
     const sorted = [...standings].sort((a, b) => b.winRate - a.winRate);
-    const champion = sorted[0];
+    // プレーオフがある年はその優勝球団（レギュラーシーズン1位は別に添える。`seasonChampion`）
+    const { champion, leagueFirst, byPlayoff } = seasonChampion(standings, seasonData.schedule);
 
     const awards = seasonData.frozenAwards;
     const topBatter = awards?.battingChampion
@@ -71,10 +80,15 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       ? { name: awards.eraChampion.name, team: awards.eraChampion.team, era: awards.eraChampion.era, wins: awards.winsLeader?.wins || 0 }
       : null;
 
-    return { champion, standings: sorted, topBatter, topHR, topPitcher, awards };
+    return { champion, leagueFirst, byPlayoff, standings: sorted, topBatter, topHR, topPitcher, awards };
   }, [seasonData]);
 
   const handleAdvanceYear = () => {
+    // 年度更新は済んでいる（上の `yearAdvanced`）。翌年の手続きへ進むだけにする
+    if (yearAdvanced) {
+      if (onStartNextSeason) onStartNextSeason(seasonData);
+      return;
+    }
     if (!advanceToNextYear) {
       alert('年間進行システムが読み込まれていません');
       return;
@@ -173,6 +187,11 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         : advanceToNextYear(seasonData, allTeams);
       if (historyEntry) onRecordTeamHistory(historyEntry);
       setSeasonData(result.newSeasonData);
+      // 大学は部の入れ替えで自分の部の球団が替わる（年度更新が settings.teamNames を作り直す）。
+      // leagueConfig（App の allTeams・userTeamName の元）も同じ球団にする
+      if (gameMode === 'university') {
+        setLeagueConfig?.(prev => repairLeagueConfig(prev, result.newSeasonData.settings, 'university'));
+      }
       Object.keys(result.updatedTeams).forEach(teamName => {
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];
       });
@@ -199,7 +218,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         setProcessing(false);
         return;
       }
-      if (onStartNextSeason) onStartNextSeason();
+      // ⚠ 翌年のデータを渡す（`setSeasonData` はまだ反映されていない。ManagementScreen 参照）
+      if (onStartNextSeason) onStartNextSeason(result.newSeasonData);
     } catch (error) {
       console.error('年度進行エラー:', error);
       alert('年度進行中にエラーが発生しました');
@@ -441,8 +461,16 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
             <p className="text-yellow-300 text-base font-semibold">
               {seasonSummary.champion.wins}勝 {seasonSummary.champion.losses}敗
               {seasonSummary.champion.draws > 0 ? ` ${seasonSummary.champion.draws}分` : ''}
-              　勝率 {(seasonSummary.champion.winRate || 0).toFixed(3)}
+              {'　'}勝率 {(seasonSummary.champion.winRate || 0).toFixed(3)}
             </p>
+            {seasonSummary.byPlayoff && (
+              <p className="text-yellow-300 text-sm font-semibold mt-1">
+                プレーオフ優勝
+                {seasonSummary.leagueFirst.team === seasonSummary.champion.team
+                  ? '・レギュラーシーズン1位'
+                  : `・レギュラーシーズン1位は ${seasonSummary.leagueFirst.team}（${seasonSummary.leagueFirst.wins}勝${seasonSummary.leagueFirst.losses}敗）`}
+              </p>
+            )}
           </div>
         )}
 
@@ -654,6 +682,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                 <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 処理中...
               </span>
+            ) : yearAdvanced ? (
+              `${seasonData.year}年目の準備へ進む →`
             ) : (
               `${seasonData.year + 1}年目へ進む →`
             )}

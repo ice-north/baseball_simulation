@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import { rosterIndex, departedSince } from '../season/departedStats.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
@@ -7,6 +8,7 @@ import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES,
 import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
 import { getTeamStaffBonus, STAFF_GRADES } from '../corporate/staffData.js';
 import { hashSeed, withSeededRandom } from '../game/rng.js';
+import ConfirmBar from './ConfirmBar.jsx';
 
 const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -14,6 +16,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const [{ retirements, aiReleases }] = useState(() => processCorporateRetirements(TEAMS_DATA, userTeamName));
   const [playerDecisions, setPlayerDecisions] = useState({});
   const [confirmed, setConfirmed] = useState(false);
+  // 確定で名簿から外れた選手の、その年の成績の写し（次へ進むときに seasonData へ渡す）
+  const departedRef = useRef([]);
   const [sortKey, setSortKey] = useState('salary');
   const [sortAsc, setSortAsc] = useState(false);
   const [sponsorOffers, setSponsorOffers] = useState(() => withSeededRandom(
@@ -24,6 +28,9 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const [staffPreviews, setStaffPreviews] = useState({});
   const [replaceStaffFor, setReplaceStaffFor] = useState(null);
   const [staffReplacements, setStaffReplacements] = useState({});
+  // 確定の前の帯。⚠ 以前は「契約更改を確定」を1回押すだけで、解雇・引退・スタッフ転向が
+  //    確定して取り消せなかった（赤字のままでも同じ）
+  const [reviewing, setReviewing] = useState(false);
 
   const teamData = TEAMS_DATA[userTeamName];
   const cd = teamData?.corporateData;
@@ -178,7 +185,11 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       ...userRetireIds,
     ];
 
+    // ⚠ 名簿から外す前後で比べて、外れた選手のその年の成績を写しておく
+    //    （選手成績の画面が年度末まで出す。`departedStats.js`）
+    const rosterBefore = rosterIndex(TEAMS_DATA);
     executeDepartures(TEAMS_DATA, allRetiredIds, allReleases, currentYear);
+    departedRef.current = departedSince(rosterBefore, TEAMS_DATA);
 
     // 赤字判定は11/30の年度末決算で行う（退団・入団・スタッフ・スポンサー確定後）
 
@@ -306,7 +317,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         <h1 className="text-xl font-bold text-ink mb-3">契約更改完了</h1>
         {totalRetirements + retireCount > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-yellow-900 mb-2">
+            <h2 className="text-sm font-bold text-ink mb-2">
               引退選手 ({totalRetirements + retireCount}名)
             </h2>
             <div className="grid grid-cols-2 gap-1">
@@ -329,8 +340,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         )}
         {(releaseCount > 0 || totalAiReleases > 0) && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-red-900 mb-2">解雇 ({releaseCount + totalAiReleases}名)</h2>
-            <p className="text-xs text-gray-300 mb-1">
+            <h2 className="text-sm font-bold text-ink-warn mb-2">解雇 ({releaseCount + totalAiReleases}名)</h2>
+            <p className="text-xs text-ink-sub mb-1">
               自チーム: {releaseCount}名 / 他チーム: {totalAiReleases}名
             </p>
           </div>
@@ -338,7 +349,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         {/* スタッフ転向 */}
         {Object.keys(staffConversions).filter(pid => staffConversions[pid] && staffPreviews[pid]).length > 0 && (
           <div className="mb-4">
-            <h2 className="text-sm font-bold text-cyan-900 mb-2">スタッフ転向</h2>
+            <h2 className="text-sm font-bold text-ink mb-2">スタッフ転向</h2>
             <div className="grid grid-cols-2 gap-1">
               {Object.entries(staffConversions).filter(([, v]) => v).map(([pid]) => {
                 const preview = staffPreviews[pid];
@@ -367,7 +378,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           )}
         </div>
         <button
-          onClick={onComplete}
+          onClick={() => onComplete?.(departedRef.current)}
           className="btn-primary mt-4 px-6 py-2 rounded"
         >
           {isClub ? '入部希望者の受付へ進む' : 'スカウト入団へ進む'}
@@ -595,7 +606,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
       {/* 予算超過警告 */}
       {!isClub && budgetBalance < 0 && (
-        <div className="mb-2 p-2 bg-red-900/30 border border-red-700 rounded">
+        <div className="mb-2 p-2 bg-surface-2 border border-red-700 rounded">
           <p className="text-red-400 text-xs font-bold mb-1">
             ⚠️ 予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です
           </p>
@@ -610,7 +621,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
       {/* 入替未完了警告 */}
       {replaceStaffFor !== null && (
-        <div className="mb-2 p-2 bg-orange-900/30 border border-orange-700 rounded">
+        <div className="mb-2 p-2 bg-surface-2 border border-orange-700 rounded">
           <p className="text-orange-400 text-xs font-bold">
             ⚠ スタッフ入替の選択が完了していません。入替先を選ぶか、転向を取消してから確定してください。
           </p>
@@ -620,7 +631,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       {/* 操作ボタン */}
       <div className="flex items-center gap-4">
         <button
-          onClick={handleConfirm}
+          onClick={() => setReviewing(true)}
           disabled={replaceStaffFor !== null}
           className={`px-5 py-2 rounded font-bold text-sm ${
             !isClub && budgetBalance < 0 ? 'btn-danger' : 'btn-primary'
@@ -628,7 +639,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         >
           {!isClub && budgetBalance < 0 ? '赤字のまま確定' : '契約更改を確定'}
         </button>
-        <div className="text-xs text-gray-300 space-x-3">
+        {/* 人数の内訳は色で区別するのでカードに載せる（地色の上では意味色が消える。index.css の文字色の決まり） */}
+        <div className="text-xs text-gray-300 space-x-3 bg-surface-2 rounded-lg px-3 py-1.5">
           <span className="text-green-400">契約{contractCount}名</span>
           {releaseCount > 0 && <span className="text-red-400">解雇{releaseCount}名</span>}
           {retireCount > 0 && <span className="text-yellow-400">引退{retireCount}名</span>}
@@ -638,6 +650,29 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           <span className="text-gray-400">→ 来季{contractCount}名</span>
         </div>
       </div>
+
+      {reviewing && replaceStaffFor === null && (() => {
+        const deficit = !isClub && budgetBalance < 0;
+        const conversions = Object.values(staffConversions).filter(Boolean).length;
+        return (
+          <ConfirmBar
+            title={deficit ? '赤字のまま、契約更改を確定しますか？' : '契約更改を確定しますか？'}
+            detail={[
+              `契約${contractCount}名`,
+              releaseCount > 0 && `解雇${releaseCount}名`,
+              retireCount > 0 && `引退${retireCount}名`,
+              conversions > 0 && `スタッフ転向${conversions}名`,
+            ].filter(Boolean).join('・') + ` → 来季${contractCount}名`}
+            note={deficit
+              ? `確定すると取り消せません。このままだと年度末（11/30）の決算で${Math.abs(budgetBalance).toLocaleString()}万円の赤字になり、注目度の低下などのペナルティが出ます。`
+              : '確定すると取り消せません。'}
+            confirmLabel={releaseCount > 0 ? '解雇して確定する' : '確定する'}
+            confirmClass={releaseCount > 0 || deficit ? 'btn-danger' : 'btn-warn'}
+            onConfirm={() => { setReviewing(false); handleConfirm(); }}
+            onCancel={() => setReviewing(false)}
+          />
+        );
+      })()}
     </div>
     </div>
   );

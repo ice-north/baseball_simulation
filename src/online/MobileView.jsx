@@ -1,6 +1,10 @@
 import { LeagueTopics } from './Chronicle.jsx';
 import React, { useEffect, useRef, useState } from 'react';
-import { useDraftMemoryPeek } from './Drafts.jsx';
+import {
+  useDraftMemoryPeek,
+  useDraftState,
+  LINEUP_ORDER_DRAFT,
+} from './Drafts.jsx';
 import {
   Standings,
   Results,
@@ -11,7 +15,8 @@ import {
   packStartText,
 } from './LeaguePanels.jsx';
 import TeamRoster from './TeamRoster.jsx';
-import OnlineLineup, { hasUnsavedFullLineup } from './OnlineLineup.jsx';
+import OnlineLineup from './OnlineLineup.jsx';
+import { fullLineupTouchesPitching } from './lineupBridge.js';
 import { CompactRoster, TeamBrief } from './PlayerPerformance.jsx';
 import { formatTurn } from './shared.js';
 import { nextAdvanceText, STATUS } from './api.js';
@@ -21,15 +26,25 @@ import { CompletedCamp } from './CampPlanner.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { StaffBody } from './StaffPage.jsx';
+import { MobileTradeReplies } from './TradeScreen.jsx';
+import { RenameDialog } from './DesktopView.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab } =
     props;
   const [playersFrom, setPlayersFrom] = useState('today');
   const [menuOpen, setMenuOpen] = useState(false);
+  // 球団名・名前を変える小窓（PCの左メニューの「名前を変える」と同じ部品）
+  const [renaming, setRenaming] = useState(false);
   // ⚠ 全画面の編成に保存していない編集が残っていれば開いたまま始める。
-  //    スマホを回すとPC用の画面と入れ替わって作り直され、以前は編集が消えていた
-  const unsavedFull = hasUnsavedFullLineup(useDraftMemoryPeek('lineup.full'));
+  //    スマホを回すとPC用の画面と入れ替わって作り直され、以前は編集が消えていた。
+  //    ⚠ 打順だけの編集なら開かない（「打順」の2タップの表が引き取る。`TapLineup.jsx`）
+  const unsavedFull = fullLineupTouchesPitching(
+    useDraftMemoryPeek('lineup.full'),
+  );
   const [fullLineup, setFullLineup] = useState(unsavedFull);
+  // 全画面の編成で保存したら、2タップの表の下書きを捨てる（打順の編集も一緒に保存したので。
+  // 残すと、保存した後に古い打順の編集が戻ってくる）
+  const [, setOrderDraft] = useDraftState(LINEUP_ORDER_DRAFT, null);
   const tabs = [
     ['today', '今日'],
     ['games', '試合'],
@@ -64,8 +79,10 @@ export default function MobileView(props) {
         </div>
       )}
       {/* ⚠ **返事が必要なトレードの提案もホームで知らせる**（PC版の左メニューの数と
-          同じ数え方。`notices.js`）。スマホWebにトレードの画面は無いので、
-          どこで返事をするかを添える。知らせないと提案に気づかないまま期限が来る */}
+          同じ数え方。`notices.js`）。知らせないと提案に気づかないまま残り続ける（提案に期限は無く、
+          返事か取り下げまで残る。提案した側の同時5件の枠も埋めたまま）。
+          帯から返事の画面（受ける・断る）へ行ける。以前は「PCかアプリで返事してください」
+          と書くだけで、スマホWebでは返事ができなかった */}
       {counts.trades > 0 && tab === 'today' && (
         <div
           className="online-procedure-banner is-waiting"
@@ -73,8 +90,11 @@ export default function MobileView(props) {
         >
           <div>
             <strong>返事が必要なトレードの提案が{counts.trades}件あります</strong>
-            <span>PCかアプリで返事してください</span>
+            <span>受けるか断るかを選びます</span>
           </div>
+          <button className="online-primary" onClick={() => setTab('transfer')}>
+            返事する
+          </button>
         </div>
       )}
       {tab === 'today' && (
@@ -119,8 +139,11 @@ export default function MobileView(props) {
             <button onClick={() => setTab('staff')}>指導者</button>
           </nav>
           <Standings view={view} />
+          {/* ⚠ **行った先の見出しの名前で書く**（「リーグの話題」と「リーグ便り」）。以前は
+              「リーグ便り・過去のシーズン →」で、開くと先頭は「リーグの話題」、1年目は
+              過去のシーズンも無かった（過去の最終順位は「リーグ便り」の中で選ぶ） */}
           <button className="online-news-link" onClick={() => setTab('news')}>
-            リーグ便り・過去のシーズン →
+            リーグの話題・リーグ便り →
           </button>
         </>
       )}
@@ -137,6 +160,8 @@ export default function MobileView(props) {
         </TeamRoster>
       )}
       {tab === 'staff' && <StaffBody {...props} mobile />}
+      {/* トレードの返事（受ける・断る）。⚠ 名前はPCのトレードのページと同じ（回しても同じ画面へ） */}
+      {tab === 'transfer' && <MobileTradeReplies {...props} />}
       {tab === 'news' && (
         <>
           <LeagueTopics view={view} />
@@ -151,25 +176,34 @@ export default function MobileView(props) {
             <OnlineLineup
               view={view}
               busy={props.busy}
+              tab="rotation"
               onClose={() => setFullLineup(false)}
               onSave={async (plan, baseLineup) => {
                 // ⚠ **失敗したら閉じない**（PCと同じ）。閉じると編集がまるごと消える
                 const result = await props.run(() =>
                   props.command('lineup', { ...plan, baseLineup }),
                 );
-                if (result?.ok) setFullLineup(false);
+                if (result?.ok) {
+                  setOrderDraft(null);
+                  setFullLineup(false);
+                }
                 return result;
               }}
             />
           ) : (
             <>
               {/* ⚠ スマホからも一人用の編成画面（`OnlineLineup.jsx`）へ入れるようにする。
-                  横に長い画面なので既定では開かず、押したときだけ出す */}
+                  横に長い画面なので既定では開かず、押したときだけ出す。
+                  ⚠ 打順・守備・控えは下の2タップの表で決めるので、ここは**投手起用の入口**
+                  （開くと投手起用のタブから始まる）。打順のタブも中にはある */}
+              {/* ⚠ **保存の応答を待つ間は開かない**。開くと「打順」の表が外れ、保存する前の
+                  起点の編集が全画面へ渡る（そこで保存すると「編成が更新されています」で断られる） */}
               <button
                 className="online-primary online-full-width"
+                disabled={props.busy}
                 onClick={() => setFullLineup(true)}
               >
-                打順・守備・投手起用を開く（横向き推奨）
+                投手起用を開く（横向き推奨）
               </button>
               <LineupPanel
                 key={`${view.year}:${view.teamName}`}
@@ -232,13 +266,15 @@ export default function MobileView(props) {
           reloadView={reloadView}
           showTimes={showTimes}
           logout={logout}
+          rename={() => setRenaming(true)}
         />
       )}
+      {renaming && <RenameDialog {...props} close={() => setRenaming(false)} />}
     </>
   );
 }
 
-function MobileMenu({ close, loading, local, reloadView, showTimes, logout }) {
+function MobileMenu({ close, loading, local, reloadView, showTimes, logout, rename }) {
   const dialog = useRef(null);
   useEffect(() => {
     const node = dialog.current;
@@ -278,6 +314,9 @@ function MobileMenu({ close, loading, local, reloadView, showTimes, logout }) {
           更新
         </button>
         <button onClick={() => act(showTimes)}>進行時刻</button>
+        {/* ⚠ **スマホにも名前を変える入口を置く**（再監査 B5）。以前はPCの左メニューにしか無く、
+            初期メンバーの選択で名前の欄を開かずに決定すると、スマホだけの人は名前を変えられなかった */}
+        <button onClick={() => act(rename)}>名前を変える</button>
         <a href="/">一人用</a>
         <button disabled={loading} onClick={() => act(logout)}>
           ログアウト

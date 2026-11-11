@@ -55,6 +55,14 @@ import { AbilityValue } from '../components/AbilityValue.jsx';
 // ⚠ 相手の名簿は**その場で取りに行く**（`useRead('team')`）。12球団ぶんを
 //    いつもビューに載せると重い。
 // ⚠ 逆提案は1回だけ（`trades.js` の `canCounter`）。
+// ⚠ **成立につながる操作（提案・逆提案・成立させる）は確認を1段挟む**（`DealConfirm`）。
+//    CPU球団は提案した瞬間に受けることがあり、成立は取り消せない。以前は押した瞬間に
+//    選手が入れ替わり、出たのも「保存しました」だけで、受けたのか断ったのかも分からなかった。
+//    確認には出す・もらう選手の名前と、片側が空ならその注意を出す。
+// ⚠ **相手の答えを文で出す**（`offerResultText` / `respondResultText`）。CPUの答え
+//    （受けた・逆提案・断った）は命令の返事に直には載らないので、送る前と後のビューを
+//    比べて言い分ける（新しい提案が残っていれば逆提案か相手の返事待ち、残っていなければ成立）。
+//    断ったときはサーバーが理由を返す（`openTrade`）。
 // ============================================================
 
 const GROUPS = [
@@ -131,6 +139,104 @@ function usePartnerRoster(view, partner) {
 }
 
 const SIDE_TEXT = { give: '出す', get: 'もらう' };
+
+/** 選手の並びを「名前・名前」に（確認と結果の文で使う） */
+const nameList = (players) => players.map((p) => p.name).join('・');
+/** 結果の文の後ろに付ける「（出した選手: … ／ 来た選手: …）」 */
+const dealText = (give, get) =>
+  `（出した選手: ${give.length ? nameList(give) : 'なし'} ／ 来た選手: ${get.length ? nameList(get) : 'なし'}）`;
+
+/**
+ * 提案したあとの文。⚠ CPU球団の答えは返事に直には載らないので、送る前と後のビューで見分ける。
+ * - 新しい提案が逆提案になって残っている → CPUの逆提案
+ * - 新しい提案がそのまま残っている → 参加者の球団へ申し込んだ（相手の返事待ち）
+ * - 残っていない → その場で受けた（成立）
+ * 断られたときは命令が失敗して理由が返るので、ここには来ない
+ */
+function offerResultText({ to, give, get, before, after }) {
+  const known = new Set((before?.trades || []).map((t) => t.id));
+  const fresh = (after?.trades || []).find(
+    (t) => !known.has(t.id) && t.mine && t.toTeam === to,
+  );
+  const label = teamLabel(to);
+  if (fresh?.countered)
+    return `${label}から逆提案が届きました。もらう選手を「${nameList(fresh.want || []) || 'なし'}」に変えてほしいそうです。上の「返事が必要な提案」で、受けるか断るかを選んでください。`;
+  if (fresh)
+    return `${label}へ提案しました。相手が受けた時点で成立します（返事が来るまでは取り下げられます）。`;
+  // 提案が残っていないうえに、選手が実際に動いていれば成立（読み直せなかったときは決めつけない）
+  const roster = after?.roster || [];
+  const moved =
+    give.some((p) => !roster.some((r) => r.id === p.id)) ||
+    get.some((p) => roster.some((r) => r.id === p.id));
+  return moved ? `${label}が受けました。トレードが成立しました${dealText(give, get)}。` : '';
+}
+
+/** 返事をしたあとの文 */
+function respondResultText({ action, trade, partner, give, get }) {
+  const label = teamLabel(partner);
+  if (action === 'accept') return `トレードが成立しました${dealText(give, get)}。`;
+  if (action === 'counter')
+    return `${label}へ逆提案を返しました。相手が受けた時点で成立します。`;
+  if (trade.mine)
+    return trade.countered
+      ? `${label}の逆提案を断りました。この提案はなくなりました。`
+      : `${label}への提案を取り下げました。`;
+  return `${label}からの提案を断りました。`;
+}
+
+/**
+ * 成立につながる操作の前の確認。出す・もらう選手と、成立したら取り消せないこと。
+ * ⚠ 片側が空でも止めはしない（渡すだけ・もらうだけも提案はできる）が、注意を出す。
+ */
+function DealConfirm({ give, get, note, confirmLabel, busy, onConfirm, onBack }) {
+  return (
+    <div className="online-trade-confirm" role="group" aria-label="トレードの確認">
+      <p className="online-trade-confirm-head">この内容でよいか確かめてください</p>
+      <dl>
+        <div className="is-give">
+          <dt>出す</dt>
+          <dd>{give.length ? nameList(give) : 'なし'}</dd>
+        </div>
+        <div className="is-get">
+          <dt>もらう</dt>
+          <dd>{get.length ? nameList(get) : 'なし'}</dd>
+        </div>
+      </dl>
+      {!give.length && (
+        <p className="online-trade-warn">
+          出す選手がいません。相手の選手をもらうだけの申し込みです。
+        </p>
+      )}
+      {!get.length && (
+        <p className="online-trade-warn">
+          もらう選手がいません。選手を渡すだけで、代わりの選手は来ません。
+        </p>
+      )}
+      <p>{note}</p>
+      <div className="online-actions">
+        <button className="online-primary" disabled={busy} onClick={onConfirm}>
+          {confirmLabel}
+        </button>
+        <button type="button" disabled={busy} onClick={onBack}>
+          戻る
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 直前の操作の結果（相手の答え・断られた理由）。⚠ 次の操作を始めるまで残す（帯はすぐ消える） */
+function TradeResult({ result }) {
+  if (!result?.text) return null;
+  return (
+    <p
+      className={`online-trade-result ${result.ok ? '' : 'is-bad'}`}
+      aria-live="polite"
+    >
+      {result.text}
+    </p>
+  );
+}
 
 function HeaderRow({ kind }) {
   const k = KINDS[kind];
@@ -366,8 +472,11 @@ function dealProblems(myRoster, theirRoster, giveIds, getIds) {
   return [...rosterShortfall(after.from), ...rosterShortfall(after.to)];
 }
 
-/** 交換案の欄（狭い）。選んだ選手を1行ずつ、主な能力と総合で */
-function DealList({ side, players, onRemove, busy }) {
+/**
+ * 交換案の欄（狭い）。選んだ選手を1行ずつ、主な能力と総合で。
+ * `detail` のときは名前を押すと能力と成績を開く（スマホの返事。表が無いので、ここで確かめる）
+ */
+function DealList({ side, players, onRemove, busy, detail = false, emptyText }) {
   return (
     <div className={`online-trade-deal-side is-${side}`}>
       <h4>
@@ -381,7 +490,11 @@ function DealList({ side, players, onRemove, busy }) {
             return (
               <li key={player.id}>
                 <span className="online-trade-deal-name">
-                  <b>{player.name}</b>
+                  {detail ? (
+                    <PlayerStatsButton player={player} panel="abilities" />
+                  ) : (
+                    <b>{player.name}</b>
+                  )}
                   <small>
                     {POS[player.position]}·{player.age}歳
                   </small>
@@ -417,7 +530,8 @@ function DealList({ side, players, onRemove, busy }) {
         </ul>
       ) : (
         <p className="online-muted">
-          {side === 'give' ? '自球団の行を押して選びます' : '相手の行を押して選びます'}
+          {emptyText ||
+            (side === 'give' ? '自球団の行を押して選びます' : '相手の行を押して選びます')}
         </p>
       )}
     </div>
@@ -436,11 +550,15 @@ function TradeComposer({
   initialGive = [],
   initialGet = [],
   submitLabel,
+  confirmLabel,
   busy,
   onSubmit,
   onCancel,
 }) {
   const [chosen, setChosen] = useState(lockedPartner || partners[0] || '');
+  // 確認の欄を開いているか・直前の結果（`TradeResult`）
+  const [confirming, setConfirming] = useState(false);
+  const [result, setResult] = useState(null);
   // ⚠ 相手の一覧は参加者の出入りで変わる。選んでいた相手が居なくなったら先頭へ
   const partner =
     lockedPartner || (partners.includes(chosen) ? chosen : partners[0] || '');
@@ -467,6 +585,23 @@ function TradeComposer({
   const toggle = (side, id) => {
     const [list, setList] = side === 'give' ? [give, setGive] : [get, setGet];
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+    // 中身を変えたら確認をやり直す（確かめた内容と送る内容を食い違わせない）
+    setConfirming(false);
+    setResult(null);
+  };
+  // ⚠ 逆提案（相手が決まっている）は参加者どうし。CPU球団は逆提案を受けない
+  const cpu = !lockedPartner && !humans?.has(partner);
+  const send = async () => {
+    const outcome = await onSubmit(partner, giveIds, getIds, {
+      give: givePlayers,
+      get: getPlayers,
+      reset: () => {
+        setGive([]);
+        setGet([]);
+      },
+    });
+    setConfirming(false);
+    setResult(outcome || null);
   };
   const problems = dealProblems(myRoster, theirRoster, giveIds, getIds);
   const empty = giveIds.length + getIds.length === 0;
@@ -494,6 +629,7 @@ function TradeComposer({
           onChange={(name) => {
             setChosen(name);
             setGet([]);
+            setConfirming(false);
           }}
         />
       )}
@@ -555,25 +691,40 @@ function TradeComposer({
             giveIds={giveIds}
             getIds={getIds}
           />
-          <div className="online-actions">
-            <button
-              className="online-primary"
-              disabled={busy || !partner || empty || problems.length > 0 || !theirRoster}
-              onClick={() =>
-                onSubmit(partner, giveIds, getIds, () => {
-                  setGive([]);
-                  setGet([]);
-                })
+          {confirming && !(!partner || empty || problems.length > 0 || !theirRoster) ? (
+            <DealConfirm
+              give={givePlayers}
+              get={getPlayers}
+              note={
+                cpu
+                  ? 'CPU球団はその場で答えます。受けた場合はすぐに選手が入れ替わり、取り消せません。'
+                  : '相手が受けた時点で選手が入れ替わり、取り消せません（返事が来るまでは取り下げられます）。'
               }
-            >
-              {submitLabel}
-            </button>
-            {onCancel && (
-              <button type="button" disabled={busy} onClick={onCancel}>
-                やめる
+              confirmLabel={confirmLabel}
+              busy={busy}
+              onConfirm={send}
+              onBack={() => setConfirming(false)}
+            />
+          ) : (
+            <div className="online-actions">
+              <button
+                className="online-primary"
+                disabled={busy || !partner || empty || problems.length > 0 || !theirRoster}
+                onClick={() => {
+                  setResult(null);
+                  setConfirming(true);
+                }}
+              >
+                {submitLabel}
               </button>
-            )}
-          </div>
+              {onCancel && (
+                <button type="button" disabled={busy} onClick={onCancel}>
+                  やめる
+                </button>
+              )}
+            </div>
+          )}
+          <TradeResult result={result} />
           {problems.length > 0 && (
             <p className="online-muted">
               交換のあとどちらかの名簿が成り立たないため、提案できません。
@@ -585,16 +736,63 @@ function TradeComposer({
   );
 }
 
-/** 届いた提案・出した提案の中身。出す選手ともらう選手を同じ列の表で */
-function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, getEntries }) {
-  const myRoster = view.roster || [];
+/** 提案の中身（id と名前）を、名簿の選手（能力・成績つき）に引き当てる */
+function dealPlayers(view, theirRoster, giveEntries, getEntries) {
   const found = (entries, roster) =>
     entries.map((e) => roster?.find((p) => p.id === e.id)).filter(Boolean);
-  const give = found(giveEntries, myRoster);
-  const get = found(getEntries, theirRoster);
-  // ⚠ 居ない選手（別のトレードで移った）は**消さずに出す**。黙って減ると
-  //    「出したはずの選手が提案から消えた」ように見える
-  const gone = [...giveEntries, ...getEntries].filter((e) => e.gone);
+  return {
+    give: found(giveEntries, view.roster || []),
+    get: found(getEntries, theirRoster),
+    // ⚠ 居ない選手（別のトレードで移った）は**消さずに出す**。黙って減ると
+    //    「出したはずの選手が提案から消えた」ように見える
+    gone: [...giveEntries, ...getEntries].filter((e) => e.gone),
+  };
+}
+
+/** 別のトレードで移った選手の知らせ（PC・スマホ） */
+function GoneNote({ gone }) {
+  if (!gone.length) return null;
+  return (
+    <p role="alert">
+      {gone.map((e) => e.name).join('・')}
+      は別のトレードで移っています。受けても成立しません。
+    </p>
+  );
+}
+
+/**
+ * スマホの返事で見せる提案の中身。PCの表（10列ほど）は幅に入らないので、
+ * 交換案の欄と同じ形（`DealList`）で出す・もらう選手を縦に並べ、交換のあとの名簿を添える
+ */
+function MobileDeal({ view, partner, theirRoster, theirError, giveEntries, getEntries }) {
+  const { give, get, gone } = dealPlayers(view, theirRoster, giveEntries, getEntries);
+  return (
+    <>
+      <div className="online-trade-deal online-trade-mobile-deal">
+        <DealList side="give" players={give} detail emptyText="出す選手はいません" />
+        {theirRoster ? (
+          <DealList side="get" players={get} detail emptyText="もらう選手はいません" />
+        ) : (
+          <p className="online-muted">
+            {theirError ? `相手の名簿を読めませんでした（${theirError}）` : '相手の名簿を読んでいます…'}
+          </p>
+        )}
+      </div>
+      <GoneNote gone={gone} />
+      <Impact
+        view={view}
+        partner={partner}
+        theirRoster={theirRoster}
+        giveIds={give.map((p) => p.id)}
+        getIds={get.map((p) => p.id)}
+      />
+    </>
+  );
+}
+
+/** 届いた提案・出した提案の中身。出す選手ともらう選手を同じ列の表で */
+function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, getEntries }) {
+  const { give, get, gone } = dealPlayers(view, theirRoster, giveEntries, getEntries);
   const kinds = ['pitcher', 'fielder'].filter((kind) =>
     [...give, ...get].some((p) => kindOf(p) === kind),
   );
@@ -633,12 +831,7 @@ function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, get
           ))}
         </div>
       )}
-      {gone.length > 0 && (
-        <p role="alert">
-          {gone.map((e) => e.name).join('・')}
-          は別のトレードで移っています。受けても成立しません。
-        </p>
-      )}
+      <GoneNote gone={gone} />
       <Impact
         view={view}
         partner={partner}
@@ -650,16 +843,47 @@ function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, get
   );
 }
 
-function TradeCard({ view, trade, busy, run, command }) {
+function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }) {
   const [countering, setCountering] = useState(false);
+  // 「この内容で成立させる」の確認を開いているか
+  const [accepting, setAccepting] = useState(false);
+  // 「断る」の確認を開いているか（スマホだけ。下の注）
+  const [rejecting, setRejecting] = useState(false);
   const partner = trade.mine ? trade.toTeam : trade.fromTeam;
   // ⚠ **自分から見た向きに直すこと**。`trade.offer` はいつも「提案した側
   //    （`fromTeam`）が出す選手」なので、提案を受けた側から見ると相手の選手
   const giveEntries = trade.mine ? trade.offer : trade.want;
   const getEntries = trade.mine ? trade.want : trade.offer;
   const theirs = usePartnerRoster(view, partner);
-  const respond = (action, payload) =>
-    run(() => command('tradeRespond', { tradeId: trade.id, action, ...payload }));
+  // 返事を送り、結果の文をページの上に出す（成立・断ると、このカードは消える）
+  // ⚠ **スマホは共通の帯（トースト）を出さない**。結果は「トレードの返事」の枠の文
+  //    （`TradeResult`）に出していて、帯がそのすぐ上に浮いて同じ文が2つ重なっていた。
+  //    枠の文は次の操作まで残るので、すぐ消える帯の方をやめる。PCは帯が右下・文がページの
+  //    上と離れていて、下の方のカードで返事をしたときは帯でしか見えないので残す
+  const respond = async (action, payload, players = {}) => {
+    let text = '';
+    const outcome = await run(async () => {
+      text = await command(
+        'tradeRespond',
+        { tradeId: trade.id, action, ...payload },
+        {
+          message: () =>
+            respondResultText({
+              action,
+              trade,
+              partner,
+              give: players.give || [],
+              get: players.get || [],
+            }),
+          toast: !mobile,
+        },
+      );
+    });
+    setAccepting(false);
+    setRejecting(false);
+    onResult?.(outcome.ok ? { ok: true, text } : { ok: false, text: outcome.error });
+    return outcome;
+  };
   const stale = [...trade.offer, ...trade.want].some((p) => p.gone);
   const problems = dealProblems(
     view.roster || [],
@@ -684,32 +908,75 @@ function TradeCard({ view, trade, busy, run, command }) {
           {trade.countered && '（逆提案あり）'}
         </small>
       </div>
-      {!countering && (
-        <TradeCompare
-          view={view}
-          partner={partner}
-          theirRoster={theirs.roster}
-          theirError={theirs.error}
-          giveEntries={giveEntries}
-          getEntries={getEntries}
+      {!countering &&
+        (mobile ? (
+          <MobileDeal
+            view={view}
+            partner={partner}
+            theirRoster={theirs.roster}
+            theirError={theirs.error}
+            giveEntries={giveEntries}
+            getEntries={getEntries}
+          />
+        ) : (
+          <TradeCompare
+            view={view}
+            partner={partner}
+            theirRoster={theirs.roster}
+            theirError={theirs.error}
+            giveEntries={giveEntries}
+            getEntries={getEntries}
+          />
+        ))}
+      {trade.myTurn && !countering && accepting && !(stale || problems.length > 0) && (
+        <DealConfirm
+          give={giveEntries}
+          get={getEntries}
+          note="成立させると、すぐに選手が入れ替わります。取り消せません。"
+          confirmLabel="成立させる"
+          busy={busy}
+          onConfirm={() =>
+            respond('accept', {}, { give: giveEntries, get: getEntries })
+          }
+          onBack={() => setAccepting(false)}
         />
       )}
-      {trade.myTurn && !countering && (
+      {/* ⚠ **スマホでは「断る」にも確認を挟む**（アプリと同じ）。指の届く所に「成立させる」と
+          並んでいて押し違えやすく、断った提案は消えて戻せない。PCはそのまま（表の下で押し違えにくい） */}
+      {mobile && rejecting && (
+        <div className="online-trade-confirm" role="group" aria-label="断る前の確認">
+          <p className="online-trade-confirm-head">提案を断りますか？</p>
+          <p>この提案は消えます。</p>
+          <div className="online-actions">
+            <button disabled={busy} onClick={() => respond('reject')}>
+              断る
+            </button>
+            <button type="button" disabled={busy} onClick={() => setRejecting(false)}>
+              戻る
+            </button>
+          </div>
+        </div>
+      )}
+      {trade.myTurn && !countering && !rejecting && !(accepting && !(stale || problems.length > 0)) && (
         <div className="online-actions">
           <button
             className="online-primary"
             disabled={busy || stale || problems.length > 0}
-            onClick={() => respond('accept')}
+            onClick={() => setAccepting(true)}
           >
             この内容で成立させる
           </button>
-          {/* ⚠ 逆提案は1回だけ。2回目の返事では出さない */}
-          {trade.canCounter && (
+          {/* ⚠ 逆提案は1回だけ。2回目の返事では出さない。
+              スマホWebは受ける・断るだけ（逆提案の表は幅に入らない。PCかアプリで） */}
+          {trade.canCounter && !mobile && (
             <button disabled={busy} onClick={() => setCountering(true)}>
               逆提案する
             </button>
           )}
-          <button disabled={busy} onClick={() => respond('reject')}>
+          <button
+            disabled={busy}
+            onClick={() => (mobile ? setRejecting(true) : respond('reject'))}
+          >
             断る
           </button>
         </div>
@@ -728,20 +995,19 @@ function TradeCard({ view, trade, busy, run, command }) {
             initialGive={giveEntries.filter((e) => !e.gone).map((e) => e.id)}
             initialGet={getEntries.filter((e) => !e.gone).map((e) => e.id)}
             submitLabel="この内容で返す"
+            confirmLabel="逆提案を送る"
             busy={busy}
             onCancel={() => setCountering(false)}
-            onSubmit={(_, give, get) =>
-              run(async () => {
-                await command('tradeRespond', {
-                  tradeId: trade.id,
-                  action: 'counter',
-                  // ⚠ `offer` はいつも**提案した側**が出す選手。向きを変えない
-                  offer: trade.mine ? give : get,
-                  want: trade.mine ? get : give,
-                });
-                setCountering(false);
-              })
-            }
+            onSubmit={async (_, give, get) => {
+              const outcome = await respond('counter', {
+                // ⚠ `offer` はいつも**提案した側**が出す選手。向きを変えない
+                offer: trade.mine ? give : get,
+                want: trade.mine ? get : give,
+              });
+              if (outcome.ok) setCountering(false);
+              // 結果（失敗の理由も）はページの上（`onResult`）に出している
+              return null;
+            }}
           />
         </>
       )}
@@ -753,6 +1019,44 @@ function TradeCard({ view, trade, busy, run, command }) {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * スマホWebのトレードの返事（届いた提案を受ける・断る。オーナーの判断1・案B ②）。
+ * ⚠ 以前はホームに「PCかアプリで返事してください」と出すだけで、スマホWebだけの人は
+ *    提案に答えられず、放っておくしかなかった（提案に期限は無く、返事か取り下げまで残る）。
+ * ⚠ 返事はPCと同じ部品（`TradeCard`）・同じ命令（`tradeRespond`）・同じ確認（`DealConfirm`）。
+ *    新しい提案と逆提案はPCかアプリのまま（選ぶ表が幅に入らない）
+ */
+export function MobileTradeReplies({ view, busy, run, command }) {
+  const waiting = (view.trades || []).filter((t) => t.myTurn);
+  // 返事の結果（成立・断るとカードごと消えるので、上に残す。PCと同じ）
+  const [answered, setAnswered] = useState(null);
+  return (
+    <>
+      <section className="online-card">
+        <h2>トレードの返事</h2>
+        <p className="online-muted">
+          届いた提案を受けるか断るかを選びます。選手の名前を押すと、能力と今季の成績を見られます。
+          新しい提案と逆提案はPCかアプリでできます。
+        </p>
+        <TradeResult result={answered} />
+        {!waiting.length && <p>返事が必要な提案はありません。</p>}
+      </section>
+      {waiting.map((t) => (
+        <TradeCard
+          key={t.id}
+          view={view}
+          trade={t}
+          busy={busy}
+          run={run}
+          command={command}
+          onResult={setAnswered}
+          mobile
+        />
+      ))}
+    </>
   );
 }
 
@@ -772,14 +1076,25 @@ export default function TradeScreen({ view, busy, run, command }) {
   const trades = view.trades || [];
   const waiting = trades.filter((t) => t.myTurn);
   const sent = trades.filter((t) => !t.myTurn);
+  // 届いた提案への返事の結果（成立・断るとカードごと消えるので、ページの上に残す）
+  const [answered, setAnswered] = useState(null);
   const card = (t) => (
-    <TradeCard key={t.id} view={view} trade={t} busy={busy} run={run} command={command} />
+    <TradeCard
+      key={t.id}
+      view={view}
+      trade={t}
+      busy={busy}
+      run={run}
+      command={command}
+      onResult={setAnswered}
+    />
   );
   return (
     <Page
       title="トレード"
       sub="ほかの球団と選手を交換します。CPU球団はその場で答え、参加者の球団は相手が受けた時点で成立します。"
     >
+      <TradeResult result={answered} />
       {waiting.length > 0 && (
         <>
           <h2 className="online-trade-heading">返事が必要な提案</h2>
@@ -809,13 +1124,34 @@ export default function TradeScreen({ view, busy, run, command }) {
               partners={partners}
               humans={humans}
               submitLabel="この内容で提案する"
+              confirmLabel="提案を送る"
               busy={busy}
-              onSubmit={(to, give, get, reset) =>
-                run(async () => {
-                  await command('tradeOffer', { to, offer: give, want: get });
-                  reset();
-                })
-              }
+              onSubmit={async (to, give, get, players) => {
+                let text = '';
+                const outcome = await run(async () => {
+                  text = await command(
+                    'tradeOffer',
+                    { to, offer: give, want: get },
+                    {
+                      message: (after, before) =>
+                        offerResultText({
+                          to,
+                          give: players.give,
+                          get: players.get,
+                          before,
+                          after,
+                        }),
+                    },
+                  );
+                  players.reset();
+                });
+                setAnswered(null);
+                // ⚠ 断られたときは理由（サーバーの文）を交換案の下にも出す。
+                //    上の赤い帯はページの先頭にあり、表を下へ送っていると見えない
+                return outcome.ok
+                  ? { ok: true, text }
+                  : { ok: false, text: outcome.error };
+              }}
             />
           </>
         ) : (

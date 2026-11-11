@@ -379,6 +379,9 @@ const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
   };
 
   const renderPlayerTable = (playerList, showAmScouts = false) => {
+    // スカウト注目は、表の中に1人でも注目されている選手がいるときだけ列を出す。
+    // ⚠ 以前は全員空でも列があり、余った幅を取って名前の列が2行に折り返していた
+    const hasScouts = playerList.some(p => p.npbScouts?.length > 0 || (showAmScouts && p.amScouts?.length > 0));
     return (
       <div className="bg-surface-2 rounded-lg overflow-hidden">
         <table className="tabular-nums w-full text-sm">
@@ -402,7 +405,7 @@ const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
               <th className="px-1 py-2 text-center">制球</th>
               <th className="px-1 py-2 text-center">変化球</th>
               <th className="px-1 py-2 text-center">スタミナ</th>
-              <th className="px-1 py-2 text-left">スカウト注目</th>
+              {hasScouts && <th className="px-1 py-2 text-left">スカウト注目</th>}
             </tr>
           </thead>
           <tbody>
@@ -415,7 +418,7 @@ const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
                   p.teamName === userTeamName ? 'bg-[var(--accent-soft)]' : i < 3 ? 'bg-gray-700/20' : ''
                 }`}>
                   <td className="px-1.5 py-1.5 text-gray-400 text-xs">{i + 1}</td>
-                  <td className="px-1.5 py-1.5 text-xs">
+                  <td className="px-1.5 py-1.5 text-xs whitespace-nowrap">
                     <button onClick={() => setDetailPlayer(p)}
                       className="font-bold text-white hover:text-accent hover:underline text-left"
                       title="クリックで選手の詳細">
@@ -437,9 +440,9 @@ const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
                   <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-400' : getStatColor(p.pitching?.control || 0)}`}>{p.pitching?.control || 0}</td>
                   <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-400' : getStatColor(bestBrk)}`}>{bestBrk}</td>
                   <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-400' : getStatColor(p.pitching?.stamina || 0)}`}>{p.pitching?.stamina || 0}</td>
-                  <td className="px-1 py-1 text-xs">
+                  {hasScouts && <td className="px-1 py-1 text-xs">
                     <ScoutBadges npbScouts={p.npbScouts} amScouts={showAmScouts ? p.amScouts : null} />
-                  </td>
+                  </td>}
                 </tr>
               );
             })}

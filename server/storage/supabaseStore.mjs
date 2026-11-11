@@ -5,6 +5,7 @@ import {
   requireOnline,
   OnlineError,
   ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
 } from '../../src/online/shared.js';
 import {
   projectLeague,
@@ -25,6 +26,7 @@ import {
   splitBundle,
   assembleBundle,
   assembleLight,
+  runWithLightRead,
 } from './snapshotParts.mjs';
 /** 部分の履歴（`views._parts.history`）が指すオブジェクトのパス */
 const partReferences = (history) =>
@@ -66,6 +68,9 @@ function leagueMetaOf(league) {
     //    違うリーグは定期処理でも直せないので、起こすと毎回ロックと全体の
     //    読み込みをして失敗し、その間の参加者の操作が弾かれる
     migratable: migrationState(league).state === 'migratable',
+    // 試合の計算方法。版（schema）が同じでも計算方法が違えば直せない（作り直すしかない）。
+    // 版だけ見ると区別できず、定期処理が毎回起きて失敗していた（`isDue`）
+    engineVersion: league.engineVersion ?? null,
     revision: league.revision,
     status: league.status,
     nextAdvanceAt: league.nextAdvanceAt ?? null,
@@ -137,9 +142,30 @@ export class SupabaseStore {
     )[0];
   }
   /**
+   * 管理行を列を絞って読む（`columns` は PostgREST の `select` の項目）。
+   * 絞り込みが通らない環境（PostgREST が式を受け付けず 400 を返す）では印を立てて
+   * `null` を返すので、呼ぶ側は全列（`control()`）で読み直す。印が立った後は問い合わせない。
+   * ⚠ 絞った読み出しはここを通す。1か所だけ予備の経路が無いと、その環境では
+   *    その操作だけが毎回失敗する（以前は `readGeneration` に無く、定期の読み直しが 400 で落ちていた）
+   */
+  async selectControl(columns) {
+    if (this.narrowSelectUnsupported) return null;
+    try {
+      return (
+        await this.request(
+          `/rest/v1/online_control?id=eq.pennant&select=${encodeURIComponent(columns.join(','))}`,
+        )
+      )[0];
+    } catch (error) {
+      if (error.storageStatus !== 400) throw error;
+      this.narrowSelectUnsupported = true;
+      return null;
+    }
+  }
+  /**
    * 閲覧と定期処理の判定に要る列だけを読む。
    * ⚠ `select=*` だと全参加者のビュー（1人あたり数十〜数百KB）を毎回取り、
-   *    画面の30秒ごとの更新のたびに参加人数ぶんの転送が発生していた。
+   *    画面の60秒ごとの更新のたびに参加人数ぶんの転送が発生していた。
    *    ここでは自分のビューと、リーグ全体の進行情報（`views._meta`）だけを取る。
    * ⚠ 絞り込みが通らない環境（古い保存で `_meta` が無い、PostgREST が式を
    *    受け付けない）では、従来どおり全列を読む。
@@ -154,22 +180,11 @@ export class SupabaseStore {
         anyRevision: memberRevision(row?.views),
       };
     };
-    if (this.narrowSelectUnsupported || (userId && !/^[\w-]+$/.test(userId)))
-      return full();
+    if (userId && !/^[\w-]+$/.test(userId)) return full();
     const columns = ['generation', 'snapshot_path', 'sessions', 'meta:views->_meta'];
     if (userId) columns.push(`view:views->"${userId}"`);
-    let row;
-    try {
-      row = (
-        await this.request(
-          `/rest/v1/online_control?id=eq.pennant&select=${encodeURIComponent(columns.join(','))}`,
-        )
-      )[0];
-    } catch (error) {
-      if (error.storageStatus !== 400) throw error;
-      this.narrowSelectUnsupported = true;
-      return full();
-    }
+    const row = await this.selectControl(columns);
+    if (row === null) return full();
     // `_meta` は次の保存から付く。無いうちは全列を読んで補う
     if (row?.snapshot_path && !row.meta) return full();
     return { ...row, view: row?.view ?? null, anyRevision: row?.meta?.revision };
@@ -249,13 +264,18 @@ export class SupabaseStore {
     //    running でないので、進行時刻だけ見ていると締め切りが来ても
     //    誰も動かさず、1人の未提出で全員の週が止まる。
     // ⚠ **古い形のまま放置しない**。更新で保存の形が変わったとき、
-    //    進行時刻だけ見ていると誰も触らない限り直らない。次の正時に
+    //    進行時刻だけ見ていると誰も触らない限り直らない。次の cron（5分以内）で
     //    定期処理が入って移行できるよう、ここでも起こす
     // ⚠ **直せない版では起こさない**（新しすぎる・計算方法が違う）。起こしても
     //    移行に失敗して何もしないのに、毎回ロックを取って全体を読み、その間の
     //    参加者の操作を「処理中」で弾いていた。進行時刻が来ていても同じ
     //    （定期処理は移行に失敗した時点で止まる）なので、ここで答えを決める。
     //    `migratable` の無い古い `_meta` は版の範囲で判定する
+    // ⚠ 版が同じでも**計算方法が違えば**直せない。サーバーの計算方法だけ上がった直後は、
+    //    前のサーバーが書いた `_meta` の版がいまの版と同じなので、版だけでは区別できない
+    //    （`engineVersion` の無い古い `_meta` は従来どおり）
+    if (row.snapshot_path && view?.engineVersion != null && view.engineVersion !== ONLINE_ENGINE_VERSION)
+      return false;
     if (row.snapshot_path && view && view.schema !== ONLINE_SCHEMA)
       return !!(
         view.migratable ??
@@ -312,11 +332,8 @@ export class SupabaseStore {
    *    開いていた画面が版の門番（`versionMismatch`）を通らない。
    */
   async readGeneration(userId, sessionId) {
-    const row = (
-      await this.request(
-        '/rest/v1/online_control?id=eq.pennant&select=generation,sessions,meta:views->_meta',
-      )
-    )[0];
+    const narrow = await this.selectControl(['generation', 'sessions', 'meta:views->_meta']);
+    const row = narrow === null ? await this.control() : narrow;
     return {
       generation: row?.generation ?? null,
       writable: isLiveSession(row?.sessions, userId, sessionId),
@@ -357,26 +374,13 @@ export class SupabaseStore {
    * ⚠ 自分のビューが無い（参加していない）・球団名の無い形のときは、全列を読んで従来どおり判断する
    */
   async recordRow(userId) {
-    if (this.narrowSelectUnsupported || !/^[\w-]+$/.test(userId || ''))
-      return this.control();
-    const columns = [
+    if (!/^[\w-]+$/.test(userId || '')) return this.control();
+    const row = await this.selectControl([
       'snapshot_path',
       'records:views->_records',
       `teamName:views->"${userId}"->teamName`,
       `year:views->"${userId}"->year`,
-    ];
-    let row;
-    try {
-      row = (
-        await this.request(
-          `/rest/v1/online_control?id=eq.pennant&select=${encodeURIComponent(columns.join(','))}`,
-        )
-      )[0];
-    } catch (error) {
-      if (error.storageStatus !== 400) throw error;
-      this.narrowSelectUnsupported = true;
-      return this.control();
-    }
+    ]);
     if (!row || row.teamName == null) return this.control();
     return {
       snapshot_path: row.snapshot_path,
@@ -517,6 +521,46 @@ export class SupabaseStore {
    *    触ったら、読み直して全体でやり直す。世界を必ず読む処理（定期進行・トレード・キャンプなど）は
    *    `{ full: true }` で最初から全体を読む（やり直しの1回ぶんを省くため。正しさはどちらでも同じ）。
    */
+  /**
+   * 命令を1回走らせ、変更があれば公開するビュー・記録の索引・保存する形を作る（`transaction` の1回ぶん）。
+   * `loaded.run` があれば軽い読み（保存する形は `run.inspect`。null なら全体で読み直す）
+   */
+  async attemptCommand(fn, loaded, row) {
+    let views, archives, prepared;
+    const value = loaded.bundle;
+    const outcome = await fn(value);
+    if (!outcome?.unchanged) {
+      // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
+      //    `this.members` を使うと、招待で増えた人のぶんが作られず、
+      //    その人は自分の球団を見られなくなる。
+      const viewMembers = value.league?.members?.length
+        ? value.league.members
+        : this.members;
+      views = Object.fromEntries(
+        viewMembers.map((m) => [
+          m.userId,
+          projectLeague(
+            value,
+            m.userId,
+            // 書けるかは読むときに端末ごとに決め直す（`readView`）。ここは目安
+            sessionIdsOf(value.sessions[m.userId])[0],
+            this.adminId,
+          ),
+        ]),
+      );
+      // ⚠ 記録に関わらない命令（編成の保存）は、前の索引をそのまま使う（作り直しは全試合をなめて重い）
+      archives =
+        outcome?.archiveUnchanged && row.views?._records
+          ? row.views._records
+          : await this.createArchive(value, row.views?._records);
+      if (archives) views._records = archives;
+      views._meta = leagueMetaOf(value.league);
+      prepared = loaded.run
+        ? loaded.run.inspect(value)
+        : { bundle: value };
+    }
+    return { outcome, views, archives, prepared };
+  }
   async transaction(fn, { full = false } = {}) {
     const token = randomUUID();
     const row = (await this.rpc('online_claim', { p_token: token }))[0];
@@ -528,105 +572,61 @@ export class SupabaseStore {
     );
     let published = false;
     try {
-      let light = !full;
-      for (;;) {
-        const loaded = await this.loadSnapshot(row, { light });
-        const lightRun = loaded.light || null;
-        const retry = () => lightRun && lightRun.tracker.touched;
-        let outcome, views, archives, prepared;
-        try {
-          const value = loaded.bundle;
-          outcome = await fn(value);
-          if (!outcome?.unchanged) {
-            // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
-            //    `this.members` を使うと、招待で増えた人のぶんが作られず、
-            //    その人は自分の球団を見られなくなる。
-            const viewMembers = value.league?.members?.length
-              ? value.league.members
-              : this.members;
-            views = Object.fromEntries(
-              viewMembers.map((m) => [
-                m.userId,
-                projectLeague(
-                  value,
-                  m.userId,
-                  // 書けるかは読むときに端末ごとに決め直す（`readView`）。ここは目安
-                  sessionIdsOf(value.sessions[m.userId])[0],
-                  this.adminId,
-                ),
-              ]),
-            );
-            // ⚠ 記録に関わらない命令（編成の保存）は、前の索引をそのまま使う（作り直しは全試合をなめて重い）
-            archives =
-              outcome?.archiveUnchanged && row.views?._records
-                ? row.views._records
-                : await this.createArchive(value, row.views?._records);
-            if (archives) views._records = archives;
-            views._meta = leagueMetaOf(value.league);
-            prepared = lightRun
-              ? lightRun.inspect(value)
-              : { bundle: value };
-          }
-        } catch (error) {
-          // ⚠ 複製（structuredClone）は番人を通らずに DataCloneError で落ちる。軽い読みなら全体でやり直す
-          if (retry() || (lightRun && error?.name === 'DataCloneError')) {
-            light = false;
-            continue;
-          }
-          throw error;
-        }
-        // 世界に触っていた（例外を握りつぶされていても印は残る）・形を差し替えていた → 全体でやり直す
-        if (retry() || (lightRun && !outcome?.unchanged && !prepared)) {
-          light = false;
-          continue;
-        }
-        if (outcome?.unchanged) return outcome.value;
-        const { path, refs } = await this.writeSnapshot(prepared, loaded.refs);
-        const partHistory = [refs, ...(row.views?._parts?.history || [])].slice(0, 3);
-        views._parts = { history: partHistory };
-        published = await this.rpc('online_publish', {
-          p_token: token,
-          p_generation: row.generation,
-          p_path: path,
-          p_views: views,
-          p_sessions: loaded.bundle.sessions,
-        });
-        requireOnline(
-          published,
-          '処理の有効期限が切れたため更新しませんでした。再読込してください',
-          409,
-          'lease',
+      // ⚠ まず軽い読み、だめなら全体で読み直す判定は `runWithLightRead`（検査用の保存と共通）
+      const { loaded, outcome, views, archives, prepared } = await runWithLightRead({
+        full,
+        load: async (light) => {
+          const loaded = await this.loadSnapshot(row, { light });
+          return { ...loaded, run: loaded.light || null };
+        },
+        attempt: (loaded) => this.attemptCommand(fn, loaded, row),
+      });
+      if (outcome?.unchanged) return outcome.value;
+      const { path, refs } = await this.writeSnapshot(prepared, loaded.refs);
+      const partHistory = [refs, ...(row.views?._parts?.history || [])].slice(0, 3);
+      views._parts = { history: partHistory };
+      published = await this.rpc('online_publish', {
+        p_token: token,
+        p_generation: row.generation,
+        p_path: path,
+        p_views: views,
+        p_sessions: loaded.bundle.sessions,
+      });
+      requireOnline(
+        published,
+        '処理の有効期限が切れたため更新しませんでした。再読込してください',
+        409,
+        'lease',
+      );
+      // ⚠ 命令の返事に載せた自分のビューに、いま公開した世代を押す（公開は世代を必ず1つ上げる。
+      //    `online_publish`）。押さないと、端末は次の読み直しで同じビューをまるごと取り直していた
+      const replied = outcome?.value?.view;
+      if (replied && typeof replied === 'object' && !Array.isArray(replied))
+        replied.viewGeneration = row.generation + 1;
+      // current + 直前2世代を残す。削除失敗は公開済みの更新を失敗扱いにしない。
+      // 部分（world・records など）は、残す3世代のどれかが指していれば残す
+      const keep = [row.snapshot_path, ...(row.previous_paths || [])].filter(
+        Boolean,
+      );
+      const retainedArchives = archiveReferences(archives);
+      const retainedParts = partReferences(partHistory);
+      const obsolete = [
+        ...keep.slice(2),
+        ...[...archiveReferences(row.views?._records)].filter(
+          (path) => !retainedArchives.has(path),
+        ),
+        ...[...partReferences(row.views?._parts?.history)].filter(
+          (path) => !retainedParts.has(path),
+        ),
+      ];
+      if (obsolete.length)
+        await this.request('/storage/v1/object/online-world', {
+          method: 'DELETE',
+          body: { prefixes: obsolete },
+        }).catch(() =>
+          console.error('online: 古いスナップショットの削除が必要です'),
         );
-        // ⚠ 命令の返事に載せた自分のビューに、いま公開した世代を押す（公開は世代を必ず1つ上げる。
-        //    `online_publish`）。押さないと、端末は次の読み直しで同じビューをまるごと取り直していた
-        const replied = outcome?.value?.view;
-        if (replied && typeof replied === 'object' && !Array.isArray(replied))
-          replied.viewGeneration = row.generation + 1;
-        // current + 直前2世代を残す。削除失敗は公開済みの更新を失敗扱いにしない。
-        // 部分（world・records など）は、残す3世代のどれかが指していれば残す
-        const keep = [row.snapshot_path, ...(row.previous_paths || [])].filter(
-          Boolean,
-        );
-        const retainedArchives = archiveReferences(archives);
-        const retainedParts = partReferences(partHistory);
-        const obsolete = [
-          ...keep.slice(2),
-          ...[...archiveReferences(row.views?._records)].filter(
-            (path) => !retainedArchives.has(path),
-          ),
-          ...[...partReferences(row.views?._parts?.history)].filter(
-            (path) => !retainedParts.has(path),
-          ),
-        ];
-        if (obsolete.length)
-          await this.request('/storage/v1/object/online-world', {
-            method: 'DELETE',
-            body: { prefixes: obsolete },
-          }).catch(() =>
-            console.error('online: 古いスナップショットの削除が必要です'),
-          );
-        return outcome?.value;
-      }
+      return outcome?.value;
     } finally {
       // publishの応答喪失時にも新オブジェクトを削除しない（既に公開済みの可能性）。
       if (!published)

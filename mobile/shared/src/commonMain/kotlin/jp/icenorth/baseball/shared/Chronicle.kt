@@ -117,14 +117,44 @@ data class TeamRecord(val stat: String = "", val label: String = "", val season:
 
 data class ChronicleText(val head: String, val body: String)
 
-/** 優勝・昇格・残留のマジックと決定。[short] は球団の短い名前 */
+// ---- 球団史・記録の行（アプリのホームのメニュー「球団史・記録」。PC の src/online/Chronicle.jsx と同じ中身） ----
+
+/** 年の書き方。オンラインの年は1年目からの通し番号なので「1年目」と書く（「1年」だと期間や学年に読める） */
+fun yearLabel(year: Int): String = "${year}年目"
+
+/** 歴代記録はシーズン最多・球団通算とも上位3人（サーバーが3人まで返す。PC も3人並べる） */
+const val TEAM_RECORD_ROWS = 3
+
+/** 年表の1行（「2年目　1部2位 64勝53敗3分 プレーオフ優勝」） */
+fun TeamSeason.historyLine(): String = "${yearLabel(year)}　$line"
+
+/** シーズン最多の1行（「1位　山田（2年目・今季）　32」） */
+fun seasonRecordLine(rank: Int, x: RecordRow): String {
+    val note = listOfNotNull(x.year?.let(::yearLabel), "今季".takeIf { x.current }).joinToString("・")
+    return "${rank}位　${x.name}${if (note.isEmpty()) "" else "（$note）"}　${x.value}"
+}
+
+/** 球団通算の1行（「1位　山田（現役）　120」） */
+fun careerRecordLine(rank: Int, x: RecordRow): String = "${rank}位　${x.name}${if (x.active) "（現役）" else ""}　${x.value}"
+
+/** 節目の1行（「2年目 8月28日　山田　シーズン30本塁打に到達」） */
+fun milestoneLine(m: Milestone): String = "${yearLabel(m.year)} ${m.month}月${m.day}日　${m.name}　${milestoneText(m)}"
+
+/** 引退した人の見出し（「3年目　山田（36歳）　殿堂入り」） */
+fun retiredHead(r: Retired): String = "${yearLabel(r.year)}　${r.name}（${r.age ?: "-"}歳）${if (r.hallOfFame) "　殿堂入り" else ""}"
+
+/**
+ * 優勝・昇格・残留のマジックと決定。[short] は球団の短い名前
+ * ⚠ 決定の文は時期によらない形にする。決着はシーズンを終えたあと（11月の契約更改・トライアウト）も
+ *    紙面に残るので、「プレーオフに臨む」のような先の話を書くと、プレーオフが済んだあとに読めてしまう
+ */
 fun raceText(r: Race, short: (String) -> String): ChronicleText? {
     if (r.team.isEmpty()) return null
     val t = short(r.team)
     val rival = r.rival?.let(short)
     val tail = if (rival != null) "${t}の勝ちと${rival}の負けを合わせて${r.magic}で決まる（残り${r.left}試合）。" else ""
     return when (r.kind) {
-        "first" -> if (r.clinched) ChronicleText("${t}、${r.leagueName}1位が決定", "レギュラーシーズン1位でプレーオフに臨む。")
+        "first" -> if (r.clinched) ChronicleText("${t}、${r.leagueName}1位が決定", "レギュラーシーズン1位の座を手にした。")
         else ChronicleText("${t}、${r.leagueName}1位へマジック${r.magic}", tail)
         "promotion" -> if (r.clinched) ChronicleText("${t}、${r.leagueName}優勝で昇格が決定", "来季は1部で戦う。")
         else ChronicleText("${t}、昇格へマジック${r.magic}", tail)
@@ -157,9 +187,6 @@ fun worldText(w: WorldNews, short: (String) -> String): ChronicleText? = when (w
     else -> null
 }
 
-/** 年の中の通し日（月×100＋日）。年をまたぐ比べは年で分ける */
-private fun dayOf(year: Int, month: Int, day: Int): Int = year * 10000 + month * 100 + day
-
 /**
  * 裏の大会のうち、いま紙面に載せるもの（同じ年で、その日から120日以内）。
  * ⚠ 甲子園（8月）と日本一決定戦（10月）はシーズン後の試合の無い時期にあり、その間は
@@ -181,7 +208,7 @@ internal fun recentWorld(view: LeagueView): List<WorldNews> {
 internal fun milestonesOn(view: LeagueView, date: GameDate?): List<Milestone> {
     val d = date ?: return emptyList()
     val year = view.year ?: return emptyList()
-    return view.chronicle.milestones.filter { dayOf(it.year, it.month, it.day) == dayOf(year, d.month, d.day) }
+    return view.chronicle.milestones.filter { dayKey(it.year, it.month, it.day) == dayKey(year, d.month, d.day) }
 }
 
 /** 節目の記事の本文（「田中が通算100安打（このリーグで）、鈴木がシーズン20本塁打に到達した。」） */

@@ -15,6 +15,8 @@ import {
 } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { TACTIC_DEFAULTS } from '../../src/online/tactics.js';
+import { shortLastLines } from './lib/textWrap.mjs';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -89,13 +91,21 @@ try {
         action = url.searchParams.get('action');
       let data;
       if (action === 'config') data = { local: true };
-      else if (action === 'view')
+      else if (action === 'view') {
         data = projectLeague(
           { league, sessions: { a: 'fixture' } },
           'a',
           'fixture',
           'a',
         );
+        // ⚠ この fixture は記録（`records`）だけで、今季の結果（`season.results`）が空。
+        //    試合のカードから小窓を開く検査のため、記録の試合をカードにも並べる
+        if (!data.results.length)
+          data.results = projectGames({ league }, 'a', {
+            year: data.year,
+            scope: 'league',
+          }).games;
+      }
       else if (action === 'game')
         data = projectGameInfo(
           { league },
@@ -140,9 +150,17 @@ try {
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`${base}/online`);
+    // ⚠ 順位表の見出しは折り返さない。自球団の行（持ち主の名前と昇格圏の印）が
+    //    長いと、360px で「打率」が「打／率」の2行に割れた
+    await page.locator('.online-standings').first().waitFor();
+    assert.deepEqual(
+      await shortLastLines(page, '.online-standings thead th'),
+      [],
+      `${width}px 順位表の見出しが1文字ずつに割れる`,
+    );
     await page.getByRole('button', { name: '打順', exact: true }).click();
-    await page.getByRole('button', { name: '采配', exact: true }).click();
-    let panel = page.getByRole('dialog', { name: '事前采配', exact: true });
+    await page.getByRole('button', { name: '方針・采配', exact: true }).click();
+    let panel = page.getByRole('dialog', { name: '方針・采配', exact: true });
     await panel.waitFor();
     for (const group of ['basic', 'bunt', 'subs', 'pitcher', 'roles']) {
       await panel.getByLabel('見る設定').selectOption(group);
@@ -211,8 +229,8 @@ try {
     }
     await page.reload();
     await page.getByRole('button', { name: '打順', exact: true }).click();
-    await page.getByRole('button', { name: '采配', exact: true }).click();
-    panel = page.getByRole('dialog', { name: '事前采配', exact: true });
+    await page.getByRole('button', { name: '方針・采配', exact: true }).click();
+    panel = page.getByRole('dialog', { name: '方針・采配', exact: true });
     await panel.getByLabel('見る設定').selectOption('bunt');
     assert.equal(
       await panel.getByLabel('送りバント', { exact: true }).inputValue(),
@@ -221,7 +239,7 @@ try {
     );
     assert.equal(attempts, 0, '閲覧や変更だけでは自動送信しない');
     await panel
-      .getByRole('button', { name: '編成を保存', exact: true })
+      .getByRole('button', { name: '保存', exact: true })
       .click();
     await panel.getByRole('alert').waitFor();
     assert.equal(
@@ -234,7 +252,7 @@ try {
       '保存失敗をパネル内に表示',
     );
     await panel
-      .getByRole('button', { name: '編成を保存', exact: true })
+      .getByRole('button', { name: '保存', exact: true })
       .click();
     await panel.getByText('保存済みの設定', { exact: true }).waitFor();
     assert.equal(commands, 1);
@@ -280,6 +298,38 @@ try {
       .click();
     await page.getByRole('button', { name: 'ホーム', exact: true }).click();
     await page.getByRole('button', { name: '試合', exact: true }).click();
+    // ⚠ **試合のカードから開いた試合経過も1列に並ぶ**。小窓をカード（`.online-score`）の
+    //    中に描いていて、カードの3列の grid がプレーの一覧まで当たり、ボタンが
+    //    3列に散っていた
+    await page
+      .locator('.online-score')
+      .getByRole('button', { name: /の試合成績$/ })
+      .first()
+      .click();
+    const cardBox = page.getByRole('dialog', { name: '試合成績', exact: true });
+    await cardBox.getByRole('button', { name: '試合経過', exact: true }).click();
+    const cardProgress = cardBox.getByRole('region', {
+      name: '試合経過',
+      exact: true,
+    });
+    await cardProgress.waitFor();
+    const playRows = await cardProgress
+      .getByRole('listitem')
+      .getByRole('button')
+      .evaluateAll((list) =>
+        list.map((n) => {
+          const r = n.getBoundingClientRect();
+          const box = n.closest('.online-mobile-play-list').getBoundingClientRect();
+          return [Math.round(r.left - box.left), Math.round(box.width - r.width)];
+        }),
+      );
+    assert.ok(
+      playRows.length > 1 && playRows.every(([x, rest]) => x === 0 && rest <= 2),
+      `${width}px 試合のカードから開いた試合経過も1列: ${JSON.stringify(playRows)}`,
+    );
+    await cardBox
+      .getByRole('button', { name: '試合成績を閉じる', exact: true })
+      .click();
     await page
       .getByRole('button', { name: '過去の試合・個人成績', exact: true })
       .click();
@@ -430,6 +480,9 @@ try {
   console.log(
     'online-mobile-gameplay-ui-check PASS（320/360×640 DPR3/390/767px・采配の下書き/保存失敗/保存・PC設定保持・他球団・全投球/回/ページ/得点・長いスクロールなし / 通信はfixture）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-mobile-gameplay-ui');
+  throw error;
 } finally {
   await browser.close();
 }

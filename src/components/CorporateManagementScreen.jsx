@@ -7,6 +7,7 @@ import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/
 import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount, assignScoutTask, cancelScoutTask, getAllScoutTasks, MAX_FAVORITES_PER_SCOUT } from '../corporate/scoutingSystem.js';
 import { getUniversityPipes } from '../university/universityPipeSystem.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
+import ConfirmBar, { keepAboveConfirmBar } from './ConfirmBar.jsx';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -17,6 +18,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const [tab, setTab] = useState('staff');
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [marketStaff, setMarketStaff] = useState(null);
+  // 雇う・解雇するスタッフ（選んだら下の帯で決める。同時に出すのはどちらか1つ）
   const [confirmHire, setConfirmHire] = useState(null);
   const [confirmFire, setConfirmFire] = useState(null);
   const [dispatchMessage, setDispatchMessage] = useState(null);
@@ -37,7 +39,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
     return (
       <ScreenShell>
         <ScreenHeader title="チーム運営" />
-        <p className="text-gray-300">社会人モードでのみ利用可能です。</p>
+        <p className="text-ink-sub">社会人モードでのみ利用可能です。</p>
       </ScreenShell>
     );
   }
@@ -90,7 +92,20 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
     }
   };
 
+  // 帯（雇う・解雇する）は、市場を作り直す・閉じる・タブを替えるときに落とす。
+  // ⚠ 帯はタブの外に出しているので、残すとほかのタブの上に前の人の帯が出て、市場にもう
+  //    いない人を「雇用する」で雇えた（7f11ae8 で中央の窓を帯にしたときの抜け）
+  const clearBars = () => { setConfirmHire(null); setConfirmFire(null); };
+  const changeTab = (id) => { clearBars(); setTab(id); };
+  const refreshMarket = () => { clearBars(); setMarketStaff(generateStaffMarket(15, teamRank)); };
+  const closeMarket = () => { clearBars(); setMarketStaff(null); };
+
   const handleHire = (newStaff) => {
+    // 市場にいない人は雇わない（帯が残っていても）
+    if (!marketStaff?.some(s => s.id === newStaff.id)) {
+      setConfirmHire(null);
+      return;
+    }
     if (!canHireGrade(teamRank, newStaff.grade)) {
       setConfirmHire(null);
       return;
@@ -129,7 +144,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
         {tabs.map(t => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => changeTab(t.id)}
             /* ⚠ このタブ列は**地色の上に直に載る**。背景を持たない `text-gray-300` の
                ままだと明るい紙の上で 1.23:1 で消える。選択色も緑ではなくアクセント
                （`.seg` / `.seg-on` の共有語彙）に揃える */
@@ -238,7 +253,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             ))}
                           </div>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setConfirmFire(s); }}
+                            onClick={(e) => { e.stopPropagation(); setConfirmHire(null); setConfirmFire(s); keepAboveConfirmBar(e.currentTarget); }}
                             className="btn-danger px-3 py-1 rounded text-xs"
                           >
                             解雇
@@ -259,13 +274,13 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <h2 className="text-sm font-bold text-gray-300">スタッフ市場</h2>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setMarketStaff(generateStaffMarket(15, teamRank))}
+                    onClick={refreshMarket}
                     className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs"
                   >
                     更新
                   </button>
                   <button
-                    onClick={() => setMarketStaff(null)}
+                    onClick={closeMarket}
                     className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs"
                   >
                     閉じる
@@ -295,8 +310,8 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     </div>
                     <span className="text-gray-300 w-16 text-right">{getStaffSalary(s)}万円</span>
                     <button
-                      onClick={() => setConfirmHire(s)}
-                      className="btn-primary px-2 py-1 rounded text-xs"
+                      onClick={(e) => { setConfirmFire(null); setConfirmHire(s); keepAboveConfirmBar(e.currentTarget); }}
+                      className={`btn-primary px-2 py-1 rounded text-xs ${confirmHire?.id === s.id ? 'ring-2 ring-cyan-400' : ''}`}
                     >
                       雇用
                     </button>
@@ -1208,67 +1223,36 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
         </div>
       )}
 
-      {/* 雇用確認モーダル */}
+      {/* 雇う前の帯 */}
       {confirmHire && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setConfirmHire(null)}>
-          <div className="bg-surface-2 rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-3">スタッフ雇用確認</h3>
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <span className={`font-bold ${gradeColor(confirmHire.grade)}`}>{STAFF_GRADES[confirmHire.grade]?.label}</span>
-                <span className="text-yellow-400 text-sm">{roleLabel(confirmHire.role)}</span>
-                <span className="text-white font-medium">{confirmHire.name}</span>
-                {confirmHire.specialtyLabel && (
-                  <span className="text-xs bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded font-bold">{confirmHire.specialtyLabel}</span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-0">
-                {Object.entries(STAFF_ABILITIES).map(([key, info]) => (
-                  <AbilityBar key={key} label={info.name} value={confirmHire.abilities[key] || 0} compact />
-                ))}
-              </div>
-              <div className="mt-2 text-sm text-gray-300">
-                年俸: <span className="text-white font-bold">{getStaffSalary(confirmHire)}万円</span>
-              </div>
-            </div>
-            {staff.length >= MAX_STAFF && (
-              <p className="text-red-400 text-xs mb-2">スタッフ枠が上限（{MAX_STAFF}名）に達しています。先に解雇してください。</p>
-            )}
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setConfirmHire(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm">
-                キャンセル
-              </button>
-              <button
-                onClick={() => handleHire(confirmHire)}
-                disabled={staff.length >= MAX_STAFF}
-                className={`px-4 py-2 rounded text-sm font-bold ${'btn-primary'}`}
-              >
-                雇用する
-              </button>
-            </div>
+        <ConfirmBar
+          title={`${confirmHire.name}（${roleLabel(confirmHire.role)}）を雇いますか？`}
+          detail={`${STAFF_GRADES[confirmHire.grade]?.label || ''}${confirmHire.specialtyLabel ? `・${confirmHire.specialtyLabel}` : ''}・年俸${getStaffSalary(confirmHire)}万円・スタッフ${staff.length}/${MAX_STAFF}名`}
+          note={staff.length >= MAX_STAFF ? `スタッフが上限（${MAX_STAFF}名）です。先に誰かを解雇してください。` : undefined}
+          confirmLabel="雇用する"
+          disabled={staff.length >= MAX_STAFF}
+          onConfirm={() => handleHire(confirmHire)}
+          onCancel={() => setConfirmHire(null)}
+        >
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0">
+            {Object.entries(STAFF_ABILITIES).map(([key, info]) => (
+              <AbilityBar key={key} label={info.name} value={confirmHire.abilities[key] || 0} compact />
+            ))}
           </div>
-        </div>
+        </ConfirmBar>
       )}
 
-      {/* 解雇確認モーダル */}
+      {/* 解雇する前の帯 */}
       {confirmFire && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setConfirmFire(null)}>
-          <div className="bg-surface-2 rounded-lg p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-3">解雇確認</h3>
-            <p className="text-gray-300 mb-4">
-              <span className="font-bold text-white">{confirmFire.name}</span>
-              （{roleLabel(confirmFire.role)}）を解雇しますか？
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setConfirmFire(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm">
-                キャンセル
-              </button>
-              <button onClick={() => handleFire(confirmFire.id)} className="btn-danger px-4 py-2 rounded text-sm">
-                解雇する
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmBar
+          title={`${confirmFire.name}（${roleLabel(confirmFire.role)}）を解雇しますか？`}
+          detail={`${STAFF_GRADES[confirmFire.grade]?.label || ''}・年俸${getStaffSalary(confirmFire)}万円`}
+          note="解雇すると取り消せません。"
+          confirmLabel="解雇する"
+          confirmClass="btn-danger"
+          onConfirm={() => handleFire(confirmFire.id)}
+          onCancel={() => setConfirmFire(null)}
+        />
       )}
 
       {/* お気に入り担当スカウト選択モーダル */}

@@ -56,6 +56,9 @@ export const nextAdvanceText = (view) =>
       ? '手続きの決定待ち'
       : '停止中';
 
+// ひらがな・カタカナ・漢字を含むか（サーバーの断りの文か、配信の仕組みの英語の文かを分ける）
+const JAPANESE_TEXT = /[\u3040-\u30ff\u4e00-\u9fff]/;
+
 export async function api(action, auth, body, query = {}) {
   let response;
   try {
@@ -92,10 +95,15 @@ export async function api(action, auth, body, query = {}) {
     );
   }
   if (!response.ok) {
+    // ⚠ **画面に出すのは日本語の文だけ**。このサーバーの断りはいつも日本語だが、
+    //    手前の配信の仕組みが止まっているときなどは「Service Unavailable」のような
+    //    英語の文が JSON で返り、赤い帯にそのまま出ていた
     const error = new Error(
-      typeof result.error === 'string'
+      typeof result.error === 'string' && JAPANESE_TEXT.test(result.error)
         ? result.error
-        : 'サーバー処理に失敗しました。最新状態を確認してください',
+        : response.status >= 500
+          ? 'サーバーに一時的につながりません。少し待ってから、もう一度お試しください'
+          : 'サーバー処理に失敗しました。最新状態を確認してください',
     );
     error.code = result.code;
     throw error;

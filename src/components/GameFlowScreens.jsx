@@ -25,6 +25,7 @@ import CampScreen from './CampScreen.jsx';
 import SandboxSetupScreen from './SandboxSetupScreen.jsx';
 import UniversityTeamSelectScreen from './UniversitySelectScreen.jsx';
 import { ModeSelectScreen, CorporateTeamSelectScreen, CorporateNameEditScreen } from './CorporateSelectScreen.jsx';
+import { withoutTryoutDraft } from '../season/tryoutDraftState.js';
 
 // ゲームフロースタート画面群
 const GameFlowScreens = ({
@@ -38,6 +39,7 @@ const GameFlowScreens = ({
   userTeamName,
   hasSaveData,
   saveSlots,
+  saveGame,
   loadGame,
   loadAutosave,
   initializeNewGame,
@@ -94,15 +96,21 @@ const GameFlowScreens = ({
       { key: 'hokkaido', icon: '🐻' },
       { key: 'kansai', icon: '🏯' },
     ];
-    // 開始前の「表紙」なので CorporateSelect / UniversitySelect / SandboxSetup と
-    // 同じ語彙にする（地色のグラデ ＋ max-w-5xl ＋ 見出し text-3xl 中央）。
-    // ⚠ ここだけ ScreenShell（本編の語彙）を使っていて、直後のローディング画面が
-    //    グラデ地色だったため、同じ流れの中で地色が2度変わっていた。
+    // 開始前の「表紙」なので、前後の画面（どの球界で始めるか・チーム選択）と同じ
+    // 導入画面の外枠（SelectShell）とカード（`.lift-card` ＋ bg-surface-2/80）にする。
+    // ⚠ ここだけ本編寄りの灰色のグラデと素のカードのままで、モード選択 → リーグ選択 →
+    //    チーム選択と進むと、真ん中の1枚だけ地色と意匠が変わっていた。
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2 text-center">リーグ選択</h1>
-          <p className="text-gray-300 mb-8 text-center">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
+      <SelectShell
+        kicker="LEAGUE SELECT"
+        title="リーグ選択"
+        sub="プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。"
+        footer={(
+          <div className="text-center">
+            <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-surface-2 text-sm transition">← 戻る</button>
+          </div>
+        )}
+      >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {leagueList.map(({ key, icon }) => {
               const leagueDef = INDEPENDENT_LEAGUES[key];
@@ -112,13 +120,11 @@ const GameFlowScreens = ({
                     selectedIndependentLeague = key;
                     setGameFlowState('newgame_team_select');
                   }}
-                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group flex flex-col"
+                  className="lift-card w-full text-left rounded-xl p-4 border bg-surface-2/80 border-gray-700/70 hover:border-gray-500 flex flex-col"
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-3xl">{icon}</span>
-                    <div>
-                      <div className="text-lg font-bold text-white group-hover:text-blue-400 transition">{leagueDef?.name}</div>
-                    </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl" aria-hidden>{icon}</span>
+                    <div className="text-base font-bold text-white truncate">{leagueDef?.name}</div>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs text-gray-300 mt-2">
                     <span>{leagueDef?.teams?.length || 4}チーム</span>
@@ -127,7 +133,7 @@ const GameFlowScreens = ({
                   </div>
                   <div className="flex flex-wrap gap-1 mt-2">
                     {leagueDef?.teams?.map(t => (
-                      <span key={t.id} className="text-xs text-gray-300 bg-gray-700/60 px-1.5 py-0.5 rounded">{t.abbreviation}</span>
+                      <span key={t.id} className="text-xs text-gray-200 bg-black/30 px-1.5 py-0.5 rounded">{t.abbreviation}</span>
                     ))}
                   </div>
                 </button>
@@ -138,12 +144,12 @@ const GameFlowScreens = ({
                 selectedIndependentLeague = null;
                 setGameFlowState('newgame_regulations');
               }}
-              className="bg-surface-2 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-green-500 rounded-xl p-5 text-left transition group flex flex-col"
+              className="lift-card w-full text-left rounded-xl p-4 border border-dashed bg-surface-2/50 border-gray-600 hover:border-gray-400 flex flex-col"
             >
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-3xl">🛠️</span>
-                <div>
-                  <div className="text-lg font-bold text-white group-hover:text-green-400 transition">リーグ作成</div>
+              <div className="flex items-center gap-3">
+                <span className="text-3xl" aria-hidden>🛠️</span>
+                <div className="min-w-0">
+                  <div className="text-base font-bold text-white">リーグ作成</div>
                   <div className="text-xs text-gray-300">チーム数・試合数・ルールを自由に設定</div>
                 </div>
               </div>
@@ -153,11 +159,7 @@ const GameFlowScreens = ({
               </div>
             </button>
           </div>
-          <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-surface-2 text-sm transition">← 戻る</button>
-          </div>
-        </div>
-      </div>
+      </SelectShell>
     );
   }
 
@@ -456,10 +458,15 @@ const GameFlowScreens = ({
   if (gameFlowState === 'newgame_tryout') {
     return <TryoutScreen
       seasonData={seasonData}
+      setSeasonData={setSeasonData}
       allTeams={allTeams}
       isInitialTryout={true}
       initializeAllPitchingRotations={initializeAllPitchingRotations}
+      onSave={saveGame}
+      saveSlots={saveSlots}
       onComplete={() => {
+        // 途中の状態の写し（tryoutDraft）は終えたら外す（`tryoutDraftState.js`）
+        setSeasonData(prev => withoutTryoutDraft(prev));
         setGameFlowState('newgame_camp');
       }}
     />;
@@ -494,6 +501,8 @@ const GameFlowScreens = ({
   // SANDBOX: レギュレーション設定
   if (gameFlowState === 'sandbox_regulations') {
     return <NewGameRegulationsScreen
+      submitLabel="設定完了 - チーム設定へ"
+      onBack={() => setGameFlowState('title')}
       onComplete={(regulations) => {
         // ⚠ 箱庭は背景の世界を持たないが、前のゲームの WORLD_DATA・プールは消すこと
         //    （以前は何も戻さず、前のゲームの大会・監督履歴・高校生が残っていた）

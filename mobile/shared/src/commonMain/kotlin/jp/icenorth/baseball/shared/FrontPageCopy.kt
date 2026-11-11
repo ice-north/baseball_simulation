@@ -311,9 +311,13 @@ internal fun loseHeadline(s: Situation, pen: Pen): String {
             "${me}、${opp}投手陣を打てず",
             "${me}ゼロ行進 ${opp}に零封",
         )
+        // ⚠ 「サヨナラ打」は安打のときだけ（押し出し・犠飛で決まった日は名前を出さない形。勝った日の見出しと同じ分け方）
         f?.walkOff == true -> f.theirWinningHit.let { h ->
-            if (h != null) listOf("${me}、${h.name}にサヨナラ${if (h.homerun) "弾" else "打"}浴びる", "${me}痛恨のサヨナラ負け", "${me}、${opp}にサヨナラ負け")
-            else listOf("${me}、サヨナラ負け", "${me}痛恨のサヨナラ負け", "${opp}にサヨナラ許す ${me}")
+            when {
+                h?.homerun == true -> listOf("${me}、${h.name}にサヨナラ弾浴びる", "${me}痛恨のサヨナラ負け", "${me}、${opp}にサヨナラ負け")
+                h?.hit == true -> listOf("${me}、${h.name}にサヨナラ打浴びる", "${me}痛恨のサヨナラ負け", "${me}、${opp}にサヨナラ負け")
+                else -> listOf("${me}、サヨナラ負け", "${me}痛恨のサヨナラ負け", "${opp}にサヨナラ許す ${me}")
+            }
         }
         s.brokenStreak >= 3 -> listOf(
             "${me}、連勝${s.brokenStreak}でストップ",

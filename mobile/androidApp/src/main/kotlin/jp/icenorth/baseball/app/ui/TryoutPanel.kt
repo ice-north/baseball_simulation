@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -69,9 +67,19 @@ private const val PAGE = 12
  * - 下: 候補（区分・並べ替え・名前で絞り、＋で獲得予定へ、★で最優先）
  * ⚠ 操作は「獲得予定」を基準にする（希望順の位置で動かすと、目標構成で飛ばされる選手が
  *    挟まったときに押した選手が入らない・消える）。誰も消さず、外すのは末尾送り。
+ * @param editable false なら読むだけ（指導者に任せた手続き）。人数・並べ替え・獲得予定に入れる操作と
+ *    「重視する能力」を出さない。候補の絞り込み・並べ替え（見るだけの操作）は残す
  */
 @Composable
-fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: JsonObject, setPlan: (JsonObject) -> Unit, onReset: () -> Unit) {
+fun TryoutPanel(
+    model: AppViewModel,
+    raw: JsonObject,
+    phase: JsonObject,
+    plan: JsonObject,
+    setPlan: (JsonObject) -> Unit,
+    editable: Boolean = true,
+    onReset: () -> Unit,
+) {
     val candidates = remember(phase) { phase.at("candidates").list().mapNotNull { it.obj() } }
     val roster = remember(raw) { raw.at("roster").list().mapNotNull { it.obj() } }
     val ranked = plan.at("rankedIds").list().mapNotNull { it.long() }
@@ -88,7 +96,12 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
     val setRanked: (List<Long>) -> Unit = { ids -> setPlan(Commands.withRanked(plan, ids)) }
     val setCount: (Int) -> Unit = { n -> setPlan(Commands.withCount(plan, n.coerceIn(0, maxCount))) }
 
-    Section(
+    // ⚠ 「獲得予定」と「候補」を切り替える（以前は1本の縦長で、候補を見ている間は獲得予定の中身が見えず、
+    //    行き来に長いスクロールが要った）。人数は切り替えの字に出す
+    var side by rememberSaveable { mutableStateOf("plan") }
+    ChoiceRow(listOf("plan" to "獲得予定 ${wanted.size}人", "pool" to "候補 ${candidates.size}人"), side) { side = it }
+
+    if (side == "plan") Section(
         "獲得希望人数",
         trailing = {
             InfoButton(
@@ -102,21 +115,21 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
         },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { setCount(planCount - 1) }, enabled = planCount > 0) { Text("−") }
+            if (editable) OutlinedButton(onClick = { setCount(planCount - 1) }, enabled = planCount > 0) { Text("−") }
             Text("${planCount}人", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = { setCount(planCount + 1) }, enabled = planCount < maxCount) { Text("＋") }
+            if (editable) OutlinedButton(onClick = { setCount(planCount + 1) }, enabled = planCount < maxCount) { Text("＋") }
             Muted("最大${maxCount}人")
         }
-        TextButton(onClick = onReset) { Text("標準案に戻す") }
+        if (editable) TextButton(onClick = onReset) { Text("標準案に戻す") }
     }
 
-    WeightsSection(model, candidates, roster) { next ->
+    if (side == "plan" && editable) WeightsSection(model, candidates, roster) { next ->
         setRanked(next)
         noticeState = "評価の高い順に、投・捕・内・外の目標人数を守っておすすめ順を作り直しました。" to next
     }
 
     val c = summary.counts
-    Section("獲得予定 ${wanted.size}人") {
+    if (side == "plan") Section("獲得予定 ${wanted.size}人") {
         Muted("投${c["pitcher"]}/${ONLINE_ROSTER_TARGETS["pitcher"]} 捕${c["catcher"]}/${ONLINE_ROSTER_TARGETS["catcher"]} 内${c["infielder"]}/${ONLINE_ROSTER_TARGETS["infielder"]} 外${c["outfielder"]}/${ONLINE_ROSTER_TARGETS["outfielder"]}")
         if (summary.blocking.isNotEmpty()) Text("このままでは決定できません: ${summary.blocking.joinToString(" / ")}　獲得希望人数を増やすか、希望順位を入れ替えてください。", color = MaterialTheme.colorScheme.error)
         if (summary.warnings.isNotEmpty()) Text("${summary.warnings.joinToString(" / ")}　この位置は人数が足りないと自動で埋められます。", color = MaterialTheme.colorScheme.secondary)
@@ -133,9 +146,13 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                         }
                     }
                 }
-                IconButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, -1)) }, enabled = i > 0, modifier = Modifier.size(36.dp)) { Text("↑") }
-                IconButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, 1)) }, enabled = i < wanted.size - 1, modifier = Modifier.size(36.dp)) { Text("↓") }
-                IconButton(onClick = { setRanked(benchFromPlan(ranked, candidates, count, roster, p.pid)) }, modifier = Modifier.size(36.dp)) { Text("×") }
+            }
+            // ⚠ 並べ替え・外すは下の行に、押せる大きさ（48dp）で置く。以前は名前の横に 36dp の「↑↓×」を
+            //    詰めて並べていて、押し間違えやすく、名前と能力の欄も狭くなっていた
+            if (editable) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, -1)) }, enabled = i > 0) { Text("↑ 上へ") }
+                TextButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, 1)) }, enabled = i < wanted.size - 1) { Text("↓ 下へ") }
+                TextButton(onClick = { setRanked(benchFromPlan(ranked, candidates, count, roster, p.pid)) }) { Text("外す") }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
@@ -144,17 +161,19 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
     var group by rememberSaveable { mutableStateOf("all") }
     var sortKey by rememberSaveable { mutableStateOf(WEIGHTED_SORT_KEY) }
     var query by rememberSaveable { mutableStateOf("") }
-    var page by rememberSaveable { mutableStateOf(0) }
+    // 何人まで出しているか（「続きを表示」で増やす。絞り込み・並べ替えを変えたら最初に戻す）
+    var limit by rememberSaveable { mutableStateOf(PAGE) }
     val scoreOf: (JsonObject) -> Double = if (sortKey == WEIGHTED_SORT_KEY) { p -> scores[p.pid] ?: 0.0 } else TRYOUT_SORT_KEYS.firstOrNull { it.key == sortKey }?.of ?: ::overallScore
     val pool = candidates
         .filter { inTryoutGroup(it, group) && (query.isBlank() || it.at("name").str().orEmpty().contains(query.trim())) }
         .sortedWith(compareByDescending<JsonObject> { scoreOf(it) }.thenBy { it.pid })
-    val pages = maxOf(1, (pool.size + PAGE - 1) / PAGE)
-    val shown = pool.drop(page.coerceAtMost(pages - 1) * PAGE).take(PAGE)
-    Section("候補 ${candidates.size}人") {
-        ChoiceRow(TRYOUT_GROUPS, group) { group = it; page = 0 }
-        ChoiceRow(listOf(WEIGHTED_SORT_KEY to "評価") + TRYOUT_SORT_KEYS.map { it.key to it.label }, sortKey) { sortKey = it; page = 0 }
-        OutlinedTextField(query, { query = it; page = 0 }, label = { Text("名前で探す") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    val shown = pool.take(limit)
+    if (side == "pool") Section("候補 ${candidates.size}人") {
+        Muted("投${c["pitcher"]}/${ONLINE_ROSTER_TARGETS["pitcher"]} 捕${c["catcher"]}/${ONLINE_ROSTER_TARGETS["catcher"]} 内${c["infielder"]}/${ONLINE_ROSTER_TARGETS["infielder"]} 外${c["outfielder"]}/${ONLINE_ROSTER_TARGETS["outfielder"]}（獲得予定を入れた人数／目標）")
+        notice?.let { Text(it, color = MaterialTheme.colorScheme.secondary) }
+        ChoiceRow(TRYOUT_GROUPS, group) { group = it; limit = PAGE }
+        ChoiceRow(listOf(WEIGHTED_SORT_KEY to "評価") + TRYOUT_SORT_KEYS.map { it.key to it.label }, sortKey) { sortKey = it; limit = PAGE }
+        OutlinedTextField(query, { query = it; limit = PAGE }, label = { Text("名前で探す") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         shown.forEach { p ->
             val at = wanted.indexOf(p.pid)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -168,6 +187,8 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                         }
                     }
                 }
+                // ⚠ 操作の欄は幅を決めておく（以前は「＋予定」「最優先」「なし」で幅が変わり、右の評価の列がずれた）
+                if (editable) Box(Modifier.width(ActionWidth), contentAlignment = Alignment.CenterEnd) {
                 if (at < 0) {
                     TextButton(onClick = {
                         if (count <= 0) {
@@ -182,15 +203,13 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
                 } else if (at > 0) {
                     TextButton(onClick = { setRanked(addToPlan(ranked, candidates, count, roster, p.pid, first = true)) }) { Text("最優先") }
                 }
+                }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
-        if (pages > 1) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { page = (page - 1).coerceAtLeast(0) }, enabled = page > 0) { Text("前へ") }
-                Text("${page + 1} / $pages", modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
-                OutlinedButton(onClick = { page = (page + 1).coerceAtMost(pages - 1) }, enabled = page + 1 < pages) { Text("次へ") }
-            }
+        // ⚠ ページ送りをやめ、続きを下に足す（以前は12人ごとに「前へ／次へ」で、見ていた所に戻れなかった）
+        if (pool.size > shown.size) {
+            OutlinedButton(onClick = { limit += PAGE * 2 }, modifier = Modifier.fillMaxWidth()) { Text("続きを表示（残り${pool.size - shown.size}人）") }
         }
     }
 }
@@ -209,7 +228,7 @@ private fun Fit(fit: TeamFit) {
     )
 }
 
-/** 甲子園で名を上げた人（「2025年夏の甲子園 ○○高のエース（ベスト4）」。サーバーが付ける） */
+/** 甲子園で名を上げた人（「2年目の夏の甲子園 ○○高のエース（ベスト4）」。サーバーが付ける。`koshienNoteOf`） */
 @Composable
 private fun Koshien(p: JsonObject) {
     val note = p.at("koshien").str() ?: return
@@ -253,3 +272,5 @@ private fun WeightsSection(model: AppViewModel, candidates: List<JsonObject>, ro
     }
 }
 
+/** 候補の行の操作（「＋予定」「最優先」）の欄の幅 */
+private val ActionWidth = 84.dp

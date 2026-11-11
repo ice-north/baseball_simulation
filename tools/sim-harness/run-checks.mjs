@@ -4,6 +4,7 @@
 //   node tools/sim-harness/run-checks.mjs check    # コミット前・CI（全部。progression は除く）
 //   node tools/sim-harness/run-checks.mjs full     # check ＋ progression
 //   node tools/sim-harness/run-checks.mjs online   # オンライン版の検査だけ
+//   node tools/sim-harness/run-checks.mjs online-ui  # オンラインの画面検査（dist を開く。サーバー不要。先に vite build）
 //   node tools/sim-harness/run-checks.mjs check --serial   # 1本ずつ（出力を追いたいとき）
 //   node tools/sim-harness/run-checks.mjs check -j 2       # 同時に走らせる数を決める
 //   node tools/sim-harness/run-checks.mjs season-check online-parity-check  # 名前で選ぶ
@@ -27,9 +28,9 @@ const harness = (name) => join('tools', 'sim-harness', `${name}.mjs`);
 const CHECKS = [
   { name: 'lint', group: 'quick', slow: 5, args: ['node_modules/eslint/bin/eslint.js', 'src', '--quiet'] },
   { name: 'scope-check', group: 'quick', slow: 3 },
-  { name: 'save-check', group: 'quick', slow: 1 },
+  { name: 'save-check', group: 'quick', slow: 4 },
   { name: 'review-check', group: 'quick', slow: 1 },
-  { name: 'oneplayer-fix-check', group: 'quick', slow: 2 },
+  { name: 'oneplayer-fix-check', group: 'quick', slow: 20 },
   { name: 'sim-integrity-check', group: 'quick', slow: 4 },
   { name: 'season-check', group: 'quick', slow: 8 },
   { name: 'draft-check', group: 'quick', slow: 8 },
@@ -55,22 +56,23 @@ const CHECKS = [
   { name: 'online-lineup-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-pitching-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stove-check', group: 'quick', online: true, slow: 1 },
+  { name: 'online-camp-target-check', group: 'quick', online: true, slow: 6 },
   { name: 'online-migration-check', group: 'check', online: true, slow: 21 },
   { name: 'online-join-check', group: 'check', online: true, slow: 9 },
-  { name: 'online-deadline-check', group: 'check', online: true, slow: 25 },
-  { name: 'online-testmode-check', group: 'check', online: true, slow: 10 },
+  { name: 'online-deadline-check', group: 'check', online: true, slow: 85 },
+  { name: 'online-testmode-check', group: 'check', online: true, slow: 60 },
   { name: 'online-lineup-port-check', group: 'check', online: true, slow: 16 },
-  { name: 'online-tryout-plan-check', group: 'check', online: true, slow: 10 },
-  { name: 'online-pack-check', group: 'check', online: true, slow: 12 },
-  { name: 'online-board-check', group: 'check', online: true, slow: 20 },
-  { name: 'online-camp-check', group: 'check', online: true, slow: 25 },
+  { name: 'online-tryout-plan-check', group: 'check', online: true, slow: 30 },
+  { name: 'online-pack-check', group: 'check', online: true, slow: 45 },
+  { name: 'online-board-check', group: 'check', online: true, slow: 85 },
+  { name: 'online-camp-check', group: 'check', online: true, slow: 165 },
   { name: 'online-trade-check', group: 'check', online: true, slow: 120 },
-  { name: 'online-convert-check', group: 'check', online: true, slow: 15 },
+  { name: 'online-convert-check', group: 'check', online: true, slow: 30 },
   { name: 'online-two-way-check', group: 'check', online: true, slow: 15 },
   { name: 'online-parity-check', group: 'check', online: true, slow: 75 },
   { name: 'online-service-check', group: 'check', online: true, slow: 55 },
   { name: 'online-storage-check', group: 'check', online: true, slow: 3 },
-  { name: 'online-parts-check', group: 'check', online: true, slow: 6 },
+  { name: 'online-parts-check', group: 'check', online: true, slow: 45 },
   { name: 'online-roster-recovery-check', group: 'check', online: true, slow: 27 },
   { name: 'online-snapshot-check', group: 'check', online: true, slow: 8 },
   { name: 'online-records-check', group: 'check', online: true, slow: 52 },
@@ -81,28 +83,37 @@ const CHECKS = [
   { name: 'progression-check', group: 'full', slow: 38 },
 ];
 
-// ここに無い *-check.mjs は、別の手順で回すもの。ブラウザやサーバーが要る画面検査と、
-// 10分近くかかる通年検査（CI では別のジョブ）。
+// オンラインの画面検査のうち、配布HTML（dist/index.html）を開くだけでサーバーが要らないもの。
+// `online-ui` で1本ずつ回す（ブラウザを開くので同時に走らせない）。1本落ちても残りは回し、
+// 最後にまとめて落ちたものを出す。CI の ui ジョブもこれを呼ぶ（`check:online:dist-ui`）。
+// ⚠ 画面検査を足したら、サーバーが要らないならここ、要るなら SEPARATE に足す
+const DIST_UI = [
+  { name: 'online-lineup-board-ui-check', slow: 25 }, // check:online:lineup-ui
+  { name: 'online-mobile-lineup-ui-check', slow: 20 }, // check:online:mobile-lineup-ui
+  { name: 'online-trade-ui-check', slow: 35 }, // check:online:trade-ui
+  { name: 'online-join-ui-check', slow: 15 }, // check:online:join-ui
+  { name: 'online-staff-ui-check', slow: 10 }, // check:online:staff-ui
+  { name: 'online-auth-ui-check', slow: 6 }, // check:online:auth-ui
+  { name: 'online-edit-ui-check', slow: 10 }, // check:online:edit-ui
+  { name: 'online-label-ui-check', slow: 17 }, // check:online:label-ui
+  { name: 'online-replay-ui-check', slow: 38 }, // check:online:replay-ui
+  { name: 'online-mobile-gameplay-ui-check', slow: 49 }, // check:online:mobile-gameplay-ui
+];
+
+// ここに無い *-check.mjs は、別の手順で回すもの。サーバーやブラウザが要る通し検査と、
+// 長くかかる通年検査（CI では別の手順・ジョブ）。
 const SEPARATE = [
   'online-engine-check', // check:online:season
-  'online-ui-check',
-  'online-auth-ui-check',
-  'online-edit-ui-check',
-  'online-lineup-board-ui-check', // check:online:lineup-ui（dist を開く。サーバー不要）
-  'online-trade-ui-check', // check:online:trade-ui（dist を開く。サーバー不要）
-  'online-replay-ui-check',
-  'online-mobile-gameplay-ui-check',
-  'online-label-ui-check',
-  'online-join-ui-check', // check:online:join-ui（dist を開く。サーバー不要）
-  'online-staff-ui-check', // check:online:staff-ui（dist を開く。サーバー不要）
+  'online-ui-check', // check:online:ui（開発サーバー2つが要る）
   'singleplayer-ui-check', // check:ui
+  'singleplayer-yearend-ui-check', // check:ui:yearend（5モードで1年目のオフから2年目の開幕まで）
 ];
 
 const LEVEL = { quick: 0, check: 1, full: 2 };
 
 // 検査を足したのに CHECKS へ書き忘れると、誰も回さないまま腐る。ここで止める。
 function assertAllListed() {
-  const known = new Set([...CHECKS.map((c) => c.name), ...SEPARATE]);
+  const known = new Set([...CHECKS.map((c) => c.name), ...DIST_UI.map((c) => c.name), ...SEPARATE]);
   const missing = readdirSync(join(root, 'tools', 'sim-harness'))
     .filter((f) => f.endsWith('-check.mjs'))
     .map((f) => f.replace(/\.mjs$/, ''))
@@ -114,14 +125,16 @@ function assertAllListed() {
 }
 
 function parseArgs(argv) {
-  const opts = { jobs: availableParallelism(), names: [], preset: null };
+  const opts = { jobs: null, names: [], preset: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--serial') opts.jobs = 1;
     else if (a === '-j' || a === '--jobs') opts.jobs = Math.max(1, Number(argv[++i]) || 1);
-    else if (a in LEVEL || a === 'online') opts.preset = a;
+    else if (a in LEVEL || a === 'online' || a === 'online-ui') opts.preset = a;
     else opts.names.push(a);
   }
+  // 画面検査はブラウザを開くので、指定が無ければ1本ずつ
+  opts.jobs ??= opts.preset === 'online-ui' ? 1 : availableParallelism();
   if (process.env.SIM_HARNESS_JOBS)
     opts.jobs = Math.max(1, Number(process.env.SIM_HARNESS_JOBS) || 1);
   return opts;
@@ -138,6 +151,7 @@ function select({ preset, names }) {
     return CHECKS.filter((c) => names.includes(c.name));
   }
   if (preset === 'online') return CHECKS.filter((c) => c.online);
+  if (preset === 'online-ui') return DIST_UI;
   const level = LEVEL[preset ?? 'check'];
   return CHECKS.filter((c) => LEVEL[c.group] <= level);
 }

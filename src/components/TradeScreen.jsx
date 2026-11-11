@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityRank, getRankColor } from '../utils/constants.js';
@@ -7,6 +7,7 @@ import { deviationValue } from '../game/playerValue.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { reservePlayerIds } from '../state/playerIds.js';
+import ConfirmBar from './ConfirmBar.jsx';
 
 // チームが所属する独立リーグIDを返す（無ければ null）。
 // マーカー(independentLeagueId/corporateData)が欠落していても、WORLD_DATAの
@@ -88,6 +89,34 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
   const [tradeResult, setTradeResult] = useState(null);
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [tradeTab, setTradeTab] = useState('propose');
+  // 成立させる前の帯。{ type: 'propose' } 申し込む / { type: 'accept', proposal } 受ける。
+  // ⚠ 以前は「トレード提案」「承諾する」を1回押すだけで、相手が受ければその場で成立し
+  //    取り消せなかった（選手の入れ替えは名簿・打順まで書き換えるので戻せない）
+  const [pendingTrade, setPendingTrade] = useState(null);
+  // 帯は、出す選手・もらう選手・相手チーム・タブを替えたら落とす。
+  // ⚠ 以前は落とさず、相手チームを替えると帯が隠れるだけで、新しい相手の選手を選ぶと
+  //    「トレード提案」を押していないのに新しい相手への帯が出た（受信提案の「承諾する」も、
+  //    「断る」やタブの切り替えのあと受信提案へ戻ると帯が残っていた）
+  // 選び直したら前の結果の知らせも消す（別の組み合わせの結果に見える）
+  const selectMyPlayer = (p) => { setPendingTrade(null); setTradeResult(null); setSelectedMyPlayer(p); };
+  const selectTargetPlayer = (p) => { setPendingTrade(null); setTradeResult(null); setSelectedTargetPlayer(p); };
+  const changeTargetTeam = (team) => { setPendingTrade(null); setTradeResult(null); setSelectedTargetTeam(team); setSelectedTargetPlayer(null); };
+  const changeTab = (tab) => { setPendingTrade(null); setTradeTab(tab); };
+  // 結果の知らせは押したボタンの近くに出して、画面の外なら見える所まで送る。
+  // ⚠ 以前は画面の上（タブの下）にしか出ず、1280×720 で表の下の「申し込む」を押すと、
+  //    成立したのか断られたのかが見えなかった（知らせは y=132〜178、ボタンは y=831）
+  const resultRef = useRef(null);
+  useEffect(() => {
+    if (tradeResult) resultRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [tradeResult]);
+  const resultNote = (where) => tradeResult?.where === where && (
+    <div ref={resultRef} role="status" data-testid="trade-result"
+      className={`px-4 py-3 rounded-xl text-sm font-semibold border bg-surface-2 ${
+        tradeResult.success ? 'text-green-300 border-green-500/70' : 'text-red-300 border-red-500/70'
+      }`}>
+      {tradeResult.message}
+    </div>
+  );
 
   const myTeam = TEAMS_DATA[userTeamName];
 
@@ -241,7 +270,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
     if (myIdx === -1) myIdx = myTeamData.players.findIndex(p => p.id === proposal.wantedPlayer.id);
     let theirIdx = targetTeam.players.indexOf(proposal.offeredPlayer);
     if (theirIdx === -1) theirIdx = targetTeam.players.findIndex(p => p.id === proposal.offeredPlayer.id);
-    if (myIdx === -1 || theirIdx === -1) { setTradeResult({ success: false, message: '選手が見つかりません' }); return; }
+    if (myIdx === -1 || theirIdx === -1) { setTradeResult({ success: false, message: '選手が見つかりません', where: 'inbox' }); return; }
 
     proposal.wantedPlayer.battingOrder = 0;
     proposal.offeredPlayer.battingOrder = 0;
@@ -252,8 +281,8 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
     givePlayerToTeam(myTeamData, proposal.offeredPlayer);
     givePlayerToTeam(targetTeam, proposal.wantedPlayer);
 
-    setTradeResult({ success: true, message: `トレード成立！ ${proposal.wantedPlayer.name} ⇄ ${proposal.offeredPlayer.name}（${proposal.fromTeam}）` });
-    setTradeTab('propose');
+    // 受けた所（受信提案）に残って、その枠の上に結果を出す
+    setTradeResult({ success: true, message: `トレード成立！ ${proposal.wantedPlayer.name} ⇄ ${proposal.offeredPlayer.name}（${proposal.fromTeam}）`, where: 'inbox' });
     setUpdateTrigger(prev => prev + 1);
   };
 
@@ -283,7 +312,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
       if (targetIdx === -1) targetIdx = targetTeam.players.findIndex(p => p.id === selectedTargetPlayer.id);
 
       if (myIdx === -1 || targetIdx === -1) {
-        setTradeResult({ success: false, message: '選手が見つかりません' });
+        setTradeResult({ success: false, message: '選手が見つかりません', where: 'propose' });
         return;
       }
 
@@ -299,12 +328,13 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
 
       setTradeResult({
         success: true,
-        message: `トレード成立！ ${selectedMyPlayer.name} ⇄ ${selectedTargetPlayer.name}`
+        message: `トレード成立！ ${selectedMyPlayer.name} ⇄ ${selectedTargetPlayer.name}`,
+        where: 'propose',
       });
       setSelectedMyPlayer(null);
       setSelectedTargetPlayer(null);
     } else {
-      setTradeResult({ success: false, message: result.reason });
+      setTradeResult({ success: false, message: result.reason, where: 'propose' });
     }
     setUpdateTrigger(prev => prev + 1);
   };
@@ -388,7 +418,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
     players, teamName, selectedPlayer, onSelect, title, titleColor,
     header, emptyMessage, keyPrefix,
   }) => (
-    <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden flex flex-col">
+    <div className="bg-surface-2 rounded-xl border border-gray-700/50 overflow-hidden flex flex-col">
       {header || (
         <div className="px-4 py-3 border-b border-gray-700/50 flex items-center gap-2">
           <h2 className={`font-semibold text-sm ${titleColor}`}>{title}</h2>
@@ -481,10 +511,12 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
   return (
     <div className="mx-auto p-4 max-w-7xl">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-white">トレード</h1>
+        {/* ⚠ 見出しは地色（明るい紙）の上なので text-ink。文字を載せる枠は不透明（bg-surface-2）にする。
+            半透明（gray-800/60〜80）だと紙が透けて、中の文字が読めなかった（index.css の「文字色の決まり」） */}
+        <h1 className="text-xl font-bold text-ink">トレード</h1>
         {onBack && (
-          <button onClick={onBack} className="px-3 py-1.5 bg-gray-700/80 text-gray-300 rounded-lg hover:bg-gray-600 transition text-sm">
-            戻る
+          <button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded-lg transition text-sm">
+            ← 戻る
           </button>
         )}
       </div>
@@ -492,7 +524,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
       {/* タブ切り替え */}
       <div className="flex gap-1.5 mb-5 bg-gray-800/60 rounded-xl p-1.5 border border-gray-700/50 w-fit">
         <button
-          onClick={() => setTradeTab('propose')}
+          onClick={() => changeTab('propose')}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
             tradeTab === 'propose' ? 'seg-on' : 'seg'
           }`}
@@ -500,7 +532,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
           提案する
         </button>
         <button
-          onClick={() => setTradeTab('inbox')}
+          onClick={() => changeTab('inbox')}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
             tradeTab === 'inbox' ? 'seg-on' : 'seg'
           }`}
@@ -514,20 +546,11 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
         </button>
       </div>
 
-      {tradeResult && (
-        <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-semibold border ${
-          tradeResult.success
-            ? 'bg-green-900/40 text-green-300 border-green-700/50'
-            : 'bg-red-900/40 text-red-300 border-red-700/50'
-        }`}>
-          {tradeResult.message}
-        </div>
-      )}
-
+      {tradeTab === 'inbox' && tradeResult?.where === 'inbox' && <div className="mb-4">{resultNote('inbox')}</div>}
       {tradeTab === 'inbox' && (
-        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden mb-5">
+        <div className="bg-surface-2 rounded-xl border border-gray-700/50 overflow-hidden mb-5">
           <div className="px-4 py-3 border-b border-gray-700/50">
-            <h2 className="font-semibold text-sm text-yellow-400">AIチームからの受信提案</h2>
+            <h2 className="font-semibold text-sm text-yellow-400">ほかの球団からの提案</h2>
             <p className="text-xs text-gray-400 mt-0.5">相手チームが欲しがっている選手と引き換えに提案が来ています</p>
           </div>
           {aiProposals.length === 0 ? (
@@ -566,13 +589,13 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => acceptAIProposal(proposal)}
+                      onClick={() => setPendingTrade({ type: 'accept', proposal })}
                       className="btn-primary px-4 py-1.5 rounded-lg text-sm font-semibold transition"
                     >
                       承諾する
                     </button>
                     <button
-                      onClick={() => setTradeTab('propose')}
+                      onClick={() => changeTab('propose')}
                       className="px-4 py-1.5 bg-gray-700/80 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition"
                     >
                       断る
@@ -590,7 +613,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
           players={myTeam.players || []}
           teamName={userTeamName}
           selectedPlayer={selectedMyPlayer}
-          onSelect={setSelectedMyPlayer}
+          onSelect={selectMyPlayer}
           title={`${userTeamName}（自チーム）`}
           titleColor="text-blue-400"
         />
@@ -599,7 +622,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
           players={TEAMS_DATA[selectedTargetTeam]?.players || []}
           teamName={selectedTargetTeam}
           selectedPlayer={selectedTargetPlayer}
-          onSelect={setSelectedTargetPlayer}
+          onSelect={selectTargetPlayer}
           keyPrefix="target"
           emptyMessage={selectedTargetTeam && TEAMS_DATA[selectedTargetTeam] ? null : 'チームを選択してください'}
           header={
@@ -607,7 +630,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
               <h2 className="font-semibold text-sm text-red-400">相手チーム</h2>
               <select
                 value={selectedTargetTeam}
-                onChange={(e) => { setSelectedTargetTeam(e.target.value); setSelectedTargetPlayer(null); }}
+                onChange={(e) => changeTargetTeam(e.target.value)}
                 className="bg-gray-700/80 border border-gray-600/50 text-white text-sm px-2.5 py-1 rounded-lg"
               >
                 <option value="">-- 選択 --</option>
@@ -624,7 +647,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
 
       {tradeTab === 'propose' && (
         /* トレード内容 */
-        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5">
+        <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-5">
           <h3 className="font-semibold text-white text-sm mb-4">トレード内容</h3>
           <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
             {renderPlayerCard(selectedMyPlayer, '放出', 'text-blue-400', 'bg-blue-950/40', userTeamName)}
@@ -633,7 +656,7 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
           </div>
           <div className="text-center mt-5">
             <button
-              onClick={executeTrade}
+              onClick={() => canTrade() && setPendingTrade({ type: 'propose' })}
               disabled={!canTrade()}
               className={`px-6 py-2.5 rounded-lg font-semibold text-sm transition ${
                 'btn-primary'
@@ -642,11 +665,38 @@ const TradeContent = ({ userTeamName, seasonData, onBack }) => {
               トレード提案
             </button>
             <p className="text-xs text-gray-400 mt-2">
-              相手チームがトレードを受け入れるかはAIが判断します
+              相手の球団が受けるかどうかは、出す選手ともらう選手の評価の差と年齢で決まります
             </p>
+            {tradeResult?.where === 'propose' && <div className="mt-3 text-left">{resultNote('propose')}</div>}
           </div>
         </div>
       )}
+
+      {tradeTab === 'propose' && pendingTrade?.type === 'propose' && canTrade() && (
+        <ConfirmBar
+          title={`${selectedTargetTeam}にトレードを申し込みますか？`}
+          detail={`出す: ${selectedMyPlayer.name}（${POSITION_NAMES[selectedMyPlayer.position]}・${selectedMyPlayer.age}歳）　もらう: ${selectedTargetPlayer.name}（${POSITION_NAMES[selectedTargetPlayer.position]}・${selectedTargetPlayer.age}歳）`}
+          note="相手が受けると、その場で成立します。成立したトレードは取り消せません。"
+          confirmLabel="申し込む"
+          confirmClass="btn-warn"
+          onConfirm={() => { setPendingTrade(null); executeTrade(); }}
+          onCancel={() => setPendingTrade(null)}
+        />
+      )}
+      {tradeTab === 'inbox' && pendingTrade?.type === 'accept' && (() => {
+        const { proposal } = pendingTrade;
+        return (
+          <ConfirmBar
+            title={`${proposal.fromTeam}のトレードの提案を受けますか？`}
+            detail={`出す: ${proposal.wantedPlayer.name}（${POSITION_NAMES[proposal.wantedPlayer.position]}・${proposal.wantedPlayer.age}歳）　もらう: ${proposal.offeredPlayer.name}（${POSITION_NAMES[proposal.offeredPlayer.position]}・${proposal.offeredPlayer.age}歳）`}
+            note="受けるとその場で成立します。成立したトレードは取り消せません。"
+            confirmLabel="受ける"
+            confirmClass="btn-warn"
+            onConfirm={() => { setPendingTrade(null); acceptAIProposal(proposal); }}
+            onCancel={() => setPendingTrade(null)}
+          />
+        );
+      })()}
     </div>
   );
 };

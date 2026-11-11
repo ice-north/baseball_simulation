@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PROGRESSION_TIMES } from './shared.js';
+import { PROGRESSION_TIMES, CAMP_ROUNDS, TURN_MINUTES, RETRY_ON_REVISION as RETRY_TYPES } from './shared.js';
 import './online.css';
 import { api, AUTH_KEY } from './api.js';
 import { Login, JoinLeague } from './LeaguePanels.jsx';
@@ -18,6 +18,7 @@ import { ActionContext } from './ActionContext.jsx';
 import { useMobile } from './useMobile.js';
 import { setTeamLabels } from './gameText.js';
 import { Drafts } from './Drafts.jsx';
+import { staffModesDoneText } from './notices.js';
 import {
   readAuth,
   sameSession,
@@ -51,6 +52,8 @@ const MOBILE_TABS = new Set([
   'decisions',
   // 指導者（PCの「指導者」ページと同じ中身。ホームの入口から開く）
   'staff',
+  // トレード（スマホは届いた提案への返事だけ。ホームの帯から開く）
+  'transfer',
 ]);
 const MOBILE_TAB_FOR = {
   rotation: 'lineup',
@@ -60,6 +63,10 @@ const MOBILE_TAB_FOR = {
 const mobileTab = (screen) =>
   MOBILE_TAB_FOR[screen] || (MOBILE_TABS.has(screen) ? screen : 'today');
 
+// 操作が済んだときの文。文か、`(送った中身, 送る前のビュー) => 文` で書く。
+// ⚠ **命令を足したらここにも足すこと**。無いと「保存しました」だけになり、決定したのか
+//    下書きなのか、トレードが成立したのか申し込んだだけなのかが分からなかった
+// ⚠ 画面の側で文を決めたいとき（トレードの相手の答えなど）は `command` の `message` で渡す
 const COMMAND_MESSAGES = {
   create: 'リーグを作成しました',
   join: 'リーグに参加しました',
@@ -71,13 +78,37 @@ const COMMAND_MESSAGES = {
   step: 'ターンを進めました',
   testmode: '検証モードを切り替えました',
   resolve: '手続きを締め切りました',
-  staffModes: '任せ方を変えました',
+  // ⚠ 最後の1人が手続きの分野を任せると、その場で手続きが決まる。決まったら言い分ける（`notices.js`）
+  staffModes: staffModesDoneText,
   staff: '指導者を入れ替えました',
   reset: 'すべて消しました。リーグを作り直してください',
+  // 手続きの提出。決定・下書き・決定の取り消しで文を変える
+  submit: (payload, before) =>
+    payload?.ready
+      ? '決定しました'
+      : before?.phase?.submission?.ready
+        ? '決定を取り消しました（下書きとして残っています）'
+        : '下書きを保存しました',
+  campRound: (payload) =>
+    Number(payload?.round) >= CAMP_ROUNDS
+      ? `第${payload.round}クールの練習を実行しました。キャンプの練習はこれで終わりです`
+      : `第${payload?.round}クールの練習を実行しました`,
+  lineup: '編成を保存しました',
+  profile: '名前を保存しました',
+  convert: '守備位置を変えました（打順と投手起用は組み直しました）',
+  pack: '初期メンバーのセットを選びました',
+  tradeOffer: 'トレードを提案しました',
+  tradeRespond: (payload) =>
+    payload?.action === 'accept'
+      ? 'トレードが成立しました'
+      : payload?.action === 'counter'
+        ? '逆提案を返しました'
+        : '提案を断りました',
 };
 
-// 版のずれ（`code: 'revision'`）だけなら最新の版で1回だけ送り直す命令（`command` の注記）
-const RETRY_ON_REVISION = new Set(['lineup', 'submit', 'campRound']);
+// 版のずれ（`code: 'revision'`）だけなら最新の版で1回だけ送り直す命令（`command` の注記）。
+// ⚠ 一覧は `shared.js` に1つだけ置く（アプリも同じ一覧を写して使う）
+const RETRY_ON_REVISION = new Set(RETRY_TYPES);
 
 export default function OnlineApp() {
   const [auth, setAuth] = useState(readAuth);
@@ -211,6 +242,10 @@ export default function OnlineApp() {
     )
       acceptView(result, current);
   }, [acceptView]);
+  // 定期の読み直しが出した失敗の文言。⚠ **次に読み直せたら、その文言だけ消す**。
+  //    以前は読み直しに成功しても赤い帯が残り、直ったのに「つながらない」と出続けた。
+  //    操作の失敗（保存できなかった等）の文言は、読み直しでは消さない
+  const pollError = useRef('');
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
@@ -223,10 +258,18 @@ export default function OnlineApp() {
       try {
         const sequence = ++viewSequence.current;
         const result = await api('view', auth, undefined, sinceQuery());
-        if (!cancelled && sequence === viewSequence.current)
-          acceptView(result, auth);
+        if (cancelled) return;
+        if (sequence === viewSequence.current) acceptView(result, auth);
+        const failed = pollError.current;
+        if (failed) {
+          pollError.current = '';
+          setError((shown) => (shown === failed ? '' : shown));
+        }
       } catch (e) {
-        if (!cancelled) setError(e.message);
+        if (!cancelled) {
+          pollError.current = e.message;
+          setError(e.message);
+        }
       }
     };
     if (!auth) return;
@@ -308,6 +351,7 @@ export default function OnlineApp() {
     viewSequence.current++;
     setBusy(true);
     setError('');
+    pollError.current = '';
     setMessage('');
     try {
       await fn();
@@ -325,8 +369,13 @@ export default function OnlineApp() {
       setBusy(false);
     }
   };
-  const command = async (type, payload) => {
+  // 済んだら画面に出した文を返す。`message` は文か `(送ったあとのビュー, 送る前のビュー) => 文`
+  //    （画面の側で結果を言い分けたいとき。返したものが空なら `COMMAND_MESSAGES` の文）
+  // ⚠ `toast: false` は文を返すだけで、右上（PCは右下）の帯に出さない。画面の側が同じ文を
+  //    すぐ横に出すときに使う（スマホのトレードの返事。帯が枠内の文に重なって2つ出ていた）
+  const command = async (type, payload, { message, toast = true } = {}) => {
     const current = authRef.current;
+    const before = viewRef.current;
     const checkSession = (credentials) => {
       if (!sameSession(readAuth(), credentials))
         throw new Error(
@@ -351,7 +400,7 @@ export default function OnlineApp() {
       result = await send(viewRef.current?.revision || 0);
     } catch (error) {
       // ⚠ **編成と手続きの提出は、版のずれだけなら最新の版で1回だけ送り直す**。
-      //    版はリーグ全体で1つなので、毎正時の進行や他の参加者の操作だけで
+      //    版はリーグ全体で1つなので、定時の進行や他の参加者の操作だけで
       //    「他の操作で更新されました」になり、編成を保存し直す羽目になっていた。
       //    どちらも自分の保存済みの内容（`baseLineup` / `baseSubmission`）で
       //    本当の食い違いを別に確かめているので、送り直しても上書き事故は起きない。
@@ -374,7 +423,13 @@ export default function OnlineApp() {
         acceptView(result.view, current);
     } else await reload();
     // ⚠ 操作ごとに文言を変える。作成や参加でも「保存しました」と出ていた
-    setMessage(COMMAND_MESSAGES[type] || '保存しました');
+    const known = COMMAND_MESSAGES[type];
+    const text =
+      (typeof message === 'function' ? message(viewRef.current, before) : message) ||
+      (typeof known === 'function' ? known(payload, before, viewRef.current) : known) ||
+      '保存しました';
+    if (toast) setMessage(text);
+    return text;
   };
   const login = (fields) =>
     run(async () => saveAuth(await api('login', null, fields)));
@@ -391,7 +446,7 @@ export default function OnlineApp() {
       writable: !!view?.writable,
       busy,
       run: (fn) => latest.current.run(fn),
-      command: (type, payload) => latest.current.command(type, payload),
+      command: (...args) => latest.current.command(...args),
     }),
     [view?.teamName, view?.writable, busy],
   );
@@ -491,7 +546,13 @@ export default function OnlineApp() {
         ) : !auth ? (
           <Login local={config.local} login={login} busy={busy} />
         ) : !view ? (
-          <p>リーグを読み込んでいます…</p>
+          /* ⚠ 読めなかったときに「読み込んでいます…」のまま残さない（上の帯に理由。
+             定期の読み直し・画面に戻ったときにも読み直す） */
+          <p>
+            {error
+              ? 'リーグを読み込めませんでした。上の「最新状態を確認」を押すか、しばらく待つと自動で読み直します。'
+              : 'リーグを読み込んでいます…'}
+          </p>
         ) : view.joinRequired ? (
           <JoinLeague
             busy={busy || !view.writable}
@@ -519,8 +580,10 @@ export default function OnlineApp() {
                 >
                   更新を取り込む
                 </button>
+                {/* ⚠ 自動処理（定期の進行）は**5分ごと**に回る（`supabase/cron.example.sql`）。
+                    以前は「次の正時」と書いており、毎正時に進めていた頃の説明が残っていた */}
                 <p className="online-muted online-spaced">
-                  次の正時の自動処理でも取り込まれます。取り込めない形式だった場合は、押すと理由が表示されます。
+                  数分以内に自動でも取り込まれます。取り込めない形式だった場合は、押すと理由が表示されます。
                 </p>
               </>
             ) : (
@@ -629,8 +692,11 @@ export default function OnlineApp() {
             <section className="online-card">
               <h2>進行時刻（日本時間）</h2>
               <p>{PROGRESSION_TIMES.join(' / ')}</p>
+              {/* ⚠ 「1日進みます」だけだと、実時間の1日かゲーム内の1日か分からない。
+                  刻み（`TURN_MINUTES`）も手で書かない */}
               <p>
-                各時刻に1日進みます。決定待ち・停止中の分は後からまとめて進めません。
+                {TURN_MINUTES}分ごとに1ターン（ゲーム内の1日）進みます。月〜金は試合、土日は手続きです。
+                決定待ち・停止中の分は後からまとめて進めません。
               </p>
               <button autoFocus onClick={() => timesDialog.current.close()}>
                 閉じる

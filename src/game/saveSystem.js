@@ -175,6 +175,11 @@ export const saveEmergency = async (gameState) => {
   }
 };
 
+// 保存の中の自分のチーム名（スロット一覧・緊急バックアップの表示用）
+const saveTeamName = (data) => data.seasonData?.settings?.teamNames?.[0]
+  || (data.leagueConfig?.leagues || []).flatMap(l => l.teams || [])[0]
+  || null;
+
 // 緊急保存の有無・メタ情報
 export const getEmergencyInfo = async () => {
   try {
@@ -182,7 +187,13 @@ export const getEmergencyInfo = async () => {
     if (!raw) return null;
     const data = await decompressDataAsync(raw);
     if (!data) return null;
-    return { timestamp: data.timestamp || null, year: data.seasonData?.year ?? null, gameMode: data.gameMode || null };
+    return {
+      timestamp: data.timestamp || null,
+      year: data.seasonData?.year ?? null,
+      date: data.seasonData?.currentDate || null,
+      teamName: saveTeamName(data),
+      gameMode: data.gameMode || null,
+    };
   } catch { return null; }
 };
 
@@ -267,9 +278,7 @@ export const readSaveSlots = async () => {
         year: data.seasonData?.year || 1,
         date: data.seasonData?.currentDate || { month: 4, day: 1 },
         phase: data.seasonData?.phase || 'regular_season',
-        teamName: data.seasonData?.settings?.teamNames?.[0]
-          || (data.leagueConfig?.leagues || []).flatMap(l => l.teams || [])[0]
-          || null,
+        teamName: saveTeamName(data),
         version: data.version || 'unknown'
       });
     } catch { results.push(null); }
@@ -605,6 +614,47 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
     return { success: false, error: 'ロードに失敗しました: ' + error.message };
   }
 };
+
+/**
+ * ロードしたあとに開く画面（`App.jsx` の `applyLoadedGame` が使う）。
+ *
+ * オフシーズン画面で保存したならそこへ戻す（12/1等の日付が日程画面に出るのを防ぐ）。
+ *
+ * ⚠ **`phase` で判定してはいけない**。`getCurrentPhase` は独立・社会人モードで
+ * **10/21〜11/29 の「イベントの谷間」も `off_season` を返す**（プレーオフ後、
+ * ドラフト前後、契約更改の前後…）。そのため 11/5 のセーブをロードすると
+ * 契約更改(11/9)・トライアウト/スカウト入団(11/10)・年度末決算(11/30)を
+ * まるごと飛ばして翌年へ進んでしまっていた（実測: 社会人・独立で再現。
+ * 大学モードは `universityMode` 分岐が 11/29 まで REGULAR_SEASON なので無事だった）。
+ * 保存時にどの画面を開いていたかは `managementView` に入っているのでそれを使う。
+ * @returns {{ screenMode: string, gameFlowState: string, managementView: string }}
+ */
+export function resumeTargetOf(saveData) {
+  // ⚠ **トライアウトの途中で保存したものは、トライアウトの続きへ戻す**（途中の指名は
+  //    `seasonData.tryoutDraft`。`tryoutDraftState.js`）。以前は日程画面へ戻していたため、
+  //    毎年のもの（11/10）はトライアウトの日が過ぎた扱いになってその年のトライアウトが
+  //    飛び、初回（新しく始めた直後）は選手のいない名簿のまま本編が始まっていた。
+  //    続きを持たない古い保存は、トライアウトを最初からやり直す。
+  if (saveData?.gameFlowState === 'newgame_tryout') {
+    return { screenMode: 'start', gameFlowState: 'newgame_tryout', managementView: 'dateprogress' };
+  }
+  const savedView = saveData?.managementView;
+  const d = saveData?.seasonData?.currentDate;
+  // managementView を持たない旧セーブ向けの保険。12月以降だけオフシーズン扱い
+  const deepOffseason = (d?.month ?? 0) >= 12 || (d?.month === 11 && (d?.day ?? 0) >= 30);
+  // ⚠ **年度替わりの手続きの画面も、保存したところへ戻す**。「2年目へ進む」で
+  //    日付が1月1日に替わった瞬間にオートセーブが走り、その時の画面は
+  //    規定の見直し・キャンプ（社会人・大学）・背番号のどれか。以前は全部
+  //    日程画面に戻していたため、ロードすると規定・キャンプを飛ばし、
+  //    独立リーグでは日程が空のまま（日程は規定の確定で作る）試合が無くなった。
+  const RESUMABLE_VIEWS = ['regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'camp', 'jersey', 'tryout'];
+  const managementView = RESUMABLE_VIEWS.includes(savedView)
+    ? savedView
+    : (savedView === 'offseason' || (!savedView && deepOffseason))
+      ? 'offseason'
+      : 'dateprogress';
+  return { screenMode: 'management', gameFlowState: 'season', managementView };
+}
 
 // セーブデータを削除（async版）
 export const deleteSaveSlot = async (slotIndex) => {

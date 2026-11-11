@@ -11,6 +11,9 @@ import { raceText, milestoneText, worldText } from './chronicleText.js';
 //    数字はサーバーが作る（`server/chronicle.mjs`）。画面は並べるだけ。
 // ⚠ 文はアプリ（`mobile/.../Chronicle.kt`）と同じにすること（`chronicleText.js`）。
 // ⚠ 自球団もサーバーから読み直す（`TeamRoster` の `always`）。球団史はビューに載せていない。
+// ⚠ 年は**「N年目」**で出す。リーグの年は1, 2, …と数えるので「1年」だと西暦や
+//    在籍年数に読める（ほかのページの「1年目オフの成長」「1年目 · 次の進行」と揃える）。
+//    節目も年を出す（月日だけだと何年目の話か分からなかった。アプリは年を出している）。
 // ============================================================
 
 function Seasons({ seasons }) {
@@ -30,7 +33,7 @@ function Seasons({ seasons }) {
       <tbody>
         {seasons.map((s) => (
           <tr key={s.year}>
-            <th>{s.year}年</th>
+            <th>{s.year}年目</th>
             <td>{s.league || '—'}</td>
             <td>{s.rank ? `${s.rank}位` : '—'}</td>
             <td>
@@ -60,7 +63,7 @@ function Records({ records }) {
                 <span className="online-leader-rank" data-rank={i + 1}>{i + 1}</span>
                 <span className="online-leader-name">
                   {x.name}
-                  <small>{x.year}年{x.current ? '（今季）' : ''}</small>
+                  <small>{x.year}年目{x.current ? '（今季）' : ''}</small>
                 </span>
                 <span className="online-leader-value">{x.value}</span>
               </li>
@@ -92,7 +95,7 @@ function Retired({ list }) {
       {list.map((r, i) => (
         <article key={i}>
           <b>
-            {r.year}年 {r.name}（{r.age}歳）{r.hallOfFame ? ' 殿堂入り' : ''}
+            {r.year}年目 {r.name}（{r.age}歳）{r.hallOfFame ? ' 殿堂入り' : ''}
           </b>
           <span>
             {[r.seasons ? `在籍${r.seasons}年` : null, r.line, r.secondCareer && `→ ${r.secondCareer}`]
@@ -112,7 +115,7 @@ function Milestones({ list, showTeam = false }) {
       {list.map((m, i) => (
         <article key={i}>
           <b>
-            {m.month}月{m.day}日 {m.name}
+            {m.year}年目 {m.month}月{m.day}日 {m.name}
             {showTeam && <small>（{teamShort(m.team)}）</small>}
           </b>
           <span>{milestoneText(m)}</span>
@@ -174,7 +177,7 @@ export function LeagueTopics({ view }) {
             {world.map(({ text, year, i }) => (
               <article key={`w:${i}`}>
                 <b>
-                  {year}年 {text.head}
+                  {year}年目 {text.head}
                 </b>
                 <span>{text.body}</span>
               </article>

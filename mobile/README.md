@@ -31,9 +31,27 @@
 ## サーバーとの約束（壊さないために）
 
 - アプリは `?action=login / refresh / view / defaults / team / player / games / game / command` を使う。ビューの項目名を変えるとアプリが壊れる。
+- `view` には手元のビューの世代 `since`（ビューの `viewGeneration`）を添える。世代が同じ（かつ保存の版が今のサーバーと同じ）なら、サーバーはビューを送らず `{ unchanged: true, viewGeneration, writable }` だけ返す（`server/leagueService.mjs` の `view`）。アプリはこのとき `writable`（書き込めるか）だけを合わせる。世代を持たない保存先（開発サーバーの `FileStore`）は `since` を無視して毎回全部返す。
+- `command` の返事の `view` は最新のビューで、`view.viewGeneration` に公開した世代が入る（`server/storage/supabaseStore.mjs`）。アプリは読み直さずにこれを使い、次の `since` にする。返事に `view` が無ければ読み直す。
+- `games` は `year`・`page`・`scope`（`own` / `league`）・`size`（1〜200。既定は6）を受ける。紙面は `size=200` で自球団の1シーズンを1回で読む（`OWN_HISTORY_PAGE`）。
+- 試合の勝敗投手（ビューの `results`・`games`・`game` の `decisions` の `winningPitcher` / `losingPitcher` / `savePitcher` / `holdPitchers`）は `{ id, name }` だけ（`server/recordedViews.mjs` の `decisionRefs`）。能力や成績は載らないので、自球団の投手は名簿（ビューの `roster`）から `id` で引く。
+- タイトル争い（ビューの `leaders` の `rows`）の行は `{ id, name, team, label, value }`（`server/leagueBoard.mjs` の `leagueLeaders`）。アプリは行を押すと球団の名簿から `id` で選手を探し、名前では探し直さない（同じ球団の同名の別人を開かないため。`shared/.../PlayerLookup.kt`）。`id` の無い古いサーバーの行だけ名前で探す。
 - 編成の保存（`command` の `lineup`）は、ビューの `lineup` を**丸ごと**送り返し、`baseLineup` に編集前の塊を添える。アプリが知らない項目もそのまま返すので、編成に項目を足すのは構わない。
-- `shared/src/jvmTest/resources/view-running.json` は開発サーバーの実際のビュー。ビューの形を変えたら、これを取り直して `ViewTest` が通ることを確かめる。
-- `shared/src/jvmTest/resources/staff-view.json` は指導者（監督・コーチ）の入ったビュー（2年目のキャンプ）。指導者の形（`server/coachView.mjs`）を変えたら `WRITE_APP_FIXTURE=1 node tools/sim-harness/online-coach-check.mjs` で取り直し、`StaffTest` が通ることを確かめる。
+- 手続きの任せ方は、ビューの `phase.delegated`（自分がその手続きを指導者に任せているか）と `members` の `ready`・`cpu`・`delegated` を読む。任せた手続きは決定の帯を出さず、`defaults` の案（指導者の案）を読むだけで見せる。待たれている最後の1人が手続きの分野を「任せる」にして保存すると、サーバーはその場で手続きを決めるので、アプリは送る前に確かめる（`shared/.../Staff.kt` の `delegationSettles`。`server/leagueEngine.mjs` の `waitsFor` と同じ見方）。
+
+### 検査に使う実際の窓口の答え（`shared/src/jvmTest/resources/`）
+
+ビュー・窓口の形（`server/projection.mjs` など）を変えたら、使っている物を取り直して `./gradlew -PsharedOnly :shared:jvmTest` が通ることを確かめる。どれもリポジトリの根から動かす。
+
+| ファイル | 中身 | 作り方 | 使う検査 |
+| --- | --- | --- | --- |
+| `view-running.json` | 開幕3日目（4月4日）のビュー | `node mobile/tools/view-fixture.mjs` のあと、必ず `node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json` | `ViewTest`・`LogicTest`・`TipsTest`・`TwoWayTest` |
+| `front/view.json`・`game.json`・`games.json`・`team.json` | 同じリーグの6月12日のビュー、自球団の最新の試合の詳細、今季の自球団の試合、次の相手の名簿 | 同じ `view-fixture.mjs` が一緒に書き出す | `FrontPageTest`（紙面） |
+| `chronicle/view-late.json`・`view-offseason.json`・`team.json` | 1年目の終盤（マジックが出る頃）のビュー、2年目のキャンプのビュー（引退・裏の大会）、球団史 | `node mobile/tools/chronicle-fixtures.mjs`（引退が出ない年は1人分を作って載せる） | `ChronicleTest`（年代記の紙面） |
+| `staff-view.json` | 指導者（監督・コーチ）の入ったビュー（2年目のキャンプ） | `WRITE_APP_FIXTURE=1 node tools/sim-harness/online-coach-check.mjs` | `StaffTest` |
+| `logic-expected.json` | Web 版の計算の答え（`view-running.json` の名簿から） | 上の `expect-logic.mjs`。CI は `--check` | `LogicTest` |
+
+- ⚠ 試合の結果は命令の `requestId` で決まる（同じコードなら同じ答え）。`ViewTest` の紙面の検査は「4月4日の自球団の最新の試合が負け」を前提にしているので、`view-fixture.mjs` はその形になる回まで `requestId` を変えて作り直す。試合の計算を変えて30回で合わなくなったら、検査の期待値をビューの中身から作る形に直すかを決める（`docs/audit/2026-11-08.md` の判断待ち 2）。
 
 ## ビルド
 

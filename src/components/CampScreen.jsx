@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import TutorialHint from './TutorialHint.jsx';
+import ConfirmBar, { keepAboveConfirmBar } from './ConfirmBar.jsx';
+import { useEscapeToClose } from './useEscapeToClose.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { DIRECTIONS, PHASES, resolveTraining, moodMultiplier, describeMood, playerWish } from '../season/trainingPolicy.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
@@ -316,6 +318,67 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     return stats;
   });
 
+  // 社会人の大学派遣は、先に派遣先の大学を窓で選ぶ（選んだら下の帯で派遣を決める）
+  const pickingUniversity = !!dispatchConfirm && gameMode === 'corporate'
+    && dispatchConfirm.destKey === 'university' && !dispatchConfirm.universityId;
+  useEscapeToClose(() => setDispatchConfirm(null), pickingUniversity);
+
+  // 練習を組む列（メイン・サブ・練習側・派遣）は表の右に固定し、読むだけの列がその下を横に流れる。
+  // ⚠ 以前は 1280幅で表が枠より約200px広く、右端の「サブ」「練習側」「派遣」が枠の外にあった
+  //    （横に送らないと練習を組めず、案内の「野手へ…」「投手へ」も見えなかった）。
+  //    固定する位置（right）は自分より右の列の幅の和。列の幅は中身（球種の選択が増えるなど）で
+  //    変わるので、描くたびと表の大きさが変わるたびに測り直す
+  const campTableRef = useRef(null);
+  useLayoutEffect(() => {
+    const table = campTableRef.current;
+    if (!table) return undefined;
+    const place = () => {
+      const heads = [...table.querySelectorAll('thead th[data-op]')];
+      let right = 0;
+      for (let i = heads.length - 1; i >= 0; i--) {
+        table.style.setProperty(`--op-right-${heads[i].dataset.op}`, `${right}px`);
+        right += heads[i].getBoundingClientRect().width;
+      }
+    };
+    place();
+    if (typeof window === 'undefined' || !window.ResizeObserver) return undefined;
+    const observer = new window.ResizeObserver(place);
+    observer.observe(table);
+    return () => observer.disconnect();
+  });
+  // 右に固定する列の見た目（地は不透明に。下を流れる列が透けない）。左の区切りは border だと
+  // 表の border-collapse で固定した列と一緒に動かないので、内側の影で引く
+  const opCell = (key, extra = '') => ({
+    className: `sticky z-[1] bg-surface-1 ${key === 'main' ? 'shadow-[inset_1px_0_0_theme(colors.gray.600)] ' : ''}${extra}`,
+    style: { right: `var(--op-right-${key}, 0px)` },
+  });
+
+  // キャンプを終える（派遣の結果もここで決まる）。取り消せないので帯で決める
+  const finalizeCamp = () => {
+    setShowCampReview(false);
+    const results = [];
+    Object.values(TEAMS_DATA).forEach(team => {
+      team.players?.forEach(p => {
+        if (p.dispatchedThisCamp) {
+          const { growthReport, outcome, universityName } = resolveDispatchTraining(p);
+          if (team === userTeam) {
+            const dest = DISPATCH_DESTINATIONS[p.dispatchedThisCamp];
+            const uniName = universityName || dest?.name || '不明';
+            results.push({ player: p, destination: uniName, growthReport, outcome });
+          }
+          delete p.dispatchOutcome;
+          delete p.dispatchedThisCamp;
+        }
+      });
+    });
+    if (results.length > 0) {
+      setDispatchResults(results);
+      setViewMode('dispatchResults');
+    } else {
+      setViewMode('summary');
+    }
+  };
+
   const handleDispatch = (playerId, destKey, universityId) => {
     const player = userTeam?.players?.find(p => p.id === playerId);
     if (!player) return;
@@ -415,6 +478,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   };
 
   const handleExecuteTraining = () => {
+    setDispatchConfirm(null); // 派遣の帯は練習の画面だけのもの（結果の画面へ持ち越さない）
     if (!userTeam || !userTeam.players) return;
 
     const finalAssignments = {};
@@ -545,10 +609,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
     if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
     // 変化球はレベルで色付け（0-100スケールなのでgetAbilityColorをそのまま使用）
+    // ⚠ 球種どうしの間の空白は span の外に置くこと（折り返せる位置にする）。中にあると
+    //   5球種の投手で列が1行に伸び、1440 幅でも右端の「サブ」の選択が切れていた
     return arsenal.map((a, i) => (
-      <span key={i} className={getAbilityColor(a.level || 0)}>
-        {i > 0 ? ' ' : ''}{getPitchTypeName(a.type)}{a.level}
-      </span>
+      <React.Fragment key={i}>
+        {i > 0 ? ' ' : ''}
+        <span className={`${getAbilityColor(a.level || 0)} whitespace-nowrap`}>{getPitchTypeName(a.type)}{a.level}</span>
+      </React.Fragment>
     ));
   };
 
@@ -591,105 +658,70 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   return (
     <div className="p-4">
       <div className="max-w-full mx-auto">
-        {/* 派遣確認モーダル */}
-        {dispatchConfirm && (() => {
+        {/* 社会人の大学派遣: 派遣先の大学を選ぶ窓（派遣そのものは下の帯で決める） */}
+        {pickingUniversity && (() => {
           const player = userTeam?.players?.find(p => p.id === dispatchConfirm.playerId);
           const dest = DISPATCH_DESTINATIONS[dispatchConfirm.destKey];
           if (!player || !dest) return null;
-
-          {/* 社会人モード: 大学派遣はパイプのある大学を選択 */}
-          if (gameMode === 'corporate' && dispatchConfirm.destKey === 'university' && !dispatchConfirm.universityId) {
-            const uniOptions = getUniversityDispatchOptions(userTeam);
-            return (
-              <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-                <div className="bg-surface-2 rounded-xl max-w-lg w-full p-5">
-                  <h2 className="text-base font-bold text-white mb-3 text-center">🎓 派遣先大学を選択</h2>
-                  <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
-                    <div className="text-white font-bold text-lg mb-1">{player.name}</div>
-                    <div className="text-gray-300 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
-                    {(() => {
-                      const dispatched = (userTeam?.players || []).filter(p => p.dispatchedThisCamp === 'university').length;
-                      const max = DISPATCH_LIMITS.perTeamUniversity;
-                      return <div className={`text-xs mt-1 font-bold ${dispatched >= max ? 'text-red-400' : 'text-orange-400'}`}>チーム派遣枠: {dispatched}/{max}人</div>;
-                    })()}
-                  </div>
-                  {uniOptions.length === 0 ? (
-                    <div className="text-gray-300 text-sm text-center mb-3">OBのいる大学がありません</div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-64 overflow-y-auto mb-3">
-                      {uniOptions.map(uni => {
-                        const canDispatch = uni.remaining > 0;
-                        const rankColors = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
-                        return (
-                          <button
-                            key={uni.universityId}
-                            disabled={!canDispatch}
-                            onClick={() => setDispatchConfirm({ ...dispatchConfirm, universityId: uni.universityId, universityName: uni.universityName })}
-                            className={`w-full text-left p-2.5 rounded-lg border transition ${
-                              canDispatch
-                                ? 'border-orange-500/40 bg-gray-700/60 hover:bg-gray-600/60 cursor-pointer'
-                                : 'border-gray-600/40 bg-gray-800/60 cursor-not-allowed opacity-50'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-bold text-sm ${rankColors[uni.rank] || 'text-gray-300'}`}>{uni.rank}</span>
-                                <span className="text-white font-bold text-sm">{uni.universityName}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-gray-300 text-xs">OB {uni.obCount}人</span>
-                                <span className={`text-xs font-bold ${canDispatch ? 'text-orange-400' : 'text-gray-400'}`}>
-                                  残{uni.remaining}/{uni.slots}枠
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex gap-1 flex-wrap">
-                              {uni.specialties.map(s => (
-                                <span key={s} className="px-1.5 py-0 rounded text-xs bg-gray-600/80 text-gray-300">
-                                  {SPECIALTY_ICONS?.[s] || ''}{SPECIALTY_LABELS?.[s] || s}
-                                </span>
-                              ))}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="flex gap-2 justify-center">
-                    <button onClick={() => setDispatchConfirm(null)} className="btn-secondary px-6 py-2 rounded-lg text-sm font-bold transition">
-                      キャンセル
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          const selectedUniName = dispatchConfirm.universityName;
+          const uniOptions = getUniversityDispatchOptions(userTeam);
           return (
             <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-              <div className="bg-surface-2 rounded-xl max-w-md w-full p-5">
-                <h2 className="text-base font-bold text-white mb-3 text-center">{dest.icon} {dest.name}に派遣</h2>
+              <div className="bg-surface-2 rounded-xl max-w-lg w-full p-5">
+                <h2 className="text-base font-bold text-white mb-3 text-center">🎓 派遣先大学を選択</h2>
                 <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
                   <div className="text-white font-bold text-lg mb-1">{player.name}</div>
                   <div className="text-gray-300 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
+                  {(() => {
+                    const dispatched = (userTeam?.players || []).filter(p => p.dispatchedThisCamp === 'university').length;
+                    const max = DISPATCH_LIMITS.perTeamUniversity;
+                    return <div className={`text-xs mt-1 font-bold ${dispatched >= max ? 'text-red-400' : 'text-orange-400'}`}>チーム派遣枠: {dispatched}/{max}人</div>;
+                  })()}
                 </div>
-                {selectedUniName && (
-                  <div className="bg-orange-900/30 border border-orange-500/30 rounded-lg p-2 mb-3 text-center">
-                    <span className="text-orange-300 text-sm font-bold">🎓 {selectedUniName}</span>
+                {uniOptions.length === 0 ? (
+                  <div className="text-gray-300 text-sm text-center mb-3">OBのいる大学がありません</div>
+                ) : (
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto mb-3">
+                    {uniOptions.map(uni => {
+                      const canDispatch = uni.remaining > 0;
+                      const rankColors = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
+                      return (
+                        <button
+                          key={uni.universityId}
+                          disabled={!canDispatch}
+                          onClick={() => setDispatchConfirm({ ...dispatchConfirm, universityId: uni.universityId, universityName: uni.universityName })}
+                          className={`w-full text-left p-2.5 rounded-lg border transition ${
+                            canDispatch
+                              ? 'border-orange-500/40 bg-gray-700/60 hover:bg-gray-600/60 cursor-pointer'
+                              : 'border-gray-600/40 bg-gray-800/60 cursor-not-allowed opacity-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold text-sm ${rankColors[uni.rank] || 'text-gray-300'}`}>{uni.rank}</span>
+                              <span className="text-white font-bold text-sm">{uni.universityName}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-300 text-xs">OB {uni.obCount}人</span>
+                              <span className={`text-xs font-bold ${canDispatch ? 'text-orange-400' : 'text-gray-400'}`}>
+                                残{uni.remaining}/{uni.slots}枠
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 flex-wrap">
+                            {uni.specialties.map(s => (
+                              <span key={s} className="px-1.5 py-0 rounded text-xs bg-gray-600/80 text-gray-300">
+                                {SPECIALTY_ICONS?.[s] || ''}{SPECIALTY_LABELS?.[s] || s}
+                              </span>
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
-                <div className="text-yellow-400 text-xs mb-3 text-center space-y-0.5">
-                  <p>キャンプ期間中に集中特訓を受けます</p>
-                  <p>通常練習の代わりに大幅な能力アップが期待できます</p>
-                  <p>派遣後もシーズンには通常通り出場できます</p>
-                </div>
                 <div className="flex gap-2 justify-center">
                   <button onClick={() => setDispatchConfirm(null)} className="btn-secondary px-6 py-2 rounded-lg text-sm font-bold transition">
-                    キャンセル
-                  </button>
-                  <button onClick={() => handleDispatch(dispatchConfirm.playerId, dispatchConfirm.destKey, dispatchConfirm.universityId)} className="btn-warn px-6 py-2 rounded-lg text-sm transition">
-                    派遣する
+                    やめる
                   </button>
                 </div>
               </div>
@@ -702,7 +734,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-ink">{campTitle} - {userTeamName}</h1>
             {dispatchedPlayers.length > 0 && (
-              <span className="text-orange-900 text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
+              <span className="text-ink-accent text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -721,17 +753,21 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           <br />選手が伸びるのは練習だけではありません。<b className="text-cyan-200">シーズン中に試合へ出た量も同じくらい効きます</b>——1年フル出場した若手は、出番の無かった選手の2倍以上成長します。体力を鍛えると疲労に強く選手寿命が延びます。Year2以降は有望株を<b className="text-cyan-200">派遣</b>に出して大きく伸ばすこともできます。
         </TutorialHint>
 
-        {/* ランク変動通知 */}
+        {/* ランク変動通知。⚠ ここから下のお知らせの枠は地色の上に置くので不透明（bg-surface-2）にし、
+            良し悪しの色は枠が持つ（半透明の bg-green-900/30 だと紙が透けて、中の文字が消えていた） */}
         {currentRound === 1 && seasonData?.rankChanges?.length > 0 && (() => {
           const userChange = seasonData.rankChanges.find(c => c.team === userTeamName);
           if (!userChange) return null;
           const isUp = 'DCBAS'.indexOf(userChange.to) > 'DCBAS'.indexOf(userChange.from);
+          // ⚠ 注目度はチームの値を読む。ランク変動の記録（rankChanges）には注目度が無く（score は
+          //    ランク付けの点数で別物）、以前は userChange.reputation を読んで「注目度: NaN」と出ていた
+          const reputation = userTeam?.corporateData?.reputation ?? userTeam?.universityData?.reputation;
           return (
-            <div className={`mb-2 p-3 rounded-xl border text-center ${isUp ? 'bg-green-900/30 border-green-500/40' : 'bg-red-900/30 border-red-500/40'}`}>
+            <div className={`mb-2 p-3 rounded-xl border text-center bg-surface-2 ${isUp ? 'border-green-500/60' : 'border-red-500/60'}`}>
               <span className={`font-black text-lg ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                 {isUp ? '↑' : '↓'} ランク{isUp ? '昇格' : '降格'}: {userChange.from} → {userChange.to}
               </span>
-              <span className="text-gray-300 text-xs ml-2">(注目度: {Math.round(userChange.reputation)})</span>
+              {Number.isFinite(reputation) && <span className="text-gray-300 text-xs ml-2">(注目度: {Math.round(reputation)})</span>}
             </div>
           );
         })()}
@@ -744,7 +780,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           if (!userPromo) return null;
           const isPromoted = userPromo.promoted.team === userTeamName;
           return (
-            <div className={`mb-2 p-3 rounded-xl border text-center ${isPromoted ? 'bg-green-900/30 border-green-500/40' : 'bg-red-900/30 border-red-500/40'}`}>
+            <div className={`mb-2 p-3 rounded-xl border text-center bg-surface-2 ${isPromoted ? 'border-green-500/60' : 'border-red-500/60'}`}>
               <span className={`font-black text-lg ${isPromoted ? 'text-green-400' : 'text-red-400'}`}>
                 {isPromoted ? '↑' : '↓'} {isPromoted ? '昇格' : '降格'}: {isPromoted ? userPromo.promoted.from : userPromo.relegated.from} → {isPromoted ? userPromo.promoted.to : userPromo.relegated.to}
               </span>
@@ -755,7 +791,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
         {/* スタッフ退職通知 */}
         {currentRound === 1 && seasonData?.staffRetirements?.length > 0 && (
-          <div className="mb-2 p-3 rounded-xl border bg-gray-800/80 border-gray-600/40">
+          <div className="mb-2 p-3 rounded-xl border bg-surface-2 border-gray-600/40">
             <div className="text-sm font-bold text-gray-300 mb-1">スタッフ退職のお知らせ</div>
             <div className="space-y-0.5">
               {seasonData.staffRetirements.map((s, idx) => {
@@ -775,7 +811,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
         {/* 赤字ペナルティ通知 */}
         {currentRound === 1 && seasonData?.deficitPenalties?.length > 0 && (
-          <div className="mb-2 p-3 rounded-xl border bg-red-900/30 border-red-500/40">
+          <div className="mb-2 p-3 rounded-xl border bg-surface-2 border-red-500/60">
             <div className="text-sm font-bold text-red-400 mb-1">⚠️ 予算超過ペナルティ</div>
             <div className="space-y-0.5">
               {seasonData.deficitPenalties.map((p, idx) => (
@@ -929,7 +965,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
             {/* 選手テーブル */}
             <div className="bg-surface-2 rounded-lg overflow-hidden overflow-x-auto">
-              <table className="w-full text-xs">
+              <table ref={campTableRef} className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-700/80 text-gray-300 text-xs">
                     {(() => {
@@ -978,10 +1014,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     {!isPitchTab && subPosHeaders.map(pos => (
                       <th key={pos} className="py-1.5 px-0.5 text-center w-6" title={POSITION_NAMES[pos]}>{subPosShort[pos]}</th>
                     ))}
-                    <th className="py-1.5 px-2 text-left w-28">メイン</th>
-                    <th className="py-1.5 px-2 text-left w-28">サブ</th>
-                    <th className="py-1.5 px-1 text-center w-16">練習側</th>
-                    {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && <th className="py-1.5 px-1 text-center w-16">派遣</th>}
+                    <th data-op="main" {...opCell('main', 'py-1.5 px-2 text-left w-28')}>メイン</th>
+                    <th data-op="sub" {...opCell('sub', 'py-1.5 px-2 text-left w-28')}>サブ</th>
+                    <th data-op="side" {...opCell('side', 'py-1.5 px-1 text-center w-16')}>練習側</th>
+                    {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && <th data-op="dispatch" {...opCell('dispatch', 'py-1.5 px-1 text-center w-16')}>派遣</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1072,15 +1108,17 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.muscle??50} label="体幹" /></td>
-                        {isPitchTab && <td className="py-1 px-2 text-xs font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>}
+                        {isPitchTab && <td className="py-1 px-2 text-xs font-mono min-w-[10rem] max-w-[16rem]">{getArsenalDisplay(player)}</td>}
                         <td className="py-1 px-2 text-xs font-mono text-gray-300 whitespace-nowrap">
                           {(() => {
                             const prev = player.previousSeasonStats;
                             if (!prev) return <span className="text-gray-400">-</span>;
                             if (isPitcher(player)) {
+                              // ⚠ inningsPitched はアウト数なので防御率は「自責点×27÷アウト数」。以前は ×9 で割っていて
+                              //    契約更改の画面の3分の1（2.89 が 0.96）に出ていた。数字だけでは何か分からないので「防」を付ける
                               const ip = prev.pitching?.inningsPitched || 0;
-                              const era = ip > 0 ? ((prev.pitching?.earnedRuns || 0) / ip * 9).toFixed(2) : '-';
-                              return <>{era !== '-' ? era : '-'} {prev.pitching?.wins || 0}勝{prev.pitching?.saves || 0}S {prev.pitching?.strikeouts || 0}K</>;
+                              const era = ip > 0 ? ((prev.pitching?.earnedRuns || 0) * 27 / ip).toFixed(2) : '-';
+                              return <>防{era} {prev.pitching?.wins || 0}勝{prev.pitching?.saves || 0}S {prev.pitching?.strikeouts || 0}K</>;
                             } else {
                               const ab = prev.batting?.atBats || 0;
                               const avg = ab > 0 ? (prev.batting.hits / ab).toFixed(3) : '-';
@@ -1097,7 +1135,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             }
                           </td>
                         ))}
-                        <td className="py-1 px-2">
+                        <td {...opCell('main', 'py-1 px-2')}>
                           <div className="flex items-center gap-1">
                             <select
                               value={currentTraining}
@@ -1135,7 +1173,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             )}
                           </div>
                         </td>
-                        <td className="py-1 px-2">
+                        <td {...opCell('sub', 'py-1 px-2')}>
                           <div className="flex items-center gap-1">
                             <select
                               value={subAssignments[player.id] || 'physique'}
@@ -1203,7 +1241,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           </div>
                         </td>
                         {/* 練習側の移動。position は変えず、表示するタブ＝見える列だけを切り替える */}
-                        <td className="py-1 px-1 text-center">
+                        <td {...opCell('side', 'py-1 px-1 text-center')}>
                           {(() => {
                             // 投手タブからは**行き先の野手タブを選ばせる**。
                             // 逆向き（野手 → 投手）は1つしか行き先が無いのでボタンのまま。
@@ -1233,7 +1271,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           })()}
                         </td>
                         {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && (
-                          <td className="py-1 px-1 text-center">
+                          <td {...opCell('dispatch', 'py-1 px-1 text-center')}>
                             <div className="flex gap-0.5 justify-center">
                               {getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).map(destKey => {
                                 const dest = DISPATCH_DESTINATIONS[destKey];
@@ -1246,7 +1284,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 return (
                                   <button
                                     key={destKey}
-                                    onClick={() => eligible && setDispatchConfirm({ playerId: player.id, destKey })}
+                                    onClick={(e) => { if (!eligible) return; setDispatchConfirm({ playerId: player.id, destKey }); keepAboveConfirmBar(e.currentTarget); }}
                                     disabled={!eligible}
                                     title={eligible ? `${dest.name}に派遣\n${dest.desc}` : reason}
                                     className={`px-1 py-0.5 rounded text-xs font-bold transition ${
@@ -1402,76 +1440,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   次のクールへ（第{currentRound + 1}クール）
                 </button>
               ) : (
-                <>
                 <button
                   onClick={() => setShowCampReview(true)}
                   className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
                 >
                   キャンプ終了 → 成長確認
                 </button>
-
-                {showCampReview && (() => {
-                  const dispatched = (userTeam?.players || []).filter(p => p.dispatchedThisCamp);
-                  const pitchers = (userTeam?.players || []).filter(p => p.position === 'pitcher');
-                  const fielders = (userTeam?.players || []).filter(p => p.position !== 'pitcher');
-                  const finalizeCamp = () => {
-                    setShowCampReview(false);
-                    const results = [];
-                    Object.values(TEAMS_DATA).forEach(team => {
-                      team.players?.forEach(p => {
-                        if (p.dispatchedThisCamp) {
-                          const { growthReport, outcome, universityName } = resolveDispatchTraining(p);
-                          if (team === userTeam) {
-                            const dest = DISPATCH_DESTINATIONS[p.dispatchedThisCamp];
-                            const uniName = universityName || dest?.name || '不明';
-                            results.push({ player: p, destination: uniName, growthReport, outcome });
-                          }
-                          delete p.dispatchOutcome;
-                          delete p.dispatchedThisCamp;
-                        }
-                      });
-                    });
-                    if (results.length > 0) {
-                      setDispatchResults(results);
-                      setViewMode('dispatchResults');
-                    } else {
-                      setViewMode('summary');
-                    }
-                  };
-                  return (
-                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowCampReview(false)}>
-                      <div className="bg-surface-2 rounded-xl border border-gray-600 max-w-md w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-white font-bold text-lg mb-3">キャンプ終了確認</h3>
-                        <div className="bg-gray-900/60 rounded-lg p-3 mb-3 space-y-2 text-sm">
-                          <div className="flex justify-between text-gray-300">
-                            <span>完了クール</span>
-                            <span className="text-white font-bold">{currentRound} / {MAX_CAMP_ROUNDS}</span>
-                          </div>
-                          <div className="flex justify-between text-gray-300">
-                            <span>投手 / 野手</span>
-                            <span className="text-white font-bold">{pitchers.length}人 / {fielders.length}人</span>
-                          </div>
-                          {dispatched.length > 0 && (
-                            <div className="flex justify-between text-gray-300">
-                              <span>派遣中</span>
-                              <span className="text-orange-400 font-bold">{dispatched.length}人（結果確定）</span>
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-gray-300 text-xs mb-4">キャンプを終了して成長結果を確認します。この操作は取り消せません。</p>
-                        <div className="flex gap-3 justify-end">
-                          <button onClick={() => setShowCampReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
-                            戻る
-                          </button>
-                          <button onClick={finalizeCamp} className="btn-primary px-5 py-1.5 rounded text-sm transition">
-                            キャンプ終了
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-                </>
               )}
             </div>
           </>
@@ -1562,12 +1536,14 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <div className="flex items-center justify-between mb-2">
                 <h1 className="text-xl font-bold text-ink">{campTitle}成長レポート - {userTeamName}</h1>
               </div>
-              <div className="flex gap-4 text-xs mb-1 ml-1">
-                <span className="text-green-400">■ キャンプ成長</span>
-                <span className="text-cyan-400">■ 自然成長()</span>
-                <span className="text-red-400">■ 衰退</span>
-              </div>
+              {/* ⚠ 凡例はカードの中に置く。意味色（green/cyan/red-400）は暗いカード用で、
+                  地色（明るい紙）の上に直に置くと 1.3〜1.6:1 で読めなかった */}
               <div className="bg-surface-2 rounded-lg overflow-hidden overflow-x-auto mb-3">
+                <div className="flex gap-4 text-xs px-2 py-1.5 border-b border-gray-700/50">
+                  <span className="text-green-400">■ 伸びた量</span>
+                  <span className="text-cyan-400">( ) うち年齢による変化</span>
+                  <span className="text-red-400">■ 下がった量</span>
+                </div>
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-700/80 text-gray-300 text-xs">
@@ -1661,6 +1637,43 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 </button>
               </div>
             </>
+          );
+        })()}
+
+        {/* 派遣を決める帯。⚠ 以前は中央の窓（見出し「〇〇に派遣」・「キャンセル」）で、帯の言葉の決まりと違った */}
+        {viewMode === 'select' && dispatchConfirm && !pickingUniversity && (() => {
+          const player = userTeam?.players?.find(p => p.id === dispatchConfirm.playerId);
+          const dest = DISPATCH_DESTINATIONS[dispatchConfirm.destKey];
+          if (!player || !dest) return null;
+          const where = dispatchConfirm.universityName || dest.name;
+          return (
+            <ConfirmBar
+              title={`${player.name}を${where}へ派遣しますか？`}
+              detail={`${POSITION_NAMES[player.position]}・${player.age}歳・総合力${calcPlayerOverall(player)}`}
+              note="このキャンプは通常練習の代わりに集中特訓を受けます（結果はキャンプを終えたときに決まり、シーズンには通常どおり出場できます）。派遣は取り消せません。"
+              confirmLabel="派遣する"
+              confirmClass="btn-warn"
+              onConfirm={() => handleDispatch(dispatchConfirm.playerId, dispatchConfirm.destKey, dispatchConfirm.universityId)}
+              onCancel={() => setDispatchConfirm(null)}
+            />
+          );
+        })()}
+
+        {/* キャンプを終える帯。⚠ 以前は中央の窓（見出し「キャンプ終了確認」・「戻る」）で、帯の言葉の決まりと違った */}
+        {viewMode === 'results' && showCampReview && (() => {
+          const players = userTeam?.players || [];
+          const dispatched = players.filter(p => p.dispatchedThisCamp).length;
+          const pitchers = players.filter(p => p.position === 'pitcher').length;
+          return (
+            <ConfirmBar
+              title="キャンプを終えますか？"
+              detail={`第${currentRound}/${MAX_CAMP_ROUNDS}クール・投手${pitchers}人／野手${players.length - pitchers}人${dispatched > 0 ? `・派遣中${dispatched}人の結果もここで決まります` : ''}`}
+              note="終えると成長の結果を確かめる画面へ進みます。取り消せません。"
+              confirmLabel="キャンプを終える"
+              confirmClass="btn-warn"
+              onConfirm={finalizeCamp}
+              onCancel={() => setShowCampReview(false)}
+            />
           );
         })()}
       </div>

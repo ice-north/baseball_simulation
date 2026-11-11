@@ -70,8 +70,8 @@ while (days < 500) {
   const list = league.chronicle?.milestones || [];
   const fresh = head ? list.slice(0, Math.max(0, list.indexOf(head))) : list;
   const got = new Set(fresh.filter((m) => m.kind === 'career').map((m) => `${m.key}:${m.stat}`));
-  // ⚠ 1日に40件を越えると切れるので、そのときは数だけ見ない
-  if (fresh.length < 40) assert.deepEqual([...got].sort(), [...expected].sort(), `${days}日目の通算の節目が数え直しと違う`);
+  // ⚠ 球団ごとに最新20件で切るので、1日に20件を越えた球団があれば数だけ見ない
+  if (fresh.length < 20) assert.deepEqual([...got].sort(), [...expected].sort(), `${days}日目の通算の節目が数え直しと違う`);
   expectedCareer += expected.size;
 
   if (league.season.year === startYear && league.season.standings.some((s) => s.gamesPlayed >= 30) && !viewChecked) {
@@ -94,6 +94,12 @@ while (days < 500) {
         magicSeen[`${r.kind}:${r.league}`] = r.team;
       }
       if (!r.clinched) assert.ok(r.magic > 0 && r.magic <= r.left, `マジックが残り試合を超える ${JSON.stringify(r)}`);
+      // ⚠ 点灯する前（追う球団が自力で抜ける間）は出さない。開幕直後に「マジック118」と書かない
+      if (!r.clinched)
+        assert.ok(
+          league.season.standings.some((s) => (s.gamesPlayed || 0) >= 15),
+          `開幕直後にマジックが出た ${JSON.stringify(r)}`,
+        );
     }
   }
 }
@@ -102,7 +108,14 @@ const c = league.chronicle;
 assert.ok(c, 'chronicle が作られていない');
 // 節目: 通算の越え方の数と一致（同じ日に2つ越えることはほぼ無いので、ひとつに数える）
 const career = c.milestones.filter((m) => m.kind === 'career');
-console.log(`節目 ${c.milestones.length}件（通算 ${career.length} / 期待 ${expectedCareer}、残すのは最新40件）`);
+console.log(`節目 ${c.milestones.length}件（通算 ${career.length} / 期待 ${expectedCareer}、残すのは球団ごとに最新20件）`);
+{
+  // 球団ごとに最新20件（リーグ全体の40件で切ると、球団史に数件しか残らなかった）
+  const perTeam = {};
+  for (const m of c.milestones) perTeam[m.team] = (perTeam[m.team] || 0) + 1;
+  assert.ok(Object.values(perTeam).every((n) => n <= 20), `球団ごとの節目が20件を超える ${JSON.stringify(perTeam)}`);
+  assert.ok(c.milestones.length > 40, `節目が全体で40件までしか残っていない（${c.milestones.length}）`);
+}
 assert.ok(c.milestones.length > 0, '節目が1件も無い');
 for (const m of c.milestones) {
   assert.ok(m.name && m.team && m.label && m.year && m.month, `節目の項目が欠けている ${JSON.stringify(m)}`);

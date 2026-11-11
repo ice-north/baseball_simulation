@@ -113,3 +113,56 @@ export const SPLIT_NAMES = {
     late: '先発6回以降',
   },
 };
+
+// ============================================================
+// 捕手の成績（マスクをかぶった時の投手成績）。
+//
+// いしだ「リード力やバッテリー相性を、捕手ごとの防御率などで見せたい」。
+// ⚠ このゲームに投手×捕手の「相性」の仕組みは無い（いしだ: 仕組みは足さない、
+//    結果として見られる形がほしい）。組み合わせ別の差は回数が少ないうちは
+//    ほぼ運なので、画面は回数を必ず並べ、少ない組を薄く出す（`BATTERY_MIN_OUTS`）。
+// - 捕手の記録 `record.catching = { all, pitchers: { [投手のキー]: 行 } }`
+//   （行は CATCH_KEYS）。投手側の「捕手別」は同じ記録を投手のキーで引く
+//   （同じ数字を2か所に持たない）。
+// - `calls` / `reads` … 捕手が配球した球数 / 打者に狙い球を当てられた球数。
+//   リードの本体（`guessSuccessRate`）がそのまま数字に出るので、防御率より
+//   ずっとぶれにくい。バントの球は数えない。
+// - `starts` … 先発マスク（試合の最初の打席で受けた捕手）。`all` の行だけ。
+// ⚠ 記録を取り始める前の試合は入っていない（保存の版は上げていない。
+//    無ければ出さない項目）。
+// ============================================================
+// ⚠ 場面別の行（PA_KEYS）より絞ってある。投手1人に捕手の数だけ行が増えるので、
+//    バント・ファウル等の使わない数を持たない。
+export const CATCH_KEYS = [
+  'outs',
+  'pa',
+  'atBats',
+  'hits',
+  'homeruns',
+  'walks',
+  'hitByPitch',
+  'strikeouts',
+  'runs',
+  'earnedRuns',
+  'calls',
+  'reads',
+  'starts',
+];
+/** 組み合わせを「まだ少ない」と薄く出す境目（アウト数。30回=90） */
+export const BATTERY_MIN_OUTS = 90;
+/** 組み合わせの表の注記。⚠ アプリ（Battery.kt の BATTERY_NOTE）と同文 */
+export const BATTERY_NOTE = `${BATTERY_MIN_OUTS / 3}回未満の組は薄く出しています。回数が少ないうちは運の差が大きく出ます。読まれ率は、打者に狙い球を当てられた球の割合で、低いほどリードが効いています。`;
+/** 捕手の行（CATCH_KEYS）から、画面に出す率を作る。守った回が無ければ null */
+export function catchRates(line) {
+  if (!line || !(line.outs > 0)) return null;
+  const nine = (n) => ((n || 0) * 27) / line.outs;
+  return {
+    outs: line.outs,
+    era: nine(line.earnedRuns),
+    k9: nine(line.strikeouts),
+    bb9: nine(line.walks),
+    avg: line.atBats > 0 ? line.hits / line.atBats : null,
+    readRate: line.calls > 0 ? (line.reads || 0) / line.calls : null,
+    starts: line.starts || 0,
+  };
+}

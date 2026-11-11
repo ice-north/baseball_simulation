@@ -28,12 +28,12 @@ val CAMP_SUB_MENUS: List<Menu> = listOf(
     Menu("eye", "選球眼練習", "👁️", "選球眼を強化（+0〜2）", only = null),
     Menu("clead_study", "Cリード学習", "🧠", "キャッチャーリード向上（リード+1~3）", only = "catcher"),
     Menu("breaking", "変化球練習", "🌀", "変化球レベルを強化（1球種を選んで集中練習も可）", only = "pitcher"),
-    Menu("newpitch", "新球種習得", "✨", "新球種習得に挑戦（成功率12%・器用さとフォーム適性で上昇、ランダム球種）", only = "pitcher"),
+    Menu("newpitch", "新球種習得", "✨", "新球種習得に挑戦（成功率12%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）", only = "pitcher"),
     Menu("spin_analysis", "スピン解析", "🎥", "高速カメラで回転を分析・スピン+1〜3（器用さ係数）、変化球Lv向上、制球微増（投手のみ）", only = "pitcher"),
     Menu("subposition", "サブポジ練習", "🔀", "指定ポジションの守備練習（適正大幅UP・器用さで伸びが変わる）", only = null),
 )
 val CAMP_DIRECTIONS: List<Menu> = listOf(
-    Menu("sharpen", "長所を伸ばす", "⚔️", "最も強い能力に絞って magnify する。他は伸びない"),
+    Menu("sharpen", "長所を伸ばす", "⚔️", "最も強い能力に絞って伸ばす。他は伸びない"),
     Menu("balanced", "全体を伸ばす", "⚖️", "満遍なく。突出はしないが穴も出来ない"),
     Menu("patch", "短所を埋める", "🧱", "最も弱い能力を底上げする。伸びしろが大きく効率は良い"),
 )
@@ -54,9 +54,9 @@ listOf(
     ChoiceField("squeeze", "スクイズ", false, listOf(Choice("auto", "AI判断"), Choice("avoid", "控えめ"), Choice("aggressive", "積極的"), Choice("never", "しない")), "auto"),
     ChoiceField("safetyBunt", "セーフティバント", false, listOf(Choice("auto", "AI判断"), Choice("avoid", "控えめ"), Choice("aggressive", "積極的"), Choice("never", "しない")), "auto"),
     ChoiceField("pinchHit", "代打", false, listOf(Choice("auto", "AI判断"), Choice("never", "使わない")), "auto"),
-    ChoiceField("pinchHitFrom", "代打を使い始める回", true, listOf(Choice("0", "既存AIの判断"), Choice("5", "5回以降"), Choice("6", "6回以降"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
+    ChoiceField("pinchHitFrom", "代打を使い始める回", true, listOf(Choice("0", "AI判断"), Choice("5", "5回以降"), Choice("6", "6回以降"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
     ChoiceField("defensiveSub", "守備固め", false, listOf(Choice("auto", "AI判断"), Choice("never", "使わない")), "auto"),
-    ChoiceField("defenseFrom", "守備固めを使い始める回", true, listOf(Choice("0", "既存AIの判断"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
+    ChoiceField("defenseFrom", "守備固めを使い始める回", true, listOf(Choice("0", "AI判断"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
     ChoiceField("hook", "先発の不調時の交代", false, listOf(Choice("auto", "標準"), Choice("early", "早めに交代"), Choice("patient", "長めに任せる")), "auto"),
     ChoiceField("starterLimit", "先発の球数上限", true, listOf(Choice("0", "役割・スタミナで判断"), Choice("60", "最大60球"), Choice("80", "最大80球"), Choice("100", "最大100球"), Choice("120", "最大120球")), "0"),
 )
@@ -95,3 +95,15 @@ val CAMP_POLICY_GUIDE: Map<String, Pair<String, String>> = mapOf(
     "patch:physique" to ("体力+12 体幹+8 走力+3 盗塁+2" to "体力+12 スタミナ+10 体幹+8 球速+2 肩力+2"),
 )
 val ONLINE_ROSTER_TARGETS: Map<String, Int> = mapOf("pitcher" to 11, "catcher" to 2, "infielder" to 6, "outfielder" to 7)
+val RETRY_ON_REVISION: Set<String> = setOf("lineup", "submit", "campRound")
+data class PyramidLeague(val id: String, val name: String, val promotes: Boolean, val relegates: Boolean)
+val PYRAMID_LEAGUES: List<PyramidLeague> = listOf(
+    PyramidLeague("A", "1部", false, true),
+    PyramidLeague("B", "2部", true, false),
+)
+const val PROMOTION_PLACES: Int = 1
+const val RELEGATION_FROM_BOTTOM: Int = 1
+val CAMP_SUB_TARGETS: Map<String, String> = mapOf("newpitch" to "pitch", "breaking" to "ownPitch", "subposition" to "position")
+val CAMP_PITCH_TYPES: List<String> = listOf("slider", "curve", "fork", "changeup", "sinker", "cutter", "knuckle", "shoot")
+val CONVERT_POSITIONS: List<String> = listOf("pitcher", "catcher", "first", "second", "third", "short", "left", "center", "right")
+val POSITION_NAMES: Map<String, String> = mapOf("pitcher" to "投手", "catcher" to "捕手", "first" to "一塁", "second" to "二塁", "third" to "三塁", "short" to "遊撃", "left" to "左翼", "center" to "中堅", "right" to "右翼")

@@ -14,6 +14,7 @@ import {
   getScoutRecommendation,
   pickRandomDestination,
 } from '../corporate/scoutingSystem.js';
+import ConfirmBar from './ConfirmBar.jsx';
 
 const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -30,6 +31,10 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedScoutId, setSelectedScoutId] = useState(null);
   const [modalPlayer, setModalPlayer] = useState(null);
+  // 下に出す確認の帯: 'negotiate' 選んだ候補と交渉する / 'skip' 獲得なしで終える / 'finish' 交渉を終える。
+  // 1つの state にして、2本同時には出さない。
+  // ⚠ 以前は終える2つも1回押すだけで終わり、その年はもう交渉できなかった
+  const [pendingBar, setPendingBar] = useState(null);
 
   const staff = teamData?.corporateData?.staff || [];
   const scouts = staff.filter(s =>
@@ -46,7 +51,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     setCandidates(withRivals);
   }, []);
 
+  // 選び直したら帯は落とす（帯は押したときの選び方で出しているので、別の候補の帯に見える）
   const toggleSelect = (playerId) => {
+    setPendingBar(null);
     setSelectedIds(prev =>
       prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
     );
@@ -72,6 +79,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   };
 
   const handleNegotiate = () => {
+    // ⚠ 終える帯はここ（とフェーズを替える所）で落とす。残すと、結果から「追加交渉する」で
+    //    戻ったときに、押していない「獲得なしで終えますか？」の帯がまた出た
+    setPendingBar(null);
     const results = [];
     const removedIds = new Set();
     selectedIds.forEach(id => {
@@ -105,6 +115,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   };
 
   const handleContinue = () => {
+    setPendingBar(null);
     if (candidates.length > 0) {
       setPhase('scout');
       setNegotiationResults([]);
@@ -198,7 +209,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         <h1 className="text-xl font-bold text-ink mb-2">交渉結果</h1>
         <p className="text-sm text-ink-sub mb-5">
           {negotiationResults.length}名に打診 → {successes.length}名が入団承諾
-          {totalAcquired > 0 && <span className="text-green-900 font-bold ml-2">(累計{totalAcquired}名獲得)</span>}
+          {totalAcquired > 0 && <span className="text-ink-accent font-bold ml-2">(累計{totalAcquired}名獲得)</span>}
         </p>
 
         <div className="space-y-3 mb-6">
@@ -272,10 +283,21 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
               className="btn-primary px-6 py-2.5 rounded-lg text-sm"
             >追加交渉する (残り{remaining}名)</button>
           )}
-          <button onClick={handleFinalize}
+          <button onClick={() => (remaining > 0 ? setPendingBar('finish') : handleFinalize())}
             className="btn-primary px-6 py-2.5 rounded-lg text-sm"
           >交渉を終了する</button>
         </div>
+        {pendingBar === 'finish' && (
+          <ConfirmBar
+            title="今年のスカウトの交渉を終えますか？"
+            detail={`獲得${totalAcquired}名・まだ交渉できる候補${remaining}名`}
+            note="終えると取り消せません。今年はもう交渉できません。"
+            confirmLabel="交渉を終える"
+            confirmClass="btn-warn"
+            onConfirm={() => { setPendingBar(null); handleFinalize(); }}
+            onCancel={() => setPendingBar(null)}
+          />
+        )}
       </div>
       </div>
     );
@@ -289,7 +311,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         <h1 className="text-xl font-bold text-ink mb-4">スカウト入団完了</h1>
         {totalAcquired > 0 ? (
           <div className="mb-5">
-            <p className="text-green-900 font-bold text-base mb-3">今シーズンは{totalAcquired}名を獲得しました</p>
+            <p className="text-ink-accent font-bold text-base mb-3">今シーズンは{totalAcquired}名を獲得しました</p>
             <div className="space-y-2">
               {allResults.filter(r => r.success).map(({ player: p }, i) => (
                 <div key={i} className="flex items-center gap-3 text-sm bg-surface-2 border border-green-700 rounded-lg p-3">
@@ -307,7 +329,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
 
         {totalAiRecruited > 0 && (
           <div className="mb-5">
-            <h2 className="text-base font-bold text-blue-900 mb-3">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
+            <h2 className="text-base font-bold text-ink mb-3">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
             {/* 1列で並べると160チーム超で縦4000px近くなり、横は左400pxしか使わない。
                 多段にして1〜2画面に収める（情報は減らさない） */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1">
@@ -322,7 +344,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
 
         <p className="text-sm text-ink-sub mb-4">
           現在のロスター: {teamData?.players?.length || 0}名
-          {totalAcquired > 0 && <span className="text-green-900 font-bold ml-2">(入団した選手はキャンプから合流します)</span>}
+          {totalAcquired > 0 && <span className="text-ink-accent font-bold ml-2">(入団した選手はキャンプから合流します)</span>}
         </p>
         <button onClick={onComplete}
           className="btn-primary px-8 py-2.5 rounded-lg text-base"
@@ -338,11 +360,11 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       <div className="max-w-7xl mx-auto">
       <h1 className="text-xl font-bold text-ink mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
       <div className="flex items-center gap-5 text-sm text-ink-sub mb-3">
-        <span>注目度: <span className={reputation >= 50 ? 'text-yellow-900 font-bold' : 'text-ink'}>{reputation}</span></span>
+        <span>注目度: <span className={reputation >= 50 ? 'text-ink-accent font-bold' : 'text-ink'}>{reputation}</span></span>
         <span>ランク: <span className="text-ink font-bold">{rank}</span></span>
         <span>ロスター: {teamData?.players?.length || 0}名</span>
-        <span>選択中: <span className="text-green-900 font-bold">{selectedIds.length}名</span></span>
-        {totalAcquired > 0 && <span className="text-green-900 font-bold">獲得済: {totalAcquired}名</span>}
+        <span>選択中: <span className="text-ink-accent font-bold">{selectedIds.length}名</span></span>
+        {totalAcquired > 0 && <span className="text-ink-accent font-bold">獲得済: {totalAcquired}名</span>}
       </div>
 
       {scouts.length > 0 && (
@@ -350,7 +372,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           <div className="text-sm text-gray-300 mb-2 font-bold">担当スカウト (交渉成功率に影響)</div>
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => setSelectedScoutId(null)}
+              onClick={() => { setPendingBar(null); setSelectedScoutId(null); }}
               className={`px-3 py-1.5 rounded text-sm font-bold transition ${
                 !selectedScoutId ? 'seg-on' : 'seg'
               }`}
@@ -360,7 +382,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
               return (
                 <button
                   key={s.id}
-                  onClick={() => setSelectedScoutId(s.id)}
+                  onClick={() => { setPendingBar(null); setSelectedScoutId(s.id); }}
                   className={`px-3 py-1.5 rounded text-sm font-bold transition ${
                     selectedScoutId === s.id ? 'seg-on' : 'seg'
                   }`}
@@ -496,17 +518,58 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       )}
 
       <div className="flex items-center gap-4">
+        {/* ⚠ 押した瞬間には交渉しない。交渉は1人3回までの回数を使い、断られた候補はほかの球団に
+            取られて一覧から消えるので、帯で決める（以前はこのボタンだけ1回で決まっていた） */}
         <button
-          onClick={handleNegotiate}
+          onClick={() => setPendingBar('negotiate')}
           disabled={selectedIds.length === 0}
           className={`px-6 py-2.5 rounded-lg font-bold text-base ${
             'btn-primary'
           }`}
         >交渉開始 ({selectedIds.length}名)</button>
-        <button onClick={handleSkip}
-          className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm"
+        <button onClick={() => setPendingBar('skip')}
+          className="btn-secondary px-4 py-2.5 rounded-lg text-sm"
         >獲得なしで進む</button>
       </div>
+      {pendingBar === 'negotiate' && selectedIds.length > 0 && (() => {
+        const picked = selectedIds.map(id => candidates.find(c => c.id === id)).filter(Boolean);
+        const scoutBonus = getScoutNegotiationBonus(selectedScout);
+        return (
+          <ConfirmBar
+            title={`${picked.length}名と交渉しますか？`}
+            detail={selectedScout ? `担当スカウト: ${selectedScout.name}（交渉+${scoutBonus}%）` : '担当スカウト: 指定なし'}
+            note="交渉は1人3回まで。断られると、ほかの球団に取られて候補から消えることがあります。取り消せません。"
+            confirmLabel="交渉する"
+            confirmClass="btn-warn"
+            onConfirm={() => { setPendingBar(null); handleNegotiate(); }}
+            onCancel={() => setPendingBar(null)}
+          >
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+              {picked.map(p => {
+                const rate = Math.min(95, (p.recruitRate || 0) + scoutBonus);
+                const shown = estimateRivalCount(p) === 0 ? Math.min(95, rate + 12) : rate;
+                return (
+                  <span key={p.id} className="whitespace-nowrap">
+                    <span className="text-white font-bold">{p.name}</span>
+                    <span className="text-gray-300">（{POSITION_NAMES[p.position]}・{shown}%{(p._negotiationAttempts || 0) > 0 ? `・残${3 - p._negotiationAttempts}回` : ''}）</span>
+                  </span>
+                );
+              })}
+            </div>
+          </ConfirmBar>
+        );
+      })()}
+      {pendingBar === 'skip' && (
+        <ConfirmBar
+          title={totalAcquired > 0 ? '今年のスカウトを、ここで終えますか？' : '今年のスカウトを、獲得なしで終えますか？'}
+          detail={`${totalAcquired > 0 ? `獲得${totalAcquired}名・` : ''}候補${candidates.length}名と交渉せずに終えます`}
+          note="終えると取り消せません。今年はもう交渉できません。"
+          confirmLabel="終える"
+          confirmClass="btn-warn"
+          onConfirm={() => { setPendingBar(null); handleSkip(); }}
+          onCancel={() => setPendingBar(null)}
+        />
+      )}
       {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
     </div>
     </div>

@@ -2,6 +2,7 @@ import { LeagueTopics } from './Chronicle.jsx';
 import React from 'react';
 import { teamShort, ownOutcome } from './gameText.js';
 import { Standings } from './LeaguePanels.jsx';
+import { GameRecordButton } from './GameHistory.jsx';
 import { turnOfDate } from './shared.js';
 
 // ============================================================
@@ -134,6 +135,14 @@ function Played({ row, view }) {
   const outcome = ownOutcome(game, view.teamName);
   const ours = home ? game.homeScore : game.awayScore;
   const theirs = home ? game.awayScore : game.homeScore;
+  const score = (
+    <>
+      <b className="online-slot-score">
+        {ours}–{theirs}
+      </b>
+      <span className="online-slot-foe">{teamShort(home ? game.away : game.home)}</span>
+    </>
+  );
   return (
     <li className="online-slot">
       <span className="online-slot-turn">第{row.turn}ターン</span>
@@ -143,10 +152,23 @@ function Played({ row, view }) {
           {outcome.mark}
         </span>
       )}
-      <b className="online-slot-score">
-        {ours}–{theirs}
-      </b>
-      <span className="online-slot-foe">{teamShort(home ? game.away : game.home)}</span>
+      {/* ⚠ **スコアを押すと**試合結果の一覧と同じ小窓（個人成績・リプレイ）を開く。
+          以前は押せず、直近の試合を見るのに「試合結果」を開き直して探していた。
+          ⚠ 別のボタンを行の端に足すと、1280幅で「11–2」の行が箱からはみ出した。
+          選手名と同じ「下線＝押せる」の語彙にする。
+          ⚠ 日程の試合の `id` が記録の `gameId`（`daySimulation` が `game.id` で積む） */}
+      {view.gameDetailsAvailable ? (
+        <GameRecordButton
+          className="online-slot-record"
+          game={{ ...game, gameId: game.id }}
+          year={view.year}
+          ownTeam={view.teamName}
+        >
+          {score}
+        </GameRecordButton>
+      ) : (
+        score
+      )}
     </li>
   );
 }
@@ -228,6 +250,9 @@ const SECTIONS = [
   { id: 'pitching', label: '投手部門', has: (c) => PITCHING_IDS.has(c.id) },
 ];
 
+/** 個人成績ランキングの1つの箱に出す人数 */
+const LEADERS_SHOWN = 5;
+
 function Leaders({ leaders, ownTeam }) {
   const shown = (leaders || []).filter((c) => c.rows.length);
   if (!shown.length) return null;
@@ -245,7 +270,8 @@ function Leaders({ leaders, ownTeam }) {
                 <div key={category.id} className="online-leader-box">
                   <h4>{category.label}</h4>
                   <ol>
-                    {category.rows.map((row, i) => (
+                    {/* ⚠ サーバーは10人まで返す（アプリ用）。Web の箱は5人に揃える */}
+                    {category.rows.slice(0, LEADERS_SHOWN).map((row, i) => (
                       <li
                         key={`${row.team}:${row.name}`}
                         /* ⚠ 自球団の選手は黄色で強調する */

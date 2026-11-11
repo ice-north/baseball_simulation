@@ -297,6 +297,8 @@ export class LeagueService {
       );
       const now = this.clock();
       const previousStatus = l?.status;
+      // 任せ方の変更で手続きが進んだか（進んだら記録の索引を作り直す。下の archiveUnchanged）
+      let settledByModes = false;
       if (command.type === 'create') {
         requireOnline(
           userId === this.adminId && !l,
@@ -372,10 +374,10 @@ export class LeagueService {
           );
           requireOnline(
             isDeepStrictEqual(currentLineup, command.payload.baseLineup),
-            // ⚠ 取り消しのボタンは画面ごとに名前が違う（PCは「変更を取り消す」、
-            //    スマホの簡易編成は「編集を戻す」、スマホの詳しい編成は閉じて開き直す）。
+            // ⚠ 取り消しのボタンは画面ごとに名前が違う（PCの各ページとスマホの「打順」は
+            //    「変更を取り消す」、スマホの投手起用（全画面の編成）は閉じて開き直す）。
             //    どの画面から保存しても分かる案内にする
-            '編成がほかの画面で更新されています。PCは「変更を取り消す」、スマホの簡易編成は「編集を戻す」、詳しい編成は閉じて開き直して、最新の編成から編集し直してください',
+            '編成がほかの画面で更新されています。PCの各ページとスマホの「打順」は「変更を取り消す」、スマホの投手起用（全画面）は閉じて開き直して、最新の編成から編集し直してください',
             409,
             'edit_conflict',
           );
@@ -435,8 +437,9 @@ export class LeagueService {
         } else if (command.type === 'staffModes') {
           // 分野ごとの任せ方（自分で / 意見を聞く / 任せる）。⚠ スタメン・投手起用を
           //    任せたときだけ世界を読んで編成を作り直す（`updateStaffModes`）
-          await this.engine((e) =>
-            e.updateStaffModes(l, userId, command.payload?.modes),
+          // ⚠ 手続きを待っていた最後の1人が任せると、その場で手続きが進む（選手が動く）
+          settledByModes = await this.engine((e) =>
+            e.updateStaffModes(l, userId, command.payload?.modes, now),
           );
         } else if (command.type === 'staff') {
           // 指導者の解任・市場から呼ぶ・役職の入れ替え（キャンプの間だけ）
@@ -622,7 +625,11 @@ export class LeagueService {
         //    （`online-service-check` で、保存の前後で索引が同じことを確かめている）
         // ⚠ 任せ方（`staffModes`）も同じ。任せた編成を作り直しても、索引の選手・球団は変わらない
         //    （`online-coach-check` で確かめている）。人事（`staff`）は球団の指導者の欄が変わるので作り直す
-        ...(['lineup', 'staffModes'].includes(command.type) ? { archiveUnchanged: true } : {}),
+        // ⚠ ただし**任せ方の変更で手続きが進んだときは作り直す**（トライアウト・退団・キャンプで
+        //    選手と能力が動く。`updateStaffModes`）
+        ...(command.type === 'lineup' || (command.type === 'staffModes' && !settledByModes)
+          ? { archiveUnchanged: true }
+          : {}),
       };
     }, { full: FULL_COMMANDS.has(command?.type) });
   }
@@ -673,7 +680,7 @@ export class LeagueService {
     if (this.store.isDue && !(await this.store.isDue(this.clock())))
       return { advanced: false };
     return this.store.transaction(async (bundle) => {
-      // ⚠ **定期処理でも移行する**。誰も操作しなくても、次の正時に自然に直る。
+      // ⚠ **定期処理でも移行する**。誰も操作しなくても、5分以内（cron の刻み）に自然に直る。
       //    直せない形（作り直すしかない版）なら止めるだけにして、
       //    定期処理そのものを例外で落とさない
       let migrated = { applied: [], changed: false };

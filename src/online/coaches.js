@@ -55,14 +55,14 @@ export const VIEWS = {
   hitting: { label: '打撃', low: '慎重', high: '積極', domain: 'batting' },
   running: { label: '走塁', low: '慎重', high: '積極', domain: 'batting' },
 };
-export const VIEW_KEYS = Object.keys(VIEWS);
+const VIEW_KEYS = Object.keys(VIEWS);
 
 /**
  * 性格。値は -2〜2 の整数。「どうやるか」を受け持つ（何を目指すかはビジョン）。
  * ⚠ 前の「起用（若手好き）」は時間軸（育成⇔勝負）に、「戦い方（攻め/守り）」と
  *    「選手との接し方」は「こだわり」にまとめた（二重に持つと筋の通らない人が出る）。
  */
-export const PERSONALITY = {
+const PERSONALITY = {
   temper: { label: '気質', low: '我慢強い', high: '短気' },
   stubborn: { label: 'こだわり', low: '柔軟', high: '頑固' },
   trust: { label: '任せ方', low: 'ワンマン', high: '任せる' },
@@ -254,7 +254,7 @@ export const STAFF_MODES = {
   advice: '意見を聞く',
   delegate: '任せる',
 };
-export const DEFAULT_STAFF_MODE = 'advice';
+const DEFAULT_STAFF_MODE = 'advice';
 
 /**
  * 分野。`owner` はその分野の判断を受け持つ役職（試合中の采配は項目ごとに違うので null）。
@@ -268,7 +268,10 @@ export const STAFF_AREAS = {
   camp: { label: 'キャンプ', owner: null },
 };
 export const STAFF_AREA_KEYS = Object.keys(STAFF_AREAS);
-/** 手続きと、それを受け持つ任せ方の分野（トライアウト・契約更改の退団・キャンプ） */
+/**
+ * 手続きと、それを受け持つ任せ方の分野（トライアウト・契約更改の退団・キャンプ）。
+ * ⚠ 「任せる」にした手続きは、その人の決定を待たない（`leagueEngine` の `waitsFor`）
+ */
 export const PHASE_STAFF_AREA = { tryout: 'tryout', contract: 'release', camp: 'camp' };
 
 /** 人の球団の任せ方（無ければ既定）。⚠ 保存は `member.staffModes`（無い人もいる） */
@@ -291,7 +294,7 @@ export function staffModesOf(member) {
  * ⚠ 代打を使うか（`pinchHit`）・守備固めを使うか（`defensiveSub`）は指導者が
  *    触らない（「使わない」は極端で、人が選ぶもの）。
  */
-export const TACTIC_OWNERS = {
+const TACTIC_OWNERS = {
   sacrificeBunt: ['manager', 'smallBall'],
   squeeze: ['manager', 'smallBall'],
   safetyBunt: ['manager', 'smallBall'],
@@ -304,14 +307,18 @@ export const TACTIC_OWNERS = {
  * 方針（`STRATEGY_FIELDS`）の受け持ち。
  * ⚠ 守備方針（前進守備・シフト）は1試合ずっと効く極端な設定なので触らない。
  */
-export const STRATEGY_OWNERS = {
+const STRATEGY_OWNERS = {
   batting: ['batting', 'hitting'],
   pitching: ['pitching', 'pitching'],
   baseRunning: ['batting', 'running'],
 };
 
-/** 「AI判断」とみなす値（この値のときだけ、意見を聞くで指導者の考えが入る） */
-const isAuto = (key, value) =>
+/**
+ * 「AI判断」とみなす値（この値のときだけ、意見を聞くで指導者の考えが入る）。
+ * ⚠ 画面の文（`coachView.mjs` の「…も標準」）も同じ判定を使う。2つに分けると、
+ *    数の項目（代打・守備固めの回、先発の球数）の 0 の扱いがずれる
+ */
+export const isAuto = (key, value) =>
   value === undefined ||
   value === null ||
   value === 'auto' ||
@@ -637,7 +644,10 @@ export function growthPolicy(coach, player) {
 
 /**
  * キャンプの方針（選手ごとの上書き）。投手は投手コーチ、野手は野手コーチの育成観。
- * コーチが居なければ監督（人の球団は `strictSeats` で「自分で」）。誰も居なければ null（標準のまま）。
+ * コーチが居なければ監督。誰も居なければ null（標準のまま）。
+ * ⚠ **人の球団（`strictSeats`）は監督で埋めない**。コーチの居ない側の選手は上書きせず、
+ *    全体の方針を「おすすめ」（「自分で」の既定と同じ）にして、その選手はおすすめで練習する。
+ *    CPU球団はこれまでどおり（全員同じ「全体×技術」の上に上書き）
  */
 export function campPlan(staff, roster, { strictSeats = false } = {}) {
   const pick = (role) =>
@@ -650,7 +660,11 @@ export function campPlan(staff, roster, { strictSeats = false } = {}) {
     any = true;
     players[player.id] = growthPolicy(coach, player);
   }
-  return any ? { policy: { mode: 'team', direction: 'balanced', phase: 'skill' }, players } : null;
+  if (!any) return null;
+  return {
+    policy: strictSeats ? { mode: 'recommended' } : { mode: 'team', direction: 'balanced', phase: 'skill' },
+    players,
+  };
 }
 
 // ------------------------------------------------------------
@@ -940,7 +954,7 @@ export function leanFromPlayer(player) {
  *
  * ⚠ 乱数を引く順を変えると、同じ種でも顔ぶれが変わる（作り直しの再現は検査で見る）。
  */
-export function generateCoach({
+function generateCoach({
   id,
   age,
   position,
@@ -1024,13 +1038,22 @@ export function upgradeCoach(coach, seed) {
   const v = coach.views || {};
   const p = coach.prefs || {};
   const old = coach.personality || {};
-  const attack = Object.hasOwn(ATTACK_TYPES, p.hitter)
-    ? p.hitter
-    : v.running >= 1 ? 'speed' : v.hitting >= 1 ? 'power' : 'contact';
+  // ⚠ **好み（prefs）を先に。ただし考え方（views）と逆を向く好みは使わない**。
+  //    考え方は変えない（采配はそのまま）ので、逆を向く好みで型を決めると「つなぐ」の
+  //    見出しで打撃「積極」、「打たせて守る」で投球「三振狙い」のように、カードの文と采配が食い違う
+  const against = {
+    speed: v.running <= -1,
+    power: v.hitting <= -1,
+    contact: v.hitting >= 1,
+  };
+  const attack =
+    Object.hasOwn(ATTACK_TYPES, p.hitter) && !against[p.hitter]
+      ? p.hitter
+      : v.running >= 1 ? 'speed' : v.hitting >= 1 ? 'power' : 'contact';
   const defense =
     v.bullpen >= 1 ? 'bullpen'
       : v.bullpen <= -1 ? 'rotation'
-        : v.pitching <= -1 || p.pitcher === 'control' ? 'fielding'
+        : v.pitching <= -1 || (p.pitcher === 'control' && !(v.pitching >= 1)) ? 'fielding'
           : p.pitcher === 'velocity' ? 'bullpen' : 'rotation';
   // 看板は得意分野から（采配が得意な人は、前の「戦い方」が守りなら守り）
   const flagship =

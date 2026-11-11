@@ -36,7 +36,15 @@ import jp.icenorth.baseball.shared.CONDITION_TEXT
 import jp.icenorth.baseball.shared.FORM_SHORT
 import jp.icenorth.baseball.shared.PITCH_TYPE_NAMES
 import jp.icenorth.baseball.shared.POSITION_LABELS
+import jp.icenorth.baseball.shared.BATTERY_NOTE
+import jp.icenorth.baseball.shared.Battery
+import jp.icenorth.baseball.shared.BatteryLine
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.batteryDecimal
+import jp.icenorth.baseball.shared.batteryInnings
+import jp.icenorth.baseball.shared.batteryOf
+import jp.icenorth.baseball.shared.batteryPercent
+import jp.icenorth.baseball.shared.batteryRate
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.detailReadable
 import jp.icenorth.baseball.shared.formatStat
@@ -72,7 +80,8 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
     val readable = remember(p, ownRoster) { detailReadable(p, ownRoster) }
     var periods by remember(id, readable) { mutableStateOf(if (readable) null else localPeriods(p)) }
     var failure by remember(id, readable) { mutableStateOf<String?>(null) }
-    LaunchedEffect(id, readable) {
+    var attempt by remember(id, readable) { mutableStateOf(0) }
+    LaunchedEffect(id, readable, attempt) {
         if (id == null || !readable) return@LaunchedEffect
         try {
             periods = model.read("player", mapOf("id" to id.toString())).at("periods").list().mapNotNull { it.obj() }
@@ -83,8 +92,10 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
         }
     }
     val pitcher = p.at("position").str() == "pitcher"
+    var openPeriods by remember(id) { mutableStateOf(setOf(0)) }
     Column(
-        Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
+        // 画面の見回り（ScreenTour）はこの印の上でスクロールする（シートは別の窓なので、画面の根を送っても動かない）
+        Modifier.testTag("player-sheet").verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column {
@@ -102,7 +113,7 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                 ).joinToString(" · "),
             )
         }
-        // ⚠ 能力は投打の両方をいつも出す（二刀流が売り。投手を野手で、野手を投手で起用できる）。本職を先に
+        // ⚠ 能力は投打の両方を持つ（二刀流が売り。投手を野手で、野手を投手で起用できる）。本職を先に
         // ⚠ **効き方で分けて並べ、項目を押すと何にどう効くかを出す**（いしだ指摘 2026-11-08: 体幹などが
         //    何に効いているのか分からず、アプリでは見えもしなかった）。Web 版の並べ方・説明と同じ
         val pitchingBlock: @Composable () -> Unit = {
@@ -132,7 +143,22 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
             }
         }
         Text("能力", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        if (pitcher) { pitchingBlock(); battingBlock() } else { battingBlock(); pitchingBlock() }
+        // ⚠ 本職でない側は畳んでおき、見出しを押して開く（いしだ 2026-11-11: シートが長い）。
+        //    二刀流の選手は両方が本職なので、いつも両方を開いておく
+        val twoWay = p.at("isTwoWay").bool() == true
+        var otherOpen by remember(id) { mutableStateOf(false) }
+        val (mainBlock, otherBlock) = if (pitcher) pitchingBlock to battingBlock else battingBlock to pitchingBlock
+        mainBlock()
+        if (twoWay || otherOpen) otherBlock()
+        if (!twoWay) {
+            Row(
+                Modifier.fillMaxWidth().clickable { otherOpen = !otherOpen }.padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Muted(if (pitcher) "打撃・守備の能力（本職でない）" else "投球の能力（本職でない）", Modifier.weight(1f))
+                Text(if (otherOpen) "閉じる ▴" else "開く ▾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         AbilityGroup("体力・精神") {
             Item("体力", p.at("physical", "bodyStamina").int())
             Item("回復", p.at("physical", "recovery").int())
@@ -160,12 +186,22 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
 
         Text("成績", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         when {
-            failure != null -> Muted("成績を読めませんでした: $failure")
+            failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 }, title = "成績を読めませんでした")
             periods == null -> Muted("読み込み中…")
             periods!!.isEmpty() -> Muted("成績の記録がありません。")
-            else -> periods!!.forEach { period ->
+            else -> periods!!.forEachIndexed { index, period ->
+                // ⚠ 開いておくのは先頭（今季）だけ。ほかの期間は見出しを押して開く（全部を並べるとシートが長く、
+                //    同じ並びの数字が3回続いて、どれが今季か見失った）
+                val shown = index in openPeriods
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(period.at("label").str().orEmpty(), fontWeight = FontWeight.SemiBold)
+                    Row(
+                        Modifier.fillMaxWidth().clickable { openPeriods = if (shown) openPeriods - index else openPeriods + index }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(period.at("label").str().orEmpty(), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(if (shown) "閉じる ▴" else "開く ▾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (!shown) return@Column
                     // 投手は投球を先に。打席に立っていれば打撃も出す
                     val sides = if (pitcher) listOf(false, true) else listOf(true, false)
                     sides.forEach { batting ->
@@ -184,6 +220,7 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                             }
                         }
                     }
+                    batteryOf(period)?.let { BatterySection(it) }
                     period.at("source").str()?.let { Muted(it) }
                 }
             }
@@ -192,6 +229,72 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
 }
 
 private val ValueWidth = 48.dp
+
+/**
+ * 投手×捕手の組み合わせ（自球団の選手だけ。Web 版 BatteryStats.jsx と同じ中身）。
+ * ⚠ 押したときだけ開く（行が多く、シートが長くなる）
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BatterySection(b: Battery) {
+    var open by remember(b) { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 4.dp).testTag("battery-toggle"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (b.caught != null) "受けた投手ごとの成績" else "組んだ捕手ごとの成績",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(if (open) "閉じる ▴" else "開く ▾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    b.caught?.let { c ->
+        Muted("捕手として（マスクをかぶった時の投手成績）")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            listOf(
+                "守備回" to batteryInnings(c.outs),
+                "先発マスク" to "${c.starts}",
+                "捕手防御率" to batteryDecimal(c.era),
+                "読まれ率" to batteryPercent(c.readRate),
+                "K/9" to batteryDecimal(c.k9),
+                "BB/9" to batteryDecimal(c.bb9),
+                "被打率" to batteryRate(c.avg),
+            ).forEach { (label, value) ->
+                Row {
+                    Text("$label ", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+                    Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.alignByBaseline())
+                }
+            }
+        }
+    }
+    if (!open) return
+    if (b.caught != null && b.pitchers.isNotEmpty()) BatteryTable("受けた投手", b.pitchers)
+    if (b.catchers.isNotEmpty()) BatteryTable("捕手", b.catchers)
+    Muted(BATTERY_NOTE)
+}
+
+@Composable
+private fun BatteryTable(who: String, rows: List<BatteryLine>) {
+    val header = listOf("回", "防御率", "K/9", "BB/9", "被打率", "読まれ率")
+    Column(Modifier.testTag("battery-table")) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+            Text(who, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(2.2f))
+            header.forEach { Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f)) }
+        }
+        rows.forEach { r ->
+            val color = if (r.few) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(r.name + if (r.few) "（少）" else "", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = color, modifier = Modifier.weight(2.2f), maxLines = 1)
+                listOf(
+                    batteryInnings(r.outs), batteryDecimal(r.era), batteryDecimal(r.k9),
+                    batteryDecimal(r.bb9), batteryRate(r.avg), batteryPercent(r.readRate),
+                ).forEach { Text(it, fontSize = 12.sp, color = color, modifier = Modifier.weight(1f), maxLines = 1) }
+            }
+        }
+    }
+}
 
 /** [AbilityGroup] の中の項目。押した項目の説明を、かたまりの下に出す */
 private class AbilityScope(val open: String?, val toggle: (String) -> Unit)

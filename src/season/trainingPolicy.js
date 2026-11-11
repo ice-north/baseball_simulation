@@ -51,7 +51,7 @@
 
 export const DIRECTIONS = {
   sharpen:  { key: 'sharpen',  name: '長所を伸ばす', icon: '⚔️',
-              description: '最も強い能力に絞って magnify する。他は伸びない' },
+              description: '最も強い能力に絞って伸ばす。他は伸びない' },
   balanced: { key: 'balanced', name: '全体を伸ばす', icon: '⚖️',
               description: '満遍なく。突出はしないが穴も出来ない' },
   patch:    { key: 'patch',    name: '短所を埋める', icon: '🧱',

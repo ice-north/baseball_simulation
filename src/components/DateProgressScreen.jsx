@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
+import { leagueMagic, remainingHeadToHead } from '../season/magicNumber.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth, getPlayoffChampion, advanceDate, compareDates } from '../season/seasonManager.js';
 import { RANK_COLORS } from '../utils/constants.js';
 import { getScheduleByDate, getNextGame } from '../season/scheduleGenerator.js';
@@ -83,7 +84,7 @@ const PHASE_EVENT_INFO = {
   offseason: { label: 'オフシーズン', desc: 'シーズンが終了しました。表彰・引退・進路決定を行います。' },
 };
 
-const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
+const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
@@ -94,6 +95,14 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   const [activeTournamentTab, setActiveTournamentTab] = useState(null);
   const [isGeneratingTournament, setIsGeneratingTournament] = useState(false);
   const [koshienNotice, setKoshienNotice] = useState(null);   // 夏の甲子園の結果ダイアログ
+  // 「試合スキップ」した自分の試合（id）。結果を画面の上に少しの間出す。
+  // ⚠ 以前は何も出ず、日付だけが進んで、勝ったのか負けたのかはカレンダーの小さな ○● を探すしかなかった
+  const [skipNoticeGameId, setSkipNoticeGameId] = useState(null);
+  useEffect(() => {
+    if (!skipNoticeGameId) return undefined;
+    const t = setTimeout(() => setSkipNoticeGameId(null), 8000);
+    return () => clearTimeout(t);
+  }, [skipNoticeGameId]);
   const [watchTick, setWatchTick] = useState(0);              // 注目リスト更新の再描画トリガー
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
   const [scoutReportNotifications, setScoutReportNotifications] = useState([]);
@@ -659,7 +668,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   // ⚠ **印（フラグ）だけでは二重実行を止められない**。印を落とすのは `executeSkipDay` の中の
   //    `setSeasonData` 経由なので、同じコミットで2回走ると**どちらも印が立ったまま**通る。
   //    `isSimulating` も `setState` なので同じ理由で間に合わない（旧実装はこれだけだった）。
-  //    `executeSkipDay` は先頭で `simulateGamesOnDate` を呼ぶので、2回通ると
+  //    `executeSkipDay` は先頭で `simulateScheduledGamesOnDate` を呼ぶので、2回通ると
   //    **その日の他の試合が二重に計算され、順位表の試合数がずれる**。
   //    ⚠ 「開発時の React が effect を2回実行するだけ」で済ませないこと——
   //    `aiManager` の `setTeam(prev => …)` で交代ログと登板疲労が二重になったのと同じ型で、
@@ -683,7 +692,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   //    `progressDate` の日数ループ（`recoverAllPitcherFatigue` と
   //    `updateAllPlayersCondition`）まで丸ごと抜ける。イベントは日付の完全一致でしか
   //    発火しないから、飛ばした日の分は後から戻ってこない。
-  //    （`dateProgression.js` の `progressToNextGame` と `seasonProgress.js` の
+  //    （`dateProgression.js` の `progressToNextGame` と、いまは無い `seasonProgress.js` の
   //    `handleProgressToNextGame` は、この理由で死んだまま残っていたので除去した。
   //    復活させず、1日進行をそのまま繰り返すこと。）
   const nextUserGame = useMemo(() => {
@@ -781,6 +790,9 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     if (isSimulating) return;
     setShowGameChoiceModal(false);
     if (choice === 'skip') {
+      const userGame = getScheduleByDate(seasonData.schedule, seasonData.currentDate)
+        .find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
+      setSkipNoticeGameId(userGame?.id ?? null);
       executeSkipDay(1);
     } else if (choice === 'manage') {
       // 采配モードへ移行
@@ -841,10 +853,6 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       isTournament: true,
     });
   };
-
-  useEffect(() => {
-    if (onRegisterAdvance) onRegisterAdvance(() => handleProgressDate(1));
-  });
 
   // マウント時: 独立リーグスケジュールが古い年度のものであればリセット（セーブロード後の取りこぼし対策）
   useEffect(() => {
@@ -929,10 +937,15 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
   const calendarCells = useMemo(() => {
     const cells = [];
+    // ⚠ プレーオフの期間（10/10〜10/20）は日付で決まるが、シリーズが早く決着すると残りの日に試合は無い。
+    //    以前は優勝が決まった後の日まで「プレーオフ」と出し続けていた（中止になった第3戦の日は自チームの試合日の色のまま）。
+    //    決着後は試合のあった日だけに出す
+    const playoffDecided = !isCorporate && !isUniversity && !!getPlayoffChampion(seasonData.schedule);
     for (let i = 0; i < firstDay; i++) cells.push({ day: null, games: [], eventLabel: null, tournamentEvents: [] });
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = { year, month: selectedMonth, day };
-      const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
+      // 決着したシリーズの残りの試合（中止扱い）は、その日に試合が無いものとして数える
+      const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj).filter(g => !g.result?.cancelled);
       const isToday = seasonData.currentDate.year === year && seasonData.currentDate.month === selectedMonth && seasonData.currentDate.day === day;
       const phaseOpts = isUniversity ? { universityMode: true } : undefined;
       const phase = getCurrentPhase(selectedMonth, day, phaseOpts, year);
@@ -941,7 +954,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       else if (isUniversity && selectedMonth === 11 && day === 29) eventLabel = 'セレクション';
       else if (isUniversity && selectedMonth === 8 && day >= 20 && day <= 31) eventLabel = '夏合宿';
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
-      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'プレーオフ';
+      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate && !(playoffDecided && gamesOnDay.length === 0)) eventLabel = 'プレーオフ';
       else if (!isCorporate && !isUniversity && selectedMonth === 10 && day === 21) eventLabel = 'グランドCS';
       else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
       else if (phase === SEASON_PHASES.CONTRACT) eventLabel = isCorporate ? '退団' : '契約更改';
@@ -962,7 +975,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   //    ⚠ データを作る `useMemo` も併せて消してある——描画されない state を残さない。
 
   // ⚠ **「昨日の結果」は撤去済み**（日程進行が縦に長くなりすぎたため）。
-  //    `simulateGamesOnDate` の戻り値が一度も描画されていなかったのを直した機能で、
+  //    `simulateScheduledGamesOnDate` の戻り値が一度も描画されていなかったのを直した機能で、
   //    データは `seasonData.results`（リーグ戦）＋ 各ブラケットの日付走査
   //    （トーナメント。社会人はリーグ戦を持たないのでこちらが本体）で作っていた。
   //    ⚠ **宣言だけ残さないこと**——描画されない state はこの作品が繰り返し踏んだ defect。
@@ -1158,8 +1171,30 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     return { wins, losses, draws, results, winRate };
   }, [calendarCells, userTeamName]);
 
+  // カレンダーのマスに出すチームの名前。略称を、その月に出るチームの中で区別できる最短（2文字から）に縮める。
+  // ⚠ マスは幅およそ100pxで、大学の略称（「早稲田大」「慶應義大」の4文字）を2つとスコアを並べると
+  //   「早稲田大11-0東京」のように右が切れていた。正式な略称は「本日の対戦」と順位表に出る
+  const calendarLabel = useMemo(() => {
+    const abbr = new Map();
+    calendarCells.forEach(c => c.games?.forEach(g => {
+      for (const n of [g.home, g.away]) if (n && !abbr.has(n)) abbr.set(n, getTeamAbbreviation(n));
+    }));
+    const out = new Map();
+    for (const [name, a] of abbr) {
+      let label = a;
+      for (let k = 2; k < a.length; k++) {
+        const p = a.slice(0, k);
+        if (![...abbr].some(([other, b]) => other !== name && b.slice(0, k) === p)) { label = p; break; }
+      }
+      out.set(name, label);
+    }
+    return out;
+  }, [calendarCells]);
+
   const totalGames = seasonData?.settings?.gamesPerSeason || 60;
   const standings = seasonData.standings || [];
+  // 順位表の「M」用。残りの直接対決の数（日程が変わった時だけ数え直す）
+  const headToHeadLeft = useMemo(() => remainingHeadToHead(seasonData?.schedule), [seasonData?.schedule]);
 
   const leagueFormat = seasonData?.settings?.leagueFormat || 'single';
   const isTwoLeague = leagueFormat === 'two';
@@ -1722,8 +1757,8 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       <div className="p-3 min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">⚾</div>
-          <div className="text-white text-xl font-bold mb-2">都市対抗予選を開催中...</div>
-          <div className="text-gray-300 text-sm">全12地区の予選トーナメントをシミュレーション中</div>
+          <div className="text-ink text-xl font-bold mb-2">都市対抗予選を開催中...</div>
+          <div className="text-ink-sub text-sm">全12地区の予選トーナメントをシミュレーション中</div>
           <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '70%'}}></div>
           </div>
@@ -1748,7 +1783,8 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
           押せると分かる手がかりが無く、「一番よく押す操作に押す場所が無い」状態だったため。
           帯は復活させず、**カレンダーの見出し行**（月送りの ◀▶ の隣）に置いてある
           ＝縦は1pxも増えない。この帯は実測66px使っていた。
-          再クリックの経路も残してある（覚えた人の手を止めないため）。 */}
+          ⚠ サイドバーの再クリックで1日進む経路は**外した**。開いている項目を押し直すと
+          黙って日が進み、間の試合も取り消せなかったため。 */}
       {/* ⚠ **「昨日の結果」パネルはここにあったが、日程進行が縦に長くなりすぎたため撤去した**。
           押した手応えを返すのが役目だったので、消したことで
           「押しても何が起きたか画面に返らない」が部分的に戻っている。
@@ -1785,8 +1821,11 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                     <span className="text-white">{selectedMonth}月</span>
                   </span>
                 )}
+                {/* ⚠ 見ている月の戦績。今月を見ている間は見出しが日付になるので、頭に「今月」を付ける
+                    （以前は無く、通算の成績に読めた）。他の月は見出しの「N月」がそのまま印になる */}
                 {monthlyStats && (
-                  <span className="text-sm font-bold ml-1">
+                  <span className="text-sm font-bold ml-1 whitespace-nowrap">
+                    {selectedMonth === seasonData.currentDate.month && <span className="text-gray-300 font-normal text-xs mr-1">今月</span>}
                     <span className="text-green-400">{monthlyStats.wins}勝</span>
                     <span className="text-red-400 ml-1">{monthlyStats.losses}敗</span>
                     {monthlyStats.draws > 0 && <span className="text-gray-300 ml-1">{monthlyStats.draws}分</span>}
@@ -1910,15 +1949,16 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                         {cell.games.length > 0 ? (
                           <div className="space-y-0">
                             {cell.games.map((game, gIdx) => {
-                              const awayShort = getTeamAbbreviation(game.away);
-                              const homeShort = getTeamAbbreviation(game.home);
+                              const awayShort = calendarLabel.get(game.away) || getTeamAbbreviation(game.away);
+                              const homeShort = calendarLabel.get(game.home) || getTeamAbbreviation(game.home);
+                              const fullTitle = `${getTeamAbbreviation(game.away)} - ${getTeamAbbreviation(game.home)}`;
                               const isUserInGame = game.home === userTeamName || game.away === userTeamName;
                               const leagueColor = !isTwoLeague ? '' :
                                 (league1Teams.includes(game.home) && league1Teams.includes(game.away)) ? 'border-l border-blue-500/50 pl-0.5' :
                                 (league2Teams.includes(game.home) && league2Teams.includes(game.away)) ? 'border-l border-orange-500/50 pl-0.5' :
                                 'border-l border-green-500/50 pl-0.5';
                               if (showAsScheduled || !game.result) {
-                                return <div key={gIdx} className={`text-xs leading-tight text-center font-medium whitespace-nowrap overflow-hidden ${isUserInGame ? 'text-yellow-300' : 'text-white'} ${leagueColor}`}>{awayShort}-{homeShort}</div>;
+                                return <div key={gIdx} title={fullTitle} className={`text-xs leading-tight text-center font-medium whitespace-nowrap overflow-hidden ${isUserInGame ? 'text-yellow-300' : 'text-white'} ${leagueColor}`}>{awayShort}-{homeShort}</div>;
                               }
                               if (game.result?.cancelled) return null;
                               const awayWin = game.result.awayScore > game.result.homeScore;
@@ -1945,7 +1985,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                                 seriesInfo = `${homeWins}-${awayWins}`;
                               }
                               return (
-                                <div key={gIdx} className={`leading-tight text-center ${leagueColor}`}>
+                                <div key={gIdx} title={fullTitle} className={`leading-tight text-center ${leagueColor}`}>
                                   <div className="text-xs whitespace-nowrap overflow-hidden">
                                     <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-300'}>{awayShort}</span>
                                     <span className="text-white mx-px font-mono text-xs">{game.result.awayScore}-{game.result.homeScore}</span>
@@ -2571,11 +2611,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
               const lLeader = leagueStandings[0];
               const lLeaderWins = lLeader?.wins || 0;
               const lLeaderLosses = lLeader?.losses || 0;
-              const isLChampionDecided = lLeader && leagueStandings.length > 1 && (() => {
-                const second = leagueStandings[1];
-                const secondRemaining = totalGames - ((second.wins || 0) + (second.losses || 0) + (second.draws || 0));
-                return lLeaderWins > (second.wins || 0) + secondRemaining;
-              })();
+              const { decided: isLChampionDecided, magic: lMagic } = leagueMagic(leagueStandings, totalGames, headToHeadLeft);
 
               return (
                 <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
@@ -2621,20 +2657,16 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                         if (index === 0) gb = isLChampionDecided ? '優勝' : '-';
                         else { const d = ((lLeaderWins - (team.wins || 0)) - (lLeaderLosses - (team.losses || 0))) / 2; gb = d === 0 ? '-' : d.toFixed(1); }
                         let mg = '';
-                        if (index === 0 && leagueStandings.length > 1) {
-                          const sec = leagueStandings[1];
-                          const secMax = (sec.wins || 0) + (totalGames - ((sec.wins || 0) + (sec.losses || 0) + (sec.draws || 0)));
-                          const mn = secMax - lLeaderWins + 1;
-                          if (mn > 0 && !isLChampionDecided) mg = `M${mn}`;
-                          else if (isLChampionDecided) mg = '-';
-                        }
+                        if (index === 0) mg = isLChampionDecided ? '-' : lMagic ? `M${lMagic}` : '';
                         return (
                           <tr key={team.team} className={`border-b border-gray-700/30 transition-colors hover:bg-gray-700/20 ${isUser ? 'bg-blue-900/30 hover:bg-blue-900/40' : ''} ${index === 0 && isLChampionDecided ? 'bg-yellow-900/15' : ''}`}>
                             <td className="py-1.5 px-0.5 text-center">
                               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${index === 0 ? 'bg-yellow-500/90 text-black' : index === 1 ? 'bg-gray-400/80 text-black' : index === 2 ? 'seg-on' : 'seg'}`}>{index + 1}</span>
                             </td>
-                            <td className={`py-1.5 px-1 font-bold text-sm ${isUser ? 'text-yellow-300' : ''}`}>
-                              {team.team}
+                            {/* 順位表は略称（レギュレーションの「略称はカレンダー・順位表で使用」）。正式名だと
+                                「徳島インディゴソック／ス」のように1〜2文字だけ次の行に落ちていた。正式名は title で読める。 */}
+                            <td className={`py-1.5 px-1 font-bold text-sm whitespace-nowrap ${isUser ? 'text-yellow-300' : ''}`} title={team.team}>
+                              {getTeamAbbreviation(team.team)}
                               {isUser && <span className="ml-1 text-xs text-blue-400 font-bold">YOU</span>}
                             </td>
                             <td className="py-1.5 px-0.5 text-center text-white text-xs">{team.gamesPlayed || 0}</td>
@@ -3549,6 +3581,23 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       {showNewspaper && newspaperData && (
         <NewspaperModal data={newspaperData} seasonData={seasonData} onClose={() => setShowNewspaper(false)} />
       )}
+
+      {/* スキップした試合の結果（8秒で消える） */}
+      {(() => {
+        const g = skipNoticeGameId != null ? (seasonData.schedule || []).find(x => x.id === skipNoticeGameId) : null;
+        if (!g?.result || g.result.cancelled) return null;
+        const mine = g.home === userTeamName ? g.result.homeScore : g.result.awayScore;
+        const theirs = g.home === userTeamName ? g.result.awayScore : g.result.homeScore;
+        const verdict = mine > theirs ? { label: '○ 勝ち', cls: 'text-green-400' } : mine < theirs ? { label: '● 負け', cls: 'text-red-400' } : { label: '△ 引き分け', cls: 'text-gray-200' };
+        return (
+          <div role="status" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-surface-2 border border-gray-600 rounded-xl shadow-2xl px-4 py-2.5 flex items-center gap-3 text-white whitespace-nowrap">
+            <span className="text-xs text-gray-300">試合結果{g.date ? ` ${g.date.month}/${g.date.day}` : ''}</span>
+            <span className="font-bold tabular-nums">{g.away} {g.result.awayScore} - {g.result.homeScore} {g.home}</span>
+            <span className={`font-bold ${verdict.cls}`}>{verdict.label}</span>
+            <button type="button" onClick={() => setSkipNoticeGameId(null)} aria-label="閉じる" className="text-gray-300 hover:text-white px-1">✕</button>
+          </div>
+        );
+      })()}
 
       {/* 試合選択モーダル */}
       {showGameChoiceModal && <PreGameModal

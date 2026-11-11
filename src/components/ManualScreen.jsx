@@ -36,11 +36,8 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="パワー（power）" range="1〜99">
             打球の飛距離を決める能力。値が高いほど長打・ホームランの確率が上がる。
-            コンディションにより<b>±5</b>の補正あり。
-            <span className="text-gray-400">
-              ——ミートの半分に抑えてある。本塁打はパワーに対して急に増えるので、
-              ミートと同じ幅にすると絶好調の日に本塁打が6倍出てしまう。
-            </span>
+            コンディションにより<b>±5</b>の補正あり（パワーは少しの差で本塁打の数が大きく変わるので、
+            ミートの半分の幅）。
           </Entry>
           <Entry title="選球眼（eye）" range="1〜99">
             ストライクとボールを見極める能力。値が高いほど四球を選びやすく、ボール球を振りにくい。
@@ -211,7 +208,7 @@ const ManualContent = ({ category }) => {
           <Entry title="コンディション（5段階）">
             毎日変動する選手の調子。試合でのパフォーマンスに直接影響する。
             打撃補正は<b>ミートとパワーで幅が違う</b>（選球眼は対象外）。
-            パワーは本塁打への効き方が急なので、ミートの半分に抑えてある。
+            パワーは少しの差で本塁打の数が大きく変わるので、幅はミートの半分。
           </Entry>
           <div className="bg-gray-700/50 rounded-lg p-3">
             <table className="w-full text-sm">
@@ -241,7 +238,7 @@ const ManualContent = ({ category }) => {
             コンディションは1日ごとに変化。現状維持が最も多く、1段階変動は自然に起こるが、2段階以上の急変は稀。
           </Entry>
           <Entry title="調子で成績がどれだけ変わるか">
-            全打者を同じコンディションに固定してリーグを回した実測。
+            全員を同じ調子にしてシーズンを回したときの目安。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
@@ -484,10 +481,10 @@ const ManualContent = ({ category }) => {
             <ul className="list-disc list-inside text-sm space-y-1 mt-1">
               <li>先発投手は100球で疲労+63〜77。回復力50なら完全回復に<b>3〜4日</b>必要（＝中4日〜5日のローテ）</li>
               <li>野手は1試合+7〜15に対して休養日1日で+19〜63回復するので、<b>週に1日休めればほぼ抜ける</b>。
-                  問題は連戦が続く時期で、実測ではシーズン終了時の規定級野手の疲労が中央26・最大69</li>
+                  ただし連戦が続く時期は抜けきらず、シーズンの終わりにはレギュラーの野手で疲労26前後（多い選手で69）残る</li>
               <li>疲労が高い投手はスタミナも減った状態で登板するため、早期降板のリスクが高まる</li>
               <li>リリーフは球数が少なくても<b>1登板あたり最低11</b>溜まる。連投には注意</li>
-              <li>AI監督は疲労80以上の投手を先発起用しない</li>
+              <li>ほかのチームの監督は疲労80以上の投手を先発させない</li>
               <li className="text-yellow-300">疲労50を超えた状態で出場すると、その選手の<b>成長率が下がる</b>（-0.01/試合）</li>
             </ul>
           </Entry>
@@ -726,7 +723,7 @@ const ManualContent = ({ category }) => {
               <li>対角へ動かすほど打ちにくい（内角高め→外角低めが最大）</li>
               <li><b className="text-yellow-300">ただし毎回対角に振り切るのも損</b>——
                   直近4球で同じ引き出しを使うと打者に読まれる。
-                  実測でも「対角を使わない」「対角を最大化する」の両方が中間に負ける</li>
+                  対角をまったく使わないのも、毎回使うのも、ほどほどに使うより打たれる</li>
               <li>制球が低い投手は狙いが洗い流されるので、配球の妙は<b>投げ切れる投手にだけ効く</b></li>
             </ul>
           </Entry>
@@ -760,7 +757,7 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="采配モードでの操作">
             守備中は<b>「配球」（球種）</b>と<b>「狙い」（勝負/際どく/誘い）</b>を自分で指示できる。
-            どちらも「おまかせ」なら捕手AIが決める。
+            どちらも「おまかせ」なら捕手が決める。
           </Entry>
         </div>
       );
@@ -823,7 +820,7 @@ const ManualContent = ({ category }) => {
               <li>型は選手詳細のコース適性の上にバッジで表示される</li>
             </ul>
           </Entry>
-          <Entry title="AI打者もヤマを張る">
+          <Entry title="打者もヤマを張る">
             張って当たればタイミングが大きく広がるが、<b className="text-yellow-300">外せば代償がある</b>。
             これがあるから「良い捕手は読み違えさせられる」。
             <ul className="list-disc list-inside text-sm space-y-1 mt-1">
@@ -900,7 +897,7 @@ const ManualContent = ({ category }) => {
               <b className="text-yellow-300">「何を持っているか」で防御率が0.40〜0.84動く。</b>
             </p>
           </Entry>
-          <Entry title="球種ごとの実測（ストレート＋1球種Lv50）">
+          <Entry title="球種ごとの目安（ストレート＋1球種Lv50）">
             <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
@@ -972,7 +969,7 @@ const ManualContent = ({ category }) => {
               </table>
             </div>
             <p className="text-sm mt-2">
-              実測でスライダー＋カッターはスライダー＋シュートより<b>防御率が0.14悪い</b>。
+              スライダー＋カッターはスライダー＋シュートより<b>防御率が0.14ほど悪い</b>。
               反対の性格を組み合わせるほど読まれにくい。
             </p>
           </Entry>
@@ -982,7 +979,7 @@ const ManualContent = ({ category }) => {
             <ul className="list-disc list-inside text-sm space-y-1 mt-1">
               <li>封印しても<b>練習・成長・表示からは消えない</b>。試合で投げないだけ</li>
               <li>打者の読み合いからも外れるので、<b>読まれやすくなる代償</b>がある</li>
-              <li>実測: 未熟な球（Lv10）の封印は<b>防御率+0.16と引き換えに四球-0.84</b>。
+              <li>目安: 未熟な球（Lv10）を封印すると<b>防御率は0.16悪くなる代わりに、四球が0.84減る</b>。
                   「四球を出せない場面の投手は封印しておく」が意味を持つ</li>
               <li>全部は封印できない（投げる球が無くなる）</li>
             </ul>
@@ -1148,13 +1145,12 @@ const ManualContent = ({ category }) => {
               <li><b>フェンスを越える飛距離があり打出し角20〜45度なら原則そのまま本塁打</b>。
                   塀際の好捕で稀に阻まれる（余裕5m未満で最大22%）</li>
               <li>引っ張った打球はフェンスが近いので、<b>詰まっても本塁打だけは増える</b></li>
-              <li>公認球の差を吸収する係数があり、MLB基準の飛距離式のまま
-                  NPB相当の本塁打数（0.55〜0.75本/試合）になる</li>
+              <li>本塁打はプロ野球と同じくらい（1試合0.55〜0.75本）出る</li>
             </ul>
           </Entry>
           <Entry title="盗塁">
             走力・盗塁スキル・捕手の肩・投手のクイック・左投手の牽制で決まる。
-            実測で0.4〜0.6個/試合・成功率73〜77%（実NPB 0.55個・72〜75%）。
+            目安は1試合0.4〜0.6個・成功率73〜77%（プロ野球は0.55個・72〜75%）。
           </Entry>
         </div>
       );
@@ -1701,7 +1697,7 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="起用は育成でもある">
             <b className="text-yellow-300">試合に出した量そのものが成長に効く。</b>
-            20歳・社会人B・プロ意識55の選手を1年育てた実測（6能力の合計の伸び）:
+            20歳・社会人B・プロ意識55の選手を1年育てたときの目安（6能力の合計の伸び）:
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
@@ -1909,12 +1905,11 @@ const ManualContent = ({ category }) => {
             資料室の「OB名鑑」で現況と通算成績が追える。
             <ul className="list-disc list-inside text-sm space-y-1 mt-1">
               <li>一軍・レギュラーは<b>絶対的な能力の線ではなく現役の中の順位</b>で決まる（椅子取り）</li>
-              <li>実測: 一軍到達44〜48% / レギュラー到達15〜16%（実NPB 40〜50% / 15〜20%）</li>
+              <li>目安: 一軍に上がるのは44〜48%、レギュラーになるのは15〜16%（プロ野球は40〜50% / 15〜20%）</li>
               <li><b>1年目からレギュラーになる選手もいる</b>（学年あたり3.9〜5.3人）。
                   即戦力（社会人・独立）が最も早く、高卒が最も遅い。
                   高卒の1年目レギュラーは学年あたり0.27人で、全員ドラフト1位</li>
-              <li>二軍が続くと戦力外。<b>プロは操作できない</b>——
-                  遊べるようにするとドラフトが単なる移籍になり、送り出す重みが失われる</li>
+              <li>二軍が続くと戦力外。<b>プロに進んだ後は操作できない</b>（見守るだけ）</li>
             </ul>
           </Entry>
         </div>
@@ -1963,7 +1958,7 @@ const ManualContent = ({ category }) => {
             </p>
           </Entry>
           <Entry title="チームランクは勝てば上がる">
-            全カテゴリのチームがEloスコアを持ち、年度末に全体のパーセンタイルでランクが決まる。
+            すべてのチームが強さの点数を持ち、年度末に全体の中の位置でランクが決まる。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
@@ -1981,12 +1976,12 @@ const ManualContent = ({ category }) => {
               </table>
             </div>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-              <li>Eloが動く場面: リーグ戦の勝率・最終順位（1位+30）・地域大会・都市対抗予選・
+              <li>点数が動く場面: リーグ戦の勝率・最終順位（1位+30）・地域大会・都市対抗予選・
                   全国大会・<b>プロ輩出（1名+15）</b></li>
-              <li><b>下位リーグでも優勝すれば昇格できる</b>ように、順位ボーナスを厚くしてある</li>
-              <li>実測: 地区大会を毎年勝つDランクのチームは<b>1〜6年（中央3年）でCへ</b>、
-                  さらに3〜8年でBへ。背景のCPUチームは10年で16%が昇格</li>
-              <li><b>注目度（reputation）はランクとは別系統</b>。
+              <li><b>下位リーグでも優勝すれば昇格できる</b>（順位の加点が大きい）</li>
+              <li>目安: 地区大会を毎年勝つDランクのチームは<b>1〜6年（多くは3年）でCへ</b>、
+                  さらに3〜8年でBへ。ほかのチームは10年で16%ほどが昇格する</li>
+              <li><b>注目度はランクとは別のもの</b>。
                   スカウト・予算・入団交渉の成功率にだけ効く</li>
             </ul>
           </Entry>
@@ -2033,17 +2028,18 @@ const ManualScreen = ({ onBack }) => {
 
   return (
     <ScreenShell width="mid" className="text-white">
-        {/* ヘッダー */}
+        {/* ヘッダー。⚠ 見出しは地色（明るい紙）の上なので text-ink / text-ink-sub。
+            白・gray-300 のままだと 2.2:1 / 1.3:1 でほとんど見えなかった */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-white">MANUAL</h1>
-            <span className="text-gray-300 text-sm">～ゲーム辞典～</span>
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-xl font-bold text-ink">マニュアル</h1>
+            <span className="text-ink-sub text-sm">ゲーム辞典</span>
           </div>
           <button
             onClick={onBack}
-            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition"
+            className="btn-secondary px-4 py-2 rounded-lg transition"
           >
-            戻る
+            ← 戻る
           </button>
         </div>
 
@@ -2068,7 +2064,9 @@ const ManualScreen = ({ onBack }) => {
 
           {/* コンテンツ */}
           <div className="flex-1 min-w-0">
-            <div className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50">
+            {/* ⚠ 本文のカードは不透明（bg-surface-2）にする。半透明（gray-800/60）だと
+                明るい地色が透けて灰色になり、本文の gray-300/400 が 2.5:1 前後まで落ちていた */}
+            <div className="bg-surface-2 rounded-xl p-4 border border-gray-700/50">
               <h2 className="text-lg font-bold mb-4 text-blue-300 border-b border-gray-700 pb-2">
                 {CATEGORIES.find(c => c.id === selectedCategory)?.label}
               </h2>

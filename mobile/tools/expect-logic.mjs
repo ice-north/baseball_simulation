@@ -2,14 +2,8 @@
 //   node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json
 import fs from 'node:fs';
 import { resolveTraining, playerWish, describeMood, recommendedPolicy } from '../../src/season/trainingPolicy.js';
-import { menuFitsPlayer, subMenuFitsPlayer } from '../../src/season/campTraining.js';
-import { CAMP_MENUS, CAMP_SUB_MENUS } from '../../src/online/shared.js';
-
-// CampPlanner.jsx の clampMenu / clampSub と同じ（JSX は node から読めないので写す）
-const clampMenu = (key, player) =>
-  CAMP_MENUS.includes(key) && menuFitsPlayer(key, player) ? key : player.position === 'pitcher' ? 'control' : 'batting';
-const clampSub = (key, player) =>
-  CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player) ? key : 'physique';
+// 画面（CampPlanner.jsx）と同じ判定を読む（以前は JSX から読めないので写していた）
+import { clampMenu, clampSub } from '../../src/online/campMenus.js';
 import {
   plannedPicks, weightedRanked, DEFAULT_WEIGHTS, addToPlan, benchFromPlan, moveInPlan, planSummary,
 } from '../../src/online/tryoutPlan.js';
@@ -35,7 +29,15 @@ const added = addToPlan(ranked, candidates, count, have, ranked.at(-1));
 const benched = benchFromPlan(ranked, candidates, count, have, picks[0]);
 const moved = moveInPlan(ranked, candidates, count, have, picks.at(-1), 0);
 const summary = planSummary(ranked, candidates, count, have);
-const text = JSON.stringify({ camp, wish, recommended, tryout: { ranked, picks, added, benched, moved, blocking: summary.blocking, warnings: summary.warnings } });
+// 注意（warnings）は獲得したあとの名簿で数える。上の例は野手が足りず注意が出ないので、
+// 名簿に投手がそろっている場合（注意なし）と、投手が3人しかいない場合（注意あり）も比べる
+const fullStaff = planSummary(weightedRanked(candidates, DEFAULT_WEIGHTS, have), candidates, candidates.length, have);
+const fewPitchers = (() => {
+  const own = roster.slice(0, 3);
+  const pool = roster.slice(11);
+  return planSummary(weightedRanked(pool, DEFAULT_WEIGHTS, own), pool, pool.length, own);
+})();
+const text = JSON.stringify({ camp, wish, recommended, tryout: { ranked, picks, added, benched, moved, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
 // --check: 書き出し済みの期待値が今の Web 版の答えと同じか（CI で、Web 版だけ直したときに気づく）
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/logic-expected.json', import.meta.url);

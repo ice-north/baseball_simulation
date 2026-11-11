@@ -7,20 +7,26 @@ import {
   PendingPackPanel,
 } from './LeaguePanels.jsx';
 import DesktopTactics from './DesktopTactics.jsx';
-import StaffPage from './StaffPage.jsx';
+import StaffPage, { staffModeChanges } from './StaffPage.jsx';
 import AbilityRanking from './AbilityRanking.jsx';
 import CareerStats from './CareerStats.jsx';
 import TeamRoster from './TeamRoster.jsx';
 import LineupBoard from './LineupBoard.jsx';
 import PitchingBoard from './PitchingBoard.jsx';
-import { useDraftMemoryStore } from './Drafts.jsx';
+import {
+  useDraftMemoryStore,
+  useDraftState,
+  STAFF_MODES_DRAFT,
+  LINEUP_ORDER_DRAFT,
+} from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
-import { formatTurn, TURN_MINUTES, TURNS_PER_DAY } from './shared.js';
+import { formatTurn, TURN_MINUTES } from './shared.js';
+import { SEASON_TURNS } from './pyramidLeague.js';
 import { teamLabel } from './gameText.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { formatDeadline, packStartText } from './LeaguePanels.jsx';
@@ -33,6 +39,7 @@ import {
   restoreFromFullLineup,
   fullLineupFromBoards,
 } from './lineupBridge.js';
+import { restoreFromTapDraft } from './tapLineup.js';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -97,21 +104,39 @@ const NAV = [
  *    もう片方の未保存の編集は保存できる（`rebaseLineupSave`）。
  */
 const BOARD_KEYS = { lineup: LINEUP_BOARD_KEYS, rotation: PITCHING_BOARD_KEYS };
+// ページの見出し。⚠ 左メニューの名前（`NAV`）から作る（2か所に書くと片方だけ変わる）
 const TITLES = {
   today: 'ホーム',
-  players: '選手成績',
-  careers: '通算成績',
-  chronicle: '球団史・記録',
-  ranking: '能力ランキング',
-  games: '試合結果',
-  lineup: 'スタメン設定',
-  rotation: '投手起用',
-  tactics: '方針・采配',
-  staff: '指導者',
-  decisions: '現在の手続き',
-  transfer: 'トレード',
+  ...Object.fromEntries(NAV.flatMap((group) => group.items)),
   admin: 'リーグ管理',
 };
+
+/**
+ * 方針・采配と指導者（任せ方）の未保存の印。
+ * ⚠ この2つはページの中で下書き（`Drafts` の `lineup.dirty`・`STAFF_MODES_DRAFT`）に
+ *    持っていて、スタメン設定・投手起用のように DesktopView へ知らせが来ない。以前は
+ *    変えたまま別のページへ移っても、左メニューに何も出なかった。
+ * ⚠ 下書きの値はほかの部品が変えても描き直されないので、**ページを移るたびに作り直して
+ *    読む**（呼ぶ側で `key` にいまのページを入れる）。開いているページには出さない
+ *    （開いたまま保存しても消えないため。開いている間はページの見出しが知らせる）
+ */
+const DRAFT_PAGES = new Set(['tactics', 'staff']);
+function DraftUnsavedDot({ id, view }) {
+  const [lineupDirty] = useDraftState('lineup.dirty', false);
+  const [modes] = useDraftState(STAFF_MODES_DRAFT, {});
+  const on =
+    id === 'tactics'
+      ? !!lineupDirty
+      : Object.keys(staffModeChanges(view.staff?.modes, modes)).length > 0;
+  return on ? <UnsavedDot /> : null;
+}
+const UnsavedDot = () => (
+  <span
+    className="online-dot is-unsaved"
+    aria-label="保存していない変更"
+    title="保存していない変更があります"
+  />
+);
 
 /**
  * 左メニューの上の「いまの状況」。⚠ **ここ1か所だけに出す**
@@ -124,8 +149,10 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
       <strong>{teamLabel(view.teamName)}</strong>
       {/* ⚠ 順位と勝敗は**出さない**（ホームの順位表に自球団を黄色で出している）。
           代わりに、この遊び方の骨格——1週間で1シーズン——をここに書く。
-          ⚠ 数は書かずに定数から作る（刻みを変えたときに取り残される） */}
-      <small>1週間で1シーズン · {TURNS_PER_DAY * 7}ターン</small>
+          ⚠ 数は書かずに定数から作る（刻みを変えたときに取り残される）。
+          ⚠ 出すのは**試合のターン数**（ホームの「第N/160ターン」と同じ数）。以前は1週の
+          ターン（224＝土日の手続きを含む）を出していて、ほかの画面の160と合わなかった */}
+      <small>1週間で1シーズン · 試合{SEASON_TURNS}ターン</small>
       {/* 途中参加でセットを選び終えた人は、いつ自分の球団になるかを出し続ける */}
       {waiting && (
         <small className="online-nav-waiting">
@@ -177,8 +204,9 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
  *    球団名が2回出ていた（参加時の呼び名の既定が球団名だったため）。
  * ⚠ 内部名（`teamName`）は変わらない。記録の選手キーまで貫いているので、
  *    見せる名前だけ差し替える。
+ * ⚠ スマホも下の「☰」の「名前を変える」からこれを開く（`MobileView.jsx`。再監査 B5）
  */
-function RenameDialog({ view, busy, run, command, close }) {
+export function RenameDialog({ view, busy, run, command, close }) {
   const dialog = useRef(null);
   const me = (view.members || []).find((m) => m.teamName === view.teamName);
   const [teamName, setTeamName] = useState(
@@ -279,9 +307,16 @@ export default function DesktopView(props) {
   //    スマホを横にするとこの画面に切り替わる。受け取ったら両方のページを作っておき、
   //    未保存の印をすぐに出す
   const memory = useDraftMemoryStore();
-  const [restore] = useState(() =>
-    restoreFromFullLineup(memory?.get('lineup.full')),
+  // ⚠ スマホの「打順」（2タップの表）の下書きは**PCが引き取って消す**。残すと、PCで保存・
+  //    取り消したあとスマホに戻したときに古い編集が戻ってくる。受け取りはふだん `lineup.full`
+  //    から（表が写している）。再読み込みのあとで `lineup.full` が空なら下書きから受け取る
+  const [orderDraft, setOrderDraft] = useDraftState(LINEUP_ORDER_DRAFT, null);
+  const [restore] = useState(
+    () =>
+      restoreFromFullLineup(memory?.get('lineup.full')) ||
+      restoreFromTapDraft(orderDraft),
   );
+  useEffect(() => setOrderDraft(null), [setOrderDraft]);
   const [opened, setOpened] = useState(() => ({
     lineup: !!restore || current === 'lineup',
     rotation: !!restore || current === 'rotation',
@@ -346,7 +381,14 @@ export default function DesktopView(props) {
       ),
   });
   const notice = noticeCounts(view);
-  const counts = { decisions: notice.procedure, transfer: notice.trades };
+  // ⚠ **キャンプの間は手続きの数をホームに付ける**。PCのキャンプはホームで行い、
+  //    「現在の手続き」は「ホームへ」の案内だけ。以前は「現在の手続き①」と出して、
+  //    押すと案内だけのページが開いた（もう一度押さないとキャンプに着かない）
+  const counts = {
+    today: campHere ? notice.procedure : 0,
+    decisions: campHere ? 0 : notice.procedure,
+    transfer: notice.trades,
+  };
   const procedure = pendingProcedure(view);
   const waiting = packWaiting(view);
   return (
@@ -362,10 +404,16 @@ export default function DesktopView(props) {
         />
         <button
           className="online-nav-home"
+          aria-label="ホーム"
           aria-current={current === 'today' ? 'page' : undefined}
           onClick={() => setTab('today')}
         >
           ホーム
+          {counts.today > 0 && (
+            <span className="online-count" aria-label="未完了の手続き">
+              {counts.today}
+            </span>
+          )}
         </button>
         {NAV.map((group) => (
           <div key={group.id} className="online-nav-group">
@@ -388,12 +436,9 @@ export default function DesktopView(props) {
                     {counts[id]}
                   </span>
                 )}
-                {unsaved(id) && (
-                  <span
-                    className="online-dot is-unsaved"
-                    aria-label="保存していない変更"
-                    title="保存していない変更があります"
-                  />
+                {unsaved(id) && <UnsavedDot />}
+                {DRAFT_PAGES.has(id) && id !== current && (
+                  <DraftUnsavedDot key={current} id={id} view={view} />
                 )}
               </button>
             ))}
@@ -434,7 +479,13 @@ export default function DesktopView(props) {
                 .join(' · ')}
             </span>
           </div>
-          <button className="online-primary" onClick={() => setTab('decisions')}>
+          {/* ⚠ **キャンプはホームへ直に飛ぶ**。PCのキャンプはホームに出していて、
+              「現在の手続き」は「ホームへ」の案内だけ。以前はそこへ飛ばしていたので、
+              2回押さないとキャンプに着かなかった */}
+          <button
+            className="online-primary"
+            onClick={() => setTab(campHere ? 'today' : 'decisions')}
+          >
             {procedure.label}を開く
           </button>
         </div>
@@ -470,9 +521,16 @@ export default function DesktopView(props) {
                ⚠ **手続きが変わったら作り直す**（`PhasePanel` と同じ `key`）。
                付けないと、年が替わって新しいキャンプが開いても前の年の
                未保存の割り当てが画面に残る */
-            <section className="online-card online-camp-card">
-              <CampPlanner key={view.phase.id} {...props} />
-            </section>
+            <>
+              <section className="online-card online-camp-card">
+                <CampPlanner key={view.phase.id} {...props} />
+              </section>
+              {/* ⚠ **年度更新の伸びはキャンプの下に出す**。キャンプの直前に済んでいて、
+                  方針を決める前に見るもの。以前は「現在の手続き」に置いていたが、
+                  キャンプ中はそこに案内しか無く、開く人がいなかった。
+                  キャンプの1画面（実行ボタンまで）は崩さないよう、下に置く */}
+              <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+            </>
           ) : (
             <>
               {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。
@@ -546,11 +604,6 @@ export default function DesktopView(props) {
               </button>
             </div>
           </section>
-          {/* ⚠ **年度更新の伸びはここに残す**。キャンプの直前に済んでいて、
-              キャンプの方針を決める前に見るもの（以前は `PhasePanel` の中で
-              キャンプの上に出していた）。ホームはキャンプだけで1画面なので、
-              落とさないようこちらへ移す */}
-          <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
         </Page>
       )}
       {current === 'decisions' &&
@@ -653,7 +706,7 @@ function Admin({ view, busy, run, command, allowStep }) {
         </label>
         <p className="online-muted">
           時間を待たずに試すための設定です。遊び始めたら外してください。
-          1ターン＝実時間1時間＝ゲーム内1日（＝1試合）です。
+          1ターン＝実時間{TURN_MINUTES}分＝ゲーム内1日です（試合の日は1試合）。
         </p>
         {(view.testMode || allowStep) && (
           <div className="online-actions">
@@ -664,9 +717,10 @@ function Admin({ view, busy, run, command, allowStep }) {
             )}
             {view.status === 'running' && (
               <>
-                {/* ⚠ **1ターン＝実時間1時間＝ゲーム内1日**。「1日進める」と書くと
+                {/* ⚠ **1ターン＝実時間 `TURN_MINUTES` 分＝ゲーム内1日**。「1日進める」と書くと
                     どちらの1日か分からない（24ターンでゲーム内は24日進む）。
-                    ターン数とゲーム内の日数を両方書く */}
+                    ターン数とゲーム内の日数を両方書く。⚠ 説明の文に刻みの分数を手で書かない
+                    （1時間ごとだった頃の「実時間1時間」が45分に変えたあとも残っていた） */}
                 <button disabled={busy} onClick={() => run(() => command('step'))}>
                   1ターン進める（ゲーム内1日）
                 </button>

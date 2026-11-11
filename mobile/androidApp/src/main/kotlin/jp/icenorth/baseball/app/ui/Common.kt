@@ -30,11 +30,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Badge
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -63,7 +65,10 @@ private val DeadlineFormat = DateTimeFormatter.ofPattern("M/d(E) H:mm", Locale.J
 
 /** 締め切りなどの日時（日本時間） */
 fun formatDeadline(iso: String?): String? =
-    iso?.let { runCatching { DeadlineFormat.format(Instant.parse(it).atZone(Tokyo)) }.getOrNull() }
+    iso?.let { runCatching { formatDateTime(Instant.parse(it).toEpochMilli()) }.getOrNull() }
+
+/** 日時（日本時間。「11/12(木) 0:00」）。締め切りと同じ書き方 */
+fun formatDateTime(epochMillis: Long): String = DeadlineFormat.format(Instant.ofEpochMilli(epochMillis).atZone(Tokyo))
 
 /**
  * 保存・提出などの間、画面全体を塞ぐ。
@@ -89,6 +94,26 @@ fun BusyOverlay(label: String) {
                 CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
                 Text(label.ifEmpty { "保存中…" }, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp))
             }
+        }
+    }
+}
+
+/**
+ * 画面の下に重ねる小さな「読み込んでいます…」（操作は塞がない。他球団の選手の詳細を開く間など）。
+ * 塞ぐのは保存・提出の間だけ（[BusyOverlay]）
+ */
+@Composable
+fun LoadingPill(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.inverseSurface,
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+        tonalElevation = 6.dp,
+        modifier = modifier.testTag("loading-pill"),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.inverseOnSurface, strokeWidth = 2.dp)
+            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 10.dp))
         }
     }
 }
@@ -139,6 +164,18 @@ fun AbilityNum(label: String?, value: Int?, velocity: Boolean = false, stamina: 
     }
 }
 
+/**
+ * 読み込みに失敗したときの知らせと「読み直す」（試合・選手・成績・指導者・ホームで同じ形）。
+ * ⚠ 以前は画面ごとに「読み込めませんでした: …」だけを出していて、読み直すには画面を離れて戻るしかなかった
+ */
+@Composable
+fun LoadFailed(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier, title: String = "読み込めませんでした") {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("$title: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onClick = onRetry) { Text("読み直す") }
+    }
+}
+
 /** 選手の主な能力を1行で（投手は球速・制球・スタミナ、野手はミート・パワー・走力・守備） */
 @Composable
 fun AbilityLine(p: JsonObject) {
@@ -147,7 +184,9 @@ fun AbilityLine(p: JsonObject) {
             AbilityNum("速", p.at("pitching", "velocity").int(), velocity = true)
             AbilityNum("制", p.at("pitching", "control").int())
             AbilityNum("ス", p.at("pitching", "stamina").int(), stamina = true)
-            AbilityNum("回", p.at("pitching", "spinRate").int())
+            // ⚠「回」だけだとキャンプのカードの「回復」と紛らわしいので「回転」。
+            //    初期メンバーのパックなど回転を持たない一覧では出さない（「回—」と並んでいた）
+            p.at("pitching", "spinRate").int()?.let { AbilityNum("回転", it) }
         } else {
             AbilityNum("ミ", p.at("batting", "meet").int())
             AbilityNum("パ", p.at("batting", "power").int())
@@ -216,6 +255,8 @@ fun ChipTabs(
                 selected = key == selected,
                 onClick = { onSelect(key) },
                 label = { Text(label) },
+                // 画面の見回り（ScreenTour）が文字ではなく鍵で押す（「野手」の文字は一括のボタンにも当たる）
+                modifier = Modifier.testTag("chip-$key"),
                 // 未完了の数（下のタブの数字と同じ数え方）
                 trailingIcon = if (count > 0) ({ Badge { Text("$count") } }) else null,
             )
@@ -240,6 +281,8 @@ fun StatTable(
     onPlayer: (JsonObject) -> Unit,
     highlight: (JsonObject) -> Boolean = { false },
     sub: (JsonObject) -> String = { positionLabel(it.at("position").str()) },
+    /** 1人もいないときの文（なぜいないのかは呼ぶ側が知っている） */
+    empty: String = "該当する選手がいません",
 ) {
     val divider = MaterialTheme.colorScheme.outlineVariant
     val hScroll = rememberScrollState()
@@ -307,7 +350,7 @@ fun StatTable(
             }
         }
     }
-    if (players.isEmpty()) Muted("該当する選手がいません", Modifier.padding(12.dp))
+    if (players.isEmpty()) Muted(empty, Modifier.padding(12.dp))
     Box(Modifier.fillMaxWidth().height(1.dp).border(1.dp, divider))
 }
 
@@ -347,8 +390,9 @@ fun Tag(text: String, color: Color = MaterialTheme.colorScheme.secondary) {
 @Composable
 fun InfoButton(title: String, lines: List<String>, modifier: Modifier = Modifier) {
     var open by rememberSaveable { mutableStateOf(false) }
+    // ⚠ 押せる大きさは 48dp（以前は 32dp で、見出しの横の小さな印を押しそこねた）
     Box(
-        modifier.size(32.dp).clickable { open = true },
+        modifier.size(48.dp).clickable { open = true },
         contentAlignment = Alignment.Center,
     ) {
         Text("ⓘ", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

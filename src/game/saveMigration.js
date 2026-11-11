@@ -9,7 +9,11 @@
 // ============================================================
 
 // 現行スキーマのバージョン。破壊的変更のたびに上げ、MIGRATIONSにステップを追加する。
-export const CURRENT_SAVE_VERSION = '2.15.0';
+// 2.16.0: トライアウトの途中の状態（seasonData.tryoutDraft）を足した。項目を足しただけで
+//         古い保存を書き換える段は無い（持たない保存はトライアウトを最初からやり直す）。
+// 2.17.0: 大学の卒業・入部レポート（seasonData.universityGraduationReport）に NPB の指名
+//         （npbDrafted）を足した。項目を足しただけで段は無い（持たない保存は指名の欄を出さない）。
+export const CURRENT_SAVE_VERSION = '2.17.0';
 
 // "a.b.c" を比較。a<b→-1, a>b→1, 等しい→0。数値でない部分は0扱い。
 export function compareVersions(a, b) {
@@ -23,6 +27,7 @@ export function compareVersions(a, b) {
 }
 
 import { createSeededRandom, hashSeed } from './rng.js';
+import { tryoutDraftPlayers } from '../season/tryoutDraftState.js';
 
 // 1選手に必須フィールドの既定値をバックフィルする（破壊しない・欠損のみ補う）。
 export function normalizePlayer(p) {
@@ -120,8 +125,39 @@ export function pruneGhostAlumni(data) {
   return removed;
 }
 
+/**
+ * 大学の保存で、設定の球団（settings.teamNames）の先頭を自チームに戻す。
+ *
+ * ⚠ 部制のリーグで入れ替え戦があると、以前は自分の部の球団を部の並び（静的データの順）の
+ *    まま settings.teamNames にしていた。先頭を自チームとして読む所（保存の一覧の名前・年度更新で
+ *    ローテーションを残す自チーム・監督移籍のいまのチーム）が、2年目から別の大学になる。
+ *    生成側は直した（`processPromotionRelegation`）が、**既にある保存には残る**。
+ * ⚠ 自チームは世界の記録（worldData.universityLeague.userTeam）で決める。何度呼んでも同じ
+ *    結果になる（揃っていれば何もしない）ので、版を上げずに毎回のロードで確かめる。
+ * @returns {boolean} 並べ直したか
+ */
+export function putUniversityUserTeamFirst(data) {
+  if (data?.gameMode !== 'university') return false;
+  const settings = data.seasonData?.settings;
+  const league = data.worldData?.universityLeague;
+  const user = league?.userTeam;
+  const names = settings?.teamNames;
+  if (!user || !Array.isArray(names) || names[0] === user || !names.includes(user)) return false;
+  const order = [user, ...names.filter(n => n !== user)];
+  const abbrs = settings.teamAbbreviations;
+  if (Array.isArray(abbrs) && abbrs.length === names.length) {
+    settings.teamAbbreviations = order.map(n => abbrs[names.indexOf(n)]);
+  }
+  settings.teamNames = order;
+  if (Array.isArray(league.leagueTeams) && league.leagueTeams.includes(user)) {
+    league.leagueTeams = [user, ...league.leagueTeams.filter(n => n !== user)];
+  }
+  return true;
+}
+
 // セーブ全体の選手を正規化（teamsData ＋ releasedPlayersPool）。
 function normalizeSaveData(data) {
+  if (putUniversityUserTeamFirst(data)) console.log('[Save] 大学の設定の球団の先頭を自チームに戻した');
   if (data.teamsData && typeof data.teamsData === 'object') {
     Object.values(data.teamsData).forEach(team => {
       if (Array.isArray(team?.players)) team.players.forEach(normalizePlayer);
@@ -132,6 +168,9 @@ function normalizeSaveData(data) {
   if (Array.isArray(data.releasedPlayersPool)) {
     data.releasedPlayersPool.forEach(normalizePlayer);
   }
+  // ⚠ トライアウトの途中の候補・指名した選手も補う。指名が終わると名簿（teamsData）に入る
+  //    ので、ここで補わないと欠けた項目のまま名簿に入る
+  tryoutDraftPlayers(data.seasonData?.tryoutDraft).forEach(normalizePlayer);
   return data;
 }
 

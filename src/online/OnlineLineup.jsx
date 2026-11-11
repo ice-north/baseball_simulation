@@ -10,10 +10,14 @@ import {
 import { teamLabel } from './gameText.js';
 import { useDraftMemory } from './Drafts.jsx';
 
-export { hasUnsavedFullLineup };
-
 // ============================================================
 // スマホ版の詳しい編成画面。**一人用の編成画面をそのまま使う**。
+//
+// ⚠ スマホの打順・守備・控えは「打順」の2タップの表（`TapLineup.jsx`）で決める。
+//    この全画面は**投手起用（ローテ・役割）のために残している**（横に長いので横向き推奨）。
+//    スマホの入口は「投手起用を開く」で、投手起用のタブから始まる（`MobileView.jsx` の `tab`）。
+//    開くと表の保存していない打順の編集も載っていて（`lineup.full`）、ここで保存すれば
+//    一緒に保存される（`MobileView.jsx` が表の下書きを捨てる）。
 //
 // 【なぜそのまま使えるか】`LineupSettingContent` は `team` をプロップで受け取り、
 // その場で書き換える作りで、`TEAMS_DATA` への結合は外側の1行だけだった。
@@ -82,13 +86,15 @@ export default function OnlineLineup({ view, busy, tab, onSave, onClose }) {
           </span>
         )}
         <div className="ml-auto flex gap-2">
+          {/* ⚠ 閉じた先は「打順」の2タップの表（`MobileView.jsx`）。以前は「方針・采配の設定へ」と
+              書いていたが、方針・采配は打順のカードの中の別の小窓（再監査 B6） */}
           <button
             type="button"
             disabled={busy}
             onClick={close}
             className="rounded border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-600 disabled:opacity-50"
           >
-            方針・采配の設定へ（保存しない）
+            打順に戻る（保存しない）
           </button>
           <button
             type="button"

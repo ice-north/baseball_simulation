@@ -396,7 +396,11 @@ function processPromotionRelegation(seasonKey) {
       for (let d = 1; d <= (league.numDivisions || 2); d++) {
         if (league.divTeams[d]?.includes(ul.userTeam)) {
           ul.userDivision = d;
-          ul.leagueTeams = [...league.divTeams[d]];
+          // ⚠ **自チームを先頭に置く**。年度更新はこれを設定の球団（settings.teamNames）にし、
+          //    先頭を自チームとして読む所がある（保存の一覧の名前・年度更新でローテーションを
+          //    残す自チーム・監督移籍のいまのチーム）。以前は部の並び（静的データの順）のままで、
+          //    部の先頭でない大学を選ぶと、2年目からそれらが部の先頭の大学になった
+          ul.leagueTeams = [ul.userTeam, ...league.divTeams[d].filter(t => t !== ul.userTeam)];
           break;
         }
       }

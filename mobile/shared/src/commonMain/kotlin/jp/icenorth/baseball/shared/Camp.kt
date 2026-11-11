@@ -4,7 +4,7 @@ import kotlinx.serialization.json.JsonObject
 
 /**
  * キャンプの方針と練習の割り当て。Web 版 src/season/trainingPolicy.js と
- * src/online/CampPlanner.jsx（menusFor / subMenusFor / clampMenu / clampSub）の写し。
+ * src/online/campMenus.js（menusFor / subMenusFor / clampMenu / clampSub）の写し。
  *
  * ⚠ 成長の計算はしない（1クールずつサーバーの campRound で実行する）。ここは
  *    「方針からどの練習を当てるか」「本人の希望と噛み合うか」を画面に出すためだけ。

@@ -6,7 +6,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import jp.icenorth.baseball.shared.AuthSession
 import jp.icenorth.baseball.shared.OnlineApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -48,10 +50,11 @@ class AppViewModelTest {
         clients.forEach { it.close() }
     }
 
-    private fun create(handler: suspend (String) -> String) {
+    private fun create(status: (String) -> HttpStatusCode = { HttpStatusCode.OK }, handler: suspend (String) -> String) {
         model = AppViewModel(app) { endpoint ->
             val client = HttpClient(MockEngine { request ->
-                respond(handler(request.url.parameters["action"].orEmpty()), headers = headersOf(HttpHeaders.ContentType, "application/json"))
+                val action = request.url.parameters["action"].orEmpty()
+                respond(handler(action), status(action), headers = headersOf(HttpHeaders.ContentType, "application/json"))
             })
             clients.add(client)
             OnlineApi(endpoint, client)
@@ -143,6 +146,83 @@ class AppViewModelTest {
         assertTrue("読み直しの失敗が伝わらない: ${model.error}", model.error.orEmpty().contains("最新の状態を読み込めませんでした"))
         assertNotNull(model.auth)
         assertEquals(2, views)
+    }
+
+    @Test fun refusedCommandReadsTheLatestViewLikeThePc() {
+        var views = 0
+        create(status = { if (it == "command") HttpStatusCode.Conflict else HttpStatusCode.OK }) { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> if (++views == 1) VIEW_1 else VIEW_2
+                // 送り直さない命令（トレード）が断られた
+                "command" -> """{"error":"相手の名簿が変わりました","code":"trade_stale"}"""
+                else -> "{}"
+            }
+        }
+        login()
+        var done = false
+        model.command("trade", JsonObject(emptyMap())) { done = true }
+        until { !model.busy }
+        assertFalse("断られたのに onDone を呼んだ", done)
+        assertEquals("相手の名簿が変わりました", model.error)
+        // ⚠ 断られたら最新を読み直す（以前は古いビューのまま残り、同じ画面で押し直すことになった）
+        assertEquals(2, views)
+        assertEquals(2, model.view?.revision)
+        assertNotNull(model.auth)
+    }
+
+    @Test fun latestAppIsNotReadAgainOnEveryPullAfterAFailure() {
+        val schedule = CheckSchedule(interval = 30 * 60_000L, retry = 5 * 60_000L)
+        assertTrue(schedule.due(0))
+        schedule.started(0)
+        // 読めなかった（電波・GitHub の回数の上限）。以前はすぐ「まだ読んでいない」に戻り、引っ張るたびに読みに行った
+        schedule.failed(1_000)
+        assertFalse(schedule.due(2_000))
+        assertFalse(schedule.due(1_000 + 5 * 60_000L - 1))
+        assertTrue(schedule.due(1_000 + 5 * 60_000L))
+        // 読めたら30分あける
+        schedule.started(10 * 60_000L)
+        assertFalse(schedule.due(39 * 60_000L))
+        assertTrue(schedule.due(40 * 60_000L))
+    }
+
+    @Test fun networkFailureDoesNotShowTheExceptionClassName() {
+        var views = 0
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> if (++views == 1) VIEW_1 else throw java.net.SocketTimeoutException("timeout")
+                else -> "{}"
+            }
+        }
+        login()
+        model.reload(pull = true)
+        until { !model.refreshing }
+        val text = model.error.orEmpty()
+        assertTrue(text, text.startsWith("通信できませんでした"))
+        assertTrue(text, text.contains("時間切れ"))
+        // ⚠ 内部の言葉（例外のクラス名・英語の文）を出さない
+        assertFalse(text, text.contains("Exception") || text.contains("timeout"))
+        assertEquals(null, networkCause(IllegalStateException("x")))
+    }
+
+    @Test fun homeIsToldWhyTheFirstViewCouldNotBeRead() {
+        // ログインしたまま開き直した（覚えているビューは無い）
+        SessionStore(app).auth = AuthSession("a", "token", "session")
+        var views = 0
+        create { action ->
+            when (action) {
+                "view" -> if (++views == 1) throw java.net.ConnectException("Connection refused") else VIEW_1
+                else -> "{}"
+            }
+        }
+        // ⚠ 以前はホームが「読み込み中…」のまま止まった
+        until { model.loadFailure != null }
+        assertNull(model.view)
+        assertTrue(model.loadFailure.orEmpty(), model.loadFailure.orEmpty().contains("接続できません"))
+        model.reload(pull = true)
+        until { model.view?.revision == 1 && !model.refreshing }
+        assertNull(model.loadFailure)
     }
 
     @Test fun theSameNoticeTwiceIsAnnouncedTwice() {
@@ -253,6 +333,43 @@ class AppViewModelTest {
         assertTrue(failure is CancellationException)
         assertEquals(2, reads)
         assertEquals("\"new\"", next?.get("owner").toString())
+    }
+
+    @Test fun playerOfAnotherTeamShowsLoadingAndIsDroppedWhenLeaving() {
+        val readStarted = CompletableDeferred<Unit>()
+        val releaseRead = CompletableDeferred<Unit>()
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> VIEW_1
+                "team" -> {
+                    readStarted.complete(Unit)
+                    releaseRead.await()
+                    """{"roster":[{"id":7,"name":"同名"}]}"""
+                }
+                else -> "{}"
+            }
+        }
+        login()
+        model.openPlayerOf("other", 7, "同名")
+        // ⚠ 以前は読み込みの間に何も出ず、押しても何も起きないように見えた
+        assertEquals("同名", model.openingPlayer)
+        until { readStarted.isCompleted }
+        // ⚠ 読み終わる前にタブを移ったら、移った先でシートを開かない
+        model.dropOpeningPlayer()
+        assertNull(model.openingPlayer)
+        releaseRead.complete(Unit)
+        idle()
+        assertNull(model.openPlayer)
+        // 読んだ名簿は覚えているので、押し直せばすぐ開く
+        model.openPlayerOf("other", 7, "同名")
+        until { model.openPlayer != null }
+        assertNull(model.openingPlayer)
+        // ⚠ id があれば名前では探し直さない（同じ球団の同名の別人を開かない）
+        model.openPlayer = null
+        model.openPlayerOf("other", 99, "同名")
+        until { model.openingPlayer == null }
+        assertNull(model.openPlayer)
     }
 
     @Test fun changingEndpointClearsThePreviousServersCredentialsAndView() {

@@ -37,7 +37,7 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
         : plan.releaseIds.filter((x) => x !== id),
     });
   return (
-    <div className="online-contract">
+    <div>
       <p className="online-contract-summary">
         <strong>
           退団予定 {released.size}人 → 残り {remaining.length}人
@@ -69,24 +69,30 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
           const reasons = advice[p.id];
           return (
             <li key={p.id} data-wanted={released.has(p.id) || undefined}>
-              <input
-                type="checkbox"
-                aria-label={`${p.name}（${p.age}歳 / ${POS[p.position]}）を退団させる`}
-                checked={released.has(p.id)}
-                onChange={(e) => toggle(p.id, e.target.checked)}
-              />
+              {/* ⚠ 枠（label）ごと押せるようにする。スマホでは箱の19pxだけでは指で押しにくい */}
+              <label className="online-release-check">
+                <input
+                  type="checkbox"
+                  aria-label={`${p.name}（${p.age}歳 / ${POS[p.position]}）を退団させる`}
+                  checked={released.has(p.id)}
+                  onChange={(e) => toggle(p.id, e.target.checked)}
+                />
+              </label>
+              {/* ⚠ 標準案の理由は**名前の下の段**に置く（横に並べない）。2列の一覧で
+                  横に置くと、狭い画面（1024px）では名前の欄が90px前後に削られ、
+                  能力と成績が4〜5行に折り返していた */}
               <span className="online-tryout-person">
                 <PlayerLine player={p} />
                 <small className="online-contract-season">{seasonLine(p)}</small>
+                {reasons && (
+                  <span
+                    className="online-contract-reason"
+                    title="標準案（決めなかったときに使われる案）でこの選手が退団になる理由"
+                  >
+                    標準案で退団: {reasons.length ? reasons.join('・') : '枠を空けるため'}
+                  </span>
+                )}
               </span>
-              {reasons && (
-                <span
-                  className="online-contract-reason"
-                  title="標準案（決めなかったときに使われる案）でこの選手が退団になる理由"
-                >
-                  標準案で退団: {reasons.length ? reasons.join('・') : '枠を空けるため'}
-                </span>
-              )}
               {released.has(p.id) && (
                 <span className="online-tryout-mark">退団予定</span>
               )}

@@ -30,7 +30,7 @@ function getKeyAbilities(p) {
 // 主要能力を横並びで表示する小コンポーネント。
 function AbilityStrip({ player }) {
   return (
-    <div className="flex items-center gap-2 tabular-nums">
+    <div className="flex items-center gap-1.5 tabular-nums">
       {getKeyAbilities(player).map(a => (
         <span key={a.label} className="inline-flex items-baseline gap-0.5">
           <span className="text-xs text-gray-300">{a.label}</span>
@@ -178,14 +178,14 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
   // 列見出し（各カラム上部。行と同じ固定幅で揃える）
   const ColumnHeader = () => (
     <div className="flex items-center gap-2 px-1 pb-1 mb-1 border-b border-gray-700 text-xs text-gray-300">
-      <span className="w-6">守</span>
-      <span className="w-5 text-center">総</span>
-      <span className="w-24">選手</span>
-      <span className="w-9 text-right">年齢</span>
-      <span className="w-64 hidden md:block">主要能力</span>
-      <span className="w-7 text-right">現</span>
-      <span className="w-3"></span>
-      <span className="w-11 text-center">新</span>
+      <span className="w-6 flex-shrink-0">守</span>
+      <span className="w-5 flex-shrink-0 text-center">総</span>
+      <span className="w-20 min-[1440px]:w-24 flex-shrink-0">選手</span>
+      <span className="w-9 flex-shrink-0 text-right">年齢</span>
+      <span className="hidden md:block flex-1 min-w-0 max-w-64">主要能力</span>
+      <span className="w-7 flex-shrink-0 text-right">現</span>
+      <span className="w-3 flex-shrink-0"></span>
+      <span className="w-11 flex-shrink-0 text-center">新</span>
     </div>
   );
 
@@ -204,23 +204,23 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
         onDrop={(e) => onDropPlayer(e, p.id)}
         className="flex items-center gap-2 py-0.5 rounded px-1"
       >
-        <span className="text-xs text-gray-300 w-6">{POSITION_NAMES[p.position] || ''}</span>
+        <span className="text-xs text-gray-300 w-6 flex-shrink-0">{POSITION_NAMES[p.position] || ''}</span>
         <div className="w-5 flex-shrink-0"><OverallBadge player={p} /></div>
-        <span className="text-sm text-white w-24 truncate">{p.name}</span>
+        <span className="text-sm text-white w-20 min-[1440px]:w-24 flex-shrink-0 truncate" title={p.name}>{p.name}</span>
         <span className="text-xs text-gray-300 w-9 text-right tabular-nums flex-shrink-0">{p.age}歳</span>
-        {/* 主要能力 */}
-        <div className="w-64 hidden md:flex flex-shrink-0 overflow-hidden">
+        {/* 主要能力（幅が足りないときはここだけが縮む。番号の欄は削らない） */}
+        <div className="hidden md:flex flex-1 min-w-0 max-w-64 overflow-hidden">
           <AbilityStrip player={p} />
         </div>
         {/* 現在の番号 */}
-        <span className="w-7 text-right text-sm tabular-nums text-gray-300">
+        <span className="w-7 flex-shrink-0 text-right text-sm tabular-nums text-gray-300">
           {orig != null ? orig : <span className="text-gray-400">―</span>}
         </span>
         {/* 変化インジケーター */}
-        <span className={`text-xs w-3 text-center ${changed ? 'text-cyan-400' : 'text-transparent'}`}>→</span>
+        <span className={`text-xs w-3 flex-shrink-0 text-center ${changed ? 'text-cyan-400' : 'text-transparent'}`}>→</span>
         {/* 新番号 */}
         {empty ? (
-          <span className="w-11 h-7 flex items-center justify-center rounded border border-dashed border-gray-600 text-gray-400 text-xs">
+          <span className="w-11 h-7 flex-shrink-0 flex items-center justify-center rounded border border-dashed border-gray-600 text-gray-400 text-xs">
             ―
           </span>
         ) : (
@@ -230,7 +230,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
             onDragEnd={onChipDragEnd}
             onClick={() => unassign(p.id)}
             title="ドラッグで移動 / クリックで解放"
-            className={`w-11 h-7 flex items-center justify-center rounded text-sm font-bold tabular-nums cursor-grab active:cursor-grabbing ${
+            className={`w-11 h-7 flex-shrink-0 flex items-center justify-center rounded text-sm font-bold tabular-nums cursor-grab active:cursor-grabbing ${
               changed
                 ? 'bg-cyan-800/80 border border-cyan-400 text-white hover:bg-cyan-700/80'
                 : 'bg-cyan-900/60 border border-cyan-600 text-cyan-100 hover:bg-cyan-800/70'}`}
@@ -272,16 +272,17 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
       </p>
 
       <div className="flex-1 min-h-0 flex gap-4">
-        {/* 選手リスト（投手／野手の2カラム・固定幅で横幅を圧縮） */}
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          <div className="flex gap-8 max-w-[1180px]">
-            {/* 左：投手 */}
-            <div className="flex-shrink-0">
+        {/* 選手リスト（投手／野手の2カラム）。1280幅では2列が入りきらず、右の列の「現→新」の欄が
+            画面の外に出ていた（番号を落とせない）。いまは主要能力の欄だけが縮み、ほかの欄は固定幅のまま。 */}
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto pr-1">
+          <div className="flex gap-4 min-[1440px]:gap-8 max-w-[1180px]">
+            {/* 左：投手（主要能力は4つ）。右の野手は6つ並ぶので、幅を 9:10 で分ける */}
+            <div className="flex-[9_1_0%] min-w-0">
               <ColumnHeader />
               {pitcherGroups.map(renderGroupBlock)}
             </div>
             {/* 右：野手（捕・内・外） */}
-            <div className="flex-shrink-0">
+            <div className="flex-[10_1_0%] min-w-0">
               <ColumnHeader />
               {fielderGroups.map(renderGroupBlock)}
             </div>
@@ -294,7 +295,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
           onDragEnter={addHi}
           onDragLeave={rmHi}
           onDrop={onDropPool}
-          className="w-52 flex-shrink-0 flex flex-col rounded-lg bg-gray-800/60 border border-gray-700 p-2"
+          className="w-44 min-[1440px]:w-52 flex-shrink-0 flex flex-col rounded-lg bg-gray-800/60 border border-gray-700 p-2"
         >
           <div className="text-xs font-bold text-gray-300 mb-1 flex-shrink-0">
             空き番号（{poolNumbers.length}）

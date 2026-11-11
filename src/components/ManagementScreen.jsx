@@ -1,19 +1,17 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations, releasedPlayersPool } from '../teams-data.js';
-import { addToReleasedPool } from '../state/pools.js';
 import { SEASON_PHASES } from '../season/seasonManager.js';
-import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
+import { applyNextSeasonRegulations } from '../season/nextSeasonRegulations.js';
+import { withDeparted, rosterIndex, departedSince } from '../season/departedStats.js';
 import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, ensureAllTeamsReady } from '../game/lineupGenerator.js';
 import { processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 import { processNPBDraft } from '../season/npbDraft.js';
-import { generateExpansionRoster } from '../season/tryoutSystem.js';
-import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
+import { withoutTryoutDraft } from '../season/tryoutDraftState.js';
 
-import ScheduleScreen from './ScheduleScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
 import ContractScreen from './ContractScreen.jsx';
 import DraftResultScreen from './DraftResultScreen.jsx';
@@ -41,113 +39,13 @@ import UniversityScoutScreen from './UniversityScoutScreen.jsx';
 import PlayerSearchScreen from './PlayerSearchScreen.jsx';
 import TeamRankingScreen from './TeamRankingScreen.jsx';
 
-// ============================================================
-// 翌年のレギュレーション確定（新規参入・解散・日程の作り直し）
-//
-// ⚠ **通常(`regulations_next`)と箱庭(`sandbox_next_regulations`)の2箇所で
-//    79行を丸ごとコピペしていた**（違いは最後の遷移先だけ）。CLAUDE.md にも
-//    「呼び出し側は ManagementScreen の2箇所。片方だけ直さないこと」という
-//    ⚠ を置いて運用で回避していたが、関数にすれば⚠ごと要らなくなる。
-// ============================================================
-function applyNextSeasonRegulations({
-  confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
-  setManagementView, nextView,
-}) {
-  const settings = confirmedSettings || seasonData.settings || {};
-  const calendarYear = 2024 + seasonData.year - 1;
-
-  // 新チーム検出: settings.teamNamesにあるがTEAMS_DATAに存在しないチーム
-  const configuredTeams = settings.teamNames || [];
-  const existingTeams = new Set(Object.keys(TEAMS_DATA));
-  const newTeamNames = configuredTeams.filter(t => !existingTeams.has(t));
-
-  if (newTeamNames.length > 0) {
-    const abbrs = settings.teamAbbreviations || [];
-    // ⚠ **リーグの格を渡すこと**。渡さないと新チームだけAリーグ相当の選手で
-    //    埋まる（Cリーグなら スタメン野手のミ+パ が 64 対 103）。格の算出は
-    //    TryoutScreen と同じ `getLeagueRankFromTeams` を使う（表を二重に作らない）。
-    const expansionRank = getLeagueRankFromTeams(configuredTeams.filter(t => existingTeams.has(t)));
-    newTeamNames.forEach(teamName => {
-      const idx = configuredTeams.indexOf(teamName);
-      const abbr = abbrs[idx] || teamName.slice(0, 3);
-      TEAMS_DATA[teamName] = {
-        name: teamName,
-        abbreviation: abbr,
-        players: generateExpansionRoster(seasonData.year || 1, 24, expansionRank),
-        pitchingRotation: null
-      };
-      generatePitchingRotation(teamName);
-    });
-  }
-
-  // 解散チーム検出: 「前年の自リーグ所属」だが今年の設定に居ないチームのみ。
-  // ※ TEAMS_DATA全体を対象にすると、並行世界（他の独立リーグ・社会人・大学）まで
-  //   まとめて削除してしまい、翌年トレード相手やランキングから消える不具合になる。
-  const configuredSet = new Set(configuredTeams);
-  const prevLeagueTeams = seasonData.settings?.teamNames || [];
-  const dissolvedTeamNames = prevLeagueTeams.filter(t => configuredTeams.length > 0 && !configuredSet.has(t) && TEAMS_DATA[t]);
-  let dissolvedPlayerCount = 0;
-
-  if (dissolvedTeamNames.length > 0) {
-    dissolvedTeamNames.forEach(teamName => {
-      const teamData = TEAMS_DATA[teamName];
-      if (teamData && teamData.players) {
-        teamData.players.forEach(player => {
-          addToReleasedPool({
-            ...JSON.parse(JSON.stringify(player)),
-            formerTeam: teamName,
-            attemptsInPool: 0
-          });
-          dissolvedPlayerCount++;
-        });
-      }
-      delete TEAMS_DATA[teamName];
-    });
-  }
-
-  const teams = configuredTeams.length > 0 ? configuredTeams : Object.keys(TEAMS_DATA);
-  const schedule = generateFullSeasonSchedule({
-    teams,
-    gamesPerSeason: settings.gamesPerSeason || 60,
-    startDate: { year: calendarYear, month: 3, day: 1 },
-    endDate: { year: calendarYear, month: 9, day: 30 },
-    leagueFormat: settings.leagueFormat || 'single',
-    leagueNames: settings.leagueNames
-  });
-  setSeasonData(prev => ({
-    ...prev,
-    currentDate: { year: calendarYear, month: 1, day: 1 },
-    schedule,
-    standings: teams.map(t => ({
-      team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
-    }))
-  }));
-  const alerts = [];
-  if (newTeamNames.length > 0) {
-    alerts.push(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
-  }
-  if (dissolvedTeamNames.length > 0) {
-    alerts.push(`${dissolvedTeamNames.join('、')}が解散しました。所属${dissolvedPlayerCount}名の選手はフリーエージェントプールに移動し、次回トライアウトに参加します`);
-  }
-  if (alerts.length > 0) {
-    alert(alerts.join('\n\n'));
-  }
-}
-
 const ManagementScreen = ({
   managementView,
   setManagementView,
   resumeViewRef,
   seasonData,
   setSeasonData,
-  selectedMonth,
   setSelectedMonth,
-  scheduleTab,
-  setScheduleTab,
-  seasonYear,
-  currentDate,
-  currentPhase,
-  leagueStandings,
   userTeamName,
   allTeams,
   gameMode,
@@ -166,35 +64,20 @@ const ManagementScreen = ({
   deleteSave,
   refreshSaveSlots,
   setupManagedGame,
-  advanceDayRef,
   setScreenMode,
-  setGameFlowState,
-  handleProgressDate,
-  handleProgressToNextPhase
+  setGameFlowState
 }) => {
   const draftedIds = seasonData?.draftedPlayerIds || [];
-  if (managementView === 'schedule') return <ScheduleScreen
-    seasonData={seasonData}
-    selectedMonth={selectedMonth}
-    setSelectedMonth={setSelectedMonth}
-    scheduleTab={scheduleTab}
-    setScheduleTab={setScheduleTab}
-    seasonYear={seasonYear}
-    currentDate={currentDate}
-    currentPhase={currentPhase}
-    leagueStandings={leagueStandings}
-    userTeamName={userTeamName}
-    onProgressDate={handleProgressDate}
-    onProgressToNextPhase={handleProgressToNextPhase}
-    onStartGame={() => setScreenMode('game')}
-    onGoToDateProgress={() => setManagementView('dateprogress')}
-  />;
   if (managementView === 'tryout') return <TryoutScreen
     seasonData={seasonData}
+    setSeasonData={setSeasonData}
     allTeams={allTeams}
     initializeAllPitchingRotations={initializeAllPitchingRotations}
+    onSave={saveGame}
+    saveSlots={saveSlots}
     onComplete={() => {
-      const newData = { ...seasonData, currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
+      // 途中の状態の写し（tryoutDraft）は終えたら外す（`tryoutDraftState.js`）
+      const newData = { ...withoutTryoutDraft(seasonData), currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
       setSeasonData(newData);
       setManagementView('dateprogress');
     }}
@@ -202,8 +85,9 @@ const ManagementScreen = ({
   if (managementView === 'contract') return <ContractScreen
     seasonData={seasonData}
     allTeams={allTeams}
-    onComplete={() => {
-      const newData = progressDate(seasonData, 1);
+    onComplete={(departed) => {
+      // ⚠ 戦力外で外した選手のその年の成績を残す（選手成績の画面が年度末まで出す）
+      const newData = progressDate(withDeparted(seasonData, departed), 1);
       setSeasonData({ ...newData, phase: 'tryout' });
       setManagementView('tryout');
     }}
@@ -211,8 +95,8 @@ const ManagementScreen = ({
   if (managementView === 'corporate_departure') return <CorporateDepartureScreen
     seasonData={seasonData}
     allTeams={allTeams}
-    onComplete={() => {
-      const newData = progressDate(seasonData, 1);
+    onComplete={(departed) => {
+      const newData = progressDate(withDeparted(seasonData, departed), 1);
       setSeasonData({ ...newData, phase: 'tryout' });
       setManagementView(seasonData?.settings?.clubMode ? 'club_recruit' : 'corporate_scout');
     }}
@@ -311,7 +195,6 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     onSetupManagedGame={setupManagedGame}
-    onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
     onForceEvent={(eventType) => {
       if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement' || eventType === 'university_scout')) {
         const update = {};
@@ -334,8 +217,12 @@ const ManagementScreen = ({
         const preUpdate = {};
         if (!seasonData.frozenAwards) preUpdate.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
-        if (Object.keys(preUpdate).length > 0) setSeasonData(prev => ({ ...prev, ...preUpdate }));
+        // ⚠ 指名で名簿から抜ける社会人・独立・大学の選手の、その年の成績を写しておく
+        //    （選手成績の画面が年度末まで出す。`departedStats.js`）
+        const rosterBefore = rosterIndex(TEAMS_DATA);
         const results = processNPBDraft(TEAMS_DATA, seasonData.year);
+        const departed = departedSince(rosterBefore, TEAMS_DATA);
+        setSeasonData(prev => withDeparted({ ...prev, ...preUpdate }, departed));
         setDraftResults(results);
         // 大学モード: ドラフト指名された大学チーム選手をseasonDataに記録
         if (seasonData.settings?.universityMode && results.draftedPlayers.length > 0) {
@@ -401,20 +288,25 @@ const ManagementScreen = ({
     userTeamName={userTeamName}
     onSave={async (slotIndex) => { await saveGame(slotIndex); }}
     saveSlots={saveSlots}
-    onStartNextSeason={() => {
+    // ⚠ 年度更新（advanceToNextYear）の直後に、同じ操作の中から呼ばれる。この画面が持つ
+    //    `seasonData` はまだ前の年なので、翌年のデータは引数で受け取る（大学の卒業レポートを
+    //    挟むときは描き直した後に呼ばれるので引数なし）。以前はクラブの2年目の開幕が
+    //    前の年の 2024/4/1 になり、地域トーナメントのシードも前の年のものを使っていた
+    onStartNextSeason={(nextSeasonData) => {
+      const next = nextSeasonData || seasonData;
       if (gameMode === 'sandbox') {
         setManagementView('sandbox_next_regulations');
       } else if (gameMode === 'university' || gameMode === 'corporate') {
-        if (seasonData?.settings?.clubMode) {
+        if (next?.settings?.clubMode) {
           // クラブチームはキャンプなし → 直接シーズンへ
           initializeAllPlayersCondition();
           ensureAllTeamsReady({
       userTeamName, generatePitchingRotation, setRecommendedLineup, generateAILineup,
       preserveUserLineup: true,
     });
-          snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
-          const calYear = 2024 + (seasonData?.year || 1) - 1;
-          const rtSeeds = seasonData?.tournamentSeeds || null;
+          snapshotAbilityHistory(TEAMS_DATA, next.year);
+          const calYear = 2024 + (next?.year || 1) - 1;
+          const rtSeeds = next?.tournamentSeeds || null;
           const rt = generateRegionalTournament({ userTeamName, calendarYear: calYear, seeds: rtSeeds });
           setSeasonData(prev => ({
             ...prev,
@@ -441,9 +333,11 @@ const ManagementScreen = ({
   if (managementView === 'sandbox_next_regulations') return <RegulationsScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
+    currentTeams={allTeams}
+    confirmLabel="確定 → チーム設定へ進む"
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
-        confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
+        confirmedSettings, seasonData, currentTeams: allTeams, setSeasonData, setLeagueConfig, generatePitchingRotation,
         setManagementView, nextView: 'sandbox_setup',
       });
     }}
@@ -475,9 +369,10 @@ const ManagementScreen = ({
   if (managementView === 'regulations_next') return <RegulationsScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
+    currentTeams={allTeams}
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
-        confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,
+        confirmedSettings, seasonData, currentTeams: allTeams, setSeasonData, setLeagueConfig, generatePitchingRotation,
         setManagementView, nextView: 'camp',
       });
     }}

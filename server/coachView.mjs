@@ -26,6 +26,7 @@ import {
   shortName,
   PHASE_STAFF_AREA,
   roleTypeLabel,
+  isAuto,
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import {
@@ -231,10 +232,9 @@ export function coachCard(league, coach, labelOf, { full = true, roster = null }
 /**
  * 采配の1行の文。
  * - 指導者が変えた: 「送りバント: AI判断 → 積極的（山田監督）」
- * - 指導者も標準のまま: 「代打を使い始める回: 既存AIの判断（山田監督も標準）」
+ * - 指導者も標準のまま: 「代打を使い始める回: AI判断（山田監督も標準）」
  * - 指導者が決めない（人が決めた・任せていない）: 「送りバント: しない」
  */
-const isStandardValue = (v) => v == null || v === 'auto' || v === 0 || v === '0';
 function tacticText({ setting, ...line }) {
   const settingLabel = line.settingLabel;
   if (!line.by) return { ...line, text: `${line.label}: ${settingLabel}` };
@@ -242,7 +242,7 @@ function tacticText({ setting, ...line }) {
   return {
     ...line,
     resolvedLabel: resolved,
-    text: line.isStandard && isStandardValue(setting)
+    text: line.isStandard && isAuto(line.key, setting)
       ? `${line.label}: ${settingLabel}（${line.by}も標準）`
       : resolved === settingLabel
         ? `${line.label}: ${resolved}（${line.by}）`
@@ -264,7 +264,7 @@ export function tacticsLines(league, teamName, team) {
       setting: line.setting,
       settingLabel: line.settingLabel,
       valueLabel: line.valueLabel,
-      isStandard: isStandardValue(line.value),
+      isStandard: isAuto(line.key, line.value),
       by: line.by,
     }),
   );
@@ -396,7 +396,13 @@ export function ownStaffView(league, member, team, labelOf) {
 
 /**
  * 手続きの標準案を出した指導者（`phase.planBy`）。任せ方が「自分で」（または席が空き）なら null。
- * トライアウト・退団は監督、キャンプは投手コーチ・野手コーチ（居なければ監督）。
+ * トライアウト・退団は監督、キャンプは投手コーチ・野手コーチ。
+ * ⚠ **キャンプは監督の名前を出さない**。人の球団のキャンプは、コーチの居ない側を監督で
+ *    埋めず「おすすめ」で練習する（`coaches.js` の `campPlan` の `strictSeats`）。
+ *    コーチが2人とも居なければ案は無い（null）
+ * ⚠ キャンプは「決定」ではなく1クールずつ実行する。文もそれに合わせる
+ * ⚠ 任せた手続きはその人の決定を待たない（`leagueEngine` の `waitsFor`）。「任せる」の文はそれを書く。
+ *    キャンプは人事ができる期間でもあるので、ほかの球団が終えると終わることも書く
  */
 export function phasePlanBy(league, teamName, kind) {
   const area = PHASE_STAFF_AREA[kind];
@@ -411,17 +417,19 @@ export function phasePlanBy(league, teamName, kind) {
           staff.batting ? `${shortName(staff.batting)}野手コーチ` : null,
         ].filter(Boolean)
       : [];
-  if (!names.length && staff.manager) names.push(`${shortName(staff.manager)}監督`);
+  if (!names.length && staff.manager && area !== 'camp')
+    names.push(`${shortName(staff.manager)}監督`);
   if (!names.length) return null;
   const by = names.join('・');
-  return {
-    mode,
-    by,
-    text:
-      mode === 'delegate'
-        ? `${by}に任せています（提出しても指導者の案で決まります。自分で決めるときは任せ方を「意見を聞く」に）`
-        : `${by}の案です。変えてから決定できます`,
-  };
+  const text =
+    area === 'camp'
+      ? mode === 'delegate'
+        ? `${by}に任せています。あなたを待たずに、ほかの球団が4クール終えるとキャンプが終わり、残りのクールは指導者の方針で回ります（指導者の入れ替えはそれまでに。自分でクールを回すと、任せ方は「意見を聞く」に戻ります）`
+        : `${by}の案です。変えてから練習を実行できます（回さなかったクールはこの案で）`
+      : mode === 'delegate'
+        ? `${by}に任せています。あなたの決定は待たずに、指導者の案で決まります（自分で決めるときは任せ方を「意見を聞く」に）`
+        : `${by}の案です。変えてから決定できます`;
+  return { mode, by, text };
 }
 
 /**

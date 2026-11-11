@@ -20,8 +20,6 @@ private fun GameResult.winner(): String? = when {
 
 private fun GameResult.loser(): String? = winner()?.let { if (it == home) away else home }
 
-private fun dayKey(d: GameDate?): Int = d?.let { it.year * 10000 + it.month * 100 + it.day } ?: 0
-
 /** 連勝・連敗の添え書き（「宮崎3連勝」）。3つ以上のときだけ */
 internal fun streakNote(view: LeagueView, team: String): String? = view.teamStreaks[team]?.takeIf { it.count >= 3 && it.kind != "D" }?.let {
     "${view.teamShort(team)}${it.count}${if (it.kind == "W") "連勝" else "連敗"}"
@@ -34,16 +32,9 @@ internal fun shortLine(view: LeagueView, g: GameResult, latest: Boolean): String
     return if (note.isEmpty()) base else "$base（$note）"
 }
 
-/** 部の順位表（勝率順。サーバーの並びは全12球団を通したもの） */
-private fun LeagueView.table(league: String): List<Standing> = standings.filter { teamLeagues[it.team] == league }
-
-private fun behind(top: Standing, s: Standing): Double = ((top.wins - s.wins) + (s.losses - top.losses)) / 2.0
-
-private fun gap(v: Double): String = if (v % 1.0 == 0.0) "${v.toInt()}" else "$v"
-
 /** シーズンを終えた順位のひと言（「1部は川崎、2部は新潟が首位でシーズンを終えた。」）。試合が無ければ空 */
 private fun seasonEnd(view: LeagueView): String {
-    val tops = listOf("A", "B").mapNotNull { l -> view.table(l).firstOrNull { it.gamesPlayed > 0 }?.let { "${LEAGUE_NAMES[l]}は${view.teamShort(it.team)}" } }
+    val tops = listOf("A", "B").mapNotNull { l -> view.leagueTable(l).firstOrNull { it.gamesPlayed > 0 }?.let { "${LEAGUE_NAMES[l]}は${view.teamShort(it.team)}" } }
     return if (tops.isEmpty()) "" else "今季、${tops.joinToString("、")}が首位でシーズンを終えた。"
 }
 
@@ -53,12 +44,12 @@ private fun seasonEnd(view: LeagueView): String {
  */
 fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): FrontPage {
     val date = view.currentDate
-    val pen = Pen(dayKey(date) + 7)
-    val latestDay = view.results.maxOfOrNull { dayKey(it.date) }
-    val today = view.results.filter { latestDay != null && dayKey(it.date) == latestDay && it.homeScore != null && it.awayScore != null }
+    val pen = Pen((date?.dayKey() ?: 0) + 7)
+    val latestDay = view.results.maxOfOrNull { it.date?.dayKey() ?: 0 }
+    val today = view.results.filter { latestDay != null && (it.date?.dayKey() ?: 0) == latestDay && it.homeScore != null && it.awayScore != null }
     val owners = view.teamOwners.keys
     // 部ごとの上位2球団（首位攻防の判定）
-    val top2 = view.teamLeagues.values.toSet().associateWith { l -> view.table(l).filter { it.gamesPlayed > 0 }.take(2).map { it.team }.toSet() }
+    val top2 = view.teamLeagues.values.toSet().associateWith { l -> view.leagueTable(l).filter { it.gamesPlayed > 0 }.take(2).map { it.team }.toSet() }
 
     data class Story(val g: GameResult, val points: Int)
     val stories = today.map { g ->
@@ -120,7 +111,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
             extra = ws >= 10
             kicker = listOfNotNull(league.ifEmpty { null }, if (ws >= 2) "${ws}連勝" else null).joinToString("・").ifEmpty { null }
             val winPlace = if (w == g.home) "本拠地" else "敵地"
-            val table = view.teamLeagues[w]?.let { view.table(it) }.orEmpty()
+            val table = view.teamLeagues[w]?.let { view.leagueTable(it) }.orEmpty()
             val rank = table.indexOfFirst { it.team == w }
             val rec = table.getOrNull(rank)?.let { "${W}はこれで${it.wins}勝${it.losses}敗${if (it.draws > 0) "${it.draws}分" else ""}、${league}${rank + 1}位。" } ?: ""
             val date0 = g.date?.let { "${it.month}月${it.day}日、" } ?: ""
@@ -143,7 +134,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
     val articles = mutableListOf<FrontPage.Article>()
     // 1部・2部の戦線（1部は首位争いと降格、2部は昇格争い）
     for (league in listOf("A", "B")) {
-        val table = view.table(league).filter { it.gamesPlayed > 0 }
+        val table = view.leagueTable(league).filter { it.gamesPlayed > 0 }
         if (table.size < 2) continue
         val name = LEAGUE_NAMES[league] ?: league
         val top = table[0]
@@ -151,12 +142,12 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         val last = table.last()
         val T = view.teamShort(top.team)
         val S = view.teamShort(second.team)
-        val g2 = behind(top, second)
+        val g2 = gamesBehind(top, second)
         val ended = view.phase?.kind in OFF_PHASES
-        val body = if (ended) "${T}が${top.wins}勝${top.losses}敗で首位、" + (if (g2 == 0.0) "${S}と並んで" else "2位の${S}に${gap(g2)}差をつけて") + "シーズンを終えた。"
+        val body = if (ended) "${T}が${top.wins}勝${top.losses}敗で首位、" + (if (g2 == 0.0) "${S}と並んで" else "2位の${S}に${gb(g2)}差をつけて") + "シーズンを終えた。"
         else buildString {
             append("首位は${T}（${top.wins}勝${top.losses}敗）。")
-            append(if (g2 == 0.0) "${S}がゲーム差なしで並ぶ。" else "2位の${S}が${gap(g2)}差で追う。")
+            append(if (g2 == 0.0) "${S}がゲーム差なしで並ぶ。" else "2位の${S}が${gb(g2)}差で追う。")
             if (league == "A") {
                 // ⚠ 降格が決まったら「危機」とは書かない（下のマジックの文が「降格が決定」と書く）
                 if (view.races.none { it.kind == "relegated" && it.team == last.team }) append("最下位の${view.teamShort(last.team)}は2部降格の危機にある。")
@@ -197,7 +188,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
     if (humans.size >= 2) {
         val lines = humans.mapNotNull { t ->
             val league = view.teamLeagues[t] ?: return@mapNotNull null
-            val table = view.table(league)
+            val table = view.leagueTable(league)
             val rank = table.indexOfFirst { it.team == t }
             val who = view.teamOwners[t]?.ifBlank { null }?.let { "${it}オーナーの" } ?: ""
             "${who}${view.teamShort(t)}は${LEAGUE_NAMES[league]}${rank + 1}位" + (table.getOrNull(rank)?.takeIf { it.gamesPlayed > 0 }?.let { "（${it.wins}勝${it.losses}敗）" } ?: "")
@@ -229,7 +220,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
             LINK_GAMES,
         )
     }
-    // 球界の外から（甲子園・独立リーグ日本一決定戦。その日から30日）
+    // 球界の外から（甲子園・独立リーグ日本一決定戦。同じ年で、その日から120日。[recentWorld]）
     recentWorld(view).forEach { w ->
         worldText(w, view::teamShort)?.let { t -> articles += FrontPage.Article(if (w.kind == "koshien") "甲子園" else "日本一決定戦", t.head, t.body, LINK_GAMES) }
     }

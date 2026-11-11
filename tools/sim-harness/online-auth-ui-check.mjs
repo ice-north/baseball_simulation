@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
+import { ONLINE_SCHEMA } from '../../src/online/shared.js';
+import { failureShots } from './lib/failureShots.mjs';
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
   'utf8',
 );
 const base = 'http://localhost:3000';
 const key = 'baseball-online-auth-v1';
+const viewKey = 'baseball-online-view-v1';
 const browser = await chromium.launch({
   ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
     ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
@@ -337,10 +340,168 @@ try {
   );
   assert.equal(await expired.page.getByRole('alert').count(), 0);
   await expired.context.close();
+
+  // --- 別のタブでログアウトしたあと、古いタブが前の人のビューを書き戻さない ---------
+  // ⚠ 以前は古いタブの定期の読み直しが、ログアウトで消した前回のビュー（`savedView.js`）を
+  //    書き戻し、ログアウトしたのに前の人の名簿・成績が端末に残っていた
+  {
+    const stale = await fixture({ commands: true });
+    await stale.page.getByRole('button', { name: 'リーグ管理', exact: true }).waitFor();
+    await stale.page.waitForFunction((k) => !!localStorage.getItem(k), viewKey);
+    const outTab = await stale.context.newPage();
+    await outTab.goto(`${base}/switch`);
+    // 別のタブのログアウト（`clearAuth` と `forgetView`）
+    await outTab.evaluate(
+      ({ key, viewKey }) => {
+        localStorage.removeItem(key);
+        localStorage.removeItem(viewKey);
+      },
+      { key, viewKey },
+    );
+    const polled = stale.page.waitForResponse(
+      (response) => new URL(response.url()).searchParams.get('action') === 'view',
+    );
+    await stale.page.bringToFront();
+    await stale.page.evaluate(() =>
+      document.dispatchEvent(new Event('visibilitychange')),
+    );
+    await polled;
+    // 止めておいた認証の更新も返し、通信が静まる（返事を処理し終える）まで待つ
+    stale.release();
+    await withDeadline(stale.refreshFinished, 'ログアウト後の古い認証更新');
+    await stale.page.waitForLoadState('networkidle');
+    assert.equal(
+      await stale.page.evaluate((k) => localStorage.getItem(k), viewKey),
+      null,
+      '別のタブでログアウトしたあと、古いタブが前の人のビューを書き戻した',
+    );
+    await stale.context.close();
+  }
+
+  // 認証済みで開く画面（ビューの答えと、残したビューを決められる）
+  const plainPage = async ({ respond, saved = null }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await context.addInitScript(
+      ({ key, viewKey, saved }) => {
+        if (sessionStorage.getItem('seeded')) return;
+        sessionStorage.setItem('seeded', '1');
+        localStorage.setItem(
+          key,
+          JSON.stringify({ userId: 'a', sessionId: 's', accessToken: 'x' }),
+        );
+        // 前に開いたことのある端末（接続の設定とビューが残っていて、開いた直後にそれを描く）
+        if (saved) {
+          localStorage.setItem('baseball-online-config-v1', JSON.stringify({ local: false }));
+          localStorage.setItem(
+            viewKey,
+            JSON.stringify({ userId: 'a', sessionId: 's', view: saved }),
+          );
+        }
+      },
+      { key, viewKey, saved },
+    );
+    await context.route(`${base}/**`, async (route) => {
+      if (route.request().resourceType() === 'document')
+        return route.fulfill({ contentType: 'text/html', body: html });
+      const action = new URL(route.request().url()).searchParams.get('action');
+      if (action === 'config')
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ local: false }),
+        });
+      if (action === 'view') return route.fulfill(respond());
+      throw new Error(`unexpected action ${action}`);
+    });
+    const page = await context.newPage();
+    return { context, page };
+  };
+  const okView = () => ({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schema: ONLINE_SCHEMA,
+      revision: 1,
+      status: 'running',
+      teamName: '検証球団',
+      year: 1,
+      currentDate: { year: 2024, month: 4, day: 1 },
+      nextAdvanceAt: null,
+      isAdmin: true,
+      writable: true,
+      members: [],
+      roster: [],
+      standings: [],
+      results: [],
+      upcoming: [],
+      notices: [],
+      history: [],
+      phase: null,
+      lineup: { battingOrder: [], starters: [], strategy: {} },
+    }),
+  });
+
+  // --- 最初の読み込みに失敗: 英語の文を出さない・「読み込んでいます」のまま残さない ----
+  // --- 定期の読み直しに成功したら、その失敗の帯を消す -------------------------------
+  {
+    let healthy = false;
+    const { context, page } = await plainPage({
+      respond: () =>
+        healthy
+          ? okView()
+          : {
+              status: 503,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: 'Service Unavailable', code: 'server' }),
+            },
+    });
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(`${base}/online`);
+    const alert = page.getByRole('alert').filter({ hasText: 'サーバーに一時的につながりません' });
+    await alert.waitFor();
+    assert.equal(
+      await page.getByText('Service Unavailable').count(),
+      0,
+      'サーバーの英語の文をそのまま出している',
+    );
+    await page.getByText('リーグを読み込めませんでした', { exact: false }).waitFor();
+    assert.equal(
+      await page.getByText('リーグを読み込んでいます…', { exact: true }).count(),
+      0,
+      '読み込めなかったのに「読み込んでいます」のまま',
+    );
+    healthy = true;
+    // 定期の読み直し（画面に戻ったとき）で直る
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.getByRole('button', { name: 'リーグ管理', exact: true }).waitFor();
+    await alert.waitFor({ state: 'detached' });
+    assert.equal(
+      await page.getByRole('alert').count(),
+      0,
+      '読み直せたのに失敗の帯が残っている',
+    );
+    await context.close();
+  }
+
+  // --- 残したビューで画面が落ちたら、そのビューを忘れる（再読込でまた落ちない） ---------
+  {
+    const broken = JSON.parse(okView().body);
+    // 描けない形（順位表が配列でない）。版は今のものにして、残したビューとして出させる
+    broken.teamLeagues = {};
+    broken.standings = 5;
+    const { context, page } = await plainPage({ respond: okView, saved: broken });
+    await page.goto(`${base}/online`);
+    await page.getByText('画面を表示できませんでした。', { exact: false }).waitFor();
+    await page.waitForFunction((k) => localStorage.getItem(k) === null, viewKey);
+    await page.getByRole('button', { name: '再読込', exact: true }).click();
+    await page.getByRole('button', { name: 'リーグ管理', exact: true }).waitFor();
+    await context.close();
+  }
   assert.deepEqual(errors, []);
   console.log(
-    'online-auth-ui-check PASS（配布HTML・ログアウト中の遅延更新・別タブログイン・期限切れ復帰 / Authはfixture）',
+    'online-auth-ui-check PASS（配布HTML・ログアウト中の遅延更新・別タブログイン・期限切れ復帰・別タブのログアウト後にビューを書き戻さない・英語の失敗文と読み込み失敗の表示・読み直せたら帯を消す・落ちたビューを忘れる / Authはfixture）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-auth-ui');
+  throw error;
 } finally {
   await browser.close();
 }

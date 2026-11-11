@@ -274,7 +274,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               onClick={handleAutoSelect}
               className="btn-primary text-xs px-3 py-1.5 rounded transition-colors"
             >
-              AI自動選択
+              自動で選ぶ
             </button>
           </>
         ) : null}
@@ -296,13 +296,15 @@ const RosterScreen = ({ seasonData, gameMode }) => {
             activeTab === 'lineup' ? 'seg-on' : 'seg'
           }`}
         >
-          ⚾ スタメン設定
+          ⚾ 試合のオーダー
         </button>
       </div>
 
       {/* スタメン設定タブ */}
+      {/* ⚠ 中の画面は見出しと枠を持つので embedded で外す（見出しが2つ・余白が二重になっていた）。
+          タブの名前も中の「スタメン設定」と同じだったので「試合のオーダー」にした（中にスタメン・投手起用・守備分析） */}
       {activeTab === 'lineup' && (
-        <LineupSettingScreen teamName={userTeamName} onBack={null} />
+        <LineupSettingScreen teamName={userTeamName} onBack={null} embedded />
       )}
 
       {/* ベンチ登録タブ */}
@@ -335,7 +337,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
           {/* 2パネル */}
           <div className="grid grid-cols-2 gap-4">
             {/* 登録選手 */}
-            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/40">
+            <div className="bg-surface-2 rounded-lg p-3 border border-gray-700/40">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-white">
                   登録選手
@@ -369,7 +371,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
             </div>
 
             {/* ベンチ外 */}
-            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/40">
+            <div className="bg-surface-2 rounded-lg p-3 border border-gray-700/40">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-white">
                   ベンチ外

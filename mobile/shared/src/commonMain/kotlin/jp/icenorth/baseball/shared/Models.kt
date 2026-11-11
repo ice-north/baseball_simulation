@@ -60,7 +60,12 @@ data class Member(
     val label: String? = null,
     val teamName: String? = null,
     val displayName: String? = null,
+    /** 手続きで待たれていない（決定済み・指導者に任せた・CPUが決める。server/projection.mjs の members） */
     val ready: Boolean = false,
+    /** 途中参加でセットを待っていて、手続きはCPUが決める */
+    val cpu: Boolean = false,
+    /** この手続きを指導者に任せている */
+    val delegated: Boolean = false,
 )
 
 @Serializable
@@ -122,6 +127,8 @@ data class Phase(
     val deadline: String? = null,
     /** 標準案を出した指導者（「山田監督の案です」）。任せ方が「自分で」なら無い */
     val planBy: PlanBy? = null,
+    /** 自分がこの手続きを指導者に任せているか（任せた手続きは提出しても指導者の案で決まる） */
+    val delegated: Boolean = false,
 )
 
 @Serializable

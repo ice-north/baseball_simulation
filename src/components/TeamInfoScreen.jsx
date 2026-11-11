@@ -12,7 +12,8 @@ import PlayerDetailModal from './PlayerDetailModal.jsx';
 const RECRUIT_TYPE_LABEL = {
   scouted: { label: '推薦', cls: 'text-blue-400' },
   selection: { label: 'セレクション', cls: 'text-green-400' },
-  recommended: { label: 'AI推薦', cls: 'text-gray-300' },
+  // 自分のスカウトを通さずに決まった推薦入学（ほかの大学の新入生はみなこれ）。⚠ 「AI」は作る側の言葉なので出さない
+  recommended: { label: '推薦（自動）', cls: 'text-gray-300' },
   general: { label: '一般', cls: 'text-gray-400' },
 };
 

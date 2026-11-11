@@ -162,6 +162,16 @@ export const createSeasonData = (year = 1) => {
 };
 
 /**
+ * オフシーズンの画面に、年度更新が済んだ後のデータ（翌年の1月1日・春季キャンプ）が来ているか。
+ * ⚠ 大学は年度更新のあと卒業・入部レポートを挟み、その間も画面はオフシーズンのまま。
+ *    年が替わった瞬間のオートセーブ・緊急保存は「翌年のデータ・画面はオフシーズン」で入る。
+ *    以前はこれを読み直すとオフシーズンの画面が「3年目へ進む」を出し、1年遊ばないまま
+ *    加齢・卒業・入部がもう一度走った。オフシーズンの画面はこの形なら年度更新をせず、
+ *    レポートの続き（無ければ翌年の手続き）へ進める（`OffSeasonScreen.jsx`）
+ */
+export const isYearAdvanced = (seasonData) => seasonData?.phase === SEASON_PHASES.SPRING_CAMP;
+
+/**
  * 日付を進める
  * @param {Object} currentDate - 現在の日付 {year, month, day}
  * @param {number} days - 進める日数
@@ -290,6 +300,22 @@ export const generatePlayoffSchedule = (teams, format = 'short', year = 2024) =>
   }
 
   return schedule;
+};
+
+/**
+ * オフシーズンの画面の「CHAMPION」。プレーオフで優勝が決まった年はその球団、
+ * プレーオフが無い（大学・箱庭の途中など）・決着していない年は勝率の1番。
+ * ⚠ 以前はいつも勝率の1番（レギュラーシーズン1位）を出していて、プレーオフを勝った球団と
+ *    違った。レギュラーシーズン1位は `leagueFirst` で別に添える。
+ * 順位表が無い（社会人は大会だけ）ときは null。
+ * @returns {{ champion: object, leagueFirst: object, byPlayoff: boolean } | null}
+ */
+export const seasonChampion = (standings = [], schedule = []) => {
+  if (!standings || standings.length === 0) return null;
+  const sorted = [...standings].sort((a, b) => b.winRate - a.winRate);
+  const playoffWinner = getPlayoffChampion(schedule || []);
+  const byPlayoff = playoffWinner ? sorted.find(s => s.team === playoffWinner) : null;
+  return { champion: byPlayoff || sorted[0], leagueFirst: sorted[0], byPlayoff: !!byPlayoff };
 };
 
 export const getPlayoffChampion = (schedule = [], options = {}) => {

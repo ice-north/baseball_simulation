@@ -1,0 +1,699 @@
+// 一人用の年度更新の通し検査（ブラウザ）。`npm run check:ui:yearend`（ビルドしてから実行）。
+//
+// 独立リーグ・箱庭・社会人（企業・クラブ）・大学の各モードを新しく始め、1年目のオフ
+// （ドラフト・契約更改・トライアウト・年度更新・翌年のレギュレーション）を画面で通して、
+// 2年目の開幕の画面に着き、日程が進められることを確かめる。
+//
+//   独立リーグ: 初回トライアウト → キャンプ → 背番号 → 開幕 → ドラフト会議 → 契約更改（1人解雇）
+//               → トライアウト（1人指名）→ オフのレギュレーション（球団数・球団名は変えられない）
+//               → オフシーズン → 2年目へ → 翌年のレギュレーション
+//               （自チームの名前を変える）→ 改名した自チームのキャンプ → 背番号 → 2年目の開幕
+//   箱庭:       規定 → 4球団に16人ずつ足す → 背番号 → 開幕 → ドラフト会議の日にオフシーズン
+//               → 2年目へ → 翌年のレギュレーション → チーム設定 → 2年目の開幕
+//   社会人企業: キャンプ → 背番号 → 開幕（大会の試合はスキップ）→ ドラフト会議 → 退団処理
+//               → スカウト入団 → 予算決算 → オフシーズン → 2年目へ → キャンプ → 背番号 → 2年目の開幕
+//   クラブ:     背番号 → 開幕 → ドラフト会議 → 退団処理 → 入部希望者 → オフシーズン → 2年目へ
+//               → 2年目の開幕（キャンプなし）
+//   大学:       キャンプ → 開幕 → 夏季合宿 → 秋季リーグ → ドラフト会議 → スポーツ推薦 → オフシーズン
+//               → 2年目へ → 卒業・入部レポート（ここでオートセーブ）→ 読み直してもレポートの続き
+//               → キャンプ → 背番号 → 2年目の開幕
+//
+// 捕まえたいのは「ボタンを押しても次の画面へ移らない」型の止まり方（2f9ee22: 翌年の
+// レギュレーションを確定しても画面が変わらず、独立リーグ・箱庭が2年目に進めなかった）。
+// ロジックの複数年は progression-check、開幕からドラフト会議までは singleplayer-ui-check が見る。
+// 画面の例外・console.error・alert が出たら落とす。
+//
+//   node tools/sim-harness/singleplayer-yearend-ui-check.mjs              # 全モード（同時に走らせる）
+//   node tools/sim-harness/singleplayer-yearend-ui-check.mjs club sandbox # モードを選ぶ
+//   node tools/sim-harness/singleplayer-yearend-ui-check.mjs --serial     # 1モードずつ
+//
+// スクリーンショットは /tmp/baseball-single-yearend-<モード>.png、落ちたら
+// /tmp/baseball-single-yearend-<モード>-failure.zip に操作の記録を残す。
+import assert from 'node:assert/strict';
+import { BASE, driver, launchBrowser, startPreview } from './lib/singleplayer.mjs';
+
+const MODES = {
+  independent: { label: '独立リーグ', run: runIndependent },
+  sandbox: { label: '箱庭', run: runSandbox },
+  corporate: { label: '社会人（企業）', run: runCorporate },
+  club: { label: '社会人（クラブ）', run: runClub },
+  university: { label: '大学', run: runUniversity },
+};
+const args = process.argv.slice(2);
+const serial = args.includes('--serial');
+const picked = args.filter((a) => !a.startsWith('--'));
+const unknown = picked.filter((m) => !MODES[m]);
+if (unknown.length) {
+  console.error(`知らないモード: ${unknown.join(', ')}（使えるもの: ${Object.keys(MODES).join(', ')}）`);
+  process.exit(2);
+}
+const modes = picked.length ? picked : Object.keys(MODES);
+
+// ------------------------------------------------------------
+// モードに依らない操作
+// ------------------------------------------------------------
+function tools(page, context, log) {
+  const ui = driver(page);
+  const button = (name) => page.getByRole('button', { name });
+  const shown = async (name) => (await button(name).count()) > 0;
+  // 押したら次の画面（`next` のボタンか文字）が出るまで待つ。出なければ「どこで止まったか」を落とす
+  const go = async (name, next, what, timeout = 30000) => {
+    await ui.click(name);
+    const target = typeof next === 'string' || next instanceof RegExp
+      ? page.getByRole('button', { name: next }).or(page.getByText(next)).first()
+      : next;
+    await target.waitFor({ timeout }).catch(() => {
+      throw new Error(`「${String(name).replace(/^\/\^?|\$?\/$/g, '')}」を押しても${what}に移らない`);
+    });
+  };
+  // 取り消せない操作は、押すと下に確認の帯（`ConfirmBar`）が出て、帯のボタンで決める。
+  // 帯が出ることを待ち、帯の中のボタン（`label`）を押して次の画面を待つ。
+  // `onBar` を渡すと、帯が出たところで呼ぶ（帯の収まりを測るなど）
+  const confirm = async (name, label, next, what, timeout = 30000, onBar = null) => {
+    const bar = page.getByTestId('confirm-bar');
+    await go(name, bar, `${what}の確認の帯`);
+    if (onBar) await onBar(bar);
+    await bar.getByRole('button', { name: label }).click();
+    await go2(next, what, timeout);
+  };
+  const go2 = async (next, what, timeout) => {
+    const target = typeof next === 'string' || next instanceof RegExp
+      ? page.getByRole('button', { name: next }).or(page.getByText(next)).first()
+      : next;
+    await target.waitFor({ timeout }).catch(() => {
+      throw new Error(`確認の帯で決めても${what}に移らない`);
+    });
+  };
+  // 区切りごとに操作の記録（trace）を捨てて取り直す。1年分を全部ためると数十MBになり、
+  // 落ちたときに要るのは最後の区切りからの操作だけなので
+  const step = async (label) => {
+    log(`- ${label}`);
+    await context.tracing.stopChunk();
+    await context.tracing.startChunk();
+  };
+
+  // 次の区切りまで早送りする。大会の自分の試合は「試合スキップ」で消化し、
+  // フェーズ移行の確認が出たらその見出しを返す（確認は開いたまま）
+  const advanceToPhase = async () => {
+    for (let i = 0; i < 60; i++) {
+      const before = await ui.date();
+      await ui.advance('phase');
+      if (await shown(/^進む$/)) {
+        const modal = page.locator('div.fixed', { has: button(/^進む$/) }).locator('h3').first();
+        return { title: (await modal.innerText()).trim(), date: await ui.date() };
+      }
+      if (await shown('試合スキップ')) {
+        await ui.click('試合スキップ');
+        continue;
+      }
+      const after = await ui.date();
+      throw new Error(`早送りが ${fmt(after)} で止まったのに、フェーズ移行の確認も大会の試合も出ていない（${fmt(before)} から）`);
+    }
+    throw new Error('早送りを60回くり返してもフェーズ移行の確認が出ない');
+  };
+  // 次のフェーズ移行の確認まで進め、見出しが期待どおりなら「進む」を押す
+  const proceedTo = async (expect) => {
+    const { title, date } = await advanceToPhase();
+    assert.match(title, expect, `${fmt(date)} のフェーズ移行が「${title}」（${expect} のはず）`);
+    await step(`${fmt(date)} ${title}`);
+    await ui.click(/^進む$/);
+  };
+  // NPB ドラフト会議の発表を飛ばして日程画面へ戻る
+  const finishDraft = async () => {
+    await page.getByText('プロ野球ドラフト会議').first().waitFor({ timeout: 60000 });
+    await go('スキップ', '結果詳細へ', '指名一覧');
+    await go('結果詳細へ', '次へ進む', 'ドラフトの結果詳細');
+    await go('次へ進む', page.getByTestId('dev-advance'), '日程画面');
+  };
+  // キャンプの練習を済ませてから背番号を決め、開幕の日程画面に着く
+  const campToOpening = async () => {
+    // キャンプの画面に「NaN」が出ない（以前は2年目のランク変動の知らせが「注目度: NaN」だった）
+    const campText = await page.locator('body').innerText();
+    assert.doesNotMatch(campText, /NaN/, `キャンプの画面に「NaN」が出ている: ${(campText.match(/[^\n]*NaN[^\n]*/) || [])[0]}`);
+    await ui.runCamp();
+    await go('シーズン開始', /確定してシーズン開始/, '背番号の画面');
+    await jerseyToOpening();
+  };
+  const jerseyToOpening = async () => {
+    // 2年目は空いている番号だけ埋める（1年目は全員が空き）
+    await ui.click('空きを自動で埋める');
+    await go(/確定してシーズン開始/, page.getByTestId('dev-advance'), '開幕の日程画面');
+  };
+  // オフシーズンの画面から「2年目へ進む」を押す
+  const offseasonToNextYear = async (next, what) => {
+    await page.getByText(/年目 シーズン終了/).first().waitFor({ timeout: 30000 });
+    await go(/^2年目へ進む/, next, what, 60000);
+  };
+  // 翌年のレギュレーションを確定する（2f9ee22 で直した止まり方）
+  // （ボタンの名前は行き先で変わる: 「確定 → キャンプへ進む」／箱庭は「確定 → チーム設定へ進む」）
+  // 球団の顔ぶれが変わる（改名・解散・新規参入）ときは取り消せないので、確認の帯で決める（`changes`）。
+  // 変わらないときは帯を出さずにそのまま進む
+  const confirmNextRegulations = async (next, what, { label = '確定 → キャンプへ進む', changes = false } = {}) => {
+    if (changes) {
+      await confirm(label, '確定する', next, what);
+      return;
+    }
+    await go(label, next, what);
+  };
+  // 2年目の開幕: 暦が1年進み、日程が進められること
+  const checkSecondYear = async ({ league }) => {
+    const opening = await ui.date();
+    assert.ok(opening, '2年目の開幕で日付が画面に出ていない');
+    assert.equal(opening.year, 2, `2年目へ進んだのに ${opening.year}年目になっている`);
+    assert.deepEqual([opening.y, opening.month, opening.day], [2025, 4, 1],
+      `2年目の開幕が ${fmt(opening)}（2025/4/1 のはず）`);
+    await step(`2年目の開幕 ${fmt(opening)}`);
+    await ui.advance(7);
+    if (await shown('試合スキップ')) await ui.click('試合スキップ');
+    const after = await ui.date();
+    assert.ok(after && (after.month > 4 || after.day > 1), `2年目の開幕から日程が進まない（${fmt(after)}）`);
+    if (league) {
+      // 自分の試合を消化している（日程が組まれている）
+      const text = await page.locator('body').innerText();
+      const m = text.match(/今月(\d+)勝(\d+)敗/);
+      assert.ok(m && Number(m[1]) + Number(m[2]) > 0, `2年目の開幕から7日進めても自分の試合が無い（${fmt(after)}）`);
+      await step(`7日進めて ${fmt(after)}（今月${m[1]}勝${m[2]}敗）`);
+    } else {
+      await step(`7日進めて ${fmt(after)}`);
+    }
+  };
+  return { ui, go, confirm, step, button, shown, proceedTo, finishDraft, campToOpening, jerseyToOpening,
+    offseasonToNextYear, confirmNextRegulations, checkSecondYear };
+}
+
+const fmt = (d) => (d ? `${d.year}年目 ${d.y}/${d.month}/${d.day}` : '(日付なし)');
+
+// トライアウトで自分の番が来るのを待つ。終わっていれば false
+async function waitUserTurn(page) {
+  await page.getByText(/あなたの指名順です|ドラフト完了/).first().waitFor({ timeout: 180000 });
+  return (await page.getByText('あなたの指名順です').count()) > 0;
+}
+// 画面の「現在のピック」の番号（トライアウトが終わって画面が替わったら null）
+const currentPick = (page) => page.evaluate(() => {
+  const m = document.body.innerText.match(/現在のピック\s*(\d+)/);
+  return m ? Number(m[1]) : null;
+});
+// 1人指名する。`choose` で候補を選び、確認の帯の「指名する」で決め、ピックの番号が進むまで待つ。
+// ⚠ 「指名する」は必ず押す（出ていなければ落とす）。以前は「出ていれば押す」で、指名が
+//    確認なしの1段に戻ってもこの検査は通ってしまっていた
+async function pick(page, choose) {
+  const before = await currentPick(page);
+  await choose();
+  const confirm = page.getByRole('button', { name: /^指名する$/ });
+  await confirm.waitFor({ timeout: 5000 });
+  await confirm.click();
+  await page.waitForFunction((n) => {
+    const m = document.body.innerText.match(/現在のピック\s*(\d+)/);
+    return !m || Number(m[1]) !== n;
+  }, before, { timeout: 30000 });
+}
+// 守備位置のタブ（全選手・投手・捕手・内野手・外野手）を開いて、いちばん上の候補を指名する
+// （その守備位置の候補がいなければ全選手から）
+const pickFromTab = (page, tab) => pick(page, async () => {
+  await page.getByRole('button', { name: tab, exact: true }).click();
+  const rows = page.locator('tbody tr');
+  if (!(await rows.count())) await page.getByRole('button', { name: '全選手', exact: true }).click();
+  await rows.first().click();
+});
+
+// ------------------------------------------------------------
+// 独立リーグ
+// ------------------------------------------------------------
+async function runIndependent(page, t) {
+  const { ui, go, step } = t;
+  await step('四国アイランドリーグplus の徳島で新しく始める');
+  await page.goto(`${BASE}/?dev=1`);
+  for (const name of ['はじめから', '独立リーグ', '四国アイランドリーグplus']) await ui.click(name);
+  await page.getByRole('button').filter({ hasText: '徳島インディゴソックス' }).first().click();
+
+  await step('初回トライアウト（おすすめ候補を24巡指名）');
+  let picks = 0;
+  while (await waitUserTurn(page)) {
+    const hint = page.getByRole('button', { name: 'ヒントを今後表示しない' });
+    if (await hint.count()) await hint.first().click();
+    const chip = page.getByText('おすすめ候補', { exact: true }).locator('..').locator('div.cursor-pointer');
+    await pick(page, async () => {
+      if (await chip.count()) await chip.first().click();
+      else await page.locator('tbody tr').first().click();
+    });
+    picks++;
+    assert.ok(picks <= 30, '初回トライアウトの指名が終わらない');
+  }
+  // 初回は指名が終わると自動でキャンプへ移る
+  await page.getByRole('button', { name: /練習を実行/ }).first().waitFor({ timeout: 30000 })
+    .catch(() => { throw new Error('初回トライアウトが終わってもキャンプへ移らない'); });
+  await t.campToOpening();
+  await step(`1年目の開幕 ${fmt(await ui.date())}`);
+
+  await step('トレード: 帯を出したまま相手チームを替えて選び直しても、帯は出ない');
+  await page.locator('nav').getByRole('button', { name: /トレード/ }).click();
+  const teamSelect = page.locator('select').first();
+  await teamSelect.selectOption({ index: 1 });
+  const tables = page.locator('table');
+  await tables.nth(0).locator('tbody tr').nth(5).click();
+  await tables.nth(1).locator('tbody tr').nth(3).click();
+  const tradeBar = page.getByTestId('confirm-bar');
+  await t.go(/^トレード提案$/, tradeBar, 'トレードの確認の帯');
+  // 以前は相手を替えると帯が隠れるだけで、新しい相手の選手を選ぶと「トレード提案」を押して
+  // いないのに新しい相手への帯が出た
+  await teamSelect.selectOption({ index: 2 });
+  await tables.nth(1).locator('tbody tr').nth(2).click();
+  await page.waitForTimeout(300);
+  assert.equal(await tradeBar.count(), 0, '相手チームを替えて選び直したら、「トレード提案」を押していないのに帯が出た');
+  await t.go(/^トレード提案$/, tradeBar, 'トレードの確認の帯');
+  await ui.click(/^受信提案/);
+  await ui.click(/^提案する$/);
+  await page.waitForTimeout(300);
+  assert.equal(await tradeBar.count(), 0, 'タブを替えて戻ったら、押していないトレードの帯が残っている');
+  // 申し込んだ結果（成立・拒否）は、押したボタンの近くの見える所に出る。
+  // 以前は画面の上にしか出ず、1280×720 では表の下の「申し込む」を押すと見えなかった
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await t.go(/^トレード提案$/, tradeBar, 'トレードの確認の帯');
+  await tradeBar.getByRole('button', { name: /^申し込む$/ }).click();
+  const tradeNote = page.getByText(/^(トレード成立！|相手チームが拒否しました)/);
+  await tradeNote.waitFor();
+  await page.waitForTimeout(300);
+  const noteBox = await tradeNote.boundingBox();
+  assert.ok(noteBox && noteBox.y >= 0 && noteBox.y + noteBox.height <= 720,
+    `1280×720 でトレードを申し込んだ結果「${await tradeNote.innerText()}」が画面の外にある（y=${Math.round(noteBox?.y)}〜${Math.round((noteBox?.y || 0) + (noteBox?.height || 0))}）`);
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
+  await page.getByTestId('dev-advance').waitFor();
+
+  await t.proceedTo(/ドラフト/);
+  await t.finishDraft();
+
+  await t.proceedTo(/契約更改/);
+  await step('契約更改: 1人解雇して確定');
+  await page.getByText('契約更改 - 1年目').first().waitFor({ timeout: 30000 });
+  // 投手の防御率を控えておく（2年目のキャンプの「前年成績」と比べる）
+  const contractEra = Object.fromEntries(await page.locator('tbody tr').evaluateAll((trs) => trs
+    .map((tr) => [tr.children[1]?.innerText.trim(), (tr.innerText.match(/ERA(\d+\.\d\d)/) || [])[1]])
+    .filter(([, era]) => era)));
+  // 投手を1人（捕手や野手を外すと、トライアウトで足りない守備位置を埋めるまで指名を終えられない）
+  const pitcherRow = page.locator('tbody tr').filter({ has: page.locator('td:nth-child(5)', { hasText: /^投$/ }) });
+  await ((await pitcherRow.count()) ? pitcherRow.last() : page.locator('tbody tr').first()).click();
+  // 390幅でも帯の問い（解雇の人数）が切れず、ボタンが画面に収まり、帯の下に表の最後が隠れない。
+  // 以前は問いを1行に詰めて「1人を解…」で切り、余白は帯の高さより小さい固定の h-24 だった
+  const narrowBar = async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(400);
+    const fit = await ui.confirmBarFit();
+    const title = await page.getByTestId('confirm-bar').locator('.font-bold').first().innerText();
+    assert.ok(fit && !fit.titleCut && fit.fitsWidth, `390幅の契約更改の帯で問い「${title}」が切れている、または帯が画面からはみ出す: ${JSON.stringify(fit)}`);
+    assert.ok(fit.hidden <= 0, `390幅の契約更改の帯の下に、表の最後が${fit.hidden}px隠れる（帯の高さ${fit.height}px）`);
+    await page.setViewportSize({ width: 1400, height: 900 });
+  };
+  await t.confirm(/^契約更改を確定する$/, /^(解雇して確定する|確定する)$/, 'トライアウトへ進む', '契約更改の完了', 30000, narrowBar);
+  await go('トライアウトへ進む', /指名終了|ドラフト完了/, 'トライアウト', 60000);
+
+  await step('トライアウト: 捕手と足りない守備位置を指名して指名を終える');
+  // ⚠ 捕手は NPB に2人とも指名されて0人のことがある。試合に出られる構成（投手・捕手・
+  //    野手8人）がそろうまで「指名終了」は押せない（押すと alert）。先に捕手を1人取り、
+  //    「編成不足」の帯が出ていればその守備位置を取る
+  let tab = '捕手';
+  // 「現在の編成 (N/24人)（現有X＋指名Y）」。指名が終わって名簿に書いた後も同じ数のはず
+  const rosterHeading = async () => (await page.getByText(/^現在の編成 \(/).first().innerText()).trim();
+  // 「現在の編成」は指名する前から出ていて、おすすめ候補の「投手 (n/10)」の n はその数（現有＋指名）と合う。
+  // 以前はおすすめ候補が今回の指名だけを数え、名簿が足りていても全区分が「0/10・0/2・0/6・0/6」の赤だった
+  assert.ok(await waitUserTurn(page), 'トライアウトで自分の番が来ない');
+  const composition = await page.getByTestId('tryout-composition').innerText()
+    .catch(() => { throw new Error('トライアウトの指名の前に「現在の編成」が出ていない'); });
+  const chips = page.getByText('おすすめ候補', { exact: true }).locator('..');
+  const chipText = (await chips.count()) ? await chips.first().innerText() : '';
+  for (const m of chipText.matchAll(/(投手|捕手|内野手|外野手) \((\d+)\/(\d+)\)/g)) {
+    const c = composition.match(new RegExp(`${m[1]}\\s+\\S+\\s+(\\d+)/${m[3]}`));
+    assert.equal(c?.[1], m[2], `おすすめ候補の「${m[0]}」が現在の編成（${c?.[0]}）と合わない`);
+  }
+  let before = null;
+  let lastTab = null;
+  let undoChecked = false;
+  while (await waitUserTurn(page)) {
+    if (!tab) {
+      const bar = page.getByTestId('confirm-bar');
+      await page.getByRole('button', { name: /^指名終了$/ }).click();
+      await bar.getByRole('button', { name: '指名を終える', exact: true }).waitFor();
+      if (!undoChecked) {
+        // 終える帯を出したまま直前の指名を取り消す → 取り消した選手の指名の帯を「やめる」で閉じる。
+        // 以前は押していないのに「指名を終えますか？」の帯が戻り、取り消しで足りなくなった編成の
+        // ままでも（捕手0人でも）指名を終えられた
+        undoChecked = true;
+        await page.getByRole('button', { name: /直前の指名.*を取り消す/ }).click();
+        await bar.getByText('を指名しますか？').waitFor();
+        await bar.getByRole('button', { name: 'やめる', exact: true }).click();
+        await page.waitForTimeout(300);
+        assert.equal(await bar.count(), 0, '指名を取り消して指名の帯を閉じたら、押していない「指名を終えますか？」の帯が戻った');
+        tab = lastTab; // 取り消した分を指名し直す
+        continue;
+      }
+      before = await rosterHeading();
+      await bar.getByRole('button', { name: '指名を終える', exact: true }).click();
+      break;
+    }
+    lastTab = tab;
+    await pickFromTab(page, tab);
+    const shortage = page.getByText('編成不足', { exact: false }).locator('..');
+    const text = (await shortage.count()) ? await shortage.first().innerText() : '';
+    tab = ['投手', '捕手', '内野手', '外野手'].find((pos) => text.includes(pos)) || null;
+  }
+  await page.getByText('ドラフト完了').first().waitFor({ timeout: 180000 });
+  if (before) {
+    assert.equal(await rosterHeading(), before,
+      'トライアウトの指名を終えたら、現在の編成の人数が変わった（指名した選手を二重に数えている）');
+  }
+  await go('トライアウト終了', page.getByTestId('dev-advance'), '日程画面');
+
+  // オフの「レギュレーション」では球団数・球団名を変えない（年度更新の翌年のレギュレーションで変える）。
+  // ⚠ 以前はここで先に保存でき、年度更新までのあいだ設定の球団が TEAMS_DATA と食い違って、
+  //    年度更新が自リーグの球団を並行世界として扱っていた
+  await step('オフのレギュレーション: 球団数・球団名は変えられない');
+  await page.locator('nav').getByRole('button', { name: /レギュレーション/ }).click();
+  const teamsCount = page.locator('select').filter({ has: page.getByRole('option', { name: /^\d+チーム$/ }) }).first();
+  await teamsCount.waitFor({ timeout: 10000 });
+  assert.equal(await teamsCount.isDisabled(), true, 'オフのレギュレーションで球団数を変えられる');
+  assert.equal(await page.getByText('チーム名設定').count(), 0, 'オフのレギュレーションで球団名を変えられる');
+  assert.equal(await page.getByRole('button', { name: '設定を保存' }).isEnabled(), true, 'オフのレギュレーションで DH・延長を保存できない');
+  await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
+  await page.getByTestId('dev-advance').waitFor({ timeout: 10000 });
+
+  await t.proceedTo(/オフシーズン/);
+  await t.offseasonToNextYear('確定 → キャンプへ進む', '翌年のレギュレーション');
+  // 自チーム（#1）の名前を変える。改名として名簿を引き継ぎ、自チームのまま2年目に入る。
+  // ⚠ 以前は自チームが解散して選手がプールへ移り、キャンプは2番目の球団（高知）を自チームとして開いた
+  const renamed = '徳島改名テスト';
+  await step(`翌年のレギュレーション: 自チームの名前を「${renamed}」に変える`);
+  await page.getByPlaceholder('チームA', { exact: true }).fill(renamed);
+  const changes = page.getByTestId('league-changes');
+  await changes.waitFor({ timeout: 10000 }).catch(() => { throw new Error('名前を変えても、確定すると変わる球団の欄が出ない'); });
+  assert.match(await changes.innerText(), new RegExp(`改名: 徳島インディゴソックス → ${renamed}`), '確定すると変わる球団の欄に改名が出ない');
+  assert.doesNotMatch(await changes.innerText(), /解散|新規参入/, '名前を変えただけなのに解散・新規参入が出る');
+  await t.confirmNextRegulations(/練習を実行/, '春季キャンプ', { changes: true });
+  assert.ok(await page.getByText(`春季キャンプ - ${renamed}`).count() > 0,
+    `改名した自チームのキャンプが開かない（見出し: ${(await page.locator('h1').first().innerText()).trim()}）`);
+  await step('2年目の春季キャンプ: 投手の「前年成績」の防御率が契約更改の画面と同じ');
+  // 以前は自責点÷アウト数×9 で、契約更改の画面の3分の1（2.89 が 0.96）に出ていた
+  const pitcherTab = page.getByRole('button', { name: /^投手\s*\d+/ });
+  if (await pitcherTab.count()) await pitcherTab.first().click();
+  const campEra = await page.locator('table').filter({ hasText: 'メイン' }).locator('tbody tr').evaluateAll((trs) => trs
+    .map((tr) => [tr.children[0]?.innerText.trim(), (tr.innerText.match(/(\d+\.\d\d) \d+勝\d+S/) || [])[1]])
+    .filter(([, era]) => era));
+  let comparedEra = 0;
+  for (const [name, era] of campEra) {
+    if (!(name in contractEra)) continue;
+    assert.equal(era, contractEra[name], `2年目の春季キャンプの前年成績で ${name} の防御率が ${era}（契約更改の画面では ${contractEra[name]}）`);
+    comparedEra++;
+  }
+  assert.ok(comparedEra >= 3, `前提: 契約更改とキャンプで防御率を比べられた投手が${comparedEra}人`);
+  // 派遣は下の帯で決める（以前は中央の窓で、やめるが「キャンセル」）。ここでは帯を出して Esc で閉じるだけ
+  const dispatchButton = page.locator('button[title*="に派遣"]:not([disabled])').first();
+  assert.ok(await dispatchButton.count(), '前提: 2年目のキャンプに派遣できる選手がいない');
+  await dispatchButton.click();
+  const dispatchBar = page.getByTestId('confirm-bar').filter({ hasText: /派遣しますか？/ });
+  await dispatchBar.waitFor({ timeout: 5000 }).catch(() => {
+    throw new Error('キャンプの派遣のボタンを押しても、派遣を決める帯が出ない');
+  });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await page.getByTestId('confirm-bar').count(), 0, '派遣の帯が Esc で閉じない');
+  // 1280幅でも練習を組む列（2年目は「派遣」も増える）が横に送らずに見える。
+  // 以前は表が枠より約200px広く、「サブ」「練習側」「派遣」が枠の外にあった
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const tab of ['投手', '内野手']) {
+    await page.getByRole('button', { name: new RegExp(`^${tab}\\s*\\d+`) }).first().click();
+    await page.waitForTimeout(300);
+    const cut = await ui.campOpsCut();
+    assert.deepEqual(cut, [], `1280幅の春季キャンプ（${tab}）で、練習を組む列が表の枠の外にある: ${cut?.join('・')}`);
+  }
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await t.campToOpening();
+  assert.ok(await page.getByText(new RegExp(`⚾\\s*${renamed}`)).count() > 0, '2年目のサイドバーの自チームが改名した名前でない');
+  await t.checkSecondYear({ league: true });
+}
+
+// ------------------------------------------------------------
+// 箱庭
+// ------------------------------------------------------------
+async function runSandbox(page, t) {
+  const { ui, go, step } = t;
+  await step('箱庭: 規定はそのまま、4球団に16人ずつ足す');
+  await page.goto(`${BASE}/?dev=1`);
+  await ui.click('箱庭モード');
+  await go('設定完了', page.getByText('箱庭モード - チーム設定'), 'チーム設定');
+  // ボタンに「AI」を出さない（以前は「AIオーダー編成」。作る側の言葉なので、何をするかで書く）
+  assert.doesNotMatch(await page.locator('body').innerText(), /AI/, '箱庭のチーム設定に「AI」が残っている');
+  const teams = await page.getByRole('button', { name: /\(\d+人\)/ }).all();
+  assert.ok(teams.length >= 2, `箱庭のチームが${teams.length}つしかない`);
+  for (const team of teams) {
+    await team.click();
+    for (const pos of ['投', '投', '投', '投', '投', '投', '投', '捕', '捕', '一', '二', '三', '遊', '左', '中', '右']) {
+      await page.getByRole('button', { name: `+ ${pos}`, exact: true }).click();
+      await page.getByRole('button', { name: '保存', exact: true }).click();
+    }
+  }
+  await go('シーズン開始', /確定してシーズン開始/, '背番号の画面');
+  await t.jerseyToOpening();
+  await step(`1年目の開幕 ${fmt(await ui.date())}`);
+
+  // 箱庭はドラフト・契約更改・トライアウトが無く、ドラフト会議の日にオフシーズンへ移る
+  await t.proceedTo(/ドラフト/);
+  await t.offseasonToNextYear('確定 → チーム設定へ進む', '翌年のレギュレーション');
+  await t.confirmNextRegulations(page.getByText('箱庭モード - チーム設定'), '箱庭のチーム設定', { label: '確定 → チーム設定へ進む' });
+  await go('シーズン開始', page.getByTestId('dev-advance'), '開幕の日程画面');
+  await t.checkSecondYear({ league: true });
+}
+
+// ------------------------------------------------------------
+// 社会人（企業・クラブ）
+// ------------------------------------------------------------
+async function newCorporateGame(page, t, team) {
+  const { ui, go } = t;
+  await page.goto(`${BASE}/?dev=1`);
+  for (const name of ['はじめから', '社会人野球', '四国']) await ui.click(name);
+  await page.getByText(team, { exact: true }).first().click();
+  await go(`${team}（`, /練習を実行|確定してシーズン開始/, 'キャンプか背番号の画面', 60000);
+}
+
+async function runCorporate(page, t) {
+  const { ui, go, step, shown } = t;
+  await step('社会人: 四国の企業チーム（JR四国）で新しく始める');
+  await newCorporateGame(page, t, 'JR四国');
+  await t.campToOpening();
+  await step(`1年目の開幕 ${fmt(await ui.date())}`);
+
+  await step('チーム運営: 雇う帯を出したまま市場を更新・タブを替えると帯が消える → スカウトを大学へ出す');
+  await page.locator('nav').getByRole('button', { name: /チーム運営/ }).click();
+  await ui.click('スタッフ市場を見る');
+  const bar = page.getByTestId('confirm-bar');
+  const hire = page.getByRole('button', { name: /^雇用$/ });
+  await hire.first().click();
+  await bar.waitFor();
+  // 帯の下に市場の最後の行が隠れない（以前は余白が固定の h-40 で、能力の表つきの帯より低く、約24px隠れた）
+  const hireFit = await ui.confirmBarFit();
+  assert.ok(hireFit && hireFit.hidden <= 0, `雇う帯の下に、スタッフ市場の最後が${hireFit?.hidden}px隠れる（帯の高さ${hireFit?.height}px）`);
+  // 以前は帯がタブの外に残り、市場を作り直しても前の人の帯のままで、市場にいない人を雇えた
+  await ui.click(/^更新$/);
+  assert.equal(await bar.count(), 0, 'スタッフ市場を「更新」しても、前の人を雇う帯が残っている');
+  await hire.first().click();
+  await bar.waitFor();
+  await ui.click(/^予算$/);
+  assert.equal(await bar.count(), 0, 'タブを替えても、雇う帯が残っている');
+  // スカウトを大学へ巡回に出しておく（オフのスカウト入団に候補が出る）
+  await ui.click(/^スカウト状況$/);
+  await page.getByRole('button', { name: '大学', exact: true }).first().click();
+  await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
+  await page.getByTestId('dev-advance').waitFor();
+
+  await t.proceedTo(/ドラフト/);
+  await t.finishDraft();
+
+  await t.proceedTo(/退団/);
+  await step('退団処理: そのまま確定 → スカウト入団は獲得なし');
+  // 年俸が予算を超えていると「赤字のまま確定」になる（その年の成績しだい）
+  await t.confirm(/^(契約更改を確定|赤字のまま確定)$/, /^(解雇して確定する|確定する)$/, 'スカウト入団へ進む', '退団処理の完了');
+  await go('スカウト入団へ進む', /獲得なしで進む|交渉開始/, 'スカウト交渉');
+  // 「獲得なしで進む」の帯を出したまま候補と交渉し、結果から「追加交渉する」で戻っても、
+  // 押していない「獲得なしで終えますか？」の帯は戻らない（以前は戻った）
+  const candidates = page.locator('tbody tr');
+  assert.ok(await candidates.count() >= 2, `前提: 春から大学へスカウトを出したのに、スカウト入団の候補が${await candidates.count()}人`);
+  await go('獲得なしで進む', bar, '獲得なしで終える確認の帯');
+  await candidates.first().click();
+  // 「交渉開始」は押しただけでは交渉しない（回数を使い、断られると候補が消えるので帯で決める）。
+  // 帯は Esc で閉じる
+  await go(/^交渉開始/, bar.filter({ hasText: /名と交渉しますか？/ }), '交渉する確認の帯');
+  assert.equal(await page.getByRole('heading', { name: '交渉結果' }).count(), 0, '「交渉開始」を押しただけで交渉が決まった');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await bar.count(), 0, '交渉する確認の帯が Esc で閉じない');
+  await t.confirm(/^交渉開始/, /^交渉する$/, page.getByRole('heading', { name: '交渉結果' }), '交渉結果');
+  if (await shown(/^追加交渉する/)) {
+    await ui.click(/^追加交渉する/);
+    await page.waitForTimeout(300);
+    assert.equal(await bar.count(), 0, '交渉の結果から「追加交渉する」で戻ったら、押していない「獲得なしで終えますか？」の帯が出た');
+    await t.confirm('獲得なしで進む', /^終える$/, /^完了$/, 'スカウト入団の完了');
+  } else {
+    await go(/^交渉を終了する$/, /^完了$/, 'スカウト入団の完了');
+  }
+  await go(/^完了$/, page.getByTestId('dev-advance'), '日程画面');
+
+  await t.proceedTo(/予算決算/);
+  await go(/^(オフシーズンへ進む|赤字を確定してオフシーズンへ)$/, page.getByText(/年目 シーズン終了/), 'オフシーズン');
+  await t.offseasonToNextYear(/練習を実行/, '春季キャンプ');
+  await t.campToOpening();
+  await t.checkSecondYear({ league: false });
+}
+
+async function runClub(page, t) {
+  const { ui, go, step, button } = t;
+  await step('社会人: 四国のクラブチーム（松山フェニックス）で新しく始める（キャンプなし）');
+  await newCorporateGame(page, t, '松山フェニックス');
+  await t.jerseyToOpening();
+  await step(`1年目の開幕 ${fmt(await ui.date())}`);
+
+  await t.proceedTo(/ドラフト/);
+  await t.finishDraft();
+
+  await t.proceedTo(/退団/);
+  await step('退団処理: そのまま確定 → 入部希望者を1人受け入れる');
+  await t.confirm(/^契約更改を確定$/, /^(解雇して確定する|確定する)$/, '入部希望者の受付へ進む', '退団処理の完了');
+  await go('入部希望者の受付へ進む', /入部なしで確定|受け入れて確定/, '入部希望者');
+  // ⚠ どちらの道を通ったかを残す。以前は「見送り」の札が無ければ黙って押さず、
+  //    「入部なしで確定」でも同じく通っていた（受け入れの経路を通ったかが分からない）
+  const applicant = page.getByText('見送り', { exact: true });
+  const applicants = await applicant.count();
+  if (applicants) {
+    await applicant.first().click();
+    await button(/^1名を受け入れて確定$/).waitFor({ timeout: 5000 });
+    await step(`入部希望者 ${applicants}人のうち1人を受け入れる`);
+  } else {
+    assert.ok(await page.getByText('今年は入部希望者がいませんでした。').count(),
+      '入部希望者の札（見送り）も「いませんでした」も無い。画面の文言が変わった？');
+    await step('入部希望者は0人（入部なしで確定）');
+  }
+  await t.confirm(applicants ? /^1名を受け入れて確定$/ : /^入部なしで確定$/, /^確定する$/, 'オフシーズンへ進む', '入部受付の完了');
+  await go('オフシーズンへ進む', page.getByTestId('dev-advance'), '日程画面');
+
+  await t.proceedTo(/オフシーズン/);
+  await t.offseasonToNextYear(page.getByTestId('dev-advance'), '2年目の日程画面');
+  assert.equal(await button(/練習を実行/).count(), 0, 'クラブなのにキャンプの画面が出た');
+  await t.checkSecondYear({ league: false });
+}
+
+// ------------------------------------------------------------
+// 大学
+// ------------------------------------------------------------
+async function runUniversity(page, t) {
+  const { ui, go, step } = t;
+  await step('大学野球: 東京六大学の法政大学で新しく始める');
+  await ui.newUniversityGame();
+  await step(`1年目の開幕 ${fmt(await ui.date())}`);
+  // 夏季合宿は日程画面を離れて合宿の画面へ移る（フェーズ移行の確認は出ない）
+  await ui.advance('phase');
+  await page.getByRole('button', { name: /練習を実行/ }).first().waitFor({ timeout: 30000 })
+    .catch(() => { throw new Error('次の区切りまで進めても夏季合宿の画面が出ない'); });
+  await ui.runCamp();
+  await go('秋季リーグへ', page.getByTestId('dev-advance'), '秋季リーグの日程画面');
+  await step(`秋季リーグ ${fmt(await ui.date())}`);
+
+  await t.proceedTo(/ドラフト/);
+  await t.finishDraft();
+
+  await t.proceedTo(/推薦/);
+  await step('スポーツ推薦: 推薦を締め切り、セレクションは合格者なしで確定');
+  await t.confirm(/^推薦を締め切る/, /^締め切る$/, /確定してオフシーズンへ|^オフシーズンへ$/, 'セレクション');
+  await t.confirm(/確定してオフシーズンへ|^オフシーズンへ$/, /^確定する$/, page.getByTestId('dev-advance'), '日程画面');
+
+  await t.proceedTo(/オフシーズン/);
+  // ⚠ 大学は年度更新のあと卒業・入部レポートを挟む。年が替わった瞬間にオートセーブが
+  //    走るので、保存に入る画面はオフシーズン（レポートは画面の中の表示）。以前はこの保存を
+  //    読み直すとオフシーズンの画面が翌年のデータで開き、「3年目へ進む」で1年遊ばないまま
+  //    加齢・卒業・入部がもう一度走った
+  const flash = page.getByText('オートセーブしました');
+  await flash.waitFor({ state: 'hidden', timeout: 30000 });
+  await t.offseasonToNextYear(page.getByText('卒業・入部レポート'), '卒業・入部レポート');
+  await flash.waitFor({ timeout: 30000 }).catch(() => { throw new Error('年度更新のあとオートセーブが走らない'); });
+  await step('卒業・入部レポートの画面でオートセーブされた → タイトルからオートセーブを読み直す');
+  await page.goto(`${BASE}/?dev=1`);
+  await ui.click('つづきから');
+  await ui.click('オートセーブから続ける');
+  await page.getByText(/卒業・入部レポート|年目 シーズン終了/).first().waitFor({ timeout: 120000 })
+    .catch(() => { throw new Error('オートセーブを読み直してもオフシーズンにもレポートにも戻らない'); });
+  assert.equal(await t.button(/^3年目へ進む/).count(), 0,
+    'レポートの途中のオートセーブを読み直すと「3年目へ進む」が出る（1年遊ばないまま年度更新がもう一度走る）');
+  assert.ok(await page.getByText('卒業・入部レポート').count() > 0, 'オートセーブを読み直すと卒業・入部レポートの続きに戻らない');
+  await go('キャンプへ進む', /練習を実行/, '春季キャンプ');
+  await t.campToOpening();
+  await t.checkSecondYear({ league: true });
+}
+
+// ------------------------------------------------------------
+// 実行
+// ------------------------------------------------------------
+async function runMode(browser, key) {
+  const { label, run } = MODES[key];
+  const lines = [];
+  const log = (line) => (serial ? console.log(`[${label}] ${line}`) : lines.push(line));
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  await context.tracing.start({ screenshots: true, snapshots: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(`console.error: ${m.text()}`); });
+  // ブラウザの確認（confirm）が残っていれば「はい」で進める。alert は出ること自体を落とす
+  page.on('dialog', async (d) => {
+    if (d.type() === 'alert') errors.push(`alert: ${d.message()}`);
+    await d.accept();
+  });
+  const started = Date.now();
+  const t = tools(page, context, log);
+  let failure = null;
+  try {
+    await run(page, t);
+    assert.deepEqual(errors, [], `画面でエラーが出た:\n${errors.join('\n')}`);
+    await page.screenshot({ path: `/tmp/baseball-single-yearend-${key}.png` });
+    await context.tracing.stop();
+  } catch (error) {
+    failure = error;
+    await page.screenshot({ path: `/tmp/baseball-single-yearend-${key}.png`, timeout: 10000 })
+      .catch((e) => log(`（画面を撮れなかった: ${e.message.split('\n')[0]}）`));
+    await context.tracing.stopChunk({ path: `/tmp/baseball-single-yearend-${key}-failure.zip` }).catch(() => {});
+    await context.tracing.stop().catch(() => {});
+  } finally {
+    await context.close().catch(() => {});
+  }
+  const seconds = (Date.now() - started) / 1000;
+  return { key, label, lines, errors, failure, seconds };
+}
+
+const stopPreview = await startPreview();
+const browser = await launchBrowser();
+const started = Date.now();
+let results = [];
+try {
+  if (serial) {
+    for (const key of modes) results.push(await runMode(browser, key));
+  } else {
+    results = await Promise.all(modes.map((key) => runMode(browser, key)));
+  }
+} finally {
+  await browser.close();
+  stopPreview();
+}
+
+for (const r of results) {
+  const mark = r.failure ? 'FAIL' : 'PASS';
+  console.log(`${mark} ${r.label}（${r.seconds.toFixed(0)}秒）`);
+  if (!serial) for (const line of r.lines) console.log(`    ${line}`);
+  if (r.failure) {
+    console.error(`    ${r.failure.message.split('\n').join('\n    ')}`);
+    if (r.errors.length && !r.failure.message.includes('画面でエラーが出た')) console.error(`    ${r.errors.join('\n    ')}`);
+    console.error(`    画面: /tmp/baseball-single-yearend-${r.key}.png / 操作の記録: /tmp/baseball-single-yearend-${r.key}-failure.zip（npx playwright show-trace で開く）`);
+  }
+}
+const failed = results.filter((r) => r.failure);
+const total = ((Date.now() - started) / 1000).toFixed(0);
+if (failed.length) {
+  console.error(`singleplayer-yearend-ui-check FAIL（${total}秒・落ちたモード: ${failed.map((r) => r.label).join('、')}）`);
+  process.exitCode = 1;
+} else {
+  console.log(`singleplayer-yearend-ui-check PASS（${total}秒・${results.map((r) => r.label).join('・')}で1年目のオフから2年目の開幕まで）`);
+}

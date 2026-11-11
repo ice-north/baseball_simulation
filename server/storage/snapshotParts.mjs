@@ -112,6 +112,46 @@ export function assembleBundle(core, order, parts) {
 }
 
 /**
+ * 命令を「まず軽い読み、だめなら全体で読み直して」走らせる。
+ * ⚠ **本番（`SupabaseStore.transaction`）と検査用の保存（`MemoryStore.transaction`）で
+ *    同じこの判定を使う**。両方に書き写していると、片方だけ直したときに検査が本番の
+ *    取りこぼしを捕まえられなくなる。
+ *
+ * - `load(light)` … 保存を読む。軽い読みなら `run` に `assembleLight` の返り値を入れて返す
+ * - `attempt(loaded)` … 命令を走らせ、`{ outcome, prepared, ... }` を返す。
+ *   `prepared` は変更を保存する形（軽い読みなら `run.inspect(bundle)`。null は保存できない）
+ *
+ * 全体で読み直すのは、軽い読みで: 番人（世界・記録）に触れた（命令が例外を握りつぶしても
+ * 印は残る）・複製で落ちた（`DataCloneError`。番人は複製できない）・変更があるのに
+ * 軽い読みのまま保存できない（リーグや世界を差し替えた）とき。
+ * 返り値は `attempt` の返り値に、読んだもの（`loaded`）と読んだ回数（`attempts`）を足したもの。
+ */
+export async function runWithLightRead({ full = false, load, attempt, onEscalate = () => {} }) {
+  let light = !full;
+  for (let attempts = 1; ; attempts++) {
+    const loaded = await load(light);
+    const run = loaded.run || null;
+    let result;
+    try {
+      result = await attempt(loaded);
+    } catch (error) {
+      if (run && (run.tracker.touched || error?.name === 'DataCloneError')) {
+        onEscalate(run.tracker.touched, error);
+        light = false;
+        continue;
+      }
+      throw error;
+    }
+    if (run && (run.tracker.touched || (!result.outcome?.unchanged && !result.prepared))) {
+      onEscalate(run.tracker.touched, null);
+      light = false;
+      continue;
+    }
+    return { ...result, loaded, attempts };
+  }
+}
+
+/**
  * 軽い読み: 芯と records だけで bundle を作り、world・backup は番人に差し替える。
  * `parts` に records が無く `refs` にはあるとき（読むだけの処理）は、records も番人にする。
  * 返す `inspect(bundle)` は、命令のあとで「軽い読みのまま保存できるか」と、保存する芯を返す。

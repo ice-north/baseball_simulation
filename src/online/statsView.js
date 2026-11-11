@@ -130,6 +130,21 @@ const kbb = field(
   },
   'decimal',
 );
+// 捕手の成績（マスクをかぶった時の投手成績。サーバーの `catcherStats`）。
+// ⚠ 受けていない選手は「—」で末尾に並ぶ。記録を取り始める前の試合は入らない。
+const caught = (key) => (player) => {
+  const value = player.catcherStats?.[key];
+  return known(value) ? value : null;
+};
+const catcherOuts = field('caughtOuts', '守備回', caught('outs'), 'innings');
+const catcherEra = field('catcherEra', '防御率', caught('era'), 'decimal', 'asc');
+const catcherReads = field(
+  'readRate',
+  '読まれ率',
+  caught('readRate'),
+  'percent',
+  'asc',
+);
 export const STAT_GROUPS = {
   batting: [
     {
@@ -242,6 +257,26 @@ export const STAT_GROUPS = {
         b('games', '試合'),
       ],
     },
+    {
+      id: 'catching',
+      label: '捕手',
+      columns: [
+        catcherOuts,
+        catcherEra,
+        catcherReads,
+        field('catcherStarts', '先発', caught('starts')),
+      ],
+    },
+    {
+      id: 'catchingAllowed',
+      label: '捕手・被打撃',
+      columns: [
+        field('catcherK9', 'K/9', caught('k9'), 'decimal'),
+        field('catcherBb9', 'BB/9', caught('bb9'), 'decimal', 'asc'),
+        field('catcherAvg', '被打率', caught('avg'), 'rate', 'asc'),
+        ability('catching', 'lead', 'リード'),
+      ],
+    },
     status('batting'),
     {
       id: 'abilities',
@@ -340,6 +375,9 @@ export const STAT_GROUPS = {
     },
   ],
 };
+/** 捕手の成績の区分か（受けた選手と捕手だけを出す） */
+export const isCatchingGroup = (id) =>
+  id === 'catching' || id === 'catchingAllowed';
 export function statGroup(category, id) {
   return (
     STAT_GROUPS[category].find((group) => group.id === id) ||

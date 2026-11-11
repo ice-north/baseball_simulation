@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react';
 // 別の理由で描き直されるまで切り替わらない（開いたダイアログの中の部品が途中で入れ替わる）。
 export const MOBILE_QUERY = '(max-width: 767px)';
 export function useMobile() {
+  // ⚠ 窓の無いところ（検査のサーバー描画 `online-panels-render-check`）ではPCとして描く
   const [mobile, setMobile] = useState(
-    () => window.matchMedia(MOBILE_QUERY).matches,
+    () => typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches,
   );
   useEffect(() => {
     const media = window.matchMedia(MOBILE_QUERY);

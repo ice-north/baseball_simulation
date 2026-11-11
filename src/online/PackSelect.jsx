@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
+import { useMobile } from './useMobile.js';
 
 // ============================================================
 // 初期メンバーの選択。20セットから1つ選ぶ。
@@ -23,7 +24,7 @@ import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
  *
  * ⚠ **手続きの提出とは別の命令**。セットの選択は締め切りで標準案に
  *    上書きされうるが、名前は上書きされては困る（自分で付けたもの）。
- * ⚠ 入力中にビューが更新されても**打ちかけを消さないこと**。毎正時の進行や
+ * ⚠ 入力中にビューが更新されても**打ちかけを消さないこと**。45分ごとの進行や
  *    他の参加者の操作でビューは何度も差し替わる。保存済みの値を取り込むのは
  *    「まだ触っていないとき」だけにする。
  */
@@ -45,7 +46,7 @@ export function TeamIdentity({ view, busy, run, command }) {
     <section className="online-identity">
       <h3>球団名とプレイヤー名</h3>
       <p className="online-muted">
-        順位表や試合結果に出る名前です。あとから（PCでは左メニューの「名前を変える」で）変えられます。
+        順位表や試合結果に出る名前です。あとから「名前を変える」（PCは左メニュー、スマホは下の「☰」）で変えられます。
       </p>
       <div className="online-identity-fields">
         <label>
@@ -108,7 +109,23 @@ const GROUPS = [
   ['outfield', '外'],
 ];
 
+/**
+ * 名簿の表の列の見出し（PC・スマホ）。
+ * ⚠ スマホ（320px〜）では1字にする（トレードの表と同じ書き方。押さえると title で全部）。
+ *    「ミート」のままだと10列が幅に入らず、見出しが「ミ／ー／ト」と1字ずつ縦に割れていた
+ */
+const COLUMNS = [
+  ['位置', '位'],
+  ['ミート', 'ミ'],
+  ['パワー', 'パ'],
+  ['走力', '走'],
+  ['守備', '守'],
+  ['球速', '速'],
+  ['制球', '制'],
+];
+
 function Roster({ pack }) {
+  const mobile = useMobile();
   const [side, setSide] = useState('all');
   const list = pack.players.filter((p) =>
     side === 'all'
@@ -136,13 +153,11 @@ function Roster({ pack }) {
             <th>選手</th>
             <th>格</th>
             <th>齢</th>
-            <th>位置</th>
-            <th>ミート</th>
-            <th>パワー</th>
-            <th>走力</th>
-            <th>守備</th>
-            <th>球速</th>
-            <th>制球</th>
+            {COLUMNS.map(([long, short]) => (
+              <th key={long} title={long}>
+                {mobile ? short : long}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -182,18 +197,46 @@ function Roster({ pack }) {
   );
 }
 
-export default function PackSelect({ packs, plan, busy, onChange, view, run, command }) {
+/**
+ * 並んでいるセットの年齢の幅（「19〜32」）。セットの版で幅が違う（版1・版2は19〜24歳、
+ * 版3は19〜32歳）ので、説明の文は決め打ちにせず中身から数える
+ */
+export const packAgeRange = (packs) => {
+  const ages = (packs || [])
+    .flatMap((pack) => pack.players || [])
+    .map((p) => p.age)
+    .filter(Number.isFinite);
+  return ages.length ? `${Math.min(...ages)}〜${Math.max(...ages)}` : '19〜24';
+};
+
+export default function PackSelect({ packs, plan, busy, onChange, view, run, command, onShow }) {
   const [open, setOpen] = useState(() => plan?.packId || packs[0]?.id);
   const shown = packs.find((p) => p.id === open) || packs[0];
+  // いま中身を見ているセットを知らせる（スマホの下の帯に「決定するのは選択中の…」と添えるため。
+  // `LeaguePanels.jsx` の `PhasePanel`）
+  useEffect(() => {
+    onShow?.(shown?.id ?? null);
+  }, [shown?.id, onShow]);
+  const mobile = useMobile();
+  const detail = useRef(null);
+  // ⚠ **スマホではカードを押したら中身へ送る**。中身は20枚のカード（2列で10段）の下にあり、
+  //    押しても画面の外で切り替わるだけで、何が起きたのか分からなかった
+  const [jump, setJump] = useState(0);
+  useEffect(() => {
+    if (jump) detail.current?.scrollIntoView({ block: 'start' });
+  }, [jump]);
+  const ageRange = packAgeRange(packs);
   return (
     <div className="online-packs">
       {/* ⚠ セットは**型ごとに構成と格の内訳が違う**（版2）。前から待っている人の
-          セット（版1）は全部同じ構成なので、特徴が無ければ前の説明を出す */}
+          セット（版1）は全部同じ構成なので、特徴が無ければ前の説明を出す。
+          ⚠ 年齢の幅は**並んでいるセットから数える**（`packAgeRange`）。版3で19〜32歳に
+          広げたとき、ここが「19〜24歳」のまま残った */}
       {packs.some((p) => p.feature) ? (
         <p className="online-muted">
           20セットから1つ選びます。セットごとに<strong>構成</strong>
           （投手厚め・野手厚め・二刀流・捕手3人など）と<strong>格付けの配り方</strong>
-          （少数精鋭・粒ぞろい・大黒柱など）が違います。年齢は19〜24歳です。
+          （少数精鋭・粒ぞろい・大黒柱など）が違います。年齢は{ageRange}歳です。
           格の総量（A=3・B=2・C=1点の合計）はどれも同じにしてあり、
           同じ枠の平均からの開きも1%前後に揃えてあるので、戦い方の好みで選んでください。
           選んだセットは1球団だけが受け取ります（重なったら球団名の順）。
@@ -202,7 +245,7 @@ export default function PackSelect({ packs, plan, busy, onChange, view, run, com
         <p className="online-muted">
           20セットから1つ選びます。どのセットも
           <strong>投12・捕2・内外10</strong>の24人（うち二刀流2人）で、格付けは
-          <strong>A2・B10・C12</strong>、年齢は19〜24歳です。
+          <strong>A2・B10・C12</strong>、年齢は{ageRange}歳です。
           合計の力は揃えてあるので（開きは1%前後）、好みで選んで構いません。
           選んだセットは1球団だけが受け取ります（重なったら球団名の順）。
         </p>
@@ -215,7 +258,10 @@ export default function PackSelect({ packs, plan, busy, onChange, view, run, com
             aria-pressed={plan?.packId === pack.id}
             aria-current={pack.id === open ? 'true' : undefined}
             disabled={busy}
-            onClick={() => setOpen(pack.id)}
+            onClick={() => {
+              setOpen(pack.id);
+              if (mobile) setJump((n) => n + 1);
+            }}
           >
             <strong>{pack.name}</strong>
             {pack.feature && (
@@ -235,7 +281,7 @@ export default function PackSelect({ packs, plan, busy, onChange, view, run, com
         ))}
       </div>
       {shown && (
-        <section className="online-pack-detail">
+        <section className="online-pack-detail" ref={detail}>
           <div className="online-card-heading">
             <h3>
               {shown.name}

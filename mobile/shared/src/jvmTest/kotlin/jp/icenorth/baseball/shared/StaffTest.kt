@@ -59,6 +59,43 @@ class StaffTest {
     }
 
     @Test
+    fun lastOneToDelegateIsAskedFirst() {
+        // 2人リーグのキャンプ（実際のビュー）。相手がまだ回しているうちは、任せても手続きは決まらない
+        val camp = mapOf("camp" to "delegate")
+        assertNull(delegationSettles(view, camp))
+        assertTrue(!nobodyElseWaited(view))
+        fun withOthers(f: (Member) -> Member) = view.copy(members = view.members.map { if (it.teamName == view.teamName) it else f(it) })
+        // 相手が決定済み（4クール終えた・任せた）か CPU が決めるなら、自分が待たれている最後の1人
+        val alone = withOthers { it.copy(ready = true) }
+        assertTrue(nobodyElseWaited(alone))
+        assertEquals("キャンプ", delegationSettles(alone, camp))
+        assertEquals("キャンプ", delegationSettles(withOthers { it.copy(ready = true, delegated = true) }, camp))
+        assertEquals("キャンプ", delegationSettles(withOthers { it.copy(cpu = true) }, camp))
+        // 関係の無い分野・任せない変更・自分が決定済み・すでに任せている・手続きが無いときは聞かない
+        assertNull(delegationSettles(alone, mapOf("tryout" to "delegate", "lineup" to "delegate")))
+        assertNull(delegationSettles(alone, mapOf("camp" to "self")))
+        assertNull(delegationSettles(alone.copy(members = alone.members.map { it.copy(ready = true) }), camp))
+        assertNull(delegationSettles(alone.copy(members = alone.members.map { it.copy(cpu = true) }), camp))
+        assertNull(delegationSettles(alone.copy(phase = alone.phase!!.copy(delegated = true)), camp))
+        assertNull(delegationSettles(alone.copy(phase = null), camp))
+        // 契約更改は「退団」の分野、トライアウトは「トライアウト」の分野
+        assertEquals("契約更改", delegationSettles(alone.copy(phase = alone.phase!!.copy(kind = "contract")), mapOf("release" to "delegate", "lineup" to "advice")))
+        assertEquals("トライアウト", delegationSettles(alone.copy(phase = alone.phase!!.copy(kind = "tryout")), mapOf("tryout" to "delegate")))
+        assertNull(delegationSettles(alone.copy(phase = alone.phase!!.copy(kind = "offseason")), mapOf("camp" to "delegate")))
+        // 1人リーグ（自分だけ）なら、手続き中に任せるといつも聞く
+        assertEquals("キャンプ", delegationSettles(view.copy(members = view.members.filter { it.teamName == view.teamName }), camp))
+    }
+
+    @Test
+    fun doneTextTellsWhenThePhaseWasDecided() {
+        val camp = mapOf("camp" to "delegate")
+        assertEquals("任せ方を変えました。キャンプは指導者の案で決まりました", staffModesDoneText(camp, view, view.copy(phase = null)))
+        assertEquals("任せ方を変えました", staffModesDoneText(camp, view, view))
+        assertEquals("任せ方を変えました", staffModesDoneText(mapOf("lineup" to "delegate"), view, view.copy(phase = null)))
+        assertEquals("任せ方を変えました", staffModesDoneText(camp, view.copy(phase = null), view))
+    }
+
+    @Test
     fun speakerIsTheManager() {
         val (speaker, _) = commentSpeaker(view)
         assertEquals(view.staff!!.manager!!.shortName, speaker)

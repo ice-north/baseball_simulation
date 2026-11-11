@@ -237,10 +237,12 @@ fun planSummary(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int,
         if (pitchers < 1) add("投手が1人もいません")
         if (catchers < 1) add("捕手が1人もいません")
     }
+    // 注意も獲得したあとの名簿（いまの名簿＋獲得予定）で数える（Web 版と同じ。見出しの「獲得後の名簿」と揃える）
+    val after = rosterCounts(combined)
     val warnings = if (blocking.isNotEmpty()) emptyList() else buildList {
-        if ((counts["pitcher"] ?: 0) < 5) add("投手が5人未満です")
-        if ((counts["infielder"] ?: 0) < 4) add("内野手が4人未満です")
-        if ((counts["outfielder"] ?: 0) < 3) add("外野手が3人未満です")
+        if ((after["pitcher"] ?: 0) < 5) add("獲得後も投手が5人未満です")
+        if ((after["infielder"] ?: 0) < 4) add("獲得後も内野手が4人未満です")
+        if ((after["outfielder"] ?: 0) < 3) add("獲得後も外野手が3人未満です")
     }
     return PlanSummary(counts, picked, blocking, warnings)
 }
@@ -269,8 +271,6 @@ fun dealProblems(mine: List<JsonObject>, theirs: List<JsonObject>?, give: Set<Lo
     val after = rostersAfterTrade(mine, theirs, give, get)
     return rosterShortfall(after.mine) + rosterShortfall(after.theirs)
 }
-
-const val MAX_OPEN_TRADES = 5
 
 /** 候補がいまの名簿の同じ区分で何番手にあたるか（Web 版の `teamFitRank` と同じ） */
 data class TeamFit(val group: String, val rank: Int, val of: Int)

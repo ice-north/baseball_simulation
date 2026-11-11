@@ -501,8 +501,8 @@ export const generateOptimalLineup = (teamName, mode = 'standard', given = null)
     }
   }
 
-  // 旧形式の打順も維持
-  team.players.forEach(p => { p.battingOrder = 0; });
+  // 旧形式の打順も維持（DH の印も外す。打順に入る人だけ付け直す。`generateAILineup` の説明を参照）
+  team.players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
   team.lineupSettings.battingOrder.forEach(entry => {
     const teamPlayer = team.players.find(p => p.id === entry.playerId);
@@ -518,13 +518,13 @@ export const generateOptimalLineup = (teamName, mode = 'standard', given = null)
   });
 };
 
-// 全チームのAIオーダー編成を実行
+// 全チームのオーダーと投手ローテーションを自動で組む（⚠ 画面の言葉に「AI」は出さない）
 export const generateAllTeamsLineup = (allTeams) => {
   allTeams.forEach(teamName => {
     generateOptimalLineup(teamName);
     generatePitchingRotation(teamName);
   });
-  alert('全チームのAIオーダー編成と投手ローテーションを設定しました！');
+  alert('全チームのオーダーと投手ローテーションを自動で組みました');
 };
 
 // 投手ローテーション生成関数（AI監督用）

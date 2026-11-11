@@ -1,5 +1,6 @@
 package jp.icenorth.baseball.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -24,6 +25,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.PlanDraft
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.list
@@ -81,9 +84,15 @@ fun OnlineApp(model: AppViewModel) {
         return
     }
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
+    // 試合タブで開いている区分（試合結果・順位表…）。順位表から選手タブへ飛んだあと、戻るで順位表に戻すためここに置く
+    var gamesSection by rememberSaveable { mutableStateOf("results") }
+    // 順位表の球団を押して選手タブへ来たか（戻るで試合タブの順位表へ戻す。ホームへではなく）
+    var fromStandings by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var showTips by rememberSaveable { mutableStateOf(false) }
     val raw = model.raw
+    // 今のスタメン・ローテに当てはまるTIPS（保存済みの編成で見る＝実際に起きること）。左下の印・TIPSの一覧・メニューの数に使う
+    val situations = remember(model.view?.roster, model.view?.lineup) { situationTips(model.view?.roster.orEmpty(), model.view?.lineup) }
     // 画面を開いている間は、ときどき読み直す（届いたトレードの提案や進行に気づけるように）。
     // アプリに戻ってきたときもすぐ読む。裏に回っている間は読まない
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -100,6 +109,28 @@ fun OnlineApp(model: AppViewModel) {
     val count = noticeCount(raw)
     // 参加前（リーグが無い・まだ参加していない）はホームだけ
     val joined = model.view?.teamName != null
+    // ⚠ 戻るはまずホームへ（以前はどのタブからでもアプリが閉じた）。ホームでは従来どおり閉じる。
+    //    画面の中の戻る（試合の詳細・トレードなど）は後から登録されるので、そちらが先に効く
+    BackHandler(enabled = joined && tab != Tab.Home) { tab = if (tab == Tab.Players && fromStandings) Tab.Games else Tab.Home }
+    // ⚠ 選手タブを離れたら、見ている球団を自球団に戻す（以前は順位表から開いた他球団のまま残り、
+    //    次に選手タブを開いても他球団の表だった）
+    // 前に開いていたタブ。⚠ 端末を回すと画面を作り直して下の LaunchedEffect がもう一度走るので、
+    //    **タブが本当に替わったとき**だけを見分けるのに使う
+    var lastTab by rememberSaveable { mutableStateOf(tab) }
+    LaunchedEffect(tab) {
+        // ⚠ 他球団の選手を読んでいる間にタブを移ったら、読み終わっても開かない（以前は移った先でシートが開いた）。
+        //    ⚠ 回しただけ（同じタブ）ではやめない。以前は読み込み中に端末を回すと開かなかった
+        if (tab != lastTab) {
+            model.dropOpeningPlayer()
+            lastTab = tab
+        }
+        if (tab != Tab.Players) {
+            model.playersTeam = null
+            fromStandings = false
+        }
+        // 編成の面の合図は、編成タブで使われなかったら（編成がまだ無い間など）捨てる
+        if (tab != Tab.Plan) model.planFaceRequest = null
+    }
     Box(Modifier.fillMaxSize()) {
         if (!joined) {
             // ⚠ 参加前もお知らせ・失敗を出す場所を置く（無いと参加の失敗が見えず、知らせも消えない）
@@ -116,6 +147,7 @@ fun OnlineApp(model: AppViewModel) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
+                val planDirty = model.plan?.present?.let { d -> model.view?.let { v -> v.lineup != null && !d.sameEdit(PlanDraft.from(d.base, v.roster)) } } == true
                 NavigationBar {
                     Tab.entries.forEach { item ->
                         NavigationBarItem(
@@ -125,6 +157,9 @@ fun OnlineApp(model: AppViewModel) {
                             icon = {
                                 if (item == Tab.Procedures && count > 0) {
                                     BadgedBox(badge = { Badge { Text("$count") } }) { Icon(item.icon, contentDescription = "未完了${count}件") }
+                                } else if (item == Tab.Plan && planDirty) {
+                                    // 保存していない編成があることを、ほかのタブにいても分かるように点で知らせる
+                                    BadgedBox(badge = { Badge() }) { Icon(item.icon, contentDescription = "保存していない変更あり") }
                                 } else {
                                     Icon(item.icon, contentDescription = null)
                                 }
@@ -135,9 +170,7 @@ fun OnlineApp(model: AppViewModel) {
                 }
             },
         ) { padding ->
-            // 今のスタメン・ローテに当てはまるTIPS（保存済みの編成で見る＝実際に起きること）
             val view = model.view
-            val situations = remember(view?.roster, view?.lineup) { situationTips(view?.roster.orEmpty(), view?.lineup) }
             // 届いた提案のうち、まだ知らせていないもの。トレードを開いたら知らせ終えたことにする
             // （新しい提案を作っている間は届いた提案の一覧が見えないので、知らせ終えたことにしない）
             val onTrades = tab == Tab.Procedures && model.procTrade && model.tradeDraft == null
@@ -151,7 +184,8 @@ fun OnlineApp(model: AppViewModel) {
                 Column {
                     // ⚠ 帯は重ねず上に並べる（重ねると、ホームの右上のメニューのような画面の上の操作を塞ぐ）。
                     //    帯がステータスバーぶん空けたら、下の画面には空けさせない（二重の隙間になる）
-                    val showProcedure = procedure != null && !onProcedure
+                    // ⚠ ホームでは帯を出さない（紙面の「お知らせ」に同じ文があり、上下に2つ並んでいた）
+                    val showProcedure = procedure != null && !onProcedure && tab != Tab.Home
                     notice?.let { text ->
                         TradeNotice(
                             text,
@@ -175,13 +209,24 @@ fun OnlineApp(model: AppViewModel) {
                     }
                     Column(if (showProcedure || notice != null) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier) {
                     when (tab) {
-                        Tab.Home -> HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
-                        Tab.Games -> GamesScreen(model)
-                        Tab.Players -> PlayersScreen(model)
+                        // ⚠ 手続き中は「次の進行まで」を「停止中」ではなく「手続きの決定待ち」にする（Web 版 nextAdvanceText と同じ）
+                        Tab.Home -> CompositionLocalProvider(LocalAwaitingDecision provides (view?.phase != null)) {
+                            HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { gamesSection = "results"; tab = Tab.Games }, onOpenTips = { showTips = true }, tipsNow = situations.size)
+                        }
+                        // ⚠ 引っ張って更新はホームだけだった。試合・選手・手続きでも同じ操作で読み直せるようにする
+                        Tab.Games -> Refreshable(model) {
+                            GamesScreen(model, gamesSection, { gamesSection = it }, onOpenTeam = { model.showTeamPlayers(it); fromStandings = true; tab = Tab.Players })
+                        }
+                        Tab.Players -> Refreshable(model) { PlayersScreen(model) }
                         Tab.Plan -> PlanScreen(model)
-                        Tab.Procedures -> ProceduresScreen(model, onRename = { renaming = true }, onHome = { tab = Tab.Home })
+                        Tab.Procedures -> Refreshable(model) {
+                            ProceduresScreen(model, onHome = { tab = Tab.Home }, onOpenStaff = { model.planFaceRequest = "Staff"; tab = Tab.Plan })
+                        }
                     }
                     }
+                }
+                model.openingPlayer?.let { name ->
+                    LoadingPill("${name}を読み込んでいます…", Modifier.align(Alignment.BottomCenter).padding(16.dp))
                 }
                 // ⚠ 枠は取らず左下の角に重ねる。ホームと編成だけ（当てはまらなければ出ない）
                 //    右下だと編成の行の「並べ替え」つまみに重なる。左下は打順の数字なので触る物が無い
@@ -197,7 +242,7 @@ fun OnlineApp(model: AppViewModel) {
             }
         }
         model.openPlayer?.let { PlayerSheet(model, it) }
-        if (showTips) TipsScreen { showTips = false }
+        if (showTips) TipsScreen(situations, onRead = model::markSituationTipsSeen) { showTips = false }
         if (renaming) RenameDialog(model) { renaming = false }
         // ⚠ 保存・提出の間は画面全体を塞ぐ（いちばん上に重ねる）
         if (model.busy) BusyOverlay(model.busyLabel)
@@ -237,9 +282,26 @@ fun RenameDialog(model: AppViewModel, close: () -> Unit) {
     )
 }
 
+/**
+ * 左下の TIPS の印（ホームと編成に重ねる）に隠れないよう、スクロールする画面の下に空ける高さ。
+ * ⚠ 編成の面を足したら、その面の下にもこれを空けること（方針・采配と指導者の最後の行が隠れていた）
+ */
+val TipsBadgeRoom = 72.dp
+
 /** 画面を開いている間に読み直す間隔（届いた提案に気づくため。変わっていなければサーバーは「変わりなし」だけ返す） */
 private const val AUTO_RELOAD_MS = 60_000L
 
 /** 自分の番の手続きは無く、届いた提案だけがある（ホームのお知らせから、トレードの側を直接開く） */
 private fun tradesOnly(raw: kotlinx.serialization.json.JsonObject?): Boolean =
     pendingProcedure(raw) == null && waitingTradeCount(raw) > 0
+
+/** 引っ張って最新の状態に読み直す枠（ホームと同じ動き） */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun Refreshable(model: AppViewModel, content: @Composable () -> Unit) {
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = model.refreshing,
+        onRefresh = { model.reload(pull = true) },
+        modifier = Modifier.fillMaxSize(),
+    ) { content() }
+}

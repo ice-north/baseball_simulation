@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -430,7 +431,7 @@ try {
     .locator('.online-page:visible')
     .getByRole('button', { name: '保存', exact: true })
     .click();
-  await p.getByText('保存しました', { exact: true }).first().waitFor();
+  await p.getByText('編成を保存しました', { exact: true }).first().waitFor();
   await nav
     .getByRole('button', { name: '投手起用', exact: true })
     .getByLabel('保存していない変更')
@@ -467,7 +468,7 @@ try {
   });
   // ⚠ 保存したら、スマホの幅にしても古い編集を開き直さない（開き直すと保存で食い違う）
   await p.setViewportSize({ width: 600, height: 900 });
-  await p.getByRole('button', { name: /打順・守備・投手起用を開く/ }).waitFor();
+  await p.getByRole('button', { name: /投手起用を開く/ }).waitFor();
   assert.equal(
     await p.locator('.online-lineup-portal').count(),
     0,
@@ -790,6 +791,27 @@ try {
       .locator('.online-page:visible')
       .evaluate((el) => el.scrollHeight);
     assert.ok(height <= 1000, `ホームが縦に長い: ${height}px`);
+    // ⚠ 直近の試合は**スコアを押すと**試合成績の小窓が開く。以前は押せず、
+    //    「試合結果」を開き直して同じ試合を探していた
+    await recent.locator('.online-slot-record').first().click();
+    const box = p.getByRole('dialog', { name: '試合成績', exact: true });
+    await box.locator('tbody tr').first().waitFor();
+    await box
+      .getByRole('button', { name: '試合成績を閉じる', exact: true })
+      .click();
+    await box.waitFor({ state: 'detached' });
+    // ⚠ **1280×800 でも左メニューの最後の項目が画面に入る**。以前は 863px あり、
+    //    一番下（「リーグ管理」）がメニューをスクロールしないと見えなかった
+    await p.setViewportSize({ width: 1280, height: 800 });
+    const lastNav = await p
+      .locator('.online-page-nav button:visible')
+      .last()
+      .boundingBox();
+    assert.ok(
+      lastNav.y + lastNav.height <= 800,
+      `1280×800 で左メニューの最後の項目が画面の外: ${JSON.stringify(lastNav)}`,
+    );
+    await p.setViewportSize({ width: 1440, height: 1000 });
   }
 
   // ---- 自球団の選手の詳細から守備位置を変える ---------------------------
@@ -864,6 +886,9 @@ try {
   console.log(
     'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び / 守備位置の変更（定期の読み直しで版が上がった後も））',
   );
+} catch (error) {
+  await failureShots(browser, 'online-lineup-board-ui');
+  throw error;
 } finally {
   await browser.close();
 }

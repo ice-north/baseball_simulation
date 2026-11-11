@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,7 +61,7 @@ fun HomePage(
     }
 }
 
-/** 次の進行（毎正時）までの残り秒。1秒ごとに数え直す。止まっていれば null */
+/** 次の進行までの残り秒。1秒ごとに数え直す。止まっている・手続き中なら null */
 @Composable
 fun secondsUntil(iso: String?): Long? {
     val at = remember(iso) { iso?.let { runCatching { Instant.parse(it) }.getOrNull() } } ?: return null
@@ -74,9 +75,33 @@ fun secondsUntil(iso: String?): Long? {
     return ((at.toEpochMilli() - now) / 1000).coerceAtLeast(0)
 }
 
-fun countdownText(left: Long?): String = when (left) {
-    null -> "停止中"
-    0L -> "進行中…"
+/**
+ * 手続きの決定を待っているか（`view.phase` がある）。⚠ 「次の進行まで」は残り秒しか受け取らないので、
+ * 手続き中かどうかは画面の上（[OnlineApp]）から渡す。
+ */
+val LocalAwaitingDecision = staticCompositionLocalOf { false }
+
+/**
+ * 残り時間の前に付ける「次の進行まで」。⚠ 時刻があるときだけ付ける。時刻が無いとき・0秒のときは
+ *    「次の進行まで 進行中…」「次の進行まで 手続きの決定待ち」と、つながらない文になっていた
+ */
+fun countdownLead(left: Long?): String = if (left != null && left > 0) "次の進行まで " else ""
+
+/** 「次の進行まで」に出す文（Web 版 api.js の nextAdvanceText と同じ決まり） */
+@Composable
+fun countdownText(left: Long?): String = countdownText(left, LocalAwaitingDecision.current, System.currentTimeMillis())
+
+/**
+ * ⚠ **時刻が無い理由まで書く**。手続き中は進行の時刻を持たない（決定で動く）ので、以前は手続き中も
+ *    「停止中」と出て、止まっているのか自分の決定を待っているのか読めなかった。
+ * ⚠ 60分を超えたら残りではなく**日時**で出す。キャンプのあとの開幕までなどは「5432:10」のような
+ *    数千分の数え下げになって読めなかった。
+ */
+fun countdownText(left: Long?, awaitingDecision: Boolean, now: Long): String = when {
+    left == null -> if (awaitingDecision) "手続きの決定待ち" else "停止中"
+    left == 0L -> "進行中…"
+    // 残り秒は切り捨てなので、分に丸めて元の時刻に戻す（0:00 ちょうどが 23:59 に見えない）
+    left > 60 * 60 -> formatDateTime((now + left * 1000 + 30_000) / 60_000 * 60_000)
     else -> "%d:%02d".format(left / 60, left % 60)
 }
 
@@ -115,8 +140,9 @@ private fun WebNewsPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composab
             Text(listOfNotNull(page.team, page.standing).joinToString("　"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row {
                 Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.weight(1f).alignByBaseline())
-                Text("次の進行まで ", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.alignByBaseline())
-                Text(countdownText(secondsUntil(nextAdvanceAt)), color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp, modifier = Modifier.alignByBaseline().padding(end = 10.dp))
+                val left = secondsUntil(nextAdvanceAt)
+                Text(countdownLead(left), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                Text(countdownText(left), color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp, modifier = Modifier.alignByBaseline().padding(end = 10.dp))
             }
         }
         // 速報（自分の番の手続きなど）
@@ -148,7 +174,7 @@ private fun WebNewsPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composab
                 }
                 Text(page.headline, fontWeight = FontWeight.Black, fontSize = 21.sp, lineHeight = 27.sp)
                 page.subhead?.let { Text(it, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                page.lead?.let { Text(it, fontSize = 13.sp, lineHeight = 20.sp) }
+                page.lead?.let { Text(paperText(it), fontSize = 13.sp, lineHeight = 20.sp) }
                 if (page.box.isNotEmpty()) Text(page.box.joinToString("　") { (k, v) -> "$k $v" }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -167,7 +193,7 @@ private fun WebNewsPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composab
                             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                                 Text(a.kicker, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = categoryColor(a.kicker))
                                 Text(a.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 20.sp)
-                                Text(a.body, fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(paperText(a.body), fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                             if (link != null) Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(start = 6.dp).align(Alignment.CenterVertically))
                         }
@@ -208,8 +234,9 @@ private fun PlainPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composable
                 }
                 Text(listOfNotNull(page.standing, page.issue.ifEmpty { null }, page.status).joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
                 Row {
-                    Text("次の進行まで ", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.alignByBaseline())
-                    Text(countdownText(secondsUntil(nextAdvanceAt)), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.alignByBaseline())
+                    val left = secondsUntil(nextAdvanceAt)
+                    Text(countdownLead(left), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.alignByBaseline())
+                    Text(countdownText(left), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.alignByBaseline())
                 }
             }
         }
@@ -230,7 +257,7 @@ private fun PlainPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composable
                 }
                 Text(page.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 page.subhead?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                page.lead?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                page.lead?.let { Text(paperText(it), style = MaterialTheme.typography.bodySmall) }
                 if (page.box.isNotEmpty()) Text(page.box.joinToString("　") { (k, v) -> "$k $v" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -243,7 +270,7 @@ private fun PlainPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composable
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(a.kicker, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(a.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text(a.body, style = MaterialTheme.typography.bodySmall)
+                    Text(paperText(a.body), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

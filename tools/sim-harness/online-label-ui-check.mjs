@@ -399,6 +399,40 @@ async function scene(width, height = 844, scale = 1, holdDetail = false) {
 }
 try {
   const { page: p, context } = await scene(1440, 1000);
+  // ⚠ 名前を変える小窓は 440px（選手の詳細の 760px に押し込まない）。説明は
+  //    濃い面の上で読める明るい色（地色用の濃い文字だと読めなかった）
+  await p.getByRole('button', { name: '名前を変える', exact: true }).click();
+  const rename = p.getByRole('dialog', { name: '球団名・名前を変える' });
+  await rename.waitFor();
+  // ⚠ 色は rgb の値そのものではなく、下の面とのコントラスト比で見る。値で縛ると、読める色へ
+  //    少し変えただけで落ち、逆に面のほうが明るくなって読めなくなっても気づけない
+  const renameLook = await rename.evaluate((node) => {
+    const rgb = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+    const lum = ([r, g, b]) => {
+      const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const note = node.querySelector('.online-muted');
+    let el = note;
+    let bg = null;
+    while (el) {
+      const c = rgb(getComputedStyle(el).backgroundColor);
+      if (c.length >= 3 && (c.length < 4 || c[3] >= 0.99)) { bg = c; break; }
+      el = el.parentElement;
+    }
+    const fg = rgb(getComputedStyle(note).color);
+    const [hi, lo] = [lum(fg), lum(bg || [255, 255, 255])].sort((x, y) => y - x);
+    return {
+      width: Math.round(node.getBoundingClientRect().width),
+      contrast: Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100,
+      foundBg: Boolean(bg),
+    };
+  });
+  assert.ok(renameLook.width <= 460, `名前を変える小窓が広い: ${renameLook.width}`);
+  assert.ok(renameLook.foundBg, '名前を変える小窓の説明の下に不透明な面が見つからない');
+  assert.ok(renameLook.contrast >= 4.5, `名前を変える小窓の説明が読めない色（コントラスト ${renameLook.contrast}:1）`);
+  await rename.getByRole('button', { name: '閉じる', exact: true }).click();
+  await rename.waitFor({ state: 'hidden' });
   await p.getByRole('button', { name: '選手成績', exact: true }).click();
   await p.getByLabel('閲覧する球団').selectOption('B');
   await p
@@ -502,6 +536,11 @@ try {
       width === 360 ? 3 : 1,
     );
     await m.getByRole('button', { name: '打順', exact: true }).click();
+    // ⚠ スマホの打順は2タップの表（`TapLineup.jsx`）。名前を押すと**選ぶ**だけで、
+    //    選手情報は選んでいる間に下の帯の「選手情報」から開く
+    await m
+      .getByRole('button', { name: '1番 成績選手1を選ぶ', exact: true })
+      .click();
     await m
       .getByRole('button', { name: '成績選手1の選手情報を見る', exact: true })
       .click();
@@ -578,7 +617,12 @@ try {
     await d
       .getByRole('button', { name: '選手成績を閉じる', exact: true })
       .click();
-    await m.getByRole('button', { name: '2番を上げる', exact: true }).click();
+    // 選んだままの1番を2番と入れ替える（以前の「2番を上げる」と同じ並びになる）
+    // （守備位置の札も同じ名前で同じ動き。名前の側を押す）
+    await m
+      .locator('[data-slot="2"] .online-tap-main')
+      .getByText('成績選手2', { exact: true })
+      .click();
     await m.getByRole('button', { name: 'メニュー', exact: true }).click();
     const menu = m.getByRole('dialog', { name: 'メニュー', exact: true });
     await menu.waitFor();
@@ -595,6 +639,21 @@ try {
         .evaluate((e) => e === document.activeElement),
       'メニューを閉じて下部ボタンにフォーカスが戻る',
     );
+    // ⚠ 進行時刻の小窓は**カードの地色で出す**。スマホは本文のカードを一枚の面に
+    //    溶かす指定（背景なし）が小窓のカードにも当たり、暗い幕の上に文字だけが浮いていた
+    await m.getByRole('button', { name: 'メニュー', exact: true }).click();
+    await menu.getByRole('button', { name: '進行時刻', exact: true }).click();
+    const times = m.getByRole('dialog', { name: '進行時刻', exact: true });
+    await times.waitFor();
+    assert.match(
+      await times
+        .locator('.online-card')
+        .evaluate((node) => getComputedStyle(node).backgroundColor),
+      /^rgb\(/,
+      `${width}px 進行時刻の小窓のカードに地色が無い`,
+    );
+    await m.keyboard.press('Escape');
+    await times.waitFor({ state: 'hidden' });
     await m
       .getByRole('button', { name: '投手・控えを含む選手成績 →', exact: true })
       .click();
@@ -855,9 +914,7 @@ try {
     await m.getByRole('heading', { name: '打順', exact: true }).waitFor();
     assert.equal(
       await m
-        .locator('.online-lineup')
-        .first()
-        .getByRole('button', { name: '成績選手2の選手情報を見る', exact: true })
+        .getByRole('button', { name: '1番 成績選手2を選ぶ', exact: true })
         .count(),
       1,
       '選手成績を見て戻っても編集中の打順を維持する',

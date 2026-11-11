@@ -68,7 +68,8 @@ const SOURCE_LABELS = {
   university: { label: '大学', color: 'text-blue-400 bg-blue-900/40 border-blue-600/40' },
   corporate:  { label: '社会人', color: 'text-orange-400 bg-orange-900/40 border-orange-600/40' },
   independent: { label: '独立', color: 'text-purple-400 bg-purple-900/40 border-purple-600/40' },
-  club: { label: 'クラブ', color: 'text-rose-400 bg-rose-900/40 border-rose-600/40' },
+  // ⚠ 素の rose-400 はカード（surface-2）の上で 3.2:1。ここだけ rose-300（4.6:1）
+  club: { label: 'クラブ', color: 'text-rose-300 bg-rose-900/40 border-rose-600/40' },
 };
 
 const DRAFT_POSITION_NAMES = {
@@ -845,7 +846,7 @@ const DraftPlayerModal = ({ entry, onClose }) => {
   );
 };
 
-const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, onContinue }) => {
+const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, userTeamName, onContinue }) => {
   const [summaryGrid] = useState(() => buildGridOrder(npbStandings));
   const [selectedEntry, setSelectedEntry] = useState(null);
   const teamPicks = useMemo(() => {
@@ -856,6 +857,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
   }, [draftedPlayers]);
 
   const missHistory = useMemo(() => getLotteryMissHistory(firstRoundData), [firstRoundData]);
+  const myCount = draftedPlayers.filter(p => p.teamName === userTeamName).length;
 
   const sortRound = sortRoundLabel;
 
@@ -864,6 +866,12 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
       <div className="text-center mb-5">
         <div className="text-green-300/60 text-xs tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">全球団指名一覧</h1>
+        {/* ⚠ 自チームから指名された選手は一覧の中で目立たせる（以前は他と同じ灰色の小さな字で、探さないと見つからなかった） */}
+        {myCount > 0 && (
+          <div className="mt-2 inline-block bg-yellow-300 text-gray-900 text-sm font-bold px-3 py-1 rounded-full">
+            {userTeamName}から {myCount}人 が指名されました（黄色の行）
+          </div>
+        )}
       </div>
       <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
         {summaryGrid.map(team => {
@@ -880,6 +888,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
               <div className="divide-y divide-gray-200">
                 {sorted.map((entry, idx) => {
                   const isFirst = entry.draftRound === 'ドラフト1位';
+                  const isMine = entry.teamName === userTeamName;
                   const displayLabel = entry.draftRound.replace('ドラフト', '');
                   return (
                     <div key={idx}>
@@ -893,7 +902,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                           ))}
                         </div>
                       )}
-                      <div className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                      <div className={`px-3 py-2 cursor-pointer transition-colors ${isMine ? 'bg-yellow-200 hover:bg-yellow-100 border-l-4 border-yellow-500' : 'hover:bg-gray-50'}`}
                            onClick={() => setSelectedEntry(entry)}>
                         <div className="flex items-baseline gap-1.5 whitespace-nowrap overflow-hidden">
                           <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
@@ -903,7 +912,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                           <span className="text-gray-900 font-bold text-sm shrink-0">{entry.name}</span>
                           <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
                           <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
-                          <span className="text-gray-500 text-xs truncate">{entry.teamName}</span>
+                          <span className={`text-xs truncate ${isMine ? 'text-gray-900 font-bold' : 'text-gray-500'}`}>{entry.teamName}</span>
                         </div>
                       </div>
                     </div>
@@ -936,30 +945,32 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
     <div className="p-4 max-w-3xl mx-auto">
       <style>{`
         @keyframes slideInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
         .draft-card { animation: slideInUp 0.45s cubic-bezier(.22,.68,0,1.2) both; }
-        .gold-shimmer { background: linear-gradient(90deg, #f59e0b 0%, #fde68a 40%, #f59e0b 60%, #b45309 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: shimmer 3s linear infinite; }
       `}</style>
 
+      {/* ⚠ この画面は地色（明るい紙）の上。見出しは text-ink / text-ink-sub、文字を載せる枠は不透明な
+          bg-surface-2（内側の行は一段暗い bg-surface-1）にする（index.css の「文字色の決まり」）。
+          以前は暗い地を前提にした白い見出しと半透明の枠のままで、「NPB Draft」1.27:1・「ドラフト結果」
+          2.18:1・内訳 3.5〜3.8:1、金色に光らせた球団名も紙の上でほぼ消えていた */}
       <div className="text-center mb-6">
-        <p className="text-gray-300 text-sm font-semibold tracking-[0.2em] uppercase mb-1">NPB Draft</p>
-        <h1 className="text-4xl font-black text-white tracking-tight">ドラフト結果</h1>
+        <p className="text-ink-sub text-sm font-semibold tracking-[0.2em] uppercase mb-1">NPB Draft</p>
+        <h1 className="text-4xl font-black text-ink tracking-tight">ドラフト結果</h1>
         <div className="flex items-center justify-center gap-3 mt-2">
-          <div className="h-px w-20 bg-gradient-to-r from-transparent to-yellow-500/80" />
-          <span className="gold-shimmer text-base font-black">{userTeamName}</span>
-          <div className="h-px w-20 bg-gradient-to-l from-transparent to-yellow-500/80" />
+          <div className="h-px w-20 bg-gradient-to-r from-transparent to-ink-sub" />
+          <span className="text-base font-black text-ink">{userTeamName}</span>
+          <div className="h-px w-20 bg-gradient-to-l from-transparent to-ink-sub" />
         </div>
       </div>
 
       {draftBySource && hasDrafted && (
         <div className="flex items-center justify-center gap-3 flex-wrap mb-4">
           {[['highschool', '高校'], ['university', '大学'], ['corporate', '社会人'], ['independent', '独立'], ['club', 'クラブ']].map(([key, label]) => (
-            <div key={key} className="bg-gray-800/80 rounded-xl px-4 py-2 border border-gray-700/50 text-center min-w-[80px]">
+            <div key={key} className="bg-surface-2 rounded-xl px-4 py-2 border border-gray-700/50 text-center min-w-[80px]">
               <div className="text-xs text-gray-300">{label}</div>
               <div className={`text-lg font-black ${SOURCE_LABELS[key]?.color?.split(' ')[0] || 'text-white'}`}>{draftBySource[key] || 0}名</div>
             </div>
           ))}
-          <div className="bg-gray-800/80 rounded-xl px-4 py-2 border border-yellow-600/40 text-center min-w-[80px]">
+          <div className="bg-surface-2 rounded-xl px-4 py-2 border border-yellow-600/60 text-center min-w-[80px]">
             <div className="text-xs text-yellow-400">全体</div>
             <div className="text-lg font-black text-yellow-300">{draftBySource.total || 0}名</div>
           </div>
@@ -967,7 +978,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
       )}
 
       {myTeamDrafted.length > 0 ? (
-        <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-4">
+        <div className="bg-surface-2 rounded-2xl border border-gray-700/50 p-4 mb-4">
           <h2 className="text-base font-black text-yellow-400 mb-3 flex items-center gap-2">
             自チームからの指名選手
             <span className="ml-auto text-sm font-bold text-gray-300">{myTeamDrafted.length}名</span>
@@ -980,7 +991,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
               //    一芸指名の「守備のスペシャリスト」まで消える
               const filteredReasons = entry.reasons.filter(r => !/(ミート|パワー|選球眼|走力|守備|肩力|盗塁|球速|制球力?|スタミナ|俊足|変化球)\d/.test(r));
               return (
-                <div key={idx} className={`draft-card bg-gray-700/60 rounded-xl p-3.5 ${style.border} ${style.glow}`} style={{ animationDelay: `${idx * 0.07}s` }}>
+                <div key={idx} className={`draft-card bg-surface-1 rounded-xl p-3.5 ${style.border} ${style.glow}`} style={{ animationDelay: `${idx * 0.07}s` }}>
                   <div className="flex items-center gap-2.5 whitespace-nowrap overflow-hidden">
                     <span className={`font-black text-sm px-2.5 py-1 rounded-lg shrink-0 ${style.badge}`}>{entry.draftRound || '指名'}</span>
                     <span className="text-yellow-300 font-bold text-base shrink-0 flex items-center gap-1">
@@ -1008,21 +1019,21 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
               );
             })}
           </div>
-          <p className="text-gray-400 text-sm mt-3">指名された選手はチームから離脱し、NPBへ移籍しました。</p>
+          <p className="text-gray-300 text-sm mt-3">指名された選手はチームから離脱し、NPBへ移籍しました。</p>
         </div>
       ) : (
-        <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-10 mb-4 text-center">
-          <p className="text-gray-200 font-bold text-lg mb-1">今シーズン、自チームからのNPB指名はありませんでした</p>
-          <p className="text-gray-400 text-sm">選手がドラフト指名条件に達しませんでした。来シーズンに期待しましょう。</p>
+        <div className="bg-surface-2 rounded-2xl border border-gray-700/50 p-10 mb-4 text-center">
+          <p className="text-gray-100 font-bold text-lg mb-1">今シーズン、自チームからのNPB指名はありませんでした</p>
+          <p className="text-gray-300 text-sm">選手がドラフト指名条件に達しませんでした。来シーズンに期待しましょう。</p>
         </div>
       )}
 
       {myTeamProBonus.length > 0 && (
-        <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 rounded-2xl p-4 mb-4 border border-green-600/30">
+        <div className="bg-surface-2 rounded-2xl p-4 mb-4 border border-green-600">
           <h2 className="text-base font-black text-green-400 mb-3">プロ輩出ボーナス</h2>
           <div className="space-y-2">
             {myTeamProBonus.map((bonus, idx) => (
-              <div key={idx} className="bg-gray-700/40 rounded-xl p-3.5">
+              <div key={idx} className="bg-surface-1 rounded-xl p-3.5">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-white font-bold text-base">{bonus.teamName}</span>
                   <span className="text-green-400 font-black text-base">+{bonus.reputationGain} 育成評判</span>
@@ -1040,11 +1051,11 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
       )}
 
       {myTeamNearMiss.length > 0 && (
-        <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-4">
+        <div className="bg-surface-2 rounded-2xl border border-gray-700/50 p-4 mb-4">
           <h2 className="text-base font-black text-gray-300 mb-3">NPB候補に迫る選手</h2>
           <div className="space-y-1.5">
             {myTeamNearMiss.slice(0, 10).map((entry, idx) => (
-              <div key={idx} className="bg-gray-700/40 rounded-xl p-3 flex items-center justify-between">
+              <div key={idx} className="bg-surface-1 rounded-xl p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-white font-bold text-base">{entry.name}</span>
                   <span className="text-gray-300 text-sm">{entry.age}歳</span>
@@ -1084,7 +1095,7 @@ const DraftTitleOverlay = ({ onComplete }) => {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center pl-56 cursor-pointer transition-opacity duration-[600ms] ${fading ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center md:pl-56 cursor-pointer transition-opacity duration-[600ms] ${fading ? 'opacity-0' : 'opacity-100'}`}
       style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
       onClick={() => setFading(true)}
     >
@@ -1133,7 +1144,7 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftByS
         <DraftConferenceScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} npbStandings={npbStandings} onComplete={() => setPhase('teamSummary')} />
       )}
       {phase === 'teamSummary' && hasDrafted && (
-        <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} npbStandings={npbStandings} onContinue={() => setPhase('summary')} />
+        <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} npbStandings={npbStandings} userTeamName={userTeamName} onContinue={() => setPhase('summary')} />
       )}
       {phase === 'summary' && (
         <DraftSummaryScreen draftedPlayers={draftedPlayers} nearMissPlayers={nearMissPlayers} proBonus={proBonus}

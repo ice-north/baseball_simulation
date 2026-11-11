@@ -42,9 +42,12 @@ export default function MobileTactics({
         y = plan.starters.indexOf(b.id);
       return (x < 0 ? 99 : x) - (y < 0 ? 99 : y);
     });
+  // ⚠ **呼び名はPC・アプリと同じ「方針・采配」**。以前は「事前采配」で、同じ設定なのに
+  //    端末で名前が違った。保存の押しボタンも「編成を保存」ではなくPCと同じ「保存」
+  //    （打順の下書きも同じなので、ここで保存すると打順の変更も一緒に保存する。下の文がそう書く）
   return (
     <MobilePanel
-      title="事前采配"
+      title="方針・采配"
       close={close}
       footer={
         <>
@@ -62,7 +65,7 @@ export default function MobileTactics({
               disabled={busy || !dirty}
               onClick={save}
             >
-              編成を保存
+              保存
             </button>
           </div>
         </>
@@ -149,8 +152,10 @@ export default function MobileTactics({
       </fieldset>
       {group === 'roles' ? (
         <>
+          {/* ⚠ スマホでも変えられる（「打順」の「投手起用を開く」の全画面。`OnlineLineup.jsx`）。
+              以前は「PCから」と書いていて、同じ画面にある入口と食い違っていた（再監査 B6） */}
           <p className="online-mobile-tactic-note">
-            役割やローテーションの変更はPCから
+            役割・ローテーションは「打順」の「投手起用を開く」で変えられます
           </p>
           <div className="online-mobile-role-list">
             {pitchers.slice(page * 4, page * 4 + 4).map((p) => {

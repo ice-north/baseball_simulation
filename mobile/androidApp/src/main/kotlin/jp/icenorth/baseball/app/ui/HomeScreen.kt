@@ -15,6 +15,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import jp.icenorth.baseball.shared.paperNameIndex
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -47,10 +49,16 @@ import jp.icenorth.baseball.shared.buildFrontPage
 import jp.icenorth.baseball.shared.buildNationalPage
 import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
-import jp.icenorth.baseball.shared.milestoneText
+import jp.icenorth.baseball.shared.TEAM_RECORD_ROWS
+import jp.icenorth.baseball.shared.careerRecordLine
+import jp.icenorth.baseball.shared.historyLine
+import jp.icenorth.baseball.shared.milestoneLine
+import jp.icenorth.baseball.shared.retiredHead
+import jp.icenorth.baseball.shared.seasonRecordLine
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.teamShort
 import jp.icenorth.baseball.shared.backIssueKey
+import jp.icenorth.baseball.shared.backIssuesOf
 import jp.icenorth.baseball.shared.Player
 import jp.icenorth.baseball.shared.OnlineJson
 import androidx.compose.material3.FilterChip
@@ -76,7 +84,16 @@ import androidx.compose.material3.HorizontalDivider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: () -> Unit, onRename: () -> Unit, onOpenGames: () -> Unit = {}, onOpenTips: () -> Unit = {}) {
+fun HomeScreen(
+    model: AppViewModel,
+    onOpenLineup: () -> Unit,
+    onOpenProcedures: () -> Unit,
+    onRename: () -> Unit,
+    onOpenGames: () -> Unit = {},
+    onOpenTips: () -> Unit = {},
+    /** 今のスタメン・ローテに当てはまるTIPSの数（メニューの「ゲームのTIPS」に添える） */
+    tipsNow: Int = 0,
+) {
     val view = model.view
     PullToRefreshBox(
         isRefreshing = model.refreshing,
@@ -84,7 +101,11 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         modifier = Modifier.fillMaxSize(),
     ) {
         if (view == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("読み込み中…") }
+            // ⚠ 読めなかったら理由と「読み直す」を出す（以前は「読み込み中…」のまま止まった）
+            val failure = model.loadFailure
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                if (failure != null) LoadFailed(failure, onRetry = { model.reload(pull = true) }) else Text("読み込み中…")
+            }
             return@PullToRefreshBox
         }
         if (view.setupRequired || view.teamName == null) {
@@ -163,16 +184,20 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
         val national = remember(localPage, view, model.raw) { buildNationalPage(view, model.raw, localPage) }
         val paper = FrontPage.Paper.entries.firstOrNull { it.name == model.homePaper } ?: FrontPage.Paper.Local
         val page = if (paper == FrontPage.Paper.National) national else localPage
-        // バックナンバー（その日の両紙の見出しを端末に残す）
+        // バックナンバー（その日の両紙の見出しを端末に残す）。球団ごとに分ける（別のアカウントの見出しを混ぜない）
         LaunchedEffect(localPage.headline, national.headline) {
-            backIssueKey(view)?.let { key -> model.recordBackIssue(BackIssue(key, localPage.issue, localPage.headline, national.headline)) }
+            backIssueKey(view)?.let { key -> model.recordBackIssue(BackIssue(key, localPage.issue, localPage.headline, national.headline, team)) }
         }
         var showBack by remember { mutableStateOf(false) }
-        if (showBack) BackNumberDialog(model.backIssues, localPage.title) { showBack = false }
+        if (showBack) BackNumberDialog(backIssuesOf(model.backIssues, team), localPage.title) { showBack = false }
         var showChronicle by remember { mutableStateOf(false) }
         if (showChronicle) ChronicleDialog(model, team, view.teamShort(team)) { showChronicle = false }
         val style = homeStyleOf(model.homeStyle)
         val uriHandler = LocalUriHandler.current
+        val names = remember(model.raw, team, lastGame, opponent, oppName) {
+            paperNameIndex(model.raw, team, lastGame, oppName?.let { n -> opponent?.let { n to it } })
+        }
+        val paperLinks = remember(names) { PaperLinks(names) { ref, name -> model.openPlayerOf(ref.team, ref.id, name) } }
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 72.dp), // 左下の TIPS の印に隠れないよう
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -184,11 +209,13 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
                 PaperTabs(paper, localPage.title) { model.changeHomePaper(it.name) }
             }
             item(key = "page") {
+                // 記事の中の選手名を押すと、その選手の詳細を開く（手元で分かる選手だけ）
+                CompositionLocalProvider(LocalPaperLinks provides paperLinks) {
                 HomePage(
                     style = style,
                     page = page,
                     nextAdvanceAt = view.nextAdvanceAt,
-                    menu = { HomeMenu(model, style, onRename, onOpenTips, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }) },
+                    menu = { HomeMenu(model, style, onRename, onOpenTips, tipsNow, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }) },
                     onLink = { link ->
                         when (link) {
                             LINK_LINEUP -> onOpenLineup()
@@ -199,6 +226,7 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
                     },
                     onOpenProcedures = onOpenProcedures,
                 )
+                }
             }
         }
     }
@@ -224,7 +252,7 @@ private fun BackNumberDialog(issues: List<BackIssue>, localTitle: String, onClos
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = { TextButton(onClick = onClose) { Text("閉じる") } },
-        title = { Text("紙面のバックナンバー") },
+        title = { Text("過去の見出し") },
         text = {
             if (issues.isEmpty()) Text("まだありません。ホームを開くたびに、その日の1面の見出しを残します。")
             else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -268,27 +296,30 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                     item { ChronicleHeading("年表") }
                     if (c.seasons.isEmpty()) item { Text("まだ終わったシーズンがありません。1年目を終えると、ここに年ごとの成績が並びます。", style = MaterialTheme.typography.bodySmall) }
                     items(c.seasons, key = { "s${it.year}" }) { s ->
-                        Text("${s.year}年　${s.line}", style = MaterialTheme.typography.bodyMedium)
+                        Text(s.historyLine(), style = MaterialTheme.typography.bodyMedium)
                     }
                     item { ChronicleHeading("歴代記録") }
                     if (c.records.isEmpty()) item { Text("記録がまだありません。", style = MaterialTheme.typography.bodySmall) }
+                    // シーズン最多・球団通算とも上位3人（PC と同じ。以前は1位だけだった）
                     items(c.records, key = { "r${it.stat}" }) { r ->
                         Column {
                             Text(r.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            r.season.firstOrNull()?.let { x -> Text("シーズン最多　${x.value}　${x.name}（${x.year}年${if (x.current) "・今季" else ""}）", style = MaterialTheme.typography.bodySmall) }
-                            r.career.firstOrNull()?.let { x -> Text("球団通算　${x.value}　${x.name}${if (x.active) "（現役）" else ""}", style = MaterialTheme.typography.bodySmall) }
+                            if (r.season.isNotEmpty()) Text("シーズン最多", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            r.season.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> Text(seasonRecordLine(i + 1, x), style = MaterialTheme.typography.bodySmall) }
+                            if (r.career.isNotEmpty()) Text("球団通算", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            r.career.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> Text(careerRecordLine(i + 1, x), style = MaterialTheme.typography.bodySmall) }
                         }
                     }
                     item { ChronicleHeading("節目の記録") }
                     if (c.milestones.isEmpty()) item { Text("まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。", style = MaterialTheme.typography.bodySmall) }
                     items(c.milestones.withIndex().toList(), key = { "m${it.index}" }) { (_, m) ->
-                        Text("${m.year}年${m.month}月${m.day}日　${m.name}　${milestoneText(m)}", style = MaterialTheme.typography.bodySmall)
+                        Text(milestoneLine(m), style = MaterialTheme.typography.bodySmall)
                     }
                     item { ChronicleHeading("引退した選手") }
                     if (c.retired.isEmpty()) item { Text("この球団から引退した選手はまだいません。", style = MaterialTheme.typography.bodySmall) }
                     items(c.retired.withIndex().toList(), key = { "x${it.index}" }) { (_, r) ->
                         Column {
-                            Text("${r.year}年　${r.name}（${r.age ?: "-"}歳）${if (r.hallOfFame) "　殿堂入り" else ""}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(retiredHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Text(listOfNotNull(r.seasons.takeIf { it > 0 }?.let { "在籍${it}年" }, r.line, r.secondCareer?.let { "→ $it" }).joinToString("　"), style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -305,15 +336,28 @@ private fun ChronicleHeading(text: String) {
 
 /** 紙面の右上のメニュー（更新・名前の変更・TIPS・ホームの見た目・ログアウト） */
 @Composable
-private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit) {
+private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, tipsNow: Int, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit) {
     var open by remember { mutableStateOf(false) }
+    // ⚠ ログアウトは確かめてから（メニューの一番下で押し間違えやすく、戻るにはメールとパスワードを入れ直す）
+    var askLogout by remember { mutableStateOf(false) }
+    if (askLogout) {
+        AlertDialog(
+            onDismissRequest = { askLogout = false },
+            title = { Text("ログアウトしますか") },
+            text = { Text("もう一度使うときは、メールアドレスとパスワードでログインし直します。") },
+            confirmButton = { TextButton(onClick = { askLogout = false; model.logout() }) { Text("ログアウト") } },
+            dismissButton = { TextButton(onClick = { askLogout = false }) { Text("やめる") } },
+        )
+    }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "メニュー") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("最新に更新") }, onClick = { open = false; model.reload(pull = true) })
             DropdownMenuItem(text = { Text("球団名・名前を変える") }, onClick = { open = false; onRename() })
-            DropdownMenuItem(text = { Text("ゲームのTIPS") }, onClick = { open = false; onOpenTips() })
-            DropdownMenuItem(text = { Text("紙面のバックナンバー") }, onClick = { open = false; onOpenBack() })
+            // ⚠ 当てはまるTIPSがあれば数を添える（一覧の先頭に、当てはまる人と一緒に出る。左下の印は未読のときだけなので、
+            //    読んだあとに「誰が疲れているか」を見直す入口はここ）
+            DropdownMenuItem(text = { Text("ゲームのTIPS" + if (tipsNow > 0) "（いま当てはまる${tipsNow}件）" else "") }, onClick = { open = false; onOpenTips() })
+            DropdownMenuItem(text = { Text("過去の見出し") }, onClick = { open = false; onOpenBack() })
             DropdownMenuItem(text = { Text("球団史・記録") }, onClick = { open = false; onOpenChronicle() })
             HorizontalDivider()
             Text("ホームの見た目", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
@@ -324,7 +368,7 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
                 )
             }
             HorizontalDivider()
-            DropdownMenuItem(text = { Text("ログアウト") }, onClick = { open = false; model.logout() })
+            DropdownMenuItem(text = { Text("ログアウト") }, onClick = { open = false; askLogout = true })
         }
     }
 }
@@ -344,11 +388,15 @@ private fun pendingAlerts(view: LeagueView, raw: JsonObject?): List<String> = bu
         val label = phase.kind?.let { PHASE_LABELS[it] } ?: phase.label ?: "手続き"
         val ready = raw?.at("phase", "submission", "ready").bool() == true
         val campDone = phase.kind == "camp" && (raw?.at("phase", "camp", "rounds").int() ?: 0) >= (raw?.at("phase", "camp", "total").int() ?: CAMP_ROUNDS)
+        // ⚠ 指導者に任せた手続きはサーバーが決定を待たない（`Notices.kt` の pendingProcedure と同じ決まり）
+        val delegated = raw?.at("phase", "delegated").bool() == true
         add(
             when {
+                delegated -> "$label: 指導者に任せています"
                 campDone -> "$label: 全クール終了（ほかの球団を待っています）"
                 ready -> "$label: 決定済み（変更もできます）"
-                else -> "$label を決めてください" + (due?.let { "（締め切り $it）" } ?: "")
+                // ⚠ 名前と「を」の間に空白を入れない（「契約更改 を決めてください」と出ていた。上の帯と同じ書き方）
+                else -> "${label}を決めてください" + (due?.let { "（締め切り $it）" } ?: "")
             },
         )
     }

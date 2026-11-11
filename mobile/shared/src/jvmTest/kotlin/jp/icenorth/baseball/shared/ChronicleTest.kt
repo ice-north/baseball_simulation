@@ -61,6 +61,35 @@ class ChronicleTest {
         assertTrue(nationalOff.articles.first { it.kicker == "引退" }.body.contains("の打撃コーチとして"), "引退後の役職の書き方")
     }
 
+    /** 決着の記事は11月の手続きの間も残るので、時期によらない文にする（「プレーオフに臨む」と書かない） */
+    @Test
+    fun decidedRaceReadsTheSameAfterTheSeason() {
+        val team = late.teamName!!
+        val decided = Race(league = late.teamLeagues[team], leagueName = "1部", kind = "first", team = team, clinched = true)
+        val contract = late.copy(phase = Phase(kind = "contract"), races = listOf(decided))
+        val article = buildFrontPage(contract, lateRaw).articles.first { it.kicker == "決定" }
+        assertEquals("レギュラーシーズン1位の座を手にした。", article.body)
+        // 決定の文はどれも先の予定（プレーオフ・開幕）を言わない
+        for (kind in listOf("first", "promotion", "survive", "relegated"))
+            assertTrue("臨む" !in raceText(decided.copy(kind = kind), { it })!!.body, kind)
+    }
+
+    /** 球団史・記録の行: 歴代記録は PC と同じ上位3人、年は「N年目」 */
+    @Test
+    fun teamChronicleLines() {
+        val c = OnlineJson.decodeFromJsonElement(TeamChronicle.serializer(), team.at("chronicle")!!)
+        val hr = c.records.first { it.stat == "homeruns" }
+        assertEquals(TEAM_RECORD_ROWS, hr.season.size) // サーバーは3人まで返す（アプリも3人とも並べる）
+        val lines = hr.season.take(TEAM_RECORD_ROWS).mapIndexed { i, x -> seasonRecordLine(i + 1, x) }
+        assertTrue(lines[0].startsWith("1位　${hr.season[0].name}（1年目"), lines[0])
+        assertTrue(lines[2].startsWith("3位　"), lines[2])
+        assertEquals("1位　山田（2年目・今季）　32", seasonRecordLine(1, RecordRow("山田", 2, 32, current = true)))
+        assertEquals("2位　山田（現役）　120", careerRecordLine(2, RecordRow("山田", null, 120, active = true)))
+        assertTrue(c.seasons.first().historyLine().startsWith("1年目　"), c.seasons.first().historyLine())
+        assertEquals("2年目 8月28日　山田　シーズン30本塁打に到達", milestoneLine(Milestone(year = 2, month = 8, day = 28, label = "シーズン30本塁打", name = "山田")))
+        assertEquals("3年目　山田（36歳）　殿堂入り", retiredHead(Retired(year = 3, name = "山田", age = 36, hallOfFame = true)))
+    }
+
     @Test
     fun raceWording() {
         val short = { n: String -> n.take(2) }

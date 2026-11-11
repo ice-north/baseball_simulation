@@ -244,7 +244,7 @@ export default function ReplayViewer({ game }) {
           {frame.kind === 'pitch' && frame.pitch
             ? `${getPitchTypeName(frame.pitch.type)} ${Math.round(frame.pitch.velocity)} km/h`
             : ''}
-          　{label(frame)}
+          {'　'}{label(frame)}
         </p>
       </div>
       <div className="online-replay-layout">
@@ -300,9 +300,9 @@ export default function ReplayViewer({ game }) {
       <div className="online-replay-log" aria-label="試合経過">
         {frames.slice(Math.max(0, index - 9), index + 1).map((f, n) => (
           <p key={n}>
-            {f.inning}回{f.top ? '表' : '裏'}　
+            {f.inning}回{f.top ? '表' : '裏'}{'　'}
             {find(f.top ? game.away : game.home, f.batterId)?.name}　{label(f)}
-            　{f.awayScore}–{f.homeScore}
+            {'　'}{f.awayScore}–{f.homeScore}
           </p>
         ))}
       </div>

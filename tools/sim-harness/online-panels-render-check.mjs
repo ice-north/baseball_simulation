@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { delegationSettles, staffModesDoneText } from '../../src/online/notices.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const entry = `
@@ -28,10 +29,13 @@ import { formatTurn, turnLabel, turnOfDate } from '../../src/online/shared.js';
 import { nextAdvanceText } from '../../src/online/api.js';
 import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
-import { CompletedCamp, subTargetChoices } from '../../src/online/CampPlanner.jsx';
-import { LeagueTopics } from '../../src/online/Chronicle.jsx';
+import CampPlanner, { CompletedCamp, subTargetChoices } from '../../src/online/CampPlanner.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
+import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
+import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 export {
+  TryoutPlanner,
+  LeagueTopics,
   React,
   renderToString,
   Notices,
@@ -46,7 +50,7 @@ export {
   setTeamLabels,
   PackSelect,
   CompletedCamp,
-  LeagueTopics,
+  CampPlanner,
   subTargetChoices,
 };
 `;
@@ -77,7 +81,7 @@ try {
     setTeamLabels,
     PackSelect,
     CompletedCamp,
-    LeagueTopics,
+    CampPlanner,
     subTargetChoices,
     DesktopTactics,
     Results,
@@ -85,6 +89,8 @@ try {
     turnLabel,
     turnOfDate,
     nextAdvanceText,
+    TryoutPlanner,
+    LeagueTopics,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -102,10 +108,145 @@ try {
     },
   } }));
   assert.match(completed, /2年目のキャンプ結果/, '手続き終了後の成果を表示できない');
+
+  // ⚠ 指導者の案・締め切りの標準案の方針は `{ mode: 'recommended' }` だけで、方向と段階を
+  //    持たない。そこから「全員同じ方針」に切り替えた状態（方向・段階の無い mode: 'team'）で、
+  //    説明が「undefined／undefined」になり、方針のボタンがどれも選ばれていなかった
+  const campPlanner = render(h(CampPlanner, {
+    view: {
+      phase: { id: 'camp-check', kind: 'camp', camp: { rounds: 0, total: 4, plan: { policy: { mode: 'team' } } } },
+      roster: [
+        { id: 1, name: '野手の選手', position: 'short' },
+        { id: 2, name: '投手の選手', position: 'pitcher' },
+      ],
+    },
+    busy: false,
+    run: () => {},
+    command: () => {},
+  }));
+  assert.doesNotMatch(campPlanner, /undefined/, 'キャンプの方針の説明に undefined が出る');
+  assert.match(campPlanner, /aria-pressed="true"[^>]*>[^<]*全体を伸ばす/, '方向の無い方針で育成方針のボタンがどれも選ばれていない');
+  // 「おすすめ」（選手ごと）のときに「いまは『全体を伸ばす×技術』です」と出さない
+  const recommendedCamp = render(h(CampPlanner, {
+    view: {
+      phase: { id: 'camp-check-rec', kind: 'camp', camp: { rounds: 0, total: 4, suggested: { policy: { mode: 'recommended' } } } },
+      roster: [{ id: 1, name: '野手の選手', position: 'short' }],
+    },
+    busy: false,
+    run: () => {},
+    command: () => {},
+  }));
+  assert.doesNotMatch(recommendedCamp, /いまは「全体を伸ばす×技術」です/, '選手ごとの決め方なのに全員同じ方針の説明が出る');
+
+  // ⚠ 球団史・リーグの話題の年は「N年目」。「2年」だと西暦や在籍年数に読める。
+  //    節目は月日だけでなく年も出す（何年目の話か分からなかった）
+  const topics = render(
+    h(LeagueTopics, {
+      view: {
+        races: [],
+        chronicle: {
+          milestones: [{ year: 2, month: 5, day: 3, name: '節目の選手', team: 'x', kind: 'career', label: '通算100安打' }],
+          world: [{ year: 2, kind: 'koshien', champion: '優勝校', runnerUp: '準優勝校' }],
+        },
+      },
+    }),
+  );
+  assert.match(topics, /2年目 5月3日 節目の選手/, '節目に年が出ない');
+  assert.match(topics, /2年目 夏の甲子園/, '裏の大会の年が「N年目」でない');
   assert.match(completed, /遊撃適性\+8/, '通算の守備適性が成果に出ない');
   assert.match(completed, /精神\+1/, '通算の精神が成果に出ない');
   assert.match(completed, /新球種を習得/, '通算の出来事が成果に出ない');
   assert.equal(render(h(CompletedCamp, { view: { roster: [] } })), '', '記録の無い過去キャンプを表示した');
+
+  // --- トライアウトの注意は文を句点で区切る（u1 低20） ----------------------
+  // ⚠ 以前は行頭の全角空白で区切っていて、JSX がそれを落とすので
+  //    「…4人未満ですこの位置は…」と文がつながって出ていた
+  {
+    const person = (id, position) => ({
+      id,
+      name: `選手${id}`,
+      age: 20,
+      position,
+      batting: {},
+      fielding: {},
+      pitching: {},
+    });
+    const tryout = (roster, candidates, rankedIds) =>
+      render(
+        h(TryoutPlanner, {
+          plan: { count: rankedIds.length, rankedIds },
+          candidates,
+          roster,
+          maxCount: 5,
+          busy: false,
+          onChange: () => {},
+          onReset: () => {},
+        }),
+      );
+    // 野手8・投手1・捕手は候補から1人 → 決定はできるが、獲得後も投手が少ない（注意）
+    const roster = [
+      person(1, 'pitcher'),
+      ...['first', 'second', 'third', 'short', 'left', 'center', 'right', 'first'].map(
+        (pos, i) => person(10 + i, pos),
+      ),
+    ];
+    const warned = tryout(roster, [person(100, 'catcher')], [100]);
+    assert.match(
+      warned,
+      /獲得後も投手が5人未満です。人数が足りない位置は自動で埋められます。/,
+      'トライアウトの注意が出ない',
+    );
+    // ⚠ **注意も獲得したあとの名簿で数える**（再監査 B3）。以前は獲得予定（捕手1人）だけを
+    //    数えて、名簿に内野5人・外野3人いても「内野手が4人未満です」と出ていた
+    assert.doesNotMatch(
+      warned,
+      /内野手が4人未満|外野手が3人未満/,
+      'トライアウトの注意が獲得予定だけを数えている（名簿に足りている区分にも出る）',
+    );
+    // 3つ出るときは句点で区切る
+    const thin = [
+      person(1, 'pitcher'),
+      ...['catcher', 'first', 'second', 'third', 'left', 'center'].map((pos, i) =>
+        person(10 + i, pos),
+      ),
+    ];
+    assert.match(
+      tryout(thin, [person(100, 'catcher'), person(101, 'catcher')], [100, 101]),
+      /獲得後も投手が5人未満です。獲得後も内野手が4人未満です。獲得後も外野手が3人未満です。人数が足りない位置は自動で埋められます。/,
+      'トライアウトの注意の文が句点で区切られていない',
+    );
+    // 年末のふつうの名簿（投8・捕2・内4・外4）に、投3・内2を足す案では注意を出さない
+    const yearEnd = [
+      ...Array.from({ length: 8 }, (_, i) => person(200 + i, 'pitcher')),
+      ...['catcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right', 'left'].map(
+        (pos, i) => person(220 + i, pos),
+      ),
+    ];
+    const picks = [
+      person(300, 'pitcher'),
+      person(301, 'pitcher'),
+      person(302, 'pitcher'),
+      person(303, 'second'),
+      person(304, 'short'),
+    ];
+    const usual = tryout(yearEnd, picks, picks.map((p) => p.id));
+    assert.match(usual, /獲得後の名簿 投11\/11 捕2\/2 内6\/6 外4\/7/, '前提: 獲得後の名簿の内訳');
+    assert.doesNotMatch(usual, /未満です/, 'ふつうの年末の案に「投手が5人未満です」などの注意が出る');
+    // ⚠ 見出しの内訳は**獲得したあとの名簿**の人数で、目標（名簿全体）と比べる。
+    //    以前は分子が獲得予定だけで「投0/11」と出て、あと11人取れるように読めた
+    assert.match(
+      warned,
+      /獲得後の名簿 投1\/11 捕1\/2 内5\/6 外3\/7/,
+      'トライアウトの内訳が獲得後の名簿の人数で出ていない',
+    );
+    // 名簿が空 → 決定できない（理由と、どうすればよいか）
+    const blocked = tryout([], [person(100, 'catcher')], [100]);
+    assert.match(
+      blocked,
+      /このままでは決定できません: [^<]*（8人以上必要）[^<]*。獲得希望人数を増やすか/,
+      '決定できない理由と次の文が句点で区切られていない',
+    );
+  }
 
   // --- 新球種の対象に「おすすめ」の印が付く ------------------------------
   // ⚠ **覚えやすさは球種の名前から分からない**（いしだ指摘: おすすめ球種が
@@ -352,6 +493,20 @@ try {
       h(PackSelect, { packs: [pack], plan: null, busy: false, onChange: () => {} }),
     );
     assert.doesNotMatch(bare, /球団名とプレイヤー名/, '渡していないのに欄が出る');
+    // ⚠ **説明の年齢の幅はセットの中身から**（版3で19〜32歳に広げたとき、「19〜24歳」のまま残った）
+    assert.match(bare, /年齢は21〜21歳です/, '説明の年齢の幅がセットの中身と違う');
+    const wide = {
+      ...pack,
+      players: [
+        { ...pack.players[0], id: 2, age: 19 },
+        { ...pack.players[0], id: 3, age: 32 },
+      ],
+    };
+    assert.match(
+      render(h(PackSelect, { packs: [wide], plan: null, busy: false, onChange: () => {} })),
+      /年齢は19〜32歳です/,
+      '19〜32歳のセットなのに説明の年齢の幅が違う',
+    );
 
     // ⚠ **親が渡し忘れていないこと**を、呼び出し元の字面で見る。
     //    部品だけ描いても親の渡し忘れは写らない。渡し忘れると欄が黙って
@@ -517,10 +672,60 @@ try {
 
   // --- 締め切りの表示（日本時間） ---------------------------------------
   assert.equal(formatDeadline('2026-11-07T15:00:00.000Z'), '11/8(日) 0:00');
+
+  // --- 最後の1人が手続きを任せるときの確認と知らせ（再監査 A2。`notices.js`）------------
+  // ⚠ サーバーは待たれている最後の1人が手続きの分野を「任せる」にした瞬間に手続きを進める
+  //    （`updateStaffModes`）。画面はその条件のときだけ保存の前に確認を挟む
+  {
+    const view = (kind, members, phase = {}) => ({
+      teamName: 'A',
+      phase: { id: `1:${kind}`, kind, ...phase },
+      members: members.map(([teamName, flags]) => ({ teamName, ...flags })),
+    });
+    const others = [['B', { ready: true }], ['C', { cpu: true }], ['D', { ready: true, delegated: true }]];
+    assert.equal(
+      delegationSettles(view('tryout', [['A', {}], ...others]), { tryout: 'delegate' }),
+      'トライアウト',
+      'ほかが全員決めているのに、任せる前の確認を出さない',
+    );
+    assert.equal(delegationSettles(view('contract', [['A', {}]]), { release: 'delegate' }), '契約更改', '1人リーグの契約更改');
+    assert.equal(delegationSettles(view('camp', [['A', {}]]), { camp: 'delegate', tactics: 'delegate' }), 'キャンプ');
+    // 決まらない変更には出さない
+    assert.equal(delegationSettles(view('tryout', [['A', {}], ['B', {}]]), { tryout: 'delegate' }), null, 'ほかに決めていない人がいるのに確認を出す');
+    assert.equal(delegationSettles(view('tryout', [['A', {}]]), { release: 'delegate' }), null, '手続きと関係の無い分野で確認を出す');
+    assert.equal(delegationSettles(view('tryout', [['A', {}]]), { tryout: 'advice' }), null);
+    assert.equal(delegationSettles(view('tryout', [['A', { ready: true }]]), { tryout: 'delegate' }), null, '決定済みの人に確認を出す');
+    assert.equal(delegationSettles(view('tryout', [['A', { ready: true, delegated: true }]], { delegated: true }), { tryout: 'delegate' }), null);
+    assert.equal(delegationSettles(view('offseason', [['A', {}]]), { tryout: 'delegate' }), null);
+    assert.equal(delegationSettles({ teamName: 'A', members: [] }, { tryout: 'delegate' }), null, '手続きが無いときに確認を出す');
+    // 知らせ: 手続きが終わったときだけ言い分ける
+    const before = view('tryout', [['A', {}]]);
+    assert.equal(
+      staffModesDoneText({ modes: { tryout: 'delegate' } }, before, { phase: null }),
+      '任せ方を変えました。トライアウトは指導者の案で決まりました',
+    );
+    assert.equal(staffModesDoneText({ modes: { tryout: 'delegate' } }, before, before), '任せ方を変えました');
+    assert.equal(staffModesDoneText({ modes: { lineup: 'delegate' } }, before, { phase: null }), '任せ方を変えました');
+    assert.equal(staffModesDoneText({ modes: { tryout: 'delegate' } }, { phase: null }, { phase: null }), '任せ方を変えました');
+  }
+
+  // --- 操作が済んだときの文（`OnlineApp.jsx` の `COMMAND_MESSAGES`） ------------
+  // ⚠ **サーバーが受ける命令ごとに文があること**。無いと「保存しました」だけになり、
+  //    決定したのか下書きなのか、トレードが成立したのか申し込んだだけなのか分からなかった。
+  //    文の表は画面の部品の中にあるので、字面で押さえる
+  {
+    const service = await readFile(join(here, '..', '..', 'server', 'leagueService.mjs'), 'utf8');
+    const app = await readFile(join(here, '..', '..', 'src', 'online', 'OnlineApp.jsx'), 'utf8');
+    const types = [...new Set([...service.matchAll(/command\.type === '([a-zA-Z]+)'/g)].map((m) => m[1]))];
+    const table = app.slice(app.indexOf('const COMMAND_MESSAGES = {'), app.indexOf('\n};', app.indexOf('const COMMAND_MESSAGES = {')));
+    assert.ok(types.length > 10 && table, '命令の一覧か文の表が見つからない');
+    const missing = types.filter((type) => !new RegExp(`^  ${type}:`, 'm').test(table));
+    assert.deepEqual(missing, [], `済んだときの文が無い命令がある（「保存しました」だけになる）: ${missing.join(', ')}`);
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く）',
 );

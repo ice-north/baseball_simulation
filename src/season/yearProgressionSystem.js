@@ -1516,7 +1516,12 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [] }
     }
     newSeasonData.tournamentHistory = [...prevHistory, yearRecord];
     if (universityGraduationReport) {
-      newSeasonData.universityGraduationReport = universityGraduationReport;
+      // NPB の指名も入れておく（レポートの途中の保存を読み直したとき、オフシーズンの画面が
+      // 前の年のデータを持たずにレポートを出し直すため。`isYearAdvanced` を参照）
+      newSeasonData.universityGraduationReport = {
+        ...universityGraduationReport,
+        npbDrafted: seasonData.universityNpbDrafted || [],
+      };
     }
   } else {
     // 独立リーグモード: リーグ優勝・プレーオフ結果をアーカイブ
