@@ -31,6 +31,9 @@ await context.tracing.start({ screenshots: true, snapshots: true });
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+// console.error も拾う。一人用は「TEAMS_DATA を名前で引けない」などを console.error だけ出して
+// 黙って戻る所があり（CLAUDE.md の不変条件）、画面は動いたまま何も起きない
+page.on('console', (m) => { if (m.type() === 'error') errors.push(`console.error: ${m.text().slice(0, 300)}`); });
 // 確認ダイアログ（上書き保存など）は「はい」で進める。alert はそのまま記録する
 page.on('dialog', async (d) => {
   if (d.type() === 'alert') errors.push(`alert: ${d.message()}`);
@@ -156,7 +159,9 @@ try {
   // 1280×720 で打順のカードが窮屈でないこと（以前は 4/4/4 の3列で幅331px、体・疲のバーと打率が
   // 右端で139px切れ、名前の行が折り返していた）
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.waitForTimeout(400);
+  // 幅が変わり、画面の縮尺の当て直し（App.jsx の自動フィットは rAF で走る）が済むまで待つ
+  await page.waitForFunction(() => innerWidth === 1280);
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const fit = await ui.lineupCardFit();
   assert.ok(fit && fit.rows >= 5 && fit.overflow <= 1 && fit.wrapped === 0,
     `1280×720 のスタメン設定で打順のカードが窮屈: ${JSON.stringify(fit)}`);

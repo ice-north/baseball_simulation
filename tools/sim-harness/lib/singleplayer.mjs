@@ -115,6 +115,9 @@ export function driver(page) {
     async runCamp() {
       for (let i = 0; i < 12; i++) {
         await click('練習を実行');
+        // ⚠ 練習の結果が出るまで待ってから見る。click の 250ms だけで「次のクールへ」の有無を
+        //    読むと、重い端末で結果が間に合わずに途中のクールで抜けてしまう
+        await btn('次のクールへ').or(btn('キャンプ終了')).first().waitFor();
         if (!(await visible('次のクールへ'))) break;
         await click('次のクールへ');
       }
