@@ -19,6 +19,11 @@ import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineApi
 import jp.icenorth.baseball.shared.OnlineException
 import jp.icenorth.baseball.shared.OnlineJson
+import jp.icenorth.baseball.shared.str
+import jp.icenorth.baseball.shared.obj
+import jp.icenorth.baseball.shared.num
+import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.at
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -137,6 +142,43 @@ class AppViewModel internal constructor(
 
     /** 選手の詳細を開いている選手（名簿の生の形）。どの画面からでも同じシートで開く */
     var openPlayer by mutableStateOf<JsonObject?>(null)
+
+    /** 選手タブで見ている球団（null は自球団）。順位表の球団を押すと、ここに入れて選手タブへ移る */
+    var playersTeam by mutableStateOf<String?>(null)
+
+    /** 順位表から選手タブへ飛んだ回数（選手タブが「選手成績」の表に切り替える合図） */
+    var playersJump by mutableStateOf(0)
+        private set
+
+    fun showTeamPlayers(team: String) {
+        playersTeam = team
+        playersJump += 1
+    }
+
+    /**
+     * 球団と id（無ければ名前）から選手の詳細を開く。試合の成績表やタイトル争いの行には能力が載っていないので、
+     * 自球団は手元の名簿から、他球団は球団の読み込み（版ごとに覚えている）から探す。
+     * いまの名簿にいない選手（退団・移籍した）は、そのことを知らせる
+     */
+    fun openPlayerOf(team: String, id: Long?, name: String?) {
+        val epoch = sessionEpoch
+        viewModelScope.launch {
+            try {
+                val source = if (team == view?.teamName) raw else read("team", mapOf("team" to team))
+                val players = source.at("roster").list().mapNotNull { it.obj() }
+                fun idOf(p: JsonObject) = p.at("id").num()?.toLong()
+                fun nameOf(p: JsonObject) = p.at("name").str()
+                val found = id?.let { want -> players.firstOrNull { idOf(it) == want } }
+                    ?: name?.let { want -> players.firstOrNull { nameOf(it) == want } }
+                if (epoch != sessionEpoch) return@launch
+                if (found != null) openPlayer = found else message = "${name ?: "この選手"}は、いまこの球団の名簿にいません"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (epoch == sessionEpoch) handle(e)
+            }
+        }
+    }
 
     /** 引っ張って更新している間 */
     var refreshing by mutableStateOf(false)
@@ -310,6 +352,7 @@ class AppViewModel internal constructor(
         loadFailure = null
         raw = null
         openPlayer = null
+        playersTeam = null
         plan = null
         phaseDraft = null
         campDraft = null

@@ -1,6 +1,7 @@
 package jp.icenorth.baseball.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,7 +81,7 @@ internal fun StandingGroup.moveMark(index: Int): String? = when {
 }
 
 @Composable
-fun StandingsBoard(view: LeagueView) {
+fun StandingsBoard(view: LeagueView, onTeam: ((String) -> Unit)? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { standingGroups(view).forEach { group ->
         Section(group.title) {
             // 見出しの1行（数字が何か分かるように）
@@ -100,6 +101,8 @@ fun StandingsBoard(view: LeagueView) {
                 Row(
                     Modifier
                         .fillMaxWidth()
+                        // 球団を押すと、その球団の選手成績へ
+                        .then(if (onTeam != null) Modifier.clickable { onTeam(row.team) } else Modifier)
                         .background(
                             if (own) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainer,
                             RoundedCornerShape(6.dp),
@@ -142,7 +145,7 @@ fun StandingsBoard(view: LeagueView) {
 
 /** タイトル争い（リーグの上位） */
 @Composable
-fun LeadersBoard(view: LeagueView, boards: List<JsonObject>) {
+fun LeadersBoard(view: LeagueView, boards: List<JsonObject>, onPlayer: ((team: String, name: String) -> Unit)? = null) {
     var selected by remember { mutableStateOf(boards.first().at("id").str().orEmpty()) }
     val board = boards.firstOrNull { it.at("id").str() == selected } ?: boards.first()
     val digits = board.at("digits").int() ?: 0
@@ -150,7 +153,12 @@ fun LeadersBoard(view: LeagueView, boards: List<JsonObject>) {
         ChoiceRow(boards.map { it.at("id").str().orEmpty() to it.at("label").str().orEmpty() }, board.at("id").str()) { selected = it }
         board.at("rows").list().mapNotNull { it.obj() }.take(5).forEachIndexed { i, row ->
             val mine = row.at("team").str() == view.teamName
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            val team = row.at("team").str().orEmpty()
+            val name = row.at("name").str().orEmpty()
+            Row(
+                Modifier.fillMaxWidth().then(if (onPlayer != null) Modifier.clickable { onPlayer(team, name) } else Modifier).padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text("${i + 1}", modifier = Modifier.width(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(row.at("name").str().orEmpty(), fontWeight = if (mine) FontWeight.Bold else FontWeight.Normal, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                 Text(view.teamShort(row.at("team").str().orEmpty()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 12.dp))
@@ -188,7 +196,7 @@ fun NewsBoard(view: LeagueView, raw: JsonObject) {
     val history = raw.at("history").list().mapNotNull { it.obj() }
     Section("リーグ便り") {
         if (notices.isEmpty() && history.isEmpty()) {
-            Muted("リーグの動きがここに届きます。")
+            Muted("まだお知らせがありません。ドラフト・トライアウト・昇格と降格・成立したトレードと、過去のシーズンの最終順位がここに並びます。")
             return@Section
         }
         val options = notices.mapIndexed { i, n ->

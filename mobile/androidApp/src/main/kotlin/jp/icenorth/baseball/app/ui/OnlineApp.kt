@@ -185,10 +185,11 @@ fun OnlineApp(model: AppViewModel) {
                         Tab.Home -> CompositionLocalProvider(LocalAwaitingDecision provides (view?.phase != null)) {
                             HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
                         }
-                        Tab.Games -> GamesScreen(model)
-                        Tab.Players -> PlayersScreen(model)
+                        // ⚠ 引っ張って更新はホームだけだった。試合・選手・手続きでも同じ操作で読み直せるようにする
+                        Tab.Games -> Refreshable(model) { GamesScreen(model, onOpenTeam = { model.showTeamPlayers(it); tab = Tab.Players }) }
+                        Tab.Players -> Refreshable(model) { PlayersScreen(model) }
                         Tab.Plan -> PlanScreen(model)
-                        Tab.Procedures -> ProceduresScreen(model, onHome = { tab = Tab.Home })
+                        Tab.Procedures -> Refreshable(model) { ProceduresScreen(model, onHome = { tab = Tab.Home }) }
                     }
                     }
                 }
@@ -258,3 +259,14 @@ private const val AUTO_RELOAD_MS = 60_000L
 /** 自分の番の手続きは無く、届いた提案だけがある（ホームのお知らせから、トレードの側を直接開く） */
 private fun tradesOnly(raw: kotlinx.serialization.json.JsonObject?): Boolean =
     pendingProcedure(raw) == null && waitingTradeCount(raw) > 0
+
+/** 引っ張って最新の状態に読み直す枠（ホームと同じ動き） */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun Refreshable(model: AppViewModel, content: @Composable () -> Unit) {
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = model.refreshing,
+        onRefresh = { model.reload(pull = true) },
+        modifier = Modifier.fillMaxSize(),
+    ) { content() }
+}

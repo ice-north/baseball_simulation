@@ -59,7 +59,14 @@ fun PlayersScreen(model: AppViewModel) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var mode by rememberSaveable { mutableStateOf(PlayersMode.Season) }
-    var team by rememberSaveable { mutableStateOf(view.teamName.orEmpty()) }
+    // 見ている球団はモデルに置く（試合タブの順位表から「この球団の選手成績」へ飛べるように）
+    val team = model.playersTeam ?: view.teamName.orEmpty()
+    // 順位表から飛んできたら、能力ランキングを開いていても球団の表に切り替える（同じ合図では一度だけ）
+    var seenJump by rememberSaveable { mutableStateOf(model.playersJump) }
+    if (seenJump != model.playersJump) {
+        seenJump = model.playersJump
+        if (mode == PlayersMode.Ranking) mode = PlayersMode.Season
+    }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) }, Modifier.weight(1f).padding(top = 8.dp))
@@ -71,7 +78,7 @@ fun PlayersScreen(model: AppViewModel) {
         }
         when (mode) {
             PlayersMode.Ranking -> AbilityRanking(model, view, raw)
-            else -> TeamStats(model, view, raw, team, { team = it }, career = mode == PlayersMode.Career)
+            else -> TeamStats(model, view, raw, team, { model.playersTeam = it }, career = mode == PlayersMode.Career)
         }
     }
 }
@@ -196,10 +203,15 @@ private fun AbilityRanking(model: AppViewModel, view: LeagueView, raw: JsonObjec
     val board = boards.firstOrNull { it.at("id").str() == selected } ?: boards.first()
     val velocity = board.at("velocity").bool() == true
     val stamina = board.at("stamina").bool() == true
+    // 自球団の選手だけに絞る（順位はリーグ全体の中の順位のまま）
+    var ownOnly by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         ChipTabs(boards.map { it.at("id").str().orEmpty() to it.at("label").str().orEmpty() }, board.at("id").str().orEmpty(), { selected = it })
+        Box(Modifier.padding(horizontal = 16.dp)) { ChoiceRow(listOf("all" to "リーグ全体", "own" to "自球団だけ"), if (ownOnly) "own" else "all") { ownOnly = it == "own" } }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-            board.at("rows").list().mapNotNull { it.obj() }.forEachIndexed { i, row ->
+            val ranked = board.at("rows").list().mapNotNull { it.obj() }.withIndex().filter { !ownOnly || it.value.at("team").str() == view.teamName }
+            if (ranked.isEmpty()) Muted("この項目の上位に、自球団の選手はいません。", Modifier.padding(vertical = 12.dp))
+            ranked.forEach { (i, row) ->
                 val mine = row.at("team").str() == view.teamName
                 Row(
                     Modifier.fillMaxWidth().clickable { model.openPlayer = row }.padding(vertical = 10.dp),

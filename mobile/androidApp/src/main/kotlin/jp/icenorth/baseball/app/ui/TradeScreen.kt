@@ -117,6 +117,7 @@ fun TradeScreen(model: AppViewModel, raw: JsonObject) {
             )
         }
         if (partners.isEmpty()) Muted("トレードの相手になる球団がありません。")
+        else if (trades.isEmpty() && model.parkedTradeDraft == null) Muted("いま進んでいる提案はありません。届いた提案と、返事を待っている提案がここに並びます。")
         if (sent.isNotEmpty()) {
             Caption("相手の返事待ち")
             sent.forEach { TradeCard(model, view, raw, it) }
@@ -389,6 +390,11 @@ private fun StepLine(step: TradeStep, counter: Boolean) {
 @Composable
 private fun PartnerStep(view: LeagueView, raw: JsonObject, current: String?, modifier: Modifier, onPick: (String) -> Unit) {
     val (partners, humans) = tradePartners(view, raw)
+    val places = remember(view.standings, view.teamLeagues) {
+        standingGroups(view).flatMap { group ->
+            group.rows.mapIndexed { i, row -> row.team to "${group.title.removeSuffix(" 順位").removeSuffix("順位")}${i + 1}位 · ${row.wins}勝${row.losses}敗${if (row.draws > 0) "${row.draws}分" else ""}" }
+        }.toMap()
+    }
     LazyColumn(modifier, contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         listOf("参加者の球団" to partners.filter { it in humans }, "CPU球団" to partners.filter { it !in humans }).forEach { (title, names) ->
             if (names.isEmpty()) return@forEach
@@ -400,7 +406,11 @@ private fun PartnerStep(view: LeagueView, raw: JsonObject, current: String?, mod
                     modifier = Modifier.fillMaxWidth().clickable { onPick(name) },
                 ) {
                     Row(Modifier.padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(view.teamLabel(name), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Column(Modifier.weight(1f)) {
+                            Text(view.teamLabel(name), fontWeight = FontWeight.SemiBold)
+                            // どんな球団か（部・順位・勝敗）。選ぶ前の手がかり
+                            places[name]?.let { Muted(it) }
+                        }
                         Muted("›")
                     }
                 }

@@ -46,11 +46,12 @@ import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
 /** 試合タブ: 自球団／リーグ全体の試合結果（年度・6試合ずつ）と、1試合の打撃・投手成績 */
 @Composable
-fun GamesScreen(model: AppViewModel) {
+fun GamesScreen(model: AppViewModel, onOpenTeam: (String) -> Unit = {}) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var open by rememberSaveable { mutableStateOf<String?>(null) }
@@ -60,7 +61,8 @@ fun GamesScreen(model: AppViewModel) {
     var year by rememberSaveable { mutableStateOf(years.lastOrNull() ?: 1) }
     var scope by rememberSaveable { mutableStateOf("own") }
     var section by rememberSaveable { mutableStateOf("results") }
-    var page by rememberSaveable { mutableStateOf(0) }
+    // ⚠ ページ送り（6試合ずつ）はやめ、下の「続きを表示」で足していく（1シーズンを見返すのに何十回も押していた）
+    var pages by rememberSaveable { mutableStateOf(1) }
     val current = open
     if (current != null) {
         BackHandler { open = null }
@@ -72,10 +74,12 @@ fun GamesScreen(model: AppViewModel) {
     var loading by remember { mutableStateOf(false) }
     // 「読み直す」を押した回数（鍵に入れて読み直す）
     var attempt by remember { mutableStateOf(0) }
-    LaunchedEffect(year, scope, page, view.revision, attempt) {
+    LaunchedEffect(year, scope, pages, view.revision, attempt) {
         loading = true
         try {
-            data = model.read("games", mapOf("year" to "$year", "page" to "$page", "scope" to scope))
+            // 読んだページは版ごとに覚えているので、足したぶんだけ通信する
+            val parts = (0 until pages).map { model.read("games", mapOf("year" to "$year", "page" to "$it", "scope" to scope, "size" to "$GAMES_CHUNK")) }
+            data = JsonObject(parts.first() + ("games" to JsonArray(parts.flatMap { it.at("games").list() })))
             failure = null
         } catch (e: Exception) {
             // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
@@ -95,19 +99,18 @@ fun GamesScreen(model: AppViewModel) {
             { section = it },
         )
         when (section) {
-            "standings" -> { StandingsBoard(view); return@Column }
+            "standings" -> { StandingsBoard(view, onOpenTeam); return@Column }
             "leaders" -> {
                 val boards = raw.at("leaders").list().mapNotNull { it.obj() }.filter { it.at("rows").list().isNotEmpty() }
-                if (boards.isEmpty()) Muted("まだ記録がありません。") else LeadersBoard(view, boards)
+                if (boards.isEmpty()) Muted("まだ記録がありません。") else LeadersBoard(view, boards) { team, name -> model.openPlayerOf(team, null, name) }
                 return@Column
             }
             "news" -> { NewsBoard(view, raw); return@Column }
         }
-        ChoiceRow(listOf("own" to "自球団", "league" to "リーグ全体"), scope) { scope = it; page = 0 }
-        if (years.size > 1) ChoiceRow(years.map { "$it" to "${it}年目" }, "$year") { year = it.toInt(); page = 0 }
+        ChoiceRow(listOf("own" to "自球団", "league" to "リーグ全体"), scope) { scope = it; pages = 1 }
+        if (years.size > 1) ChoiceRow(years.map { "$it" to "${it}年目" }, "$year") { year = it.toInt(); pages = 1 }
         val games = data?.at("games").list().mapNotNull { it.obj() }
         val count = data?.at("count").int() ?: 0
-        val size = data?.at("size").int() ?: 6
         when {
             failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 })
             data == null -> Muted("読み込み中…")
@@ -119,16 +122,17 @@ fun GamesScreen(model: AppViewModel) {
                 }
             }
         }
-        if (count > size) {
-            val pages = (count + size - 1) / size
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { page -= 1 }, enabled = page > 0) { Text("新しい") }
-                Text(if (loading) "読み込み中…" else "${page + 1} / $pages", modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                OutlinedButton(onClick = { page += 1 }, enabled = page + 1 < pages) { Text("古い") }
+        val shown = games.size
+        if (data != null && failure == null && count > shown) {
+            OutlinedButton(onClick = { pages += 1 }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+                Text(if (loading) "読み込み中…" else "続きを表示（残り${count - shown}試合）")
             }
         }
     }
 }
+
+/** 試合結果を1回に読む数（「続きを表示」で足す数） */
+private const val GAMES_CHUNK = 20
 
 private fun dateText(g: JsonObject) = g.at("date").let { d -> "${d.at("month").int() ?: ""}/${d.at("day").int() ?: ""}" }
 
@@ -142,7 +146,7 @@ private fun GameRow(view: LeagueView, g: JsonObject, onOpen: () -> Unit) {
     val result = if (mine == home || mine == away) {
         val own = if (mine == home) hs else `as`
         val their = if (mine == home) `as` else hs
-        if (own == null || their == null) null else if (own > their) "○" to WinColor else if (own < their) "●" to LoseColor else "△" to MaterialTheme.colorScheme.onSurfaceVariant
+        if (own == null || their == null) null else if (own > their) "勝" to WinColor else if (own < their) "負" to LoseColor else "分" to MaterialTheme.colorScheme.onSurfaceVariant
     } else null
     Row(Modifier.fillMaxWidth().testTag("game-row").clickable(onClick = onOpen).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(dateText(g), modifier = Modifier.width(44.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
@@ -209,7 +213,7 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
                 }
                 listOf(away, home).forEach { team ->
                     val players = g.at("teams", team).list().mapNotNull { it.obj() }
-                    if (players.isNotEmpty()) BoxScore(view, team, players)
+                    if (players.isNotEmpty()) BoxScore(view, team, players) { p -> model.openPlayerOf(team, p.at("id").num()?.toLong(), p.at("name").str()) }
                 }
                 val changes = g.at("pitcherChanges").list().mapNotNull { it.obj() }
                 if (changes.isNotEmpty()) {
@@ -299,29 +303,30 @@ private val PITCHER_COLS = listOf(
 )
 
 @Composable
-private fun BoxScore(view: LeagueView, team: String, players: List<JsonObject>) {
+private fun BoxScore(view: LeagueView, team: String, players: List<JsonObject>, onPlayer: (JsonObject) -> Unit) {
     val batters = players
         .filter { (it.at("battingOrder").int() ?: 0) > 0 || (it.at("batting", "plateAppearances").num() ?: 0.0) > 0 }
         .sortedBy { it.at("battingOrder").int()?.takeIf { o -> o > 0 } ?: 99 }
     val pitchers = players.filter { (it.at("pitching", "battersFaced").num() ?: 0.0) > 0 || (it.at("pitching", "inningsPitched").num() ?: 0.0) > 0 }
     Section(view.teamLabel(team)) {
-        Table(batters, BATTER_COLS) { p -> "${p.at("battingOrder").int()?.takeIf { it > 0 }?.toString() ?: " "} ${positionLabel(p.at("position").str())} ${p.at("name").str().orEmpty()}" }
+        Table(batters, BATTER_COLS, onPlayer) { p -> "${p.at("battingOrder").int()?.takeIf { it > 0 }?.toString() ?: " "} ${positionLabel(p.at("position").str())} ${p.at("name").str().orEmpty()}" }
         if (pitchers.isNotEmpty()) {
             Muted("投手")
-            Table(pitchers, PITCHER_COLS) { it.at("name").str().orEmpty() }
+            Table(pitchers, PITCHER_COLS, onPlayer) { it.at("name").str().orEmpty() }
         }
     }
 }
 
 @Composable
-private fun Table(rows: List<JsonObject>, cols: List<Col>, name: (JsonObject) -> String) {
+private fun Table(rows: List<JsonObject>, cols: List<Col>, onPlayer: (JsonObject) -> Unit, name: (JsonObject) -> String) {
     Column {
         Row {
             Text("", modifier = Modifier.weight(1f))
             cols.forEach { Text(it.label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(it.width), textAlign = TextAlign.End) }
         }
         rows.forEach { p ->
-            Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 行を押すと選手の詳細（押しやすい高さにする）
+            Row(Modifier.fillMaxWidth().clickable { onPlayer(p) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(name(p), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 cols.forEach { Text(it.get(p), fontSize = 13.sp, modifier = Modifier.width(it.width), textAlign = TextAlign.End) }
             }
