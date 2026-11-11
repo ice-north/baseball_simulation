@@ -91,6 +91,8 @@ fun OnlineApp(model: AppViewModel) {
     var renaming by remember { mutableStateOf(false) }
     var showTips by rememberSaveable { mutableStateOf(false) }
     val raw = model.raw
+    // 今のスタメン・ローテに当てはまるTIPS（保存済みの編成で見る＝実際に起きること）。左下の印・TIPSの一覧・メニューの数に使う
+    val situations = remember(model.view?.roster, model.view?.lineup) { situationTips(model.view?.roster.orEmpty(), model.view?.lineup) }
     // 画面を開いている間は、ときどき読み直す（届いたトレードの提案や進行に気づけるように）。
     // アプリに戻ってきたときもすぐ読む。裏に回っている間は読まない
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -159,9 +161,7 @@ fun OnlineApp(model: AppViewModel) {
                 }
             },
         ) { padding ->
-            // 今のスタメン・ローテに当てはまるTIPS（保存済みの編成で見る＝実際に起きること）
             val view = model.view
-            val situations = remember(view?.roster, view?.lineup) { situationTips(view?.roster.orEmpty(), view?.lineup) }
             // 届いた提案のうち、まだ知らせていないもの。トレードを開いたら知らせ終えたことにする
             // （新しい提案を作っている間は届いた提案の一覧が見えないので、知らせ終えたことにしない）
             val onTrades = tab == Tab.Procedures && model.procTrade && model.tradeDraft == null
@@ -202,7 +202,7 @@ fun OnlineApp(model: AppViewModel) {
                     when (tab) {
                         // ⚠ 手続き中は「次の進行まで」を「停止中」ではなく「手続きの決定待ち」にする（Web 版 nextAdvanceText と同じ）
                         Tab.Home -> CompositionLocalProvider(LocalAwaitingDecision provides (view?.phase != null)) {
-                            HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { gamesSection = "results"; tab = Tab.Games }, onOpenTips = { showTips = true })
+                            HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { gamesSection = "results"; tab = Tab.Games }, onOpenTips = { showTips = true }, tipsNow = situations.size)
                         }
                         // ⚠ 引っ張って更新はホームだけだった。試合・選手・手続きでも同じ操作で読み直せるようにする
                         Tab.Games -> Refreshable(model) {
@@ -231,7 +231,7 @@ fun OnlineApp(model: AppViewModel) {
             }
         }
         model.openPlayer?.let { PlayerSheet(model, it) }
-        if (showTips) TipsScreen { showTips = false }
+        if (showTips) TipsScreen(situations, onRead = model::markSituationTipsSeen) { showTips = false }
         if (renaming) RenameDialog(model) { renaming = false }
         // ⚠ 保存・提出の間は画面全体を塞ぐ（いちばん上に重ねる）
         if (model.busy) BusyOverlay(model.busyLabel)

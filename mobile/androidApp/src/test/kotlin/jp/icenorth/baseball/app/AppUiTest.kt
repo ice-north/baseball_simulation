@@ -8,7 +8,9 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -171,6 +173,19 @@ class AppUiTest {
         rule.onNodeWithTag("tab-Games").assertIsSelected()
         rule.onNodeWithTag("chip-standings").assertIsSelected()
         rule.runOnIdle { assertNull(model.playersTeam) }
+    }
+
+    @Test fun situationTipsCanBeReadAgainFromTheMenu() {
+        open(""""roster":[{"id":1,"name":"疲れた人","position":"first","fatigue":85}],"lineup":{"battingOrder":[{"playerId":1,"position":"first","battingOrder":1}],"starters":[]}""")
+        // 未読なので左下に印が出る
+        rule.onNodeWithTag("situation-tips").assertExists()
+        rule.onAllNodesWithContentDescription("メニュー").onFirst().performClick()
+        rule.onNodeWithText("ゲームのTIPS（いま当てはまる1件）").performClick()
+        // ⚠ 印は未読のときだけ出す（いしだ決定）。読んだあとも、当てはまる人はTIPSの一覧の先頭で見直せる
+        //    （以前は who を出す入口が印だけで、一度読むと同じ種類のTIPSでは二度と見られなかった）
+        rule.onNodeWithText("いまの状態に当てはまるTIPS").assertExists()
+        rule.onNodeWithText("疲れた人（疲労85）").assertExists()
+        rule.runOnIdle { assertTrue("fielderRest" in model.seenSituationTips) }
     }
 
     @Test fun homePaperTellsWhenANewerAppIsOut() {

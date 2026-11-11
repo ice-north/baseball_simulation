@@ -14,7 +14,7 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.alpha
@@ -51,10 +51,17 @@ import jp.icenorth.baseball.shared.GameTip
 import jp.icenorth.baseball.shared.TIP_CATEGORIES
 import jp.icenorth.baseball.shared.hasUnreadTips
 
-/** ゲームのTIPS一覧（ホームから開く。戻るボタンで閉じる） */
+/**
+ * ゲームのTIPS一覧（ホームから開く。戻るボタンで閉じる）。
+ * @param situations 今のスタメン・ローテに当てはまるTIPS。あれば先頭に、当てはまる人（「名前（疲労85）」）と一緒に出す。
+ *   ⚠ 左下の印は未読のときだけ出す（いしだ決定 2026-11-11）。読んだあと、同じ種類のTIPSに別の選手が当てはまっても
+ *   印は出ないので、当てはまる人を見直す入口をここ（ホームのメニュー・紙面のコラム・印のダイアログから開く）に置く
+ * @param onRead 当てはまるTIPSを見せたら読んだことにする（印と同じ扱い）
+ */
 @Composable
-fun TipsScreen(close: () -> Unit) {
+fun TipsScreen(situations: List<SituationTip> = emptyList(), onRead: (Set<String>) -> Unit = {}, close: () -> Unit) {
     BackHandler(onBack = close)
+    LaunchedEffect(situations) { if (situations.isNotEmpty()) onRead(situations.map { it.tip.id }.toSet()) }
     Surface(Modifier.fillMaxSize().testTag("tips"), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -66,6 +73,10 @@ fun TipsScreen(close: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item(key = "lead") { Muted("画面には出ないけれど、勝敗や成長に効くゲームの決まりです。") }
+                if (situations.isNotEmpty()) {
+                    item(key = "now") { Caption("いまの状態に当てはまるTIPS") }
+                    items(situations, key = { "now-" + it.tip.id }) { TipCard(it.tip, it.who) }
+                }
                 TIP_CATEGORIES.forEach { category ->
                     item(key = "h-$category") { Caption(category) }
                     items(GAME_TIPS.filter { it.category == category }, key = { it.title }) { TipCard(it) }
@@ -75,11 +86,15 @@ fun TipsScreen(close: () -> Unit) {
     }
 }
 
+/** @param who 当てはまる人（今の状態のTIPSだけ。「名前（疲労85）」） */
 @Composable
-private fun TipCard(tip: GameTip) {
+private fun TipCard(tip: GameTip, who: List<String> = emptyList()) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(tip.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            if (who.isNotEmpty()) {
+                Text(who.joinToString("、"), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
+            }
             Text(tip.body, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -102,7 +117,7 @@ fun SituationTipsBadge(
     // ⚠ 開いているかは回転でも残す（remember だと、端末を回すとダイアログが閉じ、読んだ扱いで印も消えていた）
     var open by rememberSaveable { mutableStateOf(false) }
     // ⚠ 印は**未読があるときだけ**出す（いしだ決定 2026-11-11）。読んだあとも居座ると、いつも角に物がある。
-    //    読んだTIPSは、ホームのメニューの「TIPS」からいつでも読み返せる
+    //    読んだTIPSと当てはまる人は、ホームのメニューの「ゲームのTIPS」の先頭でいつでも読み返せる（[TipsScreen]）
     if (!open && !hasUnreadTips(tips, seen)) return
     val alpha = if (!open && hasUnreadTips(tips, seen)) {
         val pulse by rememberInfiniteTransition(label = "tip-pulse").animateFloat(

@@ -82,7 +82,16 @@ import androidx.compose.material3.HorizontalDivider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: () -> Unit, onRename: () -> Unit, onOpenGames: () -> Unit = {}, onOpenTips: () -> Unit = {}) {
+fun HomeScreen(
+    model: AppViewModel,
+    onOpenLineup: () -> Unit,
+    onOpenProcedures: () -> Unit,
+    onRename: () -> Unit,
+    onOpenGames: () -> Unit = {},
+    onOpenTips: () -> Unit = {},
+    /** 今のスタメン・ローテに当てはまるTIPSの数（メニューの「ゲームのTIPS」に添える） */
+    tipsNow: Int = 0,
+) {
     val view = model.view
     PullToRefreshBox(
         isRefreshing = model.refreshing,
@@ -198,7 +207,7 @@ fun HomeScreen(model: AppViewModel, onOpenLineup: () -> Unit, onOpenProcedures: 
                     style = style,
                     page = page,
                     nextAdvanceAt = view.nextAdvanceAt,
-                    menu = { HomeMenu(model, style, onRename, onOpenTips, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }) },
+                    menu = { HomeMenu(model, style, onRename, onOpenTips, tipsNow, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }) },
                     onLink = { link ->
                         when (link) {
                             LINK_LINEUP -> onOpenLineup()
@@ -318,7 +327,7 @@ private fun ChronicleHeading(text: String) {
 
 /** 紙面の右上のメニュー（更新・名前の変更・TIPS・ホームの見た目・ログアウト） */
 @Composable
-private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit) {
+private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, tipsNow: Int, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     // ⚠ ログアウトは確かめてから（メニューの一番下で押し間違えやすく、戻るにはメールとパスワードを入れ直す）
     var askLogout by remember { mutableStateOf(false) }
@@ -336,7 +345,9 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("最新に更新") }, onClick = { open = false; model.reload(pull = true) })
             DropdownMenuItem(text = { Text("球団名・名前を変える") }, onClick = { open = false; onRename() })
-            DropdownMenuItem(text = { Text("ゲームのTIPS") }, onClick = { open = false; onOpenTips() })
+            // ⚠ 当てはまるTIPSがあれば数を添える（一覧の先頭に、当てはまる人と一緒に出る。左下の印は未読のときだけなので、
+            //    読んだあとに「誰が疲れているか」を見直す入口はここ）
+            DropdownMenuItem(text = { Text("ゲームのTIPS" + if (tipsNow > 0) "（いま当てはまる${tipsNow}件）" else "") }, onClick = { open = false; onOpenTips() })
             DropdownMenuItem(text = { Text("過去の見出し") }, onClick = { open = false; onOpenBack() })
             DropdownMenuItem(text = { Text("球団史・記録") }, onClick = { open = false; onOpenChronicle() })
             HorizontalDivider()
