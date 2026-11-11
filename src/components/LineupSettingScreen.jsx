@@ -1354,15 +1354,18 @@ export const LineupSettingContent = ({
             <b className="text-cyan-200">試合に出た選手ほど伸びます。</b>1年フル出場した若手は、ほとんど出番の無かった選手の<b className="text-cyan-200">2倍以上</b>成長します（実測: 300打席で能力合計 +12.7 に対し、0打席では +5.8）。
             いま勝つために主力を並べるか、数年後のために若手を我慢して使うか——<b className="text-cyan-200">スタメンを決めることは育成方針を決めること</b>でもあります。
           </TutorialHint>
-          {/* ⚠ md 以上（PC）は「打順 7/12 ＋ 右の列に守備配置と控えを縦に積む（5/12）」。
+          {/* ⚠ 1152px 以上（PC）は「打順 7/12 ＋ 右の列に守備配置と控えを縦に積む（5/12）」。
               以前は 4/4/4 の3列で、1280幅だと打順のカードが331pxしか無く、9行中8行で名前の行が
               折り返し、体・疲のバーと打率が右端で切れていた（行の中身は約480px要る）。比だけ変えると
               守備配置の図が250px前後に縮んで字が12pxを割るので、図と控えを縦に積んで打順に幅を回す。
+              ⚠ md〜1151px は打順を全幅にして、守備配置と控えをその下に積む。7/12 のままだと
+              1024幅で打順のカードが441pxしか無く、打点が右端で切れ、控えの名前が2〜3行に折り返した
+              （1100幅で486px。名前の長さで足りなくなるので、境目は少し余裕を見て 1152px）。
               md 未満は従来どおり3列のまま（右の列の入れ物は display: contents で消える）。
               ⚠ md 未満はオンラインのスマホ版（OnlineLineup.jsx）からも使われている */}
           <div className="grid grid-cols-12 gap-4">
-            {/* 左側: スタメン (4/12、PC は 7/12) */}
-            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 md:col-span-7 md:self-start overflow-hidden">
+            {/* 左側: スタメン (4/12、md〜1151px は全幅、1152px 以上は 7/12) */}
+            <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 md:col-span-12 min-[1152px]:col-span-7 md:self-start overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-700/50">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="font-semibold text-white text-sm whitespace-nowrap">スタメン設定</h2>
@@ -1619,8 +1622,8 @@ export const LineupSettingContent = ({
               </div>
             </div>
 
-            {/* 右の列（PC）: 守備配置の上に控えを積む。md 未満は contents で3列に戻る */}
-            <div className="contents md:col-span-5 md:flex md:flex-col md:gap-4 md:min-w-0">
+            {/* 右の列（PC）: 守備配置の上に控えを積む。md〜1151px は打順の下に全幅で積む。md 未満は contents で3列に戻る */}
+            <div className="contents md:col-span-12 min-[1152px]:col-span-5 md:flex md:flex-col md:gap-4 md:min-w-0">
             {/* 中央: ミニダイアモンド */}
             <div className="bg-surface-2 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden p-3">
               <h2 className="font-semibold text-white text-sm mb-2 text-center">守備配置</h2>
