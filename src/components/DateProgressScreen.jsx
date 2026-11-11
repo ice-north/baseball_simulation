@@ -2663,8 +2663,10 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                             <td className="py-1.5 px-0.5 text-center">
                               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${index === 0 ? 'bg-yellow-500/90 text-black' : index === 1 ? 'bg-gray-400/80 text-black' : index === 2 ? 'seg-on' : 'seg'}`}>{index + 1}</span>
                             </td>
-                            <td className={`py-1.5 px-1 font-bold text-sm ${isUser ? 'text-yellow-300' : ''}`}>
-                              {team.team}
+                            {/* 順位表は略称（レギュレーションの「略称はカレンダー・順位表で使用」）。正式名だと
+                                「徳島インディゴソック／ス」のように1〜2文字だけ次の行に落ちていた。正式名は title で読める。 */}
+                            <td className={`py-1.5 px-1 font-bold text-sm whitespace-nowrap ${isUser ? 'text-yellow-300' : ''}`} title={team.team}>
+                              {getTeamAbbreviation(team.team)}
                               {isUser && <span className="ml-1 text-xs text-blue-400 font-bold">YOU</span>}
                             </td>
                             <td className="py-1.5 px-0.5 text-center text-white text-xs">{team.gamesPlayed || 0}</td>
