@@ -26,12 +26,15 @@ export default function TutorialHint({ id, title, children, className = '' }) {
 
   if (!visible) return null;
 
+  // ⚠ 枠は不透明（bg-surface-2）にして、中はカードの語彙（index.css の「文字色の決まり」）で書く。
+  //    ヒントはほとんど地色（明るい紙）の上に置かれる。以前の半透明の bg-cyan-950/40 は紙が透けて、
+  //    本文が 3.1:1、「ヒントを今後表示しない」が 2.47:1 だった（7つの画面が使う）
   return (
-    <div className={`relative flex items-start gap-2.5 rounded-lg border border-cyan-500/40 bg-cyan-950/40 px-3 py-2.5 mb-3 ${className}`}>
+    <div className={`relative flex items-start gap-2.5 rounded-lg border border-cyan-500 bg-surface-2 px-3 py-2.5 mb-3 ${className}`}>
       <span className="text-lg leading-none mt-0.5">💡</span>
       <div className="flex-1 min-w-0">
         {title && <div className="text-sm font-bold text-cyan-200 mb-0.5">{title}</div>}
-        <div className="text-xs text-gray-200 leading-relaxed">{children}</div>
+        <div className="text-xs text-gray-100 leading-relaxed">{children}</div>
         <div className="mt-2 flex items-center gap-3">
           <button
             onClick={() => { markHintSeen(id); setVisible(false); }}

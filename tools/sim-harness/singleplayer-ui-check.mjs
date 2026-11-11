@@ -64,7 +64,12 @@ try {
   await groundContrast('マニュアル');
 
   step('独立リーグを新しく始めて、初回のトライアウトで指名する');
-  await ui.newIndependentTryout();
+  await ui.newIndependentTryout({ keepHint: true });
+  // ヒントの枠（TutorialHint）も地色の上に載る。driver の click() は押す前にヒントを消すので、
+  // 消す前に1回測る（以前は枠が半透明で、本文が 3.1:1・「ヒントを今後表示しない」が 2.47:1 だった）
+  assert.ok(await ui.visible('ヒントを今後表示しない'), '前提: トライアウトのヒントが出ている');
+  await groundContrast('トライアウト（ヒントつき）');
+  await ui.dismissHint();
   const first = await ui.tryoutState();
   assert.equal(first.got, 0, 'トライアウトの初めから獲得選手がいる');
   // 行を押しただけでは決まらない（選ぶ→「指名する」の2段）

@@ -93,12 +93,16 @@ export function driver(page) {
       await click('確定してシーズン開始');
       await page.getByTestId('dev-advance').waitFor();
     },
-    // 独立リーグ（四国・徳島）で新しく始めて、初回のトライアウトで自分の番を待つ
-    async newIndependentTryout() {
+    // 独立リーグ（四国・徳島）で新しく始めて、初回のトライアウトで自分の番を待つ。
+    // keepHint: ヒント（TutorialHint）を消さずに待つ（ヒントの枠を測るとき。消すのは dismissHint）
+    async newIndependentTryout({ keepHint = false } = {}) {
       await page.goto(`${BASE}/?dev=1`);
       for (const t of ['はじめから', '独立リーグ', '四国アイランドリーグplus', '徳島インディゴソックス']) await click(t);
-      await this.waitTryoutTurn();
+      if (keepHint) await page.getByText('あなたの指名順です').waitFor({ timeout: 120000 });
+      else await this.waitTryoutTurn();
     },
+    // 出ているヒントを「ヒントを今後表示しない」で消す（click() は押す前に毎回これを呼ぶ）
+    dismissHint,
     // トライアウトで自分の番が来るまで待つ
     async waitTryoutTurn() {
       await dismissHint();
