@@ -371,7 +371,9 @@ export default function OnlineApp() {
   };
   // 済んだら画面に出した文を返す。`message` は文か `(送ったあとのビュー, 送る前のビュー) => 文`
   //    （画面の側で結果を言い分けたいとき。返したものが空なら `COMMAND_MESSAGES` の文）
-  const command = async (type, payload, { message } = {}) => {
+  // ⚠ `toast: false` は文を返すだけで、右上（PCは右下）の帯に出さない。画面の側が同じ文を
+  //    すぐ横に出すときに使う（スマホのトレードの返事。帯が枠内の文に重なって2つ出ていた）
+  const command = async (type, payload, { message, toast = true } = {}) => {
     const current = authRef.current;
     const before = viewRef.current;
     const checkSession = (credentials) => {
@@ -426,7 +428,7 @@ export default function OnlineApp() {
       (typeof message === 'function' ? message(viewRef.current, before) : message) ||
       (typeof known === 'function' ? known(payload, before, viewRef.current) : known) ||
       '保存しました';
-    setMessage(text);
+    if (toast) setMessage(text);
     return text;
   };
   const login = (fields) =>

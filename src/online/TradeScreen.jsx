@@ -856,6 +856,10 @@ function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }
   const getEntries = trade.mine ? trade.want : trade.offer;
   const theirs = usePartnerRoster(view, partner);
   // 返事を送り、結果の文をページの上に出す（成立・断ると、このカードは消える）
+  // ⚠ **スマホは共通の帯（トースト）を出さない**。結果は「トレードの返事」の枠の文
+  //    （`TradeResult`）に出していて、帯がそのすぐ上に浮いて同じ文が2つ重なっていた。
+  //    枠の文は次の操作まで残るので、すぐ消える帯の方をやめる。PCは帯が右下・文がページの
+  //    上と離れていて、下の方のカードで返事をしたときは帯でしか見えないので残す
   const respond = async (action, payload, players = {}) => {
     let text = '';
     const outcome = await run(async () => {
@@ -871,6 +875,7 @@ function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }
               give: players.give || [],
               get: players.get || [],
             }),
+          toast: !mobile,
         },
       );
     });

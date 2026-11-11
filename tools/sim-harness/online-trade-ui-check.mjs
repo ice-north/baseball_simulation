@@ -562,6 +562,21 @@ try {
       .locator('.online-trade-result')
       .filter({ hasText: 'トレードが成立しました' })
       .waitFor();
+    // 成立の知らせは1つだけ（共通の帯が枠の文の上に浮いて、同じ文が2つ重なっていた。再監査 F14）
+    assert.deepEqual(
+      await m.evaluate(() =>
+        [...document.querySelectorAll('body *')]
+          .filter(
+            (n) =>
+              n.checkVisibility() &&
+              /トレードが成立しました/.test(n.innerText || '') &&
+              ![...n.children].some((c) => /トレードが成立しました/.test(c.innerText || '')),
+          )
+          .map((n) => n.className),
+      ),
+      ['online-trade-result '],
+      'スマホのトレードの返事で、成立の知らせが2つ出ている',
+    );
     const afterAccept = await live();
     assert.ok(
       rosterOf(afterAccept, teamA).some((p) => p.id === takeOut.id) &&
