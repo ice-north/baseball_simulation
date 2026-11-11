@@ -135,8 +135,9 @@ function tools(page, context, log) {
     await go(/^2年目へ進む/, next, what, 60000);
   };
   // 翌年のレギュレーションを確定する（2f9ee22 で直した止まり方）
-  const confirmNextRegulations = async (next, what) => {
-    await go('確定 → キャンプへ進む', next, what);
+  // （ボタンの名前は行き先で変わる: 「確定 → キャンプへ進む」／箱庭は「確定 → チーム設定へ進む」）
+  const confirmNextRegulations = async (next, what, label = '確定 → キャンプへ進む') => {
+    await go(label, next, what);
   };
   // 2年目の開幕: 暦が1年進み、日程が進められること
   const checkSecondYear = async ({ league }) => {
@@ -288,8 +289,8 @@ async function runSandbox(page, t) {
 
   // 箱庭はドラフト・契約更改・トライアウトが無く、ドラフト会議の日にオフシーズンへ移る
   await t.proceedTo(/ドラフト/);
-  await t.offseasonToNextYear('確定 → キャンプへ進む', '翌年のレギュレーション');
-  await t.confirmNextRegulations(page.getByText('箱庭モード - チーム設定'), '箱庭のチーム設定');
+  await t.offseasonToNextYear('確定 → チーム設定へ進む', '翌年のレギュレーション');
+  await t.confirmNextRegulations(page.getByText('箱庭モード - チーム設定'), '箱庭のチーム設定', '確定 → チーム設定へ進む');
   await go('シーズン開始', page.getByTestId('dev-advance'), '開幕の日程画面');
   await t.checkSecondYear({ league: true });
 }

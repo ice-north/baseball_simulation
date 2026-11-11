@@ -333,6 +333,7 @@ const ManagementScreen = ({
   if (managementView === 'sandbox_next_regulations') return <RegulationsScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
+    confirmLabel="確定 → チーム設定へ進む"
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
         confirmedSettings, seasonData, setSeasonData, generatePitchingRotation,

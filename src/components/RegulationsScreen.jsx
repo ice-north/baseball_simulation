@@ -21,7 +21,8 @@ const fixExtra = (settings) => ({
   maxExtraInnings: normalizeMaxExtraInnings(settings.maxExtraInnings === '' ? undefined : settings.maxExtraInnings),
 });
 
-const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
+// confirmLabel: 年度更新の決定ボタンの名前。行き先で変える（箱庭はキャンプが無くチーム設定へ進む）
+const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel = '確定 → キャンプへ進む' }) => {
   const currentPhase = seasonData.phase || 'off_season';
   const canModify = onConfirm ? true : canModifyRegulations(currentPhase);
   const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
@@ -227,7 +228,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
             </div>
           </SettingRow>
         </div>
-        {/* 年度更新（onConfirm あり）では下の「確定 → キャンプへ進む」が保存も兼ねるので出さない。
+        {/* 年度更新（onConfirm あり）では下の決定ボタン（`confirmLabel`）が保存も兼ねるので出さない。
             ⚠ 以前は両方が並び、どちらを押せば決まるのか分からなかった */}
         {!onConfirm && (
           <div className="mt-3">
@@ -358,7 +359,7 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm }) => {
             }}
             className="btn-primary px-8 py-3 rounded-lg text-base transition shadow"
           >
-            確定 → キャンプへ進む
+            {confirmLabel}
           </button>
         </div>
       )}
