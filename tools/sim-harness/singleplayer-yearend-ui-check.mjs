@@ -127,6 +127,9 @@ function tools(page, context, log) {
   };
   // キャンプの練習を済ませてから背番号を決め、開幕の日程画面に着く
   const campToOpening = async () => {
+    // キャンプの画面に「NaN」が出ない（以前は2年目のランク変動の知らせが「注目度: NaN」だった）
+    const campText = await page.locator('body').innerText();
+    assert.doesNotMatch(campText, /NaN/, `キャンプの画面に「NaN」が出ている: ${(campText.match(/[^\n]*NaN[^\n]*/) || [])[0]}`);
     await ui.runCamp();
     await go('シーズン開始', /確定してシーズン開始/, '背番号の画面');
     await jerseyToOpening();

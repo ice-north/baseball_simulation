@@ -759,12 +759,15 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           const userChange = seasonData.rankChanges.find(c => c.team === userTeamName);
           if (!userChange) return null;
           const isUp = 'DCBAS'.indexOf(userChange.to) > 'DCBAS'.indexOf(userChange.from);
+          // ⚠ 注目度はチームの値を読む。ランク変動の記録（rankChanges）には注目度が無く（score は
+          //    ランク付けの点数で別物）、以前は userChange.reputation を読んで「注目度: NaN」と出ていた
+          const reputation = userTeam?.corporateData?.reputation ?? userTeam?.universityData?.reputation;
           return (
             <div className={`mb-2 p-3 rounded-xl border text-center bg-surface-2 ${isUp ? 'border-green-500/60' : 'border-red-500/60'}`}>
               <span className={`font-black text-lg ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                 {isUp ? '↑' : '↓'} ランク{isUp ? '昇格' : '降格'}: {userChange.from} → {userChange.to}
               </span>
-              <span className="text-gray-300 text-xs ml-2">(注目度: {Math.round(userChange.reputation)})</span>
+              {Number.isFinite(reputation) && <span className="text-gray-300 text-xs ml-2">(注目度: {Math.round(reputation)})</span>}
             </div>
           );
         })()}
