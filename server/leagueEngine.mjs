@@ -500,6 +500,8 @@ export function tradeValueOf(player) {
  *    同じものを押し直せてしまう。理由をそのまま返して画面に出す。
  * ⚠ 抱えられる提案の数に上限を置く（`MAX_OPEN_TRADES`）。無制限だと
  *    相手の画面を埋められる。
+ * ⚠ **提案に期限は無い**。消えるのは返事（受ける・断る）と、提案した側の取り下げ（`reject`）だけで、
+ *    年度更新でも残る。画面の注記に「期限」と書かないこと（再監査 A4）。
  */
 export function openTrade(league, userId, { to, offer, want }, now) {
   league.trades = league.trades || [];
