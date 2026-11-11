@@ -270,6 +270,19 @@ async function runIndependent(page, t) {
   }
   await go('トライアウト終了', page.getByTestId('dev-advance'), '日程画面');
 
+  // オフの「レギュレーション」では球団数・球団名を変えない（年度更新の翌年のレギュレーションで変える）。
+  // ⚠ 以前はここで先に保存でき、年度更新までのあいだ設定の球団が TEAMS_DATA と食い違って、
+  //    年度更新が自リーグの球団を並行世界として扱っていた
+  await step('オフのレギュレーション: 球団数・球団名は変えられない');
+  await page.locator('nav').getByRole('button', { name: /レギュレーション/ }).click();
+  const teamsCount = page.locator('select').filter({ has: page.getByRole('option', { name: /^\d+チーム$/ }) }).first();
+  await teamsCount.waitFor({ timeout: 10000 });
+  assert.equal(await teamsCount.isDisabled(), true, 'オフのレギュレーションで球団数を変えられる');
+  assert.equal(await page.getByText('チーム名設定').count(), 0, 'オフのレギュレーションで球団名を変えられる');
+  assert.equal(await page.getByRole('button', { name: '設定を保存' }).isEnabled(), true, 'オフのレギュレーションで DH・延長を保存できない');
+  await page.locator('nav').getByRole('button', { name: /日程進行/ }).click();
+  await page.getByTestId('dev-advance').waitFor({ timeout: 10000 });
+
   await t.proceedTo(/オフシーズン/);
   await t.offseasonToNextYear('確定 → キャンプへ進む', '翌年のレギュレーション');
   // 自チーム（#1）の名前を変える。改名として名簿を引き継ぎ、自チームのまま2年目に入る。

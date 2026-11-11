@@ -56,7 +56,13 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel
   // ⚠ 大学・社会人のリーグの形（チーム数・形式・試合数・チーム名）は、実在のリーグと世界の球団に
   //    合わせて決まっている。ここで変えると設定の球団名だけが「チームA」などに替わり、世界の球団と
   //    食い違う（以前はオフと年度更新で変えられた）。DH と延長だけ変えられるようにする
-  const canModifyStructure = canModify && independent;
+  // ⚠ **独立リーグ・箱庭でも、球団の顔ぶれと日程の形は年度更新（`onConfirm`）でだけ変える**。
+  //    オフの「設定を保存」で球団名・球団数を先に保存すると、年度更新までのあいだ
+  //    設定の球団（`settings.teamNames`）が TEAMS_DATA と食い違い、年度更新の処理が自リーグの
+  //    球団を並行世界の球団として扱っていた（作り物の成績を足す・選手を去らせる・戦力外にする）。
+  //    自チームの名前を変えると、自チームのローテを作り直してもいた。翌年の日程は年度更新で作るので、
+  //    ここで変える意味も無い
+  const canModifyStructure = canModify && independent && !!onConfirm;
 
   // 半角→全角変換（略称用）
   const toFullWidth = (str) => str.replace(/[A-Za-z0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
@@ -133,6 +139,11 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel
         {canModify && !independent && (
           <p className="text-xs text-gray-300 mb-2">
             チーム数・リーグ形式・試合数・チーム名は、実在のリーグに合わせて決まっているので変えられません。DH制と延長は変えられます。
+          </p>
+        )}
+        {canModify && independent && !onConfirm && (
+          <p className="text-xs text-gray-300 mb-2">
+            チーム数・リーグ形式・試合数・チーム名は、年度更新の「翌年のレギュレーション」で変えられます（翌年の日程はそこで作ります）。ここではDH制・プレーオフ・延長を変えられます。
           </p>
         )}
         <div className="space-y-0">
