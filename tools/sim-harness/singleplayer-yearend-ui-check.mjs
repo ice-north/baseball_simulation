@@ -260,13 +260,31 @@ async function runIndependent(page, t) {
   // 「現在の編成 (N/24人)（現有X＋指名Y）」。指名が終わって名簿に書いた後も同じ数のはず
   const rosterHeading = async () => (await page.getByText(/^現在の編成 \(/).first().innerText()).trim();
   let before = null;
+  let lastTab = null;
+  let undoChecked = false;
   while (await waitUserTurn(page)) {
     if (!tab) {
-      before = await rosterHeading();
+      const bar = page.getByTestId('confirm-bar');
       await page.getByRole('button', { name: /^指名終了$/ }).click();
-      await page.getByTestId('confirm-bar').getByRole('button', { name: '指名を終える', exact: true }).click();
+      await bar.getByRole('button', { name: '指名を終える', exact: true }).waitFor();
+      if (!undoChecked) {
+        // 終える帯を出したまま直前の指名を取り消す → 取り消した選手の指名の帯を「やめる」で閉じる。
+        // 以前は押していないのに「指名を終えますか？」の帯が戻り、取り消しで足りなくなった編成の
+        // ままでも（捕手0人でも）指名を終えられた
+        undoChecked = true;
+        await page.getByRole('button', { name: /直前の指名.*を取り消す/ }).click();
+        await bar.getByText('を指名しますか？').waitFor();
+        await bar.getByRole('button', { name: 'やめる', exact: true }).click();
+        await page.waitForTimeout(300);
+        assert.equal(await bar.count(), 0, '指名を取り消して指名の帯を閉じたら、押していない「指名を終えますか？」の帯が戻った');
+        tab = lastTab; // 取り消した分を指名し直す
+        continue;
+      }
+      before = await rosterHeading();
+      await bar.getByRole('button', { name: '指名を終える', exact: true }).click();
       break;
     }
+    lastTab = tab;
     await pickFromTab(page, tab);
     const shortage = page.getByText('編成不足', { exact: false }).locator('..');
     const text = (await shortage.count()) ? await shortage.first().innerText() : '';

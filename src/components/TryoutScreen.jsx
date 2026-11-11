@@ -147,6 +147,9 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
     setCurrentPick(undoSnap.currentPick);
     setPendingPick(undoSnap.player);
     setUndoSnap(null);
+    // ⚠ 「指名を終えますか？」の帯も落とす。残すと、取り消しで出る指名の帯を「やめる」で閉じたときに
+    //    押していない終える帯が戻り、取り消しで足りなくなった編成のまま指名を終えられた
+    setConfirmEnd(false);
   };
 
   useEffect(() => {
@@ -211,7 +214,8 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
     }
   }, [currentPick, draftOrder, tryoutCandidates, teamRosters, userDone, saving]);
 
-  // 試合に出られる最低限の構成か（投手1・捕手1・野手8、DH制なら野手9）。
+  // 試合に出られる最低限の構成か（投手1・捕手1・野手8、DH制なら野手9）。足りないものを
+  // 「編成不足」の帯と同じ言い方（「〜があとN人必要」）で返す。
   // ⚠ 人数だけで見ないこと。9人でも捕手がいない・野手が足りないと、
   //    日程画面の「スタメンを自動補完できませんでした」で1日も進めなくなる。
   const getUserShortage = () => {
@@ -222,11 +226,13 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
     const fielders = roster.length - pitchers;
     const needFielders = seasonData?.settings?.useDH ? 9 : 8;
     const missing = [];
-    if (pitchers < 1) missing.push('投手1人');
-    if (catchers < 1) missing.push('捕手1人');
-    if (fielders < needFielders) missing.push(`野手${needFielders - fielders}人`);
+    if (pitchers < 1) missing.push('投手があと1人必要');
+    if (catchers < 1) missing.push('捕手があと1人必要');
+    if (fielders < needFielders) missing.push(`野手があと${needFielders - fielders}人必要`);
     return missing;
   };
+  // 指名を終えられないか（足りないものがあり、まだ候補がいる）。候補がいなければ足りなくても終えられる
+  const isEndBlocked = () => getUserShortage().length > 0 && tryoutCandidates.length > 0;
 
   // 途中で保存する（ロードするとこの続きから指名できる。途中の状態は seasonData.tryoutDraft）。
   // ⚠ 名簿へ書き終えたあとは保存しない（書き終えた名簿と「途中」の写しが食い違う）
@@ -247,14 +253,17 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
     }
   };
 
+  // ⚠ 足りないあいだは「指名終了」を押せなくして、理由をボタンの横に出す（以前は押すと alert で断り、
+  //    言い方も「編成不足」の帯と違っていた）。ここと帯の「指名を終える」でも見直す
   const endUserPicks = () => {
-    const missing = getUserShortage();
-    if (missing.length > 0 && tryoutCandidates.length > 0) {
-      alert(`試合に必要な選手が足りません（あと${missing.join('・')}）。指名を続けてください。`);
-      return;
-    }
+    if (isEndBlocked()) return;
     setPendingPick(null);
     setConfirmEnd(true);
+  };
+  const confirmEndUserPicks = () => {
+    setConfirmEnd(false);
+    if (isEndBlocked()) return;
+    setUserDone(true);
   };
 
   const finalizeDraft = (skipCheck = false) => {
@@ -406,6 +415,8 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
   };
 
   const showPickBar = isUserTurn && !!pendingPick && tryoutCandidates.some(c => c.id === pendingPick.id);
+  const endShortage = isUserTurn ? getUserShortage() : [];
+  const endBlocked = endShortage.length > 0 && tryoutCandidates.length > 0;
 
   return (
     <div className="p-4">
@@ -458,12 +469,21 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
             </div>
           )}
           {!draftComplete && isUserTurn && (userRoster.length > 0 || !isInitialTryout) && (
-            <button
-              onClick={endUserPicks}
-              className="btn-secondary mt-4 px-5 py-2 rounded-lg font-semibold transition text-sm"
-            >
-              指名終了
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                onClick={endUserPicks}
+                disabled={endBlocked}
+                className="btn-secondary px-5 py-2 rounded-lg font-semibold transition text-sm"
+              >
+                指名終了
+              </button>
+              {/* 足りないあいだは押せない。理由は「編成不足」の帯と同じ言い方で横に出す */}
+              {endBlocked && (
+                <span className="text-xs text-yellow-400" data-testid="tryout-end-blocked">
+                  試合に出る最低限がそろうまで終えられません（{endShortage.join(' / ')}）
+                </span>
+              )}
+            </div>
           )}
           {draftComplete && (
             <div className="mt-4">
@@ -1058,7 +1078,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
           onCancel={() => setPendingPick(null)}
         />
       )}
-      {isUserTurn && !draftComplete && confirmEnd && !showPickBar && (
+      {isUserTurn && !draftComplete && confirmEnd && !showPickBar && !endBlocked && (
         <ConfirmBar
           title="自チームの指名をここで終えますか？"
           detail={`獲得${userRoster.length}人で終えます。ほかの球団の指名は最後まで続きます`}
@@ -1066,7 +1086,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
           confirmLabel="指名を終える"
           confirmClass="btn-warn"
           disabled={saving}
-          onConfirm={() => { setConfirmEnd(false); setUserDone(true); }}
+          onConfirm={confirmEndUserPicks}
           onCancel={() => setConfirmEnd(false)}
         />
       )}

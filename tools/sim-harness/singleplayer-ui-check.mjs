@@ -83,6 +83,11 @@ try {
   await ui.waitTryoutTurn();
   const beforeSave = await ui.tryoutState();
   assert.equal(beforeSave.got, 2);
+  // 試合に出る最低限（投手・捕手・野手8人）がそろうまで「指名終了」は押せず、理由がボタンの横に出る
+  // （以前は押すと alert で断り、言い方も「編成不足」の帯と違っていた）
+  assert.ok(await page.getByRole('button', { name: /^指名終了$/ }).isDisabled(), '編成が足りないのに「指名終了」が押せる');
+  assert.match(await page.getByTestId('tryout-end-blocked').innerText(), /があと\d+人必要/,
+    '「指名終了」を押せない理由が出ていない');
 
   step('トライアウトの途中で保存して、タイトルから読み直す');
   await page.getByTestId('tryout-save').getByRole('button', { name: /スロット1に保存/ }).click();
