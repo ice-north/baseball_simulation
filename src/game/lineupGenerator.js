@@ -518,13 +518,13 @@ export const generateOptimalLineup = (teamName, mode = 'standard', given = null)
   });
 };
 
-// 全チームのAIオーダー編成を実行
+// 全チームのオーダーと投手ローテーションを自動で組む（⚠ 画面の言葉に「AI」は出さない）
 export const generateAllTeamsLineup = (allTeams) => {
   allTeams.forEach(teamName => {
     generateOptimalLineup(teamName);
     generatePitchingRotation(teamName);
   });
-  alert('全チームのAIオーダー編成と投手ローテーションを設定しました！');
+  alert('全チームのオーダーと投手ローテーションを自動で組みました');
 };
 
 // 投手ローテーション生成関数（AI監督用）
