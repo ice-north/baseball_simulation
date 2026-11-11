@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 import { TURN_MINUTES } from '../../src/online/shared.js';
 import { shortLastLines } from './lib/textWrap.mjs';
+import { failureShots } from './lib/failureShots.mjs';
 // ⚠ PCの左メニューは「現在の手続き」「選手成績」「ホーム」（3a8592d で名前が変わった）。
 //    スマホのホームのボタンは「手続き」「打順」のまま。
 // ⚠ **PCのキャンプは「ホーム」に出す**（いしだ要望。「現在の手続き」の中に
@@ -547,12 +548,15 @@ try {
     await due.page.getByRole('button', { name: 'この内容で決定', exact: true }).waitFor();
     const times = async () =>
       (await due.page.locator('main').innerText()).split('11/8(日) 0:00').length - 1;
-    assert.ok((await times()) <= 2, `PCの手続きのページに締め切りが${await times()}回出ている`);
+    // ⚠ 下限も見る。日時の書き方が変わって1回も見つからないと、上限だけでは素通りする
+    const pcTimes = await times();
+    assert.ok(pcTimes >= 1 && pcTimes <= 2, `PCの手続きのページに締め切りが${pcTimes}回出ている（1〜2回のはず）`);
     // 幅を変えても開いている画面（手続き）はそのまま
     await due.page.setViewportSize({ width: 390, height: 844 });
     await due.page.locator('.online-mobile-controls').waitFor();
     await due.page.getByRole('button', { name: 'この内容で決定', exact: true }).waitFor();
-    assert.ok((await times()) <= 1, `スマホの手続きに締め切りが${await times()}回出ている`);
+    const spTimes = await times();
+    assert.equal(spTimes, 1, `スマホの手続きに締め切りが${spTimes}回出ている（1回のはず）`);
     await due.context.close();
   }
 
@@ -1004,6 +1008,9 @@ try {
   console.log(
     'online-edit-ui-check PASS（配布HTML・標準案の再取得/世代検証・送信中入力・スマホ確認・一覧縮小・キャンプのクールの版ずれの送り直し / APIはfixture）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-edit-ui');
+  throw error;
 } finally {
   await browser.close();
 }

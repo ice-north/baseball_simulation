@@ -404,12 +404,33 @@ try {
   await p.getByRole('button', { name: '名前を変える', exact: true }).click();
   const rename = p.getByRole('dialog', { name: '球団名・名前を変える' });
   await rename.waitFor();
-  const renameLook = await rename.evaluate((node) => ({
-    width: Math.round(node.getBoundingClientRect().width),
-    note: getComputedStyle(node.querySelector('.online-muted')).color,
-  }));
+  // ⚠ 色は rgb の値そのものではなく、下の面とのコントラスト比で見る。値で縛ると、読める色へ
+  //    少し変えただけで落ち、逆に面のほうが明るくなって読めなくなっても気づけない
+  const renameLook = await rename.evaluate((node) => {
+    const rgb = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+    const lum = ([r, g, b]) => {
+      const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const note = node.querySelector('.online-muted');
+    let el = note;
+    let bg = null;
+    while (el) {
+      const c = rgb(getComputedStyle(el).backgroundColor);
+      if (c.length >= 3 && (c.length < 4 || c[3] >= 0.99)) { bg = c; break; }
+      el = el.parentElement;
+    }
+    const fg = rgb(getComputedStyle(note).color);
+    const [hi, lo] = [lum(fg), lum(bg || [255, 255, 255])].sort((x, y) => y - x);
+    return {
+      width: Math.round(node.getBoundingClientRect().width),
+      contrast: Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100,
+      foundBg: Boolean(bg),
+    };
+  });
   assert.ok(renameLook.width <= 460, `名前を変える小窓が広い: ${renameLook.width}`);
-  assert.equal(renameLook.note, 'rgb(208, 217, 229)', '名前を変える小窓の説明が読めない色');
+  assert.ok(renameLook.foundBg, '名前を変える小窓の説明の下に不透明な面が見つからない');
+  assert.ok(renameLook.contrast >= 4.5, `名前を変える小窓の説明が読めない色（コントラスト ${renameLook.contrast}:1）`);
   await rename.getByRole('button', { name: '閉じる', exact: true }).click();
   await rename.waitFor({ state: 'hidden' });
   await p.getByRole('button', { name: '選手成績', exact: true }).click();
