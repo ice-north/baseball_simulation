@@ -6,7 +6,7 @@
 //
 //   独立リーグ: 初回トライアウト → キャンプ → 背番号 → 開幕 → ドラフト会議 → 契約更改（1人解雇）
 //               → トライアウト（1人指名）→ オフシーズン → 2年目へ → 翌年のレギュレーション
-//               → キャンプ → 背番号 → 2年目の開幕
+//               （自チームの名前を変える）→ 改名した自チームのキャンプ → 背番号 → 2年目の開幕
 //   箱庭:       規定 → 4球団に16人ずつ足す → 背番号 → 開幕 → ドラフト会議の日にオフシーズン
 //               → 2年目へ → 翌年のレギュレーション → チーム設定 → 2年目の開幕
 //   社会人企業: キャンプ → 背番号 → 開幕（大会の試合はスキップ）→ ドラフト会議 → 退団処理
@@ -272,8 +272,20 @@ async function runIndependent(page, t) {
 
   await t.proceedTo(/オフシーズン/);
   await t.offseasonToNextYear('確定 → キャンプへ進む', '翌年のレギュレーション');
+  // 自チーム（#1）の名前を変える。改名として名簿を引き継ぎ、自チームのまま2年目に入る。
+  // ⚠ 以前は自チームが解散して選手がプールへ移り、キャンプは2番目の球団（高知）を自チームとして開いた
+  const renamed = '徳島改名テスト';
+  await step(`翌年のレギュレーション: 自チームの名前を「${renamed}」に変える`);
+  await page.getByPlaceholder('チームA', { exact: true }).fill(renamed);
+  const changes = page.getByTestId('league-changes');
+  await changes.waitFor({ timeout: 10000 }).catch(() => { throw new Error('名前を変えても、確定すると変わる球団の欄が出ない'); });
+  assert.match(await changes.innerText(), new RegExp(`改名: 徳島インディゴソックス → ${renamed}`), '確定すると変わる球団の欄に改名が出ない');
+  assert.doesNotMatch(await changes.innerText(), /解散|新規参入/, '名前を変えただけなのに解散・新規参入が出る');
   await t.confirmNextRegulations(/練習を実行/, '春季キャンプ');
+  assert.ok(await page.getByText(`春季キャンプ - ${renamed}`).count() > 0,
+    `改名した自チームのキャンプが開かない（見出し: ${(await page.locator('h1').first().innerText()).trim()}）`);
   await t.campToOpening();
+  assert.ok(await page.getByText(new RegExp(`⚾\\s*${renamed}`)).count() > 0, '2年目のサイドバーの自チームが改名した名前でない');
   await t.checkSecondYear({ league: true });
 }
 

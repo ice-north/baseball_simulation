@@ -5,7 +5,8 @@ import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPe
 import { PHASE_INFO } from '../season/seasonManager.js';
 import { normalizeMaxExtraInnings } from '../teams-data.js';
 import { getModeCapabilities } from '../game/modeCapabilities.js';
-import { validateLeagueTeamNames } from '../season/nextSeasonRegulations.js';
+import { validateLeagueTeamNames, planLeagueChanges } from '../season/nextSeasonRegulations.js';
+import { TEAMS_DATA } from '../teams-data.js';
 
 // ⚠ 部品の中で定義しないこと。描画のたびに別の部品として作り直され、中の入力欄が
 //   1文字打つごとに消えて作り直される（以前は延長の欄に2桁を打てなかった）
@@ -345,6 +346,31 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel
           <div>延長: <span className="text-white">{normalizeMaxExtraInnings(seasonData.settings.maxExtraInnings ?? 12)}回まで</span></div>
         </div>
       </div>
+
+      {/* 確定すると変わる球団（改名・解散・新規参入）を先に見せる。解散は取り消せない。
+          ⚠ 以前は確定した後の alert で初めて分かった。並びは確定と同じ `planLeagueChanges` で決める */}
+      {onConfirm && canModifyStructure && (() => {
+        const plan = planLeagueChanges(currentTeams || seasonData.settings?.teamNames || [], tempSettings.teamNames || []);
+        if (plan.renames.length + plan.dissolved.length + plan.added.length === 0) return null;
+        return (
+          <div className="bg-surface-2 rounded-lg p-4 mt-3" data-testid="league-changes">
+            <h2 className="text-sm font-bold mb-2 text-white">確定すると</h2>
+            <ul className="space-y-1 text-sm text-gray-100">
+              {plan.renames.map(r => (
+                <li key={`r-${r.from}`}>改名: {r.from} → {r.to || '（空欄）'}（選手・成績はそのまま）</li>
+              ))}
+              {plan.dissolved.map(name => (
+                <li key={`d-${name}`} className="text-red-400 font-bold">
+                  解散: {name}（所属{TEAMS_DATA[name]?.players?.length ?? 0}人はトライアウトのプールへ。取り消せません）
+                </li>
+              ))}
+              {plan.added.map((name, i) => (
+                <li key={`a-${i}`}>新規参入: {name || '（空欄）'}（24人を自動で編成）</li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {onConfirm && (
         <div className="mt-4 text-center">
