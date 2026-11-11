@@ -127,6 +127,27 @@ try {
     league3.members.some((m) => m.userId === 'other'),
     '2人目が記録されていない',
   );
+  // ⚠ **名前を付けずに入った球団の略称は、既定の略称のまま**。参加すると表示名
+  //    （`displayName`）は既定の名前でも必ず入るので、表示名の頭3文字を略称にして
+  //    「新潟ブ」のようになっていた（再監査 F16）。付けた名前は頭3文字のまま
+  const plain = (await service.login('plain')).sessionId;
+  await run('plain', plain, 'join', league3.revision, {});
+  const league4 = (await store.read()).league;
+  const plainTeam = league4.teams.find(
+    (t) => t.name === league4.members.find((m) => m.userId === 'plain').teamName,
+  );
+  assert.equal(plainTeam.displayName, plainTeam.name, '名前を付けない参加の前提が違う');
+  const plainView = await service.view('plain', plain);
+  assert.deepEqual(
+    plainView.teamLabels[plainTeam.name],
+    { label: plainTeam.name, short: plainTeam.abbreviation },
+    '名前を付けずに入った球団の略称が、既定の略称になっていない',
+  );
+  assert.equal(
+    plainView.teamLabels[joined.teamName].short,
+    '多摩川',
+    '付けた球団名の略称が頭3文字になっていない',
+  );
 
   // ⚠ 参加していない人も**ログアウトできる**こと。参加画面にも「ログアウト」があり、
   //    以前は403で抜けられなかった

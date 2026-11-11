@@ -344,14 +344,18 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   // ⚠ **表示名は内部名と別に持つ**。参加した人が付けた球団名を画面に出すため。
   //    内部名（`teamName` / 順位表 / 日程）は記録の選手キーまで貫いているので
   //    変えられない。表示のときだけこの表で引く。
+  // ⚠ 略称は**名前を付け替えたときだけ**表示名の頭3文字にする。参加すると表示名は
+  //    既定の名前（内部名と同じ）でも必ず入るので、`displayName` の有無で分けると
+  //    名前を付けずに入った球団まで「新潟ブ」のようになっていた（再監査 F16）
   const teamLabels = Object.fromEntries(
     (l.teams || []).map((t) => [
       t.name,
       {
         label: t.displayName || t.name,
-        short: t.displayName
-          ? [...t.displayName].slice(0, 3).join('')
-          : t.abbreviation || t.name,
+        short:
+          t.displayName && t.displayName !== t.name
+            ? [...t.displayName].slice(0, 3).join('')
+            : t.abbreviation || t.name,
       },
     ]),
   );
