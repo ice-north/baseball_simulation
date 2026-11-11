@@ -26,6 +26,7 @@ import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
 import { leagueMagic } from '../../src/season/magicNumber.js';
 import { seasonChampion } from '../../src/season/seasonManager.js';
 import { departedEntry, withDeparted, rosterIndex, departedSince, withDepartedPlayers } from '../../src/season/departedStats.js';
+import { ensureUserIndependentLeagueTagged } from '../../src/corporate/corporateInit.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -490,6 +491,8 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
 {
   const run = (from, to) => {
     const { seasonData } = quiet(() => bootstrapWorld({ userTeamNames: from }));
+    // 新しく始めたときと同じく、自リーグの球団に独立リーグの印を付ける（GameFlowScreens）
+    ensureUserIndependentLeagueTagged(from, 'shikoku');
     const config = { format: 'single', teamsPerLeague: from.length, leagues: [{ name: '四国', teams: [...from] }] };
     let league = config;
     let next = { ...seasonData, year: 2 };
@@ -511,6 +514,14 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.deepEqual(grown.league.leagues.flatMap(l => l.teams), six, '球団を増やしても leagueConfig に新しい球団が入らない');
   assert.equal(grown.league.leagues[0].name, '四国', 'リーグの名前が変わった');
   assert.equal(grown.league.teamsPerLeague, 6);
+  // ⚠ 新しい球団にも同じ独立リーグの印と格付けが付く（以前は読み直すまで無く、
+  //    その年はチームランキング・トレードの分け方から漏れていた）
+  for (const name of ['チームE', 'チームF']) {
+    assert.equal(TEAMS_DATA[name].independentLeagueId, TEAMS_DATA['高知'].independentLeagueId,
+      `新規参入の ${name} に独立リーグの印が無い`);
+    assert.equal(TEAMS_DATA[name].corporateData?.type, 'independent', `新規参入の ${name} に格付けが無い`);
+    assert.ok(TEAMS_DATA[name].corporateData?.rank, `新規参入の ${name} に格が無い`);
+  }
   const shrunk = run(six, four);
   assert.deepEqual(shrunk.league.leagues.flatMap(l => l.teams), four, '球団を減らしても leagueConfig に解散した球団が残る');
   for (const name of shrunk.league.leagues.flatMap(l => l.teams)) assert.ok(TEAMS_DATA[name], `leagueConfig の ${name} が TEAMS_DATA に無い`);

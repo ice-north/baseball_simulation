@@ -2,7 +2,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
 import { generateFullSeasonSchedule, fitGamesPerSeason } from './scheduleGenerator.js';
 import { generateExpansionRoster } from './tryoutSystem.js';
-import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
+import { getLeagueRankFromTeams, applyIndependentRank } from '../corporate/corporateInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 
 // ============================================================
@@ -178,6 +178,11 @@ export function applyNextSeasonRegulations({
     //    埋まる（Cリーグなら スタメン野手のミ+パ が 64 対 103）。格の算出は
     //    TryoutScreen と同じ `getLeagueRankFromTeams` を使う（表を二重に作らない）。
     const expansionRank = getLeagueRankFromTeams(configuredTeams.filter(t => existingTeams.has(t)));
+    // 独立リーグなら、新しい球団にも同じリーグの印（`independentLeagueId`・格付け）を付ける。
+    // ⚠ 以前は読み直したとき（App のロードの `ensureUserIndependentLeagueTagged`）まで印が無く、
+    //    その年はチームランキング・トレード・紙面の「独立リーグの球団」の分け方から漏れていた。
+    //    読み直すとプリセットの名前で引いて 'D' になり、作った選手の格とも食い違った
+    const leagueId = configuredTeams.map(t => existingTeams.has(t) && TEAMS_DATA[t]?.independentLeagueId).find(Boolean);
     newTeamNames.forEach(teamName => {
       const idx = configuredTeams.indexOf(teamName);
       const abbr = abbrs[idx] || teamName.slice(0, 3);
@@ -187,6 +192,7 @@ export function applyNextSeasonRegulations({
         players: generateExpansionRoster(seasonData.year || 1, 24, expansionRank),
         pitchingRotation: null
       };
+      if (leagueId) applyIndependentRank(teamName, expansionRank || 'D', leagueId);
       generatePitchingRotation(teamName);
     });
   }
