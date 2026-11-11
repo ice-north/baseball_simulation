@@ -86,13 +86,15 @@ export default function OnlineLineup({ view, busy, tab, onSave, onClose }) {
           </span>
         )}
         <div className="ml-auto flex gap-2">
+          {/* ⚠ 閉じた先は「打順」の2タップの表（`MobileView.jsx`）。以前は「方針・采配の設定へ」と
+              書いていたが、方針・采配は打順のカードの中の別の小窓（再監査 B6） */}
           <button
             type="button"
             disabled={busy}
             onClick={close}
             className="rounded border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-600 disabled:opacity-50"
           >
-            方針・采配の設定へ（保存しない）
+            打順に戻る（保存しない）
           </button>
           <button
             type="button"

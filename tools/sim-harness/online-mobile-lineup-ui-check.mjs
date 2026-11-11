@@ -317,9 +317,22 @@ try {
     /\bseg-on\b/,
     '「投手起用を開く」で投手起用のタブから始まらない',
   );
-  await portal.getByRole('button', { name: '方針・采配の設定へ（保存しない）' }).click();
+  // ⚠ 閉じた先は「打順」の表。ボタンの名前もそう書く（以前は「方針・采配の設定へ」。再監査 B6）
+  await portal.getByRole('button', { name: '打順に戻る（保存しない）' }).click();
   await portal.waitFor({ state: 'detached' });
   assert.deepEqual(await slots(), edited, '全画面の編成を開いて閉じたら打順が変わった');
+  // 方針・采配の「投手の役割（確認）」は、変える入口（投手起用を開く）を指す（以前は「PCから」）
+  await click('方針・采配');
+  const tactics = p.getByRole('dialog', { name: '方針・采配' });
+  await tactics.waitFor();
+  await tactics.getByRole('combobox', { name: '見る設定' }).selectOption('roles');
+  assert.equal(
+    await tactics.locator('.online-mobile-tactic-note').innerText(),
+    '役割・ローテーションは「打順」の「投手起用を開く」で変えられます',
+    '投手の役割の注記が、同じ画面にある入口を指していない',
+  );
+  await tactics.getByRole('button', { name: '打順に戻る', exact: true }).click();
+  await tactics.waitFor({ state: 'detached' });
 
   // ---- 横向き（667×375。767px以下なのでスマホの表のまま）----------------
   await p.setViewportSize({ width: 667, height: 375 });
