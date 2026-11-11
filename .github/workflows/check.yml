@@ -30,6 +30,13 @@ jobs:
         run: npm run build
       - name: Simulation checks
         run: npm run check
+      # アプリの共通部（mobile/shared）は Web の表と計算を写している。写し元だけを変えた push でも
+      # ずれに気づけるよう、Node だけで動く照合はここでも毎回回す（android.yml は paths で絞っている）
+      - name: App tables match web
+        if: ${{ !cancelled() }}
+        run: |
+          node mobile/tools/gen-tables.mjs --check
+          node mobile/tools/expect-logic.mjs --check
 
   # progression-check（多年次の人口保存・年齢ピラミッド・ポジション均衡）
   progression:
