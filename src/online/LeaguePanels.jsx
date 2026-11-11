@@ -680,7 +680,7 @@ function MobilePlanContents({ phase, plan, view }) {
   );
 }
 
-export function PhasePanel({ view, auth, busy, run, command, mobile }) {
+export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
   const phase = view.phase;
   const [plan, setPlan] = useDraftState(
     phaseDraftName(phase.id, 'plan'),
@@ -710,9 +710,18 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   const planBy = phase.planBy ? `${phase.planBy.mode}:${phase.planBy.by}` : 'self';
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  // ⚠ **指導者に任せた手続き（トライアウト・契約更改）は、指導者の案を読むだけで見せる**
+  //    （再監査 B4）。サーバーは任せた手続きを提出があっても指導者の案で決める
+  //    （`leagueEngine` の `resolvePhase`）。以前は編集・「この内容で決定」・確認がそのまま出て、
+  //    「決定しました」と出るのに案は使われなかった。キャンプは `CampPlanner` が受け持つ
+  //    （自分でクールを回すと任せ方は「意見を聞く」に戻る）ので、ここでは扱わない。
+  // ⚠ 見せる案は**下書きとは別に持つ**（`coachPlan`）。任せる前に編集していた下書きは、
+  //    「意見を聞く」に戻したときにそのまま続きから使えるよう残す
+  const delegated = needsPlan && !!phase.delegated;
+  const [coachPlan, setCoachPlan] = useState(null);
   useEffect(() => {
     let cancelled = false;
-    if (needsPlan && !phase.submission)
+    if (needsPlan && (delegated || !phase.submission))
       loadDefaults()
         .then((d) => {
           if (!cancelled) {
@@ -721,6 +730,10 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
               return;
             }
             setError('');
+            if (delegated) {
+              setCoachPlan(d.plan);
+              return;
+            }
             // ⚠ **編集していなければ、取り直した標準案で置き換える**。以前は一度下書きに入った
             //    案を残していて（`old || d.plan`）、手続きを開いたあとに任せ方を変えると
             //    （監督の案 → 自分で、など）前の人の案が「標準案です。」のまま残り、そのまま
@@ -735,7 +748,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     return () => {
       cancelled = true;
     };
-  }, [auth, phase.id, phase.submission, needsPlan, planBy]);
+  }, [auth, phase.id, phase.submission, needsPlan, planBy, delegated]);
   const submissionChanged = !sameEditState(
     baseSubmission,
     phase.submission || null,
@@ -926,6 +939,60 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
         : plan.rankedIds
           ? '獲得の希望を変える'
           : null;
+
+  // 指導者に任せた手続き: 指導者の案を読むだけ。決定・下書き・編集は出さない（上の `delegated` の注）。
+  // ⚠ 文はアプリ（ProceduresScreen）と同じ。自分で決めるときの入口は「指導者」のページ
+  if (delegated) {
+    const readyCount = view.members.filter((m) => m.ready).length;
+    const body = (
+      <>
+        <div className="online-phase-delegated" role="status">
+          <p>
+            指導者に任せています。この手続きは指導者の案で決まります。自分で決めるなら「指導者」で任せ方を「意見を聞く」にしてください。
+          </p>
+          {setTab && (
+            <button type="button" onClick={() => setTab('staff')}>
+              指導者のページへ
+            </button>
+          )}
+        </div>
+        {error && <p role="alert">{error}</p>}
+        {coachPlan ? (
+          <>
+            {phase.planBy?.by && (
+              <p className="online-muted">{`${phase.planBy.by}の案`}</p>
+            )}
+            <MobilePlanContents phase={phase} plan={coachPlan} view={view} />
+          </>
+        ) : (
+          !error && <p>指導者の案を準備しています…</p>
+        )}
+      </>
+    );
+    if (!mobile)
+      return (
+        <Page
+          title={PHASE_LABELS[phase.kind]}
+          sub={`${phase.deadline ? `締め切り ${formatDeadline(phase.deadline)} · ` : ''}決定済み ${readyCount}/${view.members.length}球団 · 指導者に任せています`}
+        >
+          <SeasonFlow view={view} />
+          <section className="online-card online-phase-rules">
+            <p>{rulesText}</p>
+            {readyList}
+          </section>
+          <section className="online-card online-decision">{body}</section>
+        </Page>
+      );
+    return (
+      <section className="online-card online-decision">
+        <SeasonFlow view={view} compact />
+        <h2>{PHASE_LABELS[phase.kind]}</h2>
+        <p>{rulesText}</p>
+        {readyList}
+        {body}
+      </section>
+    );
+  }
 
   if (!mobile) {
     // ⚠ PCは**ほかの編集ページと同じ形**: 見出しの右に操作、本文にカード。

@@ -13,6 +13,7 @@
 //  - 他球団を選ぶと、その球団の指導者（CPU球団なら采配の内訳も）が出る
 //  - スマホ（390px）のホームの「指導者」から同じ中身が開く
 //  - 手続き（トライアウト）を開いたあとに任せ方を変えると、手続きの標準案が取り直される
+//  - 任せた手続きは指導者の案を読むだけで、決定・下書き・編集を出さない（指導者のページへの入口）
 // 画面の写しは /tmp/baseball-online-staff-*.png
 import assert from 'node:assert/strict';
 import { readFile, mkdtemp } from 'node:fs/promises';
@@ -327,6 +328,40 @@ try {
       '任せ方を変えたあとも、前に開いたときの監督の案が「標準案です。」のまま残る',
     );
     assert.match(await m.locator('.online-phase-status').innerText(), /標準案です/);
+
+    // B4: 任せた手続きは指導者の案を読むだけで見せる。決定・下書き・編集は出さず、
+    //     自分で決めるときの入口（指導者のページ）を置く。以前は編集→決定→「決定しました」まで
+    //     進めたが、サーバーは任せた手続きを提出があっても指導者の案で決めていた
+    // ⚠ 手続きが開く前から任せていた形（全員が任せていても、開いただけでは進まない）
+    await fx.store.transaction((bundle) => {
+      const l = bundle.league;
+      l.members[0].staffModes = { ...(l.members[0].staffModes || {}), tryout: 'delegate' };
+      l.revision += 1;
+      return { value: null };
+    });
+    await m.goto(`${base}/online`);
+    await press('手続き');
+    const delegatedNote = m.locator('.online-phase-delegated');
+    await delegatedNote.waitFor();
+    assert.match(
+      await delegatedNote.innerText(),
+      /指導者に任せています。この手続きは指導者の案で決まります。自分で決めるなら「指導者」で任せ方を「意見を聞く」にしてください。/,
+    );
+    await m.locator('.online-phase-contents').waitFor();
+    assert.deepEqual(await shownPicks(), await serverPicks(), '任せた手続きに指導者の案が出ない');
+    for (const name of ['この内容で決定', '下書きを保存', '獲得の希望を変える', '決定を取り消す'])
+      assert.equal(
+        await m.getByRole('button', { name, exact: true }).count(),
+        0,
+        `任せた手続きに「${name}」が出る（押しても指導者の案で決まる）`,
+      );
+    await press('指導者のページへ');
+    await m.locator('.online-staff-modes').waitFor();
+    assert.equal(
+      await tryoutArea.locator('button[aria-pressed="true"]').innerText(),
+      '任せる',
+      '前提: トライアウトを任せている',
+    );
     await ctx.close();
   }
 

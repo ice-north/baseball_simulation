@@ -4383,6 +4383,22 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #cbd5e1;
   white-space: nowrap;
 }
+/* 指導者に任せた手続き（`PhasePanel` の `delegated`）: 案は読むだけ。自分で決めるときの入口を添える */
+.online-phase-delegated {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  background: rgba(103, 232, 249, 0.08);
+}
+.online-phase-delegated > p:not(:where(.online-sp *)) {
+  flex: 1 1 240px;
+  margin: 0;
+}
 .online-decision .online-actions.online-phase-confirm {
   border-top-color: #fbbf24;
 }
