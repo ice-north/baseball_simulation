@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
+import { useEscapeToClose } from './useEscapeToClose.js';
 
 /**
  * 取り消せない操作を決める帯（「選ぶ→確定」の後ろの段）。
@@ -16,12 +17,14 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
  * ⚠ 狭い幅（sm 未満）では、問いを折り返してボタンを下の段に回す。以前は1行に詰めて問いを
  *    truncate していたので、390幅では「9人を解…」で切れて解雇の人数が帯から読めなかった。
  *    問いはどの幅でも切らない（補足の detail だけ、sm 以上で1行に収める）。
+ * Esc で「やめる」と同じく閉じる（ほかの窓と同じ。上に選手詳細の窓が重なっていれば、そちらが先に閉じる）。
  */
 const ConfirmBar = ({
   title, detail, note, children,
   confirmLabel, onConfirm, confirmClass = 'btn-primary', disabled = false,
   cancelLabel = 'やめる', onCancel,
 }) => {
+  useEscapeToClose(onCancel);
   const barRef = useRef(null);
   const [barHeight, setBarHeight] = useState(null);
   useLayoutEffect(() => {

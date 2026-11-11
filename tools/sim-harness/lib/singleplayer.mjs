@@ -125,9 +125,14 @@ export function driver(page) {
         if (!(await visible('次のクールへ'))) break;
         await click('次のクールへ');
       }
+      // 「キャンプ終了 → 成長確認」は帯を出すだけ。帯の「キャンプを終える」で決める
+      // （以前は中央の窓で、見出し「キャンプ終了確認」・やめるが「戻る」だった）
       await click('キャンプ終了');
-      const confirm = page.getByRole('button', { name: 'キャンプ終了', exact: true });
-      if (await confirm.count()) await confirm.click();
+      const bar = page.getByTestId('confirm-bar');
+      await bar.waitFor().catch(() => {
+        throw new Error('「キャンプ終了 → 成長確認」を押しても、キャンプを終える確認の帯が出ない');
+      });
+      await bar.getByRole('button', { name: 'キャンプを終える', exact: true }).click();
       await page.waitForTimeout(500);
     },
     // 開発用の早送り。days は 7 / 30 / 'phase'（次の区切りまで）

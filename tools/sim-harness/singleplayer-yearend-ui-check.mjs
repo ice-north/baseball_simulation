@@ -401,6 +401,17 @@ async function runIndependent(page, t) {
     comparedEra++;
   }
   assert.ok(comparedEra >= 3, `前提: 契約更改とキャンプで防御率を比べられた投手が${comparedEra}人`);
+  // 派遣は下の帯で決める（以前は中央の窓で、やめるが「キャンセル」）。ここでは帯を出して Esc で閉じるだけ
+  const dispatchButton = page.locator('button[title*="に派遣"]:not([disabled])').first();
+  assert.ok(await dispatchButton.count(), '前提: 2年目のキャンプに派遣できる選手がいない');
+  await dispatchButton.click();
+  const dispatchBar = page.getByTestId('confirm-bar').filter({ hasText: /派遣しますか？/ });
+  await dispatchBar.waitFor({ timeout: 5000 }).catch(() => {
+    throw new Error('キャンプの派遣のボタンを押しても、派遣を決める帯が出ない');
+  });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await page.getByTestId('confirm-bar').count(), 0, '派遣の帯が Esc で閉じない');
   await t.campToOpening();
   assert.ok(await page.getByText(new RegExp(`⚾\\s*${renamed}`)).count() > 0, '2年目のサイドバーの自チームが改名した名前でない');
   await t.checkSecondYear({ league: true });
@@ -491,8 +502,14 @@ async function runCorporate(page, t) {
   assert.ok(await candidates.count() >= 2, `前提: 春から大学へスカウトを出したのに、スカウト入団の候補が${await candidates.count()}人`);
   await go('獲得なしで進む', bar, '獲得なしで終える確認の帯');
   await candidates.first().click();
-  await ui.click(/^交渉開始/);
-  await page.getByRole('heading', { name: '交渉結果' }).waitFor();
+  // 「交渉開始」は押しただけでは交渉しない（回数を使い、断られると候補が消えるので帯で決める）。
+  // 帯は Esc で閉じる
+  await go(/^交渉開始/, bar.filter({ hasText: /名と交渉しますか？/ }), '交渉する確認の帯');
+  assert.equal(await page.getByRole('heading', { name: '交渉結果' }).count(), 0, '「交渉開始」を押しただけで交渉が決まった');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await bar.count(), 0, '交渉する確認の帯が Esc で閉じない');
+  await t.confirm(/^交渉開始/, /^交渉する$/, page.getByRole('heading', { name: '交渉結果' }), '交渉結果');
   if (await shown(/^追加交渉する/)) {
     await ui.click(/^追加交渉する/);
     await page.waitForTimeout(300);

@@ -31,9 +31,10 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedScoutId, setSelectedScoutId] = useState(null);
   const [modalPlayer, setModalPlayer] = useState(null);
-  // 今年のスカウトを終える前の帯（'skip' 獲得なしで終える / 'finish' 交渉を終える）。
-  // ⚠ 以前はどちらも1回押すだけで終わり、その年はもう交渉できなかった
-  const [pendingEnd, setPendingEnd] = useState(null);
+  // 下に出す確認の帯: 'negotiate' 選んだ候補と交渉する / 'skip' 獲得なしで終える / 'finish' 交渉を終える。
+  // 1つの state にして、2本同時には出さない。
+  // ⚠ 以前は終える2つも1回押すだけで終わり、その年はもう交渉できなかった
+  const [pendingBar, setPendingBar] = useState(null);
 
   const staff = teamData?.corporateData?.staff || [];
   const scouts = staff.filter(s =>
@@ -50,7 +51,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     setCandidates(withRivals);
   }, []);
 
+  // 選び直したら帯は落とす（帯は押したときの選び方で出しているので、別の候補の帯に見える）
   const toggleSelect = (playerId) => {
+    setPendingBar(null);
     setSelectedIds(prev =>
       prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
     );
@@ -78,7 +81,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   const handleNegotiate = () => {
     // ⚠ 終える帯はここ（とフェーズを替える所）で落とす。残すと、結果から「追加交渉する」で
     //    戻ったときに、押していない「獲得なしで終えますか？」の帯がまた出た
-    setPendingEnd(null);
+    setPendingBar(null);
     const results = [];
     const removedIds = new Set();
     selectedIds.forEach(id => {
@@ -112,7 +115,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   };
 
   const handleContinue = () => {
-    setPendingEnd(null);
+    setPendingBar(null);
     if (candidates.length > 0) {
       setPhase('scout');
       setNegotiationResults([]);
@@ -280,19 +283,19 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
               className="btn-primary px-6 py-2.5 rounded-lg text-sm"
             >追加交渉する (残り{remaining}名)</button>
           )}
-          <button onClick={() => (remaining > 0 ? setPendingEnd('finish') : handleFinalize())}
+          <button onClick={() => (remaining > 0 ? setPendingBar('finish') : handleFinalize())}
             className="btn-primary px-6 py-2.5 rounded-lg text-sm"
           >交渉を終了する</button>
         </div>
-        {pendingEnd === 'finish' && (
+        {pendingBar === 'finish' && (
           <ConfirmBar
             title="今年のスカウトの交渉を終えますか？"
             detail={`獲得${totalAcquired}名・まだ交渉できる候補${remaining}名`}
             note="終えると取り消せません。今年はもう交渉できません。"
             confirmLabel="交渉を終える"
             confirmClass="btn-warn"
-            onConfirm={() => { setPendingEnd(null); handleFinalize(); }}
-            onCancel={() => setPendingEnd(null)}
+            onConfirm={() => { setPendingBar(null); handleFinalize(); }}
+            onCancel={() => setPendingBar(null)}
           />
         )}
       </div>
@@ -369,7 +372,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           <div className="text-sm text-gray-300 mb-2 font-bold">担当スカウト (交渉成功率に影響)</div>
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => setSelectedScoutId(null)}
+              onClick={() => { setPendingBar(null); setSelectedScoutId(null); }}
               className={`px-3 py-1.5 rounded text-sm font-bold transition ${
                 !selectedScoutId ? 'seg-on' : 'seg'
               }`}
@@ -379,7 +382,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
               return (
                 <button
                   key={s.id}
-                  onClick={() => setSelectedScoutId(s.id)}
+                  onClick={() => { setPendingBar(null); setSelectedScoutId(s.id); }}
                   className={`px-3 py-1.5 rounded text-sm font-bold transition ${
                     selectedScoutId === s.id ? 'seg-on' : 'seg'
                   }`}
@@ -515,26 +518,56 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       )}
 
       <div className="flex items-center gap-4">
+        {/* ⚠ 押した瞬間には交渉しない。交渉は1人3回までの回数を使い、断られた候補はほかの球団に
+            取られて一覧から消えるので、帯で決める（以前はこのボタンだけ1回で決まっていた） */}
         <button
-          onClick={handleNegotiate}
+          onClick={() => setPendingBar('negotiate')}
           disabled={selectedIds.length === 0}
           className={`px-6 py-2.5 rounded-lg font-bold text-base ${
             'btn-primary'
           }`}
         >交渉開始 ({selectedIds.length}名)</button>
-        <button onClick={() => setPendingEnd('skip')}
+        <button onClick={() => setPendingBar('skip')}
           className="btn-secondary px-4 py-2.5 rounded-lg text-sm"
         >獲得なしで進む</button>
       </div>
-      {pendingEnd === 'skip' && (
+      {pendingBar === 'negotiate' && selectedIds.length > 0 && (() => {
+        const picked = selectedIds.map(id => candidates.find(c => c.id === id)).filter(Boolean);
+        const scoutBonus = getScoutNegotiationBonus(selectedScout);
+        return (
+          <ConfirmBar
+            title={`${picked.length}名と交渉しますか？`}
+            detail={selectedScout ? `担当スカウト: ${selectedScout.name}（交渉+${scoutBonus}%）` : '担当スカウト: 指定なし'}
+            note="交渉は1人3回まで。断られると、ほかの球団に取られて候補から消えることがあります。取り消せません。"
+            confirmLabel="交渉する"
+            confirmClass="btn-warn"
+            onConfirm={() => { setPendingBar(null); handleNegotiate(); }}
+            onCancel={() => setPendingBar(null)}
+          >
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+              {picked.map(p => {
+                const rate = Math.min(95, (p.recruitRate || 0) + scoutBonus);
+                const shown = estimateRivalCount(p) === 0 ? Math.min(95, rate + 12) : rate;
+                return (
+                  <span key={p.id} className="whitespace-nowrap">
+                    <span className="text-white font-bold">{p.name}</span>
+                    <span className="text-gray-300">（{POSITION_NAMES[p.position]}・{shown}%{(p._negotiationAttempts || 0) > 0 ? `・残${3 - p._negotiationAttempts}回` : ''}）</span>
+                  </span>
+                );
+              })}
+            </div>
+          </ConfirmBar>
+        );
+      })()}
+      {pendingBar === 'skip' && (
         <ConfirmBar
           title={totalAcquired > 0 ? '今年のスカウトを、ここで終えますか？' : '今年のスカウトを、獲得なしで終えますか？'}
           detail={`${totalAcquired > 0 ? `獲得${totalAcquired}名・` : ''}候補${candidates.length}名と交渉せずに終えます`}
           note="終えると取り消せません。今年はもう交渉できません。"
           confirmLabel="終える"
           confirmClass="btn-warn"
-          onConfirm={() => { setPendingEnd(null); handleSkip(); }}
-          onCancel={() => setPendingEnd(null)}
+          onConfirm={() => { setPendingBar(null); handleSkip(); }}
+          onCancel={() => setPendingBar(null)}
         />
       )}
       {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
