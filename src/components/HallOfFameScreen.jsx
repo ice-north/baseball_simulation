@@ -7,6 +7,7 @@ import { resolveWatchList, removeFromWatchList, WATCH_STATUS_LABEL } from '../ga
 import { POSITION_NAMES } from '../utils/constants.js';
 import { SECOND_CAREER_META } from '../season/secondCareer.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
+import { formatInnings } from '../utils/physics.js';
 
 const NPB_TEAMS_CE = [
   { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', flag: 'giants' },
@@ -38,6 +39,13 @@ const SOURCE_LABELS = {
   corporate:  { label: '社人', color: 'text-orange-400 bg-orange-900/40 border-orange-600/40' },
   independent: { label: '独立', color: 'text-purple-400 bg-purple-900/40 border-purple-600/40' },
 };
+
+// ドラフトの記録の出どころ。大学のチームに所属していた選手は 'university_team'
+// で入る（src/season/npbDraft.js）ので、表示と集計では「大学」に寄せる。
+const sourceKey = (source) => (source === 'university_team' ? 'university' : source);
+
+// 通算防御率の規定（アウト数。10回）
+const MIN_ERA_OUTS = 30;
 
 const FULL_POSITION_NAMES = {
   pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手',
@@ -302,11 +310,12 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   ];
 
   const pitchingCategories = [
-    { key: 'era', label: '防御率', getValue: (s) => { const ip = s.pitching?.inningsPitched || 0; return ip >= 10 ? ((s.pitching?.earnedRuns || 0) / ip) * 9 : 999; }, format: (v) => v < 999 ? v.toFixed(2) : '-', ascending: true, minIP: 10 },
+    // inningsPitched はアウト数（3で1回）。防御率は 自責点 × 27 ÷ アウト数、規定は10回＝30アウト。
+    { key: 'era', label: '防御率', getValue: (s) => { const outs = s.pitching?.inningsPitched || 0; return outs >= MIN_ERA_OUTS ? ((s.pitching?.earnedRuns || 0) * 27) / outs : 999; }, format: (v) => v < 999 ? v.toFixed(2) : '-', ascending: true, minIP: MIN_ERA_OUTS },
     { key: 'wins', label: '勝利', getValue: (s) => s.pitching?.wins || 0, format: (v) => v },
     { key: 'saves', label: 'S', getValue: (s) => s.pitching?.saves || 0, format: (v) => v },
     { key: 'strikeouts', label: '奪三振', getValue: (s) => s.pitching?.strikeouts || 0, format: (v) => v },
-    { key: 'inningsPitched', label: '投球回', getValue: (s) => s.pitching?.inningsPitched || 0, format: (v) => v.toFixed(1) },
+    { key: 'inningsPitched', label: '投球回', getValue: (s) => s.pitching?.inningsPitched || 0, format: (v) => (v > 0 ? formatInnings(v) : '0回') },
   ];
 
   const allCategories = [...battingCategories, ...pitchingCategories];
@@ -473,7 +482,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       {(() => {
                         const src = { highschool: 0, university: 0, corporate: 0, independent: 0 };
                         npbDraftGridData.yearPlayers.forEach(p => {
-                          if (p.source && src[p.source] !== undefined) src[p.source]++;
+                          const k = sourceKey(p.source);
+                          if (k && src[k] !== undefined) src[k]++;
                         });
                         const labels = [['highschool', '高校'], ['university', '大学'], ['corporate', '社会人'], ['independent', '独立']];
                         return labels.filter(([k]) => src[k] > 0).map(([k, label]) => (
@@ -510,7 +520,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 <table className="w-full text-xs">
                                   <tbody>
                                   {picks.map((entry, pi) => {
-                                    const srcInfo = SOURCE_LABELS[entry.source];
+                                    const srcInfo = SOURCE_LABELS[sourceKey(entry.source)];
                                     const rd = entry.draftRound || '';
                                     const isIkusei = rd.includes('育成');
                                     let roundLabel;
@@ -532,14 +542,18 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                           }`}>{roundLabel}</span>
                                         </td>
                                         <td className="py-1 pl-1 text-white font-bold text-xs whitespace-nowrap cursor-pointer hover:text-yellow-300 transition" style={{ minWidth: '7em' }} onClick={() => openModal(entry)}>{entry.name}</td>
-                                        <td className="py-1 whitespace-nowrap pl-1">
-                                          <span className="text-blue-300">{getPositionName(entry.position)}</span>
-                                          <span className="inline-block w-2" />
-                                          <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{throwHand}</span>
-                                          <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{batHand}</span>
-                                          <span className="inline-block w-2" />
-                                          <span className="text-white">{entry.age}歳</span>
-                                          <span className="text-gray-300 ml-3">{entry.teamName}</span>
+                                        {/* 出身（学校・企業名）は長いので2行目に置き、入りきらなければ「…」で切って全体は title で読めるようにする。
+                                            1行に並べていた頃は 1280幅で「Hond」のように印も無く切れていた。 */}
+                                        <td className="py-1 pl-1 w-full max-w-0">
+                                          <div className="whitespace-nowrap">
+                                            <span className="text-blue-300">{getPositionName(entry.position)}</span>
+                                            <span className="inline-block w-2" />
+                                            <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{throwHand}</span>
+                                            <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{batHand}</span>
+                                            <span className="inline-block w-2" />
+                                            <span className="text-white">{entry.age}歳</span>
+                                          </div>
+                                          <div className="text-gray-300 truncate" title={entry.teamName}>{entry.teamName}</div>
                                         </td>
                                       </tr>
                                     );
@@ -589,7 +603,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                   const avg = ab > 0 ? (stats.batting.hits / ab).toFixed(3) : '.000';
                                   mainStat = `${avg} ${stats.batting?.homeruns || 0}HR ${stats.batting?.hits || 0}安`;
                                 }
-                                const srcInfo = SOURCE_LABELS[player.source];
+                                const srcInfo = SOURCE_LABELS[sourceKey(player.source)];
                                 return (
                                   <tr key={idx} className={`border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer ${player.hallOfFame ? 'bg-yellow-900/20' : ''}`} onClick={() => openModal(player)}>
                                     <td className="py-1.5 px-2">
