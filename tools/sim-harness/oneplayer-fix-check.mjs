@@ -203,4 +203,50 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   releasedPlayersPool.length = 0;
 }
 
-console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない）');
+// --- トライアウトのFA枠は、球団を解雇された選手から引く ---
+// ⚠ **プールは元プロだけではない**。大学卒業生・高卒の不指名者も同じプールに
+//    入るので人数の9割がそれで、素で引くとFA枠にほとんど元プロが来ない
+//    （実測: プール440人のうち元プロ49人 / 受験者120人のうち元プロ0〜1人）。
+//    元プロは26〜32歳の衰える年代で、**リーグが若いまま伸び続けるのを止める**
+//    唯一の供給源（いしだ案: 解雇した選手が混ざることで年齢の釣り合いが取れる）。
+{
+  // 大学卒業生を多めに、元プロを少しだけ（本番と同じ比率の縮小版）
+  // ⚠ 引数は (年, 人数)。逆にすると1人しか返らない
+  const roster = quiet(() => generateExpansionRoster(1, 60));
+  releasedPlayersPool.length = 0;
+  roster.forEach((p, i) => {
+    p.id = 900000 + i;
+    p.attemptsInPool = 0;
+    if (i < 6) {
+      // 解雇された元プロ（26〜31歳）
+      p.age = 26 + (i % 6);
+      p.previousTeam = `検査球団${i}`;
+      p.releasedYear = 2;
+      delete p.origin;
+    } else {
+      p.age = 19 + (i % 3);
+      p.origin = 'university';
+    }
+    releasedPlayersPool.push(JSON.parse(JSON.stringify(p)));
+  });
+  const candidates = quiet(() => generateTryoutCandidates(2, 4, false, 'B', 0));
+  const expro = candidates.filter((c) => c.previousTeam);
+  assert.ok(
+    expro.length >= 4,
+    `FA枠に元プロがほとんど来ていない: ${expro.length}人（プールに6人居る）`,
+  );
+  // ⚠ **FA枠が受験者の大半になってはいけない**（育てる遊びの軸は若い選手）。
+  //    ここは高校・大学のプールが空の縮小版なので割合は本番より高く出る。
+  //    本番の実測は受験者120人中14人（11.7%）
+  // ⚠ **FA枠を増やしすぎないこと**（育てる遊びの軸は若い選手）。
+  //    `faShare` の割合は正規化していないので、上げると受験者の総数ごと増えて
+  //    若い層が薄まる。本番の実測は受験者120人中14人（11.7%）、ここは40人中5人
+  const fromPool = candidates.filter((c) => c.isReleasedCandidate);
+  assert.ok(
+    fromPool.length <= candidates.length * 0.25,
+    `FA枠が多すぎる: ${fromPool.length}/${candidates.length}人`,
+  );
+  releasedPlayersPool.length = 0;
+}
+
+console.log('■ 一人用の進行の再発防止: OK（監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / FA枠は解雇された選手から引く）');

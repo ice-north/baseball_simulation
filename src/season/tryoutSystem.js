@@ -416,13 +416,35 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
  * - 能力値にブランクによる微減衰を適用
  * @returns {Array} 再トライアウト参加者（解雇フラグ付き）
  */
-function getReleasedCandidatesFromPool(maxPlayers = null) {
+/**
+ * 自由契約のプールから受験者を作る。
+ *
+ * @param {number|null} maxPlayers 引く人数（null なら全員）
+ * @param {boolean} exProFirst **球団を解雇された選手を先に引く**
+ *
+ * ⚠ **プールは元プロだけではない**。大学卒業生・高卒の不指名者もここに入るので、
+ *    人数の9割がそれで、素で引くと「FA枠」にほとんど元プロが来ない
+ *    （実測: プール440人のうち元プロは49人。FA枠5人のうち元プロは0〜1人）。
+ *    元プロは26〜32歳の衰える年代で、**リーグが若いまま伸び続けるのを止める**
+ *    唯一の供給源なので、FA枠はそこから先に引く（いしだ案）。
+ */
+function getReleasedCandidatesFromPool(maxPlayers = null, exProFirst = false) {
   if (!releasedPlayersPool || releasedPlayersPool.length === 0) return [];
 
   // シャッフルして上限を設ける: 複数チームの並行初期化時に同一選手が全チームに選ばれるのを防ぐ
-  const sourcePool = maxPlayers !== null
-    ? [...releasedPlayersPool].sort(() => Math.random() - 0.5).slice(0, maxPlayers)
-    : releasedPlayersPool;
+  const shuffled = () => [...releasedPlayersPool].sort(() => Math.random() - 0.5);
+  const sourcePool =
+    maxPlayers === null
+      ? releasedPlayersPool
+      : exProFirst
+        ? (() => {
+            const all = shuffled();
+            // ⚠ 解雇された選手の印は `previousTeam`（`releasePlayers` が付ける）
+            const exPro = all.filter((p) => p.previousTeam);
+            const rest = all.filter((p) => !p.previousTeam);
+            return [...exPro, ...rest].slice(0, maxPlayers);
+          })()
+        : shuffled().slice(0, maxPlayers);
 
   const candidates = [];
   for (const p of sourcePool) {
@@ -583,7 +605,13 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   // リーグを育てる（プロ輩出でdevelopmentReputationが上がる）動機付けにする。
   const t = Math.max(0, Math.min(1, (leagueReputation || 0) / 60));
   const uniShare = 0.40 + 0.15 * t;
-  const faShare = 0.08 + 0.12 * t;
+  // ⚠ **FA（元プロ）の枠を厚くする**（いしだ案: 解雇した選手が混ざることで
+  //    年齢の釣り合いが取れる）。以前は 8〜20% で、しかもその半分がクラブ選手、
+  //    さらにプールを素で引いていたので、実際に出てくる元プロは受験者の
+  //    **0〜1%**しか居なかった（実測: 120人中0〜1人）。
+  //    受験者の平均年齢は19.9歳で、**29歳以上が1人も居ない**。
+  //    これでは入ってくるのが若い選手だけになり、リーグは毎年伸びるだけになる
+  const faShare = 0.18 + 0.12 * t;
   const hsShare = Math.max(0.20, 1 - uniShare - faShare);
   const total = teamCount * (TRYOUT_TOTAL_PER_TEAM + Math.round(2 * t)); // 注目度で受験者数も微増
   const uniCount = Math.max(Math.round(total * uniShare), 6);
@@ -611,9 +639,10 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   drawUni(uniS.gem, gemBias).forEach(c => { c._gem = true; addCandidate(c); });
   // 3. FA組（リリースプール ＋ クラブチーム選手）
   //    FA枠の半分はクラブチームのプロ志向選手から供給する
-  const clubCount = Math.max(Math.round(faCount * 0.5), 2);
+  // ⚠ クラブ選手は若い。FA枠の多数は**元プロ**に回す
+  const clubCount = Math.max(Math.round(faCount * 0.35), 2);
   const releasedCount = Math.max(faCount - clubCount, 2);
-  getReleasedCandidatesFromPool(releasedCount).forEach(addCandidate);
+  getReleasedCandidatesFromPool(releasedCount, true).forEach(addCandidate);
   getClubTryoutCandidates(clubCount).forEach(addCandidate);
 
   // 4. 安全網: 実在候補が極端に少ない場合のみ生成で補完（通常は発生しない）
