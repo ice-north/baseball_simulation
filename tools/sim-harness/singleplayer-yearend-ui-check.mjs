@@ -244,8 +244,12 @@ async function runIndependent(page, t) {
   //    野手8人）がそろうまで「指名終了」は押せない（押すと alert）。先に捕手を1人取り、
   //    「編成不足」の帯が出ていればその守備位置を取る
   let tab = '捕手';
+  // 「現在の編成 (N/24人)（現有X＋指名Y）」。指名が終わって名簿に書いた後も同じ数のはず
+  const rosterHeading = async () => (await page.getByText(/^現在の編成 \(/).first().innerText()).trim();
+  let before = null;
   while (await waitUserTurn(page)) {
     if (!tab) {
+      before = await rosterHeading();
       await page.getByRole('button', { name: /^指名終了$/ }).click();
       await page.getByTestId('confirm-bar').getByRole('button', { name: '指名を終える', exact: true }).click();
       break;
@@ -256,6 +260,10 @@ async function runIndependent(page, t) {
     tab = ['投手', '捕手', '内野手', '外野手'].find((pos) => text.includes(pos)) || null;
   }
   await page.getByText('ドラフト完了').first().waitFor({ timeout: 180000 });
+  if (before) {
+    assert.equal(await rosterHeading(), before,
+      'トライアウトの指名を終えたら、現在の編成の人数が変わった（指名した選手を二重に数えている）');
+  }
   await go('トライアウト終了', page.getByTestId('dev-advance'), '日程画面');
 
   await t.proceedTo(/オフシーズン/);

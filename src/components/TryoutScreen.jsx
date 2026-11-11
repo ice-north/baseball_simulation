@@ -530,7 +530,10 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
             <div className="flex items-center justify-between mb-3">
               {(() => {
                 const _tn = (Array.isArray(allTeams) ? allTeams : Object.keys(allTeams))[0];
-                const _existing = TEAMS_DATA[_tn]?.players?.length || 0;
+                // ⚠ 指名が終わると指名した選手は名簿（TEAMS_DATA）にも入る。現有から除いて数える
+                //    （除かないと終わった後に「現有23＋指名1＝24人」のように二重に数えていた）
+                const _picked = new Set(userRoster.map(p => p.id));
+                const _existing = (TEAMS_DATA[_tn]?.players || []).filter(p => !_picked.has(p.id)).length;
                 const _total = _existing + userRoster.length;
                 return (
                   <h3 className="text-white font-bold">
@@ -544,7 +547,8 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
               // 編成不足の判定は「現有戦力＋今回指名した選手」の合計で行う
               const teamsArrayLocal = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
               const userTeamNameLocal = teamsArrayLocal[0];
-              const existingPlayersLocal = TEAMS_DATA[userTeamNameLocal]?.players || [];
+              const pickedIdsLocal = new Set(userRoster.map(p => p.id));
+              const existingPlayersLocal = (TEAMS_DATA[userTeamNameLocal]?.players || []).filter(p => !pickedIdsLocal.has(p.id));
               const positionCounts = { pitcher: 0, catcher: 0, infielder: 0, outfielder: 0 };
               [...existingPlayersLocal, ...userRoster].forEach(player => {
                 const category = getPositionCategory(player.position);
