@@ -52,7 +52,8 @@ export function executeSetupManagedGame(ctx, gameInfo) {
     let aiStarterId = null;
 
     if (isUserTeam) {
-      players.forEach(p => { p.battingOrder = 0; });
+      // DH の印も外す（打順に入る人だけ付け直す。`generateAILineup` の説明を参照）
+      players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
       settings.battingOrder.forEach(entry => {
         const player = players.find(p => p.id === entry.playerId);
         if (player) {

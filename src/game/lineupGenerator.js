@@ -501,8 +501,8 @@ export const generateOptimalLineup = (teamName, mode = 'standard', given = null)
     }
   }
 
-  // 旧形式の打順も維持
-  team.players.forEach(p => { p.battingOrder = 0; });
+  // 旧形式の打順も維持（DH の印も外す。打順に入る人だけ付け直す。`generateAILineup` の説明を参照）
+  team.players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
   team.lineupSettings.battingOrder.forEach(entry => {
     const teamPlayer = team.players.find(p => p.id === entry.playerId);

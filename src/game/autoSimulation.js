@@ -148,7 +148,10 @@ export const generateAILineup = (teamData, teamName) => {
 
 
   // 全員の打順をリセット
-  players.forEach(p => { p.battingOrder = 0; });
+  // ⚠ **DH の印（`_isDH`）も一緒に外す**。下で印を付け直すのは打順に入る人だけなので、
+  //    前の打順の DH が控えに回ると印が残り、守備固めで入ると印付きのまま守備位置を受け取って
+  //    「DH が2人・その守備位置が空」になっていた（守備の検索は `!p._isDH` で探す）
+  players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
   // 先発投手を先に決定（二刀流選手のフィールド配置に影響するため）
   const rotation = teamData.pitchingRotation;
@@ -479,8 +482,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     }
 
 
-    // まず全員の打順を0にリセット
-    teamData.players.forEach(p => { p.battingOrder = 0; });
+    // まず全員の打順を0にリセット（DH の印も外す。`generateAILineup` の説明を参照）
+    teamData.players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
     // lineupSettingsから打順と守備位置を適用（DHは打順のみ、ポジション変更しない）
     settings.battingOrder.forEach(entry => {
@@ -1517,6 +1520,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             if (replacement) {
               replacement.battingOrder = starter.battingOrder;
               replacement.position = starter.position;
+              // 守備に就く（DH の印が残っていると守備の検索に掛からず、その位置が空になる）
+              delete replacement._isDH;
               starter.battingOrder = 0;
               gameState.removedIds.add(starter.id);
             }
@@ -1551,6 +1556,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
           leastUsed.battingOrder = weakest.battingOrder;
           leastUsed.position = weakest.position;
+          delete leastUsed._isDH;
           weakest.battingOrder = 0;
           gameState.removedIds.add(weakest.id);
         }
@@ -1863,6 +1869,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const relieverData = defenseTeam.players.find(p => p.id === reliever.id);
       const relieverOldOrder = relieverData.battingOrder;
       const relieverOldPos = relieverData.position;
+      const relieverWasDH = !!relieverData._isDH;
       const isTwoWaySwap = inFieldSlot(relieverData);
       const replacement = isTwoWaySwap
         ? reliefFieldReplacement(defenseTeam.players, relieverData, currentPitcher.id, gs.removedIds)
@@ -1875,12 +1882,15 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
       relieverData.battingOrder = pitcherSlot;
       relieverData.position = 'pitcher';
+      delete relieverData._isDH;
       relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
       // 二刀流リリーフ: 空いた野手スロットをベンチから補充
+      // ⚠ DH の枠なら代わりも DH（守備には就かない）。印を写さないと本来の野手と守備位置が重なる
       if (replacement && relieverOldPos) {
         replacement.battingOrder = relieverOldOrder;
         replacement.position = relieverOldPos;
+        if (relieverWasDH) replacement._isDH = true; else delete replacement._isDH;
       }
 
       reliefTrack.currentRelieverId = reliever.id;
@@ -2920,6 +2930,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               const relieverData = team.players.find(p => p.id === reliever.id);
               const relieverOldOrder2 = relieverData.battingOrder;
               const relieverOldPos2 = relieverData.position;
+              const relieverWasDH2 = !!relieverData._isDH;
               const isTwoWaySwap2 = inFieldSlot(relieverData);
               const replacement = isTwoWaySwap2
                 ? reliefFieldReplacement(team.players, relieverData, pitcher.id, gameState.removedIds)
@@ -2939,11 +2950,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
               relieverData.battingOrder = pitcherSlot;
               relieverData.position = 'pitcher';
+              delete relieverData._isDH;
               relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
+              // DH の枠なら代わりも DH（上の継投と同じ）
               if (replacement && relieverOldPos2) {
                 replacement.battingOrder = relieverOldOrder2;
                 replacement.position = relieverOldPos2;
+                if (relieverWasDH2) replacement._isDH = true; else delete replacement._isDH;
               }
 
               reliefTrack.currentRelieverId = reliever.id;

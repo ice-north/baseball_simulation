@@ -18,7 +18,7 @@ import { releasedPlayersPool } from '../../src/teams-data.js';
 import { executeTeamCampTraining } from '../../src/season/campTraining.js';
 import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
-import { autoSimulateGame, setRecommendedLineup } from '../../src/game/autoSimulation.js';
+import { autoSimulateGame, generateAILineup, setRecommendedLineup } from '../../src/game/autoSimulation.js';
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason, fitGamesPerSeason, twoLeagueSizes } from '../../src/season/scheduleGenerator.js';
 import { applyNextSeasonRegulations } from '../../src/season/nextSeasonRegulations.js';
 import { twoLeagueGameCountLabel, twoLeagueSplitLabel } from '../../src/season/regulationSettings.js';
@@ -306,6 +306,65 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   }
 }
 
+// --- 打順から外れた選手に DH の印が残らず、守備固めで入っても DH が2人にならない ---
+// ⚠ 打順を組み直す所（AI の打順・保存の打順の適用・最適オーダー）は打順だけ0に戻し、
+//    DH の印（`_isDH`）は打順に入る人の分しか直していなかった。DH だった選手が控えに回ると
+//    印が残り、7回以降の守備固め・大量リードの交代で入ると印付きのまま守備位置を受け取る。
+//    守備の検索（`!p._isDH`）に掛からないのでその位置は空になり、DH が2人になっていた
+//    （推奨スタメンを組み直した自チームで200試合中186、CPU の延べ300球団のうち93）
+{
+  const { seasonData } = quiet(() => bootstrapWorld());
+  const savedDH = LEAGUE_SETTINGS.useDH;
+  LEAGUE_SETTINGS.useDH = true;
+  try {
+    const names = seasonData.settings.teamNames;
+    const [user] = names;
+    const flaggedOffLineup = (team) => team.players.filter(p => p._isDH && !(p.battingOrder > 0));
+    // 自チーム: 推奨スタメンの DH を疲れさせて組み直すと、その人は控えに回る
+    const team = TEAMS_DATA[user];
+    quiet(() => setRecommendedLineup(team, user));
+    // 疲れて打てなくなった選手は組み直すと控えに回る（打撃は試すあいだだけ落とす）
+    const benchOut = (p, rebuild) => {
+      const saved = { fatigue: p.fatigue, condition: p.condition, batting: { ...p.batting } };
+      Object.assign(p, { fatigue: 100, condition: 0 });
+      Object.assign(p.batting, { meet: 1, power: 1 });
+      try { rebuild(); } finally { Object.assign(p, { fatigue: saved.fatigue, condition: saved.condition, batting: saved.batting }); }
+      assert.ok(!(p.battingOrder > 0), '前提: 疲れた DH は組み直すと控えに回る');
+    };
+    const firstDH = team.players.find(p => p._isDH);
+    assert.ok(firstDH, '前提: 推奨スタメンに DH がいる');
+    benchOut(firstDH, () => quiet(() => setRecommendedLineup(team, user)));
+    assert.deepEqual(flaggedOffLineup(team).map(p => p.name), [], '推奨スタメンを組み直すと、控えに回った元の DH に印が残る');
+    // CPU: 試合前の打順（generateAILineup）でも同じ
+    const cpu = TEAMS_DATA[names[1]];
+    quiet(() => generateAILineup(cpu, names[1]));
+    const cpuDH = cpu.players.find(p => p._isDH);
+    assert.ok(cpuDH, '前提: CPU の打順に DH がいる');
+    benchOut(cpuDH, () => quiet(() => generateAILineup(cpu, names[1])));
+    assert.deepEqual(flaggedOffLineup(cpu).map(p => p.name), [], 'CPU の打順を組み直すと、控えに回った元の DH に印が残る');
+    // 印が残ったままの名簿（古い保存）でも、試合は保存の打順から組み直すので DH は1人
+    firstDH._isDH = true;
+    cpuDH._isDH = true;
+    const opp = names[1];
+    let twoDH = 0;
+    let games = 0;
+    for (let i = 0; i < 40; i++) {
+      quiet(() => ensureCompleteLineup(team, true));
+      const r = quiet(() => autoSimulateGame(user, opp, false, i + 1));
+      for (const side of [r.homeTeam, r.awayTeam]) {
+        games++;
+        const on = side.players.filter(p => p.battingOrder > 0);
+        const fielded = new Set(on.filter(p => !p._isDH && p.position !== 'pitcher').map(p => p.position));
+        if (on.filter(p => p._isDH).length > 1 || fielded.size < 8) twoDH++;
+      }
+      for (const t of [user, opp]) for (const p of TEAMS_DATA[t].players) p.fatigue = 0;
+    }
+    assert.equal(twoDH, 0, `試合の終わりに DH が2人・守備位置が空いていた（延べ${games}球団のうち${twoDH}）`);
+  } finally {
+    LEAGUE_SETTINGS.useDH = savedDH;
+  }
+}
+
 // --- DH制で、打順から外した先発と試合で投げる先発が同じ ---
 // ⚠ 以前の試合側は、ローテの今の番の選手が抹消中だと疲労を見て別の選手を選んでいた。
 //    打順を揃える側（`ensureCompleteLineup`）は「抹消中を飛ばした次の番」を外すので、
@@ -482,4 +541,4 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(withDeparted({ ...season, year: 4 }, [departedEntry(stay, 'A', 'A球団')]).departedSeasonStats.players.length, 1);
 }
 
-console.log('■ 一人用の進行の再発防止: OK（DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');
+console.log('■ 一人用の進行の再発防止: OK（控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');
