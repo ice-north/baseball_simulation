@@ -1263,6 +1263,17 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-pager button {
   min-width: 48px;
 }
+/* ホームの「リーグの話題」。⚠ 続きの案内は見出しの行に収める（行を増やさない） */
+.online-topics-head:not(:where(.online-sp *)) {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.online-topics-head small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-sub, #9fb0c4);
+}
 .online-news-list article {
   padding: 12px 0;
   border-bottom: 1px solid #536b85;
@@ -2394,6 +2405,12 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-board-main,
 .online-board-side {
   min-width: 0;
+}
+/* ⚠ **列の最後のカードの下余白は、ページの高さに足されるだけ**（下には何も無い）。
+   ホームは1画面（1000px）に収める決まりで、右の列が一番きつい（実測 982px）。
+   16pxを戻すだけで1行ぶんの余裕ができる */
+.online-desktop .online-board-side > .online-card:last-child {
+  --online-card-gap: 0;
 }
 /* ⚠ 1100px を下回ったら**縦に積む**。7列のカレンダーと順位表を
    横に並べたままにすると、どちらも読めない幅になる */

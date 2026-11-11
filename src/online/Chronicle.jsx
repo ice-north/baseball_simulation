@@ -122,16 +122,35 @@ function Milestones({ list, showTeam = false }) {
   );
 }
 
-/** リーグの話題（マジック・節目・裏の大会）。ホームの横に置く */
+/**
+ * リーグの話題（マジック・節目・裏の大会）。ホームの横に置く。
+ *
+ * ⚠ **件数に上限を置くこと**。ホームは1画面（1000px）に収める決まりで、
+ *    右の列は順位表とこのカードだけ。ここが件数ぶん伸びると、順位表ごと
+ *    画面から出る（実測: 話題が1件のとき898px、3件で1046px）。
+ * ⚠ 続きは「球団史・記録」（`Chronicle`）に全部出るので、ここで落としても読める。
+ */
+const HOME_TOPIC_LIMIT = 2;
 export function LeagueTopics({ view }) {
-  const races = (view.races || []).map((r) => raceText(r, teamShort)).filter(Boolean);
+  const races = (view.races || [])
+    .map((r) => raceText(r, teamShort))
+    .filter(Boolean)
+    .slice(0, HOME_TOPIC_LIMIT);
   // ⚠ 年をまたいでも残す（PCは「話題」の一覧なので、紙面のように日付で切らない）。年を見出しに添える
-  const world = (view.chronicle?.world || []).map((w) => worldText(w, teamShort));
+  const world = (view.chronicle?.world || [])
+    .map((w, i) => ({ text: worldText(w, teamShort), year: w?.year, i }))
+    .filter((x) => x.text)
+    .slice(0, HOME_TOPIC_LIMIT);
   const milestones = view.chronicle?.milestones || [];
-  if (!races.length && !world.some(Boolean) && !milestones.length) return null;
+  if (!races.length && !world.length && !milestones.length) return null;
   return (
     <section className="online-card">
-      <h2>リーグの話題</h2>
+      {/* ⚠ 続きの案内は**見出しの行に置く**。1行足すと24px取られ、順位表ごと
+          1画面から出る（実測 982px→1006px） */}
+      <h2 className="online-topics-head">
+        リーグの話題
+        <small>続きは「球団史・記録」で</small>
+      </h2>
       {races.length > 0 && (
         <div className="online-news-list">
           {races.map((t, i) => (
@@ -145,19 +164,19 @@ export function LeagueTopics({ view }) {
       {milestones.length > 0 && (
         <>
           <h3>最近の節目</h3>
-          <Milestones list={milestones.slice(0, 5)} showTeam />
+          <Milestones list={milestones.slice(0, HOME_TOPIC_LIMIT)} showTeam />
         </>
       )}
-      {world.some(Boolean) && (
+      {world.length > 0 && (
         <>
           <h3>球界の外から</h3>
           <div className="online-news-list">
-            {world.map((t, i) => t && (
+            {world.map(({ text, year, i }) => (
               <article key={`w:${i}`}>
                 <b>
-                  {view.chronicle.world[i].year}年 {t.head}
+                  {year}年 {text.head}
                 </b>
-                <span>{t.body}</span>
+                <span>{text.body}</span>
               </article>
             ))}
           </div>
