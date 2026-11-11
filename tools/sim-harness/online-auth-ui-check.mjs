@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 import { ONLINE_SCHEMA } from '../../src/online/shared.js';
+import { failureShots } from './lib/failureShots.mjs';
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
   'utf8',
@@ -498,6 +499,9 @@ try {
   console.log(
     'online-auth-ui-check PASS（配布HTML・ログアウト中の遅延更新・別タブログイン・期限切れ復帰・別タブのログアウト後にビューを書き戻さない・英語の失敗文と読み込み失敗の表示・読み直せたら帯を消す・落ちたビューを忘れる / Authはfixture）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-auth-ui');
+  throw error;
 } finally {
   await browser.close();
 }

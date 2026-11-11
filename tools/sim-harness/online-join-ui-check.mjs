@@ -14,6 +14,7 @@ import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
 import { ABILITY_HELP } from '../../src/online/playerInfo.js';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -104,7 +105,7 @@ try {
     /開幕待ち/,
     '左上に開幕待ちが出ない',
   );
-  await page.screenshot({ path: '/tmp/online-join-home.png' });
+  await page.screenshot({ path: '/tmp/baseball-online-join-home.png' });
 
   // --- 選手の詳細で能力の説明 -------------------------------------
   await page.getByRole('button', { name: '選手成績', exact: true }).click();
@@ -128,12 +129,15 @@ try {
   );
   await detail.locator('dt.has-help', { hasText: '体幹' }).click();
   assert.equal(await help.count(), 0, 'もう一度押しても説明が閉じない');
-  await page.screenshot({ path: '/tmp/online-join-detail.png' });
+  await page.screenshot({ path: '/tmp/baseball-online-join-detail.png' });
 
   assert.deepEqual(errors, [], `画面のエラー: ${errors.join(' / ')}`);
   console.log(
     '■ 途中参加の画面: OK（選ぶと準備完了・日時 / 選び直し / ホームの開幕待ち / 能力の説明）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-join-ui');
+  throw error;
 } finally {
   await browser.close();
 }

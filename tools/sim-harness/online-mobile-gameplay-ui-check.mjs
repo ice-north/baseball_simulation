@@ -16,6 +16,7 @@ import {
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { TACTIC_DEFAULTS } from '../../src/online/tactics.js';
 import { shortLastLines } from './lib/textWrap.mjs';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -479,6 +480,9 @@ try {
   console.log(
     'online-mobile-gameplay-ui-check PASS（320/360×640 DPR3/390/767px・采配の下書き/保存失敗/保存・PC設定保持・他球団・全投球/回/ページ/得点・長いスクロールなし / 通信はfixture）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-mobile-gameplay-ui');
+  throw error;
 } finally {
   await browser.close();
 }

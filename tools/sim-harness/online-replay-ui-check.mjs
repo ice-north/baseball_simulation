@@ -16,6 +16,7 @@ import {
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { STRATEGY_FIELDS } from '../../src/online/tactics.js';
 import { shortLastLines } from './lib/textWrap.mjs';
+import { failureShots } from './lib/failureShots.mjs';
 const league = structuredClone(recordedFixture);
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -307,6 +308,9 @@ try {
   console.log(
     'online-replay-ui-check PASS（実記録・PC主要12項目・采配保存・球場/投球コース・再生/停止/シーク・最終得点・閲覧非破壊 / 通信はfixture）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-replay-ui');
+  throw error;
 } finally {
   await browser.close();
 }

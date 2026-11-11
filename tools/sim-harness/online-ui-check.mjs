@@ -3,6 +3,7 @@ import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
 import { tryoutService, routeToService } from './lib/serviceRoute.mjs';
 import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
+import { failureShots } from './lib/failureShots.mjs';
 const base = process.env.ONLINE_TEST_URL || 'http://localhost:3000';
 assert.ok(
   ['localhost', '127.0.0.1'].includes(new URL(base).hostname),
@@ -749,6 +750,9 @@ try {
   console.log(
     'online-ui-check PASS（PC2人・別スマホ・トライアウト希望リスト・セット選択の下書き競合・キャンプがホームで1画面に収まる/対象を選べる・編成の元に戻す/保存中ロック/別画面との同時編集・端末交代・実試合結果・320〜767px / Chrome実操作）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-ui');
+  throw error;
 } finally {
   await browser.close();
 }

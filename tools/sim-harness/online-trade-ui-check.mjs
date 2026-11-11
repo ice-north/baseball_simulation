@@ -31,6 +31,7 @@ import { tradeFactorFor } from '../../server/coachEngine.mjs';
 import { CPU_ACCEPT_MARGIN } from '../../src/online/trades.js';
 import { rosterCounts } from '../../src/utils/constants.js';
 import { shortLastLines } from './lib/textWrap.mjs';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -594,6 +595,9 @@ try {
   console.log(
     'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき））',
   );
+} catch (error) {
+  await failureShots(browser, 'online-trade-ui');
+  throw error;
 } finally {
   await browser.close();
 }

@@ -18,6 +18,7 @@ import { chromium } from 'playwright';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
 import { shortLastLines } from './lib/textWrap.mjs';
 import { positionFitness, LOW_FITNESS } from '../../src/online/lineupEdit.js';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -341,6 +342,9 @@ try {
   console.log(
     'online-mobile-lineup-ui-check PASS（320px・667×375・打順/守備/交代の2タップ・2回目は相手の行のどこでも・選び直し・守れない位置の注意・DHなしの9番・元に戻す・取り消す・タブ移動/再読み込み/PCの幅で保持・保存して読み直し・投手起用の入口）',
   );
+} catch (error) {
+  await failureShots(browser, 'online-mobile-lineup-ui');
+  throw error;
 } finally {
   await browser.close();
 }

@@ -22,6 +22,7 @@ import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
 import { shortLastLines } from './lib/textWrap.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(new URL('../../dist/index.html', import.meta.url), 'utf8');
 const base = 'http://localhost:3000';
@@ -269,6 +270,9 @@ try {
 
   assert.deepEqual(errors, [], `画面のエラー: ${errors.join(' / ')}`);
   console.log('online-staff-ui-check PASS（PC の指導者ページ・任せ方・解任と市場・他球団・方針の中身・スマホ）');
+} catch (error) {
+  await failureShots(browser, 'online-staff-ui');
+  throw error;
 } finally {
   await browser.close();
 }

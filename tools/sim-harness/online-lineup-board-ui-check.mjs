@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
+import { failureShots } from './lib/failureShots.mjs';
 
 const html = await readFile(
   new URL('../../dist/index.html', import.meta.url),
@@ -885,6 +886,9 @@ try {
   console.log(
     'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び / 守備位置の変更（定期の読み直しで版が上がった後も））',
   );
+} catch (error) {
+  await failureShots(browser, 'online-lineup-board-ui');
+  throw error;
 } finally {
   await browser.close();
 }
