@@ -77,6 +77,8 @@ class AppUiTest {
 
     @Test fun tradeAndProcedureNoticesBothRemainVisibleWithoutOverlap() {
         open(""""pendingPack":{"chosen":null,"packs":[]},"trades":[{"id":"t1","myTurn":true,"mine":false,"fromTeam":"other"}]""")
+        // ⚠ ホームでは手続きの帯を出さない（紙面の「お知らせ」に同じ文がある）。ほかのタブで確かめる
+        rule.onNodeWithTag("tab-Games").performClick()
         val trade = rule.onNodeWithTag("trade-notice").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val procedure = rule.onNodeWithTag("procedure-notice").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue("トレード通知が手続き通知を隠しています", trade.bottom <= procedure.top)

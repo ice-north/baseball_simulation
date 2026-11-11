@@ -156,7 +156,8 @@ fun OnlineApp(model: AppViewModel) {
                 Column {
                     // ⚠ 帯は重ねず上に並べる（重ねると、ホームの右上のメニューのような画面の上の操作を塞ぐ）。
                     //    帯がステータスバーぶん空けたら、下の画面には空けさせない（二重の隙間になる）
-                    val showProcedure = procedure != null && !onProcedure
+                    // ⚠ ホームでは帯を出さない（紙面の「お知らせ」に同じ文があり、上下に2つ並んでいた）
+                    val showProcedure = procedure != null && !onProcedure && tab != Tab.Home
                     notice?.let { text ->
                         TradeNotice(
                             text,
@@ -187,7 +188,7 @@ fun OnlineApp(model: AppViewModel) {
                         Tab.Games -> GamesScreen(model)
                         Tab.Players -> PlayersScreen(model)
                         Tab.Plan -> PlanScreen(model)
-                        Tab.Procedures -> ProceduresScreen(model, onRename = { renaming = true }, onHome = { tab = Tab.Home })
+                        Tab.Procedures -> ProceduresScreen(model, onHome = { tab = Tab.Home })
                     }
                     }
                 }

@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Surface
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -80,7 +83,7 @@ import kotlinx.serialization.json.JsonObject
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
+fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, header: @Composable () -> Unit = {}) {
     val phaseId = phase.at("id").str().orEmpty()
     val camp = phase["camp"].obj()
     val done = camp.at("rounds").int() ?: 0
@@ -152,107 +155,114 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) {
         model.command("campRound", payload, label = "第${done + 1}クールの練習中…", done = "第${done + 1}クールの練習を終えました")
     }
 
-    Section(
-        "春季キャンプ",
-        trailing = {
-            Rounds(done, total)
-            InfoButton(
+    Column(Modifier.fillMaxSize()) {
+        ProcScroll(Modifier.weight(1f)) {
+            header()
+            Section(
                 "春季キャンプ",
-                listOf(
-                    "メイン練習とサブ練習を選んで実行します。1クールごとに結果が反映されるので、伸びた能力を見て次のクールを決められます。全クールが終わったら、伸びた能力でスタメン・投手起用を整えて開幕を待ちます。",
-                    "本人の希望（育成方針・段階）と噛み合うほど練習が身につきます（正解とは限りません）。",
-                ),
-            )
-        },
-    ) {
-        // 誰の案か・任せているか（Web の CampPlanner と同じ文。文はサーバーが作る）
-        if (!finished) phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
-        // ⚠ 決め方（Web 版 CAMP_MODE_LABELS と同じ）。既定はおすすめ。球団で1つの方針だと、
-        //    希望の違う選手が必ず「身が入らない」で残る（いしだ指摘: 一括指定が有効に見えない）
-        Text("決め方", style = MaterialTheme.typography.labelLarge)
-        ChoiceRow(CAMP_MODES, draft.mode, enabled = !finished) { applyPolicy(it, draft.direction, draft.phase) }
-        if (draft.mode == "team") {
-            Text("育成方針", style = MaterialTheme.typography.labelLarge)
-            ChoiceRow(CAMP_DIRECTIONS.map { it.key to "${it.icon} ${it.name}" }, draft.direction, enabled = !finished) { applyPolicy("team", it, draft.phase) }
-            Text("段階", style = MaterialTheme.typography.labelLarge)
-            ChoiceRow(CAMP_PHASES.map { it.key to "${it.icon} ${it.name}" }, draft.phase, enabled = !finished) { applyPolicy("team", draft.direction, it) }
-            Muted(
-                listOfNotNull(CAMP_DIRECTIONS.firstOrNull { it.key == draft.direction }?.description, CAMP_PHASES.firstOrNull { it.key == draft.phase }?.description).joinToString("／"),
-            )
-        } else {
-            Muted(CAMP_MODE_NOTES[draft.mode].orEmpty())
-        }
-        // ⚠ いしだ指摘: どれくらい伸びるのか・おまかせでいいのかが分からない。Web 版と同じ実測の目安（`CAMP_POLICY_GUIDE`）
-        //    目安は全員同じ方針のときだけ（選手ごとに違うと1つに決まらない）
-        val moods = roster.map { p -> policyOf(p).let { describeMood(p, it.direction, it.phase).tone } }
-        val moodLine = "希望と噛み合う選手: 意欲的 ${moods.count { it == MoodTone.Good }}人・納得 ${moods.count { it == MoodTone.Mid }}人・身が入らない ${moods.count { it == MoodTone.Bad }}人。選手の「合わせる」で1人ずつ希望に合わせられます。"
-        val guide = if (draft.mode == "team") CAMP_POLICY_GUIDE["${draft.direction}:${draft.phase}"] else null
-        if (guide != null) {
-            Text("4クールでの伸びの目安（1人あたり）", style = MaterialTheme.typography.labelLarge)
-            Muted("野手: ${guide.first}")
-            Muted("投手: ${guide.second}")
-            Muted(
-                (if (draft.direction == "balanced" && draft.phase == "skill") "いまは「全体を伸ばす×技術」です。試合に効きやすいミート・制球が伸びます。"
-                else "「全体を伸ばす×技術」なら、ミート・制球が伸びます。") +
-                    "基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。" + moodLine,
-            )
-        } else {
-            Muted(moodLine)
-        }
-        Text("全員に一括", style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            campMenusFor(false).filter { !it.key.startsWith("intensive_") }.forEach { m ->
-                OutlinedButton(onClick = { applyAll(m, false) }, enabled = !finished) { Text("野手 ${m.icon}${m.name}", fontSize = 12.sp) }
+                trailing = {
+                    Rounds(done, total)
+                    InfoButton(
+                        "春季キャンプ",
+                        listOf(
+                            "メイン練習とサブ練習を選んで実行します。1クールごとに結果が反映されるので、伸びた能力を見て次のクールを決められます。全クールが終わったら、伸びた能力でスタメン・投手起用を整えて開幕を待ちます。",
+                            "本人の希望（育成方針・段階）と噛み合うほど練習が身につきます（正解とは限りません）。",
+                            // ⚠ 希望の印の読み方はここ（以前は選手の一覧の上に常に出していた）
+                            "選手のカードの「希望」の印: " + (CAMP_DIRECTIONS + CAMP_PHASES).joinToString(" ") { "${it.icon}${it.name}" },
+                            "カードの右上（希望の印）を押すと、素質とキャンプ通算の伸びが開きます。「本人の希望どおりに」で、その選手だけ本人の希望に合わせます。",
+                        ),
+                    )
+                },
+            ) {
+                // 誰の案か・任せているか（Web の CampPlanner と同じ文。文はサーバーが作る）
+                if (!finished) phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
+                // ⚠ 決め方（Web 版 CAMP_MODE_LABELS と同じ）。既定はおすすめ。球団で1つの方針だと、
+                //    希望の違う選手が必ず「身が入らない」で残る（いしだ指摘: 一括指定が有効に見えない）
+                Text("決め方", style = MaterialTheme.typography.labelLarge)
+                ChoiceRow(CAMP_MODES, draft.mode, enabled = !finished) { applyPolicy(it, draft.direction, draft.phase) }
+                if (draft.mode == "team") {
+                    Text("育成方針", style = MaterialTheme.typography.labelLarge)
+                    ChoiceRow(CAMP_DIRECTIONS.map { it.key to "${it.icon} ${it.name}" }, draft.direction, enabled = !finished) { applyPolicy("team", it, draft.phase) }
+                    Text("段階", style = MaterialTheme.typography.labelLarge)
+                    ChoiceRow(CAMP_PHASES.map { it.key to "${it.icon} ${it.name}" }, draft.phase, enabled = !finished) { applyPolicy("team", draft.direction, it) }
+                    Muted(
+                        listOfNotNull(CAMP_DIRECTIONS.firstOrNull { it.key == draft.direction }?.description, CAMP_PHASES.firstOrNull { it.key == draft.phase }?.description).joinToString("／"),
+                    )
+                } else {
+                    Muted(CAMP_MODE_NOTES[draft.mode].orEmpty())
+                }
+                // ⚠ いしだ指摘: どれくらい伸びるのか・おまかせでいいのかが分からない。Web 版と同じ実測の目安（`CAMP_POLICY_GUIDE`）
+                //    目安は全員同じ方針のときだけ（選手ごとに違うと1つに決まらない）
+                val moods = roster.map { p -> policyOf(p).let { describeMood(p, it.direction, it.phase).tone } }
+                val moodLine = "希望と噛み合う選手: 意欲的 ${moods.count { it == MoodTone.Good }}人・納得 ${moods.count { it == MoodTone.Mid }}人・身が入らない ${moods.count { it == MoodTone.Bad }}人。"
+                val guide = if (draft.mode == "team") CAMP_POLICY_GUIDE["${draft.direction}:${draft.phase}"] else null
+                if (guide != null) {
+                    Text("4クールでの伸びの目安（1人あたり）", style = MaterialTheme.typography.labelLarge)
+                    Muted("野手: ${guide.first}")
+                    Muted("投手: ${guide.second}")
+                    Muted(
+                        (if (draft.direction == "balanced" && draft.phase == "skill") "いまは「全体を伸ばす×技術」です。試合に効きやすいミート・制球が伸びます。"
+                        else "「全体を伸ばす×技術」なら、ミート・制球が伸びます。") +
+                            "基礎体力は体力・体幹の数字が大きく伸びますが、打撃・制球はほとんど伸びません。" + moodLine,
+                    )
+                } else {
+                    Muted(moodLine)
+                }
+                Text("全員に一括", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    campMenusFor(false).filter { !it.key.startsWith("intensive_") }.forEach { m ->
+                        OutlinedButton(onClick = { applyAll(m, false) }, enabled = !finished) { Text("野手 ${m.icon}${m.name}", fontSize = 12.sp) }
+                    }
+                    campMenusFor(true).filter { !it.key.startsWith("intensive_") && it.key != "fielding" }.forEach { m ->
+                        OutlinedButton(onClick = { applyAll(m, true) }, enabled = !finished) { Text("投手 ${m.icon}${m.name}", fontSize = 12.sp) }
+                    }
+                }
+                undo?.let { b ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Muted(b.text, Modifier.weight(1f))
+                        TextButton(onClick = { model.campDraft = b.before; bulk = null }) { Text("元に戻す") }
+                    }
+                }
+                if (finished) {
+                    // ⚠ 終わったことを知らせる（Web 版 CampPlanner と同じ文。以前は実行ボタンが消えるだけだった）
+                    Text(
+                        "全${total}クールが終わりました。伸びた能力でスタメン・投手起用を整えて、月曜の開幕を待ちます。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
-            campMenusFor(true).filter { !it.key.startsWith("intensive_") && it.key != "fielding" }.forEach { m ->
-                OutlinedButton(onClick = { applyAll(m, true) }, enabled = !finished) { Text("投手 ${m.icon}${m.name}", fontSize = 12.sp) }
-            }
-        }
-        undo?.let { b ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Muted(b.text, Modifier.weight(1f))
-                TextButton(onClick = { model.campDraft = b.before; bulk = null }) { Text("元に戻す") }
-            }
-        }
-        if (finished) {
-            // ⚠ 終わったことを知らせる（Web 版 CampPlanner と同じ文。以前は実行ボタンが消えるだけだった）
-            Text(
-                "全${total}クールが終わりました。伸びた能力でスタメン・投手起用を整えて、月曜の開幕を待ちます。",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        } else {
-            Button(onClick = execute, modifier = Modifier.fillMaxWidth()) { Text("第${done + 1}クール練習を実行") }
-        }
-    }
 
-    // ⚠ 伸びをまとめて見せる（能力は伸びているのに結果がまとまっておらず、成長が実感できなかった）
-    key(done) { CampGains(model, camp, roster, finished) }
+            // ⚠ 伸びをまとめて見せる（能力は伸びているのに結果がまとまっておらず、成長が実感できなかった）
+            key(done) { CampGains(model, camp, roster, finished) }
 
-    var group by rememberSaveable { mutableStateOf("pitcher") }
-    val groups = CAMP_GROUPS.map { (id, label) -> Triple(id, label, roster.filter { campGroupOf(it.at("position").str()) == id }) }.filter { it.third.isNotEmpty() }
-    val shown = groups.firstOrNull { it.first == group } ?: groups.firstOrNull()
-    ChipTabs(groups.map { (id, label, list) -> id to "$label ${list.size}" }, shown?.first.orEmpty(), { group = it })
-    // 希望の印の読み方（カードには印だけ出す）
-    Muted(
-        "希望の印: " + (CAMP_DIRECTIONS + CAMP_PHASES).joinToString(" ") { "${it.icon}${it.name}" },
-        Modifier.padding(horizontal = 16.dp),
-    )
-    shown?.third?.forEach { p ->
-        CampPlayerCard(
-            model, p, mainOf(p), subOf(p), policyOf(p), enabled = !finished,
-            onFitWish = { fitWish(p) },
-            gains = camp.at("gains", p.pid.toString()).obj(),
-            target = draft.subTarget[p.pid],
-            onMain = { key -> model.campDraft = draft.copy(main = draft.main + (p.pid to key)) },
-            // ⚠ 練習を変えたら対象は捨てる（別の練習の対象が残る）
-            onSub = { key -> model.campDraft = draft.copy(sub = draft.sub + (p.pid to key), subTarget = draft.subTarget - p.pid) },
-            onTarget = { key -> model.campDraft = draft.copy(subTarget = if (key == null) draft.subTarget - p.pid else draft.subTarget + (p.pid to key)) },
-        )
-    }
-    // ⚠ 下にも実行ボタンを置く（選手のカードを見て決めたあと、上まで戻らないと実行できなかった）
-    if (!finished && shown != null) {
-        Button(onClick = execute, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) { Text("第${done + 1}クール練習を実行") }
+            var group by rememberSaveable { mutableStateOf("pitcher") }
+            val groups = CAMP_GROUPS.map { (id, label) -> Triple(id, label, roster.filter { campGroupOf(it.at("position").str()) == id }) }.filter { it.third.isNotEmpty() }
+            val shown = groups.firstOrNull { it.first == group } ?: groups.firstOrNull()
+            ChipTabs(groups.map { (id, label, list) -> id to "$label ${list.size}" }, shown?.first.orEmpty(), { group = it })
+            shown?.third?.forEach { p ->
+                CampPlayerCard(
+                    model, p, mainOf(p), subOf(p), policyOf(p), enabled = !finished,
+                    onFitWish = { fitWish(p) },
+                    gains = camp.at("gains", p.pid.toString()).obj(),
+                    target = draft.subTarget[p.pid],
+                    onMain = { key -> model.campDraft = draft.copy(main = draft.main + (p.pid to key)) },
+                    // ⚠ 練習を変えたら対象は捨てる（別の練習の対象が残る）
+                    onSub = { key -> model.campDraft = draft.copy(sub = draft.sub + (p.pid to key), subTarget = draft.subTarget - p.pid) },
+                    onTarget = { key -> model.campDraft = draft.copy(subTarget = if (key == null) draft.subTarget - p.pid else draft.subTarget + (p.pid to key)) },
+                )
+            }
+        }
+        // ⚠ 実行は画面の下に固定する（以前は方針の欄と一覧の一番下の2か所で、選手を見ている途中では押せず、
+        //    クールの進みも上に流れて見えなくなった）
+        if (!finished) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth().testTag("camp-bar")) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Muted("$done/${total}クール済み")
+                    Button(onClick = execute, modifier = Modifier.weight(1f)) { Text("第${done + 1}クール練習を実行", maxLines = 1) }
+                }
+            }
+        }
     }
 }
 
@@ -266,18 +276,24 @@ private const val GAIN_ROWS = 8
 
 /** 練習の成果（このクール／キャンプ通算）。伸びた量の多い選手から */
 @Composable
-internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<JsonObject>, finished: Boolean) {
+internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<JsonObject>, finished: Boolean, collapsed: Boolean = false) {
     val last = camp.at("last").obj()
     val total = camp.at("gains").obj()
     if (last == null && total.isNullOrEmpty()) return
     var showLast by rememberSaveable { mutableStateOf(!finished && last != null) }
     var all by rememberSaveable { mutableStateOf(false) }
+    // 畳んで出すとき（済んだキャンプの結果）は、人数の1行だけ。「開く」で中身
+    var open by rememberSaveable { mutableStateOf(!collapsed) }
     val useLast = showLast && last != null
     val gains = if (useLast) last.at("gains").obj() else total
     // 出来事（フォーム改造・新球種・覚醒など）は、このクールの分とキャンプ通算の分の両方をサーバーが残す
     val rows = campGainRows(gains, roster, if (useLast) last.at("events").obj() else camp.at("events").obj())
     val totals = campGainTotals(gains)
-    Section("練習の成果") {
+    Section("練習の成果", trailing = if (collapsed) ({ TextButton(onClick = { open = !open }) { Text(if (open) "閉じる" else "開く") } }) else null) {
+        if (!open) {
+            Muted(if (rows.isEmpty()) "伸びた能力はありません。" else "${rows.count { it.grew }}人が伸びました")
+            return@Section
+        }
         ChoiceRow(
             listOfNotNull(last?.let { "last" to "第${it.at("round").int() ?: 0}クール" }, "total" to "キャンプ通算"),
             if (useLast) "last" else "total",
@@ -378,33 +394,43 @@ private fun CampPlayerCard(
         MoodTone.Mid -> MaterialTheme.colorScheme.onSurfaceVariant
         MoodTone.Bad -> MaterialTheme.colorScheme.error
     }
-    Section(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+    // ⚠ 閉じた形は名前・希望・練習の2つだけ（以前は素質と通算の伸びも常に出ていて、1画面に3人しか入らなかった）。
+    //    右上（やる気・希望）を押すと素質と通算の伸びが開く
+    var open by rememberSaveable(p.pid) { mutableStateOf(false) }
+    Section(modifier = Modifier.padding(vertical = 0.dp)) {
         PlayerSummary(p, { model.openPlayer = it }) {
-            Column(horizontalAlignment = Alignment.End) {
-                Tag(MOOD_TEXT[mood.tone] ?: mood.label, moodColor)
+            Row(
+                Modifier.clickable { open = !open }.padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Muted(
                     "希望 ${CAMP_DIRECTIONS.firstOrNull { it.key == wish.direction }?.icon.orEmpty()}${CAMP_PHASES.firstOrNull { it.key == wish.phase }?.icon.orEmpty()}",
                 )
-                // この選手だけ本人の希望に合わせる
-                if (wish != policy) {
-                    TextButton(onClick = onFitWish, enabled = enabled, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
-                        Text("合わせる", fontSize = 12.sp)
-                    }
+                Tag(MOOD_TEXT[mood.tone] ?: mood.label, moodColor)
+                Muted(if (open) "▴" else "▾")
+            }
+        }
+        if (open) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Muted("成長 ${p.at("growthPotential").num()?.let { "%.2f".format(it) } ?: "—"}")
+                AbilityNum("プロ意識", p.at("personality", "discipline").int())
+                AbilityNum("精神", p.at("personality", "mental").int())
+                AbilityNum("肩", p.at("physical", "arm").int())
+                if (pitcher) AbilityNum("守", p.at("fielding", "defense").int()) else AbilityNum("眼", p.at("batting", "eye").int())
+                AbilityNum("体力", p.at("physical", "bodyStamina").int())
+                AbilityNum("回復", p.at("physical", "recovery").int())
+            }
+            // キャンプ通算の伸び（サーバーの記録）
+            val items = campGainRows(gains?.let { JsonObject(mapOf(p.pid.toString() to it)) }, listOf(p)).firstOrNull()?.items.orEmpty()
+            if (items.isNotEmpty()) GainLine("通算", items)
+            // この選手だけ本人の希望に合わせる（⚠ 以前は「合わせる」で、何に合わせるのか分からなかった）
+            if (wish != policy) {
+                TextButton(onClick = onFitWish, enabled = enabled, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                    Text("本人の希望どおりに", fontSize = 12.sp)
                 }
             }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Muted("成長 ${p.at("growthPotential").num()?.let { "%.2f".format(it) } ?: "—"}")
-            AbilityNum("プロ意識", p.at("personality", "discipline").int())
-            AbilityNum("精神", p.at("personality", "mental").int())
-            AbilityNum("肩", p.at("physical", "arm").int())
-            if (pitcher) AbilityNum("守", p.at("fielding", "defense").int()) else AbilityNum("眼", p.at("batting", "eye").int())
-            AbilityNum("体力", p.at("physical", "bodyStamina").int())
-            AbilityNum("回復", p.at("physical", "recovery").int())
-        }
-        // キャンプ通算の伸び（サーバーの記録）
-        val items = campGainRows(gains?.let { JsonObject(mapOf(p.pid.toString() to it)) }, listOf(p)).firstOrNull()?.items.orEmpty()
-        if (items.isNotEmpty()) GainLine("通算", items)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MenuPicker("メイン", main, campMenusFor(pitcher), enabled, Modifier.weight(1f), onMain)
             MenuPicker("サブ", sub, campSubMenusFor(p), enabled, Modifier.weight(1f), onSub)

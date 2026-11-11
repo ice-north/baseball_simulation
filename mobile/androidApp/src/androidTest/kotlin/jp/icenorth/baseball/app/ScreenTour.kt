@@ -260,6 +260,9 @@ class ScreenTour {
                 // ⚠ 以前は「野手」の文字で押していて、一括の「野手 打撃練習」に当たり、野手のカードが撮れていなかった
                 if (stage == "camp") step("camp group") { chip("infield"); page("procedures-camp-fielders", scrolls = 1) }
                 if (stage == "tryout") step("tryout weights") { click("開く"); page("procedures-tryout-weights", scrolls = 1) }
+                // 候補の側（獲得予定と切り替える）・初期メンバーのセットの中身
+                if (stage == "tryout") step("tryout pool") { click("候補 ", substring = true); page("procedures-tryout-pool", scrolls = 1) }
+                if (stage == "pack") step("pack detail") { rule.onAllNodesWithText("セット2").onFirst().performScrollTo().performClick(); pause(); page("procedures-pack-detail", scrolls = 1); back() }
                 tab("Games")
                 step("news") { click("リーグ便り"); page("games-news", scrolls = 1) }
                 tab("Plan")

@@ -1,6 +1,12 @@
 package jp.icenorth.baseball.app.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,7 +72,7 @@ private enum class ProcTab(val label: String) { Current("現在の手続き"), T
 
 /** 手続きタブ: 初期メンバー選択・キャンプ・契約更改・トライアウト・年度更新と、トレード */
 @Composable
-fun ProceduresScreen(model: AppViewModel, onRename: () -> Unit, onHome: () -> Unit = {}) {
+fun ProceduresScreen(model: AppViewModel, onHome: () -> Unit = {}) {
     val raw = model.raw ?: return
     // ⚠ どちらの側を開いているかは AppViewModel に置く（届いた提案の知らせから、トレードの側を直接開くため）
     val tab = if (model.procTrade) ProcTab.Trade else ProcTab.Current
@@ -75,16 +81,14 @@ fun ProceduresScreen(model: AppViewModel, onRename: () -> Unit, onHome: () -> Un
         ProcTab.Trade.name to waitingTradeCount(raw),
     )
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            ChipTabs(
-                ProcTab.entries.map { it.name to it.label },
-                tab.name,
-                { model.procTrade = it == ProcTab.Trade.name },
-                Modifier.weight(1f),
-                counts = counts,
-            )
-            TextButton(onClick = onRename) { Text("球団名") }
-        }
+        // ⚠ 球団名を変える入口はホームのメニューだけにした（以前はここの右上にもあった。手続きと関係が薄い）
+        ChipTabs(
+            ProcTab.entries.map { it.name to it.label },
+            tab.name,
+            { model.procTrade = it == ProcTab.Trade.name },
+            Modifier.fillMaxWidth().padding(top = 8.dp),
+            counts = counts,
+        )
         when (tab) {
             ProcTab.Current -> CurrentProcedure(model, raw, onHome)
             ProcTab.Trade -> TradeScreen(model, raw)
@@ -92,28 +96,40 @@ fun ProceduresScreen(model: AppViewModel, onRename: () -> Unit, onHome: () -> Un
     }
 }
 
+/** 手続きの面の縦スクロール（下に固定する帯を置く面は、これに weight を付けて上に積む） */
+@Composable
+internal fun ProcScroll(modifier: Modifier = Modifier, state: ScrollState = rememberScrollState(), content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth().verticalScroll(state).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+}
+
 @Composable
 private fun CurrentProcedure(model: AppViewModel, raw: JsonObject, onHome: () -> Unit) {
     val pending = raw["pendingPack"].obj()
     val phase = raw["phase"].obj()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    // ⚠ 決める手続きは、決定・実行の帯を画面の下に固定する（[PhasePanel] が自分で面を組む）。
+    //    以前は一覧の上と一番下にしか無く、途中で決めるには端まで送る必要があった
+    if (pending == null && phase != null) {
+        PhasePanel(model, raw, phase)
+        return
+    }
+    val scroll = rememberScrollState()
+    ProcScroll(Modifier.fillMaxSize(), scroll) {
         // ⚠ いまの段階とやることを先頭に出す（いしだ指摘: シーズン後の流れが分からない）。
         //    途中参加の初期メンバー選択の間は出さない（その画面に説明がある）
-        if (pending == null) SeasonFlowCard(raw)
-        when {
-            pending != null -> PendingPack(model, raw, pending, onHome)
-            phase != null -> PhasePanel(model, raw, phase)
-            else -> {
-                // ⚠ 「無い」だけで終わらせない。合間なら次に何が開くかを書く
-                val head = stageHeadText(raw)
-                val inSeason = raw.at("stage", "key").str() == "season"
-                Section("手続き") { Text(if (head != null && !inSeason) "いま決めることはありません。$head。" else "現在、決定待ちの手続きはありません。") }
-                raw["lastCamp"].obj()?.let { camp ->
-                    Caption("${camp.at("year").int() ?: ""}年目のキャンプ結果")
-                    CampGains(model, camp, raw.at("roster").list().mapNotNull { it.obj() }, finished = true)
-                }
-                OffseasonGrowthCard(model, raw)
+        if (pending != null) {
+            PendingPack(model, raw, pending, onHome, scroll)
+        } else {
+            SeasonFlowCard(raw)
+            // ⚠ 「無い」だけで終わらせない。合間なら次に何が開くかを書く
+            val head = stageHeadText(raw)
+            val inSeason = raw.at("stage", "key").str() == "season"
+            Section("手続き") { Text(if (head != null && !inSeason) "いま決めることはありません。$head。" else "現在、決定待ちの手続きはありません。") }
+            raw["lastCamp"].obj()?.let { camp ->
+                Caption("${camp.at("year").int() ?: ""}年目のキャンプ結果")
+                // ⚠ 済んだキャンプの結果は畳んで出す（シーズン中ずっと、24人の一覧がこのタブの大半を占めていた）
+                CampGains(model, camp, raw.at("roster").list().mapNotNull { it.obj() }, finished = true, collapsed = true)
             }
+            OffseasonGrowthCard(model, raw)
         }
     }
 }
@@ -126,7 +142,7 @@ fun packStartText(joinsAt: String?, estimated: Boolean): String {
 
 /** 途中参加の初期メンバー選択。選んだ時点で保存する（pack 命令。締め切りは無い） */
 @Composable
-private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObject, onHome: () -> Unit) {
+private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObject, onHome: () -> Unit, scroll: ScrollState) {
     val packs = pending.at("packs").list().mapNotNull { it.obj() }
     val chosen = pending.at("chosen").str()
     val chosenName = packs.firstOrNull { it.at("id").str() == chosen }?.at("name").str()
@@ -169,7 +185,7 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
     ) {
         Muted(if (chosenName != null) "いま選んでいるのは「$chosenName」です。キャンプまでは何度でも選び直せます。" else "まだ選んでいません。決めずにキャンプを迎えると、1つ目のセットになります。")
     }
-    PackPicker(model, packs, chosen) { id ->
+    PackPicker(model, packs, chosen, scroll) { id ->
         model.command("pack", Commands.pack(id), done = "初期メンバーを選びました") { choosing = false }
     }
 }
@@ -186,7 +202,7 @@ private fun PackReady(model: AppViewModel, raw: JsonObject, waiting: PackWaiting
                 listOf(
                     "選んだ24人は、キャンプが終わった時点で名簿に入ります。",
                     "それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。トレードもそれまではできません。",
-                    "セットはキャンプが終わるまで選び直せます。球団名は上の「球団名」で変えられます。",
+                    "セットはキャンプが終わるまで選び直せます。球団名はホームのメニューで変えられます。",
                 ),
             )
         },
@@ -215,19 +231,24 @@ private fun PackReady(model: AppViewModel, raw: JsonObject, waiting: PackWaiting
 @Composable
 fun ProcedureNotice(procedure: PendingProcedure, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val due = formatDeadline(procedure.deadline)
+    // ⚠ 1行の細い帯にする（以前は3行ぶんあり、どのタブでも一覧の上を大きく取っていた）。
+    //    「過ぎると標準の内容で進む」は手続きの画面の ⓘ にある
     Surface(
         color = MaterialTheme.colorScheme.tertiaryContainer,
         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         modifier = modifier.fillMaxWidth().clickable(onClick = onOpen).testTag("procedure-notice"),
     ) {
-        Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("${procedure.label}を決めてください", fontWeight = FontWeight.Bold)
-                val detail = listOfNotNull(procedure.progress, due?.let { "締め切り $it（過ぎると標準の内容で進みます）" })
-                if (detail.isNotEmpty()) Text(detail.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-            }
-            Button(onClick = onOpen) { Text("開く") }
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("${procedure.label}を決めてください", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            Text(
+                listOfNotNull(procedure.progress, due?.let { "〜$it" }).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text("開く ›", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
         }
     }
 }
@@ -263,38 +284,44 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     val members = raw.at("members").list().mapNotNull { it.obj() }
     val title = PHASE_LABELS[kind] ?: phase.at("label").str() ?: "手続き"
     val deadline = phase.at("deadline").str() ?: view.phaseDeadline
-    Section(
-        title,
-        trailing = { if (kind != "camp") InfoButton(title, listOf(rulesDetail(deadline))) },
-    ) {
-        Text(rulesText(kind, deadline, showDate = stageInfo(raw)?.open != true), style = MaterialTheme.typography.bodyMedium)
-        // 標準案を出した指導者と、任せているか（Web の PhasePanel と同じ文。文はサーバーが作る）。
-        // ⚠ 任せていると提出しても指導者の案で決まり、サーバーも決定を待たないので、出さないと組み立てが無駄になる。
-        //    キャンプのぶんは CampPanel が出す（Web と同じ分け方）
-        if (kind != "camp") phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
-        members.forEach { m ->
-            val ready = m.at("ready").bool() == true
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // ⚠ 決定前は印を出さない（以前は「…」で、何の印か分からなかった）。右の「検討中」で分かる。
-                //    「未提出」とは書かない（下書きを保存した球団もここに入る。Web 版も「検討中」）
-                Text(if (ready) "✓" else "", color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(20.dp))
-                Text(view.teamLabel(m.at("teamName").str().orEmpty()), modifier = Modifier.weight(1f))
-                // ⚠ 指導者に任せた球団は待たない（Web 版の `phaseStatusLabel` と同じ言葉）
-                Muted(
-                    when {
-                        m.at("cpu").bool() == true -> "CPUが決定（初期メンバー待ち）"
-                        m.at("delegated").bool() == true -> "指導者に任せています"
-                        ready -> "決定済み"
-                        else -> "検討中"
-                    },
-                )
+    // 1年の流れの帯と、手続きの見出し（決まり・誰が決めたか）。どの手続きでも面の先頭に置く
+    val header: @Composable () -> Unit = {
+        SeasonFlowCard(raw)
+        Section(
+            title,
+            trailing = { if (kind != "camp") InfoButton(title, listOf(rulesDetail(deadline))) },
+        ) {
+            Text(rulesText(kind, deadline, showDate = stageInfo(raw)?.open != true), style = MaterialTheme.typography.bodyMedium)
+            // 標準案を出した指導者と、任せているか（Web の PhasePanel と同じ文。文はサーバーが作る）。
+            // ⚠ 任せていると提出しても指導者の案で決まり、サーバーも決定を待たないので、出さないと組み立てが無駄になる。
+            //    キャンプのぶんは CampPanel が出す（Web と同じ分け方）
+            if (kind != "camp") phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
+            members.forEach { m ->
+                val ready = m.at("ready").bool() == true
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // ⚠ 決定前は印を出さない（以前は「…」で、何の印か分からなかった）。右の「検討中」で分かる。
+                    //    「未提出」とは書かない（下書きを保存した球団もここに入る。Web 版も「検討中」）
+                    Text(if (ready) "✓" else "", color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(20.dp))
+                    Text(view.teamLabel(m.at("teamName").str().orEmpty()), modifier = Modifier.weight(1f))
+                    // ⚠ 指導者に任せた球団は待たない（Web 版の `phaseStatusLabel` と同じ言葉）
+                    Muted(
+                        when {
+                            m.at("cpu").bool() == true -> "CPUが決定（初期メンバー待ち）"
+                            m.at("delegated").bool() == true -> "指導者に任せています"
+                            ready -> "決定済み"
+                            else -> "検討中"
+                        },
+                    )
+                }
             }
         }
     }
     if (kind == "camp") {
         // 年度更新はキャンプの直前に済む。方針を決める前に見られるようにする
-        OffseasonGrowthCard(model, raw)
-        CampPanel(model, raw, phase)
+        CampPanel(model, raw, phase) {
+            header()
+            OffseasonGrowthCard(model, raw)
+        }
         return
     }
 
@@ -327,82 +354,117 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
             failure = model.describe(e)
         }
     }
-    if (failure != null) {
-        Section {
-            LoadFailed(failure.orEmpty(), onRetry = { model.phaseDraft = null; failure = null; attempt += 1; model.reload(pull = true) })
+    val scroll = rememberScrollState()
+    val failed = failure
+    if (failed != null || draft == null) {
+        ProcScroll(Modifier.fillMaxSize(), scroll) {
+            header()
+            if (failed != null) {
+                Section {
+                    LoadFailed(failed, onRetry = { model.phaseDraft = null; failure = null; attempt += 1; model.reload(pull = true) })
+                }
+            } else {
+                Muted("標準案を準備しています…")
+            }
         }
-        return
-    }
-    if (draft == null) {
-        Muted("標準案を準備しています…")
         return
     }
     val changedElsewhere = draft.dirty && draft.base != (submission ?: JsonNull)
-    if (changedElsewhere) {
-        Section {
-            Text("別の操作で提出が更新されました。現在の入力を破棄して保存済みの内容を読み直せます。", color = MaterialTheme.colorScheme.secondary)
-            OutlinedButton(onClick = { model.phaseDraft = null }) { Text("最新の提出を読み直す") }
-        }
-    }
     val scope = rememberCoroutineScope()
     val setPlan: (JsonObject) -> Unit = { model.phaseDraft = draft.copy(plan = it, dirty = true) }
     val plan = draft.plan
     val ready = submission?.at("ready").bool() == true
+    val packs = phase.at("packs").list().mapNotNull { it.obj() }
+    val isPack = plan["packId"] != null || phase["packs"] != null
 
-    // 決定・下書きの操作（PC版と同じく見出しのすぐ下）
-    val decision: @Composable () -> Unit = {
-        Section {
-            Muted(
-                when {
-                    draft.dirty -> "編集中の内容（未保存）です。"
-                    ready -> "あなたは決定済みです。ほかに検討中の球団がいる間は出し直せます。"
-                    submission != null -> "下書きを保存済みです。"
-                    else -> "標準案を表示しています。"
-                },
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { submit(model, phaseId, plan, true, draft.base) }) { Text("この内容で決定") }
-                OutlinedButton(onClick = { submit(model, phaseId, plan, false, draft.base) }) { Text(if (ready) "決定を取り消す" else "下書きを保存") }
-            }
-            if (draft.dirty) TextButton(onClick = { model.phaseDraft = null }) { Text("変更を取り消す") }
-        }
-    }
-    decision()
-
-    when {
-        plan["packId"] != null || phase["packs"] != null -> {
-            val packs = phase.at("packs").list().mapNotNull { it.obj() }
-            // ⚠ 選んだらその場で保存する（途中参加の初期メンバー選択と同じく、押せば保存される）。
-            //    以前は手続きのタブでは未保存の編集になるだけで、「選択中」と出ても保存されず、
-            //    そのまま離れると締め切りで標準案のセットになった。決定済みなら決定のまま出し直す
-            PackPicker(model, packs, plan.at("packId").str()) { id ->
-                val name = packs.firstOrNull { it.at("id").str() == id }?.at("name").str().orEmpty()
-                submit(
-                    model, phaseId, Commands.withPack(plan, id), ready, draft.base,
-                    done = if (ready) "「$name」に選び直しました（決定済み）" else "「$name」を下書きに保存しました。決めたら「この内容で決定」を押してください",
-                )
-            }
-        }
-        plan["rankedIds"] != null -> TryoutPanel(model, raw, phase, plan, setPlan) {
-            // 標準案に戻す（⚠ 保存済みの下書きではなく、いつも標準案を取り直す）
-            scope.launch {
-                try {
-                    val defaults = model.read("defaults")
-                    if (defaults.at("phaseId").str() != phaseId) failure = "手続きが更新されました。最新状態を確認してください"
-                    else model.phaseDraft = draft.copy(plan = defaults["plan"].obj() ?: plan, dirty = submission != null)
-                } catch (e: Exception) {
-                    // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    failure = model.describe(e)
+    Column(Modifier.fillMaxSize()) {
+        ProcScroll(Modifier.weight(1f), scroll) {
+            header()
+            if (changedElsewhere) {
+                Section {
+                    Text("別の操作で提出が更新されました。現在の入力を破棄して保存済みの内容を読み直せます。", color = MaterialTheme.colorScheme.secondary)
+                    OutlinedButton(onClick = { model.phaseDraft = null }) { Text("最新の提出を読み直す") }
                 }
             }
+            when {
+                isPack -> {
+                    // ⚠ 選んだらその場で保存する（途中参加の初期メンバー選択と同じく、押せば保存される）。
+                    //    以前は手続きのタブでは未保存の編集になるだけで、「選択中」と出ても保存されず、
+                    //    そのまま離れると締め切りで標準案のセットになった。決定済みなら決定のまま出し直す
+                    PackPicker(model, packs, plan.at("packId").str(), scroll) { id ->
+                        val name = packs.firstOrNull { it.at("id").str() == id }?.at("name").str().orEmpty()
+                        submit(
+                            model, phaseId, Commands.withPack(plan, id), ready, draft.base,
+                            done = if (ready) "「$name」に選び直しました（決定済み）" else "「$name」を下書きに保存しました。決めたら「この内容で決定」を押してください",
+                        )
+                    }
+                }
+                plan["rankedIds"] != null -> TryoutPanel(model, raw, phase, plan, setPlan) {
+                    // 標準案に戻す（⚠ 保存済みの下書きではなく、いつも標準案を取り直す）
+                    scope.launch {
+                        try {
+                            val defaults = model.read("defaults")
+                            if (defaults.at("phaseId").str() != phaseId) failure = "手続きが更新されました。最新状態を確認してください"
+                            else model.phaseDraft = draft.copy(plan = defaults["plan"].obj() ?: plan, dirty = submission != null)
+                        } catch (e: Exception) {
+                            // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
+                            if (e is kotlinx.coroutines.CancellationException) throw e
+                            failure = model.describe(e)
+                        }
+                    }
+                }
+                plan["releaseIds"] != null -> ReleasePanel(model, raw, plan, setPlan)
+                kind == "offseason" -> Section { Text("最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。") }
+            }
         }
-        plan["releaseIds"] != null -> ReleasePanel(model, raw, plan, setPlan)
-        kind == "offseason" -> Section { Text("最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。") }
+        // ⚠ 決定・下書きの操作は画面の下に固定する（以前は一覧の上と一番下の2か所で、途中からは押せなかった）
+        DecisionBar(
+            status = when {
+                draft.dirty -> "編集中（未保存）"
+                ready -> "決定済み。ほかに検討中の球団がいる間は出し直せます"
+                submission != null -> "下書きを保存済み"
+                // ⚠ 「標準案を表示しています」は何のことか分かりにくかった
+                else -> "まだ変えていません（標準案のまま）"
+            },
+            summary = when {
+                isPack -> packs.firstOrNull { it.at("id").str() == plan.at("packId").str() }?.at("name").str()?.let { "選んでいるセット: $it" }
+                plan["rankedIds"] != null -> "獲得希望 ${plan.at("count").int() ?: 0}人"
+                plan["releaseIds"] != null -> releaseSummary(raw, plan)
+                else -> null
+            },
+            ready = ready,
+            dirty = draft.dirty,
+            onDecide = { submit(model, phaseId, plan, true, draft.base) },
+            onSave = { submit(model, phaseId, plan, false, draft.base) },
+            onDiscard = { model.phaseDraft = null },
+        )
     }
-    // ⚠ 長い一覧（セット・希望リスト・退団）の下にも同じ操作を置く。以前は上にしか無く、
-    //    一覧を見て決めたあと上まで戻らないと決定できなかった
-    if (plan["packId"] != null || phase["packs"] != null || plan["rankedIds"] != null || plan["releaseIds"] != null) decision()
+}
+
+/** 決定・下書きの帯（手続きの面の下に固定する）。上の行はいまの状態と、選んでいる中身の要約 */
+@Composable
+private fun DecisionBar(
+    status: String,
+    summary: String?,
+    ready: Boolean,
+    dirty: Boolean,
+    onDecide: () -> Unit,
+    onSave: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth().testTag("decision-bar")) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            summary?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Muted(status, Modifier.weight(1f))
+                if (dirty) TextButton(onClick = onDiscard, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) { Text("変更を取り消す") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onDecide, modifier = Modifier.weight(1f)) { Text("この内容で決定", maxLines = 1) }
+                OutlinedButton(onClick = onSave) { Text(if (ready) "決定を取り消す" else "下書きを保存", maxLines = 1) }
+            }
+        }
+    }
 }
 
 private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready: Boolean, base: JsonElement?, done: String? = null) {
@@ -413,44 +475,81 @@ private fun submit(model: AppViewModel, phaseId: String, plan: JsonObject, ready
     }
 }
 
-/** 初期メンバーのセット。カードを押すと中身、「このセットにする」で選ぶ */
+/** セットの人数と格付けの1行（「投11 捕2 内7 外4 · 格付け A3 B8 C13 · 平均20.9歳 · 二刀流4」） */
+private fun packLine(pack: JsonObject): String {
+    val counts = pack["counts"].obj()
+    return listOf("pitcher" to "投", "catcher" to "捕", "infield" to "内", "outfield" to "外")
+        .joinToString(" ") { (k, l) -> "$l${counts.at(k).int() ?: 0}" } +
+        // ⚠ 「A3 B8 C13」だけでは何の数か分からなかった
+        " · 格付け " + listOf("A", "B", "C").joinToString(" ") { "$it${pack.at("ranks", it).int() ?: 0}" } +
+        " · 平均${pack.at("averageAge").str() ?: "-"}歳 · 二刀流${pack.at("twoWay").int() ?: 0}"
+}
+
+/**
+ * 初期メンバーのセット。一覧は要約だけにし、押すとそのセットの24人の面に替わる（「一覧へ戻る」か戻るで一覧へ）。
+ * ⚠ 以前は選んだセットの24人が一覧の中に開き、次のセットが遠くなって見比べにくかった。
+ *    見せ方は Web と違ってよい（いしだ 2026-11-11）。構成（二刀流・捕手3人・投手厚め…）で絞り込める
+ */
 @Composable
-private fun PackPicker(model: AppViewModel, packs: List<JsonObject>, chosen: String?, onChoose: (String) -> Unit) {
-    var open by remember { mutableStateOf(chosen ?: packs.firstOrNull()?.at("id").str()) }
+private fun PackPicker(model: AppViewModel, packs: List<JsonObject>, chosen: String?, scroll: ScrollState, onChoose: (String) -> Unit) {
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
+    // 一覧をどこまで送っていたか（中身から戻ったときに同じ所へ戻す）
+    var listAt by rememberSaveable { mutableStateOf(0) }
+    var kind by rememberSaveable { mutableStateOf("all") }
+    val scope = rememberCoroutineScope()
+    val opened = packs.firstOrNull { it.at("id").str() == open }
+    val close: () -> Unit = {
+        open = null
+        scope.launch {
+            // 一覧に替わってから送る（替わる前だと、中身の面の長さで止まる）
+            withFrameNanos { }
+            scroll.scrollTo(listAt)
+        }
+    }
+    if (opened != null) {
+        val id = opened.at("id").str().orEmpty()
+        BackHandler(onBack = close)
+        Section(opened.at("name").str().orEmpty(), trailing = { TextButton(onClick = close) { Text("‹ 一覧へ戻る") } }) {
+            opened.at("feature").str()?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall) }
+            Muted(packLine(opened))
+            Button(onClick = { onChoose(id); close() }, enabled = id != chosen, modifier = Modifier.fillMaxWidth()) { Text(if (id == chosen) "選択中" else "このセットにする") }
+            opened.at("players").list().mapNotNull { it.obj() }.forEach { p ->
+                PlayerSummary(p, { model.openPlayer = it }) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        p.at("rank").str()?.let { Tag(it, MaterialTheme.colorScheme.onSurfaceVariant) }
+                        if (p.at("isTwoWay").bool() == true) Tag("二刀流")
+                    }
+                }
+            }
+        }
+        return
+    }
+    // セットの型（版2）の前半が構成（「二刀流・主力3人」の「二刀流」）。前から待っている人のセット（版1）には無い
+    val kindOf: (JsonObject) -> String? = { it.at("feature").str()?.substringBefore("・") }
+    val kinds = packs.mapNotNull(kindOf).distinct()
+    val shownKind = kind.takeIf { it == "all" || it in kinds } ?: "all"
     Section("セットを選ぶ") {
-        packs.forEach { pack ->
+        if (kinds.size > 1) ChoiceRow(listOf("all" to "すべて") + kinds.map { it to it }, shownKind) { kind = it }
+        packs.filter { shownKind == "all" || kindOf(it) == shownKind }.forEach { pack ->
             val id = pack.at("id").str().orEmpty()
-            val counts = pack["counts"].obj()
             Row(
-                Modifier.fillMaxWidth().clickable { open = id }.padding(vertical = 8.dp),
+                Modifier.fillMaxWidth().clickable {
+                    listAt = scroll.value
+                    open = id
+                    scope.launch { scroll.scrollTo(0) }
+                }.padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(if (id == chosen) "●" else "○", color = if (id == chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, modifier = Modifier.width(22.dp))
                 Column(Modifier.weight(1f)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(pack.at("name").str().orEmpty(), fontWeight = if (id == open) FontWeight.Bold else FontWeight.Normal)
-                        // ⚠ セットの型（版2）。前から待っている人のセット（版1）には無い
+                        Text(pack.at("name").str().orEmpty(), fontWeight = if (id == chosen) FontWeight.Bold else FontWeight.Normal)
                         pack.at("feature").str()?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall) }
                     }
-                    Muted(
-                        listOf("pitcher" to "投", "catcher" to "捕", "infield" to "内", "outfield" to "外")
-                            .joinToString(" ") { (k, l) -> "$l${counts.at(k).int() ?: 0}" } +
-                            " · " + listOf("A", "B", "C").joinToString(" ") { "$it${pack.at("ranks", it).int() ?: 0}" } +
-                            " · 平均${pack.at("averageAge").str() ?: "-"}歳 · 二刀流${pack.at("twoWay").int() ?: 0}",
-                    )
+                    Muted(packLine(pack))
                 }
                 if (id == chosen) Tag("選択中", MaterialTheme.colorScheme.primary)
-            }
-            if (id == open) {
-                Button(onClick = { onChoose(id) }, enabled = id != chosen) { Text(if (id == chosen) "選択中" else "このセットにする") }
-                pack.at("players").list().mapNotNull { it.obj() }.forEach { p ->
-                    PlayerSummary(p, { model.openPlayer = it }) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            p.at("rank").str()?.let { Tag(it, MaterialTheme.colorScheme.onSurfaceVariant) }
-                            if (p.at("isTwoWay").bool() == true) Tag("二刀流")
-                        }
-                    }
-                }
+                Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
@@ -468,14 +567,29 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     val releases = plan.at("releaseIds").list().mapNotNull { it.long() }
     val advice = raw.at("phase", "releaseAdvice").obj()
     val remaining = roster.filter { it.pid !in releases }
-    val counts = rosterCounts(remaining)
-    Section("退団させる選手（${releases.size}人）") {
-        Text("残り ${remaining.size}人 · " + listOf("pitcher" to "投", "catcher" to "捕", "infielder" to "内", "outfielder" to "外")
-            .joinToString(" ") { (k, l) -> "$l${counts[k] ?: 0}/${ONLINE_ROSTER_TARGETS[k] ?: 0}" }, fontWeight = FontWeight.Bold)
-        // ⚠ Web 版 ContractPlanner と同じ文。足りない区分がどう埋まるかの一文が抜けていた
-        Muted("続くトライアウトで最大 ${(ROSTER_LIMIT - remaining.size).coerceAtLeast(0)}人を獲れます（上限${ROSTER_LIMIT}人）。目標に足りない区分はトライアウトで優先して埋まります。")
-        Muted("チェックした選手が退団します。最低9人を残してください。標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため毎年少なくとも3人を出します。このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。")
-        roster.forEach { p ->
+    // ⚠ 開いたときに退団予定だった選手を先頭にまとめる（以前は名簿の順のままで、退団予定が一覧の中に散っていた）。
+    //    並びは開いたときに1回だけ決める（チェックのたびに並び替えると、押した行が動いて見失う）
+    val order = remember(roster.map { it.pid }) {
+        val first = releases.toSet()
+        roster.sortedByDescending { it.pid in first }.map { it.pid }
+    }
+    val byId = roster.associateBy { it.pid }
+    Section(
+        "退団させる選手（${releases.size}人）",
+        trailing = {
+            // ⚠ 決まりの説明は ⓘ の中（以前は2段落が常に出ていた）。人数の集計は下の帯に出す
+            InfoButton(
+                "契約更改",
+                listOf(
+                    "チェックした選手が退団します。最低9人を残してください。",
+                    "続くトライアウトで最大 ${(ROSTER_LIMIT - remaining.size).coerceAtLeast(0)}人を獲れます（上限${ROSTER_LIMIT}人）。目標に足りない区分はトライアウトで優先して埋まります。",
+                    "標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため毎年少なくとも3人を出します。",
+                    "このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。",
+                ),
+            )
+        },
+    ) {
+        order.mapNotNull { byId[it] }.forEach { p ->
             val checked = p.pid in releases
             val reasons = advice?.get(p.pid.toString()).list().mapNotNull { it.str() }.takeIf { advice?.containsKey(p.pid.toString()) == true }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -498,6 +612,16 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
             }
         }
     }
+}
+
+/** 退団後の人数（「退団3人 · 残り21人 · 投9/11 捕2/2 内6/6 外4/7」）。決定の帯に出す */
+private fun releaseSummary(raw: JsonObject, plan: JsonObject): String {
+    val roster = raw.at("roster").list().mapNotNull { it.obj() }
+    val releases = plan.at("releaseIds").list().mapNotNull { it.long() }
+    val remaining = roster.filter { it.pid !in releases }
+    val counts = rosterCounts(remaining)
+    return "退団${releases.size}人 · 残り${remaining.size}人 · " + listOf("pitcher" to "投", "catcher" to "捕", "infielder" to "内", "outfielder" to "外")
+        .joinToString(" ") { (k, l) -> "$l${counts[k] ?: 0}/${ONLINE_ROSTER_TARGETS[k] ?: 0}" }
 }
 
 /** 名簿の残りの枠（トライアウトの獲得希望人数の上限） */

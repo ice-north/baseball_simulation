@@ -86,7 +86,12 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
     val setRanked: (List<Long>) -> Unit = { ids -> setPlan(Commands.withRanked(plan, ids)) }
     val setCount: (Int) -> Unit = { n -> setPlan(Commands.withCount(plan, n.coerceIn(0, maxCount))) }
 
-    Section(
+    // ⚠ 「獲得予定」と「候補」を切り替える（以前は1本の縦長で、候補を見ている間は獲得予定の中身が見えず、
+    //    行き来に長いスクロールが要った）。人数は切り替えの字に出す
+    var side by rememberSaveable { mutableStateOf("plan") }
+    ChoiceRow(listOf("plan" to "獲得予定 ${wanted.size}人", "pool" to "候補 ${candidates.size}人"), side) { side = it }
+
+    if (side == "plan") Section(
         "獲得希望人数",
         trailing = {
             InfoButton(
@@ -108,13 +113,13 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
         TextButton(onClick = onReset) { Text("標準案に戻す") }
     }
 
-    WeightsSection(model, candidates, roster) { next ->
+    if (side == "plan") WeightsSection(model, candidates, roster) { next ->
         setRanked(next)
         noticeState = "評価の高い順に、投・捕・内・外の目標人数を守っておすすめ順を作り直しました。" to next
     }
 
     val c = summary.counts
-    Section("獲得予定 ${wanted.size}人") {
+    if (side == "plan") Section("獲得予定 ${wanted.size}人") {
         Muted("投${c["pitcher"]}/${ONLINE_ROSTER_TARGETS["pitcher"]} 捕${c["catcher"]}/${ONLINE_ROSTER_TARGETS["catcher"]} 内${c["infielder"]}/${ONLINE_ROSTER_TARGETS["infielder"]} 外${c["outfielder"]}/${ONLINE_ROSTER_TARGETS["outfielder"]}")
         if (summary.blocking.isNotEmpty()) Text("このままでは決定できません: ${summary.blocking.joinToString(" / ")}　獲得希望人数を増やすか、希望順位を入れ替えてください。", color = MaterialTheme.colorScheme.error)
         if (summary.warnings.isNotEmpty()) Text("${summary.warnings.joinToString(" / ")}　この位置は人数が足りないと自動で埋められます。", color = MaterialTheme.colorScheme.secondary)
@@ -146,17 +151,19 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
     var group by rememberSaveable { mutableStateOf("all") }
     var sortKey by rememberSaveable { mutableStateOf(WEIGHTED_SORT_KEY) }
     var query by rememberSaveable { mutableStateOf("") }
-    var page by rememberSaveable { mutableStateOf(0) }
+    // 何人まで出しているか（「続きを表示」で増やす。絞り込み・並べ替えを変えたら最初に戻す）
+    var limit by rememberSaveable { mutableStateOf(PAGE) }
     val scoreOf: (JsonObject) -> Double = if (sortKey == WEIGHTED_SORT_KEY) { p -> scores[p.pid] ?: 0.0 } else TRYOUT_SORT_KEYS.firstOrNull { it.key == sortKey }?.of ?: ::overallScore
     val pool = candidates
         .filter { inTryoutGroup(it, group) && (query.isBlank() || it.at("name").str().orEmpty().contains(query.trim())) }
         .sortedWith(compareByDescending<JsonObject> { scoreOf(it) }.thenBy { it.pid })
-    val pages = maxOf(1, (pool.size + PAGE - 1) / PAGE)
-    val shown = pool.drop(page.coerceAtMost(pages - 1) * PAGE).take(PAGE)
-    Section("候補 ${candidates.size}人") {
-        ChoiceRow(TRYOUT_GROUPS, group) { group = it; page = 0 }
-        ChoiceRow(listOf(WEIGHTED_SORT_KEY to "評価") + TRYOUT_SORT_KEYS.map { it.key to it.label }, sortKey) { sortKey = it; page = 0 }
-        OutlinedTextField(query, { query = it; page = 0 }, label = { Text("名前で探す") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    val shown = pool.take(limit)
+    if (side == "pool") Section("候補 ${candidates.size}人") {
+        Muted("投${c["pitcher"]}/${ONLINE_ROSTER_TARGETS["pitcher"]} 捕${c["catcher"]}/${ONLINE_ROSTER_TARGETS["catcher"]} 内${c["infielder"]}/${ONLINE_ROSTER_TARGETS["infielder"]} 外${c["outfielder"]}/${ONLINE_ROSTER_TARGETS["outfielder"]}（獲得予定を入れた人数／目標）")
+        notice?.let { Text(it, color = MaterialTheme.colorScheme.secondary) }
+        ChoiceRow(TRYOUT_GROUPS, group) { group = it; limit = PAGE }
+        ChoiceRow(listOf(WEIGHTED_SORT_KEY to "評価") + TRYOUT_SORT_KEYS.map { it.key to it.label }, sortKey) { sortKey = it; limit = PAGE }
+        OutlinedTextField(query, { query = it; limit = PAGE }, label = { Text("名前で探す") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         shown.forEach { p ->
             val at = wanted.indexOf(p.pid)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -190,12 +197,9 @@ fun TryoutPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, plan: J
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
-        if (pages > 1) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { page = (page - 1).coerceAtLeast(0) }, enabled = page > 0) { Text("前へ") }
-                Text("${page + 1} / $pages", modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
-                OutlinedButton(onClick = { page = (page + 1).coerceAtMost(pages - 1) }, enabled = page + 1 < pages) { Text("次へ") }
-            }
+        // ⚠ ページ送りをやめ、続きを下に足す（以前は12人ごとに「前へ／次へ」で、見ていた所に戻れなかった）
+        if (pool.size > shown.size) {
+            OutlinedButton(onClick = { limit += PAGE * 2 }, modifier = Modifier.fillMaxWidth()) { Text("続きを表示（残り${pool.size - shown.size}人）") }
         }
     }
 }
