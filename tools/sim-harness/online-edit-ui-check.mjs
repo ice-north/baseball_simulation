@@ -337,6 +337,34 @@ try {
     'velocity',
     '再読込・表示切替後も未保存案を復元',
   );
+  // ⚠ 1280px でも**練習を選ぶ2列（メイン・サブ）は送らずに見える**。右に留めていな
+  //    かったので、サブの列が丸ごと枠の外にあった（中身 1129px・枠 978px。再監査 F11）。
+  //    送っても見えたまま・2列が重ならないことも見る
+  const practiceStays = await draft.page
+    .locator('.online-camp-scroll')
+    .evaluate(async (box) => {
+      const out = [];
+      for (const at of [0, box.scrollWidth / 3, box.scrollWidth]) {
+        box.scrollLeft = at;
+        await new Promise(requestAnimationFrame);
+        const edge = box.getBoundingClientRect();
+        const [main, sub] = ['メイン', 'サブ'].map((kind) =>
+          box
+            .querySelector(`tbody tr:first-child select[aria-label$="の${kind}練習"]`)
+            .getBoundingClientRect(),
+        );
+        if (main.left < edge.left - 1 || main.right > edge.right + 1) out.push(`メインが見えない ${at}`);
+        if (sub.left < edge.left - 1 || sub.right > edge.right + 1) out.push(`サブが見えない ${at}`);
+        if (main.right > sub.left + 1) out.push(`メインとサブが重なる ${at}`);
+      }
+      box.scrollLeft = 0;
+      return { scrollable: box.scrollWidth > box.clientWidth, out };
+    });
+  assert.deepEqual(
+    practiceStays,
+    { scrollable: true, out: [] },
+    '1280px でキャンプの表のメイン・サブの練習が見えない',
+  );
   // ⚠ 1280px では表が横に送れる。**氏名の列は左に留める**（右端の練習・希望の
   //    列を見ているとき、誰の行か分からなくなっていた）
   const nameStays = await draft.page

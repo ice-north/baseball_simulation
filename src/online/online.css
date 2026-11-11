@@ -712,6 +712,24 @@ small.online-gain:not(:where(.online-sp *)) {
   z-index: 1;
   background: var(--surface-2);
 }
+/* ⚠ **練習を選ぶ2列（メイン・サブ）は右に留める**（氏名の列を左に留めるのと同じ）。
+   1440px より狭いと表が横に送れ、1280px では中身 1129px・枠 978px でサブの列が
+   丸ごと枠の外にあった（再監査 F11）。読むだけの能力の列を、氏名と練習の間で送る。
+   メインを留める位置はサブの列の幅（`CampTableScroll` が測って入れる。測る前は
+   `right` が無効になり、メインは留まらないだけ）。収まる幅では留める位置まで来ないので
+   何も変わらない */
+.online-camp-scroll .online-camp-main,
+.online-camp-scroll .online-camp-sub {
+  position: sticky;
+  z-index: 1;
+  background: var(--surface-2);
+}
+.online-camp-scroll .online-camp-sub {
+  right: 0;
+}
+.online-camp-scroll .online-camp-main {
+  right: var(--online-camp-sub-width);
+}
 /* キャンプのサブ練習の「対象」。
    ⚠ サブ練習の欄の**中に横に並べる**（列を足すと横に溢れ、下に積むと
       行が倍の高さになって12人が1画面に入らない） */

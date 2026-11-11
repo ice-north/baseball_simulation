@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { menusFor, subMenusFor, clampMenu, clampSub } from './campMenus.js';
 import {
   DIRECTIONS,
@@ -254,7 +254,7 @@ function PlayerRow({
       <td>
         <Stat value={player.physical?.muscle} diff={g('physical.muscle')} />
       </td>
-      <td>
+      <td className="online-camp-main">
         <select
           aria-label={`${player.name}のメイン練習`}
           value={main}
@@ -268,7 +268,7 @@ function PlayerRow({
           ))}
         </select>
       </td>
-      <td>
+      <td className="online-camp-sub">
         <select
           aria-label={`${player.name}のサブ練習`}
           value={sub}
@@ -302,6 +302,37 @@ function PlayerRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/**
+ * キャンプの表の横送りの枠。
+ * ⚠ **練習を選ぶ2列（メイン・サブ）は右に留める**（`online.css` の `.online-camp-main` /
+ *    `.online-camp-sub`）。1440px より狭いと表が横に送れ、1280px ではサブの列が枠の外に
+ *    あった（再監査 F11）。メインを留める位置はサブの列の幅で、サブは対象の欄が出ると
+ *    広がるので、画面で測って `--online-camp-sub-width` に入れる（測る前はメインは留めない）
+ */
+function CampTableScroll({ children }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const box = ref.current;
+    const sub = box?.querySelector('thead .online-camp-sub');
+    if (!sub) return undefined;
+    const measure = () =>
+      box.style.setProperty(
+        '--online-camp-sub-width',
+        `${sub.getBoundingClientRect().width}px`,
+      );
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(sub);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="online-camp-scroll">
+      {children}
+    </div>
   );
 }
 
@@ -768,7 +799,7 @@ export default function CampPlanner({
       )}
       {!compact && shownGroup && (
         <section key={shownGroup.id} className="online-camp-group">
-          <div className="online-camp-scroll">
+          <CampTableScroll>
             <table>
               <thead>
                 <tr>
@@ -804,8 +835,8 @@ export default function CampPlanner({
                   <th>体力</th>
                   <th>回復</th>
                   <th>体幹</th>
-                  <th>メイン</th>
-                  <th>サブ</th>
+                  <th className="online-camp-main">メイン</th>
+                  <th className="online-camp-sub">サブ</th>
                   {/* ⚠ **変化球の列も外した**。持っている球種は「新球種習得」の
                       対象の選択肢から外れ、「変化球練習」の選択肢にはそのまま
                       並ぶので、ここで見せなくても取り違えない */}
@@ -836,7 +867,7 @@ export default function CampPlanner({
                 ))}
               </tbody>
             </table>
-          </div>
+          </CampTableScroll>
           {/* ⚠ 希望の印と成長の数字の**読み方を表の下に1行で**出す。印だけ・
               倍率だけでは何のことか分からなかった（title はPCでもまず開かれない）。
               ⚠ 1行に収める。キャンプはホームに出すので1画面（1440×1000）に収める */}
