@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { delegationSettles, staffModesDoneText } from '../../src/online/notices.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const entry = `
@@ -562,6 +563,42 @@ try {
   // --- 締め切りの表示（日本時間） ---------------------------------------
   assert.equal(formatDeadline('2026-11-07T15:00:00.000Z'), '11/8(日) 0:00');
 
+  // --- 最後の1人が手続きを任せるときの確認と知らせ（再監査 A2。`notices.js`）------------
+  // ⚠ サーバーは待たれている最後の1人が手続きの分野を「任せる」にした瞬間に手続きを進める
+  //    （`updateStaffModes`）。画面はその条件のときだけ保存の前に確認を挟む
+  {
+    const view = (kind, members, phase = {}) => ({
+      teamName: 'A',
+      phase: { id: `1:${kind}`, kind, ...phase },
+      members: members.map(([teamName, flags]) => ({ teamName, ...flags })),
+    });
+    const others = [['B', { ready: true }], ['C', { cpu: true }], ['D', { ready: true, delegated: true }]];
+    assert.equal(
+      delegationSettles(view('tryout', [['A', {}], ...others]), { tryout: 'delegate' }),
+      'トライアウト',
+      'ほかが全員決めているのに、任せる前の確認を出さない',
+    );
+    assert.equal(delegationSettles(view('contract', [['A', {}]]), { release: 'delegate' }), '契約更改', '1人リーグの契約更改');
+    assert.equal(delegationSettles(view('camp', [['A', {}]]), { camp: 'delegate', tactics: 'delegate' }), 'キャンプ');
+    // 決まらない変更には出さない
+    assert.equal(delegationSettles(view('tryout', [['A', {}], ['B', {}]]), { tryout: 'delegate' }), null, 'ほかに決めていない人がいるのに確認を出す');
+    assert.equal(delegationSettles(view('tryout', [['A', {}]]), { release: 'delegate' }), null, '手続きと関係の無い分野で確認を出す');
+    assert.equal(delegationSettles(view('tryout', [['A', {}]]), { tryout: 'advice' }), null);
+    assert.equal(delegationSettles(view('tryout', [['A', { ready: true }]]), { tryout: 'delegate' }), null, '決定済みの人に確認を出す');
+    assert.equal(delegationSettles(view('tryout', [['A', { ready: true, delegated: true }]], { delegated: true }), { tryout: 'delegate' }), null);
+    assert.equal(delegationSettles(view('offseason', [['A', {}]]), { tryout: 'delegate' }), null);
+    assert.equal(delegationSettles({ teamName: 'A', members: [] }, { tryout: 'delegate' }), null, '手続きが無いときに確認を出す');
+    // 知らせ: 手続きが終わったときだけ言い分ける
+    const before = view('tryout', [['A', {}]]);
+    assert.equal(
+      staffModesDoneText({ modes: { tryout: 'delegate' } }, before, { phase: null }),
+      '任せ方を変えました。トライアウトは指導者の案で決まりました',
+    );
+    assert.equal(staffModesDoneText({ modes: { tryout: 'delegate' } }, before, before), '任せ方を変えました');
+    assert.equal(staffModesDoneText({ modes: { lineup: 'delegate' } }, before, { phase: null }), '任せ方を変えました');
+    assert.equal(staffModesDoneText({ modes: { tryout: 'delegate' } }, { phase: null }, { phase: null }), '任せ方を変えました');
+  }
+
   // --- 操作が済んだときの文（`OnlineApp.jsx` の `COMMAND_MESSAGES`） ------------
   // ⚠ **サーバーが受ける命令ごとに文があること**。無いと「保存しました」だけになり、
   //    決定したのか下書きなのか、トレードが成立したのか申し込んだだけなのか分からなかった。
@@ -580,5 +617,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認）',
 );

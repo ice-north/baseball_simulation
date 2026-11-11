@@ -18,6 +18,7 @@ import { ActionContext } from './ActionContext.jsx';
 import { useMobile } from './useMobile.js';
 import { setTeamLabels } from './gameText.js';
 import { Drafts } from './Drafts.jsx';
+import { staffModesDoneText } from './notices.js';
 import {
   readAuth,
   sameSession,
@@ -77,7 +78,8 @@ const COMMAND_MESSAGES = {
   step: 'ターンを進めました',
   testmode: '検証モードを切り替えました',
   resolve: '手続きを締め切りました',
-  staffModes: '任せ方を変えました',
+  // ⚠ 最後の1人が手続きの分野を任せると、その場で手続きが決まる。決まったら言い分ける（`notices.js`）
+  staffModes: staffModesDoneText,
   staff: '指導者を入れ替えました',
   reset: 'すべて消しました。リーグを作り直してください',
   // 手続きの提出。決定・下書き・決定の取り消しで文を変える
@@ -422,7 +424,7 @@ export default function OnlineApp() {
     const known = COMMAND_MESSAGES[type];
     const text =
       (typeof message === 'function' ? message(viewRef.current, before) : message) ||
-      (typeof known === 'function' ? known(payload, before) : known) ||
+      (typeof known === 'function' ? known(payload, before, viewRef.current) : known) ||
       '保存しました';
     setMessage(text);
     return text;

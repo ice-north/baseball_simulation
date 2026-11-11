@@ -14,6 +14,7 @@
 //  - スマホ（390px）のホームの「指導者」から同じ中身が開く
 //  - 手続き（トライアウト）を開いたあとに任せ方を変えると、手続きの標準案が取り直される
 //  - 任せた手続きは指導者の案を読むだけで、決定・下書き・編集を出さない（指導者のページへの入口）
+//  - 待たれている最後の1人が手続きを任せる前に確認を挟み、決まったら知らせを言い分ける
 // 画面の写しは /tmp/baseball-online-staff-*.png
 import assert from 'node:assert/strict';
 import { readFile, mkdtemp } from 'node:fs/promises';
@@ -21,6 +22,8 @@ import { tmpdir } from 'node:os';
 import { chromium } from 'playwright';
 import { routeToService, tryoutService } from './lib/serviceRoute.mjs';
 import { plannedPicks } from '../../src/online/tryoutPlan.js';
+import { loadLeagueWorld, openPhase, captureLeagueWorld } from '../../server/leagueEngine.mjs';
+import { withSeededRandom, hashSeed } from '../../src/game/rng.js';
 import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
 import { shortLastLines } from './lib/textWrap.mjs';
@@ -274,8 +277,20 @@ try {
   // ---- 手続きの最中に任せ方を変える（年末のトライアウト・参加者1人・スマホ 390px）--------
   {
     const fx = await tryoutService();
+    // ⚠ 候補の作り直しを種で決める（`openPhase` の候補は乱数）。種が無いと、監督の案と
+    //    「自分で」の標準案がたまたま同じ顔ぶれになる回があり、B2 の食い違いが見えない
+    await fx.store.transaction((bundle) => {
+      const l = bundle.league;
+      loadLeagueWorld(l);
+      withSeededRandom(hashSeed('staff-ui-tryout'), () =>
+        openPhase(l, 'tryout', '2026-11-10T15:00:00.000Z'),
+      );
+      l.game = captureLeagueWorld();
+      l.revision += 1;
+      return { value: null };
+    });
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
-    await routeToService(ctx, fx);
+    const { commands: sentCommands } = await routeToService(ctx, fx);
     await ctx.route(`${base}/online`, (route) => route.fulfill({ contentType: 'text/html', body: html }));
     const m = await ctx.newPage();
     m.on('pageerror', (e) => errors.push(e.message));
@@ -362,6 +377,45 @@ try {
       '任せる',
       '前提: トライアウトを任せている',
     );
+
+    // A2: 待たれている最後の1人（1人リーグなら本人）が手続きの分野を「任せる」にして保存すると、
+    //     その場で手続きが指導者の案で決まる。取り消せないので保存の前に確認を1段挟み、
+    //     済んだ知らせも言い分ける。以前は確認が無く、知らせは「任せ方を変えました」だけだった
+    await tryoutArea.getByRole('button', { name: '意見を聞く', exact: true }).click();
+    await press('任せ方を保存');
+    await m.getByText('保存済み', { exact: true }).waitFor();
+    assert.equal(
+      await m.getByRole('group', { name: '任せ方の確認' }).count(),
+      0,
+      '手続きが決まらない変更（任せる → 意見を聞く）で確認を出した',
+    );
+    const sent = sentCommands.length;
+    await tryoutArea.getByRole('button', { name: '任せる', exact: true }).click();
+    await press('任せ方を保存');
+    const ask = m.getByRole('group', { name: '任せ方の確認' });
+    await ask.waitFor({ timeout: 5000 }).catch(() => {
+      throw new Error('最後の1人が手続きを任せる前に確認が出ない（保存した瞬間にトライアウトが決まる）');
+    });
+    assert.equal(
+      await ask.locator('.online-trade-confirm-head').innerText(),
+      'いま決めていないのはあなただけです。任せると、この場でトライアウトが指導者の案で決まり、取り消せません。任せますか？',
+    );
+    assert.equal(sentCommands.length, sent, '確認の前に任せ方を送った');
+    await ask.getByRole('button', { name: 'やめる', exact: true }).click();
+    assert.equal(await ask.count(), 0, '「やめる」で確認が閉じない');
+    assert.equal(sentCommands.length, sent, '「やめる」で任せ方を送った');
+    assert.equal((await fx.store.read()).league.phase?.kind, 'tryout', '「やめる」でトライアウトが決まった');
+    await press('任せ方を保存');
+    await ask.getByRole('button', { name: '任せる', exact: true }).click();
+    await m
+      .getByText('任せ方を変えました。トライアウトは指導者の案で決まりました', { exact: true })
+      .first()
+      .waitFor({ timeout: 5000 })
+      .catch(() => {
+        throw new Error('任せたその場で手続きが決まったのに、知らせが「任せ方を変えました」だけ');
+      });
+    assert.equal(sentCommands.length, sent + 1, '任せ方の保存が1回でない');
+    assert.equal((await fx.store.read()).league.phase, null, '前提: 任せたその場でトライアウトが決まる');
     await ctx.close();
   }
 

@@ -4,6 +4,7 @@ import { Page } from './Page.jsx';
 import { teamLabel } from './gameText.js';
 import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS } from './coaches.js';
 import { useDraftState, STAFF_MODES_DRAFT } from './Drafts.jsx';
+import { delegationSettles } from './notices.js';
 
 // ============================================================
 // 指導者（監督・投手コーチ・野手コーチ）。PC のページとスマホの画面で共用。
@@ -224,9 +225,11 @@ export function staffModeChanges(modes, draft) {
  *    1つ押すたびに保存と読み込みが走るのは微妙）。下書きは変えた分野だけを持つ
  *    （`STAFF_MODES_DRAFT`。閉じる前の確認にも効く）。席が空いた分野は「自分で」に固定
  */
-function Modes({ staff, busy, run, command }) {
+function Modes({ view, staff, busy, run, command }) {
   const [draft, setDraft] = useDraftState(STAFF_MODES_DRAFT, {});
   const [error, setError] = useState('');
+  // 保存すると手続きがその場で決まるときの確認（決まる手続きの名前。再監査 A2）
+  const [asking, setAsking] = useState(null);
   const changes = staffModeChanges(staff.modes, draft);
   const count = Object.keys(changes).length;
   // 席が空いた・他の端末で同じ値にした、で送る分が無くなった下書きは捨てる
@@ -240,6 +243,7 @@ function Modes({ staff, busy, run, command }) {
     else next[area.key] = value;
     setDraft(next);
     setError('');
+    setAsking(null);
   };
   const save = () =>
     run(async () => {
@@ -255,6 +259,16 @@ function Modes({ staff, busy, run, command }) {
   const discard = () => {
     setDraft({});
     setError('');
+    setAsking(null);
+  };
+  // ⚠ **待たれている最後の1人が手続きの分野を「任せる」にすると、保存した瞬間にその手続きが
+  //    指導者の案で決まる**（サーバーの `updateStaffModes`。キャンプなら残りのクールが回って人事の
+  //    期間も終わる）。取り消せないので確認を1段挟む。以前は確認が無く、知らせも「任せ方を
+  //    変えました」だけだった（再監査 A2）。文と条件はアプリの StaffPanel と同じ
+  const requestSave = () => {
+    const settles = delegationSettles(view, changes);
+    if (settles) setAsking(settles);
+    else save();
   };
   return (
     <section className="online-card">
@@ -304,10 +318,32 @@ function Modes({ staff, busy, run, command }) {
         <button disabled={busy || !count} onClick={discard}>
           変更を取り消す
         </button>
-        <button className="online-primary" disabled={busy || !count} onClick={save}>
+        <button className="online-primary" disabled={busy || !count} onClick={requestSave}>
           任せ方を保存
         </button>
       </div>
+      {asking && (
+        <div className="online-trade-confirm" role="group" aria-label="任せ方の確認">
+          <p className="online-trade-confirm-head">
+            {`いま決めていないのはあなただけです。任せると、この場で${asking}が指導者の案で決まり、取り消せません。任せますか？`}
+          </p>
+          <div className="online-actions">
+            <button
+              className="online-primary"
+              disabled={busy}
+              onClick={() => {
+                setAsking(null);
+                save();
+              }}
+            >
+              任せる
+            </button>
+            <button disabled={busy} onClick={() => setAsking(null)}>
+              やめる
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -468,7 +504,7 @@ function OwnStaff({ view, busy, run, command }) {
           ))}
         </div>
       </section>
-      <Modes staff={staff} busy={busy} run={run} command={command} />
+      <Modes view={view} staff={staff} busy={busy} run={run} command={command} />
       <TacticsLines lines={staff.tactics} />
       {staff.canEditSeats && (
         <Market staff={staff} busy={busy} act={act} ask={ask} setAsk={setAsk} />
