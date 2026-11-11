@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import SeasonFlow from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import MobileTactics from './MobileTactics.jsx';
@@ -705,6 +705,11 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
   //    提出する案が無い（`CampPlanner` は `view.phase.camp` を見る）。以前はスマホで手続きを
   //    開くたびに、使わない標準案を取りに行っていた（世界を読むので重い）
   const needsPlan = phase.kind !== 'camp';
+  // ⚠ 標準案を出す人（任せ方）が変わったら取り直す。PCとスマホは画面を移ると作り直すので
+  //    ふだんはそれで取り直すが、ほかの端末で任せ方を変えたときは開いたまま変わる
+  const planBy = phase.planBy ? `${phase.planBy.mode}:${phase.planBy.by}` : 'self';
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
   useEffect(() => {
     let cancelled = false;
     if (needsPlan && !phase.submission)
@@ -716,7 +721,11 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
               return;
             }
             setError('');
-            setPlan((old) => old || d.plan);
+            // ⚠ **編集していなければ、取り直した標準案で置き換える**。以前は一度下書きに入った
+            //    案を残していて（`old || d.plan`）、手続きを開いたあとに任せ方を変えると
+            //    （監督の案 → 自分で、など）前の人の案が「標準案です。」のまま残り、そのまま
+            //    決定できた（再監査 B2）。提出が無く編集もしていない下書きは、前に取った標準案
+            setPlan((old) => (old && dirtyRef.current ? old : d.plan));
             setPlanRevision(d.revision);
           }
         })
@@ -726,7 +735,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile }) {
     return () => {
       cancelled = true;
     };
-  }, [auth, phase.id, phase.submission, needsPlan]);
+  }, [auth, phase.id, phase.submission, needsPlan, planBy]);
   const submissionChanged = !sameEditState(
     baseSubmission,
     phase.submission || null,

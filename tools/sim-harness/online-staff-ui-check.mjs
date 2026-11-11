@@ -12,12 +12,14 @@
 //  - 任せ方・方針・采配を変えたまま別のページへ移ると、左メニューに未保存の印が出る
 //  - 他球団を選ぶと、その球団の指導者（CPU球団なら采配の内訳も）が出る
 //  - スマホ（390px）のホームの「指導者」から同じ中身が開く
+//  - 手続き（トライアウト）を開いたあとに任せ方を変えると、手続きの標準案が取り直される
 // 画面の写しは /tmp/baseball-online-staff-*.png
 import assert from 'node:assert/strict';
 import { readFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { chromium } from 'playwright';
-import { routeToService } from './lib/serviceRoute.mjs';
+import { routeToService, tryoutService } from './lib/serviceRoute.mjs';
+import { plannedPicks } from '../../src/online/tryoutPlan.js';
 import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
 import { shortLastLines } from './lib/textWrap.mjs';
@@ -268,8 +270,68 @@ try {
   assert.ok(overflow <= 1, `スマホで横にはみ出す（${overflow}px）`);
   await p.screenshot({ path: '/tmp/baseball-online-staff-mobile.png', fullPage: true });
 
+  // ---- 手続きの最中に任せ方を変える（年末のトライアウト・参加者1人・スマホ 390px）--------
+  {
+    const fx = await tryoutService();
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await routeToService(ctx, fx);
+    await ctx.route(`${base}/online`, (route) => route.fulfill({ contentType: 'text/html', body: html }));
+    const m = await ctx.newPage();
+    m.on('pageerror', (e) => errors.push(e.message));
+    await m.goto(`${base}/online`);
+    const press = (name) => m.getByRole('button', { name, exact: true }).first().click();
+    const openProcedure = async () => {
+      await press('ホーム');
+      await m.getByRole('button', { name: '手続き', exact: true }).first().click();
+      await m.locator('.online-phase-contents').waitFor();
+    };
+    const openStaff = async () => {
+      await press('ホーム');
+      await press('指導者');
+      await m.locator('.online-staff-modes').waitFor();
+    };
+    const tryoutArea = m.locator('.online-choice', {
+      has: m.locator('.online-choice-label', { hasText: 'トライアウト' }),
+    });
+    const shownPicks = () => m.locator('.online-phase-contents li button').allInnerTexts();
+    // サーバーのいまの標準案で実際に取る顔ぶれ（画面と同じ決め方 `plannedPicks`）
+    const serverPicks = async () => {
+      const d = await fx.service.defaults(fx.userId, fx.sessionId);
+      const v = await fx.service.view(fx.userId, fx.sessionId);
+      const count = Math.min(d.plan.count, d.plan.rankedIds.length);
+      return plannedPicks(d.plan.rankedIds, v.phase.candidates, count, v.roster).map((x) => x.name);
+    };
+
+    // B2: 手続きを開いて（監督の案が下書きに入る）から任せ方を「自分で」に変えて戻ると、
+    //     いまの標準案に置き換わる。以前は監督の案が「標準案です。」のまま残り、そのまま決定できた
+    await openProcedure();
+    const byManager = await shownPicks();
+    assert.deepEqual(byManager, await serverPicks(), '前提: 開いた手続きに監督の案が出る');
+    await openStaff();
+    await tryoutArea.getByRole('button', { name: '自分で', exact: true }).click();
+    await press('任せ方を保存');
+    await m.getByText('任せ方を変えました', { exact: false }).first().waitFor();
+    const bySelf = await serverPicks();
+    assert.notDeepEqual(bySelf, byManager, '前提: 「自分で」の標準案は監督の案と違う');
+    await openProcedure();
+    await m.waitForFunction(
+      (want) =>
+        JSON.stringify([...document.querySelectorAll('.online-phase-contents li button')].map((b) => b.innerText)) ===
+        JSON.stringify(want),
+      bySelf,
+      { timeout: 5000 },
+    ).catch(() => {});
+    assert.deepEqual(
+      await shownPicks(),
+      bySelf,
+      '任せ方を変えたあとも、前に開いたときの監督の案が「標準案です。」のまま残る',
+    );
+    assert.match(await m.locator('.online-phase-status').innerText(), /標準案です/);
+    await ctx.close();
+  }
+
   assert.deepEqual(errors, [], `画面のエラー: ${errors.join(' / ')}`);
-  console.log('online-staff-ui-check PASS（PC の指導者ページ・任せ方・解任と市場・他球団・方針の中身・スマホ）');
+  console.log('online-staff-ui-check PASS（PC の指導者ページ・任せ方・解任と市場・他球団・方針の中身・スマホ・手続きの最中の任せ方）');
 } catch (error) {
   await failureShots(browser, 'online-staff-ui');
   throw error;
