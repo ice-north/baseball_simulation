@@ -207,6 +207,36 @@ class AppUiTest {
         rule.onNodeWithTag("chip-Staff").assertIsSelected()
     }
 
+    @Test fun delegatingAsTheLastOneAsksBeforeTheProcedureIsDecided() {
+        val staff = """"staff":{"modeOptions":[{"value":"self","label":"自分で"},{"value":"advice","label":"意見を聞く"},{"value":"delegate","label":"任せる"}],""" +
+            """"modes":[{"key":"tryout","label":"トライアウト","mode":"advice","effective":"advice","ownerLabel":"監督"}]}"""
+        // 1人リーグのトライアウト（待たれているのは自分だけ）。任せると、サーバーはその場で指導者の案で決めて次へ進む
+        val base = """"roster":[],"lineup":{"battingOrder":[]},"members":[{"teamName":"team","ready":false}],$staff"""
+        open(
+            """$base,"phase":{"id":"ph1","kind":"tryout"}""",
+            answer = { action -> if (action == "command") """{"view":{"revision":2,"teamName":"team","writable":true,$base}}""" else null },
+        )
+        rule.onNodeWithTag("tab-Plan").performClick()
+        rule.onNodeWithTag("chip-Staff").performClick()
+        rule.onNodeWithText("任せる").performScrollTo().performClick()
+        rule.onNodeWithText("任せ方を保存").performScrollTo().performClick()
+        // ⚠ 以前は確認なしに送り、取り消せないトライアウトの指名がその場で決まっていた。知らせも「任せ方を変えました」だけ
+        val question = "いま決めていないのはあなただけです。任せると、この場でトライアウトが指導者の案で決まり、取り消せません。任せますか？"
+        rule.onNodeWithText(question).assertExists()
+        rule.onNodeWithText("やめる").performClick()
+        rule.onNodeWithText(question).assertDoesNotExist()
+        rule.runOnIdle { assertTrue(commands.isEmpty()) }
+        rule.onNodeWithText("任せ方を保存").performScrollTo().performClick()
+        rule.onNodeWithTag("delegation-confirm").performClick()
+        rule.waitUntil(10_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            rule.onAllNodesWithText("任せ方を変えました。トライアウトは指導者の案で決まりました").fetchSemanticsNodes().isNotEmpty()
+        }
+        val sent = commands.single()
+        assertTrue(sent, sent.contains("\"type\":\"staffModes\""))
+        assertTrue(sent, sent.contains("\"tryout\":\"delegate\""))
+    }
+
     @Test fun homePaperTellsWhenANewerAppIsOut() {
         // 版の分からない所（git の無い手元）で作ったときは確かめない
         assumeTrue(BuildConfig.APP_COMMIT.isNotEmpty())

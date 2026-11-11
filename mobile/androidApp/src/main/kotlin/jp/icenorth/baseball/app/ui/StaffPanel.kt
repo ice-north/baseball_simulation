@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
@@ -49,7 +50,9 @@ import jp.icenorth.baseball.shared.StaffSeat
 import jp.icenorth.baseball.shared.StaffView
 import jp.icenorth.baseball.shared.TacticLine
 import jp.icenorth.baseball.shared.TeamStaffView
+import jp.icenorth.baseball.shared.delegationSettles
 import jp.icenorth.baseball.shared.staffModeChanges
+import jp.icenorth.baseball.shared.staffModesDoneText
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonNull
@@ -181,6 +184,16 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
         //    下書きは画面ではなく model に置く（編成の別のタブへ移っても消えない）
         val draft = model.staffModesDraft
         val changes = staffModeChanges(staff.modes, draft)
+        // 保存すると手続きがその場で決まるときの確認（決まる手続きの名前）
+        var settling by remember { mutableStateOf<String?>(null) }
+        val saveModes: (Map<String, String>) -> Unit = { sent ->
+            val before = model.view
+            // 済んだ知らせは送った後のビューで言い分ける（手続きが替わっていれば「〇〇は指導者の案で決まりました」）
+            model.command("staffModes", Commands.staffModes(sent)) {
+                model.staffModesDraft = emptyMap()
+                model.message = staffModesDoneText(sent, before, model.view)
+            }
+        }
         staff.modes.forEach { area ->
             val shown = if (area.locked) area.effective else draft[area.key] ?: area.effective
             Text(
@@ -203,9 +216,27 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
             )
             TextButton(onClick = { model.staffModesDraft = emptyMap() }, enabled = changes.isNotEmpty() && !model.busy) { Text("変更を取り消す") }
             Button(
-                onClick = { model.command("staffModes", Commands.staffModes(changes), done = "任せ方を変えました") { model.staffModesDraft = emptyMap() } },
+                onClick = { delegationSettles(view, changes)?.let { settling = it } ?: saveModes(changes) },
                 enabled = canWrite && changes.isNotEmpty(),
             ) { Text("任せ方を保存") }
+        }
+        // ⚠ **待たれている最後の1人が手続きの分野を「任せる」にすると、保存した瞬間にその手続きが指導者の案で決まる**
+        //    （server/leagueEngine.mjs の updateStaffModes。キャンプなら残りのクールが回って人事の期間も終わる）。
+        //    取り消せないので確認を1段挟む。以前は確認が無く、知らせも「任せ方を変えました」だけだった。
+        //    条件と文は Web の「指導者」ページ（src/online/StaffPage.jsx・notices.js の delegationSettles）と同じ
+        settling?.let { label ->
+            AlertDialog(
+                onDismissRequest = { settling = null },
+                text = { Text(delegationQuestion(label)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = { settling = null; saveModes(changes) },
+                        enabled = canWrite && changes.isNotEmpty(),
+                        modifier = Modifier.testTag("delegation-confirm"),
+                    ) { Text("任せる") }
+                },
+                dismissButton = { TextButton(onClick = { settling = null }) { Text("やめる") } },
+            )
         }
     }
     // ⚠ 自球団の「試合中の采配（実際の動き）」はここに出さない。編成の「作戦」の各項目の下に同じ内容
@@ -260,6 +291,10 @@ private sealed interface StaffAsk {
         override val confirm get() = "呼ぶ"
     }
 }
+
+/** 任せ方を保存すると [label]（「キャンプ」など）がその場で決まるときの問い（Web と同じ文） */
+internal fun delegationQuestion(label: String): String =
+    "いま決めていないのはあなただけです。任せると、この場で${label}が指導者の案で決まり、取り消せません。任せますか？"
 
 /** 指導者の操作が済んだときの知らせ */
 internal fun staffDoneText(action: String, role: String, other: String?, name: String?): String {

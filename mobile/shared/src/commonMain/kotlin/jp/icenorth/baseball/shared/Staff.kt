@@ -195,6 +195,48 @@ data class TeamStaffView(
     val events: List<StaffEvent> = emptyList(),
 )
 
+/**
+ * 手続きと、それを受け持つ任せ方の分野（src/online/coaches.js の PHASE_STAFF_AREA と同じ）。
+ * ⚠ 「任せる」にした手続きは、その人の決定を待たず指導者の案で決まる（server/leagueEngine.mjs の waitsFor・resolvePhase）
+ */
+val PHASE_STAFF_AREA: Map<String, String> = mapOf("tryout" to "tryout", "contract" to "release", "camp" to "camp")
+
+/**
+ * 自分のほかに、いまの手続きで待たれている人がいないか（ほかは全員 決定済み・指導者に任せた・CPUが決める）。
+ * サーバーの waitsFor と同じ見方（ビューの members の ready は、決定済みと任せた球団を含む）
+ */
+fun nobodyElseWaited(view: LeagueView): Boolean =
+    view.members.all { it.teamName == view.teamName || it.ready || it.cpu }
+
+/**
+ * 任せ方の保存（[changes] は送る分 `{ 分野: 任せ方 }`）で、いまの手続きがその場で決まるか。
+ * 決まるなら手続きの名前（「トライアウト」など）、決まらないなら null。Web の `delegationSettles`（src/online/notices.js）と同じ。
+ * ⚠ サーバーは**待たれている最後の1人が手続きの分野を「任せる」にした瞬間に**、指導者の案で手続きを進める
+ *    （server/leagueEngine.mjs の updateStaffModes）。取り消せないので、画面は保存の前に確認を1段挟む。
+ *    1人リーグなら手続き中に任せるといつもこれになる。
+ * ⚠ 自分がまだ決めておらず（ready でも cpu でもない）、自分のほかに待たれている人がいない（[nobodyElseWaited]）とき
+ */
+fun delegationSettles(view: LeagueView, changes: Map<String, String>): String? {
+    val phase = view.phase ?: return null
+    val area = PHASE_STAFF_AREA[phase.kind] ?: return null
+    if (changes[area] != "delegate" || phase.delegated) return null
+    val me = view.members.firstOrNull { it.teamName == view.teamName } ?: return null
+    if (me.ready || me.cpu || !nobodyElseWaited(view)) return null
+    return PHASE_LABELS[phase.kind] ?: "手続き"
+}
+
+/**
+ * 任せ方を保存したあとの知らせ。手続きがその場で決まったら言い分ける（[delegationSettles]）。
+ * [before] / [after] は送る前と後のビュー。Web の `staffModesDoneText` と同じ文
+ */
+fun staffModesDoneText(changes: Map<String, String>, before: LeagueView?, after: LeagueView?): String {
+    val phase = before?.phase
+    val area = PHASE_STAFF_AREA[phase?.kind]
+    if (phase != null && area != null && changes[area] == "delegate" && after != null && after.phase?.id != phase.id)
+        return "任せ方を変えました。${PHASE_LABELS[phase.kind]}は指導者の案で決まりました"
+    return "任せ方を変えました"
+}
+
 /** 手続きの標準案を出した指導者（ビューの phase.planBy） */
 @Serializable
 data class PlanBy(val mode: String = "advice", val by: String = "", val text: String = "")
