@@ -1237,10 +1237,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         formAdjustedGrowth = Math.round(formAdjustedGrowth * getVelocityCatchupMult(armVal, currentValue));
       }
 
-      // 高能力値の成長減衰（覚醒分は減衰しない）。
-      // ⚠ **減衰率は最低保証にも使う**（下の `guaranteeRate`）。伸び幅だけ
-      //    減衰させても、主対象には「最低+1」があるので、能力が上限近くでも
-      //    毎クール+1入り続けた。伸び切った能力が止まらない元
+      // 高能力値の成長減衰。
+      // ⚠ **覚醒には掛けない**（いしだ方針: 覚醒は限界突破なので、能力が
+      //    高くても伸びてほしい）。下で `adjustedBaseGrowth + awakeningGrowth`
+      //    と足しており、減衰が掛かるのは前者だけ。実測で、覚醒したときの
+      //    ミートの伸びは ミート40で4.89・95で4.25（上限100の頭打ちぶんだけ減る）。
       let dampFactor = 1.0;
       if (targetStat === 'velocity') {
         // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）

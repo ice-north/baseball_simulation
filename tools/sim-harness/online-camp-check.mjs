@@ -306,6 +306,47 @@ function campWith(build) {
     mid.meet > bat.meet * 0.8,
     `しきい値の下なのに鈍っている: ミート60で${mid.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
   );
+
+  // ⚠ **覚醒には減衰を掛けないこと**（いしだ方針: 覚醒は限界突破なので、
+  //    能力が高くても伸びてほしい）。伸び幅の減衰は `baseGrowth` にだけ掛け、
+  //    覚醒ぶんは足すだけ——という作りを、ここで固定する。
+  //    実測: 覚醒したときのミートの伸びは ミート40で4.89・95で4.25
+  //    （減るのは上限100の頭打ちぶんだけ）
+  {
+    const real = Math.random;
+    /** 覚醒したクールだけ拾って、伸び幅の平均を出す */
+    const burst = (meet) => {
+      Math.random = createSeededRandom(20261111);
+      let sum = 0;
+      let n = 0;
+      try {
+        for (let i = 0; i < 2000; i += 1) {
+          const before = fielder({
+            batting: { meet, power: 40, eye: 45, bunt: 30, steal: 30, bats: 'right' },
+          })();
+          // 経験値は1シーズン出ずっぱりの主力ぶん。覚醒倍率はオンラインと同じ1.5
+          before.experience = 240;
+          const out = executeCampTraining(before, 'batting', null, null, 1.5, 1.0);
+          const rep = out.growthReport.find((x) => x.stat === 'meet');
+          if (rep?.isAwakening) {
+            sum += rep.growth;
+            n += 1;
+          }
+        }
+      } finally {
+        Math.random = real;
+      }
+      return { 平均: n ? sum / n : 0, 回数: n };
+    };
+    const low = burst(40);
+    const high2 = burst(85);
+    assert.ok(low.回数 > 100 && high2.回数 > 100, `覚醒が起きていない: ${low.回数}/${high2.回数}回`);
+    assert.ok(
+      high2.平均 > low.平均 * 0.8,
+      `覚醒まで減衰している: ミート40で${low.平均.toFixed(2)} / ミート85で${high2.平均.toFixed(2)}`,
+    );
+    assert.ok(high2.平均 >= 3, `覚醒の伸びが小さすぎる: ${high2.平均.toFixed(2)}`);
+  }
 }
 
 // --- サブ練習の対象が効くか --------------------------------------------
@@ -993,5 +1034,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る）',
+  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けない）',
 );
