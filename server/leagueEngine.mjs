@@ -1755,7 +1755,11 @@ export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
   };
   // ⚠ 決定（「この内容で決定」・キャンプの最後のクール）のたびに見る。待つ人が居なければ進む。
   //    ⚠ 全員が任せていても、開いただけでは進まない（`openPhase` は見ない）。誰かが決定するか締め切りで進む
-  resolveSettledPhase(league, now);
+  // ⚠ **下書きの保存・決定の取り消し（`ready: false`）では進めない**。以前は ready を見ておらず、
+  //    全員が任せた手続き（1人リーグで任せたときも）では、任せた人が「下書きを保存」を押した
+  //    その場でトライアウト・契約更改が処理され、知らせは「下書きを保存しました」だった。
+  //    締め切りの自動決定（`autoResolvePhase`）は ready: true で出すので、ここで止まらない
+  if (ready === true) resolveSettledPhase(league, now);
   league.game = captureWorld();
 }
 

@@ -734,8 +734,17 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
     assert.equal(l.phase?.kind, 'tryout', '全員が任せたトライアウトが、開いた直後に終わった');
     updateStaffModes(l, a.userId, { tactics: 'delegate' }, iso());
     assert.equal(l.phase?.kind, 'tryout', '関係の無い任せ方の変更でトライアウトが終わった');
+    // ⚠ 「下書きを保存」（ready: false）では進めない。以前は ready を見ておらず、
+    //    下書きを保存したその場でトライアウトが処理されていた（再監査 A1）
+    submitPhase(l, a.userId, { phaseId: l.phase.id, plan: defaultPhasePlan(l, a.teamName), ready: false }, iso());
+    assert.equal(l.phase?.kind, 'tryout', '全員が任せたトライアウトが「下書きを保存」で終わった');
+    assert.equal(l.status, 'waiting');
     decide(l, a.userId);
     assert.equal(l.phase, null, '全員が任せたトライアウトで「決定」を押しても進まない');
+    // 契約更改も同じ（「決定を取り消す」も ready: false）
+    const c = open('contract', { [a.userId]: { release: 'delegate' }, [b.userId]: { release: 'delegate' } });
+    submitPhase(c, b.userId, { phaseId: c.phase.id, plan: defaultPhasePlan(c, b.teamName), ready: false }, iso());
+    assert.equal(c.phase?.kind, 'contract', '全員が任せた契約更改が「下書きを保存」で終わった');
   }
   {
     // キャンプ: 任せた人は待たない。席が3人とも空くと「自分で」になり、待つ
