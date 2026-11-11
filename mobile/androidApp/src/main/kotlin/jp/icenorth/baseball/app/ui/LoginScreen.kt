@@ -39,6 +39,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.app.BuildConfig
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 
 @Composable
 fun LoginScreen(model: AppViewModel) {
@@ -47,6 +49,7 @@ fun LoginScreen(model: AppViewModel) {
     var showServer by rememberSaveable { mutableStateOf(false) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
     val local = model.endpoint != BuildConfig.DEFAULT_ENDPOINT
+    var devTools by rememberSaveable { mutableStateOf(false) }
     Surface(Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -58,7 +61,12 @@ fun LoginScreen(model: AppViewModel) {
         ) {
             Spacer(Modifier.height(48.dp))
             // Web 版の見出し（OnlineApp.jsx の「NEXT STAGE オンラインペナント」）と揃える
-            Text("NEXT STAGE", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            Text(
+                "NEXT STAGE",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { devTools = true }) },
+            )
             Text("オンラインペナント", style = MaterialTheme.typography.titleMedium)
             Text(
                 // ⚠ 同時に操作できるのはブラウザ1台とアプリ1台（server/sessions.mjs）。外れるのは同じ種類の前の端末だけ
@@ -102,7 +110,10 @@ fun LoginScreen(model: AppViewModel) {
                 }
             }
             model.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            TextButton(onClick = { showServer = !showServer }) { Text(if (showServer) "接続先を閉じる" else "接続先を変える（開発用）") }
+            // ⚠ 接続先の変更は開発用なので、ふだんは出さない（遊ぶ人が触ると本番につながらなくなる）。
+            //    題字の「NEXT STAGE」を長押しすると出る。本番以外につながっている間は、戻せるようにいつも出す
+            //    （配っているのも debug ビルドなので、BuildConfig.DEBUG では分けられない）
+            if (devTools || local) TextButton(onClick = { showServer = !showServer }) { Text(if (showServer) "接続先を閉じる" else "接続先を変える（開発用）") }
             if (showServer) {
                 var draft by rememberSaveable { mutableStateOf(model.endpoint) }
                 OutlinedTextField(

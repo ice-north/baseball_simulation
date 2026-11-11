@@ -84,6 +84,7 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
         }
     }
     val pitcher = p.at("position").str() == "pitcher"
+    var openPeriods by remember(id) { mutableStateOf(setOf(0)) }
     Column(
         // 画面の見回り（ScreenTour）はこの印の上でスクロールする（シートは別の窓なので、画面の根を送っても動かない）
         Modifier.testTag("player-sheet").verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp),
@@ -165,9 +166,19 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
             failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 }, title = "成績を読めませんでした")
             periods == null -> Muted("読み込み中…")
             periods!!.isEmpty() -> Muted("成績の記録がありません。")
-            else -> periods!!.forEach { period ->
+            else -> periods!!.forEachIndexed { index, period ->
+                // ⚠ 開いておくのは先頭（今季）だけ。ほかの期間は見出しを押して開く（全部を並べるとシートが長く、
+                //    同じ並びの数字が3回続いて、どれが今季か見失った）
+                val shown = index in openPeriods
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(period.at("label").str().orEmpty(), fontWeight = FontWeight.SemiBold)
+                    Row(
+                        Modifier.fillMaxWidth().clickable { openPeriods = if (shown) openPeriods - index else openPeriods + index }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(period.at("label").str().orEmpty(), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(if (shown) "閉じる ▴" else "開く ▾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (!shown) return@Column
                     // 投手は投球を先に。打席に立っていれば打撃も出す
                     val sides = if (pitcher) listOf(false, true) else listOf(true, false)
                     sides.forEach { batting ->

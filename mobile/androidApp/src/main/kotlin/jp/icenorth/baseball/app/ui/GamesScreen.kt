@@ -43,6 +43,7 @@ import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.positionLabel
+import jp.icenorth.baseball.shared.readableChangeReason
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
@@ -224,7 +225,7 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
                                     "${c.at("inning").int()}回${if (c.at("isTop").bool() == true) "表" else "裏"} ${view.teamShort(c.at("team").str().orEmpty())}  ${c.at("out").str()} → ${c.at("in").str()}",
                                     fontSize = 13.sp,
                                 )
-                                Muted(listOfNotNull(c.at("role").str(), c.at("reason").str()).joinToString(" · "))
+                                Muted(listOfNotNull(c.at("role").str(), c.at("reason").str()?.let(::readableChangeReason)).joinToString(" · "))
                             }
                         }
                     }

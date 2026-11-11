@@ -153,7 +153,7 @@ class ScreenTour {
         pause()
         // ⚠ 下まで撮ったままだと題字のメニューが画面の外で押せず、続く「戻る」でアプリが閉じて以降が撮れなかった
         step("menu") { toTop(); rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); shot("home-menu"); back() }
-        step("back-issues") { toTop(); rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); pause(); click("紙面のバックナンバー"); shot("home-back-issues"); back() }
+        step("back-issues") { toTop(); rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); pause(); click("過去の見出し"); shot("home-back-issues"); back() }
 
         when (stage) {
             "running" -> {

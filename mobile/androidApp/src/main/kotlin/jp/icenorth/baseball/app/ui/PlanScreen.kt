@@ -47,6 +47,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
@@ -153,11 +154,11 @@ fun PlanScreen(model: AppViewModel) {
         //    帯の「保存」と並ぶと、どちらで任せ方が保存されるのか分からなかった）
         if (tab != PlanTab.Staff) {
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo) { Text("↶ 戻す") }
-                TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo) { Text("↷ 進む") }
-                Text(if (dirty) "保存していない変更があります" else "保存済み", style = MaterialTheme.typography.bodySmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                TextButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo) { Text("↶ 元に戻す") }
+                TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo) { Text("↷ やり直す") }
+                Text(if (dirty) "未保存の変更あり" else "保存済み", style = MaterialTheme.typography.bodySmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                 // ⚠ 取り消すと、編集を始めたときではなく**今の保存済み**の編成に戻す（古い base に戻すと保存が断られ続ける）
-                TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale) { Text("取り消す") }
+                TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale) { Text("変更を捨てる") }
                 Button(
                     onClick = {
                         val problem = draft.problem(view.roster)
@@ -171,7 +172,7 @@ fun PlanScreen(model: AppViewModel) {
             }
             if (stale) {
                 Text(
-                    "別の画面で編成が更新されました。この編集は保存できないので、「取り消す」で最新の編成を読み直してから編集し直してください。",
+                    "別の画面で編成が更新されました。この編集は保存できないので、「変更を捨てる」で最新の編成を読み直してから編集し直してください。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -431,7 +432,14 @@ private fun PositionSheet(draft: PlanDraft, index: Int, players: Map<Long, Playe
             PosBadge(slot.position)
             Text("${me?.name ?: ""}と守備を入れ替える", style = MaterialTheme.typography.titleMedium)
         }
-        Muted("入れ替えたあとの適性（左: ${me?.name ?: ""}・右: 相手）", Modifier.padding(horizontal = 20.dp))
+        // 列の見出し（数字が誰の・どこでの適性かを、表の上で読めるように）
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val head = MaterialTheme.typography.labelSmall
+            val ink = MaterialTheme.colorScheme.onSurfaceVariant
+            Text("入れ替える相手", style = head, color = ink, modifier = Modifier.weight(1f))
+            Text("${me?.name ?: "自分"}の適性", style = head, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(72.dp))
+            Text("相手の適性", style = head, color = ink, maxLines = 1, modifier = Modifier.width(72.dp))
+        }
         FIELD_POSITIONS.mapNotNull { pos -> draft.slots.indexOfFirst { it.position == pos }.takeIf { it >= 0 && it != index } }
             .forEach { other ->
                 val target = draft.slots[other]
@@ -616,11 +624,12 @@ private fun PitchingList(
                     // ⚠ 0人の役割も見出しは残す（ここへ落とすとその役割になる）。人数を添え、0人は薄くする
                     //    （以前は0人の見出しも同じ濃さで並び、誰かいるように見えた）
                     val empty = list.isEmpty()
-                    Row(Modifier.padding(top = 10.dp, start = 4.dp), verticalAlignment = Alignment.Bottom) {
+                    // 0人の役割は間を詰める（空の見出しが4つ5つ並ぶと、投手の行が画面の外へ押し出されていた）
+                    Row(Modifier.padding(top = if (empty) 2.dp else 10.dp, start = 4.dp), verticalAlignment = Alignment.Bottom) {
                         Text(
                             RELIEF_ROLES[role] ?: role,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = if (empty) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                            fontWeight = if (empty) FontWeight.Normal else FontWeight.Bold,
                             color = if (empty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                         )
                         Text(if (empty) "  なし" else "  ${list.size}人", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -755,7 +764,7 @@ private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = TipsBadgeRoom), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // 指導者に任せているときは、ここで変えると「意見を聞く」に戻ることを先に知らせる（PC と同じ）
         if (view.staff?.mode("tactics")?.effective == "delegate")
-            Muted("試合中の采配は指導者に任せています（「→」の内容で動きます）。ここで変えて保存すると、任せ方は「意見を聞く」に戻ります。")
+            Muted("試合中の采配は指導者に任せています（「AI判断の中身」のとおりに動きます）。ここで変えて保存すると、任せ方は「意見を聞く」に戻ります。")
         Section("方針") {
             STRATEGY_FIELDS.forEach { f ->
                 Text(f.label, style = MaterialTheme.typography.labelLarge)
@@ -763,7 +772,7 @@ private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
                 StaffActual(view, "strategy", f.key)
             }
         }
-        Section("自動采配", trailing = { InfoButton("自動采配", listOf("試合中の作戦と継投の決め方です。AI判断のままでも試合は進みます。", "「→」は指導者が「AI判断」に入れている中身と、決めた人です（保存した設定に対して）。")) }) {
+        Section("自動采配", trailing = { InfoButton("自動采配", listOf("試合中の作戦と継投の決め方です。AI判断のままでも試合は進みます。", "「AI判断の中身」は、指導者が「AI判断」に入れている内容と、決めた人です（保存した設定に対して）。")) }) {
             TACTIC_FIELDS.forEach { f ->
                 Text(f.label, style = MaterialTheme.typography.labelLarge)
                 ChoiceRow(f.options.map { it.key to it.label }, draft.tactics[f.key]) { v -> edit { it.withTactic(f.key, v) } }

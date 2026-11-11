@@ -170,8 +170,13 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
             HorizontalDivider()
         }
     }
-    Section("任せ方") {
-        Muted("「意見を聞く」は決めるのはあなたで、指導者の案が標準案になります（采配の「AI判断」は指導者の考えで動きます）。「任せる」は指導者が決めます（トライアウト・退団・キャンプは、あなたの決定を待たずに進みます）。全部「自分で」なら指導者を入れる前と同じです。")
+    Section("任せ方", trailing = {
+        InfoButton("任せ方", listOf(
+            "「意見を聞く」は決めるのはあなたで、指導者の案が標準案になります（采配の「AI判断」は指導者の考えで動きます）。",
+            "「任せる」は指導者が決めます（トライアウト・退団・キャンプは、あなたの決定を待たずに進みます）。",
+            "全部「自分で」なら指導者を入れる前と同じです。",
+        ))
+    }) {
         // ⚠ まとめて変えて「任せ方を保存」で1回だけ送る（いしだ指摘 2026-11-10: 1つ押すたびに保存が走るのは微妙）。
         //    下書きは画面ではなく model に置く（編成の別のタブへ移っても消えない）
         val draft = model.staffModesDraft
@@ -203,7 +208,8 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
             ) { Text("任せ方を保存") }
         }
     }
-    TacticsLines(staff.tactics)
+    // ⚠ 自球団の「試合中の采配（実際の動き）」はここに出さない。編成の「作戦」の各項目の下に同じ内容
+    //    （AI判断の中身）が出ていて、2か所で読むことになっていた。他球団を見るときだけ出す（[TacticsLines]）
     if (staff.canEditSeats) {
         val empty = staff.seats.filter { it.coach == null }.map { it.role }
         Section("市場（呼べる指導者）") {
@@ -374,9 +380,9 @@ private fun Events(title: String, events: List<StaffEvent>) {
     }
 }
 
-/** 方針・采配の各項目の下に出す「→ 積極的（山田監督）」。指導者が決めていなければ出さない */
+/** 方針・采配の各項目の下に出す「AI判断の中身: 積極的（山田監督）」。指導者が決めていなければ出さない */
 @Composable
 fun StaffActual(view: LeagueView, field: String, key: String) {
     val line = view.staff?.tactic(field, key)?.takeIf { it.by != null } ?: return
-    Text("→ ${line.resolvedLabel ?: line.valueLabel}（${line.by}）", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+    Text("AI判断の中身: ${line.resolvedLabel ?: line.valueLabel}（${line.by}）", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
 }

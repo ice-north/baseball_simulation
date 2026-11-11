@@ -177,7 +177,7 @@ private fun Masthead(page: FrontPage, nextAdvanceAt: String?, menu: @Composable 
     Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
         Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), fontSize = 11.sp, color = InkSoft, modifier = Modifier.weight(1f).alignByBaseline())
         val left = secondsUntil(nextAdvanceAt)
-        Text("次の進行まで ", fontSize = 11.sp, color = InkSoft, modifier = Modifier.alignByBaseline())
+        Text(countdownLead(left), fontSize = 11.sp, color = InkSoft, modifier = Modifier.alignByBaseline())
         Text(countdownText(left), fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 16.sp, color = Red, modifier = Modifier.alignByBaseline())
     }
     Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(1.dp).background(Rule.copy(alpha = 0.5f)))

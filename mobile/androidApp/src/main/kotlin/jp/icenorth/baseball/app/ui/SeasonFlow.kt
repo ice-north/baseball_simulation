@@ -99,8 +99,10 @@ fun OffseasonGrowthCard(model: AppViewModel, raw: JsonObject?) {
     val rows = campGainRows(gains, roster).filter { it.items.isNotEmpty() }
     val totals = campGainTotals(gains)
     var all by rememberSaveable { mutableStateOf(false) }
-    Section("${result.at("year").int() ?: ""}年目オフの成長（年度更新）") {
-        Muted("能力が変わるのはキャンプと年度更新だけです（シーズン中は変わりません）。年度更新では、年齢と今季の出場に応じて伸びたり衰えたりします。")
+    Section(
+        "${result.at("year").int() ?: ""}年目オフの成長（年度更新）",
+        trailing = { InfoButton("年度更新の成長", listOf("能力が変わるのはキャンプと年度更新だけです（シーズン中は変わりません）。", "年度更新では、年齢と今季の出場に応じて伸びたり衰えたりします。")) },
+    ) {
         if (rows.isEmpty()) {
             Muted("変わった能力はありません。")
         } else {

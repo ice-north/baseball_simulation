@@ -81,6 +81,12 @@ fun secondsUntil(iso: String?): Long? {
  */
 val LocalAwaitingDecision = staticCompositionLocalOf { false }
 
+/**
+ * 残り時間の前に付ける「次の進行まで」。⚠ 時刻があるときだけ付ける。時刻が無いとき・0秒のときは
+ *    「次の進行まで 進行中…」「次の進行まで 手続きの決定待ち」と、つながらない文になっていた
+ */
+fun countdownLead(left: Long?): String = if (left != null && left > 0) "次の進行まで " else ""
+
 /** 「次の進行まで」に出す文（Web 版 api.js の nextAdvanceText と同じ決まり） */
 @Composable
 fun countdownText(left: Long?): String = countdownText(left, LocalAwaitingDecision.current, System.currentTimeMillis())
@@ -134,8 +140,9 @@ private fun WebNewsPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composab
             Text(listOfNotNull(page.team, page.standing).joinToString("　"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row {
                 Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.weight(1f).alignByBaseline())
-                Text("次の進行まで ", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.alignByBaseline())
-                Text(countdownText(secondsUntil(nextAdvanceAt)), color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp, modifier = Modifier.alignByBaseline().padding(end = 10.dp))
+                val left = secondsUntil(nextAdvanceAt)
+                Text(countdownLead(left), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.alignByBaseline())
+                Text(countdownText(left), color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp, modifier = Modifier.alignByBaseline().padding(end = 10.dp))
             }
         }
         // 速報（自分の番の手続きなど）
@@ -227,8 +234,9 @@ private fun PlainPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composable
                 }
                 Text(listOfNotNull(page.standing, page.issue.ifEmpty { null }, page.status).joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
                 Row {
-                    Text("次の進行まで ", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.alignByBaseline())
-                    Text(countdownText(secondsUntil(nextAdvanceAt)), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.alignByBaseline())
+                    val left = secondsUntil(nextAdvanceAt)
+                    Text(countdownLead(left), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.alignByBaseline())
+                    Text(countdownText(left), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.alignByBaseline())
                 }
             }
         }

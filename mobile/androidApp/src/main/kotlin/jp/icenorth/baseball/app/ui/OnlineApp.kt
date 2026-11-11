@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.PlanDraft
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.list
@@ -121,6 +122,7 @@ fun OnlineApp(model: AppViewModel) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
+                val planDirty = model.plan?.present?.let { d -> model.view?.let { v -> v.lineup != null && !d.sameEdit(PlanDraft.from(d.base, v.roster)) } } == true
                 NavigationBar {
                     Tab.entries.forEach { item ->
                         NavigationBarItem(
@@ -130,6 +132,9 @@ fun OnlineApp(model: AppViewModel) {
                             icon = {
                                 if (item == Tab.Procedures && count > 0) {
                                     BadgedBox(badge = { Badge { Text("$count") } }) { Icon(item.icon, contentDescription = "未完了${count}件") }
+                                } else if (item == Tab.Plan && planDirty) {
+                                    // 保存していない編成があることを、ほかのタブにいても分かるように点で知らせる
+                                    BadgedBox(badge = { Badge() }) { Icon(item.icon, contentDescription = "保存していない変更あり") }
                                 } else {
                                     Icon(item.icon, contentDescription = null)
                                 }

@@ -234,7 +234,7 @@ private fun BackNumberDialog(issues: List<BackIssue>, localTitle: String, onClos
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = { TextButton(onClick = onClose) { Text("閉じる") } },
-        title = { Text("紙面のバックナンバー") },
+        title = { Text("過去の見出し") },
         text = {
             if (issues.isEmpty()) Text("まだありません。ホームを開くたびに、その日の1面の見出しを残します。")
             else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -337,7 +337,7 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
             DropdownMenuItem(text = { Text("最新に更新") }, onClick = { open = false; model.reload(pull = true) })
             DropdownMenuItem(text = { Text("球団名・名前を変える") }, onClick = { open = false; onRename() })
             DropdownMenuItem(text = { Text("ゲームのTIPS") }, onClick = { open = false; onOpenTips() })
-            DropdownMenuItem(text = { Text("紙面のバックナンバー") }, onClick = { open = false; onOpenBack() })
+            DropdownMenuItem(text = { Text("過去の見出し") }, onClick = { open = false; onOpenBack() })
             DropdownMenuItem(text = { Text("球団史・記録") }, onClick = { open = false; onOpenChronicle() })
             HorizontalDivider()
             Text("ホームの見た目", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))

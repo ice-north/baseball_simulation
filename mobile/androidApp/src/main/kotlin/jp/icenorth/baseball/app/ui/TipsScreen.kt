@@ -99,6 +99,9 @@ fun SituationTipsBadge(
 ) {
     if (tips.isEmpty()) return
     var open by remember { mutableStateOf(false) }
+    // ⚠ 印は**未読があるときだけ**出す（いしだ決定 2026-11-11）。読んだあとも居座ると、いつも角に物がある。
+    //    読んだTIPSは、ホームのメニューの「TIPS」からいつでも読み返せる
+    if (!open && !hasUnreadTips(tips, seen)) return
     val alpha = if (!open && hasUnreadTips(tips, seen)) {
         val pulse by rememberInfiniteTransition(label = "tip-pulse").animateFloat(
             initialValue = 1f,
