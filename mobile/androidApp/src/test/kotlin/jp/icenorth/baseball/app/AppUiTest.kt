@@ -211,13 +211,14 @@ class AppUiTest {
         val staff = """"staff":{"modeOptions":[{"value":"self","label":"自分で"},{"value":"advice","label":"意見を聞く"},{"value":"delegate","label":"任せる"}],""" +
             """"modes":[{"key":"tryout","label":"トライアウト","mode":"advice","effective":"advice","ownerLabel":"監督"}]}"""
         // 1人リーグのトライアウト（待たれているのは自分だけ）。任せると、サーバーはその場で指導者の案で決めて次へ進む
-        val base = """"roster":[],"lineup":{"battingOrder":[]},"members":[{"teamName":"team","ready":false}],$staff"""
+        // ⚠ 名簿は1人入れる。空だと編成タブは「名簿が決まると編集できます」だけになり、指導者の札が出ない
+        val base = """"roster":[{"id":1,"name":"選手","position":"first"}],"lineup":{"battingOrder":[]},"members":[{"teamName":"team","ready":false}],$staff"""
         open(
             """$base,"phase":{"id":"ph1","kind":"tryout"}""",
             answer = { action -> if (action == "command") """{"view":{"revision":2,"teamName":"team","writable":true,$base}}""" else null },
         )
         rule.onNodeWithTag("tab-Plan").performClick()
-        rule.onNodeWithTag("chip-Staff").performClick()
+        rule.onNodeWithTag("chip-Staff").performScrollTo().performClick()
         rule.onNodeWithText("任せる").performScrollTo().performClick()
         rule.onNodeWithText("任せ方を保存").performScrollTo().performClick()
         // ⚠ 以前は確認なしに送り、取り消せないトライアウトの指名がその場で決まっていた。知らせも「任せ方を変えました」だけ
