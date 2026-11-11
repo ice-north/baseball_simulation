@@ -2929,9 +2929,11 @@ if (newOuts === 3) {
       // [SECTION: RENDER] メインreturn（試合画面UI・管理シェル）
       return (
         <div className="min-h-screen bg-surface-0">
-          {/* オートセーブ完了トースト */}
+          {/* オートセーブ完了トースト。
+              ⚠ 右**上**に出す。下は取り消せない操作の確認の帯（`ConfirmBar`、下端の中央）の
+                 置き場で、狭い幅では帯のボタンの上に重なっていた */}
           {autoSaveFlash && (
-            <div className="fixed bottom-3 right-3 z-[60] bg-gray-900/95 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none">
+            <div className="fixed top-3 right-3 z-[60] bg-gray-900/95 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none">
               💾 オートセーブしました
             </div>
           )}
