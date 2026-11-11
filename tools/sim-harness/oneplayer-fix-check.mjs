@@ -24,6 +24,7 @@ import { applyNextSeasonRegulations, repairLeagueConfig, validateLeagueTeamNames
 import { twoLeagueGameCountLabel, twoLeagueSplitLabel } from '../../src/season/regulationSettings.js';
 import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
 import { leagueMagic } from '../../src/season/magicNumber.js';
+import { seasonChampion } from '../../src/season/seasonManager.js';
 import { departedEntry, withDeparted, rosterIndex, departedSince, withDepartedPlayers } from '../../src/season/departedStats.js';
 
 const quiet = (fn) => {
@@ -622,6 +623,35 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   releasedPlayersPool.length = 0;
 }
 
+// --- オフシーズンの「CHAMPION」は、プレーオフがある年はその優勝球団 ---
+// ⚠ 以前はレギュラーシーズン1位（勝率の1番）をそのまま出していて、プレーオフを
+//    勝った球団と違った（独立リーグ1年目、日程のプレーオフは徳島が優勝なのにオフは愛媛）。
+//    同じ画面の球団史はプレーオフの優勝を別に取っていた
+{
+  const standings = [
+    { team: '愛媛', wins: 40, losses: 20, draws: 0, winRate: 40 / 60 },
+    { team: '徳島', wins: 35, losses: 25, draws: 0, winRate: 35 / 60 },
+    { team: '高知', wins: 30, losses: 30, draws: 0, winRate: 0.5 },
+    { team: '香川', wins: 15, losses: 45, draws: 0, winRate: 0.25 },
+  ];
+  const final = (id, home, away, homeScore, awayScore) => ({
+    id, home, away, phase: 'playoffs', playoffRound: 'final', seriesWinsRequired: 2,
+    result: homeScore === null ? null : { homeScore, awayScore },
+  });
+  const decided = [final(1, '愛媛', '徳島', 1, 3), final(2, '愛媛', '徳島', 2, 5), final(3, '徳島', '愛媛', null, null)];
+  const won = seasonChampion(standings, decided);
+  assert.equal(won.champion.team, '徳島', `プレーオフの優勝球団でなくレギュラーシーズン1位（${won.champion.team}）を出す`);
+  assert.equal(won.byPlayoff, true);
+  assert.equal(won.leagueFirst.team, '愛媛', 'レギュラーシーズン1位を添えない');
+  // プレーオフが無い・決着していない（大学・箱庭の途中など）は勝率の1番
+  for (const schedule of [[], [final(1, '愛媛', '徳島', 3, 1), final(2, '徳島', '愛媛', null, null)]]) {
+    const r = seasonChampion(standings, schedule);
+    assert.equal(r.champion.team, '愛媛');
+    assert.equal(r.byPlayoff, false);
+  }
+  assert.equal(seasonChampion([], decided), null, '順位表が無いのに優勝球団を出す（社会人）');
+}
+
 // --- 1球団以下の設定で日程づくりが終わらない（タブが固まる） ---
 // ⚠ 規定画面の球団数に「1」を打った瞬間、試合数の選択肢を作る計算が対戦相手0で
 //    Infinity 回の巡回に入り、タブが固まっていた。入りきるかの判定は false、選択肢は空、日程は空
@@ -682,4 +712,4 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(withDeparted({ ...season, year: 4 }, [departedEntry(stay, 'A', 'A球団')]).departedSeasonStats.players.length, 1);
 }
 
-console.log('■ 一人用の進行の再発防止: OK（翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');
+console.log('■ 一人用の進行の再発防止: OK（オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る）');

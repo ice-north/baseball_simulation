@@ -3,7 +3,7 @@ import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
-import { getPlayoffChampion, isYearAdvanced } from '../season/seasonManager.js';
+import { getPlayoffChampion, isYearAdvanced, seasonChampion } from '../season/seasonManager.js';
 import { generatePitchingRotation } from '../game/lineupGenerator.js';
 import { getTransferCandidates, transferManagerTo, CATEGORY_LABEL, getTeamCategory } from '../game/managerTransfer.js';
 
@@ -65,7 +65,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     if (!standings || standings.length === 0) return null;
 
     const sorted = [...standings].sort((a, b) => b.winRate - a.winRate);
-    const champion = sorted[0];
+    // プレーオフがある年はその優勝球団（レギュラーシーズン1位は別に添える。`seasonChampion`）
+    const { champion, leagueFirst, byPlayoff } = seasonChampion(standings, seasonData.schedule);
 
     const awards = seasonData.frozenAwards;
     const topBatter = awards?.battingChampion
@@ -78,7 +79,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       ? { name: awards.eraChampion.name, team: awards.eraChampion.team, era: awards.eraChampion.era, wins: awards.winsLeader?.wins || 0 }
       : null;
 
-    return { champion, standings: sorted, topBatter, topHR, topPitcher, awards };
+    return { champion, leagueFirst, byPlayoff, standings: sorted, topBatter, topHR, topPitcher, awards };
   }, [seasonData]);
 
   const handleAdvanceYear = () => {
@@ -456,6 +457,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               {seasonSummary.champion.draws > 0 ? ` ${seasonSummary.champion.draws}分` : ''}
               {'　'}勝率 {(seasonSummary.champion.winRate || 0).toFixed(3)}
             </p>
+            {seasonSummary.byPlayoff && (
+              <p className="text-yellow-300 text-sm font-semibold mt-1">
+                プレーオフ優勝
+                {seasonSummary.leagueFirst.team === seasonSummary.champion.team
+                  ? '・レギュラーシーズン1位'
+                  : `・レギュラーシーズン1位は ${seasonSummary.leagueFirst.team}（${seasonSummary.leagueFirst.wins}勝${seasonSummary.leagueFirst.losses}敗）`}
+              </p>
+            )}
           </div>
         )}
 

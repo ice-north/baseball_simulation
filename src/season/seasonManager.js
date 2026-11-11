@@ -302,6 +302,22 @@ export const generatePlayoffSchedule = (teams, format = 'short', year = 2024) =>
   return schedule;
 };
 
+/**
+ * オフシーズンの画面の「CHAMPION」。プレーオフで優勝が決まった年はその球団、
+ * プレーオフが無い（大学・箱庭の途中など）・決着していない年は勝率の1番。
+ * ⚠ 以前はいつも勝率の1番（レギュラーシーズン1位）を出していて、プレーオフを勝った球団と
+ *    違った。レギュラーシーズン1位は `leagueFirst` で別に添える。
+ * 順位表が無い（社会人は大会だけ）ときは null。
+ * @returns {{ champion: object, leagueFirst: object, byPlayoff: boolean } | null}
+ */
+export const seasonChampion = (standings = [], schedule = []) => {
+  if (!standings || standings.length === 0) return null;
+  const sorted = [...standings].sort((a, b) => b.winRate - a.winRate);
+  const playoffWinner = getPlayoffChampion(schedule || []);
+  const byPlayoff = playoffWinner ? sorted.find(s => s.team === playoffWinner) : null;
+  return { champion: byPlayoff || sorted[0], leagueFirst: sorted[0], byPlayoff: !!byPlayoff };
+};
+
 export const getPlayoffChampion = (schedule = [], options = {}) => {
   const finals = schedule.filter(game => game.phase === SEASON_PHASES.PLAYOFFS && game.playoffRound === 'final');
   if (finals.length === 0) return null;
