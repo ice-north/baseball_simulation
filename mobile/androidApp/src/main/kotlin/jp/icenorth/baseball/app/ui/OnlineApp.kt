@@ -113,6 +113,8 @@ fun OnlineApp(model: AppViewModel) {
     // ⚠ 選手タブを離れたら、見ている球団を自球団に戻す（以前は順位表から開いた他球団のまま残り、
     //    次に選手タブを開いても他球団の表だった）
     LaunchedEffect(tab) {
+        // ⚠ 他球団の選手を読んでいる間にタブを移ったら、読み終わっても開かない（以前は移った先でシートが開いた）
+        model.dropOpeningPlayer()
         if (tab != Tab.Players) {
             model.playersTeam = null
             fromStandings = false
@@ -211,6 +213,9 @@ fun OnlineApp(model: AppViewModel) {
                         Tab.Procedures -> Refreshable(model) { ProceduresScreen(model, onHome = { tab = Tab.Home }) }
                     }
                     }
+                }
+                model.openingPlayer?.let { name ->
+                    LoadingPill("${name}を読み込んでいます…", Modifier.align(Alignment.BottomCenter).padding(16.dp))
                 }
                 // ⚠ 枠は取らず左下の角に重ねる。ホームと編成だけ（当てはまらなければ出ない）
                 //    右下だと編成の行の「並べ替え」つまみに重なる。左下は打順の数字なので触る物が無い

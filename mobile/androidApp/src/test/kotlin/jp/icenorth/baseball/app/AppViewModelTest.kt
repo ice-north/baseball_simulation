@@ -335,6 +335,43 @@ class AppViewModelTest {
         assertEquals("\"new\"", next?.get("owner").toString())
     }
 
+    @Test fun playerOfAnotherTeamShowsLoadingAndIsDroppedWhenLeaving() {
+        val readStarted = CompletableDeferred<Unit>()
+        val releaseRead = CompletableDeferred<Unit>()
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> VIEW_1
+                "team" -> {
+                    readStarted.complete(Unit)
+                    releaseRead.await()
+                    """{"roster":[{"id":7,"name":"同名"}]}"""
+                }
+                else -> "{}"
+            }
+        }
+        login()
+        model.openPlayerOf("other", 7, "同名")
+        // ⚠ 以前は読み込みの間に何も出ず、押しても何も起きないように見えた
+        assertEquals("同名", model.openingPlayer)
+        until { readStarted.isCompleted }
+        // ⚠ 読み終わる前にタブを移ったら、移った先でシートを開かない
+        model.dropOpeningPlayer()
+        assertNull(model.openingPlayer)
+        releaseRead.complete(Unit)
+        idle()
+        assertNull(model.openPlayer)
+        // 読んだ名簿は覚えているので、押し直せばすぐ開く
+        model.openPlayerOf("other", 7, "同名")
+        until { model.openPlayer != null }
+        assertNull(model.openingPlayer)
+        // ⚠ id があれば名前では探し直さない（同じ球団の同名の別人を開かない）
+        model.openPlayer = null
+        model.openPlayerOf("other", 99, "同名")
+        until { model.openingPlayer == null }
+        assertNull(model.openPlayer)
+    }
+
     @Test fun changingEndpointClearsThePreviousServersCredentialsAndView() {
         create { action -> if (action == "login") AUTH else if (action == "view") VIEW_1 else "{}" }
         login()

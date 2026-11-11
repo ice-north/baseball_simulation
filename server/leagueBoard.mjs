@@ -133,6 +133,8 @@ export function leagueLeaders(league, statsOf, labelOf = (n) => n, top = 5) {
           return null;
         if (!category.qualified && value <= 0) return null;
         return {
+          // ⚠ アプリは行を押すと選手の詳細を id で開く（名前で探すと、同じ球団の同名の別人に当たる）
+          id: entry.player.id,
           name: entry.player.name,
           team: entry.team,
           label: labelOf(entry.team),

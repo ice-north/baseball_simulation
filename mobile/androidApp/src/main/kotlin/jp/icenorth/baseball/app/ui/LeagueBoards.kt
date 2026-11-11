@@ -143,9 +143,12 @@ fun StandingsBoard(view: LeagueView, onTeam: ((String) -> Unit)? = null) {
     }
 }
 
-/** タイトル争い（リーグの上位） */
+/**
+ * タイトル争い（リーグの上位）。
+ * @param onPlayer 行を押したとき。id はサーバーの行の選手 id（古いサーバーには無いので、そのときは名前で探す）
+ */
 @Composable
-fun LeadersBoard(view: LeagueView, boards: List<JsonObject>, onPlayer: ((team: String, name: String) -> Unit)? = null) {
+fun LeadersBoard(view: LeagueView, boards: List<JsonObject>, onPlayer: ((team: String, id: Long?, name: String) -> Unit)? = null) {
     var selected by remember { mutableStateOf(boards.first().at("id").str().orEmpty()) }
     val board = boards.firstOrNull { it.at("id").str() == selected } ?: boards.first()
     val digits = board.at("digits").int() ?: 0
@@ -155,8 +158,9 @@ fun LeadersBoard(view: LeagueView, boards: List<JsonObject>, onPlayer: ((team: S
             val mine = row.at("team").str() == view.teamName
             val team = row.at("team").str().orEmpty()
             val name = row.at("name").str().orEmpty()
+            val id = row.at("id").num()?.toLong()
             Row(
-                Modifier.fillMaxWidth().then(if (onPlayer != null) Modifier.clickable { onPlayer(team, name) } else Modifier).padding(vertical = 6.dp),
+                Modifier.fillMaxWidth().then(if (onPlayer != null) Modifier.clickable { onPlayer(team, id, name) } else Modifier).padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("${i + 1}", modifier = Modifier.width(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)

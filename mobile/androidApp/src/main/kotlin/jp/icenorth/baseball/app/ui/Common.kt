@@ -98,6 +98,26 @@ fun BusyOverlay(label: String) {
     }
 }
 
+/**
+ * 画面の下に重ねる小さな「読み込んでいます…」（操作は塞がない。他球団の選手の詳細を開く間など）。
+ * 塞ぐのは保存・提出の間だけ（[BusyOverlay]）
+ */
+@Composable
+fun LoadingPill(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.inverseSurface,
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+        tonalElevation = 6.dp,
+        modifier = modifier.testTag("loading-pill"),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.inverseOnSurface, strokeWidth = 2.dp)
+            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 10.dp))
+        }
+    }
+}
+
 @Composable
 fun Section(title: String? = null, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = modifier.fillMaxWidth()) {

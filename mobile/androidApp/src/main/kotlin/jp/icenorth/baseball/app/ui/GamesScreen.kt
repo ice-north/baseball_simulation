@@ -109,7 +109,7 @@ fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Uni
             "standings" -> { StandingsBoard(view, onOpenTeam); return@Column }
             "leaders" -> {
                 val boards = raw.at("leaders").list().mapNotNull { it.obj() }.filter { it.at("rows").list().isNotEmpty() }
-                if (boards.isEmpty()) Muted("まだ記録がありません。") else LeadersBoard(view, boards) { team, name -> model.openPlayerOf(team, null, name) }
+                if (boards.isEmpty()) Muted("まだ記録がありません。") else LeadersBoard(view, boards) { team, id, name -> model.openPlayerOf(team, id, name) }
                 return@Column
             }
             "news" -> { NewsBoard(view, raw); return@Column }

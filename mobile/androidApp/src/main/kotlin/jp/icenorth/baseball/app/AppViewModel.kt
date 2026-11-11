@@ -12,6 +12,7 @@ import jp.icenorth.baseball.shared.AppBuild
 import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.LatestApp
 import jp.icenorth.baseball.shared.fetchLatestApp
+import jp.icenorth.baseball.shared.findRosterPlayer
 import jp.icenorth.baseball.shared.PlanDraft
 import jp.icenorth.baseball.shared.Wish
 import jp.icenorth.baseball.shared.sanitizeWeights
@@ -21,7 +22,6 @@ import jp.icenorth.baseball.shared.OnlineException
 import jp.icenorth.baseball.shared.OnlineJson
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.obj
-import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.at
 import kotlinx.coroutines.Job
@@ -151,28 +151,51 @@ class AppViewModel internal constructor(
     }
 
     /**
+     * 他球団の名簿を読んでいる間の、開こうとしている選手の名前（画面の下に「読み込んでいます…」を出す）。
+     * ⚠ 以前は印が無く、押しても何も起きないように見えた
+     */
+    var openingPlayer by mutableStateOf<String?>(null)
+        private set
+
+    /** 選手の詳細を開く操作の通し番号。新しく押した・やめた（[dropOpeningPlayer]）ら、前の読み込みの結果は使わない */
+    private var openPlayerSerial = 0L
+
+    /**
      * 球団と id（無ければ名前）から選手の詳細を開く。試合の成績表やタイトル争いの行には能力が載っていないので、
      * 自球団は手元の名簿から、他球団は球団の読み込み（版ごとに覚えている）から探す。
-     * いまの名簿にいない選手（退団・移籍した）は、そのことを知らせる
+     * いまの名簿にいない選手（退団・移籍した）は、そのことを知らせる（id があれば名前では探し直さない。[findRosterPlayer]）
      */
     fun openPlayerOf(team: String, id: Long?, name: String?) {
         val epoch = sessionEpoch
+        val serial = ++openPlayerSerial
+        val own = team == view?.teamName
+        openingPlayer = if (own) null else name ?: "選手"
         viewModelScope.launch {
             try {
-                val source = if (team == view?.teamName) raw else read("team", mapOf("team" to team))
-                val players = source.at("roster").list().mapNotNull { it.obj() }
-                fun idOf(p: JsonObject) = p.at("id").num()?.toLong()
-                fun nameOf(p: JsonObject) = p.at("name").str()
-                val found = id?.let { want -> players.firstOrNull { idOf(it) == want } }
-                    ?: name?.let { want -> players.firstOrNull { nameOf(it) == want } }
-                if (epoch != sessionEpoch) return@launch
+                val source = if (own) raw else read("team", mapOf("team" to team))
+                val found = findRosterPlayer(source.at("roster").list().mapNotNull { it.obj() }, id, name)
+                if (epoch != sessionEpoch || serial != openPlayerSerial) return@launch
                 if (found != null) openPlayer = found else message = "${name ?: "この選手"}は、いまこの球団の名簿にいません"
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (epoch == sessionEpoch) handle(e)
+                // やめた操作の失敗は出さない（認証切れだけはログイン画面へ戻す）
+                if (epoch == sessionEpoch && (serial == openPlayerSerial || e.isAuthFailure())) handle(e)
+            } finally {
+                if (serial == openPlayerSerial) openingPlayer = null
             }
         }
+    }
+
+    /**
+     * 選手の詳細を開きに行っているのをやめる（読み終わっても開かない）。下のタブを移ったとき。
+     * ⚠ 読み込みそのものは取り消さない（トークンの更新の途中で捨てると締め出される。[reload] と同じ理由）。
+     *    以前は読み終わる前にタブを移ると、移った先でシートが開いた
+     */
+    fun dropOpeningPlayer() {
+        if (openingPlayer == null) return
+        openPlayerSerial += 1
+        openingPlayer = null
     }
 
     /** 引っ張って更新している間 */
@@ -347,6 +370,8 @@ class AppViewModel internal constructor(
         loadFailure = null
         raw = null
         openPlayer = null
+        openPlayerSerial += 1
+        openingPlayer = null
         playersTeam = null
         plan = null
         phaseDraft = null
