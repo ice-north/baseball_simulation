@@ -160,7 +160,8 @@ fun PlanScreen(model: AppViewModel) {
                 TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo, contentPadding = tight) { Text("↷ やり直す") }
                 Text(if (dirty) "未保存" else "保存済み", style = MaterialTheme.typography.labelSmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                 // ⚠ 取り消すと、編集を始めたときではなく**今の保存済み**の編成に戻す（古い base に戻すと保存が断られ続ける）
-                TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale, contentPadding = tight) { Text("変更を捨てる") }
+                // ⚠ 名前は「変更を取り消す」（手続き・指導者の画面と Web と同じ。以前はここだけ「変更を捨てる」だった）
+                TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale, contentPadding = tight) { Text("変更を取り消す") }
                 Button(
                     onClick = {
                         val problem = draft.problem(view.roster)
@@ -174,7 +175,7 @@ fun PlanScreen(model: AppViewModel) {
             }
             if (stale) {
                 Text(
-                    "別の画面で編成が更新されました。この編集は保存できないので、「変更を捨てる」で最新の編成を読み直してから編集し直してください。",
+                    "別の画面で編成が更新されました。この編集は保存できないので、「変更を取り消す」で最新の編成を読み直してから編集し直してください。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

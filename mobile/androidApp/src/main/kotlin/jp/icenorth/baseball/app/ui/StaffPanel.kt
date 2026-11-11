@@ -201,7 +201,7 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
                 color = if (changes.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = { model.staffModesDraft = emptyMap() }, enabled = changes.isNotEmpty() && !model.busy) { Text("取り消す") }
+            TextButton(onClick = { model.staffModesDraft = emptyMap() }, enabled = changes.isNotEmpty() && !model.busy) { Text("変更を取り消す") }
             Button(
                 onClick = { model.command("staffModes", Commands.staffModes(changes), done = "任せ方を変えました") { model.staffModesDraft = emptyMap() } },
                 enabled = canWrite && changes.isNotEmpty(),
