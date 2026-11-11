@@ -47,7 +47,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
@@ -154,11 +153,14 @@ fun PlanScreen(model: AppViewModel) {
         //    帯の「保存」と並ぶと、どちらで任せ方が保存されるのか分からなかった）
         if (tab != PlanTab.Staff) {
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo) { Text("↶ 元に戻す") }
-                TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo) { Text("↷ やり直す") }
-                Text(if (dirty) "未保存の変更あり" else "保存済み", style = MaterialTheme.typography.bodySmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                // ⚠ 4つのボタンと状態の文を1行に収める（ボタンの名前を長くしたら、状態の文が縦に1字ずつ折れた）。
+                //    ボタンの内側の余白を詰め、状態の文は折り返さない
+                val tight = PaddingValues(horizontal = 6.dp)
+                TextButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo, contentPadding = tight) { Text("↶ 元に戻す") }
+                TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo, contentPadding = tight) { Text("↷ やり直す") }
+                Text(if (dirty) "未保存" else "保存済み", style = MaterialTheme.typography.labelSmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                 // ⚠ 取り消すと、編集を始めたときではなく**今の保存済み**の編成に戻す（古い base に戻すと保存が断られ続ける）
-                TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale) { Text("変更を捨てる") }
+                TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale, contentPadding = tight) { Text("変更を捨てる") }
                 Button(
                     onClick = {
                         val problem = draft.problem(view.roster)
@@ -437,7 +439,7 @@ private fun PositionSheet(draft: PlanDraft, index: Int, players: Map<Long, Playe
             val head = MaterialTheme.typography.labelSmall
             val ink = MaterialTheme.colorScheme.onSurfaceVariant
             Text("入れ替える相手", style = head, color = ink, modifier = Modifier.weight(1f))
-            Text("${me?.name ?: "自分"}の適性", style = head, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(72.dp))
+            Text("本人の適性", style = head, color = ink, maxLines = 1, modifier = Modifier.width(72.dp))
             Text("相手の適性", style = head, color = ink, maxLines = 1, modifier = Modifier.width(72.dp))
         }
         FIELD_POSITIONS.mapNotNull { pos -> draft.slots.indexOfFirst { it.position == pos }.takeIf { it >= 0 && it != index } }

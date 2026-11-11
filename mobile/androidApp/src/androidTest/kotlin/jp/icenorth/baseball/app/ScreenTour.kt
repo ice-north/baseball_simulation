@@ -160,7 +160,8 @@ class ScreenTour {
                 tab("Games")
                 page("games", scrolls = 1)
                 step("game detail") {
-                    rule.onAllNodesWithTag("game-row").onFirst().performClick()
+                    // ⚠ 一覧は「続きを表示」で長くなったので、下へ送ったあとは1行目が画面の外にある。先に見える所へ送る
+                    rule.onAllNodesWithTag("game-row").onFirst().performScrollTo().performClick()
                     pause(2500)
                     page("game-detail", scrolls = 2)
                     back()
