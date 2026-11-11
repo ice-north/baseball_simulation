@@ -106,7 +106,7 @@ const SEPARATE = [
   'online-engine-check', // check:online:season
   'online-ui-check', // check:online:ui（開発サーバー2つが要る）
   'singleplayer-ui-check', // check:ui
-  'singleplayer-yearend-ui-check', // check:ui:yearend（4モードで1年目のオフから2年目の開幕まで）
+  'singleplayer-yearend-ui-check', // check:ui:yearend（5モードで1年目のオフから2年目の開幕まで）
 ];
 
 const LEVEL = { quick: 0, check: 1, full: 2 };
