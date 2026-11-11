@@ -84,6 +84,10 @@ fun OnlineApp(model: AppViewModel) {
         return
     }
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
+    // 試合タブで開いている区分（試合結果・順位表…）。順位表から選手タブへ飛んだあと、戻るで順位表に戻すためここに置く
+    var gamesSection by rememberSaveable { mutableStateOf("results") }
+    // 順位表の球団を押して選手タブへ来たか（戻るで試合タブの順位表へ戻す。ホームへではなく）
+    var fromStandings by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var showTips by rememberSaveable { mutableStateOf(false) }
     val raw = model.raw
@@ -105,7 +109,15 @@ fun OnlineApp(model: AppViewModel) {
     val joined = model.view?.teamName != null
     // ⚠ 戻るはまずホームへ（以前はどのタブからでもアプリが閉じた）。ホームでは従来どおり閉じる。
     //    画面の中の戻る（試合の詳細・トレードなど）は後から登録されるので、そちらが先に効く
-    BackHandler(enabled = joined && tab != Tab.Home) { tab = Tab.Home }
+    BackHandler(enabled = joined && tab != Tab.Home) { tab = if (tab == Tab.Players && fromStandings) Tab.Games else Tab.Home }
+    // ⚠ 選手タブを離れたら、見ている球団を自球団に戻す（以前は順位表から開いた他球団のまま残り、
+    //    次に選手タブを開いても他球団の表だった）
+    LaunchedEffect(tab) {
+        if (tab != Tab.Players) {
+            model.playersTeam = null
+            fromStandings = false
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         if (!joined) {
             // ⚠ 参加前もお知らせ・失敗を出す場所を置く（無いと参加の失敗が見えず、知らせも消えない）
@@ -188,10 +200,12 @@ fun OnlineApp(model: AppViewModel) {
                     when (tab) {
                         // ⚠ 手続き中は「次の進行まで」を「停止中」ではなく「手続きの決定待ち」にする（Web 版 nextAdvanceText と同じ）
                         Tab.Home -> CompositionLocalProvider(LocalAwaitingDecision provides (view?.phase != null)) {
-                            HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { tab = Tab.Games }, onOpenTips = { showTips = true })
+                            HomeScreen(model, onOpenLineup = { tab = Tab.Plan }, onOpenProcedures = { tab = Tab.Procedures; model.procTrade = tradesOnly(raw) }, onRename = { renaming = true }, onOpenGames = { gamesSection = "results"; tab = Tab.Games }, onOpenTips = { showTips = true })
                         }
                         // ⚠ 引っ張って更新はホームだけだった。試合・選手・手続きでも同じ操作で読み直せるようにする
-                        Tab.Games -> Refreshable(model) { GamesScreen(model, onOpenTeam = { model.showTeamPlayers(it); tab = Tab.Players }) }
+                        Tab.Games -> Refreshable(model) {
+                            GamesScreen(model, gamesSection, { gamesSection = it }, onOpenTeam = { model.showTeamPlayers(it); fromStandings = true; tab = Tab.Players })
+                        }
                         Tab.Players -> Refreshable(model) { PlayersScreen(model) }
                         Tab.Plan -> PlanScreen(model)
                         Tab.Procedures -> Refreshable(model) { ProceduresScreen(model, onHome = { tab = Tab.Home }) }

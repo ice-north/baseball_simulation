@@ -50,9 +50,13 @@ import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
-/** 試合タブ: 自球団／リーグ全体の試合結果（年度・6試合ずつ）と、1試合の打撃・投手成績 */
+/**
+ * 試合タブ: 自球団／リーグ全体の試合結果（年度・6試合ずつ）と、1試合の打撃・投手成績。
+ * @param section 開いている区分（試合結果・順位表・タイトル・リーグ便り）。⚠ 呼ぶ側（OnlineApp）が持つ。
+ *                順位表から選手タブへ飛んだあと、戻るで順位表に戻すため（以前は戻ると「試合結果」から）
+ */
 @Composable
-fun GamesScreen(model: AppViewModel, onOpenTeam: (String) -> Unit = {}) {
+fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Unit, onOpenTeam: (String) -> Unit = {}) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var open by rememberSaveable { mutableStateOf<String?>(null) }
@@ -61,7 +65,6 @@ fun GamesScreen(model: AppViewModel, onOpenTeam: (String) -> Unit = {}) {
     val years = raw.at("seasonYears").list().mapNotNull { it.int() }.ifEmpty { listOfNotNull(view.year) }
     var year by rememberSaveable { mutableStateOf(years.lastOrNull() ?: 1) }
     var scope by rememberSaveable { mutableStateOf("own") }
-    var section by rememberSaveable { mutableStateOf("results") }
     // ⚠ ページ送り（6試合ずつ）はやめ、下の「続きを表示」で足していく（1シーズンを見返すのに何十回も押していた）
     var pages by rememberSaveable { mutableStateOf(1) }
     // ⚠ 読んだ一覧とスクロールの位置も分岐より前に置く（以前は後ろにあり、詳細から戻ると一瞬「読み込み中…」に
@@ -100,7 +103,7 @@ fun GamesScreen(model: AppViewModel, onOpenTeam: (String) -> Unit = {}) {
         ChipTabs(
             listOf("results" to "試合結果", "standings" to "順位表", "leaders" to "タイトル", "news" to "リーグ便り"),
             section,
-            { section = it },
+            onSection,
         )
         when (section) {
             "standings" -> { StandingsBoard(view, onOpenTeam); return@Column }

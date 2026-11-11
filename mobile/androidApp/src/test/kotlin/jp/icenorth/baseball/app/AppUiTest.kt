@@ -26,6 +26,8 @@ import jp.icenorth.baseball.shared.LatestApp
 import jp.icenorth.baseball.shared.OnlineApi
 import org.junit.Assume.assumeTrue
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -151,6 +153,20 @@ class AppUiTest {
         rule.runOnIdle { back!!.onBackPressed() }
         // ⚠ 以前は一覧とスクロールの位置が詳細の分岐の後ろにあり、戻ると一覧の先頭に戻っていた
         rule.onNodeWithText("5/25").assertIsDisplayed()
+    }
+
+    @Test fun backFromTeamPlayersReturnsToTheStandings() {
+        open(""""roster":[],"standings":[{"team":"team","wins":2},{"team":"rival","wins":1}]""")
+        rule.onNodeWithTag("tab-Games").performClick()
+        rule.onNodeWithTag("chip-standings").performClick()
+        rule.onNodeWithText("rival").performClick()
+        rule.onNodeWithTag("tab-Players").assertIsSelected()
+        rule.runOnIdle { assertEquals("rival", model.playersTeam) }
+        rule.runOnIdle { back!!.onBackPressed() }
+        // ⚠ 以前は戻るでホームへ行き、試合タブも「試合結果」から。見ている球団も他球団のまま残っていた
+        rule.onNodeWithTag("tab-Games").assertIsSelected()
+        rule.onNodeWithTag("chip-standings").assertIsSelected()
+        rule.runOnIdle { assertNull(model.playersTeam) }
     }
 
     @Test fun homePaperTellsWhenANewerAppIsOut() {
