@@ -65,6 +65,9 @@ class AppViewModel internal constructor(
     /** 手続きの編集中の案（タブを移っても消えないよう、ここに置く） */
     var phaseDraft by mutableStateOf<PhaseDraft?>(null)
     var campDraft by mutableStateOf<CampDraft?>(null)
+
+    /** キャンプの一括の直前の案（直後だけ「元に戻す」を出す。端末を回しても消えないよう、ここに置く） */
+    var campBulk by mutableStateOf<CampBulk?>(null)
     var tradeDraft by mutableStateOf<TradeDraft?>(null)
 
     /** 指導者の任せ方の下書き（変えた分野だけ。「任せ方を保存」でまとめて送る） */
@@ -376,6 +379,7 @@ class AppViewModel internal constructor(
         plan = null
         phaseDraft = null
         campDraft = null
+        campBulk = null
         tradeDraft = null
         staffModesDraft = emptyMap()
         parkedTradeDraft = null
@@ -680,6 +684,9 @@ internal fun savedPhaseDraft(raw: JsonObject?, phaseId: String): PhaseDraft? {
     val plan = submission["plan"].obj() ?: return null
     return PhaseDraft(phaseId, plan, submission, dirty = false)
 }
+
+/** キャンプの一括で当てる前後の案 */
+data class CampBulk(val text: String, val before: CampDraft, val after: CampDraft)
 
 /** キャンプの方針と、選手ごとのメイン・サブ練習（未実行のクールの指示） */
 data class CampDraft(

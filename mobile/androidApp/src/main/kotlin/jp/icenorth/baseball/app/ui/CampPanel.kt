@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.app.CampBulk
 import jp.icenorth.baseball.app.CampDraft
 import jp.icenorth.baseball.shared.CAMP_DIRECTIONS
 import jp.icenorth.baseball.shared.CAMP_POLICY_GUIDE
@@ -136,14 +137,14 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, header: @
         )
     }
     // ⚠ 一括は1人ずつ選んだ練習も上書きするので、直後は元に戻せるようにする（確かめずに全員が変わっていた）
-    var bulk by remember(phaseId) { mutableStateOf<Bulk?>(null) }
+    // ⚠ 戻す先は model に置く（画面の remember だと、端末を回すと「元に戻す」が消えていた）
     val applyAll = { menu: Menu, pitchers: Boolean ->
         val next = draft.copy(main = draft.main + roster.filter { it.isPitcherJson() == pitchers }.associate { it.pid to clampMenu(menu.key, it) })
-        bulk = Bulk("${if (pitchers) "投手" else "野手"}全員を「${menu.icon}${menu.name}」にしました", before = draft, after = next)
+        model.campBulk = CampBulk("${if (pitchers) "投手" else "野手"}全員を「${menu.icon}${menu.name}」にしました", before = draft, after = next)
         model.campDraft = next
     }
-    // 一括のあとに別の変更をしたら、戻す先が分からなくなるので出さない
-    val undo = bulk?.takeIf { it.after == model.campDraft }
+    // 一括のあとに別の変更をしたら、戻す先が分からなくなるので出さない（別の手続きの案とも一致しない）
+    val undo = model.campBulk?.takeIf { it.after == model.campDraft }
     val execute = {
         val payload = Commands.campRound(
             done + 1, draft.mode, draft.direction, draft.phase, draft.players,
@@ -220,7 +221,7 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, header: @
                 undo?.let { b ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Muted(b.text, Modifier.weight(1f))
-                        TextButton(onClick = { model.campDraft = b.before; bulk = null }) { Text("元に戻す") }
+                        TextButton(onClick = { model.campDraft = b.before; model.campBulk = null }) { Text("元に戻す") }
                     }
                 }
                 if (finished) {
@@ -266,8 +267,6 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, header: @
     }
 }
 
-/** 一括で当てる前後の案（直後だけ「元に戻す」を出す） */
-private data class Bulk(val text: String, val before: CampDraft, val after: CampDraft)
 
 private fun JsonObject?.idMap(): Map<Long, String> =
     orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.takeIf { it.isNotEmpty() }?.let { id to it } } }.toMap()

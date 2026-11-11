@@ -14,7 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -149,7 +149,8 @@ fun StandingsBoard(view: LeagueView, onTeam: ((String) -> Unit)? = null) {
  */
 @Composable
 fun LeadersBoard(view: LeagueView, boards: List<JsonObject>, onPlayer: ((team: String, id: Long?, name: String) -> Unit)? = null) {
-    var selected by remember { mutableStateOf(boards.first().at("id").str().orEmpty()) }
+    // ⚠ 選んだ項目は回転でも残す（remember だと、端末を回すと先頭の項目に戻っていた）
+    var selected by rememberSaveable { mutableStateOf(boards.first().at("id").str().orEmpty()) }
     val board = boards.firstOrNull { it.at("id").str() == selected } ?: boards.first()
     val digits = board.at("digits").int() ?: 0
     Section("タイトル争い") {
@@ -206,8 +207,8 @@ fun NewsBoard(view: LeagueView, raw: JsonObject) {
         val options = notices.mapIndexed { i, n ->
             "n$i" to "${n.at("year").int() ?: ""}年 ${NOTICE_LABELS[n.at("type").str()] ?: "お知らせ"}"
         } + history.mapIndexed { i, h -> "h$i" to "${h.at("year").int() ?: ""}年の最終順位" }
-        var selected by remember { mutableStateOf(options.first().first) }
-        var expanded by remember { mutableStateOf(false) }
+        var selected by rememberSaveable { mutableStateOf(options.first().first) }
+        var expanded by rememberSaveable { mutableStateOf(false) }
         val key = options.firstOrNull { it.first == selected }?.first ?: options.first().first
         ChoiceRow(options.take(if (expanded) options.size else 4), key) { selected = it }
         if (options.size > 4 && !expanded) TextButton(onClick = { expanded = true }) { Text("ほかのお知らせ（${options.size - 4}件）") }

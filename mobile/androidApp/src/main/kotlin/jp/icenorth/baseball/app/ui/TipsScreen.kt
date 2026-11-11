@@ -15,6 +15,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,7 +99,8 @@ fun SituationTipsBadge(
     modifier: Modifier = Modifier,
 ) {
     if (tips.isEmpty()) return
-    var open by remember { mutableStateOf(false) }
+    // ⚠ 開いているかは回転でも残す（remember だと、端末を回すとダイアログが閉じ、読んだ扱いで印も消えていた）
+    var open by rememberSaveable { mutableStateOf(false) }
     // ⚠ 印は**未読があるときだけ**出す（いしだ決定 2026-11-11）。読んだあとも居座ると、いつも角に物がある。
     //    読んだTIPSは、ホームのメニューの「TIPS」からいつでも読み返せる
     if (!open && !hasUnreadTips(tips, seen)) return
