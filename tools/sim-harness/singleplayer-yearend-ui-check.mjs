@@ -439,6 +439,8 @@ async function runSandbox(page, t) {
   await page.goto(`${BASE}/?dev=1`);
   await ui.click('箱庭モード');
   await go('設定完了', page.getByText('箱庭モード - チーム設定'), 'チーム設定');
+  // ボタンに「AI」を出さない（以前は「AIオーダー編成」。作る側の言葉なので、何をするかで書く）
+  assert.doesNotMatch(await page.locator('body').innerText(), /AI/, '箱庭のチーム設定に「AI」が残っている');
   const teams = await page.getByRole('button', { name: /\(\d+人\)/ }).all();
   assert.ok(teams.length >= 2, `箱庭のチームが${teams.length}つしかない`);
   for (const team of teams) {

@@ -132,11 +132,11 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
             onClick={() => {
               generateOptimalLineup(editingTeam);
               generatePitchingRotation(editingTeam);
-              alert(`${editingTeam}のAIオーダー編成と投手ローテーションを設定しました！`);
+              alert(`${editingTeam}のオーダーと投手ローテーションを自動で組みました`);
             }}
             className="btn-secondary px-4 py-2 rounded transition"
           >
-            🤖 AIオーダー編成
+            オーダーを自動で組む
           </button>
           <button
             onClick={() => generateAllTeamsLineup()}

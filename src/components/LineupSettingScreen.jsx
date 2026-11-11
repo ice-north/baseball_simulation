@@ -2150,11 +2150,11 @@ export const LineupSettingContent = ({
                     setUpdateTrigger(prev => prev + 1);
                   }}
                   className="btn-secondary text-xs px-3 py-1 rounded font-medium transition"
-                  title="全投手をおまかせにします（AIが登板場面を自動判断）"
+                  title="全投手をおまかせにします（登板の場面は試合の流れで決まります）"
                 >
                   全員おまかせ
                 </button>
-                <span className="text-xs text-gray-400 hidden sm:inline">自動設定=能力で最適配置 / おまかせ=AIが場面判断</span>
+                <span className="text-xs text-gray-400 hidden sm:inline">自動設定=能力で役割を決める / おまかせ=試合の場面で決める</span>
               </div>
 
               <BullpenFlowCompact />
@@ -2239,7 +2239,7 @@ export const LineupSettingContent = ({
                     <RoleSlot roleKey="quality" hint="5-6回で交代" />
                     <RoleSlot roleKey="short" hint="3-4回で継投" />
                     <RoleSlot roleKey="opener" hint="初回〜2回で継投" />
-                    <RoleSlot roleKey="auto_s" hint="AIが判断" />
+                    <RoleSlot roleKey="auto_s" hint="場面で判断" />
                   </div>
                 </div>
 
@@ -2258,7 +2258,7 @@ export const LineupSettingContent = ({
                     <RoleSlot roleKey="onepoint" hint="左打者対策" />
                     <RoleSlot roleKey="behind" hint="ビハインド時" />
                     <RoleSlot roleKey="mopup" hint="大差の敗戦処理" />
-                    <RoleSlot roleKey="auto_r" hint="AIが判断" />
+                    <RoleSlot roleKey="auto_r" hint="場面で判断" />
                   </div>
                 </div>
               </div>

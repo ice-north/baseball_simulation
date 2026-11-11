@@ -55,6 +55,15 @@ const groundContrast = async (where) => {
   const bad = await ui.groundTextContrast();
   assert.deepEqual(bad, [], `${where}: 地色の上で読めない文字がある（4.5:1 未満）\n${bad.join('\n')}`);
 };
+// 画面の言葉（ボタン・説明・ツールチップ）に「AI」を出さない。作る側の言葉なので、何をするかで書く
+// （トレードは「ほかの球団」「おまかせ」に直した。以前はベンチ登録の「AI自動選択」、投手起用の
+// 「おまかせ=AIが場面判断」などが残っていた）
+const noAiWords = async (where) => {
+  const text = await page.locator('body').innerText();
+  const titles = await page.locator('[title*="AI"]').evaluateAll((els) => els.map((e) => `（ツールチップ）${e.getAttribute('title')}`));
+  const hits = [...(text.match(/[^\n]*AI[^\n]*/g) || []), ...titles];
+  assert.deepEqual(hits, [], `${where}に「AI」が残っている`);
+};
 const started = Date.now();
 
 try {
@@ -188,6 +197,7 @@ try {
   await ui.click('ロスター管理');
   await ui.click('ベンチ登録'); // 大学は試合のオーダーと並ぶ外側のタブ。以前は枠が半透明で紙が透けていた
   await groundContrast('ロスター管理のベンチ登録');
+  await noAiWords('ロスター管理のベンチ登録');
   await ui.click('試合のオーダー');
   await ui.click('スタメン設定');
   // 1280×720 で打順のカードが窮屈でないこと（以前は 4/4/4 の3列で幅331px、体・疲のバーと打率が
@@ -215,6 +225,7 @@ try {
   assert.deepEqual(weak, [], `守備分析のサマリーで読めない文字がある\n${weak.join('\n')}`);
   await ui.click('投手起用');
   await groundContrast('ロスター管理の投手起用');
+  await noAiWords('ロスター管理の投手起用');
   await page.locator('nav').getByRole('button', { name: /資料室/ }).click();
   await ui.click('注目選手');
   await groundContrast('資料室の注目選手');

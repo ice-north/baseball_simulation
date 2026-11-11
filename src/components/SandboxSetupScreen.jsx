@@ -247,7 +247,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                 }}
                 className="btn-secondary px-3 py-1.5 rounded text-sm transition"
               >
-                AIオーダー編成
+                オーダーを自動で組む
               </button>
               <button
                 onClick={() => { generateAllTeamsLineup(); forceUpdate(); }}

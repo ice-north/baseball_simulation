@@ -274,7 +274,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               onClick={handleAutoSelect}
               className="btn-primary text-xs px-3 py-1.5 rounded transition-colors"
             >
-              AI自動選択
+              自動で選ぶ
             </button>
           </>
         ) : null}
