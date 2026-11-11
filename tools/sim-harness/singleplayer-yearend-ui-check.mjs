@@ -412,6 +412,16 @@ async function runIndependent(page, t) {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   assert.equal(await page.getByTestId('confirm-bar').count(), 0, '派遣の帯が Esc で閉じない');
+  // 1280幅でも練習を組む列（2年目は「派遣」も増える）が横に送らずに見える。
+  // 以前は表が枠より約200px広く、「サブ」「練習側」「派遣」が枠の外にあった
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const tab of ['投手', '内野手']) {
+    await page.getByRole('button', { name: new RegExp(`^${tab}\\s*\\d+`) }).first().click();
+    await page.waitForTimeout(300);
+    const cut = await ui.campOpsCut();
+    assert.deepEqual(cut, [], `1280幅の春季キャンプ（${tab}）で、練習を組む列が表の枠の外にある: ${cut?.join('・')}`);
+  }
+  await page.setViewportSize({ width: 1400, height: 900 });
   await t.campToOpening();
   assert.ok(await page.getByText(new RegExp(`⚾\\s*${renamed}`)).count() > 0, '2年目のサイドバーの自チームが改名した名前でない');
   await t.checkSecondYear({ league: true });

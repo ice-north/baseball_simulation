@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import ConfirmBar, { keepAboveConfirmBar } from './ConfirmBar.jsx';
 import { useEscapeToClose } from './useEscapeToClose.js';
@@ -322,6 +322,36 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const pickingUniversity = !!dispatchConfirm && gameMode === 'corporate'
     && dispatchConfirm.destKey === 'university' && !dispatchConfirm.universityId;
   useEscapeToClose(() => setDispatchConfirm(null), pickingUniversity);
+
+  // 練習を組む列（メイン・サブ・練習側・派遣）は表の右に固定し、読むだけの列がその下を横に流れる。
+  // ⚠ 以前は 1280幅で表が枠より約200px広く、右端の「サブ」「練習側」「派遣」が枠の外にあった
+  //    （横に送らないと練習を組めず、案内の「野手へ…」「投手へ」も見えなかった）。
+  //    固定する位置（right）は自分より右の列の幅の和。列の幅は中身（球種の選択が増えるなど）で
+  //    変わるので、描くたびと表の大きさが変わるたびに測り直す
+  const campTableRef = useRef(null);
+  useLayoutEffect(() => {
+    const table = campTableRef.current;
+    if (!table) return undefined;
+    const place = () => {
+      const heads = [...table.querySelectorAll('thead th[data-op]')];
+      let right = 0;
+      for (let i = heads.length - 1; i >= 0; i--) {
+        table.style.setProperty(`--op-right-${heads[i].dataset.op}`, `${right}px`);
+        right += heads[i].getBoundingClientRect().width;
+      }
+    };
+    place();
+    if (typeof window === 'undefined' || !window.ResizeObserver) return undefined;
+    const observer = new window.ResizeObserver(place);
+    observer.observe(table);
+    return () => observer.disconnect();
+  });
+  // 右に固定する列の見た目（地は不透明に。下を流れる列が透けない）。左の区切りは border だと
+  // 表の border-collapse で固定した列と一緒に動かないので、内側の影で引く
+  const opCell = (key, extra = '') => ({
+    className: `sticky z-[1] bg-surface-1 ${key === 'main' ? 'shadow-[inset_1px_0_0_theme(colors.gray.600)] ' : ''}${extra}`,
+    style: { right: `var(--op-right-${key}, 0px)` },
+  });
 
   // キャンプを終える（派遣の結果もここで決まる）。取り消せないので帯で決める
   const finalizeCamp = () => {
@@ -932,7 +962,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
             {/* 選手テーブル */}
             <div className="bg-surface-2 rounded-lg overflow-hidden overflow-x-auto">
-              <table className="w-full text-xs">
+              <table ref={campTableRef} className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-700/80 text-gray-300 text-xs">
                     {(() => {
@@ -981,10 +1011,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     {!isPitchTab && subPosHeaders.map(pos => (
                       <th key={pos} className="py-1.5 px-0.5 text-center w-6" title={POSITION_NAMES[pos]}>{subPosShort[pos]}</th>
                     ))}
-                    <th className="py-1.5 px-2 text-left w-28">メイン</th>
-                    <th className="py-1.5 px-2 text-left w-28">サブ</th>
-                    <th className="py-1.5 px-1 text-center w-16">練習側</th>
-                    {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && <th className="py-1.5 px-1 text-center w-16">派遣</th>}
+                    <th data-op="main" {...opCell('main', 'py-1.5 px-2 text-left w-28')}>メイン</th>
+                    <th data-op="sub" {...opCell('sub', 'py-1.5 px-2 text-left w-28')}>サブ</th>
+                    <th data-op="side" {...opCell('side', 'py-1.5 px-1 text-center w-16')}>練習側</th>
+                    {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && <th data-op="dispatch" {...opCell('dispatch', 'py-1.5 px-1 text-center w-16')}>派遣</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1102,7 +1132,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             }
                           </td>
                         ))}
-                        <td className="py-1 px-2">
+                        <td {...opCell('main', 'py-1 px-2')}>
                           <div className="flex items-center gap-1">
                             <select
                               value={currentTraining}
@@ -1140,7 +1170,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             )}
                           </div>
                         </td>
-                        <td className="py-1 px-2">
+                        <td {...opCell('sub', 'py-1 px-2')}>
                           <div className="flex items-center gap-1">
                             <select
                               value={subAssignments[player.id] || 'physique'}
@@ -1208,7 +1238,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           </div>
                         </td>
                         {/* 練習側の移動。position は変えず、表示するタブ＝見える列だけを切り替える */}
-                        <td className="py-1 px-1 text-center">
+                        <td {...opCell('side', 'py-1 px-1 text-center')}>
                           {(() => {
                             // 投手タブからは**行き先の野手タブを選ばせる**。
                             // 逆向き（野手 → 投手）は1つしか行き先が無いのでボタンのまま。
@@ -1238,7 +1268,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           })()}
                         </td>
                         {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && (
-                          <td className="py-1 px-1 text-center">
+                          <td {...opCell('dispatch', 'py-1 px-1 text-center')}>
                             <div className="flex gap-0.5 justify-center">
                               {getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).map(destKey => {
                                 const dest = DISPATCH_DESTINATIONS[destKey];

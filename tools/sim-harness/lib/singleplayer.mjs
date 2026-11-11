@@ -277,6 +277,24 @@ export function driver(page) {
         return { width: Math.round(card.getBoundingClientRect().width), rows: rows.length, overflow: Math.round(overflow), wrapped };
       });
     },
+    // キャンプの表で、練習を組む列（メイン・サブ・練習側・派遣）の見出しのうち、表の枠か画面の
+    // 外に出ているものの名前（横に送らないと練習を組めない）。表が無ければ null
+    async campOpsCut() {
+      return page.evaluate(() => {
+        const ops = ['メイン', 'サブ', '練習側', '派遣'];
+        const table = [...document.querySelectorAll('table')]
+          .find((t) => [...t.querySelectorAll('thead th')].some((th) => th.innerText.trim() === 'メイン'));
+        if (!table) return null;
+        const frame = table.parentElement.getBoundingClientRect();
+        return [...table.querySelectorAll('thead th')]
+          .filter((th) => ops.includes(th.innerText.trim()))
+          .filter((th) => {
+            const b = th.getBoundingClientRect();
+            return b.left < frame.left - 1 || b.right > frame.right + 1 || b.right > window.innerWidth;
+          })
+          .map((th) => th.innerText.trim());
+      });
+    },
     // 確認の帯（ConfirmBar）の収まり。ページの最後までスクロールして、
     //   hidden: 帯の下に隠れたままのページの中身の高さ（px。0 以下なら隠れていない）
     //   titleCut: 帯の問いが途中で切れているか / fitsWidth: 帯が画面の幅に収まっているか
