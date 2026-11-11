@@ -64,12 +64,9 @@ fun GamesScreen(model: AppViewModel, onOpenTeam: (String) -> Unit = {}) {
     var section by rememberSaveable { mutableStateOf("results") }
     // ⚠ ページ送り（6試合ずつ）はやめ、下の「続きを表示」で足していく（1シーズンを見返すのに何十回も押していた）
     var pages by rememberSaveable { mutableStateOf(1) }
-    val current = open
-    if (current != null) {
-        BackHandler { open = null }
-        GameDetail(model, view, current.substringBefore(':'), current.substringAfter(':')) { open = null }
-        return
-    }
+    // ⚠ 読んだ一覧とスクロールの位置も分岐より前に置く（以前は後ろにあり、詳細から戻ると一瞬「読み込み中…」に
+    //    なって一覧の先頭に戻っていた。「続きを表示」で足した下の方の試合を開くと、戻るたびに送り直しになる）
+    val listScroll = rememberScrollState()
     var data by remember { mutableStateOf<JsonObject?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
@@ -91,7 +88,13 @@ fun GamesScreen(model: AppViewModel, onOpenTeam: (String) -> Unit = {}) {
             if (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) loading = false
         }
     }
-    Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val current = open
+    if (current != null) {
+        BackHandler { open = null }
+        GameDetail(model, view, current.substringBefore(':'), current.substringAfter(':')) { open = null }
+        return
+    }
+    Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(listScroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("試合", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         // ⚠ 順位表・タイトル争い・リーグ便りはここ（ホームは新聞の紙面にしたので、数字の表はこのタブにまとめる）
         ChipTabs(

@@ -142,6 +142,17 @@ class AppUiTest {
         assertTrue(model.phaseDraft?.dirty == false)
     }
 
+    @Test fun backFromAGameKeepsTheListWhereItWas() {
+        val games = (1..30).joinToString(",") { """{"gameId":$it,"date":{"month":5,"day":$it},"home":"team","away":"other","homeScore":1,"awayScore":0}""" }
+        open(""""roster":[],"seasonYears":[1],"year":1""", answer = { action -> if (action == "games") """{"year":1,"count":30,"games":[$games]}""" else null })
+        rule.onNodeWithTag("tab-Games").performClick()
+        rule.onNodeWithText("5/25").performScrollTo().performClick()
+        rule.onNodeWithText("‹ 試合結果へ戻る").assertIsDisplayed()
+        rule.runOnIdle { back!!.onBackPressed() }
+        // ⚠ 以前は一覧とスクロールの位置が詳細の分岐の後ろにあり、戻ると一覧の先頭に戻っていた
+        rule.onNodeWithText("5/25").assertIsDisplayed()
+    }
+
     @Test fun homePaperTellsWhenANewerAppIsOut() {
         // 版の分からない所（git の無い手元）で作ったときは確かめない
         assumeTrue(BuildConfig.APP_COMMIT.isNotEmpty())
