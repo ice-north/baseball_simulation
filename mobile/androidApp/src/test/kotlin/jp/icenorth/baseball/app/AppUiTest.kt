@@ -113,12 +113,16 @@ class AppUiTest {
         val packs = """[{"id":"p1","name":"セットA","counts":{},"ranks":{},"players":[]},{"id":"p2","name":"セットB","counts":{},"ranks":{},"players":[]}]"""
         open(""""roster":[],"phase":{"id":"ph1","kind":"pack_select","packs":$packs,"submission":{"plan":{"packId":"p1"},"ready":false}}""")
         rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.onNodeWithTag("decision-bar").assertExists()
         rule.onNodeWithText("セットB").performScrollTo().performClick()
+        // ⚠ 中身を見ている間は決定の帯を出さない（帯は選んでいるセットAを指したまま「この内容で決定」を出していた）
+        rule.onNodeWithTag("decision-bar").assertDoesNotExist()
         rule.onNodeWithText("このセットにする").performScrollTo().performClick()
         rule.waitUntil(10_000) {
             shadowOf(Looper.getMainLooper()).idle()
             commands.isNotEmpty()
         }
+        rule.onNodeWithTag("decision-bar").assertExists()
         // ⚠ 以前は未保存の編集になるだけで、「選択中」と出ても保存されなかった（途中参加の選択は押せば保存される）
         val sent = commands.single()
         assertTrue(sent, sent.contains("\"type\":\"submit\""))

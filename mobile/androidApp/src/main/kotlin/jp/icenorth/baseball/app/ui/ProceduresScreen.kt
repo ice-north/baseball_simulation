@@ -150,6 +150,8 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
     val waiting = packWaiting(raw)
     // 選び終えた後に「セットを選び直す」を押したか
     var choosing by rememberSaveable { mutableStateOf(false) }
+    // 中身（24人）を開いているセット
+    var packOpen by rememberSaveable { mutableStateOf<String?>(null) }
     // ⚠ **選び終えたら「参加の準備ができました」に切り替える**（Web 版と同じ）。以前は選んだ後も
     //    セットの一覧がそのまま残り、済んだのか・いつ自分の球団になるのか分からなかった（いしだ指摘）
     if (waiting != null && !choosing) {
@@ -186,7 +188,7 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
     ) {
         Muted(if (chosenName != null) "いま選んでいるのは「$chosenName」です。キャンプまでは何度でも選び直せます。" else "まだ選んでいません。決めずにキャンプを迎えると、1つ目のセットになります。")
     }
-    PackPicker(model, packs, chosen, scroll) { id ->
+    PackPicker(model, packs, chosen, scroll, packOpen, { packOpen = it }) { id ->
         model.command("pack", Commands.pack(id), done = "初期メンバーを選びました") { choosing = false }
     }
 }
@@ -332,6 +334,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
     // 「読み直す」を押した回数。⚠ 標準案の読み込みに失敗したあとは、ほかの鍵（手続き・提出・下書きの有無）が
     //    変わらないことが多いので、これを鍵に入れないと読み直さず「標準案を準備しています…」のまま止まる
     var attempt by remember(phaseId) { mutableStateOf(0) }
+    // 初期メンバーのセットの中身（24人）を開いているセット。開いている間は下の決定の帯を出さない
+    var packOpen by rememberSaveable(phaseId) { mutableStateOf<String?>(null) }
     // ⚠ 下書きを捨てた（null にした）ときも読み直すよう、draft == null も鍵に入れる
     LaunchedEffect(phaseId, submission, draft == null, attempt) {
         val current = model.phaseDraft?.takeIf { it.phaseId == phaseId }
@@ -392,7 +396,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
                     // ⚠ 選んだらその場で保存する（途中参加の初期メンバー選択と同じく、押せば保存される）。
                     //    以前は手続きのタブでは未保存の編集になるだけで、「選択中」と出ても保存されず、
                     //    そのまま離れると締め切りで標準案のセットになった。決定済みなら決定のまま出し直す
-                    PackPicker(model, packs, plan.at("packId").str(), scroll) { id ->
+                    PackPicker(model, packs, plan.at("packId").str(), scroll, packOpen, { packOpen = it }) { id ->
                         val name = packs.firstOrNull { it.at("id").str() == id }?.at("name").str().orEmpty()
                         submit(
                             model, phaseId, Commands.withPack(plan, id), ready, draft.base,
@@ -418,8 +422,11 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject) 
                 kind == "offseason" -> Section { Text("最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。") }
             }
         }
+        // ⚠ セットの中身を開いている間は帯を出さない。帯は選んでいるセット（A）を指したまま「この内容で決定」を出すので、
+        //    別のセット（B）の24人を見ながら押すと A で決まっていた。中身の面には「このセットにする」と「一覧へ戻る」がある
+        val viewingPack = isPack && packs.any { it.at("id").str() == packOpen }
         // ⚠ 決定・下書きの操作は画面の下に固定する（以前は一覧の上と一番下の2か所で、途中からは押せなかった）
-        DecisionBar(
+        if (!viewingPack) DecisionBar(
             status = when {
                 draft.dirty -> "編集中（未保存）"
                 ready -> "決定済み。ほかに検討中の球団がいる間は出し直せます"
@@ -493,17 +500,25 @@ private fun packLine(pack: JsonObject): String {
  * 初期メンバーのセット。一覧は要約だけにし、押すとそのセットの24人の面に替わる（「一覧へ戻る」か戻るで一覧へ）。
  * ⚠ 以前は選んだセットの24人が一覧の中に開き、次のセットが遠くなって見比べにくかった。
  *    見せ方は Web と違ってよい（いしだ 2026-11-11）。構成（二刀流・捕手3人・投手厚め…）で絞り込める
+ * @param open 中身を開いているセットの id（呼ぶ側が持つ。手続きの面は、開いている間は決定の帯を隠す）
  */
 @Composable
-private fun PackPicker(model: AppViewModel, packs: List<JsonObject>, chosen: String?, scroll: ScrollState, onChoose: (String) -> Unit) {
-    var open by rememberSaveable { mutableStateOf<String?>(null) }
+private fun PackPicker(
+    model: AppViewModel,
+    packs: List<JsonObject>,
+    chosen: String?,
+    scroll: ScrollState,
+    open: String?,
+    onOpen: (String?) -> Unit,
+    onChoose: (String) -> Unit,
+) {
     // 一覧をどこまで送っていたか（中身から戻ったときに同じ所へ戻す）
     var listAt by rememberSaveable { mutableStateOf(0) }
     var kind by rememberSaveable { mutableStateOf("all") }
     val scope = rememberCoroutineScope()
     val opened = packs.firstOrNull { it.at("id").str() == open }
     val close: () -> Unit = {
-        open = null
+        onOpen(null)
         scope.launch {
             // 一覧に替わってから送る（替わる前だと、中身の面の長さで止まる）
             withFrameNanos { }
@@ -539,7 +554,7 @@ private fun PackPicker(model: AppViewModel, packs: List<JsonObject>, chosen: Str
             Row(
                 Modifier.fillMaxWidth().clickable {
                     listAt = scroll.value
-                    open = id
+                    onOpen(id)
                     scope.launch { scroll.scrollTo(0) }
                 }.padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
