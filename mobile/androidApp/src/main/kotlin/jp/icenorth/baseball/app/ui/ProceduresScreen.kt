@@ -301,7 +301,13 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, 
             // 標準案を出した指導者と、任せているか（Web の PhasePanel と同じ文。文はサーバーが作る）。
             // ⚠ 任せていると提出しても指導者の案で決まり、サーバーも決定を待たないので、出さないと組み立てが無駄になる。
             //    キャンプのぶんは CampPanel が出す（Web と同じ分け方）
-            if (kind != "camp") phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
+            // ⚠ 出すのは、出ている案が指導者の案のままの間だけ（変えていない・保存も決定もしていない）。自分で入れ替えて
+            //    決定したあとも「○○監督の案です。変えてから決定できます」が残り、決定した中身が指導者の案に読めた（Web と同じ直し）
+            val draftDirty = phase.at("delegated").bool() != true &&
+                model.phaseDraft?.takeIf { it.phaseId == phaseId }?.dirty == true
+            if (kind != "camp" && !draftDirty && submission == null) {
+                phase.at("planBy", "text").str()?.takeIf { it.isNotBlank() }?.let { Muted(it) }
+            }
             members.forEach { m ->
                 val ready = m.at("ready").bool() == true
                 Row(verticalAlignment = Alignment.CenterVertically) {

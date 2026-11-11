@@ -238,6 +238,30 @@ class AppUiTest {
         assertTrue(sent, sent.contains("\"tryout\":\"delegate\""))
     }
 
+    @Test fun coachPlanNoteShowsOnlyWhileThePlanIsTheCoaches() {
+        val roster = """[{"id":1,"name":"出す人","position":"first"},{"id":2,"name":"残す人","position":"second"}]"""
+        val note = "照屋監督の案です。変えてから決定できます"
+        val defaults: (String) -> String? = { action -> if (action == "defaults") """{"phaseId":"ph1","plan":{"releaseIds":[1]}}""" else null }
+        // 開いたとき（指導者の案のまま・まだ出していない）は出す
+        open(""""roster":$roster,"lineup":{"battingOrder":[]},"phase":{"id":"ph1","kind":"contract","planBy":{"text":"$note"}}""", answer = defaults)
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.onNodeWithText("退団させる選手（1人）").assertExists()
+        rule.onNodeWithText(note).assertExists()
+    }
+
+    @Test fun coachPlanNoteIsGoneAfterDeciding() {
+        val roster = """[{"id":1,"name":"出す人","position":"first"},{"id":2,"name":"残す人","position":"second"}]"""
+        val note = "照屋監督の案です。変えてから決定できます"
+        // ⚠ 自分で選び直して決定したあとも残り、決定した中身が指導者の案に読めた（Web の再監査 F18 と同じ直し）
+        open(
+            """"roster":$roster,"lineup":{"battingOrder":[]},"phase":{"id":"ph1","kind":"contract","planBy":{"text":"$note"},"submission":{"plan":{"releaseIds":[]},"ready":true}}""",
+            answer = { action -> if (action == "defaults") """{"phaseId":"ph1","plan":{"releaseIds":[1]}}""" else null },
+        )
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.onNodeWithText("退団させる選手（0人）").assertExists()
+        rule.onNodeWithText(note).assertDoesNotExist()
+    }
+
     @Test fun homePaperTellsWhenANewerAppIsOut() {
         // 版の分からない所（git の無い手元）で作ったときは確かめない
         assumeTrue(BuildConfig.APP_COMMIT.isNotEmpty())
