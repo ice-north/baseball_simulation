@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
+import ConfirmBar from './ConfirmBar.jsx';
 import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations, thinTwoLeagueGameCounts, twoLeagueGameCountLabel } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitGamesPerSeason } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
@@ -63,6 +64,30 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel
   //    自チームの名前を変えると、自チームのローテを作り直してもいた。翌年の日程は年度更新で作るので、
   //    ここで変える意味も無い
   const canModifyStructure = canModify && independent && !!onConfirm;
+
+  // 確定すると変わる球団（改名・解散・新規参入）。何も変わらないときは null
+  const leaguePlan = (() => {
+    if (!onConfirm || !canModifyStructure) return null;
+    const plan = planLeagueChanges(currentTeams || seasonData.settings?.teamNames || [], tempSettings.teamNames || []);
+    return plan.renames.length + plan.dissolved.length + plan.added.length > 0 ? plan : null;
+  })();
+  // 球団の顔ぶれが変わるときに出す確認の帯（`ConfirmBar`）を開いているか
+  const [reviewing, setReviewing] = React.useState(false);
+  // 年度更新の確定の前に、規定と球団名（空・重なり・リーグの外の球団と同じ名前）を確かめる
+  const checkBeforeConfirm = () => {
+    const settings = fixExtra(tempSettings);
+    const errors = [
+      ...validateRegulations(settings).errors,
+      ...(canModifyStructure
+        ? validateLeagueTeamNames(settings.teamNames || [], currentTeams || seasonData.settings?.teamNames || [])
+        : []),
+    ];
+    return { settings, errors };
+  };
+  const commit = (settings) => {
+    setSeasonData(prev => ({ ...prev, settings }));
+    onConfirm(settings);
+  };
 
   // 半角→全角変換（略称用）
   const toFullWidth = (str) => str.replace(/[A-Za-z0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
@@ -360,54 +385,71 @@ const RegulationsContent = ({ seasonData, setSeasonData, onConfirm, confirmLabel
 
       {/* 確定すると変わる球団（改名・解散・新規参入）を先に見せる。解散は取り消せない。
           ⚠ 以前は確定した後の alert で初めて分かった。並びは確定と同じ `planLeagueChanges` で決める */}
-      {onConfirm && canModifyStructure && (() => {
-        const plan = planLeagueChanges(currentTeams || seasonData.settings?.teamNames || [], tempSettings.teamNames || []);
-        if (plan.renames.length + plan.dissolved.length + plan.added.length === 0) return null;
-        return (
-          <div className="bg-surface-2 rounded-lg p-4 mt-3" data-testid="league-changes">
-            <h2 className="text-sm font-bold mb-2 text-white">確定すると</h2>
-            <ul className="space-y-1 text-sm text-gray-100">
-              {plan.renames.map(r => (
-                <li key={`r-${r.from}`}>改名: {r.from} → {r.to || '（空欄）'}（選手・成績はそのまま）</li>
-              ))}
-              {plan.dissolved.map(name => (
-                <li key={`d-${name}`} className="text-red-400 font-bold">
-                  解散: {name}（所属{TEAMS_DATA[name]?.players?.length ?? 0}人はトライアウトのプールへ。取り消せません）
-                </li>
-              ))}
-              {plan.added.map((name, i) => (
-                <li key={`a-${i}`}>新規参入: {name || '（空欄）'}（24人を自動で編成）</li>
-              ))}
-            </ul>
-          </div>
-        );
-      })()}
+      {leaguePlan && (
+        <div className="bg-surface-2 rounded-lg p-4 mt-3" data-testid="league-changes">
+          <h2 className="text-sm font-bold mb-2 text-white">確定すると</h2>
+          <ul className="space-y-1 text-sm text-gray-100">
+            {leaguePlan.renames.map(r => (
+              <li key={`r-${r.from}`}>改名: {r.from} → {r.to || '（空欄）'}（選手・成績はそのまま）</li>
+            ))}
+            {leaguePlan.dissolved.map(name => (
+              <li key={`d-${name}`} className="text-red-400 font-bold">
+                解散: {name}（所属{TEAMS_DATA[name]?.players?.length ?? 0}人はトライアウトのプールへ。取り消せません）
+              </li>
+            ))}
+            {leaguePlan.added.map((name, i) => (
+              <li key={`a-${i}`}>新規参入: {name || '（空欄）'}（24人を自動で編成）</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {onConfirm && (
         <div className="mt-4 text-center">
           <button
             onClick={() => {
-              const settings = fixExtra(tempSettings);
-              const validation = validateRegulations(settings);
-              // 球団名（空・重なり・リーグの外の球団と同じ名前）も確定の前に確かめる（`validateLeagueTeamNames`）
-              const errors = [
-                ...validation.errors,
-                ...(canModifyStructure
-                  ? validateLeagueTeamNames(settings.teamNames || [], currentTeams || seasonData.settings?.teamNames || [])
-                  : []),
-              ];
+              const { settings, errors } = checkBeforeConfirm();
               if (errors.length > 0) {
                 alert('設定エラー:\n' + errors.join('\n'));
                 return;
               }
-              setSeasonData(prev => ({ ...prev, settings }));
-              onConfirm(settings);
+              // 球団の顔ぶれが変わるとき（改名・解散・新規参入）は取り消せないので、帯で決める。
+              // 変わらないときは規定を決めて進むだけなので、そのまま進む
+              if (leaguePlan) setReviewing(true);
+              else commit(settings);
             }}
             className="btn-primary px-8 py-3 rounded-lg text-base transition shadow"
           >
             {confirmLabel}
           </button>
         </div>
+      )}
+
+      {onConfirm && reviewing && leaguePlan && (
+        <ConfirmBar
+          title="球団の顔ぶれを変えて、翌年の規定を確定しますか？"
+          detail={[
+            leaguePlan.renames.length > 0 && `改名${leaguePlan.renames.length}`,
+            leaguePlan.dissolved.length > 0 && `解散${leaguePlan.dissolved.length}`,
+            leaguePlan.added.length > 0 && `新規参入${leaguePlan.added.length}`,
+          ].filter(Boolean).join('・')}
+          note={leaguePlan.dissolved.length > 0
+            ? '確定すると取り消せません。解散した球団の選手はトライアウトのプールへ移ります。'
+            : '確定すると取り消せません。'}
+          confirmLabel="確定する"
+          confirmClass={leaguePlan.dissolved.length > 0 ? 'btn-danger' : 'btn-warn'}
+          onConfirm={() => {
+            // 帯を出したあとに名前を直していても、いまの入力で確かめ直してから決める
+            const { settings, errors } = checkBeforeConfirm();
+            setReviewing(false);
+            if (errors.length > 0) {
+              alert('設定エラー:\n' + errors.join('\n'));
+              return;
+            }
+            commit(settings);
+          }}
+          onCancel={() => setReviewing(false)}
+        />
       )}
     </ScreenShell>
   );

@@ -141,7 +141,13 @@ function tools(page, context, log) {
   };
   // 翌年のレギュレーションを確定する（2f9ee22 で直した止まり方）
   // （ボタンの名前は行き先で変わる: 「確定 → キャンプへ進む」／箱庭は「確定 → チーム設定へ進む」）
-  const confirmNextRegulations = async (next, what, label = '確定 → キャンプへ進む') => {
+  // 球団の顔ぶれが変わる（改名・解散・新規参入）ときは取り消せないので、確認の帯で決める（`changes`）。
+  // 変わらないときは帯を出さずにそのまま進む
+  const confirmNextRegulations = async (next, what, { label = '確定 → キャンプへ進む', changes = false } = {}) => {
+    if (changes) {
+      await confirm(label, '確定する', next, what);
+      return;
+    }
     await go(label, next, what);
   };
   // 2年目の開幕: 暦が1年進み、日程が進められること
@@ -297,7 +303,7 @@ async function runIndependent(page, t) {
   await changes.waitFor({ timeout: 10000 }).catch(() => { throw new Error('名前を変えても、確定すると変わる球団の欄が出ない'); });
   assert.match(await changes.innerText(), new RegExp(`改名: 徳島インディゴソックス → ${renamed}`), '確定すると変わる球団の欄に改名が出ない');
   assert.doesNotMatch(await changes.innerText(), /解散|新規参入/, '名前を変えただけなのに解散・新規参入が出る');
-  await t.confirmNextRegulations(/練習を実行/, '春季キャンプ');
+  await t.confirmNextRegulations(/練習を実行/, '春季キャンプ', { changes: true });
   assert.ok(await page.getByText(`春季キャンプ - ${renamed}`).count() > 0,
     `改名した自チームのキャンプが開かない（見出し: ${(await page.locator('h1').first().innerText()).trim()}）`);
   await t.campToOpening();
@@ -330,7 +336,7 @@ async function runSandbox(page, t) {
   // 箱庭はドラフト・契約更改・トライアウトが無く、ドラフト会議の日にオフシーズンへ移る
   await t.proceedTo(/ドラフト/);
   await t.offseasonToNextYear('確定 → チーム設定へ進む', '翌年のレギュレーション');
-  await t.confirmNextRegulations(page.getByText('箱庭モード - チーム設定'), '箱庭のチーム設定', '確定 → チーム設定へ進む');
+  await t.confirmNextRegulations(page.getByText('箱庭モード - チーム設定'), '箱庭のチーム設定', { label: '確定 → チーム設定へ進む' });
   await go('シーズン開始', page.getByTestId('dev-advance'), '開幕の日程画面');
   await t.checkSecondYear({ league: true });
 }
