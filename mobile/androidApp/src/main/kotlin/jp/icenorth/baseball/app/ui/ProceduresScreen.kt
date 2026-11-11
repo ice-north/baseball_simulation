@@ -151,6 +151,10 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
     val chosen = pending.at("chosen").str()
     val chosenName = packs.firstOrNull { it.at("id").str() == chosen }?.at("name").str()
     val waiting = packWaiting(raw)
+    // ⚠ 年齢の幅は**並んでいるセットから数える**（Web 版の `packAgeRange` と同じ）。セットの版で
+    //    幅が違い（版1・版2は19〜24歳、版3は19〜32歳）、決め打ちの「19〜24歳」が版3で残った
+    val ages = packs.flatMap { it.at("players").list() }.mapNotNull { it.at("age").int() }
+    val ageRange = if (ages.isEmpty()) "19〜24" else "${ages.min()}〜${ages.max()}"
     // 選び終えた後に「セットを選び直す」を押したか
     var choosing by rememberSaveable { mutableStateOf(false) }
     // 中身（24人）を開いているセット
@@ -177,10 +181,10 @@ private fun PendingPack(model: AppViewModel, raw: JsonObject, pending: JsonObjec
                         "あなたの球団になります。それまでは引き継いだ選手でCPUが戦い、ストーブリーグとキャンプの手続きもCPUが決めます。",
                 ) + (
                     if (packs.any { it.at("feature").str() != null }) listOf(
-                        "セットごとに構成（投手厚め・野手厚め・二刀流・捕手3人など）と格付けの配り方（少数精鋭・粒ぞろい・大黒柱など）が違います。年齢は19〜24歳です。",
+                        "セットごとに構成（投手厚め・野手厚め・二刀流・捕手3人など）と格付けの配り方（少数精鋭・粒ぞろい・大黒柱など）が違います。年齢は${ageRange}歳です。",
                         "格の総量（A=3・B=2・C=1点の合計）はどれも同じにしてあり、同じ枠の平均からの開きも1%前後に揃えてあるので、戦い方の好みで選んでください。",
                     ) else listOf(
-                        "どのセットも投12・捕2・内外10の24人（うち二刀流2人）で、格付けはA2・B10・C12、年齢は19〜24歳です。",
+                        "どのセットも投12・捕2・内外10の24人（うち二刀流2人）で、格付けはA2・B10・C12、年齢は${ageRange}歳です。",
                         "合計の力は揃えてあるので（開きは1%前後）、好みで選んで構いません。",
                     )
                 ) + listOf(

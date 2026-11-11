@@ -493,6 +493,20 @@ try {
       h(PackSelect, { packs: [pack], plan: null, busy: false, onChange: () => {} }),
     );
     assert.doesNotMatch(bare, /球団名とプレイヤー名/, '渡していないのに欄が出る');
+    // ⚠ **説明の年齢の幅はセットの中身から**（版3で19〜32歳に広げたとき、「19〜24歳」のまま残った）
+    assert.match(bare, /年齢は21〜21歳です/, '説明の年齢の幅がセットの中身と違う');
+    const wide = {
+      ...pack,
+      players: [
+        { ...pack.players[0], id: 2, age: 19 },
+        { ...pack.players[0], id: 3, age: 32 },
+      ],
+    };
+    assert.match(
+      render(h(PackSelect, { packs: [wide], plan: null, busy: false, onChange: () => {} })),
+      /年齢は19〜32歳です/,
+      '19〜32歳のセットなのに説明の年齢の幅が違う',
+    );
 
     // ⚠ **親が渡し忘れていないこと**を、呼び出し元の字面で見る。
     //    部品だけ描いても親の渡し忘れは写らない。渡し忘れると欄が黙って
