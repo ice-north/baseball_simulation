@@ -162,6 +162,16 @@ export const createSeasonData = (year = 1) => {
 };
 
 /**
+ * オフシーズンの画面に、年度更新が済んだ後のデータ（翌年の1月1日・春季キャンプ）が来ているか。
+ * ⚠ 大学は年度更新のあと卒業・入部レポートを挟み、その間も画面はオフシーズンのまま。
+ *    年が替わった瞬間のオートセーブ・緊急保存は「翌年のデータ・画面はオフシーズン」で入る。
+ *    以前はこれを読み直すとオフシーズンの画面が「3年目へ進む」を出し、1年遊ばないまま
+ *    加齢・卒業・入部がもう一度走った。オフシーズンの画面はこの形なら年度更新をせず、
+ *    レポートの続き（無ければ翌年の手続き）へ進める（`OffSeasonScreen.jsx`）
+ */
+export const isYearAdvanced = (seasonData) => seasonData?.phase === SEASON_PHASES.SPRING_CAMP;
+
+/**
  * 日付を進める
  * @param {Object} currentDate - 現在の日付 {year, month, day}
  * @param {number} days - 進める日数

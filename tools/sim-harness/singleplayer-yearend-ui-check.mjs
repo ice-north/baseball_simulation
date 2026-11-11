@@ -13,6 +13,9 @@
 //               → スカウト入団 → 予算決算 → オフシーズン → 2年目へ → キャンプ → 背番号 → 2年目の開幕
 //   クラブ:     背番号 → 開幕 → ドラフト会議 → 退団処理 → 入部希望者 → オフシーズン → 2年目へ
 //               → 2年目の開幕（キャンプなし）
+//   大学:       キャンプ → 開幕 → 夏季合宿 → 秋季リーグ → ドラフト会議 → スポーツ推薦 → オフシーズン
+//               → 2年目へ → 卒業・入部レポート（ここでオートセーブ）→ 読み直してもレポートの続き
+//               → キャンプ → 背番号 → 2年目の開幕
 //
 // 捕まえたいのは「ボタンを押しても次の画面へ移らない」型の止まり方（2f9ee22: 翌年の
 // レギュレーションを確定しても画面が変わらず、独立リーグ・箱庭が2年目に進めなかった）。
@@ -33,6 +36,7 @@ const MODES = {
   sandbox: { label: '箱庭', run: runSandbox },
   corporate: { label: '社会人（企業）', run: runCorporate },
   club: { label: '社会人（クラブ）', run: runClub },
+  university: { label: '大学', run: runUniversity },
 };
 const args = process.argv.slice(2);
 const serial = args.includes('--serial');
@@ -362,6 +366,53 @@ async function runClub(page, t) {
   await t.offseasonToNextYear(page.getByTestId('dev-advance'), '2年目の日程画面');
   assert.equal(await button(/練習を実行/).count(), 0, 'クラブなのにキャンプの画面が出た');
   await t.checkSecondYear({ league: false });
+}
+
+// ------------------------------------------------------------
+// 大学
+// ------------------------------------------------------------
+async function runUniversity(page, t) {
+  const { ui, go, step } = t;
+  await step('大学野球: 東京六大学の法政大学で新しく始める');
+  await ui.newUniversityGame();
+  await step(`1年目の開幕 ${fmt(await ui.date())}`);
+  // 夏季合宿は日程画面を離れて合宿の画面へ移る（フェーズ移行の確認は出ない）
+  await ui.advance('phase');
+  await page.getByRole('button', { name: /練習を実行/ }).first().waitFor({ timeout: 30000 })
+    .catch(() => { throw new Error('次の区切りまで進めても夏季合宿の画面が出ない'); });
+  await ui.runCamp();
+  await go('秋季リーグへ', page.getByTestId('dev-advance'), '秋季リーグの日程画面');
+  await step(`秋季リーグ ${fmt(await ui.date())}`);
+
+  await t.proceedTo(/ドラフト/);
+  await t.finishDraft();
+
+  await t.proceedTo(/推薦/);
+  await step('スポーツ推薦: 推薦を締め切り、セレクションは合格者なしで確定');
+  await t.confirm(/^推薦を締め切る/, /^締め切る$/, /確定してオフシーズンへ|^オフシーズンへ$/, 'セレクション');
+  await t.confirm(/確定してオフシーズンへ|^オフシーズンへ$/, /^確定する$/, page.getByTestId('dev-advance'), '日程画面');
+
+  await t.proceedTo(/オフシーズン/);
+  // ⚠ 大学は年度更新のあと卒業・入部レポートを挟む。年が替わった瞬間にオートセーブが
+  //    走るので、保存に入る画面はオフシーズン（レポートは画面の中の表示）。以前はこの保存を
+  //    読み直すとオフシーズンの画面が翌年のデータで開き、「3年目へ進む」で1年遊ばないまま
+  //    加齢・卒業・入部がもう一度走った
+  const flash = page.getByText('オートセーブしました');
+  await flash.waitFor({ state: 'hidden', timeout: 30000 });
+  await t.offseasonToNextYear(page.getByText('卒業・入部レポート'), '卒業・入部レポート');
+  await flash.waitFor({ timeout: 30000 }).catch(() => { throw new Error('年度更新のあとオートセーブが走らない'); });
+  await step('卒業・入部レポートの画面でオートセーブされた → タイトルからオートセーブを読み直す');
+  await page.goto(`${BASE}/?dev=1`);
+  await ui.click('つづきから');
+  await ui.click('オートセーブから続ける');
+  await page.getByText(/卒業・入部レポート|年目 シーズン終了/).first().waitFor({ timeout: 120000 })
+    .catch(() => { throw new Error('オートセーブを読み直してもオフシーズンにもレポートにも戻らない'); });
+  assert.equal(await t.button(/^3年目へ進む/).count(), 0,
+    'レポートの途中のオートセーブを読み直すと「3年目へ進む」が出る（1年遊ばないまま年度更新がもう一度走る）');
+  assert.ok(await page.getByText('卒業・入部レポート').count() > 0, 'オートセーブを読み直すと卒業・入部レポートの続きに戻らない');
+  await go('キャンプへ進む', /練習を実行/, '春季キャンプ');
+  await t.campToOpening();
+  await t.checkSecondYear({ league: true });
 }
 
 // ------------------------------------------------------------

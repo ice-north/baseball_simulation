@@ -11,7 +11,9 @@
 // 現行スキーマのバージョン。破壊的変更のたびに上げ、MIGRATIONSにステップを追加する。
 // 2.16.0: トライアウトの途中の状態（seasonData.tryoutDraft）を足した。項目を足しただけで
 //         古い保存を書き換える段は無い（持たない保存はトライアウトを最初からやり直す）。
-export const CURRENT_SAVE_VERSION = '2.16.0';
+// 2.17.0: 大学の卒業・入部レポート（seasonData.universityGraduationReport）に NPB の指名
+//         （npbDrafted）を足した。項目を足しただけで段は無い（持たない保存は指名の欄を出さない）。
+export const CURRENT_SAVE_VERSION = '2.17.0';
 
 // "a.b.c" を比較。a<b→-1, a>b→1, 等しい→0。数値でない部分は0扱い。
 export function compareVersions(a, b) {

@@ -3,7 +3,7 @@ import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
-import { getPlayoffChampion } from '../season/seasonManager.js';
+import { getPlayoffChampion, isYearAdvanced } from '../season/seasonManager.js';
 import { generatePitchingRotation } from '../game/lineupGenerator.js';
 import { getTransferCandidates, transferManagerTo, CATEGORY_LABEL, getTeamCategory } from '../game/managerTransfer.js';
 
@@ -13,7 +13,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   const [processing, setProcessing] = useState(false);
   const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
   const [saveStatus, setSaveStatus] = useState(null);
-  const [graduationReport, setGraduationReport] = useState(null);
+  // ⚠ 年度更新が済んだ後の保存から開いたとき（大学の卒業・入部レポートの途中のオートセーブ・
+  //    緊急保存）は、年度更新をもう一度走らせない。大学はレポートの続きから出す（`isYearAdvanced`）
+  const yearAdvanced = isYearAdvanced(seasonData);
+  const [graduationReport, setGraduationReport] = useState(() => (
+    yearAdvanced && gameMode === 'university' && seasonData?.universityGraduationReport
+      ? { npbDrafted: [], ...seasonData.universityGraduationReport }
+      : null
+  ));
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferCat, setTransferCat] = useState(null);
   const [transferSearch, setTransferSearch] = useState('');
@@ -75,6 +82,11 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   }, [seasonData]);
 
   const handleAdvanceYear = () => {
+    // 年度更新は済んでいる（上の `yearAdvanced`）。翌年の手続きへ進むだけにする
+    if (yearAdvanced) {
+      if (onStartNextSeason) onStartNextSeason(seasonData);
+      return;
+    }
     if (!advanceToNextYear) {
       alert('年間進行システムが読み込まれていません');
       return;
@@ -655,6 +667,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                 <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 処理中...
               </span>
+            ) : yearAdvanced ? (
+              `${seasonData.year}年目の準備へ進む →`
             ) : (
               `${seasonData.year + 1}年目へ進む →`
             )}
