@@ -55,8 +55,21 @@ const packView = (pack) => ({
     position: p.position,
     rank: p.rank || 'C',
     isTwoWay: !!p.isTwoWay,
-    batting: { meet: p.batting?.meet, power: p.batting?.power },
-    physical: { speed: p.physical?.speed },
+    // ⚠ **代表的な能力は落とさないこと**（いしだ指摘: 体力・肩・足といった
+    //    代表的な能力すら出ていない）。画面（`PackSelect` の `COLUMNS`）に
+    //    出す項目と対で増やす。片方だけ足すと「—」が並ぶ。
+    // ⚠ 回復・体幹・バント・変化球は載せない。480人ぶんなので、1人1項目で
+    //    ビューが増える。詳しくは選手名を押した先（`PlayerStatsButton`）で見る
+    batting: {
+      meet: p.batting?.meet,
+      power: p.batting?.power,
+      eye: p.batting?.eye,
+    },
+    physical: {
+      speed: p.physical?.speed,
+      arm: p.physical?.arm,
+      bodyStamina: p.physical?.bodyStamina,
+    },
     fielding: { defense: p.fielding?.defense },
     pitching: {
       velocity: p.pitching?.velocity,

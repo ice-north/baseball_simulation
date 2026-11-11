@@ -114,18 +114,55 @@ const GROUPS = [
  * ⚠ スマホ（320px〜）では1字にする（トレードの表と同じ書き方。押さえると title で全部）。
  *    「ミート」のままだと10列が幅に入らず、見出しが「ミ／ー／ト」と1字ずつ縦に割れていた
  */
+/**
+ * 名簿に出す能力。
+ *
+ * ⚠ **代表的な能力を落とさないこと**（いしだ指摘: 体力・肩・足といった
+ *    代表的な能力すら出ていない）。ここは24人を見比べて1セットを選ぶ画面で、
+ *    足りないと「選手名を押して1人ずつ詳細を開く」しか手が無くなる。
+ * ⚠ 打撃（ミート・パワー・選球眼）、走守（走力・肩・守備）、投球（球速・制球・
+ *    スタミナ）、体（体力）を1つずつ。回復・体幹・バントは詳細で見る
+ *    （ここに全部並べると24人の表が横に送らないと読めなくなる）。
+ */
 const COLUMNS = [
-  ['位置', '位'],
-  ['ミート', 'ミ'],
-  ['パワー', 'パ'],
-  ['走力', '走'],
-  ['守備', '守'],
-  ['球速', '速'],
-  ['制球', '制'],
+  ['位置', '位', (p) => POS[p.position]],
+  ['ミート', 'ミ', (p) => p.batting?.meet],
+  ['パワー', 'パ', (p) => p.batting?.power],
+  ['選球眼', '眼', (p) => p.batting?.eye],
+  ['走力', '走', (p) => p.physical?.speed],
+  ['肩', '肩', (p) => p.physical?.arm],
+  ['守備', '守', (p) => p.fielding?.defense],
+  ['球速', '速', (p) => p.pitching?.velocity, 'velocity'],
+  ['制球', '制', (p) => p.pitching?.control],
+  // ⚠ スタミナは0〜200。段位は別の物差しで出す
+  ['スタミナ', 'ス', (p) => p.pitching?.stamina, 'stamina'],
+  ['体力', '体', (p) => p.physical?.bodyStamina],
 ];
+
+/**
+ * スマホで出す列。
+ * ⚠ **11列は320pxに入らない**（`fitsPhone` が「横に動く」で落ちる）。
+ *    代表的なものに絞り、残りは選手名を押した先（`PlayerStatsButton`）で見る。
+ * ⚠ 選球眼・スタミナを落とすのは、どちらも**別の列から見当がつく**ため
+ *    （選球眼はミート、スタミナは先発かどうか）。体力・肩は代わりが無い。
+ */
+const MOBILE_COLUMNS = new Set([
+  '位置',
+  'ミート',
+  'パワー',
+  '走力',
+  '肩',
+  '守備',
+  '球速',
+  '制球',
+  '体力',
+]);
 
 function Roster({ pack }) {
   const mobile = useMobile();
+  const columns = mobile
+    ? COLUMNS.filter(([long]) => MOBILE_COLUMNS.has(long))
+    : COLUMNS;
   const [side, setSide] = useState('all');
   const list = pack.players.filter((p) =>
     side === 'all'
@@ -153,7 +190,7 @@ function Roster({ pack }) {
             <th>選手</th>
             <th>格</th>
             <th>齢</th>
-            {COLUMNS.map(([long, short]) => (
+            {columns.map(([long, short]) => (
               <th key={long} title={long}>
                 {mobile ? short : long}
               </th>
@@ -170,25 +207,19 @@ function Roster({ pack }) {
               </th>
               <td>{p.rank}</td>
               <td>{p.age}</td>
-              <td>{POS[p.position]}</td>
-              <td>
-                <AbilityGrade value={p.batting?.meet} />
-              </td>
-              <td>
-                <AbilityGrade value={p.batting?.power} />
-              </td>
-              <td>
-                <AbilityGrade value={p.physical?.speed} />
-              </td>
-              <td>
-                <AbilityGrade value={p.fielding?.defense} />
-              </td>
-              <td>
-                <AbilityGrade value={p.pitching?.velocity} velocity />
-              </td>
-              <td>
-                <AbilityGrade value={p.pitching?.control} />
-              </td>
+              {columns.map(([long, , pick, scale]) =>
+                long === '位置' ? (
+                  <td key={long}>{pick(p)}</td>
+                ) : (
+                  <td key={long}>
+                    <AbilityGrade
+                      value={pick(p)}
+                      velocity={scale === 'velocity'}
+                      stamina={scale === 'stamina'}
+                    />
+                  </td>
+                ),
+              )}
             </tr>
           ))}
         </tbody>

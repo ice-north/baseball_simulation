@@ -323,6 +323,34 @@ try {
   // ⚠ ビューが重くなりすぎないこと。20×24人ぶんを丸ごと載せると保存も重くなる
   const kb = Buffer.byteLength(JSON.stringify(view.phase.packs)) / 1024;
   assert.ok(kb < 400, `セットの投影が重い: ${Math.round(kb)}KB`);
+  // ⚠ **画面が出す能力を全部渡すこと**（いしだ指摘: 体力・肩・足といった
+  //    代表的な能力すら出ていない）。`PackSelect` の `COLUMNS` と対になっていて、
+  //    片方だけ足すと表に「—」が並ぶ。軽くするために項目を削った名残で、
+  //    打撃2つ・走力・守備・球速・制球しか渡していなかった
+  {
+    const paths = [
+      ['batting', 'meet'],
+      ['batting', 'power'],
+      ['batting', 'eye'],
+      ['physical', 'speed'],
+      ['physical', 'arm'],
+      ['physical', 'bodyStamina'],
+      ['fielding', 'defense'],
+      ['pitching', 'velocity'],
+      ['pitching', 'control'],
+      ['pitching', 'stamina'],
+    ];
+    for (const pack of view.phase.packs)
+      for (const p of pack.players)
+        for (const [group, key] of paths) {
+          // 投手に打撃、野手に投球が無いことはある。**群そのものが無い**のは渡し忘れ
+          if (!p[group]) assert.fail(`${p.name} の${group}が渡っていない`);
+          assert.ok(
+            key in p[group],
+            `${p.name} の ${group}.${key} が渡っていない（画面は列を出すので「—」になる）`,
+          );
+        }
+  }
 
   // 居ないセットは受け付けない
   const liveRevision = (await store.read()).league.revision;
