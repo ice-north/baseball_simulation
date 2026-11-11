@@ -272,6 +272,27 @@ export function driver(page) {
         return { width: Math.round(card.getBoundingClientRect().width), rows: rows.length, overflow: Math.round(overflow), wrapped };
       });
     },
+    // 確認の帯（ConfirmBar）の収まり。ページの最後までスクロールして、
+    //   hidden: 帯の下に隠れたままのページの中身の高さ（px。0 以下なら隠れていない）
+    //   titleCut: 帯の問いが途中で切れているか / fitsWidth: 帯が画面の幅に収まっているか
+    // 帯の余白（帯の直前の要素）の上端がページの中身の終わりなので、それが帯の上端より下にあれば隠れる
+    async confirmBarFit() {
+      return page.evaluate(async () => {
+        const bar = document.querySelector('[data-testid="confirm-bar"]');
+        if (!bar) return null;
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const b = bar.getBoundingClientRect();
+        const spacer = bar.previousElementSibling;
+        const title = bar.querySelector('.font-bold');
+        return {
+          height: Math.round(b.height),
+          hidden: spacer ? Math.round(spacer.getBoundingClientRect().top - b.top) : null,
+          titleCut: title ? title.scrollWidth > title.clientWidth + 1 : null,
+          fitsWidth: b.left >= 0 && b.right <= window.innerWidth,
+        };
+      });
+    },
     // タイトルの「つづきから」でスロット1を開く
     async continueSlot1() {
       await page.goto(`${BASE}/?dev=1`);

@@ -100,6 +100,22 @@ try {
   const firstRow = await page.locator('tbody tr').first().boundingBox();
   assert.ok(firstRow && firstRow.y + firstRow.height <= 720,
     `1280×720 のトライアウトで候補の表の1行目が画面の外にある（下端 ${firstRow && Math.round(firstRow.y + firstRow.height)}px）`);
+  // 画面の下端近くの行を選んでも、出てきた帯がその行に重ならない（以前は選んだ行が帯の下に隠れた）
+  const candidateRows = page.locator('tbody tr');
+  let lowRow = null;
+  for (let i = 0; i < Math.min(await candidateRows.count(), 40) && !lowRow; i++) {
+    const b = await candidateRows.nth(i).boundingBox();
+    if (b && b.y + b.height > 640 && b.y + b.height <= 720) lowRow = candidateRows.nth(i);
+  }
+  assert.ok(lowRow, '前提: 1280×720 の画面の下端近くに候補の行が無い');
+  await lowRow.click();
+  const pickBar = page.getByTestId('confirm-bar');
+  await pickBar.waitFor();
+  await page.waitForTimeout(300);
+  const [lowBox, pickBarBox] = [await lowRow.boundingBox(), await pickBar.boundingBox()];
+  assert.ok(lowBox.y + lowBox.height <= pickBarBox.y,
+    `1280×720 のトライアウトで、選んだ行（下端 ${Math.round(lowBox.y + lowBox.height)}px）が指名の帯（上端 ${Math.round(pickBarBox.y)}px）の下に隠れる`);
+  await pickBar.getByRole('button', { name: 'やめる' }).click();
   await page.setViewportSize({ width: 1400, height: 900 });
 
   step('トライアウトの途中で保存して、タイトルから読み直す');

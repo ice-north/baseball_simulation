@@ -67,10 +67,12 @@ function tools(page, context, log) {
     });
   };
   // 取り消せない操作は、押すと下に確認の帯（`ConfirmBar`）が出て、帯のボタンで決める。
-  // 帯が出ることを待ち、帯の中のボタン（`label`）を押して次の画面を待つ
-  const confirm = async (name, label, next, what, timeout = 30000) => {
+  // 帯が出ることを待ち、帯の中のボタン（`label`）を押して次の画面を待つ。
+  // `onBar` を渡すと、帯が出たところで呼ぶ（帯の収まりを測るなど）
+  const confirm = async (name, label, next, what, timeout = 30000, onBar = null) => {
     const bar = page.getByTestId('confirm-bar');
     await go(name, bar, `${what}の確認の帯`);
+    if (onBar) await onBar(bar);
     await bar.getByRole('button', { name: label }).click();
     await go2(next, what, timeout);
   };
@@ -284,7 +286,18 @@ async function runIndependent(page, t) {
   // 投手を1人（捕手や野手を外すと、トライアウトで足りない守備位置を埋めるまで指名を終えられない）
   const pitcherRow = page.locator('tbody tr').filter({ has: page.locator('td:nth-child(5)', { hasText: /^投$/ }) });
   await ((await pitcherRow.count()) ? pitcherRow.last() : page.locator('tbody tr').first()).click();
-  await t.confirm(/^契約更改を確定する$/, /^(解雇して確定する|確定する)$/, 'トライアウトへ進む', '契約更改の完了');
+  // 390幅でも帯の問い（解雇の人数）が切れず、ボタンが画面に収まり、帯の下に表の最後が隠れない。
+  // 以前は問いを1行に詰めて「1人を解…」で切り、余白は帯の高さより小さい固定の h-24 だった
+  const narrowBar = async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(400);
+    const fit = await ui.confirmBarFit();
+    const title = await page.getByTestId('confirm-bar').locator('.font-bold').first().innerText();
+    assert.ok(fit && !fit.titleCut && fit.fitsWidth, `390幅の契約更改の帯で問い「${title}」が切れている、または帯が画面からはみ出す: ${JSON.stringify(fit)}`);
+    assert.ok(fit.hidden <= 0, `390幅の契約更改の帯の下に、表の最後が${fit.hidden}px隠れる（帯の高さ${fit.height}px）`);
+    await page.setViewportSize({ width: 1400, height: 900 });
+  };
+  await t.confirm(/^契約更改を確定する$/, /^(解雇して確定する|確定する)$/, 'トライアウトへ進む', '契約更改の完了', 30000, narrowBar);
   await go('トライアウトへ進む', /指名終了|ドラフト完了/, 'トライアウト', 60000);
 
   await step('トライアウト: 捕手と足りない守備位置を指名して指名を終える');
@@ -430,6 +443,9 @@ async function runCorporate(page, t) {
   const hire = page.getByRole('button', { name: /^雇用$/ });
   await hire.first().click();
   await bar.waitFor();
+  // 帯の下に市場の最後の行が隠れない（以前は余白が固定の h-40 で、能力の表つきの帯より低く、約24px隠れた）
+  const hireFit = await ui.confirmBarFit();
+  assert.ok(hireFit && hireFit.hidden <= 0, `雇う帯の下に、スタッフ市場の最後が${hireFit?.hidden}px隠れる（帯の高さ${hireFit?.height}px）`);
   // 以前は帯がタブの外に残り、市場を作り直しても前の人の帯のままで、市場にいない人を雇えた
   await ui.click(/^更新$/);
   assert.equal(await bar.count(), 0, 'スタッフ市場を「更新」しても、前の人を雇う帯が残っている');

@@ -7,7 +7,7 @@ import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/
 import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount, assignScoutTask, cancelScoutTask, getAllScoutTasks, MAX_FAVORITES_PER_SCOUT } from '../corporate/scoutingSystem.js';
 import { getUniversityPipes } from '../university/universityPipeSystem.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
-import ConfirmBar from './ConfirmBar.jsx';
+import ConfirmBar, { keepAboveConfirmBar } from './ConfirmBar.jsx';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -253,7 +253,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             ))}
                           </div>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setConfirmHire(null); setConfirmFire(s); }}
+                            onClick={(e) => { e.stopPropagation(); setConfirmHire(null); setConfirmFire(s); keepAboveConfirmBar(e.currentTarget); }}
                             className="btn-danger px-3 py-1 rounded text-xs"
                           >
                             解雇
@@ -310,7 +310,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     </div>
                     <span className="text-gray-300 w-16 text-right">{getStaffSalary(s)}万円</span>
                     <button
-                      onClick={() => { setConfirmFire(null); setConfirmHire(s); }}
+                      onClick={(e) => { setConfirmFire(null); setConfirmHire(s); keepAboveConfirmBar(e.currentTarget); }}
                       className={`btn-primary px-2 py-1 rounded text-xs ${confirmHire?.id === s.id ? 'ring-2 ring-cyan-400' : ''}`}
                     >
                       雇用

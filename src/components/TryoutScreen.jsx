@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import TutorialHint from './TutorialHint.jsx';
-import ConfirmBar from './ConfirmBar.jsx';
+import ConfirmBar, { keepAboveConfirmBar } from './ConfirmBar.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, removeDraftedFromClubTeams, generateScoutComment } from '../season/tryoutSystem.js';
 import { removeDraftedFromGraduatePools } from '../season/universityPool.js';
@@ -871,7 +871,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                       <div
                         key={n.cat}
                         // ⚠ ここも選ぶだけ（以前はここだけ押した瞬間に指名が決まっていた）
-                        onClick={() => { if (!isUserTurn) return; setConfirmEnd(false); setPendingPick(n.player); }}
+                        onClick={(e) => { if (!isUserTurn) return; setConfirmEnd(false); setPendingPick(n.player); keepAboveConfirmBar(e.currentTarget); }}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition hover:scale-[1.02] ${
                           pendingPick?.id === n.player.id ? 'outline outline-2 outline-cyan-400 ' : ''}${
                           n.urgency === 'critical'
@@ -958,7 +958,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                         className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition ${
                           pendingPick?.id === player.id ? 'bg-cyan-900/70 outline outline-2 -outline-offset-2 outline-cyan-400'
                             : player.isReleasedCandidate ? 'bg-amber-950/30' : ''}`}
-                        onClick={() => { if (!isUserTurn) return; setConfirmEnd(false); setPendingPick(pendingPick?.id === player.id ? null : player); }}
+                        onClick={(e) => { if (!isUserTurn) return; setConfirmEnd(false); setPendingPick(pendingPick?.id === player.id ? null : player); keepAboveConfirmBar(e.currentTarget); }}
                       >
                         <td className="px-1 py-1 text-white font-bold whitespace-nowrap">
                           <button
