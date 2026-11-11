@@ -1082,9 +1082,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             const prev = player.previousSeasonStats;
                             if (!prev) return <span className="text-gray-400">-</span>;
                             if (isPitcher(player)) {
+                              // ⚠ inningsPitched はアウト数なので防御率は「自責点×27÷アウト数」。以前は ×9 で割っていて
+                              //    契約更改の画面の3分の1（2.89 が 0.96）に出ていた。数字だけでは何か分からないので「防」を付ける
                               const ip = prev.pitching?.inningsPitched || 0;
-                              const era = ip > 0 ? ((prev.pitching?.earnedRuns || 0) / ip * 9).toFixed(2) : '-';
-                              return <>{era !== '-' ? era : '-'} {prev.pitching?.wins || 0}勝{prev.pitching?.saves || 0}S {prev.pitching?.strikeouts || 0}K</>;
+                              const era = ip > 0 ? ((prev.pitching?.earnedRuns || 0) * 27 / ip).toFixed(2) : '-';
+                              return <>防{era} {prev.pitching?.wins || 0}勝{prev.pitching?.saves || 0}S {prev.pitching?.strikeouts || 0}K</>;
                             } else {
                               const ab = prev.batting?.atBats || 0;
                               const avg = ab > 0 ? (prev.batting.hits / ab).toFixed(3) : '-';

@@ -283,6 +283,10 @@ async function runIndependent(page, t) {
   await t.proceedTo(/契約更改/);
   await step('契約更改: 1人解雇して確定');
   await page.getByText('契約更改 - 1年目').first().waitFor({ timeout: 30000 });
+  // 投手の防御率を控えておく（2年目のキャンプの「前年成績」と比べる）
+  const contractEra = Object.fromEntries(await page.locator('tbody tr').evaluateAll((trs) => trs
+    .map((tr) => [tr.children[1]?.innerText.trim(), (tr.innerText.match(/ERA(\d+\.\d\d)/) || [])[1]])
+    .filter(([, era]) => era)));
   // 投手を1人（捕手や野手を外すと、トライアウトで足りない守備位置を埋めるまで指名を終えられない）
   const pitcherRow = page.locator('tbody tr').filter({ has: page.locator('td:nth-child(5)', { hasText: /^投$/ }) });
   await ((await pitcherRow.count()) ? pitcherRow.last() : page.locator('tbody tr').first()).click();
@@ -383,6 +387,20 @@ async function runIndependent(page, t) {
   await t.confirmNextRegulations(/練習を実行/, '春季キャンプ', { changes: true });
   assert.ok(await page.getByText(`春季キャンプ - ${renamed}`).count() > 0,
     `改名した自チームのキャンプが開かない（見出し: ${(await page.locator('h1').first().innerText()).trim()}）`);
+  await step('2年目の春季キャンプ: 投手の「前年成績」の防御率が契約更改の画面と同じ');
+  // 以前は自責点÷アウト数×9 で、契約更改の画面の3分の1（2.89 が 0.96）に出ていた
+  const pitcherTab = page.getByRole('button', { name: /^投手\s*\d+/ });
+  if (await pitcherTab.count()) await pitcherTab.first().click();
+  const campEra = await page.locator('table').filter({ hasText: 'メイン' }).locator('tbody tr').evaluateAll((trs) => trs
+    .map((tr) => [tr.children[0]?.innerText.trim(), (tr.innerText.match(/(\d+\.\d\d) \d+勝\d+S/) || [])[1]])
+    .filter(([, era]) => era));
+  let comparedEra = 0;
+  for (const [name, era] of campEra) {
+    if (!(name in contractEra)) continue;
+    assert.equal(era, contractEra[name], `2年目の春季キャンプの前年成績で ${name} の防御率が ${era}（契約更改の画面では ${contractEra[name]}）`);
+    comparedEra++;
+  }
+  assert.ok(comparedEra >= 3, `前提: 契約更改とキャンプで防御率を比べられた投手が${comparedEra}人`);
   await t.campToOpening();
   assert.ok(await page.getByText(new RegExp(`⚾\\s*${renamed}`)).count() > 0, '2年目のサイドバーの自チームが改名した名前でない');
   await t.checkSecondYear({ league: true });
