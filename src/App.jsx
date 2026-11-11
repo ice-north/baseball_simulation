@@ -3120,9 +3120,10 @@ if (newOuts === 3) {
                       </tr>
                     </thead>
                     <tbody>
-                      {/* アウェイチーム */}
+                      {/* アウェイチーム。球団名は略称（欄は2割しか無く、正式名は「高知ファイティン…」と切れていた。
+                          正式名は左右の打順の見出しに出ている） */}
                       <tr className="border-b border-gray-800">
-                        <td className={`py-0.5 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
+                        <td className={`py-0.5 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}} title={awayTeam.name}>{getTeamAbbreviation(awayTeam.name)}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => (
@@ -3144,7 +3145,7 @@ if (newOuts === 3) {
                       </tr>
                       {/* ホームチーム */}
                       <tr>
-                        <td className={`py-0.5 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
+                        <td className={`py-0.5 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}} title={homeTeam.name}>{getTeamAbbreviation(homeTeam.name)}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => {
@@ -3756,8 +3757,10 @@ if (newOuts === 3) {
                   }
                 };
 
+                // ⚠ 親が `space-y-2` なので、そのままだと幕にも上の余白（8px）が付き、画面の上端に
+                //   暗くならない帯が残っていた。`!mt-0` で打ち消す（`.space-y-2 > * ~ *` は詳細度が高い）
                 return (
-                  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => { setShowSubModal(false); setSubModalSelected(null); }}>
+                  <div className="fixed inset-0 !mt-0 bg-black/70 flex items-center justify-center z-50" onClick={() => { setShowSubModal(false); setSubModalSelected(null); }}>
                     <div className="bg-surface-1 rounded-xl p-4 max-w-lg w-full mx-4 border border-gray-600 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white font-bold text-lg">選手交代</h3>
