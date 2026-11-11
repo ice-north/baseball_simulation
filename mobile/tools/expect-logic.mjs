@@ -29,7 +29,15 @@ const added = addToPlan(ranked, candidates, count, have, ranked.at(-1));
 const benched = benchFromPlan(ranked, candidates, count, have, picks[0]);
 const moved = moveInPlan(ranked, candidates, count, have, picks.at(-1), 0);
 const summary = planSummary(ranked, candidates, count, have);
-const text = JSON.stringify({ camp, wish, recommended, tryout: { ranked, picks, added, benched, moved, blocking: summary.blocking, warnings: summary.warnings } });
+// 注意（warnings）は獲得したあとの名簿で数える。上の例は野手が足りず注意が出ないので、
+// 名簿に投手がそろっている場合（注意なし）と、投手が3人しかいない場合（注意あり）も比べる
+const fullStaff = planSummary(weightedRanked(candidates, DEFAULT_WEIGHTS, have), candidates, candidates.length, have);
+const fewPitchers = (() => {
+  const own = roster.slice(0, 3);
+  const pool = roster.slice(11);
+  return planSummary(weightedRanked(pool, DEFAULT_WEIGHTS, own), pool, pool.length, own);
+})();
+const text = JSON.stringify({ camp, wish, recommended, tryout: { ranked, picks, added, benched, moved, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
 // --check: 書き出し済みの期待値が今の Web 版の答えと同じか（CI で、Web 版だけ直したときに気づく）
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/logic-expected.json', import.meta.url);

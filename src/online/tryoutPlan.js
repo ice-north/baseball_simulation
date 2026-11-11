@@ -454,11 +454,16 @@ export function planSummary(rankedIds, candidates, count, roster = []) {
   if (pitchers < 1) blocking.push('投手が1人もいません');
   if (catchers < 1) blocking.push('捕手が1人もいません');
 
+  // ⚠ **注意も獲得したあとの名簿（いまの名簿＋獲得予定）で数える**。`blocking` と見出しの
+  //    「獲得後の名簿 投11/11」と同じ数え方。以前は獲得予定だけを数えていて、名簿に投手が
+  //    8人いても獲得予定が3人なら「投手が5人未満です」と毎回出ていた（再監査 B3）。
+  //    名簿が空の初期編成では獲得予定と同じ数になる
+  const after = rosterCounts(combined);
   const warnings = [];
   if (!blocking.length) {
-    if (counts.pitcher < 5) warnings.push('投手が5人未満です');
-    if (counts.infielder < 4) warnings.push('内野手が4人未満です');
-    if (counts.outfielder < 3) warnings.push('外野手が3人未満です');
+    if (after.pitcher < 5) warnings.push('獲得後も投手が5人未満です');
+    if (after.infielder < 4) warnings.push('獲得後も内野手が4人未満です');
+    if (after.outfielder < 3) warnings.push('獲得後も外野手が3人未満です');
   }
   return { counts, picked, targets: ONLINE_ROSTER_TARGETS, blocking, warnings };
 }

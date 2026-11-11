@@ -48,6 +48,14 @@ class LogicTest {
         assertEquals(ids("moved"), moveInPlan(ranked, candidates, 6, have, ids("picks").last()!!, 0))
         val summary = planSummary(ranked, candidates, 6, have)
         assertEquals(expected.at("tryout", "warnings").list().map { it.str() }, summary.warnings)
+        // 注意は獲得したあとの名簿で数える（投手がそろっている／投手が3人だけ）
+        val cases = expected.at("tryout", "warningCases").list().map { c -> c.list().map { it.str() } }
+        val full = planSummary(weightedRanked(candidates, DEFAULT_WEIGHTS, have), candidates, candidates.size, have)
+        assertEquals(cases[0], full.warnings)
+        val own = roster.take(3)
+        val pool = roster.drop(11)
+        val few = planSummary(weightedRanked(pool, DEFAULT_WEIGHTS, own), pool, pool.size, own)
+        assertEquals(cases[1], few.warnings)
     }
 
     @Test
