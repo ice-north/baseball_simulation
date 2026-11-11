@@ -214,16 +214,33 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
     }
   }, [currentPick, draftOrder, tryoutCandidates, teamRosters, userDone, saving]);
 
+  // 自チームの編成（現有＋今回の指名）。「現在の編成」「おすすめ候補」「指名終了」の判定はどれもこれで数える。
+  // ⚠ 指名が終わると指名した選手は名簿（TEAMS_DATA）にも入る。現有からは除いて数える
+  //    （除かないと「現有23＋指名1」のように二重に数えていた）。
+  // ⚠ おすすめ候補は以前、今回の指名（userRoster）だけを数えていて、名簿が足りている年末の
+  //    トライアウトでも全区分が「0/10・0/2・0/6・0/6」の赤で出ていた
+  const userComposition = () => {
+    const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+    const picked = new Set(userRoster.map(p => p.id));
+    const existing = (TEAMS_DATA[teamsArray[0]]?.players || []).filter(p => !picked.has(p.id));
+    const players = [...existing, ...userRoster];
+    const counts = { pitcher: 0, catcher: 0, infielder: 0, outfielder: 0 };
+    players.forEach(p => {
+      const category = getPositionCategory(p.position);
+      if (category in counts) counts[category]++;
+    });
+    return { players, existing: existing.length, picked: userRoster.length, counts };
+  };
+
   // 試合に出られる最低限の構成か（投手1・捕手1・野手8、DH制なら野手9）。足りないものを
   // 「編成不足」の帯と同じ言い方（「〜があとN人必要」）で返す。
   // ⚠ 人数だけで見ないこと。9人でも捕手がいない・野手が足りないと、
   //    日程画面の「スタメンを自動補完できませんでした」で1日も進めなくなる。
   const getUserShortage = () => {
-    const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
-    const roster = [...(TEAMS_DATA[teamsArray[0]]?.players || []), ...(teamRosters['ユーザー'] || [])];
-    const pitchers = roster.filter(p => p.position === 'pitcher').length;
-    const catchers = roster.filter(p => p.position === 'catcher').length;
-    const fielders = roster.length - pitchers;
+    const { players } = userComposition();
+    const pitchers = players.filter(p => p.position === 'pitcher').length;
+    const catchers = players.filter(p => p.position === 'catcher').length;
+    const fielders = players.length - pitchers;
     const needFielders = seasonData?.settings?.useDH ? 9 : 8;
     const missing = [];
     if (pitchers < 1) missing.push('投手があと1人必要');
@@ -417,6 +434,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
   const showPickBar = isUserTurn && !!pendingPick && tryoutCandidates.some(c => c.id === pendingPick.id);
   const endShortage = isUserTurn ? getUserShortage() : [];
   const endBlocked = endShortage.length > 0 && tryoutCandidates.length > 0;
+  const composition = userComposition();
 
   return (
     <div className="p-4">
@@ -545,35 +563,18 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
           ))}
         </div>
 
-        {viewTab === 'draft' && userRoster.length > 0 && (
-          <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-4 mb-4">
+        {/* 現在の編成（現有＋指名）。⚠ 指名する前から出す（名簿が足りているか、まず分かるように） */}
+        {viewTab === 'draft' && (
+          <div className="bg-surface-2 rounded-xl border border-gray-700/50 p-4 mb-4" data-testid="tryout-composition">
             <div className="flex items-center justify-between mb-3">
-              {(() => {
-                const _tn = (Array.isArray(allTeams) ? allTeams : Object.keys(allTeams))[0];
-                // ⚠ 指名が終わると指名した選手は名簿（TEAMS_DATA）にも入る。現有から除いて数える
-                //    （除かないと終わった後に「現有23＋指名1＝24人」のように二重に数えていた）
-                const _picked = new Set(userRoster.map(p => p.id));
-                const _existing = (TEAMS_DATA[_tn]?.players || []).filter(p => !_picked.has(p.id)).length;
-                const _total = _existing + userRoster.length;
-                return (
-                  <h3 className="text-white font-bold">
-                    現在の編成 ({_total}/24人)
-                    {_existing > 0 && <span className="text-gray-300 text-xs font-normal ml-1">（現有{_existing}＋指名{userRoster.length}）</span>}
-                  </h3>
-                );
-              })()}
+              <h3 className="text-white font-bold">
+                現在の編成 ({composition.existing + composition.picked}/24人)
+                {composition.existing > 0 && <span className="text-gray-300 text-xs font-normal ml-1">（現有{composition.existing}＋指名{composition.picked}）</span>}
+              </h3>
             </div>
             {(() => {
               // 編成不足の判定は「現有戦力＋今回指名した選手」の合計で行う
-              const teamsArrayLocal = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
-              const userTeamNameLocal = teamsArrayLocal[0];
-              const pickedIdsLocal = new Set(userRoster.map(p => p.id));
-              const existingPlayersLocal = (TEAMS_DATA[userTeamNameLocal]?.players || []).filter(p => !pickedIdsLocal.has(p.id));
-              const positionCounts = { pitcher: 0, catcher: 0, infielder: 0, outfielder: 0 };
-              [...existingPlayersLocal, ...userRoster].forEach(player => {
-                const category = getPositionCategory(player.position);
-                if (category in positionCounts) positionCounts[category]++;
-              });
+              const positionCounts = composition.counts;
               const getStatusIcon = (current, min, ideal) => {
                 if (current >= ideal) return '✅';
                 if (current >= min) return '🟡';
@@ -850,11 +851,8 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
 
             {/* おすすめ候補 */}
             {isUserTurn && (() => {
-              const positionCounts = { pitcher: 0, catcher: 0, infielder: 0, outfielder: 0 };
-              userRoster.forEach(player => {
-                const cat = getPositionCategory(player.position);
-                if (cat in positionCounts) positionCounts[cat]++;
-              });
+              // 数え方は「現在の編成」と同じ（現有＋指名）
+              const positionCounts = composition.counts;
               const needs = [];
               const mins = { pitcher: { min: 5, ideal: 10 }, catcher: { min: 1, ideal: 2 }, infielder: { min: 4, ideal: 6 }, outfielder: { min: 3, ideal: 6 } };
               const catLabels = { pitcher: '投手', catcher: '捕手', infielder: '内野手', outfielder: '外野手' };

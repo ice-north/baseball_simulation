@@ -259,6 +259,17 @@ async function runIndependent(page, t) {
   let tab = '捕手';
   // 「現在の編成 (N/24人)（現有X＋指名Y）」。指名が終わって名簿に書いた後も同じ数のはず
   const rosterHeading = async () => (await page.getByText(/^現在の編成 \(/).first().innerText()).trim();
+  // 「現在の編成」は指名する前から出ていて、おすすめ候補の「投手 (n/10)」の n はその数（現有＋指名）と合う。
+  // 以前はおすすめ候補が今回の指名だけを数え、名簿が足りていても全区分が「0/10・0/2・0/6・0/6」の赤だった
+  assert.ok(await waitUserTurn(page), 'トライアウトで自分の番が来ない');
+  const composition = await page.getByTestId('tryout-composition').innerText()
+    .catch(() => { throw new Error('トライアウトの指名の前に「現在の編成」が出ていない'); });
+  const chips = page.getByText('おすすめ候補', { exact: true }).locator('..');
+  const chipText = (await chips.count()) ? await chips.first().innerText() : '';
+  for (const m of chipText.matchAll(/(投手|捕手|内野手|外野手) \((\d+)\/(\d+)\)/g)) {
+    const c = composition.match(new RegExp(`${m[1]}\\s+\\S+\\s+(\\d+)/${m[3]}`));
+    assert.equal(c?.[1], m[2], `おすすめ候補の「${m[0]}」が現在の編成（${c?.[0]}）と合わない`);
+  }
   let before = null;
   let lastTab = null;
   let undoChecked = false;
