@@ -130,28 +130,25 @@ jobs:
       - name: Single-player UI
         run: npm run check:ui
 
-      # ⚠ サーバーを立てずに dist を開く（check:ui が作る）。下の PC/スマホの通し検査より
-      #    先に置く（あちらが途中で止まっても、この検査の結果は出る）
-      - name: Online PC lineup board UI
-        run: npm run check:online:lineup-ui
+      # ⚠ サーバーを立てずに dist を開く画面検査（check:ui が作った dist を使う）。一覧は
+      #    run-checks.mjs の DIST_UI。1本落ちても残りは回り、最後に落ちたものをまとめて出す。
+      #    下のサーバーが要る通し検査とは手順を分ける（片方が止まっても、もう片方の結果は出る）
+      - name: Online UI (dist only)
+        if: ${{ !cancelled() }}
+        run: node tools/sim-harness/run-checks.mjs online-ui
 
-      - name: Online mobile lineup UI
-        run: npm run check:online:mobile-lineup-ui
-
-      - name: Online PC and mobile UI
+      - name: Online PC and mobile UI (dev servers)
+        if: ${{ !cancelled() }}
         run: |
           ONLINE_DISABLE_TIMER=1 ONLINE_DATA_FILE="$RUNNER_TEMP/online-ui.json.gz" npm run dev:online > "$RUNNER_TEMP/online-api.log" 2>&1 &
           npm run dev -- --host 127.0.0.1 > "$RUNNER_TEMP/online-vite.log" 2>&1 &
+          up=
           for attempt in $(seq 1 30); do
-            if curl --fail --silent 'http://127.0.0.1:3000/api/online?action=config'; then break; fi
+            if curl --fail --silent 'http://127.0.0.1:3000/api/online?action=config' > /dev/null; then up=1; break; fi
             sleep 1
           done
+          if [ -z "$up" ]; then echo "::error::開発サーバーが30秒で立ち上がらない（ログは成果物の online-*.log）"; exit 1; fi
           ONLINE_TEST_URL=http://127.0.0.1:3000 npm run check:online:ui
-          npm run check:online:auth-ui
-          npm run check:online:edit-ui
-          npm run check:online:label-ui
-          npm run check:online:replay-ui
-          npm run check:online:mobile-gameplay-ui
 
       - name: Upload UI evidence
         if: always()
