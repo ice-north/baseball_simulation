@@ -26,7 +26,7 @@ import { loadLeagueWorld, openPhase, captureLeagueWorld } from '../../server/lea
 import { withSeededRandom, hashSeed } from '../../src/game/rng.js';
 import { join } from 'node:path';
 import { createTestStore } from './lib/testStore.mjs';
-import { shortLastLines } from './lib/textWrap.mjs';
+import { shortLastLines, midWordBreaks } from './lib/textWrap.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { failureShots } from './lib/failureShots.mjs';
 
@@ -289,6 +289,23 @@ try {
       l.revision += 1;
       return { value: null };
     });
+    // ⚠ PCの左上のいまの段階は区切りで折る。「オフ · トライア／ウト」と語の途中で
+    //    割れていた（再監査 F18。右の「決定待ち」の札で幅が減る）
+    {
+      const pc = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      await routeToService(pc, fx);
+      await pc.route(`${base}/online`, (route) => route.fulfill({ contentType: 'text/html', body: html }));
+      const d = await pc.newPage();
+      d.on('pageerror', (e) => errors.push(e.message));
+      await d.goto(`${base}/online`);
+      await d.locator('.online-nav-clock b').filter({ hasText: 'トライアウト' }).waitFor();
+      assert.deepEqual(
+        await midWordBreaks(d, '.online-nav-clock b'),
+        [],
+        'PCの左上のいまの段階が語の途中で折れる',
+      );
+      await pc.close();
+    }
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const { commands: sentCommands } = await routeToService(ctx, fx);
     await ctx.route(`${base}/online`, (route) => route.fulfill({ contentType: 'text/html', body: html }));

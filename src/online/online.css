@@ -1041,7 +1041,7 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   gap: 10px;
 }
-.online-score div span:last-child {
+.online-score div > span:last-child {
   text-align: right;
 }
 .online-score strong {
@@ -2192,6 +2192,14 @@ small.online-gain:not(:where(.online-sp *)) {
   overflow-wrap: anywhere;
   text-wrap: balance;
 }
+/* ⚠ PCの正式名は**都市と愛称の間で**折る（`teamNameParts`）。均すだけだと
+   「姫路シー／ホース」「那覇ハリ／ケーンズ」と愛称の途中で割れていた（再監査 F18）。
+   都市・愛称をそれぞれ1つの塊にし、折れるのは塊の間だけにする。愛称だけで欄より
+   長いときは、塊の中で均して折る（1文字だけ落とさない） */
+.online-score div .online-team-part {
+  display: inline-block;
+  max-width: 100%;
+}
 .online-score .online-score-decisions {
   display: block;
   margin-top: 4px;
@@ -2970,9 +2978,13 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 6px;
   margin: 0 0 4px;
 }
+/* ⚠ いまの段階（「オフ · トライアウト」）も**区切りで折る**。字の途中で折って
+   「オフ · トライア／ウト」と割れていた（再監査 F18。右の「決定待ち」の札で幅が減る） */
 .online-nav-clock b {
   font-size: 14px;
   color: #fff;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 /* ⚠ 2行とも**区切り（空白・「・」「／」）で折る**。字の途中で折ると、
    手続きのある日は毎回「手続きの決定待／ち」と1文字だけ次の行に落ちた */
@@ -3219,6 +3231,15 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-desktop .online-score-list > .online-empty {
   grid-column: 1 / -1;
+}
+/* ⚠ 球団名の欄に**いちばん長い愛称（7字）が1行で入る幅**を取る。1280px ではカードが
+   280px、名前の欄が 91px で、14px の字では「ストライカーズ」（98px）が「ストラ／イカーズ」と
+   割れた（再監査 F18）。間を 10px→6px、名前を 13px にして 95px に 91px を入れる */
+.online-desktop .online-score-list > .online-score > div {
+  gap: 6px;
+}
+.online-desktop .online-score-list > .online-score > div > span {
+  font-size: 13px;
 }
 
 /* 左右が同じ重さのページ（方針・采配、リーグ管理）は半分ずつ。
@@ -4046,20 +4067,10 @@ small.online-gain:not(:where(.online-sp *)) {
   margin: 2px 0 0;
   font-size: 11px;
 }
-/* 決め方の説明は長い。1行に収まらないときは … で止めて、全文は title で出す */
-.online-camp-guide-note:not(:where(.online-sp *)) {
-  max-width: 46%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-/* ⚠ スマホは**全文を出す**。title はタッチでは読めず、… の先が読めなかった
-   （1画面に収める決まりはPCのホームだけ） */
-.online-mobile .online-camp-guide-note:not(:where(.online-sp *)) {
-  max-width: none;
-  overflow: visible;
-  white-space: normal;
-}
+/* ⚠ 決め方の説明は**PCでも全文を出す**（… で止めない）。以前は1行に収めるため幅の
+   46% で止めて全文を title に入れていて、「…『短所を埋める』を望むとき…」と肝心の
+   ところで切れていた（再監査 F18。スマホは af00aee で先に全文にした）。長いときは
+   噛み合いの人数が次の行へ回る（実測: 1440px は1行のまま、1280px は 16px 高くなる） */
 
 /* --- 年代記（球団史・マジック・ペース） --------------------------------- */
 .online-move.is-race {

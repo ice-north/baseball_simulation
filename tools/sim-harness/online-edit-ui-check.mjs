@@ -365,6 +365,15 @@ try {
     { scrollable: true, out: [] },
     '1280px でキャンプの表のメイン・サブの練習が見えない',
   );
+  // ⚠ PCでも決め方の説明を … で止めない。「…『短所を埋める』を望むとき…」と肝心の
+  //    ところで切れていた（再監査 F18。スマホは下で見る）
+  assert.equal(
+    await draft.page
+      .locator('.online-camp-guide-note')
+      .evaluate((note) => note.scrollWidth > note.clientWidth + 1),
+    false,
+    '1280px でキャンプの決め方の説明が … で切れる',
+  );
   // ⚠ 1280px では表が横に送れる。**氏名の列は左に留める**（右端の練習・希望の
   //    列を見ているとき、誰の行か分からなくなっていた）
   const nameStays = await draft.page

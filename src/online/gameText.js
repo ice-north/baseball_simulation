@@ -18,6 +18,22 @@ export function setTeamLabels(map) {
 export const teamLabel = (name) => LABELS[name]?.label || name;
 export const teamShort = (name) =>
   LABELS[name]?.short || ABBREVIATIONS.get(name) || name;
+/**
+ * 球団名を「都市」と「愛称」に分ける（折り返す位置を決めるため）。
+ * ⚠ 既定の名前は「都市＋愛称」で、略称が都市（`pyramidLeague.js`）。狭い欄で折ると
+ *    「姫路シー／ホース」「那覇ハリ／ケーンズ」と愛称の途中で割れていた（再監査 F18）。
+ *    名前を付け替えた球団（表示名が内部名と違う）は分け目が分からないので分けない
+ */
+export function teamNameParts(name) {
+  const label = teamLabel(name);
+  const short = teamShort(name);
+  return label === name &&
+    short &&
+    short.length < label.length &&
+    label.startsWith(short)
+    ? [short, label.slice(short.length)]
+    : [label];
+}
 
 // 自球団から見た勝敗。自球団の試合でなければnull。
 export function ownOutcome(game, teamName) {

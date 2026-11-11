@@ -17,6 +17,7 @@ import {
   ownOutcome,
   teamShort,
   teamLabel,
+  teamNameParts,
 } from './gameText.js';
 import { api, POS } from './api.js';
 import {
@@ -315,7 +316,16 @@ export function Results({ view, compact = false }) {
         list.slice(page * size, page * size + size).map((g) => {
           const outcome = mode === 'results' && ownOutcome(g, view.teamName);
           const decisions = decisionText(g.decisions);
-          const name = compact ? teamShort : teamLabel;
+          // ⚠ PCは正式名を**都市と愛称の間で**折る（`teamNameParts`）。字の途中で折ると
+          //    「姫路シー／ホース」と愛称が割れていた（再監査 F18）。スマホは略称
+          const name = (team) =>
+            compact
+              ? teamShort(team)
+              : teamNameParts(team).map((part, i) => (
+                  <span className="online-team-part" key={i}>
+                    {part}
+                  </span>
+                ));
           return (
             <article className="online-score" key={g.gameId || g.id}>
               <header>

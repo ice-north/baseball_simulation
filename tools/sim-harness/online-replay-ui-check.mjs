@@ -15,7 +15,8 @@ import {
 } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { STRATEGY_FIELDS } from '../../src/online/tactics.js';
-import { shortLastLines } from './lib/textWrap.mjs';
+import { shortLastLines, midWordBreaks } from './lib/textWrap.mjs';
+import { setTeamLabels, teamNameParts } from '../../src/online/gameText.js';
 import { failureShots } from './lib/failureShots.mjs';
 const league = structuredClone(recordedFixture);
 const html = await readFile(
@@ -136,29 +137,58 @@ try {
   // ⚠ 長い球団名は2行に均して折る。「鹿児島ファルコン／ズ」と1文字だけ
   //    次の行に落ちていた（1280px・1440px とも）。記録の試合は1つだけなので、
   //    最初のカードの両球団の名前をリーグの全球団の名前に差し替えて見る
+  // ⚠ 折るのは**都市と愛称の間**。均すだけだと「姫路シー／ホース」と愛称の途中で
+  //    割れていた（再監査 F18）。画面と同じく `teamNameParts` で塊に分けて差し替える
   const nameCells = page.locator('.online-score > div').first().locator('> span');
   await nameCells.first().waitFor();
-  const shownNames = await nameCells.allInnerTexts();
+  assert.equal(
+    await nameCells.first().locator('.online-team-part').count(),
+    2,
+    'PCの試合結果の球団名が都市と愛称の塊に分かれていない',
+  );
+  const shownNames = await nameCells.evaluateAll((list) =>
+    list.map((span) => span.innerHTML),
+  );
+  setTeamLabels(
+    projectLeague({ league, sessions: { a: 'fixture' } }, 'a', 'fixture', 'a')
+      .teamLabels,
+  );
   const setNames = (name) =>
-    nameCells.evaluateAll((list, name) => {
-      for (const span of list) span.firstChild.data = name;
-    }, name);
+    nameCells.evaluateAll((list, parts) => {
+      for (const span of list)
+        span.replaceChildren(
+          ...parts.map((part) => {
+            const node = document.createElement('span');
+            node.className = 'online-team-part';
+            node.textContent = part;
+            return node;
+          }),
+        );
+    }, teamNameParts(name));
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 1000 });
     const broken = [];
+    const split = [];
     for (const { name } of league.teams) {
+      assert.ok(teamNameParts(name).length === 2, `前提: 既定の球団名が都市と愛称に分かれない: ${name}`);
       await setNames(name);
       broken.push(...(await shortLastLines(page, '.online-score div span')));
+      split.push(...(await midWordBreaks(page, '.online-score > div > span')));
     }
     assert.deepEqual(
       [...new Set(broken)],
       [],
       `試合結果の球団名が1文字だけ次の行に落ちる（${width}px）`,
     );
+    assert.deepEqual(
+      [...new Set(split)],
+      [],
+      `試合結果の球団名が都市と愛称の間でなく、語の途中で折れる（${width}px）`,
+    );
   }
   await nameCells.evaluateAll((list, names) => {
     list.forEach((span, i) => {
-      span.firstChild.data = names[i];
+      span.innerHTML = names[i];
     });
   }, shownNames);
   await page.setViewportSize({ width: 1440, height: 1000 });

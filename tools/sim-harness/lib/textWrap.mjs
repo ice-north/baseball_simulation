@@ -25,3 +25,44 @@ export function shortLastLines(page, selector) {
     return [...new Set(out)];
   }, selector);
 }
+
+/**
+ * 短い名前・札が**語の途中で折れている**ところを探す（画面の検査用）。
+ * ⚠ 日本語は字の間でどこでも折れるので、「姫路シー／ホース」「オフ · トライア／ウト」と
+ *    均して折っても語の途中で割れる。区切り（空白・「·」「・」「／」）の後ろ以外で行が
+ *    変わっていたら返す。文の段落には使わない（文は字の間で折れてよい）。
+ *    1つの名前を塊に分けて置いたとき（球団名の都市と愛称）は、塊の間は要素の境目なので
+ *    ここでは見ない（文字の並び1つずつを見る）。
+ */
+export function midWordBreaks(page, selector) {
+  return page.evaluate((selector) => {
+    const out = [];
+    const separator = /[\s·・／/]/;
+    for (const root of document.querySelectorAll(selector)) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+        const text = t.textContent;
+        if (text.trim().length < 2 || !t.parentElement?.checkVisibility?.()) continue;
+        const range = document.createRange();
+        let lastTop = null;
+        for (let i = 0; i < text.length; i++) {
+          range.setStart(t, i);
+          range.setEnd(t, i + 1);
+          const rect = [...range.getClientRects()].find((r) => r.width > 0);
+          if (!rect) continue;
+          if (
+            lastTop !== null &&
+            rect.top > lastTop + 2 &&
+            !separator.test(text[i]) &&
+            !separator.test(text[i - 1])
+          ) {
+            out.push(`${text.slice(0, i)}／${text.slice(i)}`.trim());
+            break;
+          }
+          lastTop = rect.top;
+        }
+      }
+    }
+    return [...new Set(out)];
+  }, selector);
+}
