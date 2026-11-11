@@ -4,6 +4,7 @@ import {
   SUB_TRAINING_MENUS,
   menuFitsPlayer,
   subMenuFitsPlayer,
+  FORM_PITCH_AFFINITY,
 } from '../season/campTraining.js';
 import {
   DIRECTIONS,
@@ -90,6 +91,9 @@ export const clampMenu = (key, player) =>
  * ⚠ 新球種は**まだ持っていない球種**、変化球練習は**持っている球種**。取り違えると
  *    選んでも1クール捨てることになる。
  * ⚠ サブポジはいまの守備位置を除き、適性を添える（どこなら現実的か分からない）。
+ * ⚠ 新球種は**おすすめの印を添える**（いしだ指摘）。覚えやすさはフォーム適性と
+ *    緩急の補完（`secondAffinity`）で決まるのに、名前だけ並べても分からない。
+ *    一人用のキャンプ画面と同じ印（★フォーム適性・◆緩急適性）を使う。
  */
 export function subTargetChoices(key, player) {
   const kind = CAMP_SUB_TARGETS[key];
@@ -97,9 +101,12 @@ export function subTargetChoices(key, player) {
     .filter((pitch) => pitch?.type && pitch.type !== 'straight')
     .map((pitch) => pitch.type);
   if (kind === 'pitch')
-    return CAMP_PITCH_TYPES.filter((type) => !owned.includes(type)).map(
-      (type) => [type, getPitchTypeName(type)],
-    );
+    return CAMP_PITCH_TYPES.filter((type) => !owned.includes(type)).map((type) => {
+      const form = !!FORM_PITCH_AFFINITY[player.pitching?.form]?.[type];
+      const second = player.pitching?.secondAffinity === type;
+      const tag = form && second ? ' ★◆' : form ? ' ★' : second ? ' ◆' : '';
+      return [type, `${getPitchTypeName(type)}${tag}`];
+    });
   if (kind === 'ownPitch')
     return owned.map((type) => [
       type,
@@ -166,6 +173,42 @@ function Stat({ value, diff }) {
 }
 // ⚠ 成長は**倍率**（0.70〜1.30）。四捨五入すると全員「1」になって読めない
 const ratio = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
+
+/**
+ * 変化球の短い表記。⚠ 表の1列（54px）に3〜4球種を並べるため、2文字に畳む。
+ *    全文（名前＋キレ）は `title` で出す。
+ */
+const PITCH_SHORT = {
+  slider: 'スラ',
+  curve: 'カブ',
+  fork: 'フォ',
+  changeup: 'チェ',
+  sinker: 'シン',
+  shoot: 'シュ',
+  cutter: 'カッ',
+  twoSeam: 'ツー',
+  splitter: 'スプ',
+  palm: 'パム',
+  knuckle: 'ナッ',
+};
+
+/** 直球を除いた持ち球。⚠ 置き場は `pitching.arsenal` */
+const breakingBalls = (player) =>
+  (player.pitching?.arsenal || []).filter(
+    (pitch) => pitch?.type && pitch.type !== 'straight',
+  );
+
+/** 表に出す短い表記（スラ カブ フォ） */
+const pitchTypesShort = (player) =>
+  breakingBalls(player)
+    .map((pitch) => PITCH_SHORT[pitch.type] || getPitchTypeName(pitch.type))
+    .join(' ');
+
+/** マウスを載せたときの全文（スライダー50 カーブ32） */
+const pitchTypesFull = (player) =>
+  breakingBalls(player)
+    .map((pitch) => `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`)
+    .join(' ');
 
 function PlayerRow({
   player,
@@ -332,6 +375,13 @@ function PlayerRow({
         {DIRECTIONS[wish.direction]?.icon}
         {PHASES[wish.phase]?.icon}
       </td>
+      {/* ⚠ **いちばん右**。長いので溢れたぶんは … にして、全文は title で出す。
+          ⚠ 投手の行だけ（野手の表に空の列を作らない） */}
+      {isPitcher && (
+        <td className="online-camp-pitches" title={pitchTypesFull(player)}>
+          {pitchTypesShort(player)}
+        </td>
+      )}
     </tr>
   );
 }
@@ -826,9 +876,11 @@ export default function CampPlanner({
                   <th>メイン</th>
                   <th>サブ</th>
                   <th title="本人が伸ばしたいと思っている方向">希望</th>
-                  {/* ⚠ **変化球の列も外した**。持っている球種は「新球種習得」の
-                      対象の選択肢から外れ、「変化球練習」の選択肢にはそのまま
-                      並ぶので、ここで見せなくても取り違えない */}
+                  {/* ⚠ **いま持っている変化球を出す**（いしだ指摘: 現在の球種が
+                      見えない）。1画面に収めるために一度外したが、どの球を
+                      磨くか・何を覚えさせるかはこれを見ないと決められない。
+                      ⚠ 投手の表だけ（野手の表に空の列を作らない） */}
+                  {shownGroup.id === 'pitcher' && <th>変化球</th>}
                 </tr>
               </thead>
               <tbody>

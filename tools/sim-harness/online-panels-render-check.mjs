@@ -28,7 +28,7 @@ import { formatTurn, turnLabel, turnOfDate } from '../../src/online/shared.js';
 import { nextAdvanceText } from '../../src/online/api.js';
 import DesktopTactics from '../../src/online/DesktopTactics.jsx';
 import PackSelect from '../../src/online/PackSelect.jsx';
-import { CompletedCamp } from '../../src/online/CampPlanner.jsx';
+import { CompletedCamp, subTargetChoices } from '../../src/online/CampPlanner.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
 export {
@@ -47,6 +47,7 @@ export {
   PackSelect,
   CompletedCamp,
   LeagueTopics,
+  subTargetChoices,
 };
 `;
 const result = await build({
@@ -77,6 +78,7 @@ try {
     PackSelect,
     CompletedCamp,
     LeagueTopics,
+    subTargetChoices,
     DesktopTactics,
     Results,
     formatTurn,
@@ -104,6 +106,47 @@ try {
   assert.match(completed, /精神\+1/, '通算の精神が成果に出ない');
   assert.match(completed, /新球種を習得/, '通算の出来事が成果に出ない');
   assert.equal(render(h(CompletedCamp, { view: { roster: [] } })), '', '記録の無い過去キャンプを表示した');
+
+  // --- 新球種の対象に「おすすめ」の印が付く ------------------------------
+  // ⚠ **覚えやすさは球種の名前から分からない**（いしだ指摘: おすすめ球種が
+  //    表示されない）。フォーム適性（`FORM_PITCH_AFFINITY`）と緩急の補完
+  //    （`secondAffinity`）で成功率が変わるので、一人用のキャンプ画面と
+  //    同じ印を添える（★フォーム適性 / ◆緩急適性）。
+  {
+    // アンダースローはシンカーに適性がある（`FORM_PITCH_AFFINITY.submarine`）
+    const player = {
+      id: 1,
+      name: '検査投手',
+      position: 'pitcher',
+      pitching: {
+        form: 'submarine',
+        secondAffinity: 'curve',
+        arsenal: [{ type: 'straight', level: 50 }],
+      },
+    };
+    const labels = Object.fromEntries(subTargetChoices('newpitch', player));
+    assert.ok(labels.sinker?.includes('★'), `フォーム適性の印が無い: ${labels.sinker}`);
+    assert.ok(labels.curve?.includes('◆'), `緩急適性の印が無い: ${labels.curve}`);
+    assert.ok(
+      !labels.cutter?.includes('★') && !labels.cutter?.includes('◆'),
+      `適性の無い球種に印が付いている: ${labels.cutter}`,
+    );
+    // ⚠ 持っている球種は新球種の対象に出さない（選んでも1クール捨てる）
+    const owned = {
+      ...player,
+      pitching: {
+        ...player.pitching,
+        arsenal: [
+          { type: 'straight', level: 50 },
+          { type: 'sinker', level: 40 },
+        ],
+      },
+    };
+    assert.ok(
+      !subTargetChoices('newpitch', owned).some(([k]) => k === 'sinker'),
+      '持っている球種を新球種の対象に出している',
+    );
+  }
 
   // --- ホームの「リーグの話題」は件数に上限がある ----------------------
   // ⚠ ホームは1画面（1000px）に収める決まりで、右の列は順位表とこのカードだけ。
@@ -479,5 +522,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / ホームのリーグの話題に件数の上限がある）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く）',
 );

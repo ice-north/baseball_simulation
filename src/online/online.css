@@ -682,7 +682,7 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-camp-target:not(:where(.online-sp *)) {
   margin-left: 3px;
   min-width: 0;
-  width: 84px;
+  width: 66px;
   font-size: 10px;
 }
 .online-camp-scroll select {
@@ -702,6 +702,16 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-camp-scroll .online-mood,
 .online-camp-wish small {
   white-space: nowrap;
+}
+/* ⚠ 変化球は長い（4球種で40字を超える）。**ここで止めないと表が横に伸び**、
+   右端が切れる。溢れたぶんは … にして、全文は title で出す */
+.online-camp-pitches {
+  font-size: 10px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .online-camp-bulk-all {
   font-size: 12px;
@@ -819,8 +829,11 @@ small.online-gain:not(:where(.online-sp *)) {
   font-weight: 400;
   color: #9fb0c4;
 }
+/* ⚠ **幅を詰める**。19列＋対象の欄で、1440pxの画面では表が横に溢れる
+   （実測 1253px 対 枠1138px）。メニュー名は「🔀サブポジ練習」が最長で、
+   118pxあれば切れない */
 .online-camp-group select {
-  min-width: 150px;
+  min-width: 104px;
 }
 /* ⚠ `.online td` の中央寄せより強く当てる（クラスだけだと負けて中央に寄っていた） */
 .online td.online-camp-wish {
