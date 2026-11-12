@@ -320,7 +320,9 @@ function campWith(build) {
       let sum = 0;
       let n = 0;
       try {
-        for (let i = 0; i < 2000; i += 1) {
+        // ⚠ 覚醒は1クール・1能力あたり1.4%（4クール合わせて20%前後にそろえた）。
+        //    2000回では数十回しか出ず、平均がぶれる
+        for (let i = 0; i < 12000; i += 1) {
           const before = fielder({
             batting: { meet, power: 40, eye: 45, bunt: 30, steal: 30, bats: 'right' },
           })();
@@ -340,12 +342,57 @@ function campWith(build) {
     };
     const low = burst(40);
     const high2 = burst(85);
-    assert.ok(low.回数 > 100 && high2.回数 > 100, `覚醒が起きていない: ${low.回数}/${high2.回数}回`);
+    assert.ok(low.回数 > 50 && high2.回数 > 50, `覚醒が起きていない: ${low.回数}/${high2.回数}回`);
     assert.ok(
       high2.平均 > low.平均 * 0.8,
       `覚醒まで減衰している: ミート40で${low.平均.toFixed(2)} / ミート85で${high2.平均.toFixed(2)}`,
     );
     assert.ok(high2.平均 >= 3, `覚醒の伸びが小さすぎる: ${high2.平均.toFixed(2)}`);
+  }
+
+  // ⚠ **覚醒率はクールごとに下がらないこと**（いしだ要望: 均す）。経験値を
+  //    クールごとに消費していた頃は 63.7% → 22.0% → 0% → 0% で、覚醒は
+  //    1クール目だけのものだった。消費はキャンプの最後の1クールで1回。
+  // ⚠ **4クール合わせて20%前後**（いしだ要望）。打撃練習は4能力に当たるので
+  //    4クールで16回引く。実測 18.9%（経験240・プロ意識50・覚醒倍率1.5）
+  {
+    const real = Math.random;
+    const TRIALS = 3000;
+    const perRoundHits = [0, 0, 0, 0];
+    let anyHits = 0;
+    Math.random = createSeededRandom(20261112);
+    try {
+      for (let t = 0; t < TRIALS; t += 1) {
+        let p = fielder()();
+        // 1シーズン出ずっぱりの主力ぶん（`calculateSeasonExperience`）
+        p.experience = 240;
+        let any = false;
+        for (let r = 0; r < CAMP_ROUNDS; r += 1) {
+          const out = executeCampTraining(p, 'batting', null, null, 1.5, 1.0, {
+            spendExperience: r === CAMP_ROUNDS - 1,
+          });
+          p = out.player;
+          if (out.growthReport.some((x) => x.isAwakening)) {
+            perRoundHits[r] += 1;
+            any = true;
+          }
+        }
+        if (any) anyHits += 1;
+      }
+    } finally {
+      Math.random = real;
+    }
+    const rates = perRoundHits.map((n) => (n / TRIALS) * 100);
+    const camp = (anyHits / TRIALS) * 100;
+    // 最後のクールが1クール目の半分を下回ったら「均していない」
+    assert.ok(
+      rates[3] > rates[0] * 0.5,
+      `覚醒率がクールごとに下がっている: ${rates.map((v) => v.toFixed(1)).join(' / ')}%`,
+    );
+    assert.ok(
+      camp >= 13 && camp <= 28,
+      `4クール合わせた覚醒率が20%前後から外れている: ${camp.toFixed(1)}%`,
+    );
   }
 }
 
@@ -720,6 +767,13 @@ assert.ok(
     assert.equal(view0.phase.camp?.total, 4, 'クール数が渡っていない');
 
     const roster = atCamp.game.teams[teamName].players;
+    // ⚠ **経験値はキャンプで1回しか使わない**（覚醒率をクールごとに均すため）。
+    //    クールごとに7割ずつ消すと4クールで 0.3^4＝0.8% まで落ち、3クール目
+    //    以降の覚醒率が0になる。保存されている世界に印を付けて、最後に確かめる
+    await store.transaction((value) => {
+      for (const p of value.league.game.teams[teamName].players)
+        p.experience = 240;
+    });
     const round = (n) =>
       send('campRound', {
         round: n,
@@ -853,6 +907,20 @@ assert.ok(
       '自動実行を含むキャンプ成果が実際の成長と合わない',
     );
     assert.deepEqual((await service.view('admin', admin)).lastCamp, completed, '完了後の成果がビューから消えた');
+    // ⚠ **経験値の消費はキャンプ全体で1回**（240 → 72）。クールごとに消すと
+    //    4クールで 240→72→21→6→1 まで落ちる。覚醒がキャンプの1クール目
+    //    だけのものに戻っていないかを、ここ（通しの進行）で見る
+    {
+      const after = done.game.teams[teamName].players
+        .map((p) => p.experience || 0)
+        .filter((v) => v > 0);
+      assert.ok(after.length >= 10, '経験値が全員0になっている（消費しすぎ）');
+      const max = Math.max(...after);
+      assert.ok(
+        max >= 60 && max <= 80,
+        `キャンプの経験値の消費が1回でない: 240→${max}（1回なら72）`,
+      );
+    }
     // ⚠ ここまで**自分で3クール**回した。締め切りで回るのは残り1クールだけ。
     //    数えていないと、さらに4クール回って合計7クールぶん伸びる。
     //    3クールぶんの伸びを基準に、4クールぶん（約1.33倍）の範囲に収まること。
@@ -1034,5 +1102,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けない）',
+  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けず、クールごとに均して4クールで20%前後）',
 );

@@ -494,8 +494,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     //    ここは効率（身が入るか）にだけ効く。指導者が当たりということもある。
     const moodMults = {};
     userTeam.players.forEach(p => { const e = policyFor(p); moodMults[p.id] = moodMultiplier(p, e.direction, e.phase); });
+    // ⚠ 経験値の消費は**最後のクールで1回だけ**（覚醒率をクールごとに均すため。
+    //    クールごとに減らすと、覚醒は1クール目だけのものになる）
     const { updatedTeam, allReports } = executeTeamCampTraining(
-      userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult, moodMults
+      userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult, moodMults,
+      { spendExperience: currentRound >= MAX_CAMP_ROUNDS }
     );
     TEAMS_DATA[userTeamName] = updatedTeam;
 
@@ -578,7 +581,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         }
       });
       const aiStaffBonus = aiTeam.corporateData?.staff ? getTeamStaffBonus(aiTeam.corporateData.staff) : null;
-      const aiResult = executeTeamCampTraining(aiTeam, aiAssign, {}, aiStaffBonus, awakeningMult);
+      // ⚠ 経験値の消費は**最後のクールで1回だけ**（覚醒率をクールごとに均すため）
+      const aiResult = executeTeamCampTraining(aiTeam, aiAssign, {}, aiStaffBonus, awakeningMult, {}, { spendExperience: currentRound >= MAX_CAMP_ROUNDS });
       TEAMS_DATA[tn] = aiResult.updatedTeam;
       if (aiStaffBonus) {
         applyMotivationEffect(aiResult.updatedTeam.players, aiStaffBonus);

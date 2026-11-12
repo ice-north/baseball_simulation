@@ -499,7 +499,10 @@ export class LeagueService {
           let result = null;
           await this.engine((e) => {
             e.loadLeagueWorld(l);
-            result = e.runCampRound(l, me.teamName, plan);
+            // ⚠ 経験値の消費は**最後のクールで1回だけ**（覚醒率を均すため）
+            result = e.runCampRound(l, me.teamName, plan, {
+              lastRound: Number(command.payload?.round) >= engine.CAMP_ROUNDS,
+            });
             l.game = e.captureLeagueWorld();
           });
           engine.recordCampRound(state, result);

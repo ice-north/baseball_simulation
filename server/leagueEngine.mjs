@@ -334,6 +334,11 @@ export function runCampRound(
   league,
   teamName,
   { policy, players: overrides, main, sub, subTarget } = {},
+  // ⚠ **最後のクールかどうかを渡す**。経験値の消費はキャンプで1回だけで、
+  //    クールごとに減らすと覚醒率が1クール目だけのものになる
+  //    （`executeCampTraining` の `spendExperience`）。
+  //    既定は true（渡さない呼び出しは今までどおり毎回消費する）
+  { lastRound = true } = {},
 ) {
   const team = TEAMS_DATA[teamName];
   if (!team?.players?.length) return { gains: {}, events: {} };
@@ -375,6 +380,7 @@ export function runCampRound(
     staff,
     awakening,
     moods,
+    { spendExperience: lastRound },
   );
   TEAMS_DATA[teamName] = updatedTeam;
   // 数字にならない出来事（フォーム改造・新球種・打席の変更）は文で残す
@@ -1542,7 +1548,9 @@ function resolvePhase(league, now) {
           : undefined);
       const rest = saved || campFallbackPlan(member, plan);
       for (let round = already; round < CAMP_ROUNDS; round += 1) {
-        const result = runCampRound(league, name, rest);
+        const result = runCampRound(league, name, rest, {
+          lastRound: round === CAMP_ROUNDS - 1,
+        });
         if (state) recordCampRound(state, result);
       }
     }

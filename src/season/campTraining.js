@@ -66,6 +66,28 @@ const CATEGORY_TO_STAFF_ABILITY = {
  * 各練習メニューは特定の能力値を成長させる
  */
 /**
+ * 1シーズン出ずっぱりで貯まる経験値の目安。
+ * 野手は120試合×(出場1 + 打数/3)、投手は登板×(1 + 投球回)（`calculateSeasonExperience`）。
+ */
+export const FULL_SEASON_EXPERIENCE = 240;
+/**
+ * 覚醒（限界突破）の、1クール・1能力あたりの起こりやすさ（%）。
+ *
+ * ⚠ **キャンプ4クールを通して20%前後**にそろえてある（いしだ要望:
+ *    経験が高い状態でキャンプに臨み、4クール合わせて20%前後）。
+ *    打撃練習は4能力に当たるので4クールで16回引く。1回1.4%なら
+ *    1-(1-0.014)^16 ≒ 20%。オンラインの覚醒倍率は1.5（`runCampRound` の
+ *    `awakening`）なので、その手前の素の値は 1.4÷1.5 ≒ 0.93 にする。
+ * ⚠ **クールごとに下がらないこと**（いしだ要望: 均す）。以前は経験値を
+ *    クールごとに7割消費しており、覚醒率は 63.7% → 22.0% → 0% → 0% と
+ *    1クール目だけのものになっていた。消費はキャンプの最後の1クールで1回
+ *    （`executeCampTraining` の `spendExperience`）。
+ */
+export const AWAKENING_PER_ROUND = 0.93;
+/** 経験値の頭打ち（1シーズンぶんの1.5倍）。大当たりの年を作らない */
+export const AWAKENING_EXPERIENCE_CAP = 1.5;
+
+/**
  * 才能依存の能力は、練習だけでは伸びにくい。
  *
  * ⚠ **係数と最低保証の両方に効かせること**。以前は伸び幅にだけ掛けていたが、
@@ -1003,7 +1025,7 @@ export function calcSecondAffinity(arsenal) {
  * @param {string} [newPitchType] - 新球種習得時の球種キー
  * @returns {Object} - 成長結果 { player, growthReport }
  */
-export function executeCampTraining(player, trainingType, newPitchType, staffBonus = null, awakeningMult = 1.0, moodMult = 1.0) {
+export function executeCampTraining(player, trainingType, newPitchType, staffBonus = null, awakeningMult = 1.0, moodMult = 1.0, { spendExperience = true } = {}) {
   const menu = TRAINING_MENUS[trainingType];
   if (!menu) {
     console.warn(`Unknown training type: ${trainingType}`);
@@ -1210,7 +1232,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         ? 0
         : Math.min(2.5, (discipline - 30) / 20);
       const awakeningChance = experience >= 30
-        ? Math.floor(experience / 15) * awakeningMult * awakeningDisciplineFactor
+        ? Math.min(AWAKENING_EXPERIENCE_CAP, experience / FULL_SEASON_EXPERIENCE)
+          * AWAKENING_PER_ROUND * awakeningMult * awakeningDisciplineFactor
         : 0;
       isAwakening = awakeningMult > 0 && Math.random() * 100 < awakeningChance;
       // 才能依存の能力は覚醒量も抑制
@@ -1347,10 +1370,17 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     }
   }
 
-  // 経験値を消費（練習に使った分の一部をリセット）
-  updatedPlayer.experience = Math.floor(experience * 0.3);
-  updatedPlayer.positionExperience = {};
-  updatedPlayer.battingOrderExperience = {};
+  // 経験値を消費（練習に使った分の一部をリセット）。
+  // ⚠ **キャンプの最後の1クールで1回だけ**（`spendExperience`）。クールごとに
+  //    減らすと、覚醒率が1クール目だけのものになる（実測 63.7%→22.0%→0%→0%）。
+  //    呼ぶ側（`executeTeamCampTraining` → オンラインの `runCampRound` /
+  //    一人用の `CampScreen`）が最後のクールかどうかを渡す。
+  // ⚠ 既定は true。渡さない呼び出しは今までどおり毎回消費する
+  if (spendExperience) {
+    updatedPlayer.experience = Math.floor(experience * 0.3);
+    updatedPlayer.positionExperience = {};
+    updatedPlayer.battingOrderExperience = {};
+  }
 
   return { player: updatedPlayer, growthReport };
 }
@@ -1426,7 +1456,7 @@ export function applyBatteryMentalEffect(players, staffBonus) {
  * @param {Object} [moodMults] - { [playerId]: 倍率 } 選手の希望と指示の噛み合い
  *   （`trainingPolicy.moodMultiplier`）。指示が正しいかとは別で、**やる気にだけ**効く。
  */
-export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null, awakeningMult = 1.0, moodMults = {}) {
+export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null, awakeningMult = 1.0, moodMults = {}, options = {}) {
   const allReports = [];
   const updatedPlayers = team.players.map(player => {
     // ⚠ 派遣中の選手は派遣先で鍛えるので、キャンプの練習はしない。以前は画面側で
@@ -1436,13 +1466,13 @@ export function executeTeamCampTraining(team, trainingAssignments, newPitchSelec
     const trainingType = trainingAssignments[player.id];
     if (!trainingType) {
       const autoTraining = player.position === 'pitcher' ? 'control' : 'batting';
-      const { player: trained, growthReport } = executeCampTraining(player, autoTraining, undefined, staffBonus, awakeningMult, moodMults[player.id] ?? 1.0);
+      const { player: trained, growthReport } = executeCampTraining(player, autoTraining, undefined, staffBonus, awakeningMult, moodMults[player.id] ?? 1.0, options);
       allReports.push({ player: trained, trainingType: autoTraining, growthReport });
       return trained;
     }
 
     const newPitchType = trainingType === 'newpitch' ? newPitchSelections[player.id] : undefined;
-    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType, staffBonus, awakeningMult, moodMults[player.id] ?? 1.0);
+    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType, staffBonus, awakeningMult, moodMults[player.id] ?? 1.0, options);
     allReports.push({ player: trained, trainingType, growthReport });
     return trained;
   });
