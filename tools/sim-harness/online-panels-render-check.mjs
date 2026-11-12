@@ -35,6 +35,7 @@ import { setTeamLabels } from '../../src/online/gameText.js';
 import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
+import { Homeruns } from '../../src/online/LeagueBoard.jsx';
 export {
   TryoutPlanner,
   LeagueTopics,
@@ -55,6 +56,7 @@ export {
   CampPlanner,
   subTargetChoices,
   AbilityGrade,
+  Homeruns,
 };
 `;
 const result = await build({
@@ -95,6 +97,7 @@ try {
     TryoutPlanner,
     LeagueTopics,
     AbilityGrade,
+    Homeruns,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -452,6 +455,48 @@ try {
   );
   assert.match(table, /昇格圏/, '2部の1位に昇格圏の印が無い');
   assert.match(table, /降格圏/, '1部の最下位に降格圏の印が無い');
+  // --- 直近の試合の本塁打（自軍の印）-------------------------------------
+  // ⚠ 実画面（`online-lineup-board-ui-check`）では確かめられない。直近の
+  //    試合で自軍に本塁打が出るかは日程しだいで、リーグの世界は作るたびに
+  //    変わる（実測で「自軍の本塁打の印が無い」と落ちた）
+  {
+    const list = [
+      { name: '自軍の人', team: '甲', number: 12 },
+      { name: '相手の人', team: '乙', number: 3 },
+    ];
+    const html = render(h(Homeruns, { list, ownTeam: '甲' }));
+    assert.match(html, /is-own[^>]*>自軍の人/, '自軍の本塁打に印が付かない');
+    assert.equal(
+      (html.match(/is-own/g) || []).length,
+      1,
+      '相手の本塁打にも自軍の印が付いている',
+    );
+    assert.match(html, /12号/, '何号かが出ていない');
+    // ⚠ 本塁打が0の試合でも**枠を出す**（行の高さをそろえるため）。
+    //    記録そのものが無い試合（null）だけ出さない
+    assert.match(
+      render(h(Homeruns, { list: [], ownTeam: '甲' })),
+      /online-slot-homeruns/,
+      '本塁打0の試合で枠が出ない',
+    );
+    assert.equal(
+      render(h(Homeruns, { list: null, ownTeam: '甲' })),
+      '',
+      '記録の無い試合にも枠が出ている',
+    );
+    // ⚠ 多すぎたら切って数を添える（ホームの枠は決まっている）
+    const many = render(
+      h(Homeruns, {
+        list: Array.from({ length: 6 }, (_, i) => ({
+          name: `打者${i}`, team: '乙', number: i + 1,
+        })),
+        ownTeam: '甲',
+      }),
+    );
+    assert.match(many, /ほか3本/, '多いときに残りの数が出ない');
+    assert.doesNotMatch(many, /打者3/, '上限を超えて出している');
+  }
+
   // --- 順位表の色（スポーツニュースの見え方。いしだ要望）-----------------
   // ⚠ **1位・2位・3位でバッジの色を変える**。12球団の表は数字だけだと
   //    どこが表彰台なのかを数えて探すことになる
@@ -836,5 +881,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 直近の本塁打に自軍の印が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
 );

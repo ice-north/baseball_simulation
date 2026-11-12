@@ -3426,6 +3426,16 @@ small.online-gain:not(:where(.online-sp *)) {
   padding-top: 4px;
   padding-bottom: 4px;
 }
+/* ⚠ **横も詰める**。表の幅は名簿しだいで動く（持ち変化球が5つある投手が
+   居る行は 176px、3つなら 134px）。リーグの世界は作るたびに変わるので、
+   いちばん広い名簿でも 1440px に収まる余裕を持たせる。列が19あるので、
+   左右2pxずつで76px浮く（実測で 1210px → 1134px、枠は1174px）。
+   ⚠ 土台（`.online td:not(:where(.online-sp *))` = 0,1,1）に勝つ強さで書く。 */
+.online-desktop .online-camp-group td:not(:where(.online-sp *)),
+.online-desktop .online-camp-group th:not(:where(.online-sp *)) {
+  padding-left: 4px;
+  padding-right: 4px;
+}
 .online-desktop .online-camp-group select {
   width: auto;
   min-height: 0;

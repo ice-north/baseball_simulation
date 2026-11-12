@@ -194,7 +194,9 @@ function Played({ row, view }) {
  *    そのときは名前だけ出す。
  */
 const HOMERUN_SHOWN = 3;
-function Homeruns({ list, ownTeam }) {
+// ⚠ 自軍の印は**実画面では確かめられない**（直近の試合で自軍に本塁打が
+//    出るかは日程しだい）。`online-panels-render-check` が直に描いて見る
+export function Homeruns({ list, ownTeam }) {
   // ⚠ **本塁打の無い試合でも枠を出す**。出し分けると行の高さが試合ごとに
   //    変わり、左右（直近・今後）の高さがそろわない（実測で 50px と 71px）。
   //    記録そのものが無い試合（`list` が null）は、出しようがないので出さない
