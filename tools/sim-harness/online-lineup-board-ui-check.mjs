@@ -748,7 +748,7 @@ try {
       '他球団の通算成績が出ない',
     );
   }
-  // ---- ホーム（直近5試合 / 今後の5試合）--------------------------------
+  // ---- ホーム（直近の5ターン / 今後の5ターン）--------------------------
   // ⚠ **ターンで出す**。オンラインはターンで進むので、画面のどこを見ても
   //    同じ単位になっていないと「いまどこか」が読めない。
   // ⚠ **休養日も出す**。抜けていると、次の試合まで何ターンあるのか
@@ -757,8 +757,8 @@ try {
   //    「ホーム / SEASON 1」と出ていて、場所を取るだけだった。
   {
     await go('ホーム');
-    const recent = p.locator('.online-slots').filter({ hasText: '直近5試合' });
-    const next = p.locator('.online-slots').filter({ hasText: '今後の5試合' });
+    const recent = p.locator('.online-slots').filter({ hasText: '直近の5ターン' });
+    const next = p.locator('.online-slots').filter({ hasText: '今後の5ターン' });
     await recent.waitFor();
     await next.waitFor();
     // ⚠ 編成の2ページは隠して残してあるので `:visible` で絞る
@@ -786,6 +786,53 @@ try {
     assert.match(text, /休養日/, '休養日が出ていない');
     const rest = p.locator('.online-slot.is-rest');
     assert.ok((await rest.count()) > 0, '休養日の行が無い');
+    // ⚠ **休養日も入れて5つ**（いしだ要望）。試合だけ5つ出すと、間の休養日の
+    //    ぶんだけ縦が伸び、何ターン前の試合なのかも読みにくい
+    for (const [name, box] of [['直近', recent], ['今後', next]]) {
+      const slots = await box.locator('li').count();
+      assert.ok(slots <= 5, `${name}が5つを超えている: ${slots}行`);
+      assert.ok(slots >= 3, `${name}が少なすぎる: ${slots}行`);
+    }
+    // ⚠ **直近は勝敗・セーブの投手まで出す**（いしだ要望）。点差だけでは
+    //    誰が投げて決まったのかが分からない
+    const decided = recent.locator('.online-slot-decision');
+    assert.ok(
+      (await decided.count()) > 0,
+      '直近の試合に勝敗・セーブの投手が出ていない',
+    );
+    assert.match(
+      await recent.innerText(),
+      /勝.+敗/s,
+      '勝ち投手と負け投手がそろっていない',
+    );
+    // ⚠ **今後は自軍と相手の先発を縦に1人ずつ**（いしだ要望: 見やすく）。
+    //    横に「vs」で繋ぐと、どちらが自軍かを毎回読み取ることになり、
+    //    右端の防御率も切れていた
+    const own = next.locator('.online-slot-starter.is-own');
+    assert.ok((await own.count()) > 0, '今後の試合に自軍の先発の印が無い');
+    assert.match(
+      await next.innerText(),
+      /\d+勝\d+敗/,
+      '先発の勝敗が出ていない',
+    );
+    assert.match(await next.innerText(), /防\d|防—/, '先発の防御率が出ていない');
+    // ⚠ 字が切れていないこと（枠が決まったぶん、2行に割っている）
+    assert.deepEqual(
+      await p.locator('.online-slots').evaluateAll((boxes) =>
+        boxes.flatMap((box) =>
+          [...box.querySelectorAll('*')]
+            .filter(
+              (el) =>
+                !el.children.length &&
+                el.clientWidth > 0 &&
+                el.scrollWidth > el.clientWidth + 1,
+            )
+            .map((el) => `${el.className} 「${(el.textContent || '').trim().slice(0, 20)}」`),
+        ),
+      ),
+      [],
+      '直近・今後で字が切れている',
+    );
     // ⚠ **縦に詰める**。1画面（1000px）に収まること
     const height = await p
       .locator('.online-page:visible')
@@ -884,7 +931,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び / 守備位置の変更（定期の読み直しで版が上がった後も））',
+    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発 / 守備位置の変更（定期の読み直しで版が上がった後も））',
   );
 } catch (error) {
   await failureShots(browser, 'online-lineup-board-ui');

@@ -81,6 +81,12 @@ export function withRestTurns(games, turns, fromTurn = null, toTurn = null) {
   return rows;
 }
 
+/**
+ * ホームの左右に出す行数。⚠ **休養日も数に入れる**（いしだ要望）。
+ *    試合だけ数えると、間の休養日のぶん縦が伸びてホームが1画面に収まらない。
+ */
+const SLOTS = 5;
+
 /** 休養日の1行。⚠ 続きは「第48〜52ターン」とまとめる */
 function RestRow({ row }) {
   return (
@@ -111,10 +117,13 @@ function RecentGames({ view }) {
   );
   return (
     <section className="online-card online-slots">
-      <h2>直近5試合</h2>
+      <h2>直近の5ターン</h2>
       {rows.length ? (
         <ol>
-          {rows.map((row) =>
+          {/* ⚠ **休養日も入れて5つ**（いしだ要望）。試合だけ5つ出すと、間の
+              休養日のぶんだけ縦が伸び、何ターン前の試合なのかも読みにくい。
+              枠が決まるぶん、1試合に勝敗・セーブの投手まで置ける */}
+          {rows.slice(-SLOTS).map((row) =>
             row.game ? (
               <Played key={row.game.id} row={row} view={view} />
             ) : (
@@ -169,7 +178,32 @@ function Played({ row, view }) {
       ) : (
         score
       )}
+      <Decisions decisions={game.decisions} />
     </li>
+  );
+}
+
+/**
+ * 勝ち・負け・セーブの投手。⚠ **2行目いっぱい**に置く（1行に詰めると
+ * スコアか相手が切れる）。引き分け・記録の無い試合では何も出さない。
+ */
+function Decisions({ decisions }) {
+  if (!decisions) return null;
+  const marks = [
+    ['勝', decisions.winningPitcher],
+    ['敗', decisions.losingPitcher],
+    ['Ｓ', decisions.savePitcher],
+  ].filter(([, p]) => p?.name);
+  if (!marks.length) return null;
+  return (
+    <span className="online-slot-decisions">
+      {marks.map(([mark, p]) => (
+        <span key={mark} className={`online-slot-decision is-${mark === '勝' ? 'win' : mark === '敗' ? 'loss' : 'save'}`}>
+          <b>{mark}</b>
+          {p.name}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -187,11 +221,12 @@ function NextGames({ view }) {
   );
   return (
     <section className="online-card online-slots">
-      <h2>今後の5試合</h2>
+      <h2>今後の5ターン</h2>
       {rows.length ? (
         <>
           <ol>
-            {rows.map((row) =>
+            {/* ⚠ **休養日も入れて5つ**（いしだ要望。直近と同じ） */}
+            {rows.slice(0, SLOTS).map((row) =>
               row.game ? (
                 <Upcoming key={row.game.id} row={row} view={view} />
               ) : (
@@ -218,17 +253,26 @@ function Upcoming({ row, view }) {
       <span className="online-slot-side">{home ? 'ホーム' : 'ビジター'}</span>
       <span className="online-slot-foe">{teamShort(home ? game.away : game.home)}</span>
       {/* ⚠ 先発は**2行目**に置く。1行に詰めると勝敗と防御率が切れて、
-          「右投げかどうか」しか読めなくなる（実測で相手の成績が消えていた） */}
+          「右投げかどうか」しか読めなくなる（実測で相手の成績が消えていた）。
+          ⚠ **自軍と相手を1人ずつ縦に並べる**（いしだ要望: 見やすく）。
+             横に「vs」で繋ぐと、どちらが自軍か読み取るのに毎回考えることになり、
+             成績も右端から切れていた。休養日も入れて5つにして枠が決まったので、
+             2行に割ける */}
       <span className="online-slot-starters">
-        <Starter
-          info={home ? game.homeStarterInfo : game.awayStarterInfo}
-          fallback={home ? game.homeStarter : game.awayStarter}
-        />
-        <em>vs</em>
-        <Starter
-          info={home ? game.awayStarterInfo : game.homeStarterInfo}
-          fallback={home ? game.awayStarter : game.homeStarter}
-        />
+        <span className="online-slot-starter is-own">
+          <i>自</i>
+          <Starter
+            info={home ? game.homeStarterInfo : game.awayStarterInfo}
+            fallback={home ? game.homeStarter : game.awayStarter}
+          />
+        </span>
+        <span className="online-slot-starter">
+          <i>敵</i>
+          <Starter
+            info={home ? game.awayStarterInfo : game.homeStarterInfo}
+            fallback={home ? game.awayStarter : game.homeStarter}
+          />
+        </span>
       </span>
     </li>
   );

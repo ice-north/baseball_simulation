@@ -253,6 +253,11 @@ export function ownRecentGames(schedule, ownTeam, size = 5) {
       away: g.away,
       homeScore: g.result.homeScore,
       awayScore: g.result.awayScore,
+      // ⚠ **勝敗・セーブの投手を渡す**（いしだ要望）。ホームの「直近」は
+      //    点差しか出ておらず、誰が投げて決まったのかが分からなかった。
+      //    ⚠ `decisionRefs` で id と名前だけに削る。記録には投手まるごと
+      //       （能力・成績・経歴）が入っていて、1試合で約4KBある
+      decisions: decisionRefs(g.result.decisions),
     });
   });
   return played.slice(-size);
