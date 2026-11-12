@@ -805,6 +805,46 @@ try {
       /勝.+敗/s,
       '勝ち投手と負け投手がそろっていない',
     );
+    // ⚠ **直近は本塁打を打った人と「何号」まで出す**（いしだ要望）。
+    //    縦幅が今後より短かったので、空いた行に情報を入れている
+    const played = recent.locator('.online-slot:not(.is-rest)');
+    const playedCount = await played.count();
+    assert.ok(playedCount > 0, '直近に試合の行が無い');
+    // ⚠ **本塁打が0の試合でも枠を出す**。出し分けると行の高さが試合ごとに
+    //    変わり、直近と今後の縦幅がそろわない（出し分けていた頃は 50px と 71px）
+    assert.equal(
+      await recent.locator('.online-slot-homeruns').count(),
+      playedCount,
+      '本塁打の枠が出ていない試合がある（行の高さがそろわない）',
+    );
+    // ⚠ **直近の試合の行を、今後の試合の行より低くしない**（いしだ要望:
+    //    縦幅をそろえたい）。本塁打の行を足す前は 50px と 64px で、直近の
+    //    カードだけ 69px 短かった。カード全体の高さは休養日の数で動くので、
+    //    行の高さで見る
+    const rowHeights = async (box, sel) =>
+      box.locator(sel).evaluateAll((els) =>
+        els.map((el) => el.getBoundingClientRect().height),
+      );
+    const playedRows = await rowHeights(recent, '.online-slot:not(.is-rest)');
+    const nextRows = await rowHeights(next, '.online-slot.is-next');
+    assert.ok(nextRows.length > 0, '今後に試合の行が無い');
+    assert.ok(
+      Math.min(...playedRows) >= Math.min(...nextRows) - 4,
+      `直近の試合の行が今後より低い: ${JSON.stringify({
+        直近: playedRows.map(Math.round),
+        今後: nextRows.map(Math.round),
+      })}`,
+    );
+    assert.match(
+      await recent.innerText(),
+      /本\n[^\n]*\d+号/,
+      '本塁打の「何号」が出ていない',
+    );
+    // ⚠ 自軍の本塁打は色を変える（相手の本塁打と混ざって読めなかった）
+    assert.ok(
+      (await recent.locator('.online-slot-homerun.is-own').count()) > 0,
+      '自軍の本塁打の印が無い',
+    );
     // ⚠ **今後は自軍と相手の先発を縦に1人ずつ**（いしだ要望: 見やすく）。
     //    横に「vs」で繋ぐと、どちらが自軍かを毎回読み取ることになり、
     //    右端の防御率も切れていた

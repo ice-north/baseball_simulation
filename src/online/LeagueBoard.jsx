@@ -179,7 +179,49 @@ function Played({ row, view }) {
         score
       )}
       <Decisions decisions={game.decisions} />
+      <Homeruns list={game.homeruns} ownTeam={view.teamName} />
     </li>
+  );
+}
+
+/**
+ * その試合の本塁打（打った人と「何号」）。
+ *
+ * ⚠ **直近の行を今後の行と同じ高さにするために足した**（いしだ要望）。
+ *    今後は先発を2人ぶん2行に出すので、直近は勝敗投手の1行だけでは足りなかった。
+ * ⚠ **3本まで**。4本以上出ると行が折り返して、そろえた高さが崩れる。
+ * ⚠ 何号かは記録を取ったときの値（`seasonHomeruns`）。古い試合には無いので、
+ *    そのときは名前だけ出す。
+ */
+const HOMERUN_SHOWN = 3;
+function Homeruns({ list, ownTeam }) {
+  // ⚠ **本塁打の無い試合でも枠を出す**。出し分けると行の高さが試合ごとに
+  //    変わり、左右（直近・今後）の高さがそろわない（実測で 50px と 71px）。
+  //    記録そのものが無い試合（`list` が null）は、出しようがないので出さない
+  if (!list) return null;
+  if (!list.length)
+    return (
+      <span className="online-slot-homeruns is-none">
+        <b>本</b>
+        <span className="online-muted">なし</span>
+      </span>
+    );
+  const shown = list.slice(0, HOMERUN_SHOWN);
+  const rest = list.length - shown.length;
+  return (
+    <span className="online-slot-homeruns">
+      <b>本</b>
+      {shown.map((hr, i) => (
+        <span
+          key={`${hr.name}:${hr.number ?? i}`}
+          className={`online-slot-homerun${hr.team === ownTeam ? ' is-own' : ''}`}
+        >
+          {hr.name}
+          {hr.number ? <i>{hr.number}号</i> : null}
+        </span>
+      ))}
+      {rest > 0 && <span className="online-muted">ほか{rest}本</span>}
+    </span>
   );
 }
 

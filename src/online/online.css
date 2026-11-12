@@ -2665,6 +2665,41 @@ small.online-gain:not(:where(.online-sp *)) {
   background: var(--accent-soft, #ffffff22);
   color: var(--accent, #67e8f9);
 }
+/* 本塁打（直近の試合の3行目）。⚠ 今後の行（先発2人）と高さをそろえるために置く */
+.online-slot-homeruns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  flex-basis: 100%;
+  min-width: 0;
+  font-size: 10px;
+  color: #9fb0c4;
+}
+.online-slot-homeruns > b {
+  flex: none;
+  width: 14px;
+  font-size: 9px;
+  text-align: center;
+  border-radius: 3px;
+  background: #7c2d1233;
+  color: #fdba74;
+}
+.online-slot-homerun {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* ⚠ 自球団の本塁打は色を変える。相手の本塁打と並ぶので、どちらか分からないと
+   「打たれた」のか「打った」のかが読めない */
+.online-slot-homerun.is-own {
+  color: #e2e8f0;
+}
+.online-slot-homerun i {
+  margin-left: 2px;
+  font-style: normal;
+  color: #fdba74;
+}
 /* 勝敗・セーブの投手（直近の試合の2行目） */
 .online-slot-decisions {
   display: flex;

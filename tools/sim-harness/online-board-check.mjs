@@ -13,7 +13,7 @@ import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { leagueLeaders, withStarters, teamSeasonStats } from '../../server/leagueBoard.mjs';
-import { ownUpcomingGames } from '../../server/projection.mjs';
+import { ownUpcomingGames, ownRecentGames } from '../../server/projection.mjs';
 import {
   PYRAMID_LEAGUES,
   TEAMS_PER_LEAGUE,
@@ -637,6 +637,79 @@ try {
       );
     // ⚠ ホームは**5試合**（6試合だと順位表まで縦に伸びる）
     assert.ok(next.length <= 5, `今後の試合が多すぎる: ${next.length}`);
+    // ⚠ **本塁打を打った人と「何号」を渡す**（いしだ要望）。直近の行は
+    //    点数と決着投手だけで、今後の行より低かった
+    // ⚠ 同じ人が同じ試合で2本打ったら `通算-1号` と `通算号`。番号は
+    //    記録を取ったときの通算（`seasonHomeruns`）から出している
+    const numbersOf = new Map();
+    let shown = 0;
+    for (const g of recent) {
+      assert.ok(
+        g.homeruns === null || Array.isArray(g.homeruns),
+        `本塁打の形がおかしい: ${JSON.stringify(g.homeruns)}`,
+      );
+      for (const hr of g.homeruns || []) {
+        assert.ok(hr.name && hr.team, `本塁打の打者が足りない: ${JSON.stringify(hr)}`);
+        assert.ok(
+          Number.isInteger(hr.number) && hr.number > 0,
+          `何号かが出ていない: ${JSON.stringify(hr)}`,
+        );
+        const key = `${hr.team}:${hr.name}`;
+        const before = numbersOf.get(key) || 0;
+        assert.ok(
+          hr.number > before,
+          `同じ打者の号数が増えていない: ${key} ${before}→${hr.number}`,
+        );
+        numbersOf.set(key, hr.number);
+        shown++;
+      }
+    }
+    assert.ok(shown > 0, '前提: 直近の試合に本塁打が出ている');
+    // ⚠ 自球団の打者の号数は、名簿の今季本塁打を超えない
+    for (const p of view.roster) {
+      const n = numbersOf.get(`${own}:${p.name}`);
+      if (!n) continue;
+      assert.ok(
+        n <= (p.seasonStats?.batting?.homeruns || 0),
+        `号数が今季本塁打を超えている: ${p.name} ${n}号 / ${p.seasonStats?.batting?.homeruns}本`,
+      );
+    }
+  }
+
+  // --- 本塁打0の試合でも「0本」と分かる形で渡す ------------------------
+  // ⚠ **記録のある試合は本塁打0でも空の配列**。`null`（記録そのものが無い
+  //    試合）と区別が付かないと、画面が枠を出すかどうかを決められず、
+  //    直近の行の高さが試合ごとに変わって今後の行とそろわない
+  {
+    const game = {
+      id: 9001,
+      date: '2026-04-01',
+      home: '甲',
+      away: '乙',
+      result: { homeScore: 1, awayScore: 0, decisions: {} },
+    };
+    const league = {
+      season: { year: 1 },
+      records: {
+        seasons: {
+          1: {
+            games: {
+              9001: {
+                teams: {
+                  甲: [{ name: '無本', batting: { homeruns: 0 } }],
+                  乙: [{ name: '無塁打', batting: { homeruns: 0 } }],
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const [row] = ownRecentGames([game], '甲', 5, league);
+    assert.deepEqual(row.homeruns, [], '本塁打0の試合が空の配列で渡らない');
+    // ⚠ 記録の無い試合は `null`（画面は枠そのものを出さない）
+    const [bare] = ownRecentGames([game], '甲', 5, { season: { year: 1 } });
+    assert.equal(bare.homeruns, null, '記録の無い試合が null で渡らない');
   }
 
   // --- 通算成績（球団ごとの読み込みに載る）-----------------------------

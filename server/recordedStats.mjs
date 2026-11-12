@@ -358,6 +358,13 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
               : 0;
           addCounts(record.stats.batting, b, BATTING_KEYS);
           addCounts(record.stats.pitching, q, PITCHING_KEYS);
+          // ⚠ **「何号本塁打」はここでしか作れない**。この行を足した直後の通算が
+          //    その試合までの本数で、あとから数えるには年の全試合を舐めることになる。
+          //    打った選手にだけ置く（1試合に2本なら `通算-1号` と `通算号`）。
+          //    古い記録には無いので、画面は番号なしで名前だけ出す
+          const seasonHomeruns = b.homeruns > 0
+            ? record.stats.batting.homeruns
+            : undefined;
           record.games.push({
             gameId: game.id,
             atBats: b.atBats,
@@ -376,6 +383,7 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
             battingOrder: p.battingOrder,
             batting: b,
             pitching: q,
+            ...(seasonHomeruns === undefined ? {} : { seasonHomeruns }),
           });
         }
       }

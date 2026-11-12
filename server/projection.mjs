@@ -232,7 +232,39 @@ export function teamStreaks(schedule) {
  * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
  *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
  */
-export function ownRecentGames(schedule, ownTeam, size = 5) {
+/**
+ * その試合の本塁打（打った人と「何号」）。
+ *
+ * ⚠ **記録（`league.records`）から引く**。日程の `result` には打席の中身が
+ *    残っていない（1試合100KBになるので削っている）。
+ * ⚠ 何号かは記録を取ったときに置いた `seasonHomeruns`（その試合までの通算）。
+ *    古い試合には無いので、そのときは番号を付けずに名前だけ返す。
+ * ⚠ 1試合に2本なら `通算-1号` と `通算号`。
+ * ⚠ **多すぎたら切る**。ホームの枠は決まっているので、4本以上は数だけ添える。
+ */
+function homerunsOf(league, game, year) {
+  const box = league.records?.seasons?.[year]?.games?.[game.id];
+  if (!box?.teams) return null;
+  // ⚠ 記録がある試合は**本塁打0でも空の配列**を返す（画面が「なし」と出せる。
+  //    null は「記録そのものが無い試合」）
+  const hit = [];
+  for (const [teamName, lines] of Object.entries(box.teams))
+    for (const line of lines) {
+      const n = line.batting?.homeruns || 0;
+      if (!n) continue;
+      for (let i = 0; i < n; i += 1)
+        hit.push({
+          name: line.name,
+          team: teamName,
+          number: line.seasonHomeruns
+            ? line.seasonHomeruns - (n - 1 - i)
+            : null,
+        });
+    }
+  return hit;
+}
+
+export function ownRecentGames(schedule, ownTeam, size = 5, league = null) {
   const own = schedule
     .filter(
       (g) =>
@@ -258,6 +290,9 @@ export function ownRecentGames(schedule, ownTeam, size = 5) {
       //    ⚠ `decisionRefs` で id と名前だけに削る。記録には投手まるごと
       //       （能力・成績・経歴）が入っていて、1試合で約4KBある
       decisions: decisionRefs(g.result.decisions),
+      // ⚠ 本塁打（打った人と何号）。直近の行の高さを今後の行にそろえるために
+      //    足した（いしだ要望）。記録の無い試合では null
+      homeruns: league ? homerunsOf(league, g, league.season.year) : null,
     });
   });
   return played.slice(-size);
@@ -505,7 +540,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     ),
     // ⚠ ホームの左に出す**自球団の直近5試合**。リーグ全体の `results`（14件）では
     //    12球団ぶんが混ざって自球団が2〜3試合しか入らない
-    recentGames: ownRecentGames(l.season.schedule, member.teamName, 5),
+    recentGames: ownRecentGames(l.season.schedule, member.teamName, 5, l),
     // ⚠ 並べ方は `upcomingGames` が正本（日付順・自球団を必ず含む）。
     //    先発予定はその上に重ねるだけにする
     upcoming: withStarters(
