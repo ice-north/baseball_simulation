@@ -20,6 +20,7 @@ import {
   MAX_OPEN_TRADES,
 } from '../../src/online/trades.js';
 import { tradeValueOf } from '../../server/leagueEngine.mjs';
+import { tradeFactorFor } from '../../server/coachEngine.mjs';
 import { ROSTER_LIMIT } from '../../src/online/shared.js';
 import { PACK_SIZE } from '../../src/online/rosterPack.js';
 
@@ -179,8 +180,19 @@ try {
   assert.equal(rosterOf(started, teamA).length, PACK_SIZE, '前提: セットの人数');
   assert.ok(PACK_SIZE < ROSTER_LIMIT, '前提: 枠に空きがある');
 
-  const pickA = rosterOf(started, teamA).find((p) => p.position === 'pitcher');
-  const pickB = rosterOf(started, teamB).find((p) => p.position === 'pitcher');
+  // ⚠ **選手は評価額で選ぶ**（名簿の先頭から取らない）。CPUは「もらう値段 ≧
+  //    出す値段」でしか応じないので、名簿の順に取ると世界によって断られる。
+  //    リーグの種は作った時刻から決まるので、世界は固定ではない
+  const pitchers = (l, name) =>
+    rosterOf(l, name)
+      .filter((p) => p.position === 'pitcher')
+      .sort((x, y) => tradeValueOf(y) - tradeValueOf(x));
+  const pickA = pitchers(started, teamA)[0]; // 自軍のいちばん高い投手を出す
+  const pickB = pitchers(started, teamB).at(-1); // 相手のいちばん安い投手をもらう
+  assert.ok(
+    tradeValueOf(pickA) > tradeValueOf(pickB),
+    `前提: CPUが応じる値段の差がある（${tradeValueOf(pickA)} / ${tradeValueOf(pickB)}）`,
+  );
 
   // ⚠ 居ない球団は相手にできない
   await assert.rejects(
@@ -612,11 +624,16 @@ try {
       (n) => !held.has(n),
     );
     assert.ok(cpu, '前提: CPU球団が残っていない');
+    // ⚠ 値段は**CPU球団の監督の見る目を掛けたもの**で見る（`openTrade` が
+    //    `tradeValueOf(p) * factor(p)` で判断している）。素の `tradeValueOf`
+    //    で見ると、逆提案の予算の検査が監督の見る目のぶんだけずれる
+    //    （実測で 183.34 対 183.17 と、0.1%はみ出して落ちた）
     // ⚠ 値段は**1人1回だけ計算する**。`tradeValueOf` は重く、下の組み合わせ探しで
     //    何百回も呼ぶことになる
+    const factor = tradeFactorFor((await live()), cpu);
     const prices = new Map();
     const value = (p) => {
-      if (!prices.has(p.id)) prices.set(p.id, tradeValueOf(p));
+      if (!prices.has(p.id)) prices.set(p.id, tradeValueOf(p) * factor(p));
       return prices.get(p.id);
     };
     const kindOf = (p) =>

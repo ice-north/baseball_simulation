@@ -1018,10 +1018,72 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-own-text td {
   color: #fde68a;
 }
+/* 順位は**バッジ**で出す（中継の順位表と同じ見え方。いしだ要望）。
+   ⚠ 幅は固定にする（1位と10位で球団名の始まる位置がずれると、名前を
+      目で追えない）。⚠ 広げすぎないこと。順位表は右の狭い列に置いてあり、
+      自球団の行は持ち主の名前と「昇格圏」の印が付くので、ここで数px
+      増やすと行が2行に折り返す。 */
 .online-rank {
   display: inline-block;
-  margin-right: 9px;
+  width: 19px;
+  margin-right: 6px;
+  border-radius: 3px;
+  background: #ffffff14;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
   color: #c4d4e5;
+}
+/* 1位・2位・3位は色を変える。⚠ 塗りの上に乗るので文字は**暗く**する
+   （明るい文字のままだと 2.5:1 ほどで読めない） */
+.online-rank.is-podium {
+  color: #16202c;
+}
+.online-rank.is-podium-1 {
+  background: #e9b949;
+}
+.online-rank.is-podium-2 {
+  background: #c3cedb;
+}
+.online-rank.is-podium-3 {
+  background: #cc9166;
+}
+/* 1行ごとの薄い縞。⚠ 自球団の行は黄色の塗りを残す（`.online-own`） */
+.online-standings tbody tr:nth-child(even):not(.online-own) {
+  background: #ffffff08;
+}
+/* 勝ちは明るく、負けと分けは落とす。⚠ 自球団の行は**黄色のまま**
+   （`.online-own-text td` は 0,1,1 なので、ここを強く書くと黄色が消える） */
+.online-standings tbody tr:not(.online-own-text) td.is-win {
+  color: #a8e6c0;
+}
+.online-standings tbody tr:not(.online-own-text) td.is-loss {
+  color: #e3a79a;
+}
+/* 勝率のセルの下に横棒を敷く。⚠ 文字の後ろを塗らない（数字が読みにくく
+   なる）。帯は3pxで、セルの下端に置く */
+.online-standings td.online-standings-rate {
+  background-image: linear-gradient(
+    to right,
+    #67e8f9 0 var(--rate, 0%),
+    #ffffff1f var(--rate, 0%) 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 3px;
+  background-position: left bottom;
+}
+/* その部でいちばん良いチーム打率・チーム防御率 */
+.online-standings td.is-best {
+  font-weight: 700;
+}
+.online-standings tbody tr:not(.online-own-text) td.is-best {
+  color: #67e8f9;
+}
+/* 見出しの行は帯にする（中継の順位表と同じ） */
+.online-standings thead th:not(:where(.online-sp *)) {
+  background: #ffffff0f;
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 /* 順位表は部ごとに分けて並べる。昇格圏・降格圏は左端の線で示す */
 .online table caption:not(:where(.online-sp *)) {
@@ -1038,6 +1100,16 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online tr.is-relegation th:first-child {
   box-shadow: inset 3px 0 0 #d9735f;
+}
+/* ⚠ 昇格圏・降格圏は**行ごと**薄く塗る（左端の3pxの線だけだと、狭い列で
+   どの行が圏内なのかを線の位置で追うことになる）。
+   ⚠ 縞の指定より**後に**置く（同じ強さなので、後に書いた方が勝つ）。
+   ⚠ 自球団の行は黄色の塗りを残す */
+.online-standings tbody tr.is-promotion:not(.online-own) {
+  background: #5fbf7f1f;
+}
+.online-standings tbody tr.is-relegation:not(.online-own) {
+  background: #d9735f1f;
 }
 .online-move {
   margin-left: 6px;

@@ -14,6 +14,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { delegationSettles, staffModesDoneText } from '../../src/online/notices.js';
+import { PYRAMID_LEAGUES } from '../../src/online/pyramidLeague.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const entry = `
@@ -451,6 +452,63 @@ try {
   );
   assert.match(table, /昇格圏/, '2部の1位に昇格圏の印が無い');
   assert.match(table, /降格圏/, '1部の最下位に降格圏の印が無い');
+  // --- 順位表の色（スポーツニュースの見え方。いしだ要望）-----------------
+  // ⚠ **1位・2位・3位でバッジの色を変える**。12球団の表は数字だけだと
+  //    どこが表彰台なのかを数えて探すことになる
+  {
+    // ⚠ 表彰台は**1つの部に3球団以上**要る。上の `standings` は部ごとに
+    //    2球団しかなく、3位のバッジが出ない
+    const rows = [
+      { team: '甲', wins: 63, losses: 30, winRate: 0.677 },
+      { team: '乙', wins: 50, losses: 43, winRate: 0.538 },
+      { team: '丙', wins: 45, losses: 48, winRate: 0.484 },
+      { team: '丁', wins: 30, losses: 63, winRate: 0.323 },
+      { team: '戊', wins: 55, losses: 38, winRate: 0.591 },
+      { team: '己', wins: 35, losses: 58, winRate: 0.376 },
+    ];
+    const [tierA, tierB] = PYRAMID_LEAGUES;
+    const colored = render(
+      h(Standings, {
+        view: {
+          standings: rows,
+          teamName: '丙',
+          teamLeagues: {
+            甲: tierA.id, 乙: tierA.id, 丙: tierA.id, 丁: tierA.id,
+            戊: tierB.id, 己: tierB.id,
+          },
+          // ⚠ 打率・防御率は**部ごと**に最良を決める（1部と2部を通すと、
+          //    2部の表に印がひとつも付かない）。1部の最良は乙、2部は己
+          teamStats: {
+            甲: { average: 0.26, era: 3.1 },
+            乙: { average: 0.3, era: 2.4 },
+            丙: { average: 0.24, era: 3.9 },
+            丁: { average: 0.21, era: 4.2 },
+            戊: { average: 0.22, era: 3.3 },
+            己: { average: 0.27, era: 2.8 },
+          },
+        },
+      }),
+    );
+    for (const place of [1, 2, 3])
+      assert.match(
+        colored,
+        new RegExp(`online-rank[^"]*is-podium-${place}`),
+        `${place}位のバッジに色が付いていない`,
+      );
+    // ⚠ 勝率は**帯の長さ**でも見せる。長さは行ごとに違うこと
+    const rates = [...colored.matchAll(/--rate:([^";]+)/g)].map((m) => m[1]);
+    assert.equal(rates.length, rows.length, '勝率の帯が出ていない行がある');
+    assert.ok(new Set(rates).size > 1, '勝率の帯がどの行も同じ長さ');
+    // ⚠ 最良の印は**部ごとに1つずつ**（打率と防御率で計4つ）
+    const best = (colored.match(/is-best/g) || []).length;
+    assert.equal(best, 4, `部ごとの最良の印の数がちがう: ${best}`);
+    // ⚠ 2部の最良（己）にも印が付くこと。通しで比べていると付かない
+    const tierBRows = colored.slice(colored.indexOf('戊'));
+    assert.match(tierBRows, /is-best/, '2部の最良に印が無い');
+    // ⚠ 勝ちと負けの列は色を分ける
+    assert.match(colored, /class="is-win"/, '勝の列に色の印が無い');
+    assert.match(colored, /class="is-loss"/, '敗の列に色の印が無い');
+  }
   // ⚠ 同率のときは、昇降格を決める順（勝率→勝利数→球団名）で並べる。
   //    全体の並びのまま出すと、昇格圏の印と実際に昇格する球団が食い違っていた
   const tied = render(
@@ -778,5 +836,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
 );

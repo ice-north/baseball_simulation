@@ -150,6 +150,16 @@ function raceTag(races, team) {
  *    `teamLeagues` が無い古いビューでは従来どおり1つの表で出す。
  */
 
+/**
+ * その部でいちばん良い値（打率は大きい方、防御率は小さい方）。
+ * ⚠ 値の無い球団（開幕前）は数えない。全球団が「—」のときは `null`。
+ */
+function bestOf(rows, pick, lowerIsBetter = false) {
+  const list = rows.map(pick).filter((v) => v != null);
+  if (!list.length) return null;
+  return lowerIsBetter ? Math.min(...list) : Math.max(...list);
+}
+
 export function Standings({ view }) {
   const leagues = view.teamLeagues
     ? PYRAMID_LEAGUES.map((league) => ({
@@ -162,7 +172,19 @@ export function Standings({ view }) {
   return (
     <section className="online-card">
       <h2>リーグ順位</h2>
-      {leagues.map(({ league, rows }) => (
+      {leagues.map(({ league, rows }) => {
+        // ⚠ 最良の印は**その部の中**で比べる（1部と2部を通すと、2部の表に
+        //    印がひとつも付かない）
+        const bestAverage = bestOf(
+          rows,
+          (r) => view.teamStats?.[r.team]?.average ?? null,
+        );
+        const bestEra = bestOf(
+          rows,
+          (r) => view.teamStats?.[r.team]?.era ?? null,
+          true,
+        );
+        return (
         <table key={league?.id || 'all'} className="online-standings">
           {league && <caption>{league.name}</caption>}
           <thead>
@@ -186,6 +208,7 @@ export function Standings({ view }) {
                 league.down.length &&
                 i >= rows.length - RELEGATION_FROM_BOTTOM[0];
               const race = raceTag(view.races, s.team);
+              const stats = view.teamStats?.[s.team];
               return (
                 <tr
                   key={s.team}
@@ -198,7 +221,15 @@ export function Standings({ view }) {
                     .join(' ')}
                 >
                   <th>
-                    <span className="online-rank">{i + 1}</span>
+                    {/* ⚠ 順位は**バッジ**にする（中継の順位表と同じ見え方）。
+                        1位・2位・3位で色を変え、表彰台が一目で分かるように */}
+                    <span
+                      className={`online-rank${
+                        i < 3 ? ` is-podium is-podium-${i + 1}` : ''
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
                     {teamLabel(s.team)}
                     {/* ⚠ 人が持っている球団だけ、名前を括弧で添える。
                         CPUに付けると誰かが持っているように見える。
@@ -215,27 +246,50 @@ export function Standings({ view }) {
                     ) : null}
                     {race && <small className="online-move is-race">{race}</small>}
                   </th>
-                  <td>{s.wins}</td>
-                  <td>{s.losses}</td>
-                  <td>{s.draws || 0}</td>
-                  <td>{formatRate(s.winRate)}</td>
-                  {/* ⚠ 打席・投球回が0なら「—」。開幕前は全球団がこれ */}
-                  <td>
-                    {view.teamStats?.[s.team]?.average != null
-                      ? formatRate(view.teamStats[s.team].average)
-                      : '—'}
+                  <td className="is-win">{s.wins}</td>
+                  <td className="is-loss">{s.losses}</td>
+                  <td className="online-muted">{s.draws || 0}</td>
+                  {/* ⚠ 勝率のセルの後ろに**横棒**を敷く（中継の順位表と同じ。
+                      数字を読まなくても差が見える）。5割を真ん中にすると
+                      ほとんどの球団が同じ長さになるので、.300〜.700 を
+                      セル幅いっぱいに割り当てる */}
+                  <td
+                    className="online-standings-rate"
+                    style={{
+                      '--rate': `${Math.max(
+                        0,
+                        Math.min(100, ((s.winRate || 0) - 0.3) * 250),
+                      )}%`,
+                    }}
+                  >
+                    {formatRate(s.winRate)}
                   </td>
-                  <td>
-                    {view.teamStats?.[s.team]?.era != null
-                      ? view.teamStats[s.team].era.toFixed(2)
-                      : '—'}
+                  {/* ⚠ 打席・投球回が0なら「—」。開幕前は全球団がこれ */}
+                  <td
+                    className={
+                      stats?.average != null && stats.average === bestAverage
+                        ? 'is-best'
+                        : undefined
+                    }
+                  >
+                    {stats?.average != null ? formatRate(stats.average) : '—'}
+                  </td>
+                  <td
+                    className={
+                      stats?.era != null && stats.era === bestEra
+                        ? 'is-best'
+                        : undefined
+                    }
+                  >
+                    {stats?.era != null ? stats.era.toFixed(2) : '—'}
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      ))}
+        );
+      })}
     </section>
   );
 }

@@ -312,6 +312,10 @@ export class LeagueService {
               ? this.members
               : [{ userId: this.adminId, label: '管理者' }],
             now,
+            // ⚠ **作るたびに違う世界にする**（いしだ要望: 土地と愛称の幅）。
+            //    種を既定値のままにすると、どのリーグも同じ12球団になり、
+            //    名前の候補を増やしても出てくる顔ぶれが変わらない
+            seed: engine.worldSeedFromTime(now),
           }),
         );
       } else if (command.type === 'join') {

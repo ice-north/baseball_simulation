@@ -23,6 +23,7 @@ import {
   isRestTurn,
   pyramidSeasonSchedule,
   topTierTeamNames,
+  TEAM_NAME_VARIATIONS,
 } from '../../src/online/pyramidLeague.js';
 import { upcomingGames } from '../../server/projection.mjs';
 
@@ -78,6 +79,56 @@ for (const t of teams) {
 // ⚠ シードが同じなら同じ世界になること
 assert.deepEqual(generatePyramidTeams(20261029), teams, 'シードが同じなのに結果が違う');
 assert.notDeepEqual(generatePyramidTeams(777), teams, 'シードを変えても同じ結果になった');
+
+// --- 土地と愛称の幅 -----------------------------------------------
+// ⚠ **候補が12球団ぶんギリギリだと、どのリーグも同じ顔ぶれになる**
+//    （いしだ要望: 土地とチーム名の幅を増やす）。種を変えたときに
+//    名前がちゃんと入れ替わることで見る。
+{
+  assert.ok(
+    TEAM_NAME_VARIATIONS >= 5000,
+    `土地と愛称の組み合わせが少なすぎる: ${TEAM_NAME_VARIATIONS}通り`,
+  );
+  // ⚠ 10通りの種で、出てくる球団名が**ほぼ重ならない**こと。
+  //    候補が少ないと、違う種でも同じ球団名が何度も出る
+  const seeds = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+  const names = seeds.flatMap((seed) =>
+    generatePyramidTeams(seed).map((t) => t.name),
+  );
+  const unique = new Set(names).size;
+  assert.ok(
+    unique >= names.length * 0.9,
+    `種を変えても同じ球団名が出すぎる: ${unique}/${names.length}`,
+  );
+  // ⚠ 土地の名前も入れ替わること（愛称だけ変わって「札幌○○」が
+  //    毎回いるのでは、顔ぶれが変わった感じがしない）
+  const cities = seeds.flatMap((seed) =>
+    generatePyramidTeams(seed).map((t) => t.city),
+  );
+  assert.ok(
+    new Set(cities).size >= 60,
+    `土地の名前が偏っている: ${new Set(cities).size}種類`,
+  );
+  // ⚠ **実在球団の愛称を入れない**。「北九州ホークス」のような球団が
+  //    出ると、どちらの話をしているのか分からなくなる
+  const real = [
+    'ジャイアンツ', 'タイガース', 'ドラゴンズ', 'カープ', 'スワローズ',
+    'ベイスターズ', 'ホークス', 'バファローズ', 'ライオンズ', 'マリーンズ',
+    'ファイターズ', 'イーグルス', 'インディゴソックス', 'ウォリアーズ',
+  ];
+  // ⚠ 愛称は**球団名から土地の名前を外して**取り出す。`endsWith` で見ると
+  //    「オライオンズ」が「ライオンズ」に当たって、別の愛称を落としてしまう
+  const everyNickname = new Set(
+    Array.from({ length: 40 }, (_, i) => generatePyramidTeams(i + 1))
+      .flat()
+      .map((t) => t.name.slice(t.city.length)),
+  );
+  for (const nickname of real)
+    assert.ok(
+      !everyNickname.has(nickname),
+      `実在球団の愛称が出ている: ${nickname}`,
+    );
+}
 
 // 上の階層ほど強い（昇降格に意味を持たせるため）
 const strength = { S: 4, A: 3, B: 2, C: 1, D: 0 };
@@ -332,5 +383,5 @@ for (const name of Object.keys(played)) {
 }
 
 console.log(
-  `■ 階層リーグ: OK（${PYRAMID_LEAGUES.length}リーグ${PYRAMID_TEAM_COUNT}球団 / 出入りが釣り合う / 再現する / ${SEASON_TURNS}ターン中${gamesPerTeam()}試合・${SEASON_TURNS / REST_EVERY}休養日）`,
+  `■ 階層リーグ: OK（${PYRAMID_LEAGUES.length}リーグ${PYRAMID_TEAM_COUNT}球団 / 出入りが釣り合う / 再現する / 土地と愛称の幅 / ${SEASON_TURNS}ターン中${gamesPerTeam()}試合・${SEASON_TURNS / REST_EVERY}休養日）`,
 );

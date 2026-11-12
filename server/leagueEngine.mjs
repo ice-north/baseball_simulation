@@ -778,6 +778,17 @@ export function openPhase(league, kind, now) {
   league.season.pendingPhaseEvent = kind;
 }
 
+/**
+ * リーグ1つぶんの世界の種を、作った時刻から作る。
+ *
+ * ⚠ **`createLeague` の既定値は変えない**。既定の種（20261028）の世界で
+ *    キャンプの成長量や覚醒率を合わせてあり（`online-camp-check`）、
+ *    既定を動かすとその数値の検査がまとめて動く。
+ * ⚠ 呼ぶ側が時刻を固定していれば同じ世界になる（検査のリーグは時計を
+ *    固定しているので再現する）。本番は作るたびに別の顔ぶれになる。
+ */
+export const worldSeedFromTime = (now) => hashSeed(`world:${now}`);
+
 export function createLeague({
   seed = 20261028,
   members,
