@@ -33,6 +33,7 @@ import CampPlanner, { CompletedCamp, subTargetChoices } from '../../src/online/C
 import { setTeamLabels } from '../../src/online/gameText.js';
 import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
+import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
 export {
   TryoutPlanner,
   LeagueTopics,
@@ -52,6 +53,7 @@ export {
   CompletedCamp,
   CampPlanner,
   subTargetChoices,
+  AbilityGrade,
 };
 `;
 const result = await build({
@@ -91,6 +93,7 @@ try {
     nextAdvanceText,
     TryoutPlanner,
     LeagueTopics,
+    AbilityGrade,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -286,6 +289,40 @@ try {
     assert.ok(
       !subTargetChoices('newpitch', owned).some(([k]) => k === 'sinker'),
       '持っている球種を新球種の対象に出している',
+    );
+  }
+
+  // --- 能力の色は低い値どうしでも見分けがつく --------------------------
+  // ⚠ **段位Fの帯が広すぎる**。初期メンバーセット480人の表示値を数えると
+  //    F 44.8% / E 19.3% / D 17.0% / C 11.8% / B 5.7% / A 1.3% / S 0.0% で、
+  //    7色のうち1色に4割が入っていた。「3」と「39」が同じ灰色では見比べられない
+  //    （いしだ指摘: 視認性を高めるため相応の色付けを）。
+  // ⚠ S〜Eの色は**変えない**（一人用の `getRankColor` と同じ色を保つ）。
+  {
+    const toneOf = (value, props = {}) => {
+      const html = render(h(AbilityGrade, { value, ...props }));
+      return (html.match(/class="online-ability-grade ([^"]+)"/) || [])[1] || null;
+    };
+    const low = [5, 25, 35].map((v) => toneOf(v));
+    assert.equal(
+      new Set(low).size,
+      3,
+      `低い値（5/25/35）が同じ色になっている: ${JSON.stringify(low)}`,
+    );
+    // S〜E はこれまでどおり（一人用と同じ `text-*` の色）
+    assert.equal(toneOf(45), 'text-blue-400', 'E（40〜49）の色が変わっている');
+    assert.equal(toneOf(55), 'text-green-400', 'D（50〜59）の色が変わっている');
+    assert.equal(toneOf(95), 'text-pink-400', 'S（90以上）の色が変わっている');
+    // ⚠ 球速とスタミナは0〜100ではない。物差しを揃えてから色を決める
+    assert.equal(
+      toneOf(120, { velocity: true }),
+      toneOf(12),
+      '球速の色が0〜100の物差しに揃っていない',
+    );
+    assert.equal(
+      toneOf(60, { stamina: true }),
+      toneOf(30),
+      'スタミナの色が0〜100の物差しに揃っていない',
     );
   }
 
@@ -741,5 +778,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
 );

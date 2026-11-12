@@ -516,10 +516,16 @@ export const getMentalGrade = (player) => {
   return 'F';
 };
 
+/**
+ * 能力値を0〜100の物差しに揃える。
+ * ⚠ 球速（115〜155km）とスタミナ（0〜200）は0〜100ではない。段位も色も
+ *    この値で決めるので、**式はここ1か所**に置く（2か所に書くと片方だけずれる）。
+ */
+export const normalizeAbility = (value, isPitcherVelocity = false, isStamina = false) =>
+  isPitcherVelocity ? (value - 115) * 2.5 : isStamina ? value / 2 : value;
+
 export const getAbilityRank = (value, isPitcherVelocity = false, isStamina = false) => {
-  let v = value;
-  if (isPitcherVelocity) v = (value - 115) * 2.5;
-  else if (isStamina) v = value / 2;
+  const v = normalizeAbility(value, isPitcherVelocity, isStamina);
   if (v >= 90) return 'S';
   if (v >= 80) return 'A';
   if (v >= 70) return 'B';

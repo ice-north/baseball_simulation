@@ -1930,6 +1930,23 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-ability-grade {
   font-weight: 750;
 }
+/* 段位Fの3段階（`AbilityGrade` の `lowTone`）。
+   ⚠ Fは0〜39と幅が広く、初期メンバーセットの表示値の44.8%がここに入る。
+      1色だと「3」と「39」が同じに見えるので、明るさで3つに分ける。
+   ⚠ 低いほど沈ませる（良い値が浮き上がるように）。S〜Eの色は変えない */
+/* 一覧が空のときの一文（捕手の区分など、絞り込んで誰も残らないとき） */
+.online-roster-empty {
+  margin: 10px 2px;
+}
+.online-ability-f1 {
+  color: #a9b8cb;
+}
+.online-ability-f2 {
+  color: #8b98a8;
+}
+.online-ability-f3 {
+  color: #6b7684;
+}
 .online-game-dialog {
   width: min(640px, calc(100% - 24px));
 }
@@ -2611,23 +2628,80 @@ small.online-gain:not(:where(.online-sp *)) {
   text-underline-offset: 3px;
 }
 /* 先発は**2行目**いっぱいに置く。⚠ 1行目に詰めると勝敗と防御率が切れる */
-.online-slot.is-next {
+.online-slot.is-next,
+.online-slot {
   flex-wrap: wrap;
 }
+/* ⚠ 自軍と相手を**縦に1人ずつ**（いしだ要望: 見やすく）。横に並べると
+   どちらが自軍か読み取るのに考えることになり、右端の防御率も切れていた */
 .online-slot-starters {
-  display: flex;
-  align-items: baseline;
-  gap: 3px;
+  display: grid;
+  gap: 1px;
   flex-basis: 100%;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
   font-size: 10px;
   color: #9fb0c4;
 }
-.online-slot-starters em {
+.online-slot-starter {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* 「自」「敵」の印。⚠ 幅を揃えて、名前の頭が縦に並ぶようにする */
+.online-slot-starter i {
+  flex: none;
+  width: 14px;
   font-style: normal;
-  opacity: 0.6;
+  font-size: 9px;
+  text-align: center;
+  border-radius: 3px;
+  background: #ffffff14;
+  color: #9fb0c4;
+}
+.online-slot-starter.is-own i {
+  background: var(--accent-soft, #ffffff22);
+  color: var(--accent, #67e8f9);
+}
+/* 勝敗・セーブの投手（直近の試合の2行目） */
+.online-slot-decisions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  flex-basis: 100%;
+  min-width: 0;
+  font-size: 10px;
+  color: #9fb0c4;
+}
+.online-slot-decision {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.online-slot-decision b {
+  flex: none;
+  width: 14px;
+  font-size: 9px;
+  text-align: center;
+  border-radius: 3px;
+  background: #ffffff14;
+}
+.online-slot-decision.is-win b {
+  background: #16653433;
+  color: #86efac;
+}
+.online-slot-decision.is-loss b {
+  background: #7f1d1d33;
+  color: #fca5a5;
+}
+.online-slot-decision.is-save b {
+  background: #1e3a8a33;
+  color: #93c5fd;
 }
 .online-slot-starters .online-starter-name,
 .online-slot-starters .online-starter-line {

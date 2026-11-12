@@ -10,7 +10,11 @@ import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
 import BatteryStats from './BatteryStats.jsx';
 import { phaseStatusLabel } from './notices.js';
-import { getAbilityRank, getRankColor } from '../utils/constants.js';
+import {
+  getAbilityRank,
+  getRankColor,
+  normalizeAbility,
+} from '../utils/constants.js';
 import {
   STAT_GROUPS,
   overviewGroup,
@@ -29,13 +33,30 @@ import { CONDITION_ICONS } from '../game/condition.js';
 //    以前はオンラインだけ「C」のような字だけで、移植したスタメン設定は数字、
 //    選手の詳細も数字と、画面ごとに数字と字が混ざっていた。
 //    スマホは列が狭いので字のまま（CSS で出し分ける。`.online-ability-num` / `-rank`）。
+/**
+ * 段位がFのときの色。
+ *
+ * ⚠ **F（40未満）に入る値が多すぎる**。初期メンバーセット480人の表示値を数えると
+ *    F 44.8% / E 19.3% / D 17.0% / C 11.8% / B 5.7% / A 1.3% / S 0.0% で、
+ *    7色のうち1色に4割が入っていた。「3」と「39」が同じ灰色では見比べられない
+ *    （いしだ指摘: 視認性を高めるため相応の色付けを）。
+ * ⚠ **S〜Eは触らない**。ほかの画面（一人用の `getRankColor`）と同じ色を保ち、
+ *    広すぎるFの帯だけを3つに割る。低いほど沈むので、良い値が浮き上がる。
+ */
+const lowTone = (v) =>
+  v >= 30 ? 'online-ability-f1' : v >= 20 ? 'online-ability-f2' : 'online-ability-f3';
+
 export function AbilityGrade({ value, velocity = false, stamina = false }) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0)
     return <span>—</span>;
   const rank = getAbilityRank(value, velocity, stamina);
+  const tone =
+    rank === 'F'
+      ? lowTone(normalizeAbility(value, velocity, stamina))
+      : getRankColor(rank);
   return (
     <span
-      className={`online-ability-grade ${getRankColor(rank)}`}
+      className={`online-ability-grade ${tone}`}
       title={`${rank}（${Math.round(value)}）`}
     >
       <span className="online-ability-num">{Math.round(value)}</span>
@@ -777,6 +798,16 @@ export function CompactRoster({
         </div>
       </div>
       <div className="online-roster-rows" ref={rows}>
+        {/* ⚠ **空のまま出さない**。捕手の区分は受けた選手と捕手だけに絞るので
+            （`isCatchingGroup`）、まだ誰も受けていない時期は一覧が空になる。
+            何も出さないと「読み込めていないのか、記録が無いのか」が分からない */}
+        {!shown.length && (
+          <p className="online-muted online-roster-empty">
+            {catching
+              ? 'まだ捕手の記録がありません。試合が進むと出ます。'
+              : '出す選手がいません。'}
+          </p>
+        )}
         {shown.map((player) => (
           <article key={player.id}>
             <PlayerStatsButton

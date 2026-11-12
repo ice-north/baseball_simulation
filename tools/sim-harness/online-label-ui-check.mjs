@@ -747,6 +747,18 @@ try {
       .locator('option')
       .evaluateAll((options) => options.map((option) => option.value))) {
       await groups.selectOption(id);
+      // ⚠ **捕手の区分は数に入れない**。受けた選手と捕手だけに絞るので
+      //    （`isCatchingGroup`）、まだ誰も受けていなければ一覧は空になる。
+      //    そのときに何も出ないと「読めていないのか記録が無いのか」が
+      //    分からないので、一文を出すことだけを見る
+      if (id === 'catching' || id === 'catchingAllowed') {
+        const rows = await m.locator('.online-compact-roster article').count();
+        if (!rows)
+          await m
+            .getByText('まだ捕手の記録がありません', { exact: false })
+            .waitFor({ timeout: 3000 });
+        continue;
+      }
       assert.equal(
         await firstRow.locator('.online-roster-values > span').count(),
         4,
