@@ -84,6 +84,10 @@ fun OnlineApp(model: AppViewModel) {
         return
     }
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
+    LaunchedEffect(model.tabRequest) {
+        model.tabRequest?.let { name -> Tab.entries.firstOrNull { it.name == name }?.let { tab = it } }
+        model.tabRequest = null
+    }
     // 試合タブで開いている区分（試合結果・順位表…）。順位表から選手タブへ飛んだあと、戻るで順位表に戻すためここに置く
     var gamesSection by rememberSaveable { mutableStateOf("results") }
     // 順位表の球団を押して選手タブへ来たか（戻るで試合タブの順位表へ戻す。ホームへではなく）

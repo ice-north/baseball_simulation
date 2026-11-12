@@ -44,6 +44,7 @@ import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.overviewGroup
+import jp.icenorth.baseball.shared.abilityOverview
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.sortRoster
 import jp.icenorth.baseball.shared.str
@@ -134,7 +135,8 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     var groupId by rememberSaveable(batting) { mutableStateOf("overview") }
     var sortId by rememberSaveable(batting, career) { mutableStateOf<String?>(null) }
     var ascending by rememberSaveable(batting, career) { mutableStateOf(false) }
-    val groups = listOf(overviewGroup(batting)) + if (batting) BATTING_GROUPS else PITCHING_GROUPS
+    // 主要の次に能力（スタメン・トレードの行と同じ並び）
+    val groups = listOf(overviewGroup(batting), abilityOverview(batting)) + if (batting) BATTING_GROUPS else PITCHING_GROUPS
     val group = groups.firstOrNull { it.id == groupId } ?: groups.first()
     val allColumns = groups.flatMap { it.columns }
     // 捕手の区分は受けた選手と捕手だけを、守った回の多い順に出す（Web 版 CompactRoster と同じ）

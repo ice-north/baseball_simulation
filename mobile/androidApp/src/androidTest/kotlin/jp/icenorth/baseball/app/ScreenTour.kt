@@ -190,35 +190,32 @@ class ScreenTour {
                 step("career") { click("通算"); pause(2500); page("players-career", scrolls = 1) }
                 step("ranking") { click("能力順"); pause(2500); page("players-ranking", scrolls = 1) }
 
-                tab("Plan")
-                page("plan-order", scrolls = 2)
-                step("position sheet") {
-                    repeat(3) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown(startY = top + height * 0.25f, endY = bottom * 0.85f) } }
+                // 選手の詳細から「この選手でトレードを考える」（他球団の選手。能力順の1人目）
+                step("sheet trade") {
+                    click("今季")
+                    val other = model.raw!!.at("teamNames").list().mapNotNull { it.str() }.first { it != view.teamName }
+                    rule.runOnUiThread { model.playersTeam = other }
+                    pause(3500)
+                    val id = model.rosterTeams.entries.firstOrNull { it.value == other }?.key
+                    if (id != null) rule.runOnUiThread { model.openPlayerOf(other, id, null) }
+                    pause(2500)
+                    shot("player-sheet-other")
+                    rule.runOnUiThread { model.openPlayer = null; model.playersTeam = null }
                     pause()
-                    val first = model.plan?.present?.slots?.firstOrNull()
-                    val label = first?.position?.let { jp.icenorth.baseball.shared.positionLabel(it) }
-                    if (label != null) click(label)
-                    shot("plan-position-sheet")
-                    back()
                 }
-                step("replace sheet") {
+
+                tab("Plan")
+                // ⚠ 行に能力・成績・適性を全部出す（いしだ 2026-11-13）ので行が高い。下まで撮る
+                page("plan-order", scrolls = 4)
+                // 行を選ぶと、ほかの行に入れ替えたときの適性が出る（別のシートは開かない）
+                step("order pick") {
+                    repeat(5) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown(startY = top + height * 0.25f, endY = bottom * 0.85f) } }
+                    pause()
                     val first = model.plan?.present?.slots?.firstOrNull()?.playerId
                     val name = view.roster.firstOrNull { it.id == first }?.name
                     if (name != null) click(name, substring = true)
-                    shot("plan-replace-sheet")
-                    back()
-                }
-                step("order stats") { click("今季成績"); page("plan-order-stats", scrolls = 1) }
-                step("order fitness") { click("守備適性"); page("plan-order-fitness", scrolls = 1) }
-                step("bench sheet") {
-                    click("能力")
-                    scroll(3)
-                    val starters = model.plan?.present?.slots?.map { it.playerId }.orEmpty().toSet()
-                    val bench = view.roster.filter { !it.isPitcher && it.isActive && it.id !in starters }
-                    val name = bench.firstOrNull { rule.onAllNodesWithText(it.name, substring = true).fetchSemanticsNodes().isNotEmpty() }?.name
-                    if (name != null) click(name, substring = true)
-                    shot("plan-bench-sheet")
-                    back()
+                    page("plan-order-picked", scrolls = 3)
+                    click("やめる")
                 }
                 step("pitching") { click("投手起用"); page("plan-pitching", scrolls = 2) }
                 step("role sheet") {
@@ -236,22 +233,37 @@ class ScreenTour {
 
                 tab("Procedures")
                 page("procedures", scrolls = 4)
-                // トレード: 相手 → 選手 → 確認の段（送らずに閉じる）
+                // トレード: 補強から探す → 候補 → 選手 → 確認の段（送らずに閉じる）
                 step("trade") {
                     rule.runOnUiThread { model.procTrade = true }
+                    pause(6000) // 各球団の名簿を読む
+                    page("trade", scrolls = 1)
+                    toTop()
+                    rule.onAllNodesWithTag("slot-short").onFirst().performScrollTo().performClick()
+                    pause(2500)
+                    page("trade-search-short", scrolls = 1)
+                    chip("sp")
                     pause(1500)
-                    shot("trade")
-                    click("新しくトレードを考える", substring = true)
+                    shot("trade-search-sp")
+                    chip("surplus")
+                    pause(1500)
+                    shot("trade-surplus")
+                    // 球団から選ぶ流れ
+                    rule.runOnUiThread { model.tradeDraft = TradeDraft() }
+                    pause(1500)
                     shot("trade-partner")
                     val partner = model.raw!!.at("teamNames").list().mapNotNull { it.str() }.first { it != view.teamName }
                     rule.runOnUiThread { model.tradeDraft = TradeDraft(partner = partner, step = TradeStep.Players) }
                     pause(3000)
-                    click("総合", substring = true)
-                    click("出す（自球団）", substring = true)
-                    click("総合", substring = true)
+                    // 相手の投手の1人目をもらい、起用していない自球団の投手を出す
+                    click("値")
+                    val usage = jp.icenorth.baseball.shared.TeamUsage.from(view.lineup)
+                    val give = view.roster.firstOrNull { it.isPitcher && it.id !in usage.lineupIds }?.id
+                    if (give != null) rule.runOnUiThread { model.tradeDraft = model.tradeDraft?.copy(give = setOf(give)) }
+                    pause(1500)
                     shot("trade-players")
                     click("確認へ")
-                    page("trade-confirm", scrolls = 1)
+                    page("trade-confirm", scrolls = 2)
                     rule.runOnUiThread { model.tradeDraft = null; model.procTrade = false }
                     pause()
                 }

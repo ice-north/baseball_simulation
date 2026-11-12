@@ -54,7 +54,6 @@ import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.FIELDER_REST_FATIGUE
 import jp.icenorth.baseball.shared.FIELD_POSITIONS
 import jp.icenorth.baseball.shared.positionGroup
-import jp.icenorth.baseball.shared.candidatesFor
 import jp.icenorth.baseball.shared.FIELDER_GROUP_LABELS
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.MAX_STARTERS
@@ -88,10 +87,17 @@ private enum class PlanTab(val label: String) { Order("スタメン"), Pitching(
 private typealias Edit = ((PlanDraft) -> PlanDraft) -> Unit
 
 private sealed interface PlanSheet {
-    data class Position(val index: Int) : PlanSheet
-    data class Replace(val index: Int) : PlanSheet
-    data class Bench(val id: Long) : PlanSheet
     data class Role(val id: Long) : PlanSheet
+}
+
+/**
+ * スタメンで選んでいる行。もう1つの行を押すと入れ替える（PC のスタメン設定と同じ「選んで、もう1つを押す」）。
+ * ⚠ 以前は守備の入れ替え・控えとの交代を別のシートで選んでいて、シートを開くと一覧の能力・成績が見えなくなった
+ *    （いしだ 2026-11-13）。一覧の上で選び、相手の行に「入れ替えたときの適性」を出す。
+ */
+private sealed interface OrderPick {
+    data class Starter(val index: Int) : OrderPick
+    data class Bench(val id: Long) : OrderPick
 }
 
 /**
@@ -144,7 +150,6 @@ fun PlanScreen(model: AppViewModel) {
         model.planFaceRequest = null
     }
     var sheet by remember { mutableStateOf<PlanSheet?>(null) }
-    var orderView by rememberSaveable { mutableStateOf(FielderView.Ability) }
     val players = remember(view.roster) { view.roster.associateBy { it.id } }
     val rawPlayers = remember(model.raw) {
         model.raw?.at("roster").list().mapNotNull { it.obj() }
@@ -189,7 +194,7 @@ fun PlanScreen(model: AppViewModel) {
         }
         ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.padding(top = if (tab == PlanTab.Staff) 8.dp else 0.dp))
         when (tab) {
-            PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, onDragStart, open, orderView, { orderView = it }) { sheet = it }
+            PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open)
             PlanTab.Pitching -> PitchingEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open) { sheet = it }
             PlanTab.Tactics -> TacticsEditor(view, draft, edit)
             // 監督・コーチと任せ方（PC の「指導者」ページと同じ中身）
@@ -199,21 +204,6 @@ fun PlanScreen(model: AppViewModel) {
 
     val haptic = LocalHapticFeedback.current
     when (val s = sheet) {
-        is PlanSheet.Position -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            PositionSheet(draft, s.index, players) { other ->
-                edit { it.swapPositions(s.index, other) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
-            }
-        }
-        is PlanSheet.Replace -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            ReplaceSheet(view, draft, s.index, players, orderView) { id ->
-                edit { it.replaceBatter(s.index, id) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
-            }
-        }
-        is PlanSheet.Bench -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
-            BenchSheet(draft, s.id, players) { index ->
-                edit { it.replaceBatter(index, s.id) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); sheet = null
-            }
-        }
         is PlanSheet.Role -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
             RoleSheet(
                 draft, s.id, players[s.id],
@@ -243,13 +233,32 @@ private fun OrderEditor(
     players: Map<Long, Player>,
     nextId: Long?,
     edit: Edit,
+    /** 押して1回で終わる編集（入れ替え・交代） */
+    clickEdit: Edit,
     onDragStart: () -> Unit,
     open: (Long) -> Unit,
-    mode: FielderView,
-    onMode: (FielderView) -> Unit,
-    onSheet: (PlanSheet) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
+    var picked by remember { mutableStateOf<OrderPick?>(null) }
+    // 編成が変わったら（取り消し・保存など）、選んでいた打順の枠がずれるので選び直し
+    LaunchedEffect(draft.slots.size) { picked = null }
+    val pick: (OrderPick) -> Unit = { target ->
+        val current = picked
+        when {
+            current == null -> picked = target
+            current == target -> picked = null
+            current is OrderPick.Starter && target is OrderPick.Starter -> {
+                clickEdit { it.swapPositions(current.index, target.index) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); picked = null
+            }
+            current is OrderPick.Starter && target is OrderPick.Bench -> {
+                clickEdit { it.replaceBatter(current.index, target.id) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); picked = null
+            }
+            current is OrderPick.Bench && target is OrderPick.Starter -> {
+                clickEdit { it.replaceBatter(target.index, current.id) }; haptic.performHapticFeedback(HapticFeedbackType.LongPress); picked = null
+            }
+            else -> picked = target
+        }
+    }
     val listState = rememberLazyListState()
     val reorder = rememberReorderableLazyListState(listState) { from, to ->
         val a = (from.key as? String)?.removePrefix("bat:")?.toLongOrNull() ?: return@rememberReorderableLazyListState
@@ -263,6 +272,24 @@ private fun OrderEditor(
     }
     val bench = benchOf(view, draft)
     val notes = orderNotes(draft, players, bench)
+    val pickedStarter = (picked as? OrderPick.Starter)?.index?.let { draft.slots.getOrNull(it) }
+    val pickedBench = (picked as? OrderPick.Bench)?.id?.let { players[it] }
+    /** 選んでいる行と入れ替えたら、この行の人はどこをどの適性で守るか */
+    val starterHint: (Int) -> (@Composable () -> Unit)? = { index ->
+        val slot = draft.slots[index]
+        when {
+            pickedStarter != null && picked != OrderPick.Starter(index) -> {
+                val me = players[pickedStarter.playerId]
+                val them = players[slot.playerId]
+                ({ SwapHint("⇄", listOf(slot.position to (me?.fitness(slot.position) ?: 0), pickedStarter.position to (them?.fitness(pickedStarter.position) ?: 0))) })
+            }
+            pickedBench != null -> ({ SwapHint("交代", listOf(slot.position to pickedBench.fitness(slot.position))) })
+            else -> null
+        }
+    }
+    val benchHint: (Player) -> (@Composable () -> Unit)? = { p ->
+        if (pickedStarter != null) ({ SwapHint("交代", listOf(pickedStarter.position to p.fitness(pickedStarter.position))) }) else null
+    }
     // ⚠ 投手は多い（10人以上）。守れる位置（適性 SUBSTITUTE_MIN_FITNESS 以上）のある投手だけを出し、残りは「全員を出す」で開く
     var allPitchers by rememberSaveable { mutableStateOf(false) }
     val pitcherBench = pitcherBenchOf(view, draft)
@@ -272,7 +299,19 @@ private fun OrderEditor(
     val twoWaySlot = draft.slots.firstOrNull { nextId != null && it.playerId == nextId }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            ChipTabs(FielderView.entries.map { it.name to it.label }, mode.name, { onMode(FielderView.valueOf(it)) }, Modifier.weight(1f))
+            val who = pickedStarter?.let { players[it.playerId]?.name } ?: pickedBench?.name
+            if (who != null) {
+                // 選んでいる間だけ、次に何を押せばよいかを出す（いつも出す説明は ⓘ に。いしだ指定）
+                Text(
+                    if (pickedStarter != null) "$who を選択中。スタメンを押すと守備を入れ替え、控えを押すと交代" else "$who を選択中。スタメンを押すと交代",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { picked = null }) { Text("やめる") }
+            } else {
+                Box(Modifier.weight(1f)) { Caption("打順") }
+            }
             InfoButton("スタメン", ORDER_HELP, Modifier.padding(end = 8.dp))
         }
         LazyColumn(
@@ -288,7 +327,7 @@ private fun OrderEditor(
                             Text("気になる所", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
                             notes.forEach { note ->
                                 Row(
-                                    Modifier.fillMaxWidth().clickable { onSheet(note.sheet) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    Modifier.fillMaxWidth().clickable { picked = note.pick }.padding(horizontal = 12.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
@@ -303,7 +342,6 @@ private fun OrderEditor(
             }
             item(key = "head:bat") {
                 Column {
-                    Caption("打順")
                     twoWaySlot?.let { slot ->
                         Muted(
                             "${players[slot.playerId]?.name ?: "次の先発"}は次の先発です。先発の日は9番・投手に回り、${positionLabel(slot.position)}はその日だけ控えが守ります（試合の後は元に戻ります）",
@@ -318,7 +356,11 @@ private fun OrderEditor(
                     val elevation by animateDpAsState(if (dragging) 8.dp else 0.dp, label = "lift")
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = if (dragging) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainer,
+                        color = when {
+                            dragging -> MaterialTheme.colorScheme.surfaceContainerHighest
+                            picked == OrderPick.Starter(index) -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f)
+                            else -> MaterialTheme.colorScheme.surfaceContainer
+                        },
                         shadowElevation = elevation,
                         modifier = Modifier.fillMaxWidth().longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) }),
                     ) {
@@ -327,12 +369,12 @@ private fun OrderEditor(
                             position = slot.position,
                             player = players[slot.playerId],
                             fitnessAt = slot.position,
-                            onPosition = { onSheet(PlanSheet.Position(index)) },
-                            onName = { onSheet(PlanSheet.Replace(index)) },
+                            onPosition = { pick(OrderPick.Starter(index)) },
+                            onName = { pick(OrderPick.Starter(index)) },
                             onInfo = { open(slot.playerId) },
                             draggable = true,
-                            mode = mode,
                             placeholder = "空き（押して控えと交代）",
+                            hint = starterHint(index),
                         )
                     }
                 }
@@ -342,16 +384,16 @@ private fun OrderEditor(
                 if (members.isEmpty()) return@forEach
                 item(key = "head:bench:$group") { Caption("控え・$label（${members.size}人）") }
                 items(members, key = { "bench:${it.id}" }) { p ->
-                    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                    Surface(shape = RoundedCornerShape(10.dp), color = if (picked == OrderPick.Bench(p.id)) MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                         FielderRow(
                             order = null,
                             position = p.position,
                             player = p,
                             fitnessAt = p.position,
-                            onPosition = { onSheet(PlanSheet.Bench(p.id)) },
-                            onName = { onSheet(PlanSheet.Bench(p.id)) },
+                            onPosition = { pick(OrderPick.Bench(p.id)) },
+                            onName = { pick(OrderPick.Bench(p.id)) },
                             onInfo = { open(p.id) },
-                            mode = mode,
+                            hint = benchHint(p),
                         )
                     }
                 }
@@ -369,17 +411,17 @@ private fun OrderEditor(
                     }
                 }
                 items(shownPitchers, key = { "bench:${it.id}" }) { p ->
-                    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                    Surface(shape = RoundedCornerShape(10.dp), color = if (picked == OrderPick.Bench(p.id)) MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                         FielderRow(
                             order = null,
                             position = p.position,
                             player = p,
                             // ⚠ 投手の本職（投手）の適性は意味が無い。守るなら一番合う位置で
                             fitnessAt = p.bestFieldPosition() ?: "right",
-                            onPosition = { onSheet(PlanSheet.Bench(p.id)) },
-                            onName = { onSheet(PlanSheet.Bench(p.id)) },
+                            onPosition = { pick(OrderPick.Bench(p.id)) },
+                            onName = { pick(OrderPick.Bench(p.id)) },
                             onInfo = { open(p.id) },
-                            mode = mode,
+                            hint = benchHint(p),
                         )
                     }
                 }
@@ -398,7 +440,7 @@ private fun pitcherBenchOf(view: LeagueView, draft: PlanDraft): List<Player> =
 /** 投手が野手の枠に入るとしたら一番合う守備位置（Web 版 bestFieldPosition と同じ） */
 private fun Player.bestFieldPosition(): String? = FIELD_POSITIONS.maxByOrNull { fitness(it) }
 
-private class OrderNote(val position: String, val text: String, val action: String, val sheet: PlanSheet, val color: androidx.compose.ui.graphics.Color? = null)
+private class OrderNote(val position: String, val text: String, val action: String, val pick: OrderPick, val color: androidx.compose.ui.graphics.Color? = null)
 
 /** 「気になる所」: 試合の日に休養に入る選手と、適性の低い守備（押すと直すためのシートを開く） */
 @Composable
@@ -407,7 +449,7 @@ private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List
     draft.slots.forEachIndexed { index, slot ->
         val p = players[slot.playerId]
         if (p == null) {
-            notes += OrderNote(slot.position, "${positionLabel(slot.position)}が空いています（選手が抜けました）。控えと交代して埋めてください", "交代", PlanSheet.Replace(index), MaterialTheme.colorScheme.error)
+            notes += OrderNote(slot.position, "${positionLabel(slot.position)}が空いています（選手が抜けました）。控えと交代して埋めてください", "交代", OrderPick.Starter(index), MaterialTheme.colorScheme.error)
             return@forEachIndexed
         }
         val fatigue = p.fatigue ?: 0
@@ -419,114 +461,26 @@ private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List
                 if (canRest) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"
                 else "${p.name} 疲労$fatigue。${positionLabel(slot.position)}を守れる控えが居ないので休めません",
                 "交代",
-                PlanSheet.Replace(index),
+                OrderPick.Starter(index),
                 MaterialTheme.colorScheme.error,
             )
         }
         val fit = p.fitness(slot.position)
         if (fit < SUBSTITUTE_MIN_FITNESS) {
-            notes += OrderNote(slot.position, "${p.name} ${positionLabel(slot.position)}の適性$fit。守備で失点しやすい", "守備", PlanSheet.Position(index), MaterialTheme.colorScheme.error)
+            notes += OrderNote(slot.position, "${p.name} ${positionLabel(slot.position)}の適性$fit。守備で失点しやすい", "守備", OrderPick.Starter(index), MaterialTheme.colorScheme.error)
         }
     }
     return notes
 }
 
+/** 選んでいる行と入れ替えたときの適性（位置の札＋適性。⇄ は守備の入れ替え、交代は控えとの交代） */
 @Composable
-private fun PositionSheet(draft: PlanDraft, index: Int, players: Map<Long, Player>, onSwap: (Int) -> Unit) {
-    val slot = draft.slots[index]
-    val me = players[slot.playerId]
-    Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
-        Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PosBadge(slot.position)
-            Text("${me?.name ?: ""}と守備を入れ替える", style = MaterialTheme.typography.titleMedium)
-        }
-        // 列の見出し（数字が誰の・どこでの適性かを、表の上で読めるように）
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val head = MaterialTheme.typography.labelSmall
-            val ink = MaterialTheme.colorScheme.onSurfaceVariant
-            Text("入れ替える相手", style = head, color = ink, modifier = Modifier.weight(1f))
-            Text("本人の適性", style = head, color = ink, maxLines = 1, modifier = Modifier.width(72.dp))
-            Text("相手の適性", style = head, color = ink, maxLines = 1, modifier = Modifier.width(72.dp))
-        }
-        FIELD_POSITIONS.mapNotNull { pos -> draft.slots.indexOfFirst { it.position == pos }.takeIf { it >= 0 && it != index } }
-            .forEach { other ->
-                val target = draft.slots[other]
-                val them = players[target.playerId]
-                val mine = me?.fitness(target.position) ?: 0
-                val theirs = them?.fitness(slot.position) ?: 0
-                Row(Modifier.fillMaxWidth().clickable { onSwap(other) }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PosBadge(target.position, small = true)
-                    Text(them?.name ?: "?", modifier = Modifier.weight(1f), maxLines = 1)
-                    PosBadge(target.position, filled = false, small = true)
-                    Text("$mine", fontWeight = FontWeight.Bold, color = fitnessColor(mine), modifier = Modifier.width(36.dp))
-                    PosBadge(slot.position, filled = false, small = true)
-                    Text("$theirs", fontWeight = FontWeight.Bold, color = fitnessColor(theirs), modifier = Modifier.width(36.dp))
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-    }
-}
-
-/** スタメンの1人と交代する控えを選ぶ（その守備位置の適性が高い順、同じなら疲労の少ない順） */
-@Composable
-private fun ReplaceSheet(view: LeagueView, draft: PlanDraft, index: Int, players: Map<Long, Player>, mode: FielderView, onPick: (Long) -> Unit) {
-    val slot = draft.slots[index]
-    val bench = benchOf(view, draft).candidatesFor(slot.position)
-    Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
-        Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PosBadge(slot.position)
-            Text(players[slot.playerId]?.let { "${it.name}と交代する控え" } ?: "空いている${positionLabel(slot.position)}に入れる控え", style = MaterialTheme.typography.titleMedium)
-        }
-        if (bench.isEmpty()) Text("控えの野手がいません", modifier = Modifier.padding(20.dp))
-        val row: @Composable (Player) -> Unit = { p ->
-            FielderRow(
-                order = null,
-                // 札は入る位置にして、その下の「適」がこの位置での適性と分かるように
-                position = slot.position,
-                player = p,
-                fitnessAt = slot.position,
-                mode = if (mode == FielderView.Fitness) FielderView.Ability else mode,
-                modifier = Modifier.fillMaxWidth().clickable { onPick(p.id) }.padding(horizontal = 10.dp),
-            )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        }
-        bench.forEach { row(it) }
-        // 投手も入れられる（二刀流）。野手の後ろに、その位置の適性の高い順
-        val pitchers = pitcherBenchOf(view, draft).candidatesFor(slot.position)
-        if (pitchers.isNotEmpty()) {
-            Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { Caption("投手（二刀流。先発の日は9番・投手に回ります）") }
-            pitchers.forEach { row(it) }
-        }
-    }
-}
-
-/** 控えの1人を、スタメンの誰と代えるか選ぶ（控えのその位置の適性が高い順） */
-@Composable
-private fun BenchSheet(draft: PlanDraft, id: Long, players: Map<Long, Player>, onPick: (Int) -> Unit) {
-    val me = players[id] ?: return
-    val order = draft.slots.indices.sortedWith(
-        compareByDescending<Int> { me.fitness(draft.slots[it].position) }.thenByDescending { players[draft.slots[it].playerId]?.fatigue ?: 0 },
-    )
-    Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
-        Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PosBadge(me.position)
-            Text("${me.name}を誰と代える？", style = MaterialTheme.typography.titleMedium)
-        }
-        order.forEach { index ->
-            val slot = draft.slots[index]
-            val them = players[slot.playerId]
-            val fit = me.fitness(slot.position)
-            Row(Modifier.fillMaxWidth().clickable { onPick(index) }.padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${index + 1}", fontWeight = FontWeight.Bold, modifier = Modifier.width(18.dp))
-                PosBadge(slot.position, small = true)
-                Text(them?.let { "${conditionIcon(it.condition)} ${it.name}" } ?: "空き", modifier = Modifier.weight(1f), maxLines = 1)
-                FatigueBadge(them?.fatigue)
-                Row(Modifier.width(44.dp), verticalAlignment = Alignment.Bottom) {
-                    Text("適", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("$fit", fontWeight = FontWeight.Bold, color = fitnessColor(fit))
-                }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+private fun SwapHint(label: String, fits: List<Pair<String, Int>>) {
+    Row(Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+        fits.forEach { (pos, fit) ->
+            PosBadge(pos, filled = false, small = true)
+            Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit))
         }
     }
 }
@@ -709,14 +663,10 @@ private fun PitcherRow(order: String, player: Player?, role: String?, starter: B
                 if (!starter && fatigue >= RELIEF_REST_FATIGUE) Box(tag) { Tag("休養") }
                 if (next) Box(tag) { Tag("次の先発") }
             }
+            // 能力（速 制 ス 回転・変化球）と今季成績を両方（野手の行と同じく切り替えずに全部出す。いしだ 2026-11-13）
             player?.let { p ->
-                val m = p.performance?.pitching?.metrics
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("防 ${m?.era?.let { "%.2f".format(it) } ?: "-"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    AbilityNum("速", p.pitching?.velocity, velocity = true)
-                    AbilityNum("制", p.pitching?.control)
-                    AbilityNum("ス", p.pitching?.stamina, stamina = true)
-                }
+                PitcherAbilityRow(p)
+                PitcherStatsRow(p)
             }
         }
         // 疲労は野手の行と同じく、名前の右端の決まった場所に（先発は飛ばす線、救援は休養の線で赤）
@@ -792,8 +742,9 @@ private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
 
 /** スタメンの説明（画面には出さず ⓘ に詰める。いしだ指定） */
 private val ORDER_HELP = listOf(
-    "長押しでドラッグすると打順を並べ替えます。守備の札を押すと守備位置の入れ替え、名前を押すと控えと交代します。控えの行を押すと、誰と代えるかを選べます。",
-    "2行目は上の切り替えで「能力」「今季成績」「守備適性」を出します。守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
+    "長押しでドラッグすると打順を並べ替えます。",
+    "選手（守備の札か名前）を押して選び、ほかのスタメンを押すと守備位置を入れ替え、控えを押すと交代します。控えから選んでスタメンを押しても交代です。選んでいる間は、各行に入れ替えたあとの適性（⇄・交代）が出ます。",
+    "行は 能力（ミ パ 眼 走｜守 肩）・今季成績・守れる位置の適性 の3段です。守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
     "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満の控えが居れば、その日だけ入れ替わって休みます。",
     "疲労は41以上で黄（成長が鈍り始める）、${FIELDER_REST_FATIGUE}以上で赤です。",
 )

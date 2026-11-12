@@ -45,12 +45,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import jp.icenorth.baseball.shared.PITCH_TYPE_NAMES
 import jp.icenorth.baseball.shared.StatColumn
 import jp.icenorth.baseball.shared.abilityRank
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.formatStat
 import jp.icenorth.baseball.shared.int
+import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.statRank
 import jp.icenorth.baseball.shared.str
@@ -176,25 +179,74 @@ fun LoadFailed(message: String, onRetry: () -> Unit, modifier: Modifier = Modifi
     }
 }
 
-/** 選手の主な能力を1行で（投手は球速・制球・スタミナ、野手はミート・パワー・走力・守備） */
+/**
+ * 選手の能力を1行で。**どの画面でも同じ並び**（スタメンの行 [FielderRow] と同じ。いしだ 2026-11-13: 画面ごとに能力の出し方がまちまち）。
+ * 野手は 打撃（ミ パ 眼 走）｜守備（守 肩）、投手は 速 制 ス 回転 と変化球。
+ * ⚠ 以前はトレード・キャンプ・トライアウトだけ「ミ パ 走 守」で、選球眼と肩が出ていなかった
+ */
 @Composable
 fun AbilityLine(p: JsonObject) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         if (p.at("position").str() == "pitcher") {
-            AbilityNum("速", p.at("pitching", "velocity").int(), velocity = true)
-            AbilityNum("制", p.at("pitching", "control").int())
-            AbilityNum("ス", p.at("pitching", "stamina").int(), stamina = true)
-            // ⚠「回」だけだとキャンプのカードの「回復」と紛らわしいので「回転」。
-            //    初期メンバーのパックなど回転を持たない一覧では出さない（「回—」と並んでいた）
-            p.at("pitching", "spinRate").int()?.let { AbilityNum("回転", it) }
+            PitchingCells(
+                p.at("pitching", "velocity").int(), p.at("pitching", "control").int(), p.at("pitching", "stamina").int(),
+                p.at("pitching", "spinRate").int(),
+                pitchesShort(p.at("pitching", "arsenal").list().mapNotNull { it.obj() }.map { it.at("type").str() to it.at("level").int() }),
+            )
         } else {
-            AbilityNum("ミ", p.at("batting", "meet").int())
-            AbilityNum("パ", p.at("batting", "power").int())
-            AbilityNum("走", p.at("physical", "speed").int())
-            AbilityNum("守", p.at("fielding", "defense").int())
+            BattingCells(
+                p.at("batting", "meet").int(), p.at("batting", "power").int(), p.at("batting", "eye").int(), p.at("physical", "speed").int(),
+                p.at("fielding", "defense").int(), p.at("physical", "arm").int(),
+            )
         }
     }
 }
+
+/** 能力1つ（幅をそろえて、行が変わっても同じ能力が縦に並ぶように） */
+@Composable
+fun AbilityCell(label: String, value: Int?, width: Int = 32, velocity: Boolean = false, stamina: Boolean = false) {
+    Box(Modifier.width(width.dp)) { AbilityNum(label, value, velocity, stamina) }
+}
+
+/** 区切り線（打撃と守備の間） */
+@Composable
+fun CellDivider() {
+    Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.outlineVariant))
+}
+
+/** 野手の能力の並び（ミ パ 眼 走 ｜ 守 肩）。スタメン・トレード・キャンプなどで共通 */
+@Composable
+fun BattingCells(meet: Int?, power: Int?, eye: Int?, speed: Int?, defense: Int?, arm: Int?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AbilityCell("ミ", meet)
+        AbilityCell("パ", power)
+        AbilityCell("眼", eye)
+        AbilityCell("走", speed)
+        CellDivider()
+        AbilityCell("守", defense)
+        AbilityCell("肩", arm)
+    }
+}
+
+/** 投手の能力の並び（速 制 ス 回転 ＋ 変化球）。投手起用・トレード・キャンプなどで共通 */
+@Composable
+fun PitchingCells(velocity: Int?, control: Int?, stamina: Int?, spin: Int?, pitches: String?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AbilityCell("速", velocity, width = 40, velocity = true)
+        AbilityCell("制", control)
+        AbilityCell("ス", stamina, width = 38, stamina = true)
+        // ⚠「回」だけだとキャンプのカードの「回復」と紛らわしいので「回転」。持たない一覧（初期メンバーの組など）では出さない
+        if (spin != null) AbilityCell("回転", spin, width = 44)
+        if (!pitches.isNullOrEmpty()) {
+            Text(pitches, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))
+        }
+    }
+}
+
+/** 変化球を短く（「スラ4 フォ3」。直球は全員が持っているので外す） */
+fun pitchesShort(arsenal: List<Pair<String?, Int?>>): String =
+    arsenal.filter { (type, _) -> type != null && type != "straight" }
+        .joinToString(" ") { (type, level) -> (PITCH_TYPE_NAMES[type] ?: type.orEmpty()).take(2) + (level?.toString() ?: "") }
 
 /** 名前・年齢・守備位置の1行（押すと選手の詳細） */
 @Composable
