@@ -126,10 +126,13 @@ private fun Cell(label: String, value: Int?, width: Int = 32) = AbilityCell(labe
 /**
  * 野手1人の行。**スタメンも控えも同じ部品**で出す（以前の指摘: スタメンと控えで出ている情報が違う）。
  *
- *   1行目: 打順（控えは空き）・守備の札・調子と名前・（選んでいる行があれば）入れ替えたときの適性・疲労
+ *   1行目: 打順（控えは空き）・守備の札・調子と名前・特徴ラベル・（選んでいる行があれば）入れ替えたときの適性・疲労
  *   2行目: 能力＝打撃（ミ パ 眼 走）｜守備（守 肩）。守っている位置の適性「適」は札の真下
- *   3行目: 今季成績＝打率 OPS 本 盗 席 と特徴ラベル
- *   4行目: 守れる位置の適性（60以上を高い順）
+ *   3行目: 今季成績＝打率 OPS 本 盗 席 と、右に**ほかに**守れる位置の適性（60以上を高い順、入るだけ）
+ *
+ * ⚠ 1人3行（いしだ 2026-11-13: 以前は4行目に守れる位置を全部出していて、守っている位置の適性が
+ *    札の下の「適」と2回出ていた。1画面に4人半しか入らなかった）。守っている位置は「適」だけで出し、
+ *    3行目にはそれ以外の位置だけを出す。特徴ラベルは名前の右へ（投手の行と同じ場所）
  *
  * ⚠ **能力・成績・適性を全部出す**（いしだ 2026-11-13: 切り替えながらでは判断が難しい。1人の行が大きくなってよい）。
  *    以前は2行目だけを「能力／今季成績／守備適性」で切り替えていた。
@@ -173,10 +176,14 @@ fun FielderRow(
                     color = if (player != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false).padding(end = 3.dp),
+                    modifier = Modifier.padding(end = 3.dp),
                 )
                 // ⚠ 本職・ほかに守れる位置の小さな札はここに出さない（いしだ指定: ごちゃごちゃする）。
-                //    守れる位置は4行目、守っている位置の適性は札の下の「適」で見る
+                //    守れる位置は3行目の右、守っている位置の適性は札の下の「適」で見る
+                // 特徴ラベル（アベヒ・出塁 など）は名前の右に、丸ごと入るものだけ（入れ替え先の適性が出ると減る）
+                if (player != null) {
+                    FittingRow(Modifier.weight(1f), alignEnd = false) { BattingLabels(player) }
+                }
             }
             hint?.invoke()
             if (player != null) FatigueBadge(player.fatigue)
@@ -197,9 +204,9 @@ fun FielderRow(
                 }
                 Box(Modifier.weight(1f).alignByBaseline().padding(start = 6.dp)) { AbilityRow(player) }
             }
-            Column(Modifier.padding(start = 66.dp)) {
-                StatsRow(player)
-                FitnessRow(player, fitnessAt, withArm = false)
+            Row(Modifier.padding(start = 66.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                BattingStats(player)
+                FittingRow(Modifier.weight(1f).padding(start = 8.dp), gapDp = 8) { OtherPositions(player, fitnessAt) }
             }
         }
     }
@@ -247,36 +254,62 @@ fun PitcherStatsRow(player: Player) {
  */
 @Composable
 fun StatsRow(player: Player) {
-    val m = player.performance?.batting?.metrics
-    val labels = player.performance?.batting?.labels.orEmpty()
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (m == null || m.pa == 0) {
-                Muted("今季の打席なし")
-            } else {
-                StatText("打率", rate3(m.avg))
-                StatText("OPS", ops3(m.ops))
-                StatText("本", "${m.homeruns}")
-                StatText("盗", "${m.stolenBases}")
-                StatText("席", "${m.pa}")
-            }
-        }
-        FittingRow(Modifier.weight(1f).padding(start = 8.dp)) {
-            labels.take(3).forEach { label ->
-                Tag(shortLabel(label.text), if (label.tone == "bad") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-            }
+        BattingStats(player)
+        FittingRow(Modifier.weight(1f).padding(start = 8.dp)) { BattingLabels(player) }
+    }
+}
+
+/** 今季の打撃成績（打率 OPS 本 盗 席）だけ */
+@Composable
+private fun BattingStats(player: Player) {
+    val m = player.performance?.batting?.metrics
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (m == null || m.pa == 0) {
+            Muted("今季の打席なし")
+        } else {
+            StatText("打率", rate3(m.avg))
+            StatText("OPS", ops3(m.ops))
+            StatText("本", "${m.homeruns}")
+            StatText("盗", "${m.stolenBases}")
+            StatText("席", "${m.pa}")
         }
     }
 }
 
+/** 成績の特徴（短い形）。[FittingRow] の中で使う */
+@Composable
+private fun BattingLabels(player: Player) {
+    player.performance?.batting?.labels.orEmpty().take(3).forEach { label ->
+        Tag(shortLabel(label.text), if (label.tone == "bad") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+    }
+}
+
 /**
- * 右寄せで、**丸ごと入る札だけ**を並べる（入りきらない札は途中で切らずに出さない）。
+ * 守っている位置**以外**で守れる位置（適性60以上）を高い順に、「右100」の形で。[FittingRow] の中で使う。
+ * 守っている位置の適性は札の下の「適」に出ているので、ここには出さない（2回出ていた）
+ */
+@Composable
+private fun OtherPositions(player: Player, fitnessAt: String) {
+    FIELD_POSITIONS.filter { it != fitnessAt && player.fitness(it) >= SUBSTITUTE_MIN_FITNESS }
+        .sortedByDescending { player.fitness(it) }
+        .forEach { pos ->
+            val fit = player.fitness(pos)
+            Row {
+                Text(positionLabel(pos), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, color = lighten(positionColor(pos)), modifier = Modifier.alignByBaseline())
+                Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, color = fitnessColor(fit), modifier = Modifier.alignByBaseline().padding(start = 2.dp))
+            }
+        }
+}
+
+/**
+ * 右寄せ（[alignEnd] が false なら左寄せ）で、**丸ごと入る札だけ**を並べる（入りきらない札は途中で切らずに出さない）。
  * ⚠ 普通の Row に clipToBounds だと、最後の札が半分に切れて「アベ」のように見えた
  */
 @Composable
-private fun FittingRow(modifier: Modifier, content: @Composable () -> Unit) {
+private fun FittingRow(modifier: Modifier, alignEnd: Boolean = true, gapDp: Int = 4, content: @Composable () -> Unit) {
     Layout(content, modifier) { measurables, constraints ->
-        val gap = 4.dp.roundToPx()
+        val gap = gapDp.dp.roundToPx()
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val placeables = measurables.map { it.measure(loose.copy(maxWidth = androidx.compose.ui.unit.Constraints.Infinity)) }
         val shown = mutableListOf<androidx.compose.ui.layout.Placeable>()
@@ -290,7 +323,7 @@ private fun FittingRow(modifier: Modifier, content: @Composable () -> Unit) {
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth else used
         val height = (shown.maxOfOrNull { it.height } ?: 0).coerceAtLeast(constraints.minHeight)
         layout(width, height) {
-            var x = width - used
+            var x = if (alignEnd) width - used else 0
             shown.forEach { pl ->
                 pl.placeRelative(x, (height - pl.height) / 2)
                 x += pl.width + gap

@@ -92,8 +92,8 @@ fun StaffPanel(model: AppViewModel, view: LeagueView) {
             failure = model.describe(e)
         }
     }
-    // ⚠ 下は空けておく（編成のタブには左下に TIPS の印が重なり、最後の行が隠れていた）
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = TipsBadgeRoom), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    // 下は少しだけ空ける（TIPS の印は面の切り替えの右に出すので、行には重ならない）
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TeamPicker(view, team) { team = it }
         if (isOwn) OwnStaff(model, view, own)
         else when {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
@@ -222,7 +223,16 @@ fun OnlineApp(model: AppViewModel) {
                             GamesScreen(model, gamesSection, { gamesSection = it }, onOpenTeam = { model.showTeamPlayers(it); fromStandings = true; tab = Tab.Players })
                         }
                         Tab.Players -> Refreshable(model) { PlayersScreen(model) }
-                        Tab.Plan -> PlanScreen(model)
+                        // ⚠ 編成では TIPS の印を面の切り替えの右に置く（行が3行になり、左下に重ねると打順と「適」が隠れた）
+                        Tab.Plan -> PlanScreen(model) {
+                            SituationTipsBadge(
+                                situations,
+                                seen = model.seenSituationTips,
+                                onRead = model::markSituationTipsSeen,
+                                onOpenAll = { showTips = true },
+                                modifier = Modifier.padding(end = 10.dp).size(32.dp),
+                            )
+                        }
                         Tab.Procedures -> Refreshable(model) {
                             ProceduresScreen(model, onHome = { tab = Tab.Home }, onOpenStaff = { model.planFaceRequest = "Staff"; tab = Tab.Plan })
                         }
@@ -232,9 +242,9 @@ fun OnlineApp(model: AppViewModel) {
                 model.openingPlayer?.let { name ->
                     LoadingPill("${name}を読み込んでいます…", Modifier.align(Alignment.BottomCenter).padding(16.dp))
                 }
-                // ⚠ 枠は取らず左下の角に重ねる。ホームと編成だけ（当てはまらなければ出ない）
-                //    右下だと編成の行の「並べ替え」つまみに重なる。左下は打順の数字なので触る物が無い
-                if (tab == Tab.Home || tab == Tab.Plan) {
+                // ⚠ 枠は取らず左下の角に重ねる。ホームだけ（当てはまらなければ出ない）。
+                //    編成では選手の行に重なる（左下は打順の数字と「適」、右下は並べ替えのつまみ）ので、面の切り替えの右に出す
+                if (tab == Tab.Home) {
                     SituationTipsBadge(
                         situations,
                         seen = model.seenSituationTips,
@@ -285,12 +295,6 @@ fun RenameDialog(model: AppViewModel, close: () -> Unit) {
         dismissButton = { TextButton(onClick = close) { Text("閉じる") } },
     )
 }
-
-/**
- * 左下の TIPS の印（ホームと編成に重ねる）に隠れないよう、スクロールする画面の下に空ける高さ。
- * ⚠ 編成の面を足したら、その面の下にもこれを空けること（方針・采配と指導者の最後の行が隠れていた）
- */
-val TipsBadgeRoom = 72.dp
 
 /** 画面を開いている間に読み直す間隔（届いた提案に気づくため。変わっていなければサーバーは「変わりなし」だけ返す） */
 private const val AUTO_RELOAD_MS = 60_000L

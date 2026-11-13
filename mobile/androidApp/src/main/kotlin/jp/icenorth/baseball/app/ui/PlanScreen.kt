@@ -109,7 +109,7 @@ private sealed interface OrderPick {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlanScreen(model: AppViewModel) {
+fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
     val view = model.view
     val lineup = view?.lineup
     if (view == null || lineup == null || view.roster.isEmpty()) {
@@ -192,7 +192,11 @@ fun PlanScreen(model: AppViewModel) {
                 )
             }
         }
-        ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.padding(top = if (tab == PlanTab.Staff) 8.dp else 0.dp))
+        // 今の状態に当てはまる TIPS の印は面の切り替えの右に（行に重ねない）
+        Row(Modifier.fillMaxWidth().padding(top = if (tab == PlanTab.Staff) 8.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
+            ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.weight(1f))
+            tipsBadge()
+        }
         when (tab) {
             PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open)
             PlanTab.Pitching -> PitchingEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open) { sheet = it }
@@ -316,7 +320,7 @@ private fun OrderEditor(
         }
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = TipsBadgeRoom), // 左下の TIPS の印に最後の行が隠れないよう
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -560,7 +564,7 @@ private fun PitchingList(
     val relievers = RELIEF_ORDER.map { role -> role to state.roles.filter { (id, r) -> r == role && id !in state.starters }.keys.mapNotNull { players[it] } }
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = TipsBadgeRoom), // 左下の TIPS の印に最後の行が隠れないよう
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -719,7 +723,7 @@ private fun RoleOption(label: String, hint: String?, selected: Boolean, enabled:
 @Composable
 private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
     // ⚠ 下は空けておく（左下の TIPS の印に、最後の項目の「しない」などのボタンが隠れていた）
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = TipsBadgeRoom), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // 指導者に任せているときは、ここで変えると「意見を聞く」に戻ることを先に知らせる（PC と同じ）
         if (view.staff?.mode("tactics")?.effective == "delegate")
             Muted("試合中の采配は指導者に任せています（「AI判断の中身」のとおりに動きます）。ここで変えて保存すると、任せ方は「意見を聞く」に戻ります。")
