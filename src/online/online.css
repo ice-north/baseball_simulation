@@ -2641,25 +2641,57 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 10px;
   align-items: start;
 }
+/* 今後のカードの注記（見出しの行に置く）。⚠ 下に1行置くと今後のカードだけ
+   高くなり、直近と大きさが揃わない */
+.online-slots-note {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #9fb0c4;
+}
 .online-slots ol {
   list-style: none;
   margin: 0;
   padding: 0;
 }
+/* ⚠ **5つの行はすべて同じ高さにする**（いしだ要望: まとまりを良くする）。
+   試合の行は3行（ターン／決着投手・本塁打／先発）、休養日は1行なので、
+   そのままだと 78px と 27px でばらついていた。`min-height` で揃え、
+   中身は縦の真ん中に置く。
+   ⚠ 行間（`gap` の縦）は 2px に詰める。6px のままだと試合の行が 78px に
+      なり、5行×2枚でホームが 1000px に迫る（実測で998px）。横の 6px は
+      1行目の「第9ターン／ビジター／敗／3–5／静岡」のすき間なので残す。
+   ⚠ 高さ 64px と行の高さ 1.4 は**実測**。勝敗の印と本塁打の枠がそれぞれ
+      18px で、文字の行（17px）より1pxずつ高いので 63〜64px になる。
+      既定の行の高さ（1.6）のままだと1行70pxになり、ホームが955pxまで
+      伸びて1画面（1000px）の余裕が45pxしか残らなかった。
+      字の大きさを変えたらここも測り直すこと。 */
 .online-slot {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  align-content: center;
+  gap: 2px 6px;
+  min-height: 64px;
   padding: 3px 0;
   font-size: 12px;
+  line-height: 1.4;
   border-top: 1px solid #ffffff12;
 }
 .online-slot:first-child {
   border-top: 0;
 }
+/* ⚠ 休養日の行も**同じ文字の大きさ**にする（いしだ要望）。小さくすると
+   5つの行の大きさがばらつき、まとまりが無かった。色だけで落とす */
 .online-slot.is-rest {
   color: #94a3b8;
-  font-size: 11px;
+}
+/* ⚠ 勝敗の印は**1行目の字の高さに合わせる**。既定の 22px のままだと直近の
+   行だけ 66px になり、今後の行（62px）と揃わない。試合結果の一覧では
+   22px のまま使うので、ここだけ上書きする */
+.online-slot .online-outcome {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
 }
 .online-slot-turn {
   flex: none;
@@ -2711,8 +2743,8 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 1px;
   flex-basis: 100%;
   min-width: 0;
-  font-size: 10px;
-  color: #9fb0c4;
+  font-size: 12px;
+  color: #cbd5e1;
 }
 .online-slot-starter {
   display: flex;
@@ -2745,8 +2777,8 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 2px 8px;
   flex-basis: 100%;
   min-width: 0;
-  font-size: 10px;
-  color: #9fb0c4;
+  font-size: 12px;
+  color: #cbd5e1;
 }
 .online-slot-homeruns > b {
   flex: none;
@@ -2770,17 +2802,23 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-slot-homerun i {
   margin-left: 2px;
   font-style: normal;
+  font-size: 10px;
   color: #fdba74;
 }
 /* 勝敗・セーブの投手（直近の試合の2行目） */
+/* ⚠ **名前は個人成績ランキングと同じ 12px**（いしだ要望）。10px だと同じ
+   ホームの中で左のランキングだけ大きく見え、まとまりが無かった。
+   ⚠ 印（勝・敗・Ｓ）と数字（防御率・勝敗）は**小さいまま残す**。
+      ランキングの球団名（9.6px）と同じ役どころで、ここを大きくすると
+      1280px で右端が切れる */
 .online-slot-decisions {
   display: flex;
   flex-wrap: wrap;
   gap: 2px 8px;
   flex-basis: 100%;
   min-width: 0;
-  font-size: 10px;
-  color: #9fb0c4;
+  font-size: 12px;
+  color: #cbd5e1;
 }
 .online-slot-decision {
   display: inline-flex;
@@ -2820,7 +2858,7 @@ small.online-gain:not(:where(.online-sp *)) {
    やめ、すき間を 3px に詰めて、1280〜1440px で切れないことを確かめた */
 .online-slot-starters .online-starter-name,
 .online-slot-starters > small:not([class]) {
-  font-size: 10.5px;
+  font-size: 12px;
   color: #cbd5e1;
 }
 .online-slot-starters .online-starter-line {
