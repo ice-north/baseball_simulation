@@ -152,7 +152,7 @@ fun TryoutPanel(
     val afterLine = "獲得後の名簿 投${after["pitcher"]}/${ONLINE_ROSTER_TARGETS["pitcher"]} 捕${after["catcher"]}/${ONLINE_ROSTER_TARGETS["catcher"]} 内${after["infielder"]}/${ONLINE_ROSTER_TARGETS["infielder"]} 外${after["outfielder"]}/${ONLINE_ROSTER_TARGETS["outfielder"]}（交渉した人まで）"
     if (side == "plan") Section("交渉する選手 ${ranked.size} / ${limit}人") {
         Muted(afterLine)
-        if (summary.blocking.isNotEmpty()) Text("このままでは名簿が成り立ちません: ${summary.blocking.joinToString(" / ")}。足りない守備位置の選手と交渉してください。", color = MaterialTheme.colorScheme.error)
+        if (summary.blocking.isNotEmpty()) Text("交渉した選手だけでは足りません: ${summary.blocking.joinToString(" / ")}。足りない守備位置は自動で補います（希望どおりにしたいなら、その位置の選手と交渉してください）。", color = MaterialTheme.colorScheme.error)
         if (summary.warnings.isNotEmpty()) Text("${summary.warnings.joinToString("。")}。人数が足りない位置は自動で埋められます。", color = MaterialTheme.colorScheme.secondary)
         notice?.let { Text(it, color = MaterialTheme.colorScheme.secondary) }
         if (ranked.isEmpty()) Muted(if (limit > 0) "「候補」で「交渉」を押すと、ここに1位から並びます。${limit}人まで選べます。" else "名簿に空きがありません。")

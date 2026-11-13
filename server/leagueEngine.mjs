@@ -144,7 +144,6 @@ import {
 import {
   nextFromPlan,
   wishLimit,
-  planCount,
   signTotal,
   TRYOUT_WISH_MAX,
 } from '../src/online/tryoutPlan.js';
@@ -1020,7 +1019,7 @@ export function defaultPhasePlan(league, teamName) {
   //    名簿は次のキャンプでセットに丸ごと入れ替わるので、取った選手は
   //    どこにも残らず消える（プールからは抜けているので世界から居なくなる）
   if (kind === 'tryout' && hasPendingPack(league, teamName))
-    return { rankedIds: [], count: 0 };
+    return { rankedIds: [], count: 0, total: 0 };
   // ⚠ 監督の考え（育成か勝負か・好む選手）。人の球団で「自分で」なら null（従来どおり）
   const context = tryoutContextFor(league, teamName);
   return seeded(league, `default:${league.phase.id}:${teamName}`, () => {
@@ -1381,12 +1380,19 @@ function resolveTryout(league, plans) {
   for (const pick of order) picksLeftOf[pick.team] += 1;
   // ⚠ **獲得する人数**（`signTotal`）。参加者が決める。CPU球団と、決めていない提出は
   //    空き枠いっぱい（前と同じ）。先方指摘「指名選手の人数を決められない」
+  // ⚠ **初期メンバーを待っている球団は0人**（提出の中身によらない）。名簿は次のキャンプで
+  //    セットに丸ごと入れ替わるので、取った選手は世界から消える（`defaultPhasePlan` の注）。
+  //    `total` の無い提出を「枠いっぱい」と読むようにしたので、ここで止めないと26人まで取っていた
   const totalOf = Object.fromEntries(
     names.map((name) => [
       name,
-      signTotal(plans[name], ROSTER_LIMIT - TEAMS_DATA[name].players.length),
+      hasPendingPack(league, name)
+        ? 0
+        : signTotal(plans[name], ROSTER_LIMIT - TEAMS_DATA[name].players.length),
     ]),
   );
+  // 交渉したのに他球団に取られた選手（実際に取りにいった所まで。`tryoutResults` の lost）
+  const lostOf = Object.fromEntries(names.map((name) => [name, new Set()]));
   // 交渉の何位で取れたか（画面の「トライアウトの結果」に出す）
   const wishOf = (name, id) => {
     const at = plans[name]?.rankedIds?.indexOf(id) ?? -1;
@@ -1447,13 +1453,22 @@ function resolveTryout(league, plans) {
     // ⚠ 希望順のとおりに取る（飛ばさない）。自分で10人選ぶ形なので、
     //    1位を飛ばされると何を選んだのか分からなくなる
     const fromPlan =
-      plan && !planFull
+      plan && !planFull && !reached
         ? nextFromPlan(
             plan.rankedIds
               .map((id) => remaining.find((p) => p.id === id))
               .filter(Boolean),
           )
         : null;
+    // ⚠ 取りにいった希望より上で、もう残っていない（自分以外が取った）選手は「取られた」。
+    //    人数で切った位置（`total`）で数えると、繰り上がって取りにいった下位の希望が漏れる
+    if (plan && !planFull && !reached && !forced) {
+      for (const id of plan.rankedIds) {
+        if (fromPlan && id === fromPlan.id) break;
+        if (!remaining.some((p) => p.id === id) && !acquired[pick.team].some((p) => p.id === id))
+          lostOf[pick.team].add(id);
+      }
+    }
     // ⚠ **希望が尽きても枠は埋める**。交渉は10人までで、しかも上位の球団に
     //    先を越される。ここで見送ると人の球団だけ名簿が足りないまま終わる
     //    （実測で自分21人・CPU26人。控えの数でそのまま不利になる）
@@ -1505,6 +1520,7 @@ function resolveTryout(league, plans) {
   //    `campResults` と同じく次のトライアウトまで残し、ビューの `lastTryout` で出す。
   // ⚠ 交渉した選手を**どこが取ったか**は本人にだけ見せる（交渉の中身はほかの人に見せない）
   const takenBy = new Map(allPicked.map(({ team, player }) => [player.id, team]));
+  const candidateById = new Map(phase.candidates.map((p) => [p.id, p]));
   const brief = (player) => ({
     playerId: player.id,
     name: player.name,
@@ -1516,7 +1532,6 @@ function resolveTryout(league, plans) {
       .filter((m) => !m.packSeed && acquired[m.teamName])
       .map((m) => {
         const plan = plans[m.teamName];
-        const byId = new Map(phase.candidates.map((p) => [p.id, p]));
         return [
           m.userId,
           {
@@ -1530,15 +1545,14 @@ function resolveTryout(league, plans) {
                 wish: wishOf(m.teamName, player.id),
               })),
             lost: (plan?.rankedIds || [])
-              // ⚠ 獲得する人数より下の希望は、取られていても「取りにいかなかった」ので並べない
               .filter(
-                (id, i) =>
-                  i < totalOf[m.teamName] &&
+                (id) =>
+                  lostOf[m.teamName].has(id) &&
                   takenBy.has(id) &&
                   takenBy.get(id) !== m.teamName,
               )
               .map((id) => ({
-                ...brief(byId.get(id) || { id, name: '?' }),
+                ...brief(candidateById.get(id) || { id, name: '?' }),
                 wish: wishOf(m.teamName, id),
                 takenBy: takenBy.get(id),
               })),

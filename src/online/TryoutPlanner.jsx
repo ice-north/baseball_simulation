@@ -121,6 +121,15 @@ function Line({ player, score, fit }) {
   );
 }
 
+/** 名簿＋交渉で取る人で、最低限（投手1・捕手1・野手8）に足りない人数（サーバーの `shortfall` と同じ数え方） */
+function minimumShort(roster, picked) {
+  const list = [...(roster || []), ...picked];
+  const pitcher = list.some((p) => p.position === 'pitcher') ? 0 : 1;
+  const catcher = list.some((p) => p.position === 'catcher');
+  const fielders = list.filter((p) => p.position !== 'pitcher').length;
+  return pitcher + Math.max(8 - fielders, catcher ? 0 : 1);
+}
+
 export default function TryoutPlanner({
   plan,
   candidates,
@@ -176,7 +185,8 @@ export default function TryoutPlanner({
   );
   // 獲得したあとの名簿の内訳（目標と比べるのはこちら。下の見出しの注）
   const after = rosterCounts([...(roster || []), ...picked]);
-  const afterSize = (roster || []).length + total;
+  // ⚠ 最低限（投1・捕1・野8）に届かないぶんはサーバーが人数を超えて補うので、その分も足す
+  const afterSize = (roster || []).length + Math.max(total, picked.length + minimumShort(roster, picked));
   const wantedSet = useMemo(() => new Set(wanted), [wanted.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pool = useMemo(
@@ -380,7 +390,9 @@ export default function TryoutPlanner({
               「…4人未満ですこの位置は…」と文がつながって出ていた */}
           {blocking.length > 0 && (
             <p role="alert" className="online-tryout-block">
-              {`このままでは決定できません: ${blocking.join(' / ')}。足りない守備位置の選手と交渉してください。`}
+              {/* ⚠ 決定は止めない（サーバーが足りない守備位置を補う）。上の「獲得しません…補います」と
+                  食い違わないよう、「決定できない」とは書かない */}
+              {`交渉した選手だけでは足りません: ${blocking.join(' / ')}。足りない守備位置は自動で補います（希望どおりにしたいなら、その位置の選手と交渉してください）。`}
             </p>
           )}
           {warnings.length > 0 && (

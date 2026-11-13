@@ -196,6 +196,7 @@ function PlayerRow({
   policy,
   onFitWish,
   gains = {},
+  events = [],
 }) {
   const g = (key) => gains[key];
   const choices = subTargetChoices(sub, player);
@@ -209,6 +210,14 @@ function PlayerRow({
     <tr>
       <th>
         <PlayerStatsButton player={player} panel="abilities" />
+        {/* ⚠ 直近のクールの出来事（フォーム改造・新球種・覚醒）。数字が動かない出来事もあり、
+            上のまとめを消したので、ここに出さないとキャンプが終わるまで知らされない */}
+        {events.map((text, i) => (
+          <small key={`${i}:${text}`} className="online-camp-gain-event">
+            {' '}
+            {text}
+          </small>
+        ))}
       </th>
       {/* ⚠ 投手の表に守備位置は出さない（全員「投」で、1列ぶん無駄になる） */}
       {!isPitcher && <td>{POS[player.position]}</td>}
@@ -405,7 +414,7 @@ function LastRoundGains({ last, roster }) {
         第{last.round}クールで伸びた選手（{rows.length}人）
       </summary>
       <ul className="online-camp-gain-list">
-        {rows.map(({ player, items }) => (
+        {rows.map(({ player, items, events }) => (
           <li key={player.id}>
             <span className="online-camp-gain-name">
               <PlayerStatsButton player={player} panel="abilities" />
@@ -420,6 +429,11 @@ function LastRoundGains({ last, roster }) {
                   {i.label}
                   {formatGain(i.diff)}
                 </span>
+              ))}
+              {events.map((text, index) => (
+                <strong key={`${index}:${text}`} className="online-camp-gain-event">
+                  {text}
+                </strong>
               ))}
             </span>
           </li>
@@ -442,7 +456,10 @@ function LastRoundGains({ last, roster }) {
 export function CampResultList({ camp, roster }) {
   const rows = campGainRows(camp?.gains || {}, roster, camp?.events || {});
   if (!rows.length && !camp?.rounds) return null;
-  const byRound = camp?.byRound || [];
+  // ⚠ **全クールぶん揃っているときだけ**クール別を出す。記録を足す前に始めたキャンプは
+  //    途中のクールからしか無く、並べると「計」と合わない（抜けたクールが黙って消える）
+  const byRound =
+    (camp?.byRound || []).length === camp?.rounds ? camp.byRound : [];
   const totals = campGainTotals(camp?.gains || {});
   const grown = rows.filter((r) => r.items.some((i) => i.diff > 0)).length;
   const roundSum = (round, id) =>
@@ -949,6 +966,7 @@ export default function CampPlanner({
                     policy={policyOf(p)}
                     onFitWish={fitWish}
                     gains={camp?.last?.gains?.[p.id]}
+                    events={camp?.last?.events?.[p.id]}
                     target={subTarget[p.id]}
                     onMain={(id2, key) => setMain({ ...main, [id2]: key })}
                     onSub={(id2, key) => {

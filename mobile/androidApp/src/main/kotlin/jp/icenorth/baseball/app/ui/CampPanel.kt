@@ -239,6 +239,7 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, header: @
             //    キャンプ後に選手ごとの総合上昇値を見たい）。キャンプ中は選手ごとの「第Nクール」の伸びで見る
             if (finished) key(done) { CampGains(model, camp, roster) }
 
+            val campRounds = remember(camp) { campRoundList(camp) }
             var group by rememberSaveable { mutableStateOf("pitcher") }
             val groups = CAMP_GROUPS.map { (id, label) -> Triple(id, label, roster.filter { campGroupOf(it.at("position").str()) == id }) }.filter { it.third.isNotEmpty() }
             val shown = groups.firstOrNull { it.first == group } ?: groups.firstOrNull()
@@ -247,7 +248,7 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, header: @
                 CampPlayerCard(
                     model, p, mainOf(p), subOf(p), policyOf(p), enabled = !finished,
                     onFitWish = { fitWish(p) },
-                    rounds = campRounds(camp, p.pid.toString()),
+                    rounds = campRounds,
                     target = draft.subTarget[p.pid],
                     onMain = { key -> model.campDraft = draft.copy(main = draft.main + (p.pid to key)) },
                     // ⚠ 練習を変えたら対象は捨てる（別の練習の対象が残る）
@@ -273,14 +274,22 @@ fun CampPanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, header: @
 private fun JsonObject?.idMap(): Map<Long, String> =
     orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { id -> v.str()?.takeIf { it.isNotEmpty() }?.let { id to it } } }.toMap()
 
+/** 1クールぶんの記録（伸びと出来事。どちらも選手の id → 中身） */
+internal data class CampRound(val round: Int, val gains: JsonObject?, val events: JsonObject?)
+
 /**
- * 選手1人の、クールごとの伸び（`camp.byRound`。無い記録＝版を上げる前に始めたキャンプは直近の `camp.last` だけ）。
- * ⚠ 先方指摘: 「+〇」が通算なので、1つのクールでどれだけ伸びたか分からなかった
+ * クールごとの記録（`camp.byRound`。無い記録＝版を上げる前に始めたキャンプは直近の `camp.last` だけ）。
+ * ⚠ 先方指摘: 「+〇」が通算なので、1つのクールでどれだけ伸びたか分からなかった。
+ * ⚠ 呼ぶ側で1回だけ読む（選手ごとに読み直さない）
  */
-private fun campRounds(camp: JsonObject?, id: String): List<Pair<Int, JsonObject?>> {
+internal fun campRoundList(camp: JsonObject?): List<CampRound> {
     val byRound = camp.at("byRound").list().mapNotNull { it.obj() }
-    val rounds = byRound.ifEmpty { listOfNotNull(camp.at("last").obj()) }
-    return rounds.map { (it.at("round").int() ?: 0) to it.at("gains", id).obj() }
+    val last = camp.at("last").obj()
+    return byRound.map { r ->
+        val round = r.at("round").int() ?: 0
+        // 出来事は byRound に無い。直近のクールのぶんだけ last から添える
+        CampRound(round, r.at("gains").obj(), if (round == last.at("round").int()) last.at("events").obj() else null)
+    }.ifEmpty { listOfNotNull(last?.let { CampRound(it.at("round").int() ?: 0, it.at("gains").obj(), it.at("events").obj()) }) }
 }
 
 /**
@@ -295,6 +304,8 @@ internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<Json
     var open by rememberSaveable { mutableStateOf(!collapsed) }
     val rows = campGainRows(total, roster, camp.at("events").obj())
     val totals = campGainTotals(total)
+    // ⚠ **全クールぶん揃っているときだけ**クール別を出す（途中のクールからの記録だと「計」と合わない）
+    val rounds = remember(camp) { camp.at("byRound").list().mapNotNull { it.obj() }.takeIf { it.size == (camp.at("rounds").int() ?: -1) }.orEmpty() }
     Section("選手ごとの総合上昇値（キャンプ通算）", trailing = if (collapsed) ({ TextButton(onClick = { open = !open }) { Text(if (open) "閉じる" else "開く") } }) else null) {
         if (!open) {
             Muted(if (rows.isEmpty()) "伸びた能力はありません。" else "${rows.count { it.grew }}人が伸びました")
@@ -320,11 +331,10 @@ internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<Json
                     )
                 }
                 if (row.items.isNotEmpty()) GainLine(null, row.items)
-                val rounds = campRounds(camp, id).takeIf { camp.at("byRound").list().isNotEmpty() }.orEmpty()
                 // ⚠ 0 は「±0」と書く（「第1」「0」が続いて「第10」に読めた）
-                if (rounds.isNotEmpty()) Muted("クール別 " + rounds.joinToString(" / ") { (round, gains) ->
-                    val n = (gains.orEmpty().values.sumOf { it.num() ?: 0.0 } * 10).roundToInt() / 10.0
-                    "第$round ${if (n == 0.0) "±0" else formatGain(n)}"
+                if (rounds.isNotEmpty()) Muted("クール別 " + rounds.joinToString(" / ") { r ->
+                    val n = (r.at("gains", id).obj().orEmpty().values.sumOf { it.num() ?: 0.0 } * 10).roundToInt() / 10.0
+                    "第${r.at("round").int() ?: 0} ${if (n == 0.0) "±0" else formatGain(n)}"
                 })
                 row.events.forEach { Text(it, color = MaterialTheme.colorScheme.tertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
             }
@@ -387,7 +397,7 @@ private fun CampPlayerCard(
     policy: Wish,
     enabled: Boolean,
     onFitWish: () -> Unit,
-    rounds: List<Pair<Int, JsonObject?>>,
+    rounds: List<CampRound>,
     target: String?,
     onMain: (String) -> Unit,
     onSub: (String) -> Unit,
@@ -439,11 +449,17 @@ private fun CampPlayerCard(
         }
         // ⚠ **クールごとの伸び**（先方指摘: 通算の「+〇」だけでは、1つのクールで伸びた値が分からない）。
         //    直近のクールは閉じた形でも出し、それより前のクールは開いたときに並べる
-        val roundItems = rounds.map { (round, g) ->
-            round to campGainRows(g?.let { JsonObject(mapOf(p.pid.toString() to it)) }, listOf(p)).firstOrNull()?.items.orEmpty()
+        val id = p.pid.toString()
+        val roundItems = rounds.map { r ->
+            r.round to campGainRows(r.gains?.get(id).obj()?.let { JsonObject(mapOf(id to it)) }, listOf(p)).firstOrNull()?.items.orEmpty()
         }
         roundItems.lastOrNull()?.let { (round, items) ->
             if (items.isNotEmpty()) GainLine("第${round}クール", items) else Muted("第${round}クール: 伸びなし")
+        }
+        // ⚠ 直近のクールの出来事（フォーム改造・新球種・覚醒）。上のまとめを消したので、ここに出さないと
+        //    キャンプが終わるまで知らされない
+        rounds.lastOrNull()?.events?.get(id).list().mapNotNull { it.str() }.forEach {
+            Text(it, color = MaterialTheme.colorScheme.tertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         if (open) roundItems.dropLast(1).asReversed().forEach { (round, items) ->
             if (items.isNotEmpty()) GainLine("第${round}クール", items) else Muted("第${round}クール: 伸びなし")
