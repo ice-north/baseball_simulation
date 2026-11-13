@@ -835,6 +835,39 @@ try {
         今後: nextRows.map(Math.round),
       })}`,
     );
+    // ⚠ **5つの行はすべて同じ高さ**（いしだ要望: まとまりを良くする）。
+    //    休養日の行だけ低いと、2枚のカードの大きさもそろわない
+    const allRows = [
+      ...(await rowHeights(recent, '.online-slot')),
+      ...(await rowHeights(next, '.online-slot')),
+    ].map(Math.round);
+    assert.equal(
+      new Set(allRows).size,
+      1,
+      `直近・今後の行の高さがそろっていない: ${JSON.stringify(allRows)}`,
+    );
+    // ⚠ **2枚のカードは同じ大きさ**。注記を下に1行置くと今後だけ27px高い
+    assert.ok(
+      Math.abs(a.height - b.height) <= 2,
+      `直近と今後のカードの大きさが違う: ${Math.round(a.height)}px / ${Math.round(b.height)}px`,
+    );
+    // ⚠ **文字の大きさは個人成績ランキングと同じ**（いしだ要望）。10px だと
+    //    同じホームの中で左のランキングだけ大きく見え、まとまりが無かった
+    const sizeOf = (sel) =>
+      p.locator(sel).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const leaderSize = await sizeOf('.online-leaders li');
+    for (const [name, sel] of [
+      ['決着投手', '.online-slot-decisions'],
+      ['本塁打', '.online-slot-homeruns'],
+      ['先発', '.online-slot-starters'],
+    ]) {
+      const size = await sizeOf(sel);
+      assert.equal(
+        size,
+        leaderSize,
+        `${name}の字がランキングと違う: ${size}px / ${leaderSize}px`,
+      );
+    }
     assert.match(
       await recent.innerText(),
       /本\n[^\n]*\d+号/,
@@ -969,7 +1002,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発 / 守備位置の変更（定期の読み直しで版が上がった後も））',
+    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発・行の高さと字の大きさがそろう / 守備位置の変更（定期の読み直しで版が上がった後も））',
   );
 } catch (error) {
   await failureShots(browser, 'online-lineup-board-ui');

@@ -193,7 +193,9 @@ function Played({ row, view }) {
  * ⚠ 何号かは記録を取ったときの値（`seasonHomeruns`）。古い試合には無いので、
  *    そのときは名前だけ出す。
  */
-const HOMERUN_SHOWN = 3;
+// ⚠ **2人まで**。名前を 12px にしたので、3人出すと「ほかN本」が次の行に
+//    回り、その試合の行だけ4行になって行の高さが揃わない
+const HOMERUN_SHOWN = 2;
 // ⚠ 自軍の印は**実画面では確かめられない**（直近の試合で自軍に本塁打が
 //    出るかは日程しだい）。`online-panels-render-check` が直に描いて見る
 export function Homeruns({ list, ownTeam }) {
@@ -265,7 +267,12 @@ function NextGames({ view }) {
   );
   return (
     <section className="online-card online-slots">
-      <h2>今後の5ターン</h2>
+      {/* ⚠ 注記は**見出しの行に置く**（直近のカードと高さを揃えるため。
+          下に1行置くと今後のカードだけ27px高く、2枚の大きさが違った） */}
+      <h2>
+        今後の5ターン
+        <small className="online-slots-note">先発は予定（当日の疲労で変わります）</small>
+      </h2>
       {rows.length ? (
         <>
           <ol>
@@ -278,8 +285,6 @@ function NextGames({ view }) {
               ),
             )}
           </ol>
-          {/* ⚠ 先発は**予定**。当日の疲労で入れ替わることがある */}
-          <p className="online-muted">先発は予定です（当日の疲労で変わります）。</p>
         </>
       ) : (
         <p className="online-muted">予定されている試合はありません。</p>
