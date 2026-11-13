@@ -113,8 +113,23 @@ class AppUiTest {
         open(""""roster":[{"id":1,"name":"育成選手","position":"first"}],"lastCamp":{"year":1,"rounds":4,"last":{"round":4,"gains":{"1":{"batting.meet":1}}},"gains":{"1":{"batting.meet":4}}}""")
         rule.onNodeWithTag("tab-Procedures").performClick()
         rule.onNodeWithText("1年目のキャンプ結果").assertIsDisplayed()
-        rule.onNodeWithText("練習の成果").assertIsDisplayed()
+        rule.onNodeWithText("選手ごとの総合上昇値（キャンプ通算）").assertIsDisplayed()
         rule.onNodeWithText("1人が伸びました").assertIsDisplayed()
+    }
+
+    @Test fun tryoutResultListsWhoJoined() {
+        // ⚠ 先方指摘: トライアウト後に誰が入ったか分からなかった
+        open(
+            """"roster":[{"id":7,"name":"新入り一","position":"pitcher"}],"lastTryout":{"year":1,"total":2,""" +
+                """"picks":[{"playerId":7,"name":"新入り一","position":"pitcher","age":24,"round":1,"wish":1},""" +
+                """{"playerId":8,"name":"新入り二","position":"first","age":27,"round":2,"wish":null}],""" +
+                """"lost":[{"playerId":9,"name":"取られ","position":"catcher","wish":2,"takenBy":"other"}]}""",
+        )
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.onNodeWithText("1年目のトライアウトで入団した選手（2人）").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("新入り一").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("交渉1位").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("自動").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun backGoesToHomeInsteadOfClosingTheApp() {

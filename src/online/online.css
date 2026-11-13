@@ -796,6 +796,22 @@
   flex-wrap: wrap;
   gap: 2px 8px;
 }
+/* キャンプ後の選手ごとの総合上昇値。「計」を先頭で目立たせ、クールごとの合計は小さく */
+.online-camp-gain-sum {
+  font-size: 13px;
+}
+.online-camp-gain-rounds {
+  color: #9fb0c4;
+  font-variant-numeric: tabular-nums;
+}
+/* トライアウトの結果。交渉で取った人は目立たせる（自動は地の色） */
+.online-tryout-result strong {
+  color: #9fb0c4;
+  font-weight: 600;
+}
+.online-tryout-result strong.is-wish {
+  color: #4ade80;
+}
 .online-gain {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -1444,6 +1460,39 @@ small.online-gain:not(:where(.online-sp *)) {
   border-color: var(--accent, #67e8f9);
   color: var(--accent, #67e8f9);
   background: var(--accent-soft, #ffffff14);
+}
+/* 獲得する人数（先方指摘「指名選手の人数を決められない」）。−／＋で1人ずつ */
+.online-tryout-total {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.online-tryout-total > button {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+}
+.online-tryout-total b {
+  font-size: 16px;
+  min-width: 3em;
+  text-align: center;
+  color: var(--accent, #67e8f9);
+}
+.online-tryout-total small {
+  font-size: 11px;
+  color: #9fb0c4;
+}
+.online-tryout-total .online-tryout-fill {
+  min-height: 0;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.online-tryout-total-note {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
 }
 /* 交渉中の人数（1位〜10位）。⚠ 入力欄ではなく**数の表示**にする */
 .online-tryout-limit {

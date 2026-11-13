@@ -5,9 +5,11 @@ import { ONLINE_ROSTER_TARGETS } from './shared.js';
 // ============================================================
 // 初期編成・トライアウトの希望リストを組み立てる計算。
 //
-// 【サーバー側の約束】提出するのは `{ count, rankedIds }` の2つだけ。
+// 【サーバー側の約束】提出するのは `{ count, rankedIds, total }`。
 // `rankedIds` は**交渉したい選手を10人まで、欲しい順に並べたもの**。
-// サーバーは上から見て、まだ空いている選手を `count` 人まで取る。
+// `total` は**獲得する人数**（交渉した人と、足りないぶんを自動で埋める人の合計）。
+// サーバーは上から見て、まだ空いている選手を取り、`total` 人に届いたら止める。
+// 交渉した人が尽きたら、残りは CPU と同じ判断で埋める。
 //
 // ⚠ **画面(JSX)と分けてある**。node から直接読めないと検査が書けない。
 // ⚠ 候補は実測で **360人**。全員を1本の希望順に並べる形（以前）は、
@@ -54,6 +56,28 @@ export function wishLimit(maxCount) {
 /** 提出する `count`。希望した人数と空き枠の小さい方 */
 export function planCount(rankedIds, maxCount) {
   return Math.max(0, Math.min(rankedIds.length, maxCount));
+}
+
+/**
+ * 獲得する人数（交渉した人＋自動で埋める人の合計）。提出の `total`。
+ *
+ * ⚠ 先方（main の持ち主）指摘「トライアウトの指名選手の人数を決められない」。
+ *    交渉10人の形にしたとき、希望が尽きても空き枠を**必ず全部**埋めるようにしたので、
+ *    「今年は2人だけ取る」ができなくなっていた。
+ * ⚠ **無い（古い提出・標準案）なら空き枠いっぱい**。項目を足しただけなので、
+ *    版を上げる前に出した提出もそのまま前と同じ動きになる。
+ * ⚠ 0人にしても、投手1・捕手1・野手8 に届かない球団はサーバーが必要な守備位置だけ補う
+ *    （1球団の都合で全員の手続きが止まらないように）。
+ */
+export function signTotal(plan, maxCount) {
+  const room = Math.max(0, maxCount);
+  const total = plan?.total;
+  return Number.isInteger(total) ? Math.max(0, Math.min(room, total)) : room;
+}
+
+/** 交渉した選手のうち、取りにいく人数（獲得する人数と交渉した人数の小さい方） */
+export function wishedCount(rankedIds, total) {
+  return Math.max(0, Math.min(rankedIds.length, total));
 }
 
 /** 守備位置のまとまり。画面の絞り込みと、偏りの警告に使う */

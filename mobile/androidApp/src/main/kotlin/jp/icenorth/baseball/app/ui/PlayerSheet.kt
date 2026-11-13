@@ -70,6 +70,12 @@ fun PlayerSheet(model: AppViewModel, player: JsonObject) {
     }
 }
 
+/** 経歴の種類（Web 版 PlayerDetailBody の `CAREER_LABEL` と同じ） */
+private val CAREER_TYPE_LABELS = mapOf(
+    "highschool" to "高校", "university" to "大学", "independent" to "入団", "corporate_join" to "入社",
+    "club_join" to "加入", "released" to "退団", "trade" to "トレード",
+)
+
 private fun hand(v: String?) = when (v) { "left" -> "左"; "switch" -> "両"; else -> "右" }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -191,8 +197,16 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
             }
             Text(fitness.joinToString("  ") { (pos, v) -> "${positionLabel(pos)} $v" })
         }
-        val history = p.at("careerHistory").list().mapNotNull { it.at("label").str() }
-        if (history.isNotEmpty()) Muted("経歴: " + history.joinToString(" → "))
+        // ⚠ 経歴の球団は**内部名で記録されている**ので、表示名（参加した人が付けた球団名）に引き直す。
+        //    先方指摘: 津田沼ラプリにいるのに、所属履歴が名前を変える前の「新潟ブルズ」と出ていた。
+        //    並びと書き方は Web 版（PlayerDetailBody の CareerLine）と同じ: 新しい順・年目・（入団）など
+        val history = p.at("careerHistory").list().mapNotNull { it.obj() }
+        if (history.isNotEmpty()) Muted("経歴: " + history.reversed().joinToString(" ← ") { h ->
+            val label = h.at("label").str()?.let { model.view?.teamLabel(it) ?: it }.orEmpty()
+            val year = h.at("year").int()?.let { "${it}年目 " }.orEmpty()
+            val type = CAREER_TYPE_LABELS[h.at("type").str()]?.let { "（$it）" }.orEmpty()
+            year + label + type
+        })
 
         Text("成績", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         when {

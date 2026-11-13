@@ -443,6 +443,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     teamName: member.teamName,
     year: l.season.year,
     lastCamp: l.campResults?.[userId] || null,
+    // トライアウトで入った選手・交渉して他球団に取られた選手（`resolveTryout`）
+    lastTryout: l.tryoutResults?.[userId] || null,
     // 年度更新の伸び・衰えと引退（`offseasonChanges`）。次の年度更新まで残る
     lastOffseason: l.offseasonResults?.[userId] || null,
     // いまの段階（1年の流れの帯）。`seasonStage` の説明を参照
@@ -624,6 +626,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
                     : campPlanFor(l, member.teamName, team.players),
                   // ⚠ 伸びた能力（このクール・通算）。画面のまとめに使う
                   last: phase.camp?.[userId]?.last || null,
+                  // クールごとの伸び（`recordCampRound`）。キャンプ後の選手ごとの内訳に使う
+                  byRound: phase.camp?.[userId]?.byRound || [],
                   gains: phase.camp?.[userId]?.gains || {},
                   events: phase.camp?.[userId]?.events || {},
                 }

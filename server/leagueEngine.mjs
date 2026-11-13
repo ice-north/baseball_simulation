@@ -145,6 +145,7 @@ import {
   nextFromPlan,
   wishLimit,
   planCount,
+  signTotal,
   TRYOUT_WISH_MAX,
 } from '../src/online/tryoutPlan.js';
 import { generateRosterPacks, packsForMember } from '../src/online/rosterPack.js';
@@ -452,6 +453,14 @@ export function recordCampRound(state, result) {
     gains: result?.gains || {},
     events: result?.events || {},
   };
+  // ⚠ **クールごとの伸びも残す**（先方指摘: 表の「+〇」が通算なので、1つのクールで
+  //    どれだけ伸びたか分からない）。`last` は直近の1クールしか持たないので、
+  //    キャンプ後に「第1〜4クールでそれぞれ何が伸びたか」を出すには並びが要る。
+  //    ⚠ 無い記録（版を上げる前に始めたキャンプ）もある。読む側は無ければ `last` だけで出す
+  state.byRound = [
+    ...(state.byRound || []),
+    { round: state.rounds, gains: result?.gains || {} },
+  ];
   state.gains = addCampGains(state.gains, result?.gains);
   state.events ||= {};
   for (const [id, events] of Object.entries(result?.events || {}))
@@ -1134,7 +1143,20 @@ function validatePhasePlan(league, teamName, plan) {
         plan.rankedIds.length >= plan.count,
         '獲得希望人数以上の候補を指定してください',
       );
-      return { count: plan.count, rankedIds: [...plan.rankedIds] };
+      // ⚠ 獲得する人数（`signTotal`）。**無くてもよい**（古い画面・アプリの提出は
+      //    空き枠いっぱいまで取る、前と同じ動き）
+      requireOnline(
+        plan.total === undefined ||
+          (Number.isInteger(plan.total) &&
+            plan.total >= 0 &&
+            plan.total <= Math.max(0, ROSTER_LIMIT - team.players.length)),
+        '獲得する人数が不正です',
+      );
+      return {
+        count: plan.count,
+        rankedIds: [...plan.rankedIds],
+        ...(plan.total === undefined ? {} : { total: plan.total }),
+      };
     }
     case 'offseason':
       return {};
@@ -1357,6 +1379,19 @@ function resolveTryout(league, plans) {
   ).flat();
   const picksLeftOf = Object.fromEntries(names.map((name) => [name, 0]));
   for (const pick of order) picksLeftOf[pick.team] += 1;
+  // ⚠ **獲得する人数**（`signTotal`）。参加者が決める。CPU球団と、決めていない提出は
+  //    空き枠いっぱい（前と同じ）。先方指摘「指名選手の人数を決められない」
+  const totalOf = Object.fromEntries(
+    names.map((name) => [
+      name,
+      signTotal(plans[name], ROSTER_LIMIT - TEAMS_DATA[name].players.length),
+    ]),
+  );
+  // 交渉の何位で取れたか（画面の「トライアウトの結果」に出す）
+  const wishOf = (name, id) => {
+    const at = plans[name]?.rankedIds?.indexOf(id) ?? -1;
+    return at >= 0 ? at + 1 : null;
+  };
   for (const pick of order) {
     // この指名を含めて、この球団に残っている指名の回数
     const picksLeft = picksLeftOf[pick.team]--;
@@ -1375,6 +1410,11 @@ function resolveTryout(league, plans) {
     //       止まった**（締め切りの自動解決も同じ所で失敗する）。
     const planFull = !!plan && acquired[pick.team].length >= plan.count;
     if (slotsLeft <= 0) continue;
+    // ⚠ 獲得する人数に届いたら、それ以上は取らない。ただし最低限（投手1・捕手1・
+    //    野手8）に届かないぶんだけは補う。補わないと下の検査に落ちて、
+    //    **全員のトライアウトが解決できずに止まる**
+    const reached = acquired[pick.team].length >= totalOf[pick.team];
+    if (reached && mustFill <= 0) continue;
     // 足りないものから順に埋める（投手 → 捕手 → 野手）
     const pickForShortfall = () => {
       const want = needPitcher
@@ -1391,7 +1431,8 @@ function resolveTryout(league, plans) {
     // ⚠ 残りの**指名回数**でも判定する。枠（26人）だけで見ていると、希望順位の
     //    候補が全員他球団に取られて指名を見送り続けた球団は、枠が空いたまま
     //    巡目が尽き、最低限の構成に届かずにトライアウト全体が解決できなかった。
-    if (slotsLeft <= mustFill || picksLeft <= mustFill) forced = pickForShortfall();
+    if (reached || slotsLeft <= mustFill || picksLeft <= mustFill)
+      forced = pickForShortfall();
     // CPUと同じ判断で選ぶ。
     // ⚠ CPUにも**オンラインの目標構成**を渡す。既定（一人用の24人）だと
     //    CPUだけ24人で止まり、人の球団だけ26人になる
@@ -1416,7 +1457,7 @@ function resolveTryout(league, plans) {
     // ⚠ **希望が尽きても枠は埋める**。交渉は10人までで、しかも上位の球団に
     //    先を越される。ここで見送ると人の球団だけ名簿が足りないまま終わる
     //    （実測で自分21人・CPU26人。控えの数でそのまま不利になる）
-    let player = forced || fromPlan || auto();
+    let player = forced || (reached ? null : fromPlan || auto());
     // 希望順位の候補が尽きても、最低限が欠けていれば必要な守備位置から補う
     if (!player && mustFill > 0) player = pickForShortfall();
     if (!player) continue;
@@ -1458,6 +1499,53 @@ function resolveTryout(league, plans) {
     );
     removeDraftedFromClubTeams(ids);
   }
+  // ⚠ **参加者ごとの結果を残す**（先方指摘「トライアウト後の入団選手の一覧が無く、
+  //    誰が入ったか分からない」）。リーグ便りには全球団の指名が混ざって並ぶだけで、
+  //    自分の球団に誰が来たか・交渉した人が取られたのかが読めなかった。
+  //    `campResults` と同じく次のトライアウトまで残し、ビューの `lastTryout` で出す。
+  // ⚠ 交渉した選手を**どこが取ったか**は本人にだけ見せる（交渉の中身はほかの人に見せない）
+  const takenBy = new Map(allPicked.map(({ team, player }) => [player.id, team]));
+  const brief = (player) => ({
+    playerId: player.id,
+    name: player.name,
+    position: player.position,
+    age: player.age,
+  });
+  league.tryoutResults = Object.fromEntries(
+    (league.members || [])
+      .filter((m) => !m.packSeed && acquired[m.teamName])
+      .map((m) => {
+        const plan = plans[m.teamName];
+        const byId = new Map(phase.candidates.map((p) => [p.id, p]));
+        return [
+          m.userId,
+          {
+            year: league.season.year,
+            total: totalOf[m.teamName],
+            picks: allPicked
+              .filter((p) => p.team === m.teamName)
+              .map(({ player, round }) => ({
+                ...brief(player),
+                round,
+                wish: wishOf(m.teamName, player.id),
+              })),
+            lost: (plan?.rankedIds || [])
+              // ⚠ 獲得する人数より下の希望は、取られていても「取りにいかなかった」ので並べない
+              .filter(
+                (id, i) =>
+                  i < totalOf[m.teamName] &&
+                  takenBy.has(id) &&
+                  takenBy.get(id) !== m.teamName,
+              )
+              .map((id) => ({
+                ...brief(byId.get(id) || { id, name: '?' }),
+                wish: wishOf(m.teamName, id),
+                takenBy: takenBy.get(id),
+              })),
+          },
+        ];
+      }),
+  );
   league.notices.unshift({
     type: 'tryout',
     year: league.season.year,
@@ -1603,6 +1691,7 @@ function resolvePhase(league, now) {
               year: league.season.year,
               rounds: state.rounds || 0,
               last: state.last ? clone(state.last) : null,
+              byRound: clone(state.byRound || []),
               gains: clone(state.gains || {}),
               events: clone(state.events || {}),
             },

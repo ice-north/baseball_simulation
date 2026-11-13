@@ -38,23 +38,25 @@ import jp.icenorth.baseball.shared.WEIGHTED_SORT_KEY
 import jp.icenorth.baseball.shared.WEIGHT_FIELDS
 import jp.icenorth.baseball.shared.WEIGHT_LEVELS
 import jp.icenorth.baseball.shared.WEIGHT_MAX
+import jp.icenorth.baseball.shared.TRYOUT_WISH_MAX
 import jp.icenorth.baseball.shared.addToPlan
 import jp.icenorth.baseball.shared.at
-import jp.icenorth.baseball.shared.benchFromPlan
 import jp.icenorth.baseball.shared.inTryoutGroup
-import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.long
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.overallScore
 import jp.icenorth.baseball.shared.pid
 import jp.icenorth.baseball.shared.planSummary
-import jp.icenorth.baseball.shared.plannedPicks
-import jp.icenorth.baseball.shared.rosterGroup
+import jp.icenorth.baseball.shared.removeFromPlan
+import jp.icenorth.baseball.shared.rosterCounts
 import jp.icenorth.baseball.shared.shiftInPlan
+import jp.icenorth.baseball.shared.signTotal
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.weightedRanked
 import jp.icenorth.baseball.shared.weightedScore
+import jp.icenorth.baseball.shared.wishLimit
+import jp.icenorth.baseball.shared.wishedCount
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.roundToInt
 
@@ -63,11 +65,13 @@ private const val PAGE = 12
 /**
  * 初期編成・トライアウトの希望リスト（Web 版 TryoutPlanner と同じ規則）。
  *
- * - 上: 獲得予定（サーバーが実際に取る顔ぶれ。↑↓で順位、×で控えへ）
- * - 下: 候補（区分・並べ替え・名前で絞り、＋で獲得予定へ、★で最優先）
- * ⚠ 操作は「獲得予定」を基準にする（希望順の位置で動かすと、目標構成で飛ばされる選手が
- *    挟まったときに押した選手が入らない・消える）。誰も消さず、外すのは末尾送り。
- * @param editable false なら読むだけ（指導者に任せた手続き）。人数・並べ替え・獲得予定に入れる操作と
+ * - 上: 獲得する人数（−／＋）と、交渉する選手（10人まで。↑↓で順位、「やめる」で外す）
+ * - 下: 候補（区分・並べ替え・名前で絞り、「交渉」で交渉する選手の末尾へ）
+ * ⚠ 交渉する選手の並び＝サーバーが取りにいく順（目標構成で飛ばさない）。以前の「候補全員を並べて
+ *    目標構成で飛ばす」形は Web 版でやめており、サーバーも11人以上の希望を受け付けない。
+ * ⚠ 獲得する人数（`total`）は交渉した人数と別に持つ（先方指摘「指名選手の人数を決められない」）。
+ *    交渉が多ければ上位から人数ぶん、少なければ残りを自動で埋める。決めていなければ空き枠いっぱい。
+ * @param editable false なら読むだけ（指導者に任せた手続き）。人数・交渉・並べ替えと
  *    「重視する能力」を出さない。候補の絞り込み・並べ替え（見るだけの操作）は残す
  */
 @Composable
@@ -82,60 +86,78 @@ fun TryoutPanel(
 ) {
     val candidates = remember(phase) { phase.at("candidates").list().mapNotNull { it.obj() } }
     val roster = remember(raw) { raw.at("roster").list().mapNotNull { it.obj() } }
-    val ranked = plan.at("rankedIds").list().mapNotNull { it.long() }
+    val byId = remember(candidates) { candidates.associateBy { it.pid } }
+    // ⚠ 候補に居ない選手（古い下書き）は数えない。10人を超える古い下書きも10人で切る
+    val ranked = plan.at("rankedIds").list().mapNotNull { it.long() }.filter { it in byId }
     val maxCount = rosterRoom(raw)
-    val planCount = plan.at("count").int() ?: 0
-    val count = minOf(planCount, ranked.size)
+    val limit = wishLimit(maxCount)
+    val total = signTotal(plan, maxCount)
+    val count = wishedCount(ranked, total)
+    val autoFill = (total - count).coerceAtLeast(0)
     val summary = planSummary(ranked, candidates, count, roster)
-    val wanted = summary.picked.map { it.pid }
     val weights = model.tryoutWeights
     val scores = remember(candidates, weights) { candidates.associate { it.pid to weightedScore(it, weights) } }
     // ⚠ お知らせは出したときの希望順と組で持つ（希望順が外から変わったら出さない）
     var noticeState by remember { mutableStateOf<Pair<String, List<Long>>?>(null) }
     val notice = noticeState?.takeIf { it.second == ranked }?.first
-    val setRanked: (List<Long>) -> Unit = { ids -> setPlan(Commands.withRanked(plan, ids)) }
-    val setCount: (Int) -> Unit = { n -> setPlan(Commands.withCount(plan, n.coerceIn(0, maxCount))) }
+    val setRanked: (List<Long>) -> Unit = { ids -> setPlan(Commands.withTryout(plan, ids.take(limit), total)) }
+    val setTotal: (Int) -> Unit = { n -> setPlan(Commands.withTryout(plan, ranked.take(limit), n.coerceIn(0, maxCount))) }
 
-    // ⚠ 「獲得予定」と「候補」を切り替える（以前は1本の縦長で、候補を見ている間は獲得予定の中身が見えず、
-    //    行き来に長いスクロールが要った）。人数は切り替えの字に出す
+    // ⚠ 「交渉する選手」と「候補」を切り替える（候補を見ている間は交渉の中身が見えず、行き来に長いスクロールが要った）
     var side by rememberSaveable { mutableStateOf("plan") }
-    ChoiceRow(listOf("plan" to "獲得予定 ${wanted.size}人", "pool" to "候補 ${candidates.size}人"), side) { side = it }
+    ChoiceRow(listOf("plan" to "交渉 ${ranked.size}人", "pool" to "候補 ${candidates.size}人"), side) { side = it }
 
     if (side == "plan") Section(
-        "獲得希望人数",
+        "獲得する人数",
         trailing = {
             InfoButton(
                 "トライアウト",
                 listOf(
-                    "獲得予定の上から順に取りにいきます。他球団に先を越された選手は飛ばして、控えから繰り上がります。",
-                    "名簿が偏らないよう、投${ONLINE_ROSTER_TARGETS["pitcher"]}・捕${ONLINE_ROSTER_TARGETS["catcher"]}・内${ONLINE_ROSTER_TARGETS["infielder"]}・外${ONLINE_ROSTER_TARGETS["outfielder"]}を超える区分は飛ばします（CPUの球団も同じ目標です）。",
-                    "「重視する能力」の重みから評価（0〜100）を出し、おすすめ順を作れます。「軽視〜最重視」を0.6〜1.6倍で重み付けした平均で、投手と野手は別の能力で計算します。重みはこの端末に覚えます。",
+                    "「交渉」を押した順が1位〜${TRYOUT_WISH_MAX}位です。1位から順に取りにいきます。",
+                    "同じ選手を他球団も希望したときは、前年の順位が上の球団が獲得します（取られたぶんは下から繰り上がります）。",
+                    "獲得するのは「獲得する人数」まで。交渉した人で足りないぶんは自動で埋まります（CPUと同じ判断）。0人にしても、投手・捕手・野手が最低限に届かないときは足りない位置だけ補います。",
+                    "「重視する能力」の重みから評価（0〜100）を出し、おすすめの${TRYOUT_WISH_MAX}人を選べます。「軽視〜最重視」を0.6〜1.6倍で重み付けした平均で、投手と野手は別の能力で計算します。重みはこの端末に覚えます。",
                 ),
             )
         },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (editable) OutlinedButton(onClick = { setCount(planCount - 1) }, enabled = planCount > 0) { Text("−") }
-            Text("${planCount}人", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            if (editable) OutlinedButton(onClick = { setCount(planCount + 1) }, enabled = planCount < maxCount) { Text("＋") }
-            Muted("最大${maxCount}人")
+            if (editable) OutlinedButton(onClick = { setTotal(total - 1) }, enabled = total > 0) { Text("−") }
+            Text("${total}人", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            if (editable) OutlinedButton(onClick = { setTotal(total + 1) }, enabled = total < maxCount) { Text("＋") }
+            Muted("空き枠${maxCount}人")
         }
-        if (editable) TextButton(onClick = onReset) { Text("標準案に戻す") }
+        Text(
+            when {
+                total == 0 -> "今年は獲得しません（最低限に届かないときだけ、足りない位置を補います）。"
+                ranked.size > total -> "交渉した${ranked.size}人のうち、上位から${total}人を取ります。取られたら下位が繰り上がります。"
+                autoFill > 0 -> "交渉した${count}人に、自動で${autoFill}人を足して${total}人獲得します。"
+                else -> "交渉した${count}人を獲得します。"
+            } + "獲得後の名簿は${roster.size + total}人です。",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (editable) Row {
+            if (total < maxCount) TextButton(onClick = { setTotal(maxCount) }) { Text("枠いっぱいにする") }
+            TextButton(onClick = onReset) { Text("標準案に戻す") }
+        }
     }
 
-    if (side == "plan" && editable) WeightsSection(model, candidates, roster) { next ->
+    if (side == "plan" && editable) WeightsSection(model, candidates, roster, limit) { next ->
         setRanked(next)
-        noticeState = "評価の高い順に、投・捕・内・外の目標人数を守っておすすめ順を作り直しました。" to next
+        noticeState = "評価の高い順に、投・捕・内・外の目標人数を守って${next.size}人選び直しました。" to next
     }
 
-    val c = summary.counts
-    if (side == "plan") Section("獲得予定 ${wanted.size}人") {
-        Muted("投${c["pitcher"]}/${ONLINE_ROSTER_TARGETS["pitcher"]} 捕${c["catcher"]}/${ONLINE_ROSTER_TARGETS["catcher"]} 内${c["infielder"]}/${ONLINE_ROSTER_TARGETS["infielder"]} 外${c["outfielder"]}/${ONLINE_ROSTER_TARGETS["outfielder"]}")
-        if (summary.blocking.isNotEmpty()) Text("このままでは決定できません: ${summary.blocking.joinToString(" / ")}　獲得希望人数を増やすか、希望順位を入れ替えてください。", color = MaterialTheme.colorScheme.error)
-        if (summary.warnings.isNotEmpty()) Text("${summary.warnings.joinToString(" / ")}　この位置は人数が足りないと自動で埋められます。", color = MaterialTheme.colorScheme.secondary)
+    val after = rosterCounts(roster + summary.picked)
+    val afterLine = "獲得後の名簿 投${after["pitcher"]}/${ONLINE_ROSTER_TARGETS["pitcher"]} 捕${after["catcher"]}/${ONLINE_ROSTER_TARGETS["catcher"]} 内${after["infielder"]}/${ONLINE_ROSTER_TARGETS["infielder"]} 外${after["outfielder"]}/${ONLINE_ROSTER_TARGETS["outfielder"]}（交渉した人まで）"
+    if (side == "plan") Section("交渉する選手 ${ranked.size} / ${limit}人") {
+        Muted(afterLine)
+        if (summary.blocking.isNotEmpty()) Text("このままでは名簿が成り立ちません: ${summary.blocking.joinToString(" / ")}。足りない守備位置の選手と交渉してください。", color = MaterialTheme.colorScheme.error)
+        if (summary.warnings.isNotEmpty()) Text("${summary.warnings.joinToString("。")}。人数が足りない位置は自動で埋められます。", color = MaterialTheme.colorScheme.secondary)
         notice?.let { Text(it, color = MaterialTheme.colorScheme.secondary) }
-        if (wanted.isEmpty()) Muted("獲得予定はありません。")
-        summary.picked.forEachIndexed { i, p ->
+        if (ranked.isEmpty()) Muted(if (limit > 0) "「候補」で「交渉」を押すと、ここに1位から並びます。${limit}人まで選べます。" else "名簿に空きがありません。")
+        ranked.forEachIndexed { i, id ->
+            val p = byId[id] ?: return@forEachIndexed
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${i + 1}", fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
                 Box(Modifier.weight(1f)) {
@@ -143,16 +165,17 @@ fun TryoutPanel(
                         Column(horizontalAlignment = Alignment.End) {
                             Score(scores[p.pid])
                             Fit(teamFitRank(p, roster, weights))
+                            // 獲得する人数より下は「取られたときの繰り上がり」
+                            if (i >= total) Tag("繰り上がり用", MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
-            // ⚠ 並べ替え・外すは下の行に、押せる大きさ（48dp）で置く。以前は名前の横に 36dp の「↑↓×」を
-            //    詰めて並べていて、押し間違えやすく、名前と能力の欄も狭くなっていた
+            // ⚠ 並べ替え・外すは下の行に、押せる大きさ（48dp）で置く（名前の横に詰めると押し間違えやすい）
             if (editable) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, -1)) }, enabled = i > 0) { Text("↑ 上へ") }
-                TextButton(onClick = { setRanked(shiftInPlan(ranked, candidates, count, roster, i, 1)) }, enabled = i < wanted.size - 1) { Text("↓ 下へ") }
-                TextButton(onClick = { setRanked(benchFromPlan(ranked, candidates, count, roster, p.pid)) }) { Text("外す") }
+                TextButton(onClick = { setRanked(shiftInPlan(ranked, i, -1)) }, enabled = i > 0) { Text("↑ 上へ") }
+                TextButton(onClick = { setRanked(shiftInPlan(ranked, i, 1)) }, enabled = i < ranked.size - 1) { Text("↓ 下へ") }
+                TextButton(onClick = { setRanked(removeFromPlan(ranked, id)) }) { Text("やめる") }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
@@ -162,20 +185,20 @@ fun TryoutPanel(
     var sortKey by rememberSaveable { mutableStateOf(WEIGHTED_SORT_KEY) }
     var query by rememberSaveable { mutableStateOf("") }
     // 何人まで出しているか（「続きを表示」で増やす。絞り込み・並べ替えを変えたら最初に戻す）
-    var limit by rememberSaveable { mutableStateOf(PAGE) }
+    var shownCount by rememberSaveable { mutableStateOf(PAGE) }
     val scoreOf: (JsonObject) -> Double = if (sortKey == WEIGHTED_SORT_KEY) { p -> scores[p.pid] ?: 0.0 } else TRYOUT_SORT_KEYS.firstOrNull { it.key == sortKey }?.of ?: ::overallScore
     val pool = candidates
         .filter { inTryoutGroup(it, group) && (query.isBlank() || it.at("name").str().orEmpty().contains(query.trim())) }
         .sortedWith(compareByDescending<JsonObject> { scoreOf(it) }.thenBy { it.pid })
-    val shown = pool.take(limit)
+    val shown = pool.take(shownCount)
     if (side == "pool") Section("候補 ${candidates.size}人") {
-        Muted("投${c["pitcher"]}/${ONLINE_ROSTER_TARGETS["pitcher"]} 捕${c["catcher"]}/${ONLINE_ROSTER_TARGETS["catcher"]} 内${c["infielder"]}/${ONLINE_ROSTER_TARGETS["infielder"]} 外${c["outfielder"]}/${ONLINE_ROSTER_TARGETS["outfielder"]}（獲得予定を入れた人数／目標）")
+        Muted("交渉中 ${ranked.size} / ${limit}人・$afterLine")
         notice?.let { Text(it, color = MaterialTheme.colorScheme.secondary) }
-        ChoiceRow(TRYOUT_GROUPS, group) { group = it; limit = PAGE }
-        ChoiceRow(listOf(WEIGHTED_SORT_KEY to "評価") + TRYOUT_SORT_KEYS.map { it.key to it.label }, sortKey) { sortKey = it; limit = PAGE }
-        OutlinedTextField(query, { query = it; limit = PAGE }, label = { Text("名前で探す") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        ChoiceRow(TRYOUT_GROUPS, group) { group = it; shownCount = PAGE }
+        ChoiceRow(listOf(WEIGHTED_SORT_KEY to "評価") + TRYOUT_SORT_KEYS.map { it.key to it.label }, sortKey) { sortKey = it; shownCount = PAGE }
+        OutlinedTextField(query, { query = it; shownCount = PAGE }, label = { Text("名前で探す") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         shown.forEach { p ->
-            val at = wanted.indexOf(p.pid)
+            val at = ranked.indexOf(p.pid)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
                     PlayerSummary(p, { model.openPlayer = it }) {
@@ -183,33 +206,30 @@ fun TryoutPanel(
                             Score(scores[p.pid])
                             Fit(teamFitRank(p, roster, weights))
                             Koshien(p)
-                            if (at >= 0) Tag("指名中 ${at + 1}位", MaterialTheme.colorScheme.primary)
+                            if (at >= 0) Tag("交渉中 ${at + 1}位", MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
-                // ⚠ 操作の欄は幅を決めておく（以前は「＋予定」「最優先」「なし」で幅が変わり、右の評価の列がずれた）
+                // ⚠ 操作の欄は幅を決めておく（字で幅が変わると右の評価の列がずれる）
+                // ⚠ ボタンは1つだけ（Web 版と同じ。以前は「＋予定」「最優先」の2つで、どちらを押すか毎回迷った）
                 if (editable) Box(Modifier.width(ActionWidth), contentAlignment = Alignment.CenterEnd) {
-                if (at < 0) {
-                    TextButton(onClick = {
-                        if (count <= 0) {
-                            noticeState = "獲得希望人数が0人のため、獲得予定に入れられません。先に人数を増やしてください。" to ranked
-                        } else {
-                            val next = addToPlan(ranked, candidates, count, roster, p.pid)
-                            if (plannedPicks(next, candidates, count, roster).none { it.pid == p.pid }) {
-                                noticeState = "${p.at("name").str()}は、今の名簿だけで${ROSTER_GROUP_LABELS[rosterGroup(p.at("position").str())]}が目標人数に達しているため、獲得予定に入れられません。" to ranked
-                            } else setRanked(next)
-                        }
-                    }) { Text("＋予定") }
-                } else if (at > 0) {
-                    TextButton(onClick = { setRanked(addToPlan(ranked, candidates, count, roster, p.pid, first = true)) }) { Text("最優先") }
-                }
+                    if (at < 0) {
+                        TextButton(onClick = {
+                            // ⚠ 黙って何も起きない、を作らない。満員のときは理由を出す
+                            if (ranked.size >= limit) {
+                                noticeState = (if (limit == 0) "名簿に空きがないので、交渉できません。" else "交渉できるのは${limit}人までです。誰かの交渉をやめてから選んでください。") to ranked
+                            } else setRanked(addToPlan(ranked, p.pid, limit))
+                        }) { Text("交渉") }
+                    } else {
+                        TextButton(onClick = { setRanked(removeFromPlan(ranked, p.pid)) }) { Text("やめる") }
+                    }
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
         // ⚠ ページ送りをやめ、続きを下に足す（以前は12人ごとに「前へ／次へ」で、見ていた所に戻れなかった）
         if (pool.size > shown.size) {
-            OutlinedButton(onClick = { limit += PAGE * 2 }, modifier = Modifier.fillMaxWidth()) { Text("続きを表示（残り${pool.size - shown.size}人）") }
+            OutlinedButton(onClick = { shownCount += PAGE * 2 }, modifier = Modifier.fillMaxWidth()) { Text("続きを表示（残り${pool.size - shown.size}人）") }
         }
     }
 }
@@ -243,7 +263,7 @@ private fun Score(value: Double?) {
 
 /** 重視する能力（評価値の重み）。端末に覚え、サーバーには送らない */
 @Composable
-private fun WeightsSection(model: AppViewModel, candidates: List<JsonObject>, roster: List<JsonObject>, onRanked: (List<Long>) -> Unit) {
+private fun WeightsSection(model: AppViewModel, candidates: List<JsonObject>, roster: List<JsonObject>, limit: Int, onRanked: (List<Long>) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     val weights = model.tryoutWeights
     Section("重視する能力（評価値の重み）", trailing = { TextButton(onClick = { open = !open }) { Text(if (open) "閉じる" else "開く") } }) {
@@ -266,11 +286,11 @@ private fun WeightsSection(model: AppViewModel, candidates: List<JsonObject>, ro
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onRanked(weightedRanked(candidates, weights, roster)) }) { Text("この重みでおすすめ順を作る") }
+            Button(onClick = { onRanked(weightedRanked(candidates, weights, roster, limit)) }) { Text("この重みで${limit}人選ぶ") }
             TextButton(onClick = { model.changeWeights(DEFAULT_WEIGHTS) }) { Text("標準に戻す") }
         }
     }
 }
 
-/** 候補の行の操作（「＋予定」「最優先」）の欄の幅 */
+/** 候補の行の操作（「交渉」「やめる」）の欄の幅 */
 private val ActionWidth = 84.dp

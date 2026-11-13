@@ -58,6 +58,8 @@ import {
   moveInPlan,
   wishLimit,
   planCount,
+  signTotal,
+  wishedCount,
   TRYOUT_WISH_MAX,
   DEFAULT_WEIGHTS,
   WEIGHT_FIELDS,
@@ -842,6 +844,113 @@ try {
     }
   }
 
+  // --- 獲得する人数を決められる・入団した選手が残る ---------------------------
+  // 【なぜ】先方（main の持ち主）指摘「トライアウトの指名選手の人数を決められない」
+  //    「トライアウト後の入団選手の一覧が無く、誰が入ったかわからない」。
+  //    交渉10人の形にしたとき、希望が尽きても空き枠を**必ず全部**埋めるようにしたので、
+  //    少なく取ることができなくなっていた。
+  // ⚠ 見るのは:
+  //    ①獲得する人数（`total`）で止まる（交渉が多くても上位から人数ぶんだけ）
+  //    ②0人なら取らない（最低限は名簿が満たしているので補いも起きない）
+  //    ③交渉が少なければ、残りは自動で埋めて人数ちょうどになる
+  //    ④`total` の無い提出（古い画面・アプリ）は前と同じく枠いっぱい
+  //    ⑤参加者ごとの結果（`tryoutResults`）に、入った選手と交渉の何位かが残る
+  {
+    assert.equal(signTotal({}, 6), 6, '決めていないのに枠いっぱいにならない');
+    assert.equal(signTotal({ total: 2 }, 6), 2, '決めた人数にならない');
+    assert.equal(signTotal({ total: 9 }, 6), 6, '空き枠より多く取ろうとしている');
+    assert.equal(signTotal({ total: -1 }, 6), 0, '負の人数が通る');
+    assert.equal(wishedCount([1, 2, 3], 2), 2, '人数より多く交渉から取ろうとしている');
+    const l = createLeague({
+      members: [{ userId: 'a' }, { userId: 'b' }, { userId: 'c' }],
+      now: '2026-10-26T15:00:00.000Z',
+    });
+    for (const m of l.members)
+      submitPhase(
+        l,
+        m.userId,
+        { phaseId: l.phase.id, plan: defaultPhasePlan(l, m.teamName), ready: true },
+        '2026-10-26T15:00:00.000Z',
+      );
+    loadLeagueWorld(l);
+    const KEEP_ANY = { pitcher: 9, catcher: 2, infielder: 5, outfielder: 4 };
+    for (const name of l.season.settings.teamNames) {
+      const team = TEAMS_DATA[name];
+      const left = { ...KEEP_ANY };
+      team.players = team.players.filter((p) => {
+        const group = rosterGroup(p.position);
+        if (left[group] <= 0) return false;
+        left[group] -= 1;
+        return true;
+      });
+    }
+    openPhaseSeeded(l, 'tryout', '2026-10-26T15:00:00.000Z', 20261099);
+    l.game = captureWorld();
+    const [a, b, c] = l.members;
+    const room = ROSTER_LIMIT - TEAMS_DATA[a.teamName].players.length;
+    assert.ok(room >= 4, `前提: 空き枠が${room}人しかない`);
+    // ⚠ CPUが欲しがらない選手を交渉する（上位の選手だとCPUや他の参加者と競合する）
+    const wish = [...l.phase.candidates]
+      .sort((x, y) => overallScore(x) - overallScore(y))
+      .slice(0, 4)
+      .map((p) => p.id);
+    // 範囲の外の人数は弾く（正本はサーバー）
+    assert.throws(
+      () =>
+        submitPhase(
+          l,
+          a.userId,
+          { phaseId: l.phase.id, plan: { count: 0, rankedIds: [], total: room + 1 }, ready: false },
+          '2026-10-26T15:00:00.000Z',
+        ),
+      /獲得する人数が不正です/,
+      '空き枠より多い人数が通った',
+    );
+    const plans = {
+      a: { count: 2, rankedIds: wish, total: 2 },
+      b: { count: 0, rankedIds: [], total: 0 },
+      c: { count: 1, rankedIds: [wish[3]], total: 3 },
+    };
+    for (const m of l.members)
+      submitPhase(
+        l,
+        m.userId,
+        { phaseId: l.phase.id, plan: plans[m.userId], ready: true },
+        '2026-10-26T15:00:00.000Z',
+      );
+    assert.notEqual(l.phase?.kind, 'tryout', 'トライアウトが解決していない');
+    const added = (m) =>
+      l.game.teams[m.teamName].players.filter(
+        (p) => p.draftInfo?.year === l.season.year && l.tryoutResults[m.userId].picks.some((x) => x.playerId === p.id),
+      );
+    // ①
+    assert.equal(l.tryoutResults[a.userId].picks.length, 2, `人数2人で${l.tryoutResults[a.userId].picks.length}人取った`);
+    assert.deepEqual(
+      l.tryoutResults[a.userId].picks.map((p) => p.wish),
+      [1, 2],
+      '交渉の上位から取っていない',
+    );
+    assert.equal(added(a).length, 2, '結果と名簿が食い違う');
+    assert.equal(l.game.teams[a.teamName].players.length, ROSTER_LIMIT - room + 2, '名簿の人数が合わない');
+    // ②
+    assert.equal(l.tryoutResults[b.userId].picks.length, 0, '0人なのに取った');
+    assert.equal(l.game.teams[b.teamName].players.length, ROSTER_LIMIT - room, '0人なのに名簿が増えた');
+    // ③ 交渉1人＋自動2人。交渉した4位の選手は a が取らない（a は2人で止まる）ので c が取れる
+    const cPicks = l.tryoutResults[c.userId].picks;
+    assert.equal(cPicks.length, 3, `人数3人で${cPicks.length}人取った`);
+    assert.equal(cPicks.filter((p) => p.wish === 1).length, 1, '交渉した選手を取っていない');
+    assert.equal(cPicks.filter((p) => p.wish === null).length, 2, '残りが自動で埋まっていない');
+    // ⑤ 結果は名前・守備位置・巡目を持つ（画面はこれだけで一覧を出す）
+    for (const p of [...l.tryoutResults[a.userId].picks, ...cPicks]) {
+      assert.ok(p.name && p.position && Number.isInteger(p.round), `結果の形が足りない: ${JSON.stringify(p)}`);
+    }
+    // CPU球団は前と同じく枠いっぱい
+    for (const name of l.season.settings.teamNames.filter(
+      (n) => !l.members.some((m) => m.teamName === n),
+    ))
+      assert.equal(l.game.teams[name].players.length, ROSTER_LIMIT, `${name} の枠が埋まっていない`);
+  }
+
   // --- 画面の操作を何度繰り返しても、押したとおりに動くこと ---------------
   // ⚠ **以前は入れ替えるほど画面が壊れて見えた**。候補360人を1本の希望順に
   //    並べ、獲得予定は「目標構成で飛ばしたあとの顔ぶれ」だったので、
@@ -1053,5 +1162,5 @@ try {
 }
 
 console.log(
-  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・交渉は10人まで・希望順のとおりに取る・希望のあとの空き枠が埋まる・順位が上の球団が競合に勝つ・成り立たない編成を提出前に知らせる・標準案なら名簿が偏らない・入れ替えを繰り返しても押したとおりに動く・重みからおすすめ順を作る）',
+  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・交渉は10人まで・希望順のとおりに取る・希望のあとの空き枠が埋まる・順位が上の球団が競合に勝つ・獲得する人数で止まる・入団した選手が結果に残る・成り立たない編成を提出前に知らせる・標準案なら名簿が偏らない・入れ替えを繰り返しても押したとおりに動く・重みからおすすめ順を作る）',
 );

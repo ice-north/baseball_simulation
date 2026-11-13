@@ -123,8 +123,10 @@ export const withPolicyDefaults = (policy) => ({
 const grade = (v) => (typeof v === 'number' ? Math.round(v) : '—');
 
 /**
- * 能力の値と、キャンプ通算の伸び（「52+3」）。
- * ⚠ 伸びは**サーバーの記録**（`camp.gains`）。画面で前の値と比べない
+ * 能力の値と、**直近のクール**の伸び（「52+3」）。
+ * ⚠ 先方指摘: 通算の伸びを出していたので、1つのクールでどれだけ伸びたか分からなかった。
+ *    いまは `camp.last.gains`（直近の1クール）。通算はキャンプ後のまとめ（`CampResultList`）で見る。
+ * ⚠ 伸びは**サーバーの記録**。画面で前の値と比べない
  */
 function Stat({ value, diff }) {
   return (
@@ -394,38 +396,61 @@ function CampTableScroll({ children }) {
   );
 }
 
-const GAIN_ROWS = 8;
-
-/** 練習の成果（このクール／キャンプ通算）。伸びた量の多い選手から */
-function CampGainsSummary({ camp, roster, finished }) {
-  const last = camp?.last;
-  const [scope, setScope] = useState(finished || !last ? 'total' : 'last');
-  const [all, setAll] = useState(false);
-  if (!last && !Object.keys(camp?.gains || {}).length) return null;
-  const useLast = scope === 'last' && last;
-  const gains = useLast ? last.gains || {} : camp?.gains || {};
-  const rows = campGainRows(
-    gains,
-    roster,
-    useLast ? last.events || {} : camp?.events || {},
-  );
-  const totals = campGainTotals(gains);
-  const grown = rows.filter((r) => r.items.some((i) => i.diff > 0)).length;
-  const shown = all ? rows : rows.slice(0, GAIN_ROWS);
+/** 携帯用: 直近のクールで伸びた能力（畳んで出す） */
+function LastRoundGains({ last, roster }) {
+  const rows = campGainRows(last.gains || {}, roster, last.events || {});
   return (
-    <section className="online-camp-gains" aria-label="練習の成果">
+    <details className="online-camp-last">
+      <summary>
+        第{last.round}クールで伸びた選手（{rows.length}人）
+      </summary>
+      <ul className="online-camp-gain-list">
+        {rows.map(({ player, items }) => (
+          <li key={player.id}>
+            <span className="online-camp-gain-name">
+              <PlayerStatsButton player={player} panel="abilities" />
+              <small>{POS[player.position]}</small>
+            </span>
+            <span className="online-camp-gain-items">
+              {items.map((i) => (
+                <span
+                  key={i.key}
+                  className={`online-gain ${i.diff > 0 ? 'is-up' : 'is-down'}`}
+                >
+                  {i.label}
+                  {formatGain(i.diff)}
+                </span>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/**
+ * キャンプ後の成果（選手ごとの総合上昇値）。
+ *
+ * ⚠ 先方指摘「キャンプ中の能力値上昇をまとめた上のウィンドウを削除し、キャンプ後に、
+ *    各選手の総合上昇値が見れるように」。キャンプ中は表の「+〇」（直近のクールの伸び）だけにし、
+ *    まとめは**全クールが終わってから**出す。
+ * ⚠ 選手ごとに「計」（伸びた量の合計）・項目ごとの通算・クールごとの合計を並べる。
+ *    クールごとの記録（`byRound`）が無いキャンプ（版を上げる前に始めたもの）は通算だけ。
+ * ⚠ 全員を出す（上位だけに絞らない。「各選手の」が求められている）。
+ */
+export function CampResultList({ camp, roster }) {
+  const rows = campGainRows(camp?.gains || {}, roster, camp?.events || {});
+  if (!rows.length && !camp?.rounds) return null;
+  const byRound = camp?.byRound || [];
+  const totals = campGainTotals(camp?.gains || {});
+  const grown = rows.filter((r) => r.items.some((i) => i.diff > 0)).length;
+  const roundSum = (round, id) =>
+    Object.values(round.gains?.[id] || {}).reduce((n, d) => n + d, 0);
+  return (
+    <section className="online-camp-gains" aria-label="キャンプの成果">
       <div className="online-camp-gains-head">
-        <h4>練習の成果</h4>
-        <div className="online-segments" role="group" aria-label="範囲">
-          {last && (
-            <button aria-pressed={!!useLast} onClick={() => setScope('last')}>
-              第{last.round}クール
-            </button>
-          )}
-          <button aria-pressed={!useLast} onClick={() => setScope('total')}>
-            キャンプ通算
-          </button>
-        </div>
+        <h4>選手ごとの総合上昇値（キャンプ通算）</h4>
       </div>
       {rows.length === 0 ? (
         <p className="online-muted">伸びた能力はありません。</p>
@@ -438,14 +463,20 @@ function CampGainsSummary({ camp, roster, finished }) {
               .map((t) => `${t.label}${formatGain(t.diff)}`)
               .join(' · ')}
           </p>
-          <ul className="online-camp-gain-list">
-            {shown.map(({ player, items, events }) => (
+          <ul className="online-camp-gain-list online-camp-result">
+            {rows.map(({ player, items, sum, events }) => (
               <li key={player.id}>
                 <span className="online-camp-gain-name">
                   <PlayerStatsButton player={player} panel="abilities" />
                   <small>{POS[player.position]}</small>
                 </span>
                 <span className="online-camp-gain-items">
+                  <strong
+                    className={`online-gain online-camp-gain-sum ${sum >= 0 ? 'is-up' : 'is-down'}`}
+                    title="伸びた量の合計（項目ごとの伸びを足したもの）"
+                  >
+                    計{formatGain(Math.round(sum * 10) / 10)}
+                  </strong>
                   {items.map((i) => (
                     <span
                       key={i.key}
@@ -455,6 +486,16 @@ function CampGainsSummary({ camp, roster, finished }) {
                       {formatGain(i.diff)}
                     </span>
                   ))}
+                  {byRound.length > 0 && (
+                    <small className="online-camp-gain-rounds">
+                      {byRound
+                        .map(
+                          (r) =>
+                            `第${r.round}${formatGain(Math.round(roundSum(r, player.id) * 10) / 10)}`,
+                        )
+                        .join(' ')}
+                    </small>
+                  )}
                   {events.map((text, index) => (
                     <strong
                       key={`${index}:${text}`}
@@ -467,16 +508,6 @@ function CampGainsSummary({ camp, roster, finished }) {
               </li>
             ))}
           </ul>
-          {rows.length > GAIN_ROWS && (
-            <button
-              className="online-camp-gain-more"
-              onClick={() => setAll(!all)}
-            >
-              {all
-                ? `上位${GAIN_ROWS}人だけ`
-                : `全員（${rows.length}人）を見る`}
-            </button>
-          )}
         </>
       )}
     </section>
@@ -541,7 +572,7 @@ export function CompletedCamp({ view }) {
   return (
     <section className="online-card">
       <h2>{camp.year}年目のキャンプ結果</h2>
-      <CampGainsSummary camp={camp} roster={view.roster || []} finished />
+      <CampResultList camp={camp} roster={view.roster || []} />
     </section>
   );
 }
@@ -740,14 +771,10 @@ export default function CampPlanner({
           {view.phase.planBy.text}
         </p>
       )}
-      {/* ⚠ **伸びをまとめて見せる**（いしだ指摘: 能力は伸びているのに結果が
-          まとまっておらず、成長が実感できない）。表の数字の横にも通算の伸びを出す */}
-      <CampGainsSummary
-        key={done}
-        camp={camp}
-        roster={roster}
-        finished={finished}
-      />
+      {/* ⚠ **まとめはキャンプが終わってから**出す（先方指摘: キャンプ中に上に出る
+          上昇のまとめは要らない。キャンプ後に選手ごとの総合上昇値を見たい）。
+          キャンプ中は表の数字の横の「+〇」（直近のクールの伸び）で見る */}
+      {finished && <CampResultList camp={camp} roster={roster} />}
       <section className="online-camp-bulk">
         <div className="online-camp-bulk-fields">
           {/* ⚠ 選択肢が数個のものは**ボタンを並べる**（PC版の共通のルール。
@@ -838,6 +865,11 @@ export default function CampPlanner({
           選手ごとの練習はPCで選べます。ここでは育成方針だけで進みます。
         </p>
       )}
+      {/* ⚠ 携帯は表（能力の横の「+〇」）を出さないので、**直近のクールの伸びだけ**を畳んで置く。
+          上に出していた「練習の成果」（通算のまとめ）は消した（先方指摘）。通算はキャンプ後に出す */}
+      {compact && !finished && camp?.last && (
+        <LastRoundGains last={camp.last} roster={roster} />
+      )}
       {!compact && (
         <div
           className="online-segments online-camp-tabs"
@@ -912,7 +944,7 @@ export default function CampPlanner({
                     busy={busy || finished}
                     policy={policyOf(p)}
                     onFitWish={fitWish}
-                    gains={camp?.gains?.[p.id]}
+                    gains={camp?.last?.gains?.[p.id]}
                     target={subTarget[p.id]}
                     onMain={(id2, key) => setMain({ ...main, [id2]: key })}
                     onSub={(id2, key) => {
@@ -943,6 +975,12 @@ export default function CampPlanner({
                 .join(' ')}
             </span>
             <span>成長：伸びやすさ（1.00 が並み。高いほど同じ練習でよく伸びる）</span>
+            {/* ⚠ 「+〇」が何の数か書く（以前は通算で、1つのクールの伸びが分からなかった） */}
+            <span>
+              {camp?.last
+                ? `能力の横の＋は第${camp.last.round}クールで伸びた分`
+                : '能力の横の＋は、クールを実行するとそのクールで伸びた分が出ます'}
+            </span>
           </p>
         </section>
       )}

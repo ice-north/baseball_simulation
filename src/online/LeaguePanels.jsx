@@ -30,7 +30,8 @@ import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
-import { plannedPicks } from './tryoutPlan.js';
+import TryoutResult from './TryoutResult.jsx';
+import { plannedPicks, signTotal } from './tryoutPlan.js';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting, phaseStatusLabel } from './notices.js';
 import { ReadContext } from './useRead.js';
@@ -716,8 +717,13 @@ function MobilePlanContents({ phase, plan, view }) {
       Math.min(plan.count, plan.rankedIds.length),
       view.roster,
     );
-    head = `獲得予定 ${players.length}人`;
-    note = `希望リスト${plan.rankedIds.length}人から。他球団と重なったら控えから繰り上がります。`;
+    // 獲得する人数（`signTotal`。決めていなければ空き枠いっぱい）
+    const total = signTotal(plan, Math.max(0, ROSTER_LIMIT - view.roster.length));
+    const autoFill = Math.max(0, total - players.length);
+    head = `獲得する人数 ${total}人`;
+    note = `交渉した${plan.rankedIds.length}人から${players.length}人${
+      autoFill ? `＋自動で${autoFill}人` : ''
+    }。他球団と重なったら下位が繰り上がります。`;
   } else if (plan.releaseIds) {
     const byId = new Map(view.roster.map((p) => [p.id, p]));
     players = plan.releaseIds.map((id) => byId.get(id)).filter(Boolean);
@@ -1153,6 +1159,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
         {phase.kind === 'camp' && (
           <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
         )}
+        {phase.kind === 'camp' && <TryoutResult view={view} />}
         {phase.kind === 'camp' && (
           <CampPlanner
             view={view}
