@@ -8,11 +8,13 @@ import {
   SORT_KEYS,
   filterCandidates,
   planSummary,
-  plannedPicks,
   addToPlan,
-  benchFromPlan,
+  removeFromPlan,
   shiftInPlan,
   moveInPlan,
+  wishLimit,
+  planCount,
+  TRYOUT_WISH_MAX,
   WEIGHT_FIELDS,
   WEIGHT_MAX,
   WEIGHT_LEVELS,
@@ -32,11 +34,13 @@ import {
 //    操作の型が違うので、見せ方だけ借りて作り直している。
 //
 // ⚠ 候補は実測360人。以前は360行を1本のリストにして ↑↓ で並べ替えており、
-//    300番目を1番にするのに299回押す必要があった。ここでは
-//    「獲得予定の上位だけを並べ、残りは推奨順のまま控える」形にする。
+//    300番目を1番にするのに299回押す必要があった。次に「獲得予定＋控え」に
+//    分けたが、希望人数の入力・目標構成による飛ばし・控えの開閉が重なって
+//    「使いにくい」（いしだ指摘）ままだった。
 //
-// ⚠ `rankedIds` からは**誰も取り除かない**。サーバーは上から見て空いている人を
-//    取るので、全員残しておくと競合したとき繰り上がる。「外す」は末尾送り。
+// ⚠ いまは**一覧から「交渉」を押して10人まで選ぶ**だけ。選んだ順が1位〜10位で、
+//    ↑↓ とドラッグで入れ替えられる。同じ選手を複数の球団が希望したら、
+//    **前年の順位が上の球団**が取る（`resolveTryout`）。
 // ============================================================
 
 const PAGE = 12;
@@ -142,7 +146,6 @@ export default function TryoutPlanner({
   const fitOf = (p) => teamFitRank(p, roster, weights);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
-  const [showBench, setShowBench] = useState(false);
   // ⚠ お知らせは**出したときの希望順と組で持つ**。「標準案に戻す」など外から
   //    希望順が変わったら出さない（「作り直しました」が標準案の上に残っていた）
   const [noticeState, setNoticeState] = useState(null);
@@ -155,22 +158,20 @@ export default function TryoutPlanner({
     () => new Map(candidates.map((p) => [p.id, p])),
     [candidates],
   );
-  const count = Math.min(plan.count, plan.rankedIds.length);
-  // ⚠ **希望順の上から count 人、ではない**。サーバーは目標構成
-  //    （投手10・捕手2・内野6・外野6）を超える区分を飛ばすので、
-  //    同じ規則で「実際に取る顔ぶれ」を出す。ここを希望順の先頭にすると、
-  //    画面に並んでいる顔ぶれと実際に取る顔ぶれが食い違う
+  // ⚠ 交渉できる人数は**10人と空き枠の小さい方**。空き枠が2つしかない年に
+  //    10人選べても、取れるのは2人までなので数字が食い違う
+  const limit = wishLimit(maxCount);
+  const wanted = plan.rankedIds;
+  const count = planCount(wanted, maxCount);
   const { picked, targets, blocking, warnings } = planSummary(
-    plan.rankedIds,
+    wanted,
     candidates,
     count,
     roster,
   );
   // 獲得したあとの名簿の内訳（目標と比べるのはこちら。下の見出しの注）
   const after = rosterCounts([...(roster || []), ...picked]);
-  const wanted = picked.map((p) => p.id);
   const wantedSet = useMemo(() => new Set(wanted), [wanted.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
-  const bench = plan.rankedIds.filter((id) => !wantedSet.has(id));
 
   const pool = useMemo(
     () => filterCandidates(candidates, { group, query, sortKey, scoreOf }),
@@ -181,64 +182,42 @@ export default function TryoutPlanner({
 
   const setRanked = (rankedIds) => {
     setNotice('');
-    onChange({ ...plan, rankedIds });
+    onChange({ ...plan, rankedIds, count: planCount(rankedIds, maxCount) });
   };
-  // ⚠ 操作は**獲得予定を基準に**行う（`tryoutPlan.js` の説明を参照）。
-  //    `rankedIds` の位置で動かすと、目標構成で飛ばされる選手が挟まったときに
-  //    押した選手が入らない・消える・別の選手が入る、が起きていた
-  // ⚠ 「外す」は**消さずに末尾へ**。消すと競合したときの繰り上がりが無くなる
-  const drop = (id) =>
-    setRanked(benchFromPlan(plan.rankedIds, candidates, count, roster, id));
-  const shift = (index, delta) =>
-    setRanked(shiftInPlan(plan.rankedIds, candidates, count, roster, index, delta));
-  // ドラッグで from 位 → to 位 へ動かす（間の選手は1つずつずれる。`moveInPlan`）
+  const drop = (id) => setRanked(removeFromPlan(wanted, id));
+  const shift = (index, delta) => setRanked(shiftInPlan(wanted, index, delta));
+  // ドラッグで from 位 → to 位 へ動かす（間の選手は1つずつずれる）
   const moveTo = (from, to) => {
     if (wanted[from] === undefined) return;
-    setRanked(moveInPlan(plan.rankedIds, candidates, count, roster, wanted[from], to));
+    setRanked(moveInPlan(wanted, wanted[from], to));
   };
   const dragFrom = useRef(null);
-  const add = (id, first) => {
-    // ⚠ 獲得希望人数が0人のときは誰も入れられない。以前はこの場合も
-    //    「目標人数に達しているため」と別の理由を出していた
-    if (count <= 0) {
-      setNotice('獲得希望人数が0人のため、獲得予定に入れられません。先に人数を増やしてください。');
-      return;
-    }
-    const next = addToPlan(plan.rankedIds, candidates, count, roster, id, { first });
-    // ⚠ 黙って何も起きない、を作らない。今の名簿だけでその区分が目標を超えていると、
-    //    サーバーも取りにいかないので、獲得予定には入れられない
-    if (!plannedPicks(next, candidates, count, roster).some((p) => p.id === id)) {
+  // ⚠ 黙って何も起きない、を作らない。満員のときは理由を出す
+  const negotiate = (id) => {
+    if (wanted.length >= limit) {
       setNotice(
-        `${byId.get(id)?.name}は、今の名簿だけで${GROUP_LABELS[rosterGroup(byId.get(id)?.position)]}が目標人数に達しているため、獲得予定に入れられません。`,
+        limit === 0
+          ? '名簿に空きがないので、交渉できません。'
+          : `交渉できるのは${limit}人までです。誰かの交渉をやめてから選んでください。`,
       );
       return;
     }
-    setRanked(next);
+    setRanked(addToPlan(wanted, id, limit));
   };
 
   return (
     <div className="online-tryout">
+      {/* ⚠ 獲得希望人数の入力は**置かない**（いしだ指摘「使いにくい」）。
+          交渉した人数がそのまま希望人数で、取れるのは空き枠まで */}
       <div className="online-tryout-head">
-        <label>
-          獲得希望人数（最大{maxCount}人）
-          <input
-            type="number"
-            min="0"
-            max={maxCount}
-            value={plan.count}
-            onChange={(e) =>
-              onChange({
-                ...plan,
-                // ⚠ 整数に丸める。「2.5」や不正な値をそのまま送ると、
-                //    サーバーの「獲得人数が不正です」で弾かれる
-                count: Math.max(
-                  0,
-                  Math.min(maxCount, Math.trunc(Number(e.target.value)) || 0),
-                ),
-              })
-            }
-          />
-        </label>
+        <p className="online-tryout-limit">
+          交渉中 <b>{wanted.length}</b> / {limit}人
+          <small>
+            {maxCount < TRYOUT_WISH_MAX
+              ? `名簿の空きが${maxCount}人なので、交渉できるのも${limit}人までです`
+              : `1位から${TRYOUT_WISH_MAX}位まで選べます`}
+          </small>
+        </p>
         <button type="button" disabled={busy} onClick={onReset}>
           標準案に戻す
         </button>
@@ -285,15 +264,16 @@ export default function TryoutPlanner({
             className="online-primary"
             disabled={busy}
             onClick={() => {
-              const next = weightedRanked(candidates, weights, roster);
+              // ⚠ **交渉できる人数まで**で作る。以前は候補を全員並べていた
+              const next = weightedRanked(candidates, weights, roster, limit);
               setRanked(next);
               setNotice(
-                '評価の高い順に、投・捕・内・外の目標人数を守っておすすめ順を作り直しました。',
+                `評価の高い順に、投・捕・内・外の目標人数を守って${next.length}人選び直しました。`,
                 next,
               );
             }}
           >
-            この重みでおすすめ順を作る
+            この重みで{limit}人選ぶ
           </button>
           <button
             type="button"
@@ -304,17 +284,20 @@ export default function TryoutPlanner({
           </button>
         </div>
       </details>
+      {/* ⚠ **競合の決まり方を書く**。順位を上げるご褒美だと分かるようにする
+          （いしだ要望）。書かないと「なぜ取られたのか」が画面から読めない */}
       <p className="online-muted">
-        上から順に取りにいきます。他球団に先を越された選手は飛ばして、控えから繰り上がります。
-        名簿が偏らないよう、<strong>投{targets.pitcher}・捕{targets.catcher}・内
+        1位から順に取りにいきます。<strong>同じ選手を他球団も希望したときは、
+        前年の順位が上の球団が獲得します</strong>（取られたぶんは下から繰り上がります）。
+        名簿の目標は<strong>投{targets.pitcher}・捕{targets.catcher}・内
         {targets.infielder}・外{targets.outfielder}</strong>
-        を超える区分は飛ばします（CPUの球団も同じ目標です）。
+        で、<strong>交渉した人のあとの空き枠は自動で埋まります</strong>（CPUと同じ判断）。
       </p>
 
       <div className="online-tryout-grid">
         <section className="online-tryout-wanted">
           <h3>
-            獲得予定 {wanted.length}人{' '}
+            交渉する選手 {wanted.length}人{' '}
             {/* ⚠ 目標も並べて出す。超えたぶんは飛ばされるので、
                 数字だけだと「希望したのに入らない」理由が分からない
                 ⚠ **分子は獲得したあとの名簿の人数**（いまの名簿＋獲得予定）。目標は名簿
@@ -332,7 +315,7 @@ export default function TryoutPlanner({
               「…4人未満ですこの位置は…」と文がつながって出ていた */}
           {blocking.length > 0 && (
             <p role="alert" className="online-tryout-block">
-              {`このままでは決定できません: ${blocking.join(' / ')}。獲得希望人数を増やすか、希望順位を入れ替えてください。`}
+              {`このままでは決定できません: ${blocking.join(' / ')}。足りない守備位置の選手と交渉してください。`}
             </p>
           )}
           {warnings.length > 0 && (
@@ -345,7 +328,12 @@ export default function TryoutPlanner({
               {notice}
             </p>
           )}
-          {wanted.length === 0 && <p>獲得希望人数を1人以上にしてください。</p>}
+          {wanted.length === 0 && (
+            <p>
+              右の一覧から「交渉」を押すと、ここに1位から並びます。
+              {limit > 0 ? `${limit}人まで選べます。` : '名簿に空きがありません。'}
+            </p>
+          )}
           <ol className="online-tryout-list">
             {wanted.map((id, i) => (
               <li
@@ -382,9 +370,6 @@ export default function TryoutPlanner({
                 <span className="online-tryout-person">
                   <Line player={byId.get(id)} score={scores.get(id)} fit={fitOf(byId.get(id))} />
                 </span>
-                {/* ⚠ 希望リストの隣ではなく**獲得予定の隣**と入れ替える。
-                    間に飛ばされた選手が挟まっていると、希望リストの中で
-                    1つ動かしても画面の並びが変わらず、壊れて見える */}
                 <button
                   type="button"
                   aria-label={`${byId.get(id)?.name}の希望順位を上げる`}
@@ -403,46 +388,15 @@ export default function TryoutPlanner({
                 </button>
                 <button
                   type="button"
-                  aria-label={`${byId.get(id)?.name}を控えへ回す`}
+                  aria-label={`${byId.get(id)?.name}との交渉をやめる`}
                   disabled={busy}
                   onClick={() => drop(id)}
                 >
-                  控えへ
+                  やめる
                 </button>
               </li>
             ))}
           </ol>
-          <button
-            type="button"
-            className="online-tryout-bench-toggle"
-            aria-expanded={showBench}
-            onClick={() => setShowBench(!showBench)}
-          >
-            控え {bench.length}人{showBench ? ' を閉じる' : ' を見る'}
-          </button>
-          {showBench && (
-            <ol className="online-tryout-list online-tryout-bench" start={wanted.length + 1}>
-              {bench.slice(0, 40).map((id) => (
-                <li key={id}>
-                  <span className="online-tryout-person">
-                    <Line player={byId.get(id)} score={scores.get(id)} fit={fitOf(byId.get(id))} />
-                  </span>
-                  <button
-                    type="button"
-                    disabled={busy || count === 0}
-                    onClick={() => add(id, true)}
-                  >
-                    最優先へ
-                  </button>
-                </li>
-              ))}
-              {bench.length > 40 && (
-                <li className="online-muted">
-                  ほか{bench.length - 40}人（下の「候補を探す」から指名できます）
-                </li>
-              )}
-            </ol>
-          )}
         </section>
 
         <section className="online-tryout-pool">
@@ -498,29 +452,29 @@ export default function TryoutPlanner({
                 <span className="online-tryout-person">
                   <Line player={p} score={scores.get(p.id)} fit={fitOf(p)} />
                 </span>
+                {/* ⚠ ボタンは**1つだけ**（いしだ要望）。以前は「最優先へ」と
+                    「指名に加える」の2つあり、どちらを押すのか毎回考えることに
+                    なっていた。順位は左の一覧で↑↓・ドラッグで入れ替える */}
                 {wantedSet.has(p.id) ? (
-                  <span className="online-tryout-mark">
-                    {/* ⚠ 獲得予定の番号で出す。希望リスト全体の位置だと、
-                        飛ばされた選手のぶん左の一覧の番号とずれる */}
-                    指名中 {wanted.indexOf(p.id) + 1}位
-                  </span>
+                  <button
+                    type="button"
+                    className="online-tryout-negotiating"
+                    aria-label={`${p.name}との交渉をやめる`}
+                    disabled={busy}
+                    onClick={() => drop(p.id)}
+                  >
+                    交渉中 {wanted.indexOf(p.id) + 1}位
+                  </button>
                 ) : (
-                  <>
-                    <button
-                      type="button"
-                      disabled={busy || count === 0}
-                      onClick={() => add(p.id, true)}
-                    >
-                      最優先へ
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || count === 0}
-                      onClick={() => add(p.id, false)}
-                    >
-                      指名に加える
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="online-primary online-tryout-negotiate"
+                    aria-label={`${p.name}と交渉する`}
+                    disabled={busy || limit === 0}
+                    onClick={() => negotiate(p.id)}
+                  >
+                    交渉
+                  </button>
                 )}
               </li>
             ))}

@@ -40,7 +40,6 @@ import {
 } from '../src/season/dateProgression.js';
 import {
   generateTryoutCandidates,
-  generateSnakeDraftOrder,
   selectPlayerForAI,
   updateReleasedPoolAfterTryout,
   removeDraftedFromClubTeams,
@@ -141,7 +140,12 @@ import {
   assertMemberCount,
   assignmentOrder,
 } from '../src/online/membership.js';
-import { nextFromPlan } from '../src/online/tryoutPlan.js';
+import {
+  nextFromPlan,
+  wishLimit,
+  planCount,
+  TRYOUT_WISH_MAX,
+} from '../src/online/tryoutPlan.js';
 import { generateRosterPacks, packsForMember } from '../src/online/rosterPack.js';
 import { abilitySnapshot, abilityGains, addCampGains } from '../src/online/campGains.js';
 import {
@@ -1006,7 +1010,11 @@ export function defaultPhasePlan(league, teamName) {
     const pool = clone(league.phase.candidates);
     const roster = clone(team.players);
     const rankedIds = [];
-    while (pool.length) {
+    // ⚠ **交渉できる人数まで**（10人）。以前は候補360人を全員並べていたが、
+    //    いまの希望リストは10人までで、それを超えると提出が弾かれる。
+    //    360回 `selectPlayerForAI` を回す必要も無くなった
+    const limit = wishLimit(Math.max(0, ROSTER_LIMIT - team.players.length));
+    while (pool.length && rankedIds.length < limit) {
       const player = selectPlayerForAI(pool, roster, context) || pool[0];
       rankedIds.push(player.id);
       roster.push(player);
@@ -1015,7 +1023,7 @@ export function defaultPhasePlan(league, teamName) {
         1,
       );
     }
-    return { rankedIds, count: Math.max(0, ROSTER_LIMIT - team.players.length) };
+    return { rankedIds, count: rankedIds.length };
   });
 }
 
@@ -1107,6 +1115,12 @@ function validatePhasePlan(league, teamName, plan) {
           new Set(plan.rankedIds).size === plan.rankedIds.length &&
           plan.rankedIds.every((id) => candidates.has(id)),
         '希望順位に無効・重複した選手がいます',
+      );
+      // ⚠ **交渉は10人まで**（いしだ要望の1位〜10位）。画面でも止めているが、
+      //    正本はここ。超えた提出を通すと、画面に出ていない選手まで取りにいく
+      requireOnline(
+        plan.rankedIds.length <= TRYOUT_WISH_MAX,
+        `交渉できるのは${TRYOUT_WISH_MAX}人までです`,
       );
       requireOnline(
         plan.rankedIds.length >= plan.count,
@@ -1301,10 +1315,15 @@ function resolvePackSelect(league, plans) {
 
 function resolveTryout(league, plans) {
   const phase = league.phase;
-  // ⚠ 指名順は**前年の順位の逆**（弱い球団から）。初回だけ球団名の順という
-  //    分岐があったが、初回の名簿はセット選択で配るのでもう通らない
+  // ⚠ 指名順は**前年の順位が上の球団から**（いしだ要望:「順位を上げることの
+  //    ご褒美」）。同じ選手を複数の球団が希望したら、順位が上の球団が取る。
+  //    以前は逆（弱い球団から）で、スネーク（巡ごとに逆順）だった。
+  //    ⚠ スネークにしないこと。巡ごとに逆順にすると、2巡目は最下位の球団が
+  //       先に取ることになり、「順位が上なら先に取れる」と食い違う。
+  //    ⚠ 勝率が同じ球団は球団名で決める（毎回同じ順にするため。`winRate` だけで
+  //       並べると、同率の2球団の前後が実行ごとに変わりうる）
   const names = [...league.season.standings]
-    .sort((a, b) => a.winRate - b.winRate)
+    .sort((a, b) => b.winRate - a.winRate || (a.team < b.team ? -1 : 1))
     .map((s) => s.team);
   const remaining = clone(phase.candidates);
   const acquired = Object.fromEntries(names.map((name) => [name, []]));
@@ -1324,7 +1343,10 @@ function resolveTryout(league, plans) {
     return { needPitcher, needCatcher, needFielders };
   };
   // ⚠ 巡目は**枠の数**から取る。直に書くと、枠を増やしたときに取り残される
-  const order = generateSnakeDraftOrder(names, ROSTER_LIMIT);
+  // ⚠ **毎回同じ順**（スネークではない）。上の `names` の理由と同じ
+  const order = Array.from({ length: ROSTER_LIMIT }, (_, round) =>
+    names.map((team) => ({ round: round + 1, team })),
+  ).flat();
   const picksLeftOf = Object.fromEntries(names.map((name) => [name, 0]));
   for (const pick of order) picksLeftOf[pick.team] += 1;
   for (const pick of order) {
@@ -1336,13 +1358,15 @@ function resolveTryout(league, plans) {
     const { needPitcher, needCatcher, needFielders } = shortfall(roster);
     const slotsLeft = ROSTER_LIMIT - roster.length;
     const mustFill = (needPitcher ? 1 : 0) + needFielders;
-    // ⚠ **希望人数に達しても、最低限が欠けていれば取り続ける**。
-    //    以前は希望人数（0人も選べる）で打ち切っていたため、投手・捕手・野手が
-    //    足りない球団が1つあるだけで下の検査に落ち、**全員のトライアウトが
-    //    解決できずに止まった**（締め切りの自動解決も同じ所で失敗する）。
-    //    足りないぶんは必要な守備位置から自動で補う。
+    // ⚠ **交渉した人数に達しても、枠が空いていれば取り続ける**（CPUと同じ
+    //    判断で自動的に埋める）。交渉は10人までなので、ここで打ち切ると
+    //    人の球団だけ名簿が21人などで終わり、控えの数でCPUに劣る
+    //    （実測で投10・捕2・内5・外4 の21人）。
+    //    ⚠ 0人も選べる。打ち切っていた頃は、投手・捕手・野手が足りない球団が
+    //       1つあるだけで下の検査に落ち、**全員のトライアウトが解決できずに
+    //       止まった**（締め切りの自動解決も同じ所で失敗する）。
     const planFull = !!plan && acquired[pick.team].length >= plan.count;
-    if (slotsLeft <= 0 || (planFull && mustFill === 0)) continue;
+    if (slotsLeft <= 0) continue;
     // 足りないものから順に埋める（投手 → 捕手 → 野手）
     const pickForShortfall = () => {
       const want = needPitcher
@@ -1359,32 +1383,32 @@ function resolveTryout(league, plans) {
     // ⚠ 残りの**指名回数**でも判定する。枠（26人）だけで見ていると、希望順位の
     //    候補が全員他球団に取られて指名を見送り続けた球団は、枠が空いたまま
     //    巡目が尽き、最低限の構成に届かずにトライアウト全体が解決できなかった。
-    if (slotsLeft <= mustFill || picksLeft <= mustFill || planFull)
-      forced = pickForShortfall();
-    let player = forced
-      ? forced
-      : planFull
-        ? null
-        : plan
-        ? // ⚠ **希望順だけで取らないこと**。候補の38%が投手なので、順番どおりに
-          //    取ると投手15人・野手9人（控えゼロ）になる。CPUは
-          //    `selectPlayerForAI` が目標構成を見ているので投手10・野手14で揃い、
-          //    人の球団だけ構造的に不利だった。同じ目標に従って飛ばす
-          nextFromPlan(
+    if (slotsLeft <= mustFill || picksLeft <= mustFill) forced = pickForShortfall();
+    // CPUと同じ判断で選ぶ。
+    // ⚠ CPUにも**オンラインの目標構成**を渡す。既定（一人用の24人）だと
+    //    CPUだけ24人で止まり、人の球団だけ26人になる
+    // ⚠ 監督の考え（育成か勝負か・好む選手）を渡す（`coachEngine.tryoutContextFor`）
+    const auto = () =>
+      selectPlayerForAI(
+        remaining,
+        roster,
+        tryoutContextFor(league, pick.team),
+        ONLINE_ROSTER_TARGETS,
+      );
+    // ⚠ 希望順のとおりに取る（飛ばさない）。自分で10人選ぶ形なので、
+    //    1位を飛ばされると何を選んだのか分からなくなる
+    const fromPlan =
+      plan && !planFull
+        ? nextFromPlan(
             plan.rankedIds
               .map((id) => remaining.find((p) => p.id === id))
               .filter(Boolean),
-            roster,
           )
-        : // ⚠ CPUにも**オンラインの目標構成**を渡す。既定（一人用の24人）だと
-          //    CPUだけ24人で止まり、人の球団だけ26人になる
-          // ⚠ 監督の考え（育成か勝負か・好む選手）を渡す（`coachEngine.tryoutContextFor`）
-          selectPlayerForAI(
-            remaining,
-            roster,
-            tryoutContextFor(league, pick.team),
-            ONLINE_ROSTER_TARGETS,
-          );
+        : null;
+    // ⚠ **希望が尽きても枠は埋める**。交渉は10人までで、しかも上位の球団に
+    //    先を越される。ここで見送ると人の球団だけ名簿が足りないまま終わる
+    //    （実測で自分21人・CPU26人。控えの数でそのまま不利になる）
+    let player = forced || fromPlan || auto();
     // 希望順位の候補が尽きても、最低限が欠けていれば必要な守備位置から補う
     if (!player && mustFill > 0) player = pickForShortfall();
     if (!player) continue;

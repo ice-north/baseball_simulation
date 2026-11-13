@@ -6,56 +6,54 @@ import { ONLINE_ROSTER_TARGETS } from './shared.js';
 // 初期編成・トライアウトの希望リストを組み立てる計算。
 //
 // 【サーバー側の約束】提出するのは `{ count, rankedIds }` の2つだけ。
-// サーバーは `rankedIds` を上から見て、まだ空いている選手を `count` 人まで取る。
-// だから **`rankedIds` には候補を全員残しておく方が得**（競合したとき繰り上がる）。
+// `rankedIds` は**交渉したい選手を10人まで、欲しい順に並べたもの**。
+// サーバーは上から見て、まだ空いている選手を `count` 人まで取る。
 //
 // ⚠ **画面(JSX)と分けてある**。node から直接読めないと検査が書けない。
-// ⚠ 候補は実測で **360人**（12球団・初期編成）。以前は360行を1本のリストにして
-//    ↑↓ で並べ替えさせており、300番目を1番にするのに299回押す必要があった。
-//    ここでは「上位（獲得予定）だけを並べ、残りは推奨順のまま控える」形にする。
+// ⚠ 候補は実測で **360人**。全員を1本の希望順に並べる形（以前）は、
+//    300番目を1番にするのに299回押す必要があり、順位を入れ替えるほど
+//    画面が壊れて見えた（いしだ指摘「年末のトライアウトが使いにくい」）。
+//    いまは**一覧から「交渉」を押して10人まで選ぶ**だけにしてある。
 // ============================================================
 
+/** 交渉できる人数。1位〜10位まで（いしだ要望） */
+export const TRYOUT_WISH_MAX = 10;
 
 // --- 希望リストを実際の指名へ変える規則 --------------------------------
 //
-// ⚠ **CPUと同じ目標構成に従うこと**（`ONLINE_ROSTER_TARGETS`）。以前は希望リストを
-//    順番どおりに取るだけで構成を見ておらず、候補の38%が投手なので
-//    **投手15人・野手9人**（控えゼロ）になっていた。CPUは全球団が
-//    投手10・野手14で揃っており、人の球団だけ構造的に不利だった。
+// ⚠ **希望順のとおりに取る**。以前は目標構成（投10・捕2・内6・外6）を超える
+//    区分を飛ばしていた。候補全員を並べる形ではそれが要った（候補の38%が
+//    投手なので、順番どおりだと投手ばかりになる）が、いまは自分で10人選ぶので
+//    1位を飛ばされると何を選んだのか分からなくなる。偏りすぎて最低限
+//    （投手1・捕手1・野手8）に届かないぶんは、サーバーが必要な守備位置から補う。
 // ⚠ サーバーの解決（`resolveTryout`）と画面の「獲得予定」が**同じ関数を使う**こと。
 //    片方だけ直すと、画面に出ている顔ぶれと実際に取る顔ぶれが食い違う。
 
-/** 希望順の中から、いま取るべき1人を選ぶ。目標を満たした区分は飛ばす */
-export function nextFromPlan(ordered, roster) {
-  const counts = rosterCounts(roster);
-  const room = (player) => {
-    const group = rosterGroup(player.position);
-    return counts[group] < ONLINE_ROSTER_TARGETS[group];
-  };
-  // ⚠ どの区分も埋まっているときは**希望の先頭に戻す**。ここで null を返すと
-  //    枠が余っているのに誰も取らない回ができてしまう
-  return ordered.find(room) || ordered[0] || null;
+/** 希望順の中から、いま取るべき1人を選ぶ。残っている中のいちばん上 */
+export function nextFromPlan(ordered) {
+  return ordered[0] || null;
 }
 
 /**
  * 他球団と競合しなかった場合に、実際に取る顔ぶれ。画面の「獲得予定」に使う。
- * ⚠ 希望リストの上から count 人、ではない。目標構成で飛ばされるぶんがある
+ * ⚠ 希望順の上から count 人。競合に負けたぶんは下から繰り上がる
  */
 export function plannedPicks(rankedIds, candidates, count, roster = []) {
   const byId = new Map(candidates.map((p) => [p.id, p]));
-  const pool = rankedIds.map((id) => byId.get(id)).filter(Boolean);
-  const taken = [];
-  const have = [...roster];
-  for (let i = 0; i < count; i += 1) {
-    const player = nextFromPlan(
-      pool.filter((p) => !taken.includes(p)),
-      have,
-    );
-    if (!player) break;
-    taken.push(player);
-    have.push(player);
-  }
-  return taken;
+  return rankedIds
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .slice(0, Math.max(0, count));
+}
+
+/** 交渉できる人数（空き枠と10人の小さい方）。`roster` はいまの名簿 */
+export function wishLimit(maxCount) {
+  return Math.max(0, Math.min(TRYOUT_WISH_MAX, maxCount));
+}
+
+/** 提出する `count`。希望した人数と空き枠の小さい方 */
+export function planCount(rankedIds, maxCount) {
+  return Math.max(0, Math.min(rankedIds.length, maxCount));
 }
 
 /** 守備位置のまとまり。画面の絞り込みと、偏りの警告に使う */
@@ -247,7 +245,7 @@ export function weightedScore(player, weights) {
  * （画面の獲得予定・サーバーの解決と同じ規則）。区分が全部埋まったあとは評価値順。
  * ⚠ 候補は全員並べる（競合したときの繰り上がりのため。消さない）。
  */
-export function weightedRanked(candidates, weights, roster = []) {
+export function weightedRanked(candidates, weights, roster = [], limit = TRYOUT_WISH_MAX) {
   const score = new Map(candidates.map((p) => [p.id, weightedScore(p, weights)]));
   const sorted = [...candidates].sort(
     (a, b) => score.get(b.id) - score.get(a.id) || a.id - b.id,
@@ -262,7 +260,10 @@ export function weightedRanked(candidates, weights, roster = []) {
       head.push(p.id);
     } else tail.push(p.id);
   }
-  return [...head, ...tail];
+  // ⚠ **交渉できる人数まで**で切る（いしだ要望の10人）。以前は候補を全員
+  //    並べて返していたが、いまの希望リストは10人までなので、残りを付けると
+  //    提出で弾かれる
+  return [...head, ...tail].slice(0, limit);
 }
 
 /**
@@ -305,116 +306,39 @@ export function moveRanked(rankedIds, id, toIndex) {
   return [...rest.slice(0, index), id, ...rest.slice(index)];
 }
 
-// --- 画面の操作（獲得予定を基準にした並べ替え） --------------------------
+// --- 画面の操作（希望リストの出し入れと並べ替え） ------------------------
 //
-// ⚠ **画面の操作は `rankedIds` ではなく「獲得予定」を基準にすること**。
-//    獲得予定は希望順の上から count 人ではなく、目標構成（投10・捕2・内6・外6）を
-//    超える区分を飛ばした顔ぶれ。初期編成は24人＝目標の合計ちょうどなので、
-//    **どの区分も必ず目標まで埋まっている**。以前は `rankedIds` の位置で操作しており、
-//    - 「指名に加える」は候補の約9割で何も起きなかった（実測336人中301人。
-//      最後の獲得予定と同じ区分の選手しか入らない）
-//    - 飛ばされた選手が間に挟まると「↓」で選手が獲得予定から消え、
-//      控えの選手が代わりに入った
+// ⚠ **`rankedIds` がそのまま希望リスト**（10人まで）。以前は候補360人全員を
+//    並べた配列で、獲得予定は「目標構成で飛ばしたあとの顔ぶれ」だったため、
+//    - 「指名に加える」は候補の約9割で何も起きなかった（実測336人中301人）
+//    - 飛ばされた選手が間に挟まると「↓」で選手が獲得予定から消えた
 //    - 「指名中 N位」が獲得予定の番号とずれた
-//    という形で、入れ替えるほど画面が壊れて見えた。
-// ⚠ どの操作のあとも `normalizeRanked` で並べ直す。並べ直したあとは
-//    **`rankedIds` の先頭が獲得予定と同じ順で並ぶ**ので、画面の並びと
-//    サーバーが取りにいく順が一致する（提出の中身は並べ替えだけで、人は増減しない）。
+//    という形で、入れ替えるほど画面が壊れて見えた。いまは配列そのものを
+//    出し入れするだけなので、画面の並び＝サーバーが取りにいく順。
 
-/** 獲得予定を先頭に、残りを元の順で後ろに並べ直す */
-export function normalizeRanked(rankedIds, candidates, count, roster = []) {
-  const picked = plannedPicks(rankedIds, candidates, count, roster).map((p) => p.id);
-  const set = new Set(picked);
-  return [...picked, ...rankedIds.filter((id) => !set.has(id))];
+/** 交渉する選手を希望リストの末尾へ加える。満員・重複なら何もしない */
+export function addToPlan(rankedIds, id, limit = TRYOUT_WISH_MAX) {
+  if (!id || rankedIds.includes(id) || rankedIds.length >= limit) return rankedIds;
+  return [...rankedIds, id];
 }
 
-/**
- * 控えの選手を獲得予定へ入れる。代わりに1人が控えの先頭へ回る。
- * 押し出すのは、同じ区分が目標に達していれば**同じ区分の最後の人**、
- * そうでなければ獲得予定の最後の人。`first` なら獲得予定の先頭へ、
- * そうでなければ末尾へ入れる。
- */
-export function addToPlan(rankedIds, candidates, count, roster, id, { first = false } = {}) {
-  if (!rankedIds.includes(id) || count <= 0) return rankedIds;
-  const byId = new Map(candidates.map((p) => [p.id, p]));
-  const player = byId.get(id);
-  if (!player) return rankedIds;
-  const wanted = plannedPicks(rankedIds, candidates, count, roster).map((p) => p.id);
-  if (wanted.includes(id)) {
-    // すでに獲得予定。最優先へだけは先頭へ動かす
-    if (!first) return normalizeRanked(rankedIds, candidates, count, roster);
-    return normalizeRanked(
-      [id, ...rankedIds.filter((x) => x !== id)],
-      candidates,
-      count,
-      roster,
-    );
-  }
-  const group = rosterGroup(player.position);
-  const counts = rosterCounts([...roster, ...wanted.map((x) => byId.get(x))]);
-  const sameGroup = wanted.filter((x) => rosterGroup(byId.get(x).position) === group);
-  const victim =
-    counts[group] >= ONLINE_ROSTER_TARGETS[group] && sameGroup.length
-      ? sameGroup.at(-1)
-      : wanted.length >= count
-        ? wanted.at(-1)
-        : null;
-  const kept = wanted.filter((x) => x !== victim);
-  const rest = rankedIds.filter((x) => x !== id && x !== victim && !kept.includes(x));
-  const order = first
-    ? [id, ...kept, ...(victim ? [victim] : []), ...rest]
-    : [...kept, id, ...(victim ? [victim] : []), ...rest];
-  return normalizeRanked(order, candidates, count, roster);
+/** 交渉をやめる（希望リストから外す） */
+export function removeFromPlan(rankedIds, id) {
+  return rankedIds.filter((x) => x !== id);
 }
 
-/**
- * 獲得予定から外して控えの**末尾**へ回す（消さない）。
- * ⚠ 控えの先頭に置くと、空いた枠にその本人がそのまま戻ってきて何も起きない。
- *    空いた枠には、控えのうち同じ条件で取れる一番上の選手が繰り上がる。
- */
-export function benchFromPlan(rankedIds, candidates, count, roster, id) {
-  if (!rankedIds.includes(id)) return rankedIds;
-  return normalizeRanked(
-    [...rankedIds.filter((x) => x !== id), id],
-    candidates,
-    count,
-    roster,
-  );
+/** 希望リストの中で隣と入れ替える（↑↓用）。端なら何もしない */
+export function shiftInPlan(rankedIds, index, delta) {
+  return swapRanked(rankedIds, index, delta);
 }
 
-/**
- * 獲得予定の中で隣と入れ替える（↑↓用）。獲得予定の顔ぶれは変えない。
- * ⚠ `rankedIds` の隣ではなく**獲得予定の隣**と入れ替える。
- */
-export function shiftInPlan(rankedIds, candidates, count, roster, index, delta) {
-  const normalized = normalizeRanked(rankedIds, candidates, count, roster);
-  const wantedCount = plannedPicks(normalized, candidates, count, roster).length;
-  const next = index + delta;
-  if (index < 0 || next < 0 || index >= wantedCount || next >= wantedCount)
-    return normalized;
-  return normalizeRanked(swapRanked(normalized, index, delta), candidates, count, roster);
-}
-
-/**
- * 獲得予定の中で、選手 `id` を `to` 番目（0始まり）へ動かす（ドラッグ用）。
- * 間の選手は1つずつずれる。↑↓ と同じく獲得予定の並びで1つずつ動かす。
- * ⚠ 1つ動かすたびに**その選手がいまどこにいるかを探し直す**。目標構成で並びが
- *    整え直される（埋まった区分の選手は後ろへ回る）ので、「1つ動かせば隣にいる
- *    はず」と決め打ちすると別の選手を動かしてしまう。動かなくなったら止める。
- */
-export function moveInPlan(rankedIds, candidates, count, roster, id, to) {
-  let ids = normalizeRanked(rankedIds, candidates, count, roster);
-  const limit = 2 * Math.max(1, ids.length);
-  for (let guard = 0; guard < limit; guard += 1) {
-    const at = plannedPicks(ids, candidates, count, roster).findIndex(
-      (p) => p.id === id,
-    );
-    if (at < 0 || at === to) break;
-    const next = shiftInPlan(ids, candidates, count, roster, at, to > at ? 1 : -1);
-    if (next.join('\u0000') === ids.join('\u0000')) break;
-    ids = next;
-  }
-  return ids;
+/** 希望リストの中で、選手 `id` を `to` 番目（0始まり）へ動かす（ドラッグ用） */
+export function moveInPlan(rankedIds, id, to) {
+  const at = rankedIds.indexOf(id);
+  if (at < 0) return rankedIds;
+  const rest = rankedIds.filter((x) => x !== id);
+  const index = Math.max(0, Math.min(rest.length, to));
+  return [...rest.slice(0, index), id, ...rest.slice(index)];
 }
 
 /** 隣と入れ替える（↑↓用）。端なら何もしない */
