@@ -43,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -195,7 +196,7 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
         }
         // 今の状態に当てはまる TIPS の印は面の切り替えの右に（行に重ねない）
         Row(Modifier.fillMaxWidth().padding(top = if (tab == PlanTab.Staff) 8.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
-            ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.weight(1f))
+            ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.weight(1f), endPadding = 4.dp)
             tipsBadge()
         }
         when (tab) {
@@ -290,7 +291,7 @@ private fun OrderEditor(
                 val me = players[pickedStarter.playerId]
                 val them = players[slot.playerId]
                 ({
-                    SwapHint("⇄ 入れ替え", listOf(
+                    SwapHint("⇄", listOf(
                         Triple(me?.name.orEmpty(), slot.position, me?.fitness(slot.position) ?: 0),
                         Triple(them?.name ?: "空き", pickedStarter.position, them?.fitness(pickedStarter.position) ?: 0),
                     ))
@@ -315,10 +316,14 @@ private fun OrderEditor(
             val who = pickedStarter?.let { players[it.playerId]?.name } ?: pickedBench?.name
             if (who != null) {
                 // 選んでいる間だけ、次に何を押せばよいかを出す（いつも出す説明は ⓘ に。いしだ指定）
+                // ⚠ 操作の説明は ⓘ に（2行取っていた。いしだ 2026-11-13）。ここは誰を選んでいるかだけ
                 Text(
-                    if (pickedStarter != null) "$who を選択中。スタメンを押すと守備を入れ替え、控えを押すと交代" else "$who を選択中。スタメンを押すと交代",
-                    style = MaterialTheme.typography.bodySmall,
+                    "$who を選択中",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.secondary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = { picked = null }) { Text("やめる") }
@@ -335,7 +340,7 @@ private fun OrderEditor(
             state = listState,
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
         ) {
             if (notes.isNotEmpty()) {
                 item(key = "notes") {
@@ -443,6 +448,42 @@ private fun OrderEditor(
                             hint = benchHint(p),
                             detail = detail,
                         )
+                    }
+                }
+            }
+        }
+        // スタメンを選んでいる間は、控えを画面の下に固定して出す（いしだ 2026-11-13: 控えを探すのに下までスクロールが要った）。
+        // その位置の適性の高い順。押すと交代。投手は守れる人（適性 SUBSTITUTE_MIN_FITNESS 以上）だけ
+        if (pickedStarter != null) {
+            val at = pickedStarter.position
+            val subs = remember(bench, pitcherBench, at) {
+                (bench + pitcherBench.filter { it.fitness(at) >= SUBSTITUTE_MIN_FITNESS }).sortedByDescending { it.fitness(at) }
+            }
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 8.dp, modifier = Modifier.fillMaxWidth().testTag("bench-dock")) {
+                Column {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("控えと交代（${positionLabel(at)}の適性順）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    }
+                    if (subs.isEmpty()) {
+                        Muted("この位置を守れる控えがいません", Modifier.padding(16.dp))
+                    } else {
+                        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 230.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            items(subs, key = { "dock:${it.id}" }) { p ->
+                                Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                                    FielderRow(
+                                        order = null,
+                                        position = p.position,
+                                        player = p,
+                                        // 「適」は交代して守る位置での適性
+                                        fitnessAt = at,
+                                        onPosition = { pick(OrderPick.Bench(p.id)) },
+                                        onName = { pick(OrderPick.Bench(p.id)) },
+                                        onInfo = { open(p.id) },
+                                        detail = false,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

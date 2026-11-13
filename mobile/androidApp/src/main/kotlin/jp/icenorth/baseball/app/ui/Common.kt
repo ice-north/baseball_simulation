@@ -302,10 +302,13 @@ fun ChipTabs(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     counts: Map<String, Int> = emptyMap(),
+    /** 右の余白（右に別の物を並べるときは詰める） */
+    endPadding: androidx.compose.ui.unit.Dp = 12.dp,
 ) {
     Row(
-        modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier.horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = endPadding),
+        // ⚠ 編成では右に TIPS の印が並ぶので、詰めておく（6dp だと「指導者」の右端に印がかかった）
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         options.forEach { (key, label) ->
             val count = counts[key] ?: 0

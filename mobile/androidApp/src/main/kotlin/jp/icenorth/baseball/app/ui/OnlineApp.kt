@@ -230,7 +230,7 @@ fun OnlineApp(model: AppViewModel) {
                                 seen = model.seenSituationTips,
                                 onRead = model::markSituationTipsSeen,
                                 onOpenAll = { showTips = true },
-                                modifier = Modifier.padding(end = 10.dp).size(32.dp),
+                                modifier = Modifier.padding(start = 2.dp, end = 8.dp).size(30.dp),
                             )
                         }
                         Tab.Procedures -> Refreshable(model) {
