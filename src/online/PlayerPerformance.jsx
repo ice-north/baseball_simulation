@@ -6,6 +6,7 @@ import { PageNav } from './PageNav.jsx';
 import PlayerDetailBody, { PlayerTags } from './PlayerDetailBody.jsx';
 import { useRead } from './useRead.js';
 import { inOnlineRoot } from './dialogPortal.js';
+import { useTradeStart } from './tradeStart.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
 import BatteryStats from './BatteryStats.jsx';
@@ -423,6 +424,7 @@ function Detail({ player, close }) {
     dialog.current.close();
     close();
   };
+  const startTrade = useTradeStart();
   // ⚠ 表のセル（キャンプの表など）の中から開くので、`.online` の直下へ出す
   //    （`dialogPortal.js`）。セルの `white-space: nowrap` が説明まで当たっていた
   return inOnlineRoot(
@@ -461,6 +463,21 @@ function Detail({ player, close }) {
       </header>
       {/* ⚠ **自球団の選手だけ**（`detailAvailable`）。他球団の登録は変えられない */}
       {player.detailAvailable && <ConvertPosition player={player} />}
+      {/* 他球団の選手から、そのままトレードを考える（アプリの選手シートと同じ入口）。
+          ⚠ PCの選手成績の他球団だけ（`tradeTeam` が付いている）。閉じてからトレードへ移る */}
+      {startTrade && player.tradeTeam && (
+        <div className="online-actions">
+          <button
+            type="button"
+            onClick={() => {
+              dismiss();
+              startTrade(player.tradeTeam, player);
+            }}
+          >
+            この選手でトレードを考える（{teamShort(player.tradeTeam)}）
+          </button>
+        </div>
+      )}
       {/* ⚠ **タブで分けない**。以前は「成績／能力・人物／場面別」の3タブ＋
           その中でさらに区分の切り替えがあり、1人を見るのに何度も押していた。
           見たいもの（札と経歴・成績・能力）は一度に出す。 */}
