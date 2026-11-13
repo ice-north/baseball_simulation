@@ -289,14 +289,19 @@ private fun OrderEditor(
             pickedStarter != null && picked != OrderPick.Starter(index) -> {
                 val me = players[pickedStarter.playerId]
                 val them = players[slot.playerId]
-                ({ SwapHint("⇄", listOf(slot.position to (me?.fitness(slot.position) ?: 0), pickedStarter.position to (them?.fitness(pickedStarter.position) ?: 0))) })
+                ({
+                    SwapHint("⇄ 入れ替え", listOf(
+                        Triple(me?.name.orEmpty(), slot.position, me?.fitness(slot.position) ?: 0),
+                        Triple(them?.name ?: "空き", pickedStarter.position, them?.fitness(pickedStarter.position) ?: 0),
+                    ))
+                })
             }
-            pickedBench != null -> ({ SwapHint("交代", listOf(slot.position to pickedBench.fitness(slot.position))) })
+            pickedBench != null -> ({ SwapHint("交代", listOf(Triple(pickedBench.name, slot.position, pickedBench.fitness(slot.position)))) })
             else -> null
         }
     }
     val benchHint: (Player) -> (@Composable () -> Unit)? = { p ->
-        if (pickedStarter != null) ({ SwapHint("交代", listOf(pickedStarter.position to p.fitness(pickedStarter.position))) }) else null
+        if (pickedStarter != null) ({ SwapHint("交代", listOf(Triple(p.name, pickedStarter.position, p.fitness(pickedStarter.position)))) }) else null
     }
     // ⚠ 投手は多い（10人以上）。守れる位置（適性 SUBSTITUTE_MIN_FITNESS 以上）のある投手だけを出し、残りは「全員を出す」で開く
     var allPitchers by rememberSaveable { mutableStateOf(false) }
@@ -488,14 +493,21 @@ private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List
     return notes
 }
 
-/** 選んでいる行と入れ替えたときの適性（位置の札＋適性。⇄ は守備の入れ替え、交代は控えとの交代） */
+/**
+ * 選んでいる行と入れ替えたときに、**誰が**どこをどの適性で守るか（⇄ は守備の入れ替え、交代は控えとの交代）。
+ * ⚠ 以前は名前の右に札と数字だけを詰めていて、どちらの選手の数字か分からなかった（いしだ 2026-11-13）
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SwapHint(label: String, fits: List<Pair<String, Int>>) {
-    Row(Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-        fits.forEach { (pos, fit) ->
-            PosBadge(pos, filled = false, small = true)
-            Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit))
+private fun SwapHint(label: String, moves: List<Triple<String, String, Int>>) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.align(Alignment.CenterVertically))
+        moves.forEach { (name, pos, fit) ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("$name →", style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                PosBadge(pos, filled = false, small = true)
+                Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit))
+            }
         }
     }
 }
@@ -758,7 +770,7 @@ private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
 /** スタメンの説明（画面には出さず ⓘ に詰める。いしだ指定） */
 private val ORDER_HELP = listOf(
     "長押しでドラッグすると打順を並べ替えます。",
-    "選手（守備の札か名前）を押して選び、ほかのスタメンを押すと守備位置を入れ替え、控えを押すと交代します。控えから選んでスタメンを押しても交代です。選んでいる間は、各行に入れ替えたあとの適性（⇄・交代）が出ます。",
+    "選手（守備の札か名前）を押して選び、ほかのスタメンを押すと守備位置を入れ替え、控えを押すと交代します。控えから選んでスタメンを押しても交代です。選んでいる間は、各行の名前の下に「入れ替えたら誰がどこをどの適性で守るか」が出ます。",
     "行はふだん名前と今季成績の2段です。右上の「成績のみ」を押すと能力（ミ パ 眼 走｜守 肩）の段も出ます（端末に覚えます）。成績の段の右端は、ほかに守れる位置の適性です。",
     "守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
     "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満の控えが居れば、その日だけ入れ替わって休みます。",

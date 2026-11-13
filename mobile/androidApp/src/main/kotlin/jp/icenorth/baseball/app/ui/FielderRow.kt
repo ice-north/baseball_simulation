@@ -126,7 +126,8 @@ private fun Cell(label: String, value: Int?, width: Int = 32) = AbilityCell(labe
 /**
  * 野手1人の行。**スタメンも控えも同じ部品**で出す（以前の指摘: スタメンと控えで出ている情報が違う）。
  *
- *   1行目: 打順（控えは空き）・守備の札・調子と名前・特徴ラベル・（選んでいる行があれば）入れ替えたときの適性・疲労
+ *   1行目: 打順（控えは空き）・守備の札・調子と名前・特徴ラベル・疲労
+ *   （選んでいる間だけ）入れ替えたら誰がどこをどの適性で守るか
  *   2行目: 能力＝打撃（ミ パ 眼 走）｜守備（守 肩）。守っている位置の適性「適」は札の真下
  *   3行目: 今季成績＝打率 OPS 本 盗 席 と、右に**ほかに**守れる位置の適性（60以上を高い順、入るだけ）
  *
@@ -139,7 +140,7 @@ private fun Cell(label: String, value: Int?, width: Int = 32) = AbilityCell(labe
  *
  * @param position 札に出す位置（スタメンは守っている位置、控えは本職）
  * @param fitnessAt 適性を測る位置（スタメンは守っている位置）
- * @param hint 選んでいる行と入れ替えたらどうなるか（名前の右に出す）
+ * @param hint 選んでいる行と入れ替えたらどうなるか（名前の下に1行で出す）
  */
 @Composable
 fun FielderRow(
@@ -187,11 +188,13 @@ fun FielderRow(
                     FittingRow(Modifier.weight(1f), alignEnd = false) { BattingLabels(player) }
                 }
             }
-            hint?.invoke()
             if (player != null) FatigueBadge(player.fatigue)
             if (onInfo != null) IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) { Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (draggable) Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
         }
+        // 選んでいる行と入れ替えたらどうなるか。⚠ 名前の行に押し込むと名前が「…」で切れ、誰の数字か分からなかった
+        //    （いしだ 2026-11-13）。選んでいる間だけ、名前の下に1行使って名前つきで出す
+        if (hint != null) Box(Modifier.padding(start = 66.dp, top = 2.dp)) { hint() }
         if (player != null && !detail) {
             // 成績だけ: 札の下の「適」の右に成績、右端にほかに守れる位置
             Row(verticalAlignment = Alignment.CenterVertically) {
