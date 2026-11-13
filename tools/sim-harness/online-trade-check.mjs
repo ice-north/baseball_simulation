@@ -240,8 +240,9 @@ try {
   assert.equal(rosterOf(started, teamA).length, PACK_SIZE, '前提: セットの人数');
   assert.ok(PACK_SIZE < ROSTER_LIMIT, '前提: 枠に空きがある');
 
-  // ⚠ **選手は評価額で選ぶ**（名簿の先頭から取らない）。CPUは「もらう値段 ≧
-  //    出す値段」でしか応じないので、名簿の順に取ると世界によって断られる。
+  // ⚠ **選手は評価額で選ぶ**（名簿の先頭から取らない）。相手（teamB）は参加者の
+  //    球団なので応じるかは人が決めるが、この先の値段の差の検査が名簿の順に
+  //    左右されないように、いちばん高い投手と安い投手で組む。
   //    リーグの種は作った時刻から決まるので、世界は固定ではない
   const pitchers = (l, name) =>
     rosterOf(l, name)
@@ -251,7 +252,7 @@ try {
   const pickB = pitchers(started, teamB).at(-1); // 相手のいちばん安い投手をもらう
   assert.ok(
     tradeValueOf(pickA) > tradeValueOf(pickB),
-    `前提: CPUが応じる値段の差がある（${tradeValueOf(pickA)} / ${tradeValueOf(pickB)}）`,
+    `前提: 値段の差がある（${tradeValueOf(pickA)} / ${tradeValueOf(pickB)}）`,
   );
 
   // ⚠ 居ない球団は相手にできない

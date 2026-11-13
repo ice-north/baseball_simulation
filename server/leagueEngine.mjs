@@ -83,6 +83,7 @@ import {
   menuFitsPlayer,
   subMenuFitsPlayer,
   SUB_TRAINING_MENUS,
+  calcSecondAffinity,
 } from '../src/season/campTraining.js';
 import {
   moodMultiplier,
@@ -495,7 +496,7 @@ function assertNoPendingPack(league, teamNames) {
     );
 }
 
-// 選手の値段は `tradeValue.mjs`（画面の名簿と同じ関数を使うため分けた）
+// 素質だけの値段（検査用）。CPU球団の判断と画面の値段は `tradeJudge.mjs` の `valueOf`
 export { tradeValueOf };
 
 /**
@@ -782,6 +783,18 @@ export function openPhase(league, kind, now) {
       reputation,
     );
   }
+  if (kind === 'camp') {
+    // ⚠ 緩急の補完（`secondAffinity`、◆）はキャンプの頭で決める。一人用は
+    //    `CampScreen` を開いたときに付けるが、オンラインには付ける所が無く、
+    //    ◆が出ない・新球種の習得ボーナス（+0.08）も入らなかった（監査 2026-11-13）。
+    //    一度決めたら習得のたびに `executeCampTraining` が更新する
+    for (const name of league.season.settings.teamNames) {
+      for (const p of TEAMS_DATA[name]?.players || []) {
+        if (p.position === 'pitcher' && p.pitching && p.pitching.secondAffinity === undefined)
+          p.pitching.secondAffinity = calcSecondAffinity(p.pitching.arsenal || []);
+      }
+    }
+  }
   league.phase = phase;
   league.status = 'waiting';
   league.nextAdvanceAt = null;
@@ -1031,7 +1044,10 @@ export function defaultPhasePlan(league, teamName) {
     //    360回 `selectPlayerForAI` を回す必要も無くなった
     const limit = wishLimit(Math.max(0, ROSTER_LIMIT - team.players.length));
     while (pool.length && rankedIds.length < limit) {
-      const player = selectPlayerForAI(pool, roster, context) || pool[0];
+      // ⚠ オンラインの目標構成（26人）を渡す。既定は一人用の24人で、解決側
+      //    （`resolveTryout`）と区分の数がずれていた（監査 2026-11-13）
+      const player =
+        selectPlayerForAI(pool, roster, context, ONLINE_ROSTER_TARGETS) || pool[0];
       rankedIds.push(player.id);
       roster.push(player);
       pool.splice(

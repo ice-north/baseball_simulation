@@ -88,9 +88,9 @@ fun TryoutPanel(
     val roster = remember(raw) { raw.at("roster").list().mapNotNull { it.obj() } }
     val byId = remember(candidates) { candidates.associateBy { it.pid } }
     // ⚠ 候補に居ない選手（古い下書き）は数えない。10人を超える古い下書きも10人で切る
-    val ranked = plan.at("rankedIds").list().mapNotNull { it.long() }.filter { it in byId }
     val maxCount = rosterRoom(raw)
     val limit = wishLimit(maxCount)
+    val ranked = plan.at("rankedIds").list().mapNotNull { it.long() }.filter { it in byId }.take(limit)
     val total = signTotal(plan, maxCount)
     val count = wishedCount(ranked, total)
     val autoFill = (total - count).coerceAtLeast(0)

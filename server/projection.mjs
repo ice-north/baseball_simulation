@@ -228,14 +228,6 @@ export function teamStreaks(schedule) {
 }
 
 /**
- * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
- *
- * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
- *    するので、14試合では自球団は2〜3試合しか入らない。
- * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
- *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
- */
-/**
  * その試合の本塁打（打った人と「何号」）。
  *
  * ⚠ **記録（`league.records`）から引く**。日程の `result` には打席の中身が
@@ -267,6 +259,14 @@ function homerunsOf(league, game, year) {
   return hit;
 }
 
+/**
+ * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
+ *
+ * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
+ *    するので、14試合では自球団は2〜3試合しか入らない。
+ * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
+ *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
+ */
 export function ownRecentGames(schedule, ownTeam, size = 5, league = null) {
   const own = schedule
     .filter(

@@ -284,7 +284,7 @@ export function releaseBiasFor(league, teamName) {
   return releaseBias(staffOf(league, teamName));
 }
 
-/** CPU球団がトレードで選手を見る目（`tradeValueOf` にかける倍率） */
+/** CPU球団がトレードで選手を見る目（`tradeJudge.mjs` の値段にかける倍率） */
 export function tradeFactorFor(league, teamName) {
   const staff = staffOf(league, teamName);
   return (player) => tradeFactor(staff, player);

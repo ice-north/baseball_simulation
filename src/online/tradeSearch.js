@@ -15,7 +15,10 @@ import { normalizedVelocity, normalizedStamina } from "./tryoutPlan.js";
 //
 // ⚠ **アプリの `mobile/shared/.../TradeSearch.kt` と同じ式**。片方だけ変えると、
 //    PCとアプリで補強ポイントや見込みが食い違う。変えるときは両方を変える。
-// ⚠ 「その持ち場での力」は**画面の目安**。試合の強さはサーバーの演算で決まる。
+// ⚠ 「その持ち場での力」は試合の強さではない（試合はサーバーの演算で決まる）。
+//    ただし**CPU球団のトレードの値段もこの式を使う**（`server/tradeJudge.mjs` が
+//    `slotStrength`・`rosterTops`・`pitchingStaff`・`bestSlot` を読む）。ここを変えると
+//    CPUの判断も変わるので、`online-trade-check` も回すこと。
 // ⚠ 釣り合いの境目は**サーバーが渡す数字**（`team.trade.margin`・`eyeLimit`）で引く。
 //    ここに写しを持つと、CPUの判断を変えたときに「受けるはず」と出て断られる。
 // ============================================================
@@ -40,7 +43,7 @@ export const tradeSlot = (key) =>
 
 /** 守れるとみなす適性（スタメンの交代の線と同じ） */
 export const TRADE_MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
-/** ローテの人数・ブルペンの人数。⚠ サーバーの値段（`server/tradeJudge.mjs`）も使う */
+/** ローテの人数・ブルペンの人数 */
 export const ROTATION_SIZE = 5;
 export const BULLPEN_SIZE = 4;
 
@@ -118,10 +121,9 @@ export function teamUsage(lineup) {
   return { fielders, starters, closer, ids };
 }
 
-/** 名簿の野手を、力の高い組み合わせから順に1人1か所・1か所1人で守備位置に当てる（空いた位置は力0） */
 /**
- * 野手を持ち場へ割り当てる（力の高い組み合わせから順に、1人1か所）。
- * ⚠ サーバーの値段（`server/tradeJudge.mjs`）も使う。式は変えていない
+ * 名簿の野手を、力の高い組み合わせから順に1人1か所・1か所1人で守備位置に当てる（空いた位置は力0）。
+ * ⚠ CPU球団の値段（`server/tradeJudge.mjs`）は `rosterTops` 経由でこの割り当てを使う
  */
 export function fielderAssignment(roster) {
   const out = {};

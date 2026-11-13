@@ -1191,7 +1191,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
     const campPotMult = 0.7 + 0.3 * potential;
 
-    let baseGrowth, isAwakening, awakeningGrowth;
+    // ⚠ `rawGrowth` は**丸める前の小数**。フォーム補正・球速の追いつき・高能力の
+    //    減衰を全部掛けてから、最後に1回だけ確率的に丸める（下の adjustedBaseGrowth）。
+    //    先に丸めると 0/1 にしかならず、×0.8〜1.2 や減衰を `Math.round` すると
+    //    制球65〜77で減衰が効かず、78以上で伸びが0に落ちる崖になっていた（監査 2026-11-13）。
+    let rawGrowth, isAwakening, awakeningGrowth;
 
     if (menu.intensive && menu.penaltyPool) {
       // 集中練習＝「長所を伸ばす」の実体。
@@ -1206,7 +1210,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // という反転が**既存の減衰カーブだけで**成立する（新しい係数を作らない）。
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-      baseGrowth = stochasticRound((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
+      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
         * talentMult * aptitudeFactor * physiqueMult * disciplineMult
         * campPotMult * coachingMult * moodMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
       isAwakening = false;
@@ -1223,8 +1227,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    メニューの係数（制球0.7）も、0.5をまたがない限り**一度も効かない**。
       //    端数の確率で切り上げれば期待値がそのまま残り、係数が素直に効く
       //    （年次成長の `growthSystem` が同じ理由で先に入れている）
-      baseGrowth = stochasticRound((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * moodMult * physFitMult * battCoachMult * stopAgeGate);
-      if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
+      rawGrowth = ((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * moodMult * physFitMult * battCoachMult * stopAgeGate);
+      if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && rawGrowth < 1) rawGrowth = 1;
       // 覚醒判定（経験値 × プロ意識の相乗効果）
       // discipline < 30: 努力しない選手は飛躍しない（係数0）
       // discipline = 50: 標準(1.0倍), 70→2.0倍, 100→2.5倍（上限）
@@ -1247,17 +1251,14 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
       // フォーム別成長補正（オーバー→球速伸びやすい、アンダー→制球伸びやすい）
       const formEffect = PITCHING_FORM_EFFECTS[updatedPlayer.pitching?.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-      let formAdjustedGrowth = baseGrowth;
-      if (targetStat === 'velocity' && formEffect.velocityGrowthMult !== 1.0) {
-        formAdjustedGrowth = Math.round(baseGrowth * formEffect.velocityGrowthMult);
-      } else if (targetStat === 'control' && formEffect.controlGrowthMult !== 1.0) {
-        formAdjustedGrowth = Math.round(baseGrowth * formEffect.controlGrowthMult);
-      }
+      let growthMult = 1.0;
+      if (targetStat === 'velocity') growthMult *= (formEffect.velocityGrowthMult || 1.0);
+      else if (targetStat === 'control') growthMult *= (formEffect.controlGrowthMult || 1.0);
 
       // 肩力ポテンシャルとのギャップによるキャッチアップ（球速のみ）
       if (targetStat === 'velocity') {
         const armVal = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
-        formAdjustedGrowth = Math.round(formAdjustedGrowth * getVelocityCatchupMult(armVal, currentValue));
+        growthMult *= getVelocityCatchupMult(armVal, currentValue);
       }
 
       // 高能力値の成長減衰。
@@ -1286,10 +1287,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         if (currentValue >= 65)
           dampFactor = Math.max(0.15, 1.0 - (currentValue - 65) * 0.04);
       }
-      const adjustedBaseGrowth =
-        dampFactor < 1.0
-          ? Math.max(0, Math.round(baseGrowth * dampFactor))
-          : formAdjustedGrowth;
+      const adjustedBaseGrowth = Math.max(0, stochasticRound(rawGrowth * growthMult * dampFactor));
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
       // ⚠ **主対象の「最低+1」は置かない**。確率的丸めにする前は

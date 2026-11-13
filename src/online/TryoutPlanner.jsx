@@ -171,7 +171,12 @@ export default function TryoutPlanner({
   // ⚠ 交渉できる人数は**10人と空き枠の小さい方**。空き枠が2つしかない年に
   //    10人選べても、取れるのは2人までなので数字が食い違う
   const limit = wishLimit(maxCount);
-  const wanted = plan.rankedIds;
+  // ⚠ 10人までで切って読む。交渉10人の形にする前に保存した提出は候補360人を
+  //    全部並べており、そのままだと「交渉中 360/10」で出し直しも弾かれた
+  const wanted = useMemo(
+    () => (plan.rankedIds.length > limit ? plan.rankedIds.slice(0, limit) : plan.rankedIds),
+    [plan.rankedIds, limit],
+  );
   // 獲得する人数（交渉した人＋自動で埋める人）。決めていなければ空き枠いっぱい
   const total = signTotal(plan, maxCount);
   // 交渉した選手のうち取りにいく人数（獲得する人数で切る）
