@@ -153,9 +153,12 @@ fun positionGroup(pos: String?): String = when (pos) {
 /** 控え野手の組（捕手・内野手・外野手。Web 版 groupBench と同じ） */
 val FIELDER_GROUP_LABELS = listOf("catcher" to "捕手", "infield" to "内野手", "outfield" to "外野手")
 
-/** 本職以外に守れる位置（適性 min 以上、高い順。Web 版 playablePositions から本職を除いたもの） */
-fun Player.subPositions(min: Int = SUBSTITUTE_MIN_FITNESS): List<String> =
-    FIELD_POSITIONS.filter { it != position && fitness(it) >= min }.sortedByDescending { fitness(it) }
+/**
+ * 本職以外に守れる位置（適性 min 以上、高い順。Web 版 playablePositions から本職を除いたもの）。
+ * @param except 除く位置（既定は本職。スタメンの行では守っている位置を除く）
+ */
+fun Player.subPositions(min: Int = SUBSTITUTE_MIN_FITNESS, except: String? = position): List<String> =
+    FIELD_POSITIONS.filter { it != except && fitness(it) >= min }.sortedByDescending { fitness(it) }
 
 /** その守備位置の交代候補（適性の高い順、同じなら疲労の少ない順。Web 版 candidatesFor と同じ） */
 fun List<Player>.candidatesFor(pos: String): List<Player> =

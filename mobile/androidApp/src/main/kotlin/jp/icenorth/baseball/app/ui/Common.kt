@@ -307,8 +307,7 @@ fun ChipTabs(
 ) {
     Row(
         modifier.horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = endPadding),
-        // ⚠ 編成では右に TIPS の印が並ぶので、詰めておく（6dp だと「指導者」の右端に印がかかった）
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         options.forEach { (key, label) ->
             val count = counts[key] ?: 0

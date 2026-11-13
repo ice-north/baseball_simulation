@@ -38,7 +38,7 @@ val TRADE_SLOTS: List<TradeSlot> = listOf(
 fun tradeSlot(key: String?): TradeSlot? = TRADE_SLOTS.firstOrNull { it.key == key }
 
 /** 守れるとみなす適性（スタメンの交代の線と同じ） */
-const val TRADE_MIN_FITNESS = 60
+const val TRADE_MIN_FITNESS = SUBSTITUTE_MIN_FITNESS
 
 /** 先発ローテの人数（比べるときに数える人数） */
 private const val ROTATION_SIZE = 5
@@ -112,11 +112,8 @@ data class TeamUsage(
 /** 1つの持ち場の、球団としての力（その持ち場の一番手、投手は人数ぶんの平均）と一番手 */
 data class SlotScore(val score: Double, val holder: Player?)
 
-/**
- * 名簿だけから見た持ち場の力（他球団用。起用が分からないので、各位置に一番手を当てる）。
- * 野手は「力の高い組み合わせ」から順に、1人1か所・1か所1人で割り当てる。
- */
-fun rosterSlotScores(roster: List<Player>): Map<String, SlotScore> {
+/** 名簿の野手を、力の高い組み合わせから順に1人1か所・1か所1人で守備位置に当てる（空いた位置は力0） */
+private fun fielderAssignment(roster: List<Player>): MutableMap<String, SlotScore> {
     val out = mutableMapOf<String, SlotScore>()
     val fielderSlots = TRADE_SLOTS.filter { !it.pitcher }.map { it.key }
     val pairs = roster.filter { it.isActive && !it.isPitcher }.flatMap { p -> fielderSlots.mapNotNull { s -> slotStrength(p, s)?.let { Triple(p, s, it) } } }
@@ -128,10 +125,26 @@ fun rosterSlotScores(roster: List<Player>): Map<String, SlotScore> {
         used += p.id
     }
     fielderSlots.forEach { if (it !in out) out[it] = SlotScore(0.0, null) }
+    return out
+}
+
+/** 名簿の投手を、先発の力の上位 [ROTATION_SIZE] 人（ローテ）と、残りを救援の力の高い順（ブルペン）に分ける */
+private fun pitchingStaff(roster: List<Player>): Pair<List<Player>, List<Player>> {
     val pitchers = roster.filter { it.isActive && it.isPitcher }
     val rotation = pitchers.sortedByDescending { slotStrength(it, "sp") ?: 0.0 }.take(ROTATION_SIZE)
-    out["sp"] = SlotScore(rotation.map { slotStrength(it, "sp") ?: 0.0 }.averageOr0(), rotation.lastOrNull())
     val pen = (pitchers - rotation.toSet()).sortedByDescending { slotStrength(it, "rp") ?: 0.0 }
+    return rotation to pen
+}
+
+/**
+ * 名簿だけから見た持ち場の力（他球団用。起用が分からないので、各位置に一番手を当てる）。
+ * 野手は [fielderAssignment]。先発はローテの平均（一番手はいちばん弱い人）、抑えはブルペンの先頭、
+ * 中継ぎはその次の [BULLPEN_SIZE] 人の平均。
+ */
+fun rosterSlotScores(roster: List<Player>): Map<String, SlotScore> {
+    val out = fielderAssignment(roster)
+    val (rotation, pen) = pitchingStaff(roster)
+    out["sp"] = SlotScore(rotation.map { slotStrength(it, "sp") ?: 0.0 }.averageOr0(), rotation.lastOrNull())
     out["cl"] = SlotScore(pen.firstOrNull()?.let { slotStrength(it, "cl") } ?: 0.0, pen.firstOrNull())
     val middle = pen.drop(1).take(BULLPEN_SIZE)
     out["rp"] = SlotScore(middle.map { slotStrength(it, "rp") ?: 0.0 }.averageOr0(), middle.lastOrNull())
@@ -251,10 +264,8 @@ const val SURPLUS_KEEP_RELIEVERS = BULLPEN_SIZE
  *    （平均を上回るだけで「一番手になれる」と出ていた）、「相手の一番手」の印もローテの5番手に付いた。
  */
 fun rosterTops(roster: List<Player>): Map<String, SlotScore> {
-    val out = rosterSlotScores(roster).filterKeys { tradeSlot(it)?.pitcher == false }.toMutableMap()
-    val pitchers = roster.filter { it.isActive && it.isPitcher }
-    val rotation = pitchers.sortedByDescending { slotStrength(it, "sp") ?: 0.0 }.take(ROTATION_SIZE)
-    val pen = (pitchers - rotation.toSet()).sortedByDescending { slotStrength(it, "rp") ?: 0.0 }
+    val out = fielderAssignment(roster)
+    val (rotation, pen) = pitchingStaff(roster)
     fun top(p: Player?, slot: String) = SlotScore(p?.let { slotStrength(it, slot) } ?: 0.0, p)
     out["sp"] = top(rotation.firstOrNull(), "sp")
     out["cl"] = top(pen.getOrNull(0), "cl")

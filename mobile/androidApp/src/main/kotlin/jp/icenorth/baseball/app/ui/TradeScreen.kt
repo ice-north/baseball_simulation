@@ -79,7 +79,6 @@ import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.dealProblems
 import jp.icenorth.baseball.shared.list
-import jp.icenorth.baseball.shared.long
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.pid
 import jp.icenorth.baseball.shared.positionLabel
@@ -509,7 +508,7 @@ private fun PlayersStep(
     val usage = remember(view.lineup) { TeamUsage.from(view.lineup) }
     val problems = dealProblems(myRoster, theirs, draft.give, draft.get)
     val theirPlayers = remember(theirs) { theirs.orEmpty().toPlayers() }
-    val myPlayers = remember(view.roster, league.values) { view.roster.map { it.copy(tradeValue = league.values[it.id]) } }
+    val myPlayers = remember(view.roster, league) { league.withValues(view.roster) }
     val tier = league.tier
     val inGroup = { p: Player -> rosterGroup(p.position) == group }
     Column(modifier) {
@@ -591,7 +590,7 @@ private fun ConfirmStep(
     val problems = dealProblems(myRoster, theirs, draft.give, draft.get)
     val counter = draft.counterOf
     val theirPlayers = remember(theirs) { theirs.orEmpty().toPlayers() }
-    val myPlayers = remember(view.roster, league.values) { view.roster.map { it.copy(tradeValue = league.values[it.id]) } }
+    val myPlayers = remember(view.roster, league) { league.withValues(view.roster) }
     val giving = myPlayers.filter { it.id in draft.give }
     val getting = theirPlayers.filter { it.id in draft.get }
     val usage = remember(view.lineup) { TeamUsage.from(view.lineup) }
@@ -876,6 +875,12 @@ private class LeagueRosters(
     val values: Map<Long, Double> = teams.values.flatten().mapNotNull { p -> p.tradeValue?.let { p.id to it } }.toMap()
     val tier: (Double?) -> String? = valueTiers(values.values.toList())
     val complete: Boolean get() = loaded >= total
+
+    /** 名簿に値段を付ける（自球団の値段も球団の読み込みにだけ載るので） */
+    fun withValues(roster: List<Player>): List<Player> = roster.map { it.copy(tradeValue = values[it.id]) }
+
+    /** 自球団を除いた球団の名簿 */
+    fun others(own: String?): Map<String, List<Player>> = teams - own.orEmpty()
 }
 
 private fun List<JsonObject>.toPlayers(): List<Player> =
@@ -945,7 +950,7 @@ private val REINFORCE_HELP = listOf(
 private fun ReinforcePanel(model: AppViewModel, view: LeagueView, raw: JsonObject, onSearch: (String) -> Unit) {
     val league = leagueRosters(model, view, raw)
     val usage = remember(view.lineup) { TeamUsage.from(view.lineup) }
-    val others = league.teams - view.teamName.orEmpty()
+    val others = remember(league, view.teamName) { league.others(view.teamName) }
     // ⚠ 読み終わるのを待たず、**読めた球団の分から**出す（いしだ 2026-11-13: 全部読むまで何も出ず待たされた）。
     //    順位は読めた球団の中での順位で、読むたびに付け直す
     val points = remember(league.teams, view.roster, usage) {
@@ -982,7 +987,7 @@ private fun SearchStep(model: AppViewModel, view: LeagueView, draft: TradeDraft,
     val slotKey = draft.slot ?: TRADE_SLOTS.first().key
     val usage = remember(view.lineup) { TeamUsage.from(view.lineup) }
     val own = view.teamName.orEmpty()
-    val others = league.teams - own
+    val others = remember(league, own) { league.others(own) }
     Column(modifier) {
         ChipTabs(
             TRADE_SLOTS.map { it.key to it.label } + (SURPLUS to "余りを出す"),
@@ -1039,7 +1044,7 @@ private fun SearchStep(model: AppViewModel, view: LeagueView, draft: TradeDraft,
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SurplusList(model: AppViewModel, view: LeagueView, usage: TeamUsage, others: Map<String, List<Player>>, league: LeagueRosters, set: (TradeDraft) -> Unit, draft: TradeDraft) {
-    val mine = remember(view.roster, league.values) { view.roster.map { it.copy(tradeValue = league.values[it.id]) } }
+    val mine = remember(view.roster, league) { league.withValues(view.roster) }
     val list = remember(mine, usage, others) { surplusPlayers(mine, usage, others) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Muted("起用の中心にいない選手と、その人が一番手になれる球団", Modifier.weight(1f))

@@ -26,12 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.shared.FIELDER_REST_FATIGUE
-import jp.icenorth.baseball.shared.FIELD_POSITIONS
+import jp.icenorth.baseball.shared.subPositions
 import jp.icenorth.baseball.shared.Player
 import jp.icenorth.baseball.shared.SUBSTITUTE_MIN_FITNESS
 import jp.icenorth.baseball.shared.conditionIcon
@@ -120,9 +119,6 @@ fun FatigueBadge(fatigue: Int?, restAt: Int = FIELDER_REST_FATIGUE) {
     }
 }
 
-@Composable
-private fun Cell(label: String, value: Int?, width: Int = 32) = AbilityCell(label, value, width)
-
 /**
  * 野手1人の行。**スタメンも控えも同じ部品**で出す（以前の指摘: スタメンと控えで出ている情報が違う）。
  *
@@ -195,42 +191,33 @@ fun FielderRow(
         // 選んでいる行と入れ替えたらどうなるか。⚠ 名前の行に押し込むと名前が「…」で切れ、誰の数字か分からなかった
         //    （いしだ 2026-11-13）。選んでいる間だけ、名前の下に1行使って名前つきで出す
         if (hint != null) Box(Modifier.padding(start = 66.dp, top = 2.dp)) { hint() }
-        if (player != null && !detail) {
-            // 成績だけ: 札の下の「適」の右に成績、右端にほかに守れる位置
+        if (player != null) {
+            // 守っている位置の適性「適」は札の真下に（いしだ指定）。能力も出すときは、右に能力を並べて字のベースラインでそろえる
             Row(verticalAlignment = Alignment.CenterVertically) {
-                FitBelowBadge(player, fitnessAt)
-                Row(Modifier.weight(1f).padding(start = 6.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BattingStats(player)
-                    FittingRow(Modifier.weight(1f).padding(start = 8.dp), gapDp = 8) { OtherPositions(player, fitnessAt) }
-                }
+                FitBelowBadge(player, fitnessAt, if (detail) Modifier.alignByBaseline() else Modifier)
+                if (detail) Box(Modifier.weight(1f).alignByBaseline().padding(start = 6.dp)) { AbilityRow(player) }
+                else StatsWithPositions(player, fitnessAt, Modifier.weight(1f).padding(start = 6.dp, top = 4.dp))
             }
-        } else if (player != null) {
-            // 「適」と右の能力は字のベースラインでそろえる
-            Row {
-                // 守っている位置の適性は、守備の札の真下に（いしだ指定）
-                Box(Modifier.alignByBaseline().padding(start = 26.dp, top = 4.dp).width(34.dp), contentAlignment = Alignment.Center) {
-                    val fit = player.fitness(fitnessAt)
-                    // ⚠ 右の能力の数字（[AbilityNum]）と同じ字の型にして、ベースラインでそろえる（fontSize だけだと数字が下にずれた）
-                    Row {
-                        Text("適", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
-                        Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit), modifier = Modifier.alignByBaseline())
-                    }
-                }
-                Box(Modifier.weight(1f).alignByBaseline().padding(start = 6.dp)) { AbilityRow(player) }
-            }
-            Row(Modifier.padding(start = 66.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                BattingStats(player)
-                FittingRow(Modifier.weight(1f).padding(start = 8.dp), gapDp = 8) { OtherPositions(player, fitnessAt) }
-            }
+            if (detail) StatsWithPositions(player, fitnessAt, Modifier.padding(start = 66.dp, top = 4.dp))
         }
     }
 }
 
-/** 守っている位置の適性「適」を守備の札の真下に（成績だけの形で使う） */
+/** 今季成績と、右にほかに守れる位置の適性（入るだけ） */
 @Composable
-private fun FitBelowBadge(player: Player, fitnessAt: String) {
+private fun StatsWithPositions(player: Player, fitnessAt: String, modifier: Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        BattingStats(player)
+        FittingRow(Modifier.weight(1f).padding(start = 8.dp), gapDp = 8) { OtherPositions(player, fitnessAt) }
+    }
+}
+
+/** 守っている位置の適性「適」を守備の札の真下に */
+@Composable
+private fun FitBelowBadge(player: Player, fitnessAt: String, modifier: Modifier = Modifier) {
     val fit = player.fitness(fitnessAt)
-    Box(Modifier.padding(start = 26.dp, top = 4.dp).width(34.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.padding(start = 26.dp, top = 4.dp).width(34.dp), contentAlignment = Alignment.Center) {
+        // ⚠ 右の能力の数字（[AbilityNum]）と同じ字の型にして、ベースラインでそろえる（fontSize だけだと数字が下にずれた）
         Row {
             Text("適", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
             Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit), modifier = Modifier.alignByBaseline())
@@ -317,9 +304,7 @@ private fun BattingLabels(player: Player) {
  */
 @Composable
 private fun OtherPositions(player: Player, fitnessAt: String) {
-    FIELD_POSITIONS.filter { it != fitnessAt && player.fitness(it) >= SUBSTITUTE_MIN_FITNESS }
-        .sortedByDescending { player.fitness(it) }
-        .forEach { pos ->
+    player.subPositions(except = fitnessAt).forEach { pos ->
             val fit = player.fitness(pos)
             Row {
                 Text(positionLabel(pos), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Black, color = lighten(positionColor(pos)), modifier = Modifier.alignByBaseline())
@@ -357,60 +342,6 @@ internal fun FittingRow(modifier: Modifier, alignEnd: Boolean = true, gapDp: Int
         }
     }
 }
-
-/**
- * 守備の数字（守備力・肩）と、**守れる位置**の適性（いしだ指定: 30 のような守れない適性は出さず、代わりに守備と肩を）。
- * 位置は適性60（交代で守れる線）以上だけを、適性の高い順に。守っている位置は低くても出す（赤で気づけるように）。
- * ⚠ 1行に収まらない分（4つ目以降）は下の行へ。「100」が札の中で折り返さないよう幅は固定
- */
-@Composable
-fun FitnessRow(player: Player, fitnessAt: String, withArm: Boolean = true) {
-    // 適性の高い順（いしだ指定）。守っている位置は60未満でも入れる（その順位の場所に赤で）
-    val positions = FIELD_POSITIONS.filter { it == fitnessAt || player.fitness(it) >= SUBSTITUTE_MIN_FITNESS }.sortedByDescending { player.fitness(it) }
-    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        positions.chunked(if (withArm) 3 else 5).forEachIndexed { i, line ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (!withArm) {
-                    // 守備・肩は能力の行に出ているので、位置だけを並べる
-                } else if (i == 0) {
-                    Cell("守", player.fielding?.defense)
-                    Cell("肩", player.physical?.arm)
-                    Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.outlineVariant))
-                } else {
-                    // 2行目は1行目の位置の並びにそろえる
-                    Box(Modifier.width(FITNESS_INDENT))
-                }
-                line.forEach { pos ->
-                    val fit = player.fitness(pos)
-                    // ⚠ 札（枠）で囲まず、位置の字を位置の色で（いしだ指定: 枠だと数字と字の高さがずれて見える）。
-                    //    字と数字は下の線（ベースライン）でそろえる
-                    Row(Modifier.width(46.dp)) {
-                        Text(
-                            positionLabel(pos),
-                            style = MaterialTheme.typography.bodySmall, // 行の高さを能力の数字と同じに（fontSize だけだと 24sp の行になる）
-                            fontWeight = FontWeight.Black,
-                            color = lighten(positionColor(pos)),
-                            textDecoration = if (pos == fitnessAt) TextDecoration.Underline else null,
-                            modifier = Modifier.alignByBaseline(),
-                        )
-                        Text(
-                            "$fit",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            color = fitnessColor(fit),
-                            modifier = Modifier.alignByBaseline().padding(start = 3.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** 守備適性の行の2行目の字下げ（守備・肩の2マス＋区切り線の幅） */
-private val FITNESS_INDENT = 32.dp * 2 + 9.dp // 位置1つは 46dp
 
 @Composable
 fun StatText(label: String, value: String) {

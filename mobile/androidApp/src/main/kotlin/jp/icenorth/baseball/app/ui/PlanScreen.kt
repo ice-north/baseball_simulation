@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -77,6 +76,7 @@ import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
+import jp.icenorth.baseball.shared.candidatesFor
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.roleLabel
 import jp.icenorth.baseball.shared.subPositions
@@ -194,7 +194,7 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
                 )
             }
         }
-        // 今の状態に当てはまる TIPS の印は面の切り替えの右に（行に重ねない）
+        // 今の状態に当てはまる TIPS の印は面の切り替えの右に（行に重ねない）。切り替えの右の余白は詰めて、印が「指導者」にかからないように
         Row(Modifier.fillMaxWidth().padding(top = if (tab == PlanTab.Staff) 8.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
             ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.weight(1f), endPadding = 4.dp)
             tipsBadge()
@@ -208,7 +208,6 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
         }
     }
 
-    val haptic = LocalHapticFeedback.current
     when (val s = sheet) {
         is PlanSheet.Role -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
             RoleSheet(
@@ -226,9 +225,10 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
 
 /**
  * スタメン。「打順を組む」「適性を見て守備を決める」「疲れた選手を休ませる」を**この1画面で**できるようにする。
- *  - 行はスタメンも控えも同じ形（[FielderRow]）。2行目は上の切り替えで 能力／今季成績／守備適性 を選ぶ
- *  - 守備の札は投手・捕手・内野・外野で色を分ける。札を押すと守備の入れ替え、名前を押すと交代
- *  - 控えの行を押すと「誰と代えるか」を選べる（休ませたい選手からでも、使いたい控えからでも交代できる）
+ *  - 行はスタメンも控えも同じ形（[FielderRow]）。ふだんは名前と今季成績、「成績のみ」を押すと能力も出す
+ *  - 守備の札は投手・捕手・内野・外野で色を分ける
+ *  - 選手を押して選び、ほかのスタメンを押すと守備の入れ替え、控えを押すと交代（控えから選んでもよい）。
+ *    スタメンを選んでいる間は、控えを画面の下に固定して出す
  *  - 上の「気になる所」に、休養に入る選手と適性の低い守備を出す
  *  - 投手も野手の枠に入れられる（二刀流）。控えの最後に投手を出す（守れる位置のある投手だけ。残りは畳む）
  */
@@ -455,11 +455,11 @@ private fun OrderEditor(
             }
         }
         // スタメンを選んでいる間は、控えを画面の下に固定して出す（いしだ 2026-11-13: 控えを探すのに下までスクロールが要った）。
-        // その位置の適性の高い順。押すと交代。投手は守れる人（適性 SUBSTITUTE_MIN_FITNESS 以上）だけ
+        // その位置の適性の高い順（同じなら疲れの少ない順）。押すと交代。投手は守れる人（適性 SUBSTITUTE_MIN_FITNESS 以上）だけ
         if (pickedStarter != null) {
             val at = pickedStarter.position
             val subs = remember(bench, pitcherBench, at) {
-                (bench + pitcherBench.filter { it.fitness(at) >= SUBSTITUTE_MIN_FITNESS }).sortedByDescending { it.fitness(at) }
+                (bench + pitcherBench.filter { it.fitness(at) >= SUBSTITUTE_MIN_FITNESS }).candidatesFor(at)
             }
             Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 8.dp, modifier = Modifier.fillMaxWidth().testTag("bench-dock")) {
                 Column {
@@ -788,7 +788,7 @@ private fun RoleOption(label: String, hint: String?, selected: Boolean, enabled:
 
 @Composable
 private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
-    // ⚠ 下は空けておく（左下の TIPS の印に、最後の項目の「しない」などのボタンが隠れていた）
+    // 下は少しだけ空ける（TIPS の印は面の切り替えの右に出すので、行には重ならない）
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // 指導者に任せているときは、ここで変えると「意見を聞く」に戻ることを先に知らせる（PC と同じ）
         if (view.staff?.mode("tactics")?.effective == "delegate")

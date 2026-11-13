@@ -1,5 +1,6 @@
-import { positionFitness } from './lineupEdit.js';
-import { normalizedVelocity, normalizedStamina } from './tryoutPlan.js';
+import { positionFitness } from "./lineupEdit.js";
+import { SUBSTITUTE_MIN_FITNESS } from "./shared.js";
+import { normalizedVelocity, normalizedStamina } from "./tryoutPlan.js";
 
 // ============================================================
 // トレードを「補強したいところ」から考えるための計算（PC版。いしだ 2026-11-13）。
@@ -21,24 +22,24 @@ import { normalizedVelocity, normalizedStamina } from './tryoutPlan.js';
 
 /** トレードで探す持ち場。野手は守備位置、投手は先発・中継ぎ・抑え */
 export const TRADE_SLOTS = [
-  { key: 'catcher', label: '捕手', pitcher: false },
-  { key: 'first', label: '一塁', pitcher: false },
-  { key: 'second', label: '二塁', pitcher: false },
-  { key: 'third', label: '三塁', pitcher: false },
-  { key: 'short', label: '遊撃', pitcher: false },
-  { key: 'left', label: '左翼', pitcher: false },
-  { key: 'center', label: '中堅', pitcher: false },
-  { key: 'right', label: '右翼', pitcher: false },
-  { key: 'sp', label: '先発', pitcher: true },
-  { key: 'rp', label: '中継ぎ', pitcher: true },
-  { key: 'cl', label: '抑え', pitcher: true },
+  { key: "catcher", label: "捕手", pitcher: false },
+  { key: "first", label: "一塁", pitcher: false },
+  { key: "second", label: "二塁", pitcher: false },
+  { key: "third", label: "三塁", pitcher: false },
+  { key: "short", label: "遊撃", pitcher: false },
+  { key: "left", label: "左翼", pitcher: false },
+  { key: "center", label: "中堅", pitcher: false },
+  { key: "right", label: "右翼", pitcher: false },
+  { key: "sp", label: "先発", pitcher: true },
+  { key: "rp", label: "中継ぎ", pitcher: true },
+  { key: "cl", label: "抑え", pitcher: true },
 ];
 
 export const tradeSlot = (key) =>
   TRADE_SLOTS.find((s) => s.key === key) || null;
 
 /** 守れるとみなす適性（スタメンの交代の線と同じ） */
-export const TRADE_MIN_FITNESS = 60;
+export const TRADE_MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
 const ROTATION_SIZE = 5;
 const BULLPEN_SIZE = 4;
 
@@ -55,7 +56,7 @@ const DEFENSE_WEIGHT = {
 };
 
 const n = (v) => (Number.isFinite(v) ? v : 0);
-const isPitcher = (p) => p.position === 'pitcher';
+const isPitcher = (p) => p.position === "pitcher";
 const isActive = (p) => p.isActive !== false;
 const average = (list) =>
   list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
@@ -80,7 +81,7 @@ export function slotStrength(p, slot) {
     const ctl = n(p.pitching?.control);
     const spin = n(p.pitching?.spinRate);
     const sta = normalizedStamina(p.pitching?.stamina);
-    return slot === 'sp'
+    return slot === "sp"
       ? vel * 0.3 + ctl * 0.3 + spin * 0.15 + sta * 0.25
       : vel * 0.4 + ctl * 0.35 + spin * 0.2 + sta * 0.05;
   }
@@ -93,19 +94,19 @@ export function slotStrength(p, slot) {
   return battingPower(p) * (1 - w) + defense * w;
 }
 
-const sp = (p) => slotStrength(p, 'sp') ?? 0;
-const rp = (p) => slotStrength(p, 'rp') ?? 0;
+const sp = (p) => slotStrength(p, "sp") ?? 0;
+const rp = (p) => slotStrength(p, "rp") ?? 0;
 
 /** 自球団の起用（打順の守備位置・先発ローテ・抑え）。`view.lineup` から作る */
 export function teamUsage(lineup) {
   const fielders = {};
   for (const e of lineup?.battingOrder || []) {
-    if (e?.playerId != null && e.position && e.position !== 'pitcher')
+    if (e?.playerId != null && e.position && e.position !== "pitcher")
       fielders[e.position] = e.playerId;
   }
   const starters = (lineup?.starters || []).filter((id) => id != null);
   const closerKey = Object.entries(lineup?.pitcherRoles || {}).find(
-    ([, role]) => role === 'closer',
+    ([, role]) => role === "closer",
   )?.[0];
   const closer = closerKey == null ? null : closerKey;
   const ids = new Set(
@@ -116,12 +117,8 @@ export function teamUsage(lineup) {
   return { fielders, starters, closer, ids };
 }
 
-/**
- * 名簿だけから見た持ち場の力（他球団用。起用が分からないので、各位置に一番手を当てる）。
- * 野手は「力の高い組み合わせ」から順に、1人1か所・1か所1人で割り当てる。
- * @returns {Record<string, {score:number, holder:object|null}>}
- */
-export function rosterSlotScores(roster) {
+/** 名簿の野手を、力の高い組み合わせから順に1人1か所・1か所1人で守備位置に当てる（空いた位置は力0） */
+function fielderAssignment(roster) {
   const out = {};
   const fielderSlots = TRADE_SLOTS.filter((s) => !s.pitcher).map((s) => s.key);
   const pairs = roster
@@ -140,19 +137,36 @@ export function rosterSlotScores(roster) {
   }
   for (const s of fielderSlots)
     if (!out[s]) out[s] = { score: 0, holder: null };
+  return out;
+}
+
+/** 名簿の投手を、先発の力の上位 ROTATION_SIZE 人（ローテ）と、残りを救援の力の高い順（ブルペン）に分ける */
+function pitchingStaff(roster) {
   const pitchers = roster.filter((p) => isActive(p) && isPitcher(p));
   const rotation = [...pitchers]
     .sort((a, b) => sp(b) - sp(a))
     .slice(0, ROTATION_SIZE);
+  const pen = pitchers
+    .filter((p) => !rotation.includes(p))
+    .sort((a, b) => rp(b) - rp(a));
+  return { rotation, pen };
+}
+
+/**
+ * 名簿だけから見た持ち場の力（他球団用。起用が分からないので、各位置に一番手を当てる）。
+ * 野手は `fielderAssignment`。先発はローテの平均（一番手はいちばん弱い人）、抑えはブルペンの先頭、
+ * 中継ぎはその次の BULLPEN_SIZE 人の平均。
+ * @returns {Record<string, {score:number, holder:object|null}>}
+ */
+export function rosterSlotScores(roster) {
+  const out = fielderAssignment(roster);
+  const { rotation, pen } = pitchingStaff(roster);
   out.sp = {
     score: average(rotation.map(sp)),
     holder: rotation.at(-1) || null,
   };
-  const pen = pitchers
-    .filter((p) => !rotation.includes(p))
-    .sort((a, b) => rp(b) - rp(a));
   out.cl = {
-    score: pen[0] ? slotStrength(pen[0], 'cl') : 0,
+    score: pen[0] ? slotStrength(pen[0], "cl") : 0,
     holder: pen[0] || null,
   };
   const middle = pen.slice(1, 1 + BULLPEN_SIZE);
@@ -187,7 +201,7 @@ export function ownSlotScores(roster, usage) {
       named && isPitcher(named)
         ? named
         : pen.reduce((a, b) => (!a || rp(b) > rp(a) ? b : a), null);
-    out.cl = { score: closer ? slotStrength(closer, 'cl') : 0, holder: closer };
+    out.cl = { score: closer ? slotStrength(closer, "cl") : 0, holder: closer };
     const middle = pen
       .filter((p) => p !== closer)
       .sort((a, b) => rp(b) - rp(a))
@@ -227,50 +241,50 @@ export function reinforcePoints(mine, usage, others) {
 /** 候補の絞り込み（型で探す）。`pitcher` が null なら投手・野手どちらにも使う */
 export const TRADE_FILTERS = [
   {
-    key: 'young',
-    label: '23歳以下',
+    key: "young",
+    label: "23歳以下",
     pitcher: null,
     test: (p) => (p.age ?? 99) <= 23,
   },
   {
-    key: 'meet',
-    label: '好打（ミ70+）',
+    key: "meet",
+    label: "好打（ミ70+）",
     pitcher: false,
     test: (p) => n(p.batting?.meet) >= 70,
   },
   {
-    key: 'power',
-    label: '長打（パ70+）',
+    key: "power",
+    label: "長打（パ70+）",
     pitcher: false,
     test: (p) => n(p.batting?.power) >= 70,
   },
   {
-    key: 'speed',
-    label: '俊足（走70+）',
+    key: "speed",
+    label: "俊足（走70+）",
     pitcher: false,
     test: (p) => n(p.physical?.speed) >= 70,
   },
   {
-    key: 'arm',
-    label: '強肩（肩70+）',
+    key: "arm",
+    label: "強肩（肩70+）",
     pitcher: false,
     test: (p) => n(p.physical?.arm) >= 70,
   },
   {
-    key: 'lefty',
-    label: '左投げ',
+    key: "lefty",
+    label: "左投げ",
     pitcher: true,
-    test: (p) => p.physical?.throws === 'left',
+    test: (p) => p.physical?.throws === "left",
   },
   {
-    key: 'velocity',
-    label: '速球（150+）',
+    key: "velocity",
+    label: "速球（150+）",
     pitcher: true,
     test: (p) => n(p.pitching?.velocity) >= 150,
   },
   {
-    key: 'control',
-    label: '制球（制70+）',
+    key: "control",
+    label: "制球（制70+）",
     pitcher: true,
     test: (p) => n(p.pitching?.control) >= 70,
   },
@@ -330,24 +344,15 @@ export const SURPLUS_KEEP_RELIEVERS = BULLPEN_SIZE;
  * @returns {Record<string, {score:number, holder:object|null}>}
  */
 export function rosterTops(roster) {
-  const scores = rosterSlotScores(roster);
-  const out = Object.fromEntries(
-    TRADE_SLOTS.filter((s) => !s.pitcher).map((s) => [
-      s.key,
-      scores[s.key] || { score: 0, holder: null },
-    ]),
-  );
-  const pitchers = roster.filter((p) => isActive(p) && isPitcher(p));
-  const rotation = [...pitchers]
-    .sort((a, b) => sp(b) - sp(a))
-    .slice(0, ROTATION_SIZE);
-  const pen = pitchers
-    .filter((p) => !rotation.includes(p))
-    .sort((a, b) => rp(b) - rp(a));
-  const top = (p, slot) => ({ score: p ? (slotStrength(p, slot) ?? 0) : 0, holder: p || null });
-  out.sp = top(rotation[0], 'sp');
-  out.cl = top(pen[0], 'cl');
-  out.rp = top(pen[1], 'rp');
+  const out = fielderAssignment(roster);
+  const { rotation, pen } = pitchingStaff(roster);
+  const top = (p, slot) => ({
+    score: p ? (slotStrength(p, slot) ?? 0) : 0,
+    holder: p || null,
+  });
+  out.sp = top(rotation[0], "sp");
+  out.cl = top(pen[0], "cl");
+  out.rp = top(pen[1], "rp");
   return out;
 }
 
@@ -404,9 +409,9 @@ export function surplusPlayers(mine, usage, others) {
 // ------------------------------------------------------------------ CPUの判断の目安
 
 export const TRADE_ODDS = {
-  short: '足りない（逆提案か断る）',
-  depends: '相手の監督しだい',
-  likely: '受けるはず',
+  short: "足りない（逆提案か断る）",
+  depends: "相手の監督しだい",
+  likely: "受けるはず",
 };
 
 /** サーバーが渡すCPU球団の決まり（`team.trade`）。参加者の球団なら null */
@@ -432,9 +437,9 @@ export function tradeOdds(give, get, rule) {
   const lo = 1 - rule.eyeLimit;
   const hi = 1 + rule.eyeLimit;
   const sum = (list, f) => list.reduce((a, v) => a + Math.max(1, v * f), 0);
-  if (sum(give, lo) >= sum(get, hi) * rule.margin) return 'likely';
-  if (sum(give, hi) < sum(get, lo) * rule.margin) return 'short';
-  return 'depends';
+  if (sum(give, lo) >= sum(get, hi) * rule.margin) return "likely";
+  if (sum(give, hi) < sum(get, lo) * rule.margin) return "short";
+  return "depends";
 }
 
 /** 出す側の値段がもらう側の何割か（メーターの位置）。もらう選手がいなければ null */
@@ -458,5 +463,5 @@ export function valueTiers(values) {
   const low = sorted[Math.floor(sorted.length / 3)];
   const high = sorted[Math.floor((sorted.length * 2) / 3)];
   return (v) =>
-    !Number.isFinite(v) ? null : v >= high ? '高' : v < low ? '低' : '中';
+    !Number.isFinite(v) ? null : v >= high ? "高" : v < low ? "低" : "中";
 }
