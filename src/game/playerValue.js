@@ -70,7 +70,9 @@ export const BAND_SD = {
 
 // 偏差値をドラフト評価の桁に合わせる係数。
 // 従来の能力点は σ 25〜30 程度だったので、偏差値(σ10)を約3倍して揃える。
-const DEV_SCALE = 3.0;
+// ⚠ トレードのCPUの値段（`server/tradeJudge.mjs`）も、偏差値を混ぜてからこの係数で
+//    同じ桁に戻す。写しを持たせないために外へ出してある
+export const DEV_SCALE = 3.0;
 
 function devOf(g, age, raw) {
   const mean = (VALUE_DIST[g] || VALUE_DIST.F).mean;

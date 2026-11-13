@@ -25,8 +25,8 @@ import { LeagueService } from '../../server/leagueService.mjs';
 import {
   resolvePhaseNow,
   advanceLeagueDay,
-  tradeValueOf,
 } from '../../server/leagueEngine.mjs';
+import { createTradeJudge } from '../../server/tradeJudge.mjs';
 import { tradeFactorFor } from '../../server/coachEngine.mjs';
 import { CPU_ACCEPT_MARGIN } from '../../src/online/trades.js';
 import { rosterCounts } from '../../src/utils/constants.js';
@@ -445,13 +445,24 @@ try {
     // ⚠ 受ける組み合わせ: CPUの値踏み（`cpuTradeDecision`）で、出す投手の値打ちが
     //    もらう投手の値打ちの CPU_ACCEPT_MARGIN 倍以上になる2人を選ぶ
     const factor = tradeFactorFor(l, cpuTeam);
-    const price = (p) => Math.max(1, tradeValueOf(p) * factor(p));
+    // ⚠ 値段は**サーバーが画面へ渡すものと同じ見立て**（`tradeJudge`。素質・いまの力・
+    //    成績・その球団の事情）。素の `tradeValueOf` で組み合わせを選ぶと、CPUの判断と
+    //    食い違って「受ける組み合わせ」にならない
+    // ⚠ CPUが**出す**選手にはその球団の事情が掛かる（`valueOf(p, cpuTeam)`）。
+    //    こちらが出す選手には掛からない
+    const judge = createTradeJudge(
+      Object.fromEntries(
+        [...new Set(l.season.settings.teamNames)].map((n) => [n, rosterOf(l, n)]),
+      ),
+    );
+    const give = (p) => Math.max(1, judge.valueOf(p) * factor(p));
+    const get = (p) => Math.max(1, judge.valueOf(p, cpuTeam) * factor(p));
     const pitchersOf = (name) =>
       rosterOf(l, name).filter((p) => p.position === 'pitcher');
-    const best = pitchersOf(teamA).sort((a, b) => price(b) - price(a))[0];
-    const worst = pitchersOf(cpuTeam).sort((a, b) => price(a) - price(b))[0];
+    const best = pitchersOf(teamA).sort((a, b) => give(b) - give(a))[0];
+    const worst = pitchersOf(cpuTeam).sort((a, b) => get(a) - get(b))[0];
     assert.ok(
-      price(best) >= price(worst) * CPU_ACCEPT_MARGIN,
+      give(best) >= get(worst) * CPU_ACCEPT_MARGIN,
       '検査の前提: 受ける組み合わせが作れない',
     );
     await composer.locator(`tbody[data-side="give"] tr[data-player="${best.id}"]`).click();
@@ -462,8 +473,10 @@ try {
       await odds.waitFor();
       const shown = await odds.getAttribute('data-odds');
       const margin = CPU_ACCEPT_MARGIN;
-      const giveV = Math.max(1, tradeValueOf(best));
-      const getV = Math.max(1, tradeValueOf(worst));
+      // ⚠ 画面はサーバーが渡した値段（`tradeValue`）で引く。出す側は素の値段、
+      //    もらう側はその球団の事情こみ（`projection.mjs` と同じ）
+      const giveV = Math.max(1, judge.valueOf(best));
+      const getV = Math.max(1, judge.valueOf(worst, cpuTeam));
       // 画面と同じ式で期待を出す（見る目は ±10% の幅で見る）
       const expected =
         Math.max(1, giveV * 0.9) >= Math.max(1, getV * 1.1) * margin

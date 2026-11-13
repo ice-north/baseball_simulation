@@ -105,6 +105,7 @@ import {
   MAX_OPEN_TRADES,
 } from '../src/online/trades.js';
 import { tradeValueOf } from './tradeValue.mjs';
+import { tradeJudgeForLeague } from './tradeJudge.mjs';
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
 import { createRecorder, freezeComparison } from './recordedStats.mjs';
@@ -548,8 +549,15 @@ export function openTrade(league, userId, { to, offer, want }, now) {
   // --- CPU球団はその場で答える
   // ⚠ CPU球団の監督の見る目（育成なら若手を高く、勝負なら主力の年齢を高く）
   const factor = tradeFactorFor(league, to);
+  // ⚠ 値段は**画面に出すものと同じ関数**（`tradeJudge`。素質・いまの力・成績・
+  //    その球団の事情）。ここだけ変えると、見込みメーターが「受けるはず」と
+  //    出したのに断られる
+  const judge = tradeJudgeForLeague(league);
   const decision = cpuTradeDecision({
-    valueOf: (player) => tradeValueOf(player) * factor(player),
+    // 受け取る選手（こちらが出す選手）は、相手の事情を抜いた値段で見る
+    valueOf: (player) => judge.valueOf(player) * factor(player),
+    // 自分が出す選手は、その球団の事情こみ（抜けると穴が空く選手ほど高い）
+    valueOfOwn: (player) => judge.valueOf(player, to) * factor(player),
     fromPlayers: mine.team.players,
     toPlayers: theirs.players,
     offerIds,

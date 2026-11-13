@@ -13,6 +13,7 @@
 //    配線（API・サーバー）は別のファイルで行う。
 // ============================================================
 import { requireOnline, ROSTER_LIMIT } from './shared.js';
+import { rosterGroup } from '../utils/constants.js';
 
 /** 1球団が同時に抱えられる提案の数。⚠ 無制限だと相手の画面を埋められる */
 export const MAX_OPEN_TRADES = 5;
@@ -95,8 +96,10 @@ export function assertTradeAllowed(fromTeam, toTeam, offerIds, wantIds) {
 //    変わらない）。`seeded` の中で呼ばれるとしても、乱数に頼ると
 //    「断られたので出し直す」を繰り返すだけで通るようになってしまう。
 // ⚠ **価値の物差しを新しく作らないこと**。`valueOf` を受け取る形にして、
-//    呼ぶ側（サーバー）が `deviationValue`（ドラフトと同じ物差し）を渡す。
-//    ここで別の式を書くと、トレードとドラフトで選手の値段が変わる。
+//    呼ぶ側（サーバー）が値段を渡す（`server/tradeJudge.mjs`。素質はドラフトと
+//    同じ `deviationValue`、そこへいまの力・成績・球団の事情を掛けたもの）。
+//    ここで別の式を書くと、**画面に出ている値段と食い違う**（画面の見込み
+//    メーターはサーバーが渡した値段で境目を引いている）。
 // ============================================================
 
 /**
@@ -108,13 +111,16 @@ export function assertTradeAllowed(fromTeam, toTeam, offerIds, wantIds) {
  */
 export const CPU_ACCEPT_MARGIN = 1.05;
 
-/** 守備の括り。⚠ 内野を頼まれて投手を出すような逆提案をしないため */
-const tradeKind = (p) =>
-  p?.position === 'pitcher'
-    ? 'pitcher'
-    : p?.position === 'catcher'
-      ? 'catcher'
-      : 'fielder';
+/**
+ * 守備の括り。⚠ 内野を頼まれて投手を出すような逆提案をしないため。
+ *
+ * ⚠ **内野と外野を分けること**（いしだ 2026-11-13「外野が欲しいのに内野を
+ *    提案される」）。以前は投手・捕手・**野手**の3つしかなく、外野手を頼むと
+ *    内野手で返ってきた。名簿の区分（`rosterGroup`。目標構成と同じ4つ）に揃える。
+ * ⚠ 括りが足りずに差し替えられないときは**断る**のが正しい。別の持ち場の選手を
+ *    返しても、相手が欲しいものにならない。
+ */
+const tradeKind = (p) => (p?.position ? rosterGroup(p.position) : undefined);
 
 /**
  * CPU球団の返事を決める。`{ action: 'accept' | 'counter' | 'reject' }`。
@@ -127,29 +133,35 @@ const tradeKind = (p) =>
  * ⚠ `offer` は**提案した側が出す選手**。CPUから見ると受け取る側。
  * ⚠ 価値は 1 を下回らせない。負の値があると予算の計算が壊れる
  *    （弱い選手を足すほど「安くなる」ことになってしまう）。
+ * ⚠ `valueOfOwn` は**CPU自身の選手に付ける値段**（無ければ `valueOf`）。自分の
+ *    名簿の事情（抜けると穴が空く選手は高く、代わりが居る選手は等倍）を入れるため
+ *    に分けてある。受け取る選手にも同じ事情を掛けると、足りない持ち場へ**弱い選手を
+ *    押し込むだけで上乗せを満たせる**（`server/tradeJudge.mjs`）。
  */
 export function cpuTradeDecision({
   valueOf,
+  valueOfOwn = valueOf,
   fromPlayers,
   toPlayers,
   offerIds,
   wantIds,
 }) {
   const value = (p) => Math.max(1, valueOf(p) || 0);
+  const ownValue = (p) => Math.max(1, valueOfOwn(p) || 0);
   const pick = (players, ids) =>
     ids.map((id) => players.find((p) => p.id === id)).filter(Boolean);
-  const total = (players) => players.reduce((a, p) => a + value(p), 0);
+  const total = (players, of) => players.reduce((a, p) => a + of(p), 0);
   const incoming = pick(fromPlayers, offerIds);
   const outgoing = pick(toPlayers, wantIds);
-  const gain = total(incoming);
-  const loss = total(outgoing);
+  const gain = total(incoming, value);
+  const loss = total(outgoing, ownValue);
   if (gain >= loss * CPU_ACCEPT_MARGIN)
     return { action: 'accept', gain, loss };
   // 逆提案を組む。⚠ 並べ方を決定的にすること（同値はidで分ける）
   const budget = gain / CPU_ACCEPT_MARGIN;
   const pool = [...toPlayers]
     .filter((p) => tradeKind(p) !== undefined)
-    .sort((a, b) => value(b) - value(a) || a.id - b.id);
+    .sort((a, b) => ownValue(b) - ownValue(a) || a.id - b.id);
   const picked = [];
   let left = budget;
   for (const asked of outgoing) {
@@ -157,12 +169,12 @@ export function cpuTradeDecision({
       (p) =>
         !picked.includes(p) &&
         tradeKind(p) === tradeKind(asked) &&
-        value(p) <= left,
+        ownValue(p) <= left,
     );
     // 払える選手が居ない＝どう組んでも釣り合わない
     if (!slot) return { action: 'reject', gain, loss };
     picked.push(slot);
-    left -= value(slot);
+    left -= ownValue(slot);
   }
   // ⚠ 中身が同じなら逆提案にならない（受けないのだから断る）
   if (picked.length === outgoing.length &&

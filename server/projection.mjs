@@ -40,7 +40,7 @@ import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.
 import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
 import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf } from './coachEngine.mjs';
-import { tradeValueOf } from './tradeValue.mjs';
+import { createTradeJudge } from './tradeJudge.mjs';
 import { CPU_ACCEPT_MARGIN } from '../src/online/trades.js';
 import { TRADE_FACTOR_LIMIT, tradeEyeNote } from '../src/online/coaches.js';
 
@@ -707,6 +707,18 @@ export function projectTeamInfo(bundle, userId, teamName) {
   );
   const labelOf = (name) =>
     (l.teams || []).find((t) => t.name === name)?.displayName || name;
+  // トレードの値段。⚠ **CPUの判断と同じ関数**（`tradeJudge`）で作ること。画面の見込み
+  //    メーターはこの値段で境目を引くので、別の式だと「受けるはず」と出したのに断られる。
+  // ⚠ CPU球団の名簿は**その球団の事情こみ**（抜けると穴が空く主力ほど高く、代わりが
+  //    居る選手は等倍）。参加者の球団は素の値段（CPUはもらう選手に事情を掛けない）
+  const judge = createTradeJudge(
+    Object.fromEntries(
+      [...new Set(l.season.settings.teamNames)]
+        .filter((name) => l.game.teams[name])
+        .map((name) => [name, l.game.teams[name].players]),
+    ),
+  );
+  const isMemberTeam = l.members.some((m) => m.teamName === teamName);
   return {
     teamName,
     readOnly: true,
@@ -718,7 +730,7 @@ export function projectTeamInfo(bundle, userId, teamName) {
     // トレードの目安（CPU球団だけ）。CPUが受けるかを決める決まりの数字と、監督の見る目の一言。
     // ⚠ 数字は判断の式（`cpuTradeDecision`・`tradeFactor`）の定数をそのまま渡す。画面はこの幅で
     //    「足りない／監督しだい／受けるはず」を出すので、写しを持つと境目がずれる。
-    trade: l.members.some((m) => m.teamName === teamName)
+    trade: isMemberTeam
       ? null
       : {
           margin: CPU_ACCEPT_MARGIN,
@@ -734,8 +746,10 @@ export function projectTeamInfo(bundle, userId, teamName) {
       return {
         ...visible,
         ...currentPlayerStats(l, teamName, p, statistics),
-        // CPU球団がトレードで付ける値段（見る目をかける前）。画面は目安の段と釣り合いに使う
-        tradeValue: tradeValueOf(p),
+        // CPU球団がトレードで付ける値段（監督の見る目をかける前）。画面は目安の段と釣り合いに使う。
+        // ⚠ CPU球団の選手は**その球団の事情こみ**（`createTradeJudge` の `valueOf` の第2引数）。
+        //    参加者の球団は素の値段（CPUはもらう選手に事情を掛けない）
+        tradeValue: judge.valueOf(p, isMemberTeam ? null : teamName),
         // ⚠ **他球団の選手も、過去の年と通算を出すこと**。以前は今季しか
         //    載せていなかったので、CPU球団の選手を開くと「成績が残っていない」
         //    ように見えた（記録はサーバーに揃っている）。通算成績の一覧も

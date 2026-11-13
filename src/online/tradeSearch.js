@@ -40,8 +40,9 @@ export const tradeSlot = (key) =>
 
 /** 守れるとみなす適性（スタメンの交代の線と同じ） */
 export const TRADE_MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
-const ROTATION_SIZE = 5;
-const BULLPEN_SIZE = 4;
+/** ローテの人数・ブルペンの人数。⚠ サーバーの値段（`server/tradeJudge.mjs`）も使う */
+export const ROTATION_SIZE = 5;
+export const BULLPEN_SIZE = 4;
 
 /** 守る力を重く見る位置ほど大きい（捕手・遊撃・二塁・中堅） */
 const DEFENSE_WEIGHT = {
@@ -118,7 +119,11 @@ export function teamUsage(lineup) {
 }
 
 /** 名簿の野手を、力の高い組み合わせから順に1人1か所・1か所1人で守備位置に当てる（空いた位置は力0） */
-function fielderAssignment(roster) {
+/**
+ * 野手を持ち場へ割り当てる（力の高い組み合わせから順に、1人1か所）。
+ * ⚠ サーバーの値段（`server/tradeJudge.mjs`）も使う。式は変えていない
+ */
+export function fielderAssignment(roster) {
   const out = {};
   const fielderSlots = TRADE_SLOTS.filter((s) => !s.pitcher).map((s) => s.key);
   const pairs = roster
@@ -140,8 +145,11 @@ function fielderAssignment(roster) {
   return out;
 }
 
-/** 名簿の投手を、先発の力の上位 ROTATION_SIZE 人（ローテ）と、残りを救援の力の高い順（ブルペン）に分ける */
-function pitchingStaff(roster) {
+/**
+ * 名簿の投手を、先発の力の上位 ROTATION_SIZE 人（ローテ）と、残りを救援の力の高い順（ブルペン）に分ける。
+ * ⚠ サーバーの値段（`server/tradeJudge.mjs`）も使う。式は変えていない
+ */
+export function pitchingStaff(roster) {
   const pitchers = roster.filter((p) => isActive(p) && isPitcher(p));
   const rotation = [...pitchers]
     .sort((a, b) => sp(b) - sp(a))

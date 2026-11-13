@@ -19,10 +19,26 @@ import {
   CPU_ACCEPT_MARGIN,
   MAX_OPEN_TRADES,
 } from '../../src/online/trades.js';
-import { tradeValueOf } from '../../server/leagueEngine.mjs';
+import {
+  createLeague,
+  defaultPhasePlan,
+  loadLeagueWorld,
+  submitPhase,
+  tradeValueOf,
+} from '../../server/leagueEngine.mjs';
+import {
+  createTradeJudge,
+  formFactor,
+  needFactor,
+  NEED_LIMIT,
+} from '../../server/tradeJudge.mjs';
+import { comparisonFromPlayers } from '../../server/performanceLabels.mjs';
 import { tradeFactorFor } from '../../server/coachEngine.mjs';
 import { ROSTER_LIMIT } from '../../src/online/shared.js';
 import { PACK_SIZE } from '../../src/online/rosterPack.js';
+import { TEAMS_DATA } from '../../src/teams-data.js';
+import { rosterGroup } from '../../src/utils/constants.js';
+import { bestSlot, rosterTops } from '../../src/online/tradeSearch.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
 
@@ -81,6 +97,8 @@ const NOW = '2026-10-26T15:00:00.000Z';
     guy(12, 'pitcher', 'mid'),
     guy(13, 'pitcher', 'weak'),
     guy(14, 'left', 'mid'),
+    guy(15, 'short', 'mid'),
+    guy(16, 'left', 'weak'),
   ];
   // 一方的に得（もらうだけ）→ 受ける
   assert.equal(decide(humanRoster, cpuRoster, [1], []).action, 'accept');
@@ -106,6 +124,48 @@ const NOW = '2026-10-26T15:00:00.000Z';
   assert.equal(decide(humanRoster, cpuRoster, [], [11]).action, 'reject');
   // ⚠ 括りが違うと差し替えられない。野手を頼まれたが予算に収まる野手が居ない
   assert.equal(decide(humanRoster, cpuRoster, [2], [14]).action, 'reject');
+  // --- 逆提案の持ち場（いしだ 2026-11-13「外野が欲しいのに内野を提案される」）
+  // ⚠ **内野と外野を分けること**。以前は投手・捕手・野手の3つしかなく、外野手を
+  //    頼むと内野手が返ってきた。
+  {
+    // 外野手（left mid）を mid で要求 → 予算190に収まる外野手（left weak）へ
+    const out = decide(humanRoster, cpuRoster, [3], [14]);
+    assert.equal(out.action, 'counter');
+    assert.deepEqual(out.want, [16], '外野手を頼んだのに外野手で返していない');
+    // 内野手（short mid）を mid で要求 → 予算に収まる内野手が居ないので断る。
+    //    ⚠ ここで外野手（left weak）を返さないこと
+    assert.equal(
+      decide(humanRoster, cpuRoster, [3], [15]).action,
+      'reject',
+      '内野手を頼んだのに外野手で返している',
+    );
+  }
+  // --- 自分が出す選手の値段だけ、球団の事情で変えられること（`valueOfOwn`）
+  // ⚠ もらう選手にも同じ事情を掛けると、足りない持ち場へ弱い選手を押し込むだけで
+  //    上乗せを満たせてしまう（`server/tradeJudge.mjs`）
+  {
+    const own = (p) => price[p.tier] * 1.5; // 主力は出し渋る、という見立て
+    const decideOwn = (offerIds, wantIds) =>
+      cpuTradeDecision({
+        valueOf,
+        valueOfOwn: own,
+        fromPlayers: humanRoster,
+        toPlayers: cpuRoster,
+        offerIds,
+        wantIds,
+      });
+    // 出し渋られると、同じ提案（strong 300 で mid 200）でも通らない（300 < 300×1.05）
+    assert.equal(decide(humanRoster, cpuRoster, [1], [12]).action, 'accept');
+    assert.notEqual(
+      decideOwn([1], [12]).action,
+      'accept',
+      '出す選手の値段（valueOfOwn）が効いていない',
+    );
+    // 逆提案の予算も出す側の値段で見る（mid 300 は 285 に収まらず weak 150 へ）
+    const d = decideOwn([1], [11]);
+    assert.equal(d.action, 'counter');
+    assert.deepEqual(d.want, [13], '逆提案の予算に出す側の値段を使っていない');
+  }
   // ⚠ **同じ答えを返すこと**（乱数を使っていない）
   assert.deepEqual(
     decide(humanRoster, cpuRoster, [4], [11]),
@@ -624,24 +684,32 @@ try {
       (n) => !held.has(n),
     );
     assert.ok(cpu, '前提: CPU球団が残っていない');
-    // ⚠ 値段は**CPU球団の監督の見る目を掛けたもの**で見る（`openTrade` が
-    //    `tradeValueOf(p) * factor(p)` で判断している）。素の `tradeValueOf`
-    //    で見ると、逆提案の予算の検査が監督の見る目のぶんだけずれる
-    //    （実測で 183.34 対 183.17 と、0.1%はみ出して落ちた）
-    // ⚠ 値段は**1人1回だけ計算する**。`tradeValueOf` は重く、下の組み合わせ探しで
-    //    何百回も呼ぶことになる
-    const factor = tradeFactorFor((await live()), cpu);
-    const prices = new Map();
-    const value = (p) => {
-      if (!prices.has(p.id)) prices.set(p.id, tradeValueOf(p) * factor(p));
-      return prices.get(p.id);
+    // ⚠ 値段は**サーバーと同じ見立て**で見る（`openTrade` は `tradeJudge` の値段に
+    //    監督の見る目を掛けて判断している）。素の `tradeValueOf` で見ると、逆提案の
+    //    予算の検査がずれる（実測で 184.22 対 181.41 と、1.5%はみ出して落ちた）。
+    // ⚠ **もらう選手と出す選手で値段が違う**。CPUは自分が出す選手にだけ球団の事情
+    //    （抜けると穴が空く選手は高く）を掛ける（`valueOfOwn`）
+    // ⚠ 値段は**1人1回だけ計算する**。評価式は重く、下の組み合わせ探しで何百回も呼ぶ
+    const factor = tradeFactorFor(await live(), cpu);
+    const judgeFor = (l) =>
+      createTradeJudge(
+        Object.fromEntries(
+          [...new Set(l.season.settings.teamNames)].map((n) => [
+            n,
+            rosterOf(l, n),
+          ]),
+        ),
+      );
+    // ⚠ 名簿が動いたら作り直すこと（球団の事情は名簿から出すので、古いと値段がずれる）
+    let judge = judgeFor(await live());
+    const refreshJudge = async () => {
+      judge = judgeFor(await live());
     };
-    const kindOf = (p) =>
-      p.position === 'pitcher'
-        ? 'pitcher'
-        : p.position === 'catcher'
-          ? 'catcher'
-          : 'fielder';
+    // こちらが出す選手の値段（相手の事情は掛からない）
+    const value = (p) => judge.valueOf(p) * factor(p);
+    // CPUが出す選手の値段（その球団の事情こみ）
+    const ownValue = (p) => judge.valueOf(p, cpu) * factor(p);
+    const kindOf = (p) => rosterGroup(p.position);
 
     // (1) 一方的に得な提案（もらうだけ）→ その場で成立する
     {
@@ -680,12 +748,16 @@ try {
         for (const e of after.game.teams[name].lineupSettings?.battingOrder || [])
           assert.ok(ids.has(e.playerId), `${name} の打順に居ない選手が残った`);
       }
+      // 名簿が動いたので、球団の事情から出す値段を作り直す
+      await refreshJudge();
     }
 
     // (2) タダで要求 → 断る。**記録を残さない**（押し直せてしまう）
     {
       const l = await live();
-      const target = [...rosterOf(l, cpu)].sort((x, y) => value(y) - value(x))[0];
+      const target = [...rosterOf(l, cpu)].sort(
+        (x, y) => ownValue(y) - ownValue(x),
+      )[0];
       const open = (await live()).trades.length;
       await assert.rejects(
         () => send('a', sa, 'tradeOffer', { to: cpu, offer: [], want: [target.id] }),
@@ -714,12 +786,12 @@ try {
       for (const give of mine) {
         for (const ask of theirs) {
           if (kindOf(give) !== kindOf(ask)) continue;
-          if (value(give) >= value(ask) * CPU_ACCEPT_MARGIN) continue;
+          if (value(give) >= ownValue(ask) * CPU_ACCEPT_MARGIN) continue;
           const affordable = theirs.some(
             (p) =>
               p.id !== ask.id &&
               kindOf(p) === kindOf(ask) &&
-              value(p) <= value(give) / CPU_ACCEPT_MARGIN,
+              ownValue(p) <= value(give) / CPU_ACCEPT_MARGIN,
           );
           if (affordable) {
             pair = { give, ask };
@@ -748,8 +820,8 @@ try {
       assert.ok(chosen, '逆提案の選手が名簿にいない');
       assert.equal(kindOf(chosen), kindOf(pair.ask), '守備の括りが変わった');
       assert.ok(
-        value(chosen) <= value(pair.give) / CPU_ACCEPT_MARGIN,
-        `払える範囲を超えた選手を出した（${value(chosen)} > ${value(pair.give) / CPU_ACCEPT_MARGIN}）`,
+        ownValue(chosen) <= value(pair.give) / CPU_ACCEPT_MARGIN,
+        `払える範囲を超えた選手を出した（${ownValue(chosen)} > ${value(pair.give) / CPU_ACCEPT_MARGIN}）`,
       );
       // ⚠ CPUの逆提案に**こちらは逆提案で返せない**（投げ返しが続くと終わらない）
       await assert.rejects(
@@ -814,6 +886,160 @@ try {
   await rm(dir, { recursive: true, force: true });
 }
 
+// --- CPUの値段（素質・いまの力・成績・球団の事情）-------------------------
+// 【なぜ】いしだ 2026-11-13「CPUのトレードがアホすぎる。弱い選手で強い選手が
+//   取れる」。以前はドラフトの物差し（能力の偏差値）だけで値段を決めており、
+//   スカウトの見立てなので**いまの力とも成績とも噛み合っていなかった**。
+// ⚠ ここは**釣り合いの検査**（`check:season` と同じ性格）。1組ずつの正解ではなく、
+//    12球団の総当たりで「弱い選手で強い選手が取れる」組の割合を見る。
+{
+  const l = createLeague({ members: [{ userId: 'a' }], now: NOW });
+  for (const m of l.members)
+    submitPhase(
+      l,
+      m.userId,
+      { phaseId: l.phase.id, plan: defaultPhasePlan(l, m.teamName), ready: true },
+      NOW,
+    );
+  loadLeagueWorld(l);
+  const names = [...new Set(l.season.settings.teamNames)];
+  const teams = Object.fromEntries(
+    names.map((name) => [name, TEAMS_DATA[name].players]),
+  );
+  const judge = createTradeJudge(teams);
+  const rows = [];
+  for (const [team, players] of Object.entries(teams))
+    for (const p of players) {
+      const best = bestSlot(p);
+      if (!best) continue;
+      rows.push({
+        team,
+        player: p,
+        strength: best.strength,
+        // こちらが出す値段（相手の事情は掛からない）と、その球団が出す値段
+        value: judge.valueOf(p),
+        own: judge.valueOf(p, team),
+        old: tradeValueOf(p),
+      });
+    }
+  assert.ok(rows.length > 200, `前提: 12球団ぶんの名簿（${rows.length}人）`);
+
+  // ① **明らかに弱い選手で、強い選手は取れないこと**。
+  //    「持ち場での力が3以上下の選手の値段が、相手の選手の `CPU_ACCEPT_MARGIN` 倍
+  //    以上（＝CPUが受ける額）」になる組を数える。
+  // ⚠ 0 にはならない（持ち場が違えば力は直接比べられないし、素質も混ぜている）。
+  //    見るのは**桁**。実測: 直す前 13.7% → 直したあと 0.5%
+  const inversion = (price) => {
+    let pairs = 0;
+    let bad = 0;
+    for (const a of rows)
+      for (const b of rows) {
+        if (a === b || a.team === b.team) continue;
+        if (b.strength >= a.strength - 3) continue; // b が明らかに弱い
+        pairs += 1;
+        if (b[price.give] >= a[price.get] * CPU_ACCEPT_MARGIN) bad += 1;
+      }
+    return bad / pairs;
+  };
+  const rate = inversion({ give: 'value', get: 'own' });
+  const before = inversion({ give: 'old', get: 'old' });
+  assert.ok(
+    rate <= 0.03,
+    `弱い選手で強い選手が取れる組が多すぎる: ${(rate * 100).toFixed(1)}%`,
+  );
+  // ⚠ **直す前より良くなっていること**を見る（物差しを戻したら落ちる）
+  assert.ok(
+    rate < before / 3,
+    `ドラフトの物差しだけの頃（${(before * 100).toFixed(1)}%）から良くなっていない: ${(rate * 100).toFixed(1)}%`,
+  );
+
+  // ② 成績が効くこと（規定に届いていれば ±、届いていなければ等倍）
+  {
+    const withStats = rows
+      .map((r) => r.player)
+      .filter((p) => p.seasonStats?.batting || p.seasonStats?.pitching);
+    const baseline = comparisonFromPlayers(
+      rows.map((r) => ({
+        seasonStats: {
+          batting: { atBats: 400, hits: 100, doubles: 18, triples: 2, homeruns: 10, walks: 30, strikeouts: 80, sacrificeBunts: 5, hitByPitch: 2 },
+          pitching: { inningsPitched: 450, strikeouts: 120, walks: 45, homeruns: 15, earnedRuns: 60 },
+        },
+      })),
+    );
+    const batter = (hits, homeruns) => ({
+      position: 'left',
+      seasonStats: {
+        batting: { atBats: 400, hits, doubles: 20, triples: 2, homeruns, walks: 40, strikeouts: 70, sacrificeBunts: 3, hitByPitch: 2 },
+      },
+    });
+    assert.ok(
+      formFactor(batter(140, 30), baseline) > formFactor(batter(70, 2), baseline),
+      '打者の成績が値段に効いていない',
+    );
+    // ⚠ 規定に届かない選手は成績で判断しない（数試合の当たり外れで値段が動く）
+    const few = {
+      position: 'left',
+      seasonStats: {
+        batting: { atBats: 20, hits: 12, doubles: 2, triples: 0, homeruns: 4, walks: 2, strikeouts: 3, sacrificeBunts: 0, hitByPitch: 0 },
+      },
+    };
+    assert.equal(formFactor(few, baseline), 1, '打席が少ないのに成績で値段を動かした');
+    const pitcher = (earnedRuns) => ({
+      position: 'pitcher',
+      seasonStats: {
+        pitching: { inningsPitched: 450, strikeouts: 150, walks: 30, homeruns: 10, earnedRuns },
+      },
+    });
+    assert.ok(
+      formFactor(pitcher(20), baseline) > formFactor(pitcher(120), baseline),
+      '投手の成績が値段に効いていない',
+    );
+    assert.ok(withStats.length >= 0); // 名簿の形が変わったら気づけるように読んでおく
+  }
+
+  // ③ 球団の事情（抜けると穴が空く選手は高く、代わりが居る選手は等倍）
+  {
+    const team = names[0];
+    const players = teams[team];
+    const tops = rosterTops(players);
+    const ace = tops.sp.holder;
+    assert.ok(ace, '前提: 先発の一番手が居る');
+    assert.ok(
+      needFactor(players, ace) > 1 + NEED_LIMIT / 2,
+      `先発の一番手を出し渋っていない: ${needFactor(players, ace)}`,
+    );
+    // 起用の枠の外（控えが厚い持ち場の最後尾）は等倍
+    const spare = [...players]
+      .filter((p) => p.position === 'pitcher')
+      .sort((x, y) => needFactor(players, x) - needFactor(players, y))[0];
+    assert.equal(
+      needFactor(players, spare),
+      1,
+      '代わりが居る選手にも上乗せしている',
+    );
+    // ⚠ 他球団の選手には掛けない（名簿に居なければ等倍）
+    assert.equal(
+      needFactor(players, teams[names[1]][0]),
+      1,
+      '他球団の選手に自軍の事情を掛けている',
+    );
+    // ⚠ 上乗せは `NEED_LIMIT` まで（際限なく高くしない）
+    const most = Math.max(...players.map((p) => needFactor(players, p)));
+    assert.ok(most <= 1 + NEED_LIMIT + 1e-9, `上乗せが ${most} 倍になっている`);
+  }
+
+  // ④ 同じ名簿なら同じ値段（乱数を使っていない）
+  {
+    const again = createTradeJudge(teams);
+    const p = rows[0].player;
+    assert.equal(
+      again.valueOf(p, rows[0].team),
+      judge.valueOf(p, rows[0].team),
+      '同じ名簿で値段が変わった',
+    );
+  }
+}
+
 console.log(
-  '■ トレード: OK（提案→受ける／逆提案は1回だけ→受ける／断ると消える・手番を持つ側だけ返事できる・両球団の名簿を守る・打順を組み直す・CPU球団はその場で受ける/逆提案/断る）',
+  '■ トレード: OK（提案→受ける／逆提案は1回だけ→受ける／断ると消える・手番を持つ側だけ返事できる・両球団の名簿を守る・打順を組み直す・CPU球団はその場で受ける/逆提案/断る・逆提案は同じ持ち場から・弱い選手で強い選手は取れない・成績と球団の事情が値段に効く）',
 );

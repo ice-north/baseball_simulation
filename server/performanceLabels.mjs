@@ -70,23 +70,33 @@ function combined(records, keys) {
     ]),
   );
 }
-export function leagueComparison(league) {
-  const names = league.season.settings?.teamNames;
-  if (!names?.length || names.some((name) => !league.game.teams[name]))
-    return null;
-  const players = [...new Set(names)].flatMap(
-    (name) => league.game.teams[name].players,
-  );
-  const batting = players
+/**
+ * 選手の並びから、今季の平均（比べる相手）を作る。
+ * ⚠ **`leagueComparison` と同じ式にすること**（トレードの値段もこれを使う。
+ *    `tradeJudge.mjs` の成績の倍率）。2通り持つと、同じ成績が画面と判断で違う意味になる
+ */
+export function comparisonFromPlayers(players) {
+  const batting = (players || [])
     .map((p) => p.seasonStats?.batting)
     .filter((s) => battingMetrics(s));
-  const pitching = players
+  const pitching = (players || [])
     .map((p) => p.seasonStats?.pitching)
     .filter((s) => pitchingMetrics(s));
   return {
     batting: battingMetrics(combined(batting, [...battingKeys, 'hitByPitch'])),
-    pitching: pitchingMetrics(combined(pitching, pitchingKeys)),
+    // ⚠ **自責点も足すこと**。ラベルの規則は防御率を見ないので以前は足しておらず、
+    //    リーグ平均の `era` が null のままだった。トレードの値段（`tradeJudge.mjs`）は
+    //    投手の成績を防御率で見るので、無いと投手だけ成績が効かない
+    pitching: pitchingMetrics(combined(pitching, [...pitchingKeys, 'earnedRuns'])),
   };
+}
+export function leagueComparison(league) {
+  const names = league.season.settings?.teamNames;
+  if (!names?.length || names.some((name) => !league.game.teams[name]))
+    return null;
+  return comparisonFromPlayers(
+    [...new Set(names)].flatMap((name) => league.game.teams[name].players),
+  );
 }
 function choose(candidates) {
   return candidates
