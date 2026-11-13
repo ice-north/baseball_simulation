@@ -2,13 +2,16 @@ import { TEAMS_DATA } from '../src/teams-data.js';
 import { draftAbilityScore } from '../src/season/yearProgressionSystem.js';
 import { deviationOf, valueGroup, DEV_SCALE } from '../src/game/playerValue.js';
 import {
-  BULLPEN_SIZE,
   bestSlot,
-  pitchingStaff,
-  rosterTops,
-  slotStrength,
-  TRADE_SLOTS,
+  needFactors,
+  needOfDrop,
+  NEED_LIMIT,
+  DROP_SCALE,
+  squadStrength,
 } from '../src/online/tradeSearch.js';
+
+// 穴の上乗せの式は画面の見込みメーターと共通（`tradeSearch.js`）
+export { NEED_LIMIT, DROP_SCALE, squadStrength, needFactors };
 import {
   battingMetrics,
   pitchingMetrics,
@@ -48,18 +51,6 @@ import {
 export const NOW_WEIGHT = 0.5;
 /** 今季の成績で動く幅（±8%） */
 export const FORM_LIMIT = 0.08;
-/** 出すと穴が空く選手の上乗せ（最大 +20%） */
-export const NEED_LIMIT = 0.2;
-/**
- * 「穴が空く」を満額にする落差。抜けたときに**球団の持ち場の力の合計**がどれだけ
- * 落ちるかで測る。
- * ⚠ 持ち場での力は実測でおおむね 40〜65。8 は「代わりが居ない」と言える落差。
- * ⚠ **余りを値引きしないこと**。以前は起用の枠の外を一律0.88倍にしていたが、
- *    1人を1つの持ち場に縛って数えていたため、**他の持ち場なら一番手になれる強い控え
- *    まで「余り」**になり、弱い選手で強い控えが取れる組が 1.9%→7.9% へ増えた（実測）。
- *    いまは落差が0なら等倍（上乗せが無いだけ）。
- */
-export const DROP_SCALE = 8;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -98,49 +89,14 @@ export function formFactor(player, baseline) {
 }
 
 /**
- * 球団の「持ち場の力の合計」。1人抜けたときの落差を測るための物差し。
- *
- * 数えるのは**実際に要る持ち場ぶん**だけ:
- *   野手 … 8つの持ち場の一番手（`fielderAssignment` の割り当て。1人1か所）＋ 2人目の捕手
- *   投手 … 先発 `ROTATION_SIZE` 人 ＋ 中継ぎ `BULLPEN_SIZE` 人
- * ⚠ **一番手だけを数えないこと**。先発を1人しか数えないと、2〜5番手の先発が
- *    「抜けても落差0＝余り」になる。
- * ⚠ **捕手は2人**（名簿の最低条件が捕手1人なので、2人目が抜けると次の出場で詰まる）。
- */
-export function squadStrength(players) {
-  const roster = players || [];
-  const tops = rosterTops(roster);
-  let total = 0;
-  for (const slot of TRADE_SLOTS)
-    if (!slot.pitcher) total += tops[slot.key]?.score || 0;
-  const catchers = roster
-    .map((p) => slotStrength(p, 'catcher'))
-    .filter((v) => v !== null)
-    .sort((a, b) => b - a);
-  total += catchers[1] ?? 0;
-  const { rotation, pen } = pitchingStaff(roster);
-  for (const p of rotation) total += slotStrength(p, 'sp') ?? 0;
-  for (const p of pen.slice(0, BULLPEN_SIZE)) total += slotStrength(p, 'rp') ?? 0;
-  return total;
-}
-
-/**
- * その球団がこの選手を手放すときの倍率（1 〜 1+`NEED_LIMIT`）。
+ * その球団がこの選手**1人だけ**を手放すときの倍率（1 〜 1+`NEED_LIMIT`）。
  * 抜けたときに持ち場の力の合計がどれだけ落ちるかで決める。
- *
  * これが「外野が足りないので外野は出し渋る／投手が余っているので投手は出す」になる。
- * 代わりが居る選手は落差が小さく、上乗せも小さい。
- * ⚠ **他の持ち場へ回れる選手を「余り」にしないこと**。割り当て（`fielderAssignment`）
- *    で数えるので、左翼の2番手でも右翼の一番手なら落差が出る。
+ * ⚠ 何人かまとめて出すときは `needFactors`（まとめて抜けた穴で測る）。
  */
 export function needFactor(players, player) {
   if (!player) return 1;
-  const roster = players || [];
-  if (!roster.some((p) => p.id === player.id)) return 1;
-  const drop =
-    squadStrength(roster) -
-    squadStrength(roster.filter((p) => p.id !== player.id));
-  return 1 + NEED_LIMIT * Math.min(1, Math.max(0, drop) / DROP_SCALE);
+  return needFactors(players, [player]).get(player.id) ?? 1;
 }
 
 /**
@@ -169,7 +125,7 @@ function strengthDistribution(players) {
  * リーグの名簿から、CPUの値段を出す道具を作る。
  *
  * @param teams `{ [球団名]: 選手[] }`
- * @returns `{ valueOf(player, teamName), needOf(teamName, player), baseline }`
+ * @returns `{ valueOf(player, teamName), setValuesOf(players, teamName), needOf(teamName, player), baseline }`
  *   - `valueOf(player, 球団名)` … その球団が**手放すとき**の値段（事情こみ）
  *   - `valueOf(player)` … 球団名なしは事情を抜いた値段（CPUが**受け取る**選手は
  *     こちら。足りない持ち場へ弱い選手を押し込めないように）
@@ -181,13 +137,23 @@ export function createTradeJudge(teams) {
   // ⚠ 球団の事情は**聞かれた球団だけ**で作る（1人抜くたびに名簿を数え直すので、
   //    12球団ぶんを先に作ると画面の読み込みが重くなる）。同じ球団は使い回す
   const needCache = new Map();
+  // ⚠ 1人ずつの倍率は**球団ごとに一度にまとめて**出す（満員の力は1回だけ測る。
+  //    以前は1人ごとに満員と1人抜きの2回ずつ測っていた）
   const needOf = (teamName, player) => {
     if (!teamName || !teams[teamName]) return 1;
     let byPlayer = needCache.get(teamName);
-    if (!byPlayer) needCache.set(teamName, (byPlayer = new Map()));
-    if (!byPlayer.has(player.id))
-      byPlayer.set(player.id, needFactor(teams[teamName], player));
-    return byPlayer.get(player.id);
+    if (!byPlayer) {
+      const roster = teams[teamName];
+      const full = squadStrength(roster);
+      byPlayer = new Map(
+        roster.map((p) => [
+          p.id,
+          needOfDrop(full - squadStrength(roster.filter((q) => q.id !== p.id))),
+        ]),
+      );
+      needCache.set(teamName, byPlayer);
+    }
+    return byPlayer.get(player.id) ?? 1;
   };
   const nowDeviation = (player) => {
     const best = bestSlot(player);
@@ -206,7 +172,18 @@ export function createTradeJudge(teams) {
     // ⚠ 1 を下回らせない（`cpuTradeDecision` の予算の計算が壊れる）
     return Math.max(1, base * needOf(teamName, player));
   };
-  return { valueOf, needOf, baseline };
+  /**
+   * その球団が `players` を**まとめて**出すときの値段（並びは `players` と同じ）。
+   * 1人なら `valueOf(player, teamName)` と同じ。画面の見込みメーターは同じ式
+   * （`tradeSearch.js` の `setTradeValues`）を `tradeBase` で引く。
+   */
+  const setValuesOf = (players, teamName) => {
+    if (!teamName || !teams[teamName])
+      return players.map((p) => valueOf(p));
+    const factors = needFactors(teams[teamName], players);
+    return players.map((p) => Math.max(1, valueOf(p) * (factors.get(p.id) ?? 1)));
+  };
+  return { valueOf, setValuesOf, needOf, baseline };
 }
 
 /**

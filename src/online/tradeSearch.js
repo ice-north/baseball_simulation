@@ -366,6 +366,101 @@ export function rosterTops(roster) {
   return out;
 }
 
+// ------------------------------------------------------------------ 抜けたときの穴（CPUの値段の上乗せ）
+
+/** 出すと穴が空く選手の上乗せ（最大 +20%）。⚠ サーバーの値段（`server/tradeJudge.mjs`）と共通 */
+export const NEED_LIMIT = 0.2;
+/**
+ * 「穴が空く」を満額にする落差。抜けたときに**球団の持ち場の力の合計**がどれだけ
+ * 落ちるかで測る。
+ * ⚠ 持ち場での力は実測でおおむね 40〜65。8 は「代わりが居ない」と言える落差。
+ * ⚠ **余りを値引きしないこと**。以前は起用の枠の外を一律0.88倍にしていたが、
+ *    1人を1つの持ち場に縛って数えていたため、**他の持ち場なら一番手になれる強い控え
+ *    まで「余り」**になり、弱い選手で強い控えが取れる組が 1.9%→7.9% へ増えた（実測）。
+ *    いまは落差が0なら等倍（上乗せが無いだけ）。
+ */
+export const DROP_SCALE = 8;
+
+/**
+ * 球団の「持ち場の力の合計」。抜けたときの落差を測るための物差し。
+ *
+ * 数えるのは**実際に要る持ち場ぶん**だけ:
+ *   野手 … 8つの持ち場の一番手（`fielderAssignment` の割り当て。1人1か所）＋ 2人目の捕手
+ *   投手 … 先発 `ROTATION_SIZE` 人 ＋ 中継ぎ `BULLPEN_SIZE` 人
+ * ⚠ **一番手だけを数えないこと**。先発を1人しか数えないと、2〜5番手の先発が
+ *    「抜けても落差0＝余り」になる。
+ * ⚠ **捕手は2人**（名簿の最低条件が捕手1人なので、2人目が抜けると次の出場で詰まる）。
+ * ⚠ 登録を外れた選手（`isActive === false`）は数えない（ほかの持ち場の数え方と同じ）。
+ * ⚠ アプリの `squadStrength`（TradeSearch.kt）と同じ式。
+ */
+export function squadStrength(players) {
+  const roster = players || [];
+  const tops = rosterTops(roster);
+  let total = 0;
+  for (const slot of TRADE_SLOTS)
+    if (!slot.pitcher) total += tops[slot.key]?.score || 0;
+  const catchers = roster
+    .filter(isActive)
+    .map((p) => slotStrength(p, "catcher"))
+    .filter((v) => v !== null)
+    .sort((a, b) => b - a);
+  total += catchers[1] ?? 0;
+  const { rotation, pen } = pitchingStaff(roster);
+  for (const p of rotation) total += slotStrength(p, "sp") ?? 0;
+  for (const p of pen.slice(0, BULLPEN_SIZE)) total += slotStrength(p, "rp") ?? 0;
+  return total;
+}
+
+/** 落差から倍率（1 〜 1+`NEED_LIMIT`） */
+export const needOfDrop = (drop) =>
+  1 + NEED_LIMIT * Math.min(1, Math.max(0, drop) / DROP_SCALE);
+
+/**
+ * その球団が `players` を**まとめて**手放すときの、1人ずつの倍率（1 〜 1+`NEED_LIMIT`）。
+ * `Map<id, 倍率>` で返す。名簿に居ない選手は 1。
+ *
+ * ⚠ **まとめて抜けたときの落差で決める**（監査 2026-11-13・いしだ「おすすめで」）。
+ *    1人ずつ「ほかは残る」として測ると、外野のレギュラー2人をまとめてもらっても
+ *    それぞれ「控えが埋める小さな穴」にしかならず、2人抜けた大きな穴に上乗せが
+ *    掛からなかった。
+ *    まとめた落差が1人ずつの落差の合計より大きいときは、その差を1人ずつの落差の
+ *    割合で配る（1人ずつの落差が全員0なら等分）。小さいとき（同じ穴を2回数えて
+ *    いたとき）は1人ずつの落差のまま。1人だけなら前と同じ値になる。
+ */
+export function needFactors(roster, players) {
+  const all = roster || [];
+  const out = new Map();
+  const leaving = (players || []).filter(
+    (p) => p && all.some((q) => q.id === p.id),
+  );
+  for (const p of players || []) if (p) out.set(p.id, 1);
+  if (!leaving.length) return out;
+  const full = squadStrength(all);
+  const drops = leaving.map((p) =>
+    Math.max(0, full - squadStrength(all.filter((q) => q.id !== p.id))),
+  );
+  const ids = new Set(leaving.map((p) => p.id));
+  const together = Math.max(0, full - squadStrength(all.filter((q) => !ids.has(q.id))));
+  const sum = drops.reduce((a, b) => a + b, 0);
+  leaving.forEach((p, i) => {
+    let drop = drops[i];
+    if (leaving.length > 1 && together > sum)
+      drop = sum > 0 ? (drop * together) / sum : together / leaving.length;
+    out.set(p.id, needOfDrop(drop));
+  });
+  return out;
+}
+
+/**
+ * CPU球団が `players` をまとめて出すときの値段（1人ずつ。並びは `players` と同じ）。
+ * `base` は事情を抜いた値段（サーバーの `tradeBase`）。⚠ 1を下回らせない（サーバーと同じ）。
+ * 1人なら `tradeValue` と同じになる。
+ */
+export function setTradeValues(roster, players, base) {
+  const factors = needFactors(roster, players);
+  return players.map((p) => Math.max(1, base(p) * (factors.get(p.id) ?? 1)));
+}
+
 /** 持ち場ごとの一番手1人の力（`rosterTops` の力だけ） */
 export function rosterTopStrengths(roster) {
   return Object.fromEntries(

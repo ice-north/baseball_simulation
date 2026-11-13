@@ -219,6 +219,8 @@ data class Player(
     val recent: RecentForm? = null,
     /** CPU球団がトレードで付ける値段（見る目をかける前。球団の読み込みにだけ載る。server/tradeJudge.mjs の valueOf） */
     val tradeValue: Double? = null,
+    /** 事情（抜けたときの穴）を抜いた値段。CPU球団の選手だけ。まとめてもらうときの見込みに使う（[setTradeValues]） */
+    val tradeBase: Double? = null,
 ) {
     /** 守備位置の適性。本職は100（Web 版 lineupEdit.js の positionFitness と同じ決まり） */
     fun fitness(pos: String): Int = if (position == pos) 100 else positionFitness[pos] ?: 0

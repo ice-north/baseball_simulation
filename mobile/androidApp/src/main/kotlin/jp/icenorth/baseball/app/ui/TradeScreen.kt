@@ -67,6 +67,7 @@ import jp.icenorth.baseball.shared.reinforcePoints
 import jp.icenorth.baseball.shared.ownSlotScores
 import jp.icenorth.baseball.shared.surplusPlayers
 import jp.icenorth.baseball.shared.tradeCandidates
+import jp.icenorth.baseball.shared.gettingTradeValues
 import jp.icenorth.baseball.shared.tradeOdds
 import jp.icenorth.baseball.shared.tradeOddsBounds
 import jp.icenorth.baseball.shared.tradeRatio
@@ -545,7 +546,7 @@ private fun PlayersStep(
                 PickedLine("出す", namesOf(draft.give, myRoster))
                 PickedLine("もらう", namesOf(draft.get, theirs))
                 if (rule != null && draft.get.isNotEmpty()) {
-                    OddsMeter(myPlayers.filter { it.id in draft.give }.map { it.tradeValue }, theirPlayers.filter { it.id in draft.get }.map { it.tradeValue }, rule, compact = true)
+                    OddsMeter(myPlayers.filter { it.id in draft.give }.map { it.tradeValue }, gettingTradeValues(theirPlayers, theirPlayers.filter { it.id in draft.get }), rule, compact = true)
                 }
                 problems.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -630,7 +631,7 @@ private fun ConfirmStep(
             ConfirmSide("もらう（${view.teamLabel(partner)}）", draft.get, if (theirs == null) null else getting, model, partner, league.tier)
             theirError?.let { LoadFailed(it, retryTheirs, title = "相手の名簿を読めませんでした") }
             if (rule != null && counter == null) Section("${view.teamLabel(partner)}の見込み") {
-                OddsMeter(giving.map { it.tradeValue }, getting.map { it.tradeValue }, rule)
+                OddsMeter(giving.map { it.tradeValue }, gettingTradeValues(if (theirs == null) null else theirPlayers, getting), rule)
             }
             if (theirs != null) Section("交換後") {
                 holesAfter(giving, usage).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
@@ -806,7 +807,7 @@ private fun CompareTable(give: Player, get: Player, tier: (Double?) -> String?) 
 
 /** CPUの判断の決まり（ⓘ に出す。数字はサーバーが渡す決まりから） */
 private fun oddsHelp(rule: CpuTradeRule): List<String> = listOf(
-    "CPU球団は、素質（ドラフトと同じ物差し。若いほど高い）といまの持ち場での力を半々で見て値段を付け、今季の成績で上下させます。相手が出す選手は、抜けると穴が空く主力ほど高くなります。「値 高・中・低」は、リーグの全選手をこの値段で3つに分けたものです。",
+    "CPU球団は、素質（ドラフトと同じ物差し。若いほど高い）といまの持ち場での力を半々で見て値段を付け、今季の成績で上下させます。相手が出す選手は、抜けると穴が空く主力ほど高くなります（何人かまとめてもらうと、まとめて空く穴で見ます）。「値 高・中・低」は、リーグの全選手をこの値段で3つに分けたものです。",
     "受け取る選手の値段の合計が、出す選手の値段の合計の${"%.2f".format(rule.margin)}倍以上なら受けます。",
     "監督によって見る目が違い、1人ずつ最大±${(rule.eyeLimit * 100).roundToInt()}%高く・低く見ます（若手好み・主力好み・監督の型に合う選手）。",
     "足りないときは、もらう選手を同じ持ち場（投手・捕手・内野・外野）の値段の釣り合う選手に差し替えた逆提案を返します。差し替えられる選手がいなければ断ります。",

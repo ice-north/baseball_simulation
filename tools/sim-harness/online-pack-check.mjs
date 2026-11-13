@@ -339,7 +339,17 @@ try {
       ['pitching', 'velocity'],
       ['pitching', 'control'],
       ['pitching', 'stamina'],
+      // ⚠ 表に無い能力も渡す。選手名を押した先（詳細）も同じ選手を出すので、
+      //    削ると回復・体幹・バント・変化球が「—」になった（監査 2026-11-13）
+      ['physical', 'recovery'],
+      ['batting', 'bunt'],
     ];
+    for (const pack of view.phase.packs)
+      for (const p of pack.players) {
+        assert.ok(!('growthPotential' in p), `${p.name} の成長力（隠す値）が渡っている`);
+        if (p.position === 'pitcher')
+          assert.ok(Array.isArray(p.pitching?.arsenal), `${p.name} の球種が渡っていない`);
+      }
     for (const pack of view.phase.packs)
       for (const p of pack.players)
         for (const [group, key] of paths) {

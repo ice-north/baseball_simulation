@@ -24,12 +24,15 @@ fun conditionIcon(condition: Int?): String = when (condition) {
 }
 
 /** 能力値のランク（S〜F）。球速は (v-115)×2.5、投手スタミナは v/2 に直してから測る（getAbilityRank） */
+/** 能力を0〜100の物差しにそろえる（球速は km/h、スタミナは0〜200）。Web 版 `normalizeAbility` と同じ */
+fun normalizedAbility(value: Int, velocity: Boolean = false, stamina: Boolean = false): Double = when {
+    velocity -> (value - 115) * 2.5
+    stamina -> value / 2.0
+    else -> value.toDouble()
+}
+
 fun abilityRank(value: Int, velocity: Boolean = false, stamina: Boolean = false): Char {
-    val v = when {
-        velocity -> (value - 115) * 2.5
-        stamina -> value / 2.0
-        else -> value.toDouble()
-    }
+    val v = normalizedAbility(value, velocity, stamina)
     return when {
         v >= 90 -> 'S'; v >= 80 -> 'A'; v >= 70 -> 'B'; v >= 60 -> 'C'; v >= 50 -> 'D'; v >= 40 -> 'E'; else -> 'F'
     }

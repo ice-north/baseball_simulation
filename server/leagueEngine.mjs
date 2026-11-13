@@ -567,6 +567,9 @@ export function openTrade(league, userId, { to, offer, want }, now) {
     valueOf: (player) => judge.valueOf(player) * factor(player),
     // 自分が出す選手は、その球団の事情こみ（抜けると穴が空く選手ほど高い）
     valueOfOwn: (player) => judge.valueOf(player, to) * factor(player),
+    // まとめて出すときは、まとめて抜けた穴で値段を付ける（`needFactors`）
+    lossOf: (players) =>
+      judge.setValuesOf(players, to).map((v, i) => v * factor(players[i])),
     fromPlayers: mine.team.players,
     toPlayers: theirs.players,
     offerIds,
@@ -806,7 +809,8 @@ export function openPhase(league, kind, now) {
  *
  * ⚠ **`createLeague` の既定値は変えない**。既定の種（20261028）の世界で
  *    キャンプの成長量や覚醒率を合わせてあり（`online-camp-check`）、
- *    既定を動かすとその数値の検査がまとめて動く。
+ *    既定を動かすとその数値の検査がまとめて動く。本物のリーグはこの関数の種で
+ *    作るので、`online-camp-check` は別の種の世界でも効きと伸びの大きさを見張る。
  * ⚠ 呼ぶ側が時刻を固定していれば同じ世界になる（検査のリーグは時計を
  *    固定しているので再現する）。本番は作るたびに別の顔ぶれになる。
  */

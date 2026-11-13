@@ -47,6 +47,25 @@ class TradeSearchTest {
     }
 
     @Test
+    fun takingTwoRegularsCostsTheCombinedHole() {
+        // 外野のレギュラー3人と控えの外野1人。2人まとめて抜けると控え1人では埋まらない
+        val bench = fielder("left", 50, 50, mapOf("center" to 80, "right" to 80))
+        val roster = team(65, listOf(bench))
+        val left = roster.first { it.position == "left" }
+        val right = roster.first { it.position == "right" }
+        val alone = needFactors(roster, listOf(left))[left.id]!!
+        val together = needFactors(roster, listOf(left, right))
+        assertTrue(together[left.id]!! > alone, "まとめて抜けた穴のほうが大きい: ${together[left.id]} / $alone")
+        // 1人だけなら前と同じ（1人ずつの穴）
+        assertEquals(alone, needFactors(roster, listOf(left))[left.id]!!, 1e-9)
+        // 見込みは tradeBase に倍率を掛けた値。1人なら tradeValue をそのまま使う
+        val withBase = roster.map { if (it.id == left.id || it.id == right.id) it.copy(tradeBase = 100.0) else it }
+        val values = gettingTradeValues(withBase, withBase.filter { it.id == left.id || it.id == right.id })
+        assertEquals(100.0 * together[left.id]!!, values[0]!!, 1e-9)
+        assertEquals(listOf(left.tradeValue), gettingTradeValues(withBase, listOf(left)))
+    }
+
+    @Test
     fun oddsUseServerBounds() {
         val rule = CpuTradeRule(1.05, 0.1, null)
         val (low, high) = tradeOddsBounds(rule)

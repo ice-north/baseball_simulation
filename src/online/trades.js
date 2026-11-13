@@ -137,10 +137,15 @@ const tradeKind = (p) => (p?.position ? rosterGroup(p.position) : undefined);
  *    名簿の事情（抜けると穴が空く選手は高く、代わりが居る選手は等倍）を入れるため
  *    に分けてある。受け取る選手にも同じ事情を掛けると、足りない持ち場へ**弱い選手を
  *    押し込むだけで上乗せを満たせる**（`server/tradeJudge.mjs`）。
+ * ⚠ `lossOf` は**CPU自身の選手をまとめて出すときの値段**（1人ずつの配列）。何人か
+ *    まとめて抜けると1人ずつの穴の合計より大きな穴が空くので、まとめて測る
+ *    （`tradeSearch.js` の `needFactors`）。無ければ `valueOfOwn` を1人ずつ足す。
+ *    逆提案も、組んだ顔ぶれをまとめた値段で予算に収まるかを確かめる。
  */
 export function cpuTradeDecision({
   valueOf,
   valueOfOwn = valueOf,
+  lossOf = null,
   fromPlayers,
   toPlayers,
   offerIds,
@@ -154,7 +159,11 @@ export function cpuTradeDecision({
   const incoming = pick(fromPlayers, offerIds);
   const outgoing = pick(toPlayers, wantIds);
   const gain = total(incoming, value);
-  const loss = total(outgoing, ownValue);
+  const setLoss = (players) =>
+    lossOf
+      ? lossOf(players).reduce((a, v) => a + Math.max(1, v || 0), 0)
+      : total(players, ownValue);
+  const loss = setLoss(outgoing);
   if (gain >= loss * CPU_ACCEPT_MARGIN)
     return { action: 'accept', gain, loss };
   // 逆提案を組む。⚠ 並べ方を決定的にすること（同値はidで分ける）
@@ -176,6 +185,8 @@ export function cpuTradeDecision({
     picked.push(slot);
     left -= ownValue(slot);
   }
+  // まとめて抜けた穴の上乗せで予算を超えるなら、どう組んでも釣り合わない
+  if (lossOf && setLoss(picked) > budget) return { action: 'reject', gain, loss };
   // ⚠ 中身が同じなら逆提案にならない（受けないのだから断る）
   if (picked.length === outgoing.length &&
       picked.every((p, i) => p.id === outgoing[i].id))
