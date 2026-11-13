@@ -488,12 +488,16 @@ export function CampResultList({ camp, roster }) {
                   ))}
                   {byRound.length > 0 && (
                     <small className="online-camp-gain-rounds">
+                      クール別{' '}
                       {byRound
                         .map(
-                          (r) =>
-                            `第${r.round}${formatGain(Math.round(roundSum(r, player.id) * 10) / 10)}`,
+                          (r) => {
+                            // ⚠ 0 は「±0」と書く（「第1」「0」が続いて「第10」に読めた）
+                            const n = Math.round(roundSum(r, player.id) * 10) / 10;
+                            return `第${r.round} ${n ? formatGain(n) : '±0'}`;
+                          },
                         )
-                        .join(' ')}
+                        .join(' / ')}
                     </small>
                   )}
                   {events.map((text, index) => (

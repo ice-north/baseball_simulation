@@ -321,9 +321,10 @@ internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<Json
                 }
                 if (row.items.isNotEmpty()) GainLine(null, row.items)
                 val rounds = campRounds(camp, id).takeIf { camp.at("byRound").list().isNotEmpty() }.orEmpty()
-                if (rounds.isNotEmpty()) Muted(rounds.joinToString(" ") { (round, gains) ->
-                    val n = gains.orEmpty().values.sumOf { it.num() ?: 0.0 }
-                    "第$round${formatGain((n * 10).roundToInt() / 10.0)}"
+                // ⚠ 0 は「±0」と書く（「第1」「0」が続いて「第10」に読めた）
+                if (rounds.isNotEmpty()) Muted("クール別 " + rounds.joinToString(" / ") { (round, gains) ->
+                    val n = (gains.orEmpty().values.sumOf { it.num() ?: 0.0 } * 10).roundToInt() / 10.0
+                    "第$round ${if (n == 0.0) "±0" else formatGain(n)}"
                 })
                 row.events.forEach { Text(it, color = MaterialTheme.colorScheme.tertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
             }
