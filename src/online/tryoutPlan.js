@@ -5,9 +5,11 @@ import { ONLINE_ROSTER_TARGETS } from './shared.js';
 // ============================================================
 // 初期編成・トライアウトの希望リストを組み立てる計算。
 //
-// 【サーバー側の約束】提出するのは `{ count, rankedIds }` の2つだけ。
+// 【サーバー側の約束】提出するのは `{ count, rankedIds, total }`。
 // `rankedIds` は**交渉したい選手を10人まで、欲しい順に並べたもの**。
-// サーバーは上から見て、まだ空いている選手を `count` 人まで取る。
+// `total` は**獲得する人数**（交渉した人と、足りないぶんを自動で埋める人の合計）。
+// サーバーは上から見て、まだ空いている選手を取り、`total` 人に届いたら止める。
+// 交渉した人が尽きたら、残りは CPU と同じ判断で埋める。
 //
 // ⚠ **画面(JSX)と分けてある**。node から直接読めないと検査が書けない。
 // ⚠ 候補は実測で **360人**。全員を1本の希望順に並べる形（以前）は、
@@ -46,14 +48,36 @@ export function plannedPicks(rankedIds, candidates, count, roster = []) {
     .slice(0, Math.max(0, count));
 }
 
-/** 交渉できる人数（空き枠と10人の小さい方）。`roster` はいまの名簿 */
+/** 交渉できる人数（空き枠と10人の小さい方）。`maxCount` は空き枠 */
 export function wishLimit(maxCount) {
   return Math.max(0, Math.min(TRYOUT_WISH_MAX, maxCount));
 }
 
-/** 提出する `count`。希望した人数と空き枠の小さい方 */
+/** 希望した人数と空き枠の小さい方。⚠ いまは検査（online-tryout-plan-check）だけが使う */
 export function planCount(rankedIds, maxCount) {
   return Math.max(0, Math.min(rankedIds.length, maxCount));
+}
+
+/**
+ * 獲得する人数（交渉した人＋自動で埋める人の合計）。提出の `total`。
+ *
+ * ⚠ 先方（main の持ち主）指摘「トライアウトの指名選手の人数を決められない」。
+ *    交渉10人の形にしたとき、希望が尽きても空き枠を**必ず全部**埋めるようにしたので、
+ *    「今年は2人だけ取る」ができなくなっていた。
+ * ⚠ **無い（古い提出・標準案）なら空き枠いっぱい**。項目を足しただけなので、
+ *    版を上げる前に出した提出もそのまま前と同じ動きになる。
+ * ⚠ 0人にしても、投手1・捕手1・野手8 に届かない球団はサーバーが必要な守備位置だけ補う
+ *    （1球団の都合で全員の手続きが止まらないように）。
+ */
+export function signTotal(plan, maxCount) {
+  const room = Math.max(0, maxCount);
+  const total = plan?.total;
+  return Number.isInteger(total) ? Math.max(0, Math.min(room, total)) : room;
+}
+
+/** 交渉した選手のうち、取りにいく人数（獲得する人数と交渉した人数の小さい方） */
+export function wishedCount(rankedIds, total) {
+  return Math.max(0, Math.min(rankedIds.length, total));
 }
 
 /** 守備位置のまとまり。画面の絞り込みと、偏りの警告に使う */
@@ -243,7 +267,8 @@ export function weightedScore(player, weights) {
  * 重みからおすすめの希望順を作る。
  * 評価値の高い順に見て、**目標構成（投10・捕2・内6・外6）に空きのある区分から**取る
  * （画面の獲得予定・サーバーの解決と同じ規則）。区分が全部埋まったあとは評価値順。
- * ⚠ 候補は全員並べる（競合したときの繰り上がりのため。消さない）。
+ * ⚠ 交渉できる人数（`limit`、既定10人）で切る。競合に負けたぶんはサーバーが
+ *    空き枠に応じて自動で補う。
  */
 export function weightedRanked(candidates, weights, roster = [], limit = TRYOUT_WISH_MAX) {
   const score = new Map(candidates.map((p) => [p.id, weightedScore(p, weights)]));
@@ -354,19 +379,16 @@ export function swapRanked(rankedIds, index, delta) {
 /**
  * 獲得予定（上位 count 人）の内訳と、成り立たない点・物足りない点。
  *
- * ⚠ `blocking` は**サーバーが実際に拒む条件**と同じにしてある
- *    （`leagueEngine` の「投手・捕手・野手が不足します」）。
- *    野手8人・投手1人・捕手1人を満たさないと、手続き全体が失敗して
- *    **全員が先へ進めない**。以前は提出した瞬間に初めて知らされた。
+ * ⚠ `blocking` は最低限（野手8人・投手1人・捕手1人）に届かない点。
+ *    以前はサーバーが拒む条件だったが、いまは `resolveTryout` が足りない区分を
+ *    自動で補うので、画面では「交渉した選手だけでは足りない」という知らせになる。
  * ⚠ ただし**提出を画面側で止めない**。正本はサーバーで、ここで止めると
  *    条件が食い違ったときに正しい提出まで塞いでしまう。
  * ⚠ `warnings` は助言。足りない位置はサーバーが自動で埋めるので、
  *    「希望どおりにならない」という意味。
  */
 export function planSummary(rankedIds, candidates, count, roster = []) {
-  // ⚠ **希望順の上から count 人、ではない**。目標構成で飛ばされるぶんがあるので、
-  //    サーバーと同じ規則で「実際に取る顔ぶれ」を出してから数える。
-  //    ここを `slice(0, count)` に戻すと、画面の顔ぶれと実際が食い違う
+  // 希望順の上から count 人（サーバーも希望順のとおりに取る。目標構成で飛ばさない）
   const picked = plannedPicks(rankedIds, candidates, count, roster);
   const counts = rosterCounts(picked);
   const combined = [...roster, ...picked];

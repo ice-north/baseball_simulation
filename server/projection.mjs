@@ -45,41 +45,37 @@ import { CPU_ACCEPT_MARGIN } from '../src/online/trades.js';
 import { TRADE_FACTOR_LIMIT, tradeEyeNote } from '../src/online/coaches.js';
 
 /**
- * セット（24人）を**選ぶのに要る分だけ**にする。
- * ⚠ 20セット×24人＝480人。全員の全項目を載せるとビューが重くなる。
+ * セット（24人）の選手。能力は全部、記録や経歴は載せない（まだ所属していない）。
+ * ⚠ 20セット×24人＝480人。記録・経歴まで載せるとビューが重くなる。
  */
 const packView = (pack) => ({
   ...packSummary(pack),
   takenBy: pack.takenBy || null,
-  players: pack.players.map((p) => ({
-    id: p.id,
-    name: p.name,
-    age: p.age,
-    position: p.position,
-    rank: p.rank || 'C',
-    isTwoWay: !!p.isTwoWay,
-    // ⚠ **代表的な能力は落とさないこと**（いしだ指摘: 体力・肩・足といった
-    //    代表的な能力すら出ていない）。画面（`PackSelect` の `COLUMNS`）に
-    //    出す項目と対で増やす。片方だけ足すと「—」が並ぶ。
-    // ⚠ 回復・体幹・バント・変化球は載せない。480人ぶんなので、1人1項目で
-    //    ビューが増える。詳しくは選手名を押した先（`PlayerStatsButton`）で見る
-    batting: {
-      meet: p.batting?.meet,
-      power: p.batting?.power,
-      eye: p.batting?.eye,
-    },
-    physical: {
-      speed: p.physical?.speed,
-      arm: p.physical?.arm,
-      bodyStamina: p.physical?.bodyStamina,
-    },
-    fielding: { defense: p.fielding?.defense },
-    pitching: {
-      velocity: p.pitching?.velocity,
-      control: p.pitching?.control,
-      stamina: p.pitching?.stamina,
-    },
-  })),
+  // ⚠ **能力は全部載せる**（監査 2026-11-13・いしだ「おすすめで」）。以前は表の列ぶん
+  //    だけに削り、「残りは選手名を押した先で見る」としていたが、押した先も同じ
+  //    削った選手なので回復・体幹・バント・変化球が「—」だった。全部載せても
+  //    480人で gzip 約+16KB（実測 19KB→35KB）で、この手続きの間だけ。
+  //    ⚠ 隠す値（成長力 `growthPotential` など）は載せない。`playerView` から能力だけ拾う
+  players: pack.players.map((p) => {
+    const v = playerView(p);
+    return {
+      id: p.id,
+      name: p.name,
+      age: p.age,
+      position: p.position,
+      rank: p.rank || 'C',
+      isTwoWay: !!p.isTwoWay,
+      deception: v.deception,
+      batterType: v.batterType,
+      batting: v.batting,
+      pitching: v.pitching,
+      fielding: v.fielding,
+      physical: v.physical,
+      catching: v.catching,
+      personality: v.personality,
+      positionFitness: v.positionFitness,
+    };
+  }),
 });
 
 const playerView = (p) => ({
@@ -228,14 +224,6 @@ export function teamStreaks(schedule) {
 }
 
 /**
- * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
- *
- * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
- *    するので、14試合では自球団は2〜3試合しか入らない。
- * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
- *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
- */
-/**
  * その試合の本塁打（打った人と「何号」）。
  *
  * ⚠ **記録（`league.records`）から引く**。日程の `result` には打席の中身が
@@ -267,6 +255,14 @@ function homerunsOf(league, game, year) {
   return hit;
 }
 
+/**
+ * 自球団の**直近の試合**（新しい順ではなく**古い順**で返す。画面が上から並べる）。
+ *
+ * ⚠ リーグ全体の `results`（直近14試合）では足りない。12球団は毎ターン6試合
+ *    するので、14試合では自球団は2〜3試合しか入らない。
+ * ⚠ 通し番号の数え方は `ownUpcomingGames` と**同じ**にすること。片方だけ
+ *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
+ */
 export function ownRecentGames(schedule, ownTeam, size = 5, league = null) {
   const own = schedule
     .filter(
@@ -443,6 +439,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     teamName: member.teamName,
     year: l.season.year,
     lastCamp: l.campResults?.[userId] || null,
+    // トライアウトで入った選手・交渉して他球団に取られた選手（`resolveTryout`）
+    lastTryout: l.tryoutResults?.[userId] || null,
     // 年度更新の伸び・衰えと引退（`offseasonChanges`）。次の年度更新まで残る
     lastOffseason: l.offseasonResults?.[userId] || null,
     // いまの段階（1年の流れの帯）。`seasonStage` の説明を参照
@@ -624,6 +622,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
                     : campPlanFor(l, member.teamName, team.players),
                   // ⚠ 伸びた能力（このクール・通算）。画面のまとめに使う
                   last: phase.camp?.[userId]?.last || null,
+                  // クールごとの伸び（`recordCampRound`）。キャンプ後の選手ごとの内訳に使う
+                  byRound: phase.camp?.[userId]?.byRound || [],
                   gains: phase.camp?.[userId]?.gains || {},
                   events: phase.camp?.[userId]?.events || {},
                 }
@@ -750,6 +750,9 @@ export function projectTeamInfo(bundle, userId, teamName) {
         // ⚠ CPU球団の選手は**その球団の事情こみ**（`createTradeJudge` の `valueOf` の第2引数）。
         //    参加者の球団は素の値段（CPUはもらう選手に事情を掛けない）
         tradeValue: judge.valueOf(p, isMemberTeam ? null : teamName),
+        // 事情を抜いた値段。CPU球団の選手を何人かまとめてもらうときは、画面が
+        // まとめて抜けた穴の上乗せ（`tradeSearch.js` の `setTradeValues`）をこれに掛ける
+        ...(isMemberTeam ? {} : { tradeBase: judge.valueOf(p) }),
         // ⚠ **他球団の選手も、過去の年と通算を出すこと**。以前は今季しか
         //    載せていなかったので、CPU球団の選手を開くと「成績が残っていない」
         //    ように見えた（記録はサーバーに揃っている）。通算成績の一覧も

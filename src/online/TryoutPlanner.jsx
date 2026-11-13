@@ -13,7 +13,8 @@ import {
   shiftInPlan,
   moveInPlan,
   wishLimit,
-  planCount,
+  signTotal,
+  wishedCount,
   TRYOUT_WISH_MAX,
   WEIGHT_FIELDS,
   WEIGHT_MAX,
@@ -120,6 +121,15 @@ function Line({ player, score, fit }) {
   );
 }
 
+/** 名簿＋交渉で取る人で、最低限（投手1・捕手1・野手8）に足りない人数（サーバーの `shortfall` と同じ数え方） */
+function minimumShort(roster, picked) {
+  const list = [...(roster || []), ...picked];
+  const pitcher = list.some((p) => p.position === 'pitcher') ? 0 : 1;
+  const catcher = list.some((p) => p.position === 'catcher');
+  const fielders = list.filter((p) => p.position !== 'pitcher').length;
+  return pitcher + Math.max(8 - fielders, catcher ? 0 : 1);
+}
+
 export default function TryoutPlanner({
   plan,
   candidates,
@@ -161,8 +171,17 @@ export default function TryoutPlanner({
   // ⚠ 交渉できる人数は**10人と空き枠の小さい方**。空き枠が2つしかない年に
   //    10人選べても、取れるのは2人までなので数字が食い違う
   const limit = wishLimit(maxCount);
-  const wanted = plan.rankedIds;
-  const count = planCount(wanted, maxCount);
+  // ⚠ 10人までで切って読む。交渉10人の形にする前に保存した提出は候補360人を
+  //    全部並べており、そのままだと「交渉中 360/10」で出し直しも弾かれた
+  const wanted = useMemo(
+    () => (plan.rankedIds.length > limit ? plan.rankedIds.slice(0, limit) : plan.rankedIds),
+    [plan.rankedIds, limit],
+  );
+  // 獲得する人数（交渉した人＋自動で埋める人）。決めていなければ空き枠いっぱい
+  const total = signTotal(plan, maxCount);
+  // 交渉した選手のうち取りにいく人数（獲得する人数で切る）
+  const count = wishedCount(wanted, total);
+  const autoFill = Math.max(0, total - count);
   const { picked, targets, blocking, warnings } = planSummary(
     wanted,
     candidates,
@@ -171,6 +190,8 @@ export default function TryoutPlanner({
   );
   // 獲得したあとの名簿の内訳（目標と比べるのはこちら。下の見出しの注）
   const after = rosterCounts([...(roster || []), ...picked]);
+  // ⚠ 最低限（投1・捕1・野8）に届かないぶんはサーバーが人数を超えて補うので、その分も足す
+  const afterSize = (roster || []).length + Math.max(total, picked.length + minimumShort(roster, picked));
   const wantedSet = useMemo(() => new Set(wanted), [wanted.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pool = useMemo(
@@ -182,7 +203,12 @@ export default function TryoutPlanner({
 
   const setRanked = (rankedIds) => {
     setNotice('');
-    onChange({ ...plan, rankedIds, count: planCount(rankedIds, maxCount) });
+    onChange({ ...plan, rankedIds, count: wishedCount(rankedIds, total), total });
+  };
+  const setTotal = (next) => {
+    const t = Math.max(0, Math.min(maxCount, next));
+    setNotice('');
+    onChange({ ...plan, total: t, count: wishedCount(wanted, t) });
   };
   const drop = (id) => setRanked(removeFromPlan(wanted, id));
   const shift = (index, delta) => setRanked(shiftInPlan(wanted, index, delta));
@@ -207,9 +233,46 @@ export default function TryoutPlanner({
 
   return (
     <div className="online-tryout">
-      {/* ⚠ 獲得希望人数の入力は**置かない**（いしだ指摘「使いにくい」）。
-          交渉した人数がそのまま希望人数で、取れるのは空き枠まで */}
+      {/* ⚠ **獲得する人数を決められるようにする**（先方指摘「指名選手の人数を決められない」）。
+          交渉した人数とは別に持つ。交渉が多ければ上位から人数ぶん取り（取られたら下が繰り上がる）、
+          少なければ残りを自動で埋める。既定は空き枠いっぱい（以前と同じ） */}
       <div className="online-tryout-head">
+        <div className="online-tryout-total" role="group" aria-label="獲得する人数">
+          <span>獲得する人数</span>
+          <button
+            type="button"
+            aria-label="獲得する人数を1人減らす"
+            disabled={busy || total <= 0}
+            onClick={() => setTotal(total - 1)}
+          >
+            −
+          </button>
+          <b>{total}人</b>
+          <button
+            type="button"
+            aria-label="獲得する人数を1人増やす"
+            disabled={busy || total >= maxCount}
+            onClick={() => setTotal(total + 1)}
+          >
+            ＋
+          </button>
+          <small>
+            空き枠{maxCount}人
+            {total < maxCount && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className="online-tryout-fill"
+                  disabled={busy}
+                  onClick={() => setTotal(maxCount)}
+                >
+                  枠いっぱいにする
+                </button>
+              </>
+            )}
+          </small>
+        </div>
         <p className="online-tryout-limit">
           交渉中 <b>{wanted.length}</b> / {limit}人
           <small>
@@ -296,7 +359,19 @@ export default function TryoutPlanner({
           投{targets.pitcher}・捕{targets.catcher}・内{targets.infielder}・外
           {targets.outfielder}
         </strong>
-        で、<strong>交渉した人のあとの空き枠は自動で埋まります</strong>（CPUと同じ判断）。
+        です。<strong>獲得するのは上で決めた人数まで</strong>で、交渉した人で足りないぶんは
+        自動で埋まります（CPUと同じ判断）。
+      </p>
+      {/* 決めた人数と交渉した人数の関係を1行で（どちらが余るかで意味が変わる） */}
+      <p className="online-tryout-total-note">
+        {total === 0
+          ? '今年は獲得しません（投手・捕手・野手が最低限に届かないときだけ、足りない位置を補います）。'
+          : wanted.length > total
+            ? `交渉した${wanted.length}人のうち、上位から${total}人を取ります。他球団に取られたら下位が繰り上がります。`
+            : autoFill > 0
+              ? `交渉した${count}人に、自動で${autoFill}人を足して${total}人獲得します。`
+              : `交渉した${count}人を獲得します。`}
+        {` 獲得後の名簿は${afterSize}人（枠${(roster || []).length + maxCount}人）です。`}
       </p>
 
       <div className="online-tryout-grid">
@@ -320,7 +395,9 @@ export default function TryoutPlanner({
               「…4人未満ですこの位置は…」と文がつながって出ていた */}
           {blocking.length > 0 && (
             <p role="alert" className="online-tryout-block">
-              {`このままでは決定できません: ${blocking.join(' / ')}。足りない守備位置の選手と交渉してください。`}
+              {/* ⚠ 決定は止めない（サーバーが足りない守備位置を補う）。上の「獲得しません…補います」と
+                  食い違わないよう、「決定できない」とは書かない */}
+              {`交渉した選手だけでは足りません: ${blocking.join(' / ')}。足りない守備位置は自動で補います（希望どおりにしたいなら、その位置の選手と交渉してください）。`}
             </p>
           )}
           {warnings.length > 0 && (

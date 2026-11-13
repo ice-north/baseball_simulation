@@ -14,6 +14,7 @@ import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import {
   createLeague,
+  worldSeedFromTime,
   submitPhase,
   loadLeagueWorld,
   recordCampRound,
@@ -78,9 +79,9 @@ const quiet = (fn) => {
 };
 
 /** セット選択まで済ませて、キャンプの手続きが開いたリーグを作る */
-function leagueAtCamp() {
+function leagueAtCamp(seed = undefined) {
   const league = quiet(() =>
-    createLeague({ members: [{ userId: 'a' }], now: NOW }),
+    createLeague({ members: [{ userId: 'a' }], now: NOW, ...(seed === undefined ? {} : { seed }) }),
   );
   assert.equal(league.phase.kind, 'pack_select', '前提: 開幕前はセット選択');
   quiet(() =>
@@ -116,8 +117,8 @@ const totals = (players) => {
 };
 
 /** キャンプを、指定した割り当てで解決した結果の合計 */
-function campWith(build) {
-  const league = leagueAtCamp();
+function campWith(build, seed = undefined) {
+  const league = leagueAtCamp(seed);
   const before = totals(ownRoster(league));
   const plan = { menu: 'standard', assignments: build(ownRoster(league)) };
   quiet(() =>
@@ -723,6 +724,43 @@ assert.ok(
   `球速練習で球速が伸びていない: 球速${velocity.velocity} / 投げ込み${control.velocity}`,
 );
 
+// --- 別の世界でも同じように効くか ----------------------------------------
+// ⚠ 本物のリーグは**作った時刻から種を決める**（`worldSeedFromTime`）ので、上の
+//    既定の種（20261028）の世界とは顔ぶれが違う（監査 2026-11-13・いしだ「おすすめで」）。
+//    別の種の世界でも、練習が狙いどおりに効き、伸びの大きさが既定の世界から
+//    大きく外れないことを見る。数値の調整は既定の世界で行い、ここは外れの見張り。
+// ⚠ 1人あたりで比べる（セットの人数・投手の数は世界でほぼ同じだが、念のため）
+{
+  const perHead = (gain, roster, key) => gain[key] / Math.max(1, roster);
+  const headcount = (seed) => {
+    const league = leagueAtCamp(seed);
+    const players = ownRoster(league);
+    return {
+      fielders: players.filter((p) => p.position !== 'pitcher').length,
+      pitchers: players.filter((p) => p.position === 'pitcher').length,
+    };
+  };
+  const base = headcount(undefined);
+  for (const at of ['2026-12-01T10:00:00+09:00', '2027-03-15T21:30:00+09:00']) {
+    const seed = worldSeedFromTime(at);
+    const heads = headcount(seed);
+    const bat = campWith(all('batting'), seed);
+    const run = campWith(all('baserunning'), seed);
+    const ctl = campWith(all('control'), seed);
+    assert.ok(bat.meet > run.meet, `種${seed}: 打撃練習でミートが伸びていない`);
+    assert.ok(run.speed > bat.speed, `種${seed}: 走塁練習で走力が伸びていない`);
+    assert.ok(ctl.control > 0, `種${seed}: 投げ込みで制球が伸びていない`);
+    for (const [name, here, home] of [
+      ['打撃練習のミート', perHead(bat, heads.fielders, 'meet'), perHead(batting, base.fielders, 'meet')],
+      ['投げ込みの制球', perHead(ctl, heads.pitchers, 'control'), perHead(control, base.pitchers, 'control')],
+    ])
+      assert.ok(
+        here >= home * 0.5 && here <= home * 1.8,
+        `種${seed}: ${name}の伸びが既定の世界から外れている: 1人あたり ${here.toFixed(2)} / 既定 ${home.toFixed(2)}`,
+      );
+  }
+}
+
 // --- 1クールずつ自分で実行する（ここが本丸） ---------------------------
 // ⚠ **自分で回したクールを数えること**。数えないと、画面で4回やった球団が
 //    締め切りでもう4回やって**8クールぶん**成長する。
@@ -1102,5 +1140,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けず、クールごとに均して4クールで20%前後）',
+  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けず、クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
 );

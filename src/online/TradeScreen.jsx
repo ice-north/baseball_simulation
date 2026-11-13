@@ -38,6 +38,7 @@ import {
   tradeOdds,
   tradeOddsBounds,
   tradeRatio,
+  setTradeValues,
   tradeSlot,
   valueTiers,
 } from './tradeSearch.js';
@@ -249,7 +250,7 @@ function ValueTier({ player }) {
 const ODDS_HELP =
   'CPU球団は「受け取る選手の値段の合計が、出す選手の値段の合計の上乗せ分以上」なら受けます。' +
   '値段は素質（ドラフトと同じ見立て。若いほど高い）といまの持ち場での力を半々で見て、今季の成績で上下します。' +
-  '相手が出す選手は、抜けると穴が空く主力ほど高くなります（控えが厚い持ち場なら上乗せはありません）。' +
+  '相手が出す選手は、抜けると穴が空く主力ほど高くなります（控えが厚い持ち場なら上乗せはありません。何人かまとめてもらうと、まとめて空く穴で見ます）。' +
   'そこに監督の見る目（若手を高く見る・主力を高く見る など）が1人ずつかかるので、' +
   '境目の近くは「相手の監督しだい」です。足りないときは、同じ持ち場（投手・捕手・内野・外野）の安い選手に替えた逆提案が来るか、断られます。';
 
@@ -257,7 +258,7 @@ const ODDS_HELP =
  * CPU球団が受けそうかの目安（3段のメーター）。⚠ 参加者の球団には出さない（人が決める）。
  * メーターの横軸は「出す値段 ÷ もらう値段」。境目はサーバーの決まり（`team.trade`）から引く。
  */
-function OddsMeter({ rule, give, get, valueOf }) {
+function OddsMeter({ rule, give, get, valueOf, roster }) {
   if (!rule) return null;
   if (!get.length || !give.length) {
     return (
@@ -269,7 +270,13 @@ function OddsMeter({ rule, give, get, valueOf }) {
     );
   }
   const giveValues = give.map(valueOf).filter(Number.isFinite);
-  const getValues = get.map(valueOf).filter(Number.isFinite);
+  // ⚠ 何人かまとめてもらうときは、まとめて抜けた穴の上乗せで引く（サーバーの
+  //    `setValuesOf` と同じ式）。事情を抜いた値段（`tradeBase`）が無ければ1人ずつの値段
+  const getValues = (
+    get.length > 1 && roster && get.every((p) => Number.isFinite(p.tradeBase))
+      ? setTradeValues(roster, get, (p) => p.tradeBase)
+      : get.map(valueOf)
+  ).filter(Number.isFinite);
   if (giveValues.length < give.length || getValues.length < get.length) {
     return (
       <div className="online-trade-odds" aria-label="CPUの見込み">
@@ -885,6 +892,7 @@ function TradeComposer({
               give={givePlayers}
               get={getPlayers}
               valueOf={tierOf.valueOf || (() => undefined)}
+              roster={theirRoster}
             />
           )}
           {confirming && !(!partner || empty || problems.length > 0 || !theirRoster) ? (

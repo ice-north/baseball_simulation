@@ -589,7 +589,7 @@ export function releaseBias(staff) {
 export const TRADE_FACTOR_LIMIT = 0.1;
 
 /**
- * CPU球団がトレードで選手を見る目（`tradeValueOf` にかける倍率。0.9〜1.1）。
+ * CPU球団がトレードで選手を見る目（`server/tradeJudge.mjs` の値段にかける倍率。0.9〜1.1）。
  * 育成の監督は若手を高く、勝負の監督はいまの主力の年齢（27歳以上）を高く見る（最大±6%）。
  * 型に合う選手も少し高く見る（最大±3%）。
  * ⚠ 上乗せ（`CPU_ACCEPT_MARGIN`）は全球団そのまま。見る目だけを変える。

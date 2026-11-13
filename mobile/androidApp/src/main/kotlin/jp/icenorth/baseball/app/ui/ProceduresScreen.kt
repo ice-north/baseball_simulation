@@ -47,6 +47,7 @@ import jp.icenorth.baseball.app.savedPhaseDraft
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.ROSTER_LIMIT
+import jp.icenorth.baseball.shared.signTotal
 import jp.icenorth.baseball.shared.ONLINE_ROSTER_TARGETS
 import jp.icenorth.baseball.shared.rosterCounts
 import jp.icenorth.baseball.shared.seasonLine
@@ -131,9 +132,10 @@ private fun CurrentProcedure(model: AppViewModel, raw: JsonObject, onHome: () ->
             raw["lastCamp"].obj()?.let { camp ->
                 Caption("${camp.at("year").int() ?: ""}年目のキャンプ結果")
                 // ⚠ 済んだキャンプの結果は畳んで出す（シーズン中ずっと、24人の一覧がこのタブの大半を占めていた）
-                CampGains(model, camp, raw.at("roster").list().mapNotNull { it.obj() }, finished = true, collapsed = true)
+                CampGains(model, camp, raw.at("roster").list().mapNotNull { it.obj() }, collapsed = true)
             }
             OffseasonGrowthCard(model, raw)
+            TryoutResultCard(model, raw)
         }
     }
 }
@@ -337,6 +339,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, 
         CampPanel(model, raw, phase) {
             header()
             OffseasonGrowthCard(model, raw)
+            TryoutResultCard(model, raw)
         }
         return
     }
@@ -470,7 +473,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, 
         val viewingPack = isPack && packs.any { it.at("id").str() == packOpen }
         val summary = when {
             isPack -> packs.firstOrNull { it.at("id").str() == plan.at("packId").str() }?.at("name").str()?.let { "選んでいるセット: $it" }
-            plan["rankedIds"] != null -> "獲得希望 ${plan.at("count").int() ?: 0}人"
+            plan["rankedIds"] != null -> "獲得する人数 ${signTotal(plan, rosterRoom(raw))}人（交渉 ${plan.at("rankedIds").list().size}人）"
             plan["releaseIds"] != null -> releaseSummary(raw, plan)
             else -> null
         }

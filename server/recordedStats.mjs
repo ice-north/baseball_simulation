@@ -362,7 +362,9 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
           //    その試合までの本数で、あとから数えるには年の全試合を舐めることになる。
           //    打った選手にだけ置く（1試合に2本なら `通算-1号` と `通算号`）。
           //    古い記録には無いので、画面は番号なしで名前だけ出す
-          const seasonHomeruns = b.homeruns > 0
+          // ⚠ 記録を途中から取り始めた年（`complete: false`）は置かない。記録の
+          //    通算はその年の本当の本数より少なく、10号を「3号」と出してしまう
+          const seasonHomeruns = season.complete && b.homeruns > 0
             ? record.stats.batting.homeruns
             : undefined;
           record.games.push({

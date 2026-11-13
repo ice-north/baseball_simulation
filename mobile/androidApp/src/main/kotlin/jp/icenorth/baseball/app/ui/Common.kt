@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.shared.PITCH_TYPE_NAMES
 import jp.icenorth.baseball.shared.StatColumn
-import jp.icenorth.baseball.shared.abilityRank
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.formatStat
@@ -161,7 +160,7 @@ fun AbilityNum(label: String?, value: Int?, velocity: Boolean = false, stamina: 
             value?.toString() ?: "—",
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Bold,
-            color = value?.let { rankColor(abilityRank(it, velocity, stamina)) } ?: MaterialTheme.colorScheme.onSurfaceVariant,
+            color = value?.let { abilityColor(it, velocity, stamina) } ?: MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.alignByBaseline(),
         )
     }

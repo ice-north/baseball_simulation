@@ -132,19 +132,22 @@ function Milestones({ list, showTeam = false }) {
  *    右の列は順位表とこのカードだけ。ここが件数ぶん伸びると、順位表ごと
  *    画面から出る（実測: 話題が1件のとき898px、3件で1046px）。
  * ⚠ 続きは「球団史・記録」（`Chronicle`）に全部出るので、ここで落としても読める。
+ *    `full` のとき（球団史・記録のページ）は件数で切らず、節目は出さない
+ *    （節目はそのページに球団ごとの欄がある）。
  */
 const HOME_TOPIC_LIMIT = 2;
-export function LeagueTopics({ view }) {
+export function LeagueTopics({ view, full = false }) {
+  const limit = full ? Infinity : HOME_TOPIC_LIMIT;
   const races = (view.races || [])
     .map((r) => raceText(r, teamShort))
     .filter(Boolean)
-    .slice(0, HOME_TOPIC_LIMIT);
+    .slice(0, limit);
   // ⚠ 年をまたいでも残す（PCは「話題」の一覧なので、紙面のように日付で切らない）。年を見出しに添える
   const world = (view.chronicle?.world || [])
     .map((w, i) => ({ text: worldText(w, teamShort), year: w?.year, i }))
     .filter((x) => x.text)
-    .slice(0, HOME_TOPIC_LIMIT);
-  const milestones = view.chronicle?.milestones || [];
+    .slice(0, limit);
+  const milestones = full ? [] : view.chronicle?.milestones || [];
   if (!races.length && !world.length && !milestones.length) return null;
   return (
     <section className="online-card">
@@ -152,7 +155,7 @@ export function LeagueTopics({ view }) {
           1画面から出る（実測 982px→1006px） */}
       <h2 className="online-topics-head">
         リーグの話題
-        <small>続きは「球団史・記録」で</small>
+        {!full && <small>続きは「球団史・記録」で</small>}
       </h2>
       {races.length > 0 && (
         <div className="online-news-list">
@@ -214,6 +217,8 @@ export default function Chronicle({ view }) {
                   <h2>節目の記録</h2>
                   <Milestones list={c.milestones} />
                 </section>
+                {/* ホームで2件に切った優勝争い・球界の外からの続き（リーグ全体の話題） */}
+                <LeagueTopics view={view} full />
               </div>
               <div className="online-board-side">
                 <section className="online-card">

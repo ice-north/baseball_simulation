@@ -24,6 +24,7 @@ import {
   pyramidSeasonSchedule,
   topTierTeamNames,
   TEAM_NAME_VARIATIONS,
+  placeOf,
 } from '../../src/online/pyramidLeague.js';
 import { upcomingGames } from '../../server/projection.mjs';
 
@@ -100,6 +101,16 @@ assert.notDeepEqual(generatePyramidTeams(777), teams, 'シードを変えても�
     unique >= names.length * 0.9,
     `種を変えても同じ球団名が出すぎる: ${unique}/${names.length}`,
   );
+  // ⚠ 同じ土地を指す呼び方（「高知」と「土佐」など）が同じ顔ぶれに並ばないこと。
+  //    以前は約2割の種で起きた（`SAME_PLACE`）
+  for (let seed = 1; seed <= 2000; seed++) {
+    const places = generatePyramidTeams(seed).map((t) => placeOf(t.city));
+    assert.equal(
+      new Set(places).size,
+      places.length,
+      `種${seed}で同じ土地の球団が並んだ: ${generatePyramidTeams(seed).map((t) => t.city).join('・')}`,
+    );
+  }
   // ⚠ 土地の名前も入れ替わること（愛称だけ変わって「札幌○○」が
   //    毎回いるのでは、顔ぶれが変わった感じがしない）
   const cities = seeds.flatMap((seed) =>

@@ -27,7 +27,8 @@ import {
   advanceLeagueDay,
 } from '../../server/leagueEngine.mjs';
 import { createTradeJudge } from '../../server/tradeJudge.mjs';
-import { tradeFactorFor } from '../../server/coachEngine.mjs';
+import { tradeFactorFor, staffOf } from '../../server/coachEngine.mjs';
+import { TRADE_FACTOR_LIMIT } from '../../src/online/coaches.js';
 import { CPU_ACCEPT_MARGIN } from '../../src/online/trades.js';
 import { rosterCounts } from '../../src/utils/constants.js';
 import { shortLastLines } from './lib/textWrap.mjs';
@@ -477,11 +478,13 @@ try {
       //    もらう側はその球団の事情こみ（`projection.mjs` と同じ）
       const giveV = Math.max(1, judge.valueOf(best));
       const getV = Math.max(1, judge.valueOf(worst, cpuTeam));
-      // 画面と同じ式で期待を出す（見る目は ±10% の幅で見る）
+      // 画面と同じ式で期待を出す。見る目の幅はサーバーが渡す `eyeLimit`
+      // （監督の居ない球団は 0。`projection.mjs` と同じ決まり）
+      const eye = staffOf(l, cpuTeam).manager ? TRADE_FACTOR_LIMIT : 0;
       const expected =
-        Math.max(1, giveV * 0.9) >= Math.max(1, getV * 1.1) * margin
+        Math.max(1, giveV * (1 - eye)) >= Math.max(1, getV * (1 + eye)) * margin
           ? 'likely'
-          : Math.max(1, giveV * 1.1) < Math.max(1, getV * 0.9) * margin
+          : Math.max(1, giveV * (1 + eye)) < Math.max(1, getV * (1 - eye)) * margin
             ? 'short'
             : 'depends';
       assert.equal(shown, expected, `CPUの見込みが式と違う: ${shown}`);

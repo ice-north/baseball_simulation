@@ -3,6 +3,7 @@ package jp.icenorth.baseball.app.ui
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,6 +70,7 @@ import jp.icenorth.baseball.shared.reinforcePoints
 import jp.icenorth.baseball.shared.ownSlotScores
 import jp.icenorth.baseball.shared.surplusPlayers
 import jp.icenorth.baseball.shared.tradeCandidates
+import jp.icenorth.baseball.shared.gettingTradeValues
 import jp.icenorth.baseball.shared.tradeOdds
 import jp.icenorth.baseball.shared.tradeOddsBounds
 import jp.icenorth.baseball.shared.tradeRatio
@@ -87,6 +91,7 @@ import jp.icenorth.baseball.shared.rosterGroup
 import jp.icenorth.baseball.shared.rostersAfterTrade
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
+import jp.icenorth.baseball.shared.teamShort
 import jp.icenorth.baseball.shared.offerOutcome
 import jp.icenorth.baseball.shared.tradeIds
 import jp.icenorth.baseball.shared.unseenTrades
@@ -477,6 +482,7 @@ private fun PartnerStep(model: AppViewModel, view: LeagueView, raw: JsonObject, 
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PlayersStep(
     model: AppViewModel,
@@ -521,19 +527,46 @@ private fun PlayersStep(
             { group = it },
             Modifier.padding(top = 8.dp),
         )
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-            item(key = "h-get") { Caption("${view.teamLabel(partner)}（もらう）") }
+        // ⚠ **自球団の選手が見つからなかった**（いしだ 2026-11-13「相手チームしか選べない」）。相手の一覧の
+        //    下に自球団を置いていたので、投手なら13人ほど送らないと出す選手が見えなかった。
+        //    - 「相手（もらう）／自球団（出す）」の2つを上に置き、押すとその見出しへ飛ぶ（切り替えではない。
+        //      両方は1つの一覧に並んだまま）。選ばれている方は、いま画面の上にある方
+        //    - 見出しは上に貼り付ける（どちらの選手を見ているか分かるように）
+        //    - もらう選手が決まっていて出す選手がまだのとき（補強から「考える」・選手の詳細から）は、
+        //      最初から自球団の見出しを出す（次にするのは出す選手を選ぶこと）
+        val theirList = remember(theirPlayers, group) { theirPlayers.filter(inGroup).sortedByDescending { it.tradeValue ?: 0.0 } }
+        val myList = remember(myPlayers, group) { myPlayers.filter(inGroup).sortedByDescending { it.tradeValue ?: 0.0 } }
+        val giveHeader = 1 + if (theirError != null || theirs == null) 1 else theirList.size
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        var jumped by rememberSaveable(draft.partner) { mutableStateOf(false) }
+        LaunchedEffect(theirs != null) {
+            if (!jumped && theirs != null && draft.get.isNotEmpty() && draft.give.isEmpty()) listState.scrollToItem(giveHeader)
+            if (theirs != null) jumped = true
+        }
+        val showingGive = listState.firstVisibleItemIndex >= giveHeader
+        ChipTabs(
+            listOf(
+                "get" to "${view.teamShort(partner)}（もらう）${theirList.size}人",
+                "give" to "自球団（出す）${myList.size}人",
+            ),
+            if (showingGive) "give" else "get",
+            { side -> scope.launch { listState.animateScrollToItem(if (side == "give") giveHeader else 0) } },
+            Modifier.padding(top = 4.dp).testTag("trade-side"),
+        )
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+            stickyHeader(key = "h-get") { SideHeader("${view.teamLabel(partner)}（もらう）") }
             when {
                 theirError != null -> item { LoadFailed(theirError, retryTheirs, title = "相手の名簿を読めませんでした") }
                 theirs == null -> item { Muted("読み込み中…") }
-                else -> items(theirPlayers.filter(inGroup).sortedByDescending { it.tradeValue ?: 0.0 }, key = { "get-${it.id}" }) { p ->
+                else -> items(theirList, key = { "get-${it.id}" }) { p ->
                     TradeRow(model, partner, p, p.id in draft.get, null, tier(p.tradeValue)) {
                         set(draft.copy(get = if (p.id in draft.get) draft.get - p.id else draft.get + p.id))
                     }
                 }
             }
-            item(key = "h-give") { Caption("自球団（出す）") }
-            items(myPlayers.filter(inGroup).sortedByDescending { it.tradeValue ?: 0.0 }, key = { "give-${it.id}" }) { p ->
+            stickyHeader(key = "h-give") { SideHeader("自球団（出す）") }
+            items(myList, key = { "give-${it.id}" }) { p ->
                 TradeRow(model, view.teamName.orEmpty(), p, p.id in draft.give, if (p.id in usage.lineupIds) "スタメン・ローテ" else null, tier(p.tradeValue)) {
                     set(draft.copy(give = if (p.id in draft.give) draft.give - p.id else draft.give + p.id))
                 }
@@ -545,7 +578,7 @@ private fun PlayersStep(
                 PickedLine("出す", namesOf(draft.give, myRoster))
                 PickedLine("もらう", namesOf(draft.get, theirs))
                 if (rule != null && draft.get.isNotEmpty()) {
-                    OddsMeter(myPlayers.filter { it.id in draft.give }.map { it.tradeValue }, theirPlayers.filter { it.id in draft.get }.map { it.tradeValue }, rule, compact = true)
+                    OddsMeter(myPlayers.filter { it.id in draft.give }.map { it.tradeValue }, gettingTradeValues(theirPlayers, theirPlayers.filter { it.id in draft.get }), rule, compact = true)
                 }
                 problems.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -561,6 +594,12 @@ private fun PlayersStep(
             }
         }
     }
+}
+
+/** 一覧の見出し（上に貼り付く）。⚠ 下の行が透けないように地色を敷く */
+@Composable
+private fun SideHeader(text: String) {
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth()) { Caption(text) }
 }
 
 @Composable
@@ -630,7 +669,7 @@ private fun ConfirmStep(
             ConfirmSide("もらう（${view.teamLabel(partner)}）", draft.get, if (theirs == null) null else getting, model, partner, league.tier)
             theirError?.let { LoadFailed(it, retryTheirs, title = "相手の名簿を読めませんでした") }
             if (rule != null && counter == null) Section("${view.teamLabel(partner)}の見込み") {
-                OddsMeter(giving.map { it.tradeValue }, getting.map { it.tradeValue }, rule)
+                OddsMeter(giving.map { it.tradeValue }, gettingTradeValues(if (theirs == null) null else theirPlayers, getting), rule)
             }
             if (theirs != null) Section("交換後") {
                 holesAfter(giving, usage).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
@@ -806,7 +845,7 @@ private fun CompareTable(give: Player, get: Player, tier: (Double?) -> String?) 
 
 /** CPUの判断の決まり（ⓘ に出す。数字はサーバーが渡す決まりから） */
 private fun oddsHelp(rule: CpuTradeRule): List<String> = listOf(
-    "CPU球団は、素質（ドラフトと同じ物差し。若いほど高い）といまの持ち場での力を半々で見て値段を付け、今季の成績で上下させます。相手が出す選手は、抜けると穴が空く主力ほど高くなります。「値 高・中・低」は、リーグの全選手をこの値段で3つに分けたものです。",
+    "CPU球団は、素質（ドラフトと同じ物差し。若いほど高い）といまの持ち場での力を半々で見て値段を付け、今季の成績で上下させます。相手が出す選手は、抜けると穴が空く主力ほど高くなります（何人かまとめてもらうと、まとめて空く穴で見ます）。「値 高・中・低」は、リーグの全選手をこの値段で3つに分けたものです。",
     "受け取る選手の値段の合計が、出す選手の値段の合計の${"%.2f".format(rule.margin)}倍以上なら受けます。",
     "監督によって見る目が違い、1人ずつ最大±${(rule.eyeLimit * 100).roundToInt()}%高く・低く見ます（若手好み・主力好み・監督の型に合う選手）。",
     "足りないときは、もらう選手を同じ持ち場（投手・捕手・内野・外野）の値段の釣り合う選手に差し替えた逆提案を返します。差し替えられる選手がいなければ断ります。",

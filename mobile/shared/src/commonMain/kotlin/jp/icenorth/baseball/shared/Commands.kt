@@ -102,7 +102,10 @@ object Commands {
 
     fun withReleases(plan: JsonObject, ids: Collection<Long>) = JsonObject(plan + ("releaseIds" to ids(ids)))
     fun withRanked(plan: JsonObject, ids: List<Long>) = JsonObject(plan + ("rankedIds" to ids(ids)))
-    fun withCount(plan: JsonObject, count: Int) = JsonObject(plan + ("count" to JsonPrimitive(count)))
+    /** トライアウトの希望を出す形にそろえる（交渉する選手・取りにいく人数・獲得する人数）。Web 版 TryoutPlanner と同じ */
+    fun withTryout(plan: JsonObject, ids: List<Long>, total: Int) = JsonObject(
+        withRanked(plan, ids) + ("count" to JsonPrimitive(wishedCount(ids, total))) + ("total" to JsonPrimitive(total)),
+    )
     fun withPack(plan: JsonObject, packId: String) = JsonObject(plan + ("packId" to JsonPrimitive(packId)))
 }
 

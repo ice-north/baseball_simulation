@@ -22,6 +22,7 @@ import {
 import LeagueBoard from './LeagueBoard.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
+import TryoutResult from './TryoutResult.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
@@ -547,6 +548,8 @@ export default function DesktopView(props) {
                   キャンプ中はそこに案内しか無く、開く人がいなかった。
                   キャンプの1画面（実行ボタンまで）は崩さないよう、下に置く */}
               <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+              {/* トライアウトで入った選手（先方指摘: 誰が入ったか分からない） */}
+              <TryoutResult view={view} />
             </>
           ) : (
             <>
@@ -656,6 +659,7 @@ export default function DesktopView(props) {
             </section>
             <CompletedCamp key={view.lastCamp?.year} view={view} />
             <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+            <TryoutResult view={view} />
           </Page>
         ))}
       {current === 'transfer' && <TradeScreen {...props} tradeSeed={tradeSeed} onSeedUsed={() => setTradeSeed(null)} />}

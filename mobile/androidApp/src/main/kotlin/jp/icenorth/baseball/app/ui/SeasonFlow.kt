@@ -32,6 +32,7 @@ import jp.icenorth.baseball.shared.campGainRows
 import jp.icenorth.baseball.shared.campGainTotals
 import jp.icenorth.baseball.shared.formatGain
 import jp.icenorth.baseball.shared.int
+import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.offseasonGains
@@ -39,6 +40,7 @@ import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.stageHead
 import jp.icenorth.baseball.shared.stageInfo
 import jp.icenorth.baseball.shared.str
+import jp.icenorth.baseball.shared.teamLabel
 import kotlinx.serialization.json.JsonObject
 
 // ============================================================
@@ -122,5 +124,44 @@ fun OffseasonGrowthCard(model: AppViewModel, raw: JsonObject?) {
         val departed = result.at("departed").list().mapNotNull { it.obj() }
         if (departed.isNotEmpty())
             Muted("引退: " + departed.joinToString("、") { "${it.at("name").str()}（${it.at("age").int()}歳・${positionLabel(it.at("position").str().orEmpty())}）" })
+    }
+}
+
+/**
+ * トライアウトで入団した選手と、交渉したのに他球団に取られた選手（`view.lastTryout`。Web 版 TryoutResult と同じ）。
+ * ⚠ 先方指摘: トライアウト後の入団選手の一覧が無く、誰が入ったか分からない（リーグ便りは全球団の指名が混ざるだけ）
+ */
+@Composable
+fun TryoutResultCard(model: AppViewModel, raw: JsonObject?) {
+    if (raw == null) return
+    val result = raw["lastTryout"].obj() ?: return
+    val roster = raw.at("roster").list().mapNotNull { it.obj() }
+    val byId = roster.associateBy { it.at("id").num()?.toLong() }
+    val picks = result.at("picks").list().mapNotNull { it.obj() }
+    val lost = result.at("lost").list().mapNotNull { it.obj() }
+    val wished = picks.count { it.at("wish").int() != null }
+    Section("${result.at("year").int() ?: ""}年目のトライアウトで入団した選手（${picks.size}人）") {
+        Muted(if (picks.isEmpty()) "今年のトライアウトで入団した選手はいません。" else "交渉して獲得 ${wished}人・自動で獲得 ${picks.size - wished}人")
+        picks.forEach { p ->
+            val player = byId[p.at("playerId").num()?.toLong()]
+            Row(
+                Modifier.fillMaxWidth().clickable(enabled = player != null) { player?.let { model.openPlayer = it } }.padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(p.at("name").str().orEmpty(), fontWeight = FontWeight.SemiBold)
+                Muted("${positionLabel(p.at("position").str().orEmpty())} · ${p.at("age").int() ?: ""}歳 · ${p.at("round").int() ?: ""}巡目")
+                val wish = p.at("wish").int()
+                Text(
+                    if (wish != null) "交渉${wish}位" else "自動",
+                    color = if (wish != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+        if (lost.isNotEmpty())
+            Muted("交渉したが他球団が獲得: " + lost.joinToString("、") { l ->
+                "${l.at("name").str()}（交渉${l.at("wish").int() ?: ""}位・${positionLabel(l.at("position").str().orEmpty())}）→ ${l.at("takenBy").str()?.let { model.view?.teamLabel(it) ?: it }.orEmpty()}"
+            })
     }
 }

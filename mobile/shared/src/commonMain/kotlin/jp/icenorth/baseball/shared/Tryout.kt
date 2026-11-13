@@ -7,10 +7,11 @@ import kotlin.math.min
 /**
  * 初期編成・トライアウトの希望リスト。Web 版 src/online/tryoutPlan.js の写し。
  *
- * ⚠ 提出は `{ count, rankedIds }` だけ。サーバーは上から見て空いている選手を、
- *    目標構成（ONLINE_ROSTER_TARGETS）に空きのある区分から count 人まで取る。
- *    画面の「獲得予定」もサーバーと同じ規則（plannedPicks）で出すこと。
- * ⚠ `rankedIds` からは誰も消さない（競合したとき繰り上がるため）。「外す」は末尾送り。
+ * ⚠ 提出は `{ count, rankedIds, total }`。`rankedIds` は**交渉する選手を10人まで、欲しい順に**
+ *    並べたもの（Web 版の「交渉」の形。以前の「候補全員を並べて目標構成で飛ばす」形はやめた）。
+ *    `total` は**獲得する人数**（交渉した人＋足りないぶんを自動で埋める人）。無ければ空き枠いっぱい。
+ * ⚠ サーバーは上から見て、まだ空いている選手を取る（希望順のとおり。目標構成で飛ばさない）。
+ *    同じ選手を複数の球団が希望したら、前年の順位が上の球団が取る。
  */
 
 val JsonObject.pid: Long get() = at("id").long() ?: 0L
@@ -30,25 +31,26 @@ fun rosterCounts(players: List<JsonObject>): MutableMap<String, Int> {
     return counts
 }
 
-private fun nextFromPlan(ordered: List<JsonObject>, roster: List<JsonObject>): JsonObject? {
-    val counts = rosterCounts(roster)
-    return ordered.firstOrNull { p ->
-        val g = rosterGroup(p.at("position").str())
-        (counts[g] ?: 0) < (ONLINE_ROSTER_TARGETS[g] ?: 0)
-    } ?: ordered.firstOrNull()
+/** 交渉できる人数の上限（1位〜10位）。Web 版 `TRYOUT_WISH_MAX` */
+const val TRYOUT_WISH_MAX = 10
+
+/** 交渉できる人数（空き枠と10人の小さい方） */
+fun wishLimit(maxCount: Int): Int = max(0, min(TRYOUT_WISH_MAX, maxCount))
+
+/** 獲得する人数（提出の `total`）。無ければ空き枠いっぱい。Web 版 `signTotal` */
+fun signTotal(plan: JsonObject?, maxCount: Int): Int {
+    val room = max(0, maxCount)
+    val total = plan?.get("total")?.int() ?: return room
+    return total.coerceIn(0, room)
 }
 
-/** 競合しなかった場合に実際に取る顔ぶれ */
-fun plannedPicks(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int, roster: List<JsonObject>): List<JsonObject> {
+/** 交渉した選手のうち、取りにいく人数（獲得する人数と交渉した人数の小さい方）。Web 版 `wishedCount` */
+fun wishedCount(rankedIds: List<Long>, total: Int): Int = max(0, min(rankedIds.size, total))
+
+/** 競合しなかった場合に実際に取る顔ぶれ（希望順の上から count 人） */
+fun plannedPicks(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int, @Suppress("UNUSED_PARAMETER") roster: List<JsonObject> = emptyList()): List<JsonObject> {
     val byId = candidates.associateBy { it.pid }
-    val pool = rankedIds.mapNotNull { byId[it] }
-    val taken = mutableListOf<JsonObject>()
-    val have = roster.toMutableList()
-    repeat(count) {
-        val p = nextFromPlan(pool.filter { it !in taken }, have) ?: return taken
-        taken += p; have += p
-    }
-    return taken
+    return rankedIds.mapNotNull { byId[it] }.take(max(0, count))
 }
 
 fun normalizedVelocity(v: Double?): Double = if (v == null || v == 0.0) 0.0 else (v - 115) * 2.5
@@ -132,8 +134,8 @@ fun weightedScore(p: JsonObject, weights: Map<String, Int>): Double {
     return if (sum > 0) total / sum else 0.0
 }
 
-/** 重みからおすすめの希望順（目標構成に空きのある区分を先に） */
-fun weightedRanked(candidates: List<JsonObject>, weights: Map<String, Int>, roster: List<JsonObject>): List<Long> {
+/** 重みからおすすめの希望順（目標構成に空きのある区分を先に）。交渉できる人数（10人）までで切る */
+fun weightedRanked(candidates: List<JsonObject>, weights: Map<String, Int>, roster: List<JsonObject>, limit: Int = TRYOUT_WISH_MAX): List<Long> {
     val score = candidates.associate { it.pid to weightedScore(it, weights) }
     val sorted = candidates.sortedWith(compareByDescending<JsonObject> { score[it.pid] }.thenBy { it.pid })
     val counts = rosterCounts(roster)
@@ -142,7 +144,7 @@ fun weightedRanked(candidates: List<JsonObject>, weights: Map<String, Int>, rost
         val g = rosterGroup(p.at("position").str())
         if ((counts[g] ?: 0) < (ONLINE_ROSTER_TARGETS[g] ?: 0)) { counts.merge(g, 1, Int::plus); head += p.pid } else tail += p.pid
     }
-    return head + tail
+    return (head + tail).take(max(0, limit))
 }
 
 val TRYOUT_GROUPS = listOf(
@@ -157,69 +159,26 @@ fun inTryoutGroup(p: JsonObject, group: String): Boolean = when (group) {
     else -> p.at("position").str() in setOf("left", "center", "right")
 }
 
-/** 獲得予定を先頭に、残りを元の順で後ろに */
-fun normalizeRanked(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int, roster: List<JsonObject>): List<Long> {
-    val picked = plannedPicks(rankedIds, candidates, count, roster).map { it.pid }
-    val set = picked.toSet()
-    return picked + rankedIds.filter { it !in set }
+/** 交渉する選手を希望リストの末尾へ加える。満員・重複なら何もしない（Web 版 `addToPlan`） */
+fun addToPlan(rankedIds: List<Long>, id: Long, limit: Int = TRYOUT_WISH_MAX): List<Long> =
+    if (id in rankedIds || rankedIds.size >= limit) rankedIds else rankedIds + id
+
+/** 交渉をやめる（希望リストから外す） */
+fun removeFromPlan(rankedIds: List<Long>, id: Long): List<Long> = rankedIds.filter { it != id }
+
+/** 希望リストの中で隣と入れ替える（↑↓用）。端なら何もしない */
+fun shiftInPlan(rankedIds: List<Long>, index: Int, delta: Int): List<Long> {
+    val next = index + delta
+    if (index !in rankedIds.indices || next !in rankedIds.indices) return rankedIds
+    return rankedIds.toMutableList().also { it[index] = rankedIds[next]; it[next] = rankedIds[index] }
 }
 
-/** 控えの選手を獲得予定へ入れる（代わりに1人が控えの先頭へ） */
-fun addToPlan(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int, roster: List<JsonObject>, id: Long, first: Boolean = false): List<Long> {
-    if (id !in rankedIds || count <= 0) return rankedIds
-    val byId = candidates.associateBy { it.pid }
-    val player = byId[id] ?: return rankedIds
-    val wanted = plannedPicks(rankedIds, candidates, count, roster).map { it.pid }
-    if (id in wanted) {
-        if (!first) return normalizeRanked(rankedIds, candidates, count, roster)
-        return normalizeRanked(listOf(id) + rankedIds.filter { it != id }, candidates, count, roster)
-    }
-    val group = rosterGroup(player.at("position").str())
-    val counts = rosterCounts(roster + wanted.mapNotNull { byId[it] })
-    val sameGroup = wanted.filter { rosterGroup(byId[it]?.at("position").str()) == group }
-    val victim = when {
-        (counts[group] ?: 0) >= (ONLINE_ROSTER_TARGETS[group] ?: 0) && sameGroup.isNotEmpty() -> sameGroup.last()
-        wanted.size >= count -> wanted.lastOrNull()
-        else -> null
-    }
-    val kept = wanted.filter { it != victim }
-    val rest = rankedIds.filter { it != id && it != victim && it !in kept }
-    val order = if (first) listOf(id) + kept + listOfNotNull(victim) + rest else kept + id + listOfNotNull(victim) + rest
-    return normalizeRanked(order, candidates, count, roster)
-}
-
-/** 獲得予定から外して控えの末尾へ */
-fun benchFromPlan(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int, roster: List<JsonObject>, id: Long): List<Long> {
+/** 希望リストの中で、選手 id を to 番目（0始まり）へ動かす */
+fun moveInPlan(rankedIds: List<Long>, id: Long, to: Int): List<Long> {
     if (id !in rankedIds) return rankedIds
-    return normalizeRanked(rankedIds.filter { it != id } + id, candidates, count, roster)
-}
-
-private fun swapRanked(ids: List<Long>, index: Int, delta: Int): List<Long> {
-    val next = index + delta
-    if (index !in ids.indices || next !in ids.indices) return ids
-    return ids.toMutableList().also { it[index] = ids[next]; it[next] = ids[index] }
-}
-
-/** 獲得予定の中で隣と入れ替える */
-fun shiftInPlan(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int, roster: List<JsonObject>, index: Int, delta: Int): List<Long> {
-    val normalized = normalizeRanked(rankedIds, candidates, count, roster)
-    val wantedCount = plannedPicks(normalized, candidates, count, roster).size
-    val next = index + delta
-    if (index !in 0 until wantedCount || next !in 0 until wantedCount) return normalized
-    return normalizeRanked(swapRanked(normalized, index, delta), candidates, count, roster)
-}
-
-/** 獲得予定の中で id を to 番目へ（ドラッグ用。1つずつ動かして毎回探し直す） */
-fun moveInPlan(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int, roster: List<JsonObject>, id: Long, to: Int): List<Long> {
-    var ids = normalizeRanked(rankedIds, candidates, count, roster)
-    repeat(2 * max(1, ids.size)) {
-        val at = plannedPicks(ids, candidates, count, roster).indexOfFirst { it.pid == id }
-        if (at < 0 || at == to) return ids
-        val next = shiftInPlan(ids, candidates, count, roster, at, if (to > at) 1 else -1)
-        if (next == ids) return ids
-        ids = next
-    }
-    return ids
+    val rest = rankedIds.filter { it != id }
+    val index = to.coerceIn(0, rest.size)
+    return rest.take(index) + id + rest.drop(index)
 }
 
 data class PlanSummary(val counts: Map<String, Int>, val picked: List<JsonObject>, val blocking: List<String>, val warnings: List<String>)

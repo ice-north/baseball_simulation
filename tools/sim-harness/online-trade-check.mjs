@@ -30,6 +30,7 @@ import {
   createTradeJudge,
   formFactor,
   needFactor,
+  needFactors,
   NEED_LIMIT,
 } from '../../server/tradeJudge.mjs';
 import { comparisonFromPlayers } from '../../server/performanceLabels.mjs';
@@ -38,7 +39,7 @@ import { ROSTER_LIMIT } from '../../src/online/shared.js';
 import { PACK_SIZE } from '../../src/online/rosterPack.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 import { rosterGroup } from '../../src/utils/constants.js';
-import { bestSlot, rosterTops } from '../../src/online/tradeSearch.js';
+import { bestSlot, rosterTops, setTradeValues } from '../../src/online/tradeSearch.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
 
@@ -240,8 +241,9 @@ try {
   assert.equal(rosterOf(started, teamA).length, PACK_SIZE, '前提: セットの人数');
   assert.ok(PACK_SIZE < ROSTER_LIMIT, '前提: 枠に空きがある');
 
-  // ⚠ **選手は評価額で選ぶ**（名簿の先頭から取らない）。CPUは「もらう値段 ≧
-  //    出す値段」でしか応じないので、名簿の順に取ると世界によって断られる。
+  // ⚠ **選手は評価額で選ぶ**（名簿の先頭から取らない）。相手（teamB）は参加者の
+  //    球団なので応じるかは人が決めるが、この先の値段の差の検査が名簿の順に
+  //    左右されないように、いちばん高い投手と安い投手で組む。
   //    リーグの種は作った時刻から決まるので、世界は固定ではない
   const pitchers = (l, name) =>
     rosterOf(l, name)
@@ -251,7 +253,7 @@ try {
   const pickB = pitchers(started, teamB).at(-1); // 相手のいちばん安い投手をもらう
   assert.ok(
     tradeValueOf(pickA) > tradeValueOf(pickB),
-    `前提: CPUが応じる値段の差がある（${tradeValueOf(pickA)} / ${tradeValueOf(pickB)}）`,
+    `前提: 値段の差がある（${tradeValueOf(pickA)} / ${tradeValueOf(pickB)}）`,
   );
 
   // ⚠ 居ない球団は相手にできない
@@ -1026,6 +1028,57 @@ try {
     // ⚠ 上乗せは `NEED_LIMIT` まで（際限なく高くしない）
     const most = Math.max(...players.map((p) => needFactor(players, p)));
     assert.ok(most <= 1 + NEED_LIMIT + 1e-9, `上乗せが ${most} 倍になっている`);
+  }
+
+  // ③' まとめて出すときは、まとめて空く穴で値段を付ける（監査 2026-11-13）。
+  //    1人ずつ「ほかは残る」として測ると、レギュラー2人をまとめてもらっても
+  //    小さな穴2つにしかならなかった
+  {
+    const team = names[0];
+    const players = teams[team];
+    const tops = rosterTops(players);
+    const pair = [tops.left.holder, tops.right.holder].filter(Boolean);
+    assert.equal(pair.length, 2, '前提: 左翼・右翼の一番手が居る');
+    const together = needFactors(players, pair);
+    for (const p of pair)
+      assert.ok(
+        together.get(p.id) >= needFactor(players, p) - 1e-9,
+        `まとめて出すほうが安い: ${together.get(p.id)} < ${needFactor(players, p)}`,
+      );
+    assert.ok(
+      Math.max(...together.values()) <= 1 + NEED_LIMIT + 1e-9,
+      '上乗せが上限を超えた',
+    );
+    // 外野を全員まとめて出すと、1人ずつ足すより確かに高い（控えで埋まらない）
+    const outfield = players.filter((p) => ['left', 'center', 'right'].includes(p.position));
+    const sumAlone = outfield.reduce((a, p) => a + judge.valueOf(p, team), 0);
+    const sumTogether = judge.setValuesOf(outfield, team).reduce((a, v) => a + v, 0);
+    assert.ok(
+      sumTogether > sumAlone,
+      `外野をまとめて出しても値段が上がらない: ${sumTogether} / ${sumAlone}`,
+    );
+    // 1人なら前と同じ値段。画面の式（`setTradeValues` に事情を抜いた値段）とも同じ
+    for (const p of pair)
+      assert.equal(judge.setValuesOf([p], team)[0], judge.valueOf(p, team));
+    assert.deepEqual(
+      setTradeValues(players, outfield, (p) => judge.valueOf(p)),
+      judge.setValuesOf(outfield, team),
+      '画面の見込みとサーバーの値段がずれた',
+    );
+    // 判断も、まとめた値段（`lossOf`）で見る
+    const decideSet = (lossOf) =>
+      cpuTradeDecision({
+        valueOf: (p) => judge.valueOf(p),
+        valueOfOwn: (p) => judge.valueOf(p, team),
+        lossOf,
+        fromPlayers: teams[names[1]],
+        toPlayers: players,
+        offerIds: [],
+        wantIds: outfield.map((p) => p.id),
+      });
+    const without = decideSet(null);
+    const withSet = decideSet((list) => judge.setValuesOf(list, team));
+    assert.ok(withSet.loss > without.loss, 'まとめた値段が判断に使われていない');
   }
 
   // ④ 同じ名簿なら同じ値段（乱数を使っていない）

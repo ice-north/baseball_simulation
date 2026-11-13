@@ -23,6 +23,7 @@ import { nextAdvanceText, STATUS } from './api.js';
 import { teamLabel } from './gameText.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { CompletedCamp } from './CampPlanner.jsx';
+import TryoutResult from './TryoutResult.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { StaffBody } from './StaffPage.jsx';
@@ -241,6 +242,7 @@ export default function MobileView(props) {
             <SeasonFlow view={view} compact />
             <CompletedCamp key={view.lastCamp?.year} view={view} />
             <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+            <TryoutResult view={view} />
           </>
         ))}
       <nav className="online-mobile-controls" aria-label="画面操作">

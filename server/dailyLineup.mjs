@@ -100,7 +100,13 @@ function restTiredFielders(team) {
       substitute = pick([...bench, ...spare]);
     // 守れる控えが居なければ休ませない（守備位置に穴を開けない）
     if (!substitute) continue;
-    bench.splice(bench.indexOf(substitute), 1);
+    // ⚠ 代役は出元（控え／それ以外）から外す。`spare` から来た選手を
+    //    `bench.indexOf` で探すと -1 になり、関係ない控えを消したうえ同じ選手が
+    //    次の守備位置でも選ばれて、二塁と遊撃に同じ人が入った（監査 2026-11-13）
+    for (const list of [bench, spare]) {
+      const at = list.indexOf(substitute);
+      if (at >= 0) list.splice(at, 1);
+    }
     swaps.push({ original: entry.playerId, substitute: substitute.id });
     entry.playerId = substitute.id;
   }

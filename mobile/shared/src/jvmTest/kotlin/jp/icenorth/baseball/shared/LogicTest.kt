@@ -1,6 +1,7 @@
 package jp.icenorth.baseball.shared
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,9 +44,19 @@ class LogicTest {
         val ranked = weightedRanked(candidates, DEFAULT_WEIGHTS, have)
         assertEquals(ids("ranked"), ranked)
         assertEquals(ids("picks"), plannedPicks(ranked, candidates, 6, have).map { it.pid })
-        assertEquals(ids("added"), addToPlan(ranked, candidates, 6, have, ranked.last()))
-        assertEquals(ids("benched"), benchFromPlan(ranked, candidates, 6, have, ids("picks").first()!!))
-        assertEquals(ids("moved"), moveInPlan(ranked, candidates, 6, have, ids("picks").last()!!, 0))
+        assertEquals(ids("added"), addToPlan(ranked.take(5), ranked.last()))
+        assertEquals(ids("removed"), removeFromPlan(ranked, ranked.first()))
+        assertEquals(ids("shifted"), shiftInPlan(ranked, 2, -1))
+        assertEquals(ids("moved"), moveInPlan(ranked, ranked.last(), 0))
+        // 獲得する人数（無ければ空き枠いっぱい・範囲に収める）と、交渉から取りにいく人数
+        val totals = listOf(
+            signTotal(JsonObject(emptyMap()), 7),
+            signTotal(JsonObject(mapOf("total" to JsonPrimitive(3))), 7),
+            signTotal(JsonObject(mapOf("total" to JsonPrimitive(20))), 7),
+            signTotal(JsonObject(mapOf("total" to JsonPrimitive(-1))), 7),
+            wishedCount(ranked, 4),
+        )
+        assertEquals(expected.at("tryout", "totals").list().map { it.int() }, totals)
         val summary = planSummary(ranked, candidates, 6, have)
         assertEquals(expected.at("tryout", "warnings").list().map { it.str() }, summary.warnings)
         // 注意は獲得したあとの名簿で数える（投手がそろっている／投手が3人だけ）

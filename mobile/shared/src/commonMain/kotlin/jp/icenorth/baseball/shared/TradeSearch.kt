@@ -12,7 +12,9 @@ import kotlin.math.max
 //   - 釣り合い … CPU球団が受けそうか（サーバーと同じ値段・上乗せ・見る目の幅で）
 //   を出す。
 //
-// ⚠ 「その位置での力」は**画面の目安**。試合の強さはサーバーの演算で決まる。
+// ⚠ 「その位置での力」は試合の強さではない（試合はサーバーの演算で決まる）。ただしサーバーの
+//    CPU球団の値段（server/tradeJudge.mjs）は Web 版 tradeSearch.js の同じ式を使うので、変えるときは
+//    Web 版・ここ・サーバーの判断（online-trade-check）をそろえる。
 //    能力の重みは打つ力（ミ パ 眼 走）と守る力（守 肩 × 適性）を位置ごとに混ぜるだけ。
 // ⚠ 釣り合いの境目は**サーバーが渡す数字**（`trade.margin`・`trade.eyeLimit`）で引く。
 //    ここに写しを持つと、CPUの判断を変えたときに「受けるはず」と出て断られる。
@@ -293,6 +295,63 @@ fun surplusPlayers(mine: List<Player>, usage: TeamUsage, others: Map<String, Lis
         val wanted = theirs.filter { (_, s) -> v > (s[slot.key] ?: 0.0) }.keys.toList()
         if (wanted.isEmpty()) null else SurplusEntry(p, slot, v, wanted)
     }.sortedByDescending { it.wantedBy.size * 1000 + it.strength }
+}
+
+// ------------------------------------------------------------------ 抜けたときの穴（CPUの値段の上乗せ）
+
+/** 出すと穴が空く選手の上乗せ（最大 +20%）。Web 版・サーバーの NEED_LIMIT と同じ */
+const val NEED_LIMIT = 0.2
+/** 「穴が空く」を満額にする落差。Web 版・サーバーの DROP_SCALE と同じ */
+const val DROP_SCALE = 8.0
+
+/**
+ * 球団の「持ち場の力の合計」（Web 版 `squadStrength` と同じ式）。野手8か所の一番手＋2人目の捕手、
+ * 先発 [ROTATION_SIZE] 人＋中継ぎ [BULLPEN_SIZE] 人。
+ */
+fun squadStrength(roster: List<Player>): Double {
+    val tops = rosterTops(roster)
+    var total = TRADE_SLOTS.filter { !it.pitcher }.sumOf { tops[it.key]?.score ?: 0.0 }
+    val catchers = roster.filter { it.isActive }.mapNotNull { slotStrength(it, "catcher") }.sortedDescending()
+    total += catchers.getOrNull(1) ?: 0.0
+    val (rotation, pen) = pitchingStaff(roster)
+    total += rotation.sumOf { slotStrength(it, "sp") ?: 0.0 }
+    total += pen.take(BULLPEN_SIZE).sumOf { slotStrength(it, "rp") ?: 0.0 }
+    return total
+}
+
+private fun needOfDrop(drop: Double): Double = 1 + NEED_LIMIT * minOf(1.0, maxOf(0.0, drop) / DROP_SCALE)
+
+/**
+ * その球団が [players] を**まとめて**手放すときの1人ずつの倍率（Web 版 `needFactors` と同じ）。
+ * まとめて抜けた落差が1人ずつの落差の合計より大きいときは、その差を1人ずつの落差の割合で配る。
+ */
+fun needFactors(roster: List<Player>, players: List<Player>): Map<Long, Double> {
+    val ids = roster.map { it.id }.toSet()
+    val leaving = players.filter { it.id in ids }
+    val out = players.associate { it.id to 1.0 }.toMutableMap()
+    if (leaving.isEmpty()) return out
+    val full = squadStrength(roster)
+    val drops = leaving.map { p -> maxOf(0.0, full - squadStrength(roster.filter { it.id != p.id })) }
+    val leavingIds = leaving.map { it.id }.toSet()
+    val together = maxOf(0.0, full - squadStrength(roster.filter { it.id !in leavingIds }))
+    val sum = drops.sum()
+    leaving.forEachIndexed { i, p ->
+        var drop = drops[i]
+        if (leaving.size > 1 && together > sum) drop = if (sum > 0) drop * together / sum else together / leaving.size
+        out[p.id] = needOfDrop(drop)
+    }
+    return out
+}
+
+/**
+ * CPU球団の選手を何人かもらうときの値段（並びは [getting] と同じ。Web 版の見込みメーターと同じ）。
+ * 2人以上で、名簿と事情を抜いた値段（[Player.tradeBase]）がそろっていれば、まとめて抜けた穴で引く。
+ * それ以外は1人ずつの値段（[Player.tradeValue]）。
+ */
+fun gettingTradeValues(roster: List<Player>?, getting: List<Player>): List<Double?> {
+    if (getting.size < 2 || roster == null || getting.any { it.tradeBase == null }) return getting.map { it.tradeValue }
+    val factors = needFactors(roster, getting)
+    return getting.map { max(1.0, it.tradeBase!! * (factors[it.id] ?: 1.0)) }
 }
 
 // ------------------------------------------------------------------ CPUの判断の目安

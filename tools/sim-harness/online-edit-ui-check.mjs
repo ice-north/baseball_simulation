@@ -729,7 +729,10 @@ try {
     await click(tryout.page, '手続き');
     await tryout.page.locator('.online-phase-contents li').nth(1).waitFor();
     const picks = await tryout.page.locator('.online-phase-contents').innerText();
-    assert.match(picks, /獲得予定 2人/, `獲得予定の人数が出ない: ${picks}`);
+    // ⚠ 見出しは**獲得する人数**（`total`。無ければ空き枠いっぱい）。交渉から取る人数と、
+    //    自動で埋める人数を添える（先方指摘「指名選手の人数を決められない」で人数を足した）
+    assert.match(picks, /獲得する人数 \d+人/, `獲得する人数が出ない: ${picks}`);
+    assert.match(picks, /交渉した3人から2人/, `交渉から取る人数が出ない: ${picks}`);
     assert.ok(
       picks.includes('候補一郎') && picks.includes('候補二郎') && !picks.includes('候補三郎'),
       `獲得予定の顔ぶれが違う: ${picks}`,
@@ -761,7 +764,8 @@ try {
     await tryout.page.getByText('決定しました', { exact: true }).waitFor();
     assert.deepEqual(
       tryout.payloads.at(-1).plan,
-      { count: 2, rankedIds: [102, 103] },
+      // ⚠ 獲得する人数（`total`）も一緒に送る。触っていなければ空き枠いっぱい（名簿1人＝空き25）
+      { count: 2, rankedIds: [102, 103], total: 25 },
       'スマホで入れ替えた希望順が送られない（やめた人は希望リストから消える）',
     );
     await tryout.context.close();
