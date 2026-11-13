@@ -40,6 +40,8 @@ import {
   fullLineupFromBoards,
 } from './lineupBridge.js';
 import { restoreFromTapDraft } from './tapLineup.js';
+import { TradeStartContext } from './tradeStart.js';
+import { rosterGroup } from '../utils/constants.js';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -295,6 +297,21 @@ export function RenameDialog({ view, busy, run, command, close }) {
 export default function DesktopView(props) {
   const { view, tab, setTab, busy, run, command, reload, showTimes } = props;
   const [renaming, setRenaming] = useState(false);
+  // 選手の詳細から始めたトレード（相手・欲しい選手）。トレードの画面へ渡す
+  const [tradeSeed, setTradeSeed] = useState(null);
+  const startTrade = useCallback(
+    (team, player) => {
+      setTradeSeed({
+        n: Date.now(),
+        partner: team,
+        give: [],
+        get: [player.id],
+        group: rosterGroup(player.position),
+      });
+      setTab('transfer');
+    },
+    [setTab],
+  );
   // ⚠ 消した入口（自チーム情報）で開いていたら、ホームへ戻す
   const current = TITLES[tab] ? tab : 'today';
   // キャンプをホームに出しているか（理由は下の `current === 'today'` の注）。
@@ -392,7 +409,7 @@ export default function DesktopView(props) {
   const procedure = pendingProcedure(view);
   const waiting = packWaiting(view);
   return (
-    <>
+    <TradeStartContext.Provider value={startTrade}>
       <nav className="online-page-nav" aria-label="オンラインの画面">
         <NavStatus
           view={view}
@@ -565,7 +582,22 @@ export default function DesktopView(props) {
               actions={<div className="online-team-selector">{selector}</div>}
             >
               <section className="online-card">
-                <CompactRoster key={shown.teamName} view={shown} desktop />
+                <CompactRoster
+                  key={shown.teamName}
+                  view={
+                    // ⚠ 他球団の選手には球団名を付ける（詳細の「この選手でトレードを考える」）
+                    shown.teamName === view.teamName
+                      ? shown
+                      : {
+                          ...shown,
+                          roster: (shown.roster || []).map((p) => ({
+                            ...p,
+                            tradeTeam: shown.teamName,
+                          })),
+                        }
+                  }
+                  desktop
+                />
               </section>
             </Page>
           )}
@@ -626,13 +658,13 @@ export default function DesktopView(props) {
             <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
           </Page>
         ))}
-      {current === 'transfer' && <TradeScreen {...props} />}
+      {current === 'transfer' && <TradeScreen {...props} tradeSeed={tradeSeed} onSeedUsed={() => setTradeSeed(null)} />}
       {current === 'admin' && (
         <Page title="リーグ管理">
           <Admin {...props} />
         </Page>
       )}
-    </>
+    </TradeStartContext.Provider>
   );
 }
 function Admin({ view, busy, run, command, allowStep }) {

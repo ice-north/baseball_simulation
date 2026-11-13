@@ -22,6 +22,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import jp.icenorth.baseball.shared.teamLabel
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -112,6 +114,13 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                     p.at("fatigue").int()?.let { "疲労 $it" },
                 ).joinToString(" · "),
             )
+            // 他球団の選手なら、この選手をもらう形でトレードを考え始められる（成績表・ニュースで気になった選手から）
+            val team = id?.let { model.rosterTeams[it] }
+            if (id != null && team != null && team != model.view?.teamName && ownRoster.none { it.at("id").num()?.toLong() == id }) {
+                OutlinedButton(onClick = { model.startTradeFor(team, id) }, modifier = Modifier.padding(top = 6.dp).testTag("sheet-trade")) {
+                    Text("この選手でトレードを考える（${model.view?.teamLabel(team) ?: team}）")
+                }
+            }
         }
         // ⚠ 能力は投打の両方を持つ（二刀流が売り。投手を野手で、野手を投手で起用できる）。本職を先に
         // ⚠ **効き方で分けて並べ、項目を押すと何にどう効くかを出す**（いしだ指摘 2026-11-08: 体幹などが
@@ -134,10 +143,11 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                 Item("パワー", p.at("batting", "power").int())
                 Item("選球眼", p.at("batting", "eye").int())
                 Item("走力", p.at("physical", "speed").int())
-                Item("盗塁", p.at("batting", "steal").int(), help = "盗塁技術")
-                Item("バント", p.at("batting", "bunt").int())
+                // ⚠ ほかの画面の1行（ミ パ 眼 走｜守 肩）と同じ並びを先に。盗塁・バントはその後ろ
                 Item("守備", p.at("fielding", "defense").int())
                 Item("肩", p.at("physical", "arm").int(), help = "肩力")
+                Item("盗塁", p.at("batting", "steal").int(), help = "盗塁技術")
+                Item("バント", p.at("batting", "bunt").int())
                 if (p.at("position").str() == "catcher") Item("リード", p.at("catching", "lead").int(), help = "捕手リード")
                 p.at("batterType").str()?.let { TextItem("打者型", it) }
             }

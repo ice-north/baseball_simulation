@@ -1,5 +1,12 @@
-import React, { useRef, useState } from 'react';
-import { useRead } from './useRead.js';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { useRead, ReadContext } from './useRead.js';
 import { teamLabel, teamShort } from './gameText.js';
 import { POS } from './api.js';
 import { ROSTER_LIMIT, ONLINE_ROSTER_TARGETS } from './shared.js';
@@ -20,13 +27,27 @@ import {
   getPitchTypeName,
 } from '../utils/constants.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
+import {
+  TRADE_FILTERS,
+  TRADE_ODDS,
+  cpuTradeRule,
+  reinforcePoints,
+  surplusPlayers,
+  teamUsage,
+  tradeCandidates,
+  tradeOdds,
+  tradeOddsBounds,
+  tradeRatio,
+  tradeSlot,
+  valueTiers,
+} from './tradeSearch.js';
 
 // ============================================================
 // 球団間のトレード（PC）。**出す選手ともらう選手を、同じ物差しで比べて決める**。
 //
 // 【意図】トレードで知りたいのは「この交換で自分の球団は良くなるか」と
 //   「相手が受けそうか」。そのために要るのは
-//   - 選手どうしを**同じ列**で比べられること（能力・今季成績・年齢・総合）
+//   - 選手どうしを**同じ列**で比べられること（能力・今季成績・年齢・値段の段）
 //   - いま誰が**スタメン・ローテ**か（出すと穴が空く）
 //   - 交換のあと両球団の**人数と構成**がどうなるか（上限・投手/捕手/野手の条件）
 //   以前は名前・年齢・守備位置のチェック一覧が2つ並ぶだけで（中で送る7行ぶん）、
@@ -35,7 +56,7 @@ import { AbilityValue } from '../components/AbilityValue.jsx';
 // 【形】
 //   - 守備位置ごと（投手・捕手・内野手・外野手）に、**自球団と相手の選手を
 //     1枚の表**に並べる（スタメン設定と同じ「比べるための1枚の表」）。
-//     列がそろうので、同じ守備位置の選手を上下で見比べられる。総合の高い順。
+//     列がそろうので、同じ守備位置の選手を上下で見比べられる。能力の高い順（`overallScore`）。
 //   - 行を押すと交換案に入る／外れる（自球団の行＝出す、相手の行＝もらう）。
 //   - 右の「交換案」に、選んだ選手と、交換後の両球団の人数・構成を出す。
 //     名簿が成り立たない（投手・捕手が居なくなる、野手8人割れ、上限超え）なら
@@ -46,8 +67,10 @@ import { AbilityValue } from '../components/AbilityValue.jsx';
 //    `rosterShortfall` / `rostersAfterTrade`）を使う。画面で別の式を書くと
 //    規則が2か所になる。最終の判断はサーバー（`assertTradeAllowed`）で、
 //    断られたらその理由が出る。
-// ⚠ 「総合」は並べ替えの目安（`overallScore`。トライアウトの画面と同じ）。
-//    試合の強さはサーバーの演算で決まる。
+// ⚠ 並べ替えは `overallScore`（トライアウトの画面と同じ目安）。数字は出さない（アプリと同じ。
+//    「総合」はCPUの値段と別物で、並べると交渉の目安を取り違える）。代わりに値段の段を出す。
+// ⚠ **補強から探す**（`ReinforcePanel`）と **CPUの見込み**（`OddsMeter`）はアプリと同じ式
+//    （`tradeSearch.js` ⇔ `mobile/shared/.../TradeSearch.kt`）。
 // ⚠ **相手はCPU球団でもよい**。CPUはその場で答える（受ける／逆提案／断る）。
 //    以前は参加者の球団だけを相手にしていて、1人で遊んでいる間はトレードが
 //    まったく使えなかった。どちらが人でどちらがCPUかは札に出す（返事が返る
@@ -108,7 +131,6 @@ const KINDS = {
   },
 };
 const kindOf = (player) => (player.position === 'pitcher' ? 'pitcher' : 'fielder');
-const overall = (player) => Math.round(overallScore(player));
 const byOverall = (a, b) => overallScore(b) - overallScore(a);
 
 /** 変化球は「名前＋キレ」。直球は外す（全員が持っている）。キャンプの表と同じ書き方 */
@@ -133,9 +155,162 @@ function usePartnerRoster(view, partner) {
   const last = useRef(null);
   const fresh = read.data?.teamName === partner ? read.data.roster : null;
   if (fresh) last.current = { partner, roster: fresh };
+  const freshInfo = read.data?.teamName === partner ? read.data : null;
+  if (freshInfo && last.current) last.current.info = freshInfo;
   const roster =
     fresh || (last.current?.partner === partner ? last.current.roster : null);
-  return { roster, error: roster ? '' : read.error };
+  const info =
+    freshInfo || (last.current?.partner === partner ? last.current.info : null);
+  return { roster, info, error: roster ? '' : read.error };
+}
+
+/**
+ * リーグ全球団の名簿（自球団も。値段 `tradeValue` は球団の読み込みにだけ載る）。
+ * ⚠ 補強ポイントと候補は11球団ぶんを比べるので、全部を読む。読めた球団から順に出し、
+ *    全部を待たない（以前のアプリは読み終わるまで順位が出ず、最初の数秒は何も分からなかった）。
+ * ⚠ 読みは覚え（`readCache.js`）を通すので、相手を選んだときの `usePartnerRoster` と
+ *    同じ通信を2回しない（問い合わせの形 `{ team, revision }` をそろえている）。
+ */
+function useLeagueRosters(view) {
+  const read = useContext(ReadContext);
+  const names = useMemo(() => view.teamNames || [], [view.teamNames]);
+  const revision = view.revision;
+  const peekAll = () =>
+    Object.fromEntries(
+      names
+        .map((team) => [team, read?.peek?.('team', { team, revision })])
+        .filter(([, data]) => data?.roster),
+    );
+  const [teams, setTeams] = useState(peekAll);
+  const [failed, setFailed] = useState(0);
+  useEffect(() => {
+    if (!read) return undefined;
+    let cancelled = false;
+    setTeams(peekAll());
+    setFailed(0);
+    // 3本ずつ読む（12本を一度に投げると、ほかの画面の読み込みが後ろで待たされる）
+    const queue = [...names];
+    const worker = async () => {
+      while (queue.length && !cancelled) {
+        const team = queue.shift();
+        try {
+          const data = await read('team', { team, revision });
+          if (!cancelled && data?.roster)
+            setTeams((old) =>
+              old[team] === data ? old : { ...old, [team]: data },
+            );
+        } catch {
+          if (!cancelled) setFailed((n) => n + 1);
+        }
+      }
+    };
+    Promise.all([worker(), worker(), worker()]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [read, names, revision]);
+  return { teams, total: names.length, failed };
+}
+
+/**
+ * 値段の段（高・中・低）。⚠ 段の境目は**リーグ全員**の値段で引く（表に出ている人だけで
+ * 引くと、相手を変えるたびに同じ選手の段が変わる）。自球団の選手はビューに値段が無いので、
+ * 球団の読み込みから id で引く。
+ */
+const TierContext = createContext(() => null);
+
+function useTierOf(league) {
+  return useMemo(() => {
+    const values = new Map();
+    for (const data of Object.values(league.teams))
+      for (const p of data.roster || [])
+        if (Number.isFinite(p.tradeValue)) values.set(p.id, p.tradeValue);
+    const tier = valueTiers([...values.values()]);
+    const valueOf = (player) => player?.tradeValue ?? values.get(player?.id);
+    return Object.assign((player) => tier(valueOf(player)), { valueOf });
+  }, [league.teams]);
+}
+
+function ValueTier({ player }) {
+  const tierOf = useContext(TierContext);
+  const tier = tierOf(player);
+  return tier ? (
+    <span
+      className={`online-trade-value is-${{ 高: 'high', 中: 'mid', 低: 'low' }[tier]}`}
+    >
+      {tier}
+    </span>
+  ) : (
+    '—'
+  );
+}
+
+const ODDS_HELP =
+  'CPU球団は「受け取る選手の値段の合計が、出す選手の値段の合計の上乗せ分以上」なら受けます。' +
+  '値段はドラフトと同じ見立てで、若いほど高くなります。そこに監督の見る目（若手を高く見る・主力を高く見る など）が1人ずつかかるので、' +
+  '境目の近くは「相手の監督しだい」です。足りないときは、同じ種類の安い選手に替えた逆提案が来るか、断られます。';
+
+/**
+ * CPU球団が受けそうかの目安（3段のメーター）。⚠ 参加者の球団には出さない（人が決める）。
+ * メーターの横軸は「出す値段 ÷ もらう値段」。境目はサーバーの決まり（`team.trade`）から引く。
+ */
+function OddsMeter({ rule, give, get, valueOf }) {
+  if (!rule) return null;
+  if (!get.length || !give.length) {
+    return (
+      <div className="online-trade-odds" aria-label="CPUの見込み">
+        <p className="online-muted">
+          出す選手ともらう選手を選ぶと、CPU球団が受けそうかの目安が出ます。
+        </p>
+      </div>
+    );
+  }
+  const giveValues = give.map(valueOf).filter(Number.isFinite);
+  const getValues = get.map(valueOf).filter(Number.isFinite);
+  if (giveValues.length < give.length || getValues.length < get.length) {
+    return (
+      <div className="online-trade-odds" aria-label="CPUの見込み">
+        <p className="online-muted">値段を読んでいます…</p>
+      </div>
+    );
+  }
+  const odds = tradeOdds(giveValues, getValues, rule);
+  const ratio = tradeRatio(giveValues, getValues);
+  const [low, high] = tradeOddsBounds(rule);
+  // 横軸は 0 〜 境目の上の1.5倍。はみ出したら端に止める
+  const max = high * 1.5;
+  const at = (v) => `${Math.min(100, Math.max(0, (v / max) * 100))}%`;
+  return (
+    <div
+      className="online-trade-odds"
+      aria-label="CPUの見込み"
+      data-odds={odds}
+    >
+      <p className="online-trade-odds-head">
+        <span>CPUの見込み</span>
+        <b className={`is-${odds}`}>{TRADE_ODDS[odds]}</b>
+      </p>
+      <div className="online-trade-odds-bar" aria-hidden="true">
+        <span className="is-short" style={{ width: at(low) }} />
+        <span
+          className="is-depends"
+          style={{ left: at(low), width: `calc(${at(high)} - ${at(low)})` }}
+        />
+        <span className="is-likely" style={{ left: at(high), right: 0 }} />
+        <i style={{ left: at(ratio) }} />
+      </div>
+      <p className="online-trade-odds-note">
+        釣り合い {Math.round(ratio * 100)}%（受けるには {Math.round(low * 100)}
+        〜{Math.round(high * 100)}% が境目）
+      </p>
+      {rule.eyeNote && <p className="online-trade-odds-note">{rule.eyeNote}</p>}
+      <details className="online-trade-odds-help">
+        <summary>CPUの判断のしかた</summary>
+        <p>{ODDS_HELP}</p>
+      </details>
+    </div>
+  );
 }
 
 const SIDE_TEXT = { give: '出す', get: 'もらう' };
@@ -238,16 +413,20 @@ function TradeResult({ result }) {
   );
 }
 
-function HeaderRow({ kind }) {
+function HeaderRow({ kind, lead = null }) {
   const k = KINDS[kind];
   return (
     <tr>
       <th className="online-lineup-slot" />
+      {lead}
       <th className="online-lineup-person">選手</th>
       <th className="online-trade-poscell">{kind === 'pitcher' ? '投' : '守備'}</th>
       <th>年齢</th>
-      <th className="is-sep" title="総合（並べ替えの目安。試合の強さはサーバーの演算で決まります）">
-        総合
+      <th
+        className="is-sep"
+        title="CPU球団がトレードで付ける値段の段（リーグ全員の上3分の1が高・下3分の1が低）。若いほど高い"
+      >
+        値段
       </th>
       {k.abilities.map((a, i) => (
         <th key={a.key} className={i === 0 ? 'is-sep' : ''} title={a.title}>
@@ -303,8 +482,8 @@ function PlayerCells({ player, kind, lineup }) {
         )}
       </td>
       <td>{player.age ?? '—'}</td>
-      <td className="is-sep">
-        <AbilityValue value={overall(player)} placeholder="—" />
+      <td className="is-sep online-trade-tier">
+        <ValueTier player={player} />
       </td>
       {k.abilities.map((a, i) => (
         <td key={a.key} className={i === 0 ? 'is-sep' : ''}>
@@ -473,7 +652,7 @@ function dealProblems(myRoster, theirRoster, giveIds, getIds) {
 }
 
 /**
- * 交換案の欄（狭い）。選んだ選手を1行ずつ、主な能力と総合で。
+ * 交換案の欄（狭い）。選んだ選手を1行ずつ、主な能力と値段の段で。
  * `detail` のときは名前を押すと能力と成績を開く（スマホの返事。表が無いので、ここで確かめる）
  */
 function DealList({ side, players, onRemove, busy, detail = false, emptyText }) {
@@ -500,8 +679,8 @@ function DealList({ side, players, onRemove, busy, detail = false, emptyText }) 
                   </small>
                 </span>
                 <span className="online-trade-deal-values">
-                  <span title="総合">
-                    総<AbilityValue value={overall(player)} placeholder="—" />
+                  <span title="値段（CPU球団の見立て）">
+                    値<ValueTier player={player} />
                   </span>
                   {k.brief.map((key) => {
                     const a = k.abilities.find((x) => x.key === key);
@@ -547,15 +726,20 @@ function TradeComposer({
   partners,
   humans,
   lockedPartner = null,
+  initialPartner = null,
   initialGive = [],
   initialGet = [],
+  initialGroup = null,
   submitLabel,
   confirmLabel,
   busy,
   onSubmit,
   onCancel,
 }) {
-  const [chosen, setChosen] = useState(lockedPartner || partners[0] || '');
+  const [chosen, setChosen] = useState(
+    lockedPartner || initialPartner || partners[0] || '',
+  );
+  const tierOf = useContext(TierContext);
   // 確認の欄を開いているか・直前の結果（`TradeResult`）
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState(null);
@@ -565,6 +749,7 @@ function TradeComposer({
   const [give, setGive] = useState(initialGive);
   const [get, setGet] = useState(initialGet);
   const [group, setGroup] = useState(() => {
+    if (initialGroup) return initialGroup;
     const first = initialGive
       .map((id) => (view.roster || []).find((p) => p.id === id))
       .find(Boolean);
@@ -657,7 +842,7 @@ function TradeComposer({
                   side: 'give',
                   label: '自球団の選手',
                   title: `${teamLabel(view.teamName)}（自球団）`,
-                  note: '押すと「出す」に入ります。総合の高い順',
+                  note: '押すと「出す」に入ります。能力の高い順',
                   players: inGroup(myRoster),
                   picked: giveIds,
                   lineup: view.lineup,
@@ -667,7 +852,7 @@ function TradeComposer({
                   side: 'get',
                   label: '相手の選手',
                   title: teamLabel(partner),
-                  note: '押すと「もらう」に入ります。総合の高い順',
+                  note: '押すと「もらう」に入ります。能力の高い順',
                   players: theirRoster ? inGroup(theirRoster) : [],
                   picked: getIds,
                   empty: theirs.error
@@ -691,6 +876,15 @@ function TradeComposer({
             giveIds={giveIds}
             getIds={getIds}
           />
+          {/* ⚠ CPU球団だけ（参加者の球団は人が決める）。逆提案を作るときも出さない */}
+          {cpu && (
+            <OddsMeter
+              rule={cpuTradeRule(theirs.info)}
+              give={givePlayers}
+              get={getPlayers}
+              valueOf={tierOf.valueOf || (() => undefined)}
+            />
+          )}
           {confirming && !(!partner || empty || problems.length > 0 || !theirRoster) ? (
             <DealConfirm
               give={givePlayers}
@@ -1060,7 +1254,326 @@ export function MobileTradeReplies({ view, busy, run, command }) {
   );
 }
 
-export default function TradeScreen({ view, busy, run, command }) {
+/** 候補の表の列（前に足す分）。`PlayerCells` の前に置く */
+const CANDIDATE_LEAD = (
+  <>
+    <th>球団</th>
+    <th title="今の自球団の一番手と比べた、その持ち場での力の差（目安）">差</th>
+  </>
+);
+
+/**
+ * 補強から探す（PC）。⚠ トレードは「自球団のどこを強くしたいか」から始まる（いしだ 2026-11-13）。
+ * 相手球団を先に選ぶ形だと、欲しい選手を探すのに11球団を1つずつ開くしかなかった。
+ *   - 補強ポイント … 持ち場ごとに、自球団の一番手がリーグで何位か・控えがいるか（弱い順）
+ *   - 候補 … 押した持ち場を他球団の誰が担えるか。型で絞れる。「この選手で考える」で下の提案へ
+ *   - 余りを出す … 起用していない選手のうち、他球団なら一番手になれる人と、その球団
+ * ⚠ 力は画面の目安（`tradeSearch.js`。アプリと同じ式）。試合の強さはサーバーの演算で決まる。
+ */
+function ReinforcePanel({ view, league, busy, onStart }) {
+  const [mode, setMode] = useState(null);
+  const [filterKey, setFilterKey] = useState('');
+  const mine = view.roster || [];
+  const usage = useMemo(() => teamUsage(view.lineup), [view.lineup]);
+  const others = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(league.teams)
+          .filter(([name]) => name !== view.teamName)
+          .map(([name, data]) => [name, data.roster || []]),
+      ),
+    [league.teams, view.teamName],
+  );
+  const loaded = Object.keys(others).length;
+  const expected = Math.max(0, league.total - 1);
+  const points = useMemo(
+    () => reinforcePoints(mine, usage, others),
+    [mine, usage, others],
+  );
+  const slot = mode && mode !== 'surplus' ? tradeSlot(mode) : null;
+  const filters = TRADE_FILTERS.filter(
+    (f) => !slot || f.pitcher == null || f.pitcher === slot.pitcher,
+  );
+  const filter = filters.find((f) => f.key === filterKey) || null;
+  const candidates = useMemo(
+    () =>
+      slot
+        ? tradeCandidates(slot.key, mine, usage, others, filter).slice(0, 30)
+        : [],
+    [slot, mine, usage, others, filter],
+  );
+  const surplus = useMemo(
+    () => (mode === 'surplus' ? surplusPlayers(mine, usage, others) : []),
+    [mode, mine, usage, others],
+  );
+  const kind = slot?.pitcher ? 'pitcher' : 'fielder';
+  return (
+    <section
+      className="online-card online-trade-search"
+      aria-label="補強から探す"
+    >
+      <h2>補強から探す</h2>
+      <p className="online-muted">
+        持ち場ごとに、自球団の一番手がリーグで何位かを弱い順に並べています。
+        押すと、その持ち場を担える他球団の選手が出ます（力は能力と適性から出した目安です）。
+        {loaded < expected &&
+          ` 各球団の名簿を読んでいます（${loaded}/${expected}）。順位は読めた球団の中での順位です。`}
+        {league.failed > 0 && ` 読めなかった球団が${league.failed}つあります。`}
+      </p>
+      <div className="online-lineup-scroll">
+        <table className="online-lineup-table online-trade-points">
+          <thead>
+            <tr>
+              <th>持ち場</th>
+              <th>今の一番手</th>
+              <th title="自球団を含む、読めた球団の中での順位（1位がいちばん強い）">
+                リーグ順位
+              </th>
+              <th title="打順の外に、その位置を守れる（適性60以上）野手がいるか">
+                控え
+              </th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point) => (
+              <tr
+                key={point.slot.key}
+                className={[
+                  'online-lineup-row',
+                  mode === point.slot.key ? 'is-picked' : '',
+                  point.rank > point.teams / 2 ? 'is-weak' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <th scope="row">{point.slot.label}</th>
+                <td>
+                  {point.holder ? (
+                    <PlayerStatsButton
+                      player={point.holder}
+                      category={point.slot.pitcher ? 'pitching' : 'batting'}
+                    />
+                  ) : (
+                    <span className="online-muted">居ない</span>
+                  )}
+                  {point.slot.key === 'sp' && point.holder && (
+                    <small>（ローテの5番手）</small>
+                  )}
+                </td>
+                <td className="online-trade-rank">
+                  <b>{point.rank}</b>位<small> / {point.teams}</small>
+                </td>
+                <td>
+                  {point.slot.pitcher ? (
+                    '—'
+                  ) : point.noBackup ? (
+                    <b className="online-trade-nobackup">なし</b>
+                  ) : (
+                    'あり'
+                  )}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    data-slot={point.slot.key}
+                    aria-pressed={mode === point.slot.key}
+                    onClick={() =>
+                      setMode(mode === point.slot.key ? null : point.slot.key)
+                    }
+                  >
+                    候補を見る
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="online-actions">
+        <button
+          type="button"
+          aria-pressed={mode === 'surplus'}
+          onClick={() => setMode(mode === 'surplus' ? null : 'surplus')}
+        >
+          余りを出す（起用していない選手の行き先）
+        </button>
+      </div>
+      {slot && (
+        <div
+          className="online-trade-candidates"
+          aria-label={`${slot.label}の候補`}
+        >
+          <h3>{slot.label}の候補</h3>
+          <div
+            className="online-trade-filters"
+            role="group"
+            aria-label="型で絞る"
+          >
+            {[{ key: '', label: 'すべて' }, ...filters].map((f) => (
+              <button
+                key={f.key || 'all'}
+                type="button"
+                aria-pressed={(filter?.key || '') === f.key}
+                onClick={() => setFilterKey(f.key)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="online-lineup-scroll">
+            <table
+              className="online-lineup-table online-trade-table"
+              data-kind={kind}
+            >
+              <thead>
+                <HeaderRow kind={kind} lead={CANDIDATE_LEAD} />
+              </thead>
+              <tbody>
+                {candidates.map((c) => (
+                  <tr
+                    key={`${c.team}-${c.player.id}`}
+                    className="online-lineup-row is-static"
+                  >
+                    <td className="online-lineup-slot">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={`${c.player.name}でトレードを考える`}
+                        onClick={() =>
+                          onStart({
+                            partner: c.team,
+                            get: [c.player.id],
+                            group: rosterGroup(c.player.position),
+                          })
+                        }
+                      >
+                        考える
+                      </button>
+                    </td>
+                    <td className="online-trade-team">
+                      {teamShort(c.team)}
+                      {c.theirStarter && (
+                        <small
+                          className="online-trade-starter"
+                          title="相手球団でもこの持ち場の一番手（抜けると相手に穴が空く）"
+                        >
+                          相手の一番手
+                        </small>
+                      )}
+                    </td>
+                    <td
+                      className={
+                        c.diff > 0
+                          ? 'online-trade-diff is-up'
+                          : 'online-trade-diff is-down'
+                      }
+                    >
+                      {c.diff > 0 ? '+' : ''}
+                      {Math.round(c.diff)}
+                    </td>
+                    <PlayerCells player={c.player} kind={kind} />
+                  </tr>
+                ))}
+                {!candidates.length && (
+                  <tr>
+                    <td
+                      colSpan={columnCount(kind) + 2}
+                      className="online-muted online-trade-empty"
+                    >
+                      {loaded
+                        ? 'この条件の候補は居ません。'
+                        : '名簿を読んでいます…'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {mode === 'surplus' && (
+        <div className="online-trade-candidates" aria-label="余りを出す">
+          <h3>余りを出す</h3>
+          <p className="online-muted">
+            打順・先発ローテ・抑え・主な中継ぎ（4人）に入っていない選手のうち、他球団ならその持ち場の一番手を上回る人です。
+            相手に穴があるところへ出すと、相手にも得があります。球団を押すと、その選手を出す提案を作ります。
+          </p>
+          <div className="online-lineup-scroll">
+            <table className="online-lineup-table online-trade-surplus">
+              <thead>
+                <tr>
+                  <th>選手</th>
+                  <th>年齢</th>
+                  <th>値段</th>
+                  <th>活きる持ち場</th>
+                  <th>一番手になれる球団</th>
+                </tr>
+              </thead>
+              <tbody>
+                {surplus.map((entry) => (
+                  <tr
+                    key={entry.player.id}
+                    className="online-lineup-row is-static"
+                  >
+                    <td>
+                      <PlayerStatsButton
+                        player={entry.player}
+                        category={entry.slot.pitcher ? 'pitching' : 'batting'}
+                      />
+                    </td>
+                    <td>{entry.player.age ?? '—'}</td>
+                    <td>
+                      <ValueTier player={entry.player} />
+                    </td>
+                    <td>{entry.slot.label}</td>
+                    <td className="online-trade-wanted">
+                      {entry.wantedBy.map((team) => (
+                        <button
+                          key={team}
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            onStart({
+                              partner: team,
+                              give: [entry.player.id],
+                              group: rosterGroup(entry.player.position),
+                            })
+                          }
+                        >
+                          {teamShort(team)}
+                        </button>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+                {!surplus.length && (
+                  <tr>
+                    <td colSpan={5} className="online-muted online-trade-empty">
+                      {loaded
+                        ? '他球団で一番手になれる控えは居ません。'
+                        : '名簿を読んでいます…'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default function TradeScreen({
+  view,
+  busy,
+  run,
+  command,
+  tradeSeed = null,
+  // 受け取った種を使い終えた合図（親が種を消す。⚠ 消さないと、あとでトレードを開くたびに古い相手・選手で作り直された）
+  onSeedUsed,
+}) {
   // ⚠ **全球団を相手に出す**（CPUも含む）。参加者の球団は「相手の返事待ち」に
   //    なり、CPU球団は押した瞬間に答えが返る。
   // ⚠ **人の球団を先に並べる**。交渉の相手として考えるのはまず人で、
@@ -1078,6 +1591,29 @@ export default function TradeScreen({ view, busy, run, command }) {
   const sent = trades.filter((t) => !t.myTurn);
   // 届いた提案への返事の結果（成立・断るとカードごと消えるので、ページの上に残す）
   const [answered, setAnswered] = useState(null);
+  const league = useLeagueRosters(view);
+  const tierOf = useTierOf(league);
+  // 補強から探す・選手の詳細から始めた提案（相手・出す・もらう）。⚠ `n` が変わったら
+  // 提案の欄を作り直す（途中まで選んでいた中身は捨てる。押したのは新しく考え直す合図）
+  const [seed, setSeed] = useState(tradeSeed);
+  const composer = useRef(null);
+  const start = (next) => {
+    setSeed({ n: Date.now(), give: [], get: [], ...next });
+    setAnswered(null);
+  };
+  useEffect(() => {
+    if (!tradeSeed) return;
+    setSeed(tradeSeed);
+    onSeedUsed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tradeSeed]);
+  useEffect(() => {
+    if (seed)
+      composer.current?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'start',
+      });
+  }, [seed]);
   const card = (t) => (
     <TradeCard
       key={t.id}
@@ -1090,81 +1626,96 @@ export default function TradeScreen({ view, busy, run, command }) {
     />
   );
   return (
-    <Page
-      title="トレード"
-      sub="ほかの球団と選手を交換します。CPU球団はその場で答え、参加者の球団は相手が受けた時点で成立します。"
-    >
-      <TradeResult result={answered} />
-      {waiting.length > 0 && (
-        <>
-          <h2 className="online-trade-heading">返事が必要な提案</h2>
-          {waiting.map(card)}
-        </>
-      )}
-      {sent.length > 0 && (
-        <>
-          <h2 className="online-trade-heading">相手の返事待ち</h2>
-          {sent.map(card)}
-        </>
-      )}
-      <section className="online-card">
-        <h2>新しく提案する</h2>
-        {partners.length ? (
+    <TierContext.Provider value={tierOf}>
+      <Page
+        title="トレード"
+        sub="ほかの球団と選手を交換します。CPU球団はその場で答え、参加者の球団は相手が受けた時点で成立します。"
+      >
+        <TradeResult result={answered} />
+        {waiting.length > 0 && (
           <>
-            <p className="online-muted">
-              表の行を押して、出す選手（自球団）ともらう選手（相手）を選びます。
-              右の交換案に、交換のあと両球団の人数と構成がどうなるかが出ます。
-              相手が受けるとその場で選手が入れ替わり、逆提案が返ってきたら
-              こんどはあなたが受けるか断るかを選びます（逆提案は1回だけ）。
-              <strong>CPU球団はその場で答えます</strong>
-              （受ける・逆提案・断るのどれか）。
-            </p>
-            <TradeComposer
-              view={view}
-              partners={partners}
-              humans={humans}
-              submitLabel="この内容で提案する"
-              confirmLabel="提案を送る"
-              busy={busy}
-              onSubmit={async (to, give, get, players) => {
-                let text = '';
-                const outcome = await run(async () => {
-                  text = await command(
-                    'tradeOffer',
-                    { to, offer: give, want: get },
-                    {
-                      message: (after, before) =>
-                        offerResultText({
-                          to,
-                          give: players.give,
-                          get: players.get,
-                          before,
-                          after,
-                        }),
-                    },
-                  );
-                  players.reset();
-                });
-                setAnswered(null);
-                // ⚠ 断られたときは理由（サーバーの文）を交換案の下にも出す。
-                //    上の赤い帯はページの先頭にあり、表を下へ送っていると見えない
-                return outcome.ok
-                  ? { ok: true, text }
-                  : { ok: false, text: outcome.error };
-              }}
-            />
+            <h2 className="online-trade-heading">返事が必要な提案</h2>
+            {waiting.map(card)}
           </>
-        ) : (
-          <p>トレードの相手になる球団がありません。</p>
         )}
-      </section>
-      <section className="online-card">
-        <h2>解雇と獲得</h2>
-        <p>
-          <strong>解雇</strong>は土曜の「契約更改」、
-          <strong>選手の獲得</strong>は土曜の「トライアウト」で行います。
-        </p>
-      </section>
-    </Page>
+        {sent.length > 0 && (
+          <>
+            <h2 className="online-trade-heading">相手の返事待ち</h2>
+            {sent.map(card)}
+          </>
+        )}
+        {partners.length > 0 && (
+          <ReinforcePanel
+            view={view}
+            league={league}
+            busy={busy}
+            onStart={start}
+          />
+        )}
+        <section className="online-card" ref={composer}>
+          <h2>新しく提案する</h2>
+          {partners.length ? (
+            <>
+              <p className="online-muted">
+                表の行を押して、出す選手（自球団）ともらう選手（相手）を選びます。
+                右の交換案に、交換のあと両球団の人数と構成がどうなるかが出ます。
+                相手が受けるとその場で選手が入れ替わり、逆提案が返ってきたら
+                こんどはあなたが受けるか断るかを選びます（逆提案は1回だけ）。
+                <strong>CPU球団はその場で答えます</strong>
+                （受ける・逆提案・断るのどれか）。
+              </p>
+              <TradeComposer
+                key={seed?.n ?? 0}
+                view={view}
+                partners={partners}
+                humans={humans}
+                initialPartner={seed?.partner}
+                initialGive={seed?.give || []}
+                initialGet={seed?.get || []}
+                initialGroup={seed?.group}
+                submitLabel="この内容で提案する"
+                confirmLabel="提案を送る"
+                busy={busy}
+                onSubmit={async (to, give, get, players) => {
+                  let text = '';
+                  const outcome = await run(async () => {
+                    text = await command(
+                      'tradeOffer',
+                      { to, offer: give, want: get },
+                      {
+                        message: (after, before) =>
+                          offerResultText({
+                            to,
+                            give: players.give,
+                            get: players.get,
+                            before,
+                            after,
+                          }),
+                      },
+                    );
+                    players.reset();
+                  });
+                  setAnswered(null);
+                  // ⚠ 断られたときは理由（サーバーの文）を交換案の下にも出す。
+                  //    上の赤い帯はページの先頭にあり、表を下へ送っていると見えない
+                  return outcome.ok
+                    ? { ok: true, text }
+                    : { ok: false, text: outcome.error };
+                }}
+              />
+            </>
+          ) : (
+            <p>トレードの相手になる球団がありません。</p>
+          )}
+        </section>
+        <section className="online-card">
+          <h2>解雇と獲得</h2>
+          <p>
+            <strong>解雇</strong>は土曜の「契約更改」、
+            <strong>選手の獲得</strong>は土曜の「トライアウト」で行います。
+          </p>
+        </section>
+      </Page>
+    </TierContext.Provider>
   );
 }

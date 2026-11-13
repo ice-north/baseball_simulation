@@ -39,7 +39,10 @@ import { requireOnline, seasonStage } from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
-import { releaseBiasFor, campPlanFor, phaseDelegated } from './coachEngine.mjs';
+import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf } from './coachEngine.mjs';
+import { tradeValueOf } from './tradeValue.mjs';
+import { CPU_ACCEPT_MARGIN } from '../src/online/trades.js';
+import { TRADE_FACTOR_LIMIT, tradeEyeNote } from '../src/online/coaches.js';
 
 /**
  * セット（24人）を**選ぶのに要る分だけ**にする。
@@ -712,6 +715,18 @@ export function projectTeamInfo(bundle, userId, teamName) {
     staff: teamStaffView(l, teamName, l.game.teams[teamName], labelOf),
     // 球団史（年表）・歴代記録・引退・節目。記録からさかのぼって作る
     chronicle: teamChronicle(l, teamName, activeKeys),
+    // トレードの目安（CPU球団だけ）。CPUが受けるかを決める決まりの数字と、監督の見る目の一言。
+    // ⚠ 数字は判断の式（`cpuTradeDecision`・`tradeFactor`）の定数をそのまま渡す。画面はこの幅で
+    //    「足りない／監督しだい／受けるはず」を出すので、写しを持つと境目がずれる。
+    trade: l.members.some((m) => m.teamName === teamName)
+      ? null
+      : {
+          margin: CPU_ACCEPT_MARGIN,
+          // ⚠ 監督がいない（指導者の仕組みが無い・監督の席が空き）と見る目は1倍で決まっているので、幅は0。
+          //    いつも幅を渡すと、決まっている判断に「監督しだい」の帯が出た
+          eyeLimit: staffOf(l, teamName).manager ? TRADE_FACTOR_LIMIT : 0,
+          eyeNote: l.coaches ? tradeEyeNote(staffOf(l, teamName)) : null,
+        },
     roster: l.game.teams[teamName].players.map((p) => {
       const visible = playerView(p);
       delete visible.growthPotential;
@@ -719,6 +734,8 @@ export function projectTeamInfo(bundle, userId, teamName) {
       return {
         ...visible,
         ...currentPlayerStats(l, teamName, p, statistics),
+        // CPU球団がトレードで付ける値段（見る目をかける前）。画面は目安の段と釣り合いに使う
+        tradeValue: tradeValueOf(p),
         // ⚠ **他球団の選手も、過去の年と通算を出すこと**。以前は今季しか
         //    載せていなかったので、CPU球団の選手を開くと「成績が残っていない」
         //    ように見えた（記録はサーバーに揃っている）。通算成績の一覧も

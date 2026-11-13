@@ -23,6 +23,7 @@ import jp.icenorth.baseball.shared.OnlineJson
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.long
 import jp.icenorth.baseball.shared.at
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -112,6 +113,15 @@ class AppViewModel internal constructor(
         store.homeStyle = name
     }
 
+    /** スタメンの行に能力まで出すか（既定は成績だけ）。端末に覚える */
+    var lineupDetail by mutableStateOf(store.lineupDetail)
+        private set
+
+    fun changeLineupDetail(on: Boolean) {
+        lineupDetail = on
+        store.lineupDetail = on
+    }
+
     /** ホームで開く新聞（地元紙・全国紙）。端末に覚える */
     var homePaper by mutableStateOf(store.homePaper)
         private set
@@ -147,6 +157,22 @@ class AppViewModel internal constructor(
     fun changeWeights(next: Map<String, Int>) {
         tryoutWeights = sanitizeWeights(next)
         store.tryoutWeights = tryoutWeights
+    }
+
+    /** 読んだ球団の名簿の選手 id → 球団（選手の詳細から、その選手でトレードを考えるため） */
+    val rosterTeams: MutableMap<Long, String> = java.util.concurrent.ConcurrentHashMap()
+
+    /** 下のタブを移す合図（選手の詳細の「トレードを考える」など。OnlineApp が読んで下ろす） */
+    var tabRequest by mutableStateOf<String?>(null)
+
+    /** 他球団の選手をもらう形で、トレードを考え始める（選手の詳細から） */
+    fun startTradeFor(team: String, id: Long) {
+        openPlayer = null
+        // ⚠ 作りかけの案（逆提案を含む）は捨てずに「下書きの続き」へ退避する（黙って消さない）
+        tradeDraft?.let { parkedTradeDraft = it }
+        tradeDraft = jp.icenorth.baseball.app.ui.TradeDraft(partner = team, get = setOf(id), step = jp.icenorth.baseball.app.ui.TradeStep.Players)
+        procTrade = true
+        tabRequest = "Procedures"
     }
 
     /** 選手の詳細を開いている選手（名簿の生の形）。どの画面からでも同じシートで開く */
@@ -528,6 +554,8 @@ class AppViewModel internal constructor(
         // ⚠ 試合の詳細の一球ごとの経過（replay）はアプリでは使わず大きいので、覚える前に落とす（40試合ぶん持つと重い）
         val value = authed(epoch = epoch) { api.read(it, action, params) }.let { if (action == "game") JsonObject(it - "replay") else it }
         synchronized(readCache) { readCache[key] = revision to value }
+        // 他球団の選手がどの球団か（選手の詳細の「トレードを考える」で相手を決めるため）
+        if (action == "team") params["team"]?.let { team -> value.at("roster").list().forEach { p -> p.at("id").long()?.let { rosterTeams[it] = team } } }
         return value
     }
 
@@ -585,6 +613,8 @@ class AppViewModel internal constructor(
 
     private fun clearCaches() {
         synchronized(readCache) { readCache.clear() }
+        // 選手→球団もトレードで変わる。読み直した名簿から作り直す
+        rosterTeams.clear()
         viewGeneration = null
     }
 

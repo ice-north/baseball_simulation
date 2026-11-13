@@ -157,6 +157,28 @@ fun overviewGroup(batting: Boolean): StatGroup {
     return StatGroup("overview", "主要", ids.mapNotNull { id -> all.firstOrNull { it.id == id } })
 }
 
+/**
+ * 能力の一覧（アプリだけ。スタメン・トレードの行と同じ並び・同じ1字の見出し）。
+ * ⚠ 以前は「打撃能力」「守備能力」が区分の並びの最後にあり、球団の能力をまとめて見る場所が見つけにくかった（いしだ 2026-11-13）
+ */
+fun abilityOverview(batting: Boolean): StatGroup = if (batting) {
+    StatGroup(
+        "abilityAll", "能力",
+        listOf(
+            ability("batting", "meet", "ミ"), ability("batting", "power", "パ"), ability("batting", "eye", "眼"),
+            ability("physical", "speed", "走"), ability("fielding", "defense", "守"), ability("physical", "arm", "肩"),
+        ),
+    )
+} else {
+    StatGroup(
+        "abilityAll", "能力",
+        listOf(
+            ability("pitching", "velocity", "速", StatFormat.Velocity), ability("pitching", "control", "制"),
+            ability("pitching", "stamina", "ス", StatFormat.Stamina), ability("pitching", "spinRate", "回転"),
+        ),
+    )
+}
+
 /** 既定の並び（出場量の多い順。Web 版 defaultSort） */
 fun defaultSortColumn(batting: Boolean): StatColumn = if (batting) pa else outs
 

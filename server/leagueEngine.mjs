@@ -105,8 +105,7 @@ import {
   rosterShortfall,
   MAX_OPEN_TRADES,
 } from '../src/online/trades.js';
-import { draftAbilityScore } from '../src/season/yearProgressionSystem.js';
-import { deviationValue } from '../src/game/playerValue.js';
+import { tradeValueOf } from './tradeValue.mjs';
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
 import { createRecorder, freezeComparison } from './recordedStats.mjs';
@@ -483,17 +482,8 @@ function assertNoPendingPack(league, teamNames) {
     );
 }
 
-/**
- * 選手の値段。**ドラフトと同じ物差し**（`deviationValue`）をそのまま使う。
- *
- * ⚠ **ここで別の式を書かないこと**。かつてトレードとドラフトが別々の評価式を
- *    持っていて、等価交換にならなかった（`src/game/playerValue.js` の冒頭）。
- */
-export function tradeValueOf(player) {
-  if (!player) return 0;
-  const { main, sub } = draftAbilityScore(player);
-  return deviationValue(player, main, sub);
-}
+// 選手の値段は `tradeValue.mjs`（画面の名簿と同じ関数を使うため分けた）
+export { tradeValueOf };
 
 /**
  * トレードを提案する。相手は**CPU球団でもよい**。

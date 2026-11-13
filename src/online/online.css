@@ -422,6 +422,140 @@
   color: #86efac;
   background: #4ade8022;
 }
+/* 値段の段（高・中・低）。CPU球団が付ける値段の目安（`tradeSearch.js` の `valueTiers`） */
+.online-trade-value {
+  font-weight: 700;
+}
+.online-trade-value.is-high {
+  color: #fbbf24;
+}
+.online-trade-value.is-mid {
+  color: #cbd5e1;
+}
+.online-trade-value.is-low {
+  color: #94a3b8;
+}
+/* 補強から探す（PC）。持ち場の順位の表・候補の表・余りの表 */
+.online-trade-points th[scope='row'] {
+  text-align: left;
+  white-space: nowrap;
+}
+.online-trade-points .online-lineup-row.is-weak th[scope='row'] {
+  color: #fca5a5;
+}
+.online-trade-points small,
+.online-trade-team small {
+  margin-left: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+.online-trade-rank b {
+  font-size: 15px;
+}
+.online-trade-nobackup {
+  color: #fca5a5;
+}
+.online-trade-candidates {
+  margin-top: 12px;
+}
+.online-trade-candidates h3:not(:where(.online-sp *)) {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.online-trade-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.online-trade-filters button[aria-pressed='true'],
+.online-trade-points button[aria-pressed='true'],
+.online-trade-search .online-actions button[aria-pressed='true'] {
+  border-color: #38bdf8;
+  color: #7dd3fc;
+}
+.online-trade-team {
+  text-align: left !important;
+  white-space: nowrap;
+}
+.online-trade-team .online-trade-starter {
+  color: #fbbf24;
+}
+.online-trade-diff.is-up {
+  color: #86efac;
+  font-weight: 700;
+}
+.online-trade-diff.is-down {
+  color: #94a3b8;
+}
+.online-trade-wanted {
+  text-align: left !important;
+}
+.online-trade-wanted button + button {
+  margin-left: 4px;
+}
+/* CPUの見込み（3段のメーター）。横軸は「出す値段 ÷ もらう値段」 */
+.online-trade-odds {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #ffffff1a;
+  font-size: 12px;
+}
+.online-trade-odds p:not(:where(.online-sp *)) {
+  margin: 0 0 4px;
+}
+.online-trade-odds-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.online-trade-odds-head b.is-short {
+  color: #f87171;
+}
+.online-trade-odds-head b.is-depends {
+  color: #fbbf24;
+}
+.online-trade-odds-head b.is-likely {
+  color: #4ade80;
+}
+.online-trade-odds-bar {
+  position: relative;
+  height: 8px;
+  margin: 4px 0 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1e293b;
+}
+.online-trade-odds-bar span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+.online-trade-odds-bar .is-short {
+  background: #f8717166;
+}
+.online-trade-odds-bar .is-depends {
+  background: #fbbf2466;
+}
+.online-trade-odds-bar .is-likely {
+  background: #4ade8066;
+}
+.online-trade-odds-bar i {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  margin-left: -1px;
+  background: #f8fafc;
+}
+.online-trade-odds-note {
+  color: #94a3b8;
+}
+.online-trade-odds-help summary {
+  cursor: pointer;
+  color: #7dd3fc;
+}
 /* 交換案（右の欄）。⚠ 下へ送っても見えるように貼り付ける */
 .online-trade-deal {
   position: sticky;

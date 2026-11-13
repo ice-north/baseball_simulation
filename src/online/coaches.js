@@ -607,6 +607,23 @@ export function tradeFactor(staff, player) {
   return Math.max(1 - TRADE_FACTOR_LIMIT, Math.min(1 + TRADE_FACTOR_LIMIT, f));
 }
 
+/**
+ * CPU球団の見る目を、トレードの画面に出す一言にする（`tradeFactor` と同じ式から）。
+ * ⚠ 倍率そのものは出さない（目安だけ。いしだ 2026-11-13）。向きと、型の加点があることだけ。
+ */
+export function tradeEyeNote(staff) {
+  const manager = staff?.manager;
+  if (!manager) return null;
+  const young = -0.025 * viewOf(manager, 'build') + 0.01 * horizonYouth(manager);
+  const age =
+    young > 0.005
+      ? '23歳以下の若手を高く見る'
+      : young < -0.005
+        ? '27歳以上の主力を高く見る'
+        : '年齢では差をつけない';
+  return `${shortName(manager)}監督: ${age}・型に合う選手を少し高く見る`;
+}
+
 /** 「穴のない選手に」で短所を埋めに行く開き（その段階の長所と短所の差） */
 const PATCH_GAP = 15;
 
