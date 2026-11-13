@@ -4997,7 +4997,9 @@ small.online-gain:not(:where(.online-sp *)) {
   margin-bottom: 8px;
 }
 /* 目標の構成（「投11・捕2・内6・外7」）と獲得後の内訳は語の途中で割らない（390px で「・／内」と割れた） */
-.online-mobile .online-tryout > .online-muted strong {
+/* ⚠ **目標の構成だけに当てること**。同じ段落のほかの `strong`（競合の決まり方の文）にも
+   当たると、文が長いので 320px で画面の外へ出る（実測 R415px / 幅320px） */
+.online-mobile .online-tryout > .online-muted .online-tryout-targets {
   white-space: nowrap;
 }
 .online-mobile .online-tryout .online-tryout-grid h3 small {

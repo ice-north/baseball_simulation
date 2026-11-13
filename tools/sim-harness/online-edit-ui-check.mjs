@@ -701,7 +701,7 @@ try {
     assert.equal(await coachNoteShown(), 0, '自分で選び直して決定したあとも「監督の案です」が出ている');
     await release.context.close();
 
-    // トライアウト: 実際に取る顔ぶれ（希望順の上から、目標を超える区分は飛ばす）
+    // トライアウト: 実際に取る顔ぶれ（希望順の上から count 人。目標構成で飛ばさない）
     const candidate = (id, name, position) => ({
       id,
       name,
@@ -735,10 +735,17 @@ try {
       `獲得予定の顔ぶれが違う: ${picks}`,
     );
     // ⚠ **スマホでも獲得の希望を入れ替えて決められる**（判断1・案B ④）。PCと同じ
-    //    `TryoutPlanner`。指ではドラッグできないので ↑↓ と「控えへ」で動かす
+    //    `TryoutPlanner`。指ではドラッグできないので ↑↓ と「やめる」で動かす
+    //    （いしだ要望で「交渉」ボタン1つの形にしたので、「控えへ回す」は無くなった。
+    //     交渉をやめた選手は希望リストから消え、空いた枠はサーバーが自動で埋める）
     await tryout.page.getByRole('button', { name: '獲得の希望を変える', exact: true }).click();
     await tryout.page.getByRole('button', { name: '候補二郎の希望順位を上げる', exact: true }).click();
-    await tryout.page.getByRole('button', { name: '候補一郎を控えへ回す', exact: true }).click();
+    // ⚠ 「やめる」は希望リストと候補一覧の両方に出る（同じ選手・同じ働き）ので、
+    //    希望リスト側に絞って押す
+    await tryout.page
+      .locator('.online-tryout-wanted')
+      .getByRole('button', { name: '候補一郎との交渉をやめる', exact: true })
+      .click();
     const wantedNames = () =>
       tryout.page.locator('.online-tryout-wanted > ol > li .online-player-name').allInnerTexts();
     assert.deepEqual(await wantedNames(), ['候補二郎', '候補三郎'], 'スマホで希望順を入れ替えられない');
@@ -754,8 +761,8 @@ try {
     await tryout.page.getByText('決定しました', { exact: true }).waitFor();
     assert.deepEqual(
       tryout.payloads.at(-1).plan,
-      { count: 2, rankedIds: [102, 103, 101] },
-      'スマホで入れ替えた希望順が送られない（控えへ回した人も末尾に残す）',
+      { count: 2, rankedIds: [102, 103] },
+      'スマホで入れ替えた希望順が送られない（やめた人は希望リストから消える）',
     );
     await tryout.context.close();
 

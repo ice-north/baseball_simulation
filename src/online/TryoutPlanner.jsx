@@ -289,8 +289,13 @@ export default function TryoutPlanner({
       <p className="online-muted">
         1位から順に取りにいきます。<strong>同じ選手を他球団も希望したときは、
         前年の順位が上の球団が獲得します</strong>（取られたぶんは下から繰り上がります）。
-        名簿の目標は<strong>投{targets.pitcher}・捕{targets.catcher}・内
-        {targets.infielder}・外{targets.outfielder}</strong>
+        {/* ⚠ 目標の構成だけは語の途中で割らない（`online-tryout-targets`）。
+            ほかの `strong` にも nowrap を当てると、文が長いので 320px で外へ出る */}
+        名簿の目標は
+        <strong className="online-tryout-targets">
+          投{targets.pitcher}・捕{targets.catcher}・内{targets.infielder}・外
+          {targets.outfielder}
+        </strong>
         で、<strong>交渉した人のあとの空き枠は自動で埋まります</strong>（CPUと同じ判断）。
       </p>
 

@@ -254,9 +254,9 @@ try {
     //    （＝選べない）状態で先へ進まないよう、両方が描けていることを見る
     await t.locator('.online-tryout-wanted .online-tryout-list li').first().waitFor();
     await t.locator('.online-tryout-pool .online-tryout-list li').first().waitFor();
-    // ⚠ 希望リストの操作は**獲得予定を基準に**動くこと。以前は希望順の位置で
-    //    動かしていて、当時の初期編成（24人＝目標構成の合計ちょうど）では
-    //    「指名に加える」が候補の約9割で何も起きず、「↓」で選手が消えたりした
+    // ⚠ 希望リストは**「交渉」を押した順そのもの**（いしだ要望の10人）。以前は
+    //    候補全員を並べた1本の順位表で、「指名に加える」が候補の約9割で何も起きず、
+    //    「↓」で選手が消えたりした（入れ替えるほど画面が壊れて見えた）
     {
       const wantedNames = async () =>
         (
@@ -265,6 +265,17 @@ try {
             .allInnerTexts()
         ).map((s) => s.trim());
       const start = await wantedNames();
+      // 「交渉中 N / M人」の M が交渉できる人数。標準案はそこまで埋めてある
+      const limitText = (
+        await t.locator('.online-tryout-limit').innerText()
+      ).match(/交渉中\s*(\d+)\s*\/\s*(\d+)人/);
+      assert.ok(limitText, '「交渉中 N / M人」が出ていない');
+      assert.equal(Number(limitText[1]), start.length, '交渉中の人数が希望リストと合わない');
+      assert.equal(
+        Number(limitText[2]),
+        start.length,
+        `前提: 標準案が交渉できる人数ちょうど（${limitText[0]}）`,
+      );
       await t
         .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
         .click();
@@ -274,19 +285,44 @@ try {
       const name = (
         await row.locator('.online-tryout-person button').first().innerText()
       ).trim();
-      await row.getByRole('button', { name: '指名に加える', exact: true }).click();
+      const negotiate = () =>
+        t
+          .locator('.online-tryout-pool')
+          .getByRole('button', { name: `${name}と交渉する`, exact: true });
+      // ⚠ **満員のときは理由を出す**（黙って何も起きない、を作らない）
+      await negotiate().click();
+      await t.getByText('交渉できるのは', { exact: false }).waitFor();
+      assert.deepEqual(
+        await wantedNames(),
+        start,
+        '満員なのに「交渉」で希望リストが変わった',
+      );
+      // 1人やめると、その枠で交渉できる（末尾に入る）
+      await t
+        .locator('.online-tryout-wanted')
+        .getByRole('button', { name: `${start.at(-1)}との交渉をやめる`, exact: true })
+        .click();
+      assert.deepEqual(
+        await wantedNames(),
+        start.slice(0, -1),
+        '「やめる」で希望リストから消えない',
+      );
+      await negotiate().click();
       const added = await wantedNames();
-      assert.ok(added.includes(name), '「指名に加える」で獲得予定に入らない');
-      assert.equal(added.length, start.length, '指名で獲得予定の人数が変わった');
+      assert.deepEqual(
+        added,
+        [...start.slice(0, -1), name],
+        '「交渉」した選手が希望リストの末尾に入らない',
+      );
       assert.equal(
         (
           await t
             .locator('.online-tryout-pool .online-tryout-list li', { hasText: name })
-            .locator('.online-tryout-mark')
+            .getByRole('button', { name: `${name}との交渉をやめる`, exact: true })
             .innerText()
         ).trim(),
-        `指名中 ${added.indexOf(name) + 1}位`,
-        '「指名中 N位」が獲得予定の番号とずれる',
+        `交渉中 ${added.indexOf(name) + 1}位`,
+        '「交渉中 N位」が希望順位とずれる',
       );
       await t
         .getByRole('button', { name: `${added[0]}の希望順位を下げる`, exact: true })
@@ -304,14 +340,15 @@ try {
       await t.getByText('重視する能力（評価値の重み）', { exact: true }).click();
       await t.getByLabel('パワーの重み', { exact: true }).fill('5');
       await t.getByLabel('ミートの重み', { exact: true }).fill('0');
+      // ⚠ おすすめも**交渉できる人数まで**（ボタンの字もその人数）
       await t
-        .getByRole('button', { name: 'この重みでおすすめ順を作る', exact: true })
+        .getByRole('button', { name: `この重みで${start.length}人選ぶ`, exact: true })
         .click();
       const weighted = await scoresOf('.online-tryout-wanted > ol.online-tryout-list');
-      assert.equal(weighted.length, start.length, '重みのおすすめで獲得予定の人数が変わった');
+      assert.equal(weighted.length, start.length, '重みのおすすめで交渉する人数が変わった');
       assert.ok(
         weighted.every((v, i) => i === 0 || weighted[i - 1] >= v),
-        `獲得予定が評価の高い順になっていない: ${weighted.join(',')}`,
+        `希望リストが評価の高い順になっていない: ${weighted.join(',')}`,
       );
       assert.notDeepEqual(await wantedNames(), start, '重みを変えてもおすすめが変わらない');
       const poolScores = await scoresOf('.online-tryout-pool .online-tryout-list');
@@ -322,10 +359,11 @@ try {
       await t.getByRole('button', { name: '重みを標準に戻す', exact: true }).click();
       await click(t, '標準案に戻す');
       assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+      // ⚠ 知らせは**その希望順の間だけ**出す（標準案に戻したら消える）
       assert.equal(
-        await t.getByText('おすすめ順を作り直しました', { exact: false }).count(),
+        await t.getByText('選び直しました', { exact: false }).count(),
         0,
-        '標準案に戻したのに「作り直しました」が残っている',
+        '標準案に戻したのに「選び直しました」が残っている',
       );
       await t
         .locator('.online-tryout-pool .online-segments button', { hasText: '全部' })
