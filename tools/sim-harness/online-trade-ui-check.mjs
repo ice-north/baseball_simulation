@@ -198,7 +198,7 @@ try {
   );
   // 能力と今季成績の列がある（名前だけの一覧に戻っていない）
   const headers = await incoming.locator('thead th').allInnerTexts();
-  for (const label of ['総合', '速', '制', 'ミ', 'パ', '打率', '防御率'])
+  for (const label of ['値段', '速', '制', 'ミ', 'パ', '打率', '防御率'])
     assert.ok(
       headers.some((h) => h.trim() === label),
       `届いた提案の表に「${label}」の列が無い`,
@@ -420,6 +420,11 @@ try {
     await getRows.first().waitFor();
     // もらうだけ（出す選手なし）→ 確認で注意 → CPUは断る（理由を交換案の下に出す）
     await getRows.first().click();
+    // CPUの見込み: 片側だけでは目安を出さず、選び方を書く
+    await deal
+      .locator('.online-trade-odds')
+      .filter({ hasText: '出す選手ともらう選手を選ぶと' })
+      .waitFor();
     await submit.click();
     const cpuConfirm = deal.getByRole('group', { name: 'トレードの確認' });
     await cpuConfirm.waitFor();
@@ -451,6 +456,27 @@ try {
     );
     await composer.locator(`tbody[data-side="give"] tr[data-player="${best.id}"]`).click();
     await composer.locator(`tbody[data-side="get"] tr[data-player="${worst.id}"]`).click();
+    // CPUの見込み: サーバーと同じ決まりで引いたメーター。受ける組み合わせなので「足りない」ではない
+    {
+      const odds = deal.locator('.online-trade-odds[data-odds]');
+      await odds.waitFor();
+      const shown = await odds.getAttribute('data-odds');
+      const margin = CPU_ACCEPT_MARGIN;
+      const giveV = Math.max(1, tradeValueOf(best));
+      const getV = Math.max(1, tradeValueOf(worst));
+      // 画面と同じ式で期待を出す（見る目は ±10% の幅で見る）
+      const expected =
+        Math.max(1, giveV * 0.9) >= Math.max(1, getV * 1.1) * margin
+          ? 'likely'
+          : Math.max(1, giveV * 1.1) < Math.max(1, getV * 0.9) * margin
+            ? 'short'
+            : 'depends';
+      assert.equal(shown, expected, `CPUの見込みが式と違う: ${shown}`);
+      assert.notEqual(shown, 'short', '受ける組み合わせなのに「足りない」と出る');
+      assert.match(await odds.innerText(), /釣り合い \d+%/, '釣り合いの割合が出ていない');
+      if (process.env.TRADE_SHOTS)
+        await deal.screenshot({ path: `${process.env.TRADE_SHOTS}/pc-trade-odds.png` });
+    }
     await submit.click();
     await cpuConfirm.waitFor();
     assert.doesNotMatch(
@@ -475,6 +501,61 @@ try {
       'CPU球団が受けたのに選手が入れ替わっていない',
     );
   }
+  // --- 補強から探す: 持ち場の順位 → 候補 → 「考える」で提案の欄へ（いしだ 2026-11-13） ----
+  {
+    const panel = p.locator('.online-trade-search');
+    const pointRows = panel.locator('.online-trade-points tbody tr');
+    await pointRows.first().waitFor();
+    assert.equal(await pointRows.count(), 11, '補強ポイントの持ち場が11個ない');
+    // 全球団を読み終わると「読んでいます」が消え、順位は 1〜12 の中
+    await panel.locator('p', { hasText: '各球団の名簿を読んでいます' }).waitFor({ state: 'detached' });
+    const ranks = await panel.locator('.online-trade-rank b').allInnerTexts();
+    assert.ok(
+      ranks.every((r) => Number(r) >= 1 && Number(r) <= 12),
+      `順位がおかしい: ${ranks.join(',')}`,
+    );
+    await panel.locator('button[data-slot="sp"]').click();
+    const cand = panel.locator('.online-trade-candidates tbody tr');
+    await cand.first().waitFor();
+    assert.ok((await cand.count()) > 5, '先発の候補が少なすぎる');
+    if (process.env.TRADE_SHOTS) {
+      await p.setViewportSize({ width: 1440, height: 1300 });
+      await panel.screenshot({ path: `${process.env.TRADE_SHOTS}/pc-trade-search.png` });
+    }
+    const firstName = (await cand.first().locator('.online-player-name').innerText()).trim();
+    await cand.first().getByRole('button', { name: /でトレードを考える$/ }).click();
+    const seeded = p.locator('.online-trade-composer').last();
+    await seeded
+      .locator('.online-trade-deal-side.is-get .online-trade-deal-name b', { hasText: firstName })
+      .waitFor();
+    // 余りを出す
+    await panel.getByRole('button', { name: /^余りを出す/ }).click();
+    await panel.locator('.online-trade-surplus tbody tr').first().waitFor();
+    if (process.env.TRADE_SHOTS)
+      await panel
+        .locator('.online-trade-candidates')
+        .screenshot({ path: `${process.env.TRADE_SHOTS}/pc-trade-surplus.png` });
+  }
+
+  // --- 選手の詳細から: 他球団の選手 →「この選手でトレードを考える」 ------------------
+  {
+    const l = await live();
+    const humansNow = new Set(l.members.map((m) => m.teamName));
+    const cpuTeam = l.season.settings.teamNames.find((name) => !humansNow.has(name));
+    await nav.getByRole('button', { name: '選手成績', exact: true }).click();
+    await p.getByRole('combobox', { name: '閲覧する球団' }).selectOption(cpuTeam);
+    const name = p.locator('.online-team-roster .online-player-name').first();
+    await name.waitFor();
+    await name.click();
+    const picked = (await p.locator('#online-player-title').innerText()).trim();
+    await p.getByRole('button', { name: /^この選手でトレードを考える/ }).click();
+    await p
+      .locator('.online-trade-composer')
+      .last()
+      .locator('.online-trade-deal-side.is-get .online-trade-deal-name b', { hasText: picked })
+      .waitFor();
+  }
+
   // --- スマホWeb: 届いた提案に受ける・断るで返事する（判断1・案B ②） ---------------
   // ⚠ 以前はホームの帯で「PCかアプリで返事してください」と知らせるだけで、スマホWebだけの人は
   //    答えられなかった。PCと同じ部品・同じ命令（`tradeRespond`）・同じ確認（`DealConfirm`）。
@@ -608,7 +689,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき））',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / CPUの見込みメーター / 補強から探す・余りを出す / 選手の詳細からトレード / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき））',
   );
 } catch (error) {
   await failureShots(browser, 'online-trade-ui');
