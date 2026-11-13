@@ -239,15 +239,42 @@ fun bestSlot(p: Player): Pair<TradeSlot, Double>? =
 /** 余りの1人と、その人が一番手になれる相手球団 */
 data class SurplusEntry(val player: Player, val slot: TradeSlot, val strength: Double, val wantedBy: List<String>)
 
+/** 余りを出すとき、起用の中心とみなす中継ぎの人数（ローテ・抑えの外で力の高い順） */
+const val SURPLUS_KEEP_RELIEVERS = BULLPEN_SIZE
+
 /**
- * 余りを出す。起用していない選手（打順・ローテ・抑えの外）のうち、他球団ならその持ち場の一番手を
- * 上回る人と、その球団。⚠ 相手に穴があるところへ出すと、相手にも得がある（win-win の手がかり）。
+ * 名簿の中で、持ち場ごとの**一番手1人**の力（他球団用）。
+ * 野手は [rosterSlotScores] の割り当て、先発はローテでいちばん良い人、抑えは救援の一番手、中継ぎはその次。
+ * ⚠ [rosterSlotScores] の先発・中継ぎは**人数ぶんの平均**なので、余りと比べると甘くなる（平均を上回るだけで
+ *    「一番手になれる」と出ていた）。
+ */
+fun rosterTopStrengths(roster: List<Player>): Map<String, Double> {
+    val scores = rosterSlotScores(roster)
+    val out = scores.filterKeys { tradeSlot(it)?.pitcher == false }.mapValues { it.value.score }.toMutableMap()
+    val pitchers = roster.filter { it.isActive && it.isPitcher }
+    val rotation = pitchers.sortedByDescending { slotStrength(it, "sp") ?: 0.0 }.take(ROTATION_SIZE)
+    out["sp"] = rotation.firstOrNull()?.let { slotStrength(it, "sp") } ?: 0.0
+    val pen = (pitchers - rotation.toSet()).sortedByDescending { slotStrength(it, "rp") ?: 0.0 }
+    out["cl"] = pen.firstOrNull()?.let { slotStrength(it, "cl") } ?: 0.0
+    out["rp"] = pen.getOrNull(1)?.let { slotStrength(it, "rp") } ?: 0.0
+    return out
+}
+
+/**
+ * 余りを出す。起用の中心（打順・ローテ・抑え・力の上位 [SURPLUS_KEEP_RELIEVERS] 人の中継ぎ）の外にいる選手のうち、
+ * 他球団ならその持ち場の**一番手**を上回る人と、その球団。⚠ 相手に穴があるところへ出すと、相手にも得がある（win-win の手がかり）。
+ * ⚠ 以前は中継ぎを全員「起用していない」と数え、相手の中継ぎの平均と比べていたので、防御率4点台の中継ぎに
+ *    9球団が手を挙げた（いしだ 2026-11-13）。
  */
 fun surplusPlayers(mine: List<Player>, usage: TeamUsage, others: Map<String, List<Player>>): List<SurplusEntry> {
-    val theirs = others.mapValues { (_, r) -> rosterSlotScores(r) }
-    return mine.filter { it.isActive && it.id !in usage.lineupIds }.mapNotNull { p ->
+    val theirs = others.mapValues { (_, r) -> rosterTopStrengths(r) }
+    val keptRelievers = mine.filter { it.isActive && it.isPitcher && it.id !in usage.lineupIds }
+        .sortedByDescending { slotStrength(it, "rp") ?: 0.0 }
+        .take(SURPLUS_KEEP_RELIEVERS)
+        .map { it.id }.toSet()
+    return mine.filter { it.isActive && it.id !in usage.lineupIds && it.id !in keptRelievers }.mapNotNull { p ->
         val (slot, v) = bestSlot(p) ?: return@mapNotNull null
-        val wanted = theirs.filter { (_, s) -> v > (s[slot.key]?.score ?: 0.0) }.keys.toList()
+        val wanted = theirs.filter { (_, s) -> v > (s[slot.key] ?: 0.0) }.keys.toList()
         if (wanted.isEmpty()) null else SurplusEntry(p, slot, v, wanted)
     }.sortedByDescending { it.wantedBy.size * 1000 + it.strength }
 }

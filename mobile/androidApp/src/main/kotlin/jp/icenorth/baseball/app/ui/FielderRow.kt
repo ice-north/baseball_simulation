@@ -307,7 +307,7 @@ private fun OtherPositions(player: Player, fitnessAt: String) {
  * ⚠ 普通の Row に clipToBounds だと、最後の札が半分に切れて「アベ」のように見えた
  */
 @Composable
-private fun FittingRow(modifier: Modifier, alignEnd: Boolean = true, gapDp: Int = 4, content: @Composable () -> Unit) {
+internal fun FittingRow(modifier: Modifier, alignEnd: Boolean = true, gapDp: Int = 4, content: @Composable () -> Unit) {
     Layout(content, modifier) { measurables, constraints ->
         val gap = gapDp.dp.roundToPx()
         val loose = constraints.copy(minWidth = 0, minHeight = 0)

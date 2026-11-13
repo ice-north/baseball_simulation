@@ -230,23 +230,29 @@ fun BattingCells(meet: Int?, power: Int?, eye: Int?, speed: Int?, defense: Int?,
 
 /** 投手の能力の並び（速 制 ス 回転 ＋ 変化球）。投手起用・トレード・キャンプなどで共通 */
 @Composable
-fun PitchingCells(velocity: Int?, control: Int?, stamina: Int?, spin: Int?, pitches: String?) {
+fun PitchingCells(velocity: Int?, control: Int?, stamina: Int?, spin: Int?, pitches: List<Pair<String, Int?>>) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         AbilityCell("速", velocity, width = 40, velocity = true)
         AbilityCell("制", control)
         AbilityCell("ス", stamina, width = 38, stamina = true)
         // ⚠「回」だけだとキャンプのカードの「回復」と紛らわしいので「回転」。持たない一覧（初期メンバーの組など）では出さない
         if (spin != null) AbilityCell("回転", spin, width = 44)
-        if (!pitches.isNullOrEmpty()) {
-            Text(pitches, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))
+        // ⚠ 変化球も**能力と同じ色付きの数字**で出す（いしだ 2026-11-13: 灰色の小さな字で「…」と切れ、目立たなかった。
+        //    持ち球は防御率を0.4〜0.8動かすほど効く）。良い球から順に、丸ごと入るぶんだけ（途中で切らない）
+        if (pitches.isNotEmpty()) {
+            CellDivider()
+            FittingRow(Modifier.weight(1f), alignEnd = false, gapDp = 6) {
+                pitches.forEach { (label, level) -> AbilityNum(label, level) }
+            }
         }
     }
 }
 
-/** 変化球を短く（「スラ4 フォ3」。直球は全員が持っているので外す） */
-fun pitchesShort(arsenal: List<Pair<String?, Int?>>): String =
+/** 変化球を短い名前と変化量で、良い順に（「スラ」78。直球は全員が持っているので外す） */
+fun pitchesShort(arsenal: List<Pair<String?, Int?>>): List<Pair<String, Int?>> =
     arsenal.filter { (type, _) -> type != null && type != "straight" }
-        .joinToString(" ") { (type, level) -> (PITCH_TYPE_NAMES[type] ?: type.orEmpty()).take(2) + (level?.toString() ?: "") }
+        .sortedByDescending { it.second ?: 0 }
+        .map { (type, level) -> (PITCH_TYPE_NAMES[type] ?: type.orEmpty()).take(2) to level }
 
 /** 名前・年齢・守備位置の1行（押すと選手の詳細） */
 @Composable

@@ -67,4 +67,21 @@ class TradeSearchTest {
         val extra = surplus.first { it.player.position == "short" && it.player.id !in usage.lineupIds }
         assertEquals(listOf("弱い"), extra.wantedBy)
     }
+
+    @Test
+    fun surplusRelieverMustBeatTheirTopReliever() {
+        // 自球団: ローテ5人・抑え1人の外に中継ぎが4人（50）と、もう1人（52）
+        val mine = team(60).take(8) + (1..6).map { pitcher(60) } + (1..4).map { pitcher(50) } + pitcher(52)
+        val pitchers = mine.filter { it.isPitcher }
+        val usage = TeamUsage(fielders = mine.take(8).associate { it.position to it.id }, starters = pitchers.take(5).map { it.id }, closer = pitchers[5].id)
+        // 相手: 救援が平均すると弱いが、上位には強い人がいる
+        val mixed = team(40).take(8) + (1..5).map { pitcher(60) } + listOf(pitcher(70), pitcher(70)) + (1..3).map { pitcher(30) }
+        val surplus = surplusPlayers(mine, usage, mapOf("相手" to mixed))
+        assertTrue(surplus.none { it.player.isPitcher }, "相手の一番手の中継ぎ（70）を下回る中継ぎは出さない: $surplus")
+        // 相手の救援が全員弱ければ、上位4人の外の中継ぎ（ここでは52より弱い50の1人）が出る
+        val weak = team(40).take(8) + (1..10).map { pitcher(30) }
+        val wanted = surplusPlayers(mine, usage, mapOf("弱い" to weak)).filter { it.player.isPitcher }
+        assertEquals(1, wanted.size, "力の上位4人の中継ぎは起用の中心として残す")
+        assertEquals(50, wanted.single().player.pitching?.control)
+    }
 }

@@ -811,6 +811,7 @@ private fun oddsHelp(rule: CpuTradeRule): List<String> = listOf(
     "受け取る選手の値段の合計が、出す選手の値段の合計の${"%.2f".format(rule.margin)}倍以上なら受けます。",
     "監督によって見る目が違い、1人ずつ最大±${(rule.eyeLimit * 100).roundToInt()}%高く・低く見ます（若手好み・主力好み・監督の型に合う選手）。",
     "足りないときは、もらう選手を同じ括り（投手・捕手・野手）の値段の釣り合う選手に差し替えた逆提案を返します。差し替えられる選手がいなければ断ります。",
+    "「釣り合い」は、出す選手の値段の合計がもらう選手の値段の合計の何%かです。「受けるには約○%」は見る目を抜いたときの線です。",
     "メーターの「受けるはず」は、見る目がいちばん不利でも届く線です。「足りない」は、いちばん有利でも届かない線です。その間は監督しだいです。",
 )
 
@@ -832,9 +833,10 @@ private fun OddsMeter(give: List<Double>, get: List<Double>, rule: CpuTradeRule,
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("CPUの見込み", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(odds.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = color, modifier = Modifier.padding(start = 8.dp).weight(1f))
-            ratio?.let { Muted("出す側 ${(it * 100).roundToInt()}%") }
             InfoButton("CPUの判断", oddsHelp(rule) + listOfNotNull(rule.eyeNote))
         }
+        // ⚠ 「出す側 73%」だけでは何の割合か分からなかった（いしだ 2026-11-13）。受ける線と並べて、見出しと別の行に（狭い画面で折り返していた）
+        ratio?.let { Muted("釣り合い ${(it * 100).roundToInt()}%（受けるには約${(rule.margin * 100).roundToInt()}%）") }
         if (ratio != null) {
             val top = max(2.0, high * 1.25)
             BoxWithConstraints(Modifier.fillMaxWidth().height(10.dp)) {
@@ -909,11 +911,13 @@ private fun ReinforcePanel(model: AppViewModel, view: LeagueView, raw: JsonObjec
     val league = leagueRosters(model, view, raw)
     val usage = remember(view.lineup) { TeamUsage.from(view.lineup) }
     val others = league.teams - view.teamName.orEmpty()
-    val points = remember(league.teams, view.roster, usage, league.complete) {
-        if (league.complete) reinforcePoints(view.roster, usage, others) else emptyList()
+    // ⚠ 読み終わるのを待たず、**読めた球団の分から**出す（いしだ 2026-11-13: 全部読むまで何も出ず待たされた）。
+    //    順位は読めた球団の中での順位で、読むたびに付け直す
+    val points = remember(league.teams, view.roster, usage) {
+        if (others.isNotEmpty()) reinforcePoints(view.roster, usage, others) else emptyList()
     }
     Section("補強から探す", trailing = { InfoButton("補強ポイント", REINFORCE_HELP) }) {
-        if (!league.complete) Muted("各球団の名簿を読んでいます（${league.loaded}/${league.total}）")
+        if (!league.complete) Muted("各球団の名簿を読んでいます（${league.loaded}/${league.total}）。読めた球団の中での順位です")
         points.take(3).forEach { r ->
             Row(
                 Modifier.fillMaxWidth().clickable { onSearch(r.slot.key) }.padding(vertical = 6.dp).testTag("reinforce-${r.slot.key}"),
@@ -1001,9 +1005,9 @@ private fun SurplusList(model: AppViewModel, view: LeagueView, usage: TeamUsage,
     val mine = remember(view.roster, league.values) { view.roster.map { it.copy(tradeValue = league.values[it.id]) } }
     val list = remember(mine, usage, others) { surplusPlayers(mine, usage, others) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Muted("起用していない選手と、その人が一番手になれる球団", Modifier.weight(1f))
+        Muted("起用の中心にいない選手と、その人が一番手になれる球団", Modifier.weight(1f))
         InfoButton("余りを出す", listOf(
-            "打順・先発ローテ・抑えに入っていない自球団の選手のうち、他球団ならその持ち場の一番手を上回る人です。",
+            "起用の中心（打順・先発ローテ・抑え・力の上位${jp.icenorth.baseball.shared.SURPLUS_KEEP_RELIEVERS}人の中継ぎ）に入っていない自球団の選手のうち、他球団ならその持ち場の一番手を上回る人です。先発・中継ぎは、相手の上位（先発5人・中継ぎ4人）の中でいちばん良い人と比べます。",
             "相手には穴が埋まる得があるので、釣り合いの取れた交換を考えやすい相手です。ただしCPUの判断は値段だけで、相手の穴は見ません（ⓘ「CPUの判断」）。",
             "球団を押すと、その選手を「出す」に入れて、もらう選手を選ぶ段へ進みます。",
         ))

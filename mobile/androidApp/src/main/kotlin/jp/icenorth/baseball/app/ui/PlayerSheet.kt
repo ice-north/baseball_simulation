@@ -143,10 +143,11 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                 Item("パワー", p.at("batting", "power").int())
                 Item("選球眼", p.at("batting", "eye").int())
                 Item("走力", p.at("physical", "speed").int())
-                Item("盗塁", p.at("batting", "steal").int(), help = "盗塁技術")
-                Item("バント", p.at("batting", "bunt").int())
+                // ⚠ ほかの画面の1行（ミ パ 眼 走｜守 肩）と同じ並びを先に。盗塁・バントはその後ろ
                 Item("守備", p.at("fielding", "defense").int())
                 Item("肩", p.at("physical", "arm").int(), help = "肩力")
+                Item("盗塁", p.at("batting", "steal").int(), help = "盗塁技術")
+                Item("バント", p.at("batting", "bunt").int())
                 if (p.at("position").str() == "catcher") Item("リード", p.at("catching", "lead").int(), help = "捕手リード")
                 p.at("batterType").str()?.let { TextItem("打者型", it) }
             }
