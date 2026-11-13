@@ -318,22 +318,67 @@ export function bestSlot(p) {
   return best;
 }
 
+/** 余りから外す（起用の中心とみなす）中継ぎの人数。アプリの `SURPLUS_KEEP_RELIEVERS` と同じ */
+export const SURPLUS_KEEP_RELIEVERS = BULLPEN_SIZE;
+
 /**
- * 余りを出す。起用していない選手（打順・ローテ・抑えの外）のうち、他球団ならその持ち場の一番手を
- * 上回る人と、その球団。⚠ 相手に穴があるところへ出すと、相手にも得がある（win-win の手がかり）。
+ * 名簿の中で、持ち場ごとの**一番手1人**の力（他球団用。アプリの `rosterTopStrengths` と同じ）。
+ * 野手は `rosterSlotScores` の割り当て、先発はローテでいちばん良い人、抑えは救援の一番手、中継ぎはその次。
+ * ⚠ `rosterSlotScores` の先発・中継ぎは**人数ぶんの平均**なので、余りと比べると甘くなる（平均を上回るだけで
+ *    「一番手になれる」と出ていた）。
+ */
+export function rosterTopStrengths(roster) {
+  const scores = rosterSlotScores(roster);
+  const out = Object.fromEntries(
+    TRADE_SLOTS.filter((s) => !s.pitcher).map((s) => [
+      s.key,
+      scores[s.key]?.score ?? 0,
+    ]),
+  );
+  const pitchers = roster.filter((p) => isActive(p) && isPitcher(p));
+  const rotation = [...pitchers]
+    .sort((a, b) => sp(b) - sp(a))
+    .slice(0, ROTATION_SIZE);
+  out.sp = rotation[0] ? sp(rotation[0]) : 0;
+  const pen = pitchers
+    .filter((p) => !rotation.includes(p))
+    .sort((a, b) => rp(b) - rp(a));
+  out.cl = pen[0] ? (slotStrength(pen[0], 'cl') ?? 0) : 0;
+  out.rp = pen[1] ? rp(pen[1]) : 0;
+  return out;
+}
+
+/**
+ * 余りを出す。起用の中心（打順・ローテ・抑え・力の上位 `SURPLUS_KEEP_RELIEVERS` 人の中継ぎ）の外にいる選手のうち、
+ * 他球団ならその持ち場の**一番手**を上回る人と、その球団。⚠ 相手に穴があるところへ出すと、相手にも得がある
+ * （win-win の手がかり）。
+ * ⚠ 以前は中継ぎを全員「起用していない」と数え、相手の中継ぎの平均と比べていたので、防御率4点台の中継ぎに
+ *    9球団が手を挙げた（いしだ 2026-11-13）。式はアプリの `surplusPlayers` と同じ。
  */
 export function surplusPlayers(mine, usage, others) {
   const theirs = Object.entries(others).map(([team, r]) => [
     team,
-    rosterSlotScores(r),
+    rosterTopStrengths(r),
   ]);
+  const kept = new Set(
+    mine
+      .filter(
+        (p) => isActive(p) && isPitcher(p) && !usage.ids.has(String(p.id)),
+      )
+      .sort((a, b) => rp(b) - rp(a))
+      .slice(0, SURPLUS_KEEP_RELIEVERS)
+      .map((p) => String(p.id)),
+  );
   return mine
-    .filter((p) => isActive(p) && !usage.ids.has(String(p.id)))
+    .filter(
+      (p) =>
+        isActive(p) && !usage.ids.has(String(p.id)) && !kept.has(String(p.id)),
+    )
     .map((p) => {
       const best = bestSlot(p);
       if (!best) return null;
       const wantedBy = theirs
-        .filter(([, s]) => best.strength > (s[best.slot.key]?.score ?? 0))
+        .filter(([, top]) => best.strength > (top[best.slot.key] ?? 0))
         .map(([team]) => team);
       return wantedBy.length ? { player: p, ...best, wantedBy } : null;
     })

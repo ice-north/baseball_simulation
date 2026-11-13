@@ -1496,7 +1496,7 @@ function ReinforcePanel({ view, league, busy, onStart }) {
         <div className="online-trade-candidates" aria-label="余りを出す">
           <h3>余りを出す</h3>
           <p className="online-muted">
-            打順・先発ローテ・抑えに入っていない選手のうち、他球団ならその持ち場の一番手を上回る人です。
+            打順・先発ローテ・抑え・主な中継ぎ（4人）に入っていない選手のうち、他球団ならその持ち場の一番手を上回る人です。
             相手に穴があるところへ出すと、相手にも得があります。球団を押すと、その選手を出す提案を作ります。
           </p>
           <div className="online-lineup-scroll">
