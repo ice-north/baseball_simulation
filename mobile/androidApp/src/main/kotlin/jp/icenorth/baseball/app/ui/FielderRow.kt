@@ -154,6 +154,8 @@ fun FielderRow(
     /** 選手が居ない枠（抜けた選手の空き）に出す文言 */
     placeholder: String = "?",
     hint: (@Composable () -> Unit)? = null,
+    /** 能力の行も出す（false なら名前と成績の2行。いしだ 2026-11-13: スタメンはまず成績を見て決める） */
+    detail: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
@@ -190,7 +192,16 @@ fun FielderRow(
             if (onInfo != null) IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) { Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (draggable) Icon(Icons.Filled.Menu, contentDescription = "長押しで並べ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
         }
-        if (player != null) {
+        if (player != null && !detail) {
+            // 成績だけ: 札の下の「適」の右に成績、右端にほかに守れる位置
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FitBelowBadge(player, fitnessAt)
+                Row(Modifier.weight(1f).padding(start = 6.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BattingStats(player)
+                    FittingRow(Modifier.weight(1f).padding(start = 8.dp), gapDp = 8) { OtherPositions(player, fitnessAt) }
+                }
+            }
+        } else if (player != null) {
             // 「適」と右の能力は字のベースラインでそろえる
             Row {
                 // 守っている位置の適性は、守備の札の真下に（いしだ指定）
@@ -208,6 +219,18 @@ fun FielderRow(
                 BattingStats(player)
                 FittingRow(Modifier.weight(1f).padding(start = 8.dp), gapDp = 8) { OtherPositions(player, fitnessAt) }
             }
+        }
+    }
+}
+
+/** 守っている位置の適性「適」を守備の札の真下に（成績だけの形で使う） */
+@Composable
+private fun FitBelowBadge(player: Player, fitnessAt: String) {
+    val fit = player.fitness(fitnessAt)
+    Box(Modifier.padding(start = 26.dp, top = 4.dp).width(34.dp), contentAlignment = Alignment.Center) {
+        Row {
+            Text("適", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
+            Text("$fit", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fitnessColor(fit), modifier = Modifier.alignByBaseline())
         }
     }
 }

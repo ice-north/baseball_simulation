@@ -113,6 +113,15 @@ class AppViewModel internal constructor(
         store.homeStyle = name
     }
 
+    /** スタメンの行に能力まで出すか（既定は成績だけ）。端末に覚える */
+    var lineupDetail by mutableStateOf(store.lineupDetail)
+        private set
+
+    fun changeLineupDetail(on: Boolean) {
+        lineupDetail = on
+        store.lineupDetail = on
+    }
+
     /** ホームで開く新聞（地元紙・全国紙）。端末に覚える */
     var homePaper by mutableStateOf(store.homePaper)
         private set

@@ -205,8 +205,19 @@ class ScreenTour {
                 }
 
                 tab("Plan")
-                // ⚠ 行に能力・成績・適性を全部出す（いしだ 2026-11-13）ので行が高い。下まで撮る
-                page("plan-order", scrolls = 4)
+                // 既定は名前と成績の2段。「成績のみ」を押すと能力の段も出る（いしだ 2026-11-13）
+                page("plan-order", scrolls = 3)
+                step("order detail") {
+                    repeat(5) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown(startY = top + height * 0.25f, endY = bottom * 0.85f) } }
+                    pause()
+                    rule.onAllNodesWithTag("lineup-detail").onFirst().performClick()
+                    pause()
+                    page("plan-order-detail", scrolls = 1)
+                    repeat(3) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown(startY = top + height * 0.25f, endY = bottom * 0.85f) } }
+                    pause()
+                    rule.onAllNodesWithTag("lineup-detail").onFirst().performClick()
+                    pause()
+                }
                 // 行を選ぶと、ほかの行に入れ替えたときの適性が出る（別のシートは開かない）
                 step("order pick") {
                     repeat(5) { rule.onAllNodes(isRoot()).onFirst().performTouchInput { swipeDown(startY = top + height * 0.25f, endY = bottom * 0.85f) } }

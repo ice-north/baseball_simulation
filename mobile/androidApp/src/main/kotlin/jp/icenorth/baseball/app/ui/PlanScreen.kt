@@ -43,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -198,7 +199,7 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
             tipsBadge()
         }
         when (tab) {
-            PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open)
+            PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open, model.lineupDetail, model::changeLineupDetail)
             PlanTab.Pitching -> PitchingEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open) { sheet = it }
             PlanTab.Tactics -> TacticsEditor(view, draft, edit)
             // 監督・コーチと任せ方（PC の「指導者」ページと同じ中身）
@@ -241,6 +242,9 @@ private fun OrderEditor(
     clickEdit: Edit,
     onDragStart: () -> Unit,
     open: (Long) -> Unit,
+    /** 行に能力も出すか（既定は成績だけ） */
+    detail: Boolean = false,
+    onDetail: (Boolean) -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     var picked by remember { mutableStateOf<OrderPick?>(null) }
@@ -315,6 +319,10 @@ private fun OrderEditor(
                 TextButton(onClick = { picked = null }) { Text("やめる") }
             } else {
                 Box(Modifier.weight(1f)) { Caption("打順") }
+                // 行に出すものの切り替え（既定は成績だけ。まず成績を見て決めるので。端末に覚える）
+                TextButton(onClick = { onDetail(!detail) }, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.testTag("lineup-detail")) {
+                    Text(if (detail) "能力も表示中 ▴" else "成績のみ ▾", style = MaterialTheme.typography.labelMedium)
+                }
             }
             InfoButton("スタメン", ORDER_HELP, Modifier.padding(end = 8.dp))
         }
@@ -379,6 +387,7 @@ private fun OrderEditor(
                             draggable = true,
                             placeholder = "空き（押して控えと交代）",
                             hint = starterHint(index),
+                            detail = detail,
                         )
                     }
                 }
@@ -398,6 +407,7 @@ private fun OrderEditor(
                             onName = { pick(OrderPick.Bench(p.id)) },
                             onInfo = { open(p.id) },
                             hint = benchHint(p),
+                            detail = detail,
                         )
                     }
                 }
@@ -426,6 +436,7 @@ private fun OrderEditor(
                             onName = { pick(OrderPick.Bench(p.id)) },
                             onInfo = { open(p.id) },
                             hint = benchHint(p),
+                            detail = detail,
                         )
                     }
                 }
@@ -748,7 +759,8 @@ private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
 private val ORDER_HELP = listOf(
     "長押しでドラッグすると打順を並べ替えます。",
     "選手（守備の札か名前）を押して選び、ほかのスタメンを押すと守備位置を入れ替え、控えを押すと交代します。控えから選んでスタメンを押しても交代です。選んでいる間は、各行に入れ替えたあとの適性（⇄・交代）が出ます。",
-    "行は 能力（ミ パ 眼 走｜守 肩）・今季成績・守れる位置の適性 の3段です。守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
+    "行はふだん名前と今季成績の2段です。右上の「成績のみ」を押すと能力（ミ パ 眼 走｜守 肩）の段も出ます（端末に覚えます）。成績の段の右端は、ほかに守れる位置の適性です。",
+    "守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
     "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満の控えが居れば、その日だけ入れ替わって休みます。",
     "疲労は41以上で黄（成長が鈍り始める）、${FIELDER_REST_FATIGUE}以上で赤です。",
 )

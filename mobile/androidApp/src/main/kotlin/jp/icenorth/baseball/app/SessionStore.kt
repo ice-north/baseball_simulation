@@ -35,6 +35,11 @@ class SessionStore(context: Context) {
         get() = prefs.getString("homeStyle", null)
         set(value) = prefs.edit().putString("homeStyle", value).apply()
 
+    /** スタメンの行に能力まで出すか（既定は成績だけ。いしだ 2026-11-13）。端末に覚える */
+    var lineupDetail: Boolean
+        get() = prefs.getBoolean("lineupDetail", false)
+        set(value) = prefs.edit().putBoolean("lineupDetail", value).apply()
+
     /** 状況に応じたTIPSを最後に読んだときに出ていたTIPSの id（読んだら点滅を止めるため） */
     var seenSituationTips: Set<String>
         get() = prefs.getStringSet("seenSituationTips", null)?.toSet().orEmpty()
