@@ -1470,8 +1470,9 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 13px;
 }
 .online-tryout-total > button {
-  min-width: 36px;
-  min-height: 36px;
+  /* ⚠ 指で押す大きさ（44px）。36px だとスマホの検査で「押しにくい」と落ちる */
+  min-width: 44px;
+  min-height: 44px;
   padding: 0 8px;
 }
 .online-tryout-total b {
