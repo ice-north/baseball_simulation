@@ -48,12 +48,14 @@ class TradeSearchTest {
 
     @Test
     fun takingTwoRegularsCostsTheCombinedHole() {
-        // 外野のレギュラー3人と控えの外野1人。2人まとめて抜けると控え1人では埋まらない
-        val bench = fielder("left", 50, 50, mapOf("center" to 80, "right" to 80))
+        // 外野のレギュラー3人と、左翼・右翼どちらも守れる控え1人（レギュラーとほぼ同じ力）。
+        // 1人ずつなら控えが埋めて穴は小さいが、2人まとめて抜けると控え1人では埋まらない
+        val bench = fielder("left", 64, 64, mapOf("right" to 100))
         val roster = team(65, listOf(bench))
         val left = roster.first { it.position == "left" }
         val right = roster.first { it.position == "right" }
         val alone = needFactors(roster, listOf(left))[left.id]!!
+        assertTrue(alone < 1 + NEED_LIMIT, "前提: 1人なら控えが埋めて上乗せは満額にならない: $alone")
         val together = needFactors(roster, listOf(left, right))
         assertTrue(together[left.id]!! > alone, "まとめて抜けた穴のほうが大きい: ${together[left.id]} / $alone")
         // 1人だけなら前と同じ（1人ずつの穴）
