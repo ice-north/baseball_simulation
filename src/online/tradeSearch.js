@@ -281,7 +281,8 @@ export function tradeCandidates(slot, mine, usage, others, filter = null) {
   const base = ownSlotScores(mine, usage)[slot]?.score ?? 0;
   return Object.entries(others)
     .flatMap(([team, roster]) => {
-      const holder = rosterSlotScores(roster)[slot]?.holder;
+      // 相手のその持ち場の一番手（先発ならエース。抜けると相手に穴が空く）
+      const holder = rosterTops(roster)[slot]?.holder;
       return roster
         .filter((p) => isActive(p))
         .filter(
@@ -322,30 +323,39 @@ export function bestSlot(p) {
 export const SURPLUS_KEEP_RELIEVERS = BULLPEN_SIZE;
 
 /**
- * 名簿の中で、持ち場ごとの**一番手1人**の力（他球団用。アプリの `rosterTopStrengths` と同じ）。
+ * 名簿の中で、持ち場ごとの**一番手1人**とその力（他球団用。アプリの `rosterTops` と同じ）。
  * 野手は `rosterSlotScores` の割り当て、先発はローテでいちばん良い人、抑えは救援の一番手、中継ぎはその次。
- * ⚠ `rosterSlotScores` の先発・中継ぎは**人数ぶんの平均**なので、余りと比べると甘くなる（平均を上回るだけで
- *    「一番手になれる」と出ていた）。
+ * ⚠ `rosterSlotScores` の先発・中継ぎは**人数ぶんの平均**と、いちばん弱い人なので、余りと比べると甘くなり
+ *    （平均を上回るだけで「一番手になれる」と出ていた）、「相手の一番手」の印もローテの5番手に付いた。
+ * @returns {Record<string, {score:number, holder:object|null}>}
  */
-export function rosterTopStrengths(roster) {
+export function rosterTops(roster) {
   const scores = rosterSlotScores(roster);
   const out = Object.fromEntries(
     TRADE_SLOTS.filter((s) => !s.pitcher).map((s) => [
       s.key,
-      scores[s.key]?.score ?? 0,
+      scores[s.key] || { score: 0, holder: null },
     ]),
   );
   const pitchers = roster.filter((p) => isActive(p) && isPitcher(p));
   const rotation = [...pitchers]
     .sort((a, b) => sp(b) - sp(a))
     .slice(0, ROTATION_SIZE);
-  out.sp = rotation[0] ? sp(rotation[0]) : 0;
   const pen = pitchers
     .filter((p) => !rotation.includes(p))
     .sort((a, b) => rp(b) - rp(a));
-  out.cl = pen[0] ? (slotStrength(pen[0], 'cl') ?? 0) : 0;
-  out.rp = pen[1] ? rp(pen[1]) : 0;
+  const top = (p, slot) => ({ score: p ? (slotStrength(p, slot) ?? 0) : 0, holder: p || null });
+  out.sp = top(rotation[0], 'sp');
+  out.cl = top(pen[0], 'cl');
+  out.rp = top(pen[1], 'rp');
   return out;
+}
+
+/** 持ち場ごとの一番手1人の力（`rosterTops` の力だけ） */
+export function rosterTopStrengths(roster) {
+  return Object.fromEntries(
+    Object.entries(rosterTops(roster)).map(([k, v]) => [k, v.score]),
+  );
 }
 
 /**

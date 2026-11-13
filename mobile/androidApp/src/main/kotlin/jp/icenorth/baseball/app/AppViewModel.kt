@@ -168,7 +168,8 @@ class AppViewModel internal constructor(
     /** 他球団の選手をもらう形で、トレードを考え始める（選手の詳細から） */
     fun startTradeFor(team: String, id: Long) {
         openPlayer = null
-        parkedTradeDraft = null
+        // ⚠ 作りかけの案（逆提案を含む）は捨てずに「下書きの続き」へ退避する（黙って消さない）
+        tradeDraft?.let { parkedTradeDraft = it }
         tradeDraft = jp.icenorth.baseball.app.ui.TradeDraft(partner = team, get = setOf(id), step = jp.icenorth.baseball.app.ui.TradeStep.Players)
         procTrade = true
         tabRequest = "Procedures"
@@ -612,6 +613,8 @@ class AppViewModel internal constructor(
 
     private fun clearCaches() {
         synchronized(readCache) { readCache.clear() }
+        // 選手→球団もトレードで変わる。読み直した名簿から作り直す
+        rosterTeams.clear()
         viewGeneration = null
     }
 

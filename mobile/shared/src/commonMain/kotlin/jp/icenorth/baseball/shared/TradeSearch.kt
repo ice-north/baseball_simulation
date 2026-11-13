@@ -98,7 +98,8 @@ data class TeamUsage(
             val order = lineup["battingOrder"].list().mapNotNull { it.obj() }
             val fielders = order.mapNotNull { slot ->
                 val id = slot["playerId"].long() ?: return@mapNotNull null
-                val pos = slot["position"].str() ?: return@mapNotNull null
+                // ⚠ 投手の打順の枠（DH無し）は守備位置に数えない（PC版 teamUsage と同じ）
+                val pos = slot["position"].str()?.takeIf { it != "pitcher" } ?: return@mapNotNull null
                 pos to id
             }.toMap()
             val starters = lineup["starters"].list().mapNotNull { it.long() }
@@ -223,7 +224,8 @@ data class TradeCandidate(
 fun tradeCandidates(slot: String, mine: List<Player>, usage: TeamUsage, others: Map<String, List<Player>>, filter: TradeFilter? = null): List<TradeCandidate> {
     val base = ownSlotScores(mine, usage)[slot]?.score ?: 0.0
     return others.flatMap { (team, roster) ->
-        val holders = rosterSlotScores(roster)
+        // 相手のその持ち場の一番手（先発ならエース。抜けると相手に穴が空く）
+        val holders = rosterTops(roster)
         roster.filter { it.isActive }.mapNotNull { p ->
             if (filter != null && ((filter.pitcher != null && filter.pitcher != p.isPitcher) || !filter.test(p))) return@mapNotNull null
             val v = slotStrength(p, slot) ?: return@mapNotNull null
@@ -243,22 +245,25 @@ data class SurplusEntry(val player: Player, val slot: TradeSlot, val strength: D
 const val SURPLUS_KEEP_RELIEVERS = BULLPEN_SIZE
 
 /**
- * 名簿の中で、持ち場ごとの**一番手1人**の力（他球団用）。
+ * 名簿の中で、持ち場ごとの**一番手1人**とその力（他球団用）。
  * 野手は [rosterSlotScores] の割り当て、先発はローテでいちばん良い人、抑えは救援の一番手、中継ぎはその次。
- * ⚠ [rosterSlotScores] の先発・中継ぎは**人数ぶんの平均**なので、余りと比べると甘くなる（平均を上回るだけで
- *    「一番手になれる」と出ていた）。
+ * ⚠ [rosterSlotScores] の先発・中継ぎは**人数ぶんの平均**と、いちばん弱い人なので、余りと比べると甘くなり
+ *    （平均を上回るだけで「一番手になれる」と出ていた）、「相手の一番手」の印もローテの5番手に付いた。
  */
-fun rosterTopStrengths(roster: List<Player>): Map<String, Double> {
-    val scores = rosterSlotScores(roster)
-    val out = scores.filterKeys { tradeSlot(it)?.pitcher == false }.mapValues { it.value.score }.toMutableMap()
+fun rosterTops(roster: List<Player>): Map<String, SlotScore> {
+    val out = rosterSlotScores(roster).filterKeys { tradeSlot(it)?.pitcher == false }.toMutableMap()
     val pitchers = roster.filter { it.isActive && it.isPitcher }
     val rotation = pitchers.sortedByDescending { slotStrength(it, "sp") ?: 0.0 }.take(ROTATION_SIZE)
-    out["sp"] = rotation.firstOrNull()?.let { slotStrength(it, "sp") } ?: 0.0
     val pen = (pitchers - rotation.toSet()).sortedByDescending { slotStrength(it, "rp") ?: 0.0 }
-    out["cl"] = pen.firstOrNull()?.let { slotStrength(it, "cl") } ?: 0.0
-    out["rp"] = pen.getOrNull(1)?.let { slotStrength(it, "rp") } ?: 0.0
+    fun top(p: Player?, slot: String) = SlotScore(p?.let { slotStrength(it, slot) } ?: 0.0, p)
+    out["sp"] = top(rotation.firstOrNull(), "sp")
+    out["cl"] = top(pen.getOrNull(0), "cl")
+    out["rp"] = top(pen.getOrNull(1), "rp")
     return out
 }
+
+/** 持ち場ごとの一番手1人の力（[rosterTops] の力だけ） */
+fun rosterTopStrengths(roster: List<Player>): Map<String, Double> = rosterTops(roster).mapValues { it.value.score }
 
 /**
  * 余りを出す。起用の中心（打順・ローテ・抑え・力の上位 [SURPLUS_KEEP_RELIEVERS] 人の中継ぎ）の外にいる選手のうち、

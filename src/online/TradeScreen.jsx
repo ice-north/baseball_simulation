@@ -1571,6 +1571,8 @@ export default function TradeScreen({
   run,
   command,
   tradeSeed = null,
+  // 受け取った種を使い終えた合図（親が種を消す。⚠ 消さないと、あとでトレードを開くたびに古い相手・選手で作り直された）
+  onSeedUsed,
 }) {
   // ⚠ **全球団を相手に出す**（CPUも含む）。参加者の球団は「相手の返事待ち」に
   //    なり、CPU球団は押した瞬間に答えが返る。
@@ -1600,7 +1602,10 @@ export default function TradeScreen({
     setAnswered(null);
   };
   useEffect(() => {
-    if (tradeSeed) setSeed(tradeSeed);
+    if (!tradeSeed) return;
+    setSeed(tradeSeed);
+    onSeedUsed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tradeSeed]);
   useEffect(() => {
     if (seed)

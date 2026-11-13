@@ -658,7 +658,7 @@ export default function DesktopView(props) {
             <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
           </Page>
         ))}
-      {current === 'transfer' && <TradeScreen {...props} tradeSeed={tradeSeed} />}
+      {current === 'transfer' && <TradeScreen {...props} tradeSeed={tradeSeed} onSeedUsed={() => setTradeSeed(null)} />}
       {current === 'admin' && (
         <Page title="リーグ管理">
           <Admin {...props} />

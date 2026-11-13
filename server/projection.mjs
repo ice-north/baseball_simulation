@@ -722,7 +722,9 @@ export function projectTeamInfo(bundle, userId, teamName) {
       ? null
       : {
           margin: CPU_ACCEPT_MARGIN,
-          eyeLimit: TRADE_FACTOR_LIMIT,
+          // ⚠ 監督がいない（指導者の仕組みが無い・監督の席が空き）と見る目は1倍で決まっているので、幅は0。
+          //    いつも幅を渡すと、決まっている判断に「監督しだい」の帯が出た
+          eyeLimit: staffOf(l, teamName).manager ? TRADE_FACTOR_LIMIT : 0,
           eyeNote: l.coaches ? tradeEyeNote(staffOf(l, teamName)) : null,
         },
     roster: l.game.teams[teamName].players.map((p) => {

@@ -84,4 +84,25 @@ class TradeSearchTest {
         assertEquals(1, wanted.size, "力の上位4人の中継ぎは起用の中心として残す")
         assertEquals(50, wanted.single().player.pitching?.control)
     }
+
+    @Test
+    fun theirStarterMarksTheAce() {
+        val ace = pitcher(80)
+        val other = team(50).take(8) + listOf(ace) + (1..9).map { pitcher(50) }
+        val mine = team(40)
+        val usage = TeamUsage(fielders = mine.take(8).associate { it.position to it.id }, starters = mine.filter { it.isPitcher }.take(5).map { it.id })
+        val sp = tradeCandidates("sp", mine, usage, mapOf("相手" to other))
+        assertEquals(listOf(ace.id), sp.filter { it.theirStarter }.map { it.player.id }, "先発の一番手はエース（ローテの5番手ではない）")
+    }
+
+    @Test
+    fun pitcherBattingSlotIsNotAFielder() {
+        val lineup = kotlinx.serialization.json.buildJsonObject {
+            put("battingOrder", kotlinx.serialization.json.buildJsonArray {
+                add(kotlinx.serialization.json.buildJsonObject { put("playerId", kotlinx.serialization.json.JsonPrimitive(1)); put("position", kotlinx.serialization.json.JsonPrimitive("short")) })
+                add(kotlinx.serialization.json.buildJsonObject { put("playerId", kotlinx.serialization.json.JsonPrimitive(2)); put("position", kotlinx.serialization.json.JsonPrimitive("pitcher")) })
+            })
+        }
+        assertEquals(mapOf("short" to 1L), TeamUsage.from(lineup).fielders)
+    }
 }

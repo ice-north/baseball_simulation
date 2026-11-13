@@ -1,5 +1,7 @@
 package jp.icenorth.baseball.app.ui
 
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.launch
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -494,9 +496,12 @@ private fun PlayersStep(
 ) {
     // ⚠ 「もらう」「出す」をタブで分けない（いしだ 2026-11-13: 比べにくい）。守備の括りごとに、相手の選手と
     //    自球団の選手を同じ形の行で上下に並べる（PC版のトレードと同じ考え方）
+    // 選んだ選手（もらう・出す）の本職の括りから始める（⚠ 探した持ち場の括りにすると、遊撃で探した中堅手や、
+    //    余りを出すで選んだ外野手が開いた一覧に居なかった）
     val firstGroup = run {
-        tradeSlot(draft.slot)?.let { if (it.pitcher) "pitcher" else rosterGroup(it.key) }
-            ?: theirs?.firstOrNull { it.pid in draft.get }?.let { rosterGroup(it.at("position").str()) }
+        theirs?.firstOrNull { it.pid in draft.get }?.let { rosterGroup(it.at("position").str()) }
+            ?: myRoster.firstOrNull { it.pid in draft.give }?.let { rosterGroup(it.at("position").str()) }
+            ?: tradeSlot(draft.slot)?.let { if (it.pitcher) "pitcher" else rosterGroup(it.key) }
             ?: "pitcher"
     }
     // 相手の名簿が届いてから決め直す（選手の詳細から来たときは、もらう選手の括りから始める）
@@ -541,12 +546,7 @@ private fun PlayersStep(
                 PickedLine("出す", namesOf(draft.give, myRoster))
                 PickedLine("もらう", namesOf(draft.get, theirs))
                 if (rule != null && draft.get.isNotEmpty()) {
-                    OddsMeter(
-                        myPlayers.filter { it.id in draft.give }.map { it.tradeValue ?: 0.0 },
-                        theirPlayers.filter { it.id in draft.get }.map { it.tradeValue ?: 0.0 },
-                        rule,
-                        compact = true,
-                    )
+                    OddsMeter(myPlayers.filter { it.id in draft.give }.map { it.tradeValue }, theirPlayers.filter { it.id in draft.get }.map { it.tradeValue }, rule, compact = true)
                 }
                 problems.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -631,7 +631,7 @@ private fun ConfirmStep(
             ConfirmSide("もらう（${view.teamLabel(partner)}）", draft.get, if (theirs == null) null else getting, model, partner, league.tier)
             theirError?.let { LoadFailed(it, retryTheirs, title = "相手の名簿を読めませんでした") }
             if (rule != null && counter == null) Section("${view.teamLabel(partner)}の見込み") {
-                OddsMeter(giving.map { it.tradeValue ?: 0.0 }, getting.map { it.tradeValue ?: 0.0 }, rule)
+                OddsMeter(giving.map { it.tradeValue }, getting.map { it.tradeValue }, rule)
             }
             if (theirs != null) Section("交換後") {
                 holesAfter(giving, usage).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
@@ -820,7 +820,14 @@ private fun oddsHelp(rule: CpuTradeRule): List<String> = listOf(
  * ⚠ 境目はサーバーが渡す決まり（[CpuTradeRule]）から引く（shared の [tradeOdds]）。
  */
 @Composable
-private fun OddsMeter(give: List<Double>, get: List<Double>, rule: CpuTradeRule, compact: Boolean = false) {
+private fun OddsMeter(giveValues: List<Double?>, getValues: List<Double?>, rule: CpuTradeRule, compact: Boolean = false) {
+    // ⚠ 値段が届くまでは見込みを出さない（0として数えると「足りない」と出て、出す選手を足しすぎる）
+    if (giveValues.any { it == null } || getValues.any { it == null }) {
+        Muted("CPUの見込み: 値段を読み込み中…")
+        return
+    }
+    val give = giveValues.filterNotNull()
+    val get = getValues.filterNotNull()
     val odds = tradeOdds(give, get, rule)
     val ratio = tradeRatio(give, get)
     val (low, high) = tradeOddsBounds(rule)
@@ -841,9 +848,11 @@ private fun OddsMeter(give: List<Double>, get: List<Double>, rule: CpuTradeRule,
             val top = max(2.0, high * 1.25)
             BoxWithConstraints(Modifier.fillMaxWidth().height(10.dp)) {
                 Row(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight((low / top).toFloat()).fillMaxSize().background(MaterialTheme.colorScheme.error.copy(alpha = 0.45f)))
-                    Box(Modifier.weight(((high - low) / top).toFloat()).fillMaxSize().background(Color(0xFFFACC15).copy(alpha = 0.45f)))
-                    Box(Modifier.weight(((top - high) / top).toFloat()).fillMaxSize().background(Color(0xFF4ADE80).copy(alpha = 0.45f)))
+                    // ⚠ weight は0より大きくないと落ちる（見る目の幅が0なら黄の帯が無い）
+                    fun w(v: Double) = (v / top).toFloat().coerceAtLeast(0.0001f)
+                    Box(Modifier.weight(w(low)).fillMaxSize().background(MaterialTheme.colorScheme.error.copy(alpha = 0.45f)))
+                    Box(Modifier.weight(w(high - low)).fillMaxSize().background(Color(0xFFFACC15).copy(alpha = 0.45f)))
+                    Box(Modifier.weight(w(top - high)).fillMaxSize().background(Color(0xFF4ADE80).copy(alpha = 0.45f)))
                 }
                 val x = maxWidth * (ratio.coerceIn(0.0, top) / top).toFloat()
                 Box(Modifier.offset(x = (x - 2.dp).coerceAtLeast(0.dp)).width(4.dp).fillMaxSize().background(MaterialTheme.colorScheme.onSurface))
@@ -858,8 +867,11 @@ private fun OddsMeter(give: List<Double>, get: List<Double>, rule: CpuTradeRule,
 /** リーグの名簿（読めた球団だけ）と、値段の索引・段 */
 private class LeagueRosters(
     val teams: Map<String, List<Player>>,
+    /** 読み終えた球団の数（読めなかった球団も含む） */
     val loaded: Int,
     val total: Int,
+    /** 読めなかった球団の数 */
+    val failed: Int = 0,
 ) {
     val values: Map<Long, Double> = teams.values.flatten().mapNotNull { p -> p.tradeValue?.let { p.id to it } }.toMap()
     val tier: (Double?) -> String? = valueTiers(values.values.toList())
@@ -869,30 +881,53 @@ private class LeagueRosters(
 private fun List<JsonObject>.toPlayers(): List<Player> =
     mapNotNull { e -> runCatching { OnlineJson.decodeFromJsonElement(Player.serializer(), e) }.getOrNull() }
 
+/** 読めなかった球団があれば数を出す（⚠ 出さないと「条件に合う選手がいません」に見えた） */
+@Composable
+private fun FailedRosters(league: LeagueRosters, modifier: Modifier = Modifier) {
+    if (league.failed > 0) Text("${league.failed}球団の名簿を読めませんでした（トレードを開き直すと読み直します）", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = modifier)
+}
+
+/** 一度に読む球団の数（PC版 useLeagueRosters と同じ3本） */
+private const val ROSTER_READERS = 3
+
 /**
- * 全球団（自球団を含む。値段は球団の読み込みにだけ載るので）の名簿を順に読む。
+ * 全球団（自球団を含む。値段は球団の読み込みにだけ載るので）の名簿を読む。
  * ⚠ 読み込みは版ごとに覚えている（[AppViewModel.read]）ので、画面を行き来しても読み直さない。
- *    1つの読み込みで順に読む（球団ごとに別にすると、画面が変わるたびに取り消される）。読めない球団は飛ばす
+ *    1つの読み込みの中で3本ずつ読む（球団ごとに別の読み込みにすると、画面が変わるたびに取り消される。
+ *    1本ずつだと12球団で待たされた）。読めない球団は飛ばし、数だけ数える
  */
 @Composable
 private fun leagueRosters(model: AppViewModel, view: LeagueView, raw: JsonObject): LeagueRosters {
     val names = remember(raw) { raw.at("teamNames").list().mapNotNull { it.str() } }
-    var teams by remember { mutableStateOf<Map<String, List<Player>>>(emptyMap()) }
-    var loaded by remember { mutableStateOf(0) }
+    var state by remember { mutableStateOf(LeagueRosters(emptyMap(), 0, names.size)) }
     LaunchedEffect(names, view.revision) {
-        var n = 0
-        names.forEach { name ->
-            try {
-                val roster = model.read("team", mapOf("team" to name)).at("roster").list().mapNotNull { it.obj() }.toPlayers()
-                teams = teams + (name to roster)
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
+        val lock = kotlinx.coroutines.sync.Mutex()
+        var teams = state.teams
+        var done = 0
+        var failed = 0
+        val queue = java.util.concurrent.ConcurrentLinkedQueue(names)
+        kotlinx.coroutines.coroutineScope {
+            repeat(ROSTER_READERS) {
+                launch {
+                    while (true) {
+                        val name = queue.poll() ?: break
+                        val roster = try {
+                            model.read("team", mapOf("team" to name)).at("roster").list().mapNotNull { it.obj() }.toPlayers()
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
+                            null
+                        }
+                        lock.withLock {
+                            if (roster != null) teams = teams + (name to roster) else failed += 1
+                            done += 1
+                            state = LeagueRosters(teams, done, names.size, failed)
+                        }
+                    }
+                }
             }
-            n += 1
-            loaded = n
         }
     }
-    return remember(teams, loaded, names) { LeagueRosters(teams, loaded, names.size) }
+    return state
 }
 
 // ------------------------------------------------------------------ 補強から探す
@@ -918,6 +953,7 @@ private fun ReinforcePanel(model: AppViewModel, view: LeagueView, raw: JsonObjec
     }
     Section("補強から探す", trailing = { InfoButton("補強ポイント", REINFORCE_HELP) }) {
         if (!league.complete) Muted("各球団の名簿を読んでいます（${league.loaded}/${league.total}）。読めた球団の中での順位です")
+        FailedRosters(league)
         points.take(3).forEach { r ->
             Row(
                 Modifier.fillMaxWidth().clickable { onSearch(r.slot.key) }.padding(vertical = 6.dp).testTag("reinforce-${r.slot.key}"),
@@ -955,6 +991,7 @@ private fun SearchStep(model: AppViewModel, view: LeagueView, draft: TradeDraft,
             Modifier.padding(top = 8.dp),
         )
         if (!league.complete) Muted("各球団の名簿を読んでいます（${league.loaded}/${league.total}）", Modifier.padding(horizontal = 16.dp))
+        FailedRosters(league, Modifier.padding(horizontal = 16.dp))
         if (slotKey == SURPLUS) {
             SurplusList(model, view, usage, others, league, set, draft)
             return@Column

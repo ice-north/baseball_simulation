@@ -250,7 +250,9 @@ private fun OrderEditor(
     val haptic = LocalHapticFeedback.current
     var picked by remember { mutableStateOf<OrderPick?>(null) }
     // 編成が変わったら（取り消し・保存など）、選んでいた打順の枠がずれるので選び直し
-    LaunchedEffect(draft.slots.size) { picked = null }
+    // ⚠ 打順・名簿が変わったら（ドラッグ・元に戻す・読み直し）選択を外す。数だけで見ると、並べ替えで
+    //    選んだ番号が別の選手を指したまま残り、次の押下で違う選手を入れ替えた
+    LaunchedEffect(draft.slots, view.roster) { picked = null }
     val pick: (OrderPick) -> Unit = { target ->
         val current = picked
         when {
