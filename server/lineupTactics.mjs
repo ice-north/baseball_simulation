@@ -88,7 +88,7 @@ export function validateTactics(team, plan, rotationChanged) {
     );
     requireOnline(
       Object.values(roles).filter((r) => r === 'closer').length <= 1,
-      '守護神は1人まで指定してください',
+      'クローザーは1人まで指定してください',
     );
     rotation = {
       pitcherRoles: roles,

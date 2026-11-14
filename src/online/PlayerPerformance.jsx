@@ -573,6 +573,79 @@ export function PlayerStatsButton({
   );
 }
 
+/**
+ * 球団と id だけ分かっている選手（個人成績ランキング・能力ランキング・スタメンの表など）の
+ * 選手情報を開くボタン。押してから球団の名簿を読み（自球団は手元の view）、
+ * 選手成績の名前を押したときと同じ小窓を開く。
+ * ⚠ **id で探す**（名前で探すと、同じ球団の同名の別人に当たる。アプリの `findRosterPlayer` と同じ）。
+ * ⚠ 読み込みは `TeamRoster` と同じ問い合わせ（球団名＋版）にして、読んだ名簿を使い回す。
+ * ⚠ 以前はランキングの名前が押せなかった（先方要望 2026-11 で直した）。能力ランキングは
+ *    行に載せた一部の能力だけで小窓を開いていたので、ここでも名簿の全項目で開く。
+ */
+export function TeamPlayerButton({
+  view,
+  team,
+  id,
+  name,
+  panel = 'stats',
+  className = '',
+  children,
+}) {
+  const [open, setOpen] = useState(false);
+  const own = team === view.teamName;
+  const result = useRead(open && !own ? 'team' : null, {
+    team,
+    revision: view.revision,
+  });
+  const roster = own
+    ? view.roster
+    : result.data?.teamName === team
+      ? result.data.roster
+      : null;
+  const found =
+    open && roster
+      ? roster.find((p) => String(p.id) === String(id)) ||
+        (id == null ? roster.find((p) => p.name === name) : null)
+      : null;
+  const player =
+    found && !own && !found.tradeTeam ? { ...found, tradeTeam: team } : found;
+  return (
+    <>
+      <button
+        type="button"
+        className={`online-player-name ${className}`}
+        onClick={() => setOpen(true)}
+        aria-label={`${name}の選手情報を見る`}
+        aria-busy={open && !roster && !result.error ? true : undefined}
+      >
+        {children || name}
+      </button>
+      {open && !roster && !result.error && (
+        <small className="online-muted"> 読み込み中…</small>
+      )}
+      {open && result.error && (
+        <small role="alert">
+          {' '}
+          {result.error}
+          <button type="button" onClick={result.retry}>
+            再取得
+          </button>
+        </small>
+      )}
+      {open && roster && !player && (
+        <small role="alert"> いまこの球団の名簿にいません</small>
+      )}
+      {player && (
+        <Detail
+          player={player}
+          initialPane={panel}
+          close={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
 // 起用の札（自球団だけ）。
 // ⚠ **「スタメンが誰か」「誰がリリーフか」が一覧から分からない**という指摘への対応。
 //    打順と投手の役割は view に載っているので、名前の横に短く出す。

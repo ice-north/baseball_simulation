@@ -16,7 +16,6 @@ import {
   pitchingFromLineup,
   samePitching,
   planFromPitching,
-  moveStarter,
   swapPitchers,
   setRole,
   insertStarter,
@@ -356,7 +355,7 @@ export default function PitchingBoard({
   };
 
   // ---- ドラッグ: 落とした先で決まる
-  //   先発 → 先発の行: 登板順を動かす（間はずれる） / それ以外 → 行: 持ち場を入れ替える
+  //   → 行: 持ち場を入れ替える（クリックと同じ `swapPitchers`。先発どうしは2人の登板順だけ入れ替え、間は動かさない）
   //   → 見出し（'rotation' / 'relief'）: そこへ移す。行の落とし先は投手のid
   const startDrag = (id) => (e) => {
     e.dataTransfer.effectAllowed = 'move';
@@ -387,13 +386,7 @@ export default function PitchingBoard({
     if (id === null) return;
     if (target !== 'rotation' && target !== 'relief') {
       if (target === id) return;
-      const from = state.starters.indexOf(id);
-      const to = state.starters.indexOf(target);
-      commit(
-        from >= 0 && to >= 0
-          ? moveStarter(state, from, to)
-          : swapPitchers(state, id, target),
-      );
+      commit(swapPitchers(state, id, target));
     } else commit(moveTo(id, target));
   };
   const dropProps = (target) => ({
@@ -431,7 +424,7 @@ export default function PitchingBoard({
               ? '「先発ローテーション」の見出しを押すとローテの最後に入れます。'
               : `先発は${MAX_STARTERS}人までです。ローテに入れるには先発の投手と入れ替えてください。`
         }`
-      : '役割の札を押すと役割を選び直せます。行を押して選び、ほかの投手を押すと持ち場を入れ替えます。ドラッグでも同じです（先発どうしは登板順を動かします）。';
+      : '役割の札を押すと役割を選び直せます。行を押して選び、ほかの投手を押すと持ち場を入れ替えます。ドラッグでも同じです（先発どうしは2人の登板順を入れ替えます）。';
   const pickLabel = (id, name) =>
     selection !== null && selection !== id
       ? `${name}と入れ替える`

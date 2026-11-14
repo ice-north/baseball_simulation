@@ -690,8 +690,12 @@ const opposing = projectTeamInfo({ league }, 'a', away);
 assert.equal(opposing.teamName, away);
 assert.equal(opposing.roster.length, league.game.teams[away].players.length);
 assert.ok(opposing.roster.every((p) => p.publicOnly && !p.detailAvailable));
+// スタメンと投手陣は見せる（順位表から球団を押したとき。先方要望 2026-11）。方針・作戦は出さない
+assert.ok(Array.isArray(opposing.lineup?.battingOrder), '他球団のスタメンが載っていない');
+assert.ok(Array.isArray(opposing.lineup?.starters), '他球団の先発ローテが載っていない');
+for (const key of ['strategy', 'tactics'])
+  assert.ok(!Object.hasOwn(opposing.lineup, key), `他球団の${key}が見えている`);
 for (const key of [
-  'lineup',
   'strategy',
   'phase',
   'nextStarterId',

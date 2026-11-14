@@ -3,6 +3,7 @@ import React from 'react';
 import { teamShort, ownOutcome } from './gameText.js';
 import { Standings } from './LeaguePanels.jsx';
 import { GameRecordButton } from './GameHistory.jsx';
+import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { turnOfDate } from './shared.js';
 
 // ============================================================
@@ -346,7 +347,9 @@ const SECTIONS = [
 /** 個人成績ランキングの1つの箱に出す人数 */
 const LEADERS_SHOWN = 5;
 
-function Leaders({ leaders, ownTeam }) {
+function Leaders({ view }) {
+  const leaders = view.leaders;
+  const ownTeam = view.teamName;
   const shown = (leaders || []).filter((c) => c.rows.length);
   if (!shown.length) return null;
   return (
@@ -366,7 +369,7 @@ function Leaders({ leaders, ownTeam }) {
                     {/* ⚠ サーバーは10人まで返す（アプリ用）。Web の箱は5人に揃える */}
                     {category.rows.slice(0, LEADERS_SHOWN).map((row, i) => (
                       <li
-                        key={`${row.team}:${row.name}`}
+                        key={`${row.team}:${row.id ?? row.name}`}
                         /* ⚠ 自球団の選手は黄色で強調する */
                         className={row.team === ownTeam ? 'online-own-text' : ''}
                       >
@@ -374,7 +377,13 @@ function Leaders({ leaders, ownTeam }) {
                           {i + 1}
                         </span>
                         <span className="online-leader-name">
-                          {row.name}
+                          {/* 名前を押すと選手の詳細（能力・成績）を開く（先方要望 2026-11） */}
+                          <TeamPlayerButton
+                            view={view}
+                            team={row.team}
+                            id={row.id}
+                            name={row.name}
+                          />
                           <small>{teamShort(row.team)}</small>
                         </span>
                         <span className="online-leader-value">
@@ -409,7 +418,7 @@ export default function LeagueBoard({ view }) {
           <RecentGames view={view} />
           <NextGames view={view} />
         </div>
-        <Leaders leaders={view.leaders} ownTeam={view.teamName} />
+        <Leaders view={view} />
       </div>
       <div className="online-board-side">
         <Standings view={view} />

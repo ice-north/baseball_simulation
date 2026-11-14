@@ -8,10 +8,10 @@
 //  - 控えの野手の括り（捕手・内野・外野）に投手を出さない。投手は最後の別の括り（二刀流）。
 //    スタメン8行＋投手の9番
 //  - 行を選ぶ → 控えがその守備位置の候補になる → 押すと交代（打順と守備位置を引き継ぐ）
-//  - 守備位置のバッジ同士で守備を入れ替える。ドラッグで打順を動かす・控えと交代する
+//  - 守備位置のバッジ同士で守備を入れ替える。ドラッグで打順を入れ替える・控えと交代する
 //  - 守備位置を選ぶと成績の列の場所に守備図が開く。図の位置を押しても入れ替わる
 //  - 元に戻す／やり直す（Ctrl+Z / Ctrl+Shift+Z）、未保存の印
-//  - 投手起用: 先発と救援の入れ替え（登板順と型を引き継ぐ）・役割の一覧で守護神を替える・
+//  - 投手起用: 先発と救援の入れ替え（登板順と型を引き継ぐ）・役割の一覧でクローザーを替える・
 //    先発どうしのドラッグ・ローテから外す。次の先発の印は、並びを変えたら先頭へ
 //  - ⚠ **投手起用（別のページ）を先に保存しても、スタメン設定の未保存の編集は保存できる**
 //    （PCでは打順と投手起用を別々に保存する。`lineupBridge.js` の受け持ち項目）
@@ -58,6 +58,35 @@ try {
     0,
     '守備分析が左メニューに残っている',
   );
+  // ホーム: 順位表の球団名を押すと、その球団のスタメン（8人）と投手陣が出る。
+  //         個人成績ランキングの名前を押すと、選手の小窓（能力つき）が出る（先方要望 2026-11）
+  {
+    const own = await p
+      .locator('.online-standings tr.online-own .online-team-name')
+      .innerText();
+    const teams = p.locator('.online-standings .online-team-name');
+    const names = await teams.allInnerTexts();
+    await teams.nth(names.findIndex((n) => n !== own)).click();
+    const dialog = p.locator('.online-team-dialog');
+    await dialog.locator('.online-team-lineup').first().waitFor();
+    assert.equal(
+      await dialog.locator('.online-team-lineup').first().locator('tbody tr').count(),
+      8,
+      '順位表から開いた他球団のスタメンが8人でない',
+    );
+    assert.ok(
+      (await dialog.locator('td', { hasText: /^先発1/ }).count()) > 0,
+      '順位表から開いた他球団の先発ローテが出ない',
+    );
+    await dialog.getByRole('button', { name: '球団の起用を閉じる' }).click();
+    await p.locator('.online-leader-name .online-player-name').first().click();
+    await p.locator('#online-player-title').waitFor();
+    assert.ok(
+      (await p.locator('.online-player-dialog').getByText('ミート').count()) > 0,
+      'ランキングの選手の小窓に能力が出ない',
+    );
+    await p.getByRole('button', { name: '選手成績を閉じる' }).click();
+  }
   await go('スタメン設定');
   const slots = () =>
     p
@@ -230,13 +259,13 @@ try {
     '守備図を閉じても成績の列が戻らない',
   );
 
-  // ドラッグ: 8番を1番へ（間は1つずつ下がる）
+  // ドラッグ: 8番を1番へ（2人の入れ替え。間の選手は動かない）
   await p.locator('tr[data-slot="8"]').dragTo(p.locator('tr[data-slot="1"]'));
   const dragged = await slots();
   assert.deepEqual(
     dragged,
-    [swapped[7], ...swapped.slice(0, 7)],
-    'ドラッグで打順が動かない',
+    [swapped[7], ...swapped.slice(1, 7), swapped[0]],
+    'ドラッグで2人の打順が入れ替わらない（間の選手がずれた）',
   );
   // ドラッグ: 控えを6番へ（交代）
   const benchFirst = (await benchNames())[0];
@@ -340,11 +369,11 @@ try {
     .getByRole('button', { name: '投手起用', exact: true })
     .getByLabel('保存していない変更')
     .waitFor();
-  // 役割の一覧から守護神を選ぶ: 前の守護神はこの投手の前の役割へ
+  // 役割の一覧からクローザーを選ぶ: 前のクローザーはこの投手の前の役割へ
   const reliefNow = await relief();
-  const closer = reliefNow.find((r) => r.startsWith('守護神:'));
+  const closer = reliefNow.find((r) => r.startsWith('クローザー:'));
   const [otherRole, otherName] = reliefNow
-    .find((r) => !r.startsWith('守護神:'))
+    .find((r) => !r.startsWith('クローザー:'))
     .split(':');
   await p
     .getByRole('button', {
@@ -353,24 +382,24 @@ try {
     .click();
   await p
     .getByRole('dialog', { name: `${otherName}の役割` })
-    .getByRole('button', { name: /^守護神/ })
+    .getByRole('button', { name: /^クローザー/ })
     .click();
   const afterCloser = await relief();
   assert.ok(
-    afterCloser.includes(`守護神:${otherName}`),
-    '役割の一覧で守護神にならない',
+    afterCloser.includes(`クローザー:${otherName}`),
+    '役割の一覧でクローザーにならない',
   );
   assert.equal(
-    afterCloser.filter((r) => r.startsWith('守護神:')).length,
+    afterCloser.filter((r) => r.startsWith('クローザー:')).length,
     1,
-    '守護神が2人になった',
+    'クローザーが2人になった',
   );
   if (closer)
     assert.ok(
       afterCloser.includes(`${otherRole}:${closer.split(':')[1]}`),
-      '前の守護神が役割を引き継がない',
+      '前のクローザーが役割を引き継がない',
     );
-  // 先発どうしのドラッグ: 1番手を3番手の位置へ（間は1つずつ上がる）。次の先発の印は先頭へ
+  // 先発どうしのドラッグ: 1番手と3番手を入れ替える（間は動かない）。次の先発の印は先頭へ
   const beforeDrag = await rotation();
   await p
     .locator('tr[data-starter]')
@@ -379,8 +408,8 @@ try {
   const dragged2 = await rotation();
   assert.deepEqual(
     dragged2,
-    [beforeDrag[1], beforeDrag[2], beforeDrag[0], ...beforeDrag.slice(3)],
-    'ドラッグで登板順が動かない',
+    [beforeDrag[2], beforeDrag[1], beforeDrag[0], ...beforeDrag.slice(3)],
+    'ドラッグで2人の登板順が入れ替わらない（間の投手がずれた）',
   );
   assert.equal(
     await nextMark(),
@@ -1002,7 +1031,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・守護神・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発・行の高さと字の大きさがそろう / 守備位置の変更（定期の読み直しで版が上がった後も））',
+    'online-lineup-board-ui-check PASS（順位表の球団→スタメンと投手陣・ランキングの選手→能力 / 守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・クローザー・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発・行の高さと字の大きさがそろう / 守備位置の変更（定期の読み直しで版が上がった後も））',
   );
 } catch (error) {
   await failureShots(browser, 'online-lineup-board-ui');

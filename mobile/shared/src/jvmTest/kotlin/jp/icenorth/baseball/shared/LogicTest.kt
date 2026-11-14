@@ -83,10 +83,10 @@ class LogicTest {
         assertEquals(typed.lineup, payload.at("baseLineup"))
         // 編集→元に戻す→やり直す
         var history = EditHistory(draft)
-        history = history.push(draft.moveBatter(0, 3))
+        history = history.push(draft.swapBatters(0, 3))
         history = history.push(history.present.withStrategy("batting", "aggressive"))
         assertTrue(history.canUndo)
-        assertEquals(draft.moveBatter(0, 3), history.undo().present)
+        assertEquals(draft.swapBatters(0, 3), history.undo().present)
         assertEquals("aggressive", history.undo().redo().present.strategy["batting"])
         assertTrue(history.undo().undo().present.sameEdit(draft))
         // 自動采配は既定のままなら送らない、変えたら全項目を送る

@@ -22,11 +22,10 @@ data class PlanDraft(
 ) {
     private fun withSlots(op: LineupDraft.() -> LineupDraft) = copy(slots = LineupDraft(base, slots, emptyList()).op().slots)
 
-    fun moveBatter(from: Int, to: Int) = withSlots { moveBatter(from, to) }
     fun swapPositions(a: Int, b: Int) = withSlots { swapPositions(a, b) }
     fun replaceBatter(index: Int, playerId: Long) = withSlots { replaceBatter(index, playerId) }
 
-    /** 打順の2人を入れ替える（ドラッグで別の行に落としたとき） */
+    /** 打順の2人を入れ替える（ドラッグで別の行に落としたとき。間の選手は動かさない） */
     fun swapBatters(a: Int, b: Int): PlanDraft {
         if (a == b || a !in slots.indices || b !in slots.indices) return this
         val next = slots.toMutableList(); next[a] = slots[b]; next[b] = slots[a]
@@ -53,7 +52,7 @@ data class PlanDraft(
             pitching.starters.any { id ->
                 id !in pitching.roles || (roster != null && roster.none { it.id == id && it.isActive && it.pitching != null })
             } -> "名簿に居ない・起用できない投手が先発に入っています"
-            pitching.roles.values.count { it == "closer" } > 1 -> "守護神は1人までです"
+            pitching.roles.values.count { it == "closer" } > 1 -> "クローザーは1人までです"
             else -> null
         }
 

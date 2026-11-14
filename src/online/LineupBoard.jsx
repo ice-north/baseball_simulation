@@ -13,7 +13,6 @@ import {
   orderFromLineup,
   battingOrderFromOrder,
   sameOrder,
-  moveOrder,
   swapOrder,
   swapPositions,
   replaceStarter,
@@ -332,7 +331,8 @@ export default function LineupBoard({
   };
 
   // ---- 操作（ドラッグ）。落とした先の行で、運んだものに応じて決まる
-  //   打順の行 → 打順の行: その打順へ動かす（間はずれる）
+  //   打順の行 → 打順の行: 2人の打順を入れ替える（クリックと同じ。間の選手は動かさない）
+  //   ⚠ 前は「その打順へ動かす（間はずれる）」で、入れ替えたつもりが下の選手が全員1つずれた
   //   守備位置 → 打順の行: 守備位置を入れ替える
   //   控え → 打順の行 / 打順の行 → 控え: 交代
   const startDrag = (payload) => (e) => {
@@ -365,7 +365,7 @@ export default function LineupBoard({
     endDrag();
     if (!d) return;
     if (target.kind === 'row') {
-      if (d.kind === 'row') commit(moveOrder(order, d.index, target.index));
+      if (d.kind === 'row') commit(swapOrder(order, d.index, target.index));
       else if (d.kind === 'pos')
         commit(swapPositions(order, d.index, target.index));
       else if (d.kind === 'bench')

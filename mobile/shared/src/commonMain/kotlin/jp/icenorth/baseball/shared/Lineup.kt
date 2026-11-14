@@ -62,10 +62,15 @@ data class LineupDraft(
 ) {
     val isDirty: Boolean get() = this != from(base)
 
-    fun moveBatter(from: Int, to: Int): LineupDraft {
-        if (from == to || from !in slots.indices || to !in slots.indices) return this
+    /**
+     * 2人の打順を入れ替える（守備位置は選手に付いたまま。間の選手は動かさない）。
+     * ⚠ 「その打順へ動かす（間はずれる）」にしないこと。入れ替えたつもりが下の選手が
+     *    全員1つずれる、と言われて直した（2026-11。Web の swapOrder と同じ）
+     */
+    fun swapBatters(a: Int, b: Int): LineupDraft {
+        if (a == b || a !in slots.indices || b !in slots.indices) return this
         val next = slots.toMutableList()
-        next.add(to, next.removeAt(from))
+        next[a] = slots[b]; next[b] = slots[a]
         return copy(slots = next)
     }
 

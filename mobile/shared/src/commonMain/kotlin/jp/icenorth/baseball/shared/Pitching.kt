@@ -4,7 +4,7 @@ package jp.icenorth.baseball.shared
  * 投手起用の編集（Web 版 src/online/pitchingEdit.js と同じ決まり）。
  *   starters … 先発ローテの順（投手の id）
  *   roles    … 起用できる全投手の役割。ローテの投手は先発の型、ほかは救援の役割
- * - 先発は1〜8人、守護神は1人まで
+ * - 先発は1〜8人、クローザーは1人まで
  * - **野手も投手で起用できる**（二刀流）。投手登録の選手はいつも全員が入り、野手は
  *   加えた選手だけが入る（`roles` に居る野手）。⚠ 全員を入れると救援の「おまかせ」で野手が投げる
  */
@@ -14,6 +14,13 @@ data class PitchingState(val starters: List<Long>, val roles: Map<Long, String>)
     fun moveStarter(from: Int, to: Int): PitchingState {
         if (from == to || from !in starters.indices || to !in starters.indices) return this
         val next = starters.toMutableList(); next.add(to, next.removeAt(from))
+        return copy(starters = next)
+    }
+
+    /** 2人の登板順を入れ替える（間の投手は動かさない。Web の swapStarters と同じ） */
+    fun swapStarters(a: Int, b: Int): PitchingState {
+        if (a == b || a !in starters.indices || b !in starters.indices) return this
+        val next = starters.toMutableList(); next[a] = starters[b]; next[b] = starters[a]
         return copy(starters = next)
     }
 

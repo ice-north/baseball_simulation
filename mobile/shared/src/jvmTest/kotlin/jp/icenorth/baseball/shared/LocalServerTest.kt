@@ -16,12 +16,12 @@ class LocalServerTest {
         val api = OnlineApi(endpoint)
         val auth = api.localLogin("player1")
         val view = api.view(auth)
-        val draft = LineupDraft.from(view.lineup!!).moveBatter(0, 1)
+        val draft = LineupDraft.from(view.lineup!!).swapBatters(0, 1)
         api.command(auth, view.revision, "lineup", draft.toPayload())
         val after = LineupDraft.from(api.view(auth).lineup!!)
         assertEquals(draft.slots, after.slots)
         // 古い版で送っても、版のずれだけなら送り直して通る
-        val back = after.moveBatter(1, 0)
+        val back = after.swapBatters(1, 0)
         api.command(auth, view.revision, "lineup", back.toPayload())
         assertEquals(back.slots, LineupDraft.from(api.view(auth).lineup!!).slots)
     }

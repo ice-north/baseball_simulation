@@ -8,7 +8,7 @@
 // ⚠ サーバーの形（`server/lineupTactics.mjs`）と同じ決まりを、操作の側で崩さない。
 //    - 先発は1〜8人（`validateLineup`）
 //    - 先発ローテの投手には先発の型、ほかには救援の役割（`roleFor`）
-//    - 守護神は1人まで
+//    - クローザーは1人まで
 // ⚠ オンラインでは全投手に役割が付く（無い投手は「おまかせ」）。一人用の画面に
 //    あった「未設定」の欄は、サーバーが「おまかせ」に読み替えるだけなので出さない。
 // ⚠ 保存済みの先発に名簿に居ない投手（外れた・居なくなった）や、抹消中の投手が
@@ -147,8 +147,8 @@ export function swapStarters(state, a, b) {
  * 救援の役割にすればローテから外れる。
  * - 先発が `MAX_STARTERS` 人いるときは先発へ入れない（変えない）
  * - 最後の1人の先発は救援にできない（変えない）
- * - 守護神は1人。新しく守護神にした投手の前の役割を、前の守護神へ渡す
- *   （救援どうしなら入れ替え。先発から来たときは前の守護神は「おまかせ」）
+ * - クローザーは1人。新しくクローザーにした投手の前の役割を、前のクローザーへ渡す
+ *   （救援どうしなら入れ替え。先発から来たときは前のクローザーは「おまかせ」）
  */
 export function setRole(state, id, role, at = null) {
   const current = state.roles[id];
@@ -187,7 +187,7 @@ export function setRole(state, id, role, at = null) {
  * 2人の投手の持ち場を入れ替える（行を選んで別の行を押す・行に落とす）。
  * - 先発どうし → 登板順だけ入れ替える（先発の型はその投手のまま）
  * - 先発と救援 → 救援の投手がその登板順と先発の型を引き継ぎ、先発の投手が救援の役割を引き継ぐ
- *   （スタメン設定の交代と同じ。先発の人数・守護神の人数は変わらない）
+ *   （スタメン設定の交代と同じ。先発の人数・クローザーの人数は変わらない）
  * - 救援どうし → 役割を入れ替える
  */
 export function swapPitchers(state, a, b) {
@@ -290,6 +290,6 @@ export function pitchingProblems(state, roster) {
   if (state.starters.some((id) => !ids.has(id)))
     problems.push('名簿に居ない・起用できない投手が先発に入っています');
   if (Object.values(state.roles).filter((r) => r === 'closer').length > 1)
-    problems.push('守護神は1人までです');
+    problems.push('クローザーは1人までです');
   return problems;
 }

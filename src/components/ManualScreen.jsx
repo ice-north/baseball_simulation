@@ -529,7 +529,7 @@ const ManualContent = ({ category }) => {
         <div className="space-y-4">
           <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1">先発ロール</h3>
           <Entry title="ゲームメーカー（ace）" range="球数上限: 110球">
-            チームの柱。セットアッパー・守護神へ繋ぐ。自動配置では最も総合力が高い先発に設定される。
+            チームの柱。セットアッパー・クローザーへ繋ぐ。自動配置では最も総合力が高い先発に設定される。
           </Entry>
           <Entry title="完投型（complete）" range="球数上限: 120球">
             スタミナが続く限り最後まで投げる。球数上限が最も多く、スタミナの高い投手向け。
@@ -557,9 +557,9 @@ const ManualContent = ({ category }) => {
             1打者限定で起用されるリリーフ。主に左投手が左打者を抑えるために登板する。
           </Entry>
           <Entry title="セットアッパー（setup）" range="球数上限: 35球">
-            8回を任されるリリーフ。守護神へ繋ぐ重要な役割。僅差で優勢の場面で登板する。
+            8回を任されるリリーフ。クローザーへ繋ぐ重要な役割。僅差で優勢の場面で登板する。
           </Entry>
-          <Entry title="守護神（closer）" range="球数上限: 40球">
+          <Entry title="クローザー（closer）" range="球数上限: 40球">
             9回を締めくくるクローザー。3点差以内のリードで登板し、セーブを記録する。
           </Entry>
           <Entry title="敗戦処理（mopup）" range="球数上限: 50球">
@@ -594,7 +594,7 @@ const ManualContent = ({ category }) => {
                   <tr><td className="py-0.5 px-2 text-blue-300">オープナー</td><td className="text-right px-2">40球</td></tr>
                   <tr className="border-t border-gray-600"><td className="py-0.5 px-2 text-green-300">ロングリリーフ</td><td className="text-right px-2">60球</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">敗戦処理 / ビハインド</td><td className="text-right px-2">50球</td></tr>
-                  <tr><td className="py-0.5 px-2 text-green-300">守護神 / 中継ぎエース</td><td className="text-right px-2">40球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">クローザー / 中継ぎエース</td><td className="text-right px-2">40球</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">セットアッパー</td><td className="text-right px-2">35球</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">ワンポイント</td><td className="text-right px-2">15球</td></tr>
                 </tbody>

@@ -26,7 +26,7 @@ for (let s = 0; s < SEEDS; s++) {
         const st = team.players.find(p => p.id === starterId); if (!st) continue;
         const ch = (r.pitcherChanges || []).find(c => c.out === st.name);
         const reason = !ch ? '完投' : /球数制限/.test(ch.reason) ? '球数' : /スタミナ限界/.test(ch.reason) ? 'スタミナ25%'
-          : /ダメージ/.test(ch.reason) ? 'ダメージ' : /代打/.test(ch.reason) ? '代打' : /守護神|セットアッパー/.test(ch.reason) ? '勝ちパターン'
+          : /ダメージ/.test(ch.reason) ? 'ダメージ' : /代打/.test(ch.reason) ? '代打' : /クローザー|セットアッパー/.test(ch.reason) ? '勝ちパターン'
           : /ピンチ/.test(ch.reason) ? 'ピンチ' : 'その他';
         const role = TEAMS_DATA[team.name]?.pitchingRotation?.pitcherRoles?.[st.id] || 'auto_s';
         rows.push({ role, sta: st.pitching?.stamina || 0, outs: st.gameStats.pitching.outs, pitches: st.gameStats.pitching.pitches, reason,

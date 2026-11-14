@@ -87,7 +87,7 @@ class LocalFlowTest {
         var draft = PlanDraft.from(typed.lineup!!, typed.roster)
         val reliever = typed.roster.first { it.isPitcher && it.id !in draft.pitching.starters }
         draft = draft.withPitching(draft.pitching.setRole(reliever.id, "closer"))
-            .withStrategy("batting", "aggressive").withTactic("starterLimit", "100").moveBatter(0, 2)
+            .withStrategy("batting", "aggressive").withTactic("starterLimit", "100").swapBatters(0, 2)
         assertEquals(null, draft.problem())
         send("lineup", draft.toPayload())
         val saved = PlanDraft.from(api.view(auth).lineup!!, typed.roster)

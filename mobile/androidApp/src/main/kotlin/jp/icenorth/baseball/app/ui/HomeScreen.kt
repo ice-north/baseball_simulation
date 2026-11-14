@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -268,6 +270,18 @@ private fun BackNumberDialog(issues: List<BackIssue>, localTitle: String, onClos
     )
 }
 
+/** 歴代記録の1行。現役の選手（`id` あり）は押すと選手の詳細を開く（色を変えて押せると分かるように） */
+@Composable
+private fun RecordLine(text: String, row: jp.icenorth.baseball.shared.RecordRow, onOpen: (Long) -> Unit) {
+    val id = row.id
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (id != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        modifier = if (id != null) Modifier.fillMaxWidth().clickable { onOpen(id) }.padding(vertical = 2.dp) else Modifier,
+    )
+}
+
 /**
  * 球団史・記録（年表・歴代記録・引退した選手・節目）。「team」の窓口の chronicle を読む。
  * ⚠ 文と並びは PC の「球団史・記録」（src/online/Chronicle.jsx）と同じにすること
@@ -305,9 +319,9 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                         Column {
                             Text(r.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                             if (r.season.isNotEmpty()) Text("シーズン最多", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            r.season.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> Text(seasonRecordLine(i + 1, x), style = MaterialTheme.typography.bodySmall) }
+                            r.season.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> RecordLine(seasonRecordLine(i + 1, x), x) { onClose(); model.openPlayerOf(team, it, x.name) } }
                             if (r.career.isNotEmpty()) Text("球団通算", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            r.career.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> Text(careerRecordLine(i + 1, x), style = MaterialTheme.typography.bodySmall) }
+                            r.career.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> RecordLine(careerRecordLine(i + 1, x), x) { onClose(); model.openPlayerOf(team, it, x.name) } }
                         }
                     }
                     item { ChronicleHeading("節目の記録") }
