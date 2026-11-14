@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
+import { AbilityGrade, TeamPlayerButton } from './PlayerPerformance.jsx';
 import { POS } from './api.js';
 import { teamShort } from './gameText.js';
 import { Page } from './Page.jsx';
@@ -60,7 +60,13 @@ export default function AbilityRanking({ view }) {
                       {i + 1}
                     </span>
                     <span className="online-leader-name">
-                      <PlayerStatsButton player={row} panel="abilities" />
+                      <TeamPlayerButton
+                        view={view}
+                        team={row.team}
+                        id={row.id}
+                        name={row.name}
+                        panel="abilities"
+                      />
                       <small>
                         {teamShort(row.team)}·{POS[row.position]}
                       </small>

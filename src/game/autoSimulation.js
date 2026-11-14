@@ -1662,7 +1662,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (closerCanEnter(rotation, gs, teamKey, currentPitcher.id, defenseTeam.players)) {
         shouldChange = true;
         situation = 'save';
-        changeReason = scoreDiff === 0 ? `9回同点、守護神を投入` : `9回${scoreDiff}点リード、守護神を投入`;
+        changeReason = scoreDiff === 0 ? `9回同点、クローザーを投入` : `9回${scoreDiff}点リード、クローザーを投入`;
       }
     }
     // 8回僅差→セットアッパー
@@ -1756,7 +1756,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const closerData = defenseTeam.players.find(p => p.id === rotation.closer);
       if (closerData && isAvailableMid(rotation.closer)) {
         reliever = closerData;
-        selectedRoleLabel = '守護神';
+        selectedRoleLabel = 'クローザー';
       }
     }
 
@@ -2647,7 +2647,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               // クローザー: イニングを抑えたら交代、最大2イニング
               if (reliefTrack.relieverOutsPitched >= 6) {
                 shouldChange = true;
-                changeReason = `守護神${pitcher.name}が2イニング投球、交代`;
+                changeReason = `クローザー${pitcher.name}が2イニング投球、交代`;
                 situation = 'middle';
               }
             } else if (relieverRole === 'long' || relieverRole === 'mopup' || relieverRole === 'behind') {
@@ -2699,7 +2699,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
               const roleLabel = {
                 complete: '完投型', ace: 'ゲームメーカー', quality: '勝ち権利型',
-                short: 'ショートスターター', opener: 'オープナー', closer: '守護神', setup: 'セットアッパー',
+                short: 'ショートスターター', opener: 'オープナー', closer: 'クローザー', setup: 'セットアッパー',
                 ace_relief: '中継ぎエース', long: 'ロングリリーフ', onepoint: 'ワンポイント',
                 behind: 'ビハインド', mopup: '敗戦処理'
               }[currentRole] || (isReliever ? 'リリーフ' : '先発');
@@ -2741,7 +2741,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             if (closerCanEnter(rotation, gameState, teamKey, pitcher.id, team.players)) {
               shouldChange = true;
               situation = 'save';
-              changeReason = scoreDiff === 0 ? `9回同点、守護神を投入` : `9回セーブ場面、守護神を投入`;
+              changeReason = scoreDiff === 0 ? `9回同点、クローザーを投入` : `9回セーブ場面、クローザーを投入`;
             }
           }
           // 8回で僅差リード → セットアッパー
@@ -2798,7 +2798,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
                 const closerData = team.players.find(p => p.id === rotation.closer && p.id !== pitcher.id);
                 if (closerData && isAvailable(rotation.closer)) {
                   reliever = closerData;
-                  selectedRoleLabel = '守護神';
+                  selectedRoleLabel = 'クローザー';
                 }
               }
             }

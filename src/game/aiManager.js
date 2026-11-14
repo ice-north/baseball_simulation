@@ -60,7 +60,7 @@ export function executeAutoSubstitutePitcher(ctx) {
     if (currentRole === 'ace') {
       if (inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
         shouldSubstitute = true;
-        reason = `ゲームメーカー${currentPitcher.name}が8回を投げ切り、守護神へリレー`;
+        reason = `ゲームメーカー${currentPitcher.name}が8回を投げ切り、クローザーへリレー`;
       } else if (inning >= 9 && staminaRate < 0.35) {
         shouldSubstitute = true;
         reason = `ゲームメーカー${currentPitcher.name}が8回投球後スタミナ低下(${Math.round(staminaRate * 100)}%)`;
@@ -138,7 +138,7 @@ export function executeAutoSubstitutePitcher(ctx) {
       const closerPlayer = defenseTeam.players.find(p => p.id === closerId && !p.hasSubbedOut);
       if (closerPlayer && (fatigue[closerId] || 0) < 50) {
         shouldSubstitute = true;
-        reason = `9回セーブ場面、守護神${closerPlayer.name}を投入`;
+        reason = `9回セーブ場面、クローザー${closerPlayer.name}を投入`;
       }
     }
   }
@@ -175,7 +175,7 @@ export function executeAutoSubstitutePitcher(ctx) {
 
   if (situation === 'save' && rotation?.closer) {
     const closer = availablePitchers.find(p => p.id === rotation.closer && (fatigue[rotation.closer] || 0) < 50);
-    if (closer) { selectedPitcher = closer; roleLabel = '守護神'; }
+    if (closer) { selectedPitcher = closer; roleLabel = 'クローザー'; }
   }
 
   if (!selectedPitcher && (situation === 'hold' || situation === 'save')) {

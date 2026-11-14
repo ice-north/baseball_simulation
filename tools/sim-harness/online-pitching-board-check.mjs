@@ -3,7 +3,7 @@
 //
 // ⚠ 見るのは「どの操作も**サーバーが受け付ける形**を崩さない」こと。正本は
 //    `validateLineup`（先発1〜8人）と `validateTactics`（先発には先発の型・ほかは救援の役割・
-//    守護神は1人まで）。操作を無作為に重ねても、毎回そのまま保存できる形であること。
+//    クローザーは1人まで）。操作を無作為に重ねても、毎回そのまま保存できる形であること。
 // ⚠ 疲労の色の境目はサーバーと同じ値であること（先発の登板を飛ばす・救援を使わない）。
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -171,12 +171,12 @@ accepted(start);
   assert.equal(swapPitchers(start, 6, 6), start, '同じ投手どうしで変わった');
 }
 {
-  // 守護神を別の救援へ: 前の守護神は、新しい守護神の前の役割を引き継ぐ
+  // クローザーを別の救援へ: 前のクローザーは、新しいクローザーの前の役割を引き継ぐ
   const s = setRole(start, 7, 'closer');
   assert.equal(s.roles[7], 'closer');
-  assert.equal(s.roles[6], 'setup', '前の守護神が役割を引き継がない');
+  assert.equal(s.roles[6], 'setup', '前のクローザーが役割を引き継がない');
   accepted(s);
-  // 先発から守護神へ: ローテから外れ、前の守護神は「おまかせ」
+  // 先発からクローザーへ: ローテから外れ、前のクローザーは「おまかせ」
   const t = setRole(start, 5, 'closer');
   assert.deepEqual(t.starters, [1, 2, 3, 4]);
   assert.equal(t.roles[6], 'auto_r');
@@ -262,11 +262,11 @@ accepted(start);
   );
 }
 
-// --- 崩れた保存（守護神2人・名簿に居ない先発）は理由が出る（保存のボタンが押せない）
+// --- 崩れた保存（クローザー2人・名簿に居ない先発）は理由が出る（保存のボタンが押せない）
 {
   const broken = { starters: [1, 99], roles: { ...start.roles, 7: 'closer' } };
   const problems = pitchingProblems(broken, roster);
-  assert.ok(problems.some((m) => /守護神/.test(m)));
+  assert.ok(problems.some((m) => /クローザー/.test(m)));
   assert.ok(problems.some((m) => /名簿/.test(m)));
   assert.ok(samePitching(start, pitchingFromLineup(lineup, roster)));
   // ⚠ 名簿に居ない先発（外れた投手13・居ない99）を隠さない。隠すと保存済みの崩れが
@@ -477,5 +477,5 @@ accepted(start);
 }
 
 console.log(
-  'online-pitching-board-check PASS（どの操作もサーバーが受け付ける形 / 入れ替え・役割・守護神 / 先発1〜8人 / 救援の並び / 疲労の境目がサーバーと同じ / 野手を投手起用に加える・外す / スマホとPCの受け渡し）',
+  'online-pitching-board-check PASS（どの操作もサーバーが受け付ける形 / 入れ替え・役割・クローザー / 先発1〜8人 / 救援の並び / 疲労の境目がサーバーと同じ / 野手を投手起用に加える・外す / スマホとPCの受け渡し）',
 );

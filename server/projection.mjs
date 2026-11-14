@@ -702,8 +702,11 @@ export function projectTeamInfo(bundle, userId, teamName) {
     404,
   );
   const statistics = statisticsContext(l);
-  const activeKeys = new Set(
-    l.game.teams[teamName].players.map((p) => p.onlinePlayerId).filter(Boolean),
+  // いま名簿にいる人の記録の鍵 → 選手 id（歴代記録の「現役」の印と、名前を押して開く選手）
+  const activeKeys = new Map(
+    l.game.teams[teamName].players
+      .filter((p) => p.onlinePlayerId)
+      .map((p) => [p.onlinePlayerId, p.id]),
   );
   const labelOf = (name) =>
     (l.teams || []).find((t) => t.name === name)?.displayName || name;
@@ -719,9 +722,16 @@ export function projectTeamInfo(bundle, userId, teamName) {
     ),
   );
   const isMemberTeam = l.members.some((m) => m.teamName === teamName);
+  // スタメン（打順・守備）と投手陣（先発ローテ・救援の役割）。順位表から球団を押したときと、
+  // 選手成績の「1番」「先発1」「抑え」の札に使う（先方要望 2026-11）。
+  // ⚠ 打つ・守る顔ぶれは試合で誰でも見える。**方針・作戦（`strategy`・`tactics`）は出さない**
+  //    （人の球団の采配は出さない。`teamStaffView` と同じ線引き）
+  // eslint-disable-next-line no-unused-vars
+  const { strategy, tactics, ...lineup } = projectLineup(l.game.teams[teamName]);
   return {
     teamName,
     readOnly: true,
+    lineup,
     year: l.season.year,
     // 指導者（カード・CPU球団なら采配の内訳）。⚠ 人の球団の采配は出さない（`teamStaffView`）
     staff: teamStaffView(l, teamName, l.game.teams[teamName], labelOf),

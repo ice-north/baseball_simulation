@@ -1081,7 +1081,7 @@ export const LineupSettingContent = ({
     behind:     { label: 'ビハインド', color: 'bg-yellow-700', textColor: 'text-yellow-300', group: 'relief' },
     onepoint:   { label: 'ワンポイント', color: 'bg-green-600', textColor: 'text-green-300', group: 'relief' },
     setup:      { label: 'セットアップ', color: 'bg-orange-600', textColor: 'text-orange-300', group: 'relief' },
-    closer:     { label: '守護神', color: 'bg-purple-600', textColor: 'text-purple-300', group: 'relief' },
+    closer:     { label: 'クローザー', color: 'bg-purple-600', textColor: 'text-purple-300', group: 'relief' },
   };
 
   // 控え選手のポジションソート順（捕一二三遊左中右投）。投手は最後。
@@ -1846,7 +1846,8 @@ export const LineupSettingContent = ({
             return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
           });
 
-          // 先発の登板順: fromId の投手を toId の投手の位置へ動かす（間の投手は1つずつずれる）
+          // 先発の登板順: fromId の投手と toId の投手を入れ替える（間の投手は動かさない）
+          // ⚠ 「toId の位置へ動かす（間はずれる）」にしないこと。入れ替えたつもりで下が全員ずれる
           // ⚠ 並べ替えるのは画面に出ている先発だけ。starters 配列の中の、それ以外の投手
           //    （ベンチ外など）の位置は動かさない
           const moveStarter = (fromId, toId) => {
@@ -1857,8 +1858,7 @@ export const LineupSettingContent = ({
             const to = shown.indexOf(toId);
             if (from === -1 || to === -1) return;
             const reordered = [...shown];
-            reordered.splice(from, 1);
-            reordered.splice(to, 0, fromId);
+            [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
             let k = 0;
             team.pitchingRotation.starters = starters.map(id => (shown.includes(id) ? reordered[k++] : id));
             setUpdateTrigger(prev => prev + 1);
@@ -1903,8 +1903,8 @@ export const LineupSettingContent = ({
           // 投手起用バランス警告
           const roleWarnings = (() => {
             const w = [];
-            if (reliefByRole.closer.length === 0) w.push({ msg: '守護神が未設定です', level: 'error' });
-            if (reliefByRole.closer.length >= 2) w.push({ msg: '守護神が2人以上設定されています', level: 'warn' });
+            if (reliefByRole.closer.length === 0) w.push({ msg: 'クローザーが未設定です', level: 'error' });
+            if (reliefByRole.closer.length >= 2) w.push({ msg: 'クローザーが2人以上設定されています', level: 'warn' });
             if (reliefByRole.setup.length === 0) w.push({ msg: 'セットアッパーが未設定です', level: 'warn' });
             if (starterPitchers.length < 4) w.push({ msg: `先発が${starterPitchers.length}人（推奨: 5-6人）`, level: 'error' });
             else if (starterPitchers.length < 5) w.push({ msg: `先発が${starterPitchers.length}人（推奨: 5-6人）`, level: 'warn' });
@@ -1971,8 +1971,8 @@ export const LineupSettingContent = ({
               { icon: '⚡', role: 'ショート', desc: '3-4回で中継ぎへ繋ぐ。球数上限65球', color: 'text-blue-200' },
             ];
             const reliefLegend = [
-              { icon: '🔒', role: '守護神', desc: '9回・リード時に試合を締める。球数上限40球', color: 'text-purple-400' },
-              { icon: '⬆', role: 'セットアッパー', desc: '7-8回の僅差で守護神に繋ぐ。球数上限35球', color: 'text-orange-400' },
+              { icon: '🔒', role: 'クローザー', desc: '9回・リード時に試合を締める。球数上限40球', color: 'text-purple-400' },
+              { icon: '⬆', role: 'セットアッパー', desc: '7-8回の僅差でクローザーに繋ぐ。球数上限35球', color: 'text-orange-400' },
               { icon: '🔥', role: '中継ぎエース', desc: '僅差の重要場面で登板。球数上限40球', color: 'text-green-300' },
               { icon: '🔄', role: 'ロングリリーフ', desc: '先発降板後をカバー。球数上限60球', color: 'text-green-500' },
               { icon: '🎯', role: 'ワンポイント', desc: '特定打者に対して登板。球数上限15球', color: 'text-green-400' },
@@ -2116,7 +2116,7 @@ export const LineupSettingContent = ({
           return (
             <div>
               <TutorialHint id="rotation-dnd" title="投手の役割を決める">
-                投手カードを<b className="text-cyan-200">ドラッグ＆ドロップ</b>で「先発・守護神・セットアッパー・中継ぎ」等の役割枠へ配置します。先発は5〜6人、守護神・セットアッパーは各1人が目安（不足は警告表示）。「自動」で能力に応じて一括割り当ても可能です。
+                投手カードを<b className="text-cyan-200">ドラッグ＆ドロップ</b>で「先発・クローザー・セットアッパー・中継ぎ」等の役割枠へ配置します。先発は5〜6人、クローザー・セットアッパーは各1人が目安（不足は警告表示）。「自動」で能力に応じて一括割り当ても可能です。
               </TutorialHint>
               {/* 自動設定バー: 能力に応じてロールを一括割り当て / 全員おまかせ。
                   ⚠ このタブの枠（自動設定・登板順・役割の枠・控え）は**不透明の bg-surface-1** にする。
@@ -2130,7 +2130,7 @@ export const LineupSettingContent = ({
                     setUpdateTrigger(prev => prev + 1);
                   }}
                   className="btn-primary text-xs px-3 py-1 rounded font-medium transition"
-                  title="能力に応じて先発ローテ・守護神・セット・中継ぎ等を自動で割り当てます"
+                  title="能力に応じて先発ローテ・クローザー・セット・中継ぎ等を自動で割り当てます"
                 >
                   自動設定
                 </button>
@@ -2167,7 +2167,7 @@ export const LineupSettingContent = ({
                 <div className="mb-2 bg-surface-1 rounded-lg border border-gray-700/40 px-2 py-1.5">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-blue-300 text-xs font-bold">先発 登板順</span>
-                    <span className="text-xs text-gray-300">ドラッグで並べ替え（1番手から順に登板）</span>
+                    <span className="text-xs text-gray-300">ドラッグで2人を入れ替え（1番手から順に登板）</span>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {starterPitchers.map((pl, idx) => (

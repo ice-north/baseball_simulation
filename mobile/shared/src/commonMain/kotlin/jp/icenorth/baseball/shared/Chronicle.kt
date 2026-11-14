@@ -110,7 +110,8 @@ data class TeamSeason(
 }
 
 @Serializable
-data class RecordRow(val name: String = "", val year: Int? = null, val value: Int = 0, val current: Boolean = false, val active: Boolean = false)
+/** `id` は現役（いま名簿にいる）の選手だけサーバーが付ける。押すと選手の詳細を開く */
+data class RecordRow(val name: String = "", val year: Int? = null, val value: Int = 0, val current: Boolean = false, val active: Boolean = false, val id: Long? = null)
 
 @Serializable
 data class TeamRecord(val stat: String = "", val label: String = "", val season: List<RecordRow> = emptyList(), val career: List<RecordRow> = emptyList())

@@ -30,7 +30,7 @@ class ViewTest {
         val draft = LineupDraft.from(view.lineup!!)
         assertEquals(8, draft.slots.size)
         assertNull(draft.problem())
-        val moved = draft.moveBatter(0, 3).swapPositions(0, 1).moveStarter(0, 1)
+        val moved = draft.swapBatters(0, 3).swapPositions(0, 1).moveStarter(0, 1)
         assertTrue(moved.isDirty)
         assertNull(moved.problem())
         val payload = moved.toPayload()

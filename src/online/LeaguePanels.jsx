@@ -27,6 +27,7 @@ import {
   ROSTER_LIMIT,
 } from './shared.js';
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
+import TeamLineupButton from './TeamLineup.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
@@ -231,7 +232,8 @@ export function Standings({ view }) {
                     >
                       {i + 1}
                     </span>
-                    {teamLabel(s.team)}
+                    {/* 球団名を押すと、その球団のスタメンと投手陣を開く（先方要望 2026-11） */}
+                    <TeamLineupButton view={view} team={s.team} />
                     {/* ⚠ 人が持っている球団だけ、名前を括弧で添える。
                         CPUに付けると誰かが持っているように見える。
                         呼び名が球団名と同じときはサーバーが空で返す */}

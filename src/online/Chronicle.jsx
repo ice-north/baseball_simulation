@@ -1,5 +1,6 @@
 import React from 'react';
 import TeamRoster from './TeamRoster.jsx';
+import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import { teamLabel, teamShort } from './gameText.js';
 import { raceText, milestoneText, worldText } from './chronicleText.js';
@@ -49,7 +50,14 @@ function Seasons({ seasons }) {
   );
 }
 
-function Records({ records }) {
+function Records({ records, view, team }) {
+  // 現役（いま名簿にいる）の選手は名前を押すと選手の詳細を開く（`id` はサーバーが現役にだけ付ける）
+  const name = (x) =>
+    x.id != null ? (
+      <TeamPlayerButton view={view} team={team} id={x.id} name={x.name} />
+    ) : (
+      x.name
+    );
   if (!records?.length) return <p>記録がまだありません。</p>;
   return (
     <div className="online-leaders">
@@ -62,7 +70,7 @@ function Records({ records }) {
               <li key={`s:${i}`} className={x.active ? 'online-own-text' : ''}>
                 <span className="online-leader-rank" data-rank={i + 1}>{i + 1}</span>
                 <span className="online-leader-name">
-                  {x.name}
+                  {name(x)}
                   <small>{x.year}年目{x.current ? '（今季）' : ''}</small>
                 </span>
                 <span className="online-leader-value">{x.value}</span>
@@ -75,7 +83,7 @@ function Records({ records }) {
               <li key={`c:${i}`} className={x.active ? 'online-own-text' : ''}>
                 <span className="online-leader-rank" data-rank={i + 1}>{i + 1}</span>
                 <span className="online-leader-name">
-                  {x.name}
+                  {name(x)}
                   {x.active && <small>現役</small>}
                 </span>
                 <span className="online-leader-value">{x.value}</span>
@@ -209,7 +217,7 @@ export default function Chronicle({ view }) {
             </section>
             <section className="online-card">
               <h2>歴代記録</h2>
-              <Records records={c.records} />
+              <Records records={c.records} view={view} team={shown.teamName} />
             </section>
             <div className="online-board">
               <div className="online-board-main">

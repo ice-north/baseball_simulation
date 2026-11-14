@@ -5470,3 +5470,62 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-battery-table tr[data-few] th {
   opacity: 0.55;
 }
+
+/* --- 順位表の球団名（押すとスタメンと投手陣） ---------------------------------
+   ⚠ 選手名のボタン（`.online-player-name`）と同じく、下線の文字にする。
+      ボタンの高さ（44px）を取ると順位表の行だけ高くなる */
+.online .online-team-name {
+  color: inherit;
+  font-weight: inherit;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
+.online .online-team-name:hover:enabled {
+  background: transparent;
+  text-decoration-thickness: 2px;
+}
+/* 球団のスタメンと投手陣の小窓。⚠ 成績の列が入るので選手の小窓より広くする */
+.online-team-dialog {
+  width: min(560px, calc(100% - 24px));
+}
+.online-team-dialog h3 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+}
+.online-team-lineup {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.online-team-lineup th,
+.online-team-lineup td {
+  padding: 5px 4px;
+  border-bottom: 1px solid #47607a;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.online-team-lineup th {
+  color: #cbd5e1;
+  font-weight: 600;
+  font-size: 12px;
+}
+.online-team-lineup .is-num {
+  text-align: right;
+}
+.online-team-lineup .is-name {
+  white-space: normal;
+}
+.online-team-lineup .online-player-name {
+  min-height: 0;
+}
+.online-team-lineup .online-team-role {
+  display: block;
+  font-size: 11px;
+}

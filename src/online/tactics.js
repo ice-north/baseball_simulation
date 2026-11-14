@@ -35,7 +35,7 @@ export const RELIEF_ROLES = {
   long: 'ロングリリーフ',
   ace_relief: '中継ぎエース',
   setup: 'セットアッパー',
-  closer: '守護神',
+  closer: 'クローザー',
   onepoint: 'ワンポイント',
   behind: 'ビハインド',
   mopup: '敗戦処理',

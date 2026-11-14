@@ -35,6 +35,10 @@ import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.BATTING_GROUPS
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.PITCHING_GROUPS
+import jp.icenorth.baseball.shared.RELIEF_ORDER
+import jp.icenorth.baseball.shared.RELIEF_ROLES
+import jp.icenorth.baseball.shared.STARTER_ROLES
+import jp.icenorth.baseball.shared.seasonLine
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.careerRoster
 import jp.icenorth.baseball.shared.bool
@@ -74,7 +78,7 @@ fun PlayersScreen(model: AppViewModel) {
             }
             InfoButton(
                 "選手",
-                listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "自球団の表で色の付いた行は、スタメン・先発ローテの選手です。ランキングでは自球団の選手に色が付きます。"),
+                listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "色の付いた行は、スタメン・先発ローテの選手です。他球団は表の上にスタメンと投手陣も出します。ランキングでは自球団の選手に色が付きます。"),
                 Modifier.padding(end = 8.dp),
             )
         }
@@ -112,6 +116,8 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     val own = team == view.teamName
     // 自球団の今季は手元のビューで出す。他球団と通算はその場で読みに行く（全球団ぶんをビューに載せない）
     var loaded by remember(team, career) { mutableStateOf<List<JsonObject>?>(null) }
+    // 他球団のスタメンと投手陣（球団の読み込みの `lineup`。古い保存では無い）
+    var loadedLineup by remember(team, career) { mutableStateOf<JsonObject?>(null) }
     var failure by remember(team, career) { mutableStateOf<String?>(null) }
     var attempt by remember(team, career) { mutableStateOf(0) }
     val needsRead = career || !own
@@ -120,6 +126,7 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
         try {
             val result = model.read("team", mapOf("team" to team))
             loaded = result.at("roster").list().mapNotNull { it.obj() }
+            loadedLineup = result.at("lineup").obj()
             failure = null
         } catch (e: Exception) {
             // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
@@ -151,9 +158,10 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     val players = roster.orEmpty().filter { (it.at("position").str() == "pitcher") != batting && it.at("isActive").bool() != false }
         .filter { !catching || it.at("catcherStats").obj() != null || it.at("position").str() == "catcher" }
     val sorted = sortRoster(players, sortColumn, sortAscending)
-    val lineupIds = remember(view.lineup) {
-        view.lineup?.at("battingOrder").list().mapNotNull { it.at("playerId").num()?.toLong() }.toSet() +
-            view.lineup?.at("starters").list().mapNotNull { it.num()?.toLong() }
+    val lineup = if (own) view.lineup else loadedLineup
+    val lineupIds = remember(lineup) {
+        lineup?.at("battingOrder").list().mapNotNull { it.at("playerId").num()?.toLong() }.toSet() +
+            lineup?.at("starters").list().mapNotNull { it.num()?.toLong() }
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -175,6 +183,10 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
             failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 }, modifier = Modifier.padding(16.dp))
             roster == null -> Muted("読み込み中…", Modifier.padding(16.dp))
             else -> {
+                // 他球団はスタメンと投手陣を表の上に出す（順位表から球団を押して来たとき用。先方要望 2026-11）
+                if (!own && !career && lineup != null && source != null) {
+                    TeamLineupCard(lineup, source) { model.openPlayer = it }
+                }
                 StatTable(
                     players = sorted,
                     columns = group.columns,
@@ -185,7 +197,7 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                         else { sortId = c.id; ascending = c.ascending }
                     },
                     onPlayer = { model.openPlayer = it },
-                    highlight = { own && (it.at("id").num()?.toLong() ?: -1L) in lineupIds },
+                    highlight = { (it.at("id").num()?.toLong() ?: -1L) in lineupIds },
                     sub = { p ->
                         positionLabel(p.at("position").str()) + (p.at("age").int()?.let { " ${it}歳" } ?: "")
                     },
@@ -205,6 +217,55 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * 他球団のスタメン（打順・守備・今季成績）と投手陣（先発ローテ・救援の役割）。
+ * Web 版の順位表から開く小窓（src/online/TeamLineup.jsx）と同じ中身。名前を押すと選手の詳細。
+ * ⚠ 方針・作戦はサーバーが載せない（人の球団の采配は出さない）
+ */
+@Composable
+private fun TeamLineupCard(lineup: JsonObject, roster: List<JsonObject>, onPlayer: (JsonObject) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(true) }
+    val byId = remember(roster) { roster.associateBy { it.at("id").num()?.toLong() } }
+    val order = lineup.at("battingOrder").list().mapNotNull { it.obj() }.sortedBy { it.at("battingOrder").int() ?: 0 }
+    val starters = lineup.at("starters").list().mapNotNull { it.num()?.toLong() }.filter { it in byId }
+    val roles = lineup.at("pitcherRoles").obj().orEmpty().mapNotNull { (k, v) -> k.toLongOrNull()?.let { it to v.str().orEmpty() } }.toMap()
+    val relievers = RELIEF_ORDER.flatMap { role -> roles.filter { (id, r) -> r == role && id !in starters && id in byId }.keys.map { it to role } }
+    @Composable
+    fun line(mark: String, sub: String?, player: JsonObject?) {
+        Row(
+            Modifier.fillMaxWidth().then(if (player != null) Modifier.clickable { onPlayer(player) } else Modifier).padding(vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.width(92.dp)) {
+                Text(mark, style = MaterialTheme.typography.bodyMedium)
+                if (sub != null) Muted(sub)
+            }
+            Text(player?.at("name").str() ?: "（空き）", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+            Muted(player?.let { seasonLine(it).removePrefix("今季 ") }.orEmpty())
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { Caption("スタメン・投手陣（今の起用）") }
+            TextButton(onClick = { open = !open }) { Text(if (open) "畳む" else "出す") }
+        }
+        if (open) {
+            order.forEach { e ->
+                line("${e.at("battingOrder").int() ?: ""}番 ${positionLabel(e.at("position").str())}", null, byId[e.at("playerId").num()?.toLong()])
+            }
+            if (order.isNotEmpty()) Muted("9番は先発投手（その日の先発ローテの番）")
+            HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
+            starters.forEachIndexed { i, id ->
+                val type = roles[id]?.takeIf { it != "auto_s" }?.let { STARTER_ROLES[it] }
+                line("先発${i + 1}", type, byId[id])
+            }
+            relievers.forEach { (id, role) -> line(RELIEF_ROLES[role] ?: role, null, byId[id]) }
+            if (starters.isEmpty() && relievers.isEmpty()) Muted("投手起用がまだありません。")
+            HorizontalDivider(Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }

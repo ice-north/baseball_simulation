@@ -6,7 +6,7 @@
 // `{ playerId, position }`。投手は常に9番で、ここでは扱わない（サーバーの組み立て）。
 //
 // 【操作は3つだけ】どれも「8人が8つの守備位置を1つずつ守る」形を崩さない。
-//   1. 打順を動かす（`moveOrder` / `swapOrder`）… 守備位置は選手に付いたまま
+//   1. 打順を動かす（`swapOrder`）… 守備位置は選手に付いたまま
 //   2. 守備位置を入れ替える（`swapPositions`）… 打順はそのまま
 //   3. 控えと交代する（`replaceStarter`）… 控えがその打順・守備位置にそのまま入る
 // ⚠ 以前の画面（一人用の移植）は「✕でスタメンから外す」「守備位置をコンボボックスで
@@ -128,16 +128,11 @@ export const sameOrder = (a, b) =>
     (e, i) => e.playerId === b[i].playerId && e.position === b[i].position,
   );
 
-/** 打順 `from` の選手を `to` へ動かす（間の選手は1つずつずれる）。ドラッグ用 */
-export function moveOrder(order, from, to) {
-  if (from === to || !order[from] || to < 0 || to >= order.length) return order;
-  const next = [...order];
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved);
-  return next;
-}
-
-/** 2人の打順を入れ替える。クリック（行を選んで別の行）用 */
+/**
+ * 2人の打順を入れ替える。クリック（行を選んで別の行）にもドラッグにも使う。
+ * ⚠ ドラッグを「その打順へ動かす（間はずれる）」にしないこと。入れ替えたつもりが
+ *    下の選手が全員1つずれる、と言われて直した（2026-11）。
+ */
 export function swapOrder(order, a, b) {
   if (a === b || !order[a] || !order[b]) return order;
   const next = [...order];

@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.BatterSlot
 import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.FIELDER_REST_FATIGUE
 import jp.icenorth.baseball.shared.FIELD_POSITIONS
@@ -272,13 +274,19 @@ private fun OrderEditor(
         }
     }
     val listState = rememberLazyListState()
+    // つかんだときの打順。ドラッグ中はいつも「つかんだときの打順で、つかんだ人と指の下の人を
+    // 入れ替えた形」を見せる（間の選手は動かない）。
+    // ⚠ 1行ずつ「動かす」にしないこと。入れ替えたつもりが下の選手が全員1つずれる、と言われて直した（2026-11）
+    var dragBase by remember { mutableStateOf<List<BatterSlot>?>(null) }
+    val currentSlots by rememberUpdatedState(draft.slots)
     val reorder = rememberReorderableLazyListState(listState) { from, to ->
         val a = (from.key as? String)?.removePrefix("bat:")?.toLongOrNull() ?: return@rememberReorderableLazyListState
         val b = (to.key as? String)?.removePrefix("bat:")?.toLongOrNull() ?: return@rememberReorderableLazyListState
         edit { d ->
-            val i = d.slots.indexOfFirst { it.playerId == a }
+            val base = dragBase?.takeIf { it.size == d.slots.size } ?: d.slots
+            val i = base.indexOfFirst { it.playerId == a }
             val j = d.slots.indexOfFirst { it.playerId == b }
-            if (i < 0 || j < 0) d else d.moveBatter(i, j)
+            if (i < 0 || j < 0) d else d.copy(slots = base).swapBatters(i, j)
         }
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
@@ -387,7 +395,10 @@ private fun OrderEditor(
                             else -> MaterialTheme.colorScheme.surfaceContainer
                         },
                         shadowElevation = elevation,
-                        modifier = Modifier.fillMaxWidth().longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) }),
+                        modifier = Modifier.fillMaxWidth().longPressDraggableHandle(
+                            onDragStarted = { dragBase = currentSlots; onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                            onDragStopped = { dragBase = null },
+                        ),
                     ) {
                         FielderRow(
                             order = "${index + 1}",
@@ -579,16 +590,43 @@ private fun PitchingEditor(
 ) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
+    // つかんだときの起用。ローテの中で動かす間は「つかんだときの順で、つかんだ人と指の下の人を
+    // 入れ替えた形」を見せる（間の投手は動かない。打順のドラッグと同じ）
+    var dragBase by remember { mutableStateOf<jp.icenorth.baseball.shared.PitchingState?>(null) }
+    val currentPitching by rememberUpdatedState(draft.pitching)
     val reorder = rememberReorderableLazyListState(listState) { from, to ->
         val id = (from.key as? String)?.removePrefix("p:")?.toLongOrNull() ?: return@rememberReorderableLazyListState
         val target = to.key as? String ?: return@rememberReorderableLazyListState
-        edit { d -> d.withPitching(dropPitcher(d.pitching, id, target)) }
+        edit { d -> d.withPitching(swapInRotation(dragBase, d.pitching, id, target) ?: dropPitcher(d.pitching, id, target)) }
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
-    PitchingList(view, draft, players, nextId, reorder, listState, onDragStart, open, onSheet) { p ->
+    PitchingList(view, draft, players, nextId, reorder, listState, { dragBase = currentPitching; onDragStart() }, open, onSheet) { p ->
         clickEdit { it.withPitching(it.pitching.addToStaff(p)) }
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
     }
+}
+
+/**
+ * ローテの投手をローテの中で動かしているときの形。つかんだときの順（`base`）で、つかんだ投手と
+ * 指の下の投手（ローテの見出しなら1番手）を入れ替える。ローテの外を通ってきたなどで顔ぶれが
+ * 変わっていたら null（`dropPitcher` に任せる）。
+ * ⚠ 1行ずつ「動かす」にしないこと。入れ替えたつもりが下の投手が全員1つずれる（2026-11 に直した）
+ */
+private fun swapInRotation(
+    base: jp.icenorth.baseball.shared.PitchingState?,
+    state: jp.icenorth.baseball.shared.PitchingState,
+    id: Long,
+    target: String,
+): jp.icenorth.baseball.shared.PitchingState? {
+    if (base == null || id !in base.starters || id !in state.starters) return null
+    if (base.starters.toSet() != state.starters.toSet()) return null
+    val at = when {
+        target == "head:rot" -> 0
+        target.startsWith("p:") -> state.starters.indexOf(target.removePrefix("p:").toLongOrNull() ?: return null)
+        else -> -1
+    }
+    if (at < 0) return null
+    return state.copy(starters = base.starters).swapStarters(base.starters.indexOf(id), at)
 }
 
 /** 投手 id を target（別の投手 p:… ／役割の見出し role:… ／ローテの見出し head:rot）へ落としたときの持ち場 */
@@ -815,7 +853,7 @@ private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
 
 /** スタメンの説明（画面には出さず ⓘ に詰める。いしだ指定） */
 private val ORDER_HELP = listOf(
-    "長押しでドラッグすると打順を並べ替えます。",
+    "長押しでつかみ、ほかの打順の上で離すと2人の打順が入れ替わります（間の選手は動きません）。",
     "選手（守備の札か名前）を押して選び、ほかのスタメンを押すと守備位置を入れ替え、控えを押すと交代します。控えから選んでスタメンを押しても交代です。選んでいる間は、各行の名前の下に「入れ替えたら誰がどこをどの適性で守るか」が出ます。",
     "行はふだん名前と今季成績の2段です。右上の「成績のみ」を押すと能力（ミ パ 眼 走｜守 肩）の段も出ます（端末に覚えます）。成績の段の右端は、ほかに守れる位置の適性です。",
     "守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
@@ -825,8 +863,8 @@ private val ORDER_HELP = listOf(
 
 /** 投手起用の説明（役割の目安も、行には出さずここに） */
 private fun pitchingHelp(): List<String> = listOf(
-    "長押しでドラッグするとローテの順番を並べ替えます。救援の役割の見出しへ落とすと持ち場が変わります。行を押すと先発の型・救援の役割を選べます。",
-    "疲労${STARTER_SKIP_FATIGUE}以上の先発は順番を飛ばし、疲労${RELIEF_REST_FATIGUE}以上の救援は休ませます。守護神は1人まで。",
+    "長押しでつかみ、ほかの先発の上で離すと2人の登板順が入れ替わります。救援の役割の見出しへ落とすと持ち場が変わります。行を押すと先発の型・救援の役割を選べます。",
+    "疲労${STARTER_SKIP_FATIGUE}以上の先発は順番を飛ばし、疲労${RELIEF_REST_FATIGUE}以上の救援は休ませます。クローザーは1人まで。",
     "先発の型: " + STARTER_ORDER.joinToString("、") { "${STARTER_ROLES[it] ?: it}＝${ROLE_HINT[it].orEmpty()}" },
     "救援の役割: " + RELIEF_ORDER.joinToString("、") { "${RELIEF_ROLES[it] ?: it}＝${ROLE_HINT[it].orEmpty()}" },
 )

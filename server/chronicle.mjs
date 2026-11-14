@@ -485,8 +485,12 @@ const AWARD_LABELS = {
 };
 
 /**
- * 球団の年表と歴代記録。`activeKeys`: いま名簿にいる人の記録の鍵（「現役」の印）
+ * 球団の年表と歴代記録。`activeKeys`: いま名簿にいる人の記録の鍵（「現役」の印）。
+ * Map（鍵 → 選手 id）なら、現役の行に `id` を付ける（画面が名前を押して選手を開く）
  */
+const idOf = (keys, key) =>
+  keys instanceof Map && keys.has(key) ? { id: keys.get(key) } : {};
+
 export function teamChronicle(league, teamName, activeKeys = new Set()) {
   // 年表（終わった年）
   const seasons = (league.history || []).map((h) => {
@@ -543,7 +547,7 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
       const c = careers.get(rec.key) || { key: rec.key, name: rec.name, batting: {}, pitching: {} };
       for (const r of TEAM_RECORDS) {
         const v = num(stats?.[r.side]?.[r.stat]);
-        if (v > 0) single[r.stat].push({ name: rec.name, year: Number(season.year), value: v, current, active: activeKeys.has(rec.key) });
+        if (v > 0) single[r.stat].push({ name: rec.name, year: Number(season.year), value: v, current, active: activeKeys.has(rec.key), ...idOf(activeKeys, rec.key) });
         c[r.side][r.stat] = (c[r.side][r.stat] || 0) + v;
       }
       careers.set(rec.key, c);
@@ -554,7 +558,7 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
     stat: r.stat,
     label: r.label,
     season: top(single[r.stat]),
-    career: top([...careers.values()].map((c) => ({ name: c.name, value: num(c[r.side][r.stat]), active: activeKeys.has(c.key) })).filter((x) => x.value > 0)),
+    career: top([...careers.values()].map((c) => ({ name: c.name, value: num(c[r.side][r.stat]), active: activeKeys.has(c.key), ...idOf(activeKeys, c.key) })).filter((x) => x.value > 0)),
   })).filter((r) => r.season.length || r.career.length);
 
   const c = league.chronicle || {};

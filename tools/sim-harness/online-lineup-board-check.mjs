@@ -11,7 +11,6 @@ import {
   playablePositions,
   orderFromLineup,
   battingOrderFromOrder,
-  moveOrder,
   swapOrder,
   swapPositions,
   replaceStarter,
@@ -129,11 +128,11 @@ assert.deepEqual(
 // --- 3つの操作は、どれを何度重ねてもサーバーが受け付ける形のまま
 let order = start;
 const steps = [
-  (o) => moveOrder(o, 7, 0),
+  (o) => swapOrder(o, 7, 0),
   (o) => swapOrder(o, 1, 5),
   (o) => swapPositions(o, 0, 3),
   (o) => replaceStarter(o, 2, benchFielders(roster, o)[0].id),
-  (o) => moveOrder(o, 0, 7),
+  (o) => swapOrder(o, 0, 7),
   (o) => swapPositions(o, 6, 7),
   (o) => replaceStarter(o, 7, benchFielders(roster, o).at(-1).id),
 ];
@@ -149,21 +148,7 @@ for (let round = 0; round < 3; round++)
     valid(order);
   }
 
-// 打順を動かす（ドラッグ）: 間はずれ、守備位置は選手に付いたまま
-{
-  const moved = moveOrder(start, 7, 0);
-  assert.deepEqual(
-    moved.map((e) => e.playerId),
-    [1, 8, 7, 6, 5, 4, 3, 2],
-  );
-  assert.equal(
-    moved[0].position,
-    start[7].position,
-    '動かしたら守備位置が変わった',
-  );
-  assert.equal(moveOrder(start, 3, 3), start, '同じ位置なら何もしない');
-}
-// 打順の入れ替え（クリック）
+// 打順の入れ替え（クリック・ドラッグ）: 2人だけが入れ替わり、間の選手は動かない
 {
   const swapped = swapOrder(start, 0, 2);
   assert.deepEqual(
@@ -171,6 +156,11 @@ for (let round = 0; round < 3; round++)
     [6, 7, 8],
   );
   assert.equal(swapped[0].position, start[2].position);
+  assert.deepEqual(
+    swapped.slice(3).map((e) => e.playerId),
+    start.slice(3).map((e) => e.playerId),
+    '入れ替えた2人より下の選手がずれた',
+  );
 }
 // 守備位置の入れ替え: 打順はそのまま、位置だけ交換
 {
