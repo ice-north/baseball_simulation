@@ -15,6 +15,9 @@ import {
   PRESENCE_REFRESH_HOURS,
   isAwayAt,
 } from '../src/online/social.js';
+import { validateLineup } from '../src/online/shared.js';
+import { effectiveStaffModes } from './coachEngine.mjs';
+import { projectLineup } from './projection.mjs';
 
 const clone = (value) => (value === undefined ? undefined : structuredClone(value));
 
@@ -135,17 +138,90 @@ export function touchPresence(league, userId, now) {
   member.lastSeenAt = now;
   if (member.away) {
     delete member.away;
+    const restored = restoreAwayPlan(league, member);
     pushInbox(
       league,
       userId,
       {
         type: 'awayEnded',
-        text: 'おかえりなさい。留守の間は指導者に任せていました。任せ方は元の設定に戻っています',
+        text:
+          'おかえりなさい。留守の間は指導者に任せていました。任せ方は元の設定に戻っています' +
+          (restored === 'restored'
+            ? '。スタメン・投手起用も留守の前の形に戻しました'
+            : restored === 'kept'
+              ? '。留守の間に選手が入れ替わったので、スタメン・投手起用は指導者が組んだままです'
+              : ''),
       },
       now,
     );
   }
   return true;
+}
+
+/**
+ * おるすばんになる前の編成（スタメン・投手起用）を控える（`markAway` の直後、作り直す前に呼ぶ）。
+ * ⚠ 留守の間は指導者の案で作り直す（`refreshTeamPlan`）ので、控えておかないと戻ってきた人の
+ *    打順と投手起用が消える（任せ方の設定だけが元に戻り、編成は指導者の案のままになっていた）。
+ */
+export function keepAwayPlan(member, team) {
+  if (!team) return;
+  member.awayPlan = {
+    lineupSettings: clone(team.lineupSettings) || null,
+    pitchingRotation: clone(team.pitchingRotation) || null,
+  };
+}
+
+/**
+ * 戻ってきた人の編成を、留守の前の形に戻す（`touchPresence`）。
+ * - 本人が任せていない分野（スタメン・投手起用）だけ戻す。任せている分野は指導者の案のまま
+ * - 留守の間に選手が動いて（トレード・退団・入団）成り立たないときは戻さない（'kept'）
+ * 戻したら 'restored'、控えが無い・戻す分野が無いなら null。
+ * ⚠ 保存した世界（`league.game.teams`）を直接書く（編成の保存 `saveLineup` と同じ。エンジンは使わない）
+ */
+export function restoreAwayPlan(league, member) {
+  const plan = member.awayPlan;
+  delete member.awayPlan;
+  if (!plan) return null;
+  const team = league.game?.teams?.[member.teamName];
+  if (!team) return null;
+  const modes = effectiveStaffModes(league, member);
+  const lineup = modes.lineup !== 'delegate' && plan.lineupSettings;
+  const pitching = modes.pitching !== 'delegate' && plan.pitchingRotation;
+  if (!lineup && !pitching) return null;
+  const before = {
+    lineupSettings: clone(team.lineupSettings),
+    pitchingRotation: clone(team.pitchingRotation),
+  };
+  if (lineup) team.lineupSettings = clone(plan.lineupSettings);
+  if (pitching) {
+    const starters = plan.pitchingRotation.starters || [];
+    team.pitchingRotation = {
+      ...clone(plan.pitchingRotation),
+      currentStarterIndex: starters.length
+        ? (plan.pitchingRotation.currentStarterIndex || 0) % starters.length
+        : 0,
+    };
+  }
+  const active = new Set(team.players.filter((p) => p.isActive !== false).map((p) => p.id));
+  const view = projectLineup(team);
+  const ok = (() => {
+    try {
+      validateLineup(team, view);
+    } catch {
+      return false;
+    }
+    // ⚠ 打順の9番（投手）・ローテ・救援の役割に、もう居ない選手が残っていないこと
+    const ids = [
+      ...(team.lineupSettings?.battingOrder || []).map((e) => e.playerId),
+      ...(team.pitchingRotation?.starters || []),
+      ...Object.keys(view.pitcherRoles || {}).map(Number),
+    ];
+    return (team.pitchingRotation?.starters || []).length > 0 && ids.every((id) => active.has(id));
+  })();
+  if (ok) return 'restored';
+  team.lineupSettings = before.lineupSettings;
+  team.pitchingRotation = before.pitchingRotation;
+  return 'kept';
 }
 
 /**

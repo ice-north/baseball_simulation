@@ -19,6 +19,7 @@ import { FileStore } from '../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { withStarters } from '../../server/leagueBoard.mjs';
+import { projectLineup } from '../../server/projection.mjs';
 import { prepareDailyLineup, STARTER_SKIP_FATIGUE } from '../../server/dailyLineup.mjs';
 import { pruneTrades } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
@@ -409,6 +410,14 @@ try {
     later(1);
     await service.presence('b', sessions.b);
     assert.equal((await live()).members.find((m) => m.userId === 'b').lastSeenAt, seen, '書いたばかりなのにまた書いた');
+    // 留守の前に b が自分で打順を組む（1番と2番を入れ替える）。戻ってきたらこの形に戻ること
+    const base = JSON.parse(JSON.stringify(projectLineup((await live()).game.teams[B])));
+    const mine = structuredClone(base);
+    for (const e of mine.battingOrder)
+      if (e.battingOrder <= 2) e.battingOrder = 3 - e.battingOrder;
+    await send('b', 'lineup', { ...mine, baseLineup: base });
+    const ownOrder = JSON.stringify(projectLineup((await live()).game.teams[B]).battingOrder);
+    const ownRotation = JSON.stringify(projectLineup((await live()).game.teams[B]).starters);
     // b だけ3日来ない（a は進行の操作で毎回来ている）
     later(AWAY_DAYS * 24 + 1);
     const modesBefore = structuredClone(l.members.find((m) => m.userId === 'b').staffModes || null);
@@ -433,6 +442,15 @@ try {
     assert.equal(back.away, undefined, '来たのにおるすばんが解けない');
     assert.equal(back.inbox[0].type, 'awayEnded');
     assert.ok(!isAwayAt(back, now));
+    // 留守の前に組んだ編成に戻る（留守の間は指導者の案で作り直していた）
+    assert.ok(b.awayPlan?.lineupSettings, '留守にするとき編成を控えていない');
+    const backTeam = (await live()).game.teams[B];
+    assert.equal(back.awayPlan, undefined, '戻した後も控えが残っている');
+    if (effectiveStaffModes(await live(), back).lineup !== 'delegate')
+      assert.equal(JSON.stringify(projectLineup(backTeam).battingOrder), ownOrder, '戻ってきたのに留守の前の打順に戻らない');
+    if (effectiveStaffModes(await live(), back).pitching !== 'delegate')
+      assert.equal(JSON.stringify(projectLineup(backTeam).starters), ownRotation, '戻ってきたのに留守の前のローテに戻らない');
+    assert.match(back.inbox[0].text, /留守の前の形に戻しました/);
   }
 
   // --- A3 管理者が球団をCPUに戻す -----------------------------------------------

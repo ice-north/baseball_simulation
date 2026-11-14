@@ -117,6 +117,7 @@ import {
   moveOf,
   pruneTrades,
   markAway,
+  keepAwayPlan,
   teamLabelIn,
 } from './social.mjs';
 import { cleanText, TRADE_NOTE_MAX } from '../src/online/social.js';
@@ -2209,7 +2210,11 @@ export function advanceLeagueDay(league, operationId, now) {
   // ⚠ **おるすばん**（しばらく来ていない人の球団）。指導者に任せた扱いにして、編成をその場で
   //    作り直す（任せたスタメン・投手起用は、手続きか任せ方の変更でしか作り直されないので、
   //    ここで作らないと放っておかれた球団は新しく取った選手が控えのまま走り続ける）
-  for (const member of markAway(league, now)) refreshTeamPlan(league, member.teamName);
+  // ⚠ 作り直す前に、その人の編成を控える（戻ってきたら戻す。`keepAwayPlan`）
+  for (const member of markAway(league, now)) {
+    keepAwayPlan(member, TEAMS_DATA[member.teamName]);
+    refreshTeamPlan(league, member.teamName);
+  }
   advanceOneDay(league, `day:${operationId}`, now);
   for (let n = 1; n <= IDLE_DAYS_PER_TICK && idleDay(league); n++)
     advanceOneDay(league, `day:${operationId}:${n}`, now);
