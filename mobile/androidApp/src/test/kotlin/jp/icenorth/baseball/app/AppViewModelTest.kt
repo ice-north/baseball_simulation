@@ -304,6 +304,24 @@ class AppViewModelTest {
         assertEquals(2, model.view?.revision)
     }
 
+    /** 画面が更新できたら、裏の確認を休ませていた印（authBroken）を下ろし、新しい更新トークンを書き終えて残す */
+    @Test fun refreshInTheAppClearsTheWorkersBrokenMark() {
+        create { action ->
+            when (action) {
+                "login" -> AUTH_EXPIRED
+                "view" -> VIEW_1
+                "refresh" -> """{"accessToken":"renewed","refreshToken":"new-refresh","expiresAt":9999999999999}"""
+                else -> "{}"
+            }
+        }
+        login()
+        SessionStore(app).authBroken = true
+        model.reload(pull = true)
+        until { model.auth?.accessToken == "renewed" && !model.refreshing }
+        assertFalse(SessionStore(app).authBroken)
+        assertEquals("new-refresh", SessionStore(app).auth?.refreshToken)
+    }
+
     @Test fun responseFromLoggedOutUserCannotFillTheNextUsersReadCache() {
         val readStarted = CompletableDeferred<Unit>()
         val releaseRead = CompletableDeferred<Unit>()

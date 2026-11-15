@@ -141,6 +141,9 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
         text(client.post(endpoint) { parameter("action", "logout"); authorize(auth); jsonBody(JsonObject(emptyMap())) })
     }
 
+    /** 通信の道具を閉じる（その場で作って使い捨てる呼び出し側用。閉じたあとは使えない） */
+    fun close() = client.close()
+
     private fun io.ktor.client.request.HttpRequestBuilder.authorize(auth: AuthSession) {
         header("Authorization", "Bearer ${auth.accessToken}")
         header("X-Online-Session", auth.sessionId)

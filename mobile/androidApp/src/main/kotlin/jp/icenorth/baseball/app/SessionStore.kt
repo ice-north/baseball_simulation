@@ -23,7 +23,28 @@ class SessionStore(context: Context) {
         set(value) = prefs.edit().apply {
             // ⚠ 試合結果の通知の印もログインごと（別の人・別の球団で入り直したら、最初は印を付けるだけ）
             if (value == null) remove("auth").remove("view").remove("shownDigest").remove("shownAt").remove("quickSeen").remove("seenResults").remove("notifiedResults").remove("notifiedEvents") else putString("auth", OnlineJson.encodeToString(AuthSession.serializer(), value))
+            // ログインし直した・ログアウトした → 裏の確認を止めていた印（[authBroken]）も下ろす
+            remove("authBroken")
         }.apply()
+
+    /**
+     * トークンを更新したあとのログイン情報を、**書き終わるまで待って**残す（apply ではなく commit）。
+     * ⚠ 本番の Supabase の更新トークンは1回きり。apply は裏で書くので、書き終わる前にプロセスが
+     *    止まる（裏の確認の直後に端末が落とすなど）と、次の起動で使い終わった古い更新トークンを使い、
+     *    ログインごと無効になる。更新できたので [authBroken] も下ろす
+     */
+    fun commitAuth(value: AuthSession): Boolean =
+        prefs.edit().putString("auth", OnlineJson.encodeToString(AuthSession.serializer(), value)).remove("authBroken").commit()
+
+    /**
+     * 裏の確認（ResultWorker）でトークンの更新を断られた（400 / 401。ログインが切れている）。
+     * 立っている間は裏の確認を休む（同じ切れたログインで15分ごとに読み続けない）。
+     * アプリでログインし直す・アプリが更新できたら下ろす（[auth] の書き込み・[commitAuth]）。
+     * ⚠ 裏の確認ではログアウトしない（ログインの切れはアプリを開いたときに画面が扱う）
+     */
+    var authBroken: Boolean
+        get() = prefs.getBoolean("authBroken", false)
+        set(value) = prefs.edit().putBoolean("authBroken", value).apply()
 
     var tryoutWeights: Map<String, Int>?
         get() = prefs.getString("tryoutWeights", null)?.let { text ->

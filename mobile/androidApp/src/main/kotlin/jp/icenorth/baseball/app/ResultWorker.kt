@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonObject
 import jp.icenorth.baseball.shared.resultNotice
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -26,12 +27,20 @@ import kotlinx.serialization.json.longOrNull
  * ⚠ 手元に残したビューの世代を添えて読むので、試合が進んでいなければサーバーは中身を送らない（軽い）。
  *    進んでいたら新しいビューを端末に残す（次にアプリを開いたとき、すぐ最新の紙面が出る）。
  * ⚠ 失敗しても何もしない（ログアウトもしない）。次の回にまた確かめ、ログインの切れはアプリを開いたときに画面が扱う。
+ *    ただしトークンの更新を断られたら（ログインが切れている）、アプリでログインし直すまで休む（[SessionStore.authBroken]）。
+ * ⚠ 端末の設定で通知を切られている間は読まない（トークンも回さない）。仕事は残す（また許されたら続ける）。
+ * ⚠ 更新の手順は画面（[AppViewModel] の fresh / refreshOnce）と同じ考えで別に書いてある。まとめるのは別の機会に。
  */
 class ResultWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val store = SessionStore(applicationContext)
         if (!store.resultNotify || ResultNotifier.appVisible) return Result.success()
+        // 通知を出せないのに読みに行かない（裏でトークンを回すだけになる）。仕事は止めない（設定で許し直したら続ける）
+        if (!ResultNotifier.permitted(applicationContext)) return Result.success()
+        // 更新を断られたログインで読み続けない（アプリでログインし直すと下りる）
+        if (store.authBroken) return Result.success()
         val start = store.auth ?: return Result.success()
+        // ⚠ 回ごとに作るので、終わったら閉じる（閉じないと通信の道具が回ごとに残る。AppUpdate.kt の fetchLatestApp と同じ）
         val api = createApi(store.endpoint ?: BuildConfig.DEFAULT_ENDPOINT)
         try {
             check(store, api, start)
@@ -39,6 +48,8 @@ class ResultWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             throw e
         } catch (_: Exception) {
             // 電波・サーバーの失敗は次の回に任せる
+        } finally {
+            api.close()
         }
         return Result.success()
     }
@@ -97,8 +108,11 @@ class ResultWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     }
 
     /**
-     * 期限が近ければトークンを更新する（画面と同じ鍵で。[AuthLock]）。ログインが変わっていたら null。
+     * 期限が近ければトークンを更新する（画面と同じ鍵で。[AuthLock]）。ログインが変わっていた・更新が時間切れなら null。
      * `failed` は断られたアクセストークン（あれば必ず更新する。ただし画面がもう新しくしていたらそれを使う）
+     * ⚠ 鍵を持ったまま待つのは [REFRESH_TIMEOUT_MS] まで。通信の道具の待ち時間は290秒あり、電波の悪い所では
+     *    その間ずっと画面の読み込み（画面も同じ鍵で更新する）が止まっていた。時間切れは失敗と同じ（ログアウトしない）
+     * ⚠ 断られた（400 / 401）ら [SessionStore.authBroken] を立てる。ログイン情報はそのまま（画面が扱う）
      */
     private suspend fun fresh(store: SessionStore, api: OnlineApi, start: AuthSession, failed: String?): AuthSession? =
         AuthLock.mutex.withLock {
@@ -110,19 +124,28 @@ class ResultWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val expiresAt = current.expiresAt ?: return@withLock current
             val refreshToken = current.refreshToken ?: return@withLock current
             if (!force && expiresAt - System.currentTimeMillis() > 60_000) return@withLock current
-            val result = api.refresh(refreshToken)
+            val result = try {
+                withTimeoutOrNull(REFRESH_TIMEOUT_MS) { api.refresh(refreshToken) } ?: return@withLock null
+            } catch (e: OnlineException) {
+                if ((e.status == 400 || e.status == 401) && store.auth?.refreshToken == refreshToken) store.authBroken = true
+                throw e
+            }
             val next = current.copy(
                 accessToken = result.accessToken,
                 refreshToken = result.refreshToken ?: refreshToken,
                 expiresAt = result.expiresAt,
             )
-            // ⚠ 更新している間に画面がログアウトしていたら残さない
-            if (store.auth?.refreshToken == refreshToken) store.auth = next
+            // ⚠ 更新している間に画面がログアウトしていたら残さない。
+            //    残すときは書き終わるまで待つ（更新トークンは1回きり。書く前に止まると次は古いのを使ってしまう）
+            if (store.auth?.refreshToken == refreshToken) store.commitAuth(next)
             next
         }
 
     companion object {
         /** 検査で差し替える（偽のサーバーにつなぐ） */
         internal var createApi: (String) -> OnlineApi = { OnlineApi(it) }
+
+        /** トークンの更新を待つ長さ（画面と同じ鍵を持ったまま待つので短く） */
+        internal const val REFRESH_TIMEOUT_MS = 20_000L
     }
 }

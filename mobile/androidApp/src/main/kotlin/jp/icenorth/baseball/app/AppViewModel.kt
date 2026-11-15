@@ -780,7 +780,9 @@ class AppViewModel internal constructor(
             refreshToken = result.refreshToken ?: refreshToken,
             expiresAt = result.expiresAt,
         )
-        store.auth = next
+        // ⚠ 書き終わるまで待つ（更新トークンは1回きり。apply のまま止まると次の起動で古いのを使ってしまう）。
+        //    裏の確認を休ませていた印（SessionStore.authBroken）もここで下ろす
+        store.commitAuth(next)
         auth = next
         return next
     }

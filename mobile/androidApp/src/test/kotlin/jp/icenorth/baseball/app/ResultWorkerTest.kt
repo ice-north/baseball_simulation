@@ -15,6 +15,7 @@ import jp.icenorth.baseball.shared.OnlineApi
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -34,15 +35,30 @@ class ResultWorkerTest {
     private lateinit var store: SessionStore
     private val requests = mutableListOf<String>()
     private var serverView = view(1, G41)
-    private val client = HttpClient(MockEngine { request ->
+
+    /** トークンの更新への答え（断る・サーバーの障害を試す） */
+    private var refreshStatus = HttpStatusCode.OK
+
+    // ⚠ 裏の確認は回ごとに通信の道具を作って閉じるので、検査も回ごとに作る（閉じた道具は使えない）
+    private val clients = mutableListOf<HttpClient>()
+
+    private fun client() = HttpClient(MockEngine { request ->
         val action = request.url.parameters["action"].orEmpty()
         requests += action + (request.url.parameters["since"]?.let { "?since=$it" } ?: "")
-        val body = when (action) {
-            "refresh" -> """{"accessToken":"new-access","refreshToken":"new-refresh","expiresAt":${System.currentTimeMillis() + 3_600_000}}"""
-            else -> if (request.url.parameters["since"] == generationOf(serverView)) """{"unchanged":true,"viewGeneration":${generationOf(serverView)}}""" else serverView
+        val json = headersOf(HttpHeaders.ContentType, "application/json")
+        when (action) {
+            "refresh" -> if (refreshStatus == HttpStatusCode.OK) {
+                respond("""{"accessToken":"new-access","refreshToken":"new-refresh","expiresAt":${System.currentTimeMillis() + 3_600_000}}""", HttpStatusCode.OK, json)
+            } else {
+                respond("""{"error":"認証に失敗しました。ログインし直してください","code":"auth"}""", refreshStatus, json)
+            }
+            else -> respond(
+                if (request.url.parameters["since"] == generationOf(serverView)) """{"unchanged":true,"viewGeneration":${generationOf(serverView)}}""" else serverView,
+                HttpStatusCode.OK,
+                json,
+            )
         }
-        respond(body, HttpStatusCode.OK, headers = headersOf(HttpHeaders.ContentType, "application/json"))
-    })
+    }).also { clients += it }
 
     @Before fun prepare() {
         app = RuntimeEnvironment.getApplication()
@@ -50,13 +66,13 @@ class ResultWorkerTest {
         shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
         store = SessionStore(app)
         store.auth = AuthSession("u1", "old-access", "s1", "old-refresh", System.currentTimeMillis() + 3_600_000)
-        ResultWorker.createApi = { OnlineApi(it, client) }
+        ResultWorker.createApi = { OnlineApi(it, client()) }
         ResultNotifier.appVisible = false
     }
 
     @After fun cleanup() {
         ResultWorker.createApi = { OnlineApi(it) }
-        client.close()
+        clients.forEach { it.close() }
     }
 
     private fun run(): ListenableWorker.Result = runBlocking { TestListenableWorkerBuilder<ResultWorker>(app).build().doWork() }
@@ -118,6 +134,45 @@ class ResultWorkerTest {
         assertEquals("refresh", requests.first())
         assertEquals("new-refresh", store.auth?.refreshToken)
         assertEquals("new-access", store.auth?.accessToken)
+    }
+
+    @Test fun refusedRefreshKeepsTheLoginAndRestsUntilTheAppLogsInAgain() {
+        store.auth = store.auth!!.copy(expiresAt = System.currentTimeMillis() + 10_000)
+        refreshStatus = HttpStatusCode.Unauthorized
+        assertEquals(ListenableWorker.Result.success(), run())
+        assertEquals(listOf("refresh"), requests)
+        assertEquals("ログアウトしない（ログインの切れは画面が扱う）", "old-refresh", store.auth?.refreshToken)
+        assertEquals("old-access", store.auth?.accessToken)
+        assertTrue(store.authBroken)
+
+        run()
+        assertEquals("断られたログインで読み続けない", 1, requests.size)
+
+        // アプリでログインし直した（ログイン情報を書くと印が下りる）
+        refreshStatus = HttpStatusCode.OK
+        store.auth = store.auth!!.copy(accessToken = "login-access", refreshToken = "login-refresh")
+        assertFalse(store.authBroken)
+        run()
+        assertEquals("refresh", requests[1])
+        assertEquals("new-refresh", store.auth?.refreshToken)
+    }
+
+    @Test fun refreshServiceOutageIsRetriedNextTime() {
+        store.auth = store.auth!!.copy(expiresAt = System.currentTimeMillis() + 10_000)
+        refreshStatus = HttpStatusCode.ServiceUnavailable
+        run()
+        assertFalse("障害（503）はログインの切れではない", store.authBroken)
+        assertEquals("old-refresh", store.auth?.refreshToken)
+        run()
+        assertEquals(listOf("refresh", "refresh"), requests)
+    }
+
+    @Test fun notificationsNotAllowedReadsNothing() {
+        shadowOf(app).denyPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        store.auth = store.auth!!.copy(expiresAt = System.currentTimeMillis() + 10_000)
+        assertEquals(ListenableWorker.Result.success(), run())
+        assertTrue("通知を出せないのに読まない（トークンも回さない）", requests.isEmpty())
+        assertEquals("old-refresh", store.auth?.refreshToken)
     }
 
     @Test fun loggedOutDoesNothing() {
