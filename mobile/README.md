@@ -34,8 +34,18 @@
 
 ## サーバーとの約束（壊さないために）
 
-- アプリは `?action=login / refresh / view / defaults / team / player / games / game / command / presence` を使う。`presence` はアプリに戻るたび（10分に1回まで）送り、最終ログインとおるすばんの解除に使う（版は上がらない）。ビューの項目名を変えるとアプリが壊れる。
-- ビューの `recentGames`（`server/projection.mjs` の `ownRecentGames`）は試合結果の通知が読む。`id`・`date`・`number`・`home`・`away`・スコアの名前を変えないこと。
+- アプリは `?action=login / refresh / view / defaults / team / player / games / game / command / presence` を使う。`presence` はアプリに戻るたび（10分に1回まで）送り、最終ログインとおるすばんの解除に使う。ビューの項目名を変えるとアプリが壊れる。
+  - `presence` の返事は `{ ok: true }`。おるすばんを解いたときは `{ ok: true, returned: true }` で、アプリはそのときもう一度ビューを読む（一緒に走らせた読み直しが解ける前のビューを読んでいて、自分が「おるすばん」のまま見えるため）。`returned` が無ければ解いていない扱い（`shared/.../OnlineApi.kt` の `presence`）。
+  - 版（`revision`）は、最終ログインを書いただけなら上がらない（ほかの人の画面を読み直させない）。おるすばんを解いたときは上がる。ただしビューの世代（`viewGeneration`）は、書き込みを保存するたび（`presence` が最終ログインを書いたときも）上がる（`server/storage/supabaseStore.mjs` の `online_publish`。公開は世代を必ず1つ上げる）。なので `since` を添えた次の `view` は中身をまるごと返す。
+- 通知（`ResultWorker`）が読むビューの項目。名前を変えると通知が黙って出なくなる（画面の検査では気づきにくい）:
+  - 試合結果（`shared/.../ResultNotice.kt`）: `teamName`・`teamLabels`、`recentGames`（`server/projection.mjs` の `ownRecentGames`）の `id`・`date`・`number`・`home`・`away`・`homeScore`・`awayScore`（見分けと「新しい試合か」に使う）。本文には `decisions`（勝敗投手）・`homeruns`、順位の `teamLeagues`・`standings` も使う。
+  - 手続き・トレード・手続きの結果（`shared/.../EventNotice.kt`・`Notices.kt` の `pendingProcedure`）:
+    - `year`・`phaseDeadline`、`phase` の `id`・`kind`・`label`・`deadline`・`delegated`・`submission.ready`・`camp.rounds`・`camp.total`、`pendingPack.chosen`。
+    - `trades[]` の `id`・`myTurn`・`countered`・`mine`・`fromTeam`・`toTeam`・`offer[].name`・`want[].name`・`note`・`replyNote`。
+    - `inbox[]` の `id`・`type`・`text`。通知する `type` は `tradeAccepted`・`tradeRejected`・`tradeWithdrawn`・`challenge`・`challengePlayed`・`challengeDeclined`・`challengeWithdrawn`・`starterAvoided`・`awayStarted`（`INBOX_TITLES`。ほかの種類は通知しない。名前を変えると黙って出なくなる）。
+    - `lastTryout` の `year`・`picks[].name`・`lost`、`lastCamp.year`、`lastOffseason` の `year`・`departed`。
+  - 知らせ終えた印は端末に残し、ログインし直すまで消さない。ビューにはリーグを見分ける値（作り直したリーグかどうか）が無いので、同じ接続先でリーグを作り直すと、前のリーグの印と同じ鍵（手続きの `phase.id`・トレードやお知らせの `id`・結果の年）の知らせが出ないことがある。
+- 裏の確認でトークンの更新を断られた（400 / 401）ら、ログアウトはせず、アプリでログインし直す（または画面が更新できる）まで裏の確認を休む（`SessionStore.authBroken`）。更新は画面と同じ鍵を持って20秒まで待つ（`ResultWorker.REFRESH_TIMEOUT_MS`）。更新したログイン情報は書き終わるまで待って残す（`SessionStore.commitAuth`。更新トークンは1回きり）。端末の設定で通知を切られている間も読まない。
 - `view` には手元のビューの世代 `since`（ビューの `viewGeneration`）を添える。世代が同じ（かつ保存の版が今のサーバーと同じ）なら、サーバーはビューを送らず `{ unchanged: true, viewGeneration, writable }` だけ返す（`server/leagueService.mjs` の `view`）。アプリはこのとき `writable`（書き込めるか）だけを合わせる。世代を持たない保存先（開発サーバーの `FileStore`）は `since` を無視して毎回全部返す。
 - `command` の返事の `view` は最新のビューで、`view.viewGeneration` に公開した世代が入る（`server/storage/supabaseStore.mjs`）。アプリは読み直さずにこれを使い、次の `since` にする。返事に `view` が無ければ読み直す。
 - `games` は `year`・`page`・`scope`（`own` / `league`）・`size`（1〜200。既定は6）を受ける。紙面は `size=200` で自球団の1シーズンを1回で読む（`OWN_HISTORY_PAGE`）。
