@@ -21,7 +21,8 @@ class SessionStore(context: Context) {
     var auth: AuthSession?
         get() = prefs.getString("auth", null)?.let { runCatching { OnlineJson.decodeFromString<AuthSession>(it) }.getOrNull() }
         set(value) = prefs.edit().apply {
-            if (value == null) remove("auth").remove("view") else putString("auth", OnlineJson.encodeToString(AuthSession.serializer(), value))
+            // ⚠ 試合結果の通知の印もログインごと（別の人・別の球団で入り直したら、最初は印を付けるだけ）
+            if (value == null) remove("auth").remove("view").remove("shownDigest").remove("shownAt").remove("quickSeen").remove("seenResults").remove("notifiedResults").remove("notifiedEvents") else putString("auth", OnlineJson.encodeToString(AuthSession.serializer(), value))
         }.apply()
 
     var tryoutWeights: Map<String, Int>?
@@ -63,4 +64,49 @@ class SessionStore(context: Context) {
     var viewJson: String?
         get() = prefs.getString("view", null)
         set(value) = prefs.edit().putString("view", value).apply()
+
+    /**
+     * 画面に出した最後のビューの要点（[jp.icenorth.baseball.shared.awayDigest]）と、その時刻。留守中のまとめに使う。
+     * ⚠ [viewJson] とは別に持つ。裏の試合結果の確認（ResultWorker）も [viewJson] を書き換えるので、
+     *    それと比べると「15分前から」のまとめになってしまう
+     */
+    var shownDigest: String?
+        get() = prefs.getString("shownDigest", null)
+        set(value) = prefs.edit().putString("shownDigest", value).putLong("shownAt", System.currentTimeMillis()).apply()
+
+    val shownAt: Long
+        get() = prefs.getLong("shownAt", 0L)
+
+    /** 速報再生で見た（または結果だけ見た）自球団の試合の id。null はまだ印が無い */
+    var quickSeen: Set<String>?
+        get() = prefs.getStringSet("quickSeen", null)?.toSet()
+        set(value) = prefs.edit().putStringSet("quickSeen", value).apply()
+
+    /** 試合結果を通知するか（ホームのメニュー）。既定はする。端末の通知の許可が無ければ出ない */
+    var resultNotify: Boolean
+        get() = prefs.getBoolean("resultNotify", true)
+        set(value) = prefs.edit().putBoolean("resultNotify", value).apply()
+
+    /** 通知の許可を一度お願いしたか（Android 13 以降。断られたら二度と自分からは聞かない） */
+    var notifyAsked: Boolean
+        get() = prefs.getBoolean("notifyAsked", false)
+        set(value) = prefs.edit().putBoolean("notifyAsked", value).apply()
+
+    /**
+     * アプリで見た自球団の直近の試合（[jp.icenorth.baseball.shared.resultKeys]）。null はまだ印が無い。
+     * 通知はここに無い試合をまとめて出す（開かずにいた間の試合を1つの通知に）
+     */
+    var seenResults: Set<String>?
+        get() = prefs.getStringSet("seenResults", null)?.toSet()
+        set(value) = prefs.edit().putStringSet("seenResults", value).apply()
+
+    /** 通知を出し終えた試合（同じ試合で二度鳴らさない） */
+    var notifiedResults: Set<String>?
+        get() = prefs.getStringSet("notifiedResults", null)?.toSet()
+        set(value) = prefs.edit().putStringSet("notifiedResults", value).apply()
+
+    /** 知らせ終えた手続き・トレード・手続きの結果（[jp.icenorth.baseball.shared.EventNotice.key]）。null はまだ印が無い */
+    var notifiedEvents: Set<String>?
+        get() = prefs.getStringSet("notifiedEvents", null)?.toSet()
+        set(value) = prefs.edit().putStringSet("notifiedEvents", value).apply()
 }

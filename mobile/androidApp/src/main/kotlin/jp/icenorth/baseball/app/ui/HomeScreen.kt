@@ -29,9 +29,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.app.ResultNotifier
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import android.Manifest
+import android.content.Intent
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -194,6 +201,8 @@ fun HomeScreen(
         if (showBack) BackNumberDialog(backIssuesOf(model.backIssues, team), localPage.title) { showBack = false }
         var showChronicle by remember { mutableStateOf(false) }
         if (showChronicle) ChronicleDialog(model, team, view.teamShort(team)) { showChronicle = false }
+        var showInbox by remember { mutableStateOf(false) }
+        if (showInbox) InboxDialog(view) { showInbox = false }
         val style = homeStyleOf(model.homeStyle)
         val uriHandler = LocalUriHandler.current
         val names = remember(model.raw, team, lastGame, opponent, oppName) {
@@ -207,6 +216,9 @@ fun HomeScreen(
         ) {
             // ⚠ ホームは記事1枚にまとめる（いしだの指定）。球団名・順位・進行の残り時間・手続きの知らせも紙面の中に置く。
             //    数字の表（順位表・タイトル争い・リーグ便り）は試合タブ
+            // 留守中のまとめ（前に開いたときからの変わったこと）と、見ていない試合の速報。紙面の外に置く（閉じれば消える）
+            if (model.away != null) item(key = "away") { AwayCard(model, onOpenInbox = { showInbox = true }) }
+            item(key = "quick") { QuickReplayCard(model, view) }
             item(key = "paper") {
                 PaperTabs(paper, localPage.title) { model.changeHomePaper(it.name) }
             }
@@ -217,7 +229,7 @@ fun HomeScreen(
                     style = style,
                     page = page,
                     nextAdvanceAt = view.nextAdvanceAt,
-                    menu = { HomeMenu(model, style, onRename, onOpenTips, tipsNow, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }) },
+                    menu = { HomeMenu(model, style, onRename, onOpenTips, tipsNow, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }, onOpenInbox = { showInbox = true }) },
                     onLink = { link ->
                         when (link) {
                             LINK_LINEUP -> onOpenLineup()
@@ -350,8 +362,15 @@ private fun ChronicleHeading(text: String) {
 
 /** 紙面の右上のメニュー（更新・名前の変更・TIPS・ホームの見た目・ログアウト） */
 @Composable
-private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, tipsNow: Int, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit) {
+private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, tipsNow: Int, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit, onOpenInbox: () -> Unit) {
     var open by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    // メニューを開くたびに端末の許可を見直す（設定の画面で切り替えて戻ってきたとき）
+    val notifyOn = remember(open, model.resultNotify) { model.resultNotify && ResultNotifier.permitted(context) }
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        model.changeResultNotify(granted)
+        if (!granted) model.message = "通知が許可されませんでした。端末の設定で許可すると届きます"
+    }
     // ⚠ ログアウトは確かめてから（メニューの一番下で押し間違えやすく、戻るにはメールとパスワードを入れ直す）
     var askLogout by remember { mutableStateOf(false) }
     if (askLogout) {
@@ -367,7 +386,8 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "メニュー") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("最新に更新") }, onClick = { open = false; model.reload(pull = true) })
-            DropdownMenuItem(text = { Text("球団名・名前を変える") }, onClick = { open = false; onRename() })
+            DropdownMenuItem(text = { Text("球団名・名前・ひとこと") }, onClick = { open = false; onRename() })
+            DropdownMenuItem(text = { Text("あなたへのお知らせ" + (model.view?.inbox?.size?.takeIf { it > 0 }?.let { "（${it}件）" } ?: "")) }, onClick = { open = false; onOpenInbox() })
             // ⚠ 当てはまるTIPSがあれば数を添える（一覧の先頭に、当てはまる人と一緒に出る。左下の印は未読のときだけなので、
             //    読んだあとに「誰が疲れているか」を見直す入口はここ）
             DropdownMenuItem(text = { Text("ゲームのTIPS" + if (tipsNow > 0) "（いま当てはまる${tipsNow}件）" else "") }, onClick = { open = false; onOpenTips() })
@@ -381,6 +401,28 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
                     onClick = { open = false; model.changeHomeStyle(s.name) },
                 )
             }
+            HorizontalDivider()
+            // 試合結果の通知（裏でおよそ15分ごとに確かめる。ResultNotifier）。端末が許していなければ「○」
+            DropdownMenuItem(
+                text = { Text((if (notifyOn) "● " else "○ ") + "通知（試合結果・手続き）") },
+                onClick = {
+                    open = false
+                    when {
+                        notifyOn -> model.changeResultNotify(false)
+                        ResultNotifier.needsPermission(context) -> askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        !ResultNotifier.permitted(context) -> {
+                            // 端末の設定で通知を切っている（許可の窓では入れられない）→ アプリの通知の設定を開く
+                            model.changeResultNotify(true)
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                                )
+                            }
+                        }
+                        else -> model.changeResultNotify(true)
+                    }
+                },
+            )
             HorizontalDivider()
             DropdownMenuItem(text = { Text("ログアウト") }, onClick = { open = false; askLogout = true })
         }
