@@ -53,7 +53,6 @@ import {
 import {
   activePicks,
   canPickStarters,
-  ownOpenGames,
   starterLocked,
 } from './starterPicks.mjs';
 import { exhibitionsView } from './exhibition.mjs';
