@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.app.PhaseDraft
 import jp.icenorth.baseball.app.savedPhaseDraft
@@ -50,7 +50,10 @@ import jp.icenorth.baseball.shared.ROSTER_LIMIT
 import jp.icenorth.baseball.shared.signTotal
 import jp.icenorth.baseball.shared.ONLINE_ROSTER_TARGETS
 import jp.icenorth.baseball.shared.rosterCounts
-import jp.icenorth.baseball.shared.seasonLine
+import jp.icenorth.baseball.shared.rosterGroup
+import jp.icenorth.baseball.shared.contractColumns
+import jp.icenorth.baseball.shared.sortRoster
+import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.int
@@ -659,21 +662,26 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     val releases = plan.at("releaseIds").list().mapNotNull { it.long() }
     val advice = raw.at("phase", "releaseAdvice").obj()
     val remaining = roster.filter { it.pid !in releases }
-    // ⚠ 開いたときに退団予定だった選手を先頭にまとめる（以前は名簿の順のままで、退団予定が一覧の中に散っていた）。
-    //    並びは開いたときに1回だけ決める（チェックのたびに並び替えると、押した行が動いて見失う）
-    val order = remember(roster.map { it.pid }) {
-        val first = releases.toSet()
-        roster.sortedByDescending { it.pid in first }.map { it.pid }
-    }
-    val byId = roster.associateBy { it.pid }
+    // ⚠ 先方指摘「名前・投打・年齢・各パラメータ・成績と網羅的に表示し、最右に解雇ボタン。各能力値ごとにソート」。
+    //    1人1行の表（Web 版 ContractPlanner と同じ列。`contractColumns`）。見出しを押すと並べ替え、右端で解雇を切り替える。
+    //    並べ替えていないときは守備位置の順（投・捕・内・外）
+    val columns = remember { contractColumns() }
+    var sortId by rememberSaveable { mutableStateOf<String?>(null) }
+    var ascending by rememberSaveable { mutableStateOf(false) }
+    val sortColumn = columns.firstOrNull { it.id == sortId }
+    val groupOrder = listOf("pitcher", "catcher", "infielder", "outfielder")
+    val base = roster.withIndex().sortedWith(compareBy({ groupOrder.indexOf(rosterGroup(it.value.at("position").str())) }, { it.index })).map { it.value }
+    val sorted = sortRoster(base, sortColumn, ascending)
+    val hand = mapOf("left" to "左", "right" to "右", "switch" to "両")
     Section(
-        "退団させる選手（${releases.size}人）",
+        "解雇する選手（${releases.size}人）",
         trailing = {
             // ⚠ 決まりの説明は ⓘ の中（以前は2段落が常に出ていた）。人数の集計は下の帯に出す
             InfoButton(
                 "契約更改",
                 listOf(
-                    "チェックした選手が退団します。最低9人を残してください。",
+                    "右端の「解雇」を押した選手が退団します（もう一度押すと取り消し）。最低9人を残してください。",
+                    "見出しを押すと、その項目で並べ替えます（もう一度押すと逆順）。",
                     "続くトライアウトで最大 ${(ROSTER_LIMIT - remaining.size).coerceAtLeast(0)}人を獲れます（上限${ROSTER_LIMIT}人）。目標に足りない区分はトライアウトで優先して埋まります。",
                     "標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため毎年少なくとも3人を出します。",
                     "このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。",
@@ -681,27 +689,40 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
             )
         },
     ) {
-        order.mapNotNull { byId[it] }.forEach { p ->
-            val checked = p.pid in releases
-            val reasons = advice?.get(p.pid.toString()).list().mapNotNull { it.str() }.takeIf { advice?.containsKey(p.pid.toString()) == true }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = checked,
-                    onCheckedChange = { on ->
-                        val next = if (on) releases + p.pid else releases - p.pid
-                        setPlan(Commands.withReleases(plan, next))
-                    },
-                    enabled = editable,
+        StatTable(
+            players = sorted,
+            columns = columns,
+            sortId = sortColumn?.id,
+            ascending = ascending,
+            onSort = { c ->
+                if (c.id == sortId) ascending = !ascending
+                else { sortId = c.id; ascending = c.ascending }
+            },
+            onPlayer = { model.openPlayer = it },
+            highlight = { it.pid in releases },
+            sub = { p ->
+                positionLabel(p.at("position").str()) + " " +
+                    (hand[p.at("physical", "throws").str()] ?: "右") + "投" + (hand[p.at("batting", "bats").str()] ?: "右") + "打"
+            },
+            trailingHeader = "解雇",
+            trailing = { p ->
+                val on = p.pid in releases
+                val toggle = { setPlan(Commands.withReleases(plan, if (on) releases - p.pid else releases + p.pid)) }
+                if (on) Button(onClick = toggle, enabled = editable, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("予定", fontSize = 12.sp) }
+                else OutlinedButton(onClick = toggle, enabled = editable, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("解雇", fontSize = 12.sp) }
+            },
+        )
+        // 標準案で退団になる理由（選んでいる式そのものからサーバーが作る。`phase.releaseAdvice`）
+        val advised = sorted.filter { advice?.containsKey(it.pid.toString()) == true }
+        if (advised.isNotEmpty()) {
+            Caption("標準案で退団になる選手")
+            advised.forEach { p ->
+                val reasons = advice?.get(p.pid.toString()).list().mapNotNull { it.str() }
+                Text(
+                    "${p.at("name").str().orEmpty()}: " + (reasons.joinToString("・").ifEmpty { "枠を空けるため" }),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
                 )
-                Column(Modifier.weight(1f)) {
-                    PlayerSummary(p, { model.openPlayer = it }) { if (checked) Tag("退団予定") }
-                    Muted(seasonLine(p))
-                    if (reasons != null) Text(
-                        "標準案で退団: " + (reasons.joinToString("・").ifEmpty { "枠を空けるため" }),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
             }
         }
     }

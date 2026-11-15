@@ -94,18 +94,24 @@ export function OwnersCard({ view }) {
 const KIND_LABEL = { trade: 'トレード', release: '退団', signing: '入団' };
 
 /** 取引の記録（トレード・退団・入団）。年度と球団で絞る */
-export function TransactionsPage({ view }) {
+export function TransactionsPage({ view, kind = null, back = null }) {
   const [year, setYear] = useState(view.year);
   const [team, setTeam] = useState('');
   const result = useRead('transactions', { year: String(year), ...(team ? { team } : {}) });
   const years = [...new Set([view.year, ...(result.data?.years || [])])].sort((a, b) => b - a);
-  const items = result.data?.items || [];
+  // `kind` を渡すとその種類だけ（トレード画面の「トレード履歴」は 'trade'）
+  const items = (result.data?.items || []).filter((t) => !kind || t.kind === kind);
   return (
     <Page
-      title="取引の記録"
-      sub="成立したトレードと、契約更改の退団・トライアウトの入団です。"
+      title={kind === 'trade' ? 'トレード履歴' : '取引の記録'}
+      sub={
+        kind === 'trade'
+          ? 'リーグ全体で成立したトレードです（人の球団どうし・CPU球団との交換・CPU球団どうし）。'
+          : '成立したトレードと、契約更改の退団・トライアウトの入団です。'
+      }
       actions={
         <div className="online-stat-tools">
+          {back}
           <select aria-label="取引の記録の年度" value={year} onChange={(e) => setYear(Number(e.target.value))}>
             {years.map((y) => (
               <option key={y} value={y}>
@@ -127,7 +133,9 @@ export function TransactionsPage({ view }) {
       <section className="online-card">
         {result.loading && <p className="online-muted">読み込んでいます…</p>}
         {result.error && <p className="online-error-text">{result.error}</p>}
-        {result.data && !items.length && <p>この年度の取引はまだありません。</p>}
+        {result.data && !items.length && (
+          <p>{kind === 'trade' ? 'この年度のトレードはまだありません。' : 'この年度の取引はまだありません。'}</p>
+        )}
         <div className="online-transactions">
           {items.map((t) => (
             <article key={t.id} className={`is-${t.kind}`}>
@@ -137,7 +145,8 @@ export function TransactionsPage({ view }) {
                   {t.kind === 'trade' ? turnLabel(t.date, view.seasonTurns) : t.kind === 'release' ? '契約更改' : 'トライアウト'}
                 </small>
                 <b>{t.teams.map((name) => teamShort(name)).join(' ⇄ ')}</b>
-                {t.kind === 'trade' && t.cpu && <small className="online-muted">（相手はCPU）</small>}
+                {t.kind === 'trade' && t.cpuOnly && <small className="online-muted">（CPU球団どうし）</small>}
+                {t.kind === 'trade' && t.cpu && !t.cpuOnly && <small className="online-muted">（相手はCPU）</small>}
               </header>
               <ul>
                 {t.moves.map((m) => (

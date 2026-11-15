@@ -7,9 +7,11 @@ import kotlin.math.min
 /**
  * 初期編成・トライアウトの希望リスト。Web 版 src/online/tryoutPlan.js の写し。
  *
- * ⚠ 提出は `{ count, rankedIds, total }`。`rankedIds` は**交渉する選手を10人まで、欲しい順に**
+ * ⚠ 提出は `{ count, rankedIds, total }`。`rankedIds` は**交渉する選手を20人まで、欲しい順に**
  *    並べたもの（Web 版の「交渉」の形。以前の「候補全員を並べて目標構成で飛ばす」形はやめた）。
- *    `total` は**獲得する人数**（交渉した人＋足りないぶんを自動で埋める人）。無ければ空き枠いっぱい。
+ *    `total` は**獲得する人数**（枠）。交渉リストはこれより多く並べてよく、取られたら下が繰り上がる。
+ *    交渉した人が尽きたらそこで止める（選んでいない選手は入れない。最低限だけ補う）。
+ *    `total` の無い案（標準案）だけが、尽きたぶんを自動で埋める（Web 版 `fillsAutomatically`）。
  * ⚠ サーバーは上から見て、まだ空いている選手を取る（希望順のとおり。目標構成で飛ばさない）。
  *    同じ選手を複数の球団が希望したら、前年の順位が上の球団が取る。
  */
@@ -31,11 +33,14 @@ fun rosterCounts(players: List<JsonObject>): MutableMap<String, Int> {
     return counts
 }
 
-/** 交渉できる人数の上限（1位〜10位）。Web 版 `TRYOUT_WISH_MAX` */
-const val TRYOUT_WISH_MAX = 10
+/** 交渉できる人数の上限（1位〜20位）。Web 版 `TRYOUT_WISH_MAX` */
+const val TRYOUT_WISH_MAX = 20
 
-/** 交渉できる人数（空き枠と10人の小さい方） */
-fun wishLimit(maxCount: Int): Int = max(0, min(TRYOUT_WISH_MAX, maxCount))
+/** 交渉できる人数。⚠ 空き枠で切らない（獲得する人数より多く並べ、取られたら繰り上げる）。空きが無ければ0 */
+fun wishLimit(maxCount: Int): Int = if (maxCount > 0) TRYOUT_WISH_MAX else 0
+
+/** 交渉した人が尽きたら自動で埋めるか（`total` の無い案だけ）。Web 版 `fillsAutomatically` */
+fun fillsAutomatically(plan: JsonObject?): Boolean = plan?.get("total")?.int() == null
 
 /** 獲得する人数（提出の `total`）。無ければ空き枠いっぱい。Web 版 `signTotal` */
 fun signTotal(plan: JsonObject?, maxCount: Int): Int {

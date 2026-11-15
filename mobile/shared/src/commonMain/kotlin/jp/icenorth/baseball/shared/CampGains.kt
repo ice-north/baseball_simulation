@@ -87,3 +87,25 @@ fun offseasonGains(result: JsonObject?, roster: List<JsonObject>): JsonObject {
     val byId = roster.associateBy { it.at("id").num()?.toLong()?.toString() ?: it.at("id").str().orEmpty() }
     return JsonObject(result?.at("gains").obj().orEmpty().mapValues { (id, changes) -> relevantGains(byId[id], changes.obj()) })
 }
+
+/**
+ * キャンプの成果の表の列（誰か1人でも動いた項目だけ。能力の並び → 変化球 → 守備適性）。
+ * Web 版 `campGainTable` と同じ並べ方（先方指摘「各選手1行にし、チームメイトと比べられるように」）。
+ */
+fun campGainColumns(rows: List<CampGainRow>): List<Pair<String, String>> {
+    val order = GAIN_LABELS.keys.toList()
+    fun rank(key: String): Int = order.indexOf(key).takeIf { it >= 0 } ?: if (key.startsWith("pitch.")) 1000 else 2000
+    return rows.flatMap { r -> r.items.map { it.key } }.toSet()
+        .sortedWith(compareBy<String> { rank(it) }.thenBy { it })
+        .map { it to campGainLabel(it) }
+}
+
+/** 表の並べ替え（`key` が "sum" なら計）。値の無いマスは0として比べる。同じ値は元の順（Web 版 `sortCampGainRows`） */
+fun sortCampGainRows(rows: List<CampGainRow>, key: String = "sum", ascending: Boolean = false): List<CampGainRow> {
+    fun value(r: CampGainRow): Double = if (key == "sum") r.sum else r.items.firstOrNull { it.key == key }?.diff ?: 0.0
+    val sorted = rows.withIndex().sortedWith { a, b ->
+        val c = value(a.value).compareTo(value(b.value))
+        (if (ascending) c else -c).takeIf { it != 0 } ?: (a.index - b.index)
+    }
+    return sorted.map { it.value }
+}

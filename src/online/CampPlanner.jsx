@@ -22,7 +22,13 @@ import {
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import { useDraftState, phaseDraftName } from './Drafts.jsx';
 import { Choice } from './Choice.jsx';
-import { campGainRows, campGainTotals, formatGain } from './campGains.js';
+import {
+  campGainRows,
+  campGainTotals,
+  campGainTable,
+  sortCampGainRows,
+  formatGain,
+} from './campGains.js';
 import { formatDeadline } from './LeaguePanels.jsx';
 
 // ============================================================
@@ -449,27 +455,55 @@ function LastRoundGains({ last, roster }) {
  * ⚠ 先方指摘「キャンプ中の能力値上昇をまとめた上のウィンドウを削除し、キャンプ後に、
  *    各選手の総合上昇値が見れるように」。キャンプ中は表の「+〇」（直近のクールの伸び）だけにし、
  *    まとめは**全クールが終わってから**出す。
- * ⚠ 選手ごとに「計」（伸びた量の合計）・項目ごとの通算・クールごとの合計を並べる。
- *    クールごとの記録（`byRound`）が無いキャンプ（版を上げる前に始めたもの）は通算だけ。
+ * ⚠ 先方指摘「選手3列9行は見づらい。各選手1行にし、何が伸びたかチームメイトと比べられるように」。
+ *    **1人1行の表**にし、列を項目（ミート・制球…）にそろえる。見出しを押すとその項目で並べ替える
+ *    （既定は「計」の多い順）。列は誰か1人でも動いた項目だけ（`campGainTable`）。
+ * ⚠ クールごとの合計は右端の列。クールごとの記録（`byRound`）が全クールぶん無いキャンプ
+ *    （版を上げる前に始めたもの）は出さない。
  * ⚠ 全員を出す（上位だけに絞らない。「各選手の」が求められている）。
  */
 export function CampResultList({ camp, roster }) {
-  const rows = campGainRows(camp?.gains || {}, roster, camp?.events || {});
-  if (!rows.length && !camp?.rounds) return null;
+  const [sort, setSort] = useState({ key: 'sum', dir: 'desc' });
+  const table = campGainTable(camp?.gains || {}, roster, camp?.events || {});
+  if (!table.rows.length && !camp?.rounds) return null;
   // ⚠ **全クールぶん揃っているときだけ**クール別を出す。記録を足す前に始めたキャンプは
   //    途中のクールからしか無く、並べると「計」と合わない（抜けたクールが黙って消える）
   const byRound =
     (camp?.byRound || []).length === camp?.rounds ? camp.byRound : [];
   const totals = campGainTotals(camp?.gains || {});
-  const grown = rows.filter((r) => r.items.some((i) => i.diff > 0)).length;
+  const grown = table.rows.filter((r) => r.items.some((i) => i.diff > 0)).length;
   const roundSum = (round, id) =>
     Object.values(round.gains?.[id] || {}).reduce((n, d) => n + d, 0);
+  const rows = sortCampGainRows(table.rows, sort.key, sort.dir);
+  const sortBy = (key) =>
+    setSort((now) =>
+      now.key === key ? { key, dir: now.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' },
+    );
+  const header = (key, label) => (
+    <th key={key}>
+      <button
+        type="button"
+        aria-label={`${label}で並べ替え`}
+        aria-pressed={sort.key === key}
+        onClick={() => sortBy(key)}
+      >
+        {label}
+        {sort.key === key ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
+      </button>
+    </th>
+  );
+  const cell = (diff) =>
+    diff === undefined || diff === 0 ? (
+      <td className="online-muted">·</td>
+    ) : (
+      <td className={`online-gain ${diff > 0 ? 'is-up' : 'is-down'}`}>{formatGain(diff)}</td>
+    );
   return (
     <section className="online-camp-gains" aria-label="キャンプの成果">
       <div className="online-camp-gains-head">
         <h4>選手ごとの総合上昇値（キャンプ通算）</h4>
       </div>
-      {rows.length === 0 ? (
+      {table.rows.length === 0 ? (
         <p className="online-muted">伸びた能力はありません。</p>
       ) : (
         <>
@@ -479,56 +513,55 @@ export function CampResultList({ camp, roster }) {
               .slice(0, 6)
               .map((t) => `${t.label}${formatGain(t.diff)}`)
               .join(' · ')}
+            <small>　見出しを押すと、その項目で並べ替えます。</small>
           </p>
-          <ul className="online-camp-gain-list online-camp-result">
-            {rows.map(({ player, items, sum, events }) => (
-              <li key={player.id}>
-                <span className="online-camp-gain-name">
-                  <PlayerStatsButton player={player} panel="abilities" />
-                  <small>{POS[player.position]}</small>
-                </span>
-                <span className="online-camp-gain-items">
-                  <strong
-                    className={`online-gain online-camp-gain-sum ${sum >= 0 ? 'is-up' : 'is-down'}`}
-                    title="伸びた量の合計（項目ごとの伸びを足したもの）"
-                  >
-                    計{formatGain(Math.round(sum * 10) / 10)}
-                  </strong>
-                  {items.map((i) => (
-                    <span
-                      key={i.key}
-                      className={`online-gain ${i.diff > 0 ? 'is-up' : 'is-down'}`}
+          <div className="online-contract-scroll">
+            <table className="online-camp-result-table">
+              <thead>
+                <tr>
+                  <th className="online-camp-result-name">選手</th>
+                  {header('sum', '計')}
+                  {table.columns.map((c) => header(c.key, c.label))}
+                  {byRound.length > 0 && <th>クール別</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ player, values, sum, events }) => (
+                  <tr key={player.id}>
+                    <th scope="row" className="online-camp-result-name">
+                      <PlayerStatsButton player={player} panel="abilities" />
+                      <small>{POS[player.position]}</small>
+                      {events.map((text, index) => (
+                        <strong key={`${index}:${text}`} className="online-camp-gain-event">
+                          {text}
+                        </strong>
+                      ))}
+                    </th>
+                    <td
+                      className={`online-gain online-camp-gain-sum ${sum >= 0 ? 'is-up' : 'is-down'}`}
+                      title="伸びた量の合計（項目ごとの伸びを足したもの）"
                     >
-                      {i.label}
-                      {formatGain(i.diff)}
-                    </span>
-                  ))}
-                  {byRound.length > 0 && (
-                    <small className="online-camp-gain-rounds">
-                      クール別{' '}
-                      {byRound
-                        .map(
-                          (r) => {
+                      {formatGain(Math.round(sum * 10) / 10)}
+                    </td>
+                    {table.columns.map((c) => (
+                      <React.Fragment key={c.key}>{cell(values[c.key])}</React.Fragment>
+                    ))}
+                    {byRound.length > 0 && (
+                      <td className="online-camp-gain-rounds">
+                        {byRound
+                          .map((r) => {
                             // ⚠ 0 は「±0」と書く（「第1」「0」が続いて「第10」に読めた）
                             const n = Math.round(roundSum(r, player.id) * 10) / 10;
                             return `第${r.round} ${n ? formatGain(n) : '±0'}`;
-                          },
-                        )
-                        .join(' / ')}
-                    </small>
-                  )}
-                  {events.map((text, index) => (
-                    <strong
-                      key={`${index}:${text}`}
-                      className="online-camp-gain-event"
-                    >
-                      {text}
-                    </strong>
-                  ))}
-                </span>
-              </li>
-            ))}
-          </ul>
+                          })
+                          .join(' / ')}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </section>
@@ -586,14 +619,75 @@ function CampPolicyGuide({ policy, roster, policyOf, note, hint }) {
   );
 }
 
-/** 最終クールや締め切りで手続きが閉じた後も、保存した成果を確認できる。 */
-export function CompletedCamp({ view }) {
-  const camp = view.lastCamp;
-  if (!camp) return null;
+/**
+ * 最終クールや締め切りで手続きが閉じた後も、保存した成果を確認できる。
+ *
+ * ⚠ 先方指摘「キャンプ結果の表示タイミングが契約更改後になっている。キャンプ直後に」。
+ *    キャンプが閉じると開幕し、ホームから手続きのページへ行く人はいないので、次に結果を見るのは
+ *    契約更改のころ（手続きのページの下）だった。**ホームの上にも出し**、「閉じる」まで残す
+ *    （`onHome`）。閉じた年はこのブラウザに覚え、その年のキャンプ結果はホームに出さない
+ *    （手続きのページの下にはいつでもある）。シーズンの年が替わったら出さない。
+ */
+const CAMP_SEEN_KEY = 'baseball-online-camp-seen';
+const campSeenStamp = (view) => `${view.teamName}:${view.lastCamp?.year}`;
+function campSeen(view) {
+  try {
+    return localStorage.getItem(CAMP_SEEN_KEY) === campSeenStamp(view);
+  } catch {
+    return false;
+  }
+}
+/** ホームのキャンプ結果のまとめ（何人が伸び、伸びの大きかった3人） */
+function CampHomeSummary({ camp, roster }) {
+  const table = campGainTable(camp?.gains || {}, roster, camp?.events || {});
+  const grown = table.rows.filter((r) => r.items.some((i) => i.diff > 0));
+  const top = sortCampGainRows(table.rows, 'sum', 'desc').slice(0, 3);
+  const sum = (r) => r.items.reduce((n, i) => n + i.diff, 0);
   return (
-    <section className="online-card">
-      <h2>{camp.year}年目のキャンプ結果</h2>
-      <CampResultList camp={camp} roster={view.roster || []} />
+    <p className="online-muted">
+      キャンプが終わりました。{grown.length}人が伸びました
+      {top.length > 0 && `（伸びの大きかった選手: ${top.map((r) => `${r.player.name} ${formatGain(Math.round(sum(r) * 10) / 10)}`).join('・')}）`}
+      。閉じたあとも「現在の手続き」の下で見られます。
+    </p>
+  );
+}
+
+export function CompletedCamp({ view, onHome = false }) {
+  const camp = view.lastCamp;
+  const [closed, setClosed] = useState(() => onHome && campSeen(view));
+  // ⚠ ホームでは**まとめの1行だけ**出し、表は押して開く（ホームは1画面に収める決まり）
+  const [open, setOpen] = useState(!onHome);
+  if (!camp) return null;
+  // ⚠ ホームに出すのは**キャンプが終わってから開幕まで**（「キャンプ直後」）。シーズンに入ったら
+  //    手続きの下（「現在の手続き」）でだけ見る。ずっと出すとホームが1画面に収まらない
+  if (onHome && (closed || camp.year !== view.year || view.stage?.key === 'season')) return null;
+  const close = () => {
+    try {
+      localStorage.setItem(CAMP_SEEN_KEY, campSeenStamp(view));
+    } catch {
+      /* 覚えられなくても、この画面の間は閉じる */
+    }
+    setClosed(true);
+  };
+  return (
+    <section className="online-card online-camp-done" aria-label="キャンプ結果">
+      <div className="online-card-heading">
+        <h2>{camp.year}年目のキャンプ結果</h2>
+        {onHome && (
+          <button type="button" onClick={close}>
+            閉じる
+          </button>
+        )}
+      </div>
+      {onHome && <CampHomeSummary camp={camp} roster={view.roster || []} />}
+      {onHome && (
+        <div className="online-actions">
+          <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? '表を閉じる' : '選手ごとの表を開く'}
+          </button>
+        </div>
+      )}
+      {open && <CampResultList camp={camp} roster={view.roster || []} />}
     </section>
   );
 }

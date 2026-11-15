@@ -264,21 +264,29 @@ try {
             .locator('.online-tryout-wanted > ol.online-tryout-list > li .online-tryout-person button')
             .allInnerTexts()
         ).map((s) => s.trim());
-      const start = await wantedNames();
-      // 「交渉中 N / M人」の M が交渉できる人数。標準案はそこまで埋めてある
-      const limitText = (
-        await t.locator('.online-tryout-limit').innerText()
-      ).match(/交渉中\s*(\d+)\s*\/\s*(\d+)人/);
+      const standard = await wantedNames();
+      // 「交渉中 N / M人」の M が交渉できる人数。⚠ 標準案は空き枠ぶんだけ並べる
+      //    （交渉リストは獲得する人数より多く持てる。先方指摘 2026-11-15）ので、満員まで足してから見る
+      const limitOf = async () =>
+        (await t.locator('.online-tryout-limit').innerText()).match(/交渉中\s*(\d+)\s*\/\s*(\d+)人/);
+      const limitText = await limitOf();
       assert.ok(limitText, '「交渉中 N / M人」が出ていない');
-      assert.equal(Number(limitText[1]), start.length, '交渉中の人数が希望リストと合わない');
-      assert.equal(
-        Number(limitText[2]),
-        start.length,
-        `前提: 標準案が交渉できる人数ちょうど（${limitText[0]}）`,
-      );
+      assert.equal(Number(limitText[1]), standard.length, '交渉中の人数が希望リストと合わない');
+      assert.ok(standard.length <= Number(limitText[2]), `標準案が交渉できる人数を超えている（${limitText[0]}）`);
       await t
         .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
         .click();
+      // 1ページ12人。そのページで交渉していない人が居なければ次のページへ
+      const open = t.locator('.online-tryout-pool .online-tryout-list li:not([data-wanted])');
+      for (let n = standard.length; n < Number(limitText[2]); n += 1) {
+        while (!(await open.count()))
+          await t.locator('.online-tryout-pool').getByRole('button', { name: '次のページ', exact: true }).click();
+        await open.first().getByRole('button', { name: /と交渉する$/ }).click();
+      }
+      while (!(await open.count()))
+        await t.locator('.online-tryout-pool').getByRole('button', { name: '次のページ', exact: true }).click();
+      const start = await wantedNames();
+      assert.equal(start.length, Number(limitText[2]), '交渉できる人数まで足せない');
       const row = t
         .locator('.online-tryout-pool .online-tryout-list li:not([data-wanted])')
         .first();
@@ -331,7 +339,7 @@ try {
       assert.equal(moved[1], added[0], '↓で1つ下がらない');
       assert.deepEqual([...moved].sort(), [...added].sort(), '↓で顔ぶれが変わった');
       await click(t, '標準案に戻す');
-      assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+      assert.deepEqual(await wantedNames(), standard, '標準案に戻らない');
       // 重視する能力の重みから、評価値の順でおすすめを作れる
       const scoresOf = async (selector) =>
         (await t.locator(`${selector} .online-tryout-score`).allInnerTexts()).map((text) =>
@@ -346,8 +354,10 @@ try {
         .click();
       const weighted = await scoresOf('.online-tryout-wanted > ol.online-tryout-list');
       assert.equal(weighted.length, start.length, '重みのおすすめで交渉する人数が変わった');
+      // ⚠ 目標人数を埋める選手が先、残りの枠（獲得する人数より多く並べたぶん）が後。
+      //    それぞれの中で評価の高い順（`weightedRanked`）。並びが上がるのは境目の1か所まで
       assert.ok(
-        weighted.every((v, i) => i === 0 || weighted[i - 1] >= v),
+        weighted.filter((v, i) => i > 0 && weighted[i - 1] < v).length <= 1,
         `希望リストが評価の高い順になっていない: ${weighted.join(',')}`,
       );
       assert.notDeepEqual(await wantedNames(), start, '重みを変えてもおすすめが変わらない');
@@ -358,7 +368,7 @@ try {
       );
       await t.getByRole('button', { name: '重みを標準に戻す', exact: true }).click();
       await click(t, '標準案に戻す');
-      assert.deepEqual(await wantedNames(), start, '標準案に戻らない');
+      assert.deepEqual(await wantedNames(), standard, '標準案に戻らない');
       // ⚠ 知らせは**その希望順の間だけ**出す（標準案に戻したら消える）
       assert.equal(
         await t.getByText('選び直しました', { exact: false }).count(),

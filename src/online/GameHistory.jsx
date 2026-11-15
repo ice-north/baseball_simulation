@@ -9,6 +9,7 @@ import { formatStat } from './statsView.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import { inOnlineRoot } from './dialogPortal.js';
 import { ScoringPlays } from './ScoringPlays.jsx';
+import { scoreBoard } from './scoreBoard.js';
 const GROUPS = {
   batting: [
     [
@@ -368,6 +369,65 @@ export function GameRecordButton({
     </>
   );
 }
+/** スコアボード（回ごとの得点・R H E・勝敗投手）。中身は `scoreBoard.js`。古い試合（回ごとの記録が無い）は出さない */
+export function ScoreBoard({ game, ownTeam, compact = false }) {
+  const board = scoreBoard(game);
+  if (!board) return null;
+  return (
+    <figure className={compact ? 'online-scoreboard is-compact' : 'online-scoreboard'} aria-label="スコアボード">
+      {compact && <small className="online-scoreboard-date">{turnLabel(game.date)}</small>}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col" className="online-scoreboard-team">
+              <span className="online-sr-only">球団</span>
+            </th>
+            {Array.from({ length: board.innings }, (_, i) => (
+              <th key={i} scope="col">
+                {i + 1}
+              </th>
+            ))}
+            <th scope="col" className="online-scoreboard-total" title="得点">
+              R
+            </th>
+            <th scope="col" className="online-scoreboard-total" title="安打">
+              H
+            </th>
+            <th scope="col" className="online-scoreboard-total" title="失策">
+              E
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {board.rows.map((row) => (
+            <tr key={row.team} data-own={row.team === ownTeam || undefined}>
+              <th scope="row" className="online-scoreboard-team" title={teamLabel(row.team)}>
+                {teamShort(row.team)}
+              </th>
+              {row.cells.map((cell, i) => (
+                <td key={i} data-scored={/^[1-9]/.test(cell) || undefined}>
+                  {cell}
+                </td>
+              ))}
+              <td className="online-scoreboard-total">{row.runs}</td>
+              <td className="online-scoreboard-total">{row.hits ?? '—'}</td>
+              <td className="online-scoreboard-total">{row.errors ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {board.decisions.length > 0 && (
+        <figcaption>
+          {board.decisions.map((d) => (
+            <span key={d.label}>
+              <b>{d.label}</b> {d.name}
+            </span>
+          ))}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
 function GameRecord({ id, year, ownTeam, close }) {
   const compact = window.matchMedia('(max-width: 767px)').matches;
   const [watch, setWatch] = useState(false);
@@ -393,7 +453,8 @@ function GameRecord({ id, year, ownTeam, close }) {
               </button>
             </nav>
           )}
-          {!watch && (
+          {/* ⚠ スマホは小窓を縦に収めるため、点数の大きな1行はスコアボードがあれば出さない（同じ点数が2回並ぶ） */}
+          {!watch && !(compact && scoreBoard(game)) && (
             <p className="online-game-summary">
               <small>{turnLabel(game.date)}</small>
               <strong>
@@ -403,6 +464,7 @@ function GameRecord({ id, year, ownTeam, close }) {
               </strong>
             </p>
           )}
+          {!watch && <ScoreBoard game={game} ownTeam={ownTeam} compact={compact} />}
           {watch ? (
             compact ? (
               <MobileReplay game={game} close={close} />

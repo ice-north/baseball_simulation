@@ -51,6 +51,11 @@ class SessionStore(context: Context) {
         get() = prefs.getStringSet("seenTrades", null)?.toSet().orEmpty()
         set(value) = prefs.edit().putStringSet("seenTrades", value).apply()
 
+    /** ホームのキャンプ結果を閉じた年（「球団名:年」）。閉じたら次のキャンプまで出さない */
+    var campSeen: String?
+        get() = prefs.getString("campSeen", null)
+        set(value) = prefs.edit().putString("campSeen", value).apply()
+
     /** ホームで開く新聞（地元紙・全国紙。[jp.icenorth.baseball.shared.FrontPage.Paper] の名前） */
     var homePaper: String?
         get() = prefs.getString("homePaper", null)

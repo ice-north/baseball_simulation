@@ -64,7 +64,7 @@ import {
   advanceBackgroundTournaments,
 } from '../src/game/backgroundProgression.js';
 import { generatePitchingRotation } from '../src/game/lineupGenerator.js';
-import { setRecommendedLineup } from '../src/game/autoSimulation.js';
+import { setRecommendedLineup, withFielderGameFatigue } from '../src/game/autoSimulation.js';
 import { ensureCompleteLineup } from '../src/game/lineup.js';
 import { prepareDailyLineup, benchTwoWayStarter } from './dailyLineup.mjs';
 import { initializeAllPlayersCondition } from '../src/game/condition.js';
@@ -108,6 +108,17 @@ import {
 import { tradeValueOf } from './tradeValue.mjs';
 import { tradeJudgeForLeague } from './tradeJudge.mjs';
 import { tradeStrengthGap } from '../src/online/tradeSearch.js';
+import {
+  planCpuTrade,
+  partnerOrder,
+  dayRoll,
+  offerExpiry,
+  dateKey as cpuDateKey,
+  CPU_TRADE_EVERY,
+  CPU_OFFER_EVERY,
+  CPU_OFFER_DAYS,
+  CPU_TRADE_LAST_MONTH,
+} from './cpuTrades.mjs';
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
 import { createRecorder, freezeComparison } from './recordedStats.mjs';
@@ -147,6 +158,7 @@ import {
   CONVERT_POSITIONS,
   CAMP_SUB_TARGETS,
   CAMP_PITCH_TYPES,
+  onlineFielderFatigueFor,
 } from '../src/online/shared.js';
 import {
   generatePyramidTeams,
@@ -165,6 +177,7 @@ import {
   nextFromPlan,
   wishLimit,
   signTotal,
+  fillsAutomatically,
   TRYOUT_WISH_MAX,
 } from '../src/online/tryoutPlan.js';
 import { generateRosterPacks, packsForMember } from '../src/online/rosterPack.js';
@@ -694,6 +707,22 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
     trade.countered = true;
     trade.turn = 'from';
     trade.updatedAt = now;
+    // ⚠ **CPUからの提案への逆提案は、CPUがその場で答える**（返事を待つ人が居ない）。判断は人の提案と
+    //    同じ `cpuDecisionFor`（人の球団が「出す・もらう」側として見る）。受ければ成立、受けなければ断る
+    if (trade.from === null) {
+      assertNoPendingPack(league, [trade.fromTeam, trade.toTeam]);
+      const answer = cpuDecisionFor(league, toTeam, trade.fromTeam, trade.want, trade.offer);
+      // ⚠ 応じないときは例外で返す（命令ごと取り消されるので、元の提案がそのまま残る）
+      requireOnline(
+        answer.action === 'accept',
+        `${trade.fromTeam} はこの逆提案には応じませんでした。元の提案のまま受けるか、断ってください`,
+        409,
+        'trade',
+      );
+      drop();
+      applyTrade(league, trade, now);
+      return { status: 'accepted' };
+    }
     const reply = tradeNote(note);
     if (reply) trade.replyNote = reply;
     else delete trade.replyNote;
@@ -717,10 +746,135 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
       'trade',
     );
   }
+  // ⚠ CPUからの提案を受けるときも、いまの名簿でもう一度CPUに判断させる（上と同じ理由）。
+  //    人の球団（`toTeam`）が出す・もらう側として見る
+  if (trade.from === null) {
+    assertNoPendingPack(league, [trade.fromTeam, trade.toTeam]);
+    assertTradeAllowed(fromTeam, toTeam, trade.offer, trade.want);
+    const again = cpuDecisionFor(league, toTeam, trade.fromTeam, trade.want, trade.offer);
+    requireOnline(
+      again.action === 'accept',
+      `${trade.fromTeam} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
+      409,
+      'trade',
+    );
+  }
   drop();
   applyTrade(league, trade, now);
   tell('tradeAccepted', `${myLabel}とのトレードが成立しました`);
   return { status: 'accepted' };
+}
+
+/**
+ * CPU球団が自分から動くトレード。シーズン中（7月まで）の1日の終わりに呼ぶ。
+ *   1. 期限の過ぎたCPUからの提案を取り下げる
+ *   2. CPU同士の交換（平均 `CPU_TRADE_EVERY` 日に1回、1組）
+ *   3. 人の球団への提案（球団ごとに平均 `CPU_OFFER_EVERY` 日に1回。未返事のCPUからの提案は1件まで）
+ * ⚠ 受ける側の判断は人の提案と同じ `cpuDecisionFor`（値段の上乗せと戦力の開きの線）。
+ *    人の球団への提案は「人がこれを出したら受ける」ものだけ（受けたときにもう一度同じ判断を通す）。
+ * ⚠ 初期メンバーの入れ替え待ちの球団（`hasPendingPack`）は相手にしない。
+ */
+function runCpuTrades(league, now) {
+  const season = league.season;
+  const { month } = season.currentDate || {};
+  league.trades = league.trades || [];
+  // 期限切れ（日付が期限を過ぎた）CPUからの提案
+  const today = cpuDateKey(season.currentDate);
+  const expired = league.trades.filter((t) => t.from === null && t.expires && today > t.expires);
+  if (expired.length) {
+    league.trades = league.trades.filter((t) => !expired.includes(t));
+    for (const t of expired)
+      pushInbox(
+        league,
+        t.to,
+        {
+          type: 'tradeWithdrawn',
+          tradeId: t.id,
+          text: `${teamLabelIn(league, t.fromTeam)}からのトレードの提案は、期限が過ぎたため取り下げられました`,
+        },
+        now,
+      );
+  }
+  if (league.phase || season.phase !== SEASON_PHASES.REGULAR_SEASON || !(month <= CPU_TRADE_LAST_MONTH)) return;
+  const names = (season.settings.teamNames || []).filter(
+    (n) => TEAMS_DATA[n] && !hasPendingPack(league, n),
+  );
+  const humans = new Map((league.members || []).map((m) => [m.teamName, m.userId]));
+  const cpus = names.filter((n) => !humans.has(n));
+  const teams = Object.fromEntries(names.map((n) => [n, TEAMS_DATA[n].players]));
+  const judge = tradeJudgeForLeague(league);
+  const allowed = (fromName, toName, give, get) => {
+    try {
+      assertTradeAllowed(TEAMS_DATA[fromName], TEAMS_DATA[toName], give, get);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  // --- CPU同士
+  if (cpus.length >= 2 && dayRoll(league, 'cpu-trade') < 1 / CPU_TRADE_EVERY) {
+    const from = [...cpus].sort((a, b) => dayRoll(league, `cpu-from:${a}`) - dayRoll(league, `cpu-from:${b}`))[0];
+    const plan = planCpuTrade({
+      from,
+      teams,
+      partners: partnerOrder(league, from, cpus, 'cpu'),
+      valueOf: (p) => judge.valueOf(p),
+      // 相手のCPUが、人の提案と同じ判断で受けるか
+      accept: (partner, give, get) =>
+        allowed(from, partner, give, get) &&
+        cpuDecisionFor(league, TEAMS_DATA[from], partner, give, get).action === 'accept',
+    });
+    if (plan) {
+      const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
+      applyTrade(
+        league,
+        { id, from: null, fromTeam: from, to: null, toTeam: plan.partner, offer: plan.give, want: plan.get, turn: 'to', countered: false },
+        now,
+      );
+    }
+  }
+  // --- 人の球団への提案
+  for (const [teamName, userId] of humans) {
+    if (!names.includes(teamName) || !cpus.length) continue;
+    if (league.trades.some((t) => t.from === null && t.to === userId)) continue;
+    if (dayRoll(league, `cpu-offer:${teamName}`) >= 1 / CPU_OFFER_EVERY) continue;
+    const from = [...cpus].sort(
+      (a, b) => dayRoll(league, `cpu-offer-from:${teamName}:${a}`) - dayRoll(league, `cpu-offer-from:${teamName}:${b}`),
+    )[0];
+    const plan = planCpuTrade({
+      from,
+      teams,
+      partners: [teamName],
+      valueOf: (p) => judge.valueOf(p),
+      // 人がこの内容で出したら、CPUが受けるか（受けたときも同じ判断を通す。`respondTrade`）
+      accept: (partner, give, get) =>
+        allowed(from, partner, give, get) &&
+        cpuDecisionFor(league, TEAMS_DATA[partner], from, get, give).action === 'accept',
+    });
+    if (!plan) continue;
+    const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
+    league.trades.push({
+      id,
+      // ⚠ CPUからの提案は `from` が null（提案した人が居ない）。`offer` は CPU が出す選手
+      from: null,
+      fromTeam: from,
+      to: userId,
+      toTeam: teamName,
+      offer: plan.give,
+      want: plan.get,
+      turn: 'to',
+      countered: false,
+      createdAt: now,
+      updatedAt: now,
+      expires: offerExpiry(season.currentDate),
+    });
+    pushInbox(
+      league,
+      userId,
+      { type: 'tradeOffered', tradeId: id, text: `${teamLabelIn(league, from)}からトレードの提案が届きました（${CPU_OFFER_DAYS}日以内に返事を）` },
+      now,
+    );
+  }
 }
 
 /** トレードに添えるひとこと（空なら null）。⚠ 長すぎれば断る（黙って切ると違う文が届く） */
@@ -767,8 +921,10 @@ function applyTrade(league, trade, now) {
     {
       kind: 'trade',
       teams: [trade.fromTeam, trade.toTeam],
-      // 相手がCPU球団だったか（その場で答えた）
-      cpu: !trade.to,
+      // 相手がCPU球団だったか（その場で答えた）。CPUからの提案（`from` が null）も含む
+      cpu: !trade.to || !trade.from,
+      // CPU球団どうしの交換（`runCpuTrades`）
+      ...(!trade.to && !trade.from ? { cpuOnly: true } : {}),
       moves: [
         ...after.moving.map((p) => moveOf(p, trade.fromTeam, trade.toTeam)),
         ...after.coming.map((p) => moveOf(p, trade.toTeam, trade.fromTeam)),
@@ -1193,10 +1349,11 @@ export function defaultPhasePlan(league, teamName) {
     const pool = clone(league.phase.candidates);
     const roster = clone(team.players);
     const rankedIds = [];
-    // ⚠ **交渉できる人数まで**（10人）。以前は候補360人を全員並べていたが、
-    //    いまの希望リストは10人までで、それを超えると提出が弾かれる。
-    //    360回 `selectPlayerForAI` を回す必要も無くなった
-    const limit = wishLimit(Math.max(0, ROSTER_LIMIT - team.players.length));
+    // ⚠ **空き枠ぶんまで**（交渉できる人数 `TRYOUT_WISH_MAX` が上限）。以前は候補360人を
+    //    全員並べていたが、いまの希望リストは上限があり、それを超えると提出が弾かれる。
+    //    標準案は人数を決めない（`total` 無し）ので、尽きたぶんは自動で埋まる
+    const room = Math.max(0, ROSTER_LIMIT - team.players.length);
+    const limit = Math.min(room, wishLimit(room));
     while (pool.length && rankedIds.length < limit) {
       // ⚠ オンラインの目標構成（26人）を渡す。既定は一人用の24人で、解決側
       //    （`resolveTryout`）と区分の数がずれていた（監査 2026-11-13）
@@ -1304,8 +1461,8 @@ function validatePhasePlan(league, teamName, plan) {
           plan.rankedIds.every((id) => candidates.has(id)),
         '希望順位に無効・重複した選手がいます',
       );
-      // ⚠ **交渉は10人まで**（いしだ要望の1位〜10位）。画面でも止めているが、
-      //    正本はここ。超えた提出を通すと、画面に出ていない選手まで取りにいく
+      // ⚠ **交渉は `TRYOUT_WISH_MAX` 人まで**（獲得する人数より多く並べて、取られたら繰り上げる）。
+      //    画面でも止めているが、正本はここ。超えた提出を通すと、画面に出ていない選手まで取りにいく
       requireOnline(
         plan.rankedIds.length <= TRYOUT_WISH_MAX,
         `交渉できるのは${TRYOUT_WISH_MAX}人までです`,
@@ -1627,7 +1784,7 @@ function resolveTryout(league, plans, now) {
         tryoutContextFor(league, pick.team),
         ONLINE_ROSTER_TARGETS,
       );
-    // ⚠ 希望順のとおりに取る（飛ばさない）。自分で10人選ぶ形なので、
+    // ⚠ 希望順のとおりに取る（飛ばさない）。自分で選ぶ形なので、
     //    1位を飛ばされると何を選んだのか分からなくなる
     const fromPlan =
       plan && !planFull && !reached
@@ -1646,10 +1803,16 @@ function resolveTryout(league, plans, now) {
           lostOf[pick.team].add(id);
       }
     }
-    // ⚠ **希望が尽きても枠は埋める**。交渉は10人までで、しかも上位の球団に
-    //    先を越される。ここで見送ると人の球団だけ名簿が足りないまま終わる
-    //    （実測で自分21人・CPU26人。控えの数でそのまま不利になる）
-    let player = forced || (reached ? null : fromPlan || auto());
+    // ⚠ **獲得する人数を自分で決めた提出（`total` がある）は、交渉した選手しか取らない**
+    //    （先方指摘「希望選手が取れなかった場合、選んでいない選手が入団してしまう」）。
+    //    取られたぶんは交渉リストの下が繰り上がり、リストが尽きたらそこで止める
+    //    （最低限に届かないぶんだけは下で補う）。だから交渉リストは獲得する人数より
+    //    多く持てる（`TRYOUT_WISH_MAX`）。
+    // ⚠ 人数を決めていない案（CPU・標準案・指導者の案・古い提出）は従来どおり、
+    //    希望が尽きても CPU と同じ判断で枠を埋める。埋めないと名簿が21人などで終わり、
+    //    控えの数でそのまま不利になる（実測で自分21人・CPU26人）
+    const fills = !plan || fillsAutomatically(plan);
+    let player = forced || (reached ? null : fromPlan || (fills ? auto() : null));
     // 希望順位の候補が尽きても、最低限が欠けていれば必要な守備位置から補う
     if (!player && mustFill > 0) player = pickForShortfall();
     if (!player) continue;
@@ -2255,7 +2418,8 @@ export function advanceLeagueDay(league, operationId, now) {
 }
 
 function advanceOneDay(league, key, now) {
-  seeded(league, key, () => {
+  // ⚠ 野手の1試合の疲労はオンラインの式（`onlineFielderFatigueFor`）。一人用の式は変えない
+  seeded(league, key, () => withFielderGameFatigue(onlineFielderFatigueFor, () => {
     const oldDate = league.season.currentDate;
     const todays = getScheduleByDate(league.season.schedule, oldDate).filter(
       (game) => !game.result,
@@ -2333,6 +2497,8 @@ function advanceOneDay(league, key, now) {
     schedulePlayoffReplay(season);
     league.season = season;
     clearPlayedPicks(league);
+    // CPU球団が自分から動くトレード（CPU同士・人の球団への提案）。⚠ 乱数は引かない（`cpuTrades.mjs`）
+    runCpuTrades(league, now);
     const { month, day, year } = season.currentDate;
     generateBackgroundTournaments(season.currentDate);
     if (month === 8 && day >= 15 && !season._koshienDone) {
@@ -2391,7 +2557,7 @@ function advanceOneDay(league, key, now) {
       openPhase(league, 'offseason', now);
       resolvePhase(league, now);
     }
-  });
+  }));
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   signTotal,
   wishedCount,
   minimumShort,
+  fillsAutomatically,
   TRYOUT_WISH_MAX,
   WEIGHT_FIELDS,
   WEIGHT_MAX,
@@ -40,7 +41,7 @@ import {
 //    分けたが、希望人数の入力・目標構成による飛ばし・控えの開閉が重なって
 //    「使いにくい」（いしだ指摘）ままだった。
 //
-// ⚠ いまは**一覧から「交渉」を押して10人まで選ぶ**だけ。選んだ順が1位〜10位で、
+// ⚠ いまは**一覧から「交渉」を押して20人まで選ぶ**だけ。選んだ順が1位〜20位で、
 //    ↑↓ とドラッグで入れ替えられる。同じ選手を複数の球団が希望したら、
 //    **前年の順位が上の球団**が取る（`resolveTryout`）。
 // ============================================================
@@ -73,14 +74,7 @@ function storeWeights(weights) {
   }
 }
 
-/**
- * 選手1人の1行（名前・年齢・位置・主な能力）。
- * ⚠ 契約更改（退団の選択）でも同じ行を使う。以前は名前・年齢・位置だけで、
- *    誰を出すか決めるのに一人ずつ「情報」を開く必要があった
- */
-export function PlayerLine({ player, score }) {
-  return <Line player={player} score={score} />;
-}
+/** 選手1人の1行（名前・年齢・位置・主な能力） */
 function Line({ player, score, fit }) {
   if (!player) return null;
   return (
@@ -160,20 +154,22 @@ export default function TryoutPlanner({
     () => new Map(candidates.map((p) => [p.id, p])),
     [candidates],
   );
-  // ⚠ 交渉できる人数は**10人と空き枠の小さい方**。空き枠が2つしかない年に
-  //    10人選べても、取れるのは2人までなので数字が食い違う
+  // ⚠ 交渉できる人数は空き枠で切らない（獲得する人数より多く並べ、取られたら繰り上げる）
   const limit = wishLimit(maxCount);
-  // ⚠ 10人までで切って読む。交渉10人の形にする前に保存した提出は候補360人を
-  //    全部並べており、そのままだと「交渉中 360/10」で出し直しも弾かれた
+  // ⚠ 上限で切って読む。交渉リストの形にする前に保存した提出は候補360人を
+  //    全部並べており、そのままだと「交渉中 360/20」で出し直しも弾かれた
   const wanted = useMemo(
     () => (plan.rankedIds.length > limit ? plan.rankedIds.slice(0, limit) : plan.rankedIds),
     [plan.rankedIds, limit],
   );
-  // 獲得する人数（交渉した人＋自動で埋める人）。決めていなければ空き枠いっぱい
+  // 獲得する人数（枠）。決めていなければ空き枠いっぱい
   const total = signTotal(plan, maxCount);
   // 交渉した選手のうち取りにいく人数（獲得する人数で切る）
   const count = wishedCount(wanted, total);
-  const autoFill = Math.max(0, total - count);
+  // ⚠ 人数を決めていない案（標準案・古い提出）だけ、交渉した人で足りないぶんを自動で埋める。
+  //    決めた提出は交渉した人しか取らない（`fillsAutomatically`。サーバーと同じ判定）
+  const autoFill = fillsAutomatically(plan) ? Math.max(0, total - count) : 0;
+  const shortList = !fillsAutomatically(plan) && wanted.length < total;
   const { picked, targets, blocking, warnings } = planSummary(
     wanted,
     candidates,
@@ -182,8 +178,11 @@ export default function TryoutPlanner({
   );
   // 獲得したあとの名簿の内訳（目標と比べるのはこちら。下の見出しの注）
   const after = rosterCounts([...(roster || []), ...picked]);
-  // ⚠ 最低限（投1・捕1・野8）に届かないぶんはサーバーが人数を超えて補うので、その分も足す
-  const afterSize = (roster || []).length + Math.max(total, picked.length + minimumShort(roster, picked));
+  // ⚠ 最低限（投1・捕1・野8）に届かないぶんはサーバーが人数を超えて補うので、その分も足す。
+  //    自動で埋めない提出は、交渉した人（取りにいく人数）までしか増えない
+  const afterSize =
+    (roster || []).length +
+    Math.max(count + autoFill, picked.length + minimumShort(roster, picked));
   const wantedSet = useMemo(() => new Set(wanted), [wanted.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pool = useMemo(
@@ -268,9 +267,9 @@ export default function TryoutPlanner({
         <p className="online-tryout-limit">
           交渉中 <b>{wanted.length}</b> / {limit}人
           <small>
-            {maxCount < TRYOUT_WISH_MAX
-              ? `名簿の空きが${maxCount}人なので、交渉できるのも${limit}人までです`
-              : `1位から${TRYOUT_WISH_MAX}位まで選べます`}
+            {limit === 0
+              ? '名簿に空きがないので、交渉できません'
+              : `1位から${TRYOUT_WISH_MAX}位まで選べます。獲得する人数より多く並べておくと、取られたときに繰り上がります`}
           </small>
         </p>
         <button type="button" disabled={busy} onClick={onReset}>
@@ -351,8 +350,9 @@ export default function TryoutPlanner({
           投{targets.pitcher}・捕{targets.catcher}・内{targets.infielder}・外
           {targets.outfielder}
         </strong>
-        です。<strong>獲得するのは上で決めた人数まで</strong>で、交渉した人で足りないぶんは
-        自動で埋まります（CPUと同じ判断）。
+        です。<strong>獲得するのは上で決めた人数まで</strong>で、
+        <strong>交渉した選手しか取りません</strong>（交渉した人が尽きたら、人数に届かなくてもそこで止めます。
+        投手・捕手・野手が最低限に届かないときだけ、足りない位置を補います）。
       </p>
       {/* 決めた人数と交渉した人数の関係を1行で（どちらが余るかで意味が変わる） */}
       <p className="online-tryout-total-note">
@@ -361,8 +361,10 @@ export default function TryoutPlanner({
           : wanted.length > total
             ? `交渉した${wanted.length}人のうち、上位から${total}人を取ります。他球団に取られたら下位が繰り上がります。`
             : autoFill > 0
-              ? `交渉した${count}人に、自動で${autoFill}人を足して${total}人獲得します。`
-              : `交渉した${count}人を獲得します。`}
+              ? `標準案です。交渉した${count}人に、自動で${autoFill}人を足して${total}人獲得します。`
+              : shortList
+                ? `交渉した${count}人しか並んでいないので、獲得は多くても${count}人です（${total}人に届きません）。取られたときの控えも並べておくと繰り上がります。`
+                : `交渉した${count}人を獲得します。他球団に取られたら、そのぶんは減ります。`}
         {` 獲得後の名簿は${afterSize}人（枠${(roster || []).length + maxCount}人）です。`}
       </p>
 

@@ -85,6 +85,7 @@ import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.dealProblems
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.obj
+import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.pid
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.rosterCounts
@@ -125,7 +126,11 @@ fun TradeScreen(model: AppViewModel, raw: JsonObject) {
     val waiting = trades.filter { it.at("myTurn").bool() == true }
     val sent = trades.filter { it.at("myTurn").bool() != true }
     val (partners, _) = tradePartners(view, raw)
+    // リーグ全体のトレード履歴（Web 版 TradeScreen の「トレード履歴（リーグ全体）」と同じ中身）
+    var history by remember { mutableStateOf(false) }
+    if (history) TradeHistoryDialog(model, view) { history = false }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = { history = true }, modifier = Modifier.fillMaxWidth()) { Text("トレード履歴（リーグ全体）") }
         if (waiting.isNotEmpty()) {
             Caption("返事が必要な提案（${waiting.size}件）")
             waiting.forEach { TradeCard(model, view, raw, it) }
@@ -148,6 +153,7 @@ fun TradeScreen(model: AppViewModel, raw: JsonObject) {
                 listOf(
                     "ほかの球団と選手を交換します。「補強から探す」で持ち場を選ぶと他球団の候補が並びます。球団を先に選んでも考えられます。確認の画面で内容を見てから送ります。",
                     "CPU球団はその場で答えます（受ける・逆提案・断る）。受けたらすぐ成立し、取り消せません。",
+                    "CPU球団から提案が届くこともあります（期限つき。逆提案にはその場で答えます）。CPU球団どうしでも交換します。",
                     "参加者の球団は、相手が受けた時点で成立します。返事が来るまでは取り下げられます。",
                     "解雇は土曜の「契約更改」、獲得は土曜の「トライアウト」で行います。",
                 ),
@@ -160,6 +166,60 @@ fun TradeScreen(model: AppViewModel, raw: JsonObject) {
             sent.forEach { TradeCard(model, view, raw, it) }
         }
     }
+}
+
+/**
+ * リーグ全体のトレード履歴（取引の記録をトレードだけに絞る。年度を選べる）。
+ * ⚠ 先方指摘「トレード画面に履歴ボタンを配置し、リーグ全体のトレード履歴も閲覧できるように」
+ */
+@Composable
+private fun TradeHistoryDialog(model: AppViewModel, view: LeagueView, onClose: () -> Unit) {
+    var year by remember { mutableStateOf(view.year) }
+    var data by remember { mutableStateOf<JsonObject?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(year) {
+        data = null
+        failed = false
+        runCatching { model.read("transactions", mapOf("year" to year?.toString())) }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            .onSuccess { data = it }
+            .onFailure { failed = true }
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { TextButton(onClick = onClose) { Text("閉じる") } },
+        title = { Text("トレード履歴（${year ?: ""}年目）") },
+        text = {
+            val d = data
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val years = (listOfNotNull(view.year) + d?.at("years").list().mapNotNull { it.int() }).distinct().sortedDescending()
+                if (years.size > 1) ChipTabs(years.map { "$it" to "${it}年目" }, "${year ?: ""}", { year = it.toIntOrNull() })
+                when {
+                    failed -> Text("読み込めませんでした。少し待ってから開き直してください。")
+                    d == null -> Text("読み込み中…")
+                    else -> {
+                        val items = d.at("items").list().mapNotNull { it.obj() }.filter { it.at("kind").str() == "trade" }
+                        if (items.isEmpty()) Text("この年度のトレードはまだありません。", style = MaterialTheme.typography.bodySmall)
+                        items.forEach { t ->
+                            Column {
+                                val teams = t.at("teams").list().mapNotNull { it.str() }.joinToString(" ⇄ ") { view.teamShort(it) }
+                                val who = when {
+                                    t.at("cpuOnly").bool() == true -> "（CPU球団どうし）"
+                                    t.at("cpu").bool() == true -> "（相手はCPU）"
+                                    else -> ""
+                                }
+                                val date = t.at("date").obj()?.let { "${it.at("month").int()}月${it.at("day").int()}日　" }.orEmpty()
+                                Text("$date$teams$who", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                t.at("moves").list().mapNotNull { it.obj() }.forEach { m ->
+                                    Muted("${m.at("name").str().orEmpty()}（${positionLabel(m.at("position").str())}）　${m.at("from").str()?.let { view.teamShort(it) } ?: ""} → ${m.at("to").str()?.let { view.teamShort(it) } ?: ""}")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    )
 }
 
 /** 作りかけのトレード案。タブを移っても消えないよう [AppViewModel.tradeDraft] に置く */
@@ -293,8 +353,11 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
             else -> "${view.teamLabel(partner)} からの提案"
         },
     ) {
+        val cpuNote = if (trade.at("fromCpu").bool() == true)
+            "（CPU球団からの提案" + (trade.at("expires").obj()?.let { "・${it.at("month").int()}月${it.at("day").int()}日まで" } ?: "") + "）"
+        else ""
         Text(
-            (if (myTurn) "あなたの返事待ち" else "相手の返事待ち") + if (countered) "（逆提案あり）" else "",
+            (if (myTurn) "あなたの返事待ち" else "相手の返事待ち") + (if (countered) "（逆提案あり）" else "") + cpuNote,
             color = if (myTurn) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelLarge,
         )

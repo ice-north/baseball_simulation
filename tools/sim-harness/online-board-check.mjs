@@ -470,6 +470,10 @@ try {
     const live = (await store.read()).league;
     const fields = view.abilityLeaders;
     assert.ok(Array.isArray(fields) && fields.length >= 8, '能力ランキングが渡っていない');
+    // ⚠ 先方指摘「体幹、スピン、選球眼、捕手リードなども」。基本の8項目だけに戻さない
+    for (const id of ['eye', 'lead', 'spin', 'muscle', 'body', 'mental'])
+      assert.ok(fields.some((f) => f.id === id), `能力ランキングに ${id} が無い`);
+    assert.ok(fields.some((f) => f.side === 'body'), '体・精神の区分が無い');
     const names = live.season.settings.teamNames;
     const byId = new Map(
       names.flatMap((n) => live.game.teams[n].players.map((p) => [p.id, { team: n, p }])),
@@ -486,11 +490,14 @@ try {
         teamsSeen.add(row.team);
         // ⚠ 投手の項目は投手だけ、野手の項目は野手だけ。混ぜると
         //    「走力ランキングが投手で埋まる」
-        assert.equal(
-          row.position === 'pitcher',
-          field.side === 'pitching',
-          `${field.label} に ${row.position} が混ざっている`,
-        );
+        //    体・精神（side: 'body'）は全員で競う。捕手リードは捕手だけ
+        if (field.side !== 'body')
+          assert.equal(
+            row.position === 'pitcher',
+            field.side === 'pitching',
+            `${field.label} に ${row.position} が混ざっている`,
+          );
+        if (field.id === 'lead') assert.equal(row.position, 'catcher', `捕手リードに ${row.position} が混ざっている`);
       }
       // 降順に並んでいる
       const values = field.rows.map((r) => r.value);
@@ -778,11 +785,32 @@ try {
       '期間に場面別が載っている（索引が重くなる）',
     );
     assert.ok(sample.publicSplits, '今季の場面別が載っていない');
+
+    // ⚠ 先方指摘「全チームの選手をランキング化した通算成績も」。リーグ全体の上位（ビューに載る）
+    const boards = view.careerLeaders;
+    assert.ok(Array.isArray(boards) && boards.length >= 10, '通算成績ランキングが渡っていない');
+    const hr = boards.find((b) => b.id === 'homeruns');
+    assert.ok(hr.rows.length > 0, '通算本塁打のランキングが空');
+    assert.ok(new Set(boards.flatMap((b) => b.rows.map((r) => r.team))).size > 1, '通算ランキングが1球団だけ');
+    // 合計は選手の詳細の「対人通算」と同じ数字
+    const top = hr.rows[0];
+    assert.ok(top.active && top.id != null, '通算本塁打の1位が名簿の選手として引けない');
+    const topInfo = await service.teamInfo('admin', top.team);
+    const topCareer = careerOf(topInfo.roster.find((p) => p.id === top.id));
+    assert.equal(top.value, topCareer.seasonStats.batting.homeruns, '通算本塁打がランキングと選手の通算で違う');
+    for (const b of boards) {
+      const values = b.rows.map((r) => r.value);
+      const sorted = [...values].sort((x, y) => (b.id === 'era' ? x - y : y - x));
+      assert.deepEqual(values, sorted, `通算 ${b.label} の並びが違う`);
+    }
+    // 率は規定に届いた選手だけ（少ない打席の高打率で埋めない）
+    const avg = boards.find((b) => b.id === 'avg');
+    assert.ok(avg.qualified, '打率に規定の注記が無い');
   }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・死球や犠打飛を含め規定打席を判定・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム成績は移籍退団でも出場球団に残る・部分記録は既存集計を使う・能力ランキングが全球団から並ぶ・通算成績が今季を含んで積み上がる）',
+  '■ ホームの眺め: OK（所属リーグと持ち主の表・名前を後から変えられる・先発予定がローテを回る・死球や犠打飛を含め規定打席を判定・並びが決まる・自球団の次の6試合と先発の左右と成績・チーム成績は移籍退団でも出場球団に残る・部分記録は既存集計を使う・能力ランキングが全球団から並ぶ・通算成績が今季を含んで積み上がる・通算ランキングが全球団から並ぶ）',
 );

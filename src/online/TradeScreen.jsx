@@ -11,6 +11,7 @@ import { teamLabel, teamShort } from './gameText.js';
 import { POS } from './api.js';
 import { ROSTER_LIMIT, ONLINE_ROSTER_TARGETS } from './shared.js';
 import { TRADE_NOTE_MAX } from './social.js';
+import { TransactionsPage } from './SocialPages.jsx';
 import { Page } from './Page.jsx';
 import { Choice } from './Choice.jsx';
 import {
@@ -378,8 +379,11 @@ function offerResultText({ to, give, get, before, after }) {
 function respondResultText({ action, trade, partner, give, get }) {
   const label = teamLabel(partner);
   if (action === 'accept') return `トレードが成立しました${dealText(give, get)}。`;
+  // ⚠ CPU球団からの提案への逆提案は、CPUがその場で答える（応じなければ命令が失敗して理由が出る）
   if (action === 'counter')
-    return `${label}へ逆提案を返しました。相手が受けた時点で成立します。`;
+    return trade.fromCpu
+      ? `${label}が逆提案を受けました。トレードが成立しました${dealText(give, get)}。`
+      : `${label}へ逆提案を返しました。相手が受けた時点で成立します。`;
   if (trade.mine)
     return trade.countered
       ? `${label}の逆提案を断りました。この提案はなくなりました。`
@@ -1151,6 +1155,9 @@ function TradeCard({ view, trade, busy, run, command, onResult, mobile = false }
         <small className={trade.myTurn ? 'online-own-text' : 'online-muted'}>
           {trade.myTurn ? 'あなたの返事待ち' : '相手の返事待ち'}
           {trade.countered && '（逆提案あり）'}
+          {/* CPU球団からの提案は期限つき（過ぎると取り下げ）。逆提案にはその場で答える */}
+          {trade.fromCpu &&
+            `（CPU球団からの提案${trade.expires ? `・${trade.expires.month}月${trade.expires.day}日まで` : ''}）`}
         </small>
       </div>
       <TradeNotes trade={trade} />
@@ -1690,6 +1697,8 @@ export default function TradeScreen({
         block: 'start',
       });
   }, [seed]);
+  // リーグ全体のトレード履歴（取引の記録をトレードだけに絞って出す）
+  const [history, setHistory] = useState(false);
   const card = (t) => (
     <TradeCard
       key={t.id}
@@ -1701,11 +1710,28 @@ export default function TradeScreen({
       onResult={setAnswered}
     />
   );
+  if (history)
+    return (
+      <TransactionsPage
+        view={view}
+        kind="trade"
+        back={
+          <button type="button" onClick={() => setHistory(false)}>
+            トレードに戻る
+          </button>
+        }
+      />
+    );
   return (
     <TierContext.Provider value={tierOf}>
       <Page
         title="トレード"
-        sub="ほかの球団と選手を交換します。CPU球団はその場で答え、参加者の球団は相手が受けた時点で成立します。"
+        sub="ほかの球団と選手を交換します。CPU球団はその場で答え、参加者の球団は相手が受けた時点で成立します。CPU球団から提案が届くこともあり、CPU球団どうしでも交換します。"
+        actions={
+          <button type="button" onClick={() => setHistory(true)}>
+            トレード履歴（リーグ全体）
+          </button>
+        }
       >
         <TradeResult result={answered} />
         {waiting.length > 0 && (

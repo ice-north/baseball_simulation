@@ -115,6 +115,32 @@ try {
     },
   } }));
   assert.match(completed, /2年目のキャンプ結果/, '手続き終了後の成果を表示できない');
+  // ⚠ 先方指摘「キャンプ結果の表示をキャンプ直後に」「各選手1行にし、チームメイトと比べられるように」。
+  //    ホームにはその年のキャンプ結果を出し（閉じるまで）、成果は1人1行の表（項目ごとの列）
+  {
+    const camp = {
+      year: 2,
+      rounds: 1,
+      gains: { 1: { 'batting.meet': 2 }, 2: { 'pitching.control': 3, 'batting.meet': -1 } },
+      events: {},
+      byRound: [{ round: 1, gains: { 1: { 'batting.meet': 2 }, 2: { 'pitching.control': 3, 'batting.meet': -1 } } }],
+    };
+    const roster = [
+      { id: 1, name: '野手の甲', position: 'short' },
+      { id: 2, name: '投手の乙', position: 'pitcher' },
+    ];
+    const home = render(h(CompletedCamp, { view: { year: 2, teamName: 't', roster, lastCamp: camp }, onHome: true }));
+    assert.match(home, /閉じる/, 'ホームのキャンプ結果に「閉じる」が無い');
+    // ⚠ ホームはまとめの1行と「表を開く」だけ（1画面に収める）。表は手続きの下と同じもの
+    assert.match(home, /人が伸びました/, 'ホームのキャンプ結果にまとめが無い');
+    assert.match(home, /選手ごとの表を開く/, 'ホームのキャンプ結果に表を開くボタンが無い');
+    const full = render(h(CompletedCamp, { view: { year: 2, teamName: 't', roster, lastCamp: camp } }));
+    assert.equal((full.match(/<tr>/g) || []).length, 3, `成果の表が1人1行になっていない: ${full}`);
+    assert.match(full, /ミート/, '項目の列（ミート）が無い');
+    assert.match(full, /制球/, '項目の列（制球）が無い');
+    const nextYear = render(h(CompletedCamp, { view: { year: 3, teamName: 't', roster, lastCamp: camp }, onHome: true }));
+    assert.equal(nextYear, '', '年が替わってもホームに前の年のキャンプ結果が出る');
+  }
 
   // ⚠ 指導者の案・締め切りの標準案の方針は `{ mode: 'recommended' }` だけで、方向と段階を
   //    持たない。そこから「全員同じ方針」に切り替えた状態（方向・段階の無い mode: 'team'）で、
@@ -886,5 +912,5 @@ try {
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 直近の本塁打に自軍の印が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
+  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 直近の本塁打に自軍の印が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる / キャンプ結果をホームに1人1行の表で出す）',
 );

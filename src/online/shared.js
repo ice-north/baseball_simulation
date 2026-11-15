@@ -262,6 +262,35 @@ export const SUBSTITUTE_FRESH_FATIGUE = 40;
  *    普段は適性のある控えが入る
  */
 export const FIELDER_FORCE_REST_FATIGUE = 120;
+/**
+ * オンラインの野手が1試合（3打席以上）で溜める疲労（体力ごと）。
+ *
+ * ⚠ 先方指摘（2026-11-15）「休養日を増やしたことで疲労が溜まらなくなった。目安は体力80で全試合
+ *    フル出場可能、体力50で10数試合で休息が必要、体力20で1試合ごとに休息が必要なくらい」。
+ *    一人用の式（体力100→7・体力1→15）のままだと、3試合→休養日の巡で体力50でも約40試合、
+ *    体力65以上は1年休まずに出られた。回復（`recoverAllPitcherFatigue` の野手の式）はそのままにし、
+ *    溜まる量だけを体力50を境に折る: 50以上はゆるやかに減り（50→15・80→12）、50未満は急に増える（20→27）。
+ *    回復力50で、体力80は休まず全試合・体力50は15試合目に初めて休み・体力20は出場4割
+ *    （1試合出ては休む）になる。実測は `online-fatigue-check`。
+ */
+export const onlineFielderGameFatigue = (bodyStamina) => {
+  const body = Number.isFinite(bodyStamina) ? bodyStamina : 50;
+  return Math.round(body >= 50 ? 15 - (body - 50) * 0.1 : 15 + (50 - body) * 0.4);
+};
+/**
+ * 1試合の出場で溜まる疲労（`withFielderGameFatigue` に渡す形）。**3打席以上**（四死球・犠打を含む）で溜まる。
+ * ⚠ 一人用は「3打数以上」で数えていて、四球を2つ選んだ先発や9番打者（2打数で終わる日）は
+ *    疲れないまま回復もしない日になっていた。実測でオンラインの先発の約2割がこれで抜けていた。
+ */
+export const onlineFielderFatigueFor = (bodyStamina, batting) => {
+  const pa =
+    (batting?.atBats || 0) +
+    (batting?.walks || 0) +
+    (batting?.hitByPitch || 0) +
+    (batting?.sacrificeBunts || 0) +
+    (batting?.sacrificeFlies || 0);
+  return pa >= 3 ? onlineFielderGameFatigue(bodyStamina) : 0;
+};
 /** 先発はこの疲労以上だと、その日の登板を飛ばして次の先発が投げる */
 export const STARTER_SKIP_FATIGUE = 40;
 

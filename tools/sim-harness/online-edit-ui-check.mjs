@@ -231,7 +231,14 @@ async function fitsPhone(page, what) {
       if (page > innerWidth + 1) out.push(`横スクロール ${page}px`);
       for (const n of document.querySelectorAll('.online-decision *')) {
         // 1年の流れの帯は、手続きの段を横に送って見る作り（`SeasonFlow`。ここの対象外）
+        // 契約更改の表（1人1行・20列超。先方指摘 2026-11-15）は表だけを横に送る作り。枠の外へは出さない
         if (!n.checkVisibility() || n.closest('.online-season-flow')) continue;
+        if (n.closest('.online-contract-scroll')) {
+          const box = n.closest('.online-contract-scroll').getBoundingClientRect();
+          if (n.matches('.online-contract-scroll') && (box.right > innerWidth + 1 || box.left < -1))
+            out.push(`はみ出し ${n.tagName}.${n.className}`);
+          continue;
+        }
         const r = n.getBoundingClientRect();
         if (r.width && (r.right > innerWidth + 1 || r.left < -1))
           out.push(`はみ出し ${n.tagName}.${n.className} ${(n.innerText || '').slice(0, 20)}`);
@@ -674,18 +681,24 @@ try {
       release.page.locator('.online-staff-note').filter({ hasText: coachNote }).count();
     await release.page.locator('.online-staff-note').filter({ hasText: coachNote }).waitFor();
     await release.page.getByRole('button', { name: '退団させる選手を変える', exact: true }).click();
+    // ⚠ 先方指摘で、退団の選択は表の右端の「解雇」ボタン（押すと切り替わる。aria-pressed）
     const releaseBox = (name) =>
-      release.page.getByRole('checkbox', { name: new RegExp(`^${name}（.*）を退団させる$`) });
-    await releaseBox(PITCHER).uncheck();
-    await releaseBox('検証 外野手').check();
+      release.page.getByRole('button', { name: new RegExp(`^${name}（.*）を解雇する$`) });
+    const pressed = async (name) => (await releaseBox(name).getAttribute('aria-pressed')) === 'true';
+    const setRelease = async (name, on) => {
+      if ((await pressed(name)) !== on) await releaseBox(name).click();
+      assert.equal(await pressed(name), on, `${name}の解雇が切り替わらない`);
+    };
+    await setRelease(PITCHER, false);
+    await setRelease('検証 外野手', true);
     await fitsPhone(release.page, '契約更改の退団選び');
     // 「変更を取り消す」で標準案に戻る
     await release.page.getByRole('button', { name: '変更を取り消す', exact: true }).click();
     await release.page.locator('.online-phase-status').filter({ hasText: '標準案です。' }).waitFor();
-    assert.ok(await releaseBox(PITCHER).isChecked(), '「変更を取り消す」で標準案の退団に戻らない');
-    assert.ok(!(await releaseBox('検証 外野手').isChecked()), '「変更を取り消す」で選んだ退団が残る');
-    await releaseBox(PITCHER).uncheck();
-    await releaseBox('検証 外野手').check();
+    assert.ok(await pressed(PITCHER), '「変更を取り消す」で標準案の退団に戻らない');
+    assert.ok(!(await pressed('検証 外野手')), '「変更を取り消す」で選んだ退団が残る');
+    await setRelease(PITCHER, false);
+    await setRelease('検証 外野手', true);
     assert.equal(await coachNoteShown(), 0, '退団を選び直したのに「監督の案です」が出ている');
     await release.page.getByRole('button', { name: 'この内容で決定', exact: true }).click();
     await release.page.getByRole('group', { name: '決定の確認', exact: true }).waitFor();

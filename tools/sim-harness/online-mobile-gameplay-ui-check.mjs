@@ -29,15 +29,16 @@ const browser = await chromium.launch({
     : {}),
   headless: true,
 });
-const noScroll = async (locator, message) =>
+const noScroll = async (locator, message) => {
+  const size = await locator.evaluate((node) => ({
+    height: [node.scrollHeight, node.clientHeight],
+    width: [node.scrollWidth, node.clientWidth],
+  }));
   assert.ok(
-    await locator.evaluate(
-      (node) =>
-        node.scrollHeight <= node.clientHeight + 1 &&
-        node.scrollWidth <= node.clientWidth + 1,
-    ),
-    message,
+    size.height[0] <= size.height[1] + 1 && size.width[0] <= size.width[1] + 1,
+    `${message}（中身/枠 縦${size.height.join('/')} 横${size.width.join('/')}）`,
   );
+};
 try {
   for (const width of [320, 360, 390, 767]) {
     const league = structuredClone(recordedFixture);
@@ -340,8 +341,23 @@ try {
       .first()
       .click();
     const box = page.getByRole('dialog', { name: '試合成績', exact: true });
-    await box.getByRole('table').waitFor();
-    await noScroll(box, `${width}px 個人成績に経過切替を追加しても縦に収まる`);
+    // ⚠ 表はスコアボードと個人成績の2つ（先方指摘でスコアボードを足した）。個人成績の表を待つ
+    await box.locator('table.online-record-table').waitFor();
+    await box.getByRole('figure', { name: 'スコアボード' }).waitFor();
+    // ⚠ スコアボードの高さぶんは縦に送ってよい（盤は横に収まること・個人成績と切替は今までどおり収まること）
+    const board = await box.getByRole('figure', { name: 'スコアボード' }).evaluate((n) => ({
+      height: n.getBoundingClientRect().height + parseFloat(getComputedStyle(n).marginBottom),
+      fits: n.scrollWidth <= n.clientWidth + 1,
+    }));
+    assert.ok(board.fits, `${width}px スコアボードが横に収まる`);
+    assert.ok(
+      await box.evaluate(
+        (node, extra) =>
+          node.scrollHeight - extra <= node.clientHeight + 1 && node.scrollWidth <= node.clientWidth + 1,
+        board.height,
+      ),
+      `${width}px 個人成績に経過切替を追加しても縦に収まる（スコアボードの分を除く）`,
+    );
     await box.getByRole('button', { name: '試合経過', exact: true }).click();
     const progress = box.getByRole('region', { name: '試合経過', exact: true });
     await progress.waitFor();

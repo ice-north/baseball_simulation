@@ -12,6 +12,7 @@
 import {
   INBOX_LIMIT,
   TRANSACTIONS_LIMIT,
+  TEAM_TRANSACTIONS_KEEP,
   PRESENCE_REFRESH_HOURS,
   isAwayAt,
 } from '../src/online/social.js';
@@ -48,7 +49,7 @@ export function pushInbox(league, userId, entry, now) {
 export function recordTransaction(league, entry, now) {
   if (!entry.moves?.length) return null;
   const id = `t${(league.transactionSeq = (league.transactionSeq || 0) + 1)}`;
-  league.transactions = [
+  league.transactions = keepTransactions([
     {
       id,
       year: league.season?.year ?? null,
@@ -57,8 +58,28 @@ export function recordTransaction(league, entry, now) {
       ...entry,
     },
     ...(league.transactions || []),
-  ].slice(0, TRANSACTIONS_LIMIT);
+  ]);
   return id;
+}
+
+/**
+ * 取引の記録の残し方: 新しいほうから `TRANSACTIONS_LIMIT` 件に加え、**球団ごとに新しい
+ * `TEAM_TRANSACTIONS_KEEP` 件**も残す（球団史の入退団履歴に使う）。
+ * ⚠ 先方指摘「各チームの入退団履歴も見られるように（球団史・記録から）」。リーグ全体の200件だけだと
+ *    2年ほどで古い年の入退団が消える。1球団は1年に入団1件・退団1件＋トレード数件なので、
+ *    40件でおよそ10年ぶん残る。形は変えない（同じ配列のまま残す件数だけ増える）
+ */
+export function keepTransactions(list) {
+  const perTeam = new Map();
+  return list.filter((t, i) => {
+    let keep = i < TRANSACTIONS_LIMIT;
+    for (const team of t.teams || []) {
+      const n = perTeam.get(team) || 0;
+      perTeam.set(team, n + 1);
+      if (n < TEAM_TRANSACTIONS_KEEP) keep = true;
+    }
+    return keep;
+  });
 }
 
 /** 取引の記録に載せる選手の形 */
@@ -87,7 +108,13 @@ export function pruneTrades(league, teams, now, { all = false, reason = null } =
   const has = (teamName, id) => !!teams?.[teamName]?.players?.some((p) => p.id === id);
   const why = (t) => {
     if (all) return reason || '取り下げられました';
-    if (!members.has(t.from) || (t.to && !members.has(t.to)))
+    // ⚠ CPU球団の側は userId が null（CPUからの提案は `from`、CPU球団への提案は `to`）。
+    //    その球団に人が入ったら（CPUでなくなったら）取り下げる
+    const memberTeams = new Set((league.members || []).map((m) => m.teamName));
+    if (
+      (t.from ? !members.has(t.from) : memberTeams.has(t.fromTeam)) ||
+      (t.to ? !members.has(t.to) : memberTeams.has(t.toTeam))
+    )
       return 'オーナーが替わったため、取り下げられました';
     if (t.offer.some((id) => !has(t.fromTeam, id)) || t.want.some((id) => !has(t.toTeam, id)))
       return '選手が移籍・退団したため、取り下げられました';

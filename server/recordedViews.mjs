@@ -420,6 +420,62 @@ export function playerPeriods(
  */
 const pitcherRef = (p) =>
   p && typeof p === 'object' ? { id: p.id ?? null, name: p.name ?? null } : p;
+/**
+ * 年ごとの能力・年齢・所属球団（新しい年から）。成績は同じ年の期間（`playerPeriods`）を画面が重ねる。
+ *
+ * ⚠ 先方指摘「選手の詳細に、年齢ごとの能力と成績、所属球団を表示。どれだけ成長したか、
+ *    どれだけの成績を残したか確認できるように」。能力は年度末に残した写し
+ *    （`statsHistory[].abilities`。`finalizePlayerSeason` が作る＝その年を戦い終えたときの能力）、
+ *    今季はいまの能力。所属は対人リーグの記録（`records.seasons[年].players[鍵].teams`）から引く。
+ *    記録を取り始める前の年は所属が分からないので null（画面は「—」）。
+ * ⚠ 成績の数字をここで作らない（期間の数字と2通りになる）。
+ */
+export function playerYears(league, team, player) {
+  const teamsOf = (year) => recordForPlayer(league, player, team, year)?.teams?.slice() || null;
+  const pick = (a) => ({
+    meet: a.meet,
+    power: a.power,
+    eye: a.eye,
+    speed: a.speed,
+    arm: a.arm,
+    defense: a.defense,
+    lead: a.catcherLead ?? null,
+    velocity: a.velocity,
+    control: a.control,
+    stamina: a.stamina,
+  });
+  const rows = [
+    {
+      year: league.season.year,
+      age: player.age ?? null,
+      teams: teamsOf(league.season.year) || [team],
+      abilities: pick({
+        meet: player.batting?.meet,
+        power: player.batting?.power,
+        eye: player.batting?.eye,
+        speed: player.physical?.speed,
+        arm: player.physical?.arm,
+        defense: player.fielding?.defense,
+        catcherLead: player.catching?.lead,
+        velocity: player.pitching?.velocity,
+        control: player.pitching?.control,
+        stamina: player.pitching?.stamina,
+      }),
+    },
+  ];
+  const seen = new Set([league.season.year]);
+  for (const h of [...(player.statsHistory || [])].sort((a, b) => b.year - a.year)) {
+    if (!Number.isFinite(h?.year) || seen.has(h.year) || !h.abilities) continue;
+    seen.add(h.year);
+    rows.push({
+      year: h.year,
+      age: h.abilities.age ?? null,
+      teams: teamsOf(h.year),
+      abilities: pick(h.abilities),
+    });
+  }
+  return rows;
+}
 export function decisionRefs(decisions) {
   if (!decisions || typeof decisions !== 'object') return decisions;
   return Object.fromEntries(

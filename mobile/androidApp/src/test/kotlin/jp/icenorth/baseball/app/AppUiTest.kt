@@ -252,7 +252,7 @@ class AppUiTest {
         rule.onNodeWithText("この内容で決定").assertDoesNotExist()
         rule.onNodeWithText("下書きを保存").assertDoesNotExist()
         // 見せるのは指導者の案（標準案）。自分の提出（退団なし）ではない
-        rule.onNodeWithText("退団させる選手（1人）").assertExists()
+        rule.onNodeWithText("解雇する選手（1人）").assertExists()
         rule.onNodeWithText("指導者の画面へ").performClick()
         rule.onNodeWithTag("tab-Plan").assertIsSelected()
         rule.onNodeWithTag("chip-Staff").assertIsSelected()
@@ -296,7 +296,7 @@ class AppUiTest {
         // 開いたとき（指導者の案のまま・まだ出していない）は出す
         open(""""roster":$roster,"lineup":{"battingOrder":[]},"phase":{"id":"ph1","kind":"contract","planBy":{"text":"$note"}}""", answer = defaults)
         rule.onNodeWithTag("tab-Procedures").performClick()
-        rule.onNodeWithText("退団させる選手（1人）").assertExists()
+        rule.onNodeWithText("解雇する選手（1人）").assertExists()
         rule.onNodeWithText(note).assertExists()
     }
 
@@ -309,7 +309,7 @@ class AppUiTest {
             answer = { action -> if (action == "defaults") """{"phaseId":"ph1","plan":{"releaseIds":[1]}}""" else null },
         )
         rule.onNodeWithTag("tab-Procedures").performClick()
-        rule.onNodeWithText("退団させる選手（0人）").assertExists()
+        rule.onNodeWithText("解雇する選手（0人）").assertExists()
         rule.onNodeWithText(note).assertDoesNotExist()
     }
 

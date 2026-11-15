@@ -235,24 +235,28 @@ try {
     '長すぎるひとことが通った',
   );
   await send('a', 'tradeOffer', { to: B, offer: [pA[0].id], want: [pB[0].id], note: '捕手が足りなくて…' });
-  const offeredB = (await view('b')).trades[0];
+  // ⚠ CPU球団からの提案（`runCpuTrades`）も並ぶので、人どうしの提案を球団で探す
+  const humanTrade = (v) => v.trades.find((t) => t.fromTeam === A && t.toTeam === B);
+  // CPU球団からの提案（画面では `fromCpu`、保存では `from` が null）を除いた提案
+  const humanTrades = (list) => list.filter((t) => !t.fromCpu && t.from !== null);
+  const offeredB = humanTrade(await view('b'));
   assert.equal(offeredB.note, '捕手が足りなくて…', '相手にひとことが届いていない');
   await send('b', 'tradeRespond', { tradeId: offeredB.id, action: 'counter', offer: [pA[0].id, pA[1].id], want: [pB[0].id], note: 'もう1人なら' });
   const countered = await view('a');
-  assert.equal(countered.trades[0].replyNote, 'もう1人なら', '逆提案のひとことが無い');
+  assert.equal(humanTrade(countered).replyNote, 'もう1人なら', '逆提案のひとことが無い');
   assert.equal(countered.inbox[0].type, 'tradeCountered', '逆提案の知らせが無い');
   await send('a', 'tradeRespond', { tradeId: offeredB.id, action: 'reject' });
   assert.equal((await view('b')).inbox[0].type, 'tradeWithdrawn', '取り下げの知らせが無い');
-  assert.equal((await view('a')).trades.length, 0);
+  assert.equal(humanTrades((await view('a')).trades).length, 0);
 
   // 成り立たなくなった提案は取り下げる: A の投手を B と C の両方に出し、B が受ける
   await send('a', 'tradeOffer', { to: B, offer: [pA[0].id], want: [pB[0].id] });
   await send('a', 'tradeOffer', { to: C, offer: [pA[0].id], want: [pC[0].id] });
-  const toB = (await view('b')).trades[0];
+  const toB = humanTrade(await view('b'));
   const revisionBefore = (await live()).revision;
   await send('b', 'tradeRespond', { tradeId: toB.id, action: 'accept' });
   const afterTrade = await live();
-  assert.equal(afterTrade.trades.length, 0, '動いた選手を含む提案が残っている（枠を埋める）');
+  assert.equal(humanTrades(afterTrade.trades).length, 0, '動いた選手を含む提案が残っている（枠を埋める）');
   assert.ok(afterTrade.revision > revisionBefore);
   assert.equal((await view('a')).inbox[0].type, 'tradeAccepted', '成立の知らせが無い');
   assert.ok(
@@ -463,7 +467,12 @@ try {
     const l = await live();
     assert.ok(!l.members.some((m) => m.userId === 'c'), '外した人が残っている');
     assert.equal(l.teams.find((t) => t.name === C).displayName, C, '球団名が元に戻っていない');
-    assert.equal(l.trades.length, 0, '外した人の提案が残っている');
+    // ⚠ CPU球団からほかの人への提案（`runCpuTrades`）は残ってよい。外した人の分だけを見る
+    assert.equal(
+      l.trades.filter((t) => t.from === 'c' || t.to === 'c' || humanTrades([t]).length).length,
+      0,
+      '外した人の提案が残っている',
+    );
     assert.ok(!l.exhibitions.some((e) => e.status === 'offered'), '外した人の練習試合の申し込みが残っている');
     assert.equal((await service.teamInfo('a', C)).owner, null, 'CPUに戻した球団にオーナーが出ている');
     assert.ok((await view('a')).inbox.some((n) => /オーナーが替わった/.test(n.text)), '相手に取り下げを知らせていない');

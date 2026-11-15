@@ -9,6 +9,7 @@ import { inOnlineRoot } from './dialogPortal.js';
 import { useTradeStart } from './tradeStart.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import SplitStats from './SplitStats.jsx';
+import PlayerYears from './PlayerYears.jsx';
 import BatteryStats from './BatteryStats.jsx';
 import { phaseStatusLabel } from './notices.js';
 import {
@@ -375,6 +376,7 @@ function Detail({ player, close }) {
   const [periodId, setPeriodId] = useState('current');
   const [splits, setSplits] = useState(false);
   const [battery, setBattery] = useState(false);
+  const [yearly, setYearly] = useState(false);
   const [splitCategory, setSplitCategory] = useState(
     player.position === 'pitcher' ? 'pitching' : 'batting',
   );
@@ -386,6 +388,7 @@ function Detail({ player, close }) {
   //    自球団は `action=player`（場面別まで）、他球団は球団ごとの読み込みに
   //    載った `periods`（場面別は外してある）を使う。
   const periods = info.data?.periods || player.periods || null;
+  const years = info.data?.years || player.years || null;
   const found = periods?.find((p) => p.id === periodId) || periods?.[0] || null;
   // ⚠ 今季の場面別は `publicSplits` に別に載っている（期間からは外してある）。
   //    重ねないと、他球団の選手で「場面別の成績を見る」が空になる
@@ -508,6 +511,13 @@ function Detail({ player, close }) {
       {/* ⚠ 場面別だけは**任意で開く**。打者×投手の組み合わせで行数が多く、
           1画面には入らない。上の3つ（札と経歴・成績・能力）は常に見える */}
       <div className="online-actions">
+        {/* 年ごとの推移（年・年齢・所属・成績・能力）。⚠ 先方指摘「どれだけ成長し、どれだけの成績を
+            残したか確認できるように」。1画面に収めるため場面別と同じく押して開く */}
+        {years && (
+          <button onClick={() => setYearly(!yearly)} aria-expanded={yearly}>
+            {yearly ? '年ごとの推移を閉じる' : '年ごとの推移（能力・成績・所属）'}
+          </button>
+        )}
         <button onClick={() => setSplits(!splits)} aria-expanded={splits}>
           {splits ? '場面別の成績を閉じる' : '場面別の成績を見る'}
         </button>
@@ -523,6 +533,16 @@ function Detail({ player, close }) {
           </button>
         )}
       </div>
+      {yearly && years && (
+        <section className="online-detail-section">
+          <PlayerYears
+            player={player}
+            years={years}
+            periods={periods}
+            currentYear={periods?.find((p) => p.id === 'current')?.year}
+          />
+        </section>
+      )}
       {splits && (
         <section className="online-detail-section">
           <Category value={splitCategory} setValue={setSplitCategory} />

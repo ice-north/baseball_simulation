@@ -57,6 +57,7 @@ import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.weightedRanked
 import jp.icenorth.baseball.shared.weightedScore
 import jp.icenorth.baseball.shared.wishLimit
+import jp.icenorth.baseball.shared.fillsAutomatically
 import jp.icenorth.baseball.shared.wishedCount
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.max
@@ -67,12 +68,13 @@ private const val PAGE = 12
 /**
  * 初期編成・トライアウトの希望リスト（Web 版 TryoutPlanner と同じ規則）。
  *
- * - 上: 獲得する人数（−／＋）と、交渉する選手（10人まで。↑↓で順位、「やめる」で外す）
+ * - 上: 獲得する人数（−／＋）と、交渉する選手（20人まで。↑↓で順位、「やめる」で外す）
  * - 下: 候補（区分・並べ替え・名前で絞り、「交渉」で交渉する選手の末尾へ）
  * ⚠ 交渉する選手の並び＝サーバーが取りにいく順（目標構成で飛ばさない）。以前の「候補全員を並べて
- *    目標構成で飛ばす」形は Web 版でやめており、サーバーも11人以上の希望を受け付けない。
- * ⚠ 獲得する人数（`total`）は交渉した人数と別に持つ（先方指摘「指名選手の人数を決められない」）。
- *    交渉が多ければ上位から人数ぶん、少なければ残りを自動で埋める。決めていなければ空き枠いっぱい。
+ *    目標構成で飛ばす」形は Web 版でやめており、サーバーも上限を超える希望を受け付けない。
+ * ⚠ 獲得する人数（`total`）は交渉した人数と別に持つ（先方指摘「指名選手の人数を決められない」
+ *    「入団数と指名順位は別にする」）。交渉が多ければ上位から人数ぶん（取られたら下が繰り上がる）、
+ *    少なければ交渉した人だけ（選んでいない選手は入れない）。標準案（人数を決めていない）だけ自動で埋める。
  * @param editable false なら読むだけ（指導者に任せた手続き）。人数・交渉・並べ替えと
  *    「重視する能力」を出さない。候補の絞り込み・並べ替え（見るだけの操作）は残す
  */
@@ -89,13 +91,14 @@ fun TryoutPanel(
     val candidates = remember(phase) { phase.at("candidates").list().mapNotNull { it.obj() } }
     val roster = remember(raw) { raw.at("roster").list().mapNotNull { it.obj() } }
     val byId = remember(candidates) { candidates.associateBy { it.pid } }
-    // ⚠ 候補に居ない選手（古い下書き）は数えない。10人を超える古い下書きも10人で切る
+    // ⚠ 候補に居ない選手（古い下書き）は数えない。上限を超える古い下書きも上限で切る
     val maxCount = rosterRoom(raw)
     val limit = wishLimit(maxCount)
     val ranked = plan.at("rankedIds").list().mapNotNull { it.long() }.filter { it in byId }.take(limit)
     val total = signTotal(plan, maxCount)
     val count = wishedCount(ranked, total)
-    val autoFill = (total - count).coerceAtLeast(0)
+    // ⚠ 自動で埋めるのは人数を決めていない案（標準案）だけ（Web 版と同じ `fillsAutomatically`）
+    val autoFill = if (fillsAutomatically(plan)) (total - count).coerceAtLeast(0) else 0
     val summary = planSummary(ranked, candidates, count, roster)
     val weights = model.tryoutWeights
     val scores = remember(candidates, weights) { candidates.associate { it.pid to weightedScore(it, weights) } }
@@ -117,7 +120,8 @@ fun TryoutPanel(
                 listOf(
                     "「交渉」を押した順が1位〜${TRYOUT_WISH_MAX}位です。1位から順に取りにいきます。",
                     "同じ選手を他球団も希望したときは、前年の順位が上の球団が獲得します（取られたぶんは下から繰り上がります）。",
-                    "獲得するのは「獲得する人数」まで。交渉した人で足りないぶんは自動で埋まります（CPUと同じ判断）。0人にしても、投手・捕手・野手が最低限に届かないときは足りない位置だけ補います。",
+                    "獲得するのは「獲得する人数」まで。交渉した選手しか取りません。獲得する人数より多く並べておくと、取られたときに下が繰り上がります。交渉した人が尽きたら、人数に届かなくてもそこで止めます。",
+                    "0人にしても、投手・捕手・野手が最低限に届かないときは足りない位置だけ補います。",
                     "「重視する能力」の重みから評価（0〜100）を出し、おすすめの${TRYOUT_WISH_MAX}人を選べます。「軽視〜最重視」を0.6〜1.6倍で重み付けした平均で、投手と野手は別の能力で計算します。重みはこの端末に覚えます。",
                 ),
             )
@@ -133,10 +137,11 @@ fun TryoutPanel(
             when {
                 total == 0 -> "今年は獲得しません（最低限に届かないときだけ、足りない位置を補います）。"
                 ranked.size > total -> "交渉した${ranked.size}人のうち、上位から${total}人を取ります。取られたら下位が繰り上がります。"
-                autoFill > 0 -> "交渉した${count}人に、自動で${autoFill}人を足して${total}人獲得します。"
-                else -> "交渉した${count}人を獲得します。"
+                autoFill > 0 -> "標準案です。交渉した${count}人に、自動で${autoFill}人を足して${total}人獲得します。"
+                ranked.size < total -> "交渉した${count}人しか並んでいないので、獲得は多くても${count}人です（${total}人に届きません）。取られたときの控えも並べておくと繰り上がります。"
+                else -> "交渉した${count}人を獲得します。他球団に取られたら、そのぶんは減ります。"
             // ⚠ 最低限（投1・捕1・野8）に届かないぶんはサーバーが人数を超えて補うので、その分も足す（Web 版と同じ）
-            } + "獲得後の名簿は${roster.size + max(total, summary.picked.size + minimumShort(roster, summary.picked))}人です。",
+            } + "獲得後の名簿は${roster.size + max(count + autoFill, summary.picked.size + minimumShort(roster, summary.picked))}人です。",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
         )

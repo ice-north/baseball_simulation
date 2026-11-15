@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { POS } from './api.js';
 import TeamRoster from './TeamRoster.jsx';
 import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
@@ -116,6 +117,67 @@ function Retired({ list }) {
   );
 }
 
+/**
+ * 入退団履歴（新しい順。入団・退団・トレード・引退）。中身はサーバーの `teamMoves`。
+ * ⚠ 先方指摘「各チームの入退団履歴も見られるように。表示先は球団史・記録から」。
+ *    年で絞れる（多い年は1年に10人を超える）
+ */
+function Moves({ list }) {
+  const years = [...new Set((list || []).map((m) => m.year).filter((y) => y != null))];
+  const [year, setYear] = useState(null);
+  if (!list?.length) return <p>まだ入団・退団の記録がありません。</p>;
+  const shown = year === null ? list : list.filter((m) => m.year === year);
+  return (
+    <>
+      {years.length > 1 && (
+        <div className="online-segments" role="group" aria-label="年">
+          <button aria-pressed={year === null} onClick={() => setYear(null)}>
+            すべて
+          </button>
+          {years.map((y) => (
+            <button key={y} aria-pressed={year === y} onClick={() => setYear(y)}>
+              {y}年目
+            </button>
+          ))}
+        </div>
+      )}
+      <table className="online-moves-table">
+        <thead>
+          <tr>
+            <th scope="col">時期</th>
+            <th scope="col">入退</th>
+            <th scope="col">選手</th>
+            <th scope="col">経緯</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((m, i) => (
+            <tr key={i} data-side={m.side}>
+              <td>
+                {m.year}年目{m.month ? ` ${m.month}月${m.day}日` : ''}
+              </td>
+              <td className="online-moves-side">{m.side === 'in' ? '入' : '出'}</td>
+              <td>
+                {m.name}
+                {m.position && <small>（{POS[m.position] || m.position}）</small>}
+              </td>
+              <td>
+                {m.how}
+                {m.other && (
+                  <small title={teamLabel(m.other)}>
+                    {m.side === 'in' ? '（前: ' : '（→ '}
+                    {teamShort(m.other)}）
+                  </small>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 function Milestones({ list, showTeam = false }) {
   if (!list?.length) return <p>まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。</p>;
   return (
@@ -229,6 +291,10 @@ export default function Chronicle({ view }) {
                 <LeagueTopics view={view} full />
               </div>
               <div className="online-board-side">
+                <section className="online-card">
+                  <h2>入退団履歴</h2>
+                  <Moves key={shown.teamName} list={c.moves} />
+                </section>
                 <section className="online-card">
                   <h2>引退した選手</h2>
                   <Retired list={c.retired} />

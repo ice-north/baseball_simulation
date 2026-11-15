@@ -116,6 +116,8 @@ export default function MobileView(props) {
             <small>次の進行 {nextAdvanceText(view)}</small>
           </section>
           {view.stage?.key !== 'season' && <SeasonFlow view={view} compact />}
+          {/* キャンプが終わった直後の結果（閉じるまで。PC版と同じ） */}
+          {!view.phase && <CompletedCamp key={view.lastCamp?.year} view={view} onHome />}
           <TeamBrief view={view} />
           <InboxCard view={view} limit={3} />
           <nav className="online-home-actions" aria-label="オンラインの画面">
