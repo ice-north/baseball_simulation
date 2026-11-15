@@ -174,7 +174,7 @@ export function StarterPicksPage({ view, busy, run, command }) {
   return (
     <Page
       title="予告先発"
-      sub={`この先の試合の先発をローテの中から選べます。試合の${lockTurns}ターン前に確定し、相手にも「予告先発」として見えます。確定までは相手に見えません。`}
+      sub={`この先の試合の先発をローテの中から選べます。試合の${lockTurns}ターン前に確定し、相手にも「予告先発」として見えます。確定までは相手に見えません。確定したあとにローテを組み替えても、その試合の先発は変わりません。`}
     >
       <section className="online-card">
         {!plan?.canPick && (
