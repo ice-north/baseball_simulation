@@ -1,6 +1,6 @@
 
 # Vite build files
-node_modules/
+node_modules
 dist/
 *.local
 
