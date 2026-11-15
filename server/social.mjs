@@ -14,6 +14,7 @@ import {
   TRANSACTIONS_LIMIT,
   PRESENCE_REFRESH_HOURS,
   isAwayAt,
+  tokyoDay,
 } from '../src/online/social.js';
 import { validateLineup } from '../src/online/shared.js';
 import { effectiveStaffModes } from './coachEngine.mjs';
@@ -123,39 +124,43 @@ export function pruneTrades(league, teams, now, { all = false, reason = null } =
 }
 
 /**
- * 最後に来た時刻を書く（ログイン・操作・画面を開いたとき）。書いたら true。
+ * 最後に来た時刻を書く（ログイン・操作・画面を開いたとき）。
+ * 書かなかったら false、時刻だけ書いたら 'seen'、おるすばんを解いたら 'returned'
+ * （編成が留守の前の形に戻ることがある。呼ぶ側は版を上げ、画面に読み直させる）。
  * ⚠ **おるすばんはここで解く**（来た人の球団を指導者に任せたままにしない）。
  * ⚠ 前に書いてから `PRESENCE_REFRESH_HOURS` 経っていなければ書かない（画面を開くたびに
- *    保存が走らないように）。おるすばん中だけは必ず書いて解く。
+ *    保存が走らないように）。ただし日本時間の日付が替わっていたら書く（夜中の0時過ぎに
+ *    来た人が「昨日」と出ていた）。おるすばん中だけは必ず書いて解く。
  */
 export function touchPresence(league, userId, now) {
   const member = (league?.members || []).find((m) => m.userId === userId);
   if (!member) return false;
   const last = Date.parse(member.lastSeenAt || '');
   const fresh =
-    Number.isFinite(last) && Date.parse(now) - last < PRESENCE_REFRESH_HOURS * 3600 * 1000;
+    Number.isFinite(last) &&
+    Date.parse(now) - last < PRESENCE_REFRESH_HOURS * 3600 * 1000 &&
+    tokyoDay(member.lastSeenAt) === tokyoDay(now);
   if (fresh && !member.away) return false;
   member.lastSeenAt = now;
-  if (member.away) {
-    delete member.away;
-    const restored = restoreAwayPlan(league, member);
-    pushInbox(
-      league,
-      userId,
-      {
-        type: 'awayEnded',
-        text:
-          'おかえりなさい。留守の間は指導者に任せていました。任せ方は元の設定に戻っています' +
-          (restored === 'restored'
-            ? '。スタメン・投手起用も留守の前の形に戻しました'
-            : restored === 'kept'
-              ? '。留守の間に選手が入れ替わったので、スタメン・投手起用は指導者が組んだままです'
-              : ''),
-      },
-      now,
-    );
-  }
-  return true;
+  if (!member.away) return 'seen';
+  delete member.away;
+  const restored = restoreAwayPlan(league, member);
+  pushInbox(
+    league,
+    userId,
+    {
+      type: 'awayEnded',
+      text:
+        'おかえりなさい。留守の間は指導者に任せていました。任せ方は元の設定に戻っています' +
+        (restored === 'restored'
+          ? '。スタメン・投手起用も留守の前の形に戻しました'
+          : restored === 'kept'
+            ? '。留守の間に選手が入れ替わったので、スタメン・投手起用は指導者が組んだままです'
+            : ''),
+    },
+    now,
+  );
+  return 'returned';
 }
 
 /**

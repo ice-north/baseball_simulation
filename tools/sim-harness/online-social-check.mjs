@@ -21,7 +21,7 @@ import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { withStarters } from '../../server/leagueBoard.mjs';
 import { projectLineup } from '../../server/projection.mjs';
 import { prepareDailyLineup, STARTER_SKIP_FATIGUE } from '../../server/dailyLineup.mjs';
-import { pruneTrades } from '../../server/social.mjs';
+import { pruneTrades, touchPresence } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
 import { applyJoin, nextMemberIndex } from '../../src/online/membership.js';
@@ -149,6 +149,14 @@ import {
   assert.match(league.members[1].inbox[0].text, /Aからの/);
   assert.equal(pruneTrades(league, world, 'x', { all: true, reason: '年度が替わったため' }), 1);
   assert.equal(league.trades.length, 0, '年度更新で提案が残っている');
+
+  // 来た時刻は、数時間経っていなくても日本時間の日付が替わったら書き直す（0時過ぎに来た人が「昨日」と出ていた）
+  {
+    const l = { members: [{ userId: 'a', lastSeenAt: '2026-11-14T14:00:00.000Z' }] };
+    assert.equal(touchPresence(l, 'a', '2026-11-14T14:30:00.000Z'), false, '書いたばかりなのにまた書いた');
+    assert.equal(touchPresence(l, 'a', '2026-11-14T15:30:00.000Z'), 'seen', '日付が替わったのに来た時刻を書いていない');
+    assert.equal(lastSeenLabel(l.members[0].lastSeenAt, '2026-11-14T15:30:00.000Z'), '今日');
+  }
 
   // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が
   // 残っている人と同じ種にならないこと（同じidの選手ができる）。名簿に入ったセットの選手のidからも数える
@@ -430,7 +438,7 @@ try {
     assert.ok(l.members.every((m) => m.lastSeenAt), 'ログイン・操作で来た時刻が入っていない');
     const before = l.revision;
     // 前に書いてから時間が経っていれば書く。⚠ 版は上げない（送信中の提出が弾かれる）
-    await service.presence('b', sessions.b);
+    assert.deepEqual(await service.presence('b', sessions.b), { ok: true });
     const seen = (await live()).members.find((m) => m.userId === 'b').lastSeenAt;
     assert.equal(seen, now, '画面を開いたのに来た時刻を書いていない');
     assert.equal((await live()).revision, before, '来た時刻の記録で版が上がった（送信中の提出が弾かれる）');
@@ -464,8 +472,10 @@ try {
     assert.deepEqual(b.staffModes || null, modesBefore, 'おるすばんで本人の任せ方を書き換えた');
     assert.ok((await view('a')).members.find((m) => m.teamName === B).away, '一覧に留守の印が出ない');
     assert.equal((await view('a')).members.find((m) => m.teamName === B).lastSeenDay, tokyoDay(seen));
-    // 来たら解く
-    await service.presence('b', sessions.b);
+    // 来たら解く。⚠ 解いたときは版を上げ、返事で知らせる（編成が戻るので、別の端末の古い編成から保存させない）
+    const revisionAway = (await live()).revision;
+    assert.deepEqual(await service.presence('b', sessions.b), { ok: true, returned: true }, 'おるすばんを解いたことを返事で知らせていない');
+    assert.equal((await live()).revision, revisionAway + 1, 'おるすばんを解いたのに版を上げていない');
     const back = (await live()).members.find((m) => m.userId === 'b');
     assert.equal(back.away, undefined, '来たのにおるすばんが解けない');
     assert.equal(back.inbox[0].type, 'awayEnded');
