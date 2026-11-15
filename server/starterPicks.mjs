@@ -16,6 +16,7 @@
 import { requireOnline } from '../src/online/shared.js';
 import { STARTER_LOCK_TURNS, STARTER_PICK_GAMES } from '../src/online/social.js';
 import { effectiveStaffModes } from './coachEngine.mjs';
+import { assertCanPlay } from './social.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const dayIndex = (d) => Math.round(Date.UTC(d.year, d.month - 1, d.day) / DAY_MS);
@@ -70,6 +71,7 @@ export function activePicks(league, teamName) {
 export function setStarterPick(league, userId, { gameId, playerId } = {}) {
   const member = (league.members || []).find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
+  assertCanPlay(league, '予告先発を選べません');
   requireOnline(
     canPickStarters(league, member),
     '投手起用を指導者に任せている間は、予告先発を選べません',

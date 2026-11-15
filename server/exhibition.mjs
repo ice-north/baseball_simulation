@@ -25,7 +25,7 @@ import {
 import { prepareDailyLineup } from './dailyLineup.mjs';
 import { applyStaffTactics } from './coachEngine.mjs';
 import { scoringPlaysOf, winningHitOf } from './recordedStats.mjs';
-import { pushInbox, teamLabelIn } from './social.mjs';
+import { pushInbox, teamLabelIn, assertCanPlay } from './social.mjs';
 
 const BATTING = ['atBats', 'hits', 'homeruns', 'rbis', 'walks', 'strikeouts', 'doubles', 'triples', 'stolenBases'];
 const PITCHING = ['runsAllowed', 'earnedRuns', 'strikeouts', 'hits', 'walks', 'homeruns', 'pitches'];
@@ -49,6 +49,7 @@ function playedOn(league, a, b, now) {
 export function openChallenge(league, userId, { toTeam, note } = {}, now) {
   const me = (league.members || []).find((m) => m.userId === userId);
   requireOnline(me, '参加者ではありません', 403);
+  assertCanPlay(league, '練習試合を申し込めません');
   const them = memberOfTeam(league, toTeam);
   requireOnline(them, '練習試合は、人が持っている球団に申し込めます', 409);
   requireOnline(them.userId !== userId, '自分の球団とは練習試合をできません');
@@ -131,6 +132,8 @@ export function respondChallenge(league, userId, { id, action } = {}, now, play)
     return { status: 'declined' };
   }
   requireOnline(action === 'accept', '練習試合の操作が不正です');
+  // ⚠ 断る・取り下げるはいつでもできる。受ける（その場で1試合する）のは試合ができる時期だけ
+  assertCanPlay(league, '練習試合はできません');
   requireOnline(
     memberOfTeam(league, ex.fromTeam)?.userId === ex.from,
     '申し込んだ球団のオーナーが替わったので、この申し込みは使えません',

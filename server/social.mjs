@@ -16,7 +16,7 @@ import {
   isAwayAt,
   tokyoDay,
 } from '../src/online/social.js';
-import { validateLineup } from '../src/online/shared.js';
+import { validateLineup, requireOnline } from '../src/online/shared.js';
 import { effectiveStaffModes } from './coachEngine.mjs';
 import { projectLineup } from './projection.mjs';
 
@@ -121,6 +121,17 @@ export function pruneTrades(league, teams, now, { all = false, reason = null } =
   }
   league.trades = keep;
   return dropped;
+}
+
+/**
+ * 練習試合・予告先発ができる時期か。⚠ 手続きの最中（開幕前のセット選びなど）は先発ローテが
+ *    まだ無い球団があり、練習試合を受けると「先発投手が未登録です」で落ちていた。
+ *    管理者が止めている間・エラーで止まっている間も受け付けない。
+ * `what` は断るときの文の後ろ（「練習試合はできません」）
+ */
+export function assertCanPlay(league, what) {
+  requireOnline(!league?.phase, `手続きの間は、${what}`, 409);
+  requireOnline(league?.status === 'running', `進行が止まっている間は、${what}`, 409);
 }
 
 /**

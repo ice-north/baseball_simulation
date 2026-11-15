@@ -21,7 +21,7 @@ import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { withStarters } from '../../server/leagueBoard.mjs';
 import { projectLineup } from '../../server/projection.mjs';
 import { prepareDailyLineup, STARTER_SKIP_FATIGUE } from '../../server/dailyLineup.mjs';
-import { pruneTrades, touchPresence, forgetLastYearPlans } from '../../server/social.mjs';
+import { pruneTrades, touchPresence, forgetLastYearPlans, assertCanPlay } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
 import { applyJoin, nextMemberIndex } from '../../src/online/membership.js';
@@ -201,7 +201,7 @@ import {
   {
     const today = '2026-11-15T03:00:00.000Z';
     const members = Array.from({ length: 12 }, (_, i) => ({ userId: `u${i}`, teamName: `T${i}` }));
-    const l = { teams: members.map((m) => ({ name: m.teamName })), members, exhibitions: [] };
+    const l = { status: 'running', phase: null, teams: members.map((m) => ({ name: m.teamName })), members, exhibitions: [] };
     const pairs = [];
     for (let a = 0; a < 12; a += 1) for (let b = a + 1; b < 12; b += 1) pairs.push([a, b]);
     // 前の日の試合を1件、今日の試合を EXHIBITION_LIMIT + 1 件
@@ -219,6 +219,11 @@ import {
       '上限で今日の結果を捨てたので、同じ組がその日のうちにもう1試合できる',
     );
   }
+
+  // 止めている間・手続きの間は練習試合・予告先発を受け付けない
+  assert.throws(() => assertCanPlay({ status: 'paused', phase: null }, '練習試合はできません'), /進行が止まっている間は、練習試合/);
+  assert.throws(() => assertCanPlay({ status: 'waiting', phase: { kind: 'camp' } }, 'x'), /手続きの間は/);
+  assertCanPlay({ status: 'running', phase: null }, 'x');
 
   // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が
   // 残っている人と同じ種にならないこと（同じidの選手ができる）。名簿に入ったセットの選手のidからも数える
@@ -280,6 +285,21 @@ try {
   await send('a', 'create');
   await send('b', 'join', { teamName: '湘南サンズ' });
   await send('c', 'join', { teamName: '美瑛ベアーズ' });
+  // 手続きの間（開幕前のセット選び）は練習試合・予告先発を断る。⚠ 以前は受けると
+  // 「先発投手が未登録です」で落ちた（ローテがまだ無い）
+  {
+    const l = await live();
+    assert.equal(l.phase?.kind, 'pack_select', '前提: 開幕前の手続きの最中');
+    const own = l.members.find((m) => m.userId === 'b').teamName;
+    const foe = l.members.find((m) => m.userId === 'c').teamName;
+    await assert.rejects(() => send('b', 'challenge', { toTeam: foe }), /手続きの間は、練習試合/, '手続きの間に練習試合を申し込めた');
+    const game = l.season.schedule.find((g) => g.home === own || g.away === own);
+    await assert.rejects(
+      () => send('b', 'starterPick', { gameId: game.id, playerId: null }),
+      /手続きの間は、予告先発/,
+      '手続きの間に予告先発を選べた',
+    );
+  }
   for (let i = 0; i < 4; i += 1) {
     const l = await live();
     if (!l.phase) break;
