@@ -60,4 +60,18 @@ class OnlineApiTest {
         assertEquals(listOf("trade" to 1), sent)
         assertTrue("trade" !in RETRY_ON_REVISION)
     }
+
+    /** presence の返事。おるすばんを解いたときだけ true（returned が無い古いサーバー・読めない返事は false） */
+    @Test
+    fun presenceTellsWhetherAwayWasCleared() = runBlocking {
+        fun api(body: String) = OnlineApi(
+            "http://test/",
+            HttpClient(MockEngine { respond(body, headers = headersOf(HttpHeaders.ContentType, "application/json")) }),
+        )
+        assertEquals(true, api("""{"ok":true,"returned":true}""").presence(auth))
+        assertEquals(false, api("""{"ok":true}""").presence(auth))
+        assertEquals(false, api("""{"ok":true,"returned":false}""").presence(auth))
+        assertEquals(false, api("""{"ok":true,"returned":{"x":1}}""").presence(auth))
+        assertEquals(false, presenceReturned("not json"))
+    }
 }
