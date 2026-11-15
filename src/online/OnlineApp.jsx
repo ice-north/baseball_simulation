@@ -148,6 +148,10 @@ export default function OnlineApp() {
     };
   }
   const [away, setAway] = useState(null);
+  const dismissAway = useCallback(() => {
+    visit.current.dismissed = true;
+    setAway(null);
+  }, []);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showTimes, setShowTimes] = useState(false);
@@ -209,6 +213,10 @@ export default function OnlineApp() {
     viewGeneration.current = null;
     readCache.current.clear();
     forgetView();
+    // ⚠ 留守中のまとめも前の人のものを残さない（ログアウト・ログインし直しで帯が残っていた）。
+    //    前のビューは忘れたので、この人の最初のビューとは比べない
+    setAway(null);
+    visit.current = { view: null, at: null, done: true };
     setScreen('today');
   }, []);
   const renewAuth = useCallback(async (expected) => {
@@ -321,21 +329,38 @@ export default function OnlineApp() {
     };
   }, [auth]);
   // 最後に来た時刻（しばらく来ないと「おるすばん」で指導者に任せた扱いになる。来たら解く）。
-  // ⚠ 開いたとき・タブに戻ったときに知らせるだけ。サーバーは数時間に1回しか書かない
-  //    （`touchPresence`）ので、ここでは10分より短い間隔で送らないだけにする
+  // ⚠ 開いたとき・タブに戻ったとき・開いたままの間（60秒ごとの確かめ）に知らせる。
+  //    開いたまま毎日使う人が、タブを切り替えないせいで留守扱いになっていた。
+  //    サーバーは数時間に1回しか書かない（`touchPresence`）ので、ここでは10分より短い間隔で送らない
+  // ⚠ 留守を解いた答え（`returned`）なら、すぐ読み直す。最初の読み込みと競って、
+  //    戻ってきた人の画面に自分が「おるすばん」のまま最長60秒残っていた。
+  //    留守中のまとめは、まだ閉じていなければ解いたあとのビューで作り直す
   useEffect(() => {
     if (!auth) return;
     let last = 0;
+    let cancelled = false;
     const ping = () => {
       if (document.hidden || Date.now() - last < 10 * 60000) return;
       if (auth.refreshToken && auth.expiresAt <= Date.now()) return;
       last = Date.now();
-      api('presence', auth, {}).catch(() => {});
+      api('presence', auth, {})
+        .then((result) => {
+          if (cancelled || !result?.returned || !sameSession(authRef.current, auth)) return;
+          if (visit.current.done && !visit.current.dismissed && visit.current.view)
+            visit.current.done = false;
+          return reload();
+        })
+        .catch(() => {});
     };
     ping();
+    const timer = setInterval(ping, 60000);
     document.addEventListener('visibilitychange', ping);
-    return () => document.removeEventListener('visibilitychange', ping);
-  }, [auth]);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', ping);
+    };
+  }, [auth, reload]);
   useEffect(() => {
     if (!auth?.refreshToken) return;
     let cancelled = false;
@@ -530,6 +555,8 @@ export default function OnlineApp() {
         viewGeneration.current = null;
         readCache.current.clear();
         forgetView();
+        setAway(null);
+        visit.current = { view: null, at: null, done: true };
         setShowTimes(false);
         setScreen('today');
       }
@@ -716,7 +743,7 @@ export default function OnlineApp() {
                     run={run}
                     command={command}
                     away={away}
-                    dismissAway={() => setAway(null)}
+                    dismissAway={dismissAway}
                   />
                 ) : (
                   <DesktopView
@@ -732,7 +759,7 @@ export default function OnlineApp() {
                     run={run}
                     command={command}
                     away={away}
-                    dismissAway={() => setAway(null)}
+                    dismissAway={dismissAway}
                   />
                 )}
               </Drafts>
