@@ -6,6 +6,7 @@ import {
   advanceLeagueDay,
   loadLeagueWorld,
 } from '../../server/leagueEngine.mjs';
+import { touchPresence } from '../../server/social.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { gzipSync } from 'node:zlib';
 import { nextProgressionAt } from '../../src/online/shared.js';
@@ -116,6 +117,9 @@ while (league.season.year === startYear && days < 300) {
   if (league.status === 'waiting') resolve();
   else {
     now = new Date(now.getTime() + 4 * 3600000);
+    // ⚠ 2人とも毎日来ている扱いにする（参加した人には来た時刻が入るので、来ないまま3日進めると
+    //    おるすばん＝全部を指導者に任せた扱いになり、手続きが1人の提出で済んでしまう）
+    for (const m of league.members) touchPresence(league, m.userId, now.toISOString());
     advanceLeagueDay(league, `acceptance:${days}`, now.toISOString());
     days++;
     // ⚠ 保存する試合結果に両球団の名簿の写しを残さない。1試合約100KBが
