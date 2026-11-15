@@ -36,7 +36,10 @@ import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
 import { Homeruns } from '../../src/online/LeagueBoard.jsx';
+import { StarterPicksPage, ExhibitionPage } from '../../src/online/SocialPages.jsx';
 export {
+  StarterPicksPage,
+  ExhibitionPage,
   TryoutPlanner,
   LeagueTopics,
   React,
@@ -98,6 +101,8 @@ try {
     LeagueTopics,
     AbilityGrade,
     Homeruns,
+    StarterPicksPage,
+    ExhibitionPage,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -881,10 +886,70 @@ try {
     const missing = types.filter((type) => !new RegExp(`^  ${type}:`, 'm').test(table));
     assert.deepEqual(missing, [], `済んだときの文が無い命令がある（「保存しました」だけになる）: ${missing.join(', ')}`);
   }
+  // --- 予告先発・練習試合（`SocialPages.jsx`） --------------------------------
+  {
+    const { STARTER_SKIP_FATIGUE } = await import('../../src/online/shared.js');
+    const { EXHIBITIONS_PER_DAY, MAX_OPEN_CHALLENGES } = await import('../../src/online/social.js');
+    // ⚠ 指名した投手がローテを外れても、指名は印の付いた行で見せる（以前は「ローテの順」と出た）。
+    //    確定のターン数はビューの `lockTurns`、疲れの印はサーバーと同じ STARTER_SKIP_FATIGUE
+    const roster = [
+      { id: 1, name: 'ローテの投手', position: 'pitcher', fatigue: STARTER_SKIP_FATIGUE },
+      { id: 2, name: '外れた投手', position: 'pitcher', fatigue: 0 },
+      { id: 3, name: '元気な投手', position: 'pitcher', fatigue: STARTER_SKIP_FATIGUE - 1 },
+    ];
+    const picks = render(h(StarterPicksPage, {
+      view: {
+        teamName: 'A',
+        roster,
+        lineup: { starters: [1, 3] },
+        starterPlan: {
+          canPick: true,
+          lockTurns: 5,
+          picks: { 7: 2 },
+          games: [{ id: 7, home: 'A', away: 'B', date: { year: 2024, month: 4, day: 3 } }],
+        },
+      },
+      busy: false,
+      run: () => {},
+      command: () => {},
+    }));
+    assert.match(picks, /試合の5ターン前に確定/, '予告先発の確定のターン数がビューの lockTurns でない');
+    assert.match(picks, /<option value="2" disabled="" selected="">外れた投手（ローテ外）<\/option>/, 'ローテを外れた指名が選ばれた行として出ない');
+    assert.match(picks, />ローテの投手（疲れ）</, '疲れの印が STARTER_SKIP_FATIGUE で付かない');
+    assert.doesNotMatch(picks, />元気な投手（疲れ）</, '疲れの印の境目がサーバーとちがう');
+
+    // ⚠ 申し込みの決まり（同じ相手と1日の試合数・出しておける件数）を、押す前に見せる
+    const nowIso = new Date().toISOString();
+    const member = (team) => ({ teamName: team, label: team });
+    const result = { home: 'A', away: 'B', homeScore: 1, awayScore: 0, teams: {} };
+    const played = (id, other) => ({ id, status: 'played', mine: true, fromTeam: 'A', toTeam: other, playedAt: nowIso, result });
+    const exhibition = (extra) =>
+      render(h(ExhibitionPage, {
+        view: { teamName: 'A', members: ['A', 'B', 'C', 'D', 'E', 'F'].map(member), ...extra },
+        busy: false,
+        run: () => {},
+        command: () => {},
+      }));
+    const today = Array.from({ length: EXHIBITIONS_PER_DAY }, (_, i) => played(`p${i}`, 'B'));
+    const daily = exhibition({ exhibitions: today });
+    assert.match(daily, new RegExp(`今日はこの相手と${EXHIBITIONS_PER_DAY}試合しました`), '1日の試合数に達した相手へ申し込めてしまう');
+    assert.equal((daily.match(/<button disabled="">申し込む<\/button>/g) || []).length, 1, '1日の試合数に達した相手だけを止める');
+    const offered = exhibition({
+      exhibitions: [...today, { id: 'in', status: 'offered', mine: false, fromTeam: 'B', toTeam: 'A' }],
+    });
+    assert.match(offered, /<button class="online-primary" disabled="" title="[^"]*">今日はもう試合しました<\/button>/, '1日の試合数に達した相手の申し込みを受けられてしまう');
+    const full = exhibition({
+      exhibitions: Array.from({ length: MAX_OPEN_CHALLENGES }, (_, i) => ({ id: `o${i}`, status: 'offered', mine: true, fromTeam: 'A', toTeam: ['C', 'D', 'E', 'F'][i] })),
+    });
+    assert.match(full, new RegExp(`出しておける申し込みは${MAX_OPEN_CHALLENGES}件までです`), '申し込みの件数の上限を見せていない');
+    assert.match(full, /<button disabled="">申し込む<\/button>/, '上限に達しても申し込めてしまう');
+    assert.doesNotMatch(exhibition({ exhibitions: [] }), /<button disabled="">申し込む/, '何も無いのに申し込めない');
+
+  }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 画面の描画: OK（昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 直近の本塁打に自軍の印が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
+  '■ 画面の描画: OK（予告先発のローテ外の指名・確定のターン数・疲れの印 / 練習試合の申し込みの決まり / 昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 直近の本塁打に自軍の印が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
 );

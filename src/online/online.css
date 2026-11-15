@@ -5712,6 +5712,11 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 8px;
   font-size: 13px;
 }
+/* 申し込めない理由（行の下に、ひとことの欄の位置から） */
+.online-challenge-why:not(:where(.online-sp *)) {
+  grid-column: 2 / -1;
+  font-size: 12px;
+}
 .online-challenge-out:not(:where(.online-sp *)) {
   display: flex;
   align-items: center;

@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { Page } from './Page.jsx';
 import { POS } from './api.js';
 import { teamLabel, teamShort } from './gameText.js';
-import { turnLabel } from './shared.js';
+import { turnLabel, STARTER_SKIP_FATIGUE } from './shared.js';
 import { useRead } from './useRead.js';
 import {
   lastSeenLabel,
   CHALLENGE_NOTE_MAX,
   STARTER_LOCK_TURNS,
   EXHIBITIONS_PER_DAY,
+  MAX_OPEN_CHALLENGES,
   AWAY_DAYS,
+  tokyoDay,
 } from './social.js';
 import { sinceLabel } from './awaySummary.js';
 import { BoxScore, Panel } from './GameHistory.jsx';
@@ -167,10 +169,12 @@ export function StarterPicksPage({ view, busy, run, command }) {
     .map((id) => view.roster?.find((p) => p.id === id))
     .filter(Boolean);
   const games = plan?.games || [];
+  // 確定のターン数はサーバーの答え（`starterPlan.lockTurns`）を正とし、無い古いビューでは決まりの数
+  const lockTurns = plan?.lockTurns ?? STARTER_LOCK_TURNS;
   return (
     <Page
       title="予告先発"
-      sub={`この先の試合の先発をローテの中から選べます。試合の${STARTER_LOCK_TURNS}ターン前に確定し、相手にも「予告先発」として見えます。確定までは相手に見えません。`}
+      sub={`この先の試合の先発をローテの中から選べます。試合の${lockTurns}ターン前に確定し、相手にも「予告先発」として見えます。確定までは相手に見えません。`}
     >
       <section className="online-card">
         {!plan?.canPick && (
@@ -231,10 +235,17 @@ export function StarterPicksPage({ view, busy, run, command }) {
                         }
                       >
                         <option value="">ローテの順（{pick == null ? g[`${side}Starter`] || '未定' : '指名を外す'}）</option>
+                        {/* ⚠ 指名した投手がローテを外れても指名は残る（試合の日にローテの順へ戻る）。
+                            選べない印の行で今の指名を見せる。以前は合う行が無く「ローテの順」と出ていた */}
+                        {pick != null && !rotation.some((p) => p.id === pick) && (
+                          <option value={pick} disabled>
+                            {view.roster?.find((p) => p.id === pick)?.name || '指名した投手'}（ローテ外）
+                          </option>
+                        )}
                         {rotation.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name}
-                            {p.fatigue >= 40 ? '（疲れ）' : ''}
+                            {p.fatigue >= STARTER_SKIP_FATIGUE ? '（疲れ）' : ''}
                           </option>
                         ))}
                       </select>
@@ -264,6 +275,28 @@ export function ExhibitionPage({ view, busy, run, command }) {
   const played = list.filter((e) => e.status === 'played');
   const openWith = (team) =>
     list.some((e) => e.status === 'offered' && [e.fromTeam, e.toTeam].includes(team));
+  // ⚠ サーバーの決まり（`server/exhibition.mjs`）を先に画面で見せる。以前は押してから断られた
+  //    - 同じ相手とは1日（日本時間）に EXHIBITIONS_PER_DAY 試合まで（申し込むときも受けるときも）
+  //    - 自分から出しておける申し込みは MAX_OPEN_CHALLENGES 件まで
+  const today = tokyoDay(nowIso());
+  const doneToday = (team) =>
+    played.filter((e) => [e.fromTeam, e.toTeam].includes(team) && tokyoDay(e.playedAt) === today)
+      .length >= EXHIBITIONS_PER_DAY;
+  const full = outgoing.length >= MAX_OPEN_CHALLENGES;
+  const blocked = (team) =>
+    openWith(team)
+      ? null
+      : doneToday(team)
+        ? `今日はこの相手と${EXHIBITIONS_PER_DAY}試合しました（1日${EXHIBITIONS_PER_DAY}試合まで）`
+        : full
+          ? `出しておける申し込みは${MAX_OPEN_CHALLENGES}件までです`
+          : null;
+  const send = async (team) => {
+    const result = await run(() =>
+      command('challenge', { toTeam: team, note: (notes[team] || '').trim() }),
+    );
+    if (result?.ok) setNotes((old) => ({ ...old, [team]: '' }));
+  };
   return (
     <Page
       title="練習試合"
@@ -280,10 +313,11 @@ export function ExhibitionPage({ view, busy, run, command }) {
               <div className="online-actions">
                 <button
                   className="online-primary"
-                  disabled={busy}
+                  disabled={busy || doneToday(e.fromTeam)}
+                  title={doneToday(e.fromTeam) ? `同じ相手とは1日${EXHIBITIONS_PER_DAY}試合までです` : undefined}
                   onClick={() => run(() => command('challengeRespond', { id: e.id, action: 'accept' }))}
                 >
-                  受けて試合をする
+                  {doneToday(e.fromTeam) ? '今日はもう試合しました' : '受けて試合をする'}
                 </button>
                 <button
                   disabled={busy}
@@ -312,19 +346,18 @@ export function ExhibitionPage({ view, busy, run, command }) {
                 placeholder="ひとこと（任意）"
                 maxLength={CHALLENGE_NOTE_MAX}
                 value={notes[m.teamName] || ''}
-                disabled={busy || openWith(m.teamName)}
+                disabled={busy || openWith(m.teamName) || !!blocked(m.teamName)}
                 onChange={(e) => setNotes({ ...notes, [m.teamName]: e.target.value })}
               />
               <button
-                disabled={busy || openWith(m.teamName)}
-                onClick={() =>
-                  run(() =>
-                    command('challenge', { toTeam: m.teamName, note: (notes[m.teamName] || '').trim() }),
-                  )
-                }
+                disabled={busy || openWith(m.teamName) || !!blocked(m.teamName)}
+                onClick={() => send(m.teamName)}
               >
                 {openWith(m.teamName) ? '申し込み中' : '申し込む'}
               </button>
+              {blocked(m.teamName) && (
+                <small className="online-muted online-challenge-why">{blocked(m.teamName)}</small>
+              )}
             </li>
           ))}
         </ul>
