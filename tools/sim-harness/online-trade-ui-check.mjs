@@ -703,9 +703,56 @@ try {
     await m.getByText('返事が必要な提案はありません。', { exact: true }).waitFor();
     await phone.close();
   }
+
+  // --- スマホWeb: 届いた練習試合の申し込みに返事する（Q2） ---------------------------
+  // ⚠ 以前はスマホWeb に練習試合の画面が無く、お知らせ・留守中のまとめで「申し込みが届いた」と
+  //    知らせても受けられなかった。トレードの返事と同じく、ホームの帯から返事の画面へ行く
+  {
+    await send('b', sb, 'challenge', { toTeam: teamA, note: 'お手合わせを' });
+    const phone = await browser.newContext({
+      viewport: { width: 320, height: 760 },
+      isMobile: true,
+    });
+    await routeToService(phone, { service, userId: 'a', sessionId: sa });
+    await phone.route(`${base}/online`, (route) =>
+      route.fulfill({ contentType: 'text/html', body: html }),
+    );
+    const m = await phone.newPage();
+    m.on('pageerror', (e) => errors.push(e.message));
+    await m.goto(`${base}/online`);
+    const banner = m
+      .getByRole('status')
+      .filter({ hasText: '練習試合の申し込みが1件届いています' });
+    await banner.waitFor();
+    await banner.getByRole('button', { name: '返事する', exact: true }).click();
+    const incoming = m.getByRole('region', { name: '届いた申し込み', exact: true });
+    await incoming.getByText('「お手合わせを」', { exact: false }).waitFor();
+    const fit = await m.evaluate(() => {
+      const out = [];
+      if (document.documentElement.scrollWidth > innerWidth + 1) out.push('横スクロール');
+      for (const n of document.querySelectorAll('main *')) {
+        if (!n.checkVisibility()) continue;
+        const r = n.getBoundingClientRect();
+        if (r.width && r.right > innerWidth + 1) out.push(`はみ出し ${n.className}`);
+      }
+      return [...new Set(out)].slice(0, 8);
+    });
+    assert.deepEqual(fit, [], '320px で練習試合の返事が幅に収まらない');
+    await incoming.getByRole('button', { name: '受けて試合をする', exact: true }).click();
+    await m.getByRole('region', { name: '練習試合の結果', exact: true }).locator('article').first().waitFor();
+    await m.getByText('届いている申し込みはありません。', { exact: true }).waitFor();
+    assert.ok(
+      (await live()).exhibitions.some((e) => e.status === 'played' && e.fromTeam === teamB),
+      'スマホで受けた練習試合が行われていない',
+    );
+    await m.getByRole('button', { name: 'ホーム', exact: true }).click();
+    await m.locator('.online-mobile-overview').waitFor();
+    assert.equal(await banner.count(), 0, '返事をしたのに練習試合の帯が残っている');
+    await phone.close();
+  }
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / CPUの見込みメーター / 補強から探す・余りを出す / 選手の詳細からトレード / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき））',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / CPUの見込みメーター / 補強から探す・余りを出す / 選手の詳細からトレード / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき） / スマホWebで練習試合の申し込みに返事する）',
   );
 } catch (error) {
   await failureShots(browser, 'online-trade-ui');

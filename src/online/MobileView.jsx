@@ -29,7 +29,7 @@ import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { StaffBody } from './StaffPage.jsx';
 import { MobileTradeReplies } from './TradeScreen.jsx';
 import { RenameDialog } from './DesktopView.jsx';
-import { AwaySummaryBanner, InboxCard } from './SocialPages.jsx';
+import { AwaySummaryBanner, InboxCard, MobileExhibitionReplies } from './SocialPages.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab, away, dismissAway } =
     props;
@@ -97,6 +97,17 @@ export default function MobileView(props) {
           <button className="online-primary" onClick={() => setTab('transfer')}>
             返事する
           </button>
+        </div>
+      )}
+      {/* 届いた練習試合の申し込みもホームで知らせ、返事の画面（受ける・見送る）へ行ける。
+          ⚠ 以前はスマホWeb に練習試合の画面が無く、お知らせで届いたと知らせても受けられなかった */}
+      {counts.challenges > 0 && tab === 'today' && (
+        <div className="online-procedure-banner is-waiting" role="status">
+          <div>
+            <strong>練習試合の申し込みが{counts.challenges}件届いています</strong>
+            <span>受けるか見送るかを選びます</span>
+          </div>
+          <button onClick={() => setTab('exhibition')}>返事する</button>
         </div>
       )}
       {/* 前に開いたときから起きたこと（PC版と同じ文。閉じるまで出す） */}
@@ -167,6 +178,8 @@ export default function MobileView(props) {
       {tab === 'staff' && <StaffBody {...props} mobile />}
       {/* トレードの返事（受ける・断る）。⚠ 名前はPCのトレードのページと同じ（回しても同じ画面へ） */}
       {tab === 'transfer' && <MobileTradeReplies {...props} />}
+      {/* 練習試合の返事。⚠ 名前はPCの練習試合のページと同じ（回しても同じ画面へ） */}
+      {tab === 'exhibition' && <MobileExhibitionReplies {...props} />}
       {tab === 'news' && (
         <>
           <LeagueTopics view={view} />

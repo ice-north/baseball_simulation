@@ -56,6 +56,8 @@ const MOBILE_TABS = new Set([
   'staff',
   // トレード（スマホは届いた提案への返事だけ。ホームの帯から開く）
   'transfer',
+  // 練習試合（スマホは届いた申し込みへの返事だけ。ホームの帯から開く）
+  'exhibition',
 ]);
 const MOBILE_TAB_FOR = {
   rotation: 'lineup',

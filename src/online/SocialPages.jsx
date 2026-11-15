@@ -264,13 +264,110 @@ export function StarterPicksPage({ view, busy, run, command }) {
   );
 }
 
+/**
+ * 同じ相手と今日（日本時間）もう決まりの数だけ試合したか。
+ * ⚠ サーバーの決まり（`server/exhibition.mjs` の `playedOn`）を先に画面で見せる。以前は押してから断られた
+ */
+function playedTodayWith(view) {
+  const today = tokyoDay(nowIso());
+  const played = (view.exhibitions || []).filter((e) => e.status === 'played');
+  return (team) =>
+    played.filter((e) => [e.fromTeam, e.toTeam].includes(team) && tokyoDay(e.playedAt) === today)
+      .length >= EXHIBITIONS_PER_DAY;
+}
+
+/** 届いた申し込み（受ける・見送る）。PC の練習試合のページとスマホの返事の画面で共にする */
+function IncomingChallenges({ view, busy, run, command }) {
+  const incoming = (view.exhibitions || []).filter((e) => e.status === 'offered' && !e.mine);
+  const doneToday = playedTodayWith(view);
+  if (!incoming.length) return null;
+  return (
+    <section className="online-card" aria-label="届いた申し込み">
+      <h2>届いた申し込み</h2>
+      {incoming.map((e) => (
+        <div key={e.id} className="online-challenge">
+          <p>
+            <b>{teamLabel(e.fromTeam)}</b>から{e.note ? `「${e.note}」` : '申し込みが届いています'}
+          </p>
+          <div className="online-actions">
+            <button
+              className="online-primary"
+              disabled={busy || doneToday(e.fromTeam)}
+              title={doneToday(e.fromTeam) ? `同じ相手とは1日${EXHIBITIONS_PER_DAY}試合までです` : undefined}
+              onClick={() => run(() => command('challengeRespond', { id: e.id, action: 'accept' }))}
+            >
+              {doneToday(e.fromTeam) ? '今日はもう試合しました' : '受けて試合をする'}
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => run(() => command('challengeRespond', { id: e.id, action: 'decline' }))}
+            >
+              見送る
+            </button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** 練習試合の結果の1行（点だけ。PC はここから個人成績を開く） */
+function ExhibitionLine({ e }) {
+  return (
+    <>
+      <small>{e.playedAt ? sinceLabel(Date.parse(e.playedAt)) : ''}</small>
+      <span className="online-game-line">
+        <span title={teamLabel(e.result.away)}>{teamShort(e.result.away)}</span>{' '}
+        <b>
+          {e.result.awayScore} – {e.result.homeScore}
+        </b>{' '}
+        <span title={teamLabel(e.result.home)}>{teamShort(e.result.home)}</span>
+      </span>
+    </>
+  );
+}
+
+/**
+ * スマホWeb の練習試合（届いた申し込みへの返事と、最近の結果の点）。
+ * ⚠ スマホWeb には練習試合のページが無く、お知らせ・留守中のまとめで「申し込みが届いた」と
+ *    知らせても受ける手段が無かった（トレードの返事と同じ形で、返事だけここでできる）。
+ *    新しく申し込む・個人成績を見るのは PC かアプリ。⚠ 名前は PC のページと同じ（回しても同じ画面へ）
+ */
+export function MobileExhibitionReplies({ view, busy, run, command }) {
+  const played = (view.exhibitions || []).filter((e) => e.status === 'played');
+  const waiting = (view.exhibitions || []).some((e) => e.status === 'offered' && !e.mine);
+  return (
+    <>
+      <section className="online-card">
+        <h2>練習試合</h2>
+        <p className="online-muted">
+          届いた申し込みを受けるか見送るかを選びます。成績・疲労・順位には入りません。新しい申し込みと個人成績はPCかアプリでできます。
+        </p>
+        {!waiting && <p>届いている申し込みはありません。</p>}
+      </section>
+      <IncomingChallenges view={view} busy={busy} run={run} command={command} />
+      {played.length > 0 && (
+        <section className="online-card" aria-label="練習試合の結果">
+          <h2>結果</h2>
+          <div className="online-game-history-list">
+            {played.map((e) => (
+              <article key={e.id}>
+                <ExhibitionLine e={e} />
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
 /** 練習試合（人の球団どうしで1試合。成績・疲労・順位には入らない） */
 export function ExhibitionPage({ view, busy, run, command }) {
   const [notes, setNotes] = useState({});
   const [shown, setShown] = useState(null);
   const others = (view.members || []).filter((m) => m.teamName !== view.teamName);
   const list = view.exhibitions || [];
-  const incoming = list.filter((e) => e.status === 'offered' && !e.mine);
   const outgoing = list.filter((e) => e.status === 'offered' && e.mine);
   const played = list.filter((e) => e.status === 'played');
   const openWith = (team) =>
@@ -278,10 +375,7 @@ export function ExhibitionPage({ view, busy, run, command }) {
   // ⚠ サーバーの決まり（`server/exhibition.mjs`）を先に画面で見せる。以前は押してから断られた
   //    - 同じ相手とは1日（日本時間）に EXHIBITIONS_PER_DAY 試合まで（申し込むときも受けるときも）
   //    - 自分から出しておける申し込みは MAX_OPEN_CHALLENGES 件まで
-  const today = tokyoDay(nowIso());
-  const doneToday = (team) =>
-    played.filter((e) => [e.fromTeam, e.toTeam].includes(team) && tokyoDay(e.playedAt) === today)
-      .length >= EXHIBITIONS_PER_DAY;
+  const doneToday = playedTodayWith(view);
   const full = outgoing.length >= MAX_OPEN_CHALLENGES;
   const blocked = (team) =>
     openWith(team)
@@ -302,34 +396,7 @@ export function ExhibitionPage({ view, busy, run, command }) {
       title="練習試合"
       sub={`人の球団どうしで1試合だけ行います。1部と2部に分かれていても当たれます。成績・疲労・順位には入りません。同じ相手とは1日${EXHIBITIONS_PER_DAY}試合まで。`}
     >
-      {incoming.length > 0 && (
-        <section className="online-card" aria-label="届いた申し込み">
-          <h2>届いた申し込み</h2>
-          {incoming.map((e) => (
-            <div key={e.id} className="online-challenge">
-              <p>
-                <b>{teamLabel(e.fromTeam)}</b>から{e.note ? `「${e.note}」` : '申し込みが届いています'}
-              </p>
-              <div className="online-actions">
-                <button
-                  className="online-primary"
-                  disabled={busy || doneToday(e.fromTeam)}
-                  title={doneToday(e.fromTeam) ? `同じ相手とは1日${EXHIBITIONS_PER_DAY}試合までです` : undefined}
-                  onClick={() => run(() => command('challengeRespond', { id: e.id, action: 'accept' }))}
-                >
-                  {doneToday(e.fromTeam) ? '今日はもう試合しました' : '受けて試合をする'}
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => run(() => command('challengeRespond', { id: e.id, action: 'decline' }))}
-                >
-                  見送る
-                </button>
-              </div>
-            </div>
-          ))}
-        </section>
-      )}
+      <IncomingChallenges view={view} busy={busy} run={run} command={command} />
       <section className="online-card" aria-label="申し込む">
         <h2>申し込む</h2>
         {!others.length && <p>ほかに人の球団がまだありません。</p>}
@@ -379,14 +446,7 @@ export function ExhibitionPage({ view, busy, run, command }) {
         <div className="online-game-history-list">
           {played.map((e) => (
             <article key={e.id}>
-              <small>{e.playedAt ? sinceLabel(Date.parse(e.playedAt)) : ''}</small>
-              <span className="online-game-line">
-                <span title={teamLabel(e.result.away)}>{teamShort(e.result.away)}</span>{' '}
-                <b>
-                  {e.result.awayScore} – {e.result.homeScore}
-                </b>{' '}
-                <span title={teamLabel(e.result.home)}>{teamShort(e.result.home)}</span>
-              </span>
+              <ExhibitionLine e={e} />
               <button className="online-record-button" onClick={() => setShown(e)}>
                 個人成績
               </button>
