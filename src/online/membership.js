@@ -184,6 +184,27 @@ export function applyProfile(league, { userId, teamName, playerName, comment, no
   };
 }
 
+/**
+ * 次に参加する人の通し番号（セットの種は `seed + 7 + 番号`。0 は開幕前のセット）。
+ * ⚠ `memberSeq` だけを信じないこと。版13へ上げた段で入れていなかったので、版13のリーグには
+ *    無いものがある。人数・残っている人の種・名簿に居るセットの選手のid（`種×1000＋n`。
+ *    セットが名簿に入ると種は消える）からも数え、いちばん大きいものの次にする。
+ *    同じ種を2度使うと、別の人の名簿に同じidの選手ができる
+ */
+export function nextMemberIndex(league) {
+  const base = (league.seed || 0) + 7;
+  let next = Math.max(league.memberSeq ?? 0, (league.members || []).length);
+  for (const m of league.members || [])
+    if (Number.isInteger(m.packSeed) && m.packSeed > base) next = Math.max(next, m.packSeed - base + 1);
+  for (const team of Object.values(league.game?.teams || {}))
+    for (const p of team?.players || []) {
+      const at = Math.floor((Number(p?.id) || 0) / 1000) - base;
+      // セットの選手のidだけを見る（ほかの選手のidは小さな通し番号）
+      if (at >= 1 && at <= 10000) next = Math.max(next, at + 1);
+    }
+  return next;
+}
+
 export function applyJoin(league, { userId, label, teamName, now }) {
   const { team } = assertCanJoin(league, userId);
   const shown = String(teamName || '').trim() || team.name;
@@ -191,7 +212,7 @@ export function applyJoin(league, { userId, label, teamName, now }) {
   team.displayName = shown;
   // ⚠ **種の番号は参加の通し番号**（人数ではない）。球団をCPUに戻すと人数が減るので、
   //    人数で数えると次に入った人が残っている人と同じ種になり、同じidの選手ができる
-  const index = Math.max(league.memberSeq ?? 0, (league.members || []).length);
+  const index = nextMemberIndex(league);
   league.memberSeq = index + 1;
   league.members = [
     ...(league.members || []),
@@ -202,6 +223,8 @@ export function applyJoin(league, { userId, label, teamName, now }) {
       teamName: team.name,
       displayName: shown,
       joinedAt: now,
+      // ⚠ 来た時刻も入れる。無いと `isAwayAt` が留守にせず、来なくなってもおるすばんにならない
+      lastSeenAt: now,
       // ⚠ **開幕後に参加した人には、自分のセットを選ばせる**。引き継いだCPUの
       //    名簿のままだと、自分で選んだ24人で始められない。
       //    選んだセットは**次のキャンプ**で名簿に入る（シーズン途中で入れ替えると

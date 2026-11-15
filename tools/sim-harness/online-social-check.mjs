@@ -24,6 +24,7 @@ import { prepareDailyLineup, STARTER_SKIP_FATIGUE } from '../../server/dailyLine
 import { pruneTrades } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
+import { applyJoin, nextMemberIndex } from '../../src/online/membership.js';
 import {
   AWAY_DAYS,
   OWNER_COMMENT_MAX,
@@ -148,6 +149,33 @@ import {
   assert.match(league.members[1].inbox[0].text, /Aからの/);
   assert.equal(pruneTrades(league, world, 'x', { all: true, reason: '年度が替わったため' }), 1);
   assert.equal(league.trades.length, 0, '年度更新で提案が残っている');
+
+  // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が
+  // 残っている人と同じ種にならないこと（同じidの選手ができる）。名簿に入ったセットの選手のidからも数える
+  {
+    const teams = ['A', 'B', 'C', 'D', 'E', 'F'].map((name) => ({ name, displayName: name, league: 'B', rank: 'C' }));
+    const old = {
+      seed: 100,
+      teams,
+      season: { standings: [] },
+      phase: null,
+      members: [
+        { userId: 'u0', teamName: 'A' },
+        { userId: 'u2', teamName: 'C', packSeed: 109 },
+        { userId: 'u3', teamName: 'D', packSeed: 110 },
+      ],
+      game: { teams: { E: { players: [{ id: 112 * 1000 + 5 }, { id: 7 }] } } },
+    };
+    assert.equal(nextMemberIndex(old), 6, '名簿に入ったセットの選手のidから通し番号を数えていない');
+    delete old.game;
+    applyJoin(old, { userId: 'u4', now: '2026-11-01T00:00:00.000Z' });
+    const joined = old.members.at(-1);
+    assert.equal(joined.packSeed, 111, '版13のリーグで、残っている人と同じ種を渡した');
+    assert.equal(old.memberSeq, 5);
+    // 入った人には来た時刻を入れる（無いと来なくなってもおるすばんにならない）
+    assert.equal(joined.lastSeenAt, '2026-11-01T00:00:00.000Z', '途中参加の人に来た時刻が無い');
+    assert.ok(isAwayAt(joined, '2026-11-05T00:00:00.000Z'), '途中参加の人が来なくなってもおるすばんにならない');
+  }
 }
 
 // --- 3人のリーグで通しで動かす ------------------------------------------------

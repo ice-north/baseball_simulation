@@ -997,6 +997,8 @@ export function createLeague({
       userId: m.userId,
       label: m.label || `プレイヤー${i + 1}`,
       teamName: order[i].name,
+      // ⚠ 来た時刻を入れる（無いと来なくなってもおるすばんにならない。`isAwayAt`）
+      lastSeenAt: now,
     })),
     history: [],
     notices: [],

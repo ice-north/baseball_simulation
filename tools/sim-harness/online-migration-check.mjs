@@ -152,6 +152,22 @@ assert.ok(
   assert.equal(fresh.members[0].packStyle, PACK_STYLE, '持っている版を上書きした');
 }
 
+// 版13へ上げるとき、参加の通し番号（`memberSeq`）を入れる。無いと、球団をCPUに戻した後に
+// 入った人が残っている人と同じ種になる（同じidの選手ができる）
+{
+  const old = {
+    schema: 12,
+    engineVersion: ONLINE_ENGINE_VERSION,
+    seed: 100,
+    members: [{ userId: 'a' }, { userId: 'c', packSeed: 110 }],
+  };
+  migrateLeague(old, { now: '2026-11-15T00:00:00.000Z' });
+  assert.equal(old.memberSeq, 4, '版13へ上げるときに参加の通し番号を入れていない');
+  const kept = { schema: 12, engineVersion: ONLINE_ENGINE_VERSION, seed: 100, memberSeq: 9, members: [] };
+  migrateLeague(kept, { now: '2026-11-15T00:00:00.000Z' });
+  assert.equal(kept.memberSeq, 9, '持っている通し番号を書き換えた');
+}
+
 // --- どの版をどう扱うか ----------------------------------------------
 const league = (overrides) => ({
   schema: ONLINE_SCHEMA,
