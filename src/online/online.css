@@ -5712,6 +5712,36 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 8px;
   font-size: 13px;
 }
+/* 練習試合の結果: 回ごとの得点・勝敗投手 */
+.online-line-score:not(:where(.online-sp *)) {
+  border-collapse: collapse;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.online-line-score th:not(:where(.online-sp *)),
+.online-line-score td:not(:where(.online-sp *)) {
+  min-width: 1.8em;
+  padding: 2px 4px;
+  text-align: center;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+.online-line-score tbody th:not(:where(.online-sp *)) {
+  text-align: left;
+  padding-right: 10px;
+}
+.online-line-score thead th:not(:where(.online-sp *)) {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 400;
+}
+.online-decisions:not(:where(.online-sp *)) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
 /* 申し込めない理由（行の下に、ひとことの欄の位置から） */
 .online-challenge-why:not(:where(.online-sp *)) {
   grid-column: 2 / -1;

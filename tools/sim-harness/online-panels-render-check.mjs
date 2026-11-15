@@ -36,10 +36,11 @@ import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
 import { Homeruns } from '../../src/online/LeagueBoard.jsx';
-import { StarterPicksPage, ExhibitionPage } from '../../src/online/SocialPages.jsx';
+import { StarterPicksPage, ExhibitionPage, ExhibitionBox } from '../../src/online/SocialPages.jsx';
 export {
   StarterPicksPage,
   ExhibitionPage,
+  ExhibitionBox,
   TryoutPlanner,
   LeagueTopics,
   React,
@@ -103,6 +104,7 @@ try {
     Homeruns,
     StarterPicksPage,
     ExhibitionPage,
+    ExhibitionBox,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -945,11 +947,50 @@ try {
     assert.match(full, /<button disabled="">申し込む<\/button>/, '上限に達しても申し込めてしまう');
     assert.doesNotMatch(exhibition({ exhibitions: [] }), /<button disabled="">申し込む/, '何も無いのに申し込めない');
 
+    // ⚠ 練習試合の結果: 回ごとの得点と勝敗投手を出し、箱に無い列（打席・犠飛・守備機会など）は出さない
+    const prevWindow = globalThis.window;
+    globalThis.window = { matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) };
+    try {
+      const pitcher = (id, name) => ({
+        id, name, battingOrder: 0,
+        batting: {},
+        pitching: { runsAllowed: 0, earnedRuns: 0, strikeouts: 5, hits: 3, walks: 1, homeruns: 0, pitches: 90, inningsPitched: 27 },
+      });
+      const batter = (id, name) => ({
+        id, name, battingOrder: 1,
+        batting: { atBats: 4, hits: 2, homeruns: 0, rbis: 1, walks: 0, strikeouts: 1, doubles: 1, triples: 0, stolenBases: 0 },
+        pitching: {},
+      });
+      const box = render(h(ExhibitionBox, {
+        view: { teamName: 'A' },
+        ex: {
+          id: 'ex-9',
+          result: {
+            home: 'A', away: 'B', homeScore: 2, awayScore: 1, walkOff: true,
+            lineScore: { away: [0, 0, 1, 0, 0, 0, 0, 0, 0], home: [0, 0, 0, 0, 0, 0, 0, 1, 1] },
+            decisions: { winningPitcher: { id: 1, name: '勝った投手' }, losingPitcher: { id: 5, name: '負けた投手' }, savePitcher: null },
+            scoring: [],
+            teams: { A: [batter(2, '打った選手'), pitcher(1, '勝った投手')], B: [pitcher(5, '負けた投手')] },
+          },
+        },
+      }));
+      assert.match(box, /aria-label="回ごとの得点"/, '練習試合の回ごとの得点が無い');
+      assert.match(box, /<td>1x<\/td>/, 'サヨナラの回に x が付かない');
+      assert.match(box, /<b>勝<\/b> 勝った投手/, '練習試合の勝ち投手が出ない');
+      assert.match(box, /<b>敗<\/b> 負けた投手/, '練習試合の負け投手が出ない');
+      assert.doesNotMatch(box, /<b>S<\/b>/, 'セーブの無い試合にSが出る');
+      assert.match(box, /安打で並べ替え/);
+      for (const label of ['打席', '犠飛', '守備機会', '死球', '盗塁死'])
+        assert.doesNotMatch(box, new RegExp(`aria-label="${label}で並べ替え"`), `練習試合の箱に無い「${label}」の列が出る`);
+      assert.doesNotMatch(box, />—</, '練習試合の成績に「—」の列が残っている');
+    } finally {
+      globalThis.window = prevWindow;
+    }
   }
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 画面の描画: OK（予告先発のローテ外の指名・確定のターン数・疲れの印 / 練習試合の申し込みの決まり / 昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 直近の本塁打に自軍の印が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
+  '■ 画面の描画: OK（予告先発のローテ外の指名・確定のターン数・疲れの印 / 練習試合の申し込みの決まり・結果の回ごとの得点と勝敗投手・載っている列だけ / 昇降格のお知らせで落ちない / 表示名で出す / 順位表を部ごとに分ける / 順位表に中継の色が付く / 直近の本塁打に自軍の印が付く / 締め切りを日本時間で出す / 進行をターンで出す / セットの下に名前を決める欄が出る / 方針・采配は2項目だけ / どの命令にも済んだときの文がある / トライアウトの注意の文を句点で区切る / 内訳と注意は獲得後の名簿の人数 / 最後の1人が任せる前の確認 / ホームのリーグの話題に件数の上限がある / 新球種の対象におすすめの印が付く / 初期セットの名簿に代表的な能力が並ぶ / 低い能力どうしも色で見分けられる）',
 );

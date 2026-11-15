@@ -400,18 +400,97 @@ export function ExhibitionPage({ view, busy, run, command }) {
 }
 
 function ExhibitionRecord({ view, ex, close }) {
-  const game = { ...ex.result, gameId: ex.id };
   return (
     <Panel title="練習試合の成績" close={close}>
+      <ExhibitionBox view={view} ex={ex} />
+    </Panel>
+  );
+}
+
+/**
+ * 練習試合の結果の中身（点・回ごとの得点・勝敗投手・得点経過・個人成績）。
+ * ⚠ 練習試合の箱（`server/exhibition.mjs` の `exhibitionBox`）は一部の項目しか残さないので、
+ *    個人成績は載っている列だけ出す（以前は列の多くが「—」だった）。回ごとの得点と勝敗投手は
+ *    箱にあるのに出していなかった
+ */
+export function ExhibitionBox({ view, ex }) {
+  const game = { ...ex.result, gameId: ex.id };
+  const d = game.decisions || {};
+  const decisions = [
+    ['勝', d.winningPitcher],
+    ['敗', d.losingPitcher],
+    ['S', d.savePitcher],
+  ].filter(([, p]) => p?.name);
+  return (
+    <>
       <p className="online-game-summary">
         <strong>
           <span title={teamLabel(game.away)}>{teamShort(game.away)}</span> {game.awayScore} – {game.homeScore}{' '}
           <span title={teamLabel(game.home)}>{teamShort(game.home)}</span>
         </strong>
       </p>
+      <LineScore game={game} />
+      {decisions.length > 0 && (
+        <p className="online-decisions" aria-label="勝敗投手">
+          {decisions.map(([mark, p]) => (
+            <span key={mark}>
+              <b>{mark}</b> {p.name}
+            </span>
+          ))}
+        </p>
+      )}
       <ScoringPlays game={game} />
-      <BoxScore game={game} ownTeam={view.teamName} />
-    </Panel>
+      <BoxScore game={game} ownTeam={view.teamName} knownOnly />
+    </>
+  );
+}
+
+/**
+ * 回ごとの得点（スコアボード）。9回に満たなくても9回まで枠を取り、後攻のやらなかった裏は「x」、
+ * サヨナラの回は「1x」（アプリの `lineScoreCells` と同じ書き方）
+ */
+function LineScore({ game }) {
+  const away = game.lineScore?.away || [];
+  const home = game.lineScore?.home || [];
+  if (!away.length) return null;
+  const innings = Math.max(9, away.length, home.length);
+  const top = Array.from({ length: innings }, (_, i) => (i < away.length ? String(away[i]) : ''));
+  const bottom = Array.from({ length: innings }, (_, i) =>
+    i < home.length
+      ? `${home[i]}${game.walkOff && i === home.length - 1 ? 'x' : ''}`
+      : i < away.length
+        ? 'x'
+        : '',
+  );
+  const sum = (list) => list.reduce((a, b) => a + (b || 0), 0);
+  return (
+    <table className="online-line-score" aria-label="回ごとの得点">
+      <thead>
+        <tr>
+          <th />
+          {top.map((_, i) => (
+            <th key={i}>{i + 1}</th>
+          ))}
+          <th>計</th>
+        </tr>
+      </thead>
+      <tbody>
+        {[
+          [game.away, top, sum(away)],
+          [game.home, bottom, sum(home)],
+        ].map(([team, cells, total]) => (
+          <tr key={team}>
+            <th title={teamLabel(team)}>{teamShort(team)}</th>
+            {cells.map((c, i) => (
+              <td key={i}>{c}</td>
+            ))}
+            <td>
+              <b>{total}</b>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
