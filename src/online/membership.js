@@ -173,8 +173,11 @@ export function applyProfile(league, { userId, teamName, playerName, comment, no
   if (comment !== undefined) {
     const { text, tooLong } = cleanText(comment, OWNER_COMMENT_MAX);
     requireOnline(!tooLong, `ひとことは${OWNER_COMMENT_MAX}字までです`, 400);
-    if (text) member.comment = { text, at: now, year: league.season?.year ?? null };
-    else delete member.comment;
+    // ⚠ **文が同じなら書いた日を変えない**。画面は球団名と一緒にひとことも送ってくるので、
+    //    球団名を変えただけで「開幕前の宣言」が今日書いたことになっていた
+    if (!text) delete member.comment;
+    else if (member.comment?.text !== text)
+      member.comment = { text, at: now, year: league.season?.year ?? null };
   }
   return {
     teamName: team.name,

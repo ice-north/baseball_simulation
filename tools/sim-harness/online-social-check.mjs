@@ -24,7 +24,7 @@ import { prepareDailyLineup, STARTER_SKIP_FATIGUE } from '../../server/dailyLine
 import { pruneTrades, touchPresence, forgetLastYearPlans, assertCanPlay } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
-import { applyJoin, nextMemberIndex } from '../../src/online/membership.js';
+import { applyJoin, applyProfile, nextMemberIndex } from '../../src/online/membership.js';
 import { pruneDepartedPicks, starterAvoidedText } from '../../server/starterPicks.mjs';
 import { openChallenge, respondChallenge } from '../../server/exhibition.mjs';
 import {
@@ -224,6 +224,17 @@ import {
   assert.throws(() => assertCanPlay({ status: 'paused', phase: null }, '練習試合はできません'), /進行が止まっている間は、練習試合/);
   assert.throws(() => assertCanPlay({ status: 'waiting', phase: { kind: 'camp' } }, 'x'), /手続きの間は/);
   assertCanPlay({ status: 'running', phase: null }, 'x');
+
+  // ひとこと: 球団名だけ変えたとき（画面はひとことも一緒に送る）、書いた日を変えない
+  {
+    const l = { season: { year: 1 }, teams: [{ name: 'A' }], members: [{ userId: 'a', teamName: 'A' }] };
+    applyProfile(l, { userId: 'a', comment: '今年こそ', now: '2026-04-01T00:00:00.000Z' });
+    l.season.year = 2;
+    applyProfile(l, { userId: 'a', teamName: '新しい名前', comment: '今年こそ', now: '2026-11-15T00:00:00.000Z' });
+    assert.deepEqual(l.members[0].comment, { text: '今年こそ', at: '2026-04-01T00:00:00.000Z', year: 1 }, '同じひとことの書いた日を変えた');
+    applyProfile(l, { userId: 'a', comment: '来年こそ', now: '2026-11-15T00:00:00.000Z' });
+    assert.deepEqual(l.members[0].comment, { text: '来年こそ', at: '2026-11-15T00:00:00.000Z', year: 2 });
+  }
 
   // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が
   // 残っている人と同じ種にならないこと（同じidの選手ができる）。名簿に入ったセットの選手のidからも数える
