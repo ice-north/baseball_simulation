@@ -14,28 +14,36 @@
 import { observedSeason, completeCoverage } from './recordedStats.mjs';
 
 /**
- * これから行う試合に**先発予定を重ねる**。
- *
- * ⚠ 並べ方（日付順・自球団を必ず含める）は `projection.upcomingGames` が正本。
- *    ここでは順番を変えず、先発だけ足す。並べ直すと出どころが2つになる。
- * ⚠ **予定であって確定ではない**。実際の先発は当日の疲労で入れ替わる
- *    （`prepareDailyLineup` が疲れた投手を外す）。画面にもそう書くこと。
- * ⚠ 同じ球団が続けて出るときは**ローテを回すこと**。毎回同じだと
- *    1人が全試合に先発する予定になる。
+ * 試合ごとの先発予定（`{ home: { player, mark }, away: { player, mark } }` の並び）。
+ * `withStarters` と、確定した先発の控え（`starterPicks.lockStarters`）が使う。
  */
-export function withStarters(games, teams, statsOf = null, picks = null) {
+export function starterSequence(games, teams, picks = null) {
   // 球団ごとの「次に投げるローテの位置」。⚠ 予告先発で指名した投手が投げると、ローテは
   //    その投手の次から回る（`dailyLineup.prepareDailyLineup`）ので、指名の後ろも同じく数える
   const cursor = {};
-  // 予告先発（`picks`）: `{ ownTeam, picksOf(team), lockedOf(game) }`。
+  // 予告先発（`picks`）: `{ ownTeam, picksOf(team), lockedOf(game), lockOf(team, game) }`。
   //   - 自球団の指名は確定前から出す（印は 'pick'、確定したら 'fixed'）
   //   - ほかの球団の指名は**確定してから**出す（印は 'fixed'）。確定前の指名を混ぜて数えると、
   //     その後ろの先発予定から指名が読めてしまう
+  //   - 確定したときに控えた先発（`lockOf`）があれば、それを出す（印は 'fixed'）。試合の日も
+  //     その投手が投げる。名簿に居ない・登録を外れたときは、試合の日と同じくローテの順に戻す
+  //     （指名も見ない）。ローテに居ない投手が投げたときは、ローテは進まない
   const starterOf = (name, game) => {
     const rotation = teams[name]?.pitchingRotation;
     const list = rotation?.starters || [];
     if (!list.length) return { player: null, mark: null };
     if (!(name in cursor)) cursor[name] = rotation.currentStarterIndex || 0;
+    const lock = picks?.lockOf?.(name, game);
+    if (lock) {
+      const held = teams[name].players.find((p) => p.id === lock.id);
+      if (held && held.isActive !== false && (held.position === 'pitcher' || list.includes(held.id))) {
+        if (list.includes(held.id)) cursor[name] = list.indexOf(held.id) + 1;
+        return { player: held, mark: 'fixed' };
+      }
+      const id = list[cursor[name] % list.length];
+      cursor[name] += 1;
+      return { player: teams[name].players.find((p) => p.id === id) || null, mark: null };
+    }
     const locked = !!picks?.lockedOf?.(game);
     const pick = picks?.picksOf?.(name)?.[game.id];
     const visible = pick != null && (name === picks?.ownTeam || locked) && list.includes(pick);
@@ -46,6 +54,21 @@ export function withStarters(games, teams, statsOf = null, picks = null) {
       mark: visible ? (locked ? 'fixed' : 'pick') : null,
     };
   };
+  return games.map((g) => ({ home: starterOf(g.home, g), away: starterOf(g.away, g) }));
+}
+
+/**
+ * これから行う試合に**先発予定を重ねる**。
+ *
+ * ⚠ 並べ方（日付順・自球団を必ず含める）は `projection.upcomingGames` が正本。
+ *    ここでは順番を変えず、先発だけ足す。並べ直すと出どころが2つになる。
+ * ⚠ **予定であって確定ではない**。実際の先発は当日の疲労で入れ替わる
+ *    （`prepareDailyLineup` が疲れた投手を外す）。画面にもそう書くこと。
+ * ⚠ 同じ球団が続けて出るときは**ローテを回すこと**。毎回同じだと
+ *    1人が全試合に先発する予定になる。
+ */
+export function withStarters(games, teams, statsOf = null, picks = null) {
+  const sequence = starterSequence(games, teams, picks);
   // ⚠ 投げる手と今季成績は `statsOf` を渡したときだけ付ける。渡さない呼び出し
   //    （試合結果の画面が使う `upcoming`）は名前だけのままにする——あちらは
   //    一覧に出すだけで、投影を重くする意味がない。
@@ -66,9 +89,8 @@ export function withStarters(games, teams, statsOf = null, picks = null) {
       era: outs > 0 ? ((pitching.earnedRuns || 0) * 27) / outs : null,
     };
   };
-  return games.map((g) => {
-    const home = starterOf(g.home, g);
-    const away = starterOf(g.away, g);
+  return games.map((g, i) => {
+    const { home, away } = sequence[i];
     return {
       ...g,
       homeStarter: home.player?.name || null,

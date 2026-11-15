@@ -125,6 +125,8 @@ import { cleanText, TRADE_NOTE_MAX } from '../src/online/social.js';
 import {
   pickFor,
   clearPlayedPicks,
+  lockStarters,
+  lockedStarterFor,
   pruneDepartedPicks,
   starterAvoidedText,
 } from './starterPicks.mjs';
@@ -2272,16 +2274,22 @@ function advanceOneDay(league, key, now) {
       (game) => !game.result,
     );
     const playingTeams = new Set(todays.flatMap((game) => [game.home, game.away]));
-    // 予告先発（人が指名した先発。`starterPicks.mjs`）。疲れていて使えなかった指名は後で知らせる
+    // 予告先発（人が指名した先発。`starterPicks.mjs`）。使えなかった指名は後で知らせる
+    // ⚠ 人の球団は**確定したときに控えた先発**で投げる（`lockStarters`。相手に見えた先発と同じにする）。
+    //    控えが無い試合（この作りの前に確定した試合）だけ、今の指名を見る
+    lockStarters(league, TEAMS_DATA);
     const pickReports = [];
     const restoreRotations = league.season.settings.teamNames
       .filter((name) => playingTeams.has(name))
       .map((name) => {
         const game = todays.find((g) => g.home === name || g.away === name);
-        const pick = game ? pickFor(league, name, game.id) : null;
+        const lock = game ? lockedStarterFor(league, name, game.id) : null;
+        const pick = lock ? lock.id : game ? pickFor(league, name, game.id) : null;
         const report = {};
-        if (pick != null) pickReports.push({ name, game, pick, report });
-        return prepareDailyLineup(TEAMS_DATA[name], name, { pick, report });
+        // ⚠ 知らせるのは指名したときだけ（ローテの順の投手が疲れて回るのは今までどおり黙って）
+        if (pick != null && (!lock || lock.picked))
+          pickReports.push({ name, game, pick, report, shownName: lock?.name });
+        return prepareDailyLineup(TEAMS_DATA[name], name, { pick, report, outside: !!lock });
       });
     // その日の采配（指導者の考え方）。⚠ 保存した設定は書き換えず、試合の後に戻す
     for (const name of league.season.settings.teamNames)
@@ -2302,13 +2310,13 @@ function advanceOneDay(league, key, now) {
     }
     // 節目の記録（通算100安打など）。記録（`league.records`）は試合の中で書かれている
     recordMilestones(league, played || [], oldDate);
-    for (const { name, game, pick, report } of pickReports) {
+    for (const { name, game, pick, report, shownName } of pickReports) {
       if (report.pick !== 'avoided') continue;
       const member = league.members.find((m) => m.teamName === name);
-      // ⚠ 名前はほかの球団からも探す（トレードで出た投手は自球団の名簿に居ない）
+      // ⚠ 名前は確定したときの控え、無ければほかの球団からも探す（トレードで出た投手は自球団の名簿に居ない）
       const pitcher = Object.values(TEAMS_DATA)
         .map((t) => t?.players?.find((p) => p.id === pick))
-        .find(Boolean);
+        .find(Boolean) || (shownName ? { name: shownName } : null);
       const foe = teamLabelIn(league, game.home === name ? game.away : game.home);
       pushInbox(
         league,
@@ -2348,6 +2356,8 @@ function advanceOneDay(league, key, now) {
     schedulePlayoffReplay(season);
     league.season = season;
     clearPlayedPicks(league);
+    // 日付が進んで確定の時刻を過ぎた試合の先発を控える（次の進行までにローテを並べ替えても変わらない）
+    lockStarters(league, TEAMS_DATA);
     const { month, day, year } = season.currentDate;
     generateBackgroundTournaments(season.currentDate);
     if (month === 8 && day >= 15 && !season._koshienDone) {

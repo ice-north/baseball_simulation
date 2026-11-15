@@ -12,11 +12,17 @@
 //
 // ⚠ 保存は `member.starterPicks`（試合の番号 → 選手id）。編成（`lineupSettings`）に入れないのは、
 //    古い編成の保存で指名が巻き戻らないようにするため。年度更新で消す（日程の番号が変わる）。
+// ⚠ **確定したときに見えていた先発を控える**（`member.lockedStarters`: 試合の番号 →
+//    `{ id, name, picked }`。`lockStarters`）。人の球団だけ。指名が無ければローテの次の投手。
+//    試合の日はその投手が投げる（名簿に居ない・登録を外れた・疲れているときだけいつもの決め方）。
+//    以前は確定の後でもローテを並べ替える・指名した投手をローテから外す・おるすばんから戻る、で
+//    投げる人が変わり、相手に見えた「予告先発」と違う投手が投げていた。CPU球団は今までどおり。
 // ============================================================
 import { requireOnline } from '../src/online/shared.js';
 import { STARTER_LOCK_TURNS, STARTER_PICK_GAMES } from '../src/online/social.js';
 import { effectiveStaffModes } from './coachEngine.mjs';
 import { assertCanPlay } from './social.mjs';
+import { starterSequence } from './leagueBoard.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const dayIndex = (d) => Math.round(Date.UTC(d.year, d.month - 1, d.day) / DAY_MS);
@@ -114,16 +120,64 @@ export function pickFor(league, teamName, gameId) {
   return activePicks(league, teamName)?.[gameId] ?? null;
 }
 
-/** 終わった試合の指名を消す（試合の日の後に呼ぶ） */
+/** 終わった試合の指名と、確定した先発の控えを消す（試合の日の後に呼ぶ） */
 export function clearPlayedPicks(league) {
   for (const member of league.members || []) {
-    if (!member.starterPicks) continue;
+    if (!member.starterPicks && !member.lockedStarters) continue;
     const open = new Set(
       ownOpenGames(league.season.schedule, member.teamName).map((g) => String(g.id)),
     );
-    for (const key of Object.keys(member.starterPicks))
-      if (!open.has(key)) delete member.starterPicks[key];
-    if (!Object.keys(member.starterPicks).length) delete member.starterPicks;
+    for (const field of ['starterPicks', 'lockedStarters']) {
+      if (!member[field]) continue;
+      for (const key of Object.keys(member[field])) if (!open.has(key)) delete member[field][key];
+      if (!Object.keys(member[field]).length) delete member[field];
+    }
+  }
+}
+
+/** 確定したときに控えた先発（`{ id, name, picked }`。無ければ null） */
+export function lockedStarterFor(league, teamName, gameId) {
+  const member = (league.members || []).find((m) => m.teamName === teamName);
+  return member?.lockedStarters?.[gameId] ?? null;
+}
+
+/**
+ * 先発予定の重ね方（`leagueBoard.withStarters`）。`ownTeam` の目から見る。
+ * ⚠ 投影と確定の控え（`lockStarters`）の両方がこれを使う（見えている先発と、控える先発を同じにする）
+ */
+export function starterContext(league, ownTeam) {
+  return {
+    ownTeam,
+    picksOf: (name) => activePicks(league, name),
+    lockedOf: (game) => !!game.date && starterLocked(league, game),
+    lockOf: (name, game) => lockedStarterFor(league, name, game.id),
+  };
+}
+
+/**
+ * 確定の時刻を過ぎた試合の先発を控える（人の球団だけ。進行の1日の前後に呼ぶ）。
+ * 控えるのは**その時に見えている先発**（指名、無ければローテの次の投手）。一度控えたら変えない
+ * （確定の後のローテの並べ替え・おるすばんの出入りで変わらない）。
+ * ⚠ `teams` は呼ぶ側が渡す（エンジンの中の `TEAMS_DATA`）
+ */
+export function lockStarters(league, teams) {
+  for (const member of league.members || []) {
+    if (!teams[member.teamName]) continue;
+    const locked = ownOpenGames(league.season.schedule, member.teamName).filter((g) =>
+      starterLocked(league, g),
+    );
+    if (locked.every((g) => member.lockedStarters?.[g.id])) continue;
+    const sequence = starterSequence(locked, teams, starterContext(league, member.teamName));
+    locked.forEach((game, i) => {
+      if (member.lockedStarters?.[game.id]) return;
+      const own = game.home === member.teamName ? sequence[i].home : sequence[i].away;
+      if (!own.player) return;
+      (member.lockedStarters ||= {})[game.id] = {
+        id: own.player.id,
+        name: own.player.name,
+        ...(own.mark ? { picked: true } : {}),
+      };
+    });
   }
 }
 

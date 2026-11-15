@@ -4,7 +4,8 @@
 //   A2 取引の記録（トレード）と読む窓口
 //   A3 最後に来た時刻・おるすばん（任せた扱い→来たら戻る）・管理者が球団をCPUに戻す
 //   A4 得点経過（試合の記録の箱に残り、点の合計が試合の点と合う）
-//   B1 予告先発（指名は確定まで本人だけ・確定後は変えられない・試合の日にその投手が投げる）
+//   B1 予告先発（指名は確定まで本人だけ・確定後は変えられない・試合の日にその投手が投げる・
+//      確定したときに見えた先発は、その後にローテを変えても変わらない）
 //   B4 練習試合（受けるとその場で1試合・成績・疲労・記録・順位に入らない・1日1試合）
 //   C1 オーナーのひとこと
 //
@@ -31,7 +32,12 @@ import {
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
 import { applyJoin, applyProfile, nextMemberIndex } from '../../src/online/membership.js';
-import { pruneDepartedPicks, starterAvoidedText } from '../../server/starterPicks.mjs';
+import {
+  pruneDepartedPicks,
+  starterAvoidedText,
+  lockStarters,
+  starterContext,
+} from '../../server/starterPicks.mjs';
 import { openChallenge, respondChallenge } from '../../server/exhibition.mjs';
 import {
   AWAY_DAYS,
@@ -165,6 +171,82 @@ import {
     assert.deepEqual(l.members[0].starterPicks, { 8: 2 }, '居なくなった投手の指名が残っている');
     pruneDepartedPicks(l, 'T', { players: [] });
     assert.equal(l.members[0].starterPicks, undefined);
+  }
+
+  // Q1 確定したときに見えていた先発を控え、試合の日はその投手が投げる。確定の後にローテを
+  // 並べ替えても・指名した投手をローテから外しても・指名が効かなくなっても（おるすばん）変わらない
+  {
+    const pitcherTeam = (name, ids) => ({
+      players: ids.map((id) => ({ id, name: `${name}${id}`, position: 'pitcher', fatigue: 0 })),
+      pitchingRotation: { starters: [...ids], currentStarterIndex: 0 },
+      lineupSettings: { battingOrder: [] },
+    });
+    const teams = { A: pitcherTeam('A', [1, 2, 3, 4, 5]), B: pitcherTeam('B', [11, 12, 13, 14, 15]), C: pitcherTeam('C', [21, 22, 23, 24, 25]) };
+    const schedule = [1, 2, 3, 4, 5].map((d) => ({ id: d, home: 'A', away: 'B', date: { year: 2026, month: 4, day: d } }));
+    const l = {
+      season: { currentDate: { year: 2026, month: 4, day: 1 }, schedule },
+      members: [
+        { userId: 'a', teamName: 'A', starterPicks: { 2: 4 } },
+        { userId: 'b', teamName: 'B' },
+      ],
+    };
+    // 試合1〜3（0〜2ターン前）が確定。A は試合2に4番手を指名。B は指名なし（ローテの順）
+    lockStarters(l, teams);
+    assert.deepEqual(
+      l.members[0].lockedStarters,
+      { 1: { id: 1, name: 'A1' }, 2: { id: 4, name: 'A4', picked: true }, 3: { id: 5, name: 'A5' } },
+      '確定したときに見えていた先発を控えていない',
+    );
+    assert.deepEqual(Object.values(l.members[1].lockedStarters).map((x) => x.id), [11, 12, 13]);
+    const shownToB = () => withStarters(schedule.slice(0, 3), teams, null, starterContext(l, 'B')).map((g) => [g.homeStarter, g.homeStarterMark]);
+    const before = shownToB();
+    assert.deepEqual(before, [['A1', 'fixed'], ['A4', 'fixed'], ['A5', 'fixed']], '相手に確定した先発が見えていない');
+    // 確定の後に A がローテを並べ替え、指名した投手をローテから外し、指名も効かなくなる（おるすばん）
+    teams.A.pitchingRotation.starters = [5, 3, 2, 1];
+    teams.A.pitchingRotation.currentStarterIndex = 0;
+    delete l.members[0].starterPicks;
+    lockStarters(l, teams);
+    assert.equal(l.members[0].lockedStarters[2].id, 4, '確定した先発の控えを書き換えた');
+    assert.deepEqual(shownToB(), before, '確定の後のローテの並べ替えで、相手に見える先発が変わった');
+    // 試合の日: ローテから外した投手でも、控えた先発が投げる。ローテの位置は進めない
+    const t = teams.A;
+    const report = {};
+    try {
+      prepareDailyLineup(structuredClone(t), 'A', { pick: 4, report, outside: true });
+    } catch {
+      // 打順の補完で落ちるのは名簿が投手だけだから（先発の決め方は済んでいる）
+    }
+    assert.equal(report.pick, 'used', '確定した先発がローテから外れたら投げない（相手に見えた先発と違う）');
+    // 名簿に居なくなった（トレード）なら、見える先発もローテの順に戻る（試合の日と同じ）
+    teams.A.players = teams.A.players.filter((p) => p.id !== 4);
+    assert.equal(shownToB()[1][1], undefined, '居なくなった投手を確定した先発として出している');
+    // 年度更新で控えも消す
+    forgetLastYearPlans(l);
+    assert.equal(l.members[0].lockedStarters, undefined, '年度が替わっても確定した先発の控えが残っている');
+  }
+  // ローテの外の投手を差し込んだ日は、試合の後にローテと位置を元に戻す（次の番の投手を飛ばさない）
+  {
+    const players = [1, 2, 3, 9].map((id) => ({ id, name: `p${id}`, position: 'pitcher', fatigue: 0 }));
+    const t = { players, pitchingRotation: { starters: [1, 2, 3], currentStarterIndex: 1 }, lineupSettings: { battingOrder: [] } };
+    const report = {};
+    let threw = false;
+    try {
+      prepareDailyLineup(t, 'T', { pick: 9, report, outside: true });
+    } catch {
+      threw = true;
+    }
+    assert.equal(report.pick, 'used');
+    assert.deepEqual(t.pitchingRotation.starters, [1, 9, 2, 3], 'ローテの今の位置に差し込んでいない');
+    assert.equal(t.pitchingRotation.currentStarterIndex, 1);
+    assert.ok(threw, '前提: 投手だけの名簿は打順が組めない');
+    const plain = { players: structuredClone(players), pitchingRotation: { starters: [1, 2, 3], currentStarterIndex: 1 }, lineupSettings: { battingOrder: [] } };
+    const r2 = {};
+    try {
+      prepareDailyLineup(plain, 'T', { pick: 9, report: r2 });
+    } catch {
+      // 同上
+    }
+    assert.deepEqual(r2, { pick: 'avoided', reason: 'rotation' }, '確定していない指名でローテの外の投手を投げさせた');
   }
 
   // 取り下げ: 選手が居なくなった提案・人が抜けた提案・年度更新
@@ -487,6 +569,7 @@ try {
   assert.equal(picked[`${ownSide}StarterMark`], 'pick', '自分の指名に印が無い');
   assert.equal(picked[`${ownSide}StarterInfo`]?.id, pickId, '指名した投手が先発予定に出ていない');
   // 確定するまで試合を進める → 確定の印、変えられない
+  let removedFromRotation = false;
   for (let i = 0; i < 20; i += 1) {
     const l = await live();
     const game = l.season.schedule.find((g) => g.id === open.id);
@@ -498,6 +581,30 @@ try {
         () => send('a', 'starterPick', { gameId: open.id, playerId: null }),
         /確定しています/,
         '確定した指名を外せた',
+      );
+      // Q1 確定の後に指名した投手をローテから外しても、確定した先発は変わらない（相手に見えたとおり投げる）
+      const cur = await live();
+      assert.equal(cur.members.find((m) => m.userId === 'a').lockedStarters?.[open.id]?.id, pickId, '確定した先発を控えていない');
+      // ⚠ 1度だけ外す（外した後の進行でもここを通る）
+      if (!removedFromRotation) {
+        removedFromRotation = true;
+        assert.ok(cur.game.teams[A].pitchingRotation.starters.includes(pickId), '前提: 指名した投手がローテに居る');
+        const base = JSON.parse(JSON.stringify(projectLineup(cur.game.teams[A])));
+        const edited = { ...structuredClone(base), starters: base.starters.filter((id) => id !== pickId) };
+        // 外した投手は先発の役割のままでは保存できない（救援の「おまかせ」に戻す）
+        if (edited.pitcherRoles) delete edited.pitcherRoles[pickId];
+        await send('a', 'lineup', { ...edited, baseLineup: base });
+        assert.ok(!(await live()).game.teams[A].pitchingRotation.starters.includes(pickId), '前提: ローテから外れた');
+      }
+      // 相手（B）の目から見た先発予定（ビューと同じ重ね方）
+      const now2 = await live();
+      const game = now2.season.schedule.find((g) => g.id === open.id);
+      const [seen] = withStarters([game], now2.game.teams, null, starterContext(now2, B));
+      assert.equal(seen[`${ownSide}StarterMark`], 'fixed', '確定した先発が相手に見えていない');
+      assert.equal(
+        seen[`${ownSide}Starter`],
+        now2.game.teams[A].players.find((p) => p.id === pickId).name,
+        '確定の後にローテを変えたら、相手に見える先発が変わった',
       );
     }
     await send('a', 'step');
@@ -511,6 +618,11 @@ try {
     starter?.id,
     pickId,
     `指名した投手が投げていない（投げたのは ${starter?.name}）`,
+  );
+  assert.ok(removedFromRotation, '前提: 確定の後にローテから外した');
+  assert.ok(
+    !done.game.teams[A].pitchingRotation.starters.includes(pickId),
+    'ローテの外から差し込んだ投手が、試合の後もローテに残っている',
   );
   assert.ok(!(done.members.find((m) => m.userId === 'a').starterPicks || {})[open.id], '終わった試合の指名が残っている');
 
