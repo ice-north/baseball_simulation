@@ -145,10 +145,15 @@ export function respondChallenge(league, userId, { id, action } = {}, now, play)
   ex.status = 'played';
   ex.playedAt = now;
   // ⚠ 結果を残すのはリーグ全体で決まった件数まで（古い順に捨てる）
+  // ⚠ **今日（日本時間）の試合は捨てない**。同じ相手と1日1試合の数え方（`playedOn`）が
+  //    この結果を見ているので、捨てると同じ組がその日のうちにもう1試合できてしまう
+  //    （その日だけ上限を超えることがある。翌日の試合で捨てられる）
+  const today = tokyoDay(now);
   const played = league.exhibitions.filter((e) => e.status === 'played');
   if (played.length > EXHIBITION_LIMIT) {
     const drops = new Set(
       played
+        .filter((e) => tokyoDay(e.playedAt) !== today)
         .sort((a, b) => String(a.playedAt).localeCompare(String(b.playedAt)))
         .slice(0, played.length - EXHIBITION_LIMIT),
     );

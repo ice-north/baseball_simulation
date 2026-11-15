@@ -26,11 +26,13 @@ import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
 import { applyJoin, nextMemberIndex } from '../../src/online/membership.js';
 import { pruneDepartedPicks, starterAvoidedText } from '../../server/starterPicks.mjs';
+import { openChallenge, respondChallenge } from '../../server/exhibition.mjs';
 import {
   AWAY_DAYS,
   OWNER_COMMENT_MAX,
   TRADE_NOTE_MAX,
   STARTER_LOCK_TURNS,
+  EXHIBITION_LIMIT,
   cleanText,
   isAwayAt,
   lastSeenLabel,
@@ -193,6 +195,29 @@ import {
     assert.equal(l.members[0].awayPlan, undefined, '年度が替わっても留守の前の編成の控えが残っている');
     assert.equal(l.members[0].starterPicks, undefined);
     assert.equal(l.members[0].away, true, '年度更新でおるすばんの印を消した');
+  }
+
+  // 練習試合の結果の上限（30件）で今日の試合を捨てない。捨てると同じ組がその日のうちにもう1試合できた
+  {
+    const today = '2026-11-15T03:00:00.000Z';
+    const members = Array.from({ length: 12 }, (_, i) => ({ userId: `u${i}`, teamName: `T${i}` }));
+    const l = { teams: members.map((m) => ({ name: m.teamName })), members, exhibitions: [] };
+    const pairs = [];
+    for (let a = 0; a < 12; a += 1) for (let b = a + 1; b < 12; b += 1) pairs.push([a, b]);
+    // 前の日の試合を1件、今日の試合を EXHIBITION_LIMIT + 1 件
+    let at = Date.parse(today) - 86400000;
+    for (const [i, [a, b]] of pairs.slice(0, EXHIBITION_LIMIT + 2).entries()) {
+      l.exhibitions.push({ id: `x${a}-${b}`, from: `u${a}`, fromTeam: `T${a}`, to: `u${b}`, toTeam: `T${b}`, status: 'offered' });
+      const when = new Date(i === 0 ? at : (at = Date.parse(today) - 7200000 + i * 1000)).toISOString();
+      respondChallenge(l, `u${b}`, { id: `x${a}-${b}`, action: 'accept' }, when, () => ({ homeScore: 1, awayScore: 0 }));
+    }
+    assert.ok(!l.exhibitions.some((e) => e.id === 'x0-1'), '前の日の結果を上限で捨てていない');
+    assert.ok(l.exhibitions.some((e) => e.id === 'x0-2'), '今日の試合の結果を上限で捨てた');
+    assert.throws(
+      () => openChallenge(l, 'u0', { toTeam: 'T2' }, today),
+      /1日/,
+      '上限で今日の結果を捨てたので、同じ組がその日のうちにもう1試合できる',
+    );
   }
 
   // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が
