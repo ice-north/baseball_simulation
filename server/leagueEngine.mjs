@@ -2497,10 +2497,10 @@ function advanceOneDay(league, key, now) {
     schedulePlayoffReplay(season);
     league.season = season;
     clearPlayedPicks(league);
-    // CPU球団が自分から動くトレード（CPU同士・人の球団への提案）。⚠ 乱数は引かない（`cpuTrades.mjs`）
-    runCpuTrades(league, now);
     const { month, day, year } = season.currentDate;
     generateBackgroundTournaments(season.currentDate);
+    // CPU球団が自分から動くトレード（CPU同士・人の球団への提案）。⚠ 乱数は引かない（`cpuTrades.mjs`）
+    runCpuTrades(league, now);
     if (month === 8 && day >= 15 && !season._koshienDone) {
       recordKoshien(league, simulateKoshien(season.year), season.currentDate);
       season._koshienDone = true;
