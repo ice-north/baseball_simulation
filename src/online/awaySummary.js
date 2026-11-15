@@ -8,15 +8,21 @@
 //    （`mobile/tools/expect-social.mjs` の答えと `SocialTest` が同じ入力で照らし合わせる）。
 // ============================================================
 
+import { compareLeagueStanding } from './pyramidLeague.js';
+
 const own = (view) => (view?.standings || []).find((s) => s.team === view.teamName) || null;
 const played = (row) => (row ? (row.wins || 0) + (row.losses || 0) + (row.draws || 0) : 0);
 
-/** 自球団の部の中の順位（1始まり）。順位表は全球団を通した並びなので、部で絞って数える */
+/**
+ * 自球団の部の中の順位（1始まり）。順位表は全球団を通した並びなので、部で絞って数える。
+ * ⚠ 並べ方は順位表の画面と同じ `compareLeagueStanding`（勝率→勝利数→球団名）。
+ *    サーバーの並びは同率のときの順が決まっておらず、まとめの「2部 1位」と表の順位が食い違っていた
+ */
 export function divisionRank(view) {
   const league = view?.teamLeagues?.[view.teamName];
-  const rows = (view?.standings || []).filter(
-    (s) => !league || view.teamLeagues?.[s.team] === league,
-  );
+  const rows = (view?.standings || [])
+    .filter((s) => !league || view.teamLeagues?.[s.team] === league)
+    .sort(compareLeagueStanding);
   const at = rows.findIndex((s) => s.team === view.teamName);
   return at >= 0 ? at + 1 : null;
 }

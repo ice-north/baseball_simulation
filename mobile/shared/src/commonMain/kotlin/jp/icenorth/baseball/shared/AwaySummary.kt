@@ -83,12 +83,21 @@ fun awayDigest(view: JsonObject): JsonObject = buildJsonObject {
     putJsonArray("inbox") { view.at("inbox").list().mapNotNull { it.obj() }.forEach { n -> n["id"]?.let { add(buildJsonObject { put("id", it) }) } } }
 }
 
-/** 自球団の部の中の順位（1始まり）。順位表は全球団を通した並びなので、部で絞って数える。Web 版 `divisionRank` */
+/**
+ * 自球団の部の中の順位（1始まり）。順位表は全球団を通した並びなので、部で絞って数える。Web 版 `divisionRank`
+ * ⚠ 並べ方は順位表と同じ勝率→勝利数→球団名（[LEAGUE_STANDING_ORDER]・Web の `compareLeagueStanding`）。
+ *    サーバーの並びは同率のときの順が決まっていない
+ */
 fun divisionRank(view: JsonObject): Int? {
     val team = view.at("teamName").str() ?: return null
     val league = view.at("teamLeagues", team).str()
     val rows = view.at("standings").list().mapNotNull { it.obj() }
         .filter { league.isNullOrEmpty() || view.at("teamLeagues", it.at("team").str() ?: "").str() == league }
+        .sortedWith(
+            compareByDescending<JsonObject> { it.at("winRate").num() ?: 0.0 }
+                .thenByDescending { it.at("wins").num() ?: 0.0 }
+                .thenBy { it.at("team").str().orEmpty() },
+        )
     val at = rows.indexOfFirst { it.at("team").str() == team }
     return if (at >= 0) at + 1 else null
 }
