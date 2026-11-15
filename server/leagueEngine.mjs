@@ -119,6 +119,7 @@ import {
   markAway,
   keepAwayPlan,
   teamLabelIn,
+  forgetLastYearPlans,
 } from './social.mjs';
 import { cleanText, TRADE_NOTE_MAX } from '../src/online/social.js';
 import { pickFor, clearPlayedPicks } from './starterPicks.mjs';
@@ -2044,13 +2045,14 @@ function resolvePhase(league, now) {
   // ⚠ **選手が動いた手続きの後は、成り立たなくなったトレードの提案を取り下げる**（退団・入団・
   //    引退・初期メンバーの入れ替え）。年度更新では全部取り下げる（能力も年齢も変わった後に
   //    古い条件で成立させない）。予告先発と申し込み中の練習試合も年度とともに消す
-  //    （日程を作り直すので、試合の番号が新しい年の別の試合を指してしまう）
+  //    （日程を作り直すので、試合の番号が新しい年の別の試合を指してしまう）。留守の前の編成の
+  //    控えも消す（年をまたいで戻すと、キャンプの後の編成が前の年の形に巻き戻る）
   if (kind === 'offseason') {
     pruneTrades(league, TEAMS_DATA, now, {
       all: true,
       reason: '年度が替わったため、取り下げられました',
     });
-    for (const member of league.members) delete member.starterPicks;
+    forgetLastYearPlans(league);
     clearOpenChallenges(league, now, '年度が替わったため、練習試合の申し込みは取り下げられました');
   } else pruneTrades(league, TEAMS_DATA, now);
   league.phase = null;

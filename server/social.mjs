@@ -230,6 +230,20 @@ export function restoreAwayPlan(league, member) {
 }
 
 /**
+ * 年度更新で、前の年の編成の控えと予告先発を消す（`resolvePhase` の offseason）。
+ * - 予告先発（`starterPicks`）: 日程を作り直すので、試合の番号が新しい年の別の試合を指してしまう
+ * - 留守の前の編成（`awayPlan`）: 年をまたいで戻すと、キャンプ・トライアウトの後の編成が
+ *   前の年の形に巻き戻る（選手がそろっていれば戻せてしまう）
+ * ⚠ おるすばんの印（`away`）は消さない。来ていないことは変わらない
+ */
+export function forgetLastYearPlans(league) {
+  for (const member of league.members || []) {
+    delete member.starterPicks;
+    delete member.awayPlan;
+  }
+}
+
+/**
  * 来ていない人を「おるすばん」にする。新しく留守になった人を返す（呼ぶ側が編成を作り直す）。
  * ⚠ 本人の任せ方（`member.staffModes`）は書き換えない。印（`member.away`）だけ立てる。
  *    効き方は `coachEngine.effectiveStaffModes` が読む。

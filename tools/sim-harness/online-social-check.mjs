@@ -21,7 +21,7 @@ import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { withStarters } from '../../server/leagueBoard.mjs';
 import { projectLineup } from '../../server/projection.mjs';
 import { prepareDailyLineup, STARTER_SKIP_FATIGUE } from '../../server/dailyLineup.mjs';
-import { pruneTrades, touchPresence } from '../../server/social.mjs';
+import { pruneTrades, touchPresence, forgetLastYearPlans } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
 import { applyJoin, nextMemberIndex } from '../../src/online/membership.js';
@@ -156,6 +156,15 @@ import {
     assert.equal(touchPresence(l, 'a', '2026-11-14T14:30:00.000Z'), false, '書いたばかりなのにまた書いた');
     assert.equal(touchPresence(l, 'a', '2026-11-14T15:30:00.000Z'), 'seen', '日付が替わったのに来た時刻を書いていない');
     assert.equal(lastSeenLabel(l.members[0].lastSeenAt, '2026-11-14T15:30:00.000Z'), '今日');
+  }
+
+  // 年度更新: 予告先発と、留守の前の編成の控えを消す（年をまたいで戻すと、キャンプの後の編成が前の年に巻き戻る）
+  {
+    const l = { members: [{ userId: 'a', away: true, awayPlan: { lineupSettings: {} }, starterPicks: { 3: 1 } }] };
+    forgetLastYearPlans(l);
+    assert.equal(l.members[0].awayPlan, undefined, '年度が替わっても留守の前の編成の控えが残っている');
+    assert.equal(l.members[0].starterPicks, undefined);
+    assert.equal(l.members[0].away, true, '年度更新でおるすばんの印を消した');
   }
 
   // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が
