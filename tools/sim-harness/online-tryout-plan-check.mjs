@@ -1,11 +1,10 @@
 // 初期編成・トライアウトの希望リストを組み立てる計算の検査。
 //
 // ⚠ 主目的は「**画面の操作が、サーバーの受け取れる提出を壊さないこと**」。
-//    提出は `{ count, rankedIds }` で、サーバーは
-//    「重複なし・全員が候補・rankedIds は count 以上」を求める。
+//    提出は `{ count, rankedIds, total }` で、サーバーは
+//    「重複なし・全員が候補・交渉は10人まで・rankedIds は count 以上」を求める
+//    （`total`・`count` が空き枠を超えるのは弾かず空き枠に切る）。
 //    画面側で1人でも落とすと、その場では気づかず**提出の瞬間だけ弾かれる**。
-// ⚠ 「控えへ」は**消さずに末尾へ回すこと**。消すと、他球団と競合したときに
-//    繰り上がる相手がいなくなり、人数を取りこぼす。
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -894,18 +893,36 @@ try {
       .sort((x, y) => overallScore(x) - overallScore(y))
       .slice(0, 4)
       .map((p) => p.id);
-    // 範囲の外の人数は弾く（正本はサーバー）
+    // 負の人数は弾く（正本はサーバー）
     assert.throws(
       () =>
         submitPhase(
           l,
           a.userId,
-          { phaseId: l.phase.id, plan: { count: 0, rankedIds: [], total: room + 1 }, ready: false },
+          { phaseId: l.phase.id, plan: { count: 0, rankedIds: [], total: -1 }, ready: false },
           '2026-10-26T15:00:00.000Z',
         ),
       /獲得する人数が不正です/,
-      '空き枠より多い人数が通った',
+      '負の人数が通った',
     );
+    // ⚠ 空き枠より多い人数は**弾かず空き枠に切る**。下書きを保存した後にトレードで名簿が
+    //    増えると保存済みの人数が空き枠を超える。弾くと締め切りで下書きが捨てられ、
+    //    交渉した選手が誰も取られなかった（監査 2026-11-14）
+    submitPhase(
+      l,
+      a.userId,
+      {
+        phaseId: l.phase.id,
+        plan: { count: 2, rankedIds: wish.slice(0, 2), total: room + 1 },
+        ready: false,
+      },
+      '2026-10-26T15:00:00.000Z',
+    );
+    {
+      const saved = l.phase.submissions[a.userId].plan;
+      assert.equal(saved.total, room, `空き枠を超えた人数が切られていない（${saved.total}）`);
+      assert.deepEqual(saved.rankedIds, wish.slice(0, 2), '交渉が消えた');
+    }
     const plans = {
       a: { count: 2, rankedIds: wish, total: 2 },
       b: { count: 0, rankedIds: [], total: 0 },
@@ -949,6 +966,50 @@ try {
       (n) => !l.members.some((m) => m.teamName === n),
     ))
       assert.equal(l.game.teams[name].players.length, ROSTER_LIMIT, `${name} の枠が埋まっていない`);
+  }
+
+  // --- 最低限を補うときは、交渉した選手から ---------------------------------
+  // ⚠ 捕手のいない球団が獲得0人で捕手と交渉したら、その捕手を取る（画面は「その位置の選手と
+  //    交渉してください」と勧める）。以前は補うときだけCPUの判断で別の捕手が入った（監査 2026-11-14）
+  {
+    const l = createLeague({
+      members: [{ userId: 'a' }, { userId: 'b' }],
+      now: '2026-10-26T15:00:00.000Z',
+    });
+    for (const m of l.members)
+      submitPhase(
+        l,
+        m.userId,
+        { phaseId: l.phase.id, plan: defaultPhasePlan(l, m.teamName), ready: true },
+        '2026-10-26T15:00:00.000Z',
+      );
+    loadLeagueWorld(l);
+    const [a, b] = l.members;
+    TEAMS_DATA[a.teamName].players = TEAMS_DATA[a.teamName].players.filter(
+      (p) => p.position !== 'catcher',
+    );
+    openPhaseSeeded(l, 'tryout', '2026-10-26T15:00:00.000Z', 20261099);
+    l.game = captureWorld();
+    // CPUが欲しがらない（いちばん低い）捕手と交渉する
+    const catcher = [...l.phase.candidates]
+      .filter((p) => p.position === 'catcher')
+      .sort((x, y) => overallScore(x) - overallScore(y))[0];
+    const plans = {
+      a: { count: 0, rankedIds: [catcher.id], total: 0 },
+      b: { count: 0, rankedIds: [], total: 0 },
+    };
+    for (const m of l.members)
+      submitPhase(
+        l,
+        m.userId,
+        { phaseId: l.phase.id, plan: plans[m.userId], ready: true },
+        '2026-10-26T15:00:00.000Z',
+      );
+    assert.notEqual(l.phase?.kind, 'tryout', 'トライアウトが解決していない');
+    const picks = l.tryoutResults[a.userId].picks;
+    assert.equal(picks.length, 1, `捕手1人だけ補うはずが${picks.length}人取った`);
+    assert.equal(picks[0].playerId, catcher.id, '交渉した捕手ではない捕手で補った');
+    assert.equal(picks[0].wish, 1, '交渉の1位として記録されていない');
   }
 
   // --- 画面の操作を何度繰り返しても、押したとおりに動くこと ---------------
