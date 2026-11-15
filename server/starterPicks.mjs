@@ -124,3 +124,30 @@ export function clearPlayedPicks(league) {
     if (!Object.keys(member.starterPicks).length) delete member.starterPicks;
   }
 }
+
+/**
+ * 名簿に居なくなった投手（トレード・退団）の指名を消す（`refreshTeamPlan` から。名簿が変わったとき）。
+ * ⚠ 残すと、指名した画面に居ない投手の名前が出たまま、試合の日に黙って外れる
+ */
+export function pruneDepartedPicks(league, teamName, team) {
+  const member = (league.members || []).find((m) => m.teamName === teamName);
+  if (!member?.starterPicks || !team) return;
+  const ids = new Set((team.players || []).map((p) => p.id));
+  for (const [key, id] of Object.entries(member.starterPicks)) if (!ids.has(id)) delete member.starterPicks[key];
+  if (!Object.keys(member.starterPicks).length) delete member.starterPicks;
+}
+
+const AVOIDED_REASONS = {
+  tired: '疲れが残っていた',
+  left: 'チームを離れた',
+  inactive: '登録を外れていた',
+  rotation: '先発ローテから外れていた',
+};
+
+/** 指名を使えなかったときのお知らせの文（`prepareDailyLineup` の `report.reason`） */
+export function starterAvoidedText(reason, name, foe) {
+  const known = AVOIDED_REASONS[reason] ? reason : 'tired';
+  return known === 'tired'
+    ? `予告先発の${name}は${AVOIDED_REASONS.tired}ため、${foe}戦の先発を回避しました`
+    : `予告先発の${name}は${AVOIDED_REASONS[known]}ため、${foe}戦はローテの順で先発を立てました`;
+}

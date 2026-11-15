@@ -122,7 +122,12 @@ import {
   forgetLastYearPlans,
 } from './social.mjs';
 import { cleanText, TRADE_NOTE_MAX } from '../src/online/social.js';
-import { pickFor, clearPlayedPicks } from './starterPicks.mjs';
+import {
+  pickFor,
+  clearPlayedPicks,
+  pruneDepartedPicks,
+  starterAvoidedText,
+} from './starterPicks.mjs';
 import {
   openChallenge as openChallengeIn,
   respondChallenge as respondChallengeIn,
@@ -1366,6 +1371,8 @@ function releasePlayers(teamName, ids, year) {
  */
 function refreshTeamPlan(league, name, { force = false } = {}) {
   const team = TEAMS_DATA[name];
+  // 名簿に居なくなった投手（トレード・退団）の予告先発を消す
+  pruneDepartedPicks(league, name, team);
   const member = league.members.find((m) => m.teamName === name);
   const human = !!member;
   // ⚠ 人の球団でも、スタメン・投手起用を**指導者に任せた**分野はCPUと同じく作り直す
@@ -2298,14 +2305,18 @@ function advanceOneDay(league, key, now) {
     for (const { name, game, pick, report } of pickReports) {
       if (report.pick !== 'avoided') continue;
       const member = league.members.find((m) => m.teamName === name);
-      const pitcher = TEAMS_DATA[name]?.players.find((p) => p.id === pick);
+      // ⚠ 名前はほかの球団からも探す（トレードで出た投手は自球団の名簿に居ない）
+      const pitcher = Object.values(TEAMS_DATA)
+        .map((t) => t?.players?.find((p) => p.id === pick))
+        .find(Boolean);
       const foe = teamLabelIn(league, game.home === name ? game.away : game.home);
       pushInbox(
         league,
         member?.userId,
         {
           type: 'starterAvoided',
-          text: `予告先発の${pitcher?.name || '投手'}は疲れが残っていたため、${foe}戦の先発を回避しました`,
+          // ⚠ 理由を分ける（以前は移籍・抹消・ローテから外れたときも「疲れが残っていた」と出ていた）
+          text: starterAvoidedText(report.reason, pitcher?.name || '投手', foe),
         },
         now,
       );

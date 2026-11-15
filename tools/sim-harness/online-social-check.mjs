@@ -25,6 +25,7 @@ import { pruneTrades, touchPresence, forgetLastYearPlans } from '../../server/so
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
 import { applyJoin, nextMemberIndex } from '../../src/online/membership.js';
+import { pruneDepartedPicks, starterAvoidedText } from '../../server/starterPicks.mjs';
 import {
   AWAY_DAYS,
   OWNER_COMMENT_MAX,
@@ -127,7 +128,34 @@ import {
       // 同上
     }
     assert.equal(report.pick, 'avoided', '疲れた投手の指名を使っている');
+    assert.equal(report.reason, 'tired');
     assert.equal(t.pitchingRotation.currentStarterIndex, 0, '使わなかった指名でローテを動かしている');
+  }
+  // 使えなかった理由を分ける（以前は移籍・抹消・ローテから外れても「疲れが残っていた」と出ていた）
+  for (const [reason, edit] of [
+    ['left', (t) => { t.players = t.players.filter((p) => p.id !== 4); t.pitchingRotation.starters = [1, 2, 3, 5]; }],
+    ['inactive', (t) => { t.players[3].isActive = false; }],
+    ['rotation', (t) => { t.pitchingRotation.starters = [1, 2, 3, 5]; }],
+  ]) {
+    const t = day(0);
+    edit(t);
+    const report = {};
+    try {
+      prepareDailyLineup(t, 'T', { pick: 4, report });
+    } catch {
+      // 同上
+    }
+    assert.deepEqual(report, { pick: 'avoided', reason }, `使えなかった指名の理由がちがう（${reason}）`);
+    assert.doesNotMatch(starterAvoidedText(reason, 'p4', 'B'), /疲れ/, `疲れていないのに「疲れ」と知らせる（${reason}）`);
+  }
+  assert.match(starterAvoidedText('tired', 'p4', 'B'), /p4は疲れが残っていたため、B戦の先発を回避しました/);
+  // 名簿に居なくなった投手の指名は消す（トレード・退団の後の `refreshTeamPlan`）
+  {
+    const l = { members: [{ userId: 'a', teamName: 'T', starterPicks: { 7: 4, 8: 2 } }] };
+    pruneDepartedPicks(l, 'T', { players: [{ id: 2 }] });
+    assert.deepEqual(l.members[0].starterPicks, { 8: 2 }, '居なくなった投手の指名が残っている');
+    pruneDepartedPicks(l, 'T', { players: [] });
+    assert.equal(l.members[0].starterPicks, undefined);
   }
 
   // 取り下げ: 選手が居なくなった提案・人が抜けた提案・年度更新
