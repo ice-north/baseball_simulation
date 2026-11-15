@@ -382,6 +382,8 @@ class AppViewModel internal constructor(
     /**
      * アプリに戻ってきた（MainActivity の onResume）。来たことを知らせ、留守中のまとめを用意して読み直す。
      * ⚠ 来たことは10分に1回まで（サーバーも3時間に1回しか書かない）。失敗しても黙って次に回す
+     * ⚠ おるすばんが解けた（返事の `returned`）ら、もう一度読む。一緒に走らせた読み直しは解ける前のビューを
+     *    読んでいることがあり、そのままだと自分が「おるすばん」のまま見える
      */
     fun resumed() {
         startVisit()
@@ -392,7 +394,8 @@ class AppViewModel internal constructor(
             val epoch = sessionEpoch
             viewModelScope.launch {
                 try {
-                    authed(current, epoch) { api.presence(it) }
+                    val returned = authed(current, epoch) { api.presence(it) }
+                    if (returned && epoch == sessionEpoch) reload(quiet = true, wait = true)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (ignored: Exception) {
@@ -519,8 +522,9 @@ class AppViewModel internal constructor(
     /**
      * 最新のビューを読み直す。`quiet` は画面を開いている間の自動の読み直し（届いた提案に気づくため）で、
      * 保存の最中は読まず、通信の失敗も出さない（電波の悪い所で失敗の知らせが続かないように）。
+     * `wait` は走っている読み直しが終わるのを待ってからもう一度読む（引っ張って更新と同じ。既定は引っ張ったときだけ）。
      */
-    fun reload(pull: Boolean = false, quiet: Boolean = false) {
+    fun reload(pull: Boolean = false, quiet: Boolean = false, wait: Boolean = pull) {
         val current = auth ?: return
         val epoch = sessionEpoch
         val readEpoch = viewRequestEpoch
@@ -530,7 +534,7 @@ class AppViewModel internal constructor(
         //    終わるのを待ってから、もう一度読む。取り消さないのは、トークンの更新の途中で捨てると
         //    入れ替わった更新トークンを受け取りそこね、次の更新で締め出されるため
         val previous = reloadJob?.takeIf { it.isActive }
-        if (previous != null && !pull) return
+        if (previous != null && !wait) return
         if (pull) {
             refreshing = true
             checkLatestApp()
@@ -780,7 +784,9 @@ class AppViewModel internal constructor(
             refreshToken = result.refreshToken ?: refreshToken,
             expiresAt = result.expiresAt,
         )
-        store.auth = next
+        // ⚠ 書き終わるまで待つ（更新トークンは1回きり。apply のまま止まると次の起動で古いのを使ってしまう）。
+        //    裏の確認を休ませていた印（SessionStore.authBroken）もここで下ろす
+        store.commitAuth(next)
         auth = next
         return next
     }

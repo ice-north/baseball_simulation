@@ -37,6 +37,7 @@ import {
   takeBackCamp,
   CAMP_ROUNDS,
 } from '../../server/leagueEngine.mjs';
+import { touchPresence } from '../../server/social.mjs';
 import {
   staffOf,
   tryoutContextFor,
@@ -404,6 +405,9 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
       continue;
     }
     now = new Date(now.getTime() + 4 * 3600000);
+    // ⚠ 2人とも毎日来ている扱いにする（参加した人には来た時刻が入るので、来ないまま3日進めると
+    //    おるすばん＝全部を指導者に任せた扱いになり、手続きが1人の提出で済んでしまう）
+    for (const m of l.members) touchPresence(l, m.userId, iso());
     advanceLeagueDay(l, `coach:${days}`, iso());
     days++;
   }

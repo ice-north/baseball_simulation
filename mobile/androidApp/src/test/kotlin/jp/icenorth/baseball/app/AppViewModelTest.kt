@@ -304,6 +304,77 @@ class AppViewModelTest {
         assertEquals(2, model.view?.revision)
     }
 
+    /** 画面が更新できたら、裏の確認を休ませていた印（authBroken）を下ろし、新しい更新トークンを書き終えて残す */
+    @Test fun refreshInTheAppClearsTheWorkersBrokenMark() {
+        create { action ->
+            when (action) {
+                "login" -> AUTH_EXPIRED
+                "view" -> VIEW_1
+                "refresh" -> """{"accessToken":"renewed","refreshToken":"new-refresh","expiresAt":9999999999999}"""
+                else -> "{}"
+            }
+        }
+        login()
+        SessionStore(app).authBroken = true
+        model.reload(pull = true)
+        until { model.auth?.accessToken == "renewed" && !model.refreshing }
+        assertFalse(SessionStore(app).authBroken)
+        assertEquals("new-refresh", SessionStore(app).auth?.refreshToken)
+    }
+
+    /**
+     * 戻ってきたらおるすばんが解けた（presence の返事が returned: true）。一緒に走らせた読み直しは
+     * 解ける前のビューを読んでいたので、もう一度読む（自分が「おるすばん」のまま見えないように）
+     */
+    @Test fun presenceThatEndedAwayReadsTheViewAgain() {
+        val reads = java.util.concurrent.atomic.AtomicInteger()
+        val returned = java.util.concurrent.atomic.AtomicBoolean(false)
+        val secondRead = CompletableDeferred<Unit>()
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> {
+                    val body = if (returned.get()) VIEW_2 else VIEW_1
+                    if (reads.incrementAndGet() == 2) secondRead.complete(Unit)
+                    body
+                }
+                "presence" -> {
+                    // 戻ってきたときの読み直しが、解ける前のビューを読み終えてから解く
+                    secondRead.await()
+                    returned.set(true)
+                    """{"ok":true,"returned":true}"""
+                }
+                else -> "{}"
+            }
+        }
+        login()
+        model.resumed()
+        until { model.view?.revision == 2 && !model.refreshing }
+        assertEquals(3, reads.get())
+    }
+
+    /** 古いサーバー（returned が無い）・ただ最終ログインを書いただけなら、読み直しを足さない */
+    @Test fun presenceWithoutReturnedDoesNotReadAgain() {
+        val reads = java.util.concurrent.atomic.AtomicInteger()
+        val presenced = CompletableDeferred<Unit>()
+        create { action ->
+            when (action) {
+                "login" -> AUTH
+                "view" -> {
+                    reads.incrementAndGet()
+                    VIEW_1
+                }
+                "presence" -> """{"ok":true}""".also { presenced.complete(Unit) }
+                else -> "{}"
+            }
+        }
+        login()
+        model.resumed()
+        until { presenced.isCompleted && reads.get() == 2 && !model.refreshing }
+        idle()
+        assertEquals(2, reads.get())
+    }
+
     @Test fun responseFromLoggedOutUserCannotFillTheNextUsersReadCache() {
         val readStarted = CompletableDeferred<Unit>()
         val releaseRead = CompletableDeferred<Unit>()

@@ -46,15 +46,11 @@ import { STRENGTH_GAP_LIMIT } from '../src/online/tradeSearch.js';
 import { TRADE_FACTOR_LIMIT, tradeEyeNote } from '../src/online/coaches.js';
 import {
   tokyoDay,
+  INBOX_LIMIT,
   STARTER_LOCK_TURNS,
   STARTER_PICK_GAMES,
 } from '../src/online/social.js';
-import {
-  activePicks,
-  canPickStarters,
-  ownOpenGames,
-  starterLocked,
-} from './starterPicks.mjs';
+import { canPickStarters, starterContext } from './starterPicks.mjs';
 import { exhibitionsView } from './exhibition.mjs';
 
 /**
@@ -443,11 +439,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   };
   const phase = l.phase;
   // 予告先発の重ね方。自球団の指名は確定前から、ほかの球団の指名は確定してから出す
-  const pickContext = {
-    ownTeam: member.teamName,
-    picksOf: (name) => activePicks(l, name),
-    lockedOf: (game) => !!game.date && starterLocked(l, game),
-  };
+  // ⚠ 確定したときに控えた先発（`lockStarters`）も重ねる。試合の日はその投手が投げる
+  const pickContext = starterContext(l, member.teamName);
   // 球団ごとのレギュラーシーズンの残り試合（ペースとマジックで共用。日程を2回なめない）
   const left = remainingGames(l.season.schedule);
   return {
@@ -715,7 +708,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     history: l.history,
     notices: l.notices.slice(0, 4),
     // あなたへのお知らせ（トレードの返事・取り下げ、練習試合、予告先発の回避、おるすばん）
-    inbox: (member.inbox || []).slice(0, 10),
+    // ⚠ 残している件数（`INBOX_LIMIT`）を全部送る。以前は10件に切っていて、残した後ろ半分が読めなかった
+    inbox: (member.inbox || []).slice(0, INBOX_LIMIT),
     // 取引の記録の最近のもの（全部は `transactions` で読む）
     recentTransactions: (l.transactions || []).slice(0, 5),
     // 練習試合（申し込み中と、最近の結果）

@@ -149,7 +149,28 @@ function RequestState({ result }) {
 }
 // スマホで1ページに出す人数。⚠ PC はページを分けない（下記）
 const COMPACT_PAGE_SIZE = 6;
-export function BoxScore({ game, ownTeam }) {
+/**
+ * 記録に載っている項目だけの区分（`knownOnly`）。練習試合の箱は一部の項目しか残さないので、
+ * そのまま出すと列の多くが「—」になっていた。どの選手にも無い項目の列を外し、空になった区分も外す
+ */
+function knownGroups(game) {
+  const has = { batting: new Set(), pitching: new Set() };
+  for (const rows of Object.values(game.teams || {}))
+    for (const p of rows || [])
+      for (const category of ['batting', 'pitching'])
+        for (const [key, value] of Object.entries(p[category] || {}))
+          if (value != null) has[category].add(key);
+  return Object.fromEntries(
+    Object.entries(GROUPS).map(([category, groups]) => [
+      category,
+      groups
+        .map(([id, label, columns]) => [id, label, columns.filter(([key]) => has[category].has(key))])
+        .filter(([, , columns]) => columns.length),
+    ]),
+  );
+}
+export function BoxScore({ game, ownTeam, knownOnly = false }) {
+  const groups = knownOnly ? knownGroups(game) : GROUPS;
   // ⚠ **PC はページを分けず全員を出す**（小窓の中を縦に送る）。以前は12人で区切っていて、
   //    1試合に出た打者は13〜16人いるので毎回2ページ目ができ、ページ送りは表の下
   //    （1280×800 では小窓の外）にあって、残りの数人が見えないままになっていた
@@ -177,13 +198,13 @@ export function BoxScore({ game, ownTeam }) {
     [sort, setSort] = useState(null);
   const overviewColumns = [
     ...new Map(
-      GROUPS[category].flatMap((g) => g[2]).map((c) => [c[0], c]),
+      groups[category].flatMap((g) => g[2]).map((c) => [c[0], c]),
     ).values(),
   ];
   const group =
     wide && groupId === 'overview'
       ? ['overview', '主要成績一覧', overviewColumns]
-      : GROUPS[category].find(([id]) => id === groupId) || GROUPS[category][0];
+      : groups[category].find(([id]) => id === groupId) || groups[category][0];
   const rows = [...(game.teams?.[team] || [])].filter((p) =>
     category === 'batting'
       ? (p.batting?.plateAppearances ||
@@ -248,7 +269,7 @@ export function BoxScore({ game, ownTeam }) {
               ))}
             </div>
             <div className="online-segments">
-              {[['overview', '主要成績'], ...GROUPS[category]].map(([id, label]) => (
+              {[['overview', '主要成績'], ...groups[category]].map(([id, label]) => (
                 <button
                   key={id}
                   aria-pressed={group[0] === id}
@@ -275,8 +296,8 @@ export function BoxScore({ game, ownTeam }) {
               setSort(null);
             }}
           >
-            {Object.entries(GROUPS).flatMap(([c, groups]) =>
-              groups.map(([id, label]) => (
+            {Object.entries(groups).flatMap(([c, list]) =>
+              list.map(([id, label]) => (
                 <option key={`${c}:${id}`} value={`${c}:${id}`}>
                   {label}
                 </option>
@@ -412,8 +433,14 @@ function GameRecord({ id, year, ownTeam, close }) {
           ) : game.teams ? (
             <>
               {/* 得点経過（記録を取り始めた後の試合だけ。古い試合には無い）。
-                  スマホは小窓を縦に収めるため出さず、得点の場面は「試合経過」で追う */}
-              {!compact && <ScoringPlays game={game} />}
+                  スマホは小窓を縦に収めるため、「試合経過」（リプレイ）がある試合では出さず
+                  そちらで追う。⚠ 本番はリプレイを残さない（ONLINE_RECORD_REPLAY）ので、
+                  無い試合では畳んで出す（以前はスマホで得点経過を見る手段が無かった） */}
+              {compact ? (
+                !(game.replay?.frames?.length > 0) && <ScoringPlays game={game} folded />
+              ) : (
+                <ScoringPlays game={game} />
+              )}
               <BoxScore game={game} ownTeam={ownTeam} />
             </>
           ) : (

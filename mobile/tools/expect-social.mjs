@@ -65,8 +65,11 @@ const after = (edit) => {
   return v;
 };
 const own = (v) => v.standings.find((s) => s.team === v.teamName);
-const resort = (v) =>
-  v.standings.sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+// サーバーの並び（勝率→勝利数。同率の順は決まっていない）。勝率も数え直す
+const resort = (v) => {
+  for (const s of v.standings) s.winRate = s.wins + s.losses > 0 ? s.wins / (s.wins + s.losses) : 0;
+  v.standings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+};
 const milestone = (v, extra) => ({
   year: v.year,
   playerId: roster[0].id,
@@ -128,6 +131,22 @@ const cases = {
     }),
   },
   newYear: { before, after: after((v) => (v.year += 1)) },
+  // 同率の順位は球団名の順（順位表の画面と同じ `compareLeagueStanding`）。サーバーの並びでは
+  // 自球団が同率の組の後ろに来ても、名前の順で前なら上の順位と数える
+  tie: {
+    before,
+    after: after((v) => {
+      const league = v.teamLeagues[v.teamName];
+      for (const s of v.standings)
+        if (v.teamLeagues[s.team] === league) Object.assign(s, { wins: 3, losses: 2 });
+      resort(v);
+      // 自球団を同率の組の最後へ（名前の順では前の方）
+      const mine = v.standings.splice(v.standings.indexOf(own(v)), 1)[0];
+      const last = v.standings.findLastIndex((s) => v.teamLeagues[s.team] === league);
+      v.standings.splice(last + 1, 0, mine);
+      Object.assign(v, { trades: before.trades, exhibitions: before.exhibitions, inbox: before.inbox });
+    }),
+  },
   noDivision: {
     before: (() => {
       const v = clone(before);

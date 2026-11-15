@@ -6,8 +6,11 @@ package jp.icenorth.baseball.shared
  * アプリが裏で15分ごとにビューを読み、自球団の直近の試合（`recentGames`）に
  * **前に見た覚えの無い試合**があれば知らせる。
  *
- * ⚠ 「見た」の印は**直近の試合の鍵の集まり**で持つ（[resultKeys]）。毎回いまの5試合に置き換えるので、
- *    窓から外れた古い試合は気にしなくてよい。アプリを開いて画面で見た試合も同じ印に入れる（二重に知らせない）。
+ * ⚠ 印は**直近の試合の鍵の集まり**で持つ（[resultKeys]）。「アプリで見た」（seenResults）は画面に出したビューの
+ *    いまの5試合に置き換える。「知らせ終えた」（notifiedResults）は、裏の確認（ResultWorker）がいまの5試合に置き換え、
+ *    画面（AppViewModel.markResultsSeen）は**足すだけ**にする（手元のビューが裏で読んだものより古いことがあり、
+ *    置き換えると同じ試合をもう一度鳴らすため）。足した分は30件を超えたらいまの5試合に切る。
+ *    窓から外れた古い試合は印に残っていても害はない（もう直近に出てこない）。
  * ⚠ 印がまだ無い（入れた直後・ログインし直した直後）ときは知らせずに印だけ付ける。今季の試合をまとめて知らせないため。
  */
 data class ResultNotice(val title: String, val body: String, val games: Int)
@@ -21,13 +24,22 @@ fun resultKeys(view: LeagueView): Set<String> =
 
 /**
  * 知らせる中身。新しい試合が無い・印がまだ無いときは null。
+ * [quickSeen]（速報で見た試合の印）を渡すと、速報でまだ見ていない試合のときは題と本文に結果を書かない。
  * 新しい試合が2つ以上（電波が無かった間に進んだなど）なら1つの通知にまとめる。
  */
-fun resultNotice(view: LeagueView, seen: Set<String>?): ResultNotice? {
+fun resultNotice(view: LeagueView, seen: Set<String>?, quickSeen: Set<String>? = null): ResultNotice? {
     if (seen == null) return null
     val team = view.teamName ?: return null
     val fresh = view.recentGames.filter { it.homeScore != null && it.awayScore != null && it.noticeKey() !in seen }
     if (fresh.isEmpty()) return null
+    // 速報でまだ見ていない試合があれば、結果を書かない（ホームの速報は押して見るまで伏せる作り。いしだの決定 2026-11-15）
+    if (quickSeen != null && fresh.any { it.lineScore != null && quickKey(view, it) !in quickSeen }) {
+        val what = if (fresh.size == 1) {
+            val g = fresh.single()
+            "${view.teamShort(if (g.home == team) g.away else g.home)}戦"
+        } else "${fresh.size}試合"
+        return ResultNotice("試合が終わりました", "${what}の結果が届いています。アプリの速報で見られます", fresh.size)
+    }
     val place = placeText(view, team)
     if (fresh.size == 1) {
         val g = fresh.single()

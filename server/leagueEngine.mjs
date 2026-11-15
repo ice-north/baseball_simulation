@@ -119,9 +119,17 @@ import {
   markAway,
   keepAwayPlan,
   teamLabelIn,
+  forgetLastYearPlans,
 } from './social.mjs';
 import { cleanText, TRADE_NOTE_MAX } from '../src/online/social.js';
-import { pickFor, clearPlayedPicks } from './starterPicks.mjs';
+import {
+  pickFor,
+  clearPlayedPicks,
+  lockStarters,
+  lockedStarterFor,
+  pruneDepartedPicks,
+  starterAvoidedText,
+} from './starterPicks.mjs';
 import {
   openChallenge as openChallengeIn,
   respondChallenge as respondChallengeIn,
@@ -997,6 +1005,8 @@ export function createLeague({
       userId: m.userId,
       label: m.label || `プレイヤー${i + 1}`,
       teamName: order[i].name,
+      // ⚠ 来た時刻を入れる（無いと来なくなってもおるすばんにならない。`isAwayAt`）
+      lastSeenAt: now,
     })),
     history: [],
     notices: [],
@@ -1363,6 +1373,8 @@ function releasePlayers(teamName, ids, year) {
  */
 function refreshTeamPlan(league, name, { force = false } = {}) {
   const team = TEAMS_DATA[name];
+  // 名簿に居なくなった投手（トレード・退団）の予告先発を消す
+  pruneDepartedPicks(league, name, team);
   const member = league.members.find((m) => m.teamName === name);
   const human = !!member;
   // ⚠ 人の球団でも、スタメン・投手起用を**指導者に任せた**分野はCPUと同じく作り直す
@@ -2042,13 +2054,14 @@ function resolvePhase(league, now) {
   // ⚠ **選手が動いた手続きの後は、成り立たなくなったトレードの提案を取り下げる**（退団・入団・
   //    引退・初期メンバーの入れ替え）。年度更新では全部取り下げる（能力も年齢も変わった後に
   //    古い条件で成立させない）。予告先発と申し込み中の練習試合も年度とともに消す
-  //    （日程を作り直すので、試合の番号が新しい年の別の試合を指してしまう）
+  //    （日程を作り直すので、試合の番号が新しい年の別の試合を指してしまう）。留守の前の編成の
+  //    控えも消す（年をまたいで戻すと、キャンプの後の編成が前の年の形に巻き戻る）
   if (kind === 'offseason') {
     pruneTrades(league, TEAMS_DATA, now, {
       all: true,
       reason: '年度が替わったため、取り下げられました',
     });
-    for (const member of league.members) delete member.starterPicks;
+    forgetLastYearPlans(league);
     clearOpenChallenges(league, now, '年度が替わったため、練習試合の申し込みは取り下げられました');
   } else pruneTrades(league, TEAMS_DATA, now);
   league.phase = null;
@@ -2261,16 +2274,22 @@ function advanceOneDay(league, key, now) {
       (game) => !game.result,
     );
     const playingTeams = new Set(todays.flatMap((game) => [game.home, game.away]));
-    // 予告先発（人が指名した先発。`starterPicks.mjs`）。疲れていて使えなかった指名は後で知らせる
+    // 予告先発（人が指名した先発。`starterPicks.mjs`）。使えなかった指名は後で知らせる
+    // ⚠ 人の球団は**確定したときに控えた先発**で投げる（`lockStarters`。相手に見えた先発と同じにする）。
+    //    控えが無い試合（この作りの前に確定した試合）だけ、今の指名を見る
+    lockStarters(league, TEAMS_DATA);
     const pickReports = [];
     const restoreRotations = league.season.settings.teamNames
       .filter((name) => playingTeams.has(name))
       .map((name) => {
         const game = todays.find((g) => g.home === name || g.away === name);
-        const pick = game ? pickFor(league, name, game.id) : null;
+        const lock = game ? lockedStarterFor(league, name, game.id) : null;
+        const pick = lock ? lock.id : game ? pickFor(league, name, game.id) : null;
         const report = {};
-        if (pick != null) pickReports.push({ name, game, pick, report });
-        return prepareDailyLineup(TEAMS_DATA[name], name, { pick, report });
+        // ⚠ 知らせるのは指名したときだけ（ローテの順の投手が疲れて回るのは今までどおり黙って）
+        if (pick != null && (!lock || lock.picked))
+          pickReports.push({ name, game, pick, report, shownName: lock?.name });
+        return prepareDailyLineup(TEAMS_DATA[name], name, { pick, report, outside: !!lock });
       });
     // その日の采配（指導者の考え方）。⚠ 保存した設定は書き換えず、試合の後に戻す
     for (const name of league.season.settings.teamNames)
@@ -2291,17 +2310,21 @@ function advanceOneDay(league, key, now) {
     }
     // 節目の記録（通算100安打など）。記録（`league.records`）は試合の中で書かれている
     recordMilestones(league, played || [], oldDate);
-    for (const { name, game, pick, report } of pickReports) {
+    for (const { name, game, pick, report, shownName } of pickReports) {
       if (report.pick !== 'avoided') continue;
       const member = league.members.find((m) => m.teamName === name);
-      const pitcher = TEAMS_DATA[name]?.players.find((p) => p.id === pick);
+      // ⚠ 名前は確定したときの控え、無ければほかの球団からも探す（トレードで出た投手は自球団の名簿に居ない）
+      const pitcher = Object.values(TEAMS_DATA)
+        .map((t) => t?.players?.find((p) => p.id === pick))
+        .find(Boolean) || (shownName ? { name: shownName } : null);
       const foe = teamLabelIn(league, game.home === name ? game.away : game.home);
       pushInbox(
         league,
         member?.userId,
         {
           type: 'starterAvoided',
-          text: `予告先発の${pitcher?.name || '投手'}は疲れが残っていたため、${foe}戦の先発を回避しました`,
+          // ⚠ 理由を分ける（以前は移籍・抹消・ローテから外れたときも「疲れが残っていた」と出ていた）
+          text: starterAvoidedText(report.reason, pitcher?.name || '投手', foe),
         },
         now,
       );
@@ -2333,6 +2356,8 @@ function advanceOneDay(league, key, now) {
     schedulePlayoffReplay(season);
     league.season = season;
     clearPlayedPicks(league);
+    // 日付が進んで確定の時刻を過ぎた試合の先発を控える（次の進行までにローテを並べ替えても変わらない）
+    lockStarters(league, TEAMS_DATA);
     const { month, day, year } = season.currentDate;
     generateBackgroundTournaments(season.currentDate);
     if (month === 8 && day >= 15 && !season._koshienDone) {

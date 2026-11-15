@@ -1,5 +1,6 @@
 import { generateRosterPacks, LEGACY_PACK_STYLE } from './rosterPack.js';
 import { createCoaches, upgradeCoach } from './coaches.js';
+import { nextMemberIndex } from './membership.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -198,6 +199,9 @@ export const MIGRATIONS = [
       //    （過去のトレードは選手の経歴 `careerHistory` にしか残っていない）
       league.transactions ??= [];
       league.exhibitions ??= [];
+      // ⚠ 参加の通し番号（セットの種）。無いと、球団をCPUに戻した後に入った人が
+      //    残っている人と同じ種になる（`nextMemberIndex`。版13のリーグは参加のときにも数え直す）
+      league.memberSeq ??= nextMemberIndex(league);
       for (const member of league.members || []) {
         member.inbox ??= [];
         // ⚠ **来た時刻の無い人は今の時刻にする**。無いままでも留守にはしない作り（`isAwayAt`）だが、

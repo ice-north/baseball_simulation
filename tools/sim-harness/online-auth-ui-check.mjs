@@ -382,7 +382,7 @@ try {
   }
 
   // 認証済みで開く画面（ビューの答えと、残したビューを決められる）
-  const plainPage = async ({ respond, saved = null }) => {
+  const plainPage = async ({ respond, saved = null, handle = null }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     await context.addInitScript(
       ({ key, viewKey, saved }) => {
@@ -412,6 +412,11 @@ try {
           contentType: 'application/json',
           body: JSON.stringify({ local: false }),
         });
+      if (handle) {
+        const value = await handle(action, route.request());
+        if (value !== undefined)
+          return route.fulfill({ contentType: 'application/json', body: JSON.stringify(value) });
+      }
       if (action === 'view') return route.fulfill(respond());
       if (action === 'presence')
         return route.fulfill({ contentType: 'application/json', body: '{"ok":true}' });
@@ -500,9 +505,78 @@ try {
     await page.getByRole('button', { name: 'リーグ管理', exact: true }).waitFor();
     await context.close();
   }
+  // --- 留守中のまとめ: 留守を解いた答えで読み直す・まとめを作り直す・ログアウトで消す ------
+  // ⚠ 以前は (1) 来たことの知らせが留守を解いても読み直さず、戻った人の画面に自分が
+  //    「おるすばん」のまま最長60秒残り、(2) 開いたままのタブは開いたとき・タブに戻ったとき
+  //    しか知らせず、毎日使っていても留守扱いになり、(3) まとめの帯がログアウト・
+  //    ログインし直しても残っていた
+  {
+    const ownRow = (wins, losses) => [
+      { team: '検証球団', wins, losses, draws: 0, winRate: wins / Math.max(1, wins + losses) },
+    ];
+    const viewAt = (revision, wins, losses, inbox = []) => ({
+      ...JSON.parse(okView().body),
+      revision,
+      standings: ownRow(wins, losses),
+      inbox,
+    });
+    const saved = viewAt(1, 0, 0);
+    let views = 0;
+    let presences = 0;
+    let firstView;
+    const firstViewDone = new Promise((resolve) => {
+      firstView = resolve;
+    });
+    const { context, page } = await plainPage({
+      respond: okView,
+      saved,
+      handle: async (action) => {
+        if (action === 'view') {
+          views++;
+          if (views === 1) setTimeout(firstView, 300);
+          // 留守を解いたあとのビュー（お知らせが1件増えている）
+          return views === 1
+            ? viewAt(2, 2, 1)
+            : viewAt(3, 2, 1, [{ id: 'n1', text: 'おかえりなさい' }]);
+        }
+        if (action === 'presence') {
+          presences++;
+          // 最初の読み込みのあとで答える（まとめが一度できてから留守が解ける並び）
+          if (presences === 1) {
+            await firstViewDone;
+            return { ok: true, returned: true };
+          }
+          return { ok: true };
+        }
+        if (action === 'logout') return { ok: true };
+        if (action === 'login')
+          return { userId: 'a', sessionId: 's2', accessToken: 'y' };
+        return undefined;
+      },
+    });
+    await page.clock.install();
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(`${base}/online`);
+    const banner = page.getByRole('status', { name: '留守中のまとめ' });
+    await banner.getByText('3試合 2勝1敗', { exact: false }).waitFor();
+    await banner.getByText('あなたへのお知らせ1件', { exact: false }).waitFor();
+    assert.equal(views, 2, '留守を解いた答えで読み直していない');
+    // 開いたままでも、10分ごとに知らせる（60秒ごとの確かめに乗せる）
+    await page.clock.fastForward(11 * 60000);
+    await page.waitForFunction(() => true);
+    for (let i = 0; i < 20 && presences < 2; i++) await page.waitForTimeout(100);
+    assert.equal(presences, 2, '開いたままのタブが来たことを知らせ直していない');
+    await page.getByRole('button', { name: 'ログアウト', exact: true }).click();
+    await page.getByLabel('メールアドレス').fill('a@example.com');
+    await page.getByLabel('パスワード').fill('pw');
+    await page.getByRole('button', { name: 'ログイン', exact: true }).click();
+    await page.getByRole('button', { name: 'リーグ管理', exact: true }).waitFor();
+    assert.equal(await banner.count(), 0, 'ログインし直しても前のまとめの帯が残っている');
+    await context.close();
+  }
   assert.deepEqual(errors, []);
   console.log(
-    'online-auth-ui-check PASS（配布HTML・ログアウト中の遅延更新・別タブログイン・期限切れ復帰・別タブのログアウト後にビューを書き戻さない・英語の失敗文と読み込み失敗の表示・読み直せたら帯を消す・落ちたビューを忘れる / Authはfixture）',
+    'online-auth-ui-check PASS（留守中のまとめ（留守を解いたら読み直す・開いたままでも知らせる・ログアウトで消す）・配布HTML・ログアウト中の遅延更新・別タブログイン・期限切れ復帰・別タブのログアウト後にビューを書き戻さない・英語の失敗文と読み込み失敗の表示・読み直せたら帯を消す・落ちたビューを忘れる / Authはfixture）',
   );
 } catch (error) {
   await failureShots(browser, 'online-auth-ui');

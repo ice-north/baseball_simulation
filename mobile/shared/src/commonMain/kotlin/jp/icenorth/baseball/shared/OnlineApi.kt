@@ -15,6 +15,8 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -131,15 +133,22 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
 
     /**
      * 「来た」ことを知らせる（最終ログインとおるすばんの解除。server/leagueService.mjs presence）。
-     * ⚠ 版は上がらない（ほかの人の画面を読み直させない）。サーバーが3時間に1回までしか書かない
+     * 返事は `{ ok: true }`。おるすばんを解いたときは `{ ok: true, returned: true }` で、そのときだけ true を返す
+     * （ビューの版も上がるので、呼ぶ側は読み直す。読み直さないと自分が「おるすばん」のまま見える）。
+     * ⚠ ただ最終ログインを書いただけなら版は上がらない（ほかの人の画面を読み直させない）。サーバーが3時間に1回までしか書かない
+     * ⚠ `returned` の無い古いサーバー・読めない返事は false（解いていない扱い）
      */
-    suspend fun presence(auth: AuthSession) {
-        text(client.post(endpoint) { parameter("action", "presence"); authorize(auth); jsonBody(JsonObject(emptyMap())) })
+    suspend fun presence(auth: AuthSession): Boolean {
+        val body = text(client.post(endpoint) { parameter("action", "presence"); authorize(auth); jsonBody(JsonObject(emptyMap())) })
+        return presenceReturned(body)
     }
 
     suspend fun logout(auth: AuthSession) {
         text(client.post(endpoint) { parameter("action", "logout"); authorize(auth); jsonBody(JsonObject(emptyMap())) })
     }
+
+    /** 通信の道具を閉じる（その場で作って使い捨てる呼び出し側用。閉じたあとは使えない） */
+    fun close() = client.close()
 
     private fun io.ktor.client.request.HttpRequestBuilder.authorize(auth: AuthSession) {
         header("Authorization", "Bearer ${auth.accessToken}")
@@ -167,6 +176,11 @@ class OnlineApi(private val endpoint: String, private val client: HttpClient = d
         )
     }
 }
+
+/** `presence` の返事でおるすばんが解けたか（`returned`。無い・読めなければ false） */
+internal fun presenceReturned(body: String): Boolean = runCatching {
+    (OnlineJson.parseToJsonElement(body).jsonObject["returned"] as? JsonPrimitive)?.booleanOrNull
+}.getOrNull() == true
 
 /** 試合の進行（45分ごと）や重い保存は数十秒かかることがある。Web 版は 290 秒まで待つ */
 fun defaultHttpClient(): HttpClient = createPlatformHttpClient {

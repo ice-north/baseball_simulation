@@ -193,10 +193,15 @@ export function benchTwoWayStarter(team) {
 // 短い予約ローテでも疲労投手を固定登板させない。当日の代役だけ差し込み、予約は残す。
 //
 // `pick`: 人が指名した先発（予告先発。`starterPicks.mjs`）。ローテに居て、疲れていなければ
-//   その投手から回す（ローテはその投手の次へ進む）。疲れている・ローテから外れたときは
-//   指名を使わずにいつもの決め方に戻し、`report.pick` に 'avoided' を入れる（呼ぶ側が知らせる）。
+//   その投手から回す（ローテはその投手の次へ進む）。使えないときは指名を使わずにいつもの
+//   決め方に戻し、`report.pick` に 'avoided'、`report.reason` に理由を入れる（呼ぶ側が知らせる）:
+//   'left'（名簿に居ない＝トレード・退団）・'inactive'（登録を外れた）・
+//   'rotation'（先発ローテから外れた）・'tired'（疲れている）。
+// `outside`: 確定したときに控えた先発（`starterPicks.lockStarters`）。ローテから外れていても、
+//   投手登録なら投げる（その日だけローテの今の位置に差し込み、試合の後はローテを進めない）。
+//   確定の後にローテから外して、相手に見えた先発を取り消せないようにするため。
 // ⚠ 指名が無ければ今までとまったく同じ（CPU球団と任せた人の球団は指名を持たない）。
-export function prepareDailyLineup(team, name, { pick = null, report = null } = {}) {
+export function prepareDailyLineup(team, name, { pick = null, report = null, outside = false } = {}) {
   const rotation = team.pitchingRotation;
   const starters = rotation?.starters || [];
   requireOnline(
@@ -216,18 +221,41 @@ export function prepareDailyLineup(team, name, { pick = null, report = null } = 
   const pitchers = team.players.filter(
     (p) => canStart(p) && (p.position === 'pitcher' || starters.includes(p.id)),
   );
+  let restore = () => {};
   if (pick != null) {
     const at = starters.indexOf(pick);
-    const picked = at >= 0 ? pitchers.find((p) => p.id === pick) : null;
-    if (picked && (picked.fatigue || 0) < STARTER_SKIP_FATIGUE) {
+    const player = team.players.find((p) => p.id === pick);
+    const reason = !player
+      ? 'left'
+      : player.isActive === false
+        ? 'inactive'
+        : !pitchers.includes(player) || (at < 0 && !outside)
+          ? 'rotation'
+          : (player.fatigue || 0) >= STARTER_SKIP_FATIGUE
+            ? 'tired'
+            : null;
+    if (!reason && at >= 0) {
       rotation.currentStarterIndex = at;
       if (report) report.pick = 'used';
-    } else if (report) report.pick = 'avoided';
+    } else if (!reason) {
+      // ローテの外の投手（確定の後に外された）。今の位置に差し込み、試合の後に元へ戻す。
+      // ⚠ 位置も戻す（試合が差し込んだ投手の次へ進めるので、そのままだと次の番の投手が飛ぶ）
+      const original = [...starters];
+      rotation.starters = [...starters.slice(0, index), pick, ...starters.slice(index)];
+      rotation.currentStarterIndex = index;
+      restore = () => {
+        rotation.starters = original;
+        rotation.currentStarterIndex = index;
+      };
+      if (report) report.pick = 'used';
+    } else if (report) {
+      report.pick = 'avoided';
+      report.reason = reason;
+    }
   }
   const current = pitchers.find(
-    (p) => p.id === starters[rotation.currentStarterIndex],
+    (p) => p.id === rotation.starters[rotation.currentStarterIndex],
   );
-  let restore = () => {};
   if (!current || (current.fatigue || 0) >= STARTER_SKIP_FATIGUE) {
     // ⚠ **今の順番から先へ**探すこと（一人用の `selectStarterFromRotation` と同じ）。
     //    以前は先頭から探していたので、4番手が疲れていると1番手に戻り、

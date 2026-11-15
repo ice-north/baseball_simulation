@@ -4,7 +4,8 @@
 //   A2 取引の記録（トレード）と読む窓口
 //   A3 最後に来た時刻・おるすばん（任せた扱い→来たら戻る）・管理者が球団をCPUに戻す
 //   A4 得点経過（試合の記録の箱に残り、点の合計が試合の点と合う）
-//   B1 予告先発（指名は確定まで本人だけ・確定後は変えられない・試合の日にその投手が投げる）
+//   B1 予告先発（指名は確定まで本人だけ・確定後は変えられない・試合の日にその投手が投げる・
+//      確定したときに見えた先発は、その後にローテを変えても変わらない）
 //   B4 練習試合（受けるとその場で1試合・成績・疲労・記録・順位に入らない・1日1試合）
 //   C1 オーナーのひとこと
 //
@@ -21,14 +22,30 @@ import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { withStarters } from '../../server/leagueBoard.mjs';
 import { projectLineup } from '../../server/projection.mjs';
 import { prepareDailyLineup, STARTER_SKIP_FATIGUE } from '../../server/dailyLineup.mjs';
-import { pruneTrades } from '../../server/social.mjs';
+import {
+  pruneTrades,
+  touchPresence,
+  forgetLastYearPlans,
+  assertCanPlay,
+  pushInbox,
+} from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
+import { applyJoin, applyProfile, nextMemberIndex } from '../../src/online/membership.js';
+import {
+  pruneDepartedPicks,
+  starterAvoidedText,
+  lockStarters,
+  starterContext,
+} from '../../server/starterPicks.mjs';
+import { openChallenge, respondChallenge } from '../../server/exhibition.mjs';
 import {
   AWAY_DAYS,
   OWNER_COMMENT_MAX,
   TRADE_NOTE_MAX,
   STARTER_LOCK_TURNS,
+  EXHIBITION_LIMIT,
+  INBOX_LIMIT,
   cleanText,
   isAwayAt,
   lastSeenLabel,
@@ -126,7 +143,110 @@ import {
       // 同上
     }
     assert.equal(report.pick, 'avoided', '疲れた投手の指名を使っている');
+    assert.equal(report.reason, 'tired');
     assert.equal(t.pitchingRotation.currentStarterIndex, 0, '使わなかった指名でローテを動かしている');
+  }
+  // 使えなかった理由を分ける（以前は移籍・抹消・ローテから外れても「疲れが残っていた」と出ていた）
+  for (const [reason, edit] of [
+    ['left', (t) => { t.players = t.players.filter((p) => p.id !== 4); t.pitchingRotation.starters = [1, 2, 3, 5]; }],
+    ['inactive', (t) => { t.players[3].isActive = false; }],
+    ['rotation', (t) => { t.pitchingRotation.starters = [1, 2, 3, 5]; }],
+  ]) {
+    const t = day(0);
+    edit(t);
+    const report = {};
+    try {
+      prepareDailyLineup(t, 'T', { pick: 4, report });
+    } catch {
+      // 同上
+    }
+    assert.deepEqual(report, { pick: 'avoided', reason }, `使えなかった指名の理由がちがう（${reason}）`);
+    assert.doesNotMatch(starterAvoidedText(reason, 'p4', 'B'), /疲れ/, `疲れていないのに「疲れ」と知らせる（${reason}）`);
+  }
+  assert.match(starterAvoidedText('tired', 'p4', 'B'), /p4は疲れが残っていたため、B戦の先発を回避しました/);
+  // 名簿に居なくなった投手の指名は消す（トレード・退団の後の `refreshTeamPlan`）
+  {
+    const l = { members: [{ userId: 'a', teamName: 'T', starterPicks: { 7: 4, 8: 2 } }] };
+    pruneDepartedPicks(l, 'T', { players: [{ id: 2 }] });
+    assert.deepEqual(l.members[0].starterPicks, { 8: 2 }, '居なくなった投手の指名が残っている');
+    pruneDepartedPicks(l, 'T', { players: [] });
+    assert.equal(l.members[0].starterPicks, undefined);
+  }
+
+  // Q1 確定したときに見えていた先発を控え、試合の日はその投手が投げる。確定の後にローテを
+  // 並べ替えても・指名した投手をローテから外しても・指名が効かなくなっても（おるすばん）変わらない
+  {
+    const pitcherTeam = (name, ids) => ({
+      players: ids.map((id) => ({ id, name: `${name}${id}`, position: 'pitcher', fatigue: 0 })),
+      pitchingRotation: { starters: [...ids], currentStarterIndex: 0 },
+      lineupSettings: { battingOrder: [] },
+    });
+    const teams = { A: pitcherTeam('A', [1, 2, 3, 4, 5]), B: pitcherTeam('B', [11, 12, 13, 14, 15]), C: pitcherTeam('C', [21, 22, 23, 24, 25]) };
+    const schedule = [1, 2, 3, 4, 5].map((d) => ({ id: d, home: 'A', away: 'B', date: { year: 2026, month: 4, day: d } }));
+    const l = {
+      season: { currentDate: { year: 2026, month: 4, day: 1 }, schedule },
+      members: [
+        { userId: 'a', teamName: 'A', starterPicks: { 2: 4 } },
+        { userId: 'b', teamName: 'B' },
+      ],
+    };
+    // 試合1〜3（0〜2ターン前）が確定。A は試合2に4番手を指名。B は指名なし（ローテの順）
+    lockStarters(l, teams);
+    assert.deepEqual(
+      l.members[0].lockedStarters,
+      { 1: { id: 1, name: 'A1' }, 2: { id: 4, name: 'A4', picked: true }, 3: { id: 5, name: 'A5' } },
+      '確定したときに見えていた先発を控えていない',
+    );
+    assert.deepEqual(Object.values(l.members[1].lockedStarters).map((x) => x.id), [11, 12, 13]);
+    const shownToB = () => withStarters(schedule.slice(0, 3), teams, null, starterContext(l, 'B')).map((g) => [g.homeStarter, g.homeStarterMark]);
+    const before = shownToB();
+    assert.deepEqual(before, [['A1', 'fixed'], ['A4', 'fixed'], ['A5', 'fixed']], '相手に確定した先発が見えていない');
+    // 確定の後に A がローテを並べ替え、指名した投手をローテから外し、指名も効かなくなる（おるすばん）
+    teams.A.pitchingRotation.starters = [5, 3, 2, 1];
+    teams.A.pitchingRotation.currentStarterIndex = 0;
+    delete l.members[0].starterPicks;
+    lockStarters(l, teams);
+    assert.equal(l.members[0].lockedStarters[2].id, 4, '確定した先発の控えを書き換えた');
+    assert.deepEqual(shownToB(), before, '確定の後のローテの並べ替えで、相手に見える先発が変わった');
+    // 試合の日: ローテから外した投手でも、控えた先発が投げる。ローテの位置は進めない
+    const t = teams.A;
+    const report = {};
+    try {
+      prepareDailyLineup(structuredClone(t), 'A', { pick: 4, report, outside: true });
+    } catch {
+      // 打順の補完で落ちるのは名簿が投手だけだから（先発の決め方は済んでいる）
+    }
+    assert.equal(report.pick, 'used', '確定した先発がローテから外れたら投げない（相手に見えた先発と違う）');
+    // 名簿に居なくなった（トレード）なら、見える先発もローテの順に戻る（試合の日と同じ）
+    teams.A.players = teams.A.players.filter((p) => p.id !== 4);
+    assert.equal(shownToB()[1][1], undefined, '居なくなった投手を確定した先発として出している');
+    // 年度更新で控えも消す
+    forgetLastYearPlans(l);
+    assert.equal(l.members[0].lockedStarters, undefined, '年度が替わっても確定した先発の控えが残っている');
+  }
+  // ローテの外の投手を差し込んだ日は、試合の後にローテと位置を元に戻す（次の番の投手を飛ばさない）
+  {
+    const players = [1, 2, 3, 9].map((id) => ({ id, name: `p${id}`, position: 'pitcher', fatigue: 0 }));
+    const t = { players, pitchingRotation: { starters: [1, 2, 3], currentStarterIndex: 1 }, lineupSettings: { battingOrder: [] } };
+    const report = {};
+    let threw = false;
+    try {
+      prepareDailyLineup(t, 'T', { pick: 9, report, outside: true });
+    } catch {
+      threw = true;
+    }
+    assert.equal(report.pick, 'used');
+    assert.deepEqual(t.pitchingRotation.starters, [1, 9, 2, 3], 'ローテの今の位置に差し込んでいない');
+    assert.equal(t.pitchingRotation.currentStarterIndex, 1);
+    assert.ok(threw, '前提: 投手だけの名簿は打順が組めない');
+    const plain = { players: structuredClone(players), pitchingRotation: { starters: [1, 2, 3], currentStarterIndex: 1 }, lineupSettings: { battingOrder: [] } };
+    const r2 = {};
+    try {
+      prepareDailyLineup(plain, 'T', { pick: 9, report: r2 });
+    } catch {
+      // 同上
+    }
+    assert.deepEqual(r2, { pick: 'avoided', reason: 'rotation' }, '確定していない指名でローテの外の投手を投げさせた');
   }
 
   // 取り下げ: 選手が居なくなった提案・人が抜けた提案・年度更新
@@ -148,6 +268,89 @@ import {
   assert.match(league.members[1].inbox[0].text, /Aからの/);
   assert.equal(pruneTrades(league, world, 'x', { all: true, reason: '年度が替わったため' }), 1);
   assert.equal(league.trades.length, 0, '年度更新で提案が残っている');
+
+  // 来た時刻は、数時間経っていなくても日本時間の日付が替わったら書き直す（0時過ぎに来た人が「昨日」と出ていた）
+  {
+    const l = { members: [{ userId: 'a', lastSeenAt: '2026-11-14T14:00:00.000Z' }] };
+    assert.equal(touchPresence(l, 'a', '2026-11-14T14:30:00.000Z'), false, '書いたばかりなのにまた書いた');
+    assert.equal(touchPresence(l, 'a', '2026-11-14T15:30:00.000Z'), 'seen', '日付が替わったのに来た時刻を書いていない');
+    assert.equal(lastSeenLabel(l.members[0].lastSeenAt, '2026-11-14T15:30:00.000Z'), '今日');
+  }
+
+  // 年度更新: 予告先発と、留守の前の編成の控えを消す（年をまたいで戻すと、キャンプの後の編成が前の年に巻き戻る）
+  {
+    const l = { members: [{ userId: 'a', away: true, awayPlan: { lineupSettings: {} }, starterPicks: { 3: 1 } }] };
+    forgetLastYearPlans(l);
+    assert.equal(l.members[0].awayPlan, undefined, '年度が替わっても留守の前の編成の控えが残っている');
+    assert.equal(l.members[0].starterPicks, undefined);
+    assert.equal(l.members[0].away, true, '年度更新でおるすばんの印を消した');
+  }
+
+  // 練習試合の結果の上限（30件）で今日の試合を捨てない。捨てると同じ組がその日のうちにもう1試合できた
+  {
+    const today = '2026-11-15T03:00:00.000Z';
+    const members = Array.from({ length: 12 }, (_, i) => ({ userId: `u${i}`, teamName: `T${i}` }));
+    const l = { status: 'running', phase: null, teams: members.map((m) => ({ name: m.teamName })), members, exhibitions: [] };
+    const pairs = [];
+    for (let a = 0; a < 12; a += 1) for (let b = a + 1; b < 12; b += 1) pairs.push([a, b]);
+    // 前の日の試合を1件、今日の試合を EXHIBITION_LIMIT + 1 件
+    let at = Date.parse(today) - 86400000;
+    for (const [i, [a, b]] of pairs.slice(0, EXHIBITION_LIMIT + 2).entries()) {
+      l.exhibitions.push({ id: `x${a}-${b}`, from: `u${a}`, fromTeam: `T${a}`, to: `u${b}`, toTeam: `T${b}`, status: 'offered' });
+      const when = new Date(i === 0 ? at : (at = Date.parse(today) - 7200000 + i * 1000)).toISOString();
+      respondChallenge(l, `u${b}`, { id: `x${a}-${b}`, action: 'accept' }, when, () => ({ homeScore: 1, awayScore: 0 }));
+    }
+    assert.ok(!l.exhibitions.some((e) => e.id === 'x0-1'), '前の日の結果を上限で捨てていない');
+    assert.ok(l.exhibitions.some((e) => e.id === 'x0-2'), '今日の試合の結果を上限で捨てた');
+    assert.throws(
+      () => openChallenge(l, 'u0', { toTeam: 'T2' }, today),
+      /1日/,
+      '上限で今日の結果を捨てたので、同じ組がその日のうちにもう1試合できる',
+    );
+  }
+
+  // 止めている間・手続きの間は練習試合・予告先発を受け付けない
+  assert.throws(() => assertCanPlay({ status: 'paused', phase: null }, '練習試合はできません'), /進行が止まっている間は、練習試合/);
+  assert.throws(() => assertCanPlay({ status: 'waiting', phase: { kind: 'camp' } }, 'x'), /手続きの間は/);
+  assertCanPlay({ status: 'running', phase: null }, 'x');
+
+  // ひとこと: 球団名だけ変えたとき（画面はひとことも一緒に送る）、書いた日を変えない
+  {
+    const l = { season: { year: 1 }, teams: [{ name: 'A' }], members: [{ userId: 'a', teamName: 'A' }] };
+    applyProfile(l, { userId: 'a', comment: '今年こそ', now: '2026-04-01T00:00:00.000Z' });
+    l.season.year = 2;
+    applyProfile(l, { userId: 'a', teamName: '新しい名前', comment: '今年こそ', now: '2026-11-15T00:00:00.000Z' });
+    assert.deepEqual(l.members[0].comment, { text: '今年こそ', at: '2026-04-01T00:00:00.000Z', year: 1 }, '同じひとことの書いた日を変えた');
+    applyProfile(l, { userId: 'a', comment: '来年こそ', now: '2026-11-15T00:00:00.000Z' });
+    assert.deepEqual(l.members[0].comment, { text: '来年こそ', at: '2026-11-15T00:00:00.000Z', year: 2 });
+  }
+
+  // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が
+  // 残っている人と同じ種にならないこと（同じidの選手ができる）。名簿に入ったセットの選手のidからも数える
+  {
+    const teams = ['A', 'B', 'C', 'D', 'E', 'F'].map((name) => ({ name, displayName: name, league: 'B', rank: 'C' }));
+    const old = {
+      seed: 100,
+      teams,
+      season: { standings: [] },
+      phase: null,
+      members: [
+        { userId: 'u0', teamName: 'A' },
+        { userId: 'u2', teamName: 'C', packSeed: 109 },
+        { userId: 'u3', teamName: 'D', packSeed: 110 },
+      ],
+      game: { teams: { E: { players: [{ id: 112 * 1000 + 5 }, { id: 7 }] } } },
+    };
+    assert.equal(nextMemberIndex(old), 6, '名簿に入ったセットの選手のidから通し番号を数えていない');
+    delete old.game;
+    applyJoin(old, { userId: 'u4', now: '2026-11-01T00:00:00.000Z' });
+    const joined = old.members.at(-1);
+    assert.equal(joined.packSeed, 111, '版13のリーグで、残っている人と同じ種を渡した');
+    assert.equal(old.memberSeq, 5);
+    // 入った人には来た時刻を入れる（無いと来なくなってもおるすばんにならない）
+    assert.equal(joined.lastSeenAt, '2026-11-01T00:00:00.000Z', '途中参加の人に来た時刻が無い');
+    assert.ok(isAwayAt(joined, '2026-11-05T00:00:00.000Z'), '途中参加の人が来なくなってもおるすばんにならない');
+  }
 }
 
 // --- 3人のリーグで通しで動かす ------------------------------------------------
@@ -182,6 +385,21 @@ try {
   await send('a', 'create');
   await send('b', 'join', { teamName: '湘南サンズ' });
   await send('c', 'join', { teamName: '美瑛ベアーズ' });
+  // 手続きの間（開幕前のセット選び）は練習試合・予告先発を断る。⚠ 以前は受けると
+  // 「先発投手が未登録です」で落ちた（ローテがまだ無い）
+  {
+    const l = await live();
+    assert.equal(l.phase?.kind, 'pack_select', '前提: 開幕前の手続きの最中');
+    const own = l.members.find((m) => m.userId === 'b').teamName;
+    const foe = l.members.find((m) => m.userId === 'c').teamName;
+    await assert.rejects(() => send('b', 'challenge', { toTeam: foe }), /手続きの間は、練習試合/, '手続きの間に練習試合を申し込めた');
+    const game = l.season.schedule.find((g) => g.home === own || g.away === own);
+    await assert.rejects(
+      () => send('b', 'starterPick', { gameId: game.id, playerId: null }),
+      /手続きの間は、予告先発/,
+      '手続きの間に予告先発を選べた',
+    );
+  }
   for (let i = 0; i < 4; i += 1) {
     const l = await live();
     if (!l.phase) break;
@@ -351,6 +569,7 @@ try {
   assert.equal(picked[`${ownSide}StarterMark`], 'pick', '自分の指名に印が無い');
   assert.equal(picked[`${ownSide}StarterInfo`]?.id, pickId, '指名した投手が先発予定に出ていない');
   // 確定するまで試合を進める → 確定の印、変えられない
+  let removedFromRotation = false;
   for (let i = 0; i < 20; i += 1) {
     const l = await live();
     const game = l.season.schedule.find((g) => g.id === open.id);
@@ -362,6 +581,30 @@ try {
         () => send('a', 'starterPick', { gameId: open.id, playerId: null }),
         /確定しています/,
         '確定した指名を外せた',
+      );
+      // Q1 確定の後に指名した投手をローテから外しても、確定した先発は変わらない（相手に見えたとおり投げる）
+      const cur = await live();
+      assert.equal(cur.members.find((m) => m.userId === 'a').lockedStarters?.[open.id]?.id, pickId, '確定した先発を控えていない');
+      // ⚠ 1度だけ外す（外した後の進行でもここを通る）
+      if (!removedFromRotation) {
+        removedFromRotation = true;
+        assert.ok(cur.game.teams[A].pitchingRotation.starters.includes(pickId), '前提: 指名した投手がローテに居る');
+        const base = JSON.parse(JSON.stringify(projectLineup(cur.game.teams[A])));
+        const edited = { ...structuredClone(base), starters: base.starters.filter((id) => id !== pickId) };
+        // 外した投手は先発の役割のままでは保存できない（救援の「おまかせ」に戻す）
+        if (edited.pitcherRoles) delete edited.pitcherRoles[pickId];
+        await send('a', 'lineup', { ...edited, baseLineup: base });
+        assert.ok(!(await live()).game.teams[A].pitchingRotation.starters.includes(pickId), '前提: ローテから外れた');
+      }
+      // 相手（B）の目から見た先発予定（ビューと同じ重ね方）
+      const now2 = await live();
+      const game = now2.season.schedule.find((g) => g.id === open.id);
+      const [seen] = withStarters([game], now2.game.teams, null, starterContext(now2, B));
+      assert.equal(seen[`${ownSide}StarterMark`], 'fixed', '確定した先発が相手に見えていない');
+      assert.equal(
+        seen[`${ownSide}Starter`],
+        now2.game.teams[A].players.find((p) => p.id === pickId).name,
+        '確定の後にローテを変えたら、相手に見える先発が変わった',
       );
     }
     await send('a', 'step');
@@ -375,6 +618,11 @@ try {
     starter?.id,
     pickId,
     `指名した投手が投げていない（投げたのは ${starter?.name}）`,
+  );
+  assert.ok(removedFromRotation, '前提: 確定の後にローテから外した');
+  assert.ok(
+    !done.game.teams[A].pitchingRotation.starters.includes(pickId),
+    'ローテの外から差し込んだ投手が、試合の後もローテに残っている',
   );
   assert.ok(!(done.members.find((m) => m.userId === 'a').starterPicks || {})[open.id], '終わった試合の指名が残っている');
 
@@ -402,7 +650,7 @@ try {
     assert.ok(l.members.every((m) => m.lastSeenAt), 'ログイン・操作で来た時刻が入っていない');
     const before = l.revision;
     // 前に書いてから時間が経っていれば書く。⚠ 版は上げない（送信中の提出が弾かれる）
-    await service.presence('b', sessions.b);
+    assert.deepEqual(await service.presence('b', sessions.b), { ok: true });
     const seen = (await live()).members.find((m) => m.userId === 'b').lastSeenAt;
     assert.equal(seen, now, '画面を開いたのに来た時刻を書いていない');
     assert.equal((await live()).revision, before, '来た時刻の記録で版が上がった（送信中の提出が弾かれる）');
@@ -436,8 +684,10 @@ try {
     assert.deepEqual(b.staffModes || null, modesBefore, 'おるすばんで本人の任せ方を書き換えた');
     assert.ok((await view('a')).members.find((m) => m.teamName === B).away, '一覧に留守の印が出ない');
     assert.equal((await view('a')).members.find((m) => m.teamName === B).lastSeenDay, tokyoDay(seen));
-    // 来たら解く
-    await service.presence('b', sessions.b);
+    // 来たら解く。⚠ 解いたときは版を上げ、返事で知らせる（編成が戻るので、別の端末の古い編成から保存させない）
+    const revisionAway = (await live()).revision;
+    assert.deepEqual(await service.presence('b', sessions.b), { ok: true, returned: true }, 'おるすばんを解いたことを返事で知らせていない');
+    assert.equal((await live()).revision, revisionAway + 1, 'おるすばんを解いたのに版を上げていない');
     const back = (await live()).members.find((m) => m.userId === 'b');
     assert.equal(back.away, undefined, '来たのにおるすばんが解けない');
     assert.equal(back.inbox[0].type, 'awayEnded');
@@ -451,6 +701,16 @@ try {
     if (effectiveStaffModes(await live(), back).pitching !== 'delegate')
       assert.equal(JSON.stringify(projectLineup(backTeam).starters), ownRotation, '戻ってきたのに留守の前のローテに戻らない');
     assert.match(back.inbox[0].text, /留守の前の形に戻しました/);
+  }
+
+  // あなたへのお知らせは残している件数（INBOX_LIMIT）を全部送る（以前は10件に切っていた）
+  {
+    await store.transaction((bundle) => {
+      for (let i = 0; i < INBOX_LIMIT + 3; i += 1)
+        pushInbox(bundle.league, 'a', { type: 'test', text: `お知らせ${i}` }, now);
+      return { value: null };
+    });
+    assert.equal((await view('a')).inbox.length, INBOX_LIMIT, 'お知らせを残している件数ぶん送っていない');
   }
 
   // --- A3 管理者が球団をCPUに戻す -----------------------------------------------

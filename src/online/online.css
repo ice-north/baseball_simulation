@@ -1153,13 +1153,6 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 12px;
   padding: 6px 10px;
 }
-/* ⚠ 消す操作だけ赤。押し間違いで全員の成績が消えるので、
-   色でも「ここから先は違う」と分かるようにする */
-.online-testbar .online-danger {
-  background: #b91c1c;
-  border-color: #ef4444;
-  color: #fff;
-}
 .online-own {
   background: var(--accent-soft);
 }
@@ -4367,13 +4360,16 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #facc15;
   font-weight: 700;
 }
-/* 途中参加でセットを選び終えた後の「開幕待ち」。手続きの帯と同じ形で、急ぎではない色にする */
-.online-procedure-banner.is-waiting {
+/* 途中参加でセットを選び終えた後の「開幕待ち」と、留守中のまとめ（`SocialPages.jsx`）。
+   手続きの帯と同じ形で、急ぎではない色にする */
+.online-procedure-banner.is-waiting,
+.online-procedure-banner.is-away {
   border-color: #38bdf8;
   background: rgba(56, 189, 248, 0.12);
   color: #bae6fd;
 }
-.online-procedure-banner.is-waiting strong:not(:where(.online-sp *)) {
+.online-procedure-banner.is-waiting strong:not(:where(.online-sp *)),
+.online-procedure-banner.is-away strong:not(:where(.online-sp *)) {
   color: #f0f9ff;
 }
 .online-nav-waiting {
@@ -5537,15 +5533,8 @@ small.online-gain:not(:where(.online-sp *)) {
 
 /* --- 人どうしの関わり（2026-11-14: お知らせ・オーナーたち・取引の記録・予告先発・練習試合・得点経過） ---
    ⚠ `SocialPages.jsx`・`ScoringPlays.jsx`・`TradeScreen.jsx` のひとこと。色は手続きの帯と同じ考え方で、
-      急ぎでないもの（留守中のまとめ）は青、人の言葉（ひとこと）は引用の形にする。 */
-.online-procedure-banner.is-away {
-  border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  color: #bae6fd;
-}
-.online-procedure-banner.is-away strong:not(:where(.online-sp *)) {
-  color: #f0f9ff;
-}
+      急ぎでないもの（留守中のまとめ。色は開幕待ちの帯 `.is-waiting` と共にする）は青、
+      人の言葉（ひとこと）は引用の形にする。 */
 .online-inbox-list:not(:where(.online-sp *)),
 .online-owner-list:not(:where(.online-sp *)) {
   list-style: none;
@@ -5597,6 +5586,8 @@ small.online-gain:not(:where(.online-sp *)) {
   background: #f8717114;
   font-size: 13px;
 }
+/* ⚠ 消す操作だけ赤（検証用の見出しのボタン・球団をCPUに戻す確認）。押し間違いで成績や球団が
+   消えるので、色でも「ここから先は違う」と分かるようにする */
 .online .online-danger:not(:where(.online-sp *)) {
   background: #b91c1c;
   border-color: #ef4444;
@@ -5634,6 +5625,18 @@ small.online-gain:not(:where(.online-sp *)) {
   padding-left: 1.4em;
   font-size: 13px;
   line-height: 1.7;
+}
+.online-scoring.is-folded:not(:where(.online-sp *)) {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.online-scoring.is-folded summary:not(:where(.online-sp *)) {
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.online-scoring.is-folded ol:not(:where(.online-sp *)) {
+  margin-top: 4px;
 }
 /* 取引の記録 */
 .online-transactions:not(:where(.online-sp *)) {
@@ -5699,6 +5702,41 @@ small.online-gain:not(:where(.online-sp *)) {
   align-items: center;
   gap: 8px;
   font-size: 13px;
+}
+/* 練習試合の結果: 回ごとの得点・勝敗投手 */
+.online-line-score:not(:where(.online-sp *)) {
+  border-collapse: collapse;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.online-line-score th:not(:where(.online-sp *)),
+.online-line-score td:not(:where(.online-sp *)) {
+  min-width: 1.8em;
+  padding: 2px 4px;
+  text-align: center;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+.online-line-score tbody th:not(:where(.online-sp *)) {
+  text-align: left;
+  padding-right: 10px;
+}
+.online-line-score thead th:not(:where(.online-sp *)) {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 400;
+}
+.online-decisions:not(:where(.online-sp *)) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+/* 申し込めない理由（行の下に、ひとことの欄の位置から） */
+.online-challenge-why:not(:where(.online-sp *)) {
+  grid-column: 2 / -1;
+  font-size: 12px;
 }
 .online-challenge-out:not(:where(.online-sp *)) {
   display: flex;

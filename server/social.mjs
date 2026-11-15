@@ -14,8 +14,9 @@ import {
   TRANSACTIONS_LIMIT,
   PRESENCE_REFRESH_HOURS,
   isAwayAt,
+  tokyoDay,
 } from '../src/online/social.js';
-import { validateLineup } from '../src/online/shared.js';
+import { validateLineup, requireOnline } from '../src/online/shared.js';
 import { effectiveStaffModes } from './coachEngine.mjs';
 import { projectLineup } from './projection.mjs';
 
@@ -123,39 +124,54 @@ export function pruneTrades(league, teams, now, { all = false, reason = null } =
 }
 
 /**
- * 最後に来た時刻を書く（ログイン・操作・画面を開いたとき）。書いたら true。
+ * 練習試合・予告先発ができる時期か。⚠ 手続きの最中（開幕前のセット選びなど）は先発ローテが
+ *    まだ無い球団があり、練習試合を受けると「先発投手が未登録です」で落ちていた。
+ *    管理者が止めている間・エラーで止まっている間も受け付けない。
+ * `what` は断るときの文の後ろ（「練習試合はできません」）
+ */
+export function assertCanPlay(league, what) {
+  requireOnline(!league?.phase, `手続きの間は、${what}`, 409);
+  requireOnline(league?.status === 'running', `進行が止まっている間は、${what}`, 409);
+}
+
+/**
+ * 最後に来た時刻を書く（ログイン・操作・画面を開いたとき）。
+ * 書かなかったら false、時刻だけ書いたら 'seen'、おるすばんを解いたら 'returned'
+ * （編成が留守の前の形に戻ることがある。呼ぶ側は版を上げ、画面に読み直させる）。
  * ⚠ **おるすばんはここで解く**（来た人の球団を指導者に任せたままにしない）。
  * ⚠ 前に書いてから `PRESENCE_REFRESH_HOURS` 経っていなければ書かない（画面を開くたびに
- *    保存が走らないように）。おるすばん中だけは必ず書いて解く。
+ *    保存が走らないように）。ただし日本時間の日付が替わっていたら書く（夜中の0時過ぎに
+ *    来た人が「昨日」と出ていた）。おるすばん中だけは必ず書いて解く。
  */
 export function touchPresence(league, userId, now) {
   const member = (league?.members || []).find((m) => m.userId === userId);
   if (!member) return false;
   const last = Date.parse(member.lastSeenAt || '');
   const fresh =
-    Number.isFinite(last) && Date.parse(now) - last < PRESENCE_REFRESH_HOURS * 3600 * 1000;
+    Number.isFinite(last) &&
+    Date.parse(now) - last < PRESENCE_REFRESH_HOURS * 3600 * 1000 &&
+    tokyoDay(member.lastSeenAt) === tokyoDay(now);
   if (fresh && !member.away) return false;
   member.lastSeenAt = now;
-  if (member.away) {
-    delete member.away;
-    const restored = restoreAwayPlan(league, member);
-    pushInbox(
-      league,
-      userId,
-      {
-        type: 'awayEnded',
-        text:
-          'おかえりなさい。留守の間は指導者に任せていました。任せ方は元の設定に戻っています' +
-          (restored === 'restored'
-            ? '。スタメン・投手起用も留守の前の形に戻しました'
-            : restored === 'kept'
-              ? '。留守の間に選手が入れ替わったので、スタメン・投手起用は指導者が組んだままです'
-              : ''),
-      },
-      now,
-    );
-  }
-  return true;
+  if (!member.away) return 'seen';
+  delete member.away;
+  const restored = restoreAwayPlan(league, member);
+  pushInbox(
+    league,
+    userId,
+    {
+      type: 'awayEnded',
+      text:
+        'おかえりなさい。留守の間は指導者に任せていました。任せ方は元の設定に戻っています' +
+        (restored === 'restored'
+          ? '。スタメン・投手起用も留守の前の形に戻しました'
+          : restored === 'kept'
+            ? '。留守の間に選手が入れ替わったので、スタメン・投手起用は指導者が組んだままです'
+            : ''),
+    },
+    now,
+  );
+  return 'returned';
 }
 
 /**
@@ -222,6 +238,22 @@ export function restoreAwayPlan(league, member) {
   team.lineupSettings = before.lineupSettings;
   team.pitchingRotation = before.pitchingRotation;
   return 'kept';
+}
+
+/**
+ * 年度更新で、前の年の編成の控えと予告先発を消す（`resolvePhase` の offseason）。
+ * - 予告先発（`starterPicks`・確定した先発の控え `lockedStarters`）: 日程を作り直すので、
+ *   試合の番号が新しい年の別の試合を指してしまう
+ * - 留守の前の編成（`awayPlan`）: 年をまたいで戻すと、キャンプ・トライアウトの後の編成が
+ *   前の年の形に巻き戻る（選手がそろっていれば戻せてしまう）
+ * ⚠ おるすばんの印（`away`）は消さない。来ていないことは変わらない
+ */
+export function forgetLastYearPlans(league) {
+  for (const member of league.members || []) {
+    delete member.starterPicks;
+    delete member.lockedStarters;
+    delete member.awayPlan;
+  }
 }
 
 /**

@@ -30,11 +30,11 @@ import {
   projectTeamInfo,
   projectGames,
   projectGameInfo,
+  projectTransactions,
 } from './projection.mjs';
 import { saveLineup } from './lineupCommand.mjs';
 import { touchPresence } from './social.mjs';
 import { setStarterPick } from './starterPicks.mjs';
-import { projectTransactions } from './projection.mjs';
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone = (value) => structuredClone(value);
@@ -164,25 +164,38 @@ export class LeagueService {
       const sessionId = randomUUID();
       bundle.sessions[userId] = withLogin(bundle.sessions[userId], client, sessionId);
       // 最後に来た時刻（おるすばんを解く）。⚠ 古い形のリーグには書かない（移行の前に形を変えない）
-      if (bundle.league && isCurrent(bundle.league)) touchPresence(bundle.league, userId, this.clock());
+      // ⚠ おるすばんを解いたら版を上げる（編成が留守の前の形に戻る。`presence` と同じ）
+      if (
+        bundle.league &&
+        isCurrent(bundle.league) &&
+        touchPresence(bundle.league, userId, this.clock()) === 'returned'
+      )
+        bundle.league.revision++;
       return { value: { sessionId } };
     });
   }
   /**
    * 画面を開いた・アプリに戻ったことを知らせる（最後に来た時刻とおるすばん。改善案 A3）。
-   * ⚠ **revision は上げない**（誰かの操作ではない。送信中の提出を弾かない）。書くのは
-   *    前に書いてから数時間経ったとき・おるすばん中のときだけ（`touchPresence`）
+   * 書くのは前に書いてから数時間経ったとき・日本時間の日付が替わったとき・おるすばん中のときだけ
+   * （`touchPresence`）。
+   * ⚠ 時刻を書くだけなら **revision は上げない**（誰かの操作ではない。送信中の提出を弾かない）。
+   * ⚠ **おるすばんを解いたときは上げる**。任せ方が戻り、編成も留守の前の形に戻るので、
+   *    別の端末で開いたままの古い編成から保存させない。返事は `{ ok: true, returned: true }`
+   *    （PC とアプリはこれを見て画面を読み直す）。ほかは `{ ok: true }`
    */
   async presence(userId, sessionId) {
     return this.store.transaction((bundle) => {
       const l = bundle.league;
-      if (
-        !l ||
-        !isCurrent(l) ||
-        !isLiveSession(bundle.sessions, userId, sessionId) ||
-        !touchPresence(l, userId, this.clock())
-      )
-        return { unchanged: true, value: { ok: true } };
+      const touched =
+        !!l &&
+        isCurrent(l) &&
+        isLiveSession(bundle.sessions, userId, sessionId) &&
+        touchPresence(l, userId, this.clock());
+      if (!touched) return { unchanged: true, value: { ok: true } };
+      if (touched === 'returned') {
+        l.revision++;
+        return { value: { ok: true, returned: true }, archiveUnchanged: true };
+      }
       return { value: { ok: true }, archiveUnchanged: true };
     });
   }
