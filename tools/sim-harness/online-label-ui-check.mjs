@@ -213,6 +213,11 @@ const oldGames = Object.fromEntries(
         away,
         homeScore: 4,
         awayScore: 2,
+        // 得点経過（本番はリプレイを残さないので、スマホでもこれを畳んで出す）
+        scoring: [
+          { inning: 2, half: 'top', name: '成績選手1', kind: 'homerun', runs: 2, away: 2, home: 0 },
+          { inning: 5, half: 'bottom', name: '成績選手2', kind: 'double', runs: 4, away: 2, home: 4 },
+        ],
         teams: {
           [home]: stars.slice(0, 12).map((p, n) => ({
             id: p.id,
@@ -955,6 +960,14 @@ try {
       .first()
       .click();
     const box = m.getByRole('dialog', { name: '試合成績', exact: true });
+    // ⚠ リプレイの無い試合では得点経過を畳んで出す（以前はスマホで見る手段が無かった）。
+    //    畳んだままなら小窓は縦に収まる（下の「縦スクロールなし」）
+    const scoring = box.locator('details.online-scoring');
+    await scoring.getByText('得点経過（2）', { exact: true }).waitFor();
+    assert.equal(await scoring.evaluate((n) => n.open), false, 'スマホの得点経過が開いたまま');
+    await scoring.getByText('得点経過（2）', { exact: true }).click();
+    await scoring.getByText(/5回裏.*成績選手2/).waitFor();
+    await scoring.getByText('得点経過（2）', { exact: true }).click();
     await box
       .getByRole('button', { name: '安打で並べ替え', exact: true })
       .click();

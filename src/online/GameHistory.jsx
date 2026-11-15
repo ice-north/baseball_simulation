@@ -412,8 +412,14 @@ function GameRecord({ id, year, ownTeam, close }) {
           ) : game.teams ? (
             <>
               {/* 得点経過（記録を取り始めた後の試合だけ。古い試合には無い）。
-                  スマホは小窓を縦に収めるため出さず、得点の場面は「試合経過」で追う */}
-              {!compact && <ScoringPlays game={game} />}
+                  スマホは小窓を縦に収めるため、「試合経過」（リプレイ）がある試合では出さず
+                  そちらで追う。⚠ 本番はリプレイを残さない（ONLINE_RECORD_REPLAY）ので、
+                  無い試合では畳んで出す（以前はスマホで得点経過を見る手段が無かった） */}
+              {compact ? (
+                !(game.replay?.frames?.length > 0) && <ScoringPlays game={game} folded />
+              ) : (
+                <ScoringPlays game={game} />
+              )}
               <BoxScore game={game} ownTeam={ownTeam} />
             </>
           ) : (

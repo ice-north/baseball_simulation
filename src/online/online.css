@@ -5635,6 +5635,18 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 13px;
   line-height: 1.7;
 }
+.online-scoring.is-folded:not(:where(.online-sp *)) {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.online-scoring.is-folded summary:not(:where(.online-sp *)) {
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.online-scoring.is-folded ol:not(:where(.online-sp *)) {
+  margin-top: 4px;
+}
 /* 取引の記録 */
 .online-transactions:not(:where(.online-sp *)) {
   display: grid;
