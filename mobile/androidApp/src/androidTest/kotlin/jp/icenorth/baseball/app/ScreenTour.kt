@@ -135,6 +135,20 @@ class ScreenTour {
 
         rule.runOnUiThread { model.changeHomeStyle("Paper"); model.changeHomePaper("Local") }
         pause()
+        // 速報再生（結果を伏せたカード → 回ごとに点を出す → 最後まで）。カードが無い段（試合前）は飛ばす
+        // ⚠ 紙面より先に見る。速報を見るまでは紙面も結果を伏せる（home-sealed）ので、先に見ないと紙面の写真が伏せたままになる
+        step("quick replay") {
+            if (jp.icenorth.baseball.shared.quickPending(model.view!!, model.quickSeen) == null) return@step
+            toTop()
+            shot("home-sealed")
+            click("速報で見る")
+            pause(2500)
+            shot("home-quick-replay")
+            click("最後まで")
+            shot("home-quick-replay-end")
+            back()
+            pause()
+        }
         page("home", scrolls = 3)
         // 全国紙（リーグ全体の紙面）
         step("home-national") {
@@ -162,16 +176,6 @@ class ScreenTour {
         step("back-issues") { toTop(); rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); pause(); click("過去の見出し"); shot("home-back-issues"); back() }
         // あなたへのお知らせ（トレードの返事・挑戦状・おるすばんなど）
         step("inbox") { toTop(); rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); pause(); click("あなたへのお知らせ", substring = true); shot("home-inbox"); back() }
-        // 速報再生（結果を伏せたカード → 回ごとに点を出す → 最後まで）。カードが無い段（試合前）は飛ばす
-        step("quick replay") {
-            toTop()
-            click("速報で見る")
-            pause(2500)
-            shot("home-quick-replay")
-            click("最後まで")
-            shot("home-quick-replay-end")
-            back()
-        }
 
         when (stage) {
             "running" -> {

@@ -56,6 +56,8 @@ import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.lastSeenLabel
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.long
+import jp.icenorth.baseball.shared.quickKey
+import jp.icenorth.baseball.shared.quickPending
 import jp.icenorth.baseball.shared.scoringLine
 import jp.icenorth.baseball.shared.sinceLabel
 import jp.icenorth.baseball.shared.str
@@ -130,9 +132,6 @@ fun ScoringList(view: LeagueView, plays: List<ScoringPlay>?, away: String, home:
 fun scoringOf(element: JsonElement?): List<ScoringPlay>? =
     element?.let { runCatching { OnlineJson.decodeFromJsonElement(ListSerializer(ScoringPlay.serializer()), it) }.getOrNull() }
 
-/** 速報再生で使う試合の鍵（年度ごとに id が振り直されるので年度も入れる） */
-private fun quickKey(view: LeagueView, g: OwnGame) = "${view.year}:${g.id}"
-
 /**
  * 速報が届いています（まだ見ていない自球団の最新の試合）。結果は書かない（押して見るまで伏せる）。
  * ⚠ 見たら直近の試合すべてに印を付ける（たまっていた試合をひとつずつ出さない）
@@ -140,9 +139,8 @@ private fun quickKey(view: LeagueView, g: OwnGame) = "${view.year}:${g.id}"
 @Composable
 fun QuickReplayCard(model: AppViewModel, view: LeagueView) {
     val team = view.teamName ?: return
-    val latest = view.recentGames.lastOrNull { it.lineScore != null && it.homeScore != null } ?: return
+    val latest = quickPending(view, model.quickSeen) ?: return
     val seen = model.quickSeen.orEmpty()
-    if (quickKey(view, latest) in seen) return
     var playing by remember { mutableStateOf(false) }
     val markAll = { model.markQuickSeen(view.recentGames.map { quickKey(view, it) }.toSet()) }
     val opponent = if (latest.home == team) latest.away else latest.home

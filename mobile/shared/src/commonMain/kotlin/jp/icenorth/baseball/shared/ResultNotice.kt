@@ -24,13 +24,22 @@ fun resultKeys(view: LeagueView): Set<String> =
 
 /**
  * 知らせる中身。新しい試合が無い・印がまだ無いときは null。
+ * [quickSeen]（速報で見た試合の印）を渡すと、速報でまだ見ていない試合のときは題と本文に結果を書かない。
  * 新しい試合が2つ以上（電波が無かった間に進んだなど）なら1つの通知にまとめる。
  */
-fun resultNotice(view: LeagueView, seen: Set<String>?): ResultNotice? {
+fun resultNotice(view: LeagueView, seen: Set<String>?, quickSeen: Set<String>? = null): ResultNotice? {
     if (seen == null) return null
     val team = view.teamName ?: return null
     val fresh = view.recentGames.filter { it.homeScore != null && it.awayScore != null && it.noticeKey() !in seen }
     if (fresh.isEmpty()) return null
+    // 速報でまだ見ていない試合があれば、結果を書かない（ホームの速報は押して見るまで伏せる作り。いしだの決定 2026-11-15）
+    if (quickSeen != null && fresh.any { it.lineScore != null && quickKey(view, it) !in quickSeen }) {
+        val what = if (fresh.size == 1) {
+            val g = fresh.single()
+            "${view.teamShort(if (g.home == team) g.away else g.home)}戦"
+        } else "${fresh.size}試合"
+        return ResultNotice("試合が終わりました", "${what}の結果が届いています。アプリの速報で見られます", fresh.size)
+    }
     val place = placeText(view, team)
     if (fresh.size == 1) {
         val g = fresh.single()

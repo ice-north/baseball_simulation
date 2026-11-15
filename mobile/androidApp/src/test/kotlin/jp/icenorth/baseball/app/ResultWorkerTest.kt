@@ -79,6 +79,14 @@ class ResultWorkerTest {
 
     private fun posted() = shadowOf(app.getSystemService(NotificationManager::class.java)).allNotifications
 
+    /** 速報でまだ見ていない試合（回ごとの得点がある）は、通知の題に結果を書かない */
+    @Test fun quickReplayNotSeenHidesTheScoreInTheNotification() {
+        run()
+        serverView = view(2, "$G41," + G42.replace("\"homeScore\"", "\"lineScore\":{\"away\":[5],\"home\":[3]},\"homeScore\""))
+        run()
+        assertEquals("試合が終わりました", shadowOf(posted().single()).contentTitle)
+    }
+
     @Test fun firstRunOnlyMarksThenNotifiesNewGameOnce() {
         assertEquals(ListenableWorker.Result.success(), run())
         assertTrue("最初は印だけ（今季の試合をまとめて知らせない）", posted().isEmpty())

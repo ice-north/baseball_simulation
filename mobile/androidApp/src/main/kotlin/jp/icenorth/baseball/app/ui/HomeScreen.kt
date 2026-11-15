@@ -56,6 +56,8 @@ import jp.icenorth.baseball.shared.GameResult
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.buildFrontPage
 import jp.icenorth.baseball.shared.buildNationalPage
+import jp.icenorth.baseball.shared.quickPending
+import jp.icenorth.baseball.shared.sealedForQuick
 import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
 import jp.icenorth.baseball.shared.TEAM_RECORD_ROWS
@@ -192,10 +194,13 @@ fun HomeScreen(
         // 全国紙（リーグ全体を中立に）。題字の下の行は地元紙と同じ
         val national = remember(localPage, view, model.raw) { buildNationalPage(view, model.raw, localPage) }
         val paper = FrontPage.Paper.entries.firstOrNull { it.name == model.homePaper } ?: FrontPage.Paper.Local
-        val page = if (paper == FrontPage.Paper.National) national else localPage
+        // 速報をまだ見ていない間は、紙面も結果を伏せる（いしだの決定 2026-11-15。速報は押して見るまで伏せる作り）
+        val sealed = quickPending(view, model.quickSeen) != null
+        val page = (if (paper == FrontPage.Paper.National) national else localPage).let { if (sealed) it.sealedForQuick() else it }
         // バックナンバー（その日の両紙の見出しを端末に残す）。球団ごとに分ける（別のアカウントの見出しを混ぜない）
-        LaunchedEffect(localPage.headline, national.headline) {
-            backIssueKey(view)?.let { key -> model.recordBackIssue(BackIssue(key, localPage.issue, localPage.headline, national.headline, team)) }
+        // ⚠ 伏せている間は残さない（バックナンバーから結果が分かってしまう）。見たあとに残す
+        LaunchedEffect(localPage.headline, national.headline, sealed) {
+            if (!sealed) backIssueKey(view)?.let { key -> model.recordBackIssue(BackIssue(key, localPage.issue, localPage.headline, national.headline, team)) }
         }
         var showBack by remember { mutableStateOf(false) }
         if (showBack) BackNumberDialog(backIssuesOf(model.backIssues, team), localPage.title) { showBack = false }

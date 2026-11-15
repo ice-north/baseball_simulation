@@ -94,7 +94,8 @@ class ResultWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         store.notifiedResults = now
         if ((now - notified).isEmpty()) return
         // ⚠ 中身は「アプリで見ていない試合」すべて（開かずにいた間の試合を1つの通知に）
-        resultNotice(view, seen)?.let { ResultNotifier.showResult(applicationContext, it.title, it.body) }
+        // 速報でまだ見ていない試合は結果を書かない（印がまだ無ければ見ていない扱い）
+        resultNotice(view, seen, store.quickSeen ?: emptySet())?.let { ResultNotifier.showResult(applicationContext, it.title, it.body) }
     }
 
     /** 手続き・トレード・手続きの結果（[jp.icenorth.baseball.shared.eventNotices]） */

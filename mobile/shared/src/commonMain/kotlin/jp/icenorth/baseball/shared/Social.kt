@@ -102,3 +102,36 @@ private fun civilFromDays(days: Long): Triple<Long, Int, Int> {
     val y = yoe + era * 400 + if (m <= 2) 1 else 0
     return Triple(y, m, d)
 }
+
+/** 速報再生で使う試合の鍵（年度ごとに id が振り直されるので年度も入れる） */
+fun quickKey(view: LeagueView, g: OwnGame): String = "${view.year}:${g.id}"
+
+/**
+ * 速報を出す試合（回ごとの得点が記録された自球団の最新の試合で、まだ速報で見ていないもの）。無ければ null。
+ * ⚠ 速報が残っている間は、紙面（[sealedForQuick]）と結果の通知（[resultNotice] の quickSeen）も結果を伏せる。
+ *    印がまだ無い（null）ときは見ていない扱い
+ */
+fun quickPending(view: LeagueView, seen: Set<String>?): OwnGame? {
+    if (view.teamName == null) return null
+    val latest = view.recentGames.lastOrNull { it.lineScore != null && it.homeScore != null } ?: return null
+    return latest.takeIf { quickKey(view, it) !in seen.orEmpty() }
+}
+
+/**
+ * 速報を見るまでの紙面。試合の結果が分かる所（見出し・得点・勝敗投手・順位・ほかの記事・短信）を伏せ、
+ * 手続きのお知らせ・コラム・アプリの更新の記事だけ残す（いしだの決定 2026-11-15「新聞の見出しも速報が残っている間は伏せる」）。
+ */
+fun FrontPage.sealedForQuick(): FrontPage = copy(
+    standing = null,
+    headline = "速報が届いています",
+    kicker = null,
+    subhead = null,
+    lead = "試合の結果は、上の速報で見るまで伏せています。",
+    tone = FrontPage.Tone.None,
+    score = null,
+    lineScore = null,
+    box = emptyList(),
+    articles = articles.filter { it.link == LINK_TIPS || it.link == LINK_APP_UPDATE },
+    shorts = emptyList(),
+    extra = false,
+)
