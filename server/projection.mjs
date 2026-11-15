@@ -46,6 +46,7 @@ import { STRENGTH_GAP_LIMIT } from '../src/online/tradeSearch.js';
 import { TRADE_FACTOR_LIMIT, tradeEyeNote } from '../src/online/coaches.js';
 import {
   tokyoDay,
+  INBOX_LIMIT,
   STARTER_LOCK_TURNS,
   STARTER_PICK_GAMES,
 } from '../src/online/social.js';
@@ -715,7 +716,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     history: l.history,
     notices: l.notices.slice(0, 4),
     // あなたへのお知らせ（トレードの返事・取り下げ、練習試合、予告先発の回避、おるすばん）
-    inbox: (member.inbox || []).slice(0, 10),
+    // ⚠ 残している件数（`INBOX_LIMIT`）を全部送る。以前は10件に切っていて、残した後ろ半分が読めなかった
+    inbox: (member.inbox || []).slice(0, INBOX_LIMIT),
     // 取引の記録の最近のもの（全部は `transactions` で読む）
     recentTransactions: (l.transactions || []).slice(0, 5),
     // 練習試合（申し込み中と、最近の結果）

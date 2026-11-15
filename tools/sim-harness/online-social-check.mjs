@@ -21,7 +21,13 @@ import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { withStarters } from '../../server/leagueBoard.mjs';
 import { projectLineup } from '../../server/projection.mjs';
 import { prepareDailyLineup, STARTER_SKIP_FATIGUE } from '../../server/dailyLineup.mjs';
-import { pruneTrades, touchPresence, forgetLastYearPlans, assertCanPlay } from '../../server/social.mjs';
+import {
+  pruneTrades,
+  touchPresence,
+  forgetLastYearPlans,
+  assertCanPlay,
+  pushInbox,
+} from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
 import { applyJoin, applyProfile, nextMemberIndex } from '../../src/online/membership.js';
@@ -33,6 +39,7 @@ import {
   TRADE_NOTE_MAX,
   STARTER_LOCK_TURNS,
   EXHIBITION_LIMIT,
+  INBOX_LIMIT,
   cleanText,
   isAwayAt,
   lastSeenLabel,
@@ -582,6 +589,16 @@ try {
     if (effectiveStaffModes(await live(), back).pitching !== 'delegate')
       assert.equal(JSON.stringify(projectLineup(backTeam).starters), ownRotation, '戻ってきたのに留守の前のローテに戻らない');
     assert.match(back.inbox[0].text, /留守の前の形に戻しました/);
+  }
+
+  // あなたへのお知らせは残している件数（INBOX_LIMIT）を全部送る（以前は10件に切っていた）
+  {
+    await store.transaction((bundle) => {
+      for (let i = 0; i < INBOX_LIMIT + 3; i += 1)
+        pushInbox(bundle.league, 'a', { type: 'test', text: `お知らせ${i}` }, now);
+      return { value: null };
+    });
+    assert.equal((await view('a')).inbox.length, INBOX_LIMIT, 'お知らせを残している件数ぶん送っていない');
   }
 
   // --- A3 管理者が球団をCPUに戻す -----------------------------------------------
