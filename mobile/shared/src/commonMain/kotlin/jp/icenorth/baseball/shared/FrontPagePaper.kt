@@ -141,11 +141,19 @@ private fun pitchingOrder(game: JsonObject, team: String, players: List<DetailPl
 private fun boxTeam(view: LeagueView, game: JsonObject, team: String): BoxTeam? {
     val players = game.at("teams", team).list().mapNotNull { it.obj() }.map { DetailPlayer(it) }
     if (players.isEmpty()) return null
-    val starters = players.filter { it.order > 0 }.sortedBy { it.order }
-    val subs = players.filter { it.order <= 0 && it.batted }
-    val batters = starters.map { BoxBatter(POS_SHORT[it.pos] ?: "", familyName(it.name), it.b("atBats"), it.b("hits"), it.b("rbis"), it.b("homeruns"), false) } +
-        subs.map { BoxBatter(POS_SHORT[it.pos] ?: "", familyName(it.name), it.b("atBats"), it.b("hits"), it.b("rbis"), it.b("homeruns"), true) }
-    val all = starters + subs
+    // battingOrder は試合が終わったときの打順なので、途中で退いた選手は 0 になっている。
+    // 退いた選手は同じ守備位置の最後の選手の枠へ戻し、枠の中は打席の多い順（多い方を先発とみなす）
+    val slots = players.filter { it.order > 0 }.sortedBy { it.order }.map { mutableListOf(it) }
+    val extra = mutableListOf<DetailPlayer>()
+    players.filter { it.order <= 0 && it.batted }.sortedByDescending { it.b("plateAppearances") }.forEach { p ->
+        val slot = slots.firstOrNull { it.size == 1 && it[0].pos == p.pos }
+        if (slot != null) slot += p else extra += p
+    }
+    fun row(p: DetailPlayer, sub: Boolean) = BoxBatter(POS_SHORT[p.pos] ?: "", familyName(p.name), p.b("atBats"), p.b("hits"), p.b("rbis"), p.b("homeruns"), sub)
+    val batters = slots.flatMap { slot ->
+        slot.sortedByDescending { it.b("plateAppearances") }.mapIndexed { i, p -> row(p, i > 0) }
+    } + extra.map { row(it, true) }
+    val all = slots.flatten() + extra
     val totals = listOf(all.sumOf { it.b("atBats") }, all.sumOf { it.b("hits") }, all.sumOf { it.b("rbis") }, all.sumOf { it.b("homeruns") })
     val pitchers = pitchingOrder(game, team, players).map {
         BoxPitcher(familyName(it.name), inningsText(it.outs), it.p("hits"), it.p("strikeouts"), it.p("runsAllowed"), it.p("pitches"))
@@ -402,7 +410,7 @@ internal fun interviewOf(
         else -> "引き分け"
     }
     return PaperInterview(
-        title = "${speaker}「${quote.take(14)}${if (quote.length > 14) "…" else ""}」",
+        title = "${speaker}「${shortQuote(quote)}」",
         intro = "${event}から一夜。${speaker}は試合後、${how}語った。（一問一答）",
         speaker = speaker,
         qa = qa,
@@ -776,4 +784,12 @@ internal fun splitFront(articles: List<FrontPage.Article>): Pair<List<FrontPage.
         }
     }
     return front to rest
+}
+
+/** 見出しに入れる談話。長ければ読点で切り、それでも長ければ省く */
+internal fun shortQuote(q: String, max: Int = 18): String {
+    if (q.length <= max) return q
+    val comma = q.indexOf('、')
+    if (comma in 6..max) return q.substring(0, comma)
+    return q.take(max - 1) + "…"
 }

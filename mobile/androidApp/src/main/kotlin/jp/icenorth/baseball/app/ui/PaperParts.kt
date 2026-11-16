@@ -20,12 +20,16 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.Font
@@ -132,7 +136,8 @@ fun VerticalText(
     val wPx = if (cols.isEmpty()) 0f else cols.size * em + (cols.size - 1) * em * gap + (stroke?.second ?: 0f) * 2
     val hPx = rows * em + em * 0.1f
     val style = TextStyle(fontSize = fontSize, fontFamily = fontFamily, fontWeight = fontWeight, color = color)
-    Canvas(modifier.size(with(density) { wPx.toDp() }, with(density) { hPx.toDp() })) {
+    // 1字ずつ描くので、読み上げ・検査用に元の文をまとめて持たせる
+    Canvas(modifier.semantics { this.text = AnnotatedString(text) }.size(with(density) { wPx.toDp() }, with(density) { hPx.toDp() })) {
         cols.forEachIndexed { ci, col ->
             // 右の列から
             val x0 = size.width - (stroke?.second ?: 0f) - em - ci * em * (1 + gap)
@@ -145,7 +150,7 @@ fun VerticalText(
                 val cy = y0 + em / 2
                 fun draw(at: Offset) {
                     stroke?.let { (c, width) -> drawText(layout, color = c, topLeft = at, drawStyle = Stroke(width = width * 2, join = androidx.compose.ui.graphics.StrokeJoin.Round)) }
-                    drawText(layout, color = color, topLeft = at, shadow = shadow)
+                    drawText(layout, color = color, topLeft = at, shadow = shadow, drawStyle = Fill)
                 }
                 when (cell.kind) {
                     1 -> rotate(90f, Offset(cx, cy)) { draw(Offset(cx - w / 2, cy - h / 2)) }

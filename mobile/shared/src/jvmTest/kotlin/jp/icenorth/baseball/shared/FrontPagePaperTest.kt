@@ -135,3 +135,13 @@ class FrontPagePaperTest {
         assertFalse(bigSubOf("劇的 宮崎がサヨナラ勝ち", "宮崎").isEmpty())
     }
 }
+
+class ReviewTest {
+    @Test
+    fun keepsTheTurningInning() {
+        val s = Situation("久留米", "相模原", false, 6, 4, 2, 0, 4, null)
+        val ls = FrontPage.LineScore("久留米", "相模原", listOf(1, 0, 0, 0, 3, 1, 1, 0, 0), listOf(3, 0, 0, 0, 0, 1, 0, 0, 0), false)
+        val r = reviewOf(s, ls, null, Pen(1))!!
+        assertTrue("5回" in r.second, r.second)
+    }
+}
