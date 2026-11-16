@@ -19,7 +19,13 @@ function makeTeam(useDH) {
   id = 0;
   const starters = FIELD.map((pos) => fielder(pos));
   const dh = fielder('first', { batting: { meet: 80, power: 80, eye: 80 } });
-  const bench = [fielder('short', { positionFitness: { short: 100, second: 90 } }), fielder('left'), fielder('catcher')];
+  // ⚠ 控えの打撃は**ばらばらにする**（DH の候補の並びを本当に確かめるため）。全員 50 だと
+  //    どう並べても「打撃の順」になり、検査が何も見ていなかった。並び（遊・左・捕）は打撃の順ではない
+  const bench = [
+    fielder('short', { positionFitness: { short: 100, second: 90 }, batting: { meet: 30, power: 40, eye: 35 } }),
+    fielder('left', { batting: { meet: 70, power: 65, eye: 60 } }),
+    fielder('catcher', { batting: { meet: 52, power: 45, eye: 50 } }),
+  ];
   const pitchers = [pitcher(), pitcher(), pitcher()];
   const players = [...starters, dh, ...bench, ...pitchers];
   const battingOrder = starters.map((p, i) => ({ playerId: p.id, position: p.position, battingOrder: i + 1 }));
@@ -72,8 +78,12 @@ for (const useDH of [false, true]) {
   const bench = benchFielders(team.players, order);
   const second = candidatesForSlot(bench, 'second').map((p) => positionFitness(p, 'second'));
   assert.ok(second[0] >= 90 && second.every((v, i) => i === 0 || second[i - 1] >= v), `${label}: 二塁の候補が適性の順でない`);
-  const dhList = candidatesForSlot(bench, 'dh');
-  if (useDH) assert.ok(dhList.every((p, i) => i === 0 || dhList[i - 1].batting.meet + dhList[i - 1].batting.power >= p.batting.meet + p.batting.power - 0), `${label}: DH の候補が打撃の順でない`);
+  // DH の候補（`candidatesForSlot` の打撃＝ミート＋パワー＋選球眼の順）。DH 無しでも並べ方は同じ
+  const hit = (p) => p.batting.meet + p.batting.power + p.batting.eye;
+  const dhList = candidatesForSlot(bench, 'dh').map(hit);
+  assert.equal(new Set(bench.map(hit)).size, bench.length, `${label}: 検査の前提（控えの打撃が全員違う）が崩れた`);
+  assert.notDeepEqual(bench.map(hit), [...bench.map(hit)].sort((a, b) => b - a), `${label}: 検査の前提（控えの並びが打撃の順でない）が崩れた`);
+  assert.deepEqual(dhList, [...bench.map(hit)].sort((a, b) => b - a), `${label}: DH の候補が打撃の順でない: ${dhList}`);
 }
 
 // 以前の画面で作った形: DH 無しで投手が3番に居る → 打順の順に詰め、投手は9番へ
