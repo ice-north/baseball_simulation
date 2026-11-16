@@ -58,8 +58,8 @@ export function orderFromTeam(team, useDH) {
   return kept.map((e) => (e && e.position ? e : { playerId: e?.playerId ?? null, position: free.shift() }));
 }
 
-export const sameOrder = (a, b) =>
-  a.length === b.length && a.every((e, i) => e.playerId === b[i].playerId && e.position === b[i].position);
+// 同じ形か（打順と守備位置）。オンラインの表と同じ関数を使う
+export { sameOrder } from '../../online/lineupEdit.js';
 
 /**
  * 編集の形を `team` の打順へ書く（その場で）。空きの枠は書かない。

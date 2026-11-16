@@ -59,7 +59,7 @@ export default function CareerStats({ view }) {
       ))}
     </div>
   );
-  if (mode === 'league') return <LeagueBoard view={view} modes={modes} />;
+  if (mode === 'league') return <CareerLeagueBoard view={view} modes={modes} />;
   return (
     <TeamRoster view={view} always>
       {(shown, selector) => <Board shown={shown} selector={selector} modes={modes} />}
@@ -68,7 +68,7 @@ export default function CareerStats({ view }) {
 }
 
 /** リーグ全体の通算ランキング（項目ごとの上位50人。退団した選手も残す） */
-function LeagueBoard({ view, modes }) {
+function CareerLeagueBoard({ view, modes }) {
   const [side, setSide] = useState('batting');
   const shown = (view.careerLeaders || []).filter((f) => f.side === side);
   return (

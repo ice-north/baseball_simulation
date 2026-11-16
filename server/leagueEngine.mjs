@@ -759,30 +759,31 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
   //    逆提案を取っておいて別のトレードや成長で名簿を変えてから受けると、戦力の開きの線
   //    （`STRENGTH_GAP_LIMIT`）や値段を回り込めた（監査 2026-11-14）。
   //    応じなくなったら成立させない（提案は残すので、断って出し直してもらう）
-  if (trade.to === null) {
-    assertNoPendingPack(league, [trade.fromTeam, trade.toTeam]);
-    assertTradeAllowed(fromTeam, toTeam, trade.offer, trade.want);
-    const again = cpuDecisionFor(league, fromTeam, trade.toTeam, trade.offer, trade.want);
-    requireOnline(
-      again.action === 'accept',
-      `${trade.toTeam} は、名簿や選手の力が変わったので、この逆提案ではもう応じません。断ってから出し直してください`,
-      409,
-      'trade',
-    );
-  }
-  // ⚠ CPUからの提案を受けるときも、いまの名簿でもう一度CPUに判断させる（上と同じ理由）。
+  // ⚠ CPUからの提案を受けるときも、いまの名簿でもう一度CPUに判断させる（同じ理由）。
   //    人の球団（`toTeam`）が出す・もらう側として見る
-  if (trade.from === null) {
+  // `human` は人の球団、`cpu` はCPU球団の名前、`give`・`get` は人の球団が出す・もらう選手
+  const rejudge = (human, cpu, give, get, message) => {
     assertNoPendingPack(league, [trade.fromTeam, trade.toTeam]);
     assertTradeAllowed(fromTeam, toTeam, trade.offer, trade.want);
-    const again = cpuDecisionFor(league, toTeam, trade.fromTeam, trade.want, trade.offer);
-    requireOnline(
-      again.action === 'accept',
-      `${trade.fromTeam} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
-      409,
-      'trade',
+    const again = cpuDecisionFor(league, human, cpu, give, get);
+    requireOnline(again.action === 'accept', message, 409, 'trade');
+  };
+  if (trade.to === null)
+    rejudge(
+      fromTeam,
+      trade.toTeam,
+      trade.offer,
+      trade.want,
+      `${trade.toTeam} は、名簿や選手の力が変わったので、この逆提案ではもう応じません。断ってから出し直してください`,
     );
-  }
+  if (trade.from === null)
+    rejudge(
+      toTeam,
+      trade.fromTeam,
+      trade.want,
+      trade.offer,
+      `${trade.fromTeam} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
+    );
   drop();
   applyTrade(league, trade, now);
   tell('tradeAccepted', `${myLabel}とのトレードが成立しました`);
