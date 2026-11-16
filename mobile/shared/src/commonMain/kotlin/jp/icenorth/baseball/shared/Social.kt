@@ -146,4 +146,5 @@ fun FrontPage.sealedForQuick(): FrontPage = copy(
     recordPage = null,
     sealed = true,
     scene = null,
+    shots = emptyList(),
 )

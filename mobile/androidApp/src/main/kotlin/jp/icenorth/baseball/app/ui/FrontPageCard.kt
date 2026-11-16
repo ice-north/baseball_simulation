@@ -289,7 +289,7 @@ private fun PhotoStage(page: FrontPage, accent: Color, modifier: Modifier) {
             board = if (national) Color(0xFF1D2A3A) else Color(0xFF123524),
             modifier = Modifier.fillMaxSize(),
             scene = page.scene,
-            sceneImage = sceneImageRes(page.scene)?.let { ImageBitmap.imageResource(it) },
+            sceneImage = shotImageRes(page.shots, page.issue.hashCode())?.let { ImageBitmap.imageResource(it) },
         )
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxHeight()) {

@@ -835,3 +835,40 @@ internal fun sceneOf(tone: FrontPage.Tone, f: GameFacts?, hero: PaperHero?): Str
     FrontPage.Tone.Draw -> SCENE_BATTER
     FrontPage.Tone.None -> null
 }
+
+/**
+ * 影絵の絵の候補（いしだに頼んだ16枚の番号）。
+ * 01 本塁打のスイング 02 本塁打の一周 03 サヨナラの歓喜 04 ホームで迎える 05 投げる投手 06 雄たけびの投手 07 投手と捕手の抱擁
+ * 08 打って走り出す 09 ヘッドスライディング 10 ダイビングキャッチ 11 ハイタッチ 12 構える打者
+ * 13 うなだれる 14 引き揚げる後ろ姿 15 しゃがみこむ投手 16 ベンチの手すり
+ * 17 空振り三振で片ひざ 18 打球を見上げる外野手 19 マウンドを降りる投手 20 ホームでタッチアウト 21 打球をはじく内野手 22 スタンドへ一礼
+ */
+internal fun shotsOf(tone: FrontPage.Tone, s: Situation?, f: GameFacts?, hero: PaperHero?): List<List<String>> {
+    s ?: return emptyList()
+    val first: List<String> = when (tone) {
+        FrontPage.Tone.Win -> when {
+            f?.walkOff == true -> listOf("s03", "s04")
+            s.theirs == 0 && f?.complete == true -> listOf("s06", "s07")
+            (f?.ourHomeruns ?: 0) > 0 && hero?.position != "投手" -> listOf("s01", "s02")
+            hero?.position == "投手" -> listOf("s05", "s06")
+            f != null && f.trailed -> listOf("s08")
+            s.diff == 1 -> listOf("s09", "s10")
+            else -> listOf("s11", "s12", "s08")
+        }
+        FrontPage.Tone.Lose -> when {
+            f?.walkOff == true && f.theirWinningHit?.homerun == true -> listOf("s18", "s14")
+            f?.walkOff == true -> listOf("s14", "s20")
+            s.diff >= 5 || s.theirs >= 8 -> listOf("s15", "s19")
+            s.ours == 0 -> listOf("s16", "s17")
+            (f?.ourErrors ?: 0) >= 2 -> listOf("s21")
+            f?.theirWinningHit?.homerun == true -> listOf("s18")
+            s.diff == 1 -> listOf("s20", "s13")
+            s.streak >= 3 -> listOf("s22", "s13")
+            else -> listOf("s13", "s16", "s14", "s17")
+        }
+        FrontPage.Tone.Draw -> listOf("s12", "s16")
+        FrontPage.Tone.None -> return emptyList()
+    }
+    val fallback = if (tone == FrontPage.Tone.Lose) listOf("s13", "s16") else listOf("s12", "s11")
+    return listOf(first, fallback)
+}

@@ -314,5 +314,11 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         teamPage = null,
         recordPage = null,
         scene = nationalScene,
+        shots = when (nationalScene) {
+            SCENE_PITCHER -> listOf(listOf("s06", "s07", "s05"))
+            SCENE_HOMER -> listOf(listOf("s01", "s02"))
+            null -> emptyList()
+            else -> listOf(listOf("s08", "s12", "s11"))
+        },
     )
 }

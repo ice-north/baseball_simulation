@@ -79,6 +79,11 @@ data class FrontPage(
     val sealed: Boolean = false,
     /** 1面の写真に描く影絵の場面（[SCENE_HOMER] など）。null なら球場だけ */
     val scene: String? = null,
+    /**
+     * 影絵の絵の候補（"s01" など。いしだに渡した16枚の番号）。前の組から順に、絵のある組を使い、組の中は試合で選ぶ。
+     * 絵が1枚も無ければ [scene] を図形で描く
+     */
+    val shots: List<List<String>> = emptyList(),
 ) {
     enum class Tone { Win, Lose, Draw, None }
     enum class Paper(val label: String) { Local("地元紙"), National("全国紙") }
@@ -546,6 +551,7 @@ fun buildFrontPage(
         teamPage = teamPage,
         recordPage = recordPage,
         scene = if (offPhase) null else sceneOf(tone, facts, hero),
+        shots = if (offPhase) emptyList() else shotsOf(tone, sit, facts, hero),
     )
 }
 

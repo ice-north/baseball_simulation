@@ -82,6 +82,7 @@ class FrontPagePaperTest {
         // 写真の影絵（負けた日はうなだれる選手）
         assertEquals(if (p.tone == FrontPage.Tone.Lose) SCENE_DOWN else p.scene, p.scene)
         assertNotNull(p.scene)
+        assertTrue(p.shots.isNotEmpty() && p.shots.all { g -> g.all { it.matches(Regex("s(0[1-9]|1[0-9]|2[0-2])")) } })
     }
 
     @Test
@@ -102,6 +103,7 @@ class FrontPagePaperTest {
         assertNull(p.hero)
         assertTrue(p.results.isEmpty())
         assertNull(p.scene)
+        assertTrue(p.shots.isEmpty())
     }
 
     @Test
