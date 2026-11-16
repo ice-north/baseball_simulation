@@ -485,7 +485,7 @@ export const CAMP_SUB_MENUS = [
 // ⚠ 26→28（先方要望 2026-11-16: 複数人のトレードができるように、最大28人まで抱えられる）。
 //    自動で埋めるのは標準の26人まで（`ROSTER_STANDARD`）。27・28人目は、トライアウトで
 //    獲得する人数を自分で決めたとき・トレードで増えたときだけ。CPU球団は26〜27人
-//    （`cpuRosterTarget`、サーバー）
+//    （`autoRosterTarget`、server/leagueEngine.mjs）
 export const ROSTER_LIMIT = 28;
 
 /**

@@ -594,9 +594,10 @@ function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds, judge = tradeJu
  *    同じものを押し直せてしまう。理由をそのまま返して画面に出す。
  * ⚠ 抱えられる提案の数に上限を置く（`MAX_OPEN_TRADES`）。無制限だと
  *    相手の画面を埋められる。
- * ⚠ **提案に時間の期限は無い**。消えるのは返事（受ける・断る）・提案した側の取り下げ（`reject`）と、
+ * ⚠ **人が出す提案に時間の期限は無い**。消えるのは返事（受ける・断る）・提案した側の取り下げ（`reject`）と、
  *    成り立たなくなったとき（選手が移籍・退団した、オーナーが替わった）・年度更新（`pruneTrades`）。
- *    画面の注記に「期限」と書かないこと（再監査 A4）。年度更新で消えるのは、能力も年齢も
+ *    人の提案の画面の注記に「期限」と書かないこと（再監査 A4）。
+ *    ⚠ 期限があるのは**CPUから人の球団への提案だけ**（`CPU_OFFER_DAYS` 日。`runCpuTrades` が取り下げる）。年度更新で消えるのは、能力も年齢も
  *    変わった後に古い条件で成立させないため（いしだ承認の改善案 A1）。
  * ⚠ ひとこと（`note`）は人の球団宛てのときだけ残す。CPU球団はその場で答えるので読む人が居ない。
  */
@@ -1749,11 +1750,12 @@ function resolveTryout(league, plans, now) {
   ).flat();
   const picksLeftOf = Object.fromEntries(names.map((name) => [name, 0]));
   for (const pick of order) picksLeftOf[pick.team] += 1;
-  // ⚠ **獲得する人数**（`signTotal`）。参加者が決める。CPU球団と、決めていない提出は
-  //    空き枠いっぱい（前と同じ）。先方指摘「指名選手の人数を決められない」
+  // ⚠ **獲得する人数**（`signTotal`）。参加者が決める（空き枠＝上限28人まで）。CPU球団と、決めていない提出は
+  //    自動で埋める人数まで（`autoRosterTarget`。人の球団は標準26人、CPUは26〜27人）。
+  //    先方指摘「指名選手の人数を決められない」
   // ⚠ **初期メンバーを待っている球団は0人**（提出の中身によらない）。名簿は次のキャンプで
   //    セットに丸ごと入れ替わるので、取った選手は世界から消える（`defaultPhasePlan` の注）。
-  //    `total` の無い提出を「枠いっぱい」と読むようにしたので、ここで止めないと26人まで取っていた
+  //    `total` の無い提出は自動で埋める人数まで取るので、ここで止めないと26人まで取っていた
   const totalOf = Object.fromEntries(
     names.map((name) => [
       name,
@@ -1783,10 +1785,9 @@ function resolveTryout(league, plans, now) {
     const { needPitcher, needCatcher, needFielders } = shortfall(roster);
     const slotsLeft = ROSTER_LIMIT - roster.length;
     const mustFill = (needPitcher ? 1 : 0) + needFielders;
-    // ⚠ **交渉した人数に達しても、枠が空いていれば取り続ける**（CPUと同じ
-    //    判断で自動的に埋める）。交渉は10人までなので、ここで打ち切ると
-    //    人の球団だけ名簿が21人などで終わり、控えの数でCPUに劣る
-    //    （実測で投10・捕2・内5・外4 の21人）。
+    // ⚠ 交渉した人数（`plan.count`）に達したら交渉リストからは取らない（`planFull`）。
+    //    その先は獲得する人数（`totalOf`）まで、**`total` の無い案だけ**CPUと同じ判断で埋める
+    //    （`fillsAutomatically`。下の注）。`total` を決めた提出は交渉した選手しか取らない。
     //    ⚠ 0人も選べる。打ち切っていた頃は、投手・捕手・野手が足りない球団が
     //       1つあるだけで下の検査に落ち、**全員のトライアウトが解決できずに
     //       止まった**（締め切りの自動解決も同じ所で失敗する）。
@@ -1817,7 +1818,7 @@ function resolveTryout(league, plans, now) {
         : null;
     };
     let forced = null;
-    // ⚠ 残りの**指名回数**でも判定する。枠（26人）だけで見ていると、希望順位の
+    // ⚠ 残りの**指名回数**でも判定する。枠（上限28人）だけで見ていると、希望順位の
     //    候補が全員他球団に取られて指名を見送り続けた球団は、枠が空いたまま
     //    巡目が尽き、最低限の構成に届かずにトライアウト全体が解決できなかった。
     if (reached || slotsLeft <= mustFill || picksLeft <= mustFill)

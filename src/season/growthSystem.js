@@ -468,8 +468,12 @@ export const CATEGORY_GROWTH = {
   // ⚠ 先方指摘（2026-11-16）: 「年度替わりの自然成長は成長係数を見て、フィジカルや精神が中心、
   //    若いほど伸びる。キャンプはプロ意識・体幹・器用さを見て、フィジカルと技術が中心」。
   //    それまでは独立リーグの一芸（topN=1）の式で、技術もフィジカルも同じくらい伸びていた。
-  // ⚠ **伸びる側だけ**を変える（`naturalPositive`）。focus（衰えの止まりにくさにも効く）は
-  //    独立と同じ1.0のままなので、**衰え始める年齢と落ち幅は前と同じ**。
+  // ⚠ 能力の種類と若さの重み（`naturalPositive`）は**伸びる側だけ**に掛かる。focus は独立と同じ
+  //    1.0（無し）のまま。
+  // ⚠ ただし**衰えは前（独立の式）と同じではない**。`grow()` の伸びは `基礎 + 練習 × specMult` の和で、
+  //    年を取って基礎が負になっても練習の項が打ち消すので、長所・短所の重み（topN・strength・weak）を
+  //    独立（topN=1・2.6・0.20）からここ（topN=2・1.2・0.9）に変えたぶん、能力ごとの衰え始める年齢と
+  //    落ち幅も動く（独立の一芸は衰えにくく、それ以外、とくに短所2つは早く大きく落ちていた。いまは均される）
   // ⚠ 一人用の世界の独立リーグ・社会人は触らない（`online` を渡したときだけ）
   online: {
     volume: 1.34, gain: 0.88, topN: 2, strength: 1.2, weak: 0.9, focus: null,
@@ -646,6 +650,8 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
       const g = STAT_GROWTH[key];
       const specKey = key === 'armP' ? 'arm' : key;
       // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
+      // ⚠ 和の中なので、基礎が負になる年齢（衰え）でも練習×specMult が打ち消す。
+      //    カテゴリの長所・短所の重みは、伸びだけでなく衰えの大きさにも効く
       const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
       const delta = g.base * baseMult * (statBasal + practice * specMult(specKey))
         * rankMult * (prof.gain ?? 1.0) * (YEAR_NOISE_LO + Math.random() * YEAR_NOISE_W);

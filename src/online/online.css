@@ -5251,7 +5251,7 @@ small.online-gain:not(:where(.online-sp *)) {
   min-height: 40px;
   min-width: 36px;
 }
-/* 選手の1行（契約更改・トライアウト共通の `PlayerLine`）。能力の並びは空白でだけ折り返す
+/* トライアウトの選手の1行（`TryoutPlanner` の `.online-tryout-person`）。能力の並びは空白でだけ折り返す
    （「球速D 制球B」を「制／球」と割らない）。名前などのボタンは指で押せる高さに */
 .online-mobile .online-phase-editor .online-tryout-person small {
   word-break: keep-all;
