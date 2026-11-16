@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import jp.icenorth.baseball.shared.teamLabel
+import jp.icenorth.baseball.shared.teamShort
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +60,10 @@ import jp.icenorth.baseball.shared.overviewGroup
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.str
 import kotlinx.serialization.json.JsonObject
+import jp.icenorth.baseball.shared.StatFormat
+import jp.icenorth.baseball.shared.playerYearTable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
 
 /** 選手の詳細（能力・守備適性・今季と通算の成績）。どの画面からでも同じシートで開く */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,12 +92,16 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
     val ownRoster = model.raw?.at("roster").list().mapNotNull { it.obj() }
     val readable = remember(p, ownRoster) { detailReadable(p, ownRoster) }
     var periods by remember(id, readable) { mutableStateOf(if (readable) null else localPeriods(p)) }
+    // 年ごとの能力・年齢・所属（サーバーの `years`）。自球団は action=player、他球団は球団の読み込みに載る
+    var years by remember(id, readable) { mutableStateOf(p.at("years").list().mapNotNull { it.obj() }) }
     var failure by remember(id, readable) { mutableStateOf<String?>(null) }
     var attempt by remember(id, readable) { mutableStateOf(0) }
     LaunchedEffect(id, readable, attempt) {
         if (id == null || !readable) return@LaunchedEffect
         try {
-            periods = model.read("player", mapOf("id" to id.toString())).at("periods").list().mapNotNull { it.obj() }
+            val info = model.read("player", mapOf("id" to id.toString()))
+            periods = info.at("periods").list().mapNotNull { it.obj() }
+            info.at("years").list().mapNotNull { it.obj() }.takeIf { it.isNotEmpty() }?.let { years = it }
         } catch (e: Exception) {
             // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -208,6 +217,7 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
             year + label + type
         })
 
+        YearsSection(model, p, years, periods.orEmpty())
         Text("成績", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         when {
             failure != null -> LoadFailed(failure.orEmpty(), onRetry = { failure = null; attempt += 1 }, title = "成績を読めませんでした")
@@ -253,6 +263,59 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
 }
 
 private val ValueWidth = 48.dp
+
+/**
+ * 年ごとの推移（年・年齢・所属・成績・能力を1年1行。中身は shared の [playerYearTable]、Web 版 PlayerYears.jsx と同じ）。
+ * ⚠ 先方指摘「どれだけ成長し、どれだけの成績を残したか確認できるように」。列が多いので表だけ横に送る。
+ *    前の年からの差は上がりを緑・下がりを赤で小さく添える
+ */
+@Composable
+private fun YearsSection(model: AppViewModel, player: JsonObject, years: List<JsonObject>, periods: List<JsonObject>) {
+    var open by rememberSaveable(player.at("id").num()) { mutableStateOf(false) }
+    val current = periods.firstOrNull { it.at("id").str() == "current" }?.at("year").int() ?: model.view?.year
+    val table = remember(player, years, periods, current) { playerYearTable(player, years, periods, current) }
+    if (table.rows.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("年ごとの推移（能力・成績・所属）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(if (open) "閉じる ▴" else "開く ▾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (!open) return@Column
+        val head = Modifier.width(40.dp)
+        Column(Modifier.horizontalScroll(rememberScrollState())) {
+            Row {
+                Text("年", Modifier.width(52.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("齢", Modifier.width(28.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("所属", Modifier.width(64.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                table.stats.forEach { Text(it.label, head, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
+                table.abilities.forEach { Text(it.label, head, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            table.rows.forEach { row ->
+                Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${row.year}年目", Modifier.width(52.dp), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(row.age?.toString() ?: "—", Modifier.width(28.dp), fontSize = 12.sp)
+                    Text(
+                        if (row.teams.isEmpty()) "—" else row.teams.joinToString("→") { model.view?.teamShort(it) ?: it },
+                        Modifier.width(64.dp), fontSize = 12.sp, maxLines = 1,
+                    )
+                    table.stats.forEach { c -> Text(formatStat(c, row.stats[c.id]), head, fontSize = 12.sp) }
+                    table.abilities.forEach { a ->
+                        val cell = row.abilities[a.key]
+                        Row(head, verticalAlignment = Alignment.CenterVertically) {
+                            AbilityNum(null, cell?.value?.toInt(), velocity = a.format == StatFormat.Velocity, stamina = a.format == StatFormat.Stamina)
+                            cell?.diff?.takeIf { it != 0.0 }?.let { d ->
+                                Text(
+                                    if (d > 0) "+${d.toInt()}" else "${d.toInt()}", fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                                    color = if (d > 0) androidx.compose.ui.graphics.Color(0xFF2E9E5B) else MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * 投手×捕手の組み合わせ（自球団の選手だけ。Web 版 BatteryStats.jsx と同じ中身）。

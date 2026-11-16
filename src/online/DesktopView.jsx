@@ -592,6 +592,8 @@ export default function DesktopView(props) {
               {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。
                   シーズン後から開幕までは、いまの段階とやることを先頭に出す */}
               {view.stage?.key !== 'season' && <SeasonFlow view={view} />}
+              {/* キャンプが終わった直後の結果（閉じるまで。先方指摘「キャンプ直後に」） */}
+              <CompletedCamp key={view.lastCamp?.year} view={view} onHome />
               <LeagueBoard view={view} />
             </>
           )}

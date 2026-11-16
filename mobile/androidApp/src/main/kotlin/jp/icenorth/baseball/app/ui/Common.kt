@@ -342,6 +342,10 @@ fun StatTable(
     sub: (JsonObject) -> String = { positionLabel(it.at("position").str()) },
     /** 1人もいないときの文（なぜいないのかは呼ぶ側が知っている） */
     empty: String = "該当する選手がいません",
+    /** 右端に固定する列（契約更改の「解雇」ボタンなど）。数字の列と一緒に横へ流れない */
+    trailing: (@Composable (JsonObject) -> Unit)? = null,
+    trailingHeader: String = "",
+    trailingWidth: Dp = 76.dp,
 ) {
     val divider = MaterialTheme.colorScheme.outlineVariant
     val hScroll = rememberScrollState()
@@ -405,6 +409,20 @@ fun StatTable(
                             modifier = Modifier.width(colWidth(c)).padding(end = 6.dp),
                         )
                     }
+                }
+            }
+        }
+        if (trailing != null) {
+            Column(Modifier.width(trailingWidth)) {
+                HeaderCell(trailingHeader, trailingWidth, TextAlign.Start, null)
+                players.forEach { p ->
+                    Box(
+                        Modifier
+                            .height(rowHeight)
+                            .fillMaxWidth()
+                            .background(if (highlight(p)) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent),
+                        contentAlignment = Alignment.Center,
+                    ) { trailing(p) }
                 }
             }
         }

@@ -87,7 +87,33 @@ data class TeamChronicle(
     val records: List<TeamRecord> = emptyList(),
     val retired: List<Retired> = emptyList(),
     val milestones: List<Milestone> = emptyList(),
+    /** 入退団履歴（新しい順。サーバーの `teamMoves`）。古いサーバーには無い */
+    val moves: List<TeamMove> = emptyList(),
 )
+
+/**
+ * 入退団の1行（入団・退団・トレード・引退）。`side` は "in"（入った）/ "out"（出た）、
+ * `other` は相手の球団（トレードの相手・入団前の所属）
+ */
+@Serializable
+data class TeamMove(
+    val year: Int? = null,
+    val month: Int? = null,
+    val day: Int? = null,
+    val side: String = "",
+    val how: String = "",
+    val name: String = "",
+    val position: String? = null,
+    val other: String? = null,
+)
+
+/** 入退団の1行の文（「3年目 11月10日　入　山田（投手）入団（前: 東京）」。`short` は球団の短い名前） */
+fun teamMoveLine(m: TeamMove, short: (String) -> String): String {
+    val time = listOfNotNull(m.year?.let(::yearLabel), m.month?.let { "${it}月${m.day ?: ""}日" }).joinToString(" ")
+    val pos = m.position?.let { "（${positionLabel(it)}）" }.orEmpty()
+    val other = m.other?.let { if (m.side == "in") "（前: ${short(it)}）" else "（→ ${short(it)}）" }.orEmpty()
+    return "$time　${if (m.side == "in") "入" else "出"}　${m.name}$pos　${m.how}$other"
+}
 
 @Serializable
 data class TeamSeason(

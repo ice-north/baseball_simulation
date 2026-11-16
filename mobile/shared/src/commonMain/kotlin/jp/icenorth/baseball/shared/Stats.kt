@@ -254,3 +254,44 @@ fun seasonLine(player: JsonObject): String {
     val avgText = avg?.let { fixed(it, 3).let { t -> if (t.startsWith("0.")) t.substring(1) else t } } ?: "—"
     return "今季 ${games}試合 打率$avgText ${hr}本"
 }
+
+/**
+ * 契約更改の表の列（1人1行。Web 版 `src/online/contractTable.js` の `contractColumns` と同じ並び）。
+ * ⚠ 先方指摘「名前・投打・年齢・各パラメータ・成績と網羅的に表示し、各能力値ごとにソートできるように」。
+ * ⚠ 投手の打撃・野手の投球の能力は「—」（二刀流は両方）。捕手リードは捕手だけ。並べ替えでは「—」が末尾。
+ */
+fun contractColumns(): List<StatColumn> {
+    fun pitches(p: JsonObject) = p.isPitcherJson() || p.at("isTwoWay").bool() == true
+    fun bats(p: JsonObject) = !p.isPitcherJson() || p.at("isTwoWay").bool() == true
+    fun only(column: StatColumn, test: (JsonObject) -> Boolean) = column.copy(get = { if (test(it)) column.get(it) else null })
+    val bestPitch = StatColumn("pitch", "変", get = { p ->
+        p.at("pitching", "arsenal").list().mapNotNull { it.obj() }
+            .filter { it.at("type").str() != "straight" }
+            .mapNotNull { it.at("level").num() }
+            .maxOrNull()
+    }, format = StatFormat.Ability)
+    return listOf(
+        StatColumn("age", "齢", ascending = true, get = { it.at("age").num() }),
+        only(ability("batting", "meet", "ミ"), ::bats),
+        only(ability("batting", "power", "パ"), ::bats),
+        only(ability("batting", "eye", "眼"), ::bats),
+        only(ability("physical", "speed", "走"), ::bats),
+        only(ability("fielding", "defense", "守"), ::bats),
+        only(ability("physical", "arm", "肩"), ::bats),
+        only(ability("catching", "lead", "リ")) { it.at("position").str() == "catcher" },
+        only(ability("pitching", "velocity", "速", StatFormat.Velocity), ::pitches),
+        only(ability("pitching", "control", "制"), ::pitches),
+        only(ability("pitching", "stamina", "ス", StatFormat.Stamina), ::pitches),
+        only(ability("pitching", "spinRate", "回"), ::pitches),
+        only(bestPitch, ::pitches),
+        ability("physical", "bodyStamina", "体"),
+        ability("personality", "mental", "精"),
+        StatColumn("games", "試", get = { p -> (if (p.isPitcherJson()) p.at("seasonStats", "pitching", "games") else p.at("seasonStats", "batting", "games")).num() ?: 0.0 }),
+        only(avg.copy(label = "率")) { !it.isPitcherJson() },
+        only(b("homeruns", "本")) { !it.isPitcherJson() },
+        only(b("rbis", "点")) { !it.isPitcherJson() },
+        only(era.copy(label = "防")) { it.isPitcherJson() },
+        only(p("wins", "勝")) { it.isPitcherJson() },
+        only(p("saves", "S")) { it.isPitcherJson() },
+    )
+}

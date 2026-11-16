@@ -33,6 +33,7 @@ export default function AbilityRanking({ view }) {
           {[
             ['batting', '野手'],
             ['pitching', '投手'],
+            ['body', '体・精神'],
           ].map(([id, label]) => (
             <button
               key={id}

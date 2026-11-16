@@ -55,8 +55,9 @@ import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
+import kotlin.math.roundToInt
 
-private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), Ranking("能力順") }
+private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順") }
 
 /** 選手タブ: 選手成績・通算成績（球団を切り替えて同じ表）と、リーグ全体の能力ランキング */
 @Composable
@@ -74,7 +75,7 @@ fun PlayersScreen(model: AppViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
             Box(Modifier.weight(1f)) {
-                if (mode != PlayersMode.Ranking) TeamPicker(view, raw, team) { model.playersTeam = it }
+                if (mode != PlayersMode.Ranking && mode != PlayersMode.CareerRank) TeamPicker(view, raw, team) { model.playersTeam = it }
             }
             InfoButton(
                 "選手",
@@ -84,6 +85,7 @@ fun PlayersScreen(model: AppViewModel) {
         }
         when (mode) {
             PlayersMode.Ranking -> AbilityRanking(model, view, raw)
+            PlayersMode.CareerRank -> CareerRanking(model, view, raw)
             else -> TeamStats(model, view, raw, team, career = mode == PlayersMode.Career)
         }
     }
@@ -266,6 +268,55 @@ private fun TeamLineupCard(lineup: JsonObject, roster: List<JsonObject>, onPlaye
             relievers.forEach { (id, role) -> line(RELIEF_ROLES[role] ?: role, null, byId[id]) }
             if (starters.isEmpty() && relievers.isEmpty()) Muted("投手起用がまだありません。")
             HorizontalDivider(Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
+        }
+    }
+}
+
+/**
+ * 通算成績ランキング（リーグ全球団の選手の、このリーグを始めてからの合計の上位。Web 版 CareerStats の「リーグ全体ランキング」）。
+ * ⚠ 先方指摘「各チームごとの通算成績しか見られない。全チームの選手をランキング化した通算成績も」。
+ *    並べ替えはサーバー（`careerLeaders`）。退団した選手も残る（押しても詳細は開かない）
+ */
+@Composable
+private fun CareerRanking(model: AppViewModel, view: LeagueView, raw: JsonObject) {
+    val boards = raw.at("careerLeaders").list().mapNotNull { it.obj() }
+    if (boards.isEmpty()) {
+        Muted("まだ集計がありません。", Modifier.padding(16.dp))
+        return
+    }
+    var selected by rememberSaveable { mutableStateOf(boards.first().at("id").str().orEmpty()) }
+    val board = boards.firstOrNull { it.at("id").str() == selected } ?: boards.first()
+    val format = board.at("format").str()
+    fun text(v: Double?): String = when {
+        v == null -> "—"
+        format == "rate" -> v.let { val n = (it * 1000).roundToInt(); if (n >= 1000) "1.000" else ".${n.toString().padStart(3, '0')}" }
+        format == "decimal" -> ((v * 100).roundToInt() / 100.0).let { val t = it.toString(); if (t.substringAfter('.').length < 2) t + "0" else t }
+        else -> v.roundToInt().toString()
+    }
+    Column(Modifier.fillMaxSize()) {
+        ChipTabs(boards.map { it.at("id").str().orEmpty() to it.at("label").str().orEmpty() }, board.at("id").str().orEmpty(), { selected = it })
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Muted("リーグ全球団の選手の、このリーグを始めてからの合計です（今季を含む・退団した選手も残ります）。" + (board.at("qualified").str()?.let { " $it" } ?: ""))
+            val rows = board.at("rows").list().mapNotNull { it.obj() }
+            if (rows.isEmpty()) Muted("該当なし", Modifier.padding(vertical = 12.dp))
+            rows.forEachIndexed { i, row ->
+                val active = row.at("active").bool() == true
+                val mine = active && row.at("team").str() == view.teamName
+                Row(
+                    Modifier.fillMaxWidth()
+                        .then(if (active) Modifier.clickable { model.openPlayerOf(row.at("team").str().orEmpty(), row.at("id").num()?.toLong(), row.at("name").str()) } else Modifier)
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("${i + 1}", modifier = Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.weight(1f)) {
+                        Text(row.at("name").str().orEmpty(), fontWeight = if (mine) FontWeight.Bold else FontWeight.SemiBold, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        Muted((row.at("team").str()?.let { view.teamShort(it) } ?: "—") + if (active) "" else "（退団）")
+                    }
+                    Text(text(row.at("value").num()), fontWeight = FontWeight.Bold)
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
         }
     }
 }

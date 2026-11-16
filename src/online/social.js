@@ -15,6 +15,8 @@ export const CHALLENGE_NOTE_MAX = 60;
 export const INBOX_LIMIT = 20;
 /** リーグの取引の記録を残す件数（およそ2年ぶん） */
 export const TRANSACTIONS_LIMIT = 200;
+/** 球団ごとに必ず残す取引の記録の件数（球団史の入退団履歴。およそ10年ぶん） */
+export const TEAM_TRANSACTIONS_KEEP = 40;
 /**
  * この日数来ていない人の球団は「おるすばん」（スタメン・投手起用・試合中の采配・手続きを指導者に任せた扱い）。
  * ⚠ 本人の任せ方の設定は書き換えない。来ればその場で元に戻る

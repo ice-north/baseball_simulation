@@ -800,6 +800,50 @@
   flex-wrap: wrap;
   gap: 2px 8px;
 }
+/* キャンプ後の成果の表（1人1行。`CampResultList`）。先方指摘「各選手1行にし、チームメイトと比べられるように」 */
+.online-camp-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.online-camp-result-table th,
+.online-camp-result-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #3c526b;
+  text-align: right;
+}
+.online-camp-result-table .online-camp-result-name {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--surface-2);
+  font-weight: 400;
+}
+.online-camp-result-name small {
+  margin-left: 4px;
+  color: #9fb0c4;
+}
+.online-camp-result-name .online-camp-gain-event {
+  margin-left: 6px;
+  font-size: 11px;
+}
+.online .online-camp-result-table thead button {
+  min-height: 0;
+  padding: 2px 2px;
+  border: 0;
+  background: none;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.online .online-camp-result-table thead button[aria-pressed='true'] {
+  color: #fde68a;
+  font-weight: 700;
+}
+.online-camp-result-table td.online-camp-gain-rounds {
+  text-align: left;
+}
 /* キャンプ後の選手ごとの総合上昇値。「計」を先頭で目立たせ、クールごとの合計は小さく */
 .online-camp-gain-sum {
   font-size: 13px;
@@ -2592,6 +2636,105 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-game-summary strong {
   font-size: 18px;
 }
+/* 試合の詳細のスコアボード（球場の電光板。濃い緑の盤に黄色の数字） */
+.online-scoreboard {
+  margin: 0 0 12px;
+  padding: 10px 12px 8px;
+  border-radius: 8px;
+  background: #0f2a1d;
+  border: 2px solid #3c5a46;
+  box-shadow: inset 0 0 0 1px #08160f;
+  overflow-x: auto;
+}
+.online-scoreboard table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+.online-scoreboard th,
+.online-scoreboard td {
+  min-width: 22px;
+  padding: 3px 4px;
+  text-align: center;
+  border: 0;
+}
+.online-scoreboard thead th {
+  color: #9fb8a6;
+  font-size: 12px;
+  font-weight: 600;
+}
+.online-scoreboard tbody td {
+  color: #f4f1de;
+  font-size: 17px;
+  font-weight: 700;
+  background: #06130c;
+  border: 2px solid #0f2a1d;
+}
+.online-scoreboard tbody td[data-scored] {
+  color: #ffd84d;
+}
+.online-scoreboard .online-scoreboard-team {
+  min-width: 64px;
+  max-width: 120px;
+  padding-right: 8px;
+  overflow: hidden;
+  color: #f4f1de;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 14px;
+}
+.online-scoreboard tr[data-own] .online-scoreboard-team {
+  color: var(--accent);
+}
+.online-scoreboard .online-scoreboard-total {
+  min-width: 28px;
+}
+.online-scoreboard thead .online-scoreboard-total {
+  color: #ffd84d;
+}
+.online-scoreboard tbody .online-scoreboard-total {
+  color: #ffd84d;
+  background: #0a1f14;
+}
+.online-scoreboard figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+.online-scoreboard.is-compact {
+  margin-bottom: 8px;
+  padding: 6px 8px 4px;
+}
+.online-scoreboard.is-compact th,
+.online-scoreboard.is-compact td {
+  min-width: 16px;
+  padding: 1px 2px;
+}
+.online-scoreboard.is-compact tbody td {
+  font-size: 14px;
+}
+.online-scoreboard.is-compact .online-scoreboard-team {
+  min-width: 40px;
+  font-size: 12px;
+}
+.online-scoreboard.is-compact figcaption {
+  margin-top: 3px;
+  font-size: 12px;
+}
+.online-scoreboard-date {
+  display: block;
+  color: #9fb8a6;
+  font-size: 11px;
+}
+.online-scoreboard figcaption b {
+  color: #ffd84d;
+}
 .online-game-dialog {
   min-height: min(420px, 70dvh);
 }
@@ -3763,18 +3906,75 @@ small.online-gain:not(:where(.online-sp *)) {
   margin: 0;
 }
 
-/* 契約更改の退団の選択。トライアウトの候補と同じ1行を、全員2列で並べる */
-.online-release-list {
-  max-height: none;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 24px;
+/* 契約更改: 1人1行の表（`ContractPlanner.jsx`）。先方指摘「2列13行を1列26行に」。
+   ⚠ 列が20を超えるので、狭い画面では**表だけ**横に送る（名前の列は左に残す） */
+.online-contract-scroll {
+  overflow-x: auto;
+  max-width: 100%;
 }
-.online-release-list li {
-  gap: 10px;
+.online-contract-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.online-release-list input[type='checkbox'] {
-  flex-shrink: 0;
+.online-contract-table th,
+.online-contract-table td {
+  padding: 3px 5px;
+  border-bottom: 1px solid #3c526b;
+  text-align: left;
+}
+.online-contract-table .online-contract-num {
+  text-align: right;
+}
+.online-contract-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  z-index: 1;
+}
+/* 見出しは押すと並べ替え。⚠ 共通の `.online button`（44px）を外して詰める */
+.online .online-contract-table thead button {
+  min-height: 0;
+  padding: 2px 2px;
+  border: 0;
+  background: none;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.online .online-contract-table thead button[aria-pressed='true'] {
+  color: #fde68a;
+  font-weight: 700;
+}
+.online-contract-table .online-contract-name {
+  position: sticky;
+  left: 0;
+  background: var(--surface-2);
+  font-weight: 400;
+  white-space: normal;
+  min-width: 9em;
+}
+.online-contract-table .online-contract-name .online-contract-reason {
+  display: block;
+  width: fit-content;
+}
+.online-contract-table tr[data-released] td,
+.online-contract-table tr[data-released] th {
+  background: rgba(185, 28, 28, 0.18);
+}
+.online-contract-action {
+  text-align: right;
+}
+.online .online-contract-release {
+  min-height: 34px;
+  padding: 2px 12px;
+}
+.online .online-contract-release.is-on {
+  background: #b91c1c;
+  border-color: #fca5a5;
+  color: #fff;
+  font-weight: 700;
 }
 .online-desktop .online-tryout-list button {
   min-height: 28px;
@@ -4978,26 +5178,14 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 14px;
   padding: 8px 14px;
 }
-/* 契約更改: 退団の選択。⚠ PCの2列のままだと 320px で1人ぶんが120px ほどになり、
-   能力の行が「制／球」と語の途中で割れていた。スマホは1列にし、チェックは枠ごと 44px で押せるように */
-.online .online-release-check {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-}
-.online-mobile .online-phase-editor .online-release-list {
-  grid-template-columns: minmax(0, 1fr);
-}
-.online-mobile .online-release-check {
-  width: 44px;
+/* 契約更改の表（スマホ）。⚠ 表は横に送る。解雇ボタンは指で押せる高さに */
+.online-mobile .online-contract-release {
   min-height: 44px;
-  align-self: stretch;
 }
-.online-mobile .online-release-check input[type='checkbox'] {
-  width: 22px;
-  height: 22px;
+/* 並べ替えの見出しも指で押せる大きさに（列が少し広がるが、表は横に送るので構わない） */
+.online-mobile .online-contract-table thead button {
+  min-height: 40px;
+  min-width: 36px;
 }
 /* 選手の1行（契約更改・トライアウト共通の `PlayerLine`）。能力の並びは空白でだけ折り返す
    （「球速D 制球B」を「制／球」と割らない）。名前などのボタンは指で押せる高さに */
@@ -5777,4 +5965,74 @@ small.online-gain:not(:where(.online-sp *)) {
   display: block;
   color: #cbd5e1;
   font-size: 11px;
+}
+
+/* 選手の詳細の「年ごとの推移」（1年1行。列が多いので表だけ横に送る） */
+.online-years-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.online-years-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.online-years-table th,
+.online-years-table td {
+  padding: 4px 6px;
+  text-align: right;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+.online-years-table thead th {
+  color: #cbd5e1;
+  font-weight: 650;
+}
+.online-years-table tbody th,
+.online-years-table td:nth-child(3) {
+  text-align: left;
+}
+.online-years-table .online-years-stat:last-of-type {
+  padding-right: 12px;
+}
+.online-years-table small {
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.online-years-table small.is-up {
+  color: #4ade80;
+}
+.online-years-table small.is-down {
+  color: #f87171;
+}
+
+/* 球団史の入退団履歴（入は緑、出は赤の印） */
+.online-moves-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.online-moves-table th,
+.online-moves-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  white-space: nowrap;
+}
+.online-moves-table thead th {
+  color: #cbd5e1;
+  font-weight: 650;
+}
+.online-moves-table small {
+  margin-left: 2px;
+  color: #cbd5e1;
+}
+.online-moves-table tr[data-side='in'] .online-moves-side {
+  color: #4ade80;
+  font-weight: 700;
+}
+.online-moves-table tr[data-side='out'] .online-moves-side {
+  color: #f87171;
+  font-weight: 700;
 }

@@ -257,6 +257,32 @@ const ABILITY_FIELDS = [
     id: 'stamina', label: 'スタミナ', side: 'pitching', stamina: true,
     of: (p) => p.pitching?.stamina,
   },
+  // ⚠ 先方指摘「基本的な能力しかランキングされていない。体幹、スピン、選球眼、捕手リードなども」。
+  //    選手詳細に出している項目（`abilityRows`）のうち数字のものを足した。
+  //    捕手リードは捕手だけ、体・精神の項目は投手と野手を合わせて競う（どちらにも効く）
+  { id: 'eye', label: '選球眼', side: 'batting', of: (p) => p.batting?.eye },
+  { id: 'steal', label: '盗塁技術', side: 'batting', of: (p) => p.batting?.steal },
+  { id: 'bunt', label: 'バント', side: 'batting', of: (p) => p.batting?.bunt },
+  {
+    id: 'lead', label: '捕手リード', side: 'batting',
+    only: (p) => p.position === 'catcher',
+    of: (p) => p.catching?.lead,
+  },
+  { id: 'spin', label: '回転', side: 'pitching', of: (p) => p.pitching?.spinRate },
+  {
+    id: 'pitch', label: '変化球', side: 'pitching',
+    // 持ち球（直球を除く）でいちばん良いもの（契約更改の表の「変」と同じ）
+    of: (p) => {
+      const levels = (p.pitching?.arsenal || [])
+        .filter((a) => a.type !== 'straight' && typeof a.level === 'number')
+        .map((a) => a.level);
+      return levels.length ? Math.max(...levels) : undefined;
+    },
+  },
+  { id: 'body', label: '体力', side: 'body', of: (p) => p.physical?.bodyStamina },
+  { id: 'recovery', label: '回復', side: 'body', of: (p) => p.physical?.recovery },
+  { id: 'muscle', label: '体幹', side: 'body', of: (p) => p.physical?.muscle },
+  { id: 'mental', label: '精神力', side: 'body', of: (p) => p.personality?.mental },
 ];
 
 /**
@@ -269,7 +295,7 @@ const ABILITY_FIELDS = [
  * ⚠ 並びを決定的にすること（同値は名前で分ける）。実行のたびに順位が
  *    入れ替わると、見るたび違う人が1位になる。
  * ⚠ 投手の項目は投手だけ、野手の項目は野手だけで競う。混ぜると
- *    「走力ランキングが投手で埋まる」ようなことが起きる。
+ *    「走力ランキングが投手で埋まる」ようなことが起きる。体・精神（`side: 'body'`）だけは全員で競う。
  * ⚠ **ベスト10まで出す**。5人だと、12球団288人の中で「上澄みのさらに上」しか
  *    見えず、自分の選手が入っているかどうかの判断に使えない。
  */
@@ -280,9 +306,13 @@ export function abilityLeaders(league, labelOf = (n) => n, top = 10) {
       entries.push({ team, player });
   return ABILITY_FIELDS.map((field) => {
     const pool = entries.filter(({ player }) =>
-      field.side === 'pitching'
-        ? player.position === 'pitcher'
-        : player.position !== 'pitcher',
+      field.only
+        ? field.only(player)
+        : field.side === 'body'
+          ? true
+          : field.side === 'pitching'
+            ? player.position === 'pitcher'
+            : player.position !== 'pitcher',
     );
     const rows = pool
       .map(({ team, player }) => ({ team, player, value: field.of(player) }))
@@ -316,6 +346,109 @@ export function abilityLeaders(league, labelOf = (n) => n, top = 10) {
       side: field.side,
       velocity: !!field.velocity,
       stamina: !!field.stamina,
+      rows,
+    };
+  });
+}
+
+// 通算成績ランキングの項目。⚠ 率（打率・防御率）は合計から出し直す（年ごとの率を平均しない）
+const CAREER_FIELDS = [
+  { id: 'avg', label: '打率', side: 'batting', format: 'rate', qualified: 'pa',
+    of: (b) => (b.atBats > 0 ? b.hits / b.atBats : null) },
+  { id: 'homeruns', label: '本塁打', side: 'batting', of: (b) => b.homeruns },
+  { id: 'rbis', label: '打点', side: 'batting', of: (b) => b.rbis },
+  { id: 'hits', label: '安打', side: 'batting', of: (b) => b.hits },
+  { id: 'stolenBases', label: '盗塁', side: 'batting', of: (b) => b.stolenBases },
+  { id: 'games', label: '試合', side: 'batting', of: (b) => b.games },
+  { id: 'era', label: '防御率', side: 'pitching', format: 'decimal', asc: true, qualified: 'outs',
+    of: (q) => (q.inningsPitched > 0 ? (q.earnedRuns * 27) / q.inningsPitched : null) },
+  { id: 'wins', label: '勝利', side: 'pitching', of: (q) => q.wins },
+  { id: 'saves', label: 'セーブ', side: 'pitching', of: (q) => q.saves },
+  { id: 'holds', label: 'ホールド', side: 'pitching', of: (q) => q.holds },
+  { id: 'strikeouts', label: '奪三振', side: 'pitching', of: (q) => q.strikeouts },
+  { id: 'pitchingGames', label: '登板', side: 'pitching', of: (q) => q.games },
+];
+
+/**
+ * 通算成績ランキング（**リーグ全球団**の選手の、このリーグを始めてからの合計。上位10人）。
+ *
+ * ⚠ 先方指摘「各チームごとの通算成績しか見られない。全チームの選手をランキング化した通算成績も」。
+ * ⚠ 合計は対人リーグの記録（`records.seasons[年].players`。選手の鍵は球団をまたいで同じ
+ *    `onlinePlayerId`）を年をまたいで足す。選手の詳細の「対人通算」と同じ材料。
+ *    退団・引退した選手も残す（通算の記録なので）。いま名簿に居る選手は `id` を付け、
+ *    画面が名前から詳細を開ける。
+ * ⚠ 率の項目は規定に届いた選手だけ: 打率は打席が「記録上いちばん多く出た選手の試合数×3.1」以上、
+ *    防御率は投球回が同じ試合数以上（1試合1回）。少ない打席の高打率で埋まらないように。
+ * ⚠ 並びは決定的に（同値は名前で分ける）。
+ */
+export function careerLeaders(league, labelOf = (n) => n, top = 10) {
+  const totals = new Map();
+  for (const season of Object.values(league.records?.seasons || {}).sort((a, b) => a.year - b.year))
+    for (const record of Object.values(season.players || {})) {
+      const t = totals.get(record.key) || {
+        key: record.key,
+        name: record.name,
+        team: null,
+        batting: {},
+        pitching: {},
+      };
+      t.name = record.name || t.name;
+      if (record.teams?.length) t.team = record.teams[record.teams.length - 1];
+      for (const side of ['batting', 'pitching'])
+        for (const [k, v] of Object.entries(record.stats?.[side] || {}))
+          if (typeof v === 'number') t[side][k] = (t[side][k] || 0) + v;
+      totals.set(record.key, t);
+    }
+  // いま名簿に居る選手（鍵 → 球団と選手）
+  const active = new Map();
+  for (const team of league.season.settings.teamNames || [])
+    for (const p of league.game.teams[team]?.players || [])
+      if (p.onlinePlayerId) active.set(p.onlinePlayerId, { team, player: p });
+  const list = [...totals.values()];
+  const maxGames = Math.max(0, ...list.map((t) => t.batting.games || 0), ...list.map((t) => t.pitching.games || 0));
+  const qualifies = {
+    pa: (t) => {
+      const b = t.batting;
+      const pa = (b.atBats || 0) + (b.walks || 0) + (b.hitByPitch || 0) + (b.sacrificeBunts || 0) + (b.sacrificeFlies || 0);
+      return pa >= maxGames * 3.1;
+    },
+    outs: (t) => (t.pitching.inningsPitched || 0) >= maxGames * 3,
+  };
+  return CAREER_FIELDS.map((field) => {
+    const rows = list
+      .filter((t) => !field.qualified || qualifies[field.qualified](t))
+      .map((t) => ({ t, value: field.of(t[field.side]) }))
+      .filter((r) => typeof r.value === 'number' && Number.isFinite(r.value) && (field.format || r.value > 0))
+      .sort(
+        (a, b) =>
+          (field.asc ? a.value - b.value : b.value - a.value) ||
+          String(a.t.name).localeCompare(String(b.t.name), 'ja'),
+      )
+      .slice(0, top)
+      .map(({ t, value }) => {
+        const now = active.get(t.key);
+        const team = now?.team || t.team;
+        return {
+          key: t.key,
+          id: now ? now.player.id : null,
+          name: now?.player.name || t.name,
+          team,
+          label: team ? labelOf(team) : null,
+          position: now?.player.position || null,
+          active: !!now,
+          value,
+        };
+      });
+    return {
+      id: field.id,
+      label: field.label,
+      side: field.side,
+      format: field.format || 'count',
+      qualified: field.qualified
+        ? field.qualified === 'pa'
+          ? `規定: ${Math.ceil(maxGames * 3.1)}打席以上`
+          : `規定: ${maxGames}投球回以上`
+        : null,
       rows,
     };
   });

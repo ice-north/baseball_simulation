@@ -112,6 +112,15 @@ class AppViewModel internal constructor(
         store.seenTrades = keys
     }
 
+    /** ホームのキャンプ結果を閉じた印（「球団名:年」。Web 版の `baseball-online-camp-seen` と同じ形） */
+    var campSeen by mutableStateOf(store.campSeen)
+        private set
+
+    fun markCampSeen(key: String) {
+        campSeen = key
+        store.campSeen = key
+    }
+
     /** トライアウトの評価値の重み（端末に覚える。サーバーには送らない） */
     var tryoutWeights by mutableStateOf(sanitizeWeights(store.tryoutWeights))
         private set

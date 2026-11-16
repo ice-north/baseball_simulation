@@ -380,6 +380,24 @@ export const setRecommendedLineup = (teamData, teamName) => {
 
 };
 
+// 野手が1試合（3打席以上）で溜める疲労。一人用は体力100→7・体力1→15。
+// ⚠ オンラインは休養日（4ターンに1回）があるので、この式だと疲労が溜まらない（先方指摘 2026-11-15）。
+//    オンラインの1日の処理だけ `withFielderGameFatigue` で式を差し替える（一人用の数字は変えない）。
+// `batting` はその試合の打撃成績（`gameStats.batting`）。溜まらない出場（代打など）は 0 を返す。
+const singleFielderGameFatigue = (bodyStamina, batting) =>
+  batting.atBats >= 3 ? Math.round(15 - (bodyStamina / 100) * 8) : 0;
+let fielderGameFatigue = singleFielderGameFatigue;
+/** `run` の間だけ、野手の1試合の疲労を `gain(体力, その試合の打撃成績)` にする（終われば必ず戻す） */
+export const withFielderGameFatigue = (gain, run) => {
+  const previous = fielderGameFatigue;
+  fielderGameFatigue = gain;
+  try {
+    return run();
+  } finally {
+    fielderGameFatigue = previous;
+  }
+};
+
 // 野手の日次回復ベース量（投手は別途 recoveryAmount を使用）
 export const POSITION_PLAYER_RECOVERY_BASE = 7;
 
@@ -3112,12 +3130,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
         // 野手疲労蓄積: スタメン出場(3打席以上)のみ疲労が溜まる
         // 代打(1-2打席)や守備固めは疲労の蓄積なし（ただし回復もしない）
-        if (b.atBats >= 3) {
-          const bodyStamina = playerData.physical?.bodyStamina || 50;
-          // 基礎疲労 7〜15（体力100→7, 体力1→15）
-          const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
-          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
-        }
+        // 基礎疲労 7〜15（体力100→7, 体力1→15）。オンラインは別の式（`withFielderGameFatigue`）
+        const baseFatigue = fielderGameFatigue(playerData.physical?.bodyStamina || 50, b);
+        if (baseFatigue > 0) playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
         // 死球の疲労は打席数に関わらず乗る（代打の1打席で当たっても痛い）
         if (b.hbpFatigue) playerData.fatigue = (playerData.fatigue || 0) + b.hbpFatigue;
 

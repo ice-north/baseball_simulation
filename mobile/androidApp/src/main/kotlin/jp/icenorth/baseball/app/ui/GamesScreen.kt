@@ -3,6 +3,8 @@ package jp.icenorth.baseball.app.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -261,7 +263,11 @@ internal fun lineScoreCells(away: List<Int>, home: List<Int>, walkOff: Boolean):
     return top to bottom
 }
 
-/** スコアボード。⚠ 試合の詳細に無く、何回に点が入ったか分からなかった。古い試合（記録に無い）は出さない */
+/**
+ * スコアボード（球場の電光板の見た目。回ごとの得点と R・H・E）。古い試合（記録に無い）は出さない。
+ * ⚠ 先方指摘「過去の試合のリザルトをスコアボードでグラフィカルに」。Web 版 `scoreBoard.js` と同じ中身:
+ *    安打・失策は個人成績を足す（失策は守った側の選手の数）
+ */
 @Composable
 private fun LineScoreTable(view: LeagueView, g: JsonObject) {
     val ls = g.at("lineScore").obj() ?: return
@@ -269,23 +275,53 @@ private fun LineScoreTable(view: LeagueView, g: JsonObject) {
     val home = ls.at("home").list().mapNotNull { it.int() }
     if (away.isEmpty()) return
     val (top, bottom) = lineScoreCells(away, home, g.at("walkOff").bool() == true)
-    val cell = Modifier.width(20.dp)
+    fun teamSum(team: String, key: String): String {
+        val players = g.at("teams", team).list().mapNotNull { it.obj() }
+        return if (players.isEmpty()) "-" else "${players.sumOf { it.at("batting", key).num() ?: 0.0 }.toInt()}"
+    }
+    val awayName = g.at("away").str().orEmpty()
+    val homeName = g.at("home").str().orEmpty()
+    val cell = Modifier.width(22.dp)
     @Composable
-    fun line(name: String, cells: List<String>, total: String, head: Boolean) {
-        val color = if (head) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(name, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.width(48.dp))
-            cells.forEach { Text(it, fontSize = if (head) 11.sp else 13.sp, color = color, textAlign = TextAlign.Center, modifier = cell) }
-            Text(total, fontSize = if (head) 11.sp else 14.sp, fontWeight = FontWeight.Bold, color = color, textAlign = TextAlign.End, modifier = Modifier.width(28.dp))
+    fun line(name: String, cells: List<String>, totals: List<String>, head: Boolean, own: Boolean = false) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 1.dp)) {
+            Text(
+                name, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Clip,
+                color = if (own) BoardOwn else BoardText, modifier = Modifier.width(48.dp),
+            )
+            cells.forEach { c ->
+                val scored = !head && c.firstOrNull()?.let { it in '1'..'9' } == true
+                Text(
+                    c, fontSize = if (head) 11.sp else 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                    color = when { head -> BoardHead; scored -> BoardLit; else -> BoardText },
+                    modifier = cell.padding(horizontal = 1.dp).then(if (head) Modifier else Modifier.background(BoardCell)),
+                )
+            }
+            totals.forEachIndexed { i, t ->
+                Text(
+                    t, fontSize = if (head) 11.sp else 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = BoardLit,
+                    modifier = Modifier.padding(start = if (i == 0) 6.dp else 1.dp).width(26.dp).then(if (head) Modifier else Modifier.background(BoardCell)),
+                )
+            }
         }
     }
     // 延長で幅が足りないときは横に送る
-    Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-        line("", top.indices.map { "${it + 1}" }, "計", head = true)
-        line(view.teamShort(g.at("away").str().orEmpty()), top, "${away.sum()}", head = false)
-        line(view.teamShort(g.at("home").str().orEmpty()), bottom, "${home.sum()}", head = false)
+    Column(
+        Modifier.fillMaxWidth().background(BoardBg, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 8.dp)
+            .horizontalScroll(rememberScrollState()),
+    ) {
+        line("", top.indices.map { "${it + 1}" }, listOf("R", "H", "E"), head = true)
+        line(view.teamShort(awayName), top, listOf("${g.at("awayScore").int() ?: away.sum()}", teamSum(awayName, "hits"), teamSum(awayName, "errors")), head = false, own = awayName == view.teamName)
+        line(view.teamShort(homeName), bottom, listOf("${g.at("homeScore").int() ?: home.sum()}", teamSum(homeName, "hits"), teamSum(homeName, "errors")), head = false, own = homeName == view.teamName)
     }
 }
+
+private val BoardBg = androidx.compose.ui.graphics.Color(0xFF0F2A1D)
+private val BoardCell = androidx.compose.ui.graphics.Color(0xFF06130C)
+private val BoardText = androidx.compose.ui.graphics.Color(0xFFF4F1DE)
+private val BoardHead = androidx.compose.ui.graphics.Color(0xFF9FB8A6)
+private val BoardLit = androidx.compose.ui.graphics.Color(0xFFFFD84D)
+private val BoardOwn = androidx.compose.ui.graphics.Color(0xFF7DD3FC)
 
 /** @param width 列の幅。⚠ 34dp で揃えていたら、投手の表（7列）で名前の欄が狭くなり名前が切れた */
 private data class Col(val label: String, val width: Dp = 28.dp, val get: (JsonObject) -> String)

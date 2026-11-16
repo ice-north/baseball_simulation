@@ -151,3 +151,39 @@ export function relevantGains(player, changes = {}) {
     ),
   );
 }
+
+/**
+ * キャンプの成果を**1人1行の表**にする形（先方指摘「選手3列9行は見づらい。各選手1行にし、
+ * 何が伸びたかチームメイトと比べられるように」）。
+ * 列は、誰か1人でも動いた項目だけ（能力の並び → 変化球 → 守備適性）。値の無いマスは null。
+ * ⚠ アプリの `campGainTable`（CampPanel.kt）と同じ列の並べ方。
+ */
+export function campGainTable(gains = {}, roster = [], events = {}) {
+  const rows = campGainRows(gains, roster, events);
+  const used = new Set(rows.flatMap((r) => r.items.map((i) => i.key)));
+  const order = CAMP_GAIN_FIELDS.map(([area, key]) => `${area}.${key}`);
+  const rank = (key) => {
+    const at = order.indexOf(key);
+    if (at >= 0) return at;
+    return key.startsWith('pitch.') ? 1000 : 2000;
+  };
+  const columns = [...used]
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .map((key) => ({ key, label: campGainLabel(key) }));
+  return {
+    columns,
+    rows: rows.map((r) => ({
+      ...r,
+      values: Object.fromEntries(r.items.map((i) => [i.key, i.diff])),
+    })),
+  };
+}
+
+/** 表の並べ替え（`key` は列の項目、'sum' は計）。値の無いマスは0として比べる。同じ値は元の順 */
+export function sortCampGainRows(rows, key = 'sum', dir = 'desc') {
+  const value = (r) => (key === 'sum' ? r.sum : r.values[key] ?? 0);
+  return rows
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => (dir === 'asc' ? 1 : -1) * (value(a.r) - value(b.r)) || a.i - b.i)
+    .map((e) => e.r);
+}

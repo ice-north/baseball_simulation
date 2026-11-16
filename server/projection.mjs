@@ -22,12 +22,14 @@ import {
   leagueLeaders,
   teamSeasonStats,
   abilityLeaders,
+  careerLeaders,
 } from './leagueBoard.mjs';
 import { packSummary, packsForMember } from '../src/online/rosterPack.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
   playerPeriods,
+  playerYears,
   storedGame,
   gameSummary,
   decisionRefs,
@@ -548,6 +550,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
     //    持っていないので、並べ替えはここで済ませて渡す
     abilityLeaders: abilityLeaders(l, labelOf),
+    // 通算成績ランキング（リーグ全球団の選手。退団した選手も残す）
+    careerLeaders: careerLeaders(l, labelOf),
     results: l.season.results.slice(-14).map((g) => ({
       gameId: g.gameId,
       date: g.date,
@@ -704,6 +708,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
         // ひとこと（提案した側・逆提案した側）
         note: t.note || null,
         replyNote: t.replyNote || null,
+        // CPU球団からの提案（返事はその場でCPUが出す）と、その期限（月・日）
+        fromCpu: t.from === null,
+        expires: t.expires ? { month: Math.floor(t.expires / 100) % 100, day: t.expires % 100 } : null,
       })),
     history: l.history,
     notices: l.notices.slice(0, 4),
@@ -830,6 +837,8 @@ export function projectTeamInfo(bundle, userId, teamName) {
         // ⚠ 場面別（`splits`）は**外す**。打者×投手の組み合わせで大きく、
         //    12球団ぶんを索引に積むと実測2.5MB（外せば0.8MB）。今季のぶんは
         //    下の `publicSplits` に別に載せてあり、画面が今季の期間へ重ねる。
+        // 年ごとの能力・年齢・所属（選手の詳細の「年ごとの推移」）
+        years: playerYears(l, teamName, p),
         periods: playerPeriods(l, teamName, p, statistics, {
           battery: false,
         }).map(
@@ -869,6 +878,7 @@ export function projectPlayerInfo(bundle, userId, id, context) {
       player,
       context || statisticsContext(l),
     ),
+    years: playerYears(l, member.teamName, player),
   };
 }
 /** 試合一覧の1ページの数（画面の既定） */

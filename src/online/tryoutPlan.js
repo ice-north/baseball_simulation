@@ -6,10 +6,12 @@ import { ONLINE_ROSTER_TARGETS } from './shared.js';
 // 初期編成・トライアウトの希望リストを組み立てる計算。
 //
 // 【サーバー側の約束】提出するのは `{ count, rankedIds, total }`。
-// `rankedIds` は**交渉したい選手を10人まで、欲しい順に並べたもの**。
-// `total` は**獲得する人数**（交渉した人と、足りないぶんを自動で埋める人の合計）。
+// `rankedIds` は**交渉したい選手を `TRYOUT_WISH_MAX` 人まで、欲しい順に並べたもの**。
+// `total` は**獲得する人数**（枠）。交渉リストはこれより多く並べてよい。
 // サーバーは上から見て、まだ空いている選手を取り、`total` 人に届いたら止める。
-// 交渉した人が尽きたら、残りは CPU と同じ判断で埋める。
+// 他球団に取られたら下が繰り上がる。**交渉した人が尽きたら、そこで止める**
+// （選んでいない選手は入れない。最低限の投1・捕1・野8に届かないぶんだけ補う）。
+// ⚠ `total` の無い案（標準案・指導者の案・古い提出）だけは、尽きたぶんを CPU と同じ判断で埋める。
 //
 // ⚠ **画面(JSX)と分けてある**。node から直接読めないと検査が書けない。
 // ⚠ 候補は実測で **360人**。全員を1本の希望順に並べる形（以前）は、
@@ -18,8 +20,13 @@ import { ONLINE_ROSTER_TARGETS } from './shared.js';
 //    いまは**一覧から「交渉」を押して10人まで選ぶ**だけにしてある。
 // ============================================================
 
-/** 交渉できる人数。1位〜10位まで（いしだ要望） */
-export const TRYOUT_WISH_MAX = 10;
+/**
+ * 交渉できる人数（1位〜20位）。
+ * ⚠ 先方指摘「入団数と指名順位は別にする。3人欲しいなら枠を3人、指名リストをさらに
+ *    複数名用意し、取れなかったら繰り上げる」。以前は10人までで、空き枠が10あると
+ *    控えの候補を1人も並べられなかった。アプリの `TRYOUT_WISH_MAX`（Tryout.kt）と同じ値
+ */
+export const TRYOUT_WISH_MAX = 20;
 
 // --- 希望リストを実際の指名へ変える規則 --------------------------------
 //
@@ -48,9 +55,22 @@ export function plannedPicks(rankedIds, candidates, count, roster = []) {
     .slice(0, Math.max(0, count));
 }
 
-/** 交渉できる人数（空き枠と10人の小さい方）。`maxCount` は空き枠 */
+/**
+ * 交渉できる人数。`maxCount` は空き枠。
+ * ⚠ **空き枠で切らない**（獲得する人数より多く並べて、取られたら繰り上げるため）。
+ *    空きが無い年は0人（誰とも交渉できない）
+ */
 export function wishLimit(maxCount) {
-  return Math.max(0, Math.min(TRYOUT_WISH_MAX, maxCount));
+  return maxCount > 0 ? TRYOUT_WISH_MAX : 0;
+}
+
+/**
+ * 交渉した人が尽きたら、残りを自動で埋めるか。
+ * ⚠ 獲得する人数（`total`）を決めた提出は埋めない（選んでいない選手を入れない）。
+ *    標準案・指導者の案・古い提出（`total` が無い）だけが埋める。サーバーの `resolveTryout` と同じ判定
+ */
+export function fillsAutomatically(plan) {
+  return !Number.isInteger(plan?.total);
 }
 
 /** 希望した人数と空き枠の小さい方。⚠ いまは検査（online-tryout-plan-check）だけが使う */
@@ -59,7 +79,7 @@ export function planCount(rankedIds, maxCount) {
 }
 
 /**
- * 獲得する人数（交渉した人＋自動で埋める人の合計）。提出の `total`。
+ * 獲得する人数（枠）。提出の `total`。
  *
  * ⚠ 先方（main の持ち主）指摘「トライアウトの指名選手の人数を決められない」。
  *    交渉10人の形にしたとき、希望が尽きても空き枠を**必ず全部**埋めるようにしたので、
@@ -298,9 +318,10 @@ export function weightedRanked(candidates, weights, roster = [], limit = TRYOUT_
       head.push(p.id);
     } else tail.push(p.id);
   }
-  // ⚠ **交渉できる人数まで**で切る（いしだ要望の10人）。以前は候補を全員
-  //    並べて返していたが、いまの希望リストは10人までなので、残りを付けると
-  //    提出で弾かれる
+  // ⚠ **交渉できる人数まで**で切る（`TRYOUT_WISH_MAX`）。以前は候補を全員
+  //    並べて返していたが、いまの希望リストは上限があり、残りを付けると
+  //    提出で弾かれる。目標人数を埋める選手（head）が先なので、取られたら
+  //    繰り上がるのは残り（tail）の評価の高い順
   return [...head, ...tail].slice(0, limit);
 }
 

@@ -567,7 +567,65 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
     records,
     retired: (c.retired || []).filter((r) => r.team === teamName).slice(0, 20),
     milestones: (c.milestones || []).filter((m) => m.team === teamName).slice(0, KEEP_MILESTONES_PER_TEAM),
+    moves: teamMoves(league, teamName),
   };
+}
+
+/** 入退団の言い方（取引の種類 → 入った側・出た側） */
+const MOVE_HOW = {
+  signing: { in: '入団' },
+  release: { out: '退団' },
+  trade: { in: 'トレード', out: 'トレード' },
+};
+
+/**
+ * 球団の入退団履歴（新しい順。1行1人）。
+ *
+ * ⚠ 先方指摘「各チームの入退団履歴も見られるように。表示先は球団史・記録から」。
+ *    材料は取引の記録（`league.transactions`。入団＝トライアウト・退団＝契約更改・トレード）と
+ *    引退（`chronicle.retired`）。取引の記録は球団ごとに `TEAM_TRANSACTIONS_KEEP` 件残す（`keepTransactions`）。
+ * ⚠ `other` は相手の球団（トレードの相手・入団前の所属）。無ければ null。
+ */
+export function teamMoves(league, teamName, limit = 80) {
+  const rows = [];
+  for (const t of league.transactions || []) {
+    if (!t.teams?.includes(teamName)) continue;
+    const how = MOVE_HOW[t.kind];
+    if (!how) continue;
+    for (const m of t.moves || []) {
+      const side = m.to === teamName ? 'in' : m.from === teamName ? 'out' : null;
+      if (!side || !how[side]) continue;
+      rows.push({
+        year: t.year ?? null,
+        month: t.date?.month ?? null,
+        day: t.date?.day ?? null,
+        side,
+        how: how[side],
+        name: m.name,
+        position: m.position || null,
+        other: (side === 'in' ? m.from : m.to) || null,
+      });
+    }
+  }
+  for (const r of league.chronicle?.retired || [])
+    if (r.team === teamName)
+      rows.push({
+        year: r.year ?? null,
+        // 引退は年度更新（11月末）
+        month: 11,
+        day: 30,
+        side: 'out',
+        how: '引退',
+        name: r.name,
+        position: r.position || null,
+        other: null,
+      });
+  const key = (r) => (r.year || 0) * 10000 + (r.month || 0) * 100 + (r.day || 0);
+  return rows
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => key(b.r) - key(a.r) || a.i - b.i)
+    .slice(0, limit)
+    .map(({ r }) => r);
 }
 
 /** ビューに載せる分（リーグ全体の最近のもの。小さく） */

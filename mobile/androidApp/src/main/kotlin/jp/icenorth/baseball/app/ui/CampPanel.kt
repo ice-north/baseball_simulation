@@ -13,6 +13,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -71,6 +76,8 @@ import jp.icenorth.baseball.shared.CampGainItem
 import jp.icenorth.baseball.shared.formatGain
 import jp.icenorth.baseball.shared.campGainTotals
 import jp.icenorth.baseball.shared.campGainRows
+import jp.icenorth.baseball.shared.campGainColumns
+import jp.icenorth.baseball.shared.sortCampGainRows
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.roundToInt
 
@@ -317,30 +324,71 @@ internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<Json
         }
         Text("${rows.count { it.grew }}人が伸びました", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Muted("球団全体: " + totals.take(6).joinToString(" · ") { "${it.label}${formatGain(it.diff)}" })
-        rows.forEach { row ->
-            val id = row.player.at("id").num()?.toLong()?.toString() ?: row.player.at("id").str().orEmpty()
-            Column(Modifier.fillMaxWidth().clickable { model.openPlayer = row.player }.padding(vertical = 4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(row.player.at("name").str().orEmpty(), fontWeight = FontWeight.SemiBold)
-                    Muted(positionLabel(row.player.at("position").str().orEmpty()))
-                    val sum = (row.sum * 10).roundToInt() / 10.0
-                    Text(
-                        "計${formatGain(sum)}",
-                        color = if (sum >= 0) GainUp else MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Bold,
-                    )
+        // ⚠ 先方指摘「各選手1行にし、何が伸びたかチームメイトと比べられるように」。
+        //    1人1行の表（名前は固定、項目は横に送る）。見出しを押すとその項目で並べ替える（Web 版と同じ）
+        var sortKey by rememberSaveable { mutableStateOf("sum") }
+        var ascending by rememberSaveable { mutableStateOf(false) }
+        val columns = remember(rows) { campGainColumns(rows) }
+        val sorted = sortCampGainRows(rows, sortKey, ascending)
+        val scroll = rememberScrollState()
+        fun sortBy(key: String) {
+            if (sortKey == key) ascending = !ascending else { sortKey = key; ascending = false }
+        }
+        val mark = { key: String -> if (sortKey == key) (if (ascending) "▲" else "▼") else "" }
+        val cell = Modifier.width(44.dp)
+        Row(Modifier.fillMaxWidth()) {
+            Column(Modifier.width(116.dp)) {
+                Text("選手", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.height(28.dp).padding(top = 6.dp))
+                sorted.forEach { row ->
+                    Column(Modifier.height(GainRowHeight).clickable { model.openPlayer = row.player }, verticalArrangement = Arrangement.Center) {
+                        Text(row.player.at("name").str().orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
+                        val note = row.events.firstOrNull()
+                        if (note != null) Text(note, color = MaterialTheme.colorScheme.tertiary, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        else Muted(positionLabel(row.player.at("position").str().orEmpty()))
+                    }
                 }
-                if (row.items.isNotEmpty()) GainLine(null, row.items)
-                // ⚠ 0 は「±0」と書く（「第1」「0」が続いて「第10」に読めた）
-                if (rounds.isNotEmpty()) Muted("クール別 " + rounds.joinToString(" / ") { r ->
-                    val n = (r.at("gains", id).obj().orEmpty().values.sumOf { it.num() ?: 0.0 } * 10).roundToInt() / 10.0
-                    "第${r.at("round").int() ?: 0} ${if (n == 0.0) "±0" else formatGain(n)}"
-                })
-                row.events.forEach { Text(it, color = MaterialTheme.colorScheme.tertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            }
+            Column(Modifier.horizontalScroll(scroll)) {
+                Row(Modifier.height(28.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("計${mark("sum")}", cell.clickable { sortBy("sum") }, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    columns.forEach { (key, label) ->
+                        Text("$label${mark(key)}", Modifier.widthIn(min = 44.dp).padding(end = 4.dp).clickable { sortBy(key) }, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    if (rounds.isNotEmpty()) Text("クール別", Modifier.padding(start = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                sorted.forEach { row ->
+                    val id = row.player.at("id").num()?.toLong()?.toString() ?: row.player.at("id").str().orEmpty()
+                    Row(Modifier.height(GainRowHeight), verticalAlignment = Alignment.CenterVertically) {
+                        val sum = (row.sum * 10).roundToInt() / 10.0
+                        Text(formatGain(sum), cell, color = if (sum >= 0) GainUp else MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        columns.forEach { (key, label) ->
+                            val diff = row.items.firstOrNull { it.key == key }?.diff
+                            Text(
+                                if (diff == null) "·" else formatGain(diff),
+                                Modifier.widthIn(min = 44.dp).padding(end = 4.dp),
+                                fontSize = 12.sp,
+                                fontWeight = if (diff == null) FontWeight.Normal else FontWeight.SemiBold,
+                                color = when {
+                                    diff == null -> MaterialTheme.colorScheme.outline
+                                    diff > 0 -> GainUp
+                                    else -> MaterialTheme.colorScheme.error
+                                },
+                                maxLines = 1,
+                            )
+                        }
+                        // ⚠ 0 は「±0」と書く（「第1」「0」が続いて「第10」に読めた）
+                        if (rounds.isNotEmpty()) Muted(rounds.joinToString(" / ") { r ->
+                            val n = (r.at("gains", id).obj().orEmpty().values.sumOf { it.num() ?: 0.0 } * 10).roundToInt() / 10.0
+                            "第${r.at("round").int() ?: 0} ${if (n == 0.0) "±0" else formatGain(n)}"
+                        }, Modifier.padding(start = 4.dp))
+                    }
+                }
             }
         }
     }
 }
+
+private val GainRowHeight = 40.dp
 
 /** 伸びの並び。伸びは緑、下がったものは赤 */
 @OptIn(ExperimentalLayoutApi::class)

@@ -65,6 +65,7 @@ import jp.icenorth.baseball.shared.careerRecordLine
 import jp.icenorth.baseball.shared.historyLine
 import jp.icenorth.baseball.shared.milestoneLine
 import jp.icenorth.baseball.shared.retiredHead
+import jp.icenorth.baseball.shared.teamMoveLine
 import jp.icenorth.baseball.shared.seasonRecordLine
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.teamShort
@@ -224,6 +225,19 @@ fun HomeScreen(
             // 留守中のまとめ（前に開いたときからの変わったこと）と、見ていない試合の速報。紙面の外に置く（閉じれば消える）
             if (model.away != null) item(key = "away") { AwayCard(model, onOpenInbox = { showInbox = true }) }
             item(key = "quick") { QuickReplayCard(model, view) }
+            // ⚠ 先方指摘「キャンプ結果は契約更改のあとではなく、キャンプ直後に」。キャンプを終えた年のうちは
+            //    ホームの上に出す（閉じれば消え、次のキャンプまで出さない。Web 版 `CompletedCamp` の onHome と同じ）
+            val camp = model.raw?.at("lastCamp").obj()
+            val campKey = "$team:${camp?.at("year").int()}"
+            // 開幕まで（シーズンに入ったら手続きの画面でだけ見る。Web 版と同じ）
+            val opened = model.raw?.at("stage", "key").str() == "season"
+            if (view.phase == null && !opened && camp != null && camp.at("year").int() == view.year && model.campSeen != campKey)
+                item(key = "camp") {
+                    Column {
+                        CampGains(model, camp, model.raw?.at("roster").list().mapNotNull { it.obj() }, collapsed = true)
+                        TextButton(onClick = { model.markCampSeen(campKey) }) { Text("キャンプ結果を閉じる") }
+                    }
+                }
             item(key = "paper") {
                 PaperTabs(paper, localPage.title) { model.changeHomePaper(it.name) }
             }
@@ -345,6 +359,16 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                     if (c.milestones.isEmpty()) item { Text("まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。", style = MaterialTheme.typography.bodySmall) }
                     items(c.milestones.withIndex().toList(), key = { "m${it.index}" }) { (_, m) ->
                         Text(milestoneLine(m), style = MaterialTheme.typography.bodySmall)
+                    }
+                    // ⚠ 先方指摘「各チームの入退団履歴も、球団史・記録から見られるように」（Web 版 Chronicle.jsx の Moves と同じ中身）
+                    item { ChronicleHeading("入退団履歴") }
+                    if (c.moves.isEmpty()) item { Text("まだ入団・退団の記録がありません。", style = MaterialTheme.typography.bodySmall) }
+                    items(c.moves.withIndex().toList(), key = { "v${it.index}" }) { (_, m) ->
+                        Text(
+                            teamMoveLine(m) { model.view?.teamShort(it) ?: it },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (m.side == "in") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     item { ChronicleHeading("引退した選手") }
                     if (c.retired.isEmpty()) item { Text("この球団から引退した選手はまだいません。", style = MaterialTheme.typography.bodySmall) }
