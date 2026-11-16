@@ -45,7 +45,7 @@
     - `inbox[]` の `id`・`type`・`text`。通知する `type` は `tradeAccepted`・`tradeRejected`・`tradeWithdrawn`・`challenge`・`challengePlayed`・`challengeDeclined`・`challengeWithdrawn`・`starterAvoided`・`awayStarted`（`INBOX_TITLES`。ほかの種類は通知しない。名前を変えると黙って出なくなる）。
     - `lastTryout` の `year`・`picks[].name`・`lost`、`lastCamp.year`、`lastOffseason` の `year`・`departed`。
   - 知らせ終えた印は端末に残し、ログインし直すまで消さない。ビューにはリーグを見分ける値（作り直したリーグかどうか）が無いので、同じ接続先でリーグを作り直すと、前のリーグの印と同じ鍵（手続きの `phase.id`・トレードやお知らせの `id`・結果の年）の知らせが出ないことがある。
-- 裏の確認でトークンの更新を断られた（400 / 401）ら、ログアウトはせず、アプリでログインし直す（または画面が更新できる）まで裏の確認を休む（`SessionStore.authBroken`）。更新は画面と同じ鍵を持って20秒まで待つ（`ResultWorker.REFRESH_TIMEOUT_MS`）。更新したログイン情報は書き終わるまで待って残す（`SessionStore.commitAuth`。更新トークンは1回きり）。端末の設定で通知を切られている間も読まない。
+- 裏の確認でトークンの更新を断られた（400 / 401）ら、ログアウトはせず、アプリでログインし直す（または画面が更新できる）まで裏の確認を休む（`SessionStore.authBroken`）。更新は画面と同じ鍵を持って行い、裏の確認が待つのは20秒まで（`ResultWorker.REFRESH_TIMEOUT_MS`）。待つのをやめても更新の通信は取り消さず、答えが遅れて届いたらそれも残す（サーバーはもう更新トークンを入れ替えているため）。その間も鍵は持ったままで、画面は期限が近いときだけ鍵を待つ。更新したログイン情報は書き終わるまで待って残す（`SessionStore.commitAuth`。更新トークンは1回きり）。端末の設定で通知を切られている間も読まない。
 - `view` には手元のビューの世代 `since`（ビューの `viewGeneration`）を添える。世代が同じ（かつ保存の版が今のサーバーと同じ）なら、サーバーはビューを送らず `{ unchanged: true, viewGeneration, writable }` だけ返す（`server/leagueService.mjs` の `view`）。アプリはこのとき `writable`（書き込めるか）だけを合わせる。世代を持たない保存先（開発サーバーの `FileStore`）は `since` を無視して毎回全部返す。
 - `command` の返事の `view` は最新のビューで、`view.viewGeneration` に公開した世代が入る（`server/storage/supabaseStore.mjs`）。アプリは読み直さずにこれを使い、次の `since` にする。返事に `view` が無ければ読み直す。
 - `games` は `year`・`page`・`scope`（`own` / `league`）・`size`（1〜200。既定は6）を受ける。紙面は `size=200` で自球団の1シーズンを1回で読む（`OWN_HISTORY_PAGE`）。
