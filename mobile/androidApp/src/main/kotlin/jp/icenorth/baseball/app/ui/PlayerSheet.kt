@@ -55,6 +55,7 @@ import jp.icenorth.baseball.shared.batteryPercent
 import jp.icenorth.baseball.shared.batteryRate
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.detailReadable
+import jp.icenorth.baseball.shared.formatGain
 import jp.icenorth.baseball.shared.formatStat
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
@@ -65,6 +66,7 @@ import jp.icenorth.baseball.shared.overviewGroup
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.str
 import kotlinx.serialization.json.JsonObject
+import kotlin.math.roundToInt
 import jp.icenorth.baseball.shared.StatFormat
 import jp.icenorth.baseball.shared.playerYearTable
 import androidx.compose.foundation.horizontalScroll
@@ -310,10 +312,11 @@ private fun YearsSection(model: AppViewModel, player: JsonObject, years: List<Js
                     table.abilities.forEach { a ->
                         val cell = row.abilities[a.key]
                         Row(head, verticalAlignment = Alignment.CenterVertically) {
-                            AbilityNum(null, cell?.value?.toInt(), velocity = a.format == StatFormat.Velocity, stamina = a.format == StatFormat.Stamina)
-                            cell?.diff?.takeIf { it != 0.0 }?.let { d ->
+                            // 数字は Web 版の AbilityGrade と同じく四捨五入。差は0.1刻み（丸めて0の差は playerYearTable が落とす）
+                            AbilityNum(null, cell?.value?.roundToInt(), velocity = a.format == StatFormat.Velocity, stamina = a.format == StatFormat.Stamina)
+                            cell?.diff?.let { d ->
                                 Text(
-                                    if (d > 0) "+${d.toInt()}" else "${d.toInt()}", fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                                    formatGain(d), fontSize = 9.sp, fontWeight = FontWeight.Bold,
                                     color = if (d > 0) androidx.compose.ui.graphics.Color(0xFF2E9E5B) else MaterialTheme.colorScheme.error,
                                 )
                             }

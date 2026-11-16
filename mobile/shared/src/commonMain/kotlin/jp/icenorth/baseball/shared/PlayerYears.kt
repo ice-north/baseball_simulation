@@ -1,6 +1,7 @@
 package jp.icenorth.baseball.shared
 
 import kotlinx.serialization.json.JsonObject
+import kotlin.math.roundToInt
 
 /**
  * 選手の「年ごとの推移」（年・年齢・所属・成績・能力を1年1行）。Web 版 `src/online/playerYears.js` と同じ中身。
@@ -30,6 +31,16 @@ private val PITCHING_YEAR_ABILITIES = listOf(
     YearAbility("velocity", "速", StatFormat.Velocity), YearAbility("control", "制", StatFormat.Ability),
     YearAbility("stamina", "ス", StatFormat.Stamina),
 )
+
+/**
+ * 能力の差を0.1刻みに丸める。丸めて0なら null（出さない）。Web 版の `yearDiff` と同じ
+ * （能力は小数で動く。以前はアプリが整数に切り捨てて +0.5 を緑の「+0」と出し、Web 版は +0.29999999999999716 と出した）
+ */
+fun yearDiff(value: Double?, before: Double?): Double? {
+    if (value == null || before == null) return null
+    val diff = ((value - before) * 10).roundToInt() / 10.0
+    return if (diff == 0.0) null else diff
+}
 
 private fun groupColumn(groups: List<StatGroup>, group: String, id: String) =
     groups.firstOrNull { it.id == group }?.columns?.firstOrNull { it.id == id }
@@ -61,7 +72,7 @@ fun playerYearTable(player: JsonObject, years: List<JsonObject>, periods: List<J
             abilities = abilities.associate { a ->
                 val value = y.at("abilities", a.key).num()
                 val before = older?.at("abilities", a.key).num()
-                a.key to YearCell(value, if (value != null && before != null) value - before else null)
+                a.key to YearCell(value, yearDiff(value, before))
             },
             stats = stats.associate { c -> c.id to period?.let(c.get) },
         )
