@@ -479,9 +479,14 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
  * 打撃: 首位打者、本塁打王、打点王、盗塁王
  * 投手: 最優秀防御率、最多勝、最多セーブ、最多奪三振
  * @param {Object} allTeams - TEAMS_DATA
+ * @param {Object} [options]
+ * @param {number} [options.totalGames] - シーズンの試合数。渡すと規定を本物のタイトル
+ *   （`processSeasonEnd`）と同じ規定打席・規定投球回（`qualifiedPA`・`qualifiedOuts`）にする。
+ *   ⚠ 渡さないときは従来の固定値（100打数・30アウト＝10回）のまま（一人用の `processNPBDraft`）。
+ *   固定値だと10回で防御率0.00の中継ぎが「最優秀防御率」になり、本物のタイトルと食い違う
  * @returns {Object} - playerId -> { bonus: number, awards: string[] }
  */
-export function computeSeasonAwardBonuses(allTeams) {
+export function computeSeasonAwardBonuses(allTeams, { totalGames } = {}) {
   const bonusMap = {};
   const addBonus = (playerId, points, awardName) => {
     if (!bonusMap[playerId]) bonusMap[playerId] = { bonus: 0, awards: [] };
@@ -505,13 +510,17 @@ export function computeSeasonAwardBonuses(allTeams) {
     if (sorted.length >= 2) addBonus(sorted[1].id, 5, `${title}2位`);
   };
 
-  const qualifiedBatters = allPlayers.filter(p => p.seasonStats?.batting?.atBats >= 100);
+  const useSeasonRule = Number.isFinite(totalGames) && totalGames > 0;
+  const qualifiedBatters = useSeasonRule
+    ? allPlayers.filter(p => plateAppearances(p.seasonStats?.batting) >= qualifiedPA(totalGames))
+    : allPlayers.filter(p => p.seasonStats?.batting?.atBats >= 100);
   awardRanking(qualifiedBatters, getBattingAvg, '首位打者');
   awardRanking(qualifiedBatters, p => p.seasonStats.batting.homeruns || 0, '本塁打王');
   awardRanking(qualifiedBatters, p => p.seasonStats.batting.rbis || 0, '打点王');
   awardRanking(qualifiedBatters, p => p.seasonStats.batting.stolenBases || 0, '盗塁王');
 
-  const qualifiedPitchers = allPlayers.filter(p => p.seasonStats?.pitching?.inningsPitched >= 30);
+  const minOuts = useSeasonRule ? qualifiedOuts(totalGames) : 30;
+  const qualifiedPitchers = allPlayers.filter(p => p.seasonStats?.pitching?.inningsPitched >= minOuts);
   awardRanking(qualifiedPitchers, getEra, '最優秀防御率', true);
   awardRanking(qualifiedPitchers, p => p.seasonStats.pitching.wins || 0, '最多勝');
   awardRanking(qualifiedPitchers, p => p.seasonStats.pitching.strikeouts || 0, '最多奪三振');

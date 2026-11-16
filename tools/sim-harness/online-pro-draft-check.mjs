@@ -8,6 +8,7 @@ import { TEAMS_DATA } from '../../src/teams-data.js';
 import {
   chooseProDraft,
   applyProDraft,
+  proDraftCandidates,
   proDraftChance,
   PRO_DRAFT_MAX,
   PRO_DRAFT_THRESHOLD,
@@ -16,6 +17,8 @@ import {
 } from '../../server/proDraft.mjs';
 import { teamChronicle, teamMoves, chronicleView } from '../../server/chronicle.mjs';
 import { FULL_SEASON_EXPERIENCE } from '../../src/season/campTraining.js';
+import { processSeasonEnd } from '../../src/season/yearProgressionSystem.js';
+import { qualifiedOuts } from '../../src/season/seasonManager.js';
 
 const quiet = (fn) => {
   const log = console.log;
@@ -110,6 +113,37 @@ assert.ok(mean >= 0.5 && mean <= 2.5, `年平均${mean.toFixed(2)}人（0.5〜2.
   assert.ok(teamMoves(league, name).some((m) => m.how === 'プロ入り' && m.name === star.name), '入退団履歴に無い');
   assert.equal(chronicleView(league).proDrafted[0].name, star.name, 'リーグ記録に無い');
   assert.ok(!('key' in chronicleView(league).proDrafted[0]), '記録の鍵をビューに出している');
+}
+
+// ⑤ 指名の点に足すタイトルは、本物のタイトル（`processSeasonEnd`。`season.frozenAwards`）と
+//    同じ規定で決める。⚠ 以前は固定の100打数・30アウト（＝10回）で、10回で防御率0.00の
+//    中継ぎが「最優秀防御率1位」として加点され、指名の理由にも出ていた
+{
+  const league = make(5);
+  const teams = teamsOf(league);
+  const games = league.season.settings.gamesPerSeason || league.season.schedule.length;
+  const minOuts = qualifiedOuts(games);
+  assert.ok(minOuts > 30, `規定投球回が10回以下（${minOuts}アウト）では検査にならない`);
+  const pitchers = Object.values(teams).flatMap((t) => t.players.filter((p) => p.position === 'pitcher'));
+  assert.ok(pitchers.length >= 3, '投手が足りない');
+  for (const p of pitchers) {
+    p.seasonStats.pitching = { ...p.seasonStats.pitching, inningsPitched: 0, earnedRuns: 0, wins: 0, strikeouts: 0, saves: 0 };
+  }
+  const [reliever, ace, other] = pitchers;
+  // 中継ぎ: 10回で自責0（規定に届かない）
+  Object.assign(reliever.seasonStats.pitching, { inningsPitched: 30, earnedRuns: 0 });
+  // 規定に届いた先発2人（防御率 2.25 と 4.50）
+  Object.assign(ace.seasonStats.pitching, { inningsPitched: minOuts, earnedRuns: Math.round(minOuts / 12) });
+  Object.assign(other.seasonStats.pitching, { inningsPitched: minOuts, earnedRuns: Math.round(minOuts / 6) });
+  const real = quiet(() => processSeasonEnd(league.season, TEAMS_DATA));
+  assert.equal(real.eraChampion?.id, ace.id, '本物の防御率王が規定に届いた先発になっていない（検査の前提）');
+  const awardsOf = (options) => (id) =>
+    proDraftCandidates(teams, new Set(), options).find((c) => c.player.id === id)?.awards || [];
+  // 前提: 試合数を渡さない従来の固定規定（一人用）では、この中継ぎが防御率1位になる
+  assert.ok(awardsOf({})(reliever.id).includes('最優秀防御率1位'), '検査の前提（固定規定なら中継ぎが1位）が崩れた');
+  const withRule = awardsOf({ totalGames: games });
+  assert.ok(!withRule(reliever.id).some((a) => a.startsWith('最優秀防御率')), `10回の中継ぎに防御率の加点: ${withRule(reliever.id)}`);
+  assert.ok(withRule(ace.id).includes('最優秀防御率1位'), `本物の防御率王に加点が無い: ${withRule(ace.id)}`);
 }
 
 console.log(`online-pro-draft-check PASS（年平均${mean.toFixed(2)}人・最大${Math.max(...counts)}人／ご褒美・球団史・リーグ記録）`);
