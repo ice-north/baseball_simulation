@@ -52,6 +52,12 @@ import kotlin.random.Random
  *    端末の標準の字は太さが足りない機種があるので、見出しだけアプリに入れた字を使う。
  */
 
+/**
+ * 1面の写真に影絵を描くか。いしだ 2026-11-17「影絵の絵が整うまでは影絵なしで」。
+ * 絵（PaperSilhouettes.kt の SHOT_IMAGES）がそろったら true にする
+ */
+internal const val SILHOUETTES_ON = false
+
 /** 見出しの極太ゴシック */
 val PaperGothic = FontFamily(Font(R.font.noto_sans_jp_black, FontWeight.Black))
 
@@ -210,9 +216,12 @@ fun StadiumPhoto(
     Canvas(modifier) {
         val paint = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(if (muted) 0.15f else 1f) }) }
         drawIntoCanvas { it.saveLayer(Rect(Offset.Zero, size), paint) }
-        drawStadium(this, measurer, away, home, top, bottom, awayTotal, homeTotal, seed, board)
+        val figure = SILHOUETTES_ON && (sceneImage != null || hasSilhouette(scene))
+        drawStadium(this, measurer, away, home, top, bottom, awayTotal, homeTotal, seed, board, roomForFigure = figure)
         // 影絵（左の手前。右は縦の見出し、下は斜めの帯が重なるので、上半身が見える所に立たせる）
-        if (sceneImage != null) {
+        if (!figure) {
+            // 影絵を止めている間は球場だけ
+        } else if (sceneImage != null) {
             drawSilhouetteImage(sceneImage, size.width * 0.02f, size.height * 0.97f, size.height * 0.64f)
         } else if (hasSilhouette(scene)) {
             val tall = size.height * (if (silhouetteWidth(scene) > 100f) 0.52f else 0.6f)
@@ -235,15 +244,16 @@ private fun drawStadium(
     homeTotal: Int,
     seed: Int,
     board: Color,
+    roomForFigure: Boolean,
 ) = with(d) {
     val w = size.width
     val h = size.height
     val u = w / 388f // 見本の絵（幅388）の物差し
     drawRect(Brush.verticalGradient(listOf(Color(0xFF0B1026), Color(0xFF27305C), Color(0xFF5B4A6E)), endY = h * 0.8f))
     // 照明塔（得点板より上に）
-    listOf(110f, 262f).forEach { x0 ->
+    listOf(if (roomForFigure) 110f else 22f, 262f).forEach { x0 ->
         val x = x0 * u
-        val y0 = 4 * u
+        val y0 = (if (roomForFigure) 4 else 26) * u
         drawRect(Color(0xFF11131F), Offset(x + 13 * u, y0 + 20 * u), Size(3 * u, 120 * u))
         drawRect(Color(0xFF1A1D2E), Offset(x, y0), Size(30 * u, 20 * u))
         for (i in 0 until 4) for (j in 0 until 2) drawCircle(Color(0xFFFFFBE0), 2.3f * u, Offset(x + (4.5f + i * 7) * u, y0 + (5 + j * 9) * u))
@@ -264,11 +274,11 @@ private fun drawStadium(
         val y = standTop - 12 * u * x / w + 3 * u + rnd.nextFloat() * (standBottom - standTop - 4 * u)
         drawCircle(crowd[rnd.nextInt(crowd.size)].copy(alpha = 0.8f), 1.1f * u, Offset(x, y))
     }
-    // 得点板（上の帯に。下は影絵の選手が立つ）
-    val bx = w * 0.04f
-    val by = h * 0.10f
+    // 得点板（影絵があるときは上の帯に。下に選手が立つ）
+    val bx = if (roomForFigure) w * 0.04f else 30 * u
+    val by = h * (if (roomForFigure) 0.10f else 0.22f)
     val bw = w * 0.6f
-    val bh = h * 0.25f
+    val bh = h * (if (roomForFigure) 0.25f else 0.30f)
     drawRect(Color(0xFF0C0E18), Offset(bx + 20 * u, by + bh), Size(6 * u, standTop - by - bh + 10 * u))
     drawRect(Color(0xFF0C0E18), Offset(bx + bw - 26 * u, by + bh), Size(6 * u, standTop - by - bh + 10 * u))
     drawRect(board, Offset(bx, by), Size(bw, bh))
