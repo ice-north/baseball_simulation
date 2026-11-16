@@ -70,6 +70,26 @@ try {
       baseSubmission: null,
     });
   }
+  // ⚠ 体力20前後のレギュラーを**必ず作る**。初期セットの名簿には体力40未満のレギュラーが
+  //    居ない年があり、以前はその年だけ「体力20前後」の確かめを黙って飛ばしていた。
+  //    CPU球団1つの打順の上位3人（野手）を体力18にする
+  const forcedWeak = await store.transaction((b) => {
+    const league = b.league;
+    const human = new Set((league.members || []).map((m) => m.teamName));
+    const name = league.season.settings.teamNames.find((n) => !human.has(n));
+    const team = league.game.teams[name];
+    const byId = new Map(team.players.map((p) => [p.id, p]));
+    const ids = (team.lineupSettings?.battingOrder || [])
+      .map((e) => byId.get(e.playerId))
+      .filter((p) => p && p.position !== 'pitcher')
+      .slice(0, 3)
+      .map((p) => {
+        p.physical = { ...(p.physical || {}), bodyStamina: 18 };
+        return p.id;
+      });
+    return { value: ids };
+  });
+  assert.equal(forcedWeak?.length, 3, '体力の低いレギュラーを作れない（打順が読めない）');
   const snapshot = (league) => {
     const out = new Map();
     for (const name of league.season.settings.teamNames) {
@@ -168,5 +188,7 @@ assert.ok(strong.n > 0 && strong.share >= 0.9, `体力の高いレギュラー�
 // 体力50前後: 10数試合で一度休む（早すぎず遅すぎず）
 assert.ok(middle.n > 0 && middle.firstRest >= 8 && middle.firstRest <= 30, `体力50前後の初めての休み: ${middle.firstRest}試合目`);
 // 体力20前後: 出ては休む（スタメンは6割まで）
-if (weak.n > 0) assert.ok(weak.share <= 0.65, `体力の低いレギュラーが出すぎ: ${weak.share}`);
+// ⚠ 居なければ落とす（黙って通さない。上で3人作っている）
+assert.ok(weak.n > 0, '体力40未満のレギュラーが1人も居ない（確かめられない）');
+assert.ok(weak.share <= 0.65, `体力の低いレギュラーが出すぎ: ${weak.share}`);
 console.log(`■ オンラインの野手の疲労: OK（${TURNS}ターン）`);
