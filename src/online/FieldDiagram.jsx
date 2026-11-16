@@ -79,12 +79,16 @@ export default function FieldDiagram({
   onPick,
   onHover,
 }) {
+  // ⚠ 図に無い位置（一人用の DH 制の指名打者）は図にも守備の平均にも入れない
+  //    （`src/components/lineup/SoloLineupBoard.jsx` から使う。オンラインは DH 無し）
   const at = {};
   order.forEach((entry, index) => {
-    at[entry.position] = { player: playerOf(entry.playerId), index };
+    if (COORDS[entry.position])
+      at[entry.position] = { player: playerOf(entry.playerId), index };
   });
   at.pitcher = { player: pitcher, index: null };
   const fielders = order
+    .filter((e) => COORDS[e.position])
     .map((e) => [playerOf(e.playerId), e.position])
     .filter(([p]) => p);
   const team = fielders.length
@@ -301,21 +305,24 @@ export default function FieldDiagram({
                 {k > 0 && <span className="online-lineup-field-swap">⇄</span>}
                 <span>
                   {side.player?.name || '（空き）'}{' '}
+                  {/* ⚠ 一人用の DH 制では指名打者（守らない）との入れ替えがある。適性は出さない */}
                   <small>
-                    {POS[side.from]}
-                    {side.before}%→{POS[side.to]}
+                    {side.from === 'dh' ? 'DH' : `${POS[side.from]}${side.before}%`}→
+                    {side.to === 'dh' ? 'DH' : POS[side.to]}
                   </small>
-                  <b
-                    className={
-                      side.after < 60
-                        ? 'is-low'
-                        : side.after >= 90
-                          ? 'is-good'
-                          : ''
-                    }
-                  >
-                    {side.after}%
-                  </b>
+                  {side.to !== 'dh' && (
+                    <b
+                      className={
+                        side.after < 60
+                          ? 'is-low'
+                          : side.after >= 90
+                            ? 'is-good'
+                            : ''
+                      }
+                    >
+                      {side.after}%
+                    </b>
+                  )}
                 </span>
               </React.Fragment>
             ))

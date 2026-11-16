@@ -7,6 +7,7 @@ import { generateOptimalLineup, generatePitchingRotation } from '../game/lineupG
 import { TabBar } from './GameUIComponents.jsx';
 import { AbilityValue } from './AbilityValue.jsx';
 import TutorialHint from './TutorialHint.jsx';
+import SoloLineupBoard from './lineup/SoloLineupBoard.jsx';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 import { surnameOf } from '../data/playerNames.js';
@@ -97,6 +98,7 @@ export const LineupSettingContent = ({
   displayName,
   initialTab = 'lineup',
   embedded = false,
+  board = false,
 }) => {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -1345,7 +1347,25 @@ export const LineupSettingContent = ({
               className="mb-4"
             />
 
-        {tab === 'lineup' && (
+        {/* 一人用（`board`）のスタメン設定は、オンラインPC版と同じ1枚の表（`lineup/SoloLineupBoard.jsx`）。
+            ⚠ オンラインのスマホ版（`OnlineLineup.jsx`）は `board` を渡さないので、下の従来の画面のまま */}
+        {tab === 'lineup' && board && (
+          <>
+          <TutorialHint id="lineup-playing-time" title="起用は育成でもある">
+            <b className="text-cyan-200">試合に出た選手ほど伸びます。</b>1年フル出場した若手は、ほとんど出番の無かった選手の<b className="text-cyan-200">2倍以上</b>成長します（実測: 300打席で能力合計 +12.7 に対し、0打席では +5.8）。
+            いま勝つために主力を並べるか、数年後のために若手を我慢して使うか——<b className="text-cyan-200">スタメンを決めることは育成方針を決めること</b>でもあります。
+          </TutorialHint>
+          <SoloLineupBoard
+            team={team}
+            useDH={useDH}
+            nextStarter={nextStarter}
+            onChange={() => setUpdateTrigger(prev => prev + 1)}
+            onOpen={setDetailPlayer}
+            resetKey={historyState.index}
+          />
+          </>
+        )}
+        {tab === 'lineup' && !board && (
           <>
           <TutorialHint id="lineup-dnd" title="スタメンの組み方">
             右の控え選手を<b className="text-cyan-200">ドラッグ＆ドロップ</b>で打順枠へ入れられます。枠どうしをドラッグすれば打順を入れ替えられます。<b className="text-cyan-200">守備位置は選手名の横のメニュー</b>から変更でき、使用中の位置を選ぶと交換します。「自動」ボタンで最適オーダーも組めます。
@@ -2975,7 +2995,8 @@ export const LineupSettingContent = ({
 const LineupSettingScreen = ({ teamName, onBack, embedded = false }) => {
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
-  return <LineupSettingContent teamName={teamName} onBack={onBack} team={team} embedded={embedded} />;
+  // ⚠ 一人用はスタメン設定をオンラインPC版と同じ表で出す（`board`）
+  return <LineupSettingContent teamName={teamName} onBack={onBack} team={team} embedded={embedded} board />;
 };
 
 export default LineupSettingScreen;
