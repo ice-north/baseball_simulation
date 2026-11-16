@@ -29,6 +29,15 @@ class ContractTableTest {
     }
 
     @Test
+    fun defaultOrderIsByPositionGroupThenRosterOrder() {
+        val roster = listOf(player(1, "left"), player(2, "pitcher"), player(3, "short"), player(4, "catcher"), player(5, "pitcher"))
+        assertEquals(listOf(2L, 5L, 4L, 3L, 1L), sortContractRoster(roster, null, false).map { it.pid })
+        val age = contractColumns().first { it.id == "age" }
+        val aged = listOf(player(1, "left") { put("age", 30) }, player(2, "pitcher"), player(3, "short") { put("age", 22) })
+        assertEquals(listOf(3L, 1L, 2L), sortContractRoster(aged, age, true).map { it.pid }, "値の無い選手は末尾")
+    }
+
+    @Test
     fun handednessUnknownIsADash() {
         assertEquals("—投—打", handLabel(player(1, "pitcher")), "分からない側を右と決めつけない")
         val lefty = player(2, "left") {

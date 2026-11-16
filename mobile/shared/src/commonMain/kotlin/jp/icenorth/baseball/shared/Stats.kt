@@ -194,11 +194,17 @@ private fun fixed(value: Double, digits: Int): String {
 }
 
 /** 表の文字。能力は数値（色は画面でランクから付ける） */
-fun formatStat(column: StatColumn, value: Double?): String {
+fun formatStat(column: StatColumn, value: Double?): String = formatStat(column.format, value)
+
+/**
+ * 成績の数字の書式（率は .312、小数は 3.45、件数は整数。無い・負は「—」、無限は「∞」）。
+ * ⚠ 画面ごとに丸めを書かない（以前は通算の画面が別に書いていた）。Web 版 `statsView.js` の `formatStat`
+ */
+fun formatStat(format: StatFormat, value: Double?): String {
     if (value == null || value.isNaN()) return "—"
     if (value == Double.POSITIVE_INFINITY) return "∞"
     if (value < 0) return "—"
-    return when (column.format) {
+    return when (format) {
         StatFormat.Condition -> CONDITION_TEXT.getOrNull(value.toInt()) ?: "—"
         StatFormat.Innings -> "${floor(value / 3).toInt()}.${value.toInt() % 3}"
         StatFormat.Rate -> fixed(value, 3).let { if (it.startsWith("0.")) it.substring(1) else it }
@@ -206,6 +212,13 @@ fun formatStat(column: StatColumn, value: Double?): String {
         StatFormat.Percent -> fixed(value * 100, 1).removeSuffix(".0") + "%"
         else -> fixed(value, 0)
     }
+}
+
+/** サーバーの書式の名前（通算ランキングの `format`: rate / decimal / count）を [StatFormat] に */
+fun statFormatOf(name: String?): StatFormat = when (name) {
+    "rate" -> StatFormat.Rate
+    "decimal" -> StatFormat.Decimal
+    else -> StatFormat.Count
 }
 
 /** 能力の列ならランク（色付け用） */
@@ -254,6 +267,16 @@ fun seasonLine(player: JsonObject): String {
     val avgText = avg?.let { fixed(it, 3).let { t -> if (t.startsWith("0.")) t.substring(1) else t } } ?: "—"
     return "今季 ${games}試合 打率$avgText ${hr}本"
 }
+
+private val CONTRACT_GROUP_ORDER = listOf("pitcher", "catcher", "infielder", "outfielder")
+
+/**
+ * 契約更改の表の並べ方（Web 版 `contractTable.js` の `sortContractRoster` と同じ）。
+ * 列が無ければ守備位置の順（投・捕・内・外、同じ区分は名簿の順）。列があればその値で（無い値は末尾、同じ値は名簿の順）
+ */
+fun sortContractRoster(roster: List<JsonObject>, column: StatColumn?, ascending: Boolean): List<JsonObject> =
+    if (column == null) roster.sortedBy { CONTRACT_GROUP_ORDER.indexOf(rosterGroup(it.at("position").str())) }
+    else sortRoster(roster, column, ascending)
 
 private val HANDED = mapOf("left" to "左", "right" to "右", "switch" to "両")
 

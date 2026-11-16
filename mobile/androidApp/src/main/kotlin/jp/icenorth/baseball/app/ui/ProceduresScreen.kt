@@ -47,14 +47,13 @@ import jp.icenorth.baseball.app.savedPhaseDraft
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.handLabel
+import jp.icenorth.baseball.shared.sortContractRoster
 import jp.icenorth.baseball.shared.rosterLimitOf
 import jp.icenorth.baseball.shared.rosterStandardOf
 import jp.icenorth.baseball.shared.signTotal
 import jp.icenorth.baseball.shared.ONLINE_ROSTER_TARGETS
 import jp.icenorth.baseball.shared.rosterCounts
-import jp.icenorth.baseball.shared.rosterGroup
 import jp.icenorth.baseball.shared.contractColumns
-import jp.icenorth.baseball.shared.sortRoster
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
@@ -671,9 +670,7 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     var sortId by rememberSaveable { mutableStateOf<String?>(null) }
     var ascending by rememberSaveable { mutableStateOf(false) }
     val sortColumn = columns.firstOrNull { it.id == sortId }
-    val groupOrder = listOf("pitcher", "catcher", "infielder", "outfielder")
-    val base = roster.withIndex().sortedWith(compareBy({ groupOrder.indexOf(rosterGroup(it.value.at("position").str())) }, { it.index })).map { it.value }
-    val sorted = sortRoster(base, sortColumn, ascending)
+    val sorted = sortContractRoster(roster, sortColumn, ascending)
     Section(
         "解雇する選手（${releases.size}人）",
         trailing = {

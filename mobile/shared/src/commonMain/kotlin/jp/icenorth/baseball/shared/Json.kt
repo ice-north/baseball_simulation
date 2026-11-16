@@ -22,3 +22,9 @@ fun JsonElement?.int(): Int? = num()?.toInt()
 fun JsonElement?.long(): Long? = num()?.toLong()
 fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
 fun JsonElement?.bool(): Boolean? = (this as? JsonPrimitive)?.booleanOrNull
+
+/**
+ * 選手などの `id` を文字の鍵にする（数の 12 も文字の "12" も同じ "12"。12.0 にしない）。
+ * 結果の `gains` の鍵（文字）と名簿の `id`（数）を突き合わせるときに使う
+ */
+fun JsonElement?.idKey(): String? = at("id").let { it.num()?.toLong()?.toString() ?: it.str() }
