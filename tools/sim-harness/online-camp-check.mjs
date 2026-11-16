@@ -971,16 +971,24 @@ assert.ok(
     }
     // ⚠ ここまで**自分で3クール**回した。締め切りで回るのは残り1クールだけ。
     //    数えていないと、さらに4クール回って合計7クールぶん伸びる。
-    //    3クールぶんの伸びを基準に、4クールぶん（約1.33倍）の範囲に収まること。
     const perThree = two.meet - start.meet;
     const all4 = finished.meet - start.meet;
     assert.ok(
       all4 > perThree,
       `残りのクールが回っていない: 3クール${perThree} / 全部${all4}`,
     );
-    assert.ok(
-      all4 < perThree * 1.9,
-      `自分で回したぶんが数えられていない（二重に成長した）: 3クール${perThree} / 全部${all4}`,
+    // ⚠ 倍率（全部 < 3クール×1.9）で見ていたが、最後のクールは経験値を使う（覚醒が出やすい）ので
+    //    1クールで3クールぶんより伸びる年があり、CI で落ちた（3クール10 / 全部23）。
+    //    締め切りで回ったのが**1クールだけ**かを、クールごとの記録で直に見る
+    assert.equal(
+      (completed.byRound || []).length,
+      4,
+      `自分で回したぶんが数えられていない（二重に成長した）: クールの記録 ${(completed.byRound || []).length}件`,
+    );
+    assert.equal(
+      Math.round(recorded(completed.byRound.at(-1).gains, 'batting.meet')),
+      finished.meet - two.meet,
+      `締め切りで1クールより多く回った: 3クール${perThree} / 全部${all4}`,
     );
 
     // ⚠ キャンプが終わったら打順が組み直されていること（空のまま開幕させない）
