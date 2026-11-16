@@ -22,6 +22,14 @@
     'Hiragino Kaku Gothic ProN',
     sans-serif;
 }
+/* 一人用の画面の中に、オンラインの部品をそのまま置く入れ物（`.online.online-desktop.online-embed`）。
+   画面全体の地色・高さ・文字の大きさは一人用のまま（一人用のスタメン設定 `SoloLineupBoard.jsx`）。
+   ⚠ 中に一人用（Tailwind）の部品を入れないこと（`.online button` などが上書きする） */
+.online.online-embed {
+  min-height: 0;
+  background: transparent;
+  font-size: 14px;
+}
 .online *:not(:where(.online-sp *)),
 .online *:not(:where(.online-sp *))::before,
 .online *:not(:where(.online-sp *))::after {

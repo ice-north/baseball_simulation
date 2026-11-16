@@ -55,6 +55,7 @@ const CHECKS = [
   { name: 'online-read-cache-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stats-view-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-lineup-board-check', group: 'quick', online: true, slow: 1 },
+  { name: 'solo-lineup-board-check', group: 'quick', slow: 1 },
   { name: 'online-pitching-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stove-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-camp-target-check', group: 'quick', online: true, slow: 6 },

@@ -257,24 +257,31 @@ export function driver(page) {
     },
     // スタメン設定の打順のカードの窮屈さ。行の中の要素が行の右端からはみ出す量（px）と、
     // 名前の行（1行目）が折り返している行の数を返す
+    // スタメン設定の表（オンラインと同じ1枚の表。`SoloLineupBoard.jsx`）の収まり。
+    // ⚠ 以前は打順のカード（4/4/4 → 7/12 の列）の折り返し・はみ出しを測っていた。表になってからは
+    //    「名前が折り返さない」「表の横の送り（scroll）が何px要るか」「守備の判断に要る列（適性）が
+    //    送らずに見えるか」を測る。表が無ければ null
     async lineupCardFit() {
       return page.evaluate(() => {
-        const h = [...document.querySelectorAll('h2')].find((e) => e.textContent.trim() === 'スタメン設定');
-        const card = h?.closest('.rounded-xl');
-        if (!card) return null;
-        const rows = [...card.querySelectorAll('[draggable="true"]')];
-        let overflow = 0, wrapped = 0;
-        for (const r of rows) {
-          const right = r.getBoundingClientRect().right;
-          for (const el of r.querySelectorAll('*')) {
-            const b = el.getBoundingClientRect();
-            if (b.width) overflow = Math.max(overflow, b.right - right);
-          }
-          const kids = [...(r.querySelector('.flex-wrap')?.children || [])].map((c) => c.getBoundingClientRect()).filter((b) => b.width);
-          const firstBottom = Math.min(...kids.map((b) => b.bottom));
-          if (kids.some((b) => b.top >= firstBottom - 1)) wrapped++;
-        }
-        return { width: Math.round(card.getBoundingClientRect().width), rows: rows.length, overflow: Math.round(overflow), wrapped };
+        const board = document.querySelector('[data-testid=solo-lineup-board]');
+        const scroll = board?.querySelector('.online-lineup-scroll');
+        if (!scroll) return null;
+        const rows = [...board.querySelectorAll('tbody[aria-label="スタメン"] tr[data-slot]')];
+        const wrapped = rows.filter((r) => {
+          const name = r.querySelector('.online-player-name');
+          if (!name) return false;
+          const line = parseFloat(getComputedStyle(name).lineHeight) || 20;
+          return name.getBoundingClientRect().height > line * 1.5;
+        }).length;
+        const frame = scroll.getBoundingClientRect();
+        const fit = [...board.querySelectorAll('thead th')].find((th) => th.innerText.trim() === '適性');
+        return {
+          width: Math.round(frame.width),
+          rows: rows.length,
+          overflow: Math.max(0, scroll.scrollWidth - scroll.clientWidth),
+          wrapped,
+          fitnessVisible: !!fit && fit.getBoundingClientRect().right <= frame.right + 1,
+        };
       });
     },
     // キャンプの表で、練習を組む列（メイン・サブ・練習側・派遣）の見出しのうち、表の枠か画面の

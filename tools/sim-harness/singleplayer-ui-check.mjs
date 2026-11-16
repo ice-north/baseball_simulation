@@ -200,23 +200,23 @@ try {
   await noAiWords('ロスター管理のベンチ登録');
   await ui.click('試合のオーダー');
   await ui.click('スタメン設定');
-  // 1280×720 で打順のカードが窮屈でないこと（以前は 4/4/4 の3列で幅331px、体・疲のバーと打率が
-  // 右端で139px切れ、名前の行が折り返していた）
+  // 1280×720 でスタメン設定の表が横に送らずに収まること（オンラインPC版と同じ1枚の表。
+  // 以前の打順のカードは 4/4/4 の3列で幅331px、体・疲のバーと打率が右端で139px切れていた）
   await page.setViewportSize({ width: 1280, height: 720 });
   // 幅が変わり、画面の縮尺の当て直し（App.jsx の自動フィットは rAF で走る）が済むまで待つ
   await page.waitForFunction(() => innerWidth === 1280);
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const fit = await ui.lineupCardFit();
-  assert.ok(fit && fit.rows >= 5 && fit.overflow <= 1 && fit.wrapped === 0,
-    `1280×720 のスタメン設定で打順のカードが窮屈: ${JSON.stringify(fit)}`);
-  // md（768px）〜1151px も同じ。以前は 1280幅の直し（打順 7/12）が 1100幅より狭いと足りず、
-  // 1024幅で打点が21px切れ、800幅では名前の行が8行折り返した
+  assert.ok(fit && fit.rows >= 8 && fit.overflow <= 1 && fit.wrapped === 0,
+    `1280×720 のスタメン設定の表が収まらない: ${JSON.stringify(fit)}`);
+  // md（768px）〜1151px は今季成績の右の列を表の中で横に送る（オンラインと同じ）。名前は折り返さず、
+  // 守備の判断に要る列（適性まで）は送らずに見えること
   for (const [width, height] of [[1024, 768], [800, 600], [768, 1024]]) {
     await page.setViewportSize({ width, height });
     await page.waitForTimeout(400);
     const narrow = await ui.lineupCardFit();
-    assert.ok(narrow && narrow.rows >= 5 && narrow.overflow <= 1 && narrow.wrapped === 0,
-      `${width}×${height} のスタメン設定で打順のカードが窮屈: ${JSON.stringify(narrow)}`);
+    assert.ok(narrow && narrow.rows >= 8 && narrow.wrapped === 0 && (width < 1000 || narrow.fitnessVisible),
+      `${width}×${height} のスタメン設定の表が窮屈: ${JSON.stringify(narrow)}`);
   }
   await page.setViewportSize({ width: 1400, height: 900 });
   await ui.click('守備分析');

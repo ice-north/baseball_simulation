@@ -79,12 +79,16 @@ export default function FieldDiagram({
   onPick,
   onHover,
 }) {
+  // ⚠ 図に無い位置（一人用の DH 制の指名打者）は図にも守備の平均にも入れない
+  //    （`src/components/lineup/SoloLineupBoard.jsx` から使う。オンラインは DH 無し）
   const at = {};
   order.forEach((entry, index) => {
-    at[entry.position] = { player: playerOf(entry.playerId), index };
+    if (COORDS[entry.position])
+      at[entry.position] = { player: playerOf(entry.playerId), index };
   });
   at.pitcher = { player: pitcher, index: null };
   const fielders = order
+    .filter((e) => COORDS[e.position])
     .map((e) => [playerOf(e.playerId), e.position])
     .filter(([p]) => p);
   const team = fielders.length
