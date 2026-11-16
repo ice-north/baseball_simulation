@@ -79,6 +79,9 @@ class FrontPagePaperTest {
         // コラムは1面の記事に入れない（囲みで別に出す）
         assertTrue(p.frontArticles!!.none { it.link == LINK_TIPS })
         assertNotNull(p.column)
+        // 写真の影絵（負けた日はうなだれる選手）
+        assertEquals(if (p.tone == FrontPage.Tone.Lose) SCENE_DOWN else p.scene, p.scene)
+        assertNotNull(p.scene)
     }
 
     @Test
@@ -98,6 +101,7 @@ class FrontPagePaperTest {
         assertNull(p.bigHead)
         assertNull(p.hero)
         assertTrue(p.results.isEmpty())
+        assertNull(p.scene)
     }
 
     @Test

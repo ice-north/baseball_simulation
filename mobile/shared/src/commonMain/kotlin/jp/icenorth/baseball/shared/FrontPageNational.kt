@@ -80,6 +80,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
     var score: FrontPage.Score? = null
     var extra = false
     var nationalBigHead: String? = null
+    var nationalScene: String? = null
     if (story != null) {
         val g = story.g
         val w = g.winner()
@@ -120,6 +121,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
                 wScore - lScore == 1 -> "接戦制す"
                 else -> "快勝"
             }
+            nationalScene = if (lScore == 0) SCENE_PITCHER else if (wScore - lScore >= 5) SCENE_HOMER else SCENE_BATTER
             kicker = listOfNotNull(league.ifEmpty { null }, if (ws >= 2) "${ws}連勝" else null).joinToString("・").ifEmpty { null }
             val winPlace = if (w == g.home) "本拠地" else "敵地"
             val table = view.teamLeagues[w]?.let { view.leagueTable(it) }.orEmpty()
@@ -311,5 +313,6 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         frontArticles = null,
         teamPage = null,
         recordPage = null,
+        scene = nationalScene,
     )
 }

@@ -201,6 +201,7 @@ fun StadiumPhoto(
     muted: Boolean,
     board: Color,
     modifier: Modifier = Modifier,
+    scene: String? = null,
 ) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -209,6 +210,11 @@ fun StadiumPhoto(
         val paint = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(if (muted) 0.15f else 1f) }) }
         drawIntoCanvas { it.saveLayer(Rect(Offset.Zero, size), paint) }
         drawStadium(this, measurer, away, home, top, bottom, awayTotal, homeTotal, seed, board)
+        // 影絵（左の手前。右は縦の見出し、下は斜めの帯が重なるので、上半身が見える所に立たせる）
+        if (hasSilhouette(scene)) {
+            val tall = size.height * (if (silhouetteWidth(scene) > 100f) 0.52f else 0.6f)
+            drawSilhouettes(scene, size.width * 0.03f + silhouetteWidth(scene) / 2 * tall / 100f, size.height * 0.95f, tall)
+        }
         drawIntoCanvas { it.restore() }
         drawRect(dot)
         if (muted) drawRect(Color.Black.copy(alpha = 0.18f))
@@ -231,16 +237,17 @@ private fun drawStadium(
     val h = size.height
     val u = w / 388f // 見本の絵（幅388）の物差し
     drawRect(Brush.verticalGradient(listOf(Color(0xFF0B1026), Color(0xFF27305C), Color(0xFF5B4A6E)), endY = h * 0.8f))
-    // 照明塔
-    listOf(22f, 250f).forEach { x0 ->
+    // 照明塔（得点板より上に）
+    listOf(110f, 262f).forEach { x0 ->
         val x = x0 * u
-        drawRect(Color(0xFF11131F), Offset(x + 13 * u, 46 * u), Size(3 * u, 120 * u))
-        drawRect(Color(0xFF1A1D2E), Offset(x, 26 * u), Size(30 * u, 20 * u))
-        for (i in 0 until 4) for (j in 0 until 2) drawCircle(Color(0xFFFFFBE0), 2.3f * u, Offset(x + (4.5f + i * 7) * u, (31 + j * 9) * u))
+        val y0 = 4 * u
+        drawRect(Color(0xFF11131F), Offset(x + 13 * u, y0 + 20 * u), Size(3 * u, 120 * u))
+        drawRect(Color(0xFF1A1D2E), Offset(x, y0), Size(30 * u, 20 * u))
+        for (i in 0 until 4) for (j in 0 until 2) drawCircle(Color(0xFFFFFBE0), 2.3f * u, Offset(x + (4.5f + i * 7) * u, y0 + (5 + j * 9) * u))
         drawCircle(
-            Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), Color(0xFFFFF6C8).copy(alpha = 0.45f), Color.Transparent), center = Offset(x + 15 * u, 36 * u), radius = 52 * u),
+            Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), Color(0xFFFFF6C8).copy(alpha = 0.45f), Color.Transparent), center = Offset(x + 15 * u, y0 + 10 * u), radius = 52 * u),
             52 * u,
-            Offset(x + 15 * u, 36 * u),
+            Offset(x + 15 * u, y0 + 10 * u),
         )
     }
     // 観客席
@@ -254,11 +261,11 @@ private fun drawStadium(
         val y = standTop - 12 * u * x / w + 3 * u + rnd.nextFloat() * (standBottom - standTop - 4 * u)
         drawCircle(crowd[rnd.nextInt(crowd.size)].copy(alpha = 0.8f), 1.1f * u, Offset(x, y))
     }
-    // 得点板
-    val bx = 30 * u
-    val by = h * 0.22f
+    // 得点板（上の帯に。下は影絵の選手が立つ）
+    val bx = w * 0.04f
+    val by = h * 0.10f
     val bw = w * 0.6f
-    val bh = h * 0.30f
+    val bh = h * 0.25f
     drawRect(Color(0xFF0C0E18), Offset(bx + 20 * u, by + bh), Size(6 * u, standTop - by - bh + 10 * u))
     drawRect(Color(0xFF0C0E18), Offset(bx + bw - 26 * u, by + bh), Size(6 * u, standTop - by - bh + 10 * u))
     drawRect(board, Offset(bx, by), Size(bw, bh))

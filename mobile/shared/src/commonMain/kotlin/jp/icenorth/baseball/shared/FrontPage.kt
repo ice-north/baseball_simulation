@@ -77,6 +77,8 @@ data class FrontPage(
     val recordPage: RecordPage? = null,
     /** 速報を見るまで伏せている（新聞風は「ただいま印刷中」） */
     val sealed: Boolean = false,
+    /** 1面の写真に描く影絵の場面（[SCENE_HOMER] など）。null なら球場だけ */
+    val scene: String? = null,
 ) {
     enum class Tone { Win, Lose, Draw, None }
     enum class Paper(val label: String) { Local("地元紙"), National("全国紙") }
@@ -543,6 +545,7 @@ fun buildFrontPage(
         column = column,
         teamPage = teamPage,
         recordPage = recordPage,
+        scene = if (offPhase) null else sceneOf(tone, facts, hero),
     )
 }
 

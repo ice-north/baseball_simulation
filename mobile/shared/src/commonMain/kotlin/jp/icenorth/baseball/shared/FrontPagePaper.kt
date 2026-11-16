@@ -815,3 +815,23 @@ internal fun teamMark(view: LeagueView, team: String): String {
     val clash = (view.teamLeagues.keys + view.teamLabels.keys).any { it != team && view.teamShort(it).take(1) == head }
     return if (clash) short else head
 }
+
+// 1面の写真の影絵（Android の PaperParts.kt が描く）
+const val SCENE_HOMER = "homer"
+const val SCENE_WALKOFF = "walkoff"
+const val SCENE_PITCHER = "pitcher"
+const val SCENE_BATTER = "batter"
+const val SCENE_DOWN = "down"
+
+/** 写真の影絵の場面（サヨナラの歓喜・本塁打・投手・構える打者・うなだれる選手） */
+internal fun sceneOf(tone: FrontPage.Tone, f: GameFacts?, hero: PaperHero?): String? = when (tone) {
+    FrontPage.Tone.Win -> when {
+        f?.walkOff == true -> SCENE_WALKOFF
+        hero?.position == "投手" -> SCENE_PITCHER
+        (f?.ourHomeruns ?: 0) > 0 -> SCENE_HOMER
+        else -> SCENE_BATTER
+    }
+    FrontPage.Tone.Lose -> SCENE_DOWN
+    FrontPage.Tone.Draw -> SCENE_BATTER
+    FrontPage.Tone.None -> null
+}

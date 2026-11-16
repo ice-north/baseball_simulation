@@ -286,6 +286,7 @@ private fun PhotoStage(page: FrontPage, accent: Color, modifier: Modifier) {
             muted = lose,
             board = if (national) Color(0xFF1D2A3A) else Color(0xFF123524),
             modifier = Modifier.fillMaxSize(),
+            scene = page.scene,
         )
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxHeight()) {

@@ -145,4 +145,5 @@ fun FrontPage.sealedForQuick(): FrontPage = copy(
     teamPage = null,
     recordPage = null,
     sealed = true,
+    scene = null,
 )
