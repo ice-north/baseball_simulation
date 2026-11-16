@@ -179,6 +179,23 @@ export function campGainTable(gains = {}, roster = [], events = {}) {
   };
 }
 
+/**
+ * キャンプで伸びた選手（どれか1項目でも上がった）と、そのうち伸びの合計が大きかった上位 `n` 人。
+ * ホームのまとめ（`CampHomeSummary`）に使う。
+ * ⚠ 表の行には**数字が動かなくても出来事（フォーム改造など）があった選手**や、合計が負の選手も
+ *    載る（`campGainRows`）。以前は行から上位3人を取っていたので、伸びた選手が少ない年は
+ *    「伸びの大きかった選手: ○○ +0」「○○ -1」と出ていた。上位は**合計が正の、伸びた選手**から取る
+ */
+export function campTopGainers(rows, n = 3) {
+  const grown = rows.filter((r) => r.items.some((i) => i.diff > 0));
+  const top = sortCampGainRows(
+    grown.filter((r) => r.sum > 0),
+    'sum',
+    'desc',
+  ).slice(0, n);
+  return { grown, top };
+}
+
 /** 表の並べ替え（`key` は列の項目、'sum' は計）。値の無いマスは0として比べる。同じ値は元の順 */
 export function sortCampGainRows(rows, key = 'sum', dir = 'desc') {
   const value = (r) => (key === 'sum' ? r.sum : r.values[key] ?? 0);

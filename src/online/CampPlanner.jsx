@@ -26,6 +26,7 @@ import {
   campGainRows,
   campGainTotals,
   campGainTable,
+  campTopGainers,
   sortCampGainRows,
   formatGain,
 } from './campGains.js';
@@ -640,13 +641,12 @@ function campSeen(view) {
 /** ホームのキャンプ結果のまとめ（何人が伸び、伸びの大きかった3人） */
 function CampHomeSummary({ camp, roster }) {
   const table = campGainTable(camp?.gains || {}, roster, camp?.events || {});
-  const grown = table.rows.filter((r) => r.items.some((i) => i.diff > 0));
-  const top = sortCampGainRows(table.rows, 'sum', 'desc').slice(0, 3);
-  const sum = (r) => r.items.reduce((n, i) => n + i.diff, 0);
+  // ⚠ 上位は伸びた選手から（出来事だけの行・合計が負の行を入れない）。数字は表の「計」（`r.sum`）
+  const { grown, top } = campTopGainers(table.rows, 3);
   return (
     <p className="online-muted">
       キャンプが終わりました。{grown.length}人が伸びました
-      {top.length > 0 && `（伸びの大きかった選手: ${top.map((r) => `${r.player.name} ${formatGain(Math.round(sum(r) * 10) / 10)}`).join('・')}）`}
+      {top.length > 0 && `（伸びの大きかった選手: ${top.map((r) => `${r.player.name} ${formatGain(Math.round(r.sum * 10) / 10)}`).join('・')}）`}
       。閉じたあとも「現在の手続き」の下で見られます。
     </p>
   );
