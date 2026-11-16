@@ -51,6 +51,7 @@
 - `games` は `year`・`page`・`scope`（`own` / `league`）・`size`（1〜200。既定は6）を受ける。紙面は `size=200` で自球団の1シーズンを1回で読む（`OWN_HISTORY_PAGE`）。
 - 試合の勝敗投手（ビューの `results`・`games`・`game` の `decisions` の `winningPitcher` / `losingPitcher` / `savePitcher` / `holdPitchers`）は `{ id, name }` だけ（`server/recordedViews.mjs` の `decisionRefs`）。能力や成績は載らないので、自球団の投手は名簿（ビューの `roster`）から `id` で引く。
 - タイトル争い（ビューの `leaders` の `rows`）の行は `{ id, name, team, label, value }`（`server/leagueBoard.mjs` の `leagueLeaders`）。アプリは行を押すと球団の名簿から `id` で選手を探し、名前では探し直さない（同じ球団の同名の別人を開かないため。`shared/.../PlayerLookup.kt`）。`id` の無い古いサーバーの行だけ名前で探す。
+- 選手枠の上限と標準の人数は、ビューの `rosterLimit`・`rosterStandard`（`server/projection.mjs`。中身は `src/online/shared.js` の `ROSTER_LIMIT`・`ROSTER_STANDARD`）を読む。トレードの人数の確かめ（`shared/.../Tryout.kt` の `rosterShortfall`・`dealProblems`）・トライアウトの空き枠（`rosterRoom`・`rosterFill`）・契約更改の説明はこの数を使い、無い古いサーバーのときだけアプリの表の数（`Tables.kt`）を使う（`rosterLimitOf`・`rosterStandardOf`）。アプリの表の数は作ったときのままなので、枠を変えたら古いアプリでもサーバーの数で確かめられるようにするため（以前のアプリは26人のままで、28人にしたサーバーとずれた）。
 - 編成の保存（`command` の `lineup`）は、ビューの `lineup` を**丸ごと**送り返し、`baseLineup` に編集前の塊を添える。アプリが知らない項目もそのまま返すので、編成に項目を足すのは構わない。
 - 手続きの任せ方は、ビューの `phase.delegated`（自分がその手続きを指導者に任せているか）と `members` の `ready`・`cpu`・`delegated` を読む。任せた手続きは決定の帯を出さず、`defaults` の案（指導者の案）を読むだけで見せる。待たれている最後の1人が手続きの分野を「任せる」にして保存すると、サーバーはその場で手続きを決めるので、アプリは送る前に確かめる（`shared/.../Staff.kt` の `delegationSettles`。`server/leagueEngine.mjs` の `waitsFor` と同じ見方）。
 

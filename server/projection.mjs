@@ -38,7 +38,12 @@ import {
   statisticsContext,
 } from './recordedViews.mjs';
 import { recordForPlayer } from './recordedStats.mjs';
-import { requireOnline, seasonStage } from '../src/online/shared.js';
+import {
+  requireOnline,
+  seasonStage,
+  ROSTER_LIMIT,
+  ROSTER_STANDARD,
+} from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
@@ -458,6 +463,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     error: l.error,
     teamName: member.teamName,
     year: l.season.year,
+    // 選手枠の上限と標準の人数。アプリはこれを読む（古いアプリが持っている数が古いと、
+    // トレード・トライアウトの確かめがサーバーとずれるため。無ければアプリの持っている数）
+    rosterLimit: ROSTER_LIMIT,
+    rosterStandard: ROSTER_STANDARD,
     lastCamp: l.campResults?.[userId] || null,
     // トライアウトで入った選手・交渉して他球団に取られた選手（`resolveTryout`）
     lastTryout: l.tryoutResults?.[userId] || null,

@@ -228,9 +228,19 @@ fun planSummary(rankedIds: List<Long>, candidates: List<JsonObject>, count: Int,
 
 // --- トレード（src/online/trades.js と同じ条件） ---------------------------
 
-/** 名簿として成り立つか（rosterShortfall） */
-fun rosterShortfall(players: List<JsonObject>): List<String> = buildList {
-    if (players.size > ROSTER_LIMIT) add("${ROSTER_LIMIT}人を超えます（${players.size}人）")
+/**
+ * 選手枠の上限（ビューの `rosterLimit`）。サーバーの数を正にする（アプリの表の数は作ったときのまま古くなる。
+ * 以前のアプリは26人のままで、28人にしたサーバーとトレード・トライアウトの確かめがずれた）。
+ * 送らない古いサーバーのときだけ表の数（[ROSTER_LIMIT]）
+ */
+fun rosterLimitOf(view: JsonObject?): Int = view.at("rosterLimit").int()?.takeIf { it > 0 } ?: ROSTER_LIMIT
+
+/** 標準の人数（ビューの `rosterStandard`。自動で埋めるのはここまで）。無ければ表の数（[ROSTER_STANDARD]） */
+fun rosterStandardOf(view: JsonObject?): Int = view.at("rosterStandard").int()?.takeIf { it > 0 } ?: ROSTER_STANDARD
+
+/** 名簿として成り立つか（rosterShortfall）。[limit] は選手枠の上限（[rosterLimitOf]） */
+fun rosterShortfall(players: List<JsonObject>, limit: Int = ROSTER_LIMIT): List<String> = buildList {
+    if (players.size > limit) add("${limit}人を超えます（${players.size}人）")
     if (players.none { it.isPitcherJson() }) add("投手が居なくなります")
     if (players.none { it.at("position").str() == "catcher" }) add("捕手が居なくなります")
     val fielders = players.count { !it.isPitcherJson() }
@@ -245,10 +255,10 @@ fun rostersAfterTrade(mine: List<JsonObject>, theirs: List<JsonObject>, give: Se
     return TradeAfter(mine.filter { it.pid !in give } + coming, theirs.filter { it.pid !in get } + moving)
 }
 
-fun dealProblems(mine: List<JsonObject>, theirs: List<JsonObject>?, give: Set<Long>, get: Set<Long>): List<String> {
+fun dealProblems(mine: List<JsonObject>, theirs: List<JsonObject>?, give: Set<Long>, get: Set<Long>, limit: Int = ROSTER_LIMIT): List<String> {
     theirs ?: return emptyList()
     val after = rostersAfterTrade(mine, theirs, give, get)
-    return rosterShortfall(after.mine) + rosterShortfall(after.theirs)
+    return rosterShortfall(after.mine, limit) + rosterShortfall(after.theirs, limit)
 }
 
 /** 候補がいまの名簿の同じ区分で何番手にあたるか（Web 版の `teamFitRank` と同じ） */
