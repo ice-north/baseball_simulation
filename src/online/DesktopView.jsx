@@ -1,5 +1,7 @@
 import Chronicle from './Chronicle.jsx';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useFirstWeek } from './useFirstWeek.js';
+import AgeOutlook from './AgeOutlook.jsx';
 import {
   Results,
   Notices,
@@ -45,6 +47,7 @@ import { TradeStartContext } from './tradeStart.js';
 import { OWNER_COMMENT_MAX } from './social.js';
 import {
   AwaySummaryBanner,
+  FirstWeekBanner,
   TransactionsPage,
   StarterPicksPage,
   ExhibitionPage,
@@ -437,6 +440,8 @@ export default function DesktopView(props) {
   };
   const procedure = pendingProcedure(view);
   const waiting = packWaiting(view);
+  // はじめての1週間（参加してから7日。開いたページの手順を済みにする）
+  const firstWeek = useFirstWeek(view, current, 'page');
   return (
     <TradeStartContext.Provider value={startTrade}>
       <nav className="online-page-nav" aria-label="オンラインの画面">
@@ -565,6 +570,10 @@ export default function DesktopView(props) {
           年度更新）は決めて待つものなので、これまでどおり手続きのページ。 */}
       {/* 留守中のまとめ（前に開いたときから何が起きたか）。ホームの上に、閉じるまで出す */}
       {current === 'today' && <AwaySummaryBanner away={props.away} close={props.dismissAway} />}
+      {/* はじめての1週間（途中参戦した人。次にやることを1つだけ） */}
+      {current === 'today' && !campHere && (
+        <FirstWeekBanner guide={firstWeek.guide} open={(step) => setTab(step.page)} close={firstWeek.close} />
+      )}
       {current === 'today' && (
         <Page>
           {campHere ? (
@@ -643,6 +652,8 @@ export default function DesktopView(props) {
                   desktop
                 />
               </section>
+              {/* 自球団だけ: 年齢構成と3年後の見込み（成長力を使うので他球団には無い） */}
+              {shown.teamName === view.teamName && <AgeOutlook outlook={view.ageOutlook} />}
             </Page>
           )}
         </TeamRoster>

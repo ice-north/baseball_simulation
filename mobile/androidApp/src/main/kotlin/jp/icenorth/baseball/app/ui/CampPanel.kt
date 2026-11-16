@@ -56,6 +56,7 @@ import jp.icenorth.baseball.shared.campGroupOf
 import jp.icenorth.baseball.shared.campMenusFor
 import jp.icenorth.baseball.shared.campSubMenusFor
 import jp.icenorth.baseball.shared.campSubTargetChoices
+import jp.icenorth.baseball.shared.campTargetRequired
 import jp.icenorth.baseball.shared.Choice
 import jp.icenorth.baseball.shared.clampMenu
 import jp.icenorth.baseball.shared.clampSub
@@ -518,21 +519,23 @@ private fun CampPlayerCard(
         }
         // 対象を取る練習（新球種習得・変化球練習・サブポジ練習）だけ、何を練習するかを選ぶ。⚠「おまかせ」を残す（従来どおり中で選ぶ）
         val choices = campSubTargetChoices(sub, p)
-        if (choices.isNotEmpty()) TargetPicker(target, choices, enabled, onTarget)
+        if (choices.isNotEmpty()) TargetPicker(target, choices, enabled, if (campTargetRequired(sub)) "未選択" else "おまかせ", onTarget)
+        if (choices.isNotEmpty() && campTargetRequired(sub) && choices.none { it.key == target })
+            Text("選ばないと基礎体力になります", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 /** サブ練習の対象（Web 版 CampPlanner の対象の欄と同じ選択肢） */
 @Composable
-private fun TargetPicker(selected: String?, choices: List<Choice>, enabled: Boolean, onPick: (String?) -> Unit) {
+private fun TargetPicker(selected: String?, choices: List<Choice>, enabled: Boolean, none: String, onPick: (String?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val current = choices.firstOrNull { it.key == selected }
     Box(Modifier.fillMaxWidth()) {
         OutlinedButton(onClick = { open = true }, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
-            Text("対象: ${current?.label ?: "おまかせ"}", fontSize = 12.sp, maxLines = 1)
+            Text("対象: ${current?.label ?: none}", fontSize = 12.sp, maxLines = 1)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("おまかせ", fontWeight = if (current == null) FontWeight.Bold else FontWeight.Normal) }, onClick = { open = false; onPick(null) })
+            DropdownMenuItem(text = { Text(none, fontWeight = if (current == null) FontWeight.Bold else FontWeight.Normal) }, onClick = { open = false; onPick(null) })
             choices.forEach { c ->
                 DropdownMenuItem(
                     text = { Text(c.label, fontWeight = if (c.key == current?.key) FontWeight.Bold else FontWeight.Normal) },

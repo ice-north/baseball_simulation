@@ -4,7 +4,7 @@ import TeamRoster from './TeamRoster.jsx';
 import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import { teamLabel, teamShort } from './gameText.js';
-import { raceText, milestoneText, worldText } from './chronicleText.js';
+import { raceText, milestoneText, worldText, honorRows } from './chronicleText.js';
 
 // ============================================================
 // 球団史・記録（PC）。年表・歴代記録・引退した人・節目、リーグの話題。
@@ -136,6 +136,12 @@ function ProDrafted({ list, showTeam = false, empty }) {
           <span>
             {r.npbTeam} {r.round}位指名{r.reason ? `　${r.reason}` : ''}
           </span>
+          {/* プロでのその後（球団史は全部の年、リーグ全体はいちばん新しい年。飾りでリーグには効かない） */}
+          {(r.career || (r.after ? [r.after] : [])).map((t, j) => (
+            <small key={j} className="online-pro-after">
+              {t}
+            </small>
+          ))}
         </article>
       ))}
     </div>
@@ -203,6 +209,23 @@ function Moves({ list }) {
   );
 }
 
+/** 年間表彰（リーグ全体。いちばん新しい年） */
+function Honors({ honors }) {
+  const rows = honorRows(honors, teamShort);
+  if (!rows.length)
+    return <p>まだありません。10月下旬に成績が確定すると、タイトルと部ごとのMVP・新人王・ベストナイン・最優秀バッテリーが決まります。</p>;
+  return (
+    <div className="online-news-list">
+      {rows.map((r, i) => (
+        <article key={i}>
+          <b>{r.head}</b>
+          <span>{r.body}</span>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function Milestones({ list, showTeam = false }) {
   if (!list?.length) return <p>まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。</p>;
   return (
@@ -243,7 +266,9 @@ export function LeagueTopics({ view, full = false }) {
     .filter((x) => x.text)
     .slice(0, limit);
   const milestones = full ? [] : view.chronicle?.milestones || [];
-  if (!races.length && !world.length && !milestones.length) return null;
+  // 今年のプロの便り（10月から年度更新まで）
+  const pro = (view.chronicle?.proNews || []).slice(0, limit);
+  if (!races.length && !world.length && !milestones.length && !pro.length) return null;
   return (
     <section className="online-card">
       {/* ⚠ 続きの案内は**見出しの行に置く**。1行足すと24px取られ、順位表ごと
@@ -266,6 +291,21 @@ export function LeagueTopics({ view, full = false }) {
         <>
           <h3>最近の節目</h3>
           <Milestones list={milestones.slice(0, HOME_TOPIC_LIMIT)} showTeam />
+        </>
+      )}
+      {pro.length > 0 && (
+        <>
+          <h3>プロの便り</h3>
+          <div className="online-news-list">
+            {pro.map((p, i) => (
+              <article key={`p:${i}`}>
+                <b>
+                  {p.name}（元{teamShort(p.team)}）
+                </b>
+                <span>{p.text}</span>
+              </article>
+            ))}
+          </div>
         </>
       )}
       {world.length > 0 && (
@@ -332,6 +372,10 @@ export default function Chronicle({ view }) {
                   <Retired list={c.retired} />
                 </section>
                 {/* リーグ全体の記録（球団を選び直しても同じ） */}
+                <section className="online-card">
+                  <h2>年間表彰{view.chronicle?.honors?.year ? `（${view.chronicle.honors.year}年目）` : ''}</h2>
+                  <Honors honors={view.chronicle?.honors} />
+                </section>
                 <section className="online-card">
                   <h2>リーグからプロへ</h2>
                   <ProDrafted

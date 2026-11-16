@@ -72,6 +72,17 @@ class SessionStore(context: Context) {
         get() = prefs.getStringSet("seenTrades", null)?.toSet().orEmpty()
         set(value) = prefs.edit().putStringSet("seenTrades", value).apply()
 
+    /** はじめての1週間（済んだ手順の id と閉じたか）。鍵は [jp.icenorth.baseball.shared.firstWeekKey] */
+    var firstWeekKey: String?
+        get() = prefs.getString("firstWeekKey", null)
+        set(value) = prefs.edit().putString("firstWeekKey", value).apply()
+    var firstWeekDone: Set<String>
+        get() = prefs.getStringSet("firstWeekDone", null)?.toSet().orEmpty()
+        set(value) = prefs.edit().putStringSet("firstWeekDone", value).apply()
+    var firstWeekClosed: Boolean
+        get() = prefs.getBoolean("firstWeekClosed", false)
+        set(value) = prefs.edit().putBoolean("firstWeekClosed", value).apply()
+
     /** ホームのキャンプ結果を閉じた年（「球団名:年」）。閉じたら次のキャンプまで出さない */
     var campSeen: String?
         get() = prefs.getString("campSeen", null)

@@ -32,7 +32,7 @@ out('data class Menu(val key: String, val name: String, val icon: String, val de
 out('data class Choice(val key: String, val label: String)');
 out('data class ChoiceField(val key: String, val label: String, val numeric: Boolean, val options: List<Choice>, val default: String)');
 out('');
-const only = { breaking: 'pitcher', newpitch: 'pitcher', spin_analysis: 'pitcher', clead_study: 'catcher' };
+const only = { breaking: 'pitcher', newpitch: 'pitcher', spin_analysis: 'pitcher', clead_study: 'catcher', form_change: 'pitcher' };
 // 守備位置で決まる「その練習が効くか」は campTraining.js の関数で確かめてから書く
 for (const key of Object.keys(only))
   if (SUB_TRAINING_MENUS[key] && shared.CAMP_SUB_MENUS.includes(key)) {
@@ -134,6 +134,10 @@ const list = (name, values) => {
 map('CAMP_SUB_TARGETS', shared.CAMP_SUB_TARGETS);
 list('CAMP_PITCH_TYPES', shared.CAMP_PITCH_TYPES);
 list('CONVERT_POSITIONS', shared.CONVERT_POSITIONS);
+// フォーム改造・打席変更の対象（選ばないと基礎体力になる種類と、選べる形）
+list('CAMP_TARGET_REQUIRED', shared.CAMP_TARGET_REQUIRED);
+list('CAMP_FORMS', shared.CAMP_FORMS);
+list('CAMP_BATS', shared.CAMP_BATS);
 map('POSITION_NAMES', api.POS_FULL);
 // 人どうしの関わり（ひとことの字数・おるすばんの日数・予告先発の確定・練習試合の回数。Web 版 social.js）
 for (const k of ['TRADE_NOTE_MAX', 'OWNER_COMMENT_MAX', 'CHALLENGE_NOTE_MAX', 'AWAY_DAYS', 'STARTER_LOCK_TURNS', 'STARTER_PICK_GAMES', 'EXHIBITIONS_PER_DAY']) {

@@ -158,8 +158,8 @@ function campWith(build, seed = undefined) {
 // ⚠ **効かないサブ練習を出さないこと**。変化球練習・新球種習得・スピン解析は
 //    投手にしか効かず、Cリード学習は捕手だけ。出すと、選べるのにそのクールが
 //    丸ごと無駄になる（`executeSubTraining` が何もせずに返る）。
-// ⚠ **フォーム改造・打席変更はまだ出さない**（対象の種類が増える）。
-//    サブポジ練習は `CAMP_SUB_TARGETS` に載せて対象を選べるようにしたので出す。
+// ⚠ フォーム改造・打席変更は対象を選ぶ（`online-camp-target-check` が中身を見る）。
+//    フォーム改造は投手だけ。サブポジ練習は `CAMP_SUB_TARGETS` に載せて対象を選べるようにしたので出す。
 //    これが欠けていた間、**野手のサブ練習は体づくり系だけ**だった。
 {
   // 画面が出すサブ練習そのもの（`campMenus.js` の `subMenusFor`）
@@ -167,11 +167,8 @@ function campWith(build, seed = undefined) {
   const pitcher = { position: 'pitcher' };
   const catcher = { position: 'catcher' };
   const fielder = { position: 'left' };
-  for (const key of ['form_change', 'switch_hit'])
-    assert.ok(
-      !CAMP_SUB_MENUS.includes(key),
-      `対象の種類が無いサブ練習を出している: ${key}`,
-    );
+  assert.ok(offered(pitcher).includes('form_change'), '投手にフォーム改造が出ていない');
+  assert.ok(!offered(fielder).includes('form_change'), '野手にフォーム改造が出ている');
   for (const key of CAMP_SUB_MENUS)
     assert.ok(SUB_TRAINING_MENUS[key], `知らないサブ練習がある: ${key}`);
   // ⚠ **野手に守備の伸ばし方を出すこと**。サブポジ練習が抜けると、野手の

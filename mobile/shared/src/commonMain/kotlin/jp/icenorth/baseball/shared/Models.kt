@@ -18,6 +18,8 @@ data class LeagueView(
     val status: String? = null,
     val teamName: String? = null,
     val year: Int? = null,
+    /** 参加した時刻（はじめての1週間。FirstWeek.kt）。リーグを作ったときの人と古いサーバーには無い */
+    val joinedAt: String? = null,
     val useDH: Boolean = false,
     val currentDate: GameDate? = null,
     val seasonTurns: Int = SEASON_TURNS,

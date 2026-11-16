@@ -35,6 +35,16 @@ class CampTargetTest {
     }
 
     @Test
+    fun formAndBatsOfferOnlyOtherShapes() {
+        // ⚠ Web 版と同じ文（「サイドへ」「両打へ」）。いまの形は出さない
+        assertEquals(listOf("overhand" to "オーバーへ", "sidearm" to "サイドへ", "submarine" to "アンダーへ"), campSubTargetChoices("form_change", pitcher).map { it.key to it.label })
+        val lefty = obj("""{"id":3,"position":"left","batting":{"bats":"left"}}""")
+        assertEquals(listOf("right" to "右打へ", "switch" to "両打へ"), campSubTargetChoices("switch_hit", lefty).map { it.key to it.label })
+        assertEquals(true, campTargetRequired("switch_hit"))
+        assertEquals(false, campTargetRequired("newpitch"))
+    }
+
+    @Test
     fun onlyTargetsThatFitTheCurrentSubTrainingAreSent() {
         val sub = mapOf(1L to "physique", 2L to "subposition")
         // 投手は練習を変えたので前の対象（fork）を送らない。合わない値（pitcher）も送らない

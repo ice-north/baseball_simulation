@@ -44,6 +44,7 @@ import jp.icenorth.baseball.shared.AWAY_DAYS
 import jp.icenorth.baseball.shared.CHALLENGE_NOTE_MAX
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.EXHIBITIONS_PER_DAY
+import jp.icenorth.baseball.shared.FIRST_WEEK_NOTE
 import jp.icenorth.baseball.shared.Exhibition
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineJson
@@ -92,6 +93,25 @@ fun AwayCard(model: AppViewModel, onOpenInbox: () -> Unit) {
         if (model.view?.inbox.orEmpty().isNotEmpty()) {
             TextButton(onClick = onOpenInbox) { Text("お知らせを見る") }
         }
+    }
+}
+
+/**
+ * はじめての1週間（参加してから7日。Web 版 `FirstWeekBanner` と同じ文）。次にやることを1つだけ出す。
+ * `open(face)`: 編成のその面を開く
+ */
+@Composable
+fun FirstWeekCard(model: AppViewModel, open: (String) -> Unit) {
+    @Suppress("UNUSED_VARIABLE") val serial = model.firstWeekSerial // 済み・閉じたら作り直す
+    val guide = remember(model.view, serial) { model.firstWeekGuideNow() } ?: return
+    Section(
+        "はじめての1週間（${guide.done}/${guide.total}）",
+        modifier = Modifier.testTag("first-week"),
+        trailing = { TextButton(onClick = model::closeFirstWeek) { Text("案内を閉じる") } },
+    ) {
+        Text("次は「${guide.next.title}」", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(guide.next.body + if (guide.done == 0) " $FIRST_WEEK_NOTE" else "", style = MaterialTheme.typography.bodyMedium)
+        Button(onClick = { open(guide.next.face) }) { Text("開く") }
     }
 }
 

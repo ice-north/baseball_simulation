@@ -32,6 +32,7 @@ import TeamLineupButton from './TeamLineup.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
+import AgeOutlook from './AgeOutlook.jsx';
 import TryoutResult from './TryoutResult.jsx';
 import { plannedPicks, signTotal } from './tryoutPlan.js';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
@@ -1006,6 +1007,8 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
           onReset={resetToDefaults}
         />
       )}
+      {/* 年齢構成と3年後の見込み（若手を取るか即戦力か・誰を残すかの材料。`AgeOutlook.jsx`） */}
+      {(plan.rankedIds || plan.releaseIds) && <AgeOutlook outlook={view.ageOutlook} compact />}
       {plan.releaseIds && (
         <ContractPlanner
           roster={view.roster}

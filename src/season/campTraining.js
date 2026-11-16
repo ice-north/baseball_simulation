@@ -266,6 +266,9 @@ const SUB_MENU_ONLY = {
   newpitch: 'pitcher',
   spin_analysis: 'pitcher',
   clead_study: 'catcher',
+  // ⚠ 野手のフォーム改造はミートが少し伸びるだけ（打撃練習と変わらない）。名前どおりの
+  //    投球フォームの改造は投手だけなので、オンラインでは投手にだけ出す（一人用の画面はこの表を見ない）
+  form_change: 'pitcher',
 };
 export const subMenuFitsPlayer = (key, player) => {
   if (!SUB_TRAINING_MENUS[key]) return false;

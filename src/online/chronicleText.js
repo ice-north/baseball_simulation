@@ -57,3 +57,34 @@ export function worldText(w, short = (n) => n) {
   }
   return null;
 }
+
+/**
+ * 年間表彰の行（`view.chronicle.honors`。サーバー `seasonAwards.mjs` の `honorsView`）。
+ * タイトル（リーグ全体）と、部ごとの MVP・新人王・最優秀バッテリー・ベストナイン。
+ * @returns {{ head: string, body: string }[]}
+ */
+export function honorRows(h, short = (n) => n) {
+  if (!h) return [];
+  const who = (x) => `${x.name}（${short(x.team)}）`;
+  const rows = [];
+  if (h.titles?.length)
+    rows.push({
+      head: 'タイトル',
+      body: h.titles.map((t) => `${t.label} ${who(t)}${t.line ? ` ${t.line}` : ''}`).join('、'),
+    });
+  for (const l of h.leagues || []) {
+    if (l.mvp) rows.push({ head: `${l.league} MVP`, body: `${who(l.mvp)} ${l.mvp.line}` });
+    if (l.rookie) rows.push({ head: `${l.league} 新人王`, body: `${who(l.rookie)} ${l.rookie.line}` });
+    if (l.battery)
+      rows.push({
+        head: `${l.league} 最優秀バッテリー`,
+        body: `${l.battery.pitcher}・${l.battery.catcher}（${short(l.battery.team)}） ${l.battery.line}`,
+      });
+    if (l.bestNine?.length)
+      rows.push({
+        head: `${l.league} ベストナイン`,
+        body: l.bestNine.map((x) => `${x.label} ${who(x)}`).join('、'),
+      });
+  }
+  return rows;
+}

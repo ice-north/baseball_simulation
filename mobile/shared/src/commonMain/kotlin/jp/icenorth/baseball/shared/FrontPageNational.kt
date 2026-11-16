@@ -218,6 +218,32 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
     }
     // 指導者（オフはリーグの人事。シーズン中は監督の通算勝利の節目）
     articles += staffNationalArticles(view, view.phase?.kind in OFF_PHASES, today.mapNotNull { it.winner() }.toSet())
+    // 年間表彰（成績が確定した10月下旬から年度更新まで。その年の表彰だけ）
+    view.chronicle.honors?.takeIf { it.year == view.year && it.leagues.isNotEmpty() }?.let { h ->
+        val top = h.leagues.first().mvp
+        val rows = honorRows(h, view::teamShort).filter { !it.first.endsWith("ベストナイン") }
+        articles += FrontPage.Article(
+            "年間表彰",
+            top?.let { "${h.leagues.first().league}MVPは${view.teamShort(it.team)}・${it.name}" } ?: "今季の表彰が決まる",
+            rows.joinToString("") { "${it.first}は${it.second}。" },
+            LINK_GAMES,
+        )
+    }
+    // プロの便り（リーグからプロへ行った選手の今年。10月から年度更新まで。飾り）
+    view.chronicle.proNews.takeIf { it.isNotEmpty() }?.let { news ->
+        val top = news.first()
+        val head = when (top.highlight) {
+            null -> "元${view.teamShort(top.team)}・${top.name}、プロでの今季"
+            "ended" -> "元${view.teamShort(top.team)}・${top.name}、プロの舞台を去る"
+            else -> "元${view.teamShort(top.team)}・${top.name}、${top.highlight}"
+        }
+        articles += FrontPage.Article(
+            "プロの便り",
+            head,
+            news.joinToString("") { "${it.name}（元${view.teamShort(it.team)}）は${it.text.substringAfter(": ")}。" },
+            LINK_GAMES,
+        )
+    }
     // 引退（年度更新のあと。リーグ全体の大物から）
     if (view.phase?.kind in OFF_PHASES && view.chronicle.retired.isNotEmpty()) {
         val gone = view.chronicle.retired

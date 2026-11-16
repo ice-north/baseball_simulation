@@ -17,6 +17,10 @@ import {
   CAMP_POLICY_GUIDE,
   CAMP_SUB_TARGETS,
   CAMP_PITCH_TYPES,
+  CAMP_TARGET_REQUIRED,
+  CAMP_FORMS,
+  CAMP_BATS,
+  currentBats,
   CONVERT_POSITIONS,
 } from './shared.js';
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
@@ -63,7 +67,10 @@ import { formatDeadline } from './LeaguePanels.jsx';
  * ⚠ 新球種は**おすすめの印を添える**（いしだ指摘）。覚えやすさはフォーム適性と
  *    緩急の補完（`secondAffinity`）で決まるのに、名前だけ並べても分からない。
  *    一人用のキャンプ画面と同じ印（★フォーム適性・◆緩急適性）を使う。
+ * ⚠ フォーム改造・打席変更は**いまの形を除く**。変わったあとは選択肢から消え、
+ *    「未選択」に戻る（サーバーは基礎体力で回す。`campSubKey`）。文はアプリ（Camp.kt）と同じ
  */
+export const BATS_SHORT = { right: '右打', left: '左打', switch: '両打' };
 export function subTargetChoices(key, player) {
   const kind = CAMP_SUB_TARGETS[key];
   const owned = (player.pitching?.arsenal || [])
@@ -81,6 +88,14 @@ export function subTargetChoices(key, player) {
     return (player.pitching?.arsenal || [])
       .filter((pitch) => owned.includes(pitch.type) && (pitch.level ?? 0) < 100)
       .map((pitch) => [pitch.type, `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`]);
+  if (kind === 'form')
+    return CAMP_FORMS.filter(
+      (form) => form !== (player.pitching?.form || 'threeQuarter'),
+    ).map((form) => [form, `${FORM_SHORT[form]}へ`]);
+  if (kind === 'bats')
+    return CAMP_BATS.filter((bats) => bats !== currentBats(player)).map(
+      (bats) => [bats, `${BATS_SHORT[bats]}へ`],
+    );
   if (kind === 'position')
     return CONVERT_POSITIONS.filter(
       (pos) => pos !== 'pitcher' && pos !== player.position,
@@ -357,16 +372,26 @@ function PlayerRow({
         </select>
         {/* ⚠ 対象を取る練習だけ**同じ欄の中に横に**出す。列を足すと23列が24列に
             なって横に溢れ、下に積むと行の高さが倍になる。
-            ⚠ 「おまかせ」を残す（従来どおり中で選ぶ） */}
+            ⚠ 「おまかせ」を残す（従来どおり中で選ぶ）。フォーム改造・打席変更は選ばないと
+            練習しない（基礎体力になる）ので「未選択」 */}
         {choices.length > 0 && (
           <select
             className="online-camp-target"
             aria-label={`${player.name}の練習の対象`}
+            title={
+              CAMP_TARGET_REQUIRED.includes(CAMP_SUB_TARGETS[sub])
+                ? '選ばないと基礎体力になります'
+                : undefined
+            }
             value={target || ''}
             disabled={busy}
             onChange={(e) => onTarget(player.id, e.target.value)}
           >
-            <option value="">おまかせ</option>
+            <option value="">
+              {CAMP_TARGET_REQUIRED.includes(CAMP_SUB_TARGETS[sub])
+                ? '未選択'
+                : 'おまかせ'}
+            </option>
             {choices.map(([key, label]) => (
               <option key={key} value={key}>
                 {label}

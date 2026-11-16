@@ -63,6 +63,8 @@ import jp.icenorth.baseball.shared.TeamChronicle
 import jp.icenorth.baseball.shared.ChronicleView
 import jp.icenorth.baseball.shared.proDraftedHead
 import jp.icenorth.baseball.shared.proDraftedBody
+import jp.icenorth.baseball.shared.honorRows
+import jp.icenorth.baseball.shared.proDraftedAfter
 import jp.icenorth.baseball.shared.TEAM_RECORD_ROWS
 import jp.icenorth.baseball.shared.careerRecordLine
 import jp.icenorth.baseball.shared.historyLine
@@ -228,6 +230,8 @@ fun HomeScreen(
             // 留守中のまとめ（前に開いたときからの変わったこと）と、見ていない試合の速報。紙面の外に置く（閉じれば消える）
             if (model.away != null) item(key = "away") { AwayCard(model, onOpenInbox = { showInbox = true }) }
             item(key = "quick") { QuickReplayCard(model, view) }
+            // はじめての1週間（途中参戦した人。次にやることを1つだけ。開くと編成のその面へ）
+            item(key = "firstWeek") { FirstWeekCard(model) { face -> model.planFaceRequest = face; onOpenLineup() } }
             // ⚠ 先方指摘「キャンプ結果は契約更改のあとではなく、キャンプ直後に」。キャンプを終えた年のうちは
             //    ホームの上に出す（閉じれば消え、次のキャンプまで出さない。Web 版 `CompletedCamp` の onHome と同じ）
             val camp = model.raw?.at("lastCamp").obj()
@@ -325,9 +329,12 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
     var data by remember { mutableStateOf<TeamChronicle?>(null) }
     var failed by remember { mutableStateOf(false) }
     // リーグ全体のプロ入り（ビューの chronicle。古いサーバーには無い）
-    val league = remember(model.view) {
-        model.raw?.at("chronicle").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(ChronicleView.serializer(), it) }.getOrNull() }?.proDrafted.orEmpty()
+    val leagueChronicle = remember(model.view) {
+        model.raw?.at("chronicle").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(ChronicleView.serializer(), it) }.getOrNull() }
     }
+    val league = leagueChronicle?.proDrafted.orEmpty()
+    // 年間表彰（リーグ全体。いちばん新しい年。Web 版 Chronicle.jsx の Honors と同じ）
+    val honors = leagueChronicle?.honors
     LaunchedEffect(team) {
         runCatching {
             model.read("team", mapOf("team" to team)).at("chronicle").obj()?.let { OnlineJson.decodeFromJsonElement(TeamChronicle.serializer(), it) }
@@ -384,6 +391,16 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                         Column {
                             Text(proDraftedHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
+                            proDraftedAfter(r).forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                    }
+                    item { ChronicleHeading("年間表彰" + (honors?.year?.takeIf { it > 0 }?.let { "（${it}年目）" } ?: "")) }
+                    val honorList = honorRows(honors) { model.view?.teamShort(it) ?: it }
+                    if (honorList.isEmpty()) item { Text("まだありません。10月下旬に成績が確定すると、タイトルと部ごとのMVP・新人王・ベストナイン・最優秀バッテリーが決まります。", style = MaterialTheme.typography.bodySmall) }
+                    items(honorList.withIndex().toList(), key = { "h${it.index}" }) { (_, r) ->
+                        Column {
+                            Text(r.first, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(r.second, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     item { ChronicleHeading("リーグからプロへ") }
@@ -392,6 +409,7 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                         Column {
                             Text(proDraftedHead(r) { model.view?.teamShort(it) ?: it }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
+                            proDraftedAfter(r).forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
                     }
                     item { ChronicleHeading("引退した選手") }

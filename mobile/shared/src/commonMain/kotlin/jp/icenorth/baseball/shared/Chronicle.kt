@@ -80,6 +80,10 @@ data class ChronicleView(
     val world: List<WorldNews> = emptyList(),
     /** リーグからプロ入りした選手（新しい順）。古いサーバーには無い */
     val proDrafted: List<ProDrafted> = emptyList(),
+    /** いちばん新しい年の表彰。古いサーバーには無い */
+    val honors: Honors? = null,
+    /** 今年のプロの便り。古いサーバーには無い */
+    val proNews: List<ProNews> = emptyList(),
 )
 
 /**
@@ -96,7 +100,24 @@ data class ProDrafted(
     val npbTeam: String = "",
     val round: Int? = null,
     val reason: String? = null,
+    /** プロでのいちばん新しい年の一行（飾り。サーバー proCareer.mjs）。古いサーバーには無い */
+    val after: String? = null,
+    /** プロでの歩み（古い順。球団史の方だけ） */
+    val career: List<String> = emptyList(),
 )
+
+/** 今年のプロの便り（10月から年度更新まで） */
+@Serializable
+data class ProNews(
+    val name: String = "",
+    val team: String = "",
+    val npbTeam: String = "",
+    val text: String = "",
+    val highlight: String? = null,
+)
+
+/** プロでのその後の行（球団史は全部の年、リーグ全体はいちばん新しい年。Web 版 Chronicle.jsx と同じ） */
+fun proDraftedAfter(r: ProDrafted): List<String> = r.career.ifEmpty { listOfNotNull(r.after) }
 
 /** プロ入りの見出し（「3年目　山田（投手・20歳）」。`short` を渡すと元の球団も付ける） */
 fun proDraftedHead(r: ProDrafted, short: ((String) -> String)? = null): String =
@@ -285,3 +306,50 @@ internal fun retiredBody(list: List<Retired>, short: ((String) -> String)?): Str
             (r.secondCareer?.let { "今後は${it}として球界に残る。" } ?: "") +
             (if (r.hallOfFame) "殿堂入りの成績を残した。" else "")
     } + if (list.size > 3) "ほかに${list.size - 3}人がユニフォームを脱いだ。" else ""
+
+/** 表彰を受けた人（サーバー seasonAwards.mjs。ベストナインは label＝守備位置） */
+@Serializable
+data class Honoree(
+    val name: String = "",
+    val team: String = "",
+    val line: String? = null,
+    val label: String? = null,
+    val position: String? = null,
+    val id: Long? = null,
+)
+
+@Serializable
+data class HonorBattery(val team: String = "", val pitcher: String = "", val catcher: String = "", val line: String = "")
+
+@Serializable
+data class LeagueHonors(
+    val league: String = "",
+    val mvp: Honoree? = null,
+    val rookie: Honoree? = null,
+    val bestNine: List<Honoree> = emptyList(),
+    val battery: HonorBattery? = null,
+)
+
+/** いちばん新しい年の表彰（タイトルと部ごとの表彰）。古いサーバーには無い */
+@Serializable
+data class Honors(
+    val year: Int = 0,
+    val titles: List<Honoree> = emptyList(),
+    val leagues: List<LeagueHonors> = emptyList(),
+)
+
+/** 年間表彰の行（見出し → 中身）。⚠ Web 版 chronicleText.js の honorRows と同じ文 */
+fun honorRows(h: Honors?, short: (String) -> String = { it }): List<Pair<String, String>> {
+    if (h == null) return emptyList()
+    fun who(name: String, team: String) = "${name}（${short(team)}）"
+    val rows = mutableListOf<Pair<String, String>>()
+    if (h.titles.isNotEmpty())
+        rows += "タイトル" to h.titles.joinToString("、") { t -> "${t.label} ${who(t.name, t.team)}" + (t.line?.takeIf { it.isNotEmpty() }?.let { " $it" } ?: "") }
+    for (l in h.leagues) {
+        l.mvp?.let { rows += "${l.league} MVP" to "${who(it.name, it.team)} ${it.line.orEmpty()}" }
+        l.rookie?.let { rows += "${l.league} 新人王" to "${who(it.name, it.team)} ${it.line.orEmpty()}" }
+        l.battery?.let { rows += "${l.league} 最優秀バッテリー" to "${it.pitcher}・${it.catcher}（${short(it.team)}） ${it.line}" }
+        if (l.bestNine.isNotEmpty()) rows += "${l.league} ベストナイン" to l.bestNine.joinToString("、") { "${it.label.orEmpty()} ${who(it.name, it.team)}" }
+    }
+    return rows
+}
