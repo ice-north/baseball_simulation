@@ -305,21 +305,24 @@ export default function FieldDiagram({
                 {k > 0 && <span className="online-lineup-field-swap">⇄</span>}
                 <span>
                   {side.player?.name || '（空き）'}{' '}
+                  {/* ⚠ 一人用の DH 制では指名打者（守らない）との入れ替えがある。適性は出さない */}
                   <small>
-                    {POS[side.from]}
-                    {side.before}%→{POS[side.to]}
+                    {side.from === 'dh' ? 'DH' : `${POS[side.from]}${side.before}%`}→
+                    {side.to === 'dh' ? 'DH' : POS[side.to]}
                   </small>
-                  <b
-                    className={
-                      side.after < 60
-                        ? 'is-low'
-                        : side.after >= 90
-                          ? 'is-good'
-                          : ''
-                    }
-                  >
-                    {side.after}%
-                  </b>
+                  {side.to !== 'dh' && (
+                    <b
+                      className={
+                        side.after < 60
+                          ? 'is-low'
+                          : side.after >= 90
+                            ? 'is-good'
+                            : ''
+                      }
+                    >
+                      {side.after}%
+                    </b>
+                  )}
                 </span>
               </React.Fragment>
             ))

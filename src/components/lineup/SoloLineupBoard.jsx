@@ -294,6 +294,12 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
   };
 
   const problems = orderProblems(order, roster);
+  // 次の先発が野手の枠にも入っている（二刀流）。⚠ 一人用はオンラインと違い、試合の日に
+  //    `ensureCompleteLineup` が先発をその枠から外して控えで埋め、**試合の後も戻さない**
+  const twoWaySlot = nextStarter ? order.find((e) => e.playerId === nextStarter.id) : null;
+  const twoWayText = twoWaySlot
+    ? `${nextStarter.name}は次の先発で、${POS_NAME[twoWaySlot.position]}にも入っています。先発の日は${useDH ? '打順から外れ' : '9番・投手に回り'}、${POS_NAME[twoWaySlot.position]}には控えが入ります（試合の後も元には戻りません）。`
+    : null;
   const help =
     selectedRow !== null
       ? `${(order[selectedRow] && byId.get(order[selectedRow].playerId)?.name) || `${selectedRow + 1}番`}を選択中：控えを押すと交代、ほかの打順を押すと打順を入れ替えます。`
@@ -338,6 +344,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
         <div className="online-lineup-toolbar">
           <p className="online-lineup-help" aria-live="polite">
             {problems.length ? <span className="online-error-text">{problems[0]}</span> : help}
+            {useDH && twoWayText && <span className="online-error-text"> {twoWayText}</span>}
           </p>
           <button
             type="button"
@@ -437,7 +444,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                     </td>
                     <td colSpan={COLUMN_COUNT - 2} className="online-lineup-person">
                       {nextStarter ? `${nextStarter.name}（次の先発）` : '次の先発'}
-                      <small>投手は9番で打ちます。先発の順は「投手起用」で決めます。</small>
+                      <small>{twoWayText || '投手は9番で打ちます。先発の順は「投手起用」で決めます。'}</small>
                     </td>
                   </tr>
                 )}
