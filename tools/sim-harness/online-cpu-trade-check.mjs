@@ -87,13 +87,13 @@ async function runLeague(dir) {
     const l = (await store.read()).league;
     for (const t of l.trades || []) if (t.from === null && !offers.has(t.id)) offers.set(t.id, { trade: structuredClone(t), league: structuredClone({ teams: Object.fromEntries(Object.entries(l.game.teams).map(([n, team]) => [n, team.players])) }) });
   }
-  return { store, service, send, offers, league: (await store.read()).league };
+  return { store, service, send, sessionId, offers, league: (await store.read()).league };
 }
 
 const dir = await mkdtemp(join(tmpdir(), 'pennant-cpu-trade-'));
 const dir2 = await mkdtemp(join(tmpdir(), 'pennant-cpu-trade2-'));
 try {
-  const { service, send, offers, league } = await runLeague(dir);
+  const { service, send, sessionId, offers, league } = await runLeague(dir);
   const own = league.members[0].teamName;
   // 1. CPU同士の交換
   const cpuOnly = (league.transactions || []).filter((t) => t.kind === 'trade' && t.cpuOnly);
@@ -120,21 +120,36 @@ try {
   const inbox = league.members[0].inbox || [];
   assert.ok(inbox.some((m) => m.type === 'tradeOffered' || m.type === 'tradeWithdrawn'), 'CPUからの提案のお知らせが無い');
   // 3. ビューに「CPUからの提案」として出る
-  const login = await service.login('admin');
-  const view = await service.view('admin', login.sessionId);
-  if (open.length) {
-    const shown = view.trades.find((t) => t.id === open[0].id);
-    assert.ok(shown?.fromCpu && shown.myTurn && shown.canCounter && shown.expires, 'CPUからの提案が返事待ちとして出ていない');
-    // 受ける → 成立（CPUがいまの名簿でもう一度判断して受ける）か、理由つきで断られる
-    const before = (league.transactions || []).length;
-    try {
-      await send('tradeRespond', { tradeId: open[0].id, action: 'accept' });
-      const after = (await service.store.read()).league;
-      assert.ok(!(after.trades || []).some((t) => t.id === open[0].id), '受けた提案が残っている');
-      assert.ok((after.transactions || []).length > before, '受けたのに取引の記録が増えない');
-    } catch (error) {
-      assert.match(String(error.message), /もう続けません/, `受けたときの失敗の理由が違う: ${error.message}`);
-    }
+  // ⚠ 最後の日に返事待ちの提案が無い（期限で取り下げられた直後など）こともある。以前はその回だけ
+  //    この確かめを黙って飛ばしていた。無ければ日を進めて届くのを待ち、届かなければ落とす
+  //    （4. のやり直しは上で取った `league` と比べるので、ここで進めても変わらない）
+  let pending = (league.trades || []).find((t) => t.from === null);
+  for (let i = 0; !pending && i < 40; i += 1) {
+    await quiet(() => send('step'));
+    pending = ((await service.store.read()).league.trades || []).find((t) => t.from === null);
+  }
+  assert.ok(pending, '返事待ちのCPUからの提案が作れない（日を進めても届かない）');
+  // ⚠ ログインし直さない（1台までなので、`send` の持つ入場が切れて命令が弾かれる）
+  const view = await service.view('admin', sessionId);
+  const shown = view.trades.find((t) => t.id === pending.id);
+  assert.ok(shown?.fromCpu && shown.myTurn && shown.canCounter && shown.expires, 'CPUからの提案が返事待ちとして出ていない');
+  // 受ける → 成立（CPUがいまの名簿でもう一度判断して受ける）か、理由つきで断られる
+  // ⚠ try は命令だけを包む。確かめ（assert）まで包むと、確かめの失敗を catch が飲み込み、
+  //    「理由が違う」という別の失敗に見えていた
+  const before = ((await service.store.read()).league.transactions || []).length;
+  let refused = null;
+  try {
+    await send('tradeRespond', { tradeId: pending.id, action: 'accept' });
+  } catch (error) {
+    refused = error;
+  }
+  if (refused) {
+    assert.match(String(refused.message), /もう続けません/, `受けたときの失敗の理由が違う: ${refused.message}`);
+    assert.ok(((await service.store.read()).league.trades || []).some((t) => t.id === pending.id), '断られたのに提案が消えた');
+  } else {
+    const after = (await service.store.read()).league;
+    assert.ok(!(after.trades || []).some((t) => t.id === pending.id), '受けた提案が残っている');
+    assert.ok((after.transactions || []).length > before, '受けたのに取引の記録が増えない');
   }
   console.log(`  CPU同士 ${cpuOnly.length}件・人への提案 ${offers.size}件（${TURNS}ターン）`);
 
