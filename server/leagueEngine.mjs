@@ -556,14 +556,15 @@ export { tradeValueOf };
 /**
  * CPU球団 `to` の返事（`cpuTradeDecision`）。提案のときと、CPUの逆提案を受けるときに使う。
  */
-function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds) {
+function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds, judge = tradeJudgeForLeague(league)) {
   const theirs = TEAMS_DATA[to];
   // ⚠ CPU球団の監督の見る目（育成なら若手を高く、勝負なら主力の年齢を高く）
   const factor = tradeFactorFor(league, to);
   // ⚠ 値段は**画面に出すものと同じ関数**（`tradeJudge`。素質・いまの力・成績・
   //    その球団の事情）。ここだけ変えると、見込みメーターが「受けるはず」と
   //    出したのに断られる
-  const judge = tradeJudgeForLeague(league);
+  // ⚠ `judge` は名簿が変わっていない間だけ使い回せる（球団の事情を名簿ごとに覚える）。
+  //    1日のCPUトレード（`runCpuTrades`）は1回作って渡し、交換が成立したら作り直す
   return cpuTradeDecision({
     // 受け取る選手（こちらが出す選手）は、相手の事情を抜いた値段で見る
     valueOf: (player) => judge.valueOf(player) * factor(player),
@@ -823,8 +824,18 @@ function runCpuTrades(league, now) {
   );
   const humans = new Map((league.members || []).map((m) => [m.teamName, m.userId]));
   const cpus = names.filter((n) => !humans.has(n));
-  const teams = Object.fromEntries(names.map((n) => [n, TEAMS_DATA[n].players]));
-  const judge = tradeJudgeForLeague(league);
+  // ⚠ 名簿の写しと値段の道具は**くじが当たってから**作り、交換が成立したら作り直す。
+  //    以前は毎日（トレードの無い日も）作り、`cpuDecisionFor` の呼ぶたびにも作り直していた。
+  //    また CPU同士の交換のあとも古い名簿（`applyTrade` は名簿の配列を差し替える）のまま
+  //    人の球団への提案を組んでいたので、出て行った選手を出す提案を作れた
+  let teams = null;
+  let judge = null;
+  const fresh = () => {
+    if (!teams) {
+      teams = Object.fromEntries(names.map((n) => [n, TEAMS_DATA[n].players]));
+      judge = tradeJudgeForLeague(league);
+    }
+  };
   const allowed = (fromName, toName, give, get) => {
     try {
       assertTradeAllowed(TEAMS_DATA[fromName], TEAMS_DATA[toName], give, get);
@@ -836,6 +847,7 @@ function runCpuTrades(league, now) {
   // --- CPU同士
   if (cpus.length >= 2 && dayRoll(league, 'cpu-trade') < 1 / CPU_TRADE_EVERY) {
     const from = [...cpus].sort((a, b) => dayRoll(league, `cpu-from:${a}`) - dayRoll(league, `cpu-from:${b}`))[0];
+    fresh();
     const plan = planCpuTrade({
       from,
       teams,
@@ -844,7 +856,7 @@ function runCpuTrades(league, now) {
       // 相手のCPUが、人の提案と同じ判断で受けるか
       accept: (partner, give, get) =>
         allowed(from, partner, give, get) &&
-        cpuDecisionFor(league, TEAMS_DATA[from], partner, give, get).action === 'accept',
+        cpuDecisionFor(league, TEAMS_DATA[from], partner, give, get, judge).action === 'accept',
     });
     if (plan) {
       const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
@@ -853,6 +865,9 @@ function runCpuTrades(league, now) {
         { id, from: null, fromTeam: from, to: null, toTeam: plan.partner, offer: plan.give, want: plan.get, turn: 'to', countered: false },
         now,
       );
+      // 名簿が変わったので、次に使うときに作り直す
+      teams = null;
+      judge = null;
     }
   }
   // --- 人の球団への提案
@@ -863,6 +878,7 @@ function runCpuTrades(league, now) {
     const from = [...cpus].sort(
       (a, b) => dayRoll(league, `cpu-offer-from:${teamName}:${a}`) - dayRoll(league, `cpu-offer-from:${teamName}:${b}`),
     )[0];
+    fresh();
     const plan = planCpuTrade({
       from,
       teams,
@@ -871,7 +887,7 @@ function runCpuTrades(league, now) {
       // 人がこの内容で出したら、CPUが受けるか（受けたときも同じ判断を通す。`respondTrade`）
       accept: (partner, give, get) =>
         allowed(from, partner, give, get) &&
-        cpuDecisionFor(league, TEAMS_DATA[partner], from, get, give).action === 'accept',
+        cpuDecisionFor(league, TEAMS_DATA[partner], from, get, give, judge).action === 'accept',
     });
     if (!plan) continue;
     const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
