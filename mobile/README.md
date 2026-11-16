@@ -34,9 +34,14 @@
 
 ## サーバーとの約束（壊さないために）
 
-- アプリは `?action=login / refresh / view / defaults / team / player / games / game / command / presence` を使う。`presence` はアプリに戻るたび（10分に1回まで）送り、最終ログインとおるすばんの解除に使う。ビューの項目名を変えるとアプリが壊れる。
+- アプリは `?action=login / refresh / view / defaults / team / player / games / game / transactions / command / presence` を使う。`presence` はアプリに戻るたび（10分に1回まで）送り、最終ログインとおるすばんの解除に使う。ビューの項目名を変えるとアプリが壊れる。
   - `presence` の返事は `{ ok: true }`。おるすばんを解いたときは `{ ok: true, returned: true }` で、アプリはそのときもう一度ビューを読む（一緒に走らせた読み直しが解ける前のビューを読んでいて、自分が「おるすばん」のまま見えるため）。`returned` が無ければ解いていない扱い（`shared/.../OnlineApi.kt` の `presence`）。
   - 版（`revision`）は、最終ログインを書いただけなら上がらない（ほかの人の画面を読み直させない）。おるすばんを解いたときは上がる。ただしビューの世代（`viewGeneration`）は、書き込みを保存するたび（`presence` が最終ログインを書いたときも）上がる（`server/storage/supabaseStore.mjs` の `online_publish`。公開は世代を必ず1つ上げる）。なので `since` を添えた次の `view` は中身をまるごと返す。
+- 画面が読む項目のうち、名前を変えると黙って空になるもの（どれも無ければ出さないだけなので、画面の検査では気づきにくい）:
+  - ビュー: `careerLeaders`（通算成績ランキング）、`chronicle.proDrafted`（プロ入りした選手）、`lastCamp`（キャンプの結果）、`stage.key`（`season` かどうかでキャンプ直後の案内を出す）、`trades[]` の `fromCpu`・`expires`（CPU球団からの提案とその期限）、`rosterLimit`・`rosterStandard`（選手枠。下の項目）。
+  - `team`: `formerCareers`（引退・退団した選手の通算）、`chronicle.moves`（入退団履歴）、`roster[].years`（他球団の選手の年ごとの推移）。
+  - `player`: `years`（自球団の選手の年ごとの推移。年・年齢・所属・能力）。
+  - `transactions`（`year` を受ける。トレード履歴）: `years`、`items[]` の `kind`（アプリは `trade` だけ出す）・`teams`・`cpu`・`cpuOnly`・`date`・`moves[]`（`name`・`position`・`from`・`to`）。
 - 通知（`ResultWorker`）が読むビューの項目。名前を変えると通知が黙って出なくなる（画面の検査では気づきにくい）:
   - 試合結果（`shared/.../ResultNotice.kt`）: `teamName`・`teamLabels`、`recentGames`（`server/projection.mjs` の `ownRecentGames`）の `id`・`date`・`number`・`home`・`away`・`homeScore`・`awayScore`（見分けと「新しい試合か」に使う）。本文には `decisions`（勝敗投手）・`homeruns`、順位の `teamLeagues`・`standings` も使う。
   - 手続き・トレード・手続きの結果（`shared/.../EventNotice.kt`・`Notices.kt` の `pendingProcedure`）:
