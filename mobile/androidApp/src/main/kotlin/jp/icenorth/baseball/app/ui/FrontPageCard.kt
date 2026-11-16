@@ -39,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -287,6 +289,7 @@ private fun PhotoStage(page: FrontPage, accent: Color, modifier: Modifier) {
             board = if (national) Color(0xFF1D2A3A) else Color(0xFF123524),
             modifier = Modifier.fillMaxSize(),
             scene = page.scene,
+            sceneImage = sceneImageRes(page.scene)?.let { ImageBitmap.imageResource(it) },
         )
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxHeight()) {

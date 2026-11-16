@@ -202,6 +202,7 @@ fun StadiumPhoto(
     board: Color,
     modifier: Modifier = Modifier,
     scene: String? = null,
+    sceneImage: ImageBitmap? = null,
 ) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -211,7 +212,9 @@ fun StadiumPhoto(
         drawIntoCanvas { it.saveLayer(Rect(Offset.Zero, size), paint) }
         drawStadium(this, measurer, away, home, top, bottom, awayTotal, homeTotal, seed, board)
         // 影絵（左の手前。右は縦の見出し、下は斜めの帯が重なるので、上半身が見える所に立たせる）
-        if (hasSilhouette(scene)) {
+        if (sceneImage != null) {
+            drawSilhouetteImage(sceneImage, size.width * 0.02f, size.height * 0.97f, size.height * 0.64f)
+        } else if (hasSilhouette(scene)) {
             val tall = size.height * (if (silhouetteWidth(scene) > 100f) 0.52f else 0.6f)
             drawSilhouettes(scene, size.width * 0.03f + silhouetteWidth(scene) / 2 * tall / 100f, size.height * 0.95f, tall)
         }

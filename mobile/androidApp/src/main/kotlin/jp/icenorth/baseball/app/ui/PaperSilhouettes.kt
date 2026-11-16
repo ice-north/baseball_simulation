@@ -6,6 +6,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import jp.icenorth.baseball.app.R
 import jp.icenorth.baseball.shared.SCENE_BATTER
 import jp.icenorth.baseball.shared.SCENE_DOWN
 import jp.icenorth.baseball.shared.SCENE_HOMER
@@ -19,6 +23,7 @@ import kotlin.math.sin
  * 1面の写真に重ねる影絵（いしだ 2026-11-16「影絵の写真的なのでOK」）。
  * 照明の逆光で黒くつぶれた選手の姿を、胴（台形）・手足（太い線）・頭（円）で描く。画像は使わない。
  * ⚠ ポーズの座標は足元が原点・上がマイナス・身長およそ100。
+ * ⚠ 絵（res/drawable-nodpi/paper_sil_*.webp。いしだが画像生成で作った影絵）がある場面は絵を使い、無い場面だけ図形で描く。
  */
 
 private class Pose(
@@ -175,4 +180,28 @@ internal fun DrawScope.drawSilhouettes(scene: String?, cx: Float, footY: Float, 
         pose.cap?.let { c -> val q = c.map(::p); drawPath(Path().apply { moveTo(q[0].x, q[0].y); q.drop(1).forEach { lineTo(it.x, it.y) }; close() }, ink) }
         pose.hands.forEach { h -> drawCircle(ink, h[2] * k, p(o(h[0], h[1]))) }
     }
+}
+
+/** 場面の影絵の絵（無ければ null で、図形で描く） */
+internal fun sceneImageRes(scene: String?): Int? = when (scene) {
+    SCENE_HOMER -> R.drawable.paper_sil_homer
+    else -> null
+}
+
+/** 絵の影絵を描く。[left] は左端、[footY] は足元、[height] は絵の高さ（px）。後ろに照り返しを置く */
+internal fun DrawScope.drawSilhouetteImage(img: ImageBitmap, left: Float, footY: Float, height: Float) {
+    val w = height * img.width / img.height
+    val glowC = Offset(left + w / 2, footY - height * 0.6f)
+    drawCircle(
+        Brush.radialGradient(listOf(Color(0xFFFFF4D0).copy(alpha = 0.55f), Color(0xFFFFF4D0).copy(alpha = 0.18f), Color.Transparent), center = glowC, radius = height * 0.75f),
+        height * 0.75f,
+        glowC,
+    )
+    drawImage(
+        img,
+        srcOffset = IntOffset.Zero,
+        srcSize = IntSize(img.width, img.height),
+        dstOffset = IntOffset(left.toInt(), (footY - height).toInt()),
+        dstSize = IntSize(w.toInt(), height.toInt()),
+    )
 }
