@@ -33,3 +33,14 @@ fun offerOutcome(before: Set<String>, raw: JsonObject?): OfferOutcome {
     val added = tradesOf(raw).firstOrNull { it.at("id").str() !in before } ?: return OfferOutcome.Accepted
     return if (added.at("countered").bool() == true) OfferOutcome.Countered else OfferOutcome.Offered
 }
+
+/**
+ * 逆提案を送ったあとの結果を、送ったあとのビューから読み取る（[counterId] は逆提案した提案の id）。
+ * CPU球団からの提案への逆提案は、CPUがその場で答える: 受けたら成立して提案は一覧から消える
+ * （応じなければサーバーが失敗で返すので、ここには来ない。`server/leagueEngine.mjs` の `counter`）。
+ * 参加者の球団へは提案が残って相手の番（[OfferOutcome.Offered]）。ビューを読めなかったときも決めつけず Offered。
+ */
+fun counterOutcome(counterId: String, raw: JsonObject?): OfferOutcome {
+    if (raw == null) return OfferOutcome.Offered
+    return if (counterId in tradeIds(raw)) OfferOutcome.Offered else OfferOutcome.Accepted
+}

@@ -94,6 +94,7 @@ import jp.icenorth.baseball.shared.rostersAfterTrade
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
+import jp.icenorth.baseball.shared.counterOutcome
 import jp.icenorth.baseball.shared.offerOutcome
 import jp.icenorth.baseball.shared.tradeIds
 import jp.icenorth.baseball.shared.unseenTrades
@@ -708,8 +709,14 @@ private fun ConfirmStep(
                 "tradeRespond",
                 Commands.tradeRespond(counter, "counter", draft.counterMine, draft.give, draft.get, note = draft.note),
                 label = "逆提案を送信中…",
-                done = "逆提案を送りました",
-            ) { model.tradeDraft = null }
+            ) {
+                model.tradeDraft = null
+                // ⚠ CPU球団からの提案への逆提案は、CPUがその場で受けて成立する（応じなければ失敗で返る）
+                model.message = when (counterOutcome(counter, model.raw)) {
+                    OfferOutcome.Accepted -> "${view.teamLabel(partner)}が逆提案を受けて、トレードが成立しました"
+                    else -> "逆提案を送りました。相手の返事を待っています"
+                }
+            }
         } else {
             val before = tradeIds(model.raw)
             model.command("tradeOffer", Commands.tradeOffer(partner, draft.give, draft.get, note = draft.note.takeIf { partner in humans }), label = "提案を送信中…") {
