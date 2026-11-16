@@ -789,6 +789,8 @@ internal fun splitFront(articles: List<FrontPage.Article>): Pair<List<FrontPage.
 /** 見出しに入れる談話。長ければ読点で切り、それでも長ければ省く */
 internal fun shortQuote(q: String, max: Int = 18): String {
     if (q.length <= max) return q
+    val stop = q.indexOf('。')
+    if (stop in 6..max) return q.substring(0, stop)
     val comma = q.indexOf('、')
     if (comma in 6..max) return q.substring(0, comma)
     return q.take(max - 1) + "…"

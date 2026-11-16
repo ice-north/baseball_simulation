@@ -291,7 +291,7 @@ private fun PhotoStage(page: FrontPage, accent: Color, modifier: Modifier) {
             val density = LocalDensity.current
             val avail = with(density) { (height - 12.dp).toPx() }
             // 黄色の袋文字（縦）
-            page.bigSub?.takeIf { page.bigHead != null }?.let { sub ->
+            page.bigSub?.takeIf { page.bigHead != null }?.replace(" ", "")?.replace("　", "")?.let { sub ->
                 val em = with(density) { 25.sp.toPx() }
                 val per = (avail / em).toInt().coerceAtLeast(4)
                 VerticalText(sub, 25.sp, subFill, Modifier.padding(top = 8.dp, end = 2.dp), per = per, gap = 0.15f, stroke = subStroke to with(density) { 3.dp.toPx() })
