@@ -255,6 +255,12 @@ fun seasonLine(player: JsonObject): String {
     return "今季 ${games}試合 打率$avgText ${hr}本"
 }
 
+private val HANDED = mapOf("left" to "左", "right" to "右", "switch" to "両")
+
+/** 投げ・打ち（「右投左打」）。分からない側は「—」（Web 版 `contractTable.js` の `handed`。右と決めつけない） */
+fun handLabel(player: JsonObject): String =
+    "${HANDED[player.at("physical", "throws").str()] ?: "—"}投${HANDED[player.at("batting", "bats").str()] ?: "—"}打"
+
 /**
  * 契約更改の表の列（1人1行。Web 版 `src/online/contractTable.js` の `contractColumns` と同じ並び）。
  * ⚠ 先方指摘「名前・投打・年齢・各パラメータ・成績と網羅的に表示し、各能力値ごとにソートできるように」。
@@ -291,7 +297,8 @@ fun contractColumns(): List<StatColumn> {
         only(b("homeruns", "本")) { !it.isPitcherJson() },
         only(b("rbis", "点")) { !it.isPitcherJson() },
         only(era.copy(label = "防")) { it.isPitcherJson() },
-        only(p("wins", "勝")) { it.isPitcherJson() },
-        only(p("saves", "S")) { it.isPitcherJson() },
+        // ⚠ 投手は成績が無ければ0（Web 版の `?? 0`。登板の無い投手が「—」で並べ替えの末尾に回らない）
+        only(p("wins", "勝").let { c -> c.copy(get = { c.get(it) ?: 0.0 }) }) { it.isPitcherJson() },
+        only(p("saves", "S").let { c -> c.copy(get = { c.get(it) ?: 0.0 }) }) { it.isPitcherJson() },
     )
 }

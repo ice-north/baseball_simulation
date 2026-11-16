@@ -46,6 +46,7 @@ import jp.icenorth.baseball.app.PhaseDraft
 import jp.icenorth.baseball.app.savedPhaseDraft
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.PHASE_LABELS
+import jp.icenorth.baseball.shared.handLabel
 import jp.icenorth.baseball.shared.rosterLimitOf
 import jp.icenorth.baseball.shared.rosterStandardOf
 import jp.icenorth.baseball.shared.signTotal
@@ -673,7 +674,6 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     val groupOrder = listOf("pitcher", "catcher", "infielder", "outfielder")
     val base = roster.withIndex().sortedWith(compareBy({ groupOrder.indexOf(rosterGroup(it.value.at("position").str())) }, { it.index })).map { it.value }
     val sorted = sortRoster(base, sortColumn, ascending)
-    val hand = mapOf("left" to "左", "right" to "右", "switch" to "両")
     Section(
         "解雇する選手（${releases.size}人）",
         trailing = {
@@ -702,8 +702,7 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
             onPlayer = { model.openPlayer = it },
             highlight = { it.pid in releases },
             sub = { p ->
-                positionLabel(p.at("position").str()) + " " +
-                    (hand[p.at("physical", "throws").str()] ?: "右") + "投" + (hand[p.at("batting", "bats").str()] ?: "右") + "打"
+                positionLabel(p.at("position").str()) + " " + handLabel(p)
             },
             trailingHeader = "解雇",
             trailing = { p ->
