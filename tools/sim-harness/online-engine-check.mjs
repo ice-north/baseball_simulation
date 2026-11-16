@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { PRO_DRAFT_MAX } from '../../server/proDraft.mjs';
 import {
   createLeague,
   defaultPhasePlan,
@@ -153,13 +154,17 @@ while (league.season.year === startYear && days < 300) {
 assert.equal(league.season.year, 2, '実試合を消化して2年目に到達する');
 assert.equal(league.history.length, 1);
 assert.ok(league.history[0].playoffChampion, 'プレーオフの勝者が確定する');
-// ⚠ **NPBドラフトは行わない**（オンラインだけ。一人用はそのまま）。
-//    12球団から良い選手をNPBへ引き抜く処理で、育てた選手が手元から消える。
-//    長く続ける対人リーグでは取り返す手段が無いので外した。
-assert.ok(
-  !league.notices.some((n) => n.type === 'draft'),
-  'オンラインでNPBドラフトが動いている（育てた選手が抜かれる）',
-);
+// ⚠ プロからの指名は**1年に0〜3人だけ**（先方要望 2026-11-16 で解禁。`proDraft.mjs`）。
+//    以前のNPBドラフト（12球団から何人も引き抜く）は外したまま。人数が増えたらここで分かる
+{
+  const picks = league.notices.filter((n) => n.type === 'draft').flatMap((n) => n.picks || []);
+  assert.ok(picks.length <= PRO_DRAFT_MAX, `プロに指名された人数が多すぎる（${picks.length}人）`);
+  assert.equal(
+    (league.chronicle?.proDrafted || []).length,
+    picks.length,
+    'プロ入りの記録と知らせの人数が合わない',
+  );
+}
 // ⚠ **選手が減らないこと**。ドラフトは名簿から直に取り除く処理だったので、
 //    外し忘れるとここで分かる
 for (const name of league.season.settings.teamNames)
@@ -172,6 +177,11 @@ for (const name of league.season.settings.teamNames)
 assert.ok(
   league.history[0].awards && Object.keys(league.history[0].awards).length > 0,
   'タイトルが年度の記録に残っていない',
+);
+// 年間表彰（部ごとの MVP など。`seasonAwards.mjs`）も年度の記録に残る
+assert.ok(
+  Object.values(league.history[0].awards.honors || {}).some((h) => h.mvp),
+  '年間表彰が年度の記録に残っていない',
 );
 // ⚠ 開幕前は**初期メンバー選択**（`pack_select`）。初期編成（360人の希望
 //    リスト）から置き換えた。ここは `check` の束に入っていない別枠の検査なので、
