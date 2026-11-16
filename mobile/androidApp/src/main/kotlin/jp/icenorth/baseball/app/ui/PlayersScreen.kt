@@ -91,7 +91,8 @@ fun PlayersScreen(model: AppViewModel) {
             }
             InfoButton(
                 "選手",
-                listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "色の付いた行は、スタメン・先発ローテの選手です。他球団は表の上にスタメンと投手陣も出します。ランキングでは自球団の選手に色が付きます。"),
+                // ⚠ 添え書きは常に出さず ⓘ に入れる（アプリは狭い。年齢の見込みの読み方もここ）
+                listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "色の付いた行は、スタメン・先発ローテの選手です。他球団は表の上にスタメンと投手陣も出します。ランキングでは自球団の選手に色が付きます。", "年齢: $AGE_OUTLOOK_NOTE"),
                 Modifier.padding(end = 8.dp),
             )
         }
@@ -142,7 +143,6 @@ fun AgeOutlookCard(outlook: AgeOutlook?, compact: Boolean = false) {
                 color = if (r.kind == "decline" || r.veteran) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
         }
-        Text(AGE_OUTLOOK_NOTE, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
