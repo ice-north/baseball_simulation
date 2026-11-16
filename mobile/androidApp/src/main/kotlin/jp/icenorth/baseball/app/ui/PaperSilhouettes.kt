@@ -187,6 +187,8 @@ internal fun DrawScope.drawSilhouettes(scene: String?, cx: Float, footY: Float, 
  */
 private val SHOT_IMAGES: Map<String, List<Int>> = mapOf(
     "s01" to listOf(R.drawable.paper_sil_01),
+    "s02" to listOf(R.drawable.paper_sil_02, R.drawable.paper_sil_02b),
+    "s03" to listOf(R.drawable.paper_sil_03),
 )
 
 /** 候補の組から、絵のある最初の組を選び、組の中は [seed] で選ぶ。絵が無ければ null（図形で描く） */
