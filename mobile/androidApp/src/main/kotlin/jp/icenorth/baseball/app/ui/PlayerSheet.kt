@@ -1,6 +1,11 @@
 package jp.icenorth.baseball.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import jp.icenorth.baseball.shared.abilityBarFraction
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
 import jp.icenorth.baseball.shared.ABILITY_HELP
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
@@ -148,7 +153,10 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                 Item("回転", p.at("pitching", "spinRate").int())
                 Item("出どころ", p.at("deception").int())
                 p.at("pitching", "arsenal").list().filter { it.at("type").str() != "straight" }.forEach { a ->
-                    AbilityNum("${PITCH_TYPE_NAMES[a.at("type").str()] ?: a.at("type").str()} ", a.at("level").int())
+                    Column(Modifier.width(ABILITY_CELL)) {
+                        AbilityNum("${PITCH_TYPE_NAMES[a.at("type").str()] ?: a.at("type").str()} ", a.at("level").int())
+                        AbilityBar(a.at("level").int())
+                    }
                 }
             }
         }
@@ -412,12 +420,36 @@ private fun AbilityGroup(title: String, content: @Composable AbilityScope.() -> 
     }
 }
 
-/** 数字の項目。[help] は説明の見出し（Web 版の名前。アプリの短い表示名と違うときだけ渡す） */
+/**
+ * 数字の項目。[help] は説明の見出し（Web 版の名前。アプリの短い表示名と違うときだけ渡す）。
+ * ⚠ 数字の下にデータバーを添える（先方指摘 2026-11-16: 数字だけで見づらい）。長さは段位と同じ物差し
+ *    （[abilityBarFraction]）、色は数字と同じ段位の色。幅をそろえて、バーが縦にそろうようにする
+ */
 @Composable
 private fun AbilityScope.Item(label: String, value: Int?, help: String = label, velocity: Boolean = false, stamina: Boolean = false) {
     val known = ABILITY_HELP[help] != null
-    Box(Modifier.clickable(enabled = known) { toggle(help) }) {
+    Column(Modifier.width(ABILITY_CELL).clickable(enabled = known) { toggle(help) }) {
         AbilityNum("$label ", value, velocity, stamina)
+        AbilityBar(value, velocity, stamina)
+    }
+}
+
+/** 能力の項目の幅（3つ並ぶ幅）。バーの長さを項目どうしで比べられるように固定する */
+private val ABILITY_CELL = 96.dp
+
+/** 能力のデータバー（数字の下の細い棒）。値が無ければ空の棒 */
+@Composable
+private fun AbilityBar(value: Int?, velocity: Boolean = false, stamina: Boolean = false) {
+    Box(
+        Modifier.padding(top = 2.dp).fillMaxWidth().height(4.dp)
+            .clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        if (value != null) {
+            Box(
+                Modifier.fillMaxWidth(abilityBarFraction(value, velocity, stamina)).height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)).background(abilityColor(value, velocity, stamina)),
+            )
+        }
     }
 }
 

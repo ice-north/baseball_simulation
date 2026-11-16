@@ -78,7 +78,35 @@ data class ChronicleView(
     val milestones: List<Milestone> = emptyList(),
     val retired: List<Retired> = emptyList(),
     val world: List<WorldNews> = emptyList(),
+    /** リーグからプロ入りした選手（新しい順）。古いサーバーには無い */
+    val proDrafted: List<ProDrafted> = emptyList(),
 )
+
+/**
+ * プロ入りした選手（NPBのドラフトで指名された人。サーバーの `proDraft.mjs`）。
+ * ⚠ 先方要望（2026-11-16）: プロ指名を解禁。リーグ全体で年0〜3人
+ */
+@Serializable
+data class ProDrafted(
+    val year: Int = 0,
+    val team: String = "",
+    val name: String = "",
+    val position: String? = null,
+    val age: Int? = null,
+    val npbTeam: String = "",
+    val round: Int? = null,
+    val reason: String? = null,
+)
+
+/** プロ入りの見出し（「3年目　山田（投手・20歳）」。`short` を渡すと元の球団も付ける） */
+fun proDraftedHead(r: ProDrafted, short: ((String) -> String)? = null): String =
+    "${yearLabel(r.year)}　${r.name}" +
+        (r.position?.let { "（${positionLabel(it)}・${r.age ?: "-"}歳）" } ?: "") +
+        (short?.let { "　${it(r.team)}" } ?: "")
+
+/** プロ入りの中身（「読売ジャイアンツ 2位指名　20歳の将来性」） */
+fun proDraftedBody(r: ProDrafted): String =
+    "${r.npbTeam} ${r.round?.let { "${it}位" } ?: ""}指名" + (r.reason?.takeIf { it.isNotBlank() }?.let { "　$it" } ?: "")
 
 /** 球団史（「team」の窓口の chronicle） */
 @Serializable
@@ -89,6 +117,8 @@ data class TeamChronicle(
     val milestones: List<Milestone> = emptyList(),
     /** 入退団履歴（新しい順。サーバーの `teamMoves`）。古いサーバーには無い */
     val moves: List<TeamMove> = emptyList(),
+    /** この球団からプロ入りした選手（新しい順）。古いサーバーには無い */
+    val proDrafted: List<ProDrafted> = emptyList(),
 )
 
 /**

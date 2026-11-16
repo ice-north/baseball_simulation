@@ -74,7 +74,12 @@ export function playerYearTable(player, years, periods, currentYear) {
   const rows = list.map((y, i) => {
     const older = list[i + 1];
     const period = periodForYear(periods, y.year, currentYear);
-    const shaped = period ? { ...player, seasonStats: period.seasonStats } : null;
+    // ⚠ **率（打率・防御率）は `performance` から読む**（`statsView.js` の `metric`）。
+    //    `seasonStats` だけ差し替えると、どの年も今の選手の `performance`（今季）が出て、
+    //    1年目から4年目まで打率が同じになっていた（いしだ指摘 2026-11-16）
+    const shaped = period
+      ? { ...player, seasonStats: period.seasonStats, performance: period.performance || null }
+      : null;
     return {
       year: y.year,
       age: y.age,

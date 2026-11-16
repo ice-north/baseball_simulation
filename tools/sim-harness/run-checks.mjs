@@ -79,6 +79,8 @@ const CHECKS = [
   { name: 'online-roster-recovery-check', group: 'check', online: true, slow: 27 },
   { name: 'online-snapshot-check', group: 'check', online: true, slow: 8 },
   { name: 'online-records-check', group: 'check', online: true, slow: 52 },
+  // プロ野球への道（年0〜3人の指名・ご褒美・球団史とリーグ記録）
+  { name: 'online-pro-draft-check', group: 'check', online: true, slow: 15 },
   // 年代記（節目・引退・裏の大会・マジック・球団史）。1年を通して進める
   { name: 'online-chronicle-check', group: 'check', online: true, slow: 130 },
   // 指導者（監督・コーチ）。種・任せ方・人事・40年の入れ替わり・1年を通して翌年のキャンプまで

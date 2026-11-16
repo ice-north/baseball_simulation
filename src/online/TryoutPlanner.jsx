@@ -121,6 +121,8 @@ export default function TryoutPlanner({
   candidates,
   roster,
   maxCount,
+  // 決めていないときの人数（標準の26人までの空き。上限28人の枠のうち）。無ければ空き枠いっぱい
+  fillCount = maxCount,
   busy,
   onChange,
   onReset,
@@ -162,8 +164,8 @@ export default function TryoutPlanner({
     () => (plan.rankedIds.length > limit ? plan.rankedIds.slice(0, limit) : plan.rankedIds),
     [plan.rankedIds, limit],
   );
-  // 獲得する人数（枠）。決めていなければ空き枠いっぱい
-  const total = signTotal(plan, maxCount);
+  // 獲得する人数（枠）。決めていなければ標準の人数（26人）まで
+  const total = signTotal(plan, maxCount, fillCount);
   // 交渉した選手のうち取りにいく人数（獲得する人数で切る）
   const count = wishedCount(wanted, total);
   // ⚠ 人数を決めていない案（標準案・古い提出）だけ、交渉した人で足りないぶんを自動で埋める。
@@ -248,7 +250,7 @@ export default function TryoutPlanner({
             ＋
           </button>
           <small>
-            空き枠{maxCount}人
+            空き枠{maxCount}人（標準は{(roster || []).length + fillCount}人・上限{(roster || []).length + maxCount}人）
             {total < maxCount && (
               <>
                 {' '}

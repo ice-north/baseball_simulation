@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { abilityRows, ABILITY_HELP } from './playerInfo.js';
+import { abilityRows, ABILITY_HELP, abilityBarPercent } from './playerInfo.js';
 import { statGroup, formatStat } from './statsView.js';
 import { POS } from './api.js';
 import { getZoneProfile, zoneHeatmap } from '../game/batterZone.js';
@@ -114,6 +114,17 @@ function AbilityBlock({ title, note, rows, help }) {
             >
               {label}
             </dt>
+            {/* ⚠ 数字にデータバーを添える（先方指摘 2026-11-16: 数字だけで見づらい）。
+                長さは段位と同じ物差し（球速・スタミナは0〜100に直す。`abilityBarPercent`）、
+                色は数字と同じ段位の色（`currentColor`） */}
+            {typeof value === 'number' && (
+              <span
+                className={`online-ability-bar ${getRankColor(getAbilityRank(value, label === '球速', label === 'スタミナ'))}`}
+                aria-hidden="true"
+              >
+                <i style={{ width: `${abilityBarPercent(value, label)}%` }} />
+              </span>
+            )}
             <dd
               className={
                 typeof value === 'number'

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { statGroup, formatStat } from './statsView.js';
-import { ONLINE_ROSTER_TARGETS, ROSTER_LIMIT } from './shared.js';
+import { ONLINE_ROSTER_TARGETS, ROSTER_LIMIT, ROSTER_STANDARD } from './shared.js';
 import { rosterGroup } from '../utils/constants.js';
 import { contractColumns, sortContractRoster } from './contractTable.js';
 
@@ -95,7 +95,7 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
         </span>
         <small>
           続くトライアウトで最大 {Math.max(0, ROSTER_LIMIT - remaining.length)}
-          人を獲れます（上限{ROSTER_LIMIT}人）。目標に足りない区分はトライアウトで優先して埋まります。
+          人を獲れます（標準{ROSTER_STANDARD}人・上限{ROSTER_LIMIT}人。人数を決めなければ標準まで埋めます）。目標に足りない区分はトライアウトで優先して埋まります。
         </small>
       </p>
       <p className="online-muted">

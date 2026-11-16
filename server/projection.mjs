@@ -23,6 +23,7 @@ import {
   teamSeasonStats,
   abilityLeaders,
   careerLeaders,
+  formerCareers,
 } from './leagueBoard.mjs';
 import { packSummary, packsForMember } from '../src/online/rosterPack.js';
 import {
@@ -551,7 +552,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     //    持っていないので、並べ替えはここで済ませて渡す
     abilityLeaders: abilityLeaders(l, labelOf),
     // 通算成績ランキング（リーグ全球団の選手。退団した選手も残す）
-    careerLeaders: careerLeaders(l, labelOf),
+    careerLeaders: careerLeaders(l),
     results: l.season.results.slice(-14).map((g) => ({
       gameId: g.gameId,
       date: g.date,
@@ -802,6 +803,8 @@ export function projectTeamInfo(bundle, userId, teamName) {
     staff: teamStaffView(l, teamName, l.game.teams[teamName], labelOf),
     // 球団史（年表）・歴代記録・引退・節目。記録からさかのぼって作る
     chronicle: teamChronicle(l, teamName, activeKeys),
+    // 引退・解雇・退団した選手の通算（通算成績の「球団ごと」の下に出す。先方要望 2026-11-16）
+    formerCareers: formerCareers(l, teamName),
     // トレードの目安（CPU球団だけ）。CPUが受けるかを決める決まりの数字と、監督の見る目の一言。
     // ⚠ 数字は判断の式（`cpuTradeDecision`・`tradeFactor`）の定数をそのまま渡す。画面はこの幅で
     //    「足りない／監督しだい／受けるはず」を出すので、写しを持つと境目がずれる。

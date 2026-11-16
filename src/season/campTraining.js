@@ -29,7 +29,12 @@ export const PITCH_TYPES = [
 // 集中練習が1点に集約する倍率。通常メニューは3〜4能力に分散するので、
 // ここが 1.0 だと「集中しても総量は同じ・他能力に減点だけ付く」＝常に損になる。
 // 分散先の数（3〜4）より小さくしてあるのは、集中には減点という別の代償があるため。
-const INTENSIVE_FOCUS = 2.4;
+// ⚠ 2.4→3.0（先方指摘 2026-11-16: 減点の代償を負うのに伸びずに減点だけ受けることがある。
+//    リスクを負うぶん伸びを上げる）。あわせて、減点が出たクールは対象を最低+1にした
+//    （`INTENSIVE_PENALTY_FLOOR`）
+const INTENSIVE_FOCUS = 3.0;
+// 減点（他能力-1）が出たクールの、集中した能力の最低の伸び。上限に着いている能力は伸ばさない
+const INTENSIVE_PENALTY_FLOOR = 1;
 
 // 練習カテゴリ → スタッフ指導能力のマッピング
 const CATEGORY_TO_STAFF_ABILITY = {
@@ -165,11 +170,11 @@ export const TRAINING_MENUS = {
     targets: ['newpitch'],
     category: 'pitching'
   },
-  // 集中練習コース: +1確定 + 50%で+1〜2上乗せ / 25%で他1能力-1 / 25%で他2能力-1
+  // 集中練習コース: 通常の式で出した伸びを1能力に集約（`INTENSIVE_FOCUS`）/ 25%で他1能力-1 / 25%で他2能力-1
   intensive_power: {
     name: '長打集中',
     icon: '💥',
-    description: 'パワー+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
+    description: 'パワーを集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
     targets: ['power'],
     category: 'batting',
     intensive: true,
@@ -178,7 +183,7 @@ export const TRAINING_MENUS = {
   intensive_meet: {
     name: 'ミート集中',
     icon: '🎯',
-    description: 'ミート+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
+    description: 'ミートを集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
     targets: ['meet'],
     category: 'batting',
     intensive: true,
@@ -187,7 +192,7 @@ export const TRAINING_MENUS = {
   intensive_speed: {
     name: '走力集中',
     icon: '⚡',
-    description: '走力+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
+    description: '走力を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
     targets: ['speed'],
     category: 'batting',
     intensive: true,
@@ -196,7 +201,7 @@ export const TRAINING_MENUS = {
   intensive_control: {
     name: '制球集中',
     icon: '🎯',
-    description: '制球+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
+    description: '制球を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
     targets: ['control'],
     category: 'pitching',
     intensive: true,
@@ -205,7 +210,7 @@ export const TRAINING_MENUS = {
   intensive_velocity: {
     name: '球速集中',
     icon: '🔥',
-    description: '球速+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
+    description: '球速を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
     targets: ['velocity'],
     category: 'pitching',
     intensive: true,
@@ -214,7 +219,7 @@ export const TRAINING_MENUS = {
   intensive_defense: {
     name: '守備集中',
     icon: '🛡️',
-    description: '守備+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
+    description: '守備を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
     targets: ['defense'],
     category: 'fielding',
     intensive: true,
@@ -223,7 +228,7 @@ export const TRAINING_MENUS = {
   intensive_eye: {
     name: '選球眼集中',
     icon: '👁️',
-    description: '選球眼+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
+    description: '選球眼を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
     targets: ['eye'],
     category: 'batting',
     intensive: true,
@@ -340,7 +345,7 @@ export const SUB_TRAINING_MENUS = {
   newpitch: {
     name: '新球種習得',
     icon: '✨',
-    description: '新球種習得に挑戦（成功率12%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）',
+    description: '新球種習得に挑戦（成功率16%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）',
     targets: ['newpitch'],
   },
   spin_analysis: {
@@ -699,10 +704,12 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const newType =
             wanted || candidates[Math.floor(Math.random() * candidates.length)];
           const formAff = getFormPitchAffinity(playerForm, newType);
-          const baseRate = 0.12;
+          // ⚠ 0.12→0.16・適性の上限 0.25→0.32（先方指摘 2026-11-16: 取得率が低い。若干上げる）。
+          //    4クール続けたときに1つ覚える見込み（器用さ50）: 適性なし 40%→50%、適性あり 63〜68%→70〜77%
+          const baseRate = 0.16;
           // ⚠ フォーム適性を足した**後**に器用さを掛ける。先に掛けると
-          //    上限 0.25 のクランプで器用さが消える
-          const successRate = (formAff ? Math.min(0.25, baseRate + formAff.affinity) : baseRate)
+          //    上限 0.32 のクランプで器用さが消える
+          const successRate = (formAff ? Math.min(0.32, baseRate + formAff.affinity) : baseRate)
             * dexterityMult(player, 0.8);
           if (Math.random() < successRate) {
             const level = 20 + Math.floor(Math.random() * 20);
@@ -1061,7 +1068,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   const batteryValue = staffBonus ? (staffBonus.batteryCoach || 50) : 50;
   const batteryMult = 0.9 + (batteryValue / 100) * 0.2;
 
-  // 新球種習得の場合（覚醒10%/大成功15%/成功20%/習得25%/失敗30%）
+  // 新球種習得の場合（覚醒10%/大成功15%/成功20%/習得33%/失敗22%）
   if (trainingType === 'newpitch') {
     const arsenal = updatedPlayer.pitching?.arsenal || [];
     const existingTypes = arsenal.map(p => p.type);
@@ -1075,13 +1082,14 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // 第2適性（緩急補完）ボーナス
       const hasSecondAffinity = updatedPlayer.pitching?.secondAffinity === targetType;
       const affinityBonus = formBonus + (hasSecondAffinity ? 0.08 : 0);
-      // 基本: 覚醒10%, 大成功15%, 成功20%, 習得25%, 失敗30%
+      // 基本: 覚醒10%, 大成功15%, 成功20%, 習得33%, 失敗22%
       // 適性ボーナス分だけ失敗率が減り、成功率に上乗せ
       // ⚠ ここに `failRate = max(0.05, 0.30 - affinityBonus)` があったが、
       //    **計算するだけで一度も使われていなかった**（実際の失敗率は
       //    `1 - (0.45 + learnedRate)` ＝ `0.30 - affinityBonus*0.5` で決まる）。
       //    適性ボーナスの効きを読み違える元なので除去した
-      const learnedRate = 0.25 + affinityBonus * 0.5;
+      // ⚠ 0.25→0.33（先方指摘 2026-11-16: 新球種の取得率が低い。若干上げる）。失敗 30%→22%
+      const learnedRate = 0.33 + affinityBonus * 0.5;
       // ⚠ 器用さは**抽選そのものを上へずらす**（器用さ50で従来どおり）。
       //    `affinityBonus` は失敗↔習得(Lv1-20)しか動かさないので、そこへ足すと
       //    「器用な投手は覚えが早い＝最初から高いレベル」が表現できない。
@@ -1154,6 +1162,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   const stopAgeGate = age >= _stopAge
     ? _postStopFloor
     : Math.max(_postStopFloor, 1.0 - Math.max(0, age - (_stopAge - 4)) / 4 * (1.0 - _postStopFloor));
+
+  // 集中練習の代償（50%で±0、25%で1能力-1、25%で2能力-1）は**先に引く**。
+  // 代償が出たクールは対象を最低+1にする（`INTENSIVE_PENALTY_FLOOR`）ため
+  const penaltyRoll = menu.intensive && menu.penaltyPool ? Math.random() : null;
+  const penaltyCount = penaltyRoll === null ? 0 : penaltyRoll < 0.5 ? 0 : penaltyRoll < 0.75 ? 1 : 2;
 
   // 通常の能力練習（成長量抑制: プロ級へ到達しにくくする）
   menu.targets.forEach((targetStat, targetIdx) => {
@@ -1298,6 +1311,9 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    期待値は保たれる＝練習が構造的に無駄になることはない。
       // ⚠ スタミナ・体力だけは最低+1を残す（やれば伸びるもの。いしだ方針）
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
+      // ⚠ 集中練習で代償（減点）が出たクールは、伸びが0のまま減点だけにしない
+      if (menu.intensive && penaltyCount > 0 && totalGrowth < INTENSIVE_PENALTY_FLOOR)
+        totalGrowth = INTENSIVE_PENALTY_FLOOR;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : 100;
       const newValue = Math.min(maxValue, currentValue + totalGrowth);
@@ -1330,8 +1346,6 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   // 集中練習のペナルティ処理: 50%で±0、25%で1能力-1、25%で2能力-1
   if (menu.intensive && menu.penaltyPool) {
     const pool = menu.penaltyPool.filter(s => !menu.targets.includes(s));
-    const roll = Math.random();
-    const penaltyCount = roll < 0.5 ? 0 : roll < 0.75 ? 1 : 2;
     if (penaltyCount > 0 && pool.length > 0) {
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
       const chosen = shuffled.slice(0, Math.min(penaltyCount, shuffled.length));

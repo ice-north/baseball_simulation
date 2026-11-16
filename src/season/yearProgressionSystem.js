@@ -1065,7 +1065,9 @@ function simulateParallelWorldStats(allTeams, playedTeamNames = []) {
  * @param {Object} allTeams - 全チームデータ
  * @returns {Object} - { newSeasonData, updatedTeams, awards, retirements }
  */
-export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [] } = {}) {
+export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [], onlineTeamNames = null } = {}) {
+  // オンラインの対人リーグの球団（自然成長の式を分ける。`growthSystem` の `CATEGORY_GROWTH.online`）
+  const online = onlineTeamNames ? new Set(onlineTeamNames) : null;
   // 0. プロへ送り出した教え子のキャリアを1年進める（NPBは観るだけの階層）
   const npbYear = seasonData.settings?.year || seasonData.year || 1;
   processNpbCareers(allTeams, npbYear);
@@ -1153,11 +1155,11 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [] }
   releasedPlayersPool.forEach(p => { p.age = (p.age || 20) + 1; });
 
   // 4.5. 年齢カーブによる成長・衰退を適用
-  const { updatedTeams: teamsAfterAgeCurve, ageReports } = applyAgeCurveChanges(updatedTeams);
+  const { updatedTeams: teamsAfterAgeCurve, ageReports } = applyAgeCurveChanges(updatedTeams, { online });
   updatedTeams = teamsAfterAgeCurve;
 
   // 4.6. 社会人/独立チームの若手選手に実戦経験による成長を適用
-  applyCorporatePlayerGrowth(updatedTeams);
+  applyCorporatePlayerGrowth(updatedTeams, { online });
 
   // 4.65. 加齢で守備範囲が落ちた選手を易しい守備位置へ移す（捕手→一塁、遊撃→三塁…）
   const positionShifts = applyPositionShifts(updatedTeams);

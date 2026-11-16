@@ -31,6 +31,13 @@ fun normalizedAbility(value: Int, velocity: Boolean = false, stamina: Boolean = 
     else -> value.toDouble()
 }
 
+/**
+ * 能力のデータバーの長さ（0〜1）。段位と同じ物差し（[normalizedAbility]）。
+ * ⚠ Web 版の `abilityBarPercent`（src/online/playerInfo.js）と同じ式（先方指摘 2026-11-16: 数字だけで見づらい）
+ */
+fun abilityBarFraction(value: Int, velocity: Boolean = false, stamina: Boolean = false): Float =
+    (kotlin.math.round(normalizedAbility(value, velocity, stamina)) / 100.0).coerceIn(0.0, 1.0).toFloat()
+
 fun abilityRank(value: Int, velocity: Boolean = false, stamina: Boolean = false): Char {
     val v = normalizedAbility(value, velocity, stamina)
     return when {

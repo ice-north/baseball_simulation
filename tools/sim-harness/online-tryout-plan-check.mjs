@@ -40,6 +40,7 @@ import {
   submitPhase,
   openPhase,
   loadLeagueWorld,
+  autoRosterTarget,
 } from '../../server/leagueEngine.mjs';
 import {
   POSITION_GROUPS,
@@ -73,6 +74,7 @@ import { rosterCounts } from '../../src/utils/constants.js';
 import {
   ONLINE_ROSTER_TARGETS as ROSTER_TARGETS,
   ROSTER_LIMIT,
+  ROSTER_STANDARD,
 } from '../../src/online/shared.js';
 
 // --- 並べ替えと絞り込み（候補を作らずに済む部分） --------------------
@@ -212,7 +214,9 @@ try {
   const KEEP = { pitcher: 9, catcher: 2, infielder: 5, outfielder: 4 };
   // ⚠ 枠の数から導く。直に書くと、枠を増やしたときに取り残される
   const KEEP_TOTAL = Object.values(KEEP).reduce((a, b) => a + b, 0);
-  const EXPECTED_SLOTS = ROSTER_LIMIT - KEEP_TOTAL;
+  // ⚠ 人数を決めない案は**標準の人数**（`ROSTER_STANDARD`＝26）まで埋める。上限（28）は
+  //    人数を決めたときだけ（先方要望 2026-11-16）。ここでいう空きは標準までの空き
+  const EXPECTED_SLOTS = ROSTER_STANDARD - KEEP_TOTAL;
   await store.transaction((bundle) => {
     const l = bundle.league;
     loadLeagueWorld(l);
@@ -243,7 +247,7 @@ try {
     KEEP,
     `前提: 戦力外のあとの構成がちがう（${JSON.stringify(rosterCounts(roomBefore))}）`,
   );
-  const slots = ROSTER_LIMIT - roomBefore.length;
+  const slots = ROSTER_STANDARD - roomBefore.length;
   assert.equal(
     slots,
     EXPECTED_SLOTS,
@@ -442,7 +446,7 @@ try {
     //    ⚠ 自動で埋めたぶんは希望に入っていない選手（CPUと同じ判断で選ぶ）
     assert.equal(
       mineRoster.length,
-      ROSTER_LIMIT,
+      ROSTER_STANDARD,
       `希望のあとの空き枠が埋まっていない: ${mineRoster.length}人（${JSON.stringify(mine)}）`,
     );
     const beforeIds = new Set(roomBefore.map((p) => p.id));
@@ -471,16 +475,21 @@ try {
     //    「どの守備位置を優先するか」にしか使わず、尽きても別の選手を取る）。
     //    オンラインの目標構成を渡しているのは**顔ぶれの偏りを揃えるため**で、
     //    ここはその検査ではない。
+    // ⚠ CPUは26か27人（`autoRosterTarget`。リーグの種×年×球団で決まる）
     for (const name of cpuNames)
       assert.equal(
         after.game.teams[name].players.length,
-        ROSTER_LIMIT,
+        autoRosterTarget(after, name),
         `${name} の枠が埋まっていない`,
       );
+    assert.ok(
+      cpuNames.every((n) => [ROSTER_STANDARD, ROSTER_STANDARD + 1].includes(autoRosterTarget(after, n))),
+      'CPUの人数が26〜27人でない',
+    );
     // ⚠ 目標構成の合計と枠が合っていること。ずれると埋めきれないか弾かれる
     assert.equal(
       Object.values(ROSTER_TARGETS).reduce((a, b) => a + b, 0),
-      ROSTER_LIMIT,
+      ROSTER_STANDARD,
       '目標構成の合計と枠の数が合っていない',
     );
   }
@@ -678,7 +687,7 @@ try {
     //    誰とも交渉しなかった球団は、CPUと同じ判断で枠いっぱいまで埋める。
     assert.equal(
       zero.length,
-      ROSTER_LIMIT,
+      ROSTER_STANDARD,
       `0人の案の球団の枠が埋まっていない: ${zero.length}人（${JSON.stringify(zc)}）`,
     );
   }
@@ -739,7 +748,7 @@ try {
     assert.notEqual(empty.phase?.kind, 'tryout', 'トライアウトが解決していない');
     assert.equal(
       empty.game.teams[mx.teamName].players.length,
-      ROSTER_LIMIT,
+      ROSTER_STANDARD,
       `空の球団が枠いっぱいまで取れていない（巡目が足りない）`,
     );
     // ⚠ **標準案のままなら偏らないこと**。希望順はそのまま指名順なので、
@@ -747,7 +756,7 @@ try {
     //    触らずに提出した参加者だけ控えの居ない名簿になる。
     //    実測で、直す前は人の球団だけ投手15人・野手9人（CPUは投手10・野手14）だった
     const got = rosterCounts(empty.game.teams[mx.teamName].players);
-    const gotFielders = ROSTER_LIMIT - got.pitcher;
+    const gotFielders = ROSTER_STANDARD - got.pitcher;
     assert.ok(got.catcher >= 1, `標準案で捕手が居ない: ${JSON.stringify(got)}`);
     assert.ok(
       gotFielders >= 12,
@@ -967,7 +976,7 @@ try {
     for (const name of l.season.settings.teamNames.filter(
       (n) => !l.members.some((m) => m.teamName === n),
     ))
-      assert.equal(l.game.teams[name].players.length, ROSTER_LIMIT, `${name} の枠が埋まっていない`);
+      assert.equal(l.game.teams[name].players.length, autoRosterTarget(l, name), `${name} の枠が埋まっていない`);
   }
 
   // --- 取られたら交渉リストの下が繰り上がり、選んでいない選手は入れない ---------
@@ -1249,7 +1258,8 @@ try {
     const withRoster = plannedPicks(
       weightedRanked(candidates, DEFAULT_WEIGHTS, full),
       candidates,
-      ROSTER_LIMIT - full.length,
+      // 目標構成の合計（標準26人）までの空き。上限28人まで取ると、区分を埋めきったあとは何でも取る
+      ROSTER_STANDARD - full.length,
       full,
     );
     assert.equal(

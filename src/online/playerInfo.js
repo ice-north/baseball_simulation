@@ -1,4 +1,4 @@
-import { BALL_EFFECTS, PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, normalizeAbility } from '../utils/constants.js';
 import { getDeception } from '../game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL } from '../game/batterType.js';
 const n = (value) =>
@@ -57,9 +57,18 @@ export const ABILITY_HELP = {
   体幹: 'パワー・肩力・走力・球速・体力の伸びやすさ（0.5〜1.5倍。50で等倍）。試合には効かない。',
   器用さ: 'ミート・選球眼・守備・制球・盗塁・バントの伸びやすさ（0.5〜1.5倍）。フォーム改造・新球種・両打ち・別の守備位置の覚えやすさにも効く。試合には効かない。',
   プロ意識: 'キャンプの伸び（0.5〜1.5倍）、覚醒の起きやすさ（30未満は起きない）、衰え始めの遅さ（80で+1歳、100で+2歳）。試合には効かない。',
-  成長係数: '毎年の伸び全体に掛かる倍率（0.3〜1.8）。試合に出続けると少しずつ上がり、疲れたまま出続けると下がる。',
+  成長係数: '年度替わりの自然な伸び（体力・走力・肩力・球速などの体と、精神力・体幹が中心。若いほど伸びる）の大きさ（0.3〜1.8）。キャンプの伸びにも少し効く。試合に出続けると少しずつ上がり、疲れたまま出続けると下がる。',
   守備適性: 'その位置で守ると、守備・走力・肩力が「0.5＋適性÷200」倍で効く（100で等倍、60で0.8倍）。',
 };
+
+/**
+ * 能力のデータバーの長さ（0〜100%）。段位と同じ物差し（`normalizeAbility`: 球速は115〜155km/h、
+ * スタミナは0〜200を0〜100に直す）。⚠ アプリの `abilityBarFraction`（shared の Text.kt）と同じ式
+ */
+export function abilityBarPercent(value, label) {
+  const v = normalizeAbility(value, label === '球速', label === 'スタミナ');
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
 
 export function abilityRows(player, group) {
   const b = player.batting || {},

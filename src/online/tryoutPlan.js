@@ -84,15 +84,19 @@ export function planCount(rankedIds, maxCount) {
  * ⚠ 先方（main の持ち主）指摘「トライアウトの指名選手の人数を決められない」。
  *    交渉10人の形にしたとき、希望が尽きても空き枠を**必ず全部**埋めるようにしたので、
  *    「今年は2人だけ取る」ができなくなっていた。
- * ⚠ **無い（古い提出・標準案）なら空き枠いっぱい**。項目を足しただけなので、
+ * ⚠ **無い（古い提出・標準案）なら標準の人数（`fillCount`）まで**。項目を足しただけなので、
  *    版を上げる前に出した提出もそのまま前と同じ動きになる。
  * ⚠ 0人にしても、投手1・捕手1・野手8 に届かない球団はサーバーが必要な守備位置だけ補う
  *    （1球団の都合で全員の手続きが止まらないように）。
  */
-export function signTotal(plan, maxCount) {
+export function signTotal(plan, maxCount, fillCount = maxCount) {
   const room = Math.max(0, maxCount);
   const total = plan?.total;
-  return Number.isInteger(total) ? Math.max(0, Math.min(room, total)) : room;
+  // ⚠ 決めていなければ**標準の人数まで**（`fillCount`。上限28人の枠のうち26人まで。2026-11-16）。
+  //    アプリの `Tryout.kt` の `signTotal` と同じ式
+  return Number.isInteger(total)
+    ? Math.max(0, Math.min(room, total))
+    : Math.max(0, Math.min(room, fillCount));
 }
 
 /**

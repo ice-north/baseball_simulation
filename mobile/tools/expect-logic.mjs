@@ -32,7 +32,7 @@ const removed = removeFromPlan(ranked, ranked[0]);
 const shifted = shiftInPlan(ranked, 2, -1);
 const moved = moveInPlan(ranked, ranked.at(-1), 0);
 // 獲得する人数（無ければ空き枠いっぱい・範囲に収める）と、交渉から取りにいく人数
-const totals = [signTotal({}, 7), signTotal({ total: 3 }, 7), signTotal({ total: 20 }, 7), signTotal({ total: -1 }, 7), wishedCount(ranked, 4)];
+const totals = [signTotal({}, 7), signTotal({ total: 3 }, 7), signTotal({ total: 20 }, 7), signTotal({ total: -1 }, 7), signTotal({}, 7, 5), signTotal({ total: 6 }, 7, 5), wishedCount(ranked, 4)];
 // 最低限に足りない人数（画面の「獲得後の名簿」）: 投手だけ3人／捕手のいない野手だけ／そろった名簿
 const pitchersOnly = roster.filter((p) => p.position === 'pitcher').slice(0, 3);
 const noCatcher = roster.filter((p) => p.position !== 'pitcher' && p.position !== 'catcher').slice(0, 9);
