@@ -33,7 +33,7 @@ import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
 import TryoutPlanner from './TryoutPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
-import { plannedPicks, signTotal } from './tryoutPlan.js';
+import { fillsAutomatically, plannedPicks, signTotal } from './tryoutPlan.js';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting, phaseStatusLabel } from './notices.js';
 import { ReadContext } from './useRead.js';
@@ -735,11 +735,17 @@ function MobilePlanContents({ phase, plan, view }) {
       Math.max(0, ROSTER_LIMIT - view.roster.length),
       ROSTER_STANDARD - view.roster.length,
     );
-    const autoFill = Math.max(0, total - players.length);
+    // ⚠ 人数を決めた提出（`total` がある）は交渉した人しか取らない。自動で埋めるのは
+    //    標準案・古い提出だけ（`fillsAutomatically`。PCの `TryoutPlanner`・サーバーと同じ判定）
+    const fills = fillsAutomatically(plan);
+    const autoFill = fills ? Math.max(0, total - players.length) : 0;
     head = `獲得する人数 ${total}人`;
-    note = `交渉した${plan.rankedIds.length}人から${players.length}人${
-      autoFill ? `＋自動で${autoFill}人` : ''
-    }。他球団と重なったら下位が繰り上がります。`;
+    note =
+      !fills && plan.rankedIds.length < total
+        ? `交渉した${players.length}人しか並んでいないので、獲得は多くても${players.length}人です（${total}人に届きません）。取られたときの控えも並べておくと繰り上がります。`
+        : `交渉した${plan.rankedIds.length}人から${players.length}人${
+            autoFill ? `＋自動で${autoFill}人` : ''
+          }。他球団と重なったら下位が繰り上がります。`;
   } else if (plan.releaseIds) {
     const byId = new Map(view.roster.map((p) => [p.id, p]));
     players = plan.releaseIds.map((id) => byId.get(id)).filter(Boolean);
