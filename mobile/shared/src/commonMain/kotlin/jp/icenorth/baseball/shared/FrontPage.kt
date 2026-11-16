@@ -49,6 +49,34 @@ data class FrontPage(
     val lineScore: LineScore? = null,
     /** 勝敗投手・本塁打の欄（「勝 ○○ 3勝1敗」「本 △△ 5号」）。新聞の小さな定型欄 */
     val box: List<Pair<String, String>> = emptyList(),
+    /** 曜日つきの日付（「4月23日（木曜日）」。新聞風の題字の横） */
+    val dateLine: String? = null,
+    /** 号数（今季のターン。新聞風の欄外） */
+    val issueNo: Int? = null,
+    /** 1面の縦の大見出し（「大逆転」「完封」など短い言葉）。新聞風だけが使う */
+    val bigHead: String? = null,
+    /** 縦の袖見出し（大見出しから自球団の名前を落としたもの） */
+    val bigSub: String? = null,
+    /** リード文の横の縦の小見出し */
+    val leadHead: String? = null,
+    /** 写真（球場の得点板）の説明 */
+    val caption: String? = null,
+    /** ヒーロー欄 */
+    val hero: PaperHero? = null,
+    /** 題字の下の「きょうの紙面」（目次） */
+    val index: List<String> = emptyList(),
+    /** 1面の「きのうの結果」（同じ日のほかの試合） */
+    val results: List<ResultRow> = emptyList(),
+    /** 新聞風の1面に載せる記事（残りは2面）。null なら [articles] を全部1面に */
+    val frontArticles: List<Article>? = null,
+    /** 囲みのコラム（TIPS） */
+    val column: Article? = null,
+    /** 2面（チーム面）。地元紙のシーズン中だけ */
+    val teamPage: TeamPage? = null,
+    /** 3面（記録面）。地元紙のシーズン中だけ */
+    val recordPage: RecordPage? = null,
+    /** 速報を見るまで伏せている（新聞風は「ただいま印刷中」） */
+    val sealed: Boolean = false,
 ) {
     enum class Tone { Win, Lose, Draw, None }
     enum class Paper(val label: String) { Local("地元紙"), National("全国紙") }
@@ -160,6 +188,7 @@ fun buildFrontPage(
     var extra = false
     var facts: GameFacts? = null
     var sit: Situation? = null
+    var detailGame: JsonObject? = null
 
     // ⚠ 手続きの時期（オフ・キャンプ・初期メンバー選び）は、最後の試合でなく時期の話を1面にする
     //    （以前は11月の契約更改の間も、9月の最後の試合を「白星」と書いていた）
@@ -179,6 +208,7 @@ fun buildFrontPage(
         //    見出しだけでなく、スコアボードと勝敗投手・本塁打の欄も同じ（別の試合の回ごとの得点・本塁打を出さない）
         val detail = lastGame?.takeIf { it.at("gameId").long() == null || it.at("gameId").long() == last.gameId }
         facts = GameFacts.from(detail, team)
+        detailGame = detail
         val situation = Situation(me, opp, home, ours, theirs, streak, broken, mine?.let { rankIndex + 1 }, facts)
         sit = situation
         headline = when (tone) {
@@ -451,6 +481,26 @@ fun buildFrontPage(
     // 指導者（オフは自球団の人事と新体制。シーズン中はときどきベンチの空気）
     articles += staffLocalArticles(view, me, offPhase, pen)
 
+    // 新聞風の2面・3面（地元紙のシーズン中で、自球団の試合があるとき）
+    val (front, rest) = splitFront(articles)
+    val hero = heroOf(view, detailGame, team, tone, facts)
+    val teamPage = if (!offPhase && last != null) buildTeamPage(
+        view, raw, team, me, own, tone, sit, detailGame, hero,
+        leftover = rest.filter { !(it.kicker == "ひと言" && view.staff?.manager != null) },
+        pen = pen,
+    ) else null
+    val recordPage = if (!offPhase && last != null) buildRecordPage(view, raw, team, sit, detailGame, lineScore, facts, pen) else null
+    val nextOpp = view.nextGames.firstOrNull { it.home == team || it.away == team }?.let { view.teamShort(if (it.home == team) it.away else it.home) }
+    val index = listOfNotNull(
+        nextOpp?.let { "次は${it}戦" },
+        teamPage?.interview?.let { "2面 ${it.speaker}" } ?: teamPage?.let { "2面 チームの今" },
+        recordPage?.takeIf { it.boxes.isNotEmpty() }?.let { "3面 成績表" } ?: recordPage?.let { "3面 順位" },
+    )
+    val results = last?.takeIf { !offPhase }?.date?.let { d ->
+        view.results.filter { it.date == d && it.home != team && it.away != team && it.homeScore != null && it.awayScore != null }
+            .map { ResultRow(view.teamShort(it.away), it.awayScore!!, view.teamShort(it.home), it.homeScore!!) }
+    }.orEmpty()
+
     column?.let { articles += it }
     // アプリの版: 古いときは記事のいちばん上（全幅の1本目）、最新・試作版は紙面の終わり
     app?.let { (article, top) -> if (top) articles.add(0, article) else articles += article }
@@ -478,6 +528,21 @@ fun buildFrontPage(
         score = score,
         articles = articles,
         shorts = shorts,
+        dateLine = paperDate(date),
+        issueNo = turnOfDate(date, view.seasonTurns),
+        bigHead = bigHeadOf(tone, sit),
+        bigSub = sit?.let { bigSubOf(headline, me) },
+        leadHead = leadHeadOf(tone, sit, mine?.takeIf { it.gamesPlayed > 0 }?.let { "${leagueName}${rankIndex + 1}位" }),
+        caption = photoCaption(tone, sit, lineScore),
+        hero = hero,
+        index = index,
+        results = results,
+        // ⚠ 2面が無い日（手続きの時期など）は記事を全部1面に（null）
+        frontArticles = if (teamPage == null) null
+        else (if (app?.second == true) listOf(app.first) else emptyList()) + front + (if (app != null && !app.second) listOf(app.first) else emptyList()),
+        column = column,
+        teamPage = teamPage,
+        recordPage = recordPage,
     )
 }
 
@@ -535,7 +600,8 @@ suspend fun loadOwnHistory(team: String, maxPages: Int = 8, readPage: suspend (I
         if (games.size >= count) break
         // 結果の変わり目が2つ見えたら、連続の数は決まっている
         val changes = games.zipWithNext().count { (a, b) -> outcome(a) != outcome(b) }
-        if (changes >= 2) break
+        // ⚠ 2面の「直近10試合」のため、10試合は読む
+        if (changes >= 2 && games.size >= 10) break
     }
     return games.asReversed().toList() to (games.size >= count)
 }
