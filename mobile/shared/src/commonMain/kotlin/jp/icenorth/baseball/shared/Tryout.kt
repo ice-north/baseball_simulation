@@ -42,10 +42,13 @@ fun wishLimit(maxCount: Int): Int = if (maxCount > 0) TRYOUT_WISH_MAX else 0
 /** 交渉した人が尽きたら自動で埋めるか（`total` の無い案だけ）。Web 版 `fillsAutomatically` */
 fun fillsAutomatically(plan: JsonObject?): Boolean = plan?.get("total")?.int() == null
 
-/** 獲得する人数（提出の `total`）。無ければ空き枠いっぱい。Web 版 `signTotal` */
-fun signTotal(plan: JsonObject?, maxCount: Int): Int {
+/**
+ * 獲得する人数（提出の `total`）。無ければ標準の人数まで（`fillCount`。上限28人の枠のうち26人まで）。
+ * Web 版 `signTotal` と同じ式
+ */
+fun signTotal(plan: JsonObject?, maxCount: Int, fillCount: Int = maxCount): Int {
     val room = max(0, maxCount)
-    val total = plan?.get("total")?.int() ?: return room
+    val total = plan?.get("total")?.int() ?: return fillCount.coerceIn(0, room)
     return total.coerceIn(0, room)
 }
 

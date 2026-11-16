@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { ROSTER_LIMIT } from '../../src/online/shared.js';
+import { ROSTER_STANDARD } from '../../src/online/shared.js';
 import {
   createLeague,
   defaultPhasePlan,
@@ -71,10 +71,11 @@ advanceLeagueDay(league, 'recovery:tryout', now);
 assert.equal(league.phase.kind, 'tryout');
 resolveDefaults();
 const recovered = league.game.teams[member.teamName];
-// ⚠ 枠の数は `ROSTER_LIMIT` が正本。直に書くと枠を変えたときに取り残される
-assert.equal(recovered.players.length, ROSTER_LIMIT);
+// ⚠ 人の球団が人数を決めなければ標準の人数（`ROSTER_STANDARD`）まで埋まる（上限 `ROSTER_LIMIT` ではない）。
+//    直に書くと枠を変えたときに取り残される
+assert.equal(recovered.players.length, ROSTER_STANDARD);
 assert.ok(recovered.players.some((p) => p.position === 'pitcher'));
 assert.ok(recovered.players.some((p) => p.position === 'catcher'));
 console.log(
-  'online-roster-recovery-check PASS（ドラフト後4人・投手不在→契約確認→補強で枠いっぱい）',
+  'online-roster-recovery-check PASS（ドラフト後4人・投手不在→契約確認→補強で標準の人数まで）',
 );

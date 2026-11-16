@@ -279,7 +279,8 @@
 /* 能力は**横に並べる**。縦に積むと送らないと見えない */
 .online-detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /* ⚠ 150→170px: 能力にデータバーを足したぶん（名前・バー・数字が1行に入る幅） */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
 }
 .online-detail-block {
@@ -308,6 +309,33 @@
 .online-detail-block dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+/* 能力のデータバー（先方指摘 2026-11-16: 数字だけで見づらい）。色は数字と同じ段位の色。
+   ⚠ 数字の欄の幅をそろえて、バーの左端と右端を縦にそろえる */
+.online-detail-block dl > div:has(> .online-ability-bar) {
+  align-items: center;
+}
+.online-detail-block dl > div:has(> .online-ability-bar) > dt {
+  flex: 0 0 auto;
+  min-width: 4.8em;
+}
+.online-detail-block dl > div:has(> .online-ability-bar) > dd {
+  flex: 0 0 2.6em;
+  text-align: right;
+}
+.online-ability-bar {
+  flex: 1;
+  min-width: 24px;
+  height: 6px;
+  border-radius: 3px;
+  background: #ffffff14;
+  overflow: hidden;
+}
+.online-ability-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: currentColor;
 }
 /* 能力の説明: 項目名を押すと下に出す（スマホのブラウザは触れても title が出ないため） */
 .online-detail-block dt.has-help:not(:where(.online-sp *)) {
@@ -1534,10 +1562,13 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 11px;
   color: #9fb0c4;
 }
+/* ⚠ 標準（26人）で決めると上限（28人）より少ないので、このボタンはいつも出る。
+   指で押せる大きさ（40px）にする（`online-edit-ui-check`） */
 .online-tryout-total .online-tryout-fill {
-  min-height: 0;
-  padding: 2px 8px;
-  font-size: 11px;
+  min-height: 40px;
+  margin-top: 4px;
+  padding: 0 12px;
+  font-size: 13px;
 }
 .online-tryout-total-note {
   margin: 4px 0 8px;
@@ -3311,9 +3342,40 @@ small.online-gain:not(:where(.online-sp *)) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.online-leader-name small {
-  margin-left: 5px;
+.online-leader-team {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #e2e8f0;
+}
+/* 退団・引退した選手の通算（通算成績の「球団ごと」の下） */
+.online-former-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.online-former-table caption {
+  text-align: left;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 4px 0;
+}
+.online-former-table th,
+.online-former-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #ffffff14;
+  text-align: right;
+  white-space: nowrap;
+}
+.online-former-table th[scope='row'],
+.online-former-table thead th:first-child {
+  text-align: left;
+  font-weight: 400;
+}
+.online-former-table thead th {
   color: #9fb0c4;
+  font-weight: 400;
 }
 .online-leader-value {
   flex: 0 0 auto;
@@ -4760,12 +4822,6 @@ small.online-gain:not(:where(.online-sp *)) {
 /* --- 年代記（球団史・マジック・ペース） --------------------------------- */
 .online-move.is-race {
   color: #f2d27a;
-}
-.online-leader-pace {
-  display: block;
-  font-size: 10px;
-  color: #9fb0c4;
-  text-align: right;
 }
 .online-chronicle-sub {
   margin: 6px 0 2px;

@@ -132,6 +132,21 @@ const grand = c.world.find((w) => w.kind === 'grand' && w.year === startYear);
 assert.ok(grand?.champion, '独立リーグ日本一決定戦の結果が残っていない');
 assert.ok(grand.ours, 'このリーグの代表が無い');
 console.log(`甲子園 ${koshien.champion}（${koshien.championPref}） / 日本一 ${grand.champion}（代表 ${grand.ours} ${grand.oursResult}）`);
+// プロ野球への道（年0〜3人。指名された人は名簿から外れ、球団史とリーグ便りに残る）
+{
+  const drafted = (c.proDrafted || []).filter((r) => r.year === startYear);
+  assert.ok(drafted.length <= 3, `プロ指名が多すぎる（${drafted.length}人）`);
+  for (const r of drafted) {
+    assert.ok(r.key, 'プロ指名の記録に鍵が無い');
+    assert.ok(
+      !Object.values(league.game.teams).some((t) => (t.players || []).some((p) => p.onlinePlayerId === r.key)),
+      `${r.name} がまだ名簿に居る`,
+    );
+  }
+  if (drafted.length)
+    assert.ok(league.notices.some((n) => n.type === 'draft' && n.year === startYear), 'リーグ便りにドラフトが無い');
+  console.log(`プロ指名 ${drafted.length}人: ${drafted.map((r) => `${r.name}（${r.team}→${r.npbTeam} ${r.round}位）`).join(' / ') || 'なし'}`);
+}
 // 引退
 console.log(`引退 ${c.retired.length}人: ${c.retired.slice(0, 3).map((r) => `${r.name}（${r.line}）`).join(' / ')}`);
 for (const r of c.retired) {

@@ -393,16 +393,16 @@ function Leaders({ view }) {
                             id={row.id}
                             name={row.name}
                           />
-                          <small>{teamShort(row.team)}</small>
                         </span>
+                        {/* ⚠ 球団名は名前と別の欄にして、名前が長くても切らない
+                            （先方指摘 2026-11-16: 小さい灰色で読めない・名前が「…」で切れる） */}
+                        <span className="online-leader-team">{teamShort(row.team)}</span>
                         <span className="online-leader-value">
                           {/* ⚠ 先頭の0を省くのは**率の項目だけ**（打率 .525）。
                               防御率に掛けると 0.34 が .34 になって桁を読み違える */}
                           {formatLeaderValue(category, row.value)}
-                          {/* 「このままなら年間○」。1位だけ（並べると数字が多すぎる） */}
-                          {i === 0 && row.pace > row.value && (
-                            <small className="online-leader-pace">ペース{row.pace}</small>
-                          )}
+                          {/* ⚠ 「ペース○」は出さない（先方指摘 2026-11-16: 名前が見切れる）。
+                              サーバーの pace は紙面の文（「このままなら年間○本」）だけが使う */}
                         </span>
                       </li>
                     ))}

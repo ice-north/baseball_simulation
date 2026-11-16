@@ -566,6 +566,8 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
     seasons,
     records,
     retired: (c.retired || []).filter((r) => r.team === teamName).slice(0, 20),
+    // プロ入りした選手（球団の誇り。`proDraft.mjs`）
+    proDrafted: (c.proDrafted || []).filter((r) => r.team === teamName).map(({ key, ...r }) => r),
     milestones: (c.milestones || []).filter((m) => m.team === teamName).slice(0, KEEP_MILESTONES_PER_TEAM),
     moves: teamMoves(league, teamName),
   };
@@ -620,6 +622,19 @@ export function teamMoves(league, teamName, limit = 80) {
         position: r.position || null,
         other: null,
       });
+  for (const r of league.chronicle?.proDrafted || [])
+    if (r.team === teamName)
+      rows.push({
+        year: r.year ?? null,
+        // 指名はNPBのドラフト会議（10月下旬）
+        month: 10,
+        day: 25,
+        side: 'out',
+        how: 'プロ入り',
+        name: r.name,
+        position: r.position || null,
+        other: r.npbTeam || null,
+      });
   const key = (r) => (r.year || 0) * 10000 + (r.month || 0) * 100 + (r.day || 0);
   return rows
     .map((r, i) => ({ r, i }))
@@ -640,6 +655,8 @@ export function chronicleView(league) {
       .filter((r) => r.year === year - 1 && (league.season.currentDate?.month || 0) < SEASON_START_MONTH)
       .slice(0, 12),
     world: (c.world || []).slice(0, 4).map(({ notable, ...w }) => ({ ...w, star: notable?.[0] || null })),
+    // リーグからプロ入りした選手（新しい順。球団史・記録の「リーグからプロへ」）
+    proDrafted: (c.proDrafted || []).slice(0, 30).map(({ key, ...r }) => r),
   };
 }
 

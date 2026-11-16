@@ -60,6 +60,9 @@ import jp.icenorth.baseball.shared.quickPending
 import jp.icenorth.baseball.shared.sealedForQuick
 import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
+import jp.icenorth.baseball.shared.ChronicleView
+import jp.icenorth.baseball.shared.proDraftedHead
+import jp.icenorth.baseball.shared.proDraftedBody
 import jp.icenorth.baseball.shared.TEAM_RECORD_ROWS
 import jp.icenorth.baseball.shared.careerRecordLine
 import jp.icenorth.baseball.shared.historyLine
@@ -321,6 +324,10 @@ private fun RecordLine(text: String, row: jp.icenorth.baseball.shared.RecordRow,
 private fun ChronicleDialog(model: AppViewModel, team: String, short: String, onClose: () -> Unit) {
     var data by remember { mutableStateOf<TeamChronicle?>(null) }
     var failed by remember { mutableStateOf(false) }
+    // リーグ全体のプロ入り（ビューの chronicle。古いサーバーには無い）
+    val league = remember(model.view) {
+        model.raw?.at("chronicle").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(ChronicleView.serializer(), it) }.getOrNull() }?.proDrafted.orEmpty()
+    }
     LaunchedEffect(team) {
         runCatching {
             model.read("team", mapOf("team" to team)).at("chronicle").obj()?.let { OnlineJson.decodeFromJsonElement(TeamChronicle.serializer(), it) }
@@ -369,6 +376,23 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                             style = MaterialTheme.typography.bodySmall,
                             color = if (m.side == "in") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                    // プロ入りした選手（この球団から）と、リーグ全体からプロへ（Web 版 Chronicle.jsx の ProDrafted と同じ）
+                    item { ChronicleHeading("プロ入りした選手") }
+                    if (c.proDrafted.isEmpty()) item { Text("この球団からプロ入りした選手はまだいません。指名されるとチームメイトのプロ意識と経験が上がります。", style = MaterialTheme.typography.bodySmall) }
+                    items(c.proDrafted.withIndex().toList(), key = { "p${it.index}" }) { (_, r) ->
+                        Column {
+                            Text(proDraftedHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    item { ChronicleHeading("リーグからプロへ") }
+                    if (league.isEmpty()) item { Text("まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜3人）。", style = MaterialTheme.typography.bodySmall) }
+                    items(league.withIndex().toList(), key = { "l${it.index}" }) { (_, r) ->
+                        Column {
+                            Text(proDraftedHead(r) { model.view?.teamShort(it) ?: it }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     item { ChronicleHeading("引退した選手") }
                     if (c.retired.isEmpty()) item { Text("この球団から引退した選手はまだいません。", style = MaterialTheme.typography.bodySmall) }

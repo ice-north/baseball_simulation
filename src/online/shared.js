@@ -482,7 +482,11 @@ export const CAMP_SUB_MENUS = [
  * ⚠ **1か所に置くこと**。トライアウトの獲得人数・画面の上限・トレードの検査が
  *    別々に 24 と書いていると、変えたときに片方だけ残る。
  */
-export const ROSTER_LIMIT = 26;
+// ⚠ 26→28（先方要望 2026-11-16: 複数人のトレードができるように、最大28人まで抱えられる）。
+//    自動で埋めるのは標準の26人まで（`ROSTER_STANDARD`）。27・28人目は、トライアウトで
+//    獲得する人数を自分で決めたとき・トレードで増えたときだけ。CPU球団は26〜27人
+//    （`cpuRosterTarget`、サーバー）
+export const ROSTER_LIMIT = 28;
 
 /**
  * オンラインの目標構成（合計26人）。
@@ -490,8 +494,8 @@ export const ROSTER_LIMIT = 26;
  * ⚠ **一人用の `ROSTER_TARGETS`（24人）とは別**。一人用の名簿と試合の釣り合いは
  *    24人で測ってあり、そこを動かすとドラフト・トライアウト・戦力外の
  *    釣り合いが全部ずれる。オンラインだけ枠を2つ増やすので、表を分けた。
- * ⚠ 合計は `ROSTER_LIMIT` と揃えること。ずれると、トライアウトが枠を
- *    埋めきれない（目標に達して止まる）か、上限で弾かれる。
+ * ⚠ 合計は標準の人数（`ROSTER_STANDARD`）になる。上限（`ROSTER_LIMIT`）より小さくてよい
+ *    （上限は複数人トレードのための余り。2026-11-16）。
  */
 export const ONLINE_ROSTER_TARGETS = {
   pitcher: 11,
@@ -499,6 +503,13 @@ export const ONLINE_ROSTER_TARGETS = {
   infielder: 6,
   outfielder: 7,
 };
+
+/**
+ * 標準の人数（自動で埋める上限）。目標構成の合計（26人）。
+ * ⚠ トライアウトで獲得する人数を決めていない案（標準案・指導者の案）と、画面の既定の人数はここまで。
+ *    上限（`ROSTER_LIMIT`）まで自動で取ると、人の球団だけ28人になって控えの数で有利になる
+ */
+export const ROSTER_STANDARD = Object.values(ONLINE_ROSTER_TARGETS).reduce((a, b) => a + b, 0);
 
 /** キャンプのクール数。一人用と同じ4回 */
 export const CAMP_ROUNDS = 4;

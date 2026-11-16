@@ -464,6 +464,17 @@ export const CATEGORY_GROWTH = {
     focus: { control: 1.6, meet: 1.8, eye: 1.4, defense: 1.7, breaking: 1.4,
              velocity: 1.0, speed: 0.55, arm: 0.6, stamina: 1.1, power: 1.2, lead: 1.4 },
   },
+  // オンラインの対人リーグ（12球団）の**年度替わりの自然成長**。
+  // ⚠ 先方指摘（2026-11-16）: 「年度替わりの自然成長は成長係数を見て、フィジカルや精神が中心、
+  //    若いほど伸びる。キャンプはプロ意識・体幹・器用さを見て、フィジカルと技術が中心」。
+  //    それまでは独立リーグの一芸（topN=1）の式で、技術もフィジカルも同じくらい伸びていた。
+  // ⚠ **伸びる側だけ**を変える（`naturalPositive`）。focus（衰えの止まりにくさにも効く）は
+  //    独立と同じ1.0のままなので、**衰え始める年齢と落ち幅は前と同じ**。
+  // ⚠ 一人用の世界の独立リーグ・社会人は触らない（`online` を渡したときだけ）
+  online: {
+    volume: 1.34, gain: 0.88, topN: 2, strength: 1.2, weak: 0.9, focus: null,
+    natural: true,
+  },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
     volume: 0.86, gain: 0.06, topN: 2, strength: 1.25, weak: 0.9,
@@ -503,6 +514,50 @@ export function seasonActivity(player) {
     return stats?.batting?.atBats || 0;
   };
   return of(player.seasonStats) || of(player.previousSeasonStats);
+}
+
+// ------------------------------------------------------------
+// オンラインの自然成長（年度替わり）の伸び方
+// ------------------------------------------------------------
+// 能力の種類ごとの「伸びる側」の倍率。フィジカルを厚く、技術を薄く（技術はキャンプで伸ばす）。
+// ⚠ 実測（`online-yearend-growth-probe.mjs`、初期セット12球団×6回、2026-11-16）:
+//    21歳以下の野手 体力+2.1 精神+1.8 肩力+1.5 体幹+1.4 走力+0.9 パワー+0.8 守備+0.4（ミート・選球眼は+0.3未満）、
+//    21歳以下の投手 体力+1.9 精神+1.7 体幹・肩力・走力+1.3 変化球+1.2 球速+1.0 スタミナ+1.0 制球+0.3。
+//    22〜25歳はその半分ほど、26歳からは伸びより衰えが勝つ（衰えは前と同じ）。
+//    前（独立リーグの式）は21歳以下の野手で 制球・肩力・守備+0.8 ミート+0.6 と技術もフィジカルも同じくらいだった
+export const NATURAL_GROWTH_KIND = {
+  speed: 2.2, arm: 2.2, armP: 1.8, velocity: 1.8, stamina: 1.6, bodyStamina: 1.8,
+  power: 0.8,
+  meet: 0.35, eye: 0.35, control: 0.35, defense: 0.35, breaking: 0.5, lead: 0.6,
+  steal: 0.35, bunt: 0.35,
+};
+// 若いほど伸びる（伸びる側だけ）。成長係数は基礎成長（`basalGrowth`）と天井が見ている
+const NATURAL_YOUTH = { 18: 1.6, 19: 1.5, 20: 1.4, 21: 1.3, 22: 1.15, 23: 1.05, 24: 0.95, 25: 0.85, 26: 0.75 };
+export const naturalYouth = (age) => NATURAL_YOUTH[age] ?? (age < 18 ? 1.6 : 0.65);
+/** 自然成長の伸びる側の倍率（能力の種類×若さ） */
+export const naturalPositive = (key, age) => (NATURAL_GROWTH_KIND[key] ?? 1.0) * naturalYouth(age);
+
+// 精神力・体幹の自然な伸び（1年あたりの期待値。成長係数1.0のとき）。
+// ⚠ どちらも**年度更新では今まで一度も動かなかった**（精神力は初期値のまま、体幹はキャンプだけ）。
+//    衰えは付けない（精神は経験で練れ、体幹はキャンプの体づくりで保つもの）
+const MENTAL_BY_AGE = [[20, 2.0], [23, 1.5], [26, 1.0], [29, 0.6], [99, 0.3]];
+const MUSCLE_BY_AGE = [[20, 1.6], [23, 1.1], [26, 0.6], [29, 0.2], [99, 0]];
+const byAge = (table, age) => table.find(([upTo]) => age <= upTo)?.[1] ?? 0;
+/**
+ * 精神力・体幹を伸ばす（オンラインの年度替わりだけ）。成長係数（＋起用の補正）で 0.6〜1.3倍
+ */
+export function applyNaturalMindBody(player) {
+  const age = player.age || 25;
+  const gp = gpClamp((player.growthPotential ?? 1.0) + (player.growthModifier || 0));
+  const scale = 0.6 + 0.4 * gp;
+  if (player.personality && typeof player.personality.mental === 'number') {
+    const gain = stochasticRound(byAge(MENTAL_BY_AGE, age) * scale);
+    player.personality.mental = Math.min(99, player.personality.mental + Math.max(0, gain));
+  }
+  if (player.physical && typeof player.physical.muscle === 'number') {
+    const gain = stochasticRound(byAge(MUSCLE_BY_AGE, age) * scale);
+    player.physical.muscle = Math.min(99, player.physical.muscle + Math.max(0, gain));
+  }
 }
 
 export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
@@ -599,7 +654,9 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
         //    この関数が担当する能力は `applyAgeCurveChanges` の対象外に
         //    してあるので、ここで掛けないと体幹・器用さが効かなくなる
         //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
-        const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * formMult;
+        const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * formMult
+          // オンラインの自然成長: フィジカル厚め・技術薄め・若いほど（伸びる側だけ）
+          * (prof.natural ? naturalPositive(key, age) : 1);
         return Math.min(capOverride ?? g.cap,
           current + stochasticRound(delta * phys * decayMult(current, growthThreshold(ceilOf(g, prof.pro).threshold + (prof.ceilingShift ?? 0), gp), growthDecayRate(ceilOf(g, prof.pro).rate, gp), ceilOf(g, prof.pro).floor)));
       }
@@ -609,15 +666,20 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
   return { grow, age, gp, discipline };
 }
 
-export function applyCorporatePlayerGrowth(allTeams) {
+/**
+ * @param opts.online オンラインの対人リーグの球団名（Set）。渡した球団は自然成長の式
+ *   （`CATEGORY_GROWTH.online`）で伸ばし、精神力・体幹も伸ばす（`applyNaturalMindBody`）
+ */
+export function applyCorporatePlayerGrowth(allTeams, { online = null } = {}) {
   const decayMult = (current, threshold, rate, floor = 0.10) => {
     if (current < threshold) return 1.0;
     return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
 
-  for (const [, team] of Object.entries(allTeams)) {
+  for (const [teamName, team] of Object.entries(allTeams)) {
     if (!team?.corporateData && !team?.independentLeagueId) continue;
     if (!team.players) continue;
+    const natural = !!online?.has(teamName);
 
     const isClub = team.corporateData?.type === 'club';
     const isIndependent = !!team.independentLeagueId;
@@ -627,7 +689,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
 
     // カテゴリごとの育成の性格（`CATEGORY_GROWTH`）。
     // 従来は3カテゴリすべてが同じ傾斜（長所×1.4 / 短所×0.7）だった。
-    const prof = CATEGORY_GROWTH[isClub ? 'club' : isIndependent ? 'independent' : 'corporate'];
+    const prof = CATEGORY_GROWTH[natural ? 'online' : isClub ? 'club' : isIndependent ? 'independent' : 'corporate'];
 
     for (const player of team.players) {
       const { grow, age, discipline } = makeGrower(player, prof, rankMult);
@@ -667,6 +729,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
           player.catching.lead = grow(player.catching.lead ?? 30, 'lead');
         }
       }
+      if (natural) applyNaturalMindBody(player);
 
       // 知名度の蓄積。⚠ 以前は全員に毎年 0〜2（平均+1）を無条件に足しており、
       //    実績と関係なく在籍年数だけで社会人の知名度の中央値が 1→37（15年）まで積み上がった。
@@ -702,11 +765,16 @@ const UNIVERSITY_OWNED_STATS = {
 };
 
 // --- 年齢カーブによる成長・衰退 ---
-export function applyAgeCurveChanges(allTeams) {
+/**
+ * @param opts.online オンラインの対人リーグの球団名（Set）。伸びる側だけ自然成長の倍率
+ *   （`naturalPositive`: フィジカル厚め・技術薄め・若いほど）を掛ける。衰える側は同じ
+ */
+export function applyAgeCurveChanges(allTeams, { online = null } = {}) {
   const updatedTeams = {};
   const ageReports = [];
 
   Object.entries(allTeams).forEach(([teamName, team]) => {
+    const natural = !!online?.has(teamName);
     // 社会人・独立・クラブは applyCorporatePlayerGrowth が年齢カーブごと担当する
     const corporateGrown = !!(team?.corporateData || team?.independentLeagueId);
     updatedTeams[teamName] = {
@@ -766,8 +834,9 @@ export function applyAgeCurveChanges(allTeams) {
           }
           // 成長方向: ポテンシャル + 体幹/器用さ補正（プロ意識は練習に集中）
           // 衰退方向: マイナスポテンシャルで加速 + プロ意識で緩和
+          const naturalMult = natural ? naturalPositive(stat, age) : 1;
           let change = rawChange > 0
-            ? Math.round(rawChange * ageTalentMult * growthPotential * physiqueMult)
+            ? Math.round(rawChange * ageTalentMult * growthPotential * physiqueMult * naturalMult)
             : Math.round(rawChange * decayMult * decayDiscMult);
 
           // 能力値を取得・更新

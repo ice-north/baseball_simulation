@@ -25,6 +25,7 @@ import {
   PHASE_LABELS,
   sameEditState,
   ROSTER_LIMIT,
+  ROSTER_STANDARD,
 } from './shared.js';
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import TeamLineupButton from './TeamLineup.jsx';
@@ -446,8 +447,8 @@ export function Results({ view, compact = false }) {
  *    昇降格のお知らせが入るとリーグ便りごと画面が落ちていた。
  */
 const NOTICE_LABELS = {
-  // ⚠ **消さないこと**。オンラインではもうドラフトを行わないが、外す前の年度の
-  //    お知らせが保存に残っている。消すと、その年だけ「お知らせ」になる
+  // リーグ全体で年0〜3人のプロ指名（`server/proDraft.mjs`）。外していた頃より前の年度の
+  // お知らせも同じ種類で残っている
   draft: 'NPBドラフト',
   tryout: 'トライアウト',
   promotion: '昇格・降格',
@@ -532,8 +533,10 @@ export function Notices({ view, compact = false }) {
                       <b>
                         {typeof p.round === 'number' ? `${p.round}巡` : p.round}{' '}
                         {p.name}
+                        {/* ドラフトは元の球団も出す（どこから抜かれたか） */}
+                        {notice?.type === 'draft' && p.npbTeam && p.team ? `（${teamShort(p.team)}）` : ''}
                       </b>
-                      <span>→ {label(p.npbTeam || p.team)}</span>
+                      <span>→ {p.npbTeam || label(p.team)}</span>
                     </article>
                   ),
                 )}
@@ -726,8 +729,12 @@ function MobilePlanContents({ phase, plan, view }) {
       Math.min(plan.count, plan.rankedIds.length),
       view.roster,
     );
-    // 獲得する人数（`signTotal`。決めていなければ空き枠いっぱい）
-    const total = signTotal(plan, Math.max(0, ROSTER_LIMIT - view.roster.length));
+    // 獲得する人数（`signTotal`。決めていなければ標準の26人まで）
+    const total = signTotal(
+      plan,
+      Math.max(0, ROSTER_LIMIT - view.roster.length),
+      ROSTER_STANDARD - view.roster.length,
+    );
     const autoFill = Math.max(0, total - players.length);
     head = `獲得する人数 ${total}人`;
     note = `交渉した${plan.rankedIds.length}人から${players.length}人${
@@ -990,6 +997,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
           candidates={phase.candidates}
           roster={view.roster}
           maxCount={Math.max(0, ROSTER_LIMIT - view.roster.length)}
+          fillCount={Math.max(0, ROSTER_STANDARD - view.roster.length)}
           busy={busy}
           onChange={(next) => {
             setDirty(true);

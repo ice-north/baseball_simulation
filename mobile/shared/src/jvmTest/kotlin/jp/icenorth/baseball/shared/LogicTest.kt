@@ -54,6 +54,9 @@ class LogicTest {
             signTotal(JsonObject(mapOf("total" to JsonPrimitive(3))), 7),
             signTotal(JsonObject(mapOf("total" to JsonPrimitive(20))), 7),
             signTotal(JsonObject(mapOf("total" to JsonPrimitive(-1))), 7),
+            // 決めていなければ標準の人数まで（上限の枠より少ない）
+            signTotal(JsonObject(emptyMap()), 7, 5),
+            signTotal(JsonObject(mapOf("total" to JsonPrimitive(6))), 7, 5),
             wishedCount(ranked, 4),
         )
         assertEquals(expected.at("tryout", "totals").list().map { it.int() }, totals)

@@ -120,6 +120,8 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     var loaded by remember(team, career) { mutableStateOf<List<JsonObject>?>(null) }
     // 他球団のスタメンと投手陣（球団の読み込みの `lineup`。古い保存では無い）
     var loadedLineup by remember(team, career) { mutableStateOf<JsonObject?>(null) }
+    // 引退・解雇・退団した選手の通算（サーバーの `formerCareers`。通算のときだけ出す）
+    var former by remember(team, career) { mutableStateOf<List<JsonObject>>(emptyList()) }
     var failure by remember(team, career) { mutableStateOf<String?>(null) }
     var attempt by remember(team, career) { mutableStateOf(0) }
     val needsRead = career || !own
@@ -129,6 +131,7 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
             val result = model.read("team", mapOf("team" to team))
             loaded = result.at("roster").list().mapNotNull { it.obj() }
             loadedLineup = result.at("lineup").obj()
+            former = result.at("formerCareers").list().mapNotNull { it.obj() }
             failure = null
         } catch (e: Exception) {
             // ⚠ 前の読み込みが取り消されたとき（ページを連打した・画面を離れた）は失敗として出さない
@@ -218,7 +221,41 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                         Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     )
                 }
+                if (career) FormerCareers(former, batting)
             }
+        }
+    }
+}
+
+/**
+ * 引退・解雇・退団した選手の通算（その球団で最後にプレーした人。新しく去った順）。
+ * Web 版 CareerStats の「退団・引退した選手の通算」と同じ中身。
+ * ⚠ 先方要望（2026-11-16）「引退・解雇後も成績が残るように」。名簿に居ないので押しても詳細は開かない
+ */
+@Composable
+private fun FormerCareers(list: List<JsonObject>, batting: Boolean) {
+    val rows = list.filter { it.at(if (batting) "batting" else "pitching").obj() != null }
+    if (rows.isEmpty()) return
+    fun rate3(v: Double?): String = v?.let { val n = kotlin.math.round(it * 1000).toInt(); if (n >= 1000) "1.000" else ".${n.toString().padStart(3, '0')}" } ?: "—"
+    fun dec2(v: Double?): String = v?.let { val n = kotlin.math.round(it * 100).toInt(); "${n / 100}.${(n % 100).toString().padStart(2, '0')}" } ?: "—"
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Caption("退団・引退した${if (batting) "野手" else "投手"}の通算")
+        rows.forEach { r ->
+            val b = r.at("batting").obj()
+            val q = r.at("pitching").obj()
+            val line = if (batting && b != null) {
+                "${b.at("games").int() ?: 0}試合 打率${rate3(b.at("avg").num())} ${b.at("hits").int() ?: 0}安打 ${b.at("homeruns").int() ?: 0}本 ${b.at("rbis").int() ?: 0}打点 ${b.at("stolenBases").int() ?: 0}盗塁"
+            } else if (q != null) {
+                "${q.at("games").int() ?: 0}登板 ${q.at("wins").int() ?: 0}勝${q.at("losses").int() ?: 0}敗${q.at("saves").int() ?: 0}S${q.at("holds").int() ?: 0}H 防御率${dec2(q.at("era").num())} ${q.at("strikeouts").int() ?: 0}奪三振"
+            } else ""
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(r.at("name").str().orEmpty(), fontWeight = FontWeight.SemiBold)
+                    Muted("最終${r.at("lastYear").int() ?: ""}年・${r.at("years").int() ?: 0}シーズン")
+                }
+            }
+            Muted(line)
+            HorizontalDivider(Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }

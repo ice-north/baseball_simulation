@@ -741,24 +741,37 @@ assert.ok(
     };
   };
   const base = headcount(undefined);
+  // ⚠ **2つの世界を合わせて比べる**。1つの世界（野手13人前後×4クール）では伸びの合計が
+  //    乱数で倍・半分に振れ、帯（0.5〜1.8倍）の端を行き来していた（2026-11-16 実測:
+  //    同じ種でもキャンプの確率を少し変えるだけで 0.70〜1.80）
+  const pool = { fielders: 0, pitchers: 0, bat: {}, run: {}, ctl: {} };
+  const add = (into, gain) => {
+    for (const [k, v] of Object.entries(gain)) into[k] = (into[k] || 0) + v;
+  };
+  const seeds = [];
   for (const at of ['2026-12-01T10:00:00+09:00', '2027-03-15T21:30:00+09:00']) {
     const seed = worldSeedFromTime(at);
+    seeds.push(seed);
     const heads = headcount(seed);
-    const bat = campWith(all('batting'), seed);
-    const run = campWith(all('baserunning'), seed);
+    pool.fielders += heads.fielders;
+    pool.pitchers += heads.pitchers;
     const ctl = campWith(all('control'), seed);
-    assert.ok(bat.meet > run.meet, `種${seed}: 打撃練習でミートが伸びていない`);
-    assert.ok(run.speed > bat.speed, `種${seed}: 走塁練習で走力が伸びていない`);
     assert.ok(ctl.control > 0, `種${seed}: 投げ込みで制球が伸びていない`);
-    for (const [name, here, home] of [
-      ['打撃練習のミート', perHead(bat, heads.fielders, 'meet'), perHead(batting, base.fielders, 'meet')],
-      ['投げ込みの制球', perHead(ctl, heads.pitchers, 'control'), perHead(control, base.pitchers, 'control')],
-    ])
-      assert.ok(
-        here >= home * 0.5 && here <= home * 1.8,
-        `種${seed}: ${name}の伸びが既定の世界から外れている: 1人あたり ${here.toFixed(2)} / 既定 ${home.toFixed(2)}`,
-      );
+    add(pool.bat, campWith(all('batting'), seed));
+    add(pool.run, campWith(all('baserunning'), seed));
+    add(pool.ctl, ctl);
   }
+  const where = `種${seeds.join('・')}`;
+  assert.ok(pool.bat.meet > pool.run.meet, `${where}: 打撃練習でミートが伸びていない`);
+  assert.ok(pool.run.speed > pool.bat.speed, `${where}: 走塁練習で走力が伸びていない`);
+  for (const [name, here, home] of [
+    ['打撃練習のミート', perHead(pool.bat, pool.fielders, 'meet'), perHead(batting, base.fielders, 'meet')],
+    ['投げ込みの制球', perHead(pool.ctl, pool.pitchers, 'control'), perHead(control, base.pitchers, 'control')],
+  ])
+    assert.ok(
+      here >= home * 0.5 && here <= home * 1.8,
+      `${where}: ${name}の伸びが既定の世界から外れている: 1人あたり ${here.toFixed(2)} / 既定 ${home.toFixed(2)}`,
+    );
 }
 
 // --- 1クールずつ自分で実行する（ここが本丸） ---------------------------

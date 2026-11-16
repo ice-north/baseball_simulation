@@ -47,6 +47,7 @@ import jp.icenorth.baseball.app.savedPhaseDraft
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.ROSTER_LIMIT
+import jp.icenorth.baseball.shared.ROSTER_STANDARD
 import jp.icenorth.baseball.shared.signTotal
 import jp.icenorth.baseball.shared.ONLINE_ROSTER_TARGETS
 import jp.icenorth.baseball.shared.rosterCounts
@@ -481,7 +482,7 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, 
         val viewingPack = isPack && packs.any { it.at("id").str() == packOpen }
         val summary = when {
             isPack -> packs.firstOrNull { it.at("id").str() == plan.at("packId").str() }?.at("name").str()?.let { "選んでいるセット: $it" }
-            plan["rankedIds"] != null -> "獲得する人数 ${signTotal(plan, rosterRoom(raw))}人（交渉 ${plan.at("rankedIds").list().size}人）"
+            plan["rankedIds"] != null -> "獲得する人数 ${signTotal(plan, rosterRoom(raw), rosterFill(raw))}人（交渉 ${plan.at("rankedIds").list().size}人）"
             plan["releaseIds"] != null -> releaseSummary(raw, plan)
             else -> null
         }
@@ -682,7 +683,7 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                 listOf(
                     "右端の「解雇」を押した選手が退団します（もう一度押すと取り消し）。最低9人を残してください。",
                     "見出しを押すと、その項目で並べ替えます（もう一度押すと逆順）。",
-                    "続くトライアウトで最大 ${(ROSTER_LIMIT - remaining.size).coerceAtLeast(0)}人を獲れます（上限${ROSTER_LIMIT}人）。目標に足りない区分はトライアウトで優先して埋まります。",
+                    "続くトライアウトで最大 ${(ROSTER_LIMIT - remaining.size).coerceAtLeast(0)}人を獲れます（標準${ROSTER_STANDARD}人・上限${ROSTER_LIMIT}人。人数を決めなければ標準まで埋めます）。目標に足りない区分はトライアウトで優先して埋まります。",
                     "標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため毎年少なくとも3人を出します。",
                     "このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。",
                 ),
@@ -740,3 +741,6 @@ private fun releaseSummary(raw: JsonObject, plan: JsonObject): String {
 
 /** 名簿の残りの枠（トライアウトの獲得希望人数の上限） */
 internal fun rosterRoom(raw: JsonObject): Int = (ROSTER_LIMIT - raw.at("roster").list().size).coerceAtLeast(0)
+
+/** 獲得する人数を決めていないときに埋める人数（標準の26人まで。Web 版 LeaguePanels の `fillCount`） */
+internal fun rosterFill(raw: JsonObject): Int = (ROSTER_STANDARD - raw.at("roster").list().size).coerceAtLeast(0)

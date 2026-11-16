@@ -118,6 +118,31 @@ function Retired({ list }) {
 }
 
 /**
+ * プロ入りした選手（NPBのドラフトで指名された人。新しい順）。中身はサーバーの `proDraft.mjs` の記録。
+ * ⚠ 先方要望（2026-11-16）: プロ指名を解禁し、プロ入りした選手はリーグ記録から確かめられるように。
+ *    `showTeam` のとき（リーグ全体）は元の球団も出す
+ */
+function ProDrafted({ list, showTeam = false, empty }) {
+  if (!list?.length) return <p>{empty}</p>;
+  return (
+    <div className="online-news-list">
+      {list.map((r, i) => (
+        <article key={i}>
+          <b>
+            {r.year}年目 {r.name}
+            {r.position && `（${POS[r.position] || r.position}・${r.age}歳）`}
+            {showTeam && ` ${teamShort(r.team)}`}
+          </b>
+          <span>
+            {r.npbTeam} {r.round}位指名{r.reason ? `　${r.reason}` : ''}
+          </span>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+/**
  * 入退団履歴（新しい順。入団・退団・トレード・引退）。中身はサーバーの `teamMoves`。
  * ⚠ 先方指摘「各チームの入退団履歴も見られるように。表示先は球団史・記録から」。
  *    年で絞れる（多い年は1年に10人を超える）
@@ -296,8 +321,24 @@ export default function Chronicle({ view }) {
                   <Moves key={shown.teamName} list={c.moves} />
                 </section>
                 <section className="online-card">
+                  <h2>プロ入りした選手</h2>
+                  <ProDrafted
+                    list={c.proDrafted}
+                    empty="この球団からプロ入りした選手はまだいません。指名されるとチームメイトのプロ意識と経験が上がります。"
+                  />
+                </section>
+                <section className="online-card">
                   <h2>引退した選手</h2>
                   <Retired list={c.retired} />
+                </section>
+                {/* リーグ全体の記録（球団を選び直しても同じ） */}
+                <section className="online-card">
+                  <h2>リーグからプロへ</h2>
+                  <ProDrafted
+                    list={view.chronicle?.proDrafted}
+                    showTeam
+                    empty="まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜3人）。"
+                  />
                 </section>
               </div>
             </div>

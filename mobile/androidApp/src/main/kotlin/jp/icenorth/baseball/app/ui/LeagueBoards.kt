@@ -169,7 +169,8 @@ fun LeadersBoard(view: LeagueView, boards: List<JsonObject>, onPlayer: ((team: S
             ) {
                 Text("${i + 1}", modifier = Modifier.width(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(row.at("name").str().orEmpty(), fontWeight = if (mine) FontWeight.Bold else FontWeight.Normal, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                Text(view.teamShort(row.at("team").str().orEmpty()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 12.dp))
+                // ⚠ 球団名は小さい灰色にしない（先方指摘 2026-11-16: 読めない）。Web の Leaders と同じ
+                Text(view.teamShort(row.at("team").str().orEmpty()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(end = 12.dp))
                 val v = row.at("value").num()
                 Text(
                     when {
@@ -180,19 +181,10 @@ fun LeadersBoard(view: LeagueView, boards: List<JsonObject>, onPlayer: ((team: S
                     },
                     fontWeight = FontWeight.Bold,
                 )
-                // 「このままなら年間○」。1位だけ（並べると数字が多すぎる。Web 版 LeagueBoard の Leaders と同じ）
-                leaderPace(i, row)?.let { Text("  ペース$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                // ⚠ 「ペース○」は出さない（先方指摘 2026-11-16: 名前が見切れる。Web と同じ）
             }
         }
     }
-}
-
-/** 1位の年間ペース（今の数より多いときだけ）。サーバーの `pace`（数える項目だけに付く） */
-internal fun leaderPace(index: Int, row: JsonObject): Int? {
-    if (index != 0) return null
-    val pace = row.at("pace").num() ?: return null
-    val value = row.at("value").num() ?: return null
-    return pace.toInt().takeIf { pace > value }
 }
 
 private val NOTICE_LABELS = mapOf("draft" to "NPBドラフト", "tryout" to "トライアウト", "promotion" to "昇格・降格", "trade" to "トレード")

@@ -122,6 +122,7 @@ import {
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
 import { createRecorder, freezeComparison } from './recordedStats.mjs';
+import { chooseProDraft, applyProDraft } from './proDraft.mjs';
 import {
   pushInbox,
   recordTransaction,
@@ -162,6 +163,7 @@ import {
   CAMP_PHASES,
   CAMP_ROUNDS,
   ROSTER_LIMIT,
+  ROSTER_STANDARD,
   ONLINE_ROSTER_TARGETS,
   CONVERT_POSITIONS,
   CAMP_SUB_TARGETS,
@@ -225,6 +227,18 @@ const seeded = (league, key, fn) =>
       fn,
     ),
   );
+
+/**
+ * トライアウトで自動で埋める人数（名簿の合計）。人の球団は標準の26人、CPU球団は26か27人。
+ *
+ * ⚠ 先方要望（2026-11-16）: 枠は28人まで（複数人のトレードのため）、CPUは26〜27人を基本。
+ *    CPUの27人目はリーグの種×年×球団のハッシュで決める（乱数を引かない＝同じ年度をやり直せば同じ）。
+ * ⚠ 人の球団は**獲得する人数を自分で決めたときだけ**27・28人まで取れる（`signTotal`）
+ */
+export function autoRosterTarget(league, teamName) {
+  if (league.members.some((m) => m.teamName === teamName)) return ROSTER_STANDARD;
+  return ROSTER_STANDARD + (hashSeed(`${league.seed}:${league.season.year}:roster:${teamName}`) % 2);
+}
 
 // ⚠ **`generateFullSeasonSchedule` は使えない**。`leagueFormat` が
 //    `'single'` か `'two'` の2通りしか対応しておらず、7リーグを組めない
@@ -1362,7 +1376,9 @@ export function defaultPhasePlan(league, teamName) {
     // ⚠ **空き枠ぶんまで**（交渉できる人数 `TRYOUT_WISH_MAX` が上限）。以前は候補360人を
     //    全員並べていたが、いまの希望リストは上限があり、それを超えると提出が弾かれる。
     //    標準案は人数を決めない（`total` 無し）ので、尽きたぶんは自動で埋まる
-    const room = Math.max(0, ROSTER_LIMIT - team.players.length);
+    // ⚠ 並べるのは**自動で埋める人数まで**（標準26人、CPUは26〜27人。`autoRosterTarget`）。
+    //    上限（28人）まで並べると、CPUも標準案の人の球団も28人まで取ってしまう
+    const room = Math.max(0, autoRosterTarget(league, teamName) - team.players.length);
     const limit = Math.min(room, wishLimit(room));
     while (pool.length && rankedIds.length < limit) {
       // ⚠ オンラインの目標構成（26人）を渡す。既定は一人用の24人で、解決側
@@ -1727,7 +1743,12 @@ function resolveTryout(league, plans, now) {
       name,
       hasPendingPack(league, name)
         ? 0
-        : signTotal(plans[name], ROSTER_LIMIT - TEAMS_DATA[name].players.length),
+        : signTotal(
+            plans[name],
+            ROSTER_LIMIT - TEAMS_DATA[name].players.length,
+            // 決めていない案は自動で埋める人数まで（標準26人・CPUは26〜27人）
+            autoRosterTarget(league, name) - TEAMS_DATA[name].players.length,
+          ),
     ]),
   );
   // 交渉したのに他球団に取られた選手（実際に取りにいった所まで。`tryoutResults` の lost）
@@ -2058,12 +2079,18 @@ function resolvePhase(league, now) {
           ? campPlanFor(league, name, team.players)
           : undefined);
       const rest = saved || campFallbackPlan(member, plan);
-      for (let round = already; round < CAMP_ROUNDS; round += 1) {
-        const result = runCampRound(league, name, rest, {
-          lastRound: round === CAMP_ROUNDS - 1,
-        });
-        if (state) recordCampRound(state, result);
-      }
+      // ⚠ **乱数は球団ごとに引き直す**（リーグの種×年×球団）。手続き全体の1本の乱数を
+      //    回すと、ほかの球団のメニュー（集中練習の代償・新球種の抽選）で引く回数が変わる
+      //    だけで、自分の球団の伸びが入れ替わっていた（2026-11-16、キャンプの確率を
+      //    変えたら別の球団の検査値が倍・半分に振れた）
+      withSeededRandom(hashSeed(`${league.seed}:${league.season.year}:camp:${name}`), () => {
+        for (let round = already; round < CAMP_ROUNDS; round += 1) {
+          const result = runCampRound(league, name, rest, {
+            lastRound: round === CAMP_ROUNDS - 1,
+          });
+          if (state) recordCampRound(state, result);
+        }
+      });
     }
     // 最終クールの応答では phase が消えるため、完了結果を別に残す。
     // 初期名簿へ入れ替わる球団には、入れ替え前のCPU選手の成果を見せない。
@@ -2141,6 +2168,8 @@ function resolvePhase(league, now) {
         });
     const result = advanceToNextYear(league.season, TEAMS_DATA, {
       playedTeamNames: league.season.settings.teamNames,
+      // 対人リーグの球団は自然成長の式を分ける（フィジカル・精神が中心、若いほど。先方指摘 2026-11-16）
+      onlineTeamNames: league.season.settings.teamNames,
     });
     const retiredList = recordRetirements(league, result.retirements, {
       year: retireYear,
@@ -2552,10 +2581,10 @@ function advanceOneDay(league, key, now) {
     }
     // その年の成績を確定する（比較値・タイトル・最終順位）。
     //
-    // ⚠ **NPBドラフトは行わない**（オンラインだけ。一人用はそのまま）。
-    //    ドラフトは12球団から良い選手をNPBへ引き抜く処理で、育てた選手が
-    //    手元から消える。長く続ける対人リーグでは、抜かれた側に取り返す手段が
-    //    無いので外した。
+    // ⚠ **NPBドラフトは一人用の処理を回さない**。一人用の `processNPBDraft` は各球団から
+    //    2〜3人ずつ抜くので、長く続ける対人リーグでは育てた選手が手元から消えすぎる。
+    //    代わりにリーグ全体で年0〜3人だけ指名し、抜かれた球団にご褒美を渡す
+    //    （`proDraft.mjs`。先方要望 2026-11-16 で解禁）。
     // ⚠ **確定の処理は残すこと**。同じ日に動いていたので一緒に消しやすいが、
     //    これが無いとタイトルも最終順位も年度の記録に残らない。
     // ⚠ 日付はNPBのドラフト日のまま（一人用と同じ暦で動かすため）。
@@ -2568,6 +2597,8 @@ function advanceOneDay(league, key, now) {
         TEAMS_DATA,
         season.settings.teamNames,
       );
+      // プロ野球への道（成績を確定した**後**。タイトルと最終順位は指名された選手を含めて残す）
+      runProDraft(league, now);
       season._draftDone = true;
     }
     if (month === 11 && day === 9) openPhase(league, 'contract', now);
@@ -2583,6 +2614,32 @@ function advanceOneDay(league, key, now) {
       resolvePhase(league, now);
     }
   }));
+}
+
+/**
+ * その年のプロ指名（リーグ全体で0〜3人）を決めて当てる。`proDraft.mjs` の注を参照。
+ * ⚠ 初期メンバーを待っている球団は外す（名簿は次のキャンプで丸ごと入れ替わる）
+ */
+function runProDraft(league, now) {
+  const names = league.season.settings.teamNames;
+  const teams = Object.fromEntries(names.filter((n) => TEAMS_DATA[n]).map((n) => [n, TEAMS_DATA[n]]));
+  const skip = new Set(names.filter((n) => hasPendingPack(league, n)));
+  const picks = quiet(() => chooseProDraft(league, teams, skip));
+  if (!picks.length) return;
+  const touched = new Set();
+  const rows = applyProDraft(league, teams, picks, {
+    gamesPerSeason: league.season.settings.gamesPerSeason || 120,
+    remove: (teamName, player) => {
+      const team = TEAMS_DATA[teamName];
+      cleanupPlayerReferences(team, player.id);
+      team.players = team.players.filter((p) => p.id !== player.id);
+      touched.add(teamName);
+    },
+  });
+  // 抜けた選手の入った提案は取り下げ、打順・ローテを組み直す（成り立つなら人の編成は残る）
+  pruneTrades(league, TEAMS_DATA, now);
+  for (const name of touched) refreshTeamPlan(league, name);
+  return rows;
 }
 
 /**

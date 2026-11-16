@@ -17,6 +17,7 @@ import { performanceFor } from '../../server/performanceLabels.mjs';
 import { createSeasonStats } from '../../src/players.js';
 import { getAbilityRank } from '../../src/utils/constants.js';
 import { abilityRows } from '../../src/online/playerInfo.js';
+import { playerYearTable } from '../../src/online/playerYears.js';
 const player = (id, runs = id) => {
   const seasonStats = createSeasonStats();
   Object.assign(seasonStats.batting, {
@@ -227,6 +228,15 @@ assert.equal(
     .match(/BATTERY_NOTE: String = "(.*)"/)[1]
     .replace('${BATTERY_MIN_OUTS / 3}', String(minOuts / 3));
   assert.equal(note, BATTERY_NOTE, 'アプリと注記を同文に');
+}
+// 年ごとの推移: 率（打率）はその年の期間の performance から読む（今の選手の値を使い回さない）
+{
+  const line = (avg) => ({ seasonStats: { batting: { games: 10, atBats: 100, hits: avg * 100 } }, performance: { batting: { metrics: { avg } } } });
+  const player = { position: 'first', performance: { batting: { metrics: { avg: 0.266 } } } };
+  const years = [{ year: 2, age: 19, abilities: {} }, { year: 1, age: 18, abilities: {} }];
+  const periods = [{ id: 'current', ...line(0.31) }, { id: 'online:1', ...line(0.22) }];
+  const table = playerYearTable(player, years, periods, 2);
+  assert.deepEqual(table.rows.map((r) => r.stats['batting.avg']), [0.31, 0.22], '年ごとの打率が年で変わらない');
 }
 console.log(
   'online-stats-view-check PASS（既存項目の閲覧・OPS/WHIP等・欠損/0/∞・全名簿ソート・安定順序・状態と投球回・捕手の成績とアプリの同文）',

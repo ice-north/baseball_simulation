@@ -95,7 +95,7 @@ fun TryoutPanel(
     val maxCount = rosterRoom(raw)
     val limit = wishLimit(maxCount)
     val ranked = plan.at("rankedIds").list().mapNotNull { it.long() }.filter { it in byId }.take(limit)
-    val total = signTotal(plan, maxCount)
+    val total = signTotal(plan, maxCount, rosterFill(raw))
     val count = wishedCount(ranked, total)
     // ⚠ 自動で埋めるのは人数を決めていない案（標準案）だけ（Web 版と同じ `fillsAutomatically`）
     val autoFill = if (fillsAutomatically(plan)) (total - count).coerceAtLeast(0) else 0
@@ -131,7 +131,7 @@ fun TryoutPanel(
             if (editable) OutlinedButton(onClick = { setTotal(total - 1) }, enabled = total > 0) { Text("−") }
             Text("${total}人", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             if (editable) OutlinedButton(onClick = { setTotal(total + 1) }, enabled = total < maxCount) { Text("＋") }
-            Muted("空き枠${maxCount}人")
+            Muted("空き枠${maxCount}人（標準${raw.at("roster").list().size + rosterFill(raw)}人・上限${raw.at("roster").list().size + maxCount}人）")
         }
         Text(
             when {

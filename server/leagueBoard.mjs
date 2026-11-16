@@ -370,7 +370,7 @@ const CAREER_FIELDS = [
 ];
 
 /**
- * 通算成績ランキング（**リーグ全球団**の選手の、このリーグを始めてからの合計。上位10人）。
+ * 通算成績ランキング（**リーグ全球団**の選手の、このリーグを始めてからの合計。上位50人）。
  *
  * ⚠ 先方指摘「各チームごとの通算成績しか見られない。全チームの選手をランキング化した通算成績も」。
  * ⚠ 合計は対人リーグの記録（`records.seasons[年].players`。選手の鍵は球団をまたいで同じ
@@ -381,7 +381,11 @@ const CAREER_FIELDS = [
  *    防御率は投球回が同じ試合数以上（1試合1回）。少ない打席の高打率で埋まらないように。
  * ⚠ 並びは決定的に（同値は名前で分ける）。
  */
-export function careerLeaders(league, labelOf = (n) => n, top = 10) {
+/**
+ * 記録の鍵ごとの通算（このリーグを始めてからの合計）。`team` は最後に記録が付いた球団、
+ * `lastYear` はその年、`years` は記録のある年の数。
+ */
+function careerTotals(league) {
   const totals = new Map();
   for (const season of Object.values(league.records?.seasons || {}).sort((a, b) => a.year - b.year))
     for (const record of Object.values(season.players || {})) {
@@ -389,21 +393,89 @@ export function careerLeaders(league, labelOf = (n) => n, top = 10) {
         key: record.key,
         name: record.name,
         team: null,
+        lastYear: null,
+        years: 0,
         batting: {},
         pitching: {},
       };
       t.name = record.name || t.name;
       if (record.teams?.length) t.team = record.teams[record.teams.length - 1];
+      t.lastYear = season.year;
+      t.years += 1;
       for (const side of ['batting', 'pitching'])
         for (const [k, v] of Object.entries(record.stats?.[side] || {}))
           if (typeof v === 'number') t[side][k] = (t[side][k] || 0) + v;
       totals.set(record.key, t);
     }
-  // いま名簿に居る選手（鍵 → 球団と選手）
+  return totals;
+}
+
+/** いま名簿に居る選手（鍵 → 球団と選手） */
+function activeByKey(league) {
   const active = new Map();
   for (const team of league.season.settings.teamNames || [])
     for (const p of league.game.teams[team]?.players || [])
       if (p.onlinePlayerId) active.set(p.onlinePlayerId, { team, player: p });
+  return active;
+}
+
+/** 通算ランキングに出す人数（先方要望 2026-11-16: 10位まで → 50位まで） */
+export const CAREER_LEADERS_TOP = 50;
+
+/**
+ * その球団で最後に記録を残し、いまはどの名簿にも居ない選手（引退・解雇・退団）の通算。
+ *
+ * ⚠ 先方要望（2026-11-16）「引退・解雇後も成績が残るように」。球団ごとの通算成績の表は
+ *    いまの名簿から作るので、居なくなった選手はそこから消えていた（記録は残っている）。
+ *    よそへ移籍した選手は移籍先の表に出るので、ここには入れない。
+ * ⚠ 率は合計から出し直す（年ごとの率を平均しない）。打席が無い投手・投げていない野手は片方だけ
+ */
+export function formerCareers(league, teamName, limit = 60) {
+  const active = activeByKey(league);
+  const outs = (q) => q.inningsPitched || 0;
+  return [...careerTotals(league).values()]
+    .filter((t) => t.team === teamName && !active.has(t.key))
+    .filter((t) => (t.batting.games || 0) > 0 || (t.pitching.games || 0) > 0)
+    .sort((a, b) => (b.lastYear || 0) - (a.lastYear || 0) || String(a.name).localeCompare(String(b.name), 'ja'))
+    .slice(0, limit)
+    .map((t) => {
+      const b = t.batting,
+        q = t.pitching;
+      return {
+        key: t.key,
+        name: t.name,
+        lastYear: t.lastYear,
+        years: t.years,
+        batting: (b.atBats || 0) + (b.walks || 0) > 0
+          ? {
+              games: b.games || 0,
+              atBats: b.atBats || 0,
+              hits: b.hits || 0,
+              homeruns: b.homeruns || 0,
+              rbis: b.rbis || 0,
+              stolenBases: b.stolenBases || 0,
+              avg: b.atBats > 0 ? b.hits / b.atBats : null,
+            }
+          : null,
+        pitching: outs(q) > 0
+          ? {
+              games: q.games || 0,
+              wins: q.wins || 0,
+              losses: q.losses || 0,
+              saves: q.saves || 0,
+              holds: q.holds || 0,
+              strikeouts: q.strikeouts || 0,
+              innings: outs(q) / 3,
+              era: (q.earnedRuns * 27) / outs(q),
+            }
+          : null,
+      };
+    });
+}
+
+export function careerLeaders(league, top = CAREER_LEADERS_TOP) {
+  const totals = careerTotals(league);
+  const active = activeByKey(league);
   const list = [...totals.values()];
   const maxGames = Math.max(0, ...list.map((t) => t.batting.games || 0), ...list.map((t) => t.pitching.games || 0));
   const qualifies = {
@@ -425,16 +497,16 @@ export function careerLeaders(league, labelOf = (n) => n, top = 10) {
           String(a.t.name).localeCompare(String(b.t.name), 'ja'),
       )
       .slice(0, top)
+      // ⚠ 行は**画面が使う項目だけ**（2026-11-16 監査）。上位50人×項目数で全体のビューの4割を
+      //    占めていたので、どちらの画面も読まない表示名（`label`）と守備位置を外した。
+      //    球団の短い名前は画面が球団名から作る（`teamShort`）
       .map(({ t, value }) => {
         const now = active.get(t.key);
-        const team = now?.team || t.team;
         return {
           key: t.key,
           id: now ? now.player.id : null,
           name: now?.player.name || t.name,
-          team,
-          label: team ? labelOf(team) : null,
-          position: now?.player.position || null,
+          team: now?.team || t.team,
           active: !!now,
           value,
         };
