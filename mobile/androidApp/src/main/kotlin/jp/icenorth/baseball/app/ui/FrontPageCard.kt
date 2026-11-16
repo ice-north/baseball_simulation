@@ -1,9 +1,12 @@
 package jp.icenorth.baseball.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,7 +28,9 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -78,6 +83,7 @@ private val Shade = Color(0xFFE6DFCD)
  * @param menu 題字の右に置くメニュー（更新・名前の変更・見た目の切り替え・ログアウト）
  * @param onLink 記事を押したとき（[FrontPage.Article.link]）
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FrontPageCard(
     page: FrontPage,
@@ -91,6 +97,11 @@ fun FrontPageCard(
     val pages = listOfNotNull(1, page.teamPage?.let { 2 }, page.recordPage?.let { 3 })
     var pageNo by rememberSaveable(page.paper, page.issue) { mutableIntStateOf(1) }
     if (pageNo !in pages) pageNo = 1
+    // 面の終わりの「2面に詳報 ▶」などで替えたときは、新しい面の頭（面の切り替え）まで戻す
+    val tabsInView = remember { BringIntoViewRequester() }
+    var jumps by remember { mutableIntStateOf(0) }
+    LaunchedEffect(jumps) { if (jumps > 0) tabsInView.bringIntoView() }
+    val jump: (Int) -> Unit = { if (it in pages) { pageNo = it; jumps++ } }
     Column(
         Modifier
             .fillMaxWidth()
@@ -99,12 +110,12 @@ fun FrontPageCard(
     ) {
         RunningHead(page, pageNo)
         Masthead(page, nextAdvanceAt, accent, menu)
-        if (pages.size > 1) PageTabs(pages, pageNo) { pageNo = it }
+        if (pages.size > 1) Box(Modifier.bringIntoViewRequester(tabsInView)) { PageTabs(pages, pageNo) { pageNo = it } }
         when {
             page.sealed -> SealedFront(page, onLink, onOpenProcedures)
-            pageNo == 2 && page.teamPage != null -> TeamPageView(page.teamPage!!, accent, onLink) { pageNo = 3 }
-            pageNo == 3 && page.recordPage != null -> RecordPageView(page.recordPage!!, onLink) { pageNo = 1 }
-            else -> FrontView(page, accent, onLink, onOpenProcedures, onPage = { if (it in pages) pageNo = it })
+            pageNo == 2 && page.teamPage != null -> TeamPageView(page.teamPage!!, accent, onLink) { jump(3) }
+            pageNo == 3 && page.recordPage != null -> RecordPageView(page.recordPage!!, onLink) { jump(1) }
+            else -> FrontView(page, accent, onLink, onOpenProcedures, onPage = jump)
         }
     }
 }
@@ -291,7 +302,7 @@ private fun PhotoStage(page: FrontPage, accent: Color, modifier: Modifier) {
             val density = LocalDensity.current
             val avail = with(density) { (height - 12.dp).toPx() }
             // 黄色の袋文字（縦）
-            page.bigSub?.takeIf { page.bigHead != null }?.replace(" ", "")?.replace("　", "")?.let { sub ->
+            page.bigSub?.takeIf { page.bigHead != null }?.replace("　", "")?.let { sub ->
                 val em = with(density) { 25.sp.toPx() }
                 val per = (avail / em).toInt().coerceAtLeast(4)
                 VerticalText(sub, 25.sp, subFill, Modifier.padding(top = 8.dp, end = 2.dp), per = per, gap = 0.15f, stroke = subStroke to with(density) { 3.dp.toPx() })

@@ -117,6 +117,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
                 wScore - lScore >= 7 -> "大勝"
                 lScore == 0 -> "零封"
                 ws >= 3 -> "${ws}連勝"
+                wScore - lScore == 1 -> "接戦制す"
                 else -> "快勝"
             }
             kicker = listOfNotNull(league.ifEmpty { null }, if (ws >= 2) "${ws}連勝" else null).joinToString("・").ifEmpty { null }

@@ -170,7 +170,7 @@ private fun boxNotes(view: LeagueView, game: JsonObject, team: String): List<Str
     fun names(stat: String, withCount: Boolean = true): String = order.flatMap { t ->
         teams[t].list().mapNotNull { it.obj() }.map { DetailPlayer(it) }.filter { it.b(stat) > 0 }.map { p ->
             val n = familyName(p.name) + if (withCount && p.b(stat) >= 2) p.b(stat).toString() else ""
-            if (t == team) n else "$n（${view.teamShort(t).take(1)}）"
+            if (t == team) n else "$n（${teamMark(view, t)}）"
         }
     }.joinToString("、")
     val homers = order.flatMap { t ->
@@ -178,7 +178,7 @@ private fun boxNotes(view: LeagueView, game: JsonObject, team: String): List<Str
             val hr = p.b("homeruns")
             val total = if (t == team) p.id?.let { own[it] }?.seasonStats?.batting?.homeruns else null
             val num = if (total != null && total >= hr) (total - hr + 1..total).joinToString("・") { "${it}号" } else ""
-            familyName(p.name) + num + if (t == team) "" else "（${view.teamShort(t).take(1)}）"
+            familyName(p.name) + num + if (t == team) "" else "（${teamMark(view, t)}）"
         }
     }.joinToString("、")
     val errors = order.mapNotNull { t ->
@@ -377,14 +377,20 @@ internal fun interviewOf(
     if (b != null) {
         val feat = when { b.hr >= 2 -> "${b.hr}本塁打"; b.hr == 1 -> "本塁打"; b.hits >= 3 -> "${b.hits}安打"; else -> "${b.rbi}打点" }
         qa += "――${familyName(b.name)}が$feat。" to pen.pick(
-            if (tone == FrontPage.Tone.Win) listOf("調子が上がってきた。今はあいつに回せば何か起きる", "よく打ってくれた。頼もしい", "練習の成果。本人の努力だ", "こういう日を増やしてほしい")
-            else listOf("あいつが打っても勝てなかった。周りが続かないと", "一人で打っても勝てない", "あの打撃は明日につながる"),
+            when (tone) {
+                FrontPage.Tone.Win -> listOf("調子が上がってきた。今はあいつに回せば何か起きる", "よく打ってくれた。頼もしい", "練習の成果。本人の努力だ", "こういう日を増やしてほしい")
+                FrontPage.Tone.Lose -> listOf("あいつが打っても勝てなかった。周りが続かないと", "一人で打っても勝てない", "あの打撃は明日につながる")
+                else -> listOf("よく打ってくれた。あと1本が欲しかった", "あの打撃は明日につながる")
+            },
             61,
         )
     } else if (ace != null && ace.outs >= 18) {
         qa += "――${familyName(ace.name)}が${inningsText(ace.outs)}回${ace.runs}失点。" to pen.pick(
-            if (tone == FrontPage.Tone.Win) listOf("試合をつくってくれた。言うことはない", "球に力があった", "捕手とよく話し合えていた")
-            else listOf("よく投げた。打線が援護できなかった", "投手を責める試合ではない", "勝たせてあげたかった"),
+            when (tone) {
+                FrontPage.Tone.Win -> listOf("試合をつくってくれた。言うことはない", "球に力があった", "捕手とよく話し合えていた")
+                FrontPage.Tone.Lose -> listOf("よく投げた。打線が援護できなかった", "投手を責める試合ではない", "勝たせてあげたかった")
+                else -> listOf("よく投げた。勝ちを付けてあげたかった", "試合をつくってくれた")
+            },
             62,
         )
     }
@@ -669,7 +675,13 @@ internal fun reviewOf(s: Situation, ls: FrontPage.LineScore?, f: GameFacts?, pen
         }.take(5).map { sentences[it] }
     }
     val body = keep.joinToString("。") { it } + "。" +
-        (f?.ourPitchers?.firstOrNull()?.let { "${s.me}の投手陣は${f.ourPitchers.size}人で${s.theirs}失点。" } ?: "") +
+        (f?.ourPitchers?.let { ps ->
+            when {
+                ps.isEmpty() -> ""
+                ps.size == 1 -> "${s.me}は${familyName(ps[0].name)}が1人で投げ抜き、${if (s.theirs == 0) "無失点" else "${s.theirs}失点"}。"
+                else -> "${s.me}の投手陣は${ps.size}人の継投で${if (s.theirs == 0) "無失点" else "${s.theirs}失点"}。"
+            }
+        } ?: "") +
         (f?.winningHit?.let { "決勝点は${it.inning}回、${it.name}の${it.what}だった。" } ?: f?.theirWinningHit?.let { "${it.inning}回、${it.name}に決勝の${it.what}を許した。" } ?: "")
     val head = when {
         f?.walkOff == true -> if (s.ours > s.theirs) "最後に試合を決める" else "最後の最後に暗転"
@@ -722,7 +734,7 @@ internal fun buildRecordPage(
             val v = r.at("value").num()
             val value = when (id) { "avg" -> rate3(v); "era" -> v?.let(::twoDecimals) ?: "-"; else -> "${v?.toInt() ?: "-"}" }
             val t = r.at("team").str().orEmpty()
-            LeaderRow(familyName(r.at("name").str().orEmpty()), view.teamShort(t).take(1), value, t == team)
+            LeaderRow(familyName(r.at("name").str().orEmpty()), teamMark(view, t), value, t == team)
         }
         LeaderBoard(label, rows).takeIf { rows.isNotEmpty() }
     }
@@ -794,4 +806,12 @@ internal fun shortQuote(q: String, max: Int = 18): String {
     val comma = q.indexOf('、')
     if (comma in 6..max) return q.substring(0, comma)
     return q.take(max - 1) + "…"
+}
+
+/** 表に添える球団の1字（「（宮）」）。ほかの球団と1字目がかぶるときは短い名前のまま */
+internal fun teamMark(view: LeagueView, team: String): String {
+    val short = view.teamShort(team)
+    val head = short.take(1)
+    val clash = (view.teamLeagues.keys + view.teamLabels.keys).any { it != team && view.teamShort(it).take(1) == head }
+    return if (clash) short else head
 }

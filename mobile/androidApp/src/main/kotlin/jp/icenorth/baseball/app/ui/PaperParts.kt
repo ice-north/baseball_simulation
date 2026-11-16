@@ -81,8 +81,10 @@ internal fun verticalCells(text: String): List<VCell> {
             i = j
             continue
         }
+        // 半角の空白（「秋山 正」の姓と名の間）は縦書きでは詰める。全角の空白（字下げ）は1マス
+        if (c == ' ') { i++; continue }
         out += when {
-            c == ' ' || c == '　' -> VCell("　", 0)
+            c == '　' -> VCell("　", 0)
             c in ROTATE -> VCell(c.toString(), 1)
             c in PUNCT -> VCell(c.toString(), 2)
             c in SMALL -> VCell(c.toString(), 3)
