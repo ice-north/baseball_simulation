@@ -13,6 +13,9 @@ import jp.icenorth.baseball.shared.AGE_OUTLOOK_NOTE
 import jp.icenorth.baseball.shared.AgeOutlook
 import jp.icenorth.baseball.shared.OnlineJson
 import jp.icenorth.baseball.shared.ageOutlookLabel
+import jp.icenorth.baseball.shared.TeamDiagnosis
+import jp.icenorth.baseball.shared.diagnosisPageLabel
+import jp.icenorth.baseball.shared.diagnosisPlanFace
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,11 +74,11 @@ import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
 
-private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順"), Ages("年齢") }
+private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順"), Ages("チーム") }
 
 /** 選手タブ: 選手成績・通算成績（球団を切り替えて同じ表）と、リーグ全体の能力ランキング */
 @Composable
-fun PlayersScreen(model: AppViewModel) {
+fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpenTrade: () -> Unit = {}) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var mode by rememberSaveable { mutableStateOf(PlayersMode.Season) }
@@ -101,20 +104,40 @@ fun PlayersScreen(model: AppViewModel) {
         when (mode) {
             PlayersMode.Ranking -> AbilityRanking(model, view, raw)
             PlayersMode.CareerRank -> CareerRanking(model, view, raw)
-            // 自球団の年齢構成と3年後の見込み（Web 版 AgeOutlook.jsx と同じ中身）
-            PlayersMode.Ages -> AgeOutlookPane(raw)
+            // 自球団のチーム診断と年齢構成・3年後の見込み（Web 版 TeamDiagnosis.jsx・AgeOutlook.jsx と同じ中身）
+            PlayersMode.Ages -> AgeOutlookPane(raw, onOpenPlan, onOpenTrade)
             else -> TeamStats(model, view, raw, team, career = mode == PlayersMode.Career)
         }
     }
 }
 
 @Composable
-private fun AgeOutlookPane(raw: JsonObject) {
+private fun AgeOutlookPane(raw: JsonObject, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
     val outlook = remember(raw) {
         raw.at("ageOutlook").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(AgeOutlook.serializer(), it) }.getOrNull() }
     }
+    val diagnosis = remember(raw) {
+        raw.at("diagnosis").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(TeamDiagnosis.serializer(), it) }.getOrNull() }
+    }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        // 試合が少ないうち（10試合未満）は診断が無い。そのときは年齢構成だけ
+        if (diagnosis != null) item { DiagnosisCard(diagnosis, onOpenPlan, onOpenTrade) }
         item { AgeOutlookCard(outlook) }
+    }
+}
+
+/** チーム診断「なぜ勝てない？」（Web 版 TeamDiagnosis.jsx と同じ並び。直す画面へのボタン付き） */
+@Composable
+private fun DiagnosisCard(d: TeamDiagnosis, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
+    Section("チーム診断（${d.games}試合）") {
+        Text(d.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        d.items.forEach { item ->
+            Text(item.text, style = MaterialTheme.typography.bodyMedium)
+            val label = diagnosisPageLabel(item.page)
+            val face = diagnosisPlanFace(item.page)
+            if (label != null) TextButton(onClick = { if (face != null) onOpenPlan(face) else onOpenTrade() }) { Text("${label}へ") }
+        }
+        d.note?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
     }
 }
 

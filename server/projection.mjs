@@ -27,6 +27,7 @@ import {
 } from './leagueBoard.mjs';
 import { packSummary, packsForMember } from '../src/online/rosterPack.js';
 import { ageOutlook } from '../src/online/ageOutlook.js';
+import { diagnoseTeam } from '../src/online/teamDiagnosis.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -46,7 +47,7 @@ import {
   ROSTER_STANDARD,
 } from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
-import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
+import { SEASON_TURNS, PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
 import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf } from './coachEngine.mjs';
 import { createTradeJudge } from './tradeJudge.mjs';
@@ -387,6 +388,21 @@ function packJoinsAt(l) {
 }
 const pendingPackAuto = (phase, member) =>
   !!phase && !!member.packSeed && phase.kind !== 'pack_select';
+/** 自球団の診断。同じ部の球団と比べる（部分けの無いリーグは全球団と） */
+function diagnosisFor(l, teamName, team) {
+  const names = l.season?.settings?.teamNames || [];
+  const tier = (l.teams || []).find((t) => t.name === teamName)?.league;
+  const same = tier ? names.filter((name) => (l.teams || []).find((t) => t.name === name)?.league === tier) : names;
+  const rivals = same.map((name) => ({ name, players: l.game?.teams?.[name]?.players || [] }));
+  return diagnoseTeam({
+    team,
+    teamName,
+    rivals,
+    results: l.season?.results || [],
+    leagueName: (tier && PYRAMID_LEAGUES.find((x) => x.id === tier)?.name) || 'リーグ',
+  });
+}
+
 export function projectLeague(bundle, userId, sessionId, adminId) {
   const l = bundle.league;
   if (!l) return { setupRequired: true, isAdmin: userId === adminId };
@@ -729,6 +745,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       team.players,
       (l.season?.settings?.teamNames || []).flatMap((name) => (l.game?.teams?.[name]?.players || []).map((p) => p.age)),
     ),
+    // チーム診断「なぜ勝てない？」（自球団だけ。直せることを3つまで。`teamDiagnosis.js`）
+    diagnosis: diagnosisFor(l, member.teamName, team),
     // 参加した時刻（はじめての1週間の案内。`firstWeek.js`。リーグを作ったときの人には無い）
     joinedAt: member.joinedAt || null,
     notices: l.notices.slice(0, 4),

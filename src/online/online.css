@@ -6219,3 +6219,19 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #cbd5e1;
   font-size: 12px;
 }
+
+/* チーム診断（`TeamDiagnosis.jsx`）。直す画面へのボタンは文の後ろに小さく */
+.online-diagnosis article {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.online-diagnosis article span {
+  flex: 1;
+}
+.online .online-diagnosis article button {
+  flex: none;
+  min-height: 0;
+  padding: 2px 8px;
+  font-size: 12px;
+}
