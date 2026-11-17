@@ -19,15 +19,17 @@ import {
   PlayerStatsButton,
   RoleMark,
 } from './PlayerPerformance.jsx';
-import { overviewGroup, formatStat } from './statsView.js';
+import { formatStat } from './statsView.js';
+import {
+  PLAYER_GROUPS,
+  PLAYER_KINDS,
+  kindOf,
+  pitchTypes,
+} from './playerColumns.js';
 import { playablePositions } from './lineupEdit.js';
 import { overallScore } from './tryoutPlan.js';
 import { rosterShortfall, rostersAfterTrade } from './trades.js';
-import {
-  rosterGroup,
-  rosterCounts,
-  getPitchTypeName,
-} from '../utils/constants.js';
+import { rosterGroup, rosterCounts } from '../utils/constants.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
 import {
   TRADE_FILTERS,
@@ -92,58 +94,9 @@ import {
 //    断ったときはサーバーが理由を返す（`openTrade`）。
 // ============================================================
 
-const GROUPS = [
-  { id: 'pitcher', label: '投手', short: '投' },
-  { id: 'catcher', label: '捕手', short: '捕' },
-  { id: 'infielder', label: '内野手', short: '内' },
-  { id: 'outfielder', label: '外野手', short: '外' },
-];
-
-const pickStats = (category, ids) => {
-  const columns = overviewGroup(category).columns;
-  return ids.map((id) => columns.find((c) => c.id === id)).filter(Boolean);
-};
-
-/** 投手と野手で列を変える（比べたい能力が違う）。どちらも「能力 → 今季成績」の順 */
-const KINDS = {
-  fielder: {
-    category: 'batting',
-    abilities: [
-      { key: 'meet', label: 'ミ', title: 'ミート', get: (p) => p.batting?.meet },
-      { key: 'power', label: 'パ', title: 'パワー', get: (p) => p.batting?.power },
-      { key: 'eye', label: '眼', title: '選球眼', get: (p) => p.batting?.eye },
-      { key: 'speed', label: '走', title: '走力', get: (p) => p.physical?.speed },
-      { key: 'defense', label: '守', title: '守備', get: (p) => p.fielding?.defense },
-      { key: 'arm', label: '肩', title: '肩力', get: (p) => p.physical?.arm },
-    ],
-    stats: pickStats('batting', ['pa', 'avg', 'homeruns', 'ops']),
-    statLabel: { homeruns: '本塁打' },
-    // 交換案の欄に出す主な能力（狭いので3つ）
-    brief: ['meet', 'power', 'defense'],
-  },
-  pitcher: {
-    category: 'pitching',
-    abilities: [
-      { key: 'velocity', label: '速', title: '球速', get: (p) => p.pitching?.velocity, isVel: true },
-      { key: 'control', label: '制', title: '制球', get: (p) => p.pitching?.control },
-      { key: 'stamina', label: 'ス', title: 'スタミナ', get: (p) => p.pitching?.stamina, isSta: true },
-      { key: 'spin', label: '回', title: '回転（変化球のキレ）', get: (p) => p.pitching?.spinRate },
-    ],
-    stats: pickStats('pitching', ['games', 'outs', 'era', 'whip']),
-    statLabel: { games: '登板' },
-    brief: ['velocity', 'control', 'stamina'],
-  },
-};
-const kindOf = (player) => (player.position === 'pitcher' ? 'pitcher' : 'fielder');
+const GROUPS = PLAYER_GROUPS;
+const KINDS = PLAYER_KINDS;
 const byOverall = (a, b) => overallScore(b) - overallScore(a);
-
-/** 変化球は「名前＋キレ」。直球は外す（全員が持っている）。キャンプの表と同じ書き方 */
-function pitchTypes(player) {
-  return (player.pitching?.arsenal || [])
-    .filter((pitch) => pitch?.type && pitch.type !== 'straight')
-    .map((pitch) => `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`)
-    .join(' ');
-}
 
 /**
  * 相手の名簿。⚠ 選んだ相手のものだけ取りに行く。

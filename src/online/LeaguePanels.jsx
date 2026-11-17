@@ -1006,6 +1006,8 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
           maxCount={Math.max(0, ROSTER_LIMIT - view.roster.length)}
           fillCount={Math.max(0, ROSTER_STANDARD - view.roster.length)}
           busy={busy}
+          // ⚠ スマホは受験者を**表にしない**（320px に能力の列が入らない）
+          mobile={mobile}
           onChange={(next) => {
             setDirty(true);
             setPlan(next);

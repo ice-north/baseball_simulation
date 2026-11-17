@@ -250,10 +250,56 @@ try {
     await t
       .getByRole('button', { name: 'この内容で決定', exact: true })
       .waitFor();
-    // ⚠ トライアウトは「希望リスト＋候補を探す」の2欄。候補が1行も出ない
-    //    （＝選べない）状態で先へ進まないよう、両方が描けていることを見る
+    // ⚠ トライアウトは**上が「交渉する選手」・下が「受験者」**（2026-11-17 の作り替え）。
+    //    受験者が1行も出ない（＝選べない）状態で先へ進まないよう、両方が描けていることを見る
     await t.locator('.online-tryout-wanted .online-tryout-list li').first().waitFor();
-    await t.locator('.online-tryout-pool .online-tryout-list li').first().waitFor();
+    await t.locator('.online-tryout-pool [data-player]').first().waitFor();
+    // --- 受験者の表（PCはスタメン設定・トレードと同じ1枚の表で、能力を網羅的に出す）---
+    // ⚠ **投手と野手で表を分けること**。比べたい能力が違うので、1枚に混ぜると
+    //    片方の能力の列が全部「—」になる（列は `playerColumns.js` で共通）
+    {
+      const tables = t.locator('.online-tryout-pool .online-tryout-table');
+      await tables.first().waitFor();
+      const kinds = await tables.evaluateAll((list) =>
+        list.map((el) => el.dataset.kind),
+      );
+      assert.deepEqual(
+        kinds,
+        ['pitcher', 'fielder'],
+        `受験者の表が投手・野手に分かれていない: ${kinds}`,
+      );
+      const headOf = async (kind) =>
+        (
+          await t
+            .locator(`.online-tryout-table[data-kind="${kind}"] thead th`)
+            .allInnerTexts()
+        ).map((x) => x.trim());
+      // ⚠ 能力は**網羅的に**（いしだ要望）。以前は3つ（投手なら球速・制球・スタミナ）しか無かった
+      const pitcherHead = await headOf('pitcher');
+      for (const label of ['交渉', '選手', '年齢', '評価', '速', '制', 'ス', '回', '変化球', '出どころ'])
+        assert.ok(pitcherHead.includes(label), `投手の表に「${label}」の列が無い`);
+      const fielderHead = await headOf('fielder');
+      for (const label of ['守備', 'ミ', 'パ', '眼', '走', '守', '肩'])
+        assert.ok(fielderHead.includes(label), `野手の表に「${label}」の列が無い`);
+      // ⚠ **今季の成績の列は、出場した人が居るときだけ**。受験者はほとんどが
+      //    高校生・大学生で、実測120人中0人しか成績を持たない（空の列が並ぶ）
+      assert.ok(
+        !fielderHead.includes('打率'),
+        '誰も出場していないのに成績の列が出ている',
+      );
+      // 「交渉する選手」が「受験者」より上にあり、受験者が全幅であること
+      // ⚠ 以前は左右2列で、受験者の欄が画面の半分しかなかった
+      const top = await t.locator('.online-tryout-wanted').boundingBox();
+      const pool = await t.locator('.online-tryout-pool').boundingBox();
+      assert.ok(
+        top.y + top.height <= pool.y + 1,
+        '「交渉する選手」が「受験者」より上に無い',
+      );
+      assert.ok(
+        pool.width > top.width * 0.9,
+        `受験者の欄が狭い（${Math.round(pool.width)}px / 交渉 ${Math.round(top.width)}px）`,
+      );
+    }
     // ⚠ 希望リストは**「交渉」を押した順そのもの**（いしだ要望の10人）。以前は
     //    候補全員を並べた1本の順位表で、「指名に加える」が候補の約9割で何も起きず、
     //    「↓」で選手が消えたりした（入れ替えるほど画面が壊れて見えた）
@@ -277,7 +323,7 @@ try {
         .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
         .click();
       // 1ページ12人。そのページで交渉していない人が居なければ次のページへ
-      const open = t.locator('.online-tryout-pool .online-tryout-list li:not([data-wanted])');
+      const open = t.locator('.online-tryout-pool [data-player]:not([data-wanted])');
       for (let n = standard.length; n < Number(limitText[2]); n += 1) {
         while (!(await open.count()))
           await t.locator('.online-tryout-pool').getByRole('button', { name: '次のページ', exact: true }).click();
@@ -288,7 +334,7 @@ try {
       const start = await wantedNames();
       assert.equal(start.length, Number(limitText[2]), '交渉できる人数まで足せない');
       const row = t
-        .locator('.online-tryout-pool .online-tryout-list li:not([data-wanted])')
+        .locator('.online-tryout-pool [data-player]:not([data-wanted])')
         .first();
       const name = (
         await row.locator('.online-tryout-person button').first().innerText()
@@ -325,7 +371,7 @@ try {
       assert.equal(
         (
           await t
-            .locator('.online-tryout-pool .online-tryout-list li', { hasText: name })
+            .locator('.online-tryout-pool [data-player]', { hasText: name })
             .getByRole('button', { name: `${name}との交渉をやめる`, exact: true })
             .innerText()
         ).trim(),
@@ -361,7 +407,7 @@ try {
         `希望リストが評価の高い順になっていない: ${weighted.join(',')}`,
       );
       assert.notDeepEqual(await wantedNames(), start, '重みを変えてもおすすめが変わらない');
-      const poolScores = await scoresOf('.online-tryout-pool .online-tryout-list');
+      const poolScores = await scoresOf('.online-tryout-pool');
       assert.ok(
         poolScores.every((v, i) => i === 0 || poolScores[i - 1] >= v),
         '候補が評価値の順に並んでいない',

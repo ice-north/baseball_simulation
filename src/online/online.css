@@ -406,7 +406,10 @@
 /* ⚠ 次の2つの `!important` は外さない。`.online td`（0,1,1）の中央寄せと
    `.online-desktop .online-lineup-table td`（0,2,1）の padding に負ける
    （ほかの `!important` を外したとき、前後の比べでここだけ変わった） */
-.online-trade-pitches {
+/* ⚠ トライアウトの受験者の表（`.online-tryout-pitches`）も同じ見た目にする。
+   幅を決めないと、変化球の列が表の半分を取る（実測） */
+.online-trade-pitches,
+.online-tryout-pitches {
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1429,43 +1432,116 @@ small.online-gain:not(:where(.online-sp *)) {
   border-radius: 6px;
   font-size: 13px;
 }
-/* 初期編成・トライアウトの希望リスト。
-   ⚠ 左＝獲得予定（並べ替える）／右＝候補を探す（絞り込んで指名する）。
-      以前は360人を1本のリストにして ↑↓ で動かさせており、
-      300番目を1番に上げるのに299回押す必要があった。 */
-.online-tryout-head {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.online-tryout-head label {
+/* 初期編成・トライアウトの希望リスト（`TryoutPlanner.jsx`）。
+   ⚠ **上＝交渉する選手（獲得する人数・交渉中の人数・獲得後の名簿）／下＝受験者（全幅）**
+      （2026-11-17 いしだ要望）。以前は左右2列で、受験者の欄が画面の半分しかなく、
+      能力は3つ（投手なら球速・制球・スタミナ）しか出せなかった。
+   ⚠ 受験者はPCだけ**スタメン設定・トレードと同じ表**（`.online-lineup-table`）。
+      スマホはカードの行のまま（320px に能力の列が入らない）。 */
+.online-tryout {
   display: grid;
-  gap: 4px;
-}
-.online-tryout-head input {
-  width: 120px;
-}
-.online-tryout-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
 }
-.online-tryout-grid > section {
+.online-tryout > section {
   min-width: 0;
   border: 1px solid #536b85;
   border-radius: 8px;
   padding: 10px 12px;
 }
-.online-tryout-grid h3 {
+.online-tryout h3 {
   margin-top: 0;
   font-size: 15px;
 }
-.online-tryout-grid h3 small {
+.online-tryout h3 small {
+  display: block;
   font-weight: 400;
   font-size: 12px;
   color: #d0d9e5;
+}
+/* 交渉する選手の見出しの段（人数・獲得する人数・標準案に戻すを1段に） */
+.online-tryout-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.online-tryout-head .online-tryout-wanted-title {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+/* ⚠ 全幅になったので、交渉する選手は**2列以上に流す**（20人でも縦に伸びない）。
+   順位の数字が付いているので、左→右→次の段の順に読める */
+.online-desktop .online-tryout-wanted .online-tryout-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  column-gap: 16px;
+}
+/* 受験者の表。⚠ 投手と野手で列が違うので表を分け、見出し（caption）で括りを示す */
+.online-tryout-table {
+  width: 100%;
+}
+.online-tryout-table + .online-tryout-table {
+  margin-top: 12px;
+}
+/* ⚠ 要素名で当てるものには `:not(:where(.online-sp *))` を付ける（決まり） */
+.online-desktop .online-tryout-table caption:not(:where(.online-sp *)) {
+  text-align: left;
+  padding: 6px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+/* 交渉中の行は色を敷く（上の「交渉する選手」と同じ `--accent-soft`） */
+.online-tryout-table tr[data-wanted] {
+  background: var(--accent-soft);
+}
+.online-desktop .online-tryout-table .online-tryout-pick {
+  width: 84px;
+  text-align: left;
+}
+/* 「交渉」ボタンは表の中なので、行の高さ（40px）に収める */
+.online-desktop .online-tryout-table .online-tryout-pick button:not(:where(.online-sp *)) {
+  min-height: 28px;
+  min-width: 76px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.online-desktop .online-tryout-table .online-tryout-scorecell {
+  width: 46px;
+}
+.online-desktop .online-tryout-table .online-tryout-poscell {
+  text-align: left;
+  width: 84px;
+}
+/* 出どころ（高校・大学・元の球団）。長い名前は端で切る（全文はマウスオーバー） */
+.online-tryout-origin {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: #cbd5e1;
+  text-align: left !important;
+}
+/* 受験者の見出し・絞り込み・並べ替えを1段に（表の上） */
+.online-tryout-pool-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.online-tryout-pool-head h3 {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+/* ⚠ 守備位置の切り替えは**余った幅いっぱいに広げる**。伸ばさないと、折り返した段で
+   中身の幅のまま（5つで190px ほど）になり、320px でボタンが34pxまで痩せて押しにくい */
+.online-tryout-pool-head .online-segments {
+  flex: 1 1 260px;
+}
+.online-tryout-pool-head .online-tryout-tools {
+  margin: 0;
 }
 .online-tryout-warn {
   font-size: 12px;
@@ -1482,12 +1558,12 @@ small.online-gain:not(:where(.online-sp *)) {
   padding: 6px 8px;
   margin: 0 0 8px;
 }
+/* ⚠ **中で動く枠にしない**（以前は `max-height: 440px` で中だけ縦に送っていた）。
+   交渉する選手は20人まで、受験者はページごとに送るので、枠の中の送りは二重になる */
 .online-tryout-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 440px;
-  overflow-y: auto;
 }
 .online-tryout-list li {
   display: flex;
@@ -1659,11 +1735,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-tryout-score {
   color: #67e8f9;
   font-weight: 600;
-}
-@media (max-width: 1100px) {
-  .online-tryout-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 .online-working {
   position: fixed;
@@ -5295,7 +5366,7 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-mobile .online-tryout .online-drag-handle {
   display: none;
 }
-.online-mobile .online-tryout .online-tryout-grid > section {
+.online-mobile .online-tryout > section {
   padding: 10px 8px;
 }
 /* 守備位置の5つの切り替えは等分（横に並べたままだと 320px で「外野」が外へ出た） */
@@ -5308,7 +5379,7 @@ small.online-gain:not(:where(.online-sp *)) {
   min-width: 0;
   padding: 8px 2px;
 }
-/* 獲得希望人数と「標準案に戻す」を1段に */
+/* 人数の見出し・獲得する人数・「標準案に戻す」を1段に（320px では折り返す） */
 .online-mobile .online .online-tryout-head label,
 .online-mobile .online-tryout-head label {
   margin: 0;
@@ -5317,13 +5388,16 @@ small.online-gain:not(:where(.online-sp *)) {
   gap: 10px;
   margin-bottom: 8px;
 }
+.online-mobile .online-tryout-head .online-tryout-wanted-title {
+  flex: 1 1 100%;
+}
 /* 目標の構成（「投11・捕2・内6・外7」）と獲得後の内訳は語の途中で割らない（390px で「・／内」と割れた） */
 /* ⚠ **目標の構成だけに当てること**。同じ段落のほかの `strong`（競合の決まり方の文）にも
    当たると、文が長いので 320px で画面の外へ出る（実測 R415px / 幅320px） */
-.online-mobile .online-tryout > .online-muted .online-tryout-targets {
+.online-mobile .online-tryout .online-tryout-targets {
   white-space: nowrap;
 }
-.online-mobile .online-tryout .online-tryout-grid h3 small {
+.online-mobile .online-tryout h3 small {
   word-break: keep-all;
 }
 
