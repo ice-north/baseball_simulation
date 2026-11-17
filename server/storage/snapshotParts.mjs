@@ -55,6 +55,10 @@ function splitPastGames(records, year) {
   let pastGames = null;
   let seasons = null;
   for (const [key, season] of Object.entries(records.seasons)) {
+    // ⚠ 印のまま来た（軽い読みの記録を全体の保存に回した）なら止める。黙って飛ばすと
+    //    pastGames にその年が入らず、次に読むとき戻せなくてリーグが読めなくなる
+    if (season?.games === PAST_GAMES)
+      throw new Error(`終わった年（${key}）の試合の記録が印のまま保存されようとしました`);
     if (!(Number(key) < year) || !isObject(season?.games)) continue;
     pastGames ||= {};
     seasons ||= { ...records.seasons };

@@ -374,4 +374,14 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
   assert.equal(next.unchanged, undefined, '世代が変わったら中身を送る');
   assert.equal(next.viewGeneration, whole.viewGeneration + 1);
 }
+// 監査（2026-11-18）: 印のまま残った記録を全体の保存に回したら、保存の前に止める
+// （黙って飛ばすと終わった年の試合が部分に入らず、次に読むとき戻せなくなる）
+assert.throws(
+  () =>
+    splitBundle({
+      league: { season: { year: 3, settings: { teamNames: [] } }, game: { teams: {} }, records: { seasons: { 1: { year: 1, games: PAST_GAMES } } } },
+      sessions: {},
+    }),
+  /印のまま/,
+);
 console.log('online-parts-check PASS（分けて戻すと一致・軽い読みの番人・命令ごとの読み方・本番の保存の世代と部分）');
