@@ -19,6 +19,7 @@ import {
 import { SEASON_PHASES } from '../src/season/seasonManager.js';
 import { KOSHIEN_STAGE_LABEL } from '../src/season/koshien.js';
 import { SEASON_START_MONTH } from '../src/online/shared.js';
+import { teamSplitsOf } from '../src/online/recordStats.js';
 import { honorTitlesOf, honorsView } from './seasonAwards.mjs';
 import { withProCareer, proNewsOf } from './proCareer.mjs';
 
@@ -493,9 +494,12 @@ const AWARD_LABELS = {
 const idOf = (keys, key) =>
   keys instanceof Map && keys.has(key) ? { id: keys.get(key) } : {};
 
-export function teamChronicle(league, teamName, activeKeys = new Set()) {
-  // 年表（終わった年）
-  const seasons = (league.history || []).map((h) => {
+/**
+ * 球団の年表（終わった年。新しい順）。球団史（`teamChronicle`）とオーナーの通算（`ownerRecords`）が使う。
+ * ⚠ 球団は内部の名前（`teamName`）で引く。見せる名前（displayName）を変えても年表は続く
+ */
+export function teamSeasons(league, teamName) {
+  return (league.history || []).map((h) => {
     const row = h.standings?.find((s) => s.team === teamName);
     const leagueId = h.leagues?.[teamName] || null;
     let rank = null;
@@ -525,6 +529,11 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
       titles,
     };
   }).reverse();
+}
+
+export function teamChronicle(league, teamName, activeKeys = new Set()) {
+  // 年表（終わった年）
+  const seasons = teamSeasons(league, teamName);
 
   // 歴代記録: シーズン最多（各項目の上位3）と通算（この球団での成績の上位3）
   const single = Object.fromEntries(TEAM_RECORDS.map((r) => [r.stat, []]));
@@ -534,16 +543,17 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
     // ⚠ **年の途中で移籍した人は、この球団で出た試合だけ**を数える。記録の `stats` は
     //    両方の球団の合計なので、そのままだと前の球団で打った本塁打まで球団記録に入る。
     //    その人の分だけ試合の記録（球団ごとの行）から足し直す
+    //    ⚠ 終わった年は年度更新で作った `season.teamSplits` を使う。終わった年の試合の記録は別に保存し、
+    //    軽い読みでは読まない（触ると全体を読み直す。`snapshotParts.mjs`）。今季は試合の記録から作る
     const moved = new Map();
+    const anyMoved = Object.values(season.players || {}).some((rec) => rec.teams?.includes(teamName) && rec.teams.length > 1);
+    const splits = anyMoved ? season.teamSplits || teamSplitsOf(season) : null;
     for (const rec of Object.values(season.players || {}))
-      if (rec.teams?.includes(teamName) && rec.teams.length > 1)
-        moved.set(rec.key, { batting: {}, pitching: {} });
-    if (moved.size)
-      for (const box of Object.values(season.games || {}))
-        for (const row of box?.teams?.[teamName] || []) {
-          const t = moved.get(row.key);
-          if (t) addStats(t, row);
-        }
+      if (rec.teams?.includes(teamName) && rec.teams.length > 1) {
+        const t = { batting: {}, pitching: {} };
+        addStats(t, splits?.[rec.key]?.[teamName]);
+        moved.set(rec.key, t);
+      }
     for (const rec of Object.values(season.players || {})) {
       if (!rec.teams?.includes(teamName)) continue;
       const stats = moved.get(rec.key) || rec.stats;

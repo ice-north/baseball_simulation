@@ -226,6 +226,8 @@ export function applyJoin(league, { userId, label, teamName, now }) {
       teamName: team.name,
       displayName: shown,
       joinedAt: now,
+      // 参加した年（オーナーの通算はこの年から数える。`server/ownerRecords.mjs`）
+      ...(Number.isFinite(league.season?.year) ? { joinedYear: league.season.year } : {}),
       // ⚠ 来た時刻も入れる。無いと `isAwayAt` が留守にせず、来なくなってもおるすばんにならない
       lastSeenAt: now,
       // ⚠ **開幕後に参加した人には、自分のセットを選ばせる**。引き継いだCPUの

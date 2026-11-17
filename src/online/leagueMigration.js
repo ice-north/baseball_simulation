@@ -1,6 +1,7 @@
 import { generateRosterPacks, LEGACY_PACK_STYLE } from './rosterPack.js';
 import { createCoaches, upgradeCoach } from './coaches.js';
 import { nextMemberIndex } from './membership.js';
+import { teamSplitsOf } from './recordStats.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -208,6 +209,16 @@ export const MIGRATIONS = [
         //    入れておかないと、この版の前から来ていない人がいつまでも留守にならない
         member.lastSeenAt ??= now;
       }
+    },
+  },
+  {
+    from: 13,
+    to: 14,
+    note: '終わった年の、途中で球団を移った選手の球団ごとの成績を記録に足した（終わった年の試合の記録を別に保存するため）。参加した年（joinedYear）は、これから参加する人にだけ入る',
+    apply(league) {
+      // ⚠ **足すだけ**。終わった年（今季より前）だけ。今季は年度更新で作る（`freezeComparison`）
+      for (const season of Object.values(league.records?.seasons || {}))
+        if (Number(season?.year) < league.season?.year) season.teamSplits ??= teamSplitsOf(season);
     },
   },
 ];

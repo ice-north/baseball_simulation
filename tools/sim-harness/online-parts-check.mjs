@@ -15,6 +15,8 @@ import {
   assembleBundle,
   assembleLight,
   NeedsFullWorld,
+  SNAPSHOT_FORMAT,
+  PAST_GAMES,
 } from '../../server/storage/snapshotParts.mjs';
 
 const store = createTestStore('parts-check');
@@ -53,6 +55,46 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
   const back = assembleBundle(JSON.parse(JSON.stringify(core)), order, JSON.parse(JSON.stringify(parts)));
   assert.equal(JSON.stringify(back), text, '戻すと1文字も違わない（球団の並びも同じ）');
   assert.ok(JSON.stringify(core).length * 3 < text.length, `芯が十分小さい（${JSON.stringify(core).length} / ${text.length}）`);
+}
+
+// --- 終わった年の試合の記録は別の部分（F1。1年で約22MB増え、軽い読みでも毎回読んでいた）
+{
+  const bundle = await store.read();
+  const year = bundle.league.season.year;
+  // 終わった年を2つ作る（記録の形だけ。試合1つずつ）
+  const past = (y) => ({ year: y, players: {}, games: { 1: { gameId: 1, teams: {} } }, complete: true });
+  bundle.league.records ||= { version: 1, seasons: {} };
+  bundle.league.records.seasons = { [year - 2]: past(year - 2), [year - 1]: past(year - 1), ...bundle.league.records.seasons };
+  const text = JSON.stringify(bundle);
+  const { core, order, parts } = splitBundle(bundle);
+  assert.equal(JSON.stringify(bundle), text, '分けても元の一式を変えない');
+  assert.deepEqual(Object.keys(parts.pastGames).map(Number).sort(), [year - 2, year - 1], '終わった年だけを分ける');
+  assert.equal(parts.records.seasons[year - 1].games, PAST_GAMES, '記録には印を残す');
+  if (parts.records.seasons[year]) assert.notEqual(parts.records.seasons[year].games, PAST_GAMES, '今季は分けない');
+  const back = assembleBundle(JSON.parse(JSON.stringify(core)), order, JSON.parse(JSON.stringify(parts)));
+  assert.equal(JSON.stringify(back), text, '戻すと1文字も違わない（キーの順も）');
+  // 軽い読み: 終わった年の試合に触ったら全体を読み直す。触らなければ印のまま保存できる
+  const refs = Object.fromEntries(Object.keys(parts).map((n) => [n, {}]));
+  const light = () => assembleLight(JSON.parse(JSON.stringify(core)), order, { records: JSON.parse(JSON.stringify(parts.records)) }, refs);
+  {
+    const run = light();
+    assert.throws(() => Object.keys(run.bundle.league.records.seasons[year - 1].games), NeedsFullWorld);
+    assert.ok(run.tracker.touched, '終わった年の試合に触った印が付かない');
+  }
+  {
+    const run = light();
+    // 選手の記録（終わった年の players）は読める
+    assert.deepEqual(run.bundle.league.records.seasons[year - 1].players, {});
+    const out = run.inspect(run.bundle);
+    assert.ok(out, '終わった年に触れなければ軽い読みのまま保存できる');
+    assert.equal(out.records.seasons[year - 1].games, PAST_GAMES, '保存する記録で番人を印に戻す');
+    assert.equal(run.bundle.league.records.seasons[year - 1].games === PAST_GAMES, false, '生きた記録を書き換えた');
+  }
+  {
+    const run = light();
+    run.bundle.league.records.seasons[year - 1].games = {};
+    assert.equal(run.inspect(run.bundle), null, '終わった年の試合を差し替えたのに軽い読みのまま保存した');
+  }
 }
 
 // --- 軽い読みの番人
@@ -283,7 +325,7 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
   };
   await supa.transaction(edit('1'));
   const first = JSON.parse(gunzipSync(objects.get(row.snapshot_path)));
-  assert.equal(first.snapshotFormat, 2, '書くと分けた形になる');
+  assert.equal(first.snapshotFormat, SNAPSHOT_FORMAT, '書くと分けた形になる');
   const worldPath = first.parts.world.path;
   const recordsPath = first.parts.records.path;
   const expected = structuredClone(legacy);
