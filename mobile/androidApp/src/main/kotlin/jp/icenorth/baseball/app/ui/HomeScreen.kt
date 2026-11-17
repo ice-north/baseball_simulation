@@ -61,6 +61,8 @@ import jp.icenorth.baseball.shared.sealedForQuick
 import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
 import jp.icenorth.baseball.shared.ChronicleView
+import jp.icenorth.baseball.shared.OwnerRecord
+import jp.icenorth.baseball.shared.ownerRecordHead
 import jp.icenorth.baseball.shared.proDraftedHead
 import jp.icenorth.baseball.shared.proDraftedBody
 import jp.icenorth.baseball.shared.honorRows
@@ -335,6 +337,10 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
     val league = leagueChronicle?.proDrafted.orEmpty()
     // 年間表彰（リーグ全体。いちばん新しい年。Web 版 Chronicle.jsx の Honors と同じ）
     val honors = leagueChronicle?.honors
+    // オーナー名鑑（ビューの owners。Web 版 Chronicle.jsx の Owners と同じ）
+    val owners = remember(model.view) {
+        model.raw?.at("owners").list().mapNotNull { e -> e.obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(OwnerRecord.serializer(), it) }.getOrNull() } }
+    }
     LaunchedEffect(team) {
         runCatching {
             model.read("team", mapOf("team" to team)).at("chronicle").obj()?.let { OnlineJson.decodeFromJsonElement(TeamChronicle.serializer(), it) }
@@ -392,6 +398,14 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                             Text(proDraftedHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
                             proDraftedAfter(r).forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                    }
+                    item { ChronicleHeading("オーナー名鑑") }
+                    if (owners.isEmpty()) item { Text("まだ参加者がいません。", style = MaterialTheme.typography.bodySmall) }
+                    items(owners.withIndex().toList(), key = { "o${it.index}" }) { (_, o) ->
+                        Column {
+                            Text(ownerRecordHead(o), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(o.text, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     item { ChronicleHeading("年間表彰" + (honors?.year?.takeIf { it > 0 }?.let { "（${it}年目）" } ?: "")) }

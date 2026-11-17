@@ -353,3 +353,20 @@ fun honorRows(h: Honors?, short: (String) -> String = { it }): List<Pair<String,
     }
     return rows
 }
+
+/**
+ * オーナー名鑑（ビューの `owners`。サーバーの `server/ownerRecords.mjs`）。古いサーバーには無い。
+ * ⚠ 文（`text`）はサーバーが作る。PC・スマホWeb（Chronicle.jsx の Owners）と同じものを出すだけ
+ */
+@Serializable
+data class OwnerRecord(
+    val label: String = "",
+    val team: String = "",
+    val seasons: Int = 0,
+    val champions: Int = 0,
+    val milestone: String? = null,
+    val text: String = "",
+)
+
+/** オーナー名鑑の見出し（「いしだ（北の湖）」） */
+fun ownerRecordHead(o: OwnerRecord): String = "${o.label}（${o.team}）"

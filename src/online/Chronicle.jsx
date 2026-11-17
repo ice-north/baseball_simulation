@@ -226,6 +226,26 @@ function Honors({ honors }) {
   );
 }
 
+/**
+ * オーナー名鑑（参加者ごとの通算。リーグ全体）。⚠ 文はサーバーが作る（`server/ownerRecords.mjs`）。
+ * アプリ（ChronicleDialog の「オーナー名鑑」）と同じ並び
+ */
+function Owners({ list }) {
+  if (!list?.length) return <p>まだ参加者がいません。</p>;
+  return (
+    <div className="online-news-list">
+      {list.map((o) => (
+        <article key={`${o.label}:${o.team}`}>
+          <b>
+            {o.label}（{o.team}）
+          </b>
+          <span>{o.text}</span>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function Milestones({ list, showTeam = false }) {
   if (!list?.length) return <p>まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。</p>;
   return (
@@ -372,6 +392,10 @@ export default function Chronicle({ view }) {
                   <Retired list={c.retired} />
                 </section>
                 {/* リーグ全体の記録（球団を選び直しても同じ） */}
+                <section className="online-card">
+                  <h2>オーナー名鑑</h2>
+                  <Owners list={view.owners} />
+                </section>
                 <section className="online-card">
                   <h2>年間表彰{view.chronicle?.honors?.year ? `（${view.chronicle.honors.year}年目）` : ''}</h2>
                   <Honors honors={view.chronicle?.honors} />
