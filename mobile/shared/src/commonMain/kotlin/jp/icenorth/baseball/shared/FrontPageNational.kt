@@ -79,6 +79,8 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
     var subhead: String? = null
     var score: FrontPage.Score? = null
     var extra = false
+    var nationalBigHead: String? = null
+    var nationalScene: String? = null
     if (story != null) {
         val g = story.g
         val w = g.winner()
@@ -109,6 +111,17 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
                 2,
             )
             extra = ws >= 10
+            nationalBigHead = when {
+                clash -> "首位攻防"
+                ws >= 5 -> "${ws}連勝"
+                ls >= 5 -> "${ls}連敗"
+                wScore - lScore >= 7 -> "大勝"
+                lScore == 0 -> "零封"
+                ws >= 3 -> "${ws}連勝"
+                wScore - lScore == 1 -> "接戦制す"
+                else -> "快勝"
+            }
+            nationalScene = if (lScore == 0) SCENE_PITCHER else if (wScore - lScore >= 5) SCENE_HOMER else SCENE_BATTER
             kicker = listOfNotNull(league.ifEmpty { null }, if (ws >= 2) "${ws}連勝" else null).joinToString("・").ifEmpty { null }
             val winPlace = if (w == g.home) "本拠地" else "敵地"
             val table = view.teamLeagues[w]?.let { view.leagueTable(it) }.orEmpty()
@@ -312,5 +325,26 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         extra = extra,
         articles = articles,
         shorts = shorts,
+        bigHead = nationalBigHead,
+        bigSub = if (nationalBigHead != null) headline else null,
+        leadHead = null,
+        caption = story?.g?.let { g -> "▲${view.teamShort(g.home)}の球場の得点板" },
+        hero = null,
+        index = listOfNotNull(
+            articles.firstOrNull { it.kicker == "1部戦線" }?.title,
+            articles.firstOrNull { it.kicker == "2部戦線" }?.title,
+            articles.firstOrNull { it.kicker == "タイトル戦線" }?.let { "タイトル戦線" },
+        ),
+        results = if (story == null) emptyList() else today.filter { it != story.g }.map { ResultRow(view.teamShort(it.away), it.awayScore ?: 0, view.teamShort(it.home), it.homeScore ?: 0) },
+        frontArticles = null,
+        teamPage = null,
+        recordPage = null,
+        scene = nationalScene,
+        shots = when (nationalScene) {
+            SCENE_PITCHER -> listOf(listOf("s06", "s07", "s05"))
+            SCENE_HOMER -> listOf(listOf("s01", "s02"))
+            null -> emptyList()
+            else -> listOf(listOf("s08", "s12", "s11"))
+        },
     )
 }

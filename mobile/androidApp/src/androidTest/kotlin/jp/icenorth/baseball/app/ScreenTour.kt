@@ -150,6 +150,16 @@ class ScreenTour {
             pause()
         }
         page("home", scrolls = 3)
+        // 新聞風の2面（チーム面）・3面（記録面）。試合の無い段（面の切り替えが無い）は飛ばす
+        listOf("2面 チーム" to "home-page2", "3面 記録" to "home-page3").forEach { (tab, name) ->
+            step(name) {
+                toTop()
+                click(tab)
+                pause(1200)
+                page(name, scrolls = 3)
+            }
+        }
+        step("home-page1") { toTop(); click("1面"); pause() }
         // 全国紙（リーグ全体の紙面）
         step("home-national") {
             rule.runOnUiThread { model.changeHomePaper("National") }

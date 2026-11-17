@@ -132,11 +132,10 @@ internal fun warningArticle(opp: String, roster: List<Player>, starter: StarterI
     )
 }
 
-/** 試合後のひと言（監督と主役）。決まり文句から場面で選ぶ */
-internal fun commentArticle(manager: String?, tone: FrontPage.Tone, s: Situation, pen: Pen, temper: Int = 0): FrontPage.Article? {
-    val boss = manager?.let { "${it}監督" } ?: "監督"
+/** 監督の試合後のひと言（場面と気質で選ぶ。2面の一問一答でも使う） */
+internal fun managerQuote(tone: FrontPage.Tone, s: Situation, pen: Pen, temper: Int = 0): String? {
     val f = s.facts
-    val quote = when (tone) {
+    return when (tone) {
         FrontPage.Tone.Win -> when {
             f?.walkOff == true -> listOf("最後まで諦めなかった選手たちのおかげ", "ベンチもスタンドも一つになった", "しびれる試合を、よく勝ち切ってくれた")
             f?.trailed == true -> listOf("よく追いついて、ひっくり返してくれた", "負けている展開でも下を向かなかった", "粘り強さが出た試合だった")
@@ -160,6 +159,13 @@ internal fun commentArticle(manager: String?, tone: FrontPage.Tone, s: Situation
         FrontPage.Tone.Draw -> listOf("勝ち切れなかったのは悔しい", "負けなかったことを前向きに捉える", "痛み分け。次に生かす")
         FrontPage.Tone.None -> return null
     }.let { pen.pick(it, 18) }
+}
+
+/** 試合後のひと言（監督と主役）。決まり文句から場面で選ぶ */
+internal fun commentArticle(manager: String?, tone: FrontPage.Tone, s: Situation, pen: Pen, temper: Int = 0): FrontPage.Article? {
+    val boss = manager?.let { "${it}監督" } ?: "監督"
+    val f = s.facts
+    val quote = managerQuote(tone, s, pen, temper) ?: return null
     // 主役のひと言（勝った日は決勝打・主役の打者・好投の投手。負けた日は奮闘した打者か投手）
     val hero = f?.winningHit?.takeIf { tone == FrontPage.Tone.Win }?.name
         ?: f?.topBatter?.takeIf { it.hr > 0 || it.rbi >= 2 || it.hits >= 3 }?.name
