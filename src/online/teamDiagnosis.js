@@ -10,6 +10,7 @@
 // ============================================================
 import { plateAppearances } from '../season/seasonManager.js';
 import { POS_FULL } from './api.js';
+import { FIELDER_REST_FATIGUE } from './shared.js';
 
 /** 診断を出し始める試合数（少ないうちは数字が揺れる） */
 export const DIAGNOSIS_MIN_GAMES = 10;
@@ -28,18 +29,25 @@ const MIN_OUTS = 45;
 /** 救援（抑え・セットアッパー）: 部の防御率よりこれ以上悪い */
 const RELIEF_ERA_GAP = 1.5;
 const MIN_RELIEF_OUTS = 24;
+/** 先発に回す候補（ローテの外の投手）に数える投球回（アウト数。10回） */
+const MIN_ALT_OUTS = 30;
 /** 疲れ: 野手の疲労がこれ以上だと試合の打撃・守備が目に見えて落ちる（疲労²/1200 で約3） */
 export const DIAGNOSIS_FATIGUE = 60;
+// ⚠ `FIELDER_REST_FATIGUE`（80）以上で代わりの居る野手は、試合の日にサーバーが自動で休ませる。
+//    「疲れたまま出ています」とは言えないので、その人は挙げない
 /** 守備: 守らせている位置の適性がこれ未満 */
 const FITNESS_LOW = 60;
 
 const n = (v) => (Number.isFinite(v) ? v : 0);
 const rate3 = (v) => v.toFixed(3).replace(/^0/, '');
 const era2 = (er, outs) => (outs > 0 ? (er * 27) / outs : null);
+// ⚠ 出塁率の分母には犠飛を入れる（成績の表 `recordStats.js` の rates と同じ式。数字を食い違わせない）
 const obpOf = (b) => {
-  const pa = plateAppearances(b || {});
-  return pa > 0 ? (n(b.hits) + n(b.walks) + n(b.hitByPitch)) / pa : null;
+  const d = plateAppearances(b || {}) + n(b?.sacrificeFlies);
+  return d > 0 ? (n(b.hits) + n(b.walks) + n(b.hitByPitch)) / d : null;
 };
+/** 起用できる選手か（今は使えない選手を「試す手があります」と勧めない） */
+const usable = (p) => p?.isActive !== false;
 
 /** 部の球団ごとの得点・失点（1試合あたり）と、試合数 */
 function runTable(teamNames, results) {
@@ -59,9 +67,10 @@ function runTable(teamNames, results) {
  * @param rivals 同じ部の球団（自球団を含む）`[{ name, players }]`
  * @param results 今季の試合結果（`season.results`）
  * @param leagueName 部の名前（「1部」）
+ * @param statsOf 今季の成績の引き当て（`projectLeague` の `seasonStatsOf`。成績の表と同じ数字にする）
  * @returns {{ summary: string, items: { kind: string, text: string, page: string }[] } | null}
  */
-export function diagnoseTeam({ team, teamName, rivals, results, leagueName = 'リーグ' }) {
+export function diagnoseTeam({ team, teamName, rivals, results, leagueName = 'リーグ', statsOf = (_team, p) => p.seasonStats }) {
   if (!team?.players?.length || !rivals?.length) return null;
   const names = rivals.map((r) => r.name);
   const table = runTable(names, results);
@@ -84,8 +93,9 @@ export function diagnoseTeam({ team, teamName, rivals, results, leagueName = '�
   let pa = 0, on = 0, outs = 0, er = 0;
   for (const r of rivals)
     for (const p of r.players || []) {
-      const b = p.seasonStats?.batting || {};
-      const q = p.seasonStats?.pitching || {};
+      const st = statsOf(r.name, p);
+      const b = st?.batting || {};
+      const q = st?.pitching || {};
       pa += plateAppearances(b);
       on += n(b.hits) + n(b.walks) + n(b.hitByPitch);
       outs += n(q.inningsPitched);
@@ -95,6 +105,13 @@ export function diagnoseTeam({ team, teamName, rivals, results, leagueName = '�
   const lgEra = era2(er, outs) ?? 4;
 
   const byId = new Map(team.players.map((p) => [p.id, p]));
+  const statsCache = new Map();
+  const st = (p) => {
+    if (!statsCache.has(p.id)) statsCache.set(p.id, statsOf(teamName, p) || {});
+    return statsCache.get(p.id);
+  };
+  const bat = (p) => st(p).batting || {};
+  const pit = (p) => st(p).pitching || {};
   const order = (team.lineupSettings?.battingOrder || []).filter((s) => s.position !== 'pitcher' && byId.has(s.playerId));
   const inLineup = new Set(order.map((s) => s.playerId));
   const rot = team.pitchingRotation || {};
@@ -103,15 +120,15 @@ export function diagnoseTeam({ team, teamName, rivals, results, leagueName = '�
 
   // 1. 打線: 出塁できていない先発野手（控えにもっと出塁している人がいれば名前を出す）
   const weak = order
-    .map((s) => ({ s, p: byId.get(s.playerId), b: byId.get(s.playerId).seasonStats?.batting || {} }))
+    .map((s) => ({ s, p: byId.get(s.playerId), b: bat(byId.get(s.playerId)) }))
     .filter((x) => plateAppearances(x.b) >= MIN_PA)
     .map((x) => ({ ...x, obp: obpOf(x.b) }))
     .filter((x) => x.obp != null && x.obp <= lgObp - OBP_GAP)
     .sort((a, b) => a.obp - b.obp)[0];
   if (weak) {
     const bench = team.players
-      .filter((p) => p.position !== 'pitcher' && !inLineup.has(p.id) && plateAppearances(p.seasonStats?.batting || {}) >= MIN_BENCH_PA)
-      .map((p) => ({ p, obp: obpOf(p.seasonStats.batting), pa: plateAppearances(p.seasonStats.batting) }))
+      .filter((p) => usable(p) && p.position !== 'pitcher' && !inLineup.has(p.id) && plateAppearances(bat(p)) >= MIN_BENCH_PA)
+      .map((p) => ({ p, obp: obpOf(bat(p)), pa: plateAppearances(bat(p)) }))
       .filter((x) => x.obp != null && x.obp >= weak.obp + 0.03)
       .sort((a, b) => b.obp - a.obp)[0];
     items.push({
@@ -128,14 +145,14 @@ export function diagnoseTeam({ team, teamName, rivals, results, leagueName = '�
 
   // 2. 先発投手: 打たれている先発（ローテの外にもっと抑えている投手がいれば名前を出す）
   const badStarter = team.players
-    .filter((p) => starters.has(p.id) && n(p.seasonStats?.pitching?.inningsPitched) >= MIN_OUTS)
-    .map((p) => ({ p, era: era2(n(p.seasonStats.pitching.earnedRuns), n(p.seasonStats.pitching.inningsPitched)) }))
+    .filter((p) => starters.has(p.id) && n(pit(p).inningsPitched) >= MIN_OUTS)
+    .map((p) => ({ p, era: era2(n(pit(p).earnedRuns), n(pit(p).inningsPitched)) }))
     .filter((x) => x.era >= lgEra + ERA_GAP)
     .sort((a, b) => b.era - a.era)[0];
   if (badStarter) {
     const alt = team.players
-      .filter((p) => p.position === 'pitcher' && !starters.has(p.id) && n(p.seasonStats?.pitching?.inningsPitched) >= 30)
-      .map((p) => ({ p, era: era2(n(p.seasonStats.pitching.earnedRuns), n(p.seasonStats.pitching.inningsPitched)) }))
+      .filter((p) => usable(p) && p.position === 'pitcher' && !starters.has(p.id) && n(pit(p).inningsPitched) >= MIN_ALT_OUTS)
+      .map((p) => ({ p, era: era2(n(pit(p).earnedRuns), n(pit(p).inningsPitched)) }))
       .filter((x) => x.era < lgEra)
       .sort((a, b) => a.era - b.era)[0];
     items.push({
@@ -152,8 +169,8 @@ export function diagnoseTeam({ team, teamName, rivals, results, leagueName = '�
   const late = [rot.closer, ...(rot.setupMen || [])].filter((id) => id != null);
   const badRelief = late
     .map((id) => byId.get(id))
-    .filter((p) => p && n(p.seasonStats?.pitching?.inningsPitched) >= MIN_RELIEF_OUTS)
-    .map((p) => ({ p, era: era2(n(p.seasonStats.pitching.earnedRuns), n(p.seasonStats.pitching.inningsPitched)), closer: p.id === rot.closer }))
+    .filter((p) => p && n(pit(p).inningsPitched) >= MIN_RELIEF_OUTS)
+    .map((p) => ({ p, era: era2(n(pit(p).earnedRuns), n(pit(p).inningsPitched)), closer: p.id === rot.closer }))
     .filter((x) => x.era >= lgEra + RELIEF_ERA_GAP)
     .sort((a, b) => b.era - a.era)[0];
   if (badRelief)
@@ -167,7 +184,7 @@ export function diagnoseTeam({ team, teamName, rivals, results, leagueName = '�
   // 4. 疲れ: 疲れたまま出ている先発野手（試合の打撃・守備が落ちる）
   const tired = order
     .map((s) => byId.get(s.playerId))
-    .filter((p) => n(p.fatigue) >= DIAGNOSIS_FATIGUE)
+    .filter((p) => n(p.fatigue) >= DIAGNOSIS_FATIGUE && n(p.fatigue) < FIELDER_REST_FATIGUE)
     .sort((a, b) => n(b.fatigue) - n(a.fatigue));
   if (tired.length)
     items.push({

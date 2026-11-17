@@ -57,6 +57,28 @@ import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../sr
   assert.ok(def.items.some((x) => x.kind === 'defense' && /遊撃.*40%/.test(x.text)), JSON.stringify(def.items));
   const starter = run(makeTeam('自', { badStarter: 1 }));
   assert.ok(starter.items.some((x) => x.kind === 'starter' && x.page === 'rotation'), JSON.stringify(starter.items));
+  // 監査（2026-11-18）: 疲労80以上で代わりの居る野手は試合の日に自動で休む → 「疲れたまま出ています」と言わない
+  {
+    const team = makeTeam('自', { tired: 2 });
+    team.players[2].fatigue = 85;
+    assert.ok(!run(team).items.some((x) => x.kind === 'fatigue'), '自動で休む疲労80以上を「疲れたまま」と挙げた');
+  }
+  // 監査: 今は起用できない控え（isActive false）を勧めない
+  {
+    const team = makeTeam('自', { weak: 6 });
+    team.players.find((p) => p.id === '自-bench').isActive = false;
+    assert.doesNotMatch(run(team).items[0].text, /控えの自控え/, '起用できない控えを勧めた');
+  }
+  // 監査: 出塁率の分母に犠飛を入れる（成績の表と同じ数字）。statsOf で表と同じ成績を引く
+  {
+    const team = makeTeam('自', { weak: 6 });
+    const own = team;
+    const teams = [own, ...names.slice(1).map((n) => makeTeam(n))];
+    const statsOf = (_t, p) =>
+      p.id === '自-6' ? { batting: { ...p.seasonStats.batting, sacrificeFlies: 10 }, pitching: {} } : p.seasonStats;
+    const r = diagnoseTeam({ team: own, teamName: '自', rivals: teams.map((t) => ({ name: t.name, players: t.players })), results: results(20, 3), leagueName: '1部', statsOf });
+    assert.match(r.items[0].text, /出塁率\.200/, `犠飛を分母に入れていない: ${r.items[0].text}`);
+  }
   // 穴が無くて部の下位 → 補強を挙げる。穴が無くて上位 → 一言だけ
   const low = run(makeTeam('自'), 20, 1);
   assert.deepEqual(low.items.map((x) => x.kind), ['roster']);
@@ -95,6 +117,7 @@ import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../sr
   };
   const [x, b1] = ownerRecords(league);
   assert.equal(x.label, 'いしだ', '優勝した人が上');
+  assert.equal(x.head, 'いしだ（北の湖）');
   assert.equal(x.seasons, 4);
   assert.equal(x.top, 2);
   assert.equal(x.champions, 1);
@@ -113,6 +136,8 @@ import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../sr
   const steady = ownerRecords({ members: [league.members[0]], history: [year(1, 'B', 35), year(2, 'B', 35), year(3, 'B', 35)] })[0];
   assert.equal(steady.streak, 3);
   assert.equal(steady.milestone, '3年連続Aクラス');
+  // 呼び名を変えていない人（呼び名＝球団名）は括弧を付けない
+  assert.equal(ownerRecords({ members: [{ teamName: 'X', label: '湘南', displayName: '湘南' }], history: [] })[0].head, '湘南');
   // 終えたシーズンが無い
   const fresh = ownerRecords({ members: [league.members[0]], history: [] })[0];
   assert.equal(fresh.text, 'まだ終えたシーズンがありません');

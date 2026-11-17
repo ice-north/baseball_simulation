@@ -390,7 +390,7 @@ function packJoinsAt(l) {
 const pendingPackAuto = (phase, member) =>
   !!phase && !!member.packSeed && phase.kind !== 'pack_select';
 /** 自球団の診断。同じ部の球団と比べる（部分けの無いリーグは全球団と） */
-function diagnosisFor(l, teamName, team) {
+function diagnosisFor(l, teamName, team, statsOf) {
   const names = l.season?.settings?.teamNames || [];
   const tier = (l.teams || []).find((t) => t.name === teamName)?.league;
   const same = tier ? names.filter((name) => (l.teams || []).find((t) => t.name === name)?.league === tier) : names;
@@ -400,6 +400,7 @@ function diagnosisFor(l, teamName, team) {
     teamName,
     rivals,
     results: l.season?.results || [],
+    statsOf,
     leagueName: (tier && PYRAMID_LEAGUES.find((x) => x.id === tier)?.name) || 'リーグ',
   });
 }
@@ -751,7 +752,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // オーナーの通算記録（オーナー名鑑。参加者全員。`ownerRecords.mjs`）
     owners: ownerRecords(l),
     // チーム診断「なぜ勝てない？」（自球団だけ。直せることを3つまで。`teamDiagnosis.js`）
-    diagnosis: diagnosisFor(l, member.teamName, team),
+    diagnosis: diagnosisFor(l, member.teamName, team, seasonStatsOf),
     // 参加した時刻（はじめての1週間の案内。`firstWeek.js`。リーグを作ったときの人には無い）
     joinedAt: member.joinedAt || null,
     notices: l.notices.slice(0, 4),

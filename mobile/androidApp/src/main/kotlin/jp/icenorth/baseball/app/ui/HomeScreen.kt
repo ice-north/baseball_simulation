@@ -62,7 +62,6 @@ import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
 import jp.icenorth.baseball.shared.ChronicleView
 import jp.icenorth.baseball.shared.OwnerRecord
-import jp.icenorth.baseball.shared.ownerRecordHead
 import jp.icenorth.baseball.shared.proDraftedHead
 import jp.icenorth.baseball.shared.proDraftedBody
 import jp.icenorth.baseball.shared.honorRows
@@ -404,7 +403,7 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                     if (owners.isEmpty()) item { Text("まだ参加者がいません。", style = MaterialTheme.typography.bodySmall) }
                     items(owners.withIndex().toList(), key = { "o${it.index}" }) { (_, o) ->
                         Column {
-                            Text(ownerRecordHead(o), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(o.head, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Text(o.text, style = MaterialTheme.typography.bodySmall)
                         }
                     }

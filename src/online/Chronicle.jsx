@@ -236,9 +236,7 @@ function Owners({ list }) {
     <div className="online-news-list">
       {list.map((o) => (
         <article key={`${o.label}:${o.team}`}>
-          <b>
-            {o.label}（{o.team}）
-          </b>
+          <b>{o.head}</b>
           <span>{o.text}</span>
         </article>
       ))}

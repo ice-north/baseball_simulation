@@ -47,9 +47,13 @@ export function ownerRecords(league) {
       : 'まだ終えたシーズンがありません';
     const bestText = best ? `${best.league || ''}${best.rank}位（${best.year}年目）` : null;
     const milestone = milestoneOf(rows, streak);
+    const label = m.label || m.displayName || m.teamName;
+    const team = m.displayName || m.teamName;
     out.push({
-      label: m.label || m.displayName || m.teamName,
-      team: m.displayName || m.teamName,
+      label,
+      team,
+      // 見出し。⚠ 呼び名を変えていない人は呼び名＝球団名なので、括弧を付けない（「湘南（湘南）」にしない）
+      head: label === team ? team : `${label}（${team}）`,
       seasons: rows.length,
       top,
       champions,

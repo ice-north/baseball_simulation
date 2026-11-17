@@ -362,11 +362,11 @@ fun honorRows(h: Honors?, short: (String) -> String = { it }): List<Pair<String,
 data class OwnerRecord(
     val label: String = "",
     val team: String = "",
+    /** 見出し（「いしだ（湘南）」。呼び名＝球団名なら球団名だけ） */
+    val head: String = "",
     val seasons: Int = 0,
     val champions: Int = 0,
     val milestone: String? = null,
     val text: String = "",
 )
 
-/** オーナー名鑑の見出し（「いしだ（北の湖）」） */
-fun ownerRecordHead(o: OwnerRecord): String = "${o.label}（${o.team}）"
