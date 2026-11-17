@@ -1,5 +1,6 @@
 import './engine-bootstrap.mjs';
 import { schedulePlayoffReplay, PLAYOFF_REPLAY } from './playoffReplay.mjs';
+import { selectHonors } from './seasonAwards.mjs';
 import {
   recordMilestones,
   recordKoshien,
@@ -168,6 +169,9 @@ import {
   CONVERT_POSITIONS,
   CAMP_SUB_TARGETS,
   CAMP_PITCH_TYPES,
+  CAMP_FORMS,
+  CAMP_BATS,
+  currentBats,
   onlineFielderFatigueFor,
 } from '../src/online/shared.js';
 import {
@@ -375,7 +379,26 @@ function campTargetOptions(key, value) {
   const kind = CAMP_SUB_TARGETS[key];
   if (kind === 'pitch' || kind === 'ownPitch') return { targetPitch: value };
   if (kind === 'position') return { targetPosition: value };
+  if (kind === 'form') return { targetForm: value };
+  if (kind === 'bats') return { targetBats: value };
   return {};
+}
+
+/**
+ * 実際に回すサブ練習。フォーム改造（投手）と打席変更は、**対象が無いか、もうその形なら基礎体力**。
+ * ⚠ 一人用は対象が無ければ抽選する。オンラインは4クールを同じ指示で回すので、抽選だと
+ *    クールごとにフォームが変わり続け、変わったあとも次のクールでまた別の形に変わる
+ *    （`executeSubTraining` は対象＝いまの形なら抽選に戻る）。
+ * ⚠ 打席変更は失敗すると打席が変わらないので、次のクールでまた挑む（成功したら止まる）
+ */
+export function campSubKey(key, player, target) {
+  if (key === 'form_change')
+    return CAMP_FORMS.includes(target) && target !== (player.pitching?.form || 'threeQuarter')
+      ? key
+      : 'physique';
+  if (key === 'switch_hit')
+    return CAMP_BATS.includes(target) && target !== currentBats(player) ? key : 'physique';
+  return key;
 }
 
 /**
@@ -448,7 +471,8 @@ export function runCampRound(
   const events = {};
   const note = (player, report) => {
     for (const r of report || [])
-      if (r.isAwakening)
+      // ⚠ フォーム改造は失敗してもフォームが変わる。打席変更の失敗も知らせる（数字に出ない）
+      if (r.isAwakening || r.statName === 'フォーム改造' || r.after === '変更失敗')
         (events[player.id] ||= []).push(
           typeof r.before === 'number' && r.stat !== 'newpitch'
             ? `${r.statName}が覚醒`
@@ -461,8 +485,11 @@ export function runCampRound(
     //    `validatePhasePlan`）。ここで倒すと、どちらの入口が漏れても気づけない
     const own =
       policies.get(player.id) || playerPolicy(player, policy, overrides);
-    const key =
-      sub?.[player.id] || resolveTraining(player, own.direction, own.phase).sub;
+    const key = campSubKey(
+      sub?.[player.id] || resolveTraining(player, own.direction, own.phase).sub,
+      player,
+      subTarget?.[player.id],
+    );
     // ⚠ **選んだ対象を渡すこと**（覚えたい球種・磨きたい球種・守備位置）。
     //    渡さないと中で抽選され、画面で選んだのに違うものを覚える
     if (SUB_TRAINING_MENUS[key]) {
@@ -1293,9 +1320,13 @@ export function validateCampRound(league, teamName, payload) {
     requireOnline(
       kind === 'position'
         ? CONVERT_POSITIONS.includes(value) && value !== 'pitcher'
-        : kind === 'ownPitch'
-          ? owned.includes(value)
-          : CAMP_PITCH_TYPES.includes(value),
+        : kind === 'form'
+          ? CAMP_FORMS.includes(value)
+          : kind === 'bats'
+            ? CAMP_BATS.includes(value)
+            : kind === 'ownPitch'
+              ? owned.includes(value)
+              : CAMP_PITCH_TYPES.includes(value),
       `練習の対象が不正です（${player.name}）`,
     );
     subTarget[playerId] = value;
@@ -2593,6 +2624,8 @@ function advanceOneDay(league, key, now) {
     if (month === 10 && day === getNPBDraftDay(year) && !season._draftDone) {
       freezeComparison(league);
       season.frozenAwards = processSeasonEnd(season, TEAMS_DATA);
+      // 年間表彰（MVP・新人王・ベストナイン・最優秀バッテリー。部ごと。`seasonAwards.mjs`）
+      season.frozenAwards.honors = selectHonors(league, TEAMS_DATA);
       season.finalRankings = snapshotRankings(
         TEAMS_DATA,
         season.settings.teamNames,

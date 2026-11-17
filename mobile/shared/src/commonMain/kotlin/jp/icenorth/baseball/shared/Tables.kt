@@ -31,6 +31,8 @@ val CAMP_SUB_MENUS: List<Menu> = listOf(
     Menu("newpitch", "新球種習得", "✨", "新球種習得に挑戦（成功率16%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）", only = "pitcher"),
     Menu("spin_analysis", "スピン解析", "🎥", "高速カメラで回転を分析・スピン+1〜3（器用さ係数）、変化球Lv向上、制球微増（投手のみ）", only = "pitcher"),
     Menu("subposition", "サブポジ練習", "🔀", "指定ポジションの守備練習（適正大幅UP・器用さで伸びが変わる）", only = null),
+    Menu("form_change", "フォーム改造", "🔄", "投球フォーム変更に挑戦（成功20%・器用さで上下: フォーム変更+能力UP / 失敗: 制球低下）", only = "pitcher"),
+    Menu("switch_hit", "打席変更", "↔️", "打席変更に挑戦（器用さで成功率が上下・失敗でミート低下リスク）", only = null),
 )
 val CAMP_DIRECTIONS: List<Menu> = listOf(
     Menu("sharpen", "長所を伸ばす", "⚔️", "最も強い能力に絞って伸ばす。他は伸びない"),
@@ -105,9 +107,12 @@ val PYRAMID_LEAGUES: List<PyramidLeague> = listOf(
 )
 const val PROMOTION_PLACES: Int = 1
 const val RELEGATION_FROM_BOTTOM: Int = 1
-val CAMP_SUB_TARGETS: Map<String, String> = mapOf("newpitch" to "pitch", "breaking" to "ownPitch", "subposition" to "position")
+val CAMP_SUB_TARGETS: Map<String, String> = mapOf("newpitch" to "pitch", "breaking" to "ownPitch", "subposition" to "position", "form_change" to "form", "switch_hit" to "bats")
 val CAMP_PITCH_TYPES: List<String> = listOf("slider", "curve", "fork", "changeup", "sinker", "cutter", "knuckle", "shoot")
 val CONVERT_POSITIONS: List<String> = listOf("pitcher", "catcher", "first", "second", "third", "short", "left", "center", "right")
+val CAMP_TARGET_REQUIRED: List<String> = listOf("form", "bats")
+val CAMP_FORMS: List<String> = listOf("overhand", "threeQuarter", "sidearm", "submarine")
+val CAMP_BATS: List<String> = listOf("right", "left", "switch")
 val POSITION_NAMES: Map<String, String> = mapOf("pitcher" to "投手", "catcher" to "捕手", "first" to "一塁", "second" to "二塁", "third" to "三塁", "short" to "遊撃", "left" to "左翼", "center" to "中堅", "right" to "右翼")
 const val TRADE_NOTE_MAX: Int = 100
 const val OWNER_COMMENT_MAX: Int = 40

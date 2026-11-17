@@ -31,7 +31,7 @@ export const GRADE_BG = {
 };
 
 // ピーク年齢の推定（成長率が高い/プロ意識が高いほど後ろ倒し）
-function estimatePeakAge(gp, discipline) {
+export function estimatePeakAge(gp, discipline) {
   const a = 25 + (gp - 1.0) * 8 + Math.max(0, discipline - 60) * 0.035;
   return Math.max(24, Math.min(31, Math.round(a)));
 }

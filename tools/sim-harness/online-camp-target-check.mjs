@@ -5,6 +5,8 @@
 //    （スプリット・ツーシーム・パームを選ぶと 400 でクールが実行できなかった）
 // 2. 人の球団で守備位置を変えた選手に「サブポジ練習」を当てても、守備位置が戻らない
 //    （適性への合わせで一塁手に戻り、捕手が0人になることもあった）
+// 3. フォーム改造・打席変更（先方回答 2026-11-16 B3）: 選んだ形に変わる・変わったあとの
+//    クールで別の形に変わり続けない・対象が無ければ何もしない（基礎体力）・野手にフォーム改造は出さない
 import assert from 'node:assert/strict';
 import {
   createLeague,
@@ -17,6 +19,8 @@ import {
 } from '../../server/leagueEngine.mjs';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 import { CAMP_PITCH_TYPES } from '../../src/online/shared.js';
+import { campSubKey } from '../../server/leagueEngine.mjs';
+import { subMenusFor } from '../../src/online/campMenus.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
 const quiet = (fn) => {
@@ -89,5 +93,45 @@ const roster = () => league.game.teams[name].players;
     const after = roster().find((p) => p.id === first.id);
     assert.equal(after.position, 'catcher', `${round}クール目のサブポジ練習で守備位置が戻った`);
   }
+}
+// ------------------------------------------------------------------ 3. フォーム改造・打席変更
+{
+  const pitcher = roster().find((p) => p.position === 'pitcher' && p.isActive !== false);
+  const batter = roster().find((p) => p.position !== 'pitcher' && p.isActive !== false);
+  const from = pitcher.pitching.form || 'threeQuarter';
+  const to = from === 'sidearm' ? 'overhand' : 'sidearm';
+  assert.ok(subMenusFor(pitcher).some(([k]) => k === 'form_change'), '投手にフォーム改造が出ていない');
+  assert.ok(!subMenusFor(batter).some(([k]) => k === 'form_change'), '野手にフォーム改造が出ている');
+  assert.ok(subMenusFor(batter).some(([k]) => k === 'switch_hit'), '野手に打席変更が出ていない');
+  // 対象が無い・もうその形 → 基礎体力
+  assert.equal(campSubKey('form_change', pitcher, undefined), 'physique');
+  assert.equal(campSubKey('form_change', pitcher, from), 'physique');
+  assert.equal(campSubKey('form_change', pitcher, to), 'form_change');
+  assert.equal(campSubKey('switch_hit', batter, undefined), 'physique');
+  // 野手にフォーム改造の対象は断る（練習そのものが野手に出ない）
+  assert.throws(() =>
+    validateCampRound(league, name, { round: 1, sub: { [batter.id]: 'form_change' }, subTarget: { [batter.id]: 'sidearm' } }),
+  );
+  // 4クール同じ指示で回しても、フォームは選んだ形から動かない（1回目で変わり、後は基礎体力）
+  const bats = batter.batting?.bats || 'right';
+  const toBats = bats === 'switch' ? 'right' : 'switch';
+  const formsSeen = new Set();
+  for (let round = 1; round <= 4; round += 1) {
+    const plan = validateCampRound(league, name, {
+      round,
+      policy: { mode: 'recommended' },
+      sub: { [pitcher.id]: 'form_change', [batter.id]: 'switch_hit' },
+      subTarget: { [pitcher.id]: to, [batter.id]: toBats },
+    });
+    loadLeagueWorld(league);
+    const result = quiet(() => runCampRound(league, name, plan));
+    league.game = captureLeagueWorld();
+    const p = roster().find((x) => x.id === pitcher.id);
+    formsSeen.add(p.pitching.form);
+    if (round === 1) assert.ok(result.events[pitcher.id]?.some((t) => /フォーム改造/.test(t)), 'フォーム改造の結果が出来事に出ない');
+    const b = roster().find((x) => x.id === batter.id);
+    assert.ok([bats, toBats].includes(b.batting?.bats || 'right'), '選んでいない打席に変わった');
+  }
+  assert.deepEqual([...formsSeen], [to], `フォームが選んだ形以外に動いた: ${[...formsSeen]}`);
 }
 console.log('online-camp-target-check PASS');

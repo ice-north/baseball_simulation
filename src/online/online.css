@@ -4645,6 +4645,15 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-nav-waiting {
   color: #7dd3fc;
 }
+/* はじめての1週間（参加してから7日。`SocialPages.jsx` の FirstWeekBanner）。急ぎではない緑 */
+.online-procedure-banner.is-first-week {
+  border-color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+  color: #bbf7d0;
+}
+.online-procedure-banner.is-first-week strong:not(:where(.online-sp *)) {
+  color: #f0fdf4;
+}
 /* 参加の準備ができました: 選んだセットと、自分の球団になる日 */
 .online-join-ready {
   display: grid;
@@ -6099,4 +6108,40 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-moves-table tr[data-side='out'] .online-moves-side {
   color: #f87171;
   font-weight: 700;
+}
+/* 年齢構成と3年後の見込み（`AgeOutlook.jsx`） */
+.online-age-bands {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 10px;
+}
+.online-age-band {
+  display: grid;
+  grid-template-columns: 76px 1fr 110px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.online-age-bar {
+  display: flex;
+  height: 10px;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.online-age-bar i.is-fielder {
+  background: #38bdf8;
+}
+.online-age-bar i.is-pitcher {
+  background: #f59e0b;
+}
+.online-age-core tr.is-warn td,
+.online-age-core tr.is-warn th {
+  color: #fca5a5;
+}
+/* プロ入りした選手のその後（`Chronicle.jsx` の ProDrafted） */
+.online-news-list .online-pro-after {
+  display: block;
+  color: #cbd5e1;
+  font-size: 12px;
 }

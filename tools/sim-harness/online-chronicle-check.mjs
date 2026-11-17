@@ -180,6 +180,30 @@ assert.ok(first.league && first.rank >= 1, `年表に部と順位が無い ${JSO
 const hr = info.chronicle.records.find((r) => r.stat === 'homeruns');
 assert.ok(hr?.season?.length, '歴代記録（本塁打）が無い');
 console.log(`球団史 ${own}: ${JSON.stringify(first)} / 本塁打 ${JSON.stringify(hr.season[0])}`);
+// 年間表彰（部ごとの MVP・新人王・ベストナイン・最優秀バッテリー。`seasonAwards.mjs`）
+{
+  const honors = h.awards?.honors || {};
+  assert.deepEqual(Object.keys(honors).sort(), ['A', 'B'], `部ごとの表彰が無い ${Object.keys(honors)}`);
+  for (const [id, x] of Object.entries(honors)) {
+    assert.ok(x.mvp?.name && x.mvp.line, `${id} の MVP が無い`);
+    const teamsIn = Object.entries(h.leagues).filter(([, l]) => l === id).map(([t]) => t);
+    assert.ok(teamsIn.includes(x.mvp.team), `${id} の MVP が別の部の選手`);
+    assert.ok(x.bestNine.length >= 7 && x.bestNine.length <= 9, `${id} のベストナインの人数 ${x.bestNine.length}`);
+    assert.ok(x.bestNine.every((b) => teamsIn.includes(b.team)), `${id} のベストナインに別の部の選手`);
+    assert.equal(new Set(x.bestNine.map((b) => b.id)).size, x.bestNine.length, `${id} のベストナインに同じ人が2回`);
+    if (x.battery) assert.ok(teamsIn.includes(x.battery.team) && x.battery.pitcher && x.battery.catcher, `${id} のバッテリーが変`);
+    console.log(`表彰 ${id}: MVP ${x.mvp.name}（${x.mvp.team} ${x.mvp.line}） / 新人王 ${x.rookie?.name || 'なし'}（${x.rookie?.line || ''}） / バッテリー ${x.battery ? `${x.battery.pitcher}・${x.battery.catcher} ${x.battery.line}` : 'なし'}`);
+    console.log(`  ベストナイン ${x.bestNine.map((b) => `${b.label}${b.name}`).join(' ')}`);
+  }
+  const view = projectLeague(bundle(), 'a', null, null);
+  const shown = view.chronicle.honors;
+  assert.ok(shown?.year === startYear && shown.leagues.length === 2 && shown.titles.length >= 6, `ビューの表彰 ${JSON.stringify(shown)?.slice(0, 200)}`);
+  // 球団の年表にも出る（MVP の球団）
+  const mvpTeam = honors.A.mvp.team;
+  const memberOf = league.members.find((m) => m.teamName === mvpTeam);
+  const t = projectTeamInfo(bundle(), memberOf?.userId || 'a', mvpTeam);
+  assert.ok(t.chronicle.seasons.at(-1).titles.some((x) => x.startsWith('MVP ')), `年表に MVP が無い ${JSON.stringify(t.chronicle.seasons.at(-1))}`);
+}
 // 引退の記録の作り方（1年目はリーグに29歳以上がほとんど居ないので、作った引退で確かめる）
 {
   const { recordRetirements } = await import('../../server/chronicle.mjs');

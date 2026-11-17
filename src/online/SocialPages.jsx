@@ -14,6 +14,7 @@ import {
   tokyoDay,
 } from './social.js';
 import { sinceLabel } from './awaySummary.js';
+import { FIRST_WEEK_NOTE } from './firstWeek.js';
 import { BoxScore, Panel } from './GameHistory.jsx';
 import { ScoringPlays } from './ScoringPlays.jsx';
 
@@ -43,6 +44,31 @@ export function AwaySummaryBanner({ away, close }) {
         <span>{away.lines.join(' · ')}</span>
       </div>
       <button onClick={close}>閉じる</button>
+    </div>
+  );
+}
+
+/**
+ * はじめての1週間（参加してから7日の間。`firstWeek.js`）。次にやることを1つだけ出す。
+ * `open(step)`: そのページを開く（開いた時点で済みにするのは呼ぶ側）
+ */
+export function FirstWeekBanner({ guide, open, close }) {
+  if (!guide) return null;
+  return (
+    <div className="online-procedure-banner is-first-week" role="status" aria-label="はじめての1週間">
+      <div>
+        <strong>
+          はじめての1週間（{guide.done}/{guide.total}）: 次は「{guide.next.title}」
+        </strong>
+        <span>
+          {guide.next.body}
+          {guide.done === 0 ? ` ${FIRST_WEEK_NOTE}` : ''}
+        </span>
+      </div>
+      <button className="online-primary" onClick={() => open(guide.next)}>
+        開く
+      </button>
+      <button onClick={close}>案内を閉じる</button>
     </div>
   );
 }

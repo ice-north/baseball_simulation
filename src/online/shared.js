@@ -443,7 +443,10 @@ export { PITCH_TYPES as CAMP_PITCH_TYPES } from '../season/campTraining.js';
  *    なっていた。
  * ⚠ 指定しても**成功率は上がらない**。新球種はフォーム適性と器用さで決まる。
  * ⚠ 「おまかせ」を残すこと（指定が無ければ従来どおり中で選ぶ）。
- * ⚠ フォーム改造・打席変更はまだ入れない（対象の種類が増える）。
+ * ⚠ フォーム改造（投手）と打席変更は**対象を選ばないと何もしない**（基礎体力になる）。
+ *    一人用は選ばなければ中で抽選するが、オンラインは4クールを同じ指示で回すので、
+ *    抽選だとクールごとにフォームが変わり続ける。変わったあと（対象＝いまの形）も基礎体力
+ *    （`campSubKey`、サーバー）。先方回答（2026-11-16）「すぐやりたい」B3。
  */
 export const CAMP_SUB_TARGETS = {
   // 覚えたい球種（まだ持っていないもの）
@@ -452,7 +455,20 @@ export const CAMP_SUB_TARGETS = {
   breaking: 'ownPitch',
   // 覚えさせたい守備位置
   subposition: 'position',
+  // 変えたいフォーム（投手だけ。野手のフォーム改造はミートの練習で、対象は無い）
+  form_change: 'form',
+  // 変えたい打席（右・左・両）
+  switch_hit: 'bats',
 };
+
+/** 対象を選ばないと練習しない種類（おまかせを出さない） */
+export const CAMP_TARGET_REQUIRED = ['form', 'bats'];
+/** フォーム改造で選べるフォーム */
+export const CAMP_FORMS = ['overhand', 'threeQuarter', 'sidearm', 'submarine'];
+/** 打席変更で選べる打席 */
+export const CAMP_BATS = ['right', 'left', 'switch'];
+/** いまの打席（`executeSubTraining` と同じ読み方） */
+export const currentBats = (player) => player?.batting?.bats || player?.physical?.bats || 'right';
 
 /**
  * キャンプのサブ練習。**サーバーと画面で同じ表を見る**。
@@ -475,6 +491,9 @@ export const CAMP_SUB_MENUS = [
   'spin_analysis',
   // ⚠ **野手のサブ練習がこれ1つだけ欠けていた**（体づくり系しか選べなかった）
   'subposition',
+  // ⚠ 対象を選ぶ（`CAMP_SUB_TARGETS`）。成功率は器用さで決まり、失敗すると制球・ミートが下がる
+  'form_change',
+  'switch_hit',
 ];
 
 /**

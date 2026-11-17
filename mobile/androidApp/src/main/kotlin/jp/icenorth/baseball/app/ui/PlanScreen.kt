@@ -154,6 +154,8 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
         PlanTab.entries.firstOrNull { it.name == model.planFaceRequest }?.let { tab = it }
         model.planFaceRequest = null
     }
+    // はじめての1週間: 開いた面の手順を済みにする
+    LaunchedEffect(tab) { model.markFirstWeekFace(tab.name) }
     var sheet by remember { mutableStateOf<PlanSheet?>(null) }
     val players = remember(view.roster) { view.roster.associateBy { it.id } }
     val rawPlayers = remember(model.raw) {

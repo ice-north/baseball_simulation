@@ -1,6 +1,18 @@
 package jp.icenorth.baseball.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.graphics.Color
+import jp.icenorth.baseball.shared.AGE_OUTLOOK_NOTE
+import jp.icenorth.baseball.shared.AgeOutlook
+import jp.icenorth.baseball.shared.OnlineJson
+import jp.icenorth.baseball.shared.ageOutlookLabel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,7 +69,7 @@ import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.roundToInt
 
-private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順") }
+private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順"), Ages("年齢") }
 
 /** 選手タブ: 選手成績・通算成績（球団を切り替えて同じ表）と、リーグ全体の能力ランキング */
 @Composable
@@ -75,18 +87,61 @@ fun PlayersScreen(model: AppViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
             Box(Modifier.weight(1f)) {
-                if (mode != PlayersMode.Ranking && mode != PlayersMode.CareerRank) TeamPicker(view, raw, team) { model.playersTeam = it }
+                if (mode != PlayersMode.Ranking && mode != PlayersMode.CareerRank && mode != PlayersMode.Ages) TeamPicker(view, raw, team) { model.playersTeam = it }
             }
             InfoButton(
                 "選手",
-                listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "色の付いた行は、スタメン・先発ローテの選手です。他球団は表の上にスタメンと投手陣も出します。ランキングでは自球団の選手に色が付きます。"),
+                // ⚠ 添え書きは常に出さず ⓘ に入れる（アプリは狭い。年齢の見込みの読み方もここ）
+                listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "色の付いた行は、スタメン・先発ローテの選手です。他球団は表の上にスタメンと投手陣も出します。ランキングでは自球団の選手に色が付きます。", "年齢: $AGE_OUTLOOK_NOTE"),
                 Modifier.padding(end = 8.dp),
             )
         }
         when (mode) {
             PlayersMode.Ranking -> AbilityRanking(model, view, raw)
             PlayersMode.CareerRank -> CareerRanking(model, view, raw)
+            // 自球団の年齢構成と3年後の見込み（Web 版 AgeOutlook.jsx と同じ中身）
+            PlayersMode.Ages -> AgeOutlookPane(raw)
             else -> TeamStats(model, view, raw, team, career = mode == PlayersMode.Career)
+        }
+    }
+}
+
+@Composable
+private fun AgeOutlookPane(raw: JsonObject) {
+    val outlook = remember(raw) {
+        raw.at("ageOutlook").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(AgeOutlook.serializer(), it) }.getOrNull() }
+    }
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        item { AgeOutlookCard(outlook) }
+    }
+}
+
+/** 年齢構成と3年後の見込み（自球団。手続きのトライアウト・契約更改でも使う） */
+@Composable
+fun AgeOutlookCard(outlook: AgeOutlook?, compact: Boolean = false) {
+    if (outlook == null) { Text("まだ見込みを出せません。", style = MaterialTheme.typography.bodySmall); return }
+    val most = (outlook.bands.maxOfOrNull { it.pitchers + it.fielders } ?: 1).coerceAtLeast(1)
+    Section("年齢構成と${outlook.years}年後の見込み") {
+        outlook.bands.forEach { b ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(b.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(72.dp))
+                Row(Modifier.weight(1f).height(10.dp).background(Color(0x26949FB8))) {
+                    if (b.fielders > 0) Box(Modifier.weight(b.fielders.toFloat()).fillMaxHeight().background(Color(0xFF38BDF8)))
+                    if (b.pitchers > 0) Box(Modifier.weight(b.pitchers.toFloat()).fillMaxHeight().background(Color(0xFFF59E0B)))
+                    val rest = most - b.fielders - b.pitchers
+                    if (rest > 0) Spacer(Modifier.weight(rest.toFloat()))
+                }
+                Text("野手${b.fielders}・投手${b.pitchers}", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        outlook.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        Text(outlook.advice, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        if (!compact) outlook.core.forEach { r ->
+            Text(
+                "${r.name}（${positionLabel(r.position)}） ${r.age}歳 → ${r.later}歳　${ageOutlookLabel(r)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (r.kind == "decline" || r.veteran) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }

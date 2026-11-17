@@ -26,6 +26,7 @@ import {
   formerCareers,
 } from './leagueBoard.mjs';
 import { packSummary, packsForMember } from '../src/online/rosterPack.js';
+import { ageOutlook } from '../src/online/ageOutlook.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -714,6 +715,13 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
         expires: t.expires ? { month: Math.floor(t.expires / 100) % 100, day: t.expires % 100 } : null,
       })),
     history: l.history,
+    // 年齢構成と3年後の見込み（自球団だけ。成長力を使うので他球団には作らない。`ageOutlook.js`）
+    ageOutlook: ageOutlook(
+      team.players,
+      (l.season?.settings?.teamNames || []).flatMap((name) => (l.game?.teams?.[name]?.players || []).map((p) => p.age)),
+    ),
+    // 参加した時刻（はじめての1週間の案内。`firstWeek.js`。リーグを作ったときの人には無い）
+    joinedAt: member.joinedAt || null,
     notices: l.notices.slice(0, 4),
     // あなたへのお知らせ（トレードの返事・取り下げ、練習試合、予告先発の回避、おるすばん）
     // ⚠ 残している件数（`INBOX_LIMIT`）を全部送る。以前は10件に切っていて、残した後ろ半分が読めなかった

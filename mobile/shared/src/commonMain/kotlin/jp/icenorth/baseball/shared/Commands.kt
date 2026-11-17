@@ -158,11 +158,24 @@ fun campSubTargetChoices(subKey: String?, player: JsonObject): List<Choice> {
                 val type = pitch.at("type").str().orEmpty()
                 Choice(type, name(type) + (pitch.at("level").num()?.let(::plainNumber) ?: ""))
             }
+        // ⚠ フォーム改造・打席変更は、いまの形を除く（Web 版と同じ「サイドへ」「両打へ」）
+        "form" -> CAMP_FORMS.filter { it != (player.at("pitching", "form").str() ?: "threeQuarter") }
+            .map { Choice(it, "${FORM_SHORT[it] ?: it}へ") }
+        "bats" -> CAMP_BATS.filter { it != currentBats(player) }.map { Choice(it, "${BATS_SHORT[it] ?: it}へ") }
         "position" -> CONVERT_POSITIONS.filter { it != "pitcher" && it != player.at("position").str() }
             .map { pos -> Choice(pos, (POSITION_NAMES[pos] ?: pos) + (player.at("positionFitness", pos).num()?.let { " ${plainNumber(it)}%" } ?: "")) }
         else -> emptyList()
     }
 }
+
+val BATS_SHORT = mapOf("right" to "右打", "left" to "左打", "switch" to "両打")
+
+/** いまの打席（Web 版 shared.js の currentBats と同じ読み方） */
+fun currentBats(player: JsonObject): String =
+    player.at("batting", "bats").str() ?: player.at("physical", "bats").str() ?: "right"
+
+/** 対象を選ばないと練習しない（基礎体力になる）サブ練習か。選ばないときの見出しを「未選択」にする */
+fun campTargetRequired(subKey: String?): Boolean = CAMP_SUB_TARGETS[subKey] in CAMP_TARGET_REQUIRED
 
 /** 整数なら小数点を付けずに出す（JS の `${n}` と同じ見え方） */
 private fun plainNumber(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()

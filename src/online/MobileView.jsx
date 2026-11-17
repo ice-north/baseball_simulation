@@ -29,7 +29,8 @@ import OffseasonGrowth from './OffseasonGrowth.jsx';
 import { StaffBody } from './StaffPage.jsx';
 import { MobileTradeReplies } from './TradeScreen.jsx';
 import { RenameDialog } from './DesktopView.jsx';
-import { AwaySummaryBanner, InboxCard, MobileExhibitionReplies } from './SocialPages.jsx';
+import { AwaySummaryBanner, FirstWeekBanner, InboxCard, MobileExhibitionReplies } from './SocialPages.jsx';
+import { useFirstWeek } from './useFirstWeek.js';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab, away, dismissAway } =
     props;
@@ -56,6 +57,8 @@ export default function MobileView(props) {
   const counts = noticeCounts(view);
   const procedure = pendingProcedure(view);
   const waiting = packWaiting(view);
+  // はじめての1週間（PC と同じ文。スマホWeb はタブで済みにする）
+  const firstWeek = useFirstWeek(view, tab, 'mobile');
   return (
     <>
       {/* ⚠ 自分が決める手続きは、どの画面にいても上に帯で出す（PC版と同じ。見逃し防止） */}
@@ -112,6 +115,9 @@ export default function MobileView(props) {
       )}
       {/* 前に開いたときから起きたこと（PC版と同じ文。閉じるまで出す） */}
       {tab === 'today' && <AwaySummaryBanner away={away} close={dismissAway} />}
+      {tab === 'today' && (
+        <FirstWeekBanner guide={firstWeek.guide} open={(step) => setTab(step.mobile)} close={firstWeek.close} />
+      )}
       {tab === 'today' && (
         <>
           <section className="online-mobile-overview">

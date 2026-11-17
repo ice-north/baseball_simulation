@@ -1,5 +1,10 @@
 package jp.icenorth.baseball.app
 
+import jp.icenorth.baseball.shared.FirstWeekGuide
+import jp.icenorth.baseball.shared.firstWeekGuide
+import jp.icenorth.baseball.shared.firstWeekKey
+import jp.icenorth.baseball.shared.firstWeekStepOfFace
+
 import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -110,6 +115,42 @@ class AppViewModel internal constructor(
         if (keys == seenTrades) return
         seenTrades = keys
         store.seenTrades = keys
+    }
+
+    /**
+     * はじめての1週間（参加してから7日。FirstWeek.kt）。端末に覚えるのは1人分だけ
+     * （鍵＝球団と参加の時刻が変われば、済みの印を捨てて始め直す）
+     */
+    private fun firstWeekState(): Pair<Set<String>, Boolean> {
+        val key = view?.let { v -> v.joinedAt?.let { firstWeekKey(v.teamName.orEmpty(), it) } } ?: return emptySet<String>() to false
+        if (store.firstWeekKey != key) {
+            store.firstWeekKey = key
+            store.firstWeekDone = emptySet()
+            store.firstWeekClosed = false
+        }
+        return store.firstWeekDone to store.firstWeekClosed
+    }
+    var firstWeekSerial by mutableStateOf(0)
+        private set
+
+    fun firstWeekGuideNow(): FirstWeekGuide? {
+        val (done, closed) = firstWeekState()
+        return firstWeekGuide(view?.joinedAt, done, closed, System.currentTimeMillis())
+    }
+
+    /** 編成の面を開いたら、その手順を済みにする */
+    fun markFirstWeekFace(face: String) {
+        val id = firstWeekStepOfFace(face) ?: return
+        val (done, _) = firstWeekState()
+        if (view?.joinedAt == null || id in done) return
+        store.firstWeekDone = done + id
+        firstWeekSerial++
+    }
+
+    fun closeFirstWeek() {
+        firstWeekState()
+        store.firstWeekClosed = true
+        firstWeekSerial++
     }
 
     /** ホームのキャンプ結果を閉じた印（「球団名:年」。Web 版の `baseball-online-camp-seen` と同じ形） */
