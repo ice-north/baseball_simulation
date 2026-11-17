@@ -1602,12 +1602,14 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 /* 「交渉」ボタン（候補一覧の右端）。⚠ 能力値の右に置き、押す場所を1つにする
    （いしだ要望。以前は「最優先へ」「指名に加える」の2つあった） */
-.online-tryout-list .online-tryout-negotiate {
+.online-tryout-list .online-tryout-negotiate,
+.online-tryout-table .online-tryout-negotiate {
   flex: 0 0 auto;
   min-width: 56px;
 }
 /* 交渉中の行。もう一度押すとやめられる（押せると分かるよう枠を残す） */
-.online-tryout-list .online-tryout-negotiating {
+.online-tryout-list .online-tryout-negotiating,
+.online-tryout-table .online-tryout-negotiating {
   flex: 0 0 auto;
   min-width: 76px;
   border-color: var(--accent, #67e8f9);
@@ -5380,10 +5382,6 @@ small.online-gain:not(:where(.online-sp *)) {
   padding: 8px 2px;
 }
 /* 人数の見出し・獲得する人数・「標準案に戻す」を1段に（320px では折り返す） */
-.online-mobile .online .online-tryout-head label,
-.online-mobile .online-tryout-head label {
-  margin: 0;
-}
 .online-mobile .online-tryout-head {
   gap: 10px;
   margin-bottom: 8px;
