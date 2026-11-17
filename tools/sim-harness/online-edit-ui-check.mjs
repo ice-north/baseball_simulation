@@ -776,6 +776,12 @@ try {
       planned.includes('候補二郎') && planned.includes('候補三郎') && !planned.includes('候補一郎'),
       `確認で入れ替えた獲得予定が出ない: ${planned}`,
     );
+    // ⚠ 人数（`total`）を決めた提出は交渉した人しか取らない（`fillsAutomatically`）。
+    //    以前のスマホの確認は「＋自動で23人」と、実際には取らない人数を足して出していた
+    assert.ok(
+      planned.includes('交渉した2人しか並んでいないので') && !planned.includes('自動で'),
+      `人数を決めた提出なのに自動で埋めるように出る: ${planned}`,
+    );
     await tryout.page.getByRole('button', { name: '決定する', exact: true }).click();
     await tryout.page.getByText('決定しました', { exact: true }).waitFor();
     assert.deepEqual(

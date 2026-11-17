@@ -64,6 +64,7 @@ import jp.icenorth.baseball.shared.describeMood
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.isPitcherJson
 import jp.icenorth.baseball.shared.list
+import jp.icenorth.baseball.shared.idKey
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.pid
@@ -310,7 +311,8 @@ internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<Json
     val total = camp.at("gains").obj()
     if (total.isNullOrEmpty() && (camp.at("rounds").int() ?: 0) == 0) return
     var open by rememberSaveable { mutableStateOf(!collapsed) }
-    val rows = campGainRows(total, roster, camp.at("events").obj())
+    // 名簿全員ぶんの集計なので、描き直しのたびに作り直さない
+    val rows = remember(camp, roster) { campGainRows(total, roster, camp.at("events").obj()) }
     val totals = campGainTotals(total)
     // ⚠ **全クールぶん揃っているときだけ**クール別を出す（途中のクールからの記録だと「計」と合わない）
     val rounds = remember(camp) { camp.at("byRound").list().mapNotNull { it.obj() }.takeIf { it.size == (camp.at("rounds").int() ?: -1) }.orEmpty() }
@@ -358,7 +360,7 @@ internal fun CampGains(model: AppViewModel, camp: JsonObject?, roster: List<Json
                     if (rounds.isNotEmpty()) Text("クール別", Modifier.padding(start = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
                 sorted.forEach { row ->
-                    val id = row.player.at("id").num()?.toLong()?.toString() ?: row.player.at("id").str().orEmpty()
+                    val id = row.player.idKey().orEmpty()
                     Row(Modifier.height(GainRowHeight), verticalAlignment = Alignment.CenterVertically) {
                         val sum = (row.sum * 10).roundToInt() / 10.0
                         Text(formatGain(sum), cell, color = if (sum >= 0) GainUp else MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 13.sp)

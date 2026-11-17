@@ -58,6 +58,7 @@ const CHECKS = [
   { name: 'solo-lineup-board-check', group: 'quick', slow: 1 },
   { name: 'online-pitching-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stove-check', group: 'quick', online: true, slow: 1 },
+  { name: 'online-contract-table-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-camp-target-check', group: 'quick', online: true, slow: 6 },
   { name: 'online-owner-five-check', group: 'quick', online: true, slow: 2 },
   { name: 'online-migration-check', group: 'check', online: true, slow: 21 },

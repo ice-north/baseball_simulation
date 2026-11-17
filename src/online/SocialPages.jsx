@@ -17,6 +17,7 @@ import { sinceLabel } from './awaySummary.js';
 import { FIRST_WEEK_NOTE } from './firstWeek.js';
 import { BoxScore, Panel } from './GameHistory.jsx';
 import { ScoringPlays } from './ScoringPlays.jsx';
+import { lineScoreCells } from './scoreBoard.js';
 
 // ============================================================
 // 人どうしの関わりの画面（PC）。
@@ -548,15 +549,9 @@ function LineScore({ game }) {
   const away = game.lineScore?.away || [];
   const home = game.lineScore?.home || [];
   if (!away.length) return null;
-  const innings = Math.max(9, away.length, home.length);
-  const top = Array.from({ length: innings }, (_, i) => (i < away.length ? String(away[i]) : ''));
-  const bottom = Array.from({ length: innings }, (_, i) =>
-    i < home.length
-      ? `${home[i]}${game.walkOff && i === home.length - 1 ? 'x' : ''}`
-      : i < away.length
-        ? 'x'
-        : '',
-  );
+  // 枠の書き方は試合の詳細のスコアボードと同じ関数（`scoreBoard.js`）。
+  // ⚠ `ScoreBoard`（GameHistory）そのものは使わない。練習試合の箱には安打・失策の列が無く、計も回の和で出す
+  const { top, bottom } = lineScoreCells(away, home, !!game.walkOff);
   const sum = (list) => list.reduce((a, b) => a + (b || 0), 0);
   return (
     <table className="online-line-score" aria-label="回ごとの得点">

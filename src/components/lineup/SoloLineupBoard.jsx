@@ -32,7 +32,7 @@ import { orderFromTeam, writeOrder, candidatesForSlot, orderProblems } from './s
 //    2026-11-04 いしだ）: 自動設定ボタン（どう変わるか分からない）・守備位置のコンボボックス・
 //    ✕で外す（7人の状態を経由する）・常に出ている守備図・控えの比較チェックボックス。
 // ⚠ 見た目はオンラインの部品のクラス（`.online-lineup-*`）をそのまま使うので、
-//    `.online.online-desktop.online-embed` の中に置く（`src/index.css` の `.online-embed`）。
+//    `.online.online-desktop.online-embed` の中に置く（`src/online/online.css` の `.online.online-embed`）。
 //    中に一人用（Tailwind）の部品を入れないこと（`.online button` が上書きする）。
 // ⚠ 編集はその場で `team` に書き、`onChange` で親（`LineupSettingContent`）に知らせる。
 //    元に戻す・やり直すは親の履歴が受け持つ（打順は `snapshotRoster` に入っている）。

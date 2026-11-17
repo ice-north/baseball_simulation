@@ -12,6 +12,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import jp.icenorth.baseball.shared.AuthSession
 import jp.icenorth.baseball.shared.OnlineApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -39,6 +40,9 @@ class ResultWorkerTest {
     /** トークンの更新への答え（断る・サーバーの障害を試す） */
     private var refreshStatus = HttpStatusCode.OK
 
+    /** トークンの更新の答えが届くまでの長さ（待つのをやめたあとに届くのを試す） */
+    private var refreshDelayMs = 0L
+
     // ⚠ 裏の確認は回ごとに通信の道具を作って閉じるので、検査も回ごとに作る（閉じた道具は使えない）
     private val clients = mutableListOf<HttpClient>()
 
@@ -47,10 +51,13 @@ class ResultWorkerTest {
         requests += action + (request.url.parameters["since"]?.let { "?since=$it" } ?: "")
         val json = headersOf(HttpHeaders.ContentType, "application/json")
         when (action) {
-            "refresh" -> if (refreshStatus == HttpStatusCode.OK) {
-                respond("""{"accessToken":"new-access","refreshToken":"new-refresh","expiresAt":${System.currentTimeMillis() + 3_600_000}}""", HttpStatusCode.OK, json)
-            } else {
-                respond("""{"error":"認証に失敗しました。ログインし直してください","code":"auth"}""", refreshStatus, json)
+            "refresh" -> {
+                if (refreshDelayMs > 0) delay(refreshDelayMs)
+                if (refreshStatus == HttpStatusCode.OK) {
+                    respond("""{"accessToken":"new-access","refreshToken":"new-refresh","expiresAt":${System.currentTimeMillis() + 3_600_000}}""", HttpStatusCode.OK, json)
+                } else {
+                    respond("""{"error":"認証に失敗しました。ログインし直してください","code":"auth"}""", refreshStatus, json)
+                }
             }
             else -> respond(
                 if (request.url.parameters["since"] == generationOf(serverView)) """{"unchanged":true,"viewGeneration":${generationOf(serverView)}}""" else serverView,
@@ -72,6 +79,7 @@ class ResultWorkerTest {
 
     @After fun cleanup() {
         ResultWorker.createApi = { OnlineApi(it) }
+        ResultWorker.refreshTimeoutMs = ResultWorker.REFRESH_TIMEOUT_MS
         clients.forEach { it.close() }
     }
 
@@ -142,6 +150,35 @@ class ResultWorkerTest {
         assertEquals("refresh", requests.first())
         assertEquals("new-refresh", store.auth?.refreshToken)
         assertEquals("new-access", store.auth?.accessToken)
+    }
+
+    /**
+     * 待つのをやめても更新の通信は取り消さず、遅れて届いた新しいトークンを端末に残す
+     * （サーバーはもう更新トークンを入れ替えている。古いのが残ると次の更新で締め出される）
+     */
+    @Test fun slowRefreshIsNotCancelledAndItsTokensAreKept() {
+        store.auth = store.auth!!.copy(expiresAt = System.currentTimeMillis() + 10_000)
+        ResultWorker.refreshTimeoutMs = 50
+        refreshDelayMs = 500
+        assertEquals(ListenableWorker.Result.success(), run())
+        assertEquals("待つのをやめたら読まない", listOf("refresh"), requests)
+        assertEquals("old-refresh", store.auth?.refreshToken)
+        val deadline = System.currentTimeMillis() + 5_000
+        while (store.auth?.refreshToken != "new-refresh" && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        assertEquals("遅れて届いた更新も端末に残す", "new-refresh", store.auth?.refreshToken)
+        assertEquals("new-access", store.auth?.accessToken)
+        assertFalse(store.authBroken)
+    }
+
+    /** 遅れて届く前にログアウトしていたら、届いたトークンで入り直さない */
+    @Test fun slowRefreshAfterLogoutIsNotKept() {
+        store.auth = store.auth!!.copy(expiresAt = System.currentTimeMillis() + 10_000)
+        ResultWorker.refreshTimeoutMs = 50
+        refreshDelayMs = 300
+        run()
+        store.auth = null
+        Thread.sleep(800)
+        assertNull(store.auth)
     }
 
     @Test fun refusedRefreshKeepsTheLoginAndRestsUntilTheAppLogsInAgain() {

@@ -51,6 +51,9 @@ import jp.icenorth.baseball.shared.RELIEF_ORDER
 import jp.icenorth.baseball.shared.RELIEF_ROLES
 import jp.icenorth.baseball.shared.STARTER_ROLES
 import jp.icenorth.baseball.shared.seasonLine
+import jp.icenorth.baseball.shared.StatFormat
+import jp.icenorth.baseball.shared.formatStat
+import jp.icenorth.baseball.shared.statFormatOf
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.careerRoster
 import jp.icenorth.baseball.shared.bool
@@ -67,7 +70,6 @@ import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
-import kotlin.math.roundToInt
 
 private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順"), Ages("年齢") }
 
@@ -291,8 +293,8 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
 private fun FormerCareers(list: List<JsonObject>, batting: Boolean) {
     val rows = list.filter { it.at(if (batting) "batting" else "pitching").obj() != null }
     if (rows.isEmpty()) return
-    fun rate3(v: Double?): String = v?.let { val n = kotlin.math.round(it * 1000).toInt(); if (n >= 1000) "1.000" else ".${n.toString().padStart(3, '0')}" } ?: "—"
-    fun dec2(v: Double?): String = v?.let { val n = kotlin.math.round(it * 100).toInt(); "${n / 100}.${(n % 100).toString().padStart(2, '0')}" } ?: "—"
+    fun rate3(v: Double?): String = formatStat(StatFormat.Rate, v)
+    fun dec2(v: Double?): String = formatStat(StatFormat.Decimal, v)
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Caption("退団・引退した${if (batting) "野手" else "投手"}の通算")
         rows.forEach { r ->
@@ -378,13 +380,9 @@ private fun CareerRanking(model: AppViewModel, view: LeagueView, raw: JsonObject
     }
     var selected by rememberSaveable { mutableStateOf(boards.first().at("id").str().orEmpty()) }
     val board = boards.firstOrNull { it.at("id").str() == selected } ?: boards.first()
-    val format = board.at("format").str()
-    fun text(v: Double?): String = when {
-        v == null -> "—"
-        format == "rate" -> v.let { val n = (it * 1000).roundToInt(); if (n >= 1000) "1.000" else ".${n.toString().padStart(3, '0')}" }
-        format == "decimal" -> ((v * 100).roundToInt() / 100.0).let { val t = it.toString(); if (t.substringAfter('.').length < 2) t + "0" else t }
-        else -> v.roundToInt().toString()
-    }
+    // 書式は Web 版 CareerStats と同じ（`formatStat({ format })`）
+    val format = statFormatOf(board.at("format").str())
+    fun text(v: Double?): String = formatStat(format, v)
     Column(Modifier.fillMaxSize()) {
         ChipTabs(boards.map { it.at("id").str().orEmpty() to it.at("label").str().orEmpty() }, board.at("id").str().orEmpty(), { selected = it })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {

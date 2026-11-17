@@ -46,6 +46,7 @@ import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.readableChangeReason
+import jp.icenorth.baseball.shared.scoreBoardTotals
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
@@ -275,10 +276,6 @@ private fun LineScoreTable(view: LeagueView, g: JsonObject) {
     val home = ls.at("home").list().mapNotNull { it.int() }
     if (away.isEmpty()) return
     val (top, bottom) = lineScoreCells(away, home, g.at("walkOff").bool() == true)
-    fun teamSum(team: String, key: String): String {
-        val players = g.at("teams", team).list().mapNotNull { it.obj() }
-        return if (players.isEmpty()) "-" else "${players.sumOf { it.at("batting", key).num() ?: 0.0 }.toInt()}"
-    }
     val awayName = g.at("away").str().orEmpty()
     val homeName = g.at("home").str().orEmpty()
     val cell = Modifier.width(22.dp)
@@ -311,8 +308,8 @@ private fun LineScoreTable(view: LeagueView, g: JsonObject) {
             .horizontalScroll(rememberScrollState()),
     ) {
         line("", top.indices.map { "${it + 1}" }, listOf("R", "H", "E"), head = true)
-        line(view.teamShort(awayName), top, listOf("${g.at("awayScore").int() ?: away.sum()}", teamSum(awayName, "hits"), teamSum(awayName, "errors")), head = false, own = awayName == view.teamName)
-        line(view.teamShort(homeName), bottom, listOf("${g.at("homeScore").int() ?: home.sum()}", teamSum(homeName, "hits"), teamSum(homeName, "errors")), head = false, own = homeName == view.teamName)
+        line(view.teamShort(awayName), top, scoreBoardTotals(g, "away"), head = false, own = awayName == view.teamName)
+        line(view.teamShort(homeName), bottom, scoreBoardTotals(g, "home"), head = false, own = homeName == view.teamName)
     }
 }
 

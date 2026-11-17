@@ -809,18 +809,29 @@ class AppViewModel internal constructor(
     }
 
     /** アクセストークンの期限が近ければ先に更新する（本番の Supabase は1時間で切れる） */
-    private suspend fun fresh(current: AuthSession, epoch: Long, force: Boolean = false): AuthSession = refreshLock.withLock {
+    private suspend fun fresh(current: AuthSession, epoch: Long, force: Boolean = false): AuthSession {
+        // 期限がまだ先なら鍵を待たない（裏の確認が鍵を持って更新している間も、画面の読み込みを止めない）。
+        // ⚠ 裏が更新を済ませても、手元のアクセストークンは期限まで使える
+        val expiresAt = current.expiresAt
+        if (!force && (expiresAt == null || current.refreshToken == null || expiresAt - System.currentTimeMillis() > 60_000)) {
+            requireSession(epoch)
+            return current
+        }
+        return refreshLock.withLock { freshLocked(current, epoch, force) }
+    }
+
+    private suspend fun freshLocked(current: AuthSession, epoch: Long, force: Boolean): AuthSession {
         requireSession(epoch)
         // ほかの呼び出しが待っている間に更新を済ませていたら、それを使う
         val latest = auth
-        if (latest != null && latest.accessToken != current.accessToken) return@withLock latest
+        if (latest != null && latest.accessToken != current.accessToken) return latest
         // 裏の確認（ResultWorker）が更新を済ませて端末に残していたら、それを使う（古い更新トークンで更新しない）
         val stored = store.auth
         if (stored != null && stored.userId == current.userId && stored.sessionId == current.sessionId && stored.accessToken != current.accessToken) {
             auth = stored
-            return@withLock stored
+            return stored
         }
-        refreshOnce(current, epoch, force)
+        return refreshOnce(current, epoch, force)
     }
 
     private suspend fun refreshOnce(current: AuthSession, epoch: Long, force: Boolean): AuthSession {

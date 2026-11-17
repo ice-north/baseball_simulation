@@ -34,9 +34,14 @@
 
 ## サーバーとの約束（壊さないために）
 
-- アプリは `?action=login / refresh / view / defaults / team / player / games / game / command / presence` を使う。`presence` はアプリに戻るたび（10分に1回まで）送り、最終ログインとおるすばんの解除に使う。ビューの項目名を変えるとアプリが壊れる。
+- アプリは `?action=login / refresh / view / defaults / team / player / games / game / transactions / command / presence` を使う。`presence` はアプリに戻るたび（10分に1回まで）送り、最終ログインとおるすばんの解除に使う。ビューの項目名を変えるとアプリが壊れる。
   - `presence` の返事は `{ ok: true }`。おるすばんを解いたときは `{ ok: true, returned: true }` で、アプリはそのときもう一度ビューを読む（一緒に走らせた読み直しが解ける前のビューを読んでいて、自分が「おるすばん」のまま見えるため）。`returned` が無ければ解いていない扱い（`shared/.../OnlineApi.kt` の `presence`）。
   - 版（`revision`）は、最終ログインを書いただけなら上がらない（ほかの人の画面を読み直させない）。おるすばんを解いたときは上がる。ただしビューの世代（`viewGeneration`）は、書き込みを保存するたび（`presence` が最終ログインを書いたときも）上がる（`server/storage/supabaseStore.mjs` の `online_publish`。公開は世代を必ず1つ上げる）。なので `since` を添えた次の `view` は中身をまるごと返す。
+- 画面が読む項目のうち、名前を変えると黙って空になるもの（どれも無ければ出さないだけなので、画面の検査では気づきにくい）:
+  - ビュー: `careerLeaders`（通算成績ランキング）、`chronicle.proDrafted`（プロ入りした選手）、`lastCamp`（キャンプの結果）、`stage.key`（`season` かどうかでキャンプ直後の案内を出す）、`trades[]` の `fromCpu`・`expires`（CPU球団からの提案とその期限）、`rosterLimit`・`rosterStandard`（選手枠。下の項目）。
+  - `team`: `formerCareers`（引退・退団した選手の通算）、`chronicle.moves`（入退団履歴）、`roster[].years`（他球団の選手の年ごとの推移）。
+  - `player`: `years`（自球団の選手の年ごとの推移。年・年齢・所属・能力）。
+  - `transactions`（`year` を受ける。トレード履歴）: `years`、`items[]` の `kind`（アプリは `trade` だけ出す）・`teams`・`cpu`・`cpuOnly`・`date`・`moves[]`（`name`・`position`・`from`・`to`）。
 - 通知（`ResultWorker`）が読むビューの項目。名前を変えると通知が黙って出なくなる（画面の検査では気づきにくい）:
   - 試合結果（`shared/.../ResultNotice.kt`）: `teamName`・`teamLabels`、`recentGames`（`server/projection.mjs` の `ownRecentGames`）の `id`・`date`・`number`・`home`・`away`・`homeScore`・`awayScore`（見分けと「新しい試合か」に使う）。本文には `decisions`（勝敗投手）・`homeruns`、順位の `teamLeagues`・`standings` も使う。
   - 手続き・トレード・手続きの結果（`shared/.../EventNotice.kt`・`Notices.kt` の `pendingProcedure`）:
@@ -45,12 +50,13 @@
     - `inbox[]` の `id`・`type`・`text`。通知する `type` は `tradeAccepted`・`tradeRejected`・`tradeWithdrawn`・`challenge`・`challengePlayed`・`challengeDeclined`・`challengeWithdrawn`・`starterAvoided`・`awayStarted`（`INBOX_TITLES`。ほかの種類は通知しない。名前を変えると黙って出なくなる）。
     - `lastTryout` の `year`・`picks[].name`・`lost`、`lastCamp.year`、`lastOffseason` の `year`・`departed`。
   - 知らせ終えた印は端末に残し、ログインし直すまで消さない。ビューにはリーグを見分ける値（作り直したリーグかどうか）が無いので、同じ接続先でリーグを作り直すと、前のリーグの印と同じ鍵（手続きの `phase.id`・トレードやお知らせの `id`・結果の年）の知らせが出ないことがある。
-- 裏の確認でトークンの更新を断られた（400 / 401）ら、ログアウトはせず、アプリでログインし直す（または画面が更新できる）まで裏の確認を休む（`SessionStore.authBroken`）。更新は画面と同じ鍵を持って20秒まで待つ（`ResultWorker.REFRESH_TIMEOUT_MS`）。更新したログイン情報は書き終わるまで待って残す（`SessionStore.commitAuth`。更新トークンは1回きり）。端末の設定で通知を切られている間も読まない。
+- 裏の確認でトークンの更新を断られた（400 / 401）ら、ログアウトはせず、アプリでログインし直す（または画面が更新できる）まで裏の確認を休む（`SessionStore.authBroken`）。更新は画面と同じ鍵を持って行い、裏の確認が待つのは20秒まで（`ResultWorker.REFRESH_TIMEOUT_MS`）。待つのをやめても更新の通信は取り消さず、答えが遅れて届いたらそれも残す（サーバーはもう更新トークンを入れ替えているため）。その間も鍵は持ったままで、画面は期限が近いときだけ鍵を待つ。更新したログイン情報は書き終わるまで待って残す（`SessionStore.commitAuth`。更新トークンは1回きり）。端末の設定で通知を切られている間も読まない。
 - `view` には手元のビューの世代 `since`（ビューの `viewGeneration`）を添える。世代が同じ（かつ保存の版が今のサーバーと同じ）なら、サーバーはビューを送らず `{ unchanged: true, viewGeneration, writable }` だけ返す（`server/leagueService.mjs` の `view`）。アプリはこのとき `writable`（書き込めるか）だけを合わせる。世代を持たない保存先（開発サーバーの `FileStore`）は `since` を無視して毎回全部返す。
 - `command` の返事の `view` は最新のビューで、`view.viewGeneration` に公開した世代が入る（`server/storage/supabaseStore.mjs`）。アプリは読み直さずにこれを使い、次の `since` にする。返事に `view` が無ければ読み直す。
 - `games` は `year`・`page`・`scope`（`own` / `league`）・`size`（1〜200。既定は6）を受ける。紙面は `size=200` で自球団の1シーズンを1回で読む（`OWN_HISTORY_PAGE`）。
 - 試合の勝敗投手（ビューの `results`・`games`・`game` の `decisions` の `winningPitcher` / `losingPitcher` / `savePitcher` / `holdPitchers`）は `{ id, name }` だけ（`server/recordedViews.mjs` の `decisionRefs`）。能力や成績は載らないので、自球団の投手は名簿（ビューの `roster`）から `id` で引く。
 - タイトル争い（ビューの `leaders` の `rows`）の行は `{ id, name, team, label, value }`（`server/leagueBoard.mjs` の `leagueLeaders`）。アプリは行を押すと球団の名簿から `id` で選手を探し、名前では探し直さない（同じ球団の同名の別人を開かないため。`shared/.../PlayerLookup.kt`）。`id` の無い古いサーバーの行だけ名前で探す。
+- 選手枠の上限と標準の人数は、ビューの `rosterLimit`・`rosterStandard`（`server/projection.mjs`。中身は `src/online/shared.js` の `ROSTER_LIMIT`・`ROSTER_STANDARD`）を読む。トレードの人数の確かめ（`shared/.../Tryout.kt` の `rosterShortfall`・`dealProblems`）・トライアウトの空き枠（`rosterRoom`・`rosterFill`）・契約更改の説明はこの数を使い、無い古いサーバーのときだけアプリの表の数（`Tables.kt`）を使う（`rosterLimitOf`・`rosterStandardOf`）。アプリの表の数は作ったときのままなので、枠を変えたら古いアプリでもサーバーの数で確かめられるようにするため（以前のアプリは26人のままで、28人にしたサーバーとずれた）。
 - 編成の保存（`command` の `lineup`）は、ビューの `lineup` を**丸ごと**送り返し、`baseLineup` に編集前の塊を添える。アプリが知らない項目もそのまま返すので、編成に項目を足すのは構わない。
 - 手続きの任せ方は、ビューの `phase.delegated`（自分がその手続きを指導者に任せているか）と `members` の `ready`・`cpu`・`delegated` を読む。任せた手続きは決定の帯を出さず、`defaults` の案（指導者の案）を読むだけで見せる。待たれている最後の1人が手続きの分野を「任せる」にして保存すると、サーバーはその場で手続きを決めるので、アプリは送る前に確かめる（`shared/.../Staff.kt` の `delegationSettles`。`server/leagueEngine.mjs` の `waitsFor` と同じ見方）。
 

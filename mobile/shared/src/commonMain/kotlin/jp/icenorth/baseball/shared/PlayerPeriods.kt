@@ -38,8 +38,6 @@ fun careerRoster(roster: List<JsonObject>): List<JsonObject> = roster.mapNotNull
     }
 }
 
-private fun idKey(player: JsonObject): String? = player.at("id").num()?.toLong()?.toString() ?: player.at("id").str()
-
 /**
  * 選手の詳細で action=player（場面別まで入った期間）を読みに行くか。
  * ⚠ サーバーの projectPlayerInfo は**自球団の選手しか返さない**（他球団・トレード相手・トライアウト候補は
@@ -50,8 +48,8 @@ private fun idKey(player: JsonObject): String? = player.at("id").num()?.toLong()
  */
 fun detailReadable(player: JsonObject, ownRoster: List<JsonObject> = emptyList()): Boolean {
     if (player.at("detailAvailable").bool() == true) return true
-    val id = idKey(player) ?: return false
-    return ownRoster.any { idKey(it) == id && it.at("detailAvailable").bool() == true }
+    val id = player.idKey() ?: return false
+    return ownRoster.any { it.idKey() == id && it.at("detailAvailable").bool() == true }
 }
 
 /**

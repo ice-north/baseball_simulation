@@ -57,9 +57,12 @@ const roundOf = (margin) => (margin >= 25 ? 1 : margin >= 15 ? 2 : margin >= 8 ?
 /**
  * 候補の点（高い順）。`teams` は対人リーグの球団名 → 球団。
  * 初期メンバーを待っている球団（`skip`）は外す（名簿はキャンプで入れ替わる）。
+ * ⚠ タイトルの規定は本物のタイトル（`processSeasonEnd` → `season.frozenAwards`）と同じ
+ *    規定打席・規定投球回（`totalGames` から決める）。以前は固定の100打数・10回で、
+ *    10回で防御率0.00の中継ぎが「最優秀防御率」として指名の理由に出ていた
  */
-export function proDraftCandidates(teams, skip = new Set()) {
-  const awards = computeSeasonAwardBonuses(teams);
+export function proDraftCandidates(teams, skip = new Set(), { totalGames } = {}) {
+  const awards = computeSeasonAwardBonuses(teams, { totalGames });
   const list = [];
   for (const [teamName, team] of Object.entries(teams)) {
     if (skip.has(teamName)) continue;
@@ -85,7 +88,10 @@ export const proDraftChance = (score) =>
  */
 export function chooseProDraft(league, teams, skip = new Set()) {
   const picks = [];
-  for (const c of proDraftCandidates(teams, skip)) {
+  // `processSeasonEnd` と同じ試合数の取り方
+  const totalGames =
+    league.season?.settings?.gamesPerSeason || league.season?.schedule?.length || 0;
+  for (const c of proDraftCandidates(teams, skip, { totalGames })) {
     if (picks.length >= PRO_DRAFT_MAX) break;
     const p = proDraftChance(c.score);
     if (p <= 0) break;

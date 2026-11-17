@@ -583,14 +583,15 @@ export { tradeValueOf };
 /**
  * CPU球団 `to` の返事（`cpuTradeDecision`）。提案のときと、CPUの逆提案を受けるときに使う。
  */
-function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds) {
+function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds, judge = tradeJudgeForLeague(league)) {
   const theirs = TEAMS_DATA[to];
   // ⚠ CPU球団の監督の見る目（育成なら若手を高く、勝負なら主力の年齢を高く）
   const factor = tradeFactorFor(league, to);
   // ⚠ 値段は**画面に出すものと同じ関数**（`tradeJudge`。素質・いまの力・成績・
   //    その球団の事情）。ここだけ変えると、見込みメーターが「受けるはず」と
   //    出したのに断られる
-  const judge = tradeJudgeForLeague(league);
+  // ⚠ `judge` は名簿が変わっていない間だけ使い回せる（球団の事情を名簿ごとに覚える）。
+  //    1日のCPUトレード（`runCpuTrades`）は1回作って渡し、交換が成立したら作り直す
   return cpuTradeDecision({
     // 受け取る選手（こちらが出す選手）は、相手の事情を抜いた値段で見る
     valueOf: (player) => judge.valueOf(player) * factor(player),
@@ -620,9 +621,10 @@ function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds) {
  *    同じものを押し直せてしまう。理由をそのまま返して画面に出す。
  * ⚠ 抱えられる提案の数に上限を置く（`MAX_OPEN_TRADES`）。無制限だと
  *    相手の画面を埋められる。
- * ⚠ **提案に時間の期限は無い**。消えるのは返事（受ける・断る）・提案した側の取り下げ（`reject`）と、
+ * ⚠ **人が出す提案に時間の期限は無い**。消えるのは返事（受ける・断る）・提案した側の取り下げ（`reject`）と、
  *    成り立たなくなったとき（選手が移籍・退団した、オーナーが替わった）・年度更新（`pruneTrades`）。
- *    画面の注記に「期限」と書かないこと（再監査 A4）。年度更新で消えるのは、能力も年齢も
+ *    人の提案の画面の注記に「期限」と書かないこと（再監査 A4）。
+ *    ⚠ 期限があるのは**CPUから人の球団への提案だけ**（`CPU_OFFER_DAYS` 日。`runCpuTrades` が取り下げる）。年度更新で消えるのは、能力も年齢も
  *    変わった後に古い条件で成立させないため（いしだ承認の改善案 A1）。
  * ⚠ ひとこと（`note`）は人の球団宛てのときだけ残す。CPU球団はその場で答えるので読む人が居ない。
  */
@@ -784,30 +786,31 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
   //    逆提案を取っておいて別のトレードや成長で名簿を変えてから受けると、戦力の開きの線
   //    （`STRENGTH_GAP_LIMIT`）や値段を回り込めた（監査 2026-11-14）。
   //    応じなくなったら成立させない（提案は残すので、断って出し直してもらう）
-  if (trade.to === null) {
-    assertNoPendingPack(league, [trade.fromTeam, trade.toTeam]);
-    assertTradeAllowed(fromTeam, toTeam, trade.offer, trade.want);
-    const again = cpuDecisionFor(league, fromTeam, trade.toTeam, trade.offer, trade.want);
-    requireOnline(
-      again.action === 'accept',
-      `${trade.toTeam} は、名簿や選手の力が変わったので、この逆提案ではもう応じません。断ってから出し直してください`,
-      409,
-      'trade',
-    );
-  }
-  // ⚠ CPUからの提案を受けるときも、いまの名簿でもう一度CPUに判断させる（上と同じ理由）。
+  // ⚠ CPUからの提案を受けるときも、いまの名簿でもう一度CPUに判断させる（同じ理由）。
   //    人の球団（`toTeam`）が出す・もらう側として見る
-  if (trade.from === null) {
+  // `human` は人の球団、`cpu` はCPU球団の名前、`give`・`get` は人の球団が出す・もらう選手
+  const rejudge = (human, cpu, give, get, message) => {
     assertNoPendingPack(league, [trade.fromTeam, trade.toTeam]);
     assertTradeAllowed(fromTeam, toTeam, trade.offer, trade.want);
-    const again = cpuDecisionFor(league, toTeam, trade.fromTeam, trade.want, trade.offer);
-    requireOnline(
-      again.action === 'accept',
-      `${trade.fromTeam} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
-      409,
-      'trade',
+    const again = cpuDecisionFor(league, human, cpu, give, get);
+    requireOnline(again.action === 'accept', message, 409, 'trade');
+  };
+  if (trade.to === null)
+    rejudge(
+      fromTeam,
+      trade.toTeam,
+      trade.offer,
+      trade.want,
+      `${trade.toTeam} は、名簿や選手の力が変わったので、この逆提案ではもう応じません。断ってから出し直してください`,
     );
-  }
+  if (trade.from === null)
+    rejudge(
+      toTeam,
+      trade.fromTeam,
+      trade.want,
+      trade.offer,
+      `${trade.fromTeam} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
+    );
   drop();
   applyTrade(league, trade, now);
   tell('tradeAccepted', `${myLabel}とのトレードが成立しました`);
@@ -850,8 +853,18 @@ function runCpuTrades(league, now) {
   );
   const humans = new Map((league.members || []).map((m) => [m.teamName, m.userId]));
   const cpus = names.filter((n) => !humans.has(n));
-  const teams = Object.fromEntries(names.map((n) => [n, TEAMS_DATA[n].players]));
-  const judge = tradeJudgeForLeague(league);
+  // ⚠ 名簿の写しと値段の道具は**くじが当たってから**作り、交換が成立したら作り直す。
+  //    以前は毎日（トレードの無い日も）作り、`cpuDecisionFor` の呼ぶたびにも作り直していた。
+  //    また CPU同士の交換のあとも古い名簿（`applyTrade` は名簿の配列を差し替える）のまま
+  //    人の球団への提案を組んでいたので、出て行った選手を出す提案を作れた
+  let teams = null;
+  let judge = null;
+  const fresh = () => {
+    if (!teams) {
+      teams = Object.fromEntries(names.map((n) => [n, TEAMS_DATA[n].players]));
+      judge = tradeJudgeForLeague(league);
+    }
+  };
   const allowed = (fromName, toName, give, get) => {
     try {
       assertTradeAllowed(TEAMS_DATA[fromName], TEAMS_DATA[toName], give, get);
@@ -863,6 +876,7 @@ function runCpuTrades(league, now) {
   // --- CPU同士
   if (cpus.length >= 2 && dayRoll(league, 'cpu-trade') < 1 / CPU_TRADE_EVERY) {
     const from = [...cpus].sort((a, b) => dayRoll(league, `cpu-from:${a}`) - dayRoll(league, `cpu-from:${b}`))[0];
+    fresh();
     const plan = planCpuTrade({
       from,
       teams,
@@ -871,7 +885,7 @@ function runCpuTrades(league, now) {
       // 相手のCPUが、人の提案と同じ判断で受けるか
       accept: (partner, give, get) =>
         allowed(from, partner, give, get) &&
-        cpuDecisionFor(league, TEAMS_DATA[from], partner, give, get).action === 'accept',
+        cpuDecisionFor(league, TEAMS_DATA[from], partner, give, get, judge).action === 'accept',
     });
     if (plan) {
       const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
@@ -880,6 +894,9 @@ function runCpuTrades(league, now) {
         { id, from: null, fromTeam: from, to: null, toTeam: plan.partner, offer: plan.give, want: plan.get, turn: 'to', countered: false },
         now,
       );
+      // 名簿が変わったので、次に使うときに作り直す
+      teams = null;
+      judge = null;
     }
   }
   // --- 人の球団への提案
@@ -890,6 +907,7 @@ function runCpuTrades(league, now) {
     const from = [...cpus].sort(
       (a, b) => dayRoll(league, `cpu-offer-from:${teamName}:${a}`) - dayRoll(league, `cpu-offer-from:${teamName}:${b}`),
     )[0];
+    fresh();
     const plan = planCpuTrade({
       from,
       teams,
@@ -898,7 +916,7 @@ function runCpuTrades(league, now) {
       // 人がこの内容で出したら、CPUが受けるか（受けたときも同じ判断を通す。`respondTrade`）
       accept: (partner, give, get) =>
         allowed(from, partner, give, get) &&
-        cpuDecisionFor(league, TEAMS_DATA[partner], from, get, give).action === 'accept',
+        cpuDecisionFor(league, TEAMS_DATA[partner], from, get, give, judge).action === 'accept',
     });
     if (!plan) continue;
     const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
@@ -1764,11 +1782,12 @@ function resolveTryout(league, plans, now) {
   ).flat();
   const picksLeftOf = Object.fromEntries(names.map((name) => [name, 0]));
   for (const pick of order) picksLeftOf[pick.team] += 1;
-  // ⚠ **獲得する人数**（`signTotal`）。参加者が決める。CPU球団と、決めていない提出は
-  //    空き枠いっぱい（前と同じ）。先方指摘「指名選手の人数を決められない」
+  // ⚠ **獲得する人数**（`signTotal`）。参加者が決める（空き枠＝上限28人まで）。CPU球団と、決めていない提出は
+  //    自動で埋める人数まで（`autoRosterTarget`。人の球団は標準26人、CPUは26〜27人）。
+  //    先方指摘「指名選手の人数を決められない」
   // ⚠ **初期メンバーを待っている球団は0人**（提出の中身によらない）。名簿は次のキャンプで
   //    セットに丸ごと入れ替わるので、取った選手は世界から消える（`defaultPhasePlan` の注）。
-  //    `total` の無い提出を「枠いっぱい」と読むようにしたので、ここで止めないと26人まで取っていた
+  //    `total` の無い提出は自動で埋める人数まで取るので、ここで止めないと26人まで取っていた
   const totalOf = Object.fromEntries(
     names.map((name) => [
       name,
@@ -1798,10 +1817,9 @@ function resolveTryout(league, plans, now) {
     const { needPitcher, needCatcher, needFielders } = shortfall(roster);
     const slotsLeft = ROSTER_LIMIT - roster.length;
     const mustFill = (needPitcher ? 1 : 0) + needFielders;
-    // ⚠ **交渉した人数に達しても、枠が空いていれば取り続ける**（CPUと同じ
-    //    判断で自動的に埋める）。交渉は10人までなので、ここで打ち切ると
-    //    人の球団だけ名簿が21人などで終わり、控えの数でCPUに劣る
-    //    （実測で投10・捕2・内5・外4 の21人）。
+    // ⚠ 交渉した人数（`plan.count`）に達したら交渉リストからは取らない（`planFull`）。
+    //    その先は獲得する人数（`totalOf`）まで、**`total` の無い案だけ**CPUと同じ判断で埋める
+    //    （`fillsAutomatically`。下の注）。`total` を決めた提出は交渉した選手しか取らない。
     //    ⚠ 0人も選べる。打ち切っていた頃は、投手・捕手・野手が足りない球団が
     //       1つあるだけで下の検査に落ち、**全員のトライアウトが解決できずに
     //       止まった**（締め切りの自動解決も同じ所で失敗する）。
@@ -1832,7 +1850,7 @@ function resolveTryout(league, plans, now) {
         : null;
     };
     let forced = null;
-    // ⚠ 残りの**指名回数**でも判定する。枠（26人）だけで見ていると、希望順位の
+    // ⚠ 残りの**指名回数**でも判定する。枠（上限28人）だけで見ていると、希望順位の
     //    候補が全員他球団に取られて指名を見送り続けた球団は、枠が空いたまま
     //    巡目が尽き、最低限の構成に届かずにトライアウト全体が解決できなかった。
     if (reached || slotsLeft <= mustFill || picksLeft <= mustFill)

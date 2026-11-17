@@ -79,7 +79,6 @@ import jp.icenorth.baseball.shared.tradeSlot
 import jp.icenorth.baseball.shared.valueTiers
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OfferOutcome
-import jp.icenorth.baseball.shared.ROSTER_LIMIT
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.dealProblems
@@ -90,10 +89,12 @@ import jp.icenorth.baseball.shared.pid
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.rosterCounts
 import jp.icenorth.baseball.shared.rosterGroup
+import jp.icenorth.baseball.shared.rosterLimitOf
 import jp.icenorth.baseball.shared.rostersAfterTrade
 import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
+import jp.icenorth.baseball.shared.counterOutcome
 import jp.icenorth.baseball.shared.offerOutcome
 import jp.icenorth.baseball.shared.tradeIds
 import jp.icenorth.baseball.shared.unseenTrades
@@ -333,7 +334,7 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
     val stale = (giveEntries + getEntries).any { it.at("gone").bool() == true }
     val give = giveEntries.filter { it.at("gone").bool() != true }.map { it.pid }.toSet()
     val get = getEntries.filter { it.at("gone").bool() != true }.map { it.pid }.toSet()
-    val problems = dealProblems(myRoster, theirs, give, get)
+    val problems = dealProblems(myRoster, theirs, give, get, rosterLimitOf(raw))
     val tradeId = trade.at("id").str().orEmpty()
     // 確かめている返事（accept / reject）。押してすぐには送らない
     // 逆提案などで内容が変わったら、古い内容に対して開いた確認を閉じる。
@@ -367,7 +368,7 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
         DealSide("出す（自球団）", giveEntries, myRoster, model)
         DealSide("もらう（${view.teamLabel(partner)}）", getEntries, theirs.orEmpty(), model)
         theirError?.let { LoadFailed(it, retryTheirs, title = "相手の名簿を読めませんでした") }
-        if (theirs != null) AfterCounts(view, partner, myRoster, theirs, give, get)
+        if (theirs != null) AfterCounts(view, partner, myRoster, theirs, give, get, rosterLimitOf(raw))
         if (stale) Text("移籍済みの選手が含まれているため、成立できません。", color = MaterialTheme.colorScheme.error)
         problems.forEach { Text(it, color = MaterialTheme.colorScheme.error) }
         if (myTurn) {
@@ -422,16 +423,16 @@ private fun DealSide(title: String, entries: List<JsonObject>, roster: List<Json
     }
 }
 
-private fun countsText(players: List<JsonObject>): String {
+private fun countsText(players: List<JsonObject>, limit: Int): String {
     val c = rosterCounts(players)
-    return "${players.size}/${ROSTER_LIMIT}人 投${c["pitcher"]} 捕${c["catcher"]} 内${c["infielder"]} 外${c["outfielder"]}"
+    return "${players.size}/${limit}人 投${c["pitcher"]} 捕${c["catcher"]} 内${c["infielder"]} 外${c["outfielder"]}"
 }
 
 @Composable
-private fun AfterCounts(view: LeagueView, partner: String, mine: List<JsonObject>, theirs: List<JsonObject>, give: Set<Long>, get: Set<Long>) {
+private fun AfterCounts(view: LeagueView, partner: String, mine: List<JsonObject>, theirs: List<JsonObject>, give: Set<Long>, get: Set<Long>, limit: Int) {
     val after = rostersAfterTrade(mine, theirs, give, get)
-    Muted("交換後  自球団 ${countsText(after.mine)}")
-    Muted("交換後  ${view.teamLabel(partner)} ${countsText(after.theirs)}")
+    Muted("交換後  自球団 ${countsText(after.mine, limit)}")
+    Muted("交換後  ${view.teamLabel(partner)} ${countsText(after.theirs, limit)}")
 }
 
 private val GROUPS = listOf("pitcher" to "投手", "catcher" to "捕手", "infielder" to "内野手", "outfielder" to "外野手")
@@ -520,7 +521,7 @@ private fun PartnerStep(model: AppViewModel, view: LeagueView, raw: JsonObject, 
         partners.forEach { name ->
             try {
                 val roster = model.read("team", mapOf("team" to name)).at("roster").list().mapNotNull { it.obj() }
-                counts = counts + (name to countsText(roster))
+                counts = counts + (name to countsText(roster, rosterLimitOf(raw)))
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
             }
@@ -581,7 +582,7 @@ private fun PlayersStep(
     // 相手の名簿が届いてから決め直す（選手の詳細から来たときは、もらう選手の括りから始める）
     var group by rememberSaveable(draft.partner, theirs != null) { mutableStateOf(firstGroup) }
     val usage = remember(view.lineup) { TeamUsage.from(view.lineup) }
-    val problems = dealProblems(myRoster, theirs, draft.give, draft.get)
+    val problems = dealProblems(myRoster, theirs, draft.give, draft.get, rosterLimitOf(model.raw))
     val theirPlayers = remember(theirs) { theirs.orEmpty().toPlayers() }
     val myPlayers = remember(view.roster, league) { league.withValues(view.roster) }
     val tier = league.tier
@@ -695,7 +696,7 @@ private fun ConfirmStep(
     set: (TradeDraft) -> Unit,
 ) {
     val humans = model.raw?.at("members").list().mapNotNull { it.at("teamName").str() }.toSet()
-    val problems = dealProblems(myRoster, theirs, draft.give, draft.get)
+    val problems = dealProblems(myRoster, theirs, draft.give, draft.get, rosterLimitOf(model.raw))
     val counter = draft.counterOf
     val theirPlayers = remember(theirs) { theirs.orEmpty().toPlayers() }
     val myPlayers = remember(view.roster, league) { league.withValues(view.roster) }
@@ -708,8 +709,14 @@ private fun ConfirmStep(
                 "tradeRespond",
                 Commands.tradeRespond(counter, "counter", draft.counterMine, draft.give, draft.get, note = draft.note),
                 label = "逆提案を送信中…",
-                done = "逆提案を送りました",
-            ) { model.tradeDraft = null }
+            ) {
+                model.tradeDraft = null
+                // ⚠ CPU球団からの提案への逆提案は、CPUがその場で受けて成立する（応じなければ失敗で返る）
+                model.message = when (counterOutcome(counter, model.raw)) {
+                    OfferOutcome.Accepted -> "${view.teamLabel(partner)}が逆提案を受けて、トレードが成立しました"
+                    else -> "逆提案を送りました。相手の返事を待っています"
+                }
+            }
         } else {
             val before = tradeIds(model.raw)
             model.command("tradeOffer", Commands.tradeOffer(partner, draft.give, draft.get, note = draft.note.takeIf { partner in humans }), label = "提案を送信中…") {
@@ -742,7 +749,7 @@ private fun ConfirmStep(
             }
             if (theirs != null) Section("交換後") {
                 holesAfter(giving, usage).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                AfterCounts(view, partner, myRoster, theirs, draft.give, draft.get)
+                AfterCounts(view, partner, myRoster, theirs, draft.give, draft.get, rosterLimitOf(model.raw))
             }
             problems.forEach { Text(it, color = MaterialTheme.colorScheme.error) }
             // ⚠ ひとことは人の球団だけ（CPU球団は読まない）。逆提案はいつも人どうし

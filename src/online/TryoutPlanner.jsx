@@ -121,7 +121,8 @@ export default function TryoutPlanner({
   candidates,
   roster,
   maxCount,
-  // 決めていないときの人数（標準の26人までの空き。上限28人の枠のうち）。無ければ空き枠いっぱい
+  // 決めていないときの人数（標準の26人までの空き。上限28人の枠のうち）。手続きの画面
+  // （`PhasePanel`）は必ず渡す。渡さないときだけ空き枠（`maxCount`）を既定にする
   fillCount = maxCount,
   busy,
   onChange,
@@ -228,7 +229,8 @@ export default function TryoutPlanner({
     <div className="online-tryout">
       {/* ⚠ **獲得する人数を決められるようにする**（先方指摘「指名選手の人数を決められない」）。
           交渉した人数とは別に持つ。交渉が多ければ上位から人数ぶん取り（取られたら下が繰り上がる）、
-          少なければ残りを自動で埋める。既定は空き枠いっぱい（以前と同じ） */}
+          少なければ、人数を決めていない案（標準案）だけ残りを自動で埋める（`fillsAutomatically`）。
+          既定は標準の26人まで（`fillCount`） */}
       <div className="online-tryout-head">
         <div className="online-tryout-total" role="group" aria-label="獲得する人数">
           <span>獲得する人数</span>

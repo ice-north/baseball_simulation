@@ -51,7 +51,7 @@ fun campGainRows(gains: JsonObject?, roster: List<JsonObject>, events: JsonObjec
     //    数で比べると Web 版と並びが変わる
 }
 
-private fun gainId(player: JsonObject): String = player.at("id").num()?.toLong()?.toString() ?: player.at("id").str().orEmpty()
+private fun gainId(player: JsonObject): String = player.idKey().orEmpty()
 
 /** 球団全体で、項目ごとの伸びの合計（多い順） */
 fun campGainTotals(gains: JsonObject?): List<CampGainItem> {
@@ -84,7 +84,7 @@ fun relevantGains(player: JsonObject?, changes: JsonObject?): JsonObject {
 
 /** 年度更新の伸び（`view.lastOffseason.gains`）を、選手ごとに表示する項目だけにしたもの */
 fun offseasonGains(result: JsonObject?, roster: List<JsonObject>): JsonObject {
-    val byId = roster.associateBy { it.at("id").num()?.toLong()?.toString() ?: it.at("id").str().orEmpty() }
+    val byId = roster.associateBy(::gainId)
     return JsonObject(result?.at("gains").obj().orEmpty().mapValues { (id, changes) -> relevantGains(byId[id], changes.obj()) })
 }
 

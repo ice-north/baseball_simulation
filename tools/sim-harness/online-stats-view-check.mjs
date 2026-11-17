@@ -237,6 +237,18 @@ assert.equal(
   const periods = [{ id: 'current', ...line(0.31) }, { id: 'online:1', ...line(0.22) }];
   const table = playerYearTable(player, years, periods, 2);
   assert.deepEqual(table.rows.map((r) => r.stats['batting.avg']), [0.31, 0.22], '年ごとの打率が年で変わらない');
+  // 能力の差は0.1刻みに丸め、丸めて0の差は出さない（アプリの PlayerYearsTest と同じ値）
+  const grown = playerYearTable(
+    player,
+    [
+      { year: 2, age: 19, abilities: { meet: 50.3, power: 40.5, eye: 30.02, speed: 20 } },
+      { year: 1, age: 18, abilities: { meet: 50, power: 40.9, eye: 30, speed: 22 } },
+    ],
+    periods,
+    2,
+  );
+  const diffs = Object.fromEntries(['meet', 'power', 'eye', 'speed'].map((k) => [k, grown.rows[0].abilities[k].diff]));
+  assert.deepEqual(diffs, { meet: 0.3, power: -0.4, eye: null, speed: -2 }, '年ごとの推移の能力の差を0.1刻みに');
 }
 console.log(
   'online-stats-view-check PASS（既存項目の閲覧・OPS/WHIP等・欠損/0/∞・全名簿ソート・安定順序・状態と投球回・捕手の成績とアプリの同文）',

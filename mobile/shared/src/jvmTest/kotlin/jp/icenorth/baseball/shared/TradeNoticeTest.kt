@@ -40,4 +40,14 @@ class TradeNoticeTest {
         // 参加者の球団へ: 新しい記録が相手の番で残る
         assertEquals(OfferOutcome.Offered, offerOutcome(before, view(T("trade-1", myTurn = true), T("trade-3", myTurn = false))))
     }
+
+    @Test
+    fun readsWhatHappenedToACounter() {
+        // CPU球団からの提案への逆提案: CPUがその場で受けると提案は一覧から消える
+        assertEquals(OfferOutcome.Accepted, counterOutcome("trade-1", view(T("trade-2", myTurn = true))))
+        // 参加者への逆提案: 提案が相手の番で残る
+        assertEquals(OfferOutcome.Offered, counterOutcome("trade-1", view(T("trade-1", myTurn = false, countered = true))))
+        // 読み直せなかったときは成立と決めつけない
+        assertEquals(OfferOutcome.Offered, counterOutcome("trade-1", null))
+    }
 }

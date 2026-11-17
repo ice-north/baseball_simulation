@@ -50,7 +50,29 @@ import {
   PLAIN_SKILL_LINE,
   poleStats,
 } from '../../src/season/trainingPolicy.js';
-import { abilitySnapshot, abilityGains, campGainLabel } from '../../src/online/campGains.js';
+import {
+  abilitySnapshot,
+  abilityGains,
+  campGainLabel,
+  campGainTable,
+  campTopGainers,
+} from '../../src/online/campGains.js';
+
+// ホームのまとめの「伸びの大きかった選手」は、伸びた選手（合計が正）からだけ取る。
+// ⚠ 表の行には出来事だけの選手（数字は動かない）や合計が負の選手も載るので、以前は
+//    伸びた選手が少ない年に「○○ +0」「○○ -1」が上位に並んでいた
+{
+  const roster = [1, 2, 3, 4].map((id) => ({ id, name: `選手${id}` }));
+  const table = campGainTable(
+    { 1: { 'batting.meet': 2 }, 2: { 'batting.power': -1 }, 3: { 'batting.meet': 1, 'batting.power': -3 } },
+    roster,
+    { 4: ['フォーム改造'] },
+  );
+  assert.equal(table.rows.length, 4, '検査の前提: 出来事だけ・負の選手も表に載る');
+  const { grown, top } = campTopGainers(table.rows, 3);
+  assert.deepEqual(grown.map((r) => r.player.id).sort(), [1, 3], '伸びた選手の数え方が違う');
+  assert.deepEqual(top.map((r) => r.player.id), [1], `伸びの大きかった選手に伸びていない選手が入る: ${top.map((r) => `${r.player.id}:${r.sum}`)}`);
+}
 
 // ノック・守備補強とスタッフ指導で伸びる能力も、成果から落とさない。
 {

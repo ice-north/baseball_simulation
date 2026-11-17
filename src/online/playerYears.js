@@ -8,6 +8,8 @@
 //    （`statsView.js` の列をそのまま使う）。
 // ⚠ 投手は投球の能力と投手成績、野手は打撃・守備の能力と打撃成績（二刀流は両方）。
 // ⚠ 前の年から伸びた能力は `diff` に差を入れる（画面が上がりを緑・下がりを赤で出す）。
+//    差は0.1刻みに丸め（能力は小数で動くので、そのままだと +0.29999999999999716 と出た）、
+//    丸めて0になる差は null（出さない）。アプリ（`mobile/shared/.../PlayerYears.kt`）も同じ。
 // ============================================================
 import { statGroup } from './statsView.js';
 
@@ -39,6 +41,13 @@ export const YEAR_PITCHING_STATS = [
   ['pitching', 'record', 'losses'],
   ['pitching', 'record', 'saves'],
 ];
+
+/** 能力の差を0.1刻みに丸める。丸めて0なら null（出さない） */
+export function yearDiff(value, before) {
+  if (value === null || before === null) return null;
+  const diff = Math.round((value - before) * 10) / 10;
+  return diff === 0 ? null : diff;
+}
 
 /** その年の期間（今季は current、過去は対人の記録を優先し、無ければ参考の成績） */
 export function periodForYear(periods, year, current) {
@@ -88,7 +97,7 @@ export function playerYearTable(player, years, periods, currentYear) {
         abilities.map(([key]) => {
           const value = Number.isFinite(y.abilities?.[key]) ? y.abilities[key] : null;
           const before = older && Number.isFinite(older.abilities?.[key]) ? older.abilities[key] : null;
-          return [key, { value, diff: value !== null && before !== null ? value - before : null }];
+          return [key, { value, diff: yearDiff(value, before) }];
         }),
       ),
       stats: Object.fromEntries(stats.map((s) => [s.key, shaped ? s.column.get(shaped) : null])),
