@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import SeasonFlow from './SeasonFlow.jsx';
-import OffseasonGrowth from './OffseasonGrowth.jsx';
+import YearSummary from './YearSummary.jsx';
 import MobileTactics from './MobileTactics.jsx';
 import TapLineup, { useTapLineup } from './TapLineup.jsx';
 import {
@@ -1184,10 +1184,9 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
         {/* ⚠ **キャンプは携帯でも回せるようにする**。表は23列あって携帯には
             入らないが、1クールずつ実行するのは携帯からでもできる必要がある
             （携帯だけの人は、出せないと4クールとも自動になる） */}
-        {phase.kind === 'camp' && (
-          <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
-        )}
-        {phase.kind === 'camp' && <TryoutResult view={view} />}
+        {/* ⚠ 年が替わった直後は「その年のまとめ」だけ（いしだ 2026-11-18
+            「キャンプの結果やオフの成長は要りません」） */}
+        {phase.kind === 'camp' && <YearSummary view={view} />}
         {phase.kind === 'camp' && (
           <CampPlanner
             view={view}

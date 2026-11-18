@@ -683,9 +683,12 @@ export function CompletedCamp({ view, onHome = false }) {
   // ⚠ ホームでは**まとめの1行だけ**出し、表は押して開く（ホームは1画面に収める決まり）
   const [open, setOpen] = useState(!onHome);
   if (!camp) return null;
+  // ⚠ **その年のキャンプのものだけ**出す。年が替わったあと（年度更新〜開幕）は
+  //    「その年のまとめ」だけにする（いしだ 2026-11-18「キャンプの結果…は要りません」）
+  if (view.year != null && camp.year !== view.year) return null;
   // ⚠ ホームに出すのは**キャンプが終わってから開幕まで**（「キャンプ直後」）。シーズンに入ったら
   //    手続きの下（「現在の手続き」）でだけ見る。ずっと出すとホームが1画面に収まらない
-  if (onHome && (closed || camp.year !== view.year || view.stage?.key === 'season')) return null;
+  if (onHome && (closed || view.stage?.key === 'season')) return null;
   const close = () => {
     try {
       localStorage.setItem(CAMP_SEEN_KEY, campSeenStamp(view));

@@ -26,7 +26,7 @@ import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
-import OffseasonGrowth from './OffseasonGrowth.jsx';
+import YearSummary from './YearSummary.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
@@ -588,13 +588,12 @@ export default function DesktopView(props) {
               <section className="online-card online-camp-card">
                 <CampPlanner key={view.phase.id} {...props} />
               </section>
-              {/* ⚠ **年度更新の伸びはキャンプの下に出す**。キャンプの直前に済んでいて、
-                  方針を決める前に見るもの。以前は「現在の手続き」に置いていたが、
-                  キャンプ中はそこに案内しか無く、開く人がいなかった。
+              {/* ⚠ **年が替わったら「その年のまとめ」だけ出す**（いしだ 2026-11-18
+                  「キャンプの結果やオフの成長は要りません。その年の順位、入退団の選手、
+                  主なトピックに止めて下さい」）。以前はここに年度更新の伸び
+                  （`OffseasonGrowth`）を出していた。能力の増減は選手の詳細で見られる。
                   キャンプの1画面（実行ボタンまで）は崩さないよう、下に置く */}
-              <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
-              {/* トライアウトで入った選手（先方指摘: 誰が入ったか分からない） */}
-              <TryoutResult view={view} />
+              <YearSummary view={view} />
             </>
           ) : (
             <>
@@ -709,9 +708,12 @@ export default function DesktopView(props) {
                   : '現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。'}
               </p>
             </section>
+            {/* ⚠ キャンプの結果は**その年のキャンプのものだけ**（年が替わったら出さない）。
+                年が替わった直後は「その年のまとめ」だけにする（いしだ 2026-11-18） */}
             <CompletedCamp key={view.lastCamp?.year} view={view} />
-            <OffseasonGrowth key={view.lastOffseason?.year} view={view} />
+            {/* トライアウト直後（年度更新まで）は入団した選手。年が替わったら下のまとめへ */}
             <TryoutResult view={view} />
+            <YearSummary view={view} />
           </Page>
         ))}
       {current === 'transfer' && <TradeScreen {...props} tradeSeed={tradeSeed} onSeedUsed={() => setTradeSeed(null)} />}
