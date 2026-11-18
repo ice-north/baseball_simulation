@@ -516,6 +516,18 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     }
   }
 
+  // 投手の最低人数を先に確保する。
+  // ⚠ 残りの枠を能力だけで選ぶと野手ばかりになることがあり、D ランクのクラブ（13〜17人）は
+  //    約3%が投手1人で始まっていた。その1人がドラフトや移籍で抜けると投手0人になり、
+  //    大学モードの2年目に試合が「投手が取得できません」で壊れた（打席数の上限まで回り続ける）
+  const minPitchers = Math.min(maxPitchers, rosterSize - roster.length, Math.max(4, Math.round(rosterSize * 0.3)));
+  while (roster.filter(p => p.position === 'pitcher').length < minPitchers) {
+    const pick = selectPlayerForAI(remaining.filter(p => p.position === 'pitcher'), roster);
+    if (!pick) break;
+    remaining.splice(remaining.findIndex(c => c.id === pick.id), 1);
+    roster.push(pick);
+  }
+
   for (let i = roster.length; i < rosterSize && remaining.length > 0; i++) {
     const pitcherCount = roster.filter(p => p.position === 'pitcher').length;
     let pool = remaining;
