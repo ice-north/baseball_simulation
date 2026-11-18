@@ -325,7 +325,7 @@ export class LeagueService {
       throw error;
     }
     // ⚠ アカウントはもうできている。定期進行と重なって断られても、使用済みの印は付け直す
-    //    （付け損ねると、押さえが切れたあと同じリンクで2つ目を作れてしまう）
+    //    （付け損ねても、押さえは時間で外れないので2つ目は作れない。そのリンクは使えなくなる）
     for (let attempt = 0; ; attempt += 1) {
       try {
         await this.store.transaction((bundle) => {
