@@ -2,3 +2,5 @@
 # 「中身を直して取り込んだ」「もう要らない」と確かめたものだけを書く。
 
 claude/stats-name-header-left   # 同じ直しが別の形で main に入っている（online.css の「選手名」見出しの左寄せ）
+claude/online-ui-overhaul       # 作り直しで置き換え済み。いしだ「古い直しはいりません」(2026-11-18)
+claude/roster-stats-panel       # いしだ「古い直しはいりません」(2026-11-18)
