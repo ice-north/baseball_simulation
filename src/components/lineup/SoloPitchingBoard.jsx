@@ -18,6 +18,7 @@ import {
   STARTER_SKIP_FATIGUE,
 } from '../../online/pitchingEdit.js';
 import { AbilityValue } from '../AbilityValue.jsx';
+import { pitchTypes, totalBreak } from '../../online/playerColumns.js';
 import { FORM_SHORT, FORM_NAME, getFatigueTone } from '../../utils/constants.js';
 import { CONDITION_ICONS } from '../../game/condition.js';
 import '../../online/online.css';
@@ -87,8 +88,8 @@ const STATS = [
   },
 ];
 // ⚠ 列を足したらここも直すこと（`colSpan` がずれると罫線が折れる）。
-//    順・役割・投手 / 投・フォーム・年齢・疲労 / 速・制・ス / 成績
-const COLUMN_COUNT = 3 + 4 + 3 + STATS.length;
+//    順・役割・投手 / 投・フォーム・年齢・疲労 / 球速・制球・スタ・変化 / 成績（オンラインPC版と同じ）
+const COLUMN_COUNT = 3 + 4 + 4 + STATS.length;
 
 function ConditionMark({ player }) {
   const level = Number.isInteger(player.condition) && player.condition >= 0 && player.condition <= 4 ? player.condition : null;
@@ -114,10 +115,11 @@ function HeaderRow() {
         疲労
       </th>
       <th className="is-sep" title="球速">
-        速
+        球速
       </th>
-      <th title="制球">制</th>
-      <th title="スタミナ">ス</th>
+      <th title="制球">制球</th>
+      <th title="スタミナ">スタ</th>
+      <th title="変化球（直球を除く持ち球）の変化量の合計">変化</th>
       {STATS.map((s, i) => (
         <th key={s.id} className={i === 0 ? 'is-sep is-stat' : 'is-stat'} title={`今季の${s.title}`}>
           {s.label}
@@ -175,6 +177,7 @@ function PitcherCells({ player, starter, onOpen }) {
       <td>
         <AbilityValue value={player.pitching?.stamina} isSta placeholder="—" />
       </td>
+      <td title={pitchTypes(player) || '変化球なし'}>{totalBreak(player) ?? '—'}</td>
       {STATS.map((s, i) => (
         <td key={s.id} className={i === 0 ? 'is-sep is-stat' : 'is-stat'}>
           {stats ? s.show(stats) : '—'}
