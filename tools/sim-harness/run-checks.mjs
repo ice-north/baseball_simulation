@@ -41,6 +41,8 @@ const CHECKS = [
   { name: 'base-state-check', group: 'quick', slow: 1 },
   { name: 'bunt-check', group: 'quick', slow: 1 },
   { name: 'doc-check', group: 'quick', slow: 1 },
+  // 社会人・独立の最初の名簿に投手が4人以上いるか（投手0人で試合が壊れた）
+  { name: 'corporate-roster-check', group: 'quick', slow: 1 },
   { name: 'online-config-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-pyramid-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-membership-check', group: 'quick', online: true, slow: 1 },
