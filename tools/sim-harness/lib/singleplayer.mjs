@@ -141,6 +141,23 @@ export function driver(page) {
       await page.getByTestId(`dev-advance-${days}`).click();
       await devIdle();
     },
+    // 大学の1年目: 夏季合宿の画面まで早送りする。
+    // ⚠ 春季リーグで優勝すると6月に全日本大学野球選手権があり、早送りは自分の試合の確認で止まる
+    //    （優勝するかは毎回違う）。以前は止まったまま合宿の画面を待ち、時々「合宿の画面が出ない」で落ちた。
+    //    試合は「試合スキップ」で消化して、合宿の画面が出るまで続ける
+    async advanceToSummerCamp() {
+      const camp = btn(/練習を実行/).first();
+      for (let i = 0; i < 30; i++) {
+        await this.advance('phase');
+        const skip = btn('試合スキップ').first();
+        await camp.or(skip).waitFor({ timeout: 60000 }).catch(() => {});
+        if (await camp.isVisible()) return i;
+        if (!(await skip.isVisible())) break;
+        await click('試合スキップ');
+      }
+      const d = await this.date();
+      throw new Error(`次の区切りまで進めても夏季合宿の画面が出ない（${d ? `${d.year}年目 ${d.month}/${d.day}` : '日付なし'}で止まった）`);
+    },
     // セーブ＆ロード画面でスロット1に保存し、日程進行へ戻る
     async saveToSlot1() {
       await click('セーブ＆ロード');
