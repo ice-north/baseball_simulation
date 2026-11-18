@@ -93,7 +93,7 @@ function storeWeights(weights) {
 /**
  * どこから来た人か（高校・大学・元の球団）。
  * ⚠ トライアウトは**知らない選手を選ぶ**場なので、素性は能力と同じくらいの手がかり。
- *    実測で120人のうち119人に出どころが入っている
+ *    実測で120人のうち119人に出身が入っている
  */
 export function originOf(player) {
   const origin = player?.origin || {};
@@ -144,6 +144,7 @@ function Line({ player, score, fit }) {
             <AbilityGrade value={player.fielding?.defense} />
           </>
         )}
+        {originOf(player) && ` / ${originOf(player)}`}
       </small>
     </>
   );
@@ -164,11 +165,12 @@ const hasStats = (players, kind) => {
 
 /**
  * 受験者の表（PC）。⚠ **スタメン設定・トレードと同じ表**（`.online-lineup-table`）。
- * 列は `playerColumns.js`（投手と野手で違う）＋ 交渉・評価・出どころ。
+ * 列は `playerColumns.js`（投手と野手で違う）＋ 交渉・評価・出身。
  */
 function PoolTable({
   kind,
   players,
+  withStats,
   scores,
   fitOf,
   wanted,
@@ -178,7 +180,14 @@ function PoolTable({
   onDrop,
 }) {
   const k = PLAYER_KINDS[kind];
-  const stats = hasStats(players, kind) ? k.stats : [];
+  const stats = withStats ? k.stats : [];
+  // ⚠ 満員のときは押せなくし、理由を添える。押せたままだと知らせが上の欄（画面の外）に出て、
+  //    押した場所からは何も起きないように見えた
+  const full = limit === 0 || wanted.length >= limit;
+  const fullReason =
+    limit === 0
+      ? '名簿に空きがないので、交渉できません'
+      : `交渉できるのは${limit}人までです。誰かの交渉をやめてから選んでください`;
   return (
     <table className="online-lineup-table online-tryout-table" data-kind={kind}>
       <caption>{k.label}</caption>
@@ -213,8 +222,9 @@ function PoolTable({
               {k.statLabel[column.id] || column.label}
             </th>
           ))}
+          {/* ⚠ 「出どころ」は投手の能力（球の見えにくさ）の名前なので使わない */}
           <th className="is-sep online-tryout-origin" title="高校・大学・元の球団">
-            出どころ
+            出身
           </th>
         </tr>
       </thead>
@@ -242,7 +252,8 @@ function PoolTable({
                     type="button"
                     className="online-primary online-tryout-negotiate"
                     aria-label={`${p.name}と交渉する`}
-                    disabled={busy || limit === 0}
+                    disabled={busy || full}
+                    title={full ? fullReason : undefined}
                     onClick={() => onNegotiate(p.id)}
                   >
                     交渉
@@ -405,7 +416,13 @@ export default function TryoutPlanner({
   const shown = pool.slice(page * size, page * size + size);
   // PCは投手と野手で表を分ける。⚠ **出ている人だけ**（空の表は出さない）
   const sections = ['pitcher', 'fielder']
-    .map((kind) => ({ kind, players: shown.filter((p) => kindOf(p) === kind) }))
+    .map((kind) => ({
+      kind,
+      players: shown.filter((p) => kindOf(p) === kind),
+      // ⚠ 成績の列を出すかは**絞り込んだ全員**で決める（表示中の20人で決めると、
+      //    元プロが居るページだけ列が増え、ページを送るたびに表の幅が変わる）
+      withStats: hasStats(pool.filter((p) => kindOf(p) === kind), kind),
+    }))
     .filter((s) => s.players.length);
 
   const setRanked = (rankedIds) => {
@@ -610,7 +627,9 @@ export default function TryoutPlanner({
             {targets.outfielder}
           </strong>
           です。<strong>獲得するのは上で決めた人数まで</strong>で、
-          <strong>交渉した選手しか取りません</strong>（交渉した人が尽きたら、人数に届かなくてもそこで止めます。
+          {/* ⚠ 短い強調も割らない。字の幅がわずかに違う環境（CI）で「…取りませ／ん」と
+              1字だけ次の行に落ちた。13字なので 320px でも1行に収まる */}
+          <strong className="online-tryout-targets">交渉した選手しか取りません</strong>（交渉した人が尽きたら、人数に届かなくてもそこで止めます。
           投手・捕手・野手が最低限に届かないときだけ、足りない位置を補います）。
         </p>
         {/* 決めた人数と交渉した人数の関係を1行で（どちらが余るかで意味が変わる） */}
@@ -776,7 +795,7 @@ export default function TryoutPlanner({
                     type="button"
                     className="online-primary online-tryout-negotiate"
                     aria-label={`${p.name}と交渉する`}
-                    disabled={busy || limit === 0}
+                    disabled={busy || limit === 0 || wanted.length >= limit}
                     onClick={() => negotiate(p.id)}
                   >
                     交渉
@@ -792,6 +811,7 @@ export default function TryoutPlanner({
                 key={section.kind}
                 kind={section.kind}
                 players={section.players}
+                withStats={section.withStats}
                 scores={scores}
                 fitOf={fitOf}
                 wanted={wanted}

@@ -11,6 +11,10 @@
 //   world       … リーグ外の球団・高校生の母集団（pools）・世界（world）・自由契約（released）
 //   records     … 試合と選手の記録（league.records）。ビューを作るのに要るので軽い読みでも読む
 //   backup      … 管理者の退避（bundle.backup）。退避・復元のときだけ
+//   pastGames   … 終わった年（今季より前）の試合の記録（records.seasons[年].games）。
+//                  1年で約22MB（展開後）増え、軽い読みでも毎回読んでいた（先方回答 F1）。
+//                  records の中のその場所には印（`PAST_GAMES`）を置き、全体を読むときに戻す。
+//                  軽い読みでは印を番人に差し替える（触ったら全体を読み直す）
 //
 // 【軽い読み（light）】芯と records だけ読み、world と backup は「触ったら印を付けて
 //   止まる」番人（Proxy）に差し替える。命令やビュー作りが番人に触ったら、
@@ -22,7 +26,13 @@
 //    （キーの順も含む。球団の並びはシミュレーションの順に効く）。`online-parts-check`。
 // ============================================================
 
-export const SNAPSHOT_FORMAT = 2;
+// ⚠ 3: 終わった年の試合の記録を分けた形（pastGames）。2 の保存もそのまま読める。
+//    上げたのは、この形を知らない古いコードに戻したとき、包みを読まずに断らせるため
+//    （2 だと読めてしまい、印の文字列を試合の一覧として読む）
+export const SNAPSHOT_FORMAT = 3;
+const READABLE_FORMATS = [2, 3];
+/** 終わった年の試合の記録を別の部分へ出したあとに残す印 */
+export const PAST_GAMES = '@pastGames';
 const WORLD_KEYS = ['pools', 'world', 'released'];
 
 export class NeedsFullWorld extends Error {
@@ -34,7 +44,39 @@ export class NeedsFullWorld extends Error {
 
 /** 分けた形か（古い保存は bundle そのもの） */
 export const isSplitSnapshot = (snapshot) =>
-  snapshot?.snapshotFormat === SNAPSHOT_FORMAT;
+  READABLE_FORMATS.includes(snapshot?.snapshotFormat);
+
+/**
+ * 記録から、終わった年（`year` より前）の試合の記録を抜き出す。元の記録は変えない。
+ * ⚠ 抜いた場所に印を置く（キーの順を変えないため。全体を読んだとき1文字も違わないこと）
+ */
+function splitPastGames(records, year) {
+  if (!isObject(records?.seasons) || !Number.isFinite(year)) return { records };
+  let pastGames = null;
+  let seasons = null;
+  for (const [key, season] of Object.entries(records.seasons)) {
+    // ⚠ 印のまま来た（軽い読みの記録を全体の保存に回した）なら止める。黙って飛ばすと
+    //    pastGames にその年が入らず、次に読むとき戻せなくてリーグが読めなくなる
+    if (season?.games === PAST_GAMES)
+      throw new Error(`終わった年（${key}）の試合の記録が印のまま保存されようとしました`);
+    if (!(Number(key) < year) || !isObject(season?.games)) continue;
+    pastGames ||= {};
+    seasons ||= { ...records.seasons };
+    pastGames[key] = season.games;
+    seasons[key] = { ...season, games: PAST_GAMES };
+  }
+  return pastGames ? { records: { ...records, seasons }, pastGames } : { records };
+}
+
+/** 印の場所に、終わった年の試合の記録を戻す（その場で書き換える） */
+function restorePastGames(records, pastGames) {
+  for (const [key, season] of Object.entries(records?.seasons || {}))
+    if (season?.games === PAST_GAMES) {
+      if (!isObject(pastGames?.[key])) throw new Error(`終わった年（${key}）の試合の記録が見つかりません`);
+      season.games = pastGames[key];
+    }
+  return records;
+}
 
 /**
  * 全体の bundle を芯と部分に分ける。返す core は保存用の包み（部分の参照は呼ぶ側が入れる）。
@@ -74,7 +116,11 @@ export function splitBundle(bundle) {
   if (Array.isArray(backup)) order.arrays.push('backup');
   parts.world = world;
   const { records, ...leagueRest } = league;
-  if (records !== undefined) parts.records = records;
+  if (records !== undefined) {
+    const split = splitPastGames(records, league.season?.year);
+    parts.records = split.records;
+    if (split.pastGames) parts.pastGames = split.pastGames;
+  }
   return { core: { ...rest, league: { ...leagueRest, game } }, order, parts };
 }
 
@@ -105,7 +151,7 @@ export function assembleBundle(core, order, parts) {
     for (const key of WORLD_KEYS)
       if (Object.hasOwn(world, key)) game[key] = world[key];
     const nextLeague = { ...league, game: ordered(order.game, game) };
-    if (parts.records !== undefined) nextLeague.records = parts.records;
+    if (parts.records !== undefined) nextLeague.records = restorePastGames(parts.records, parts.pastGames);
     bundle.league = ordered(order.league, nextLeague);
   }
   return ordered(order?.bundle, bundle);
@@ -178,6 +224,8 @@ export function assembleLight(core, order, parts, refs) {
     );
   const bundle = { ...core };
   const guards = {};
+  // 終わった年の試合の記録の番人（年 → 番人）
+  const pastGuards = {};
   if (refs.backup) bundle.backup = guards.backup = guard('backup');
   const league = bundle.league;
   let teamsTarget = null;
@@ -201,13 +249,34 @@ export function assembleLight(core, order, parts, refs) {
     for (const key of WORLD_KEYS)
       if (order.game?.includes(key) && !Object.hasOwn(game, key)) game[key] = guards[key] = guard(key);
     const nextLeague = { ...league, game: ordered(order.game, game) };
-    if (parts.records !== undefined) nextLeague.records = parts.records;
+    if (parts.records !== undefined) {
+      // ⚠ 終わった年の試合の記録は読まない。印の場所を番人にする（触ったら全体を読み直す）
+      nextLeague.records = parts.records;
+      for (const [key, season] of Object.entries(parts.records?.seasons || {}))
+        if (season?.games === PAST_GAMES) season.games = pastGuards[key] = guard(`終わった年の試合 ${key}`);
+    }
     // 記録も読まなかった（読むだけの処理。`SupabaseStore.readLight`）なら、記録も番人にする
     else if (refs.records) nextLeague.records = guard('records');
     bundle.league = ordered(order.league, nextLeague);
   }
   const shaped = ordered(order?.bundle, bundle);
   const original = { league: shaped.league, game: shaped.league?.game };
+  const originalYear = shaped.league?.season?.year;
+  /**
+   * 保存する記録: 番人を印に戻した写し。番人を差し替えていた（終わった年の試合を書き換えた）なら null
+   * ⚠ 番人のまま JSON にすると、番人に触れて落ちる
+   */
+  const withPastMarkers = (records) => {
+    const years = Object.keys(pastGuards);
+    if (!years.length || !isObject(records?.seasons)) return records;
+    const seasons = { ...records.seasons };
+    for (const key of years) {
+      const season = seasons[key];
+      if (!season || season.games !== pastGuards[key]) return null;
+      seasons[key] = { ...season, games: PAST_GAMES };
+    }
+    return { ...records, seasons };
+  };
   /**
    * 命令のあと: 番人に触っていない・形を差し替えていないなら、保存する芯と部分を返す。
    * 差し替えていた（リーグを作り直した・世界の部分を置き換えた）ら null（全体でやり直す）。
@@ -241,7 +310,11 @@ export function assembleLight(core, order, parts, refs) {
     const names = after.league.season?.settings?.teamNames;
     if (!Array.isArray(names) || names.length !== Object.keys(teamsTarget).length || names.some((n) => !Object.hasOwn(teamsTarget, n)))
       return null;
-    const { records, ...leagueRest } = after.league;
+    const { records: liveRecords, ...leagueRest } = after.league;
+    // 年が変わった（今季より前の年が増えた）なら、全体で分け直す
+    if (after.league.season?.year !== originalYear) return null;
+    const records = withPastMarkers(liveRecords);
+    if (records === null) return null;
     const coreGame = { ...game, teams: teamsTarget };
     for (const key of Object.keys(guards)) delete coreGame[key];
     const coreOut = coreOf(after);

@@ -36,8 +36,8 @@ export const BEST_NINE_SLOTS = [
 const OUTFIELD = new Set(['left', 'center', 'right']);
 /** 守る位置の難しさ（打者の値打ちに足す点。規定打席ぶん出たときの点） */
 const POSITION_BONUS = { catcher: 5, short: 4, second: 3, center: 3, third: 2, right: 1, left: 0, first: -1, pitcher: 0 };
-/** ベストナインに数える出場の下限（規定打席の何割か） */
-const BEST_NINE_PA_SHARE = 0.5;
+/** ベストナイン・新人王に数える出場の下限（規定打席・規定投球回の何割か） */
+const HALF_QUALIFY_SHARE = 0.5;
 /** 最優秀バッテリーに数える組の下限（規定投球回の何割か） */
 const BATTERY_OUTS_SHARE = 0.5;
 /** 部の1位の球団の選手に、MVPで足す点 */
@@ -122,12 +122,29 @@ function leagueAverages(players) {
   };
 }
 
-/** 去年までの記録に出ていない選手（新人王の候補）。1年目のリーグは22歳以下 */
-function isRookie(league, player, year) {
+/** 新人王に数える年齢の上限（表彰の時点の年齢） */
+export const ROOKIE_MAX_AGE = 22;
+
+/**
+ * 新人王の候補か。**どの年も同じ決まり**:
+ *   1. 表彰の時点で22歳以下（`ROOKIE_MAX_AGE`）
+ *   2. このリーグの去年までの記録（`league.records.seasons`）に出ていない
+ *      （＝このリーグで公式戦に出るのは今年がはじめて）
+ * ⚠ 1年目のリーグは去年の記録が無いので、1. だけで決まる（足す前の決まりと同じ）。
+ *    前は2年目から 1. を見ておらず、30歳のトライアウト入団や途中参加の人の
+ *    初期メンバー（24人）が丸ごと候補になっていた。
+ * ⚠ 選手ごとの「このリーグに来た年」は全員には無い（1年目の CPU 球団の名簿には
+ *    経歴が付かず、トライアウトの入団は前の年度の印で付く）ので、記録で見る。
+ *    名簿にいて1試合も出なかった若手は翌年も候補のままだが、年齢の上限で23歳には外れる
+ *    （NPB も「前の年までの出場が少ない」ことで決める）。
+ */
+export function isRookie(league, player, year) {
+  if ((player.age ?? 99) > ROOKIE_MAX_AGE) return false;
   const key = player.onlinePlayerId;
-  const past = Object.entries(league.records?.seasons || {}).filter(([y]) => Number(y) < year);
-  if (!past.length) return (player.age || 99) <= 22;
-  return !past.some(([, s]) => key && s.players?.[key]);
+  if (!key) return true;
+  return !Object.entries(league.records?.seasons || {}).some(
+    ([y, s]) => Number(y) < year && s.players?.[key],
+  );
 }
 
 const entryOf = (x, extra = {}) => ({
@@ -159,6 +176,10 @@ export function selectHonors(league, teams) {
   const honors = {};
   for (const leagueId of new Set(names.map((name) => tierOf.get(name)).filter(Boolean))) {
     const teamNames = names.filter((name) => tierOf.get(name) === leagueId);
+    // ⚠ **部は表彰の時点で居る球団で決め、成績はその年の通し**（`seasonStats` は移籍しても
+    //    選手に付いて回る）。年の途中にトレードで部をまたいだ選手は、移った先の部で、
+    //    前の球団の分も含めた1年分の成績で比べる（前の部では候補にならない）。
+    //    部の平均（`leagueAverages`）も同じ数え方。
     const players = teamNames.flatMap((team) =>
       (teams[team].players || []).map((player) => ({ team, player })),
     );
@@ -183,6 +204,12 @@ export function selectHonors(league, teams) {
         if (v != null) rated.push({ ...x, kind: 'batter', value: v, line: batterSummary(b), pa: plateAppearances(b) });
       }
     }
+    // 規定の半分は出たか（ベストナインの野手・新人王）。投手は10セーブでも数える
+    const halfQualified = (x) =>
+      x.kind === 'batter'
+        ? x.pa >= minPA * HALF_QUALIFY_SHARE
+        : n(x.player.seasonStats?.pitching?.inningsPitched) >= minOuts * HALF_QUALIFY_SHARE ||
+          n(x.player.seasonStats?.pitching?.saves) >= 10;
     const best = (list) =>
       list.reduce((a, c) => (a == null || c.value > a.value || (c.value === a.value && String(c.player.name).localeCompare(String(a.player.name), 'ja') < 0) ? c : a), null);
 
@@ -193,11 +220,7 @@ export function selectHonors(league, teams) {
     const mvp = best(mvpPool);
     // 新人王: 新人の中で値打ちが一番（規定の半分は出た人）
     const rookie = best(
-      rated.filter(
-        (x) =>
-          isRookie(league, x.player, year) &&
-          (x.kind === 'batter' ? x.pa >= minPA * BEST_NINE_PA_SHARE : n(x.player.seasonStats?.pitching?.inningsPitched) >= minOuts * BEST_NINE_PA_SHARE || n(x.player.seasonStats?.pitching?.saves) >= 10),
-      ),
+      rated.filter((x) => isRookie(league, x.player, year) && halfQualified(x)),
     );
     // ベストナイン: 登録の守備位置ごと（外野は3人）
     const bestNine = [];
@@ -207,7 +230,7 @@ export function selectHonors(league, teams) {
           slot.pos === 'pitcher'
             ? x.kind === 'pitcher' && x.enough
             : x.kind === 'batter' &&
-              x.pa >= minPA * BEST_NINE_PA_SHARE &&
+              halfQualified(x) &&
               (slot.pos === 'outfield' ? OUTFIELD.has(x.player.position) : x.player.position === slot.pos),
         )
         .sort((a, b) => b.value - a.value || String(a.player.name).localeCompare(String(b.player.name), 'ja'))
@@ -219,7 +242,7 @@ export function selectHonors(league, teams) {
       mvp: mvp ? entryOf(mvp, { line: mvp.line }) : null,
       rookie: rookie ? entryOf(rookie, { line: rookie.line }) : null,
       bestNine,
-      battery: bestBattery(league, teamNames, minOuts),
+      battery: bestBattery(league, teams, teamNames, minOuts),
     };
   }
   return honors;
@@ -229,17 +252,23 @@ export function selectHonors(league, teams) {
  * 最優秀バッテリー: 同じ球団の投手と捕手の組で、規定投球回の半分以上を組んだ中で防御率が一番。
  * 捕手の記録（`records.seasons[年].players[鍵].catching.pitchers`）から引く。
  */
-function bestBattery(league, teamNames, minOuts) {
+function bestBattery(league, teams, teamNames, minOuts) {
   const players = league.records?.seasons?.[league.season.year]?.players || {};
+  // ⚠ いまの球団は名簿で見る。記録の `teams` は来た順に**足すだけ**（`recordedStats.mjs`）
+  //    なので、A→B→A と戻った選手でも [A, B] のままで、最後の要素はいまの球団ではない
+  const teamOf = new Map();
+  for (const name of teamNames)
+    for (const p of teams[name]?.players || [])
+      if (p.onlinePlayerId) teamOf.set(p.onlinePlayerId, name);
   let top = null;
-  for (const rec of Object.values(players)) {
-    const team = rec.teams?.at?.(-1);
+  for (const [key, rec] of Object.entries(players)) {
+    const team = teamOf.get(key);
     if (!team || !teamNames.includes(team) || !rec.catching?.pitchers) continue;
     for (const [pitcherKey, line] of Object.entries(rec.catching.pitchers)) {
       const outs = n(line.outs);
       if (outs < minOuts * BATTERY_OUTS_SHARE) continue;
       const pitcher = players[pitcherKey];
-      if (!pitcher || pitcher.teams?.at?.(-1) !== team) continue;
+      if (!pitcher || teamOf.get(pitcherKey) !== team) continue;
       const era = era2(n(line.earnedRuns), outs);
       if (top == null || era < top.era || (era === top.era && outs > top.outs))
         top = { era, outs, team, pitcher: pitcher.name, catcher: rec.name };

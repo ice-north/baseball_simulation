@@ -232,8 +232,8 @@ try {
   await ui.click('日程進行');
 
   step('次の区切り（夏季合宿）まで');
-  await ui.advance('phase');
-  assert.ok(await ui.visible('練習を実行'), '夏季合宿の画面が出ていない');
+  // 春に優勝したら6月の全日本大学選手権の試合を飛ばしながら進む（優勝するかは毎回違う）
+  await ui.advanceToSummerCamp();
   await shot('summer-camp');
 
   step('合宿を済ませて秋季リーグへ');

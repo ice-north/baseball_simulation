@@ -222,7 +222,14 @@ fun OnlineApp(model: AppViewModel) {
                         Tab.Games -> Refreshable(model) {
                             GamesScreen(model, gamesSection, { gamesSection = it }, onOpenTeam = { model.showTeamPlayers(it); fromStandings = true; tab = Tab.Players })
                         }
-                        Tab.Players -> Refreshable(model) { PlayersScreen(model) }
+                        // チーム診断の「スタメン設定へ」などは編成のその面へ、「トレードへ」は手続きのトレードへ
+                        Tab.Players -> Refreshable(model) {
+                            PlayersScreen(
+                                model,
+                                onOpenPlan = { face -> model.planFaceRequest = face; tab = Tab.Plan },
+                                onOpenTrade = { tab = Tab.Procedures; model.procTrade = true },
+                            )
+                        }
                         // ⚠ 編成では TIPS の印を面の切り替えの右に置く（行が3行になり、左下に重ねると打順と「適」が隠れた）
                         Tab.Plan -> PlanScreen(model) {
                             SituationTipsBadge(
