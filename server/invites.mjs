@@ -122,11 +122,40 @@ function assertNotStalled(invite, now) {
   );
 }
 
+/**
+ * ログイン前の確かめに要るぶんだけの写し（管理行の `views._invites` に置く。`supabaseStore.mjs`）。
+ * ⚠ **合言葉は入れない**（ハッシュと期限・使用・取り消し・押さえの時刻だけ）。
+ * ⚠ ログイン前の入口（`checkInvite`）が保存の芯（数MB）を読まずに済むようにするため。
+ *    形だけ合う文字列を送り続けられても、管理行の小さな列を1回読むだけで済む。
+ */
+export function inviteDigest(bundle) {
+  return (bundle.invites || []).map((i) => ({
+    hash: i.hash,
+    expiresAt: i.expiresAt,
+    ...(i.usedAt ? { usedAt: i.usedAt } : {}),
+    ...(i.revokedAt ? { revokedAt: i.revokedAt } : {}),
+    ...(i.claimedAt ? { claimedAt: i.claimedAt } : {}),
+  }));
+}
+
 /** リンクを開いたときの確かめ（まだ使えるか・期限）。押さえはしない */
 export function peekInvite(bundle, token, now) {
   const invite = findOpen(bundle, token, now);
   assertNotStalled(invite, now);
   return { expiresAt: invite.expiresAt };
+}
+
+/**
+ * 招待でアカウントを作ったが、まだ参加していない人の数（その人の球団の分を空けておく）。
+ * ⚠ 残り1球団で2本のリンクを送ると、2人ともアカウントを作れて、後から参加した人は入れなかった。
+ * ⚠ **登録から7日（`INVITE_DAYS`）まで**。参加しないままの人で枠が埋まり続けないように
+ */
+function reservedSeats(bundle, now) {
+  const joined = new Set((bundle.league?.members || []).map((m) => m.userId));
+  const since = ms(now) - INVITE_DAYS * 86400000;
+  return (bundle.invites || []).filter(
+    (i) => i.usedBy && !joined.has(i.usedBy) && ms(i.usedAt) > since,
+  ).length;
 }
 
 /**
@@ -148,7 +177,7 @@ export function claimInvite(bundle, token, now) {
   const teams = league?.season?.settings?.teamNames;
   if (Array.isArray(teams))
     requireOnline(
-      (league.members || []).length < teams.length,
+      (league.members || []).length + reservedSeats(bundle, now) < teams.length,
       '空いている球団がありません。管理者に相談してください',
       409,
     );

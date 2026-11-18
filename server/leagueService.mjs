@@ -293,6 +293,9 @@ export class LeagueService {
   /** 招待リンクを開いたとき（ログイン前）。まだ使えるかだけ返す */
   async checkInvite(token) {
     assertInviteShape(token);
+    // ⚠ ログイン前に誰でも叩ける入口。本番は管理行の小さな写しだけを読む（芯は数MB）
+    const digest = this.store.readInvites ? await this.store.readInvites() : null;
+    if (digest) return peekInvite({ invites: digest }, token, this.clock());
     const bundle = this.store.readLight
       ? (await this.store.readLight()).bundle
       : await this.store.read();

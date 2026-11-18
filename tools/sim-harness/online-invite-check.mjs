@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { createHandler } from '../../server/http.mjs';
-import { claimInvite, createInvite, INVITE_CLAIM_MS, INVITE_DAYS, INVITE_OPEN_MAX } from '../../server/invites.mjs';
+import { claimInvite, createInvite, finishInvite, INVITE_CLAIM_MS, INVITE_DAYS, INVITE_OPEN_MAX } from '../../server/invites.mjs';
 
 let now = '2026-11-18T00:00:00.000Z';
 const store = createTestStore(`/tmp/pennant-invite-${process.pid}.gz`);
@@ -137,6 +137,25 @@ assert.equal((await service.invites('admin', adminSession)).invites.length, 0, '
   assert.throws(() => claimInvite(bundle, token, now), /空いている球団がありません/);
   bundle.league.members.pop();
   assert.ok(claimInvite(bundle, token, now), '空きがあるのに断った');
+}
+
+// --- 残り1球団で2本送っても、まだ参加していない登録の分は空けておく ----------
+{
+  const bundle = {
+    invites: [],
+    league: { season: { settings: { teamNames: ['A', 'B'] } }, members: [{ userId: 'a' }] },
+  };
+  const first = createInvite(bundle, now);
+  const second = createInvite(bundle, now);
+  const claim = claimInvite(bundle, first.token, now);
+  finishInvite(bundle, first.token, claim, 'guest-a', now); // 登録したが、まだ参加していない
+  assert.throws(() => claimInvite(bundle, second.token, now), /空いている球団がありません/, '残り1球団で2人登録できた');
+  bundle.league.members.push({ userId: 'guest-a' }); // 参加した → 満員
+  assert.throws(() => claimInvite(bundle, second.token, now), /空いている球団がありません/);
+  bundle.league.members.pop(); // 参加せずに7日たった → 枠を返す
+  const later = new Date(Date.parse(now) + INVITE_DAYS * 86400000 + 1000).toISOString();
+  bundle.invites.find((i) => i.hash !== bundle.invites[0].hash).expiresAt = later.replace(/^\d+/, '2099');
+  assert.ok(claimInvite(bundle, second.token, later), '参加しないままの登録が枠を埋め続けた');
 }
 
 // --- 招待はリーグの版を上げない -------------------------------------------
