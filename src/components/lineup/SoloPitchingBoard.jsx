@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Fatigue } from '../../online/BoardParts.jsx';
-import { POS_FULL } from '../../online/api.js';
+import { PitchingHeaderRow, PitchingCells, pitchingColumnCount } from '../../online/PitchingRows.jsx';
 import {
   MAX_STARTERS,
   STARTER_ORDER,
@@ -17,9 +16,6 @@ import {
   staffCandidates,
   STARTER_SKIP_FATIGUE,
 } from '../../online/pitchingEdit.js';
-import { AbilityValue } from '../AbilityValue.jsx';
-import { pitchTypes, totalBreak } from '../../online/playerColumns.js';
-import { FORM_SHORT, FORM_NAME, getFatigueTone } from '../../utils/constants.js';
 import { CONDITION_ICONS } from '../../game/condition.js';
 import '../../online/online.css';
 import {
@@ -57,11 +53,6 @@ import {
 // ============================================================
 
 const CONDITION_TEXT = ['絶不調', '不調', '普通', '好調', '絶好調'];
-const FATIGUE_TONE_TEXT = {
-  warn: '疲れています（このまま投げ続けると成長が鈍ります）',
-  heavy: 'かなり疲れています（成長の鈍り方が最も大きくなります）',
-  '': undefined,
-};
 
 // 今季成績（投球）。⚠ 一人用の選手は `seasonStats.pitching` に積む（`inningsPitched` はアウト数）
 // 投球回（アウト数 → 「18 2/3」）
@@ -87,9 +78,8 @@ const STATS = [
     show: (s) => decimal(s.inningsPitched > 0 ? (((s.hits || 0) + (s.walks || 0)) * 3) / s.inningsPitched : null),
   },
 ];
-// ⚠ 列を足したらここも直すこと（`colSpan` がずれると罫線が折れる）。
-//    順・役割・投手 / 投・フォーム・年齢・疲労 / 球速・制球・スタ・変化 / 成績（オンラインPC版と同じ）
-const COLUMN_COUNT = 3 + 4 + 4 + STATS.length;
+const STAT_HEADS = STATS.map((s) => ({ id: s.id, label: s.label, title: s.title }));
+const COLUMN_COUNT = pitchingColumnCount(STAT_HEADS);
 
 function ConditionMark({ player }) {
   const level = Number.isInteger(player.condition) && player.condition >= 0 && player.condition <= 4 ? player.condition : null;
@@ -102,88 +92,36 @@ function ConditionMark({ player }) {
 }
 
 function HeaderRow() {
-  return (
-    <tr>
-      <th className="online-lineup-slot">順</th>
-      <th className="online-pitch-rolecell">役割</th>
-      <th className="online-lineup-person">投手</th>
-      <th title="投げる手">投</th>
-      {/* ⚠ フォームを出す。球種の相性と左右の打者への効き方が変わるので、救援の並べ方を決めるのに要る */}
-      <th title="投球フォーム">フォーム</th>
-      <th>年齢</th>
-      <th className="is-sep" title={`先発は疲労${STARTER_SKIP_FATIGUE}以上でその日の登板を飛ばします`}>
-        疲労
-      </th>
-      <th className="is-sep" title="球速">
-        球速
-      </th>
-      <th title="制球">制球</th>
-      <th title="スタミナ">スタ</th>
-      <th title="変化球（直球を除く持ち球）のキレの合計。封印した球は数えない">変化</th>
-      {STATS.map((s, i) => (
-        <th key={s.id} className={i === 0 ? 'is-sep is-stat' : 'is-stat'} title={`今季の${s.title}`}>
-          {s.label}
-        </th>
-      ))}
-    </tr>
-  );
+  return <PitchingHeaderRow stats={STAT_HEADS} fatigueTitle={`先発は疲労${STARTER_SKIP_FATIGUE}以上でその日の登板を飛ばします`} />;
 }
 
 function PitcherCells({ player, starter, onOpen }) {
-  const tone = getFatigueTone(player.fatigue);
   const stats = player.seasonStats?.pitching;
   return (
-    <>
-      <td className={`online-lineup-person online-fatigue-${tone || 'none'}`} title={FATIGUE_TONE_TEXT[tone]}>
-        <button
-          type="button"
-          className="online-player-name"
-          aria-label={`${player.name}の選手情報を見る`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen(player);
-          }}
-        >
-          {player.name}
-        </button>
-        <ConditionMark player={player} />
-        {player.position !== 'pitcher' && (
-          <small className="online-role-mark" title="野手登録の選手です（二刀流）。役割の札から投手起用を外せます">
-            野手・{POS_FULL[player.position] || ''}
-          </small>
-        )}
-      </td>
-      <td>{player.physical?.throws === 'left' ? '左' : '右'}</td>
-      <td className="online-pitch-form" title={FORM_NAME[player.pitching?.form] || undefined}>
-        {FORM_SHORT[player.pitching?.form] || '—'}
-      </td>
-      <td>{player.age ?? '—'}</td>
-      <td className="is-sep">
-        {/* ⚠ 救援は疲労（シーズンの疲れ）では休ませない。登板間隔は試合の側が別の値
-            （`pitchingRotation.reliefFatigue`）で見るので、赤（休み）の印は先発だけに付ける */}
-        <Fatigue
-          value={player.fatigue}
-          rest={starter ? STARTER_SKIP_FATIGUE : Infinity}
-          warn={starter ? 20 : 30}
-          restText="登板の日は飛ばして、次の先発が投げます"
-        />
-      </td>
-      <td className="is-sep">
-        <AbilityValue value={player.pitching?.velocity} isVel placeholder="—" />
-      </td>
-      <td>
-        <AbilityValue value={player.pitching?.control} placeholder="—" />
-      </td>
-      <td>
-        <AbilityValue value={player.pitching?.stamina} isSta placeholder="—" />
-      </td>
-      <td title={pitchTypes(player) || '変化球なし'}>{totalBreak(player) ?? '—'}</td>
-      {STATS.map((s, i) => (
-        <td key={s.id} className={i === 0 ? 'is-sep is-stat' : 'is-stat'}>
-          {stats ? s.show(stats) : '—'}
-        </td>
-      ))}
-    </>
+    <PitchingCells
+      player={player}
+      starter={starter}
+      name={
+        <>
+          <button
+            type="button"
+            className="online-player-name"
+            aria-label={`${player.name}の選手情報を見る`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(player);
+            }}
+          >
+            {player.name}
+          </button>
+          <ConditionMark player={player} />
+        </>
+      }
+      // ⚠ 救援は疲労（シーズンの疲れ）では休ませない。登板間隔は試合の側が別の値
+      //   （`pitchingRotation.reliefFatigue`）で見るので、赤（休み）の印は先発だけに付ける
+      fatigue={{ rest: starter ? STARTER_SKIP_FATIGUE : Infinity, restText: '登板の日は飛ばして、次の先発が投げます' }}
+      stats={STATS.map((s) => ({ id: s.id, text: stats ? s.show(stats) : '—' }))}
+    />
   );
 }
 
