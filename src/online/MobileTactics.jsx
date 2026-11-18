@@ -19,6 +19,8 @@ const GROUPS = {
   subs: '代打・守備固め',
   pitcher: '先発の交代',
   roles: '投手の役割（確認）',
+  // 見るだけ（B2）。基本方針の下に置くと 320px で長いスクロールになるので分ける
+  stats: '作戦別成績（見るだけ）',
 };
 const FIELDS = {
   bunt: ['sacrificeBunt', 'squeeze', 'safetyBunt'],
@@ -123,11 +125,10 @@ export default function MobileTactics({
               <Actual view={view} field="strategy" name={key} />
             </label>
           ))}
-        {group === 'basic' && (
-          <details className="online-mobile-strategy-stats">
-            <summary>作戦別成績</summary>
+        {group === 'stats' && (
+          <div className="online-mobile-strategy-stats">
             <StrategyStats stats={view.strategyStats} compact />
-          </details>
+          </div>
         )}
         {(FIELDS[group] || []).map((key) => {
           const [label, options] = TACTIC_FIELDS[key];

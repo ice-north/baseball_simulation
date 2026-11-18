@@ -6254,10 +6254,8 @@ small.online-gain:not(:where(.online-sp *)) {
   overflow-x: auto;
   font-size: 12px;
 }
-.online-mobile-strategy-stats summary {
-  cursor: pointer;
-  font-weight: 700;
-  padding: 6px 0;
+.online-mobile-strategy-stats {
+  margin-top: 4px;
 }
 
 /* 球団の顔（主将・永久欠番。`Chronicle.jsx` の TeamFace） */
