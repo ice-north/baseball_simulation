@@ -413,8 +413,9 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="疲労による能力低下">
             疲労は打者・投手の両方に影響する。ペナルティは二次曲線で増加し、疲労が高いほど加速度的に悪化する。
+            <b className="text-yellow-300">投手のほうが重い</b>（割る数が小さい）。
             <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
-              能力低下 = 疲労² ÷ 670（小数点以下四捨五入）
+              打者 = 疲労² ÷ 1200　　投手 = 疲労² ÷ 670（どちらも小数点以下四捨五入）
             </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
@@ -426,7 +427,16 @@ const ManualContent = ({ category }) => {
                 </tr></thead>
                 <tbody className="text-gray-300">
                   <tr>
-                    <td className="py-0.5 px-2 text-red-300">能力低下</td>
+                    <td className="py-0.5 px-2 text-red-300">打者</td>
+                    <td className="text-right px-2 text-green-400">0</td>
+                    <td className="text-right px-2 text-green-400">0</td>
+                    <td className="text-right px-2 text-yellow-300">-1</td>
+                    <td className="text-right px-2 text-yellow-300">-3</td>
+                    <td className="text-right px-2 text-orange-300">-5</td>
+                    <td className="text-right px-2 text-red-400">-8</td>
+                  </tr>
+                  <tr>
+                    <td className="py-0.5 px-2 text-red-300">投手</td>
                     <td className="text-right px-2 text-green-400">0</td>
                     <td className="text-right px-2 text-yellow-300">-1</td>
                     <td className="text-right px-2 text-yellow-300">-2</td>
@@ -438,7 +448,7 @@ const ManualContent = ({ category }) => {
               </table>
             </div>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-              <li><b>打者</b>: ミート・パワー・走力に上記ペナルティ、選球眼はその半分</li>
+              <li><b>打者</b>: ミート・パワー・走力に上記ペナルティ、選球眼はその半分（切り捨て）</li>
               <li><b>投手</b>: 球速・制球に上記ペナルティ（スタミナ低下とは別に適用）</li>
             </ul>
           </Entry>
@@ -484,8 +494,8 @@ const ManualContent = ({ category }) => {
                   ただし連戦が続く時期は抜けきらず、シーズンの終わりにはレギュラーの野手で疲労26前後（多い選手で69）残る</li>
               <li>疲労が高い投手はスタミナも減った状態で登板するため、早期降板のリスクが高まる</li>
               <li>リリーフは球数が少なくても<b>1登板あたり最低11</b>溜まる。連投には注意</li>
-              <li>ほかのチームの監督は疲労80以上の投手を先発させない</li>
-              <li className="text-yellow-300">疲労50を超えた状態で出場すると、その選手の<b>成長率が下がる</b>（-0.01/試合）</li>
+              <li>疲労40以上の先発投手は登板を飛ばされ、次の順番の投手が投げる（簡易スタメンで自分で先発を指名した日を除く）</li>
+              <li className="text-yellow-300">疲労41以上でスタメン出場（投手は10球以上の登板）すると、その選手の<b>成長率が下がる</b>。41〜60で-0.01、61〜80で-0.02、81以上で-0.03（1試合ごと）</li>
             </ul>
           </Entry>
         </div>
