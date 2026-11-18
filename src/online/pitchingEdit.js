@@ -178,8 +178,10 @@ export function setRole(state, id, role, at = null) {
   if (role === 'closer')
     for (const [other, r] of Object.entries(roles))
       if (r === 'closer' && String(other) !== String(id))
+        // ⚠ 一人用の「役割なし」（'none'。`soloPitchingEdit.js` の NO_ROLE）から選んだときも「おまかせ」へ。
+        //    引き継がせると前のクローザーが役割なしに落ち、救援の顔ぶれから外れていた
         roles[other] =
-          wasStarter || isStarterRole(current) ? 'auto_r' : current;
+          wasStarter || isStarterRole(current) || current === 'none' ? 'auto_r' : current;
   return { starters, roles };
 }
 

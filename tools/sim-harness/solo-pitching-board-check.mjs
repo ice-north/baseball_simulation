@@ -5,6 +5,7 @@
 //    古い形の配列（`middleRelievers`・`setupMen`・`closer`）を読み、先発は `starters` から選ぶ。
 //    それと、一人用だけの決まり（役割なし・野手は救援だけ）を崩さないこと。
 import assert from 'node:assert/strict';
+import { totalBreak } from '../../src/online/playerColumns.js';
 import { swapPitchers, setRole, insertStarter, addToStaff, removeFromStaff } from '../../src/online/pitchingEdit.js';
 import {
   NO_ROLE,
@@ -120,9 +121,9 @@ function consistent(team, label) {
   state = swapPitchers(state, t.middle[0].id, t.starters[1].id);
   assert.equal(state.starters[1], t.middle[0].id);
   assert.equal(state.roles[t.starters[1].id], 'long');
-  // 役割なしの投手をクローザーに → 前のクローザーは「役割なし」を引き継ぐ
+  // 役割なしの投手をクローザーに → 前のクローザーは「おまかせ」（役割なしに落とさない。監査 2026-11-19）
   state = setRole(state, t.idle.id, 'closer');
-  assert.equal(state.roles[t.closer.id], NO_ROLE);
+  assert.equal(state.roles[t.closer.id], 'auto_r');
   // 先発を役割なしへ（ローテから外れる）
   state = setRole(state, t.starters[4].id, NO_ROLE);
   assert.ok(!state.starters.includes(t.starters[4].id));
@@ -192,5 +193,19 @@ function consistent(team, label) {
   consistent(t.team, '前のクローザーが戻った');
   assert.equal(Object.values(t.team.pitchingRotation.pitcherRoles).filter((r) => r === 'closer').length, 1);
 }
+
+// ---- 役割なしの投手をクローザーにしたら、前のクローザーは「おまかせ」（役割なしに落とさない）
+{
+  const t = makeTeam();
+  const state = setRole(pitchingFromTeam(t.team), t.idle.id, 'closer');
+  assert.equal(state.roles[t.idle.id], 'closer');
+  assert.equal(state.roles[t.closer.id], 'auto_r', '前のクローザーが役割なしに落ちた');
+}
+
+// ---- 「変化」の列は封印した球を数えない（試合では投げない）
+assert.equal(
+  totalBreak({ pitching: { arsenal: [{ type: 'straight', level: 50 }, { type: 'slider', level: 40 }, { type: 'fork', level: 30, sealed: true }] } }),
+  40,
+);
 
 console.log('solo-pitching-board-check: ok');

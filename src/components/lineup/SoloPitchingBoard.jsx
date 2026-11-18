@@ -119,7 +119,7 @@ function HeaderRow() {
       </th>
       <th title="制球">制球</th>
       <th title="スタミナ">スタ</th>
-      <th title="変化球（直球を除く持ち球）の変化量の合計">変化</th>
+      <th title="変化球（直球を除く持ち球）のキレの合計。封印した球は数えない">変化</th>
       {STATS.map((s, i) => (
         <th key={s.id} className={i === 0 ? 'is-sep is-stat' : 'is-stat'} title={`今季の${s.title}`}>
           {s.label}
