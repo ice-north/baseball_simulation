@@ -1,11 +1,15 @@
 // 先方回答（2026-11-16）「余裕があれば」のうち作ったものの検査（軽い）。
 //   - A1 チーム診断: 試合が少ないうちは出さない・直せることを3つまで・該当の画面
 //   - A4 オーナー名鑑: 参加した年から数える・優勝/昇格/Aクラスの節目・PC とアプリで同じ一文
+//   - E1 1人用の年間表彰・節目の記録（`src/season/soloChronicle.js`）
 //   node tools/sim-harness/online-owner-extra-check.mjs
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ownerRecords } from '../../server/ownerRecords.mjs';
 import { seasonReview, nearMilestones } from '../../server/seasonReview.mjs';
 import { strategyStats, strategyMark } from '../../src/online/strategyStats.js';
+import { CITY_PREFS, localPlayers, alumniPairs, tiesArticles } from '../../src/online/hometown.js';
+import { soloSeasonEnd, slimHonors, isSoloRookie } from '../../src/season/soloChronicle.js';
 import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../src/online/teamDiagnosis.js';
 
 // ---------- A1 ----------
@@ -222,5 +226,76 @@ import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../sr
   assert.equal(batting.rows[0].cells.length, batting.columns.length);
   assert.equal(strategyStats({ 3: games[3] }, 'X'), null, '印のある試合が無ければ出さない');
   console.log(`作戦別成績: ${def.rows.map((r) => `${r.label} ${r.record} 被打率${r.avg}`).join(' / ')}`);
+}
+// ---------- C3 ----------
+{
+  const ours = [
+    { id: 1, name: '地元くん', highSchool: { name: '宮崎商', pref: '宮崎' } },
+    { id: 2, name: '先輩', highSchool: { name: '東海大相模', pref: '神奈川' }, universityTeamName: '東海大学' },
+    { id: 3, name: '出身なし' },
+  ];
+  const theirs = [{ id: 9, name: '後輩', highSchool: { name: '東海大相模', pref: '神奈川' } }, { id: 8, name: '大学の', universityTeamName: '東海大学' }];
+  assert.deepEqual(localPlayers('宮崎', ours).map((p) => p.name), ['地元くん']);
+  assert.deepEqual(localPlayers('湘南', ours).map((p) => p.name), ['先輩'], '地域の名前も県に引ける');
+  assert.deepEqual(localPlayers('どこか', ours), [], '知らない土地は空');
+  const pairs = alumniPairs(ours, theirs);
+  assert.deepEqual(pairs.map((p) => [p.kind, p.school, p.ours, p.theirs]), [['高校', '東海大相模', ['先輩'], ['後輩']], ['大学', '東海大学', ['先輩'], ['大学の']]]);
+  const a = tiesArticles({ city: '宮崎', short: '宮崎', players: ours, opponent: { short: '湘南', players: theirs } });
+  assert.deepEqual(a.map((x) => x.kicker), ['地元の星', '同窓対決']);
+  assert.match(a[1].body, /次の相手湘南には、先輩と同じ東海大相模出身の後輩がいる。ほかにも東海大学の縁がある。/);
+  assert.ok(Object.values(CITY_PREFS).every((list) => list.length > 0));
+  // 球団の土地の一覧（pyramidLeague.js の CITIES）が全部、県に引ける
+  const src = readFileSync(new URL('../../src/online/pyramidLeague.js', import.meta.url), 'utf8');
+  const start = src.indexOf('const CITIES = [');
+  const cities = [...src.slice(start, src.indexOf('];', start)).matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.ok(cities.length > 100);
+  assert.deepEqual(cities.filter((c) => !CITY_PREFS[c]), [], '県の分からない土地がある');
+  console.log(`縁: ${a.map((x) => x.title).join(' / ')}`);
+}
+// ---------- E1（1人用の年間表彰・節目） ----------
+{
+  const positions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  const bat = (ab, h, hr) => ({ atBats: ab, hits: h, homeruns: hr, walks: 20, rbis: hr * 3, doubles: 10, triples: 1, stolenBases: 2 });
+  const pit = (outs, er, w) => ({ inningsPitched: outs, earnedRuns: er, wins: w, losses: 5, strikeouts: 120, walks: 30, hits: 120, saves: 0 });
+  const team = (name, good) => ({
+    name,
+    players: [
+      ...positions.map((pos, i) => ({
+        id: `${name}${i}`, name: `${name}${pos}`, position: pos, age: i === 0 ? 18 : 25,
+        statsHistory: i === 0 ? [] : [{ year: 1 }],
+        careerStats: { batting: { hits: i === 1 ? 950 : 0 }, pitching: {} },
+        seasonStats: { batting: bat(400, good ? 130 : 100, i === 1 ? 31 : 8), pitching: {} },
+      })),
+      { id: `${name}P`, name: `${name}投手`, position: 'pitcher', age: 24, statsHistory: [{ year: 1 }],
+        careerStats: { batting: {}, pitching: {} }, seasonStats: { batting: {}, pitching: pit(500, good ? 40 : 70, good ? 16 : 9) } },
+    ],
+  });
+  const teams = { 甲: team('甲', true), 乙: team('乙', false) };
+  const seasonData = {
+    year: 3,
+    settings: { teamNames: ['甲', '乙'], gamesPerSeason: 100 },
+    standings: [{ team: '甲', wins: 60, losses: 40, gamesPlayed: 100 }, { team: '乙', wins: 40, losses: 60, gamesPlayed: 100 }],
+  };
+  const a = soloSeasonEnd(seasonData, teams);
+  assert.ok(a.battingChampion, 'タイトルは今まで通り');
+  const h = a.honors.solo;
+  assert.equal(h.mvp.team, '甲');
+  assert.equal(h.rookie?.name, '甲catcher', '新人王は記録の無い22歳以下');
+  assert.equal(h.battery, null, '1人用に最優秀バッテリーは無い');
+  assert.equal(h.bestNine.filter((x) => x.label === '外野手').length, 3);
+  assert.ok(a.milestones.some((m) => m.label === '通算1000安打' && m.name === '甲first'), '通算は careerStats＋今季');
+  assert.ok(a.milestones.some((m) => m.label === 'シーズン30本塁打'));
+  assert.equal(isSoloRookie({ age: 23, statsHistory: [] }), false);
+  // 一度締めた選手は今季が通算に入っているので足さない
+  const done = { 甲: team('甲', true), 乙: team('乙', false) };
+  done.甲.players[1].seasonFinalizedYear = 3;
+  done.甲.players[1].careerStats.batting.hits = 1080;
+  assert.ok(soloSeasonEnd(seasonData, done).milestones.some((m) => m.label === '通算1000安打'));
+  done.甲.players[1].careerStats.batting.hits = 1200;
+  const twice = soloSeasonEnd(seasonData, done).milestones.filter((m) => m.label.endsWith('安打') && m.name === '甲first');
+  assert.deepEqual(twice.map((m) => m.label), ['通算1200安打'], '1330 と数えない');
+  const slim = slimHonors(a.honors);
+  assert.equal(slim.solo.mvp.id, undefined, '写しは軽く');
+  console.log(`1人用の表彰: MVP ${h.mvp.name} 新人王 ${h.rookie.name} 節目 ${a.milestones.map((m) => m.label).join('・')}`);
 }
 console.log('online-owner-extra-check PASS');

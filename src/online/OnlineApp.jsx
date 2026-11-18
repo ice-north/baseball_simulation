@@ -82,6 +82,7 @@ const COMMAND_MESSAGES = {
   step: 'ターンを進めました',
   testmode: '検証モードを切り替えました',
   resolve: '手続きを締め切りました',
+  teamFace: (p) => (p?.captain !== undefined ? '主将を決めました' : p?.retire ? '永久欠番にしました' : p?.unretire ? '欠番を戻しました' : '球団の顔を変えました'),
   // ⚠ 最後の1人が手続きの分野を任せると、その場で手続きが決まる。決まったら言い分ける（`notices.js`）
   staffModes: staffModesDoneText,
   staff: '指導者を入れ替えました',

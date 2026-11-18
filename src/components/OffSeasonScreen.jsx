@@ -7,6 +7,8 @@ import { getPlayoffChampion, isYearAdvanced, seasonChampion } from '../season/se
 import { generatePitchingRotation } from '../game/lineupGenerator.js';
 import { repairLeagueConfig } from '../season/nextSeasonRegulations.js';
 import { getTransferCandidates, transferManagerTo, CATEGORY_LABEL, getTeamCategory } from '../game/managerTransfer.js';
+import { slimHonors, slimMilestones } from '../season/soloChronicle.js';
+import SoloHonors from './SoloHonors.jsx';
 
 const RANK_TEXT = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
 
@@ -170,6 +172,9 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           winsLeader:      slimAward(fa.winsLeader, ['wins']),
           savesLeader:     slimAward(fa.savesLeader, ['saves']),
           strikeoutKing:   slimAward(fa.strikeoutKing, ['strikeouts']),
+          // 年間表彰と節目の記録（E1。`soloChronicle.js`）。無い年（足す前の年）は持たない
+          ...(fa.honors ? { honors: slimHonors(fa.honors) } : {}),
+          ...(fa.milestones?.length ? { milestones: slimMilestones(fa.milestones) } : {}),
         } : null;
         historyEntry = {
           year: seasonData.year,
@@ -500,6 +505,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
             </div>
           );
         })()}
+
+        {/* 年間表彰・節目の記録（E1） */}
+        {seasonSummary?.awards && (seasonSummary.awards.honors || seasonSummary.awards.milestones) && (
+          <div className="mb-5">
+            <h3 className="text-sm font-bold text-ink mb-2">年間表彰</h3>
+            <SoloHonors awards={seasonSummary.awards} userTeamName={myTeamName} />
+          </div>
+        )}
 
         {/* 順位表（コンパクト） */}
         {seasonSummary?.standings && seasonSummary.standings.length > 1 && (() => {
