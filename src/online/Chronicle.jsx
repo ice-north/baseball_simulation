@@ -4,7 +4,7 @@ import TeamRoster from './TeamRoster.jsx';
 import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import { teamLabel, teamShort } from './gameText.js';
-import { raceText, milestoneText, worldText, honorRows } from './chronicleText.js';
+import { raceText, milestoneText, worldText, honorRows, draftRankText } from './chronicleText.js';
 
 // ============================================================
 // 球団史・記録（PC）。年表・歴代記録・引退した人・節目、リーグの話題。
@@ -134,7 +134,7 @@ function ProDrafted({ list, showTeam = false, empty }) {
             {showTeam && ` ${teamShort(r.team)}`}
           </b>
           <span>
-            {r.npbTeam} {r.round}位指名{r.reason ? `　${r.reason}` : ''}
+            {r.npbTeam} {draftRankText(r)}指名{r.reason ? `　${r.reason}` : ''}
           </span>
           {/* プロでのその後（球団史は全部の年、リーグ全体はいちばん新しい年。飾りでリーグには効かない） */}
           {(r.career || (r.after ? [r.after] : [])).map((t, j) => (

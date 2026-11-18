@@ -12,10 +12,13 @@ import {
   proDraftChance,
   PRO_DRAFT_MAX,
   PRO_DRAFT_THRESHOLD,
+  rankOf,
+  rankLabel,
   TEAMMATE_DISCIPLINE,
   TEAMMATE_EXPERIENCE_GAMES,
 } from '../../server/proDraft.mjs';
 import { teamChronicle, teamMoves, chronicleView } from '../../server/chronicle.mjs';
+import { draftRankText } from '../../src/online/chronicleText.js';
 import { FULL_SEASON_EXPERIENCE } from '../../src/season/campTraining.js';
 import { processSeasonEnd } from '../../src/season/yearProgressionSystem.js';
 import { qualifiedOuts } from '../../src/season/seasonManager.js';
@@ -62,6 +65,41 @@ for (let seed = 1; seed <= 12; seed++) {
 }
 const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
 assert.ok(mean >= 0.5 && mean <= 2.5, `年平均${mean.toFixed(2)}人（0.5〜2.5人のはず）`);
+
+// ②' 指名順位: **中位から育成指名が大半**（いしだ 2026-11-18「ドラフト順位が甘すぎます。
+//    独立リーガーのドラフトは中位から育成指名が大半だと思います」）。
+//    直す前の実測（40リーグ×3年・161人）は 1位32%・2位24%・3位24% と上位ばかりだった。
+{
+  const ranks = [];
+  for (let seed = 1; seed <= 20; seed++) {
+    const league = make(seed);
+    const teams = teamsOf(league);
+    for (let y = 0; y < 3; y++) {
+      league.season.year += 1;
+      for (const p of quiet(() => chooseProDraft(league, teams)))
+        ranks.push({ round: p.round, ikusei: !!p.ikusei });
+    }
+  }
+  assert.ok(ranks.length >= 20, `前提: 指名が少なすぎて割合を見られない（${ranks.length}人）`);
+  const share = (f) => ranks.filter(f).length / ranks.length;
+  const top = share((r) => !r.ikusei && r.round <= 3);
+  const mid = share((r) => !r.ikusei && r.round >= 4);
+  const ikusei = share((r) => r.ikusei);
+  // ⚠ 上位指名（1〜3位）は**たまに**。独立から1位で獲られるのは年に1人も出ない
+  assert.ok(top <= 0.2, `上位指名（1〜3位）が多すぎる: ${(top * 100).toFixed(0)}%`);
+  // ⚠ 中位（4位以下）＋育成で大半
+  assert.ok(mid + ikusei >= 0.7, `中位〜育成が少なすぎる: ${((mid + ikusei) * 100).toFixed(0)}%`);
+  // ⚠ 育成指名が**必ず混じる**（支配下だけだと「甘い」に戻る）
+  assert.ok(ikusei >= 0.1, `育成指名が少なすぎる: ${(ikusei * 100).toFixed(0)}%`);
+  assert.ok(ikusei <= 0.6, `育成指名ばかりになっている: ${(ikusei * 100).toFixed(0)}%`);
+  // 順位の書き方（「4位」「育成2位」）。画面・アプリと同じ
+  assert.equal(rankLabel({ round: 4 }), '4位');
+  assert.equal(rankLabel({ round: 2, ikusei: true }), '育成2位');
+  assert.equal(draftRankText({ round: 2, ikusei: true }), '育成2位', '画面の書き方がサーバーと違う');
+  // 点が高いほど上位（同じ点なら同じ順位）
+  assert.ok(rankOf(100).round < rankOf(40).round, '点が高いのに下位指名になっている');
+  assert.ok(!rankOf(100).ikusei && rankOf(0).ikusei, 'しきい値ぎりぎりが支配下になっている');
+}
 
 // ③ 同じ種・同じ年なら同じ指名（乱数を引かない）
 {

@@ -99,6 +99,8 @@ data class ProDrafted(
     val age: Int? = null,
     val npbTeam: String = "",
     val round: Int? = null,
+    /** 育成指名（支配下ではない契約）。独立からの指名は中位〜育成が大半（サーバー proDraft.mjs） */
+    val ikusei: Boolean = false,
     val reason: String? = null,
     /** プロでのいちばん新しい年の一行（飾り。サーバー proCareer.mjs）。古いサーバーには無い */
     val after: String? = null,
@@ -125,9 +127,13 @@ fun proDraftedHead(r: ProDrafted, short: ((String) -> String)? = null): String =
         (r.position?.let { "（${positionLabel(it)}・${r.age ?: "-"}歳）" } ?: "") +
         (short?.let { "　${it(r.team)}" } ?: "")
 
-/** プロ入りの中身（「読売ジャイアンツ 2位指名　20歳の将来性」） */
+/** 指名順位（「4位」「育成2位」）。⚠ Web 版 `chronicleText.js` の `draftRankText` と同じ書き方 */
+fun draftRankText(r: ProDrafted): String =
+    r.round?.let { "${if (r.ikusei) "育成" else ""}${it}位" } ?: ""
+
+/** プロ入りの中身（「読売ジャイアンツ 育成2位指名　20歳の将来性」） */
 fun proDraftedBody(r: ProDrafted): String =
-    "${r.npbTeam} ${r.round?.let { "${it}位" } ?: ""}指名" + (r.reason?.takeIf { it.isNotBlank() }?.let { "　$it" } ?: "")
+    "${r.npbTeam} ${draftRankText(r)}指名" + (r.reason?.takeIf { it.isNotBlank() }?.let { "　$it" } ?: "")
 
 /** 球団史（「team」の窓口の chronicle） */
 @Serializable
