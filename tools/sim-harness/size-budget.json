@@ -1,0 +1,14 @@
+{
+  "unit": "KB",
+  "note": "online-size-budget-check.mjs の上限。--update で書き直す。otherParts は、終わった年の試合を別の部分へ分ける変更（1年ぶん約22MB）が入っても落ちない幅にしてある。入ったら --update で records と合わせて締め直す",
+  "budget": {
+    "core": 9380,
+    "records": 32290,
+    "world": 65670,
+    "otherParts": 30000,
+    "storedGzip": 9690,
+    "view": 460,
+    "viewGzip": 60,
+    "teamInfo": 330
+  }
+}
