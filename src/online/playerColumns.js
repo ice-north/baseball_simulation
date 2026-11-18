@@ -72,3 +72,12 @@ export function pitchTypes(player) {
     .map((pitch) => `${getPitchTypeName(pitch.type)}${pitch.level ?? ''}`)
     .join(' ');
 }
+
+/** 変化球（直球を除く持ち球）の変化量の合計。持ち球の多さと質をまとめて1つの数で比べる */
+export function totalBreak(player) {
+  const pitches = (player?.pitching?.arsenal || []).filter(
+    (pitch) => pitch?.type && pitch.type !== 'straight',
+  );
+  if (!pitches.length) return null;
+  return pitches.reduce((sum, pitch) => sum + (Number(pitch.level) || 0), 0);
+}

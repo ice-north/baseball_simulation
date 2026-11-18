@@ -80,12 +80,14 @@ class ChronicleTest {
             assertTrue("臨む" !in raceText(decided.copy(kind = kind), { it })!!.body, kind)
     }
 
-    /** 球団史・記録の行: 歴代記録は PC と同じ上位3人、年は「N年目」 */
+    /** 球団史・記録の行: 歴代記録は PC と同じ上位10人まで、年は「N年目」 */
     @Test
     fun teamChronicleLines() {
         val c = OnlineJson.decodeFromJsonElement(TeamChronicle.serializer(), team.at("chronicle")!!)
         val hr = c.records.first { it.stat == "homeruns" }
-        assertEquals(TEAM_RECORD_ROWS, hr.season.size) // サーバーは3人まで返す（アプリも3人とも並べる）
+        assertEquals(10, TEAM_RECORD_ROWS)
+        // 見本の JSON は3人まで返していた頃のもの。サーバーは10人まで返し、アプリも全部並べる
+        assertTrue(hr.season.size in 3..TEAM_RECORD_ROWS, "${hr.season.size}")
         val lines = hr.season.take(TEAM_RECORD_ROWS).mapIndexed { i, x -> seasonRecordLine(i + 1, x) }
         assertTrue(lines[0].startsWith("1位　${hr.season[0].name}（1年目"), lines[0])
         assertTrue(lines[2].startsWith("3位　"), lines[2])

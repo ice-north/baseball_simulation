@@ -454,6 +454,8 @@ const TEAM_RECORDS = [
   { side: 'pitching', stat: 'holds', label: 'ホールド' },
   { side: 'pitching', stat: 'strikeouts', label: '奪三振' },
 ];
+/** 歴代記録に並べる人数（シーズン最多・球団通算とも） */
+export const TEAM_RECORD_ROWS = 10;
 const AWARD_LABELS = {
   battingChampion: '首位打者', homeRunKing: '本塁打王', rbiKing: '打点王', stolenBaseKing: '盗塁王',
   eraChampion: '最優秀防御率', winsLeader: '最多勝', strikeoutKing: '最多奪三振', savesLeader: '最多セーブ',
@@ -507,7 +509,8 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
   // 年表（終わった年）
   const seasons = teamSeasons(league, teamName);
 
-  // 歴代記録: シーズン最多（各項目の上位3）と通算（この球団での成績の上位3）
+  // 歴代記録: シーズン最多（各項目の上位10）と通算（この球団での成績の上位10）
+  // ⚠ いしだ 2026-11-18「歴代記録は3位までではなく各項目10位まで」。アプリも同じ数だけ並べる（`TEAM_RECORD_ROWS`）
   const single = Object.fromEntries(TEAM_RECORDS.map((r) => [r.stat, []]));
   const careers = new Map();
   for (const season of Object.values(league.records?.seasons || {})) {
@@ -538,7 +541,7 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
       careers.set(rec.key, c);
     }
   }
-  const top = (list) => list.sort((a, b) => b.value - a.value || a.year - b.year || a.name.localeCompare(b.name, 'ja')).slice(0, 3);
+  const top = (list) => list.sort((a, b) => b.value - a.value || a.year - b.year || a.name.localeCompare(b.name, 'ja')).slice(0, TEAM_RECORD_ROWS);
   const records = TEAM_RECORDS.map((r) => ({
     stat: r.stat,
     label: r.label,

@@ -412,7 +412,7 @@ private fun CareerRanking(model: AppViewModel, view: LeagueView, raw: JsonObject
     Column(Modifier.fillMaxSize()) {
         ChipTabs(boards.map { it.at("id").str().orEmpty() to it.at("label").str().orEmpty() }, board.at("id").str().orEmpty(), { selected = it })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Muted("リーグ全球団の選手の、このリーグを始めてからの合計です（今季を含む・退団した選手も残ります）。" + (board.at("qualified").str()?.let { " $it" } ?: ""))
+            Muted("リーグ全球団の選手の、このリーグを始めてからの合計です（今季を含む・退団・引退した選手も灰色で残ります）。" + (board.at("qualified").str()?.let { " $it" } ?: ""))
             val rows = board.at("rows").list().mapNotNull { it.obj() }
             if (rows.isEmpty()) Muted("該当なし", Modifier.padding(vertical = 12.dp))
             rows.forEachIndexed { i, row ->
@@ -426,10 +426,16 @@ private fun CareerRanking(model: AppViewModel, view: LeagueView, raw: JsonObject
                 ) {
                     Text("${i + 1}", modifier = Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Column(Modifier.weight(1f)) {
-                        Text(row.at("name").str().orEmpty(), fontWeight = if (mine) FontWeight.Bold else FontWeight.SemiBold, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                        Muted((row.at("team").str()?.let { view.teamShort(it) } ?: "—") + if (active) "" else "（退団）")
+                        // ⚠ 現役でない人（退団・引退）は「（退団）」と書かずに**灰色**で分ける（PC の通算成績と同じ。いしだ 2026-11-18）
+                        val nameColor = when {
+                            mine -> MaterialTheme.colorScheme.primary
+                            active -> MaterialTheme.colorScheme.onSurface
+                            else -> MaterialTheme.colorScheme.outline
+                        }
+                        Text(row.at("name").str().orEmpty(), fontWeight = if (mine) FontWeight.Bold else FontWeight.SemiBold, color = nameColor)
+                        Muted(row.at("team").str()?.let { view.teamShort(it) } ?: "—")
                     }
-                    Text(text(row.at("value").num()), fontWeight = FontWeight.Bold)
+                    Text(text(row.at("value").num()), fontWeight = FontWeight.Bold, color = if (active) Color.Unspecified else MaterialTheme.colorScheme.outline)
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }

@@ -233,8 +233,8 @@ data class ChronicleText(val head: String, val body: String)
 /** 年の書き方。オンラインの年は1年目からの通し番号なので「1年目」と書く（「1年」だと期間や学年に読める） */
 fun yearLabel(year: Int): String = "${year}年目"
 
-/** 歴代記録はシーズン最多・球団通算とも上位3人（サーバーが3人まで返す。PC も3人並べる） */
-const val TEAM_RECORD_ROWS = 3
+/** 歴代記録はシーズン最多・球団通算とも上位10人（サーバーが10人まで返す。PC も10人並べる。server/chronicle.mjs の TEAM_RECORD_ROWS と同じ数） */
+const val TEAM_RECORD_ROWS = 10
 
 /** 年表の1行（「2年目　1部2位 64勝53敗3分 プレーオフ優勝」） */
 fun TeamSeason.historyLine(): String = "${yearLabel(year)}　$line"
