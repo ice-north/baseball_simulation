@@ -12,7 +12,7 @@ import {
 
 export const RECORD_VERSION = 1;
 const clone = (value) => structuredClone(value);
-const keyFor = (team, player) =>
+export const keyFor = (team, player) =>
   player.onlinePlayerId || `${team}:${player.id}:${player.name}`;
 export function observedSeason(league) {
   return league.records?.seasons?.[league.season.year] || null;
