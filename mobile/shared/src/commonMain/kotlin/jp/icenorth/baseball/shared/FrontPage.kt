@@ -11,6 +11,9 @@ import kotlin.math.round
  *    「数字数字したことは試合タブ、ホームはエンタメ感」）。ここでは数字は記事の文の中に少しだけ入れる。
  * ⚠ 文はビューから決まる（同じビューなら同じ紙面）。言い回しは試合ごとに変える（[Pen]・FrontPageCopy.kt）。
  *    乱数で選ぶと、開き直すたびに記事が変わって見える。
+ * ⚠ PC 版（src/online/paper/。ホームの「スポーツ新聞」）はこの FrontPage*.kt・StaffNews.kt の写し。
+ *    文を変えたら PC 版も直し、`node mobile/tools/expect-paper.mjs > …/front/paper-expected.json` で期待値を
+ *    書き出し直す（答え合わせは FrontPageWebTest）
  */
 data class FrontPage(
     /** 題字の下の日付（「4月23日 第25ターン」） */
