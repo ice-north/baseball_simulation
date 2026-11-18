@@ -71,6 +71,17 @@ assert.equal(face.candidates.length, 0, '欠番にした人がまだ候補にい
 // 欠番を戻す
 setTeamFace(league, 'a', { unretire: number });
 assert.equal(team.retiredNumbers.length, 0);
+// 引退した人の番号がもう次の人に付いていても欠番にでき、付けている人の番号は振り直す
+{
+  const heir = team.players.at(-1);
+  heir.number = number;
+  const result = setTeamFace(league, 'a', { retire: { name: veteran.name, year: 1 } });
+  assert.equal(result.retired, number);
+  assert.notEqual(heir.number, number, '欠番にした番号を付けている人の番号を振り直していない');
+  assert.equal(result.renumbered?.number, heir.number);
+  assert.ok(!team.players.some((p) => p.number === number));
+  setTeamFace(league, 'a', { unretire: number });
+}
 assert.ok(RETIRED_NUMBERS_MAX >= 5);
 
 // ④ 一人用の割り当ては今までと同じ（欠番を渡さない）

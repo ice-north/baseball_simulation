@@ -57,10 +57,17 @@ export function updateTeamFace(league, team, teamName, payload = {}) {
     const list = (team.retiredNumbers ||= []);
     requireOnline(!list.some((x) => x.number === r.number), `背番号${r.number}はもう永久欠番です`, 409);
     requireOnline(list.length < RETIRED_NUMBERS_MAX, `永久欠番は${RETIRED_NUMBERS_MAX}までです`, 409);
+    // ⚠ 本人がまだ名簿にいる（引退の記録の前）なら断る。**別の人が付けていても欠番にできる**:
+    //    引退した人の番号は良い番号から振るのですぐ次の人に付き、断ると欠番にできなかった。
+    //    付けている人は、欠番を避けて番号を振り直す（`ensureTeamJerseyNumbers`）
     const wearing = team.players.find((p) => p.number === r.number);
-    requireOnline(!wearing, `背番号${r.number}はいま${wearing?.name}が付けています`, 409);
+    requireOnline(!wearing || wearing.name !== r.name, `背番号${r.number}はいま${wearing?.name}が付けています`, 409);
     list.push({ number: r.number, name: r.name, year: r.year, position: r.position || null });
     list.sort((a, b) => a.number - b.number);
+    if (wearing) {
+      ensureTeamJerseyNumbers(team, reservedOf(team));
+      return { retired: r.number, renumbered: { name: wearing.name, number: wearing.number } };
+    }
     return { retired: r.number };
   }
   if (payload.unretire != null) {
