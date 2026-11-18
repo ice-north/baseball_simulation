@@ -584,6 +584,8 @@ class AppViewModel internal constructor(
         error = null
         clearCaches()
         ResultNotifier.sync(getApplication<Application>(), store)
+        // ⚠ ウィジェットは自分で読み直さない。描き直さないと、ログアウトしても前の球団の順位と試合を出し続ける
+        SummaryWidget.refresh(getApplication<Application>())
         if (current != null) viewModelScope.launch { runCatching { client.logout(current) } }
     }
 
