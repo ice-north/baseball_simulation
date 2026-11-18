@@ -97,6 +97,9 @@ async function fixture({
     } else if (action === 'presence') {
       // 来たことの知らせ（画面を開くと送る。版は上がらない）
       value = { ok: true };
+    } else if (action === 'invites') {
+      // リーグ管理を開くと招待の一覧を読む（`Invites.jsx`）
+      value = { invites: [] };
     } else if (action === 'logout') {
       logouts++;
       value = { ok: true };
