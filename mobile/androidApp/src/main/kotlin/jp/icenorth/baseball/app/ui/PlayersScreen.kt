@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.graphics.Color
 import jp.icenorth.baseball.shared.AGE_OUTLOOK_NOTE
 import jp.icenorth.baseball.shared.AgeOutlook
+import jp.icenorth.baseball.shared.AGE_GRID_GROUPS
+import jp.icenorth.baseball.shared.ageGridRows
 import jp.icenorth.baseball.shared.ageOutlookLabel
 import jp.icenorth.baseball.shared.OnlineJson
 import jp.icenorth.baseball.shared.TeamDiagnosis
@@ -150,7 +152,9 @@ fun AgeOutlookCard(outlook: AgeOutlook?, compact: Boolean = false) {
     if (outlook == null) { if (!compact) Text("まだ見込みを出せません。", style = MaterialTheme.typography.bodySmall); return }
     val most = (outlook.bands.maxOfOrNull { it.pitchers + it.fielders } ?: 1).coerceAtLeast(1)
     Section("年齢構成と${outlook.years}年後の見込み") {
-        outlook.bands.forEach { b ->
+        // 年齢 × 守備位置の図（Web 版 AgeOutlook.jsx の AgeGrid と同じ）。古いサーバー（grid が無い）なら前の帯グラフ
+        if (outlook.grid.isNotEmpty()) AgeGrid(outlook)
+        else outlook.bands.forEach { b ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(b.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(72.dp))
                 Row(Modifier.weight(1f).height(10.dp).background(Color(0x26949FB8))) {
@@ -171,6 +175,54 @@ fun AgeOutlookCard(outlook: AgeOutlook?, compact: Boolean = false) {
                 color = if (r.kind == "decline" || r.veteran) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
         }
+    }
+}
+
+/**
+ * 年齢 × 守備位置の図（縦が年齢で上ほど年上・いちばん上は「30以上」、横が投手・捕手・内野・外野）。
+ * ⚠ いしだ 2026-11-18「どのポジションが将来足りなくなるか分かりやすいように」。「3年後」で全員を3つ上の段へ。
+ *    主力は太字、3年後に下り坂・引退が近い主力は赤（Web 版と同じ印）
+ */
+@Composable
+private fun AgeGrid(outlook: AgeOutlook) {
+    var later by remember { mutableStateOf(false) }
+    val rows = remember(outlook, later) { ageGridRows(outlook.grid, later) }
+    val line = MaterialTheme.colorScheme.outlineVariant
+    Column {
+        ChipTabs(listOf("now" to "いま", "later" to "${outlook.years}年後"), if (later) "later" else "now", { later = it == "later" }, endPadding = 0.dp)
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            Text("年齢", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(44.dp))
+            AGE_GRID_GROUPS.forEachIndexed { g, name ->
+                Text("$name ${outlook.grid.count { it.group == g }}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            }
+        }
+        HorizontalDivider(color = line)
+        rows.forEach { row ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                Text(row.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(44.dp))
+                row.cells.forEachIndexed { g, people ->
+                    Column(Modifier.weight(1f)) {
+                        people.forEach { p ->
+                            val pos = if (g >= 2) positionLabel(p.position) else ""
+                            val age = if (row.label.endsWith("以上")) " ${if (later) p.later else p.age}" else ""
+                            Text(
+                                p.name + pos + age,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                fontWeight = if (p.core) FontWeight.Bold else FontWeight.Normal,
+                                color = when {
+                                    p.warn -> MaterialTheme.colorScheme.error
+                                    p.core -> MaterialTheme.colorScheme.onSurface
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            HorizontalDivider(color = line.copy(alpha = 0.5f))
+        }
+        Text("太字は主力、赤は${outlook.years}年後に下り坂か引退が近い年齢になる主力です。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
