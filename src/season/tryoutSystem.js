@@ -5,7 +5,12 @@
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
-import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
+import {
+  getHighSchoolTryoutCandidates,
+  getHighSchoolEliteTryoutCandidates,
+  getHighSchoolToolTryoutCandidates,
+  getUniversitySeniorTryoutCandidates,
+} from './universityPool.js';
 import {
   getUtilityScore,
   generateCatcherLead,
@@ -188,6 +193,16 @@ const buildPositionBag = (count) => {
  */
 const TRYOUT_GROUP_MIX = { pitcher: 0.40, catcher: 0.09, infield: 0.26, outfield: 0.25 };
 const TRYOUT_OVERDRAW = 3;
+/**
+ * 高校生の受験者のうち、帯の外から来る枠の割合。
+ * ⚠ **小さく保つこと**（実測で合わせた値）。逸材枠はDリーグで約5%・Sリーグで9%、
+ *    素材枠はどのリーグでも8%。いしだ要望は「9割くらい大学生が強くていい」なので、
+ *    これ以上増やすとその釣り合いが崩れる（実測: 逸材枠を12%にすると、受験者全体の
+ *    1位が高卒になる年が6割を超えた）。
+ */
+const HS_ELITE_SHARE = 0.045;
+const HS_ELITE_SHARE_BY_RANK = 0.045;
+const HS_TOOL_SHARE = 0.08;
 const positionGroupOf = (p) => p === 'pitcher' ? 'pitcher'
   : p === 'catcher' ? 'catcher'
   : ['first', 'second', 'third', 'short'].includes(p) ? 'infield' : 'outfield';
@@ -627,13 +642,29 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   const gemBias = Math.min(1, qualityBias + 0.25);
   // 通常枠（90%）とgem枠（10%）に分割
   const split = (n) => { const gem = Math.max(1, Math.round(n * 0.1)); return { main: Math.max(0, n - gem), gem }; };
-  const hsS = split(hsCount), uniS = split(uniCount);
+  // ⚠ 高校生だけ、帯の外から来る2枠を先に取り分ける（いしだ 2026-11-18
+  //    「高卒が軒並み大学生より弱い。一部強い高校生や、荒削りな素材型がいてほしい」）。
+  //    - 逸材枠: プールの最上位から。**リーグの格で人数が変わる**（格が上がるほど来る）
+  //    - 素材枠: 走・肩・球速・体幹のどれかが図抜けた人から。格では変えない（誰も誘わないので、
+  //      どのリーグにも同じだけ流れてくる）
+  // ⚠ **帯そのものは広げない**。広げると高卒全体が底上げされ、「9割は大学生のほうが
+  //    強い」という釣り合いが崩れる。人数で混ぜるだけにする。
+  const hsElite = Math.max(1, Math.round(hsCount * (HS_ELITE_SHARE + HS_ELITE_SHARE_BY_RANK * qualityBias)));
+  const hsTool = Math.max(1, Math.round(hsCount * HS_TOOL_SHARE));
+  const hsRest = Math.max(0, hsCount - hsElite - hsTool);
+  const hsS = split(hsRest), uniS = split(uniCount);
   // 多めに引いてから守備位置の群で間引く（プールの評価順に構成比が引きずられるのを断つ）
   const drawHS = (n, bias) => balanceByPosition(getHighSchoolTryoutCandidates(n * TRYOUT_OVERDRAW, bias), n);
   const drawUni = (n, bias) => balanceByPosition(getUniversitySeniorTryoutCandidates(year, n * TRYOUT_OVERDRAW, bias), n);
   // 1. 高校卒業予定
   drawHS(hsS.main, qualityBias).forEach(addCandidate);
   drawHS(hsS.gem, gemBias).forEach(c => { c._gem = true; addCandidate(c); });
+  // ⚠ この2枠は**多めに引かない**（`TRYOUT_OVERDRAW` を掛けない）。多めに引くと
+  //    最上位が混ざる確率がそのぶん上がり、実測で「受験者の1位が高卒」の年が8割に
+  //    なった（引く人数ぶんだけ上へ寄せた抽選をしているため）。守備位置の散らばりは、
+  //    逸材枠は人数が少ないので気にせず、素材枠は一芸ごとに順番に取ることで作る。
+  getHighSchoolEliteTryoutCandidates(hsElite).forEach(addCandidate);
+  getHighSchoolToolTryoutCandidates(hsTool).forEach(addCandidate);
   // 2. 大学4年生（卒業予定・NPB未指名）
   drawUni(uniS.main, qualityBias).forEach(addCandidate);
   drawUni(uniS.gem, gemBias).forEach(c => { c._gem = true; addCandidate(c); });
