@@ -35,6 +35,7 @@ const CHECKS = [
   { name: 'sim-integrity-check', group: 'quick', slow: 4 },
   { name: 'season-check', group: 'quick', slow: 8 },
   { name: 'draft-check', group: 'quick', slow: 8 },
+  { name: 'tryout-candidates-check', group: 'check', slow: 5 },
   { name: 'bracket-check', group: 'quick', slow: 2 },
   { name: 'contract-scope-check', group: 'quick', slow: 2 },
   { name: 'pool-leak-check', group: 'quick', slow: 2 },

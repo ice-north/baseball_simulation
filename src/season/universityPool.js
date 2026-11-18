@@ -557,24 +557,29 @@ export function assignCareerPaths(highSchoolClass, year) {
  * 選手の潜在能力を評価（進路振り分け用）
  * 現在の能力 + 成長力を加味
  */
-function evaluatePlayerPotential(player) {
-  const isPitcher = player.position === 'pitcher';
-  const gp = player.growthPotential || 1.0;
-
-  let abilityScore;
-  if (isPitcher) {
+/**
+ * いまの力だけの点（伸びしろ・知名度・ゆらぎを混ぜない）。
+ * ⚠ 進路の振り分けは `evaluatePlayerPotential`（伸びしろ・知名度こみ）で決める。
+ *    こちらは「**画面に出る強さ**で並べたい」ところだけで使う（逸材枠）。
+ */
+function currentAbilityScore(player) {
+  if (player.position === 'pitcher') {
     const v = player.pitching?.velocity || 130;
     const c = player.pitching?.control || 40;
     const s = player.pitching?.stamina || 60;
-    abilityScore = (v - 120) * 1.5 + c + s * 0.4;
-  } else {
-    const m = player.batting?.meet || 0;
-    const p = player.batting?.power || 0;
-    const spd = player.physical?.speed || 0;
-    const def = player.fielding?.defense || 0;
-    const arm = player.physical?.arm || 0;
-    abilityScore = m + p + spd * 0.5 + def * 0.3 + arm * 0.3;
+    return (v - 120) * 1.5 + c + s * 0.4;
   }
+  const m = player.batting?.meet || 0;
+  const p = player.batting?.power || 0;
+  const spd = player.physical?.speed || 0;
+  const def = player.fielding?.defense || 0;
+  const arm = player.physical?.arm || 0;
+  return m + p + spd * 0.5 + def * 0.3 + arm * 0.3;
+}
+
+function evaluatePlayerPotential(player) {
+  const gp = player.growthPotential || 1.0;
+  const abilityScore = currentAbilityScore(player);
 
   // 成長力で補正（高成長の選手は上位に配置されやすい）
   const growthBonus = (gp - 0.9) * 50;
@@ -847,15 +852,146 @@ export function getHighSchoolTryoutCandidates(count, qualityBias = 0) {
   const start = Math.floor(scored.length * (0.30 - 0.25 * bias));
   const end = Math.max(start + count, Math.floor(scored.length * (0.68 - 0.48 * bias)));
   const band = _shuffleInPlace(scored.slice(start, end));
-  return band.slice(0, count).map(({ p }) => {
-    const c = _cloneForTryout(p);
-    // 年末トライアウト時点では高校3年生=18歳。入団後の年次進行で翌キャンプに19歳になる。
-    c.age = c.age || 18;
-    c.origin = 'independent_candidate';
-    c._tryoutSource = 'highschool';
-    c.isNewcomer = true;
-    return c;
-  });
+  return band.slice(0, count).map(({ p }) => _asHighSchoolCandidate(p));
+}
+
+/** 高校生プールの選手を受験者の形にする（帯・逸材・素材型で共通） */
+function _asHighSchoolCandidate(player, kind = 'band') {
+  const c = _cloneForTryout(player);
+  // 年末トライアウト時点では高校3年生=18歳。入団後の年次進行で翌キャンプに19歳になる。
+  c.age = c.age || 18;
+  c.origin = 'independent_candidate';
+  c._tryoutSource = 'highschool';
+  // どの枠で来たか（検査と、あとで画面に出すときの手がかり。保存には載らない）
+  if (kind !== 'band') c._tryoutKind = kind;
+  c.isNewcomer = true;
+  return c;
+}
+
+// ============================================================
+// 高校生の「帯の外」から来る2つの枠（いしだ 2026-11-18
+// 「高卒が軒並み大学生より弱い。一部強い高校生や、荒削りな素材型がいてほしい」）。
+//
+// 【なぜ必要か】受験者の高校生は評価順の帯（上位30〜68%）からしか引いていなかった。
+// プールには強い選手も一芸の持ち主も居るのに、**どちらも帯より上**にいて来られない。
+//   実測（12球団・3回ぶん）: 高卒が大学生の評価の中央値を超えるのは 力で4.7%、
+//   大学生の最大を超えた高卒は 358人中0人。走か肩が80以上の高卒は1%（大学は6%）。
+//   プール5000人では 走か肩80以上が48人居て、**36人が帯より上**（＝絶対に来ない）。
+// ============================================================
+
+/**
+ * 逸材枠。プールの**最上位**から引く（大学・NPBではなく、すぐ試合に出られる道を選んだ高校生）。
+ * ⚠ **人数で絞ること**（帯を広げない）。帯を上へ広げると高卒全体が強くなり、
+ *    「9割は大学生のほうが強い」という釣り合いが崩れる（いしだ要望）。
+ */
+export function getHighSchoolEliteTryoutCandidates(count) {
+  const pool = (highSchoolPool.players || []).filter(p => !p._universityReserved);
+  if (pool.length === 0 || count <= 0) return [];
+  // ⚠ ここだけ **いまの力**で並べる（`evaluatePlayerPotential` は伸びしろ・知名度・
+  //    ゆらぎを混ぜるので、「最上位」を取っても画面では評価49の選手が混じる。実測で
+  //    逸材枠の平均が大学生の中央値と並ぶだけだった）
+  const scored = pool.map(p => ({ p, s: currentAbilityScore(p) })).sort((a, b) => b.s - a.s);
+  const top = Math.max(count, Math.floor(scored.length * HS_ELITE_BAND));
+  // ⚠ 帯の中で**上へ寄せて引く**（一様だと帯の平均＝大学生の中央値あたりに固まり、
+  //    「飛び抜けた高校生」が出ない）。u² なので半分はプールの上位1.5%から来て、
+  //    ときどき最上位（大学生の最大を超える選手）が混じる。
+  //    ⚠ 寄せ方を強めるのは良いが、**人数（`HS_ELITE_SHARE`）は増やさないこと**。
+  //       増やすと高卒全体が強くなり、「9割は大学生のほうが強い」が崩れる
+  const picked = new Set();
+  const out = [];
+  for (let guard = 0; out.length < count && guard < count * 50; guard += 1) {
+    const i = Math.min(top - 1, Math.floor(top * Math.random() ** 2));
+    if (picked.has(i)) continue;
+    picked.add(i);
+    out.push(_asHighSchoolCandidate(scored[i].p, 'elite'));
+  }
+  return out;
+}
+
+/** プールの上位何割から逸材枠を引くか。狭いほど「飛び抜けた高校生」が混じる */
+const HS_ELITE_BAND = 0.06;
+/**
+ * 素材型とみなす一芸の強さ（プールの中での上位何割か）。
+ * 実測の線: 上位1.5% は 走69・肩76・体68（プールの中央は 走35・肩43・体46）
+ */
+const HS_TOOL_BAND = 0.015;
+/** 素材型は「総合では目立たない」人から。評価順の上位何割より下を見るか */
+const HS_TOOL_MIN_RANK = 0.25;
+/**
+ * 素材（荒削りな強み）。体幹は体力（`bodyStamina`）で見る。
+ * ⚠ **投手と野手で見るものを分ける**。投手の肩は画面にも出ないし、荒削りな投手は
+ *    「球は速いが制球が無い」。野手の球速を見ても意味が無い
+ */
+const HS_TOOLS = [
+  { key: 'speed', of: (p) => p.physical?.speed, pitcher: false },
+  { key: 'arm', of: (p) => p.physical?.arm, pitcher: false },
+  { key: 'velocity', of: (p) => p.pitching?.velocity, pitcher: true },
+  { key: 'body-f', of: (p) => p.physical?.bodyStamina, pitcher: false },
+  { key: 'body-p', of: (p) => p.physical?.bodyStamina, pitcher: true },
+];
+const _isPitcher = (p) => p.position === 'pitcher';
+const _toolFits = (tool, p) => tool.pitcher === _isPitcher(p);
+/** 素材型は伸びしろのある人から選ぶ（荒削りでも、育てば化ける見込みがあること） */
+const HS_TOOL_MIN_GROWTH = 1.0;
+
+/**
+ * 素材型枠。走・肩・体幹のどれかがプールの上位 `HS_TOOL_BAND` に入る選手を、
+ * **総合の評価は見ずに**引く（評価順では上位でない人だけ）。
+ * ⚠ 一芸の線は**プールの中の相対**で引くこと。「80以上」のような決め打ちだと、
+ *    体幹は実測で80以上が5000人中1人しか居らず、その枠が毎年空になる。
+ */
+export function getHighSchoolToolTryoutCandidates(count) {
+  const pool = (highSchoolPool.players || []).filter(p => !p._universityReserved);
+  if (pool.length === 0 || count <= 0) return [];
+  const scored = pool.map(p => ({ p, s: evaluatePlayerPotential(p) })).sort((a, b) => b.s - a.s);
+  // 評価順で上位すぎる人は逸材枠の仕事（ここは「強くはないが素材がある」人）
+  const rankOf = new Map(scored.map(({ p }, i) => [p, i / scored.length]));
+  // ⚠ 線は**同じ括りの中で**引く（投手の球速を野手ごみで並べない）
+  const cut = {};
+  for (const tool of HS_TOOLS) {
+    const values = pool
+      .filter((p) => _toolFits(tool, p))
+      .map(tool.of)
+      .filter((v) => typeof v === 'number')
+      .sort((a, b) => b - a);
+    cut[tool.key] = values.length
+      ? values[Math.min(values.length - 1, Math.floor(values.length * HS_TOOL_BAND))]
+      : Infinity;
+  }
+  // ⚠ **一芸ごとに順番に取る**。まとめて無作為に引くと、人数の多い括り（体力の
+  //    ある投手）ばかりになり、「足の速い野手」「強肩の野手」が出てこない（実測で
+  //    15人中11人が体力型の投手だった）
+  // 伸びしろのある人を先に。足りなければ残りから埋める（枠を空けない）
+  const order = (list) => [
+    ..._shuffleInPlace(list.filter((p) => (p.growthPotential ?? 1) >= HS_TOOL_MIN_GROWTH)),
+    ..._shuffleInPlace(list.filter((p) => (p.growthPotential ?? 1) < HS_TOOL_MIN_GROWTH)),
+  ];
+  const buckets = HS_TOOLS.map((tool) =>
+    order(
+      pool.filter(
+        (p) =>
+          (rankOf.get(p) ?? 1) >= HS_TOOL_MIN_RANK &&
+          _toolFits(tool, p) &&
+          (tool.of(p) ?? -1) >= cut[tool.key],
+      ),
+    ),
+  );
+  const taken = new Set();
+  const out = [];
+  for (let round = 0; out.length < count && round < 50; round += 1) {
+    let moved = false;
+    for (const bucket of buckets) {
+      if (out.length >= count) break;
+      while (bucket.length && taken.has(bucket[0])) bucket.shift();
+      if (!bucket.length) continue;
+      const player = bucket.shift();
+      taken.add(player);
+      out.push(_asHighSchoolCandidate(player, 'tool'));
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  return out;
 }
 
 // 卒業予定の大学4年生（NPB未指名）を抽出（クローンを返す）
