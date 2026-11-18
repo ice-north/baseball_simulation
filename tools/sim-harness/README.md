@@ -74,6 +74,14 @@ node tools/sim-harness/progression-check.mjs 8    # 年数
 （`--serial` で1モードずつ、`club sandbox` のようにモードを選べる）。重いので `check` の束には
 入れていない。年次進行・オフの画面・`ManagementScreen.jsx` の遷移を触ったら回す。
 
+### 保存とビューの大きさの上限（online-size-budget-check.mjs）
+
+`npm run check:online:size`（約3分）。2人のリーグを1年目の開幕から2年目の20試合まで進め、保存の部分
+（芯・記録・世界…）とビュー・球団の情報の大きさを3時点で測って、`size-budget.json` の上限と比べる。
+保存する項目を足して落ちたら、まず減らせないかを考える（内訳は `online-size-probe.mjs`）。要る増え方なら
+`node tools/sim-harness/online-size-budget-check.mjs --update` で上限を書き直し（いまの大きさ×1.2）、PR に理由を書く。
+上限の60%を下回ると「下げどき」と出るので、減らしたあとも `--update` で締め直す。CI では `online-size` ジョブ。
+
 ## 何を検証するか
 
 ### season-check.mjs — 試合エンジンのバランス
@@ -210,6 +218,20 @@ node tools/sim-harness/tactic-strength-probe.mjs 10 400 打撃慎重  # 名前�
 同じ名簿の双子の球団を作り、片方だけ設定を変えて対戦させる。方針の数字
 （`src/online/tactics.js` の `STRATEGY_MODS`）を変えたら回し、「何も変えない（対照）」と
 比べて ± の幅に収まるかを見る（いしだの方針「型で強さを変えない」）。
+
+### long-run-probe.mjs — 試合込みで何年も進めたときのバランスと不整合（プローブ / 合否なし）
+
+```bash
+node tools/sim-harness/long-run-probe.mjs 10 11 /tmp/s11.json   # 年数・種・結果のJSON（10年で約35分）
+DUMP=/tmp/y10.json node tools/sim-harness/long-run-probe.mjs 10 33   # 最後の年のリーグを書き出す（調べ物用、約370MB）
+```
+
+人2人（標準案）＋CPUのオンラインのリーグを試合込みで進め、毎年の契約更改が開いた時点で
+リーグの成績（打率・出塁率・長打率・本塁打・防御率・BB/9・盗塁）・勝率の散らばり・能力の平均と上位・
+部ごとの戦力・年齢の層・名簿・保存の大きさ・人の球団と最下位の球団の中身（投手と捕手の数・ローテ・疲労）を出す。
+範囲外の能力・数でない成績・28人超え・捕手なし・疲労200超えと、`console.error`/例外も数える。
+⚠ 種で結果が大きく変わるので4つ以上を並べる（4コアなら同時に4本）。1年あたりの時間は年を追うごとに延びる
+（1年目約130秒 → 10年目約300秒。世界の全選手の `statsHistory` が増えて、毎日の世界の写しが重くなる）。
 
 ## 構成
 

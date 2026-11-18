@@ -31,6 +31,7 @@ import { MobileTradeReplies } from './TradeScreen.jsx';
 import { RenameDialog } from './DesktopView.jsx';
 import { AwaySummaryBanner, FirstWeekBanner, InboxCard, MobileExhibitionReplies } from './SocialPages.jsx';
 import { useFirstWeek } from './useFirstWeek.js';
+import TeamDiagnosis from './TeamDiagnosis.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab, away, dismissAway } =
     props;
@@ -175,11 +176,21 @@ export default function MobileView(props) {
       {tab === 'players' && (
         <TeamRoster view={view}>
           {(shown, selector) => (
-            <CompactRoster
-              key={shown.teamName}
-              view={shown}
-              teamSelector={selector}
-            />
+            <>
+              <CompactRoster
+                key={shown.teamName}
+                view={shown}
+                teamSelector={selector}
+              />
+              {/* 自球団だけ: チーム診断（PC と同じ文。スマホWeb は投手起用も打順のタブ。トレードの提案はPC・アプリだけなので飛ばない） */}
+              {shown.teamName === view.teamName && (
+                <TeamDiagnosis
+                  diagnosis={view.diagnosis}
+                  open={() => setTab('lineup')}
+                  pages={['lineup', 'rotation']}
+                />
+              )}
+            </>
           )}
         </TeamRoster>
       )}

@@ -2,6 +2,7 @@ import Chronicle from './Chronicle.jsx';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFirstWeek } from './useFirstWeek.js';
 import AgeOutlook from './AgeOutlook.jsx';
+import TeamDiagnosis from './TeamDiagnosis.jsx';
 import {
   Results,
   Notices,
@@ -54,6 +55,7 @@ import {
   MembersAdmin,
 } from './SocialPages.jsx';
 import { rosterGroup } from '../utils/constants.js';
+import { InvitesAdmin } from './Invites.jsx';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -653,6 +655,8 @@ export default function DesktopView(props) {
                 />
               </section>
               {/* 自球団だけ: 年齢構成と3年後の見込み（成長力を使うので他球団には無い） */}
+              {/* 自球団だけ: チーム診断「なぜ勝てない？」（直せることと、直す画面へのボタン） */}
+              {shown.teamName === view.teamName && <TeamDiagnosis diagnosis={view.diagnosis} open={setTab} />}
               {shown.teamName === view.teamName && <AgeOutlook outlook={view.ageOutlook} />}
             </Page>
           )}
@@ -718,6 +722,7 @@ export default function DesktopView(props) {
       {current === 'admin' && (
         <Page title="リーグ管理">
           <Admin {...props} />
+          <InvitesAdmin {...props} />
           <MembersAdmin {...props} />
         </Page>
       )}

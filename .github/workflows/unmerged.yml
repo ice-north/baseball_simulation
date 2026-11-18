@@ -1,0 +1,39 @@
+name: unmerged
+
+# 取りこぼし検知: 作業用のフォークのブランチにあって、ice-north の main に入っていないコミットを一覧にする
+# （tools/unmerged-report.mjs）。フォークでだけ動き、ice-north では何もしない。一覧は実行のまとめ（Summary）に出る。
+#
+# - claude/** への push のたび: 一覧を出すだけ（落とさない。PR の検査の一覧を赤くしないため）
+# - 毎日 1 回と手動: PR の無い取りこぼしが 3 日より古ければ落とす（GitHub から失敗の知らせが届く）
+#   ⚠ 毎日の分は、フォークの既定ブランチ（main）にこのファイルがあるときだけ動く。フォークの main が
+#      古いままなら、GitHub の「Sync fork」で ice-north の main に合わせる
+on:
+  push:
+    branches: ['claude/**']
+  schedule:
+    - cron: '17 22 * * *' # 毎日 07:17（日本時間）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unmerged
+  cancel-in-progress: true
+
+jobs:
+  report:
+    if: github.repository_owner != 'ice-north'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 未取り込みのコミットを一覧にする
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAIL_ARGS: ${{ github.event_name == 'push' && ' ' || '--fail-after-days 3' }}
+        run: node tools/unmerged-report.mjs $FAIL_ARGS

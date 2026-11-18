@@ -427,18 +427,36 @@ try {
     assert.notEqual(after.phase?.kind, 'tryout', 'トライアウトが解決していない');
     const mineRoster = after.game.teams[teamName].players;
     const mine = rosterCounts(mineRoster);
-    // ① 希望した4人が、希望した順（1巡目〜4巡目）で入っていること。
+    // ① 取れた希望は、**希望した順に・続けて**入っていること（1巡目から詰めて）。
     //    ⚠ 目標構成で飛ばす実装だと、3人目の投手（目標を超える）が後回しになり、
-    //       4人目の野手が先に入るので巡目がずれる
+    //       4人目の野手が先に入るので巡目がずれる。
+    //    ⚠ **他球団に取られた希望は飛ばして数える**。評価のいちばん低い選手を
+    //       希望していても、最低限（投手・捕手・野手）が足りない球団は必要な
+    //       守備位置から補うので、CPUが先に取ることがある（実測で3人目が取られた）。
+    //       「競合で取られた」と「目標構成で飛ばされた」を**持ち主で見分ける**
+    let round = 0;
+    let obtained = 0;
     wish.forEach((id, i) => {
       const got = mineRoster.find((p) => p.id === id);
-      assert.ok(got, `希望${i + 1}位の選手を取れていない（飛ばされた）`);
+      if (!got) {
+        const owner = after.season.settings.teamNames.find(
+          (n) => n !== teamName && after.game.teams[n].players.some((p) => p.id === id),
+        );
+        assert.ok(
+          owner,
+          `希望${i + 1}位が誰の名簿にも居ない（競合ではなく飛ばされている）`,
+        );
+        return;
+      }
+      obtained += 1;
+      round += 1;
       assert.equal(
         got.draftInfo?.round,
-        i + 1,
+        round,
         `希望${i + 1}位が${got.draftInfo?.round}巡目になっている（希望順のとおりに取っていない）`,
       );
     });
+    assert.ok(obtained >= 2, `希望した4人のうち${obtained}人しか取れていない`);
     const cpuNames = after.season.settings.teamNames.filter((n) => n !== teamName);
     const cpus = cpuNames.map((n) => rosterCounts(after.game.teams[n].players));
     assert.ok(mine.catcher >= 1, `捕手が居ない: ${JSON.stringify(mine)}`);
@@ -455,8 +473,8 @@ try {
     );
     assert.equal(
       filled.length,
-      slots - wish.length,
-      `自動で埋めた人数が合わない: ${filled.length}人（空き${slots} - 希望${wish.length}）`,
+      slots - obtained,
+      `自動で埋めた人数が合わない: ${filled.length}人（空き${slots} - 取れた希望${obtained}）`,
     );
     // ⚠ **控えが居ること**。野手9人だと代打も守備固めも出せず、
     //    レギュラーが全試合に出続けるので、成績の出方が一人用と別物になる。

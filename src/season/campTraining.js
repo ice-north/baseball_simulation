@@ -4,7 +4,7 @@
 // ============================================================
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor, dexterityMult, dexterityShift } from './growthUtils.js';
-import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT, BATS_SHORT } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 // ⚠ **確率的丸め**。年次成長（`growthSystem`）と同じものを使う（二重に書かない）
 import { stochasticRound } from './growthSystem.js';
@@ -552,8 +552,9 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           growthReport.push({ statName: 'フォーム改造成功', before: FORM_SHORT[currentForm], after: FORM_SHORT[targetForm], growth: 0, isAwakening: true });
           const bonus = Math.floor(Math.random() * 3) + 3;
           const oldCtrl = player.pitching.control || 50;
-          player.pitching.control = oldCtrl + bonus;
-          growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: bonus });
+          // ⚠ 上限100で止める（ほかの制球の伸びと同じ。98で成功すると103になっていた）
+          player.pitching.control = Math.min(100, oldCtrl + bonus);
+          growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: player.pitching.control - oldCtrl });
         } else {
           // 失敗: フォーム変更 + 制球-1~3 ダウン
           growthReport.push({ statName: 'フォーム改造', before: FORM_SHORT[currentForm], after: FORM_SHORT[targetForm], growth: 0 });
@@ -583,9 +584,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       const targetBats = options.targetBats && options.targetBats !== currentBats
         ? options.targetBats
         : (currentBats === 'switch' ? null : 'switch');
-      const BATS_NAMES = { right: '右打', left: '左打', switch: '両打' };
       if (!targetBats || targetBats === currentBats) {
-        growthReport.push({ statName: '打席変更', before: BATS_NAMES[currentBats], after: '変更不要', growth: 0 });
+        growthReport.push({ statName: '打席変更', before: BATS_SHORT[currentBats], after: '変更不要', growth: 0 });
         break;
       }
       // ハイリスクハイリターン: switch→片打は30%、片打→switchは15%、片打→反対は20%
@@ -598,7 +598,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       if (Math.random() < successRate) {
         if (!player.batting) player.batting = {};
         player.batting.bats = targetBats;
-        growthReport.push({ statName: '打席', before: BATS_NAMES[currentBats], after: BATS_NAMES[targetBats], growth: 0, isAwakening: true });
+        growthReport.push({ statName: '打席', before: BATS_SHORT[currentBats], after: BATS_SHORT[targetBats], growth: 0, isAwakening: true });
         // ミート微減リスク（switchへの場合のみ）
         if (isToSwitch && player.batting.meet > 30) {
           const penalty = Math.floor(Math.random() * 3) + 1;
@@ -607,7 +607,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: player.batting.meet - oldMeet });
         }
       } else {
-        growthReport.push({ statName: '打席変更', before: BATS_NAMES[currentBats], after: '変更失敗', growth: 0 });
+        growthReport.push({ statName: '打席変更', before: BATS_SHORT[currentBats], after: '変更失敗', growth: 0 });
         // 失敗ペナルティ: ミート-1~2
         if (player.batting?.meet > 25) {
           const penalty = Math.floor(Math.random() * 2) + 1;

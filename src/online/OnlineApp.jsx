@@ -3,6 +3,7 @@ import { PROGRESSION_TIMES, CAMP_ROUNDS, TURN_MINUTES, RETRY_ON_REVISION as RETR
 import './online.css';
 import { api, AUTH_KEY } from './api.js';
 import { Login, JoinLeague } from './LeaguePanels.jsx';
+import { InviteSignup, readInviteToken, forgetInviteToken } from './Invites.jsx';
 import DesktopView from './DesktopView.jsx';
 import MobileView from './MobileView.jsx';
 import { ReadContext } from './useRead.js';
@@ -514,6 +515,27 @@ export default function OnlineApp() {
   };
   const login = (fields) =>
     run(async () => saveAuth(await api('login', null, fields)));
+  // 招待リンク（`?invite=`）で開いたときの合言葉。ログイン前だけ登録画面を出す（`Invites.jsx`）
+  const [inviteToken, setInviteToken] = useState(() => readInviteToken());
+  const leaveInvite = () => {
+    forgetInviteToken();
+    setInviteToken(null);
+  };
+  // リーグ管理の招待リンク（管理者だけ）。⚠ 一覧は覚えを通さない（作った・消したをすぐ映す）
+  const invitesApi = useMemo(
+    () => ({
+      list: () => fetchDetail('invites'),
+      send: async (body) => {
+        const current = authRef.current;
+        const credentials =
+          current?.refreshToken && current.expiresAt <= Date.now()
+            ? await renewAuth(current)
+            : current;
+        return api('invites', credentials, body);
+      },
+    }),
+    [fetchDetail, renewAuth],
+  );
   // ⚠ 選手の詳細はどこからでも開かれるので、命令はコンテキストで渡す
   //    （`ActionContext.jsx` の注記）。毎回作り直すと小窓が作り直されるので、
   //    中身が変わったときだけ作り直す
@@ -626,6 +648,17 @@ export default function OnlineApp() {
         )}
         {!config ? (
           <p>接続を確認しています…</p>
+        ) : !auth && inviteToken && !config.local ? (
+          <InviteSignup
+            token={inviteToken}
+            busy={busy}
+            run={run}
+            skip={leaveInvite}
+            signedUp={(result) => {
+              leaveInvite();
+              saveAuth(result);
+            }}
+          />
         ) : !auth ? (
           <Login local={config.local} login={login} busy={busy} />
         ) : !view ? (
@@ -749,6 +782,7 @@ export default function OnlineApp() {
                   />
                 ) : (
                   <DesktopView
+                    invitesApi={invitesApi}
                     tab={screen === 'news' ? 'games' : screen}
                     setTab={setScreen}
                     reload={reload}

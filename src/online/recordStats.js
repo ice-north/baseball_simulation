@@ -166,3 +166,31 @@ export function catchRates(line) {
     starts: line.starts || 0,
   };
 }
+
+/**
+ * 年の途中で球団を移った選手の、**球団ごとの**成績（`{ [記録の鍵]: { [球団]: { batting, pitching } } }`）。
+ * 球団史の歴代記録（`server/chronicle.mjs` の teamChronicle）が使う。記録の `stats` は両球団の合計なので、
+ * 球団ごとには試合の記録（`season.games` の球団ごとの行）から足し直すしかない。
+ * ⚠ 終わった年は年度更新で `season.teamSplits` に入れておく（`freezeComparison`）。終わった年の試合の記録は
+ *    別の部分に分けて保存し、軽い読みでは読まない（`snapshotParts.mjs`）ので、球団史を作るたびに
+ *    試合の記録をなめると、編成を1つ保存するだけで全体を読み直すことになる
+ */
+export function teamSplitsOf(season) {
+  const moved = new Set(
+    Object.values(season?.players || {})
+      .filter((rec) => (rec.teams?.length || 0) > 1)
+      .map((rec) => rec.key),
+  );
+  const out = {};
+  if (!moved.size) return out;
+  for (const box of Object.values(season.games || {}))
+    for (const [team, rows] of Object.entries(box?.teams || {}))
+      for (const row of rows || []) {
+        if (!moved.has(row.key)) continue;
+        const t = ((out[row.key] ||= {})[team] ||= { batting: {}, pitching: {} });
+        for (const side of ['batting', 'pitching'])
+          for (const [k, v] of Object.entries(row[side] || {}))
+            if (typeof v === 'number') t[side][k] = (t[side][k] || 0) + v;
+      }
+  return out;
+}

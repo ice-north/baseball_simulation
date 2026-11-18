@@ -1418,6 +1418,15 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-login form + button {
   margin-top: 12px;
 }
+/* 作った招待リンク（リーグ管理）。長いURLを1行で選べるように枠いっぱいに */
+.online-invite-made {
+  margin-top: 14px;
+}
+.online-invite-made input {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
 .online-ready {
   display: flex;
   flex-wrap: wrap;
@@ -1602,12 +1611,14 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 /* 「交渉」ボタン（候補一覧の右端）。⚠ 能力値の右に置き、押す場所を1つにする
    （いしだ要望。以前は「最優先へ」「指名に加える」の2つあった） */
-.online-tryout-list .online-tryout-negotiate {
+.online-tryout-list .online-tryout-negotiate,
+.online-tryout-table .online-tryout-negotiate {
   flex: 0 0 auto;
   min-width: 56px;
 }
 /* 交渉中の行。もう一度押すとやめられる（押せると分かるよう枠を残す） */
-.online-tryout-list .online-tryout-negotiating {
+.online-tryout-list .online-tryout-negotiating,
+.online-tryout-table .online-tryout-negotiating {
   flex: 0 0 auto;
   min-width: 76px;
   border-color: var(--accent, #67e8f9);
@@ -5380,10 +5391,6 @@ small.online-gain:not(:where(.online-sp *)) {
   padding: 8px 2px;
 }
 /* 人数の見出し・獲得する人数・「標準案に戻す」を1段に（320px では折り返す） */
-.online-mobile .online .online-tryout-head label,
-.online-mobile .online-tryout-head label {
-  margin: 0;
-}
 .online-mobile .online-tryout-head {
   gap: 10px;
   margin-bottom: 8px;
@@ -5392,8 +5399,8 @@ small.online-gain:not(:where(.online-sp *)) {
   flex: 1 1 100%;
 }
 /* 目標の構成（「投11・捕2・内6・外7」）と獲得後の内訳は語の途中で割らない（390px で「・／内」と割れた） */
-/* ⚠ **目標の構成だけに当てること**。同じ段落のほかの `strong`（競合の決まり方の文）にも
-   当たると、文が長いので 320px で画面の外へ出る（実測 R415px / 幅320px） */
+/* ⚠ **目標の構成と、短い強調（「交渉した選手しか取りません」13字）だけに当てること**。同じ段落の
+   長い `strong`（競合の決まり方の文）にも当たると、320px で画面の外へ出る（実測 R415px / 幅320px） */
 .online-mobile .online-tryout .online-tryout-targets {
   white-space: nowrap;
 }
@@ -6217,5 +6224,21 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-news-list .online-pro-after {
   display: block;
   color: #cbd5e1;
+  font-size: 12px;
+}
+
+/* チーム診断（`TeamDiagnosis.jsx`）。直す画面へのボタンは文の後ろに小さく */
+.online-diagnosis article {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.online-diagnosis article span {
+  flex: 1;
+}
+.online .online-diagnosis article button {
+  flex: none;
+  min-height: 0;
+  padding: 2px 8px;
   font-size: 12px;
 }
