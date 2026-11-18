@@ -1,3 +1,4 @@
+import StrategyStats from './StrategyStats.jsx';
 import React, { useState } from 'react';
 import MobilePanel from './MobilePanel.jsx';
 import { PageNav } from './PageNav.jsx';
@@ -122,6 +123,12 @@ export default function MobileTactics({
               <Actual view={view} field="strategy" name={key} />
             </label>
           ))}
+        {group === 'basic' && (
+          <details className="online-mobile-strategy-stats">
+            <summary>作戦別成績</summary>
+            <StrategyStats stats={view.strategyStats} compact />
+          </details>
+        )}
         {(FIELDS[group] || []).map((key) => {
           const [label, options] = TACTIC_FIELDS[key];
           return (

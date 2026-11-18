@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { ownerRecords } from '../../server/ownerRecords.mjs';
 import { seasonReview, nearMilestones } from '../../server/seasonReview.mjs';
+import { strategyStats, strategyMark } from '../../src/online/strategyStats.js';
 import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../src/online/teamDiagnosis.js';
 
 // ---------- A1 ----------
@@ -192,5 +193,34 @@ import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../sr
   const near = nearMilestones(new Map([['a', { batting: { hits: 84 }, pitching: {} }], ['b', { batting: { hits: 86 }, pitching: {} }]]), new Map([['a', { name: 'A', team: 'X' }], ['b', { name: 'B', team: 'X' }]]), short);
   assert.deepEqual(near.map((x) => x.name), ['B']);
   console.log(`今季総括号: ${r.lead}`);
+}
+// ---------- B2 ----------
+{
+  assert.deepEqual(strategyMark({ batting: 'balanced', defense: 'shift', pitching: 'nope' }), { defense: 'shift' }, '標準と知らない値は残さない');
+  const bat = (ab, h, hr = 0, bb = 0) => ({ batting: { atBats: ab, hits: h, homeruns: hr, walks: bb, plateAppearances: ab + bb } });
+  const games = {
+    1: { home: 'X', away: 'Y', homeScore: 5, awayScore: 2, strategy: { X: { defense: 'shift' }, Y: {} }, teams: { X: [bat(30, 10, 2)], Y: [bat(30, 6)] } },
+    2: { home: 'Y', away: 'X', homeScore: 4, awayScore: 1, strategy: { X: {}, Y: {} }, teams: { X: [bat(30, 5)], Y: [bat(32, 12, 1, 2)] } },
+    // 印の無い古い試合は数えない
+    3: { home: 'X', away: 'Y', homeScore: 9, awayScore: 0, teams: { X: [bat(40, 20)], Y: [bat(30, 1)] } },
+  };
+  const st = strategyStats(games, 'X');
+  assert.equal(st.games, 2);
+  const def = st.fields.find((f) => f.key === 'defense');
+  assert.equal(def.side, 'defense');
+  const shift = def.rows.find((r) => r.value === 'shift');
+  assert.equal(shift.label, '守備シフト');
+  assert.equal(shift.record, '1勝0敗');
+  assert.equal(shift.avg, '.200', '守りの方針は相手の打率');
+  assert.equal(shift.allowed, '2.0');
+  const normal = def.rows.find((r) => r.value === 'normal');
+  assert.equal(normal.record, '0勝1敗');
+  assert.equal(normal.avg, '.375');
+  const batting = st.fields.find((f) => f.key === 'batting');
+  assert.equal(batting.rows.length, 1);
+  assert.equal(batting.rows[0].avg, '.250', '攻めの方針は自球団の打率（15/60）');
+  assert.equal(batting.rows[0].cells.length, batting.columns.length);
+  assert.equal(strategyStats({ 3: games[3] }, 'X'), null, '印のある試合が無ければ出さない');
+  console.log(`作戦別成績: ${def.rows.map((r) => `${r.label} ${r.record} 被打率${r.avg}`).join(' / ')}`);
 }
 console.log('online-owner-extra-check PASS');

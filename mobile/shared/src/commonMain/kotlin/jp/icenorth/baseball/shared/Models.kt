@@ -49,6 +49,8 @@ data class LeagueView(
     val chronicle: ChronicleView = ChronicleView(),
     /** 今季総括号（年度更新のあと〜開幕前だけ。server/seasonReview.mjs）。古いサーバーには無い */
     val seasonReview: SeasonReview? = null,
+    /** 作戦別成績（自球団だけ。src/online/strategyStats.js）。古いサーバーと、まだ記録の無いときは null */
+    val strategyStats: StrategyStats? = null,
     /** 自分の球団の指導者と任せ方（server/coachView.mjs ownStaffView）。古いサーバーには無い */
     val staff: StaffView? = null,
     /** リーグ全球団の指導者と最近の人事（server/coachView.mjs leagueStaffView）。古いサーバーには無い */
@@ -362,3 +364,22 @@ data class SeasonPitching(val games: Int = 0, val wins: Int = 0, val losses: Int
 /** 直近の試合の打撃（[games] 試合で [atBats] 打数 [hits] 安打）と連続試合安打 */
 @Serializable
 data class RecentForm(val games: Int = 0, val atBats: Int = 0, val hits: Int = 0, val hitStreak: Int = 0)
+
+/**
+ * 作戦別成績（B2）。その日に敷いていた方針ごとの今季の成績。
+ * ⚠ 列の見出し（columns）と行の文字（cells）はサーバーが作る（Web 版 StrategyStats.jsx と同じ表）
+ */
+@Serializable
+data class StrategyStats(val games: Int = 0, val fields: List<StrategyStatField> = emptyList())
+
+@Serializable
+data class StrategyStatField(
+    val key: String = "",
+    val label: String = "",
+    val side: String = "",
+    val columns: List<String> = emptyList(),
+    val rows: List<StrategyStatRow> = emptyList(),
+)
+
+@Serializable
+data class StrategyStatRow(val value: String = "", val label: String = "", val games: Int = 0, val cells: List<String> = emptyList())

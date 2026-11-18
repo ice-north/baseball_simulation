@@ -30,6 +30,7 @@ import { ageOutlook } from '../src/online/ageOutlook.js';
 import { diagnoseTeam } from '../src/online/teamDiagnosis.js';
 import { ownerRecords } from './ownerRecords.mjs';
 import { seasonReview } from './seasonReview.mjs';
+import { strategyStats } from '../src/online/strategyStats.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -756,6 +757,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     owners: ownerRecords(l),
     // チーム診断「なぜ勝てない？」（自球団だけ。直せることを3つまで。`teamDiagnosis.js`）
     diagnosis: diagnosisFor(l, member.teamName, team, seasonStatsOf),
+    // 作戦別成績（自球団だけ。今季、方針の印のある試合。`strategyStats.js`）
+    strategyStats: strategyStats(l.records?.seasons?.[l.season.year]?.games, member.teamName),
     // 参加した時刻（はじめての1週間の案内。`firstWeek.js`。リーグを作ったときの人には無い）
     joinedAt: member.joinedAt || null,
     notices: l.notices.slice(0, 4),

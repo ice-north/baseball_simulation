@@ -1,3 +1,4 @@
+import StrategyStats from './StrategyStats.jsx';
 import React, { useEffect, useState } from 'react';
 import { STRATEGY_FIELDS, TACTIC_FIELDS, TACTIC_DEFAULTS, strategyEffectText } from './tactics.js';
 import { useDraftState } from './Drafts.jsx';
@@ -163,6 +164,10 @@ export default function DesktopTactics({ view, busy, run, command }) {
           </div>
         </section>
       </div>
+      <section className="online-card">
+        <h2>作戦別成績</h2>
+        <StrategyStats stats={view.strategyStats} />
+      </section>
     </Page>
   );
 }

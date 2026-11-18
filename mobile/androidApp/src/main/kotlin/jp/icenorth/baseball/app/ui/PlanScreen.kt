@@ -51,6 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import jp.icenorth.baseball.shared.StrategyStatField
+import androidx.compose.foundation.horizontalScroll
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.BatterSlot
 import jp.icenorth.baseball.shared.EditHistory
@@ -855,6 +857,32 @@ private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
                 Text(f.label, style = MaterialTheme.typography.labelLarge)
                 ChoiceRow(f.options.map { it.key to it.label }, draft.tactics[f.key]) { v -> edit { it.withTactic(f.key, v) } }
                 StaffActual(view, "tactics", f.key)
+            }
+        }
+        // 作戦別成績（自球団の今季。サーバーが作る表。Web 版 StrategyStats.jsx と同じ列）
+        Section("作戦別成績") {
+            val stats = view.strategyStats
+            if (stats == null || stats.fields.isEmpty()) Muted("まだありません。方針を敷いて試合をすると、方針ごとの勝敗・得点・打率がここにたまります。")
+            else {
+                Muted("今季${stats.games}試合。攻めの方針は自球団の打撃、守りの方針は相手の打撃の数字です。")
+                stats.fields.forEach { f -> StrategyStatTable(f) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StrategyStatTable(f: StrategyStatField) {
+    Text(f.label, style = MaterialTheme.typography.labelLarge)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        Column {
+            Text("方針", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(84.dp))
+            f.rows.forEach { r -> Text(r.label, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(84.dp).padding(vertical = 2.dp)) }
+        }
+        f.columns.forEachIndexed { i, head ->
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 10.dp)) {
+                Text(head, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                f.rows.forEach { r -> Text(r.cells.getOrElse(i) { "" }, fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp)) }
             }
         }
     }

@@ -1,3 +1,4 @@
+import { strategyMark } from '../src/online/strategyStats.js';
 import { createHash } from 'node:crypto';
 import {
   PA_KEYS,
@@ -300,6 +301,10 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
         winningHit: winningHitOf(observer.events, result),
         // 得点経過（点が動いた打席と、打席の外で入った点）。乱数は引かない（記録を読むだけ）
         scoring: scoringPlaysOf(observer.events, result),
+        // その試合で敷いていた方針（球団ごとに標準と違うものだけ）。作戦別成績に使う（`strategyStats.js`）
+        strategy: Object.fromEntries(
+          [result.homeTeam, result.awayTeam].map((t) => [t.name, strategyMark(t.strategy)]),
+        ),
       };
       for (const team of [result.homeTeam, result.awayTeam]) {
         box.teams[team.name] = [];
