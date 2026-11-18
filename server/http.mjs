@@ -1,7 +1,16 @@
 import { requireOnline, OnlineError } from '../src/online/shared.js';
 export function createHandler(
   service,
-  { local = false, allowStep = false, authenticate, signIn, refresh, cronSecret } = {},
+  {
+    local = false,
+    allowStep = false,
+    authenticate,
+    signIn,
+    refresh,
+    cronSecret,
+    // 招待リンクからアカウントを作る（本番は Supabase の管理API。`production.mjs`）
+    createAccount,
+  } = {},
 ) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -79,6 +88,32 @@ export function createHandler(
         } else auth = await signIn(body);
         // ⚠ 端末の種類（アプリは 'app'）。ブラウザ1台とアプリ1台まで同時に操作できる
         value = { ...auth, ...(await service.login(auth.userId, body?.client)) };
+      } else if (action === 'inviteCheck' && req.method === 'GET')
+        // 招待リンクを開いたとき（ログイン前）。まだ使えるかだけ返す
+        value = await service.checkInvite(url.searchParams.get('invite'));
+      else if (action === 'inviteRedeem' && req.method === 'POST') {
+        // ⚠ **ログイン前に通す唯一の書き込み**。合言葉（招待リンク）が無いと何もできない。
+        //    公開サインアップは無効のままで、アカウントはサーバーが管理者の鍵で作る
+        requireOnline(
+          !local && createAccount,
+          'ローカル検証モードでは招待リンクを使えません',
+          400,
+        );
+        const email = typeof body?.email === 'string' ? body.email.trim() : '';
+        const password = typeof body?.password === 'string' ? body.password : '';
+        requireOnline(
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254,
+          'メールアドレスを正しく入力してください',
+        );
+        requireOnline(
+          password.length >= 8 && password.length <= 72,
+          'パスワードは8文字以上にしてください',
+        );
+        await service.redeemInvite(body?.invite, () =>
+          createAccount({ email, password }),
+        );
+        const auth = await signIn({ email, password });
+        value = { ...auth, ...(await service.login(auth.userId, body?.client)) };
       } else if (action === 'refresh' && req.method === 'POST' && !local)
         value = await refresh(body);
       else {
@@ -130,6 +165,11 @@ export function createHandler(
         // 画面を開いた・アプリに戻った（最後に来た時刻。おるすばんを解く）
         else if (action === 'presence' && req.method === 'POST')
           value = await service.presence(userId, sessionId);
+        // 招待リンク（管理者だけ）。一覧と、作る・取り消す
+        else if (action === 'invites' && req.method === 'GET')
+          value = await service.invites(userId, sessionId);
+        else if (action === 'invites' && req.method === 'POST')
+          value = await service.inviteCommand(userId, sessionId, body);
         else if (action === 'command' && req.method === 'POST')
           value = await service.command(userId, sessionId, body);
         else throw new OnlineError('操作先が見つかりません', 404);

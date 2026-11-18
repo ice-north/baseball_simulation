@@ -35,6 +35,15 @@ import {
 import { saveLineup } from './lineupCommand.mjs';
 import { touchPresence } from './social.mjs';
 import { setStarterPick } from './starterPicks.mjs';
+import {
+  inviteList,
+  createInvite,
+  revokeInvites,
+  peekInvite,
+  assertInviteShape,
+  claimInvite,
+  finishInvite,
+} from './invites.mjs';
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone = (value) => structuredClone(value);
@@ -245,6 +254,96 @@ export class LeagueService {
       else delete bundle.sessions[userId];
       return { value: { ok: true } };
     });
+  }
+  /**
+   * 招待リンク（`server/invites.mjs`）。管理者が作る・一覧・取り消し。
+   * ⚠ **リーグの版（revision）は上げない**。リーグの中身は変わらないので、
+   *    送信中の誰かの提出を「他の操作で更新されました」で弾かない。
+   */
+  assertAdminSession(bundle, userId, sessionId) {
+    requireOnline(userId === this.adminId, '招待を扱えるのは管理者だけです', 403);
+    requireOnline(
+      isLiveSession(bundle.sessions, userId, sessionId),
+      '別の端末でログインしました（ブラウザ・アプリはそれぞれ1台まで）。この端末からの操作はできません',
+      409,
+      'session',
+    );
+  }
+  async invites(userId, sessionId) {
+    // ⚠ 招待は芯にあるので軽い読みで足りる（世界まで読まない）
+    const bundle = this.store.readLight
+      ? (await this.store.readLight()).bundle
+      : await this.store.read();
+    this.assertAdminSession(bundle, userId, sessionId);
+    return { invites: inviteList(bundle, this.clock()) };
+  }
+  async inviteCommand(userId, sessionId, body) {
+    return this.store.transaction((bundle) => {
+      this.assertAdminSession(bundle, userId, sessionId);
+      const now = this.clock();
+      let value;
+      if (body?.type === 'create') value = createInvite(bundle, now);
+      else if (body?.type === 'revoke')
+        value = { revoked: revokeInvites(bundle, now, body.id || null) };
+      else requireOnline(false, '未対応の操作です');
+      return {
+        value: { ...value, invites: inviteList(bundle, now) },
+        archiveUnchanged: true,
+      };
+    });
+  }
+  /** 招待リンクを開いたとき（ログイン前）。まだ使えるかだけ返す */
+  async checkInvite(token) {
+    assertInviteShape(token);
+    const bundle = this.store.readLight
+      ? (await this.store.readLight()).bundle
+      : await this.store.read();
+    return peekInvite(bundle, token, this.clock());
+  }
+  /**
+   * 招待リンクでアカウントを作る。`createAccount` は作った人の userId を返す（本番は Supabase）。
+   * ⚠ 押さえる → 作る → 使用済みにする、の3段。作るのに失敗したら押さえを外す
+   *    （打ち間違いなどで、リンクを使えなくしない）。
+   */
+  async redeemInvite(token, createAccount) {
+    // ⚠ **ロックを取る前に、ロック無しの読みで確かめる**。ログイン前に誰でも叩ける入口なので、
+    //    使えない合言葉で毎回ロックを取ると、その間の参加者の操作が「処理中」で弾かれる
+    await this.checkInvite(token);
+    const claim = await this.store.transaction((bundle) => ({
+      value: claimInvite(bundle, token, this.clock()),
+      archiveUnchanged: true,
+    }));
+    let userId;
+    try {
+      userId = await createAccount();
+    } catch (error) {
+      await this.store
+        .transaction((bundle) =>
+          finishInvite(bundle, token, claim, null, this.clock())
+            ? { value: null, archiveUnchanged: true }
+            : { unchanged: true, value: null },
+        )
+        .catch(() => console.error('online: 招待の押さえを外せませんでした'));
+      throw error;
+    }
+    // ⚠ アカウントはもうできている。定期進行と重なって断られても、使用済みの印は付け直す
+    //    （付け損ねると、押さえが切れたあと同じリンクで2つ目を作れてしまう）
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await this.store.transaction((bundle) => {
+          finishInvite(bundle, token, claim, userId, this.clock());
+          return { value: null, archiveUnchanged: true };
+        });
+        break;
+      } catch (error) {
+        if (attempt >= 4 || error?.code !== 'busy') {
+          console.error('online: 招待を使用済みにできませんでした');
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    }
+    return userId;
   }
   /**
    * 保存されたリーグを、いまのコードが読める形へ直す。

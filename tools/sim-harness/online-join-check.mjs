@@ -4,8 +4,8 @@
 //    参加の道には鶏と卵の罠がある——参加するにはログインが要るが、
 //    ログインに参加者であることを求めると、呼ばれた人は永遠に入れない。
 //    ここでその経路を丸ごと通す。
-// ⚠ 招待コードは廃止した。アカウントは管理者が Supabase で作らない限り
-//    増えないので、入口はそこで絞れている。
+// ⚠ 参加の画面でコードは聞かない。アカウントは招待リンク（`online-invite-check`）か
+//    管理者が Supabase で作らない限り増えないので、入口はそこで絞れている。
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -43,6 +43,15 @@ try {
     PYRAMID_LEAGUES.find((l) => l.tier === bottomTier).id,
     '最下層から始まる',
   );
+
+  // --- 招待リンクはリーグの版を上げない（`online-invite-check` の続き） ---
+  {
+    const revision = league0.revision;
+    await service.inviteCommand('admin', adminSession, { type: 'create' });
+    const after = (await store.read()).league;
+    assert.equal(after.revision, revision, '招待を作ると送信中の提出が弾かれる');
+    assert.equal(after.members.length, league0.members.length);
+  }
 
   // --- まだ参加していない人 -----------------------------------------
   // ⚠ ログインは通る（通さないと参加の画面に来られない）

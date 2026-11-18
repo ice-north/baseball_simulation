@@ -72,6 +72,20 @@ jobs:
       - name: Online actual daily season (year 1 to year 2)
         run: npm run check:online:season
 
+  # 保存とビューの大きさが上限（tools/sim-harness/size-budget.json）の内か。1年目の開幕から2年目まで進めて測る（約3分）。
+  # 大きさの表は実行のまとめ（Summary）に出る
+  online-size:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Online save and view size budget
+        run: npm run check:online:size
+
   # 一人用の年度更新の通し検査（独立・箱庭・企業・クラブで1年目のオフから2年目の開幕まで。
   # 4モードを同時に進めて、4コアで約2分半）。ui ジョブに足すとそのぶん延びるので、別のジョブで並べる
   ui-yearend:
