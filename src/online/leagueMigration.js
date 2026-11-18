@@ -2,6 +2,7 @@ import { generateRosterPacks, LEGACY_PACK_STYLE } from './rosterPack.js';
 import { createCoaches, upgradeCoach } from './coaches.js';
 import { nextMemberIndex } from './membership.js';
 import { teamSplitsOf } from './recordStats.js';
+import { clampOverCap } from '../utils/constants.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -219,6 +220,16 @@ export const MIGRATIONS = [
       // ⚠ **足すだけ**。終わった年（今季より前）だけ。今季は年度更新で作る（`freezeComparison`）
       for (const season of Object.values(league.records?.seasons || {}))
         if (Number(season?.year) < league.season?.year) season.teamSplits ??= teamSplitsOf(season);
+    },
+  },
+  {
+    from: 14,
+    to: 15,
+    note: '上限を超えて保存された能力（体力118など）と疲労（2000超）を上限へ丸めた。能力の上限は99にそろえた（キャンプだけ100だった）',
+    apply(league) {
+      // ⚠ 上限が無かった頃の名簿に残っている値だけを下げる（何度当てても同じ。`clampOverCap`）
+      for (const team of Object.values(league.game?.teams || {}))
+        for (const p of team?.players || []) clampOverCap(p);
     },
   },
 ];
