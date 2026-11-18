@@ -1,0 +1,4 @@
+# 取りこぼし検知（tools/unmerged-report.mjs）で見ないブランチ。1行に1本。# から後ろは注釈。末尾の * は前方一致。
+# 「中身を直して取り込んだ」「もう要らない」と確かめたものだけを書く。
+
+claude/stats-name-header-left   # 同じ直しが別の形で main に入っている（online.css の「選手名」見出しの左寄せ）

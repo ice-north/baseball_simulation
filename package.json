@@ -23,6 +23,8 @@
     "check:bunt": "node tools/sim-harness/bunt-check.mjs",
     "check:online": "node tools/sim-harness/run-checks.mjs online",
     "check:online:season": "node tools/sim-harness/online-engine-check.mjs",
+    "check:online:size": "node tools/sim-harness/online-size-budget-check.mjs",
+    "check:unmerged": "node tools/unmerged-report.mjs",
     "check:online:storage": "node tools/sim-harness/online-storage-check.mjs",
     "check:online:ui": "node tools/sim-harness/online-ui-check.mjs",
     "check:online:auth-ui": "node tools/sim-harness/online-auth-ui-check.mjs",
