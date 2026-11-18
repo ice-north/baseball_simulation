@@ -108,8 +108,26 @@ export function writePitching(team, state) {
     ),
   );
   const staff = roster.filter((p) => p.isActive !== false && onStaff(state, p.id));
-  const roleOf = (p) => state.roles[p.id];
-  const relievers = staff.filter((p) => !state.starters.includes(p.id) && roleOf(p) !== NO_ROLE);
+  // ⚠ 抹消中の救援も、役割のとおり古い形の配列に入れたまま書く。外すと、戻ったとき表は
+  //    「クローザー」と出るのに試合の側（`rotation.closer` を読む）にはクローザーが居ない。
+  //    試合の側は抹消中の選手を使わない（`canEnterRelief` は `isActive` を見る）
+  // ⚠ 抹消中にほかの投手をクローザーにしたら、抹消中のクローザーは「おまかせ」に降ろす
+  //    （戻ったときにクローザーが2人にならないように）
+  const activeCloser = staff.some(
+    (p) => !state.starters.includes(p.id) && state.roles[p.id] === 'closer',
+  );
+  for (const [id, role] of Object.entries(kept))
+    if (role === 'closer' && activeCloser) kept[id] = 'auto_r';
+  const roleOf = (p) => (p.isActive === false ? kept[String(p.id)] : state.roles[p.id]);
+  const keptRelief = (p) =>
+    p.isActive === false &&
+    Object.hasOwn(RELIEF_ROLES, kept[String(p.id)]) &&
+    !state.starters.includes(p.id);
+  const relievers = roster.filter(
+    (p) =>
+      (staff.includes(p) && !state.starters.includes(p.id) && roleOf(p) !== NO_ROLE) ||
+      keptRelief(p),
+  );
   const roles = { ...kept };
   for (const p of staff) if (roleOf(p) !== NO_ROLE) roles[p.id] = roleOf(p);
   rotation.starters = [...state.starters];

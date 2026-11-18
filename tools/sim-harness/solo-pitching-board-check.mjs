@@ -171,4 +171,26 @@ function consistent(team, label) {
   assert.equal(t.team.pitchingRotation.currentStarterIndex, 0);
 }
 
+// ---- 抹消中のクローザー: 表を触っても試合の側のクローザーのまま。抹消中にほかをクローザーにしたら降ろす
+{
+  const t = makeTeam();
+  t.closer.isActive = false; // ベンチ外にする
+  let state = pitchingFromTeam(t.team);
+  state = setRole(state, t.middle[0].id, 'long'); // 表を1回触る（役割は同じ）
+  writePitching(t.team, state);
+  assert.equal(t.team.pitchingRotation.closer, t.closer.id, '抹消中のクローザーが試合の側から消えた');
+  t.closer.isActive = true; // 戻す
+  assert.equal(pitchingFromTeam(t.team).roles[t.closer.id], 'closer');
+  consistent(t.team, '抹消中のクローザーが戻った');
+
+  t.closer.isActive = false;
+  state = setRole(pitchingFromTeam(t.team), t.setup.id, 'closer');
+  writePitching(t.team, state);
+  assert.equal(t.team.pitchingRotation.closer, t.setup.id, '抹消中に選んだクローザーが試合の側に入らない');
+  assert.equal(t.team.pitchingRotation.pitcherRoles[t.closer.id], 'auto_r', '抹消中の前のクローザーが降りていない');
+  t.closer.isActive = true;
+  consistent(t.team, '前のクローザーが戻った');
+  assert.equal(Object.values(t.team.pitchingRotation.pitcherRoles).filter((r) => r === 'closer').length, 1);
+}
+
 console.log('solo-pitching-board-check: ok');

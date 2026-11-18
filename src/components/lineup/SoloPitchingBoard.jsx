@@ -309,7 +309,10 @@ export default function SoloPitchingBoard({ team, onChange, onOpen, resetKey }) 
     if (a === b) return false;
     const aStarter = state.starters.includes(a);
     const bStarter = state.starters.includes(b);
-    return !((aStarter && isFielder(b)) || (bStarter && isFielder(a)));
+    if ((aStarter && isFielder(b)) || (bStarter && isFielder(a))) return false;
+    // 野手と「役割なし」の投手も入れ替えない（野手が役割なしになると、投手起用から黙って消える）
+    const noRole = (id) => !state.starters.includes(id) && state.roles[id] === NO_ROLE;
+    return !((isFielder(a) && noRole(b)) || (isFielder(b) && noRole(a)));
   };
   const swap = (a, b) => (canSwap(a, b) ? swapPitchers(state, a, b) : state);
   const clickRow = (id) => {
