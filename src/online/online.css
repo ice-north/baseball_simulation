@@ -1418,6 +1418,15 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-login form + button {
   margin-top: 12px;
 }
+/* 作った招待リンク（リーグ管理）。長いURLを1行で選べるように枠いっぱいに */
+.online-invite-made {
+  margin-top: 14px;
+}
+.online-invite-made input {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
 .online-ready {
   display: flex;
   flex-wrap: wrap;

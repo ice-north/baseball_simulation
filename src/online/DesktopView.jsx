@@ -55,6 +55,7 @@ import {
   MembersAdmin,
 } from './SocialPages.jsx';
 import { rosterGroup } from '../utils/constants.js';
+import { InvitesAdmin } from './Invites.jsx';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -721,6 +722,7 @@ export default function DesktopView(props) {
       {current === 'admin' && (
         <Page title="リーグ管理">
           <Admin {...props} />
+          <InvitesAdmin {...props} />
           <MembersAdmin {...props} />
         </Page>
       )}

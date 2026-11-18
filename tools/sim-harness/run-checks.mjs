@@ -50,6 +50,7 @@ const CHECKS = [
   { name: 'online-core-check', group: 'quick', online: true, slow: 3 },
   { name: 'online-boundary-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-auth-check', group: 'quick', online: true, slow: 1 },
+  { name: 'online-invite-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-clock-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-edit-conflict-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-label-check', group: 'quick', online: true, slow: 1 },
@@ -108,6 +109,7 @@ const DIST_UI = [
   { name: 'online-join-ui-check', slow: 15 }, // check:online:join-ui
   { name: 'online-staff-ui-check', slow: 10 }, // check:online:staff-ui
   { name: 'online-auth-ui-check', slow: 6 }, // check:online:auth-ui
+  { name: 'online-invite-ui-check', slow: 8 }, // check:online:invite-ui
   { name: 'online-edit-ui-check', slow: 10 }, // check:online:edit-ui
   { name: 'online-label-ui-check', slow: 17 }, // check:online:label-ui
   { name: 'online-replay-ui-check', slow: 38 }, // check:online:replay-ui
