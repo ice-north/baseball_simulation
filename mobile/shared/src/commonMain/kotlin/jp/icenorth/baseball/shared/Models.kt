@@ -51,6 +51,8 @@ data class LeagueView(
     val seasonReview: SeasonReview? = null,
     /** 作戦別成績（自球団だけ。src/online/strategyStats.js）。古いサーバーと、まだ記録の無いときは null */
     val strategyStats: StrategyStats? = null,
+    /** 同窓・地元の縁（地元紙の記事。src/online/hometown.js）。古いサーバーには無い */
+    val ties: List<SeasonReviewArticle> = emptyList(),
     /** 自分の球団の指導者と任せ方（server/coachView.mjs ownStaffView）。古いサーバーには無い */
     val staff: StaffView? = null,
     /** リーグ全球団の指導者と最近の人事（server/coachView.mjs leagueStaffView）。古いサーバーには無い */

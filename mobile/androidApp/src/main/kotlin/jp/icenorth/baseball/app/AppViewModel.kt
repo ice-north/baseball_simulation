@@ -483,6 +483,7 @@ class AppViewModel internal constructor(
         val trimmed = if (next.size > 40) ids else next
         quickSeen = trimmed
         store.quickSeen = trimmed
+        SummaryWidget.refresh(getApplication<Application>())
     }
 
     init {
@@ -781,6 +782,8 @@ class AppViewModel internal constructor(
         // 古いサーバーの返事には無いので、そのときは null にして次は全部読む
         viewGeneration = raw?.get("viewGeneration")?.jsonPrimitive?.longOrNull
         store.viewJson = text
+        // ホーム画面のウィジェットも描き直す（置かれていなければ何もしない）
+        SummaryWidget.refresh(getApplication<Application>())
         raw?.let { store.shownDigest = awayDigest(it).toString() }
         // はじめての1週間: 球団か参加の時刻が変わったら済みの印を捨てる（画面の組み立てでは書かない）
         syncFirstWeekKey()

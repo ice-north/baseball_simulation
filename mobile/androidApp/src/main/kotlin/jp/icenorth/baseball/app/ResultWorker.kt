@@ -85,6 +85,7 @@ class ResultWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         if (store.auth?.userId != start.userId || view.teamName == null || ResultNotifier.appVisible) return
         if (changed) {
             store.viewJson = text
+            SummaryWidget.refresh(applicationContext)
             notifyResults(store, view)
         }
         notifyEvents(store, view, raw)
