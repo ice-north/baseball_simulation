@@ -14,6 +14,7 @@
 - `npm run check:ui`（約2分）: 一人用の通し検査。ビルドしてブラウザで開幕からドラフト会議まで進める。
 - 一人用の画面確認は、日程画面の開発用の早送り（`npm run dev`、またはビルドに `?dev=1`）と、`npm run scenes` で作る場面（`npm run scene -- <名前>`）を使う。詳細は `tools/sim-harness/README.md`。
 
+- 取りこぼし検知: `npm run check:unmerged` で、フォークのブランチにあって ice-north の main に無いコミットが一覧になる。**PR を出す前と、総合監査の最初に回す**。直しは別のブランチに置かず、開いている PR のブランチに載せる（別のブランチに置いた直しは、PR に入らないまま忘れられたことがある）。
 - PR: 作業用のフォークから ice-north へは、題と本文だけのコミットを作業ブランチの先頭に載せて `pr/<ブランチ名>` へ push すると作られる。使い方は `.github/workflows/upstream-pr.yml` の先頭。
 
 触った場所ごとに、少なくとも回す検査:
@@ -25,6 +26,7 @@
 | 日程画面・大会・フェーズ（`DateProgressScreen.jsx`・`dateProgression.js`） | `check:bracket`・`check:ui` |
 | セーブ（`src/game/saveSystem.js`・`saveMigration.js`） | `check:quick`・`check:ui` |
 | オンライン（`server/`・`src/online/`） | `check:online`・`check:online:season` |
+| オンラインの保存する項目・ビューの項目を足した | `check:online:size`（約3分。上限は `tools/sim-harness/size-budget.json`） |
 | オンラインの画面（`src/online/*.jsx`・`online.css`） | `check:online:dist-ui`・`check:online:ui` |
 | 画面の部品全般 | `check:quick`・`check:ui` |
 

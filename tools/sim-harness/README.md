@@ -74,6 +74,14 @@ node tools/sim-harness/progression-check.mjs 8    # 年数
 （`--serial` で1モードずつ、`club sandbox` のようにモードを選べる）。重いので `check` の束には
 入れていない。年次進行・オフの画面・`ManagementScreen.jsx` の遷移を触ったら回す。
 
+### 保存とビューの大きさの上限（online-size-budget-check.mjs）
+
+`npm run check:online:size`（約3分）。2人のリーグを1年目の開幕から2年目の20試合まで進め、保存の部分
+（芯・記録・世界…）とビュー・球団の情報の大きさを3時点で測って、`size-budget.json` の上限と比べる。
+保存する項目を足して落ちたら、まず減らせないかを考える（内訳は `online-size-probe.mjs`）。要る増え方なら
+`node tools/sim-harness/online-size-budget-check.mjs --update` で上限を書き直し（いまの大きさ×1.2）、PR に理由を書く。
+上限の60%を下回ると「下げどき」と出るので、減らしたあとも `--update` で締め直す。CI では `online-size` ジョブ。
+
 ## 何を検証するか
 
 ### season-check.mjs — 試合エンジンのバランス

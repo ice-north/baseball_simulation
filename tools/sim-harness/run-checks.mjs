@@ -116,6 +116,7 @@ const DIST_UI = [
 // 長くかかる通年検査（CI では別の手順・ジョブ）。
 const SEPARATE = [
   'online-engine-check', // check:online:season
+  'online-size-budget-check', // check:online:size（保存とビューの大きさの上限。1年と少し進めるので約3分）
   'online-ui-check', // check:online:ui（開発サーバー2つが要る）
   'singleplayer-ui-check', // check:ui
   'singleplayer-yearend-ui-check', // check:ui:yearend（5モードで1年目のオフから2年目の開幕まで）

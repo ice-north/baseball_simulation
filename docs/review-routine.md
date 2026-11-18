@@ -8,6 +8,8 @@
   - Web: `npm run build`、`npm run check`（lint を含む）、`npm run check:progression`、`npm run check:online:season`（約2〜3分）
   - 画面: `npm run check:ui`、`check:online:ui` ほか `check:online:*-ui`（Playwright。手元の Chromium が版と合わないときは `PW_CHROMIUM` で指定）
   - アプリ: `mobile/` で `node tools/gen-tables.mjs --check`・`node tools/expect-logic.mjs --check`・`./gradlew -PsharedOnly :shared:jvmTest`（SDK があれば `:androidApp:testDebugUnitTest`）
+  - 取りこぼし: `npm run check:unmerged`（フォークのブランチにあって main に無いコミットの一覧）。前回までの直しが main に入っているかを最初に見て、入っていなければ今回の PR に載せる
+  - 大きさ: `npm run check:online:size`（保存とビューの大きさの上限。約3分）
 - 型検査は無い（JavaScript）。Kotlin はビルドが型検査を兼ねる。
 - エラーログ: リポジトリ内には集める仕組みが無い。本番は Vercel の関数ログと Supabase のログ（`docs/online/PRODUCTION_SETUP.md`）。見られないときは飛ばして記録に書く。
 - 決まりの文書: `CLAUDE.md`（変更時の不変条件）、`仕様書.md`・`開発ガイド.md`・`ゲームフロー.md`、`docs/online/*.md`、`mobile/README.md`（サーバーとの約束）。過去のレビュー記録は `docs/online/REVIEWS.md`・`docs/online/REVIEW_*.md` と `docs/audit/`。
