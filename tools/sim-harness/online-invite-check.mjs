@@ -88,6 +88,21 @@ now = new Date(Date.parse(now) + INVITE_DAYS * 86400000 + 1000).toISOString();
 await rejects(service.redeemInvite(old.token, async () => 'x'), /期限が切れて/);
 assert.equal((await service.invites('admin', adminSession)).invites.length, 0, '期限切れが一覧に残っている');
 
+// --- 使えない合言葉ではロックを取らない（ログイン前に誰でも叩ける入口） -------
+{
+  const original = store.transaction.bind(store);
+  let locks = 0;
+  store.transaction = (...args) => {
+    locks += 1;
+    return original(...args);
+  };
+  await rejects(service.redeemInvite('y'.repeat(32), async () => 'x'), /正しくない/);
+  await rejects(service.redeemInvite(old.token, async () => 'x'), /期限が切れて/);
+  await rejects(service.redeemInvite('../', async () => 'x'), /正しくありません/);
+  store.transaction = original;
+  assert.equal(locks, 0, '使えない合言葉で保存のロックを取った');
+}
+
 // --- 作りすぎの歯止め -----------------------------------------------------
 {
   const bundle = { invites: [] };

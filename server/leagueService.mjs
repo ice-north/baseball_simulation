@@ -40,6 +40,7 @@ import {
   createInvite,
   revokeInvites,
   peekInvite,
+  assertInviteShape,
   claimInvite,
   finishInvite,
 } from './invites.mjs';
@@ -291,6 +292,7 @@ export class LeagueService {
   }
   /** 招待リンクを開いたとき（ログイン前）。まだ使えるかだけ返す */
   async checkInvite(token) {
+    assertInviteShape(token);
     const bundle = this.store.readLight
       ? (await this.store.readLight()).bundle
       : await this.store.read();
@@ -302,6 +304,9 @@ export class LeagueService {
    *    （打ち間違いなどで、リンクを使えなくしない）。
    */
   async redeemInvite(token, createAccount) {
+    // ⚠ **ロックを取る前に、ロック無しの読みで確かめる**。ログイン前に誰でも叩ける入口なので、
+    //    使えない合言葉で毎回ロックを取ると、その間の参加者の操作が「処理中」で弾かれる
+    await this.checkInvite(token);
     const claim = await this.store.transaction((bundle) => ({
       value: claimInvite(bundle, token, this.clock()),
       archiveUnchanged: true,

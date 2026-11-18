@@ -71,13 +71,21 @@ export function revokeInvites(bundle, now, id = null) {
   return count;
 }
 
-const findOpen = (bundle, token, now) => {
+/**
+ * 合言葉の形だけ確かめる。⚠ **保存を読む前に呼ぶこと**（ログイン前の入口なので、
+ * でたらめな値で保存の読み込みやロックを起こさせない）
+ */
+export function assertInviteShape(token) {
   requireOnline(
     typeof token === 'string' && /^[\w-]{20,80}$/.test(token),
     '招待リンクが正しくありません。届いたリンクをもう一度開いてください',
     400,
     'invite',
   );
+}
+
+const findOpen = (bundle, token, now) => {
+  assertInviteShape(token);
   const hash = hashOf(token);
   const invite = (bundle.invites || []).find((i) => i.hash === hash);
   requireOnline(
