@@ -88,7 +88,58 @@ export function productionHandler() {
     expiresAt: Date.now() + result.expires_in * 1000,
     userId: result.user.id,
   });
+  /**
+   * 招待リンクからアカウントを作る（Supabase の管理API）。
+   * ⚠ **公開サインアップは無効のまま**でよい。管理API は service role の鍵で通るので、
+   *    サーバーが合言葉（招待リンク）を確かめた人のぶんだけ作れる。
+   * ⚠ `email_confirm: true` で作る（確認メールは送らない作り。手で作るときの
+   *    「Auto Confirm User」と同じ。付け忘れるとログインできない）。
+   */
+  const createAccount = async ({ email, password }) => {
+    let response;
+    try {
+      response = await fetch(`${url}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password, email_confirm: true }),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch {
+      throw new OnlineError(
+        '認証サービスに接続できません。少し待って再試行してください',
+        503,
+        'auth_service',
+      );
+    }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const code = String(result?.error_code || result?.code || '');
+      const text = String(result?.msg || result?.message || '');
+      if (code === 'email_exists' || /already (been )?registered|already exists/i.test(text))
+        throw new OnlineError(
+          'このメールアドレスはもう登録されています。ログインするか、別のアドレスを使ってください',
+          409,
+          'email_exists',
+        );
+      if (code === 'weak_password' || /password/i.test(text))
+        throw new OnlineError('パスワードが短すぎるか、簡単すぎます。別のパスワードにしてください', 400);
+      if (code === 'email_address_invalid' || /email/i.test(text))
+        throw new OnlineError('メールアドレスを正しく入力してください', 400);
+      throw new OnlineError(
+        'アカウントを作れませんでした。少し待って再試行してください',
+        response.status === 429 ? 429 : 503,
+        'auth_service',
+      );
+    }
+    requireOnline(result?.id, 'アカウントを作れませんでした。少し待って再試行してください', 503);
+    return result.id;
+  };
   handler = createHandler(service, {
+    createAccount,
     cronSecret,
     allowStep: service.allowStep,
     // ⚠ 同じトークンの照会はしばらく覚えて使い回す（読み込みのたびの往復を省く。`authCache.mjs`）

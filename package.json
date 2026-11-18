@@ -26,6 +26,7 @@
     "check:online:storage": "node tools/sim-harness/online-storage-check.mjs",
     "check:online:ui": "node tools/sim-harness/online-ui-check.mjs",
     "check:online:auth-ui": "node tools/sim-harness/online-auth-ui-check.mjs",
+    "check:online:invite-ui": "node tools/sim-harness/online-invite-ui-check.mjs",
     "check:online:edit-ui": "node tools/sim-harness/online-edit-ui-check.mjs",
     "check:online:lineup-ui": "node tools/sim-harness/online-lineup-board-ui-check.mjs",
     "check:online:trade-ui": "node tools/sim-harness/online-trade-ui-check.mjs",
