@@ -586,10 +586,10 @@ async function runUniversity(page, t) {
   await step('大学野球: 東京六大学の法政大学で新しく始める');
   await ui.newUniversityGame();
   await step(`1年目の開幕 ${fmt(await ui.date())}`);
-  // 夏季合宿は日程画面を離れて合宿の画面へ移る（フェーズ移行の確認は出ない）
-  await ui.advance('phase');
-  await page.getByRole('button', { name: /練習を実行/ }).first().waitFor({ timeout: 30000 })
-    .catch(() => { throw new Error('次の区切りまで進めても夏季合宿の画面が出ない'); });
+  // 夏季合宿は日程画面を離れて合宿の画面へ移る（フェーズ移行の確認は出ない）。
+  // 春に優勝したら6月の全日本大学選手権の試合を飛ばしながら進む
+  const games = await ui.advanceToSummerCamp();
+  if (games) await step(`全日本大学選手権の試合を${games}回スキップ`);
   await ui.runCamp();
   await go('秋季リーグへ', page.getByTestId('dev-advance'), '秋季リーグの日程画面');
   await step(`秋季リーグ ${fmt(await ui.date())}`);

@@ -263,20 +263,26 @@ try {
       const kinds = await tables.evaluateAll((list) =>
         list.map((el) => el.dataset.kind),
       );
-      assert.deepEqual(
-        kinds,
-        ['pitcher', 'fielder'],
+      // ⚠ 「全員」の1ページ目に投手か野手が1人も居ない年もあるので、並びだけ見る
+      //    （投手の表 → 野手の表。同じ区分の表が2つ無い）
+      assert.ok(
+        kinds.length >= 1 && kinds.join() === ['pitcher', 'fielder'].filter((k) => kinds.includes(k)).join(),
         `受験者の表が投手・野手に分かれていない: ${kinds}`,
       );
-      const headOf = async (kind) =>
-        (
-          await t
-            .locator(`.online-tryout-table[data-kind="${kind}"] thead th`)
-            .allInnerTexts()
-        ).map((x) => x.trim());
+      // 区分ごとに絞り込んでから見出しを読む（「全部」の1ページ目に居ない区分でも確かめる）
+      const segment = (label) =>
+        t.locator('.online-tryout-pool .online-segments button', { hasText: label }).click();
+      const headOf = async (kind) => {
+        await segment(kind === 'pitcher' ? '投手' : '外野');
+        const head = t.locator(`.online-tryout-table[data-kind="${kind}"] thead th`);
+        await head.first().waitFor();
+        const texts = (await head.allInnerTexts()).map((x) => x.trim());
+        await segment('全部');
+        return texts;
+      };
       // ⚠ 能力は**網羅的に**（いしだ要望）。以前は3つ（投手なら球速・制球・スタミナ）しか無かった
       const pitcherHead = await headOf('pitcher');
-      for (const label of ['交渉', '選手', '年齢', '評価', '速', '制', 'ス', '回', '変化球', '出どころ'])
+      for (const label of ['交渉', '選手', '年齢', '評価', '速', '制', 'ス', '回', '変化球', '出身'])
         assert.ok(pitcherHead.includes(label), `投手の表に「${label}」の列が無い`);
       const fielderHead = await headOf('fielder');
       for (const label of ['守備', 'ミ', 'パ', '眼', '走', '守', '肩'])
@@ -322,7 +328,7 @@ try {
       await t
         .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
         .click();
-      // 1ページ12人。そのページで交渉していない人が居なければ次のページへ
+      // 1ページ20人（PC）。そのページで交渉していない人が居なければ次のページへ
       const open = t.locator('.online-tryout-pool [data-player]:not([data-wanted])');
       for (let n = standard.length; n < Number(limitText[2]); n += 1) {
         while (!(await open.count()))
@@ -343,9 +349,14 @@ try {
         t
           .locator('.online-tryout-pool')
           .getByRole('button', { name: `${name}と交渉する`, exact: true });
-      // ⚠ **満員のときは理由を出す**（黙って何も起きない、を作らない）
-      await negotiate().click();
-      await t.getByText('交渉できるのは', { exact: false }).waitFor();
+      // ⚠ **満員のときは押せなくし、理由を添える**（黙って何も起きない、を作らない）。
+      //    以前は押せて、知らせが上の「交渉する選手」の欄（押した所からは画面の外）に出ていた
+      assert.ok(await negotiate().isDisabled(), '満員なのに「交渉」が押せる');
+      assert.match(
+        (await negotiate().getAttribute('title')) || '',
+        /交渉できるのは/,
+        '満員で押せない「交渉」に理由が添えられていない',
+      );
       assert.deepEqual(
         await wantedNames(),
         start,

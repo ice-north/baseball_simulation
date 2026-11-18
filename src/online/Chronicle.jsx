@@ -4,7 +4,14 @@ import TeamRoster from './TeamRoster.jsx';
 import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import { teamLabel, teamShort } from './gameText.js';
-import { raceText, milestoneText, worldText, honorRows, draftRankText } from './chronicleText.js';
+import {
+  raceText,
+  milestoneText,
+  worldText,
+  honorRows,
+  proDraftedAfter,
+  draftRankText,
+} from './chronicleText.js';
 
 // ============================================================
 // 球団史・記録（PC）。年表・歴代記録・引退した人・節目、リーグの話題。
@@ -137,7 +144,7 @@ function ProDrafted({ list, showTeam = false, empty }) {
             {r.npbTeam} {draftRankText(r)}指名{r.reason ? `　${r.reason}` : ''}
           </span>
           {/* プロでのその後（球団史は全部の年、リーグ全体はいちばん新しい年。飾りでリーグには効かない） */}
-          {(r.career || (r.after ? [r.after] : [])).map((t, j) => (
+          {proDraftedAfter(r).map((t, j) => (
             <small key={j} className="online-pro-after">
               {t}
             </small>
@@ -220,6 +227,24 @@ function Honors({ honors }) {
         <article key={i}>
           <b>{r.head}</b>
           <span>{r.body}</span>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * オーナー名鑑（参加者ごとの通算。リーグ全体）。⚠ 文はサーバーが作る（`server/ownerRecords.mjs`）。
+ * アプリ（ChronicleDialog の「オーナー名鑑」）と同じ並び
+ */
+function Owners({ list }) {
+  if (!list?.length) return <p>まだ参加者がいません。</p>;
+  return (
+    <div className="online-news-list">
+      {list.map((o) => (
+        <article key={`${o.label}:${o.team}`}>
+          <b>{o.head}</b>
+          <span>{o.text}</span>
         </article>
       ))}
     </div>
@@ -372,6 +397,10 @@ export default function Chronicle({ view }) {
                   <Retired list={c.retired} />
                 </section>
                 {/* リーグ全体の記録（球団を選び直しても同じ） */}
+                <section className="online-card">
+                  <h2>オーナー名鑑</h2>
+                  <Owners list={view.owners} />
+                </section>
                 <section className="online-card">
                   <h2>年間表彰{view.chronicle?.honors?.year ? `（${view.chronicle.honors.year}年目）` : ''}</h2>
                   <Honors honors={view.chronicle?.honors} />

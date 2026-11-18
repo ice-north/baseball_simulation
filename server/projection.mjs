@@ -27,6 +27,8 @@ import {
 } from './leagueBoard.mjs';
 import { packSummary, packsForMember } from '../src/online/rosterPack.js';
 import { ageOutlook } from '../src/online/ageOutlook.js';
+import { diagnoseTeam } from '../src/online/teamDiagnosis.js';
+import { ownerRecords } from './ownerRecords.mjs';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -46,7 +48,7 @@ import {
   ROSTER_STANDARD,
 } from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
-import { SEASON_TURNS } from '../src/online/pyramidLeague.js';
+import { SEASON_TURNS, PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
 import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf } from './coachEngine.mjs';
 import { createTradeJudge } from './tradeJudge.mjs';
@@ -388,6 +390,22 @@ function packJoinsAt(l) {
 }
 const pendingPackAuto = (phase, member) =>
   !!phase && !!member.packSeed && phase.kind !== 'pack_select';
+/** 自球団の診断。同じ部の球団と比べる（部分けの無いリーグは全球団と） */
+function diagnosisFor(l, teamName, team, statsOf) {
+  const names = l.season?.settings?.teamNames || [];
+  const tier = (l.teams || []).find((t) => t.name === teamName)?.league;
+  const same = tier ? names.filter((name) => (l.teams || []).find((t) => t.name === name)?.league === tier) : names;
+  const rivals = same.map((name) => ({ name, players: l.game?.teams?.[name]?.players || [] }));
+  return diagnoseTeam({
+    team,
+    teamName,
+    rivals,
+    results: l.season?.results || [],
+    statsOf,
+    leagueName: (tier && PYRAMID_LEAGUES.find((x) => x.id === tier)?.name) || 'リーグ',
+  });
+}
+
 export function projectLeague(bundle, userId, sessionId, adminId) {
   const l = bundle.league;
   if (!l) return { setupRequired: true, isAdmin: userId === adminId };
@@ -729,10 +747,16 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // ⚠ 保存は増やさない（年度の記録・取引の記録・球団史から毎回組む）
     yearSummary: yearSummaryFor(l, member.teamName, labelOf),
     // 年齢構成と3年後の見込み（自球団だけ。成長力を使うので他球団には作らない。`ageOutlook.js`）
-    ageOutlook: ageOutlook(
+    // ⚠ 途中参加で初期メンバーを待っている間（`packSeed`）は出さない。名簿はまだ CPU のときの
+    //    選手で、次のキャンプで丸ごと入れ替わるので、その見込みは自分の球団の話にならない
+    ageOutlook: member.packSeed ? null : ageOutlook(
       team.players,
       (l.season?.settings?.teamNames || []).flatMap((name) => (l.game?.teams?.[name]?.players || []).map((p) => p.age)),
     ),
+    // オーナーの通算記録（オーナー名鑑。参加者全員。`ownerRecords.mjs`）
+    owners: ownerRecords(l),
+    // チーム診断「なぜ勝てない？」（自球団だけ。直せることを3つまで。`teamDiagnosis.js`）
+    diagnosis: diagnosisFor(l, member.teamName, team, seasonStatsOf),
     // 参加した時刻（はじめての1週間の案内。`firstWeek.js`。リーグを作ったときの人には無い）
     joinedAt: member.joinedAt || null,
     notices: l.notices.slice(0, 4),

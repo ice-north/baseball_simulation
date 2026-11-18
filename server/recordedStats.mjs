@@ -6,6 +6,7 @@ import {
   CATCH_KEYS,
   zeroLine,
   addCounts,
+  teamSplitsOf,
 } from '../src/online/recordStats.js';
 
 export const RECORD_VERSION = 1;
@@ -393,6 +394,8 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
       }
       season.games[game.id] = box;
       delete season.archiveToken;
+      // 球団ごとの成績（年度更新で作る）も作り直す
+      delete season.teamSplits;
     },
   };
 }
@@ -523,6 +526,9 @@ export function freezeComparison(league) {
   const season = observedSeason(league);
   if (season && !season.comparison)
     season.comparison = clone(comparisonForSeason(season));
+  // ⚠ 途中で球団を移った選手の球団ごとの成績。終わった年の試合の記録は別に保存して軽い読みで
+  //    読まないので、球団史（`teamChronicle`）が試合の記録をなめなくて済むよう、ここで作っておく
+  if (season && !season.teamSplits) season.teamSplits = teamSplitsOf(season);
   if (season && !season.archiveToken) {
     // ⚠ **全試合を1本の文字列にしないこと**。42球団3024試合では
     //    `JSON.stringify(season.games)` が文字列の上限を超えて落ちる

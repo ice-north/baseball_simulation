@@ -11,8 +11,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.graphics.Color
 import jp.icenorth.baseball.shared.AGE_OUTLOOK_NOTE
 import jp.icenorth.baseball.shared.AgeOutlook
-import jp.icenorth.baseball.shared.OnlineJson
 import jp.icenorth.baseball.shared.ageOutlookLabel
+import jp.icenorth.baseball.shared.OnlineJson
+import jp.icenorth.baseball.shared.TeamDiagnosis
+import jp.icenorth.baseball.shared.diagnosisPageLabel
+import jp.icenorth.baseball.shared.diagnosisPlanFace
+import jp.icenorth.baseball.shared.ageOutlookOf
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,11 +75,11 @@ import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
 
-private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順"), Ages("年齢") }
+private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順"), Ages("チーム") }
 
 /** 選手タブ: 選手成績・通算成績（球団を切り替えて同じ表）と、リーグ全体の能力ランキング */
 @Composable
-fun PlayersScreen(model: AppViewModel) {
+fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpenTrade: () -> Unit = {}) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var mode by rememberSaveable { mutableStateOf(PlayersMode.Season) }
@@ -101,27 +105,49 @@ fun PlayersScreen(model: AppViewModel) {
         when (mode) {
             PlayersMode.Ranking -> AbilityRanking(model, view, raw)
             PlayersMode.CareerRank -> CareerRanking(model, view, raw)
-            // 自球団の年齢構成と3年後の見込み（Web 版 AgeOutlook.jsx と同じ中身）
-            PlayersMode.Ages -> AgeOutlookPane(raw)
+            // 自球団のチーム診断と年齢構成・3年後の見込み（Web 版 TeamDiagnosis.jsx・AgeOutlook.jsx と同じ中身）
+            PlayersMode.Ages -> AgeOutlookPane(raw, onOpenPlan, onOpenTrade)
             else -> TeamStats(model, view, raw, team, career = mode == PlayersMode.Career)
         }
     }
 }
 
 @Composable
-private fun AgeOutlookPane(raw: JsonObject) {
-    val outlook = remember(raw) {
-        raw.at("ageOutlook").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(AgeOutlook.serializer(), it) }.getOrNull() }
+private fun AgeOutlookPane(raw: JsonObject, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
+    val outlook = remember(raw) { ageOutlookOf(raw) }
+    val diagnosis = remember(raw) {
+        raw.at("diagnosis").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(TeamDiagnosis.serializer(), it) }.getOrNull() }
     }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        // 試合が少ないうち（10試合未満）は診断が無い。そのときは年齢構成だけ
+        if (diagnosis != null) item { DiagnosisCard(diagnosis, onOpenPlan, onOpenTrade) }
         item { AgeOutlookCard(outlook) }
     }
 }
 
-/** 年齢構成と3年後の見込み（自球団。手続きのトライアウト・契約更改でも使う） */
+/** チーム診断「なぜ勝てない？」（Web 版 TeamDiagnosis.jsx と同じ並び。直す画面へのボタン付き） */
+@Composable
+private fun DiagnosisCard(d: TeamDiagnosis, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
+    Section("チーム診断（${d.games}試合）") {
+        Text(d.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        d.items.forEach { item ->
+            Text(item.text, style = MaterialTheme.typography.bodyMedium)
+            val label = diagnosisPageLabel(item.page)
+            val face = diagnosisPlanFace(item.page)
+            if (label != null) TextButton(onClick = { if (face != null) onOpenPlan(face) else onOpenTrade() }) { Text("${label}へ") }
+        }
+        d.note?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    }
+}
+
+/**
+ * 年齢構成と3年後の見込み（自球団）。選手の「チーム」と、手続きのトライアウト・契約更改
+ * （`ProceduresScreen.kt`。`compact` で主力の一覧を省く。Web 版 LeaguePanels.jsx と同じ置き場所）
+ */
 @Composable
 fun AgeOutlookCard(outlook: AgeOutlook?, compact: Boolean = false) {
-    if (outlook == null) { Text("まだ見込みを出せません。", style = MaterialTheme.typography.bodySmall); return }
+    // 手続きの中（compact）は、見込みが無ければ何も出さない（Web 版と同じ）
+    if (outlook == null) { if (!compact) Text("まだ見込みを出せません。", style = MaterialTheme.typography.bodySmall); return }
     val most = (outlook.bands.maxOfOrNull { it.pitchers + it.fielders } ?: 1).coerceAtLeast(1)
     Section("年齢構成と${outlook.years}年後の見込み") {
         outlook.bands.forEach { b ->

@@ -214,6 +214,7 @@ fun TryoutPanel(
                             Score(scores[p.pid])
                             Fit(teamFitRank(p, roster, weights))
                             Koshien(p)
+                            originOf(p)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             if (at >= 0) Tag("交渉中 ${at + 1}位", MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -254,6 +255,12 @@ private fun Fit(fit: TeamFit) {
         color = if (fit.rank <= 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         fontWeight = if (fit.rank <= 2) FontWeight.Bold else FontWeight.Normal,
     )
+}
+
+/** 出身（高校・大学・元の球団）。⚠ Web 版 TryoutPlanner.jsx の originOf と同じ順で選ぶ */
+private fun originOf(p: JsonObject): String? {
+    fun of(key: String) = p.at("origin", key).str()?.takeIf { it.isNotBlank() }
+    return of("previousTeam")?.let { "元$it" } ?: of("university") ?: of("highSchool")
 }
 
 /** 甲子園で名を上げた人（「2年目の夏の甲子園 ○○高のエース（ベスト4）」。サーバーが付ける。`koshienNoteOf`） */

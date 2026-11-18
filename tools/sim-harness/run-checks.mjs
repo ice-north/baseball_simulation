@@ -42,6 +42,8 @@ const CHECKS = [
   { name: 'base-state-check', group: 'quick', slow: 1 },
   { name: 'bunt-check', group: 'quick', slow: 1 },
   { name: 'doc-check', group: 'quick', slow: 1 },
+  // 社会人・独立の最初の名簿に投手が4人以上いるか（投手0人で試合が壊れた）
+  { name: 'corporate-roster-check', group: 'quick', slow: 1 },
   { name: 'online-config-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-pyramid-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-membership-check', group: 'quick', online: true, slow: 1 },
@@ -49,6 +51,7 @@ const CHECKS = [
   { name: 'online-core-check', group: 'quick', online: true, slow: 3 },
   { name: 'online-boundary-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-auth-check', group: 'quick', online: true, slow: 1 },
+  { name: 'online-invite-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-clock-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-edit-conflict-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-label-check', group: 'quick', online: true, slow: 1 },
@@ -62,6 +65,7 @@ const CHECKS = [
   { name: 'online-contract-table-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-camp-target-check', group: 'quick', online: true, slow: 6 },
   { name: 'online-owner-five-check', group: 'quick', online: true, slow: 2 },
+  { name: 'online-owner-extra-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-migration-check', group: 'check', online: true, slow: 21 },
   { name: 'online-join-check', group: 'check', online: true, slow: 9 },
   { name: 'online-deadline-check', group: 'check', online: true, slow: 85 },
@@ -80,6 +84,7 @@ const CHECKS = [
   { name: 'online-service-check', group: 'check', online: true, slow: 55 },
   { name: 'online-storage-check', group: 'check', online: true, slow: 3 },
   { name: 'online-parts-check', group: 'check', online: true, slow: 45 },
+  { name: 'online-past-games-check', group: 'check', online: true, slow: 200 },
   { name: 'online-roster-recovery-check', group: 'check', online: true, slow: 27 },
   { name: 'online-snapshot-check', group: 'check', online: true, slow: 8 },
   { name: 'online-records-check', group: 'check', online: true, slow: 52 },
@@ -105,6 +110,7 @@ const DIST_UI = [
   { name: 'online-join-ui-check', slow: 15 }, // check:online:join-ui
   { name: 'online-staff-ui-check', slow: 10 }, // check:online:staff-ui
   { name: 'online-auth-ui-check', slow: 6 }, // check:online:auth-ui
+  { name: 'online-invite-ui-check', slow: 8 }, // check:online:invite-ui
   { name: 'online-edit-ui-check', slow: 10 }, // check:online:edit-ui
   { name: 'online-label-ui-check', slow: 17 }, // check:online:label-ui
   { name: 'online-replay-ui-check', slow: 38 }, // check:online:replay-ui
@@ -115,6 +121,7 @@ const DIST_UI = [
 // 長くかかる通年検査（CI では別の手順・ジョブ）。
 const SEPARATE = [
   'online-engine-check', // check:online:season
+  'online-size-budget-check', // check:online:size（保存とビューの大きさの上限。1年と少し進めるので約3分）
   'online-ui-check', // check:online:ui（開発サーバー2つが要る）
   'singleplayer-ui-check', // check:ui
   'singleplayer-yearend-ui-check', // check:ui:yearend（5モードで1年目のオフから2年目の開幕まで）
