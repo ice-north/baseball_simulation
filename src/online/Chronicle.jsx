@@ -244,6 +244,30 @@ function Owners({ list }) {
   );
 }
 
+/**
+ * 今季総括号（年度更新のあと〜開幕前だけ。リーグ全体）。⚠ 文はサーバーが作る（`server/seasonReview.mjs`）。
+ * アプリの全国紙（キャンプの日の1面）と同じ記事
+ */
+export function SeasonReview({ review }) {
+  if (!review?.articles?.length) return null;
+  return (
+    <section className="online-card online-season-review">
+      <h2>今季総括号 {review.headline}</h2>
+      {review.lead && <p>{review.lead}</p>}
+      <div className="online-news-list">
+        {review.articles.map((a) => (
+          <article key={a.kicker}>
+            <b>
+              〔{a.kicker}〕{a.title}
+            </b>
+            <span>{a.body}</span>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Milestones({ list, showTeam = false }) {
   if (!list?.length) return <p>まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。</p>;
   return (
@@ -356,6 +380,7 @@ export default function Chronicle({ view }) {
             sub={`${teamLabel(shown.teamName)}の年ごとの成績と、このリーグでの歴代記録。記録はリーグを始めてからのものです。`}
             actions={<div className="online-team-selector">{selector}</div>}
           >
+            <SeasonReview review={view.seasonReview} />
             <section className="online-card">
               <h2>年表</h2>
               <Seasons seasons={c.seasons} />

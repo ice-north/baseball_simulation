@@ -1,4 +1,4 @@
-import { LeagueTopics } from './Chronicle.jsx';
+import { LeagueTopics, SeasonReview } from './Chronicle.jsx';
 import React from 'react';
 import { teamShort, ownOutcome } from './gameText.js';
 import { Standings } from './LeaguePanels.jsx';
@@ -427,6 +427,8 @@ export default function LeagueBoard({ view }) {
           <RecentGames view={view} />
           <NextGames view={view} />
         </div>
+        {/* 今季総括号（年度更新のあと〜開幕前だけ） */}
+        <SeasonReview review={view.seasonReview} />
         <Leaders view={view} />
       </div>
       <div className="online-board-side">

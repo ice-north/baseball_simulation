@@ -29,6 +29,7 @@ import { packSummary, packsForMember } from '../src/online/rosterPack.js';
 import { ageOutlook } from '../src/online/ageOutlook.js';
 import { diagnoseTeam } from '../src/online/teamDiagnosis.js';
 import { ownerRecords } from './ownerRecords.mjs';
+import { seasonReview } from './seasonReview.mjs';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -574,6 +575,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     races: leagueRaces(l, left),
     // 節目の記録・引退・裏の大会（リーグ全体の最近のもの）
     chronicle: chronicleView(l),
+    // 今季総括号（年度更新のあと〜開幕前だけ。文はサーバーが作る。`seasonReview.mjs`）
+    seasonReview: seasonReview(l, (name) => teamLabels[name]?.short || name),
     // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。
     teamStats: teamSeasonStats(l, seasonStatsOf),
     // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか

@@ -4,6 +4,7 @@
 //   node tools/sim-harness/online-owner-extra-check.mjs
 import assert from 'node:assert/strict';
 import { ownerRecords } from '../../server/ownerRecords.mjs';
+import { seasonReview, nearMilestones } from '../../server/seasonReview.mjs';
 import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../src/online/teamDiagnosis.js';
 
 // ---------- A1 ----------
@@ -142,5 +143,54 @@ import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../sr
   const fresh = ownerRecords({ members: [league.members[0]], history: [] })[0];
   assert.equal(fresh.text, 'まだ終えたシーズンがありません');
   console.log(`オーナー名鑑: ${x.text}`);
+}
+// ---------- A6 ----------
+{
+  const st = (rows) => rows.map(([team, wins]) => ({ team, wins, losses: 50 - wins, draws: 0 }));
+  const leagues = { X: 'A', Y: 'A', Z: 'B', W: 'B' };
+  const last = {
+    year: 2,
+    leagues,
+    standings: st([['X', 30], ['Y', 26], ['Z', 31], ['W', 20]]),
+    moves: [{ teamId: 'Z', from: 'B', to: 'A' }, { teamId: 'Y', from: 'A', to: 'B' }],
+    playoffChampion: 'X',
+    awards: { homeRunKing: { name: '山田', team: 'X', homeruns: 30 }, honors: { A: { mvp: { name: '山田', team: 'X' }, rookie: { name: '佐藤', team: 'Y' } } } },
+  };
+  const make = (month) => ({
+    season: { year: 3, currentDate: { month, day: 1 }, settings: { teamNames: ['X', 'Y', 'Z', 'W'] } },
+    history: [last],
+    chronicle: {
+      milestones: [
+        { year: 2, kind: 'season', side: 'batting', stat: 'homeruns', value: 30, label: 'シーズン30本塁打', team: 'X', name: '山田' },
+        { year: 2, kind: 'career', side: 'batting', stat: 'hits', value: 100, label: '通算100安打', team: 'Z', name: '鈴木' },
+        { year: 1, kind: 'career', side: 'batting', stat: 'hits', value: 100, label: '通算100安打', team: 'Z', name: '古い' },
+      ],
+      retired: [{ year: 2, team: 'W', name: '大ベテラン' }],
+      proDrafted: [],
+    },
+    records: { seasons: { 1: { year: 1, players: { k1: { stats: { batting: { hits: 60 } } } } }, 2: { year: 2, players: { k1: { stats: { batting: { hits: 36 } } } } } } },
+    game: { teams: { X: { players: [{ name: '近藤', onlinePlayerId: 'k1' }] } } },
+  });
+  const short = (n) => `${n}球団`;
+  const r = seasonReview(make(2), short);
+  assert.ok(r, '開幕前は出す');
+  assert.equal(r.year, 2);
+  assert.equal(r.headline, '2年目を振り返る');
+  assert.match(r.lead, /1部はX球団、2部はZ球団が1位/);
+  assert.match(r.lead, /Z球団が昇格し、Y球団が降格。/);
+  const k = Object.fromEntries(r.articles.map((a) => [a.kicker, a]));
+  assert.match(k['頂点'].body, /プレーオフもX球団が制し/);
+  assert.match(k['年間表彰'].body, /1部MVPは山田（X球団）、新人王は佐藤（Y球団）/);
+  assert.equal(k['今季の記録'].title, '山田がシーズン30本塁打', 'シーズン30本は通算100安打より珍しい');
+  assert.ok(!k['今季の記録'].body.includes('古い'), '去年の節目は入れない');
+  assert.match(k['去る人'].body, /大ベテラン（W球団）/);
+  assert.equal(k['来季の注目'].title, '近藤、通算100安打へあと4');
+  // 開幕したら出さない・年度更新の前（去年の記録が無い）も出さない
+  assert.equal(seasonReview(make(4), short), null);
+  assert.equal(seasonReview({ ...make(2), history: [{ ...last, year: 1 }] }, short), null);
+  // あと少しの境目（刻みの15%以内）
+  const near = nearMilestones(new Map([['a', { batting: { hits: 84 }, pitching: {} }], ['b', { batting: { hits: 86 }, pitching: {} }]]), new Map([['a', { name: 'A', team: 'X' }], ['b', { name: 'B', team: 'X' }]]), short);
+  assert.deepEqual(near.map((x) => x.name), ['B']);
+  console.log(`今季総括号: ${r.lead}`);
 }
 console.log('online-owner-extra-check PASS');

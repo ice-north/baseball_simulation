@@ -47,6 +47,8 @@ data class LeagueView(
     val races: List<Race> = emptyList(),
     /** 節目の記録・引退・裏の大会（server/chronicle.mjs chronicleView）。古いサーバーには無い */
     val chronicle: ChronicleView = ChronicleView(),
+    /** 今季総括号（年度更新のあと〜開幕前だけ。server/seasonReview.mjs）。古いサーバーには無い */
+    val seasonReview: SeasonReview? = null,
     /** 自分の球団の指導者と任せ方（server/coachView.mjs ownStaffView）。古いサーバーには無い */
     val staff: StaffView? = null,
     /** リーグ全球団の指導者と最近の人事（server/coachView.mjs leagueStaffView）。古いサーバーには無い */

@@ -370,3 +370,18 @@ data class OwnerRecord(
     val text: String = "",
 )
 
+
+/**
+ * 今季総括号（ビューの `seasonReview`。サーバーの `server/seasonReview.mjs`）。年度更新のあと〜開幕前だけ。
+ * ⚠ 文はサーバーが作る。PC（球団史・記録のいちばん上・ホーム）とスマホWeb（話題）と同じ記事を出すだけ
+ */
+@Serializable
+data class SeasonReview(
+    val year: Int = 0,
+    val headline: String = "",
+    val lead: String = "",
+    val articles: List<SeasonReviewArticle> = emptyList(),
+)
+
+@Serializable
+data class SeasonReviewArticle(val kicker: String = "", val title: String = "", val body: String = "")
