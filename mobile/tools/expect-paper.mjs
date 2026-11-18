@@ -70,16 +70,24 @@ function paperLines(p) {
   return out;
 }
 
-// 場面: 詳細・今季の試合・次の相手の名簿がそろった日 / 詳細が読めなかった日 / 今季の試合が読めなかった日
+// 場面: 詳細・今季の試合・次の相手の名簿がそろった日 / 詳細が読めなかった日 / 今季の試合が読めなかった日 /
+//   キャンプ（手続きの時期の1面・指導者の人事。resources/front/scenes.json の camp でビューの上の段を差し替える）/
+//   勝った日（同じく win。最後の試合の得点を入れ替える）
+// ⚠ 差し替えはビューの**いちばん上の段の項目ごと**（FrontPageWebTest も同じく `raw + patch`）
+const patches = read('scenes.json');
 const scenes = {
   full: { game, history: history[0], historyComplete: history[1], opponent },
   noDetail: { game: null, history: history[0], historyComplete: history[1], opponent: null },
   noHistory: { game, history: null, historyComplete: false, opponent },
+  camp: { patch: patches.camp, game: null, history: history[0], historyComplete: history[1], opponent },
+  win: { patch: patches.win, game: null, history: null, historyComplete: false, opponent },
 };
 const result = {};
 for (const [name, s] of Object.entries(scenes)) {
-  const local = buildFrontPage(view, raw, s.game, { history: s.history, historyComplete: s.historyComplete, opponent: s.opponent });
-  result[name] = { local: paperLines(local), national: paperLines(buildNationalPage(view, raw, local)) };
+  const r = s.patch ? { ...raw, ...s.patch } : raw;
+  const v = s.patch ? paperView(r) : view;
+  const local = buildFrontPage(v, r, s.game, { history: s.history, historyComplete: s.historyComplete, opponent: s.opponent });
+  result[name] = { local: paperLines(local), national: paperLines(buildNationalPage(v, r, local)) };
 }
 
 const text = JSON.stringify(result);

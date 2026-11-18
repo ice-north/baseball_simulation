@@ -79,12 +79,17 @@ class FrontPageWebTest {
 
     private fun lines(scene: String, paper: String): List<String> = expected.at(scene, paper).list().map { it.str().orEmpty() }
 
-    private fun check(scene: String, game: JsonObject?, history: Pair<List<GameResult>, Boolean>?, opponent: List<Player>?) {
-        val local = buildFrontPage(view, raw, game, history = history?.first, historyComplete = history?.second ?: false, opponent = opponent)
-        val national = buildNationalPage(view, raw, local)
+    /** 場面ごとに、ビューのいちばん上の段の項目を差し替える（expect-paper.mjs の `{ ...raw, ...patch }` と同じ） */
+    private val patches = OnlineJson.decodeFromString<JsonObject>(res("scenes.json"))
+
+    private fun check(scene: String, game: JsonObject?, history: Pair<List<GameResult>, Boolean>?, opponent: List<Player>?, patch: String? = null) {
+        val r = patch?.let { JsonObject(raw + patches.getValue(it).jsonObject) } ?: raw
+        val v = patch?.let { OnlineJson.decodeFromJsonElement(LeagueView.serializer(), r) } ?: view
+        val local = buildFrontPage(v, r, game, history = history?.first, historyComplete = history?.second ?: false, opponent = opponent)
+        val national = buildNationalPage(v, r, local)
         val wantLocal = lines(scene, "local")
         val wantNational = lines(scene, "national")
-        assertTrue(wantLocal.size > 20, "期待値が空に近い（$scene）")
+        assertTrue(wantLocal.size > if (patch == "camp") 10 else 20, "期待値が空に近い（$scene）")
         // ⚠ 1行ずつ比べる（全部を1つの文にすると、どこがずれたか読めない）
         assertEquals(wantLocal.joinToString("\n"), paperLines(local).joinToString("\n"), "地元紙（$scene）が PC 版と違う")
         assertEquals(wantNational.joinToString("\n"), paperLines(national).joinToString("\n"), "全国紙（$scene）が PC 版と違う")
@@ -98,4 +103,12 @@ class FrontPageWebTest {
 
     @Test
     fun withoutHistoryMatchesPc() = check("noHistory", game, null, opponent)
+
+    /** 手続きの時期（キャンプ）の1面と、指導者の人事（新体制・人事の記事） */
+    @Test
+    fun campMatchesPc() = check("camp", null, history, opponent, patch = "camp")
+
+    /** 勝った日の見出し（ほかの場面は負けた日だけ） */
+    @Test
+    fun winMatchesPc() = check("win", null, null, opponent, patch = "win")
 }

@@ -221,8 +221,8 @@ function Masthead({ page }) {
       </div>
       {page.index.length > 0 && (
         <ul className="paper-index" aria-label="きょうの紙面">
-          {page.index.map((x) => (
-            <li key={x}>{x}</li>
+          {page.index.map((x, i) => (
+            <li key={`${i}-${x}`}>{x}</li>
           ))}
         </ul>
       )}
@@ -303,8 +303,8 @@ function FrontView({ page, onPage }) {
         page.shorts.length > 0 && (
           <section className="paper-results">
             <h3>リーグ短信</h3>
-            {page.shorts.map((s) => (
-              <p key={s}>▽{s}</p>
+            {page.shorts.map((s, i) => (
+              <p key={`${i}-${s}`}>▽{s}</p>
             ))}
           </section>
         )
@@ -480,8 +480,8 @@ function TeamPageView({ t, onNext }) {
               <h3>調子の矢印</h3>
               <table className="paper-kv">
                 <tbody>
-                  {t.conditions.map((c) => (
-                    <tr key={c.name + c.position}>
+                  {t.conditions.map((c, i) => (
+                    <tr key={`${i}-${c.name}${c.position}`}>
                       <td className={`paper-arrow is-${c.arrow > 0 ? 'up' : c.arrow < 0 ? 'down' : 'flat'}`}>{ARROWS[c.arrow]}</td>
                       <td>{c.position}</td>
                       <th>{c.name}</th>
@@ -495,8 +495,8 @@ function TeamPageView({ t, onNext }) {
           {(t.pitchers.length > 0 || t.rotation) && (
             <section>
               <h3>投手陣</h3>
-              {t.pitchers.map(([name, note, rest]) => (
-                <p key={name} className={rest ? 'is-tired' : ''}>
+              {t.pitchers.map(([name, note, rest], i) => (
+                <p key={`${i}-${name}`} className={rest ? 'is-tired' : ''}>
                   {name}　{note}
                   {rest ? '（休ませたい）' : ''}
                 </p>
@@ -540,16 +540,16 @@ function RecordPageView({ r, onBack }) {
           )}
           {r.notes.length > 0 && (
             <div className="paper-notes">
-              {r.notes.map((n) => (
-                <p key={n}>{n}</p>
+              {r.notes.map((n, i) => (
+                <p key={`${i}-${n}`}>{n}</p>
               ))}
             </div>
           )}
           {r.relays.length > 0 && (
             <section className="paper-relays">
               <h3>継投</h3>
-              {r.relays.map((n) => (
-                <p key={n}>{n}</p>
+              {r.relays.map((n, i) => (
+                <p key={`${i}-${n}`}>{n}</p>
               ))}
             </section>
           )}
@@ -588,8 +588,8 @@ function RecordPageView({ r, onBack }) {
           {r.probables.length > 0 && (
             <section>
               <h3>{r.probablesTitle ?? '予告先発'}</h3>
-              {r.probables.map(([line, mine]) => (
-                <p key={line} className={mine ? 'is-mine' : ''}>
+              {r.probables.map(([line, mine], i) => (
+                <p key={`${i}-${line}`} className={mine ? 'is-mine' : ''}>
                   {line}
                 </p>
               ))}

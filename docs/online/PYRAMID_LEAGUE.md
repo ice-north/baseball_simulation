@@ -404,7 +404,8 @@ Cリード学習・変化球練習・新球種習得・スピン解析・サブ�
 自球団の年齢の段（投手・野手）と、主力の3年後の見込み（`src/online/ageOutlook.js`。成長力と
 プロ意識から決まるピーク年齢で見る。乱数なし）。成長力を使うので**自球団だけ**作る。
 
-- ビュー: `ageOutlook`（`{ years, bands[], core[], rising[], lines[], advice }`）。名簿が空のときと、
+- ビュー: `ageOutlook`（`{ years, bands[], grid[], core[], rising[], lines[], advice }`）。`grid[]` は「年齢 × 守備位置」の図の
+  1人1つの箱（`id, name, position, group, age, later, core, warn`）。無い古いサーバーではアプリは前の帯の図に戻る。名簿が空のときと、
   **途中参加で初期メンバーを待っている間**（`packSeed`）は `null`（名簿は CPU のときの選手で、次の
   キャンプで入れ替わるため）。画面は `null` なら出さない（アプリの「年齢」の面は「まだ見込みを出せません」）。
 - 出す場所: PC は選手成績（自球団を見ているとき）と手続きのトライアウト・契約更改（`compact`）。
