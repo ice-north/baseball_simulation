@@ -35,6 +35,7 @@ let days = 0;
 let pacedSeen = false;
 let magicSeen = null;
 let viewChecked = false;
+let contractViewChecked = false;
 // ⚠ 節目は「その日の1試合ぶん」で前の値を作る。全員の通算を毎日数え直して確かめる
 const totals = () => {
   const out = new Map();
@@ -90,6 +91,23 @@ while (days < 500) {
     assert.ok(view.chronicle && Array.isArray(view.chronicle.milestones), 'chronicle が無い');
     viewChecked = true;
   }
+  // ⚠ **契約更改の画面で、その年のNPBドラフトが見られること**（いしだ 2026-11-19「指名の
+  //    演出もほしいです。契約更改前、160ターンが終わった段階で、誰が指名されたかを表示
+  //    しましょう」）。画面（`ProDraftResult.jsx`）は `view.chronicle.proDrafted` の
+  //    **今年の行**だけを拾うので、契約更改が開いた時点で投影に乗っていることを確かめる。
+  //    指名は10月下旬で、そこから11/9の契約更改までの日はまとめて進む
+  if (league.phase?.kind === 'contract' && league.season.year === startYear && !contractViewChecked) {
+    contractViewChecked = true;
+    const view = projectLeague(bundle(), 'a', null, null);
+    assert.equal(view.year, startYear, '契約更改の時点で年が進んでいる（画面が去年の指名を落とす）');
+    const kept = (league.chronicle?.proDrafted || []).filter((r) => r.year === startYear);
+    const shown = (view.chronicle?.proDrafted || []).filter((r) => r.year === view.year);
+    assert.equal(shown.length, kept.length, '契約更改の時点でその年の指名が投影に乗っていない');
+    for (const r of shown) {
+      assert.ok(r.name && r.team && r.npbTeam && r.round, `指名の項目が欠けている ${JSON.stringify(r)}`);
+      assert.ok(!('key' in r), '記録の鍵をビューに出している');
+    }
+  }
   // マジックの整合: 決まった球団は、最後まで順位が変わらないこと（年の終わりに確かめる）
   if (league.season.year === startYear) {
     const races = leagueRaces(league);
@@ -109,6 +127,7 @@ while (days < 500) {
   }
 }
 assert.ok(league.season.year > startYear, '翌年まで進まなかった');
+assert.ok(contractViewChecked, '契約更改が開かないまま終わった（ドラフトの発表を確かめられていない）');
 const c = league.chronicle;
 assert.ok(c, 'chronicle が作られていない');
 // 節目: 通算の越え方の数と一致（同じ日に2つ越えることはほぼ無いので、ひとつに数える）

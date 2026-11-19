@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import SeasonFlow from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
+import ProDraftResult from './ProDraftResult.jsx';
 import MobileTactics from './MobileTactics.jsx';
 import TapLineup, { useTapLineup } from './TapLineup.jsx';
 import {
@@ -1153,6 +1154,10 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
       >
         <fieldset className="online-form-fields online-phase" disabled={busy}>
           <SeasonFlow view={view} />
+          {/* ⚠ **契約更改が、シーズンの160ターンが終わって最初に開く手続き**。
+              その年のNPBドラフトの結果をここで出す（いしだ 2026-11-19）。
+              0人の年（3割）も「指名なし」と出す（`whenEmpty`） */}
+          {phase.kind === 'contract' && <ProDraftResult view={view} whenEmpty />}
           <section className="online-card online-phase-rules">
             <p>{rulesText}</p>
             {staffNote}
@@ -1193,6 +1198,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
             （携帯だけの人は、出せないと4クールとも自動になる） */}
         {/* ⚠ 年が替わった直後は「その年のまとめ」だけ（いしだ 2026-11-18
             「キャンプの結果やオフの成長は要りません」） */}
+        {phase.kind === 'contract' && <ProDraftResult view={view} whenEmpty />}
         {phase.kind === 'camp' && <YearSummary view={view} />}
         {phase.kind === 'camp' && (
           <CampPlanner

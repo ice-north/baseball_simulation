@@ -28,6 +28,7 @@ import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
+import ProDraftResult from './ProDraftResult.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
@@ -602,6 +603,10 @@ export default function DesktopView(props) {
               {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。
                   シーズン後から開幕までは、いまの段階とやることを先頭に出す */}
               {view.stage?.key !== 'season' && <SeasonFlow view={view} />}
+              {/* ⚠ **シーズンが終わって最初に見るのがここ**。その年のNPBドラフトで
+                  誰が抜かれたかを出す（いしだ 2026-11-19「指名の演出もほしい」）。
+                  年度更新で消える */}
+              <ProDraftResult view={view} />
               {/* キャンプが終わった直後の結果（閉じるまで。先方指摘「キャンプ直後に」） */}
               <CompletedCamp key={view.lastCamp?.year} view={view} onHome />
               <LeagueBoard view={view} />
@@ -715,6 +720,8 @@ export default function DesktopView(props) {
             {/* ⚠ キャンプの結果は**その年のキャンプのものだけ**（年が替わったら出さない）。
                 年が替わった直後は「その年のまとめ」だけにする（いしだ 2026-11-18） */}
             <CompletedCamp key={view.lastCamp?.year} view={view} />
+            {/* その年のNPBドラフト（指名から年度更新まで） */}
+            <ProDraftResult view={view} />
             {/* トライアウト直後（年度更新まで）は入団した選手。年が替わったら下のまとめへ */}
             <TryoutResult view={view} />
             <YearSummary view={view} />

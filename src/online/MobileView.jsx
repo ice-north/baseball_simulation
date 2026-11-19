@@ -26,6 +26,7 @@ import { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
+import ProDraftResult from './ProDraftResult.jsx';
 import { StaffBody } from './StaffPage.jsx';
 import { MobileTradeReplies } from './TradeScreen.jsx';
 import { RenameDialog } from './DesktopView.jsx';
@@ -134,6 +135,8 @@ export default function MobileView(props) {
             <small>次の進行 {nextAdvanceText(view)}</small>
           </section>
           {view.stage?.key !== 'season' && <SeasonFlow view={view} compact />}
+          {/* その年のNPBドラフト（指名から年度更新まで。PC版と同じ） */}
+          <ProDraftResult view={view} />
           {/* キャンプが終わった直後の結果（閉じるまで。PC版と同じ） */}
           {!view.phase && <CompletedCamp key={view.lastCamp?.year} view={view} onHome />}
           <TeamBrief view={view} />
@@ -278,6 +281,7 @@ export default function MobileView(props) {
             </section>
             <SeasonFlow view={view} compact />
             <CompletedCamp key={view.lastCamp?.year} view={view} />
+            <ProDraftResult view={view} />
             <TryoutResult view={view} />
             <YearSummary view={view} />
           </>

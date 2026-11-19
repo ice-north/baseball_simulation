@@ -34,6 +34,7 @@ import CampPlanner, { CompletedCamp, subTargetChoices } from '../../src/online/C
 import { setTeamLabels } from '../../src/online/gameText.js';
 import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 import YearSummary from '../../src/online/YearSummary.jsx';
+import ProDraftResult from '../../src/online/ProDraftResult.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
 import { Homeruns } from '../../src/online/LeagueBoard.jsx';
@@ -63,6 +64,7 @@ export {
   AbilityGrade,
   Homeruns,
   YearSummary,
+  ProDraftResult,
 };
 `;
 const result = await build({
@@ -93,6 +95,7 @@ try {
     PackSelect,
     CompletedCamp,
     YearSummary,
+    ProDraftResult,
     CampPlanner,
     subTargetChoices,
     DesktopTactics,
@@ -258,6 +261,38 @@ try {
       '古い年のまとめが出ている',
     );
     assert.equal(render(h(YearSummary, { view: { year: 3 } })), '', 'まとめが無いのに枠だけ出ている');
+  }
+
+  // --- NPBドラフトの発表（指名から年度更新まで。`ProDraftResult.jsx`）---------
+  // ⚠ いしだ 2026-11-19「指名の演出もほしいです。契約更改前、160ターンが終わった段階で、
+  //    誰が指名されたかを表示しましょう」。中身は `view.chronicle.proDrafted` の今年の行
+  {
+    const view = {
+      year: 3,
+      teamName: '三陸',
+      chronicle: {
+        proDrafted: [
+          { year: 3, team: '三陸', name: '抜かれ太郎', position: 'pitcher', age: 19, npbTeam: '中日ドラゴンズ', round: 4, reason: '19歳の将来性' },
+          { year: 3, team: '庄内', name: '育成次郎', position: 'center', age: 20, npbTeam: '西武ライオンズ', round: 2, ikusei: true, reason: '能力を評価' },
+          { year: 2, team: '三陸', name: '去年三郎', position: 'pitcher', age: 21, npbTeam: '阪神タイガース', round: 7, reason: '能力を評価' },
+        ],
+      },
+    };
+    const html = render(h(ProDraftResult, { view }));
+    for (const text of ['3年目のNPBドラフト', '抜かれ太郎', '4位', '中日ドラゴンズ', '育成次郎', '育成2位', '19歳の将来性'])
+      assert.ok(html.includes(text), `ドラフトの発表に「${text}」が出ない`);
+    assert.ok(html.includes('2人がNPBへ'), `指名人数が出ない: ${html.slice(0, 200)}`);
+    // ⚠ **去年の指名は混ぜない**（古い指名は球団史・記録の「リーグからプロへ」で見る）
+    assert.ok(!html.includes('去年三郎'), '去年の指名が混ざっている');
+    // ⚠ 自球団から抜かれた選手に印（いちばん知りたいこと）。ご褒美の案内も出す
+    assert.match(html, /data-mine="true"/, '自球団の指名に印が無い');
+    assert.ok(html.includes('プロ意識+5'), 'チームメイトのご褒美の案内が無い');
+    // ⚠ 年度更新で `view.year` が進んだら消える
+    assert.equal(render(h(ProDraftResult, { view: { ...view, year: 4 } })), '', '年が替わったのに去年の指名が出ている');
+    // ⚠ ホーム（`whenEmpty` なし）では0人の年に何も出さない。契約更改の手続きでは出す
+    assert.equal(render(h(ProDraftResult, { view: { year: 3, teamName: '三陸' } })), '', '指名が無いのに枠だけ出ている');
+    const none = render(h(ProDraftResult, { view: { year: 3, teamName: '三陸' }, whenEmpty: true }));
+    assert.ok(none.includes('指名された選手はいませんでした'), `0人の年の文が出ない: ${none.slice(0, 200)}`);
   }
 
   // --- トライアウトの注意は文を句点で区切る（u1 低20） ----------------------

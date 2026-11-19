@@ -882,6 +882,66 @@
   font-size: 11px;
   color: #94a3b8;
 }
+/* NPBドラフトの発表（`ProDraftResult.jsx`）。1人1行で「順位・選手・行き先・理由」 */
+.online-pro-draft h2 small {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #cbd5e1;
+}
+.online-pro-draft-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.online-pro-draft-list li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #ffffff0f;
+  font-size: 13px;
+}
+/* 自球団から抜かれた選手は目立たせる（いちばん知りたいこと） */
+.online-pro-draft-list li[data-mine] {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.online-pro-draft-rank {
+  flex: 0 0 auto;
+  min-width: 4.5em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #ffffff1f;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.online-pro-draft-who small {
+  margin-left: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.online-pro-draft-move {
+  font-size: 12px;
+  font-weight: 400;
+  color: #d0d9e5;
+}
+/* 理由（「19歳の将来性、最優秀防御率」）は次の行に回す */
+.online-pro-draft-reason {
+  flex: 1 1 100%;
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+/* 狭い画面では行き先も行を分ける（320pxで球団名2つが並ばない） */
+.online-mobile .online-pro-draft-move {
+  flex: 1 1 100%;
+}
 .online-camp-gain-list {
   list-style: none;
   margin: 0;
