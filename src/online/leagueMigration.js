@@ -232,6 +232,17 @@ export const MIGRATIONS = [
         for (const p of team?.players || []) clampOverCap(p);
     },
   },
+  {
+    from: 15,
+    to: 16,
+    note: '試合記録に回ごとの攻撃（打席の順）を足した',
+    apply() {
+      // ⚠ **足す方向だけの変更**。新しい試合の箱には `plays` が入る（`recordedStats.mjs` の
+      //    `inningPlaysOf`）。前からある試合には打席の記録そのものが残っていないので
+      //    作れない。画面はその試合だけ「回ごとの攻撃」を出さない（`GameHistory.jsx`）。
+      //    ここで消したり作ったりするものは無いので、段は版を上げるだけ。
+    },
+  },
 ];
 
 // ⚠ **手順表と目標の版を差し替えられるようにしてある**。段が0本だった頃に、

@@ -217,6 +217,50 @@ try {
     (await cardBox.boundingBox()).width >= 1200,
     `PCの試合成績の小窓が狭い: ${(await cardBox.boundingBox()).width}`,
   );
+  // --- スコアボード: 幅と、回の数字を押すとその回の攻撃が出る -----------------
+  // ⚠ いしだ 2026-11-19「スコアをクリックすると、その回の攻撃を時系列で表示してほしい」
+  //    「スコアボードも、2/3程度に横幅を縮めてほしい」
+  {
+    const board = cardBox.locator('.online-scoreboard').first();
+    await board.waitFor();
+    const boardWidth = (await board.boundingBox()).width;
+    const dialogWidth = (await cardBox.boundingBox()).width;
+    assert.ok(
+      boardWidth <= dialogWidth * 0.72,
+      `スコアボードが広い: ${Math.round(boardWidth)}px / 小窓 ${Math.round(dialogWidth)}px`,
+    );
+    const cells = board.locator('tbody td button');
+    const count = await cells.count();
+    assert.ok(count >= 9, `回の数字が押せない（${count}個）`);
+    // 点の入った回を選ぶ（無ければ先頭の回）
+    let target = cells.first();
+    let runs = 0;
+    for (let i = 0; i < count; i++) {
+      const text = (await cells.nth(i).innerText()).trim();
+      if (/^[1-9]/.test(text)) {
+        target = cells.nth(i);
+        runs = parseInt(text, 10);
+        break;
+      }
+    }
+    const label = await target.getAttribute('aria-label');
+    await target.click();
+    const plays = cardBox.getByRole('region', { name: label, exact: true });
+    await plays.waitFor();
+    const lines = await plays.locator('li').count();
+    assert.ok(lines >= 1, `${label}に打席が並んでいない`);
+    // ⚠ **その回の点の合計がスコアボードの数字と合う**（サーバー側は
+    //    `online-inning-plays-check` が全試合で見ている。画面でも1回ぶん確かめる）
+    const shown = await plays
+      .locator('li em')
+      .evaluateAll((list) => list.reduce((a, n) => a + (parseInt(n.textContent, 10) || 0), 0));
+    assert.equal(shown, runs, `${label}の点（画面 ${shown}）とスコアボードの${runs}が違う`);
+    // 見た目の確かめ用（この検査はもともと観戦パネルも撮っている）
+    await cardBox.screenshot({ path: '/tmp/baseball-online-inning-plays.png' });
+    // もう一度押すと閉じる
+    await target.click();
+    await plays.waitFor({ state: 'hidden' });
+  }
   await cardBox
     .getByRole('button', { name: '観戦リプレイ', exact: true })
     .click();

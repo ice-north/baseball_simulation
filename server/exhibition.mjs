@@ -24,7 +24,7 @@ import {
 } from '../src/online/social.js';
 import { prepareDailyLineup } from './dailyLineup.mjs';
 import { applyStaffTactics } from './coachEngine.mjs';
-import { scoringPlaysOf, winningHitOf } from './recordedStats.mjs';
+import { scoringPlaysOf, winningHitOf, inningPlaysOf } from './recordedStats.mjs';
 import { pushInbox, teamLabelIn, assertCanPlay } from './social.mjs';
 
 const BATTING = ['atBats', 'hits', 'homeruns', 'rbis', 'walks', 'strikeouts', 'doubles', 'triples', 'stolenBases'];
@@ -231,7 +231,7 @@ function exhibitionBox(result, events) {
       }));
   }
   const ref = (p) => (p ? { id: p.id, name: p.name } : null);
-  return {
+  const box = {
     home: result.homeTeam.name,
     away: result.awayTeam.name,
     homeScore: result.homeScore,
@@ -247,6 +247,9 @@ function exhibitionBox(result, events) {
     scoring: scoringPlaysOf(events, result),
     teams,
   };
+  // 回ごとの攻撃（打席の順）。⚠ `teams` を作った後に作る（打者の番号がその並びの番号）
+  box.plays = inningPlaysOf(events, box, result);
+  return box;
 }
 
 /**

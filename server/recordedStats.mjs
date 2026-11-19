@@ -397,6 +397,9 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
           });
         }
       }
+      // 回ごとの攻撃（打席の順）。⚠ **`box.teams` を作った後**に作る（打者の番号が
+      //    その並びの番号なので、空の一覧で作ると全部 null になる）
+      box.plays = inningPlaysOf(observer.events, box, result);
       season.games[game.id] = box;
       delete season.archiveToken;
       // 球団ごとの成績（年度更新で作る）も作り直す
@@ -505,6 +508,82 @@ export function scoringPlaysOf(events, result) {
   if (events?.length && Number.isFinite(result?.homeScore) && Number.isFinite(result?.awayScore))
     gap({ home: result.homeScore, away: result.awayScore }, lastInning, lastHalf);
   return plays.slice(0, SCORING_PLAYS_LIMIT);
+}
+
+/** 回ごとの攻撃に残す打席の結果の記号。⚠ 画面（`src/online/gamePlays.js`）と同じ並び */
+export const PLAY_CODES = ['本', '三', '二', '安', '四', '死', '振', '犠', '併', '失', '凡', '走'];
+
+/** 打席1つの結果の記号。⚠ `scoringKind` と同じ読み方（打者の成績の増えた分から読む） */
+function playCode(e) {
+  const d = e.delta || {};
+  if (d.homeruns > 0) return '本';
+  if (d.triples > 0) return '三';
+  if (d.doubles > 0) return '二';
+  if (d.hits > 0) return '安';
+  if (d.walks > 0) return '四';
+  if (d.hitByPitch > 0) return '死';
+  if (d.sacrificeBunts > 0) return '犠';
+  if (d.strikeouts > 0) return '振';
+  if (e.result?.type === 'double_play') return '併';
+  if (e.result?.isError && !e.result?.hitWithError) return '失';
+  return '凡';
+}
+
+/**
+ * 回ごとの攻撃（打席の順）。スコアボードの回の数字を押すと、その半回をこの順で出す
+ * （いしだ 2026-11-19「スコアをクリックすると、その回の攻撃を時系列で表示してほしい」）。
+ *
+ * 形は `{ '3t': [[打者の番号, 記号, 点], ...], '3b': [...] }`。
+ *   - 鍵は「回＋t（表）/b（裏）」
+ *   - 打者の番号は `box.teams[攻撃側]` の**並び順の番号**（名前を2度持たないため。
+ *     打席に立った選手は必ずこの一覧に居る）
+ *   - 点はその打席で入った点（0なら0）。打席の外で入った点（暴投・盗塁など）は
+ *     打者の番号が null で記号 '走'
+ * ⚠ **半回の点の合計が、スコアボードのその回の数字と必ず一致すること**
+ *    （`online-inning-plays-check` が全試合で確かめる）。打席の外の点を落とすとずれる。
+ * ⚠ 1試合あたり約1KB（打席70〜80）。箱は元から約28KBなので、増えるのは数%。
+ */
+export function inningPlaysOf(events, box, result) {
+  const index = new Map(
+    Object.entries(box?.teams || {}).map(([team, list]) => [
+      team,
+      new Map((list || []).map((p, i) => [p.id, i])),
+    ]),
+  );
+  const out = {};
+  const push = (inning, half, row) => {
+    (out[`${inning}${half}`] ||= []).push(row);
+  };
+  let last = { home: 0, away: 0 };
+  let lastInning = 1;
+  let lastHalf = 't';
+  for (const e of events || []) {
+    const half = e.offense === box.home ? 'b' : 't';
+    const side = half === 'b' ? 'home' : 'away';
+    // 打席の前に入っていた点（暴投・盗塁・ボークなど。打者が居ない）
+    if (e.scoreBefore) {
+      const gap = (e.scoreBefore[side] || 0) - (last[side] || 0);
+      if (gap > 0) push(e.inning, half, [null, '走', gap]);
+      last = { ...last, [side]: e.scoreBefore[side] || 0 };
+    }
+    if (!e.runnerOnly && e.completed !== false) {
+      const runs =
+        e.scoreAfter && e.scoreBefore
+          ? (e.scoreAfter[side] || 0) - (e.scoreBefore[side] || 0)
+          : 0;
+      const idx = index.get(e.offense)?.get(e.batterId);
+      push(e.inning, half, [idx ?? null, playCode(e), runs]);
+    }
+    if (e.scoreAfter) last = { home: e.scoreAfter.home || 0, away: e.scoreAfter.away || 0 };
+    lastInning = e.inning;
+    lastHalf = half;
+  }
+  // 最後の打席の後に入った点（暴投でのサヨナラなど）
+  const side = lastHalf === 'b' ? 'home' : 'away';
+  const final = side === 'home' ? result?.homeScore : result?.awayScore;
+  if (Number.isFinite(final) && final > (last[side] || 0))
+    push(lastInning, lastHalf, [null, '走', final - last[side]]);
+  return out;
 }
 
 /** 打席の結果の種類。⚠ 打者の成績の増えた分から読む（投球の結果の形は打席の種類で違う） */
