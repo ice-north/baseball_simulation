@@ -461,6 +461,25 @@ export const needOfDrop = (drop) =>
   1 + NEED_LIMIT * Math.min(1, Math.max(0, drop) / DROP_SCALE);
 
 /**
+ * 1人ずつ「ほかは残る」として抜いたときの落差（`Map<id, 落差>`。0 以上）と満員の力。
+ * CPUの出し渋り（`tradeJudge.mjs` の `needOf`）と画面の「出しやすい」
+ * （`tradeThoughts.js`）が**同じ測り方**を使うための1か所。
+ * ⚠ 名簿の人数ぶん `squadStrength` を呼ぶ（25人なら26回）。球団ごとに1回だけ使うこと。
+ * ⚠ 何人かまとめて出すときは、まとめて空く穴で見る `needFactors` の方を使う。
+ */
+export function playerDrops(roster) {
+  const all = roster || [];
+  const full = squadStrength(all);
+  const drops = new Map(
+    all.map((p) => [
+      p.id,
+      Math.max(0, full - squadStrength(all.filter((q) => q.id !== p.id))),
+    ]),
+  );
+  return { full, drops };
+}
+
+/**
  * その球団が `players` を**まとめて**手放すときの、1人ずつの倍率（1 〜 1+`NEED_LIMIT`）。
  * `Map<id, 倍率>` で返す。名簿に居ない選手は 1。
  *

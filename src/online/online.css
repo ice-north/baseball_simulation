@@ -533,7 +533,6 @@
 .online-trade-wanted button + button {
   margin-left: 4px;
 }
-/* CPUの見込み（3段のメーター）。横軸は「出す値段 ÷ もらう値段」 */
 /* 相手（CPU）の考えていること（`ThoughtsPanel`）。見込みメーターと同じ枠の作り */
 .online-trade-thoughts {
   margin-top: 10px;
