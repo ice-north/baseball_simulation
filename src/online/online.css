@@ -14,13 +14,7 @@
       そのまま効く。 */
 .online {
   min-height: 100dvh;
-  /* ⚠ 地色は変数のまま（`--surface-0`）。その上に**ごく薄い明かり**を重ねるだけ
-     （ナイター中継の語彙。タイトル画面と同じ気配）。色は足していないので、
-     紙の上の文字色（`--ink` 系）のコントラストは変わらない */
-  background:
-    radial-gradient(120% 60% at 50% -10%, #ffffff3d, #ffffff00 60%),
-    radial-gradient(90% 50% at 50% 110%, #0f172a1a, #0f172a00 70%),
-    var(--surface-0);
+  background: var(--surface-0);
   color: var(--ink);
   font:
     15px/1.6 -apple-system,
@@ -148,86 +142,8 @@
   border-radius: 12px;
   padding: var(--online-card-pad, 22px);
   margin-bottom: var(--online-card-gap, 20px);
-  /* ⚠ **上端に明るい線を1本入れる**（`inset`）。平らな面が並ぶと地味に見えるので、
-     光が当たっている側を作る。影も少し強めて紙から浮かせる */
-  box-shadow:
-    inset 0 1px 0 #ffffff1f,
-    0 6px 16px #10203926;
+  box-shadow: 0 3px 9px #10203912;
   min-width: 0;
-}
-/* ============================================================
-   地味さを直すための土台（いしだ 2026-11-19「主に画面が地味な点」）。
-   ⚠ **色と寸法はここの変数で持つこと**。画面ごとに書くと、濃さを直すときに
-      当たりが抜ける。球団色だけは球団ごとに `--team-color` を inline で差す
-      （`teamColors.js`）。
-   ⚠ **コントラストの決まり（`src/index.css` の表）は崩さない**。足したのは
-      「地の装飾」と「文字の大きさ」だけで、文字色は今のまま。
-   ============================================================ */
-:where(.online) {
-  /* 読む数字（順位・勝敗・スコア）。表の12〜13pxと差を付けるために大きく取る */
-  --online-display-1: 34px;
-  --online-display-2: 22px;
-}
-/* ⚠ 大きな数字は**等幅の数字**で（桁が動くと読みづらい）。単位は小さく添える */
-.online-display {
-  font-size: var(--online-display-1);
-  font-weight: 750;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-.online-display small {
-  margin: 0 2px 0 1px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #cbd5e1;
-}
-/* 球団のマーク（`TeamMark.jsx`）。球団色の角丸＋頭文字 */
-.online-team-mark {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  background: var(--team-color, var(--accent));
-  border-radius: 5px;
-  font-weight: 700;
-  line-height: 1;
-  vertical-align: middle;
-}
-/* ⚠ **行を高くしないこと**。表の行は font 13px・行間1.6（＝20.8px）なので、
-   それより小さくして `vertical-align: middle` で収める。18px・`-2px` で置いたときは
-   順位表12行で約70px伸び、PCのホームが1画面（1000px）から溢れた */
-.online-team-mark.is-sm {
-  width: 16px;
-  height: 16px;
-  font-size: 10px;
-  border-radius: 4px;
-  vertical-align: middle;
-}
-/* ⚠ 2文字入る大きさ（「三陸」）。1文字の球団でも同じ四角にする */
-.online-team-mark.is-lg {
-  width: 48px;
-  height: 48px;
-  font-size: 19px;
-  letter-spacing: -0.04em;
-  border-radius: 10px;
-}
-/* 暗いカードの上は明るい色の地＋暗い文字（実測 6.45〜11.84） */
-.online-team-mark.is-card {
-  color: #0f172a;
-}
-/* 明るい紙の上は濃い色の地＋白文字。⚠ 縁を付ける（紙との差が最小2.3で形が溶ける） */
-.online-team-mark.is-paper {
-  color: #ffffff;
-  box-shadow: inset 0 0 0 1px #00000059;
-}
-/* スマホのホームの見出し（球団色の上端とマーク。PC版のホームの札と同じ気配） */
-.online-mobile-overview {
-  border-top: 2px solid var(--team-color, var(--accent));
-}
-.online-mobile-overview .online-team-mark {
-  float: left;
-  margin: 2px 10px 0 0;
 }
 .online-eyebrow {
   font-size: 12px;
@@ -305,13 +221,6 @@
 }
 .online-standings th:first-child {
   padding-right: 6px;
-}
-/* ⚠ **球団色は自球団の行だけ**（いしだ 2026-11-19「カラフル過ぎてかっこ悪い」）。
-   12球団ぶん色を並べると虹になって、かえって安っぽく見える。
-   `--team-color` は自球団の行にしか入らない（`LeaguePanels.jsx` の `Standings`） */
-.online-standings tbody th {
-  box-shadow: inset 3px 0 0 var(--team-color, transparent);
-  padding-left: 8px;
 }
 /* ⚠ 見出しも折り返さない。スマホ 360px で自球団の行が長いと「打率」が
    「打／率」の2行に割れた */
@@ -1616,26 +1525,6 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-score strong {
   font-size: 24px;
-  color: #fff;
-}
-/* --- スコア（いしだ 2026-11-19「画面が地味」）------------------------------ */
-/* 球団名の下に球団色の線。⚠ 線だけにする（欄の文字は変えない） */
-.online-score-team {
-  display: inline-block;
-  padding-bottom: 3px;
-  box-shadow: inset 0 -3px 0 var(--team-color, transparent);
-}
-/* ⚠ 得点は**等幅の数字**で、勝った側だけ白く。負けた側を落とすと勝敗が一目で分かる */
-.online-score-num {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--online-display-2);
-  color: #9fb0c4;
-}
-.online-score-num b {
-  font-weight: 750;
-  color: #cbd5e1;
-}
-.online-score-num b.is-win {
   color: #fff;
 }
 /* 日程の対戦の印（得点の代わり）。⚠ 大きな白い「×」は負け・中止に読めた */

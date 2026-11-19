@@ -1,6 +1,5 @@
 // 試合の一覧・成績で共用する短い表記。表示専用で、保存データや計算には使わない。
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
-import { setTeamColors } from './teamColors.js';
 
 const ABBREVIATIONS = new Map(
   Object.values(INDEPENDENT_LEAGUES).flatMap((league) =>
@@ -15,8 +14,6 @@ const ABBREVIATIONS = new Map(
 let LABELS = {};
 export function setTeamLabels(map) {
   LABELS = map || {};
-  // 球団色も同じときに割り当てる（内部名の並べ替えた順。`teamColors.js` の注）
-  setTeamColors(Object.keys(LABELS));
 }
 export const teamLabel = (name) => LABELS[name]?.label || name;
 export const teamShort = (name) =>
