@@ -72,6 +72,8 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
     }
     // ⚠ 手続きの時期は試合の話を1面にしない（地元紙と同じ。[OFF_PHASES]）
     val story = if (view.phase?.kind in OFF_PHASES) null else stories.maxByOrNull { it.points }
+    // 今季総括号（年度更新のあと〜開幕前。サーバーが作る記事。PC・スマホWebと同じ文）
+    val review = view.seasonReview?.takeIf { it.articles.isNotEmpty() && story == null }
 
     var headline: String
     var kicker: String? = null
@@ -142,9 +144,16 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         }
         headline = h
         lead = l
+        if (review != null) {
+            headline = "今季総括号 ${review.headline}"
+            lead = review.lead
+            kicker = "今季総括号"
+            nationalBigHead = "総括"
+        }
     }
 
     val articles = mutableListOf<FrontPage.Article>()
+    review?.articles?.forEach { articles += FrontPage.Article(it.kicker, it.title, it.body, LINK_GAMES) }
     // 1部・2部の戦線（1部は首位争いと降格、2部は昇格争い）
     for (league in listOf("A", "B")) {
         val table = view.leagueTable(league).filter { it.gamesPlayed > 0 }
@@ -330,7 +339,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
         leadHead = null,
         caption = story?.g?.let { g -> "▲${view.teamShort(g.home)}の球場の得点板" },
         hero = null,
-        index = listOfNotNull(
+        index = if (review != null) review.articles.take(3).map { it.title } else listOfNotNull(
             articles.firstOrNull { it.kicker == "1部戦線" }?.title,
             articles.firstOrNull { it.kicker == "2部戦線" }?.title,
             articles.firstOrNull { it.kicker == "タイトル戦線" }?.let { "タイトル戦線" },

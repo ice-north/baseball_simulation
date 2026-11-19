@@ -66,7 +66,7 @@ private fun outcome(g: OwnGame, team: String): Int {
 }
 
 /** 「○ 5-3 美瑛（第42戦）」 */
-private fun scoreLine(view: LeagueView, g: OwnGame, team: String): String {
+internal fun scoreLine(view: LeagueView, g: OwnGame, team: String): String {
     val ours = if (g.home == team) g.homeScore else g.awayScore
     val theirs = if (g.home == team) g.awayScore else g.homeScore
     val mark = when (outcome(g, team)) { 1 -> "○"; -1 -> "●"; else -> "△" }
@@ -92,7 +92,7 @@ private fun homerunText(view: LeagueView, g: OwnGame, team: String): String? {
 }
 
 /** 「1部2位（首位と3差）」 */
-private fun placeText(view: LeagueView, team: String): String? {
+internal fun placeText(view: LeagueView, team: String): String? {
     val league = view.teamLeagues[team]
     val table = view.leagueTable(league)
     val rank = table.indexOfFirst { it.team == team }

@@ -59,6 +59,12 @@ class ChronicleTest {
         // オフ: 引退
         assertTrue(nationalOff.articles.any { it.kicker == "引退" }, "全国紙に引退が無い")
         assertTrue(nationalOff.articles.first { it.kicker == "引退" }.body.contains("の打撃コーチとして"), "引退後の役職の書き方")
+        // 今季総括号（年度更新のあと〜開幕前。サーバーの seasonReview の記事をそのまま載せる）
+        val review = assertNotNull(off.seasonReview, "今季総括号が無い")
+        assertTrue(nationalOff.headline.startsWith("今季総括号"), nationalOff.headline)
+        assertEquals(review.lead, nationalOff.lead)
+        assertTrue(nationalOff.articles.any { it.kicker == "頂点" }, "総括号に頂点が無い")
+        assertTrue(late.seasonReview == null, "シーズン中に総括号が出ている")
     }
 
     /** 決着の記事は11月の手続きの間も残るので、時期によらない文にする（「プレーオフに臨む」と書かない） */

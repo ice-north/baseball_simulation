@@ -1,3 +1,4 @@
+import { numberLeagueTeams, captainsOfYear, updateTeamFace } from './teamFace.mjs';
 import './engine-bootstrap.mjs';
 import { schedulePlayoffReplay, PLAYOFF_REPLAY } from './playoffReplay.mjs';
 import { selectHonors } from './seasonAwards.mjs';
@@ -1120,6 +1121,12 @@ export function convertPosition(league, userId, { playerId, position }) {
   return { position };
 }
 
+/** 主将・永久欠番（球団の顔。`teamFace.mjs`）。世界を読んだあとに呼ぶ */
+export function setTeamFace(league, userId, payload) {
+  const { member, team } = memberTeam(league, userId);
+  return updateTeamFace(league, team, member.teamName, payload);
+}
+
 export function openPhase(league, kind, now) {
   // ⚠ **締め切りを持たせること**。待ち続ける設計だと、1人が決めないだけで
   //    全員の週が止まる。締め切りが曜日合わせも兼ねている
@@ -1272,6 +1279,8 @@ export function createLeague({
     //    トライアウトで使う（初期編成は置き換えた）
     openPhase(league, 'pack_select', now);
   });
+  // 背番号（リーグの球団だけ。`teamFace.mjs`）
+  numberLeagueTeams(league.season.settings.teamNames, TEAMS_DATA);
   league.game = captureWorld();
   // 指導者（監督・コーチ）。⚠ 世界とは別の保存（`league.coaches`）。種から決まる
   ensureCoaches(league);
@@ -2194,11 +2203,20 @@ function resolvePhase(league, now) {
     });
     // その年の部分け（昇降格の前）。球団史の「1部2位」に使う
     annotateHistory(league.history.at(-1), league.teams, null);
+    // その年の主将（球団の顔。年度更新の前の名簿で。`teamFace.mjs`）
+    {
+      const captains = captainsOfYear(league.season.settings.teamNames, TEAMS_DATA);
+      if (Object.keys(captains).length) league.history.at(-1).captains = captains;
+    }
     // 引退した人の記録の鍵（年度更新で名簿から消えるので、先に引いておく）
     const retireKeys = new Map();
+    const retireNumbers = new Map();
     for (const name of league.season.settings.teamNames)
-      for (const p of TEAMS_DATA[name]?.players || [])
+      for (const p of TEAMS_DATA[name]?.players || []) {
         if (p.onlinePlayerId) retireKeys.set(`${name}:${p.name}`, p.onlinePlayerId);
+        // 背番号（永久欠番にするときに使う）
+        if (Number.isInteger(p.number)) retireNumbers.set(`${name}:${p.name}`, p.number);
+      }
     const retireYear = league.season.year;
     const retireTeams = [...league.season.settings.teamNames];
     // 指導者の通算に残す、終わった年の球団の成績（日程が残っている今のうちに）
@@ -2224,6 +2242,7 @@ function resolvePhase(league, now) {
       year: retireYear,
       teamNames: retireTeams,
       keys: retireKeys,
+      numbers: retireNumbers,
     });
     for (const key of Object.keys(TEAMS_DATA)) delete TEAMS_DATA[key];
     Object.assign(TEAMS_DATA, result.updatedTeams);
@@ -2379,6 +2398,8 @@ export function submitPhase(league, userId, { phaseId, plan, ready }, now) {
   //    その場でトライアウト・契約更改が処理され、知らせは「下書きを保存しました」だった。
   //    締め切りの自動決定（`autoResolvePhase`）は ready: true で出すので、ここで止まらない
   if (ready === true) resolveSettledPhase(league, now);
+  // トライアウトで入った人にも背番号を付ける
+  numberLeagueTeams(league.season.settings.teamNames, TEAMS_DATA);
   league.game = captureWorld();
 }
 
@@ -2505,6 +2526,8 @@ export function advanceLeagueDay(league, operationId, now) {
   if (league.status === 'running')
     league.nextAdvanceAt = nextProgressionAt(now);
   league.notices = league.notices.slice(0, 20);
+  // 背番号（足りない人・重なった人だけ。トレード・トライアウトで来た人もここで付く）
+  numberLeagueTeams(league.season.settings.teamNames, TEAMS_DATA);
   league.game = captureWorld();
 }
 

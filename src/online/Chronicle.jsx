@@ -3,6 +3,7 @@ import { POS } from './api.js';
 import TeamRoster from './TeamRoster.jsx';
 import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
+import { useActions } from './ActionContext.jsx';
 import { teamLabel, teamShort } from './gameText.js';
 import {
   raceText,
@@ -251,6 +252,130 @@ function Owners({ list }) {
   );
 }
 
+/**
+ * 今季総括号（年度更新のあと〜開幕前だけ。リーグ全体）。⚠ 文はサーバーが作る（`server/seasonReview.mjs`）。
+ * アプリの全国紙（キャンプの日の1面）と同じ記事
+ */
+export function SeasonReview({ review }) {
+  if (!review?.articles?.length) return null;
+  return (
+    <section className="online-card online-season-review">
+      <h2>今季総括号 {review.headline}</h2>
+      {review.lead && <p>{review.lead}</p>}
+      <div className="online-news-list">
+        {review.articles.map((a) => (
+          <article key={a.kicker}>
+            <b>
+              〔{a.kicker}〕{a.title}
+            </b>
+            <span>{a.body}</span>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * 球団の顔（C2）: 主将・歴代主将・永久欠番・在籍の長い人。効き目は無い（紙面と球団史に残るだけ）。
+ * ⚠ 変えられるのは自球団だけ（命令 `teamFace`、`server/teamFace.mjs`）。アプリの球団史と同じ並び
+ */
+export function TeamFace({ face, own, roster = [], ties = [] }) {
+  const actions = useActions();
+  const [error, setError] = useState('');
+  if (!face) return <p>まだありません。</p>;
+  const canEdit = own && actions?.command && actions.writable;
+  const send = async (payload) => {
+    setError('');
+    const result = await actions.run(() => actions.command('teamFace', payload));
+    if (!result?.ok) setError(result?.error || '変えられませんでした');
+  };
+  const num = (n) => (Number.isInteger(n) ? `#${n} ` : '');
+  return (
+    <div className="online-team-face">
+      <p>
+        主将: <b>{face.captain ? `${num(face.captain.number)}${face.captain.name}` : 'なし'}</b>
+        {canEdit && (
+          <select
+            aria-label="主将を選ぶ"
+            disabled={actions.busy}
+            value={face.captain?.id ?? ''}
+            onChange={(e) => send({ captain: e.target.value === '' ? null : Number(e.target.value) })}
+          >
+            <option value="">主将を置かない</option>
+            {roster.map((p) => (
+              <option key={p.id} value={p.id}>
+                {num(p.number)}
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </p>
+      {face.captains?.length > 0 && (
+        <p className="online-muted">
+          歴代主将: {face.captains.map((c) => `${c.year}年目 ${c.name}`).join('・')}
+        </p>
+      )}
+      <h3>永久欠番</h3>
+      {face.retiredNumbers?.length ? (
+        <ul className="online-plain-list">
+          {face.retiredNumbers.map((r) => (
+            <li key={r.number}>
+              <b>{r.number}</b> {r.name}（{r.year}年目に引退）
+              {canEdit && (
+                <button disabled={actions.busy} onClick={() => send({ unretire: r.number })}>
+                  欠番を戻す
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="online-muted">まだありません。この球団で引退した選手の背番号を、永久欠番にできます。</p>
+      )}
+      {canEdit && face.candidates?.length > 0 && (
+        <ul className="online-plain-list">
+          {face.candidates.map((c) => (
+            <li key={`${c.year}:${c.name}`}>
+              #{c.number} {c.name}（{c.year}年目に引退{c.line ? `・${c.line}` : ''}）
+              <button disabled={actions.busy} onClick={() => send({ retire: { name: c.name, year: c.year } })}>
+                永久欠番にする
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {face.tenure?.length > 0 && (
+        <>
+          <h3>在籍の長い選手</h3>
+          <p className="online-muted">
+            {face.tenure.map((t) => `${t.name} ${t.years}年${t.homegrown ? '（生え抜き）' : ''}`).join('・')}
+          </p>
+        </>
+      )}
+      {own && ties?.length > 0 && (
+        <>
+          <h3>地元・同窓の縁</h3>
+          <div className="online-news-list">
+            {ties.map((a) => (
+              <article key={a.kicker}>
+                <b>{a.title}</b>
+                <span>{a.body}</span>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+      {error && (
+        <p role="alert" className="online-alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Milestones({ list, showTeam = false }) {
   if (!list?.length) return <p>まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。</p>;
   return (
@@ -363,6 +488,7 @@ export default function Chronicle({ view }) {
             sub={`${teamLabel(shown.teamName)}の年ごとの成績と、このリーグでの歴代記録。記録はリーグを始めてからのものです。`}
             actions={<div className="online-team-selector">{selector}</div>}
           >
+            <SeasonReview review={view.seasonReview} />
             <section className="online-card">
               <h2>年表</h2>
               <Seasons seasons={c.seasons} />
@@ -381,6 +507,15 @@ export default function Chronicle({ view }) {
                 <LeagueTopics view={view} full />
               </div>
               <div className="online-board-side">
+                <section className="online-card">
+                  <h2>球団の顔</h2>
+                  <TeamFace
+                    face={c.face}
+                    own={shown.teamName === view.teamName}
+                    roster={shown.teamName === view.teamName ? view.roster || [] : []}
+                    ties={view.ties}
+                  />
+                </section>
                 <section className="online-card">
                   <h2>入退団履歴</h2>
                   <Moves key={shown.teamName} list={c.moves} />

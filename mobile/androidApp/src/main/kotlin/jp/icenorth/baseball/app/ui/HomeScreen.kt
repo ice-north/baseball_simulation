@@ -39,6 +39,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.ui.platform.LocalContext
+import jp.icenorth.baseball.app.ShareImage
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,6 +69,7 @@ import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
 import jp.icenorth.baseball.shared.ChronicleView
 import jp.icenorth.baseball.shared.OwnerRecord
+import jp.icenorth.baseball.shared.teamFaceLines
 import jp.icenorth.baseball.shared.proDraftedHead
 import jp.icenorth.baseball.shared.proDraftedBody
 import jp.icenorth.baseball.shared.honorRows
@@ -221,6 +229,18 @@ fun HomeScreen(
             paperNameIndex(model.raw, team, lastGame, oppName?.let { n -> opponent?.let { n to it } })
         }
         val paperLinks = remember(names) { PaperLinks(names) { ref, name -> model.openPlayerOf(ref.team, ref.id, name) } }
+        // 紙面を画像で共有（D2）。紙面の描画をこの層にも描き、メニューから画像にして送る
+        val shareLayer = rememberGraphicsLayer()
+        val shareScope = rememberCoroutineScope()
+        val shareContext = LocalContext.current
+        val sharePaper: () -> Unit = {
+            shareScope.launch {
+                runCatching {
+                    val picture = shareLayer.toImageBitmap().asAndroidBitmap()
+                    ShareImage.share(shareContext, picture, "${page.title} ${page.headline}")
+                }
+            }
+        }
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 72.dp), // 左下の TIPS の印に隠れないよう
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -251,12 +271,14 @@ fun HomeScreen(
             }
             item(key = "page") {
                 // 記事の中の選手名を押すと、その選手の詳細を開く（手元で分かる選手だけ）
+                // ⚠ 共有の画像は、この紙面の描画を層に写したもの（[sharePaper]）
+                Box(Modifier.drawWithContent { shareLayer.record { this@drawWithContent.drawContent() }; drawLayer(shareLayer) }) {
                 CompositionLocalProvider(LocalPaperLinks provides paperLinks) {
                 HomePage(
                     style = style,
                     page = page,
                     nextAdvanceAt = view.nextAdvanceAt,
-                    menu = { HomeMenu(model, style, onRename, onOpenTips, tipsNow, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }, onOpenInbox = { showInbox = true }) },
+                    menu = { HomeMenu(model, style, onRename, onOpenTips, tipsNow, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }, onOpenInbox = { showInbox = true }, onShare = if (page.sealed) null else sharePaper) },
                     onLink = { link ->
                         when (link) {
                             LINK_LINEUP -> onOpenLineup()
@@ -267,6 +289,7 @@ fun HomeScreen(
                     },
                     onOpenProcedures = onOpenProcedures,
                 )
+                }
                 }
             }
         }
@@ -362,6 +385,11 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                     items(c.seasons, key = { "s${it.year}" }) { s ->
                         Text(s.historyLine(), style = MaterialTheme.typography.bodyMedium)
                     }
+                    // 球団の顔（主将・永久欠番・在籍。Web 版 Chronicle.jsx の TeamFace と同じ文。決めるのは PC）
+                    item { ChronicleHeading("球団の顔") }
+                    items(teamFaceLines(c.face).withIndex().toList(), key = { "f${it.index}" }) { (_, line) ->
+                        Text(line, style = MaterialTheme.typography.bodySmall)
+                    }
                     item { ChronicleHeading("歴代記録") }
                     if (c.records.isEmpty()) item { Text("記録がまだありません。", style = MaterialTheme.typography.bodySmall) }
                     // シーズン最多・球団通算とも上位3人（PC と同じ。以前は1位だけだった）
@@ -446,7 +474,7 @@ private fun ChronicleHeading(text: String) {
 
 /** 紙面の右上のメニュー（更新・名前の変更・TIPS・ホームの見た目・ログアウト） */
 @Composable
-private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, tipsNow: Int, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit, onOpenInbox: () -> Unit) {
+private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, tipsNow: Int, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit, onOpenInbox: () -> Unit, onShare: (() -> Unit)? = null) {
     var open by remember { mutableStateOf(false) }
     val context = LocalContext.current
     // メニューを開くたびに端末の許可を見直す（設定の画面で切り替えて戻ってきたとき）
@@ -477,6 +505,8 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
             DropdownMenuItem(text = { Text("ゲームのTIPS" + if (tipsNow > 0) "（いま当てはまる${tipsNow}件）" else "") }, onClick = { open = false; onOpenTips() })
             DropdownMenuItem(text = { Text("過去の見出し") }, onClick = { open = false; onOpenBack() })
             DropdownMenuItem(text = { Text("球団史・記録") }, onClick = { open = false; onOpenChronicle() })
+            // 紙面を画像で共有（速報を見るまで伏せている間は出さない。結果が分かってしまう）
+            onShare?.let { share -> DropdownMenuItem(text = { Text("紙面を画像で共有") }, onClick = { open = false; share() }) }
             HorizontalDivider()
             Text("ホームの見た目", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             HomeStyle.entries.forEach { s ->

@@ -1,4 +1,4 @@
-import { LeagueTopics } from './Chronicle.jsx';
+import { LeagueTopics, SeasonReview } from './Chronicle.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   useDraftMemoryPeek,
@@ -201,6 +201,7 @@ export default function MobileView(props) {
       {tab === 'exhibition' && <MobileExhibitionReplies {...props} />}
       {tab === 'news' && (
         <>
+          <SeasonReview review={view.seasonReview} />
           <LeagueTopics view={view} />
           <Notices view={view} compact />
         </>

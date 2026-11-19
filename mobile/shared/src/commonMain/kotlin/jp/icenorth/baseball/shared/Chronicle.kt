@@ -146,7 +146,40 @@ data class TeamChronicle(
     val moves: List<TeamMove> = emptyList(),
     /** この球団からプロ入りした選手（新しい順）。古いサーバーには無い */
     val proDrafted: List<ProDrafted> = emptyList(),
+    /** 球団の顔（主将・歴代主将・永久欠番・在籍の長い人。server/teamFace.mjs）。古いサーバーには無い */
+    val face: TeamFace? = null,
 )
+
+@Serializable
+data class FaceCaptain(val id: Long? = null, val name: String = "", val number: Int? = null, val year: Int? = null)
+
+@Serializable
+data class RetiredNumber(val number: Int = 0, val name: String = "", val year: Int = 0, val position: String? = null)
+
+@Serializable
+data class FaceTenure(val id: Long? = null, val name: String = "", val number: Int? = null, val years: Int = 0, val homegrown: Boolean = false)
+
+@Serializable
+data class TeamFace(
+    val captain: FaceCaptain? = null,
+    val captains: List<FaceCaptain> = emptyList(),
+    val retiredNumbers: List<RetiredNumber> = emptyList(),
+    val tenure: List<FaceTenure> = emptyList(),
+)
+
+/**
+ * 球団の顔の行（Web 版 Chronicle.jsx の TeamFace と同じ文）。主将・永久欠番を決めるのは PC の球団史・記録
+ */
+fun teamFaceLines(f: TeamFace?): List<String> {
+    if (f == null) return emptyList()
+    val num = { n: Int? -> n?.let { "#$it " } ?: "" }
+    return listOfNotNull(
+        "主将: " + (f.captain?.let { "${num(it.number)}${it.name}" } ?: "なし"),
+        f.captains.takeIf { it.isNotEmpty() }?.let { list -> "歴代主将: " + list.joinToString("・") { "${it.year}年目 ${it.name}" } },
+        "永久欠番: " + (f.retiredNumbers.takeIf { it.isNotEmpty() }?.joinToString("・") { "${it.number} ${it.name}（${it.year}年目に引退）" } ?: "まだありません"),
+        f.tenure.takeIf { it.isNotEmpty() }?.let { list -> "在籍の長い選手: " + list.joinToString("・") { "${it.name} ${it.years}年" + if (it.homegrown) "（生え抜き）" else "" } },
+    )
+}
 
 /**
  * 入退団の1行（入団・退団・トレード・引退）。`side` は "in"（入った）/ "out"（出た）、
@@ -376,3 +409,18 @@ data class OwnerRecord(
     val text: String = "",
 )
 
+
+/**
+ * 今季総括号（ビューの `seasonReview`。サーバーの `server/seasonReview.mjs`）。年度更新のあと〜開幕前だけ。
+ * ⚠ 文はサーバーが作る。PC（球団史・記録のいちばん上・ホーム）とスマホWeb（話題）と同じ記事を出すだけ
+ */
+@Serializable
+data class SeasonReview(
+    val year: Int = 0,
+    val headline: String = "",
+    val lead: String = "",
+    val articles: List<SeasonReviewArticle> = emptyList(),
+)
+
+@Serializable
+data class SeasonReviewArticle(val kicker: String = "", val title: String = "", val body: String = "")

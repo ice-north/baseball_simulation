@@ -7,6 +7,7 @@ import { resolveWatchList, removeFromWatchList, WATCH_STATUS_LABEL } from '../ga
 import { POSITION_NAMES } from '../utils/constants.js';
 import { SECOND_CAREER_META } from '../season/secondCareer.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
+import SoloHonors from './SoloHonors.jsx';
 import { formatInnings } from '../utils/physics.js';
 
 const NPB_TEAMS_CE = [
@@ -1306,6 +1307,21 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* 歴代の年間表彰・節目の記録（E1。足す前の年は無い） */}
+              {almanac.years.some(h => h.awards?.honors || h.awards?.milestones) && (
+                <div>
+                  <h2 className="text-sm font-bold text-ink mb-2">歴代の年間表彰</h2>
+                  <div className="space-y-2">
+                    {almanac.years.filter(h => h.awards?.honors || h.awards?.milestones).map(h => (
+                      <div key={h.year}>
+                        <div className="text-xs font-bold text-ink-sub mb-1">{h.year}年目</div>
+                        <SoloHonors awards={h.awards} userTeamName={seasonData?.settings?.teamNames?.[0] || null} compact />
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

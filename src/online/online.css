@@ -6315,3 +6315,39 @@ small.online-gain:not(:where(.online-sp *)) {
   padding: 2px 8px;
   font-size: 12px;
 }
+
+/* 作戦別成績（方針・采配の下。`StrategyStats.jsx`） */
+.online-strategy-stats {
+  display: grid;
+  gap: 10px;
+}
+.online-strategy-stats table {
+  width: 100%;
+}
+.online-strategy-stats td,
+.online-strategy-stats th {
+  text-align: right;
+  white-space: nowrap;
+}
+.online-strategy-stats th[scope='row'] {
+  text-align: left;
+}
+.online-strategy-stats.is-compact {
+  overflow-x: auto;
+  font-size: 12px;
+}
+.online-mobile-strategy-stats {
+  margin-top: 4px;
+}
+
+/* 球団の顔（主将・永久欠番。`Chronicle.jsx` の TeamFace） */
+.online-team-face select {
+  margin-left: 8px;
+}
+.online-team-face h3 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+}
+.online-team-face li button {
+  margin-left: 8px;
+}

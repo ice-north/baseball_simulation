@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">NEXT STAGE</string>
+    <string name="widget_description">順位・前の試合・次の試合</string>
 </resources>

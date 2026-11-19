@@ -440,6 +440,12 @@ fun buildFrontPage(
     }
     // プロ注目（飾り。NPBのスカウトが見に来ている、という話だけで、選手は抜かれない）
     scoutArticle(view.roster, me, view.year, date, pen)?.let { articles += it }
+    // 同窓・地元の縁（サーバーが作る記事。地元出身・次の相手との同窓対決。飾り。src/online/hometown.js）
+    // ⚠ 毎日同じ記事が並ばないよう、日ごとに1本だけ（同窓対決があればそちらを先に）
+    view.ties.takeIf { it.isNotEmpty() }?.let { ties ->
+        val pick = ties.firstOrNull { it.kicker == "同窓対決" }?.takeIf { pen.pick(listOf(true, false), 61) } ?: pen.pick(ties, 62)
+        articles += FrontPage.Article(pick.kicker, pick.title, pick.body, LINK_LINEUP)
+    }
 
     // リーグ便りの最新1件（全件は試合タブ）
     raw?.at("notices").list().mapNotNull { it.obj() }.firstOrNull()?.let { n ->
