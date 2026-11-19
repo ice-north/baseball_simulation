@@ -426,15 +426,40 @@ export function Results({ view, compact = false }) {
                 )}
               </header>
               <div>
-                <span title={teamLabel(g.away)}>{name(g.away)}</span>
+                {/* ⚠ 球団色は**名前の下線**だけに使う（いしだ 2026-11-19「画面が地味」）。
+                    マークは置かない。欄の文字が変わると、試合結果を文で確かめている
+                    検査（`online-mobile-gameplay-ui-check` など）が球団名を取り違える */}
+                <span
+                  title={teamLabel(g.away)}
+                  className="online-score-team"
+                  style={{ '--team-color': teamColor(g.away).bright }}
+                >
+                  {name(g.away)}
+                </span>
                 {/* ⚠ 日程の対戦は「vs」を小さく薄く出す。以前の大きな白い「×」は、
                     野球の表では負け・中止の印に読めた */}
                 {mode === 'results' ? (
-                  <strong>{`${g.awayScore} – ${g.homeScore}`}</strong>
+                  /* ⚠ 文は変えない（「3 – 2」のまま）。勝った側だけ白く、負けた側は
+                     落とす。数字は等幅（桁が動くと並びが崩れる） */
+                  <strong className="online-score-num">
+                    <b className={g.awayScore > g.homeScore ? 'is-win' : undefined}>
+                      {g.awayScore}
+                    </b>
+                    {' – '}
+                    <b className={g.homeScore > g.awayScore ? 'is-win' : undefined}>
+                      {g.homeScore}
+                    </b>
+                  </strong>
                 ) : (
                   <em className="online-score-vs">vs</em>
                 )}
-                <span title={teamLabel(g.home)}>{name(g.home)}</span>
+                <span
+                  title={teamLabel(g.home)}
+                  className="online-score-team"
+                  style={{ '--team-color': teamColor(g.home).bright }}
+                >
+                  {name(g.home)}
+                </span>
               </div>
               {decisions && (
                 <small className="online-score-decisions">{decisions}</small>

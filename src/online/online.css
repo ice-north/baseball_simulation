@@ -192,13 +192,17 @@
   border-radius: 5px;
   font-weight: 700;
   line-height: 1;
-  vertical-align: -2px;
+  vertical-align: middle;
 }
+/* ⚠ **行を高くしないこと**。表の行は font 13px・行間1.6（＝20.8px）なので、
+   それより小さくして `vertical-align: middle` で収める。18px・`-2px` で置いたときは
+   順位表12行で約70px伸び、PCのホームが1画面（1000px）から溢れた */
 .online-team-mark.is-sm {
-  width: 18px;
-  height: 18px;
-  font-size: 11px;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
   border-radius: 4px;
+  vertical-align: middle;
 }
 /* ⚠ 2文字入る大きさ（「三陸」）。1文字の球団でも同じ四角にする */
 .online-team-mark.is-lg {
@@ -233,63 +237,6 @@
 .online-card .online-eyebrow,
 .online-player-dialog .online-eyebrow {
   color: var(--accent);
-}
-/* --- ホームの自球団の札（`TeamHero.jsx`）------------------------------- */
-/* ⚠ 球団色は**帯と上端の線だけ**に使う（面全体を球団色にすると、カードの上の
-   文字色の決まりが12球団ぶん崩れる） */
-.online-hero {
-  position: relative;
-  overflow: hidden;
-  background:
-    linear-gradient(
-      100deg,
-      color-mix(in srgb, var(--team-deep, #1d4ed8) 34%, transparent),
-      transparent 62%
-    ),
-    var(--surface-2);
-  border-top: 2px solid var(--team-color, var(--accent));
-}
-/* ⚠ 広い画面では**1本の帯**にする（名前が左・数字が右）。縦に積むと、右半分が
-   空いたまま高さだけ取る */
-.online-hero {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px 24px;
-}
-.online-hero-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.online-hero-name h2 {
-  margin: 0;
-}
-.online-hero-name p {
-  margin: 2px 0 0;
-}
-.online-hero-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 28px;
-  margin: 0;
-}
-.online-hero-stats dt {
-  font-size: 12px;
-  font-weight: 650;
-  color: #cbd5e1;
-}
-.online-hero-stats dd {
-  margin: 2px 0 0;
-}
-@media (max-width: 420px) {
-  :where(.online) {
-    --online-display-1: 26px;
-  }
-  .online-hero-stats {
-    gap: 6px 18px;
-  }
 }
 .online-muted {
   font-size: 13px;
@@ -1671,6 +1618,26 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-score strong {
   font-size: 24px;
+  color: #fff;
+}
+/* --- スコア（いしだ 2026-11-19「画面が地味」）------------------------------ */
+/* 球団名の下に球団色の線。⚠ 線だけにする（欄の文字は変えない） */
+.online-score-team {
+  display: inline-block;
+  padding-bottom: 3px;
+  box-shadow: inset 0 -3px 0 var(--team-color, transparent);
+}
+/* ⚠ 得点は**等幅の数字**で、勝った側だけ白く。負けた側を落とすと勝敗が一目で分かる */
+.online-score-num {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--online-display-2);
+  color: #9fb0c4;
+}
+.online-score-num b {
+  font-weight: 750;
+  color: #cbd5e1;
+}
+.online-score-num b.is-win {
   color: #fff;
 }
 /* 日程の対戦の印（得点の代わり）。⚠ 大きな白い「×」は負け・中止に読めた */
