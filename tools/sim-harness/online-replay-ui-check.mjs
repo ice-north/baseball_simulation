@@ -255,6 +255,28 @@ try {
       .locator('li em')
       .evaluateAll((list) => list.reduce((a, n) => a + (parseInt(n.textContent, 10) || 0), 0));
     assert.equal(shown, runs, `${label}の点（画面 ${shown}）とスコアボードの${runs}が違う`);
+    // ⚠ **回ごとの攻撃がある試合に得点経過は出さない**（いしだ 2026-11-19
+    //    「得点経過は、スコアボードの得点を押すことで見れるようになったため削除」）。
+    //    打席の記録が無い古い試合にだけ残す（`online-label-ui-check` が見ている）
+    assert.equal(
+      await cardBox.locator('.online-scoring').count(),
+      0,
+      '回ごとの攻撃があるのに得点経過も出ている',
+    );
+    // ⚠ 個人成績の表はスコアボードと同じくらいの幅に収める（いしだ 2026-11-19）
+    const tableWidth = await cardBox
+      .locator('table.online-record-table')
+      .evaluate((n) => n.getBoundingClientRect().width);
+    assert.ok(
+      tableWidth <= dialogWidth * 0.72,
+      `個人成績の表が広い: ${Math.round(tableWidth)}px / 小窓 ${Math.round(dialogWidth)}px`,
+    );
+    // 行は詰める（44pxのままだと縦に長い）
+    const rowHeight = await cardBox
+      .locator('table.online-record-table tbody tr')
+      .first()
+      .evaluate((n) => n.getBoundingClientRect().height);
+    assert.ok(rowHeight <= 32, `個人成績の行が高い: ${Math.round(rowHeight)}px`);
     // 見た目の確かめ用（この検査はもともと観戦パネルも撮っている）
     await cardBox.screenshot({ path: '/tmp/baseball-online-inning-plays.png' });
     // もう一度押すと閉じる

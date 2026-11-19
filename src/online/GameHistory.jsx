@@ -565,15 +565,20 @@ function GameRecord({ id, year, ownTeam, close }) {
             )
           ) : game.teams ? (
             <>
-              {/* 得点経過（記録を取り始めた後の試合だけ。古い試合には無い）。
+              {/* ⚠ **得点経過は、回ごとの攻撃が無い試合だけ**（いしだ 2026-11-19
+                  「得点経過は、スコアボードの得点を押すことで見れるようになったため削除」）。
+                  いまの試合はスコアボードの数字を押せば、その回の全打席が順に出る。
+                  ただし**前からある試合には打席の記録が無い**ので、その試合まで消すと
+                  点の動きを見る手段がなくなる。だから古い試合にだけ残す。
                   スマホは小窓を縦に収めるため、「試合経過」（リプレイ）がある試合では出さず
                   そちらで追う。⚠ 本番はリプレイを残さない（ONLINE_RECORD_REPLAY）ので、
                   無い試合では畳んで出す（以前はスマホで得点経過を見る手段が無かった） */}
-              {compact ? (
-                !(game.replay?.frames?.length > 0) && <ScoringPlays game={game} folded />
-              ) : (
-                <ScoringPlays game={game} />
-              )}
+              {!hasInningPlays(game) &&
+                (compact ? (
+                  !(game.replay?.frames?.length > 0) && <ScoringPlays game={game} folded />
+                ) : (
+                  <ScoringPlays game={game} />
+                ))}
               <BoxScore game={game} ownTeam={ownTeam} />
             </>
           ) : (

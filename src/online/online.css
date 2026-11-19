@@ -2577,6 +2577,23 @@ small.online-gain:not(:where(.online-sp *)) {
   padding: 6px 2px;
   height: 44px;
 }
+/* ⚠ PCの試合成績の個人成績は**スコアボードと同じくらいの幅**に収めて、縦も詰める
+   （いしだ 2026-11-19「横に長くなっています。スコアボードと同じくらいの幅に縮めて、
+   縦も詰めて、コンパクトにしてください」）。
+   ⚠ スマホ（`.online-mobile`）は触る大きさ（44px）を保つので、ここはPCだけに当てる */
+.online-desktop .online-game-dialog .online-record-table {
+  max-width: 67%;
+  min-width: min(100%, 560px);
+}
+.online-desktop .online-game-dialog .online-record-table th,
+.online-desktop .online-game-dialog .online-record-table td {
+  padding: 2px 2px;
+  height: 26px;
+}
+/* 名前の欄は広すぎると数字が潰れる（幅が3分の2になったぶん詰める） */
+.online-desktop .online-game-dialog .online-record-table th:first-child {
+  width: 24%;
+}
 .online-record-table th button {
   padding: 0;
   border: 0;
