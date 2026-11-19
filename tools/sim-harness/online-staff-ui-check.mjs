@@ -60,13 +60,45 @@ async function campService() {
   });
   const league = (await store.read()).league;
   assert.equal(league.phase?.kind, 'camp', 'セットを選んでもキャンプに入らない');
-  // 年度更新の伸び（2年目からのキャンプと同じ。ホームのキャンプの下に出す）
+  // 年度更新を終えた形にする（2年目のキャンプ。ホームのキャンプの下に「その年のまとめ」が出る）
+  // ⚠ まとめの材料は**年度の記録と取引の記録**（`server/yearSummary.mjs`）。
+  //    以前はオフの成長（`offseasonResults`）を出していたので、その作り物で足りていた
   await store.transaction((bundle) => {
     const l = bundle.league;
-    const id = l.game.teams[l.members[0].teamName].players[0].id;
-    l.offseasonResults = {
-      admin: { year: 1, gains: { [id]: { 'physical.speed': 3 } }, departed: [] },
-    };
+    const mine = l.members[0].teamName;
+    const leagues = Object.fromEntries((l.teams || []).map((t) => [t.name, t.league]));
+    l.season.year = 2;
+    l.history = [
+      {
+        year: 1,
+        standings: l.season.settings.teamNames.map((team, i) => ({
+          team,
+          wins: 70 - i * 5,
+          losses: 50 + i * 5,
+          draws: 0,
+          winRate: (70 - i * 5) / 120,
+        })),
+        leagues,
+        playoffChampion: mine,
+        awards: {},
+      },
+    ];
+    l.transactions = [
+      {
+        year: 1,
+        kind: 'signing',
+        teams: [mine],
+        date: { month: 11, day: 10 },
+        moves: [{ name: '入団一郎', position: 'pitcher', from: null, to: mine }],
+      },
+      {
+        year: 1,
+        kind: 'release',
+        teams: [mine],
+        date: { month: 11, day: 1 },
+        moves: [{ name: '退団二郎', position: 'left', from: mine, to: null }],
+      },
+    ];
     return { value: null };
   });
   return { service, store, userId: 'admin', sessionId };
@@ -130,20 +162,36 @@ try {
     await nav.locator('.online-nav-home[aria-current="page"]').waitFor();
   };
   await nav.getByRole('button', { name: '指導者', exact: true }).waitFor();
-  // ⚠ 年度更新の伸び（オフの成長）は**キャンプ中のホーム**に、カードの地色で出す。
-  //    以前は「現在の手続き」（キャンプ中は案内だけ）の奥にあり、薄い緑の箱の地色が
-  //    カードの地色を消して、明るいグレーの地に明るい文字が載っていた
-  const growth = p.getByRole('region', { name: 'オフの成長' });
-  await growth.waitFor();
-  assert.ok(await p.locator('.online-camp').isVisible(), 'オフの成長はキャンプと同じホームに出す');
-  const growthPaint = await growth.evaluate((node) => ({
+  // ⚠ 年が替わったら**キャンプ中のホーム**に「その年のまとめ」を、カードの地色で出す。
+  //    ⚠ 以前はここに年度更新の伸び（オフの成長）を出していたが、いしだ 2026-11-18
+  //       「キャンプの結果やオフの成長は要りません。その年の順位、入退団の選手、
+  //       主なトピックに止めて下さい」で入れ替えた。
+  //    ⚠ カードの地色に載せること（薄い箱の地色がカードを消して、明るいグレーの地に
+  //       明るい文字が載っていたことがある）
+  const summary = p.getByRole('region', { name: 'その年のまとめ' });
+  await summary.waitFor();
+  assert.ok(await p.locator('.online-camp').isVisible(), 'その年のまとめはキャンプと同じホームに出す');
+  const summaryPaint = await summary.evaluate((node) => ({
     card: getComputedStyle(node).backgroundColor,
     ground: getComputedStyle(node.closest('.online')).backgroundColor,
   }));
   assert.ok(
-    growthPaint.card.startsWith('rgb(') && growthPaint.card !== growthPaint.ground,
-    `オフの成長がカードの地色に載っていない: ${JSON.stringify(growthPaint)}`,
+    summaryPaint.card.startsWith('rgb(') && summaryPaint.card !== summaryPaint.ground,
+    `その年のまとめがカードの地色に載っていない: ${JSON.stringify(summaryPaint)}`,
   );
+  // ⚠ **オフの成長・キャンプの結果は出さない**（年度更新のあとはまとめだけ）
+  for (const name of ['オフの成長', 'キャンプ結果'])
+    assert.equal(
+      await p.getByRole('region', { name }).count(),
+      0,
+      `年が替わったのに「${name}」が出ている`,
+    );
+  // まとめの中身は3つ（順位・入退団・主なトピック）
+  for (const head of ['順位', '入退団', '主なトピック'])
+    assert.ok(
+      (await summary.innerText()).includes(head),
+      `まとめに「${head}」が無い`,
+    );
   // ⚠ キャンプの表は 1440px で横に送らずに右端まで見える。選択欄が 150px で、
   //    投手の表が 11px はみ出して右端の列が切れていた
   const campOverflow = await p

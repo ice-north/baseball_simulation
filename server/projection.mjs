@@ -55,6 +55,7 @@ import { SEASON_TURNS, PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
 import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf } from './coachEngine.mjs';
 import { createTradeJudge } from './tradeJudge.mjs';
+import { yearSummaryFor } from './yearSummary.mjs';
 import { CPU_ACCEPT_MARGIN } from '../src/online/trades.js';
 import { STRENGTH_GAP_LIMIT } from '../src/online/tradeSearch.js';
 import { TRADE_FACTOR_LIMIT, tradeEyeNote } from '../src/online/coaches.js';
@@ -761,6 +762,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
         expires: t.expires ? { month: Math.floor(t.expires / 100) % 100, day: t.expires % 100 } : null,
       })),
     history: l.history,
+    // その年のまとめ（年度更新の直後に出す。順位・入退団・主なトピックだけ）。
+    // ⚠ 保存は増やさない（年度の記録・取引の記録・球団史から毎回組む）
+    yearSummary: yearSummaryFor(l, member.teamName, labelOf),
     // 年齢構成と3年後の見込み（自球団だけ。成長力を使うので他球団には作らない。`ageOutlook.js`）
     // ⚠ 途中参加で初期メンバーを待っている間（`packSeed`）は出さない。名簿はまだ CPU のときの
     //    選手で、次のキャンプで丸ごと入れ替わるので、その見込みは自分の球団の話にならない

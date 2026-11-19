@@ -566,6 +566,44 @@ export const getRankColor = (rank) => ({
  * ミートが数千も下がっていた（10年の長期シミュ）。150 は普段の最高（先発の翌日で100前後）より上
  */
 export const FATIGUE_MAX = 150;
+
+/**
+ * 選手の能力（1〜99 の物差しのもの）の上限。⚠ **伸ばすところはここで止める**。
+ * 年齢の伸び（`STAT_GROWTH` の cap）・派遣・作るときは99、キャンプとプロ指名の上乗せだけ100で止めていて、
+ * 同じ能力が経路によって99止まりと100止まりに分かれていた（監査 2026-11-19 で99にそろえた）。
+ * 球種の Lv・守備位置の適性・知名度は別の物差し（100）。投手のスタミナ・球速は対象外。
+ */
+export const ABILITY_CAP = 99;
+const CAPPED_ABILITIES = {
+  batting: ['meet', 'power', 'eye', 'bunt', 'steal'],
+  fielding: ['defense', 'steal'],
+  physical: ['speed', 'arm', 'bodyStamina', 'muscle', 'dexterity', 'recovery'],
+  pitching: ['control'],
+  catching: ['lead'],
+};
+/**
+ * 上限を超えて保存された能力と疲労を上限へ丸める（ロード・オンラインの版の移行で使う）。
+ * 以前は上限が無く、10年の長期シミュで体力118・疲労2000超の選手ができていた。
+ * 何度呼んでも同じ結果。@returns {boolean} 丸めたか
+ */
+export function clampOverCap(player) {
+  if (!player || typeof player !== 'object') return false;
+  let changed = false;
+  for (const [box, keys] of Object.entries(CAPPED_ABILITIES)) {
+    const b = player[box];
+    if (!b || typeof b !== 'object') continue;
+    for (const k of keys)
+      if (typeof b[k] === 'number' && b[k] > ABILITY_CAP) {
+        b[k] = ABILITY_CAP;
+        changed = true;
+      }
+  }
+  if (typeof player.fatigue === 'number' && player.fatigue > FATIGUE_MAX) {
+    player.fatigue = FATIGUE_MAX;
+    changed = true;
+  }
+  return changed;
+}
 export function addFatigue(player, amount) {
   if (!(amount > 0)) return;
   const now = player.fatigue || 0;

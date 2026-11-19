@@ -14,7 +14,7 @@ import { addToObRegistry } from '../game/obRegistry.js';
 import { buildToolNorms, toolProfile, toolHuntRateForRound, TOOL_HUNT_RATE_IKU,
          huntScoreWeight, scoreStats, randomHuntTool, toolDevOf, isSpecialist,
          TOOL_LABELS, TOOL_NOUNS } from '../game/scoutTools.js';
-import { amateurRoute, CORPORATE_DRAFT_MIN_AGE } from '../utils/constants.js';
+import { amateurRoute, CORPORATE_DRAFT_MIN_AGE, ABILITY_CAP } from '../utils/constants.js';
 
 /**
  * 育成指名の「大穴出身」加点（`ikuScore` の素点に足す）。
@@ -757,12 +757,12 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         if (stat === 'stamina') {
           player.pitching.stamina = Math.min(200, player.pitching.stamina + boostAmount * 2);
         } else {
-          player.pitching[stat] = Math.min(100, player.pitching[stat] + boostAmount);
+          player.pitching[stat] = Math.min(ABILITY_CAP, player.pitching[stat] + boostAmount);
         }
       } else {
         const stats = ['meet', 'power', 'eye'];
         const stat = stats[Math.floor(Math.random() * stats.length)];
-        player.batting[stat] = Math.min(100, player.batting[stat] + boostAmount);
+        player.batting[stat] = Math.min(ABILITY_CAP, player.batting[stat] + boostAmount);
       }
       boostedCount++;
     });

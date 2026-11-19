@@ -9,13 +9,17 @@ import { teamLabel } from './gameText.js';
 // ⚠ 先方（main の持ち主）指摘「トライアウト後の入団選手の一覧が無く、誰が入ったか
 //    わからない」。リーグ便りには全球団の指名が混ざって並ぶだけだった。
 //    サーバーが参加者ごとに残す（`resolveTryout` → `view.lastTryout`）。
-// ⚠ 見せ方は「オフの成長」（`OffseasonGrowth`）と同じカード。
+// ⚠ 見せ方はキャンプの結果（`CompletedCamp`）と同じカード。
 //    名簿に居る人は名前を押すと能力が開く（退団などで居なければ名前だけ）。
 // ============================================================
 
 export default function TryoutResult({ view }) {
   const result = view?.lastTryout;
   if (!result) return null;
+  // ⚠ 出すのは**トライアウトから年度更新までの間だけ**。年が替わったら、入団した選手は
+  //    「その年のまとめ」の入退団に出る（いしだ 2026-11-18「その年の順位、入退団の選手、
+  //    主なトピックに止めて下さい」）
+  if (view.year != null && result.year !== view.year) return null;
   const byId = new Map((view.roster || []).map((p) => [String(p.id), p]));
   const picks = result.picks || [];
   const lost = result.lost || [];

@@ -97,7 +97,7 @@ async function openPrs() {
     if (!res.ok) return null;
     const map = new Map();
     for (const pr of await res.json())
-      if (pr.head?.repo?.owner?.login?.toLowerCase() === owner) map.set(pr.head.ref, { number: pr.number, sha: pr.head.sha });
+      if (pr.head?.repo?.owner?.login?.toLowerCase() === owner) map.set(pr.head.ref, { number: pr.number });
     return map;
   } catch {
     return null;
@@ -148,7 +148,6 @@ for (const name of heads) {
   });
   const newest = Math.max(...commits.map((c) => c.time));
   const pr = prs?.get(name) ?? null;
-  // PR が開いていても、PR の先頭より後に足したコミットは PR に入っていない（push し忘れ・別の写しの push）
   branches.push({ name, commits, newest, days: Math.floor((now - newest) / 86400000), pr });
 }
 branches.sort((a, b) => (b.newest ?? 0) - (a.newest ?? 0));

@@ -862,7 +862,7 @@ function _asHighSchoolCandidate(player, kind = 'band') {
   c.age = c.age || 18;
   c.origin = 'independent_candidate';
   c._tryoutSource = 'highschool';
-  // どの枠で来たか（検査と、あとで画面に出すときの手がかり。保存には載らない）
+  // どの枠で来たか（検査と、あとで画面に出すときの手がかり。獲得した選手にはそのまま残り、オンラインでは保存にも載る）
   if (kind !== 'band') c._tryoutKind = kind;
   c.isNewcomer = true;
   return c;
@@ -891,7 +891,8 @@ export function getHighSchoolEliteTryoutCandidates(count) {
   //    ゆらぎを混ぜるので、「最上位」を取っても画面では評価49の選手が混じる。実測で
   //    逸材枠の平均が大学生の中央値と並ぶだけだった）
   const scored = pool.map(p => ({ p, s: currentAbilityScore(p) })).sort((a, b) => b.s - a.s);
-  const top = Math.max(count, Math.floor(scored.length * HS_ELITE_BAND));
+  // ⚠ プールが引く人数より少ないとき（予約で減った年など）に、無い選手を引かない
+  const top = Math.min(scored.length, Math.max(count, Math.floor(scored.length * HS_ELITE_BAND)));
   // ⚠ 帯の中で**上へ寄せて引く**（一様だと帯の平均＝大学生の中央値あたりに固まり、
   //    「飛び抜けた高校生」が出ない）。u² なので半分はプールの上位1.5%から来て、
   //    ときどき最上位（大学生の最大を超える選手）が混じる。
