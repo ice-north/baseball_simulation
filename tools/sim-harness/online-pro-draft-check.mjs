@@ -1,6 +1,9 @@
 // プロ野球への道（オンラインのNPBドラフト）の検査。
-// ⚠ 先方要望（2026-11-16）: リーグ全体で年0〜3人、若さ・能力・成績で選ぶ。抜かれた球団には
+// ⚠ 先方要望（2026-11-16）: リーグ全体で年0〜5人、若さ・能力・成績で選ぶ。抜かれた球団には
 //    チームメイトのプロ意識+5・経験+30試合分・球団史への記録。プロ入りはリーグ記録から見られる。
+// ⚠ 先方要望（2026-11-19）: **指名は確率ではない**。「能力値がプロに達したから行われる」。
+//    だから「達したのに抜かれない」ことがあってはいけない（②で見る）。厳しさを決めるのは
+//    `PRO_DRAFT_THRESHOLD` だけで、人数の釣り合いも②で見る。
 //   node tools/sim-harness/online-pro-draft-check.mjs
 import assert from 'node:assert/strict';
 import { createLeague, submitPhase, loadLeagueWorld } from '../../server/leagueEngine.mjs';
@@ -9,7 +12,7 @@ import {
   chooseProDraft,
   applyProDraft,
   proDraftCandidates,
-  proDraftChance,
+  isProLevel,
   PRO_DRAFT_MAX,
   PRO_DRAFT_THRESHOLD,
   rankOf,
@@ -44,31 +47,49 @@ const make = (seed) => {
 const teamsOf = (league) =>
   Object.fromEntries(league.season.settings.teamNames.map((n) => [n, TEAMS_DATA[n]]));
 
-// ① 確率: しきい値の下は0、上がるほど増え、上限で止まる
-assert.equal(proDraftChance(PRO_DRAFT_THRESHOLD - 1), 0);
-assert.ok(proDraftChance(PRO_DRAFT_THRESHOLD) > 0);
-assert.ok(proDraftChance(PRO_DRAFT_THRESHOLD + 10) > proDraftChance(PRO_DRAFT_THRESHOLD));
-assert.ok(proDraftChance(PRO_DRAFT_THRESHOLD + 1000) <= 0.8);
+// ① **確率ではない**（いしだ 2026-11-19「指名は能力値がプロに達したから行われるもの」）。
+//    プロに達した線（`isProLevel`）の上下だけで決まる。
+assert.equal(isProLevel(PRO_DRAFT_THRESHOLD - 1), false);
+assert.equal(isProLevel(PRO_DRAFT_THRESHOLD), true);
+assert.equal(isProLevel(PRO_DRAFT_THRESHOLD + 1000), true);
 
-// ② 人数: どの年も3人まで、平均は年0.5〜2.5人（初期セットの名簿、成績の加点なし）
+// ② 人数と、**達した選手を飛ばさないこと**（初期セットの名簿、成績の加点なし）。
+//    ⚠ 1リーグ1回だけ測る。確率を外したので、同じ名簿なら年を進めても同じ結果になり、
+//      同じリーグを3年ぶん数えても標本は増えない
 const counts = [];
-for (let seed = 1; seed <= 12; seed++) {
+const ranks = [];
+for (let seed = 1; seed <= 30; seed++) {
   const league = make(seed);
   const teams = teamsOf(league);
-  for (let y = 0; y < 3; y++) {
-    league.season.year += 1;
-    const picks = quiet(() => chooseProDraft(league, teams));
-    assert.ok(picks.length <= PRO_DRAFT_MAX, `${picks.length}人は多すぎる`);
-    for (const p of picks) assert.ok((p.player.age || 0) < 30, '30歳以上は指名しない');
-    counts.push(picks.length);
-  }
+  const picks = quiet(() => chooseProDraft(league, teams));
+  assert.ok(picks.length <= PRO_DRAFT_MAX, `${picks.length}人は多すぎる`);
+  for (const p of picks) assert.ok((p.player.age || 0) < 30, '30歳以上は指名しない');
+  counts.push(picks.length);
+  for (const p of picks) ranks.push({ round: p.round, ikusei: !!p.ikusei });
+  // ⚠ **達したのに抜かれない選手がいてはいけない**（枠が埋まったときだけ残る）。
+  //    確率で決めていた頃は、越えていても9割が残っていた
+  const able = quiet(() =>
+    proDraftCandidates(teams, new Set(), {
+      totalGames: league.season.settings.gamesPerSeason || league.season.schedule.length,
+    }),
+  ).filter((c) => isProLevel(c.score));
+  assert.equal(
+    picks.length,
+    Math.min(able.length, PRO_DRAFT_MAX),
+    `プロに達した${able.length}人のうち${picks.length}人しか指名されていない（確率で飛ばしている）`,
+  );
+  assert.deepEqual(
+    picks.map((p) => p.player.id),
+    able.slice(0, PRO_DRAFT_MAX).map((c) => c.player.id),
+    '点の高い順に指名していない',
+  );
 }
 const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
 assert.ok(mean >= 0.5 && mean <= 2.0, `年平均${mean.toFixed(2)}人（0.5〜2.0人のはず）`);
 // ⚠ **0名の年が必ずある**（いしだ 2026-11-19「最大5名程度。ただし現実的には厳しく、
-//    0名の年もあるように」）。上限を上げるだけだと当たり年が増えて0名が減るので、
-//    確率の基準と傾き（`PRO_DRAFT_BASE_P` / `PRO_DRAFT_SLOPE`）で釣り合わせてある。
-//    実測（40リーグ×3年）: 0人36% / 1人33% / 2人21% / 3人7% / 4人2% / 5人3%
+//    0名の年もあるように」）。確率を外したので、ここを決めるのは `PRO_DRAFT_THRESHOLD`
+//    **だけ**。上限（`PRO_DRAFT_MAX`）を上げても当たり年の人数が増えるだけで0名は減らない。
+//    実測（80リーグ・しきい値278）: 0人31% / 1人39% / 2人20% / 3人8% / 4人1% / 5人1%
 {
   const zero = counts.filter((n) => n === 0).length / counts.length;
   assert.ok(zero >= 0.15, `0名の年が少なすぎる: ${(zero * 100).toFixed(0)}%`);
@@ -81,17 +102,8 @@ assert.ok(mean >= 0.5 && mean <= 2.0, `年平均${mean.toFixed(2)}人（0.5〜2.
 // ②' 指名順位: **中位から育成指名が大半**（いしだ 2026-11-18「ドラフト順位が甘すぎます。
 //    独立リーガーのドラフトは中位から育成指名が大半だと思います」）。
 //    直す前の実測（40リーグ×3年・161人）は 1位32%・2位24%・3位24% と上位ばかりだった。
+//    いまの実測（80リーグ・しきい値278・90人）は 上位9%・中位48%・育成43%。
 {
-  const ranks = [];
-  for (let seed = 1; seed <= 20; seed++) {
-    const league = make(seed);
-    const teams = teamsOf(league);
-    for (let y = 0; y < 3; y++) {
-      league.season.year += 1;
-      for (const p of quiet(() => chooseProDraft(league, teams)))
-        ranks.push({ round: p.round, ikusei: !!p.ikusei });
-    }
-  }
   assert.ok(ranks.length >= 20, `前提: 指名が少なすぎて割合を見られない（${ranks.length}人）`);
   const share = (f) => ranks.filter(f).length / ranks.length;
   const top = share((r) => !r.ikusei && r.round <= 3);

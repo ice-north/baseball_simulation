@@ -88,7 +88,7 @@ data class ChronicleView(
 
 /**
  * プロ入りした選手（NPBのドラフトで指名された人。サーバーの `proDraft.mjs`）。
- * ⚠ 先方要望（2026-11-16）: プロ指名を解禁。リーグ全体で年0〜3人
+ * ⚠ 先方要望（2026-11-16）: プロ指名を解禁。リーグ全体で年0〜5人（0人の年もある）
  */
 @Serializable
 data class ProDrafted(

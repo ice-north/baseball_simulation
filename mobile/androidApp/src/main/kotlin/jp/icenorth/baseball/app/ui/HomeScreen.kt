@@ -468,7 +468,7 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                     }
                     item { ChronicleHeading("リーグからプロへ", opened("leaguePro"), count = league.size) { toggle("leaguePro") } }
                     if (opened("leaguePro")) {
-                        if (league.isEmpty()) item { Text("まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜3人）。", style = MaterialTheme.typography.bodySmall) }
+                        if (league.isEmpty()) item { Text("まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜5人。0人の年もあります）。", style = MaterialTheme.typography.bodySmall) }
                         items(league.withIndex().toList(), key = { "l${it.index}" }) { (_, r) ->
                             Column {
                                 Text(proDraftedHead(r) { model.view?.teamShort(it) ?: it }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
