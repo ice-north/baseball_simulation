@@ -1,7 +1,6 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import SeasonFlow from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
-import { TeamMark } from './TeamMark.jsx';
 import { teamColor } from './teamColors.js';
 import ProDraftResult from './ProDraftResult.jsx';
 import MobileTactics from './MobileTactics.jsx';
@@ -226,9 +225,14 @@ export function Standings({ view, action = null }) {
               return (
                 <tr
                   key={s.team}
-                  /* ⚠ 球団色は行の左の帯だけに使う（`online.css` の `.online-standings tbody th`）。
-                     12球団が同じ顔に見えるのを直すため（いしだ 2026-11-19「画面が地味」） */
-                  style={{ '--team-color': teamColor(s.team).bright }}
+                  /* ⚠ **球団色は自球団の行だけ**（いしだ 2026-11-19「このリーグ順位は
+                     カラフル過ぎてかっこ悪い」）。12球団ぶん並べると虹になる。
+                     色を出すのは、画面に1〜2球団しか出ないところ（スコア・スマホの見出し）だけ */
+                  style={
+                    s.team === view.teamName
+                      ? { '--team-color': teamColor(s.team).bright }
+                      : undefined
+                  }
                   className={[
                     s.team === view.teamName ? 'online-own online-own-text' : '',
                     up ? 'is-promotion' : '',
@@ -247,8 +251,6 @@ export function Standings({ view, action = null }) {
                     >
                       {i + 1}
                     </span>
-                    {/* 球団のマーク（球団色＋頭文字）。名前のすぐ左に置く */}
-                    <TeamMark team={s.team} />
                     {/* 球団名を押すと、その球団のスタメンと投手陣を開く（先方要望 2026-11） */}
                     <TeamLineupButton view={view} team={s.team} />
                     {/* ⚠ 人が持っている球団だけ、名前を括弧で添える。

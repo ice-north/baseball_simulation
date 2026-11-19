@@ -306,14 +306,12 @@
 .online-standings th:first-child {
   padding-right: 6px;
 }
-/* ⚠ 行の左に球団色の帯を敷く（12球団を一目で見分けるため。`teamColors.js`）。
-   文字の色は変えない（決まりは `src/index.css` の表のまま） */
+/* ⚠ **球団色は自球団の行だけ**（いしだ 2026-11-19「カラフル過ぎてかっこ悪い」）。
+   12球団ぶん色を並べると虹になって、かえって安っぽく見える。
+   `--team-color` は自球団の行にしか入らない（`LeaguePanels.jsx` の `Standings`） */
 .online-standings tbody th {
   box-shadow: inset 3px 0 0 var(--team-color, transparent);
   padding-left: 8px;
-}
-.online-standings .online-team-mark {
-  margin-right: 5px;
 }
 /* ⚠ 見出しも折り返さない。スマホ 360px で自球団の行が長いと「打率」が
    「打／率」の2行に割れた */
