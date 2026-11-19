@@ -2,6 +2,7 @@ import { LeagueTopics, SeasonReview } from './Chronicle.jsx';
 import React from 'react';
 import { teamShort, ownOutcome } from './gameText.js';
 import { Standings } from './LeaguePanels.jsx';
+import { SportsPaperButton } from './SportsPaper.jsx';
 import { GameRecordButton } from './GameHistory.jsx';
 import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { turnOfDate } from './shared.js';
@@ -434,7 +435,8 @@ export default function LeagueBoard({ view }) {
       <div className="online-board-side">
         {/* あなたへのお知らせ（トレードの返事・練習試合など）。無ければ出さない */}
         <InboxCard view={view} />
-        <Standings view={view} />
+        {/* 「スポーツ新聞」（いしだ 2026-11-18「リーグ順位の右あたりに」）。紙面はアプリと同じ文 */}
+        <Standings view={view} action={<SportsPaperButton view={view} />} />
         <LeagueTopics view={view} />
         {/* オーナーたち（呼び名・ひとこと・最後に来た日）。人が2人以上のときだけ */}
         <OwnersCard view={view} />

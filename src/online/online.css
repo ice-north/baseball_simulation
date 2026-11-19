@@ -3502,6 +3502,11 @@ small.online-gain:not(:where(.online-sp *)) {
   font-size: 12px;
   color: #e2e8f0;
 }
+/* 通算ランキングの、もう現役でない人（退団・引退）。行ごと灰色に */
+.online-leaders li.online-leader-former,
+.online-leaders li.online-leader-former .online-leader-team {
+  color: #7d8a9a;
+}
 /* 退団・引退した選手の通算（通算成績の「球団ごと」の下） */
 .online-former-table {
   width: 100%;
@@ -6289,6 +6294,62 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-age-bar i.is-pitcher {
   background: #f59e0b;
 }
+/* 年齢 × 守備位置の図（`AgeOutlook.jsx` の AgeGrid）。縦が年齢（上ほど高い）、横が守備位置 */
+.online-age-grid-wrap {
+  margin: 4px 0 12px;
+}
+.online-age-grid {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.online-age-grid th,
+.online-age-grid td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #ffffff14;
+  vertical-align: top;
+  text-align: left;
+}
+.online-age-grid thead th {
+  color: #9fb0c4;
+  font-weight: 700;
+  text-align: center;
+}
+.online-age-grid thead th small {
+  margin-left: 4px;
+  font-weight: 400;
+}
+.online-age-grid thead th:first-child,
+.online-age-grid tbody th {
+  width: 64px;
+  color: #9fb0c4;
+  font-weight: 400;
+  text-align: right;
+  white-space: nowrap;
+}
+.online-age-grid td + td {
+  border-left: 1px solid #ffffff10;
+}
+.online-age-person {
+  display: inline-block;
+  margin: 0 8px 0 0;
+  white-space: nowrap;
+  color: #cbd5e1;
+}
+.online-age-person.is-core {
+  color: #f1f5f9;
+  font-weight: 700;
+}
+.online-age-person.is-warn {
+  color: #fca5a5;
+}
+.online-age-person small {
+  margin-left: 2px;
+  color: #9fb0c4;
+  font-weight: 400;
+}
 .online-age-core tr.is-warn td,
 .online-age-core tr.is-warn th {
   color: #fca5a5;
@@ -6350,4 +6411,682 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-team-face li button {
   margin-left: 8px;
+}
+
+/* 球団史・記録の折りたたみ（`Chronicle.jsx` の `Fold`）。見出しの行を押して開け閉めする */
+.online-fold {
+  --online-card-pad: 0;
+  margin-bottom: 10px;
+}
+.online-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.online-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.online-fold > summary::before {
+  content: '▸';
+  color: var(--accent);
+  transition: transform 0.12s;
+}
+.online-fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+.online-fold > summary:hover {
+  background: #ffffff08;
+}
+.online-fold > summary h2 {
+  margin: 0;
+}
+.online-fold > summary h2 small {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #9fb0c4;
+}
+.online-fold-body {
+  padding: 4px 18px 18px;
+}
+.online-fold-group {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  color: #9fb0c4;
+}
+
+/* --- スポーツ新聞（PC。`SportsPaper.jsx`。紙面の文はアプリと同じ） ------------- */
+/* ⚠ 中身は `.online-sp` で包む（`.online button` / `.online table` の要素名の指定を当てない）。
+   色はアプリの紙面（FrontPageCard.kt）と同じ: 紙 #F1ECDF・墨 #1B1A17・赤 #C8102E・紺 #14365F・黄 #FFE100 */
+.online-paper-open {
+  --online-control-h: 26px;
+  --online-btn-pad: 2px 10px;
+  --online-control-font: 12px;
+  --online-btn-bg: #c8102e;
+  --online-btn-border: #e0485f;
+  --online-btn-hover: #a50d26;
+  --online-btn-ink: #fff;
+  font-weight: 700;
+  border-radius: 4px !important;
+}
+.online-standings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+/* ⚠ ボタンを足してもホームの高さを変えない（PC のホームは 1000px に収める。見出しの下の 10px は外の箱へ） */
+.online-desktop .online-standings-head > h2 {
+  margin: 0;
+}
+.online-paper-dialog {
+  width: min(1180px, 96vw);
+  max-width: 96vw;
+  height: 94dvh;
+  max-height: 94dvh;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: #f1ecdf;
+  color: #1b1a17;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.online-paper-dialog:not([open]) {
+  display: none;
+}
+.online-paper-dialog::backdrop {
+  background: #0f172acc;
+}
+.online-paper-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #1b1a17;
+  font-size: 13px;
+}
+.online-paper-switch {
+  display: flex;
+  border: 1px solid #8a8272;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.online-paper-switch button,
+.online-paper-close {
+  padding: 4px 14px;
+  background: transparent;
+  color: #e6dfcd;
+  font-weight: 700;
+  cursor: pointer;
+}
+.online-paper-switch button.is-on {
+  background: #f1ecdf;
+  color: #1b1a17;
+}
+.online-paper-close {
+  margin-left: auto;
+  border: 1px solid #8a8272;
+  border-radius: 4px;
+}
+.online-paper {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 24px 24px;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', 'Noto Serif JP', serif;
+  color: #1b1a17;
+  --paper-accent: #c8102e;
+}
+.online-paper.is-national {
+  --paper-accent: #14365f;
+}
+.online-paper *,
+.online-paper *::before,
+.online-paper *::after {
+  box-sizing: border-box;
+}
+.online-paper h2,
+.online-paper h3,
+.online-paper small,
+.online-paper button,
+.online-paper .paper-gothic {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'YuGothic', 'Noto Sans JP', 'Meiryo', sans-serif;
+}
+.online-paper-wait {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  padding: 120px 0;
+}
+.paper-running {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  font-size: 11px;
+  color: #5b5548;
+  border-bottom: 1px solid #1b1a17;
+  padding-bottom: 2px;
+}
+.paper-running span:nth-child(2) {
+  text-align: center;
+}
+.paper-running span:last-child {
+  text-align: right;
+}
+.paper-masthead {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: end;
+  gap: 4px 18px;
+  padding: 8px 0 6px;
+  border-bottom: 4px double #1b1a17;
+}
+.paper-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.paper-title strong {
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--paper-accent);
+  letter-spacing: 2px;
+}
+.paper-title em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--paper-accent);
+  padding: 2px 8px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+}
+.paper-mast-side {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  justify-content: flex-end;
+  font-size: 13px;
+  color: #5b5548;
+}
+.paper-mast-side b {
+  color: #1b1a17;
+}
+.paper-index {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+.paper-index li {
+  border: 1px solid #1b1a17;
+  padding: 0 8px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+  font-weight: 700;
+}
+.paper-extra {
+  margin-top: 8px;
+  background: #c8102e;
+  color: #fff;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 8px;
+}
+.paper-top {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  margin-top: 10px;
+  align-items: stretch;
+}
+.paper-top.has-hero {
+  grid-template-columns: auto 1fr 220px;
+}
+.paper-v {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap-reverse;
+  align-content: flex-start;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+  font-weight: 900;
+  line-height: 1.02;
+}
+.paper-v i {
+  font-style: normal;
+  text-align: center;
+  width: 1.1em;
+}
+.paper-v i.is-space {
+  height: 0.4em;
+}
+.paper-v i.is-tcy {
+  font-size: 0.8em;
+  width: 1.375em;
+  letter-spacing: -0.05em;
+}
+.paper-bighead {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.paper-big {
+  font-size: 64px;
+  color: #fff;
+  background: var(--paper-accent);
+  padding: 8px 4px;
+}
+.paper-bigsub {
+  font-size: 22px;
+  background: #ffe100;
+  color: #1b1a17;
+  padding: 6px 3px;
+  max-height: 290px;
+}
+.paper-photo {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #23402f;
+  border: 6px solid #1b1a17;
+  padding: 18px 16px;
+  min-height: 220px;
+}
+.paper-photo figcaption {
+  margin-top: 12px;
+  color: #e6dfcd;
+  font-size: 12px;
+}
+table.paper-board {
+  width: 100%;
+  border-collapse: collapse;
+  color: #fff;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.paper-board th,
+.paper-board td {
+  border: 1px solid #ffffff33;
+  text-align: center;
+  padding: 6px 2px;
+  font-size: 20px;
+  font-weight: 800;
+}
+.paper-board thead th {
+  font-size: 12px;
+  color: #ffe100;
+  padding: 2px;
+}
+.paper-board tbody th {
+  text-align: left;
+  padding-left: 8px;
+  white-space: nowrap;
+  font-size: 18px;
+}
+.paper-board-total {
+  color: #ffe100;
+  font-size: 26px !important;
+}
+.paper-board.is-plain {
+  color: #fff;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+  font-weight: 800;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  font-size: 26px;
+}
+.paper-board.is-plain b {
+  font-size: 56px;
+  color: #ffe100;
+}
+.paper-hero {
+  border: 2px solid #1b1a17;
+  background: #fff8e1;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.paper-hero small {
+  align-self: flex-start;
+  background: var(--paper-accent);
+  color: #fff;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.paper-hero strong {
+  font-size: 24px;
+  font-weight: 900;
+}
+.paper-hero-pos,
+.paper-hero-season {
+  font-size: 12px;
+  color: #5b5548;
+}
+.paper-hero p {
+  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 15px;
+}
+.paper-hero p b {
+  color: var(--paper-accent);
+  font-size: 18px;
+}
+.paper-blackhead {
+  margin-top: 10px;
+  background: #1b1a17;
+  color: #fff;
+  padding: 12px 16px;
+}
+.paper-blackhead small {
+  color: #ffe100;
+  font-weight: 900;
+}
+.paper-blackhead h2 {
+  margin: 0;
+  font-size: 36px;
+  line-height: 1.25;
+  font-weight: 900;
+}
+.paper-leadblock {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+.paper-leadhead {
+  font-size: 18px;
+  max-height: 230px;
+  border-left: 3px solid #1b1a17;
+  border-right: 3px solid #1b1a17;
+  padding: 4px 3px;
+  align-self: flex-start;
+}
+.paper-kicker {
+  display: inline-block;
+  font-weight: 900;
+  color: var(--paper-accent);
+  font-size: 14px;
+}
+.paper-headline {
+  margin: 2px 0 6px;
+  font-size: 32px;
+  line-height: 1.25;
+  font-weight: 900;
+}
+.paper-subhead {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 800;
+}
+.paper-lead {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.85;
+  text-indent: 1em;
+}
+.paper-boxline {
+  margin: 10px 0 0;
+  padding: 6px 0;
+  border-top: 1px solid #8a8272;
+  border-bottom: 1px solid #8a8272;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 14px;
+}
+.paper-boxline b {
+  display: inline-block;
+  border: 1px solid #1b1a17;
+  padding: 0 4px;
+  margin-right: 6px;
+  font-size: 12px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+}
+.paper-articles {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px 22px;
+}
+.paper-article {
+  border-top: 2px solid #1b1a17;
+  padding-top: 6px;
+}
+.paper-article small {
+  display: inline-block;
+  background: #1b1a17;
+  color: #f1ecdf;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 6px;
+}
+.paper-article h3 {
+  margin: 4px 0;
+  font-size: 19px;
+  line-height: 1.35;
+  font-weight: 900;
+}
+.paper-article p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  text-indent: 1em;
+}
+.paper-results {
+  margin-top: 16px;
+  border-top: 3px solid #1b1a17;
+  padding-top: 6px;
+}
+.paper-results h3,
+.online-paper section > h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 900;
+}
+.paper-results p {
+  margin: 0;
+  font-size: 14px;
+}
+.paper-results table {
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.paper-results td {
+  padding: 2px 8px;
+  text-align: center;
+}
+.paper-results td.is-win {
+  font-weight: 900;
+}
+.paper-next {
+  display: block;
+  margin: 18px 0 0 auto;
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid #1b1a17;
+  font-weight: 900;
+  color: #1b1a17;
+  cursor: pointer;
+}
+.paper-next:hover {
+  background: #e6dfcd;
+}
+.paper-section {
+  margin-top: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  background: var(--paper-accent);
+  color: #fff;
+  padding: 4px 12px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+}
+.paper-section strong {
+  font-size: 22px;
+  font-weight: 900;
+}
+.paper-team-grid,
+.paper-record-grid {
+  display: grid;
+  grid-template-columns: 1fr 330px;
+  gap: 22px;
+  margin-top: 12px;
+}
+.paper-team-side section,
+.paper-record-grid aside section {
+  border-top: 2px solid #1b1a17;
+  padding-top: 6px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+.paper-team-side p,
+.paper-record-grid aside p {
+  margin: 2px 0;
+}
+.paper-interview h2 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  line-height: 1.3;
+  font-weight: 900;
+}
+.paper-interview dl {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.75;
+}
+.paper-interview dt {
+  font-weight: 800;
+  margin-top: 6px;
+}
+.paper-interview dd {
+  margin: 0;
+}
+.paper-interview dd::before {
+  content: '　';
+}
+.paper-form {
+  display: flex;
+  gap: 3px;
+  font-size: 18px;
+}
+.paper-form .is-win {
+  color: #c8102e;
+}
+.paper-form .is-lose {
+  color: #1b1a17;
+}
+.paper-form .is-draw {
+  color: #8a8272;
+}
+table.paper-kv,
+table.paper-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.paper-kv th,
+.paper-kv td,
+.paper-table th,
+.paper-table td {
+  border-bottom: 1px solid #c9c0aa;
+  padding: 3px 4px;
+  text-align: left;
+  font-weight: 400;
+}
+.paper-kv td:last-child {
+  text-align: right;
+}
+.paper-table td {
+  text-align: right;
+}
+.paper-table thead th {
+  font-size: 11px;
+  color: #5b5548;
+  border-bottom: 1px solid #1b1a17;
+}
+.paper-table tr.is-mine {
+  background: #ffe10066;
+  font-weight: 800;
+}
+.paper-table tr.is-sub th {
+  color: #5b5548;
+}
+.paper-table tr.is-total {
+  border-top: 1px solid #1b1a17;
+  font-weight: 800;
+}
+.paper-small {
+  font-size: 11px;
+  color: #5b5548;
+}
+.paper-note {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.paper-arrow {
+  font-weight: 900;
+  width: 1.6em;
+}
+.paper-arrow.is-up {
+  color: #c8102e;
+}
+.paper-arrow.is-down {
+  color: #14365f;
+}
+.paper-team-side p.is-tired,
+.paper-record-grid aside p.is-mine {
+  font-weight: 800;
+}
+.paper-review h2 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 900;
+}
+.paper-review p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.8;
+  text-indent: 1em;
+}
+.paper-boxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 12px;
+}
+.paper-box h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  border-bottom: 2px solid #1b1a17;
+}
+.paper-box table + table {
+  margin-top: 8px;
+}
+.paper-notes,
+.paper-relays {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.paper-notes p,
+.paper-relays p {
+  margin: 0;
 }

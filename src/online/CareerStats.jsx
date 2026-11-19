@@ -74,7 +74,7 @@ function CareerLeagueBoard({ view, modes }) {
   return (
     <Page
       title="通算成績"
-      sub="リーグ全球団の選手の、このリーグを始めてからの合計の上位です（今季を含む・退団した選手も残します）。自球団の選手は黄色で出します。"
+      sub="リーグ全球団の選手の、このリーグを始めてからの合計の上位です（今季を含む・退団・引退した選手も灰色で残します）。自球団の選手は黄色で出します。"
       actions={modes}
     >
       <section className="online-card">
@@ -97,7 +97,11 @@ function CareerLeagueBoard({ view, modes }) {
               </h4>
               <ol>
                 {field.rows.map((row, i) => (
-                  <li key={row.key} className={row.team === view.teamName && row.active ? 'online-own-text' : ''}>
+                  <li
+                    key={row.key}
+                    className={row.active ? (row.team === view.teamName ? 'online-own-text' : '') : 'online-leader-former'}
+                    title={row.active ? undefined : '現役ではありません（退団・引退した選手）'}
+                  >
                     <span className="online-leader-rank" data-rank={i + 1}>
                       {i + 1}
                     </span>
@@ -109,8 +113,9 @@ function CareerLeagueBoard({ view, modes }) {
                       )}
                     </span>
                     <span className="online-leader-team">
+                      {/* ⚠ 「（退団）」の字は付けない（狭い箱で名前が切れて読めなくなった。いしだ 2026-11-18）。
+                          現役でない人は行ごと灰色にする（`.online-leader-former`） */}
                       {row.team ? teamShort(row.team) : '—'}
-                      {row.active ? '' : '（退団）'}
                     </span>
                     <span className="online-leader-value">{formatStat({ format: field.format }, row.value)}</span>
                   </li>

@@ -118,6 +118,7 @@ const DIST_UI = [
   { name: 'online-label-ui-check', slow: 17 }, // check:online:label-ui
   { name: 'online-replay-ui-check', slow: 38 }, // check:online:replay-ui
   { name: 'online-mobile-gameplay-ui-check', slow: 49 }, // check:online:mobile-gameplay-ui
+  { name: 'online-paper-ui-check', slow: 12 }, // check:online:paper-ui
 ];
 
 // ここに無い *-check.mjs は、別の手順で回すもの。サーバーやブラウザが要る通し検査と、
