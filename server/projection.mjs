@@ -821,7 +821,7 @@ function tradePlayers(league, teamName, ids) {
 
 // 参加者向けに、確定済み名簿・今季成績・能力と、今の起用（打順・守備・ローテ・救援の役割）を公開する。
 // 方針・作戦、次回先発、契約、未提出案や成長の内部値を含めない。
-export function projectTeamInfo(bundle, userId, teamName) {
+export function projectTeamInfo(bundle, userId, teamName, context = null) {
   const l = bundle.league;
   requireOnline(
     l?.members.some((m) => m.userId === userId),
@@ -833,7 +833,8 @@ export function projectTeamInfo(bundle, userId, teamName) {
     '球団が見つかりません',
     404,
   );
-  const statistics = statisticsContext(l);
+  // ⚠ 全球団の索引（`buildTeamsIndex`）は1つの文脈を使い回す（球団ごとに全試合をなめ直していた）
+  const statistics = context || statisticsContext(l);
   // いま名簿にいる人の記録の鍵 → 選手 id（歴代記録の「現役」の印と、名前を押して開く選手）
   const activeKeys = new Map(
     l.game.teams[teamName].players
