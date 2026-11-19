@@ -17,9 +17,11 @@ on:
 permissions:
   contents: read
 
+# ⚠ 毎日の分（落ちたら知らせる）は push の分と別の列にする。同じ列だと、毎日の分の最中に
+#    claude/** への push があると打ち切られ、失敗の知らせが届かない
 concurrency:
-  group: unmerged
-  cancel-in-progress: true
+  group: unmerged-${{ github.event_name == 'push' && 'push' || 'daily' }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   report:

@@ -1,4 +1,5 @@
 import { isLiveSession, sessionIdsOf } from '../sessions.mjs';
+import { inviteDigest } from '../invites.mjs';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { randomUUID, createHash } from 'node:crypto';
 import {
@@ -253,6 +254,14 @@ export class SupabaseStore {
       bundle: loaded.bundle,
       touched: () => loaded.light?.tracker.touched ?? null,
     };
+  }
+  /**
+   * ログイン前の招待の確かめ用に、招待の写し（`views._invites`）だけを読む。
+   * 写しがまだ無い（この版より前に保存した）・絞り込みが通らない環境では `null`（呼ぶ側が芯を読む）。
+   */
+  async readInvites() {
+    const row = await this.selectControl(['invites:views->_invites']);
+    return Array.isArray(row?.invites) ? row.invites : null;
   }
   async isDue(now) {
     // ⚠ リーグ全体の進行情報（`views._meta`）で判定する。以前は管理者のビューを
@@ -574,6 +583,8 @@ export class SupabaseStore {
           : await this.createArchive(value, row.views?._records);
       if (archives) views._records = archives;
       views._meta = leagueMetaOf(value.league);
+      // ログイン前の招待の確かめ用（芯を読まずに済ませる。`readInvites`）
+      views._invites = inviteDigest(value);
       prepared = loaded.run
         ? loaded.run.inspect(value)
         : { bundle: value };

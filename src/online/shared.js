@@ -15,7 +15,7 @@ import { SEASON_TURNS } from './pyramidLeague.js';
 //    1 = 固定4球団・2人・1日7枠）。
 // ⚠ 上げてもリーグは**作り直せない**（`create` は既存リーグがあると拒む）。
 //    `docs/online/PRODUCTION_SETUP.md` の作り直し手順で制御行を空にすること。
-export const ONLINE_SCHEMA = 14;
+export const ONLINE_SCHEMA = 15;
 export const ONLINE_ENGINE_VERSION = 'online-1';
 
 // ---- ターンの長さ

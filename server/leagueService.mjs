@@ -295,6 +295,9 @@ export class LeagueService {
   /** 招待リンクを開いたとき（ログイン前）。まだ使えるかだけ返す */
   async checkInvite(token) {
     assertInviteShape(token);
+    // ⚠ ログイン前に誰でも叩ける入口。本番は管理行の小さな写しだけを読む（芯は数MB）
+    const digest = this.store.readInvites ? await this.store.readInvites() : null;
+    if (digest) return peekInvite({ invites: digest }, token, this.clock());
     const bundle = this.store.readLight
       ? (await this.store.readLight()).bundle
       : await this.store.read();
@@ -327,7 +330,7 @@ export class LeagueService {
       throw error;
     }
     // ⚠ アカウントはもうできている。定期進行と重なって断られても、使用済みの印は付け直す
-    //    （付け損ねると、押さえが切れたあと同じリンクで2つ目を作れてしまう）
+    //    （付け損ねても、押さえは時間で外れないので2つ目は作れない。そのリンクは使えなくなる）
     for (let attempt = 0; ; attempt += 1) {
       try {
         await this.store.transaction((bundle) => {

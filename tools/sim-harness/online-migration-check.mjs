@@ -168,6 +168,18 @@ assert.ok(
   assert.equal(kept.memberSeq, 9, '持っている通し番号を書き換えた');
 }
 
+// 版15へ上げるとき、上限を超えて保存された能力と疲労を上限へ丸める（何度当てても同じ）
+{
+  const p = { physical: { bodyStamina: 118, speed: 60 }, batting: { meet: 100 }, pitching: { control: 99, stamina: 180 }, fatigue: 2400 };
+  const old = { schema: 14, engineVersion: ONLINE_ENGINE_VERSION, seed: 1, members: [], game: { teams: { A: { players: [p] } } } };
+  migrateLeague(old);
+  assert.deepEqual(
+    [p.physical.bodyStamina, p.physical.speed, p.batting.meet, p.pitching.control, p.pitching.stamina, p.fatigue],
+    [99, 60, 99, 99, 180, 150],
+    '版15で上限を超えた値を丸めていない（または上限の内側・スタミナまで触った）',
+  );
+}
+
 // --- どの版をどう扱うか ----------------------------------------------
 const league = (overrides) => ({
   schema: ONLINE_SCHEMA,

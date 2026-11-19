@@ -4,6 +4,7 @@
 //   - 作れるのは管理者だけ。保存には合言葉そのものを残さない（ハッシュだけ）
 //   - 1つのリンクで作れるアカウントは1つ。期限切れ・取り消し・使用済みは断る
 //   - アカウントを作るのに失敗したら、リンクはもう一度使える
+//   - 使用済みの印を付け損ねて押さえが残ったリンクは、時間が経っても使えるように戻らない
 //   - 招待はリーグの版（revision）を上げない（送信中の提出を弾かない）
 //   - 登録した人はそのままログインした状態になり、参加の画面（joinRequired）へ進む
 //   - リーグが満員なら、アカウントを作る前に断る
@@ -11,7 +12,7 @@ import assert from 'node:assert/strict';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { createHandler } from '../../server/http.mjs';
-import { claimInvite, createInvite, INVITE_DAYS, INVITE_OPEN_MAX } from '../../server/invites.mjs';
+import { claimInvite, createInvite, finishInvite, INVITE_CLAIM_MS, INVITE_DAYS, INVITE_OPEN_MAX } from '../../server/invites.mjs';
 
 let now = '2026-11-18T00:00:00.000Z';
 const store = createTestStore(`/tmp/pennant-invite-${process.pid}.gz`);
@@ -103,6 +104,19 @@ assert.equal((await service.invites('admin', adminSession)).invites.length, 0, '
   assert.equal(locks, 0, '使えない合言葉で保存のロックを取った');
 }
 
+// --- 使用済みの印を付け損ねたら、押さえが古くなってもリンクは戻らない ------
+{
+  const bundle = { invites: [] };
+  const { token } = createInvite(bundle, now);
+  claimInvite(bundle, token, now); // ここで関数が止まった（印も外しも来ない）
+  const later = new Date(Date.parse(now) + INVITE_CLAIM_MS + 1000).toISOString();
+  assert.throws(() => claimInvite(bundle, token, later), /途中で止まり/, '止まった押さえのリンクで2つ目を作れた');
+  const svc = new LeagueService(createTestStore(`/tmp/pennant-invite-stall-${process.pid}.gz`), { clock: () => later });
+  svc.store.read = async () => bundle;
+  svc.store.readLight = undefined;
+  await rejects(svc.checkInvite(token), /途中で止まり/, '止まった押さえのリンクが開けた');
+}
+
 // --- 作りすぎの歯止め -----------------------------------------------------
 {
   const bundle = { invites: [] };
@@ -123,6 +137,25 @@ assert.equal((await service.invites('admin', adminSession)).invites.length, 0, '
   assert.throws(() => claimInvite(bundle, token, now), /空いている球団がありません/);
   bundle.league.members.pop();
   assert.ok(claimInvite(bundle, token, now), '空きがあるのに断った');
+}
+
+// --- 残り1球団で2本送っても、まだ参加していない登録の分は空けておく ----------
+{
+  const bundle = {
+    invites: [],
+    league: { season: { settings: { teamNames: ['A', 'B'] } }, members: [{ userId: 'a' }] },
+  };
+  const first = createInvite(bundle, now);
+  const second = createInvite(bundle, now);
+  const claim = claimInvite(bundle, first.token, now);
+  finishInvite(bundle, first.token, claim, 'guest-a', now); // 登録したが、まだ参加していない
+  assert.throws(() => claimInvite(bundle, second.token, now), /空いている球団がありません/, '残り1球団で2人登録できた');
+  bundle.league.members.push({ userId: 'guest-a' }); // 参加した → 満員
+  assert.throws(() => claimInvite(bundle, second.token, now), /空いている球団がありません/);
+  bundle.league.members.pop(); // 参加せずに7日たった → 枠を返す
+  const later = new Date(Date.parse(now) + INVITE_DAYS * 86400000 + 1000).toISOString();
+  bundle.invites.find((i) => i.hash !== bundle.invites[0].hash).expiresAt = later.replace(/^\d+/, '2099');
+  assert.ok(claimInvite(bundle, second.token, later), '参加しないままの登録が枠を埋め続けた');
 }
 
 // --- 招待はリーグの版を上げない -------------------------------------------
