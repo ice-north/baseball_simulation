@@ -243,6 +243,7 @@ DUMP=/tmp/y10.json node tools/sim-harness/long-run-probe.mjs 10 33   # 最後の
   - `online-*-check.mjs` はオンライン版、`*-ui-check.mjs` はブラウザで画面を動かす検査。
 - `*-probe.mjs`: 合否の無い測定（効き方・分布を見るため。手で回す）。
 - `run-checks.mjs`: 検査をまとめて同時に走らせる入口。`open-scene.mjs`: 書き出した場面から続きを遊ぶ。
+- `look-shot.mjs`: オンラインの見た目を写真に撮る（`npx vite build` のあとに `node tools/sim-harness/look-shot.mjs <出す場所>`）。ホーム・自球団の札・順位表をPCとスマホの幅で撮るので、見た目を直したときの前後を並べられる。検査ではない（順位は作り物）。
 
 ```
 tools/sim-harness/lib/

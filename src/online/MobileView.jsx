@@ -27,6 +27,8 @@ import TryoutResult from './TryoutResult.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
+import { TeamMark } from './TeamMark.jsx';
+import { teamColor } from './teamColors.js';
 import { StaffBody } from './StaffPage.jsx';
 import { MobileTradeReplies } from './TradeScreen.jsx';
 import { RenameDialog } from './DesktopView.jsx';
@@ -122,7 +124,12 @@ export default function MobileView(props) {
       )}
       {tab === 'today' && (
         <>
-          <section className="online-mobile-overview">
+          <section
+            className="online-mobile-overview"
+            style={{ '--team-color': teamColor(view.teamName).bright }}
+          >
+            {/* 球団色のマーク（PC版のホームの札と同じ。いしだ 2026-11-19「画面が地味」） */}
+            <TeamMark team={view.teamName} size="lg" />
             <strong>{teamLabel(view.teamName)}</strong>
             <span>
               {/* ⚠ 総数はビューの値で出す（PC版と同じ理由） */}

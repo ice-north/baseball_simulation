@@ -14,7 +14,13 @@
       そのまま効く。 */
 .online {
   min-height: 100dvh;
-  background: var(--surface-0);
+  /* ⚠ 地色は変数のまま（`--surface-0`）。その上に**ごく薄い明かり**を重ねるだけ
+     （ナイター中継の語彙。タイトル画面と同じ気配）。色は足していないので、
+     紙の上の文字色（`--ink` 系）のコントラストは変わらない */
+  background:
+    radial-gradient(120% 60% at 50% -10%, #ffffff3d, #ffffff00 60%),
+    radial-gradient(90% 50% at 50% 110%, #0f172a1a, #0f172a00 70%),
+    var(--surface-0);
   color: var(--ink);
   font:
     15px/1.6 -apple-system,
@@ -142,8 +148,82 @@
   border-radius: 12px;
   padding: var(--online-card-pad, 22px);
   margin-bottom: var(--online-card-gap, 20px);
-  box-shadow: 0 3px 9px #10203912;
+  /* ⚠ **上端に明るい線を1本入れる**（`inset`）。平らな面が並ぶと地味に見えるので、
+     光が当たっている側を作る。影も少し強めて紙から浮かせる */
+  box-shadow:
+    inset 0 1px 0 #ffffff1f,
+    0 6px 16px #10203926;
   min-width: 0;
+}
+/* ============================================================
+   地味さを直すための土台（いしだ 2026-11-19「主に画面が地味な点」）。
+   ⚠ **色と寸法はここの変数で持つこと**。画面ごとに書くと、濃さを直すときに
+      当たりが抜ける。球団色だけは球団ごとに `--team-color` を inline で差す
+      （`teamColors.js`）。
+   ⚠ **コントラストの決まり（`src/index.css` の表）は崩さない**。足したのは
+      「地の装飾」と「文字の大きさ」だけで、文字色は今のまま。
+   ============================================================ */
+:where(.online) {
+  /* 読む数字（順位・勝敗・スコア）。表の12〜13pxと差を付けるために大きく取る */
+  --online-display-1: 34px;
+  --online-display-2: 22px;
+}
+/* ⚠ 大きな数字は**等幅の数字**で（桁が動くと読みづらい）。単位は小さく添える */
+.online-display {
+  font-size: var(--online-display-1);
+  font-weight: 750;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.online-display small {
+  margin: 0 2px 0 1px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+/* 球団のマーク（`TeamMark.jsx`）。球団色の角丸＋頭文字 */
+.online-team-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  background: var(--team-color, var(--accent));
+  border-radius: 5px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: -2px;
+}
+.online-team-mark.is-sm {
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+/* ⚠ 2文字入る大きさ（「三陸」）。1文字の球団でも同じ四角にする */
+.online-team-mark.is-lg {
+  width: 48px;
+  height: 48px;
+  font-size: 19px;
+  letter-spacing: -0.04em;
+  border-radius: 10px;
+}
+/* 暗いカードの上は明るい色の地＋暗い文字（実測 6.45〜11.84） */
+.online-team-mark.is-card {
+  color: #0f172a;
+}
+/* 明るい紙の上は濃い色の地＋白文字。⚠ 縁を付ける（紙との差が最小2.3で形が溶ける） */
+.online-team-mark.is-paper {
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px #00000059;
+}
+/* スマホのホームの見出し（球団色の上端とマーク。PC版のホームの札と同じ気配） */
+.online-mobile-overview {
+  border-top: 2px solid var(--team-color, var(--accent));
+}
+.online-mobile-overview .online-team-mark {
+  float: left;
+  margin: 2px 10px 0 0;
 }
 .online-eyebrow {
   font-size: 12px;
@@ -153,6 +233,63 @@
 .online-card .online-eyebrow,
 .online-player-dialog .online-eyebrow {
   color: var(--accent);
+}
+/* --- ホームの自球団の札（`TeamHero.jsx`）------------------------------- */
+/* ⚠ 球団色は**帯と上端の線だけ**に使う（面全体を球団色にすると、カードの上の
+   文字色の決まりが12球団ぶん崩れる） */
+.online-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--team-deep, #1d4ed8) 34%, transparent),
+      transparent 62%
+    ),
+    var(--surface-2);
+  border-top: 2px solid var(--team-color, var(--accent));
+}
+/* ⚠ 広い画面では**1本の帯**にする（名前が左・数字が右）。縦に積むと、右半分が
+   空いたまま高さだけ取る */
+.online-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+}
+.online-hero-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.online-hero-name h2 {
+  margin: 0;
+}
+.online-hero-name p {
+  margin: 2px 0 0;
+}
+.online-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 0;
+}
+.online-hero-stats dt {
+  font-size: 12px;
+  font-weight: 650;
+  color: #cbd5e1;
+}
+.online-hero-stats dd {
+  margin: 2px 0 0;
+}
+@media (max-width: 420px) {
+  :where(.online) {
+    --online-display-1: 26px;
+  }
+  .online-hero-stats {
+    gap: 6px 18px;
+  }
 }
 .online-muted {
   font-size: 13px;
@@ -221,6 +358,15 @@
 }
 .online-standings th:first-child {
   padding-right: 6px;
+}
+/* ⚠ 行の左に球団色の帯を敷く（12球団を一目で見分けるため。`teamColors.js`）。
+   文字の色は変えない（決まりは `src/index.css` の表のまま） */
+.online-standings tbody th {
+  box-shadow: inset 3px 0 0 var(--team-color, transparent);
+  padding-left: 8px;
+}
+.online-standings .online-team-mark {
+  margin-right: 5px;
 }
 /* ⚠ 見出しも折り返さない。スマホ 360px で自球団の行が長いと「打率」が
    「打／率」の2行に割れた */

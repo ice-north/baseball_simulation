@@ -29,6 +29,7 @@ import TryoutResult from './TryoutResult.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
+import TeamHero from './TeamHero.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
@@ -600,6 +601,9 @@ export default function DesktopView(props) {
             </>
           ) : (
             <>
+              {/* ⚠ ホームの先頭は**自球団の札**（球団色・順位・勝敗の大きな数字）。
+                  いしだ 2026-11-19「主に画面が地味な点」の見本 */}
+              <TeamHero view={view} />
               {/* ⚠ シーズン中は出さない（毎日同じ帯が場所を取るだけ）。
                   シーズン後から開幕までは、いまの段階とやることを先頭に出す */}
               {view.stage?.key !== 'season' && <SeasonFlow view={view} />}
