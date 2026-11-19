@@ -3,7 +3,7 @@
 //
 // ⚠ 先方要望（2026-11-16）: 一度外したプロからの指名を解禁する。ただし以前（一人用の
 //    `processNPBDraft` をそのまま回していた頃）は各球団2〜3人ずつ抜かれていたので、
-//    **リーグ全体で年に0〜5人**に絞る。若さ・能力・顕著な成績（タイトル）を見て選ぶ。
+//    **リーグ全体で年に0〜5人**（線を越えた選手だけ。枠は5人）。若さ・能力・顕著な成績（タイトル）を見て選ぶ。
 // ⚠ 抜かれた球団が戦力を失うだけの罰にならないよう、ご褒美を付ける:
 //    - チームメイトのプロ意識 +5（`TEAMMATE_DISCIPLINE`）
 //    - チームメイトの経験 +30試合分（`TEAMMATE_EXPERIENCE_GAMES`。キャンプの覚醒の起きやすさに効く）
@@ -21,6 +21,7 @@ import {
   computeSeasonAwardBonuses,
 } from '../src/season/yearProgressionSystem.js';
 import { FULL_SEASON_EXPERIENCE } from '../src/season/campTraining.js';
+import { draftRankText } from '../src/online/chronicleText.js';
 
 /**
  * 1年に指名される上限（いしだ 2026-11-19「指名数は最大を5名程度に。ただし現実的には
@@ -33,7 +34,8 @@ export const PRO_DRAFT_MAX = 5;
  * **プロに達した能力の線**（`checkNPBDraftEligibility` の総合点。年齢・能力・成長力・知名度込み）。
  *
  * ⚠ 指名は**確率ではない**（いしだ 2026-11-19「あくまでも、指名は能力値がプロに達した
- *    から行われるものです。確率ではありません」）。この線を越えた選手は越えた年に指名される。
+ *    から行われるものです。確率ではありません」）。この線を越えた選手は越えた年に指名される
+ *    （枠 `PRO_DRAFT_MAX` を超えた分は点の低い方からその年は残り、翌年また候補になる）。
  *    以前はしきい値258＋確率（基準8%・越えた分で加算）で決めていたが、
  *    「越えても抜かれない年がある」のは筋が通らないので確率を外した。
  * ⚠ **厳しさを決めるのはここだけ**。確率を外すと同じ258では年3.3人も抜かれるので、
@@ -91,8 +93,8 @@ const DRAFT_RANKS = [
   { min: -Infinity, round: 2, ikusei: true },
 ];
 export const rankOf = (margin) => DRAFT_RANKS.find((r) => margin >= r.min);
-/** 「4位」「育成2位」。⚠ 画面（`chronicleText.js`）・アプリ（`Chronicle.kt`）と同じ書き方 */
-export const rankLabel = (r) => `${r?.ikusei ? '育成' : ''}${r?.round ?? ''}位`;
+/** 「4位」「育成2位」。画面と同じ関数（`chronicleText.js`）。⚠ アプリ（`Chronicle.kt`）も同じ書き方 */
+export const rankLabel = draftRankText;
 
 /**
  * 候補の点（高い順）。`teams` は対人リーグの球団名 → 球団。
