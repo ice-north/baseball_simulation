@@ -1076,9 +1076,6 @@ small.online-gain:not(:where(.online-sp *)) {
   color: #fbbf24;
   font-size: 12px;
 }
-.online-camp-gain-more {
-  margin-top: 6px;
-}
 /* ⚠ 列が20以上ある。**横に送れるようにする**（折り返すと行が読めない） */
 .online-camp-scroll {
   overflow-x: auto;

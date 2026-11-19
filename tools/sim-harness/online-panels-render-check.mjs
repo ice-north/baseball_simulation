@@ -242,7 +242,12 @@ try {
     assert.match(html, /data-mine="true"/, '順位に自球団の印が無い');
     // ⚠ **キャンプの結果・オフの成長は出さない**
     assert.ok(!/伸び|衰え|クール/.test(html), `まとめに成長・キャンプの話が出ている: ${html.slice(0, 200)}`);
-    // 出すのは年度更新から開幕まで。シーズンに入ったら消す
+    // 出すのは年度更新から**開幕した月の終わり**まで（監査 2026-11-20 Q1。キャンプの約27時間
+    // だけだと、日曜に開かなかった人は一度も見られなかった）
+    assert.ok(
+      render(h(YearSummary, { view: { ...view, currentDate: { year: 2027, month: 4, day: 20 } } })).includes('2年目のまとめ'),
+      '開幕した月にまとめが出ない（キャンプで見逃した人が見られない）',
+    );
     assert.equal(
       render(h(YearSummary, { view: { ...view, currentDate: { year: 2027, month: 5, day: 1 } } })),
       '',
