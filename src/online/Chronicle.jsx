@@ -410,7 +410,7 @@ export default function Chronicle({ view }) {
                   <ProDrafted
                     list={view.chronicle?.proDrafted}
                     showTeam
-                    empty="まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜3人）。"
+                    empty="まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜5人。0人の年もあります）。"
                   />
                 </section>
               </div>

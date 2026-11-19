@@ -447,7 +447,7 @@ export function Results({ view, compact = false }) {
  *    昇降格のお知らせが入るとリーグ便りごと画面が落ちていた。
  */
 const NOTICE_LABELS = {
-  // リーグ全体で年0〜3人のプロ指名（`server/proDraft.mjs`）。外していた頃より前の年度の
+  // リーグ全体で年0〜5人のプロ指名（`server/proDraft.mjs`）。外していた頃より前の年度の
   // お知らせも同じ種類で残っている
   draft: 'NPBドラフト',
   tryout: 'トライアウト',

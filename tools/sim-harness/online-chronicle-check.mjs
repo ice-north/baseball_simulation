@@ -11,6 +11,7 @@ import {
 import { touchPresence } from '../../server/social.mjs';
 import { projectLeague, projectTeamInfo } from '../../server/projection.mjs';
 import { leagueRaces, CAREER_MILESTONES, SEASON_MILESTONES } from '../../server/chronicle.mjs';
+import { PRO_DRAFT_MAX } from '../../server/proDraft.mjs';
 import { standingsByLeague } from '../../src/online/pyramidLeague.js';
 
 let now = new Date('2026-10-28T00:00:00Z');
@@ -132,10 +133,14 @@ const grand = c.world.find((w) => w.kind === 'grand' && w.year === startYear);
 assert.ok(grand?.champion, '独立リーグ日本一決定戦の結果が残っていない');
 assert.ok(grand.ours, 'このリーグの代表が無い');
 console.log(`甲子園 ${koshien.champion}（${koshien.championPref}） / 日本一 ${grand.champion}（代表 ${grand.ours} ${grand.oursResult}）`);
-// プロ野球への道（年0〜3人。指名された人は名簿から外れ、球団史とリーグ便りに残る）
+// プロ野球への道（年0〜5人。指名された人は名簿から外れ、球団史とリーグ便りに残る）
+// ⚠ 上限は `PRO_DRAFT_MAX` から取る（直に書くと、上限を変えたときに取り残される）
 {
   const drafted = (c.proDrafted || []).filter((r) => r.year === startYear);
-  assert.ok(drafted.length <= 3, `プロ指名が多すぎる（${drafted.length}人）`);
+  assert.ok(
+    drafted.length <= PRO_DRAFT_MAX,
+    `プロ指名が多すぎる（${drafted.length}人 / 上限${PRO_DRAFT_MAX}人）`,
+  );
   for (const r of drafted) {
     assert.ok(r.key, 'プロ指名の記録に鍵が無い');
     assert.ok(

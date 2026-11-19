@@ -64,7 +64,19 @@ for (let seed = 1; seed <= 12; seed++) {
   }
 }
 const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
-assert.ok(mean >= 0.5 && mean <= 2.5, `年平均${mean.toFixed(2)}人（0.5〜2.5人のはず）`);
+assert.ok(mean >= 0.5 && mean <= 2.0, `年平均${mean.toFixed(2)}人（0.5〜2.0人のはず）`);
+// ⚠ **0名の年が必ずある**（いしだ 2026-11-19「最大5名程度。ただし現実的には厳しく、
+//    0名の年もあるように」）。上限を上げるだけだと当たり年が増えて0名が減るので、
+//    確率の基準と傾き（`PRO_DRAFT_BASE_P` / `PRO_DRAFT_SLOPE`）で釣り合わせてある。
+//    実測（40リーグ×3年）: 0人36% / 1人33% / 2人21% / 3人7% / 4人2% / 5人3%
+{
+  const zero = counts.filter((n) => n === 0).length / counts.length;
+  assert.ok(zero >= 0.15, `0名の年が少なすぎる: ${(zero * 100).toFixed(0)}%`);
+  assert.ok(zero <= 0.6, `0名の年ばかり: ${(zero * 100).toFixed(0)}%`);
+  // 当たり年（4人以上）はたまに。毎年ではない
+  const many = counts.filter((n) => n >= 4).length / counts.length;
+  assert.ok(many <= 0.15, `4人以上の年が多すぎる: ${(many * 100).toFixed(0)}%`);
+}
 
 // ②' 指名順位: **中位から育成指名が大半**（いしだ 2026-11-18「ドラフト順位が甘すぎます。
 //    独立リーガーのドラフトは中位から育成指名が大半だと思います」）。
