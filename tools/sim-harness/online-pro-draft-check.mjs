@@ -23,7 +23,7 @@ import {
 import { teamChronicle, teamMoves, chronicleView } from '../../server/chronicle.mjs';
 import { draftRankText } from '../../src/online/chronicleText.js';
 import { FULL_SEASON_EXPERIENCE } from '../../src/season/campTraining.js';
-import { processSeasonEnd } from '../../src/season/yearProgressionSystem.js';
+import { processSeasonEnd, checkNPBDraftEligibility } from '../../src/season/yearProgressionSystem.js';
 import { qualifiedOuts } from '../../src/season/seasonManager.js';
 
 const quiet = (fn) => {
@@ -53,11 +53,53 @@ assert.equal(isProLevel(PRO_DRAFT_THRESHOLD - 1), false);
 assert.equal(isProLevel(PRO_DRAFT_THRESHOLD), true);
 assert.equal(isProLevel(PRO_DRAFT_THRESHOLD + 1000), true);
 
+// ①' **若さと将来性も材料**（いしだ 2026-11-19「若さや将来性も判断の材料になります。
+//    凄い30代では指名されません」）。①の線は**点**の線で、点（`checkNPBDraftEligibility`）には
+//    年齢と成長力が入っている。実測（能力を振り切り・成長力1.3の野手）:
+//    18歳434 / 22歳388 / 25歳342 / 29歳305 / **30歳0**。成長力は0.6→1.4で+20点。
+{
+  const league = make(11);
+  const teams = teamsOf(league);
+  const name = league.season.settings.teamNames[0];
+  const base = teams[name].players.find((p) => p.position !== 'pitcher');
+  /** 能力を振り切った選手（年齢と成長力だけ変える） */
+  const star = (age, gp = 1.3) => {
+    const p = structuredClone(base);
+    Object.assign(p, { age, growthPotential: gp, fame: 0 });
+    Object.assign(p.batting, { meet: 95, power: 95, eye: 95 });
+    Object.assign(p.physical, { speed: 95, arm: 95 });
+    p.fielding.defense = 95;
+    return p;
+  };
+  const scoreOf = (p) => checkNPBDraftEligibility(p).totalScore;
+  // ⚠ **凄い30代に点は付かない**。能力だけで越えられる形にしてはいけない
+  for (const age of [30, 33, 38]) {
+    assert.equal(scoreOf(star(age)), 0, `能力を振り切った${age}歳に点が付いている`);
+    assert.equal(isProLevel(scoreOf(star(age))), false, `凄い${age}歳がプロに達している`);
+  }
+  // 同じ能力・同じ成長力なら、若いほど点が高い
+  const byAge = [18, 22, 25, 29].map((a) => scoreOf(star(a)));
+  for (let i = 1; i < byAge.length; i++)
+    assert.ok(byAge[i] < byAge[i - 1], `若さが効いていない: ${byAge.map(Math.round).join(' → ')}`);
+  // 将来性（成長力）も効く
+  assert.ok(scoreOf(star(19, 1.4)) > scoreOf(star(19, 0.8)), '将来性（成長力）が効いていない');
+  // 門は候補を作るところ（`proDraftCandidates`）でも閉じている（点の付け方を変えても漏れない）
+  Object.assign(base, star(32), { id: base.id, name: base.name });
+  const totalGames = league.season.settings.gamesPerSeason || league.season.schedule.length;
+  const cand = quiet(() => proDraftCandidates(teams, new Set(), { totalGames }));
+  assert.ok(!cand.some((c) => c.player.id === base.id), '凄い32歳が候補に入っている');
+  assert.ok(
+    !quiet(() => chooseProDraft(league, teams)).some((p) => p.player.id === base.id),
+    '凄い32歳が指名された',
+  );
+}
+
 // ② 人数と、**達した選手を飛ばさないこと**（初期セットの名簿、成績の加点なし）。
 //    ⚠ 1リーグ1回だけ測る。確率を外したので、同じ名簿なら年を進めても同じ結果になり、
 //      同じリーグを3年ぶん数えても標本は増えない
 const counts = [];
 const ranks = [];
+const ages = [];
 for (let seed = 1; seed <= 30; seed++) {
   const league = make(seed);
   const teams = teamsOf(league);
@@ -65,6 +107,7 @@ for (let seed = 1; seed <= 30; seed++) {
   assert.ok(picks.length <= PRO_DRAFT_MAX, `${picks.length}人は多すぎる`);
   for (const p of picks) assert.ok((p.player.age || 0) < 30, '30歳以上は指名しない');
   counts.push(picks.length);
+  for (const p of picks) ages.push(p.player.age || 0);
   for (const p of picks) ranks.push({ round: p.round, ikusei: !!p.ikusei });
   // ⚠ **達したのに抜かれない選手がいてはいけない**（枠が埋まったときだけ残る）。
   //    確率で決めていた頃は、越えていても9割が残っていた
@@ -97,6 +140,13 @@ assert.ok(mean >= 0.5 && mean <= 2.0, `年平均${mean.toFixed(2)}人（0.5〜2.
   // 当たり年（4人以上）はたまに。毎年ではない
   const many = counts.filter((n) => n >= 4).length / counts.length;
   assert.ok(many <= 0.15, `4人以上の年が多すぎる: ${(many * 100).toFixed(0)}%`);
+}
+// ②'' 抜かれるのは**若手**（いしだ 2026-11-19「若さや将来性も判断の材料」）。
+//    実測（30リーグ・31人）: 19歳71% / 20歳13% / 21歳10% / 22歳6%。24歳以上は0人。
+{
+  const share = (f) => ages.filter(f).length / ages.length;
+  assert.ok(share((a) => a <= 21) >= 0.6, `若手（21歳以下）の指名が少なすぎる: ${(share((a) => a <= 21) * 100).toFixed(0)}%`);
+  assert.ok(share((a) => a >= 24) <= 0.2, `24歳以上の指名が多すぎる: ${(share((a) => a >= 24) * 100).toFixed(0)}%`);
 }
 
 // ②' 指名順位: **中位から育成指名が大半**（いしだ 2026-11-18「ドラフト順位が甘すぎます。
