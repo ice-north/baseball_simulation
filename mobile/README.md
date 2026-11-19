@@ -99,7 +99,7 @@
 ## アプリの版（最新かどうか）
 
 - アプリは作ったときに「最後に `mobile/` を変えたコミット」とその時刻を持つ（`androidApp/build.gradle.kts` の `APP_COMMIT`）。CI は履歴を全部取って作る（`fetch-depth: 0`）。
-- 起動時と引っ張って更新したとき（30分に1回まで）、GitHub の公開 API で ice-north の main の同じもの（`commits?path=mobile`）を読み、ホームの紙面に記事で出す（`shared/.../AppUpdate.kt`）。同じなら「最新版」、main の方が新しければ紙面の先頭に「新しいアプリが出ています」（押すと配布ページ）、ブランチで作った先の版なら「試作版」。
+- 起動時と引っ張って更新したとき（30分に1回まで）、GitHub の公開 API で ice-north の main の同じもの（`commits?path=mobile`）を読み、ホームの紙面に記事で出す（`shared/.../AppUpdate.kt`）。同じ（最新版）なら何も書かない。main の方が新しければ紙面の先頭に「新しいアプリが出ています」（押すと配布ページ）、ブランチで作った先の版なら「試作版」。
 - ⚠ `mobile/` の中なら README や tools だけの変更でも「新しい版」になる。
 
 ## 署名

@@ -55,14 +55,15 @@ fun appFreshness(build: AppBuild, latest: LatestApp): AppFreshness? = when {
 }
 
 /**
- * 紙面の記事。確かめられなかったとき（通信の失敗・手元で作った版）は null（記事を出さない）。
- * @return 記事と、紙面のいちばん上に置くか（古いときだけ上。最新・試作版は紙面の終わり）
+ * 紙面の記事。確かめられなかったとき（通信の失敗・手元で作った版）と、最新版のときは null（記事を出さない。
+ * 最新なら何も書かなくてよい＝いしだの指定 2026-11-20）。
+ * @return 記事と、紙面のいちばん上に置くか（古いときだけ上。試作版は紙面の終わり）
  */
 fun appVersionArticle(build: AppBuild, latest: LatestApp?): Pair<FrontPage.Article, Boolean>? {
     latest ?: return null
     val mine = "${jstDate(build.time)}の版"
     return when (appFreshness(build, latest) ?: return null) {
-        AppFreshness.Latest -> FrontPage.Article("アプリ", "このアプリは最新版", "入っているのは${mine}。配布中の最新と同じ。") to false
+        AppFreshness.Latest -> null
         AppFreshness.Outdated -> FrontPage.Article(
             "アプリ更新",
             "新しいアプリが出ています",
