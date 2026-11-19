@@ -1,12 +1,12 @@
 {
   "unit": "KB",
-  "note": "online-size-budget-check.mjs の上限。--update で書き直す。otherParts は、終わった年の試合を別の部分へ分ける変更（1年ぶん約22MB）が入っても落ちない幅にしてある。入ったら --update で records と合わせて締め直す",
+  "note": "online-size-budget-check.mjs の上限。--update で書き直す（いまの大きさ×1.2）。2026-11-20 の監査で、芯から使わない年齢変化の一覧と試合中の記録を外して芯が 7.8MB→1.5MB になったので、core・records・storedGzip・otherParts を締め直した",
   "budget": {
-    "core": 9380,
-    "records": 32290,
+    "core": 1830,
+    "records": 6280,
     "world": 65670,
-    "otherParts": 30000,
-    "storedGzip": 9690,
+    "otherParts": 26150,
+    "storedGzip": 9090,
     "view": 460,
     "viewGzip": 60,
     "teamInfo": 330
