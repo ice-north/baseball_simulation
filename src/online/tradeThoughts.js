@@ -4,6 +4,7 @@ import {
   rosterTops,
   squadStrength,
   needOfDrop,
+  playerDrops,
   NEED_LIMIT,
 } from './tradeSearch.js';
 import { PLAYER_GROUPS } from './playerColumns.js';
@@ -33,7 +34,7 @@ import { PLAYER_GROUPS } from './playerColumns.js';
 //    初期セットの名簿は外野が4〜6人で目標7人なので、12球団すべてが
 //    「外野が足りない」になり、球団ごとの事情が消える（実測 48/48）。
 //    リーグの中の順位で見れば球団ごとに違う（＝CPUの判断と同じ見方）。
-// ⚠ 落差を測るのに名簿の人数ぶん `squadStrength` を呼ぶ（25人なら26回）。
+// ⚠ 落差（`playerDrops`。サーバーの `needOf` と同じ関数）は名簿の人数ぶん `squadStrength` を呼ぶ（25人なら26回）。
 //    **相手1球団だけ**に使うこと（12球団ぶんを毎回数えると画面が重い）。
 // ============================================================
 
@@ -83,13 +84,7 @@ export function teamThoughts(roster, others = {}) {
     };
   }).sort((a, b) => b.rank - a.rank || a.score - b.score);
   // 余り: 抜けても持ち場の力の合計がほとんど落ちない選手
-  const full = squadStrength(all);
-  const dropOf = new Map(
-    all.map((p) => [
-      p.id,
-      Math.max(0, full - squadStrength(all.filter((q) => q.id !== p.id))),
-    ]),
-  );
+  const { full, drops: dropOf } = playerDrops(all);
   const spares = PLAYER_GROUPS.map(({ id, label }) => {
     const players = all.filter((p) => rosterGroup(p.position) === id);
     const drops = players.map((p) => dropOf.get(p.id) || 0).sort((a, b) => b - a);
@@ -122,9 +117,9 @@ export function thoughtsText(thoughts, name) {
   const head = `${name}の戦力は${teams}球団中${strengthRank}位。`;
   const want = weak.length
     ? `${weak.map((w) => w.slot.label).join('・')}が弱く（${weak[0].slot.label}は${weak[0].rank}位）、ここを埋める選手をもらうと戦力が上がるので、同じ値段でも交換が通りやすい。`
-    : '弱い持ち場は無く、どの持ち場をもらっても戦力はあまり上がらない。';
+    : 'リーグの下位3分の1に入る持ち場は無い（もらう選手が今の一番手より強ければ、どの持ち場でも戦力は上がる）。';
   const rich = spares[0]?.spare
-    ? `${spares[0].label}は${spares[0].spare}人が「抜けても穴が空かない」ので出しやすい。`
+    ? `${spares[0].label}は${spares[0].spare}人が「1人だけなら抜けても穴が空かない」ので出しやすい（何人かまとめて求めると、まとめて空く穴の分の上乗せが乗ることがある）。`
     : '抜けても穴が空かない選手は居ないので、どの選手も出し渋る。';
   return `${head}${want}${rich}`;
 }

@@ -533,7 +533,6 @@
 .online-trade-wanted button + button {
   margin-left: 4px;
 }
-/* CPUの見込み（3段のメーター）。横軸は「出す値段 ÷ もらう値段」 */
 /* 相手（CPU）の考えていること（`ThoughtsPanel`）。見込みメーターと同じ枠の作り */
 .online-trade-thoughts {
   margin-top: 10px;
@@ -1076,9 +1075,6 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-camp-gain-event {
   color: #fbbf24;
   font-size: 12px;
-}
-.online-camp-gain-more {
-  margin-top: 6px;
 }
 /* ⚠ 列が20以上ある。**横に送れるようにする**（折り返すと行が読めない） */
 .online-camp-scroll {

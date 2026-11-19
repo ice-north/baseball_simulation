@@ -488,6 +488,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   const pickContext = starterContext(l, member.teamName);
   // 球団ごとのレギュラーシーズンの残り試合（ペースとマジックで共用。日程を2回なめない）
   const left = remainingGames(l.season.schedule);
+  // 球団史（リーグ全体の最近のもの）。表彰（`honors`）は「その年のまとめ」でも使い回す
+  const chronicle = chronicleView(l);
   return {
     // ⚠ **このビューを作ったコードの版**。`LeagueService.view` がここを見て、
     //    古い形のリーグを表示させない。ビューは保存済みのものがそのまま
@@ -591,7 +593,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // 優勝・昇格・残留のマジックと決定（部ごと）。手続きの時期も決着は残す
     races: leagueRaces(l, left),
     // 節目の記録・引退・裏の大会（リーグ全体の最近のもの）
-    chronicle: chronicleView(l),
+    chronicle,
     // 今季総括号（年度更新のあと〜開幕前だけ。文はサーバーが作る。`seasonReview.mjs`）
     seasonReview: seasonReview(l, (name) => teamLabels[name]?.short || name),
     // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。
@@ -764,7 +766,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     history: l.history,
     // その年のまとめ（年度更新の直後に出す。順位・入退団・主なトピックだけ）。
     // ⚠ 保存は増やさない（年度の記録・取引の記録・球団史から毎回組む）
-    yearSummary: yearSummaryFor(l, member.teamName, labelOf),
+    // ⚠ 出す時期（年度更新〜開幕した月）の外では null（`isYearSummaryTime`）
+    yearSummary: yearSummaryFor(l, member.teamName, labelOf, chronicle.honors),
     // 年齢構成と3年後の見込み（自球団だけ。成長力を使うので他球団には作らない。`ageOutlook.js`）
     // ⚠ 途中参加で初期メンバーを待っている間（`packSeed`）は出さない。名簿はまだ CPU のときの
     //    選手で、次のキャンプで丸ごと入れ替わるので、その見込みは自分の球団の話にならない
@@ -818,7 +821,7 @@ function tradePlayers(league, teamName, ids) {
 
 // 参加者向けに、確定済み名簿・今季成績・能力と、今の起用（打順・守備・ローテ・救援の役割）を公開する。
 // 方針・作戦、次回先発、契約、未提出案や成長の内部値を含めない。
-export function projectTeamInfo(bundle, userId, teamName) {
+export function projectTeamInfo(bundle, userId, teamName, context = null) {
   const l = bundle.league;
   requireOnline(
     l?.members.some((m) => m.userId === userId),
@@ -830,7 +833,8 @@ export function projectTeamInfo(bundle, userId, teamName) {
     '球団が見つかりません',
     404,
   );
-  const statistics = statisticsContext(l);
+  // ⚠ 全球団の索引（`buildTeamsIndex`）は1つの文脈を使い回す（球団ごとに全試合をなめ直していた）
+  const statistics = context || statisticsContext(l);
   // いま名簿にいる人の記録の鍵 → 選手 id（歴代記録の「現役」の印と、名前を押して開く選手）
   const activeKeys = new Map(
     l.game.teams[teamName].players

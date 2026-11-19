@@ -2247,6 +2247,8 @@ function resolvePhase(league, now) {
     for (const key of Object.keys(TEAMS_DATA)) delete TEAMS_DATA[key];
     Object.assign(TEAMS_DATA, result.updatedTeams);
     league.season = result.newSeasonData;
+    // 年齢の変化の一覧は一人用のキャンプ画面向け（オンラインは使わない。6MB ある）
+    delete league.season.ageReports;
     WORLD_DATA.year = league.season.year;
     assignTeamControllers(
       TEAMS_DATA,
@@ -2463,14 +2465,24 @@ export function updateStaff(league, userId, payload) {
  *    同じ予備経路に入るだけなので、`ONLINE_SCHEMA` は上げない。
  */
 export function slimStoredResults(season) {
+  // ⚠ 試合中の記録（`decisionLog`・`pitcherAppearances`。1試合で約1KB）も外す
+  //    （監査 2026-11-20。1年目8月の芯で圧縮後 456KB → 276KB）。勝敗投手は試合の直後に
+  //    `decisions` へ確定していて（`autoSimulation.js` の `decisionsFromResult`）、
+  //    保存後に読むところは無い（オンラインの画面・アプリ・サーバーとも）
+  const DROP = ['homeTeam', 'awayTeam', 'decisionLog', 'pitcherAppearances'];
   const slim = (result) => {
-    if (!result || !('homeTeam' in result || 'awayTeam' in result))
-      return result;
-    const { homeTeam, awayTeam, ...rest } = result;
+    if (!result || !DROP.some((key) => key in result)) return result;
+    const rest = { ...result };
+    for (const key of DROP) delete rest[key];
     return rest;
   };
   for (const game of season.results || []) game.result = slim(game.result);
   for (const game of season.schedule || []) game.result = slim(game.result);
+  // ⚠ 年齢による能力の変化の一覧（世界の全選手・約1.6万人ぶん）は一人用のキャンプ画面だけが
+  //    読む。オンラインは `offseasonChanges` で別に作るので要らない。2年目の芯 9.4MB のうち
+  //    6.2MB がこれだった（監査 2026-11-20）。年度更新でも消すが、もう保存に入っている
+  //    リーグのぶんもここ（毎日の進行）で消える。中身を軽くするだけなので版は上げない
+  delete season.ageReports;
 }
 
 /**

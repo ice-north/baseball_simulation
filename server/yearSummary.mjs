@@ -1,6 +1,7 @@
 import { teamMoves } from './chronicle.mjs';
 import { honorsView } from './seasonAwards.mjs';
 import { PYRAMID_LEAGUES, compareLeagueStanding } from '../src/online/pyramidLeague.js';
+import { isYearSummaryTime } from '../src/online/shared.js';
 
 // ============================================================
 // その年のまとめ（年度更新の直後に出す）。
@@ -26,10 +27,13 @@ const leagueNameOf = (id) =>
  * その年のまとめ。年度の記録がまだ無ければ null（1年目のシーズン前）。
  * @param labelOf 球団名 → 表示名
  */
-export function yearSummaryFor(league, teamName, labelOf = (n) => n) {
+export function yearSummaryFor(league, teamName, labelOf = (n) => n, honors = undefined) {
   const entry = league?.history?.at?.(-1);
   if (!entry || !teamName) return null;
   const year = entry.year;
+  // ⚠ **出す時期の外では組まない・載せない**（画面は時期の外では出さないので、
+  //    1年の大半は毎回の応答に使わないまとめが乗っていた）
+  if (!isYearSummaryTime(year, league.season?.year, league.season?.currentDate)) return null;
   const leagues = entry.leagues || {};
   const myLeague = leagues[teamName] ?? null;
   // ⚠ 順位は**自分の部だけ**（1部と2部を混ぜると「10位」のような順位になる）
@@ -59,7 +63,9 @@ export function yearSummaryFor(league, teamName, labelOf = (n) => n) {
       : null;
 
   // --- 入退団（その年のぶんだけ）。材料は球団史と同じ `teamMoves`
-  const moves = teamMoves(league, teamName).filter((m) => m.year === year);
+  // ⚠ 件数で切らずに年で絞る（`teamMoves` の既定の80件で切ると、取引の多い球団で
+  //    その年の分が欠けうる）
+  const moves = teamMoves(league, teamName, Infinity).filter((m) => m.year === year);
   const joined = moves.filter((m) => m.side === 'in');
   const left = moves.filter((m) => m.side === 'out');
 
@@ -75,10 +81,12 @@ export function yearSummaryFor(league, teamName, labelOf = (n) => n) {
     topics.push(`${leagueNameOf(myLeague) || 'リーグ'}1位`);
   if (move) topics.push(`${move.to}へ${move.up ? '昇格' : '降格'}`);
   // 自球団の選手が取った賞（タイトル・MVP・新人王・ベストナイン・最優秀バッテリー）
-  const honors = honorsView(
-    league,
-    Object.fromEntries(PYRAMID_LEAGUES.map((l) => [l.id, l.name])),
-  );
+  // ⚠ 同じ応答の球団史（`chronicleView`）で組んだものがあれば使い回す
+  if (honors === undefined)
+    honors = honorsView(
+      league,
+      Object.fromEntries(PYRAMID_LEAGUES.map((l) => [l.id, l.name])),
+    );
   if (honors?.year === year) {
     for (const t of honors.titles || [])
       if (t.team === teamName) topics.push(`${t.name}が${t.label}${t.line ? `（${t.line}）` : ''}`);

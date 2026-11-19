@@ -1,6 +1,6 @@
 import React from 'react';
 import { POS } from './api.js';
-import { SEASON_START_MONTH } from './shared.js';
+import { isYearSummaryTime } from './shared.js';
 
 // ============================================================
 // その年のまとめ（年度更新の直後に出す）。
@@ -38,10 +38,10 @@ function MoveRow({ row }) {
 export default function YearSummary({ view }) {
   const s = view?.yearSummary;
   if (!s) return null;
-  // ⚠ 出すのは**年度更新から開幕まで**。終わった年のまとめなので、シーズンに入ったら消す
+  // ⚠ 出すのは**年度更新から開幕した月の終わりまで**（`isYearSummaryTime`。サーバーも同じ
+  //    関数で時期の外は載せない）。終わった年のまとめなので、その先は消す
   //    （次の11月にまた出てくると、今年の話に見える）。古い年の分は球団史・記録で見る
-  if (s.year !== view.year - 1) return null;
-  if ((view.currentDate?.month || 0) >= SEASON_START_MONTH) return null;
+  if (!isYearSummaryTime(s.year, view.year, view.currentDate)) return null;
   return (
     <section className="online-card online-year-summary" aria-label="その年のまとめ">
       <h2>

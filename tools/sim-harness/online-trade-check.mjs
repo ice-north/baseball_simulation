@@ -1073,7 +1073,8 @@ try {
   //    外野が足りない、投手が余ってるなど」。画面は `ThoughtsPanel`、式は `tradeThoughts.js`）。
   // ⚠ 文の飾りにしないこと。出す3つはCPUが実際に使っている値と同じでなければならない:
   //    「出しやすい」＝ 上乗せが等倍（`needOf` が1）／「出し渋る」＝ 上乗せが乗る／
-  //    「弱い持ち場」＝ そこを埋めると球団の力（`squadStrength`）がいちばん伸びる
+  //    「弱い持ち場」＝ 持ち場ごとの一番手の力（`rosterTops`）がリーグの下から3分の1
+  //    （そこを埋めると自分の伸びが大きくなり、戦力の開き `tradeStrengthGap` で通りやすくなる）
   {
     for (const team of names.slice(0, 4)) {
       const players = teams[team];
