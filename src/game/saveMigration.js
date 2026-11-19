@@ -28,10 +28,13 @@ export function compareVersions(a, b) {
 
 import { createSeededRandom, hashSeed } from './rng.js';
 import { tryoutDraftPlayers } from '../season/tryoutDraftState.js';
+import { clampOverCap } from '../utils/constants.js';
 
 // 1選手に必須フィールドの既定値をバックフィルする（破壊しない・欠損のみ補う）。
 export function normalizePlayer(p) {
   if (!p || typeof p !== 'object') return p;
+  // ⚠ 上限が無かった頃の保存は、能力・疲労が上限を超えていることがある（体力118・疲労2000超）
+  clampOverCap(p);
   const playerKey = p.id ?? `${p.name || ''}:${p.age || ''}:${p.position || ''}`;
   const fieldRandom = field => createSeededRandom(hashSeed(`${playerKey}:${field}`));
   const norm = (field, mu, sigma) => {

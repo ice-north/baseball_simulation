@@ -33,6 +33,7 @@ import PackSelect from '../../src/online/PackSelect.jsx';
 import CampPlanner, { CompletedCamp, subTargetChoices } from '../../src/online/CampPlanner.jsx';
 import { setTeamLabels } from '../../src/online/gameText.js';
 import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
+import YearSummary from '../../src/online/YearSummary.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
 import { Homeruns } from '../../src/online/LeagueBoard.jsx';
@@ -61,6 +62,7 @@ export {
   subTargetChoices,
   AbilityGrade,
   Homeruns,
+  YearSummary,
 };
 `;
 const result = await build({
@@ -90,6 +92,7 @@ try {
     setTeamLabels,
     PackSelect,
     CompletedCamp,
+    YearSummary,
     CampPlanner,
     subTargetChoices,
     DesktopTactics,
@@ -122,6 +125,16 @@ try {
     },
   } }));
   assert.match(completed, /2年目のキャンプ結果/, '手続き終了後の成果を表示できない');
+  // ⚠ **年が替わったら出さない**（年度更新のあとは「その年のまとめ」だけ。いしだ 2026-11-18）
+  assert.equal(
+    render(h(CompletedCamp, { view: {
+      phase: null, year: 3,
+      roster: [{ id: 1, name: '練習した選手', position: 'short' }],
+      lastCamp: { year: 2, rounds: 4, gains: {}, events: {}, last: { round: 4, gains: {}, events: {} } },
+    } })),
+    '',
+    '年が替わったのに前の年のキャンプの結果が出ている',
+  );
   // ⚠ 先方指摘「キャンプ結果の表示をキャンプ直後に」「各選手1行にし、チームメイトと比べられるように」。
   //    ホームにはその年のキャンプ結果を出し（閉じるまで）、成果は1人1行の表（項目ごとの列）
   {
@@ -197,6 +210,55 @@ try {
   assert.match(completed, /精神\+1/, '通算の精神が成果に出ない');
   assert.match(completed, /新球種を習得/, '通算の出来事が成果に出ない');
   assert.equal(render(h(CompletedCamp, { view: { roster: [] } })), '', '記録の無い過去キャンプを表示した');
+
+  // --- その年のまとめ（年度更新〜開幕の間だけ。`YearSummary.jsx`）-----------
+  // ⚠ いしだ 2026-11-18「キャンプの結果やオフの成長は要りません。その年の順位、
+  //    入退団の選手、主なトピックに止めて下さい」
+  {
+    const summary = {
+      year: 2,
+      league: '2部',
+      rank: 1,
+      record: { wins: 70, losses: 50, draws: 0 },
+      standings: [
+        { rank: 1, team: '三陸', label: '三陸アトラス', wins: 70, losses: 50, draws: 0, mine: true },
+        { rank: 2, team: '庄内', label: '庄内ミラージュ', wins: 60, losses: 60, draws: 0 },
+      ],
+      champion: '三陸アトラス',
+      move: { to: '1部', up: true },
+      joined: [{ side: 'in', how: '入団', name: '新人一郎', position: 'pitcher', other: null, year: 2 }],
+      left: [{ side: 'out', how: 'プロ入り', name: 'プロ八郎', position: 'center', other: '中日', year: 2 }],
+      topics: ['プレーオフ優勝', '1部へ昇格'],
+    };
+    // ⚠ 年度更新のあとは**1月1日**から（`advanceToNextYear` が日付を戻す）。開幕は4月
+    const view = { year: 3, currentDate: { year: 2027, month: 1, day: 1 }, yearSummary: summary };
+    const html = render(h(YearSummary, { view }));
+    for (const text of ['2年目のまとめ', '順位', '入退団', '主なトピック', '三陸アトラス', '新人一郎', 'プロ八郎', 'プレーオフ優勝'])
+      assert.ok(html.includes(text), `まとめに「${text}」が出ない`);
+    // ⚠ 自球団の行に印（どこに居たかが一目で分かるように）
+    assert.match(html, /data-mine="true"/, '順位に自球団の印が無い');
+    // ⚠ **キャンプの結果・オフの成長は出さない**
+    assert.ok(!/伸び|衰え|クール/.test(html), `まとめに成長・キャンプの話が出ている: ${html.slice(0, 200)}`);
+    // 出すのは年度更新から開幕まで。シーズンに入ったら消す
+    assert.equal(
+      render(h(YearSummary, { view: { ...view, currentDate: { year: 2027, month: 5, day: 1 } } })),
+      '',
+      'シーズン中もまとめが出ている',
+    );
+    // ⚠ 次の年の11月（ストーブリーグ）に、去年のまとめが戻ってこないこと
+    assert.equal(
+      render(h(YearSummary, { view: { ...view, currentDate: { year: 2027, month: 11, day: 20 } } })),
+      '',
+      '次のストーブリーグで去年のまとめが出ている',
+    );
+    // 終わった年のものだけ（古い年のまとめは球団史で見る）
+    assert.equal(
+      render(h(YearSummary, { view: { ...view, year: 5 } })),
+      '',
+      '古い年のまとめが出ている',
+    );
+    assert.equal(render(h(YearSummary, { view: { year: 3 } })), '', 'まとめが無いのに枠だけ出ている');
+  }
 
   // --- トライアウトの注意は文を句点で区切る（u1 低20） ----------------------
   // ⚠ 以前は行頭の全角空白で区切っていて、JSX がそれを落とすので

@@ -51,8 +51,31 @@ const NPB_TEAMS = [
 const unit = (league, tag) =>
   hashSeed(`${league.seed ?? 0}:${league.season.year}:proDraft:${tag}`) / 4294967296;
 
-/** 何位で指名されたか（点が高いほど上位） */
-const roundOf = (margin) => (margin >= 25 ? 1 : margin >= 15 ? 2 : margin >= 8 ? 3 : margin >= 3 ? 4 : 5);
+/**
+ * 何位で指名されたか（点が高いほど上位。`ikusei` は育成指名）。
+ *
+ * ⚠ **独立リーグからの指名は中位〜育成が大半**（いしだ 2026-11-18「ドラフト順位が
+ *    甘すぎます。独立リーガーのドラフトは中位から育成指名が大半だと思います」）。
+ *    以前は `margin >= 25` で1位だったので、実測（40リーグ×3年・161人）で
+ *    **1位32%・2位24%・3位24%** と上位指名ばかりだった。
+ * ⚠ 線は**実測のしきい値超え**（中央16・75%点30・最大105）に合わせてある。
+ *    `PRO_DRAFT_THRESHOLD` や能力の出方を変えたら測り直すこと（`online-pro-draft-check`）。
+ */
+const DRAFT_RANKS = [
+  { min: 90, round: 1 },
+  { min: 70, round: 2 },
+  { min: 52, round: 3 },
+  { min: 38, round: 4 },
+  { min: 27, round: 5 },
+  { min: 18, round: 6 },
+  { min: 11, round: 7 },
+  // ここから下は育成指名（支配下ではない契約）
+  { min: 5, round: 1, ikusei: true },
+  { min: -Infinity, round: 2, ikusei: true },
+];
+export const rankOf = (margin) => DRAFT_RANKS.find((r) => margin >= r.min);
+/** 「4位」「育成2位」。⚠ 画面（`chronicleText.js`）・アプリ（`Chronicle.kt`）と同じ書き方 */
+export const rankLabel = (r) => `${r?.ikusei ? '育成' : ''}${r?.round ?? ''}位`;
 
 /**
  * 候補の点（高い順）。`teams` は対人リーグの球団名 → 球団。
@@ -97,7 +120,8 @@ export function chooseProDraft(league, teams, skip = new Set()) {
     if (p <= 0) break;
     if (unit(league, `pick:${c.player.id}`) >= p) continue;
     const npbTeam = NPB_TEAMS[Math.floor(unit(league, `npb:${c.player.id}`) * NPB_TEAMS.length)];
-    picks.push({ ...c, round: roundOf(c.score - PRO_DRAFT_THRESHOLD), npbTeam });
+    const rank = rankOf(c.score - PRO_DRAFT_THRESHOLD);
+    picks.push({ ...c, round: rank.round, ikusei: !!rank.ikusei, npbTeam });
   }
   return picks;
 }
@@ -137,6 +161,8 @@ export function applyProDraft(league, teams, picks, { remove, gamesPerSeason = 1
       age: p.age ?? null,
       npbTeam: pick.npbTeam,
       round: pick.round,
+      // ⚠ 育成指名（支配下ではない契約）。画面とアプリは「育成2位」と出す
+      ...(pick.ikusei ? { ikusei: true } : {}),
       reason: reasonOf(pick),
     });
     remove(pick.teamName, p);
@@ -157,7 +183,7 @@ export function applyProDraft(league, teams, picks, { remove, gamesPerSeason = 1
     league.notices.unshift({
       type: 'draft',
       year,
-      picks: rows.map((r) => ({ round: `${r.round}位`, name: r.name, team: r.team, npbTeam: r.npbTeam })),
+      picks: rows.map((r) => ({ round: rankLabel(r), name: r.name, team: r.team, npbTeam: r.npbTeam })),
     });
   return rows;
 }

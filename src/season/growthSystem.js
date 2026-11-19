@@ -876,11 +876,13 @@ export function applyAgeCurveChanges(allTeams, { online = null } = {}) {
             ? Math.max(1, Math.min(Math.max(statCap, currentValue), currentValue + change))
             : Math.max(1, currentValue + change);
 
+          // ⚠ 上限で止まった分は報告に載せない（体力98に+3で99なら +1。99→99 の行は出さない）。
+          //    キャンプの成長レポートは `change` を「うち年齢による変化」としてそのまま出す
           if (change !== 0) {
             updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
-            changes.push({
+            if (newValue !== currentValue) changes.push({
               stat, statName: getStatName(stat),
-              before: currentValue, after: newValue, change
+              before: currentValue, after: newValue, change: newValue - currentValue
             });
 
             // 球速⇔肩力の連動

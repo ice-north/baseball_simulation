@@ -809,6 +809,79 @@
   font-size: 13px;
   color: #cbd5e1;
 }
+/* --- その年のまとめ（`YearSummary.jsx`。年度更新〜開幕の間だけ） ------------
+   ⚠ いしだ 2026-11-18「キャンプの結果やオフの成長は要りません。その年の順位、
+      入退団の選手、主なトピックに止めて下さい」。3つを**横に並べて1画面**に収める
+      （縦に積むと、キャンプの下でスクロールしないと読めない）。 */
+.online-year-summary h2 small {
+  margin-left: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #cbd5e1;
+}
+.online-year-summary h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.online-year-summary h3 small {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #cbd5e1;
+}
+.online-year-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .online-year-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.online-year-standings {
+  width: 100%;
+  font-size: 13px;
+}
+/* 自球団の行（どこに居たかが一目で分かるように） */
+.online-year-standings tr[data-mine] {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.online-year-moves,
+.online-year-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.online-year-moves li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid #ffffff14;
+}
+.online-year-topics li {
+  padding: 3px 0;
+  border-bottom: 1px solid #ffffff14;
+}
+/* 入団・トレードは色を付け、退団・引退・プロ入りは落ち着いた色（向きが一目で分かる） */
+.online-year-move-how {
+  flex: 0 0 auto;
+  min-width: 4.5em;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+.online-year-move-how[data-side='in'] {
+  color: var(--accent, #67e8f9);
+}
+.online-year-move-name small {
+  margin-left: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+}
 .online-camp-gain-list {
   list-style: none;
   margin: 0;

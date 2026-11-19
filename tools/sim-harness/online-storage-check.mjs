@@ -4,6 +4,7 @@ import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
 import { SupabaseStore } from '../../server/storage/supabaseStore.mjs';
 import { createHandler } from '../../server/http.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
+import { createInvite } from '../../server/invites.mjs';
 import { Readable } from 'node:stream';
 import { ONLINE_SCHEMA, ONLINE_ENGINE_VERSION } from '../../src/online/shared.js';
 let row = {
@@ -330,6 +331,21 @@ const archived = row.views._records;
 assert.ok(Number.isInteger(row.views._meta?.revision) && 'status' in row.views._meta, '保存にリーグ全体の進行情報（_meta）が無い');
 // 直せる版かどうかも載せる（`isDue` が直せない版で起こさないため）
 assert.equal(typeof row.views._meta.migratable, 'boolean', '_meta に直せるかの印が無い');
+// ⚠ ログイン前の招待の確かめは、管理行の小さな写し（`views._invites`）だけを読む（芯は読まない）
+{
+  let made;
+  await store.transaction((bundle) => {
+    made = createInvite(bundle, new Date().toISOString());
+  });
+  const digest = row.views._invites;
+  assert.ok(Array.isArray(digest) && digest.some((i) => i.hash && i.expiresAt), '招待の写しが管理行に無い');
+  assert.ok(!JSON.stringify(digest).includes(made.token), '招待の写しに合言葉そのものが入っている');
+  const before = downloads.length;
+  const viewer = new LeagueService(store, { adminId: 'a', members: [] });
+  assert.equal((await viewer.checkInvite(made.token)).expiresAt, made.expiresAt);
+  await assert.rejects(viewer.checkInvite('z'.repeat(32)), /正しくない/);
+  assert.equal(downloads.length, before, 'ログイン前の招待の確かめで保存の芯を読んだ');
+}
 await store.transaction((bundle) => {
   bundle.sessions.a = 'archive-session';
 });

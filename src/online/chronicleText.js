@@ -31,6 +31,9 @@ export function raceText(r, short = (n) => n) {
 }
 
 /** 節目（「通算100安打に到達」） */
+/** プロ入りの指名順位（「4位」「育成2位」）。⚠ アプリ（`Chronicle.kt`）と同じ書き方 */
+export const draftRankText = (r) => `${r?.ikusei ? '育成' : ''}${r?.round ?? ''}位`;
+
 export function milestoneText(m) {
   return m.kind === 'career' ? `${m.label}に到達（このリーグで）` : `${m.label}に到達`;
 }

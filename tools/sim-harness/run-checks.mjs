@@ -41,6 +41,7 @@ const CHECKS = [
   { name: 'pool-leak-check', group: 'quick', slow: 2 },
   { name: 'base-state-check', group: 'quick', slow: 1 },
   { name: 'bunt-check', group: 'quick', slow: 1 },
+  { name: 'growth-cap-check', group: 'quick', slow: 1 },
   { name: 'doc-check', group: 'quick', slow: 1 },
   // 社会人・独立の最初の名簿に投手が4人以上いるか（投手0人で試合が壊れた）
   { name: 'corporate-roster-check', group: 'quick', slow: 1 },
@@ -60,6 +61,7 @@ const CHECKS = [
   { name: 'online-stats-view-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-lineup-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'solo-lineup-board-check', group: 'quick', slow: 1 },
+  { name: 'solo-pitching-board-check', group: 'quick', slow: 1 },
   { name: 'online-pitching-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stove-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-contract-table-check', group: 'quick', online: true, slow: 1 },
