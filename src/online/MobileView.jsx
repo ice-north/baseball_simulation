@@ -137,6 +137,8 @@ export default function MobileView(props) {
           {view.stage?.key !== 'season' && <SeasonFlow view={view} compact />}
           {/* その年のNPBドラフト（指名から年度更新まで。PC版と同じ） */}
           <ProDraftResult view={view} />
+          {/* 開幕した月のあいだの「その年のまとめ」（キャンプで見逃した人のため。PC版と同じ） */}
+          {!view.phase && <YearSummary view={view} />}
           {/* キャンプが終わった直後の結果（閉じるまで。PC版と同じ） */}
           {!view.phase && <CompletedCamp key={view.lastCamp?.year} view={view} onHome />}
           <TeamBrief view={view} />

@@ -147,7 +147,16 @@ function useLeagueRosters(view) {
   useEffect(() => {
     if (!read) return undefined;
     let cancelled = false;
-    setTeams(peekAll());
+    // ⚠ 版が変わっても、新しい版がまだ読めていない球団は前の版を持ち越す
+    //    （全部消すと、日付が進むたびに「相手の考えていること」と補強ポイントが
+    //    一瞬「読んでいます…」に戻ってちらついた）。読めた球団から新しい版に替わる
+    setTeams((old) => {
+      const fresh = peekAll();
+      const kept = Object.fromEntries(
+        names.filter((n) => old[n] && !fresh[n]).map((n) => [n, old[n]]),
+      );
+      return { ...kept, ...fresh };
+    });
     setFailed(0);
     // 3本ずつ読む（12本を一度に投げると、ほかの画面の読み込みが後ろで待たされる）
     const queue = [...names];

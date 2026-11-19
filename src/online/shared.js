@@ -107,6 +107,17 @@ export function nextProgressionAt(now) {
  * ⚠ 開幕前・シーズン後は範囲の外。`null` を返して、呼ぶ側で文面を変える。
  */
 export const SEASON_START_MONTH = 4;
+/**
+ * 「その年のまとめ」（`yearSummary`）を出す時期か。年度更新（11/30）から**開幕した月の終わり**まで。
+ * ⚠ キャンプが終わると日付は 4/1 へ飛ぶ（1〜3月は経過しない）ので、開幕前だけにすると
+ *    実時間で約27時間（日曜のキャンプの間）しか見られず、日曜に開かなかった人は
+ *    一度も見られなかった（監査 2026-11-20 Q1）。開幕した月（1ターン＝1日で約22時間）まで延ばす。
+ * ⚠ サーバー（`server/yearSummary.mjs`。時期の外はビューに載せない）と画面で同じ関数を使う。
+ */
+export const isYearSummaryTime = (summaryYear, year, date) =>
+  summaryYear != null &&
+  summaryYear === year - 1 &&
+  (date?.month || 0) <= SEASON_START_MONTH;
 export function turnOfDate(date, turns = SEASON_TURNS) {
   if (!date?.year) return null;
   const start = Date.UTC(date.year, SEASON_START_MONTH - 1, 1);

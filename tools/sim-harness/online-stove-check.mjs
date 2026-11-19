@@ -134,6 +134,18 @@ assert.deepEqual(teamFitRank(fielder(9, 20, 80), own, DEFAULT_WEIGHTS), { group:
   };
   const s = yearSummaryFor(league, '三陸');
   assert.equal(s.year, 2, 'まとめるのは終わった年');
+  // ⚠ 出す時期（年度更新〜開幕した月）の外は**ビューに載せない**（画面は出さないのに
+  //    1年の大半の応答に乗っていた。監査 2026-11-20）
+  for (const [month, want] of [[1, true], [4, true], [5, false], [11, false]]) {
+    const at = { ...league, season: { year: 3, currentDate: { year: 2027, month, day: 1 } } };
+    assert.equal(!!yearSummaryFor(at, '三陸'), want, `${month}月のまとめの有無が違う`);
+  }
+  // ⚠ 1年後（次の年度更新の前）には去年のまとめを載せない
+  assert.equal(
+    yearSummaryFor({ ...league, season: { year: 4, currentDate: { month: 1, day: 1 } } }, '三陸'),
+    null,
+    '2年前のまとめを載せている',
+  );
   // ① 順位は**自分の部だけ**（1部と2部を混ぜると「10位」のような順位になる）
   assert.deepEqual(
     s.standings.map((r) => r.team),

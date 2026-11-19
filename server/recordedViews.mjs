@@ -301,7 +301,13 @@ export function playerPeriods(
   )) {
     const record = recordForPlayer(league, player, team, season.year);
     if (!record) continue;
-    const comparison = comparisonForSeason(season);
+    // ⚠ 今季の比較値は `context.comparison` と同じもの（同じ `observedSeason` から作る）。
+    //    作り直すと全選手（288人）を毎回なめ直し、索引作り（`buildTeamsIndex`）で
+    //    選手の数だけ繰り返していた（書き込み1回で約3.5秒 → 約0.6秒。監査 2026-11-20）
+    const comparison =
+      context.comparison && season === observedSeason(league)
+        ? context.comparison
+        : comparisonForSeason(season);
     entries.push({
       record,
       comparison,

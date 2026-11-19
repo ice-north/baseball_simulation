@@ -14,6 +14,9 @@ import { draftRankText } from './chronicleText.js';
 //    「リーグからプロへ」）に入っているので、その年の行だけ拾う。ビューの大きさは変わらない。
 // ⚠ 出すのは**その年の指名だけ**。年度更新で `view.year` が1つ進むと消える
 //    （去年の指名は球団史・記録の「リーグからプロへ」で見られる）。
+// ⚠ ご褒美の数（+5・+30試合分）は `server/proDraft.mjs` の `TEAMMATE_DISCIPLINE`・
+//    `TEAMMATE_EXPERIENCE_GAMES`。**抜かれた1人ごとに1回ずつ効く**ので、2人抜かれた年は
+//    +10・+60試合分（以前は人数に関わらず +5 と出ていた）。
 // ⚠ `whenEmpty` を付けたところだけ「指名なし」も出す。0人の年は3割あり、
 //    契約更改の画面では「今年は誰も抜かれなかった」と分かる方が良い。ホームでは出さない
 //    （何週も「指名なし」の札が場所を取るだけ）。
@@ -58,7 +61,8 @@ export default function ProDraftResult({ view, whenEmpty = false }) {
       )}
       {mine.length > 0 && (
         <p className="online-muted">
-          プロ入りに触れて、{teamLabel(view.teamName)}の残った選手はプロ意識+5・経験+30試合分。
+          プロ入りに触れて、{teamLabel(view.teamName)}の残った選手はプロ意識+{5 * mine.length}
+          （100まで）・経験+{30 * mine.length}試合分。
         </p>
       )}
     </section>

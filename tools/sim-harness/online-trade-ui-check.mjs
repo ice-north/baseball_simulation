@@ -451,6 +451,11 @@ try {
       await thoughts.waitFor();
       // ⚠ 名簿を読み終わるまでは「読んでいます…」が出る。順位の行が出るまで待つ
       await thoughts.locator('p').filter({ hasText: '球団中' }).first().waitFor();
+      // ⚠ 「球団中」は1球団読めた時点で出る。下の式は全球団で数えるので、
+      //    「名簿を読んでいます（x/y）」が消える（＝全部読めた）まで待つ
+      await thoughts
+        .getByText(/名簿を読んでいます（/)
+        .waitFor({ state: 'detached', timeout: 15000 });
       const rosters = Object.fromEntries(
         [...new Set(l.season.settings.teamNames)].map((n) => [n, rosterOf(l, n)]),
       );

@@ -493,17 +493,24 @@ export class SupabaseStore {
     );
     const data = buildArchiveIndex(bundle, retainedYears);
     if (!data) return null;
-    const players = await this.publishArchive(data.players, previous?.players),
-      teams = await this.publishArchive(data.teams, previous?.teams),
-      games = Object.fromEntries(
-        retainedYears.map((year) => [year, previous.games[year]]),
-      );
-    for (const [year, value] of Object.entries(data.games))
-      games[year] = {
-        ...(await this.publishArchive(value, previous?.games?.[year])),
-        finalizedToken:
-          bundle.league.records?.seasons?.[year]?.archiveToken || null,
-      };
+    // ⚠ 選手・球団・年ごとの試合の索引は互いに関係しないので並べて上げる
+    //    （1つずつ待つと往復の数だけ遅れた）。並びは前と同じ
+    const [players, teams, ...yearRefs] = await Promise.all([
+      this.publishArchive(data.players, previous?.players),
+      this.publishArchive(data.teams, previous?.teams),
+      ...Object.entries(data.games).map(async ([year, value]) => [
+        year,
+        {
+          ...(await this.publishArchive(value, previous?.games?.[year])),
+          finalizedToken:
+            bundle.league.records?.seasons?.[year]?.archiveToken || null,
+        },
+      ]),
+    ]);
+    const games = Object.fromEntries(
+      retainedYears.map((year) => [year, previous.games[year]]),
+    );
+    for (const [year, ref] of yearRefs) games[year] = ref;
     return {
       version: 2,
       players,
@@ -673,9 +680,16 @@ export class SupabaseStore {
       const split = splitBundle(prepared.bundle);
       core = split.core;
       order = split.order;
-      refs = {};
-      for (const [name, data] of Object.entries(split.parts))
-        refs[name] = await this.publishPart(name, data, previous[name]);
+      // ⚠ 部分の上げ直しは互いに関係しないので並べて待つ（1つずつ待つと往復の数だけ遅れた）。
+      //    芯（下の包み）は全部の参照がそろってから書く
+      refs = Object.fromEntries(
+        await Promise.all(
+          Object.entries(split.parts).map(async ([name, data]) => [
+            name,
+            await this.publishPart(name, data, previous[name]),
+          ]),
+        ),
+      );
     } else {
       core = prepared.core;
       order = prepared.order;

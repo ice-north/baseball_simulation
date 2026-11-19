@@ -44,7 +44,9 @@ import jp.icenorth.baseball.shared.teamLabel
 import kotlinx.serialization.json.JsonObject
 
 // ============================================================
-// 1年の流れの帯と、オフの成長（Web 版の `SeasonFlow.jsx` / `OffseasonGrowth.jsx` と同じ）。
+// 1年の流れの帯と、オフの成長（Web 版の `SeasonFlow.jsx` と同じ。Web はオフの成長を
+// 2026-11-18 にやめて「その年のまとめ」（`YearSummary.jsx`・ビューの `yearSummary`）に替えた。
+// アプリはまだオフの成長のまま。移すときは `OffseasonGrowthCard` を消して `yearSummary` を描く）。
 //
 // ⚠ いしだ指摘: シーズン後の流れ・いまの段階・何をすればいいか、成長がいつどれだけ
 //    起きたのかが分からない。段階はサーバーが決める（`view.stage`）。

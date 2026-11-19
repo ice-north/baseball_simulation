@@ -8,6 +8,7 @@ import {
   NEED_LIMIT,
   DROP_SCALE,
   squadStrength,
+  playerDrops,
 } from '../src/online/tradeSearch.js';
 
 // 穴の上乗せの式は画面の見込みメーターと共通（`tradeSearch.js`）
@@ -143,14 +144,8 @@ export function createTradeJudge(teams) {
     if (!teamName || !teams[teamName]) return 1;
     let byPlayer = needCache.get(teamName);
     if (!byPlayer) {
-      const roster = teams[teamName];
-      const full = squadStrength(roster);
-      byPlayer = new Map(
-        roster.map((p) => [
-          p.id,
-          needOfDrop(full - squadStrength(roster.filter((q) => q.id !== p.id))),
-        ]),
-      );
+      const { drops } = playerDrops(teams[teamName]);
+      byPlayer = new Map([...drops].map(([id, drop]) => [id, needOfDrop(drop)]));
       needCache.set(teamName, byPlayer);
     }
     return byPlayer.get(player.id) ?? 1;
