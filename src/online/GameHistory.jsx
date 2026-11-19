@@ -10,6 +10,7 @@ import { ownOutcome, teamShort, teamLabel } from './gameText.js';
 import { inOnlineRoot } from './dialogPortal.js';
 import { ScoringPlays } from './ScoringPlays.jsx';
 import { scoreBoard } from './scoreBoard.js';
+import { hasInningPlays, inningPlays } from './gamePlays.js';
 const GROUPS = {
   batting: [
     [
@@ -390,10 +391,55 @@ export function GameRecordButton({
     </>
   );
 }
-/** スコアボード（回ごとの得点・R H E・勝敗投手）。中身は `scoreBoard.js`。古い試合（回ごとの記録が無い）は出さない */
+/**
+ * その半回の攻撃（打席の順）。スコアボードの回の数字を押すと開く。
+ * ⚠ 中身はサーバーが残した `game.plays`（`gamePlays.js` が読む形にする）。
+ */
+function InningPlays({ game, inning, half }) {
+  const data = inningPlays(game, inning, half);
+  const label = `${inning}回${half === 'bottom' ? '裏' : '表'}`;
+  return (
+    <section className="online-inning-plays" aria-label={`${label}の攻撃`}>
+      <h4>
+        {label}　{teamShort(data?.team || (half === 'bottom' ? game.home : game.away))}の攻撃
+      </h4>
+      {data?.rows?.length ? (
+        <ol>
+          {data.rows.map((row, i) => (
+            <li key={i}>
+              {row.order != null && <b>{row.order}</b>}
+              <span className="online-inning-play-name">{row.name}</span>
+              <span className="online-inning-play-text">{row.text}</span>
+              {row.runs > 0 && <em>{row.runs}点</em>}
+              <small>{row.outs}死</small>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="online-muted">この回の打席の記録はありません。</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * スコアボード（回ごとの得点・R H E・勝敗投手）。中身は `scoreBoard.js`。
+ * 古い試合（回ごとの記録が無い）は出さない。
+ *
+ * ⚠ いしだ 2026-11-19「スコアをクリックすると、その回の攻撃を時系列で表示してほしい」。
+ *    回の数字を押すと、その半回の打席を順に出す（`gamePlays.js`）。
+ *    打席の記録が無い試合（`plays` の無い古い試合）は押せない。
+ */
 export function ScoreBoard({ game, ownTeam, compact = false }) {
   const board = scoreBoard(game);
+  // 開いている半回（`{ inning, half }`）。もう一度押すと閉じる
+  const [open, setOpen] = useState(null);
+  const playable = hasInningPlays(game);
   if (!board) return null;
+  const toggle = (inning, half) =>
+    setOpen((now) =>
+      now && now.inning === inning && now.half === half ? null : { inning, half },
+    );
   return (
     <figure className={compact ? 'online-scoreboard is-compact' : 'online-scoreboard'} aria-label="スコアボード">
       {compact && <small className="online-scoreboard-date">{turnLabel(game.date)}</small>}
@@ -425,11 +471,35 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
               <th scope="row" className="online-scoreboard-team" title={teamLabel(row.team)}>
                 {teamShort(row.team)}
               </th>
-              {row.cells.map((cell, i) => (
-                <td key={i} data-scored={/^[1-9]/.test(cell) || undefined}>
-                  {cell}
-                </td>
-              ))}
+              {row.cells.map((cell, i) => {
+                const half = row.team === game.home ? 'bottom' : 'top';
+                const inning = i + 1;
+                const picked =
+                  open && open.inning === inning && open.half === half;
+                return (
+                  <td
+                    key={i}
+                    data-scored={/^[1-9]/.test(cell) || undefined}
+                    data-open={picked || undefined}
+                  >
+                    {/* ⚠ **数字そのものを押せるようにする**（見た目は変えない）。
+                        押せない試合（打席の記録が無い）と、やらなかった回（空・x）は
+                        ただの数字のまま */}
+                    {playable && cell !== '' && cell !== 'x' ? (
+                      <button
+                        type="button"
+                        aria-expanded={!!picked}
+                        aria-label={`${inning}回${half === 'bottom' ? '裏' : '表'}の攻撃`}
+                        onClick={() => toggle(inning, half)}
+                      >
+                        {cell}
+                      </button>
+                    ) : (
+                      cell
+                    )}
+                  </td>
+                );
+              })}
               <td className="online-scoreboard-total">{row.runs}</td>
               <td className="online-scoreboard-total">{row.hits ?? '—'}</td>
               <td className="online-scoreboard-total">{row.errors ?? '—'}</td>
@@ -437,6 +507,7 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
           ))}
         </tbody>
       </table>
+      {open && <InningPlays game={game} inning={open.inning} half={open.half} />}
       {board.decisions.length > 0 && (
         <figcaption>
           {board.decisions.map((d) => (

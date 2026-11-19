@@ -2923,6 +2923,13 @@ small.online-gain:not(:where(.online-sp *)) {
   box-shadow: inset 0 0 0 1px #08160f;
   overflow-x: auto;
 }
+/* ⚠ PCは**横幅を3分の2ほどに**（いしだ 2026-11-19「スコアボードも、2/3程度に
+   横幅を縮めてほしい」）。小窓いっぱいに広げると枠が間延びして見える。
+   スマホ（`is-compact`）は狭いので縮めない */
+.online-scoreboard:not(.is-compact) {
+  max-width: 67%;
+  min-width: min(100%, 440px);
+}
 .online-scoreboard table {
   width: 100%;
   border-collapse: collapse;
@@ -2947,6 +2954,80 @@ small.online-gain:not(:where(.online-sp *)) {
   font-weight: 700;
   background: #06130c;
   border: 2px solid #0f2a1d;
+}
+/* 回の数字は押せる（その回の攻撃を開く）。⚠ 見た目は数字のまま（下線も色も変えない）。
+   押せることは、押したときに開く欄と、指す形（`cursor`）で分かる */
+.online-scoreboard tbody td button {
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  text-align: center;
+}
+.online-scoreboard tbody td button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.online-scoreboard tbody td[data-open] {
+  background: #1d3f2b;
+  border-color: #ffd84d;
+}
+/* --- その回の攻撃（打席の順。`InningPlays`）------------------------------- */
+.online-inning-plays {
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #06130c;
+  border: 1px solid #3c5a46;
+}
+.online-inning-plays h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #ffd84d;
+}
+.online-inning-plays ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.online-inning-plays li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid #ffffff14;
+  color: #f4f1de;
+}
+.online-inning-plays li:last-child {
+  border-bottom: 0;
+}
+/* その回の何人目か */
+.online-inning-plays li b {
+  flex: 0 0 auto;
+  min-width: 1.4em;
+  color: #9fb8a6;
+  font-size: 12px;
+  font-weight: 600;
+}
+.online-inning-play-name {
+  flex: 0 0 auto;
+  min-width: 7em;
+}
+.online-inning-play-text {
+  flex: 1 1 auto;
+  color: #cbd5e1;
+}
+.online-inning-plays li em {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-weight: 700;
+  color: #ffd84d;
+}
+.online-inning-plays li small {
+  flex: 0 0 auto;
+  color: #9fb8a6;
+  font-size: 12px;
 }
 .online-scoreboard tbody td[data-scored] {
   color: #ffd84d;
