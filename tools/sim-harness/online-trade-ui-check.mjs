@@ -27,6 +27,7 @@ import {
   advanceLeagueDay,
 } from '../../server/leagueEngine.mjs';
 import { createTradeJudge } from '../../server/tradeJudge.mjs';
+import { teamThoughts, thoughtsText } from '../../src/online/tradeThoughts.js';
 import { tradeFactorFor, staffOf } from '../../server/coachEngine.mjs';
 import { TRADE_FACTOR_LIMIT } from '../../src/online/coaches.js';
 import { CPU_ACCEPT_MARGIN } from '../../src/online/trades.js';
@@ -443,6 +444,43 @@ try {
       '断られた提案が残っている',
     );
     await getRows.first().click(); // 選び直す（外す）
+    // --- 相手（CPU）の考えていること（いしだ 2026-11-13）----------------------
+    // ⚠ 選んだ選手に関わらず出る（相手の事情なので）。文は画面と同じ式で確かめる
+    {
+      const thoughts = deal.getByRole('region', { name: '相手の考えていること' });
+      await thoughts.waitFor();
+      // ⚠ 名簿を読み終わるまでは「読んでいます…」が出る。順位の行が出るまで待つ
+      await thoughts.locator('p').filter({ hasText: '球団中' }).first().waitFor();
+      const rosters = Object.fromEntries(
+        [...new Set(l.season.settings.teamNames)].map((n) => [n, rosterOf(l, n)]),
+      );
+      const others = Object.fromEntries(
+        Object.entries(rosters).filter(([n]) => n !== cpuTeam),
+      );
+      const t = teamThoughts(rosters[cpuTeam], others);
+      const text = (await thoughts.innerText()).replace(/\s+/g, '');
+      // ⚠ 球団名は表示名（`teamShort`）なので文ごとは比べず、**式から出る数と言葉**で見る
+      const want = thoughtsText(t, '').replace(/\s+/g, '');
+      assert.ok(
+        text.includes(`${t.teams}球団中${t.strengthRank}位`),
+        `戦力の順位が式と違う（式は${t.teams}球団中${t.strengthRank}位）: ${text}`,
+      );
+      assert.ok(
+        text.includes(want.slice(want.indexOf('の戦力は'))),
+        `相手の考えていることが式と違う\n画面: ${text}\n式: ${want}`,
+      );
+      // 3行（弱い持ち場・出しやすい・出し渋る）が出ている
+      for (const label of ['弱い持ち場', '出しやすい', '出し渋る'])
+        assert.ok(text.includes(label), `「${label}」の行が無い: ${text}`);
+      // 弱い持ち場の順位が文字で出ている（「遊撃11位」）
+      if (t.weak.length)
+        assert.ok(
+          text.includes(`${t.weak[0].slot.label}${t.weak[0].rank}位`),
+          `弱い持ち場の順位が出ていない: ${text}`,
+        );
+      if (process.env.TRADE_SHOTS)
+        await thoughts.screenshot({ path: `${process.env.TRADE_SHOTS}/pc-trade-thoughts.png` });
+    }
     // ⚠ 受ける組み合わせ: CPUの値踏み（`cpuTradeDecision`）で、出す投手の値打ちが
     //    もらう投手の値打ちの CPU_ACCEPT_MARGIN 倍以上になる2人を選ぶ
     const factor = tradeFactorFor(l, cpuTeam);
@@ -752,7 +790,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / CPUの見込みメーター / 補強から探す・余りを出す / 選手の詳細からトレード / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき） / スマホWebで練習試合の申し込みに返事する）',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / CPUの見込みメーター / 相手の考えていること（弱い持ち場・出しやすい・出し渋る） / 補強から探す・余りを出す / 選手の詳細からトレード / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき） / スマホWebで練習試合の申し込みに返事する）',
   );
 } catch (error) {
   await failureShots(browser, 'online-trade-ui');

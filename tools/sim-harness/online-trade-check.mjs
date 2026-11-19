@@ -39,6 +39,7 @@ import { ROSTER_LIMIT } from '../../src/online/shared.js';
 import { PACK_SIZE } from '../../src/online/rosterPack.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 import { rosterGroup } from '../../src/utils/constants.js';
+import { teamThoughts, thoughtsText } from '../../src/online/tradeThoughts.js';
 import {
   bestSlot,
   rosterTops,
@@ -1065,6 +1066,60 @@ try {
     // ⚠ 上乗せは `NEED_LIMIT` まで（際限なく高くしない）
     const most = Math.max(...players.map((p) => needFactor(players, p)));
     assert.ok(most <= 1 + NEED_LIMIT + 1e-9, `上乗せが ${most} 倍になっている`);
+  }
+
+  // ③'' **画面に出す「相手の考えていること」が、CPUの判断と食い違わないこと**
+  //    （いしだ 2026-11-13「相手の考えていることを表示するのはどうでしょう？例えば、
+  //    外野が足りない、投手が余ってるなど」。画面は `ThoughtsPanel`、式は `tradeThoughts.js`）。
+  // ⚠ 文の飾りにしないこと。出す3つはCPUが実際に使っている値と同じでなければならない:
+  //    「出しやすい」＝ 上乗せが等倍（`needOf` が1）／「出し渋る」＝ 上乗せが乗る／
+  //    「弱い持ち場」＝ そこを埋めると球団の力（`squadStrength`）がいちばん伸びる
+  {
+    for (const team of names.slice(0, 4)) {
+      const players = teams[team];
+      const others = Object.fromEntries(
+        Object.entries(teams).filter(([n]) => n !== team),
+      );
+      const t = teamThoughts(players, others);
+      assert.ok(t, '相手の事情が出ない');
+      assert.equal(t.teams, names.length, `順位の母数が球団数と違う: ${t.teams}`);
+      // 「出しやすい」と数えた人数ぶん、上乗せが等倍の選手が居ること
+      for (const g of t.spares) {
+        const inGroup = players.filter((p) => rosterGroup(p.position) === g.id);
+        const even = inGroup.filter((p) => judge.needOf(team, p) === 1).length;
+        assert.equal(
+          g.spare,
+          even,
+          `${team}の${g.label}: 画面は余り${g.spare}人、CPUの上乗せが等倍なのは${even}人`,
+        );
+      }
+      // 「出し渋る」と出す括り（いちばん痛い抜け方）の選手には、実際に上乗せが乗る
+      const hold = t.spares.slice().sort((a, b) => b.hurt - a.hurt)[0];
+      if (hold?.hurt) {
+        const worst = players
+          .filter((p) => rosterGroup(p.position) === hold.id)
+          .reduce((a, b) => (judge.needOf(team, b) > judge.needOf(team, a) ? b : a));
+        assert.ok(
+          judge.needOf(team, worst) > 1,
+          `${team}の${hold.label}を出し渋ると出しているのに、上乗せが等倍`,
+        );
+        assert.ok(
+          Math.abs(hold.factor - judge.needOf(team, worst)) < 1e-9,
+          `画面の上乗せ（${hold.factor}）とCPUの上乗せ（${judge.needOf(team, worst)}）が違う`,
+        );
+      }
+      // 「弱い持ち場」は、そこの一番手がリーグで下の方に居ること
+      for (const w of t.weak)
+        assert.ok(
+          w.rank > t.teams * 2 / 3,
+          `${team}の${w.slot.label}を弱いと出しているのに${w.rank}位`,
+        );
+      // 文が組めること（球団名・順位・持ち場が入る）
+      const text = thoughtsText(t, team);
+      assert.ok(text.includes(team) && text.includes(`${t.strengthRank}位`), `文が組めていない: ${text}`);
+    }
+    // ⚠ 名簿が無ければ出さない（読み込み中に空の枠を出さない）
+    assert.equal(teamThoughts([], {}), null, '空の名簿で事情を出している');
   }
 
   // ③' まとめて出すときは、まとめて空く穴で値段を付ける（監査 2026-11-13）。

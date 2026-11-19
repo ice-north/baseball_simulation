@@ -534,6 +534,33 @@
   margin-left: 4px;
 }
 /* CPUの見込み（3段のメーター）。横軸は「出す値段 ÷ もらう値段」 */
+/* 相手（CPU）の考えていること（`ThoughtsPanel`）。見込みメーターと同じ枠の作り */
+.online-trade-thoughts {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #ffffff1a;
+  font-size: 12px;
+}
+.online-trade-thoughts h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+.online-trade-thoughts p:not(:where(.online-sp *)) {
+  margin: 0 0 6px;
+}
+/* 「弱い持ち場 / 出しやすい / 出し渋る」の3行。見出しの幅をそろえる */
+.online-trade-thoughts-list {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  gap: 2px 8px;
+  margin: 0 0 6px;
+}
+.online-trade-thoughts-list dt {
+  color: #cbd5e1;
+}
+.online-trade-thoughts-list dd {
+  margin: 0;
+}
 .online-trade-odds {
   margin-top: 10px;
   padding-top: 8px;

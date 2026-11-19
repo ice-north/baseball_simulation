@@ -29,6 +29,7 @@ import {
 import { playablePositions } from './lineupEdit.js';
 import { overallScore } from './tryoutPlan.js';
 import { rosterShortfall, rostersAfterTrade } from './trades.js';
+import { teamThoughts, thoughtsText, factorText } from './tradeThoughts.js';
 import { rosterGroup, rosterCounts } from '../utils/constants.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
 import {
@@ -77,6 +78,9 @@ import {
 //    「総合」はCPUの値段と別物で、並べると交渉の目安を取り違える）。代わりに値段の段を出す。
 // ⚠ **補強から探す**（`ReinforcePanel`）と **CPUの見込み**（`OddsMeter`）はアプリと同じ式
 //    （`tradeSearch.js` ⇔ `mobile/shared/.../TradeSearch.kt`）。
+// ⚠ 相手がCPU球団なら、**相手の考えていること**（`ThoughtsPanel`。弱い持ち場・
+//    出しやすい括り・出し渋る括り）を交換案の脇に出す。式は `tradeThoughts.js` で、
+//    **CPUが実際に使っている値**（戦力の開きと出し渋りの上乗せ）から作る。
 // ⚠ **相手はCPU球団でもよい**。CPUはその場で答える（受ける／逆提案／断る）。
 //    以前は参加者の球団だけを相手にしていて、1人で遊んでいる間はトレードが
 //    まったく使えなかった。どちらが人でどちらがCPUかは札に出す（返事が返る
@@ -210,6 +214,80 @@ const ODDS_HELP =
   'そこに監督の見る目（若手を高く見る・主力を高く見る など）が1人ずつかかるので、' +
   '境目の近くは「相手の監督しだい」です。足りないときは、同じ持ち場（投手・捕手・内野・外野）の安い選手に替えた逆提案が来るか、断られます。' +
   'また、値段が釣り合っていても、交換のあとのスタメン・ローテ・中継ぎの力がそちらばかり上がる交換は断ります（弱い2人で強い1人を取る形など）。';
+
+/**
+ * 相手（CPU球団）の考えていること。⚠ 参加者の球団には出さない（人の考えは測れない）。
+ *
+ * ⚠ いしだ 2026-11-13「外野が欲しいのに内野を提案されたり。相手の考えていることを
+ *    表示するのはどうでしょう？例えば、外野が足りない、投手が余ってるなど、そして
+ *    総合点と余剰、不足、成績などから判断する」。
+ * ⚠ **CPUが実際に使っている仕掛けだけを出すこと**（式は `tradeThoughts.js`）。
+ *    弱い持ち場＝戦力の開き（`gapLimit`）で通りやすくなるところ、
+ *    余り＝出し渋りの上乗せ（`needOf`）が乗らない選手。
+ * ⚠ 相手を含む全球団の名簿が要る（順位を出すため）。読めた球団の中での順位で、
+ *    読み込み中はその旨を出す（`ReinforcePanel` と同じ扱い）。
+ */
+function ThoughtsPanel({ partner, theirRoster, league }) {
+  const others = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(league?.teams || {})
+          .filter(([name]) => name !== partner)
+          .map(([name, data]) => [name, data.roster || []]),
+      ),
+    [league?.teams, partner],
+  );
+  const thoughts = useMemo(
+    () => (theirRoster ? teamThoughts(theirRoster, others) : null),
+    [theirRoster, others],
+  );
+  const expected = Math.max(0, (league?.total || 0) - 1);
+  const loaded = Object.keys(others).length;
+  if (!thoughts) return null;
+  // ⚠ **1球団も読めていないうちは順位を出さない**（比べる相手が居ないと
+  //    どの持ち場も1位になり、「弱い持ち場は無い」と嘘が出る）
+  if (!loaded)
+    return (
+      <section className="online-trade-thoughts" aria-label="相手の考えていること">
+        <h4>相手の考えていること</h4>
+        <p className="online-muted">各球団の名簿を読んでいます…</p>
+      </section>
+    );
+  const easy = thoughts.spares.filter((g) => g.spare > 0).slice(0, 2);
+  const hold = thoughts.spares.slice().sort((a, b) => b.hurt - a.hurt)[0];
+  return (
+    <section className="online-trade-thoughts" aria-label="相手の考えていること">
+      <h4>相手の考えていること</h4>
+      <p>{thoughtsText(thoughts, teamShort(partner))}</p>
+      <dl className="online-trade-thoughts-list">
+        <dt>弱い持ち場</dt>
+        <dd>
+          {thoughts.weak.length
+            ? thoughts.weak
+                .map((w) => `${w.slot.label}${w.rank}位`)
+                .join(' · ')
+            : '無い'}
+        </dd>
+        <dt>出しやすい</dt>
+        <dd>
+          {easy.length
+            ? easy.map((g) => `${g.label}${g.spare}人`).join(' · ')
+            : '無い（どの選手も出し渋る）'}
+        </dd>
+        <dt>出し渋る</dt>
+        <dd>
+          {hold?.hurt
+            ? `${hold.label}（主力が抜けると値段に${factorText(hold.factor)}）`
+            : '無い'}
+        </dd>
+      </dl>
+      <p className="online-muted">
+        順位は{thoughts.teams}球団の中で、持ち場ごとの一番手の力を比べたものです。
+        {loaded < expected && ` 名簿を読んでいます（${loaded}/${expected}）。`}
+      </p>
+    </section>
+  );
+}
 
 /**
  * CPU球団が受けそうかの目安（3段のメーター）。⚠ 参加者の球団には出さない（人が決める）。
@@ -710,6 +788,7 @@ function TradeComposer({
   view,
   partners,
   humans,
+  league = null,
   lockedPartner = null,
   initialPartner = null,
   initialGive = [],
@@ -866,6 +945,9 @@ function TradeComposer({
             getIds={getIds}
           />
           {/* ⚠ CPU球団だけ（参加者の球団は人が決める）。逆提案を作るときも出さない */}
+          {cpu && (
+            <ThoughtsPanel partner={partner} theirRoster={theirRoster} league={league} />
+          )}
           {cpu && (
             <OddsMeter
               rule={cpuTradeRule(theirs.info)}
@@ -1724,6 +1806,7 @@ export default function TradeScreen({
                 view={view}
                 partners={partners}
                 humans={humans}
+                league={league}
                 initialPartner={seed?.partner}
                 initialGive={seed?.give || []}
                 initialGet={seed?.get || []}
