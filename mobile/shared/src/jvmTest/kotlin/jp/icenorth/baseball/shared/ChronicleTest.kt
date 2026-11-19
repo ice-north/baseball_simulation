@@ -59,6 +59,12 @@ class ChronicleTest {
         // オフ: 引退
         assertTrue(nationalOff.articles.any { it.kicker == "引退" }, "全国紙に引退が無い")
         assertTrue(nationalOff.articles.first { it.kicker == "引退" }.body.contains("の打撃コーチとして"), "引退後の役職の書き方")
+        // 今季総括号（年度更新のあと〜開幕前。サーバーの seasonReview の記事をそのまま載せる）
+        val review = assertNotNull(off.seasonReview, "今季総括号が無い")
+        assertTrue(nationalOff.headline.startsWith("今季総括号"), nationalOff.headline)
+        assertEquals(review.lead, nationalOff.lead)
+        assertTrue(nationalOff.articles.any { it.kicker == "頂点" }, "総括号に頂点が無い")
+        assertTrue(late.seasonReview == null, "シーズン中に総括号が出ている")
     }
 
     /** 決着の記事は11月の手続きの間も残るので、時期によらない文にする（「プレーオフに臨む」と書かない） */
@@ -74,12 +80,14 @@ class ChronicleTest {
             assertTrue("臨む" !in raceText(decided.copy(kind = kind), { it })!!.body, kind)
     }
 
-    /** 球団史・記録の行: 歴代記録は PC と同じ上位3人、年は「N年目」 */
+    /** 球団史・記録の行: 歴代記録は PC と同じ上位10人まで、年は「N年目」 */
     @Test
     fun teamChronicleLines() {
         val c = OnlineJson.decodeFromJsonElement(TeamChronicle.serializer(), team.at("chronicle")!!)
         val hr = c.records.first { it.stat == "homeruns" }
-        assertEquals(TEAM_RECORD_ROWS, hr.season.size) // サーバーは3人まで返す（アプリも3人とも並べる）
+        assertEquals(10, TEAM_RECORD_ROWS)
+        // 見本の JSON は3人まで返していた頃のもの。サーバーは10人まで返し、アプリも全部並べる
+        assertTrue(hr.season.size in 3..TEAM_RECORD_ROWS, "${hr.season.size}")
         val lines = hr.season.take(TEAM_RECORD_ROWS).mapIndexed { i, x -> seasonRecordLine(i + 1, x) }
         assertTrue(lines[0].startsWith("1位　${hr.season[0].name}（1年目"), lines[0])
         assertTrue(lines[2].startsWith("3位　"), lines[2])

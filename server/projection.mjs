@@ -29,6 +29,9 @@ import { packSummary, packsForMember } from '../src/online/rosterPack.js';
 import { ageOutlook } from '../src/online/ageOutlook.js';
 import { diagnoseTeam } from '../src/online/teamDiagnosis.js';
 import { ownerRecords } from './ownerRecords.mjs';
+import { seasonReview } from './seasonReview.mjs';
+import { strategyStats } from '../src/online/strategyStats.js';
+import { tiesArticles } from '../src/online/hometown.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -390,6 +393,20 @@ function packJoinsAt(l) {
 }
 const pendingPackAuto = (phase, member) =>
   !!phase && !!member.packSeed && phase.kind !== 'pack_select';
+/** 地元紙の「縁」の記事（地元出身・次の相手との同窓対決） */
+function tiesFor(l, teamName, team, teamLabels) {
+  const city = (l.teams || []).find((t) => t.name === teamName)?.city;
+  const next = ownUpcomingGames(l.season?.schedule || [], teamName, 1)[0];
+  const oppName = next ? (next.home === teamName ? next.away : next.home) : null;
+  const short = (name) => teamLabels[name]?.short || name;
+  return tiesArticles({
+    city,
+    short: short(teamName),
+    players: team?.players || [],
+    opponent: oppName ? { short: short(oppName), players: l.game?.teams?.[oppName]?.players || [] } : null,
+  });
+}
+
 /** 自球団の診断。同じ部の球団と比べる（部分けの無いリーグは全球団と） */
 function diagnosisFor(l, teamName, team, statsOf) {
   const names = l.season?.settings?.teamNames || [];
@@ -575,6 +592,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     races: leagueRaces(l, left),
     // 節目の記録・引退・裏の大会（リーグ全体の最近のもの）
     chronicle: chronicleView(l),
+    // 今季総括号（年度更新のあと〜開幕前だけ。文はサーバーが作る。`seasonReview.mjs`）
+    seasonReview: seasonReview(l, (name) => teamLabels[name]?.short || name),
     // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。
     teamStats: teamSeasonStats(l, seasonStatsOf),
     // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
@@ -757,6 +776,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     owners: ownerRecords(l),
     // チーム診断「なぜ勝てない？」（自球団だけ。直せることを3つまで。`teamDiagnosis.js`）
     diagnosis: diagnosisFor(l, member.teamName, team, seasonStatsOf),
+    // 同窓・地元の縁（地元紙の記事。自球団と次の相手。飾り。`hometown.js`）
+    ties: tiesFor(l, member.teamName, team, teamLabels),
+    // 作戦別成績（自球団だけ。今季、方針の印のある試合。`strategyStats.js`）
+    strategyStats: strategyStats(l.records?.seasons?.[l.season.year]?.games, member.teamName),
     // 参加した時刻（はじめての1週間の案内。`firstWeek.js`。リーグを作ったときの人には無い）
     joinedAt: member.joinedAt || null,
     notices: l.notices.slice(0, 4),

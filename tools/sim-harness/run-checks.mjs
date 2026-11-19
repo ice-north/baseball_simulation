@@ -41,6 +41,7 @@ const CHECKS = [
   { name: 'pool-leak-check', group: 'quick', slow: 2 },
   { name: 'base-state-check', group: 'quick', slow: 1 },
   { name: 'bunt-check', group: 'quick', slow: 1 },
+  { name: 'growth-cap-check', group: 'quick', slow: 1 },
   { name: 'doc-check', group: 'quick', slow: 1 },
   // 社会人・独立の最初の名簿に投手が4人以上いるか（投手0人で試合が壊れた）
   { name: 'corporate-roster-check', group: 'quick', slow: 1 },
@@ -60,6 +61,7 @@ const CHECKS = [
   { name: 'online-stats-view-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-lineup-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'solo-lineup-board-check', group: 'quick', slow: 1 },
+  { name: 'solo-pitching-board-check', group: 'quick', slow: 1 },
   { name: 'online-pitching-board-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-stove-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-contract-table-check', group: 'quick', online: true, slow: 1 },
@@ -90,6 +92,7 @@ const CHECKS = [
   { name: 'online-records-check', group: 'check', online: true, slow: 52 },
   // プロ野球への道（年0〜3人の指名・ご褒美・球団史とリーグ記録）
   { name: 'online-pro-draft-check', group: 'check', online: true, slow: 15 },
+  { name: 'online-team-face-check', group: 'check', online: true, slow: 5 },
   // 年代記（節目・引退・裏の大会・マジック・球団史）。1年を通して進める
   { name: 'online-chronicle-check', group: 'check', online: true, slow: 130 },
   // 指導者（監督・コーチ）。種・任せ方・人事・40年の入れ替わり・1年を通して翌年のキャンプまで
@@ -115,6 +118,7 @@ const DIST_UI = [
   { name: 'online-label-ui-check', slow: 17 }, // check:online:label-ui
   { name: 'online-replay-ui-check', slow: 38 }, // check:online:replay-ui
   { name: 'online-mobile-gameplay-ui-check', slow: 49 }, // check:online:mobile-gameplay-ui
+  { name: 'online-paper-ui-check', slow: 12 }, // check:online:paper-ui
 ];
 
 // ここに無い *-check.mjs は、別の手順で回すもの。サーバーやブラウザが要る通し検査と、

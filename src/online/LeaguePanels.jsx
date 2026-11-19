@@ -163,7 +163,8 @@ function bestOf(rows, pick, lowerIsBetter = false) {
   return lowerIsBetter ? Math.min(...list) : Math.max(...list);
 }
 
-export function Standings({ view }) {
+/** @param action 見出しの右に置くもの（PC のホームの「スポーツ新聞」ボタン）。スマホ版は渡さない */
+export function Standings({ view, action = null }) {
   const leagues = view.teamLeagues
     ? PYRAMID_LEAGUES.map((league) => ({
         league,
@@ -174,7 +175,14 @@ export function Standings({ view }) {
     : [{ league: null, rows: view.standings }];
   return (
     <section className="online-card">
-      <h2>リーグ順位</h2>
+      {action ? (
+        <div className="online-standings-head">
+          <h2>リーグ順位</h2>
+          {action}
+        </div>
+      ) : (
+        <h2>リーグ順位</h2>
+      )}
       {leagues.map(({ league, rows }) => {
         // ⚠ 最良の印は**その部の中**で比べる（1部と2部を通すと、2部の表に
         //    印がひとつも付かない）

@@ -35,7 +35,7 @@
 - `src/App.jsx`: 手動試合、管理画面の接続。`[SECTION:]` マーカーで対象箇所を探す。
 - `src/game/autoSimulation.js`: 自動試合。共通の物理演算は `src/simulation-logic.js`、投球判断は `src/game/pitchCalling.js`。
 - `src/components/DateProgressScreen.jsx`: 日付進行とイベント。フェーズの定義は `src/season/seasonManager.js` と `src/season/dateProgression.js`。
-- `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用（一人用）。一人用のスタメン設定はオンラインPC版と同じ1枚の表（`src/components/lineup/SoloLineupBoard.jsx`、中身は `soloLineupOrder.js`、DH制あり）で、`.online.online-desktop.online-embed` に包んでオンラインの部品のクラスを使う。オンラインのスマホ版の打順・守備・控えは2回のタップで入れ替える縦の表（`src/online/TapLineup.jsx`、中身は `src/online/tapLineup.js`）、投手起用は「投手起用を開く」から `LineupSettingContent` を全画面で使う（`src/online/OnlineLineup.jsx`、view との変換は `src/online/lineupBridge.js`）。オンラインのPC版は別の画面（`src/online/LineupBoard.jsx`・`PitchingBoard.jsx`）。
+- `src/components/LineupSettingScreen.jsx`: 打順、守備位置、投手起用（一人用）。一人用のスタメン設定はオンラインPC版と同じ1枚の表（`src/components/lineup/SoloLineupBoard.jsx`、中身は `soloLineupOrder.js`、DH制あり）、投手起用も同じ形の1枚の表（`src/components/lineup/SoloPitchingBoard.jsx`、中身は `soloPitchingEdit.js`。オンラインに無い「役割なし」があり、野手は救援だけ）で、`.online.online-desktop.online-embed` に包んでオンラインの部品のクラスを使う。一人用のチーム情報（`TeamInfoScreen.jsx`）はオンラインの選手成績の表（`CompactRoster`）をそのまま使う。オンラインのスマホ版の打順・守備・控えは2回のタップで入れ替える縦の表（`src/online/TapLineup.jsx`、中身は `src/online/tapLineup.js`）、投手起用は「投手起用を開く」から `LineupSettingContent` を全画面で使う（`src/online/OnlineLineup.jsx`、view との変換は `src/online/lineupBridge.js`）。オンラインのPC版は別の画面（`src/online/LineupBoard.jsx`・`PitchingBoard.jsx`）。
 - `src/game/saveSystem.js`: スロット、バックアップ、ロード、ファイル入出力。形式移行は `src/game/saveMigration.js`。
 - `src/corporate/worldData.js`: 並行世界の初期化。`TEAMS_DATA` とともにロード失敗時の復元対象。
 - `src/components/StartScreen.jsx` と `src/components/select/`: タイトルと導入画面。意匠はナイター中継で、本編とは別の語彙（`.glass-panel` と `.lift-card`）を使う。
@@ -51,5 +51,6 @@
 - 一人用の画面をオンラインへ持ち込むときは、`team` をプロップで受け取る形に直してから渡し、`TEAMS_DATA` を名前で引く関数には `team` も渡す。引けないと `console.error` を出して戻るだけなので、画面は操作できたまま何も起きない。
 - 持ち込んだ画面は `.online` の中に置くなら `.online-sp` で包む（PC版。ほかのページと同じ枠に入れるため）。`online.css` は `.online button` のように要素名で当てており、詳細度が Tailwind の単一クラスより強いので、そのまま入れるとボタンが全部同じ高さ・同じ色に潰れる。いま `.online` の中に包んだ一人用の画面は無い（PC版の編成は `LineupBoard.jsx` に置き換えた）ので、`online.css` の要素名の指定の多くは `:not(:where(.online-sp *))` を付けていない。持ち込むときは、その画面に当たる要素名の指定に `:not(:where(.online-sp *))` を付けてから入れる。包まずに出すならポータルで `.online` の**外**へ出す（スマホ版の全画面）。
 - オンラインの保存の形を変えたら `ONLINE_SCHEMA` を上げ、**同じコミットで** `src/online/leagueMigration.js` の `MIGRATIONS` に1段足す。オンラインは保存が1つしかないので、段が無いと全員の成績を消して作り直すしか選べない。移行できるのは項目を足す変更だけなので、形は足す方向で設計する。
+- PC のスポーツ新聞（`src/online/paper/`・`SportsPaper.jsx`）の文はアプリの `FrontPage*.kt` の写し。どちらかの文を変えたら両方を直し、`node mobile/tools/expect-paper.mjs > mobile/shared/src/jvmTest/resources/front/paper-expected.json` で期待値を書き出し直す（答え合わせはアプリの `FrontPageWebTest`）。
 - 一人用の文字色は、地色（明るい紙）の上かカードの上かを見て `src/index.css` の「文字色の決まり」の表から選ぶ。地色の上は `text-ink` 系の4色だけで、半透明の枠を置かない。
 - 既存の数値調整は `npm run check:season` で集計を確認する。

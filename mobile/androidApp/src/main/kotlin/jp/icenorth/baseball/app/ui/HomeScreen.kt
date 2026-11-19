@@ -39,6 +39,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.ui.platform.LocalContext
+import jp.icenorth.baseball.app.ShareImage
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,6 +69,7 @@ import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
 import jp.icenorth.baseball.shared.ChronicleView
 import jp.icenorth.baseball.shared.OwnerRecord
+import jp.icenorth.baseball.shared.teamFaceLines
 import jp.icenorth.baseball.shared.proDraftedHead
 import jp.icenorth.baseball.shared.proDraftedBody
 import jp.icenorth.baseball.shared.honorRows
@@ -82,6 +90,7 @@ import jp.icenorth.baseball.shared.OnlineJson
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import jp.icenorth.baseball.shared.appVersionArticle
 import jp.icenorth.baseball.shared.APP_DOWNLOAD_URL
@@ -221,6 +230,18 @@ fun HomeScreen(
             paperNameIndex(model.raw, team, lastGame, oppName?.let { n -> opponent?.let { n to it } })
         }
         val paperLinks = remember(names) { PaperLinks(names) { ref, name -> model.openPlayerOf(ref.team, ref.id, name) } }
+        // 紙面を画像で共有（D2）。紙面の描画をこの層にも描き、メニューから画像にして送る
+        val shareLayer = rememberGraphicsLayer()
+        val shareScope = rememberCoroutineScope()
+        val shareContext = LocalContext.current
+        val sharePaper: () -> Unit = {
+            shareScope.launch {
+                runCatching {
+                    val picture = shareLayer.toImageBitmap().asAndroidBitmap()
+                    ShareImage.share(shareContext, picture, "${page.title} ${page.headline}")
+                }
+            }
+        }
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 72.dp), // 左下の TIPS の印に隠れないよう
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -251,12 +272,14 @@ fun HomeScreen(
             }
             item(key = "page") {
                 // 記事の中の選手名を押すと、その選手の詳細を開く（手元で分かる選手だけ）
+                // ⚠ 共有の画像は、この紙面の描画を層に写したもの（[sharePaper]）
+                Box(Modifier.drawWithContent { shareLayer.record { this@drawWithContent.drawContent() }; drawLayer(shareLayer) }) {
                 CompositionLocalProvider(LocalPaperLinks provides paperLinks) {
                 HomePage(
                     style = style,
                     page = page,
                     nextAdvanceAt = view.nextAdvanceAt,
-                    menu = { HomeMenu(model, style, onRename, onOpenTips, tipsNow, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }, onOpenInbox = { showInbox = true }) },
+                    menu = { HomeMenu(model, style, onRename, onOpenTips, tipsNow, onOpenBack = { showBack = true }, onOpenChronicle = { showChronicle = true }, onOpenInbox = { showInbox = true }, onShare = if (page.sealed) null else sharePaper) },
                     onLink = { link ->
                         when (link) {
                             LINK_LINEUP -> onOpenLineup()
@@ -267,6 +290,7 @@ fun HomeScreen(
                     },
                     onOpenProcedures = onOpenProcedures,
                 )
+                }
                 }
             }
         }
@@ -329,6 +353,11 @@ private fun RecordLine(text: String, row: jp.icenorth.baseball.shared.RecordRow,
 private fun ChronicleDialog(model: AppViewModel, team: String, short: String, onClose: () -> Unit) {
     var data by remember { mutableStateOf<TeamChronicle?>(null) }
     var failed by remember { mutableStateOf(false) }
+    // ⚠ 欄はどれも折りたたむ（PC の Chronicle.jsx の Fold と同じ。いしだ 2026-11-18「情報量が多くて見づらい。
+    //    必要な物を開いて見るように」）。開いた欄は球団を選び直しても開いたまま
+    var openSections by remember { mutableStateOf(setOf<String>()) }
+    fun toggle(id: String) { openSections = if (id in openSections) openSections - id else openSections + id }
+    fun opened(id: String) = id in openSections
     // リーグ全体のプロ入り（ビューの chronicle。古いサーバーには無い）
     val leagueChronicle = remember(model.view) {
         model.raw?.at("chronicle").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(ChronicleView.serializer(), it) }.getOrNull() }
@@ -357,80 +386,105 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                 failed -> Text("読み込めませんでした。少し待ってから開き直してください。")
                 c == null -> Text("読み込み中…")
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { ChronicleHeading("年表") }
-                    if (c.seasons.isEmpty()) item { Text("まだ終わったシーズンがありません。1年目を終えると、ここに年ごとの成績が並びます。", style = MaterialTheme.typography.bodySmall) }
-                    items(c.seasons, key = { "s${it.year}" }) { s ->
-                        Text(s.historyLine(), style = MaterialTheme.typography.bodyMedium)
-                    }
-                    item { ChronicleHeading("歴代記録") }
-                    if (c.records.isEmpty()) item { Text("記録がまだありません。", style = MaterialTheme.typography.bodySmall) }
-                    // シーズン最多・球団通算とも上位3人（PC と同じ。以前は1位だけだった）
-                    items(c.records, key = { "r${it.stat}" }) { r ->
-                        Column {
-                            Text(r.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            if (r.season.isNotEmpty()) Text("シーズン最多", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            r.season.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> RecordLine(seasonRecordLine(i + 1, x), x) { onClose(); model.openPlayerOf(team, it, x.name) } }
-                            if (r.career.isNotEmpty()) Text("球団通算", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            r.career.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> RecordLine(careerRecordLine(i + 1, x), x) { onClose(); model.openPlayerOf(team, it, x.name) } }
+                    item { ChronicleHeading("年表", opened("seasons"), count = c.seasons.size) { toggle("seasons") } }
+                    if (opened("seasons")) {
+                        if (c.seasons.isEmpty()) item { Text("まだ終わったシーズンがありません。1年目を終えると、ここに年ごとの成績が並びます。", style = MaterialTheme.typography.bodySmall) }
+                        items(c.seasons, key = { "s${it.year}" }) { s ->
+                            Text(s.historyLine(), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                    item { ChronicleHeading("節目の記録") }
-                    if (c.milestones.isEmpty()) item { Text("まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。", style = MaterialTheme.typography.bodySmall) }
-                    items(c.milestones.withIndex().toList(), key = { "m${it.index}" }) { (_, m) ->
-                        Text(milestoneLine(m), style = MaterialTheme.typography.bodySmall)
+                    // 球団の顔（主将・永久欠番・在籍。Web 版 Chronicle.jsx の TeamFace と同じ文。決めるのは PC）
+                    item { ChronicleHeading("球団の顔", opened("face")) { toggle("face") } }
+                    if (opened("face")) {
+                        items(teamFaceLines(c.face).withIndex().toList(), key = { "f${it.index}" }) { (_, line) ->
+                            Text(line, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    item { ChronicleHeading("歴代記録", opened("records")) { toggle("records") } }
+                    if (opened("records")) {
+                        if (c.records.isEmpty()) item { Text("記録がまだありません。", style = MaterialTheme.typography.bodySmall) }
+                        // シーズン最多・球団通算とも上位10人（PC と同じ。いしだ 2026-11-18 に3人から10人へ）
+                        items(c.records, key = { "r${it.stat}" }) { r ->
+                            Column {
+                                Text(r.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                if (r.season.isNotEmpty()) Text("シーズン最多", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                r.season.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> RecordLine(seasonRecordLine(i + 1, x), x) { onClose(); model.openPlayerOf(team, it, x.name) } }
+                                if (r.career.isNotEmpty()) Text("球団通算", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                r.career.take(TEAM_RECORD_ROWS).forEachIndexed { i, x -> RecordLine(careerRecordLine(i + 1, x), x) { onClose(); model.openPlayerOf(team, it, x.name) } }
+                            }
+                        }
+                    }
+                    item { ChronicleHeading("節目の記録", opened("milestones"), count = c.milestones.size) { toggle("milestones") } }
+                    if (opened("milestones")) {
+                        if (c.milestones.isEmpty()) item { Text("まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。", style = MaterialTheme.typography.bodySmall) }
+                        items(c.milestones.withIndex().toList(), key = { "m${it.index}" }) { (_, m) ->
+                            Text(milestoneLine(m), style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     // ⚠ 先方指摘「各チームの入退団履歴も、球団史・記録から見られるように」（Web 版 Chronicle.jsx の Moves と同じ中身）
-                    item { ChronicleHeading("入退団履歴") }
-                    if (c.moves.isEmpty()) item { Text("まだ入団・退団の記録がありません。", style = MaterialTheme.typography.bodySmall) }
-                    items(c.moves.withIndex().toList(), key = { "v${it.index}" }) { (_, m) ->
-                        Text(
-                            teamMoveLine(m) { model.view?.teamShort(it) ?: it },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (m.side == "in") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    item { ChronicleHeading("入退団履歴", opened("moves"), count = c.moves.size) { toggle("moves") } }
+                    if (opened("moves")) {
+                        if (c.moves.isEmpty()) item { Text("まだ入団・退団の記録がありません。", style = MaterialTheme.typography.bodySmall) }
+                        items(c.moves.withIndex().toList(), key = { "v${it.index}" }) { (_, m) ->
+                            Text(
+                                teamMoveLine(m) { model.view?.teamShort(it) ?: it },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (m.side == "in") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     // プロ入りした選手（この球団から）と、リーグ全体からプロへ（Web 版 Chronicle.jsx の ProDrafted と同じ）
-                    item { ChronicleHeading("プロ入りした選手") }
-                    if (c.proDrafted.isEmpty()) item { Text("この球団からプロ入りした選手はまだいません。指名されるとチームメイトのプロ意識と経験が上がります。", style = MaterialTheme.typography.bodySmall) }
-                    items(c.proDrafted.withIndex().toList(), key = { "p${it.index}" }) { (_, r) ->
-                        Column {
-                            Text(proDraftedHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                            Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
-                            proDraftedAfter(r).forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    item { ChronicleHeading("プロ入りした選手", opened("proDrafted"), count = c.proDrafted.size) { toggle("proDrafted") } }
+                    if (opened("proDrafted")) {
+                        if (c.proDrafted.isEmpty()) item { Text("この球団からプロ入りした選手はまだいません。指名されるとチームメイトのプロ意識と経験が上がります。", style = MaterialTheme.typography.bodySmall) }
+                        items(c.proDrafted.withIndex().toList(), key = { "p${it.index}" }) { (_, r) ->
+                            Column {
+                                Text(proDraftedHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
+                                proDraftedAfter(r).forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
                         }
                     }
-                    item { ChronicleHeading("オーナー名鑑") }
-                    if (owners.isEmpty()) item { Text("まだ参加者がいません。", style = MaterialTheme.typography.bodySmall) }
-                    items(owners.withIndex().toList(), key = { "o${it.index}" }) { (_, o) ->
-                        Column {
-                            Text(o.head, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                            Text(o.text, style = MaterialTheme.typography.bodySmall)
+                    item { ChronicleHeading("オーナー名鑑", opened("owners"), count = owners.size) { toggle("owners") } }
+                    if (opened("owners")) {
+                        if (owners.isEmpty()) item { Text("まだ参加者がいません。", style = MaterialTheme.typography.bodySmall) }
+                        items(owners.withIndex().toList(), key = { "o${it.index}" }) { (_, o) ->
+                            Column {
+                                Text(o.head, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text(o.text, style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
-                    item { ChronicleHeading("年間表彰" + (honors?.year?.takeIf { it > 0 }?.let { "（${it}年目）" } ?: "")) }
-                    val honorList = honorRows(honors) { model.view?.teamShort(it) ?: it }
-                    if (honorList.isEmpty()) item { Text("まだありません。10月下旬に成績が確定すると、タイトルと部ごとのMVP・新人王・ベストナイン・最優秀バッテリーが決まります。", style = MaterialTheme.typography.bodySmall) }
-                    items(honorList.withIndex().toList(), key = { "h${it.index}" }) { (_, r) ->
-                        Column {
-                            Text(r.first, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                            Text(r.second, style = MaterialTheme.typography.bodySmall)
+                    item { ChronicleHeading("年間表彰" + (honors?.year?.takeIf { it > 0 }?.let { "（${it}年目）" } ?: ""), opened("honors")) { toggle("honors") } }
+                    if (opened("honors")) {
+                        val honorList = honorRows(honors) { model.view?.teamShort(it) ?: it }
+                        if (honorList.isEmpty()) item { Text("まだありません。10月下旬に成績が確定すると、タイトルと部ごとのMVP・新人王・ベストナイン・最優秀バッテリーが決まります。", style = MaterialTheme.typography.bodySmall) }
+                        items(honorList.withIndex().toList(), key = { "h${it.index}" }) { (_, r) ->
+                            Column {
+                                Text(r.first, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text(r.second, style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
-                    item { ChronicleHeading("リーグからプロへ") }
-                    if (league.isEmpty()) item { Text("まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜3人）。", style = MaterialTheme.typography.bodySmall) }
-                    items(league.withIndex().toList(), key = { "l${it.index}" }) { (_, r) ->
-                        Column {
-                            Text(proDraftedHead(r) { model.view?.teamShort(it) ?: it }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                            Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
-                            proDraftedAfter(r).forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    item { ChronicleHeading("リーグからプロへ", opened("leaguePro"), count = league.size) { toggle("leaguePro") } }
+                    if (opened("leaguePro")) {
+                        if (league.isEmpty()) item { Text("まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜3人）。", style = MaterialTheme.typography.bodySmall) }
+                        items(league.withIndex().toList(), key = { "l${it.index}" }) { (_, r) ->
+                            Column {
+                                Text(proDraftedHead(r) { model.view?.teamShort(it) ?: it }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
+                                proDraftedAfter(r).forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
                         }
                     }
-                    item { ChronicleHeading("引退した選手") }
-                    if (c.retired.isEmpty()) item { Text("この球団から引退した選手はまだいません。", style = MaterialTheme.typography.bodySmall) }
-                    items(c.retired.withIndex().toList(), key = { "x${it.index}" }) { (_, r) ->
-                        Column {
-                            Text(retiredHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                            Text(listOfNotNull(r.seasons.takeIf { it > 0 }?.let { "在籍${it}年" }, r.line, r.secondCareer?.let { "→ $it" }).joinToString("　"), style = MaterialTheme.typography.bodySmall)
+                    item { ChronicleHeading("引退した選手", opened("retired"), count = c.retired.size) { toggle("retired") } }
+                    if (opened("retired")) {
+                        if (c.retired.isEmpty()) item { Text("この球団から引退した選手はまだいません。", style = MaterialTheme.typography.bodySmall) }
+                        items(c.retired.withIndex().toList(), key = { "x${it.index}" }) { (_, r) ->
+                            Column {
+                                Text(retiredHead(r), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text(listOfNotNull(r.seasons.takeIf { it > 0 }?.let { "在籍${it}年" }, r.line, r.secondCareer?.let { "→ $it" }).joinToString("　"), style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }
@@ -440,13 +494,20 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
 }
 
 @Composable
-private fun ChronicleHeading(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+private fun ChronicleHeading(text: String, open: Boolean, count: Int? = null, onToggle: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (open) "▾" else "▸", color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(18.dp))
+        Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        if (count != null) Text("　${count}件", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 /** 紙面の右上のメニュー（更新・名前の変更・TIPS・ホームの見た目・ログアウト） */
 @Composable
-private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, tipsNow: Int, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit, onOpenInbox: () -> Unit) {
+private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit, onOpenTips: () -> Unit, tipsNow: Int, onOpenBack: () -> Unit, onOpenChronicle: () -> Unit, onOpenInbox: () -> Unit, onShare: (() -> Unit)? = null) {
     var open by remember { mutableStateOf(false) }
     val context = LocalContext.current
     // メニューを開くたびに端末の許可を見直す（設定の画面で切り替えて戻ってきたとき）
@@ -477,6 +538,8 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
             DropdownMenuItem(text = { Text("ゲームのTIPS" + if (tipsNow > 0) "（いま当てはまる${tipsNow}件）" else "") }, onClick = { open = false; onOpenTips() })
             DropdownMenuItem(text = { Text("過去の見出し") }, onClick = { open = false; onOpenBack() })
             DropdownMenuItem(text = { Text("球団史・記録") }, onClick = { open = false; onOpenChronicle() })
+            // 紙面を画像で共有（速報を見るまで伏せている間は出さない。結果が分かってしまう）
+            onShare?.let { share -> DropdownMenuItem(text = { Text("紙面を画像で共有") }, onClick = { open = false; share() }) }
             HorizontalDivider()
             Text("ホームの見た目", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
             HomeStyle.entries.forEach { s ->

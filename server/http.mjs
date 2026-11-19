@@ -105,10 +105,8 @@ export function createHandler(
           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254,
           'メールアドレスを正しく入力してください',
         );
-        requireOnline(
-          password.length >= 8 && password.length <= 72,
-          'パスワードは8文字以上にしてください',
-        );
+        requireOnline(password.length >= 8, 'パスワードは8文字以上にしてください');
+        requireOnline(password.length <= 72, 'パスワードは72文字以下にしてください');
         await service.redeemInvite(body?.invite, () =>
           createAccount({ email, password }),
         );

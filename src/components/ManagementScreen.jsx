@@ -7,7 +7,8 @@ import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, ensureAllTeamsReady } from '../game/lineupGenerator.js';
-import { processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { soloSeasonEnd } from '../season/soloChronicle.js';
 import { processNPBDraft } from '../season/npbDraft.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 import { withoutTryoutDraft } from '../season/tryoutDraftState.js';
@@ -198,7 +199,7 @@ const ManagementScreen = ({
     onForceEvent={(eventType) => {
       if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement' || eventType === 'university_scout')) {
         const update = {};
-        if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
+        if (!seasonData.frozenAwards) update.frozenAwards = soloSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         if (Object.keys(update).length > 0) setSeasonData(prev => ({ ...prev, ...update }));
         setManagementView('offseason');
@@ -215,7 +216,7 @@ const ManagementScreen = ({
       else if (eventType === 'draft') {
         // プロ指名で選手が消える前にランキング・表彰を確定する
         const preUpdate = {};
-        if (!seasonData.frozenAwards) preUpdate.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
+        if (!seasonData.frozenAwards) preUpdate.frozenAwards = soloSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         // ⚠ 指名で名簿から抜ける社会人・独立・大学の選手の、その年の成績を写しておく
         //    （選手成績の画面が年度末まで出す。`departedStats.js`）
@@ -271,7 +272,7 @@ const ManagementScreen = ({
       }
       else if (eventType === 'offseason') {
         const update = {};
-        if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
+        if (!seasonData.frozenAwards) update.frozenAwards = soloSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         if (Object.keys(update).length > 0) setSeasonData(prev => ({ ...prev, ...update }));
         setManagementView('offseason');

@@ -26,14 +26,16 @@ const isValidNumber = (n) => Number.isInteger(n) && n >= 0 && n <= 99;
  * チーム内の全選手に一意な背番号(0-99)を割り当てる。
  * 既に有効・非重複な番号を持つ選手は維持し、未設定/重複のみ埋める（冪等）。
  */
-export function ensureTeamJerseyNumbers(team) {
+export function ensureTeamJerseyNumbers(team, reserved = null) {
   const players = team?.players;
   if (!Array.isArray(players) || players.length === 0) return;
 
-  const used = new Set();
+  // ⚠ `reserved`: 付けない番号（オンラインの永久欠番。`server/teamFace.mjs`）。一人用は渡さない
+  const used = new Set(reserved || []);
   // 既存の有効・非重複番号を維持（従来 number=id の巨大値は無効として振り直す）
   for (const p of players) {
     if (isValidNumber(p.number) && !used.has(p.number)) used.add(p.number);
+    // ⚠ 欠番を付けたまま残っている人（欠番にする前から付けていた人）は振り直す
     else p.number = null;
   }
 

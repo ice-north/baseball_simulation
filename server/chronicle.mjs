@@ -22,6 +22,10 @@ import { SEASON_START_MONTH } from '../src/online/shared.js';
 import { teamSplitsOf } from '../src/online/recordStats.js';
 import { honorTitlesOf, honorsView } from './seasonAwards.mjs';
 import { withProCareer, proCareersOf, rowsWithCareer, newsOfCareers } from './proCareer.mjs';
+import { teamFaceView } from './teamFace.mjs';
+import { CAREER_MILESTONES, SEASON_MILESTONES, crossedCareer, crossedSeason } from '../src/online/milestones.js';
+
+export { CAREER_MILESTONES, SEASON_MILESTONES };
 
 // ⚠ 節目は**球団ごとに**最新20件（12球団で最大240件・数十KB）。以前はリーグ全体で最新40件で、
 //    1年目だけで129件できるため約1か月で消え、「球団史・記録」の節目が各球団に数件しか残らなかった
@@ -32,40 +36,6 @@ const keepMilestones = (list) => {
 };
 const KEEP_RETIRED = 60;
 const KEEP_WORLD = 12;
-
-/** 通算の節目（このリーグでの通算）。`every` ごと、`from` から */
-export const CAREER_MILESTONES = [
-  { side: 'batting', stat: 'hits', label: '安打', every: 100, from: 100 },
-  { side: 'batting', stat: 'homeruns', label: '本塁打', every: 50, from: 50 },
-  { side: 'batting', stat: 'rbis', label: '打点', every: 100, from: 100 },
-  { side: 'batting', stat: 'stolenBases', label: '盗塁', every: 50, from: 50 },
-  { side: 'pitching', stat: 'wins', label: '勝', every: 25, from: 25 },
-  { side: 'pitching', stat: 'saves', label: 'セーブ', every: 50, from: 50 },
-  { side: 'pitching', stat: 'holds', label: 'ホールド', every: 50, from: 50 },
-  { side: 'pitching', stat: 'strikeouts', label: '奪三振', every: 250, from: 250 },
-];
-
-/** シーズンの節目（その年の数字）。決まった値だけ */
-export const SEASON_MILESTONES = [
-  { side: 'batting', stat: 'homeruns', label: '本塁打', at: [20, 30, 40, 50] },
-  { side: 'batting', stat: 'hits', label: '安打', at: [150, 180, 200] },
-  { side: 'batting', stat: 'rbis', label: '打点', at: [80, 100, 120] },
-  { side: 'batting', stat: 'stolenBases', label: '盗塁', at: [30, 50] },
-  { side: 'pitching', stat: 'wins', label: '勝', at: [15, 20] },
-  { side: 'pitching', stat: 'saves', label: 'セーブ', at: [30, 40] },
-  { side: 'pitching', stat: 'strikeouts', label: '奪三振', at: [150, 200] },
-];
-
-/** 何かを越えたか。越えた値（いちばん大きいもの）か null */
-function crossedCareer(rule, before, after) {
-  if (after < rule.from || after <= before) return null;
-  const step = Math.floor(after / rule.every) * rule.every;
-  return step > before && step >= rule.from ? step : null;
-}
-function crossedSeason(rule, before, after) {
-  const hit = rule.at.filter((v) => before < v && after >= v);
-  return hit.length ? hit.at(-1) : null;
-}
 
 const chronicleOf = (league) =>
   (league.chronicle ||= { milestones: [], retired: [], world: [] });
@@ -276,7 +246,7 @@ export function careerLine(total, pitcher) {
  * 年度更新で引退した人を残す（このリーグの球団の人だけ）。
  * `retirements`: `advanceToNextYear` の戻り値。`keys`: 年度更新の前に取った「選手 id → 記録の鍵」
  */
-export function recordRetirements(league, retirements, { year, teamNames, keys }) {
+export function recordRetirements(league, retirements, { year, teamNames, keys, numbers = new Map() }) {
   const ours = new Set(teamNames || []);
   const list = [];
   for (const r of retirements || []) {
@@ -300,6 +270,8 @@ export function recordRetirements(league, retirements, { year, teamNames, keys }
       reason: r.reason || null,
       // 「川崎ミラージュの打撃コーチ」（`assignSecondCareer` の title は「監督」「打撃コーチ」など）
       secondCareer: r.secondCareer?.title ? `${r.secondCareer.team || r.team}の${r.secondCareer.title}` : null,
+      // 最後に付けていた背番号（永久欠番。`teamFace.mjs`）。背番号を付ける前の引退には無い
+      ...(numbers.has(`${r.team}:${r.name}`) ? { number: numbers.get(`${r.team}:${r.name}`) } : {}),
     });
   }
   // 大物から（通算の数字の大きい順）
@@ -482,6 +454,8 @@ const TEAM_RECORDS = [
   { side: 'pitching', stat: 'holds', label: 'ホールド' },
   { side: 'pitching', stat: 'strikeouts', label: '奪三振' },
 ];
+/** 歴代記録に並べる人数（シーズン最多・球団通算とも） */
+export const TEAM_RECORD_ROWS = 10;
 const AWARD_LABELS = {
   battingChampion: '首位打者', homeRunKing: '本塁打王', rbiKing: '打点王', stolenBaseKing: '盗塁王',
   eraChampion: '最優秀防御率', winsLeader: '最多勝', strikeoutKing: '最多奪三振', savesLeader: '最多セーブ',
@@ -535,7 +509,8 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
   // 年表（終わった年）
   const seasons = teamSeasons(league, teamName);
 
-  // 歴代記録: シーズン最多（各項目の上位3）と通算（この球団での成績の上位3）
+  // 歴代記録: シーズン最多（各項目の上位10）と通算（この球団での成績の上位10）
+  // ⚠ いしだ 2026-11-18「歴代記録は3位までではなく各項目10位まで」。アプリも同じ数だけ並べる（`TEAM_RECORD_ROWS`）
   const single = Object.fromEntries(TEAM_RECORDS.map((r) => [r.stat, []]));
   const careers = new Map();
   for (const season of Object.values(league.records?.seasons || {})) {
@@ -566,7 +541,7 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
       careers.set(rec.key, c);
     }
   }
-  const top = (list) => list.sort((a, b) => b.value - a.value || a.year - b.year || a.name.localeCompare(b.name, 'ja')).slice(0, 3);
+  const top = (list) => list.sort((a, b) => b.value - a.value || a.year - b.year || a.name.localeCompare(b.name, 'ja')).slice(0, TEAM_RECORD_ROWS);
   const records = TEAM_RECORDS.map((r) => ({
     stat: r.stat,
     label: r.label,
@@ -584,6 +559,8 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
     proDrafted: withProCareer((c.proDrafted || []).filter((r) => r.team === teamName), league).map(({ key, ...r }) => r),
     milestones: (c.milestones || []).filter((m) => m.team === teamName).slice(0, KEEP_MILESTONES_PER_TEAM),
     moves: teamMoves(league, teamName),
+    // 球団の顔（主将・歴代主将・永久欠番・在籍の長い人。`teamFace.mjs`）
+    face: teamFaceView(league, teamName, league.game?.teams?.[teamName]),
   };
 }
 

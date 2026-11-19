@@ -50,6 +50,13 @@
     - `inbox[]` の `id`・`type`・`text`。通知する `type` は `tradeAccepted`・`tradeRejected`・`tradeWithdrawn`・`challenge`・`challengePlayed`・`challengeDeclined`・`challengeWithdrawn`・`starterAvoided`・`awayStarted`（`INBOX_TITLES`。ほかの種類は通知しない。名前を変えると黙って出なくなる）。
     - `lastTryout` の `year`・`picks[].name`・`lost`、`lastCamp.year`、`lastOffseason` の `year`・`departed`。
   - 知らせ終えた印は端末に残し、ログインし直すまで消さない。ビューにはリーグを見分ける値（作り直したリーグかどうか）が無いので、同じ接続先でリーグを作り直すと、前のリーグの印と同じ鍵（手続きの `phase.id`・トレードやお知らせの `id`・結果の年）の知らせが出ないことがある。
+- ホーム画面のウィジェット（`SummaryWidget.kt`。文は `shared/.../Widget.kt` の `widgetSummary`）が読むビューの項目。自分では読みに行かず、アプリが受け取って端末に残したビューを描き直すだけ（ビューを受け取ったとき・速報を見たとき・ログアウトしたとき）。名前を変えると黙って出なくなる:
+  - `teamName`・`teamLabels`・`currentDate`（`month`・`day`）・`recentGames`（`home`・`away`・`homeScore`・`awayScore`・`lineScore`）・`nextGames`（`home`・`away`）・`teamLeagues`・`standings`・`phase.label`。
+- 今季総括号・作戦別成績・縁・球団の顔で読むビューの項目。どれも古いサーバーには無く、無ければ出さない（版は上げていない）。名前を変えると黙って出なくなる:
+  - `seasonReview`（`server/seasonReview.mjs`）の `year`・`headline`・`lead`・`articles[]`（`kicker`・`title`・`body`）。
+  - `strategyStats`（`src/online/strategyStats.js`）の `games`・`fields[]`（`key`・`label`・`side`・`columns`・`rows[]` の `value`・`label`・`games`・`cells`）。
+  - `ties[]`（地元・同窓の縁の記事。`kicker`・`title`・`body`）。
+  - 球団の窓口（`team`）の `chronicle.face`（`server/teamFace.mjs`）の `captain`・`captains[]`（`id`・`name`・`number`・`year`）・`retiredNumbers[]`（`number`・`name`・`year`・`position`）・`tenure[]`（`id`・`name`・`number`・`years`・`homegrown`）。主将・永久欠番を決める命令 `teamFace`（`{ captain }`・`{ retire: { name, year } }`・`{ unretire }`）は PC の球団史からだけ送り、アプリは表示だけ。
 - 裏の確認でトークンの更新を断られた（400 / 401）ら、ログアウトはせず、アプリでログインし直す（または画面が更新できる）まで裏の確認を休む（`SessionStore.authBroken`）。更新は画面と同じ鍵を持って行い、裏の確認が待つのは20秒まで（`ResultWorker.REFRESH_TIMEOUT_MS`）。待つのをやめても更新の通信は取り消さず、答えが遅れて届いたらそれも残す（サーバーはもう更新トークンを入れ替えているため）。その間も鍵は持ったままで、画面は期限が近いときだけ鍵を待つ。更新したログイン情報は書き終わるまで待って残す（`SessionStore.commitAuth`。更新トークンは1回きり）。端末の設定で通知を切られている間も読まない。
 - `view` には手元のビューの世代 `since`（ビューの `viewGeneration`）を添える。世代が同じ（かつ保存の版が今のサーバーと同じ）なら、サーバーはビューを送らず `{ unchanged: true, viewGeneration, writable }` だけ返す（`server/leagueService.mjs` の `view`）。アプリはこのとき `writable`（書き込めるか）だけを合わせる。世代を持たない保存先（開発サーバーの `FileStore`）は `since` を無視して毎回全部返す。
 - `command` の返事の `view` は最新のビューで、`view.viewGeneration` に公開した世代が入る（`server/storage/supabaseStore.mjs`）。アプリは読み直さずにこれを使い、次の `since` にする。返事に `view` が無ければ読み直す。
@@ -61,7 +68,7 @@
 - 年間表彰・プロのその後・年齢構成・はじめての1週間で読むビューの項目（`docs/online/PYRAMID_LEAGUE.md` の同じ名前の節）。どれも古いサーバーには無く、無ければ出さない（版は上げていない）。名前を変えると黙って出なくなる:
   - `chronicle.honors`（`server/seasonAwards.mjs` の `honorsView`）の `year`・`titles[]` の `label`・`name`・`team`・`line`、`leagues[]` の `league`・`mvp` / `rookie`（`name`・`team`・`line`）・`bestNine[]`（`label`・`name`・`team`）・`battery`（`team`・`pitcher`・`catcher`・`line`）。文は `Chronicle.kt` の `honorRows`（Web 版 `chronicleText.js` と同じ）。全国紙は `year` がビューの `year` と同じときだけ載せる。
   - `chronicle.proNews[]`（`server/proCareer.mjs`）の `name`・`team`・`npbTeam`・`text`・`highlight`（`ended` は引退・戦力外）。`chronicle.proDrafted[].after` と、球団の窓口（`team`）の `chronicle.proDrafted[].career`（`proDraftedAfter`）。
-  - `ageOutlook`（`src/online/ageOutlook.js`）の `years`・`bands[]`（`label`・`pitchers`・`fielders`）・`core[]`・`lines[]`・`advice`。`null` のとき（名簿が空・途中参加で初期メンバー待ち）は出さない（`AgeOutlook.kt` の `ageOutlookOf`）。
+  - `ageOutlook`（`src/online/ageOutlook.js`）の `years`・`bands[]`（`label`・`pitchers`・`fielders`）・`grid[]`（`id`・`name`・`position`・`group`・`age`・`later`・`core`・`warn`。年齢 × 守備位置の図。無ければ帯の図）・`core[]`・`lines[]`・`advice`。`null` のとき（名簿が空・途中参加で初期メンバー待ち）は出さない（`AgeOutlook.kt` の `ageOutlookOf`）。
   - `joinedAt`（ISO の時刻。リーグを作ったときの人には無い）と `teamName`。はじめての1週間の期間と、端末に残す鍵（`FirstWeek.kt`）。鍵が変わったら済みの印を捨てるのは、ビューを受け取ったところ（`AppViewModel.applyView`）。
 - 手続きの任せ方は、ビューの `phase.delegated`（自分がその手続きを指導者に任せているか）と `members` の `ready`・`cpu`・`delegated` を読む。任せた手続きは決定の帯を出さず、`defaults` の案（指導者の案）を読むだけで見せる。待たれている最後の1人が手続きの分野を「任せる」にして保存すると、サーバーはその場で手続きを決めるので、アプリは送る前に確かめる（`shared/.../Staff.kt` の `delegationSettles`。`server/leagueEngine.mjs` の `waitsFor` と同じ見方）。
 

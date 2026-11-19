@@ -4,7 +4,7 @@
 // ============================================================
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor, dexterityMult, dexterityShift } from './growthUtils.js';
-import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT, BATS_SHORT } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILITY_CAP } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 // ⚠ **確率的丸め**。年次成長（`growthSystem`）と同じものを使う（二重に書かない）
 import { stochasticRound } from './growthSystem.js';
@@ -396,7 +396,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const oldMuscle = player.physical.muscle ?? 50;
         if (oldMuscle < 100) {
           const mGrowth = Math.floor(Math.random() * 3) + 1; // 1〜3
-          player.physical.muscle = Math.min(100, oldMuscle + mGrowth);
+          player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGrowth);
           growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
         }
       }
@@ -415,14 +415,14 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const oldMuscle = player.physical.muscle ?? 50;
         if (oldMuscle < 100) {
           const mGrowth = Math.floor(Math.random() * 3) + 1;
-          player.physical.muscle = Math.min(100, oldMuscle + mGrowth);
+          player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGrowth);
           growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
         }
         // 肩力 +0〜1（40%で+1）投手は球速連動
         if (Math.random() < 0.4) {
           const oldArm = player.physical.arm || 50;
           if (oldArm < 100) {
-            player.physical.arm = Math.min(100, oldArm + 1);
+            player.physical.arm = Math.min(ABILITY_CAP, oldArm + 1);
             growthReport.push({ statName: '肩力', before: oldArm, after: player.physical.arm, growth: 1 });
             if (player.pitching) {
               const armNow = player.physical.arm;
@@ -444,7 +444,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const oldPower = player.batting.power || 0;
         const powerGrowth = applyTechStatDecay(oldPower, 1);
         if (powerGrowth > 0) {
-          player.batting.power = Math.min(100, oldPower + powerGrowth);
+          player.batting.power = Math.min(ABILITY_CAP, oldPower + powerGrowth);
           growthReport.push({ statName: 'パワー', before: oldPower, after: player.batting.power, growth: powerGrowth });
         }
       }
@@ -509,7 +509,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const oldDef = player.fielding.defense || 50;
         const def = applyTechStatDecay(oldDef, defRaw);
         if (def > 0) {
-          player.fielding.defense = Math.min(100, oldDef + def);
+          player.fielding.defense = Math.min(ABILITY_CAP, oldDef + def);
           growthReport.push({ statName: '守備', before: oldDef, after: player.fielding.defense, growth: def });
         }
       }
@@ -518,7 +518,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const oldBunt = player.batting.bunt || 30;
         const buntGrowth = applyTechStatDecay(oldBunt, 1);
         if (buntGrowth > 0) {
-          player.batting.bunt = Math.min(100, oldBunt + buntGrowth);
+          player.batting.bunt = Math.min(ABILITY_CAP, oldBunt + buntGrowth);
           growthReport.push({ statName: 'バント', before: oldBunt, after: player.batting.bunt, growth: buntGrowth });
         }
       }
@@ -552,9 +552,10 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           growthReport.push({ statName: 'フォーム改造成功', before: FORM_SHORT[currentForm], after: FORM_SHORT[targetForm], growth: 0, isAwakening: true });
           const bonus = Math.floor(Math.random() * 3) + 3;
           const oldCtrl = player.pitching.control || 50;
-          // ⚠ 上限100で止める（ほかの制球の伸びと同じ。98で成功すると103になっていた）
-          player.pitching.control = Math.min(100, oldCtrl + bonus);
-          growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: player.pitching.control - oldCtrl });
+          // ⚠ 上限（ABILITY_CAP）で止める（98で成功すると103になっていた）
+          player.pitching.control = Math.min(ABILITY_CAP, oldCtrl + bonus);
+          if (player.pitching.control !== oldCtrl)
+            growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: player.pitching.control - oldCtrl });
         } else {
           // 失敗: フォーム変更 + 制球-1~3 ダウン
           growthReport.push({ statName: 'フォーム改造', before: FORM_SHORT[currentForm], after: FORM_SHORT[targetForm], growth: 0 });
@@ -572,7 +573,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const oldMeet = player.batting.meet || 50;
           const mt = applyTechStatDecay(oldMeet, mtRaw);
           if (mt > 0) {
-            player.batting.meet = Math.min(100, oldMeet + mt);
+            player.batting.meet = Math.min(ABILITY_CAP, oldMeet + mt);
             growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: mt });
           }
         }
@@ -757,7 +758,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const oldCtrl = player.pitching.control || 50;
         const ctrlGain = applyTechStatDecay(oldCtrl, 1);
         if (ctrlGain > 0) {
-          player.pitching.control = Math.min(100, oldCtrl + ctrlGain);
+          player.pitching.control = Math.min(ABILITY_CAP, oldCtrl + ctrlGain);
           growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: ctrlGain });
         }
       }
@@ -770,7 +771,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       const rawGain = Math.floor(Math.random() * 3) + 1; // 1~3
       const gain = Math.max(1, Math.round(rawGain * batteryMult));
       const old = player.catching.lead || 40;
-      player.catching.lead = Math.min(100, old + gain);
+      player.catching.lead = Math.min(ABILITY_CAP, old + gain);
       growthReport.push({ statName: 'Cリード', before: old, after: player.catching.lead, growth: gain });
       break;
     }
@@ -821,7 +822,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const old = player.batting.eye || 50;
         const eyeGain = applyTechStatDecay(old, eyeRaw);
         if (eyeGain > 0) {
-          player.batting.eye = Math.min(100, old + eyeGain);
+          player.batting.eye = Math.min(ABILITY_CAP, old + eyeGain);
           growthReport.push({ statName: '選球眼', before: old, after: player.batting.eye, growth: eyeGain });
         }
       }

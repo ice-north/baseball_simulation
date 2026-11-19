@@ -11,9 +11,12 @@ import { requireOnline } from '../src/online/shared.js';
  * ⚠ 1つのリンクで作れるアカウントは1つ。使う途中（アカウントを作っている間）は
  *    `claimedAt` で押さえて、同じリンクの同時押しで2つ作られないようにする。
  *    作るのに失敗したら押さえを外して、もう一度使えるようにする。
+ * ⚠ **押さえは時間で外さない**。アカウントを作ったあと使用済みの印を付け損ねる
+ *    （定期進行のロックと重なる・関数が途中で止まる）と、押さえが外れた時点で同じリンクから
+ *    2つ目のアカウントを作れてしまう。古い押さえのリンクは使えなくし、管理者に作り直してもらう。
  */
 export const INVITE_DAYS = 7;
-/** 使う途中の押さえ。これより古い押さえは、途中で落ちたものとして外す */
+/** 使う途中の押さえ。これより古い押さえは途中で止まったものとして、そのリンクを使えなくする */
 export const INVITE_CLAIM_MS = 2 * 60000;
 /** 未使用で持てる招待の数（作りすぎの歯止め） */
 export const INVITE_OPEN_MAX = 12;
@@ -109,10 +112,50 @@ const findOpen = (bundle, token, now) => {
   return invite;
 };
 
+/** 押さえたまま止まったリンク。アカウントができているかもしれないので、もう使わせない */
+function assertNotStalled(invite, now) {
+  requireOnline(
+    !invite.claimedAt || ms(invite.claimedAt) + INVITE_CLAIM_MS > ms(now),
+    'この招待リンクは登録が途中で止まりました。作ったアカウントでログインできないときは、管理者に新しいリンクを頼んでください',
+    409,
+    'invite_used',
+  );
+}
+
+/**
+ * ログイン前の確かめに要るぶんだけの写し（管理行の `views._invites` に置く。`supabaseStore.mjs`）。
+ * ⚠ **合言葉は入れない**（ハッシュと期限・使用・取り消し・押さえの時刻だけ）。
+ * ⚠ ログイン前の入口（`checkInvite`）が保存の芯（数MB）を読まずに済むようにするため。
+ *    形だけ合う文字列を送り続けられても、管理行の小さな列を1回読むだけで済む。
+ */
+export function inviteDigest(bundle) {
+  return (bundle.invites || []).map((i) => ({
+    hash: i.hash,
+    expiresAt: i.expiresAt,
+    ...(i.usedAt ? { usedAt: i.usedAt } : {}),
+    ...(i.revokedAt ? { revokedAt: i.revokedAt } : {}),
+    ...(i.claimedAt ? { claimedAt: i.claimedAt } : {}),
+  }));
+}
+
 /** リンクを開いたときの確かめ（まだ使えるか・期限）。押さえはしない */
 export function peekInvite(bundle, token, now) {
   const invite = findOpen(bundle, token, now);
+  assertNotStalled(invite, now);
   return { expiresAt: invite.expiresAt };
+}
+
+/**
+ * 招待でアカウントを作ったが、まだ参加していない人の数（その人の球団の分を空けておく）。
+ * ⚠ 残り1球団で2本のリンクを送ると、2人ともアカウントを作れて、後から参加した人は入れなかった。
+ * ⚠ **登録から7日（`INVITE_DAYS`）まで**。参加しないままの人で枠が埋まり続けないように
+ */
+function reservedSeats(bundle, now) {
+  const joined = new Set((bundle.league?.members || []).map((m) => m.userId));
+  const since = ms(now) - INVITE_DAYS * 86400000;
+  return (bundle.invites || []).filter(
+    (i) => i.usedBy && !joined.has(i.usedBy) && ms(i.usedAt) > since,
+  ).length;
 }
 
 /**
@@ -121,17 +164,20 @@ export function peekInvite(bundle, token, now) {
  */
 export function claimInvite(bundle, token, now) {
   const invite = findOpen(bundle, token, now);
-  requireOnline(
-    !invite.claimedAt || ms(invite.claimedAt) + INVITE_CLAIM_MS <= ms(now),
-    'この招待リンクは登録の途中です。少し待ってからもう一度お試しください',
-    409,
-    'busy',
-  );
+  if (invite.claimedAt) {
+    assertNotStalled(invite, now);
+    requireOnline(
+      false,
+      'この招待リンクは登録の途中です。少し待ってからもう一度お試しください',
+      409,
+      'busy',
+    );
+  }
   const league = bundle.league;
   const teams = league?.season?.settings?.teamNames;
   if (Array.isArray(teams))
     requireOnline(
-      (league.members || []).length < teams.length,
+      (league.members || []).length + reservedSeats(bundle, now) < teams.length,
       '空いている球団がありません。管理者に相談してください',
       409,
     );

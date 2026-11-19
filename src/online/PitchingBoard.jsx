@@ -6,6 +6,7 @@ import { useBoardHistory } from './useBoardHistory.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
 import { FORM_SHORT, FORM_NAME, getFatigueTone } from '../utils/constants.js';
 import { POS_FULL } from './api.js';
+import { pitchTypes, totalBreak } from './playerColumns.js';
 import {
   MAX_STARTERS,
   STARTER_ORDER,
@@ -64,8 +65,8 @@ const STAT_COLUMNS = (() => {
 })();
 const SHORT_LABEL = { games: '登板', holds: 'H', saves: 'S' };
 // ⚠ 列を足したらここも直すこと（`colSpan` がずれると罫線が折れる）。
-//    順・役割・投手 / 投・フォーム・年齢・疲労 / 速・制・ス / 成績
-const COLUMN_COUNT = 3 + 4 + 3 + STAT_COLUMNS.length;
+//    順・役割・投手 / 投・フォーム・年齢・疲労 / 球速・制球・スタ・変化 / 成績
+const COLUMN_COUNT = 3 + 4 + 4 + STAT_COLUMNS.length;
 /** 名前の色の意味。⚠ **色だけに頼らない**（読み上げとマウスオーバーに出す） */
 const FATIGUE_TONE_TEXT = {
   warn: '疲れています（このまま投げ続けると成長が鈍ります）',
@@ -91,10 +92,11 @@ function HeaderRow() {
         疲労
       </th>
       <th className="is-sep" title="球速">
-        速
+        球速
       </th>
-      <th title="制球">制</th>
-      <th title="スタミナ">ス</th>
+      <th title="制球">制球</th>
+      <th title="スタミナ">スタ</th>
+      <th title="変化球（直球を除く持ち球）のキレの合計。封印した球は数えない">変化</th>
       {STAT_COLUMNS.map((column, i) => (
         <th
           key={column.id}
@@ -163,6 +165,7 @@ function PitcherCells({ player, starter }) {
       <td>
         <AbilityValue value={player.pitching?.stamina} isSta placeholder="—" />
       </td>
+      <td title={pitchTypes(player) || '変化球なし'}>{totalBreak(player) ?? '—'}</td>
       {STAT_COLUMNS.map((column, i) => (
         <td key={column.id} className={i === 0 ? 'is-sep is-stat' : 'is-stat'}>
           {formatStat(column, column.get(player))}

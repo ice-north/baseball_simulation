@@ -25,6 +25,7 @@ on:
       - 'src/online/awaySummary.js'
       - 'src/online/chronicleText.js'
       - 'src/online/firstWeek.js'
+      - 'src/online/paper/**'
       - 'src/utils/constants.js'
   pull_request:
     paths:
@@ -44,6 +45,7 @@ on:
       - 'src/online/awaySummary.js'
       - 'src/online/chronicleText.js'
       - 'src/online/firstWeek.js'
+      - 'src/online/paper/**'
       - 'src/utils/constants.js'
   workflow_dispatch:
 
@@ -78,6 +80,7 @@ jobs:
           node tools/expect-logic.mjs --check
           node tools/expect-social.mjs --check
           node tools/expect-chronicle.mjs --check
+          node tools/expect-paper.mjs --check
       - name: 共通部分の検査
         run: ./gradlew :shared:jvmTest --console=plain
       - name: アプリの通信・画面の回帰検査

@@ -64,6 +64,8 @@ const FULL_COMMANDS = new Set([
   'tradeRespond',
   // 守備位置の変更も世界を読み込む（`convertPosition` の前の `loadLeagueWorld`）
   'convert',
+  // 主将・永久欠番も世界の球団を書き換える（`teamFace.mjs`）
+  'teamFace',
   // 球団をCPUに戻すと編成を作り直す。練習試合を受けるとその場で1試合する
   'releaseMember',
   'challengeRespond',
@@ -293,6 +295,9 @@ export class LeagueService {
   /** 招待リンクを開いたとき（ログイン前）。まだ使えるかだけ返す */
   async checkInvite(token) {
     assertInviteShape(token);
+    // ⚠ ログイン前に誰でも叩ける入口。本番は管理行の小さな写しだけを読む（芯は数MB）
+    const digest = this.store.readInvites ? await this.store.readInvites() : null;
+    if (digest) return peekInvite({ invites: digest }, token, this.clock());
     const bundle = this.store.readLight
       ? (await this.store.readLight()).bundle
       : await this.store.read();
@@ -325,7 +330,7 @@ export class LeagueService {
       throw error;
     }
     // ⚠ アカウントはもうできている。定期進行と重なって断られても、使用済みの印は付け直す
-    //    （付け損ねると、押さえが切れたあと同じリンクで2つ目を作れてしまう）
+    //    （付け損ねても、押さえは時間で外れないので2つ目は作れない。そのリンクは使えなくなる）
     for (let attempt = 0; ; attempt += 1) {
       try {
         await this.store.transaction((bundle) => {
@@ -617,6 +622,13 @@ export class LeagueService {
           await this.engine((e) => {
             e.loadLeagueWorld(l);
             e.convertPosition(l, userId, command.payload || {});
+            l.game = e.captureLeagueWorld();
+          });
+        } else if (command.type === 'teamFace') {
+          // 主将・永久欠番（球団の顔。効き目は無い。`teamFace.mjs`）
+          await this.engine((e) => {
+            e.loadLeagueWorld(l);
+            e.setTeamFace(l, userId, command.payload || {});
             l.game = e.captureLeagueWorld();
           });
         } else if (command.type === 'tradeRespond') {

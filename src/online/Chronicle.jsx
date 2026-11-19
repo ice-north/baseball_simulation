@@ -3,6 +3,7 @@ import { POS } from './api.js';
 import TeamRoster from './TeamRoster.jsx';
 import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
+import { useActions } from './ActionContext.jsx';
 import { teamLabel, teamShort } from './gameText.js';
 import {
   raceText,
@@ -24,6 +25,49 @@ import {
 //    在籍年数に読める（ほかのページの「1年目オフの成長」「1年目 · 次の進行」と揃える）。
 //    節目も年を出す（月日だけだと何年目の話か分からなかった。アプリは年を出している）。
 // ============================================================
+
+/**
+ * 球団史・記録の欄を1つずつ折りたたむ（いしだ 2026-11-18「情報量が多くなり PC で縦長で見づらい。
+ * 各一覧を折りたたんで、必要な物を開いて見るように」）。
+ * ⚠ 開いた欄は端末に覚える（球団を選び直したり、ページを移ったりするたびに閉じると、
+ *    毎回開き直すことになる）。初めは全部閉じておく。
+ * ⚠ `count` は見出しの横に件数を出す（閉じたままでも中身の量が分かるように）
+ */
+const FOLD_KEY = 'online.chronicle.open';
+const readOpen = () => {
+  try {
+    const list = JSON.parse(localStorage.getItem(FOLD_KEY) || '[]');
+    return new Set(Array.isArray(list) ? list : []);
+  } catch {
+    return new Set();
+  }
+};
+function Fold({ id, title, count, children }) {
+  const [open, setOpen] = useState(() => readOpen().has(id));
+  const toggle = (e) => {
+    const next = e.currentTarget.open;
+    setOpen(next);
+    try {
+      const set = readOpen();
+      if (next) set.add(id);
+      else set.delete(id);
+      localStorage.setItem(FOLD_KEY, JSON.stringify([...set]));
+    } catch {
+      // 保存できない端末（プライベートモードなど）では覚えないだけ
+    }
+  };
+  return (
+    <details className="online-card online-fold" open={open} onToggle={toggle}>
+      <summary>
+        <h2>
+          {title}
+          {count != null && <small>{count}件</small>}
+        </h2>
+      </summary>
+      {open && <div className="online-fold-body">{children}</div>}
+    </details>
+  );
+}
 
 function Seasons({ seasons }) {
   if (!seasons?.length)
@@ -251,6 +295,130 @@ function Owners({ list }) {
   );
 }
 
+/**
+ * 今季総括号（年度更新のあと〜開幕前だけ。リーグ全体）。⚠ 文はサーバーが作る（`server/seasonReview.mjs`）。
+ * アプリの全国紙（キャンプの日の1面）と同じ記事
+ */
+export function SeasonReview({ review }) {
+  if (!review?.articles?.length) return null;
+  return (
+    <section className="online-card online-season-review">
+      <h2>今季総括号 {review.headline}</h2>
+      {review.lead && <p>{review.lead}</p>}
+      <div className="online-news-list">
+        {review.articles.map((a) => (
+          <article key={a.kicker}>
+            <b>
+              〔{a.kicker}〕{a.title}
+            </b>
+            <span>{a.body}</span>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * 球団の顔（C2）: 主将・歴代主将・永久欠番・在籍の長い人。効き目は無い（紙面と球団史に残るだけ）。
+ * ⚠ 変えられるのは自球団だけ（命令 `teamFace`、`server/teamFace.mjs`）。アプリの球団史と同じ並び
+ */
+export function TeamFace({ face, own, roster = [], ties = [] }) {
+  const actions = useActions();
+  const [error, setError] = useState('');
+  if (!face) return <p>まだありません。</p>;
+  const canEdit = own && actions?.command && actions.writable;
+  const send = async (payload) => {
+    setError('');
+    const result = await actions.run(() => actions.command('teamFace', payload));
+    if (!result?.ok) setError(result?.error || '変えられませんでした');
+  };
+  const num = (n) => (Number.isInteger(n) ? `#${n} ` : '');
+  return (
+    <div className="online-team-face">
+      <p>
+        主将: <b>{face.captain ? `${num(face.captain.number)}${face.captain.name}` : 'なし'}</b>
+        {canEdit && (
+          <select
+            aria-label="主将を選ぶ"
+            disabled={actions.busy}
+            value={face.captain?.id ?? ''}
+            onChange={(e) => send({ captain: e.target.value === '' ? null : Number(e.target.value) })}
+          >
+            <option value="">主将を置かない</option>
+            {roster.map((p) => (
+              <option key={p.id} value={p.id}>
+                {num(p.number)}
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </p>
+      {face.captains?.length > 0 && (
+        <p className="online-muted">
+          歴代主将: {face.captains.map((c) => `${c.year}年目 ${c.name}`).join('・')}
+        </p>
+      )}
+      <h3>永久欠番</h3>
+      {face.retiredNumbers?.length ? (
+        <ul className="online-plain-list">
+          {face.retiredNumbers.map((r) => (
+            <li key={r.number}>
+              <b>{r.number}</b> {r.name}（{r.year}年目に引退）
+              {canEdit && (
+                <button disabled={actions.busy} onClick={() => send({ unretire: r.number })}>
+                  欠番を戻す
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="online-muted">まだありません。この球団で引退した選手の背番号を、永久欠番にできます。</p>
+      )}
+      {canEdit && face.candidates?.length > 0 && (
+        <ul className="online-plain-list">
+          {face.candidates.map((c) => (
+            <li key={`${c.year}:${c.name}`}>
+              #{c.number} {c.name}（{c.year}年目に引退{c.line ? `・${c.line}` : ''}）
+              <button disabled={actions.busy} onClick={() => send({ retire: { name: c.name, year: c.year } })}>
+                永久欠番にする
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {face.tenure?.length > 0 && (
+        <>
+          <h3>在籍の長い選手</h3>
+          <p className="online-muted">
+            {face.tenure.map((t) => `${t.name} ${t.years}年${t.homegrown ? '（生え抜き）' : ''}`).join('・')}
+          </p>
+        </>
+      )}
+      {own && ties?.length > 0 && (
+        <>
+          <h3>地元・同窓の縁</h3>
+          <div className="online-news-list">
+            {ties.map((a) => (
+              <article key={a.kicker}>
+                <b>{a.title}</b>
+                <span>{a.body}</span>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+      {error && (
+        <p role="alert" className="online-alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Milestones({ list, showTeam = false }) {
   if (!list?.length) return <p>まだありません。通算100安打・シーズン20本塁打などに届くと、ここに残ります。</p>;
   return (
@@ -279,7 +447,7 @@ function Milestones({ list, showTeam = false }) {
  *    （節目はそのページに球団ごとの欄がある）。
  */
 const HOME_TOPIC_LIMIT = 2;
-export function LeagueTopics({ view, full = false }) {
+export function LeagueTopics({ view, full = false, bare = false }) {
   const limit = full ? Infinity : HOME_TOPIC_LIMIT;
   const races = (view.races || [])
     .map((r) => raceText(r, teamShort))
@@ -293,15 +461,20 @@ export function LeagueTopics({ view, full = false }) {
   const milestones = full ? [] : view.chronicle?.milestones || [];
   // 今年のプロの便り（10月から年度更新まで）
   const pro = (view.chronicle?.proNews || []).slice(0, limit);
-  if (!races.length && !world.length && !milestones.length && !pro.length) return null;
+  if (!races.length && !world.length && !milestones.length && !pro.length)
+    return bare ? <p>まだ話題がありません。</p> : null;
+  // `bare`: 枠と見出しなし（球団史・記録の折りたたみの中に入れる）
+  const Wrap = bare ? React.Fragment : 'section';
   return (
-    <section className="online-card">
+    <Wrap {...(bare ? {} : { className: 'online-card' })}>
       {/* ⚠ 続きの案内は**見出しの行に置く**。1行足すと24px取られ、順位表ごと
           1画面から出る（実測 982px→1006px） */}
-      <h2 className="online-topics-head">
-        リーグの話題
-        {!full && <small>続きは「球団史・記録」で</small>}
-      </h2>
+      {!bare && (
+        <h2 className="online-topics-head">
+          リーグの話題
+          {!full && <small>続きは「球団史・記録」で</small>}
+        </h2>
+      )}
       {races.length > 0 && (
         <div className="online-news-list">
           {races.map((t, i) => (
@@ -348,7 +521,7 @@ export function LeagueTopics({ view, full = false }) {
           </div>
         </>
       )}
-    </section>
+    </Wrap>
   );
 }
 
@@ -363,58 +536,60 @@ export default function Chronicle({ view }) {
             sub={`${teamLabel(shown.teamName)}の年ごとの成績と、このリーグでの歴代記録。記録はリーグを始めてからのものです。`}
             actions={<div className="online-team-selector">{selector}</div>}
           >
-            <section className="online-card">
-              <h2>年表</h2>
+            <SeasonReview review={view.seasonReview} />
+            {/* ⚠ 欄はどれも折りたたむ（`Fold`）。2列に分けると、開いた欄の横に大きな空きが
+                できるので1列に並べる */}
+            <Fold id="seasons" title="年表" count={c.seasons?.length || 0}>
               <Seasons seasons={c.seasons} />
-            </section>
-            <section className="online-card">
-              <h2>歴代記録</h2>
+            </Fold>
+            <Fold id="records" title="歴代記録（各項目10位まで）">
               <Records records={c.records} view={view} team={shown.teamName} />
-            </section>
-            <div className="online-board">
-              <div className="online-board-main">
-                <section className="online-card">
-                  <h2>節目の記録</h2>
-                  <Milestones list={c.milestones} />
-                </section>
-                {/* ホームで2件に切った優勝争い・球界の外からの続き（リーグ全体の話題） */}
-                <LeagueTopics view={view} full />
-              </div>
-              <div className="online-board-side">
-                <section className="online-card">
-                  <h2>入退団履歴</h2>
-                  <Moves key={shown.teamName} list={c.moves} />
-                </section>
-                <section className="online-card">
-                  <h2>プロ入りした選手</h2>
-                  <ProDrafted
-                    list={c.proDrafted}
-                    empty="この球団からプロ入りした選手はまだいません。指名されるとチームメイトのプロ意識と経験が上がります。"
-                  />
-                </section>
-                <section className="online-card">
-                  <h2>引退した選手</h2>
-                  <Retired list={c.retired} />
-                </section>
-                {/* リーグ全体の記録（球団を選び直しても同じ） */}
-                <section className="online-card">
-                  <h2>オーナー名鑑</h2>
-                  <Owners list={view.owners} />
-                </section>
-                <section className="online-card">
-                  <h2>年間表彰{view.chronicle?.honors?.year ? `（${view.chronicle.honors.year}年目）` : ''}</h2>
-                  <Honors honors={view.chronicle?.honors} />
-                </section>
-                <section className="online-card">
-                  <h2>リーグからプロへ</h2>
-                  <ProDrafted
-                    list={view.chronicle?.proDrafted}
-                    showTeam
-                    empty="まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜5人。0人の年もあります）。"
-                  />
-                </section>
-              </div>
-            </div>
+            </Fold>
+            <Fold id="face" title="球団の顔">
+              <TeamFace
+                face={c.face}
+                own={shown.teamName === view.teamName}
+                roster={shown.teamName === view.teamName ? view.roster || [] : []}
+                ties={view.ties}
+              />
+            </Fold>
+            <Fold id="milestones" title="節目の記録" count={c.milestones?.length || 0}>
+              <Milestones list={c.milestones} />
+            </Fold>
+            <Fold id="moves" title="入退団履歴" count={c.moves?.length || 0}>
+              <Moves key={shown.teamName} list={c.moves} />
+            </Fold>
+            <Fold id="proDrafted" title="プロ入りした選手" count={c.proDrafted?.length || 0}>
+              <ProDrafted
+                list={c.proDrafted}
+                empty="この球団からプロ入りした選手はまだいません。指名されるとチームメイトのプロ意識と経験が上がります。"
+              />
+            </Fold>
+            <Fold id="retired" title="引退した選手" count={c.retired?.length || 0}>
+              <Retired list={c.retired} />
+            </Fold>
+            {/* ここから下はリーグ全体の記録（球団を選び直しても同じ） */}
+            <h3 className="online-fold-group">リーグ全体</h3>
+            {/* ホームで2件に切った優勝争い・球界の外からの続き（リーグ全体の話題） */}
+            <Fold id="topics" title="リーグの話題">
+              <LeagueTopics view={view} full bare />
+            </Fold>
+            <Fold id="owners" title="オーナー名鑑" count={view.owners?.length || 0}>
+              <Owners list={view.owners} />
+            </Fold>
+            <Fold
+              id="honors"
+              title={`年間表彰${view.chronicle?.honors?.year ? `（${view.chronicle.honors.year}年目）` : ''}`}
+            >
+              <Honors honors={view.chronicle?.honors} />
+            </Fold>
+            <Fold id="leaguePro" title="リーグからプロへ" count={view.chronicle?.proDrafted?.length || 0}>
+              <ProDrafted
+                list={view.chronicle?.proDrafted}
+                showTeam
+                empty="まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜5人。0人の年もあります）。"
+              />
+            </Fold>
           </Page>
         );
       }}

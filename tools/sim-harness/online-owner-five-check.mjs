@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import { proCareerOf, proNewsOf, withProCareer, PRO_SEASON_END_MONTH } from '../../server/proCareer.mjs';
 import { firstWeekGuide, inFirstWeek, markFirstWeek, FIRST_WEEK_STEPS, FIRST_WEEK_DAYS } from '../../src/online/firstWeek.js';
-import { ageOutlook, AGE_BANDS, CORE_FIELDERS, CORE_PITCHERS, outlookOf } from '../../src/online/ageOutlook.js';
+import { ageOutlook, ageGridRows, AGE_BANDS, AGE_GRID_TOP, CORE_FIELDERS, CORE_PITCHERS, outlookOf } from '../../src/online/ageOutlook.js';
 import { honorRows } from '../../src/online/chronicleText.js';
 import { honorsView, honorTitlesOf, isRookie, ROOKIE_MAX_AGE, selectHonors } from '../../server/seasonAwards.mjs';
 import { createLeague } from '../../server/leagueEngine.mjs';
@@ -83,6 +83,16 @@ import { createLeague } from '../../server/leagueEngine.mjs';
   const o = ageOutlook(team.players, all);
   assert.equal(o.bands.length, AGE_BANDS.length);
   assert.equal(o.bands.reduce((n, b) => n + b.pitchers + b.fielders, 0), team.players.length, '段の人数の合計が名簿と違う');
+  // 年齢 × 守備位置の図: 全員がちょうど1回ずつ載る・上が「30以上」で1歳ずつ下がる・主力の数が合う
+  for (const later of [false, true]) {
+    const rows = ageGridRows(o.grid, later);
+    const placed = rows.flatMap((r) => r.cells.flat());
+    assert.equal(placed.length, team.players.length, `図に載った人数が名簿と違う（later=${later}）`);
+    assert.equal(new Set(placed.map((p) => p.id)).size, team.players.length, '図に同じ人が2回載った');
+    assert.equal(rows[0].label, `${AGE_GRID_TOP}以上`);
+    for (let i = 2; i < rows.length; i++) assert.equal(Number(rows[i - 1].label) - 1, Number(rows[i].label), '段が1歳ずつでない');
+  }
+  assert.equal(o.grid.filter((p) => p.core).length, CORE_FIELDERS + CORE_PITCHERS, '図の主力の数が違う');
   assert.equal(o.core.length, CORE_FIELDERS + CORE_PITCHERS, '主力の人数');
   assert.ok(o.lines.length >= 3 && o.advice, '文が無い');
   for (const r of o.core) assert.equal(r.later, r.age + o.years);

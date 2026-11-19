@@ -32,6 +32,56 @@ export const VETERAN_AGE = 35;
 const RISING_UPSIDE = 6;
 
 const isPitcher = (p) => p.position === 'pitcher';
+
+// ------------------------------------------------------------
+// 年齢 × 守備位置の図（いしだ 2026-11-18「縦に年齢（上が高い）、横にポジション。
+// どのポジションが将来足りなくなるか分かりやすい」）。
+// ⚠ 縦は1歳ずつ、上の段は「30以上」にまとめる。下は19歳まで（もっと若い人がいればその歳まで）。
+// ⚠ アプリ（`AgeOutlook.kt` の ageGridRows）と同じ切り方にすること。
+// ------------------------------------------------------------
+/** 横の並び（守備位置のまとまり） */
+export const AGE_GRID_GROUPS = ['投手', '捕手', '内野', '外野'];
+/** いちばん上の段（この歳から上をまとめる） */
+export const AGE_GRID_TOP = 30;
+/** 下の段の目安（これより若い人がいればその歳まで伸ばす） */
+export const AGE_GRID_BOTTOM = 19;
+const GROUP_OF = {
+  pitcher: 0,
+  catcher: 1,
+  first: 2,
+  second: 2,
+  third: 2,
+  short: 2,
+  left: 3,
+  center: 3,
+  right: 3,
+};
+/** 守備位置 → 横の列（0〜3）。分からない位置は内野に置く */
+export const ageGridGroup = (position) => GROUP_OF[position] ?? 2;
+
+/**
+ * 図の段（上から）。`later` が true なら3年後の年齢で並べる。
+ * 戻り値: [{ label, cells: [[人…] × 4] }]。人は名前の順ではなく、主力を先に
+ */
+export function ageGridRows(players, later = false) {
+  const ageOf = (p) => (later ? p.later : p.age);
+  const list = (players || []).filter((p) => Number.isFinite(ageOf(p)));
+  const youngest = Math.min(AGE_GRID_BOTTOM, ...list.map(ageOf));
+  const rows = [];
+  for (let age = AGE_GRID_TOP; age >= youngest; age--) {
+    const top = age === AGE_GRID_TOP;
+    const here = list.filter((p) => (top ? ageOf(p) >= AGE_GRID_TOP : ageOf(p) === age));
+    rows.push({
+      label: top ? `${AGE_GRID_TOP}以上` : `${age}`,
+      cells: AGE_GRID_GROUPS.map((_, g) =>
+        here
+          .filter((p) => p.group === g)
+          .sort((a, b) => Number(b.core) - Number(a.core) || ageOf(b) - ageOf(a)),
+      ),
+    });
+  }
+  return rows;
+}
 const avg = (list) => (list.length ? list.reduce((s, x) => s + x, 0) / list.length : null);
 const round1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 
@@ -105,9 +155,27 @@ export function ageOutlook(players, leagueAges = []) {
         : share <= 0.15
           ? '主力は若く、控えにも伸びる若手がいます。いまは即戦力を足して勝ちに行ける時期です。'
           : '若手と中堅の釣り合いは取れています。抜けそうな位置だけ、トライアウトで手当てしておきましょう。';
+  // 年齢 × 守備位置の図に置く全員（`ageGridRows` で段に分ける）
+  const coreById = new Map(coreRows.map((r) => [r.id, r]));
+  const grid = list.map((p) => {
+    const r = coreById.get(p.id);
+    const later = p.age + OUTLOOK_YEARS;
+    return {
+      id: p.id,
+      name: p.name,
+      position: p.position || null,
+      group: ageGridGroup(p.position),
+      age: p.age,
+      later,
+      core: !!r,
+      // 主力のうち、3年後に下り坂か引退が近い年齢の人（図では赤で出す）
+      warn: !!r && (r.kind === 'decline' || r.veteran),
+    };
+  });
   return {
     years: OUTLOOK_YEARS,
     bands,
+    grid,
     core: coreRows,
     rising,
     lines,
