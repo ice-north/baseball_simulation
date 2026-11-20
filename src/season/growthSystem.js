@@ -229,11 +229,12 @@ export function applyFreeAgentGrowth(pool) {
   for (const player of pool) {
     const age = player.age || 25;
     const discipline = player.personality?.discipline ?? 50;
-    // ⚠ **変動こみで読むこと**（`naturalCoefOf` の注記）。年度をまたぐ減衰の前に読む
+    // ⚠ growthPotential は年齢で減衰させない（`updateGrowthModifiers` の注記を参照）。
+    //    変動は球団の選手と同じく**先に半分にしてから**読む（いしだ 2026-11-21「判断はおすすめで」）。
+    //    以前は半分にする前に読んでおり、変動+0.1 が曲線を動かす量が球団の選手の倍（0.8年と0.4年）だった
+    player.growthModifier = nextGrowthModifier(player);
+    // ⚠ **変動こみで読むこと**（`naturalCoefOf` の注記）
     const gpEff = gpClamp((player.growthPotential ?? 1.0) + (player.growthModifier || 0));
-
-    // ⚠ growthPotential は年齢で減衰させない（`updateGrowthModifiers` の注記を参照）
-    player.growthModifier = Math.max(-0.3, Math.round((player.growthModifier || 0) * 0.5 * 100) / 100);
 
     // ⚠ 年齢曲線は `naturalCoefOf`（**2つある成長関数で共有すること**）。
     //    チームが無いので環境は FA_VOLUME×FA_GAIN、出場もゼロ扱い
