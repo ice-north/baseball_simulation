@@ -192,7 +192,11 @@ export function coachStints(coach, labelOf) {
   const job = coach.job;
   if (job?.team) {
     const last = out.at(-1);
-    if (last && last.team === job.team && last.role === job.role) last.current = true;
+    // ⚠ 年が続いているときだけまとめる（監査 2026-11-20）。一度離れて同じ球団・同じ役職へ戻った人が、
+    //    通しで在任していたように出ていた。`since` は就いた年のまま（続けて在任する間は動かない）なので、
+    //    年表の最後の行が `since` の前の年まで届いていれば続き
+    if (last && last.team === job.team && last.role === job.role && job.since != null && last.to >= job.since - 1)
+      last.current = true;
     else out.push({ team: job.team, role: job.role, from: job.since ?? null, to: null, current: true });
   }
   return out.map((s) => ({

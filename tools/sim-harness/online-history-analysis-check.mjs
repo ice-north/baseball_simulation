@@ -72,6 +72,26 @@ import { slotOf } from '../../src/online/teamHistory.js';
     stints.map((s) => s.text),
     ['1年目〜2年目 A球団 投手コーチ', '3年目〜 B球団 監督（現職）'],
   );
+  // ⚠ 同じ球団・同じ役職でも、年が続いていなければまとめない（離れて戻った人。監査 2026-11-20）
+  const pitchingA = [
+    { year: 1, team: 'A', role: 'pitching' },
+    { year: 2, team: 'A', role: 'pitching' },
+  ];
+  assert.deepEqual(
+    coachStints({ id: 'c2', career: pitchingA, job: { team: 'A', role: 'pitching', since: 4 } }, label).map((s) => s.text),
+    ['1年目〜2年目 A球団 投手コーチ', '4年目〜 A球団 投手コーチ（現職）'],
+    '離れて戻った人が通しで在任していたように出る',
+  );
+  // 続けて在任している間は `since` が就いた年のまま。まとめて「1年目〜（現職）」
+  assert.deepEqual(
+    coachStints({ id: 'c3', career: pitchingA, job: { team: 'A', role: 'pitching', since: 1 } }, label).map((s) => s.text),
+    ['1年目〜 A球団 投手コーチ（現職）'],
+  );
+  // 年の切り替わりで就いたばかり（今季の行はまだ無い）でも続きならまとめる
+  assert.deepEqual(
+    coachStints({ id: 'c4', career: pitchingA, job: { team: 'A', role: 'pitching', since: 3 } }, label).map((s) => s.text),
+    ['1年目〜 A球団 投手コーチ（現職）'],
+  );
   const rec = (key, team, pa, bf) => ({
     key,
     name: key,
