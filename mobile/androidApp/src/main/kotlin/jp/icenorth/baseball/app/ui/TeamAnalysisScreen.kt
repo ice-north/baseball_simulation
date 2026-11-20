@@ -211,8 +211,8 @@ fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team
                         Text("選手", style = head, color = ink, modifier = Modifier.weight(1f))
                         Text("範囲", style = head, color = ink, modifier = Modifier.width(48.dp), textAlign = TextAlign.End)
                         Text("適性", style = head, color = ink, modifier = Modifier.width(36.dp), textAlign = TextAlign.End)
-                        Text("失策", style = head, color = ink, modifier = Modifier.width(34.dp), textAlign = TextAlign.End)
-                        Text("守備率", style = head, color = ink, modifier = Modifier.width(48.dp), textAlign = TextAlign.End)
+                        Text("失策", style = head, color = ink, modifier = Modifier.width(30.dp), textAlign = TextAlign.End)
+                        Text("守備率", style = head, color = ink, modifier = Modifier.width(58.dp), textAlign = TextAlign.End)
                     }
                     order.forEach { e ->
                         val pos = e.at("position").str().orEmpty()
@@ -234,8 +234,8 @@ fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team
                                 Text("${fitnessAt(p, pos)}", modifier = Modifier.width(36.dp), textAlign = TextAlign.End)
                                 val chances = p.at("seasonStats", "batting", "fieldingChances").num()?.toInt() ?: 0
                                 val errors = p.at("seasonStats", "batting", "errors").num()?.toInt() ?: 0
-                                Text("$errors", modifier = Modifier.width(34.dp), textAlign = TextAlign.End)
-                                Text(if (chances > 0) rate3((chances - errors).toDouble() / chances) else "—", modifier = Modifier.width(48.dp), textAlign = TextAlign.End)
+                                Text("$errors", modifier = Modifier.width(30.dp), textAlign = TextAlign.End)
+                                Text(if (chances > 0) rate3((chances - errors).toDouble() / chances) else "—", modifier = Modifier.width(58.dp), textAlign = TextAlign.End)
                             }
                             if (p != null) {
                                 Row(Modifier.padding(start = 34.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -96,11 +96,13 @@ fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpen
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // ⚠ 絞り込みは2段にまとめる（以前は 表の種類／球団・打撃投球／項目 の3段で、表が画面の半ばから始まった）。
         //    1段目に表の種類と球団、2段目（TeamStats の中）に打撃・投球と項目
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-            ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
+        // ⚠ 切り替えが6つになったので、球団の選択と ⓘ を1段目、切り替えを2段目に分ける
+        //    （同じ行に置くと球団名の幅が無くなり、1字ずつ折り返して行が縦に伸びた）
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, start = 4.dp)) {
             Box(Modifier.weight(1f)) {
                 // 年齢構成は自球団だけ（成長の見込みは他球団には分からない。PC と同じ）
                 if (mode != PlayersMode.Ages) TeamPicker(view, raw, team) { model.playersTeam = it }
+                else Text("自球団の年齢構成", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp))
             }
             InfoButton(
                 "チーム分析",
@@ -115,6 +117,7 @@ fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpen
                 Modifier.padding(end = 8.dp),
             )
         }
+        ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
         when (mode) {
             PlayersMode.Overview -> TeamOverviewPane(model, view, raw, team, onOpenPlan, onOpenTrade)
             PlayersMode.Lineup -> TeamLineupPane(model, view, raw, team)

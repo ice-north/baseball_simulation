@@ -205,7 +205,8 @@ class ScreenTour {
                 step("news") { click("リーグ便り"); shot("games-news") }
                 // リーグ史（過去の順位・プロ入り・取引・通算と能力のランキング・表彰。先方要望 2026-11-20）
                 step("league history") {
-                    chip("history"); pause(1500); page("games-history-standings", scrolls = 1)
+                    // ⚠ 切り替えは一覧の上（送った後は画面の外）。先に上まで戻す
+                    toTop(); chip("history"); pause(1500); page("games-history-standings", scrolls = 1)
                     listOf("pro", "moves", "careers", "ability", "honors").forEach { key ->
                         step("league history $key") { chip(key); pause(2500); page("games-history-$key", scrolls = 1) }
                     }
