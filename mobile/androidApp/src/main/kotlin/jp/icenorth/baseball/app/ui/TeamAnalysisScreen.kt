@@ -29,22 +29,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
-import jp.icenorth.baseball.shared.DEFENSE_POSITION_ORDER
 import jp.icenorth.baseball.shared.LEAGUE_NAMES
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineJson
 import jp.icenorth.baseball.shared.TeamDiagnosis
 import jp.icenorth.baseball.shared.allTeamRatings
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.SERVER_UPDATE_PENDING
 import jp.icenorth.baseball.shared.defenseGrade
+import jp.icenorth.baseball.shared.defensePositionLabel
+import jp.icenorth.baseball.shared.defenseRows
 import jp.icenorth.baseball.shared.defenseRange
 import jp.icenorth.baseball.shared.fitnessAt
+import jp.icenorth.baseball.shared.hasTeamRatings
+import jp.icenorth.baseball.shared.isFieldPosition
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.jsRound
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
-import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.rankIn
 import jp.icenorth.baseball.shared.rate3
 import jp.icenorth.baseball.shared.ratingAverage
@@ -106,7 +109,9 @@ fun TeamOverviewPane(model: AppViewModel, view: LeagueView, raw: JsonObject, tea
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Section("チーム能力値") {
             Muted("いまの起用（スタメン・先発ローテ・リリーフ・控え）に就いている選手の能力の平均です（0〜100）。図は項目ごとにリーグ全球団の中で比べた位置で、外ほど上です。目安で、試合の強さを直接決める数字ではありません。")
-            if (ratings == null) Muted("起用がまだ無いので、チーム能力値を出せません。")
+            // ⚠ 項目が無い（古いサーバー）のと、その球団の値が無い（起用がまだ無い）を分ける（判断6、2026-11-20 監査）
+            if (!hasTeamRatings(raw)) Muted(SERVER_UPDATE_PENDING)
+            else if (ratings == null) Muted("起用がまだ無いので、チーム能力値を出せません。")
             else TeamRadar(
                 ratings = ratings,
                 average = if (inLeague.isEmpty()) null else ratingAverage(inLeague),
@@ -194,10 +199,9 @@ fun TeamDefensePane(model: AppViewModel, data: TeamData) {
             lineup == null || lineup.at("battingOrder").list().isEmpty() -> Muted("この球団のスタメンはまだ読めません。次に日付が進むと出ます。")
             else -> {
                 val byId = roster.associateBy { it.at("id").num()?.toLong() }
-                val order = lineup.at("battingOrder").list().mapNotNull { it.obj() }
-                    .filter { it.at("position").str() in DEFENSE_POSITION_ORDER }
-                    .sortedBy { DEFENSE_POSITION_ORDER.indexOf(it.at("position").str()) }
-                val ranges = order.mapNotNull { e -> byId[e.at("playerId").num()?.toLong()]?.let { defenseRange(it, e.at("position").str().orEmpty()) } }
+                // DH の行も末尾に出す（PC と同じ。判断6、2026-11-20 監査）。チーム守備の平均には入れない
+                val order = defenseRows(lineup.at("battingOrder").list().mapNotNull { it.obj() })
+                val ranges = order.filter { isFieldPosition(it.at("position").str()) }.mapNotNull { e -> byId[e.at("playerId").num()?.toLong()]?.let { defenseRange(it, e.at("position").str().orEmpty()) } }
                 val teamRange = if (ranges.isEmpty()) 0.0 else ranges.average()
                 val teamGrade = defenseGrade(teamRange)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -221,7 +225,7 @@ fun TeamDefensePane(model: AppViewModel, data: TeamData) {
                         val p = byId[e.at("playerId").num()?.toLong()]
                         Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(positionLabel(pos), modifier = Modifier.width(34.dp), fontWeight = FontWeight.Bold)
+                                Text(defensePositionLabel(pos), modifier = Modifier.width(34.dp), fontWeight = FontWeight.Bold)
                                 if (p == null) {
                                     Muted("（空き）")
                                     return@Row

@@ -28,6 +28,16 @@ val RATING_AXES: List<RatingAxis> = listOf(
 /** 図のいちばん内側（リーグでいちばん低い球団の位置。PC の INNER と同じ） */
 const val RADAR_INNER: Double = 0.15
 
+/**
+ * サーバーが古くて項目そのものが無いときの文（判断6、2026-11-20 監査）。
+ * ⚠ 項目が無い（古いサーバー）のと、空（まだ起用が無い・まだ指導していない）を混ぜないこと。
+ *    以前は無いときも「起用がまだ無い」「まだ指導した球団はありません」と、事実と違う文を出していた
+ */
+const val SERVER_UPDATE_PENDING: String = "この項目はまだ読み込めません（サーバーの更新待ち）。"
+
+/** ビューにチーム能力値（`teamRatings`）の項目があるか（古いサーバーには無い） */
+fun hasTeamRatings(raw: JsonObject?): Boolean = raw?.get("teamRatings") is JsonObject
+
 /** 1球団のチーム能力値（ビューの `teamRatings[球団]`）。無ければ null */
 fun teamRatingsOf(raw: JsonObject?, team: String?): Map<String, Int?>? {
     val r = raw?.at("teamRatings", team ?: return null).obj() ?: return null
@@ -122,6 +132,19 @@ fun defenseRange(player: JsonObject, pos: String, fitness: Int = fitnessAt(playe
 
 /** 守備分析の並び（捕・一・二・三・遊・左・中・右。打順より守備の穴を探しやすい） */
 val DEFENSE_POSITION_ORDER: List<String> = listOf("catcher", "first", "second", "third", "short", "left", "center", "right")
+
+/**
+ * 守備分析の行（PC の TeamAnalysis.jsx の Defense と同じ並び）。守備の8位置の順で、それ以外（DH）は
+ * 末尾に残す（判断6、2026-11-20 監査。以前のアプリは DH の行を落としていた）
+ */
+fun defenseRows(battingOrder: List<JsonObject>): List<JsonObject> =
+    battingOrder.sortedBy { e -> DEFENSE_POSITION_ORDER.indexOf(e.at("position").str()).let { if (it == -1) 99 else it } }
+
+/** チーム守備（平均の守備範囲）に入れる行。DH は守らないので入れない（PC の守備図 FieldDiagram と同じ） */
+fun isFieldPosition(pos: String?): Boolean = pos in DEFENSE_POSITION_ORDER
+
+/** 守備分析の位置の見出し（DH は「DH」。ほかは守備位置の1字） */
+fun defensePositionLabel(pos: String?): String = if (pos == "dh") "DH" else positionLabel(pos)
 
 // ------------------------------------------------------------
 // 球団の歩み（折れ線）。縦軸はリーグ全体の中の位置（1部1位＝1 … 2部6位＝12）

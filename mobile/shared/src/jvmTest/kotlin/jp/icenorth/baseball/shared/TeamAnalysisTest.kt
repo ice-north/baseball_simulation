@@ -84,4 +84,34 @@ class TeamAnalysisTest {
         assertEquals(-2, jsRound(-2.5))
         assertEquals(-3, jsRound(-2.6))
     }
+
+    /** 判断6（2026-11-20 監査）: 守備分析は DH の行を末尾に出し（PC と同じ）、チーム守備の平均には入れない */
+    @Test
+    fun defenseRowsKeepDhAtTheEnd() {
+        val rows = listOf("dh", "short", "catcher", "right", "first").mapIndexed { i, pos ->
+            obj("""{"playerId":$i,"battingOrder":${i + 1},"position":"$pos"}""")
+        }
+        assertEquals(listOf("catcher", "first", "short", "right", "dh"), defenseRows(rows).map { it.at("position").str() })
+        assertEquals(listOf(false, true, true, true, true), rows.map { isFieldPosition(it.at("position").str()) })
+        assertEquals("DH", defensePositionLabel("dh"))
+        assertEquals("遊", defensePositionLabel("short"))
+    }
+
+    /**
+     * 判断6（2026-11-20 監査）: 項目が無い（古いサーバー）のと空を見分ける。
+     * ⚠ kotlinx.serialization の既定値を空の一覧にすると、無いのと空が同じになり「まだ指導した球団は
+     *    ありません」と事実と違う文になっていた
+     */
+    @Test
+    fun missingItemsAreNotEmpty() {
+        assertTrue(!hasTeamRatings(obj("""{"teamName":"x"}""")))
+        assertTrue(hasTeamRatings(obj("""{"teamRatings":{}}""")))
+        assertNull(teamRatingsOf(obj("""{"teamRatings":{}}"""), "x"))
+        val old = OnlineJson.decodeFromString(CoachCard.serializer(), """{"id":"c1","name":"山田 太郎"}""")
+        assertNull(old.stints)
+        assertNull(old.pupils)
+        val fresh = OnlineJson.decodeFromString(CoachCard.serializer(), """{"id":"c1","name":"山田 太郎","stints":[],"pupils":[]}""")
+        assertEquals(emptyList(), fresh.stints)
+        assertEquals(emptyList(), fresh.pupils)
+    }
 }

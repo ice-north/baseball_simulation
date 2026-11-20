@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.COACH_ABILITY_ITEMS
+import jp.icenorth.baseball.shared.SERVER_UPDATE_PENDING
 import jp.icenorth.baseball.shared.CoachCard
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.LeagueView
@@ -472,11 +473,20 @@ fun CoachDialog(coach: CoachCard, onClose: () -> Unit) {
                     }
                 }
                 Caption("これまでの指導チームと役職")
-                if (coach.stints.isEmpty()) Muted("まだ指導した球団はありません。")
-                coach.stints.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                // ⚠ 項目が無い（null＝古いサーバー）のと空（まだ指導していない）を分ける（判断6、2026-11-20 監査）
+                val stints = coach.stints
+                when {
+                    stints == null -> Muted(SERVER_UPDATE_PENDING)
+                    stints.isEmpty() -> Muted("まだ指導した球団はありません。")
+                    else -> stints.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                }
                 Caption("主な指導選手")
-                if (coach.pupils.isEmpty()) Muted("まだいません（このリーグで指導した年の記録から挙げます）。")
-                coach.pupils.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                val pupils = coach.pupils
+                when {
+                    pupils == null -> Muted(SERVER_UPDATE_PENDING)
+                    pupils.isEmpty() -> Muted("まだいません（このリーグで指導した年の記録から挙げます）。")
+                    else -> pupils.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                }
                 if (coach.views.isNotEmpty() || coach.traits.isNotEmpty()) {
                     Caption("考え方・性格")
                     coach.views.forEach { ScaleRow(it) }
