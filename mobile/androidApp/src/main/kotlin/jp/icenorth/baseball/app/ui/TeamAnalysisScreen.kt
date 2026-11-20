@@ -40,6 +40,7 @@ import jp.icenorth.baseball.shared.defenseGrade
 import jp.icenorth.baseball.shared.defenseRange
 import jp.icenorth.baseball.shared.fitnessAt
 import jp.icenorth.baseball.shared.int
+import jp.icenorth.baseball.shared.jsRound
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
@@ -60,7 +61,11 @@ import kotlinx.serialization.json.JsonObject
  *    値はサーバーが全球団ぶん作る（ビューの teamRatings）
  */
 
-/** 球団の名簿と起用（自球団は手元のビュー、他球団はその場で読む） */
+/**
+ * 球団の名簿と起用（自球団は手元のビュー、他球団はその場で読む）。
+ * ⚠ 呼ぶのは PlayersScreen の1か所だけにし、「能力」「スタメン」「守備」へ同じものを渡す。以前は切り替えごとに
+ *    呼んでいて、他球団を見ながら切り替えるたびに同じ `team` を読み直していた（2026-11-20 監査）
+ */
 class TeamData(val roster: List<JsonObject>?, val lineup: JsonObject?, val failure: String?, val retry: () -> Unit)
 
 @Composable
@@ -91,8 +96,7 @@ private fun sumOf(roster: List<JsonObject>, side: String, key: String): Int =
 
 /** チーム能力値（レーダー）と今季のチーム成績。自球団はチーム診断も */
 @Composable
-fun TeamOverviewPane(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
-    val data = rememberTeamData(model, view, raw, team)
+fun TeamOverviewPane(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String, data: TeamData, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
     val own = team == view.teamName
     val rivals = remember(raw, team) { rivalsOf(view, raw, team) }
     val everyone = remember(raw) { allTeamRatings(raw) }
@@ -166,8 +170,7 @@ private fun Tiles(tiles: List<Triple<String, String, String?>>) {
 
 /** スタメン・投手陣（いまの打順と守備位置、先発ローテとリリーフの役割） */
 @Composable
-fun TeamLineupPane(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String) {
-    val data = rememberTeamData(model, view, raw, team)
+fun TeamLineupPane(model: AppViewModel, data: TeamData) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
         val roster = data.roster
         when {
@@ -181,8 +184,7 @@ fun TeamLineupPane(model: AppViewModel, view: LeagueView, raw: JsonObject, team:
 
 /** 守備分析: いまのスタメンの守備位置ごとの守備範囲・適性・失策（守備位置の順） */
 @Composable
-fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String) {
-    val data = rememberTeamData(model, view, raw, team)
+fun TeamDefensePane(model: AppViewModel, data: TeamData) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val roster = data.roster
         val lineup = data.lineup
@@ -201,7 +203,7 @@ fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("チーム守備 ", style = MaterialTheme.typography.titleSmall)
                     Text(teamGrade.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(teamGrade.color))
-                    Muted("　平均の守備範囲 ${kotlin.math.round(teamRange * 100).toInt()}")
+                    Muted("　平均の守備範囲 ${jsRound(teamRange * 100)}")
                 }
                 Section("守備位置ごと") {
                     Row(Modifier.fillMaxWidth()) {
@@ -229,7 +231,7 @@ fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team
                                 val grade = defenseGrade(range)
                                 Row(Modifier.width(48.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                                     Text(grade.label, fontWeight = FontWeight.Bold, color = Color(grade.color))
-                                    Text(" ${kotlin.math.round(range * 100).toInt()}", style = MaterialTheme.typography.labelSmall)
+                                    Text(" ${jsRound(range * 100)}", style = MaterialTheme.typography.labelSmall)
                                 }
                                 Text("${fitnessAt(p, pos)}", modifier = Modifier.width(36.dp), textAlign = TextAlign.End)
                                 val chances = p.at("seasonStats", "batting", "fieldingChances").num()?.toInt() ?: 0

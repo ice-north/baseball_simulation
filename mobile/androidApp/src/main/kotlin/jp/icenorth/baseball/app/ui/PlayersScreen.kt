@@ -83,6 +83,8 @@ import kotlinx.serialization.json.JsonObject
  */
 private enum class PlayersMode(val label: String) { Overview("能力"), Lineup("スタメン"), Defense("守備"), Season("今季"), Career("通算"), Ages("年齢") }
 
+private val TEAM_DATA_MODES = setOf(PlayersMode.Overview, PlayersMode.Lineup, PlayersMode.Defense)
+
 /** 選手タブ（チーム分析）: チーム能力値・スタメン・守備分析・選手成績・通算成績（球団を切り替えて同じ表）と年齢構成 */
 @Composable
 fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpenTrade: () -> Unit = {}) {
@@ -118,10 +120,12 @@ fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpen
             )
         }
         ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
+        // 「能力」「スタメン」「守備」は同じ球団の読み込みを分け合う（切り替えるたびに読み直さない）
+        val teamData = if (mode in TEAM_DATA_MODES) rememberTeamData(model, view, raw, team) else null
         when (mode) {
-            PlayersMode.Overview -> TeamOverviewPane(model, view, raw, team, onOpenPlan, onOpenTrade)
-            PlayersMode.Lineup -> TeamLineupPane(model, view, raw, team)
-            PlayersMode.Defense -> TeamDefensePane(model, view, raw, team)
+            PlayersMode.Overview -> TeamOverviewPane(model, view, raw, team, teamData!!, onOpenPlan, onOpenTrade)
+            PlayersMode.Lineup -> TeamLineupPane(model, teamData!!)
+            PlayersMode.Defense -> TeamDefensePane(model, teamData!!)
             // 自球団の年齢構成・3年後の見込み（Web 版 AgeOutlook.jsx と同じ中身）
             PlayersMode.Ages -> AgeOutlookPane(raw)
             else -> TeamStats(model, view, raw, team, career = mode == PlayersMode.Career)

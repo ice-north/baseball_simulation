@@ -92,9 +92,12 @@ fun LeagueHistoryPane(model: AppViewModel, view: LeagueView, raw: JsonObject) {
 /** 過去の順位（終わった年の最終順位。差はすぐ上の順位の球団とのゲーム差）と歴代の優勝 */
 @Composable
 private fun PastStandingsPane(view: LeagueView, raw: JsonObject) {
-    val history = raw.at("history").list().mapNotNull { it.obj() }
+    // ⚠ 年ごとの表は raw が替わるまで作り直さない（以前は描くたびに全部の年の表を作り直していた。2026-11-20 監査）
+    val history = remember(raw) { raw.at("history").list().mapNotNull { it.obj() } }
+    val tablesByYear = remember(raw) { history.map { pastTables(it) } }
     var year by rememberSaveable { mutableStateOf(history.lastOrNull()?.at("year").int()) }
-    val entry = history.firstOrNull { it.at("year").int() == year } ?: history.lastOrNull()
+    val entryIndex = history.indexOfFirst { it.at("year").int() == year }.takeIf { it >= 0 } ?: history.lastIndex
+    val entry = history.getOrNull(entryIndex)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (entry == null) {
             Muted("まだ終わったシーズンがありません。1年目の年度更新が済むと、ここに年ごとの最終順位が並びます。")
@@ -106,7 +109,7 @@ private fun PastStandingsPane(view: LeagueView, raw: JsonObject) {
         Muted("${entry.at("year").int()}年目の最終順位です。差はすぐ上の順位の球団とのゲーム差です。")
         val moves = pastMoves(entry)
         val champion = entry.at("playoffChampion").str()
-        pastTables(entry).forEach { table ->
+        tablesByYear[entryIndex].forEach { table ->
             val gaps = gamesBehindAbove(table.rows)
             Section(table.league?.name ?: "順位") {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -140,8 +143,9 @@ private fun PastStandingsPane(view: LeagueView, raw: JsonObject) {
         }
         // 歴代の優勝（新しい順。各部の1位とプレーオフ優勝）
         Section("歴代の優勝") {
-            history.reversed().forEach { h ->
-                val tables = pastTables(h)
+            history.indices.reversed().forEach { hi ->
+                val h = history[hi]
+                val tables = tablesByYear[hi]
                 val firsts = PYRAMID_LEAGUES.mapNotNull { l -> tables.firstOrNull { it.league?.id == l.id }?.rows?.firstOrNull()?.let { "${l.name} ${view.teamShort(it.team)}" } }
                 val po = h.at("playoffChampion").str()?.let { "PO ${view.teamShort(it)}" }
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
@@ -205,13 +209,17 @@ private val KIND_LABELS = mapOf("trade" to "トレード", "release" to "退団"
 private fun TransactionsPane(model: AppViewModel, view: LeagueView) {
     var year by rememberSaveable { mutableStateOf(view.year) }
     var team by rememberSaveable { mutableStateOf("") }
-    var data by remember { mutableStateOf<JsonObject?>(null) }
+    // ⚠ 読んだ版は絞り方（年度・球団）と組で持つ。日付が進んで（版が上がって）読み直す間は前の版を出したままにし、
+    //   新しい版が読めたら差し替える。以前は版が上がるたび空にして、一瞬「読み込み中…」に戻っていた
+    //   （Web は前回の監査で同じ直し。2026-11-20 監査）。絞り方を変えたときだけ読み込み中にする
+    var loaded by remember { mutableStateOf<Pair<Pair<Int?, String>, JsonObject>?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableStateOf(0) }
+    val data = loaded?.takeIf { it.first == (year to team) }?.second
     LaunchedEffect(year, team, view.revision, attempt) {
-        data = null
         try {
-            data = model.read("transactions", buildMap { put("year", year?.toString()); if (team.isNotEmpty()) put("team", team) })
+            val key = year to team
+            loaded = key to model.read("transactions", buildMap { put("year", year?.toString()); if (team.isNotEmpty()) put("team", team) })
             failure = null
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
