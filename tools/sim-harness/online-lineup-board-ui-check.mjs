@@ -875,6 +875,54 @@ try {
       (await p.locator('.online-roster-rows article').count()) > 0,
       '他球団の通算成績が出ない',
     );
+    // ⚠ 読み込み中・失敗の間も見出し（チーム分析）と切り替えの列を出したまま（監査 2026-11-20）。
+    //    以前は選択欄と文言だけになり、見出しが消えて跳ねる・失敗したまま別の切り替えへ移れなかった
+    const third = live.season.settings.teamNames.find((n) => n !== own && n !== other);
+    let release;
+    const gate = new Promise((resolve) => (release = resolve));
+    let fail = true;
+    const isThird = (url) => {
+      const u = new URL(url);
+      return u.searchParams.get('action') === 'team' && u.searchParams.get('team') === third;
+    };
+    await p.route(isThird, async (route) => {
+      await gate;
+      if (!fail) return route.fallback();
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: '検査で失敗させた', code: 'server' }),
+      });
+    });
+    const head = async (when) => {
+      assert.deepEqual(
+        await p.locator('.online-page-head:visible h1').allInnerTexts(),
+        ['チーム分析'],
+        `${when}に見出し（チーム分析）が消えた`,
+      );
+      assert.equal(
+        await p.locator('.online-page-tabs:visible button').count(),
+        6,
+        `${when}に切り替えの列が消えた`,
+      );
+    };
+    await p.getByLabel('閲覧する球団').selectOption(third);
+    await p.getByText('球団情報を読み込んでいます…').waitFor();
+    await head('読み込み中');
+    release();
+    await p.getByText('検査で失敗させた').waitFor();
+    await head('読み込みの失敗');
+    // 失敗したままでも別の切り替えへ移れる
+    await p.locator('.online-page-tabs').getByRole('button', { name: '選手成績', exact: true }).click();
+    await p
+      .locator('.online-page-tabs button[aria-pressed="true"]')
+      .filter({ hasText: '選手成績' })
+      .waitFor();
+    fail = false;
+    await p.getByRole('button', { name: '再取得' }).click();
+    await p.locator('.online-roster-rows article:visible').first().waitFor();
+    await p.unroute(isThird);
+    await p.getByLabel('閲覧する球団').selectOption(own);
   }
   // ---- ホーム（直近の5ターン / 今後の5ターン）--------------------------
   // ⚠ **ターンで出す**。オンラインはターンで進むので、画面のどこを見ても
@@ -1135,7 +1183,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（順位表の球団→スタメンと投手陣・ランキングの選手→能力 / 守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・クローザー・同じ役割の中の順番・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発・行の高さと字の大きさがそろう / 守備位置の変更（定期の読み直しで版が上がった後も））',
+    'online-lineup-board-ui-check PASS（順位表の球団→スタメンと投手陣・ランキングの選手→能力 / 守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・クローザー・同じ役割の中の順番・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績・読み込み中と失敗でも見出しと切り替えが残る / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発・行の高さと字の大きさがそろう / 守備位置の変更（定期の読み直しで版が上がった後も））',
   );
 } catch (error) {
   await failureShots(browser, 'online-lineup-board-ui');
