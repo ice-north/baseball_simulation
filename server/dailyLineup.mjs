@@ -58,12 +58,14 @@ function restorePitcherSlot(team) {
 }
 
 /**
- * 疲れた野手をその日だけ休ませる。戻す関数を返す。
+ * 疲れた野手をその日だけ休ませる。戻す関数を返す（`restore.resting` は休ませた選手の id）。
  * 誰を休ませ、守備をどう組み直すかは `planRest`（`src/online/restPlan.js`。画面の見込みと同じ計算）。
+ * `twoWayStarterId`: その日に先発投手として野手の枠を抜ける二刀流の選手（`benchTwoWayStarter` と同じ決め方）。
+ *   休ませる人が居れば、抜けた枠もここで控えに替える（`benchTwoWayStarter` は何もしない）。
  * ⚠ 先発がほかの守備へ移ることがある（遊撃手を休ませ、二塁手が遊撃に回って控えの二塁手が入る）。
  * ⚠ **保存した打順は書き換えない**。その日だけ差し替えて、試合の後に戻す。
  */
-export function restTiredFielders(team) {
+export function restTiredFielders(team, twoWayStarterId = null) {
   const order = team.lineupSettings?.battingOrder || [];
   const byId = new Map(team.players.map((p) => [p.id, p]));
   const slots = order.filter(
@@ -74,8 +76,9 @@ export function restTiredFielders(team) {
   const plan = planRest(
     slots.map((e) => ({ player: byId.get(e.playerId), position: e.position })),
     team.players.filter((p) => !inLineup.has(p.id)),
+    twoWayStarterId,
   );
-  if (!plan) return () => {};
+  if (!plan) return Object.assign(() => {}, { resting: [] });
   const saved = new Map(slots.map((e) => [e.playerId, e.position]));
   // 打順の枠はそのまま、入る人と守備位置だけをその日だけ替える
   const changes = [];
@@ -100,7 +103,7 @@ export function restTiredFielders(team) {
   }));
   // ⚠ 戻すときは**選手IDで探す**。`ensureCompleteLineup` が打順の配列を
   //    作り直すことがあり、差し替えたときの要素を握っていても届かない
-  return () => {
+  const restore = () => {
     const current = team.lineupSettings?.battingOrder || [];
     const found = swaps.map(({ today }) =>
       current.find((e) => e.playerId === today && e.position !== 'pitcher'),
@@ -111,6 +114,7 @@ export function restTiredFielders(team) {
       found[i].position = originalPosition;
     });
   };
+  return Object.assign(restore, { resting: plan.resting });
 }
 /**
  * **二刀流の先発の日**。次の先発が野手の打順にも入っているとき、その日だけ
@@ -130,7 +134,7 @@ export function restTiredFielders(team) {
  *    は今日の先発を9番に入れるので、戻すと同じ選手が2回並ぶ（`lineupCommand`
  *    と同じく、野手に入っていない先発で仮に埋める）。
  */
-export function benchTwoWayStarter(team) {
+export function benchTwoWayStarter(team, { resting = [] } = {}) {
   const order = team.lineupSettings?.battingOrder || [];
   const starters = team.pitchingRotation?.starters || [];
   if (!starters.length) return () => {};
@@ -157,8 +161,12 @@ export function benchTwoWayStarter(team) {
   const fieldSlots = order.filter(
     (e) => e.position !== 'pitcher' && e.position !== 'dh' && byId.has(e.playerId),
   );
+  // ⚠ その日に休ませた選手（`restTiredFielders`）は控えに数えない（2026-11-20 監査。
+  //    休ませた遊撃手が二刀流の抜けた遊撃に戻り、画面の「休みます」と食い違った）
+  const rested = new Set(resting);
   const bench = team.players.filter(
-    (p) => p.isActive !== false && p.id !== starterId && !inLineup.has(p.id),
+    (p) =>
+      p.isActive !== false && p.id !== starterId && !inLineup.has(p.id) && !rested.has(p.id),
   );
   const fielders = bench.filter((p) => p.position !== 'pitcher');
   // ⚠ 控えは「疲れていない野手」→「野手」→「ローテの外の投手」→「ほかの控え投手」の順。
@@ -241,7 +249,6 @@ export function prepareDailyLineup(team, name, { pick = null, report = null, out
     409,
     'roster',
   );
-  const restoreFielders = restTiredFielders(team);
   const index = (rotation.currentStarterIndex || 0) % starters.length;
   rotation.currentStarterIndex = index;
   // ⚠ ローテには野手も入れられる（二刀流）。先発に選べるのは、ローテに居る選手
@@ -316,7 +323,10 @@ export function prepareDailyLineup(team, name, { pick = null, report = null, out
       };
     }
   }
-  const restoreTwoWay = benchTwoWayStarter(team);
+  // ⚠ 休養はその日の先発が決まってから組む（2026-11-20 監査）。先に組むと、先発投手として
+  //    抜ける二刀流を残る先発に数え、休ませた選手を `benchTwoWayStarter` が戻していた
+  const restoreFielders = restTiredFielders(team, nextRotationStarterId(team) ?? null);
+  const restoreTwoWay = benchTwoWayStarter(team, { resting: restoreFielders.resting });
   requireOnline(
     ensureCompleteLineup(team, false),
     `${name}の編成を補完できません`,

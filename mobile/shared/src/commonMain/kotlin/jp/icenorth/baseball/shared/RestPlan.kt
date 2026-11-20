@@ -105,29 +105,40 @@ object RestPlan {
 
     /**
      * 試合の日に誰を休ませ、守備をどう組むか（Web 版 planRest と同じ）。
-     * `starters` は守備に就く先発8人、`bench` は控え（起用できる野手だけを使う）。
+     * `starters` は守備に就く先発8人、`bench` は控え（起用できる野手だけを使う）、
+     * `leaving` はその日に先発投手として野手の枠を抜ける二刀流の選手（居なければ null）。
      * 休ませる人が居なければ null。
+     * ⚠ 起用できない先発が居る打順は組まない・二刀流の先発は守備に残らない（2026-11-20 監査。Web 版の注を参照）
      */
-    fun plan(starters: List<Starter>, bench: List<Player>): Result? {
+    fun plan(starters: List<Starter>, bench: List<Player>, leaving: Long? = null): Result? {
         val positions = starters.map { it.position }.toSet()
         if (starters.size != FIELD.size || !FIELD.all { it in positions }) return null
+        if (!starters.all { it.player.isActive }) return null
         val fielders = bench.filter { it.isActive && !it.isPitcher }
         val fresh = fielders.filter { (it.fatigue ?: 0) < SUBSTITUTE_FRESH_FATIGUE }
+        val out = leaving?.takeIf { id -> starters.any { it.player.id == id } }
         // ⚠ 疲れの重い順（同じなら元の並び。Web 版の sort は安定）
         val tired = starters.map { it.player }
-            .filter { (it.fatigue ?: 0) >= FIELDER_REST_FATIGUE }
+            .filter { it.id != out && (it.fatigue ?: 0) >= FIELDER_REST_FATIGUE }
             .sortedByDescending { it.fatigue ?: 0 }
         if (tired.isEmpty()) return null
         val saved = starters.associate { it.player.id to it.position }
         fun forced(p: Player) = (p.fatigue ?: 0) >= FIELDER_FORCE_REST_FATIGUE
+        val present = starters.map { it.player }.filter { it.id != out }
+        // 二刀流が抜けるだけで下限を割る分は、休ませない理由にしない
+        val baseline = if (out == null) 0.0 else listOf(fresh, fielders)
+            .mapNotNull { pool -> if (pool.isEmpty()) null else planField(present, pool, saved)?.shortfall }
+            .minOrNull() ?: Double.POSITIVE_INFINITY
+        val extra = if (out == null) 0 else 1
         var bestKey: List<Double>? = null
         var best: Result? = null
         for (bits in 1 until (1 shl tired.size)) {
             val resting = tired.filterIndexed { i, _ -> bits and (1 shl i) != 0 }
             val restingIds = resting.map { it.id }.toSet()
             val pool = if (resting.any(::forced)) fielders else fresh
-            if (pool.size < resting.size) continue
-            val staying = starters.map { it.player }.filter { it.id !in restingIds }
+            // 控えの人数より多くは休ませられない（守備の組み合わせを数える前に切る）
+            if (pool.size < resting.size + extra) continue
+            val staying = present.filter { it.id !in restingIds }
             val field = planField(staying, pool, saved) ?: continue
             val key = listOf(
                 resting.count(::forced).toDouble(),
@@ -142,7 +153,7 @@ object RestPlan {
         }
         val key = bestKey ?: return null
         // ふつうの疲れでは下限を割ってまで休ませない
-        if (key[0] == 0.0 && key[1] < 0.0) return null
+        if (key[0] == 0.0 && -key[1] > baseline) return null
         return best
     }
 }

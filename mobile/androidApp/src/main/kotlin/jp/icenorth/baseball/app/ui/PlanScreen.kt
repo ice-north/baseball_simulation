@@ -301,7 +301,11 @@ private fun OrderEditor(
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
     val bench = benchOf(view, draft)
-    val notes = orderNotes(draft, players, bench)
+    // ⚠ RestPlan.plan は守備の組み合わせを全部数えるので重い。ドラッグ中の再描画のたびに数えず、
+    //    守備の顔ぶれ（打順の並びは見ない）・名簿・控え・次の先発が変わったときだけ数える（2026-11-20 監査）
+    val fieldSet = draft.slots.toSet()
+    val restingIds = remember(fieldSet, players, bench, nextId) { restingOf(draft.slots, players, bench, nextId) }
+    val notes = orderNotes(draft, players, restingIds, nextId)
     val pickedStarter = (picked as? OrderPick.Starter)?.index?.let { draft.slots.getOrNull(it) }
     val pickedBench = (picked as? OrderPick.Bench)?.id?.let { players[it] }
     /** 選んでいる行と入れ替えたら、この行の人はどこをどの適性で守るか */
@@ -528,12 +532,18 @@ private fun Player.bestFieldPosition(): String? = FIELD_POSITIONS.maxByOrNull { 
 private class OrderNote(val position: String, val text: String, val action: String, val pick: OrderPick, val color: androidx.compose.ui.graphics.Color? = null)
 
 /** 「気になる所」: 試合の日に休養に入る選手と、適性の低い守備（押すと直すためのシートを開く） */
+/**
+ * 試合の日に誰が休むか（サーバーと同じ計算 RestPlan。ほかの先発が守備を移って休める場合もある）。
+ * ⚠ 次の先発（nextId）が野手の枠にも居る二刀流なら、その日は抜けた形で数える（Web 版 lineupNotes と同じ）
+ */
+private fun restingOf(slots: List<BatterSlot>, players: Map<Long, Player>, bench: List<Player>, nextId: Long?): Set<Long> {
+    val field = slots.mapNotNull { s -> players[s.playerId]?.takeIf { it.isActive }?.let { RestPlan.Starter(it, s.position) } }
+    return (if (field.size == slots.size) RestPlan.plan(field, bench, nextId) else null)?.resting?.toSet().orEmpty()
+}
+
 @Composable
-private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List<Player>): List<OrderNote> {
+private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, resting: Set<Long>, nextId: Long?): List<OrderNote> {
     val notes = mutableListOf<OrderNote>()
-    // 試合の日に誰が休むか（サーバーと同じ計算 RestPlan。ほかの先発が守備を移って休める場合もある）
-    val field = draft.slots.mapNotNull { s -> players[s.playerId]?.takeIf { it.isActive }?.let { RestPlan.Starter(it, s.position) } }
-    val resting = (if (field.size == draft.slots.size) RestPlan.plan(field, bench) else null)?.resting?.toSet().orEmpty()
     draft.slots.forEachIndexed { index, slot ->
         val p = players[slot.playerId]
         if (p == null) {
@@ -541,7 +551,8 @@ private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List
             return@forEachIndexed
         }
         val fatigue = p.fatigue ?: 0
-        if (fatigue >= FIELDER_REST_FATIGUE) {
+        // その日に投げる二刀流の選手には休養の注意を出さない（野手の枠を抜ける）
+        if (fatigue >= FIELDER_REST_FATIGUE && p.id != nextId) {
             notes += OrderNote(
                 slot.position,
                 if (p.id in resting) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"

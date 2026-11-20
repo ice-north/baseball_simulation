@@ -52,12 +52,12 @@ const fewPitchers = (() => {
 const field = view.lineup.battingOrder.filter((e) => e.position !== 'pitcher');
 const inOrder = new Set(view.lineup.battingOrder.map((e) => e.playerId));
 const restBench = roster.filter((p) => !inOrder.has(p.id));
-const restCase = (levels) => {
+const restCase = (levels, leaving = null) => {
   const starters = field.map((e, i) => ({
     player: { ...roster.find((p) => p.id === e.playerId), fatigue: levels[i] ?? 0 },
     position: e.position,
   }));
-  const plan = planRest(starters, restBench);
+  const plan = planRest(starters, restBench, leaving);
   return plan && { resting: plan.resting, assign: Object.fromEntries([...plan.assign].map(([id, pos]) => [String(id), pos])) };
 };
 const restPlans = [];
@@ -65,7 +65,12 @@ for (let i = 0; i < field.length; i += 1) restPlans.push(restCase(field.map((_, 
 for (let i = 0; i < field.length; i += 1)
   for (let j = i + 1; j < field.length; j += 1) restPlans.push(restCase(field.map((_, k) => (k === i ? 100 : k === j ? 130 : 0))));
 restPlans.push(restCase(field.map(() => 90)));
-const text = JSON.stringify({ restPlans, camp, wish, recommended, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
+// 二刀流の先発の日（i 番目の野手がその日の先発として抜け、j 番目が疲労100）
+const restPlansTwoWay = [];
+for (let i = 0; i < field.length; i += 1)
+  for (let j = 0; j < field.length; j += 1)
+    if (i !== j) restPlansTwoWay.push(restCase(field.map((_, k) => (k === j ? 100 : 0)), field[i].playerId));
+const text = JSON.stringify({ restPlans, restPlansTwoWay, camp, wish, recommended, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
 // --check: 書き出し済みの期待値が今の Web 版の答えと同じか（CI で、Web 版だけ直したときに気づく）
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/logic-expected.json', import.meta.url);

@@ -239,4 +239,4 @@ export const FRESH_FATIGUE = SUBSTITUTE_FRESH_FATIGUE;
  * （`server/dailyLineup.mjs` の `restTiredFielders`。中身は `restPlan.js`）は、ほかの先発の守備を
  * 移してでも、どの守備も下限以上で組めるときだけ入れ替える（疲れ切った選手は組めなくても休ませる）
  */
-export const REST_TEXT = `試合の日は、その日だけ控え（疲労${FRESH_FATIGUE}未満）と入れ替わって休みます。ほかの先発の守備を移すこともあり、どの守備も適性${LOW_FITNESS}%以上で組めるときだけ休みます（疲労${FIELDER_FORCE_REST_FATIGUE}以上は組めなくても休みます）`;
+export const REST_TEXT = `試合の日は、その日だけ控え（疲労${FRESH_FATIGUE}未満）と入れ替わって休みます。ほかの先発の守備を移すこともあり、どの守備も適性${LOW_FITNESS}%以上で組めるときだけ休みます（疲労${FIELDER_FORCE_REST_FATIGUE}以上は組めなくても休みます）。二刀流の選手が先発する日は、その選手が抜けた形で組みます`;

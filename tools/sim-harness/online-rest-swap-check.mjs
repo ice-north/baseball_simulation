@@ -14,7 +14,7 @@ import './lib/bootstrap.mjs';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
-import { restTiredFielders } from '../../server/dailyLineup.mjs';
+import { prepareDailyLineup, restTiredFielders } from '../../server/dailyLineup.mjs';
 import { ensureCompleteLineup, fieldFitness } from '../../src/game/lineup.js';
 import { generateAILineup } from '../../src/game/autoSimulation.js';
 import { planRest } from '../../src/online/restPlan.js';
@@ -124,6 +124,92 @@ const snapshot = (t) => JSON.stringify(t.lineupSettings.battingOrder);
   generateAILineup(t, '__check__');
   const catcher = t.players.find((p) => p.battingOrder > 0 && p.position === 'catcher');
   assert.equal(catcher?.id, 1, '捕手を遊撃に取って、捕手を守れない選手を捕手にした');
+}
+
+// --- 5b. 二刀流の先発の日（2026-11-20 監査）。休養は、先発投手として野手の枠を抜ける二刀流を
+//     残る先発に数えない。以前は二刀流（二塁手。遊撃も守れる）を遊撃へ回して疲れた遊撃手を休ませる
+//     案を作り、その後 `benchTwoWayStarter` が二刀流の抜けた遊撃に休ませた遊撃手を戻していた
+//     （画面は「休みます」）。画面の見込み（`lineupNotes` に次の先発を渡す）と試合の日が同じになるか
+{
+  const FIELD8 = POSITIONS;
+  const fit = (own, extra = {}) =>
+    Object.fromEntries(FIELD8.map((p) => [p, p === own ? 100 : (extra[p] ?? 20)]));
+  const P = (id, position, o = {}) => ({
+    id,
+    position,
+    isActive: true,
+    fatigue: 0,
+    batting: { meet: 60, power: 60 },
+    positionFitness: fit(position, o.fit),
+    ...o,
+  });
+  const make = (extra = []) => ({
+    players: [
+      P(1, 'catcher'), P(2, 'first'),
+      P(3, 'second', { fit: { short: 90 }, pitching: { stamina: 60 } }), // 二刀流（次の先発）
+      P(4, 'short', { fatigue: FIELDER_REST_FATIGUE + 20 }),
+      P(5, 'third'), P(6, 'left'), P(7, 'center'), P(8, 'right'),
+      P(10, 'second', { fit: { short: 30 } }), P(11, 'catcher'), P(12, 'left'),
+      ...extra,
+      P(20, 'pitcher'), P(21, 'pitcher'),
+    ],
+    pitchingRotation: { starters: [3, 20, 21], currentStarterIndex: 0 },
+    lineupSettings: {
+      battingOrder: [
+        ...FIELD8.map((position, i) => ({ playerId: i + 1, position, battingOrder: i + 1 })),
+        { playerId: 20, position: 'pitcher', battingOrder: 9 },
+      ],
+    },
+  });
+  const check = (t, label) => {
+    const order = t.lineupSettings.battingOrder.filter((e) => e.position !== 'pitcher');
+    const inOrder = new Set(t.lineupSettings.battingOrder.map((e) => e.playerId));
+    const bench = t.players.filter((p) => !inOrder.has(p.id) && p.position !== 'pitcher');
+    const said = lineupNotes(order, t.players, bench, {}, 3)
+      .filter((n) => n.kind === 'rest')
+      .map((n) => [order[n.index].playerId, n.text.includes('休みます')]);
+    const saved = snapshot(t);
+    const restore = prepareDailyLineup(t, 'T');
+    const today = t.lineupSettings.battingOrder;
+    const plays = today.some((e) => e.playerId === 4);
+    assert.deepEqual(said, [[4, !plays]], `${label}: 画面の見込みと試合の日の遊撃手が食い違う`);
+    assert.ok(today.some((e) => e.playerId === 3 && e.position === 'pitcher'), `${label}: 二刀流が先発に回っていない`);
+    assert.equal(new Set(today.map((e) => e.playerId)).size, 9, `${label}: 同じ選手が2回並んだ`);
+    restore();
+    assert.equal(snapshot(t), saved, `${label}: 試合の後に打順が元に戻っていない`);
+    return plays;
+  };
+  // 遊撃を守れる控えが居ない → 二刀流が抜けると遊撃手は休めない（画面も「休めません」）
+  assert.equal(check(make(), '控えに遊撃手なし'), true, '休めないはずの遊撃手が休んだ');
+  // 遊撃を守れる控えが居る → 休ませ、二刀流の抜けた枠にも戻さない
+  assert.equal(
+    check(make([P(13, 'short')]), '控えに遊撃手あり'),
+    false,
+    '休ませた遊撃手が二刀流の抜けた枠に戻った',
+  );
+}
+
+// --- 5c. 起用できない先発（登録を外れた）が居る打順では休養を組まない（2026-11-20 監査）。
+//     以前は抹消中の二塁手を遊撃へ移して遊撃手を休ませ、後で `ensureCompleteLineup` が
+//     抹消中の選手を外して休ませた遊撃手で埋め、戻すと同じ選手が2枠・二塁が欠けて保存された
+{
+  const t = team(
+    [{ id: 20, position: 'second', fatigue: 0, positionFitness: { second: 100, short: 30 }, batting: { meet: 50, power: 50 } }],
+    {
+      short: { fatigue: FIELDER_REST_FATIGUE + 20 },
+      second: { isActive: false, positionFitness: { second: 100, short: 90 } },
+    },
+  );
+  const restore = restTiredFielders(t);
+  assert.ok(ensureCompleteLineup(t, false), '打順を埋められない');
+  restore();
+  const field = t.lineupSettings.battingOrder.filter((e) => e.position !== 'pitcher');
+  assert.equal(new Set(field.map((e) => e.playerId)).size, 8, '戻した打順に同じ選手が2回並んだ');
+  assert.equal(new Set(field.map((e) => e.position)).size, 8, '戻した打順で守備位置が欠けた');
+  assert.equal(planRest(
+    POSITIONS.map((position, i) => ({ player: t.players[i], position })),
+    [],
+  ), null, '起用できない先発が居るのに休養を組んだ');
 }
 
 // --- 6. 本物の初期の名簿（12球団）で、疲れたレギュラーの全部の組み合わせ
@@ -243,4 +329,4 @@ assert.equal(normal.notesAgree, normal.cases, '画面の「休みます」と試
 assert.equal(broken.notesAgree, broken.cases, '画面の「休みます」と試合の日の入れ替えが食い違う（疲れ切った選手）');
 // planRest は休ませる人が居なければ null
 assert.equal(planRest([], []), null);
-console.log('■ 自動スタメンの守備の適性: OK（守備を移して休ませる / 下限を割らない / 疲れ切った選手の穴を小さく / 穴埋め / CPUの打順作り / 画面の見込みと一致 / 戻す）');
+console.log('■ 自動スタメンの守備の適性: OK（守備を移して休ませる / 下限を割らない / 疲れ切った選手の穴を小さく / 穴埋め / CPUの打順作り / 二刀流の先発の日 / 起用できない先発 / 画面の見込みと一致 / 戻す）');

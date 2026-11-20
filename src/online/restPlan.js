@@ -2,8 +2,8 @@
 //
 // サーバー（`server/dailyLineup.mjs` の `restTiredFielders`・`benchTwoWayStarter`）が試合の日に
 // 当て、画面（スマホの編成の「気になる所」`tapLineup.js`）は同じ計算で「休めるか」を出す。
-// アプリの写しは `mobile/shared/.../RestPlan.kt`（答え合わせは `RestPlanTest`、期待値は
-// `node mobile/tools/expect-rest-plan.mjs` で書き出す）。どちらかを変えたら両方を直す。
+// アプリの写しは `mobile/shared/.../RestPlan.kt`（答え合わせは `LogicTest.restPlanMatchesWeb`、期待値は
+// `node mobile/tools/expect-logic.mjs` で書き出す）。どちらかを変えたら両方を直す。
 import { bestFieldAssignment, fieldFitness } from '../game/lineup.js';
 import {
   FIELDER_REST_FATIGUE,
@@ -60,8 +60,10 @@ export function planField(staying, pool, saved) {
 
 /**
  * 試合の日に誰を休ませ、守備をどう組むか。
- * `starters`: 守備に就く先発（8人。`{ player, position }`）、`bench`: 控えの野手（起用できる人）。
+ * `starters`: 守備に就く先発（8人。`{ player, position }`）、`bench`: 控えの野手（起用できる人）、
+ * `leaving`: その日に先発投手として野手の枠を抜ける二刀流の選手の id（居なければ null）。
  * 返すのは `{ resting: 選手id[], assign: Map(選手id → 守備位置) }`。休ませる人が居なければ null。
+ * `assign` には `leaving` は入らない（抜けた枠も控えで埋めた形）。
  *
  * ⚠ **守備はまとめて組み直す**。以前は休ませる人の守備位置にそのまま入れる控えだけを
  *    探していたので、
@@ -80,26 +82,45 @@ export function planField(staying, pool, saved) {
  * ⚠ 疲れの抜けていない控え（`SUBSTITUTE_FRESH_FATIGUE` 以上）は、疲れ切った選手を
  *    休ませるときだけ使う。
  */
-export function planRest(starters, bench) {
+export function planRest(starters, bench, leaving = null) {
   const positions = new Set(starters.map((s) => s.position));
   if (starters.length !== FIELD.length || !FIELD.every((pos) => positions.has(pos))) return null;
+  // ⚠ 起用できない先発（名簿に居ない・登録を外れた）が居る打順は組まない（2026-11-20 監査）。
+  //    抹消中の二塁手を遊撃へ移す案を作ると、後で `ensureCompleteLineup` がその選手を外し、
+  //    いま休ませた遊撃手で埋める。戻すと同じ選手が2枠・二塁が欠けて保存された。
+  //    画面（`tapLineup.js` の `canPlayField`・アプリの `isActive`）と同じ条件
+  if (!starters.every((s) => s.player && s.player.isActive !== false)) return null;
   const fielders = bench.filter((p) => p && p.isActive !== false && p.position !== 'pitcher');
   const fresh = fielders.filter((p) => (p.fatigue || 0) < SUBSTITUTE_FRESH_FATIGUE);
+  // ⚠ その日の二刀流の先発（`leaving`）は守備に残らない（2026-11-20 監査）。以前は残る先発として
+  //    数え、二刀流を遊撃へ回して遊撃手を休ませる案を作っていた。その後 `benchTwoWayStarter` が
+  //    二刀流を外して空いた遊撃に、いま休ませた遊撃手を戻していた（画面は「休みます」）
+  const out = starters.some((s) => s.player.id === leaving) ? leaving : null;
   const tired = starters
     .map((s) => s.player)
-    .filter((p) => (p.fatigue || 0) >= FIELDER_REST_FATIGUE)
+    .filter((p) => p.id !== out && (p.fatigue || 0) >= FIELDER_REST_FATIGUE)
     .sort((a, b) => (b.fatigue || 0) - (a.fatigue || 0));
   if (!tired.length) return null;
   const saved = new Map(starters.map((s) => [s.player.id, s.position]));
   const forced = (p) => (p.fatigue || 0) >= FIELDER_FORCE_REST_FATIGUE;
+  const present = starters.map((s) => s.player).filter((p) => p.id !== out);
+  // 二刀流が抜けるだけでも下限を割るなら、その分は休養のせいではない（休ませない理由にしない）。
+  // 抜けた枠の控えは `benchTwoWayStarter` と同じく疲れていない野手→野手の順
+  let baseline = 0;
+  if (out !== null) {
+    const plans = [fresh, fielders].map((pool) => (pool.length ? planField(present, pool, saved) : null));
+    baseline = Math.min(...plans.map((plan) => (plan ? plan.shortfall : Infinity)));
+  }
+  const extra = out !== null ? 1 : 0;
   let best = null;
   // 誰を休ませるかの組み合わせ（疲れた先発は多くて数人。8人全員でも255通り）
   for (let bits = 1; bits < 1 << tired.length; bits += 1) {
     const resting = tired.filter((_, i) => bits & (1 << i));
     const restingIds = new Set(resting.map((p) => p.id));
     const pool = resting.some(forced) ? fielders : fresh;
-    if (pool.length < resting.length) continue;
-    const staying = starters.map((s) => s.player).filter((p) => !restingIds.has(p.id));
+    // 控えの人数より多くは休ませられない（守備の組み合わせを数える前に切る）
+    if (pool.length < resting.length + extra) continue;
+    const staying = present.filter((p) => !restingIds.has(p.id));
     const plan = planField(staying, pool, saved);
     if (!plan) continue;
     const key = [
@@ -110,7 +131,7 @@ export function planRest(starters, bench) {
     ];
     if (!best || isBetter(key, best.key)) best = { key, resting, assign: plan.assign };
   }
-  // ふつうの疲れでは下限を割ってまで休ませない
-  if (!best || (best.key[0] === 0 && best.key[1] < 0)) return null;
+  // ふつうの疲れでは下限を割ってまで休ませない（二刀流が抜けるだけで割れる分は除く）
+  if (!best || (best.key[0] === 0 && -best.key[1] > baseline)) return null;
   return { resting: best.resting.map((p) => p.id), assign: best.assign };
 }
