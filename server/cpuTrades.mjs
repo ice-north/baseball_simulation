@@ -42,10 +42,35 @@ export const CPU_OFFER_DAYS = 7;
 export const CPU_TRADE_LAST_MONTH = 7;
 /** 動く側の伸びの下限（`squadStrength` の点）。これ未満の交換はしない */
 export const CPU_TRADE_MIN_GAIN = 0.5;
-/** 人の球団へ出した提案の覚え（球団>欲しがった選手）の件数。同じ提案を繰り返さないため */
-export const CPU_OFFER_LOG = 30;
-/** 覚えの1件のキー */
-export const offerLogKey = (fromTeam, playerId) => `${fromTeam}>${playerId}`;
+/**
+ * 人の選手を求める提案を出したあと、どのCPUからも同じ選手を求めない日数。
+ * ⚠ 以前は「同じCPUが同じ選手を」だけ避けていたので、別のCPUが人の同じ主力を続けて欲しがれた。
+ *    覚えも全球団共用の30件で、人が多いと早く消えた（判断7、いしだ 2026-11-20）
+ */
+export const CPU_OFFER_MEMO_DAYS = 30;
+/** 覚えの件数の上限（日数で消えるので普段は届かない。壊れた状態で膨らまないための線） */
+export const CPU_OFFER_MEMO_MAX = 200;
+
+/**
+ * 人の球団へ出した提案の覚え `league.cpuOfferMemo`（`{ team, id, until }` の配列。`team` は人の球団、
+ * `id` は求めた選手、`until` はこの日付キーより前は求めない）から、いまも効いているものだけを返す。
+ * ⚠ 前の形 `league.cpuOfferLog`（「球団>選手id」の文字列）は読まない（日付が無いので期限を決められない）。
+ *    足すだけの項目なので版は上げていない（無ければ空とみなす）
+ */
+export function liveOfferMemo(league) {
+  const today = dateKey(league.season?.currentDate);
+  return (Array.isArray(league.cpuOfferMemo) ? league.cpuOfferMemo : []).filter(
+    (m) => m && typeof m === 'object' && m.team != null && m.id != null && Number(m.until) > today,
+  );
+}
+
+/** 提案で求めた人の選手を覚える（期限の過ぎたものは捨てる。新しい順） */
+export function rememberOffer(league, team, ids) {
+  const until = offerExpiry(league.season?.currentDate, CPU_OFFER_MEMO_DAYS);
+  league.cpuOfferMemo = [...ids.map((id) => ({ team, id, until })), ...liveOfferMemo(league)].slice(0, CPU_OFFER_MEMO_MAX);
+  // 前の形の覚えは使わないので消す（保存を小さく）
+  delete league.cpuOfferLog;
+}
 /** 1回の判断で見る相手の球団の数（全部見ると重い） */
 const PARTNERS = 3;
 /** 1つの持ち場で見るもらう選手の数 */
@@ -97,10 +122,10 @@ const after = (mine, theirs, give, get) => [
  * @param accept `(partner, give, get) => boolean` 相手がその交換を受けるか（CPU同士なら相手の判断、
  *        人の球団へ提案するなら「人がこれを出したら自分が受けるか」）
  * @param valueOf 出す候補を並べる値段（高い順に見る）
- * @param balanced 人の球団への提案なら true。戦力の開きを両向きに見て、相手の弱い持ち場を埋める
- *        選手も出す候補に入れ、両方の伸びの合計が大きい案を選ぶ
+ * @param balanced 人の球団への提案なら true。戦力の開きを両向きに見て、相手の伸びが負の案を除き、
+ *        相手の弱い持ち場を埋める選手も出す候補に入れ、両方の伸びの合計が大きい案を選ぶ
  * @param fair `(partner, give, get) => boolean` 相手から見て値段が見合うか（省略なら見ない）
- * @param avoid もらう候補から外す選手のid（前に同じ球団が欲しがった選手。同じ提案を繰り返さない）
+ * @param avoid もらう候補から外す選手のid（人の球団への提案で、期間内にどのCPUかが求めた選手）
  * @returns `{ partner, give, get, gain, partnerGain }`（`give` は `from` が出す選手のid）
  */
 export function planCpuTrade({ from, teams, partners, accept, valueOf, balanced = false, fair = null, avoid = null }) {
@@ -157,6 +182,8 @@ export function planCpuTrade({ from, teams, partners, accept, valueOf, balanced 
           const gain = squadStrength(after(mine, theirs, give, get)) - base;
           if (gain < CPU_TRADE_MIN_GAIN) continue;
           const partnerGain = squadStrength(after(theirs, mine, get, give)) - theirBase;
+          // ⚠ 人の球団へは、人の戦力が下がる案を出さない（0 は可。判断7、いしだ 2026-11-20）
+          if (balanced && partnerGain < 0) continue;
           // ⚠ 相手ばかり伸びる交換もしない（受ける側の判断は「言い出した側ばかり伸びる」しか見ない）
           if (partnerGain - gain > STRENGTH_GAP_LIMIT) continue;
           // ⚠ 人の球団へは、こちらばかり伸びる案も出さない（主力を控え1人で取る案になる）

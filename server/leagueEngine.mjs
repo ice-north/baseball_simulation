@@ -113,8 +113,8 @@ import { tradeStrengthGap } from '../src/online/tradeSearch.js';
 import {
   planCpuTrade,
   CPU_OFFER_VALUE_FLOOR,
-  CPU_OFFER_LOG,
-  offerLogKey,
+  liveOfferMemo,
+  rememberOffer,
   partnerOrder,
   dayRoll,
   offerExpiry,
@@ -916,13 +916,11 @@ function runCpuTrades(league, now) {
     fresh();
     let from = null;
     let plan = null;
-    // ⚠ 同じ球団が同じ選手を何度も欲しがらない（以前は断っても期限が切れても、名簿が変わらなければ
-    //    同じ提案が10日おきに届いた）。覚えは `league.cpuOfferLog`（新しい順に `CPU_OFFER_LOG` 件）
-    const log = new Set(league.cpuOfferLog || []);
+    // ⚠ 人の同じ選手を続けて求めない。どのCPUからでも、求めてから `CPU_OFFER_MEMO_DAYS` 日は
+    //    その選手を求める提案を出さない（以前は同じCPUだけを避けたので、別のCPUが人の同じ主力を
+    //    続けて欲しがれた。判断7、いしだ 2026-11-20）。覚えは `league.cpuOfferMemo`（日付つき）
+    const avoid = new Set(liveOfferMemo(league).filter((m) => m.team === teamName).map((m) => m.id));
     for (const cpu of order) {
-      const avoid = new Set(
-        (teams[teamName] || []).filter((p) => log.has(offerLogKey(cpu, p.id))).map((p) => p.id),
-      );
       plan = planCpuTrade({
         from: cpu,
         avoid,
@@ -949,10 +947,7 @@ function runCpuTrades(league, now) {
       }
     }
     if (!plan) continue;
-    league.cpuOfferLog = [...plan.get.map((id) => offerLogKey(from, id)), ...(league.cpuOfferLog || [])].slice(
-      0,
-      CPU_OFFER_LOG,
-    );
+    rememberOffer(league, teamName, plan.get);
     const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
     league.trades.push({
       id,
