@@ -1,6 +1,7 @@
 import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, normalizeAbility } from '../utils/constants.js';
 import { getDeception } from '../game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL } from '../game/batterType.js';
+import { growthStopAge, postStopTrainEffect } from '../season/campTraining.js';
 const n = (value) =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 const handed = (value) =>
@@ -57,9 +58,24 @@ export const ABILITY_HELP = {
   体幹: 'パワー・肩力・走力・球速・体力の伸びやすさ（0.5〜1.5倍。50で等倍）。試合には効かない。',
   器用さ: 'ミート・選球眼・守備・制球・盗塁・バントの伸びやすさ（0.5〜1.5倍）。フォーム改造・新球種・両打ち・別の守備位置の覚えやすさにも効く。試合には効かない。',
   プロ意識: 'キャンプの伸び（0.5〜1.5倍）、覚醒の起きやすさ（30未満は起きない）、衰え始めの遅さ（80で+1歳、100で+2歳）。試合には効かない。',
+  成長の停止: 'キャンプの伸びが止まる年齢。成長係数が高いほど遅く（係数1.0で26歳・1.2で29歳・1.5で32歳）、疲労管理の良さで最大+2歳、プロ意識80で+1歳・100で+2歳。4年前から効きが落ち、止まったあとはプロ意識ぶん（意識60で3%・100で15%）だけ練習が効く。⚠ 成長係数そのものは年齢では下がらない（年齢の効きはこの停止年齢と、年度替わりの自然な伸びのカーブが担う）。',
   成長係数: '年度替わりの自然な伸び（体力・走力・肩力・球速などの体と、精神力・体幹が中心。若いほど伸びる）の大きさ（0.3〜1.8）。キャンプの伸びにも少し効く。試合に出続けると少しずつ上がり、疲れたまま出続けると下がる。',
   守備適性: 'その位置で守ると、守備・走力・肩力が「0.5＋適性÷200」倍で効く（100で等倍、60で0.8倍）。',
 };
+
+/**
+ * 「成長の停止」の文。⚠ 年齢は選手情報に出ているので、**あと何年か**を添える。
+ *    止まったあとは、プロ意識ぶんだけ練習が効くことも書く（0%なら書かない）。
+ */
+export function stopAgeText(player) {
+  const age = Number(player?.age);
+  if (!Number.isFinite(age)) return null;
+  const stop = growthStopAge(player);
+  const left = stop - age;
+  if (left > 0) return `${stop}歳（あと${left}年）`;
+  const effect = Math.round(postStopTrainEffect(player) * 100);
+  return `${stop}歳（停止ずみ${effect > 0 ? `・練習は${effect}%効く` : ''}）`;
+}
 
 /**
  * 能力のデータバーの長さ（0〜100%）。段位と同じ物差し（`normalizeAbility`: 球速は115〜155km/h、
@@ -140,6 +156,11 @@ export function abilityRows(player, group) {
               ),
             ).toFixed(2),
       ],
+      // ⚠ **年齢の効きはここに出す**（いしだ 2026-11-20「30歳以上の選手が、まだまだ
+      //    1.0以上になっていたので、正常に動いているか知りたい」）。成長係数は
+      //    **素の伸びやすさ**で年齢では下がらない決まりなので、年齢で変わるもの
+      //    （キャンプの伸びが止まる年齢）を並べて見せる
+      ['成長の停止', stopAgeText(player)],
     ],
     profile: [
       ['背番号', player.number ?? null],

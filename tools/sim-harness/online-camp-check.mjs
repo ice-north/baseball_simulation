@@ -39,6 +39,8 @@ import {
 } from '../../src/season/campTraining.js';
 import { menusFor, subMenusFor } from '../../src/online/campMenus.js';
 import { createSeededRandom } from '../../src/game/rng.js';
+import { growthStopAge, postStopTrainEffect } from '../../src/season/campTraining.js';
+import { stopAgeText } from '../../src/online/playerInfo.js';
 import {
   DIRECTIONS,
   resolveTraining,
@@ -1218,6 +1220,36 @@ assert.ok(
   assert.equal(weight.stamina, 0, 'ウエイトで体力が上がっている（役が混ざっている）');
 }
 
+// --- 成長が止まる年齢（いしだ 2026-11-20「成長係数の年齢ごとの変動を教えて。
+//     30歳以上の選手が、まだまだ1.0以上になっていたので、正常に動いているか知りたい」）---
+// ⚠ **成長係数（`growthPotential`）は年齢で下げない**のが決まり（`growthSystem.js` の注）。
+//    年齢は「止まる年齢」と年次のカーブが担う。画面（選手情報の「成長の停止」）も同じ式で出す。
+{
+  const who = (gp, discipline, mod = 0) => ({
+    growthPotential: gp,
+    growthModifier: mod,
+    personality: { discipline },
+  });
+  assert.equal(growthStopAge(who(1.0, 60)), 26, '標準の選手の止まる年齢');
+  assert.equal(growthStopAge(who(1.2, 60)), 29, '素質が高いと遅く止まる');
+  assert.equal(growthStopAge(who(1.2, 80)), 30, 'プロ意識80で+1歳');
+  assert.equal(growthStopAge(who(1.5, 100)), 32, '上限は32歳');
+  assert.equal(growthStopAge(who(1.8, 100)), 32, '32歳を超えない');
+  assert.equal(growthStopAge(who(0.6, 50)), 22, '下限は22歳');
+  assert.equal(growthStopAge(who(1.0, 60, 0.4)), 28, '疲労管理の良さで最大+2歳');
+  // 止まったあとも、プロ意識ぶんだけ練習が効く
+  assert.equal(Math.round(postStopTrainEffect(who(1.0, 50)) * 100), 0);
+  assert.equal(Math.round(postStopTrainEffect(who(1.0, 80)) * 100), 9);
+  assert.equal(Math.round(postStopTrainEffect(who(1.0, 100)) * 100), 15);
+  // 画面の文（年齢つき）
+  assert.equal(stopAgeText({ ...who(1.2, 80), age: 24 }), '30歳（あと6年）');
+  assert.equal(stopAgeText({ ...who(1.2, 80), age: 31 }), '30歳（停止ずみ・練習は9%効く）');
+  assert.equal(stopAgeText({ ...who(1.0, 50), age: 30 }), '26歳（停止ずみ）');
+  // ⚠ **成長係数は年齢で変わらない**（30歳で1.2のままでよい、が答え）
+  const old30 = { ...who(1.2, 80), age: 30 };
+  assert.equal(old30.growthPotential, 1.2, '成長係数を年齢で下げてはいけない');
+}
+
 // --- 伸びの上限と、ノックの効き（いしだ 2026-11-20）-------------------------
 // ⚠「能力80台から4クールで+6くらい上がる選手がいます。独立リーグとしては上がりすぎ…
 //   能力が低い場合は、いまの伸びのままでOK」「ノックの守備の伸びが弱い気がします」
@@ -1305,5 +1337,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 低い能力は据え置き・高い能力は跳ねない / ノックで守備と適性が伸びる / ウエイトが体幹・基礎体力が体力の役 / 新球種は1クール3割・4クールで7割 / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒は低い能力では据え置き・高い能力では抑える／クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
+  '■ キャンプ: OK（成長の止まる年齢（素質・疲労管理・プロ意識で22〜32歳）/ 選手ごとに効く / 低い能力は据え置き・高い能力は跳ねない / ノックで守備と適性が伸びる / ウエイトが体幹・基礎体力が体力の役 / 新球種は1クール3割・4クールで7割 / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒は低い能力では据え置き・高い能力では抑える／クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
 );

@@ -363,6 +363,32 @@ export const SUB_TRAINING_MENUS = {
 };
 
 /**
+ * キャンプの伸びが止まる年齢（22〜32）。素質（成長係数）・疲労管理・プロ意識で延びる。
+ *
+ * ⚠ いしだ 2026-11-20「成長係数の年齢ごとの変動を教えて。30歳以上の選手が、まだまだ
+ *    1.0以上になっていたので、正常に動いているか知りたいです」。
+ *    **成長係数（`growthPotential`）は年齢で下げない**のが決まり（`growthSystem.js` の注。
+ *    昔は毎年引いていて、30代は全員0付近に潰れ、年齢の効きが三重に掛かっていた）。
+ *    年齢はこの停止年齢と `getAgeGrowthBase` のカーブだけが担う。
+ *    画面（選手情報の「成長の停止」）はこの関数で出す。
+ */
+export function growthStopAge(player) {
+  const gp = player?.growthPotential ?? 1.0;
+  const mod = player?.growthModifier || 0;
+  const discipline = player?.personality?.discipline ?? 50;
+  return Math.min(32, Math.max(22,
+    Math.round(26 + (gp - 1.0) * 15)
+    + Math.min(2, Math.max(0, mod * 5))
+    + Math.min(2, Math.max(0, (discipline - 60) * 0.05))
+  ));
+}
+
+/** 止まったあとも練習が効く割合（プロ意識で決まる。50で0%・80で9%・100で15%） */
+export function postStopTrainEffect(player) {
+  return Math.max(0, ((player?.personality?.discipline ?? 50) - 50) * 0.003);
+}
+
+/**
  * 覚醒の伸びの、高い能力での抑え。
  *
  * ⚠ いしだ 2026-11-20「能力80台から4クールで+6くらい上がる選手がいます。独立リーグとしては
@@ -1181,16 +1207,10 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
   // 成長停止年齢: gp(個人差) + 疲労管理(growthModifier) + プロ意識で延長
   // 停止後もdisciplineが高ければ練習で微量カバー可能
-  const _gp = player.growthPotential ?? 1.0;
-  const _growthMod = player.growthModifier || 0;
-  const _discipline = player.personality?.discipline ?? 50;
-  const _stopAge = Math.min(32, Math.max(22,
-    Math.round(26 + (_gp - 1.0) * 15)
-    + Math.min(2, Math.max(0, _growthMod * 5))              // 疲労管理: 良管理で最大+2歳
-    + Math.min(2, Math.max(0, (_discipline - 60) * 0.05))   // プロ意識80→+1, 100→+2歳
-  ));
+  // ⚠ 式は `growthStopAge` / `postStopTrainEffect` に出してある（画面の「成長の停止」と同じ値）
+  const _stopAge = growthStopAge(player);
   // stopAge到達後: discipline次第で衰えをカバー（discipline 50→0%, 80→9%, 100→15%）
-  const _postStopFloor = Math.max(0, (_discipline - 50) * 0.003);
+  const _postStopFloor = postStopTrainEffect(player);
   // stopAge4年前から緩やかに減衰 → 停止後はpostStopFloorのみ
   const stopAgeGate = age >= _stopAge
     ? _postStopFloor
