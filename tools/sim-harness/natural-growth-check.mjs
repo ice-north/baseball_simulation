@@ -43,6 +43,8 @@ import {
 import { withSeededRandom, hashSeed } from '../../src/game/rng.js';
 import { estimatePeakAge } from '../../src/season/potential.js';
 import { outlookOf } from '../../src/online/ageOutlook.js';
+import { ABILITY_HELP } from '../../src/online/playerInfo.js';
+import { growthStopAge } from '../../src/season/campTraining.js';
 import { createCandidatePlayer } from '../../src/season/tryoutSystem.js';
 import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor } from '../../src/utils/naturalGrowth.js';
 
@@ -325,6 +327,26 @@ assert.equal(
   'decline',
   '33歳・素質1.0 が3年後に下り坂と出ない',
 );
+
+// --- 6.6 プロ意識の説明の数字が式と合う（Web とアプリは同じ文。online-ability-help-check） ---
+{
+  const help = ABILITY_HELP['プロ意識'];
+  // 年度替わりの山のずれ: 100で2.5歳遅く・0で2.5歳早く・10ごとに0.5歳
+  for (const [discipline, shift] of [[100, 2.5], [0, -2.5], [60, 0.5]]) {
+    for (const age of [27, 31, 35]) {
+      assert.ok(
+        Math.abs(naturalCoefOf(age, 1.0, discipline) - naturalCoefOf(age - shift, 1.0, 50)) < 1e-9,
+        `プロ意識${discipline}の曲線のずれが説明（${shift}歳）と合わない`,
+      );
+    }
+  }
+  assert.ok(help.includes('100で2.5歳遅く') && help.includes('0で2.5歳早く'), 'プロ意識の説明に年度替わりのずれが無い');
+  // キャンプの伸びが止まる年齢: 80で+1歳・100で+2歳
+  const stopOf = (discipline) => growthStopAge({ growthPotential: 1.0, personality: { discipline } });
+  assert.equal(stopOf(80) - stopOf(60), 1, 'プロ意識80のキャンプの停止年齢が説明（+1歳）と合わない');
+  assert.equal(stopOf(100) - stopOf(60), 2, 'プロ意識100のキャンプの停止年齢が説明（+2歳）と合わない');
+  assert.ok(help.includes('キャンプの伸びが止まる年齢（80で+1歳、100で+2歳）'), 'プロ意識の説明にキャンプの停止年齢が無い');
+}
 
 // --- 7. 表示の計算は選手を書き換えない（`peek`）・投手・見た目 ---
 for (const seed of [seedFielder, seedPitcher]) {
