@@ -208,7 +208,7 @@ export const LEGACY_PACK_STYLE = 1;
  */
 // ⚠ **どの型も捕手2・内野5・外野4以上**（どの守備のまとまりにも控えが1人は居る）。
 //    控えの居ないまとまりのレギュラーは、疲れても休めずに出続ける
-//    （`server/dailyLineup.mjs` の `restTiredFielders` は守れる控えが居るときだけ休ませる）。
+//    （`server/dailyLineup.mjs` の `restTiredFielders` は、守備を組み直しても下限以上で組めるときだけ休ませる）。
 //    外野3人の型を作ったら、通年の検査（`check:online:season`）で中堅手が
 //    疲労471まで積み上がった。厚みの違いは投手と野手の人数の差で出す。
 export const PACK_SHAPES = [
@@ -362,7 +362,7 @@ function generateStyledPacks(seed, count, ageWeights) {
       const base =
         group === 'infield' || group === 'outfield' ? list.slice(0, n) : [];
       // ⚠ 内野の控えは**遊撃手か三塁手**から引く。疲れたレギュラーの代役は
-      //    その位置の適性60以上の控えだけ（`restTiredFielders`）で、一塁手・
+      //    守備を組み直して適性60以上で組めるときだけ（`restTiredFielders`）で、一塁手・
       //    二塁手の控えは三塁や遊撃をほとんど守れない（実測: 一塁手で二塁60以上は1割）。
       //    遊撃手は二塁・三塁、三塁手は一塁・遊撃を守れる。一塁は控えの捕手も守れる
       const pool = group === 'infield' ? ['short', 'third'] : list;
