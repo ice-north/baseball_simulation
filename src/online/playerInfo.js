@@ -1,4 +1,5 @@
 import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, normalizeAbility } from '../utils/constants.js';
+import { naturalGrowthText } from '../utils/naturalGrowth.js';
 import { getDeception } from '../game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL } from '../game/batterType.js';
 const n = (value) =>
@@ -133,18 +134,12 @@ export function abilityRows(player, group) {
       //    「平均いくつ伸びるか」を表さない。サーバーが出した値（`naturalGrowth`）は
       //    年齢・出場量・プロ意識・調子まで含めた1能力あたりの伸び。
       //    ⚠ 古いサーバーは渡さないので、そのときは出さない
-      //    ⚠ 符号の付け方は一人用（`src/utils/naturalGrowth.js`）とアプリ（`PlayerSheet.kt`）と同じ
+      //    ⚠ 符号の付け方は一人用と同じ関数（`naturalGrowthText`）。アプリ（`PlayerSheet.kt`）も同じ形
       [
         '自然成長',
         n(player.naturalGrowth) === null
           ? null
-          : `${
-              Math.abs(player.naturalGrowth) < 0.005
-                ? '±'
-                : player.naturalGrowth > 0
-                  ? '+'
-                  : '-'
-            }${Math.abs(player.naturalGrowth).toFixed(2)}/年`,
+          : `${naturalGrowthText(player.naturalGrowth)}/年`,
       ],
     ],
     profile: [

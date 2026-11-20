@@ -105,9 +105,10 @@ const packView = (pack) => ({
   }),
 });
 
-// ⚠ `team` は**自然成長の計算に使うだけ**（球団の格で練習量が変わる。`teamRankMult`）。
-//    渡さないと独立リーグのランクC相当で出る（まだどの球団にも居ない選手）
-const playerView = (p, team = null) => ({
+// ⚠ 自然成長（`naturalGrowth`）は `playerViewWithGrowth` が足す。ここで求めると、
+//    セット選択の約480人（`packView`）や他球団の名簿（`projectTeamInfo`）のように
+//    すぐ捨てる所でも1人ずつ成長の式を回すことになる
+const playerView = (p) => ({
   id: p.id,
   isActive: p.isActive !== false,
   name: p.name,
@@ -151,12 +152,6 @@ const playerView = (p, team = null) => ({
   zoneProfile: p.zoneProfile,
   growthPotential: p.growthPotential,
   growthModifier: p.growthModifier,
-  // ⚠ **画面に出すのはこちら**（いしだ 2026-11-20「表示を自然成長の平均と合わせたい」）。
-  //    素質（`growthPotential` 0.3〜1.8）は素の個性で「平均いくつ伸びるか」ではない。
-  //    年齢・出場量・プロ意識・調子まで含めた**今年の1能力あたりの伸び**を出す
-  //    ⚠ 対人リーグの12球団は年度替わりで全部 `online` の区分で伸びる（`advanceToNextYear` の
-  //    `onlineTeamNames`）。`team` はベテランの指導（`veteranBonusOf`）にも使う
-  naturalGrowth: expectedNaturalGrowth(p, 'online', team ? teamRankMult(team) : 0.90, { team }),
   origin: {
     highSchool: p.highSchool?.name,
     university: p.universityTeamName || p.universityName,
@@ -170,6 +165,19 @@ const playerView = (p, team = null) => ({
         .map((h) => ({ type: h.type, year: h.year, label: h.label }))
     : [],
   seasonStats: p.seasonStats,
+});
+/**
+ * `playerView` に自然成長（`naturalGrowth`）を足したもの。自球団の名簿とトライアウトの候補だけが使う。
+ * ⚠ **画面に出すのはこちら**（いしだ 2026-11-20「表示を自然成長の平均と合わせたい」）。
+ *    素質（`growthPotential` 0.3〜1.8）は素の個性で「平均いくつ伸びるか」ではない。
+ *    年齢・出場量・プロ意識・調子まで含めた**次の年度替わりの1能力あたりの伸び**を出す。
+ * ⚠ 対人リーグの12球団は年度替わりで全部 `online` の区分で伸びる（`advanceToNextYear` の
+ *    `onlineTeamNames`）。`team` は球団の格（`teamRankMult`）とベテランの指導（`veteranBonusOf`）に使う。
+ *    渡さないと独立リーグのランクC相当で出る（まだどの球団にも居ない選手）
+ */
+const playerViewWithGrowth = (p, team = null) => ({
+  ...playerView(p),
+  naturalGrowth: expectedNaturalGrowth(p, 'online', team ? teamRankMult(team) : 0.90, { team }),
 });
 const dateKey = (d) =>
   d ? (d.year || 0) * 10000 + (d.month || 0) * 100 + (d.day || 0) : Infinity;
@@ -670,7 +678,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       picks: member.starterPicks || {},
     },
     roster: team.players.map((p) => ({
-      ...playerView(p, team),
+      ...playerViewWithGrowth(p, team),
       ...currentPlayerStats(l, member.teamName, p, statistics),
       detailAvailable: true,
     })),
@@ -699,7 +707,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           packs: l.packs?.map(packView),
           // ⚠ 甲子園で名を上げた人には、その年の成績を添える（`koshien`）
           candidates: phase.candidates?.map((c) => {
-            const view = playerView(c, team);
+            const view = playerViewWithGrowth(c, team);
             const note = koshienNoteOf(l, c.id);
             return note ? { ...view, koshien: note } : view;
           }),
@@ -918,9 +926,8 @@ export function projectTeamInfo(bundle, userId, teamName, context = null) {
       const visible = playerView(p);
       delete visible.growthPotential;
       delete visible.growthModifier;
-      // ⚠ 自然成長は素質（`growthPotential`）がそのまま透けるので、隠す値と同じ扱いにする。
+      // ⚠ 自然成長（`playerViewWithGrowth`）も素質がそのまま透けるので、ここでは足さない。
       //    自軍の選手はリーグのビュー（`projectLeague` の `roster`）側で出る
-      delete visible.naturalGrowth;
       return {
         ...visible,
         ...currentPlayerStats(l, teamName, p, statistics),

@@ -101,9 +101,11 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const sortedPlayers = useMemo(() => {
     if (!sortKey) return players;
+    // 値は1人1回だけ求める（自然成長は成長の式を回すので、比べるたびに求めると重い）
+    const values = new Map(players.map(p => [p, getSortValue(p, sortKey)]));
     return [...players].sort((a, b) => {
-      const va = getSortValue(a, sortKey);
-      const vb = getSortValue(b, sortKey);
+      const va = values.get(a);
+      const vb = values.get(b);
       if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
       return sortAsc ? va - vb : vb - va;
     });

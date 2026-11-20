@@ -392,6 +392,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     if (sortKey === key) { setSortAsc(!sortAsc); }
     else { setSortKey(key); setSortAsc(key === 'position'); }
   };
+  // 自然成長は成長の式を回すので、比べるたびではなく1人1回だけ求める
+  const growthOf = new Map(sortKey === 'growth'
+    ? (userTeam?.players || []).map(p => [p, naturalGrowthOf(p, userTeam) ?? -99])
+    : []);
   const sortedPlayers = [...(userTeam?.players || [])].sort((a, b) => {
     const dir = sortAsc ? 1 : -1;
     const getVal = (p) => {
@@ -399,7 +403,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         case 'position': return POSITION_ORDER.indexOf(p.position);
         case 'age': return p.age || 20;
         case 'build': return p.physical?.build === 'large' ? 2 : p.physical?.build === 'small' ? 0 : 1;
-        case 'growth': return naturalGrowthOf(p, userTeam) ?? -99;
+        case 'growth': return growthOf.get(p);
         case 'discipline': return p.personality?.discipline || 0;
         case 'mental': return p.personality?.mental || 0;
         case 'meet': return p.batting?.meet || 0;
