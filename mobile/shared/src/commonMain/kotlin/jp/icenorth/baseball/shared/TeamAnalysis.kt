@@ -67,11 +67,17 @@ fun radarFraction(scales: Map<String, Pair<Int, Int>>, key: String, v: Int?): Do
     return RADAR_INNER + (1 - RADAR_INNER) * f
 }
 
-/** 部の平均（項目ごと。四捨五入） */
+/**
+ * JS の Math.round と同じ丸め（.5 は +∞ 側。-2.5 → -2）。
+ * ⚠ kotlin.math.round は .5 を偶数へ丸める（2.5 → 2）ので、PC の Math.round と1ずれる（2026-11-20 監査）
+ */
+fun jsRound(x: Double): Int = kotlin.math.floor(x + 0.5).toInt()
+
+/** 部の平均（項目ごと。PC と同じく Math.round で丸める） */
 fun ratingAverage(all: Collection<Map<String, Int?>>): Map<String, Int?> =
     RATING_AXES.associate { a ->
         val list = all.mapNotNull { it[a.key] }
-        a.key to if (list.isEmpty()) null else kotlin.math.round(list.average()).toInt()
+        a.key to if (list.isEmpty()) null else jsRound(list.average())
     }
 
 // ------------------------------------------------------------

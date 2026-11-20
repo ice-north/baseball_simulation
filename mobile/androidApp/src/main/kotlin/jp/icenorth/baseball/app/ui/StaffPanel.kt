@@ -131,10 +131,13 @@ fun StaffPanel(model: AppViewModel, view: LeagueView) {
  */
 @Composable
 private fun LeagueCoachName(model: AppViewModel, team: String, brief: StaffBrief, suffix: String, small: Boolean = false) {
-    var open by remember { mutableStateOf(false) }
-    var card by remember { mutableStateOf<CoachCard?>(null) }
+    // ⚠ 人が替わったら（監督の交代など）前の人のカードを捨てる。キーなしで持つと、同じ席の名前を押すと
+    //   前の人の小窓が開いた（2026-11-20 監査）
+    val who: Any = brief.id ?: brief.name
+    var open by remember(team, who) { mutableStateOf(false) }
+    var card by remember(team, who) { mutableStateOf<CoachCard?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(open) {
+    LaunchedEffect(open, team, who) {
         if (!open || card != null) return@LaunchedEffect
         try {
             val staff = model.read("team", mapOf("team" to team))["staff"]?.takeUnless { it is JsonNull }

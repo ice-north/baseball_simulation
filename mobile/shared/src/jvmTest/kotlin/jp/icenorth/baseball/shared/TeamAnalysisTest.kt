@@ -71,4 +71,17 @@ class TeamAnalysisTest {
         assertEquals(1, rankIn(listOf(3.1, 2.5), 2.5, better = false))
         assertTrue(COACH_ABILITY_ITEMS.size == 8)
     }
+
+    /** 部の平均は PC（TeamAnalysis.jsx）の Math.round と同じく .5 を上へ丸める（kotlin.math.round は偶数へ丸めて1ずれた） */
+    @Test
+    fun ratingAverageRoundsHalfUpLikeMathRound() {
+        val avg = ratingAverage(listOf(mapOf("offense" to 2, "defense" to 50), mapOf("offense" to 3, "defense" to 51)))
+        assertEquals(3, avg["offense"])
+        assertEquals(51, avg["defense"])
+        assertNull(avg["speed"])
+        assertEquals(3, jsRound(2.5))
+        assertEquals(4, jsRound(3.5))
+        assertEquals(-2, jsRound(-2.5))
+        assertEquals(-3, jsRound(-2.6))
+    }
 }

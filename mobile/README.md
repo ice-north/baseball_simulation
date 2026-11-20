@@ -41,7 +41,12 @@
   - ビュー: `careerLeaders`（通算成績ランキング）、`chronicle.proDrafted`（プロ入りした選手。指名順位は `round`（数）と `ikusei`（育成指名なら true）で「4位」「育成2位」と出す）、`lastCamp`（キャンプの結果）、`stage.key`（`season` かどうかでキャンプ直後の案内を出す）、`trades[]` の `fromCpu`・`expires`（CPU球団からの提案とその期限）、`rosterLimit`・`rosterStandard`（選手枠。下の項目）、`yearSummary`（その年のまとめ。`year`・`league`・`rank`・`record`・`standings[]`（`rank`・`label`・`wins`・`losses`・`draws`・`mine`）・`joined[]`/`left[]`（`side`・`how`・`name`・`position`・`other`）・`topics[]`。`server/yearSummary.mjs`。年度更新から開幕した月の間だけ載る）。
   - `team`: `formerCareers`（引退・退団した選手の通算）、`chronicle.moves`（入退団履歴）、`roster[].years`（他球団の選手の年ごとの推移）。
   - `player`: `years`（自球団の選手の年ごとの推移。年・年齢・所属・能力）。
-  - `transactions`（`year` を受ける。トレード履歴）: `years`、`items[]` の `kind`（アプリは `trade` だけ出す）・`teams`・`cpu`・`cpuOnly`・`date`・`moves[]`（`name`・`position`・`from`・`to`）。
+  - `transactions`（`year` と `team`（球団で絞る）を受ける）: `years`、`items[]` の `kind`・`teams`・`cpu`・`cpuOnly`・`date`・`moves[]`（`name`・`position`・`from`・`to`）。トレード画面の履歴は `kind` が `trade` の行だけ、試合タブの「リーグ史」の移籍・取引は退団（`release`。`to` が無い）・入団（`signing`。`from` が無い）も出す（`LeagueHistoryScreen.kt` の `TransactionsPane`）。
+- チーム分析（選手タブの「能力」「スタメン」「守備」）とリーグ史・指導者で読む項目（先方5項目 2026-11-20）。どれも古いサーバーには無く、無ければ出さない。名前を変えると黙って出なくなる:
+  - ビュー: `teamRatings`（球団 → `starters`・`relief`・`offense`・`defense`・`speed`・`bench`。`src/online/teamRatings.js`。`TeamAnalysis.kt` の `RATING_AXES`）、`teamStats`（球団 → `average`・`era`。チーム成績と紙面の部の中の順位）、`teamNames`（全球団の名前。部の球団・球団の選択・トレードの相手。無ければ `standings` の球団）。
+  - ビューの `history[]`（終わった年。`year`・`standings[]`（`team`・`wins`・`losses`・`draws`・`winRate`）・`leagues`（球団 → 部の id）・`moves[]`（`teamId`・`from`・`to`。昇格・降格）・`playoffChampion`）。リーグ史の過去の順位・歴代の優勝（`TeamAnalysis.kt` の `pastTables`・`pastMoves`）。
+  - ビューの `leagueStaff.teams[]` の `manager`・`pitching`・`batting` の `id`（押すと人物の小窓。その球団の `team` の窓口の `staff` から同じ id の人を探す。`id` の無い古いサーバーは名前で探す。`StaffPanel.kt` の `LeagueCoachName`）。
+  - `team`: `lineup`（他球団のスタメン・投手陣と守備分析。無ければ「まだ読めません」）、`staff.seats[].coach` の指導者カードの `abilities`（`COACH_ABILITY_ITEMS` の鍵 → 1〜99）・`stints[]`（これまでの指導チーム）・`pupils[]`（主な指導選手）。`stints`・`pupils` は1行ずつの文 `text` を出す（`StaffPanel.kt` の `CoachDialog`。自球団の指導者はビューの `staff` の同じカード）。
 - 通知（`ResultWorker`）が読むビューの項目。名前を変えると通知が黙って出なくなる（画面の検査では気づきにくい）:
   - 試合結果（`shared/.../ResultNotice.kt`）: `teamName`・`teamLabels`、`recentGames`（`server/projection.mjs` の `ownRecentGames`）の `id`・`date`・`number`・`home`・`away`・`homeScore`・`awayScore`（見分けと「新しい試合か」に使う）。本文には `decisions`（勝敗投手）・`homeruns`、順位の `teamLeagues`・`standings` も使う。
   - 手続き・トレード・手続きの結果（`shared/.../EventNotice.kt`・`Notices.kt` の `pendingProcedure`）:
