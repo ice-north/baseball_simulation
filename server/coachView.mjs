@@ -30,6 +30,7 @@ import {
   coachAbilities,
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
+import { formatRate as rate3 } from '../src/online/gameText.js';
 import {
   staffOf,
   teamTacticsFor,
@@ -209,7 +210,6 @@ export function coachStints(coach, labelOf) {
 
 /** 主な指導選手に挙げる人数 */
 const PUPIL_COUNT = 5;
-const rate3 = (v) => v.toFixed(3).replace(/^0/, '');
 /**
  * 主な指導選手（その人が指導した年・球団で、出番の多かった選手。⚠ 先方要望 2026-11-20）。
  * 投手コーチは投手（対戦打者の数）、野手コーチは野手（打席の数）、監督は両方で数える。

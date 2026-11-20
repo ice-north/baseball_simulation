@@ -236,8 +236,10 @@ function CoachDialog({ coach, close }) {
         <h3>主な指導選手</h3>
         {coach.pupils?.length ? (
           <ul className="online-plain-list">
-            {coach.pupils.map((p) => (
-              <li key={p.name}>{p.text}</li>
+            {/* ⚠ 名前は key にしない（同姓同名の選手が居る。監査 2026-11-20）。並びはサーバーが決めて
+                画面では入れ替えないので、順番で足りる（選手の key をビューに足すと重くなる） */}
+            {coach.pupils.map((p, i) => (
+              <li key={i}>{p.text}</li>
             ))}
           </ul>
         ) : (
