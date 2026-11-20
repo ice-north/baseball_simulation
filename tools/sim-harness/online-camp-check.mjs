@@ -39,7 +39,8 @@ import {
 } from '../../src/season/campTraining.js';
 import { menusFor, subMenusFor } from '../../src/online/campMenus.js';
 import { createSeededRandom } from '../../src/game/rng.js';
-import { growthStopAge, postStopTrainEffect } from '../../src/season/campTraining.js';
+import { growthStopAge, postStopTrainEffect, executeCampTraining as runCampMenu, executeSubTraining as runSubMenu } from '../../src/season/campTraining.js';
+import { ABILITY_CAP } from '../../src/utils/constants.js';
 import {
   DIRECTIONS,
   resolveTraining,
@@ -1330,6 +1331,33 @@ assert.ok(
 // ⚠ 世界を汚したまま終わらない（ほかの検査と同じプロセスで動くことがある）
 loadLeagueWorld(leagueAtCamp());
 captureWorld();
+
+// --- 1〜99 の能力はキャンプでも上限（ABILITY_CAP）で止まる（2026-11-20 監査: メイン練習と
+//     ストレッチだけ100で止めていた）---
+{
+  const restore = Math.random;
+  Math.random = createSeededRandom(20261120);
+  try {
+    const near = () => ({
+      id: 1, name: 'x', age: 22, position: 'shortstop', growthPotential: 1.5,
+      experience: 9999, campExperience: 9999, seasonExperience: 9999, personality: { discipline: 100 },
+      batting: { meet: 98, power: 98, eye: 98, bunt: 98, steal: 98 }, fielding: { defense: 98, steal: 98 },
+      physical: { speed: 98, arm: 98, bodyStamina: 98, muscle: 98, dexterity: 98, recovery: 98 },
+      positionFitness: { shortstop: 100 }, talent: {},
+    });
+    let maxSeen = 0;
+    for (let i = 0; i < 400; i++) {
+      for (const t of ['fielding', 'batting', 'baserunning']) {
+        for (const g of runCampMenu(near(), t, null).growthReport || []) if (g.stat !== 'stamina') maxSeen = Math.max(maxSeen, g.after);
+      }
+      for (const g of runSubMenu(near(), 'stretch')?.growthReport || []) maxSeen = Math.max(maxSeen, g.after);
+    }
+    assert.ok(maxSeen <= ABILITY_CAP, `キャンプで能力が上限を超えた: ${maxSeen}`);
+    assert.ok(maxSeen === ABILITY_CAP, 'キャンプの検査の選手が上限まで伸びていない（検査が効いていない）');
+  } finally {
+    Math.random = restore;
+  }
+}
 
 console.log(
   '■ キャンプ: OK（成長の止まる年齢（素質・疲労管理・プロ意識で22〜32歳）/ 選手ごとに効く / 低い能力は据え置き・高い能力は跳ねない / ノックで守備と適性が伸びる / ウエイトが体幹・基礎体力が体力の役 / 新球種は1クール3割・4クールで7割 / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒は低い能力では据え置き・高い能力では抑える／クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
