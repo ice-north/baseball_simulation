@@ -33,6 +33,23 @@ data class CoachHistory(
     val text: String = "",
 )
 
+/** 指導した球団と役職のひと続き（「2年目〜 美瑛 投手コーチ（現職）」） */
+@Serializable
+data class CoachStint(
+    val team: String? = null,
+    val role: String? = null,
+    val from: Int? = null,
+    val to: Int? = null,
+    val current: Boolean = false,
+    val teamLabel: String? = null,
+    val roleLabel: String = "",
+    val text: String = "",
+)
+
+/** 主な指導選手の1人（「田中（2年・打率.301 12本）」） */
+@Serializable
+data class CoachPupil(val name: String = "", val years: Int = 0, val text: String = "")
+
 @Serializable
 data class CoachCard(
     val id: String = "",
@@ -70,6 +87,15 @@ data class CoachCard(
     val playerLine: String? = null,
     val mentor: String? = null,
     val history: List<CoachHistory> = emptyList(),
+    /**
+     * 詳細能力（`COACH_ABILITY_ITEMS` の鍵 → 1〜99）。表示と人物像だけで、どこにも効かない
+     * （サーバーの coachAbilities。先方要望 2026-11-20）。古いサーバーには無い
+     */
+    val abilities: Map<String, Int>? = null,
+    /** これまでの指導チームと役職（古い順。full のカードだけ） */
+    val stints: List<CoachStint> = emptyList(),
+    /** 主な指導選手（在任中に出番の多かった5人まで。full のカードだけ） */
+    val pupils: List<CoachPupil> = emptyList(),
 ) {
     /** 呼び名（姓だけ。「山田監督」） */
     val shortName: String get() = name.substringBefore(' ').ifBlank { name }
@@ -161,6 +187,8 @@ data class StaffView(
 
 @Serializable
 data class StaffBrief(
+    /** 指導者の id（押すと人物の小窓。その球団の読み込みから同じ id の人を探す）。古いサーバーには無い */
+    val id: String? = null,
     val name: String = "",
     val shortName: String = "",
     val color: String = "",

@@ -39,11 +39,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
+import jp.icenorth.baseball.shared.COACH_ABILITY_ITEMS
 import jp.icenorth.baseball.shared.CoachCard
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineJson
 import jp.icenorth.baseball.shared.STAFF_ROLE_LABELS
+import jp.icenorth.baseball.shared.StaffBrief
 import jp.icenorth.baseball.shared.StaffEvent
 import jp.icenorth.baseball.shared.StaffScale
 import jp.icenorth.baseball.shared.StaffSeat
@@ -103,12 +105,17 @@ fun StaffPanel(model: AppViewModel, view: LeagueView) {
         }
         view.leagueStaff?.let { league ->
             Section("各球団の監督") {
+                Muted("球団名を押すとその球団の首脳陣、名前を押すと人物の小窓を開きます。")
                 league.teams.forEach { t ->
-                    Row(Modifier.fillMaxWidth().clickable { team = t.team }.padding(vertical = 4.dp)) {
-                        Text(view.teamShort(t.team), fontWeight = FontWeight.Bold, modifier = Modifier.width(56.dp))
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Text(view.teamShort(t.team), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(56.dp).clickable { team = t.team })
                         Column(Modifier.weight(1f)) {
-                            Text(t.manager?.let { "${it.name}監督" + if (it.isNew) "（新）" else "" } ?: "監督なし")
+                            t.manager?.let { LeagueCoachName(model, t.team, it, "監督" + if (it.isNew) "（新）" else "") } ?: Text("監督なし")
                             t.manager?.color?.let { Muted(it) }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                t.pitching?.let { LeagueCoachName(model, t.team, it, "投手C", small = true) }
+                                t.batting?.let { LeagueCoachName(model, t.team, it, "野手C", small = true) }
+                            }
                         }
                     }
                 }
@@ -116,6 +123,39 @@ fun StaffPanel(model: AppViewModel, view: LeagueView) {
             Events("リーグの人事", league.events)
         }
     }
+}
+
+/**
+ * 各球団の指導者の名前（押すと人物の小窓）。カードはその球団の読み込み（team の窓口の staff）から
+ * 同じ id の人を探す（ビューの leagueStaff は名前だけで軽くしてある）。⚠ PC の LeagueCoachButton と同じ
+ */
+@Composable
+private fun LeagueCoachName(model: AppViewModel, team: String, brief: StaffBrief, suffix: String, small: Boolean = false) {
+    var open by remember { mutableStateOf(false) }
+    var card by remember { mutableStateOf<CoachCard?>(null) }
+    var failure by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(open) {
+        if (!open || card != null) return@LaunchedEffect
+        try {
+            val staff = model.read("team", mapOf("team" to team))["staff"]?.takeUnless { it is JsonNull }
+                ?.let { OnlineJson.decodeFromJsonElement(TeamStaffView.serializer(), it) }
+            card = staff?.seats?.mapNotNull { it.coach }?.firstOrNull { c -> if (brief.id != null) c.id == brief.id else c.name == brief.name }
+            if (card == null) { failure = "この指導者の情報が見つかりませんでした"; open = false }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            failure = model.describe(e)
+            open = false
+        }
+    }
+    failure?.let { message -> LaunchedEffect(message) { model.message = message; failure = null } }
+    Text(
+        "${if (small) brief.shortName.ifBlank { brief.name } else brief.name}$suffix",
+        style = if (small) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.clickable { open = true },
+    )
+    val shown = card
+    if (open && shown != null) CoachDialog(shown) { open = false }
 }
 
 @Composable
@@ -333,11 +373,21 @@ private fun CoachBlock(roleLabel: String, coach: CoachCard?) {
         return
     }
     var open by rememberSaveable(coach.id) { mutableStateOf(false) }
+    // 名前を押すと人物の小窓（詳細能力・これまでの指導チームと役職・主な指導選手。先方要望 2026-11-20）
+    var profile by rememberSaveable(coach.id) { mutableStateOf(false) }
+    if (profile) CoachDialog(coach) { profile = false }
     Column(Modifier.fillMaxWidth().clickable { open = !open }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Caption(roleLabel)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(coach.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("  ${coach.age}歳 · ${coach.origin}${if (coach.legend) " · 名選手" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                coach.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.testTag("coach-name").clickable { profile = true },
+            )
+            Text("  ${coach.age}歳 · ${coach.origin}${if (coach.legend) " · 名選手" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            TextButton(onClick = { profile = true }) { Text("人物 ›") }
         }
         // 称号（通算の記録から。最大2つ）
         if (coach.titles.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) { coach.titles.forEach { Tag(it, MaterialTheme.colorScheme.tertiary) } }
@@ -360,6 +410,82 @@ private fun CoachBlock(roleLabel: String, coach: CoachCard?) {
             coach.history.forEach { h -> Text("${h.year}年 ${h.teamLabel.orEmpty()} ${h.roleLabel.orEmpty()} ${h.text}", style = MaterialTheme.typography.bodySmall) }
         } else Muted("押すと考え方・性格・好む選手・履歴")
     }
+}
+
+/**
+ * 指導者の人物の小窓（名前を押すと開く）。PC の CoachDialog（src/online/StaffPage.jsx）と同じ並び。
+ * ⚠ 文はサーバーが作る（server/coachView.mjs）。画面で言い換えない。詳細能力は表示だけで、どこにも効かない
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CoachDialog(coach: CoachCard, onClose: () -> Unit) {
+    val trust = coach.traits.firstOrNull { it.key == "trust" }
+    AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { TextButton(onClick = onClose) { Text("閉じる") } },
+        title = {
+            Column {
+                Text(coach.name, fontWeight = FontWeight.Bold)
+                Text(
+                    listOfNotNull(
+                        coach.roleLabel.takeIf { it.isNotBlank() },
+                        "${coach.age}歳",
+                        coach.origin.takeIf { it.isNotBlank() },
+                        if (coach.legend) "名選手" else null,
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()).testTag("coach-dialog"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (coach.titles.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) { coach.titles.forEach { Tag(it, MaterialTheme.colorScheme.tertiary) } }
+                Text(coach.headline.ifBlank { coach.color }, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                if (coach.pitch.isNotBlank()) Muted("「${coach.pitch}」")
+                if (coach.vision.isNotBlank()) Fact("ビジョン", coach.vision)
+                if (coach.growth.isNotBlank()) Fact("育成観", coach.growth)
+                if (coach.personality.isNotBlank()) Fact("性格", coach.personality)
+                trust?.let { Fact("任せ方", it.text) }
+                coach.delegation?.let { Fact("コーチ任せ", it) }
+                if (coach.prefs.isNotBlank()) Fact("好む選手", coach.prefs)
+                if (coach.career.isNotBlank()) Fact("通算", coach.career)
+                coach.mentor?.let { Fact("恩師", it) }
+                coach.playerLine?.let { Fact("現役時代", it) }
+                coach.abilities?.let { abilities ->
+                    Caption("詳細能力")
+                    Muted("人物の目安です。試合や育成の強さには効きません（采配やキャンプの案を変えるのはビジョン・考え方・性格です）。")
+                    // 2列に並べる（8項目）
+                    COACH_ABILITY_ITEMS.chunked(2).forEach { pair ->
+                        Row(Modifier.fillMaxWidth()) {
+                            pair.forEach { item ->
+                                Row(Modifier.weight(1f).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(item.label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(84.dp))
+                                    AbilityNum(null, abilities[item.key])
+                                }
+                            }
+                            if (pair.size == 1) Box(Modifier.weight(1f))
+                        }
+                    }
+                }
+                Caption("これまでの指導チームと役職")
+                if (coach.stints.isEmpty()) Muted("まだ指導した球団はありません。")
+                coach.stints.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                Caption("主な指導選手")
+                if (coach.pupils.isEmpty()) Muted("まだいません（このリーグで指導した年の記録から挙げます）。")
+                coach.pupils.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                if (coach.views.isNotEmpty() || coach.traits.isNotEmpty()) {
+                    Caption("考え方・性格")
+                    coach.views.forEach { ScaleRow(it) }
+                    coach.traits.forEach { ScaleRow(it) }
+                }
+                if (coach.history.isNotEmpty()) {
+                    Caption("年ごとの成績")
+                    coach.history.forEach { h -> Text("${h.year}年 ${h.teamLabel.orEmpty()} ${h.roleLabel.orEmpty()} ${h.text}", style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        },
+    )
 }
 
 @Composable

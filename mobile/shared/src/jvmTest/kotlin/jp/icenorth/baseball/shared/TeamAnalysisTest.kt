@@ -1,0 +1,74 @@
+package jp.icenorth.baseball.shared
+
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/** 先方5項目（2026-11-20）のアプリ側の計算。PC（standingsGap.js・teamHistory.js・defenseRange.js・LeagueHistory.jsx）と同じ答えか */
+class TeamAnalysisTest {
+    private fun obj(json: String): JsonObject = Json.parseToJsonElement(json).jsonObject
+
+    @Test
+    fun gapIsToTheTeamDirectlyAbove() {
+        val rows = listOf(Standing("a", 10, 5), Standing("b", 9, 6), Standing("c", 9, 6), Standing("d", 6, 8))
+        assertEquals(listOf(null, 1.0, 0.0, 2.5), gamesBehindAbove(rows))
+        assertEquals(listOf("—", "1.0", "0.0", "2.5"), gamesBehindAbove(rows).map(::gapText))
+        assertEquals("0.0", gapText(-0.0))
+    }
+
+    @Test
+    fun historySlotPutsFirstDivisionOnTop() {
+        assertEquals(1, historySlot("1部", 1))
+        assertEquals(6, historySlot("1部", 6))
+        assertEquals(7, historySlot("2部", 1))
+        assertNull(historySlot("3部", 1))
+        assertNull(historySlot("1部", null))
+        val points = historyPoints(
+            listOf(TeamSeason(2, "1部", 1, 40, 20), TeamSeason(1, "2部", 1, 38, 22, move = "昇格")),
+            null,
+            null,
+        )
+        assertEquals(listOf(1, 2), points.map { it.year })
+        assertEquals("2部優勝・昇格", points.first().mark)
+        assertEquals("1部優勝", points.last().mark)
+    }
+
+    @Test
+    fun defenseRangeMatchesWeb() {
+        val p = obj("""{"position":"short","fielding":{"defense":80},"physical":{"speed":70,"arm":60},"positionFitness":{"second":50}}""")
+        // 遊撃は本職（適性100）: (80*0.4 + 70*0.3 + 60*0.3)/100 = 0.71
+        assertEquals(0.71, defenseRange(p, "short"), 1e-9)
+        // 二塁は適性50 → 0.75倍
+        assertEquals(0.71 * 0.75, defenseRange(p, "second"), 1e-9)
+        assertEquals("B", defenseGrade(0.71).label)
+        // 一塁は適性無し（0）→ 半分
+        assertEquals((80 * 0.5 + 70 * 0.25 + 60 * 0.25) / 100 * 0.5, defenseRange(p, "first"), 1e-9)
+    }
+
+    @Test
+    fun pastTablesSplitByDivision() {
+        val entry = obj(
+            """{"year":1,"standings":[{"team":"x","wins":5,"losses":5},{"team":"y","wins":7,"losses":3},{"team":"z","wins":2,"losses":8}],
+            "leagues":{"x":"A","y":"A","z":"B"},"moves":[{"teamId":"z","from":"B","to":"A"},{"teamId":"x","from":"A","to":"B"}],"playoffChampion":"y"}""",
+        )
+        val tables = pastTables(entry)
+        assertEquals(listOf("1部", "2部"), tables.map { it.league?.name })
+        assertEquals(listOf("y", "x"), tables.first().rows.map { it.team })
+        assertEquals(mapOf("z" to "昇格", "x" to "降格"), pastMoves(entry))
+    }
+
+    @Test
+    fun radarScalesByLeaguePosition() {
+        val all = listOf(mapOf("offense" to 40), mapOf("offense" to 60))
+        val scales = ratingScales(all)
+        assertEquals(RADAR_INNER, radarFraction(scales, "offense", 40), 1e-9)
+        assertEquals(1.0, radarFraction(scales, "offense", 60), 1e-9)
+        assertEquals(2, rankIn(listOf(40.0, 60.0, 50.0), 50.0))
+        assertEquals(1, rankIn(listOf(3.1, 2.5), 2.5, better = false))
+        assertTrue(COACH_ABILITY_ITEMS.size == 8)
+    }
+}

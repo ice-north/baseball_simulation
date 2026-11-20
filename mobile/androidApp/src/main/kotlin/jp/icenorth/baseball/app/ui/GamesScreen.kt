@@ -100,14 +100,20 @@ fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Uni
         GameDetail(model, view, current.substringBefore(':'), current.substringAfter(':')) { open = null }
         return
     }
+    // ⚠ リーグ史は中の切り替えごとに自分で送る（能力・通算のランキングは表が自分で縦に送る）ので、
+    //    下の縦に送る列の外に置く（送る列の中に送る列を入れると落ちる）
+    if (section == "history") {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("試合", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp))
+            ChipTabs(GAMES_SECTIONS, section, onSection)
+            LeagueHistoryPane(model, view, raw)
+        }
+        return
+    }
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(listScroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("試合", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         // ⚠ 順位表・タイトル争い・リーグ便りはここ（ホームは新聞の紙面にしたので、数字の表はこのタブにまとめる）
-        ChipTabs(
-            listOf("results" to "試合結果", "standings" to "順位表", "leaders" to "タイトル", "news" to "リーグ便り"),
-            section,
-            onSection,
-        )
+        ChipTabs(GAMES_SECTIONS, section, onSection)
         when (section) {
             "standings" -> { StandingsBoard(view, onOpenTeam); return@Column }
             "leaders" -> {
@@ -140,6 +146,12 @@ fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Uni
         }
     }
 }
+
+/**
+ * 試合タブの区分。リーグ史（過去の順位・プロ入り・取引・通算と能力のランキング・表彰。先方要望 2026-11-20）は
+ * PC の左メニュー「リーグ史」と同じ中身
+ */
+private val GAMES_SECTIONS = listOf("results" to "試合結果", "standings" to "順位表", "leaders" to "タイトル", "news" to "リーグ便り", "history" to "リーグ史")
 
 /** 試合結果を1回に読む数（「続きを表示」で足す数） */
 private const val GAMES_CHUNK = 20
