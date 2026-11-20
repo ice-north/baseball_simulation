@@ -232,9 +232,13 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
 export function RenameDialog({ view, busy, run, command, close }) {
   const dialog = useRef(null);
   const me = (view.members || []).find((m) => m.teamName === view.teamName);
-  const [teamName, setTeamName] = useState(
-    () => me?.displayName || teamLabel(view.teamName),
-  );
+  // ⚠ **地域名とチーム名は分けて決める**（いしだ 2026-11-20「じゃないと略称名が
+  //    ダサくなってしまう」）。略称は地域名をそのまま使い、地元（紙面の「縁」の記事）も
+  //    地域名で引く。既定は既にある名前を都市で切ったもの（サーバーの `teamCityOf`）
+  const labels = view.teamLabels?.[view.teamName] || {};
+  const [city, setCity] = useState(() => labels.city || '');
+  const [nickname, setNickname] = useState(() => labels.nickname || '');
+  const teamName = `${city}${nickname}`.trim();
   const [playerName, setPlayerName] = useState(() => me?.label || '');
   // オーナーのひとこと（順位表・球団の画面・紙面に出す）
   const [comment, setComment] = useState(() => me?.comment || '');
@@ -272,7 +276,8 @@ export function RenameDialog({ view, busy, run, command, close }) {
           setError('');
           const result = await run(() =>
             command('profile', {
-              teamName: teamName.trim(),
+              cityName: city.trim(),
+              nickname: nickname.trim(),
               playerName: playerName.trim(),
               comment: comment.trim(),
             }),
@@ -282,14 +287,28 @@ export function RenameDialog({ view, busy, run, command, close }) {
         }}
       >
         <label>
-          球団名
+          地域名
           <input
-            value={teamName}
-            maxLength={24}
+            value={city}
+            maxLength={8}
             disabled={busy}
-            onChange={(e) => setTeamName(e.target.value)}
+            onChange={(e) => setCity(e.target.value)}
           />
         </label>
+        <label>
+          チーム名
+          <input
+            value={nickname}
+            maxLength={16}
+            disabled={busy}
+            onChange={(e) => setNickname(e.target.value)}
+          />
+        </label>
+        {/* ⚠ 2つに分けたぶん、**出来上がりをその場で見せる**（略称が地域名になることも） */}
+        <p className="online-muted online-rename-preview">
+          球団名は「{teamName || '（未入力）'}」、狭い欄では「{city || teamName || '（未入力）'}」と出ます。
+          地域名は地元紙の「地元出身」にも使います。
+        </p>
         <label>
           あなたの名前
           <input

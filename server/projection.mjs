@@ -32,6 +32,7 @@ import { ownerRecords } from './ownerRecords.mjs';
 import { seasonReview } from './seasonReview.mjs';
 import { strategyStats } from '../src/online/strategyStats.js';
 import { tiesArticles } from '../src/online/hometown.js';
+import { teamCityOf, teamDisplayOf } from '../src/online/membership.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -395,7 +396,9 @@ const pendingPackAuto = (phase, member) =>
   !!phase && !!member.packSeed && phase.kind !== 'pack_select';
 /** 地元紙の「縁」の記事（地元出身・次の相手との同窓対決） */
 function tiesFor(l, teamName, team, teamLabels) {
-  const city = (l.teams || []).find((t) => t.name === teamName)?.city;
+  // ⚠ **地元は付けた地域名で引く**（いしだ 2026-11-20「チーム名を変えても、地元が
+  //    変わりません」）。付けていなければ既定の都市
+  const city = teamCityOf((l.teams || []).find((t) => t.name === teamName));
   const next = ownUpcomingGames(l.season?.schedule || [], teamName, 1)[0];
   const oppName = next ? (next.home === teamName ? next.away : next.home) : null;
   const short = (name) => teamLabels[name]?.short || name;
@@ -458,17 +461,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   // ⚠ 略称は**名前を付け替えたときだけ**表示名の頭3文字にする。参加すると表示名は
   //    既定の名前（内部名と同じ）でも必ず入るので、`displayName` の有無で分けると
   //    名前を付けずに入った球団まで「新潟ブ」のようになっていた（再監査 F16）
+  // ⚠ **地域名を付けた球団は、略称はその地域名**（いしだ 2026-11-20「地域名とチーム名を
+  //    分けましょう。じゃないと略称名がダサくなってしまう」）。分けずに付け替えた
+  //    古い球団だけ、今までどおり頭3文字にする
   const teamLabels = Object.fromEntries(
-    (l.teams || []).map((t) => [
-      t.name,
-      {
-        label: t.displayName || t.name,
-        short:
-          t.displayName && t.displayName !== t.name
-            ? [...t.displayName].slice(0, 3).join('')
-            : t.abbreviation || t.name,
-      },
-    ]),
+    // ⚠ 名前ひとそろいの作り方は `membership.js` の `teamDisplayOf`（2か所に書かない）
+    (l.teams || []).map((t) => [t.name, teamDisplayOf(t)]),
   );
   const labelOf = (name) => teamLabels[name]?.label || name;
   // ⚠ 成績の引き当ては**1回だけ**。12球団×24人＝288人を、ベスト5と

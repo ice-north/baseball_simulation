@@ -439,6 +439,21 @@ try {
   assert.ok(renameLook.width <= 460, `名前を変える小窓が広い: ${renameLook.width}`);
   assert.ok(renameLook.foundBg, '名前を変える小窓の説明の下に不透明な面が見つからない');
   assert.ok(renameLook.contrast >= 4.5, `名前を変える小窓の説明が読めない色（コントラスト ${renameLook.contrast}:1）`);
+  // ⚠ **地域名とチーム名は分けて決める**（いしだ 2026-11-20「じゃないと略称名が
+  //    ダサくなってしまう」）。出来上がりと略称をその場で見せる
+  {
+    const cityBox = rename.getByLabel('地域名');
+    const nickBox = rename.getByLabel('チーム名');
+    await cityBox.waitFor();
+    await nickBox.waitFor();
+    await cityBox.fill('美瑛');
+    await nickBox.fill('ブルーレイクス');
+    const preview = await rename.locator('.online-rename-preview').innerText();
+    assert.ok(
+      preview.includes('美瑛ブルーレイクス') && preview.includes('「美瑛」'),
+      `出来上がりと略称が出ていない: ${preview}`,
+    );
+  }
   await rename.getByRole('button', { name: '閉じる', exact: true }).click();
   await rename.waitFor({ state: 'hidden' });
   await p.getByRole('button', { name: '選手成績', exact: true }).click();

@@ -31,7 +31,8 @@ import {
 } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
-import { applyJoin, applyProfile, nextMemberIndex } from '../../src/online/membership.js';
+import { applyJoin, applyProfile, nextMemberIndex, teamCityOf, teamNicknameOf, teamDisplayOf } from '../../src/online/membership.js';
+import { CITY_PREFS } from '../../src/online/hometown.js';
 import {
   pruneDepartedPicks,
   starterAvoidedText,
@@ -323,6 +324,43 @@ import {
     assert.deepEqual(l.members[0].comment, { text: '今年こそ', at: '2026-04-01T00:00:00.000Z', year: 1 }, '同じひとことの書いた日を変えた');
     applyProfile(l, { userId: 'a', comment: '来年こそ', now: '2026-11-15T00:00:00.000Z' });
     assert.deepEqual(l.members[0].comment, { text: '来年こそ', at: '2026-11-15T00:00:00.000Z', year: 2 });
+  }
+
+  // 球団名は**地域名とチーム名に分ける**（いしだ 2026-11-20「じゃないと略称名が
+  // ダサくなってしまう」「チーム名を変えても、地元が変わりません」）
+  {
+    const l = {
+      season: { year: 1 },
+      teams: [{ name: '美瑛ブルーレイクス', city: '美瑛', abbreviation: '美瑛' }],
+      members: [{ userId: 'a', teamName: '美瑛ブルーレイクス' }],
+    };
+    // 付ける前は既定の名前を都市で切って分ける
+    assert.equal(teamCityOf(l.teams[0]), '美瑛', '既定の地域名が引けない');
+    assert.equal(teamNicknameOf(l.teams[0]), 'ブルーレイクス', '既定のチーム名が引けない');
+    const out = applyProfile(l, { userId: 'a', cityName: '旭川', nickname: 'スターズ' });
+    assert.equal(l.teams[0].displayName, '旭川スターズ', '球団名が組み上がっていない');
+    assert.equal(l.teams[0].displayCity, '旭川', '地域名を残していない');
+    assert.equal(l.teams[0].displayNickname, 'スターズ', 'チーム名を残していない');
+    assert.equal(out.city, '旭川');
+    assert.equal(out.nickname, 'スターズ');
+    // ⚠ **内部名は変えない**（記録の選手キーまで貫いている）
+    assert.equal(l.teams[0].name, '美瑛ブルーレイクス', '内部名を変えてしまっている');
+    // ⚠ 略称は地域名そのまま（頭3文字の「旭川ス」にしない）
+    assert.equal(teamDisplayOf(l.teams[0]).short, '旭川', '略称が地域名になっていない');
+    // 分けずに付け替えた古い球団は、今までどおり頭3文字
+    assert.equal(
+      teamDisplayOf({ name: '美瑛ブルーレイクス', displayName: '旭川スターズ' }).short,
+      '旭川ス',
+      '分けていない球団の略称の作り方を変えてしまっている',
+    );
+    // ⚠ 地元は付けた地域名で引く（`hometown.js` の県の表）
+    assert.deepEqual(CITY_PREFS['旭川'], ['北海道'], '前提: 地域名から県が引けない');
+    // 長すぎる名前は断る
+    assert.throws(() => applyProfile(l, { userId: 'a', cityName: '１２３４５６７８９' }), /地域名/);
+    assert.throws(() => applyProfile(l, { userId: 'a', nickname: 'あ'.repeat(17) }), /チーム名/);
+    // 古い画面（`teamName` だけ送る）も今までどおり通る
+    applyProfile(l, { userId: 'a', teamName: '昔ながらの名前' });
+    assert.equal(l.teams[0].displayName, '昔ながらの名前', '古い送り方が効かなくなっている');
   }
 
   // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が

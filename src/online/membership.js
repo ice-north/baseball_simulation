@@ -144,6 +144,42 @@ export function assertTeamNameFree(league, team, shown) {
 }
 
 /**
+ * 球団の「地域名」と「チーム名」。
+ *
+ * ⚠ いしだ 2026-11-20「チーム名を決めるとき、地域名とチーム名を分けましょう。
+ *    じゃないと略称名がダサくなってしまう」。付け替えた球団の略称は表示名の頭3文字に
+ *    していたので、「美瑛ブルーレイクス」が「美瑛ブ」になっていた。
+ * ⚠ 分けて持つのは**表示のため**だけ。内部名（`name`）は変えない。
+ * ⚠ 付け替えていない球団は、既定の名前（`都市＋愛称`）を都市で切って分ける。
+ */
+export const teamCityOf = (team) =>
+  team?.displayCity || team?.abbreviation || team?.city || '';
+export function teamNicknameOf(team) {
+  if (team?.displayNickname) return team.displayNickname;
+  const shown = team?.displayName || team?.name || '';
+  const city = teamCityOf(team);
+  return city && shown.startsWith(city) ? shown.slice(city.length) : shown;
+}
+
+/**
+ * 画面に出す名前ひとそろい（`label` 正式名・`short` 略称・`city` 地域名・`nickname` チーム名）。
+ *
+ * ⚠ **略称は地域名**（いしだ 2026-11-20）。分けずに付け替えた古い球団だけ、今までどおり
+ *    表示名の頭3文字（「美瑛ブ」）。付けずに入った球団は既定の略称（都市）。
+ * ⚠ 投影（`server/projection.mjs` の `teamLabels`）はこれを使う。2か所に書かない。
+ */
+export const teamDisplayOf = (team) => ({
+  label: team?.displayName || team?.name,
+  short:
+    team?.displayCity ||
+    (team?.displayName && team.displayName !== team.name
+      ? [...team.displayName].slice(0, 3).join('')
+      : team?.abbreviation || team?.name),
+  city: teamCityOf(team),
+  nickname: teamNicknameOf(team),
+});
+
+/**
  * 球団名とプレイヤー名を後から変える。
  *
  * ⚠ **参加のときしか名前を付けられなかった**。リーグを作った管理者には
@@ -151,13 +187,29 @@ export function assertTeamNameFree(league, team, shown) {
  *    球団名が2回出ていた（参加時の呼び名が既定で球団名だったため）。
  * ⚠ 内部名（`name`）は変えない。記録の選手キーまで貫いている。
  */
-export function applyProfile(league, { userId, teamName, playerName, comment, now = null }) {
+export function applyProfile(league, { userId, teamName, cityName, nickname, playerName, comment, now = null }) {
   requireOnline(league, 'リーグがまだありません', 409);
   const member = (league.members || []).find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
   const team = (league.teams || []).find((t) => t.name === member.teamName);
   requireOnline(team, '球団が見つかりません', 409);
-  if (teamName !== undefined) {
+  // ⚠ **地域名とチーム名は分けて受け取る**（いしだ 2026-11-20）。略称は地域名をそのまま
+  //    使うので、「美瑛ブルーレイクス」の略称が「美瑛ブ」にならない。
+  //    地域名は地元（`hometown.js` の県の表）も引くので、変えれば地元も変わる。
+  // ⚠ 古い画面・アプリは `teamName` だけを送ってくる。そのときは今までどおり
+  //    表示名だけを差し替える（分けた名前は触らない）
+  if (cityName !== undefined || nickname !== undefined) {
+    const city = String(cityName ?? teamCityOf(team) ?? '').trim();
+    const nick = String(nickname ?? teamNicknameOf(team) ?? '').trim();
+    requireOnline(city.length <= 8, '地域名は8字までです', 400);
+    requireOnline(nick.length <= 16, 'チーム名は16字までです', 400);
+    const shown = `${city}${nick}`.trim() || team.name;
+    assertTeamNameFree(league, team, shown);
+    team.displayCity = city || undefined;
+    team.displayNickname = nick || undefined;
+    team.displayName = shown;
+    member.displayName = shown;
+  } else if (teamName !== undefined) {
     const shown = String(teamName || '').trim() || team.name;
     assertTeamNameFree(league, team, shown);
     team.displayName = shown;
@@ -182,6 +234,8 @@ export function applyProfile(league, { userId, teamName, playerName, comment, no
   return {
     teamName: team.name,
     displayName: team.displayName,
+    city: teamCityOf(team),
+    nickname: teamNicknameOf(team),
     label: member.label,
     comment: member.comment?.text || '',
   };

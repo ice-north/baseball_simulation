@@ -593,7 +593,11 @@ export class LeagueService {
           // ⚠ 参加のときしか名前を付けられず、管理者には機会すら無かった
           applyProfile(l, {
             userId,
+            // ⚠ 新しい画面は地域名とチーム名を分けて送る（いしだ 2026-11-20）。
+            //    古い画面・アプリは `teamName` だけ送ってくるので、どちらも受ける
             teamName: command.payload?.teamName,
+            cityName: command.payload?.cityName,
+            nickname: command.payload?.nickname,
             playerName: command.payload?.playerName,
             comment: command.payload?.comment,
             now,
