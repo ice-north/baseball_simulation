@@ -947,6 +947,13 @@
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+/* 名前を押すと指名時の能力が開く（`PlayerStatsButton`）。⚠ 行を高くしない
+   （`.online button` の min-height が効くと、1行が32pxになって札が間延びする） */
+.online-pro-draft-list .online-player-name,
+.online-news-list .online-player-name {
+  min-height: 0;
+  font-weight: inherit;
+}
 .online-pro-draft-who small {
   margin-left: 4px;
   font-size: 11px;

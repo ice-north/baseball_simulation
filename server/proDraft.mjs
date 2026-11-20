@@ -56,6 +56,45 @@ export const TEAMMATE_DISCIPLINE = 5;
 export const TEAMMATE_EXPERIENCE_GAMES = 30;
 /** 球団史に残す件数（リーグ全体。年0〜5人なので数十年分） */
 const KEEP_PRO_DRAFTED = 120;
+/**
+ * 指名時の能力を残す件数（新しい順）。⚠ いしだ 2026-11-20「ドラフト結果で、選手名を
+ * クリックすると、その選手の詳細能力が見られるようにしてください」。抜かれた選手は
+ * 名簿から消えるので、**指名した時点の能力をここに写して**おく（1人約700B）。
+ * ⚠ 全120件に付けると芯が約86KB増える（上限1830KBのうち、いま1523KB）。
+ *    押せるのは新しい指名だけで足りるので24件（年0〜5人なので5年以上）に絞る。
+ */
+const KEEP_PRO_DRAFTED_PLAYERS = 24;
+
+/**
+ * 指名された選手の能力の写し。⚠ **画面の選手情報（`PlayerPerformance.jsx` の `Detail`）が
+ * そのまま開ける形**にすること（`server/projection.mjs` の `playerView` と同じ並び）。
+ * 成績は入れない（記録の方に残っている）。
+ */
+export function draftSnapshot(player) {
+  if (!player) return null;
+  const pick = (obj, keys) =>
+    obj && Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+  return {
+    id: player.id,
+    name: player.name,
+    age: player.age,
+    position: player.position,
+    number: player.number,
+    batting: player.batting,
+    pitching: player.pitching,
+    fielding: player.fielding,
+    physical: pick(player.physical, [
+      'speed', 'arm', 'throws', 'bodyStamina', 'recovery', 'muscle', 'dexterity', 'build',
+    ]),
+    catching: player.catching && { lead: player.catching.lead },
+    personality: player.personality && {
+      discipline: player.personality.discipline,
+      mental: player.personality.mental,
+    },
+    positionFitness: player.positionFitness,
+    growthPotential: player.growthPotential,
+  };
+}
 
 const NPB_TEAMS = [
   '読売ジャイアンツ', '阪神タイガース', '横浜DeNAベイスターズ',
@@ -180,6 +219,8 @@ export function applyProDraft(league, teams, picks, { remove, gamesPerSeason = 1
       // ⚠ 育成指名（支配下ではない契約）。画面とアプリは「育成2位」と出す
       ...(pick.ikusei ? { ikusei: true } : {}),
       reason: reasonOf(pick),
+      // 指名した時点の能力（名簿から消えるので、ここに写しておく。新しい24件だけ残る）
+      player: draftSnapshot(p),
     });
     remove(pick.teamName, p);
   }
@@ -194,7 +235,15 @@ export function applyProDraft(league, teams, picks, { remove, gamesPerSeason = 1
     }
   }
   const chronicle = (league.chronicle ||= { milestones: [], retired: [], world: [] });
-  chronicle.proDrafted = [...rows, ...(chronicle.proDrafted || [])].slice(0, KEEP_PRO_DRAFTED);
+  // ⚠ 能力の写しは**新しい方から `KEEP_PRO_DRAFTED_PLAYERS` 件だけ**残す（芯を膨らませない）。
+  //    写しの落ちた古い指名は、画面で名前を押せないだけ（文の情報はそのまま残る）
+  chronicle.proDrafted = [...rows, ...(chronicle.proDrafted || [])]
+    .slice(0, KEEP_PRO_DRAFTED)
+    .map((row, i) => {
+      if (i < KEEP_PRO_DRAFTED_PLAYERS || !row.player) return row;
+      const { player, ...rest } = row;
+      return rest;
+    });
   if (rows.length)
     league.notices.unshift({
       type: 'draft',

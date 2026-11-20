@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { POS } from './api.js';
 import TeamRoster from './TeamRoster.jsx';
-import { TeamPlayerButton } from './PlayerPerformance.jsx';
+import { TeamPlayerButton, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import { useActions } from './ActionContext.jsx';
 import { teamLabel, teamShort } from './gameText.js';
@@ -180,7 +180,17 @@ function ProDrafted({ list, showTeam = false, empty }) {
       {list.map((r, i) => (
         <article key={i}>
           <b>
-            {r.year}年目 {r.name}
+            {r.year}年目{' '}
+            {/* 名前を押すと**指名した時点の能力**が開く（いしだ 2026-11-20）。写しは
+                サーバーが指名のときに残す（`proDraft.mjs` の `draftSnapshot`）。
+                写しの無い古い指名は名前のまま */}
+            {r.player ? (
+              <PlayerStatsButton player={r.player} panel="abilities">
+                {r.name}
+              </PlayerStatsButton>
+            ) : (
+              r.name
+            )}
             {r.position && `（${POS[r.position] || r.position}・${r.age}歳）`}
             {showTeam && ` ${teamShort(r.team)}`}
           </b>

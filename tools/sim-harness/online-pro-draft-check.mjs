@@ -225,6 +225,43 @@ assert.ok(mean >= 0.5 && mean <= 2.0, `年平均${mean.toFixed(2)}人（0.5〜2.
   assert.ok(teamMoves(league, name).some((m) => m.how === 'プロ入り' && m.name === star.name), '入退団履歴に無い');
   assert.equal(chronicleView(league).proDrafted[0].name, star.name, 'リーグ記録に無い');
   assert.ok(!('key' in chronicleView(league).proDrafted[0]), '記録の鍵をビューに出している');
+  // ⚠ **指名した時点の能力の写し**（いしだ 2026-11-20「選手名をクリックすると、その選手の
+  //    詳細能力が見られるように」）。抜かれた選手は名簿に居ないので、ここに無いと押せない
+  {
+    const kept = league.chronicle.proDrafted[0];
+    assert.ok(kept.player, '指名の記録に能力の写しが無い');
+    assert.equal(kept.player.name, star.name, '写しの名前が違う');
+    assert.ok(kept.player.pitching || kept.player.batting, '写しに能力が入っていない');
+    assert.ok(kept.player.positionFitness, '写しに守備適性が入っていない');
+    // ⚠ 成績は入れない（記録の方に残っている。写しは能力だけ）
+    assert.ok(!('seasonStats' in kept.player), '写しに成績まで入れている');
+    // ⚠ ビューに載せるのは**その年の指名だけ**（1人約700B。古い年まで載せるとビューが太る）
+    const view = chronicleView(league);
+    assert.ok(view.proDrafted[0].player, 'ビューに今年の能力の写しが無い');
+    league.chronicle.proDrafted.push({ ...kept, year: league.season.year - 1 });
+    const older = chronicleView(league).proDrafted.find((r) => r.year === league.season.year - 1);
+    assert.ok(older, '前提: 古い年の行が見つからない');
+    assert.ok(!older.player, '古い年の能力の写しまでビューに載せている');
+    league.chronicle.proDrafted.pop();
+    // 球団史の読み込み（求められたときだけ）には残す
+    assert.ok(teamChronicle(league, name).proDrafted[0].player, '球団史に能力の写しが無い');
+    // ⚠ 写しを残すのは**新しい方から24件**まで（芯を膨らませない）
+    league.chronicle.proDrafted = Array.from({ length: 30 }, (_, i) => ({
+      ...kept,
+      year: 1,
+      name: `古い指名${i}`,
+    }));
+    const another = { ...star, id: star.id + 1, name: '次の指名' };
+    teams[name].players.push(another);
+    applyProDraft(league, teams, [{ teamName: name, player: another, score: 300, awards: [], round: 3, npbTeam: '中日ドラゴンズ' }], {
+      gamesPerSeason: 120,
+      remove: () => {},
+    });
+    const list = league.chronicle.proDrafted;
+    assert.ok(list[23].player, '24件目の能力の写しが落ちている');
+    assert.ok(!list[24].player, '25件目にも能力の写しが残っている');
+    assert.equal(list[24].name, '古い指名23', '写しを落とすときに行まで消している');
+  }
 }
 
 // ⑤ 指名の点に足すタイトルは、本物のタイトル（`processSeasonEnd`。`season.frozenAwards`）と

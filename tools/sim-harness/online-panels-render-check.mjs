@@ -35,6 +35,7 @@ import { setTeamLabels } from '../../src/online/gameText.js';
 import TryoutPlanner from '../../src/online/TryoutPlanner.jsx';
 import YearSummary from '../../src/online/YearSummary.jsx';
 import ProDraftResult from '../../src/online/ProDraftResult.jsx';
+import PlayerDetailBody from '../../src/online/PlayerDetailBody.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
 import { Homeruns } from '../../src/online/LeagueBoard.jsx';
@@ -65,6 +66,7 @@ export {
   Homeruns,
   YearSummary,
   ProDraftResult,
+  PlayerDetailBody,
 };
 `;
 const result = await build({
@@ -96,6 +98,7 @@ try {
     CompletedCamp,
     YearSummary,
     ProDraftResult,
+    PlayerDetailBody,
     CampPlanner,
     subTargetChoices,
     DesktopTactics,
@@ -277,7 +280,22 @@ try {
       teamName: '三陸',
       chronicle: {
         proDrafted: [
-          { year: 3, team: '三陸', name: '抜かれ太郎', position: 'pitcher', age: 19, npbTeam: '中日ドラゴンズ', round: 4, reason: '19歳の将来性' },
+          // ⚠ `player` は指名した時点の能力の写し（`server/proDraft.mjs` の `draftSnapshot`）。
+          //    これがある行は名前を押せる
+          {
+            year: 3, team: '三陸', name: '抜かれ太郎', position: 'pitcher', age: 19,
+            npbTeam: '中日ドラゴンズ', round: 4, reason: '19歳の将来性',
+            player: {
+              id: 7, name: '抜かれ太郎', age: 19, position: 'pitcher', number: 18,
+              batting: { meet: 30, power: 20, eye: 40, bats: 'right' },
+              pitching: { velocity: 152, control: 60, stamina: 120, spinRate: 70, form: 'overhand', arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'slider', level: 60 }] },
+              fielding: { defense: 50 },
+              physical: { speed: 60, arm: 70, throws: 'right', bodyStamina: 70, recovery: 60, muscle: 55, dexterity: 60, build: 'medium' },
+              personality: { discipline: 60, mental: 55 },
+              positionFitness: { pitcher: 100, catcher: 10, first: 20, second: 20, third: 20, short: 20, left: 20, center: 20, right: 20 },
+              growthPotential: 1.2,
+            },
+          },
           { year: 3, team: '庄内', name: '育成次郎', position: 'center', age: 20, npbTeam: '西武ライオンズ', round: 2, ikusei: true, reason: '能力を評価' },
           { year: 2, team: '三陸', name: '去年三郎', position: 'pitcher', age: 21, npbTeam: '阪神タイガース', round: 7, reason: '能力を評価' },
         ],
@@ -298,6 +316,20 @@ try {
     assert.equal(render(h(ProDraftResult, { view: { year: 3, teamName: '三陸' } })), '', '指名が無いのに枠だけ出ている');
     const none = render(h(ProDraftResult, { view: { year: 3, teamName: '三陸' }, whenEmpty: true }));
     assert.ok(none.includes('指名された選手はいませんでした'), `0人の年の文が出ない: ${none.slice(0, 200)}`);
+    // ⚠ **能力の写しがある行だけ名前を押せる**（いしだ 2026-11-20「選手名をクリックすると、
+    //    その選手の詳細能力が見られるように」）。写しの無い行は名前のまま
+    assert.match(html, /抜かれ太郎の選手情報を見る/, '能力の写しがあるのに名前を押せない');
+    assert.ok(!/育成次郎の選手情報を見る/.test(html), '能力の写しが無いのに名前を押せる');
+    // ⚠ 写しだけで**選手情報の中身が組めること**（成績が無くても落ちない）。
+    //    小窓は押してから開くので、中身（`PlayerDetailBody`）をここで組んで確かめる
+    {
+      const snap = view.chronicle.proDrafted[0].player;
+      const detail = render(h(PlayerDetailBody, { player: snap, shown: snap, periodLabel: '今季' }));
+      // ⚠ 成績は無い（「—」）が、**能力は全部出る**こと
+      for (const text of ['球速', '152', 'スライダー', '守備適性', '成長係数'])
+        assert.ok(detail.includes(text), `能力の写しから選手情報に「${text}」が出ない`);
+      assert.ok(detail.length > 400, `選手情報の中身が薄い: ${detail.length}文字`);
+    }
   }
 
   // --- トライアウトの注意は文を句点で区切る（u1 低20） ----------------------

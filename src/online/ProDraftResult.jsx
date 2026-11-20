@@ -1,6 +1,7 @@
 import React from 'react';
 import { POS } from './api.js';
 import { teamLabel } from './gameText.js';
+import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import { draftRankText } from './chronicleText.js';
 
 // ============================================================
@@ -45,7 +46,17 @@ export default function ProDraftResult({ view, whenEmpty = false }) {
             <li key={i} data-mine={r.team === view?.teamName || undefined}>
               <span className="online-pro-draft-rank">{draftRankText(r)}</span>
               <span className="online-pro-draft-who">
-                <b>{r.name}</b>
+                {/* ⚠ 名前を押すと**指名した時点の能力**が開く（いしだ 2026-11-20）。
+                    抜かれた選手は名簿に居ないので、サーバーが指名のときに写した
+                    `player`（`server/proDraft.mjs` の `draftSnapshot`）を渡す。
+                    古い指名（写しの無い行）は名前のまま */}
+                {r.player ? (
+                  <PlayerStatsButton player={r.player} panel="abilities" className="online-pro-draft-name">
+                    <b>{r.name}</b>
+                  </PlayerStatsButton>
+                ) : (
+                  <b>{r.name}</b>
+                )}
                 <small>
                   {POS[r.position] || r.position || ''}
                   {r.age != null ? `・${r.age}歳` : ''}

@@ -650,7 +650,13 @@ export function chronicleView(league) {
     world: (c.world || []).slice(0, 4).map(({ notable, ...w }) => ({ ...w, star: notable?.[0] || null })),
     // リーグからプロ入りした選手（新しい順。球団史・記録の「リーグからプロへ」）
     // ⚠ リーグ全体の一覧はいちばん新しい年の一行（`after`）だけ。全部の年（`career`）は球団史の方に載せる
-    proDrafted: rowsWithCareer(careers.slice(0, 30)).map(({ key, career, ...r }) => r),
+    // ⚠ **能力の写し（`player`）はその年の指名にだけ載せる**（いしだ 2026-11-20「選手名を
+    //    クリックすると、その選手の詳細能力が見られるように」）。1人約700Bで、30件ぶん
+    //    載せるとビューが約21KB太る。押したいのは今年のドラフト結果（`ProDraftResult`）なので、
+    //    古い年は落とす（球団史の読み込み `teamChronicle` には残っているので、そちらでは押せる）
+    proDrafted: rowsWithCareer(careers.slice(0, 30)).map(({ key, career, player, ...r }) =>
+      r.year === year && player ? { ...r, player } : r,
+    ),
     // 今年のプロの便り（10月から年度更新まで。紙面と話題に出す）
     proNews: newsOfCareers(careers, league),
     // いちばん新しい年の表彰（タイトルと、部ごとの MVP・新人王・ベストナイン・最優秀バッテリー）
