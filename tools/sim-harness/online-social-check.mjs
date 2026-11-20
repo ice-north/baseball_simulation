@@ -425,8 +425,11 @@ import {
     assert.equal(teamRegionOf(l.teams[0]), null, '次に入った人に前の人の地方が残っている');
   }
 
-  // 判断1（いしだ 2026-11-20「おすすめで」）: 略称（＝地域名）が**同じリーグの**ほかの球団
-  // （人の球団・CPU球団の既定の略称）とぶつかる名前は断る。別のリーグなら通す。
+  // 判断1（いしだ 2026-11-20「おすすめで」）: 略称（＝地域名）がほかの球団
+  // （人の球団・CPU球団の既定の略称）とぶつかる名前は断る。
+  // ⚠ **別のリーグでも断る**（2026-11-20 監査で決まりを変えた。昇降格で球団はリーグを移るので、
+  //    2部で「札幌」を取った人が昇格すると1部に「札幌」が2つになっていた）。ほかの枠の
+  //    既定の略称も取っておく（CPUに戻すと枠は既定の名前に戻る）。
   // 既にぶつかっている保存データは触らず、名前を変えない送り方は通す
   {
     const fresh = () => ({
@@ -447,25 +450,66 @@ import {
       const l = fresh();
       assert.throws(
         () => applyProfile(l, { userId: 'a', cityName, nickname: 'ブリザーズ', region: 'hokkaido' }),
-        (e) => e.status === 409 && /略称「.+」は同じリーグ/.test(e.message),
+        (e) => e.status === 409 && /略称「.+」は.+と同じ/.test(e.message),
         `同じリーグの略称「${cityName}」とぶつかる地域名を通した`,
       );
       // ⚠ 断ったときは何も書き換えない（地方だけ先に書いていた）
       assert.equal(l.teams[0].displayName, undefined, '断ったのに球団名を書き換えた');
       assert.equal(l.teams[0].displayRegion, undefined, '断ったのに地方を書き換えた');
     }
-    // 別のリーグの略称（札幌）とは同じでよい
+    // 別のリーグの略称（札幌）とも同じにしない（昇格すると同じリーグに2つになる）
     {
       const l = fresh();
-      applyProfile(l, { userId: 'a', cityName: '札幌', nickname: 'ブリザーズ' });
-      assert.equal(teamDisplayOf(l.teams[0]).short, '札幌', '別のリーグの略称と同じ地域名を断った');
+      assert.throws(
+        () => applyProfile(l, { userId: 'a', cityName: '札幌', nickname: 'ブリザーズ' }),
+        (e) => e.status === 409 && /略称「札幌」は札幌ホークスと同じ/.test(e.message),
+        '別のリーグの略称と同じ地域名を通した（昇格すると1部に「札幌」が2つになる）',
+      );
+      assert.equal(l.teams[0].displayName, undefined, '断ったのに球団名を書き換えた');
+    }
+    // ほかの枠の既定の略称も取っておく。「美瑛」の枠は人が「富良野」に付け替えているが、
+    // CPUに戻すと「美瑛」に戻るので、ほかの人は「美瑛」を取れない
+    {
+      const l = fresh();
+      assert.throws(
+        () => applyProfile(l, { userId: 'a', cityName: '美瑛', nickname: 'ブリザーズ' }),
+        (e) => e.status === 409 && /略称「美瑛」は富良野ベアーズの元の略称/.test(e.message),
+        'ほかの枠の既定の略称を取れてしまう（CPUに戻すと同じ略称が2つになる）',
+      );
+      // 古い送り方の頭3文字でも同じ
+      assert.throws(() => applyProfile(l, { userId: 'a', teamName: '美瑛' }), /元の略称/);
+      // 自分の枠の既定の略称へ戻すのは通す
+      applyProfile(l, { userId: 'a', cityName: '函館', nickname: 'ブリザーズ' });
+      applyProfile(l, { userId: 'a', cityName: '新潟', nickname: 'ブリザーズ' });
+      assert.equal(teamDisplayOf(l.teams[0]).short, '新潟', '自分の枠の既定の略称へ戻せない');
+    }
+    // CPUに戻したとき（`releaseMember` は枠を既定の名前に戻す）も、ぶつかる組ができない:
+    // 「札幌」の枠の人が「函館」にした後、別の人は「札幌」を取れない
+    {
+      const l = fresh();
+      l.teams[3].league = 'B';
+      l.members.push({ userId: 'x', teamName: '札幌ホークス' });
+      applyProfile(l, { userId: 'x', cityName: '函館', nickname: 'ホークス' });
+      assert.throws(
+        () => applyProfile(l, { userId: 'a', cityName: '札幌', nickname: 'ブリザーズ' }),
+        /札幌.*元の略称/,
+        'CPUに戻すと既定の略称に戻る枠の略称を取れてしまう',
+      );
+    }
+    // 昇降格の後も、ぶつかる組ができない（1部と2部を入れ替えても全球団の略称が別々）
+    {
+      const l = fresh();
+      applyProfile(l, { userId: 'a', cityName: '函館', nickname: 'ブリザーズ' });
+      for (const t of l.teams) t.league = t.league === 'A' ? 'B' : 'A';
+      const shorts = l.teams.map((t) => teamDisplayOf(t).short);
+      assert.equal(new Set(shorts).size, shorts.length, `略称が重なっている: ${shorts}`);
     }
     // 古い送り方（`teamName` だけ。略称は頭3文字）でもぶつかれば断る
     {
       const l = fresh();
       assert.throws(
         () => applyProfile(l, { userId: 'a', teamName: '富良野フォックス' }),
-        /略称「富良野」は同じリーグ/,
+        /略称「富良野」は富良野ベアーズと同じ/,
         '古い送り方で略称がぶつかる名前を通した',
       );
       assert.equal(l.teams[0].displayName, undefined, '古い送り方で断ったのに球団名を書き換えた');
@@ -493,12 +537,13 @@ import {
     // Web の小窓が使う判定（ビューの `teamLabels`・`teamLeagues` から作る）
     {
       const entries = [
-        { name: 'A', league: 'B', short: '新潟', label: '新潟ブリザーズ' },
-        { name: 'B', league: 'B', short: '旭川', label: '旭川スターズ' },
-        { name: 'C', league: 'A', short: '札幌', label: '札幌ホークス' },
+        { name: 'A', short: '新潟', base: '新潟', label: '新潟ブリザーズ' },
+        { name: 'B', short: '旭川', base: '旭川', label: '旭川スターズ' },
+        { name: 'C', short: '函館', base: '札幌', label: '函館ホークス' },
       ];
       assert.equal(findShortClash(entries, 'A', '旭川')?.label, '旭川スターズ');
-      assert.equal(findShortClash(entries, 'A', '札幌'), null, '別のリーグの略称を断っている');
+      assert.equal(findShortClash(entries, 'A', '函館')?.label, '函館ホークス', '別のリーグの略称を通している');
+      assert.equal(findShortClash(entries, 'A', '札幌')?.label, '函館ホークス', 'ほかの枠の既定の略称を通している');
       assert.equal(findShortClash(entries, 'A', '新潟'), null, 'いまの略称を断っている');
       assert.equal(findShortClash(entries, 'A', ''), null, '空の地域名を断っている');
     }
@@ -934,8 +979,20 @@ try {
     await assert.rejects(() => send('a', 'releaseMember', { userId: 'a' }), /自分/, '管理者が自分を外せた');
     // ⚠ 分けて付けた名前（地域名・チーム名・地方）もCPUに戻すときに消す（2026-11-20 監査）
     await send('c', 'profile', { cityName: '美瑛', nickname: 'ブルーレイクス', region: 'hokkaido' });
+    // ⚠ CPUに戻すと枠は既定の名前（既定の略称）に戻るので、ほかの人はその略称を取れない
+    //    （取れると、戻したときに同じ略称が2つになる。2026-11-20 監査）
+    const cBase = (await live()).teams.find((t) => t.name === C).abbreviation;
+    await assert.rejects(
+      () => send('b', 'profile', { cityName: cBase, nickname: 'テスターズ' }),
+      (e) => e.status === 409 && /元の略称/.test(e.message),
+      'ほかの人の枠の既定の略称を取れた（CPUに戻すと同じ略称が2つになる）',
+    );
     await send('a', 'releaseMember', { userId: 'c' });
     const l = await live();
+    {
+      const shorts = l.teams.map((t) => teamDisplayOf(t).short);
+      assert.equal(new Set(shorts).size, shorts.length, `CPUに戻した後に略称が重なっている: ${shorts}`);
+    }
     {
       const released = l.teams.find((t) => t.name === C);
       assert.deepEqual(

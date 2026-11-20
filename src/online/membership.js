@@ -12,7 +12,7 @@
 //    `Math.random()` を呼ばない（シードから決まる必要がある）。
 //    配線（API・サーバー）は別のファイルで行う。
 // ============================================================
-import { requireOnline, findShortClash } from './shared.js';
+import { requireOnline, findShortClash, shortClashMessage, shortNameOf } from './shared.js';
 import { cleanText, OWNER_COMMENT_MAX } from './social.js';
 import { PACK_STYLE } from './rosterPack.js';
 import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
@@ -209,11 +209,10 @@ export function teamNicknameOf(team) {
  */
 export const teamDisplayOf = (team) => ({
   label: team?.displayName || team?.name,
-  short:
-    team?.displayCity ||
-    (team?.displayName && team.displayName !== team.name
-      ? [...team.displayName].slice(0, 3).join('')
-      : team?.abbreviation || team?.name),
+  // ⚠ 作り方は `shared.js` の `shortNameOf`（Web の小窓と同じもの）
+  short: shortNameOf({ city: team?.displayCity, shown: team?.displayName, name: team?.name, base: team?.abbreviation }),
+  // 枠の既定の略称（都市）。ほかの人がこの略称を取れないようにする（`findShortClash`）
+  base: team?.abbreviation || team?.name,
   city: teamCityOf(team),
   nickname: teamNicknameOf(team),
   region: teamRegionOf(team),
@@ -222,14 +221,9 @@ export const teamDisplayOf = (team) => ({
 // 略称の判定は `shared.js` の `findShortClash`（Web の小窓と同じもの）
 function assertShortFree(league, team, patch) {
   const next = teamDisplayOf({ ...team, ...patch }).short;
-  const entries = (league.teams || []).map((t) => ({ name: t.name, league: t.league, ...teamDisplayOf(t) }));
+  const entries = (league.teams || []).map((t) => ({ name: t.name, ...teamDisplayOf(t) }));
   const clash = findShortClash(entries, team.name, next);
-  if (clash)
-    requireOnline(
-      false,
-      `略称「${next}」は同じリーグの${clash.label}と同じです。別の地域名にしてください`,
-      409,
-    );
+  if (clash) requireOnline(false, shortClashMessage(next, clash), 409);
 }
 
 /**
@@ -349,7 +343,7 @@ export function applyJoin(league, { userId, label, teamName, now }) {
   const { team } = assertCanJoin(league, userId);
   const shown = String(teamName || '').trim() || team.name;
   assertTeamNameFree(league, team, shown);
-  // ⚠ 参加で付ける名前は分けない（略称は頭3文字）。それでも同じリーグの略称とぶつかるなら断る（判断1）
+  // ⚠ 参加で付ける名前は分けない（略称は頭3文字）。それでもほかの球団の略称とぶつかるなら断る（判断1）
   assertShortFree(league, team, { displayCity: undefined, displayNickname: undefined, displayName: shown });
   // ⚠ 前のオーナーが分けて付けた名前（地域名・チーム名・地方）を引き継がない（2026-11-20 監査）
   clearTeamSplitName(team);

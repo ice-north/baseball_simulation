@@ -67,22 +67,42 @@ export function requireOnline(
 }
 
 /**
- * 略称（＝地域名）が同じリーグのほかの球団とぶつかるか。ぶつかる相手（`entries` の1件）を返す。
+ * 球団の略称（＝地域名）。サーバー（`membership.js` の `teamDisplayOf`）と Web の小窓が
+ * 同じものを使う（2か所に書かない）。
+ * - `city`: 分けて付けた地域名。あればそのまま略称
+ * - `shown`: 表示名。内部名（`name`）と違う＝分けずに付け替えた球団は頭3文字（「美瑛ブ」）
+ * - `base`: 枠の既定の略称（都市）。付け替えていない球団はこれ
+ */
+export const shortNameOf = ({ city, shown, name, base }) =>
+  city || (shown && shown !== name ? [...shown].slice(0, 3).join('') : base || name);
+
+/**
+ * 略称（＝地域名）がほかの球団とぶつかるか。ぶつかる相手（`entries` の1件）を返す。
  *
  * ⚠ いしだ 2026-11-20 判断1（おすすめで）: 略称は地域名そのものなので、同じリーグに
- *    「旭川」が2つあると順位表・日程・速報の狭い欄でどちらか分からない。**同じリーグの**
- *    球団（人の球団もCPU球団も。CPU球団は既定の略称＝都市）と同じ略称は断る。
- * ⚠ `entries` は `{ name, league, short, label }` の並び。サーバーは球団から
- *    （`teamDisplayOf`）、Web の小窓はビュー（`teamLabels`・`teamLeagues`）から作る。
- *    判定はここ1か所に置く。
+ *    「旭川」が2つあると順位表・日程・速報の狭い欄でどちらか分からない。
+ * ⚠ **リーグを問わず全球団と比べる**（2026-11-20 監査で決まりを変えた）。初めは同じ
+ *    リーグだけと比べていたが、昇降格（`applyPyramidMovements`）で球団は毎年リーグを
+ *    移るので、2部で「札幌」を取った人が昇格すると1部に「札幌」が2つになっていた。
+ *    12球団しかないので、全球団のいまの略称と比べる。
+ * ⚠ **ほかの枠の既定の略称（`base`）も取っておく**。CPUに戻す（`releaseMember`）と
+ *    枠は既定の名前に戻るので、「札幌」の枠を「函館」にした人の後で別の人が「札幌」を
+ *    取ると、その人を外したときに「札幌」が2つになっていた。
+ * ⚠ `entries` は `{ name, short, base, label }` の並び。サーバーは球団から
+ *    （`teamDisplayOf`）、Web の小窓はビュー（`teamLabels`）から作る。判定はここ1か所に置く。
  * ⚠ **いまの略称のままなら断らない**。既にぶつかっている保存データ（移行しない）でも、
  *    名前を変えずにひとことだけ直す（古い送り方は毎回 `teamName` も送る）のは通す。
  */
 export function findShortClash(entries, self, next) {
   const me = (entries || []).find((e) => e.name === self);
   if (!next || !me || next === me.short) return null;
-  return (entries || []).find((e) => e.name !== self && e.league === me.league && e.short === next) || null;
+  return (entries || []).find((e) => e.name !== self && (e.short === next || e.base === next)) || null;
 }
+/** 断るときの文（サーバーと小窓で同じ） */
+export const shortClashMessage = (next, clash) =>
+  clash.short === next
+    ? `略称「${next}」は${clash.label}と同じです。別の地域名にしてください`
+    : `略称「${next}」は${clash.label}の元の略称なので使えません。別の地域名にしてください`;
 export function assertLeagueVersion(league) {
   requireOnline(
     league?.schema === ONLINE_SCHEMA &&
