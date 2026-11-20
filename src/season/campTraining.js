@@ -283,12 +283,12 @@ export const SUB_TRAINING_MENUS = {
   physique: {
     name: '基礎体力',
     icon: '🏃',
-    description: '体力+2〜4・体幹+2〜3/クール確定（投手：スタミナ+1〜2も）',
+    description: '体力+2〜4/クール確定・体幹+0〜1（投手：スタミナ+1〜2も）',
   },
   weight: {
     name: 'ウエイト',
     icon: '🏋️',
-    description: '体幹+1〜3（確定）・パワー+0〜1・肩力+0〜1',
+    description: '体幹+2〜4（確定）・パワー+0〜1・肩力+0〜1',
   },
   stretch: {
     name: 'ストレッチ',
@@ -348,7 +348,7 @@ export const SUB_TRAINING_MENUS = {
   newpitch: {
     name: '新球種習得',
     icon: '✨',
-    description: '新球種習得に挑戦（成功率16%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）',
+    description: '新球種習得に挑戦（成功率22%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）',
     targets: ['newpitch'],
   },
   spin_analysis: {
@@ -392,11 +392,13 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           player.physical.bodyStamina = Math.min(99, bsBefore + bsGrowth);
           growthReport.push({ statName: '体力', before: bsBefore, after: player.physical.bodyStamina, growth: player.physical.bodyStamina - bsBefore });
         }
-        // 体幹+2〜3（確定）
+        // 体幹 +0〜1（50%で+1）
+        // ⚠ **ウエイトより上げないこと**（いしだ 2026-11-20「基礎体力練習でウエイトより
+        //    体幹が上がってしまいます」）。以前はどちらも +1〜3 で、基礎体力は体力と
+        //    スタミナまで付くぶん丸ごと上位互換だった。体幹を鍛えるのはウエイトの役
         const oldMuscle = player.physical.muscle ?? 50;
-        if (oldMuscle < 100) {
-          const mGrowth = Math.floor(Math.random() * 3) + 1; // 1〜3
-          player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGrowth);
+        if (oldMuscle < 100 && Math.random() < 0.5) {
+          player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + 1);
           growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
         }
       }
@@ -410,11 +412,13 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'weight': {
-      // 体幹 +1〜3（確定）
+      // 体幹 +2〜4（確定）
+      // ⚠ **体幹を鍛える練習はこれ**（いしだ 2026-11-20「キャンプのウエイトの効果を上げて、
+      //    基礎体力練習の体幹上昇効果を下げてください」）。基礎体力は体力・スタミナの役
       if (player.physical) {
         const oldMuscle = player.physical.muscle ?? 50;
         if (oldMuscle < 100) {
-          const mGrowth = Math.floor(Math.random() * 3) + 1;
+          const mGrowth = Math.floor(Math.random() * 3) + 2;
           player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGrowth);
           growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
         }
@@ -439,8 +443,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           }
         }
       }
-      // パワー +0〜1（40%で+1）
-      if (player.batting && Math.random() < 0.4) {
+      // パワー +0〜1（55%で+1。⚠ ウエイトの効きを上げた。40%→55%）
+      if (player.batting && Math.random() < 0.55) {
         const oldPower = player.batting.power || 0;
         const powerGrowth = applyTechStatDecay(oldPower, 1);
         if (powerGrowth > 0) {
@@ -708,12 +712,16 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const newType =
             wanted || candidates[Math.floor(Math.random() * candidates.length)];
           const formAff = getFormPitchAffinity(playerForm, newType);
-          // ⚠ 0.12→0.16・適性の上限 0.25→0.32（先方指摘 2026-11-16: 取得率が低い。若干上げる）。
-          //    4クール続けたときに1つ覚える見込み（器用さ50）: 適性なし 40%→50%、適性あり 63〜68%→70〜77%
-          const baseRate = 0.16;
+          // ⚠ 0.12→0.16→**0.22**・適性の上限 0.25→0.32→**0.40**
+          //    （いしだ 2026-11-16「取得率が低い」／2026-11-20「新球種取得の確率が低すぎる気が
+          //     します。確認してください」）。オンラインで新球種を覚える道は**このサブ練習だけ**
+          //     （`CAMP_MENUS` に newpitch は無い）なので、ここが遅いと一生覚えない。
+          //    実測（初期セットの投手137人・器用さ平均53）: 1クール 24.3%→**29.9%**、
+          //    4クール続けて1つ以上 66.9%→**75.7%**、平均 0.95→1.21球種
+          const baseRate = 0.22;
           // ⚠ フォーム適性を足した**後**に器用さを掛ける。先に掛けると
           //    上限 0.32 のクランプで器用さが消える
-          const successRate = (formAff ? Math.min(0.32, baseRate + formAff.affinity) : baseRate)
+          const successRate = (formAff ? Math.min(0.40, baseRate + formAff.affinity) : baseRate)
             * dexterityMult(player, 0.8);
           if (Math.random() < successRate) {
             const level = 20 + Math.floor(Math.random() * 20);

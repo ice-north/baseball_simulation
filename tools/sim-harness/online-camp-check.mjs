@@ -1175,10 +1175,83 @@ assert.ok(
   );
 }
 
+// --- サブ練習の役割分け（いしだ 2026-11-20）---------------------------------
+// ⚠「キャンプのウエイトの効果を上げて、基礎体力練習の体幹上昇効果を下げてください。
+//   基礎体力練習でウエイトより体幹が上がってしまいます」。直す前はどちらも体幹+1〜3で、
+//   基礎体力は体力とスタミナまで付くぶん**丸ごと上位互換**だった。
+{
+  const body = () => ({
+    position: 'first',
+    name: 'サブ練習の見本',
+    physical: { muscle: 50, bodyStamina: 50, arm: 50, dexterity: 50, speed: 50, recovery: 50 },
+    batting: { meet: 50, power: 50, eye: 50 },
+    fielding: { defense: 50 },
+  });
+  const average = (menu, runs = 3000) => {
+    let muscle = 0;
+    let stamina = 0;
+    for (let i = 0; i < runs; i++) {
+      const p = body();
+      executeSubTraining(p, menu, {});
+      muscle += p.physical.muscle - 50;
+      stamina += p.physical.bodyStamina - 50;
+    }
+    return { muscle: muscle / runs, stamina: stamina / runs };
+  };
+  const weight = average('weight');
+  const physique = average('physique');
+  // ⚠ **体幹を鍛えるのはウエイト**。基礎体力の方が上がってはいけない
+  assert.ok(
+    weight.muscle > physique.muscle * 2,
+    `ウエイトの体幹がじゅうぶんに強くない: ウエイト+${weight.muscle.toFixed(2)} / 基礎体力+${physique.muscle.toFixed(2)}`,
+  );
+  assert.ok(weight.muscle >= 2.5, `ウエイトの体幹が弱い: +${weight.muscle.toFixed(2)}`);
+  // ⚠ 0.8 まで（「確定で+1」にしても落ちる線。役を混ぜ返さないため）
+  assert.ok(physique.muscle <= 0.8, `基礎体力の体幹が強い: +${physique.muscle.toFixed(2)}`);
+  // ⚠ **基礎体力は体力の役**（こちらは減らさない）
+  assert.ok(physique.stamina >= 2.5, `基礎体力の体力が弱い: +${physique.stamina.toFixed(2)}`);
+  assert.equal(weight.stamina, 0, 'ウエイトで体力が上がっている（役が混ざっている）');
+}
+
+// --- 新球種の取得率（いしだ 2026-11-20「低すぎる気がします。確認してください」）-----
+// ⚠ オンラインで新球種を覚える道は**サブ練習だけ**（`CAMP_MENUS` に newpitch は無い）。
+//    ここが遅いと一生覚えない。実測（初期セットの投手・器用さ平均53）:
+//    1クール 24.3%→29.9%、4クール続けて1つ以上 66.9%→75.7%
+{
+  const pitcher = () => ({
+    position: 'pitcher',
+    name: '新球種の見本',
+    physical: { muscle: 50, bodyStamina: 50, arm: 50, dexterity: 50, speed: 50, recovery: 50 },
+    pitching: { velocity: 140, control: 50, stamina: 100, spinRate: 50, form: 'threeQuarter', arsenal: [{ id: 1, type: 'straight', level: 100 }] },
+    batting: { meet: 20, power: 20, eye: 20 },
+    fielding: { defense: 50 },
+  });
+  const runs = 3000;
+  let got = 0;
+  for (let i = 0; i < runs; i++) {
+    const p = pitcher();
+    executeSubTraining(p, 'newpitch', {});
+    if (p.pitching.arsenal.length > 1) got += 1;
+  }
+  const rate = got / runs;
+  assert.ok(
+    rate >= 0.24 && rate <= 0.42,
+    `新球種の取得率が範囲外: 1クール ${(rate * 100).toFixed(1)}%`,
+  );
+  // 4クール続ければ、おおむね覚える
+  let four = 0;
+  for (let i = 0; i < 1000; i++) {
+    const p = pitcher();
+    for (let c = 0; c < 4; c++) executeSubTraining(p, 'newpitch', {});
+    if (p.pitching.arsenal.length > 1) four += 1;
+  }
+  assert.ok(four / 1000 >= 0.65, `4クール続けても覚えない: ${((four / 1000) * 100).toFixed(1)}%`);
+}
+
 // ⚠ 世界を汚したまま終わらない（ほかの検査と同じプロセスで動くことがある）
 loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けず、クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
+  '■ キャンプ: OK（選手ごとに効く / ウエイトが体幹・基礎体力が体力の役 / 新球種は1クール3割・4クールで7割 / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けず、クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
 );
