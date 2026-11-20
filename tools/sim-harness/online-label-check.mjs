@@ -210,6 +210,8 @@ try {
         league.game.teams.A.players[i],
         'online',
         teamRankMult(league.game.teams.A),
+        // ⚠ 同じ球団のベテランの指導（`veteranBonusOf`）も年度替わりの変動に入る
+        { team: league.game.teams.A },
       ),
       `${row.name} の自然成長が球団の格を見ていない`,
     );

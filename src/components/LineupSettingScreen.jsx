@@ -821,7 +821,7 @@ export const LineupSettingContent = ({
                 {/* ⚠ 素質（`growthPotential`）そのままの「成長率 ×1.20」は年齢が入らず、
                     30代でも大きく出ていた。契約更改・キャンプ・選手情報と同じ
                     「来季の自然成長」に揃える（`src/utils/naturalGrowth.js`） */}
-                <StatBox label="自然成長" value={naturalGrowthText(naturalGrowthOf(player))} />
+                <StatBox label="自然成長" value={naturalGrowthText(naturalGrowthOf(player, team))} />
                 <StatBox label="プロ意識" value={player.personality?.discipline ?? 0} />
                 <StatBox label="精神力" value={player.personality?.mental ?? 0} />
                 {player.position === 'catcher' && <StatBox label="Cリード" value={player.catching?.lead ?? 0} />}
@@ -977,7 +977,7 @@ export const LineupSettingContent = ({
                   <StatRow label="スタミナ" getValue={pl => pl.pitching?.stamina || 0} />
                 </>}
                 <tr><td colSpan={players.length + 1} className="py-1 px-2 text-xs text-purple-400 font-bold bg-gray-700/30">内面</td></tr>
-                <StatRow label="自然成長" getValue={pl => naturalGrowthOf(pl)} />
+                <StatRow label="自然成長" getValue={pl => naturalGrowthOf(pl, team)} />
                 <StatRow label="プロ意識" getValue={pl => pl.personality?.discipline ?? 0} />
                 <StatRow label="精神力" getValue={pl => pl.personality?.mental ?? 0} />
                 <StatRow label="経験" getValue={pl => pl.experience || 0} />

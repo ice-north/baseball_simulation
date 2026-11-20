@@ -154,7 +154,9 @@ const playerView = (p, team = null) => ({
   // ⚠ **画面に出すのはこちら**（いしだ 2026-11-20「表示を自然成長の平均と合わせたい」）。
   //    素質（`growthPotential` 0.3〜1.8）は素の個性で「平均いくつ伸びるか」ではない。
   //    年齢・出場量・プロ意識・調子まで含めた**今年の1能力あたりの伸び**を出す
-  naturalGrowth: expectedNaturalGrowth(p, 'online', team ? teamRankMult(team) : 0.90),
+  //    ⚠ 対人リーグの12球団は年度替わりで全部 `online` の区分で伸びる（`advanceToNextYear` の
+  //    `onlineTeamNames`）。`team` はベテランの指導（`veteranBonusOf`）にも使う
+  naturalGrowth: expectedNaturalGrowth(p, 'online', team ? teamRankMult(team) : 0.90, { team }),
   origin: {
     highSchool: p.highSchool?.name,
     university: p.universityTeamName || p.universityName,

@@ -65,7 +65,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     switch (key) {
       case 'name': return player.name;
       case 'age': return player.age || 0;
-      case 'growth': return naturalGrowthOf(player);
+      case 'growth': return naturalGrowthOf(player, teamData) ?? -99;
       case 'position': return getPositionSortIndex(player.position);
       case 'meet': return player.batting?.meet || 0;
       case 'power': return player.batting?.power || 0;
@@ -270,9 +270,9 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                         {(() => {
                           // ⚠ 出すのは**来季の自然成長**（`src/utils/naturalGrowth.js`）。
                           //    素の成長係数は年齢が入らず、30代でも 1.0 以上と出ていた
-                          const v = naturalGrowthOf(player);
+                          const v = naturalGrowthOf(player, teamData);
                           return (
-                            <span className={naturalGrowthColor(v)} title={naturalGrowthTitle(player)}>
+                            <span className={naturalGrowthColor(v)} title={naturalGrowthTitle(player, teamData)}>
                               {naturalGrowthText(v)}
                             </span>
                           );
