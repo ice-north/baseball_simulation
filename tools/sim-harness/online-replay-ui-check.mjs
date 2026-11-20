@@ -277,6 +277,43 @@ try {
       .first()
       .evaluate((n) => n.getBoundingClientRect().height);
     assert.ok(rowHeight <= 32, `個人成績の行が高い: ${Math.round(rowHeight)}px`);
+    // ⚠ **中身は真ん中**（いしだ 2026-11-20「右枠が余っています。カラムをスコアの横幅に
+    //    合わせ、真ん中に表示してください」）。左右の余白がそろっていること
+    const gaps = await cardBox.evaluate((node) => {
+      const box = node.getBoundingClientRect();
+      const of = (sel) => {
+        const el = node.querySelector(sel);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return [Math.round(r.left - box.left), Math.round(box.right - r.right)];
+      };
+      return { board: of('.online-scoreboard'), table: of('.online-record-area') };
+    });
+    for (const [name, pair] of Object.entries(gaps)) {
+      assert.ok(pair, `${name} が見つからない`);
+      assert.ok(
+        Math.abs(pair[0] - pair[1]) <= 4,
+        `${name} が真ん中に無い（左${pair[0]}px / 右${pair[1]}px）`,
+      );
+    }
+    // ⚠ **タブを変えても高さが変わらない**（いしだ 2026-11-20「タブを切り替えるたびに
+    //    枠が動くので見にくい」）。球団×打撃/投球のどれでも同じ高さで場所を取る
+    const areaHeight = () =>
+      cardBox
+        .locator('.online-record-area')
+        .evaluate((n) => Math.round(n.getBoundingClientRect().height));
+    const firstHeight = await areaHeight();
+    await cardBox.getByRole('button', { name: '投球', exact: true }).click();
+    await cardBox.getByRole('button', { name: '投球・基本', exact: true }).waitFor();
+    assert.equal(await areaHeight(), firstHeight, '打撃と投球で個人成績の高さが変わる');
+    // ⚠ 球団の切り替えは `aria-label` を持つ div（役割は付けていない）。CSS で引く
+    const teamTabs = cardBox.locator('[aria-label="試合成績の球団"] button');
+    await teamTabs.last().click();
+    assert.equal(await areaHeight(), firstHeight, '球団を変えると個人成績の高さが変わる');
+    await teamTabs.first().click();
+    await cardBox.getByRole('button', { name: '打撃', exact: true }).click();
+    await cardBox.getByRole('button', { name: '打撃・基本', exact: true }).waitFor();
+    assert.equal(await areaHeight(), firstHeight, '戻したときに高さが変わる');
     // 見た目の確かめ用（この検査はもともと観戦パネルも撮っている）
     await cardBox.screenshot({ path: '/tmp/baseball-online-inning-plays.png' });
     // もう一度押すと閉じる

@@ -273,7 +273,13 @@ assert.ok(mean >= 0.5 && mean <= 2.0, `年平均${mean.toFixed(2)}人（0.5〜2.
   const games = league.season.settings.gamesPerSeason || league.season.schedule.length;
   const minOuts = qualifiedOuts(games);
   assert.ok(minOuts > 30, `規定投球回が10回以下（${minOuts}アウト）では検査にならない`);
-  const pitchers = Object.values(teams).flatMap((t) => t.players.filter((p) => p.position === 'pitcher'));
+  // ⚠ **30歳未満から選ぶ**。指名の候補は30歳以上を外すので（`proDraftCandidates`）、
+  //    30歳の投手を「防御率王」に仕立てると、加点を確かめる前に候補から消える。
+  //    名簿の並びは選手の作り方を変えると動くので（出身の抽選を足したときに動いた）、
+  //    並びに頼らず**条件で選ぶ**こと
+  const pitchers = Object.values(teams).flatMap((t) =>
+    t.players.filter((p) => p.position === 'pitcher' && (p.age || 0) < 30),
+  );
   assert.ok(pitchers.length >= 3, '投手が足りない');
   for (const p of pitchers) {
     p.seasonStats.pitching = { ...p.seasonStats.pitching, inningsPitched: 0, earnedRuns: 0, wins: 0, strikeouts: 0, saves: 0 };

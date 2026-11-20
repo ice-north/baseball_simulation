@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReplayViewer from './ReplayViewer.jsx';
 import MobileReplay from './MobileReplay.jsx';
 import { useRead } from './useRead.js';
@@ -171,6 +171,26 @@ function knownGroups(game) {
     ]),
   );
 }
+/**
+ * 画面に出た直後に測るための効果。⚠ `useLayoutEffect` は**サーバー描画で警告**が出るので
+ * （検査が `renderToString` を使う）、ブラウザのときだけ `useLayoutEffect` を使う。
+ */
+const useAfterPaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+/** その区分に出場した選手か（打撃は打席・走塁・守備、投球は投げた選手） */
+const appeared = (p, category) =>
+  category === 'batting'
+    ? (p.batting?.plateAppearances ||
+        p.batting?.atBats ||
+        p.batting?.walks ||
+        p.batting?.hitByPitch ||
+        p.batting?.sacrificeBunts ||
+        p.battingOrder ||
+        p.batting?.stolenBases ||
+        p.batting?.caughtStealing ||
+        p.batting?.fieldingChances) > 0
+    : (p.pitching?.pitches || p.pitching?.inningsPitched) > 0;
+
 export function BoxScore({ game, ownTeam, knownOnly = false }) {
   const groups = knownOnly ? knownGroups(game) : GROUPS;
   // ⚠ **PC はページを分けず全員を出す**（小窓の中を縦に送る）。以前は12人で区切っていて、
@@ -207,18 +227,25 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
     wide && groupId === 'overview'
       ? ['overview', '主要成績一覧', overviewColumns]
       : groups[category].find(([id]) => id === groupId) || groups[category][0];
-  const rows = [...(game.teams?.[team] || [])].filter((p) =>
-    category === 'batting'
-      ? (p.batting?.plateAppearances ||
-          p.batting?.atBats ||
-          p.batting?.walks ||
-          p.batting?.hitByPitch ||
-          p.batting?.sacrificeBunts ||
-          p.battingOrder ||
-          p.batting?.stolenBases ||
-          p.batting?.caughtStealing ||
-          p.batting?.fieldingChances) > 0
-      : (p.pitching?.pitches || p.pitching?.inningsPitched) > 0,
+  // ⚠ **タブを変えても枠が動かない**（いしだ 2026-11-20）。出た高さの最大を覚えて床にする。
+  //    小窓を開いている間だけの値で、閉じれば消える
+  const areaRef = useRef(null);
+  const [floor, setFloor] = useState(0);
+  useAfterPaint(() => {
+    const height = areaRef.current?.offsetHeight || 0;
+    if (height > floor) setFloor(height);
+  });
+  const rows = [...(game.teams?.[team] || [])].filter((p) => appeared(p, category));
+  // ⚠ **タブを変えても枠の高さを変えない**（いしだ 2026-11-20「タブを切り替えるたびに
+  //    枠が動くので見にくい」）。球団×打撃/投球のどれを選んでも足りる高さを先に決める。
+  //    行数はこの試合で決まるので、開いている間は動かない
+  const maxRows = Math.max(
+    1,
+    ...[game.away, game.home].flatMap((name) =>
+      ['batting', 'pitching'].map(
+        (c) => (game.teams?.[name] || []).filter((p) => appeared(p, c)).length,
+      ),
+    ),
   );
   rows.sort((a, b) => {
     if (!sort) return (a.battingOrder || 99) - (b.battingOrder || 99);
@@ -308,6 +335,14 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
           </select>
         )}
       </div>
+      {/* ⚠ 高さを先に決めた枠で包む（タブを変えても動かない）。行数ぶんの場所は
+          CSS（`--rows` × `--online-record-row`）で取り、**実際に出た高さの最大**を
+          測って床にする（見出しが2行に折れる区分があり、行数だけでは足りない） */}
+      <div
+        className="online-record-area"
+        ref={areaRef}
+        style={{ '--rows': maxRows, ...(floor ? { minHeight: `${floor}px` } : {}) }}
+      >
       <table className="online-record-table">
         <thead>
           <tr>
@@ -347,6 +382,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
         </tbody>
       </table>
       {!rows.length && <p>この区分の出場記録はありません。</p>}
+      </div>
       {!wide && (
         <PageNav
           page={page}

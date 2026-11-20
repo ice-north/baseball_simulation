@@ -2583,19 +2583,36 @@ small.online-gain:not(:where(.online-sp *)) {
 /* ⚠ PCの試合成績の個人成績は**スコアボードと同じくらいの幅**に収めて、縦も詰める
    （いしだ 2026-11-19「横に長くなっています。スコアボードと同じくらいの幅に縮めて、
    縦も詰めて、コンパクトにしてください」）。
+   ⚠ **中身は真ん中に置く**（いしだ 2026-11-20「詰めたことで右枠が余っています。
+   カラムをスコアの横幅に合わせ、真ん中に表示してください」）。幅は1か所
+   （`--online-game-width`）で持ち、スコアボード・タブ・表の3つに同じ幅を当てる。
    ⚠ スマホ（`.online-mobile`）は触る大きさ（44px）を保つので、ここはPCだけに当てる */
-.online-desktop .online-game-dialog .online-record-table {
+.online-desktop .online-game-dialog {
+  --online-game-width: min(67%, 1fr);
+  --online-record-row: 26px;
+}
+.online-desktop .online-game-dialog .online-scoreboard,
+.online-desktop .online-game-dialog .online-game-summary,
+.online-desktop .online-game-dialog .online-stat-tools,
+.online-desktop .online-game-dialog .online-record-area {
   max-width: 67%;
   min-width: min(100%, 560px);
+  margin-inline: auto;
 }
 .online-desktop .online-game-dialog .online-record-table th,
 .online-desktop .online-game-dialog .online-record-table td {
   padding: 2px 2px;
-  height: 26px;
+  height: var(--online-record-row);
 }
 /* 名前の欄は広すぎると数字が潰れる（幅が3分の2になったぶん詰める） */
 .online-desktop .online-game-dialog .online-record-table th:first-child {
   width: 24%;
+}
+/* ⚠ **タブを変えても高さを変えない**（いしだ 2026-11-20）。球団×打撃/投球のどれを
+   選んでも足りる行数（`--rows`。`GameHistory.jsx` が数える）で先に場所を取る。
+   ⚠ スマホはページ送りで行数が決まっているので当てない */
+.online-desktop .online-game-dialog .online-record-area {
+  min-height: calc(var(--rows, 9) * var(--online-record-row) + 34px);
 }
 .online-record-table th button {
   padding: 0;
