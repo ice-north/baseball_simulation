@@ -7384,6 +7384,14 @@ table.paper-table {
   font-variant-numeric: tabular-nums;
   color: #cbd5e1;
 }
+/* ⚠ 幅の狭いスマホ（360px など）では出さない（監査 2026-11-20）。横にはみ出しはしないが、
+   シーズン中（勝敗が2桁・差が「12.5」）に長い球団名（東大阪クルセイダーズ）が2行に割れ、
+   順位の札と名前が別の行に分かれた。375px 以上は列が無いときと同じ折り返しで収まる */
+@media (max-width: 370px) {
+  .online-standings .online-standings-gap {
+    display: none;
+  }
+}
 
 /* --- 球団の歩み（`TeamHistoryChart.jsx`） ------------------------------- */
 .online-history-chart {
