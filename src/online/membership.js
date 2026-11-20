@@ -247,8 +247,8 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
   // ⚠ **地域名とチーム名は分けて受け取る**（いしだ 2026-11-20）。略称は地域名をそのまま
   //    使うので、「美瑛ブルーレイクス」の略称が「美瑛ブ」にならない。
   //    地域名は地元（`hometown.js` の県の表）も引くので、変えれば地元も変わる。
-  // ⚠ 古い画面・アプリは `teamName` だけを送ってくる。そのときは今までどおり
-  //    表示名だけを差し替える（分けた名前は触らない）
+  // ⚠ 古い画面・アプリは `teamName` だけを送ってくる。そのときは表示名を差し替え、
+  //    名前が変わったときだけ分けた名前（地域名・チーム名・地方）も合わせて直す（下の `else if` の注）
   if (cityName !== undefined || nickname !== undefined || region !== undefined) {
     const city = String(cityName ?? teamCityOf(team) ?? '').trim();
     const nick = String(nickname ?? teamNicknameOf(team) ?? '').trim();
