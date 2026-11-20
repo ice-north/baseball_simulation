@@ -333,6 +333,24 @@ try {
         assert.ok(detail.includes(text), `能力の写しから選手情報に「${text}」が出ない`);
       assert.ok(detail.length > 400, `選手情報の中身が薄い: ${detail.length}文字`);
     }
+    // ⚠ 名前の付いた高校と並んでいる仮の「高校卒」は経歴に出さない（判断3より前に作ったリーグに
+    //    残っていて「… ← 高校卒（高校） ← 〇〇高（高校）」と出ていた。2026-11-20 監査）。
+    //    高校が仮の1つだけなら残す
+    {
+      const snap = view.chronicle.proDrafted[0].player;
+      const careerOf = (careerHistory) =>
+        render(h(PlayerDetailBody, { player: { ...snap, careerHistory }, shown: snap, periodLabel: '今季' })).match(
+          /<p class="online-career">([\s\S]*?)<\/p>/,
+        )?.[1] || '';
+      const both = careerOf([
+        { type: 'highschool', year: null, label: '札幌第一高' },
+        { type: 'highschool', label: '高校卒' },
+        { type: 'join', year: 1, label: '三陸' },
+      ]);
+      assert.ok(both.includes('札幌第一高') && !both.includes('高校卒'), `名前の付いた高校の横に仮の「高校卒」が出ている: ${both}`);
+      const only = careerOf([{ type: 'highschool', label: '高校卒' }, { type: 'join', year: 1, label: '三陸' }]);
+      assert.ok(only.includes('高校卒') && only.includes('三陸'), `高校が仮の1つだけのときに消している: ${only}`);
+    }
   }
 
   // --- トライアウトの注意は文を句点で区切る（u1 低20） ----------------------
