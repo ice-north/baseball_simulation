@@ -1,4 +1,5 @@
 import { requireOnline } from '../src/online/shared.js';
+import { reliefOrderOf } from '../src/online/pitchingEdit.js';
 import {
   STARTER_ROLES,
   RELIEF_ROLES,
@@ -90,22 +91,46 @@ export function validateTactics(team, plan, rotationChanged) {
       Object.values(roles).filter((r) => r === 'closer').length <= 1,
       'クローザーは1人まで指定してください',
     );
+    // ⚠ **同じ役割の中の順番**（いしだ 2026-11-20「リリーフ投手が同じロールだった場合、
+    //    並びが上の選手が優先して使われてしまいます」）。画面が送ってきた順（`pitcherOrder`）で
+    //    並べ替えてから一覧を作る。送って来なければ前の順、それも無ければ名簿の並び（今までどおり）
+    const sentOrder = plan.pitcherOrder;
+    if (sentOrder !== undefined)
+      requireOnline(
+        Array.isArray(sentOrder) && sentOrder.every((id) => Number.isFinite(Number(id))),
+        '投手の並び順が不正です',
+      );
+    // ⚠ **並べ替えたことのない球団には足さない**。いつも書き込むと、画面へ返す編成の形が
+    //    増えて、編集中だった人の保存が「ほかの画面で更新されています」で弾かれる
+    //    （検査で実際に踏んだ）。送って来たときと、前から持っているときだけ残す
+    const storedOrder = team.pitchingRotation?.pitcherOrder;
+    const order =
+      sentOrder !== undefined || storedOrder?.length
+        ? reliefOrderOf(sentOrder ?? storedOrder, pitchers)
+        : null;
+    const rank = (id) => {
+      const at = (order || []).indexOf(id);
+      return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+    };
+    const sorted = [...pitchers].sort((a, b) => rank(a.id) - rank(b.id));
     rotation = {
       pitcherRoles: roles,
-      relievers: pitchers
+      // ⚠ 決めた順をそのまま残す（次に役割だけ保存したときも順番が消えない）
+      ...(order ? { pitcherOrder: order } : {}),
+      relievers: sorted
         .filter((p) => !plan.starters.includes(p.id))
         .map((p) => p.id),
-      middleRelievers: pitchers
+      middleRelievers: sorted
         .filter(
           (p) =>
             !plan.starters.includes(p.id) &&
             !['setup', 'closer'].includes(roles[p.id]),
         )
         .map((p) => p.id),
-      setupMen: pitchers
+      setupMen: sorted
         .filter((p) => roles[p.id] === 'setup')
         .map((p) => p.id),
-      closer: pitchers.find((p) => roles[p.id] === 'closer')?.id ?? null,
+      closer: sorted.find((p) => roles[p.id] === 'closer')?.id ?? null,
     };
   }
   return { tactics, rotation };

@@ -53,6 +53,8 @@ export function teamFromView(view) {
       closers: [],
       currentStarterIndex: nextIndex,
       pitcherRoles: clone(lineup.pitcherRoles || {}),
+      // 同じ役割の中の順番（いしだ 2026-11-20）。無ければ名簿の並び＝今までの順
+      pitcherOrder: clone(lineup.pitcherOrder || []),
     },
     strategy: clone(lineup.strategy || {}),
   };
@@ -79,6 +81,9 @@ export function planFromTeam(team) {
     strategy: team.strategy || {},
     ...(team.pitchingRotation?.pitcherRoles
       ? { pitcherRoles: team.pitchingRotation.pitcherRoles }
+      : {}),
+    ...(team.pitchingRotation?.pitcherOrder?.length
+      ? { pitcherOrder: team.pitchingRotation.pitcherOrder }
       : {}),
   };
 }
@@ -144,7 +149,7 @@ export function rebaseLineupParts(parts, latest) {
 }
 
 /** 打順・先発・投手の役割。方針・采配（PC）が「自分の項目ではない」と見分けるのに使う */
-export const LINEUP_EDITOR_KEYS = ['battingOrder', 'starters', 'pitcherRoles'];
+export const LINEUP_EDITOR_KEYS = ['battingOrder', 'starters', 'pitcherRoles', 'pitcherOrder'];
 /**
  * PC版のスタメン設定（`LineupBoard.jsx`）と投手起用（`PitchingBoard.jsx`）が受け持つ項目。
  * ⚠ PCでは打順と投手起用を**別のページで別に保存する**。受け持つ項目を分けておかないと、
@@ -152,7 +157,7 @@ export const LINEUP_EDITOR_KEYS = ['battingOrder', 'starters', 'pitcherRoles'];
  *    保存できなくなる（自分の項目が他で変わった扱いになる）。
  */
 export const LINEUP_BOARD_KEYS = ['battingOrder'];
-export const PITCHING_BOARD_KEYS = ['starters', 'pitcherRoles'];
+export const PITCHING_BOARD_KEYS = ['starters', 'pitcherRoles', 'pitcherOrder'];
 /** 方針・采配（PC）が受け持つ項目 */
 export const TACTICS_EDITOR_KEYS = ['strategy', 'tactics'];
 

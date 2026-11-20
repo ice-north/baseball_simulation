@@ -21,7 +21,8 @@ function staffAreasOf(team) {
     order: JSON.stringify(
       view.battingOrder.map(({ playerId, battingOrder, position }) => [playerId, battingOrder, position]),
     ),
-    rotation: JSON.stringify([view.starters, view.pitcherRoles || null]),
+    // ⚠ 救援の順番も「変えた」に数える（並べ替えただけの保存が「変更なし」にならないように）
+    rotation: JSON.stringify([view.starters, view.pitcherRoles || null, view.pitcherOrder || null]),
     tactics: JSON.stringify([
       { ...TACTIC_DEFAULTS, ...(team.onlineTactics || {}) },
       { ...STRATEGY_DEFAULTS, ...(team.strategy || {}) },

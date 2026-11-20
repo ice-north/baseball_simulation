@@ -418,6 +418,79 @@ try {
       afterCloser.includes(`${otherRole}:${closer.split(':')[1]}`),
       '前のクローザーが役割を引き継がない',
     );
+  // 同じ役割の中の順番（▲▼）。いしだ 2026-11-20「リリーフ投手が同じロールだった場合、
+  // 並びが上の選手が優先して使われてしまいます。同じロール内で順番を入れ替えられるように」
+  {
+    // 同じ役割を2人作る（既定の名簿は役割が1人ずつ）
+    const before = await relief();
+    assert.ok(before.length >= 3, `前提: 救援が少ない: ${JSON.stringify(before)}`);
+    const [keepRole, keepName] = before[2].split(':');
+    const [moveRole, moveName] = before[3 < before.length ? 3 : 1].split(':');
+    await p
+      .getByRole('button', { name: `${moveName}の役割（${moveRole}）を選び直す` })
+      .click();
+    await p
+      .getByRole('dialog', { name: `${moveName}の役割` })
+      .getByRole('button', { name: new RegExp(`^${keepRole}`) })
+      .click();
+    const rows = await relief();
+    const at = rows.findIndex(
+      (r, i) => i > 0 && r.split(':')[0] === rows[i - 1].split(':')[0],
+    );
+    assert.ok(at > 0, `前提: 同じ役割が2人以上並んでいない: ${JSON.stringify(rows)}`);
+    const [role, upper] = rows[at - 1].split(':');
+    const lower = rows[at].split(':')[1];
+    assert.ok(role === keepRole && [keepName, moveName].includes(upper), '前提: 作った括りが違う');
+    // ⚠ 1人しか居ない役割には▲▼を出さない（押しても動かないボタンを置かない）
+    const alone = rows.find(
+      (r, i) =>
+        r.split(':')[0] !== rows[i - 1]?.split(':')[0] &&
+        r.split(':')[0] !== rows[i + 1]?.split(':')[0],
+    );
+    if (alone)
+      assert.equal(
+        await p
+          .locator('tbody[aria-label="救援"] tr[data-reliever]')
+          .filter({ hasText: alone.split(':')[1] })
+          .locator('.online-pitch-order button')
+          .count(),
+        0,
+        '1人だけの役割に並べ替えのボタンが出ている',
+      );
+    await p.getByRole('button', { name: `${upper}を${role}の中で下へ` }).click();
+    const afterMove = await relief();
+    assert.equal(afterMove[at - 1], `${role}:${lower}`, '▼で入れ替わらない');
+    assert.equal(afterMove[at], `${role}:${upper}`, '▼で入れ替わらない');
+    // ⚠ 並べ替えただけでも保存できる（未保存の印が出る）
+    await nav
+      .getByRole('button', { name: '投手起用', exact: true })
+      .getByLabel('保存していない変更')
+      .waitFor();
+    // ⚠ 端の投手は動かせない（入れ替えで先頭に来た方の「上へ」は押せない）
+    assert.equal(
+      await p.getByRole('button', { name: `${lower}を${role}の中で上へ` }).isDisabled(),
+      true,
+      '先頭なのに上へ動かせる',
+    );
+    // 動かした方は戻せる
+    assert.equal(
+      await p.getByRole('button', { name: `${upper}を${role}の中で上へ` }).isDisabled(),
+      false,
+      '動かした投手を戻せない',
+    );
+    // 戻しておく（このあとの検査は元の並びを前提にしている）
+    await p.getByRole('button', { name: `${upper}を${role}の中で上へ` }).click();
+    assert.deepEqual(await relief(), rows, '元の並びに戻らない');
+    await p
+      .getByRole('button', { name: `${moveName}の役割（${keepRole}）を選び直す` })
+      .click();
+    await p
+      .getByRole('dialog', { name: `${moveName}の役割` })
+      .getByRole('button', { name: new RegExp(`^${moveRole}`) })
+      .click();
+    assert.deepEqual(await relief(), before, '役割を戻せない');
+  }
+
   // 先発どうしのドラッグ: 1番手と3番手を入れ替える（間は動かない）。次の先発の印は先頭へ
   const beforeDrag = await rotation();
   await p
@@ -1055,7 +1128,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-lineup-board-ui-check PASS（順位表の球団→スタメンと投手陣・ランキングの選手→能力 / 守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・クローザー・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発・行の高さと字の大きさがそろう / 守備位置の変更（定期の読み直しで版が上がった後も））',
+    'online-lineup-board-ui-check PASS（順位表の球団→スタメンと投手陣・ランキングの選手→能力 / 守備分析なし / 控えの野手に投手なし・投手は別の括り / 選んで交代・守備の入れ替え / 守備図 / ドラッグ / 元に戻す / ページ移動 / 投手起用の入れ替え・クローザー・同じ役割の中の順番・ローテから外す / 二刀流（野手を投手起用に・投手を野手の枠に） / スマホの幅をまたぐ編集 / 別々に保存 / 読み直し / 投と打の列・フォームの列・疲労で名前に色 / 通算成績 / 選手成績の「選手名」の見出しが左寄せ / ホームの直近と今後をターンで横並び・休養日も入れて5つ・勝敗/セーブの投手・自軍と相手の先発・行の高さと字の大きさがそろう / 守備位置の変更（定期の読み直しで版が上がった後も））',
   );
 } catch (error) {
   await failureShots(browser, 'online-lineup-board-ui');

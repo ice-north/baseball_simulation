@@ -18,6 +18,7 @@ import {
   setRole,
   insertStarter,
   reliefGroups,
+  moveRelief,
   pitchingProblems,
   onStaff,
   addToStaff,
@@ -332,6 +333,14 @@ export default function PitchingBoard({
     : view.nextStarterId;
   // 救援は使われる場面の順（役割の順）に並べる。役割の名前は各行の札が示す
   const groups = reliefGroups(state, roster);
+  // 同じ役割に何人いるか／その中で動かせるか（▲▼を出す判断）
+  const sameRoleCount = (id) =>
+    (groups.find((g) => g.role === state.roles[id])?.players || []).length;
+  const canMoveRelief = (id, delta) => {
+    const list = groups.find((g) => g.role === state.roles[id])?.players || [];
+    const at = list.findIndex((p) => p.id === id);
+    return at !== -1 && at + delta >= 0 && at + delta < list.length;
+  };
   const relievers = groups.flatMap((g) => g.players);
   const vacant = groups
     .filter((g) => !g.players.length && g.role !== 'auto_r')
@@ -544,7 +553,34 @@ export default function PitchingBoard({
                       </span>
                     </button>
                   </td>
-                  <td className="online-pitch-rolecell">{roleChip(player)}</td>
+                  <td className="online-pitch-rolecell">
+                    {roleChip(player)}
+                    {/* ⚠ **同じ役割の中の順番**（いしだ 2026-11-20「リリーフ投手が同じ
+                        ロールだった場合、並びが上の選手が優先して使われてしまいます。
+                        同じロール内で順番を入れ替えられるようにしてほしいです」）。
+                        役割をまたぐ移動はしない（役割は札で変える） */}
+                    {sameRoleCount(player.id) > 1 && (
+                      <span className="online-pitch-order">
+                        {[
+                          ['▲', -1, '上へ'],
+                          ['▼', 1, '下へ'],
+                        ].map(([mark, delta, what]) => (
+                          <button
+                            key={what}
+                            type="button"
+                            disabled={busy || !canMoveRelief(player.id, delta)}
+                            aria-label={`${player.name}を${roleLabel(state.roles[player.id])}の中で${what}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              commit(moveRelief(state, player.id, delta, roster));
+                            }}
+                          >
+                            {mark}
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                  </td>
                   <PitcherCells player={player} starter={false} />
                 </tr>
               ))}

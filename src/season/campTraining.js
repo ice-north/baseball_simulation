@@ -1334,11 +1334,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         growthMult *= getVelocityCatchupMult(armVal, currentValue);
       }
 
-      // 高能力値の成長減衰。
-      // ⚠ **覚醒には掛けない**（いしだ方針: 覚醒は限界突破なので、能力が
-      //    高くても伸びてほしい）。下で `adjustedBaseGrowth + awakeningGrowth`
-      //    と足しており、減衰が掛かるのは前者だけ。実測で、覚醒したときの
-      //    ミートの伸びは ミート40で4.89・95で4.25（上限100の頭打ちぶんだけ減る）。
+      // 高能力値の成長減衰（ふだんの伸び）。
+      // ⚠ **覚醒には別の抑え**（`awakeningHighStatDamp`。いしだ 2026-11-20「能力80台から
+      //    4クールで+6は上がりすぎ。能力が低い場合はいまの伸びのままでOK」）。
+      //    ここの `dampFactor` が掛かるのは `adjustedBaseGrowth` だけで、覚醒ぶんは
+      //    上の `awakeningGrowth` で別に抑えてから足す（70未満は素通し）。
       let dampFactor = 1.0;
       if (targetStat === 'velocity') {
         // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）

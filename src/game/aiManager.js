@@ -162,6 +162,18 @@ export function executeAutoSubstitutePitcher(ctx) {
     return false;
   });
   if (availablePitchers.length === 0) return;
+  // ⚠ **同じ役割の中は、決めた順に使う**（いしだ 2026-11-20「リリーフ投手が同じロールだった
+  //    場合、並びが上の選手が優先して使われてしまいます」）。`rotation.relievers` は
+  //    投手起用で決めた順（`server/lineupTactics.mjs`）。ここで並べ替えておけば、
+  //    下の「敗戦処理を探す」などの先頭取りがその順に従う
+  {
+    const order = rotation?.relievers || [];
+    const rank = (id) => {
+      const at = order.indexOf(id);
+      return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+    };
+    availablePitchers.sort((a, b) => rank(a.id) - rank(b.id));
+  }
 
   let selectedPitcher = null;
   let roleLabel = '';
