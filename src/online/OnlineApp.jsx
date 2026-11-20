@@ -64,6 +64,9 @@ const MOBILE_TAB_FOR = {
   rotation: 'lineup',
   tactics: 'lineup',
   ranking: 'players',
+  // PC のチーム分析（選手成績をまとめたページ）はスマホの「選手」で
+  analysis: 'players',
+  careers: 'players',
 };
 const mobileTab = (screen) =>
   MOBILE_TAB_FOR[screen] || (MOBILE_TABS.has(screen) ? screen : 'today');

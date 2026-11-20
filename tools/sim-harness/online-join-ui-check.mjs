@@ -108,6 +108,7 @@ try {
   await page.screenshot({ path: '/tmp/baseball-online-join-home.png' });
 
   // --- 選手の詳細で能力の説明 -------------------------------------
+  await page.getByRole('button', { name: 'チーム分析', exact: true }).click();
   await page.getByRole('button', { name: '選手成績', exact: true }).click();
   const name = page.locator('main .online-player-name').first();
   await name.waitFor();

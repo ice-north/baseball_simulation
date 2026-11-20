@@ -63,7 +63,7 @@ import kotlinx.serialization.json.put
 enum class Tab(val label: String, val icon: ImageVector) {
     Home("ホーム", Icons.Filled.Home),
     Games("試合", Icons.Filled.DateRange),
-    Players("選手", Icons.Filled.Person),
+    Players("チーム", Icons.Filled.Person),
     Plan("編成", Icons.Filled.List),
     Procedures("手続き", Icons.Filled.Edit),
 }

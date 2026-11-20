@@ -7341,3 +7341,292 @@ table.paper-table {
 .paper-relays p {
   margin: 0;
 }
+
+/* --- ページの中の切り替え（`Page.jsx` の `PageTabs`。リーグ史・チーム分析） ---------- */
+/* ⚠ 見出しは明るい地色の上なので、ほかの切り替え（`.online-segments`）と同じ濃い帯にして
+   カードの色とそろえる。見出しの名前（h1）の下に1段で並べる */
+.online-page-head.has-tabs {
+  align-items: flex-end;
+}
+.online-page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 2px;
+  padding: 4px;
+  width: fit-content;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.72);
+  border: 1px solid rgba(55, 65, 81, 0.5);
+}
+.online .online-page-tabs button {
+  min-height: 30px;
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #d1d5db;
+  font-weight: 600;
+}
+.online .online-page-tabs button:hover {
+  background: #374151;
+  color: #fff;
+}
+.online .online-page-tabs button[aria-pressed='true'] {
+  background: #0e3f4c;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-strong);
+  font-weight: 700;
+}
+
+/* --- 順位表のゲーム差 -------------------------------------------------- */
+.online-standings td.online-standings-gap {
+  font-variant-numeric: tabular-nums;
+  color: #cbd5e1;
+}
+
+/* --- 球団の歩み（`TeamHistoryChart.jsx`） ------------------------------- */
+.online-history-chart {
+  margin: 0;
+}
+.online-history-chart figcaption {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.online-history-chart svg {
+  display: block;
+  width: 100%;
+  max-width: 900px;
+  height: auto;
+}
+.online-history-band rect {
+  fill: #ffffff06;
+}
+.online-history-band.is-tier-0 rect {
+  fill: #22d3ee0d;
+}
+.online-history-band text,
+.online-history-tick,
+.online-history-year {
+  fill: #9fb0c4;
+  font-size: 12px;
+}
+.online-history-band text {
+  font-weight: 700;
+  fill: #cbd5e1;
+}
+.online-history-divider {
+  stroke: #94a3b8;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.online-history-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.online-history-line.is-current {
+  stroke-dasharray: 4 4;
+}
+.online-history-dot {
+  fill: var(--accent);
+  stroke: var(--surface-2);
+  stroke-width: 2;
+}
+.online-history-dot.is-title {
+  fill: #facc15;
+}
+.online-history-dot.is-current {
+  fill: var(--surface-2);
+  stroke: var(--accent);
+}
+.online-history-dot.is-active {
+  stroke: #fff;
+}
+.online-history-mark {
+  fill: #e5e7eb;
+  font-size: 11px;
+  font-weight: 700;
+}
+.online-history-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+.online-history-tip line {
+  stroke: #ffffff59;
+  stroke-width: 1;
+}
+.online-card .online-history-readout {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #d0d9e5;
+  min-height: 1.5em;
+}
+
+/* --- リーグ史 --------------------------------------------------------- */
+.online-past-standings + .online-past-standings {
+  margin-top: 12px;
+}
+/* 部ごとの表の列をそろえる（中身の幅で決めると、1部と2部で列の位置がずれる） */
+.online-past-standings {
+  table-layout: fixed;
+  width: 100%;
+}
+.online-past-standings th:first-child {
+  width: 34%;
+}
+.online-past-standings th:last-child {
+  width: 18%;
+}
+.online .online-pro-more {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+/* --- チーム分析 ------------------------------------------------------- */
+.online-team-radar {
+  display: grid;
+  grid-template-columns: minmax(300px, 440px) minmax(320px, 1fr);
+  gap: 16px 24px;
+  align-items: center;
+}
+.online-radar-legend {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+}
+.online-radar-legend i {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  vertical-align: middle;
+  border-top: 2px solid var(--accent);
+}
+.online-radar-legend .is-average i {
+  border-top: 2px dashed #94a3b8;
+}
+.online-team-radar svg {
+  width: 100%;
+  height: auto;
+}
+.online-radar-grid {
+  fill: none;
+  stroke: #ffffff24;
+  stroke-width: 1;
+}
+.online-radar-average {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+.online-radar-team {
+  fill: #22d3ee33;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.online-radar-dot {
+  fill: var(--accent);
+  stroke: var(--surface-2);
+  stroke-width: 2;
+}
+.online-radar-dot.is-active {
+  stroke: #fff;
+}
+.online-radar-label {
+  fill: #e5e7eb;
+  font-size: 12px;
+  font-weight: 650;
+}
+.online-radar-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.online-radar-table th,
+.online-radar-table td {
+  padding: 4px 8px;
+  white-space: nowrap;
+  border-bottom: 1px solid #ffffff14;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.online-radar-table th:first-child {
+  text-align: left;
+}
+.online-radar-table tr.is-active {
+  background: #22d3ee1f;
+}
+.online-team-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+.online-team-tiles div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #ffffff0d;
+}
+.online-team-tiles small {
+  color: #9fb0c4;
+  font-size: 12px;
+}
+.online-team-tiles b {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.online-defense-table td,
+.online-defense-table th {
+  white-space: nowrap;
+}
+.online-defense-board .online-board-side .online-lineup-field {
+  position: static;
+  width: 100%;
+}
+
+/* --- 指導者の詳細能力・人物の小窓 --------------------------------------- */
+.online-coach-abilities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 14px;
+  margin: 6px 0 8px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.online-coach-abilities li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #ffffff12;
+  padding: 2px 0;
+}
+.online-coach-dialog {
+  width: min(560px, calc(100% - 24px));
+}
+.online-coach-dialog .online-staff-color {
+  font-weight: 650;
+  color: var(--accent);
+  margin: 6px 0;
+}
+.online-coach-dialog .online-staff-pitch {
+  font-size: 13px;
+  color: #d0d9e5;
+}
+.online-coach-dialog .online-staff-facts div {
+  grid-template-columns: 6em 1fr;
+}
+.online-coach-dialog .online-staff-facts {
+  margin-bottom: 8px;
+}
+.online-staff-card header strong .online-coach-name {
+  font-size: 18px;
+  font-weight: 700;
+}

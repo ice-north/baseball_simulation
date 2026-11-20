@@ -62,13 +62,13 @@ export default function CareerStats({ view }) {
   if (mode === 'league') return <CareerLeagueBoard view={view} modes={modes} />;
   return (
     <TeamRoster view={view} always>
-      {(shown, selector) => <Board shown={shown} selector={selector} modes={modes} />}
+      {(shown, selector) => <CareerTeamBoard shown={shown} selector={selector} modes={modes} />}
     </TeamRoster>
   );
 }
 
 /** リーグ全体の通算ランキング（項目ごとの上位50人。退団した選手も残す） */
-function CareerLeagueBoard({ view, modes }) {
+export function CareerLeagueBoard({ view, modes = null }) {
   const [side, setSide] = useState('batting');
   const shown = (view.careerLeaders || []).filter((f) => f.side === side);
   return (
@@ -131,7 +131,7 @@ function CareerLeagueBoard({ view, modes }) {
   );
 }
 
-function Board({ shown, selector, modes }) {
+export function CareerTeamBoard({ shown, selector, modes = null }) {
   const roster = useMemo(() => careerRoster(shown.roster), [shown.roster]);
   // ⚠ 1年でも欠けている年があれば**そう書く**。記録を始める前の成績は
   //    入っていないので、黙って出すと「少ない」と誤解される

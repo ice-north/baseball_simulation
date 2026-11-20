@@ -203,8 +203,23 @@ class ScreenTour {
                 step("standings") { click("順位表"); page("games-standings", scrolls = 1) }
                 step("leaders") { click("タイトル"); shot("games-leaders") }
                 step("news") { click("リーグ便り"); shot("games-news") }
+                // リーグ史（過去の順位・プロ入り・取引・通算と能力のランキング・表彰。先方要望 2026-11-20）
+                step("league history") {
+                    // ⚠ 切り替えは一覧の上（送った後は画面の外）。先に上まで戻す
+                    toTop(); chip("history"); pause(1500); page("games-history-standings", scrolls = 1)
+                    listOf("pro", "moves", "careers", "ability", "honors").forEach { key ->
+                        step("league history $key") { chip(key); pause(2500); page("games-history-$key", scrolls = 1) }
+                    }
+                    chip("results")
+                }
 
+                // 選手タブ＝チーム分析（能力のレーダー・スタメン・守備・今季・通算・年齢）
                 tab("Players")
+                page("players-overview", scrolls = 2)
+                step("players lineup") { chip("Lineup"); pause(1500); page("players-lineup", scrolls = 1) }
+                step("players defense") { chip("Defense"); pause(1500); page("players-defense", scrolls = 1) }
+                step("players ages") { chip("Ages"); pause(1500); page("players-ages", scrolls = 1) }
+                chip("Season")
                 page("players-batting", scrolls = 1)
                 step("pitching stats") { click("投球"); page("players-pitching", scrolls = 1) }
                 step("player sheet") {
@@ -219,12 +234,11 @@ class ScreenTour {
                     rule.runOnUiThread { model.openPlayer = null }
                     pause()
                 }
-                step("career") { click("通算"); pause(2500); page("players-career", scrolls = 1) }
-                step("ranking") { click("能力順"); pause(2500); page("players-ranking", scrolls = 1) }
+                step("career") { chip("Career"); pause(2500); page("players-career", scrolls = 1) }
 
-                // 選手の詳細から「この選手でトレードを考える」（他球団の選手。能力順の1人目）
+                // 選手の詳細から「この選手でトレードを考える」（他球団の選手）
                 step("sheet trade") {
-                    click("今季")
+                    chip("Season")
                     val other = model.raw!!.at("teamNames").list().mapNotNull { it.str() }.first { it != view.teamName }
                     rule.runOnUiThread { model.playersTeam = other }
                     pause(3500)
@@ -273,6 +287,14 @@ class ScreenTour {
                 step("tactics") { click("方針・采配"); page("plan-tactics", scrolls = 2) }
                 // 指導者（首脳陣・任せ方・采配の実際の動き）。以前は撮っていなかった
                 step("staff") { chip("Staff"); pause(2000); page("plan-staff", scrolls = 3) }
+                // 指導者の人物の小窓（名前を押す。詳細能力・これまでの指導チームと役職・主な指導選手）
+                step("coach dialog") {
+                    toTop()
+                    rule.onAllNodesWithTag("coach-name").onFirst().performScrollTo().performClick()
+                    pause()
+                    page("plan-staff-coach", scrolls = 2, tag = "coach-dialog")
+                    back()
+                }
 
                 tab("Procedures")
                 page("procedures", scrolls = 4)
@@ -350,6 +372,16 @@ class ScreenTour {
             pause()
             click("球団名", substring = true)
             shot("rename-dialog")
+            back()
+        }
+        // 球団史・記録（上に球団の歩みの折れ線。先方要望 2026-11-20）
+        if (stage == "running") step("chronicle") {
+            rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick()
+            pause()
+            click("球団史・記録")
+            pause(2500)
+            rule.onAllNodesWithTag("history-chart").onFirst().performClick()
+            shot("home-chronicle")
             back()
         }
         Log.i("ScreenTour", "done $stage: $count shots")

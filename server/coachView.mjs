@@ -27,6 +27,7 @@ import {
   PHASE_STAFF_AREA,
   roleTypeLabel,
   isAuto,
+  coachAbilities,
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import {
@@ -177,6 +178,107 @@ function historyRows(coach, labelOf) {
 }
 
 /**
+ * これまでの指導チームと役職（続けて同じ球団・同じ役職の年をまとめる。古い順）。
+ * 今の席は「〇年目〜 … （現職）」。⚠ 先方要望（2026-11-20）「これまでの指導チームと役職」
+ */
+export function coachStints(coach, labelOf) {
+  const rows = [...(coach.career || [])].sort((a, b) => a.year - b.year);
+  const out = [];
+  for (const r of rows) {
+    const last = out.at(-1);
+    if (last && last.team === r.team && last.role === r.role && last.to === r.year - 1) last.to = r.year;
+    else out.push({ team: r.team, role: r.role, from: r.year, to: r.year });
+  }
+  const job = coach.job;
+  if (job?.team) {
+    const last = out.at(-1);
+    if (last && last.team === job.team && last.role === job.role) last.current = true;
+    else out.push({ team: job.team, role: job.role, from: job.since ?? null, to: null, current: true });
+  }
+  return out.map((s) => ({
+    ...s,
+    teamLabel: labelOf(s.team),
+    roleLabel: ROLE_LABELS[s.role] || '',
+    text: `${s.from != null ? `${s.from}年目` : ''}${s.current ? '〜' : s.to !== s.from ? `〜${s.to}年目` : ''} ${labelOf(s.team)} ${ROLE_LABELS[s.role] || ''}${s.current ? '（現職）' : ''}`.trim(),
+  }));
+}
+
+/** 主な指導選手に挙げる人数 */
+const PUPIL_COUNT = 5;
+const rate3 = (v) => v.toFixed(3).replace(/^0/, '');
+/**
+ * 主な指導選手（その人が指導した年・球団で、出番の多かった選手。⚠ 先方要望 2026-11-20）。
+ * 投手コーチは投手（対戦打者の数）、野手コーチは野手（打席の数）、監督は両方で数える。
+ * 材料は対人リーグの年ごとの記録（`records.seasons[年].players`）。今の席の今季も入れる。
+ * ⚠ 年の途中で移籍した選手は、その年の両方の球団の合計で数える（目安なので、球団ごとに分け直さない）
+ * ⚠ 説明だけ。効果は無い
+ */
+export function coachPupils(league, coach) {
+  const spans = (coach.career || []).map((r) => ({ year: r.year, team: r.team, role: r.role }));
+  if (coach.job?.team && !spans.some((s) => s.year === league.season?.year && s.team === coach.job.team))
+    spans.push({ year: league.season?.year, team: coach.job.team, role: coach.job.role });
+  const people = new Map();
+  for (const span of spans) {
+    const season = league.records?.seasons?.[span.year];
+    if (!season) continue;
+    for (const rec of Object.values(season.players || {})) {
+      if (!rec.teams?.includes(span.team)) continue;
+      const b = rec.stats?.batting || {};
+      const pt = rec.stats?.pitching || {};
+      const pa = span.role === 'pitching' ? 0 : b.plateAppearances || 0;
+      const bf = span.role === 'batting' ? 0 : pt.battersFaced || 0;
+      if (!pa && !bf) continue;
+      const p = people.get(rec.key) || {
+        name: rec.name,
+        years: new Set(),
+        pa: 0, bf: 0, ab: 0, hits: 0, hr: 0, wins: 0, saves: 0, holds: 0, er: 0, outs: 0,
+      };
+      p.years.add(span.year);
+      p.pa += pa;
+      p.bf += bf;
+      if (pa) Object.assign(p, { ab: p.ab + (b.atBats || 0), hits: p.hits + (b.hits || 0), hr: p.hr + (b.homeruns || 0) });
+      if (bf)
+        Object.assign(p, {
+          wins: p.wins + (pt.wins || 0),
+          saves: p.saves + (pt.saves || 0),
+          holds: p.holds + (pt.holds || 0),
+          er: p.er + (pt.earnedRuns || 0),
+          outs: p.outs + (pt.inningsPitched || 0),
+        });
+      people.set(rec.key, p);
+    }
+  }
+  // ⚠ 打者（打席）と投手（対戦打者）は数が違うので混ぜて並べない。投手コーチは投手だけ、野手コーチは
+  //    打者だけ、監督（を務めた年がある人）は打者3人・投手2人（足りなければもう一方で埋める）
+  const all = [...people.values()];
+  const byName = (a, b) => a.name.localeCompare(b.name, 'ja');
+  const hitters = all.filter((p) => p.pa >= p.bf).sort((a, b) => b.pa - a.pa || byName(a, b));
+  const pitchers = all.filter((p) => p.bf > p.pa).sort((a, b) => b.bf - a.bf || byName(a, b));
+  const roles = new Set(spans.map((s) => s.role));
+  const hitterCount = roles.has('manager') || (roles.has('pitching') && roles.has('batting'))
+    ? PUPIL_COUNT - Math.min(2, pitchers.length)
+    : roles.has('pitching') ? 0 : PUPIL_COUNT;
+  return [...hitters.slice(0, hitterCount), ...pitchers]
+    .slice(0, PUPIL_COUNT)
+    .map((p) => {
+      const pitcher = p.bf > p.pa;
+      const line = pitcher
+        ? [
+            `${p.wins}勝`,
+            p.saves ? `${p.saves}S` : null,
+            p.holds ? `${p.holds}H` : null,
+            p.outs > 0 ? `防御率${((p.er * 27) / p.outs).toFixed(2)}` : null,
+          ]
+        : [p.ab > 0 ? `打率${rate3(p.hits / p.ab)}` : null, `${p.hr}本`];
+      return {
+        name: p.name,
+        years: p.years.size,
+        text: `${p.name}（${p.years.size}年・${line.filter(Boolean).join(' ')}）`,
+      };
+    });
+}
+
+/**
  * 指導者カード（画面の1人ぶん）。`full` なら考え方の目盛り・履歴まで。
  */
 export function coachCard(league, coach, labelOf, { full = true, roster = null } = {}) {
@@ -209,6 +311,8 @@ export function coachCard(league, coach, labelOf, { full = true, roster = null }
     // ⚠ 任せ度は監督の席にいる人だけ意味がある（コーチの間は使わない）
     delegation: job?.role === 'manager' ? delegationText(coach) : null,
     career: summary.text,
+    // 詳細能力（表示と人物像だけ。どこにも効かない。`coachAbilities`）
+    abilities: coachAbilities(coach),
   };
   if (!full) return card;
   return {
@@ -226,6 +330,9 @@ export function coachCard(league, coach, labelOf, { full = true, roster = null }
     playerLine: coach.origin?.line || null,
     mentor: mentor ? mentor.name : null,
     history: historyRows(coach, labelOf).slice(0, 12),
+    // これまでの指導チームと役職・主な指導選手（名前を押して開く人物の小窓）
+    stints: coachStints(coach, labelOf),
+    pupils: coachPupils(league, coach),
   };
 }
 
@@ -437,6 +544,8 @@ export function phasePlanBy(league, teamName, kind) {
  * （投手コーチは守りの型、野手コーチは攻めの型。コーチの間はその側だけが効く）
  */
 const brief = (coach, role = 'manager') => ({
+  // 名前を押すと人物の小窓（その球団の読み込みから、この id の人を探す）
+  id: coach.id,
   name: coach.name,
   // 紙面の呼び名（「山田監督」）
   shortName: shortName(coach),

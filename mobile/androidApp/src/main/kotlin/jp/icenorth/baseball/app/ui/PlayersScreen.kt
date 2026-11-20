@@ -77,14 +77,18 @@ import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
 
-private enum class PlayersMode(val label: String) { Season("今季"), Career("通算"), CareerRank("通算順"), Ranking("能力順"), Ages("チーム") }
+/**
+ * チーム分析の切り替え（PC の左メニュー「チーム分析」と同じ並び。先方要望 2026-11-20）。
+ * ⚠ 以前の「通算順」「能力順」（リーグ全体のランキング）は試合タブの「リーグ史」へ移した
+ */
+private enum class PlayersMode(val label: String) { Overview("能力"), Lineup("スタメン"), Defense("守備"), Season("今季"), Career("通算"), Ages("年齢") }
 
-/** 選手タブ: 選手成績・通算成績（球団を切り替えて同じ表）と、リーグ全体の能力ランキング */
+/** 選手タブ（チーム分析）: チーム能力値・スタメン・守備分析・選手成績・通算成績（球団を切り替えて同じ表）と年齢構成 */
 @Composable
 fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpenTrade: () -> Unit = {}) {
     val view = model.view ?: return
     val raw = model.raw ?: return
-    var mode by rememberSaveable { mutableStateOf(PlayersMode.Season) }
+    var mode by rememberSaveable { mutableStateOf(PlayersMode.Overview) }
     // 見ている球団はモデルに置く（試合タブの順位表から「この球団の選手成績」へ飛べるように）。
     // ⚠ 飛んできたときに「選手成績」の表を出すための合図は要らない。タブを移ると この画面は構成から外れ、
     //    mode は毎回「選手成績」から始まる（以前の合図 seenJump は、入った時点で合図と同じ値になり働いていなかった）
@@ -92,44 +96,51 @@ fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpen
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // ⚠ 絞り込みは2段にまとめる（以前は 表の種類／球団・打撃投球／項目 の3段で、表が画面の半ばから始まった）。
         //    1段目に表の種類と球団、2段目（TeamStats の中）に打撃・投球と項目
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-            ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
+        // ⚠ 切り替えが6つになったので、球団の選択と ⓘ を1段目、切り替えを2段目に分ける
+        //    （同じ行に置くと球団名の幅が無くなり、1字ずつ折り返して行が縦に伸びた）
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, start = 4.dp)) {
             Box(Modifier.weight(1f)) {
-                if (mode != PlayersMode.Ranking && mode != PlayersMode.CareerRank && mode != PlayersMode.Ages) TeamPicker(view, raw, team) { model.playersTeam = it }
+                // 年齢構成は自球団だけ（成長の見込みは他球団には分からない。PC と同じ）
+                if (mode != PlayersMode.Ages) TeamPicker(view, raw, team) { model.playersTeam = it }
+                else Text("自球団の年齢構成", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp))
             }
             InfoButton(
-                "選手",
+                "チーム分析",
                 // ⚠ 添え書きは常に出さず ⓘ に入れる（アプリは狭い。年齢の見込みの読み方もここ）
-                listOf("表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。", "色の付いた行は、スタメン・先発ローテの選手です。他球団は表の上にスタメンと投手陣も出します。ランキングでは自球団の選手に色が付きます。", "年齢: $AGE_OUTLOOK_NOTE"),
+                listOf(
+                    "能力: いまの起用の選手の能力の平均（チーム能力値）と今季のチーム成績。図は項目ごとにリーグの中の位置で、強さには効きません。",
+                    "表の見出しを押すと並べ替え、名前を押すと選手の詳細を開きます。",
+                    "色の付いた行は、スタメン・先発ローテの選手です。",
+                    "能力・通算のリーグ全体のランキングは、試合タブの「リーグ史」にあります。",
+                    "年齢: $AGE_OUTLOOK_NOTE",
+                ),
                 Modifier.padding(end = 8.dp),
             )
         }
+        ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
         when (mode) {
-            PlayersMode.Ranking -> AbilityRanking(model, view, raw)
-            PlayersMode.CareerRank -> CareerRanking(model, view, raw)
-            // 自球団のチーム診断と年齢構成・3年後の見込み（Web 版 TeamDiagnosis.jsx・AgeOutlook.jsx と同じ中身）
-            PlayersMode.Ages -> AgeOutlookPane(raw, onOpenPlan, onOpenTrade)
+            PlayersMode.Overview -> TeamOverviewPane(model, view, raw, team, onOpenPlan, onOpenTrade)
+            PlayersMode.Lineup -> TeamLineupPane(model, view, raw, team)
+            PlayersMode.Defense -> TeamDefensePane(model, view, raw, team)
+            // 自球団の年齢構成・3年後の見込み（Web 版 AgeOutlook.jsx と同じ中身）
+            PlayersMode.Ages -> AgeOutlookPane(raw)
             else -> TeamStats(model, view, raw, team, career = mode == PlayersMode.Career)
         }
     }
 }
 
 @Composable
-private fun AgeOutlookPane(raw: JsonObject, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
+internal fun AgeOutlookPane(raw: JsonObject) {
     val outlook = remember(raw) { ageOutlookOf(raw) }
-    val diagnosis = remember(raw) {
-        raw.at("diagnosis").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(TeamDiagnosis.serializer(), it) }.getOrNull() }
-    }
+    // ⚠ チーム診断は「能力」の切り替えへ移した（PC のチーム分析と同じ）
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
-        // 試合が少ないうち（10試合未満）は診断が無い。そのときは年齢構成だけ
-        if (diagnosis != null) item { DiagnosisCard(diagnosis, onOpenPlan, onOpenTrade) }
         item { AgeOutlookCard(outlook) }
     }
 }
 
 /** チーム診断「なぜ勝てない？」（Web 版 TeamDiagnosis.jsx と同じ並び。直す画面へのボタン付き） */
 @Composable
-private fun DiagnosisCard(d: TeamDiagnosis, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
+internal fun DiagnosisCard(d: TeamDiagnosis, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
     Section("チーム診断（${d.games}試合）") {
         Text(d.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         d.items.forEach { item ->
@@ -401,7 +412,7 @@ private fun FormerCareers(list: List<JsonObject>, batting: Boolean) {
  * ⚠ 方針・作戦はサーバーが載せない（人の球団の采配は出さない）
  */
 @Composable
-private fun TeamLineupCard(lineup: JsonObject, roster: List<JsonObject>, onPlayer: (JsonObject) -> Unit) {
+internal fun TeamLineupCard(lineup: JsonObject, roster: List<JsonObject>, onPlayer: (JsonObject) -> Unit) {
     var open by rememberSaveable { mutableStateOf(true) }
     val byId = remember(roster) { roster.associateBy { it.at("id").num()?.toLong() } }
     val order = lineup.at("battingOrder").list().mapNotNull { it.obj() }.sortedBy { it.at("battingOrder").int() ?: 0 }
@@ -450,7 +461,7 @@ private fun TeamLineupCard(lineup: JsonObject, roster: List<JsonObject>, onPlaye
  *    並べ替えはサーバー（`careerLeaders`）。退団した選手も残る（押しても詳細は開かない）
  */
 @Composable
-private fun CareerRanking(model: AppViewModel, view: LeagueView, raw: JsonObject) {
+internal fun CareerRanking(model: AppViewModel, view: LeagueView, raw: JsonObject) {
     val boards = raw.at("careerLeaders").list().mapNotNull { it.obj() }
     if (boards.isEmpty()) {
         Muted("まだ集計がありません。", Modifier.padding(16.dp))
@@ -497,7 +508,7 @@ private fun CareerRanking(model: AppViewModel, view: LeagueView, raw: JsonObject
 
 /** 能力ランキング（リーグ全球団の中の並び。球団ごとの表では作れない） */
 @Composable
-private fun AbilityRanking(model: AppViewModel, view: LeagueView, raw: JsonObject) {
+internal fun AbilityRanking(model: AppViewModel, view: LeagueView, raw: JsonObject) {
     val boards = raw.at("abilityLeaders").list().mapNotNull { it.obj() }
     if (boards.isEmpty()) {
         Muted("まだ集計がありません。", Modifier.padding(16.dp))

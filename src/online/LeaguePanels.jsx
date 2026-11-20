@@ -32,6 +32,7 @@ import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import TeamLineupButton from './TeamLineup.jsx';
 import { PageNav } from './PageNav.jsx';
 import { Page } from './Page.jsx';
+import { gamesBehind, gapText } from './standingsGap.js';
 import TryoutPlanner from './TryoutPlanner.jsx';
 import AgeOutlook from './AgeOutlook.jsx';
 import TryoutResult from './TryoutResult.jsx';
@@ -196,6 +197,8 @@ export function Standings({ view, action = null }) {
           (r) => view.teamStats?.[r.team]?.era ?? null,
           true,
         );
+        // すぐ上の順位の球団とのゲーム差（`standingsGap.js`）
+        const gaps = gamesBehind(rows);
         return (
         <table key={league?.id || 'all'} className="online-standings">
           {league && <caption>{league.name}</caption>}
@@ -206,6 +209,8 @@ export function Standings({ view, action = null }) {
               <th>敗</th>
               <th>分</th>
               <th>勝率</th>
+              {/* ゲーム差（すぐ上の球団との。先方要望 2026-11-20「勝率と打率の間に」） */}
+              <th title="すぐ上の順位の球団とのゲーム差">差</th>
               {/* ⚠ チーム打率・チーム防御率は**サーバーが選手成績から足し上げる**
                   （`teamSeasonStats`）。順位表は勝敗しか持っていない */}
               <th>打率</th>
@@ -284,6 +289,7 @@ export function Standings({ view, action = null }) {
                   >
                     {formatRate(s.winRate)}
                   </td>
+                  <td className="online-standings-gap">{gapText(gaps[i])}</td>
                   {/* ⚠ 打席・投球回が0なら「—」。開幕前は全球団がこれ */}
                   <td
                     className={
