@@ -60,13 +60,13 @@ function pickUniversityName(rank) {
  * @param rank 選手の帯（S〜E）。無ければ C とみなす
  * @returns `{ highSchool: {name, rank, pref}|null, universityName: string|null, careerHistory }`
  */
-export function assignPlayerOrigin(age, rank = 'C') {
+export function assignPlayerOrigin(age, rank = 'C', { university = true } = {}) {
   const school = assignHighSchool(rank) || null;
   const highSchool = school
     ? { name: school.name, rank: school.rank, pref: school.pref }
     : null;
   const universityName =
-    (age ?? 0) >= UNIVERSITY_MIN_AGE && Math.random() < UNIVERSITY_SHARE
+    university && (age ?? 0) >= UNIVERSITY_MIN_AGE && Math.random() < UNIVERSITY_SHARE
       ? pickUniversityName(rank)
       : null;
   // ⚠ 経歴は**古い順**に積む（画面は新しい順に並べ替えて出す。`PlayerDetailBody` の `CareerLine`）
@@ -80,9 +80,10 @@ export function assignPlayerOrigin(age, rank = 'C') {
 /**
  * 出身の無い選手に出身を付ける（既に分かっている選手は触らない）。
  * 初期セットの生成と、前からあるリーグの移行（`leagueMigration.js`）の両方で使う。
+ * @param options.university false なら高校だけ付ける（一人用の生成候補。`tryoutSystem.js` の注）
  * @returns 付けたら true
  */
-export function fillPlayerOrigin(player) {
+export function fillPlayerOrigin(player, { university = true } = {}) {
   if (!player) return false;
   const known =
     player.highSchool?.name ||
@@ -90,10 +91,15 @@ export function fillPlayerOrigin(player) {
     player.universityName ||
     player.universityTeamId;
   if (known) return false;
-  const origin = assignPlayerOrigin(player.age, player.rank);
+  const origin = assignPlayerOrigin(player.age, player.rank, { university });
   player.highSchool = origin.highSchool;
   if (origin.universityName) player.universityName = origin.universityName;
   // ⚠ 既にある経歴（入団・トレードなど）の**前**に置く（古い順に積む決まり）
-  player.careerHistory = [...origin.careerHistory, ...(player.careerHistory || [])];
+  // ⚠ 生成のときに積んである仮の「高校卒」は外す（付けた高校と2つ並び、経歴が
+  //    「〇〇高 → 高校卒 → …」になっていた。2026-11-20 監査）
+  player.careerHistory = [
+    ...origin.careerHistory,
+    ...(player.careerHistory || []).filter((h) => !(h?.type === 'highschool' && h.label === '高校卒')),
+  ];
   return true;
 }

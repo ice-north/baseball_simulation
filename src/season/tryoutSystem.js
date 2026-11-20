@@ -409,7 +409,16 @@ export function createCandidatePlayer(options) {
   //    ⚠ 出身は**別の種**で引く（選手の id と名前から）。外の乱数を1つでも引くと後ろの選手が
   //    全部入れ替わり、種と版から作り直す初期セット（`rosterPack.js`「古い作り方は変えない」）で
   //    選んだ後に待っている人の24人が別人になる（2026-11-20 監査）
-  withSeededRandom(hashSeed(`origin:${player.id}:${player.name}`), () => fillPlayerOrigin(player));
+  //    ⚠ 大学名を付けるのは**オンライン**（`rosterPack.js`）だけ。一人用の補充
+  //    （`generateRandomFillCandidates`）は `withUniversity: false` で高校だけ付ける。
+  //    一人用はこの候補から社会人・独立の初期名簿も作り（`corporateInit` の
+  //    `generateCorporateRoster`）、大学歴は後で `assignInitialUniversityBackgrounds` が
+  //    大卒率55%で付け直す。ここでも付けると大卒が5割→6.5割に増えてドラフトの
+  //    「大卒は24歳から」（`amateurRoute`）の対象が広がり、付け直した大学と経歴の大学が
+  //    食い違っていた（判断3。2026-11-20 監査）
+  withSeededRandom(hashSeed(`origin:${player.id}:${player.name}`), () =>
+    fillPlayerOrigin(player, { university: options.withUniversity !== false }),
+  );
 
   player.scoutComment = generateScoutComment(player);
   return player;
@@ -428,7 +437,8 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
     //    9割の年は1人も来ず、1割の年は全員が格上になる
     const rank = effectiveTryoutRank(independentLeagueRank);
     candidates.push(
-      createCandidatePlayer({ id: nextId(), position: positionBag[i - 1], rank }),
+      // ⚠ 一人用は高校だけ（大学歴は `assignInitialUniversityBackgrounds` などの一人用の仕組みが持つ）
+      createCandidatePlayer({ id: nextId(), position: positionBag[i - 1], rank, withUniversity: false }),
     );
   }
   return candidates;
