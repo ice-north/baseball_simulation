@@ -22,6 +22,7 @@ import {
 import { generateBats } from '../utils/handedness.js';
 import { reservePlayerIds } from '../state/playerIds.js';
 import { fillPlayerOrigin } from './playerOrigin.js';
+import { withSeededRandom, hashSeed } from '../game/rng.js';
 
 // 2年目以降トライアウトの1チームあたり基準受験者数
 // 構成比はリーグ注目度(developmentReputation)で変動する（下記 generateTryoutCandidates 参照）:
@@ -405,7 +406,10 @@ export function createCandidatePlayer(options) {
   //    してほしいです」。生成した選手は出身が空で、選手情報の「出身高校」も経歴も出ず、
   //    同窓・地元の縁（`src/online/hometown.js`）にも一度も引っかからなかった。
   //    ⚠ 在学中の印（`universityTeamId` / `universityYear`）は付けない（`playerOrigin.js` の注）
-  fillPlayerOrigin(player);
+  //    ⚠ 出身は**別の種**で引く（選手の id と名前から）。外の乱数を1つでも引くと後ろの選手が
+  //    全部入れ替わり、種と版から作り直す初期セット（`rosterPack.js`「古い作り方は変えない」）で
+  //    選んだ後に待っている人の24人が別人になる（2026-11-20 監査）
+  withSeededRandom(hashSeed(`origin:${player.id}:${player.name}`), () => fillPlayerOrigin(player));
 
   player.scoutComment = generateScoutComment(player);
   return player;
