@@ -401,6 +401,22 @@ export function naturalCoefOf(age, gpEff = 1.0, discipline = 50, peakAge = PEAK_
   return naturalAgeCoef((age || 25) - shift);
 }
 
+/**
+ * 年齢曲線でまだ伸びる**最後の年齢**（年度替わりの伸びがプラスになる最後の歳）。
+ * 素質と・プロ意識の曲線のずらし（`GP_AGE_SHIFT`・`DISC_AGE_SHIFT`）を入れた、主要な能力の平均（`PEAK_REF`）。
+ * 素質1.0・プロ意識50で31歳（32歳から衰える）。
+ * ⚠ 「3年後の見込み」（`ageOutlook.js`）と将来性の札（`potential.js` の `estimatePeakAge`）はこれを使う。
+ *    以前は別の式（素質1.0で25歳）を持っていて、ゲームでは伸びる28歳を「下り坂」と出していた
+ */
+export function naturalPeakAge(gpEff = 1.0, discipline = 50, peakAge = PEAK_REF) {
+  let last = 15;
+  for (let age = 15; age <= 60; age += 1) {
+    if (naturalCoefOf(age, gpEff, discipline, peakAge) > 0) last = age;
+    else break;
+  }
+  return last;
+}
+
 // 能力ごとの伸びやすさ（`STAT_GROWTH[].base`）を「平均1」に直すための基準。
 // ⚠ **指定の表が当たる条件**（独立リーグ・ランクC・レギュラー出場・プロ意識50）で
 //    主要な能力の平均が曲線の値どおりになるよう較正してある。`CATEGORY_GROWTH` の

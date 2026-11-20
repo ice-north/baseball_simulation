@@ -35,11 +35,14 @@ import assert from 'node:assert/strict';
 import {
   expectedNaturalGrowth,
   naturalAgeCoef,
+  naturalCoefOf,
   updateGrowthModifiers,
   applyCorporatePlayerGrowth,
   teamRankMult,
 } from '../../src/season/growthSystem.js';
 import { withSeededRandom, hashSeed } from '../../src/game/rng.js';
+import { estimatePeakAge } from '../../src/season/potential.js';
+import { outlookOf } from '../../src/online/ageOutlook.js';
 import { createCandidatePlayer } from '../../src/season/tryoutSystem.js';
 import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor } from '../../src/utils/naturalGrowth.js';
 
@@ -299,6 +302,29 @@ for (const age of [37, 38, 39, 40]) {
   const star = shownOf(fielder(40, 1.4, 70, DECLINE_BASE));
   assert.ok(star > -2.6, `素質1.4・意識70の40歳が${star.toFixed(2)}。素質が高い選手は長持ちすること`);
 }
+
+// --- 6.5 ピーク年齢の見込み（将来性の札・オンラインの「3年後の見込み」）は年齢曲線から ---
+// ⚠ 以前は別の式（素質1.0で25歳）で、ゲームでは伸びる28歳を「3年後は下り坂」と出していた
+for (const gp of [0.6, 1.0, 1.4]) {
+  for (const discipline of [20, 50, 90]) {
+    const peak = estimatePeakAge(gp, discipline);
+    assert.ok(
+      naturalCoefOf(peak, gp, discipline) > 0 && naturalCoefOf(peak + 1, gp, discipline) <= 0,
+      `ピーク年齢の見込み（素質${gp}・意識${discipline}で${peak}歳）が年齢曲線の伸びの終わりと合わない`,
+    );
+  }
+}
+assert.equal(estimatePeakAge(1.0, 50), 31, '素質1.0・意識50のピーク年齢は31歳（32歳から衰える）');
+assert.notEqual(
+  outlookOf({ age: 28, growthPotential: 1.0, personality: { discipline: 50 } }).kind,
+  'decline',
+  '28歳・素質1.0（31歳まで伸びる）が「3年後は下り坂」と出る',
+);
+assert.equal(
+  outlookOf({ age: 33, growthPotential: 1.0, personality: { discipline: 50 } }).kind,
+  'decline',
+  '33歳・素質1.0 が3年後に下り坂と出ない',
+);
 
 // --- 7. 表示の計算は選手を書き換えない（`peek`）・投手・見た目 ---
 for (const seed of [seedFielder, seedPitcher]) {
