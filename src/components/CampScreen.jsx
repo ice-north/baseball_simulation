@@ -988,7 +988,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <S k="position" w="w-9">ポジ</S>
                         <S k="age" w="w-9">年齢</S>
                         <S k="build" w="w-9" title="体格">体格</S>
-                        <S k="growth" w="w-10" title="成長率 (基礎+変動)">成長</S>
+                        <S k="growth" w="w-10" title="自然成長（能力1つあたり/年）">成長</S>
                         <S k="discipline" title="練習成長への乗算。高いほど練習が身につき、覚醒も起きやすい">プロ意識</S>
                         <S k="mental" w="w-8" title="チャンス・ピンチでの強さ">精神</S>
                         <th className="py-1.5 px-1 text-center w-14 whitespace-nowrap" title="この選手が今の方針をどう受け止めているか。希望と噛み合うと効率が上がる（正しい指示かどうかとは別）">意欲</th>
