@@ -13,7 +13,7 @@ import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 import { surnameOf } from '../data/playerNames.js';
 import { defenseRange, defenseGrade } from '../utils/defenseRange.js';
-import { naturalGrowthOf, naturalGrowthText } from '../utils/naturalGrowth.js';
+import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor } from '../utils/naturalGrowth.js';
 
 // 投球フォームの短縮ラベル（カードの省スペース表示用）
 const throwsLabel = (player) => (player.physical?.throws === 'left' ? '左投' : '右投');
@@ -653,12 +653,13 @@ export const LineupSettingContent = ({
     const avg = bs?.atBats > 0 ? (bs.hits / bs.atBats).toFixed(3) : '-';
     const obp = bs?.atBats > 0 ? ((bs.hits + (bs.walks || 0) + (bs.hitByPitch || 0)) / (bs.atBats + (bs.walks || 0) + (bs.hitByPitch || 0))).toFixed(3) : '-';
 
-    const StatBox = ({ label, value, isVelocity, isStamina, highlight }) => {
+    // `colorClass` は能力値でない数（自然成長）のため。能力のランクの色で塗ると全部「F」の灰色になる
+    const StatBox = ({ label, value, isVelocity, isStamina, highlight, colorClass }) => {
       const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value, false, isStamina);
       return (
         <div className={`text-center px-1 py-1 rounded ${highlight ? 'bg-gray-600/40' : ''}`}>
           <div className="text-xs text-gray-400">{label}</div>
-          <div className={`text-sm font-bold ${getRankColor(rank)}`}>{value}</div>
+          <div className={`text-sm font-bold ${colorClass || getRankColor(rank)}`}>{value}</div>
         </div>
       );
     };
@@ -821,7 +822,8 @@ export const LineupSettingContent = ({
                 {/* ⚠ 素質（`growthPotential`）そのままの「成長率 ×1.20」は年齢が入らず、
                     30代でも大きく出ていた。契約更改・キャンプ・選手情報と同じ
                     「来季の自然成長」に揃える（`src/utils/naturalGrowth.js`） */}
-                <StatBox label="自然成長" value={naturalGrowthText(naturalGrowthOf(player, team))} />
+                <StatBox label="自然成長" value={naturalGrowthText(naturalGrowthOf(player, team))}
+                  colorClass={naturalGrowthColor(naturalGrowthOf(player, team))} />
                 <StatBox label="プロ意識" value={player.personality?.discipline ?? 0} />
                 <StatBox label="精神力" value={player.personality?.mental ?? 0} />
                 {player.position === 'catcher' && <StatBox label="Cリード" value={player.catching?.lead ?? 0} />}
@@ -916,18 +918,20 @@ export const LineupSettingContent = ({
     const players = playerIds.map(id => team.players.find(p => p.id === id)).filter(Boolean);
     if (players.length < 2) return null;
 
-    const StatRow = ({ label, getValue, isVelocity }) => {
+    // `format` / `colorOf` は能力値でない数（自然成長）のため。能力のランクの色で塗ると全部「F」の灰色になる
+    const StatRow = ({ label, getValue, isVelocity, format, colorOf }) => {
       const values = players.map(pl => getValue(pl));
       const maxVal = Math.max(...values.filter(v => typeof v === 'number'));
       return (
         <tr className="border-b border-gray-700/20">
           <td className="py-1 px-2 text-xs text-gray-300 whitespace-nowrap">{label}</td>
           {values.map((val, i) => {
-            const rank = isVelocity ? getVelocityRank(val) : getAbilityRank(val);
+            const color = colorOf ? colorOf(val)
+              : getRankColor(isVelocity ? getVelocityRank(val) : getAbilityRank(val));
             const isBest = typeof val === 'number' && val === maxVal && values.filter(v => v === maxVal).length === 1;
             return (
-              <td key={i} className={`py-1 px-2 text-center text-sm font-bold ${getRankColor(rank)} ${isBest ? 'bg-green-900/20' : ''}`}>
-                {val}
+              <td key={i} className={`py-1 px-2 text-center text-sm font-bold ${color} ${isBest ? 'bg-green-900/20' : ''}`}>
+                {format ? format(val) : val}
               </td>
             );
           })}
@@ -977,7 +981,7 @@ export const LineupSettingContent = ({
                   <StatRow label="スタミナ" getValue={pl => pl.pitching?.stamina || 0} />
                 </>}
                 <tr><td colSpan={players.length + 1} className="py-1 px-2 text-xs text-purple-400 font-bold bg-gray-700/30">内面</td></tr>
-                <StatRow label="自然成長" getValue={pl => naturalGrowthOf(pl, team)} />
+                <StatRow label="自然成長" getValue={pl => naturalGrowthOf(pl, team)} format={naturalGrowthText} colorOf={naturalGrowthColor} />
                 <StatRow label="プロ意識" getValue={pl => pl.personality?.discipline ?? 0} />
                 <StatRow label="精神力" getValue={pl => pl.personality?.mental ?? 0} />
                 <StatRow label="経験" getValue={pl => pl.experience || 0} />
