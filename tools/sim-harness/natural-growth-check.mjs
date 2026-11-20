@@ -251,7 +251,7 @@ for (let age = 32; age <= 40; age += 1) {
     );
 }
 
-// --- 4. 素質（0歳の順序と、衰え始めの年齢） ---
+// --- 4. 素質（19歳の伸びの順序と、衰え始めの年齢） ---
 const crossOf = (gp, discipline = 50, modifier = 0) => {
   for (let age = 20; age <= 50; age += 1)
     if (shownOf(fielder(age, gp, discipline, DECLINE_BASE, 450, modifier)) < 0) return age;
