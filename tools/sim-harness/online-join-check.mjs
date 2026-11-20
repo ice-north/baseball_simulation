@@ -159,6 +159,8 @@ try {
     );
     // 既定の名前は「都市＋愛称」なので、分けた名前もそこから引ける
     assert.equal(labels.city, plainTeam.abbreviation, '既定の地域名が引けていない');
+    // ⚠ 地方は選んだときだけ。地名から引いて埋めると地元が地方全体に広がる（2026-11-20 監査）
+    assert.equal(labels.region, null, '地方を選んでいない球団に地方が付いている');
     assert.equal(
       `${labels.city}${labels.nickname}`,
       plainTeam.name,

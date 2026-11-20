@@ -187,6 +187,7 @@ import {
 import {
   assertMemberCount,
   assignmentOrder,
+  clearTeamSplitName,
 } from '../src/online/membership.js';
 import {
   nextFromPlan,
@@ -1060,7 +1061,12 @@ export function releaseMember(league, adminId, targetUserId, now) {
   loadLeagueWorld(league);
   league.members.splice(index, 1);
   const team = (league.teams || []).find((t) => t.name === member.teamName);
-  if (team) team.displayName = team.name;
+  if (team) {
+    team.displayName = team.name;
+    // ⚠ 分けた名前（地域名・チーム名・地方）も消す。表示名だけ戻すと略称・地元が前の人の
+    //    ままで、次に入った人に引き継がれていた（2026-11-20 監査）
+    clearTeamSplitName(team);
+  }
   if (league.phase) {
     delete league.phase.submissions?.[targetUserId];
     delete league.phase.camp?.[targetUserId];

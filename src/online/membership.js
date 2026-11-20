@@ -16,7 +16,7 @@ import { requireOnline } from './shared.js';
 import { cleanText, OWNER_COMMENT_MAX } from './social.js';
 import { PACK_STYLE } from './rosterPack.js';
 import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
-import { REGION_OPTIONS, regionOfCity } from './hometown.js';
+import { REGION_OPTIONS } from './hometown.js';
 
 /** 参加できる上限。球団数と同じ（全球団が人間でも成立する） */
 export const MAX_MEMBERS = PYRAMID_TEAM_COUNT; // 12（2部制）
@@ -153,14 +153,46 @@ export function assertTeamNameFree(league, team, shown) {
  * ⚠ 分けて持つのは**表示のため**だけ。内部名（`name`）は変えない。
  * ⚠ 付け替えていない球団は、既定の名前（`都市＋愛称`）を都市で切って分ける。
  */
-export const teamCityOf = (team) =>
-  team?.displayCity || team?.abbreviation || team?.city || '';
+export function teamCityOf(team) {
+  if (team?.displayCity) return team.displayCity;
+  const base = team?.abbreviation || team?.city || '';
+  // ⚠ 分けずに付け替えた古い球団（`displayCity` が無く、表示名が既定の都市で始まらない。
+  //    例「新潟」の枠を「美瑛ブルーレイクス」にした）は**地域名を空**にする。既定の都市を
+  //    入れると小窓が「新潟」「美瑛ブルーレイクス」で開き、地方だけ選んで保存すると
+  //    「新潟美瑛ブルーレイクス」になっていた（2026-11-20 監査）
+  const shown = team?.displayName;
+  if (shown && shown !== team?.name && base && !shown.startsWith(base)) return '';
+  return base;
+}
 /**
- * 球団の地方（12地区のid）。⚠ 選んでいなければ地名から引く（前からある球団は
- * 既定の119か所なので引ける）。地元の判定に使う（`hometown.js` の `prefsOfTeam`）
+ * 球団の地方（12地区のid）。⚠ **選んだものだけ**を返す（選んでいなければ null）。
+ * ⚠ 地名から地方を引いて埋めないこと。地方は地元を地方の県ぜんぶへ広げるので、
+ *    既定の球団まで地元が変わっていた（新潟→北信越6県、筑豊→九州8県。119か所のうち
+ *    103か所。2026-11-20 監査）。選んでいなければ地元は今までどおり地名から引く
+ *    （`teamHomeOf` → `hometown.js` の `prefsOfTeam`）。小窓の初めの値もこれ
  */
-export const teamRegionOf = (team) =>
-  team?.displayRegion || regionOfCity(teamCityOf(team)) || null;
+export const teamRegionOf = (team) => team?.displayRegion || null;
+/**
+ * 地元の判定に渡すもの（`hometown.js` の `prefsOfTeam` の引数）。
+ * ⚠ 地域名を分けて付けた球団はその地域名、付けていない球団は**球団の土地**（`city`）。
+ *    分けずに付け替えた古い球団も土地のまま（分ける前と同じ。表示の地域名
+ *    `teamCityOf` は空になることがあるので使わない）
+ */
+export const teamHomeOf = (team) => ({
+  city: team?.displayCity || team?.city || team?.abbreviation || '',
+  region: teamRegionOf(team),
+});
+/**
+ * 分けた名前（地域名・チーム名・地方）を消す。CPUに戻す・別の人が入る・古い送り方で
+ * 名前だけ付け替えるときに使う。⚠ 残すと正式名と略称・地元がずれ、CPUに戻した球団の
+ * 「美瑛」が次に入った人に引き継がれていた（2026-11-20 監査）
+ */
+export function clearTeamSplitName(team) {
+  if (!team) return;
+  delete team.displayCity;
+  delete team.displayNickname;
+  delete team.displayRegion;
+}
 export function teamNicknameOf(team) {
   if (team?.displayNickname) return team.displayNickname;
   const shown = team?.displayName || team?.name || '';
@@ -231,6 +263,19 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
   } else if (teamName !== undefined) {
     const shown = String(teamName || '').trim() || team.name;
     assertTeamNameFree(league, team, shown);
+    // ⚠ 古い送り方（アプリ・初めのセット選びの `TeamIdentity`）は名前を変えなくても
+    //    毎回 `teamName` を送ってくるので、**名前が変わったときだけ**分けた名前を直す。
+    //    残すと正式名だけ変わって略称・地域名・地元が前の名前のままになっていた
+    //    （2026-11-20 監査）。新しい名前がいまの地域名で始まるなら地域名と地方は残し、
+    //    チーム名だけ差し替える。始まらなければ3つとも消す（分けていない球団と同じ扱い）
+    if (shown !== (team.displayName || team.name)) {
+      const city = team.displayCity;
+      if (city && shown.startsWith(city) && shown.length > city.length) {
+        team.displayNickname = shown.slice(city.length);
+      } else {
+        clearTeamSplitName(team);
+      }
+    }
     team.displayName = shown;
     member.displayName = shown;
   }
@@ -286,6 +331,8 @@ export function applyJoin(league, { userId, label, teamName, now }) {
   const { team } = assertCanJoin(league, userId);
   const shown = String(teamName || '').trim() || team.name;
   assertTeamNameFree(league, team, shown);
+  // ⚠ 前のオーナーが分けて付けた名前（地域名・チーム名・地方）を引き継がない（2026-11-20 監査）
+  clearTeamSplitName(team);
   team.displayName = shown;
   // ⚠ **種の番号は参加の通し番号**（人数ではない）。球団をCPUに戻すと人数が減るので、
   //    人数で数えると次に入った人が残っている人と同じ種になり、同じidの選手ができる

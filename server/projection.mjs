@@ -33,7 +33,7 @@ import { ownerRecords } from './ownerRecords.mjs';
 import { seasonReview } from './seasonReview.mjs';
 import { strategyStats } from '../src/online/strategyStats.js';
 import { tiesArticles } from '../src/online/hometown.js';
-import { teamCityOf, teamDisplayOf, teamRegionOf } from '../src/online/membership.js';
+import { teamDisplayOf, teamHomeOf } from '../src/online/membership.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -404,9 +404,9 @@ const pendingPackAuto = (phase, member) =>
 function tiesFor(l, teamName, team, teamLabels) {
   // ⚠ **地元は選んだ地方で引く**（いしだ 2026-11-20「北海道や東北、関東、信越など、
   //    最初に選んでから地域名を打つのはどうですか？」）。選んでいなければ地名から引く
+  // ⚠ 地名から地方を引いて渡さないこと（既定の球団の地元が地方全体に広がっていた。2026-11-20 監査）
   const own = (l.teams || []).find((t) => t.name === teamName);
-  const city = teamCityOf(own);
-  const region = teamRegionOf(own);
+  const { city, region } = teamHomeOf(own);
   const next = ownUpcomingGames(l.season?.schedule || [], teamName, 1)[0];
   const oppName = next ? (next.home === teamName ? next.away : next.home) : null;
   const short = (name) => teamLabels[name]?.short || name;
