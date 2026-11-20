@@ -31,8 +31,13 @@ import {
 } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
-import { applyJoin, applyProfile, nextMemberIndex, teamCityOf, teamNicknameOf, teamDisplayOf } from '../../src/online/membership.js';
-import { CITY_PREFS } from '../../src/online/hometown.js';
+import { applyJoin, applyProfile, nextMemberIndex, teamCityOf, teamNicknameOf, teamDisplayOf, teamRegionOf } from '../../src/online/membership.js';
+import {
+  CITY_PREFS,
+  prefsOfCity,
+  prefsOfTeam,
+  localPlayersIn,
+} from '../../src/online/hometown.js';
 import {
   pruneDepartedPicks,
   starterAvoidedText,
@@ -358,6 +363,29 @@ import {
     // 長すぎる名前は断る
     assert.throws(() => applyProfile(l, { userId: 'a', cityName: '１２３４５６７８９' }), /地域名/);
     assert.throws(() => applyProfile(l, { userId: 'a', nickname: 'あ'.repeat(17) }), /チーム名/);
+    // ⚠ **地方を選べば、地域名が何であっても地元が付く**（いしだ 2026-11-20「北海道や東北、
+    //    関東、信越など、最初に選んでから地域名を打つのはどうですか？」）
+    {
+      applyProfile(l, { userId: 'a', cityName: '美瑛', nickname: 'ブルーレイクス', region: 'hokkaido' });
+      assert.equal(l.teams[0].displayRegion, 'hokkaido', '地方を残していない');
+      assert.equal(teamRegionOf(l.teams[0]), 'hokkaido');
+      // 表に無い地名でも、地方の県ぜんぶが地元になる
+      assert.deepEqual(prefsOfCity('美瑛'), [], '前提: 美瑛は地名の表に無い');
+      assert.deepEqual(prefsOfTeam({ region: 'hokkaido', city: '美瑛' }), ['北海道']);
+      assert.equal(
+        localPlayersIn(prefsOfTeam({ region: 'hokkaido', city: '美瑛' }), [
+          { id: 1, name: '道産子', highSchool: { name: '旭川北', pref: '北海道' } },
+          { id: 2, name: 'よそ者', highSchool: { name: '大阪北', pref: '大阪' } },
+        ]).length,
+        1,
+        '地方を選んでも地元出身を拾えない',
+      );
+      // 地方を選んでいない球団は、今までどおり地名から引く
+      assert.deepEqual(prefsOfTeam({ city: '旭川' }), ['北海道'], '地名から引けなくなっている');
+      // 知らない地方は断る
+      assert.throws(() => applyProfile(l, { userId: 'a', region: 'まだ無い地方' }), /地方/);
+    }
+
     // 古い画面（`teamName` だけ送る）も今までどおり通る
     applyProfile(l, { userId: 'a', teamName: '昔ながらの名前' });
     assert.equal(l.teams[0].displayName, '昔ながらの名前', '古い送り方が効かなくなっている');

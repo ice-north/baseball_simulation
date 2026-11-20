@@ -3,9 +3,12 @@
 // 選手の出身（高校の県・高校・大学）から「地元出身」「同窓対決」を見つける。
 //
 // ⚠ 先方回答（2026-11-16）「余裕があれば」C3。**飾り**（能力・試合に効かない）。
-// ⚠ 出身が分かるのは、高校・大学から入った選手だけ（最初の24人には出身が無い）。
+// ⚠ 出身は初期メンバーにも付くようになった（2026-11-20。`playerOrigin.js`）。
 // ⚠ 地域の名前（湘南・瀬戸内など）は県をまたぐことがあるので、県は配列で持つ。
 // ============================================================
+
+import { REGIONS } from '../corporate/corporateTeamsData.js';
+import { PREF_BLOCK } from '../data/regions.js';
 
 /** 球団の土地 → 都道府県（`pyramidLeague.js` の CITIES と同じ並び） */
 export const CITY_PREFS = {
@@ -38,14 +41,50 @@ export const CITY_PREFS = {
 /**
  * 地元として**判定できる地名**（`CITY_PREFS` の鍵。`pyramidLeague.js` の CITIES と同じ119か所）。
  * ⚠ いしだ 2026-11-20「地域名は、どこでも地元にできるのですか？判定できるの？」。
- *    できない。表に無い地名（自分で付けた「美瑛」など）は県が引けないので、
- *    地元出身の記事は出ない。名前を変える小窓はこの一覧を候補に出し、
- *    引けるかどうかをその場で知らせる（`DesktopView.jsx` の `RenameDialog`）。
+ *    地名だけでは表に載っている119か所しか判定できない（自分で付けた「美瑛」は引けない）。
+ *    そこで**地方を先に選ぶ**形にした（いしだ案「北海道や東北、関東、信越など、最初に
+ *    選んでから地域名を打つのはどうですか？」）。地方を選べば地域名は自由に書ける。
  */
 export const KNOWN_CITIES = Object.keys(CITY_PREFS);
 
 /** その地名の都道府県（複数のことがある）。判定できなければ空の配列 */
 export const prefsOfCity = (city) => CITY_PREFS[String(city || '').trim()] || [];
+
+/**
+ * 選べる地方（12地区）。⚠ **新しい区分を作らないこと**（`src/data/regions.js` の注）。
+ *    社会人チームの `region`・大学リーグ・高校の県を突き合わせている区分そのものを使う。
+ */
+export const REGION_OPTIONS = REGIONS.map((r) => ({ id: r.id, name: r.name }));
+
+/** 地方 → 都道府県（`PREF_BLOCK` の裏返し） */
+const REGION_PREFS = REGION_OPTIONS.reduce((out, r) => {
+  out[r.id] = Object.entries(PREF_BLOCK)
+    .filter(([, block]) => block === r.id)
+    .map(([pref]) => pref);
+  return out;
+}, {});
+
+/** その地方の都道府県。知らない地方なら空の配列 */
+export const prefsOfRegion = (region) => REGION_PREFS[String(region || '')] || [];
+
+/** その地名が属する地方（候補から選んだときに地方を埋めるため）。分からなければ null */
+export const regionOfCity = (city) => {
+  const pref = prefsOfCity(city)[0];
+  return pref ? PREF_BLOCK[pref] || null : null;
+};
+
+/** 地方の名前（「東北」）。知らなければ空 */
+export const regionName = (region) =>
+  REGION_OPTIONS.find((r) => r.id === region)?.name || '';
+
+/**
+ * 球団の地元の都道府県。**地方を選んでいればそれが正本**で、選んでいなければ地名から引く
+ * （前からある球団は地名が既定の119か所なので引ける）。
+ */
+export const prefsOfTeam = ({ region, city } = {}) =>
+  (region ? prefsOfRegion(region) : null)?.length
+    ? prefsOfRegion(region)
+    : prefsOfCity(city);
 
 /** 選手の出身（世界の選手。高校 `{ name, pref }`・大学の名前） */
 const schoolOf = (p) => p?.highSchool?.name || null;
@@ -54,8 +93,12 @@ const prefOf = (p) => p?.highSchool?.pref || null;
 
 /** 球団の地元出身（高校の県が球団の土地の県）。`{ id, name, pref, school }` */
 export function localPlayers(city, players) {
-  const prefs = CITY_PREFS[city] || [];
-  if (!prefs.length) return [];
+  return localPlayersIn(CITY_PREFS[city] || [], players);
+}
+
+/** 地元出身（県の一覧を直に渡す形。地方を選んだ球団はこちら） */
+export function localPlayersIn(prefs, players) {
+  if (!prefs?.length) return [];
   return (players || [])
     .filter((p) => p.isActive !== false && prefs.includes(prefOf(p)))
     .map((p) => ({ id: p.id, name: p.name, pref: prefOf(p), school: schoolOf(p) }));
@@ -81,9 +124,10 @@ export function alumniPairs(ours, theirs) {
  * 地元紙に載せる「縁」の記事（自球団と次の相手）。文はサーバーで作り、アプリはそのまま載せる。
  * @returns {{ kicker: string, title: string, body: string }[]}
  */
-export function tiesArticles({ city, short, players, opponent }) {
+export function tiesArticles({ city, region, short, players, opponent }) {
   const out = [];
-  const local = localPlayers(city, players);
+  // ⚠ 地方を選んでいればその県ぜんぶが地元（いしだ 2026-11-20）。選んでいなければ地名から引く
+  const local = localPlayersIn(prefsOfTeam({ region, city }), players);
   if (local.length) {
     const top = local.slice(0, 3);
     out.push({

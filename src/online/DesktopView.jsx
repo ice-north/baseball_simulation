@@ -33,7 +33,13 @@ import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
 import { teamLabel } from './gameText.js';
-import { KNOWN_CITIES, prefsOfCity } from './hometown.js';
+import {
+  KNOWN_CITIES,
+  REGION_OPTIONS,
+  prefsOfTeam,
+  regionOfCity,
+  regionName,
+} from './hometown.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { formatDeadline, packStartText } from './LeaguePanels.jsx';
 import { CompactRoster } from './PlayerPerformance.jsx';
@@ -239,6 +245,9 @@ export function RenameDialog({ view, busy, run, command, close }) {
   const labels = view.teamLabels?.[view.teamName] || {};
   const [city, setCity] = useState(() => labels.city || '');
   const [nickname, setNickname] = useState(() => labels.nickname || '');
+  // ⚠ **地方を先に選ぶ**（いしだ 2026-11-20「北海道や東北、関東、信越など、最初に選んで
+  //    から地域名を打つのはどうですか？」）。選べば地域名は自由に書けて、地元も付く
+  const [region, setRegion] = useState(() => labels.region || '');
   const teamName = `${city}${nickname}`.trim();
   const [playerName, setPlayerName] = useState(() => me?.label || '');
   // オーナーのひとこと（順位表・球団の画面・紙面に出す）
@@ -279,6 +288,7 @@ export function RenameDialog({ view, busy, run, command, close }) {
             command('profile', {
               cityName: city.trim(),
               nickname: nickname.trim(),
+              region,
               playerName: playerName.trim(),
               comment: comment.trim(),
             }),
@@ -288,19 +298,46 @@ export function RenameDialog({ view, busy, run, command, close }) {
         }}
       >
         <label>
+          地方
+          {/* ⚠ 地元はここで決まる。選ばなければ地域名から引く（既定の119か所だけ引ける） */}
+          <select
+            value={region}
+            disabled={busy}
+            onChange={(e) => setRegion(e.target.value)}
+          >
+            {/* ⚠ この文に「地域名」と書かない。`<option>` の字は `<label>` の中なので、
+                下の「地域名」の欄と名前がぶつかる（検査が欄を引けなくなった） */}
+            <option value="">選ばない（地名から判定）</option>
+            {REGION_OPTIONS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           地域名
-          {/* ⚠ **知っている地名は候補に出す**（いしだ 2026-11-20「地域名は、どこでも
-              地元にできるのですか？」）。地元を判定できるのはこの119か所だけ。
-              自由に書いてもよいが、そのときは地元が付かないことを下の行で知らせる */}
+          {/* ⚠ 候補は**選んだ地方の地名**に絞る（地方を選んでいなければ全部）。
+              自由に書いてもよく、そのときも地方を選んでいれば地元は付く */}
           <input
             list="online-city-options"
             value={city}
             maxLength={8}
             disabled={busy}
-            onChange={(e) => setCity(e.target.value)}
+            onChange={(e) => {
+              setCity(e.target.value);
+              // 知っている地名を入れたら、地方が未選択ならそこから埋める
+              if (!region) {
+                const found = regionOfCity(e.target.value);
+                if (found) setRegion(found);
+              }
+            }}
           />
           <datalist id="online-city-options">
-            {KNOWN_CITIES.map((name) => (
+            {(region
+              ? KNOWN_CITIES.filter((name) => regionOfCity(name) === region)
+              : KNOWN_CITIES
+            ).map((name) => (
               <option key={name} value={name} />
             ))}
           </datalist>
@@ -319,11 +356,13 @@ export function RenameDialog({ view, busy, run, command, close }) {
           球団名は「{teamName || '（未入力）'}」、狭い欄では「{city || teamName || '（未入力）'}」と出ます。
           {/* ⚠ 地元を判定できるかを**その場で**出す。できない地名のときに黙っていると、
               「チーム名を変えても地元が変わらない」と見える */}
-          {prefsOfCity(city).length
-            ? `地元は${prefsOfCity(city).join('・')}として扱います（地元出身の選手が紙面に出ます）。`
+          {prefsOfTeam({ region, city }).length
+            ? `地元は${regionName(region) || prefsOfTeam({ region, city }).join('・')}（${prefsOfTeam(
+                { region, city },
+              ).join('・')}）として扱います。`
             : city
-              ? 'この地域名は地元を判定できません（地元出身の記事は出ません）。候補から選ぶと付きます。'
-              : '地域名は地元紙の「地元出身」にも使います。'}
+              ? 'このままでは地元を判定できません（地元出身の記事は出ません）。地方を選ぶと付きます。'
+              : '地方を選ぶと、地元出身の選手が地元紙に出ます。'}
         </p>
         <label>
           あなたの名前

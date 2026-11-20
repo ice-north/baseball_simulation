@@ -16,6 +16,7 @@ import { requireOnline } from './shared.js';
 import { cleanText, OWNER_COMMENT_MAX } from './social.js';
 import { PACK_STYLE } from './rosterPack.js';
 import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
+import { REGION_OPTIONS, regionOfCity } from './hometown.js';
 
 /** 参加できる上限。球団数と同じ（全球団が人間でも成立する） */
 export const MAX_MEMBERS = PYRAMID_TEAM_COUNT; // 12（2部制）
@@ -154,6 +155,12 @@ export function assertTeamNameFree(league, team, shown) {
  */
 export const teamCityOf = (team) =>
   team?.displayCity || team?.abbreviation || team?.city || '';
+/**
+ * 球団の地方（12地区のid）。⚠ 選んでいなければ地名から引く（前からある球団は
+ * 既定の119か所なので引ける）。地元の判定に使う（`hometown.js` の `prefsOfTeam`）
+ */
+export const teamRegionOf = (team) =>
+  team?.displayRegion || regionOfCity(teamCityOf(team)) || null;
 export function teamNicknameOf(team) {
   if (team?.displayNickname) return team.displayNickname;
   const shown = team?.displayName || team?.name || '';
@@ -177,6 +184,7 @@ export const teamDisplayOf = (team) => ({
       : team?.abbreviation || team?.name),
   city: teamCityOf(team),
   nickname: teamNicknameOf(team),
+  region: teamRegionOf(team),
 });
 
 /**
@@ -187,7 +195,7 @@ export const teamDisplayOf = (team) => ({
  *    球団名が2回出ていた（参加時の呼び名が既定で球団名だったため）。
  * ⚠ 内部名（`name`）は変えない。記録の選手キーまで貫いている。
  */
-export function applyProfile(league, { userId, teamName, cityName, nickname, playerName, comment, now = null }) {
+export function applyProfile(league, { userId, teamName, cityName, nickname, region, playerName, comment, now = null }) {
   requireOnline(league, 'リーグがまだありません', 409);
   const member = (league.members || []).find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
@@ -198,11 +206,22 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, pla
   //    地域名は地元（`hometown.js` の県の表）も引くので、変えれば地元も変わる。
   // ⚠ 古い画面・アプリは `teamName` だけを送ってくる。そのときは今までどおり
   //    表示名だけを差し替える（分けた名前は触らない）
-  if (cityName !== undefined || nickname !== undefined) {
+  if (cityName !== undefined || nickname !== undefined || region !== undefined) {
     const city = String(cityName ?? teamCityOf(team) ?? '').trim();
     const nick = String(nickname ?? teamNicknameOf(team) ?? '').trim();
     requireOnline(city.length <= 8, '地域名は8字までです', 400);
     requireOnline(nick.length <= 16, 'チーム名は16字までです', 400);
+    // ⚠ **地方は先に選ぶ**（いしだ 2026-11-20）。選べば地域名は自由に書けて、地元も付く。
+    //    知らないidは断る（画面の一覧＝`REGION_OPTIONS` 以外は入れない）
+    if (region !== undefined) {
+      const picked = String(region || '').trim();
+      requireOnline(
+        !picked || REGION_OPTIONS.some((r) => r.id === picked),
+        'その地方は選べません',
+        400,
+      );
+      team.displayRegion = picked || undefined;
+    }
     const shown = `${city}${nick}`.trim() || team.name;
     assertTeamNameFree(league, team, shown);
     team.displayCity = city || undefined;
@@ -236,6 +255,7 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, pla
     displayName: team.displayName,
     city: teamCityOf(team),
     nickname: teamNicknameOf(team),
+    region: teamRegionOf(team),
     label: member.label,
     comment: member.comment?.text || '',
   };

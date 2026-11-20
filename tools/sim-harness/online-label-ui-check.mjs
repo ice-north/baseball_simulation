@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
-import { KNOWN_CITIES } from '../../src/online/hometown.js';
+import { KNOWN_CITIES, regionOfCity } from '../../src/online/hometown.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -454,22 +454,39 @@ try {
       preview.includes('美瑛ブルーレイクス') && preview.includes('「美瑛」'),
       `出来上がりと略称が出ていない: ${preview}`,
     );
-    // ⚠ **地元を判定できない地名はそう言う**（いしだ 2026-11-20「地域名は、どこでも
+    // ⚠ **地元を判定できないならそう言う**（いしだ 2026-11-20「地域名は、どこでも
     //    地元にできるのですか？判定できるの？」）。「美瑛」は知っている119か所に無い
     assert.ok(
       preview.includes('地元を判定できません'),
       `判定できない地域名で黙っている: ${preview}`,
     );
-    // 知っている地名なら県を出す
-    await cityBox.fill('旭川');
-    const known = await rename.locator('.online-rename-preview').innerText();
-    assert.ok(known.includes('北海道'), `知っている地名で地元を出していない: ${known}`);
-    // 候補の一覧（知っている地名）を添える
+    // ⚠ **地方を先に選べば、地域名が何であっても地元が付く**（いしだ 2026-11-20
+    //    「北海道や東北、関東、信越など、最初に選んでから地域名を打つのはどうですか？」）
+    const regionBox = rename.getByLabel('地方');
+    await regionBox.selectOption('hokkaido');
+    const withRegion = await rename.locator('.online-rename-preview').innerText();
+    assert.ok(
+      withRegion.includes('北海道') && !withRegion.includes('判定できません'),
+      `地方を選んでも地元が付かない: ${withRegion}`,
+    );
+    // 候補は選んだ地方の地名だけに絞る
+    const hokkaidoCount = KNOWN_CITIES.filter((name) => regionOfCity(name) === 'hokkaido').length;
+    assert.ok(hokkaidoCount > 0 && hokkaidoCount < KNOWN_CITIES.length, '前提: 地方で絞れない');
+    assert.equal(
+      await rename.locator('#online-city-options option').count(),
+      hokkaidoCount,
+      '地域名の候補を選んだ地方で絞っていない',
+    );
+    // 地方を選ばなければ全部の候補
+    await regionBox.selectOption('');
     assert.equal(
       await rename.locator('#online-city-options option').count(),
       KNOWN_CITIES.length,
-      '地域名の候補の数が表と違う',
+      '地方を選ばないときの候補の数が表と違う',
     );
+    // 知っている地名を入れると地方が埋まる
+    await cityBox.fill('旭川');
+    assert.equal(await regionBox.inputValue(), 'hokkaido', '知っている地名で地方が埋まらない');
     await cityBox.fill('美瑛');
   }
   await rename.getByRole('button', { name: '閉じる', exact: true }).click();

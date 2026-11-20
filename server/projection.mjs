@@ -32,7 +32,7 @@ import { ownerRecords } from './ownerRecords.mjs';
 import { seasonReview } from './seasonReview.mjs';
 import { strategyStats } from '../src/online/strategyStats.js';
 import { tiesArticles } from '../src/online/hometown.js';
-import { teamCityOf, teamDisplayOf } from '../src/online/membership.js';
+import { teamCityOf, teamDisplayOf, teamRegionOf } from '../src/online/membership.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -396,14 +396,17 @@ const pendingPackAuto = (phase, member) =>
   !!phase && !!member.packSeed && phase.kind !== 'pack_select';
 /** 地元紙の「縁」の記事（地元出身・次の相手との同窓対決） */
 function tiesFor(l, teamName, team, teamLabels) {
-  // ⚠ **地元は付けた地域名で引く**（いしだ 2026-11-20「チーム名を変えても、地元が
-  //    変わりません」）。付けていなければ既定の都市
-  const city = teamCityOf((l.teams || []).find((t) => t.name === teamName));
+  // ⚠ **地元は選んだ地方で引く**（いしだ 2026-11-20「北海道や東北、関東、信越など、
+  //    最初に選んでから地域名を打つのはどうですか？」）。選んでいなければ地名から引く
+  const own = (l.teams || []).find((t) => t.name === teamName);
+  const city = teamCityOf(own);
+  const region = teamRegionOf(own);
   const next = ownUpcomingGames(l.season?.schedule || [], teamName, 1)[0];
   const oppName = next ? (next.home === teamName ? next.away : next.home) : null;
   const short = (name) => teamLabels[name]?.short || name;
   return tiesArticles({
     city,
+    region,
     short: short(teamName),
     players: team?.players || [],
     opponent: oppName ? { short: short(oppName), players: l.game?.teams?.[oppName]?.players || [] } : null,

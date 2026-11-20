@@ -598,6 +598,7 @@ export class LeagueService {
             teamName: command.payload?.teamName,
             cityName: command.payload?.cityName,
             nickname: command.payload?.nickname,
+            region: command.payload?.region,
             playerName: command.payload?.playerName,
             comment: command.payload?.comment,
             now,
