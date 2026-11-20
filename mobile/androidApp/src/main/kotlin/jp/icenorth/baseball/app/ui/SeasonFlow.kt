@@ -15,10 +15,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -28,15 +24,18 @@ import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.SEASON_STEPS
 import jp.icenorth.baseball.shared.at
-import jp.icenorth.baseball.shared.campGainRows
-import jp.icenorth.baseball.shared.campGainTotals
-import jp.icenorth.baseball.shared.formatGain
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.obj
-import jp.icenorth.baseball.shared.offseasonGains
 import jp.icenorth.baseball.shared.positionLabel
+import jp.icenorth.baseball.shared.draftRankText
+import jp.icenorth.baseball.shared.isYearSummaryTime
+import jp.icenorth.baseball.shared.proDraftLead
+import jp.icenorth.baseball.shared.proDraftOfYear
+import jp.icenorth.baseball.shared.proDraftReward
+import jp.icenorth.baseball.shared.yearSummaryMoveText
+import jp.icenorth.baseball.shared.yearSummaryRankText
 import jp.icenorth.baseball.shared.stageHead
 import jp.icenorth.baseball.shared.stageInfo
 import jp.icenorth.baseball.shared.str
@@ -44,9 +43,10 @@ import jp.icenorth.baseball.shared.teamLabel
 import kotlinx.serialization.json.JsonObject
 
 // ============================================================
-// 1年の流れの帯と、オフの成長（Web 版の `SeasonFlow.jsx` と同じ。Web はオフの成長を
-// 2026-11-18 にやめて「その年のまとめ」（`YearSummary.jsx`・ビューの `yearSummary`）に替えた。
-// アプリはまだオフの成長のまま。移すときは `OffseasonGrowthCard` を消して `yearSummary` を描く）。
+// 1年の流れの帯と、その年のまとめ・NPBドラフトの発表・トライアウトの結果
+// （Web 版の `SeasonFlow.jsx`・`YearSummary.jsx`・`ProDraftResult.jsx`・`TryoutResult.jsx` と同じ）。
+// ⚠ オフの成長（`lastOffseason` の能力の差）は 2026-11-20 にやめた（Web は 11-18。いしだ「キャンプの結果や
+//    オフの成長は要りません」）。`lastOffseason` の `year`・`departed` は通知がまだ読む。
 //
 // ⚠ いしだ指摘: シーズン後の流れ・いまの段階・何をすればいいか、成長がいつどれだけ
 //    起きたのかが分からない。段階はサーバーが決める（`view.stage`）。
@@ -93,39 +93,65 @@ fun SeasonFlowCard(raw: JsonObject?) {
     }
 }
 
-/** 年度更新で起きた伸び・衰え・引退（`view.lastOffseason`） */
+/**
+ * その年のまとめ（順位・入退団・主なトピック）。Web 版 `YearSummary.jsx` と同じ。
+ * ⚠ いしだ 2026-11-18「キャンプの結果やオフの成長は要りません。その年の順位、入退団の選手、
+ *    主なトピックに止めて下さい」。以前はここにオフの成長（`lastOffseason` の能力の差）を出していた。
+ * ⚠ 出すのは年度更新から開幕した月の終わりまで（`isYearSummaryTime`。サーバーも時期の外は載せない）。
+ */
 @Composable
-fun OffseasonGrowthCard(model: AppViewModel, raw: JsonObject?) {
-    if (raw == null) return
-    val result = raw["lastOffseason"].obj() ?: return
-    val roster = raw.at("roster").list().mapNotNull { it.obj() }
-    val gains = offseasonGains(result, roster)
-    val rows = campGainRows(gains, roster).filter { it.items.isNotEmpty() }
-    val totals = campGainTotals(gains)
-    var all by rememberSaveable { mutableStateOf(false) }
-    Section(
-        "${result.at("year").int() ?: ""}年目オフの成長（年度更新）",
-        trailing = { InfoButton("年度更新の成長", listOf("能力が変わるのはキャンプと年度更新だけです（シーズン中は変わりません）。", "年度更新では、年齢と今季の出場に応じて伸びたり衰えたりします。")) },
-    ) {
-        if (rows.isEmpty()) {
-            Muted("変わった能力はありません。")
-        } else {
-            Text("${rows.count { it.sum > 0 }}人が伸び、${rows.count { it.sum < 0 }}人が衰えました", fontWeight = FontWeight.Bold)
-            Muted("伸び: " + totals.filter { it.diff > 0 }.take(5).joinToString(" · ") { "${it.label}${formatGain(it.diff)}" })
-            (if (all) rows else rows.take(8)).forEach { row ->
-                Column(Modifier.fillMaxWidth().clickable { model.openPlayer = row.player }.padding(vertical = 4.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(row.player.at("name").str().orEmpty(), fontWeight = FontWeight.SemiBold)
-                        Muted("${positionLabel(row.player.at("position").str().orEmpty())} · ${row.player.at("age").int() ?: ""}歳")
-                    }
-                    GainLine(null, row.items)
-                }
+fun YearSummaryCard(model: AppViewModel) {
+    val view = model.view ?: return
+    val s = view.yearSummary ?: return
+    if (!isYearSummaryTime(s.year, view.year, view.currentDate?.month)) return
+    Section("${s.year}年目のまとめ", modifier = Modifier.testTag("year-summary")) {
+        yearSummaryRankText(s)?.let { Text(it, fontWeight = FontWeight.Bold) }
+        // ① 順位（自分の部だけ。自球団を太字）
+        Caption("順位")
+        s.standings.forEach { r ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val weight = if (r.mine) FontWeight.Bold else FontWeight.Normal
+                Text("${r.rank}", fontWeight = weight)
+                Text(r.label, fontWeight = weight, modifier = Modifier.weight(1f))
+                Text("${r.wins}勝${r.losses}敗${if (r.draws > 0) "${r.draws}分" else ""}", fontWeight = weight)
             }
-            if (rows.size > 8) TextButton(onClick = { all = !all }) { Text(if (all) "上位8人だけ" else "全員（${rows.size}人）を見る") }
         }
-        val departed = result.at("departed").list().mapNotNull { it.obj() }
-        if (departed.isNotEmpty())
-            Muted("引退: " + departed.joinToString("、") { "${it.at("name").str()}（${it.at("age").int()}歳・${positionLabel(it.at("position").str().orEmpty())}）" })
+        // ② 入退団
+        Caption("入退団（入団${s.joined.size}人・退団${s.left.size}人）")
+        if (s.joined.isEmpty() && s.left.isEmpty()) Muted("この年の入退団はありません。")
+        (s.joined + s.left).forEach { Text(yearSummaryMoveText(it), fontSize = 13.sp) }
+        // ③ 主なトピック
+        Caption("主なトピック")
+        if (s.topics.isEmpty()) Muted("この年に残った話題はありません。")
+        s.topics.forEach { Text("・$it", fontSize = 13.sp) }
+    }
+}
+
+/**
+ * その年のNPBドラフトの発表（指名から年度更新まで）。Web 版 `ProDraftResult.jsx` と同じ。
+ * ⚠ 中身はビューの `chronicle.proDrafted` のその年の行（保存もビューも足していない）。
+ * ⚠ `whenEmpty` のところ（契約更改の手続き）だけ「指名なし」も出す。ホームでは出さない。
+ */
+@Composable
+fun ProDraftCard(model: AppViewModel, whenEmpty: Boolean = false) {
+    val view = model.view ?: return
+    val rows = proDraftOfYear(view.chronicle, view.year)
+    if (rows.isEmpty() && !whenEmpty) return
+    val myLabel = view.teamName?.let { view.teamLabel(it) }.orEmpty()
+    val mine = rows.count { it.team == view.teamName }
+    Section("${view.year ?: ""}年目のNPBドラフト（10月下旬）", modifier = Modifier.testTag("pro-draft")) {
+        Muted(proDraftLead(rows, view.teamName, myLabel))
+        rows.forEach { r ->
+            Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(draftRankText(r), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(r.name, fontWeight = if (r.team == view.teamName) FontWeight.Bold else FontWeight.SemiBold)
+                    Muted("${positionLabel(r.position)}${r.age?.let { "・${it}歳" } ?: ""}")
+                }
+                Muted("${view.teamLabel(r.team)} → ${r.npbTeam}${r.reason?.takeIf { it.isNotBlank() }?.let { "　$it" } ?: ""}")
+            }
+        }
+        proDraftReward(mine, myLabel)?.let { Muted(it) }
     }
 }
 
@@ -137,6 +163,9 @@ fun OffseasonGrowthCard(model: AppViewModel, raw: JsonObject?) {
 fun TryoutResultCard(model: AppViewModel, raw: JsonObject?) {
     if (raw == null) return
     val result = raw["lastTryout"].obj() ?: return
+    // ⚠ 出すのはトライアウトから年度更新までの間だけ（年が替わったら「その年のまとめ」の入退団に出る。Web 版と同じ）
+    val year = raw.at("year").int()
+    if (year != null && result.at("year").int() != year) return
     val roster = raw.at("roster").list().mapNotNull { it.obj() }
     val byId = roster.associateBy { it.at("id").num()?.toLong() }
     val picks = result.at("picks").list().mapNotNull { it.obj() }

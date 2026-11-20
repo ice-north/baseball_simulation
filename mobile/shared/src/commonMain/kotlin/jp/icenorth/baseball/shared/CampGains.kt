@@ -82,12 +82,6 @@ fun relevantGains(player: JsonObject?, changes: JsonObject?): JsonObject {
     })
 }
 
-/** 年度更新の伸び（`view.lastOffseason.gains`）を、選手ごとに表示する項目だけにしたもの */
-fun offseasonGains(result: JsonObject?, roster: List<JsonObject>): JsonObject {
-    val byId = roster.associateBy(::gainId)
-    return JsonObject(result?.at("gains").obj().orEmpty().mapValues { (id, changes) -> relevantGains(byId[id], changes.obj()) })
-}
-
 /**
  * キャンプの成果の表の列（誰か1人でも動いた項目だけ。能力の並び → 変化球 → 守備適性）。
  * Web 版 `campGainTable` と同じ並べ方（先方指摘「各選手1行にし、チームメイトと比べられるように」）。

@@ -29,10 +29,55 @@
 // ⚠ 3: 終わった年の試合の記録を分けた形（pastGames）。2 の保存もそのまま読める。
 //    上げたのは、この形を知らない古いコードに戻したとき、包みを読まずに断らせるため
 //    （2 だと読めてしまい、印の文字列を試合の一覧として読む）
-export const SNAPSHOT_FORMAT = 3;
-const READABLE_FORMATS = [2, 3];
+// ⚠ 4: 今季の試合結果の二重持ちを1つにした形（`SAME_AS_SCHEDULE`）。2・3 の保存もそのまま読める。
+//    上げたのは、この形を知らない古いコードに戻したとき、印の文字列を試合結果として読ませないため
+export const SNAPSHOT_FORMAT = 4;
+const READABLE_FORMATS = [2, 3, 4];
 /** 終わった年の試合の記録を別の部分へ出したあとに残す印 */
 export const PAST_GAMES = '@pastGames';
+/**
+ * 今季の試合結果（`season.results[].result`）が、日程の同じ試合（`season.schedule[].result`）と
+ * 同じ中身のときに置く印。
+ * ⚠ 試合を進めた直後は**同じオブジェクト**を両方に入れている（`daySimulation.js`）のに、
+ *    保存では2回書いていた（1年目8月の芯で約1.8MB。監査 2026-11-20、いしだ「おすすめで」）。
+ *    読むときは日程の方のオブジェクトを指し直す（試合直後と同じ形に戻る）。
+ * ⚠ 中身が1文字でも違えば印にしない（そのまま書く）。どちらかをその場で書き換えるところは無い
+ *    （書き換えるときは `slimStoredResults` のように新しいオブジェクトに差し替える）。
+ */
+export const SAME_AS_SCHEDULE = '@schedule';
+
+/** 保存する芯: 今季の試合結果の二重持ちを印にした写し（元は変えない） */
+function packResults(core) {
+  const season = core?.league?.season;
+  if (!Array.isArray(season?.results) || !Array.isArray(season?.schedule)) return core;
+  const byId = new Map();
+  for (const game of season.schedule) if (game?.result) byId.set(game.id, game.result);
+  let changed = false;
+  const results = season.results.map((entry) => {
+    const twin = entry?.result && byId.get(entry.gameId);
+    if (!twin || (twin !== entry.result && JSON.stringify(twin) !== JSON.stringify(entry.result)))
+      return entry;
+    changed = true;
+    return { ...entry, result: SAME_AS_SCHEDULE };
+  });
+  if (!changed) return core;
+  return { ...core, league: { ...core.league, season: { ...season, results } } };
+}
+
+/** 読んだ芯: 印を日程の同じ試合の結果に戻した写し（元は変えない） */
+function unpackResults(core) {
+  const season = core?.league?.season;
+  if (!Array.isArray(season?.results) || !season.results.some((e) => e?.result === SAME_AS_SCHEDULE))
+    return core;
+  const byId = new Map((season.schedule || []).map((game) => [game?.id, game?.result]));
+  const results = season.results.map((entry) => {
+    if (entry?.result !== SAME_AS_SCHEDULE) return entry;
+    const twin = byId.get(entry.gameId);
+    if (!twin) throw new Error(`試合 ${entry.gameId} の結果が日程に見つかりません`);
+    return { ...entry, result: twin };
+  });
+  return { ...core, league: { ...core.league, season: { ...season, results } } };
+}
 const WORLD_KEYS = ['pools', 'world', 'released'];
 
 export class NeedsFullWorld extends Error {
@@ -93,7 +138,7 @@ export function splitBundle(bundle) {
   const league = rest.league;
   const names = league?.season?.settings?.teamNames;
   if (!league?.game?.teams || !Array.isArray(names))
-    return { core: rest, order, parts };
+    return { core: packResults(rest), order, parts };
   order.league = Object.keys(league);
   order.game = Object.keys(league.game);
   const inLeague = new Set(names);
@@ -121,7 +166,7 @@ export function splitBundle(bundle) {
     parts.records = split.records;
     if (split.pastGames) parts.pastGames = split.pastGames;
   }
-  return { core: { ...rest, league: { ...leagueRest, game } }, order, parts };
+  return { core: packResults({ ...rest, league: { ...leagueRest, game } }), order, parts };
 }
 
 const isObject = (value) => value !== null && typeof value === 'object';
@@ -135,7 +180,7 @@ const ordered = (keys, source) => {
 
 /** 芯と全部の部分から、分ける前の bundle に戻す */
 export function assembleBundle(core, order, parts) {
-  const bundle = { ...core };
+  const bundle = { ...unpackResults(core) };
   if (parts.backup !== undefined) bundle.backup = parts.backup;
   const league = bundle.league;
   if (league && order?.teams) {
@@ -222,7 +267,7 @@ export function assembleLight(core, order, parts, refs) {
         getPrototypeOf: () => touch(label),
       },
     );
-  const bundle = { ...core };
+  const bundle = { ...unpackResults(core) };
   const guards = {};
   // 終わった年の試合の記録の番人（年 → 番人）
   const pastGuards = {};
@@ -297,8 +342,8 @@ export function assembleLight(core, order, parts, refs) {
     const nextOrder = { ...order, bundle: Object.keys(after) };
     if (after.league && !teamsProxy)
       // 分けていないリーグ（球団の一覧が無い形）は芯にまるごと入っている
-      return { core: coreOf(after), order: nextOrder, records: undefined, whole: true };
-    if (!after.league) return { core: coreOf(after), order: nextOrder, records: undefined };
+      return { core: packResults(coreOf(after)), order: nextOrder, records: undefined, whole: true };
+    if (!after.league) return { core: packResults(coreOf(after)), order: nextOrder, records: undefined };
     const game = after.league.game;
     if (game.teams !== teamsProxy) return null;
     for (const key of WORLD_KEYS) {
@@ -321,7 +366,7 @@ export function assembleLight(core, order, parts, refs) {
     coreOut.league = { ...leagueRest, game: coreGame };
     nextOrder.league = Object.keys(after.league);
     nextOrder.game = Object.keys(game);
-    return { core: coreOut, order: nextOrder, records };
+    return { core: packResults(coreOut), order: nextOrder, records };
   };
   return { bundle: shaped, tracker, inspect };
 }

@@ -24,6 +24,7 @@ let beforeDownload = null;
 let missingStatus = 404;
 let missingDetail = null;
 const controlSelects = [];
+const claimSelects = [];
 let rejectNarrowSelect = false;
 const pickColumns = (source, select) =>
   Object.fromEntries(
@@ -44,10 +45,15 @@ const fetchImpl = async (url, options) => {
       : options.body;
   let value;
   if (path.endsWith('/online_claim')) {
+    // ⚠ 本番の PostgREST と同じく、絞り込みが通らないときは**占有を取らずに** 400 で断る
+    const select = new URL(url).searchParams.get('select');
+    claimSelects.push(select);
+    if (select && rejectNarrowSelect)
+      return new Response(JSON.stringify({ message: 'bad select' }), { status: 400 });
     if (lease) value = [];
     else {
       lease = body.p_token;
-      value = [{ ...row }];
+      value = [select ? pickColumns(row, select) : { ...row }];
     }
   } else if (path.endsWith('/online_release')) {
     if (lease === body.p_token) lease = null;
@@ -642,6 +648,34 @@ assert.equal(
     const first = await viewer.view('m0', 's0');
     assert.equal((await viewer.view('m0', 's0', first.viewGeneration)).unchanged, true, '絞り込みが通らない環境で世代の近道が動かない');
   }
+  rejectNarrowSelect = false;
+}
+
+// ⚠ 書き込みの最初（占有を取る `online_claim`）で全員のビューを受け取らない（監査 2026-11-20）。
+//    要るのは世代・保存の場所・索引（`_records`）・部分の履歴（`_parts`）だけ
+{
+  const big = Object.fromEntries(
+    Array.from({ length: 11 }, (_, i) => [`m${i}`, { teamName: `T${i}`, big: 'x'.repeat(1000) }]),
+  );
+  const writer = new SupabaseStore({ url: 'https://fixture.test', serviceKey: 'test-only', members: [{ userId: 'a' }], adminId: 'a', fetchImpl });
+  const narrowRow = { generation: row.generation, snapshot_path: row.snapshot_path, views: { ...row.views, ...big } };
+  row = { ...row, views: narrowRow.views };
+  claimSelects.length = 0;
+  const claimed = await writer.claim('t-narrow');
+  assert.ok(claimSelects[0], '占有を取るときに列を絞っていない');
+  assert.equal(claimed.generation, row.generation);
+  assert.equal(claimed.snapshot_path, row.snapshot_path);
+  assert.deepEqual(Object.keys(claimed.views).filter((k) => !k.startsWith('_')), [], '占有を取るときに参加者のビューを受け取っている');
+  assert.deepEqual(claimed.views._records ?? null, row.views._records ?? null, '索引（_records）を取り違えている');
+  assert.deepEqual(claimed.views._parts ?? null, row.views._parts ?? null, '部分の履歴（_parts）を取り違えている');
+  await writer.rpc('online_release', { p_token: 't-narrow' });
+  // 絞り込みが通らない環境では、占有を取らずに断られ、全列で取り直す（二重に取らない）
+  rejectNarrowSelect = true;
+  const fallback = new SupabaseStore({ url: 'https://fixture.test', serviceKey: 'test-only', members: [{ userId: 'a' }], adminId: 'a', fetchImpl });
+  const whole = await fallback.claim('t-wide');
+  assert.equal(whole.generation, row.generation, '絞り込みが通らない環境で占有を取れない');
+  assert.equal(lease, 't-wide');
+  await fallback.rpc('online_release', { p_token: 't-wide' });
   rejectNarrowSelect = false;
 }
 
