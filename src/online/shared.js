@@ -66,6 +66,23 @@ export function requireOnline(
   if (!condition) throw new OnlineError(message, status, code);
 }
 
+/**
+ * 略称（＝地域名）が同じリーグのほかの球団とぶつかるか。ぶつかる相手（`entries` の1件）を返す。
+ *
+ * ⚠ いしだ 2026-11-20 判断1（おすすめで）: 略称は地域名そのものなので、同じリーグに
+ *    「旭川」が2つあると順位表・日程・速報の狭い欄でどちらか分からない。**同じリーグの**
+ *    球団（人の球団もCPU球団も。CPU球団は既定の略称＝都市）と同じ略称は断る。
+ * ⚠ `entries` は `{ name, league, short, label }` の並び。サーバーは球団から
+ *    （`teamDisplayOf`）、Web の小窓はビュー（`teamLabels`・`teamLeagues`）から作る。
+ *    判定はここ1か所に置く。
+ * ⚠ **いまの略称のままなら断らない**。既にぶつかっている保存データ（移行しない）でも、
+ *    名前を変えずにひとことだけ直す（古い送り方は毎回 `teamName` も送る）のは通す。
+ */
+export function findShortClash(entries, self, next) {
+  const me = (entries || []).find((e) => e.name === self);
+  if (!next || !me || next === me.short) return null;
+  return (entries || []).find((e) => e.name !== self && e.league === me.league && e.short === next) || null;
+}
 export function assertLeagueVersion(league) {
   requireOnline(
     league?.schema === ONLINE_SCHEMA &&

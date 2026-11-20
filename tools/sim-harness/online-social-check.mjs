@@ -32,6 +32,7 @@ import {
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
 import { applyJoin, applyProfile, nextMemberIndex, teamCityOf, teamNicknameOf, teamDisplayOf, teamRegionOf, teamHomeOf } from '../../src/online/membership.js';
+import { findShortClash } from '../../src/online/shared.js';
 import {
   CITY_PREFS,
   prefsOfCity,
@@ -422,6 +423,85 @@ import {
     applyJoin(l, { userId: 'b', teamName: '', now: 'x' });
     assert.equal(teamDisplayOf(l.teams[0]).short, '新潟', '次に入った人に前の人の略称が残っている');
     assert.equal(teamRegionOf(l.teams[0]), null, '次に入った人に前の人の地方が残っている');
+  }
+
+  // 判断1（いしだ 2026-11-20「おすすめで」）: 略称（＝地域名）が**同じリーグの**ほかの球団
+  // （人の球団・CPU球団の既定の略称）とぶつかる名前は断る。別のリーグなら通す。
+  // 既にぶつかっている保存データは触らず、名前を変えない送り方は通す
+  {
+    const fresh = () => ({
+      season: { year: 1 },
+      teams: [
+        { name: '新潟ブリザーズ', city: '新潟', abbreviation: '新潟', league: 'B' },
+        { name: '旭川スターズ', city: '旭川', abbreviation: '旭川', league: 'B' },
+        { name: '美瑛ベアーズ', city: '美瑛', abbreviation: '美瑛', league: 'B', displayName: '富良野ベアーズ', displayCity: '富良野' },
+        { name: '札幌ホークス', city: '札幌', abbreviation: '札幌', league: 'A' },
+      ],
+      members: [
+        { userId: 'a', teamName: '新潟ブリザーズ' },
+        { userId: 'c', teamName: '美瑛ベアーズ' },
+      ],
+    });
+    // CPU球団の既定の略称（旭川）・人の球団の地域名（富良野）とぶつかる
+    for (const cityName of ['旭川', '富良野']) {
+      const l = fresh();
+      assert.throws(
+        () => applyProfile(l, { userId: 'a', cityName, nickname: 'ブリザーズ', region: 'hokkaido' }),
+        (e) => e.status === 409 && /略称「.+」は同じリーグ/.test(e.message),
+        `同じリーグの略称「${cityName}」とぶつかる地域名を通した`,
+      );
+      // ⚠ 断ったときは何も書き換えない（地方だけ先に書いていた）
+      assert.equal(l.teams[0].displayName, undefined, '断ったのに球団名を書き換えた');
+      assert.equal(l.teams[0].displayRegion, undefined, '断ったのに地方を書き換えた');
+    }
+    // 別のリーグの略称（札幌）とは同じでよい
+    {
+      const l = fresh();
+      applyProfile(l, { userId: 'a', cityName: '札幌', nickname: 'ブリザーズ' });
+      assert.equal(teamDisplayOf(l.teams[0]).short, '札幌', '別のリーグの略称と同じ地域名を断った');
+    }
+    // 古い送り方（`teamName` だけ。略称は頭3文字）でもぶつかれば断る
+    {
+      const l = fresh();
+      assert.throws(
+        () => applyProfile(l, { userId: 'a', teamName: '富良野フォックス' }),
+        /略称「富良野」は同じリーグ/,
+        '古い送り方で略称がぶつかる名前を通した',
+      );
+      assert.equal(l.teams[0].displayName, undefined, '古い送り方で断ったのに球団名を書き換えた');
+      // 参加で付ける名前も同じ
+      const j = fresh();
+      j.members = j.members.filter((m) => m.userId !== 'a');
+      j.teams = j.teams.filter((t) => t.name !== '旭川スターズ');
+      assert.throws(
+        () => applyJoin(j, { userId: 'x', teamName: '富良野フォックス', now: 'x' }),
+        /略称「富良野」/,
+        '参加で略称がぶつかる名前を通した',
+      );
+    }
+    // 既にぶつかっている保存データ（移行しない）: 名前を変えない送り方・ひとことだけは通す
+    {
+      const l = fresh();
+      Object.assign(l.teams[0], { displayName: '旭川ブリザーズ', displayCity: '旭川', displayNickname: 'ブリザーズ' });
+      applyProfile(l, { userId: 'a', teamName: '旭川ブリザーズ', comment: 'がんばる' });
+      applyProfile(l, { userId: 'a', cityName: '旭川', nickname: 'ブリザーズ', comment: 'がんばる' });
+      // チーム名だけ変えるのも略称は変わらないので通す
+      applyProfile(l, { userId: 'a', teamName: '旭川ベアーズ' });
+      assert.equal(teamDisplayOf(l.teams[0]).short, '旭川');
+      assert.equal(l.members[0].comment?.text, 'がんばる', 'ぶつかったままの保存データでひとことを直せない');
+    }
+    // Web の小窓が使う判定（ビューの `teamLabels`・`teamLeagues` から作る）
+    {
+      const entries = [
+        { name: 'A', league: 'B', short: '新潟', label: '新潟ブリザーズ' },
+        { name: 'B', league: 'B', short: '旭川', label: '旭川スターズ' },
+        { name: 'C', league: 'A', short: '札幌', label: '札幌ホークス' },
+      ];
+      assert.equal(findShortClash(entries, 'A', '旭川')?.label, '旭川スターズ');
+      assert.equal(findShortClash(entries, 'A', '札幌'), null, '別のリーグの略称を断っている');
+      assert.equal(findShortClash(entries, 'A', '新潟'), null, 'いまの略称を断っている');
+      assert.equal(findShortClash(entries, 'A', ''), null, '空の地域名を断っている');
+    }
   }
 
   // ⚠ 地方を選んでいない球団の地元は**地名から**引く（地方全体に広げない。2026-11-20 監査。

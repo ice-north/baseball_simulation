@@ -12,7 +12,7 @@
 //    `Math.random()` を呼ばない（シードから決まる必要がある）。
 //    配線（API・サーバー）は別のファイルで行う。
 // ============================================================
-import { requireOnline } from './shared.js';
+import { requireOnline, findShortClash } from './shared.js';
 import { cleanText, OWNER_COMMENT_MAX } from './social.js';
 import { PACK_STYLE } from './rosterPack.js';
 import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
@@ -219,6 +219,19 @@ export const teamDisplayOf = (team) => ({
   region: teamRegionOf(team),
 });
 
+// 略称の判定は `shared.js` の `findShortClash`（Web の小窓と同じもの）
+function assertShortFree(league, team, patch) {
+  const next = teamDisplayOf({ ...team, ...patch }).short;
+  const entries = (league.teams || []).map((t) => ({ name: t.name, league: t.league, ...teamDisplayOf(t) }));
+  const clash = findShortClash(entries, team.name, next);
+  if (clash)
+    requireOnline(
+      false,
+      `略称「${next}」は同じリーグの${clash.label}と同じです。別の地域名にしてください`,
+      409,
+    );
+}
+
 /**
  * 球団名とプレイヤー名を後から変える。
  *
@@ -243,6 +256,10 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
     const nick = String(nickname ?? teamNicknameOf(team) ?? '').trim();
     requireOnline(city.length <= 8, '地域名は8字までです', 400);
     requireOnline(nick.length <= 16, 'チーム名は16字までです', 400);
+    const shown = `${city}${nick}`.trim() || team.name;
+    // ⚠ 断るかどうかは**書き換える前に**決める（地方だけ先に書いてから断っていた）
+    assertTeamNameFree(league, team, shown);
+    assertShortFree(league, team, { displayCity: city || undefined, displayName: shown });
     // ⚠ **地方は先に選ぶ**（いしだ 2026-11-20）。選べば地域名は自由に書けて、地元も付く。
     //    知らないidは断る（画面の一覧＝`REGION_OPTIONS` 以外は入れない）
     if (region !== undefined) {
@@ -254,8 +271,6 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
       );
       team.displayRegion = picked || undefined;
     }
-    const shown = `${city}${nick}`.trim() || team.name;
-    assertTeamNameFree(league, team, shown);
     team.displayCity = city || undefined;
     team.displayNickname = nick || undefined;
     team.displayName = shown;
@@ -270,7 +285,10 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
     //    チーム名だけ差し替える。始まらなければ3つとも消す（分けていない球団と同じ扱い）
     if (shown !== (team.displayName || team.name)) {
       const city = team.displayCity;
-      if (city && shown.startsWith(city) && shown.length > city.length) {
+      const keepCity = city && shown.startsWith(city) && shown.length > city.length;
+      // ⚠ 古い送り方でも略称がぶつかるなら断る（判断1。地域名を消すと略称は頭3文字になる）
+      assertShortFree(league, team, { displayCity: keepCity ? city : undefined, displayName: shown });
+      if (keepCity) {
         team.displayNickname = shown.slice(city.length);
       } else {
         clearTeamSplitName(team);
@@ -331,6 +349,8 @@ export function applyJoin(league, { userId, label, teamName, now }) {
   const { team } = assertCanJoin(league, userId);
   const shown = String(teamName || '').trim() || team.name;
   assertTeamNameFree(league, team, shown);
+  // ⚠ 参加で付ける名前は分けない（略称は頭3文字）。それでも同じリーグの略称とぶつかるなら断る（判断1）
+  assertShortFree(league, team, { displayCity: undefined, displayNickname: undefined, displayName: shown });
   // ⚠ 前のオーナーが分けて付けた名前（地域名・チーム名・地方）を引き継がない（2026-11-20 監査）
   clearTeamSplitName(team);
   team.displayName = shown;

@@ -27,7 +27,7 @@ import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
-import { formatTurn, TURN_MINUTES } from './shared.js';
+import { findShortClash, formatTurn, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
 import { teamLabel } from './gameText.js';
 import {
@@ -255,6 +255,19 @@ export function RenameDialog({ view, busy, run, command, close }) {
   //    から地域名を打つのはどうですか？」）。選べば地域名は自由に書けて、地元も付く
   const [region, setRegion] = useState(() => labels.region || '');
   const teamName = `${city}${nickname}`.trim();
+  // ⚠ 同じリーグのほかの球団と略称（＝地域名）がぶつかるなら、保存する前に知らせる
+  //    （判断1。サーバーも断る。判定は `shared.js` の `findShortClash` 1か所）。
+  //    地域名を空にしたときの略称（頭3文字・既定の略称）はサーバーに任せる
+  const shortClash = findShortClash(
+    Object.entries(view.teamLabels || {}).map(([name, l]) => ({
+      name,
+      league: view.teamLeagues?.[name],
+      short: l.short,
+      label: l.label,
+    })),
+    view.teamName,
+    city.trim(),
+  );
   const [playerName, setPlayerName] = useState(() => me?.label || '');
   // オーナーのひとこと（順位表・球団の画面・紙面に出す）
   const [comment, setComment] = useState(() => me?.comment || '');
@@ -348,6 +361,11 @@ export function RenameDialog({ view, busy, run, command, close }) {
             ))}
           </datalist>
         </label>
+        {shortClash && (
+          <p role="alert" className="online-error-text">
+            略称「{city.trim()}」は同じリーグの{shortClash.label}と同じです。別の地域名にしてください。
+          </p>
+        )}
         <label>
           チーム名
           <input
@@ -398,7 +416,7 @@ export function RenameDialog({ view, busy, run, command, close }) {
           <button
             className="online-primary"
             type="submit"
-            disabled={busy || !teamName.trim()}
+            disabled={busy || !teamName.trim() || !!shortClash}
           >
             保存
           </button>
