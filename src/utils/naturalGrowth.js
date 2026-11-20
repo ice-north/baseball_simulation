@@ -33,13 +33,16 @@ export const naturalGrowthText = (value) => {
  */
 export const naturalGrowthColor = (value) => {
   const v = Number(value) || 0;
-  if (v >= 1.20) return 'text-pink-400';
+  // ⚠ 段は**実際に出る幅**に合わせる（年齢曲線の山が +1.2〜1.3、30代後半は -5 まで）
+  if (v >= 1.10) return 'text-pink-400';
   if (v >= 0.80) return 'text-red-400';
   if (v >= 0.50) return 'text-orange-400';
-  if (v >= 0.30) return 'text-yellow-400';
+  if (v >= 0.25) return 'text-yellow-400';
   if (v >= 0.10) return 'text-green-400';
   if (v >= -0.05) return 'text-gray-300';
-  return 'text-blue-400';
+  // 衰えは2段。年1点を超えて落ちる選手は**もう戦力として崩れていく**ので分ける
+  if (v >= -1.00) return 'text-blue-400';
+  return 'text-blue-500';
 };
 
 /** 吹き出しの説明（表の数字に付ける） */

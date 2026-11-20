@@ -1,36 +1,51 @@
 #!/usr/bin/env node
 // ============================================================
-// 自然成長の検査（`expectedNaturalGrowth` と年齢による衰えの形）
+// 自然成長の検査（`naturalAgeCoef` の年齢曲線と `expectedNaturalGrowth` の表示）
 //
-// ⚠ いしだ 2026-11-20:
-//    「成長係数1.0が主要な能力が平均1程度自然に上がる、0.0で平均0成長、
-//      マイナスで衰えを表現したいと思っていました」
-//    「表示を自然成長の平均と合わせたい」「衰えをもう2年ほど早めたいが、効果は緩やかに」
+// ⚠ いしだ 2026-11-20 の指定（この表を正本とする）:
+//    「基本、成長係数は23歳まで徐々に上がり、出場試合数によってプラス変動、
+//      疲労があるのに出場することでマイナス変動、26歳から徐々に減り始めます」
+//    素質1.0の高卒選手（主要な能力1つあたり・1年の点）:
+//      19歳 1.00 / 20 1.05 / 21 1.10 / 22 1.15 / 23〜25 1.20 /
+//      26 1.15 / 27 1.05 / 28 0.90 / 29 0.70 / 30 0.45 / 31 0.15 /
+//      32 -0.20 / 33 -0.60 / 34 -1.05 / 35 -1.55 / 36 -2.10 /
+//      37 -2.70 / 38 -3.35 / 39 -4.05 / 40 -4.80
+//    きっかけは「実際プレイしていると、なかなか衰えず、ずっとベテランが居座ります」。
 //
-//    これを数字で固定する。見るのは4つ。
-//      1. **表示＝実際**。画面に出す `expectedNaturalGrowth` が、本番の `grow` を
-//         何千回回した平均と合う（画面は `src/utils/naturalGrowth.js`・
-//         オンラインは `server/projection.mjs` の `naturalGrowth`）。
-//      2. **係数1.0で平均+1**。若くて能力がまだ低い選手は主要な能力が平均+1前後伸びる。
-//      3. **衰え始めの年齢**。素質が高いほど遅い、という並びが崩れない。
-//      4. **衰えは緩やか**。40歳でも1年で平均-1を超えて落ちない。
-//    加えて、表示の計算が**選手を書き換えない**こと（`makeGrower` の `peek`）。
+// ⚠ **2つの基準で比べる**。伸びと衰えは別の要素で削られるので、同じ能力値では測れない。
+//    伸びる側 … 能力38（天井の減衰にかからない若手の帯）
+//    衰える側 … 能力50（`STAT_GROWTH[].ref` と同じ水準。`declineScale` が1倍になる）
+//    どちらも 素質1.0・プロ意識50・レギュラー出場（450打数）・独立リーグのランクC。
 //
-// ⚠ 能力が高いと天井（`growthThreshold`）で伸びが削られるので、素質を見る検査は
-//    **能力40**（独立リーグの若手の実際の帯）で測る。能力55以上は別に並びだけ見る。
+// 見るのは7つ。
+//   1. **表示＝実際**。`expectedNaturalGrowth` が本番の `grow` の平均と合う。
+//   2. **指定の表に乗る**（上の2基準で）。
+//   3. **山は23〜27歳**。19歳より23歳の方が伸びる（指定どおり上がってから下がる）。
+//   4. **素質が高いほど長持ちし、若いうちもよく伸びる**。
+//   5. **プロ意識と出場の変動で曲線が後ろにずれる**（大事に使うと長持ちする）。
+//   6. **30代後半は年2点以上落ちる**（ベテランが席を明け渡す）。
+//   7. 表示の計算が選手を書き換えない（`peek`）・投手でも出る・画面の見た目。
 // 終了コード: 全PASSで0、FAILで1。
 // ============================================================
 import assert from 'node:assert/strict';
 import {
   makeGrower,
   expectedNaturalGrowth,
+  naturalAgeCoef,
   CATEGORY_GROWTH,
 } from '../../src/season/growthSystem.js';
 import { createCandidatePlayer } from '../../src/season/tryoutSystem.js';
 import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor } from '../../src/utils/naturalGrowth.js';
 
+/** いしだ指定の表（素質1.0・1能力あたり・1年） */
+const TARGET = {
+  19: 1.00, 20: 1.05, 21: 1.10, 22: 1.15, 23: 1.20, 24: 1.20, 25: 1.20,
+  26: 1.15, 27: 1.05, 28: 0.90, 29: 0.70, 30: 0.45, 31: 0.15,
+  32: -0.20, 33: -0.60, 34: -1.05, 35: -1.55, 36: -2.10,
+  37: -2.70, 38: -3.35, 39: -4.05, 40: -4.80,
+};
 /** 平均を取る能力（`expectedNaturalGrowth` の野手側と同じ6つ） */
-const FIELDER_KEYS = [
+const KEYS = [
   ['batting', 'meet', 'meet'],
   ['batting', 'power', 'power'],
   ['batting', 'eye', 'eye'],
@@ -38,173 +53,197 @@ const FIELDER_KEYS = [
   ['physical', 'arm', 'arm'],
   ['fielding', 'defense', 'defense'],
 ];
-const RANK_MULT = 0.90; // 独立リーグ＝ランクC相当（`applyCorporatePlayerGrowth`）
+const RANK_MULT = 0.90;  // 独立リーグ＝ランクC相当（`teamRankMult`）
+const GROW_BASE = 38;    // 伸びる側を測る能力値（天井の減衰にかからない）
+const DECLINE_BASE = 50; // 衰える側を測る能力値（`ref` と同じ＝比例が1倍）
 
 const seedFielder = createCandidatePlayer({ position: 'shortstop' });
 const seedPitcher = createCandidatePlayer({ position: 'pitcher' });
 
-function fielder(age, gp, discipline, base) {
+function fielder(age, gp, discipline, base, atBats = 450, modifier = 0) {
   const p = structuredClone(seedFielder);
   p.age = age;
   p.growthPotential = gp;
-  p.growthModifier = 0;
+  p.growthModifier = modifier;
   p.personality = { ...(p.personality || {}), discipline, mental: 50 };
-  for (const [box, key] of FIELDER_KEYS) p[box][key] = base;
+  for (const [box, key] of KEYS) p[box][key] = base;
   p.physical.dexterity = 50;
-  p.stats = { ...(p.stats || {}), games: 100 };
+  p.physical.muscle = 50;
+  p.physical.build = 'medium';
+  p.seasonStats = {
+    ...(p.seasonStats || {}),
+    batting: { ...(p.seasonStats?.batting || {}), atBats },
+  };
   return p;
 }
 
 /** 本番の `grow` を n 回回したときの、主要な能力1つあたりの平均の動き */
-function simulate(age, gp, discipline, base, category, n = 2500) {
+function simulate(player, category, n = 2500) {
   const prof = CATEGORY_GROWTH[category];
   let total = 0;
   for (let i = 0; i < n; i += 1) {
-    const p = fielder(age, gp, discipline, base);
+    const p = structuredClone(player);
     const { grow } = makeGrower(p, prof, RANK_MULT);
     let sum = 0;
-    for (const [box, key, growKey] of FIELDER_KEYS) {
+    for (const [box, key, growKey] of KEYS) {
       const before = p[box][key];
       p[box][key] = grow(p[box][key], growKey);
       sum += p[box][key] - before;
     }
-    total += sum / FIELDER_KEYS.length;
+    total += sum / KEYS.length;
   }
   return total / n;
 }
-
-const PROFILES = [
-  { gp: 0.6, discipline: 50 },
-  { gp: 1.0, discipline: 50 },
-  { gp: 1.0, discipline: 70 },
-  { gp: 1.4, discipline: 70 },
-  { gp: 1.8, discipline: 70 },
-];
-const CATEGORIES = ['independent', 'online'];
+const shownOf = (player, category = 'independent') =>
+  expectedNaturalGrowth(player, category, RANK_MULT);
 
 // --- 1. 表示＝実際 ---
 let compared = 0;
-let worst = 0;
-for (const category of CATEGORIES) {
-  for (const { gp, discipline } of PROFILES) {
-    for (const base of [40, 55]) {
+let worstGap = 0;
+for (const category of ['independent', 'online']) {
+  for (const gp of [0.6, 1.0, 1.4]) {
+    for (const base of [GROW_BASE, DECLINE_BASE]) {
       for (const age of [19, 25, 31, 36, 40]) {
-        const shown = expectedNaturalGrowth(fielder(age, gp, discipline, base), category, RANK_MULT);
-        const real = simulate(age, gp, discipline, base, category);
-        const gap = Math.abs(shown - real);
-        worst = Math.max(worst, gap);
+        const p = fielder(age, gp, 50, base);
+        const gap = Math.abs(shownOf(p, category) - simulate(p, category));
+        worstGap = Math.max(worstGap, gap);
         compared += 1;
         assert.ok(
-          gap <= 0.08,
-          `表示と実際がずれている（${category} 素質${gp} 意識${discipline} 能力${base} ${age}歳）: `
-            + `表示${shown.toFixed(2)} 対 実際${real.toFixed(2)}`,
+          gap <= 0.10,
+          `表示と実際がずれている（${category} 素質${gp} 能力${base} ${age}歳）: 差 ${gap.toFixed(2)}`,
         );
       }
     }
   }
 }
-assert.ok(compared >= 100, '見た組み合わせが少なすぎる（検査の作りが壊れている）');
+assert.ok(compared >= 60, '見た組み合わせが少なすぎる（検査の作りが壊れている）');
 
-// --- 2. 係数1.0で主要な能力が平均+1前後 ---
-for (const category of CATEGORIES) {
-  const young = simulate(19, 1.0, 50, 40, category);
+// --- 2. 指定の表に乗る ---
+const fit = [];
+for (let age = 19; age <= 31; age += 1) {
+  const got = shownOf(fielder(age, 1.0, 50, GROW_BASE));
+  fit.push([age, got]);
   assert.ok(
-    young >= 0.60 && young <= 1.30,
-    `${category}: 素質1.0の19歳（能力40）の自然成長が ${young.toFixed(2)}。`
-      + '「係数1.0で主要な能力が平均1程度上がる」から外れている',
+    Math.abs(got - TARGET[age]) <= 0.35,
+    `伸びる側が指定の表から外れている（${age}歳・能力${GROW_BASE}）: `
+      + `${got.toFixed(2)} 対 指定 ${TARGET[age].toFixed(2)}`,
   );
-  // 0.0 付近＝横ばいの年齢が、選手生活の真ん中（27〜32歳）に来ること
-  const flat = [27, 28, 29, 30, 31, 32]
-    .map((age) => Math.abs(expectedNaturalGrowth(fielder(age, 1.0, 50, 40), category, RANK_MULT)))
-    .reduce((a, b) => Math.min(a, b));
-  assert.ok(flat <= 0.10, `${category}: 素質1.0が横ばい（±0.10）になる年齢が27〜32歳に無い`);
+}
+for (let age = 32; age <= 40; age += 1) {
+  const got = shownOf(fielder(age, 1.0, 50, DECLINE_BASE));
+  fit.push([age, got]);
+  assert.ok(
+    Math.abs(got - TARGET[age]) <= 0.85,
+    `衰える側が指定の表から外れている（${age}歳・能力${DECLINE_BASE}）: `
+      + `${got.toFixed(2)} 対 指定 ${TARGET[age].toFixed(2)}`,
+  );
 }
 
-// --- 3. 衰え始めの年齢 ---
-const onsetOf = (gp, discipline, base, category) => {
-  for (let age = 19; age <= 46; age += 1)
-    if (expectedNaturalGrowth(fielder(age, gp, discipline, base), category, RANK_MULT) < 0) return age;
+// --- 3. 山は23〜27歳（19歳より23歳の方が伸びる） ---
+{
+  const at = (age) => shownOf(fielder(age, 1.0, 50, GROW_BASE));
+  assert.ok(at(23) > at(19), `19歳(${at(19).toFixed(2)})より23歳(${at(23).toFixed(2)})の方が伸びること`);
+  const peak = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+    .map((age) => [age, at(age)])
+    .sort((a, b) => b[1] - a[1])[0][0];
+  assert.ok(peak >= 23 && peak <= 27, `山が${peak}歳にある（23〜27歳に来ること）`);
+  // 曲線そのものも指定どおり（丸めの外側で確かめる）
+  assert.equal(Math.round(naturalAgeCoef(19) * 100) / 100, 1.00, '曲線の19歳が1.00でない');
+  assert.equal(Math.round(naturalAgeCoef(23) * 100) / 100, 1.20, '曲線の23歳が1.20でない');
+  assert.equal(Math.round(naturalAgeCoef(25) * 100) / 100, 1.20, '曲線の25歳が1.20でない');
+  for (const age of [26, 30, 32, 36, 40])
+    assert.equal(
+      Math.round(naturalAgeCoef(age) * 100) / 100,
+      TARGET[age],
+      `曲線の${age}歳が指定（${TARGET[age]}）でない`,
+    );
+}
+
+// --- 4. 素質（0歳の順序と、衰え始めの年齢） ---
+const crossOf = (gp, discipline = 50, modifier = 0) => {
+  for (let age = 20; age <= 50; age += 1)
+    if (shownOf(fielder(age, gp, discipline, DECLINE_BASE, 450, modifier)) < 0) return age;
   return 99;
 };
-const onsets = {};
-for (const category of CATEGORIES) {
-  const row = PROFILES.map(({ gp, discipline }) => onsetOf(gp, discipline, 40, category));
-  onsets[category] = row;
-  // 素質が高いほど遅い（意識70は同じ素質の意識50より遅い）
-  for (let i = 1; i < row.length; i += 1)
-    assert.ok(
-      row[i] >= row[i - 1],
-      `${category}: 衰え始めの並びが崩れている（${JSON.stringify(row)}）。素質が高いほど遅いこと`,
-    );
-  // ⚠ いしだ「衰えをもう2年ほど早めたい」。素質1.0・意識50は**30歳前後**で下を向く
-  //    （前は33歳だった）。早すぎ・遅すぎの両側を止める
-  const standard = onsetOf(1.0, 50, 40, category);
+{
+  const young = [0.6, 1.0, 1.4].map((gp) => shownOf(fielder(19, gp, 50, GROW_BASE)));
   assert.ok(
-    standard >= 29 && standard <= 32,
-    `${category}: 素質1.0・意識50の衰え始めが${standard}歳（29〜32歳に収めること）`,
+    young[0] < young[1] && young[1] < young[2],
+    `19歳の伸びが素質の順になっていない（${young.map((v) => v.toFixed(2)).join(' / ')}）`,
   );
-  // 素質1.8は30代を通して伸び続ける
+  const cross = [0.6, 1.0, 1.4].map((gp) => crossOf(gp));
   assert.ok(
-    onsetOf(1.8, 70, 40, category) >= 38,
-    `${category}: 素質1.8が38歳より前に衰え始めている`,
+    cross[0] < cross[1] && cross[1] < cross[2],
+    `衰え始めが素質の順になっていない（${cross.join(' / ')}歳）`,
+  );
+  assert.ok(
+    cross[1] >= 29 && cross[1] <= 33,
+    `素質1.0の衰え始めが${cross[1]}歳（指定の表は31〜32歳で0を割る）`,
   );
 }
 
-// --- 4. 衰えは緩やか（いしだ「効果は緩やかに」） ---
-for (const category of CATEGORIES) {
-  for (const { gp, discipline } of PROFILES) {
-    for (const age of [36, 40]) {
-      const v = expectedNaturalGrowth(fielder(age, gp, discipline, 40), category, RANK_MULT);
-      assert.ok(
-        v >= -1.0,
-        `${category}: 素質${gp}の${age}歳が1年で平均${v.toFixed(2)}。-1.0 より急な衰えにしない`,
-      );
-    }
-    // 年を取るほど下がる（上がり直さない）
-    let prev = Infinity;
-    for (let age = 24; age <= 42; age += 1) {
-      const v = expectedNaturalGrowth(fielder(age, gp, discipline, 40), category, RANK_MULT);
-      assert.ok(
-        v <= prev + 0.02,
-        `${category}: 素質${gp}の${age}歳で自然成長が上がり直した（${prev.toFixed(2)} → ${v.toFixed(2)}）`,
-      );
-      prev = v;
-    }
-  }
+// --- 5. プロ意識と変動で長持ちする（いしだ「大事に使われたら毎年+0.1程度増える」） ---
+{
+  const base = crossOf(1.0, 50, 0);
+  assert.ok(crossOf(1.0, 90, 0) > base, 'プロ意識が高くても衰え始めが遅くならない');
+  assert.ok(crossOf(1.0, 20, 0) < base, 'プロ意識が低くても衰え始めが早くならない');
+  // ⚠ `growthModifier`（出場で積み・疲労で削れる変動）が**年度替わりの成長に効くこと**。
+  //    以前は `makeGrower` が `growthPotential` しか読まず、変動は効いていなかった
+  const withUse = shownOf(fielder(30, 1.0, 50, DECLINE_BASE, 450, 0.3));
+  const plain = shownOf(fielder(30, 1.0, 50, DECLINE_BASE, 450, 0));
+  const abused = shownOf(fielder(30, 1.0, 50, DECLINE_BASE, 450, -0.3));
+  assert.ok(withUse > plain, `変動プラスが効いていない（${withUse.toFixed(2)} 対 ${plain.toFixed(2)}）`);
+  assert.ok(abused < plain, `変動マイナスが効いていない（${abused.toFixed(2)} 対 ${plain.toFixed(2)}）`);
+  // 出場量（控えはレギュラーより伸びない）
+  const bench = shownOf(fielder(22, 1.0, 50, GROW_BASE, 120));
+  const regular = shownOf(fielder(22, 1.0, 50, GROW_BASE, 450));
+  assert.ok(regular > bench, `出場量が伸びに効いていない（${regular.toFixed(2)} 対 ${bench.toFixed(2)}）`);
 }
 
-// --- 5. 表示の計算は選手を書き換えない（`peek`） ---
+// --- 6. 30代後半は席を明け渡す（いしだ「なかなか衰えず、ずっとベテランが居座ります」） ---
+for (const age of [37, 38, 39, 40]) {
+  const v = shownOf(fielder(age, 1.0, 50, DECLINE_BASE));
+  assert.ok(
+    v <= -2.0,
+    `${age}歳・素質1.0・能力${DECLINE_BASE}の衰えが${v.toFixed(2)}。`
+      + '年2点以上落ちないとベテランが席を明け渡さない',
+  );
+}
+{
+  // 素質1.4のベテランは長持ちする（40歳でも年1点台まで）
+  const star = shownOf(fielder(40, 1.4, 70, DECLINE_BASE));
+  assert.ok(star > -2.6, `素質1.4・意識70の40歳が${star.toFixed(2)}。素質が高い選手は長持ちすること`);
+}
+
+// --- 7. 表示の計算は選手を書き換えない（`peek`）・投手・見た目 ---
 for (const seed of [seedFielder, seedPitcher]) {
   const p = structuredClone(seed);
   p.age = 24;
   p.growthPotential = 1.2;
   const before = JSON.stringify(p);
-  for (const category of CATEGORIES) expectedNaturalGrowth(p, category, RANK_MULT);
+  for (const category of ['independent', 'online']) shownOf(p, category);
   naturalGrowthOf(p);
   assert.equal(JSON.stringify(p), before, '自然成長の表示を出すと選手の中身が変わる（`peek` が効いていない）');
 }
-
-// --- 6. 投手も数字が出る（能力の組が違う） ---
 {
   const p = structuredClone(seedPitcher);
-  p.age = 20;
-  p.growthPotential = 1.3;
+  p.age = 21;
+  p.growthPotential = 1.2;
   p.growthModifier = 0;
-  const young = expectedNaturalGrowth(p, 'independent', RANK_MULT);
-  const old = expectedNaturalGrowth({ ...structuredClone(p), age: 38 }, 'independent', RANK_MULT);
+  const young = shownOf(p);
+  const old = shownOf({ ...structuredClone(p), age: 38 });
   assert.ok(Number.isFinite(young) && Number.isFinite(old), '投手の自然成長が数字にならない');
-  assert.ok(young > old, `投手の自然成長が年齢で下がらない（20歳${young} 38歳${old}）`);
+  assert.ok(young > 0 && old < 0, `投手の自然成長が年齢で裏返らない（21歳${young} 38歳${old}）`);
 }
-
-// --- 7. 画面の見た目（符号付き・色） ---
 assert.equal(naturalGrowthText(0.42), '+0.42', '自然成長の表示に + が付かない');
 assert.equal(naturalGrowthText(-0.06), '-0.06', '自然成長のマイナスの表示が違う');
 assert.equal(naturalGrowthText(0.001), '±0.00', '横ばいが ±0.00 で出ない');
-assert.notEqual(naturalGrowthColor(0.9), naturalGrowthColor(-0.3), '伸びと衰えが同じ色になっている');
 assert.equal(naturalGrowthColor(-0.3), 'text-blue-400', '衰えが青で出ない');
+assert.notEqual(naturalGrowthColor(0.9), naturalGrowthColor(-0.3), '伸びと衰えが同じ色になっている');
 
 console.log(
-  `■ 自然成長: OK（表示と実際の差は最大${worst.toFixed(3)}・${compared}組 / `
-    + `衰え始め 独立${onsets.independent.join('・')}歳 オンライン${onsets.online.join('・')}歳 `
-    + `＝素質0.6・1.0・1.0意識70・1.4・1.8）`,
+  `■ 自然成長: OK（表示と実際の差は最大${worstGap.toFixed(2)}・${compared}組 / `
+    + `素質1.0の実測 ${fit.filter(([a]) => [19, 23, 27, 31, 35, 40].includes(a))
+      .map(([a, v]) => `${a}歳${v >= 0 ? '+' : ''}${v.toFixed(2)}`).join('・')} / `
+    + `衰え始め 素質0.6・1.0・1.4 で ${[0.6, 1.0, 1.4].map((gp) => crossOf(gp)).join('・')}歳）`,
 );

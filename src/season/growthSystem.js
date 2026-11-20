@@ -39,7 +39,7 @@ export function updateGrowthModifiers(allTeams, awards) {
       // ⚠ **`growthPotential` を年齢で減衰させないこと**。
       //    旧実装は毎年 `-(age-23)*0.05` を積んでおり、30歳で累計 -1.40。
       //    つまり **30代の選手は全員 gp が 0 付近に潰れ**、個性が消えたうえ、
-      //    年齢の効果が `basalGrowth` / `getAgeGrowthBase` と合わせて
+      //    年齢の効果が `naturalAgeCoef` / `getAgeGrowthBase` と合わせて
       //    **3箇所**に重なっていた（衰退が三重に掛かる）。
       //    成長率は「その選手の素の伸びやすさ」という不変の個性として残し、
       //    年齢はカーブ側が単独で担う。
@@ -88,25 +88,11 @@ export function updateGrowthModifiers(allTeams, awards) {
 // 年次成長に掛ける体格補正の幅。毎年・全能力に掛かるので、キャンプ(1.0)より弱くする
 const PHYSIQUE_W = 0.30;
 
-// 衰えの緩やかさ（負の伸びに掛ける）。⚠ いしだ 2026-11-20「衰えをもう2年ほど早めたいが、
-// 効果は緩やかに」。衰え**始め**は練習量の年齢の落ち（`YOUTH_MULT` のベテラン側）で早め、
-// 落ちる**量**はここで抑える。1.0 にすると以前の落ち方に戻る
-const DECLINE_SOFT = 0.45;
-
-// 【若いほど吸収が速い】練習成長の年齢係数。
-// ⚠ 旧実装は **19歳と23歳の伸びがほぼ同じ**だった（19歳比 94%）。
-//    実データの打者は 23-25歳で 20-22歳の約半分、26-27歳でほぼ0まで落ちる。
-//    プロ1〜3年目に技術が一気に伸びる、という当たり前が出ていなかった。
-// ⚠ **成長方向にだけ掛けること**（`physiqueMultFor` と同じ扱い）。練習項そのものに
-//    掛けると `基礎 + 練習 = 0` の交点が動き、**衰え始める年齢が変わってしまう**。
-//    正の delta にだけ掛ければ衰え始めは完全に不変（実測で 27/29/32/34/36/37 が一致）。
-// ⚠ 到達点は**ほぼ変わらない。早く着くだけ**（平均ケースのミートのピーク 78→75）。
-//    「22歳で成長が止まる」わけではない。
-//    実測の19歳比: 21歳82% / 23歳60% / 25歳43% / 27歳31% / 29歳23%
-const YOUTH_MULT = { 18: 1.95, 19: 1.85, 20: 1.68, 21: 1.50, 22: 1.32, 23: 1.16,
-                     24: 1.07, 25: 1.00, 26: 0.93, 27: 0.86, 28: 0.78, 29: 0.70,
-                     30: 0.64, 31: 0.59, 32: 0.55, 33: 0.51, 34: 0.48 };
-const youthMult = (age) => YOUTH_MULT[age] ?? (age < 18 ? 1.95 : 0.45);
+// ⚠ 【かつてここにあった「若いほど吸収が速い」の練習の年齢係数（`YOUTH_MULT`）】は
+//    2026-11-20に落とした。年齢は `naturalAgeCoef` の年齢曲線が**単独で**担う
+//    （練習の項に年齢の重みを足すと二重計上になり、衰え始める年齢が動く）。
+//    曲線は19歳から23歳まで上がって25歳まで平ら＝「高卒3〜5年目がいちばん伸びる」で、
+//    旧実装の「19歳が最大・23歳はその6割」とは山の位置が違う（いしだ指定）。
 
 // 新球種の習得。⚠ **大学プールにしか無かった**。社会人・独立・クラブの投手は
 // キャンプ以外に球種を増やす経路が無く、実測で12年進化させても球種数が
@@ -157,15 +143,16 @@ export const growthDecayRate = (base, gp = 1.0) =>
 //    **「体力から落ち、技術は残る」**という基本が出ていなかった。
 //    `npbCareer` は既に加齢プロファイルを別に持っている（肩0.5 / 走塁0.6 /
 //    リードは落ちない）ので、こちらもそれに揃える。
-// ⚠ **`peak` はピーク年齢のずらし（年）**。これが無いと
-//    **ピーク年齢と成長速度が同じパラメーターで決まってしまう**。
-//    成長量 = base × (基礎 + 練習 × 実効重み) で基礎は全能力共通なので、
-//    **実効重みが小さい能力ほど早く交点に達する**。実測でピーク年齢が
-//    実効重みときれいに並んでいた（ミート4.69→27歳 / 走力0.34→**19歳**）。
-//    その結果 **走力と肩は高校を出た瞬間が最高**で、あとは落ちるだけだった。
-//    「伸びにくい」ことと「ピークが早い」ことは別の話なので、軸を分ける。
+// ⚠ **`peakAge` はその能力の狙うピーク年齢**（実データの値をそのまま置く）。
+//    これが無いと**ピーク年齢と成長速度が同じパラメーターで決まってしまう**ので、
+//    軸を分ける。「伸びにくい」ことと「ピークが早い」ことは別の話。
 //    実データのピーク: 走力22-24 / 肩24-26 / パワー27-29 / ミート26-27 /
 //                     守備26-28 / 選球眼28-32（晩成）/ 球速24-26 / 制球28-32
+// ⚠ 2026-11-20に**意味が変わった**。以前は「基礎成長のピークの終わりを何年ずらすか」
+//    という補正値（走力+4・ミート-1）で、`基礎 + 練習` の交点が能力ごとにずれるのを
+//    打ち消すためのものだった。いまは年齢曲線（`naturalCoefOf`）が全能力で共通なので、
+//    **狙う年齢を直接書く**。曲線は `peakAge - PEAK_REF` だけ年齢方向にずれる
+//    （平均は `PEAK_REF`＝指定の表どおり、走力はそれより4年早く・選球眼は3年遅く山が来る）。
 // ⚠ **アマの打撃（ミート・パワー・選球眼）だけ天井を低く・急にしてある**（`ama`）。
 //    守備・制球と同じ 52 / 0.05 だった頃は、大学S・社会人Sのスタメン野手の中央値が
 //    ミート66/パワー66 と **NPBレギュラー基準（ミート58/パワー55）を上回り**、
@@ -189,37 +176,37 @@ const AMA_BAT = { threshold: 42, rate: 0.09, floor: 0.02 };
 const AMA_CTL = { threshold: 46, rate: 0.08, floor: 0.03 };
 
 export const STAT_GROWTH = {
-  meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 0.66 },
-  power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 1.78 },
-  eye:      { peak: 2, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 0.25 },
-  defense:  { peak: -1, ref: 50, base: 1.7, cap: 99,  threshold: 52, rate: 0.05, decline: 0.80 },
-  speed:    { peak: 4, ref: 50, base: 0.5, cap: 99,  threshold: 62, rate: 0.03, decline: 5.70 },
-  arm:      { peak: 6, ref: 50, base: 0.5, cap: 99,  threshold: 62, rate: 0.03, decline: 6.20 },
-  armP:     { peak: 6, ref: 50, base: 1.0, cap: 99,  threshold: 62, rate: 0.03, decline: 3.30 },  // 投手の肩
-  control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_CTL, decline: 0.44 },
-  stamina:  { peak: 2, base: 2.0, cap: 200, threshold: 62, rate: 0.03, decline: 1.48 },
-  velocity: { peak: 5, base: 0.5, cap: null, threshold: 142, rate: 0.20, decline: 6.00 },
+  meet:     { peakAge: 26.5, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 0.66 },
+  power:    { peakAge: 28, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 1.78 },
+  eye:      { peakAge: 30, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_BAT, decline: 0.25 },
+  defense:  { peakAge: 27, ref: 50, base: 1.7, cap: 99,  threshold: 52, rate: 0.05, decline: 0.80 },
+  speed:    { peakAge: 23, ref: 50, base: 0.5, cap: 99,  threshold: 62, rate: 0.03, decline: 5.70 },
+  arm:      { peakAge: 25, ref: 50, base: 0.5, cap: 99,  threshold: 62, rate: 0.03, decline: 6.20 },
+  armP:     { peakAge: 25, ref: 50, base: 1.0, cap: 99,  threshold: 62, rate: 0.03, decline: 3.30 },  // 投手の肩
+  control:  { peakAge: 30, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, ama: AMA_CTL, decline: 0.44 },
+  stamina:  { peakAge: 26, base: 2.0, cap: 200, threshold: 62, rate: 0.03, decline: 1.48 },
+  velocity: { peakAge: 25, base: 0.5, cap: null, threshold: 142, rate: 0.20, decline: 6.00 },
   // 体力・体幹・器用さ。年次成長では直接伸ばさないが、**大学とキャンプが使うので
   // 物差しはここに置く**（進路で「体力60」の意味が変わらないようにするため）。
-  bodyStamina: { peak: 2, ref: 50, base: 1.15, cap: 99, threshold: 62, rate: 0.03, decline: 1.00 },
-  muscle:      { peak: 4, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 0.60 },
-  dexterity:   { peak: 4, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 0.40 },
+  bodyStamina: { peakAge: 26, ref: 50, base: 1.15, cap: 99, threshold: 62, rate: 0.03, decline: 1.00 },
+  muscle:      { peakAge: 27, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 0.60 },
+  dexterity:   { peakAge: 27, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 0.40 },
   // 回復力は加齢で落ちる一方（`getRecoveryAgeBase` が別に担当）。ここは成長側だけ
-  recovery:    { peak: 2, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 1.20 },
+  recovery:    { peakAge: 26, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 1.20 },
   // ⚠ **変化球とリードは長らく年次成長の対象外だった**。社会人・独立・クラブの
   //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
   //    （大学プールだけが `applyUniversityGrowth` で伸ばしていた）。
   //    どちらも「実戦で最も磨かれる」ものなので、実戦成長の対象に入れる。
-  breaking: { peak: 4, ref: 50, base: 1.3, cap: 100, threshold: 52, rate: 0.04, decline: 0.20 },
+  breaking: { peakAge: 30, ref: 50, base: 1.3, cap: 100, threshold: 52, rate: 0.04, decline: 0.20 },
   // リードは経験の積み上げ。**加齢で落ちない**（`npbCareer` の加齢処理と同じ扱い）
-  lead:     { peak: 6, ref: 50, base: 1.1, cap: 95,  threshold: 52, rate: 0.05, decline: 0 },
+  lead:     { peakAge: 34, ref: 50, base: 1.1, cap: 95,  threshold: 52, rate: 0.05, decline: 0 },
 };
 
 // --- 自由契約選手の自主トレ成長 ---
 // ⚠ **成長の式を二重に持たないこと**。以前はここだけ旧式（`zeroAge` の分岐＋
 //    discipline の3乗の崖）が残っており、他が変わっても取り残されていた。
 //    「チームが無い」ことは **練習量(`FA_VOLUME`)と環境(`FA_GAIN`)が低い**
-//    という形で表す。プロ意識の効き方（`disciplineTrainMult`）は共通。
+//    という形で表す。プロ意識の効き方（`naturalCoefOf` のずらし）は共通。
 const FA_VOLUME = 0.55;   // 自主トレのみ。実戦も指導者も無い
 const FA_GAIN = 0.80;     // 環境も無い（チーム所属のランクD 0.80 相当）
 export function applyFreeAgentGrowth(pool) {
@@ -230,23 +217,29 @@ export function applyFreeAgentGrowth(pool) {
 
   for (const player of pool) {
     const age = player.age || 25;
-    const gp = player.growthPotential || 1.0;
     const discipline = player.personality?.discipline ?? 50;
+    // ⚠ **変動こみで読むこと**（`naturalCoefOf` の注記）。年度をまたぐ減衰の前に読む
+    const gpEff = gpClamp((player.growthPotential ?? 1.0) + (player.growthModifier || 0));
 
     // ⚠ growthPotential は年齢で減衰させない（`updateGrowthModifiers` の注記を参照）
     player.growthModifier = Math.max(-0.3, Math.round((player.growthModifier || 0) * 0.5 * 100) / 100);
 
-    const basal = basalGrowth(age, gp);
-    const practice = FA_VOLUME * disciplineTrainMult(discipline) * youthMult(age);
+    // ⚠ 年齢曲線は `naturalCoefOf`（**2つある成長関数で共有すること**）。
+    //    チームが無いので環境は FA_VOLUME×FA_GAIN、出場もゼロ扱い
+    const envMult = FA_VOLUME * FA_GAIN * (0.55 / ACT_REF);
 
     const grow = (current, key, baseMult = 1, capOverride = null) => {
       const g = STAT_GROWTH[key];
-      const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
-      const delta = g.base * baseMult * (statBasal + practice) * FA_GAIN * (0.6 + Math.random() * 0.6);
-      if (delta >= 0) {
-        return Math.min(capOverride ?? g.cap, current + stochasticRound(delta * decayMult(current, growthThreshold(ceilOf(g).threshold, gp), growthDecayRate(ceilOf(g).rate, gp), ceilOf(g).floor)));
+      const coef = naturalCoefOf(age, gpEff, discipline, g.peakAge);
+      const w = (g.base / BASE_REF) * baseMult * (0.75 + Math.random() * 0.30);
+      if (coef >= 0) {
+        const delta = coef * w * gpPosMult(gpEff) * envMult
+          * decayMult(current, growthThreshold(ceilOf(g).threshold, gpEff), growthDecayRate(ceilOf(g).rate, gpEff), ceilOf(g).floor);
+        return Math.min(capOverride ?? g.cap, current + stochasticRound(delta));
       }
-      return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref) * DECLINE_SOFT)));
+      // ⚠ 衰えは環境によらない（練習できなくても落ち方は同じ）
+      const delta = coef * w * declineWeight(g.decline ?? 1) / DECLINE_REF * declineScale(current, g.ref);
+      return Math.max(1, current + stochasticRound(dampDecline(current, delta)));
     };
 
     if (player.position === 'pitcher') {
@@ -310,38 +303,115 @@ export function applyFreeAgentGrowth(pool) {
 //    実測: ピーク0.35 では 意識20/50/90 の衰え始めが 32/36/衰えず に潰れた
 //    （練習量の差より基礎の下駄の方が大きいため）。0.14 まで下げて初めて
 //    26/31/36 に開く。**基礎は「何もしなくても少しは伸びる」程度でよい**。
-const BASAL_PEAK = 0.14;       // ピーク時の基礎成長（成長率1.0のとき）
-const BASAL_PEAK_END = 22;
-const BASAL_GP_SHIFT = 11;      // 成長率でピークの終わりが前後する（gp1.4→24.8歳 / gp0.6→19.2歳）
-const BASAL_DECAY = 0.090;     // ピーク以降、1歳ごとの落ち幅
-const BASAL_ACCEL = 0.012;     // 下り坂はわずかに加速する
-const BASAL_FLOOR = -1.8;
+// ============================================================
+// 【自然成長の年齢曲線】いしだ 2026-11-20 の指定
+//   「基本、成長係数は23歳まで徐々に上がり、出場試合数によってプラス変動、
+//     疲労があるのに出場することでマイナス変動、26歳から徐々に減り始めます」
+//
+//   素質1.0・プロ意識50・レギュラー出場・独立リーグ（ランクC）の高卒選手で
+//     19歳 1.00 / 20歳 1.05 / 21歳 1.10 / 22歳 1.15 / 23〜25歳 1.20（山）/
+//     26歳 1.15 / 27歳 1.05 / 28歳 0.90 / 29歳 0.70 / 30歳 0.45 / 31歳 0.15 /
+//     32歳 -0.20 / 34歳 -1.05 / 36歳 -2.10 / 38歳 -3.35 / 40歳 -4.80
+//   **単位は「主要な能力1つあたり・1年の点」**（1.00 なら平均+1、0 で横ばい、負で衰え）。
+//   25歳以降は傾きが毎年 0.05 ずつ急になる二次曲線で、指定の表と全点一致する。
+//
+// ⚠ **なぜ作り替えたか**。前の形（基礎 0.14 ＋ 練習の和）では、30代の衰えが
+//    1年で平均 -0.5 程度しかなく、実ワールドの測定で **32〜34歳が平均総合力も
+//    スタメン率もいちばん高い**（42.4・75% 対 23〜25歳の 42.0・71%）という
+//    「ベテランが居座って席が空かない」状態だった（いしだ指摘）。
+//    若手が追い抜くには、30代後半で数点ずつ落ちる必要がある。
+//
+// ⚠ 曲線の**位置**（何歳で山が来るか）を素質・プロ意識・蓄積した変動がずらす。
+//    曲線の**高さ**を素質で変えてはいけない。高さに掛けると素質1.4の選手が
+//    40歳で -6.7 と**いちばん激しく衰える**ことになる（素質が高い選手は
+//    長持ちするべき）。ずらしなら素質1.4は40歳で -2.6 に収まる。
+// ⚠ 年齢の項は**ここだけ**に置く（`applyAgeCurveChanges` の `getAgeGrowthBase` と
+//    合わせて2箇所）。練習の項に年齢の重みを足すと二重計上になる。
+// ============================================================
+const NATURAL_AT_19 = 1.00;        // 19歳（素質1.0）の1能力あたりの伸び
+const NATURAL_RISE = 0.05;         // 19→23歳の1年あたりの上がり幅
+const NATURAL_RISE_END = 23;
+const NATURAL_PEAK = 1.20;         // 23〜25歳の山
+const NATURAL_PEAK_END = 25;
+const NATURAL_SLOPE_STEP = 0.05;   // 25歳以降、傾きが毎年これだけ急になる
+const NATURAL_FLOOR = -5.5;        // 際限なく落ちない（実際は `dampDecline` が先に効く）
+
+/** 年齢（素質1.0に換算した「実効年齢」）→ 1能力あたりの伸び */
+export function naturalAgeCoef(effAge) {
+  // ⚠ 19歳より前は**平らにする**（下げない）。素質が高い選手は曲線が後ろにずれるので、
+  //    延長して下げると「素質1.4の19歳が素質1.0の19歳より伸びない」ことになる
+  if (effAge <= 19) return NATURAL_AT_19;
+  if (effAge <= NATURAL_RISE_END) return NATURAL_AT_19 + (effAge - 19) * NATURAL_RISE;
+  if (effAge <= NATURAL_PEAK_END) return NATURAL_PEAK;
+  const k = effAge - NATURAL_PEAK_END;
+  // ⚠ 40歳（k=15）より先は**まっすぐにする**（指定の表はそこで終わっている）。
+  //    二次曲線のまま延ばすと、早くピークが来る能力（走力は実効年齢が2.6歳うしろ）が
+  //    40歳の時点でもう -7 を超え、1年で走力が10点落ちるようなことになる。
+  const K_END = 15;
+  if (k <= K_END) return NATURAL_PEAK - (NATURAL_SLOPE_STEP / 2) * k * (k + 1);
+  const atEnd = NATURAL_PEAK - (NATURAL_SLOPE_STEP / 2) * K_END * (K_END + 1);
+  const slope = NATURAL_SLOPE_STEP * K_END;   // k=15 の傾き（-0.75/年）
+  return Math.max(NATURAL_FLOOR, atEnd - slope * (k - K_END));
+}
+
+// 曲線を年齢方向にずらす量。
+// ⚠ 素質は `growthPotential + growthModifier`（出場で積み、疲労で削れる変動こみ）。
+//    いしだ「大事に使われたら毎年+0.1程度増える」＝1年で曲線が0.8歳うしろにずれる。
+//    **以前は `makeGrower` が `growthPotential` しか読んでおらず、変動は
+//    年度替わりの成長にまったく効いていなかった**（精神力・体幹だけが見ていた）。
+const GP_AGE_SHIFT = 8;    // 素質1.4→+3.2歳 / 0.6→-3.2歳
+const DISC_AGE_SHIFT = 5;  // プロ意識90→+2.0歳 / 20→-1.5歳
+/**
+ * 素質が**伸びる側だけ**に掛かる倍率（0.3→0.69 / 1.0→1.00 / 1.8→1.36）。
+ * ⚠ ずらしだけでは足りない。ずらしは「いつまで伸びるか」しか変えないので、
+ *    19歳の時点では素質1.4と素質0.6がほぼ同じ伸びになってしまう
+ *    （曲線を後ろにずらすと若いうちは平らな部分に乗るため）。
+ * ⚠ **衰える側には掛けない**。掛けると素質1.4の選手が40歳でいちばん激しく衰える。
+ */
+const gpPosMult = (gpEff) => 0.55 + 0.45 * gpClamp(gpEff);
+// 主要な能力の `peakAge` の加重平均。**指定の表はこの「平均的な能力」に当たる**。
+// 能力ごとの曲線は `peakAge - PEAK_REF` だけ年齢方向にずれる（走力は4年早く・選球眼は3年遅く）
+const PEAK_REF = 26.5;
 
 /**
- * 基礎成長。練習と無関係に身体が育つ／衰える分。
- *
- * ⚠ **`growthPotential` は年齢を含まない素の個性として渡すこと**。
- *    年齢の効果はこの関数が単独で担う（`applyAgeCurveChanges` の
- *    `getAgeGrowthBase` と合わせて2箇所。それ以外に年齢の項を作らない）。
+ * その選手・その能力の、今年の1点あたりの伸び（年齢曲線の値）。
+ * @param gpEff 素質＋蓄積した変動（0.3〜1.8にクランプ）
+ * @param peakAge `STAT_GROWTH[].peakAge`（走力は早く・選球眼は遅くピークが来る）
  */
-export function basalGrowth(age, gp = 1.0, peakShift = 0) {
-  const g = Math.max(0.3, Math.min(1.8, gp));
-  const peak = g * BASAL_PEAK;
-  const peakEnd = BASAL_PEAK_END + (g - 1) * BASAL_GP_SHIFT + peakShift;
-  if (age <= peakEnd) return peak;
-  const x = age - peakEnd;
-  return Math.max(BASAL_FLOOR, peak - BASAL_DECAY * x * (1 + BASAL_ACCEL * x));
+export function naturalCoefOf(age, gpEff = 1.0, discipline = 50, peakAge = PEAK_REF) {
+  const shift = (gpClamp(gpEff) - 1) * GP_AGE_SHIFT
+    + ((discipline ?? 50) - 50) / 100 * DISC_AGE_SHIFT
+    + ((peakAge ?? PEAK_REF) - PEAK_REF);
+  return naturalAgeCoef((age || 25) - shift);
 }
 
-// 練習成長に掛かるプロ意識の倍率。**常に 0 以上**（練習は身体を削らない）。
-// 意識10以下は「練習しない」＝基礎成長だけで生きる選手。
-//   20→0.13 / 50→0.50 / 70→0.75 / 90→1.00 / 100→1.13
-// ⚠ 幅を狭めると衰え始める年齢の散らばりが消える。この幅が
-//   「20代中盤で終わる者」と「30代後半まで現役の者」を分けている。
-const DISC_TRAIN_W = 1.45;
-export function disciplineTrainMult(discipline = 50) {
-  return Math.max(0, (discipline - 10) / 100) * DISC_TRAIN_W;
-}
+// 能力ごとの伸びやすさ（`STAT_GROWTH[].base`）を「平均1」に直すための基準。
+// ⚠ **指定の表が当たる条件**（独立リーグ・ランクC・レギュラー出場・プロ意識50）で
+//    主要な能力の平均が曲線の値どおりになるよう較正してある。`CATEGORY_GROWTH` の
+//    `volume`・`gain` やランクの倍率を変えたら、`natural-growth-check` で測り直す。
+const BASE_REF = 1.33;
+// 衰え側の基準。`STAT_GROWTH[].decline` の加重平均ぶんを割って、
+// **平均は曲線どおり・能力ごとの落ち方は profile どおり**にする
+const DECLINE_REF = 0.83;
+/**
+ * 能力ごとの衰えやすさの**開きを縮める**倍率。
+ * ⚠ `decline` の生の値は走力5.7・肩6.2 対 選球眼0.25 と **23倍**の開きがある。
+ *    これは「基礎成長が -0.5 程度」だった頃に、ピーク→38歳の減衰率(%)を実データに
+ *    合わせて決めた値。年齢曲線にしてマイナスが -2〜-4.8 に大きくなったので、
+ *    生の開きのままでは **36歳で走力が1年に6点落ちる**（実測）ことになった。
+ *    開きを 0.30 に縮めて、順序（体から落ち、技術は残る）だけを残す。
+ * ⚠ `decline: 0`（捕手のリード）は0のまま＝加齢で落ちない。
+ */
+const DECLINE_SPREAD = 0.30;
+const declineWeight = (decline) =>
+  !decline ? 0 : 1 + (decline - 1) * DECLINE_SPREAD;
+// 出場量の基準（フル出場）。これで割って「レギュラーなら1.0・控えは下がる」にする
+const ACT_REF = 1.50;
+
+// ⚠ 【かつてここにあった練習成長のプロ意識倍率（`disciplineTrainMult`）】は
+//    2026-11-20に落とした。プロ意識は**年齢曲線のずらし**（`DISC_AGE_SHIFT`）に移した。
+//    練習の項に足して基礎の負を打ち消す形だと、プロ意識が高い選手が
+//    **いつまでも衰えない**（それが「ベテランが居座る」原因だった）。
 
 // 1年で失える割合の上限。**衰えても「小学生以下」までは落ちない**。
 // ⚠ 下限でクランプしてはいけない（`corporateInit.taperLow` と同じ理由。
@@ -349,7 +419,11 @@ export function disciplineTrainMult(discipline = 50) {
 //    符号は変わらないので「衰え始める年齢」は完全に不変のまま、
 //    崩壊だけが止まる。旧実装も新実装も、練習しない選手のミートが
 //    最終的に **1** まで落ちていた（旧は27歳、新は40歳で到達）。
-const DECLINE_MAX_RATE = 0.055;
+// ⚠ いしだ 2026-11-20「実際プレイしていると、なかなか衰えず、ずっとベテランが
+//    居座ります」。0.055 では能力50の選手が1年で2.75点しか落ちず、指定の年齢曲線
+//    （40歳で -4.80）が能力87以上でしか実現しなかった。0.12 にすると能力50で
+//    1年6点まで落ちられる＝36歳あたりから席を明け渡す
+const DECLINE_MAX_RATE = 0.12;
 const dampDecline = (current, delta) => Math.max(delta, -Math.max(1, current * DECLINE_MAX_RATE));
 
 // ⚠ **衰えは能力値に比例させること**。`grow()` の delta は `base × 年齢係数` で
@@ -533,7 +607,9 @@ export function seasonActivity(player) {
 // ⚠ 実測（`online-yearend-growth-probe.mjs`、初期セット12球団×6回、2026-11-16）:
 //    21歳以下の野手 体力+2.1 精神+1.8 肩力+1.5 体幹+1.4 走力+0.9 パワー+0.8 守備+0.4（ミート・選球眼は+0.3未満）、
 //    21歳以下の投手 体力+1.9 精神+1.7 体幹・肩力・走力+1.3 変化球+1.2 球速+1.0 スタミナ+1.0 制球+0.3。
-//    22〜25歳はその半分ほど、26歳からは伸びより衰えが勝つ（衰えは前と同じ）。
+//    22〜25歳はその半分ほど、26歳からは伸びより衰えが勝つ。
+//    ⚠ 2026-11-20に年齢曲線を作り替えたので、**年齢ごとの量はこの実測から動いている**
+//      （ここの役目は能力の種類ごとの重みだけ。年齢は `naturalAgeCoef` が担う）。
 //    前（独立リーグの式）は21歳以下の野手で 制球・肩力・守備+0.8 ミート+0.6 と技術もフィジカルも同じくらいだった
 export const NATURAL_GROWTH_KIND = {
   speed: 2.2, arm: 2.2, armP: 1.8, velocity: 1.8, stamina: 1.6, bodyStamina: 1.8,
@@ -541,11 +617,18 @@ export const NATURAL_GROWTH_KIND = {
   meet: 0.35, eye: 0.35, control: 0.35, defense: 0.35, breaking: 0.5, lead: 0.6,
   steal: 0.35, bunt: 0.35,
 };
-// 若いほど伸びる（伸びる側だけ）。成長係数は基礎成長（`basalGrowth`）と天井が見ている
+// 若いほど伸びる（伸びる側だけ）。⚠ `applyAgeCurveChanges` が見る能力（回復力・体力・
+// 盗塁・バント、投手の打撃）**だけ**に残してある。主要な能力は `naturalCoefOf` の
+// 年齢曲線が年齢を担うので、そちらでは `naturalKind`（年齢を含まない）を使う
 const NATURAL_YOUTH = { 18: 1.6, 19: 1.5, 20: 1.4, 21: 1.3, 22: 1.15, 23: 1.05, 24: 0.95, 25: 0.85, 26: 0.75 };
 export const naturalYouth = (age) => NATURAL_YOUTH[age] ?? (age < 18 ? 1.6 : 0.65);
 /** 自然成長の伸びる側の倍率（能力の種類×若さ） */
 export const naturalPositive = (key, age) => (NATURAL_GROWTH_KIND[key] ?? 1.0) * naturalYouth(age);
+// 能力の種類ごとの重みだけ（年齢を含まない）。平均が1になるように割る。
+// ⚠ `makeGrower` はこちらを使う（年齢は `naturalCoefOf` の曲線が単独で担うので、
+//    ここに年齢の重み（`naturalYouth`）を掛けると二重計上になる）
+const NATURAL_KIND_MEAN = 1.05;
+export const naturalKind = (key) => (NATURAL_GROWTH_KIND[key] ?? 1.0) / NATURAL_KIND_MEAN;
 
 // 精神力・体幹の自然な伸び（1年あたりの期待値。成長係数1.0のとき）。
 // ⚠ どちらも**年度更新では今まで一度も動かなかった**（精神力は初期値のまま、体幹はキャンプだけ）。
@@ -576,12 +659,13 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
     return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
     const age = player.age || 25;
-    const gp = player.growthPotential || 1.0;
+    // ⚠ **変動（`growthModifier`）こみで読むこと**。出場で積み・疲労で削れる分で
+    //    年齢曲線が前後する（いしだ 2026-11-20「出場試合数によってプラス変動、
+    //    疲労があるのに出場することでマイナス変動」）。以前はここが
+    //    `player.growthPotential` だけで、**変動は年度替わりの成長に効いていなかった**
+    const gpEff = gpClamp((player.growthPotential ?? 1.0) + (player.growthModifier || 0));
+    const gp = gpEff;
     const discipline = player.personality?.discipline ?? 50;
-
-    // 実成長 = 基礎成長 + 練習成長（**分岐なし。和の符号がすべて**）。
-    // 設計は冒頭の「実成長 = 基礎成長 + 練習成長」の節を参照。
-    const basal = basalGrowth(age, gp);
     // その年の充実度（前年を引き継ぐ）。⚠ 成長方向にだけ掛ける
     // ⚠ `opts.peek` は**選手を書き換えない**（画面に出す「今年の自然な伸び」用）。
     //    `advanceGrowthForm` は `_growthForm` を進める＝状態を書き換えるので、
@@ -599,14 +683,13 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
     //    レギュラー(240打席)の値は 1.25 のまま据え置き、**下を伸ばす**。
     //    控えは 0.45＝レギュラーの36%しか練習量を得られない。
     const activityMult = 0.55 + Math.min(0.95, activity / 300);   // 0.55〜1.50
-    // ⚠ **若年前倒しは練習項にだけ掛けること**。「若いほど吸収が速い」は
-    //    **練習の吸収**の話で、基礎成長は `basalGrowth` が自前の年齢カーブを
-    //    持っている。実成長全体に掛けると**年齢の効果を二重に計上**する。
-    //    練習項の中に入れると `基礎 + 練習 = 0` の交点が動くので、
-    //    **衰え始める年齢の再較正とセット**になる（年配ほど練習で衰えを
-    //    抑えられなくなる＝実際の関係と同じ向き）。
-    const practice = (prof.volume ?? 1.0) * activityMult
-      * disciplineTrainMult(discipline) * youthMult(age);
+    // 環境の倍率（**伸びる側だけ**に掛かる）。練習量・設備・出場量。
+    // ⚠ プロ意識と素質は**年齢曲線のずらし**に移した（`naturalCoefOf`）。ここに
+    //    足し算で入れると、年齢の効果が二重になるうえ「プロ意識が高いと
+    //    いつまでも衰えない」が戻る（それが「ベテランが居座る」原因だった）。
+    // ⚠ 年齢の重み（`youthMult`）もここには入れない。年齢は曲線が単独で担う。
+    const envMult = (prof.volume ?? 1.0) * (prof.gain ?? 1.0) * rankMult
+      * (activityMult / ACT_REF);
 
     // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
     // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
@@ -667,20 +750,24 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
     const changeOf = (current, key, baseMult = 1, noise = null) => {
       const g = STAT_GROWTH[key];
       const specKey = key === 'armP' ? 'arm' : key;
-      // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
-      // ⚠ 和の中なので、基礎が負になる年齢（衰え）でも練習×specMult が打ち消す。
-      //    カテゴリの長所・短所の重みは、伸びだけでなく衰えの大きさにも効く
-      const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
-      const delta = g.base * baseMult * (statBasal + practice * specMult(specKey))
-        * rankMult * (prof.gain ?? 1.0) * (noise ?? YEAR_NOISE_LO + Math.random() * YEAR_NOISE_W);
-      if (delta >= 0) {
+      // 年齢曲線の値（1能力あたりの点）。能力ごとのピークのずれ（`peak`）もここで見る
+      const coef = naturalCoefOf(age, gpEff, discipline, g.peakAge);
+      // 能力ごとの伸びやすさを「平均1」に直す（ミート1.9 対 走力0.5 の差は残す）
+      const w = (g.base / BASE_REF) * baseMult
+        * (noise ?? YEAR_NOISE_LO + Math.random() * YEAR_NOISE_W);
+      if (coef >= 0) {
         const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * formMult
-          * (prof.natural ? naturalPositive(key, age) : 1);
-        return delta * phys * decayMult(current, growthThreshold(ceilOf(g, prof.pro).threshold + (prof.ceilingShift ?? 0), gp), growthDecayRate(ceilOf(g, prof.pro).rate, gp), ceilOf(g, prof.pro).floor);
+          * (prof.natural ? naturalKind(key) : 1);
+        return coef * w * gpPosMult(gpEff) * specMult(specKey) * envMult * phys
+          * decayMult(current, growthThreshold(ceilOf(g, prof.pro).threshold + (prof.ceilingShift ?? 0), gp), growthDecayRate(ceilOf(g, prof.pro).rate, gp), ceilOf(g, prof.pro).floor);
       }
-      // ⚠ 衰えは `DECLINE_SOFT` で緩める（いしだ 2026-11-20）。**2か所ある成長関数の
-      //    両方に掛けること**（ここと `applyFreeAgentGrowth`）
-      return dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref) * DECLINE_SOFT);
+      // 衰え: 能力ごとの衰えやすさ（`decline`。走力・肩から落ち、選球眼は残る）と
+      // 水準への比例だけを掛ける。
+      // ⚠ **長所・短所の重み（`specMult`）は掛けない**。掛けると独立リーグの一芸
+      //    （×2.6）がいちばん速く崩れる＝設計と逆になる。
+      // ⚠ **環境（`envMult`）も掛けない**。練習できない選手が落ちにくくなってしまう。
+      return dampDecline(current, coef * w * declineWeight(g.decline ?? 1) / DECLINE_REF
+        * declineScale(current, g.ref));
     };
     /** 今年の変化の平均（ゆらぎを均した年）。画面の「自然成長」に使う */
     const expect = (current, key, baseMult = 1) =>
