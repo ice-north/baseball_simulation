@@ -180,6 +180,40 @@ assert.ok(
   );
 }
 
+// 版18へ上げるとき、出身の無い選手に高校（と一部は大学）を付ける
+// ⚠ いしだ 2026-11-20「初期メンバーにも、高校や大学のラベル付けをしてほしいです」。
+//    前からあるリーグはここで付けないと、いま遊んでいるリーグだけ空のままになる
+{
+  const blank = { id: 101, name: '昔からの選手', age: 24, rank: 'B' };
+  const fromSchool = { id: 102, name: '高校から来た選手', age: 19, highSchool: { name: '既にある高校', pref: '東京' } };
+  const student = { id: 103, name: '大学から来た選手', age: 22, universityTeamName: '既にある大学' };
+  const old = {
+    schema: 17,
+    engineVersion: ONLINE_ENGINE_VERSION,
+    seed: 1,
+    members: [],
+    game: { teams: { A: { players: [blank, fromSchool, student] } } },
+  };
+  migrateLeague(old);
+  assert.ok(blank.highSchool?.name, '出身の無い選手に高校を付けていない');
+  assert.ok(blank.highSchool?.pref, '付けた高校に県が無い（地元の縁が引けない）');
+  assert.ok(
+    (blank.careerHistory || []).some((h) => h.type === 'highschool'),
+    '付けた出身が経歴に出ない',
+  );
+  // ⚠ **在学中の印は付けない**（プロ指名の「大学4年生のみ指名可」に引っかかる）
+  assert.ok(!blank.universityTeamId && !blank.universityYear, '大学の在学の印を付けている');
+  // 分かっている選手は触らない
+  assert.equal(fromSchool.highSchool.name, '既にある高校', '分かっている出身を書き換えた');
+  assert.equal(student.universityTeamName, '既にある大学', '分かっている大学を書き換えた');
+  assert.ok(!student.highSchool, '大学から来た選手に高校を足している');
+  // ⚠ **選手ごとに種を決めて引く**（やり直しても同じ学校。バックアップから戻しても変わらない）
+  const again = { id: 101, name: '昔からの選手', age: 24, rank: 'B' };
+  const twice = { ...old, schema: 17, game: { teams: { A: { players: [again] } } } };
+  migrateLeague(twice);
+  assert.equal(again.highSchool.name, blank.highSchool.name, '移行をやり直すと出身が変わる');
+}
+
 // --- どの版をどう扱うか ----------------------------------------------
 const league = (overrides) => ({
   schema: ONLINE_SCHEMA,

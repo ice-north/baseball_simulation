@@ -20,6 +20,8 @@ import { captureWorld } from '../../server/worldSnapshot.mjs';
 import { packWaiting, pendingProcedure } from '../../src/online/notices.js';
 import { projectLeague } from '../../server/projection.mjs';
 import { jstWeekday } from '../../src/online/shared.js';
+import { UNIVERSITY_MIN_AGE } from '../../src/season/playerOrigin.js';
+import { CITY_PREFS, localPlayers } from '../../src/online/hometown.js';
 import {
   generateRosterPacks,
   packSummary,
@@ -172,6 +174,48 @@ for (const seed of [20261103, 777, 42, 1]) {
     `23歳以下が少なすぎる: ${((ages.filter((a) => a <= 23).length / ages.length) * 100).toFixed(1)}%`,
   );
   assert.ok(mean >= 22.5 && mean <= 25, `平均年齢が範囲外: ${mean.toFixed(1)}`);
+}
+
+// --- 出身（高校・大学）-------------------------------------------------------
+// ⚠ いしだ 2026-11-20「初期メンバーにも、高校や大学のラベル付けをしてほしいです」。
+//    付ける前は出身が空で、選手情報の「出身高校」も経歴も出ず、同窓・地元の縁
+//    （`src/online/hometown.js`）にも一度も引っかからなかった。
+{
+  const all = packs.flatMap((p) => p.players);
+  // 全員に出身高校（県つき）
+  for (const p of all) {
+    assert.ok(p.highSchool?.name, `${p.name} に出身高校が無い`);
+    assert.ok(p.highSchool?.pref, `${p.name} の出身高校に県が無い（地元の縁が引けない）`);
+    // ⚠ **在学中の印は付けない**。付くとプロ指名が「大学4年生のみ指名可」に
+    //    引っかかり、年度末の戦力外でも在学生扱いになる（`playerOrigin.js` の注）
+    assert.ok(!p.universityTeamId, `${p.name} に大学の在学の印が付いている`);
+    assert.ok(!p.universityYear, `${p.name} に大学の学年が付いている`);
+    // 経歴にも残す（選手情報の「経歴」の行）
+    assert.ok(
+      (p.careerHistory || []).some((h) => h.type === 'highschool'),
+      `${p.name} の経歴に高校が無い`,
+    );
+  }
+  // 大学を出た選手が混ざる（22歳以上の一部）。若い選手には付かない
+  const uni = all.filter((p) => p.universityName);
+  const share = uni.length / all.length;
+  assert.ok(share >= 0.1 && share <= 0.4, `大学を出た選手の割合が範囲外: ${(share * 100).toFixed(0)}%`);
+  for (const p of uni) {
+    assert.ok(p.age >= UNIVERSITY_MIN_AGE, `${p.age}歳なのに大学を出ている: ${p.name}`);
+    assert.ok(
+      (p.careerHistory || []).some((h) => h.type === 'university' && h.label === p.universityName),
+      `${p.name} の経歴に大学が無い`,
+    );
+  }
+  // ⚠ 学校がばらけること（同じ高校ばかりだと同窓だらけになる）
+  const schools = new Set(all.map((p) => p.highSchool.name));
+  assert.ok(
+    schools.size >= all.length * 0.6,
+    `出身高校が偏りすぎ: ${schools.size}校 / ${all.length}人`,
+  );
+  // ⚠ 同窓・地元の縁が引けるようになったこと（出身が空だと0件のままだった）
+  const locals = CITY_PREFS ? Object.keys(CITY_PREFS).filter((city) => localPlayers(city, all).length) : [];
+  assert.ok(locals.length > 0, '地元出身の選手が1人も引けない');
   // 版2は19〜24歳のまま
   const young = generateRosterPacks(20261103, { style: YOUNG_PACK_STYLE });
   for (const pack of young)
@@ -654,5 +698,5 @@ try {
 }
 
 console.log(
-  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 構成と格の型がばらけ、型の決まりを守る / 同じ枠の平均からの開きが3%以内 / 19〜32歳（衰える年齢も混ざる）/ 版1・版2は前の作り方のまま / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
+  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 出身の高校・大学（在学の印は付けない）/ 構成と格の型がばらけ、型の決まりを守る / 同じ枠の平均からの開きが3%以内 / 19〜32歳（衰える年齢も混ざる）/ 版1・版2は前の作り方のまま / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
 );

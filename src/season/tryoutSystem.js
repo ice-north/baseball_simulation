@@ -21,6 +21,7 @@ import {
 } from '../utils/constants.js';
 import { generateBats } from '../utils/handedness.js';
 import { reservePlayerIds } from '../state/playerIds.js';
+import { fillPlayerOrigin } from './playerOrigin.js';
 
 // 2年目以降トライアウトの1チームあたり基準受験者数
 // 構成比はリーグ注目度(developmentReputation)で変動する（下記 generateTryoutCandidates 参照）:
@@ -400,6 +401,11 @@ export function createCandidatePlayer(options) {
   applyLeagueLevelShift(player, options.rank, options.levelShift);
   // ⚠ 引いた帯を選手に残す。初期セットの「A2名・B10名・C12名」はこれで数える
   if (options.rank) player.rank = options.rank;
+  // 出身（高校・大学）。⚠ いしだ 2026-11-20「初期メンバーにも、高校や大学のラベル付けを
+  //    してほしいです」。生成した選手は出身が空で、選手情報の「出身高校」も経歴も出ず、
+  //    同窓・地元の縁（`src/online/hometown.js`）にも一度も引っかからなかった。
+  //    ⚠ 在学中の印（`universityTeamId` / `universityYear`）は付けない（`playerOrigin.js` の注）
+  fillPlayerOrigin(player);
 
   player.scoutComment = generateScoutComment(player);
   return player;

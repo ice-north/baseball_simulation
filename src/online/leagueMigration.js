@@ -3,6 +3,8 @@ import { createCoaches, upgradeCoach } from './coaches.js';
 import { nextMemberIndex } from './membership.js';
 import { teamSplitsOf } from './recordStats.js';
 import { clampOverCap } from '../utils/constants.js';
+import { fillPlayerOrigin } from '../season/playerOrigin.js';
+import { withSeededRandom, hashSeed } from '../game/rng.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -252,6 +254,22 @@ export const MIGRATIONS = [
       //    （`server/proDraft.mjs` の `draftSnapshot`）。前からある指名は選手が
       //    名簿から消えていて写しを作れないので、画面はその行の名前を押せないままにする。
       //    ここで作るものは無いので、段は版を上げるだけ。
+    },
+  },
+  {
+    from: 17,
+    to: 18,
+    note: '初期セットの選手に出身（高校・大学）を付けた',
+    apply(league) {
+      // ⚠ いしだ 2026-11-20「初期メンバーにも、高校や大学のラベル付けをしてほしいです」。
+      //    これから作るセットは生成のときに付く（`tryoutSystem.js` の `createCandidatePlayer`）。
+      //    **前からあるリーグはここで付ける**（付けないと、いま遊んでいるリーグだけ空のまま）。
+      // ⚠ 出身が分かっている選手（高校・大学から入った選手）は触らない（`fillPlayerOrigin`）。
+      // ⚠ **選手ごとに種を決めて引く**。移行をやり直しても同じ学校になる
+      //    （バックアップから戻したときに出身が変わらない）
+      for (const team of Object.values(league.game?.teams || {}))
+        for (const p of team?.players || [])
+          withSeededRandom(hashSeed(`origin:${p.id}`), () => fillPlayerOrigin(p));
     },
   },
 ];
