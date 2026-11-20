@@ -598,9 +598,50 @@ export class SupabaseStore {
     }
     return { outcome, views, archives, prepared };
   }
+  /**
+   * 処理の占有を取る（`online_claim`）。返る管理行は**要る列だけ**に絞る。
+   * ⚠ `returning *` のままだと、書き込みのたびに参加者全員ぶんのビュー（1人約300KB）を
+   *    受け取っていた。使うのは世代・保存の場所・索引（`_records`）・部分の履歴（`_parts`）だけ
+   *    （監査 2026-11-20、いしだ「おすすめで」）。
+   * ⚠ 絞り込みが通らない環境（PostgREST が 400）では `selectControl` と同じ印を立てて全列で取り直す。
+   *    400 は問い合わせを読む段で断られるので、占有は取られていない（取り直しても二重にならない）。
+   */
+  async claim(token) {
+    if (!this.narrowSelectUnsupported) {
+      try {
+        const select = [
+          'generation',
+          'snapshot_path',
+          'previous_paths',
+          'records:views->_records',
+          'parts:views->_parts',
+        ].join(',');
+        const rows = await this.request(
+          `/rest/v1/rpc/online_claim?select=${encodeURIComponent(select)}`,
+          { method: 'POST', body: { p_token: token } },
+        );
+        const row = rows?.[0];
+        if (!row) return null;
+        // 絞り込みを黙って無視して全列が返った（`views` がある）なら、そのまま使う
+        if (row.views) return row;
+        const { records, parts, ...rest } = row;
+        return {
+          ...rest,
+          views: {
+            ...(records ? { _records: records } : {}),
+            ...(parts ? { _parts: parts } : {}),
+          },
+        };
+      } catch (error) {
+        if (error.storageStatus !== 400) throw error;
+        this.narrowSelectUnsupported = true;
+      }
+    }
+    return (await this.rpc('online_claim', { p_token: token }))[0];
+  }
   async transaction(fn, { full = false } = {}) {
     const token = randomUUID();
-    const row = (await this.rpc('online_claim', { p_token: token }))[0];
+    const row = await this.claim(token);
     requireOnline(
       row,
       '他の処理が実行中です。少し待って再読込してください',

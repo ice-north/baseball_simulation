@@ -54,6 +54,7 @@ import jp.icenorth.baseball.shared.packWaiting
 import jp.icenorth.baseball.shared.CAMP_ROUNDS
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.proDraftOfYear
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
@@ -268,6 +269,10 @@ fun HomeScreen(
                         TextButton(onClick = { model.markCampSeen(campKey) }) { Text("キャンプ結果を閉じる") }
                     }
                 }
+            // その年のNPBドラフト（指名から年度更新まで）と、開幕した月までの「その年のまとめ」
+            // （キャンプで見逃した人のため）。Web 版のホームと同じ
+            if (proDraftOfYear(view.chronicle, view.year).isNotEmpty()) item(key = "proDraft") { ProDraftCard(model) }
+            if (view.phase == null && view.yearSummary != null) item(key = "yearSummary") { YearSummaryCard(model) }
             item(key = "paper") {
                 PaperTabs(paper, localPage.title) { model.changeHomePaper(it.name) }
             }

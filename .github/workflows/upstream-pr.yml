@@ -64,7 +64,8 @@ jobs:
           num=$(gh pr list -R "$UPSTREAM" --state open --head "$BRANCH" --json number,headRepositoryOwner \
                   --jq "map(select(.headRepositoryOwner.login == \"$owner\"))[0].number // empty")
           if [ -n "$num" ]; then
-            gh pr edit "$num" -R "$UPSTREAM" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
+            # ⚠ `gh pr edit` は GraphQL で read:org を求め、public_repo だけの PAT では落ちる。REST で書き換える
+            gh api -X PATCH "repos/$UPSTREAM/pulls/$num" -f title="$TITLE" -F body=@"$RUNNER_TEMP/body.md" > /dev/null
             url="https://github.com/$UPSTREAM/pull/$num"
             echo "既存の PR を書き換えた: $url"
           else

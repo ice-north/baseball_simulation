@@ -272,6 +272,16 @@ export const MIGRATIONS = [
           withSeededRandom(hashSeed(`origin:${p.id}`), () => fillPlayerOrigin(p));
     },
   },
+  {
+    from: 18,
+    to: 19,
+    note: '救援の「同じ役割の中の順番」を保存に足した',
+    apply() {
+      // ⚠ **足す方向だけの変更**（`team.pitchingRotation.pitcherOrder`）。
+      //    無い球団は名簿の並び＝今までの順で動く（`lineupTactics.mjs` の `reliefOrderOf`）。
+      //    次に投手起用を保存したときに入るので、ここで作るものは無い
+    },
+  },
 ];
 
 // ⚠ **手順表と目標の版を差し替えられるようにしてある**。段が0本だった頃に、

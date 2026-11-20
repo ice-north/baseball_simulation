@@ -22,6 +22,8 @@ import {
   setRole,
   insertStarter,
   reliefGroups,
+  moveRelief,
+  reliefOrderOf,
   pitchingProblems,
   addToStaff,
   removeFromStaff,
@@ -262,6 +264,54 @@ accepted(start);
   );
 }
 
+// --- 同じ役割の中の順番（いしだ 2026-11-20「リリーフ投手が同じロールだった場合、
+//     並びが上の選手が優先して使われてしまいます。同じロール内で順番を入れ替えられる
+//     ようにしてほしいです」）------------------------------------------------
+{
+  const roleOf = (state, id) => state.roles[id];
+  const groupIds = (state, role) =>
+    reliefGroups(state, roster)
+      .find((g) => g.role === role)
+      .players.map((p) => p.id);
+  // 同じ役割に2人以上いる括りを探す
+  const role = RELIEF_ORDER.find((r) => groupIds(start, r).length >= 2);
+  assert.ok(role, '前提: 同じ役割が2人以上の括りが無い');
+  const before = groupIds(start, role);
+  // ⚠ 下へ動かすと、その役割の中だけで入れ替わる
+  const moved = moveRelief(start, before[0], 1, roster);
+  assert.deepEqual(
+    groupIds(moved, role),
+    [before[1], before[0], ...before.slice(2)],
+    '同じ役割の中で入れ替わらない',
+  );
+  // ⚠ **ほかの役割は動かさない**
+  for (const other of RELIEF_ORDER)
+    if (other !== role)
+      assert.deepEqual(groupIds(moved, other), groupIds(start, other), `${other} まで動いた`);
+  for (const id of Object.keys(start.roles))
+    assert.equal(roleOf(moved, Number(id)), roleOf(start, Number(id)), '役割が変わった');
+  // 端では動かない
+  assert.equal(moveRelief(start, before[0], -1, roster), start, '先頭が上へ動いた');
+  assert.equal(
+    moveRelief(start, before.at(-1), 1, roster),
+    start,
+    '最後が下へ動いた',
+  );
+  // ⚠ **並べ替えただけでも「変えた」になる**（保存のボタンが押せる）
+  assert.ok(!samePitching(start, moved), '並べ替えが変更として数えられない');
+  // ⚠ 保存の形に順番が入り、読み直すと同じ並びに戻る
+  const plan = planFromPitching(moved);
+  assert.deepEqual(plan.pitcherOrder, moved.order, '保存の形に順番が入っていない');
+  const back = pitchingFromLineup({ ...lineup, pitcherOrder: plan.pitcherOrder }, roster);
+  assert.deepEqual(groupIds(back, role), groupIds(moved, role), '読み直すと順番が戻る');
+  // ⚠ 保存に無い選手は名簿の並びで後ろへ、名簿に居ない選手は落とす
+  assert.deepEqual(
+    reliefOrderOf([9, 999], roster.filter((p) => [6, 7, 9].includes(p.id))),
+    [9, 6, 7],
+    '保存に無い選手・名簿に居ない選手の扱いが違う',
+  );
+}
+
 // --- 崩れた保存（クローザー2人・名簿に居ない先発）は理由が出る（保存のボタンが押せない）
 {
   const broken = { starters: [1, 99], roles: { ...start.roles, 7: 'closer' } };
@@ -477,5 +527,5 @@ accepted(start);
 }
 
 console.log(
-  'online-pitching-board-check PASS（どの操作もサーバーが受け付ける形 / 入れ替え・役割・クローザー / 先発1〜8人 / 救援の並び / 疲労の境目がサーバーと同じ / 野手を投手起用に加える・外す / スマホとPCの受け渡し）',
+  'online-pitching-board-check PASS（どの操作もサーバーが受け付ける形 / 入れ替え・役割・クローザー / 先発1〜8人 / 救援の並び・同じ役割の中の順番 / 疲労の境目がサーバーと同じ / 野手を投手起用に加える・外す / スマホとPCの受け渡し）',
 );

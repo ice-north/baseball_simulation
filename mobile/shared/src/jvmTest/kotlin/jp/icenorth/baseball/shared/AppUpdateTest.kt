@@ -12,9 +12,8 @@ class AppUpdateTest {
     fun sameCommitIsLatest() {
         val build = AppBuild(main.commit, main.time, "main")
         assertEquals(AppFreshness.Latest, appFreshness(build, main))
-        val (article, top) = appVersionArticle(build, main)!!
-        assertEquals("このアプリは最新版", article.title)
-        assertEquals(false, top)
+        // 最新のときは紙面に何も書かない
+        assertNull(appVersionArticle(build, main))
     }
 
     @Test

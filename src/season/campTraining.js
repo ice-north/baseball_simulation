@@ -133,10 +133,14 @@ export const TRAINING_MENUS = {
   fielding: {
     name: 'ノック',
     icon: '🧤',
-    description: '守備力と肩力を強化（投手野手共通）',
+    description: '守備力と肩力を強化（投手野手共通）・野手は今の守備位置の適性も+4〜8/クール',
     targets: ['defense', 'arm'],
     // 実測: 失点2.06で最少
-    growthMultipliers: { arm: 1.5 },
+    // ⚠ 守備は 1.0→**1.5**（いしだ 2026-11-20「ノックの守備の伸びが弱い気がします」）。
+    //    実測（4クール・経験値満タン）: 守備60の選手で 平均+2.0→+3.0。
+    //    守備位置の適性は前から確定で+4〜8/クール上がる（`executeCampTraining` の末尾）が、
+    //    主力は自分の位置が既に100なので動かず、伸びていないように見えていた
+    growthMultipliers: { arm: 1.5, defense: 1.5 },
     category: 'fielding'
   },
   control: {
@@ -283,12 +287,12 @@ export const SUB_TRAINING_MENUS = {
   physique: {
     name: '基礎体力',
     icon: '🏃',
-    description: '体力+2〜4・体幹+2〜3/クール確定（投手：スタミナ+1〜2も）',
+    description: '体力+2〜4/クール確定・体幹+0〜1（投手：スタミナ+1〜2も）',
   },
   weight: {
     name: 'ウエイト',
     icon: '🏋️',
-    description: '体幹+1〜3（確定）・パワー+0〜1・肩力+0〜1',
+    description: '体幹+2〜4（確定）・パワー+0〜1・肩力+0〜1',
   },
   stretch: {
     name: 'ストレッチ',
@@ -348,7 +352,7 @@ export const SUB_TRAINING_MENUS = {
   newpitch: {
     name: '新球種習得',
     icon: '✨',
-    description: '新球種習得に挑戦（成功率16%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）',
+    description: '新球種習得に挑戦（成功率22%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）',
     targets: ['newpitch'],
   },
   spin_analysis: {
@@ -357,6 +361,49 @@ export const SUB_TRAINING_MENUS = {
     description: '高速カメラで回転を分析・スピン+1〜3（器用さ係数）、変化球Lv向上、制球微増（投手のみ）',
   },
 };
+
+/**
+ * キャンプの伸びが止まる年齢（22〜32）。素質（成長係数）・疲労管理・プロ意識で延びる。
+ *
+ * ⚠ いしだ 2026-11-20「成長係数の年齢ごとの変動を教えて。30歳以上の選手が、まだまだ
+ *    1.0以上になっていたので、正常に動いているか知りたいです」。
+ *    **成長係数（`growthPotential`）は年齢で下げない**のが決まり（`growthSystem.js` の注。
+ *    昔は毎年引いていて、30代は全員0付近に潰れ、年齢の効きが三重に掛かっていた）。
+ *    年齢はこの停止年齢と `getAgeGrowthBase` のカーブだけが担う。
+ *    画面（選手情報の「成長の停止」）はこの関数で出す。
+ */
+export function growthStopAge(player) {
+  const gp = player?.growthPotential ?? 1.0;
+  const mod = player?.growthModifier || 0;
+  const discipline = player?.personality?.discipline ?? 50;
+  return Math.min(32, Math.max(22,
+    Math.round(26 + (gp - 1.0) * 15)
+    + Math.min(2, Math.max(0, mod * 5))
+    + Math.min(2, Math.max(0, (discipline - 60) * 0.05))
+  ));
+}
+
+/** 止まったあとも練習が効く割合（プロ意識で決まる。50で0%・80で9%・100で15%） */
+export function postStopTrainEffect(player) {
+  return Math.max(0, ((player?.personality?.discipline ?? 50) - 50) * 0.003);
+}
+
+/**
+ * 覚醒の伸びの、高い能力での抑え。
+ *
+ * ⚠ いしだ 2026-11-20「能力80台から4クールで+6くらい上がる選手がいます。独立リーグとしては
+ *    上がりすぎな気がしますので調整をお願いします。能力が低い場合は、いまの伸びのままでOK」。
+ *    ふだんの伸びは能力65以上で減衰していたが、**覚醒には何も掛かっていなかった**ので、
+ *    80台でも1回の覚醒で+3〜6跳ねていた（実測: 4クールの最大 +9）。
+ * ⚠ **70未満は素通し**（低い能力はいまの伸びのまま、という要望）。
+ * ⚠ 実測（4クール・経験値満タン・プロ意識60・成長力1.0、600回）:
+ *    ミート40 平均+2.2・最大+14（据え置き）／60 平均+2.1（据え置き）／
+ *    80 平均 0.96→0.82・**最大 9→5**／90 最大 7→3。
+ */
+function awakeningHighStatDamp(currentValue) {
+  if (!(currentValue >= 70)) return 1;
+  return Math.max(0.3, 1 - (currentValue - 70) * 0.05);
+}
 
 /**
  * 技術系能力(meet/power/eye/defense等)の高能力値成長減衰を適用
@@ -392,11 +439,13 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           player.physical.bodyStamina = Math.min(99, bsBefore + bsGrowth);
           growthReport.push({ statName: '体力', before: bsBefore, after: player.physical.bodyStamina, growth: player.physical.bodyStamina - bsBefore });
         }
-        // 体幹+2〜3（確定）
+        // 体幹 +0〜1（50%で+1）
+        // ⚠ **ウエイトより上げないこと**（いしだ 2026-11-20「基礎体力練習でウエイトより
+        //    体幹が上がってしまいます」）。以前はどちらも +1〜3 で、基礎体力は体力と
+        //    スタミナまで付くぶん丸ごと上位互換だった。体幹を鍛えるのはウエイトの役
         const oldMuscle = player.physical.muscle ?? 50;
-        if (oldMuscle < 100) {
-          const mGrowth = Math.floor(Math.random() * 3) + 1; // 1〜3
-          player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGrowth);
+        if (oldMuscle < 100 && Math.random() < 0.5) {
+          player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + 1);
           growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
         }
       }
@@ -410,11 +459,13 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'weight': {
-      // 体幹 +1〜3（確定）
+      // 体幹 +2〜4（確定）
+      // ⚠ **体幹を鍛える練習はこれ**（いしだ 2026-11-20「キャンプのウエイトの効果を上げて、
+      //    基礎体力練習の体幹上昇効果を下げてください」）。基礎体力は体力・スタミナの役
       if (player.physical) {
         const oldMuscle = player.physical.muscle ?? 50;
         if (oldMuscle < 100) {
-          const mGrowth = Math.floor(Math.random() * 3) + 1;
+          const mGrowth = Math.floor(Math.random() * 3) + 2;
           player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGrowth);
           growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
         }
@@ -439,8 +490,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           }
         }
       }
-      // パワー +0〜1（40%で+1）
-      if (player.batting && Math.random() < 0.4) {
+      // パワー +0〜1（55%で+1。⚠ ウエイトの効きを上げた。40%→55%）
+      if (player.batting && Math.random() < 0.55) {
         const oldPower = player.batting.power || 0;
         const powerGrowth = applyTechStatDecay(oldPower, 1);
         if (powerGrowth > 0) {
@@ -708,12 +759,16 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const newType =
             wanted || candidates[Math.floor(Math.random() * candidates.length)];
           const formAff = getFormPitchAffinity(playerForm, newType);
-          // ⚠ 0.12→0.16・適性の上限 0.25→0.32（先方指摘 2026-11-16: 取得率が低い。若干上げる）。
-          //    4クール続けたときに1つ覚える見込み（器用さ50）: 適性なし 40%→50%、適性あり 63〜68%→70〜77%
-          const baseRate = 0.16;
+          // ⚠ 0.12→0.16→**0.22**・適性の上限 0.25→0.32→**0.40**
+          //    （いしだ 2026-11-16「取得率が低い」／2026-11-20「新球種取得の確率が低すぎる気が
+          //     します。確認してください」）。オンラインで新球種を覚える道は**このサブ練習だけ**
+          //     （`CAMP_MENUS` に newpitch は無い）なので、ここが遅いと一生覚えない。
+          //    実測（初期セットの投手137人・器用さ平均53）: 1クール 24.3%→**29.9%**、
+          //    4クール続けて1つ以上 66.9%→**75.7%**、平均 0.95→1.21球種
+          const baseRate = 0.22;
           // ⚠ フォーム適性を足した**後**に器用さを掛ける。先に掛けると
           //    上限 0.32 のクランプで器用さが消える
-          const successRate = (formAff ? Math.min(0.32, baseRate + formAff.affinity) : baseRate)
+          const successRate = (formAff ? Math.min(0.40, baseRate + formAff.affinity) : baseRate)
             * dexterityMult(player, 0.8);
           if (Math.random() < successRate) {
             const level = 20 + Math.floor(Math.random() * 20);
@@ -1152,16 +1207,10 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
   // 成長停止年齢: gp(個人差) + 疲労管理(growthModifier) + プロ意識で延長
   // 停止後もdisciplineが高ければ練習で微量カバー可能
-  const _gp = player.growthPotential ?? 1.0;
-  const _growthMod = player.growthModifier || 0;
-  const _discipline = player.personality?.discipline ?? 50;
-  const _stopAge = Math.min(32, Math.max(22,
-    Math.round(26 + (_gp - 1.0) * 15)
-    + Math.min(2, Math.max(0, _growthMod * 5))              // 疲労管理: 良管理で最大+2歳
-    + Math.min(2, Math.max(0, (_discipline - 60) * 0.05))   // プロ意識80→+1, 100→+2歳
-  ));
+  // ⚠ 式は `growthStopAge` / `postStopTrainEffect` に出してある（画面の「成長の停止」と同じ値）
+  const _stopAge = growthStopAge(player);
   // stopAge到達後: discipline次第で衰えをカバー（discipline 50→0%, 80→9%, 100→15%）
-  const _postStopFloor = Math.max(0, (_discipline - 50) * 0.003);
+  const _postStopFloor = postStopTrainEffect(player);
   // stopAge4年前から緩やかに減衰 → 停止後はpostStopFloorのみ
   const stopAgeGate = age >= _stopAge
     ? _postStopFloor
@@ -1259,7 +1308,14 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       isAwakening = awakeningMult > 0 && Math.random() * 100 < awakeningChance;
       // 才能依存の能力は覚醒量も抑制
       const rawAwakening = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
-      awakeningGrowth = isAwakening ? Math.max(1, Math.round(rawAwakening * talentMult)) : 0;
+      // ⚠ **高い能力では覚醒の伸びも抑える**（いしだ 2026-11-20。`awakeningHighStatDamp`）。
+      //    70未満は素通し。ここで現在値が要るので、先に引いておく
+      const awakeningBase = getStatPath(targetStat)
+        ? (getNestedValue(updatedPlayer, getStatPath(targetStat)) ?? 0)
+        : 0;
+      awakeningGrowth = isAwakening
+        ? Math.max(1, Math.round(rawAwakening * talentMult * awakeningHighStatDamp(awakeningBase)))
+        : 0;
     }
 
     const statPath = getStatPath(targetStat);
@@ -1278,11 +1334,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         growthMult *= getVelocityCatchupMult(armVal, currentValue);
       }
 
-      // 高能力値の成長減衰。
-      // ⚠ **覚醒には掛けない**（いしだ方針: 覚醒は限界突破なので、能力が
-      //    高くても伸びてほしい）。下で `adjustedBaseGrowth + awakeningGrowth`
-      //    と足しており、減衰が掛かるのは前者だけ。実測で、覚醒したときの
-      //    ミートの伸びは ミート40で4.89・95で4.25（上限100の頭打ちぶんだけ減る）。
+      // 高能力値の成長減衰（ふだんの伸び）。
+      // ⚠ **覚醒には別の抑え**（`awakeningHighStatDamp`。いしだ 2026-11-20「能力80台から
+      //    4クールで+6は上がりすぎ。能力が低い場合はいまの伸びのままでOK」）。
+      //    ここの `dampFactor` が掛かるのは `adjustedBaseGrowth` だけで、覚醒ぶんは
+      //    上の `awakeningGrowth` で別に抑えてから足す（70未満は素通し）。
       let dampFactor = 1.0;
       if (targetStat === 'velocity') {
         // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）

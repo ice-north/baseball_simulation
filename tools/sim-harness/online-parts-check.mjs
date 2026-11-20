@@ -17,6 +17,7 @@ import {
   NeedsFullWorld,
   SNAPSHOT_FORMAT,
   PAST_GAMES,
+  SAME_AS_SCHEDULE,
 } from '../../server/storage/snapshotParts.mjs';
 
 const store = createTestStore('parts-check');
@@ -55,6 +56,48 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
   const back = assembleBundle(JSON.parse(JSON.stringify(core)), order, JSON.parse(JSON.stringify(parts)));
   assert.equal(JSON.stringify(back), text, '戻すと1文字も違わない（球団の並びも同じ）');
   assert.ok(JSON.stringify(core).length * 3 < text.length, `芯が十分小さい（${JSON.stringify(core).length} / ${text.length}）`);
+}
+
+// --- 今季の試合結果の二重持ち（`season.results[].result` と `schedule[].result`）は芯に1回だけ書く
+//     （監査 2026-11-20。1年目8月の芯で約1.8MB）。戻すと1文字も違わず、試合直後と同じく同じものを指す
+{
+  const bundle = await store.read();
+  const season = bundle.league.season;
+  const games = season.schedule.slice(0, 3);
+  const shared = { homeScore: 3, awayScore: 1, decisions: { winningPitcher: { id: 1, name: '勝' } }, pitcherChanges: [] };
+  games[0].result = shared;
+  games[1].result = { homeScore: 2, awayScore: 2, decisions: {}, pitcherChanges: [] };
+  // 0: 同じオブジェクト / 1: 中身が同じ別のオブジェクト / 2: 中身が違う（印にしない）
+  games[2].result = { homeScore: 5, awayScore: 0, decisions: {}, pitcherChanges: [] };
+  season.results = [
+    { gameId: games[0].id, date: games[0].date, home: games[0].home, away: games[0].away, result: shared },
+    { gameId: games[1].id, date: games[1].date, home: games[1].home, away: games[1].away, result: JSON.parse(JSON.stringify(games[1].result)) },
+    { gameId: games[2].id, date: games[2].date, home: games[2].home, away: games[2].away, result: { ...games[2].result, homeScore: 6 } },
+  ];
+  const text = JSON.stringify(bundle);
+  const { core, order, parts } = splitBundle(bundle);
+  assert.equal(JSON.stringify(bundle), text, '分けても元の一式を変えない（二重持ちの印は写しに付ける）');
+  assert.deepEqual(
+    core.league.season.results.map((r) => r.result === SAME_AS_SCHEDULE),
+    [true, true, false],
+    '同じ中身の結果だけを印にする',
+  );
+  const back = assembleBundle(JSON.parse(JSON.stringify(core)), order, JSON.parse(JSON.stringify(parts)));
+  assert.equal(JSON.stringify(back), text, '二重持ちを戻すと1文字も違わない');
+  const byId = new Map(back.league.season.schedule.map((g) => [g.id, g]));
+  assert.equal(back.league.season.results[0].result, byId.get(games[0].id).result, '戻した結果は日程の結果と同じものを指す');
+  // 軽い読みでも戻り、そのまま保存すると印に戻る
+  const refs = Object.fromEntries(Object.keys(parts).map((n) => [n, {}]));
+  const run = assembleLight(
+    JSON.parse(JSON.stringify(core)),
+    order,
+    parts.records === undefined ? {} : { records: JSON.parse(JSON.stringify(parts.records)) },
+    refs,
+  );
+  assert.deepEqual(run.bundle.league.season.results[1].result, games[1].result, '軽い読みでも二重持ちを戻す');
+  const saved = run.inspect(run.bundle);
+  assert.equal(saved.core.league.season.results[0].result, SAME_AS_SCHEDULE, '軽い読みのまま保存しても1回だけ書く');
+  assert.equal(JSON.stringify(run.bundle.league.season.results[2].result), JSON.stringify(season.results[2].result));
 }
 
 // --- 終わった年の試合の記録は別の部分（F1。1年で約22MB増え、軽い読みでも毎回読んでいた）

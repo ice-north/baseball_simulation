@@ -369,6 +369,11 @@ export function projectLineup(team) {
                 ),
               ]),
           ),
+          // ⚠ **同じ役割の中の順番**（いしだ 2026-11-20）。画面はこれを読んで並べ、
+          //    保存で送り返す。無い球団（前からある保存）は名簿の並び＝今までの順
+          ...(team.pitchingRotation.pitcherOrder?.length
+            ? { pitcherOrder: [...team.pitchingRotation.pitcherOrder] }
+            : {}),
         }
       : {}),
     ...(team.onlineTactics ? { tactics: team.onlineTactics } : {}),

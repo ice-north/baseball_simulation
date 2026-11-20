@@ -423,10 +423,83 @@ try {
     () => validateLineup(serverTeam, planFromTeam(autoTeam)),
     '自動編成の結果が保存できない',
   );
+  // --- 同じ役割の中の順番が、試合の使われ方まで届くか ----------------
+  // ⚠ いしだ 2026-11-20「リリーフ投手が同じロールだった場合、並びが上の選手が優先して
+  //    使われてしまいます。同じロール内で順番を入れ替えられるようにしてほしいです」
+  {
+    const team = league.game.teams[teamName];
+    const relievers = team.players
+      .filter((p) => p.position === 'pitcher' && p.isActive !== false)
+      .slice(5, 8)
+      .map((p) => p.id);
+    assert.ok(relievers.length === 3, '前提: 救援に回せる投手が足りない');
+    const roles = Object.fromEntries(relievers.map((id) => [id, 'mopup']));
+    const starters = team.players
+      .filter((p) => p.position === 'pitcher' && !relievers.includes(p.id))
+      .slice(0, 5)
+      .map((p) => p.id);
+    const base = projectLineup(team);
+    saveLineup(league, 'admin', {
+      battingOrder: base.battingOrder,
+      starters,
+      strategy: base.strategy,
+      pitcherRoles: roles,
+    });
+    const first = league.game.teams[teamName].pitchingRotation;
+    // ⚠ 順番を送らなければ名簿の並び（今までどおり）
+    assert.deepEqual(
+      first.middleRelievers.filter((id) => relievers.includes(id)),
+      relievers,
+      '順番を送らないときは名簿の並びにならない',
+    );
+    // 逆順で送ると、一覧もその順になる
+    const reversed = [...relievers].reverse();
+    saveLineup(league, 'admin', {
+      battingOrder: base.battingOrder,
+      starters,
+      strategy: base.strategy,
+      pitcherRoles: roles,
+      pitcherOrder: reversed,
+    });
+    const after = league.game.teams[teamName].pitchingRotation;
+    assert.deepEqual(
+      after.middleRelievers.filter((id) => relievers.includes(id)),
+      reversed,
+      '決めた順が救援の一覧に届いていない',
+    );
+    assert.deepEqual(
+      after.relievers.filter((id) => relievers.includes(id)),
+      reversed,
+      '決めた順が救援の一覧（relievers）に届いていない',
+    );
+    // ⚠ 画面へ返す形にも順番が載る（開き直しても並びが戻らない）
+    assert.deepEqual(
+      projectLineup(league.game.teams[teamName]).pitcherOrder.filter((id) =>
+        relievers.includes(id),
+      ),
+      reversed,
+      '画面へ返す形に順番が載っていない',
+    );
+    // ⚠ 役割だけを保存し直しても順番が消えない
+    saveLineup(league, 'admin', {
+      battingOrder: base.battingOrder,
+      starters,
+      strategy: base.strategy,
+      pitcherRoles: roles,
+    });
+    assert.deepEqual(
+      league.game.teams[teamName].pitchingRotation.middleRelievers.filter((id) =>
+        relievers.includes(id),
+      ),
+      reversed,
+      '役割だけ保存したら順番が消えた',
+    );
+  }
+
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 編成画面の移植: OK（投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / スマホの2タップの入れ替えが保存できる形のまま・方針と別々に保存しても消さない / TEAMS_DATA 無しで自動編成）',
+  '■ 編成画面の移植: OK（救援の同じ役割の中の順番が試合まで届く / 投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / スマホの2タップの入れ替えが保存できる形のまま・方針と別々に保存しても消さない / TEAMS_DATA 無しで自動編成）',
 );

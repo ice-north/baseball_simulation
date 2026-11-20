@@ -147,13 +147,24 @@ try {
   );
   assert.equal(plainTeam.displayName, plainTeam.name, '名前を付けない参加の前提が違う');
   const plainView = await service.view('plain', plain);
-  // ⚠ 表示名には地名・愛称・地方も載る（`city`・`nickname`・`region`）。ここで見るのは名前と略称だけ
-  const { label, short } = plainView.teamLabels[plainTeam.name] || {};
-  assert.deepEqual(
-    { label, short },
-    { label: plainTeam.name, short: plainTeam.abbreviation },
-    '名前を付けずに入った球団の略称が、既定の略称になっていない',
-  );
+  // ⚠ 名前ひとそろいには地域名・チーム名・地方も入る（`teamDisplayOf`）。
+  //    まるごと比べると項目を足すたびに落ちるので、見たい項目だけを見る
+  {
+    const labels = plainView.teamLabels[plainTeam.name];
+    assert.equal(labels.label, plainTeam.name, '名前を付けない参加で表示名が変わっている');
+    assert.equal(
+      labels.short,
+      plainTeam.abbreviation,
+      '名前を付けずに入った球団の略称が、既定の略称になっていない',
+    );
+    // 既定の名前は「都市＋愛称」なので、分けた名前もそこから引ける
+    assert.equal(labels.city, plainTeam.abbreviation, '既定の地域名が引けていない');
+    assert.equal(
+      `${labels.city}${labels.nickname}`,
+      plainTeam.name,
+      '地域名とチーム名を合わせても球団名に戻らない',
+    );
+  }
   assert.equal(
     plainView.teamLabels[joined.teamName].short,
     '多摩川',

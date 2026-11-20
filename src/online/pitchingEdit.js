@@ -102,18 +102,66 @@ export function pitchingFromLineup(lineup, roster) {
       roleFor(lineup?.pitcherRoles?.[p.id], starters.includes(p.id)),
     ]),
   );
-  return { starters, roles };
+  // ⚠ **同じ役割の中の順番**（いしだ 2026-11-20「リリーフ投手が同じロールだった場合、
+  //    並びが上の選手が優先して使われてしまいます。同じロール内で順番を入れ替えられる
+  //    ようにしてほしいです」）。保存に無ければ名簿の並び（＝今までの順）
+  const order = reliefOrderOf(lineup?.pitcherOrder, pitchers);
+  return { starters, roles, order };
+}
+
+/**
+ * 救援の順番の一覧を、名簿に合わせて整える。
+ * ⚠ 保存に無い選手は**名簿の並びで後ろへ**足す（新しく入った選手が消えない）。
+ *    名簿に居ない選手は落とす（退団した選手を残さない）。
+ */
+export function reliefOrderOf(saved, pitchers) {
+  const ids = (pitchers || []).map((p) => p.id);
+  const known = new Set(ids);
+  const kept = (Array.isArray(saved) ? saved : []).filter((id) => known.has(id));
+  const seen = new Set(kept);
+  return [...kept, ...ids.filter((id) => !seen.has(id))];
+}
+
+/** 並び順の番号（小さいほど先に使われる）。一覧に無ければ最後尾 */
+export const reliefRank = (state, id) => {
+  const at = (state?.order || []).indexOf(id);
+  return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+};
+
+/**
+ * 同じ役割の中で1つ上（`delta < 0`）・下（`delta > 0`）へ動かす。
+ * ⚠ **同じ役割の中だけで入れ替える**（役割をまたぐと、役割の表の並びが崩れる）。
+ */
+export function moveRelief(state, id, delta, roster) {
+  const role = state.roles[id];
+  const group = (state.order || []).filter(
+    (other) => state.roles[other] === role && !state.starters.includes(other),
+  );
+  const at = group.indexOf(id);
+  const to = at + (delta < 0 ? -1 : 1);
+  if (at === -1 || to < 0 || to >= group.length) return state;
+  const swapWith = group[to];
+  const order = [...state.order];
+  const i = order.indexOf(id);
+  const j = order.indexOf(swapWith);
+  order[i] = swapWith;
+  order[j] = id;
+  return { ...state, order: reliefOrderOf(order, roster || []) };
 }
 
 export const samePitching = (a, b) =>
   a.starters.length === b.starters.length &&
   a.starters.every((id, i) => id === b.starters[i]) &&
   Object.keys(a.roles).length === Object.keys(b.roles).length &&
-  Object.entries(a.roles).every(([id, role]) => b.roles[id] === role);
+  Object.entries(a.roles).every(([id, role]) => b.roles[id] === role) &&
+  // ⚠ 同じ役割の中の順番も「変えた」に数える（並べ替えただけでは保存できない、を防ぐ）
+  (a.order || []).length === (b.order || []).length &&
+  (a.order || []).every((id, i) => id === (b.order || [])[i]);
 
 export const planFromPitching = (state) => ({
   starters: [...state.starters],
   pitcherRoles: { ...state.roles },
+  pitcherOrder: [...(state.order || [])],
 });
 
 /** 先発の順を動かす（間はずれる）。ドラッグ用 */
@@ -182,7 +230,9 @@ export function setRole(state, id, role, at = null) {
         //    引き継がせると前のクローザーが役割なしに落ち、救援の顔ぶれから外れていた
         roles[other] =
           wasStarter || isStarterRole(current) || current === 'none' ? 'auto_r' : current;
-  return { starters, roles };
+  // ⚠ **順番（`order`）を落とさないこと**。`{ ...state }` を使わずに組み直すところは、
+  //    書き忘れると同じ役割の中の並べ替えが消える（実際に踏んだ）
+  return { ...state, starters, roles };
 }
 
 /**
@@ -205,6 +255,7 @@ export function swapPitchers(state, a, b) {
     const [missing, other] = missingA ? [a, b] : [b, a];
     if (!state.starters.includes(missing)) return state;
     return {
+      ...state,
       starters: state.starters.map((id) => (id === missing ? other : id)),
       roles: { ...state.roles, [other]: 'auto_s' },
     };
@@ -214,6 +265,7 @@ export function swapPitchers(state, a, b) {
       ? state.starters.map((id) => (id === a ? b : id === b ? a : id))
       : state.starters;
   return {
+    ...state,
     starters,
     roles: { ...state.roles, [a]: state.roles[b], [b]: state.roles[a] },
   };
@@ -248,7 +300,7 @@ export function removeFromStaff(state, id, roster) {
   if (state.starters.includes(id) && state.starters.length <= 1) return state;
   const roles = { ...state.roles };
   delete roles[id];
-  return { starters: state.starters.filter((s) => s !== id), roles };
+  return { ...state, starters: state.starters.filter((s) => s !== id), roles };
 }
 
 /** 投手起用に加えていない野手（加える候補。投球の能力の高い順） */
@@ -269,9 +321,11 @@ export function reliefGroups(state, roster) {
   );
   return RELIEF_ORDER.map((role) => ({
     role,
-    players: pitchers.filter(
-      (p) => !state.starters.includes(p.id) && state.roles[p.id] === role,
-    ),
+    // ⚠ **同じ役割の中は決めた順**（いしだ 2026-11-20）。試合でもこの順に使われる
+    //    （`server/lineupTactics.mjs` が同じ順で `relievers` を作る）
+    players: pitchers
+      .filter((p) => !state.starters.includes(p.id) && state.roles[p.id] === role)
+      .sort((a, b) => reliefRank(state, a.id) - reliefRank(state, b.id)),
   }));
 }
 

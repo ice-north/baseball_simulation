@@ -39,6 +39,7 @@ import {
 } from '../../src/season/campTraining.js';
 import { menusFor, subMenusFor } from '../../src/online/campMenus.js';
 import { createSeededRandom } from '../../src/game/rng.js';
+import { growthStopAge, postStopTrainEffect } from '../../src/season/campTraining.js';
 import {
   DIRECTIONS,
   resolveTraining,
@@ -327,11 +328,13 @@ function campWith(build, seed = undefined) {
     `しきい値の下なのに鈍っている: ミート60で${mid.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
   );
 
-  // ⚠ **覚醒には減衰を掛けないこと**（いしだ方針: 覚醒は限界突破なので、
-  //    能力が高くても伸びてほしい）。伸び幅の減衰は `baseGrowth` にだけ掛け、
-  //    覚醒ぶんは足すだけ——という作りを、ここで固定する。
-  //    実測: 覚醒したときのミートの伸びは ミート40で4.89・95で4.25
-  //    （減るのは上限100の頭打ちぶんだけ）
+  // ⚠ **覚醒の伸びは、高い能力では抑える**（いしだ 2026-11-20「能力80台から4クールで
+  //    +6くらい上がる選手がいます。独立リーグとしては上がりすぎ…能力が低い場合は、
+  //    いまの伸びのままでOK」）。`awakeningHighStatDamp`（70未満は素通し・
+  //    超過1ごとに5%・下限30%）。
+  //    ⚠ 以前は「覚醒は限界突破なので能力が高くても伸びてほしい」として**何も
+  //       掛けていなかった**。その方針はこの指示で置き換わっている。
+  //    実測: 覚醒したときのミートの伸びは ミート40で4.89（据え置き）・85で2.2前後
   {
     const real = Math.random;
     /** 覚醒したクールだけ拾って、伸び幅の平均を出す */
@@ -363,11 +366,14 @@ function campWith(build, seed = undefined) {
     const low = burst(40);
     const high2 = burst(85);
     assert.ok(low.回数 > 50 && high2.回数 > 50, `覚醒が起きていない: ${low.回数}/${high2.回数}回`);
+    // ⚠ **低い能力の覚醒は据え置き**（+4以上）。ここを鈍らせない
+    assert.ok(low.平均 >= 4, `低い能力の覚醒まで鈍らせている: ミート40で${low.平均.toFixed(2)}`);
+    // ⚠ 高い能力は抑える。ただし**0にはしない**（覚醒は残す）
     assert.ok(
-      high2.平均 > low.平均 * 0.8,
-      `覚醒まで減衰している: ミート40で${low.平均.toFixed(2)} / ミート85で${high2.平均.toFixed(2)}`,
+      high2.平均 < low.平均 * 0.7,
+      `高い能力の覚醒が抑えられていない: ミート40で${low.平均.toFixed(2)} / ミート85で${high2.平均.toFixed(2)}`,
     );
-    assert.ok(high2.平均 >= 3, `覚醒の伸びが小さすぎる: ${high2.平均.toFixed(2)}`);
+    assert.ok(high2.平均 >= 1, `高い能力で覚醒が消えている: ${high2.平均.toFixed(2)}`);
   }
 
   // ⚠ **覚醒率はクールごとに下がらないこと**（いしだ要望: 均す）。経験値を
@@ -1175,10 +1181,156 @@ assert.ok(
   );
 }
 
+// --- サブ練習の役割分け（いしだ 2026-11-20）---------------------------------
+// ⚠「キャンプのウエイトの効果を上げて、基礎体力練習の体幹上昇効果を下げてください。
+//   基礎体力練習でウエイトより体幹が上がってしまいます」。直す前はどちらも体幹+1〜3で、
+//   基礎体力は体力とスタミナまで付くぶん**丸ごと上位互換**だった。
+{
+  const body = () => ({
+    position: 'first',
+    name: 'サブ練習の見本',
+    physical: { muscle: 50, bodyStamina: 50, arm: 50, dexterity: 50, speed: 50, recovery: 50 },
+    batting: { meet: 50, power: 50, eye: 50 },
+    fielding: { defense: 50 },
+  });
+  const average = (menu, runs = 3000) => {
+    let muscle = 0;
+    let stamina = 0;
+    for (let i = 0; i < runs; i++) {
+      const p = body();
+      executeSubTraining(p, menu, {});
+      muscle += p.physical.muscle - 50;
+      stamina += p.physical.bodyStamina - 50;
+    }
+    return { muscle: muscle / runs, stamina: stamina / runs };
+  };
+  const weight = average('weight');
+  const physique = average('physique');
+  // ⚠ **体幹を鍛えるのはウエイト**。基礎体力の方が上がってはいけない
+  assert.ok(
+    weight.muscle > physique.muscle * 2,
+    `ウエイトの体幹がじゅうぶんに強くない: ウエイト+${weight.muscle.toFixed(2)} / 基礎体力+${physique.muscle.toFixed(2)}`,
+  );
+  assert.ok(weight.muscle >= 2.5, `ウエイトの体幹が弱い: +${weight.muscle.toFixed(2)}`);
+  // ⚠ 0.8 まで（「確定で+1」にしても落ちる線。役を混ぜ返さないため）
+  assert.ok(physique.muscle <= 0.8, `基礎体力の体幹が強い: +${physique.muscle.toFixed(2)}`);
+  // ⚠ **基礎体力は体力の役**（こちらは減らさない）
+  assert.ok(physique.stamina >= 2.5, `基礎体力の体力が弱い: +${physique.stamina.toFixed(2)}`);
+  assert.equal(weight.stamina, 0, 'ウエイトで体力が上がっている（役が混ざっている）');
+}
+
+// --- 成長が止まる年齢（いしだ 2026-11-20「成長係数の年齢ごとの変動を教えて。
+//     30歳以上の選手が、まだまだ1.0以上になっていたので、正常に動いているか知りたい」）---
+// ⚠ **成長係数（`growthPotential`）は年齢で下げない**のが決まり（`growthSystem.js` の注）。
+//    年齢は「止まる年齢」と年次のカーブが担う。画面（選手情報の「成長の停止」）も同じ式で出す。
+{
+  const who = (gp, discipline, mod = 0) => ({
+    growthPotential: gp,
+    growthModifier: mod,
+    personality: { discipline },
+  });
+  assert.equal(growthStopAge(who(1.0, 60)), 26, '標準の選手の止まる年齢');
+  assert.equal(growthStopAge(who(1.2, 60)), 29, '素質が高いと遅く止まる');
+  assert.equal(growthStopAge(who(1.2, 80)), 30, 'プロ意識80で+1歳');
+  assert.equal(growthStopAge(who(1.5, 100)), 32, '上限は32歳');
+  assert.equal(growthStopAge(who(1.8, 100)), 32, '32歳を超えない');
+  assert.equal(growthStopAge(who(0.6, 50)), 22, '下限は22歳');
+  assert.equal(growthStopAge(who(1.0, 60, 0.4)), 28, '疲労管理の良さで最大+2歳');
+  // 止まったあとも、プロ意識ぶんだけ練習が効く
+  assert.equal(Math.round(postStopTrainEffect(who(1.0, 50)) * 100), 0);
+  assert.equal(Math.round(postStopTrainEffect(who(1.0, 80)) * 100), 9);
+  assert.equal(Math.round(postStopTrainEffect(who(1.0, 100)) * 100), 15);
+  // ⚠ **成長係数は年齢で変わらない**（30歳で1.2のままでよい、が答え）
+  const old30 = { ...who(1.2, 80), age: 30 };
+  assert.equal(old30.growthPotential, 1.2, '成長係数を年齢で下げてはいけない');
+}
+
+// --- 伸びの上限と、ノックの効き（いしだ 2026-11-20）-------------------------
+// ⚠「能力80台から4クールで+6くらい上がる選手がいます。独立リーグとしては上がりすぎ…
+//   能力が低い場合は、いまの伸びのままでOK」「ノックの守備の伸びが弱い気がします」
+{
+  const field = (defense) => ({
+    id: 1, name: '伸びの見本', age: 24, position: 'short', experience: 240,
+    growthPotential: 1.0, growthModifier: 0,
+    personality: { discipline: 60, mental: 50 },
+    physical: { speed: 60, arm: 60, dexterity: 50, bodyStamina: 60, recovery: 60, muscle: 50, throws: 'right' },
+    batting: { meet: defense, power: 60, eye: 60, bunt: 40, steal: 40, bats: 'right' },
+    fielding: { defense },
+    positionFitness: { short: 70, second: 50, third: 50, first: 40, catcher: 10, left: 40, center: 40, right: 40 },
+    seasonStats: { batting: {}, pitching: {} },
+  });
+  const fourRounds = (value, menu, read) => {
+    let total = 0;
+    let max = 0;
+    let fit = 0;
+    const runs = 400;
+    for (let i = 0; i < runs; i++) {
+      let p = field(value);
+      const before = read(p);
+      const fitBefore = p.positionFitness.short;
+      for (let c = 0; c < 4; c++)
+        p = executeCampTraining(p, menu, null, null, 1.0, 1.0, { spendExperience: false }).player;
+      total += read(p) - before;
+      max = Math.max(max, read(p) - before);
+      fit += p.positionFitness.short - fitBefore;
+    }
+    return { mean: total / runs, max, fit: fit / runs };
+  };
+  const meetOf = (p) => p.batting.meet;
+  const defOf = (p) => p.fielding.defense;
+  // ⚠ **低い能力は据え置き**（要望）。4クールで平均+1.5以上は伸びる
+  const low = fourRounds(40, 'batting', meetOf);
+  assert.ok(low.mean >= 1.5, `低い能力の伸びまで鈍らせている: 平均+${low.mean.toFixed(2)}`);
+  // ⚠ **高い能力は跳ねない**。覚醒にも抑えが掛かる（`awakeningHighStatDamp`）
+  const high = fourRounds(80, 'batting', meetOf);
+  assert.ok(high.max <= 6, `能力80台が4クールで跳ねすぎ: 最大+${high.max}`);
+  assert.ok(high.mean <= low.mean, `高い能力の方が伸びている: ${high.mean.toFixed(2)} / ${low.mean.toFixed(2)}`);
+  // ⚠ **ノックは守備が伸びる**（守備60で4クール平均+2.5以上）
+  const knock = fourRounds(60, 'fielding', defOf);
+  assert.ok(knock.mean >= 2.5, `ノックの守備が弱い: 平均+${knock.mean.toFixed(2)}`);
+  // ⚠ ノックは**今の守備位置の適性**も上げる（確定で+4〜8/クール）
+  assert.ok(knock.fit >= 16, `ノックで守備位置の適性が上がっていない: +${knock.fit.toFixed(1)}`);
+}
+
+// --- 新球種の取得率（いしだ 2026-11-20「低すぎる気がします。確認してください」）-----
+// ⚠ オンラインで新球種を覚える道は**サブ練習だけ**（`CAMP_MENUS` に newpitch は無い）。
+//    ここが遅いと一生覚えない。実測（初期セットの投手・器用さ平均53）:
+//    1クール 24.3%→29.9%、4クール続けて1つ以上 66.9%→75.7%
+{
+  const pitcher = () => ({
+    position: 'pitcher',
+    name: '新球種の見本',
+    physical: { muscle: 50, bodyStamina: 50, arm: 50, dexterity: 50, speed: 50, recovery: 50 },
+    pitching: { velocity: 140, control: 50, stamina: 100, spinRate: 50, form: 'threeQuarter', arsenal: [{ id: 1, type: 'straight', level: 100 }] },
+    batting: { meet: 20, power: 20, eye: 20 },
+    fielding: { defense: 50 },
+  });
+  const runs = 3000;
+  let got = 0;
+  for (let i = 0; i < runs; i++) {
+    const p = pitcher();
+    executeSubTraining(p, 'newpitch', {});
+    if (p.pitching.arsenal.length > 1) got += 1;
+  }
+  const rate = got / runs;
+  assert.ok(
+    rate >= 0.24 && rate <= 0.42,
+    `新球種の取得率が範囲外: 1クール ${(rate * 100).toFixed(1)}%`,
+  );
+  // 4クール続ければ、おおむね覚える
+  let four = 0;
+  for (let i = 0; i < 1000; i++) {
+    const p = pitcher();
+    for (let c = 0; c < 4; c++) executeSubTraining(p, 'newpitch', {});
+    if (p.pitching.arsenal.length > 1) four += 1;
+  }
+  assert.ok(four / 1000 >= 0.65, `4クール続けても覚えない: ${((four / 1000) * 100).toFixed(1)}%`);
+}
+
 // ⚠ 世界を汚したまま終わらない（ほかの検査と同じプロセスで動くことがある）
 loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けず、クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
+  '■ キャンプ: OK（成長の止まる年齢（素質・疲労管理・プロ意識で22〜32歳）/ 選手ごとに効く / 低い能力は据え置き・高い能力は跳ねない / ノックで守備と適性が伸びる / ウエイトが体幹・基礎体力が体力の役 / 新球種は1クール3割・4クールで7割 / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒は低い能力では据え置き・高い能力では抑える／クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
 );
