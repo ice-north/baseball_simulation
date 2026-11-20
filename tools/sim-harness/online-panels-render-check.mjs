@@ -326,7 +326,9 @@ try {
       const snap = view.chronicle.proDrafted[0].player;
       const detail = render(h(PlayerDetailBody, { player: snap, shown: snap, periodLabel: '今季' }));
       // ⚠ 成績は無い（「—」）が、**能力は全部出る**こと
-      for (const text of ['球速', '152', 'スライダー', '守備適性', '成長係数'])
+      // ⚠ 「成長係数」は「自然成長」に替えた（いしだ 2026-11-20「表示を自然成長の平均と
+      //    合わせたい」）。写しにはサーバーの `naturalGrowth` が無いので、その行は出ない
+      for (const text of ['球速', '152', 'スライダー', '守備適性'])
         assert.ok(detail.includes(text), `能力の写しから選手情報に「${text}」が出ない`);
       assert.ok(detail.length > 400, `選手情報の中身が薄い: ${detail.length}文字`);
     }

@@ -42,6 +42,8 @@ const CHECKS = [
   { name: 'base-state-check', group: 'quick', slow: 1 },
   { name: 'bunt-check', group: 'quick', slow: 1 },
   { name: 'growth-cap-check', group: 'quick', slow: 1 },
+  // 自然成長（表示＝実際・係数1.0で平均+1・衰え始めの年齢・衰えの緩さ）
+  { name: 'natural-growth-check', group: 'quick', slow: 6 },
   { name: 'doc-check', group: 'quick', slow: 1 },
   // 社会人・独立の最初の名簿に投手が4人以上いるか（投手0人で試合が壊れた）
   { name: 'corporate-roster-check', group: 'quick', slow: 1 },

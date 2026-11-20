@@ -11,6 +11,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
 import { getDeception, describeDeception } from '../game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from '../game/batterType.js';
+import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor, naturalGrowthTitle } from '../utils/naturalGrowth.js';
 
 // コース適性のヒートマップ（5×5）。内側の3×3がストライクゾーン。
 // 色はパワプロ等と同じ慣習で 赤=得意（ホットゾーン） / 青=苦手（コールドゾーン）。
@@ -284,9 +285,11 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                 </div>
                 <div className="border-t border-gray-600 mt-2 pt-2 text-xs text-gray-300 space-y-1">
                   <div>体格: <span className="text-white">{player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}</span></div>
-                  <div>成長: <span className={`font-bold ${(player.growthPotential ?? 1.0) >= 1.1 ? 'text-orange-400' : 'text-white'}`}>
-                    {Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0))).toFixed(2)}
-                  </span></div>
+                  {/* ⚠ 「来季の年度替わりで主要な能力が1つあたり何点動くか」。
+                      素の成長係数（年齢が入らない）はもう出さない（`src/utils/naturalGrowth.js`） */}
+                  <div>自然成長: <span className={`font-bold ${naturalGrowthColor(naturalGrowthOf(player))}`} title={naturalGrowthTitle(player)}>
+                    {naturalGrowthText(naturalGrowthOf(player))}
+                  </span><span className="text-gray-400">/年</span></div>
                 </div>
               </div>
 

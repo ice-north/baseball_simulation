@@ -26,7 +26,7 @@ class TipsTest {
     @Test
     fun abilityHelpCoversTheDetailedAbilities() {
         // 体幹など、細かい能力に説明があること（文は Web 版と同じ。照らし合わせは online-ability-help-check）
-        listOf("体力", "回復", "精神力", "体幹", "器用さ", "プロ意識", "成長係数", "出どころ", "打者型", "守備適性").forEach {
+        listOf("体力", "回復", "精神力", "体幹", "器用さ", "プロ意識", "自然成長", "出どころ", "打者型", "守備適性").forEach {
             assertTrue(ABILITY_HELP[it]?.isNotBlank() == true, "説明が無い: $it")
         }
     }

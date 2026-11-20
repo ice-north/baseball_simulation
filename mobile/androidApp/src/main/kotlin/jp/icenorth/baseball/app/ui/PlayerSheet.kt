@@ -203,7 +203,7 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
             Item("体幹", p.at("physical", "muscle").int())
             Item("器用さ", p.at("physical", "dexterity").int())
             Item("プロ意識", p.at("personality", "discipline").int())
-            growthFactor(p)?.let { TextItem("成長係数", it) }
+            naturalGrowth(p)?.let { TextItem("自然成長", it) }
         }
         val fitness = p.at("positionFitness").obj().orEmpty()
             .mapNotNull { (pos, v) -> v.int()?.let { pos to it } }
@@ -456,7 +456,7 @@ private fun AbilityBar(value: Int?, velocity: Boolean = false, stamina: Boolean 
     }
 }
 
-/** 文字の項目（打者型・成長係数） */
+/** 文字の項目（打者型・自然成長） */
 @Composable
 private fun AbilityScope.TextItem(label: String, text: String, help: String = label) {
     Row(Modifier.clickable(enabled = ABILITY_HELP[help] != null) { toggle(help) }) {
@@ -465,10 +465,19 @@ private fun AbilityScope.TextItem(label: String, text: String, help: String = la
     }
 }
 
-/** 成長係数（Web 版と同じく 0.3〜1.8 に収め、小数2桁） */
-private fun growthFactor(p: JsonObject): String? {
-    val base = p.at("growthPotential").num() ?: return null
-    val value = (base + (p.at("growthModifier").num() ?: 0.0)).coerceIn(0.3, 1.8)
-    val hundredths = kotlin.math.round(value * 100).toInt()
-    return "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
+/**
+ * 自然成長（Web 版と同じ。符号付き・小数2桁・「/年」付き）。
+ *
+ * ⚠ いしだ 2026-11-20「表示を自然成長の平均と合わせたい」。前は素質（`growthPotential`）＋
+ *    出場の変動（`growthModifier`）を「成長係数」として出していたが、あれは**年齢が入らない**
+ *    数字で、30代の選手でも 1.0 以上と出ていた。サーバーが出す `naturalGrowth`
+ *    （`expectedNaturalGrowth`）は「来季の年度替わりに主な能力が1つあたり何点動くか」。
+ * ⚠ 説明の鍵（`ABILITY_HELP`）も「自然成長」に替わっている。合わせること。
+ */
+private fun naturalGrowth(p: JsonObject): String? {
+    val value = p.at("naturalGrowth").num() ?: return null
+    val hundredths = kotlin.math.round(kotlin.math.abs(value) * 100).toInt()
+    val body = "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
+    val sign = if (hundredths == 0) "±" else if (value > 0) "+" else "-"
+    return "$sign$body/年"
 }

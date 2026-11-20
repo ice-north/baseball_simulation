@@ -164,6 +164,21 @@ assert.equal(
 );
 assert.equal(abilityRows({ batting: { meet: 0 } }, 'batting')[0][1], 0);
 assert.equal(abilityRows({}, 'body')[0][1], null);
+// 自然成長の行（いしだ 2026-11-20「表示を自然成長の平均と合わせたい」）。
+// ⚠ サーバーの `naturalGrowth`（`expectedNaturalGrowth`）をそのまま出す。素質
+//    （`growthPotential`）はもう出さない。古いサーバーが渡さないときは行を出さない
+{
+  const rowsOf = (player) =>
+    Object.fromEntries(abilityRows(player, 'growth').filter(([, v]) => v !== null));
+  assert.equal(rowsOf({ naturalGrowth: 0.42 })['自然成長'], '+0.42/年', '自然成長が符号付きで出ない');
+  assert.equal(rowsOf({ naturalGrowth: -0.07 })['自然成長'], '-0.07/年', '衰えのマイナスが出ない');
+  assert.equal(rowsOf({ naturalGrowth: 0 })['自然成長'], '±0.00/年', '横ばいが ±0.00 で出ない');
+  assert.equal(rowsOf({ growthPotential: 1.4 })['自然成長'], undefined, '渡されていないのに自然成長を出している');
+  assert.ok(
+    !abilityRows({ growthPotential: 1.4 }, 'growth').some(([k]) => k === '成長係数'),
+    '素の成長係数の行が残っている',
+  );
+}
 const outs = statGroup('pitching', 'basic').columns.find(
   (c) => c.id === 'outs',
 );

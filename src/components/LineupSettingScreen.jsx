@@ -13,6 +13,7 @@ import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 import { surnameOf } from '../data/playerNames.js';
 import { defenseRange, defenseGrade } from '../utils/defenseRange.js';
+import { naturalGrowthOf, naturalGrowthText } from '../utils/naturalGrowth.js';
 
 // 投球フォームの短縮ラベル（カードの省スペース表示用）
 const throwsLabel = (player) => (player.physical?.throws === 'left' ? '左投' : '右投');
@@ -817,7 +818,10 @@ export const LineupSettingContent = ({
             <div>
               <h4 className="text-purple-400 text-xs font-bold uppercase tracking-wider mb-1.5">内面</h4>
               <div className="grid grid-cols-4 gap-1 bg-gray-700/40 rounded-lg p-2">
-                <StatBox label="成長率" value={player.growthPotential ? `×${player.growthPotential.toFixed(2)}` : '-'} />
+                {/* ⚠ 素質（`growthPotential`）そのままの「成長率 ×1.20」は年齢が入らず、
+                    30代でも大きく出ていた。契約更改・キャンプ・選手情報と同じ
+                    「来季の自然成長」に揃える（`src/utils/naturalGrowth.js`） */}
+                <StatBox label="自然成長" value={naturalGrowthText(naturalGrowthOf(player))} />
                 <StatBox label="プロ意識" value={player.personality?.discipline ?? 0} />
                 <StatBox label="精神力" value={player.personality?.mental ?? 0} />
                 {player.position === 'catcher' && <StatBox label="Cリード" value={player.catching?.lead ?? 0} />}
@@ -973,7 +977,7 @@ export const LineupSettingContent = ({
                   <StatRow label="スタミナ" getValue={pl => pl.pitching?.stamina || 0} />
                 </>}
                 <tr><td colSpan={players.length + 1} className="py-1 px-2 text-xs text-purple-400 font-bold bg-gray-700/30">内面</td></tr>
-                <StatRow label="成長率" getValue={pl => pl.growthPotential ? parseFloat(pl.growthPotential.toFixed(2)) : 0} />
+                <StatRow label="自然成長" getValue={pl => naturalGrowthOf(pl)} />
                 <StatRow label="プロ意識" getValue={pl => pl.personality?.discipline ?? 0} />
                 <StatRow label="精神力" getValue={pl => pl.personality?.mental ?? 0} />
                 <StatRow label="経験" getValue={pl => pl.experience || 0} />

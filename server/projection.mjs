@@ -10,6 +10,7 @@ import { isLiveSession } from './sessions.mjs';
 import { roleFor } from '../src/online/tactics.js';
 import { getDeception } from '../src/game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL } from '../src/game/batterType.js';
+import { expectedNaturalGrowth, teamRankMult } from '../src/season/growthSystem.js';
 import {
   PHASE_LABELS,
   ONLINE_SCHEMA,
@@ -103,7 +104,9 @@ const packView = (pack) => ({
   }),
 });
 
-const playerView = (p) => ({
+// ⚠ `team` は**自然成長の計算に使うだけ**（球団の格で練習量が変わる。`teamRankMult`）。
+//    渡さないと独立リーグのランクC相当で出る（まだどの球団にも居ない選手）
+const playerView = (p, team = null) => ({
   id: p.id,
   isActive: p.isActive !== false,
   name: p.name,
@@ -147,6 +150,10 @@ const playerView = (p) => ({
   zoneProfile: p.zoneProfile,
   growthPotential: p.growthPotential,
   growthModifier: p.growthModifier,
+  // ⚠ **画面に出すのはこちら**（いしだ 2026-11-20「表示を自然成長の平均と合わせたい」）。
+  //    素質（`growthPotential` 0.3〜1.8）は素の個性で「平均いくつ伸びるか」ではない。
+  //    年齢・出場量・プロ意識・調子まで含めた**今年の1能力あたりの伸び**を出す
+  naturalGrowth: expectedNaturalGrowth(p, 'online', team ? teamRankMult(team) : 0.90),
   origin: {
     highSchool: p.highSchool?.name,
     university: p.universityTeamName || p.universityName,
@@ -653,7 +660,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       picks: member.starterPicks || {},
     },
     roster: team.players.map((p) => ({
-      ...playerView(p),
+      ...playerView(p, team),
       ...currentPlayerStats(l, member.teamName, p, statistics),
       detailAvailable: true,
     })),
@@ -682,7 +689,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           packs: l.packs?.map(packView),
           // ⚠ 甲子園で名を上げた人には、その年の成績を添える（`koshien`）
           candidates: phase.candidates?.map((c) => {
-            const view = playerView(c);
+            const view = playerView(c, team);
             const note = koshienNoteOf(l, c.id);
             return note ? { ...view, koshien: note } : view;
           }),
@@ -901,6 +908,9 @@ export function projectTeamInfo(bundle, userId, teamName, context = null) {
       const visible = playerView(p);
       delete visible.growthPotential;
       delete visible.growthModifier;
+      // ⚠ 自然成長は素質（`growthPotential`）がそのまま透けるので、隠す値と同じ扱いにする。
+      //    自軍の選手はリーグのビュー（`projectLeague` の `roster`）側で出る
+      delete visible.naturalGrowth;
       return {
         ...visible,
         ...currentPlayerStats(l, teamName, p, statistics),

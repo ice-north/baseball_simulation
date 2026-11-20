@@ -8,6 +8,7 @@ import { finalizePlayerSeason, getPitchTypeName } from '../season/yearProgressio
 import { AbilityValue } from './AbilityValue.jsx';
 import { AbilityLegend } from './GameUIComponents.jsx';
 import ConfirmBar from './ConfirmBar.jsx';
+import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor, naturalGrowthTitle } from '../utils/naturalGrowth.js';
 
 // AI自動解雇のロスター調整パラメータ
 // 野手/投手の総合力（スカウト画面と同じ算出式）
@@ -64,7 +65,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     switch (key) {
       case 'name': return player.name;
       case 'age': return player.age || 0;
-      case 'growth': return Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
+      case 'growth': return naturalGrowthOf(player);
       case 'position': return getPositionSortIndex(player.position);
       case 'meet': return player.batting?.meet || 0;
       case 'power': return player.batting?.power || 0;
@@ -112,7 +113,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     'ミ': 'ミート', 'パ': 'パワー', '走': '走力', '肩': '肩力', '守': '守備力',
     '眼': '選球眼', '盗': '盗塁', '速': '球速', '制': '制球', 'ス': 'スタミナ',
     '回': '球の回転数', '野': '野手総合力', '投': '投手総合力',
-    '試': '試合数', '成績': '今季成績', '齢': '年齢', '成長': '成長率',
+    '試': '試合数', '成績': '今季成績', '齢': '年齢', '成長': '自然成長（能力1つあたり/年）',
   };
   // ツールチップは native title で（Tooltipで<th>をラップすると列がズレるため）
   const SortHeader = ({ label, sortKeyVal, className = '' }) => (
@@ -267,13 +268,12 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                       <td className="py-1 px-1 text-xs text-gray-300 text-center">{player.age || '?'}</td>
                       <td className="py-1 px-1 text-xs text-center">
                         {(() => {
-                          const base = player.growthPotential ?? 1.0;
-                          const mod = player.growthModifier || 0;
-                          const effective = Math.max(0.3, Math.min(1.8, base + mod));
-                          const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-300';
+                          // ⚠ 出すのは**来季の自然成長**（`src/utils/naturalGrowth.js`）。
+                          //    素の成長係数は年齢が入らず、30代でも 1.0 以上と出ていた
+                          const v = naturalGrowthOf(player);
                           return (
-                            <span className={color} title={`基礎:${base.toFixed(2)} 変動:${mod >= 0 ? '+' : ''}${mod.toFixed(2)}`}>
-                              {effective.toFixed(2)}
+                            <span className={naturalGrowthColor(v)} title={naturalGrowthTitle(player)}>
+                              {naturalGrowthText(v)}
                             </span>
                           );
                         })()}

@@ -9,6 +9,7 @@ import { POSITION_NAMES, POSITION_ORDER, getAbilityColor, POSITION_GROUP_COLORS,
 import { AbilityValue } from './AbilityValue.jsx';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
+import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor, naturalGrowthTitle } from '../utils/naturalGrowth.js';
 
 // MAX_CAMP_ROUNDS is now a prop (maxRounds)
 
@@ -398,7 +399,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         case 'position': return POSITION_ORDER.indexOf(p.position);
         case 'age': return p.age || 20;
         case 'build': return p.physical?.build === 'large' ? 2 : p.physical?.build === 'small' ? 0 : 1;
-        case 'growth': return (p.growthPotential ?? 1.0) + (p.growthModifier || 0);
+        case 'growth': return naturalGrowthOf(p);
         case 'discipline': return p.personality?.discipline || 0;
         case 'mental': return p.personality?.mental || 0;
         case 'meet': return p.batting?.meet || 0;
@@ -1053,13 +1054,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         </td>
                         <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
-                            const base = player.growthPotential ?? 1.0;
-                            const mod = player.growthModifier || 0;
-                            const effective = Math.max(0.3, Math.min(1.8, base + mod));
-                            const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-300';
+                            // ⚠ 契約更改・選手情報と**同じ数字**（`src/utils/naturalGrowth.js`）
+                            const v = naturalGrowthOf(player);
                             return (
-                              <span className={color} title={`基礎:${base.toFixed(2)} 変動:${mod >= 0 ? '+' : ''}${mod.toFixed(2)}`}>
-                                {effective.toFixed(2)}
+                              <span className={naturalGrowthColor(v)} title={naturalGrowthTitle(player)}>
+                                {naturalGrowthText(v)}
                               </span>
                             );
                           })()}

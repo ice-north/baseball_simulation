@@ -6,6 +6,7 @@ import {
   performanceFor,
 } from '../../server/performanceLabels.mjs';
 import { projectLeague } from '../../server/projection.mjs';
+import { expectedNaturalGrowth, teamRankMult } from '../../src/season/growthSystem.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -199,6 +200,25 @@ try {
     '投手ポジションでも打撃成績を捨てない',
   );
   assert.equal(view.roster[0].performance.pitching.metrics.k9, 6);
+  // 自然成長（いしだ 2026-11-20「表示を自然成長の平均と合わせたい」）。
+  // ⚠ **球団の格を見ること**（`teamRankMult`）。固定値で出すと、格の高い球団の選手が
+  //    実際より低く出る（オンラインの12球団は S〜D が混ざる）
+  view.roster.forEach((row, i) => {
+    assert.equal(
+      row.naturalGrowth,
+      expectedNaturalGrowth(
+        league.game.teams.A.players[i],
+        'online',
+        teamRankMult(league.game.teams.A),
+      ),
+      `${row.name} の自然成長が球団の格を見ていない`,
+    );
+  });
+  assert.ok(
+    teamRankMult({ corporateData: { rank: 'S' } }) >
+      teamRankMult({ corporateData: { rank: 'C' } }),
+    '球団の格で練習量が変わらない',
+  );
   assert.deepEqual(
     view,
     projectLeague({ league, sessions: { a: 's' } }, 'a', 's', 'a'),

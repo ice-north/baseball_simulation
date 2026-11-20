@@ -88,6 +88,11 @@ export function updateGrowthModifiers(allTeams, awards) {
 // 年次成長に掛ける体格補正の幅。毎年・全能力に掛かるので、キャンプ(1.0)より弱くする
 const PHYSIQUE_W = 0.30;
 
+// 衰えの緩やかさ（負の伸びに掛ける）。⚠ いしだ 2026-11-20「衰えをもう2年ほど早めたいが、
+// 効果は緩やかに」。衰え**始め**は練習量の年齢の落ち（`YOUTH_MULT` のベテラン側）で早め、
+// 落ちる**量**はここで抑える。1.0 にすると以前の落ち方に戻る
+const DECLINE_SOFT = 0.45;
+
 // 【若いほど吸収が速い】練習成長の年齢係数。
 // ⚠ 旧実装は **19歳と23歳の伸びがほぼ同じ**だった（19歳比 94%）。
 //    実データの打者は 23-25歳で 20-22歳の約半分、26-27歳でほぼ0まで落ちる。
@@ -99,8 +104,9 @@ const PHYSIQUE_W = 0.30;
 //    「22歳で成長が止まる」わけではない。
 //    実測の19歳比: 21歳82% / 23歳60% / 25歳43% / 27歳31% / 29歳23%
 const YOUTH_MULT = { 18: 1.95, 19: 1.85, 20: 1.68, 21: 1.50, 22: 1.32, 23: 1.16,
-                     24: 1.07, 25: 1.00, 26: 0.95, 27: 0.90, 28: 0.87 };
-const youthMult = (age) => YOUTH_MULT[age] ?? (age < 18 ? 1.95 : 0.85);
+                     24: 1.07, 25: 1.00, 26: 0.93, 27: 0.86, 28: 0.78, 29: 0.70,
+                     30: 0.64, 31: 0.59, 32: 0.55, 33: 0.51, 34: 0.48 };
+const youthMult = (age) => YOUTH_MULT[age] ?? (age < 18 ? 1.95 : 0.45);
 
 // 新球種の習得。⚠ **大学プールにしか無かった**。社会人・独立・クラブの投手は
 // キャンプ以外に球種を増やす経路が無く、実測で12年進化させても球種数が
@@ -240,7 +246,7 @@ export function applyFreeAgentGrowth(pool) {
       if (delta >= 0) {
         return Math.min(capOverride ?? g.cap, current + stochasticRound(delta * decayMult(current, growthThreshold(ceilOf(g).threshold, gp), growthDecayRate(ceilOf(g).rate, gp), ceilOf(g).floor)));
       }
-      return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
+      return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref) * DECLINE_SOFT)));
     };
 
     if (player.position === 'pitcher') {
@@ -307,8 +313,8 @@ export function applyFreeAgentGrowth(pool) {
 const BASAL_PEAK = 0.14;       // ピーク時の基礎成長（成長率1.0のとき）
 const BASAL_PEAK_END = 22;
 const BASAL_GP_SHIFT = 11;      // 成長率でピークの終わりが前後する（gp1.4→24.8歳 / gp0.6→19.2歳）
-const BASAL_DECAY = 0.100;     // ピーク以降、1歳ごとの落ち幅
-const BASAL_ACCEL = 0.015;     // 下り坂はわずかに加速する
+const BASAL_DECAY = 0.090;     // ピーク以降、1歳ごとの落ち幅
+const BASAL_ACCEL = 0.012;     // 下り坂はわずかに加速する
 const BASAL_FLOOR = -1.8;
 
 /**
@@ -577,7 +583,12 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
     // 設計は冒頭の「実成長 = 基礎成長 + 練習成長」の節を参照。
     const basal = basalGrowth(age, gp);
     // その年の充実度（前年を引き継ぐ）。⚠ 成長方向にだけ掛ける
-    const formMult = advanceGrowthForm(player);
+    // ⚠ `opts.peek` は**選手を書き換えない**（画面に出す「今年の自然な伸び」用）。
+    //    `advanceGrowthForm` は `_growthForm` を進める＝状態を書き換えるので、
+    //    画面から呼ぶときは**いまの調子のまま**で見る（平均の年）
+    const formMult = opts.peek
+      ? Math.max(0.10, 1 + (player._growthForm ?? 0) * FORM_W)
+      : advanceGrowthForm(player);
     // 実戦に出ているほど練習量が増える（出場も練習のうち）
     // ⚠ `opts.activity` を**読むこと**。プロ（`applyNpbGrowth`）は一軍300・二軍70を
     //    渡しているのに、以前は無視して空の成績を読み、一軍も二軍も同じ練習量だった
@@ -632,9 +643,10 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
     let strengthKeys;
     if (prof.topN === 1) {
       if (!player._sharpenedTool || !statEntries.some(e => e.key === player._sharpenedTool)) {
-        player._sharpenedTool = statEntries[0].key;
+        // ⚠ `peek`（画面に出すだけ）のときは決めない。選手を書き換えてしまう
+        if (!opts.peek) player._sharpenedTool = statEntries[0].key;
       }
-      strengthKeys = new Set([player._sharpenedTool]);
+      strengthKeys = new Set([player._sharpenedTool || statEntries[0].key]);
     } else {
       strengthKeys = new Set(statEntries.slice(0, prof.topN).map(e => e.key));
     }
@@ -646,7 +658,13 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
 
     // key は STAT_GROWTH のキー。specKey は長所/短所・カテゴリ得意分野の判定に使う
     // 能力名（投手の肩 'armP' は 'arm' として見る）。
-    const grow = (current, key, baseMult = 1, capOverride = null) => {
+    /**
+     * その能力の**今年の変化**（丸める前・上限で止める前）。
+     * ⚠ `noise` を渡せるようにしてあるのは、画面に出す「今年の自然な伸び」
+     *    （`expectedNaturalGrowth`）が**平均の年**（noise=1）で出すため。
+     *    式を2か所に書かないこと。
+     */
+    const changeOf = (current, key, baseMult = 1, noise = null) => {
       const g = STAT_GROWTH[key];
       const specKey = key === 'armP' ? 'arm' : key;
       // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
@@ -654,28 +672,88 @@ export function makeGrower(player, prof, rankMult = 1.0, opts = {}) {
       //    カテゴリの長所・短所の重みは、伸びだけでなく衰えの大きさにも効く
       const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
       const delta = g.base * baseMult * (statBasal + practice * specMult(specKey))
-        * rankMult * (prof.gain ?? 1.0) * (YEAR_NOISE_LO + Math.random() * YEAR_NOISE_W);
+        * rankMult * (prof.gain ?? 1.0) * (noise ?? YEAR_NOISE_LO + Math.random() * YEAR_NOISE_W);
       if (delta >= 0) {
-        // ⚠ 体格補正は**成長方向にだけ**掛ける（衰退には効かない）。
-        //    この関数が担当する能力は `applyAgeCurveChanges` の対象外に
-        //    してあるので、ここで掛けないと体幹・器用さが効かなくなる
-        //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
         const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * formMult
-          // オンラインの自然成長: フィジカル厚め・技術薄め・若いほど（伸びる側だけ）
           * (prof.natural ? naturalPositive(key, age) : 1);
-        return Math.min(capOverride ?? g.cap,
-          current + stochasticRound(delta * phys * decayMult(current, growthThreshold(ceilOf(g, prof.pro).threshold + (prof.ceilingShift ?? 0), gp), growthDecayRate(ceilOf(g, prof.pro).rate, gp), ceilOf(g, prof.pro).floor)));
+        return delta * phys * decayMult(current, growthThreshold(ceilOf(g, prof.pro).threshold + (prof.ceilingShift ?? 0), gp), growthDecayRate(ceilOf(g, prof.pro).rate, gp), ceilOf(g, prof.pro).floor);
       }
-
-      return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
+      // ⚠ 衰えは `DECLINE_SOFT` で緩める（いしだ 2026-11-20）。**2か所ある成長関数の
+      //    両方に掛けること**（ここと `applyFreeAgentGrowth`）
+      return dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref) * DECLINE_SOFT);
     };
-  return { grow, age, gp, discipline };
+    /** 今年の変化の平均（ゆらぎを均した年）。画面の「自然成長」に使う */
+    const expect = (current, key, baseMult = 1) =>
+      changeOf(current, key, baseMult, YEAR_NOISE_LO + YEAR_NOISE_W / 2);
+    const grow = (current, key, baseMult = 1, capOverride = null) => {
+      const g = STAT_GROWTH[key];
+      const change = changeOf(current, key, baseMult);
+      if (change >= 0) {
+        // ⚠ 体格補正・上限は `changeOf` の中（成長方向にだけ掛かる）。
+        //    ここは丸めと上限止めだけを担う
+        return Math.min(capOverride ?? g.cap, current + stochasticRound(change));
+      }
+      return Math.max(1, current + stochasticRound(change));
+    };
+  return { grow, expect, age, gp, discipline };
 }
 
 /**
  * @param opts.online オンラインの対人リーグの球団名（Set）。渡した球団は自然成長の式
  *   （`CATEGORY_GROWTH.online`）で伸ばし、精神力・体幹も伸ばす（`applyNaturalMindBody`）
  */
+/**
+ * **今年の自然な伸び**（1能力あたりの平均。画面に出す数）。
+ *
+ * ⚠ いしだ 2026-11-20「成長係数1.0が主要な能力が平均1程度自然に上がる、0.0で平均0成長、
+ *    マイナスで衰えを表現したい」。素質（`growthPotential`）は 0.3〜1.8 の**素の個性**で、
+ *    そのままでは「平均いくつ伸びるか」を表さない。画面にはこの関数の値を出す。
+ * ⚠ **式は `makeGrower` と同じ**（`expect` はゆらぎを均した年）。ここで別の式を書かない。
+ * ⚠ 平均に入れるのは**0〜99の物差しの能力だけ**。球速（km/h）とスタミナ（0〜200）は
+ *    単位が違うので混ぜない（混ぜると投手の数字が打者と比べられなくなる）。
+ * @param category `CATEGORY_GROWTH` の区分。オンラインの球団は 'online'、一人用の自球団は 'independent'
+ */
+export function expectedNaturalGrowth(player, category = 'independent', rankMult = 0.90) {
+  const prof = CATEGORY_GROWTH[category] || CATEGORY_GROWTH.independent;
+  // ⚠ `peek` で呼ぶ（選手の調子・一芸の印を書き換えない）
+  const { expect } = makeGrower(player, prof, rankMult, { peek: true });
+  const stats =
+    player?.position === 'pitcher'
+      ? [
+          [player.pitching?.control, 'control'],
+          [player.physical?.arm, 'armP'],
+          ...(player.pitching?.arsenal || [])
+            .filter((a) => a?.type && a.type !== 'straight')
+            .map((a) => [a.level, 'breaking']),
+        ]
+      : [
+          [player.batting?.meet, 'meet'],
+          [player.batting?.power, 'power'],
+          [player.batting?.eye, 'eye'],
+          [player.physical?.speed, 'speed'],
+          [player.physical?.arm, 'arm'],
+          [player.fielding?.defense, 'defense'],
+        ];
+  const usable = stats.filter(([value]) => Number.isFinite(value));
+  if (!usable.length) return 0;
+  const total = usable.reduce((sum, [value, key]) => sum + expect(value, key), 0);
+  return Math.round((total / usable.length) * 100) / 100;
+}
+
+/** 球団の格ごとの練習量の倍率（設備・指導者・実戦の環境） */
+const RANK_TRAIN_MULT = { S: 1.15, A: 1.05, B: 1.0, C: 0.90, D: 0.80 };
+/**
+ * その球団の練習量の倍率。
+ * ⚠ 独立リーグはキャンプがあるためクラブよりも環境が整っている → 格が無ければランクC相当。
+ * ⚠ **画面に出す自然成長（`expectedNaturalGrowth`）にも同じ値を渡すこと**。
+ *    固定値で出すと、格の高い球団の選手の表示が実際より低く出る
+ *    （オンラインの12球団は S〜D が混ざる）。
+ */
+export const teamRankMult = (team) =>
+  RANK_TRAIN_MULT[
+    team?.corporateData?.rank || (team?.independentLeagueId ? 'C' : 'D')
+  ] ?? 1.0;
+
 export function applyCorporatePlayerGrowth(allTeams, { online = null } = {}) {
   const decayMult = (current, threshold, rate, floor = 0.10) => {
     if (current < threshold) return 1.0;
@@ -689,9 +767,7 @@ export function applyCorporatePlayerGrowth(allTeams, { online = null } = {}) {
 
     const isClub = team.corporateData?.type === 'club';
     const isIndependent = !!team.independentLeagueId;
-    // 独立リーグはキャンプがあるためクラブよりも環境が整っている → ランクC相当
-    const rank = team.corporateData?.rank || (isIndependent ? 'C' : 'D');
-    const rankMult = { S: 1.15, A: 1.05, B: 1.0, C: 0.90, D: 0.80 }[rank] || 1.0;
+    const rankMult = teamRankMult(team);
 
     // カテゴリごとの育成の性格（`CATEGORY_GROWTH`）。
     // 従来は3カテゴリすべてが同じ傾斜（長所×1.4 / 短所×0.7）だった。
