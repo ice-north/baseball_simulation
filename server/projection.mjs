@@ -28,6 +28,7 @@ import {
 import { packSummary, packsForMember } from '../src/online/rosterPack.js';
 import { ageOutlook } from '../src/online/ageOutlook.js';
 import { diagnoseTeam } from '../src/online/teamDiagnosis.js';
+import { teamRatings } from '../src/online/teamRatings.js';
 import { ownerRecords } from './ownerRecords.mjs';
 import { seasonReview } from './seasonReview.mjs';
 import { strategyStats } from '../src/online/strategyStats.js';
@@ -599,6 +600,13 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     seasonReview: seasonReview(l, (name) => teamLabels[name]?.short || name),
     // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。
     teamStats: teamSeasonStats(l, seasonStatsOf),
+    // チーム能力値（チーム分析のレーダー。全球団。見せるだけで強さには効かない。`teamRatings.js`）
+    teamRatings: Object.fromEntries(
+      (l.season.settings.teamNames || []).map((name) => {
+        const t = l.game.teams[name];
+        return [name, t ? teamRatings(t.players || [], projectLineup(t)) : null];
+      }),
+    ),
     // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
     //    持っていないので、並べ替えはここで済ませて渡す
     abilityLeaders: abilityLeaders(l, labelOf),

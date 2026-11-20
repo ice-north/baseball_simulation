@@ -1166,3 +1166,83 @@ export function createCoaches(league) {
   });
   return c;
 }
+
+// ------------------------------------------------------------
+// 指導者の詳細能力（先方要望 2026-11-20「指導者にも詳細能力を」）
+//
+// ⚠ **表示と人物像のためだけ**。采配・育成・キャンプ・トレード・試合のどこにも効かない
+//    （いしだ方針「監督に能力バフは無し・型で強さを変えない」）。画面にもそう書く。
+// ⚠ **保存しない**。指導者の id（種）・現役時代・得意分野・ビジョン・性格・通算の年数から毎回同じ値を作る
+//    （乱数を引かない。何度見ても同じ。保存の形も版も変えない）。
+//    経験を積むと少しずつ上がる（通算の年数）。名選手は現役の受け持ちの分野が高い。
+// ⚠ 値は 0〜100（選手の能力と同じ目盛り。画面は選手と同じ段位 S〜F で出す）。
+// ------------------------------------------------------------
+export const COACH_ABILITY_ITEMS = [
+  { key: 'tactics', label: '采配', note: '試合の流れを読む力' },
+  { key: 'pitchingCoach', label: '投手指導', note: '投手を見る・教える力' },
+  { key: 'battingCoach', label: '打撃指導', note: '打者を見る・教える力' },
+  { key: 'fieldingCoach', label: '守備走塁指導', note: '守備と走塁を教える力' },
+  { key: 'development', label: '育成', note: '若手を伸ばす根気' },
+  { key: 'leadership', label: '統率', note: 'チームをまとめる力' },
+  { key: 'rapport', label: '人望', note: '選手やコーチに慕われる度合い' },
+  { key: 'eye', label: '眼力', note: '選手の素質を見抜く目' },
+];
+
+/** 0〜1 の決まった値（id と項目ごと）。⚠ FNV-1a は似た文字列で似た値になるのでかき混ぜる */
+function abilityUnit(id, key) {
+  let h = hashSeed(`${id}:coach-ability:${key}`);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+/**
+ * 指導者の詳細能力（0〜100 の整数）。`COACH_ABILITY_ITEMS` の並び。
+ * 土台 40〜64（id から）＋ 得意分野・現役の守備位置・ビジョン・性格の寄せ ＋ 経験（通算の年数）。
+ */
+export function coachAbilities(coach) {
+  if (!coach) return null;
+  const id = coach.id || coach.name || '';
+  const spec = coach.specialty;
+  const pos = coach.origin?.position;
+  const legend = !!coach.origin?.legend;
+  const v = visionOf(coach);
+  const p = coach.personality || {};
+  const rows = coach.career || [];
+  const years = (role) => rows.filter((r) => !role || r.role === role).length;
+  const exp = (n, per = 1.5, cap = 12) => Math.min(cap, n * per);
+  const base = (key) => 40 + Math.floor(abilityUnit(id, key) * 25);
+  const raw = {
+    tactics:
+      base('tactics') + (spec === 'manager' ? 10 : 0) + (pos === 'catcher' ? 4 : 0) + exp(years('manager'), 2, 16),
+    pitchingCoach:
+      base('pitchingCoach') +
+      (spec === 'pitching' ? 12 : 0) +
+      (pos === 'pitcher' ? 6 : pos === 'catcher' ? 4 : 0) +
+      (legend && pos === 'pitcher' ? 6 : 0) +
+      exp(years('pitching')),
+    battingCoach:
+      base('battingCoach') +
+      (spec === 'batting' ? 12 : 0) +
+      (pos && pos !== 'pitcher' ? 5 : 0) +
+      (legend && pos !== 'pitcher' ? 6 : 0) +
+      exp(years('batting')),
+    fieldingCoach:
+      base('fieldingCoach') +
+      (pos === 'infield' || pos === 'catcher' ? 7 : pos === 'outfield' ? 4 : 0) +
+      (v.defense === 'fielding' ? 7 : 0) +
+      (v.attack === 'speed' ? 5 : 0) +
+      exp(years('batting'), 0.8, 6),
+    development:
+      base('development') + (v.horizon === 'develop' ? 12 : v.horizon === 'win' ? -6 : 0) - clampInt(p.temper) * 3 + exp(years(), 0.6, 6),
+    leadership: base('leadership') + clampInt(p.stubborn) * 3 + (legend ? 8 : 0) + exp(years('manager'), 1.5, 10),
+    rapport: base('rapport') + clampInt(p.trust) * 4 - clampInt(p.temper) * 3 + (legend ? 6 : 0) - clampInt(p.stubborn) * 2,
+    eye: base('eye') + (spec === 'manager' ? 4 : 0) + (coach.voice === 'logical' ? 6 : 0) + exp(years(), 0.8, 10),
+  };
+  return Object.fromEntries(
+    COACH_ABILITY_ITEMS.map(({ key }) => [key, Math.max(1, Math.min(99, Math.round(raw[key])))]),
+  );
+}

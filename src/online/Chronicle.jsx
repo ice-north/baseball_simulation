@@ -13,6 +13,8 @@ import {
   proDraftedAfter,
   draftRankText,
 } from './chronicleText.js';
+import TeamHistoryChart from './TeamHistoryChart.jsx';
+import { currentSeasonRow } from './teamHistory.js';
 
 // ============================================================
 // 球団史・記録（PC）。年表・歴代記録・引退した人・節目、リーグの話題。
@@ -42,7 +44,7 @@ const readOpen = () => {
     return new Set();
   }
 };
-function Fold({ id, title, count, children }) {
+export function Fold({ id, title, count, children }) {
   const [open, setOpen] = useState(() => readOpen().has(id));
   const toggle = (e) => {
     const next = e.currentTarget.open;
@@ -173,7 +175,7 @@ function Retired({ list }) {
  * ⚠ 先方要望（2026-11-16）: プロ指名を解禁し、プロ入りした選手はリーグ記録から確かめられるように。
  *    `showTeam` のとき（リーグ全体）は元の球団も出す
  */
-function ProDrafted({ list, showTeam = false, empty }) {
+export function ProDrafted({ list, showTeam = false, empty, more = null }) {
   if (!list?.length) return <p>{empty}</p>;
   return (
     <div className="online-news-list">
@@ -203,6 +205,8 @@ function ProDrafted({ list, showTeam = false, empty }) {
               {t}
             </small>
           ))}
+          {/* `more`: 行の下に足すもの（リーグ史の「プロでの成績を全部見る」） */}
+          {more && more(r)}
         </article>
       ))}
     </div>
@@ -271,7 +275,7 @@ function Moves({ list }) {
 }
 
 /** 年間表彰（リーグ全体。いちばん新しい年） */
-function Honors({ honors }) {
+export function Honors({ honors }) {
   const rows = honorRows(honors, teamShort);
   if (!rows.length)
     return <p>まだありません。10月下旬に成績が確定すると、タイトルと部ごとのMVP・新人王・ベストナイン・最優秀バッテリーが決まります。</p>;
@@ -291,7 +295,7 @@ function Honors({ honors }) {
  * オーナー名鑑（参加者ごとの通算。リーグ全体）。⚠ 文はサーバーが作る（`server/ownerRecords.mjs`）。
  * アプリ（ChronicleDialog の「オーナー名鑑」）と同じ並び
  */
-function Owners({ list }) {
+export function Owners({ list }) {
   if (!list?.length) return <p>まだ参加者がいません。</p>;
   return (
     <div className="online-news-list">
@@ -452,8 +456,8 @@ function Milestones({ list, showTeam = false }) {
  * ⚠ **件数に上限を置くこと**。ホームは1画面（1000px）に収める決まりで、
  *    右の列は順位表とこのカードだけ。ここが件数ぶん伸びると、順位表ごと
  *    画面から出る（実測: 話題が1件のとき898px、3件で1046px）。
- * ⚠ 続きは「球団史・記録」（`Chronicle`）に全部出るので、ここで落としても読める。
- *    `full` のとき（球団史・記録のページ）は件数で切らず、節目は出さない
+ * ⚠ 続きは「リーグ史」（`LeagueHistory`）に全部出るので、ここで落としても読める。
+ *    `full` のとき（リーグ史のページ）は件数で切らず、節目は出さない
  *    （節目はそのページに球団ごとの欄がある）。
  */
 const HOME_TOPIC_LIMIT = 2;
@@ -482,7 +486,7 @@ export function LeagueTopics({ view, full = false, bare = false }) {
       {!bare && (
         <h2 className="online-topics-head">
           リーグの話題
-          {!full && <small>続きは「球団史・記録」で</small>}
+          {!full && <small>続きは「リーグ史」で</small>}
         </h2>
       )}
       {races.length > 0 && (
@@ -543,10 +547,16 @@ export default function Chronicle({ view }) {
         return (
           <Page
             title="球団史・記録"
-            sub={`${teamLabel(shown.teamName)}の年ごとの成績と、このリーグでの歴代記録。記録はリーグを始めてからのものです。`}
+            sub={`${teamLabel(shown.teamName)}の年ごとの成績と、この球団での歴代記録。記録はリーグを始めてからのものです。リーグ全体の記録は「リーグ史」にあります。`}
             actions={<div className="online-team-selector">{selector}</div>}
           >
-            <SeasonReview review={view.seasonReview} />
+            {/* 球団の歩み（折れ線グラフ。先方要望 2026-11-20）。⚠ 折りたたまない: このページを開いて
+                最初に見るもの。年表（表）は下の欄で開く */}
+            {(c.seasons?.length > 0 || currentSeasonRow(view, shown.teamName)) && (
+              <section className="online-card">
+                <TeamHistoryChart seasons={c.seasons} current={currentSeasonRow(view, shown.teamName)} />
+              </section>
+            )}
             {/* ⚠ 欄はどれも折りたたむ（`Fold`）。2列に分けると、開いた欄の横に大きな空きが
                 できるので1列に並べる */}
             <Fold id="seasons" title="年表" count={c.seasons?.length || 0}>
@@ -578,28 +588,8 @@ export default function Chronicle({ view }) {
             <Fold id="retired" title="引退した選手" count={c.retired?.length || 0}>
               <Retired list={c.retired} />
             </Fold>
-            {/* ここから下はリーグ全体の記録（球団を選び直しても同じ） */}
-            <h3 className="online-fold-group">リーグ全体</h3>
-            {/* ホームで2件に切った優勝争い・球界の外からの続き（リーグ全体の話題） */}
-            <Fold id="topics" title="リーグの話題">
-              <LeagueTopics view={view} full bare />
-            </Fold>
-            <Fold id="owners" title="オーナー名鑑" count={view.owners?.length || 0}>
-              <Owners list={view.owners} />
-            </Fold>
-            <Fold
-              id="honors"
-              title={`年間表彰${view.chronicle?.honors?.year ? `（${view.chronicle.honors.year}年目）` : ''}`}
-            >
-              <Honors honors={view.chronicle?.honors} />
-            </Fold>
-            <Fold id="leaguePro" title="リーグからプロへ" count={view.chronicle?.proDrafted?.length || 0}>
-              <ProDrafted
-                list={view.chronicle?.proDrafted}
-                showTeam
-                empty="まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜5人。0人の年もあります）。"
-              />
-            </Fold>
+            {/* ⚠ リーグ全体の欄（リーグの話題・オーナー名鑑・年間表彰・リーグからプロへ・今季総括号）は
+                「リーグ史」へ移した（先方要望 2026-11-20 のリーグ史。`LeagueHistory.jsx`） */}
           </Page>
         );
       }}

@@ -93,10 +93,12 @@ fun StandingsBoard(view: LeagueView, onTeam: ((String) -> Unit)? = null) {
                 Text("勝-敗-分", style = head, color = ink, modifier = Modifier.width(80.dp), textAlign = TextAlign.End)
                 Text("差", style = head, color = ink, modifier = Modifier.width(44.dp), textAlign = TextAlign.End)
             }
-            val top = group.rows.firstOrNull()
             group.rows.forEachIndexed { i, row ->
                 val own = row.team == view.teamName
-                val gap = top?.let { ((it.wins - it.losses) - (row.wins - row.losses)) / 2.0 } ?: 0.0
+                // ゲーム差は**すぐ上の順位の球団との差**（PC の順位表と同じ。`src/online/standingsGap.js`。
+                // 先方要望 2026-11-20「上位順位のチームとのゲーム差」）。以前は首位との差だった
+                val above = group.rows.getOrNull(i - 1)
+                val gap = above?.let { ((it.wins - it.losses) - (row.wins - row.losses)) / 2.0 } ?: 0.0
                 val mark = group.moveMark(i)
                 Row(
                     Modifier
@@ -135,7 +137,7 @@ fun StandingsBoard(view: LeagueView, onTeam: ((String) -> Unit)? = null) {
                         }
                     }
                     Text("${row.wins}-${row.losses}-${row.draws}", modifier = Modifier.width(80.dp), textAlign = TextAlign.End)
-                    Text(if (i == 0 || gap == 0.0) "-" else "%.1f".format(gap), modifier = Modifier.width(44.dp), textAlign = TextAlign.End)
+                    Text(if (i == 0) "-" else "%.1f".format(gap + 0.0), modifier = Modifier.width(44.dp), textAlign = TextAlign.End)
                 }
             }
         }

@@ -625,7 +625,7 @@ try {
   await p.keyboard.press('Control+Shift+z');
   assert.deepEqual(await starterOrder(p), movedOrder, 'Ctrl+Shift+Zで進まない');
   // ページを移っても未保存の編集が残る（隠すだけで外さない）
-  await click(p, '選手成績');
+  await click(p, 'チーム分析');
   await click(p, '投手起用');
   assert.deepEqual(await starterOrder(p), movedOrder, 'ページ移動で編集が消えた');
   // 保存の応答待ちの間は触れない（送信中の編集が保存後の作り直しで消えるため）

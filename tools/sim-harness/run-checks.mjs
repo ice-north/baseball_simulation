@@ -69,6 +69,7 @@ const CHECKS = [
   { name: 'online-camp-target-check', group: 'quick', online: true, slow: 6 },
   { name: 'online-owner-five-check', group: 'quick', online: true, slow: 2 },
   { name: 'online-owner-extra-check', group: 'quick', online: true, slow: 1 },
+  { name: 'online-history-analysis-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-migration-check', group: 'check', online: true, slow: 21 },
   { name: 'online-join-check', group: 'check', online: true, slow: 9 },
   { name: 'online-deadline-check', group: 'check', online: true, slow: 85 },

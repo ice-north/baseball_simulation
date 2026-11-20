@@ -68,6 +68,7 @@ const fitnessColor = (v) => FITNESS_COLORS.find(([min]) => v >= min)[1];
  * @param focus      選んでいる打順の行の位置（控えとの交代を考えている）
  * @param onPick     守備位置を押した（表のバッジを押したのと同じ）
  * @param onHover    守備位置にマウスを乗せた／外した
+ * ⚠ `onPick` を渡さないと見るだけの図（チーム分析の守備分析）。押しても何も起きない
  */
 export default function FieldDiagram({
   order,
@@ -171,7 +172,8 @@ export default function FieldDiagram({
         />
         {Object.entries(COORDS).map(([pos, { x, y }]) => {
           const { player, index } = at[pos] || {};
-          const fixed = pos === 'pitcher';
+          // 投手は動かせない。見るだけの図（`onPick` 無し）は全部押せない
+          const fixed = pos === 'pitcher' || !onPick;
           const fitness = player ? positionFitness(player, pos) : 0;
           const color = fitnessColor(fitness);
           const grade = gradeOf(defenseRange(player, pos));
@@ -328,7 +330,9 @@ export default function FieldDiagram({
             ))
           : selected !== null
             ? '入れ替える守備位置を押してください（図でも表でも）'
-            : '守備位置を押すと選べます。数字は今の位置の守備適性、丸の色も適性です。'}
+            : onPick
+              ? '守備位置を押すと選べます。数字は今の位置の守備適性、丸の色も適性です。'
+              : '数字は今の位置の守備適性、丸の色も適性です。'}
       </p>
     </aside>
   );

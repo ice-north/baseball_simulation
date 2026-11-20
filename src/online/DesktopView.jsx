@@ -1,8 +1,6 @@
 import Chronicle from './Chronicle.jsx';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFirstWeek } from './useFirstWeek.js';
-import AgeOutlook from './AgeOutlook.jsx';
-import TeamDiagnosis from './TeamDiagnosis.jsx';
 import {
   Results,
   Notices,
@@ -11,9 +9,8 @@ import {
 } from './LeaguePanels.jsx';
 import DesktopTactics from './DesktopTactics.jsx';
 import StaffPage, { staffModeChanges } from './StaffPage.jsx';
-import AbilityRanking from './AbilityRanking.jsx';
-import CareerStats from './CareerStats.jsx';
-import TeamRoster from './TeamRoster.jsx';
+import TeamAnalysis from './TeamAnalysis.jsx';
+import LeagueHistory from './LeagueHistory.jsx';
 import LineupBoard from './LineupBoard.jsx';
 import PitchingBoard from './PitchingBoard.jsx';
 import {
@@ -42,7 +39,6 @@ import {
 } from './hometown.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { formatDeadline, packStartText } from './LeaguePanels.jsx';
-import { CompactRoster } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import {
   rebaseLineupSave,
@@ -57,7 +53,6 @@ import { OWNER_COMMENT_MAX } from './social.js';
 import {
   AwaySummaryBanner,
   FirstWeekBanner,
-  TransactionsPage,
   StarterPicksPage,
   ExhibitionPage,
   MembersAdmin,
@@ -84,21 +79,22 @@ import { InvitesAdmin } from './Invites.jsx';
 // ⚠ 消した入口:
 //    - 自チーム情報 … 所属・順位・成績は左メニューの球団名の下に出す。
 //      名前の変更は頻繁ではないので、左メニューの「名前を変える」から開く
-// ⚠ 能力ランキングは残す。**リーグ全球団**の中の並びで、選手成績の表
+// ⚠ 能力ランキングは残す（リーグ史の中）。**リーグ全球団**の中の並びで、選手成績の表
 //    （1球団ずつ）では作れないため
+// ⚠ 先方要望（2026-11-20）で「情報」を組み直した:
+//    - チーム分析 … 選手成績・通算成績（球団ごと）・スタメン・守備分析・年齢構成・チーム能力値をまとめた
+//    - リーグ史 … 過去の順位・プロ入り・移籍（取引の記録）・通算成績ランキング・能力ランキング・表彰をまとめた
+//    古い入口（`players` など）で開かれたら、まとめた先の切り替えで開く（`MERGED_TABS`）
 // ============================================================
 const NAV = [
   {
     id: 'info',
     label: '情報',
     items: [
-      ['players', '選手成績'],
-      ['careers', '通算成績'],
+      ['analysis', 'チーム分析'],
       ['chronicle', '球団史・記録'],
-      ['ranking', '能力ランキング'],
+      ['league', 'リーグ史'],
       ['games', '試合結果'],
-      // トレード・退団・入団の記録（改善案 A2）
-      ['transactions', '取引の記録'],
     ],
   },
   {
@@ -134,6 +130,16 @@ const NAV = [
  *    もう片方の未保存の編集は保存できる（`rebaseLineupSave`）。
  */
 const BOARD_KEYS = { lineup: LINEUP_BOARD_KEYS, rotation: PITCHING_BOARD_KEYS };
+/**
+ * まとめたページの古い入口 → [開くページ, その中の切り替え]。スマホの「選手」タブから PC の幅に
+ * 広げたとき・古い案内のボタンから来たときに、何も出ないページにしない
+ */
+const MERGED_TABS = {
+  players: ['analysis', 'players'],
+  careers: ['analysis', 'careers'],
+  ranking: ['league', 'ability'],
+  transactions: ['league', 'moves'],
+};
 // ページの見出し。⚠ 左メニューの名前（`NAV`）から作る（2か所に書くと片方だけ変わる）
 const TITLES = {
   today: 'ホーム',
@@ -421,7 +427,8 @@ export default function DesktopView(props) {
     [setTab],
   );
   // ⚠ 消した入口（自チーム情報）で開いていたら、ホームへ戻す
-  const current = TITLES[tab] ? tab : 'today';
+  const merged = MERGED_TABS[tab];
+  const current = merged ? merged[0] : TITLES[tab] ? tab : 'today';
   // キャンプをホームに出しているか（理由は下の `current === 'today'` の注）。
   // ⚠ 途中参加の初期メンバー選択（`pendingPack`）が先。その人のキャンプは
   //    CPUが決めるので、ホームへ出しても決めるものが無い
@@ -703,46 +710,13 @@ export default function DesktopView(props) {
           </div>
         </Page>
       )}
-      {current === 'careers' && <CareerStats view={view} />}
-      {current === 'transactions' && <TransactionsPage view={view} />}
+      {current === 'analysis' && (
+        <TeamAnalysis key={merged?.[1] || 'analysis'} view={view} initial={merged?.[1]} open={setTab} />
+      )}
+      {current === 'league' && <LeagueHistory key={merged?.[1] || 'league'} view={view} initial={merged?.[1]} />}
       {current === 'starters' && <StarterPicksPage {...props} />}
       {current === 'exhibition' && <ExhibitionPage {...props} />}
       {current === 'chronicle' && <Chronicle view={view} />}
-      {current === 'ranking' && <AbilityRanking view={view} />}
-      {current === 'players' && (
-        <TeamRoster view={view}>
-          {(shown, selector) => (
-            <Page
-              title="選手成績"
-              sub="列の見出しを押すと並べ替えます。選手名を押すと詳しい成績と能力を開きます。"
-              actions={<div className="online-team-selector">{selector}</div>}
-            >
-              <section className="online-card">
-                <CompactRoster
-                  key={shown.teamName}
-                  view={
-                    // ⚠ 他球団の選手には球団名を付ける（詳細の「この選手でトレードを考える」）
-                    shown.teamName === view.teamName
-                      ? shown
-                      : {
-                          ...shown,
-                          roster: (shown.roster || []).map((p) => ({
-                            ...p,
-                            tradeTeam: shown.teamName,
-                          })),
-                        }
-                  }
-                  desktop
-                />
-              </section>
-              {/* 自球団だけ: 年齢構成と3年後の見込み（成長力を使うので他球団には無い） */}
-              {/* 自球団だけ: チーム診断「なぜ勝てない？」（直せることと、直す画面へのボタン） */}
-              {shown.teamName === view.teamName && <TeamDiagnosis diagnosis={view.diagnosis} open={setTab} />}
-              {shown.teamName === view.teamName && <AgeOutlook outlook={view.ageOutlook} />}
-            </Page>
-          )}
-        </TeamRoster>
-      )}
       {/* ⚠ **手続き中でも開けること**。打順や投手起用はいつ決めてもよく、
           止める理由が無い。
           ⚠ **保存に失敗しても閉じない**。閉じると編集がまるごと消える。

@@ -290,7 +290,7 @@ try {
   await click(draft.page, 'ホーム');
   await chooseMenu(draft.page, 'velocity');
   // ⚠ ページを移って戻る（キャンプはホームなので、移る先は別のページ）
-  await click(draft.page, '選手成績');
+  await click(draft.page, 'チーム分析');
   // ⚠ ほかのページの帯の「キャンプを開く」は**ホームへ直に飛ぶ**（u1 低28）。以前は
   //    「現在の手続き」（「ホームへ」の案内だけ）へ飛び、2回押さないと着かなかった
   await click(draft.page, 'キャンプを開く');
@@ -1058,6 +1058,7 @@ try {
   await click(pages.page, '更新');
   // ⚠ PCの選手成績は**ページ送りをしない**（全員を1枚に）。人数が減っても
   //    取り残された行が出ないことを見る（ページ送りの縮小はリーグ便りで見る）
+  await click(pages.page, 'チーム分析');
   await click(pages.page, '選手成績');
   const rosterRows = pages.page.locator('.online-roster-rows article');
   await pages.page.waitForFunction(
