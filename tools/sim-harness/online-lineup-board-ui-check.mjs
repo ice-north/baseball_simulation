@@ -87,6 +87,25 @@ try {
     );
     await p.getByRole('button', { name: '選手成績を閉じる' }).click();
   }
+  // --- 能力ランキング: 名前・球団・値の3つの欄（いしだ 2026-11-20「名前のあとに
+  //     半角スペースを入れてください。ポジションはいらないです」）--------------
+  {
+    await go('能力ランキング');
+    const row = p.locator('.online-leader-box li').first();
+    await row.waitFor();
+    const text = await row.innerText();
+    // ⚠ 守備位置を出さない（「川崎·遊」と続いて名前と地続きに見えていた）
+    assert.ok(!/[·・]/.test(text), `能力ランキングに守備位置が残っている: ${text}`);
+    // ⚠ 名前と球団は別の欄。くっつけない
+    const gap = await row.evaluate((li) => {
+      const name = li.querySelector('.online-leader-name');
+      const team = li.querySelector('.online-leader-team');
+      if (!name || !team) return null;
+      return Math.round(team.getBoundingClientRect().left - name.getBoundingClientRect().right);
+    });
+    assert.ok(gap !== null, `能力ランキングに名前か球団の欄が無い: ${text}`);
+    assert.ok(gap >= 3, `名前と球団が詰まりすぎ: ${gap}px`);
+  }
   await go('スタメン設定');
   const slots = () =>
     p

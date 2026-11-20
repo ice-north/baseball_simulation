@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { AbilityGrade, TeamPlayerButton } from './PlayerPerformance.jsx';
-import { POS } from './api.js';
 import { teamShort } from './gameText.js';
 import { Page } from './Page.jsx';
 
@@ -68,10 +67,13 @@ export default function AbilityRanking({ view }) {
                         name={row.name}
                         panel="abilities"
                       />
-                      <small>
-                        {teamShort(row.team)}·{POS[row.position]}
-                      </small>
                     </span>
+                    {/* ⚠ 球団名は**名前と別の欄**にする（いしだ 2026-11-20「名前のあとに
+                        半角スペースを入れてください。ポジションはいらないです」）。
+                        以前は名前の後ろに「川崎·遊」と続けていて、名前と地続きに見え、
+                        長い名前は「…」で切れていた。ほかのランキング（個人成績・通算）と
+                        同じ作りにそろえてある */}
+                    <span className="online-leader-team">{teamShort(row.team)}</span>
                     <span className="online-leader-value">
                       <AbilityGrade
                         value={row.value}
