@@ -27,6 +27,16 @@ export const PLAY_TEXT = {
 
 /** アウトになった打席（残りのアウトを数えるため）。⚠ 犠打もアウト1つ */
 const OUT_CODES = new Set(['振', '犠', '併', '凡']);
+/** 安打（色を変える。⚠ 四球・死球・失策は安打ではない） */
+const HIT_CODES = new Set(['本', '三', '二', '安']);
+
+/**
+ * その打席の色の種類（いしだ 2026-11-20「安打なら黄色、打点も付いたら赤色など、
+ * 視覚的にわかりやすくして」）。点が入った打席がいちばん強い。
+ *   `score` … 点が入った（赤）／`hit` … 安打（黄）／`out` … アウト（落とす）／`plain` … そのほか
+ */
+export const playTone = (code, runs) =>
+  (Number(runs) || 0) > 0 ? 'score' : HIT_CODES.has(code) ? 'hit' : OUT_CODES.has(code) ? 'out' : 'plain';
 
 /** その半回の鍵（「3t」＝3回表・「3b」＝3回裏） */
 export const inningKey = (inning, half) => `${inning}${half === 'bottom' ? 'b' : 't'}`;
@@ -61,6 +71,7 @@ export function inningPlays(game, inning, half) {
         text: PLAY_TEXT[code] || code,
         runs: Number(runs) || 0,
         outs: Math.min(3, outs),
+        tone: playTone(code, runs),
       };
     }),
   };

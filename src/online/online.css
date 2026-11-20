@@ -2591,11 +2591,14 @@ small.online-gain:not(:where(.online-sp *)) {
   --online-game-width: min(67%, 1fr);
   --online-record-row: 26px;
 }
+/* ⚠ 小窓そのものを中身の幅まで狭めたので（`.online-game-dialog` の `width`）、
+   中身は**いっぱいに広げる**。真ん中にそろえる指定は残す（狭い画面で最低幅に
+   当たったときに左へ寄らないように） */
 .online-desktop .online-game-dialog .online-scoreboard,
 .online-desktop .online-game-dialog .online-game-summary,
 .online-desktop .online-game-dialog .online-stat-tools,
 .online-desktop .online-game-dialog .online-record-area {
-  max-width: 67%;
+  max-width: 100%;
   min-width: min(100%, 560px);
   margin-inline: auto;
 }
@@ -3063,7 +3066,21 @@ small.online-gain:not(:where(.online-sp *)) {
   flex: 0 0 auto;
   font-style: normal;
   font-weight: 700;
+  color: #ff8787;
+}
+/* ⚠ **打席の色**（いしだ 2026-11-20「安打なら黄色、打点も付いたら赤色など、視覚的に
+   わかりやすくして」）。点が入った打席がいちばん強い（赤）→ 安打（黄）→ そのほか →
+   アウト（落とす）。実測のコントラスト（地 #06130c の上）: 黄13.7・赤6.9・落とした色8.9 */
+.online-inning-plays li[data-tone='hit'] .online-inning-play-text {
   color: #ffd84d;
+}
+.online-inning-plays li[data-tone='score'] .online-inning-play-text,
+.online-inning-plays li[data-tone='score'] .online-inning-play-name {
+  color: #ff8787;
+  font-weight: 700;
+}
+.online-inning-plays li[data-tone='out'] .online-inning-play-text {
+  color: #9fb8a6;
 }
 .online-inning-plays li small {
   flex: 0 0 auto;
@@ -3133,6 +3150,16 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 .online-scoreboard figcaption b {
   color: #ffd84d;
+}
+/* ⚠ **勝ちは赤・負けは青**（いしだ 2026-11-20「投手も、勝ちを赤、負けを青としましょう」）。
+   S（セーブ）・H（ホールド）は今までの黄色のまま。実測（盤 #0f2a1d の上）: 赤5.5・青6.0 */
+.online-scoreboard figcaption span[data-mark='勝'],
+.online-scoreboard figcaption span[data-mark='勝'] b {
+  color: #ff8787;
+}
+.online-scoreboard figcaption span[data-mark='敗'],
+.online-scoreboard figcaption span[data-mark='敗'] b {
+  color: #60a5fa;
 }
 .online-game-dialog {
   min-height: min(420px, 70dvh);
@@ -3245,7 +3272,10 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-replay-dialog > header { position: sticky; top: 0; z-index: 6; background: var(--surface-2); }
 .online-replay-dialog > .online-replay-launch { position: sticky; top: 56px; z-index: 5; background: var(--surface-2); }
 .online-replay-dialog .online-replay-controls { position: sticky; top: 108px; z-index: 4; background: var(--surface-2); padding: 4px 0; }
-@media (min-width: 768px) { .online-game-dialog:not(.online-replay-dialog) { width: min(1240px, 96vw); max-width: 96vw; } }
+/* ⚠ **中身に合わせた幅にする**（いしだ 2026-11-20「両枠に隙間が大きいです。もっと
+   試合成績の横幅を狭くしてください」）。個人成績の表を詰めたので、1240pxだと左右が
+   余って見えた。観戦リプレイ（`.online-replay-dialog`）は別で、今までどおり広い */
+@media (min-width: 768px) { .online-game-dialog:not(.online-replay-dialog) { width: min(900px, 96vw); max-width: 96vw; } }
 .online-replay-controls select { width: auto; flex: 0 0 110px; }
 .online-replay-controls input[type='range'] { width: auto; flex: 1; min-width: 140px; }
 .online-replay-controls button { min-height: 34px; font-size: 12px; padding: 4px 8px; }

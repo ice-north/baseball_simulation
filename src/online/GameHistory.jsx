@@ -442,7 +442,8 @@ function InningPlays({ game, inning, half }) {
       {data?.rows?.length ? (
         <ol>
           {data.rows.map((row, i) => (
-            <li key={i}>
+            /* ⚠ 色の決め方は `gamePlays.js` の `playTone`（点＝赤・安打＝黄・アウトは落とす） */
+            <li key={i} data-tone={row.tone}>
               {row.order != null && <b>{row.order}</b>}
               <span className="online-inning-play-name">{row.name}</span>
               <span className="online-inning-play-text">{row.text}</span>
@@ -547,7 +548,8 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
       {board.decisions.length > 0 && (
         <figcaption>
           {board.decisions.map((d) => (
-            <span key={d.label}>
+            /* ⚠ 勝ちは赤・負けは青（いしだ 2026-11-20）。S・Hは今までの黄色のまま */
+            <span key={d.label} data-mark={d.label}>
               <b>{d.label}</b> {d.name}
             </span>
           ))}

@@ -211,12 +211,18 @@ try {
     0,
     'PCの試合成績がページに分かれている',
   );
-  // ⚠ PCの試合の小窓は**選手の詳細の 760px に押し込まない**。試合成績は1240px、
-  //    観戦リプレイは画面の97%（1440pxなら1396px）
-  assert.ok(
-    (await cardBox.boundingBox()).width >= 1200,
-    `PCの試合成績の小窓が狭い: ${(await cardBox.boundingBox()).width}`,
-  );
+  // ⚠ PCの試合の小窓は**選手の詳細の 760px に押し込まない**。中身（スコアボードと
+  //    個人成績の表）に合わせた 900px で、観戦リプレイだけ画面の97%（1440pxなら1396px）。
+  //    ⚠ いしだ 2026-11-20「両枠に隙間が大きいです。もっと試合成績の横幅を狭くしてください」
+  //       で 1240px から狭めた。**中身より狭くしないこと**（表が横に溢れる）
+  {
+    const width = (await cardBox.boundingBox()).width;
+    assert.ok(width >= 860 && width <= 1000, `PCの試合成績の小窓の幅が範囲外: ${width}`);
+    assert.ok(
+      await cardBox.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+      '試合成績が横にはみ出している',
+    );
+  }
   // --- スコアボード: 幅と、回の数字を押すとその回の攻撃が出る -----------------
   // ⚠ いしだ 2026-11-19「スコアをクリックすると、その回の攻撃を時系列で表示してほしい」
   //    「スコアボードも、2/3程度に横幅を縮めてほしい」
@@ -225,9 +231,11 @@ try {
     await board.waitFor();
     const boardWidth = (await board.boundingBox()).width;
     const dialogWidth = (await cardBox.boundingBox()).width;
+    // ⚠ 小窓を中身の幅まで狭めたので（いしだ 2026-11-20）、**盤は小窓いっぱい**になる。
+    //    余るようなら小窓が広すぎる
     assert.ok(
-      boardWidth <= dialogWidth * 0.72,
-      `スコアボードが広い: ${Math.round(boardWidth)}px / 小窓 ${Math.round(dialogWidth)}px`,
+      boardWidth >= dialogWidth - 40,
+      `スコアボードの左右が余っている: ${Math.round(boardWidth)}px / 小窓 ${Math.round(dialogWidth)}px`,
     );
     const cells = board.locator('tbody td button');
     const count = await cells.count();
@@ -267,9 +275,10 @@ try {
     const tableWidth = await cardBox
       .locator('table.online-record-table')
       .evaluate((n) => n.getBoundingClientRect().width);
+    // ⚠ 表も盤と同じ幅（中身をそろえる）
     assert.ok(
-      tableWidth <= dialogWidth * 0.72,
-      `個人成績の表が広い: ${Math.round(tableWidth)}px / 小窓 ${Math.round(dialogWidth)}px`,
+      Math.abs(tableWidth - boardWidth) <= 8,
+      `個人成績の表とスコアボードの幅が違う: 表${Math.round(tableWidth)}px / 盤${Math.round(boardWidth)}px`,
     );
     // 行は詰める（44pxのままだと縦に長い）
     const rowHeight = await cardBox
@@ -314,6 +323,47 @@ try {
     await cardBox.getByRole('button', { name: '打撃', exact: true }).click();
     await cardBox.getByRole('button', { name: '打撃・基本', exact: true }).waitFor();
     assert.equal(await areaHeight(), firstHeight, '戻したときに高さが変わる');
+    // ⚠ **打席の色**（いしだ 2026-11-20「安打なら黄色、打点も付いたら赤色など、視覚的に
+    //    わかりやすくして」）。種類ごとに違う色が当たっていること（色の値は `online.css`）
+    {
+      const tones = await plays.locator('li').evaluateAll((list) =>
+        list.map((li) => ({
+          tone: li.getAttribute('data-tone'),
+          color: getComputedStyle(li.querySelector('.online-inning-play-text')).color,
+        })),
+      );
+      const byTone = new Map();
+      for (const row of tones) {
+        assert.ok(row.tone, '打席に色の種類が付いていない');
+        const seen = byTone.get(row.tone);
+        if (seen) assert.equal(row.color, seen, `同じ種類（${row.tone}）で色が違う`);
+        else byTone.set(row.tone, row.color);
+      }
+      assert.ok(byTone.size >= 2, `色の種類が1つしか出ていない: ${[...byTone.keys()]}`);
+      assert.equal(
+        new Set(byTone.values()).size,
+        byTone.size,
+        `種類が違うのに同じ色: ${JSON.stringify([...byTone])}`,
+      );
+    }
+    // ⚠ **勝ちは赤・負けは青**（いしだ 2026-11-20）
+    {
+      const marks = await cardBox
+        .locator('.online-scoreboard figcaption span[data-mark]')
+        .evaluateAll((list) =>
+          Object.fromEntries(
+            list.map((n) => [n.getAttribute('data-mark'), getComputedStyle(n).color]),
+          ),
+        );
+      assert.ok(marks['勝'] && marks['敗'], `勝敗投手が出ていない: ${JSON.stringify(marks)}`);
+      assert.notEqual(marks['勝'], marks['敗'], '勝ちと負けが同じ色');
+      // 赤と青（色の名前ではなく、赤み・青みで見る）
+      const rgb = (c) => (c.match(/\d+/g) || []).map(Number);
+      const [wr, , wb] = rgb(marks['勝']);
+      const [lr, , lb] = rgb(marks['敗']);
+      assert.ok(wr > wb, `勝ちが赤くない: ${marks['勝']}`);
+      assert.ok(lb > lr, `負けが青くない: ${marks['敗']}`);
+    }
     // 見た目の確かめ用（この検査はもともと観戦パネルも撮っている）
     await cardBox.screenshot({ path: '/tmp/baseball-online-inning-plays.png' });
     // もう一度押すと閉じる
