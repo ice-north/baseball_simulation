@@ -105,4 +105,50 @@ class LogicTest {
             assertEquals("auto", changed.at("tactics", "hook").str())
         }
     }
+
+    /**
+     * 救援の同じ役割の中の順番（いしだ 2026-11-20。PC の投手起用の▲▼と同じ）。Web 版 pitchingEdit.js の
+     * reliefOrderOf・moveRelief・reliefGroups の写しが同じ答えを出し、保存で `pitcherOrder` が送られるか
+     */
+    @Test
+    fun reliefOrderMatchesWeb() {
+        val want = expected.at("relief").obj()!!
+        val ids = { e: kotlinx.serialization.json.JsonElement? -> e.list().map { it.long()!! } }
+        val groups = { e: kotlinx.serialization.json.JsonElement? -> e.list().map { g -> g.list().let { it[0].str() to it[1].list().map { id -> id.long()!! } } } }
+        val typed = OnlineJson.decodeFromString<LeagueView>(view.toString())
+        val players = typed.roster
+        val lineup = JsonObject(typed.lineup!! + mapOf("pitcherRoles" to want.at("roles")!!, "pitcherOrder" to want.at("saved")!!))
+        // 保存に順番が無ければ名簿の並び（今までの順）
+        assertEquals(ids(want.at("plainOrder")), PlanDraft.from(typed.lineup!!, players).pitching.order)
+        val draft = PlanDraft.from(lineup, players)
+        assertEquals(ids(want.at("startOrder")), draft.pitching.order)
+        val asIds = { s: PitchingState -> s.reliefGroups(players).map { (role, list) -> role to list.map { it.id } } }
+        assertEquals(groups(want.at("startGroups")), asIds(draft.pitching))
+        var state = draft.pitching
+        want.at("steps").list().forEachIndexed { i, step ->
+            val id = step.at("id").long()!!; val delta = step.at("delta").int()!!
+            val can = state.canMoveRelief(id, delta)
+            val next = state.moveRelief(id, delta, players)
+            // ▲▼を押せる＝動く（端・1人だけの役割では押せない）
+            assertEquals(can, next != state, "step $i canMove")
+            state = next
+            assertEquals(ids(step.at("order")), state.order, "step $i order")
+            assertEquals(groups(step.at("groups")), asIds(state), "step $i groups")
+        }
+        val tidy = want.at("tidy").list()
+        val four = players.take(4).map { it.id }
+        assertEquals(ids(tidy[0]), reliefOrderOf(null, four))
+        assertEquals(ids(tidy[1]), reliefOrderOf(listOf(four[3], 5L, four[1]), four))
+        // 役割を変えても順番は落ちない（`copy` で引き継ぐ）
+        assertEquals(state.order, state.setRole(state.order.first { it !in state.starters }, "mopup").order)
+        // 保存: 順番を持っていない球団で並べ替えなければ送らない（画面へ返す形を増やさない）。
+        // 並べ替えたら送る。元から持っていれば、そのまま送り返す
+        val plain = PlanDraft.from(typed.lineup!!, players)
+        assertEquals(null, plain.toPayload()["pitcherOrder"])
+        assertEquals(null, plain.withPitching(plain.pitching.setRole(want.at("roles").obj()!!.keys.first().toLong(), "long")).toPayload()["pitcherOrder"])
+        val moved = draft.withPitching(state)
+        assertEquals(state.order, ids(moved.toPayload()["pitcherOrder"]))
+        assertEquals(ids(want.at("startOrder")), ids(draft.toPayload()["pitcherOrder"]))
+        assertTrue(!moved.sameEdit(draft))
+    }
 }

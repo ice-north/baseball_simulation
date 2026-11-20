@@ -47,6 +47,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -611,7 +613,10 @@ private fun PitchingEditor(
         edit { d -> d.withPitching(swapInRotation(dragBase?.takeIf { dragFrom == d.base }, d.pitching, id, target) ?: dropPitcher(d.pitching, id, target)) }
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
-    PitchingList(view, draft, players, nextId, reorder, listState, { dragBase = currentPitching; dragFrom = currentBase; onDragStart() }, open, onSheet) { p ->
+    PitchingList(
+        view, draft, players, nextId, reorder, listState, { dragBase = currentPitching; dragFrom = currentBase; onDragStart() }, open, onSheet,
+        onMove = { id, delta -> clickEdit { it.withPitching(it.pitching.moveRelief(id, delta, view.roster)) } },
+    ) { p ->
         clickEdit { it.withPitching(it.pitching.addToStaff(p)) }
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
     }
@@ -670,6 +675,8 @@ private fun PitchingList(
     onDragStart: () -> Unit,
     open: (Long) -> Unit,
     onSheet: (PlanSheet) -> Unit,
+    /** 救援を同じ役割の中で1つ上（-1）・下（+1）へ */
+    onMove: (Long, Int) -> Unit,
     onAdd: (Player) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -677,7 +684,8 @@ private fun PitchingList(
     // 投手起用に加えていない野手（ふだんは畳む。野手は多い）
     var fieldersOpen by rememberSaveable { mutableStateOf(false) }
     val candidates = state.staffCandidates(view.roster)
-    val relievers = RELIEF_ORDER.map { role -> role to state.roles.filter { (id, r) -> r == role && id !in state.starters }.keys.mapNotNull { players[it] } }
+    // ⚠ 同じ役割の中は決めた順（`pitcherOrder`、無ければ名簿の並び）。試合でもこの順に使われる
+    val relievers = state.reliefGroups(view.roster)
     LazyColumn(
         state = listState,
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
@@ -722,7 +730,27 @@ private fun PitchingList(
                 ReorderableItem(reorder, key = "p:${p.id}") { dragging ->
                     PitcherCard(dragging, Modifier.longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) })) {
                         // ⚠ 救援は役割の札を出さない（すぐ上の見出しと同じ印が二重に並んでいた）
-                        PitcherRow("", p, null, starter = false, next = false, onRole = { onSheet(PlanSheet.Role(p.id)) }, onInfo = { open(p.id) })
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f)) {
+                                PitcherRow("", p, null, starter = false, next = false, onRole = { onSheet(PlanSheet.Role(p.id)) }, onInfo = { open(p.id) })
+                            }
+                            // ⚠ **同じ役割の中の順番**（いしだ 2026-11-20「リリーフ投手が同じロールだった場合、
+                            //    並びが上の選手が優先して使われてしまいます。同じロール内で順番を入れ替えられる
+                            //    ようにしてほしいです」。PC の投手起用の▲▼と同じ）。1人だけの役割には出さない。
+                            //    役割をまたぐ移動はしない（役割は長押しのドラッグか、押して選び直す）
+                            if (list.size > 1) {
+                                Column {
+                                    listOf(Triple("▲", -1, "上へ"), Triple("▼", 1, "下へ")).forEach { (mark, delta, what) ->
+                                        TextButton(
+                                            onClick = { onMove(p.id, delta) },
+                                            enabled = state.canMoveRelief(p.id, delta),
+                                            contentPadding = PaddingValues(0.dp),
+                                            modifier = Modifier.size(36.dp, 30.dp).semantics { contentDescription = "${p.name}を${RELIEF_ROLES[role] ?: role}の中で$what" },
+                                        ) { Text(mark) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -900,7 +928,7 @@ private val ORDER_HELP = listOf(
 
 /** 投手起用の説明（役割の目安も、行には出さずここに） */
 private fun pitchingHelp(): List<String> = listOf(
-    "長押しでつかみ、ほかの先発の上で離すと2人の登板順が入れ替わります。救援の役割の見出しへ落とすと持ち場が変わります。行を押すと先発の型・救援の役割を選べます。",
+    "長押しでつかみ、ほかの先発の上で離すと2人の登板順が入れ替わります。救援の役割の見出しへ落とすと持ち場が変わります。行を押すと先発の型・救援の役割を選べます。同じ役割の救援が2人以上いるときは▲▼で順番を入れ替えられます（上の投手から先に使われます）。",
     "疲労${STARTER_SKIP_FATIGUE}以上の先発は順番を飛ばし、疲労${RELIEF_REST_FATIGUE}以上の救援は休ませます。クローザーは1人まで。",
     "先発の型: " + STARTER_ORDER.joinToString("、") { "${STARTER_ROLES[it] ?: it}＝${ROLE_HINT[it].orEmpty()}" },
     "救援の役割: " + RELIEF_ORDER.joinToString("、") { "${RELIEF_ROLES[it] ?: it}＝${ROLE_HINT[it].orEmpty()}" },

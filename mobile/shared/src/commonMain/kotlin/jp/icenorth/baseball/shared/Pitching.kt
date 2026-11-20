@@ -4,11 +4,14 @@ package jp.icenorth.baseball.shared
  * 投手起用の編集（Web 版 src/online/pitchingEdit.js と同じ決まり）。
  *   starters … 先発ローテの順（投手の id）
  *   roles    … 起用できる全投手の役割。ローテの投手は先発の型、ほかは救援の役割
+ *   order    … 救援の同じ役割の中の順番（Web 版の `order`。いしだ 2026-11-20「同じロール内で順番を
+ *              入れ替えられるようにしてほしい」）。保存に無ければ名簿の並び（＝今までの順）
  * - 先発は1〜8人、クローザーは1人まで
  * - **野手も投手で起用できる**（二刀流）。投手登録の選手はいつも全員が入り、野手は
  *   加えた選手だけが入る（`roles` に居る野手）。⚠ 全員を入れると救援の「おまかせ」で野手が投げる
+ * ⚠ 状態を組み直すところは `copy` で `order` を引き継ぐこと（Web 版で書き忘れて並べ替えが消えたのを踏んだ）
  */
-data class PitchingState(val starters: List<Long>, val roles: Map<Long, String>) {
+data class PitchingState(val starters: List<Long>, val roles: Map<Long, String>, val order: List<Long> = emptyList()) {
     fun isStarterRole(role: String?) = role != null && STARTER_ROLES.containsKey(role)
 
     /** 2人の登板順を入れ替える（間の投手は動かさない。Web の swapStarters と同じ） */
@@ -42,7 +45,7 @@ data class PitchingState(val starters: List<Long>, val roles: Map<Long, String>)
                 if (r == "closer" && other != id) nextRoles[other] = if (wasStarter || isStarterRole(current)) "auto_r" else current
             }
         }
-        return PitchingState(nextStarters, nextRoles)
+        return copy(starters = nextStarters, roles = nextRoles)
     }
 
     /** 投手起用に入っている（役割を持つ）か */
@@ -57,7 +60,7 @@ data class PitchingState(val starters: List<Long>, val roles: Map<Long, String>)
         val player = roster.firstOrNull { it.id == id } ?: return this
         if (player.isPitcher) return this
         if (id in starters && starters.size <= 1) return this
-        return PitchingState(starters - id, roles - id)
+        return copy(starters = starters - id, roles = roles - id)
     }
 
     /** 投手起用に加えていない野手（加える候補。投球の能力の高い順。Web 版 staffCandidates と同じ） */
@@ -77,10 +80,55 @@ data class PitchingState(val starters: List<Long>, val roles: Map<Long, String>)
         if (ra == null || rb == null) {
             val (missing, other) = if (ra == null) a to b else b to a
             if (missing !in starters) return this
-            return PitchingState(starters.map { if (it == missing) other else it }, roles + (other to "auto_s"))
+            return copy(starters = starters.map { if (it == missing) other else it }, roles = roles + (other to "auto_s"))
         }
         val nextStarters = if (ia >= 0 || ib >= 0) starters.map { if (it == a) b else if (it == b) a else it } else starters
-        return PitchingState(nextStarters, roles + mapOf(a to rb, b to ra))
+        return copy(starters = nextStarters, roles = roles + mapOf(a to rb, b to ra))
+    }
+
+    /** 並び順の番号（小さいほど先に使われる）。一覧に無ければ最後尾（Web 版 reliefRank） */
+    fun reliefRank(id: Long): Int = order.indexOf(id).let { if (it == -1) Int.MAX_VALUE else it }
+
+    /**
+     * 同じ役割の中で1つ上（`delta < 0`）・下（`delta > 0`）へ動かす（Web 版 moveRelief の写し）。
+     * ⚠ **同じ役割の中だけで入れ替える**（役割をまたぐと、役割の並びが崩れる）
+     */
+    fun moveRelief(id: Long, delta: Int, roster: List<Player>): PitchingState {
+        val group = reliefGroupOf(id)
+        val at = group.indexOf(id)
+        val to = at + (if (delta < 0) -1 else 1)
+        if (at == -1 || to < 0 || to >= group.size) return this
+        val swapWith = group[to]
+        val next = order.toMutableList()
+        val i = next.indexOf(id); val j = next.indexOf(swapWith)
+        next[i] = swapWith; next[j] = id
+        return copy(order = reliefOrderOf(next, roster.map { it.id }))
+    }
+
+    /** ▲▼を押せるか（同じ役割の中で、端でない） */
+    fun canMoveRelief(id: Long, delta: Int): Boolean {
+        val group = reliefGroupOf(id)
+        val at = group.indexOf(id)
+        val to = at + (if (delta < 0) -1 else 1)
+        return at != -1 && to >= 0 && to < group.size
+    }
+
+    /** 同じ役割の救援（順番の一覧に載っている選手だけ。Web 版 moveRelief の group） */
+    private fun reliefGroupOf(id: Long): List<Long> {
+        val role = roles[id]
+        return order.filter { roles[it] == role && it !in starters }
+    }
+
+    /**
+     * 救援を役割ごとに括る（試合で使われる場面の順。Web 版 reliefGroups の写し）。
+     * ⚠ **同じ役割の中は決めた順**（いしだ 2026-11-20）。試合でもこの順に使われる
+     *    （`server/lineupTactics.mjs` が同じ順で `relievers` を作る）
+     */
+    fun reliefGroups(roster: List<Player>): List<Pair<String, List<Player>>> {
+        val staff = roster.filter { it.isActive && onStaff(it.id) }
+        return RELIEF_ORDER.map { role ->
+            role to staff.filter { it.id !in starters && roles[it.id] == role }.sortedBy { reliefRank(it.id) }
+        }
     }
 
     companion object {
@@ -92,14 +140,27 @@ data class PitchingState(val starters: List<Long>, val roles: Map<Long, String>)
          * 保存済みの編成と名簿から作る。名簿に居ない先発も外さない（Web 版 pitchingFromLineup）。
          * 野手は、先発ローテに居るか役割を保存してある選手（加えた野手）だけ入る
          */
-        fun from(starters: List<Long>, savedRoles: Map<Long, String>, pitchers: List<Player>): PitchingState {
+        fun from(starters: List<Long>, savedRoles: Map<Long, String>, pitchers: List<Player>, savedOrder: List<Long>? = null): PitchingState {
             val unique = starters.distinct()
-            val roles = pitchers
+            val staff = pitchers
                 .filter { (it.isPitcher && it.isActive) || (it.canJoinStaff && (it.id in unique || it.id in savedRoles)) }
-                .associate { it.id to roleFor(savedRoles[it.id], it.id in unique) }
-            return PitchingState(unique, roles)
+            val roles = staff.associate { it.id to roleFor(savedRoles[it.id], it.id in unique) }
+            return PitchingState(unique, roles, reliefOrderOf(savedOrder, staff.map { it.id }))
         }
     }
+}
+
+/**
+ * 救援の順番の一覧を、名簿に合わせて整える（Web 版 reliefOrderOf の写し）。
+ * ⚠ 保存に無い選手は**名簿の並びで後ろへ**足す（新しく入った選手が消えない）。
+ *    名簿に居ない選手は落とす（退団した選手を残さない）。
+ * @param ids 名簿の並びの id（Web 版は選手の配列を受け取り id を取り出す）
+ */
+fun reliefOrderOf(saved: List<Long>?, ids: List<Long>): List<Long> {
+    val known = ids.toSet()
+    val kept = saved.orEmpty().filter { it in known }
+    val seen = kept.toSet()
+    return kept + ids.filter { it !in seen }
 }
 
 /** 投手起用に加えられる野手（野手登録で、抹消されておらず、投球の能力がある） */
