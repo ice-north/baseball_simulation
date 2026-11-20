@@ -105,4 +105,39 @@ class LogicTest {
             assertEquals("auto", changed.at("tactics", "hook").str())
         }
     }
+
+    @Test
+    fun restPlanMatchesWeb() {
+        // 期待値と同じ場面（expect-logic.mjs の restCase）
+        val typed = OnlineJson.decodeFromString<LeagueView>(view.toString())
+        val order = typed.lineup!!.at("battingOrder").list().map { it as JsonObject }
+        val field = order.filter { it.at("position").str() != "pitcher" }
+        val inOrder = order.map { it.at("playerId").long() }.toSet()
+        val bench = typed.roster.filter { it.id !in inOrder }
+        fun case(levels: List<Int>): RestPlan.Result? = RestPlan.plan(
+            field.mapIndexed { i, e ->
+                val p = typed.roster.first { it.id == e.at("playerId").long() }
+                RestPlan.Starter(p.copy(fatigue = levels[i]), e.at("position").str()!!)
+            },
+            bench,
+        )
+        val cases = mutableListOf<List<Int>>()
+        for (i in field.indices) cases += field.indices.map { if (it == i) 100 else 0 }
+        for (i in field.indices) for (j in i + 1 until field.size) cases += field.indices.map { if (it == i) 100 else if (it == j) 130 else 0 }
+        cases += field.map { 90 }
+        val want = expected.at("restPlans").list()
+        assertEquals(want.size, cases.size)
+        cases.forEachIndexed { n, levels ->
+            val got = case(levels)
+            val w = want[n]
+            if (w is kotlinx.serialization.json.JsonNull) {
+                assertEquals(null, got, "場面$n")
+                return@forEachIndexed
+            }
+            assertNotNull(got, "場面$n")
+            assertEquals(w.at("resting").list().map { it.long() }, got.resting, "場面$n 休む人")
+            val assign = (w.at("assign") as JsonObject).mapKeys { it.key.toLong() }.mapValues { it.value.str() }
+            assertEquals(assign, got.assign, "場面$n 守備")
+        }
+    }
 }

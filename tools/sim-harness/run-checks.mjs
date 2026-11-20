@@ -82,6 +82,7 @@ const CHECKS = [
   { name: 'online-trade-check', group: 'check', online: true, slow: 120 },
   { name: 'online-convert-check', group: 'check', online: true, slow: 30 },
   { name: 'online-two-way-check', group: 'check', online: true, slow: 15 },
+  { name: 'online-rest-swap-check', group: 'check', online: true, slow: 15 },
   { name: 'online-parity-check', group: 'check', online: true, slow: 75 },
   { name: 'online-fatigue-check', group: 'check', online: true, slow: 130 },
   { name: 'online-cpu-trade-check', group: 'check', online: true, slow: 200 },

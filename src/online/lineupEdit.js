@@ -23,6 +23,7 @@
 
 import {
   FIELDER_REST_FATIGUE,
+  FIELDER_FORCE_REST_FATIGUE,
   SUBSTITUTE_MIN_FITNESS,
   SUBSTITUTE_FRESH_FATIGUE,
 } from './shared.js';
@@ -235,6 +236,7 @@ export const LOW_FITNESS = SUBSTITUTE_MIN_FITNESS;
 export const FRESH_FATIGUE = SUBSTITUTE_FRESH_FATIGUE;
 /**
  * 疲労が休ませる値以上のときの説明。⚠ 必ず休むわけではない。サーバー
- * （`server/dailyLineup.mjs` の `restTiredFielders`）は、守れる控えが居るときだけ入れ替える
+ * （`server/dailyLineup.mjs` の `restTiredFielders`。中身は `restPlan.js`）は、ほかの先発の守備を
+ * 移してでも、どの守備も下限以上で組めるときだけ入れ替える（疲れ切った選手は組めなくても休ませる）
  */
-export const REST_TEXT = `試合の日は、守れる控え（適性${LOW_FITNESS}%以上・疲労${FRESH_FATIGUE}未満）が居ればその日だけ入れ替わって休みます。居なければそのまま出ます`;
+export const REST_TEXT = `試合の日は、その日だけ控え（疲労${FRESH_FATIGUE}未満）と入れ替わって休みます。ほかの先発の守備を移すこともあり、どの守備も適性${LOW_FITNESS}%以上で組めるときだけ休みます（疲労${FIELDER_FORCE_REST_FATIGUE}以上は組めなくても休みます）`;
