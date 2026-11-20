@@ -42,7 +42,7 @@ import {
 } from '../../src/online/tapLineup.js';
 import { benchFielders } from '../../src/online/lineupEdit.js';
 import { pitchingFromLineup } from '../../src/online/pitchingEdit.js';
-import { generateOptimalLineup } from '../../src/game/lineupGenerator.js';
+import { generateOptimalLineup, generatePitchingRotation } from '../../src/game/lineupGenerator.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 
 const dir = await mkdtemp(join(tmpdir(), 'pennant-lineup-port-'));
@@ -564,8 +564,80 @@ try {
     await cmd('convert', { playerId: more.id, position: 'pitcher' });
     current = await sameOrder('守備位置を変えた後');
     // (a) 投手起用を指導者に任せる（作り直す）
+    // ⚠ 判断4（いしだ 2026-11-20「おすすめで」）: 任せている間は**指導者が並べた順**
+    //    （`generatePitchingRotation` の能力の順）で起用し、画面にもその順で出す。
+    //    人が▲▼で並べた順（上で逆に保存した）や名簿の並びのままにしない
+    const roleGroups = (state, order) => {
+      const groups = {};
+      for (const id of order)
+        if (Object.hasOwn(state.roles, String(id)) && !state.starters.includes(id))
+          (groups[state.roles[id]] ||= []).push(id);
+      return groups;
+    };
+    const coachRotation = async () => {
+      const stored = (await store.read()).league;
+      const fresh = JSON.parse(JSON.stringify(stored.game.teams[stored.members[0].teamName]));
+      generatePitchingRotation(null, fresh);
+      const r = fresh.pitchingRotation;
+      return { r, coach: [...(r.closer != null ? [r.closer] : []), ...r.setupMen, ...r.middleRelievers] };
+    };
+    // 任せる前に、人が指導者の順と**逆**に並べて保存しておく（見分けられるように）
+    {
+      const { coach } = await coachRotation();
+      const before = pitchingFromLineup(current.lineup, current.roster);
+      await cmd('lineup', {
+        ...current.lineup,
+        starters: before.starters,
+        pitcherRoles: before.roles,
+        pitcherOrder: [...coach].reverse(),
+        baseLineup: current.lineup,
+      });
+      current = await sameOrder('指導者と逆に並べて保存した');
+    }
+    const humanOrder = pitchingFromLineup(current.lineup, current.roster).order;
     await cmd('staffModes', { modes: { pitching: 'delegate' } });
     current = await sameOrder('投手起用を任せた後');
+    {
+      const stored = (await store.read()).league;
+      const own = stored.game.teams[stored.members[0].teamName];
+      const { r, coach } = await coachRotation();
+      const state = pitchingFromLineup(current.lineup, current.roster);
+      assert.ok(current.lineup.pitcherOrder?.length, '任せた球団の画面へ指導者の順が返らない');
+      const shown = roleGroups(state, state.order);
+      const wanted = roleGroups(state, coach);
+      assert.deepEqual(shown, wanted, '任せた球団の画面の同じ役割の中の順が、指導者の能力の順と違う');
+      assert.notDeepEqual(
+        roleGroups(state, humanOrder),
+        wanted,
+        '前提: 人が並べた順と指導者の順が同じで、見分けられない',
+      );
+      // 試合が使う欄も能力の順（`sameOrder` で画面の順と合うことは見た）
+      const rot = own.pitchingRotation;
+      assert.deepEqual(rot.middleRelievers, r.middleRelievers, '任せた球団の中継ぎの欄が能力の順でない');
+      assert.deepEqual(rot.setupMen, r.setupMen, '任せた球団のセットアッパーの欄が能力の順でない');
+    }
+    // 任せたまま打順だけ保存しても、投手起用は任せたまま（指導者の順を「変えた」に数えない）。
+    // 版の食い違い（409）の条件は変えない: 画面が受け取った形をそのまま送り返せば通る
+    const delegatedView = current.lineup;
+    await cmd('lineup', { ...delegatedView, baseLineup: delegatedView });
+    {
+      const stored = (await store.read()).league;
+      assert.equal(
+        stored.members[0].staffModes?.pitching,
+        'delegate',
+        '任せたまま打順だけ保存したら、投手起用が任せていない扱いに戻った',
+      );
+    }
+    current = await sameOrder('任せたまま打順を保存した後');
+    assert.deepEqual(current.lineup.pitcherOrder, delegatedView.pitcherOrder, '打順の保存で救援の順が変わった');
+    // 任せる→自分で: 任せていた間の順がそのまま初めの順になる
+    await cmd('staffModes', { modes: { pitching: 'self' } });
+    current = await sameOrder('任せるのをやめた後');
+    assert.deepEqual(
+      current.lineup.pitcherOrder,
+      delegatedView.pitcherOrder,
+      '任せるのをやめたら、任せていた間の順が引き継がれない',
+    );
     // ⚠ 画面へ返す順番には名簿に居る選手だけを載せる（退団した選手の id を残さない）
     const stored = (await store.read()).league;
     const own = stored.game.teams[stored.members[0].teamName];
@@ -582,5 +654,5 @@ try {
 }
 
 console.log(
-  '■ 編成画面の移植: OK（救援の同じ役割の中の順番が試合まで届く・作り直しても画面の順と合う / 投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / スマホの2タップの入れ替えが保存できる形のまま・方針と別々に保存しても消さない / TEAMS_DATA 無しで自動編成）',
+  '■ 編成画面の移植: OK（救援の同じ役割の中の順番が試合まで届く・作り直しても画面の順と合う・任せた間は指導者の能力の順 / 投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / スマホの2タップの入れ替えが保存できる形のまま・方針と別々に保存しても消さない / TEAMS_DATA 無しで自動編成）',
 );

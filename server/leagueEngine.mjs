@@ -1620,9 +1620,13 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
   const modes = human ? effectiveStaffModes(league, member) : null;
   const ownLineup = human && modes.lineup !== 'delegate';
   const ownPitching = human && modes.pitching !== 'delegate';
+  // ⚠ 任せている間は**指導者が考えて並べた順**（能力の順）を `pitcherOrder` に写して、
+  //    画面の順も同じにする（`recordCoachReliefOrder`。いしだ 2026-11-20 判断4「おすすめで」）
+  const delegated = human && !ownPitching;
   if (human && !force && ownLineup !== ownPitching) {
     if (!ownPitching) {
       generatePitchingRotation(name);
+      recordCoachReliefOrder(team);
       alignReliefOrder(team);
     }
     if (!ownLineup) {
@@ -1654,6 +1658,7 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
     }
   }
   generatePitchingRotation(name);
+  if (delegated) recordCoachReliefOrder(team);
   if (human) alignReliefOrder(team);
   // ⚠ **守備位置の登録を書き換えさせない**。CPUの打順作り（`generateAILineup`）は
   //    スタメンに入れた選手の登録をその日の守備位置に書き換える（一人用の試合の
@@ -1715,6 +1720,47 @@ function syncRelievers(team) {
       if (!present.has(Number(id))) delete rotation.pitcherRoles[id];
 }
 
+/** 投手起用の画面に出る投手陣（`pitchingFromLineup` と同じ。投手登録＋加えた野手） */
+function reliefStaffOf(team) {
+  const rotation = team.pitchingRotation || {};
+  const starters = rotation.starters || [];
+  return team.players.filter(
+    (p) =>
+      isPitcher(p) ||
+      (isStaffableFielder(p) &&
+        (starters.includes(p.id) ||
+          Object.hasOwn(rotation.pitcherRoles || {}, String(p.id)))),
+  );
+}
+
+/**
+ * 投手起用を**指導者に任せた**人の球団: 指導者が並べた救援の順（`generatePitchingRotation` の
+ * 能力の順の欄。守護神・セットアッパー・中継ぎの順）を `pitcherOrder` に写す。
+ *
+ * ⚠ いしだ 2026-11-20 判断4「おすすめで」。`alignReliefOrder` だけだと、任せた球団も
+ *    同じ役割の中を名簿の並び（または任せる前に人が並べた古い順）で起用していた。
+ *    任せている間は指導者の考えた順で投げ、画面にもその順で出す。
+ *    自分で起用している球団（`pitcherOrder` は人の▲▼の順）には呼ばない。
+ *    任せる→自分で、に切り替えたときは、ここで書いた順がそのまま初めの順になる。
+ * ⚠ 形は保存（`lineupTactics` の `reliefOrderOf`）と同じにする（画面に出る投手陣だけ・
+ *    欄に無い投手は名簿の並びで後ろ）。違う形だと、任せたまま打順だけ保存したときに
+ *    順番が「変わった」に数えられ、投手起用が「意見を聞く」に戻ってしまう（`saveLineup`）。
+ *    同じ順なら書き直しても形は変わらない（画面の編集が 409 で弾かれない）。
+ */
+function recordCoachReliefOrder(team) {
+  const rotation = team.pitchingRotation;
+  if (!rotation) return;
+  const coachOrder = [
+    ...(rotation.closer != null ? [rotation.closer] : []),
+    ...(rotation.setupMen || []),
+    ...(rotation.middleRelievers || []),
+  ];
+  const order = reliefOrderOf(coachOrder, reliefStaffOf(team));
+  const before = rotation.pitcherOrder || [];
+  if (order.length === before.length && order.every((id, i) => id === before[i])) return;
+  rotation.pitcherOrder = order;
+}
+
 /**
  * 人の球団の救援の欄（`setupMen` / `middleRelievers` / `relievers`）を、投手起用の画面に
  * 出る「同じ役割の中の順」に並べ直す。
@@ -1727,19 +1773,14 @@ function syncRelievers(team) {
  *    欄のままで、画面の▲▼の順と別の投手が先に出ていた。
  *    役割は変えない。並びの決め方は画面と同じ関数（`reliefOrderOf`）を使う。
  * ⚠ `pitcherOrder` は書き足さない（並べ替えたことのない球団の画面へ返す形を変えない。
- *    `lineupTactics.mjs` の注）。
+ *    `lineupTactics.mjs` の注）。ただし投手起用を任せた球団は、先に `recordCoachReliefOrder`
+ *    で指導者の順を書いてから呼ぶ（判断4）。
  */
 function alignReliefOrder(team) {
   const rotation = team.pitchingRotation;
   if (!rotation) return;
   const starters = rotation.starters || [];
-  const staff = team.players.filter(
-    (p) =>
-      isPitcher(p) ||
-      (isStaffableFielder(p) &&
-        (starters.includes(p.id) ||
-          Object.hasOwn(rotation.pitcherRoles || {}, String(p.id)))),
-  );
+  const staff = reliefStaffOf(team);
   const order = reliefOrderOf(rotation.pitcherOrder, staff);
   const rank = (id) => {
     const at = order.indexOf(id);
@@ -2608,9 +2649,15 @@ function advanceOneDay(league, key, now) {
     // ⚠ 人の球団の救援の欄を画面の順に揃える（`alignReliefOrder`。2026-11-20 監査）。
     //    手続きの作り直しは揃えるが、この直しより前に作り直した保存は能力の順のまま
     //    残っているので、試合の前にも揃える（揃っていれば何も変わらない）
-    for (const member of league.members || [])
-      if (playingTeams.has(member.teamName) && TEAMS_DATA[member.teamName])
-        alignReliefOrder(TEAMS_DATA[member.teamName]);
+    // ⚠ 投手起用を任せた球団は、欄（指導者の能力の順）を正本にして `pitcherOrder` へ写す
+    //    （判断4。この直しより前に任せた保存は、古い順や名簿の並びのまま残っている）
+    for (const member of league.members || []) {
+      const team = TEAMS_DATA[member.teamName];
+      if (!playingTeams.has(member.teamName) || !team) continue;
+      if (effectiveStaffModes(league, member).pitching === 'delegate')
+        recordCoachReliefOrder(team);
+      alignReliefOrder(team);
+    }
     const pickReports = [];
     const restoreRotations = league.season.settings.teamNames
       .filter((name) => playingTeams.has(name))
