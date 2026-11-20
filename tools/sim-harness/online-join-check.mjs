@@ -147,8 +147,10 @@ try {
   );
   assert.equal(plainTeam.displayName, plainTeam.name, '名前を付けない参加の前提が違う');
   const plainView = await service.view('plain', plain);
+  // ⚠ 表示名には地名・愛称・地方も載る（`city`・`nickname`・`region`）。ここで見るのは名前と略称だけ
+  const { label, short } = plainView.teamLabels[plainTeam.name] || {};
   assert.deepEqual(
-    plainView.teamLabels[plainTeam.name],
+    { label, short },
     { label: plainTeam.name, short: plainTeam.abbreviation },
     '名前を付けずに入った球団の略称が、既定の略称になっていない',
   );
