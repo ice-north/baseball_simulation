@@ -511,7 +511,7 @@ export function scoringPlaysOf(events, result) {
 }
 
 /** 回ごとの攻撃に残す打席の結果の記号。⚠ 画面（`src/online/gamePlays.js`）と同じ並び */
-export const PLAY_CODES = ['本', '三', '二', '安', '四', '死', '振', '犠', '併', '失', '凡', '走'];
+export const PLAY_CODES = ['本', '三', '二', '安', '四', '死', '振', '犠', '併', '失', '凡', '走', '刺'];
 
 /** 打席1つの結果の記号。⚠ `scoringKind` と同じ読み方（打者の成績の増えた分から読む） */
 function playCode(e) {
@@ -533,14 +533,21 @@ function playCode(e) {
  * 回ごとの攻撃（打席の順）。スコアボードの回の数字を押すと、その半回をこの順で出す
  * （いしだ 2026-11-19「スコアをクリックすると、その回の攻撃を時系列で表示してほしい」）。
  *
- * 形は `{ '3t': [[打者の番号, 記号, 点], ...], '3b': [...] }`。
+ * 形は `{ '3t': [[打者の番号, 記号, 点, アウト], ...], '3b': [...] }`。
  *   - 鍵は「回＋t（表）/b（裏）」
  *   - 打者の番号は `box.teams[攻撃側]` の**並び順の番号**（名前を2度持たないため。
  *     打席に立った選手は必ずこの一覧に居る）
  *   - 点はその打席で入った点（0なら0）。打席の外で入った点（暴投・盗塁など）は
  *     打者の番号が null で記号 '走'
+ *   - アウトはその行で増えたアウトの数（試合の中の `e.outs` そのもの。振り逃げ・野選は0、
+ *     併殺は2）。打者の居ない走者のアウト（盗塁死など）は打者の番号が null で記号 '刺'
  * ⚠ **半回の点の合計が、スコアボードのその回の数字と必ず一致すること**
  *    （`online-inning-plays-check` が全試合で確かめる）。打席の外の点を落とすとずれる。
+ * ⚠ 2026-11-20 監査: アウトを打席の記号から数えていたので、盗塁死を数えず振り逃げ・野選を
+ *    1つと数え、約7%の半回が「2死」で終わっていた。4つ目の要素を足した。
+ *    **前からある試合の行は3要素**（画面は記号から数える古い読み方に戻る。`gamePlays.js`）。
+ * ⚠ 2026-11-20 監査: 打席が終わらなかった打席（`completed === false`。典型はサヨナラの暴投、
+ *    盗塁死で3アウト）の点を落としていた（`last` だけ進めて行を足さなかった）。
  * ⚠ 1試合あたり約1KB（打席70〜80）。箱は元から約28KBなので、増えるのは数%。
  */
 export function inningPlaysOf(events, box, result) {
@@ -563,16 +570,24 @@ export function inningPlaysOf(events, box, result) {
     // 打席の前に入っていた点（暴投・盗塁・ボークなど。打者が居ない）
     if (e.scoreBefore) {
       const gap = (e.scoreBefore[side] || 0) - (last[side] || 0);
-      if (gap > 0) push(e.inning, half, [null, '走', gap]);
+      if (gap > 0) push(e.inning, half, [null, '走', gap, 0]);
       last = { ...last, [side]: e.scoreBefore[side] || 0 };
     }
-    if (!e.runnerOnly && e.completed !== false) {
-      const runs =
-        e.scoreAfter && e.scoreBefore
-          ? (e.scoreAfter[side] || 0) - (e.scoreBefore[side] || 0)
-          : 0;
+    const outs = Number(e.outs) || 0;
+    const runs =
+      e.scoreAfter && e.scoreBefore
+        ? (e.scoreAfter[side] || 0) - (e.scoreBefore[side] || 0)
+        : 0;
+    if (e.runnerOnly) {
+      // 盗塁死など、打席の途中の走者のアウト（点は後の打席の記録が持つ）
+      if (outs > 0) push(e.inning, half, [null, '刺', 0, outs]);
+    } else if (e.completed !== false) {
       const idx = index.get(e.offense)?.get(e.batterId);
-      push(e.inning, half, [idx ?? null, playCode(e), runs]);
+      push(e.inning, half, [idx ?? null, playCode(e), runs, outs]);
+    } else if (runs > 0 || outs > 0) {
+      // ⚠ 打席が終わらなかった打席（サヨナラの暴投・盗塁死の3アウトなど）。打者の行は
+      //    足さないが、その間に入った点とアウトは落とさない
+      push(e.inning, half, [null, runs > 0 ? '走' : '刺', runs, outs]);
     }
     if (e.scoreAfter) last = { home: e.scoreAfter.home || 0, away: e.scoreAfter.away || 0 };
     lastInning = e.inning;
@@ -582,7 +597,7 @@ export function inningPlaysOf(events, box, result) {
   const side = lastHalf === 'b' ? 'home' : 'away';
   const final = side === 'home' ? result?.homeScore : result?.awayScore;
   if (Number.isFinite(final) && final > (last[side] || 0))
-    push(lastInning, lastHalf, [null, '走', final - last[side]]);
+    push(lastInning, lastHalf, [null, '走', final - last[side], 0]);
   return out;
 }
 

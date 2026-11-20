@@ -23,10 +23,16 @@ export const PLAY_TEXT = {
   失: '失策で出塁',
   凡: '凡退',
   走: '走者が進んで得点',
+  刺: '走者がアウト',
 };
 
-/** アウトになった打席（残りのアウトを数えるため）。⚠ 犠打もアウト1つ */
-const OUT_CODES = new Set(['振', '犠', '併', '凡']);
+/**
+ * アウトになった打席（色を落とすため。古い試合ではアウトもこれで数える）。⚠ 犠打もアウト1つ
+ * ⚠ 2026-11-20 監査: 記号から数えると盗塁死を数えず、振り逃げ・野選を1つと数えて、
+ *    約7%の半回が「2死」で終わっていた。いまの試合は行の4つ目（その行で増えたアウト。
+ *    サーバーの `e.outs`）を使う。3要素の行（前からある試合）だけ記号から数える。
+ */
+const OUT_CODES = new Set(['振', '犠', '併', '凡', '刺']);
 /** 安打（色を変える。⚠ 四球・死球・失策は安打ではない） */
 const HIT_CODES = new Set(['本', '三', '二', '安']);
 
@@ -59,9 +65,10 @@ export function inningPlays(game, inning, half) {
   let order = 0;
   return {
     team,
-    rows: rows.map(([index, code, runs]) => {
-      // ⚠ 併殺はアウト2つ（その回が3アウトで終わる形を合わせる）
-      if (OUT_CODES.has(code)) outs += code === '併' ? 2 : 1;
+    rows: rows.map(([index, code, runs, rowOuts]) => {
+      if (rowOuts != null) outs += Number(rowOuts) || 0;
+      // 古い試合（行が3要素）: 記号から数える。⚠ 併殺はアウト2つ
+      else if (OUT_CODES.has(code)) outs += code === '併' ? 2 : 1;
       const player = index == null ? null : players[index];
       if (index != null) order += 1;
       return {
