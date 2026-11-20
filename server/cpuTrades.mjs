@@ -133,7 +133,8 @@ export function planCpuTrade({ from, teams, partners, accept, valueOf, balanced 
           .filter((p) => p.isActive !== false && (slotStrength(p, need.slot.key) ?? -1) > floor)
           .sort((a, b) => slotStrength(b, need.slot.key) - slotStrength(a, need.slot.key) || a.id - b.id)
           .slice(0, HELPS)
-          .forEach((p) => helps.push(p));
+          // ⚠ 2つの弱い持ち場に同じ選手が入ることがある。同じ案を2回計算しない（答えは同じ）
+          .forEach((p) => { if (!helps.includes(p)) helps.push(p); });
       }
     }
     for (const need of needs) {
