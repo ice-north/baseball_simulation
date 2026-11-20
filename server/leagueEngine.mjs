@@ -66,6 +66,7 @@ import {
   advanceBackgroundTournaments,
 } from '../src/game/backgroundProgression.js';
 import { generatePitchingRotation } from '../src/game/lineupGenerator.js';
+import { reliefOrderOf, isPitcher, isStaffableFielder } from '../src/online/pitchingEdit.js';
 import { setRecommendedLineup, withFielderGameFatigue } from '../src/game/autoSimulation.js';
 import { ensureCompleteLineup } from '../src/game/lineup.js';
 import { prepareDailyLineup, benchTwoWayStarter } from './dailyLineup.mjs';
@@ -1620,7 +1621,10 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
   const ownLineup = human && modes.lineup !== 'delegate';
   const ownPitching = human && modes.pitching !== 'delegate';
   if (human && !force && ownLineup !== ownPitching) {
-    if (!ownPitching) generatePitchingRotation(name);
+    if (!ownPitching) {
+      generatePitchingRotation(name);
+      alignReliefOrder(team);
+    }
     if (!ownLineup) {
       const registered = new Map(team.players.map((p) => [p.id, p.position]));
       setRecommendedLineup(team, name);
@@ -1645,10 +1649,12 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
     undoTwoWay?.();
     if (complete) {
       syncRelievers(team);
+      alignReliefOrder(team);
       return;
     }
   }
   generatePitchingRotation(name);
+  if (human) alignReliefOrder(team);
   // ⚠ **守備位置の登録を書き換えさせない**。CPUの打順作り（`generateAILineup`）は
   //    スタメンに入れた選手の登録をその日の守備位置に書き換える（一人用の試合の
   //    写しでの作り）。保存する名簿に当てると、二刀流の投手が「右翼手」になって
@@ -1707,6 +1713,44 @@ function syncRelievers(team) {
   if (rotation.pitcherRoles)
     for (const id of Object.keys(rotation.pitcherRoles))
       if (!present.has(Number(id))) delete rotation.pitcherRoles[id];
+}
+
+/**
+ * 人の球団の救援の欄（`setupMen` / `middleRelievers` / `relievers`）を、投手起用の画面に
+ * 出る「同じ役割の中の順」に並べ直す。
+ *
+ * ⚠ 2026-11-20 監査。画面（`pitchingFromLineup` → `reliefOrderOf`）は保存した
+ *    `pitcherOrder`、無ければ名簿の並びで役割の中を並べ、試合（`autoSimulation`）は
+ *    `middleRelievers` / `setupMen` の並びの先頭から使う。保存（`lineupTactics`）は
+ *    その順で欄を作るが、**作り直す経路**（投手起用を任せた球団・守備位置の変更の
+ *    `force`・一度も保存していない球団）は `generatePitchingRotation` の**能力の順**の
+ *    欄のままで、画面の▲▼の順と別の投手が先に出ていた。
+ *    役割は変えない。並びの決め方は画面と同じ関数（`reliefOrderOf`）を使う。
+ * ⚠ `pitcherOrder` は書き足さない（並べ替えたことのない球団の画面へ返す形を変えない。
+ *    `lineupTactics.mjs` の注）。
+ */
+function alignReliefOrder(team) {
+  const rotation = team.pitchingRotation;
+  if (!rotation) return;
+  const starters = rotation.starters || [];
+  const staff = team.players.filter(
+    (p) =>
+      isPitcher(p) ||
+      (isStaffableFielder(p) &&
+        (starters.includes(p.id) ||
+          Object.hasOwn(rotation.pitcherRoles || {}, String(p.id)))),
+  );
+  const order = reliefOrderOf(rotation.pitcherOrder, staff);
+  const rank = (id) => {
+    const at = order.indexOf(id);
+    return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  const byOrder = (ids) => [...ids].sort((a, b) => rank(a) - rank(b));
+  rotation.setupMen = byOrder(rotation.setupMen || []);
+  rotation.middleRelievers = byOrder(rotation.middleRelievers || []);
+  rotation.relievers = byOrder(
+    staff.map((p) => p.id).filter((id) => !starters.includes(id)),
+  );
 }
 
 /**
@@ -2561,6 +2605,12 @@ function advanceOneDay(league, key, now) {
     // ⚠ 人の球団は**確定したときに控えた先発**で投げる（`lockStarters`。相手に見えた先発と同じにする）。
     //    控えが無い試合（この作りの前に確定した試合）だけ、今の指名を見る
     lockStarters(league, TEAMS_DATA);
+    // ⚠ 人の球団の救援の欄を画面の順に揃える（`alignReliefOrder`。2026-11-20 監査）。
+    //    手続きの作り直しは揃えるが、この直しより前に作り直した保存は能力の順のまま
+    //    残っているので、試合の前にも揃える（揃っていれば何も変わらない）
+    for (const member of league.members || [])
+      if (playingTeams.has(member.teamName) && TEAMS_DATA[member.teamName])
+        alignReliefOrder(TEAMS_DATA[member.teamName]);
     const pickReports = [];
     const restoreRotations = league.season.settings.teamNames
       .filter((name) => playingTeams.has(name))

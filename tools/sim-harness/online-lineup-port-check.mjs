@@ -41,6 +41,7 @@ import {
   restoreFromTapDraft,
 } from '../../src/online/tapLineup.js';
 import { benchFielders } from '../../src/online/lineupEdit.js';
+import { pitchingFromLineup } from '../../src/online/pitchingEdit.js';
 import { generateOptimalLineup } from '../../src/game/lineupGenerator.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 
@@ -496,10 +497,90 @@ try {
     );
   }
 
+  // --- 画面の「同じ役割の中の順」と、試合が使う順（`middleRelievers` / `setupMen`）が合う
+  // ⚠ 監査 2026-11-20。保存（`lineupTactics`）はその順で欄を作るが、作り直す経路
+  //    （一度も保存していない・守備位置を変えた `force`・投手起用を任せた）は
+  //    `generatePitchingRotation` の能力の順のままで、画面の▲▼と別の投手が先に出ていた
+  {
+    let seq = 0;
+    const cmd = async (type, payload) =>
+      service.command('admin', sessionId, {
+        requestId: `relief-${type}-${++seq}`,
+        revision: (await store.read()).league.revision,
+        type,
+        payload,
+      });
+    const sameOrder = async (label) => {
+      const current = await service.view('admin', sessionId);
+      const state = pitchingFromLineup(current.lineup, current.roster);
+      const stored = (await store.read()).league;
+      const rotation = stored.game.teams[stored.members[0].teamName].pitchingRotation;
+      const rank = (id) => state.order.indexOf(id);
+      let groups = 0;
+      for (const list of [rotation.setupMen, rotation.middleRelievers]) {
+        const byRole = {};
+        for (const id of list) (byRole[state.roles[id]] ||= []).push(id);
+        for (const ids of Object.values(byRole)) {
+          if (ids.length < 2) continue;
+          groups += 1;
+          assert.deepEqual(
+            ids,
+            [...ids].sort((a, b) => rank(a) - rank(b)),
+            `${label}: 試合で使う順が画面の同じ役割の中の順と違う`,
+          );
+        }
+      }
+      assert.ok(groups > 0, `前提（${label}）: 2人以上の役割が無い`);
+      return current;
+    };
+    // (c) 一度も保存していない球団: 控えの野手を投手にして、同じ役割を2人以上にする
+    //     （守備位置の変更は作り直し＝能力の順の欄になる）
+    let current = await service.view('admin', sessionId);
+    const playing = new Set(current.lineup.battingOrder.map((e) => e.playerId));
+    const bench = current.roster.filter(
+      (p) => p.position !== 'pitcher' && p.isActive !== false && !playing.has(p.id),
+    );
+    for (const p of bench.slice(0, 3)) await cmd('convert', { playerId: p.id, position: 'pitcher' });
+    assert.equal(current.lineup.pitcherOrder, undefined, '前提: 並べ替えを保存していない');
+    current = await sameOrder('保存していない');
+    // 救援を逆の順に保存してから、(b) 守備位置を変える（作り直す）
+    const state = pitchingFromLineup(current.lineup, current.roster);
+    await cmd('lineup', {
+      battingOrder: current.lineup.battingOrder,
+      starters: state.starters,
+      strategy: current.lineup.strategy,
+      pitcherRoles: state.roles,
+      pitcherOrder: [...state.order].reverse(),
+      baseLineup: current.lineup,
+    });
+    current = await sameOrder('並べ替えを保存した');
+    const more = current.roster.find(
+      (p) =>
+        p.position !== 'pitcher' &&
+        p.isActive !== false &&
+        !current.lineup.battingOrder.some((e) => e.playerId === p.id),
+    );
+    assert.ok(more, '前提: 投手にできる控えの野手が居ない');
+    await cmd('convert', { playerId: more.id, position: 'pitcher' });
+    current = await sameOrder('守備位置を変えた後');
+    // (a) 投手起用を指導者に任せる（作り直す）
+    await cmd('staffModes', { modes: { pitching: 'delegate' } });
+    current = await sameOrder('投手起用を任せた後');
+    // ⚠ 画面へ返す順番には名簿に居る選手だけを載せる（退団した選手の id を残さない）
+    const stored = (await store.read()).league;
+    const own = stored.game.teams[stored.members[0].teamName];
+    own.pitchingRotation.pitcherOrder = [...own.pitchingRotation.pitcherOrder, 999999999];
+    assert.equal(
+      projectLineup(own).pitcherOrder.includes(999999999),
+      false,
+      '名簿に居ない選手が画面へ返す順番に残る',
+    );
+  }
+
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
 console.log(
-  '■ 編成画面の移植: OK（救援の同じ役割の中の順番が試合まで届く / 投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / スマホの2タップの入れ替えが保存できる形のまま・方針と別々に保存しても消さない / TEAMS_DATA 無しで自動編成）',
+  '■ 編成画面の移植: OK（救援の同じ役割の中の順番が試合まで届く・作り直しても画面の順と合う / 投影と往復する / 複製を渡す / 編集が届く / 投手と入れ替えても保存できる / 次の先発を打順に入れる / PCの2画面の保存が互いを消さない / スマホの2タップの入れ替えが保存できる形のまま・方針と別々に保存しても消さない / TEAMS_DATA 無しで自動編成）',
 );

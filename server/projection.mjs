@@ -329,6 +329,14 @@ export function ownRecentGames(schedule, ownTeam, size = 5, league = null) {
 }
 
 export function projectLineup(team) {
+  // ⚠ 救援の順番は**名簿に居る選手だけ**返す（2026-11-20 監査）。保存した `pitcherOrder` を
+  //    そのまま返すと、退団・トレードで居なくなった選手の id も画面とアプリへ渡り、
+  //    アプリはそれをそのまま送り返していた（サーバーは `reliefOrderOf` で落とすので
+  //    害は無いが、画面へ返す形に居ない選手が残る）。登録を外れた選手は名簿に居るので残す
+  const onRoster = new Set((team.players || []).map((p) => p.id));
+  const pitcherOrder = (team.pitchingRotation?.pitcherOrder || []).filter((id) =>
+    onRoster.has(id),
+  );
   return {
     battingOrder: (team.lineupSettings?.battingOrder || []).filter(
       (e) => e.position !== 'pitcher',
@@ -371,9 +379,7 @@ export function projectLineup(team) {
           ),
           // ⚠ **同じ役割の中の順番**（いしだ 2026-11-20）。画面はこれを読んで並べ、
           //    保存で送り返す。無い球団（前からある保存）は名簿の並び＝今までの順
-          ...(team.pitchingRotation.pitcherOrder?.length
-            ? { pitcherOrder: [...team.pitchingRotation.pitcherOrder] }
-            : {}),
+          ...(pitcherOrder.length ? { pitcherOrder } : {}),
         }
       : {}),
     ...(team.onlineTactics ? { tactics: team.onlineTactics } : {}),
