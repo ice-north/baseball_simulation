@@ -39,6 +39,7 @@ import PlayerDetailBody from '../../src/online/PlayerDetailBody.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
 import { Homeruns } from '../../src/online/LeagueBoard.jsx';
+import LeagueHistory from '../../src/online/LeagueHistory.jsx';
 import { StarterPicksPage, ExhibitionPage, ExhibitionBox } from '../../src/online/SocialPages.jsx';
 export {
   StarterPicksPage,
@@ -67,6 +68,7 @@ export {
   YearSummary,
   ProDraftResult,
   PlayerDetailBody,
+  LeagueHistory,
 };
 `;
 const result = await build({
@@ -114,6 +116,7 @@ try {
     StarterPicksPage,
     ExhibitionPage,
     ExhibitionBox,
+    LeagueHistory,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -745,6 +748,46 @@ try {
   assert.doesNotThrow(() =>
     renderToString(h(Standings, { view: { standings, teamName: 'x' } })),
   );
+
+  // ⚠ 「差」の列は狭いスマホ（370px 以下）で列ごと隠す（`online.css` の `.online-standings-gap`）。
+  //    見出しにも同じ印が無いと見出しだけ残って列がずれる。過去の順位の表で見出しに付け忘れていた
+  //    （2026-11-20 監査）。いまの順位表と過去の順位の表の両方で、見出しと各行の印の数を比べる
+  {
+    const gapCells = (html) =>
+      [...html.matchAll(/<table[^>]*class="[^"]*online-standings[^"]*"[^>]*>([\s\S]*?)<\/table>/g)].map(([, table]) => {
+        const [head = '', body = ''] = table.split('<tbody');
+        const count = (s) => (s.match(/class="[^"]*online-standings-gap/g) || []).length;
+        return { head: count(head), rows: body.split('<tr').slice(1).map(count) };
+      });
+    const past = render(
+      h(LeagueHistory, {
+        initial: 'standings',
+        view: {
+          teamName: 'A球団',
+          history: [
+            {
+              year: 1,
+              standings: [
+                { team: 'A球団', wins: 40, losses: 30 },
+                { team: 'B球団', wins: 35, losses: 35 },
+              ],
+              leagues: { A球団: 'A', B球団: 'A' },
+            },
+          ],
+        },
+      }),
+    );
+    const now = render(h(Standings, { view: { standings, teamName: 'x' } }));
+    for (const [name, html] of [['過去の順位', past], ['順位表', now]]) {
+      const tables = gapCells(html);
+      assert.ok(tables.length > 0 && tables.every((t) => t.rows.length > 0), `${name}の表が描けていない`);
+      for (const t of tables)
+        assert.ok(
+          t.rows.every((n) => n === t.head),
+          `${name}の「差」の見出しと列の印が揃っていない（見出し ${t.head}・行 ${t.rows}）`,
+        );
+    }
+  }
 
   // --- 始める手順（セットを選ぶ → 名前 → 決定） -------------------------
   // ⚠ **名前を決める欄が出ること**。`PackSelect` は `view` と `command` を
