@@ -133,10 +133,14 @@ export const TRAINING_MENUS = {
   fielding: {
     name: 'ノック',
     icon: '🧤',
-    description: '守備力と肩力を強化（投手野手共通）',
+    description: '守備力と肩力を強化（投手野手共通）・野手は今の守備位置の適性も+4〜8/クール',
     targets: ['defense', 'arm'],
     // 実測: 失点2.06で最少
-    growthMultipliers: { arm: 1.5 },
+    // ⚠ 守備は 1.0→**1.5**（いしだ 2026-11-20「ノックの守備の伸びが弱い気がします」）。
+    //    実測（4クール・経験値満タン）: 守備60の選手で 平均+2.0→+3.0。
+    //    守備位置の適性は前から確定で+4〜8/クール上がる（`executeCampTraining` の末尾）が、
+    //    主力は自分の位置が既に100なので動かず、伸びていないように見えていた
+    growthMultipliers: { arm: 1.5, defense: 1.5 },
     category: 'fielding'
   },
   control: {
@@ -357,6 +361,23 @@ export const SUB_TRAINING_MENUS = {
     description: '高速カメラで回転を分析・スピン+1〜3（器用さ係数）、変化球Lv向上、制球微増（投手のみ）',
   },
 };
+
+/**
+ * 覚醒の伸びの、高い能力での抑え。
+ *
+ * ⚠ いしだ 2026-11-20「能力80台から4クールで+6くらい上がる選手がいます。独立リーグとしては
+ *    上がりすぎな気がしますので調整をお願いします。能力が低い場合は、いまの伸びのままでOK」。
+ *    ふだんの伸びは能力65以上で減衰していたが、**覚醒には何も掛かっていなかった**ので、
+ *    80台でも1回の覚醒で+3〜6跳ねていた（実測: 4クールの最大 +9）。
+ * ⚠ **70未満は素通し**（低い能力はいまの伸びのまま、という要望）。
+ * ⚠ 実測（4クール・経験値満タン・プロ意識60・成長力1.0、600回）:
+ *    ミート40 平均+2.2・最大+14（据え置き）／60 平均+2.1（据え置き）／
+ *    80 平均 0.96→0.82・**最大 9→5**／90 最大 7→3。
+ */
+function awakeningHighStatDamp(currentValue) {
+  if (!(currentValue >= 70)) return 1;
+  return Math.max(0.3, 1 - (currentValue - 70) * 0.05);
+}
 
 /**
  * 技術系能力(meet/power/eye/defense等)の高能力値成長減衰を適用
@@ -1267,7 +1288,14 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       isAwakening = awakeningMult > 0 && Math.random() * 100 < awakeningChance;
       // 才能依存の能力は覚醒量も抑制
       const rawAwakening = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
-      awakeningGrowth = isAwakening ? Math.max(1, Math.round(rawAwakening * talentMult)) : 0;
+      // ⚠ **高い能力では覚醒の伸びも抑える**（いしだ 2026-11-20。`awakeningHighStatDamp`）。
+      //    70未満は素通し。ここで現在値が要るので、先に引いておく
+      const awakeningBase = getStatPath(targetStat)
+        ? (getNestedValue(updatedPlayer, getStatPath(targetStat)) ?? 0)
+        : 0;
+      awakeningGrowth = isAwakening
+        ? Math.max(1, Math.round(rawAwakening * talentMult * awakeningHighStatDamp(awakeningBase)))
+        : 0;
     }
 
     const statPath = getStatPath(targetStat);

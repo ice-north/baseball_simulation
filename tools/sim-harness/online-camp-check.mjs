@@ -327,11 +327,13 @@ function campWith(build, seed = undefined) {
     `しきい値の下なのに鈍っている: ミート60で${mid.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
   );
 
-  // ⚠ **覚醒には減衰を掛けないこと**（いしだ方針: 覚醒は限界突破なので、
-  //    能力が高くても伸びてほしい）。伸び幅の減衰は `baseGrowth` にだけ掛け、
-  //    覚醒ぶんは足すだけ——という作りを、ここで固定する。
-  //    実測: 覚醒したときのミートの伸びは ミート40で4.89・95で4.25
-  //    （減るのは上限100の頭打ちぶんだけ）
+  // ⚠ **覚醒の伸びは、高い能力では抑える**（いしだ 2026-11-20「能力80台から4クールで
+  //    +6くらい上がる選手がいます。独立リーグとしては上がりすぎ…能力が低い場合は、
+  //    いまの伸びのままでOK」）。`awakeningHighStatDamp`（70未満は素通し・
+  //    超過1ごとに5%・下限30%）。
+  //    ⚠ 以前は「覚醒は限界突破なので能力が高くても伸びてほしい」として**何も
+  //       掛けていなかった**。その方針はこの指示で置き換わっている。
+  //    実測: 覚醒したときのミートの伸びは ミート40で4.89（据え置き）・85で2.2前後
   {
     const real = Math.random;
     /** 覚醒したクールだけ拾って、伸び幅の平均を出す */
@@ -363,11 +365,14 @@ function campWith(build, seed = undefined) {
     const low = burst(40);
     const high2 = burst(85);
     assert.ok(low.回数 > 50 && high2.回数 > 50, `覚醒が起きていない: ${low.回数}/${high2.回数}回`);
+    // ⚠ **低い能力の覚醒は据え置き**（+4以上）。ここを鈍らせない
+    assert.ok(low.平均 >= 4, `低い能力の覚醒まで鈍らせている: ミート40で${low.平均.toFixed(2)}`);
+    // ⚠ 高い能力は抑える。ただし**0にはしない**（覚醒は残す）
     assert.ok(
-      high2.平均 > low.平均 * 0.8,
-      `覚醒まで減衰している: ミート40で${low.平均.toFixed(2)} / ミート85で${high2.平均.toFixed(2)}`,
+      high2.平均 < low.平均 * 0.7,
+      `高い能力の覚醒が抑えられていない: ミート40で${low.平均.toFixed(2)} / ミート85で${high2.平均.toFixed(2)}`,
     );
-    assert.ok(high2.平均 >= 3, `覚醒の伸びが小さすぎる: ${high2.平均.toFixed(2)}`);
+    assert.ok(high2.平均 >= 1, `高い能力で覚醒が消えている: ${high2.平均.toFixed(2)}`);
   }
 
   // ⚠ **覚醒率はクールごとに下がらないこと**（いしだ要望: 均す）。経験値を
@@ -1213,6 +1218,53 @@ assert.ok(
   assert.equal(weight.stamina, 0, 'ウエイトで体力が上がっている（役が混ざっている）');
 }
 
+// --- 伸びの上限と、ノックの効き（いしだ 2026-11-20）-------------------------
+// ⚠「能力80台から4クールで+6くらい上がる選手がいます。独立リーグとしては上がりすぎ…
+//   能力が低い場合は、いまの伸びのままでOK」「ノックの守備の伸びが弱い気がします」
+{
+  const field = (defense) => ({
+    id: 1, name: '伸びの見本', age: 24, position: 'short', experience: 240,
+    growthPotential: 1.0, growthModifier: 0,
+    personality: { discipline: 60, mental: 50 },
+    physical: { speed: 60, arm: 60, dexterity: 50, bodyStamina: 60, recovery: 60, muscle: 50, throws: 'right' },
+    batting: { meet: defense, power: 60, eye: 60, bunt: 40, steal: 40, bats: 'right' },
+    fielding: { defense },
+    positionFitness: { short: 70, second: 50, third: 50, first: 40, catcher: 10, left: 40, center: 40, right: 40 },
+    seasonStats: { batting: {}, pitching: {} },
+  });
+  const fourRounds = (value, menu, read) => {
+    let total = 0;
+    let max = 0;
+    let fit = 0;
+    const runs = 400;
+    for (let i = 0; i < runs; i++) {
+      let p = field(value);
+      const before = read(p);
+      const fitBefore = p.positionFitness.short;
+      for (let c = 0; c < 4; c++)
+        p = executeCampTraining(p, menu, null, null, 1.0, 1.0, { spendExperience: false }).player;
+      total += read(p) - before;
+      max = Math.max(max, read(p) - before);
+      fit += p.positionFitness.short - fitBefore;
+    }
+    return { mean: total / runs, max, fit: fit / runs };
+  };
+  const meetOf = (p) => p.batting.meet;
+  const defOf = (p) => p.fielding.defense;
+  // ⚠ **低い能力は据え置き**（要望）。4クールで平均+1.5以上は伸びる
+  const low = fourRounds(40, 'batting', meetOf);
+  assert.ok(low.mean >= 1.5, `低い能力の伸びまで鈍らせている: 平均+${low.mean.toFixed(2)}`);
+  // ⚠ **高い能力は跳ねない**。覚醒にも抑えが掛かる（`awakeningHighStatDamp`）
+  const high = fourRounds(80, 'batting', meetOf);
+  assert.ok(high.max <= 6, `能力80台が4クールで跳ねすぎ: 最大+${high.max}`);
+  assert.ok(high.mean <= low.mean, `高い能力の方が伸びている: ${high.mean.toFixed(2)} / ${low.mean.toFixed(2)}`);
+  // ⚠ **ノックは守備が伸びる**（守備60で4クール平均+2.5以上）
+  const knock = fourRounds(60, 'fielding', defOf);
+  assert.ok(knock.mean >= 2.5, `ノックの守備が弱い: 平均+${knock.mean.toFixed(2)}`);
+  // ⚠ ノックは**今の守備位置の適性**も上げる（確定で+4〜8/クール）
+  assert.ok(knock.fit >= 16, `ノックで守備位置の適性が上がっていない: +${knock.fit.toFixed(1)}`);
+}
+
 // --- 新球種の取得率（いしだ 2026-11-20「低すぎる気がします。確認してください」）-----
 // ⚠ オンラインで新球種を覚える道は**サブ練習だけ**（`CAMP_MENUS` に newpitch は無い）。
 //    ここが遅いと一生覚えない。実測（初期セットの投手・器用さ平均53）:
@@ -1253,5 +1305,5 @@ loadLeagueWorld(leagueAtCamp());
 captureWorld();
 
 console.log(
-  '■ キャンプ: OK（選手ごとに効く / ウエイトが体幹・基礎体力が体力の役 / 新球種は1クール3割・4クールで7割 / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒には減衰を掛けず、クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
+  '■ キャンプ: OK（選手ごとに効く / 低い能力は据え置き・高い能力は跳ねない / ノックで守備と適性が伸びる / ウエイトが体幹・基礎体力が体力の役 / 新球種は1クール3割・4クールで7割 / 1クールずつ実行して数える / 同じクールを2回走らせない / 残りは締め切りで自動 / 前の版の記録でも締め切りで止まらない / 画面のメニューをサーバーが受け取れる / 選んだ対象が練習まで届く / 1クールの伸びが「必ず+1」にならず、才能（足・肩）と伸び切った能力は鈍る / 覚醒は低い能力では据え置き・高い能力では抑える／クールごとに均して4クールで20%前後 / 別の種の世界でも効き、伸びが外れない）',
 );

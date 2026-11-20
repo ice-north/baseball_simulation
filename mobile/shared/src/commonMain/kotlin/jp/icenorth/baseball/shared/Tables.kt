@@ -8,7 +8,7 @@ data class ChoiceField(val key: String, val label: String, val numeric: Boolean,
 val CAMP_MENUS: List<Menu> = listOf(
     Menu("batting", "打撃練習", "🏏", "ミートを強化、パワー・選球眼・バントを微増", category = "batting"),
     Menu("baserunning", "走塁練習", "🏃", "走力・盗塁・バントを強化", category = "batting"),
-    Menu("fielding", "ノック", "🧤", "守備力と肩力を強化（投手野手共通）", category = "fielding"),
+    Menu("fielding", "ノック", "🧤", "守備力と肩力を強化（投手野手共通）・野手は今の守備位置の適性も+4〜8/クール", category = "fielding"),
     Menu("control", "投げ込み", "🎯", "制球力を強化し、スタミナも向上（投手向け）", category = "pitching"),
     Menu("velocity", "球速練習", "🔥", "球速を強化（肩力上限・フォーム適性あり）、スタミナも微増（投手向け）", category = "pitching"),
     Menu("intensive_power", "長打集中", "💥", "パワーを集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）", category = "batting"),
