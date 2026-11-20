@@ -48,8 +48,13 @@ try {
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(`${base}/online`);
   const nav = p.locator('.online-page-nav');
-  const go = (label) =>
-    nav.getByRole('button', { name: label, exact: true }).click();
+  // ⚠ 選手成績・通算成績はチーム分析の中、能力ランキングはリーグ史の中（先方要望 2026-11-20）
+  const MERGED = { 選手成績: 'チーム分析', 通算成績: 'チーム分析', 能力ランキング: 'リーグ史' };
+  const go = async (label) => {
+    await nav.getByRole('button', { name: MERGED[label] || label, exact: true }).click();
+    if (MERGED[label])
+      await p.locator('.online-page-tabs').getByRole('button', { name: label, exact: true }).click();
+  };
   await nav
     .getByRole('button', { name: 'スタメン設定', exact: true })
     .waitFor();
@@ -821,8 +826,10 @@ try {
   //    読み直さないと空欄になる（`TeamRoster` の `always`）
   {
     await go('通算成績');
-    const heading = p.getByRole('heading', { name: '通算成績', level: 1 });
-    await heading.waitFor();
+    await p
+      .locator('.online-page-tabs button[aria-pressed="true"]')
+      .filter({ hasText: '通算成績' })
+      .waitFor();
     // ⚠ 期間の名前は**表の脇にも出すこと**（今季の表と同じ見た目なので、
     //    どちらを見ているのか分からなくなる）
     assert.match(

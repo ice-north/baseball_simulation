@@ -601,7 +601,8 @@ try {
     const l = await live();
     const humansNow = new Set(l.members.map((m) => m.teamName));
     const cpuTeam = l.season.settings.teamNames.find((name) => !humansNow.has(name));
-    await nav.getByRole('button', { name: '選手成績', exact: true }).click();
+    await nav.getByRole('button', { name: 'チーム分析', exact: true }).click();
+    await p.locator('.online-page-tabs').getByRole('button', { name: '選手成績', exact: true }).click();
     await p.getByRole('combobox', { name: '閲覧する球団' }).selectOption(cpuTeam);
     const name = p.locator('.online-team-roster .online-player-name').first();
     await name.waitFor();

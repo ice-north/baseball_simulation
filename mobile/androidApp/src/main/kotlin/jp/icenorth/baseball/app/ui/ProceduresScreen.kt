@@ -144,8 +144,11 @@ private fun CurrentProcedure(model: AppViewModel, raw: JsonObject, onHome: () ->
                 // ⚠ 済んだキャンプの結果は畳んで出す（シーズン中ずっと、24人の一覧がこのタブの大半を占めていた）
                 CampGains(model, camp, raw.at("roster").list().mapNotNull { it.obj() }, collapsed = true)
             }
-            OffseasonGrowthCard(model, raw)
+            // その年のNPBドラフト（指名から年度更新まで）・トライアウトの結果（年度更新まで）・
+            // その年のまとめ（年度更新から開幕した月まで）。Web 版の「現在の手続き」と同じ並び
+            ProDraftCard(model)
             TryoutResultCard(model, raw)
+            YearSummaryCard(model)
         }
     }
 }
@@ -309,6 +312,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, 
     // 1年の流れの帯と、手続きの見出し（決まり・誰が決めたか）。どの手続きでも面の先頭に置く
     val header: @Composable () -> Unit = {
         SeasonFlowCard(raw)
+        // その年のNPBドラフトの発表（契約更改のときは「指名なし」も出す。Web 版 PhasePanel と同じ）
+        if (kind == "contract") ProDraftCard(model, whenEmpty = true)
         Section(
             title,
             trailing = { if (kind != "camp") InfoButton(title, listOf(rulesDetail(deadline))) },
@@ -348,8 +353,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, 
         // 年度更新はキャンプの直前に済む。方針を決める前に見られるようにする
         CampPanel(model, raw, phase) {
             header()
-            OffseasonGrowthCard(model, raw)
-            TryoutResultCard(model, raw)
+            // ⚠ 年が替わったら「その年のまとめ」だけ（いしだ 2026-11-18。オフの成長は出さない）
+            YearSummaryCard(model)
         }
         return
     }

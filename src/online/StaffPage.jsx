@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import TeamRoster from './TeamRoster.jsx';
+import { useRead } from './useRead.js';
+import { inOnlineRoot } from './dialogPortal.js';
+import { AbilityGrade } from './PlayerPerformance.jsx';
 import { Page } from './Page.jsx';
 import { teamLabel } from './gameText.js';
-import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS } from './coaches.js';
+import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS, COACH_ABILITY_ITEMS } from './coaches.js';
 import { useDraftState, STAFF_MODES_DRAFT } from './Drafts.jsx';
 import { delegationSettles } from './notices.js';
 
@@ -68,7 +71,9 @@ export function CoachCard({ coach, roleLabel, actions = null }) {
     <article className="online-staff-card">
       <header>
         <span className="online-eyebrow">{roleLabel || coach.roleLabel}</span>
-        <strong>{coach.name}</strong>
+        <strong>
+          <CoachNameButton coach={coach} />
+        </strong>
         <small>
           {coach.age}歳 · {coach.origin}
           {coach.legend ? ' · 名選手' : ''}
@@ -97,7 +102,8 @@ export function CoachCard({ coach, roleLabel, actions = null }) {
       </dl>
       {coach.views && (
         <details className="online-staff-more">
-          <summary>考え方・性格・好む選手・履歴</summary>
+          <summary>詳細能力・考え方・性格・好む選手・履歴</summary>
+          <CoachAbilities abilities={coach.abilities} />
           {coach.prefs && <p className="online-staff-prefs">好む選手: {coach.prefs}</p>}
           <ul className="online-staff-scales">
             {coach.views.map((item) => (
@@ -124,6 +130,196 @@ export function CoachCard({ coach, roleLabel, actions = null }) {
       )}
       {actions}
     </article>
+  );
+}
+
+/** 詳細能力の表（選手と同じ段位 S〜F）。⚠ 表示と人物像だけ（どこにも効かない。`coachAbilities`） */
+export function CoachAbilities({ abilities }) {
+  if (!abilities) return null;
+  return (
+    <ul className="online-coach-abilities">
+      {COACH_ABILITY_ITEMS.map((item) => (
+        <li key={item.key} title={item.note}>
+          <span>{item.label}</span>
+          <AbilityGrade value={abilities[item.key]} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * 指導者の人物の小窓（名前を押すと開く。先方要望 2026-11-20「指導者名をクリックすると、ビジョン、育成観、
+ * 性格、任せ方、これまでの指導チームと役職、主な指導選手を表示」）。中身はカード（`coachCard` の full）。
+ * ⚠ 文はサーバーが作る（`server/coachView.mjs`）。画面で言い換えない
+ */
+function CoachDialog({ coach, close }) {
+  const dialog = useRef(null);
+  useEffect(() => {
+    const node = dialog.current;
+    const trigger = document.activeElement;
+    node.showModal();
+    return () => {
+      if (node.open) node.close();
+      if (trigger?.isConnected) trigger.focus();
+    };
+  }, []);
+  const dismiss = () => {
+    dialog.current?.close();
+    close();
+  };
+  const trust = coach.traits?.find((t) => t.key === 'trust');
+  return inOnlineRoot(
+    <dialog
+      ref={dialog}
+      className="online-player-dialog online-coach-dialog"
+      aria-labelledby="online-coach-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        dismiss();
+      }}
+      onClick={(event) => {
+        if (event.target === dialog.current) dismiss();
+      }}
+    >
+      <header>
+        <div>
+          <h2 id="online-coach-title">{coach.name}</h2>
+          <small>
+            {[coach.team ? `${teamLabel(coach.team)} ${coach.roleLabel}` : coach.roleLabel, `${coach.age}歳`, coach.origin, coach.legend && '名選手']
+              .filter(Boolean)
+              .join(' · ')}
+          </small>
+        </div>
+        <button onClick={dismiss} aria-label="指導者の情報を閉じる">
+          閉じる
+        </button>
+      </header>
+      {coach.titles?.length ? (
+        <p className="online-staff-titles">
+          {coach.titles.map((t) => (
+            <b key={t}>{t}</b>
+          ))}
+        </p>
+      ) : null}
+      <p className="online-staff-color">{coach.headline}</p>
+      {coach.pitch && <p className="online-staff-pitch">「{coach.pitch}」</p>}
+      <dl className="online-staff-facts">
+        <Fact label="ビジョン" value={coach.vision} />
+        <Fact label="育成観" value={coach.growth} />
+        <Fact label="性格" value={coach.personality} />
+        <Fact label="任せ方" value={trust ? trust.text : null} />
+        <Fact label="コーチ任せ" value={coach.delegation} />
+        <Fact label="好む選手" value={coach.prefs} />
+        <Fact label="通算" value={coach.career} />
+        <Fact label="恩師" value={coach.mentor} />
+        <Fact label="現役時代" value={coach.playerLine} />
+      </dl>
+      <section className="online-detail-section">
+        <h3>詳細能力</h3>
+        <p className="online-muted">人物の目安です。試合や育成の強さには効きません（采配やキャンプの案を変えるのはビジョン・考え方・性格です）。</p>
+        <CoachAbilities abilities={coach.abilities} />
+      </section>
+      <section className="online-detail-section">
+        <h3>これまでの指導チームと役職</h3>
+        {coach.stints?.length ? (
+          <ul className="online-plain-list">
+            {coach.stints.map((st, i) => (
+              <li key={`${st.team}:${st.role}:${st.from}:${i}`}>{st.text}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="online-muted">まだ指導した球団はありません。</p>
+        )}
+      </section>
+      <section className="online-detail-section">
+        <h3>主な指導選手</h3>
+        {coach.pupils?.length ? (
+          <ul className="online-plain-list">
+            {coach.pupils.map((p) => (
+              <li key={p.name}>{p.text}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="online-muted">まだいません（このリーグで指導した年の記録から挙げます）。</p>
+        )}
+      </section>
+      {coach.views && (
+        <section className="online-detail-section">
+          <h3>考え方・性格</h3>
+          <ul className="online-staff-scales">
+            {coach.views.map((item) => (
+              <Scale key={item.key} item={item} />
+            ))}
+          </ul>
+          <ul className="online-staff-scales">
+            {coach.traits.map((item) => (
+              <Scale key={item.key} item={item} />
+            ))}
+          </ul>
+        </section>
+      )}
+      {coach.history?.length ? (
+        <section className="online-detail-section">
+          <h3>年ごとの成績</h3>
+          <ul className="online-staff-history">
+            {coach.history.map((h, i) => (
+              <li key={`${h.year}:${h.team}:${i}`}>
+                <b>{h.year}年</b> {h.teamLabel} {h.roleLabel} {h.text}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </dialog>,
+  );
+}
+
+/** 指導者の名前（押すと人物の小窓）。カードの中身がそのまま小窓の中身 */
+export function CoachNameButton({ coach }) {
+  const [open, setOpen] = useState(false);
+  if (!coach) return null;
+  return (
+    <>
+      <button
+        type="button"
+        className="online-player-name online-coach-name"
+        onClick={() => setOpen(true)}
+        aria-label={`${coach.name}の指導者情報を見る`}
+      >
+        {coach.name}
+      </button>
+      {open && <CoachDialog coach={coach} close={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/**
+ * 一覧（各球団の指導者）の名前。一覧は軽い形なので、押してからその球団を読み、席の中から
+ * この id の人を探して小窓を開く（自球団は手元の view）。⚠ 読み込みは `TeamRoster` と同じ問い合わせ
+ */
+function LeagueCoachButton({ view, team, coach }) {
+  const [open, setOpen] = useState(false);
+  const own = team === view.teamName;
+  const result = useRead(open && !own ? 'team' : null, { team, revision: view.revision }, { keep: true });
+  const seats = own ? view.staff?.seats : result.data?.teamName === team ? result.data.staff?.seats : null;
+  const found = open && seats ? seats.find((s) => s.coach?.id === coach.id)?.coach : null;
+  return (
+    <>
+      <button
+        type="button"
+        className="online-player-name online-coach-name"
+        onClick={() => setOpen(true)}
+        aria-label={`${coach.name}の指導者情報を見る`}
+        aria-busy={open && !seats && !result.error ? true : undefined}
+      >
+        {coach.name}
+      </button>
+      {open && !seats && !result.error && <small className="online-muted"> 読み込み中…</small>}
+      {open && result.error && <small role="alert"> {result.error}</small>}
+      {open && seats && !found && <small role="alert"> いまこの球団にいません</small>}
+      {found && <CoachDialog coach={found} close={() => setOpen(false)} />}
+    </>
   );
 }
 
@@ -428,7 +624,7 @@ function Events({ events, title = '最近の人事' }) {
   );
 }
 
-function LeagueStaff({ leagueStaff }) {
+function LeagueStaff({ leagueStaff, view }) {
   if (!leagueStaff?.teams?.length) return null;
   return (
     <section className="online-card">
@@ -450,7 +646,7 @@ function LeagueStaff({ leagueStaff }) {
                 <td key={role}>
                   {t[role] ? (
                     <>
-                      {t[role].name}
+                      {view && t[role].id ? <LeagueCoachButton view={view} team={t.team} coach={t[role]} /> : t[role].name}
                       <small>{t[role].color}</small>
                     </>
                   ) : (
@@ -573,7 +769,7 @@ export function StaffBody({ view, busy, run, command, mobile = false, children }
             ) : (
               <OtherStaff shown={shown} />
             )}
-            <LeagueStaff leagueStaff={view.leagueStaff} />
+            <LeagueStaff leagueStaff={view.leagueStaff} view={view} />
             <Events events={view.leagueStaff?.events} title="リーグの人事" />
           </>
         )
@@ -594,7 +790,7 @@ export default function StaffPage(props) {
           actions={<div className="online-team-selector">{selector}</div>}
         >
           {body}
-          <LeagueStaff leagueStaff={view.leagueStaff} />
+          <LeagueStaff leagueStaff={view.leagueStaff} view={view} />
           <Events events={view.leagueStaff?.events} title="リーグの人事" />
         </Page>
       )}

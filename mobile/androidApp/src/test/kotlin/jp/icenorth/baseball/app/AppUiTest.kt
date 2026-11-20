@@ -320,9 +320,10 @@ class AppUiTest {
         rule.onNodeWithText("新しいアプリが出ています").assertExists()
     }
 
-    @Test fun homePaperSaysTheAppIsLatest() {
+    @Test fun homePaperSaysNothingWhenTheAppIsLatest() {
         assumeTrue(BuildConfig.APP_COMMIT.isNotEmpty())
         open(""""roster":[]""", LatestApp(BuildConfig.APP_COMMIT, BuildConfig.APP_COMMIT_TIME))
-        rule.onNodeWithText("このアプリは最新版").assertExists()
+        rule.onNodeWithText("新しいアプリが出ています").assertDoesNotExist()
+        rule.onNodeWithText("試作版のアプリ").assertDoesNotExist()
     }
 }

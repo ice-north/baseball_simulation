@@ -491,6 +491,7 @@ try {
   }
   await rename.getByRole('button', { name: '閉じる', exact: true }).click();
   await rename.waitFor({ state: 'hidden' });
+  await p.getByRole('button', { name: 'チーム分析', exact: true }).click();
   await p.getByRole('button', { name: '選手成績', exact: true }).click();
   await p.getByLabel('閲覧する球団').selectOption('B');
   await p
@@ -549,7 +550,7 @@ try {
     await p
       .locator('.online-page-nav [aria-current="page"]')
       .getAttribute('aria-label'),
-    '選手成績',
+    'チーム分析',
     '詳細を閉じても元の一覧に留まる',
   );
   await p.setViewportSize({ width: 700, height: 1000 });
@@ -559,7 +560,7 @@ try {
     await p
       .locator('.online-page-nav [aria-current="page"]')
       .getAttribute('aria-label'),
-    '選手成績',
+    'チーム分析',
     '表示形式を往復しても選手画面を維持する',
   );
   await p.screenshot({
@@ -570,7 +571,7 @@ try {
     await p
       .locator('.online-page-nav [aria-current="page"]')
       .getAttribute('aria-label'),
-    '選手成績',
+    'チーム分析',
     '全体キャプチャ後も選手画面を維持する',
   );
   // ⚠ PCの選手成績は**表が1つ**（能力一覧／成績一覧の切替は無くした）。
@@ -1055,6 +1056,9 @@ try {
   }
   const switched = await scene(1440, 1000);
   await switched.page
+    .getByRole('button', { name: 'チーム分析', exact: true })
+    .click();
+  await switched.page
     .getByRole('button', { name: '選手成績', exact: true })
     .click();
   const switchAuth = async (page) =>
@@ -1088,6 +1092,9 @@ try {
   );
   await switched.context.close();
   const staleRead = await scene(1440, 1000, 1, true);
+  await staleRead.page
+    .getByRole('button', { name: 'チーム分析', exact: true })
+    .click();
   await staleRead.page
     .getByRole('button', { name: '選手成績', exact: true })
     .click();

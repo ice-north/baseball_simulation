@@ -127,6 +127,7 @@ try {
   const ownTeam = league.members[0].teamName;
   assert.equal(league.game.teams[ownTeam].onlineTactics.sacrificeBunt, 'never');
   assert.equal(league.game.teams[ownTeam].onlineTactics.starterLimit, 80);
+  await page.getByRole('button', { name: 'チーム分析', exact: true }).click();
   await page.getByRole('button', { name: '選手成績', exact: true }).click();
   assert.equal(
     await page

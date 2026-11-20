@@ -54,6 +54,7 @@ import jp.icenorth.baseball.shared.packWaiting
 import jp.icenorth.baseball.shared.CAMP_ROUNDS
 import jp.icenorth.baseball.shared.PHASE_LABELS
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.proDraftOfYear
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
@@ -67,6 +68,7 @@ import jp.icenorth.baseball.shared.quickPending
 import jp.icenorth.baseball.shared.sealedForQuick
 import jp.icenorth.baseball.shared.BackIssue
 import jp.icenorth.baseball.shared.TeamChronicle
+import jp.icenorth.baseball.shared.historyPoints
 import jp.icenorth.baseball.shared.ChronicleView
 import jp.icenorth.baseball.shared.OwnerRecord
 import jp.icenorth.baseball.shared.teamFaceLines
@@ -267,6 +269,10 @@ fun HomeScreen(
                         TextButton(onClick = { model.markCampSeen(campKey) }) { Text("キャンプ結果を閉じる") }
                     }
                 }
+            // その年のNPBドラフト（指名から年度更新まで）と、開幕した月までの「その年のまとめ」
+            // （キャンプで見逃した人のため）。Web 版のホームと同じ
+            if (proDraftOfYear(view.chronicle, view.year).isNotEmpty()) item(key = "proDraft") { ProDraftCard(model) }
+            if (view.phase == null && view.yearSummary != null) item(key = "yearSummary") { YearSummaryCard(model) }
             item(key = "paper") {
                 PaperTabs(paper, localPage.title) { model.changeHomePaper(it.name) }
             }
@@ -358,17 +364,6 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
     var openSections by remember { mutableStateOf(setOf<String>()) }
     fun toggle(id: String) { openSections = if (id in openSections) openSections - id else openSections + id }
     fun opened(id: String) = id in openSections
-    // リーグ全体のプロ入り（ビューの chronicle。古いサーバーには無い）
-    val leagueChronicle = remember(model.view) {
-        model.raw?.at("chronicle").obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(ChronicleView.serializer(), it) }.getOrNull() }
-    }
-    val league = leagueChronicle?.proDrafted.orEmpty()
-    // 年間表彰（リーグ全体。いちばん新しい年。Web 版 Chronicle.jsx の Honors と同じ）
-    val honors = leagueChronicle?.honors
-    // オーナー名鑑（ビューの owners。Web 版 Chronicle.jsx の Owners と同じ）
-    val owners = remember(model.view) {
-        model.raw?.at("owners").list().mapNotNull { e -> e.obj()?.let { runCatching { OnlineJson.decodeFromJsonElement(OwnerRecord.serializer(), it) }.getOrNull() } }
-    }
     LaunchedEffect(team) {
         runCatching {
             model.read("team", mapOf("team" to team)).at("chronicle").obj()?.let { OnlineJson.decodeFromJsonElement(TeamChronicle.serializer(), it) }
@@ -386,6 +381,9 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                 failed -> Text("読み込めませんでした。少し待ってから開き直してください。")
                 c == null -> Text("読み込み中…")
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // 球団の歩み（折れ線）。年表の上に置く（先方要望 2026-11-20。PC の TeamHistoryChart.jsx と同じ）
+                    val points = historyPoints(c.seasons, model.view, team)
+                    if (points.isNotEmpty()) item { TeamHistoryChart(points, Modifier.fillMaxWidth().padding(bottom = 4.dp)) }
                     item { ChronicleHeading("年表", opened("seasons"), count = c.seasons.size) { toggle("seasons") } }
                     if (opened("seasons")) {
                         if (c.seasons.isEmpty()) item { Text("まだ終わったシーズンがありません。1年目を終えると、ここに年ごとの成績が並びます。", style = MaterialTheme.typography.bodySmall) }
@@ -445,38 +443,7 @@ private fun ChronicleDialog(model: AppViewModel, team: String, short: String, on
                             }
                         }
                     }
-                    item { ChronicleHeading("オーナー名鑑", opened("owners"), count = owners.size) { toggle("owners") } }
-                    if (opened("owners")) {
-                        if (owners.isEmpty()) item { Text("まだ参加者がいません。", style = MaterialTheme.typography.bodySmall) }
-                        items(owners.withIndex().toList(), key = { "o${it.index}" }) { (_, o) ->
-                            Column {
-                                Text(o.head, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                Text(o.text, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                    item { ChronicleHeading("年間表彰" + (honors?.year?.takeIf { it > 0 }?.let { "（${it}年目）" } ?: ""), opened("honors")) { toggle("honors") } }
-                    if (opened("honors")) {
-                        val honorList = honorRows(honors) { model.view?.teamShort(it) ?: it }
-                        if (honorList.isEmpty()) item { Text("まだありません。10月下旬に成績が確定すると、タイトルと部ごとのMVP・新人王・ベストナイン・最優秀バッテリーが決まります。", style = MaterialTheme.typography.bodySmall) }
-                        items(honorList.withIndex().toList(), key = { "h${it.index}" }) { (_, r) ->
-                            Column {
-                                Text(r.first, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                Text(r.second, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                    item { ChronicleHeading("リーグからプロへ", opened("leaguePro"), count = league.size) { toggle("leaguePro") } }
-                    if (opened("leaguePro")) {
-                        if (league.isEmpty()) item { Text("まだこのリーグからプロ入りした選手はいません（指名は10月下旬、リーグ全体で年0〜5人。0人の年もあります）。", style = MaterialTheme.typography.bodySmall) }
-                        items(league.withIndex().toList(), key = { "l${it.index}" }) { (_, r) ->
-                            Column {
-                                Text(proDraftedHead(r) { model.view?.teamShort(it) ?: it }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                Text(proDraftedBody(r), style = MaterialTheme.typography.bodySmall)
-                                proDraftedAfter(r).forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            }
-                        }
-                    }
+                    // ⚠ リーグ全体の欄（オーナー名鑑・年間表彰・リーグからプロへ）は「試合」タブの「リーグ史」へ移した（PC と同じ）
                     item { ChronicleHeading("引退した選手", opened("retired"), count = c.retired.size) { toggle("retired") } }
                     if (opened("retired")) {
                         if (c.retired.isEmpty()) item { Text("この球団から引退した選手はまだいません。", style = MaterialTheme.typography.bodySmall) }

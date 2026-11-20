@@ -8,8 +8,12 @@ import { teamLabel } from './gameText.js';
  *    いない項目（通算成績など）を使う画面はこれを使う。立てないと、自球団だけ
  *    その項目が欠けた `view` が渡り、自分の選手だけ空欄になる。
  */
-export default function TeamRoster({ view, children, always = false }) {
-  const [selected, setSelected] = useState(view.teamName);
+export default function TeamRoster({ view, children, always = false, selected: controlled, onSelect }) {
+  // `selected` / `onSelect` を渡すと、選んだ球団を呼ぶ側が持つ（チーム分析の切り替えで、
+  // 選んだ球団を保ったまま中の画面を替えるため）
+  const [picked, setPicked] = useState(view.teamName);
+  const selected = controlled ?? picked;
+  const setSelected = onSelect ?? setPicked;
   const own = selected === view.teamName && !always;
   const result = useRead(own ? null : 'team', {
     team: selected,

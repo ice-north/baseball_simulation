@@ -38,7 +38,7 @@
   - `presence` の返事は `{ ok: true }`。おるすばんを解いたときは `{ ok: true, returned: true }` で、アプリはそのときもう一度ビューを読む（一緒に走らせた読み直しが解ける前のビューを読んでいて、自分が「おるすばん」のまま見えるため）。`returned` が無ければ解いていない扱い（`shared/.../OnlineApi.kt` の `presence`）。
   - 版（`revision`）は、最終ログインを書いただけなら上がらない（ほかの人の画面を読み直させない）。おるすばんを解いたときは上がる。ただしビューの世代（`viewGeneration`）は、書き込みを保存するたび（`presence` が最終ログインを書いたときも）上がる（`server/storage/supabaseStore.mjs` の `online_publish`。公開は世代を必ず1つ上げる）。なので `since` を添えた次の `view` は中身をまるごと返す。
 - 画面が読む項目のうち、名前を変えると黙って空になるもの（どれも無ければ出さないだけなので、画面の検査では気づきにくい）:
-  - ビュー: `careerLeaders`（通算成績ランキング）、`chronicle.proDrafted`（プロ入りした選手。指名順位は `round`（数）と `ikusei`（育成指名なら true）で「4位」「育成2位」と出す）、`lastCamp`（キャンプの結果）、`stage.key`（`season` かどうかでキャンプ直後の案内を出す）、`trades[]` の `fromCpu`・`expires`（CPU球団からの提案とその期限）、`rosterLimit`・`rosterStandard`（選手枠。下の項目）。
+  - ビュー: `careerLeaders`（通算成績ランキング）、`chronicle.proDrafted`（プロ入りした選手。指名順位は `round`（数）と `ikusei`（育成指名なら true）で「4位」「育成2位」と出す）、`lastCamp`（キャンプの結果）、`stage.key`（`season` かどうかでキャンプ直後の案内を出す）、`trades[]` の `fromCpu`・`expires`（CPU球団からの提案とその期限）、`rosterLimit`・`rosterStandard`（選手枠。下の項目）、`yearSummary`（その年のまとめ。`year`・`league`・`rank`・`record`・`standings[]`（`rank`・`label`・`wins`・`losses`・`draws`・`mine`）・`joined[]`/`left[]`（`side`・`how`・`name`・`position`・`other`）・`topics[]`。`server/yearSummary.mjs`。年度更新から開幕した月の間だけ載る）。
   - `team`: `formerCareers`（引退・退団した選手の通算）、`chronicle.moves`（入退団履歴）、`roster[].years`（他球団の選手の年ごとの推移）。
   - `player`: `years`（自球団の選手の年ごとの推移。年・年齢・所属・能力）。
   - `transactions`（`year` を受ける。トレード履歴）: `years`、`items[]` の `kind`（アプリは `trade` だけ出す）・`teams`・`cpu`・`cpuOnly`・`date`・`moves[]`（`name`・`position`・`from`・`to`）。
@@ -99,7 +99,7 @@
 ## アプリの版（最新かどうか）
 
 - アプリは作ったときに「最後に `mobile/` を変えたコミット」とその時刻を持つ（`androidApp/build.gradle.kts` の `APP_COMMIT`）。CI は履歴を全部取って作る（`fetch-depth: 0`）。
-- 起動時と引っ張って更新したとき（30分に1回まで）、GitHub の公開 API で ice-north の main の同じもの（`commits?path=mobile`）を読み、ホームの紙面に記事で出す（`shared/.../AppUpdate.kt`）。同じなら「最新版」、main の方が新しければ紙面の先頭に「新しいアプリが出ています」（押すと配布ページ）、ブランチで作った先の版なら「試作版」。
+- 起動時と引っ張って更新したとき（30分に1回まで）、GitHub の公開 API で ice-north の main の同じもの（`commits?path=mobile`）を読み、ホームの紙面に記事で出す（`shared/.../AppUpdate.kt`）。同じ（最新版）なら何も書かない。main の方が新しければ紙面の先頭に「新しいアプリが出ています」（押すと配布ページ）、ブランチで作った先の版なら「試作版」。
 - ⚠ `mobile/` の中なら README や tools だけの変更でも「新しい版」になる。
 
 ## 署名
