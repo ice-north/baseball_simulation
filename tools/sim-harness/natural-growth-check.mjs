@@ -36,6 +36,8 @@ import {
   expectedNaturalGrowth,
   naturalAgeCoef,
   naturalCoefOf,
+  naturalPeakAge,
+  STAT_GROWTH,
   updateGrowthModifiers,
   applyCorporatePlayerGrowth,
   teamRankMult,
@@ -346,6 +348,26 @@ assert.equal(
   assert.equal(stopOf(80) - stopOf(60), 1, 'プロ意識80のキャンプの停止年齢が説明（+1歳）と合わない');
   assert.equal(stopOf(100) - stopOf(60), 2, 'プロ意識100のキャンプの停止年齢が説明（+2歳）と合わない');
   assert.ok(help.includes('キャンプの伸びが止まる年齢（80で+1歳、100で+2歳）'), 'プロ意識の説明にキャンプの停止年齢が無い');
+}
+
+// --- 6.7 マニュアル（ManualScreen の「年次成長」）とアプリの TIPS（Tips.kt）に書いた数字 ---
+// ⚠ ここが落ちたら、式を変えた側に合わせて文を直す（数字は式から計算して書いてある）
+{
+  // 衰え始める年齢（主な能力の平均）: 素質 × プロ意識20/35/50/65/80/100
+  const DOC_DECLINE = { 0.6: [27, 28, 29, 29, 30, 31], 1.0: [30, 31, 32, 33, 33, 34], 1.4: [34, 34, 35, 36, 37, 38] };
+  for (const [gp, ages] of Object.entries(DOC_DECLINE))
+    [20, 35, 50, 65, 80, 100].forEach((discipline, i) =>
+      assert.equal(naturalPeakAge(Number(gp), discipline) + 1, ages[i], `マニュアルの衰え始め（素質${gp}・意識${discipline}）が式と違う`));
+  // 能力ごとの衰え始め（素質1.0・意識50）
+  const DOC_STAT = { speed: 28, arm: 30, velocity: 30, armP: 30, stamina: 31, meet: 32, defense: 32, power: 33, eye: 35, control: 35, breaking: 35 };
+  for (const [key, age] of Object.entries(DOC_STAT))
+    assert.equal(naturalPeakAge(1.0, 50, STAT_GROWTH[key].peakAge) + 1, age, `マニュアル・TIPSの${key}の衰え始めが式と違う`);
+  // 選手情報の自然成長（6能力の平均・能力50）は、走力・肩のぶん曲線より早くマイナスになる（素質1.0で1年・0.6で3年）
+  assert.equal(naturalPeakAge(1.0, 50) + 1 - crossOf(1.0), 1, 'マニュアルの「素質1.0なら1年早い」が式と違う');
+  assert.equal(naturalPeakAge(0.6, 50) + 1 - crossOf(0.6), 3, 'マニュアルの「素質0.6なら3年早い」が式と違う');
+  // 出場量: 年300打席は0打席の約2.7倍（伸びる年）
+  const ratio = shownOf(fielder(21, 1.0, 50, GROW_BASE, 300)) / shownOf(fielder(21, 1.0, 50, GROW_BASE, 0));
+  assert.ok(Math.abs(ratio - 2.7) < 0.1, `300打席と0打席の伸びの比が${ratio.toFixed(2)}（マニュアル・TIPSは約2.7倍）`);
 }
 
 // --- 7. 表示の計算は選手を書き換えない（`peek`）・投手・見た目 ---
