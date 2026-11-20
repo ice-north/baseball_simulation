@@ -23,7 +23,10 @@ import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
          buntThrowOutChance, squeezeHomeThrowChance } from './bunting.js';
 import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
 import { withSeededRandom } from './rng.js';
-import { nextRotationStarterId } from './lineup.js';
+import { nextRotationStarterId, bestFieldAssignment } from './lineup.js';
+
+// CPU の打順作りで、守備の適性がこれ未満の守備に就けるときの減点の境（オンラインの代役の下限と同じ値）
+const AI_LINEUP_MIN_FITNESS = 60;
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
 const PITCHER_REST_FATIGUE_THRESHOLD = 40;
@@ -233,34 +236,41 @@ export const generateAILineup = (teamData, teamName) => {
   };
 
   // ポジションごとに最適な選手を選ぶ（守備適性+打撃力+調子+疲労の総合判断）
+  // ⚠ **8つの守備をまとめて決める**（`bestFieldAssignment`）。以前は遊撃→二塁→中堅→捕手…と
+  //    1か所ずつ一番の人を取っていたので、遊撃も守れる捕手が遊撃に取られて捕手に外野手が入る、
+  //    疲れたレギュラーの代わりに捕手が二塁に入る、のように後ろの守備ほど穴になっていた。
+  //    1人ずつの点（下の `score`）は前と同じで、合計がいちばん高い組を選ぶ。
+  //    適性60未満の守備には足りない分を引く（ほかに組みようがあれば穴を作らない）
   const lineup = [];
   const usedPlayers = new Set();
-
-  // 重要守備位置を先に埋める
+  // 疲労41以上から段階的に成長ペナルティ(-0.01/-0.02/-0.03)が発生するため休養を促す。
+  // fatiguePenalty = 疲労²/1200 なので 疲労41→1, 61→3, 81→5 に対応する
+  const fatigueMalus = (fp) => (fp >= 5 ? -50 : fp >= 3 ? -25 : fp >= 1 ? -8 : 0);
+  const score = (p, pos) => {
+    const fit = getPositionFitness(p, pos);
+    const eff = getEffectiveBatting(p);
+    return fit * 0.6 + (eff.meet + eff.power) * 0.4 + fatigueMalus(eff.fatiguePenalty)
+      - Math.max(0, AI_LINEUP_MIN_FITNESS - fit) * 2;
+  };
   const priorityPositions = ['short', 'second', 'center', 'catcher', 'third', 'first', 'left', 'right'];
-  priorityPositions.forEach(pos => {
-    const available = fieldPlayers.filter(p => !usedPlayers.has(p.id));
-    if (available.length === 0) return;
-
-    available.sort((a, b) => {
-      const aFit = getPositionFitness(a, pos);
-      const bFit = getPositionFitness(b, pos);
-      const aEff = getEffectiveBatting(a);
-      const bEff = getEffectiveBatting(b);
-      const aBat = aEff.meet + aEff.power;
-      const bBat = bEff.meet + bEff.power;
-      // 疲労41以上から段階的に成長ペナルティ(-0.01/-0.02/-0.03)が発生するため休養を促す。
-      // fatiguePenalty = 疲労²/1200 なので 疲労41→1, 61→3, 81→5 に対応する
-      const fatigueMalus = (fp) => (fp >= 5 ? -50 : fp >= 3 ? -25 : fp >= 1 ? -8 : 0);
-      const aFatigueMalus = fatigueMalus(aEff.fatiguePenalty);
-      const bFatigueMalus = fatigueMalus(bEff.fatiguePenalty);
-      return (bFit * 0.6 + bBat * 0.4 + bFatigueMalus) - (aFit * 0.6 + aBat * 0.4 + aFatigueMalus);
+  const plan = bestFieldAssignment([], fieldPlayers, priorityPositions, score);
+  if (plan) {
+    for (const pos of priorityPositions) {
+      const selected = fieldPlayers.find(p => plan.assign.get(p.id) === pos);
+      lineup.push({ player: selected, position: pos });
+      usedPlayers.add(selected.id);
+    }
+  } else {
+    // 野手が8人に満たない（埋められない）ときは、前と同じく1か所ずつ取る
+    priorityPositions.forEach(pos => {
+      const available = fieldPlayers.filter(p => !usedPlayers.has(p.id));
+      if (available.length === 0) return;
+      available.sort((a, b) => score(b, pos) - score(a, pos));
+      const selected = available[0];
+      lineup.push({ player: selected, position: pos });
+      usedPlayers.add(selected.id);
     });
-
-    const selected = available[0];
-    lineup.push({ player: selected, position: pos });
-    usedPlayers.add(selected.id);
-  });
+  }
 
   // DH制: 打撃専門のDHをベンチから選出
   if (useDH) {

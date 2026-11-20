@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { POS, POS_FULL } from './api.js';
 import {
   useDraftState,
@@ -353,7 +353,19 @@ export default function TapLineup({
       ];
 
   const problems = orderProblems(order, roster);
-  const notes = lineupNotes(order, roster, bench, POS_FULL);
+  // ⚠ 休めるかの見込み（`planRest`）は守備の組み合わせを全部数えるので重い（疲れた先発8人で
+  //    数十ms）。描画のたびに数えず、打順・名簿・次の先発が変わったときだけ（2026-11-20 監査）
+  const notes = useMemo(
+    () =>
+      lineupNotes(
+        order,
+        view.roster || [],
+        benchFielders(view.roster || [], order),
+        POS_FULL,
+        view.nextStarterId,
+      ),
+    [order, view.roster, view.nextStarterId],
+  );
   const nextStarter = byId.get(view.nextStarterId);
   const twoWaySlot = order.find(
     (e) => e.playerId != null && e.playerId === view.nextStarterId,

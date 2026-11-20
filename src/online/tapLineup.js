@@ -30,9 +30,9 @@ import {
   canPlayField,
   LOW_FITNESS,
   REST_FATIGUE,
-  FRESH_FATIGUE,
 } from './lineupEdit.js';
 import { restoreFromFullLineup, sameValue } from './lineupBridge.js';
+import { planRest } from './restPlan.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const HISTORY_LIMIT = 50;
@@ -219,13 +219,24 @@ function replaced(order, index, playerId) {
 
 /**
  * 気になる所（スタメンの枠ごと）。空き・起用できない選手・試合の日に休む疲労・適性の低い守備。
- * ⚠ 判定はPCのスタメン設定と同じ値（`LOW_FITNESS`・`REST_FATIGUE`・`FRESH_FATIGUE`）。
+ * ⚠ 判定はPCのスタメン設定と同じ値（`LOW_FITNESS`・`REST_FATIGUE`）。休めるかはサーバーと同じ
+ *    `planRest`（ほかの先発が守備を移って休める場合も「休みます」）。
  *    文はアプリの「気になる所」と同じ。
- * `positionName` は守備位置の名前（`POS_FULL`）。
+ * `positionName` は守備位置の名前（`POS_FULL`）。`nextStarterId` は次の先発（`view.nextStarterId`）。
+ * ⚠ 次の先発が野手の枠にも居る（二刀流）と、その日は野手の枠を抜ける。サーバーと同じく
+ *    抜けた形で休めるかを数え、その選手には休養の注意を出さない（その日は投げる）。
  */
-export function lineupNotes(order, roster, bench, positionName) {
+export function lineupNotes(order, roster, bench, positionName, nextStarterId = null) {
   const byId = new Map((roster || []).map((p) => [p.id, p]));
   const notes = [];
+  // 試合の日に誰が休むか（サーバーと同じ計算。守備をまとめて組み直す）
+  const field = order
+    .filter((slot) => slot.position !== 'pitcher' && slot.position !== 'dh')
+    .map((slot) => ({ player: byId.get(slot.playerId), position: slot.position }));
+  const rest = field.every((s) => canPlayField(s.player))
+    ? planRest(field, bench || [], nextStarterId ?? null)
+    : null;
+  const resting = new Set(rest?.resting || []);
   order.forEach((slot, index) => {
     const where = positionName[slot.position] || '';
     if (slot.playerId == null) {
@@ -248,18 +259,13 @@ export function lineupNotes(order, roster, bench, positionName) {
       return;
     }
     const fatigue = player.fatigue || 0;
-    if (fatigue >= REST_FATIGUE) {
-      const canRest = (bench || []).some(
-        (p) =>
-          positionFitness(p, slot.position) >= LOW_FITNESS &&
-          (p.fatigue || 0) < FRESH_FATIGUE,
-      );
+    if (fatigue >= REST_FATIGUE && !(nextStarterId != null && player.id === nextStarterId)) {
       notes.push({
         index,
         kind: 'rest',
-        text: canRest
+        text: resting.has(player.id)
           ? `${player.name} 疲労${fatigue}。試合の日は控えと入れ替わって休みます`
-          : `${player.name} 疲労${fatigue}。${where}を守れる控えが居ないので休めません`,
+          : `${player.name} 疲労${fatigue}。守備を組み直しても代わりが居ないので休めません`,
       });
     }
     const fitness = positionFitness(player, slot.position);
