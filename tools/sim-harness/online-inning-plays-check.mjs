@@ -109,6 +109,13 @@ assert.deepEqual(
   const top = inningPlays({ ...box, plays }, 9, 'top').rows;
   assert.deepEqual(top.map((r) => r.outs), [0, 1, 2, 3], 'アウトの数え方が試合のアウトと違う（振り逃げ・盗塁死）');
   assert.equal(top[1].order, null, '走者のアウトに打順が付いている');
+  // 打席の途中に暴投で入った点は打者の点にしない（「三振 1点」と赤く出ていた）
+  const mid = inningPlaysOf(
+    [{ inning: 2, offense: 'A', batterId: 1, delta: { strikeouts: 1 }, outs: 1, scoreBefore: s0, resultScore: { away: 1, home: 0 }, scoreAfter: { away: 1, home: 0 } }],
+    box,
+    { awayScore: 1, homeScore: 0 },
+  );
+  assert.deepEqual(mid['2t'], [[null, '走', 1, 0], [0, '振', 0, 1]], `打席の途中の点が打者の点になっている: ${JSON.stringify(mid['2t'])}`);
   // 前からある試合（行が3要素）は記号から数える古い読み方
   const old = { ...box, plays: { '1t': [[0, '振', 0], [1, '併', 0]] } };
   assert.deepEqual(inningPlays(old, 1, 'top').rows.map((r) => r.outs), [1, 3], '古い試合のアウトが読めない');

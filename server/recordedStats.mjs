@@ -582,8 +582,15 @@ export function inningPlaysOf(events, box, result) {
       // 盗塁死など、打席の途中の走者のアウト（点は後の打席の記録が持つ）
       if (outs > 0) push(e.inning, half, [null, '刺', 0, outs]);
     } else if (e.completed !== false) {
+      // ⚠ 打席の途中（最後の1球の前）に暴投・盗塁などで入った点は「走」の行に分ける。
+      //    分けないと「三振 1点」のように打者の点として赤く出る（2026-11-20 監査）。
+      //    `resultScore` が無い記録では分けない
+      const mid = e.resultScore
+        ? Math.max(0, Math.min(runs, (e.resultScore[side] || 0) - (e.scoreBefore?.[side] || 0)))
+        : 0;
+      if (mid > 0) push(e.inning, half, [null, '走', mid, 0]);
       const idx = index.get(e.offense)?.get(e.batterId);
-      push(e.inning, half, [idx ?? null, playCode(e), runs, outs]);
+      push(e.inning, half, [idx ?? null, playCode(e), runs - mid, outs]);
     } else if (runs > 0 || outs > 0) {
       // ⚠ 打席が終わらなかった打席（サヨナラの暴投・盗塁死の3アウトなど）。打者の行は
       //    足さないが、その間に入った点とアウトは落とさない
