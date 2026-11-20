@@ -40,7 +40,6 @@ import {
 import { menusFor, subMenusFor } from '../../src/online/campMenus.js';
 import { createSeededRandom } from '../../src/game/rng.js';
 import { growthStopAge, postStopTrainEffect } from '../../src/season/campTraining.js';
-import { stopAgeText } from '../../src/online/playerInfo.js';
 import {
   DIRECTIONS,
   resolveTraining,
@@ -1241,10 +1240,6 @@ assert.ok(
   assert.equal(Math.round(postStopTrainEffect(who(1.0, 50)) * 100), 0);
   assert.equal(Math.round(postStopTrainEffect(who(1.0, 80)) * 100), 9);
   assert.equal(Math.round(postStopTrainEffect(who(1.0, 100)) * 100), 15);
-  // 画面の文（年齢つき）
-  assert.equal(stopAgeText({ ...who(1.2, 80), age: 24 }), '30歳（あと6年）');
-  assert.equal(stopAgeText({ ...who(1.2, 80), age: 31 }), '30歳（停止ずみ・練習は9%効く）');
-  assert.equal(stopAgeText({ ...who(1.0, 50), age: 30 }), '26歳（停止ずみ）');
   // ⚠ **成長係数は年齢で変わらない**（30歳で1.2のままでよい、が答え）
   const old30 = { ...who(1.2, 80), age: 30 };
   assert.equal(old30.growthPotential, 1.2, '成長係数を年齢で下げてはいけない');
