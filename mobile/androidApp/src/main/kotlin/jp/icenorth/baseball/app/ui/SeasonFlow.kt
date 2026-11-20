@@ -145,7 +145,15 @@ fun ProDraftCard(model: AppViewModel, whenEmpty: Boolean = false) {
             Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(draftRankText(r), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text(r.name, fontWeight = if (r.team == view.teamName) FontWeight.Bold else FontWeight.SemiBold)
+                    // ⚠ 名前を押すと**指名した時点の能力**が開く（Web 版 ProDraftResult と同じ。いしだ 2026-11-20）。抜かれた選手は
+                    //   名簿に居ないので、サーバーが指名のときに写した `player` を開く。写しの無い古い行は名前のまま
+                    val snapshot = r.player
+                    Text(
+                        r.name,
+                        fontWeight = if (r.team == view.teamName) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (snapshot != null) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                        modifier = if (snapshot != null) Modifier.clickable { model.openPlayer = snapshot } else Modifier,
+                    )
                     Muted("${positionLabel(r.position)}${r.age?.let { "・${it}歳" } ?: ""}")
                 }
                 Muted("${view.teamLabel(r.team)} → ${r.npbTeam}${r.reason?.takeIf { it.isNotBlank() }?.let { "　$it" } ?: ""}")

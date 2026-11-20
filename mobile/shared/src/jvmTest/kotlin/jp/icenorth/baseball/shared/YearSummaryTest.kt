@@ -42,4 +42,16 @@ class YearSummaryTest {
         assertNull(proDraftReward(0, "三陸アトラス"))
         assertTrue(proDraftLead(emptyList(), "三陸", "x").startsWith("このリーグから指名された選手はいませんでした"))
     }
+
+    /** 指名した時点の能力の写し（`player`）を読む。発表の名前を押すと開く（Web 版 ProDraftResult と同じ） */
+    @Test
+    fun proDraftKeepsTheSnapshot() {
+        val c = OnlineJson.decodeFromString<ChronicleView>(
+            """{"proDrafted":[{"year":3,"team":"三陸","name":"甲","player":{"id":7,"name":"甲","position":"pitcher","pitching":{"velocity":150}}},
+               {"year":3,"team":"三陸","name":"乙"}]}""",
+        )
+        val rows = proDraftOfYear(c, 3)
+        assertEquals(150, rows[0].player.at("pitching", "velocity").int())
+        assertNull(rows[1].player)
+    }
 }
