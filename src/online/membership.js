@@ -219,11 +219,15 @@ export const teamDisplayOf = (team) => ({
 });
 
 // 略称の判定は `shared.js` の `findShortClash`（Web の小窓と同じもの）
-function assertShortFree(league, team, patch) {
+function shortClashOf(league, team, patch) {
   const next = teamDisplayOf({ ...team, ...patch }).short;
   const entries = (league.teams || []).map((t) => ({ name: t.name, ...teamDisplayOf(t) }));
   const clash = findShortClash(entries, team.name, next);
-  if (clash) requireOnline(false, shortClashMessage(next, clash), 409);
+  return clash ? shortClashMessage(next, clash) : null;
+}
+function assertShortFree(league, team, patch) {
+  const message = shortClashOf(league, team, patch);
+  if (message) requireOnline(false, message, 409);
 }
 
 /**
@@ -253,7 +257,14 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
     const shown = `${city}${nick}`.trim() || team.name;
     // ⚠ 断るかどうかは**書き換える前に**決める（地方だけ先に書いてから断っていた）
     assertTeamNameFree(league, team, shown);
-    assertShortFree(league, team, { displayCity: city || undefined, displayName: shown });
+    // ⚠ **正式名が変わらないなら断らない**。分けずに付け替えた古い球団（例「旭川」の枠を
+    //    「旭川ホワイトベアーズ」にした。略称「旭川ホ」）は小窓の地域名が「旭川」で埋まって
+    //    開くので、ほかの球団が「旭川」だと何も打たないうちから断られ、ひとことすら直せ
+    //    なかった（2026-11-20 監査）。そのときは名前を今の形のまま残し、ぶつかる略称にはしない
+    const sameName = shown === (team.displayName || team.name);
+    const splitClash = shortClashOf(league, team, { displayCity: city || undefined, displayName: shown });
+    if (!sameName && splitClash) requireOnline(false, splitClash, 409);
+    const keepName = sameName && splitClash;
     // ⚠ **地方は先に選ぶ**（いしだ 2026-11-20）。選べば地域名は自由に書けて、地元も付く。
     //    知らないidは断る（画面の一覧＝`REGION_OPTIONS` 以外は入れない）
     if (region !== undefined) {
@@ -265,10 +276,12 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
       );
       team.displayRegion = picked || undefined;
     }
-    team.displayCity = city || undefined;
-    team.displayNickname = nick || undefined;
-    team.displayName = shown;
-    member.displayName = shown;
+    if (!keepName) {
+      team.displayCity = city || undefined;
+      team.displayNickname = nick || undefined;
+      team.displayName = shown;
+      member.displayName = shown;
+    }
   } else if (teamName !== undefined) {
     const shown = String(teamName || '').trim() || team.name;
     assertTeamNameFree(league, team, shown);

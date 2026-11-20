@@ -258,12 +258,19 @@ export function RenameDialog({ view, busy, run, command, close }) {
   // ⚠ ほかの球団と略称（＝地域名）がぶつかるなら、保存する前に知らせる
   //    （判断1。サーバーも断る。略称の作り方と判定は `shared.js` の `shortNameOf`・
   //    `findShortClash` 1か所。リーグを問わず全球団と、ほかの枠の既定の略称と比べる）
-  const nextShort = shortNameOf({ city: city.trim(), shown: teamName, name: view.teamName, base: labels.base });
-  const shortClash = findShortClash(
+  // ⚠ **正式名が変わらないなら断らない**（サーバーの `applyProfile` と同じ）。分けずに付け替えた
+  //    古い球団（「旭川ホワイトベアーズ」・略称「旭川ホ」）は地域名が「旭川」で埋まって開くので、
+  //    ほかの球団が「旭川」だと何も打たないうちから保存できず、ひとことも直せなかった。
+  //    そのときサーバーは名前を今の形のまま残すので、狭い欄の名前もいまの略称で見せる
+  const sameName = teamName === (labels.label || view.teamName);
+  const splitClash = findShortClash(
     Object.entries(view.teamLabels || {}).map(([name, l]) => ({ name, short: l.short, base: l.base, label: l.label })),
     view.teamName,
-    nextShort,
+    shortNameOf({ city: city.trim(), shown: teamName, name: view.teamName, base: labels.base }),
   );
+  const shortClash = sameName ? null : splitClash;
+  const nextShort =
+    sameName && splitClash ? labels.short : shortNameOf({ city: city.trim(), shown: teamName, name: view.teamName, base: labels.base });
   const [playerName, setPlayerName] = useState(() => me?.label || '');
   // オーナーのひとこと（順位表・球団の画面・紙面に出す）
   const [comment, setComment] = useState(() => me?.comment || '');

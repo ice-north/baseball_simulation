@@ -534,6 +534,26 @@ import {
       assert.equal(teamDisplayOf(l.teams[0]).short, '旭川');
       assert.equal(l.members[0].comment?.text, 'がんばる', 'ぶつかったままの保存データでひとことを直せない');
     }
+    // 分けずに付け替えた古い球団（「旭川」の枠を「旭川ホワイトベアーズ」に。略称「旭川ホ」）は、
+    // 小窓が地域名「旭川」で埋まって開く。ほかの球団が既に「旭川」でも、正式名を変えない保存
+    // （ひとことだけ直す）は通し、名前は今の形のまま残す（2026-11-20 監査。何も打たないうちから
+    // 断られ、ひとことすら直せなかった）。正式名を変えるなら今までどおり断る
+    {
+      const l = fresh();
+      Object.assign(l.teams[1], { displayName: '旭川ホワイトベアーズ' });
+      Object.assign(l.teams[0], { displayName: '旭川ブリザーズ', displayCity: '旭川', displayNickname: 'ブリザーズ' });
+      l.members.push({ userId: 'w', teamName: '旭川スターズ' });
+      assert.equal(teamDisplayOf(l.teams[1]).short, '旭川ホ', '前提: 分けずに付け替えた球団の略称');
+      assert.equal(teamCityOf(l.teams[1]), '旭川', '前提: 小窓の地域名が既定の都市で埋まる');
+      applyProfile(l, { userId: 'w', cityName: '旭川', nickname: 'ホワイトベアーズ', comment: '今年こそ' });
+      assert.equal(l.members.at(-1).comment?.text, '今年こそ', '正式名を変えないのに断られてひとことを直せない');
+      assert.equal(teamDisplayOf(l.teams[1]).short, '旭川ホ', '断らない代わりにぶつかる略称へ変えてしまった');
+      assert.throws(
+        () => applyProfile(l, { userId: 'w', cityName: '旭川', nickname: 'ベアーズ' }),
+        (e) => e.status === 409,
+        '正式名を変えてぶつかる略称になるのを通した',
+      );
+    }
     // Web の小窓が使う判定（ビューの `teamLabels`・`teamLeagues` から作る）
     {
       const entries = [
