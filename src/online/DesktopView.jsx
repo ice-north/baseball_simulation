@@ -33,6 +33,7 @@ import { nextAdvanceText, STATUS } from './api.js';
 import { formatTurn, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
 import { teamLabel } from './gameText.js';
+import { KNOWN_CITIES, prefsOfCity } from './hometown.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { formatDeadline, packStartText } from './LeaguePanels.jsx';
 import { CompactRoster } from './PlayerPerformance.jsx';
@@ -288,12 +289,21 @@ export function RenameDialog({ view, busy, run, command, close }) {
       >
         <label>
           地域名
+          {/* ⚠ **知っている地名は候補に出す**（いしだ 2026-11-20「地域名は、どこでも
+              地元にできるのですか？」）。地元を判定できるのはこの119か所だけ。
+              自由に書いてもよいが、そのときは地元が付かないことを下の行で知らせる */}
           <input
+            list="online-city-options"
             value={city}
             maxLength={8}
             disabled={busy}
             onChange={(e) => setCity(e.target.value)}
           />
+          <datalist id="online-city-options">
+            {KNOWN_CITIES.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
         </label>
         <label>
           チーム名
@@ -307,7 +317,13 @@ export function RenameDialog({ view, busy, run, command, close }) {
         {/* ⚠ 2つに分けたぶん、**出来上がりをその場で見せる**（略称が地域名になることも） */}
         <p className="online-muted online-rename-preview">
           球団名は「{teamName || '（未入力）'}」、狭い欄では「{city || teamName || '（未入力）'}」と出ます。
-          地域名は地元紙の「地元出身」にも使います。
+          {/* ⚠ 地元を判定できるかを**その場で**出す。できない地名のときに黙っていると、
+              「チーム名を変えても地元が変わらない」と見える */}
+          {prefsOfCity(city).length
+            ? `地元は${prefsOfCity(city).join('・')}として扱います（地元出身の選手が紙面に出ます）。`
+            : city
+              ? 'この地域名は地元を判定できません（地元出身の記事は出ません）。候補から選ぶと付きます。'
+              : '地域名は地元紙の「地元出身」にも使います。'}
         </p>
         <label>
           あなたの名前

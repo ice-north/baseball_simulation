@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
+import { KNOWN_CITIES } from '../../src/online/hometown.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
@@ -453,6 +454,23 @@ try {
       preview.includes('美瑛ブルーレイクス') && preview.includes('「美瑛」'),
       `出来上がりと略称が出ていない: ${preview}`,
     );
+    // ⚠ **地元を判定できない地名はそう言う**（いしだ 2026-11-20「地域名は、どこでも
+    //    地元にできるのですか？判定できるの？」）。「美瑛」は知っている119か所に無い
+    assert.ok(
+      preview.includes('地元を判定できません'),
+      `判定できない地域名で黙っている: ${preview}`,
+    );
+    // 知っている地名なら県を出す
+    await cityBox.fill('旭川');
+    const known = await rename.locator('.online-rename-preview').innerText();
+    assert.ok(known.includes('北海道'), `知っている地名で地元を出していない: ${known}`);
+    // 候補の一覧（知っている地名）を添える
+    assert.equal(
+      await rename.locator('#online-city-options option').count(),
+      KNOWN_CITIES.length,
+      '地域名の候補の数が表と違う',
+    );
+    await cityBox.fill('美瑛');
   }
   await rename.getByRole('button', { name: '閉じる', exact: true }).click();
   await rename.waitFor({ state: 'hidden' });

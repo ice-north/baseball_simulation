@@ -35,6 +35,18 @@ export const CITY_PREFS = {
   筑豊: ['福岡'], 島原: ['長崎'], 天草: ['熊本'], 阿蘇: ['熊本'], 霧島: ['鹿児島'],
 };
 
+/**
+ * 地元として**判定できる地名**（`CITY_PREFS` の鍵。`pyramidLeague.js` の CITIES と同じ119か所）。
+ * ⚠ いしだ 2026-11-20「地域名は、どこでも地元にできるのですか？判定できるの？」。
+ *    できない。表に無い地名（自分で付けた「美瑛」など）は県が引けないので、
+ *    地元出身の記事は出ない。名前を変える小窓はこの一覧を候補に出し、
+ *    引けるかどうかをその場で知らせる（`DesktopView.jsx` の `RenameDialog`）。
+ */
+export const KNOWN_CITIES = Object.keys(CITY_PREFS);
+
+/** その地名の都道府県（複数のことがある）。判定できなければ空の配列 */
+export const prefsOfCity = (city) => CITY_PREFS[String(city || '').trim()] || [];
+
 /** 選手の出身（世界の選手。高校 `{ name, pref }`・大学の名前） */
 const schoolOf = (p) => p?.highSchool?.name || null;
 const universityOf = (p) => p?.universityTeamName || p?.universityName || null;
