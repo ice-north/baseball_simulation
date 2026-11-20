@@ -646,6 +646,8 @@ try {
   assert.ok(Number.isInteger(played.result.homeScore) && Number.isInteger(played.result.awayScore));
   assert.equal(played.result.home, C, '受けた側がホームでない');
   assert.ok(played.result.teams[A]?.length > 8, '練習試合のボックスが無い');
+  // 回ごとの攻撃は練習試合の画面が読まないので残さない（2026-11-20 監査。保存の無駄）
+  assert.equal(played.result.plays, undefined, '練習試合の箱に読まない plays が残っている');
   // ⚠ 成績・疲労・調子・記録・順位・日程に入らない
   for (const name of [A, C])
     assert.deepEqual(
