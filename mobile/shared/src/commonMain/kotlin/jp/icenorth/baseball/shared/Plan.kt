@@ -77,9 +77,14 @@ data class PlanDraft(
                 put(
                     "tactics",
                     buildJsonObject {
-                        base["tactics"].obj()?.forEach { (k, v) -> put(k, v) }
+                        val saved = base["tactics"].obj()
+                        saved?.forEach { (k, v) -> put(k, v) }
                         TACTIC_FIELDS.forEach { f ->
                             val value = tactics[f.key] ?: f.default
+                            // ⚠ 既定のままで、元の自動采配にも無い項目は送らない（監査 2026-11-21）。古いサーバーは
+                            //    知らない項目を「未対応の采配項目です」で弾くので、アプリに項目を足すと
+                            //    （例: 休養の目安 `restLine`）サーバーより先に配ったアプリで編成が保存できなくなる
+                            if (value == f.default && saved?.containsKey(f.key) != true) return@forEach
                             if (f.numeric) put(f.key, JsonPrimitive(value.toIntOrNull() ?: 0)) else put(f.key, value)
                         }
                     },

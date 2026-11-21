@@ -2,6 +2,8 @@ package jp.icenorth.baseball.shared
 
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -97,12 +99,26 @@ class LogicTest {
         assertEquals(draft.swapBatters(0, 3), history.undo().present)
         assertEquals("aggressive", history.undo().redo().present.strategy["batting"])
         assertTrue(history.undo().undo().present.sameEdit(draft))
-        // 自動采配は既定のままなら送らない、変えたら全項目を送る
+        // 自動采配は既定のままなら送らない、変えたら変えた項目を送る
+        // ⚠ 既定のままで元に無い項目は送らない（監査 2026-11-21）。サーバーが既定で埋める。古いサーバーは
+        //    知らない項目（`restLine` など）を「未対応の采配項目です」で弾くので、全項目を送ると先に配ったアプリで保存できない
         if (typed.lineup!!["tactics"] == null) {
             assertEquals(null, payload["tactics"])
             val changed = draft.withTactic("starterLimit", "100").toPayload()
             assertEquals(100, changed.at("tactics", "starterLimit").int())
-            assertEquals("auto", changed.at("tactics", "hook").str())
+            assertEquals(null, changed.at("tactics", "hook"))
+            assertEquals(null, changed.at("tactics", "restLine"))
+        }
+        // 元の自動采配にある項目は既定でもそのまま返す（古いサーバーの塊に `restLine` が無ければ足さない）
+        run {
+            val old = buildJsonObject {
+                draft.base.forEach { (k, v) -> put(k, v) }
+                put("tactics", buildJsonObject { put("hook", "auto"); put("starterLimit", 80) })
+            }
+            val p = PlanDraft.from(old, emptyList()).withTactic("starterLimit", "100").toPayload()
+            assertEquals("auto", p.at("tactics", "hook").str())
+            assertEquals(100, p.at("tactics", "starterLimit").int())
+            assertEquals(null, p.at("tactics", "restLine"))
         }
     }
 
