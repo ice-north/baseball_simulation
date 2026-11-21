@@ -109,6 +109,32 @@ export const TALENT_STAT_MULTIPLIERS = {
   velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
 };
 
+/**
+ * 努力で上がる能力の天井（いしだ 2026-11-21「体力や守備、スタミナ、体幹、サブポジなどの
+ * 努力で上がるものに関しては、制限をゆるくしたいところです」）。
+ * 才能で決まる能力（ミート・パワー・選球眼・制球）より**ずっと緩い**。
+ *
+ * ⚠ **いま入っているのは守備だけ**。ご指摘の残り4つは、測ったら元から減衰を受けていない。
+ *    ・体幹（`muscle`）… サブ練習「ウエイト」が確定で +2〜4。減衰なし・99で止まるだけ
+ *    ・体力（`bodyStamina`）… サブ練習「基礎体力」が確定で +2〜4。**主練習の対象ではない**
+ *      （実測: 体力88から4クールのサブで99まで到達）
+ *    ・サブポジ（`positionFitness`）… ノックとサブ練習が確定で +4〜8。減衰なし・100で止まる
+ *    ・スタミナ（`stamina`）… 1クールの計算値が常に1未満で、**「最低+1」の規則が
+ *      すべてを決めている**（実測: スタミナ90でも190でも・意識50でも90でも 4クールで +4.0）。
+ *      天井を足しても一度も効かないので入れない。効かせたいならメニューの係数
+ *      （`control` の `stamina: 0.5`）の側を上げること。
+ * ⚠ 守備は `TECHNICAL_STATS` なので、放っておくと技術系の天井（50から3%）を受ける。
+ *    それだと**ノックで守備を積む**という一番素直な育て方が潰れる（実測の到達点 79.9）。
+ *    才能で決まるミート・パワーとは別の物差しにする。
+ */
+const EFFORT_DAMP = {
+  // 守備70までは減衰ゼロ＝ノックが素直に効く。70から1点ごとに5%（85で25%・90で下限）
+  //   実測の到達点（能力38の19歳から毎年4クールのノック・34歳まで）:
+  //     意識90/器用80 → 88.8（技術系のままなら 79.9 / 今朝までの65から4%なら 86.3）
+  //     標準（意識50） → 68.2（技術系のままなら 65.6 / 65から4%なら 66.2）
+  defense: { from: 70, rate: 0.05, floor: 0.15 },
+};
+
 export const TRAINING_MENUS = {
   batting: {
     name: '打撃練習',
@@ -1366,6 +1392,17 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         //      上位の青天井だけを塞ぐ変更（いしだの選んだ案1）。
         if (currentValue >= 50)
           dampFactor = Math.max(0.15, 1.0 - (currentValue - 50) * 0.03);
+      }
+      // ⚠ 努力で上がる能力は天井を別に持つ（`EFFORT_DAMP` の注を見ること）。
+      //    上の技術系・フィジカル系の判定を**上書きする**ので、順番を変えないこと
+      // ⚠ **置き換えること**（上の判定に足すのではない）。しきい値の下では 1.0 に戻す。
+      //    ここを `if (effort && currentValue >= effort.from)` にすると、守備60では
+      //    技術系の 0.70 が残ったままになる（実測 +2.2 のまま変わらなかった）
+      const effort = EFFORT_DAMP[targetStat];
+      if (effort) {
+        dampFactor = currentValue >= effort.from
+          ? Math.max(effort.floor, 1.0 - (currentValue - effort.from) * effort.rate)
+          : 1.0;
       }
       const adjustedBaseGrowth = Math.max(0, stochasticRound(rawGrowth * growthMult * dampFactor));
 

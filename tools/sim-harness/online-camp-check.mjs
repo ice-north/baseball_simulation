@@ -1294,16 +1294,23 @@ assert.ok(
   assert.ok(high.max <= 6, `能力80台が4クールで跳ねすぎ: 最大+${high.max}`);
   assert.ok(high.mean <= low.mean, `高い能力の方が伸びている: ${high.mean.toFixed(2)} / ${low.mean.toFixed(2)}`);
   // ⚠ **ノックは守備が伸びる**（いしだ 2026-11-20「ノックの守備の伸びが弱い」）。
-  //    守備60で4クール平均+2.0以上。
-  // ⚠ 目安を 2.5 → 2.0 に下げたのは、技術系の減衰のしきい値を 65 → 50 にしたぶん
-  //    守備60が3割引かれるため（いしだ 2026-11-21・案1）。**しきい値の下は据え置き**で、
-  //    守備40なら4クール平均は変わっていない。下の `knockLow` で押さえる
+  //    守備60で4クール平均+2.5以上。
+  // ⚠ 守備は**努力で上がる能力**なので、技術系（50から3%）ではなく専用の天井
+  //    （70から2%・下限25%。`EFFORT_DAMP`）を持つ。いしだ 2026-11-21「体力や守備、
+  //    スタミナ、体幹、サブポジなどの努力で上がるものに関しては、制限をゆるくしたい」。
+  //    **ここを技術系に戻すと守備60の伸びが3割落ちる**（実測 +2.6 → +2.2）
   const knock = fourRounds(60, 'fielding', defOf);
-  assert.ok(knock.mean >= 2.0, `ノックの守備が弱い: 平均+${knock.mean.toFixed(2)}`);
+  assert.ok(knock.mean >= 2.5, `ノックの守備が弱い: 平均+${knock.mean.toFixed(2)}`);
   const knockLow = fourRounds(40, 'fielding', defOf);
   assert.ok(
     knockLow.mean >= 2.5,
     `しきい値の下のノックまで弱くなっている: 守備40で平均+${knockLow.mean.toFixed(2)}`,
+  );
+  // ⚠ ただし**青天井ではない**。守備85では鈍る（下限25%）
+  const knockHigh = fourRounds(85, 'fielding', defOf);
+  assert.ok(
+    knockHigh.mean < knock.mean * 0.7,
+    `高い守備が鈍っていない: 守備85で平均+${knockHigh.mean.toFixed(2)} / 守備60で+${knock.mean.toFixed(2)}`,
   );
   // ⚠ ノックは**今の守備位置の適性**も上げる（確定で+4〜8/クール）
   assert.ok(knock.fit >= 16, `ノックで守備位置の適性が上がっていない: +${knock.fit.toFixed(1)}`);
