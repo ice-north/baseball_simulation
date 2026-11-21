@@ -59,6 +59,7 @@ import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.BatterSlot
 import jp.icenorth.baseball.shared.EditHistory
 import jp.icenorth.baseball.shared.FIELDER_REST_FATIGUE
+import jp.icenorth.baseball.shared.restFatigueOf
 import jp.icenorth.baseball.shared.FIELD_POSITIONS
 import jp.icenorth.baseball.shared.positionGroup
 import jp.icenorth.baseball.shared.FIELDER_GROUP_LABELS
@@ -306,8 +307,10 @@ private fun OrderEditor(
     // ⚠ RestPlan.plan は守備の組み合わせを全部数えるので重い。ドラッグ中の再描画のたびに数えず、
     //    守備の顔ぶれ（打順の並びは見ない）・名簿・控え・次の先発が変わったときだけ数える（2026-11-20 監査）
     val fieldSet = draft.slots.toSet()
-    val restingIds = remember(fieldSet, players, bench, nextId) { restingOf(draft.slots, players, bench, nextId) }
-    val notes = orderNotes(draft, players, restingIds, nextId)
+    // 休ませる目安（自動采配の「疲れた野手を休ませる目安」。保存前の選び直しも見込みに入れる）
+    val restAt = restFatigueOf(draft.tactics["restLine"])
+    val restingIds = remember(fieldSet, players, bench, nextId, restAt) { restingOf(draft.slots, players, bench, nextId, restAt) }
+    val notes = orderNotes(draft, players, restingIds, nextId, restAt)
     val pickedStarter = (picked as? OrderPick.Starter)?.index?.let { draft.slots.getOrNull(it) }
     val pickedBench = (picked as? OrderPick.Bench)?.id?.let { players[it] }
     /** 選んでいる行と入れ替えたら、この行の人はどこをどの適性で守るか */
@@ -538,13 +541,13 @@ private class OrderNote(val position: String, val text: String, val action: Stri
  * 試合の日に誰が休むか（サーバーと同じ計算 RestPlan。ほかの先発が守備を移って休める場合もある）。
  * ⚠ 次の先発（nextId）が野手の枠にも居る二刀流なら、その日は抜けた形で数える（Web 版 lineupNotes と同じ）
  */
-private fun restingOf(slots: List<BatterSlot>, players: Map<Long, Player>, bench: List<Player>, nextId: Long?): Set<Long> {
+private fun restingOf(slots: List<BatterSlot>, players: Map<Long, Player>, bench: List<Player>, nextId: Long?, restAt: Int): Set<Long> {
     val field = slots.mapNotNull { s -> players[s.playerId]?.takeIf { it.isActive }?.let { RestPlan.Starter(it, s.position) } }
-    return (if (field.size == slots.size) RestPlan.plan(field, bench, nextId) else null)?.resting?.toSet().orEmpty()
+    return (if (field.size == slots.size) RestPlan.plan(field, bench, nextId, restAt) else null)?.resting?.toSet().orEmpty()
 }
 
 @Composable
-private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, resting: Set<Long>, nextId: Long?): List<OrderNote> {
+private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, resting: Set<Long>, nextId: Long?, restAt: Int): List<OrderNote> {
     val notes = mutableListOf<OrderNote>()
     draft.slots.forEachIndexed { index, slot ->
         val p = players[slot.playerId]
@@ -554,7 +557,7 @@ private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, resting: Se
         }
         val fatigue = p.fatigue ?: 0
         // その日に投げる二刀流の選手には休養の注意を出さない（野手の枠を抜ける）
-        if (fatigue >= FIELDER_REST_FATIGUE && p.id != nextId) {
+        if (fatigue >= restAt && p.id != nextId) {
             notes += OrderNote(
                 slot.position,
                 if (p.id in resting) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"
@@ -936,7 +939,7 @@ private val ORDER_HELP = listOf(
     "選手（守備の札か名前）を押して選び、ほかのスタメンを押すと守備位置を入れ替え、控えを押すと交代します。控えから選んでスタメンを押しても交代です。選んでいる間は、各行の名前の下に「入れ替えたら誰がどこをどの適性で守るか」が出ます。",
     "行はふだん名前と今季成績の2段です。右上の「成績のみ」を押すと能力（ミ パ 眼 走｜守 肩）の段も出ます（端末に覚えます）。成績の段の右端は、ほかに守れる位置の適性です。",
     "守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
-    "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その日だけ控え（疲労${SUBSTITUTE_FRESH_FATIGUE}未満）と入れ替わって休みます。ほかの先発の守備を移すこともあり、どの守備も適性${SUBSTITUTE_MIN_FITNESS}以上で組めるときだけ休みます（疲労${FIELDER_FORCE_REST_FATIGUE}以上は組めなくても休みます）。",
+    "試合の日に疲労${FIELDER_REST_FATIGUE}以上（自動采配の「疲れた野手を休ませる目安」で早め60・遅め100にもできます）の野手は、その日だけ控え（疲労${SUBSTITUTE_FRESH_FATIGUE}未満）と入れ替わって休みます。ほかの先発の守備を移すこともあり、どの守備も適性${SUBSTITUTE_MIN_FITNESS}以上で組めるときだけ休みます（疲労${FIELDER_FORCE_REST_FATIGUE}以上は組めなくても休みます）。",
     "疲労は41以上で黄（成長が鈍り始める）、${FIELDER_REST_FATIGUE}以上で赤です。",
 )
 

@@ -388,12 +388,20 @@ function Leaders({ view }) {
                         </span>
                         <span className="online-leader-name">
                           {/* 名前を押すと選手の詳細（能力・成績）を開く（先方要望 2026-11） */}
-                          <TeamPlayerButton
-                            view={view}
-                            team={row.team}
-                            id={row.id}
-                            name={row.name}
-                          />
+                          {/* ⚠ 今年プロに指名された選手（`pro`）はもう名簿に居ないので押せない。名前に「プロへ」と添える */}
+                          {row.pro ? (
+                            <>
+                              {row.name}
+                              <small className="online-leader-pro">プロへ</small>
+                            </>
+                          ) : (
+                            <TeamPlayerButton
+                              view={view}
+                              team={row.team}
+                              id={row.id}
+                              name={row.name}
+                            />
+                          )}
                         </span>
                         {/* ⚠ 球団名は名前と別の欄にして、名前が長くても切らない
                             （先方指摘 2026-11-16: 小さい灰色で読めない・名前が「…」で切れる） */}

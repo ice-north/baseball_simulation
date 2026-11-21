@@ -298,13 +298,28 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
             LINK_GAMES,
         )
     }
-    // プロ注目（飾り。リーグ全体の能力ランキングから若い選手を）
+    // プロ注目。ドラフトの気配（`proWatch`）があれば本物（リーグ全体で NPB が見ている選手）、
+    // 無ければ飾り（能力ランキングから若い選手を）
+    val watch = watchRows(raw)
+    if (watch != null && watch.isNotEmpty()) {
+        val w = pen.pick(watch, 40)
+        val team = view.teamShort(w.team)
+        val hot = watch.count { it.hot }
+        articles += FrontPage.Article(
+            "ドラフト戦線",
+            if (w.hot) pen.pick(listOf("${w.npb}、${team}の${w.name}に接触", "${w.name}（${team}）に${w.npb}が接触"), 43)
+            else pen.pick(listOf("${w.npb}が${team}の${w.name}に熱視線！", "${w.npb}、${w.name}（${team}）を視察"), 44),
+            "${team}の${w.name}に、${w.npb}のスカウトが${if (w.hot) "接触した。指名の候補に挙げているという。" else "足を運んだ。"}" +
+                (if (watch.size >= 2) "このリーグでプロが追う選手は${watch.size}人${if (hot > 0) "、うち接触は${hot}人" else ""}。" else ""),
+            LINK_GAMES,
+        )
+    }
     val ability = raw?.at("abilityLeaders").list().mapNotNull { it.obj() }
     val scout = listOf("velocity" to "最速", "power" to "パワー", "speed" to "走力", "meet" to "ミート").mapNotNull { (id, label) ->
         val b = ability.firstOrNull { it.at("id").str() == id } ?: return@mapNotNull null
         b.at("rows").list().mapNotNull { it.obj() }.firstOrNull { (it.at("age").int() ?: 99) <= 25 }?.let { Triple(label, it, id) }
     }
-    if (scout.isNotEmpty()) {
+    if (watch == null && scout.isNotEmpty()) {
         val (label, row, id) = pen.pick(scout, 40)
         val name = row.at("name").str().orEmpty()
         val team = view.teamShort(row.at("team").str().orEmpty())

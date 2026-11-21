@@ -295,6 +295,14 @@ export function seasonStage({ phaseKind, regularLeft, regularPlayed, date }) {
 // ⚠ 画面はこの値で色を変え・説明を書く。サーバーと別に持つとずれるので、ここだけに置く。
 /** 野手はこの疲労以上だと、その日だけ控えと入れ替えて休ませる */
 export const FIELDER_REST_FATIGUE = 80;
+/**
+ * 休ませる目安ごとの疲労（自動采配の「疲れた野手を休ませる目安」`restLine`。`tactics.js`）。
+ * 標準は `FIELDER_REST_FATIGUE`。疲労の打撃への響きは 疲労²/1200（60→-3・80→-5・100→-8）。
+ * ⚠ アプリは gen-tables で同じ表（Tables.kt の REST_LINES）
+ */
+export const REST_LINES = { standard: FIELDER_REST_FATIGUE, early: 60, late: 100 };
+/** その球団の休ませる目安の疲労（`team.onlineTactics`） */
+export const restFatigueOf = (tactics) => REST_LINES[tactics?.restLine] ?? FIELDER_REST_FATIGUE;
 /** 休ませる野手の代役に選べる守備適性の下限 */
 export const SUBSTITUTE_MIN_FITNESS = 60;
 /** 休ませる野手の代役に選べる控えの疲労（これ未満の控えだけが代役になる） */

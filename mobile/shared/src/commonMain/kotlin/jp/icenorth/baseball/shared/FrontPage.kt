@@ -442,8 +442,8 @@ fun buildFrontPage(
         val (speaker, temper) = commentSpeaker(view)
         commentArticle(speaker, tone, situation, pen, temper)?.let { articles += it }
     }
-    // プロ注目（飾り。NPBのスカウトが見に来ている、という話だけで、選手は抜かれない）
-    scoutArticle(view.roster, me, view.year, date, pen)?.let { articles += it }
+    // プロ注目（ドラフトの気配 `proWatch` があれば本物、無ければ飾り）
+    scoutArticle(view.roster, me, view.year, date, pen, watchRows(raw), team, facts, sit)?.let { articles += it }
     // 同窓・地元の縁（サーバーが作る記事。地元出身・次の相手との同窓対決。飾り。src/online/hometown.js）
     // ⚠ 毎日同じ記事が並ばないよう、日ごとに1本だけ（同窓対決があればそちらを先に）
     view.ties.takeIf { it.isNotEmpty() }?.let { ties ->

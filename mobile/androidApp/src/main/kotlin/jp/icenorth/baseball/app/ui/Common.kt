@@ -327,6 +327,27 @@ private val RowHeight = 40.dp
 private val NameWidth = 118.dp
 
 /**
+ * ドラフトの気配の札（黄色。「西武注目」「中日接触」）。サーバーが名簿の選手に付ける `proWatch`
+ * （server/proDraft.mjs の proWatchList。噂の出た日から指名の日まで）。⚠ Web 版は `ProWatchBadge`（同じ文）
+ */
+@Composable
+fun ProWatchChip(watch: kotlinx.serialization.json.JsonElement?, modifier: Modifier = Modifier) {
+    val npb = watch.at("npb").str() ?: return
+    val hot = watch.at("level").str() == "hot"
+    Text(
+        npb + if (hot) "接触" else "注目",
+        modifier = modifier
+            .background(if (hot) Color(0xFFFFB300) else Color(0xFFF5C518), RoundedCornerShape(3.dp))
+            .padding(horizontal = 4.dp),
+        fontSize = 9.sp,
+        lineHeight = 12.sp,
+        fontWeight = FontWeight.Bold,
+        color = Color(0xFF3A2C00),
+        maxLines = 1,
+    )
+}
+
+/**
  * 成績の表（PC版の「成績一覧」と同じ1つの形）。名前の列は固定し、数字の列だけ横に流す。
  * 見出しを押すと並べ替え（もう一度押すと逆順）。名前を押すと選手の詳細。
  */
@@ -378,7 +399,10 @@ fun StatTable(
                             overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        Text(sub(p), fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(sub(p), fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            ProWatchChip(p.at("proWatch"), Modifier.padding(start = 4.dp))
+                        }
                     }
                 }
             }

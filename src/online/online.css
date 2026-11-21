@@ -7637,3 +7637,78 @@ table.paper-table {
   font-size: 18px;
   font-weight: 700;
 }
+
+/* ドラフトの気配の札（黄色。`ProWatchBadge`）。名前の横に小さく */
+.online .online-pro-watch {
+  display: inline-block;
+  margin-left: 0.35em;
+  padding: 0 0.4em;
+  border-radius: 3px;
+  background: #f5c518;
+  color: #3a2c00;
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1.5;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.online .online-pro-watch.is-hot {
+  background: #ffb300;
+  box-shadow: 0 0 0 1px #8a5a00 inset;
+}
+/* 個人成績ランキングの「プロへ」（今年プロに指名されて名簿を離れた選手） */
+.online .online-leader-pro {
+  margin-left: 0.3em;
+  padding: 0 0.3em;
+  border-radius: 3px;
+  background: #f5c518;
+  color: #3a2c00;
+  font-size: 0.7em;
+  font-weight: 700;
+}
+/* リーグ史の歴代タイトル（年ごとの小さな表を並べる） */
+.online .online-title-history {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.online .online-title-history caption {
+  text-align: left;
+  font-weight: 700;
+  padding-bottom: 4px;
+}
+/* トライアウト: ほかの球団のリスト（`ListedBy`）。赤＝自分より先に指名する球団 */
+.online .online-tryout-listed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.online .online-tryout-listed-team {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 0.7em;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.online .online-tryout-listed-team.is-first {
+  background: #dc2626;
+  color: #fff;
+}
+/* 契約更改のコーチ打診（投手C・野手C）。2つ並べて1つのセルに */
+.online .online-contract-offer {
+  white-space: nowrap;
+}
+.online .online-contract-offer .online-contract-release {
+  padding: 2px 8px;
+  margin-left: 4px;
+}
+.online .online-contract-offer .online-contract-release.is-on {
+  background: #1d4ed8;
+  border-color: #93c5fd;
+}

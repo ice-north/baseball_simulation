@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.mutableStateOf
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
@@ -165,12 +166,14 @@ fun LeadersBoard(view: LeagueView, boards: List<JsonObject>, onPlayer: ((team: S
             val team = row.at("team").str().orEmpty()
             val name = row.at("name").str().orEmpty()
             val id = row.at("id").num()?.toLong()
+            // ⚠ 今年プロに指名されて名簿を離れた選手（`pro`）は押せない。名前に「（プロへ）」と添える（Web の Leaders と同じ）
+            val pro = row.at("pro").bool() == true
             Row(
-                Modifier.fillMaxWidth().then(if (onPlayer != null) Modifier.clickable { onPlayer(team, id, name) } else Modifier).padding(vertical = 6.dp),
+                Modifier.fillMaxWidth().then(if (onPlayer != null && !pro) Modifier.clickable { onPlayer(team, id, name) } else Modifier).padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("${i + 1}", modifier = Modifier.width(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(row.at("name").str().orEmpty(), fontWeight = if (mine) FontWeight.Bold else FontWeight.Normal, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                Text(row.at("name").str().orEmpty() + if (pro) "（プロへ）" else "", fontWeight = if (mine) FontWeight.Bold else FontWeight.Normal, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                 // ⚠ 球団名は小さい灰色にしない（先方指摘 2026-11-16: 読めない）。Web の Leaders と同じ
                 Text(view.teamShort(row.at("team").str().orEmpty()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(end = 12.dp))
                 val v = row.at("value").num()

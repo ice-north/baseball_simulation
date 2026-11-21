@@ -677,7 +677,10 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     val roster = raw.at("roster").list().mapNotNull { it.obj() }
     val releases = plan.at("releaseIds").list().mapNotNull { it.long() }
     val advice = raw.at("phase", "releaseAdvice").obj()
-    val remaining = roster.filter { it.pid !in releases }
+    // コーチ打診（役職 → 選手id。Web 版 ContractPlanner と同じ）
+    val offers = COACH_OFFER_ROLES.associate { (role, _) -> role to plan.at("coachOffers", role).long() }
+    val offered = offers.values.filterNotNull().toSet()
+    val remaining = roster.filter { it.pid !in releases && it.pid !in offered }
     // ⚠ 先方指摘「名前・投打・年齢・各パラメータ・成績と網羅的に表示し、最右に解雇ボタン。各能力値ごとにソート」。
     //    1人1行の表（Web 版 ContractPlanner と同じ列。`contractColumns`）。見出しを押すと並べ替え、右端で解雇を切り替える。
     //    並べ替えていないときは守備位置の順（投・捕・内・外）
@@ -695,6 +698,7 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                 listOf(
                     "右端の「解雇」を押した選手が退団します（もう一度押すと取り消し）。最低9人を残してください。",
                     "見出しを押すと、その項目で並べ替えます（もう一度押すと逆順）。",
+                    "「投C」「野C」はコーチ打診です。打診した選手は現役を退いて名簿を離れ、年度更新でその役職のコーチに就きます（いまのコーチは市場へ戻ります。各役職1人まで）。監督には、キャンプの間に指導者の画面で入れ替えて上げられます。",
                     "続くトライアウトで最大 ${(rosterLimitOf(raw) - remaining.size).coerceAtLeast(0)}人を獲れます（標準${rosterStandardOf(raw)}人・上限${rosterLimitOf(raw)}人。人数を決めなければ標準まで埋めます）。目標に足りない区分はトライアウトで優先して埋まります。",
                     "標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため毎年少なくとも3人を出します。",
                     "このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。",
@@ -712,16 +716,25 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                 else { sortId = c.id; ascending = c.ascending }
             },
             onPlayer = { model.openPlayer = it },
-            highlight = { it.pid in releases },
+            highlight = { it.pid in releases || it.pid in offered },
             sub = { p ->
                 positionLabel(p.at("position").str()) + " " + handLabel(p)
             },
-            trailingHeader = "解雇",
+            trailingHeader = "解雇・打診",
+            trailingWidth = 172.dp,
             trailing = { p ->
-                val on = p.pid in releases
-                val toggle = { setPlan(Commands.withReleases(plan, if (on) releases - p.pid else releases + p.pid)) }
-                if (on) Button(onClick = toggle, enabled = editable, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("予定", fontSize = 12.sp) }
-                else OutlinedButton(onClick = toggle, enabled = editable, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("解雇", fontSize = 12.sp) }
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val on = p.pid in releases
+                    val toggle = { setPlan(Commands.withRelease(plan, p.pid, !on)) }
+                    if (on) Button(onClick = toggle, enabled = editable, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("予定", fontSize = 12.sp) }
+                    else OutlinedButton(onClick = toggle, enabled = editable, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("解雇", fontSize = 12.sp) }
+                    COACH_OFFER_ROLES.forEach { (role, short) ->
+                        val picked = offers[role] == p.pid
+                        val pick = { setPlan(Commands.withCoachOffer(plan, p.pid, role)) }
+                        if (picked) Button(onClick = pick, enabled = editable, contentPadding = PaddingValues(horizontal = 4.dp)) { Text(short, fontSize = 11.sp) }
+                        else OutlinedButton(onClick = pick, enabled = editable, contentPadding = PaddingValues(horizontal = 4.dp)) { Text(short, fontSize = 11.sp) }
+                    }
+                }
             },
         )
         // 標準案で退団になる理由（選んでいる式そのものからサーバーが作る。`phase.releaseAdvice`）
@@ -740,13 +753,17 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     }
 }
 
+/** コーチ打診の役職（役職 → ボタンの短い名前）。⚠ Web 版 ContractPlanner の COACH_OFFER_ROLES と同じ役職 */
+private val COACH_OFFER_ROLES = listOf("pitching" to "投C", "batting" to "野C")
+
 /** 退団後の人数（「退団3人 · 残り21人 · 投9/11 捕2/2 内6/6 外4/7」）。決定の帯に出す */
 private fun releaseSummary(raw: JsonObject, plan: JsonObject): String {
     val roster = raw.at("roster").list().mapNotNull { it.obj() }
     val releases = plan.at("releaseIds").list().mapNotNull { it.long() }
-    val remaining = roster.filter { it.pid !in releases }
+    val offered = COACH_OFFER_ROLES.mapNotNull { (role, _) -> plan.at("coachOffers", role).long() }
+    val remaining = roster.filter { it.pid !in releases && it.pid !in offered }
     val counts = rosterCounts(remaining)
-    return "退団${releases.size}人 · 残り${remaining.size}人 · " + listOf("pitcher" to "投", "catcher" to "捕", "infielder" to "内", "outfielder" to "外")
+    return "退団${releases.size}人" + (if (offered.isNotEmpty()) " · コーチ打診${offered.size}人" else "") + " · 残り${remaining.size}人 · " + listOf("pitcher" to "投", "catcher" to "捕", "infielder" to "内", "outfielder" to "外")
         .joinToString(" ") { (k, l) -> "$l${counts[k] ?: 0}/${ONLINE_ROSTER_TARGETS[k] ?: 0}" }
 }
 

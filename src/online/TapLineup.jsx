@@ -29,6 +29,7 @@ import {
   REST_FATIGUE,
   FIELD_POSITIONS,
 } from './lineupEdit.js';
+import { restFatigueOf } from './shared.js';
 import {
   startTapDraft,
   syncTapDraft,
@@ -188,10 +189,10 @@ function Fit({ player, position }) {
   );
 }
 
-function FatigueBadge({ player }) {
+function FatigueBadge({ player, restAt = REST_FATIGUE }) {
   const value = player?.fatigue || 0;
   const tone =
-    value >= REST_FATIGUE ? 'is-rest' : getFatigueTone(value) ? 'is-tired' : '';
+    value >= restAt ? 'is-rest' : getFatigueTone(value) ? 'is-tired' : '';
   return (
     <span className={`online-tap-fatigue ${tone}`}>
       疲労{value}
@@ -363,8 +364,9 @@ export default function TapLineup({
         benchFielders(view.roster || [], order),
         POS_FULL,
         view.nextStarterId,
+        restFatigueOf(view.lineup?.tactics),
       ),
-    [order, view.roster, view.nextStarterId],
+    [order, view.roster, view.nextStarterId, view.lineup?.tactics],
   );
   const nextStarter = byId.get(view.nextStarterId);
   const twoWaySlot = order.find(
@@ -542,7 +544,7 @@ export default function TapLineup({
                     </span>
                   )}
                 </button>
-                {player && <FatigueBadge player={player} />}
+                {player && <FatigueBadge player={player} restAt={restFatigueOf(view.lineup?.tactics)} />}
                 <span className="online-tap-line2">
                   <Fit player={player} position={slot.position} />
                   {player ? (
@@ -653,7 +655,7 @@ export default function TapLineup({
                       >
                         <NameLine player={player} />
                       </button>
-                      <FatigueBadge player={player} />
+                      <FatigueBadge player={player} restAt={restFatigueOf(view.lineup?.tactics)} />
                       <span className="online-tap-line2">
                         <Fit player={player} position={fitnessPosition} />
                         <SecondLine

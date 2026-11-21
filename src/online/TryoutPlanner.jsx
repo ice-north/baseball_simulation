@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
+import { teamShort } from './gameText.js';
 import { rosterGroup, rosterCounts } from '../utils/constants.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
 import { formatStat } from './statsView.js';
@@ -115,6 +116,29 @@ function FitMark({ fit }) {
   );
 }
 
+/**
+ * ほかの球団がこの選手をリストに入れているか（サーバーの `listedBy`。先方要望 2026-11-21）。
+ * 自分より先に指名する球団（前年の順位が上）は赤い札、後の球団は灰色の札。CPU球団は狙いの見込み（`?`）。
+ * ⚠ アプリは `TryoutPanel.kt` の `ListedByChips`（同じ文）
+ */
+export function ListedBy({ listed }) {
+  if (!listed?.length) return null;
+  return (
+    <span className="online-tryout-listed">
+      {listed.map((r) => (
+        <span
+          key={r.team}
+          className={`online-tryout-listed-team${r.first ? ' is-first' : ''}`}
+          title={`${teamShort(r.team)}が${r.cpu ? 'リストに入れていそう（CPU球団の狙いの見込み）' : 'リストに入れています'}・${r.wish}番目${r.first ? '。あなたより先に指名します' : '。あなたの後に指名します'}`}
+        >
+          {teamShort(r.team)}
+          {r.cpu ? '?' : ''}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** 選手1人の1行（名前・年齢・位置・主な能力）。交渉する選手の欄と、スマホの受験者で使う */
 function Line({ player, score, fit }) {
   if (!player) return null;
@@ -122,6 +146,7 @@ function Line({ player, score, fit }) {
     <>
       <PlayerStatsButton player={player} panel="abilities" />
       <FitMark fit={fit} />
+      <ListedBy listed={player.listedBy} />
       {/* 甲子園で名を上げた人（サーバーが付ける。`koshienNoteOf`） */}
       {player.koshien && <span className="online-tryout-fit">{player.koshien}</span>}
       <small>
@@ -263,6 +288,7 @@ function PoolTable({
               <td className="online-lineup-person online-tryout-person">
                 <PlayerStatsButton player={p} panel="abilities" />
                 <FitMark fit={fitOf(p)} />
+                <ListedBy listed={p.listedBy} />
                 {p.koshien && (
                   <span className="online-tryout-fit">{p.koshien}</span>
                 )}
@@ -619,6 +645,9 @@ export default function TryoutPlanner({
         <p className="online-muted">
           1位から順に取りにいきます。<strong>同じ選手を他球団も希望したときは、
           前年の順位が上の球団が獲得します</strong>（取られたぶんは下から繰り上がります）。
+          名前の横の球団の札は、その選手をリストに入れている球団です（
+          <span className="online-tryout-listed-team is-first">赤</span>
+          はあなたより先に指名する球団、「?」はCPU球団の狙いの見込み）。
           {/* ⚠ 目標の構成だけは語の途中で割らない（`online-tryout-targets`）。
               ほかの `strong` にも nowrap を当てると、文が長いので 320px で外へ出る */}
           名簿の目標は

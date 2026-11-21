@@ -17,6 +17,7 @@ import {
   shortLine,
   winnerOf,
   loserOf,
+  watchRow,
 } from './local.js';
 import { gb, gamesBehind } from './paper.js';
 import { OFF_PHASES, paceLine } from './frontPage.js';
@@ -343,7 +344,27 @@ export function buildNationalPage(view, raw, local) {
       ),
     );
   }
-  // プロ注目（飾り。能力ランキングから若い選手を）
+  // プロ注目。ドラフトの気配（`proWatch`）があれば本物（リーグ全体で NPB が見ている選手）、
+  // 無ければ飾り（能力ランキングから若い選手を）
+  const watch = Array.isArray(raw?.proWatch) ? raw.proWatch.map(watchRow).filter(Boolean) : null;
+  if (watch != null) {
+    if (watch.length) {
+      const w = pen.pick(watch, 40);
+      const team = view.teamShort(w.team);
+      const hot = watch.filter((x) => x.hot).length;
+      articles.push(
+        article(
+          'ドラフト戦線',
+          w.hot
+            ? pen.pick([`${w.npb}、${team}の${w.name}に接触`, `${w.name}（${team}）に${w.npb}が接触`], 43)
+            : pen.pick([`${w.npb}が${team}の${w.name}に熱視線！`, `${w.npb}、${w.name}（${team}）を視察`], 44),
+          `${team}の${w.name}に、${w.npb}のスカウトが${w.hot ? '接触した。指名の候補に挙げているという。' : '足を運んだ。'}` +
+            (watch.length >= 2 ? `このリーグでプロが追う選手は${watch.length}人${hot > 0 ? `、うち接触は${hot}人` : ''}。` : ''),
+          LINK_GAMES,
+        ),
+      );
+    }
+  }
   const ability = list(raw?.abilityLeaders).map(obj).filter(Boolean);
   const scout = [
     ['velocity', '最速'],
@@ -361,7 +382,7 @@ export function buildNationalPage(view, raw, local) {
       return row ? [label, row, id] : null;
     })
     .filter(Boolean);
-  if (scout.length) {
+  if (watch == null && scout.length) {
     const [label, row, id] = pen.pick(scout, 40);
     const name = str(row.name) ?? '';
     const team = view.teamShort(str(row.team) ?? '');

@@ -1,6 +1,8 @@
 package jp.icenorth.baseball.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,8 +25,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.TeamFit
 import jp.icenorth.baseball.shared.teamFitRank
@@ -41,6 +45,7 @@ import jp.icenorth.baseball.shared.WEIGHT_MAX
 import jp.icenorth.baseball.shared.TRYOUT_WISH_MAX
 import jp.icenorth.baseball.shared.addToPlan
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.inTryoutGroup
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.minimumShort
@@ -59,6 +64,7 @@ import jp.icenorth.baseball.shared.weightedScore
 import jp.icenorth.baseball.shared.wishLimit
 import jp.icenorth.baseball.shared.fillsAutomatically
 import jp.icenorth.baseball.shared.wishedCount
+import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -120,6 +126,7 @@ fun TryoutPanel(
                 listOf(
                     "「交渉」を押した順が1位〜${TRYOUT_WISH_MAX}位です。1位から順に取りにいきます。",
                     "同じ選手を他球団も希望したときは、前年の順位が上の球団が獲得します（取られたぶんは下から繰り上がります）。",
+                    "候補の右の球団の札は、その選手をリストに入れている球団です。赤はあなたより先に指名する球団、「?」はCPU球団の狙いの見込みです。",
                     "獲得するのは「獲得する人数」まで。交渉した選手しか取りません。獲得する人数より多く並べておくと、取られたときに下が繰り上がります。交渉した人が尽きたら、人数に届かなくてもそこで止めます。",
                     "0人にしても、投手・捕手・野手が最低限に届かないときは足りない位置だけ補います。",
                     "「重視する能力」の重みから評価（0〜100）を出し、おすすめの${TRYOUT_WISH_MAX}人を選べます。「軽視〜最重視」を0.6〜1.6倍で重み付けした平均で、投手と野手は別の能力で計算します。重みはこの端末に覚えます。",
@@ -214,6 +221,7 @@ fun TryoutPanel(
                             Score(scores[p.pid])
                             Fit(teamFitRank(p, roster, weights))
                             Koshien(p)
+                            ListedByChips(p) { model.view?.teamShort(it) ?: it }
                             originOf(p)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             if (at >= 0) Tag("交渉中 ${at + 1}位", MaterialTheme.colorScheme.primary)
                         }
@@ -261,6 +269,32 @@ private fun Fit(fit: TeamFit) {
 private fun originOf(p: JsonObject): String? {
     fun of(key: String) = p.at("origin", key).str()?.takeIf { it.isNotBlank() }
     return of("previousTeam")?.let { "元$it" } ?: of("university") ?: of("highSchool")
+}
+
+/**
+ * ほかの球団がこの選手をリストに入れているか（サーバーの `listedBy`。先方要望 2026-11-21）。
+ * 自分より先に指名する球団は赤、後の球団は灰色。CPU球団は狙いの見込み（「?」）。⚠ Web 版は TryoutPlanner.jsx の `ListedBy`
+ */
+@Composable
+private fun ListedByChips(p: JsonObject, short: (String) -> String) {
+    val rows = p.at("listedBy").list().mapNotNull { it.obj() }
+    if (rows.isEmpty()) return
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        rows.forEach { r ->
+            val first = r.at("first").bool() == true
+            Text(
+                short(r.at("team").str().orEmpty()) + if (r.at("cpu").bool() == true) "?" else "",
+                modifier = Modifier
+                    .background(if (first) Color(0xFFDC2626) else Color(0xFFE5E7EB), RoundedCornerShape(3.dp))
+                    .padding(horizontal = 3.dp),
+                fontSize = 9.sp,
+                lineHeight = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (first) Color.White else Color(0xFF374151),
+                maxLines = 1,
+            )
+        }
+    }
 }
 
 /** 甲子園で名を上げた人（「2年目の夏の甲子園 ○○高のエース（ベスト4）」。サーバーが付ける。`koshienNoteOf`） */

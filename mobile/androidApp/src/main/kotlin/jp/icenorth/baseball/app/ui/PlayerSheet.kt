@@ -124,7 +124,10 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column {
-            Text(p.at("name").str().orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(p.at("name").str().orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                ProWatchChip(p.at("proWatch"), Modifier.padding(start = 8.dp))
+            }
             val condition = p.at("condition").int()?.let { CONDITION_TEXT.getOrNull(it) }
             Muted(
                 listOfNotNull(

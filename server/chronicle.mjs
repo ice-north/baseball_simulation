@@ -21,7 +21,8 @@ import { SEASON_PHASES } from '../src/season/seasonManager.js';
 import { KOSHIEN_STAGE_LABEL } from '../src/season/koshien.js';
 import { SEASON_START_MONTH } from '../src/online/shared.js';
 import { teamSplitsOf } from '../src/online/recordStats.js';
-import { honorTitlesOf, honorsView } from './seasonAwards.mjs';
+import { honorTitlesOf, honorsView, titleHistory } from './seasonAwards.mjs';
+import { npbShort } from './proDraft.mjs';
 import { withProCareer, proCareersOf, rowsWithCareer, newsOfCareers } from './proCareer.mjs';
 import { teamFaceView } from './teamFace.mjs';
 import { CAREER_MILESTONES, SEASON_MILESTONES, crossedCareer, crossedSeason } from '../src/online/milestones.js';
@@ -662,6 +663,8 @@ export function chronicleView(league) {
     proNews: newsOfCareers(careers, league),
     // いちばん新しい年の表彰（タイトルと、部ごとの MVP・新人王・ベストナイン・最優秀バッテリー）
     honors: honorsView(league, Object.fromEntries(PYRAMID_LEAGUES.map((l) => [l.id, l.name]))),
+    // 歴代のタイトル（年ごと・新しい順。その年にプロへ進んだ人は `pro`）。リーグ史の「歴代タイトル」
+    titles: titleHistory(league, npbShort),
   };
 }
 

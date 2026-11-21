@@ -55,21 +55,42 @@ function Cell({ column, player }) {
   return value ?? '—';
 }
 
+/** コーチ打診の役職（`server/coachEngine.mjs` の `hirePlayerAsCoach`）。⚠ アプリの ProceduresScreen.kt と同じ文 */
+export const COACH_OFFER_ROLES = [
+  ['pitching', '投手コーチ'],
+  ['batting', '野手コーチ'],
+];
+
 export default function ContractPlanner({ roster, plan, advice = {}, onChange }) {
   const released = new Set(plan.releaseIds);
-  const remaining = roster.filter((p) => !released.has(p.id));
+  const offers = plan.coachOffers || {};
+  const offerOf = (id) => COACH_OFFER_ROLES.find(([role]) => offers[role] === id)?.[0] || null;
+  const remaining = roster.filter((p) => !released.has(p.id) && !offerOf(p.id));
   const counts = Object.fromEntries(GROUPS.map(([g]) => [g, 0]));
   for (const p of remaining) counts[rosterGroup(p.position)] += 1;
   // 並べ替え（列のidと向き）。null は名簿の並び（守備位置の順）
   const [sort, setSort] = useState(null);
   const columns = contractColumns();
   const rows = sortContractRoster(roster, sort && columns.find((c) => c.id === sort.id), sort?.dir);
+  // ⚠ 解雇と打診は同じ選手に重ねない（サーバーも弾く）。片方を選んだらもう片方を外す
+  const withoutOffer = (id) =>
+    Object.fromEntries(Object.entries(offers).filter(([, x]) => x !== id));
+  // 打診が無ければ `coachOffers` ごと外す（前と同じ形の案を送る）
+  const send = (releaseIds, coachOffers) => {
+    const { coachOffers: _drop, ...rest } = plan;
+    void _drop;
+    onChange({ ...rest, releaseIds, ...(Object.keys(coachOffers).length ? { coachOffers } : {}) });
+  };
   const toggle = (id, on) =>
-    onChange({
-      releaseIds: on
-        ? [...plan.releaseIds, id]
-        : plan.releaseIds.filter((x) => x !== id),
-    });
+    send(
+      on ? [...plan.releaseIds, id] : plan.releaseIds.filter((x) => x !== id),
+      on ? withoutOffer(id) : offers,
+    );
+  const offer = (id, role) => {
+    const next = withoutOffer(id);
+    if (offers[role] !== id) next[role] = id;
+    send(plan.releaseIds.filter((x) => x !== id), next);
+  };
   const sortBy = (column) =>
     setSort((now) =>
       now?.id === column.id
@@ -80,7 +101,8 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
     <div>
       <p className="online-contract-summary">
         <strong>
-          解雇予定 {released.size}人 → 残り {remaining.length}人
+          解雇予定 {released.size}人
+          {Object.keys(offers).length > 0 && `・コーチ打診 ${Object.keys(offers).length}人`} → 残り {remaining.length}人
         </strong>
         <span>
           {GROUPS.map(([g, label]) => {
@@ -101,6 +123,8 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
       <p className="online-muted">
         右端の「解雇」を押した選手が退団します（もう一度押すと取り消し）。最低9人を残してください。
         見出しを押すと、その項目で並べ替えます。
+        「投手C」「野手C」はコーチ打診です。打診した選手は現役を退いて名簿を離れ、年度更新でその役職のコーチに就きます（いまのコーチは市場へ戻ります。各役職1人まで）。
+        監督には、キャンプの間に指導者のページで入れ替えて上げられます。
         標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため
         毎年少なくとも3人を出します。このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。
       </p>
@@ -122,6 +146,7 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
                 </th>
               ))}
               <th className="online-contract-action">解雇</th>
+              <th className="online-contract-action">コーチ打診</th>
             </tr>
           </thead>
           <tbody>
@@ -129,7 +154,7 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
               const reasons = advice[p.id];
               const on = released.has(p.id);
               return (
-                <tr key={p.id} data-released={on || undefined}>
+                <tr key={p.id} data-released={on || offerOf(p.id) ? true : undefined}>
                   {columns.map((column) =>
                     column.id === 'name' ? (
                       <th key={column.id} scope="row" className="online-contract-name">
@@ -161,6 +186,24 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
                     >
                       {on ? '解雇予定' : '解雇'}
                     </button>
+                  </td>
+                  <td className="online-contract-action online-contract-offer">
+                    {COACH_OFFER_ROLES.map(([role, label]) => {
+                      const picked = offers[role] === p.id;
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          className={picked ? 'online-contract-release is-on' : 'online-contract-release'}
+                          aria-pressed={picked}
+                          aria-label={`${p.name}に${label}を打診する`}
+                          title={picked ? `${label}に打診中（もう一度押すと取り消し）` : `${label}に打診する（いまの${label}と入れ替わります）`}
+                          onClick={() => offer(p.id, role)}
+                        >
+                          {picked ? `${label.slice(0, 2)}C打診` : `${label.slice(0, 2)}C`}
+                        </button>
+                      );
+                    })}
                   </td>
                 </tr>
               );

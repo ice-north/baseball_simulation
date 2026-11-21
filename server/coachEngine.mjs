@@ -392,6 +392,75 @@ export function staffCommand(league, userId, payload) {
   requireOnline(false, '指導者の操作が不正です');
 }
 
+/**
+ * 契約更改の「コーチ打診」（先方要望 2026-11-21「契約更改で投手コーチ打診・野手コーチ打診があってもいい。
+ * 選んだら、いまのコーチから新たに打診した選手がコーチになる。その後監督へも行けるように」）。
+ *
+ * - 選手は契約更改で名簿を離れ（呼ぶ側で外す）、**年度更新で**その球団の `role` の席に就く
+ *   （`coachOffseason` の最後、`seatReserved`）。いまの人はそのとき市場へ戻る。
+ *   ⚠ その場で替えないのは、年度更新が**終わった年の成績を席に居る人の通算に足す**から（`coachOffseason` の 1）。
+ *     契約更改で替えると、1年務めたコーチの年が消え、打診した選手に務めていない年が付く
+ * - 決まるまでは `status: 'reserved'`（市場にも席にも居ない。`joins` に行き先）。
+ * - 指導者の作り方は引退した選手が指導者の道へ進むとき（`coachOffseason` の 4）と同じ。考え方は現役の姿から
+ *   （`leanFromPlayer`）、恩師は今の監督、出身は現役の球団。⚠ 能力のバフは付けない（監督・コーチは采配の肩代わり）
+ * - 監督へは、キャンプの間の指導者の画面で「入れ替え」（`staffCommand` の swap）で上げられる
+ * - 乱数（名前の重なりを避ける・考え方の揺れ）はリーグの種×年×球団×役職で決める
+ * @returns 新しい指導者
+ */
+export function hirePlayerAsCoach(league, teamName, player, role) {
+  requireOnline(role === 'pitching' || role === 'batting', 'コーチの役職が不正です');
+  const c = ensureCoaches(league);
+  const year = league.season.year;
+  c.teams[teamName] ||= { manager: null, pitching: null, batting: null };
+  const label = (league.teams || []).find((t) => t.name === teamName)?.displayName || teamName;
+  let coach = null;
+  seededIn(league, `offer:${year}:${teamName}:${role}`, () => {
+    coach = newCoach(c, {
+      age: player.age || 30,
+      position: positionGroup(player.position),
+      specialty: role,
+      lean: leanFromPlayer(player),
+      origin: {
+        kind: 'player',
+        team: teamName,
+        teamLabel: label,
+        seasons: (player.careerHistory || []).filter((h) => h.type === 'independent').length,
+        line: null,
+        playerName: player.name,
+        legend: false,
+      },
+    });
+  });
+  // ⚠ 名前は選手のまま（現役の名前で指導者になる）
+  coach.name = player.name;
+  coach.status = 'reserved';
+  coach.freeSince = null;
+  coach.joins = { team: teamName, role, year: year + 1 };
+  const head = c.teams[teamName].manager;
+  if (head) coach.mentor = head;
+  logEvent(c, { year, kind: 'turn', team: teamName, role: null, coachId: coach.id, name: coach.name });
+  return coach;
+}
+
+/** 打診を受けた人を席に就ける（年度更新の最後）。いまの人は市場へ。出来事を返す */
+function seatReserved(c, year) {
+  const events = [];
+  for (const coach of Object.values(c.people)) {
+    if (coach.status !== 'reserved' || !coach.joins) continue;
+    const { team, role } = coach.joins;
+    delete coach.joins;
+    c.teams[team] ||= { manager: null, pitching: null, batting: null };
+    const before = c.people[c.teams[team][role]];
+    if (before) {
+      unassign(c, before, year);
+      events.push({ year, kind: 'release', team, role, coachId: before.id, name: before.name });
+    }
+    assign(c, team, role, coach, year);
+    events.push(hireEvent(c, { year, team, role, coach }));
+  }
+  return events;
+}
+
 // ------------------------------------------------------------
 // 年度更新
 // ------------------------------------------------------------
@@ -644,6 +713,8 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
     const extra = free().sort((a, b) => b.age - a.age).slice(0, Math.max(0, free().length - MARKET_MAX));
     for (const coach of extra) coach.status = 'retired';
   });
+  // 契約更改でコーチ打診を受けた人が席に就く（成績を足し・辞任を決めた**後**。`hirePlayerAsCoach`）
+  events.unshift(...seatReserved(c, nextYear).reverse());
   // 記録の無い引退者は残さない（保存を太らせない）
   for (const [id, coach] of Object.entries(c.people))
     if (coach.status === 'retired' && !coach.career?.length) delete c.people[id];

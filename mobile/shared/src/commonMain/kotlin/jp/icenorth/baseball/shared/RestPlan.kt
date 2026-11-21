@@ -110,7 +110,7 @@ object RestPlan {
      * 休ませる人が居なければ null。
      * ⚠ 起用できない先発が居る打順は組まない・二刀流の先発は守備に残らない（2026-11-20 監査。Web 版の注を参照）
      */
-    fun plan(starters: List<Starter>, bench: List<Player>, leaving: Long? = null): Result? {
+    fun plan(starters: List<Starter>, bench: List<Player>, leaving: Long? = null, restAt: Int = FIELDER_REST_FATIGUE): Result? {
         val positions = starters.map { it.position }.toSet()
         if (starters.size != FIELD.size || !FIELD.all { it in positions }) return null
         if (!starters.all { it.player.isActive }) return null
@@ -119,7 +119,7 @@ object RestPlan {
         val out = leaving?.takeIf { id -> starters.any { it.player.id == id } }
         // ⚠ 疲れの重い順（同じなら元の並び。Web 版の sort は安定）
         val tired = starters.map { it.player }
-            .filter { it.id != out && (it.fatigue ?: 0) >= FIELDER_REST_FATIGUE }
+            .filter { it.id != out && (it.fatigue ?: 0) >= restAt }
             .sortedByDescending { it.fatigue ?: 0 }
         if (tired.isEmpty()) return null
         val saved = starters.associate { it.player.id to it.position }

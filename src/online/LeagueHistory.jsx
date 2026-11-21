@@ -217,6 +217,37 @@ function ProPage({ view }) {
   );
 }
 
+/**
+ * 歴代タイトル（年ごと・新しい順）。⚠ 先方要望（2026-11-21）「プロ指名された選手もリーグの過去のタイトルとして残して」。
+ * 文はサーバーが作る（`seasonAwards.js` の `titleHistory`）。その年にプロへ進んだ人には「→西武」と添える。アプリと同じ並び
+ */
+function TitleHistory({ list, own }) {
+  if (!list?.length)
+    return <p>まだありません。10月下旬に成績が確定すると、その年のタイトルがここに残ります。</p>;
+  return (
+    <div className="online-title-history">
+      {list.map((y) => (
+        <table key={y.year} className="online-standings">
+          <caption>{y.year}年目</caption>
+          <tbody>
+            {y.titles.map((t) => (
+              <tr key={t.label} className={t.team === own ? 'online-own-text' : undefined}>
+                <th>{t.label}</th>
+                <td>
+                  {t.name}
+                  {t.pro && <small className="online-leader-pro">→{t.pro}</small>}
+                </td>
+                <td>{teamShort(t.team)}</td>
+                <td>{t.line}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ))}
+    </div>
+  );
+}
+
 function HonorsPage({ view }) {
   return (
     <Page title="表彰・話題・オーナー" sub="リーグ全体の年間表彰・話題・参加者ごとの通算です。">
@@ -226,6 +257,9 @@ function HonorsPage({ view }) {
         title={`年間表彰${view.chronicle?.honors?.year ? `（${view.chronicle.honors.year}年目）` : ''}`}
       >
         <Honors honors={view.chronicle?.honors} />
+      </Fold>
+      <Fold id="titles" title="歴代タイトル" count={view.chronicle?.titles?.length || 0}>
+        <TitleHistory list={view.chronicle?.titles} own={view.teamName} />
       </Fold>
       <Fold id="topics" title="リーグの話題">
         <LeagueTopics view={view} full bare />
