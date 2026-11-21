@@ -1,5 +1,6 @@
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
+import { isPlaceholderHighSchool, PLACEHOLDER_HIGH_SCHOOL } from '../utils/careerHistory.js';
 
 // ============================================================
 // 生成した選手の出身（高校・大学）。
@@ -71,7 +72,7 @@ export function assignPlayerOrigin(age, rank = 'C', { university = true } = {}) 
       : null;
   // ⚠ 経歴は**古い順**に積む（画面は新しい順に並べ替えて出す。`PlayerDetailBody` の `CareerLine`）
   const careerHistory = [
-    { type: 'highschool', year: null, label: highSchool ? highSchool.name : '高校卒' },
+    { type: 'highschool', year: null, label: highSchool ? highSchool.name : PLACEHOLDER_HIGH_SCHOOL },
     ...(universityName ? [{ type: 'university', year: null, label: universityName }] : []),
   ];
   return { highSchool, universityName, careerHistory };
@@ -99,7 +100,7 @@ export function fillPlayerOrigin(player, { university = true } = {}) {
   //    「〇〇高 → 高校卒 → …」になっていた。2026-11-20 監査）
   player.careerHistory = [
     ...origin.careerHistory,
-    ...(player.careerHistory || []).filter((h) => !(h?.type === 'highschool' && h.label === '高校卒')),
+    ...(player.careerHistory || []).filter((h) => !isPlaceholderHighSchool(h)),
   ];
   return true;
 }

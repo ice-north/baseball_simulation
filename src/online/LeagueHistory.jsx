@@ -131,7 +131,11 @@ function PastStandings({ view }) {
                       <th>敗</th>
                       <th>分</th>
                       <th>勝率</th>
-                      <th title="すぐ上の順位の球団とのゲーム差">差</th>
+                      {/* ⚠ 列と同じ印を見出しにも付ける。狭いスマホ（370px 以下）では列ごと隠すので
+                          （`online.css`）、見出しだけ残ると「この年」の見出しが「差」の列の上にずれる */}
+                      <th className="online-standings-gap" title="すぐ上の順位の球団とのゲーム差">
+                        差
+                      </th>
                       <th>この年</th>
                     </tr>
                   </thead>

@@ -7,6 +7,7 @@ import { buildPlayerStory, fameLabel } from './playerStory.js';
 import AbilityHistoryChart from './AbilityHistoryChart.jsx';
 import PotentialBadge from './PotentialBadge.jsx';
 import { useEscapeToClose } from './useEscapeToClose.js';
+import { withoutPlaceholderHighSchool } from '../utils/careerHistory.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
 import { getDeception, describeDeception } from '../game/deception.js';
@@ -188,7 +189,9 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
 
         {/* 経歴 */}
         {(() => {
-          const history = player.careerHistory || [];
+          // ⚠ 名前の付いた高校と並んでいる仮の「高校卒」は出さない（下で高校の名前に書き換えるので、
+          //    残すと同じ高校が2つ並ぶ。`careerHistory.js`）
+          const history = withoutPlaceholderHighSchool(player.careerHistory);
           const steps = [];
           if (history.length > 0) {
             // 全国大会成績(achievement)は経路チップではなく物語タブで表示するため除外

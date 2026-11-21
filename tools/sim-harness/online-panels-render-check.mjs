@@ -39,6 +39,7 @@ import PlayerDetailBody from '../../src/online/PlayerDetailBody.jsx';
 import { LeagueTopics } from '../../src/online/Chronicle.jsx';
 import { AbilityGrade } from '../../src/online/PlayerPerformance.jsx';
 import { Homeruns } from '../../src/online/LeagueBoard.jsx';
+import LeagueHistory from '../../src/online/LeagueHistory.jsx';
 import { StarterPicksPage, ExhibitionPage, ExhibitionBox } from '../../src/online/SocialPages.jsx';
 export {
   StarterPicksPage,
@@ -67,6 +68,7 @@ export {
   YearSummary,
   ProDraftResult,
   PlayerDetailBody,
+  LeagueHistory,
 };
 `;
 const result = await build({
@@ -114,6 +116,7 @@ try {
     StarterPicksPage,
     ExhibitionPage,
     ExhibitionBox,
+    LeagueHistory,
   } = await import(pathToFileURL(file).href);
   const h = React.createElement;
   // React が文字の継ぎ目に入れる印（<!-- -->）を外して、見える文面で比べる
@@ -331,6 +334,24 @@ try {
       for (const text of ['球速', '152', 'スライダー', '守備適性'])
         assert.ok(detail.includes(text), `能力の写しから選手情報に「${text}」が出ない`);
       assert.ok(detail.length > 400, `選手情報の中身が薄い: ${detail.length}文字`);
+    }
+    // ⚠ 名前の付いた高校と並んでいる仮の「高校卒」は経歴に出さない（判断3より前に作ったリーグに
+    //    残っていて「… ← 高校卒（高校） ← 〇〇高（高校）」と出ていた。2026-11-20 監査）。
+    //    高校が仮の1つだけなら残す
+    {
+      const snap = view.chronicle.proDrafted[0].player;
+      const careerOf = (careerHistory) =>
+        render(h(PlayerDetailBody, { player: { ...snap, careerHistory }, shown: snap, periodLabel: '今季' })).match(
+          /<p class="online-career">([\s\S]*?)<\/p>/,
+        )?.[1] || '';
+      const both = careerOf([
+        { type: 'highschool', year: null, label: '札幌第一高' },
+        { type: 'highschool', label: '高校卒' },
+        { type: 'join', year: 1, label: '三陸' },
+      ]);
+      assert.ok(both.includes('札幌第一高') && !both.includes('高校卒'), `名前の付いた高校の横に仮の「高校卒」が出ている: ${both}`);
+      const only = careerOf([{ type: 'highschool', label: '高校卒' }, { type: 'join', year: 1, label: '三陸' }]);
+      assert.ok(only.includes('高校卒') && only.includes('三陸'), `高校が仮の1つだけのときに消している: ${only}`);
     }
   }
 
@@ -747,6 +768,46 @@ try {
   assert.doesNotThrow(() =>
     renderToString(h(Standings, { view: { standings, teamName: 'x' } })),
   );
+
+  // ⚠ 「差」の列は狭いスマホ（370px 以下）で列ごと隠す（`online.css` の `.online-standings-gap`）。
+  //    見出しにも同じ印が無いと見出しだけ残って列がずれる。過去の順位の表で見出しに付け忘れていた
+  //    （2026-11-20 監査）。いまの順位表と過去の順位の表の両方で、見出しと各行の印の数を比べる
+  {
+    const gapCells = (html) =>
+      [...html.matchAll(/<table[^>]*class="[^"]*online-standings[^"]*"[^>]*>([\s\S]*?)<\/table>/g)].map(([, table]) => {
+        const [head = '', body = ''] = table.split('<tbody');
+        const count = (s) => (s.match(/class="[^"]*online-standings-gap/g) || []).length;
+        return { head: count(head), rows: body.split('<tr').slice(1).map(count) };
+      });
+    const past = render(
+      h(LeagueHistory, {
+        initial: 'standings',
+        view: {
+          teamName: 'A球団',
+          history: [
+            {
+              year: 1,
+              standings: [
+                { team: 'A球団', wins: 40, losses: 30 },
+                { team: 'B球団', wins: 35, losses: 35 },
+              ],
+              leagues: { A球団: 'A', B球団: 'A' },
+            },
+          ],
+        },
+      }),
+    );
+    const now = render(h(Standings, { view: { standings, teamName: 'x' } }));
+    for (const [name, html] of [['過去の順位', past], ['順位表', now]]) {
+      const tables = gapCells(html);
+      assert.ok(tables.length > 0 && tables.every((t) => t.rows.length > 0), `${name}の表が描けていない`);
+      for (const t of tables)
+        assert.ok(
+          t.rows.every((n) => n === t.head),
+          `${name}の「差」の見出しと列の印が揃っていない（見出し ${t.head}・行 ${t.rows}）`,
+        );
+    }
+  }
 
   // --- 始める手順（セットを選ぶ → 名前 → 決定） -------------------------
   // ⚠ **名前を決める欄が出ること**。`PackSelect` は `view` と `command` を

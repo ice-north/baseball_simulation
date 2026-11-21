@@ -27,7 +27,7 @@ import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
-import { findShortClash, formatTurn, TURN_MINUTES } from './shared.js';
+import { findShortClash, formatTurn, shortClashMessage, shortNameOf, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
 import { teamLabel } from './gameText.js';
 import {
@@ -255,19 +255,22 @@ export function RenameDialog({ view, busy, run, command, close }) {
   //    から地域名を打つのはどうですか？」）。選べば地域名は自由に書けて、地元も付く
   const [region, setRegion] = useState(() => labels.region || '');
   const teamName = `${city}${nickname}`.trim();
-  // ⚠ 同じリーグのほかの球団と略称（＝地域名）がぶつかるなら、保存する前に知らせる
-  //    （判断1。サーバーも断る。判定は `shared.js` の `findShortClash` 1か所）。
-  //    地域名を空にしたときの略称（頭3文字・既定の略称）はサーバーに任せる
-  const shortClash = findShortClash(
-    Object.entries(view.teamLabels || {}).map(([name, l]) => ({
-      name,
-      league: view.teamLeagues?.[name],
-      short: l.short,
-      label: l.label,
-    })),
+  // ⚠ ほかの球団と略称（＝地域名）がぶつかるなら、保存する前に知らせる
+  //    （判断1。サーバーも断る。略称の作り方と判定は `shared.js` の `shortNameOf`・
+  //    `findShortClash` 1か所。リーグを問わず全球団と、ほかの枠の既定の略称と比べる）
+  // ⚠ **正式名が変わらないなら断らない**（サーバーの `applyProfile` と同じ）。分けずに付け替えた
+  //    古い球団（「旭川ホワイトベアーズ」・略称「旭川ホ」）は地域名が「旭川」で埋まって開くので、
+  //    ほかの球団が「旭川」だと何も打たないうちから保存できず、ひとことも直せなかった。
+  //    そのときサーバーは名前を今の形のまま残すので、狭い欄の名前もいまの略称で見せる
+  const sameName = teamName === (labels.label || view.teamName);
+  const splitClash = findShortClash(
+    Object.entries(view.teamLabels || {}).map(([name, l]) => ({ name, short: l.short, base: l.base, label: l.label })),
     view.teamName,
-    city.trim(),
+    shortNameOf({ city: city.trim(), shown: teamName, name: view.teamName, base: labels.base }),
   );
+  const shortClash = sameName ? null : splitClash;
+  const nextShort =
+    sameName && splitClash ? labels.short : shortNameOf({ city: city.trim(), shown: teamName, name: view.teamName, base: labels.base });
   const [playerName, setPlayerName] = useState(() => me?.label || '');
   // オーナーのひとこと（順位表・球団の画面・紙面に出す）
   const [comment, setComment] = useState(() => me?.comment || '');
@@ -363,7 +366,7 @@ export function RenameDialog({ view, busy, run, command, close }) {
         </label>
         {shortClash && (
           <p role="alert" className="online-error-text">
-            略称「{city.trim()}」は同じリーグの{shortClash.label}と同じです。別の地域名にしてください。
+            {shortClashMessage(nextShort, shortClash)}。
           </p>
         )}
         <label>
@@ -377,7 +380,7 @@ export function RenameDialog({ view, busy, run, command, close }) {
         </label>
         {/* ⚠ 2つに分けたぶん、**出来上がりをその場で見せる**（略称が地域名になることも） */}
         <p className="online-muted online-rename-preview">
-          球団名は「{teamName || '（未入力）'}」、狭い欄では「{city || teamName || '（未入力）'}」と出ます。
+          球団名は「{teamName || '（未入力）'}」、狭い欄では「{teamName ? nextShort : '（未入力）'}」と出ます。
           {/* ⚠ 地元を判定できるかを**その場で**出す。できない地名のときに黙っていると、
               「チーム名を変えても地元が変わらない」と見える */}
           {prefsOfTeam({ region, city }).length

@@ -29,6 +29,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
+import jp.icenorth.baseball.shared.withoutPlaceholderHighSchool
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -219,7 +220,12 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
         // ⚠ 経歴の球団は**内部名で記録されている**ので、表示名（参加した人が付けた球団名）に引き直す。
         //    先方指摘: 津田沼ラプリにいるのに、所属履歴が名前を変える前の「新潟ブルズ」と出ていた。
         //    並びと書き方は Web 版（PlayerDetailBody の CareerLine）と同じ: 新しい順・年目・（入団）など
-        val history = p.at("careerHistory").list().mapNotNull { it.obj() }
+        // ⚠ 名前の付いた高校と並んでいる仮の「高校卒」は出さない（古いリーグに残っている。Web 版と同じ）
+        val history = withoutPlaceholderHighSchool(
+            p.at("careerHistory").list().mapNotNull { it.obj() },
+            { it.at("type").str() },
+            { it.at("label").str() },
+        )
         if (history.isNotEmpty()) Muted("経歴: " + history.reversed().joinToString(" ← ") { h ->
             val label = h.at("label").str()?.let { model.view?.teamLabel(it) ?: it }.orEmpty()
             val year = h.at("year").int()?.let { "${it}年目 " }.orEmpty()
