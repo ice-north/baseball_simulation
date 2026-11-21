@@ -155,6 +155,8 @@ fun FielderRow(
     /** 能力の行も出す（false なら名前と成績の2行。いしだ 2026-11-13: スタメンはまず成績を見て決める） */
     detail: Boolean,
     modifier: Modifier = Modifier,
+    /** 疲労を赤くする目安（球団の休養の目安 `restFatigueOf`。Web 版の LineupBoard・TapLineup と同じ） */
+    restAt: Int = FIELDER_REST_FATIGUE,
 ) {
     Column(modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -185,7 +187,7 @@ fun FielderRow(
                     FittingRow(Modifier.weight(1f), alignEnd = false) { BattingLabels(player) }
                 }
             }
-            if (player != null) FatigueBadge(player.fatigue)
+            if (player != null) FatigueBadge(player.fatigue, restAt)
             if (onInfo != null) IconButton(onClick = onInfo, modifier = Modifier.size(32.dp)) { Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (draggable) Icon(Icons.Filled.Menu, contentDescription = "長押しで入れ替え", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
         }

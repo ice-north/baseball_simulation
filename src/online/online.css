@@ -7669,7 +7669,7 @@ table.paper-table {
 /* リーグ史の歴代タイトル（年ごとの小さな表を並べる） */
 .online .online-title-history {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 12px;
 }
 .online .online-title-history caption {
