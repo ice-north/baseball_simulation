@@ -370,7 +370,7 @@ export const SUB_TRAINING_MENUS = {
  *    **成長係数（`growthPotential`）は年齢で下げない**のが決まり（`growthSystem.js` の注。
  *    昔は毎年引いていて、30代は全員0付近に潰れ、年齢の効きが三重に掛かっていた）。
  *    年齢はこの停止年齢と `getAgeGrowthBase` のカーブだけが担う。
- *    画面（選手情報の「成長の停止」）はこの関数で出す。
+ *    （選手情報の「成長の停止」の表示は 2026-11-20 にやめた。式はキャンプだけが使う）
  */
 export function growthStopAge(player) {
   const gp = player?.growthPotential ?? 1.0;
@@ -529,7 +529,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           gain = picked.isTech ? applyTechStatDecay(old, 1) : 1;
         }
         if (gain > 0) {
-          const maxVal = picked.isVelocity ? getVelocityCap(player.physical?.arm || 50) : 100;
+          const maxVal = picked.isVelocity ? getVelocityCap(player.physical?.arm || 50) : ABILITY_CAP;
           player[obj][prop] = Math.min(maxVal, old + gain);
           growthReport.push({ statName: picked.name, before: old, after: player[obj][prop], growth: gain });
           if (picked.key === 'physical.arm' && !isPitcher) {
@@ -1207,7 +1207,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
   // 成長停止年齢: gp(個人差) + 疲労管理(growthModifier) + プロ意識で延長
   // 停止後もdisciplineが高ければ練習で微量カバー可能
-  // ⚠ 式は `growthStopAge` / `postStopTrainEffect` に出してある（画面の「成長の停止」と同じ値）
+  // ⚠ 式は `growthStopAge` / `postStopTrainEffect` に出してある
   const _stopAge = growthStopAge(player);
   // stopAge到達後: discipline次第で衰えをカバー（discipline 50→0%, 80→9%, 100→15%）
   const _postStopFloor = postStopTrainEffect(player);
@@ -1375,7 +1375,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       if (menu.intensive && penaltyCount > 0 && totalGrowth < INTENSIVE_PENALTY_FLOOR)
         totalGrowth = INTENSIVE_PENALTY_FLOOR;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
-      const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : 100;
+      // ⚠ 1〜99 の物差しの能力は ABILITY_CAP で止める（100 で止めていて、98 から練習すると100になった。2026-11-20 監査）
+      const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : ABILITY_CAP;
       const newValue = Math.min(maxValue, currentValue + totalGrowth);
       updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
       growthReport.push({

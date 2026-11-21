@@ -106,6 +106,11 @@ data class ProDrafted(
     val after: String? = null,
     /** プロでの歩み（古い順。球団史の方だけ） */
     val career: List<String> = emptyList(),
+    /**
+     * 指名した時点の能力の写し（サーバー proDraft.mjs の draftSnapshot。名簿の選手と同じ形）。ビューではその年の指名にだけ載る
+     * （server/chronicle.mjs）。古い指名・古いサーバーには無い。NPBドラフトの発表で名前を押すと開く（Web 版 ProDraftResult と同じ）
+     */
+    val player: kotlinx.serialization.json.JsonObject? = null,
 )
 
 /** 今年のプロの便り（10月から年度更新まで） */

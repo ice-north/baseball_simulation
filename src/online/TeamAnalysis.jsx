@@ -8,7 +8,7 @@ import { CareerTeamBoard } from './CareerStats.jsx';
 import TeamDiagnosis from './TeamDiagnosis.jsx';
 import AgeOutlook from './AgeOutlook.jsx';
 import FieldDiagram from './FieldDiagram.jsx';
-import { teamLabel } from './gameText.js';
+import { teamLabel, formatRate as rate3 } from './gameText.js';
 import { PYRAMID_LEAGUES } from './pyramidLeague.js';
 import { RATING_AXES, teamRatings } from './teamRatings.js';
 import { positionFitness } from './lineupEdit.js';
@@ -36,7 +36,6 @@ const TABS = [
   ['careers', '通算成績'],
 ];
 
-const rate3 = (v) => (v == null ? '—' : v.toFixed(3).replace(/^0/, ''));
 const sumOf = (roster, side, key) =>
   (roster || []).reduce((n, p) => n + (Number(p.seasonStats?.[side]?.[key]) || 0), 0);
 

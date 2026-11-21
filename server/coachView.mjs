@@ -30,6 +30,7 @@ import {
   coachAbilities,
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
+import { formatRate as rate3 } from '../src/online/gameText.js';
 import {
   staffOf,
   teamTacticsFor,
@@ -192,7 +193,11 @@ export function coachStints(coach, labelOf) {
   const job = coach.job;
   if (job?.team) {
     const last = out.at(-1);
-    if (last && last.team === job.team && last.role === job.role) last.current = true;
+    // ⚠ 年が続いているときだけまとめる（監査 2026-11-20）。一度離れて同じ球団・同じ役職へ戻った人が、
+    //    通しで在任していたように出ていた。`since` は就いた年のまま（続けて在任する間は動かない）なので、
+    //    年表の最後の行が `since` の前の年まで届いていれば続き
+    if (last && last.team === job.team && last.role === job.role && job.since != null && last.to >= job.since - 1)
+      last.current = true;
     else out.push({ team: job.team, role: job.role, from: job.since ?? null, to: null, current: true });
   }
   return out.map((s) => ({
@@ -205,7 +210,6 @@ export function coachStints(coach, labelOf) {
 
 /** 主な指導選手に挙げる人数 */
 const PUPIL_COUNT = 5;
-const rate3 = (v) => v.toFixed(3).replace(/^0/, '');
 /**
  * 主な指導選手（その人が指導した年・球団で、出番の多かった選手。⚠ 先方要望 2026-11-20）。
  * 投手コーチは投手（対戦打者の数）、野手コーチは野手（打席の数）、監督は両方で数える。

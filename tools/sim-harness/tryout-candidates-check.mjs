@@ -27,6 +27,7 @@ import { bootstrapWorld } from './lib/world.mjs';
 import { highSchoolPool } from '../../src/season/universityPool.js';
 import { generateTryoutCandidates } from '../../src/season/tryoutSystem.js';
 import { weightedScore, DEFAULT_WEIGHTS } from '../../src/online/tryoutPlan.js';
+import { generateCorporateRoster } from '../../src/corporate/corporateInit.js';
 
 const RUNS = Number(process.argv[2]) || 21;
 const TEAMS = 12;
@@ -170,9 +171,42 @@ assert.ok(
   `素材型の一芸が偏っている: ${[...labels].join('・') || 'なし'}`,
 );
 
+// --- ④ 一人用の生成候補の出身（判断3。2026-11-20 監査）-----------------------
+// 生成候補に出身（`playerOrigin.js`）を付けたとき、一人用の補充にも大学名が付いていた。
+// 一人用はこの候補から社会人・独立の初期名簿も作り、大学歴は `assignInitialUniversityBackgrounds`
+// （大卒率55%）が付け直すので、大卒が5割→6.5割に増え（ドラフトの「大卒は24歳から」の対象が広がる）、
+// 544人で経歴の大学と付け直した大学が食い違い、経歴に「〇〇高」と仮の「高校卒」が2つ並んでいた
+const origin = quiet(() => {
+  let n = 0, uni = 0, young = 0, mismatch = 0, dupHs = 0, fillUni = 0;
+  for (let k = 0; k < 8; k++)
+    for (const [type, rank] of [['corporate', 'A'], ['corporate', 'C'], ['club', 'D'], ['independent', 'C']]) {
+      const roster = generateCorporateRoster({ id: type === 'independent' ? `il_o${k}` : `o${k}`, name: `出身${k}`, type, rank });
+      for (const p of roster) {
+        n += 1;
+        const ch = p.careerHistory || [];
+        const unis = ch.filter((h) => h.type === 'university');
+        if (p.universityName || unis.length) uni += 1;
+        if (unis.length && (p.age || 0) < 22) young += 1;
+        if (unis.length > 1 || unis.some((h) => h.label !== (p.universityTeamName || p.universityName))) mismatch += 1;
+        if (ch.filter((h) => h.type === 'highschool').length !== 1) dupHs += 1;
+      }
+    }
+  // 一人用のトライアウトの補充（大学から来ていない候補）は大学名を持たない
+  for (const p of generateTryoutCandidates(1, 4, true))
+    if (p.universityName && !p.universityTeamName) fillUni += 1;
+  return { n, uni, young, mismatch, dupHs, fillUni };
+});
+assert.equal(origin.mismatch, 0, `社会人・独立の初期名簿で経歴の大学と出身大学が食い違う: ${origin.mismatch}/${origin.n}人`);
+assert.equal(origin.dupHs, 0, `経歴に高校が1つでない選手がいる: ${origin.dupHs}/${origin.n}人`);
+assert.equal(origin.young, 0, `22歳未満に大学歴: ${origin.young}人`);
+assert.equal(origin.fillUni, 0, `一人用のトライアウトの補充に大学名が付いている: ${origin.fillUni}人`);
+// 直す前は 0.65、直した後（＝出身を付ける前と同じ）は 0.50 前後
+assert.ok(origin.uni / origin.n < 0.58, `社会人・独立の初期名簿の大卒が多すぎる: ${(origin.uni / origin.n).toFixed(2)}`);
+
 log(
   `■ トライアウトの受験者: OK（${runs.length}回・${WORLDS}世界・12球団 / 高卒の平均評価${mean((r) => r.hsMean).toFixed(1)} 対 大学生${mean((r) => r.uniMean).toFixed(1)}` +
     ` / 高卒が中央値超え${(mean((r) => r.beatMedian) * 100).toFixed(0)}% / 上位10人の高卒${mean((r) => r.top10hs).toFixed(1)}人` +
     ` / 逸材枠${eliteCount.toFixed(1)}人（評価${eliteMean.toFixed(1)}）・最上位が高卒の年${(topYears * 100).toFixed(0)}%` +
-    ` / 素材型${rawCount.toFixed(1)}人（${[...labels].join('・')}）)`,
+    ` / 素材型${rawCount.toFixed(1)}人（${[...labels].join('・')}）` +
+    ` / 一人用の初期名簿の大卒${((origin.uni / origin.n) * 100).toFixed(0)}%・経歴の食い違い0)`,
 );

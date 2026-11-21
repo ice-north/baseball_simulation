@@ -66,6 +66,7 @@ export function decisionText(decisions) {
     .join(' · ');
 }
 
-// 勝率は野球の慣例どおり先頭の0を省く（1.000はそのまま）。
+// 勝率は野球の慣例どおり先頭の0を省く（1.000はそのまま）。打率・守備率も同じ。
+// ⚠ サーバー（`server/coachView.mjs`）も使う。画面ごとに同じ式を書き写さない（監査 2026-11-20）
 export const formatRate = (value) =>
   Number.isFinite(value) ? value.toFixed(3).replace(/^0\./, '.') : '—';

@@ -162,10 +162,12 @@ export function executeAutoSubstitutePitcher(ctx) {
     return false;
   });
   if (availablePitchers.length === 0) return;
-  // ⚠ **同じ役割の中は、決めた順に使う**（いしだ 2026-11-20「リリーフ投手が同じロールだった
-  //    場合、並びが上の選手が優先して使われてしまいます」）。`rotation.relievers` は
-  //    投手起用で決めた順（`server/lineupTactics.mjs`）。ここで並べ替えておけば、
-  //    下の「敗戦処理を探す」などの先頭取りがその順に従う
+  // `rotation.relievers` の順に並べてから、下の「敗戦処理を探す」などの先頭取りをする。
+  // ⚠ 2026-11-20 監査で注を実際に合わせた。ここを呼ぶのは**一人用の手動試合**（`App.jsx`）
+  //    だけで、一人用の `relievers` は投手起用の保存（`soloPitchingEdit.js`）が**名簿の並び**で
+  //    書くので、いまは並びは変わらない（名簿の並びのまま）。オンラインの救援の
+  //    「同じ役割の中の順」（`pitcherOrder`。`server/lineupTactics.mjs`）は、自動試合
+  //    （`autoSimulation.js`）が `setupMen` / `middleRelievers` の並びで選ぶ側で効いている
   {
     const order = rotation?.relievers || [];
     const rank = (id) => {

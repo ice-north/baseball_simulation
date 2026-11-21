@@ -119,7 +119,7 @@ fun eventNotices(
             EventNotice(
                 "result:offseason:${r.at("year").int() ?: year}",
                 "年度更新が終わりました",
-                listOfNotNull("伸び・衰えが出ました", if (departed > 0) "引退・退団 ${departed}人" else null).joinToString("\n"),
+                listOfNotNull(if (departed > 0) "引退・退団 ${departed}人" else null, "順位・入退団は手続きの「その年のまとめ」で見られます").joinToString("\n"),
             ),
         )
     }

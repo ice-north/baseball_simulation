@@ -24,7 +24,7 @@ import {
 } from '../src/online/social.js';
 import { prepareDailyLineup } from './dailyLineup.mjs';
 import { applyStaffTactics } from './coachEngine.mjs';
-import { scoringPlaysOf, winningHitOf, inningPlaysOf } from './recordedStats.mjs';
+import { scoringPlaysOf, winningHitOf } from './recordedStats.mjs';
 import { pushInbox, teamLabelIn, assertCanPlay } from './social.mjs';
 
 const BATTING = ['atBats', 'hits', 'homeruns', 'rbis', 'walks', 'strikeouts', 'doubles', 'triples', 'stolenBases'];
@@ -247,8 +247,10 @@ function exhibitionBox(result, events) {
     scoring: scoringPlaysOf(events, result),
     teams,
   };
-  // 回ごとの攻撃（打席の順）。⚠ `teams` を作った後に作る（打者の番号がその並びの番号）
-  box.plays = inningPlaysOf(events, box, result);
+  // ⚠ 回ごとの攻撃（`plays`）は**残さない**。練習試合の画面（`SocialPages.jsx` の
+  //    `ExhibitionBox`）はスコアボードを押せる形でなく、アプリも読まないので、保存が
+  //    1試合約1KB増えるだけだった（2026-11-20 監査で外した）。出すときは
+  //    `inningPlaysOf(events, box, result)` を `teams` を作った後に足す
   return box;
 }
 

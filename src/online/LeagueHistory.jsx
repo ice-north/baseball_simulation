@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Page, PageTabs, usePageTab } from './Page.jsx';
-import { teamLabel, teamShort } from './gameText.js';
-import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
+import { teamLabel, teamShort, formatRate as rate3 } from './gameText.js';
+import { PYRAMID_LEAGUES, compareLeagueStanding, withWinRate } from './pyramidLeague.js';
 import { gamesBehind, gapText } from './standingsGap.js';
 import { Fold, Honors, Owners, ProDrafted, LeagueTopics, SeasonReview } from './Chronicle.jsx';
 import { TransactionsPage } from './SocialPages.jsx';
@@ -33,21 +33,16 @@ const TABS = [
 ];
 
 const leagueOf = (id) => PYRAMID_LEAGUES.find((l) => l.id === id) || null;
-const withRate = (s) => ({
-  ...s,
-  winRate: s.winRate ?? (s.wins + s.losses > 0 ? s.wins / (s.wins + s.losses) : 0),
-});
-const rate3 = (v) => v.toFixed(3).replace(/^0/, '');
 
 /** 年度の記録1年ぶんを部ごとに並べる（順位表と同じ並べ方） */
 export function yearTables(entry) {
   if (!entry?.standings?.length) return [];
-  if (!entry.leagues) return [{ league: null, rows: [...entry.standings].map(withRate).sort(compareLeagueStanding) }];
+  if (!entry.leagues) return [{ league: null, rows: [...entry.standings].map(withWinRate).sort(compareLeagueStanding) }];
   return PYRAMID_LEAGUES.map((league) => ({
     league,
     rows: entry.standings
       .filter((s) => entry.leagues[s.team] === league.id)
-      .map(withRate)
+      .map(withWinRate)
       .sort(compareLeagueStanding),
   })).filter((g) => g.rows.length);
 }
@@ -204,7 +199,7 @@ function ProPage({ view }) {
   return (
     <Page
       title="プロ入りとその後"
-      sub="このリーグからNPBのドラフトで指名された選手と、プロに入ってからの成績です（新しい順。プロでの成績は飾りで、リーグには効きません）。名前を押すと指名した時点の能力が開きます。"
+      sub="このリーグからNPBのドラフトで指名された選手と、プロに入ってからの成績です（新しい順。プロでの成績は飾りで、リーグには効きません）。今年の指名は、名前を押すと指名した時点の能力が開きます。"
     >
       <section className="online-card">
         <ProDrafted

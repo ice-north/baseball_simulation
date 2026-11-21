@@ -46,12 +46,22 @@ export const PAST_GAMES = '@pastGames';
  */
 export const SAME_AS_SCHEDULE = '@schedule';
 
+/**
+ * 日程の試合 id → 結果。**結果のある試合だけ**入れる（印にするときと戻すときで同じ引き方にする）。
+ * ⚠ 2026-11-20 監査。以前は戻す側だけ結果の無い試合も入れていて、同じ id が日程に2つあると
+ *    後に出た方（結果の無い方）を引き、印にしたときと別の試合を見ることがあった
+ */
+function resultsById(schedule) {
+  const byId = new Map();
+  for (const game of schedule || []) if (game?.result) byId.set(game.id, game.result);
+  return byId;
+}
+
 /** 保存する芯: 今季の試合結果の二重持ちを印にした写し（元は変えない） */
 function packResults(core) {
   const season = core?.league?.season;
   if (!Array.isArray(season?.results) || !Array.isArray(season?.schedule)) return core;
-  const byId = new Map();
-  for (const game of season.schedule) if (game?.result) byId.set(game.id, game.result);
+  const byId = resultsById(season.schedule);
   let changed = false;
   const results = season.results.map((entry) => {
     const twin = entry?.result && byId.get(entry.gameId);
@@ -69,7 +79,7 @@ function unpackResults(core) {
   const season = core?.league?.season;
   if (!Array.isArray(season?.results) || !season.results.some((e) => e?.result === SAME_AS_SCHEDULE))
     return core;
-  const byId = new Map((season.schedule || []).map((game) => [game?.id, game?.result]));
+  const byId = resultsById(season.schedule);
   const results = season.results.map((entry) => {
     if (entry?.result !== SAME_AS_SCHEDULE) return entry;
     const twin = byId.get(entry.gameId);

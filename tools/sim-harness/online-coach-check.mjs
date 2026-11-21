@@ -261,8 +261,15 @@ assert.equal(inCamp.phase?.kind, 'camp', 'キャンプに入らない');
   // 任せる: 方針まで指導者
   const l = clone(inCamp);
   // ⚠ 任せ方の命令は記録の索引を作り直さない（`leagueService` の archiveUnchanged）。
-  //    編成を指導者のものに作り直しても、索引（選手・球団の記録）が変わらないこと
-  const index = () => JSON.stringify(buildArchiveIndex({ league: l, sessions: {} }));
+  //    編成を指導者のものに作り直しても、索引（選手・試合の記録）が変わらないこと
+  // ⚠ 球団の索引は比べない（2026-11-20 監査・判断4）。球団情報には今の起用が入り、任せると
+  //    指導者の救援の順（`pitcherOrder`）が書かれて変わる。`archiveUnchanged` でも保存側は
+  //    球団の索引だけは作り直す（`supabaseStore.attemptCommand` → `buildTeamsIndex`）ので、
+  //    使い回すのは選手・試合の索引だけ
+  const index = () => {
+    const { players, games } = buildArchiveIndex({ league: l, sessions: {} });
+    return JSON.stringify({ players, games });
+  };
   const indexBefore = index();
   updateStaffModes(l, human.userId, { tactics: 'delegate', lineup: 'delegate', pitching: 'delegate' });
   assert.equal(index(), indexBefore, '任せ方を変えると記録の索引が変わる');

@@ -229,9 +229,12 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
       : groups[category].find(([id]) => id === groupId) || groups[category][0];
   // ⚠ **タブを変えても枠が動かない**（いしだ 2026-11-20）。出た高さの最大を覚えて床にする。
   //    小窓を開いている間だけの値で、閉じれば消える
+  // ⚠ **PC だけ**（スマホはページ送りで行数が決まっているので当てない。CSS の
+  //    `.online-desktop … .online-record-area` と同じ。2026-11-20 監査: スマホにも当たっていた）
   const areaRef = useRef(null);
   const [floor, setFloor] = useState(0);
   useAfterPaint(() => {
+    if (!wide) return;
     const height = areaRef.current?.offsetHeight || 0;
     if (height > floor) setFloor(height);
   });
@@ -341,7 +344,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
       <div
         className="online-record-area"
         ref={areaRef}
-        style={{ '--rows': maxRows, ...(floor ? { minHeight: `${floor}px` } : {}) }}
+        style={{ '--rows': maxRows, ...(wide && floor ? { minHeight: `${floor}px` } : {}) }}
       >
       <table className="online-record-table">
         <thead>

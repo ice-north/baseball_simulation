@@ -31,12 +31,14 @@ import {
 } from '../../server/social.mjs';
 import { scoringPlaysOf } from '../../server/recordedStats.mjs';
 import { effectiveStaffModes } from '../../server/coachEngine.mjs';
-import { applyJoin, applyProfile, nextMemberIndex, teamCityOf, teamNicknameOf, teamDisplayOf, teamRegionOf } from '../../src/online/membership.js';
+import { applyJoin, applyProfile, nextMemberIndex, teamCityOf, teamNicknameOf, teamDisplayOf, teamRegionOf, teamHomeOf } from '../../src/online/membership.js';
+import { findShortClash } from '../../src/online/shared.js';
 import {
   CITY_PREFS,
   prefsOfCity,
   prefsOfTeam,
   localPlayersIn,
+  KNOWN_CITIES,
 } from '../../src/online/hometown.js';
 import {
   pruneDepartedPicks,
@@ -389,6 +391,145 @@ import {
     // 古い画面（`teamName` だけ送る）も今までどおり通る
     applyProfile(l, { userId: 'a', teamName: '昔ながらの名前' });
     assert.equal(l.teams[0].displayName, '昔ながらの名前', '古い送り方が効かなくなっている');
+    // ⚠ 古い送り方で名前を変えたら、分けた名前（地域名・チーム名・地方）を残さない
+    //    （2026-11-20 監査。正式名だけ変わり、略称・地域名・地元が「美瑛」のままだった）
+    assert.equal(teamDisplayOf(l.teams[0]).short, '昔なが', '古い送り方の後も前の地域名が略称に残っている');
+    assert.equal(teamDisplayOf(l.teams[0]).city, '', '古い送り方の後も前の地域名が残っている');
+    assert.equal(teamRegionOf(l.teams[0]), null, '古い送り方の後も前の地方が残っている');
+  }
+
+  // 古い送り方（アプリ・初めのセット選び）は名前を変えなくても毎回 `teamName` を送る。
+  // 名前が同じなら分けた名前を消さない。いまの地域名で始まる名前ならチーム名だけ差し替える
+  {
+    const l = {
+      season: { year: 1 },
+      teams: [{ name: '新潟ブリザーズ', city: '新潟', abbreviation: '新潟' }],
+      members: [{ userId: 'a', teamName: '新潟ブリザーズ' }],
+    };
+    applyProfile(l, { userId: 'a', cityName: '美瑛', nickname: 'ブルーレイクス', region: 'hokkaido' });
+    applyProfile(l, { userId: 'a', teamName: '美瑛ブルーレイクス', comment: 'がんばる' });
+    assert.equal(teamRegionOf(l.teams[0]), 'hokkaido', '名前を変えない古い送り方で地方が消えた');
+    assert.equal(teamDisplayOf(l.teams[0]).short, '美瑛', '名前を変えない古い送り方で略称が変わった');
+    applyProfile(l, { userId: 'a', teamName: '美瑛ベアーズ' });
+    assert.deepEqual(
+      [teamDisplayOf(l.teams[0]).city, teamDisplayOf(l.teams[0]).nickname, teamRegionOf(l.teams[0])],
+      ['美瑛', 'ベアーズ', 'hokkaido'],
+      '地域名で始まる名前に変えたのに地域名・地方を残していない',
+    );
+    // 別の人が入るときも前の人の分けた名前を引き継がない（CPUに戻すのは下の A3 で見る）
+    l.members = [];
+    l.teams[0].displayName = l.teams[0].name;
+    l.teams[0].league = 'B';
+    applyJoin(l, { userId: 'b', teamName: '', now: 'x' });
+    assert.equal(teamDisplayOf(l.teams[0]).short, '新潟', '次に入った人に前の人の略称が残っている');
+    assert.equal(teamRegionOf(l.teams[0]), null, '次に入った人に前の人の地方が残っている');
+  }
+
+  // 判断1（いしだ 2026-11-20「おすすめで」）: 略称（＝地域名）が**同じリーグの**ほかの球団
+  // （人の球団・CPU球団の既定の略称）とぶつかる名前は断る。別のリーグなら通す。
+  // 既にぶつかっている保存データは触らず、名前を変えない送り方は通す
+  {
+    const fresh = () => ({
+      season: { year: 1 },
+      teams: [
+        { name: '新潟ブリザーズ', city: '新潟', abbreviation: '新潟', league: 'B' },
+        { name: '旭川スターズ', city: '旭川', abbreviation: '旭川', league: 'B' },
+        { name: '美瑛ベアーズ', city: '美瑛', abbreviation: '美瑛', league: 'B', displayName: '富良野ベアーズ', displayCity: '富良野' },
+        { name: '札幌ホークス', city: '札幌', abbreviation: '札幌', league: 'A' },
+      ],
+      members: [
+        { userId: 'a', teamName: '新潟ブリザーズ' },
+        { userId: 'c', teamName: '美瑛ベアーズ' },
+      ],
+    });
+    // CPU球団の既定の略称（旭川）・人の球団の地域名（富良野）とぶつかる
+    for (const cityName of ['旭川', '富良野']) {
+      const l = fresh();
+      assert.throws(
+        () => applyProfile(l, { userId: 'a', cityName, nickname: 'ブリザーズ', region: 'hokkaido' }),
+        (e) => e.status === 409 && /略称「.+」は同じリーグ/.test(e.message),
+        `同じリーグの略称「${cityName}」とぶつかる地域名を通した`,
+      );
+      // ⚠ 断ったときは何も書き換えない（地方だけ先に書いていた）
+      assert.equal(l.teams[0].displayName, undefined, '断ったのに球団名を書き換えた');
+      assert.equal(l.teams[0].displayRegion, undefined, '断ったのに地方を書き換えた');
+    }
+    // 別のリーグの略称（札幌）とは同じでよい
+    {
+      const l = fresh();
+      applyProfile(l, { userId: 'a', cityName: '札幌', nickname: 'ブリザーズ' });
+      assert.equal(teamDisplayOf(l.teams[0]).short, '札幌', '別のリーグの略称と同じ地域名を断った');
+    }
+    // 古い送り方（`teamName` だけ。略称は頭3文字）でもぶつかれば断る
+    {
+      const l = fresh();
+      assert.throws(
+        () => applyProfile(l, { userId: 'a', teamName: '富良野フォックス' }),
+        /略称「富良野」は同じリーグ/,
+        '古い送り方で略称がぶつかる名前を通した',
+      );
+      assert.equal(l.teams[0].displayName, undefined, '古い送り方で断ったのに球団名を書き換えた');
+      // 参加で付ける名前も同じ
+      const j = fresh();
+      j.members = j.members.filter((m) => m.userId !== 'a');
+      j.teams = j.teams.filter((t) => t.name !== '旭川スターズ');
+      assert.throws(
+        () => applyJoin(j, { userId: 'x', teamName: '富良野フォックス', now: 'x' }),
+        /略称「富良野」/,
+        '参加で略称がぶつかる名前を通した',
+      );
+    }
+    // 既にぶつかっている保存データ（移行しない）: 名前を変えない送り方・ひとことだけは通す
+    {
+      const l = fresh();
+      Object.assign(l.teams[0], { displayName: '旭川ブリザーズ', displayCity: '旭川', displayNickname: 'ブリザーズ' });
+      applyProfile(l, { userId: 'a', teamName: '旭川ブリザーズ', comment: 'がんばる' });
+      applyProfile(l, { userId: 'a', cityName: '旭川', nickname: 'ブリザーズ', comment: 'がんばる' });
+      // チーム名だけ変えるのも略称は変わらないので通す
+      applyProfile(l, { userId: 'a', teamName: '旭川ベアーズ' });
+      assert.equal(teamDisplayOf(l.teams[0]).short, '旭川');
+      assert.equal(l.members[0].comment?.text, 'がんばる', 'ぶつかったままの保存データでひとことを直せない');
+    }
+    // Web の小窓が使う判定（ビューの `teamLabels`・`teamLeagues` から作る）
+    {
+      const entries = [
+        { name: 'A', league: 'B', short: '新潟', label: '新潟ブリザーズ' },
+        { name: 'B', league: 'B', short: '旭川', label: '旭川スターズ' },
+        { name: 'C', league: 'A', short: '札幌', label: '札幌ホークス' },
+      ];
+      assert.equal(findShortClash(entries, 'A', '旭川')?.label, '旭川スターズ');
+      assert.equal(findShortClash(entries, 'A', '札幌'), null, '別のリーグの略称を断っている');
+      assert.equal(findShortClash(entries, 'A', '新潟'), null, 'いまの略称を断っている');
+      assert.equal(findShortClash(entries, 'A', ''), null, '空の地域名を断っている');
+    }
+  }
+
+  // ⚠ 地方を選んでいない球団の地元は**地名から**引く（地方全体に広げない。2026-11-20 監査。
+  //    地名から地方を引いて渡していたので、新潟が北信越6県・筑豊が九州8県になっていた）
+  {
+    const widened = KNOWN_CITIES.filter((city) => {
+      const team = { name: `${city}X`, abbreviation: city, city };
+      return prefsOfTeam(teamHomeOf(team)).join() !== prefsOfCity(city).join();
+    });
+    assert.deepEqual(widened, [], `地方を選んでいない既定の球団の地元が変わっている: ${widened.slice(0, 5)}`);
+    assert.equal(teamDisplayOf({ name: '新潟X', abbreviation: '新潟', city: '新潟' }).region, null, '小窓の初めの地方を地名から埋めている');
+  }
+
+  // ⚠ 分けずに付け替えた古い球団（表示名が既定の都市で始まらない）は、小窓の地域名を空で出す。
+  //    既定の都市を入れると、地方だけ選んで保存したとき「新潟美瑛ブルーレイクス」になっていた
+  {
+    const l = {
+      season: { year: 1 },
+      teams: [{ name: '新潟ブリザーズ', city: '新潟', abbreviation: '新潟' }],
+      members: [{ userId: 'a', teamName: '新潟ブリザーズ' }],
+    };
+    applyProfile(l, { userId: 'a', teamName: '美瑛ブルーレイクス' });
+    const d = teamDisplayOf(l.teams[0]);
+    assert.deepEqual([d.city, d.nickname], ['', '美瑛ブルーレイクス'], '古い球団の小窓の初めの値が既定の都市を含む');
+    // 地元は分ける前と同じく球団の土地
+    assert.deepEqual(prefsOfTeam(teamHomeOf(l.teams[0])), ['新潟'], '古い球団の地元が変わった');
+    applyProfile(l, { userId: 'a', cityName: d.city, nickname: d.nickname, region: 'hokkaido' });
+    assert.equal(l.teams[0].displayName, '美瑛ブルーレイクス', '地方だけ選んで保存したら球団名が変わった');
   }
 
   // 途中参加の種: 版13へ上げたリーグには `memberSeq` が無い。球団をCPUに戻した後に入った人が
@@ -585,6 +726,8 @@ try {
   assert.ok(Number.isInteger(played.result.homeScore) && Number.isInteger(played.result.awayScore));
   assert.equal(played.result.home, C, '受けた側がホームでない');
   assert.ok(played.result.teams[A]?.length > 8, '練習試合のボックスが無い');
+  // 回ごとの攻撃は練習試合の画面が読まないので残さない（2026-11-20 監査。保存の無駄）
+  assert.equal(played.result.plays, undefined, '練習試合の箱に読まない plays が残っている');
   // ⚠ 成績・疲労・調子・記録・順位・日程に入らない
   for (const name of [A, C])
     assert.deepEqual(
@@ -789,8 +932,18 @@ try {
     await send('a', 'challenge', { toTeam: C });
     await assert.rejects(() => send('b', 'releaseMember', { userId: 'c' }), (e) => e.status === 403, '管理者でない人が外せた');
     await assert.rejects(() => send('a', 'releaseMember', { userId: 'a' }), /自分/, '管理者が自分を外せた');
+    // ⚠ 分けて付けた名前（地域名・チーム名・地方）もCPUに戻すときに消す（2026-11-20 監査）
+    await send('c', 'profile', { cityName: '美瑛', nickname: 'ブルーレイクス', region: 'hokkaido' });
     await send('a', 'releaseMember', { userId: 'c' });
     const l = await live();
+    {
+      const released = l.teams.find((t) => t.name === C);
+      assert.deepEqual(
+        [released.displayCity, released.displayNickname, released.displayRegion],
+        [undefined, undefined, undefined],
+        'CPUに戻した球団に前の人の地域名・チーム名・地方が残っている',
+      );
+    }
     assert.ok(!l.members.some((m) => m.userId === 'c'), '外した人が残っている');
     assert.equal(l.teams.find((t) => t.name === C).displayName, C, '球団名が元に戻っていない');
     // ⚠ CPU球団からほかの人への提案（`runCpuTrades`）は残ってよい。外した人の分だけを見る

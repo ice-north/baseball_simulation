@@ -2584,11 +2584,11 @@ small.online-gain:not(:where(.online-sp *)) {
    （いしだ 2026-11-19「横に長くなっています。スコアボードと同じくらいの幅に縮めて、
    縦も詰めて、コンパクトにしてください」）。
    ⚠ **中身は真ん中に置く**（いしだ 2026-11-20「詰めたことで右枠が余っています。
-   カラムをスコアの横幅に合わせ、真ん中に表示してください」）。幅は1か所
-   （`--online-game-width`）で持ち、スコアボード・タブ・表の3つに同じ幅を当てる。
+   カラムをスコアの横幅に合わせ、真ん中に表示してください」）。幅は小窓の幅
+   （`.online-game-dialog` の `width`）で持ち、スコアボード・点数の行・タブ・表は
+   その中いっぱいに広げる（下の指定）。
    ⚠ スマホ（`.online-mobile`）は触る大きさ（44px）を保つので、ここはPCだけに当てる */
 .online-desktop .online-game-dialog {
-  --online-game-width: min(67%, 1fr);
   --online-record-row: 26px;
 }
 /* ⚠ 小窓そのものを中身の幅まで狭めたので（`.online-game-dialog` の `width`）、
@@ -2967,13 +2967,11 @@ small.online-gain:not(:where(.online-sp *)) {
   box-shadow: inset 0 0 0 1px #08160f;
   overflow-x: auto;
 }
-/* ⚠ PCは**横幅を3分の2ほどに**（いしだ 2026-11-19「スコアボードも、2/3程度に
-   横幅を縮めてほしい」）。小窓いっぱいに広げると枠が間延びして見える。
-   スマホ（`is-compact`）は狭いので縮めない */
-.online-scoreboard:not(.is-compact) {
-  max-width: 67%;
-  min-width: min(100%, 440px);
-}
+/* ⚠ PCの横幅（いしだ 2026-11-19「スコアボードも、2/3程度に横幅を縮めてほしい」）は、
+   いまは小窓そのものを狭めて持つ（`.online-desktop .online-game-dialog .online-scoreboard`）。
+   スコアボードは試合成績の小窓（`.online` の直下に出す）にしか出ないので、
+   以前の `:not(.is-compact) { max-width: 67% }` はその指定に負けて効いていなかった
+   （2026-11-20 監査で外した） */
 .online-scoreboard table {
   width: 100%;
   border-collapse: collapse;
@@ -3070,7 +3068,8 @@ small.online-gain:not(:where(.online-sp *)) {
 }
 /* ⚠ **打席の色**（いしだ 2026-11-20「安打なら黄色、打点も付いたら赤色など、視覚的に
    わかりやすくして」）。点が入った打席がいちばん強い（赤）→ 安打（黄）→ そのほか →
-   アウト（落とす）。実測のコントラスト（地 #06130c の上）: 黄13.7・赤6.9・落とした色8.9 */
+   アウト（落とす）。コントラスト（地 #06130c の上。WCAG の式）: 黄13.7・赤8.2・
+   落とした色8.9・そのほか（#cbd5e1）12.8 */
 .online-inning-plays li[data-tone='hit'] .online-inning-play-text {
   color: #ffd84d;
 }
@@ -7383,6 +7382,14 @@ table.paper-table {
 .online-standings td.online-standings-gap {
   font-variant-numeric: tabular-nums;
   color: #cbd5e1;
+}
+/* ⚠ 幅の狭いスマホ（360px など）では出さない（監査 2026-11-20）。横にはみ出しはしないが、
+   シーズン中（勝敗が2桁・差が「12.5」）に長い球団名（東大阪クルセイダーズ）が2行に割れ、
+   順位の札と名前が別の行に分かれた。375px 以上は列が無いときと同じ折り返しで収まる */
+@media (max-width: 370px) {
+  .online-standings .online-standings-gap {
+    display: none;
+  }
 }
 
 /* --- 球団の歩み（`TeamHistoryChart.jsx`） ------------------------------- */

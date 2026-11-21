@@ -29,21 +29,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
-import jp.icenorth.baseball.shared.DEFENSE_POSITION_ORDER
 import jp.icenorth.baseball.shared.LEAGUE_NAMES
 import jp.icenorth.baseball.shared.LeagueView
 import jp.icenorth.baseball.shared.OnlineJson
 import jp.icenorth.baseball.shared.TeamDiagnosis
 import jp.icenorth.baseball.shared.allTeamRatings
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.SERVER_UPDATE_PENDING
 import jp.icenorth.baseball.shared.defenseGrade
+import jp.icenorth.baseball.shared.defensePositionLabel
+import jp.icenorth.baseball.shared.defenseRows
 import jp.icenorth.baseball.shared.defenseRange
 import jp.icenorth.baseball.shared.fitnessAt
+import jp.icenorth.baseball.shared.hasTeamRatings
+import jp.icenorth.baseball.shared.isFieldPosition
 import jp.icenorth.baseball.shared.int
+import jp.icenorth.baseball.shared.jsRound
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
-import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.rankIn
 import jp.icenorth.baseball.shared.rate3
 import jp.icenorth.baseball.shared.ratingAverage
@@ -60,7 +64,11 @@ import kotlinx.serialization.json.JsonObject
  *    値はサーバーが全球団ぶん作る（ビューの teamRatings）
  */
 
-/** 球団の名簿と起用（自球団は手元のビュー、他球団はその場で読む） */
+/**
+ * 球団の名簿と起用（自球団は手元のビュー、他球団はその場で読む）。
+ * ⚠ 呼ぶのは PlayersScreen の1か所だけにし、「能力」「スタメン」「守備」へ同じものを渡す。以前は切り替えごとに
+ *    呼んでいて、他球団を見ながら切り替えるたびに同じ `team` を読み直していた（2026-11-20 監査）
+ */
 class TeamData(val roster: List<JsonObject>?, val lineup: JsonObject?, val failure: String?, val retry: () -> Unit)
 
 @Composable
@@ -91,8 +99,7 @@ private fun sumOf(roster: List<JsonObject>, side: String, key: String): Int =
 
 /** チーム能力値（レーダー）と今季のチーム成績。自球団はチーム診断も */
 @Composable
-fun TeamOverviewPane(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
-    val data = rememberTeamData(model, view, raw, team)
+fun TeamOverviewPane(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String, data: TeamData, onOpenPlan: (String) -> Unit, onOpenTrade: () -> Unit) {
     val own = team == view.teamName
     val rivals = remember(raw, team) { rivalsOf(view, raw, team) }
     val everyone = remember(raw) { allTeamRatings(raw) }
@@ -102,7 +109,9 @@ fun TeamOverviewPane(model: AppViewModel, view: LeagueView, raw: JsonObject, tea
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Section("チーム能力値") {
             Muted("いまの起用（スタメン・先発ローテ・リリーフ・控え）に就いている選手の能力の平均です（0〜100）。図は項目ごとにリーグ全球団の中で比べた位置で、外ほど上です。目安で、試合の強さを直接決める数字ではありません。")
-            if (ratings == null) Muted("起用がまだ無いので、チーム能力値を出せません。")
+            // ⚠ 項目が無い（古いサーバー）のと、その球団の値が無い（起用がまだ無い）を分ける（判断6、2026-11-20 監査）
+            if (!hasTeamRatings(raw)) Muted(SERVER_UPDATE_PENDING)
+            else if (ratings == null) Muted("起用がまだ無いので、チーム能力値を出せません。")
             else TeamRadar(
                 ratings = ratings,
                 average = if (inLeague.isEmpty()) null else ratingAverage(inLeague),
@@ -166,8 +175,7 @@ private fun Tiles(tiles: List<Triple<String, String, String?>>) {
 
 /** スタメン・投手陣（いまの打順と守備位置、先発ローテとリリーフの役割） */
 @Composable
-fun TeamLineupPane(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String) {
-    val data = rememberTeamData(model, view, raw, team)
+fun TeamLineupPane(model: AppViewModel, data: TeamData) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
         val roster = data.roster
         when {
@@ -181,8 +189,7 @@ fun TeamLineupPane(model: AppViewModel, view: LeagueView, raw: JsonObject, team:
 
 /** 守備分析: いまのスタメンの守備位置ごとの守備範囲・適性・失策（守備位置の順） */
 @Composable
-fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team: String) {
-    val data = rememberTeamData(model, view, raw, team)
+fun TeamDefensePane(model: AppViewModel, data: TeamData) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val roster = data.roster
         val lineup = data.lineup
@@ -192,16 +199,15 @@ fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team
             lineup == null || lineup.at("battingOrder").list().isEmpty() -> Muted("この球団のスタメンはまだ読めません。次に日付が進むと出ます。")
             else -> {
                 val byId = roster.associateBy { it.at("id").num()?.toLong() }
-                val order = lineup.at("battingOrder").list().mapNotNull { it.obj() }
-                    .filter { it.at("position").str() in DEFENSE_POSITION_ORDER }
-                    .sortedBy { DEFENSE_POSITION_ORDER.indexOf(it.at("position").str()) }
-                val ranges = order.mapNotNull { e -> byId[e.at("playerId").num()?.toLong()]?.let { defenseRange(it, e.at("position").str().orEmpty()) } }
+                // DH の行も末尾に出す（PC と同じ。判断6、2026-11-20 監査）。チーム守備の平均には入れない
+                val order = defenseRows(lineup.at("battingOrder").list().mapNotNull { it.obj() })
+                val ranges = order.filter { isFieldPosition(it.at("position").str()) }.mapNotNull { e -> byId[e.at("playerId").num()?.toLong()]?.let { defenseRange(it, e.at("position").str().orEmpty()) } }
                 val teamRange = if (ranges.isEmpty()) 0.0 else ranges.average()
                 val teamGrade = defenseGrade(teamRange)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("チーム守備 ", style = MaterialTheme.typography.titleSmall)
                     Text(teamGrade.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(teamGrade.color))
-                    Muted("　平均の守備範囲 ${kotlin.math.round(teamRange * 100).toInt()}")
+                    Muted("　平均の守備範囲 ${jsRound(teamRange * 100)}")
                 }
                 Section("守備位置ごと") {
                     Row(Modifier.fillMaxWidth()) {
@@ -219,7 +225,7 @@ fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team
                         val p = byId[e.at("playerId").num()?.toLong()]
                         Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(positionLabel(pos), modifier = Modifier.width(34.dp), fontWeight = FontWeight.Bold)
+                                Text(defensePositionLabel(pos), modifier = Modifier.width(34.dp), fontWeight = FontWeight.Bold)
                                 if (p == null) {
                                     Muted("（空き）")
                                     return@Row
@@ -229,7 +235,7 @@ fun TeamDefensePane(model: AppViewModel, view: LeagueView, raw: JsonObject, team
                                 val grade = defenseGrade(range)
                                 Row(Modifier.width(48.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                                     Text(grade.label, fontWeight = FontWeight.Bold, color = Color(grade.color))
-                                    Text(" ${kotlin.math.round(range * 100).toInt()}", style = MaterialTheme.typography.labelSmall)
+                                    Text(" ${jsRound(range * 100)}", style = MaterialTheme.typography.labelSmall)
                                 }
                                 Text("${fitnessAt(p, pos)}", modifier = Modifier.width(36.dp), textAlign = TextAlign.End)
                                 val chances = p.at("seasonStats", "batting", "fieldingChances").num()?.toInt() ?: 0

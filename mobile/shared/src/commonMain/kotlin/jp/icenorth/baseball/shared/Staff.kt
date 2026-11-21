@@ -92,10 +92,14 @@ data class CoachCard(
      * （サーバーの coachAbilities。先方要望 2026-11-20）。古いサーバーには無い
      */
     val abilities: Map<String, Int>? = null,
-    /** これまでの指導チームと役職（古い順。full のカードだけ） */
-    val stints: List<CoachStint> = emptyList(),
-    /** 主な指導選手（在任中に出番の多かった5人まで。full のカードだけ） */
-    val pupils: List<CoachPupil> = emptyList(),
+    /**
+     * これまでの指導チームと役職（古い順。full のカードだけ）。
+     * ⚠ 既定は null（空にしない）。古いサーバーは項目を載せず、空の一覧（まだ指導していない）と
+     *    見分けられないと「まだ指導した球団はありません」と事実と違う文になる（判断6、2026-11-20 監査）
+     */
+    val stints: List<CoachStint>? = null,
+    /** 主な指導選手（在任中に出番の多かった5人まで。full のカードだけ）。無い（古いサーバー）は null */
+    val pupils: List<CoachPupil>? = null,
 ) {
     /** 呼び名（姓だけ。「山田監督」） */
     val shortName: String get() = name.substringBefore(' ').ifBlank { name }

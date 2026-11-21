@@ -395,6 +395,15 @@ export function pyramidSeasonSchedule(teams, { year, turns = SEASON_TURNS } = {}
  * ⚠ 順位表の画面もこれで並べること。全体の並び（勝率→勝利数）のまま出すと、
  *    同率のとき画面の「昇格圏・降格圏」の印と実際に動く球団が食い違う
  */
+/**
+ * 勝率の無い行（古い年度の記録）に勝率を補う。並べる前に通すこと（`compareLeagueStanding` は勝率で並べる）。
+ * ⚠ 画面（リーグ史）とサーバー（球団史の年表）で同じものを使う（監査 2026-11-20）
+ */
+export const withWinRate = (s) => ({
+  ...s,
+  winRate: s.winRate ?? (s.wins + s.losses > 0 ? s.wins / (s.wins + s.losses) : 0),
+});
+
 export function compareLeagueStanding(sa = {}, sb = {}) {
   const a = sa.team ?? '';
   const b = sb.team ?? '';

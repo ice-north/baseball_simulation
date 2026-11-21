@@ -34,7 +34,7 @@ import { ownerRecords } from './ownerRecords.mjs';
 import { seasonReview } from './seasonReview.mjs';
 import { strategyStats } from '../src/online/strategyStats.js';
 import { tiesArticles } from '../src/online/hometown.js';
-import { teamCityOf, teamDisplayOf, teamRegionOf } from '../src/online/membership.js';
+import { teamDisplayOf, teamHomeOf } from '../src/online/membership.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -336,6 +336,14 @@ export function ownRecentGames(schedule, ownTeam, size = 5, league = null) {
 }
 
 export function projectLineup(team) {
+  // ⚠ 救援の順番は**名簿に居る選手だけ**返す（2026-11-20 監査）。保存した `pitcherOrder` を
+  //    そのまま返すと、退団・トレードで居なくなった選手の id も画面とアプリへ渡り、
+  //    アプリはそれをそのまま送り返していた（サーバーは `reliefOrderOf` で落とすので
+  //    害は無いが、画面へ返す形に居ない選手が残る）。登録を外れた選手は名簿に居るので残す
+  const onRoster = new Set((team.players || []).map((p) => p.id));
+  const pitcherOrder = (team.pitchingRotation?.pitcherOrder || []).filter((id) =>
+    onRoster.has(id),
+  );
   return {
     battingOrder: (team.lineupSettings?.battingOrder || []).filter(
       (e) => e.position !== 'pitcher',
@@ -378,9 +386,7 @@ export function projectLineup(team) {
           ),
           // ⚠ **同じ役割の中の順番**（いしだ 2026-11-20）。画面はこれを読んで並べ、
           //    保存で送り返す。無い球団（前からある保存）は名簿の並び＝今までの順
-          ...(team.pitchingRotation.pitcherOrder?.length
-            ? { pitcherOrder: [...team.pitchingRotation.pitcherOrder] }
-            : {}),
+          ...(pitcherOrder.length ? { pitcherOrder } : {}),
         }
       : {}),
     ...(team.onlineTactics ? { tactics: team.onlineTactics } : {}),
@@ -411,9 +417,9 @@ const pendingPackAuto = (phase, member) =>
 function tiesFor(l, teamName, team, teamLabels) {
   // ⚠ **地元は選んだ地方で引く**（いしだ 2026-11-20「北海道や東北、関東、信越など、
   //    最初に選んでから地域名を打つのはどうですか？」）。選んでいなければ地名から引く
+  // ⚠ 地名から地方を引いて渡さないこと（既定の球団の地元が地方全体に広がっていた。2026-11-20 監査）
   const own = (l.teams || []).find((t) => t.name === teamName);
-  const city = teamCityOf(own);
-  const region = teamRegionOf(own);
+  const { city, region } = teamHomeOf(own);
   const next = ownUpcomingGames(l.season?.schedule || [], teamName, 1)[0];
   const oppName = next ? (next.home === teamName ? next.away : next.home) : null;
   const short = (name) => teamLabels[name]?.short || name;

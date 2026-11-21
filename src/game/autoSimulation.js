@@ -2048,6 +2048,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       observed.risp = !!(gameState.bases[1] || gameState.bases[2]);
       observed.dpPossible = gameState.outs < 2 && !!gameState.bases[0];
       observed.resultStartOuts = pitcher.gameStats.pitching.outs;
+      // 最後の1球の前の得点（その打席の途中に暴投などで入った点を、打者の点と分けるため。
+      // オンラインの「回の攻撃」が読む。⚠ 2026-11-20 監査「三振 1点」）
+      observed.resultScore = { ...gameState.score };
     };
 
     let atBatOver = false;
