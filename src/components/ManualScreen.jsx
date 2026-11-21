@@ -1614,7 +1614,8 @@ const ManualContent = ({ category }) => {
             曲線の<b>高さ</b>ではなく<b>位置</b>が動く。うしろにずれた選手は長く伸び、遅く衰える。
             <ul className="list-disc list-inside text-sm space-y-1 mt-1">
               <li><b>素質</b>: 0.1ごとに0.8歳（1.4なら3.2歳うしろ、0.6なら3.2歳前）</li>
-              <li><b>プロ意識</b>: 50を基準に10ごとに0.5歳（100で2.5歳うしろ、0で2.5歳前）</li>
+              <li><b>プロ意識</b>: 50が基準。<b>上下で幅が違う</b>——上は10ごとに0.5歳（100で2.5歳うしろ）、
+                下は10ごとに1.15歳（20で3.5歳前、0で5.8歳前）。練習しない側の罰が重い</li>
               <li><b>出場による変動</b>（試合に出ると増え、疲れたまま出ると減る）: 素質に足して効く。
                 年度替わりで半分にしてから効く</li>
             </ul>
@@ -1628,15 +1629,15 @@ const ManualContent = ({ category }) => {
                 </tr></thead>
                 <tbody className="text-gray-300">
                   <tr><td className="py-0.5 px-2 text-green-300">素質0.6</td>
-                    <td className="text-right px-2 text-red-400">27歳</td><td className="text-right px-2">28</td>
+                    <td className="text-right px-2 text-red-400">25歳</td><td className="text-right px-2">27</td>
                     <td className="text-right px-2">29</td><td className="text-right px-2">29</td>
                     <td className="text-right px-2">30</td><td className="text-right px-2">31</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">素質1.0</td>
-                    <td className="text-right px-2">30歳</td><td className="text-right px-2">31</td>
+                    <td className="text-right px-2">28歳</td><td className="text-right px-2">30</td>
                     <td className="text-right px-2">32</td><td className="text-right px-2">33</td>
                     <td className="text-right px-2">33</td><td className="text-right px-2">34</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">素質1.4</td>
-                    <td className="text-right px-2">34歳</td><td className="text-right px-2">34</td>
+                    <td className="text-right px-2">32歳</td><td className="text-right px-2">33</td>
                     <td className="text-right px-2">35</td><td className="text-right px-2">36</td>
                     <td className="text-right px-2">37</td><td className="text-right px-2 text-green-400">38</td></tr>
                 </tbody>

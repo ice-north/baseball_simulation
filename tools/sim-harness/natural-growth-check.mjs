@@ -345,8 +345,10 @@ assert.equal(
 // --- 6.6 プロ意識の説明の数字が式と合う（Web とアプリは同じ文。online-ability-help-check） ---
 {
   const help = ABILITY_HELP['プロ意識'];
-  // 年度替わりの山のずれ: 100で2.5歳遅く・0で2.5歳早く・10ごとに0.5歳
-  for (const [discipline, shift] of [[100, 2.5], [0, -2.5], [60, 0.5]]) {
+  // 年度替わりの山のずれ。⚠ **50を境に上下で幅が違う**（いしだ 2026-11-21「低いプロ意識に
+  //    よる成長係数の下落をもう2年程早めたい。高プロ意識はそのままでOK」）。
+  //    上は10ごとに0.5歳（100で+2.5歳）、下は10ごとに1.15歳（20で-3.45歳・0で-5.75歳）
+  for (const [discipline, shift] of [[100, 2.5], [60, 0.5], [20, -3.45], [0, -5.75]]) {
     for (const age of [27, 31, 35]) {
       assert.ok(
         Math.abs(naturalCoefOf(age, 1.0, discipline) - naturalCoefOf(age - shift, 1.0, 50)) < 1e-9,
@@ -354,7 +356,10 @@ assert.equal(
       );
     }
   }
-  assert.ok(help.includes('100で2.5歳遅く') && help.includes('0で2.5歳早く'), 'プロ意識の説明に年度替わりのずれが無い');
+  assert.ok(
+    help.includes('100で2.5歳遅く') && help.includes('20で3.5歳早く'),
+    'プロ意識の説明に年度替わりのずれ（上下で幅が違うこと）が無い',
+  );
   // キャンプの伸びが止まる年齢: 80で+1歳・100で+2歳
   const stopOf = (discipline) => growthStopAge({ growthPotential: 1.0, personality: { discipline } });
   assert.equal(stopOf(80) - stopOf(60), 1, 'プロ意識80のキャンプの停止年齢が説明（+1歳）と合わない');
@@ -366,7 +371,8 @@ assert.equal(
 // ⚠ ここが落ちたら、式を変えた側に合わせて文を直す（数字は式から計算して書いてある）
 {
   // 衰え始める年齢（主な能力の平均）: 素質 × プロ意識20/35/50/65/80/100
-  const DOC_DECLINE = { 0.6: [27, 28, 29, 29, 30, 31], 1.0: [30, 31, 32, 33, 33, 34], 1.4: [34, 34, 35, 36, 37, 38] };
+  // ⚠ 意識20・35の列は 2026-11-21 の非対称化（下だけ急）で2年ほど早まっている
+  const DOC_DECLINE = { 0.6: [25, 27, 29, 29, 30, 31], 1.0: [28, 30, 32, 33, 33, 34], 1.4: [32, 33, 35, 36, 37, 38] };
   for (const [gp, ages] of Object.entries(DOC_DECLINE))
     [20, 35, 50, 65, 80, 100].forEach((discipline, i) =>
       assert.equal(naturalPeakAge(Number(gp), discipline) + 1, ages[i], `マニュアルの衰え始め（素質${gp}・意識${discipline}）が式と違う`));
