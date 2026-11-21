@@ -445,7 +445,10 @@ function Detail({ player, close }) {
     >
       <header>
         <div>
-          <h2 id="online-player-title">{player.name}</h2>
+          <h2 id="online-player-title">
+            {player.name}
+            <ProWatchBadge watch={player.proWatch} />
+          </h2>
           {/* ⚠ 札は**1行にまとめる**。守備位置・年齢・背番号・利き手・体格・
               出身。調子と疲労は今季のときだけ（過去の期間では今の調子は無関係） */}
           <small>
@@ -561,6 +564,24 @@ function Detail({ player, close }) {
     </dialog>,
   );
 }
+/**
+ * ドラフトの気配の札（黄色。「西武注目」「中日接触」）。サーバーが名簿の選手に付ける `proWatch`
+ * （`server/proDraft.mjs` の `proWatchList`。噂の出た日から指名の日まで）。⚠ アプリは `ProWatchChip`（同じ文）
+ */
+export function ProWatchBadge({ watch }) {
+  if (!watch?.npb) return null;
+  const hot = watch.level === 'hot';
+  return (
+    <span
+      className={`online-pro-watch${hot ? ' is-hot' : ''}`}
+      title={hot ? `${watch.npb}のスカウトが接触（指名の候補）` : `${watch.npb}のスカウトが注目`}
+    >
+      {watch.npb}
+      {hot ? '接触' : '注目'}
+    </span>
+  );
+}
+
 export function PlayerStatsButton({
   player,
   category = 'batting',
@@ -583,6 +604,7 @@ export function PlayerStatsButton({
       >
         {children || player.name}
       </button>
+      <ProWatchBadge watch={player.proWatch} />
       {open && (
         <Detail
           player={player}

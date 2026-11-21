@@ -111,4 +111,8 @@ class FrontPageWebTest {
     /** 勝った日の見出し（ほかの場面は負けた日だけ） */
     @Test
     fun winMatchesPc() = check("win", null, null, opponent, patch = "win")
+
+    /** ドラフトの気配（`proWatch`）があるときのプロ注目の記事（地元紙・全国紙） */
+    @Test
+    fun watchMatchesPc() = check("watch", game, history, opponent, patch = "watch")
 }

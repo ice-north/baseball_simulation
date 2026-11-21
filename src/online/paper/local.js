@@ -228,29 +228,50 @@ export function commentArticle(manager, tone, s, pen, temper = 0) {
   return article('ひと言', `${boss}「${quote}」`, heroLine ?? `${boss}は試合後、そう振り返った。`, null);
 }
 
+/** 光る能力の一言（スカウトが見ている所）。無ければ null */
+function scoutTrait(p) {
+  if (p.isPitcher) {
+    const v = p.pitching?.velocity ?? 0;
+    const c = p.pitching?.control ?? 0;
+    if (v >= 150) return { trait: `最速${v}kmの直球`, score: v - 140 };
+    if (c >= 75) return { trait: '精密な制球', score: c - 65 };
+    if (v >= 147) return { trait: `${v}kmの速球`, score: v - 142 };
+    return null;
+  }
+  const pw = p.batting?.power ?? 0;
+  const sp = p.physical?.speed ?? 0;
+  const mt = p.batting?.meet ?? 0;
+  if (pw >= 70) return { trait: '長打力', score: pw - 60 };
+  if (sp >= 80) return { trait: '足の速さ', score: sp - 70 };
+  if (mt >= 75) return { trait: '巧みなバットコントロール', score: mt - 65 };
+  return null;
+}
+
+/** ドラフトの気配の1人（サーバーの `proWatch` の行）。形が崩れていれば null */
+export function watchRow(o) {
+  const r = obj(o);
+  if (!r) return null;
+  const name = str(r.name);
+  const npb = str(r.npb);
+  if (name == null || npb == null) return null;
+  return { id: int(r.id), name, team: str(r.team) ?? '', npb, hot: str(r.level) === 'hot' };
+}
+
 /**
- * プロ注目（飾り）。若くて光る能力のある自球団の選手に、NPBのスカウトが見に来ているという話。
+ * プロ注目。
+ * - `watch`（サーバーの `proWatch`。ドラフトの気配）があれば**本物**: 自球団で NPB が見ている選手の話
+ *   （「西武が○○に熱視線！」「○○に中日が接触」）。きのうの試合で活躍していれば毎日「プロ注目の○○が完封」。
+ *   見られている選手がいなければ載せない（飾りの話を混ぜると、札の付いていない選手に「熱視線」が出る）。
+ * - `watch` が無い（古いサーバー）ときは飾り: 若くて光る能力のある自球団の選手に、NPBのスカウトが見に来ている。
  * 毎日は載せない（2日に1日くらい。同じ日なら同じ）
  */
-export function scoutArticle(roster, me, year, date, pen) {
+export function scoutArticle(roster, me, year, date, pen, watch = null, team = '', facts = null, s = null) {
+  if (watch != null) return watchArticle(roster, me, year, date, pen, watch, team, facts, s);
   const picks = roster
     .filter((p) => p.isActive && (p.age ?? 99) <= 26)
     .map((p) => {
-      if (p.isPitcher) {
-        const v = p.pitching?.velocity ?? 0;
-        const c = p.pitching?.control ?? 0;
-        if (v >= 150) return { p, trait: `最速${v}kmの直球`, score: v - 140 };
-        if (c >= 75) return { p, trait: '精密な制球', score: c - 65 };
-        if (v >= 147) return { p, trait: `${v}kmの速球`, score: v - 142 };
-        return null;
-      }
-      const pw = p.batting?.power ?? 0;
-      const sp = p.physical?.speed ?? 0;
-      const mt = p.batting?.meet ?? 0;
-      if (pw >= 70) return { p, trait: '長打力', score: pw - 60 };
-      if (sp >= 80) return { p, trait: '足の速さ', score: sp - 70 };
-      if (mt >= 75) return { p, trait: '巧みなバットコントロール', score: mt - 65 };
-      return null;
+      const t = scoutTrait(p);
+      return t ? { p, ...t } : null;
     })
     .filter(Boolean);
   if (!picks.length) return null;
@@ -275,6 +296,63 @@ export function scoutArticle(roster, me, year, date, pen) {
     `${p.age}歳の${pos}・${p.name}。${school}${pick.trait}に、NPB${scouts}球団のスカウトが` +
       pen.pick(['ネット裏で目を光らせた。', '視察に訪れた。', '熱心にメモを取っていた。'], 23) +
       `${potential}${pen.pick(['今後の成長が楽しみだ。', 'この先の伸びに注目が集まる。', '独立リーグから羽ばたく日は来るか。'], 24)}`,
+    LINK_LINEUP,
+  );
+}
+
+/** きのうの試合での活躍（「完封」「2発」など）。無ければ null */
+function watchFeat(w, facts, s, tone) {
+  if (!facts) return null;
+  const ace = facts.ace;
+  if (tone === TONE.Win && ace != null && ace.name === w.name && facts.complete === true) return s != null && s.theirs === 0 ? '完封' : '完投';
+  const b = facts.batters.find((x) => x.name === w.name);
+  if (b != null && b.hr >= 2) return `${b.hr}発`;
+  if (b != null && b.hr === 1) return '一発';
+  if (b != null && b.hits >= 3) return '猛打賞';
+  if (tone === TONE.Win && ace != null && ace.name === w.name && ace.outs >= 18 && ace.runs <= 1) return '好投';
+  return null;
+}
+
+function watchArticle(roster, me, year, date, pen, watch, team, facts, s) {
+  const ours = watch.filter((w) => w.team === team);
+  if (!ours.length) return null;
+  const playerOf = (w) => roster.find((p) => (w.id != null && p.id === w.id) || p.name === w.name) ?? null;
+  const tone = s == null ? TONE.None : s.ours > s.theirs ? TONE.Win : s.ours < s.theirs ? TONE.Lose : TONE.Draw;
+  // きのう活躍した人がいれば、その話（毎日）
+  for (const w of ours) {
+    const feat = watchFeat(w, facts, s, tone);
+    if (feat == null) continue;
+    const p = playerOf(w);
+    const pos = p != null ? positionNoun(p.position) : '選手';
+    return article(
+      'プロ注目',
+      pen.pick([`プロ注目の${w.name}が${feat}`, `${w.name}${feat} ${w.npb}のスカウトの前で`], 25),
+      `${w.npb}が${w.hot ? '指名の候補に挙げる' : '追いかける'}${pos}・${w.name}が${feat}。` +
+        pen.pick(['ネット裏のスカウトは「やはり良いものを持っている」とうなずいた。', 'スカウトの評価をまた一つ上げた。', '視察に訪れたスカウトの前で、存在感を見せつけた。'], 26),
+      LINK_LINEUP,
+    );
+  }
+  const day = (year ?? 0) * 400 + (date?.month ?? 0) * 31 + (date?.day ?? 0);
+  if (!new Pen(day).pick([true, false], 20)) return null;
+  const w = new Pen(day).pick(ours, 21);
+  const p = playerOf(w);
+  const pos = p != null ? positionNoun(p.position) : '選手';
+  const age = p?.age != null ? `${p.age}歳の` : '';
+  const trait = (p != null ? scoutTrait(p)?.trait : null) ?? null;
+  if (w.hot)
+    return article(
+      'プロ注目',
+      pen.pick([`${w.name}に${w.npb}が接触`, `${w.npb}、${w.name}の調査に本腰`, `${me}の${w.name}、${w.npb}が指名候補に`], 27),
+      `${age}${pos}・${w.name}に、${w.npb}のスカウトが接触した。${trait ?? '素質'}を高く買い、指名に向けて調査を進めているという。` +
+        pen.pick(['秋のドラフトへ、注目が集まる。', '独立リーグから羽ばたく日は近いか。'], 28),
+      LINK_LINEUP,
+    );
+  return article(
+    'プロ注目',
+    pen.pick([`${w.npb}が${w.name}に熱視線！`, `プロ注目 ${me}の${w.name}`, `${w.name}の${trait ?? '素質'}に${w.npb}の目`], 29),
+    `${age}${pos}・${w.name}。${trait ?? 'その素質'}に、${w.npb}のスカウトが` +
+      pen.pick(['ネット裏で目を光らせた。', '視察に訪れた。', '熱心にメモを取っていた。'], 23) +
+      pen.pick(['今後の成長が楽しみだ。', 'この先の伸びに注目が集まる。', '独立リーグから羽ばたく日は来るか。'], 24),
     LINK_LINEUP,
   );
 }

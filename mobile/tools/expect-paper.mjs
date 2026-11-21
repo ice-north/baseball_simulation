@@ -81,6 +81,8 @@ const scenes = {
   noHistory: { game, history: null, historyComplete: false, opponent },
   camp: { patch: patches.camp, game: null, history: history[0], historyComplete: history[1], opponent },
   win: { patch: patches.win, game: null, history: null, historyComplete: false, opponent },
+  // ドラフトの気配（`proWatch`。自球団の2人と他球団の1人）
+  watch: { patch: patches.watch, game, history: history[0], historyComplete: history[1], opponent },
 };
 const result = {};
 for (const [name, s] of Object.entries(scenes)) {

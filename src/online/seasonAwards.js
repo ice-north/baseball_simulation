@@ -314,6 +314,35 @@ const TITLE_ROWS = [
 ];
 
 /**
+ * 歴代のタイトル（年ごと・新しい順）。リーグ史の「歴代タイトル」（PC の LeagueHistory.jsx・アプリの LeagueHistoryScreen.kt）。
+ * ⚠ 先方要望（2026-11-21）「プロ指名された選手もリーグの過去のタイトルとして残してほしい」。タイトルは
+ *    成績を確定したときに名前ごと写してある（`frozenAwards` → 年度更新で `history[].awards`）ので、
+ *    名簿から抜けても消えない。その年にプロへ進んだ人は `pro`（NPB球団の短い名前）を添える。
+ * 成績を確定した年（10月下旬〜年度更新）はその年も先頭に入れる。保存は増えない（ビューで作るだけ）。
+ * @returns {{ year, titles: { label, name, team, line, pro? }[] }[]}
+ */
+export function titleHistory(league, npbShort = (n) => n) {
+  const years = (league.history || []).map((h) => ({ year: h.year, awards: h.awards }));
+  const current = league.season?.frozenAwards;
+  if (current && !years.some((y) => y.year === league.season.year)) years.push({ year: league.season.year, awards: current });
+  const pro = new Map(
+    (league.chronicle?.proDrafted || []).map((r) => [`${r.year}:${r.team}:${r.name}`, r.npbTeam ? npbShort(r.npbTeam) : 'NPB']),
+  );
+  return years
+    .filter((y) => y.awards)
+    .sort((a, b) => b.year - a.year)
+    .map(({ year, awards }) => ({
+      year,
+      titles: TITLE_ROWS.filter(([k]) => awards[k]?.name).map(([k, label, value]) => {
+        const a = awards[k];
+        const to = pro.get(`${year}:${a.team}:${a.name}`);
+        return { label, name: a.name, team: a.team, line: value(a), ...(to ? { pro: to } : {}) };
+      }),
+    }))
+    .filter((y) => y.titles.length);
+}
+
+/**
  * ビューに載せる、いちばん新しい年の表彰（タイトル＋部ごとの表彰）。
  * 成績を確定した年（10月下旬〜年度更新）はその年、それ以外は去年（`history` の最後）。
  * 表彰を足す前の年しか無ければ部ごとの表彰は空のまま、タイトルだけ出す。

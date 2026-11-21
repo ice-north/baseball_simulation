@@ -70,6 +70,8 @@ import {
 } from '../src/online/social.js';
 import { canPickStarters, starterContext } from './starterPicks.mjs';
 import { exhibitionsView } from './exhibition.mjs';
+import { proWatchList } from './proDraft.mjs';
+import { tryoutInterest, tryoutPickOrder } from '../src/online/tryoutPlan.js';
 
 /**
  * セット（24人）の選手。能力は全部、記録や経歴は載せない（まだ所属していない）。
@@ -458,6 +460,30 @@ function diagnosisFor(l, teamName, team, statsOf) {
   });
 }
 
+/**
+ * ドラフトの気配（NPB が注目している選手。`proDraft.mjs` の `proWatchList`）。
+ * ⚠ 288人の点を数えるので、同じリーグの同じ版・同じ日なら1回だけ作る（参加者ごとの投影で使い回す）。
+ * ⚠ 途中参加でセットを待っている球団は外す（指名と同じ）。
+ */
+const proWatchCache = new WeakMap();
+export function proWatchFor(l) {
+  const d = l.season?.currentDate;
+  const key = `${l.revision}:${d?.month}:${d?.day}:${l.season?._draftDone ? 1 : 0}`;
+  const hit = proWatchCache.get(l);
+  if (hit?.key === key) return hit.rows;
+  const names = l.season?.settings?.teamNames || [];
+  const teams = Object.fromEntries(names.filter((n) => l.game.teams[n]).map((n) => [n, l.game.teams[n]]));
+  const skip = new Set((l.members || []).filter((m) => m.packSeed).map((m) => m.teamName));
+  const rows = proWatchList(l, teams, skip);
+  proWatchCache.set(l, { key, rows });
+  return rows;
+}
+/** 名簿の選手に付ける札（`{ npb, level }`）。注目されていなければ何も足さない */
+const watchMark = (watch, p) => {
+  const w = watch.get(p.id);
+  return w ? { proWatch: { npb: w.npb, level: w.level } } : {};
+};
+
 export function projectLeague(bundle, userId, sessionId, adminId) {
   const l = bundle.league;
   if (!l) return { setupRequired: true, isAdmin: userId === adminId };
@@ -520,6 +546,9 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
   const left = remainingGames(l.season.schedule);
   // 球団史（リーグ全体の最近のもの）。表彰（`honors`）は「その年のまとめ」でも使い回す
   const chronicle = chronicleView(l);
+  // ドラフトの気配（リーグ全体。紙面の記事と名簿の札）
+  const proWatch = proWatchFor(l);
+  const watchById = new Map(proWatch.map((w) => [w.id, w]));
   return {
     // ⚠ **このビューを作ったコードの版**。`LeagueService.view` がここを見て、
     //    古い形のリーグを表示させない。ビューは保存済みのものがそのまま
@@ -686,8 +715,12 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     roster: team.players.map((p) => ({
       ...playerViewWithGrowth(p, team),
       ...currentPlayerStats(l, member.teamName, p, statistics),
+      ...watchMark(watchById, p),
       detailAvailable: true,
     })),
+    // ⚠ ドラフトの気配（NPB が注目している選手。噂の出た日から指名の日まで）。
+    //    `{ id, name, team, npb, level: 'watch' | 'hot' }`。紙面の「プロ注目」の記事はここから書く
+    proWatch,
     seasonYears: [
       ...new Set([
         l.season.year,
@@ -712,11 +745,34 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           deadline: phase.deadline || null,
           packs: l.packs?.map(packView),
           // ⚠ 甲子園で名を上げた人には、その年の成績を添える（`koshien`）
-          candidates: phase.candidates?.map((c) => {
-            const view = playerViewWithGrowth(c, team);
-            const note = koshienNoteOf(l, c.id);
-            return note ? { ...view, koshien: note } : view;
-          }),
+          candidates: (() => {
+            if (!phase.candidates) return undefined;
+            // ⚠ ほかの球団のリスト（先方要望 2026-11-21）。参加者は保存した交渉リスト、CPU は狙いの見込み
+            //    （`openPhase` の `cpuLists`）。`first` は自分より先に指名する球団（前年の順位が上）
+            const interest =
+              phase.kind === 'tryout'
+                ? tryoutInterest({
+                    ownTeam: member.teamName,
+                    order: tryoutPickOrder(l.season.standings),
+                    humanLists: Object.fromEntries(
+                      l.members
+                        .filter((m) => m.userId !== userId && phase.submissions[m.userId]?.plan?.rankedIds)
+                        .map((m) => [m.teamName, phase.submissions[m.userId].plan.rankedIds]),
+                    ),
+                    cpuLists: phase.cpuLists || {},
+                  })
+                : new Map();
+            return phase.candidates.map((c) => {
+              const view = playerViewWithGrowth(c, team);
+              const note = koshienNoteOf(l, c.id);
+              const listed = interest.get(c.id);
+              return {
+                ...view,
+                ...(note ? { koshien: note } : {}),
+                ...(listed ? { listedBy: listed } : {}),
+              };
+            });
+          })(),
           // ⚠ 契約更改: 標準案（決めなかったときの案）で誰が・なぜ退団になるか。
           //    PC・スマホ・アプリが同じ理由を出すよう、サーバーで1回だけ作る
           //    （選び方そのもの `getAIReleaseCandidates` / `releaseScore` から）
@@ -899,6 +955,7 @@ export function projectTeamInfo(bundle, userId, teamName, context = null) {
   // eslint-disable-next-line no-unused-vars
   const { strategy, tactics, ...lineup } = projectLineup(l.game.teams[teamName]);
   const owner = l.members.find((m) => m.teamName === teamName);
+  const teamWatch = new Map(proWatchFor(l).map((w) => [w.id, w]));
   return {
     teamName,
     readOnly: true,
@@ -937,6 +994,7 @@ export function projectTeamInfo(bundle, userId, teamName, context = null) {
       return {
         ...visible,
         ...currentPlayerStats(l, teamName, p, statistics),
+        ...watchMark(teamWatch, p),
         // CPU球団がトレードで付ける値段（監督の見る目をかける前）。画面は目安の段と釣り合いに使う。
         // ⚠ CPU球団の選手は**その球団の事情こみ**（`createTradeJudge` の `valueOf` の第2引数）。
         //    参加者の球団は素の値段（CPUはもらう選手に事情を掛けない）

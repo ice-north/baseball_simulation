@@ -61,6 +61,7 @@ listOf(
     ChoiceField("defenseFrom", "守備固めを使い始める回", true, listOf(Choice("0", "AI判断"), Choice("7", "7回以降"), Choice("8", "8回以降"), Choice("9", "9回以降")), "0"),
     ChoiceField("hook", "先発の不調時の交代", false, listOf(Choice("auto", "標準"), Choice("early", "早めに交代"), Choice("patient", "長めに任せる")), "auto"),
     ChoiceField("starterLimit", "先発の球数上限", true, listOf(Choice("0", "役割・スタミナで判断"), Choice("60", "最大60球"), Choice("80", "最大80球"), Choice("100", "最大100球"), Choice("120", "最大120球")), "0"),
+    ChoiceField("restLine", "疲れた野手を休ませる目安", false, listOf(Choice("standard", "標準（疲労80から）"), Choice("early", "早め（疲労60から）"), Choice("late", "遅め（疲労100から）")), "standard"),
 )
 val STRATEGY_EFFECTS: Map<String, String> = mapOf("batting.balanced" to "能力はそのまま。", "batting.patient" to "ミート+3・パワー-5・選球眼+10。よく見て当てにいく。", "batting.aggressive" to "ミート-5・パワー+8・選球眼-5。長打を狙って強く振る。", "pitching.balanced" to "能力は変わらない。配球は捕手に任せる。", "pitching.strikeout" to "能力は変わらない。誘い球と変化球を増やし、空振りを取りにいく（四球は増える）。", "pitching.contact" to "能力は変わらない。ストライクゾーンで勝負し、ゴロを打たせる球種を選ぶ（四球は減るが打たれやすい）。", "baseRunning.normal" to "能力は変わらない。", "baseRunning.aggressive" to "能力は変わらない。盗塁を試みる回数が約1.5倍。", "baseRunning.conservative" to "能力は変わらない。盗塁を試みる回数が半分以下。", "baseRunning.never" to "盗塁しない。", "defense.normal" to "能力はそのまま。", "defense.infield_in" to "内野の守備+10・外野の守備-15。内野は打球に早く追いつくが、外野の間を抜かれやすい。", "defense.shift" to "内野の守備+5・外野の守備-10。内野の網を厚くするぶん、外野が手薄になる。")
 val STARTER_ROLES: Map<String, String> = mapOf("auto_s" to "おまかせ", "ace" to "ゲームメーカー", "complete" to "完投型", "quality" to "勝ち権利型", "short" to "ショートスターター", "opener" to "オープナー")
@@ -82,6 +83,9 @@ const val SUBSTITUTE_FRESH_FATIGUE: Int = 40
 const val ROSTER_LIMIT: Int = 28
 const val ROSTER_STANDARD: Int = 26
 const val CAMP_ROUNDS: Int = 4
+val REST_LINES: Map<String, Int> = mapOf("standard" to 80, "early" to 60, "late" to 100)
+/** その球団の休ませる目安の疲労（Web 版 shared.js の restFatigueOf） */
+fun restFatigueOf(restLine: String?): Int = REST_LINES[restLine] ?: FIELDER_REST_FATIGUE
 data class SeasonStep(val key: String, val label: String, val time: String, val todo: String)
 val SEASON_STEPS: List<SeasonStep> = listOf(
     SeasonStep("season", "シーズン", "月〜金", "試合は自動で進みます。スタメン設定・投手起用を整えておきます。"),

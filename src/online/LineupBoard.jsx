@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { POS, POS_FULL } from './api.js';
-import { turnOfDate } from './shared.js';
+import { turnOfDate, restFatigueOf } from './shared.js';
 import { BoardPage, Fatigue } from './BoardParts.jsx';
 import FieldDiagram from './FieldDiagram.jsx';
 import { useBoardHistory } from './useBoardHistory.js';
@@ -141,7 +141,7 @@ function Fitness({ value, position }) {
 }
 
 /** 1人ぶんの数字の列（スタメンと控えで**同じ部品**を使う） */
-function PlayerCells({ player, fitness, fitnessPosition }) {
+function PlayerCells({ player, fitness, fitnessPosition, restAt = REST_FATIGUE }) {
   return (
     <>
       {/* ⚠ 疲労は**名前にも色を付ける**。数字の列にも色はあるが、スタメンを
@@ -177,7 +177,7 @@ function PlayerCells({ player, fitness, fitnessPosition }) {
       <td className="is-sep">
         <Fatigue
           value={player.fatigue}
-          rest={REST_FATIGUE}
+          rest={restAt}
           restText={REST_TEXT}
         />
       </td>
@@ -208,7 +208,7 @@ function PlayerCells({ player, fitness, fitnessPosition }) {
 //    打順・守備・選手 / 投・打・年齢・疲労 / 能力 / 適性・守・肩 / 成績
 const COLUMN_COUNT = 3 + 4 + ABILITIES.length + 3 + STAT_COLUMNS.length;
 
-function HeaderRow({ fitnessLabel }) {
+function HeaderRow({ fitnessLabel, restAt = REST_FATIGUE }) {
   return (
     <tr>
       <th className="online-lineup-slot">打順</th>
@@ -217,7 +217,7 @@ function HeaderRow({ fitnessLabel }) {
       <th title="投げる手（左・右）">投</th>
       <th title="打席（左・右・両）">打</th>
       <th>年齢</th>
-      <th className="is-sep" title={`${REST_FATIGUE}以上: ${REST_TEXT}`}>
+      <th className="is-sep" title={`${restAt}以上: ${REST_TEXT}`}>
         疲労
       </th>
       {ABILITIES.map((a, i) => (
@@ -257,6 +257,8 @@ export default function LineupBoard({
 }) {
   const roster = view.roster || [];
   const byId = new Map(roster.map((p) => [p.id, p]));
+  // 疲れた野手を休ませる目安（自動采配の `restLine`。保存済みの値）。疲労の色をこれに合わせる
+  const restAt = restFatigueOf(view.lineup?.tactics);
   // スタメンに入れられる選手（名簿に居て、抹消されていない選手。投手も入れられる）。
   // ⚠ 名簿には抹消中も入る
   const fielderOf = (id) => {
@@ -470,7 +472,7 @@ export default function LineupBoard({
           <div className="online-lineup-scroll">
             <table className="online-lineup-table">
               <thead>
-                <HeaderRow fitnessLabel="適性" />
+                <HeaderRow fitnessLabel="適性" restAt={restAt} />
               </thead>
               <tbody aria-label="スタメン">
                 {order.map((entry, index) => {
@@ -544,6 +546,7 @@ export default function LineupBoard({
                           player={player}
                           fitness={positionFitness(player, entry.position)}
                           fitnessPosition={entry.position}
+                          restAt={restAt}
                         />
                       ) : (
                         <td
@@ -721,6 +724,7 @@ export default function LineupBoard({
                             player={player}
                             fitness={fitness}
                             fitnessPosition={fitnessPosition}
+                            restAt={restAt}
                           />
                         </tr>
                       );

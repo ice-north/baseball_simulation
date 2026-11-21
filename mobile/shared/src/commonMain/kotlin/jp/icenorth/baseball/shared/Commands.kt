@@ -134,6 +134,24 @@ object Commands {
 
     fun withReleases(plan: JsonObject, ids: Collection<Long>) = JsonObject(plan + ("releaseIds" to ids(ids)))
     fun withRanked(plan: JsonObject, ids: List<Long>) = JsonObject(plan + ("rankedIds" to ids(ids)))
+    /**
+     * 契約更改のコーチ打診（`coachOffers`: 役職 → 選手id。Web 版 ContractPlanner の `offer`）。
+     * 同じ選手を押し直すと取り消し、別の役職・解雇と重なっていれば外す
+     */
+    fun withCoachOffer(plan: JsonObject, id: Long, role: String): JsonObject {
+        val now = (plan["coachOffers"] as? JsonObject)?.filterValues { (it as? JsonPrimitive)?.content?.toLongOrNull() != id }.orEmpty()
+        val was = (plan["coachOffers"] as? JsonObject)?.get(role)?.let { (it as? JsonPrimitive)?.content?.toLongOrNull() } == id
+        val next = if (was) now else now + (role to JsonPrimitive(id))
+        val releases = (plan["releaseIds"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.toLongOrNull() }.orEmpty()
+        return JsonObject(plan + ("coachOffers" to JsonObject(next)) + ("releaseIds" to ids(releases.filter { it != id })))
+    }
+    /** 解雇を切り替える（打診と重なっていれば打診を外す） */
+    fun withRelease(plan: JsonObject, id: Long, on: Boolean): JsonObject {
+        val releases = (plan["releaseIds"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.toLongOrNull() }.orEmpty()
+        val offers = (plan["coachOffers"] as? JsonObject)?.filterValues { (it as? JsonPrimitive)?.content?.toLongOrNull() != id }
+        val base = withReleases(plan, if (on) releases + id else releases - id)
+        return if (on && offers != null) JsonObject(base + ("coachOffers" to JsonObject(offers))) else base
+    }
     /** トライアウトの希望を出す形にそろえる（交渉する選手・取りにいく人数・獲得する人数）。Web 版 TryoutPlanner と同じ */
     fun withTryout(plan: JsonObject, ids: List<Long>, total: Int) = JsonObject(
         withRanked(plan, ids) + ("count" to JsonPrimitive(wishedCount(ids, total))) + ("total" to JsonPrimitive(total)),

@@ -84,6 +84,14 @@ export const TACTIC_FIELDS = {
       120: '最大120球',
     },
   ],
+  // ⚠ 疲れた野手をその日だけ控えと入れ替える目安（先方要望 2026-11-21「放置で見られない時間が多いので、
+  //    ある程度の疲労が溜まると控えと入れ替えるシステムが欲しい」）。入れ替えそのものは前から全球団に
+  //    効いている（`server/dailyLineup.mjs` の `restTiredFielders`。疲労80から）。ここで早め・遅めを選べる。
+  //    疲労の値は `src/online/shared.js` の `REST_LINES`。指導者は決めない（`TACTIC_OWNERS` に無い）
+  restLine: [
+    '疲れた野手を休ませる目安',
+    { standard: '標準（疲労80から）', early: '早め（疲労60から）', late: '遅め（疲労100から）' },
+  ],
 };
 /**
  * 方針が能力の数字に足す分（自動試合 `autoSimulation.js` が読む。画面の説明 `strategyEffectText` も同じ表から作る）。

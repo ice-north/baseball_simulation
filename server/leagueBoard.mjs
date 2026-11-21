@@ -11,7 +11,7 @@
 // ⚠ 12球団×24人＝288人を毎回なめる。1回の投影で**1度だけ**呼ぶこと
 //    （参加者ごとに呼ぶと人数ぶん重くなる）。
 // ============================================================
-import { observedSeason, completeCoverage } from './recordedStats.mjs';
+import { observedSeason, completeCoverage, recordedStats } from './recordedStats.mjs';
 
 /**
  * 試合ごとの先発予定（`{ home: { player, mark }, away: { player, mark } }` の並び）。
@@ -148,6 +148,25 @@ export function leagueLeaders(league, statsOf, labelOf = (n) => n, top = 10) {
       entries.push({ team, player, stats: statsOf(team, player) });
     }
   }
+  // ⚠ **今年プロに指名された選手も残す**（先方要望 2026-11-21「プロ指名された瞬間にチームから抜けるため、
+  //    各成績のランキングからも消え、タイトルを獲っていないことになっている」）。指名は成績を確定した
+  //    **後**（10月下旬）なのでタイトル（`frozenAwards`）には入っているが、この表はいまの名簿から作るので、
+  //    年度更新までの間、首位打者が表から消えて2位の人が1位に見えていた。
+  //    成績は試合の記録（`records.seasons[年].players`）から。記録が無い年（古いリーグ）は出せない
+  const year = league.season.year;
+  const recorded = league.records?.seasons?.[year]?.players || {};
+  for (const row of league.chronicle?.proDrafted || []) {
+    if (row.year !== year || !names.includes(row.team)) continue;
+    const key = row.key || (row.player?.id != null ? `${row.team}:${row.player.id}:${row.name}` : null);
+    const record = key ? recorded[key] : null;
+    if (!record) continue;
+    entries.push({
+      team: row.team,
+      player: { id: record.id ?? row.player?.id ?? null, name: row.name },
+      stats: recordedStats(record),
+      pro: row.npbTeam || true,
+    });
+  }
   return LEADER_CATEGORIES.map((category) => {
     const rows = entries
       .map((entry) => {
@@ -176,6 +195,8 @@ export function leagueLeaders(league, statsOf, labelOf = (n) => n, top = 10) {
           team: entry.team,
           label: labelOf(entry.team),
           value,
+          // 今年プロに指名されて名簿を離れた選手（画面は名前に「プロへ」と添える）
+          ...(entry.pro ? { pro: true } : {}),
         };
       })
       .filter(Boolean)
