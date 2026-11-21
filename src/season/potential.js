@@ -11,6 +11,7 @@
 // ============================================================
 
 import { calcPlayerOverall } from './dispatchSystem.js';
+import { naturalPeakAge, naturalCoefOf } from './growthSystem.js';
 
 // グレード境界（総合力→グレード）
 const GRADE_CUTS = [
@@ -30,10 +31,15 @@ export const GRADE_BG = {
   D: 'bg-gray-800/60 border-gray-600/40',
 };
 
-// ピーク年齢の推定（成長率が高い/プロ意識が高いほど後ろ倒し）
+// 年齢曲線の山の高さ（`naturalAgeCoef` の23〜25歳）
+const NATURAL_PEAK_COEF = 1.20;
+
+// ピーク年齢の推定（成長率が高い/プロ意識が高いほど後ろ倒し）。
+// ⚠ 年度替わりの年齢曲線（`naturalPeakAge`）から取る。以前の式（`25 + (gp-1)*8 + …`、24〜31歳）は
+//    素質1.0で25歳だったが、2026-11-20の年齢曲線では素質1.0・プロ意識50は31歳まで伸びる。
+//    ゲームが伸ばしている28歳を「3年後は下り坂」と出していた
 export function estimatePeakAge(gp, discipline) {
-  const a = 25 + (gp - 1.0) * 8 + Math.max(0, discipline - 60) * 0.035;
-  return Math.max(24, Math.min(31, Math.round(a)));
+  return naturalPeakAge(gp ?? 1.0, discipline ?? 50);
 }
 
 /**
@@ -58,7 +64,9 @@ export function projectPeak(player) {
   // 若いほど・成長率が高いほど1年の伸びが大きく、ピークに近づくと逓減。
   let ov = current;
   for (let y = age + 1; y <= peakAge; y++) {
-    const youthMult = y <= 24 ? 1.0 : y <= 27 ? 0.65 : 0.4;
+    // 年ごとの重みは年齢曲線の形（山の1.20で割る。ピークの手前で小さくなる）。
+    // ⚠ 以前は 24歳まで1.0・27歳まで0.65・それ以降0.4 の段で、ピーク25歳の頃の形だった
+    const youthMult = Math.max(0, naturalCoefOf(y, gp, discipline)) / NATURAL_PEAK_COEF;
     // 成長率ぶんの伸び＋プロ意識ぶんの練習成長（高プロ意識ほど伸び続ける）
     const annual = Math.max(0, gp - 0.7) * 4.6 * youthMult
                  + Math.max(0, discipline - 65) * 0.035 * youthMult;

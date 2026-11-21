@@ -458,7 +458,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                         ? focusPosition === 'dh'
                           ? '押すと交代します。'
                           : '押すと交代します。適性の列はこの守備位置での値です。'
-                        : '控えは試合に出ないと伸びにくくなります（出場の多い選手は約2倍伸びる）。'}
+                        : '控えは試合に出ないと伸びにくくなります（年300打席の選手は0打席の約2.7倍伸びる）。'}
                     </small>
                   </th>
                 </tr>

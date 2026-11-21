@@ -611,6 +611,12 @@ async function runUniversity(page, t) {
   await flash.waitFor({ state: 'hidden', timeout: 30000 });
   await t.offseasonToNextYear(page.getByText('卒業・入部レポート'), '卒業・入部レポート');
   await flash.waitFor({ timeout: 30000 }).catch(() => { throw new Error('年度更新のあとオートセーブが走らない'); });
+  // ⚠ 重いとき、いま出た「オートセーブしました」が12月に入った時の保存（空き時間まで遅れて
+  //    年度更新の直前に走り出したもの）のことがある。そのまま読み直しへ移ると、走っている
+  //    年度更新の保存がページの移動で切れ、12月の保存から開いて落ちた（2026-11-21 監査、
+  //    4コアで5モード同時）。消えるのを待ち、続けてもう1回出るならそれも待つ
+  await flash.waitFor({ state: 'hidden', timeout: 30000 });
+  await flash.waitFor({ timeout: 8000 }).then(() => flash.waitFor({ state: 'hidden', timeout: 30000 })).catch(() => {});
   await step('卒業・入部レポートの画面でオートセーブされた → タイトルからオートセーブを読み直す');
   await page.goto(`${BASE}/?dev=1`);
   await ui.click('つづきから');

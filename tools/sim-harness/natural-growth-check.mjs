@@ -16,9 +16,13 @@
 //    伸びる側 … 能力38（天井の減衰にかからない若手の帯）
 //    衰える側 … 能力50（`STAT_GROWTH[].ref` と同じ水準。`declineScale` が1倍になる）
 //    どちらも 素質1.0・プロ意識50・レギュラー出場（450打数）・独立リーグのランクC。
+// ⚠ **表の年齢は年度替わりの（加齢した後の）年齢**。年度送りは加齢してから伸ばすので、
+//    表の「19歳」はシーズン中に18歳の選手の数字。`fielder(age)` はシーズン中の年齢を age-1 に置く。
 //
 // 見るのは7つ。
-//   1. **表示＝実際**。`expectedNaturalGrowth` が本番の `grow` の平均と合う。
+//   1. **表示＝実際**。シーズン中に出した `expectedNaturalGrowth`（一人用は `naturalGrowthOf`）が、
+//      年度送りと同じ順（変動の半減 `updateGrowthModifiers` → 加齢 → `applyCorporatePlayerGrowth`）
+//      で実際に動いた平均と合う。区分（独立・社会人・クラブ・オンライン）と球団の格ごとに見る。
 //   2. **指定の表に乗る**（上の2基準で）。
 //   3. **山は23〜27歳**。19歳より23歳の方が伸びる（指定どおり上がってから下がる）。
 //   4. **素質が高いほど長持ちし、若いうちもよく伸びる**。
@@ -29,11 +33,20 @@
 // ============================================================
 import assert from 'node:assert/strict';
 import {
-  makeGrower,
   expectedNaturalGrowth,
   naturalAgeCoef,
-  CATEGORY_GROWTH,
+  naturalCoefOf,
+  naturalPeakAge,
+  STAT_GROWTH,
+  updateGrowthModifiers,
+  applyCorporatePlayerGrowth,
+  teamRankMult,
 } from '../../src/season/growthSystem.js';
+import { withSeededRandom, hashSeed } from '../../src/game/rng.js';
+import { estimatePeakAge } from '../../src/season/potential.js';
+import { outlookOf } from '../../src/online/ageOutlook.js';
+import { ABILITY_HELP } from '../../src/online/playerInfo.js';
+import { growthStopAge } from '../../src/season/campTraining.js';
 import { createCandidatePlayer } from '../../src/season/tryoutSystem.js';
 import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor } from '../../src/utils/naturalGrowth.js';
 
@@ -60,9 +73,10 @@ const DECLINE_BASE = 50; // 衰える側を測る能力値（`ref` と同じ＝�
 const seedFielder = createCandidatePlayer({ position: 'shortstop' });
 const seedPitcher = createCandidatePlayer({ position: 'pitcher' });
 
+/** 年度替わりで age 歳になる野手（シーズン中は age-1 歳） */
 function fielder(age, gp, discipline, base, atBats = 450, modifier = 0) {
   const p = structuredClone(seedFielder);
-  p.age = age;
+  p.age = age - 1;
   p.growthPotential = gp;
   p.growthModifier = modifier;
   p.personality = { ...(p.personality || {}), discipline, mental: 50 };
@@ -77,46 +91,124 @@ function fielder(age, gp, discipline, base, atBats = 450, modifier = 0) {
   return p;
 }
 
-/** 本番の `grow` を n 回回したときの、主要な能力1つあたりの平均の動き */
-function simulate(player, category, n = 2500) {
-  const prof = CATEGORY_GROWTH[category];
-  let total = 0;
-  for (let i = 0; i < n; i += 1) {
-    const p = structuredClone(player);
-    const { grow } = makeGrower(p, prof, RANK_MULT);
-    let sum = 0;
-    for (const [box, key, growKey] of KEYS) {
-      const before = p[box][key];
-      p[box][key] = grow(p[box][key], growKey);
-      sum += p[box][key] - before;
-    }
-    total += sum / KEYS.length;
-  }
-  return total / n;
-}
-const shownOf = (player, category = 'independent') =>
-  expectedNaturalGrowth(player, category, RANK_MULT);
+/** 球団の形（`naturalGrowthPlanOf` がこれで区分と格を決める） */
+const TEAM_SHAPES = {
+  independent: { independentLeagueId: 'check-league' },            // ランクC相当 0.90
+  corporate: { corporateData: { type: 'corporate', rank: 'A' } },  // 1.05
+  club: { corporateData: { type: 'club', rank: 'C' } },            // 0.90
+  online: { independentLeagueId: 'check-league' },                 // オンラインの12球団と同じ形
+};
+const teamOf = (category, players) => ({ name: 'T', ...structuredClone(TEAM_SHAPES[category]), players });
 
-// --- 1. 表示＝実際 ---
+/**
+ * 画面に出す数（シーズン中に見る）。一人用は `naturalGrowthOf`、オンラインは
+ * `server/projection.mjs` と同じ呼び方
+ */
+function shownFor(player, category, team = teamOf(category, [player])) {
+  if (category === 'online') return expectedNaturalGrowth(player, 'online', teamRankMult(team), { team });
+  return naturalGrowthOf(player, team);
+}
+
+/**
+ * **年度送りと同じ順**に n 年ぶん回し、主要な能力1つあたりの平均の動きを返す。
+ *   2.5 変動の半減（`updateGrowthModifiers`。優勝なし）→ 3 成績を前季へ（`resetSeasonStats`）
+ *   → 4 加齢 → 4.6 `applyCorporatePlayerGrowth`
+ * ⚠ 乱数は種を固定する（`withSeededRandom`）。揺らぎ（年ごとのノイズ・調子・丸め）の平均を見るので
+ *    回数は要るが、同じ入力なら毎回同じ結果になる
+ */
+function yearEndAverage(player, category, { mates = [], n = 1500 } = {}) {
+  return withSeededRandom(hashSeed(`natural-growth:${category}:${player.age}:${player.growthPotential}`), () => {
+    let total = 0;
+    for (let i = 0; i < n; i += 1) {
+      const p = structuredClone(player);
+      const team = teamOf(category, [p, ...structuredClone(mates)]);
+      const teams = { T: team };
+      updateGrowthModifiers(teams, {});
+      for (const q of team.players) {
+        q.previousSeasonStats = q.seasonStats;
+        q.seasonStats = {};
+        q.age += 1;
+      }
+      const before = KEYS.map(([box, key]) => p[box][key]);
+      applyCorporatePlayerGrowth(teams, { online: category === 'online' ? new Set(['T']) : null });
+      total += KEYS.reduce((sum, [box, key], j) => sum + p[box][key] - before[j], 0) / KEYS.length;
+    }
+    return total / n;
+  });
+}
+const shownOf = (player, category = 'independent') => shownFor(player, category);
+
+// --- 1. 表示＝実際（年度送りの順に回して比べる） ---
+// ⚠ 以前は makeGrower を直に回して比べていたので、年度送りの順（半減→加齢→成長）の
+//    食い違いが映らなかった。33歳・変動+0.3 が +0.13 と出て実際は -0.71、
+//    クラブ（ランクC）の20歳・能力40が +1.11 と出て実際は +0.04 だった
+const NOISE_TOL = 0.10;
 let compared = 0;
 let worstGap = 0;
+const compare = (label, player, category, opts) => {
+  const shown = shownFor(player, category, opts?.mates ? teamOf(category, [player, ...opts.mates]) : undefined);
+  const actual = yearEndAverage(player, category, opts);
+  const gap = Math.abs(shown - actual);
+  worstGap = Math.max(worstGap, gap);
+  compared += 1;
+  assert.ok(
+    gap <= NOISE_TOL,
+    `表示と実際がずれている（${label}）: 表示 ${shown.toFixed(2)} 実際 ${actual.toFixed(2)}`,
+  );
+  return { shown, actual };
+};
 for (const category of ['independent', 'online']) {
   for (const gp of [0.6, 1.0, 1.4]) {
     for (const base of [GROW_BASE, DECLINE_BASE]) {
       for (const age of [19, 25, 31, 36, 40]) {
-        const p = fielder(age, gp, 50, base);
-        const gap = Math.abs(shownOf(p, category) - simulate(p, category));
-        worstGap = Math.max(worstGap, gap);
-        compared += 1;
-        assert.ok(
-          gap <= 0.10,
-          `表示と実際がずれている（${category} 素質${gp} 能力${base} ${age}歳）: 差 ${gap.toFixed(2)}`,
-        );
+        compare(`${category} 素質${gp} 能力${base} ${age}歳`, fielder(age, gp, 50, base), category);
       }
     }
   }
 }
-assert.ok(compared >= 60, '見た組み合わせが少なすぎる（検査の作りが壊れている）');
+for (const category of ['corporate', 'club']) {
+  for (const base of [40, DECLINE_BASE]) {
+    for (const age of [20, 27, 34]) {
+      compare(`${category} 能力${base} ${age}歳`, fielder(age, 1.0, 50, base), category);
+    }
+  }
+}
+assert.ok(compared >= 70, '見た組み合わせが少なすぎる（検査の作りが壊れている）');
+{
+  // 監査で見つかった食い違いそのもの
+  const vet = compare('33歳・変動+0.3', fielder(34, 1.0, 50, DECLINE_BASE, 450, 0.3), 'independent');
+  assert.ok(vet.shown < 0, `33歳・変動+0.3 の表示が ${vet.shown}（年度替わりでは衰える）`);
+  const club = compare('クラブC 20歳・能力40', fielder(21, 1.0, 50, 40), 'club');
+  assert.ok(club.shown < 0.3, `クラブの20歳の表示が ${club.shown}（独立リーグの式で出ている）`);
+  // 同じ球団の30歳以上のベテラン（指導力60以上）の加算は25歳以下の変動に入る
+  const mentor = fielder(33, 1.0, 95, DECLINE_BASE);
+  mentor.personality.mental = 95;
+  const young = fielder(22, 1.0, 50, GROW_BASE);
+  const alone = shownFor(young, 'independent');
+  const taught = compare('ベテランの指導つき 22歳', young, 'independent', { mates: [mentor, mentor, mentor] });
+  assert.ok(taught.shown > alone, `ベテランの指導が表示に入っていない（${taught.shown} 対 ${alone}）`);
+}
+{
+  // 出場量は今季と前季の大きい方。開幕日（今季0）と1試合後（4打数）で表示が跳ねない
+  const p = fielder(23, 1.0, 50, GROW_BASE, 0);
+  p.previousSeasonStats = { batting: { atBats: 450 } };
+  const opening = shownOf(p);
+  p.seasonStats = { batting: { atBats: 4 } };
+  const afterOne = shownOf(p);
+  assert.equal(afterOne, opening, `1試合出ただけで表示が ${opening} → ${afterOne} に下がる`);
+  p.previousSeasonStats = {};
+  assert.ok(shownOf(p) < opening, '前季も今季も出ていない選手が、レギュラーと同じに出る');
+}
+{
+  // 年齢曲線で伸びない選手（大学・プロ・所属なし）は「—」
+  const p = fielder(21, 1.0, 50, GROW_BASE);
+  assert.equal(naturalGrowthOf(p, { universityData: {}, players: [p] }), null, '大学の在学生に自然成長が出る');
+  assert.equal(naturalGrowthOf(p, { players: [p] }), null, 'プロ（社会人・独立でない球団）に自然成長が出る');
+  assert.equal(naturalGrowthOf(p, null), null, '所属の無い選手に自然成長が出る');
+  assert.equal(naturalGrowthText(null), '—', '出せない選手が「—」で出ない');
+  // オンラインの選手はサーバーの値をそのまま使う（一人用の編成画面を流用している）
+  assert.equal(naturalGrowthOf({ ...p, naturalGrowth: -1.23 }, null), -1.23, 'サーバーの自然成長を使っていない');
+}
 
 // --- 2. 指定の表に乗る ---
 const fit = [];
@@ -159,7 +251,7 @@ for (let age = 32; age <= 40; age += 1) {
     );
 }
 
-// --- 4. 素質（0歳の順序と、衰え始めの年齢） ---
+// --- 4. 素質（19歳の伸びの順序と、衰え始めの年齢） ---
 const crossOf = (gp, discipline = 50, modifier = 0) => {
   for (let age = 20; age <= 50; age += 1)
     if (shownOf(fielder(age, gp, discipline, DECLINE_BASE, 450, modifier)) < 0) return age;
@@ -215,6 +307,69 @@ for (const age of [37, 38, 39, 40]) {
   assert.ok(star > -2.6, `素質1.4・意識70の40歳が${star.toFixed(2)}。素質が高い選手は長持ちすること`);
 }
 
+// --- 6.5 ピーク年齢の見込み（将来性の札・オンラインの「3年後の見込み」）は年齢曲線から ---
+// ⚠ 以前は別の式（素質1.0で25歳）で、ゲームでは伸びる28歳を「3年後は下り坂」と出していた
+for (const gp of [0.6, 1.0, 1.4]) {
+  for (const discipline of [20, 50, 90]) {
+    const peak = estimatePeakAge(gp, discipline);
+    assert.ok(
+      naturalCoefOf(peak, gp, discipline) > 0 && naturalCoefOf(peak + 1, gp, discipline) <= 0,
+      `ピーク年齢の見込み（素質${gp}・意識${discipline}で${peak}歳）が年齢曲線の伸びの終わりと合わない`,
+    );
+  }
+}
+assert.equal(estimatePeakAge(1.0, 50), 31, '素質1.0・意識50のピーク年齢は31歳（32歳から衰える）');
+assert.notEqual(
+  outlookOf({ age: 28, growthPotential: 1.0, personality: { discipline: 50 } }).kind,
+  'decline',
+  '28歳・素質1.0（31歳まで伸びる）が「3年後は下り坂」と出る',
+);
+assert.equal(
+  outlookOf({ age: 33, growthPotential: 1.0, personality: { discipline: 50 } }).kind,
+  'decline',
+  '33歳・素質1.0 が3年後に下り坂と出ない',
+);
+
+// --- 6.6 プロ意識の説明の数字が式と合う（Web とアプリは同じ文。online-ability-help-check） ---
+{
+  const help = ABILITY_HELP['プロ意識'];
+  // 年度替わりの山のずれ: 100で2.5歳遅く・0で2.5歳早く・10ごとに0.5歳
+  for (const [discipline, shift] of [[100, 2.5], [0, -2.5], [60, 0.5]]) {
+    for (const age of [27, 31, 35]) {
+      assert.ok(
+        Math.abs(naturalCoefOf(age, 1.0, discipline) - naturalCoefOf(age - shift, 1.0, 50)) < 1e-9,
+        `プロ意識${discipline}の曲線のずれが説明（${shift}歳）と合わない`,
+      );
+    }
+  }
+  assert.ok(help.includes('100で2.5歳遅く') && help.includes('0で2.5歳早く'), 'プロ意識の説明に年度替わりのずれが無い');
+  // キャンプの伸びが止まる年齢: 80で+1歳・100で+2歳
+  const stopOf = (discipline) => growthStopAge({ growthPotential: 1.0, personality: { discipline } });
+  assert.equal(stopOf(80) - stopOf(60), 1, 'プロ意識80のキャンプの停止年齢が説明（+1歳）と合わない');
+  assert.equal(stopOf(100) - stopOf(60), 2, 'プロ意識100のキャンプの停止年齢が説明（+2歳）と合わない');
+  assert.ok(help.includes('キャンプの伸びが止まる年齢（80で+1歳、100で+2歳）'), 'プロ意識の説明にキャンプの停止年齢が無い');
+}
+
+// --- 6.7 マニュアル（ManualScreen の「年次成長」）とアプリの TIPS（Tips.kt）に書いた数字 ---
+// ⚠ ここが落ちたら、式を変えた側に合わせて文を直す（数字は式から計算して書いてある）
+{
+  // 衰え始める年齢（主な能力の平均）: 素質 × プロ意識20/35/50/65/80/100
+  const DOC_DECLINE = { 0.6: [27, 28, 29, 29, 30, 31], 1.0: [30, 31, 32, 33, 33, 34], 1.4: [34, 34, 35, 36, 37, 38] };
+  for (const [gp, ages] of Object.entries(DOC_DECLINE))
+    [20, 35, 50, 65, 80, 100].forEach((discipline, i) =>
+      assert.equal(naturalPeakAge(Number(gp), discipline) + 1, ages[i], `マニュアルの衰え始め（素質${gp}・意識${discipline}）が式と違う`));
+  // 能力ごとの衰え始め（素質1.0・意識50）
+  const DOC_STAT = { speed: 28, arm: 30, velocity: 30, armP: 30, stamina: 31, meet: 32, defense: 32, power: 33, eye: 35, control: 35, breaking: 35 };
+  for (const [key, age] of Object.entries(DOC_STAT))
+    assert.equal(naturalPeakAge(1.0, 50, STAT_GROWTH[key].peakAge) + 1, age, `マニュアル・TIPSの${key}の衰え始めが式と違う`);
+  // 選手情報の自然成長（6能力の平均・能力50）は、走力・肩のぶん曲線より早くマイナスになる（素質1.0で1年・0.6で3年）
+  assert.equal(naturalPeakAge(1.0, 50) + 1 - crossOf(1.0), 1, 'マニュアルの「素質1.0なら1年早い」が式と違う');
+  assert.equal(naturalPeakAge(0.6, 50) + 1 - crossOf(0.6), 3, 'マニュアルの「素質0.6なら3年早い」が式と違う');
+  // 出場量: 年300打席は0打席の約2.7倍（伸びる年）
+  const ratio = shownOf(fielder(21, 1.0, 50, GROW_BASE, 300)) / shownOf(fielder(21, 1.0, 50, GROW_BASE, 0));
+  assert.ok(Math.abs(ratio - 2.7) < 0.1, `300打席と0打席の伸びの比が${ratio.toFixed(2)}（マニュアル・TIPSは約2.7倍）`);
+}
+
 // --- 7. 表示の計算は選手を書き換えない（`peek`）・投手・見た目 ---
 for (const seed of [seedFielder, seedPitcher]) {
   const p = structuredClone(seed);
@@ -222,7 +377,7 @@ for (const seed of [seedFielder, seedPitcher]) {
   p.growthPotential = 1.2;
   const before = JSON.stringify(p);
   for (const category of ['independent', 'online']) shownOf(p, category);
-  naturalGrowthOf(p);
+  naturalGrowthOf(p, teamOf('club', [p]));
   assert.equal(JSON.stringify(p), before, '自然成長の表示を出すと選手の中身が変わる（`peek` が効いていない）');
 }
 {

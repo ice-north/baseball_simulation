@@ -392,6 +392,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     if (sortKey === key) { setSortAsc(!sortAsc); }
     else { setSortKey(key); setSortAsc(key === 'position'); }
   };
+  // 自然成長は成長の式を回すので、比べるたびではなく1人1回だけ求める
+  const growthOf = new Map(sortKey === 'growth'
+    ? (userTeam?.players || []).map(p => [p, naturalGrowthOf(p, userTeam) ?? -99])
+    : []);
   const sortedPlayers = [...(userTeam?.players || [])].sort((a, b) => {
     const dir = sortAsc ? 1 : -1;
     const getVal = (p) => {
@@ -399,7 +403,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         case 'position': return POSITION_ORDER.indexOf(p.position);
         case 'age': return p.age || 20;
         case 'build': return p.physical?.build === 'large' ? 2 : p.physical?.build === 'small' ? 0 : 1;
-        case 'growth': return naturalGrowthOf(p);
+        case 'growth': return growthOf.get(p);
         case 'discipline': return p.personality?.discipline || 0;
         case 'mental': return p.personality?.mental || 0;
         case 'meet': return p.batting?.meet || 0;
@@ -988,7 +992,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <S k="position" w="w-9">ポジ</S>
                         <S k="age" w="w-9">年齢</S>
                         <S k="build" w="w-9" title="体格">体格</S>
-                        <S k="growth" w="w-10" title="成長率 (基礎+変動)">成長</S>
+                        <S k="growth" w="w-10" title="自然成長（能力1つあたり/年）">成長</S>
                         <S k="discipline" title="練習成長への乗算。高いほど練習が身につき、覚醒も起きやすい">プロ意識</S>
                         <S k="mental" w="w-8" title="チャンス・ピンチでの強さ">精神</S>
                         <th className="py-1.5 px-1 text-center w-14 whitespace-nowrap" title="この選手が今の方針をどう受け止めているか。希望と噛み合うと効率が上がる（正しい指示かどうかとは別）">意欲</th>
@@ -1055,9 +1059,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             // ⚠ 契約更改・選手情報と**同じ数字**（`src/utils/naturalGrowth.js`）
-                            const v = naturalGrowthOf(player);
+                            const v = naturalGrowthOf(player, userTeam);
                             return (
-                              <span className={naturalGrowthColor(v)} title={naturalGrowthTitle(player)}>
+                              <span className={naturalGrowthColor(v)} title={naturalGrowthTitle(player, userTeam)}>
                                 {naturalGrowthText(v)}
                               </span>
                             );

@@ -53,6 +53,7 @@ const REMOVED_ON_PURPOSE = {
   SHAPE_BY_PITCH:  'pitchShape.PITCH_AXIS_SIDE に一本化して削除（歴史の記録）',
   batterCommitRate: 'commitRateFor へ改名（見出しに「→」で明示）',
   practiceOffset:  '成長の2項モデル化で置き換え（歴史の記録）',
+  BASAL_GP_SHIFT:  '「基礎＋練習」の和の形の基礎成長のずらし。2026-11-20 の年齢曲線（GP_AGE_SHIFT）で置き換え（歴史の記録）',
   calcAbilScore:   '補充の投打別スケール。共有の abilityZ に置き換えて削除（歴史の記録）',
   scorePlayerForRecruitment: '独立補充の投打別スケール。recruitBaseZ に置き換えて削除（歴史の記録）',
   positionBoost:   '補充のポジション補正。recruitPositionBoost に置き換えて削除（歴史の記録）',

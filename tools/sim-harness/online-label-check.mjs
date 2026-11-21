@@ -5,7 +5,7 @@ import {
   leagueComparison,
   performanceFor,
 } from '../../server/performanceLabels.mjs';
-import { projectLeague } from '../../server/projection.mjs';
+import { projectLeague, projectTeamInfo } from '../../server/projection.mjs';
 import { expectedNaturalGrowth, teamRankMult } from '../../src/season/growthSystem.js';
 import {
   ONLINE_SCHEMA,
@@ -210,10 +210,22 @@ try {
         league.game.teams.A.players[i],
         'online',
         teamRankMult(league.game.teams.A),
+        // ⚠ 同じ球団のベテランの指導（`veteranBonusOf`）も年度替わりの変動に入る
+        { team: league.game.teams.A },
       ),
       `${row.name} の自然成長が球団の格を見ていない`,
     );
   });
+  assert.ok(
+    view.roster.every((row) => Number.isFinite(row.naturalGrowth)),
+    '自球団の名簿に自然成長が無い',
+  );
+  // 他球団の名簿には出さない（素質が透ける）。求めてから捨てるのではなく、そもそも足さない
+  const other = projectTeamInfo({ league, sessions: { a: 's' } }, 'a', 'B');
+  assert.ok(other.roster.length > 0, '前提: 他球団の名簿が出る');
+  for (const row of other.roster)
+    for (const key of ['naturalGrowth', 'growthPotential', 'growthModifier'])
+      assert.ok(!(key in row), `他球団の名簿に ${key} が載っている`);
   assert.ok(
     teamRankMult({ corporateData: { rank: 'S' } }) >
       teamRankMult({ corporateData: { rank: 'C' } }),

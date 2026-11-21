@@ -495,7 +495,7 @@ const ManualContent = ({ category }) => {
               <li>疲労が高い投手はスタミナも減った状態で登板するため、早期降板のリスクが高まる</li>
               <li>リリーフは球数が少なくても<b>1登板あたり最低11</b>溜まる。連投には注意</li>
               <li>疲労40以上の先発投手は登板を飛ばされ、次の順番の投手が投げる（簡易スタメンで自分で先発を指名した日を除く）</li>
-              <li className="text-yellow-300">疲労41以上でスタメン出場（投手は10球以上の登板）すると、その選手の<b>成長率が下がる</b>。41〜60で-0.01、61〜80で-0.02、81以上で-0.03（1試合ごと）</li>
+              <li className="text-yellow-300">疲労41以上でスタメン出場（投手は10球以上の登板）すると、その選手の<b>出場による変動が下がり、自然成長が早く衰える側へずれる</b>。41〜60で-0.01、61〜80で-0.02、81以上で-0.03（1試合ごと。0.1で年齢曲線が0.8歳前にずれる）</li>
             </ul>
           </Entry>
         </div>
@@ -1384,9 +1384,9 @@ const ManualContent = ({ category }) => {
               </table>
             </div>
             <p className="text-sm mt-2 text-gray-400">
-              ※ この表はキャンプ練習の下敷きになる補正。シーズンをまたぐ年次成長は
-              能力ごとにピーク年齢が違う（走力23歳 / 肩25歳 / パワー29歳 / 選球眼29歳…）。
-              「年次成長」のページを参照。
+              ※ この表はキャンプ練習の下敷きになる補正。シーズンをまたぐ年度替わりの自然成長は
+              別の年齢曲線で、能力ごとに衰え始めが違う（素質1.0・プロ意識50で 走力28歳 / 肩30歳 /
+              ミート32歳 / パワー33歳 / 選球眼35歳…）。「年次成長」のページを参照。
             </p>
           </Entry>
           <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">成長減衰</h3>
@@ -1576,138 +1576,140 @@ const ManualContent = ({ category }) => {
     case 'growth':
       return (
         <div className="space-y-4">
-          <Entry title="実成長 = 基礎成長 + 練習成長">
-            シーズンをまたぐ年次成長は、次の形で決まる。
-            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
-              実成長 = （基礎成長 ＋ 練習成長 × 環境）× 才能・出場量などの倍率
-            </code>
-            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+          {/* ⚠ 数字は src/season/growthSystem.js の定数から計算したもの（2026-11-20 の年齢曲線）。
+              曲線（NATURAL_*）・ずらし（GP_AGE_SHIFT・DISC_AGE_SHIFT）・peakAge・decline を変えたら直す */}
+          <Entry title="年度替わりの自然成長は年齢の曲線で決まる">
+            シーズンをまたぐときに、練習しなくても自然に動く分。主な能力1つあたりの点で、
+            素質1.0・プロ意識50・独立リーグ（ランクC）・レギュラー出場の選手なら次のとおり。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
-                  <th className="text-left py-1 px-2">要素</th><th className="text-left py-1 px-2">何を表すか</th>
+                  <th className="text-left py-1 px-2">年齢</th>
+                  <th className="text-right py-1 px-2">19</th><th className="text-right py-1 px-2">21</th>
+                  <th className="text-right py-1 px-2">23〜25</th><th className="text-right py-1 px-2">27</th>
+                  <th className="text-right py-1 px-2">29</th><th className="text-right py-1 px-2">31</th>
+                  <th className="text-right py-1 px-2">32</th><th className="text-right py-1 px-2">34</th>
+                  <th className="text-right py-1 px-2">36</th><th className="text-right py-1 px-2">38</th>
+                  <th className="text-right py-1 px-2">40</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-1 px-2 text-green-300 font-bold">成長率（growthPotential）</td>
-                    <td className="px-2"><b>基礎成長</b>。何もしなくても身体が育つ／衰える。年齢でマイナスへ入る</td></tr>
-                  <tr><td className="py-1 px-2 text-yellow-300 font-bold">プロ意識（discipline）</td>
-                    <td className="px-2"><b>練習成長への乗算</b>。常に0以上</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">1年の動き</td>
+                    <td className="text-right px-2 text-green-400">+1.00</td><td className="text-right px-2 text-green-400">+1.10</td>
+                    <td className="text-right px-2 text-green-400">+1.20</td><td className="text-right px-2 text-green-400">+1.05</td>
+                    <td className="text-right px-2">+0.70</td><td className="text-right px-2">+0.15</td>
+                    <td className="text-right px-2 text-red-400">-0.20</td><td className="text-right px-2 text-red-400">-1.05</td>
+                    <td className="text-right px-2 text-red-400">-2.10</td><td className="text-right px-2 text-red-400">-3.35</td>
+                    <td className="text-right px-2 text-red-400">-4.80</td></tr>
                 </tbody>
               </table>
             </div>
             <p className="text-sm mt-2">
-              基礎がマイナスへ入っても練習成長が上回れば伸び、釣り合えば維持、
-              <b className="text-yellow-300">基礎の衰えが練習成長を超えたらプロ意識が高くても衰える</b>。
+              23歳まで少しずつ上がり、25歳まで山、26歳から下がり始めて<b>32歳で0を割る</b>。
+              30代後半は1年に2〜5点落ちるので、ベテランは若手に席を明け渡していく。
+              年齢は<b>年度替わりで1つ足した後の年齢</b>で見る（シーズン中に31歳の選手は「32歳」の値で動く）。
+              選手情報の「自然成長」は、この次の年度替わりの見込み。キャンプの伸びはこれとは別に乗る。
             </p>
           </Entry>
-          <Entry title="衰え始める年齢はプロ意識で決まる">
-            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
+          <Entry title="素質・プロ意識・出場による変動は、曲線を前後にずらす">
+            曲線の<b>高さ</b>ではなく<b>位置</b>が動く。うしろにずれた選手は長く伸び、遅く衰える。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>素質</b>: 0.1ごとに0.8歳（1.4なら3.2歳うしろ、0.6なら3.2歳前）</li>
+              <li><b>プロ意識</b>: 50を基準に10ごとに0.5歳（100で2.5歳うしろ、0で2.5歳前）</li>
+              <li><b>出場による変動</b>（試合に出ると増え、疲れたまま出ると減る）: 素質に足して効く。
+                年度替わりで半分にしてから効く</li>
+            </ul>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
-                  <th className="text-left py-1 px-2">プロ意識</th>
-                  <th className="text-right py-1 px-2">20</th><th className="text-right py-1 px-2">35</th>
+                  <th className="text-left py-1 px-2">衰え始める年齢</th>
+                  <th className="text-right py-1 px-2">意識20</th><th className="text-right py-1 px-2">35</th>
                   <th className="text-right py-1 px-2">50</th><th className="text-right py-1 px-2">65</th>
                   <th className="text-right py-1 px-2">80</th><th className="text-right py-1 px-2">100</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-green-300">社会人</td>
-                    <td className="text-right px-2 text-red-400">27歳</td><td className="text-right px-2">29</td>
-                    <td className="text-right px-2">32</td><td className="text-right px-2">34</td>
-                    <td className="text-right px-2">37</td><td className="text-right px-2 text-green-400">40</td></tr>
-                  <tr><td className="py-0.5 px-2 text-green-300">独立</td>
-                    <td className="text-right px-2">27歳</td><td className="text-right px-2">31</td>
-                    <td className="text-right px-2">34</td><td className="text-right px-2">37</td>
-                    <td className="text-right px-2 text-green-400">40</td><td className="text-right px-2">—</td></tr>
-                  <tr><td className="py-0.5 px-2 text-green-300">クラブ</td>
-                    <td className="text-right px-2 text-red-400">26歳</td><td className="text-right px-2">27</td>
-                    <td className="text-right px-2">29</td><td className="text-right px-2">31</td>
-                    <td className="text-right px-2">32</td><td className="text-right px-2">34</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">素質0.6</td>
+                    <td className="text-right px-2 text-red-400">27歳</td><td className="text-right px-2">28</td>
+                    <td className="text-right px-2">29</td><td className="text-right px-2">29</td>
+                    <td className="text-right px-2">30</td><td className="text-right px-2">31</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">素質1.0</td>
+                    <td className="text-right px-2">30歳</td><td className="text-right px-2">31</td>
+                    <td className="text-right px-2">32</td><td className="text-right px-2">33</td>
+                    <td className="text-right px-2">33</td><td className="text-right px-2">34</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">素質1.4</td>
+                    <td className="text-right px-2">34歳</td><td className="text-right px-2">34</td>
+                    <td className="text-right px-2">35</td><td className="text-right px-2">36</td>
+                    <td className="text-right px-2">37</td><td className="text-right px-2 text-green-400">38</td></tr>
                 </tbody>
               </table>
             </div>
             <p className="text-sm mt-2">
-              プロ意識の分布は平均50・σ18。社会人なら下位5%が27歳・中央が32歳・上位3%が38歳で、
-              <b>「20代中盤で衰える者」と「30代後半でも活躍する者」が同居する</b>。
+              平均的な能力（ミート・守備）の年度替わりの動きがマイナスになる最初の年齢。走力・肩はこれより早く、
+              選球眼・制球は遅い（次の表）。選手情報の自然成長（野手は6能力の平均）は、走力・肩の落ち方が大きいぶん
+              これより早くマイナスになる（能力50の野手で、素質1.0なら1年・素質0.6なら3年早い）。
+              <b>所属（社会人・独立・クラブ）や出場量では変わらない</b>（それらは伸びる年の大きさにだけ効く）。
+              素質は伸びる年の大きさにも効く（0.6で0.82倍・1.0で等倍・1.4で1.18倍）が、衰える年には効かない。
             </p>
           </Entry>
-          <Entry title="能力ごとにピーク年齢が違う">
+          <Entry title="能力ごとに山の位置が違う">
+            能力ごとに曲線がずれる（素質1.0・プロ意識50のとき）。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
-                  <th className="text-left py-1 px-2">能力</th><th className="text-right py-1 px-2">ピーク</th>
-                  <th className="text-left py-1 px-2 pl-6">能力</th><th className="text-right py-1 px-2">ピーク</th>
+                  <th className="text-left py-1 px-2">能力</th><th className="text-right py-1 px-2">いちばん伸びる</th>
+                  <th className="text-right py-1 px-2">衰え始め</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2">走力</td><td className="text-right px-2">23歳</td>
-                      <td className="py-0.5 px-2 pl-6">ミート</td><td className="text-right px-2">27歳</td></tr>
-                  <tr><td className="py-0.5 px-2">球速</td><td className="text-right px-2">24歳</td>
-                      <td className="py-0.5 px-2 pl-6">守備</td><td className="text-right px-2">27歳</td></tr>
-                  <tr><td className="py-0.5 px-2">肩</td><td className="text-right px-2">25歳</td>
-                      <td className="py-0.5 px-2 pl-6">パワー</td><td className="text-right px-2">29歳</td></tr>
-                  <tr><td className="py-0.5 px-2">スタミナ</td><td className="text-right px-2">27歳</td>
-                      <td className="py-0.5 px-2 pl-6 text-yellow-300">選球眼</td><td className="text-right px-2 text-yellow-300">29歳</td></tr>
-                  <tr><td className="py-0.5 px-2"></td><td className="text-right px-2"></td>
-                      <td className="py-0.5 px-2 pl-6 text-yellow-300">制球</td><td className="text-right px-2 text-yellow-300">31歳</td></tr>
+                  <tr><td className="py-0.5 px-2">走力</td><td className="text-right px-2">20〜21歳</td><td className="text-right px-2 text-red-400">28歳</td></tr>
+                  <tr><td className="py-0.5 px-2">肩・球速</td><td className="text-right px-2">22〜23歳</td><td className="text-right px-2">30歳</td></tr>
+                  <tr><td className="py-0.5 px-2">スタミナ</td><td className="text-right px-2">23〜24歳</td><td className="text-right px-2">31歳</td></tr>
+                  <tr><td className="py-0.5 px-2">ミート</td><td className="text-right px-2">23〜25歳</td><td className="text-right px-2">32歳</td></tr>
+                  <tr><td className="py-0.5 px-2">守備</td><td className="text-right px-2">24〜25歳</td><td className="text-right px-2">32歳</td></tr>
+                  <tr><td className="py-0.5 px-2">パワー</td><td className="text-right px-2">25〜26歳</td><td className="text-right px-2">33歳</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300">選球眼・制球・変化球</td><td className="text-right px-2">27〜28歳</td><td className="text-right px-2 text-yellow-300">35歳</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">捕手のリード</td><td className="text-right px-2">31〜32歳</td><td className="text-right px-2 text-green-400">落ちない</td></tr>
                 </tbody>
               </table>
             </div>
             <p className="text-sm mt-2">
-              <b>走力は20代前半・筋力は20代後半・選球眼と制球は30代まで</b>。
+              <b>走力は20代前半・筋力は20代半ば・選球眼と制球は20代後半</b>が山。
               打者の型が加齢で変わる（若い＝走力型 / 年配＝選球眼型）のもこの副産物。
             </p>
           </Entry>
           <Entry title="衰え方は「体から落ち、技術は残る」">
+            衰える年は、能力ごとの落ちやすさと<b>いまの水準</b>だけで決まる（能力50を基準に比例。
+            高い能力ほど同じ割合で多く落ちる）。所属の環境・出場量・長所短所は効かない。
+            1年で失うのはいまの値の12%（最低1点）まで。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
-                  <th className="text-left py-1 px-2">ピーク→38歳</th><th className="text-right py-1 px-2">減少率</th>
-                  <th className="text-left py-1 px-2 pl-6"></th><th className="text-right py-1 px-2">減少率</th>
+                  <th className="text-left py-1 px-2">落ちやすさ（平均を1）</th><th className="text-right py-1 px-2"></th>
+                  <th className="text-left py-1 px-2 pl-6"></th><th className="text-right py-1 px-2"></th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-red-300">走力</td><td className="text-right px-2 text-red-400">-23%</td>
-                      <td className="py-0.5 px-2 pl-6">守備</td><td className="text-right px-2">-8%</td></tr>
-                  <tr><td className="py-0.5 px-2">スタミナ</td><td className="text-right px-2">-16%</td>
-                      <td className="py-0.5 px-2 pl-6">パワー</td><td className="text-right px-2">-8%</td></tr>
-                  <tr><td className="py-0.5 px-2">肩</td><td className="text-right px-2">-15%</td>
-                      <td className="py-0.5 px-2 pl-6">ミート</td><td className="text-right px-2">-7%</td></tr>
-                  <tr><td className="py-0.5 px-2">球速</td><td className="text-right px-2">-10%</td>
-                      <td className="py-0.5 px-2 pl-6 text-green-300">制球</td><td className="text-right px-2 text-green-400">-2%</td></tr>
-                  <tr><td className="py-0.5 px-2"></td><td className="text-right px-2"></td>
-                      <td className="py-0.5 px-2 pl-6 text-green-300">選球眼</td><td className="text-right px-2 text-green-400">ほぼ不変</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-300">肩</td><td className="text-right px-2 text-red-400">3.1</td>
+                      <td className="py-0.5 px-2 pl-6">守備</td><td className="text-right px-2">1.1</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-300">球速</td><td className="text-right px-2 text-red-400">3.0</td>
+                      <td className="py-0.5 px-2 pl-6">ミート</td><td className="text-right px-2">1.1</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-300">走力</td><td className="text-right px-2 text-red-400">2.9</td>
+                      <td className="py-0.5 px-2 pl-6">制球</td><td className="text-right px-2">1.0</td></tr>
+                  <tr><td className="py-0.5 px-2">投手の肩</td><td className="text-right px-2">2.0</td>
+                      <td className="py-0.5 px-2 pl-6 text-green-300">選球眼</td><td className="text-right px-2 text-green-400">0.9</td></tr>
+                  <tr><td className="py-0.5 px-2">パワー</td><td className="text-right px-2">1.5</td>
+                      <td className="py-0.5 px-2 pl-6 text-green-300">変化球</td><td className="text-right px-2 text-green-400">0.9</td></tr>
+                  <tr><td className="py-0.5 px-2">スタミナ</td><td className="text-right px-2">1.4</td>
+                      <td className="py-0.5 px-2 pl-6 text-green-300">捕手のリード</td><td className="text-right px-2 text-green-400">0</td></tr>
                 </tbody>
               </table>
             </div>
-            <p className="text-sm mt-2 text-gray-400">
-              ※ 捕手のリードは経験で積み上がるので加齢で落ちない。
-            </p>
           </Entry>
-
-          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1 mt-6">何が選手の将来を決めるか</h3>
-          <Entry title="19歳から7年育てたときの分散分解">
-            <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
-              <table className="w-full text-sm">
-                <thead><tr className="text-gray-300 border-b border-gray-600">
-                  <th className="text-left py-1 px-2">要因</th><th className="text-right py-1 px-2">説明力</th>
-                  <th className="text-left py-1 px-2">効き幅</th>
-                </tr></thead>
-                <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-yellow-300 font-bold">18歳時点の能力（素材）</td><td className="text-right px-2">42%</td><td className="px-2">下位25%→上位25% で +18.7</td></tr>
-                  <tr><td className="py-0.5 px-2 text-yellow-300 font-bold">プロ意識</td><td className="text-right px-2">30%</td><td className="px-2">5-30→80-100 で +19.0</td></tr>
-                  <tr><td className="py-0.5 px-2">カテゴリ（社会人/独立/クラブ）</td><td className="text-right px-2">8%</td><td className="px-2">—</td></tr>
-                  <tr><td className="py-0.5 px-2 text-green-300">成長率</td><td className="text-right px-2">6.3%</td><td className="px-2">0.6→1.4 で +10.8</td></tr>
-                  <tr><td className="py-0.5 px-2 text-green-300">出場量</td><td className="text-right px-2">5.4%</td><td className="px-2">0打席→300打席 で +12.6</td></tr>
-                  <tr><td className="py-0.5 px-2">チームランク</td><td className="text-right px-2">1.2%</td><td className="px-2">—</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="text-sm mt-2">
-              <b className="text-yellow-300">素材とプロ意識が拮抗している。</b>
-              「素材下位×意識上位」と「素材上位×意識下位」がほぼ同じ結果になるので、
-              プロ意識だけ見ていればいい構造にはなっていない。
-            </p>
-          </Entry>
-          <Entry title="起用は育成でもある">
-            <b className="text-yellow-300">試合に出した量そのものが成長に効く。</b>
-            20歳・社会人B・プロ意識55の選手を1年育てたときの目安（6能力の合計の伸び）:
+          <Entry title="伸びる年の大きさは所属と出場で変わる">
+            伸びる年は、曲線の値に<b>所属の環境・球団の格・出場量</b>が掛かる。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>環境は独立を1として<b>社会人0.49・クラブ0.04</b>。社会人は技術（制球・ミート・選球眼・守備・変化球）に
+                1.8〜1.9倍の重みが付く。球団の格はS 1.15〜D 0.80倍（独立はC相当の0.90）</li>
+              <li>出場量は0打席で0.37倍、300打席（投手は先発15試合）以上で1倍</li>
+            </ul>
+            20歳・社会人B・プロ意識55・能力45の野手の、年度替わりの6能力の合計の伸び:
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
                 <thead><tr className="text-gray-300 border-b border-gray-600">
@@ -1717,15 +1719,14 @@ const ManualContent = ({ category }) => {
                 </tr></thead>
                 <tbody className="text-gray-300">
                   <tr><td className="py-0.5 px-2 text-green-300">1年の伸び</td>
-                    <td className="text-right px-2 text-red-400">+5.8</td><td className="text-right px-2">+8.0</td>
-                    <td className="text-right px-2">+11.3</td><td className="text-right px-2 text-green-400">+12.7</td></tr>
+                    <td className="text-right px-2 text-red-400">+1.6</td><td className="text-right px-2">+2.5</td>
+                    <td className="text-right px-2">+3.7</td><td className="text-right px-2 text-green-400">+4.3</td></tr>
                 </tbody>
               </table>
             </div>
             <p className="text-sm mt-2">
-              レギュラー起用は控え起用の<b>2.2倍</b>伸びる。
-              体幹を先に鍛えるより<b>早く一軍で使うほうが強い</b>——
-              レギュラー入りが1年早いことの複利が上回るため。
+              <b className="text-yellow-300">レギュラー起用は控え起用の約2.7倍伸びる。</b>
+              ただし衰える年齢に入ると、試合に出しても衰えは止まらない。
             </p>
           </Entry>
           <Entry title="プラトーとブレイクスルー">
@@ -1752,8 +1753,8 @@ const ManualContent = ({ category }) => {
             </div>
             <p className="text-sm mt-2">
               <b className="text-yellow-300">一芸型は独立、総合型は社会人</b>が有利という逆転が実際に出る。
-              クラブはプロ意識が低いとほとんど伸びない代わりに、
-              意識の高い選手は突然変異のように伸びて社会人へ引き上げられることがある。
+              クラブは環境がほとんど無いので、年度替わりの伸びは独立の1割にも届かない
+              （伸びるのは走・肩・球速・スタミナが中心）。
             </p>
           </Entry>
           <Entry title="加齢によるポジション転向">
