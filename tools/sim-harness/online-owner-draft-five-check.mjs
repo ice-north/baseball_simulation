@@ -79,6 +79,26 @@ while (days < 600) {
         for (const r of c.listedBy) assert.equal(r.first, order.indexOf(r.team) < order.indexOf(A.teamName), '先に指名する球団の印が違う');
       // B の画面には B 自身の札は出ない
       assert.ok(!view(B.userId).phase.candidates.some((c) => c.listedBy?.some((r) => r.team === B.teamName)));
+      // 監査（2026-11-21）: B がトライアウトを指導者に任せたら、B の提出は使われないので札にしない
+      {
+        const saved = B.staffModes;
+        B.staffModes = { ...(saved || {}), tryout: 'delegate' };
+        if (league.coaches?.teams?.[B.teamName]?.manager) {
+          const v2 = view(A.userId);
+          assert.ok(!v2.phase.candidates.some((c) => c.listedBy?.some((r) => r.team === B.teamName && !r.cpu)), '任せた人の提出を札にしている');
+        }
+        B.staffModes = saved;
+        if (saved === undefined) delete B.staffModes;
+      }
+      // 開いた後に人が入った球団は、CPU の見込みと人のリストの札が2つ並ばない
+      {
+        const cpuTeam = Object.keys(league.phase.cpuLists || {})[0];
+        const fake = { userId: 'z', teamName: cpuTeam };
+        league.members.push(fake);
+        const v3 = view(A.userId);
+        league.members.pop();
+        assert.ok(!v3.phase.candidates.some((c) => c.listedBy?.some((r) => r.team === cpuTeam && r.cpu)), '人が入った球団に CPU の見込みの札が残っている');
+      }
       // ⑤ 打診した選手はトライアウトの受験者にいない
       assert.ok(!league.phase.candidates.some((c) => c.name === offered.name && c.age === offered.age), 'コーチ打診した選手がトライアウトに出ている');
       tryoutChecked = true;
