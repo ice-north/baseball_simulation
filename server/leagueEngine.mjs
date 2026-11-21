@@ -112,6 +112,9 @@ import { tradeJudgeForLeague } from './tradeJudge.mjs';
 import { tradeStrengthGap } from '../src/online/tradeSearch.js';
 import {
   planCpuTrade,
+  CPU_OFFER_VALUE_FLOOR,
+  liveOfferMemo,
+  rememberOffer,
   partnerOrder,
   dayRoll,
   offerExpiry,
@@ -905,21 +908,46 @@ function runCpuTrades(league, now) {
     if (!names.includes(teamName) || !cpus.length) continue;
     if (league.trades.some((t) => t.from === null && t.to === userId)) continue;
     if (dayRoll(league, `cpu-offer:${teamName}`) >= 1 / CPU_OFFER_EVERY) continue;
-    const from = [...cpus].sort(
+    // ⚠ 釣り合う案を持たない球団も多い（その日の名簿で3〜4割）ので、その日の順にCPUを見て
+    //    最初に案が見つかった球団が言い出す（1回の判断は数十ミリ秒）
+    const order = [...cpus].sort(
       (a, b) => dayRoll(league, `cpu-offer-from:${teamName}:${a}`) - dayRoll(league, `cpu-offer-from:${teamName}:${b}`),
-    )[0];
+    );
     fresh();
-    const plan = planCpuTrade({
-      from,
-      teams,
-      partners: [teamName],
-      valueOf: (p) => judge.valueOf(p),
-      // 人がこの内容で出したら、CPUが受けるか（受けたときも同じ判断を通す。`respondTrade`）
-      accept: (partner, give, get) =>
-        allowed(from, partner, give, get) &&
-        cpuDecisionFor(league, TEAMS_DATA[partner], from, get, give, judge).action === 'accept',
-    });
+    let from = null;
+    let plan = null;
+    // ⚠ 人の同じ選手を続けて求めない。どのCPUからでも、求めてから `CPU_OFFER_MEMO_DAYS` 日は
+    //    その選手を求める提案を出さない（以前は同じCPUだけを避けたので、別のCPUが人の同じ主力を
+    //    続けて欲しがれた。判断7、いしだ 2026-11-20）。覚えは `league.cpuOfferMemo`（日付つき）
+    const avoid = new Set(liveOfferMemo(league).filter((m) => m.team === teamName).map((m) => m.id));
+    for (const cpu of order) {
+      plan = planCpuTrade({
+        from: cpu,
+        avoid,
+        teams,
+        partners: [teamName],
+        valueOf: (p) => judge.valueOf(p),
+        // ⚠ 人の側から見ても釣り合う案だけ（戦力の開きを両向きに見る・値段が見合う）。
+        //    以前は人の一番手を若い控え1人で取る案ばかり届いた（いしだ 2026-11-20）
+        balanced: true,
+        fair: (partner, give, get) => {
+          const pick = (team, ids) => TEAMS_DATA[team].players.filter((p) => ids.includes(p.id));
+          const offered = pick(cpu, give).reduce((a, p) => a + judge.valueOf(p), 0);
+          const lost = judge.setValuesOf(pick(partner, get), partner).reduce((a, v) => a + v, 0);
+          return offered >= lost * CPU_OFFER_VALUE_FLOOR;
+        },
+        // 人がこの内容で出したら、CPUが受けるか（受けたときも同じ判断を通す。`respondTrade`）
+        accept: (partner, give, get) =>
+          allowed(cpu, partner, give, get) &&
+          cpuDecisionFor(league, TEAMS_DATA[partner], cpu, get, give, judge).action === 'accept',
+      });
+      if (plan) {
+        from = cpu;
+        break;
+      }
+    }
     if (!plan) continue;
+    rememberOffer(league, teamName, plan.get);
     const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
     league.trades.push({
       id,
