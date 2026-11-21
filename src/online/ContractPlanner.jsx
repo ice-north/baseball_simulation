@@ -75,18 +75,21 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
   // ⚠ 解雇と打診は同じ選手に重ねない（サーバーも弾く）。片方を選んだらもう片方を外す
   const withoutOffer = (id) =>
     Object.fromEntries(Object.entries(offers).filter(([, x]) => x !== id));
+  // 打診が無ければ `coachOffers` ごと外す（前と同じ形の案を送る）
+  const send = (releaseIds, coachOffers) => {
+    const { coachOffers: _drop, ...rest } = plan;
+    void _drop;
+    onChange({ ...rest, releaseIds, ...(Object.keys(coachOffers).length ? { coachOffers } : {}) });
+  };
   const toggle = (id, on) =>
-    onChange({
-      ...plan,
-      releaseIds: on
-        ? [...plan.releaseIds, id]
-        : plan.releaseIds.filter((x) => x !== id),
-      coachOffers: on ? withoutOffer(id) : offers,
-    });
+    send(
+      on ? [...plan.releaseIds, id] : plan.releaseIds.filter((x) => x !== id),
+      on ? withoutOffer(id) : offers,
+    );
   const offer = (id, role) => {
     const next = withoutOffer(id);
     if (offers[role] !== id) next[role] = id;
-    onChange({ ...plan, releaseIds: plan.releaseIds.filter((x) => x !== id), coachOffers: next });
+    send(plan.releaseIds.filter((x) => x !== id), next);
   };
   const sortBy = (column) =>
     setSort((now) =>
