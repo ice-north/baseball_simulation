@@ -8,6 +8,7 @@ import {
   plannedPicks, weightedRanked, DEFAULT_WEIGHTS, addToPlan, removeFromPlan, shiftInPlan, moveInPlan, planSummary,
   signTotal, wishedCount, minimumShort,
 } from '../../src/online/tryoutPlan.js';
+import { planRest } from '../../src/online/restPlan.js';
 
 const view = JSON.parse(fs.readFileSync(new URL('../shared/src/jvmTest/resources/view-running.json', import.meta.url)));
 const roster = view.roster;
@@ -46,7 +47,30 @@ const fewPitchers = (() => {
   const pool = roster.slice(11);
   return planSummary(weightedRanked(pool, DEFAULT_WEIGHTS, own), pool, pool.length, own);
 })();
-const text = JSON.stringify({ camp, wish, recommended, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
+// 疲れた野手を休ませる守備の組み直し（`planRest`）。保存済みの打順の野手8人のうち、
+// 1人ずつ疲労100・2人ずつ疲労100と130・全員疲労90 にした場面（ほかの先発は疲労0、控えはそのまま）
+const field = view.lineup.battingOrder.filter((e) => e.position !== 'pitcher');
+const inOrder = new Set(view.lineup.battingOrder.map((e) => e.playerId));
+const restBench = roster.filter((p) => !inOrder.has(p.id));
+const restCase = (levels, leaving = null) => {
+  const starters = field.map((e, i) => ({
+    player: { ...roster.find((p) => p.id === e.playerId), fatigue: levels[i] ?? 0 },
+    position: e.position,
+  }));
+  const plan = planRest(starters, restBench, leaving);
+  return plan && { resting: plan.resting, assign: Object.fromEntries([...plan.assign].map(([id, pos]) => [String(id), pos])) };
+};
+const restPlans = [];
+for (let i = 0; i < field.length; i += 1) restPlans.push(restCase(field.map((_, j) => (j === i ? 100 : 0))));
+for (let i = 0; i < field.length; i += 1)
+  for (let j = i + 1; j < field.length; j += 1) restPlans.push(restCase(field.map((_, k) => (k === i ? 100 : k === j ? 130 : 0))));
+restPlans.push(restCase(field.map(() => 90)));
+// 二刀流の先発の日（i 番目の野手がその日の先発として抜け、j 番目が疲労100）
+const restPlansTwoWay = [];
+for (let i = 0; i < field.length; i += 1)
+  for (let j = 0; j < field.length; j += 1)
+    if (i !== j) restPlansTwoWay.push(restCase(field.map((_, k) => (k === j ? 100 : 0)), field[i].playerId));
+const text = JSON.stringify({ restPlans, restPlansTwoWay, camp, wish, recommended, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
 // --check: 書き出し済みの期待値が今の Web 版の答えと同じか（CI で、Web 版だけ直したときに気づく）
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/logic-expected.json', import.meta.url);

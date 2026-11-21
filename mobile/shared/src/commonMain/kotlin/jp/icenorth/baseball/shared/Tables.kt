@@ -76,6 +76,7 @@ const val MAX_STARTERS: Int = 8
 const val RELIEF_REST_FATIGUE: Int = 50
 const val STARTER_SKIP_FATIGUE: Int = 40
 const val FIELDER_REST_FATIGUE: Int = 80
+const val FIELDER_FORCE_REST_FATIGUE: Int = 120
 const val SUBSTITUTE_MIN_FITNESS: Int = 60
 const val SUBSTITUTE_FRESH_FATIGUE: Int = 40
 const val ROSTER_LIMIT: Int = 28

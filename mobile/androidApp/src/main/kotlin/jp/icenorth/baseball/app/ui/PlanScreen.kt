@@ -75,6 +75,8 @@ import jp.icenorth.baseball.shared.STRATEGY_EFFECTS
 import jp.icenorth.baseball.shared.STRATEGY_FIELDS
 import jp.icenorth.baseball.shared.SUBSTITUTE_MIN_FITNESS
 import jp.icenorth.baseball.shared.SUBSTITUTE_FRESH_FATIGUE
+import jp.icenorth.baseball.shared.FIELDER_FORCE_REST_FATIGUE
+import jp.icenorth.baseball.shared.RestPlan
 import jp.icenorth.baseball.shared.TACTIC_FIELDS
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.conditionIcon
@@ -299,7 +301,11 @@ private fun OrderEditor(
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
     val bench = benchOf(view, draft)
-    val notes = orderNotes(draft, players, bench)
+    // ⚠ RestPlan.plan は守備の組み合わせを全部数えるので重い。ドラッグ中の再描画のたびに数えず、
+    //    守備の顔ぶれ（打順の並びは見ない）・名簿・控え・次の先発が変わったときだけ数える（2026-11-20 監査）
+    val fieldSet = draft.slots.toSet()
+    val restingIds = remember(fieldSet, players, bench, nextId) { restingOf(draft.slots, players, bench, nextId) }
+    val notes = orderNotes(draft, players, restingIds, nextId)
     val pickedStarter = (picked as? OrderPick.Starter)?.index?.let { draft.slots.getOrNull(it) }
     val pickedBench = (picked as? OrderPick.Bench)?.id?.let { players[it] }
     /** 選んでいる行と入れ替えたら、この行の人はどこをどの適性で守るか */
@@ -526,8 +532,17 @@ private fun Player.bestFieldPosition(): String? = FIELD_POSITIONS.maxByOrNull { 
 private class OrderNote(val position: String, val text: String, val action: String, val pick: OrderPick, val color: androidx.compose.ui.graphics.Color? = null)
 
 /** 「気になる所」: 試合の日に休養に入る選手と、適性の低い守備（押すと直すためのシートを開く） */
+/**
+ * 試合の日に誰が休むか（サーバーと同じ計算 RestPlan。ほかの先発が守備を移って休める場合もある）。
+ * ⚠ 次の先発（nextId）が野手の枠にも居る二刀流なら、その日は抜けた形で数える（Web 版 lineupNotes と同じ）
+ */
+private fun restingOf(slots: List<BatterSlot>, players: Map<Long, Player>, bench: List<Player>, nextId: Long?): Set<Long> {
+    val field = slots.mapNotNull { s -> players[s.playerId]?.takeIf { it.isActive }?.let { RestPlan.Starter(it, s.position) } }
+    return (if (field.size == slots.size) RestPlan.plan(field, bench, nextId) else null)?.resting?.toSet().orEmpty()
+}
+
 @Composable
-private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List<Player>): List<OrderNote> {
+private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, resting: Set<Long>, nextId: Long?): List<OrderNote> {
     val notes = mutableListOf<OrderNote>()
     draft.slots.forEachIndexed { index, slot ->
         val p = players[slot.playerId]
@@ -536,13 +551,12 @@ private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List
             return@forEachIndexed
         }
         val fatigue = p.fatigue ?: 0
-        if (fatigue >= FIELDER_REST_FATIGUE) {
-            // サーバー（server/dailyLineup.mjs）と同じ条件: 控えはその位置の適性60以上、かつ疲労40未満
-            val canRest = bench.any { it.fitness(slot.position) >= SUBSTITUTE_MIN_FITNESS && (it.fatigue ?: 0) < SUBSTITUTE_FRESH_FATIGUE }
+        // その日に投げる二刀流の選手には休養の注意を出さない（野手の枠を抜ける）
+        if (fatigue >= FIELDER_REST_FATIGUE && p.id != nextId) {
             notes += OrderNote(
                 slot.position,
-                if (canRest) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"
-                else "${p.name} 疲労$fatigue。${positionLabel(slot.position)}を守れる控えが居ないので休めません",
+                if (p.id in resting) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"
+                else "${p.name} 疲労$fatigue。守備を組み直しても代わりが居ないので休めません",
                 "交代",
                 OrderPick.Starter(index),
                 MaterialTheme.colorScheme.error,
@@ -894,7 +908,7 @@ private val ORDER_HELP = listOf(
     "選手（守備の札か名前）を押して選び、ほかのスタメンを押すと守備位置を入れ替え、控えを押すと交代します。控えから選んでスタメンを押しても交代です。選んでいる間は、各行の名前の下に「入れ替えたら誰がどこをどの適性で守るか」が出ます。",
     "行はふだん名前と今季成績の2段です。右上の「成績のみ」を押すと能力（ミ パ 眼 走｜守 肩）の段も出ます（端末に覚えます）。成績の段の右端は、ほかに守れる位置の適性です。",
     "守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
-    "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満の控えが居れば、その日だけ入れ替わって休みます。",
+    "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その日だけ控え（疲労${SUBSTITUTE_FRESH_FATIGUE}未満）と入れ替わって休みます。ほかの先発の守備を移すこともあり、どの守備も適性${SUBSTITUTE_MIN_FITNESS}以上で組めるときだけ休みます（疲労${FIELDER_FORCE_REST_FATIGUE}以上は組めなくても休みます）。",
     "疲労は41以上で黄（成長が鈍り始める）、${FIELDER_REST_FATIGUE}以上で赤です。",
 )
 

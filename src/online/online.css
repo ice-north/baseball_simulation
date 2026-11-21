@@ -2615,7 +2615,7 @@ small.online-gain:not(:where(.online-sp *)) {
    選んでも足りる行数（`--rows`。`GameHistory.jsx` が数える）で先に場所を取る。
    ⚠ スマホはページ送りで行数が決まっているので当てない */
 .online-desktop .online-game-dialog .online-record-area {
-  min-height: calc(var(--rows, 9) * var(--online-record-row) + 34px);
+  min-height: calc(var(--rows, 9) * var(--online-record-row) + 40px);
 }
 .online-record-table th button {
   padding: 0;
