@@ -187,6 +187,18 @@ const crossOf = (gp, discipline = 50, modifier = 0) => {
   const base = crossOf(1.0, 50, 0);
   assert.ok(crossOf(1.0, 90, 0) > base, 'プロ意識が高くても衰え始めが遅くならない');
   assert.ok(crossOf(1.0, 20, 0) < base, 'プロ意識が低くても衰え始めが早くならない');
+  // ⚠ いしだ 2026-11-21「低いプロ意識による成長係数の下落をもう2年程早めたい。
+  //    高プロ意識はそのままでOK」。**50を境に幅が違う**（`discAgeShift`）。
+  //    左右対称に戻すと低い側が2年うしろへ戻る
+  assert.ok(
+    base - crossOf(1.0, 20, 0) >= 3,
+    `プロ意識20の衰え始めが基準の${base}歳から${base - crossOf(1.0, 20, 0)}年しか早まっていない（3年以上）`,
+  );
+  assert.equal(
+    crossOf(1.0, 90, 0) - base,
+    2,
+    'プロ意識90の側は動かさない（基準から2年遅い）',
+  );
   // ⚠ `growthModifier`（出場で積み・疲労で削れる変動）が**年度替わりの成長に効くこと**。
   //    以前は `makeGrower` が `growthPotential` しか読まず、変動は効いていなかった
   const withUse = shownOf(fielder(30, 1.0, 50, DECLINE_BASE, 450, 0.3));
