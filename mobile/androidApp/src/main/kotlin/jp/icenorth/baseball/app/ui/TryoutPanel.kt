@@ -64,6 +64,7 @@ import jp.icenorth.baseball.shared.weightedScore
 import jp.icenorth.baseball.shared.wishLimit
 import jp.icenorth.baseball.shared.fillsAutomatically
 import jp.icenorth.baseball.shared.wishedCount
+import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.max
 import kotlin.math.roundToInt
