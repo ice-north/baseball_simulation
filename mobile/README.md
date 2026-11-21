@@ -67,7 +67,7 @@
 - `command` の返事の `view` は最新のビューで、`view.viewGeneration` に公開した世代が入る（`server/storage/supabaseStore.mjs`）。アプリは読み直さずにこれを使い、次の `since` にする。返事に `view` が無ければ読み直す。
 - `games` は `year`・`page`・`scope`（`own` / `league`）・`size`（1〜200。既定は6）を受ける。紙面は `size=200` で自球団の1シーズンを1回で読む（`OWN_HISTORY_PAGE`）。
 - 試合の勝敗投手（ビューの `results`・`games`・`game` の `decisions` の `winningPitcher` / `losingPitcher` / `savePitcher` / `holdPitchers`）は `{ id, name }` だけ（`server/recordedViews.mjs` の `decisionRefs`）。能力や成績は載らないので、自球団の投手は名簿（ビューの `roster`）から `id` で引く。
-- タイトル争い（ビューの `leaders` の `rows`）の行は `{ id, name, team, label, value }`（`server/leagueBoard.mjs` の `leagueLeaders`）。アプリは行を押すと球団の名簿から `id` で選手を探し、名前では探し直さない（同じ球団の同名の別人を開かないため。`shared/.../PlayerLookup.kt`）。`id` の無い古いサーバーの行だけ名前で探す。
+- タイトル争い（ビューの `leaders` の `rows`）の行は `{ id, name, team, label, value }`（プロへ進んだ選手の行は `pro: true` も付き、名簿に居ないので押せない）（`server/leagueBoard.mjs` の `leagueLeaders`）。アプリは行を押すと球団の名簿から `id` で選手を探し、名前では探し直さない（同じ球団の同名の別人を開かないため。`shared/.../PlayerLookup.kt`）。`id` の無い古いサーバーの行だけ名前で探す。
 - 選手枠の上限と標準の人数は、ビューの `rosterLimit`・`rosterStandard`（`server/projection.mjs`。中身は `src/online/shared.js` の `ROSTER_LIMIT`・`ROSTER_STANDARD`）を読む。トレードの人数の確かめ（`shared/.../Tryout.kt` の `rosterShortfall`・`dealProblems`）・トライアウトの空き枠（`rosterRoom`・`rosterFill`）・契約更改の説明はこの数を使い、無い古いサーバーのときだけアプリの表の数（`Tables.kt`）を使う（`rosterLimitOf`・`rosterStandardOf`）。アプリの表の数は作ったときのままなので、枠を変えたら古いアプリでもサーバーの数で確かめられるようにするため（以前のアプリは26人のままで、28人にしたサーバーとずれた）。
 - 編成の保存（`command` の `lineup`）は、ビューの `lineup` を**丸ごと**送り返し、`baseLineup` に編集前の塊を添える。アプリが知らない項目もそのまま返すので、編成に項目を足すのは構わない。
 - 年間表彰・プロのその後・年齢構成・はじめての1週間で読むビューの項目（`docs/online/PYRAMID_LEAGUE.md` の同じ名前の節）。どれも古いサーバーには無く、無ければ出さない（版は上げていない）。名前を変えると黙って出なくなる:
@@ -75,6 +75,11 @@
   - `chronicle.proNews[]`（`server/proCareer.mjs`）の `name`・`team`・`npbTeam`・`text`・`highlight`（`ended` は引退・戦力外）。`chronicle.proDrafted[].after`・`player`（指名した時点の能力の写し。その年の指名だけ。NPBドラフトの発表で名前を押すと開く）と、球団の窓口（`team`）の `chronicle.proDrafted[].career`（`proDraftedAfter`）。
   - `ageOutlook`（`src/online/ageOutlook.js`）の `years`・`bands[]`（`label`・`pitchers`・`fielders`）・`grid[]`（`id`・`name`・`position`・`group`・`age`・`later`・`core`・`warn`。年齢 × 守備位置の図。無ければ帯の図）・`core[]`・`lines[]`・`advice`。`null` のとき（名簿が空・途中参加で初期メンバー待ち）は出さない（`AgeOutlook.kt` の `ageOutlookOf`）。
   - `joinedAt`（ISO の時刻。リーグを作ったときの人には無い）と `teamName`。はじめての1週間の期間と、端末に残す鍵（`FirstWeek.kt`）。鍵が変わったら済みの印を捨てるのは、ビューを受け取ったところ（`AppViewModel.applyView`）。
+- 先方5項目（2026-11-21。ドラフトの気配・プロ指名選手の成績・トライアウトの札・休養の目安・コーチ打診）で読む・送る項目。どれも古いサーバーには無く、無ければ出さない（版は上げていない）。名前を変えると黙って出なくなる:
+  - 読む: ビューの `proWatch[]`（`id`・`name`・`team`・`npb`・`level`（`hot` で「接触」、ほかは「注目」）。`server/proDraft.mjs` の `proWatchList`）、`roster[].proWatch`・`team` の窓口の `roster[].proWatch`（名簿の黄色い札）、`phase.candidates[].listedBy[]`（`team`・`wish`・`cpu`（CPU の見込みなら true）・`first`（自分より先に指名する球団なら true））、`chronicle.titles[]`（歴代タイトル。`year`・`titles[]` の `label`・`name`・`team`・`line`・`pro`）。タイトル争いの行（`leaders` の `rows`）にも `pro`（プロへ進んだ選手。名簿に居ないので押せない）が付く。
+  - 送る: 契約更改の `coachOffers`（`{ pitching, batting }` → 選手 id。打診が無ければ送らない）、自動采配の `restLine`（`standard`・`early`・`late`）。
+  - ⚠ **古いサーバーは自動采配の知らない項目を「未対応の采配項目です」で弾く**（`server/lineupTactics.mjs`）。だからアプリは、既定のままで元の自動采配に無い項目は送らない（`Plan.kt` の `toPayload`）。新しい項目を足すときも同じにする。
+  - ⚠ 古いサーバーは `coachOffers` を黙って捨てる（`validatePhasePlan` が `releaseIds` しか返さない）。打診はサーバーを先に出してからアプリで使えるようにする。
 - 手続きの任せ方は、ビューの `phase.delegated`（自分がその手続きを指導者に任せているか）と `members` の `ready`・`cpu`・`delegated` を読む。任せた手続きは決定の帯を出さず、`defaults` の案（指導者の案）を読むだけで見せる。待たれている最後の1人が手続きの分野を「任せる」にして保存すると、サーバーはその場で手続きを決めるので、アプリは送る前に確かめる（`shared/.../Staff.kt` の `delegationSettles`。`server/leagueEngine.mjs` の `waitsFor` と同じ見方）。
 
 ### 検査に使う実際の窓口の答え（`shared/src/jvmTest/resources/`）
