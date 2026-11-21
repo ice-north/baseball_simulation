@@ -316,17 +316,25 @@ function campWith(build, seed = undefined) {
     `制球が打撃より伸びやすい: 制球${pitch.control.toFixed(2)} / ミート${bat.meet.toFixed(2)}`,
   );
 
-  // ⚠ **伸び切った能力は鈍ること**（高能力の減衰）。しきい値は技術系65
+  // ⚠ **伸び切った能力は鈍ること**（高能力の減衰）。しきい値は技術系**50**で1点ごとに3%
   const high = perRound('batting', fielder({ batting: { meet: 85, power: 40, eye: 45, bunt: 30, steal: 30, bats: 'right' } }));
   assert.ok(
     high.meet < bat.meet * 0.5,
     `高い能力が鈍っていない: ミート85で${high.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
   );
-  // ⚠ しきい値より下では**これまでどおり伸びる**こと（打撃を巻き添えにしない）
+  // ⚠ しきい値より下では**これまでどおり伸びる**こと（低い能力を巻き添えにしない）
+  const low = perRound('batting', fielder({ batting: { meet: 35, power: 40, eye: 45, bunt: 30, steal: 30, bats: 'right' } }));
+  assert.ok(
+    low.meet > bat.meet * 0.8,
+    `しきい値の下なのに鈍っている: ミート35で${low.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
+  );
+  // ⚠ しきい値を超えたら鈍り始めること（いしだ 2026-11-21「4クールの合計が+10に到達するのは
+  //    伸びすぎ」。しきい値を 65/4% → 50/3% に下げた。ミート60は3割落ちる）。
+  //    **これを 65 に戻すと、練習だけでアマの天井（打撃は能力42から減衰）を素通りできる**
   const mid = perRound('batting', fielder({ batting: { meet: 60, power: 40, eye: 45, bunt: 30, steal: 30, bats: 'right' } }));
   assert.ok(
-    mid.meet > bat.meet * 0.8,
-    `しきい値の下なのに鈍っている: ミート60で${mid.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
+    mid.meet < bat.meet * 0.85,
+    `しきい値を超えても鈍っていない: ミート60で${mid.meet.toFixed(2)} / ミート45で${bat.meet.toFixed(2)}`,
   );
 
   // ⚠ **覚醒の伸びは、高い能力では抑える**（いしだ 2026-11-20「能力80台から4クールで
@@ -1286,9 +1294,18 @@ assert.ok(
   const high = fourRounds(80, 'batting', meetOf);
   assert.ok(high.max <= 6, `能力80台が4クールで跳ねすぎ: 最大+${high.max}`);
   assert.ok(high.mean <= low.mean, `高い能力の方が伸びている: ${high.mean.toFixed(2)} / ${low.mean.toFixed(2)}`);
-  // ⚠ **ノックは守備が伸びる**（守備60で4クール平均+2.5以上）
+  // ⚠ **ノックは守備が伸びる**（いしだ 2026-11-20「ノックの守備の伸びが弱い」）。
+  //    守備60で4クール平均+2.0以上。
+  // ⚠ 目安を 2.5 → 2.0 に下げたのは、技術系の減衰のしきい値を 65 → 50 にしたぶん
+  //    守備60が3割引かれるため（いしだ 2026-11-21・案1）。**しきい値の下は据え置き**で、
+  //    守備40なら4クール平均は変わっていない。下の `knockLow` で押さえる
   const knock = fourRounds(60, 'fielding', defOf);
-  assert.ok(knock.mean >= 2.5, `ノックの守備が弱い: 平均+${knock.mean.toFixed(2)}`);
+  assert.ok(knock.mean >= 2.0, `ノックの守備が弱い: 平均+${knock.mean.toFixed(2)}`);
+  const knockLow = fourRounds(40, 'fielding', defOf);
+  assert.ok(
+    knockLow.mean >= 2.5,
+    `しきい値の下のノックまで弱くなっている: 守備40で平均+${knockLow.mean.toFixed(2)}`,
+  );
   // ⚠ ノックは**今の守備位置の適性**も上げる（確定で+4〜8/クール）
   assert.ok(knock.fit >= 16, `ノックで守備位置の適性が上がっていない: +${knock.fit.toFixed(1)}`);
 }
